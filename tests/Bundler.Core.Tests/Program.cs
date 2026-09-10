@@ -1,14 +1,16 @@
 using Bundler.Core.Configuration;
 using Bundler.Core.Models;
 using Bundler.Core.Planning;
+using Bundler.Core.Tools;
 using Bundler.Core.Validation;
 
-var tests = new (string Name, Action Test)[]
+var tests = new (string Name, Func<Task> Test)[]
 {
-    ("Parses supported desktop RIDs", ParsesSupportedDesktopRids),
-    ("Rejects incompatible formats", RejectsIncompatibleFormats),
-    ("Adds app dependency before DMG", AddsAppDependencyBeforeDmg),
-    ("Rejects executable paths outside input", RejectsExecutablePathEscape)
+    ("Parses supported desktop RIDs", () => RunSync(ParsesSupportedDesktopRids)),
+    ("Rejects incompatible formats", () => RunSync(RejectsIncompatibleFormats)),
+    ("Adds app dependency before DMG", () => RunSync(AddsAppDependencyBeforeDmg)),
+    ("Rejects executable paths outside input", () => RunSync(RejectsExecutablePathEscape)),
+    ("Verifies and extracts bundled NSIS", VerifiesAndExtractsBundledNsis)
 };
 
 var failed = 0;
@@ -16,7 +18,7 @@ foreach (var (name, test) in tests)
 {
     try
     {
-        test();
+        await test();
         Console.WriteLine($"PASS {name}");
     }
     catch (Exception exception)
@@ -79,6 +81,36 @@ static void RejectsExecutablePathEscape()
     var issues = BundleConfigurationValidator.Validate(configuration, checkFileSystem: false);
     Assert(issues.Any(issue => issue.Path.EndsWith("mainExecutable", StringComparison.Ordinal)),
         "An executable outside inputDirectory should have failed validation.");
+}
+
+static async Task VerifiesAndExtractsBundledNsis()
+{
+    if (!OperatingSystem.IsWindows())
+    {
+        return;
+    }
+
+    var repositoryRoot = Path.GetFullPath("../../../../../", AppContext.BaseDirectory);
+    var archive = Path.Combine(repositoryRoot, "third_party", "nsis", "nsis-3.12.zip");
+    var cache = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        var compiler = await NsisToolResolver.ResolveAsync(archive, cache);
+        Assert(File.Exists(compiler), "The verified NSIS archive did not produce makensis.exe.");
+    }
+    finally
+    {
+        if (Directory.Exists(cache))
+        {
+            Directory.Delete(cache, recursive: true);
+        }
+    }
+}
+
+static Task RunSync(Action action)
+{
+    action();
+    return Task.CompletedTask;
 }
 
 static BundleConfiguration ValidConfiguration(BundleTargetConfiguration target) => new()

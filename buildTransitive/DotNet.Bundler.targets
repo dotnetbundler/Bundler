@@ -1,0 +1,28 @@
+<Project>
+  <PropertyGroup>
+    <_BundlerPackageRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\'))</_BundlerPackageRoot>
+    <_BundlerDriver>$(_BundlerPackageRoot)tools\net8.0\any\bundler.dll</_BundlerDriver>
+    <_BundlerNsisArchive>$(_BundlerPackageRoot)tools\nsis\nsis-3.12.zip</_BundlerNsisArchive>
+  </PropertyGroup>
+
+  <Target Name="BundleDesktopApplication"
+          AfterTargets="Publish"
+          Condition="'$(BundlerEnabled)' == 'true' and '$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
+      <BundlerVersion Condition="'$(BundlerVersion)' == ''">$(Version)</BundlerVersion>
+      <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''">$(TargetName).exe</BundlerMainExecutable>
+    </PropertyGroup>
+    <Error Condition="'$(BundlerIdentifier)' == ''"
+           Text="BundlerIdentifier is required when BundlerEnabled is true." />
+    <Error Condition="'$(RuntimeIdentifier)' == ''"
+           Text="RuntimeIdentifier is required when BundlerEnabled is true." />
+    <Error Condition="!$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))"
+           Text="The first Bundler release supports Windows RIDs only." />
+    <Error Condition="'$(BundlerFormat)' != 'nsis'"
+           Text="The first Bundler release supports the nsis format only." />
+
+    <Message Importance="high" Text="Bundling $(BundlerProductName) for $(RuntimeIdentifier) as NSIS..." />
+    <Exec Command="dotnet exec &quot;$(_BundlerDriver)&quot; bundle --product-name &quot;$(BundlerProductName)&quot; --identifier &quot;$(BundlerIdentifier)&quot; --version &quot;$(BundlerVersion)&quot; --publisher &quot;$(BundlerPublisher)&quot; --rid &quot;$(RuntimeIdentifier)&quot; --input &quot;$(PublishDir).&quot; --output &quot;$(BundlerOutputPath)\.&quot; --main-executable &quot;$(BundlerMainExecutable)&quot; --format &quot;$(BundlerFormat)&quot; --tool-archive &quot;$(_BundlerNsisArchive)&quot; --tool-cache &quot;$(BundlerToolCachePath)\.&quot;" />
+  </Target>
+</Project>

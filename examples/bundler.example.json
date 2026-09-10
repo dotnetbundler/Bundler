@@ -13,18 +13,6 @@
       "inputDirectory": "../publish/win-x64",
       "mainExecutable": "ExampleApp.exe",
       "formats": ["nsis"]
-    },
-    {
-      "runtimeIdentifier": "osx-arm64",
-      "inputDirectory": "../publish/osx-arm64",
-      "mainExecutable": "ExampleApp",
-      "formats": ["dmg"]
-    },
-    {
-      "runtimeIdentifier": "linux-x64",
-      "inputDirectory": "../publish/linux-x64",
-      "mainExecutable": "ExampleApp",
-      "formats": ["deb", "appImage"]
     }
   ]
 }

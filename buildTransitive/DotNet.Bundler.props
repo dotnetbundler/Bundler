@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <BundlerEnabled Condition="'$(BundlerEnabled)' == ''">false</BundlerEnabled>
+    <BundlerFormat Condition="'$(BundlerFormat)' == ''">nsis</BundlerFormat>
+    <BundlerProductName Condition="'$(BundlerProductName)' == ''"></BundlerProductName>
+    <BundlerVersion Condition="'$(BundlerVersion)' == ''"></BundlerVersion>
+    <BundlerPublisher Condition="'$(BundlerPublisher)' == ''">$(Company)</BundlerPublisher>
+    <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''"></BundlerMainExecutable>
+    <BundlerOutputPath Condition="'$(BundlerOutputPath)' == ''">$(MSBuildProjectDirectory)\artifacts</BundlerOutputPath>
+    <BundlerToolCachePath Condition="'$(BundlerToolCachePath)' == ''">$(BaseIntermediateOutputPath)bundler\tools</BundlerToolCachePath>
+  </PropertyGroup>
+</Project>

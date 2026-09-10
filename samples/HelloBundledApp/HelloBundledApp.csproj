@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <RestoreSources>$(MSBuildThisFileDirectory)..\..\artifacts\packages</RestoreSources>
+
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerIdentifier>com.example.hellobundledapp</BundlerIdentifier>
+    <BundlerProductName>Hello Bundled App</BundlerProductName>
+    <BundlerPublisher>Bundler Contributors</BundlerPublisher>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.2" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
