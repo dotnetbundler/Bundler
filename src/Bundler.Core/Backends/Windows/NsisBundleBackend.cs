@@ -3,6 +3,7 @@ using Bundler.Core.Models;
 using Bundler.Core.Planning;
 using Bundler.Core.Templates;
 using Bundler.Core.Tools;
+using System.Runtime.InteropServices;
 
 namespace Bundler.Core.Backends.Windows;
 
@@ -17,7 +18,7 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath) 
     {
         var configuration = context.Configuration;
         var item = context.Item;
-        if (!System.OperatingSystem.IsWindows())
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             throw new PlatformNotSupportedException("NSIS packages can currently be built only on Windows hosts.");
         }
@@ -40,11 +41,9 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath) 
             item.OutputDirectory,
             $"{safeProductName}-{configuration.Version}-setup.exe");
         var scriptPath = Path.Combine(context.WorkDirectory, "installer.nsi");
-        var template = await File.ReadAllTextAsync(fullTemplatePath, cancellationToken);
-        await File.WriteAllTextAsync(
-            scriptPath,
-            CreateScript(template, configuration, item, installerPath, safeProductName),
-            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        var template = File.ReadAllText(fullTemplatePath);
+        File.WriteAllText(scriptPath, CreateScript(template, configuration, item, installerPath, safeProductName));
 
         await ProcessRunner.RunAsync(
             fullCompilerPath,
@@ -86,27 +85,27 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath) 
     }
 
     private static string Escape(string value) => value
-        .Replace("$", "$$", StringComparison.Ordinal)
-        .Replace("\"", "$\\\"", StringComparison.Ordinal)
-        .Replace("\r", " ", StringComparison.Ordinal)
-        .Replace("\n", " ", StringComparison.Ordinal);
+        .Replace("$", "$$")
+        .Replace("\"", "$\\\"")
+        .Replace("\r", " ")
+        .Replace("\n", " ");
 
     private static string SafeFileName(string value)
     {
-        var invalid = Path.GetInvalidFileNameChars().ToHashSet();
+        var invalid = new HashSet<char>(Path.GetInvalidFileNameChars());
         var result = new string(value.Select(character => invalid.Contains(character) ? '_' : character).ToArray()).Trim();
         return string.IsNullOrWhiteSpace(result) || result is "." or ".." ? "Application" : result;
     }
 
     private static string NumericVersion(string version)
     {
-        var components = version.Split(['-', '+'], 2)[0].Split('.').Take(4).ToList();
+        var components = version.Split(new[] { '-', '+' }, 2)[0].Split('.').Take(4).ToList();
         while (components.Count < 4)
         {
             components.Add("0");
         }
 
-        return string.Join('.', components);
+        return string.Join(".", components);
     }
 
     private static long EstimateSizeInKilobytes(string directory)

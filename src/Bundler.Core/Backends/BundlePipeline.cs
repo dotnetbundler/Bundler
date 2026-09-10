@@ -18,12 +18,17 @@ public sealed class BundlePipeline(IEnumerable<IBundleBackend> backends)
 
         foreach (var item in plan.Items)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!_backends.TryGetValue((item.Target.OperatingSystem, item.Format), out var backend))
+            if (!_backends.ContainsKey((item.Target.OperatingSystem, item.Format)))
             {
                 throw new NotSupportedException(
                     $"No backend is registered for {item.Target.OperatingSystem}/{item.Format}.");
             }
+        }
+
+        foreach (var item in plan.Items)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var backend = _backends[(item.Target.OperatingSystem, item.Format)];
 
             Directory.CreateDirectory(item.OutputDirectory);
             var workDirectory = Path.Combine(

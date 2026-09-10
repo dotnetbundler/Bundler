@@ -4,13 +4,23 @@ using Bundler.Core.Models;
 
 namespace Bundler.Core.Validation;
 
-public static partial class BundleConfigurationValidator
+public static class BundleConfigurationValidator
 {
+    private static readonly Regex IdentifierPattern = new(
+        "^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$",
+        RegexOptions.Compiled);
+    private static readonly Regex VersionPattern = new(
+        "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+        RegexOptions.Compiled);
+
     public static IReadOnlyList<ValidationIssue> Validate(
         BundleConfiguration configuration,
         bool checkFileSystem = true)
     {
-        ArgumentNullException.ThrowIfNull(configuration);
+        if (configuration is null)
+        {
+            throw new ArgumentNullException(nameof(configuration));
+        }
         var issues = new List<ValidationIssue>();
 
         Required(configuration.ProductName, "productName", issues);
@@ -19,13 +29,13 @@ public static partial class BundleConfigurationValidator
         Required(configuration.OutputDirectory, "outputDirectory", issues);
 
         if (!string.IsNullOrWhiteSpace(configuration.Identifier) &&
-            !IdentifierPattern().IsMatch(configuration.Identifier))
+            !IdentifierPattern.IsMatch(configuration.Identifier))
         {
             issues.Add(new("identifier", "Must be a reverse-DNS identifier such as 'com.example.app'."));
         }
 
         if (!string.IsNullOrWhiteSpace(configuration.Version) &&
-            !VersionPattern().IsMatch(configuration.Version))
+            !VersionPattern.IsMatch(configuration.Version))
         {
             issues.Add(new("version", "Must be a SemVer-like version such as '1.2.3' or '1.2.3-beta.1'."));
         }
@@ -74,9 +84,10 @@ public static partial class BundleConfigurationValidator
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(targetConfiguration.MainExecutable) &&
-            (Path.IsPathRooted(targetConfiguration.MainExecutable) ||
-             targetConfiguration.MainExecutable.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+        var configuredExecutable = targetConfiguration.MainExecutable;
+        if (!string.IsNullOrWhiteSpace(configuredExecutable) &&
+            (Path.IsPathRooted(configuredExecutable) ||
+             configuredExecutable!.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                  .Contains("..", StringComparer.Ordinal)))
         {
             issues.Add(new($"{path}.mainExecutable", "Must stay inside inputDirectory."));
@@ -150,10 +161,4 @@ public static partial class BundleConfigurationValidator
             issues.Add(new(path, "Value is required."));
         }
     }
-
-    [GeneratedRegex("^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$")]
-    private static partial Regex IdentifierPattern();
-
-    [GeneratedRegex("^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$")]
-    private static partial Regex VersionPattern();
 }

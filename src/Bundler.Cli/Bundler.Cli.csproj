@@ -2,39 +2,9 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <AssemblyName>bundler</AssemblyName>
-    <IsPackable>true</IsPackable>
-    <PackageId>DotNet.Bundler</PackageId>
-    <PackageVersion>0.1.0-alpha.4</PackageVersion>
-    <Authors>Bundler contributors</Authors>
-    <Description>Automatic desktop installer generation for published .NET applications.</Description>
-    <PackageTags>dotnet;bundler;installer;nsis;desktop</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <DevelopmentDependency>true</DevelopmentDependency>
-    <IncludeBuildOutput>false</IncludeBuildOutput>
-    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
-    <NoWarn>$(NoWarn);NU5100</NoWarn>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
-    <ProjectReference Include="..\Bundler.MSBuild\Bundler.MSBuild.csproj"
-                      ReferenceOutputAssembly="false" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="$(TargetPath)" Pack="true" PackagePath="tools/net8.0/any/" />
-    <None Include="$(TargetDir)bundler.deps.json" Pack="true" PackagePath="tools/net8.0/any/" />
-    <None Include="$(TargetDir)bundler.runtimeconfig.json" Pack="true" PackagePath="tools/net8.0/any/" />
-    <None Include="$(TargetDir)Bundler.Core.dll" Pack="true" PackagePath="tools/net8.0/any/" />
-    <None Include="..\Bundler.MSBuild\bin\$(Configuration)\netstandard2.0\DotNet.Bundler.MSBuild.dll"
-          Pack="true" PackagePath="tasks/netstandard2.0/" />
-    <None Include="..\Bundler.MSBuild\bin\$(Configuration)\netstandard2.0\DotNet.Bundler.MSBuild.deps.json"
-          Pack="true" PackagePath="tasks/netstandard2.0/" />
-    <None Include="..\..\buildTransitive\DotNet.Bundler.props" Pack="true" PackagePath="buildTransitive/" />
-    <None Include="..\..\buildTransitive\DotNet.Bundler.targets" Pack="true" PackagePath="buildTransitive/" />
-    <None Include="..\..\third_party\nsis\nsis-3.12.zip" Pack="true" PackagePath="tools/nsis/" />
-    <None Include="..\..\third_party\nsis\COPYING" Pack="true" PackagePath="tools/nsis/" />
-    <None Include="..\..\templates\nsis\installer.nsi" Pack="true" PackagePath="templates/nsis/" />
-    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
-    <None Include="..\..\README.zh-CN.md" Pack="true" PackagePath="/" />
-    <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

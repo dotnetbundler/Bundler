@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text;
 using Bundler.Core.Backends;
 using Bundler.Core.Backends.Windows;
 using Bundler.Core.Configuration;
@@ -19,7 +18,6 @@ static async Task<int> RunAsync(string[] args)
         {
             "validate" when args.Length == 2 => await ValidateAsync(args[1]),
             "plan" when args.Length == 2 => await PlanAsync(args[1]),
-            "bundle" when args.Length == 3 && args[1] == "--request-file" => await BundleAsync(LoadRequest(args[2])),
             "bundle" => await BundleAsync(ParseOptions(args.Skip(1).ToArray())),
             _ => PrintUsage()
         };
@@ -106,34 +104,6 @@ static async Task<int> BundleAsync(IReadOnlyDictionary<string, string> options)
     return 0;
 }
 
-static Dictionary<string, string> LoadRequest(string requestPath)
-{
-    var lines = File.ReadAllLines(Path.GetFullPath(requestPath));
-    if (lines.Length == 0 || lines[0] != "DotNet.Bundler.Request.v1")
-    {
-        throw new InvalidDataException("Unsupported or missing bundle request header.");
-    }
-
-    var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-    foreach (var line in lines.Skip(1))
-    {
-        var separator = line.IndexOf('=');
-        if (separator <= 0)
-        {
-            throw new InvalidDataException("The bundle request contains an invalid line.");
-        }
-
-        var key = line[..separator];
-        var value = Encoding.UTF8.GetString(Convert.FromBase64String(line[(separator + 1)..]));
-        if (!values.TryAdd(key, value))
-        {
-            throw new InvalidDataException($"The bundle request contains duplicate key '{key}'.");
-        }
-    }
-
-    return values;
-}
-
 static Dictionary<string, string> ParseOptions(string[] arguments)
 {
     if (arguments.Length % 2 != 0)
@@ -172,6 +142,6 @@ static int PrintUsage()
     Console.Error.WriteLine("Usage:");
     Console.Error.WriteLine("  bundler validate <configuration.json>");
     Console.Error.WriteLine("  bundler plan <configuration.json>");
-    Console.Error.WriteLine("  bundler bundle --request-file <path>");
+    Console.Error.WriteLine("  bundler bundle --name value [...]");
     return 2;
 }

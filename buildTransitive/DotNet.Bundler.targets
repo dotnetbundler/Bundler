@@ -1,7 +1,6 @@
 <Project>
   <PropertyGroup>
     <_BundlerPackageRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\'))</_BundlerPackageRoot>
-    <_BundlerDriver>$(_BundlerPackageRoot)tools\net8.0\any\bundler.dll</_BundlerDriver>
     <_BundlerTaskAssembly>$(_BundlerPackageRoot)tasks\netstandard2.0\DotNet.Bundler.MSBuild.dll</_BundlerTaskAssembly>
     <_BundlerNsisArchive>$(_BundlerPackageRoot)tools\nsis\nsis-3.12.zip</_BundlerNsisArchive>
     <_BundlerDefaultNsisTemplate>$(_BundlerPackageRoot)templates\nsis\installer.nsi</_BundlerDefaultNsisTemplate>
@@ -23,26 +22,24 @@
            Text="BundlerIdentifier is required when BundlerEnabled is true." />
     <Error Condition="'$(RuntimeIdentifier)' == ''"
            Text="RuntimeIdentifier is required when BundlerEnabled is true." />
-    <Error Condition="!$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))"
-           Text="The first Bundler release supports Windows RIDs only." />
-    <Error Condition="'$(BundlerFormat)' != 'nsis'"
-           Text="The first Bundler release supports the nsis format only." />
-
-    <Message Importance="high" Text="Bundling $(BundlerProductName) for $(RuntimeIdentifier) as NSIS..." />
+    <Message Importance="high" Text="Bundling $(BundlerProductName) for $(RuntimeIdentifier): $(BundlerFormats)..." />
     <DotNet.Bundler.MSBuild.BundleDesktopApplication
-      DriverPath="$(_BundlerDriver)"
       ProductName="$(BundlerProductName)"
       Identifier="$(BundlerIdentifier)"
       Version="$(BundlerVersion)"
       Publisher="$(BundlerPublisher)"
+      Description="$(BundlerDescription)"
       RuntimeIdentifier="$(RuntimeIdentifier)"
       InputDirectory="$(PublishDir)"
       OutputDirectory="$(BundlerOutputPath)"
       MainExecutable="$(BundlerMainExecutable)"
-      Format="$(BundlerFormat)"
-      ToolArchivePath="$(_BundlerNsisArchive)"
+      Formats="$(BundlerFormats)"
+      Icons="@(BundlerIcon)"
+      Resources="@(BundlerResource)"
+      NsisToolArchivePath="$(_BundlerNsisArchive)"
       ToolCacheDirectory="$(BundlerToolCachePath)"
-      TemplatePath="$(BundlerNsisTemplate)"
-      IntermediateDirectory="$(IntermediateOutputPath)bundler" />
+      NsisTemplatePath="$(BundlerNsisTemplate)">
+      <Output TaskParameter="Artifacts" ItemName="BundlerArtifact" />
+    </DotNet.Bundler.MSBuild.BundleDesktopApplication>
   </Target>
 </Project>

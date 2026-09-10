@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 
 namespace Bundler.Core.Tools;
 
@@ -8,12 +9,12 @@ public static class NsisToolResolver
     public const string Version = "3.12";
     public const string ArchiveSha256 = "56581F90DB321581C5381193D796FFFCF2D24B2F8FED2160A6C6A3BAA67F2C4F";
 
-    public static async Task<string> ResolveAsync(
+    public static Task<string> ResolveAsync(
         string archivePath,
         string cacheDirectory,
         CancellationToken cancellationToken = default)
     {
-        if (!OperatingSystem.IsWindows())
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             throw new PlatformNotSupportedException("The bundled NSIS compiler runs on Windows hosts only.");
         }
@@ -25,13 +26,14 @@ public static class NsisToolResolver
             throw new FileNotFoundException("The bundled NSIS archive is missing.", archivePath);
         }
 
-        await VerifyArchiveAsync(archivePath, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        VerifyArchive(archivePath);
 
-        var toolDirectory = Path.Combine(cacheDirectory, $"nsis-{Version}-{ArchiveSha256[..12].ToLowerInvariant()}");
+        var toolDirectory = Path.Combine(cacheDirectory, $"nsis-{Version}-{ArchiveSha256.Substring(0, 12).ToLowerInvariant()}");
         var compilerPath = Path.Combine(toolDirectory, $"nsis-{Version}", "makensis.exe");
         if (File.Exists(compilerPath))
         {
-            return compilerPath;
+            return Task.FromResult(compilerPath);
         }
 
         Directory.CreateDirectory(cacheDirectory);
@@ -63,15 +65,16 @@ public static class NsisToolResolver
         }
 
         return File.Exists(compilerPath)
-            ? compilerPath
+            ? Task.FromResult(compilerPath)
             : throw new InvalidOperationException("NSIS extraction completed without producing makensis.exe.");
     }
 
-    private static async Task VerifyArchiveAsync(string archivePath, CancellationToken cancellationToken)
+    private static void VerifyArchive(string archivePath)
     {
-        await using var stream = File.OpenRead(archivePath);
-        var hash = await SHA256.HashDataAsync(stream, cancellationToken);
-        var actualHash = Convert.ToHexString(hash);
+        using var stream = File.OpenRead(archivePath);
+        using var sha256 = SHA256.Create();
+        var hash = sha256.ComputeHash(stream);
+        var actualHash = BitConverter.ToString(hash).Replace("-", string.Empty);
         if (!actualHash.Equals(ArchiveSha256, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException(

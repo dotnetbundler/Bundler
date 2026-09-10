@@ -2,14 +2,25 @@ using System.Text.RegularExpressions;
 
 namespace Bundler.Core.Templates;
 
-public static partial class TemplateRenderer
+public static class TemplateRenderer
 {
+    private static readonly Regex TokenPattern = new(
+        "\\{\\{([a-z0-9_]+)\\}\\}",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     public static string Render(string template, IReadOnlyDictionary<string, string> values)
     {
-        ArgumentNullException.ThrowIfNull(template);
-        ArgumentNullException.ThrowIfNull(values);
+        if (template is null)
+        {
+            throw new ArgumentNullException(nameof(template));
+        }
 
-        var rendered = TokenPattern().Replace(template, match =>
+        if (values is null)
+        {
+            throw new ArgumentNullException(nameof(values));
+        }
+
+        var rendered = TokenPattern.Replace(template, match =>
         {
             var name = match.Groups[1].Value;
             return values.TryGetValue(name, out var value)
@@ -19,7 +30,4 @@ public static partial class TemplateRenderer
 
         return rendered;
     }
-
-    [GeneratedRegex("\\{\\{([a-z0-9_]+)\\}\\}", RegexOptions.CultureInvariant)]
-    private static partial Regex TokenPattern();
 }

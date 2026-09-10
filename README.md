@@ -10,7 +10,7 @@ The first supported path is Windows + NSIS. MSI, macOS and Linux formats are pla
 
 The package carries a pinned NSIS 3.12 portable archive. Consumers do not install NSIS themselves. The archive is verified with SHA-256 and extracted into the project's intermediate directory when first used. This per-project cache is intentional for the first release and may become a shared content-addressed cache later.
 
-The in-process MSBuild task targets `netstandard2.0` for compatibility with MSBuild hosts. It starts the bundled `net8.0` packaging driver out of process, so the .NET 8 runtime/SDK is currently required when bundling.
+The MSBuild task and the Core assembly it loads both target `netstandard2.0`. Packaging decisions and backend orchestration run directly inside MSBuild; the package does not launch a separate .NET CLI driver. NSIS compilation still starts the bundled `makensis.exe`, because that executable is the actual installer compiler.
 
 ## Consumer configuration
 
@@ -28,7 +28,7 @@ The in-process MSBuild task targets `netstandard2.0` for compatibility with MSBu
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.4" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.5" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -48,14 +48,26 @@ The installer is written to `artifacts/<rid>/nsis/` by default. Installer genera
 | `BundlerEnabled` | Yes | `false` |
 | `BundlerIdentifier` | Yes | — |
 | `RuntimeIdentifier` | Yes | — |
-| `BundlerFormat` | No | `nsis` |
+| `BundlerFormats` | No | `nsis` |
 | `BundlerProductName` | No | `$(AssemblyName)` |
 | `BundlerVersion` | No | `$(Version)` |
 | `BundlerMainExecutable` | No | `$(TargetName).exe` |
 | `BundlerPublisher` | No | `$(Company)` |
+| `BundlerDescription` | No | `$(Description)` |
 | `BundlerOutputPath` | No | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerToolCachePath` | No | `$(BaseIntermediateOutputPath)bundler\tools` |
 | `BundlerNsisTemplate` | No | Template included in the package |
+
+Multiple formats use a semicolon-separated value, for example `<BundlerFormats>nsis;msi</BundlerFormats>`. The task parses the complete request and the Core planner determines the required package steps. At present only the NSIS backend is implemented, so requesting MSI intentionally fails instead of silently skipping it.
+
+Icons and extra resources are passed as MSBuild items:
+
+```xml
+<ItemGroup>
+  <BundlerIcon Include="Assets\app.ico" />
+  <BundlerResource Include="Assets\licenses\**\*" />
+</ItemGroup>
+```
 
 ## Packaging pipeline and NSIS customization
 
@@ -70,10 +82,10 @@ This is a practical Tauri-inspired baseline, not feature parity. Upgrade/downgra
 ```powershell
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Core.Tests/Bundler.Core.Tests.csproj
-dotnet pack src/Bundler.Cli/Bundler.Cli.csproj -c Release -o artifacts/packages
+dotnet pack src/Bundler.MSBuild/Bundler.MSBuild.csproj -c Release -o artifacts/packages
 ```
 
-The repository also retains the `validate` and `plan` CLI commands for development and diagnostics. See `examples/bundler.example.json` for the configuration-file shape.
+The Core project contains configuration, validation, planning, tool resolution, and backends without depending on MSBuild. The existing CLI is retained as a development client of Core, but it is no longer shipped in the NuGet build package.
 
 ## Security and licensing
 

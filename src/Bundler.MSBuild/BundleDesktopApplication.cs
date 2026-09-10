@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Text;
+using System.Linq;
+using Bundler.Core.Backends;
+using Bundler.Core.Backends.Windows;
+using Bundler.Core.Configuration;
+using Bundler.Core.Models;
+using Bundler.Core.Tools;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 
@@ -10,93 +14,69 @@ namespace DotNet.Bundler.MSBuild;
 
 public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
 {
-    [Required]
-    public string DriverPath { get; set; } = "";
-
-    [Required]
-    public string ProductName { get; set; } = "";
-
-    [Required]
-    public string Identifier { get; set; } = "";
-
-    [Required]
-    public string Version { get; set; } = "";
-
+    [Required] public string ProductName { get; set; } = "";
+    [Required] public string Identifier { get; set; } = "";
+    [Required] public string Version { get; set; } = "";
     public string Publisher { get; set; } = "";
-
-    [Required]
-    public string RuntimeIdentifier { get; set; } = "";
-
-    [Required]
-    public string InputDirectory { get; set; } = "";
-
-    [Required]
-    public string OutputDirectory { get; set; } = "";
-
-    [Required]
-    public string MainExecutable { get; set; } = "";
-
-    [Required]
-    public string Format { get; set; } = "";
-
-    [Required]
-    public string ToolArchivePath { get; set; } = "";
-
-    [Required]
-    public string ToolCacheDirectory { get; set; } = "";
-
-    [Required]
-    public string TemplatePath { get; set; } = "";
-
-    [Required]
-    public string IntermediateDirectory { get; set; } = "";
-
-    [Output]
-    public string RequestFile { get; private set; } = "";
+    public string Description { get; set; } = "";
+    [Required] public string RuntimeIdentifier { get; set; } = "";
+    [Required] public string InputDirectory { get; set; } = "";
+    [Required] public string OutputDirectory { get; set; } = "";
+    [Required] public string MainExecutable { get; set; } = "";
+    [Required] public string Formats { get; set; } = "";
+    public ITaskItem[] Icons { get; set; } = Array.Empty<ITaskItem>();
+    public ITaskItem[] Resources { get; set; } = Array.Empty<ITaskItem>();
+    public string NsisToolArchivePath { get; set; } = "";
+    [Required] public string ToolCacheDirectory { get; set; } = "";
+    public string NsisTemplatePath { get; set; } = "";
+    [Output] public ITaskItem[] Artifacts { get; private set; } = Array.Empty<ITaskItem>();
 
     public override bool Execute()
     {
         try
         {
-            var intermediateDirectory = Path.GetFullPath(IntermediateDirectory);
-            Directory.CreateDirectory(intermediateDirectory);
-            RequestFile = Path.Combine(intermediateDirectory, "bundle-request.txt");
-            WriteRequest(RequestFile);
-
-            var startInfo = new ProcessStartInfo
+            var formats = ParseFormats();
+            var configuration = new BundleConfiguration
             {
-                FileName = "dotnet",
-                Arguments = "exec " + Quote(DriverPath) + " bundle --request-file " + Quote(RequestFile),
-                WorkingDirectory = intermediateDirectory,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
+                ProductName = ProductName,
+                Identifier = Identifier,
+                Version = Version,
+                Publisher = EmptyToNull(Publisher),
+                Description = EmptyToNull(Description),
+                OutputDirectory = Path.GetFullPath(OutputDirectory),
+                Icons = Icons.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
+                Resources = Resources.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
+                Targets = new[]
+                {
+                    new BundleTargetConfiguration
+                    {
+                        RuntimeIdentifier = RuntimeIdentifier,
+                        InputDirectory = Path.GetFullPath(InputDirectory),
+                        MainExecutable = MainExecutable,
+                        Formats = formats
+                    }
+                }
             };
 
-            using (var process = Process.Start(startInfo))
+            var artifacts = new BundlePipeline(CreateBackends(formats))
+                .BuildAsync(configuration)
+                .GetAwaiter()
+                .GetResult();
+
+            Artifacts = artifacts.Select(artifact =>
             {
-                if (process == null)
-                {
-                    Log.LogError("Failed to start the DotNet.Bundler driver.");
-                    return false;
-                }
+                var item = new TaskItem(artifact.Path);
+                item.SetMetadata("Format", artifact.Format.ToString());
+                item.SetMetadata("RuntimeIdentifier", artifact.RuntimeIdentifier);
+                return (ITaskItem)item;
+            }).ToArray();
 
-                var outputRead = process.StandardOutput.ReadToEndAsync();
-                var errorRead = process.StandardError.ReadToEndAsync();
-                process.WaitForExit();
-                System.Threading.Tasks.Task.WaitAll(outputRead, errorRead);
-
-                LogLines(outputRead.Result, isError: false);
-                LogLines(errorRead.Result, isError: true);
-                if (process.ExitCode != 0)
-                {
-                    Log.LogError("DotNet.Bundler exited with code {0}.", process.ExitCode);
-                    return false;
-                }
+            foreach (var artifact in artifacts)
+            {
+                Log.LogMessage(MessageImportance.High, "Created {0}", artifact.Path);
             }
 
-            return !Log.HasLoggedErrors;
+            return true;
         }
         catch (Exception exception)
         {
@@ -105,51 +85,50 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         }
     }
 
-    private void WriteRequest(string path)
+    private IReadOnlyList<PackageFormat> ParseFormats()
     {
-        var values = new Dictionary<string, string>(StringComparer.Ordinal)
+        var result = new List<PackageFormat>();
+        foreach (var value in Formats.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries))
         {
-            ["product-name"] = ProductName,
-            ["identifier"] = Identifier,
-            ["version"] = Version,
-            ["publisher"] = Publisher,
-            ["rid"] = RuntimeIdentifier,
-            ["input"] = Path.GetFullPath(InputDirectory),
-            ["output"] = Path.GetFullPath(OutputDirectory),
-            ["main-executable"] = MainExecutable,
-            ["format"] = Format,
-            ["tool-archive"] = Path.GetFullPath(ToolArchivePath),
-            ["tool-cache"] = Path.GetFullPath(ToolCacheDirectory),
-            ["template"] = Path.GetFullPath(TemplatePath)
-        };
-
-        var lines = new List<string> { "DotNet.Bundler.Request.v1" };
-        foreach (var pair in values)
-        {
-            lines.Add(pair.Key + "=" + Convert.ToBase64String(Encoding.UTF8.GetBytes(pair.Value ?? "")));
-        }
-
-        File.WriteAllLines(path, lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-    }
-
-    private void LogLines(string text, bool isError)
-    {
-        using (var reader = new StringReader(text))
-        {
-            string? line;
-            while ((line = reader.ReadLine()) != null)
+            PackageFormat format;
+            if (!Enum.TryParse(value.Trim(), true, out format))
             {
-                if (isError)
-                {
-                    Log.LogError(line);
-                }
-                else
-                {
-                    Log.LogMessage(MessageImportance.High, line);
-                }
+                throw new ArgumentException("Unknown bundle format '" + value.Trim() + "'.", nameof(Formats));
+            }
+
+            if (!result.Contains(format))
+            {
+                result.Add(format);
             }
         }
+
+        if (result.Count == 0)
+        {
+            throw new ArgumentException("At least one bundle format is required.", nameof(Formats));
+        }
+
+        return result;
     }
 
-    private static string Quote(string value) => "\"" + value.Replace("\"", "\\\"") + "\"";
+    private IReadOnlyList<IBundleBackend> CreateBackends(IReadOnlyList<PackageFormat> formats)
+    {
+        var backends = new List<IBundleBackend>();
+        if (formats.Contains(PackageFormat.Nsis))
+        {
+            if (string.IsNullOrWhiteSpace(NsisToolArchivePath) || string.IsNullOrWhiteSpace(NsisTemplatePath))
+            {
+                throw new InvalidOperationException("NSIS packaging requires its bundled tool archive and script template.");
+            }
+
+            var compiler = NsisToolResolver.ResolveAsync(NsisToolArchivePath, ToolCacheDirectory)
+                .GetAwaiter()
+                .GetResult();
+            backends.Add(new NsisBundleBackend(compiler, NsisTemplatePath));
+        }
+
+        return backends;
+    }
+
+    private static string? EmptyToNull(string value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 }

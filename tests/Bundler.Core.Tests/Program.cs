@@ -16,7 +16,8 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Verifies and extracts bundled NSIS", VerifiesAndExtractsBundledNsis),
     ("Writes a valid Windows uninstall command", () => RunSync(WritesValidWindowsUninstallCommand)),
     ("Rejects unknown template variables", () => RunSync(RejectsUnknownTemplateVariables)),
-    ("Runs backends through the common pipeline", RunsBackendsThroughCommonPipeline)
+    ("Runs backends through the common pipeline", RunsBackendsThroughCommonPipeline),
+    ("Preflights every requested backend", PreflightsEveryRequestedBackend)
 };
 
 var failed = 0;
@@ -206,6 +207,53 @@ static async Task RunsBackendsThroughCommonPipeline()
     }
 }
 
+static async Task PreflightsEveryRequestedBackend()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "publish");
+    Directory.CreateDirectory(input);
+    await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp.exe"), "test");
+    var backend = new RecordingBackend();
+
+    try
+    {
+        var configuration = new BundleConfiguration
+        {
+            ProductName = "ExampleApp",
+            Identifier = "com.example.app",
+            Version = "1.0.0",
+            OutputDirectory = Path.Combine(root, "artifacts"),
+            Targets =
+            [
+                new BundleTargetConfiguration
+                {
+                    RuntimeIdentifier = "win-x64",
+                    InputDirectory = input,
+                    MainExecutable = "ExampleApp.exe",
+                    Formats = [PackageFormat.Nsis, PackageFormat.Msi]
+                }
+            ]
+        };
+
+        try
+        {
+            await new BundlePipeline([backend]).BuildAsync(configuration);
+            throw new InvalidOperationException("A missing MSI backend should have failed preflight.");
+        }
+        catch (NotSupportedException exception)
+        {
+            Assert(exception.Message.Contains("Msi", StringComparison.Ordinal),
+                "The preflight error should identify the missing format backend.");
+            Assert(backend.InvocationCount == 0,
+                "No backend should run until every planned format has passed preflight.");
+        }
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
 static string RepositoryRoot() => Path.GetFullPath("../../../../../", AppContext.BaseDirectory);
 
 static Task RunSync(Action action)
@@ -236,11 +284,13 @@ file sealed class RecordingBackend : IBundleBackend
     public PackageFormat Format => PackageFormat.Nsis;
     public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
     public string? WorkDirectory { get; private set; }
+    public int InvocationCount { get; private set; }
 
     public async Task<BundleArtifact> BuildAsync(
         BundleBuildContext context,
         CancellationToken cancellationToken = default)
     {
+        InvocationCount++;
         WorkDirectory = context.WorkDirectory;
         var path = Path.Combine(context.Item.OutputDirectory, "recording-installer.exe");
         await File.WriteAllTextAsync(path, "artifact", cancellationToken);

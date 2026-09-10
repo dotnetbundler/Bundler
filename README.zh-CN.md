@@ -10,7 +10,7 @@
 
 NuGet 包内携带固定版本的 NSIS 3.12 便携压缩包，使用者无需自行安装 NSIS。首次使用时会先校验 SHA-256，再解压到项目的中间输出目录。首个版本有意保留项目级缓存，后续可迭代为按内容寻址的共享缓存。
 
-进程内运行的 MSBuild Task 以 `netstandard2.0` 为目标框架，以兼容不同 MSBuild 宿主。它会在进程外启动包内的 `net8.0` 打包驱动，因此当前执行打包仍要求机器具备 .NET 8 SDK/运行时。
+MSBuild Task 及其直接加载的 Core 程序集都以 `netstandard2.0` 为目标框架。打包决策和后端调度直接在 MSBuild 进程内完成，包不会再启动额外的 .NET CLI 驱动。NSIS 编译仍会启动包内的 `makensis.exe`，因为它本身就是安装程序编译器。
 
 ## 使用配置
 
@@ -28,7 +28,7 @@ NuGet 包内携带固定版本的 NSIS 3.12 便携压缩包，使用者无需自
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.4" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.5" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -48,14 +48,26 @@ dotnet publish -c Release
 | `BundlerEnabled` | 是 | `false` |
 | `BundlerIdentifier` | 是 | — |
 | `RuntimeIdentifier` | 是 | — |
-| `BundlerFormat` | 否 | `nsis` |
+| `BundlerFormats` | 否 | `nsis` |
 | `BundlerProductName` | 否 | `$(AssemblyName)` |
 | `BundlerVersion` | 否 | `$(Version)` |
 | `BundlerMainExecutable` | 否 | `$(TargetName).exe` |
 | `BundlerPublisher` | 否 | `$(Company)` |
+| `BundlerDescription` | 否 | `$(Description)` |
 | `BundlerOutputPath` | 否 | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerToolCachePath` | 否 | `$(BaseIntermediateOutputPath)bundler\tools` |
 | `BundlerNsisTemplate` | 否 | 包内自带模板 |
+
+多个格式使用分号分隔，例如 `<BundlerFormats>nsis;msi</BundlerFormats>`。Task 会解析完整请求，再由 Core 规划需要执行的打包步骤。目前只有 NSIS 后端已经实现，因此请求 MSI 会明确失败，不会被静默忽略。
+
+图标和额外资源通过 MSBuild Item 传入：
+
+```xml
+<ItemGroup>
+  <BundlerIcon Include="Assets\app.ico" />
+  <BundlerResource Include="Assets\licenses\**\*" />
+</ItemGroup>
+```
 
 ## 通用打包流程与 NSIS 定制
 
@@ -70,10 +82,10 @@ NSIS 脚本存放在 `templates/nsis/installer.nsi` 文件中，不再嵌入 C#�
 ```powershell
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Core.Tests/Bundler.Core.Tests.csproj
-dotnet pack src/Bundler.Cli/Bundler.Cli.csproj -c Release -o artifacts/packages
+dotnet pack src/Bundler.MSBuild/Bundler.MSBuild.csproj -c Release -o artifacts/packages
 ```
 
-仓库仍保留 `validate` 和 `plan` CLI 命令，供开发和诊断使用。配置文件结构可参考 `examples/bundler.example.json`。
+Core 项目包含配置、校验、规划、工具解析和打包后端，并不依赖 MSBuild。现有 CLI 仍作为 Core 的开发调用端保留，但不再发布到 NuGet 构建包中。
 
 ## 安全与许可证
 

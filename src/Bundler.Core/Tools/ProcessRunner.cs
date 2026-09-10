@@ -20,10 +20,7 @@ internal static class ProcessRunner
             CreateNoWindow = true
         };
 
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
+        startInfo.Arguments = string.Join(" ", arguments.Select(QuoteArgument));
 
         using var process = new Process { StartInfo = startInfo };
         if (!process.Start())
@@ -31,11 +28,13 @@ internal static class ProcessRunner
             throw new InvalidOperationException($"Failed to start '{executable}'.");
         }
 
-        var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-        var output = await standardOutput;
-        var error = await standardError;
+        var standardOutput = process.StandardOutput.ReadToEndAsync();
+        var standardError = process.StandardError.ReadToEndAsync();
+        process.WaitForExit();
+        await Task.WhenAll(standardOutput, standardError);
+        cancellationToken.ThrowIfCancellationRequested();
+        var output = standardOutput.Result;
+        var error = standardError.Result;
 
         if (process.ExitCode != 0)
         {
@@ -43,4 +42,7 @@ internal static class ProcessRunner
                 $"'{Path.GetFileName(executable)}' exited with code {process.ExitCode}.{Environment.NewLine}{output}{error}".TrimEnd());
         }
     }
+
+    private static string QuoteArgument(string argument) =>
+        "\"" + argument.Replace("\"", "\\\"") + "\"";
 }
