@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Bundler.Core.Tools;
+namespace DotNet.Bundler.Nsis;
 
 internal static class ProcessRunner
 {

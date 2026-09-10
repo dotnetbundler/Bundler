@@ -15,7 +15,6 @@ public sealed class BundleConfiguration
     public string OutputDirectory { get; init; } = "artifacts";
     public IReadOnlyList<string> Icons { get; init; } = [];
     public IReadOnlyList<BundleResourceConfiguration> Resources { get; init; } = [];
-    public NsisBundleConfiguration Nsis { get; init; } = new();
     public IReadOnlyList<BundleTargetConfiguration> Targets { get; init; } = [];
 }
 
@@ -23,28 +22,6 @@ public sealed class BundleResourceConfiguration
 {
     public string Source { get; init; } = "";
     public string TargetPath { get; init; } = "";
-}
-
-public sealed class NsisBundleConfiguration
-{
-    public NsisInstallMode InstallMode { get; init; } = NsisInstallMode.CurrentUser;
-    public string? InstallerIcon { get; init; }
-    public string? UninstallerIcon { get; init; }
-    public string? HeaderImage { get; init; }
-    public string? SidebarImage { get; init; }
-    public string? UninstallerHeaderImage { get; init; }
-    public string? InstallerHooks { get; init; }
-    public IReadOnlyList<string> Languages { get; init; } = ["English"];
-    public IReadOnlyDictionary<string, string> CustomLanguageFiles { get; init; } =
-        new Dictionary<string, string>();
-    public bool DisplayLanguageSelector { get; init; }
-}
-
-public enum NsisInstallMode
-{
-    CurrentUser,
-    PerMachine,
-    Both
 }
 
 public sealed class BundleTargetConfiguration

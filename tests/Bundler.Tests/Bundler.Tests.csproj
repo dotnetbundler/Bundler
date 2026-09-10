@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Bundler.Core\Bundler.Core.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Nsis\Bundler.Nsis.csproj" />
   </ItemGroup>
 </Project>

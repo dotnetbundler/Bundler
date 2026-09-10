@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
+    <ProjectReference Include="..\Bundler.Nsis\Bundler.Nsis.csproj" />
   </ItemGroup>
 </Project>

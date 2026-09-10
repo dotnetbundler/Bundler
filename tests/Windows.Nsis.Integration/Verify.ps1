@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.11"
+    [string]$PackageVersion = "0.1.0-alpha.12"
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,7 +9,9 @@ $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $integrationRoot = Join-Path $repositoryRoot "artifacts\windows-nsis-integration"
 $packageDirectory = Join-Path $repositoryRoot "artifacts\packages"
 $packagePath = Join-Path $packageDirectory "DotNet.Bundler.$PackageVersion.nupkg"
+$nsisPackagePath = Join-Path $packageDirectory "DotNet.Bundler.Nsis.$PackageVersion.nupkg"
 $fixtureProject = Join-Path $PSScriptRoot "Fixture\BundlerIntegrationFixture.csproj"
+$apiFixtureProject = Join-Path $repositoryRoot "tests\Nsis.Api.PackageFixture\Nsis.Api.PackageFixture.csproj"
 $packageCache = Join-Path $integrationRoot "packages"
 $bundleOutput = Join-Path $integrationRoot "bundle"
 $perMachineBundleOutput = Join-Path $integrationRoot "bundle-per-machine"
@@ -108,6 +110,7 @@ function Remove-TestState {
 
 try {
     Assert-True (Test-Path -LiteralPath $packagePath) "Package not found: $packagePath"
+    Assert-True (Test-Path -LiteralPath $nsisPackagePath) "Package not found: $nsisPackagePath"
     $archive = [IO.Compression.ZipFile]::OpenRead($packagePath)
     try {
         $entries = @($archive.Entries | ForEach-Object FullName)
@@ -115,11 +118,8 @@ try {
             "buildTransitive/DotNet.Bundler.props",
             "buildTransitive/DotNet.Bundler.targets",
             "tasks/netstandard2.0/Bundler.Core.dll",
-            "tasks/netstandard2.0/DotNet.Bundler.MSBuild.dll",
-            "templates/nsis/installer.nsi",
-            "templates/nsis/languages/English.nsh",
-            "templates/nsis/languages/SimpChinese.nsh",
-            "tools/nsis/nsis-3.12.zip"
+            "tasks/netstandard2.0/DotNet.Bundler.Nsis.dll",
+            "tasks/netstandard2.0/DotNet.Bundler.MSBuild.dll"
         )) {
             Assert-True ($entries -contains $requiredEntry) "NuGet package is missing $requiredEntry"
         }
@@ -127,6 +127,15 @@ try {
     }
     finally {
         $archive.Dispose()
+    }
+    $nsisPackage = [IO.Compression.ZipFile]::OpenRead($nsisPackagePath)
+    try {
+        $entries = @($nsisPackage.Entries | ForEach-Object FullName)
+        Assert-True ($entries -contains "lib/netstandard2.0/DotNet.Bundler.Nsis.dll") "NSIS API package is missing its netstandard2.0 assembly."
+        Assert-True ($entries -contains "licenses/nsis/COPYING") "NSIS API package is missing the upstream NSIS license."
+    }
+    finally {
+        $nsisPackage.Dispose()
     }
     foreach ($path in $hookMarkers) {
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
@@ -137,6 +146,17 @@ try {
         Remove-Item -LiteralPath $packageCache -Recurse -Force
     }
     Remove-TestState
+
+    $apiOutput = Join-Path $integrationRoot "standalone-api"
+    Invoke-Native "dotnet" @(
+        "run", "--project", $apiFixtureProject, "-c", $Configuration,
+        "-p:BundlerPackageVersion=$PackageVersion",
+        "-p:BundlerPackageSource=$packageDirectory",
+        "-p:RestorePackagesPath=$packageCache",
+        "--", $apiOutput, (Join-Path $integrationRoot "shared-tools")
+    )
+    $apiInstaller = Join-Path $apiOutput "artifacts\win-x64\nsis\NSIS API Package Fixture-1.0.0-setup.exe"
+    Assert-True (Test-Path -LiteralPath $apiInstaller) "Standalone NSIS API package did not create its installer."
 
     $nsisArchivePath = Join-Path $repositoryRoot "third_party\nsis\nsis-3.12.zip"
     $nsisArchive = [IO.Compression.ZipFile]::OpenRead($nsisArchivePath)

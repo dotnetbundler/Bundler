@@ -8,9 +8,11 @@
 
 The first supported path is Windows + NSIS. MSI, macOS and Linux formats are planned but are not implemented yet.
 
-The package carries a pinned NSIS 3.12 portable archive. Consumers do not install NSIS themselves. The archive is verified with SHA-256 and extracted into the project's intermediate directory when first used. This per-project cache is intentional for the first release and may become a shared content-addressed cache later.
+The implementation is split into reusable NuGet packages. `DotNet.Bundler.Core` owns format-neutral planning and orchestration, `DotNet.Bundler.Nsis` exposes the standalone NSIS API and owns all NSIS implementation assets, and `DotNet.Bundler` is the thin MSBuild integration package.
 
-The MSBuild task and the Core assembly it loads both target `netstandard2.0`. Packaging decisions and backend orchestration run directly inside MSBuild; the package does not launch a separate .NET CLI driver. NSIS compilation still starts the bundled `makensis.exe`, because that executable is the actual installer compiler.
+`DotNet.Bundler.Nsis` carries a pinned NSIS 3.12 portable archive as an embedded resource. Consumers do not install NSIS or download tools themselves. The archive is verified with SHA-256 and extracted once into the shared `%LOCALAPPDATA%\DotNetBundler\tools` cache. Projects on the same machine reuse the content-addressed tool directory.
+
+The MSBuild task and the Core/NSIS assemblies it loads all provide `netstandard2.0` assets. Packaging decisions and backend orchestration run directly inside MSBuild; the package does not launch a separate .NET CLI driver. NSIS compilation still starts the bundled `makensis.exe`, because that executable is the actual installer compiler.
 
 ## Consumer configuration
 
@@ -28,7 +30,7 @@ The MSBuild task and the Core assembly it loads both target `netstandard2.0`. Pa
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.11" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.12" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -40,6 +42,44 @@ dotnet publish -c Release
 ```
 
 The installer is written to `artifacts/<rid>/nsis/` by default. Installer generation runs after `Publish`, not after an ordinary `Build`.
+
+## Standalone NSIS API
+
+Applications and build tools that do not use MSBuild integration can reference `DotNet.Bundler.Nsis` directly:
+
+```xml
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.12" />
+```
+
+```csharp
+using Bundler.Core.Configuration;
+using Bundler.Core.Models;
+using DotNet.Bundler.Nsis;
+
+var request = new BundleConfiguration
+{
+    ProductName = "My App",
+    Identifier = "com.example.myapp",
+    Version = "1.0.0",
+    OutputDirectory = "artifacts",
+    Targets =
+    [
+        new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "win-x64",
+            InputDirectory = "publish/win-x64",
+            MainExecutable = "MyApp.exe",
+            Formats = [PackageFormat.Nsis]
+        }
+    ]
+};
+
+var artifacts = await new NsisBundler().BuildAsync(request);
+```
+
+`NsisBundleConfiguration` controls NSIS-specific behavior. `NsisBundlerOptions` can override the shared cache, compiler, archive, template, or language directory for advanced and test scenarios; normal callers need none of those paths.
+
+The current implementation needs no custom NSIS plugin. If a future feature cannot be implemented reliably in NSIS script alone, its native plugin must be built with [`dotnetbundler/NsisPlugin`](https://github.com/dotnetbundler/NsisPlugin) as a separate `win-x86` Native AOT project, and the compiled DLL—not a build-time SDK requirement—will be embedded in `DotNet.Bundler.Nsis`.
 
 ## MSBuild properties
 
@@ -58,7 +98,7 @@ The installer is written to `artifacts/<rid>/nsis/` by default. Installer genera
 | `BundlerCopyright` | No | `$(Copyright)` |
 | `BundlerLicenseFile` | No | None; `.txt` or `.rtf` |
 | `BundlerOutputPath` | No | `$(MSBuildProjectDirectory)\artifacts` |
-| `BundlerToolCachePath` | No | `$(BaseIntermediateOutputPath)bundler\tools` |
+| `BundlerToolCachePath` | No | `%LOCALAPPDATA%\DotNetBundler\tools` |
 | `BundlerNsisTemplate` | No | Template included in the package |
 | `BundlerNsisInstallMode` | No | `currentUser`; also supports `perMachine` and `both` |
 | `BundlerNsisInstallerIcon` | No | First `BundlerIcon` `.ico` |
@@ -89,7 +129,7 @@ For NSIS, the first configured `.ico` is the fallback for both the installer and
 
 All formats run through one pipeline: validate configuration, build a format-aware plan, create an isolated work directory, invoke a backend, verify its artifact, and clean the work directory. Adding MSI, macOS, or Linux support should therefore add a backend instead of duplicating orchestration.
 
-The NSIS script is stored at `templates/nsis/installer.nsi`, not embedded in C#. Installer languages are configured like Tauri: `BundlerNsisLanguages` is a semicolon-separated list, the first language is the fallback, and the selector is shown only when `BundlerNsisDisplayLanguageSelector` is true and multiple languages are enabled. English and Simplified Chinese message files are bundled.
+The editable NSIS source template is stored at `templates/nsis/installer.nsi`. During package production it, the language files, and the NSIS archive are embedded into `DotNet.Bundler.Nsis`, so standalone API and MSBuild consumers get identical assets without project-output copies. Installer languages are configured like Tauri: `BundlerNsisLanguages` is a semicolon-separated list, the first language is the fallback, and the selector is shown only when `BundlerNsisDisplayLanguageSelector` is true and multiple languages are enabled. English and Simplified Chinese message files are bundled.
 
 ```xml
 <PropertyGroup>
@@ -120,14 +160,14 @@ This is a practical Windows baseline, not Tauri feature parity. Upgrade/downgrad
 
 ```powershell
 dotnet build Bundler.slnx
-dotnet run --project tests/Bundler.Core.Tests/Bundler.Core.Tests.csproj
-dotnet pack src/Bundler.MSBuild/Bundler.MSBuild.csproj -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.11
+dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
+dotnet pack Bundler.slnx -c Release -o artifacts/packages
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.12
 ```
 
 The Windows integration test installs a dedicated fixture into a Chinese path containing spaces, validates payload/resources/metadata/registry/shortcuts/process shutdown, exercises both data-preserving and full-data removal uninstalls, and cleans its test state in `finally`.
 
-The Core project contains configuration, validation, planning, tool resolution, and backends without depending on MSBuild. The existing CLI is retained as a development client of Core, but it is no longer shipped in the NuGet build package.
+Core contains only format-neutral configuration, validation, planning, and orchestration. The NSIS project contains the public API, NSIS-specific configuration, templates, tool resolution, process execution, and backend. MSBuild and the development CLI are adapters over those packages; neither implements NSIS packaging.
 
 ## Security and licensing
 

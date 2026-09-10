@@ -11,7 +11,8 @@
     <BundlerLicenseFile Condition="'$(BundlerLicenseFile)' == ''"></BundlerLicenseFile>
     <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''"></BundlerMainExecutable>
     <BundlerOutputPath Condition="'$(BundlerOutputPath)' == ''">$(MSBuildProjectDirectory)\artifacts</BundlerOutputPath>
-    <BundlerToolCachePath Condition="'$(BundlerToolCachePath)' == ''">$(BaseIntermediateOutputPath)bundler\tools</BundlerToolCachePath>
+    <BundlerToolCachePath Condition="'$(BundlerToolCachePath)' == ''"></BundlerToolCachePath>
+    <BundlerNsisToolArchivePath Condition="'$(BundlerNsisToolArchivePath)' == ''"></BundlerNsisToolArchivePath>
     <BundlerNsisTemplate Condition="'$(BundlerNsisTemplate)' == ''"></BundlerNsisTemplate>
     <BundlerNsisInstallMode Condition="'$(BundlerNsisInstallMode)' == ''">currentUser</BundlerNsisInstallMode>
     <BundlerNsisInstallerIcon Condition="'$(BundlerNsisInstallerIcon)' == ''"></BundlerNsisInstallerIcon>

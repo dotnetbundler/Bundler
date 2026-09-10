@@ -2,8 +2,15 @@
   <PropertyGroup>
     <TargetFramework></TargetFramework>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <PackageId>DotNet.Bundler.Core</PackageId>
+    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
+    <Authors>Bundler contributors</Authors>
     <Description>Core planning and packaging abstractions for desktop .NET applications.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <Compile Remove="Configuration\BundleConfigurationLoader.cs" />
   </ItemGroup>

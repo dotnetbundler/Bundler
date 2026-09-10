@@ -1,8 +1,8 @@
 using System.Text.RegularExpressions;
 
-namespace Bundler.Core.Templates;
+namespace DotNet.Bundler.Nsis;
 
-public static class TemplateRenderer
+internal static class TemplateRenderer
 {
     private static readonly Regex TokenPattern = new(
         "\\{\\{([a-z0-9_]+)\\}\\}",

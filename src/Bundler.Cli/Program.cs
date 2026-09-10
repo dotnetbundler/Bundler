@@ -1,12 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Bundler.Core.Backends;
-using Bundler.Core.Backends.Windows;
 using Bundler.Core.Configuration;
 using Bundler.Core.Models;
 using Bundler.Core.Planning;
-using Bundler.Core.Tools;
 using Bundler.Core.Validation;
+using DotNet.Bundler.Nsis;
 
 return await RunAsync(args);
 
@@ -74,7 +72,6 @@ static async Task<int> BundleAsync(IReadOnlyDictionary<string, string> options)
         throw new NotSupportedException("The first Bundler release supports --format nsis only.");
     }
 
-    var compiler = await NsisToolResolver.ResolveAsync(Required("tool-archive"), Required("tool-cache"));
     var configuration = new BundleConfiguration
     {
         ProductName = Required("product-name"),
@@ -94,9 +91,15 @@ static async Task<int> BundleAsync(IReadOnlyDictionary<string, string> options)
         ]
     };
 
-    var orchestrator = new BundleOrchestrator(
-        [new NsisBundleBackend(compiler, Required("template"), Required("language-dir"))]);
-    var artifacts = await orchestrator.BuildAsync(configuration);
+    var bundler = new NsisBundler(
+        options: new NsisBundlerOptions
+        {
+            ToolArchivePath = options.GetValueOrDefault("tool-archive"),
+            ToolCacheDirectory = options.GetValueOrDefault("tool-cache"),
+            TemplatePath = options.GetValueOrDefault("template"),
+            LanguageDirectory = options.GetValueOrDefault("language-dir")
+        });
+    var artifacts = await bundler.BuildAsync(configuration);
     foreach (var artifact in artifacts)
     {
         Console.WriteLine($"Created {artifact.Path}");

@@ -8,9 +8,11 @@
 
 第一条已支持链路是 Windows + NSIS。MSI、macOS 和 Linux 格式属于后续路线，目前尚未实现。
 
-NuGet 包内携带固定版本的 NSIS 3.12 便携压缩包，使用者无需自行安装 NSIS。首次使用时会先校验 SHA-256，再解压到项目的中间输出目录。首个版本有意保留项目级缓存，后续可迭代为按内容寻址的共享缓存。
+实现已经拆分为可复用的 NuGet 包：`DotNet.Bundler.Core` 负责与格式无关的规划和编排，`DotNet.Bundler.Nsis` 提供可独立调用的 NSIS API 并拥有全部 NSIS 实现资源，`DotNet.Bundler` 则是轻量的 MSBuild 集成包。
 
-MSBuild Task 及其直接加载的 Core 程序集都以 `netstandard2.0` 为目标框架。打包决策和后端调度直接在 MSBuild 进程内完成，包不会再启动额外的 .NET CLI 驱动。NSIS 编译仍会启动包内的 `makensis.exe`，因为它本身就是安装程序编译器。
+`DotNet.Bundler.Nsis` 将固定版本的 NSIS 3.12 便携压缩包作为嵌入资源携带。使用者无需安装 NSIS，也不需要在线下载工具。首次使用会校验 SHA-256，并解压到共享的 `%LOCALAPPDATA%\DotNetBundler\tools` 缓存；同一台机器上的项目会复用按内容寻址的工具目录。
+
+MSBuild Task 及其直接加载的 Core/NSIS 程序集都提供 `netstandard2.0` 资产。打包决策和后端调度直接在 MSBuild 进程内完成，包不会再启动额外的 .NET CLI 驱动。NSIS 编译仍会启动包内的 `makensis.exe`，因为它本身就是安装程序编译器。
 
 ## 使用配置
 
@@ -28,7 +30,7 @@ MSBuild Task 及其直接加载的 Core 程序集都以 `netstandard2.0` 为目�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.11" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.12" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -40,6 +42,44 @@ dotnet publish -c Release
 ```
 
 安装程序默认输出到 `artifacts/<rid>/nsis/`。自动打包发生在 `Publish` 之后，普通的 `Build` 不会生成安装包。
+
+## 独立 NSIS API
+
+不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
+
+```xml
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.12" />
+```
+
+```csharp
+using Bundler.Core.Configuration;
+using Bundler.Core.Models;
+using DotNet.Bundler.Nsis;
+
+var request = new BundleConfiguration
+{
+    ProductName = "我的应用",
+    Identifier = "com.example.myapp",
+    Version = "1.0.0",
+    OutputDirectory = "artifacts",
+    Targets =
+    [
+        new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "win-x64",
+            InputDirectory = "publish/win-x64",
+            MainExecutable = "MyApp.exe",
+            Formats = [PackageFormat.Nsis]
+        }
+    ]
+};
+
+var artifacts = await new NsisBundler().BuildAsync(request);
+```
+
+`NsisBundleConfiguration` 控制 NSIS 专属行为。高级调用和测试场景可以通过 `NsisBundlerOptions` 覆盖共享缓存、编译器、压缩包、模板或语言目录；普通调用者不需要提供这些路径。
+
+当前实现不需要自定义 NSIS 插件。若后续某项能力无法仅靠 NSIS 脚本可靠实现，必须使用 [`dotnetbundler/NsisPlugin`](https://github.com/dotnetbundler/NsisPlugin) 建立独立的 `win-x86` Native AOT 项目，并将编译后的 DLL 嵌入 `DotNet.Bundler.Nsis`；不能把插件 SDK 或现场编译要求转嫁给使用者。
 
 ## MSBuild 属性
 
@@ -58,7 +98,7 @@ dotnet publish -c Release
 | `BundlerCopyright` | 否 | `$(Copyright)` |
 | `BundlerLicenseFile` | 否 | 无；支持 `.txt` 或 `.rtf` |
 | `BundlerOutputPath` | 否 | `$(MSBuildProjectDirectory)\artifacts` |
-| `BundlerToolCachePath` | 否 | `$(BaseIntermediateOutputPath)bundler\tools` |
+| `BundlerToolCachePath` | 否 | `%LOCALAPPDATA%\DotNetBundler\tools` |
 | `BundlerNsisTemplate` | 否 | 包内自带模板 |
 | `BundlerNsisInstallMode` | 否 | `currentUser`；也支持 `perMachine` 和 `both` |
 | `BundlerNsisInstallerIcon` | 否 | 第一个 `BundlerIcon` `.ico` |
@@ -89,7 +129,7 @@ dotnet publish -c Release
 
 所有格式共用同一条管线：校验配置、生成包含格式依赖关系的计划、创建隔离工作目录、调用后端、确认产物存在、清理工作目录。后续增加 MSI、macOS 或 Linux 支持时，应增加后端，而不是复制整套调度代码。
 
-NSIS 脚本存放在 `templates/nsis/installer.nsi` 文件中，不再嵌入 C#。安装器语言按 Tauri 的方式配置：`BundlerNsisLanguages` 是分号分隔的语言列表，第一项是回退语言；只有启用多个语言并把 `BundlerNsisDisplayLanguageSelector` 设为 `true` 时才显示语言选择器。包内目前提供 English 和 SimpChinese 文案文件。
+可编辑的 NSIS 源模板存放在 `templates/nsis/installer.nsi`。发布包时，该模板、语言文件和 NSIS 压缩包会嵌入 `DotNet.Bundler.Nsis`，因此独立 API 和 MSBuild 使用者得到完全相同的资源，也不会把工具复制到项目输出目录。安装器语言按 Tauri 的方式配置：`BundlerNsisLanguages` 是分号分隔的语言列表，第一项是回退语言；只有启用多个语言并把 `BundlerNsisDisplayLanguageSelector` 设为 `true` 时才显示语言选择器。包内目前提供 English 和 SimpChinese 文案文件。
 
 ```xml
 <PropertyGroup>
@@ -120,14 +160,14 @@ NSIS 脚本存放在 `templates/nsis/installer.nsi` 文件中，不再嵌入 C#�
 
 ```powershell
 dotnet build Bundler.slnx
-dotnet run --project tests/Bundler.Core.Tests/Bundler.Core.Tests.csproj
-dotnet pack src/Bundler.MSBuild/Bundler.MSBuild.csproj -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.11
+dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
+dotnet pack Bundler.slnx -c Release -o artifacts/packages
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.12
 ```
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。
 
-Core 项目包含配置、校验、规划、工具解析和打包后端，并不依赖 MSBuild。现有 CLI 仍作为 Core 的开发调用端保留，但不再发布到 NuGet 构建包中。
+Core 只包含与格式无关的配置、校验、规划和编排。NSIS 项目包含公共 API、NSIS 专属配置、模板、工具解析、进程执行和后端。MSBuild 与开发用 CLI 都只是这些包的适配层，不实现 NSIS 打包逻辑。
 
 ## 安全与许可证
 

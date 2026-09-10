@@ -1,14 +1,17 @@
+using Bundler.Core.Backends;
 using Bundler.Core.Configuration;
 using Bundler.Core.Models;
 using Bundler.Core.Planning;
-using Bundler.Core.Templates;
-using Bundler.Core.Tools;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Bundler.Core.Backends.Windows;
+namespace DotNet.Bundler.Nsis;
 
-public sealed class NsisBundleBackend(string compilerPath, string templatePath, string languageDirectory) : IBundleBackend
+internal sealed class NsisBundleBackend(
+    string compilerPath,
+    string templatePath,
+    string languageDirectory,
+    NsisBundleConfiguration settings) : IBundleBackend
 {
     public PackageFormat Format => PackageFormat.Nsis;
     public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
@@ -44,10 +47,10 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
         var scriptPath = Path.Combine(context.WorkDirectory, "installer.nsi");
         cancellationToken.ThrowIfCancellationRequested();
         var template = File.ReadAllText(fullTemplatePath);
-        var localization = PrepareLanguages(configuration.Nsis, context.WorkDirectory);
+        var localization = PrepareLanguages(settings, context.WorkDirectory);
         File.WriteAllText(
             scriptPath,
-            CreateScript(template, configuration, item, installerPath, safeProductName, localization),
+            CreateScript(template, configuration, settings, item, installerPath, safeProductName, localization),
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
         await ProcessRunner.RunAsync(
@@ -67,6 +70,7 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
     internal static string CreateScript(
         string template,
         BundleConfiguration configuration,
+        NsisBundleConfiguration settings,
         BundlePlanItem item,
         string installerPath,
         string safeProductName)
@@ -74,6 +78,7 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
         return CreateScript(
             template,
             configuration,
+            settings,
             item,
             installerPath,
             safeProductName,
@@ -86,6 +91,7 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
     private static string CreateScript(
         string template,
         BundleConfiguration configuration,
+        NsisBundleConfiguration settings,
         BundlePlanItem item,
         string installerPath,
         string safeProductName,
@@ -96,7 +102,7 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
         var copyright = configuration.Copyright ?? publisher;
         var version = NumericVersion(configuration.Version);
         var resources = ExpandResources(configuration.Resources, item.InputDirectory);
-        var visualDirectives = CreateVisualDirectives(configuration.Icons, configuration.Nsis);
+        var visualDirectives = CreateVisualDirectives(configuration.Icons, settings);
 
         return TemplateRenderer.Render(template, new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -111,7 +117,7 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
             ["main_executable"] = Escape(item.MainExecutable),
             ["process_name"] = Escape(Path.GetFileName(item.MainExecutable)),
             ["install_folder"] = Escape(safeProductName),
-            ["install_mode"] = InstallModeName(configuration.Nsis.InstallMode),
+            ["install_mode"] = InstallModeName(settings.InstallMode),
             ["target_architecture"] = TargetArchitectureName(item.Target.Architecture),
             ["input_glob"] = Escape(Path.Combine(item.InputDirectory, "*")),
             ["output_file"] = Escape(installerPath),
@@ -119,7 +125,7 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
             ["installer_icon_directives"] = visualDirectives,
             ["license_page"] = CreateLicensePage(configuration.LicenseFile),
             ["homepage_registry"] = CreateHomepageRegistry(configuration.Homepage),
-            ["installer_hooks_include"] = CreateInstallerHooksInclude(configuration.Nsis.InstallerHooks),
+            ["installer_hooks_include"] = CreateInstallerHooksInclude(settings.InstallerHooks),
             ["resource_install_commands"] = CreateResourceInstallCommands(resources),
             ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory, resources),
             ["language_macros"] = localization.LanguageMacros,

@@ -1,11 +1,9 @@
 using Bundler.Core.Configuration;
 using Bundler.Core.Backends;
-using Bundler.Core.Backends.Windows;
 using Bundler.Core.Models;
 using Bundler.Core.Planning;
-using Bundler.Core.Tools;
-using Bundler.Core.Templates;
 using Bundler.Core.Validation;
+using DotNet.Bundler.Nsis;
 
 var tests = new (string Name, Func<Task> Test)[]
 {
@@ -14,6 +12,7 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Adds app dependency before DMG", () => RunSync(AddsAppDependencyBeforeDmg)),
     ("Rejects executable paths outside input", () => RunSync(RejectsExecutablePathEscape)),
     ("Verifies and extracts bundled NSIS", VerifiesAndExtractsBundledNsis),
+    ("Builds through the standalone NSIS API", BuildsThroughStandaloneNsisApi),
     ("Writes a valid Windows uninstall command", () => RunSync(WritesValidWindowsUninstallCommand)),
     ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
     ("Uninstalls only packaged payload files", () => RunSync(UninstallsOnlyPackagedPayloadFiles)),
@@ -142,7 +141,7 @@ static void WritesValidWindowsUninstallCommand()
             false);
 
         var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
-        var script = NsisBundleBackend.CreateScript(template, configuration, item, "setup.exe", "ExampleApp");
+        var script = NsisBundleBackend.CreateScript(template, configuration, new NsisBundleConfiguration(), item, "setup.exe", "ExampleApp");
         Assert(script.Contains("\"UninstallString\" '\"$INSTDIR\\Uninstall.exe\"'", StringComparison.Ordinal),
             "UninstallString must contain ordinary quotes around the executable path.");
         Assert(!script.Contains("'$\"$INSTDIR", StringComparison.Ordinal),
@@ -179,6 +178,53 @@ static void LetsUsersChooseInstallDirectory()
         "Fixed and selectable install scopes should restore their previously selected install directories.");
 }
 
+static async Task BuildsThroughStandaloneNsisApi()
+{
+    if (!OperatingSystem.IsWindows())
+    {
+        return;
+    }
+
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Api.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "publish");
+    Directory.CreateDirectory(input);
+    await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp.exe"), "standalone-api-test");
+    try
+    {
+        var configuration = new BundleConfiguration
+        {
+            ProductName = "Standalone API App",
+            Identifier = "com.example.standalone",
+            Version = "1.0.0",
+            OutputDirectory = Path.Combine(root, "artifacts"),
+            Targets =
+            [
+                new BundleTargetConfiguration
+                {
+                    RuntimeIdentifier = "win-x64",
+                    InputDirectory = input,
+                    MainExecutable = "ExampleApp.exe",
+                    Formats = [PackageFormat.Nsis]
+                }
+            ]
+        };
+        var bundler = new NsisBundler(
+            new NsisBundleConfiguration { Languages = ["English", "SimpChinese"] },
+            new NsisBundlerOptions { ToolCacheDirectory = Path.Combine(root, "shared-tools") });
+
+        var artifacts = await bundler.BuildAsync(configuration);
+        Assert(artifacts.Count == 1 && File.Exists(artifacts[0].Path),
+            "The standalone NSIS API should materialize embedded resources and create an installer.");
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
 static void UninstallsOnlyPackagedPayloadFiles()
 {
     var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
@@ -204,7 +250,7 @@ static void UninstallsOnlyPackagedPayloadFiles()
             "output",
             false);
         var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
-        var script = NsisBundleBackend.CreateScript(template, configuration, item, "setup.exe", "ExampleApp");
+        var script = NsisBundleBackend.CreateScript(template, configuration, new NsisBundleConfiguration(), item, "setup.exe", "ExampleApp");
 
         Assert(script.Contains("Delete /REBOOTOK \"$INSTDIR\\ExampleApp.exe\"", StringComparison.Ordinal),
             "The uninstaller should delete the packaged executable explicitly.");
@@ -271,10 +317,15 @@ static void RendersNsisInstallScopes()
                 Identifier = configuration.Identifier,
                 Version = configuration.Version,
                 OutputDirectory = configuration.OutputDirectory,
-                Nsis = new NsisBundleConfiguration { InstallMode = mode },
                 Targets = configuration.Targets
             };
-            return NsisBundleBackend.CreateScript(template, configuration, item, "setup.exe", "ExampleApp");
+            return NsisBundleBackend.CreateScript(
+                template,
+                configuration,
+                new NsisBundleConfiguration { InstallMode = mode },
+                item,
+                "setup.exe",
+                "ExampleApp");
         }
 
         var currentUser = Render(NsisInstallMode.CurrentUser);
@@ -340,14 +391,6 @@ static void RendersNsisMetadataIconsAndResources()
             LicenseFile = licenseFile,
             OutputDirectory = "artifacts",
             Icons = [icon],
-            Nsis = new NsisBundleConfiguration
-            {
-                InstallerIcon = icon,
-                UninstallerIcon = uninstallerIcon,
-                HeaderImage = headerImage,
-                SidebarImage = sidebarImage,
-                InstallerHooks = hooksFile
-            },
             Resources =
             [
                 new BundleResourceConfiguration
@@ -375,7 +418,21 @@ static void RendersNsisMetadataIconsAndResources()
             "output",
             false);
         var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
-        var script = NsisBundleBackend.CreateScript(template, configuration, item, "setup.exe", "ExampleApp");
+        var nsisConfiguration = new NsisBundleConfiguration
+        {
+            InstallerIcon = icon,
+            UninstallerIcon = uninstallerIcon,
+            HeaderImage = headerImage,
+            SidebarImage = sidebarImage,
+            InstallerHooks = hooksFile
+        };
+        var script = NsisBundleBackend.CreateScript(
+            template,
+            configuration,
+            nsisConfiguration,
+            item,
+            "setup.exe",
+            "ExampleApp");
 
         Assert(script.Contains("!define PRODUCT_DESCRIPTION \"Example Description\"", StringComparison.Ordinal),
             "The configured description should be rendered into installer metadata.");

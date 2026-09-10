@@ -2,9 +2,9 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 
-namespace Bundler.Core.Tools;
+namespace DotNet.Bundler.Nsis;
 
-public static class NsisToolResolver
+internal static class NsisToolResolver
 {
     public const string Version = "3.12";
     public const string ArchiveSha256 = "56581F90DB321581C5381193D796FFFCF2D24B2F8FED2160A6C6A3BAA67F2C4F";

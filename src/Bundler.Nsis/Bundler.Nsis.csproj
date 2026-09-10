@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>DotNet.Bundler.Nsis</AssemblyName>
+    <RootNamespace>DotNet.Bundler.Nsis</RootNamespace>
+    <PackageId>DotNet.Bundler.Nsis</PackageId>
+    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
+    <Authors>Bundler contributors</Authors>
+    <Description>Reusable NSIS packaging API for desktop .NET applications.</Description>
+    <PackageTags>dotnet;bundler;installer;nsis;desktop</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\third_party\nsis\nsis-3.12.zip"
+                      LogicalName="DotNet.Bundler.Nsis.Resources.nsis-3.12.zip" />
+    <EmbeddedResource Include="..\..\templates\nsis\installer.nsi"
+                      LogicalName="DotNet.Bundler.Nsis.Resources.installer.nsi" />
+    <EmbeddedResource Include="..\..\templates\nsis\languages\English.nsh"
+                      LogicalName="DotNet.Bundler.Nsis.Resources.languages.English.nsh" />
+    <EmbeddedResource Include="..\..\templates\nsis\languages\SimpChinese.nsh"
+                      LogicalName="DotNet.Bundler.Nsis.Resources.languages.SimpChinese.nsh" />
+    <None Include="..\..\third_party\nsis\COPYING" Pack="true" PackagePath="licenses/nsis/" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
+    <None Include="..\..\README.zh-CN.md" Pack="true" PackagePath="/" />
+    <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>
