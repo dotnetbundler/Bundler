@@ -28,7 +28,7 @@ MSBuild Task 及其直接加载的 Core 程序集都以 `netstandard2.0` 为目�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.6" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.7" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -73,7 +73,7 @@ dotnet publish -c Release
 
 所有格式共用同一条管线：校验配置、生成包含格式依赖关系的计划、创建隔离工作目录、调用后端、确认产物存在、清理工作目录。后续增加 MSI、macOS 或 Linux 支持时，应增加后端，而不是复制整套调度代码。
 
-NSIS 脚本存放在 `templates/nsis/installer.nsi` 文件中，不再嵌入 C#。默认模板提供当前用户安装、可选择并记住上次位置的安装目录、DPI 感知、压缩、中英文界面、开始菜单与桌面快捷方式、“应用和功能”卸载信息、静默卸载以及完成页启动程序。卸载时只删除构建载荷中记录的文件，不会递归删除用户任意选择的目录。若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。模板支持 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`install_folder`、`input_glob`、`output_file`、`estimated_size`、`uninstall_payload`，写法为 `{{name}}`。
+NSIS 脚本存放在 `templates/nsis/installer.nsi` 文件中，不再嵌入 C#。默认模板提供当前用户安装、可选择并记住上次位置的安装目录、非本应用的非空目录警告、DPI 感知、压缩、中英文界面、可选的开始菜单与桌面快捷方式、运行程序检测和关闭、“应用和功能”卸载信息、可选删除应用数据、静默卸载以及完成页启动程序。卸载时只删除构建载荷中记录的文件，不会递归删除用户任意选择的目录。若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。模板支持 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`input_glob`、`output_file`、`estimated_size`、`uninstall_payload`，写法为 `{{name}}`。
 
 这只是参考 Tauri 后形成的可用基线，并不等于已经达到 Tauri 的功能完整度。升级/降级策略、安装范围选择、文件关联、深链接、签名和生命周期钩子仍需先设计成结构化配置，再适合对外开放。
 

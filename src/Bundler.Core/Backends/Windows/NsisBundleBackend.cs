@@ -47,7 +47,7 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath) 
 
         await ProcessRunner.RunAsync(
             fullCompilerPath,
-            ["/V2", scriptPath],
+            ["-INPUTCHARSET", "UTF8", "-OUTPUTCHARSET", "UTF8", "/V2", scriptPath],
             context.WorkDirectory,
             cancellationToken);
 
@@ -77,6 +77,7 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath) 
             ["publisher"] = Escape(publisher),
             ["identifier"] = Escape(configuration.Identifier),
             ["main_executable"] = Escape(item.MainExecutable),
+            ["process_name"] = Escape(Path.GetFileName(item.MainExecutable)),
             ["install_folder"] = Escape(safeProductName),
             ["input_glob"] = Escape(Path.Combine(item.InputDirectory, "*")),
             ["output_file"] = Escape(installerPath),

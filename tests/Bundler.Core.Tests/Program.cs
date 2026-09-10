@@ -17,6 +17,7 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Writes a valid Windows uninstall command", () => RunSync(WritesValidWindowsUninstallCommand)),
     ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
     ("Uninstalls only packaged payload files", () => RunSync(UninstallsOnlyPackagedPayloadFiles)),
+    ("Provides interactive NSIS safety options", () => RunSync(ProvidesInteractiveNsisSafetyOptions)),
     ("Rejects unknown template variables", () => RunSync(RejectsUnknownTemplateVariables)),
     ("Runs backends through the common pipeline", RunsBackendsThroughCommonPipeline),
     ("Preflights every requested backend", PreflightsEveryRequestedBackend)
@@ -212,6 +213,22 @@ static void UninstallsOnlyPackagedPayloadFiles()
     {
         Directory.Delete(root, recursive: true);
     }
+}
+
+static void ProvidesInteractiveNsisSafetyOptions()
+{
+    var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+    Assert(template.Contains("Page custom ShortcutOptionsPage", StringComparison.Ordinal),
+        "The installer should provide shortcut selection controls.");
+    Assert(template.Contains("Function ValidateInstallDirectory", StringComparison.Ordinal) &&
+           template.Contains("${INSTALL_MARKER}", StringComparison.Ordinal),
+        "The installer should distinguish its own directory from another non-empty directory.");
+    Assert(template.Contains("Call EnsureAppClosed", StringComparison.Ordinal) &&
+           template.Contains("Call un.EnsureAppClosed", StringComparison.Ordinal),
+        "Install and uninstall should both check the running application.");
+    Assert(template.Contains("UninstPage custom un.AppDataOptionsPage", StringComparison.Ordinal) &&
+           template.Contains("$LOCALAPPDATA\\${PRODUCT_ID}", StringComparison.Ordinal),
+        "The uninstaller should offer optional application-data deletion.");
 }
 
 static async Task RunsBackendsThroughCommonPipeline()
