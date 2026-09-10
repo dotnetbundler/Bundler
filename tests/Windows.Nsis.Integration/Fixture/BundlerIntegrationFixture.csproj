@@ -15,6 +15,7 @@
     <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
     <BundlerNsisLanguages>English;SimpChinese</BundlerNsisLanguages>
     <BundlerNsisDisplayLanguageSelector>true</BundlerNsisDisplayLanguageSelector>
+    <BundlerNsisInstallMode Condition="'$(BundlerNsisInstallMode)' == ''">currentUser</BundlerNsisInstallMode>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />

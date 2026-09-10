@@ -24,10 +24,18 @@ public sealed class BundleResourceConfiguration
 
 public sealed class NsisBundleConfiguration
 {
+    public NsisInstallMode InstallMode { get; init; } = NsisInstallMode.CurrentUser;
     public IReadOnlyList<string> Languages { get; init; } = ["English"];
     public IReadOnlyDictionary<string, string> CustomLanguageFiles { get; init; } =
         new Dictionary<string, string>();
     public bool DisplayLanguageSelector { get; init; }
+}
+
+public enum NsisInstallMode
+{
+    CurrentUser,
+    PerMachine,
+    Both
 }
 
 public sealed class BundleTargetConfiguration

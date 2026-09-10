@@ -30,6 +30,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     [Required] public string ToolCacheDirectory { get; set; } = "";
     public string NsisTemplatePath { get; set; } = "";
     public string NsisLanguageDirectory { get; set; } = "";
+    public string NsisInstallMode { get; set; } = "currentUser";
     public string NsisLanguages { get; set; } = "English";
     public bool NsisDisplayLanguageSelector { get; set; }
     public ITaskItem[] NsisLanguageFiles { get; set; } = Array.Empty<ITaskItem>();
@@ -56,6 +57,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 }).ToArray(),
                 Nsis = new NsisBundleConfiguration
                 {
+                    InstallMode = ParseInstallMode(),
                     Languages = ParseLanguages(),
                     DisplayLanguageSelector = NsisDisplayLanguageSelector,
                     CustomLanguageFiles = ParseCustomLanguageFiles()
@@ -165,6 +167,18 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         return languages.Length > 0
             ? languages
             : throw new ArgumentException("At least one NSIS language is required.", nameof(NsisLanguages));
+    }
+
+    private NsisInstallMode ParseInstallMode()
+    {
+        if (Enum.TryParse<NsisInstallMode>(NsisInstallMode, true, out var mode))
+        {
+            return mode;
+        }
+
+        throw new ArgumentException(
+            "BundlerNsisInstallMode must be currentUser, perMachine, or both.",
+            nameof(NsisInstallMode));
     }
 
     private IReadOnlyDictionary<string, string> ParseCustomLanguageFiles()

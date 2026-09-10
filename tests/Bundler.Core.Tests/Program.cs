@@ -18,6 +18,7 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
     ("Uninstalls only packaged payload files", () => RunSync(UninstallsOnlyPackagedPayloadFiles)),
     ("Provides interactive NSIS safety options", () => RunSync(ProvidesInteractiveNsisSafetyOptions)),
+    ("Renders NSIS install scopes", () => RunSync(RendersNsisInstallScopes)),
     ("Renders NSIS metadata, icons, and resources", () => RunSync(RendersNsisMetadataIconsAndResources)),
     ("Rejects unknown template variables", () => RunSync(RejectsUnknownTemplateVariables)),
     ("Runs backends through the common pipeline", RunsBackendsThroughCommonPipeline),
@@ -172,8 +173,9 @@ static void LetsUsersChooseInstallDirectory()
     var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
     Assert(template.Contains("!insertmacro MUI_PAGE_DIRECTORY", StringComparison.Ordinal),
         "The installer must display the NSIS directory selection page.");
-    Assert(template.Contains("InstallDirRegKey HKCU \"${UNINSTALL_KEY}\" \"InstallLocation\"", StringComparison.Ordinal),
-        "The installer should restore the previously selected install directory.");
+    Assert(template.Contains("ReadRegStr $0 SHCTX \"${UNINSTALL_KEY}\" \"InstallLocation\"", StringComparison.Ordinal) &&
+           template.Contains("MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_VALUENAME \"InstallLocation\"", StringComparison.Ordinal),
+        "Fixed and selectable install scopes should restore their previously selected install directories.");
 }
 
 static void UninstallsOnlyPackagedPayloadFiles()
@@ -234,6 +236,72 @@ static void ProvidesInteractiveNsisSafetyOptions()
     Assert(template.Contains("UninstPage custom un.AppDataOptionsPage", StringComparison.Ordinal) &&
            template.Contains("$LOCALAPPDATA\\${PRODUCT_ID}", StringComparison.Ordinal),
         "The uninstaller should offer optional application-data deletion.");
+}
+
+static void RendersNsisInstallScopes()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    File.WriteAllText(Path.Combine(root, "ExampleApp.exe"), "test");
+
+    try
+    {
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+        var item = new BundlePlanItem(
+            new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+            PackageFormat.Nsis,
+            root,
+            "ExampleApp.exe",
+            "output",
+            false);
+
+        string Render(NsisInstallMode mode)
+        {
+            var configuration = ValidConfiguration(new BundleTargetConfiguration
+            {
+                RuntimeIdentifier = "win-x64",
+                InputDirectory = root,
+                MainExecutable = "ExampleApp.exe",
+                Formats = [PackageFormat.Nsis]
+            });
+            configuration = new BundleConfiguration
+            {
+                ProductName = configuration.ProductName,
+                Identifier = configuration.Identifier,
+                Version = configuration.Version,
+                OutputDirectory = configuration.OutputDirectory,
+                Nsis = new NsisBundleConfiguration { InstallMode = mode },
+                Targets = configuration.Targets
+            };
+            return NsisBundleBackend.CreateScript(template, configuration, item, "setup.exe", "ExampleApp");
+        }
+
+        var currentUser = Render(NsisInstallMode.CurrentUser);
+        Assert(currentUser.Contains("!define INSTALL_MODE \"currentUser\"", StringComparison.Ordinal) &&
+               currentUser.Contains("RequestExecutionLevel user", StringComparison.Ordinal) &&
+               currentUser.Contains("SetShellVarContext current", StringComparison.Ordinal) &&
+               currentUser.Contains("$LOCALAPPDATA\\Programs\\${INSTALL_FOLDER}", StringComparison.Ordinal),
+            "Current-user mode must use user execution, HKCU shell context, and a per-user directory.");
+
+        var perMachine = Render(NsisInstallMode.PerMachine);
+        Assert(perMachine.Contains("!define INSTALL_MODE \"perMachine\"", StringComparison.Ordinal) &&
+               perMachine.Contains("RequestExecutionLevel admin", StringComparison.Ordinal) &&
+               perMachine.Contains("SetShellVarContext all", StringComparison.Ordinal) &&
+               perMachine.Contains("$PROGRAMFILES64\\${INSTALL_FOLDER}", StringComparison.Ordinal),
+            "Per-machine mode must elevate and use the all-users shell context and Program Files.");
+
+        var both = Render(NsisInstallMode.Both);
+        Assert(both.Contains("!define INSTALL_MODE \"both\"", StringComparison.Ordinal) &&
+               both.Contains("!define MULTIUSER_MUI", StringComparison.Ordinal) &&
+               both.Contains("!insertmacro MULTIUSER_PAGE_INSTALLMODE", StringComparison.Ordinal) &&
+               both.Contains("!insertmacro MULTIUSER_INIT", StringComparison.Ordinal) &&
+               both.Contains("WriteRegStr SHCTX", StringComparison.Ordinal),
+            "Both mode must delegate scope selection and registry routing to NSIS MultiUser support.");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
 }
 
 static void RendersNsisMetadataIconsAndResources()

@@ -108,6 +108,8 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
             ["main_executable"] = Escape(item.MainExecutable),
             ["process_name"] = Escape(Path.GetFileName(item.MainExecutable)),
             ["install_folder"] = Escape(safeProductName),
+            ["install_mode"] = InstallModeName(configuration.Nsis.InstallMode),
+            ["target_architecture"] = TargetArchitectureName(item.Target.Architecture),
             ["input_glob"] = Escape(Path.Combine(item.InputDirectory, "*")),
             ["output_file"] = Escape(installerPath),
             ["estimated_size"] = EstimateSizeInKilobytes(item.InputDirectory).ToString(System.Globalization.CultureInfo.InvariantCulture),
@@ -142,6 +144,21 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
             $"Icon \"{escaped}\""
         });
     }
+
+    private static string InstallModeName(NsisInstallMode mode) => mode switch
+    {
+        NsisInstallMode.CurrentUser => "currentUser",
+        NsisInstallMode.PerMachine => "perMachine",
+        NsisInstallMode.Both => "both",
+        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown NSIS install mode.")
+    };
+
+    private static string TargetArchitectureName(CpuArchitecture architecture) => architecture switch
+    {
+        CpuArchitecture.X64 => "x64",
+        CpuArchitecture.Arm64 => "arm64",
+        _ => throw new ArgumentOutOfRangeException(nameof(architecture), architecture, "Unknown target architecture.")
+    };
 
     private static IReadOnlyList<PayloadResource> ExpandResources(
         IReadOnlyList<BundleResourceConfiguration> configuredResources,

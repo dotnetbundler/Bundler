@@ -41,6 +41,7 @@
       ToolCacheDirectory="$(BundlerToolCachePath)"
       NsisTemplatePath="$(BundlerNsisTemplate)"
       NsisLanguageDirectory="$(_BundlerNsisLanguageDirectory)"
+      NsisInstallMode="$(BundlerNsisInstallMode)"
       NsisLanguages="$(BundlerNsisLanguages)"
       NsisDisplayLanguageSelector="$(BundlerNsisDisplayLanguageSelector)"
       NsisLanguageFiles="@(BundlerNsisLanguageFile)">

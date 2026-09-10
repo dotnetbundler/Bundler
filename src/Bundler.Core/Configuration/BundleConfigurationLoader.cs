@@ -55,6 +55,7 @@ public static class BundleConfigurationLoader
             }).ToArray(),
             Nsis = new NsisBundleConfiguration
             {
+                InstallMode = source.Nsis.InstallMode,
                 Languages = source.Nsis.Languages,
                 DisplayLanguageSelector = source.Nsis.DisplayLanguageSelector,
                 CustomLanguageFiles = source.Nsis.CustomLanguageFiles.ToDictionary(

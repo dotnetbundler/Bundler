@@ -10,6 +10,7 @@
     <BundlerOutputPath Condition="'$(BundlerOutputPath)' == ''">$(MSBuildProjectDirectory)\artifacts</BundlerOutputPath>
     <BundlerToolCachePath Condition="'$(BundlerToolCachePath)' == ''">$(BaseIntermediateOutputPath)bundler\tools</BundlerToolCachePath>
     <BundlerNsisTemplate Condition="'$(BundlerNsisTemplate)' == ''"></BundlerNsisTemplate>
+    <BundlerNsisInstallMode Condition="'$(BundlerNsisInstallMode)' == ''">currentUser</BundlerNsisInstallMode>
     <BundlerNsisLanguages Condition="'$(BundlerNsisLanguages)' == ''">English</BundlerNsisLanguages>
     <BundlerNsisDisplayLanguageSelector Condition="'$(BundlerNsisDisplayLanguageSelector)' == ''">false</BundlerNsisDisplayLanguageSelector>
   </PropertyGroup>

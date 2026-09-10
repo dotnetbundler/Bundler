@@ -4,6 +4,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $integrationRoot = Join-Path $repositoryRoot "artifacts\windows-nsis-integration"
 $packageDirectory = Join-Path $repositoryRoot "artifacts\packages"
@@ -11,6 +12,8 @@ $packagePath = Join-Path $packageDirectory "DotNet.Bundler.$PackageVersion.nupkg
 $fixtureProject = Join-Path $PSScriptRoot "Fixture\BundlerIntegrationFixture.csproj"
 $packageCache = Join-Path $integrationRoot "packages"
 $bundleOutput = Join-Path $integrationRoot "bundle"
+$perMachineBundleOutput = Join-Path $integrationRoot "bundle-per-machine"
+$bothBundleOutput = Join-Path $integrationRoot "bundle-both"
 $testIcon = Join-Path $integrationRoot "test-installer.ico"
 $installRoot = Join-Path $integrationRoot "安装 目录"
 $installDirectory = Join-Path $installRoot "Bundler Integration Fixture"
@@ -49,6 +52,18 @@ function Invoke-WindowsExecutable([string]$FilePath, [string]$ArgumentLine) {
     if ($process.ExitCode -ne 0) {
         throw "Process failed with exit code $($process.ExitCode)`: $FilePath $ArgumentLine"
     }
+}
+
+function Build-FixtureBundle([string]$InstallMode, [string]$OutputPath) {
+    Invoke-Native "dotnet" @(
+        "publish", $fixtureProject, "-c", $Configuration, "--force",
+        "-p:BundlerPackageVersion=$PackageVersion",
+        "-p:BundlerPackageSource=$packageDirectory",
+        "-p:BundlerIntegrationOutput=$OutputPath",
+        "-p:BundlerTestIcon=$testIcon",
+        "-p:BundlerNsisInstallMode=$InstallMode",
+        "-p:RestorePackagesPath=$packageCache"
+    )
 }
 
 function Wait-For([scriptblock]$Condition, [string]$Message, [int]$TimeoutSeconds = 15) {
@@ -125,17 +140,14 @@ try {
         $nsisArchive.Dispose()
     }
 
-    Invoke-Native "dotnet" @(
-        "publish", $fixtureProject, "-c", $Configuration, "--force",
-        "-p:BundlerPackageVersion=$PackageVersion",
-        "-p:BundlerPackageSource=$packageDirectory",
-        "-p:BundlerIntegrationOutput=$bundleOutput",
-        "-p:BundlerTestIcon=$testIcon",
-        "-p:RestorePackagesPath=$packageCache"
-    )
+    Build-FixtureBundle "currentUser" $bundleOutput
+    Build-FixtureBundle "perMachine" $perMachineBundleOutput
+    Build-FixtureBundle "both" $bothBundleOutput
 
     $installer = Join-Path $bundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     Assert-True (Test-Path -LiteralPath $installer) "Installer was not created: $installer"
+    Assert-True (Test-Path -LiteralPath (Join-Path $perMachineBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Per-machine installer was not created."
+    Assert-True (Test-Path -LiteralPath (Join-Path $bothBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Both-scope installer was not created."
 
     Invoke-WindowsExecutable $installer "/S /D=$installDirectory"
     $installedExecutable = Join-Path $installDirectory "BundlerIntegrationFixture.exe"

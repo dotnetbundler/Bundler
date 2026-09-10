@@ -8,6 +8,7 @@ SetCompressor /SOLID lzma
 !include "nsDialogs.nsh"
 !include "StrFunc.nsh"
 !include "FileFunc.nsh"
+!include "x64.nsh"
 ${StrStr}
 ${UnStrStr}
 
@@ -20,6 +21,8 @@ ${UnStrStr}
 !define MAIN_EXECUTABLE "{{main_executable}}"
 !define PROCESS_NAME "{{process_name}}"
 !define INSTALL_FOLDER "{{install_folder}}"
+!define INSTALL_MODE "{{install_mode}}"
+!define TARGET_ARCHITECTURE "{{target_architecture}}"
 !define INPUT_GLOB "{{input_glob}}"
 !define OUTPUT_FILE "{{output_file}}"
 !define ESTIMATED_SIZE "{{estimated_size}}"
@@ -37,9 +40,27 @@ Var DeleteAppDataCheckbox
 Name "${PRODUCT_NAME}"
 BrandingText "${PRODUCT_PUBLISHER}"
 OutFile "${OUTPUT_FILE}"
-InstallDir "$LOCALAPPDATA\Programs\${INSTALL_FOLDER}"
-InstallDirRegKey HKCU "${UNINSTALL_KEY}" "InstallLocation"
-RequestExecutionLevel user
+InstallDir "placeholder\${INSTALL_FOLDER}"
+
+!if "${INSTALL_MODE}" == "currentUser"
+  RequestExecutionLevel user
+!else if "${INSTALL_MODE}" == "perMachine"
+  RequestExecutionLevel admin
+!else if "${INSTALL_MODE}" == "both"
+  !define MULTIUSER_MUI
+  !define MULTIUSER_INSTALLMODE_INSTDIR "${INSTALL_FOLDER}"
+  !define MULTIUSER_INSTALLMODE_COMMANDLINE
+  !define MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_KEY "${UNINSTALL_KEY}"
+  !define MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_VALUENAME "InstallLocation"
+  !define MULTIUSER_INSTALLMODEPAGE_SHOWUSERNAME
+  !define MULTIUSER_EXECUTIONLEVEL Highest
+  !if "${TARGET_ARCHITECTURE}" == "x64"
+    !define MULTIUSER_USE_PROGRAMFILES64
+  !else if "${TARGET_ARCHITECTURE}" == "arm64"
+    !define MULTIUSER_USE_PROGRAMFILES64
+  !endif
+  !include "MultiUser.nsh"
+!endif
 
 VIProductVersion "${PRODUCT_NUMERIC_VERSION}"
 VIAddVersionKey "ProductName" "${PRODUCT_NAME}"
@@ -55,6 +76,9 @@ VIAddVersionKey "FileDescription" "${PRODUCT_DESCRIPTION}"
 !define MUI_LANGDLL_REGISTRY_VALUENAME "Installer Language"
 
 !insertmacro MUI_PAGE_WELCOME
+!if "${INSTALL_MODE}" == "both"
+  !insertmacro MULTIUSER_PAGE_INSTALLMODE
+!endif
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE ValidateInstallDirectory
 !insertmacro MUI_PAGE_DIRECTORY
 Page custom ShortcutOptionsPage ShortcutOptionsLeave
@@ -68,10 +92,31 @@ UninstPage custom un.AppDataOptionsPage un.AppDataOptionsLeave
 !insertmacro MUI_RESERVEFILE_LANGDLL
 {{language_files}}
 
+!macro SetInstallContext
+  !if "${INSTALL_MODE}" == "currentUser"
+    SetShellVarContext current
+  !else if "${INSTALL_MODE}" == "perMachine"
+    SetShellVarContext all
+  !endif
+  !if "${TARGET_ARCHITECTURE}" == "x64"
+    SetRegView 64
+  !else if "${TARGET_ARCHITECTURE}" == "arm64"
+    SetRegView 64
+  !else
+    SetRegView 32
+  !endif
+!macroend
+
 Function .onInit
   StrCpy $CreateDesktopShortcut 1
   StrCpy $CreateStartMenuShortcut 1
 {{display_language_selector}}
+  !insertmacro SetInstallContext
+  !if "${INSTALL_MODE}" == "both"
+    !insertmacro MULTIUSER_INIT
+  !else
+    Call SetDefaultInstallDirectory
+  !endif
 FunctionEnd
 
 Function un.onInit
@@ -81,6 +126,26 @@ Function un.onInit
     StrCpy $DeleteAppData 1
   ${EndIf}
   !insertmacro MUI_UNGETLANGUAGE
+  !insertmacro SetInstallContext
+  !if "${INSTALL_MODE}" == "both"
+    !insertmacro MULTIUSER_UNINIT
+  !endif
+FunctionEnd
+
+Function SetDefaultInstallDirectory
+  !if "${INSTALL_MODE}" == "currentUser"
+    StrCpy $INSTDIR "$LOCALAPPDATA\Programs\${INSTALL_FOLDER}"
+  !else if "${INSTALL_MODE}" == "perMachine"
+    ${If} ${RunningX64}
+      StrCpy $INSTDIR "$PROGRAMFILES64\${INSTALL_FOLDER}"
+    ${Else}
+      StrCpy $INSTDIR "$PROGRAMFILES\${INSTALL_FOLDER}"
+    ${EndIf}
+  !endif
+  ReadRegStr $0 SHCTX "${UNINSTALL_KEY}" "InstallLocation"
+  ${If} $0 != ""
+    StrCpy $INSTDIR $0
+  ${EndIf}
 FunctionEnd
 
 Function ValidateInstallDirectory
@@ -179,7 +244,7 @@ Function un.EnsureAppClosed
 FunctionEnd
 
 Section "Install" MainSection
-  SetShellVarContext current
+  !insertmacro SetInstallContext
   Call EnsureAppClosed
   SetOutPath "$INSTDIR"
   File /r "${INPUT_GLOB}"
@@ -199,26 +264,26 @@ Section "Install" MainSection
     CreateShortcut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\${MAIN_EXECUTABLE}"
   ${EndIf}
 
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "${PRODUCT_NAME}"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "Comments" "${PRODUCT_DESCRIPTION}"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${MAIN_EXECUTABLE}"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "QuietUninstallString" '"$INSTDIR\Uninstall.exe" /S'
-  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "EstimatedSize" ${ESTIMATED_SIZE}
-  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
-  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayName" "${PRODUCT_NAME}"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "Comments" "${PRODUCT_DESCRIPTION}"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${MAIN_EXECUTABLE}"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "QuietUninstallString" '"$INSTDIR\Uninstall.exe" /S'
+  WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "EstimatedSize" ${ESTIMATED_SIZE}
+  WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoModify" 1
+  WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoRepair" 1
 SectionEnd
 
 Section "Uninstall"
-  SetShellVarContext current
+  !insertmacro SetInstallContext
   Call un.EnsureAppClosed
   Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"
   RMDir "$SMPROGRAMS\${PRODUCT_NAME}"
-  DeleteRegKey HKCU "${UNINSTALL_KEY}"
+  DeleteRegKey SHCTX "${UNINSTALL_KEY}"
   DeleteRegKey /ifempty HKCU "Software\${PRODUCT_ID}"
   ${If} $DeleteAppData == 1
     RMDir /r "$APPDATA\${PRODUCT_ID}"
