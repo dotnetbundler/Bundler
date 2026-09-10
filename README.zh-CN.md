@@ -54,10 +54,18 @@ dotnet publish -c Release
 | `BundlerMainExecutable` | 否 | `$(TargetName).exe` |
 | `BundlerPublisher` | 否 | `$(Company)` |
 | `BundlerDescription` | 否 | `$(Description)` |
+| `BundlerHomepage` | 否 | `$(PackageProjectUrl)` |
+| `BundlerCopyright` | 否 | `$(Copyright)` |
+| `BundlerLicenseFile` | 否 | 无；支持 `.txt` 或 `.rtf` |
 | `BundlerOutputPath` | 否 | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerToolCachePath` | 否 | `$(BaseIntermediateOutputPath)bundler\tools` |
 | `BundlerNsisTemplate` | 否 | 包内自带模板 |
 | `BundlerNsisInstallMode` | 否 | `currentUser`；也支持 `perMachine` 和 `both` |
+| `BundlerNsisInstallerIcon` | 否 | 第一个 `BundlerIcon` `.ico` |
+| `BundlerNsisUninstallerIcon` | 否 | 安装器图标 |
+| `BundlerNsisHeaderImage` | 否 | NSIS 默认图片；`.bmp` |
+| `BundlerNsisSidebarImage` | 否 | NSIS 默认图片；`.bmp` |
+| `BundlerNsisUninstallerHeaderImage` | 否 | 安装器 Header 图片；`.bmp` |
 | `BundlerNsisLanguages` | 否 | `English` |
 | `BundlerNsisDisplayLanguageSelector` | 否 | `false` |
 
@@ -74,7 +82,7 @@ dotnet publish -c Release
 </ItemGroup>
 ```
 
-对 NSIS 而言，第一个 `.ico` 文件同时用于安装器和卸载器；`BundlerDescription` 会写入可执行文件版本信息和“应用和功能”；每个资源安装到相对的 `TargetPath`，省略时使用源文件名。目标路径冲突或逃逸安装目录会在打包前报错。
+对 NSIS 而言，第一个 `.ico` 文件是安装器和卸载器的回退图标，也可以分别用 NSIS 专属属性覆盖。Header 图片建议为 150×57 BMP，Sidebar 图片建议为 164×314 BMP。`BundlerLicenseFile` 会增加许可证页面。描述、主页、版权、产品版本和文件版本会写入相应的可执行文件或“应用和功能”元数据。每个资源安装到相对的 `TargetPath`，省略时使用源文件名。目标路径冲突或逃逸安装目录会在打包前报错。
 
 ## 通用打包流程与 NSIS 定制
 

@@ -15,6 +15,8 @@ $bundleOutput = Join-Path $integrationRoot "bundle"
 $perMachineBundleOutput = Join-Path $integrationRoot "bundle-per-machine"
 $bothBundleOutput = Join-Path $integrationRoot "bundle-both"
 $testIcon = Join-Path $integrationRoot "test-installer.ico"
+$testHeaderImage = Join-Path $integrationRoot "test-header.bmp"
+$testSidebarImage = Join-Path $integrationRoot "test-sidebar.bmp"
 $installRoot = Join-Path $integrationRoot "安装 目录"
 $installDirectory = Join-Path $installRoot "Bundler Integration Fixture"
 $defaultInstallDirectory = Join-Path $env:LOCALAPPDATA "Programs\Bundler Integration Fixture"
@@ -61,6 +63,8 @@ function Build-FixtureBundle([string]$InstallMode, [string]$OutputPath) {
         "-p:BundlerPackageSource=$packageDirectory",
         "-p:BundlerIntegrationOutput=$OutputPath",
         "-p:BundlerTestIcon=$testIcon",
+        "-p:BundlerTestHeaderImage=$testHeaderImage",
+        "-p:BundlerTestSidebarImage=$testSidebarImage",
         "-p:BundlerNsisInstallMode=$InstallMode",
         "-p:RestorePackagesPath=$packageCache"
     )
@@ -124,6 +128,10 @@ try {
         $archive.Dispose()
     }
     New-Item -ItemType Directory -Path $integrationRoot -Force | Out-Null
+    Assert-UnderIntegrationRoot $packageCache
+    if (Test-Path -LiteralPath $packageCache) {
+        Remove-Item -LiteralPath $packageCache -Recurse -Force
+    }
     Remove-TestState
 
     $nsisArchivePath = Join-Path $repositoryRoot "third_party\nsis\nsis-3.12.zip"
@@ -135,6 +143,18 @@ try {
         $outputStream = [IO.File]::Create($testIcon)
         try { $inputStream.CopyTo($outputStream) }
         finally { $outputStream.Dispose(); $inputStream.Dispose() }
+
+        foreach ($asset in @(
+            @{ Entry = "nsis-3.12/Contrib/Graphics/Header/nsis3-grey.bmp"; Path = $testHeaderImage },
+            @{ Entry = "nsis-3.12/Contrib/Graphics/Wizard/nsis3-grey.bmp"; Path = $testSidebarImage }
+        )) {
+            $entry = $nsisArchive.GetEntry($asset.Entry)
+            Assert-True ($null -ne $entry) "Bundled NSIS archive does not contain $($asset.Entry)."
+            $inputStream = $entry.Open()
+            $outputStream = [IO.File]::Create($asset.Path)
+            try { $inputStream.CopyTo($outputStream) }
+            finally { $outputStream.Dispose(); $inputStream.Dispose() }
+        }
     }
     finally {
         $nsisArchive.Dispose()
@@ -158,6 +178,7 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $installDirectory "docs\license.txt")) "Configured external resource is missing."
     Assert-True (Test-Path -LiteralPath $registryPath) "Uninstall registry entry is missing."
     Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "Comments") -eq "Disposable Windows NSIS integration-test fixture.") "Description metadata is missing from the uninstall registry entry."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "URLInfoAbout") -eq "https://example.com/dotnet-bundler-fixture") "Homepage metadata is missing from the uninstall registry entry."
     Assert-True (Test-Path -LiteralPath $desktopShortcut) "Desktop shortcut is missing."
     Assert-True (Test-Path -LiteralPath $startMenuShortcut) "Start Menu shortcut is missing."
 

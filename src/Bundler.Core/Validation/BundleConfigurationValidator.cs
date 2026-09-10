@@ -40,6 +40,13 @@ public static class BundleConfigurationValidator
             issues.Add(new("version", "Must be a SemVer-like version such as '1.2.3' or '1.2.3-beta.1'."));
         }
 
+        if (!string.IsNullOrWhiteSpace(configuration.Homepage) &&
+            (!Uri.TryCreate(configuration.Homepage, UriKind.Absolute, out var homepage) ||
+             (homepage.Scheme != Uri.UriSchemeHttp && homepage.Scheme != Uri.UriSchemeHttps)))
+        {
+            issues.Add(new("homepage", "Must be an absolute HTTP or HTTPS URL."));
+        }
+
         if (configuration.Targets.Count == 0)
         {
             issues.Add(new("targets", "At least one desktop target is required."));
@@ -51,6 +58,12 @@ public static class BundleConfigurationValidator
         }
 
         ValidatePaths(configuration.Icons, "icons", checkFileSystem, issues);
+        ValidateOptionalFile(configuration.LicenseFile, "licenseFile", [".txt", ".rtf"], checkFileSystem, issues);
+        ValidateOptionalFile(configuration.Nsis.InstallerIcon, "nsis.installerIcon", [".ico"], checkFileSystem, issues);
+        ValidateOptionalFile(configuration.Nsis.UninstallerIcon, "nsis.uninstallerIcon", [".ico"], checkFileSystem, issues);
+        ValidateOptionalFile(configuration.Nsis.HeaderImage, "nsis.headerImage", [".bmp"], checkFileSystem, issues);
+        ValidateOptionalFile(configuration.Nsis.SidebarImage, "nsis.sidebarImage", [".bmp"], checkFileSystem, issues);
+        ValidateOptionalFile(configuration.Nsis.UninstallerHeaderImage, "nsis.uninstallerHeaderImage", [".bmp"], checkFileSystem, issues);
         for (var index = 0; index < configuration.Resources.Count; index++)
         {
             var resource = configuration.Resources[index];
@@ -169,6 +182,29 @@ public static class BundleConfigurationValidator
             {
                 issues.Add(new($"{propertyName}[{index}]", $"Path does not exist: {paths[index]}"));
             }
+        }
+    }
+
+    private static void ValidateOptionalFile(
+        string? path,
+        string propertyName,
+        IReadOnlyCollection<string> extensions,
+        bool checkFileSystem,
+        List<ValidationIssue> issues)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        if (!extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
+        {
+            issues.Add(new(propertyName, $"Supported file extensions: {string.Join(", ", extensions)}."));
+        }
+
+        if (checkFileSystem && !File.Exists(path))
+        {
+            issues.Add(new(propertyName, $"File does not exist: {path}"));
         }
     }
 

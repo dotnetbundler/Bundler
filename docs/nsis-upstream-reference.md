@@ -26,6 +26,10 @@ Adopted the three public modes (`currentUser`, `perMachine`, and `both`) because
 
 The upstream initialization order and `MULTIUSER_USE_PROGRAMFILES64` behavior were used to confirm ambiguous NSIS details. DotNet.Bundler retains its existing `%LOCALAPPDATA%\Programs` current-user default instead of copying Tauri's directory layout.
 
+### Artwork and metadata
+
+The available Tauri fields were checked to avoid naming gaps, but DotNet.Bundler implements these as ordinary bundle metadata plus NSIS-specific artwork overrides. The uninstaller header falls back to the installer header; the installer and uninstaller icons can be configured independently. No Tauri runtime behavior is copied for these static assets.
+
 ## External validation still required
 
 See `docs/nsis-open-items.md` for tests that need credentials, production identifiers, or platform conditions unavailable in the repository.

@@ -12,10 +12,17 @@
     <BundlerProductName>Bundler Integration Fixture</BundlerProductName>
     <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
     <BundlerDescription>Disposable Windows NSIS integration-test fixture.</BundlerDescription>
+    <BundlerHomepage>https://example.com/dotnet-bundler-fixture</BundlerHomepage>
+    <BundlerCopyright>Copyright DotNet.Bundler Tests</BundlerCopyright>
+    <BundlerLicenseFile>$(MSBuildProjectDirectory)\Assets\license.txt</BundlerLicenseFile>
     <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
     <BundlerNsisLanguages>English;SimpChinese</BundlerNsisLanguages>
     <BundlerNsisDisplayLanguageSelector>true</BundlerNsisDisplayLanguageSelector>
     <BundlerNsisInstallMode Condition="'$(BundlerNsisInstallMode)' == ''">currentUser</BundlerNsisInstallMode>
+    <BundlerNsisInstallerIcon>$(BundlerTestIcon)</BundlerNsisInstallerIcon>
+    <BundlerNsisUninstallerIcon>$(BundlerTestIcon)</BundlerNsisUninstallerIcon>
+    <BundlerNsisHeaderImage>$(BundlerTestHeaderImage)</BundlerNsisHeaderImage>
+    <BundlerNsisSidebarImage>$(BundlerTestSidebarImage)</BundlerNsisSidebarImage>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />

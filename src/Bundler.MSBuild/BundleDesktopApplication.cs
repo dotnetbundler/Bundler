@@ -19,6 +19,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     [Required] public string Version { get; set; } = "";
     public string Publisher { get; set; } = "";
     public string Description { get; set; } = "";
+    public string Homepage { get; set; } = "";
+    public string Copyright { get; set; } = "";
+    public string LicenseFile { get; set; } = "";
     [Required] public string RuntimeIdentifier { get; set; } = "";
     [Required] public string InputDirectory { get; set; } = "";
     [Required] public string OutputDirectory { get; set; } = "";
@@ -31,6 +34,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string NsisTemplatePath { get; set; } = "";
     public string NsisLanguageDirectory { get; set; } = "";
     public string NsisInstallMode { get; set; } = "currentUser";
+    public string NsisInstallerIcon { get; set; } = "";
+    public string NsisUninstallerIcon { get; set; } = "";
+    public string NsisHeaderImage { get; set; } = "";
+    public string NsisSidebarImage { get; set; } = "";
+    public string NsisUninstallerHeaderImage { get; set; } = "";
     public string NsisLanguages { get; set; } = "English";
     public bool NsisDisplayLanguageSelector { get; set; }
     public ITaskItem[] NsisLanguageFiles { get; set; } = Array.Empty<ITaskItem>();
@@ -48,6 +56,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Version = Version,
                 Publisher = EmptyToNull(Publisher),
                 Description = EmptyToNull(Description),
+                Homepage = EmptyToNull(Homepage),
+                Copyright = EmptyToNull(Copyright),
+                LicenseFile = OptionalFullPath(LicenseFile),
                 OutputDirectory = Path.GetFullPath(OutputDirectory),
                 Icons = Icons.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
                 Resources = Resources.Select(item => new BundleResourceConfiguration
@@ -58,6 +69,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Nsis = new NsisBundleConfiguration
                 {
                     InstallMode = ParseInstallMode(),
+                    InstallerIcon = OptionalFullPath(NsisInstallerIcon),
+                    UninstallerIcon = OptionalFullPath(NsisUninstallerIcon),
+                    HeaderImage = OptionalFullPath(NsisHeaderImage),
+                    SidebarImage = OptionalFullPath(NsisSidebarImage),
+                    UninstallerHeaderImage = OptionalFullPath(NsisUninstallerHeaderImage),
                     Languages = ParseLanguages(),
                     DisplayLanguageSelector = NsisDisplayLanguageSelector,
                     CustomLanguageFiles = ParseCustomLanguageFiles()
@@ -149,6 +165,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
 
     private static string? EmptyToNull(string value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static string? OptionalFullPath(string value) =>
+        string.IsNullOrWhiteSpace(value) ? null : Path.GetFullPath(value);
 
     private static string ResourceTargetPath(ITaskItem item)
     {

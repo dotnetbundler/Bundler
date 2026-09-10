@@ -54,10 +54,18 @@ The installer is written to `artifacts/<rid>/nsis/` by default. Installer genera
 | `BundlerMainExecutable` | No | `$(TargetName).exe` |
 | `BundlerPublisher` | No | `$(Company)` |
 | `BundlerDescription` | No | `$(Description)` |
+| `BundlerHomepage` | No | `$(PackageProjectUrl)` |
+| `BundlerCopyright` | No | `$(Copyright)` |
+| `BundlerLicenseFile` | No | None; `.txt` or `.rtf` |
 | `BundlerOutputPath` | No | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerToolCachePath` | No | `$(BaseIntermediateOutputPath)bundler\tools` |
 | `BundlerNsisTemplate` | No | Template included in the package |
 | `BundlerNsisInstallMode` | No | `currentUser`; also supports `perMachine` and `both` |
+| `BundlerNsisInstallerIcon` | No | First `BundlerIcon` `.ico` |
+| `BundlerNsisUninstallerIcon` | No | Installer icon |
+| `BundlerNsisHeaderImage` | No | Default NSIS artwork; `.bmp` |
+| `BundlerNsisSidebarImage` | No | Default NSIS artwork; `.bmp` |
+| `BundlerNsisUninstallerHeaderImage` | No | Installer header image; `.bmp` |
 | `BundlerNsisLanguages` | No | `English` |
 | `BundlerNsisDisplayLanguageSelector` | No | `false` |
 
@@ -74,7 +82,7 @@ Icons and extra resources are passed as MSBuild items:
 </ItemGroup>
 ```
 
-For NSIS, the first configured `.ico` is used for both the installer and uninstaller. `BundlerDescription` is written to executable version metadata and Add/Remove Programs. Each resource is installed at its relative `TargetPath`; when omitted, the source file name is used. Target collisions and paths escaping the installation directory are rejected before packaging.
+For NSIS, the first configured `.ico` is the fallback for both the installer and uninstaller; the NSIS-specific icon properties can override either one. Header images should be 150×57 BMP files and sidebar images should be 164×314 BMP files. `BundlerLicenseFile` adds a license page. Description, homepage, copyright, product version, and file version are written to the applicable executable or Add/Remove Programs metadata. Each resource is installed at its relative `TargetPath`; when omitted, the source file name is used. Target collisions and paths escaping the installation directory are rejected before packaging.
 
 ## Packaging pipeline and NSIS customization
 

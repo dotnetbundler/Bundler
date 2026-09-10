@@ -17,6 +17,8 @@ ${UnStrStr}
 !define PRODUCT_NUMERIC_VERSION "{{numeric_version}}"
 !define PRODUCT_PUBLISHER "{{publisher}}"
 !define PRODUCT_DESCRIPTION "{{description}}"
+!define PRODUCT_HOMEPAGE "{{homepage}}"
+!define PRODUCT_COPYRIGHT "{{copyright}}"
 !define PRODUCT_ID "{{identifier}}"
 !define MAIN_EXECUTABLE "{{main_executable}}"
 !define PROCESS_NAME "{{process_name}}"
@@ -65,8 +67,10 @@ InstallDir "placeholder\${INSTALL_FOLDER}"
 VIProductVersion "${PRODUCT_NUMERIC_VERSION}"
 VIAddVersionKey "ProductName" "${PRODUCT_NAME}"
 VIAddVersionKey "ProductVersion" "${PRODUCT_VERSION}"
+VIAddVersionKey "FileVersion" "${PRODUCT_VERSION}"
 VIAddVersionKey "CompanyName" "${PRODUCT_PUBLISHER}"
 VIAddVersionKey "FileDescription" "${PRODUCT_DESCRIPTION}"
+VIAddVersionKey "LegalCopyright" "${PRODUCT_COPYRIGHT}"
 
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_NOAUTOCLOSE
@@ -76,6 +80,7 @@ VIAddVersionKey "FileDescription" "${PRODUCT_DESCRIPTION}"
 !define MUI_LANGDLL_REGISTRY_VALUENAME "Installer Language"
 
 !insertmacro MUI_PAGE_WELCOME
+{{license_page}}
 !if "${INSTALL_MODE}" == "both"
   !insertmacro MULTIUSER_PAGE_INSTALLMODE
 !endif
@@ -133,18 +138,20 @@ Function un.onInit
 FunctionEnd
 
 Function SetDefaultInstallDirectory
-  !if "${INSTALL_MODE}" == "currentUser"
-    StrCpy $INSTDIR "$LOCALAPPDATA\Programs\${INSTALL_FOLDER}"
-  !else if "${INSTALL_MODE}" == "perMachine"
-    ${If} ${RunningX64}
-      StrCpy $INSTDIR "$PROGRAMFILES64\${INSTALL_FOLDER}"
-    ${Else}
-      StrCpy $INSTDIR "$PROGRAMFILES\${INSTALL_FOLDER}"
+  ${If} $INSTDIR == "placeholder\${INSTALL_FOLDER}"
+    !if "${INSTALL_MODE}" == "currentUser"
+      StrCpy $INSTDIR "$LOCALAPPDATA\Programs\${INSTALL_FOLDER}"
+    !else if "${INSTALL_MODE}" == "perMachine"
+      ${If} ${RunningX64}
+        StrCpy $INSTDIR "$PROGRAMFILES64\${INSTALL_FOLDER}"
+      ${Else}
+        StrCpy $INSTDIR "$PROGRAMFILES\${INSTALL_FOLDER}"
+      ${EndIf}
+    !endif
+    ReadRegStr $0 SHCTX "${UNINSTALL_KEY}" "InstallLocation"
+    ${If} $0 != ""
+      StrCpy $INSTDIR $0
     ${EndIf}
-  !endif
-  ReadRegStr $0 SHCTX "${UNINSTALL_KEY}" "InstallLocation"
-  ${If} $0 != ""
-    StrCpy $INSTDIR $0
   ${EndIf}
 FunctionEnd
 
@@ -268,6 +275,7 @@ Section "Install" MainSection
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "Comments" "${PRODUCT_DESCRIPTION}"
+{{homepage_registry}}
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${MAIN_EXECUTABLE}"
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'

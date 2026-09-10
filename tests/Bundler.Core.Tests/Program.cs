@@ -174,7 +174,8 @@ static void LetsUsersChooseInstallDirectory()
     Assert(template.Contains("!insertmacro MUI_PAGE_DIRECTORY", StringComparison.Ordinal),
         "The installer must display the NSIS directory selection page.");
     Assert(template.Contains("ReadRegStr $0 SHCTX \"${UNINSTALL_KEY}\" \"InstallLocation\"", StringComparison.Ordinal) &&
-           template.Contains("MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_VALUENAME \"InstallLocation\"", StringComparison.Ordinal),
+           template.Contains("MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_VALUENAME \"InstallLocation\"", StringComparison.Ordinal) &&
+           template.Contains("${If} $INSTDIR == \"placeholder\\${INSTALL_FOLDER}\"", StringComparison.Ordinal),
         "Fixed and selectable install scopes should restore their previously selected install directories.");
 }
 
@@ -311,8 +312,16 @@ static void RendersNsisMetadataIconsAndResources()
     Directory.CreateDirectory(input);
     File.WriteAllText(Path.Combine(input, "ExampleApp.exe"), "test");
     var icon = Path.Combine(root, "app.ico");
+    var uninstallerIcon = Path.Combine(root, "uninstall.ico");
+    var headerImage = Path.Combine(root, "header.bmp");
+    var sidebarImage = Path.Combine(root, "sidebar.bmp");
+    var licenseFile = Path.Combine(root, "license.rtf");
     var resource = Path.Combine(root, "license.txt");
     File.WriteAllText(icon, "icon");
+    File.WriteAllText(uninstallerIcon, "icon");
+    File.WriteAllText(headerImage, "bitmap");
+    File.WriteAllText(sidebarImage, "bitmap");
+    File.WriteAllText(licenseFile, "license");
     File.WriteAllText(resource, "license");
 
     try
@@ -324,8 +333,18 @@ static void RendersNsisMetadataIconsAndResources()
             Version = "1.0.0",
             Publisher = "Example Publisher",
             Description = "Example Description",
+            Homepage = "https://example.com/app",
+            Copyright = "Copyright Example",
+            LicenseFile = licenseFile,
             OutputDirectory = "artifacts",
             Icons = [icon],
+            Nsis = new NsisBundleConfiguration
+            {
+                InstallerIcon = icon,
+                UninstallerIcon = uninstallerIcon,
+                HeaderImage = headerImage,
+                SidebarImage = sidebarImage
+            },
             Resources =
             [
                 new BundleResourceConfiguration
@@ -360,6 +379,14 @@ static void RendersNsisMetadataIconsAndResources()
         Assert(script.Contains("!define MUI_ICON", StringComparison.Ordinal) &&
                script.Contains("!define MUI_UNICON", StringComparison.Ordinal),
             "The configured .ico should apply to the installer and uninstaller.");
+        Assert(script.Contains(uninstallerIcon.Replace("$", "$$"), StringComparison.Ordinal) &&
+               script.Contains("!define MUI_HEADERIMAGE_BITMAP", StringComparison.Ordinal) &&
+               script.Contains("!define MUI_WELCOMEFINISHPAGE_BITMAP", StringComparison.Ordinal),
+            "NSIS-specific installer, uninstaller, header, and sidebar artwork should be rendered.");
+        Assert(script.Contains("MUI_PAGE_LICENSE", StringComparison.Ordinal) &&
+               script.Contains("URLInfoAbout\" \"https://example.com/app", StringComparison.Ordinal) &&
+               script.Contains("VIAddVersionKey \"LegalCopyright\" \"${PRODUCT_COPYRIGHT}\"", StringComparison.Ordinal),
+            "License, homepage, and extended version metadata should be rendered.");
         Assert(script.Contains("SetOutPath \"$INSTDIR\\docs\"", StringComparison.Ordinal) &&
                script.Contains("/oname=license.txt", StringComparison.Ordinal),
             "The external resource should be installed at its configured target path.");

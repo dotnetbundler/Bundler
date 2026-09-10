@@ -93,9 +93,10 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
     {
         var publisher = configuration.Publisher ?? configuration.ProductName;
         var description = configuration.Description ?? configuration.ProductName;
+        var copyright = configuration.Copyright ?? publisher;
         var version = NumericVersion(configuration.Version);
         var resources = ExpandResources(configuration.Resources, item.InputDirectory);
-        var iconDirectives = CreateIconDirectives(configuration.Icons);
+        var visualDirectives = CreateVisualDirectives(configuration.Icons, configuration.Nsis);
 
         return TemplateRenderer.Render(template, new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -104,6 +105,8 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
             ["numeric_version"] = version,
             ["publisher"] = Escape(publisher),
             ["description"] = Escape(description),
+            ["homepage"] = Escape(configuration.Homepage ?? string.Empty),
+            ["copyright"] = Escape(copyright),
             ["identifier"] = Escape(configuration.Identifier),
             ["main_executable"] = Escape(item.MainExecutable),
             ["process_name"] = Escape(Path.GetFileName(item.MainExecutable)),
@@ -113,7 +116,9 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
             ["input_glob"] = Escape(Path.Combine(item.InputDirectory, "*")),
             ["output_file"] = Escape(installerPath),
             ["estimated_size"] = EstimateSizeInKilobytes(item.InputDirectory).ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["installer_icon_directives"] = iconDirectives,
+            ["installer_icon_directives"] = visualDirectives,
+            ["license_page"] = CreateLicensePage(configuration.LicenseFile),
+            ["homepage_registry"] = CreateHomepageRegistry(configuration.Homepage),
             ["resource_install_commands"] = CreateResourceInstallCommands(resources),
             ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory, resources),
             ["language_macros"] = localization.LanguageMacros,
@@ -122,28 +127,62 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
         });
     }
 
-    private static string CreateIconDirectives(IReadOnlyList<string> icons)
+    private static string CreateVisualDirectives(
+        IReadOnlyList<string> icons,
+        NsisBundleConfiguration settings)
     {
-        var icon = icons.FirstOrDefault(path =>
+        var fallbackIcon = icons.FirstOrDefault(path =>
             Path.GetExtension(path).Equals(".ico", StringComparison.OrdinalIgnoreCase));
-        if (icon is null)
+        if (fallbackIcon is null && icons.Count > 0)
         {
-            if (icons.Count > 0)
-            {
-                throw new InvalidOperationException("Windows NSIS packaging requires at least one .ico file when icons are configured.");
-            }
-
-            return string.Empty;
+            throw new InvalidOperationException("Windows NSIS packaging requires at least one .ico file when icons are configured.");
         }
 
-        var escaped = Escape(Path.GetFullPath(icon));
-        return string.Join(Environment.NewLine, new[]
+        var installerIcon = settings.InstallerIcon ?? fallbackIcon;
+        var uninstallerIcon = settings.UninstallerIcon ?? installerIcon;
+        var lines = new List<string>();
+        if (installerIcon is not null)
         {
-            $"!define MUI_ICON \"{escaped}\"",
-            $"!define MUI_UNICON \"{escaped}\"",
-            $"Icon \"{escaped}\""
-        });
+            var escaped = Escape(Path.GetFullPath(installerIcon));
+            lines.Add($"!define MUI_ICON \"{escaped}\"");
+            lines.Add($"Icon \"{escaped}\"");
+        }
+        if (uninstallerIcon is not null)
+        {
+            lines.Add($"!define MUI_UNICON \"{Escape(Path.GetFullPath(uninstallerIcon))}\"");
+        }
+        if (settings.SidebarImage is not null)
+        {
+            var path = Escape(Path.GetFullPath(settings.SidebarImage));
+            lines.Add($"!define MUI_WELCOMEFINISHPAGE_BITMAP \"{path}\"");
+            lines.Add($"!define MUI_UNWELCOMEFINISHPAGE_BITMAP \"{path}\"");
+        }
+        if (settings.HeaderImage is not null || settings.UninstallerHeaderImage is not null)
+        {
+            lines.Add("!define MUI_HEADERIMAGE");
+        }
+        if (settings.HeaderImage is not null)
+        {
+            lines.Add($"!define MUI_HEADERIMAGE_BITMAP \"{Escape(Path.GetFullPath(settings.HeaderImage))}\"");
+        }
+        var uninstallerHeader = settings.UninstallerHeaderImage ?? settings.HeaderImage;
+        if (uninstallerHeader is not null)
+        {
+            lines.Add($"!define MUI_HEADERIMAGE_UNBITMAP \"{Escape(Path.GetFullPath(uninstallerHeader))}\"");
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
+
+    private static string CreateLicensePage(string? licenseFile) =>
+        string.IsNullOrWhiteSpace(licenseFile)
+            ? string.Empty
+            : $"!insertmacro MUI_PAGE_LICENSE \"{Escape(Path.GetFullPath(licenseFile!))}\"";
+
+    private static string CreateHomepageRegistry(string? homepage) =>
+        string.IsNullOrWhiteSpace(homepage)
+            ? string.Empty
+            : $"  WriteRegStr SHCTX \"${{UNINSTALL_KEY}}\" \"URLInfoAbout\" \"{Escape(homepage!)}\"";
 
     private static string InstallModeName(NsisInstallMode mode) => mode switch
     {

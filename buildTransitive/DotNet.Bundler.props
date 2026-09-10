@@ -6,11 +6,19 @@
     <BundlerVersion Condition="'$(BundlerVersion)' == ''"></BundlerVersion>
     <BundlerPublisher Condition="'$(BundlerPublisher)' == ''">$(Company)</BundlerPublisher>
     <BundlerDescription Condition="'$(BundlerDescription)' == ''">$(Description)</BundlerDescription>
+    <BundlerHomepage Condition="'$(BundlerHomepage)' == ''">$(PackageProjectUrl)</BundlerHomepage>
+    <BundlerCopyright Condition="'$(BundlerCopyright)' == ''">$(Copyright)</BundlerCopyright>
+    <BundlerLicenseFile Condition="'$(BundlerLicenseFile)' == ''"></BundlerLicenseFile>
     <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''"></BundlerMainExecutable>
     <BundlerOutputPath Condition="'$(BundlerOutputPath)' == ''">$(MSBuildProjectDirectory)\artifacts</BundlerOutputPath>
     <BundlerToolCachePath Condition="'$(BundlerToolCachePath)' == ''">$(BaseIntermediateOutputPath)bundler\tools</BundlerToolCachePath>
     <BundlerNsisTemplate Condition="'$(BundlerNsisTemplate)' == ''"></BundlerNsisTemplate>
     <BundlerNsisInstallMode Condition="'$(BundlerNsisInstallMode)' == ''">currentUser</BundlerNsisInstallMode>
+    <BundlerNsisInstallerIcon Condition="'$(BundlerNsisInstallerIcon)' == ''"></BundlerNsisInstallerIcon>
+    <BundlerNsisUninstallerIcon Condition="'$(BundlerNsisUninstallerIcon)' == ''"></BundlerNsisUninstallerIcon>
+    <BundlerNsisHeaderImage Condition="'$(BundlerNsisHeaderImage)' == ''"></BundlerNsisHeaderImage>
+    <BundlerNsisSidebarImage Condition="'$(BundlerNsisSidebarImage)' == ''"></BundlerNsisSidebarImage>
+    <BundlerNsisUninstallerHeaderImage Condition="'$(BundlerNsisUninstallerHeaderImage)' == ''"></BundlerNsisUninstallerHeaderImage>
     <BundlerNsisLanguages Condition="'$(BundlerNsisLanguages)' == ''">English</BundlerNsisLanguages>
     <BundlerNsisDisplayLanguageSelector Condition="'$(BundlerNsisDisplayLanguageSelector)' == ''">false</BundlerNsisDisplayLanguageSelector>
   </PropertyGroup>
