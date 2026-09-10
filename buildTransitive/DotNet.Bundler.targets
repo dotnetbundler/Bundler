@@ -50,6 +50,7 @@
       NsisHeaderImage="$(BundlerNsisHeaderImage)"
       NsisSidebarImage="$(BundlerNsisSidebarImage)"
       NsisUninstallerHeaderImage="$(BundlerNsisUninstallerHeaderImage)"
+      NsisInstallerHooks="$(BundlerNsisInstallerHooks)"
       NsisLanguages="$(BundlerNsisLanguages)"
       NsisDisplayLanguageSelector="$(BundlerNsisDisplayLanguageSelector)"
       NsisLanguageFiles="@(BundlerNsisLanguageFile)">

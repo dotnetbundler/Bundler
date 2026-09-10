@@ -31,6 +31,7 @@ ${UnStrStr}
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_ID}"
 !define INSTALL_MARKER ".dotnet-bundler-${PRODUCT_ID}"
 {{installer_icon_directives}}
+{{installer_hooks_include}}
 
 Var CreateDesktopShortcut
 Var CreateStartMenuShortcut
@@ -252,6 +253,9 @@ FunctionEnd
 
 Section "Install" MainSection
   !insertmacro SetInstallContext
+  !ifmacrodef NSIS_HOOK_PREINSTALL
+    !insertmacro NSIS_HOOK_PREINSTALL
+  !endif
   Call EnsureAppClosed
   SetOutPath "$INSTDIR"
   File /r "${INPUT_GLOB}"
@@ -283,10 +287,16 @@ Section "Install" MainSection
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "EstimatedSize" ${ESTIMATED_SIZE}
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoModify" 1
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoRepair" 1
+  !ifmacrodef NSIS_HOOK_POSTINSTALL
+    !insertmacro NSIS_HOOK_POSTINSTALL
+  !endif
 SectionEnd
 
 Section "Uninstall"
   !insertmacro SetInstallContext
+  !ifmacrodef NSIS_HOOK_PREUNINSTALL
+    !insertmacro NSIS_HOOK_PREUNINSTALL
+  !endif
   Call un.EnsureAppClosed
   Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"
@@ -303,4 +313,7 @@ Section "Uninstall"
     Delete /REBOOTOK "$INSTDIR\Uninstall.exe"
     RMDir "$INSTDIR"
   ${EndIf}
+  !ifmacrodef NSIS_HOOK_POSTUNINSTALL
+    !insertmacro NSIS_HOOK_POSTUNINSTALL
+  !endif
 SectionEnd

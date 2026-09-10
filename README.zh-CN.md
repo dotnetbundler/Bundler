@@ -66,6 +66,7 @@ dotnet publish -c Release
 | `BundlerNsisHeaderImage` | 否 | NSIS 默认图片；`.bmp` |
 | `BundlerNsisSidebarImage` | 否 | NSIS 默认图片；`.bmp` |
 | `BundlerNsisUninstallerHeaderImage` | 否 | 安装器 Header 图片；`.bmp` |
+| `BundlerNsisInstallerHooks` | 否 | 可选的 `.nsh` 生命周期宏文件 |
 | `BundlerNsisLanguages` | 否 | `English` |
 | `BundlerNsisDisplayLanguageSelector` | 否 | `false` |
 
@@ -109,9 +110,11 @@ NSIS 脚本存放在 `templates/nsis/installer.nsi` 文件中，不再嵌入 C#�
 
 `BundlerNsisInstallMode` 控制 Windows 安装范围。`currentUser` 不提权，卸载信息和快捷方式写入当前用户上下文；`perMachine` 请求管理员权限，安装到 Program Files，并使用所有用户 Shell 上下文和 HKLM 注册表；`both` 使用 NSIS 自带的 MultiUser 页面让用户选择。由于安装器必须具备切换到计算机范围的能力，`both` 启动时会请求最高可用权限。x64 和 arm64 包使用 64 位注册表视图。
 
+可选的 `BundlerNsisInstallerHooks` 文件可以把 `NSIS_HOOK_PREINSTALL`、`NSIS_HOOK_POSTINSTALL`、`NSIS_HOOK_PREUNINSTALL`、`NSIS_HOOK_POSTUNINSTALL` 中任意几项定义为 NSIS 宏，安装器会在相应生命周期边界调用。Hook 使用安装器当前权限执行，失败处理需要在宏中明确编写。
+
 若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。模板支持 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`input_glob`、`output_file`、`estimated_size`、`uninstall_payload`、`language_macros`、`language_files`、`display_language_selector`，写法为 `{{name}}`。
 
-这只是参考 Tauri 后形成的可用基线，并不等于已经达到 Tauri 的功能完整度。升级/降级策略、安装范围选择、文件关联、深链接、签名和生命周期钩子仍需先设计成结构化配置，再适合对外开放。
+这是面向 Windows 的可用基线，并不等于 Tauri 功能对等。升级/降级策略、文件关联、深链接、签名和更新器命令行行为仍属于后续工作。
 
 ## 仓库命令
 

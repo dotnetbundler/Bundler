@@ -64,6 +64,7 @@ public static class BundleConfigurationLoader
                 HeaderImage = source.Nsis.HeaderImage is null ? null : Resolve(baseDirectory, source.Nsis.HeaderImage),
                 SidebarImage = source.Nsis.SidebarImage is null ? null : Resolve(baseDirectory, source.Nsis.SidebarImage),
                 UninstallerHeaderImage = source.Nsis.UninstallerHeaderImage is null ? null : Resolve(baseDirectory, source.Nsis.UninstallerHeaderImage),
+                InstallerHooks = source.Nsis.InstallerHooks is null ? null : Resolve(baseDirectory, source.Nsis.InstallerHooks),
                 Languages = source.Nsis.Languages,
                 DisplayLanguageSelector = source.Nsis.DisplayLanguageSelector,
                 CustomLanguageFiles = source.Nsis.CustomLanguageFiles.ToDictionary(

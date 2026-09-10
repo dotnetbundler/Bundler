@@ -39,6 +39,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string NsisHeaderImage { get; set; } = "";
     public string NsisSidebarImage { get; set; } = "";
     public string NsisUninstallerHeaderImage { get; set; } = "";
+    public string NsisInstallerHooks { get; set; } = "";
     public string NsisLanguages { get; set; } = "English";
     public bool NsisDisplayLanguageSelector { get; set; }
     public ITaskItem[] NsisLanguageFiles { get; set; } = Array.Empty<ITaskItem>();
@@ -74,6 +75,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                     HeaderImage = OptionalFullPath(NsisHeaderImage),
                     SidebarImage = OptionalFullPath(NsisSidebarImage),
                     UninstallerHeaderImage = OptionalFullPath(NsisUninstallerHeaderImage),
+                    InstallerHooks = OptionalFullPath(NsisInstallerHooks),
                     Languages = ParseLanguages(),
                     DisplayLanguageSelector = NsisDisplayLanguageSelector,
                     CustomLanguageFiles = ParseCustomLanguageFiles()

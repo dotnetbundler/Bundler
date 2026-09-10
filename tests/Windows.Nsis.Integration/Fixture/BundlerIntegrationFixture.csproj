@@ -23,6 +23,7 @@
     <BundlerNsisUninstallerIcon>$(BundlerTestIcon)</BundlerNsisUninstallerIcon>
     <BundlerNsisHeaderImage>$(BundlerTestHeaderImage)</BundlerNsisHeaderImage>
     <BundlerNsisSidebarImage>$(BundlerTestSidebarImage)</BundlerNsisSidebarImage>
+    <BundlerNsisInstallerHooks>$(MSBuildProjectDirectory)\Assets\installer-hooks.nsh</BundlerNsisInstallerHooks>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />

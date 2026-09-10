@@ -119,6 +119,7 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
             ["installer_icon_directives"] = visualDirectives,
             ["license_page"] = CreateLicensePage(configuration.LicenseFile),
             ["homepage_registry"] = CreateHomepageRegistry(configuration.Homepage),
+            ["installer_hooks_include"] = CreateInstallerHooksInclude(configuration.Nsis.InstallerHooks),
             ["resource_install_commands"] = CreateResourceInstallCommands(resources),
             ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory, resources),
             ["language_macros"] = localization.LanguageMacros,
@@ -183,6 +184,11 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
         string.IsNullOrWhiteSpace(homepage)
             ? string.Empty
             : $"  WriteRegStr SHCTX \"${{UNINSTALL_KEY}}\" \"URLInfoAbout\" \"{Escape(homepage!)}\"";
+
+    private static string CreateInstallerHooksInclude(string? hooksFile) =>
+        string.IsNullOrWhiteSpace(hooksFile)
+            ? string.Empty
+            : $"!include \"{Escape(Path.GetFullPath(hooksFile!))}\"";
 
     private static string InstallModeName(NsisInstallMode mode) => mode switch
     {

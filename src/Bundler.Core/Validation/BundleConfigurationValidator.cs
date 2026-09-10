@@ -64,6 +64,7 @@ public static class BundleConfigurationValidator
         ValidateOptionalFile(configuration.Nsis.HeaderImage, "nsis.headerImage", [".bmp"], checkFileSystem, issues);
         ValidateOptionalFile(configuration.Nsis.SidebarImage, "nsis.sidebarImage", [".bmp"], checkFileSystem, issues);
         ValidateOptionalFile(configuration.Nsis.UninstallerHeaderImage, "nsis.uninstallerHeaderImage", [".bmp"], checkFileSystem, issues);
+        ValidateOptionalFile(configuration.Nsis.InstallerHooks, "nsis.installerHooks", [".nsh"], checkFileSystem, issues);
         for (var index = 0; index < configuration.Resources.Count; index++)
         {
             var resource = configuration.Resources[index];

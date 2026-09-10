@@ -30,6 +30,10 @@ The upstream initialization order and `MULTIUSER_USE_PROGRAMFILES64` behavior we
 
 The available Tauri fields were checked to avoid naming gaps, but DotNet.Bundler implements these as ordinary bundle metadata plus NSIS-specific artwork overrides. The uninstaller header falls back to the installer header; the installer and uninstaller icons can be configured independently. No Tauri runtime behavior is copied for these static assets.
 
+### Lifecycle hooks
+
+DotNet.Bundler uses the four optional `NSIS_HOOK_*` macro names found in the upstream template because their placement is unambiguous and the convention is already documented in the NSIS bundling ecosystem. Only the naming and lifecycle boundaries are adopted; hook contents remain user-owned NSIS code.
+
 ## External validation still required
 
 See `docs/nsis-open-items.md` for tests that need credentials, production identifiers, or platform conditions unavailable in the repository.

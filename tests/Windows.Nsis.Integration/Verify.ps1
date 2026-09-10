@@ -29,6 +29,7 @@ $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "$product
 $startMenuDirectory = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\$productName"
 $startMenuShortcut = Join-Path $startMenuDirectory "$productName.lnk"
 $fixtureProcess = $null
+$hookMarkers = @("preinstall", "postinstall", "preuninstall", "postuninstall") | ForEach-Object { Join-Path $env:TEMP "DotNetBundler-$_.txt" }
 
 function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
@@ -127,6 +128,9 @@ try {
     finally {
         $archive.Dispose()
     }
+    foreach ($path in $hookMarkers) {
+        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
+    }
     New-Item -ItemType Directory -Path $integrationRoot -Force | Out-Null
     Assert-UnderIntegrationRoot $packageCache
     if (Test-Path -LiteralPath $packageCache) {
@@ -181,6 +185,8 @@ try {
     Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "URLInfoAbout") -eq "https://example.com/dotnet-bundler-fixture") "Homepage metadata is missing from the uninstall registry entry."
     Assert-True (Test-Path -LiteralPath $desktopShortcut) "Desktop shortcut is missing."
     Assert-True (Test-Path -LiteralPath $startMenuShortcut) "Start Menu shortcut is missing."
+    Assert-True (Test-Path -LiteralPath $hookMarkers[0]) "Pre-install hook did not run."
+    Assert-True (Test-Path -LiteralPath $hookMarkers[1]) "Post-install hook did not run."
 
     $script:fixtureProcess = Start-Process -FilePath $installedExecutable -ArgumentList "--wait" -PassThru
     Start-Sleep -Milliseconds 500
@@ -205,6 +211,8 @@ try {
     Assert-True (-not (Test-Path -LiteralPath $registryPath)) "Uninstall registry entry survived uninstall."
     Assert-True (-not (Test-Path -LiteralPath $desktopShortcut)) "Desktop shortcut survived uninstall."
     Assert-True (-not (Test-Path -LiteralPath $startMenuShortcut)) "Start Menu shortcut survived uninstall."
+    Assert-True (Test-Path -LiteralPath $hookMarkers[2]) "Pre-uninstall hook did not run."
+    Assert-True (Test-Path -LiteralPath $hookMarkers[3]) "Post-uninstall hook did not run."
 
     Remove-Item -LiteralPath $runtimeData -Force
     Remove-Item -LiteralPath $installDirectory -Recurse -Force

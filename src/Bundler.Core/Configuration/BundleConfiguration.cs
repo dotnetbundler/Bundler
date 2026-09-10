@@ -33,6 +33,7 @@ public sealed class NsisBundleConfiguration
     public string? HeaderImage { get; init; }
     public string? SidebarImage { get; init; }
     public string? UninstallerHeaderImage { get; init; }
+    public string? InstallerHooks { get; init; }
     public IReadOnlyList<string> Languages { get; init; } = ["English"];
     public IReadOnlyDictionary<string, string> CustomLanguageFiles { get; init; } =
         new Dictionary<string, string>();

@@ -66,6 +66,7 @@ The installer is written to `artifacts/<rid>/nsis/` by default. Installer genera
 | `BundlerNsisHeaderImage` | No | Default NSIS artwork; `.bmp` |
 | `BundlerNsisSidebarImage` | No | Default NSIS artwork; `.bmp` |
 | `BundlerNsisUninstallerHeaderImage` | No | Installer header image; `.bmp` |
+| `BundlerNsisInstallerHooks` | No | Optional `.nsh` lifecycle macro file |
 | `BundlerNsisLanguages` | No | `English` |
 | `BundlerNsisDisplayLanguageSelector` | No | `false` |
 
@@ -109,9 +110,11 @@ The default template includes current-user installation, a user-selectable direc
 
 `BundlerNsisInstallMode` controls Windows installation scope. `currentUser` installs without elevation and writes uninstall metadata and shortcuts in the current-user context. `perMachine` requests administrator access, installs under Program Files, and uses the all-users shell and HKLM registry context. `both` uses the standard NSIS MultiUser page to let the user choose; because NSIS must be able to select the machine scope, launching this mode requests the highest available execution level. x64 and arm64 packages use the 64-bit registry view.
 
+An optional `BundlerNsisInstallerHooks` file can define any of `NSIS_HOOK_PREINSTALL`, `NSIS_HOOK_POSTINSTALL`, `NSIS_HOOK_PREUNINSTALL`, and `NSIS_HOOK_POSTUNINSTALL` as NSIS macros. The installer calls each defined macro at the corresponding lifecycle boundary. Hook code runs with the installer's privileges and is responsible for handling failures explicitly.
+
 Set `BundlerNsisTemplate` to an absolute path to use a customized copy. Supported placeholders are `product_name`, `version`, `numeric_version`, `publisher`, `identifier`, `main_executable`, `process_name`, `install_folder`, `input_glob`, `output_file`, `estimated_size`, `uninstall_payload`, `language_macros`, `language_files`, and `display_language_selector`, each written as `{{name}}`.
 
-This is a practical Tauri-inspired baseline, not feature parity. Upgrade/downgrade policy, install scope selection, file associations, deep links, signing, and lifecycle hooks still need structured configuration before they should be exposed.
+This is a practical Windows baseline, not Tauri feature parity. Upgrade/downgrade policy, file associations, deep links, signing, and updater command-line behavior remain planned work.
 
 ## Repository commands
 
