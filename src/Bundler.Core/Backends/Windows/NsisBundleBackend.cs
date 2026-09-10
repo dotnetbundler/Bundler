@@ -4,10 +4,11 @@ using Bundler.Core.Planning;
 using Bundler.Core.Templates;
 using Bundler.Core.Tools;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Bundler.Core.Backends.Windows;
 
-public sealed class NsisBundleBackend(string compilerPath, string templatePath) : IBundleBackend
+public sealed class NsisBundleBackend(string compilerPath, string templatePath, string languageDirectory) : IBundleBackend
 {
     public PackageFormat Format => PackageFormat.Nsis;
     public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
@@ -43,7 +44,11 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath) 
         var scriptPath = Path.Combine(context.WorkDirectory, "installer.nsi");
         cancellationToken.ThrowIfCancellationRequested();
         var template = File.ReadAllText(fullTemplatePath);
-        File.WriteAllText(scriptPath, CreateScript(template, configuration, item, installerPath, safeProductName));
+        var localization = PrepareLanguages(configuration.Nsis, context.WorkDirectory);
+        File.WriteAllText(
+            scriptPath,
+            CreateScript(template, configuration, item, installerPath, safeProductName, localization),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
         await ProcessRunner.RunAsync(
             fullCompilerPath,
@@ -66,6 +71,26 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath) 
         string installerPath,
         string safeProductName)
     {
+        return CreateScript(
+            template,
+            configuration,
+            item,
+            installerPath,
+            safeProductName,
+            new NsisLocalization(
+                "!insertmacro MUI_LANGUAGE \"English\"",
+                string.Empty,
+                string.Empty));
+    }
+
+    private static string CreateScript(
+        string template,
+        BundleConfiguration configuration,
+        BundlePlanItem item,
+        string installerPath,
+        string safeProductName,
+        NsisLocalization localization)
+    {
         var publisher = configuration.Publisher ?? configuration.ProductName;
         var version = NumericVersion(configuration.Version);
 
@@ -82,9 +107,66 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath) 
             ["input_glob"] = Escape(Path.Combine(item.InputDirectory, "*")),
             ["output_file"] = Escape(installerPath),
             ["estimated_size"] = EstimateSizeInKilobytes(item.InputDirectory).ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory)
+            ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory),
+            ["language_macros"] = localization.LanguageMacros,
+            ["language_files"] = localization.LanguageFiles,
+            ["display_language_selector"] = localization.DisplayLanguageSelector
         });
     }
+
+    private NsisLocalization PrepareLanguages(NsisBundleConfiguration settings, string workDirectory)
+    {
+        if (settings.Languages.Count == 0)
+        {
+            throw new InvalidOperationException("At least one NSIS language is required.");
+        }
+
+        var languageMacros = new List<string>();
+        var languageIncludes = new List<string>();
+        for (var index = 0; index < settings.Languages.Count; index++)
+        {
+            var language = settings.Languages[index];
+            if (string.IsNullOrWhiteSpace(language) ||
+                !IsValidLanguageName(language))
+            {
+                throw new InvalidOperationException($"Invalid NSIS language name '{language}'.");
+            }
+
+            var customFile = settings.CustomLanguageFiles.FirstOrDefault(
+                pair => pair.Key.Equals(language, StringComparison.OrdinalIgnoreCase)).Value;
+            var sourcePath = string.IsNullOrWhiteSpace(customFile)
+                ? Path.Combine(Path.GetFullPath(languageDirectory), language + ".nsh")
+                : Path.GetFullPath(customFile);
+            if (!File.Exists(sourcePath))
+            {
+                throw new FileNotFoundException(
+                    $"No built-in or custom message file was found for NSIS language '{language}'.",
+                    sourcePath);
+            }
+
+            var destinationPath = Path.Combine(workDirectory, $"language-{index:D2}-{language}.nsh");
+            File.WriteAllText(
+                destinationPath,
+                File.ReadAllText(sourcePath),
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            languageMacros.Add($"!insertmacro MUI_LANGUAGE \"{language}\"");
+            languageIncludes.Add($"!include \"{Escape(destinationPath)}\"");
+        }
+
+        var selector = settings.DisplayLanguageSelector && settings.Languages.Count > 1
+            ? "  !insertmacro MUI_LANGDLL_DISPLAY"
+            : string.Empty;
+        return new NsisLocalization(
+            string.Join(Environment.NewLine, languageMacros),
+            string.Join(Environment.NewLine, languageIncludes),
+            selector);
+    }
+
+    private static bool IsValidLanguageName(string value) =>
+        value.Length > 0 &&
+        value[0] is >= 'A' and <= 'Z' &&
+        value.All(character =>
+            character is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9');
 
     private static string CreateUninstallPayload(string inputDirectory)
     {
@@ -147,4 +229,9 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath) 
             .Sum(path => new FileInfo(path).Length);
         return Math.Max(1, (bytes + 1023) / 1024);
     }
+
+    private sealed record NsisLocalization(
+        string LanguageMacros,
+        string LanguageFiles,
+        string DisplayLanguageSelector);
 }

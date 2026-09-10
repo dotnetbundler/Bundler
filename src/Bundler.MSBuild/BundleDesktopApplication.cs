@@ -29,6 +29,10 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string NsisToolArchivePath { get; set; } = "";
     [Required] public string ToolCacheDirectory { get; set; } = "";
     public string NsisTemplatePath { get; set; } = "";
+    public string NsisLanguageDirectory { get; set; } = "";
+    public string NsisLanguages { get; set; } = "English";
+    public bool NsisDisplayLanguageSelector { get; set; }
+    public ITaskItem[] NsisLanguageFiles { get; set; } = Array.Empty<ITaskItem>();
     [Output] public ITaskItem[] Artifacts { get; private set; } = Array.Empty<ITaskItem>();
 
     public override bool Execute()
@@ -46,6 +50,12 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 OutputDirectory = Path.GetFullPath(OutputDirectory),
                 Icons = Icons.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
                 Resources = Resources.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
+                Nsis = new NsisBundleConfiguration
+                {
+                    Languages = ParseLanguages(),
+                    DisplayLanguageSelector = NsisDisplayLanguageSelector,
+                    CustomLanguageFiles = ParseCustomLanguageFiles()
+                },
                 Targets = new[]
                 {
                     new BundleTargetConfiguration
@@ -115,7 +125,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         var backends = new List<IBundleBackend>();
         if (formats.Contains(PackageFormat.Nsis))
         {
-            if (string.IsNullOrWhiteSpace(NsisToolArchivePath) || string.IsNullOrWhiteSpace(NsisTemplatePath))
+            if (string.IsNullOrWhiteSpace(NsisToolArchivePath) ||
+                string.IsNullOrWhiteSpace(NsisTemplatePath) ||
+                string.IsNullOrWhiteSpace(NsisLanguageDirectory))
             {
                 throw new InvalidOperationException("NSIS packaging requires its bundled tool archive and script template.");
             }
@@ -123,7 +135,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             var compiler = NsisToolResolver.ResolveAsync(NsisToolArchivePath, ToolCacheDirectory)
                 .GetAwaiter()
                 .GetResult();
-            backends.Add(new NsisBundleBackend(compiler, NsisTemplatePath));
+            backends.Add(new NsisBundleBackend(compiler, NsisTemplatePath, NsisLanguageDirectory));
         }
 
         return backends;
@@ -131,4 +143,41 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
 
     private static string? EmptyToNull(string value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private IReadOnlyList<string> ParseLanguages()
+    {
+        var languages = NsisLanguages
+            .Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(language => language.Trim())
+            .Where(language => language.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return languages.Length > 0
+            ? languages
+            : throw new ArgumentException("At least one NSIS language is required.", nameof(NsisLanguages));
+    }
+
+    private IReadOnlyDictionary<string, string> ParseCustomLanguageFiles()
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in NsisLanguageFiles)
+        {
+            var language = item.GetMetadata("Language").Trim();
+            if (language.Length == 0)
+            {
+                throw new ArgumentException(
+                    "Each BundlerNsisLanguageFile item requires Language metadata.",
+                    nameof(NsisLanguageFiles));
+            }
+
+            if (result.ContainsKey(language))
+            {
+                throw new ArgumentException("Duplicate custom NSIS language file for '" + language + "'.");
+            }
+
+            result.Add(language, Path.GetFullPath(item.ItemSpec));
+        }
+
+        return result;
+    }
 }

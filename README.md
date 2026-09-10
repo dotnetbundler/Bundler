@@ -28,7 +28,7 @@ The MSBuild task and the Core assembly it loads both target `netstandard2.0`. Pa
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.7" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.8" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -57,6 +57,8 @@ The installer is written to `artifacts/<rid>/nsis/` by default. Installer genera
 | `BundlerOutputPath` | No | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerToolCachePath` | No | `$(BaseIntermediateOutputPath)bundler\tools` |
 | `BundlerNsisTemplate` | No | Template included in the package |
+| `BundlerNsisLanguages` | No | `English` |
+| `BundlerNsisDisplayLanguageSelector` | No | `false` |
 
 Multiple formats use a semicolon-separated value, for example `<BundlerFormats>nsis;msi</BundlerFormats>`. The task parses the complete request and the Core planner determines the required package steps. At present only the NSIS backend is implemented, so requesting MSI intentionally fails instead of silently skipping it.
 
@@ -73,7 +75,26 @@ Icons and extra resources are passed as MSBuild items:
 
 All formats run through one pipeline: validate configuration, build a format-aware plan, create an isolated work directory, invoke a backend, verify its artifact, and clean the work directory. Adding MSI, macOS, or Linux support should therefore add a backend instead of duplicating orchestration.
 
-The NSIS script is stored at `templates/nsis/installer.nsi`, not embedded in C#. The default template includes current-user installation, a user-selectable directory that remembers the previous location, a warning for unrelated non-empty directories, DPI awareness, compression, English/Simplified Chinese UI, optional Start Menu and desktop shortcuts, running-app detection and closure, Add/Remove Programs metadata, optional application-data cleanup, silent uninstall, and finish-page launch behavior. Uninstall removes only files recorded in the build payload, rather than recursively deleting an arbitrary user-selected directory. Set `BundlerNsisTemplate` to an absolute path to use a customized copy. Supported placeholders are `product_name`, `version`, `numeric_version`, `publisher`, `identifier`, `main_executable`, `process_name`, `install_folder`, `input_glob`, `output_file`, `estimated_size`, and `uninstall_payload`, each written as `{{name}}`.
+The NSIS script is stored at `templates/nsis/installer.nsi`, not embedded in C#. Installer languages are configured like Tauri: `BundlerNsisLanguages` is a semicolon-separated list, the first language is the fallback, and the selector is shown only when `BundlerNsisDisplayLanguageSelector` is true and multiple languages are enabled. English and Simplified Chinese message files are bundled.
+
+```xml
+<PropertyGroup>
+  <BundlerNsisLanguages>English;SimpChinese</BundlerNsisLanguages>
+  <BundlerNsisDisplayLanguageSelector>true</BundlerNsisDisplayLanguageSelector>
+</PropertyGroup>
+```
+
+Additional NSIS languages require a custom message file containing every `LangString` used by the template:
+
+```xml
+<ItemGroup>
+  <BundlerNsisLanguageFile Include="installer-languages\German.nsh" Language="German" />
+</ItemGroup>
+```
+
+The default template includes current-user installation, a user-selectable directory that remembers the previous location, a warning for unrelated non-empty directories, DPI awareness, compression, optional Start Menu and desktop shortcuts, running-app detection and closure, Add/Remove Programs metadata, optional application-data cleanup, silent uninstall, and finish-page launch behavior. Uninstall removes packaged payload paths from the program directory. Files created later at new paths remain; files created or replaced at a packaged path are removed. The separate application-data checkbox controls `%APPDATA%\<identifier>` and `%LOCALAPPDATA%\<identifier>` only.
+
+Set `BundlerNsisTemplate` to an absolute path to use a customized copy. Supported placeholders are `product_name`, `version`, `numeric_version`, `publisher`, `identifier`, `main_executable`, `process_name`, `install_folder`, `input_glob`, `output_file`, `estimated_size`, `uninstall_payload`, `language_macros`, `language_files`, and `display_language_selector`, each written as `{{name}}`.
 
 This is a practical Tauri-inspired baseline, not feature parity. Upgrade/downgrade policy, install scope selection, file associations, deep links, signing, and lifecycle hooks still need structured configuration before they should be exposed.
 

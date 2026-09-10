@@ -28,7 +28,7 @@ MSBuild Task 及其直接加载的 Core 程序集都以 `netstandard2.0` 为目�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.7" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.8" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -57,6 +57,8 @@ dotnet publish -c Release
 | `BundlerOutputPath` | 否 | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerToolCachePath` | 否 | `$(BaseIntermediateOutputPath)bundler\tools` |
 | `BundlerNsisTemplate` | 否 | 包内自带模板 |
+| `BundlerNsisLanguages` | 否 | `English` |
+| `BundlerNsisDisplayLanguageSelector` | 否 | `false` |
 
 多个格式使用分号分隔，例如 `<BundlerFormats>nsis;msi</BundlerFormats>`。Task 会解析完整请求，再由 Core 规划需要执行的打包步骤。目前只有 NSIS 后端已经实现，因此请求 MSI 会明确失败，不会被静默忽略。
 
@@ -73,7 +75,26 @@ dotnet publish -c Release
 
 所有格式共用同一条管线：校验配置、生成包含格式依赖关系的计划、创建隔离工作目录、调用后端、确认产物存在、清理工作目录。后续增加 MSI、macOS 或 Linux 支持时，应增加后端，而不是复制整套调度代码。
 
-NSIS 脚本存放在 `templates/nsis/installer.nsi` 文件中，不再嵌入 C#。默认模板提供当前用户安装、可选择并记住上次位置的安装目录、非本应用的非空目录警告、DPI 感知、压缩、中英文界面、可选的开始菜单与桌面快捷方式、运行程序检测和关闭、“应用和功能”卸载信息、可选删除应用数据、静默卸载以及完成页启动程序。卸载时只删除构建载荷中记录的文件，不会递归删除用户任意选择的目录。若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。模板支持 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`input_glob`、`output_file`、`estimated_size`、`uninstall_payload`，写法为 `{{name}}`。
+NSIS 脚本存放在 `templates/nsis/installer.nsi` 文件中，不再嵌入 C#。安装器语言按 Tauri 的方式配置：`BundlerNsisLanguages` 是分号分隔的语言列表，第一项是回退语言；只有启用多个语言并把 `BundlerNsisDisplayLanguageSelector` 设为 `true` 时才显示语言选择器。包内目前提供 English 和 SimpChinese 文案文件。
+
+```xml
+<PropertyGroup>
+  <BundlerNsisLanguages>English;SimpChinese</BundlerNsisLanguages>
+  <BundlerNsisDisplayLanguageSelector>true</BundlerNsisDisplayLanguageSelector>
+</PropertyGroup>
+```
+
+其他 NSIS 语言需要提供包含模板全部 `LangString` 的自定义文案文件：
+
+```xml
+<ItemGroup>
+  <BundlerNsisLanguageFile Include="installer-languages\German.nsh" Language="German" />
+</ItemGroup>
+```
+
+默认模板提供当前用户安装、可选择并记住上次位置的安装目录、非本应用的非空目录警告、DPI 感知、压缩、可选的开始菜单与桌面快捷方式、运行程序检测和关闭、“应用和功能”卸载信息、可选删除应用数据、静默卸载以及完成页启动程序。卸载会删除程序目录中属于构建载荷的路径：程序后来在新路径创建的文件会保留；如果创建或覆盖的是构建载荷中的同名路径，卸载时仍会删除。单独的“删除应用数据”选项只控制 `%APPDATA%\<identifier>` 与 `%LOCALAPPDATA%\<identifier>`。
+
+若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。模板支持 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`input_glob`、`output_file`、`estimated_size`、`uninstall_payload`、`language_macros`、`language_files`、`display_language_selector`，写法为 `{{name}}`。
 
 这只是参考 Tauri 后形成的可用基线，并不等于已经达到 Tauri 的功能完整度。升级/降级策略、安装范围选择、文件关联、深链接、签名和生命周期钩子仍需先设计成结构化配置，再适合对外开放。
 

@@ -94,7 +94,8 @@ static async Task<int> BundleAsync(IReadOnlyDictionary<string, string> options)
         ]
     };
 
-    var orchestrator = new BundleOrchestrator([new NsisBundleBackend(compiler, Required("template"))]);
+    var orchestrator = new BundleOrchestrator(
+        [new NsisBundleBackend(compiler, Required("template"), Required("language-dir"))]);
     var artifacts = await orchestrator.BuildAsync(configuration);
     foreach (var artifact in artifacts)
     {

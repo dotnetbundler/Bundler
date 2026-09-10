@@ -4,6 +4,7 @@
     <_BundlerTaskAssembly>$(_BundlerPackageRoot)tasks\netstandard2.0\DotNet.Bundler.MSBuild.dll</_BundlerTaskAssembly>
     <_BundlerNsisArchive>$(_BundlerPackageRoot)tools\nsis\nsis-3.12.zip</_BundlerNsisArchive>
     <_BundlerDefaultNsisTemplate>$(_BundlerPackageRoot)templates\nsis\installer.nsi</_BundlerDefaultNsisTemplate>
+    <_BundlerNsisLanguageDirectory>$(_BundlerPackageRoot)templates\nsis\languages</_BundlerNsisLanguageDirectory>
   </PropertyGroup>
 
   <UsingTask TaskName="DotNet.Bundler.MSBuild.BundleDesktopApplication"
@@ -38,7 +39,11 @@
       Resources="@(BundlerResource)"
       NsisToolArchivePath="$(_BundlerNsisArchive)"
       ToolCacheDirectory="$(BundlerToolCachePath)"
-      NsisTemplatePath="$(BundlerNsisTemplate)">
+      NsisTemplatePath="$(BundlerNsisTemplate)"
+      NsisLanguageDirectory="$(_BundlerNsisLanguageDirectory)"
+      NsisLanguages="$(BundlerNsisLanguages)"
+      NsisDisplayLanguageSelector="$(BundlerNsisDisplayLanguageSelector)"
+      NsisLanguageFiles="@(BundlerNsisLanguageFile)">
       <Output TaskParameter="Artifacts" ItemName="BundlerArtifact" />
     </DotNet.Bundler.MSBuild.BundleDesktopApplication>
   </Target>

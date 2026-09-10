@@ -12,7 +12,16 @@ public sealed class BundleConfiguration
     public string OutputDirectory { get; init; } = "artifacts";
     public IReadOnlyList<string> Icons { get; init; } = [];
     public IReadOnlyList<string> Resources { get; init; } = [];
+    public NsisBundleConfiguration Nsis { get; init; } = new();
     public IReadOnlyList<BundleTargetConfiguration> Targets { get; init; } = [];
+}
+
+public sealed class NsisBundleConfiguration
+{
+    public IReadOnlyList<string> Languages { get; init; } = ["English"];
+    public IReadOnlyDictionary<string, string> CustomLanguageFiles { get; init; } =
+        new Dictionary<string, string>();
+    public bool DisplayLanguageSelector { get; init; }
 }
 
 public sealed class BundleTargetConfiguration

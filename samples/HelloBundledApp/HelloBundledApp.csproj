@@ -10,9 +10,11 @@
     <BundlerIdentifier>com.example.hellobundledapp</BundlerIdentifier>
     <BundlerProductName>Hello Bundled App</BundlerProductName>
     <BundlerPublisher>Bundler Contributors</BundlerPublisher>
+    <BundlerNsisLanguages>English;SimpChinese</BundlerNsisLanguages>
+    <BundlerNsisDisplayLanguageSelector>true</BundlerNsisDisplayLanguageSelector>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.7" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.8" PrivateAssets="all" />
   </ItemGroup>
 </Project>

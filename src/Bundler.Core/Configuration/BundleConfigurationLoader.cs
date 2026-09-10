@@ -49,6 +49,15 @@ public static class BundleConfigurationLoader
             OutputDirectory = Resolve(baseDirectory, source.OutputDirectory),
             Icons = source.Icons.Select(path => Resolve(baseDirectory, path)).ToArray(),
             Resources = source.Resources.Select(path => Resolve(baseDirectory, path)).ToArray(),
+            Nsis = new NsisBundleConfiguration
+            {
+                Languages = source.Nsis.Languages,
+                DisplayLanguageSelector = source.Nsis.DisplayLanguageSelector,
+                CustomLanguageFiles = source.Nsis.CustomLanguageFiles.ToDictionary(
+                    pair => pair.Key,
+                    pair => Resolve(baseDirectory, pair.Value),
+                    StringComparer.OrdinalIgnoreCase)
+            },
             Targets = source.Targets.Select(target => new BundleTargetConfiguration
             {
                 RuntimeIdentifier = target.RuntimeIdentifier,
