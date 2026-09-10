@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Core planning and packaging abstractions for desktop .NET applications.</Description>
+  </PropertyGroup>
+</Project>
