@@ -8,7 +8,9 @@
 
 第一条已支持链路是 Windows + NSIS。MSI、macOS 和 Linux 格式属于后续路线，目前尚未实现。
 
-NuGet 包内携带固定版本的 NSIS 3.12 便携压缩包，使用者无需自行安装 NSIS。首次使用时会先校验 SHA-256，再解压到项目的中间输出目录。
+NuGet 包内携带固定版本的 NSIS 3.12 便携压缩包，使用者无需自行安装 NSIS。首次使用时会先校验 SHA-256，再解压到项目的中间输出目录。首个版本有意保留项目级缓存，后续可迭代为按内容寻址的共享缓存。
+
+进程内运行的 MSBuild Task 以 `netstandard2.0` 为目标框架，以兼容不同 MSBuild 宿主。它会在进程外启动包内的 `net8.0` 打包驱动，因此当前执行打包仍要求机器具备 .NET 8 SDK/运行时。
 
 ## 使用配置
 
@@ -26,7 +28,7 @@ NuGet 包内携带固定版本的 NSIS 3.12 便携压缩包，使用者无需自
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.2" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.4" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -53,6 +55,15 @@ dotnet publish -c Release
 | `BundlerPublisher` | 否 | `$(Company)` |
 | `BundlerOutputPath` | 否 | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerToolCachePath` | 否 | `$(BaseIntermediateOutputPath)bundler\tools` |
+| `BundlerNsisTemplate` | 否 | 包内自带模板 |
+
+## 通用打包流程与 NSIS 定制
+
+所有格式共用同一条管线：校验配置、生成包含格式依赖关系的计划、创建隔离工作目录、调用后端、确认产物存在、清理工作目录。后续增加 MSI、macOS 或 Linux 支持时，应增加后端，而不是复制整套调度代码。
+
+NSIS 脚本存放在 `templates/nsis/installer.nsi` 文件中，不再嵌入 C#。默认模板提供当前用户安装、DPI 感知、压缩、中英文界面、开始菜单与桌面快捷方式、“应用和功能”卸载信息、静默卸载以及完成页启动程序。若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。模板支持 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`install_folder`、`input_glob`、`output_file`、`estimated_size`，写法为 `{{name}}`。
+
+这只是参考 Tauri 后形成的可用基线，并不等于已经达到 Tauri 的功能完整度。升级/降级策略、安装范围选择、文件关联、深链接、签名和生命周期钩子仍需先设计成结构化配置，再适合对外开放。
 
 ## 仓库命令
 

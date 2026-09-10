@@ -8,5 +8,6 @@
     <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''"></BundlerMainExecutable>
     <BundlerOutputPath Condition="'$(BundlerOutputPath)' == ''">$(MSBuildProjectDirectory)\artifacts</BundlerOutputPath>
     <BundlerToolCachePath Condition="'$(BundlerToolCachePath)' == ''">$(BaseIntermediateOutputPath)bundler\tools</BundlerToolCachePath>
+    <BundlerNsisTemplate Condition="'$(BundlerNsisTemplate)' == ''"></BundlerNsisTemplate>
   </PropertyGroup>
 </Project>

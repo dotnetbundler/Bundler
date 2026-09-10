@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Bundler.Cli/Bundler.Cli.csproj" />
     <Project Path="src/Bundler.Core/Bundler.Core.csproj" />
+    <Project Path="src/Bundler.MSBuild/Bundler.MSBuild.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Bundler.Core.Tests/Bundler.Core.Tests.csproj" />

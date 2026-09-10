@@ -10,10 +10,14 @@ public interface IBundleBackend
     DesktopOperatingSystem OperatingSystem { get; }
 
     Task<BundleArtifact> BuildAsync(
-        BundleConfiguration configuration,
-        BundlePlanItem item,
+        BundleBuildContext context,
         CancellationToken cancellationToken = default);
 }
+
+public sealed record BundleBuildContext(
+    BundleConfiguration Configuration,
+    BundlePlanItem Item,
+    string WorkDirectory);
 
 public sealed record BundleArtifact(
     PackageFormat Format,

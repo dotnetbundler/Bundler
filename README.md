@@ -8,7 +8,9 @@
 
 The first supported path is Windows + NSIS. MSI, macOS and Linux formats are planned but are not implemented yet.
 
-The package carries a pinned NSIS 3.12 portable archive. Consumers do not install NSIS themselves. The archive is verified with SHA-256 and extracted into the project's intermediate directory when first used.
+The package carries a pinned NSIS 3.12 portable archive. Consumers do not install NSIS themselves. The archive is verified with SHA-256 and extracted into the project's intermediate directory when first used. This per-project cache is intentional for the first release and may become a shared content-addressed cache later.
+
+The in-process MSBuild task targets `netstandard2.0` for compatibility with MSBuild hosts. It starts the bundled `net8.0` packaging driver out of process, so the .NET 8 runtime/SDK is currently required when bundling.
 
 ## Consumer configuration
 
@@ -26,7 +28,7 @@ The package carries a pinned NSIS 3.12 portable archive. Consumers do not instal
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.2" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.4" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -53,6 +55,15 @@ The installer is written to `artifacts/<rid>/nsis/` by default. Installer genera
 | `BundlerPublisher` | No | `$(Company)` |
 | `BundlerOutputPath` | No | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerToolCachePath` | No | `$(BaseIntermediateOutputPath)bundler\tools` |
+| `BundlerNsisTemplate` | No | Template included in the package |
+
+## Packaging pipeline and NSIS customization
+
+All formats run through one pipeline: validate configuration, build a format-aware plan, create an isolated work directory, invoke a backend, verify its artifact, and clean the work directory. Adding MSI, macOS, or Linux support should therefore add a backend instead of duplicating orchestration.
+
+The NSIS script is stored at `templates/nsis/installer.nsi`, not embedded in C#. The default template includes current-user installation, DPI awareness, compression, English/Simplified Chinese UI, Start Menu and desktop shortcuts, Add/Remove Programs metadata, silent uninstall, and finish-page launch behavior. Set `BundlerNsisTemplate` to an absolute path to use a customized copy. Supported placeholders are `product_name`, `version`, `numeric_version`, `publisher`, `identifier`, `main_executable`, `install_folder`, `input_glob`, `output_file`, and `estimated_size`, each written as `{{name}}`.
+
+This is a practical Tauri-inspired baseline, not feature parity. Upgrade/downgrade policy, install scope selection, file associations, deep links, signing, and lifecycle hooks still need structured configuration before they should be exposed.
 
 ## Repository commands
 

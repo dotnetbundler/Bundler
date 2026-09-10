@@ -1,7 +1,10 @@
 using Bundler.Core.Configuration;
+using Bundler.Core.Backends;
+using Bundler.Core.Backends.Windows;
 using Bundler.Core.Models;
 using Bundler.Core.Planning;
 using Bundler.Core.Tools;
+using Bundler.Core.Templates;
 using Bundler.Core.Validation;
 
 var tests = new (string Name, Func<Task> Test)[]
@@ -10,7 +13,10 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Rejects incompatible formats", () => RunSync(RejectsIncompatibleFormats)),
     ("Adds app dependency before DMG", () => RunSync(AddsAppDependencyBeforeDmg)),
     ("Rejects executable paths outside input", () => RunSync(RejectsExecutablePathEscape)),
-    ("Verifies and extracts bundled NSIS", VerifiesAndExtractsBundledNsis)
+    ("Verifies and extracts bundled NSIS", VerifiesAndExtractsBundledNsis),
+    ("Writes a valid Windows uninstall command", () => RunSync(WritesValidWindowsUninstallCommand)),
+    ("Rejects unknown template variables", () => RunSync(RejectsUnknownTemplateVariables)),
+    ("Runs backends through the common pipeline", RunsBackendsThroughCommonPipeline)
 };
 
 var failed = 0;
@@ -90,7 +96,7 @@ static async Task VerifiesAndExtractsBundledNsis()
         return;
     }
 
-    var repositoryRoot = Path.GetFullPath("../../../../../", AppContext.BaseDirectory);
+    var repositoryRoot = RepositoryRoot();
     var archive = Path.Combine(repositoryRoot, "third_party", "nsis", "nsis-3.12.zip");
     var cache = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
     try
@@ -106,6 +112,101 @@ static async Task VerifiesAndExtractsBundledNsis()
         }
     }
 }
+
+static void WritesValidWindowsUninstallCommand()
+{
+    var input = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(input);
+    try
+    {
+        File.WriteAllText(Path.Combine(input, "ExampleApp.exe"), "test");
+        var configuration = ValidConfiguration(new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "win-x64",
+            InputDirectory = input,
+            MainExecutable = "ExampleApp.exe",
+            Formats = [PackageFormat.Nsis]
+        });
+        var item = new BundlePlanItem(
+            new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+            PackageFormat.Nsis,
+            input,
+            "ExampleApp.exe",
+            "output",
+            false);
+
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+        var script = NsisBundleBackend.CreateScript(template, configuration, item, "setup.exe", "ExampleApp");
+        Assert(script.Contains("\"UninstallString\" '\"$INSTDIR\\Uninstall.exe\"'", StringComparison.Ordinal),
+            "UninstallString must contain ordinary quotes around the executable path.");
+        Assert(!script.Contains("'$\"$INSTDIR", StringComparison.Ordinal),
+            "UninstallString must not write NSIS escape markers into the registry.");
+    }
+    finally
+    {
+        Directory.Delete(input, recursive: true);
+    }
+}
+
+static void RejectsUnknownTemplateVariables()
+{
+    try
+    {
+        TemplateRenderer.Render("{{known}} {{missing}}", new Dictionary<string, string> { ["known"] = "value" });
+        throw new InvalidOperationException("An unknown template variable should have failed rendering.");
+    }
+    catch (InvalidDataException exception)
+    {
+        Assert(exception.Message.Contains("missing", StringComparison.Ordinal),
+            "The template error should identify the missing variable.");
+    }
+}
+
+static async Task RunsBackendsThroughCommonPipeline()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "publish");
+    var output = Path.Combine(root, "artifacts");
+    Directory.CreateDirectory(input);
+    await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp.exe"), "test");
+
+    var backend = new RecordingBackend();
+    try
+    {
+        var configuration = new BundleConfiguration
+        {
+            ProductName = "ExampleApp",
+            Identifier = "com.example.app",
+            Version = "1.0.0",
+            OutputDirectory = output,
+            Targets =
+            [
+                new BundleTargetConfiguration
+                {
+                    RuntimeIdentifier = "win-x64",
+                    InputDirectory = input,
+                    MainExecutable = "ExampleApp.exe",
+                    Formats = [PackageFormat.Nsis]
+                }
+            ]
+        };
+
+        var artifacts = await new BundlePipeline([backend]).BuildAsync(configuration);
+        Assert(artifacts.Count == 1 && File.Exists(artifacts[0].Path),
+            "The common pipeline should return an existing backend artifact.");
+        Assert(backend.WorkDirectory is not null && !Directory.Exists(backend.WorkDirectory),
+            "The common pipeline should clean its backend work directory.");
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static string RepositoryRoot() => Path.GetFullPath("../../../../../", AppContext.BaseDirectory);
 
 static Task RunSync(Action action)
 {
@@ -127,5 +228,22 @@ static void Assert(bool condition, string message)
     if (!condition)
     {
         throw new InvalidOperationException(message);
+    }
+}
+
+file sealed class RecordingBackend : IBundleBackend
+{
+    public PackageFormat Format => PackageFormat.Nsis;
+    public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
+    public string? WorkDirectory { get; private set; }
+
+    public async Task<BundleArtifact> BuildAsync(
+        BundleBuildContext context,
+        CancellationToken cancellationToken = default)
+    {
+        WorkDirectory = context.WorkDirectory;
+        var path = Path.Combine(context.Item.OutputDirectory, "recording-installer.exe");
+        await File.WriteAllTextAsync(path, "artifact", cancellationToken);
+        return new BundleArtifact(Format, context.Item.Target.RuntimeIdentifier, path);
     }
 }
