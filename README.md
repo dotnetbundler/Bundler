@@ -28,7 +28,7 @@ The MSBuild task and the Core assembly it loads both target `netstandard2.0`. Pa
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.5" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.6" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -73,7 +73,7 @@ Icons and extra resources are passed as MSBuild items:
 
 All formats run through one pipeline: validate configuration, build a format-aware plan, create an isolated work directory, invoke a backend, verify its artifact, and clean the work directory. Adding MSI, macOS, or Linux support should therefore add a backend instead of duplicating orchestration.
 
-The NSIS script is stored at `templates/nsis/installer.nsi`, not embedded in C#. The default template includes current-user installation, DPI awareness, compression, English/Simplified Chinese UI, Start Menu and desktop shortcuts, Add/Remove Programs metadata, silent uninstall, and finish-page launch behavior. Set `BundlerNsisTemplate` to an absolute path to use a customized copy. Supported placeholders are `product_name`, `version`, `numeric_version`, `publisher`, `identifier`, `main_executable`, `install_folder`, `input_glob`, `output_file`, and `estimated_size`, each written as `{{name}}`.
+The NSIS script is stored at `templates/nsis/installer.nsi`, not embedded in C#. The default template includes current-user installation, a user-selectable directory that remembers the previous location, DPI awareness, compression, English/Simplified Chinese UI, Start Menu and desktop shortcuts, Add/Remove Programs metadata, silent uninstall, and finish-page launch behavior. Uninstall removes only files recorded in the build payload, rather than recursively deleting an arbitrary user-selected directory. Set `BundlerNsisTemplate` to an absolute path to use a customized copy. Supported placeholders are `product_name`, `version`, `numeric_version`, `publisher`, `identifier`, `main_executable`, `install_folder`, `input_glob`, `output_file`, `estimated_size`, and `uninstall_payload`, each written as `{{name}}`.
 
 This is a practical Tauri-inspired baseline, not feature parity. Upgrade/downgrade policy, install scope selection, file associations, deep links, signing, and lifecycle hooks still need structured configuration before they should be exposed.
 

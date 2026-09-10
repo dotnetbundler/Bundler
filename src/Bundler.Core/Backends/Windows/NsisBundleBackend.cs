@@ -80,8 +80,40 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath) 
             ["install_folder"] = Escape(safeProductName),
             ["input_glob"] = Escape(Path.Combine(item.InputDirectory, "*")),
             ["output_file"] = Escape(installerPath),
-            ["estimated_size"] = EstimateSizeInKilobytes(item.InputDirectory).ToString(System.Globalization.CultureInfo.InvariantCulture)
+            ["estimated_size"] = EstimateSizeInKilobytes(item.InputDirectory).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory)
         });
+    }
+
+    private static string CreateUninstallPayload(string inputDirectory)
+    {
+        var root = Path.GetFullPath(inputDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var lines = new List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            lines.Add($"  Delete /REBOOTOK \"$INSTDIR\\{Escape(RelativePath(root, file))}\"");
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories)
+                     .OrderByDescending(path => path.Length))
+        {
+            lines.Add($"  RMDir /REBOOTOK \"$INSTDIR\\{Escape(RelativePath(root, directory))}\"");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string RelativePath(string root, string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var prefix = root + Path.DirectorySeparatorChar;
+        if (!fullPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Payload path is outside the input directory: {fullPath}");
+        }
+
+        return fullPath.Substring(prefix.Length).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
     }
 
     private static string Escape(string value) => value

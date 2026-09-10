@@ -15,6 +15,8 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Rejects executable paths outside input", () => RunSync(RejectsExecutablePathEscape)),
     ("Verifies and extracts bundled NSIS", VerifiesAndExtractsBundledNsis),
     ("Writes a valid Windows uninstall command", () => RunSync(WritesValidWindowsUninstallCommand)),
+    ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
+    ("Uninstalls only packaged payload files", () => RunSync(UninstallsOnlyPackagedPayloadFiles)),
     ("Rejects unknown template variables", () => RunSync(RejectsUnknownTemplateVariables)),
     ("Runs backends through the common pipeline", RunsBackendsThroughCommonPipeline),
     ("Preflights every requested backend", PreflightsEveryRequestedBackend)
@@ -160,6 +162,55 @@ static void RejectsUnknownTemplateVariables()
     {
         Assert(exception.Message.Contains("missing", StringComparison.Ordinal),
             "The template error should identify the missing variable.");
+    }
+}
+
+static void LetsUsersChooseInstallDirectory()
+{
+    var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+    Assert(template.Contains("!insertmacro MUI_PAGE_DIRECTORY", StringComparison.Ordinal),
+        "The installer must display the NSIS directory selection page.");
+    Assert(template.Contains("InstallDirRegKey HKCU \"${UNINSTALL_KEY}\" \"InstallLocation\"", StringComparison.Ordinal),
+        "The installer should restore the previously selected install directory.");
+}
+
+static void UninstallsOnlyPackagedPayloadFiles()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+    var nested = Path.Combine(root, "assets");
+    Directory.CreateDirectory(nested);
+    File.WriteAllText(Path.Combine(root, "ExampleApp.exe"), "test");
+    File.WriteAllText(Path.Combine(nested, "data.txt"), "test");
+
+    try
+    {
+        var configuration = ValidConfiguration(new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "win-x64",
+            InputDirectory = root,
+            MainExecutable = "ExampleApp.exe",
+            Formats = [PackageFormat.Nsis]
+        });
+        var item = new BundlePlanItem(
+            new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+            PackageFormat.Nsis,
+            root,
+            "ExampleApp.exe",
+            "output",
+            false);
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+        var script = NsisBundleBackend.CreateScript(template, configuration, item, "setup.exe", "ExampleApp");
+
+        Assert(script.Contains("Delete /REBOOTOK \"$INSTDIR\\ExampleApp.exe\"", StringComparison.Ordinal),
+            "The uninstaller should delete the packaged executable explicitly.");
+        Assert(script.Contains("Delete /REBOOTOK \"$INSTDIR\\assets\\data.txt\"", StringComparison.Ordinal),
+            "The uninstaller should delete packaged nested files explicitly.");
+        Assert(!script.Contains("RMDir /r \"$INSTDIR\"", StringComparison.Ordinal),
+            "The uninstaller must not recursively delete an arbitrary user-selected directory.");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
     }
 }
 

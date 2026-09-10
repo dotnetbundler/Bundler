@@ -21,6 +21,7 @@ Name "${PRODUCT_NAME}"
 BrandingText "${PRODUCT_PUBLISHER}"
 OutFile "${OUTPUT_FILE}"
 InstallDir "$LOCALAPPDATA\Programs\${INSTALL_FOLDER}"
+InstallDirRegKey HKCU "${UNINSTALL_KEY}" "InstallLocation"
 RequestExecutionLevel user
 
 VIProductVersion "${PRODUCT_NUMERIC_VERSION}"
@@ -37,6 +38,7 @@ VIAddVersionKey "FileDescription" "${PRODUCT_NAME} Installer"
 !define MUI_LANGDLL_REGISTRY_VALUENAME "Installer Language"
 
 !insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -82,5 +84,7 @@ Section "Uninstall"
   RMDir /r "$SMPROGRAMS\${PRODUCT_NAME}"
   DeleteRegKey HKCU "${UNINSTALL_KEY}"
   DeleteRegKey /ifempty HKCU "Software\${PRODUCT_ID}"
-  RMDir /r "$INSTDIR"
+{{uninstall_payload}}
+  Delete /REBOOTOK "$INSTDIR\Uninstall.exe"
+  RMDir "$INSTDIR"
 SectionEnd
