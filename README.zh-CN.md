@@ -28,7 +28,7 @@ MSBuild Task 及其直接加载的 Core 程序集都以 `netstandard2.0` 为目�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.9" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.11" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -67,9 +67,13 @@ dotnet publish -c Release
 ```xml
 <ItemGroup>
   <BundlerIcon Include="Assets\app.ico" />
-  <BundlerResource Include="Assets\licenses\**\*" />
+  <BundlerResource Include="Assets\licenses\**\*">
+    <TargetPath>licenses\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+  </BundlerResource>
 </ItemGroup>
 ```
+
+对 NSIS 而言，第一个 `.ico` 文件同时用于安装器和卸载器；`BundlerDescription` 会写入可执行文件版本信息和“应用和功能”；每个资源安装到相对的 `TargetPath`，省略时使用源文件名。目标路径冲突或逃逸安装目录会在打包前报错。
 
 ## 通用打包流程与 NSIS 定制
 
@@ -104,7 +108,10 @@ NSIS 脚本存放在 `templates/nsis/installer.nsi` 文件中，不再嵌入 C#�
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Core.Tests/Bundler.Core.Tests.csproj
 dotnet pack src/Bundler.MSBuild/Bundler.MSBuild.csproj -c Release -o artifacts/packages
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.11
 ```
+
+Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。
 
 Core 项目包含配置、校验、规划、工具解析和打包后端，并不依赖 MSBuild。现有 CLI 仍作为 Core 的开发调用端保留，但不再发布到 NuGet 构建包中。
 

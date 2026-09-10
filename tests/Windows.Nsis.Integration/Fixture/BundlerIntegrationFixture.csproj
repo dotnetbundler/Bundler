@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <AssemblyName>BundlerIntegrationFixture</AssemblyName>
+    <Version>1.0.0</Version>
+    <RestoreSources>$(BundlerPackageSource)</RestoreSources>
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerIdentifier>com.dotnetbundler.integrationfixture</BundlerIdentifier>
+    <BundlerProductName>Bundler Integration Fixture</BundlerProductName>
+    <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
+    <BundlerDescription>Disposable Windows NSIS integration-test fixture.</BundlerDescription>
+    <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
+    <BundlerNsisLanguages>English;SimpChinese</BundlerNsisLanguages>
+    <BundlerNsisDisplayLanguageSelector>true</BundlerNsisDisplayLanguageSelector>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
+    <BundlerIcon Include="$(BundlerTestIcon)" Condition="'$(BundlerTestIcon)' != ''" />
+    <BundlerResource Include="Assets\license.txt" TargetPath="docs\license.txt" />
+  </ItemGroup>
+</Project>

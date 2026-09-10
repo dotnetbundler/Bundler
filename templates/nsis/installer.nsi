@@ -7,6 +7,7 @@ SetCompressor /SOLID lzma
 !include "LogicLib.nsh"
 !include "nsDialogs.nsh"
 !include "StrFunc.nsh"
+!include "FileFunc.nsh"
 ${StrStr}
 ${UnStrStr}
 
@@ -14,6 +15,7 @@ ${UnStrStr}
 !define PRODUCT_VERSION "{{version}}"
 !define PRODUCT_NUMERIC_VERSION "{{numeric_version}}"
 !define PRODUCT_PUBLISHER "{{publisher}}"
+!define PRODUCT_DESCRIPTION "{{description}}"
 !define PRODUCT_ID "{{identifier}}"
 !define MAIN_EXECUTABLE "{{main_executable}}"
 !define PROCESS_NAME "{{process_name}}"
@@ -23,6 +25,7 @@ ${UnStrStr}
 !define ESTIMATED_SIZE "{{estimated_size}}"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_ID}"
 !define INSTALL_MARKER ".dotnet-bundler-${PRODUCT_ID}"
+{{installer_icon_directives}}
 
 Var CreateDesktopShortcut
 Var CreateStartMenuShortcut
@@ -42,7 +45,7 @@ VIProductVersion "${PRODUCT_NUMERIC_VERSION}"
 VIAddVersionKey "ProductName" "${PRODUCT_NAME}"
 VIAddVersionKey "ProductVersion" "${PRODUCT_VERSION}"
 VIAddVersionKey "CompanyName" "${PRODUCT_PUBLISHER}"
-VIAddVersionKey "FileDescription" "${PRODUCT_NAME} Installer"
+VIAddVersionKey "FileDescription" "${PRODUCT_DESCRIPTION}"
 
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_NOAUTOCLOSE
@@ -73,6 +76,10 @@ FunctionEnd
 
 Function un.onInit
   StrCpy $DeleteAppData 0
+  ${GetOptions} $CMDLINE "/DELETEAPPDATA" $0
+  ${IfNot} ${Errors}
+    StrCpy $DeleteAppData 1
+  ${EndIf}
   !insertmacro MUI_UNGETLANGUAGE
 FunctionEnd
 
@@ -132,7 +139,7 @@ Function un.AppDataOptionsLeave
 FunctionEnd
 
 Function EnsureAppClosed
-  nsExec::ExecToStack 'tasklist.exe /NH /FI "IMAGENAME eq ${PROCESS_NAME}"'
+  nsExec::ExecToStack 'tasklist.exe /NH /FO CSV /FI "IMAGENAME eq ${PROCESS_NAME}"'
   Pop $0
   Pop $1
   ${StrStr} $2 "$1" "${PROCESS_NAME}"
@@ -152,7 +159,7 @@ Function EnsureAppClosed
 FunctionEnd
 
 Function un.EnsureAppClosed
-  nsExec::ExecToStack 'tasklist.exe /NH /FI "IMAGENAME eq ${PROCESS_NAME}"'
+  nsExec::ExecToStack 'tasklist.exe /NH /FO CSV /FI "IMAGENAME eq ${PROCESS_NAME}"'
   Pop $0
   Pop $1
   ${UnStrStr} $2 "$1" "${PROCESS_NAME}"
@@ -176,6 +183,7 @@ Section "Install" MainSection
   Call EnsureAppClosed
   SetOutPath "$INSTDIR"
   File /r "${INPUT_GLOB}"
+{{resource_install_commands}}
 
   FileOpen $0 "$INSTDIR\${INSTALL_MARKER}" w
   FileWrite $0 "${PRODUCT_ID}"
@@ -194,6 +202,7 @@ Section "Install" MainSection
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "${PRODUCT_NAME}"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "Comments" "${PRODUCT_DESCRIPTION}"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${MAIN_EXECUTABLE}"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'

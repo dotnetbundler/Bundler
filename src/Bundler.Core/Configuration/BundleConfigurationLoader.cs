@@ -48,7 +48,11 @@ public static class BundleConfigurationLoader
             Description = source.Description,
             OutputDirectory = Resolve(baseDirectory, source.OutputDirectory),
             Icons = source.Icons.Select(path => Resolve(baseDirectory, path)).ToArray(),
-            Resources = source.Resources.Select(path => Resolve(baseDirectory, path)).ToArray(),
+            Resources = source.Resources.Select(resource => new BundleResourceConfiguration
+            {
+                Source = Resolve(baseDirectory, resource.Source),
+                TargetPath = resource.TargetPath
+            }).ToArray(),
             Nsis = new NsisBundleConfiguration
             {
                 Languages = source.Nsis.Languages,

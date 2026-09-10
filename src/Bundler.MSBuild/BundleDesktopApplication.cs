@@ -49,7 +49,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Description = EmptyToNull(Description),
                 OutputDirectory = Path.GetFullPath(OutputDirectory),
                 Icons = Icons.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
-                Resources = Resources.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
+                Resources = Resources.Select(item => new BundleResourceConfiguration
+                {
+                    Source = Path.GetFullPath(item.ItemSpec),
+                    TargetPath = ResourceTargetPath(item)
+                }).ToArray(),
                 Nsis = new NsisBundleConfiguration
                 {
                     Languages = ParseLanguages(),
@@ -143,6 +147,12 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
 
     private static string? EmptyToNull(string value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static string ResourceTargetPath(ITaskItem item)
+    {
+        var targetPath = item.GetMetadata("TargetPath").Trim();
+        return targetPath.Length > 0 ? targetPath : Path.GetFileName(item.ItemSpec);
+    }
 
     private IReadOnlyList<string> ParseLanguages()
     {

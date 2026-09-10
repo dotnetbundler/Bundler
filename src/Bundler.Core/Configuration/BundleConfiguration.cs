@@ -11,9 +11,15 @@ public sealed class BundleConfiguration
     public string? Description { get; init; }
     public string OutputDirectory { get; init; } = "artifacts";
     public IReadOnlyList<string> Icons { get; init; } = [];
-    public IReadOnlyList<string> Resources { get; init; } = [];
+    public IReadOnlyList<BundleResourceConfiguration> Resources { get; init; } = [];
     public NsisBundleConfiguration Nsis { get; init; } = new();
     public IReadOnlyList<BundleTargetConfiguration> Targets { get; init; } = [];
+}
+
+public sealed class BundleResourceConfiguration
+{
+    public string Source { get; init; } = "";
+    public string TargetPath { get; init; } = "";
 }
 
 public sealed class NsisBundleConfiguration

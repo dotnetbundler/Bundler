@@ -51,7 +51,25 @@ public static class BundleConfigurationValidator
         }
 
         ValidatePaths(configuration.Icons, "icons", checkFileSystem, issues);
-        ValidatePaths(configuration.Resources, "resources", checkFileSystem, issues);
+        for (var index = 0; index < configuration.Resources.Count; index++)
+        {
+            var resource = configuration.Resources[index];
+            Required(resource.Source, $"resources[{index}].source", issues);
+            Required(resource.TargetPath, $"resources[{index}].targetPath", issues);
+            if (!string.IsNullOrWhiteSpace(resource.TargetPath) &&
+                (Path.IsPathRooted(resource.TargetPath) ||
+                 resource.TargetPath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                     .Contains("..", StringComparer.Ordinal)))
+            {
+                issues.Add(new($"resources[{index}].targetPath", "Must stay inside the installation directory."));
+            }
+
+            if (checkFileSystem && !string.IsNullOrWhiteSpace(resource.Source) &&
+                !File.Exists(resource.Source) && !Directory.Exists(resource.Source))
+            {
+                issues.Add(new($"resources[{index}].source", $"Path does not exist: {resource.Source}"));
+            }
+        }
         ValidateDuplicateOutputs(configuration, issues);
         return issues;
     }

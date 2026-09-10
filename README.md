@@ -28,7 +28,7 @@ The MSBuild task and the Core assembly it loads both target `netstandard2.0`. Pa
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.9" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.11" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -67,9 +67,13 @@ Icons and extra resources are passed as MSBuild items:
 ```xml
 <ItemGroup>
   <BundlerIcon Include="Assets\app.ico" />
-  <BundlerResource Include="Assets\licenses\**\*" />
+  <BundlerResource Include="Assets\licenses\**\*">
+    <TargetPath>licenses\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+  </BundlerResource>
 </ItemGroup>
 ```
+
+For NSIS, the first configured `.ico` is used for both the installer and uninstaller. `BundlerDescription` is written to executable version metadata and Add/Remove Programs. Each resource is installed at its relative `TargetPath`; when omitted, the source file name is used. Target collisions and paths escaping the installation directory are rejected before packaging.
 
 ## Packaging pipeline and NSIS customization
 
@@ -104,7 +108,10 @@ This is a practical Tauri-inspired baseline, not feature parity. Upgrade/downgra
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Core.Tests/Bundler.Core.Tests.csproj
 dotnet pack src/Bundler.MSBuild/Bundler.MSBuild.csproj -c Release -o artifacts/packages
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.11
 ```
+
+The Windows integration test installs a dedicated fixture into a Chinese path containing spaces, validates payload/resources/metadata/registry/shortcuts/process shutdown, exercises both data-preserving and full-data removal uninstalls, and cleans its test state in `finally`.
 
 The Core project contains configuration, validation, planning, tool resolution, and backends without depending on MSBuild. The existing CLI is retained as a development client of Core, but it is no longer shipped in the NuGet build package.
 

@@ -18,6 +18,7 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
     ("Uninstalls only packaged payload files", () => RunSync(UninstallsOnlyPackagedPayloadFiles)),
     ("Provides interactive NSIS safety options", () => RunSync(ProvidesInteractiveNsisSafetyOptions)),
+    ("Renders NSIS metadata, icons, and resources", () => RunSync(RendersNsisMetadataIconsAndResources)),
     ("Rejects unknown template variables", () => RunSync(RejectsUnknownTemplateVariables)),
     ("Runs backends through the common pipeline", RunsBackendsThroughCommonPipeline),
     ("Preflights every requested backend", PreflightsEveryRequestedBackend)
@@ -233,6 +234,74 @@ static void ProvidesInteractiveNsisSafetyOptions()
     Assert(template.Contains("UninstPage custom un.AppDataOptionsPage", StringComparison.Ordinal) &&
            template.Contains("$LOCALAPPDATA\\${PRODUCT_ID}", StringComparison.Ordinal),
         "The uninstaller should offer optional application-data deletion.");
+}
+
+static void RendersNsisMetadataIconsAndResources()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "publish");
+    Directory.CreateDirectory(input);
+    File.WriteAllText(Path.Combine(input, "ExampleApp.exe"), "test");
+    var icon = Path.Combine(root, "app.ico");
+    var resource = Path.Combine(root, "license.txt");
+    File.WriteAllText(icon, "icon");
+    File.WriteAllText(resource, "license");
+
+    try
+    {
+        var configuration = new BundleConfiguration
+        {
+            ProductName = "ExampleApp",
+            Identifier = "com.example.app",
+            Version = "1.0.0",
+            Publisher = "Example Publisher",
+            Description = "Example Description",
+            OutputDirectory = "artifacts",
+            Icons = [icon],
+            Resources =
+            [
+                new BundleResourceConfiguration
+                {
+                    Source = resource,
+                    TargetPath = "docs/license.txt"
+                }
+            ],
+            Targets =
+            [
+                new BundleTargetConfiguration
+                {
+                    RuntimeIdentifier = "win-x64",
+                    InputDirectory = input,
+                    MainExecutable = "ExampleApp.exe",
+                    Formats = [PackageFormat.Nsis]
+                }
+            ]
+        };
+        var item = new BundlePlanItem(
+            new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+            PackageFormat.Nsis,
+            input,
+            "ExampleApp.exe",
+            "output",
+            false);
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+        var script = NsisBundleBackend.CreateScript(template, configuration, item, "setup.exe", "ExampleApp");
+
+        Assert(script.Contains("!define PRODUCT_DESCRIPTION \"Example Description\"", StringComparison.Ordinal),
+            "The configured description should be rendered into installer metadata.");
+        Assert(script.Contains("!define MUI_ICON", StringComparison.Ordinal) &&
+               script.Contains("!define MUI_UNICON", StringComparison.Ordinal),
+            "The configured .ico should apply to the installer and uninstaller.");
+        Assert(script.Contains("SetOutPath \"$INSTDIR\\docs\"", StringComparison.Ordinal) &&
+               script.Contains("/oname=license.txt", StringComparison.Ordinal),
+            "The external resource should be installed at its configured target path.");
+        Assert(script.Contains("Delete /REBOOTOK \"$INSTDIR\\docs\\license.txt\"", StringComparison.Ordinal),
+            "The external resource should be included in the safe uninstall manifest.");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
 }
 
 static async Task RunsBackendsThroughCommonPipeline()

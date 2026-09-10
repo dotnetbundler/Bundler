@@ -92,7 +92,10 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
         NsisLocalization localization)
     {
         var publisher = configuration.Publisher ?? configuration.ProductName;
+        var description = configuration.Description ?? configuration.ProductName;
         var version = NumericVersion(configuration.Version);
+        var resources = ExpandResources(configuration.Resources, item.InputDirectory);
+        var iconDirectives = CreateIconDirectives(configuration.Icons);
 
         return TemplateRenderer.Render(template, new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -100,6 +103,7 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
             ["version"] = Escape(configuration.Version),
             ["numeric_version"] = version,
             ["publisher"] = Escape(publisher),
+            ["description"] = Escape(description),
             ["identifier"] = Escape(configuration.Identifier),
             ["main_executable"] = Escape(item.MainExecutable),
             ["process_name"] = Escape(Path.GetFileName(item.MainExecutable)),
@@ -107,11 +111,128 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
             ["input_glob"] = Escape(Path.Combine(item.InputDirectory, "*")),
             ["output_file"] = Escape(installerPath),
             ["estimated_size"] = EstimateSizeInKilobytes(item.InputDirectory).ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory),
+            ["installer_icon_directives"] = iconDirectives,
+            ["resource_install_commands"] = CreateResourceInstallCommands(resources),
+            ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory, resources),
             ["language_macros"] = localization.LanguageMacros,
             ["language_files"] = localization.LanguageFiles,
             ["display_language_selector"] = localization.DisplayLanguageSelector
         });
+    }
+
+    private static string CreateIconDirectives(IReadOnlyList<string> icons)
+    {
+        var icon = icons.FirstOrDefault(path =>
+            Path.GetExtension(path).Equals(".ico", StringComparison.OrdinalIgnoreCase));
+        if (icon is null)
+        {
+            if (icons.Count > 0)
+            {
+                throw new InvalidOperationException("Windows NSIS packaging requires at least one .ico file when icons are configured.");
+            }
+
+            return string.Empty;
+        }
+
+        var escaped = Escape(Path.GetFullPath(icon));
+        return string.Join(Environment.NewLine, new[]
+        {
+            $"!define MUI_ICON \"{escaped}\"",
+            $"!define MUI_UNICON \"{escaped}\"",
+            $"Icon \"{escaped}\""
+        });
+    }
+
+    private static IReadOnlyList<PayloadResource> ExpandResources(
+        IReadOnlyList<BundleResourceConfiguration> configuredResources,
+        string inputDirectory)
+    {
+        var inputRoot = Path.GetFullPath(inputDirectory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var targets = new HashSet<string>(
+            Directory.EnumerateFiles(inputRoot, "*", SearchOption.AllDirectories)
+                .Select(path => RelativePath(inputRoot, path)),
+            StringComparer.OrdinalIgnoreCase);
+        var resources = new List<PayloadResource>();
+
+        foreach (var configured in configuredResources)
+        {
+            var source = Path.GetFullPath(configured.Source);
+            var target = NormalizeTargetPath(configured.TargetPath);
+            if (File.Exists(source))
+            {
+                Add(source, target);
+                continue;
+            }
+
+            if (!Directory.Exists(source))
+            {
+                throw new FileNotFoundException("Bundle resource was not found.", source);
+            }
+
+            foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+            {
+                Add(file, Path.Combine(target, RelativePath(source, file)));
+            }
+        }
+
+        return resources;
+
+        void Add(string source, string target)
+        {
+            target = NormalizeTargetPath(target);
+            if (target.Equals("Uninstall.exe", StringComparison.OrdinalIgnoreCase) ||
+                target.StartsWith(".dotnet-bundler-", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"Resource target '{target}' is reserved by the installer.");
+            }
+
+            if (!targets.Add(target))
+            {
+                throw new InvalidOperationException($"More than one payload file targets '{target}'.");
+            }
+
+            resources.Add(new PayloadResource(Path.GetFullPath(source), target));
+        }
+    }
+
+    private static string NormalizeTargetPath(string targetPath)
+    {
+        if (string.IsNullOrWhiteSpace(targetPath) || Path.IsPathRooted(targetPath))
+        {
+            throw new InvalidOperationException($"Resource target path must be relative: '{targetPath}'.");
+        }
+
+        var normalized = targetPath
+            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+            .Trim(Path.DirectorySeparatorChar);
+        if (normalized.Split(Path.DirectorySeparatorChar).Any(component => component is "" or "." or ".."))
+        {
+            throw new InvalidOperationException($"Resource target path must stay inside the installation directory: '{targetPath}'.");
+        }
+
+        return normalized;
+    }
+
+    private static string CreateResourceInstallCommands(IReadOnlyList<PayloadResource> resources)
+    {
+        var lines = new List<string>();
+        foreach (var resource in resources.OrderBy(resource => resource.TargetPath, StringComparer.OrdinalIgnoreCase))
+        {
+            var targetDirectory = Path.GetDirectoryName(resource.TargetPath);
+            var destination = string.IsNullOrEmpty(targetDirectory)
+                ? "$INSTDIR"
+                : "$INSTDIR\\" + Escape(targetDirectory);
+            lines.Add($"  SetOutPath \"{destination}\"");
+            lines.Add($"  File \"/oname={Escape(Path.GetFileName(resource.TargetPath))}\" \"{Escape(resource.Source)}\"");
+        }
+
+        if (resources.Count > 0)
+        {
+            lines.Add("  SetOutPath \"$INSTDIR\"");
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 
     private NsisLocalization PrepareLanguages(NsisBundleConfiguration settings, string workDirectory)
@@ -170,7 +291,9 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
         value.All(character =>
             character is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9');
 
-    private static string CreateUninstallPayload(string inputDirectory)
+    private static string CreateUninstallPayload(
+        string inputDirectory,
+        IReadOnlyList<PayloadResource> resources)
     {
         var root = Path.GetFullPath(inputDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var lines = new List<string>();
@@ -180,10 +303,28 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
             lines.Add($"  Delete /REBOOTOK \"$INSTDIR\\{Escape(RelativePath(root, file))}\"");
         }
 
-        foreach (var directory in Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories)
-                     .OrderByDescending(path => path.Length))
+        foreach (var resource in resources)
         {
-            lines.Add($"  RMDir /REBOOTOK \"$INSTDIR\\{Escape(RelativePath(root, directory))}\"");
+            lines.Add($"  Delete /REBOOTOK \"$INSTDIR\\{Escape(resource.TargetPath)}\"");
+        }
+
+        var directories = new HashSet<string>(
+            Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories)
+                .Select(path => RelativePath(root, path)),
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var resource in resources)
+        {
+            var directory = Path.GetDirectoryName(resource.TargetPath);
+            while (!string.IsNullOrEmpty(directory))
+            {
+                directories.Add(directory);
+                directory = Path.GetDirectoryName(directory);
+            }
+        }
+
+        foreach (var directory in directories.OrderByDescending(path => path.Length))
+        {
+            lines.Add($"  RMDir /REBOOTOK \"$INSTDIR\\{Escape(directory)}\"");
         }
 
         return string.Join(Environment.NewLine, lines);
@@ -236,4 +377,6 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
         string LanguageMacros,
         string LanguageFiles,
         string DisplayLanguageSelector);
+
+    private sealed record PayloadResource(string Source, string TargetPath);
 }
