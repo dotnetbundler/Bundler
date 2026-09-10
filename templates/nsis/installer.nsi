@@ -211,12 +211,14 @@ Section "Uninstall"
   RMDir "$SMPROGRAMS\${PRODUCT_NAME}"
   DeleteRegKey HKCU "${UNINSTALL_KEY}"
   DeleteRegKey /ifempty HKCU "Software\${PRODUCT_ID}"
-{{uninstall_payload}}
-  Delete "$INSTDIR\${INSTALL_MARKER}"
-  Delete /REBOOTOK "$INSTDIR\Uninstall.exe"
-  RMDir "$INSTDIR"
   ${If} $DeleteAppData == 1
     RMDir /r "$APPDATA\${PRODUCT_ID}"
     RMDir /r "$LOCALAPPDATA\${PRODUCT_ID}"
+    RMDir /r /REBOOTOK "$INSTDIR"
+  ${Else}
+{{uninstall_payload}}
+    Delete "$INSTDIR\${INSTALL_MARKER}"
+    Delete /REBOOTOK "$INSTDIR\Uninstall.exe"
+    RMDir "$INSTDIR"
   ${EndIf}
 SectionEnd

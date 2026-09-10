@@ -154,7 +154,9 @@ public sealed class NsisBundleBackend(string compilerPath, string templatePath, 
         }
 
         var selector = settings.DisplayLanguageSelector && settings.Languages.Count > 1
-            ? "  !insertmacro MUI_LANGDLL_DISPLAY"
+            ? "  !define MUI_LANGDLL_ALWAYSSHOW" + Environment.NewLine +
+              "  !insertmacro MUI_LANGDLL_DISPLAY" + Environment.NewLine +
+              "  !undef MUI_LANGDLL_ALWAYSSHOW"
             : string.Empty;
         return new NsisLocalization(
             string.Join(Environment.NewLine, languageMacros),

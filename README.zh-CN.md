@@ -28,7 +28,7 @@ MSBuild Task 及其直接加载的 Core 程序集都以 `netstandard2.0` 为目�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.8" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.9" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -92,7 +92,7 @@ NSIS 脚本存放在 `templates/nsis/installer.nsi` 文件中，不再嵌入 C#�
 </ItemGroup>
 ```
 
-默认模板提供当前用户安装、可选择并记住上次位置的安装目录、非本应用的非空目录警告、DPI 感知、压缩、可选的开始菜单与桌面快捷方式、运行程序检测和关闭、“应用和功能”卸载信息、可选删除应用数据、静默卸载以及完成页启动程序。卸载会删除程序目录中属于构建载荷的路径：程序后来在新路径创建的文件会保留；如果创建或覆盖的是构建载荷中的同名路径，卸载时仍会删除。单独的“删除应用数据”选项只控制 `%APPDATA%\<identifier>` 与 `%LOCALAPPDATA%\<identifier>`。
+默认模板提供当前用户安装、可选择并记住上次位置的安装目录、非本应用的非空目录警告、DPI 感知、压缩、可选的开始菜单与桌面快捷方式、运行程序检测和关闭、“应用和功能”卸载信息、可选删除应用数据、静默卸载以及完成页启动程序。未选择删除应用数据时，卸载只删除程序目录中属于构建载荷的路径：程序后来在新路径创建的文件会保留；如果创建或覆盖的是构建载荷中的同名路径，卸载时仍会删除。选择删除应用数据时，会递归删除整个程序安装目录，以及 `%APPDATA%\<identifier>` 和 `%LOCALAPPDATA%\<identifier>`。
 
 若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。模板支持 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`input_glob`、`output_file`、`estimated_size`、`uninstall_payload`、`language_macros`、`language_files`、`display_language_selector`，写法为 `{{name}}`。
 

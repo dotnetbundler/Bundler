@@ -28,7 +28,7 @@ The MSBuild task and the Core assembly it loads both target `netstandard2.0`. Pa
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.8" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.9" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -92,7 +92,7 @@ Additional NSIS languages require a custom message file containing every `LangSt
 </ItemGroup>
 ```
 
-The default template includes current-user installation, a user-selectable directory that remembers the previous location, a warning for unrelated non-empty directories, DPI awareness, compression, optional Start Menu and desktop shortcuts, running-app detection and closure, Add/Remove Programs metadata, optional application-data cleanup, silent uninstall, and finish-page launch behavior. Uninstall removes packaged payload paths from the program directory. Files created later at new paths remain; files created or replaced at a packaged path are removed. The separate application-data checkbox controls `%APPDATA%\<identifier>` and `%LOCALAPPDATA%\<identifier>` only.
+The default template includes current-user installation, a user-selectable directory that remembers the previous location, a warning for unrelated non-empty directories, DPI awareness, compression, optional Start Menu and desktop shortcuts, running-app detection and closure, Add/Remove Programs metadata, optional application-data cleanup, silent uninstall, and finish-page launch behavior. When application-data deletion is not selected, uninstall removes packaged payload paths from the program directory: files created later at new paths remain, while files created or replaced at a packaged path are removed. When application-data deletion is selected, uninstall recursively removes the complete program directory plus `%APPDATA%\<identifier>` and `%LOCALAPPDATA%\<identifier>`.
 
 Set `BundlerNsisTemplate` to an absolute path to use a customized copy. Supported placeholders are `product_name`, `version`, `numeric_version`, `publisher`, `identifier`, `main_executable`, `process_name`, `install_folder`, `input_glob`, `output_file`, `estimated_size`, `uninstall_payload`, `language_macros`, `language_files`, and `display_language_selector`, each written as `{{name}}`.
 

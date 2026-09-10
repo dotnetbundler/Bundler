@@ -206,8 +206,12 @@ static void UninstallsOnlyPackagedPayloadFiles()
             "The uninstaller should delete the packaged executable explicitly.");
         Assert(script.Contains("Delete /REBOOTOK \"$INSTDIR\\assets\\data.txt\"", StringComparison.Ordinal),
             "The uninstaller should delete packaged nested files explicitly.");
-        Assert(!script.Contains("RMDir /r \"$INSTDIR\"", StringComparison.Ordinal),
-            "The uninstaller must not recursively delete an arbitrary user-selected directory.");
+        Assert(script.Contains("${If} $DeleteAppData == 1", StringComparison.Ordinal) &&
+               script.Contains("RMDir /r /REBOOTOK \"$INSTDIR\"", StringComparison.Ordinal),
+            "Choosing application-data deletion should remove the complete program directory.");
+        Assert(script.IndexOf("${Else}", StringComparison.Ordinal) <
+               script.IndexOf("Delete /REBOOTOK \"$INSTDIR\\ExampleApp.exe\"", StringComparison.Ordinal),
+            "Payload-only deletion should remain in the branch used when application data is preserved.");
     }
     finally
     {
