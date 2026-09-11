@@ -1,8 +1,4 @@
-using Bundler.Core.Configuration;
-using Bundler.Core.Models;
-using Bundler.Core.Planning;
-
-namespace Bundler.Core.Backends;
+namespace DotNet.Bundler;
 
 public interface IBundleBackend
 {
@@ -17,7 +13,8 @@ public interface IBundleBackend
 public sealed record BundleBuildContext(
     BundleConfiguration Configuration,
     BundlePlanItem Item,
-    string WorkDirectory);
+    string WorkDirectory,
+    IBundleLogger Logger);
 
 public sealed record BundleArtifact(
     PackageFormat Format,

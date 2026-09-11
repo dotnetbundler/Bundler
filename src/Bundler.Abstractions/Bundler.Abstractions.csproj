@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>DotNet.Bundler.Abstractions</AssemblyName>
+    <RootNamespace>DotNet.Bundler</RootNamespace>
+    <PackageId>DotNet.Bundler.Abstractions</PackageId>
+    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
+    <Authors>Bundler contributors</Authors>
+    <Description>Public contracts for reusable .NET desktop packaging backends.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

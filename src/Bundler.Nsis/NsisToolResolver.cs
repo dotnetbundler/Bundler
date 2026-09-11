@@ -1,6 +1,5 @@
-using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Runtime.InteropServices;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Nsis;
 
@@ -19,66 +18,14 @@ internal static class NsisToolResolver
             throw new PlatformNotSupportedException("The bundled NSIS compiler runs on Windows hosts only.");
         }
 
-        archivePath = Path.GetFullPath(archivePath);
-        cacheDirectory = Path.GetFullPath(cacheDirectory);
-        if (!File.Exists(archivePath))
-        {
-            throw new FileNotFoundException("The bundled NSIS archive is missing.", archivePath);
-        }
-
-        cancellationToken.ThrowIfCancellationRequested();
-        VerifyArchive(archivePath);
-
-        var toolDirectory = Path.Combine(cacheDirectory, $"nsis-{Version}-{ArchiveSha256.Substring(0, 12).ToLowerInvariant()}");
-        var compilerPath = Path.Combine(toolDirectory, $"nsis-{Version}", "makensis.exe");
-        if (File.Exists(compilerPath))
-        {
-            return Task.FromResult(compilerPath);
-        }
-
-        Directory.CreateDirectory(cacheDirectory);
-        var stagingDirectory = Path.Combine(cacheDirectory, $".nsis-{Version}-{Guid.NewGuid():N}");
-        try
-        {
-            ZipFile.ExtractToDirectory(archivePath, stagingDirectory);
-            var stagedCompiler = Path.Combine(stagingDirectory, $"nsis-{Version}", "makensis.exe");
-            if (!File.Exists(stagedCompiler))
-            {
-                throw new InvalidDataException("The NSIS archive does not contain makensis.exe at the expected path.");
-            }
-
-            try
-            {
-                Directory.Move(stagingDirectory, toolDirectory);
-            }
-            catch (IOException) when (File.Exists(compilerPath))
-            {
-                // Another concurrent build populated the same verified cache.
-            }
-        }
-        finally
-        {
-            if (Directory.Exists(stagingDirectory))
-            {
-                Directory.Delete(stagingDirectory, recursive: true);
-            }
-        }
-
-        return File.Exists(compilerPath)
-            ? Task.FromResult(compilerPath)
-            : throw new InvalidOperationException("NSIS extraction completed without producing makensis.exe.");
-    }
-
-    private static void VerifyArchive(string archivePath)
-    {
-        using var stream = File.OpenRead(archivePath);
-        using var sha256 = SHA256.Create();
-        var hash = sha256.ComputeHash(stream);
-        var actualHash = BitConverter.ToString(hash).Replace("-", string.Empty);
-        if (!actualHash.Equals(ArchiveSha256, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidDataException(
-                $"NSIS archive checksum mismatch. Expected {ArchiveSha256}, got {actualHash}.");
-        }
+        return ZipToolCache.ResolveAsync(
+            archivePath,
+            cacheDirectory,
+            new ZipToolArchive(
+                "nsis",
+                Version,
+                ArchiveSha256,
+                Path.Combine($"nsis-{Version}", "makensis.exe")),
+            cancellationToken);
     }
 }

@@ -1,4 +1,4 @@
-namespace Bundler.Core.Models;
+namespace DotNet.Bundler;
 
 public enum DesktopOperatingSystem
 {

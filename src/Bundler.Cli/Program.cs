@@ -1,9 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Bundler.Core.Configuration;
-using Bundler.Core.Models;
-using Bundler.Core.Planning;
-using Bundler.Core.Validation;
+using DotNet.Bundler;
+using DotNet.Bundler.Core;
 using DotNet.Bundler.Nsis;
 
 return await RunAsync(args);

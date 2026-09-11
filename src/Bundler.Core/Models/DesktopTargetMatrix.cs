@@ -1,4 +1,6 @@
-namespace Bundler.Core.Models;
+using DotNet.Bundler;
+
+namespace DotNet.Bundler.Core;
 
 public static class DesktopTargetMatrix
 {

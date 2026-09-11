@@ -1,11 +1,12 @@
-using Bundler.Core.Configuration;
-using Bundler.Core.Models;
-using Bundler.Core.Planning;
+using DotNet.Bundler;
 
-namespace Bundler.Core.Backends;
+namespace DotNet.Bundler.Core;
 
-public sealed class BundlePipeline(IEnumerable<IBundleBackend> backends)
+public sealed class BundlePipeline(
+    IEnumerable<IBundleBackend> backends,
+    IBundleLogger? logger = null)
 {
+    private readonly IBundleLogger _logger = logger ?? NullBundleLogger.Instance;
     private readonly IReadOnlyDictionary<(DesktopOperatingSystem, PackageFormat), IBundleBackend> _backends =
         backends.ToDictionary(backend => (backend.OperatingSystem, backend.Format));
 
@@ -38,11 +39,12 @@ public sealed class BundlePipeline(IEnumerable<IBundleBackend> backends)
                 item.Format.ToString().ToLowerInvariant(),
                 Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(workDirectory);
+            _logger.Log(BundleLogLevel.Information, $"Building {item.Format} package for {item.Target.RuntimeIdentifier}.");
 
             try
             {
                 var artifact = await backend.BuildAsync(
-                    new BundleBuildContext(configuration, item, workDirectory),
+                    new BundleBuildContext(configuration, item, workDirectory, _logger),
                     cancellationToken);
                 if (!File.Exists(artifact.Path) && !Directory.Exists(artifact.Path))
                 {
@@ -51,6 +53,7 @@ public sealed class BundlePipeline(IEnumerable<IBundleBackend> backends)
                 }
 
                 artifacts.Add(artifact);
+                _logger.Log(BundleLogLevel.Information, $"Created {artifact.Path}.");
             }
             finally
             {

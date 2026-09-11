@@ -1,8 +1,5 @@
-using Bundler.Core.Configuration;
-using Bundler.Core.Backends;
-using Bundler.Core.Models;
-using Bundler.Core.Planning;
-using Bundler.Core.Validation;
+using DotNet.Bundler;
+using DotNet.Bundler.Core;
 using DotNet.Bundler.Nsis;
 
 var tests = new (string Name, Func<Task> Test)[]
@@ -472,6 +469,7 @@ static async Task RunsBackendsThroughCommonPipeline()
     await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp.exe"), "test");
 
     var backend = new RecordingBackend();
+    var logger = new RecordingLogger();
     try
     {
         var configuration = new BundleConfiguration
@@ -492,11 +490,13 @@ static async Task RunsBackendsThroughCommonPipeline()
             ]
         };
 
-        var artifacts = await new BundlePipeline([backend]).BuildAsync(configuration);
+        var artifacts = await new BundlePipeline([backend], logger).BuildAsync(configuration);
         Assert(artifacts.Count == 1 && File.Exists(artifacts[0].Path),
             "The common pipeline should return an existing backend artifact.");
         Assert(backend.WorkDirectory is not null && !Directory.Exists(backend.WorkDirectory),
             "The common pipeline should clean its backend work directory.");
+        Assert(logger.Messages.Any(message => message.Contains("Created", StringComparison.Ordinal)),
+            "The common pipeline should report progress through the public logging contract.");
     }
     finally
     {
@@ -596,4 +596,11 @@ file sealed class RecordingBackend : IBundleBackend
         await File.WriteAllTextAsync(path, "artifact", cancellationToken);
         return new BundleArtifact(Format, context.Item.Target.RuntimeIdentifier, path);
     }
+}
+
+file sealed class RecordingLogger : IBundleLogger
+{
+    public List<string> Messages { get; } = [];
+
+    public void Log(BundleLogLevel level, string message) => Messages.Add($"{level}: {message}");
 }

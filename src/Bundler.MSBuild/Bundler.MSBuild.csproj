@@ -6,10 +6,10 @@
     <GenerateDependencyFile>true</GenerateDependencyFile>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <IsPackable>true</IsPackable>
-    <PackageId>DotNet.Bundler</PackageId>
+    <PackageId>DotNet.Bundler.MSBuild</PackageId>
     <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
     <Authors>Bundler contributors</Authors>
-    <Description>Automatic desktop installer generation for published .NET applications.</Description>
+    <Description>MSBuild adapter for reusable DotNet.Bundler backend packages.</Description>
     <PackageTags>dotnet;msbuild;bundler;installer;nsis;desktop</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <DevelopmentDependency>true</DevelopmentDependency>
@@ -27,10 +27,11 @@
   <ItemGroup>
     <None Include="$(TargetPath)" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.MSBuild.deps.json" Pack="true" PackagePath="tasks/netstandard2.0/" />
-    <None Include="$(TargetDir)Bundler.Core.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
+    <None Include="$(TargetDir)DotNet.Bundler.Abstractions.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
+    <None Include="$(TargetDir)DotNet.Bundler.Core.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.Nsis.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
-    <None Include="..\..\buildTransitive\DotNet.Bundler.props" Pack="true" PackagePath="buildTransitive/" />
-    <None Include="..\..\buildTransitive\DotNet.Bundler.targets" Pack="true" PackagePath="buildTransitive/" />
+    <None Include="..\..\buildTransitive\DotNet.Bundler.MSBuild.props" Pack="true" PackagePath="buildTransitive/" />
+    <None Include="..\..\buildTransitive\DotNet.Bundler.MSBuild.targets" Pack="true" PackagePath="buildTransitive/" />
     <None Include="..\..\README.md" Pack="true" PackagePath="/" />
     <None Include="..\..\README.zh-CN.md" Pack="true" PackagePath="/" />
     <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />

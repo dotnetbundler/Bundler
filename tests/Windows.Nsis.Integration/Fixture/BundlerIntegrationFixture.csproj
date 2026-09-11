@@ -8,6 +8,7 @@
     <Version>1.0.0</Version>
     <RestoreSources>$(BundlerPackageSource)</RestoreSources>
     <BundlerEnabled>true</BundlerEnabled>
+    <BundlerIntegrationPackageId Condition="'$(BundlerIntegrationPackageId)' == ''">DotNet.Bundler</BundlerIntegrationPackageId>
     <BundlerIdentifier>com.dotnetbundler.integrationfixture</BundlerIdentifier>
     <BundlerProductName>Bundler Integration Fixture</BundlerProductName>
     <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
@@ -26,7 +27,7 @@
     <BundlerNsisInstallerHooks>$(MSBuildProjectDirectory)\Assets\installer-hooks.nsh</BundlerNsisInstallerHooks>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
+    <PackageReference Include="$(BundlerIntegrationPackageId)" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerIcon Include="$(BundlerTestIcon)" Condition="'$(BundlerTestIcon)' != ''" />
     <BundlerResource Include="Assets\license.txt" TargetPath="docs\license.txt" />
   </ItemGroup>

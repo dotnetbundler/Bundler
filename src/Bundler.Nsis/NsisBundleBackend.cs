@@ -1,7 +1,5 @@
-using Bundler.Core.Backends;
-using Bundler.Core.Configuration;
-using Bundler.Core.Models;
-using Bundler.Core.Planning;
+using DotNet.Bundler;
+using DotNet.Bundler.Core;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -53,6 +51,7 @@ internal sealed class NsisBundleBackend(
             CreateScript(template, configuration, settings, item, installerPath, safeProductName, localization),
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
+        context.Logger.Log(BundleLogLevel.Trace, $"Running NSIS compiler '{fullCompilerPath}'.");
         await ProcessRunner.RunAsync(
             fullCompilerPath,
             ["-INPUTCHARSET", "UTF8", "-OUTPUTCHARSET", "UTF8", "/V2", scriptPath],

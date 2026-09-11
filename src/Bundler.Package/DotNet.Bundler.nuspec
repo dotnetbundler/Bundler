@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package>
+  <metadata>
+    <id>DotNet.Bundler</id>
+    <version>$version$</version>
+    <authors>Bundler contributors</authors>
+    <developmentDependency>true</developmentDependency>
+    <readme>README.md</readme>
+    <description>Convenience package for automatic desktop installer generation during dotnet publish.</description>
+    <tags>dotnet msbuild bundler installer desktop</tags>
+    <dependencies>
+      <group targetFramework="netstandard2.0">
+        <dependency id="DotNet.Bundler.MSBuild" version="[$version$]" />
+      </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="..\..\README.md" target="" />
+    <file src="..\..\README.zh-CN.md" target="" />
+  </files>
+</package>

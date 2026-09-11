@@ -9,6 +9,7 @@ $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $integrationRoot = Join-Path $repositoryRoot "artifacts\windows-nsis-integration"
 $packageDirectory = Join-Path $repositoryRoot "artifacts\packages"
 $packagePath = Join-Path $packageDirectory "DotNet.Bundler.$PackageVersion.nupkg"
+$msbuildPackagePath = Join-Path $packageDirectory "DotNet.Bundler.MSBuild.$PackageVersion.nupkg"
 $nsisPackagePath = Join-Path $packageDirectory "DotNet.Bundler.Nsis.$PackageVersion.nupkg"
 $fixtureProject = Join-Path $PSScriptRoot "Fixture\BundlerIntegrationFixture.csproj"
 $apiFixtureProject = Join-Path $repositoryRoot "tests\Nsis.Api.PackageFixture\Nsis.Api.PackageFixture.csproj"
@@ -16,6 +17,7 @@ $packageCache = Join-Path $integrationRoot "packages"
 $bundleOutput = Join-Path $integrationRoot "bundle"
 $perMachineBundleOutput = Join-Path $integrationRoot "bundle-per-machine"
 $bothBundleOutput = Join-Path $integrationRoot "bundle-both"
+$directMsBuildOutput = Join-Path $integrationRoot "bundle-direct-msbuild"
 $testIcon = Join-Path $integrationRoot "test-installer.ico"
 $testHeaderImage = Join-Path $integrationRoot "test-header.bmp"
 $testSidebarImage = Join-Path $integrationRoot "test-sidebar.bmp"
@@ -59,10 +61,15 @@ function Invoke-WindowsExecutable([string]$FilePath, [string]$ArgumentLine) {
     }
 }
 
-function Build-FixtureBundle([string]$InstallMode, [string]$OutputPath) {
+function Build-FixtureBundle(
+    [string]$InstallMode,
+    [string]$OutputPath,
+    [string]$PackageId = "DotNet.Bundler"
+) {
     Invoke-Native "dotnet" @(
         "publish", $fixtureProject, "-c", $Configuration, "--force",
         "-p:BundlerPackageVersion=$PackageVersion",
+        "-p:BundlerIntegrationPackageId=$PackageId",
         "-p:BundlerPackageSource=$packageDirectory",
         "-p:BundlerIntegrationOutput=$OutputPath",
         "-p:BundlerTestIcon=$testIcon",
@@ -110,14 +117,16 @@ function Remove-TestState {
 
 try {
     Assert-True (Test-Path -LiteralPath $packagePath) "Package not found: $packagePath"
+    Assert-True (Test-Path -LiteralPath $msbuildPackagePath) "Package not found: $msbuildPackagePath"
     Assert-True (Test-Path -LiteralPath $nsisPackagePath) "Package not found: $nsisPackagePath"
-    $archive = [IO.Compression.ZipFile]::OpenRead($packagePath)
+    $archive = [IO.Compression.ZipFile]::OpenRead($msbuildPackagePath)
     try {
         $entries = @($archive.Entries | ForEach-Object FullName)
         foreach ($requiredEntry in @(
-            "buildTransitive/DotNet.Bundler.props",
-            "buildTransitive/DotNet.Bundler.targets",
-            "tasks/netstandard2.0/Bundler.Core.dll",
+            "buildTransitive/DotNet.Bundler.MSBuild.props",
+            "buildTransitive/DotNet.Bundler.MSBuild.targets",
+            "tasks/netstandard2.0/DotNet.Bundler.Abstractions.dll",
+            "tasks/netstandard2.0/DotNet.Bundler.Core.dll",
             "tasks/netstandard2.0/DotNet.Bundler.Nsis.dll",
             "tasks/netstandard2.0/DotNet.Bundler.MSBuild.dll"
         )) {
@@ -185,11 +194,13 @@ try {
     }
 
     Build-FixtureBundle "currentUser" $bundleOutput
+    Build-FixtureBundle "currentUser" $directMsBuildOutput "DotNet.Bundler.MSBuild"
     Build-FixtureBundle "perMachine" $perMachineBundleOutput
     Build-FixtureBundle "both" $bothBundleOutput
 
     $installer = Join-Path $bundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     Assert-True (Test-Path -LiteralPath $installer) "Installer was not created: $installer"
+    Assert-True (Test-Path -LiteralPath (Join-Path $directMsBuildOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Direct MSBuild package installer was not created."
     Assert-True (Test-Path -LiteralPath (Join-Path $perMachineBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Per-machine installer was not created."
     Assert-True (Test-Path -LiteralPath (Join-Path $bothBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Both-scope installer was not created."
 

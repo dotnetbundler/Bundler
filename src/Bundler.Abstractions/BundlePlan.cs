@@ -1,6 +1,4 @@
-using Bundler.Core.Models;
-
-namespace Bundler.Core.Planning;
+namespace DotNet.Bundler;
 
 public sealed record BundlePlan(IReadOnlyList<BundlePlanItem> Items);
 

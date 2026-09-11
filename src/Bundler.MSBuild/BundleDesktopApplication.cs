@@ -2,8 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Bundler.Core.Configuration;
-using Bundler.Core.Models;
+using DotNet.Bundler;
 using DotNet.Bundler.Nsis;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
@@ -93,7 +92,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             {
                 ToolArchivePath = EmptyToNull(NsisToolArchivePath),
                 ToolCacheDirectory = EmptyToNull(ToolCacheDirectory),
-                TemplatePath = EmptyToNull(NsisTemplatePath)
+                TemplatePath = EmptyToNull(NsisTemplatePath),
+                Logger = new MsBuildBundleLogger(Log)
             };
             var artifacts = new NsisBundler(nsisConfiguration, nsisOptions)
                 .BuildAsync(configuration)
@@ -107,11 +107,6 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 item.SetMetadata("RuntimeIdentifier", artifact.RuntimeIdentifier);
                 return (ITaskItem)item;
             }).ToArray();
-
-            foreach (var artifact in artifacts)
-            {
-                Log.LogMessage(MessageImportance.High, "Created {0}", artifact.Path);
-            }
 
             return true;
         }
@@ -206,5 +201,27 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         }
 
         return result;
+    }
+
+    private sealed class MsBuildBundleLogger(TaskLoggingHelper log) : IBundleLogger
+    {
+        public void Log(BundleLogLevel level, string message)
+        {
+            switch (level)
+            {
+                case BundleLogLevel.Warning:
+                    log.LogWarning(message);
+                    break;
+                case BundleLogLevel.Error:
+                    log.LogError(message);
+                    break;
+                case BundleLogLevel.Trace:
+                    log.LogMessage(MessageImportance.Low, message);
+                    break;
+                default:
+                    log.LogMessage(MessageImportance.High, message);
+                    break;
+            }
+        }
     }
 }

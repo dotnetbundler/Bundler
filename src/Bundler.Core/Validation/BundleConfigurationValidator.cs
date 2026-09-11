@@ -1,8 +1,7 @@
 using System.Text.RegularExpressions;
-using Bundler.Core.Configuration;
-using Bundler.Core.Models;
+using DotNet.Bundler;
 
-namespace Bundler.Core.Validation;
+namespace DotNet.Bundler.Core;
 
 public static class BundleConfigurationValidator
 {

@@ -1,9 +1,11 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Bundler.Abstractions/Bundler.Abstractions.csproj" />
     <Project Path="src/Bundler.Cli/Bundler.Cli.csproj" />
     <Project Path="src/Bundler.Core/Bundler.Core.csproj" />
     <Project Path="src/Bundler.Nsis/Bundler.Nsis.csproj" />
     <Project Path="src/Bundler.MSBuild/Bundler.MSBuild.csproj" />
+    <Project Path="src/Bundler.Package/Bundler.Package.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Bundler.Tests/Bundler.Tests.csproj" />

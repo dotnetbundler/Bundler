@@ -1,5 +1,4 @@
-using Bundler.Core.Configuration;
-using Bundler.Core.Models;
+using DotNet.Bundler;
 using DotNet.Bundler.Nsis;
 
 if (args.Length != 2)

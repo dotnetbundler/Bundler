@@ -8,11 +8,23 @@
 
 The first supported path is Windows + NSIS. MSI, macOS and Linux formats are planned but are not implemented yet.
 
-The implementation is split into reusable NuGet packages. `DotNet.Bundler.Core` owns format-neutral planning and orchestration, `DotNet.Bundler.Nsis` exposes the standalone NSIS API and owns all NSIS implementation assets, and `DotNet.Bundler` is the thin MSBuild integration package.
+The implementation is split into reusable NuGet packages. `DotNet.Bundler` is only a convenience meta-package; packaging code lives in the packages below.
+
+## Package architecture
+
+| Package | Responsibility |
+| --- | --- |
+| `DotNet.Bundler.Abstractions` | Public requests, targets, results, logging contracts, and backend interface |
+| `DotNet.Bundler.Core` | Validation, planning, orchestration, work directories, and shared content-addressed ZIP tool cache |
+| `DotNet.Bundler.Nsis` | Standalone NSIS API, NSIS configuration, script generation, languages, and bundled `makensis` toolchain |
+| `DotNet.Bundler.MSBuild` | MSBuild parameter mapping and invocation of backend APIs; contains no NSIS implementation |
+| `DotNet.Bundler` | Empty convenience meta-package that brings in `DotNet.Bundler.MSBuild` without filtering its transitive build assets |
+
+The future WiX/MSI implementation will be added as `DotNet.Bundler.Wix`; an empty placeholder package is intentionally not published.
 
 `DotNet.Bundler.Nsis` carries a pinned NSIS 3.12 portable archive as an embedded resource. Consumers do not install NSIS or download tools themselves. The archive is verified with SHA-256 and extracted once into the shared `%LOCALAPPDATA%\DotNetBundler\tools` cache. Projects on the same machine reuse the content-addressed tool directory.
 
-The MSBuild task and the Core/NSIS assemblies it loads all provide `netstandard2.0` assets. Packaging decisions and backend orchestration run directly inside MSBuild; the package does not launch a separate .NET CLI driver. NSIS compilation still starts the bundled `makensis.exe`, because that executable is the actual installer compiler.
+The MSBuild task and the Abstractions/Core/NSIS assemblies it loads all provide `netstandard2.0` assets. Packaging decisions and backend orchestration run directly inside MSBuild; the package does not launch a separate .NET CLI driver. NSIS compilation still starts the bundled `makensis.exe`, because that executable is the actual installer compiler.
 
 ## Consumer configuration
 
@@ -52,8 +64,7 @@ Applications and build tools that do not use MSBuild integration can reference `
 ```
 
 ```csharp
-using Bundler.Core.Configuration;
-using Bundler.Core.Models;
+using DotNet.Bundler;
 using DotNet.Bundler.Nsis;
 
 var request = new BundleConfiguration
@@ -167,7 +178,7 @@ powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Releas
 
 The Windows integration test installs a dedicated fixture into a Chinese path containing spaces, validates payload/resources/metadata/registry/shortcuts/process shutdown, exercises both data-preserving and full-data removal uninstalls, and cleans its test state in `finally`.
 
-Core contains only format-neutral configuration, validation, planning, and orchestration. The NSIS project contains the public API, NSIS-specific configuration, templates, tool resolution, process execution, and backend. MSBuild and the development CLI are adapters over those packages; neither implements NSIS packaging.
+Abstractions contains the stable cross-package contracts. Core implements format-neutral validation, planning, orchestration, work-directory lifecycle, and reusable ZIP tool caching. The NSIS project contains the public backend API, NSIS-specific configuration, templates, process execution, and resources. MSBuild and the development CLI are adapters over those packages; neither implements NSIS packaging.
 
 ## Security and licensing
 

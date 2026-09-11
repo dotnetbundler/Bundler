@@ -1,6 +1,4 @@
-using Bundler.Core.Models;
-
-namespace Bundler.Core.Configuration;
+namespace DotNet.Bundler;
 
 public sealed class BundleConfiguration
 {

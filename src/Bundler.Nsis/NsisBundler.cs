@@ -1,6 +1,5 @@
-using Bundler.Core.Backends;
-using Bundler.Core.Configuration;
-using Bundler.Core.Models;
+using DotNet.Bundler;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Nsis;
 
@@ -47,7 +46,7 @@ public sealed class NsisBundler
         var languages = Path.GetFullPath(_options.LanguageDirectory ?? embedded.LanguageDirectory);
 
         var backend = new NsisBundleBackend(compiler, template, languages, _configuration);
-        return await new BundlePipeline([backend]).BuildAsync(bundle, cancellationToken);
+        return await new BundlePipeline([backend], _options.Logger).BuildAsync(bundle, cancellationToken);
     }
 
     private static void ValidateConfiguration(NsisBundleConfiguration settings)

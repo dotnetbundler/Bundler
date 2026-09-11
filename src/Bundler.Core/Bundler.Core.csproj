@@ -2,10 +2,12 @@
   <PropertyGroup>
     <TargetFramework></TargetFramework>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <AssemblyName>DotNet.Bundler.Core</AssemblyName>
+    <RootNamespace>DotNet.Bundler.Core</RootNamespace>
     <PackageId>DotNet.Bundler.Core</PackageId>
     <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
     <Authors>Bundler contributors</Authors>
-    <Description>Core planning and packaging abstractions for desktop .NET applications.</Description>
+    <Description>Format-neutral validation, planning, orchestration, and tool caching for desktop packages.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
@@ -13,5 +15,8 @@
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <Compile Remove="Configuration\BundleConfigurationLoader.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bundler.Abstractions\Bundler.Abstractions.csproj" />
   </ItemGroup>
 </Project>

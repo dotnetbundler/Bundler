@@ -1,7 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Bundler.Core.Configuration;
+using DotNet.Bundler;
+
+namespace DotNet.Bundler.Core;
 
 public static class BundleConfigurationLoader
 {

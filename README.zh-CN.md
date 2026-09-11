@@ -8,11 +8,23 @@
 
 第一条已支持链路是 Windows + NSIS。MSI、macOS 和 Linux 格式属于后续路线，目前尚未实现。
 
-实现已经拆分为可复用的 NuGet 包：`DotNet.Bundler.Core` 负责与格式无关的规划和编排，`DotNet.Bundler.Nsis` 提供可独立调用的 NSIS API 并拥有全部 NSIS 实现资源，`DotNet.Bundler` 则是轻量的 MSBuild 集成包。
+实现已经拆分为可复用的 NuGet 包。`DotNet.Bundler` 只是便利元包，实际打包代码位于以下各层。
+
+## 包结构
+
+| 包 | 职责 |
+| --- | --- |
+| `DotNet.Bundler.Abstractions` | 公共请求、目标、结果、日志契约和后端接口 |
+| `DotNet.Bundler.Core` | 验证、规划、编排、工作目录和共享的内容寻址 ZIP 工具缓存 |
+| `DotNet.Bundler.Nsis` | 独立 NSIS API、NSIS 配置、脚本生成、语言和内置 `makensis` 工具链 |
+| `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
+| `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
+
+后续实现 WiX/MSI 时再增加 `DotNet.Bundler.Wix`，当前不会发布没有实现的空占位包。
 
 `DotNet.Bundler.Nsis` 将固定版本的 NSIS 3.12 便携压缩包作为嵌入资源携带。使用者无需安装 NSIS，也不需要在线下载工具。首次使用会校验 SHA-256，并解压到共享的 `%LOCALAPPDATA%\DotNetBundler\tools` 缓存；同一台机器上的项目会复用按内容寻址的工具目录。
 
-MSBuild Task 及其直接加载的 Core/NSIS 程序集都提供 `netstandard2.0` 资产。打包决策和后端调度直接在 MSBuild 进程内完成，包不会再启动额外的 .NET CLI 驱动。NSIS 编译仍会启动包内的 `makensis.exe`，因为它本身就是安装程序编译器。
+MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `netstandard2.0` 资产。打包决策和后端调度直接在 MSBuild 进程内完成，包不会再启动额外的 .NET CLI 驱动。NSIS 编译仍会启动包内的 `makensis.exe`，因为它本身就是安装程序编译器。
 
 ## 使用配置
 
@@ -52,8 +64,7 @@ dotnet publish -c Release
 ```
 
 ```csharp
-using Bundler.Core.Configuration;
-using Bundler.Core.Models;
+using DotNet.Bundler;
 using DotNet.Bundler.Nsis;
 
 var request = new BundleConfiguration
@@ -167,7 +178,7 @@ powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Releas
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。
 
-Core 只包含与格式无关的配置、校验、规划和编排。NSIS 项目包含公共 API、NSIS 专属配置、模板、工具解析、进程执行和后端。MSBuild 与开发用 CLI 都只是这些包的适配层，不实现 NSIS 打包逻辑。
+Abstractions 保存跨包稳定契约。Core 实现与格式无关的校验、规划、编排、工作目录生命周期和通用 ZIP 工具缓存。NSIS 项目包含公共后端 API、NSIS 专属配置、模板、进程执行和资源。MSBuild 与开发用 CLI 都只是这些包的适配层，不实现 NSIS 打包逻辑。
 
 ## 安全与许可证
 

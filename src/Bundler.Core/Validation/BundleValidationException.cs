@@ -1,4 +1,4 @@
-namespace Bundler.Core.Validation;
+namespace DotNet.Bundler.Core;
 
 public sealed class BundleValidationException : Exception
 {

@@ -1,8 +1,6 @@
-using Bundler.Core.Configuration;
-using Bundler.Core.Models;
-using Bundler.Core.Validation;
+using DotNet.Bundler;
 
-namespace Bundler.Core.Planning;
+namespace DotNet.Bundler.Core;
 
 public static class BundlePlanner
 {
