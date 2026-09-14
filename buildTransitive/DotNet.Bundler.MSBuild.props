@@ -28,5 +28,10 @@
     <BundlerNsisAllowDowngrades Condition="'$(BundlerNsisAllowDowngrades)' == ''">false</BundlerNsisAllowDowngrades>
     <BundlerNsisLegacyMsiProductCodes Condition="'$(BundlerNsisLegacyMsiProductCodes)' == ''"></BundlerNsisLegacyMsiProductCodes>
     <BundlerNsisLegacyMsiUpgradeCodes Condition="'$(BundlerNsisLegacyMsiUpgradeCodes)' == ''"></BundlerNsisLegacyMsiUpgradeCodes>
+    <BundlerWindowsSigningPfxFile Condition="'$(BundlerWindowsSigningPfxFile)' == ''"></BundlerWindowsSigningPfxFile>
+    <BundlerWindowsSigningPfxPasswordEnvironmentVariable Condition="'$(BundlerWindowsSigningPfxPasswordEnvironmentVariable)' == ''"></BundlerWindowsSigningPfxPasswordEnvironmentVariable>
+    <BundlerWindowsSigningCertificateThumbprint Condition="'$(BundlerWindowsSigningCertificateThumbprint)' == ''"></BundlerWindowsSigningCertificateThumbprint>
+    <BundlerWindowsSigningCertificateStoreLocation Condition="'$(BundlerWindowsSigningCertificateStoreLocation)' == ''">CurrentUser</BundlerWindowsSigningCertificateStoreLocation>
+    <BundlerWindowsSigningTimestampUrl Condition="'$(BundlerWindowsSigningTimestampUrl)' == ''"></BundlerWindowsSigningTimestampUrl>
   </PropertyGroup>
 </Project>

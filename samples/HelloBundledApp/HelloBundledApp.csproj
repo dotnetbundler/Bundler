@@ -9,6 +9,10 @@
     <HelloBundledAppAllowDowngrades Condition="'$(HelloBundledAppAllowDowngrades)' == ''">false</HelloBundledAppAllowDowngrades>
     <HelloBundledAppLegacyMsiProductCodes Condition="'$(HelloBundledAppLegacyMsiProductCodes)' == ''"></HelloBundledAppLegacyMsiProductCodes>
     <HelloBundledAppLegacyMsiUpgradeCodes Condition="'$(HelloBundledAppLegacyMsiUpgradeCodes)' == ''"></HelloBundledAppLegacyMsiUpgradeCodes>
+    <HelloBundledAppSigningPfxFile Condition="'$(HelloBundledAppSigningPfxFile)' == ''"></HelloBundledAppSigningPfxFile>
+    <HelloBundledAppSigningPfxPasswordEnvironmentVariable Condition="'$(HelloBundledAppSigningPfxPasswordEnvironmentVariable)' == ''"></HelloBundledAppSigningPfxPasswordEnvironmentVariable>
+    <HelloBundledAppSigningCertificateThumbprint Condition="'$(HelloBundledAppSigningCertificateThumbprint)' == ''"></HelloBundledAppSigningCertificateThumbprint>
+    <HelloBundledAppSigningTimestampUrl Condition="'$(HelloBundledAppSigningTimestampUrl)' == ''"></HelloBundledAppSigningTimestampUrl>
     <_HelloBundledAppToolsetArchive>$(MSBuildThisFileDirectory)..\..\third_party\nsis\nsis-toolset-3.12-r1.zip</_HelloBundledAppToolsetArchive>
     <_HelloBundledAppArtworkDirectory>$(BaseIntermediateOutputPath)sample-nsis-artwork\</_HelloBundledAppArtworkDirectory>
     <_HelloBundledAppArtworkRoot>$(_HelloBundledAppArtworkDirectory)common\Contrib\Graphics</_HelloBundledAppArtworkRoot>
@@ -35,12 +39,16 @@
     <BundlerNsisAllowDowngrades>$(HelloBundledAppAllowDowngrades)</BundlerNsisAllowDowngrades>
     <BundlerNsisLegacyMsiProductCodes>$(HelloBundledAppLegacyMsiProductCodes)</BundlerNsisLegacyMsiProductCodes>
     <BundlerNsisLegacyMsiUpgradeCodes>$(HelloBundledAppLegacyMsiUpgradeCodes)</BundlerNsisLegacyMsiUpgradeCodes>
+    <BundlerWindowsSigningPfxFile>$(HelloBundledAppSigningPfxFile)</BundlerWindowsSigningPfxFile>
+    <BundlerWindowsSigningPfxPasswordEnvironmentVariable>$(HelloBundledAppSigningPfxPasswordEnvironmentVariable)</BundlerWindowsSigningPfxPasswordEnvironmentVariable>
+    <BundlerWindowsSigningCertificateThumbprint>$(HelloBundledAppSigningCertificateThumbprint)</BundlerWindowsSigningCertificateThumbprint>
+    <BundlerWindowsSigningTimestampUrl>$(HelloBundledAppSigningTimestampUrl)</BundlerWindowsSigningTimestampUrl>
     <Version>1.0.0</Version>
     <ApplicationIcon>$(_HelloBundledAppArtworkRoot)\Icons\modern-install-colorful.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.16" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.17" PrivateAssets="all" />
     <BundlerIcon Include="$(_HelloBundledAppArtworkRoot)\Icons\modern-install-colorful.ico" />
     <BundlerResource Include="Assets\demo-resource.txt" TargetPath="演示资源\说明.txt" />
     <BundlerResource Include="Assets\demo.hello" TargetPath="demo.hello" />

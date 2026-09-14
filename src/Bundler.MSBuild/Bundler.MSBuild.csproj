@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
     <ProjectReference Include="..\Bundler.Nsis\Bundler.Nsis.csproj" />
+    <ProjectReference Include="..\Bundler.Signing.Windows\Bundler.Signing.Windows.csproj" />
     <PackageReference Include="Microsoft.Build.Utilities.Core"
                       Version="17.8.43"
                       PrivateAssets="all"
@@ -30,6 +31,7 @@
     <None Include="$(TargetDir)DotNet.Bundler.Abstractions.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.Core.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.Nsis.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
+    <None Include="$(TargetDir)DotNet.Bundler.Signing.Windows.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="..\..\buildTransitive\DotNet.Bundler.MSBuild.props" Pack="true" PackagePath="buildTransitive/" />
     <None Include="..\..\buildTransitive\DotNet.Bundler.MSBuild.targets" Pack="true" PackagePath="buildTransitive/" />
     <None Include="..\..\README.md" Pack="true" PackagePath="/" />

@@ -38,6 +38,8 @@ ${UnStrStr}
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_ID}"
 !define CAPABILITIES_KEY "Software\${PRODUCT_ID}\Capabilities"
 !define INSTALL_MARKER ".dotnet-bundler-${PRODUCT_ID}"
+!define SIGNED_UNINSTALLER "{{signed_uninstaller}}"
+{{uninstaller_import_define}}
 {{installer_icon_directives}}
 {{installer_hooks_include}}
 
@@ -69,6 +71,8 @@ Var LegacyMsiProductCode
 Name "${PRODUCT_NAME}"
 BrandingText "${PRODUCT_PUBLISHER}"
 OutFile "${OUTPUT_FILE}"
+; 签名模式的第一次编译完成后，将生成的卸载器交给宿主签名。
+{{uninstaller_finalize_command}}
 InstallDir "placeholder\${INSTALL_FOLDER}"
 
 !if "${INSTALL_MODE}" == "currentUser"
@@ -506,7 +510,12 @@ Section "Install" MainSection
   FileWrite $0 "${PRODUCT_ID}"
   FileClose $0
 
-  WriteUninstaller "$INSTDIR\Uninstall.exe"
+  ; 第二次编译直接封装已经签名的卸载器，避免安装后得到未签名文件。
+  !ifdef BUNDLER_IMPORT_SIGNED_UNINSTALLER
+    File "/oname=Uninstall.exe" "${SIGNED_UNINSTALLER}"
+  !else
+    WriteUninstaller "$INSTDIR\Uninstall.exe"
+  !endif
 
   ${If} $CreateStartMenuShortcut == 1
     CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
@@ -534,6 +543,8 @@ Section "Install" MainSection
   !endif
 SectionEnd
 
+; 导入签名卸载器时不再生成新的卸载段；卸载逻辑已包含在签名文件中。
+!ifndef BUNDLER_IMPORT_SIGNED_UNINSTALLER
 Section "Uninstall"
   !insertmacro SetInstallContext
   !ifmacrodef NSIS_HOOK_PREUNINSTALL
@@ -560,3 +571,4 @@ Section "Uninstall"
     !insertmacro NSIS_HOOK_POSTUNINSTALL
   !endif
 SectionEnd
+!endif

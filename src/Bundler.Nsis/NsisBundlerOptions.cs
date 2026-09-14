@@ -10,6 +10,7 @@ public sealed class NsisBundlerOptions
     public string? DataDirectory { get; init; }
     public string? TemplatePath { get; init; }
     public string? LanguageDirectory { get; init; }
+    public IBundleSigner? Signer { get; init; }
     public IBundleLogger? Logger { get; init; }
 
     internal string ResolveToolCacheDirectory()

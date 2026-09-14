@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using DotNet.Bundler;
 using DotNet.Bundler.Nsis;
+using DotNet.Bundler.Signing.Windows;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 
@@ -45,6 +46,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public bool NsisAllowDowngrades { get; set; }
     public string NsisLegacyMsiProductCodes { get; set; } = "";
     public string NsisLegacyMsiUpgradeCodes { get; set; } = "";
+    public string WindowsSigningPfxFile { get; set; } = "";
+    public string WindowsSigningPfxPasswordEnvironmentVariable { get; set; } = "";
+    public string WindowsSigningCertificateThumbprint { get; set; } = "";
+    public string WindowsSigningCertificateStoreLocation { get; set; } = "CurrentUser";
+    public string WindowsSigningTimestampUrl { get; set; } = "";
     public ITaskItem[] NsisLanguageFiles { get; set; } = Array.Empty<ITaskItem>();
     [Output] public ITaskItem[] Artifacts { get; private set; } = Array.Empty<ITaskItem>();
 
@@ -117,6 +123,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 CompilerPath = EmptyToNull(NsisCompilerPath),
                 DataDirectory = EmptyToNull(NsisDataDirectory),
                 TemplatePath = EmptyToNull(NsisTemplatePath),
+                Signer = CreateWindowsSigner(),
                 Logger = new MsBuildBundleLogger(Log)
             };
             var artifacts = new NsisBundler(nsisConfiguration, nsisOptions)
@@ -238,6 +245,55 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         }
 
         return result;
+    }
+
+    private IBundleSigner? CreateWindowsSigner()
+    {
+        var pfxFile = EmptyToNull(WindowsSigningPfxFile);
+        var thumbprint = EmptyToNull(WindowsSigningCertificateThumbprint);
+        if (pfxFile is null && thumbprint is null)
+        {
+            if (!string.IsNullOrWhiteSpace(WindowsSigningPfxPasswordEnvironmentVariable) ||
+                !string.IsNullOrWhiteSpace(WindowsSigningTimestampUrl))
+            {
+                throw new ArgumentException(
+                    "A signing PFX file or certificate thumbprint is required when Windows signing options are set.");
+            }
+            return null;
+        }
+        if (pfxFile is not null && thumbprint is not null)
+        {
+            throw new ArgumentException(
+                "BundlerWindowsSigningPfxFile and BundlerWindowsSigningCertificateThumbprint cannot both be set.");
+        }
+        if (!Enum.TryParse(
+                WindowsSigningCertificateStoreLocation,
+                true,
+                out System.Security.Cryptography.X509Certificates.StoreLocation storeLocation))
+        {
+            throw new ArgumentException(
+                "BundlerWindowsSigningCertificateStoreLocation must be CurrentUser or LocalMachine.");
+        }
+
+        string? password = null;
+        if (!string.IsNullOrWhiteSpace(WindowsSigningPfxPasswordEnvironmentVariable))
+        {
+            password = Environment.GetEnvironmentVariable(WindowsSigningPfxPasswordEnvironmentVariable);
+            if (password is null)
+            {
+                throw new InvalidOperationException(
+                    $"Signing password environment variable '{WindowsSigningPfxPasswordEnvironmentVariable}' is not set.");
+            }
+        }
+
+        return new WindowsAuthenticodeSigner(new WindowsAuthenticodeSigningOptions
+        {
+            PfxFile = pfxFile is null ? null : Path.GetFullPath(pfxFile),
+            PfxPassword = password,
+            CertificateThumbprint = thumbprint,
+            CertificateStoreLocation = storeLocation,
+            TimestampUrl = EmptyToNull(WindowsSigningTimestampUrl)
+        });
     }
 
     private sealed class MsBuildBundleLogger(TaskLoggingHelper log) : IBundleLogger

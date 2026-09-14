@@ -42,7 +42,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `ne
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.16" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.17" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -60,7 +60,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.16" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.17" />
 ```
 
 ```csharp
@@ -123,6 +123,11 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 | `BundlerNsisAllowDowngrades` | 否 | `false` |
 | `BundlerNsisLegacyMsiProductCodes` | 否 | 分号分隔的 MSI ProductCode GUID |
 | `BundlerNsisLegacyMsiUpgradeCodes` | 否 | 分号分隔的 MSI UpgradeCode GUID |
+| `BundlerWindowsSigningPfxFile` | 否 | PFX/P12 代码签名证书路径 |
+| `BundlerWindowsSigningPfxPasswordEnvironmentVariable` | 否 | 保存 PFX 密码的环境变量名 |
+| `BundlerWindowsSigningCertificateThumbprint` | 否 | Windows `My` 证书存储区中的证书指纹 |
+| `BundlerWindowsSigningCertificateStoreLocation` | 否 | `CurrentUser`；也支持 `LocalMachine` |
+| `BundlerWindowsSigningTimestampUrl` | 否 | RFC 3161 时间戳服务 URL |
 
 多个格式使用分号分隔，例如 `<BundlerFormats>nsis;msi</BundlerFormats>`。Task 会解析完整请求，再由 Core 规划需要执行的打包步骤。目前只有 NSIS 后端已经实现，因此请求 MSI 会明确失败，不会被静默忽略。
 
@@ -193,9 +198,64 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 可选的 `BundlerNsisInstallerHooks` 文件可以把 `NSIS_HOOK_PREINSTALL`、`NSIS_HOOK_POSTINSTALL`、`NSIS_HOOK_PREUNINSTALL`、`NSIS_HOOK_POSTUNINSTALL` 中任意几项定义为 NSIS 宏，安装器会在相应生命周期边界调用。Hook 使用安装器当前权限执行，失败处理需要在宏中明确编写。
 
-若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。模板支持的变量包括 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`install_mode`、`target_architecture`、`allow_downgrades`、`legacy_msi_product_codes`、`legacy_msi_upgrade_codes`、`input_glob`、`output_file`、`estimated_size`、`plugin_directory`、`uninstall_payload`、`language_macros`、`language_files`、`display_language_selector`，写法为 `{{name}}`。
+Windows Authenticode 签名由独立的 `DotNet.Bundler.Signing.Windows` 包实现，不依赖 Windows SDK 或外部 `signtool.exe`。NSIS 会先导出并签名卸载器，再重新编译并签名最终安装器，因此两个可执行文件都带签名。PFX 和证书存储区指纹只能二选一；PFX 密码只通过环境变量读取，不应写进项目文件或命令行。生产发布强烈建议设置可信的 RFC 3161 时间戳服务，否则证书过期后签名无法继续证明签署时证书有效。
 
-这是面向 Windows 的可用基线，并不等于 Tauri 功能对等。签名和更新器命令行行为仍属于后续工作。
+```xml
+<PropertyGroup>
+  <BundlerWindowsSigningPfxFile>$(SigningCertificatePath)</BundlerWindowsSigningPfxFile>
+  <BundlerWindowsSigningPfxPasswordEnvironmentVariable>BUNDLER_SIGNING_PASSWORD</BundlerWindowsSigningPfxPasswordEnvironmentVariable>
+  <BundlerWindowsSigningTimestampUrl>https://你的时间戳服务</BundlerWindowsSigningTimestampUrl>
+</PropertyGroup>
+```
+
+### 本地自签名测试
+
+下面的命令会在当前用户的 `My` 证书存储区创建一个有效期一天的一次性代码签名证书，用它构建 `HelloBundledApp`，并检查安装器和安装后的卸载器。它只用于验证签名流程；自签名证书没有受信任 CA 的证书链，因此 `Get-AuthenticodeSignature` 通常会报告 `UnknownError` 或“不受信任的根证书”，也不会让真实用户看到可信发布者。
+
+```powershell
+# 在仓库根目录创建一次性测试证书。
+$certificate = New-SelfSignedCertificate `
+  -Type CodeSigningCert `
+  -Subject "CN=Hello Bundled App Test Publisher" `
+  -CertStoreLocation "Cert:\CurrentUser\My" `
+  -NotAfter ([DateTime]::Now.AddDays(1))
+$thumbprint = $certificate.Thumbprint
+
+dotnet pack Bundler.slnx -c Release -o artifacts/packages
+dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release `
+  -p:HelloBundledAppSigningCertificateThumbprint=$thumbprint
+
+$installer = Resolve-Path `
+  "samples/HelloBundledApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe"
+$installerSignature = Get-AuthenticodeSignature -LiteralPath $installer
+$installerSignature | Select-Object Status, StatusMessage
+$installerSignature.SignerCertificate | Select-Object Subject, Thumbprint
+
+if ($installerSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
+  throw "安装器没有使用预期证书签名。"
+}
+```
+
+运行安装器并完成安装后，继续验证卸载器；如果安装时修改了目录，请替换下面的路径：
+
+```powershell
+$uninstaller = "$env:LOCALAPPDATA\Programs\Hello Bundled App\Uninstall.exe"
+$uninstallerSignature = Get-AuthenticodeSignature -LiteralPath $uninstaller
+if ($uninstallerSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
+  throw "卸载器没有使用预期证书签名。"
+}
+
+# 验收完成后删除一次性测试证书。
+Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
+```
+
+若要观察 UAC 发布者页面，可在构建时同时传入 `-p:HelloBundledAppInstallMode=perMachine`。自签名证书仍会显示为未知或不受信任的发布者；正式发布必须换成受信任 CA 签发的代码签名证书，并配置 RFC 3161 时间戳。
+
+内置签名器直接调用 Windows 的 Authenticode API，因此启用它时构建宿主必须是 Windows；不启用签名时，Linux 和 macOS 上的 NSIS 构建不受影响。独立 API 使用者也可以直接引用 `DotNet.Bundler.Signing.Windows`，或为 `NsisBundlerOptions.Signer` 提供自己的 `IBundleSigner` 实现。
+
+若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。自定义模板必须保留签名两阶段编译所需的 `uninstaller_finalize_command`、`uninstaller_import_define` 和 `signed_uninstaller` 占位符。其他变量包括 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`install_mode`、`target_architecture`、`allow_downgrades`、`legacy_msi_product_codes`、`legacy_msi_upgrade_codes`、`input_glob`、`output_file`、`estimated_size`、`plugin_directory`、`uninstall_payload`、`language_macros`、`language_files`、`display_language_selector`，写法为 `{{name}}`。
+
+这是面向 Windows 的可用基线，并不等于 Tauri 功能对等。自动更新器命令行行为仍属于后续工作。
 
 ## 仓库命令
 
@@ -203,7 +263,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.16
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.17
 ```
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.16"
+    [string]$PackageVersion = "0.1.0-alpha.17"
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,6 +11,7 @@ $packageDirectory = Join-Path $repositoryRoot "artifacts\packages"
 $packagePath = Join-Path $packageDirectory "DotNet.Bundler.$PackageVersion.nupkg"
 $msbuildPackagePath = Join-Path $packageDirectory "DotNet.Bundler.MSBuild.$PackageVersion.nupkg"
 $nsisPackagePath = Join-Path $packageDirectory "DotNet.Bundler.Nsis.$PackageVersion.nupkg"
+$signingPackagePath = Join-Path $packageDirectory "DotNet.Bundler.Signing.Windows.$PackageVersion.nupkg"
 $fixtureProject = Join-Path $PSScriptRoot "Fixture\BundlerIntegrationFixture.csproj"
 $legacyMsiProject = Join-Path $PSScriptRoot "LegacyMsiFixture\LegacyMsiFixture.wixproj"
 $legacyMsiPath = Join-Path $PSScriptRoot "LegacyMsiFixture\bin\$Configuration\LegacyMsiFixture.msi"
@@ -23,6 +24,7 @@ $upgradeBundleOutput = Join-Path $integrationRoot "bundle-upgrade"
 $allowedDowngradeBundleOutput = Join-Path $integrationRoot "bundle-allowed-downgrade"
 $legacyMsiProductMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-product-migration"
 $legacyMsiUpgradeMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-upgrade-migration"
+$signedBundleOutput = Join-Path $integrationRoot "bundle-signed"
 $directMsBuildOutput = Join-Path $integrationRoot "bundle-direct-msbuild"
 $testIcon = Join-Path $integrationRoot "test-installer.ico"
 $testHeaderImage = Join-Path $integrationRoot "test-header.bmp"
@@ -50,6 +52,7 @@ $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "$product
 $startMenuDirectory = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\$productName"
 $startMenuShortcut = Join-Path $startMenuDirectory "$productName.lnk"
 $fixtureProcess = $null
+$testCertificateThumbprint = $null
 $hookMarkers = @("preinstall", "postinstall", "preuninstall", "postuninstall") | ForEach-Object { Join-Path $env:TEMP "DotNetBundler-$_.txt" }
 
 function Assert-True([bool]$Condition, [string]$Message) {
@@ -92,7 +95,8 @@ function Build-FixtureBundle(
     [string]$ApplicationVersion = "1.0.0",
     [bool]$AllowDowngrades = $false,
     [string]$LegacyMsiProductCodes = "",
-    [string]$LegacyMsiUpgradeCodes = ""
+    [string]$LegacyMsiUpgradeCodes = "",
+    [string]$SigningCertificateThumbprint = ""
 ) {
     Invoke-Native "dotnet" @(
         "publish", $fixtureProject, "-c", $Configuration, "--force",
@@ -108,6 +112,7 @@ function Build-FixtureBundle(
         "-p:BundlerNsisAllowDowngrades=$AllowDowngrades",
         "-p:BundlerNsisLegacyMsiProductCodes=$LegacyMsiProductCodes",
         "-p:BundlerNsisLegacyMsiUpgradeCodes=$LegacyMsiUpgradeCodes",
+        "-p:BundlerWindowsSigningCertificateThumbprint=$SigningCertificateThumbprint",
         "-p:RestorePackagesPath=$packageCache"
     )
 }
@@ -169,6 +174,7 @@ try {
     Assert-True (Test-Path -LiteralPath $packagePath) "Package not found: $packagePath"
     Assert-True (Test-Path -LiteralPath $msbuildPackagePath) "Package not found: $msbuildPackagePath"
     Assert-True (Test-Path -LiteralPath $nsisPackagePath) "Package not found: $nsisPackagePath"
+    Assert-True (Test-Path -LiteralPath $signingPackagePath) "Package not found: $signingPackagePath"
     $archive = [IO.Compression.ZipFile]::OpenRead($msbuildPackagePath)
     try {
         $entries = @($archive.Entries | ForEach-Object FullName)
@@ -178,6 +184,7 @@ try {
             "tasks/netstandard2.0/DotNet.Bundler.Abstractions.dll",
             "tasks/netstandard2.0/DotNet.Bundler.Core.dll",
             "tasks/netstandard2.0/DotNet.Bundler.Nsis.dll",
+            "tasks/netstandard2.0/DotNet.Bundler.Signing.Windows.dll",
             "tasks/netstandard2.0/DotNet.Bundler.MSBuild.dll",
             "licenses/nsis/COPYING",
             "licenses/nsis-plugin/LICENSE"
@@ -198,6 +205,14 @@ try {
     }
     finally {
         $nsisPackage.Dispose()
+    }
+    $signingPackage = [IO.Compression.ZipFile]::OpenRead($signingPackagePath)
+    try {
+        $entries = @($signingPackage.Entries | ForEach-Object FullName)
+        Assert-True ($entries -contains "lib/netstandard2.0/DotNet.Bundler.Signing.Windows.dll") "Windows signing API package is missing its netstandard2.0 assembly."
+    }
+    finally {
+        $signingPackage.Dispose()
     }
     foreach ($path in $hookMarkers) {
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
@@ -258,11 +273,21 @@ try {
     Build-FixtureBundle "currentUser" $legacyMsiProductMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false $legacyMsiProductCode ""
     Build-FixtureBundle "currentUser" $legacyMsiUpgradeMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false "" $legacyMsiUpgradeCode
 
+    # 使用当前用户证书存储区验证 MSBuild 参数映射以及安装器、卸载器的双重签名。
+    $testCertificate = New-SelfSignedCertificate `
+        -Type CodeSigningCert `
+        -Subject "CN=DotNet.Bundler disposable integration certificate" `
+        -CertStoreLocation "Cert:\CurrentUser\My" `
+        -NotAfter ([DateTime]::Now.AddDays(1))
+    $testCertificateThumbprint = $testCertificate.Thumbprint
+    Build-FixtureBundle "currentUser" $signedBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" $testCertificateThumbprint
+
     $installer = Join-Path $bundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $upgradeInstaller = Join-Path $upgradeBundleOutput "win-x64\nsis\$productName-1.1.0-setup.exe"
     $allowedDowngradeInstaller = Join-Path $allowedDowngradeBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $legacyMsiProductMigrationInstaller = Join-Path $legacyMsiProductMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $legacyMsiUpgradeMigrationInstaller = Join-Path $legacyMsiUpgradeMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
+    $signedInstaller = Join-Path $signedBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     Assert-True (Test-Path -LiteralPath $installer) "Installer was not created: $installer"
     Assert-True (Test-Path -LiteralPath (Join-Path $directMsBuildOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Direct MSBuild package installer was not created."
     Assert-True (Test-Path -LiteralPath (Join-Path $perMachineBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Per-machine installer was not created."
@@ -271,6 +296,12 @@ try {
     Assert-True (Test-Path -LiteralPath $allowedDowngradeInstaller) "Allowed-downgrade installer was not created."
     Assert-True (Test-Path -LiteralPath $legacyMsiProductMigrationInstaller) "ProductCode migration installer was not created."
     Assert-True (Test-Path -LiteralPath $legacyMsiUpgradeMigrationInstaller) "UpgradeCode migration installer was not created."
+    Assert-True ((Get-AuthenticodeSignature -LiteralPath $signedInstaller).SignerCertificate.Thumbprint -eq $testCertificateThumbprint) "The final installer does not contain the expected Authenticode certificate."
+    Invoke-WindowsExecutable $signedInstaller "/S /D=$installDirectory"
+    $signedUninstaller = Join-Path $installDirectory "Uninstall.exe"
+    Assert-True ((Get-AuthenticodeSignature -LiteralPath $signedUninstaller).SignerCertificate.Thumbprint -eq $testCertificateThumbprint) "The installed uninstaller does not contain the expected Authenticode certificate."
+    Invoke-WindowsExecutable $signedUninstaller "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Signed installer test cleanup did not finish."
 
     # 分别按 ProductCode 和 UpgradeCode 迁移同一个一次性 MSI，验证两种精确标识路径。
     Invoke-MsiExec "/i `"$legacyMsiPath`" /qn /norestart"
@@ -378,4 +409,7 @@ try {
 }
 finally {
     Remove-TestState
+    if ($null -ne $testCertificateThumbprint) {
+        Remove-Item -LiteralPath "Cert:\CurrentUser\My\$testCertificateThumbprint" -Force -ErrorAction SilentlyContinue
+    }
 }

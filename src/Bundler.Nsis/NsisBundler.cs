@@ -61,7 +61,13 @@ public sealed class NsisBundler
         var template = Path.GetFullPath(_options.TemplatePath ?? embedded.TemplatePath);
         var languages = Path.GetFullPath(_options.LanguageDirectory ?? embedded.LanguageDirectory);
 
-        var backend = new NsisBundleBackend(toolset, template, languages, embedded.PluginDirectory, _configuration);
+        var backend = new NsisBundleBackend(
+            toolset,
+            template,
+            languages,
+            embedded.PluginDirectory,
+            _configuration,
+            _options.Signer);
         return await new BundlePipeline([backend], _options.Logger).BuildAsync(bundle, cancellationToken);
     }
 

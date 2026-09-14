@@ -130,6 +130,56 @@ dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release `
 
 仓库的自动化集成测试使用一次性 MSI Fixture 完整验证这条路径；本示例只保留安全、明确的参数入口。
 
+## 安装器与卸载器签名
+
+示例默认不签名，因为仓库不能携带发布者私钥。准备代码签名 PFX 后，通过环境变量传入密码即可演示完整签名流程；密码不会进入项目文件或 MSBuild 命令行：
+
+```powershell
+$env:HELLO_BUNDLED_APP_SIGNING_PASSWORD = '你的-PFX-密码'
+dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release `
+  -p:HelloBundledAppSigningPfxFile='C:\证书\publisher.pfx' `
+  -p:HelloBundledAppSigningPfxPasswordEnvironmentVariable=HELLO_BUNDLED_APP_SIGNING_PASSWORD `
+  -p:HelloBundledAppSigningTimestampUrl='https://你的-RFC3161-时间戳服务'
+```
+
+也可以用 `HelloBundledAppSigningCertificateThumbprint` 指定当前用户 `My` 证书存储区中的证书。签名时会先签署卸载器，再把它封装进安装器，最后签署安装器；内置签名器无需安装 Windows SDK 或 `signtool.exe`，但必须在 Windows 主机运行。
+
+本地没有正式证书时，可以创建一次性自签名证书来验证签名链路：
+
+```powershell
+$certificate = New-SelfSignedCertificate `
+  -Type CodeSigningCert `
+  -Subject "CN=Hello Bundled App Test Publisher" `
+  -CertStoreLocation "Cert:\CurrentUser\My" `
+  -NotAfter ([DateTime]::Now.AddDays(1))
+$thumbprint = $certificate.Thumbprint
+
+dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release `
+  -p:HelloBundledAppSigningCertificateThumbprint=$thumbprint
+
+$installer = Resolve-Path `
+  "samples/HelloBundledApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe"
+$signature = Get-AuthenticodeSignature -LiteralPath $installer
+$signature | Select-Object Status, StatusMessage
+$signature.SignerCertificate | Select-Object Subject, Thumbprint
+
+if ($signature.SignerCertificate.Thumbprint -ne $thumbprint) {
+  throw "安装器没有使用预期证书签名。"
+}
+
+# 运行安装器后检查卸载器；如果修改过安装目录，请相应修改路径。
+$uninstaller = "$env:LOCALAPPDATA\Programs\Hello Bundled App\Uninstall.exe"
+$uninstallerSignature = Get-AuthenticodeSignature -LiteralPath $uninstaller
+if ($uninstallerSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
+  throw "卸载器没有使用预期证书签名。"
+}
+
+# 验收完成后删除一次性证书。
+Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
+```
+
+自签名证书只能证明签名代码和两阶段 NSIS 流程有效。它没有受信任的证书链，因此状态通常是 `UnknownError` 或“不受信任的根证书”，不能代替正式发布证书。
+
 ## 高级覆盖入口
 
 `BundlerToolCachePath`、`BundlerNsisToolsetArchivePath`、`BundlerNsisCompilerPath`、`BundlerNsisDataDirectory` 和 `BundlerNsisTemplate` 是工具链或模板的高级覆盖入口。示例默认不设置它们，因为默认路径本身要演示“NuGet 包自带多宿主 NSIS 工具且多个项目共享缓存”的正常行为。需要调试自定义工具链或模板时，可以通过同名 MSBuild 属性传入。

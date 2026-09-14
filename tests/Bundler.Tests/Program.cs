@@ -1,8 +1,10 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
 using DotNet.Bundler.Nsis;
+using DotNet.Bundler.Signing.Windows;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 var tests = new (string Name, Func<Task> Test)[]
 {
@@ -17,6 +19,7 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Rejects invalid legacy MSI identifiers", RejectsInvalidLegacyMsiIdentifiers),
     ("Rejects invalid associations and protocols", () => RunSync(RejectsInvalidAssociationsAndProtocols)),
     ("Builds through the standalone NSIS API", BuildsThroughStandaloneNsisApi),
+    ("Signs both NSIS installer artifacts", SignsBothNsisInstallerArtifacts),
     ("Writes a valid Windows uninstall command", () => RunSync(WritesValidWindowsUninstallCommand)),
     ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
     ("Uninstalls only packaged payload files", () => RunSync(UninstallsOnlyPackagedPayloadFiles)),
@@ -27,7 +30,8 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Renders NSIS metadata, icons, and resources", () => RunSync(RendersNsisMetadataIconsAndResources)),
     ("Rejects unknown template variables", () => RunSync(RejectsUnknownTemplateVariables)),
     ("Runs backends through the common pipeline", RunsBackendsThroughCommonPipeline),
-    ("Preflights every requested backend", PreflightsEveryRequestedBackend)
+    ("Preflights every requested backend", PreflightsEveryRequestedBackend),
+    ("Signs a PE file without the Windows SDK", SignsPeFileWithoutWindowsSdk)
 };
 
 var failed = 0;
@@ -216,6 +220,57 @@ static void LetsUsersChooseInstallDirectory()
         "Fixed and selectable install scopes should restore their previously selected install directories.");
 }
 
+static async Task SignsPeFileWithoutWindowsSdk()
+{
+    if (!OperatingSystem.IsWindows())
+    {
+        return;
+    }
+
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var executable = Environment.ProcessPath ?? throw new InvalidOperationException("No test process path is available.");
+        var target = Path.Combine(root, "signed-test.exe");
+        File.Copy(executable, target);
+
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(
+            "CN=DotNet.Bundler test certificate",
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
+            new OidCollection { new("1.3.6.1.5.5.7.3.3") },
+            critical: true));
+        using var certificate = request.CreateSelfSigned(
+            DateTimeOffset.Now.AddMinutes(-5),
+            DateTimeOffset.Now.AddDays(1));
+        const string password = "integration-only-password";
+        var pfx = Path.Combine(root, "test-signing.pfx");
+        File.WriteAllBytes(pfx, certificate.Export(X509ContentType.Pfx, password));
+
+        var signer = new WindowsAuthenticodeSigner(new WindowsAuthenticodeSigningOptions
+        {
+            PfxFile = pfx,
+            PfxPassword = password
+        });
+        await signer.SignAsync(new BundleSigningRequest(
+            target,
+            BundleSigningArtifactKind.Installer,
+            "Signing test"));
+
+        using var embedded = new X509Certificate2(X509Certificate.CreateFromSignedFile(target));
+        Assert(embedded.Thumbprint == certificate.Thumbprint,
+            "The signed PE file did not contain the expected test certificate.");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
 static void SelectsEveryBundledNsisHostCompiler()
 {
     Assert(NsisToolResolver.GetCompilerRelativePath(OSPlatform.Windows, Architecture.X64)
@@ -394,6 +449,75 @@ static async Task BuildsThroughStandaloneNsisApi()
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+}
+
+static async Task SignsBothNsisInstallerArtifacts()
+{
+    if (!OperatingSystem.IsWindows())
+    {
+        return;
+    }
+
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.NsisSigning.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "publish");
+    Directory.CreateDirectory(input);
+    await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp.exe"), "signed-nsis-test");
+    try
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(
+            "CN=DotNet.Bundler NSIS test certificate",
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
+            new OidCollection { new("1.3.6.1.5.5.7.3.3") },
+            critical: true));
+        using var certificate = request.CreateSelfSigned(
+            DateTimeOffset.Now.AddMinutes(-5),
+            DateTimeOffset.Now.AddDays(1));
+        const string password = "nsis-integration-password";
+        var pfx = Path.Combine(root, "test-signing.pfx");
+        File.WriteAllBytes(pfx, certificate.Export(X509ContentType.Pfx, password));
+        var signer = new RecordingSigner(new WindowsAuthenticodeSigner(new WindowsAuthenticodeSigningOptions
+        {
+            PfxFile = pfx,
+            PfxPassword = password
+        }));
+        var bundler = new NsisBundler(options: new NsisBundlerOptions
+        {
+            ToolCacheDirectory = Path.Combine(root, "shared-tools"),
+            Signer = signer
+        });
+        var artifacts = await bundler.BuildAsync(new BundleConfiguration
+        {
+            ProductName = "Signed NSIS App",
+            Identifier = "com.example.signed-nsis",
+            Version = "1.0.0",
+            OutputDirectory = Path.Combine(root, "artifacts"),
+            Targets =
+            [
+                new BundleTargetConfiguration
+                {
+                    RuntimeIdentifier = "win-x64",
+                    InputDirectory = input,
+                    MainExecutable = "ExampleApp.exe",
+                    Formats = [PackageFormat.Nsis]
+                }
+            ]
+        });
+
+        Assert(signer.ArtifactKinds.SequenceEqual(
+                new[] { BundleSigningArtifactKind.Uninstaller, BundleSigningArtifactKind.Installer }),
+            "NSIS signing must sign the exported uninstaller before the final installer.");
+        using var embedded = new X509Certificate2(X509Certificate.CreateFromSignedFile(artifacts[0].Path));
+        Assert(embedded.Thumbprint == certificate.Thumbprint,
+            "The final NSIS installer did not contain the expected signing certificate.");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
     }
 }
 
@@ -910,4 +1034,17 @@ file sealed class RecordingLogger : IBundleLogger
     public List<string> Messages { get; } = [];
 
     public void Log(BundleLogLevel level, string message) => Messages.Add($"{level}: {message}");
+}
+
+file sealed class RecordingSigner(IBundleSigner inner) : IBundleSigner
+{
+    public List<BundleSigningArtifactKind> ArtifactKinds { get; } = [];
+
+    public async Task SignAsync(
+        BundleSigningRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArtifactKinds.Add(request.ArtifactKind);
+        await inner.SignAsync(request, cancellationToken);
+    }
 }

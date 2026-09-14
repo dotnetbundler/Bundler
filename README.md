@@ -42,7 +42,7 @@ The MSBuild task and the Abstractions/Core/NSIS assemblies it loads all provide 
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.16" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.17" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -60,7 +60,7 @@ The installer is written to `artifacts/<rid>/nsis/` by default. Installer genera
 Applications and build tools that do not use MSBuild integration can reference `DotNet.Bundler.Nsis` directly:
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.16" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.17" />
 ```
 
 ```csharp
@@ -123,6 +123,11 @@ The current implementation needs no custom NSIS plugin. If a future feature cann
 | `BundlerNsisAllowDowngrades` | No | `false` |
 | `BundlerNsisLegacyMsiProductCodes` | No | Semicolon-separated MSI ProductCode GUIDs |
 | `BundlerNsisLegacyMsiUpgradeCodes` | No | Semicolon-separated MSI UpgradeCode GUIDs |
+| `BundlerWindowsSigningPfxFile` | No | PFX/P12 code-signing certificate path |
+| `BundlerWindowsSigningPfxPasswordEnvironmentVariable` | No | Name of the environment variable containing the PFX password |
+| `BundlerWindowsSigningCertificateThumbprint` | No | Certificate thumbprint in the Windows `My` store |
+| `BundlerWindowsSigningCertificateStoreLocation` | No | `CurrentUser`; `LocalMachine` is also supported |
+| `BundlerWindowsSigningTimestampUrl` | No | RFC 3161 timestamp-service URL |
 
 Multiple formats use a semicolon-separated value, for example `<BundlerFormats>nsis;msi</BundlerFormats>`. The task parses the complete request and the Core planner determines the required package steps. At present only the NSIS backend is implemented, so requesting MSI intentionally fails instead of silently skipping it.
 
@@ -193,9 +198,64 @@ Either property can contain multiple semicolon-separated GUIDs. Product codes id
 
 An optional `BundlerNsisInstallerHooks` file can define any of `NSIS_HOOK_PREINSTALL`, `NSIS_HOOK_POSTINSTALL`, `NSIS_HOOK_PREUNINSTALL`, and `NSIS_HOOK_POSTUNINSTALL` as NSIS macros. The installer calls each defined macro at the corresponding lifecycle boundary. Hook code runs with the installer's privileges and is responsible for handling failures explicitly.
 
-Set `BundlerNsisTemplate` to an absolute path to use a customized copy. Supported placeholders include `product_name`, `version`, `numeric_version`, `publisher`, `identifier`, `main_executable`, `process_name`, `install_folder`, `install_mode`, `target_architecture`, `allow_downgrades`, `legacy_msi_product_codes`, `legacy_msi_upgrade_codes`, `input_glob`, `output_file`, `estimated_size`, `plugin_directory`, `uninstall_payload`, `language_macros`, `language_files`, and `display_language_selector`, each written as `{{name}}`.
+Windows Authenticode signing is implemented by the independent `DotNet.Bundler.Signing.Windows` package and does not require the Windows SDK or an external `signtool.exe`. NSIS first exports and signs its uninstaller, recompiles with that signed file, and then signs the final installer. Choose either a PFX file or a certificate-store thumbprint, not both. PFX passwords are read only from a named environment variable and should not be stored in project files or command lines. Production releases should use a trusted RFC 3161 timestamp service so that a signature can remain valid after the certificate expires.
 
-This is a practical Windows baseline, not Tauri feature parity. Signing and updater command-line behavior remain planned work.
+```xml
+<PropertyGroup>
+  <BundlerWindowsSigningPfxFile>$(SigningCertificatePath)</BundlerWindowsSigningPfxFile>
+  <BundlerWindowsSigningPfxPasswordEnvironmentVariable>BUNDLER_SIGNING_PASSWORD</BundlerWindowsSigningPfxPasswordEnvironmentVariable>
+  <BundlerWindowsSigningTimestampUrl>https://your-timestamp-service</BundlerWindowsSigningTimestampUrl>
+</PropertyGroup>
+```
+
+### Local self-signed test
+
+The following commands create a one-day disposable code-signing certificate in the current user's `My` certificate store, build `HelloBundledApp` with it, and inspect both the installer and installed uninstaller. This verifies the signing pipeline only. A self-signed certificate has no trusted CA chain, so `Get-AuthenticodeSignature` will normally report `UnknownError` or an untrusted root and end users will not see a trusted publisher.
+
+```powershell
+# Run from the repository root.
+$certificate = New-SelfSignedCertificate `
+  -Type CodeSigningCert `
+  -Subject "CN=Hello Bundled App Test Publisher" `
+  -CertStoreLocation "Cert:\CurrentUser\My" `
+  -NotAfter ([DateTime]::Now.AddDays(1))
+$thumbprint = $certificate.Thumbprint
+
+dotnet pack Bundler.slnx -c Release -o artifacts/packages
+dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release `
+  -p:HelloBundledAppSigningCertificateThumbprint=$thumbprint
+
+$installer = Resolve-Path `
+  "samples/HelloBundledApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe"
+$installerSignature = Get-AuthenticodeSignature -LiteralPath $installer
+$installerSignature | Select-Object Status, StatusMessage
+$installerSignature.SignerCertificate | Select-Object Subject, Thumbprint
+
+if ($installerSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
+  throw "The installer was not signed with the expected certificate."
+}
+```
+
+After installing the application, verify the uninstaller. Replace the path if a different installation directory was selected:
+
+```powershell
+$uninstaller = "$env:LOCALAPPDATA\Programs\Hello Bundled App\Uninstall.exe"
+$uninstallerSignature = Get-AuthenticodeSignature -LiteralPath $uninstaller
+if ($uninstallerSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
+  throw "The uninstaller was not signed with the expected certificate."
+}
+
+# Remove the disposable certificate after testing.
+Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
+```
+
+To inspect the UAC publisher page, also pass `-p:HelloBundledAppInstallMode=perMachine` when building. A self-signed certificate will still appear unknown or untrusted. Production releases require a code-signing certificate issued by a trusted CA and should use an RFC 3161 timestamp.
+
+The built-in signer calls Windows Authenticode APIs, so signing with it requires a Windows build host. Unsigned NSIS builds on Linux and macOS are unaffected. Standalone API consumers can reference `DotNet.Bundler.Signing.Windows` directly or provide their own `IBundleSigner` through `NsisBundlerOptions.Signer`.
+
+Set `BundlerNsisTemplate` to an absolute path to use a customized copy. A custom template must retain the signing-pass placeholders `uninstaller_finalize_command`, `uninstaller_import_define`, and `signed_uninstaller`. Other supported placeholders include `product_name`, `version`, `numeric_version`, `publisher`, `identifier`, `main_executable`, `process_name`, `install_folder`, `install_mode`, `target_architecture`, `allow_downgrades`, `legacy_msi_product_codes`, `legacy_msi_upgrade_codes`, `input_glob`, `output_file`, `estimated_size`, `plugin_directory`, `uninstall_payload`, `language_macros`, `language_files`, and `display_language_selector`, each written as `{{name}}`.
+
+This is a practical Windows baseline, not Tauri feature parity. Updater command-line behavior remains planned work.
 
 ## Repository commands
 
@@ -203,7 +263,7 @@ This is a practical Windows baseline, not Tauri feature parity. Signing and upda
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.16
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.17
 ```
 
 The Windows integration test installs a dedicated fixture into a Chinese path containing spaces, validates payload/resources/metadata/registry/shortcuts/process shutdown, exercises both data-preserving and full-data removal uninstalls, and cleans its test state in `finally`.

@@ -55,6 +55,11 @@
       NsisAllowDowngrades="$(BundlerNsisAllowDowngrades)"
       NsisLegacyMsiProductCodes="$(BundlerNsisLegacyMsiProductCodes)"
       NsisLegacyMsiUpgradeCodes="$(BundlerNsisLegacyMsiUpgradeCodes)"
+      WindowsSigningPfxFile="$(BundlerWindowsSigningPfxFile)"
+      WindowsSigningPfxPasswordEnvironmentVariable="$(BundlerWindowsSigningPfxPasswordEnvironmentVariable)"
+      WindowsSigningCertificateThumbprint="$(BundlerWindowsSigningCertificateThumbprint)"
+      WindowsSigningCertificateStoreLocation="$(BundlerWindowsSigningCertificateStoreLocation)"
+      WindowsSigningTimestampUrl="$(BundlerWindowsSigningTimestampUrl)"
       NsisLanguageFiles="@(BundlerNsisLanguageFile)">
       <Output TaskParameter="Artifacts" ItemName="BundlerArtifact" />
     </DotNet.Bundler.MSBuild.BundleDesktopApplication>

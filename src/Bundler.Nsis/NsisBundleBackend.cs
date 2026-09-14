@@ -9,7 +9,8 @@ internal sealed class NsisBundleBackend(
     string templatePath,
     string languageDirectory,
     string pluginDirectory,
-    NsisBundleConfiguration settings) : IBundleBackend
+    NsisBundleConfiguration settings,
+    IBundleSigner? signer) : IBundleBackend
 {
     public PackageFormat Format => PackageFormat.Nsis;
     public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
@@ -48,20 +49,39 @@ internal sealed class NsisBundleBackend(
         cancellationToken.ThrowIfCancellationRequested();
         var template = File.ReadAllText(fullTemplatePath);
         var localization = PrepareLanguages(settings, context.WorkDirectory);
-        File.WriteAllText(
-            scriptPath,
-            CreateScript(template, configuration, settings, item, installerPath, safeProductName, localization, pluginDirectory),
-            new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        if (signer is null)
+        {
+            WriteScript(UninstallerMode.Unsigned);
+            await CompileAsync();
+        }
+        else
+        {
+            var uninstallerPath = Path.Combine(context.WorkDirectory, "signed-uninstaller.exe");
+            WriteScript(new UninstallerMode(
+                CreateUninstallerFinalizeCommand(uninstallerPath),
+                string.Empty,
+                string.Empty));
+            await CompileAsync();
+            if (!File.Exists(uninstallerPath))
+            {
+                throw new InvalidOperationException("NSIS did not export the uninstaller for signing.");
+            }
 
-        context.Logger.Log(BundleLogLevel.Trace, $"Running NSIS compiler '{fullCompilerPath}'.");
-        await ProcessRunner.RunAsync(
-            fullCompilerPath,
-            ["-INPUTCHARSET", "UTF8", "-OUTPUTCHARSET", "UTF8", "-V2", scriptPath],
-            context.WorkDirectory,
-            cancellationToken,
-            fullDataDirectory is null
-                ? null
-                : new Dictionary<string, string> { ["NSISDIR"] = fullDataDirectory });
+            context.Logger.Log(BundleLogLevel.Information, "Signing the NSIS uninstaller.");
+            await signer.SignAsync(
+                new BundleSigningRequest(uninstallerPath, BundleSigningArtifactKind.Uninstaller, configuration.ProductName),
+                cancellationToken);
+
+            WriteScript(new UninstallerMode(
+                string.Empty,
+                "!define BUNDLER_IMPORT_SIGNED_UNINSTALLER",
+                Escape(uninstallerPath)));
+            await CompileAsync();
+            context.Logger.Log(BundleLogLevel.Information, "Signing the NSIS installer.");
+            await signer.SignAsync(
+                new BundleSigningRequest(installerPath, BundleSigningArtifactKind.Installer, configuration.ProductName),
+                cancellationToken);
+        }
 
         if (!File.Exists(installerPath))
         {
@@ -69,6 +89,33 @@ internal sealed class NsisBundleBackend(
         }
 
         return new BundleArtifact(Format, item.Target.RuntimeIdentifier, installerPath);
+
+        void WriteScript(UninstallerMode mode) => File.WriteAllText(
+            scriptPath,
+            CreateScript(
+                template,
+                configuration,
+                settings,
+                item,
+                installerPath,
+                safeProductName,
+                localization,
+                pluginDirectory,
+                mode),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+
+        async Task CompileAsync()
+        {
+            context.Logger.Log(BundleLogLevel.Trace, $"Running NSIS compiler '{fullCompilerPath}'.");
+            await ProcessRunner.RunAsync(
+                fullCompilerPath,
+                ["-INPUTCHARSET", "UTF8", "-OUTPUTCHARSET", "UTF8", "-V2", scriptPath],
+                context.WorkDirectory,
+                cancellationToken,
+                fullDataDirectory is null
+                    ? null
+                    : new Dictionary<string, string> { ["NSISDIR"] = fullDataDirectory });
+        }
     }
 
     internal static string CreateScript(
@@ -90,7 +137,8 @@ internal sealed class NsisBundleBackend(
                 "!insertmacro MUI_LANGUAGE \"English\"",
                 string.Empty,
                 string.Empty),
-            ".");
+            ".",
+            UninstallerMode.Unsigned);
     }
 
     private static string CreateScript(
@@ -101,7 +149,8 @@ internal sealed class NsisBundleBackend(
         string installerPath,
         string safeProductName,
         NsisLocalization localization,
-        string nsisPluginDirectory)
+        string nsisPluginDirectory,
+        UninstallerMode uninstallerMode)
     {
         var publisher = configuration.Publisher ?? configuration.ProductName;
         var description = configuration.Description ?? configuration.ProductName;
@@ -142,8 +191,25 @@ internal sealed class NsisBundleBackend(
             ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory, resources),
             ["language_macros"] = localization.LanguageMacros,
             ["language_files"] = localization.LanguageFiles,
-            ["display_language_selector"] = localization.DisplayLanguageSelector
+            ["display_language_selector"] = localization.DisplayLanguageSelector,
+            ["uninstaller_finalize_command"] = uninstallerMode.FinalizeCommand,
+            ["uninstaller_import_define"] = uninstallerMode.ImportDefine,
+            ["signed_uninstaller"] = uninstallerMode.SignedUninstallerPath
         });
+    }
+
+    private static string CreateUninstallerFinalizeCommand(string destinationPath)
+    {
+        if (destinationPath.Contains('\''))
+        {
+            throw new InvalidOperationException("The NSIS signing work directory cannot contain an apostrophe.");
+        }
+
+        var destination = Escape(destinationPath);
+        return System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+            System.Runtime.InteropServices.OSPlatform.Windows)
+            ? $"!uninstfinalize 'cmd.exe /D /C copy /Y \"%1\" \"{destination}\" >NUL'"
+            : $"!uninstfinalize '/bin/cp \"%1\" \"{destination}\"'";
     }
 
     private static string CreateVisualDirectives(
@@ -597,4 +663,12 @@ internal sealed class NsisBundleBackend(
         string DisplayLanguageSelector);
 
     private sealed record PayloadResource(string Source, string TargetPath);
+
+    private sealed record UninstallerMode(
+        string FinalizeCommand,
+        string ImportDefine,
+        string SignedUninstallerPath)
+    {
+        public static UninstallerMode Unsigned { get; } = new(string.Empty, string.Empty, string.Empty);
+    }
 }
