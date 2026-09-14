@@ -1,7 +1,12 @@
-# NSIS binary provenance
+# NsisToolset binary provenance
 
-- Version: 3.12
-- Download: https://sourceforge.net/projects/nsis/files/NSIS%203/3.12/nsis-3.12.zip/download
-- SHA-256: `56581F90DB321581C5381193D796FFFCF2D24B2F8FED2160A6C6A3BAA67F2C4F`
+- Toolset release: 3.12-r1
+- NSIS upstream version: 3.12
+- Project: [NsisToolset](https://github.com/dotnetbundler/NsisToolset)
+- Release: [v3.12-r1](https://github.com/dotnetbundler/NsisToolset/releases/tag/v3.12-r1)
+- Download: [nsis-toolset-3.12-r1.zip](https://github.com/dotnetbundler/NsisToolset/releases/download/v3.12-r1/nsis-toolset-3.12-r1.zip)
+- SHA-256: `41F15B7F7E3A0349185606EDE939C7B2E5B31FF76F0EB479143D6659EF1EDDBC`
 
-`COPYING` was extracted unchanged from `nsis-3.12/COPYING` in the archive.
+The release combines one common NSIS data directory with compilers for Windows,
+Linux x64/arm64, and macOS x64/arm64. `COPYING` was copied unchanged from the
+release archive's `common/COPYING` file.

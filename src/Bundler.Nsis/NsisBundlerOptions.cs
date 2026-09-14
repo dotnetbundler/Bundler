@@ -5,8 +5,9 @@ using DotNet.Bundler;
 public sealed class NsisBundlerOptions
 {
     public string? ToolCacheDirectory { get; init; }
-    public string? ToolArchivePath { get; init; }
+    public string? ToolsetArchivePath { get; init; }
     public string? CompilerPath { get; init; }
+    public string? DataDirectory { get; init; }
     public string? TemplatePath { get; init; }
     public string? LanguageDirectory { get; init; }
     public IBundleLogger? Logger { get; init; }

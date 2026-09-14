@@ -15,6 +15,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.12" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.13" PrivateAssets="all" />
   </ItemGroup>
 </Project>

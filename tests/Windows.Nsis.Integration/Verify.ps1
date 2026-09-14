@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.12"
+    [string]$PackageVersion = "0.1.0-alpha.13"
 )
 
 $ErrorActionPreference = "Stop"
@@ -167,10 +167,10 @@ try {
     $apiInstaller = Join-Path $apiOutput "artifacts\win-x64\nsis\NSIS API Package Fixture-1.0.0-setup.exe"
     Assert-True (Test-Path -LiteralPath $apiInstaller) "Standalone NSIS API package did not create its installer."
 
-    $nsisArchivePath = Join-Path $repositoryRoot "third_party\nsis\nsis-3.12.zip"
+    $nsisArchivePath = Join-Path $repositoryRoot "third_party\nsis\nsis-toolset-3.12-r1.zip"
     $nsisArchive = [IO.Compression.ZipFile]::OpenRead($nsisArchivePath)
     try {
-        $iconEntry = $nsisArchive.GetEntry("nsis-3.12/Contrib/Graphics/Icons/modern-install.ico")
+        $iconEntry = $nsisArchive.GetEntry("common/Contrib/Graphics/Icons/modern-install.ico")
         Assert-True ($null -ne $iconEntry) "Bundled NSIS archive does not contain the integration-test icon."
         $inputStream = $iconEntry.Open()
         $outputStream = [IO.File]::Create($testIcon)
@@ -178,8 +178,8 @@ try {
         finally { $outputStream.Dispose(); $inputStream.Dispose() }
 
         foreach ($asset in @(
-            @{ Entry = "nsis-3.12/Contrib/Graphics/Header/nsis3-grey.bmp"; Path = $testHeaderImage },
-            @{ Entry = "nsis-3.12/Contrib/Graphics/Wizard/nsis3-grey.bmp"; Path = $testSidebarImage }
+            @{ Entry = "common/Contrib/Graphics/Header/nsis3-grey.bmp"; Path = $testHeaderImage },
+            @{ Entry = "common/Contrib/Graphics/Wizard/nsis3-grey.bmp"; Path = $testSidebarImage }
         )) {
             $entry = $nsisArchive.GetEntry($asset.Entry)
             Assert-True ($null -ne $entry) "Bundled NSIS archive does not contain $($asset.Entry)."

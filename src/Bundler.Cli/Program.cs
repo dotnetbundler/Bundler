@@ -92,8 +92,10 @@ static async Task<int> BundleAsync(IReadOnlyDictionary<string, string> options)
     var bundler = new NsisBundler(
         options: new NsisBundlerOptions
         {
-            ToolArchivePath = options.GetValueOrDefault("tool-archive"),
+            ToolsetArchivePath = options.GetValueOrDefault("toolset-archive"),
             ToolCacheDirectory = options.GetValueOrDefault("tool-cache"),
+            CompilerPath = options.GetValueOrDefault("compiler"),
+            DataDirectory = options.GetValueOrDefault("nsis-data-dir"),
             TemplatePath = options.GetValueOrDefault("template"),
             LanguageDirectory = options.GetValueOrDefault("language-dir")
         });

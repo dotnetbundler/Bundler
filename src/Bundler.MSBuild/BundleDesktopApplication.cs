@@ -26,7 +26,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     [Required] public string Formats { get; set; } = "";
     public ITaskItem[] Icons { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] Resources { get; set; } = Array.Empty<ITaskItem>();
-    public string NsisToolArchivePath { get; set; } = "";
+    public string NsisToolsetArchivePath { get; set; } = "";
+    public string NsisCompilerPath { get; set; } = "";
+    public string NsisDataDirectory { get; set; } = "";
     public string ToolCacheDirectory { get; set; } = "";
     public string NsisTemplatePath { get; set; } = "";
     public string NsisInstallMode { get; set; } = "currentUser";
@@ -90,8 +92,10 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             };
             var nsisOptions = new NsisBundlerOptions
             {
-                ToolArchivePath = EmptyToNull(NsisToolArchivePath),
+                ToolsetArchivePath = EmptyToNull(NsisToolsetArchivePath),
                 ToolCacheDirectory = EmptyToNull(ToolCacheDirectory),
+                CompilerPath = EmptyToNull(NsisCompilerPath),
+                DataDirectory = EmptyToNull(NsisDataDirectory),
                 TemplatePath = EmptyToNull(NsisTemplatePath),
                 Logger = new MsBuildBundleLogger(Log)
             };

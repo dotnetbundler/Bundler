@@ -14,8 +14,8 @@
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="..\..\third_party\nsis\nsis-3.12.zip"
-                      LogicalName="DotNet.Bundler.Nsis.Resources.nsis-3.12.zip" />
+    <EmbeddedResource Include="..\..\third_party\nsis\nsis-toolset-3.12-r1.zip"
+                      LogicalName="DotNet.Bundler.Nsis.Resources.nsis-toolset-3.12-r1.zip" />
     <EmbeddedResource Include="..\..\templates\nsis\installer.nsi"
                       LogicalName="DotNet.Bundler.Nsis.Resources.installer.nsi" />
     <EmbeddedResource Include="..\..\templates\nsis\languages\English.nsh"

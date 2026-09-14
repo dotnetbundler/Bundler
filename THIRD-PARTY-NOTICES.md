@@ -1,10 +1,11 @@
 # Third-party notices
 
-## NSIS 3.12
+## NsisToolset 3.12-r1 / NSIS 3.12
 
 - Project: Nullsoft Scriptable Install System
-- Source archive: https://sourceforge.net/projects/nsis/files/NSIS%203/3.12/nsis-3.12.zip/download
-- SHA-256: `56581F90DB321581C5381193D796FFFCF2D24B2F8FED2160A6C6A3BAA67F2C4F`
-- Upstream license file: `tools/nsis/COPYING` in the generated NuGet package
+- Toolset project: https://github.com/dotnetbundler/NsisToolset
+- Toolset release: https://github.com/dotnetbundler/NsisToolset/releases/tag/v3.12-r1
+- Release archive SHA-256: `41F15B7F7E3A0349185606EDE939C7B2E5B31FF76F0EB479143D6659EF1EDDBC`
+- Upstream license file: `licenses/nsis/COPYING` in the generated NuGet package
 
 NSIS and its bundled compression modules use multiple licenses. Refer to the included upstream `COPYING` file for the authoritative terms.

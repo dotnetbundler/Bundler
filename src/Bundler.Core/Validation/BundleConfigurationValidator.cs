@@ -64,9 +64,9 @@ public static class BundleConfigurationValidator
             Required(resource.Source, $"resources[{index}].source", issues);
             Required(resource.TargetPath, $"resources[{index}].targetPath", issues);
             if (!string.IsNullOrWhiteSpace(resource.TargetPath) &&
-                (Path.IsPathRooted(resource.TargetPath) ||
-                 resource.TargetPath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                     .Contains("..", StringComparer.Ordinal)))
+                (IsRootedInstallerPath(resource.TargetPath) ||
+                 resource.TargetPath.Split(new[] { '/', '\\' }, StringSplitOptions.None)
+                      .Contains("..", StringComparer.Ordinal)))
             {
                 issues.Add(new($"resources[{index}].targetPath", "Must stay inside the installation directory."));
             }
@@ -178,6 +178,11 @@ public static class BundleConfigurationValidator
             }
         }
     }
+
+    private static bool IsRootedInstallerPath(string path) =>
+        path.StartsWith("/", StringComparison.Ordinal) ||
+        path.StartsWith("\\", StringComparison.Ordinal) ||
+        (path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':');
 
     private static void ValidateOptionalFile(
         string? path,

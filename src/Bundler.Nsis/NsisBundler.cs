@@ -36,16 +36,20 @@ public sealed class NsisBundler
         ValidateConfiguration(_configuration);
         var cache = _options.ResolveToolCacheDirectory();
         var embedded = await NsisEmbeddedResources.MaterializeAsync(cache, cancellationToken);
-        var compiler = !string.IsNullOrWhiteSpace(_options.CompilerPath)
-            ? Path.GetFullPath(_options.CompilerPath!)
+        var toolset = !string.IsNullOrWhiteSpace(_options.CompilerPath)
+            ? new NsisToolset(
+                Path.GetFullPath(_options.CompilerPath!),
+                string.IsNullOrWhiteSpace(_options.DataDirectory)
+                    ? null
+                    : Path.GetFullPath(_options.DataDirectory!))
             : await NsisToolResolver.ResolveAsync(
-                _options.ToolArchivePath ?? embedded.ToolArchivePath,
+                _options.ToolsetArchivePath ?? embedded.ToolsetArchivePath,
                 cache,
                 cancellationToken);
         var template = Path.GetFullPath(_options.TemplatePath ?? embedded.TemplatePath);
         var languages = Path.GetFullPath(_options.LanguageDirectory ?? embedded.LanguageDirectory);
 
-        var backend = new NsisBundleBackend(compiler, template, languages, _configuration);
+        var backend = new NsisBundleBackend(toolset, template, languages, _configuration);
         return await new BundlePipeline([backend], _options.Logger).BuildAsync(bundle, cancellationToken);
     }
 

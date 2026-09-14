@@ -12,7 +12,9 @@
     <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''"></BundlerMainExecutable>
     <BundlerOutputPath Condition="'$(BundlerOutputPath)' == ''">$(MSBuildProjectDirectory)\artifacts</BundlerOutputPath>
     <BundlerToolCachePath Condition="'$(BundlerToolCachePath)' == ''"></BundlerToolCachePath>
-    <BundlerNsisToolArchivePath Condition="'$(BundlerNsisToolArchivePath)' == ''"></BundlerNsisToolArchivePath>
+    <BundlerNsisToolsetArchivePath Condition="'$(BundlerNsisToolsetArchivePath)' == ''"></BundlerNsisToolsetArchivePath>
+    <BundlerNsisCompilerPath Condition="'$(BundlerNsisCompilerPath)' == ''"></BundlerNsisCompilerPath>
+    <BundlerNsisDataDirectory Condition="'$(BundlerNsisDataDirectory)' == ''"></BundlerNsisDataDirectory>
     <BundlerNsisTemplate Condition="'$(BundlerNsisTemplate)' == ''"></BundlerNsisTemplate>
     <BundlerNsisInstallMode Condition="'$(BundlerNsisInstallMode)' == ''">currentUser</BundlerNsisInstallMode>
     <BundlerNsisInstallerIcon Condition="'$(BundlerNsisInstallerIcon)' == ''"></BundlerNsisInstallerIcon>

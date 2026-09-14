@@ -7,11 +7,21 @@ public sealed record ZipToolArchive(
     string Name,
     string Version,
     string Sha256,
-    string ExecutableRelativePath);
+    string ExecutableRelativePath,
+    IReadOnlyList<string>? RequiredRelativePaths = null);
+
+public sealed record ResolvedZipTool(string DirectoryPath, string ExecutablePath);
 
 public static class ZipToolCache
 {
-    public static Task<string> ResolveAsync(
+    public static async Task<string> ResolveAsync(
+        string archivePath,
+        string cacheDirectory,
+        ZipToolArchive archive,
+        CancellationToken cancellationToken = default)
+        => (await ResolveToolAsync(archivePath, cacheDirectory, archive, cancellationToken)).ExecutablePath;
+
+    public static Task<ResolvedZipTool> ResolveToolAsync(
         string archivePath,
         string cacheDirectory,
         ZipToolArchive archive,
@@ -34,32 +44,41 @@ public static class ZipToolCache
         var executablePath = Path.GetFullPath(Path.Combine(toolDirectory, archive.ExecutableRelativePath));
         if (!executablePath.StartsWith(
                 toolDirectory.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
-                StringComparison.OrdinalIgnoreCase))
+                PathComparison))
         {
             throw new ArgumentException("The tool executable must stay inside the extracted archive directory.", nameof(archive));
         }
-        if (File.Exists(executablePath))
+        var requiredPaths = (archive.RequiredRelativePaths ?? Array.Empty<string>())
+            .Append(archive.ExecutableRelativePath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        foreach (var relativePath in requiredPaths)
         {
-            return Task.FromResult(executablePath);
+            ValidateRelativePath(toolDirectory, relativePath, nameof(archive));
         }
 
+        if (HasRequiredFiles(toolDirectory, requiredPaths))
+        {
+            return Task.FromResult(new ResolvedZipTool(toolDirectory, executablePath));
+        }
         Directory.CreateDirectory(cacheDirectory);
         var stagingDirectory = Path.Combine(cacheDirectory, $".{archive.Name}-{archive.Version}-{Guid.NewGuid():N}");
         try
         {
             ZipFile.ExtractToDirectory(archivePath, stagingDirectory);
-            var stagedExecutable = Path.Combine(stagingDirectory, archive.ExecutableRelativePath);
-            if (!File.Exists(stagedExecutable))
+            var missingPath = requiredPaths.FirstOrDefault(relativePath =>
+                !File.Exists(Path.Combine(stagingDirectory, relativePath)));
+            if (missingPath is not null)
             {
                 throw new InvalidDataException(
-                    $"The {archive.Name} archive does not contain '{archive.ExecutableRelativePath}'.");
+                    $"The {archive.Name} archive does not contain '{missingPath}'.");
             }
 
             try
             {
                 Directory.Move(stagingDirectory, toolDirectory);
             }
-            catch (IOException) when (File.Exists(executablePath))
+            catch (IOException) when (HasRequiredFiles(toolDirectory, requiredPaths))
             {
                 // Another process populated the same verified cache entry first.
             }
@@ -72,10 +91,29 @@ public static class ZipToolCache
             }
         }
 
-        return File.Exists(executablePath)
-            ? Task.FromResult(executablePath)
+        return HasRequiredFiles(toolDirectory, requiredPaths)
+            ? Task.FromResult(new ResolvedZipTool(toolDirectory, executablePath))
             : throw new InvalidOperationException(
-                $"{archive.Name} extraction completed without producing '{archive.ExecutableRelativePath}'.");
+                $"{archive.Name} extraction completed without producing all required files.");
+    }
+
+    private static bool HasRequiredFiles(string toolDirectory, IEnumerable<string> relativePaths) =>
+        relativePaths.All(relativePath => File.Exists(Path.Combine(toolDirectory, relativePath)));
+
+    private static void ValidateRelativePath(string toolDirectory, string relativePath, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
+        {
+            throw new ArgumentException("Tool archive paths must be non-empty relative paths.", parameterName);
+        }
+
+        var fullPath = Path.GetFullPath(Path.Combine(toolDirectory, relativePath));
+        var prefix = toolDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+            Path.DirectorySeparatorChar;
+        if (!fullPath.StartsWith(prefix, PathComparison))
+        {
+            throw new ArgumentException("Tool archive paths must stay inside the extracted archive directory.", parameterName);
+        }
     }
 
     private static void VerifyArchive(string archivePath, string expectedHash)
@@ -97,4 +135,9 @@ public static class ZipToolCache
             throw new ArgumentException("Tool cache segments must be valid file names.", parameterName);
         }
     }
+
+    private static StringComparison PathComparison =>
+        Path.DirectorySeparatorChar == '\\'
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
 }

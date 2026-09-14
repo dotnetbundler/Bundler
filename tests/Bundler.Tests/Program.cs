@@ -1,6 +1,7 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
 using DotNet.Bundler.Nsis;
+using System.Runtime.InteropServices;
 
 var tests = new (string Name, Func<Task> Test)[]
 {
@@ -9,6 +10,7 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Adds app dependency before DMG", () => RunSync(AddsAppDependencyBeforeDmg)),
     ("Rejects executable paths outside input", () => RunSync(RejectsExecutablePathEscape)),
     ("Verifies and extracts bundled NSIS", VerifiesAndExtractsBundledNsis),
+    ("Selects every bundled NSIS host compiler", () => RunSync(SelectsEveryBundledNsisHostCompiler)),
     ("Builds through the standalone NSIS API", BuildsThroughStandaloneNsisApi),
     ("Writes a valid Windows uninstall command", () => RunSync(WritesValidWindowsUninstallCommand)),
     ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
@@ -93,18 +95,32 @@ static void RejectsExecutablePathEscape()
 
 static async Task VerifiesAndExtractsBundledNsis()
 {
-    if (!OperatingSystem.IsWindows())
-    {
-        return;
-    }
-
     var repositoryRoot = RepositoryRoot();
-    var archive = Path.Combine(repositoryRoot, "third_party", "nsis", "nsis-3.12.zip");
+    var archive = Path.Combine(repositoryRoot, "third_party", "nsis", "nsis-toolset-3.12-r1.zip");
     var cache = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
     try
     {
-        var compiler = await NsisToolResolver.ResolveAsync(archive, cache);
-        Assert(File.Exists(compiler), "The verified NSIS archive did not produce makensis.exe.");
+        using (var zip = System.IO.Compression.ZipFile.OpenRead(archive))
+        {
+            var entries = zip.Entries.Select(entry => entry.FullName).ToHashSet(StringComparer.Ordinal);
+            foreach (var required in new[]
+            {
+                "common/nsisconf.nsh",
+                "hosts/win-x86/makensis.exe",
+                "hosts/linux-x64/makensis",
+                "hosts/linux-arm64/makensis",
+                "hosts/osx-x64/makensis",
+                "hosts/osx-arm64/makensis"
+            })
+            {
+                Assert(entries.Contains(required), $"The NSIS toolset archive is missing '{required}'.");
+            }
+        }
+
+        var toolset = await NsisToolResolver.ResolveAsync(archive, cache);
+        Assert(File.Exists(toolset.CompilerPath), "The verified NSIS toolset did not produce the host compiler.");
+        Assert(toolset.DataDirectory is not null && Directory.Exists(toolset.DataDirectory),
+            "The verified NSIS toolset did not produce its common data directory.");
     }
     finally
     {
@@ -175,13 +191,27 @@ static void LetsUsersChooseInstallDirectory()
         "Fixed and selectable install scopes should restore their previously selected install directories.");
 }
 
+static void SelectsEveryBundledNsisHostCompiler()
+{
+    Assert(NsisToolResolver.GetCompilerRelativePath(OSPlatform.Windows, Architecture.X64)
+            .Replace('\\', '/') == "hosts/win-x86/makensis.exe",
+        "Windows hosts should use the portable x86 NSIS compiler.");
+    Assert(NsisToolResolver.GetCompilerRelativePath(OSPlatform.Linux, Architecture.X64)
+            .Replace('\\', '/') == "hosts/linux-x64/makensis",
+        "Linux x64 host compiler selection failed.");
+    Assert(NsisToolResolver.GetCompilerRelativePath(OSPlatform.Linux, Architecture.Arm64)
+            .Replace('\\', '/') == "hosts/linux-arm64/makensis",
+        "Linux arm64 host compiler selection failed.");
+    Assert(NsisToolResolver.GetCompilerRelativePath(OSPlatform.OSX, Architecture.X64)
+            .Replace('\\', '/') == "hosts/osx-x64/makensis",
+        "macOS x64 host compiler selection failed.");
+    Assert(NsisToolResolver.GetCompilerRelativePath(OSPlatform.OSX, Architecture.Arm64)
+            .Replace('\\', '/') == "hosts/osx-arm64/makensis",
+        "macOS arm64 host compiler selection failed.");
+}
+
 static async Task BuildsThroughStandaloneNsisApi()
 {
-    if (!OperatingSystem.IsWindows())
-    {
-        return;
-    }
-
     var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Api.Tests", Guid.NewGuid().ToString("N"));
     var input = Path.Combine(root, "publish");
     Directory.CreateDirectory(input);

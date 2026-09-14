@@ -21,11 +21,11 @@ internal static class NsisEmbeddedResources
                 : '_')
             .ToArray());
         var resourceDirectory = Path.Combine(cacheDirectory, "resources", version);
-        var archivePath = Path.Combine(resourceDirectory, "nsis-3.12.zip");
+        var archivePath = Path.Combine(resourceDirectory, "nsis-toolset-3.12-r1.zip");
         var templatePath = Path.Combine(resourceDirectory, "templates", "installer.nsi");
         var languageDirectory = Path.Combine(resourceDirectory, "templates", "languages");
 
-        await WriteVerifiedAsync(assembly, Prefix + "nsis-3.12.zip", archivePath, cancellationToken);
+        await WriteVerifiedAsync(assembly, Prefix + "nsis-toolset-3.12-r1.zip", archivePath, cancellationToken);
         await WriteVerifiedAsync(assembly, Prefix + "installer.nsi", templatePath, cancellationToken);
         await WriteVerifiedAsync(assembly, Prefix + "languages.English.nsh", Path.Combine(languageDirectory, "English.nsh"), cancellationToken);
         await WriteVerifiedAsync(assembly, Prefix + "languages.SimpChinese.nsh", Path.Combine(languageDirectory, "SimpChinese.nsh"), cancellationToken);
@@ -99,7 +99,7 @@ internal static class NsisEmbeddedResources
     }
 
     internal sealed record NsisResourcePaths(
-        string ToolArchivePath,
+        string ToolsetArchivePath,
         string TemplatePath,
         string LanguageDirectory);
 }

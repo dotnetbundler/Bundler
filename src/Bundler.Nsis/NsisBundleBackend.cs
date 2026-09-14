@@ -1,12 +1,11 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
-using System.Runtime.InteropServices;
 using System.Text;
 
 namespace DotNet.Bundler.Nsis;
 
 internal sealed class NsisBundleBackend(
-    string compilerPath,
+    NsisToolset toolset,
     string templatePath,
     string languageDirectory,
     NsisBundleConfiguration settings) : IBundleBackend
@@ -20,15 +19,17 @@ internal sealed class NsisBundleBackend(
     {
         var configuration = context.Configuration;
         var item = context.Item;
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            throw new PlatformNotSupportedException("NSIS packages can currently be built only on Windows hosts.");
-        }
-
-        var fullCompilerPath = Path.GetFullPath(compilerPath);
+        var fullCompilerPath = Path.GetFullPath(toolset.CompilerPath);
         if (!File.Exists(fullCompilerPath))
         {
-            throw new FileNotFoundException("makensis.exe was not found.", fullCompilerPath);
+            throw new FileNotFoundException("The NSIS compiler was not found.", fullCompilerPath);
+        }
+        var fullDataDirectory = string.IsNullOrWhiteSpace(toolset.DataDirectory)
+            ? null
+            : Path.GetFullPath(toolset.DataDirectory!);
+        if (fullDataDirectory is not null && !Directory.Exists(fullDataDirectory))
+        {
+            throw new DirectoryNotFoundException($"The NSIS data directory was not found: {fullDataDirectory}");
         }
 
         var fullTemplatePath = Path.GetFullPath(templatePath);
@@ -54,9 +55,12 @@ internal sealed class NsisBundleBackend(
         context.Logger.Log(BundleLogLevel.Trace, $"Running NSIS compiler '{fullCompilerPath}'.");
         await ProcessRunner.RunAsync(
             fullCompilerPath,
-            ["-INPUTCHARSET", "UTF8", "-OUTPUTCHARSET", "UTF8", "/V2", scriptPath],
+            ["-INPUTCHARSET", "UTF8", "-OUTPUTCHARSET", "UTF8", "-V2", scriptPath],
             context.WorkDirectory,
-            cancellationToken);
+            cancellationToken,
+            fullDataDirectory is null
+                ? null
+                : new Dictionary<string, string> { ["NSISDIR"] = fullDataDirectory });
 
         if (!File.Exists(installerPath))
         {
@@ -239,7 +243,7 @@ internal sealed class NsisBundleBackend(
 
             foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
             {
-                Add(file, Path.Combine(target, RelativePath(source, file)));
+                Add(file, CombineInstallerPath(target, RelativePath(source, file)));
             }
         }
 
@@ -265,15 +269,13 @@ internal sealed class NsisBundleBackend(
 
     private static string NormalizeTargetPath(string targetPath)
     {
-        if (string.IsNullOrWhiteSpace(targetPath) || Path.IsPathRooted(targetPath))
+        if (string.IsNullOrWhiteSpace(targetPath) || IsRootedInstallerPath(targetPath))
         {
             throw new InvalidOperationException($"Resource target path must be relative: '{targetPath}'.");
         }
 
-        var normalized = targetPath
-            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
-            .Trim(Path.DirectorySeparatorChar);
-        if (normalized.Split(Path.DirectorySeparatorChar).Any(component => component is "" or "." or ".."))
+        var normalized = ToInstallerPath(targetPath).Trim('\\');
+        if (normalized.Split('\\').Any(component => component is "" or "." or ".."))
         {
             throw new InvalidOperationException($"Resource target path must stay inside the installation directory: '{targetPath}'.");
         }
@@ -286,12 +288,12 @@ internal sealed class NsisBundleBackend(
         var lines = new List<string>();
         foreach (var resource in resources.OrderBy(resource => resource.TargetPath, StringComparer.OrdinalIgnoreCase))
         {
-            var targetDirectory = Path.GetDirectoryName(resource.TargetPath);
+            var targetDirectory = InstallerDirectoryName(resource.TargetPath);
             var destination = string.IsNullOrEmpty(targetDirectory)
                 ? "$INSTDIR"
-                : "$INSTDIR\\" + Escape(targetDirectory);
+                : "$INSTDIR\\" + Escape(targetDirectory!);
             lines.Add($"  SetOutPath \"{destination}\"");
-            lines.Add($"  File \"/oname={Escape(Path.GetFileName(resource.TargetPath))}\" \"{Escape(resource.Source)}\"");
+            lines.Add($"  File \"/oname={Escape(InstallerFileName(resource.TargetPath))}\" \"{Escape(resource.Source)}\"");
         }
 
         if (resources.Count > 0)
@@ -367,7 +369,7 @@ internal sealed class NsisBundleBackend(
 
         foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
         {
-            lines.Add($"  Delete /REBOOTOK \"$INSTDIR\\{Escape(RelativePath(root, file))}\"");
+            lines.Add($"  Delete /REBOOTOK \"$INSTDIR\\{Escape(ToInstallerPath(RelativePath(root, file)))}\"");
         }
 
         foreach (var resource in resources)
@@ -377,15 +379,15 @@ internal sealed class NsisBundleBackend(
 
         var directories = new HashSet<string>(
             Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories)
-                .Select(path => RelativePath(root, path)),
+                .Select(path => ToInstallerPath(RelativePath(root, path))),
             StringComparer.OrdinalIgnoreCase);
         foreach (var resource in resources)
         {
-            var directory = Path.GetDirectoryName(resource.TargetPath);
+            var directory = InstallerDirectoryName(resource.TargetPath);
             while (!string.IsNullOrEmpty(directory))
             {
-                directories.Add(directory);
-                directory = Path.GetDirectoryName(directory);
+                directories.Add(directory!);
+                directory = InstallerDirectoryName(directory!);
             }
         }
 
@@ -407,6 +409,30 @@ internal sealed class NsisBundleBackend(
         }
 
         return fullPath.Substring(prefix.Length).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+    }
+
+    private static string ToInstallerPath(string path) => path.Replace('/', '\\');
+
+    private static string CombineInstallerPath(string left, string right) =>
+        string.IsNullOrEmpty(left)
+            ? ToInstallerPath(right).TrimStart('\\')
+            : ToInstallerPath(left).TrimEnd('\\') + "\\" + ToInstallerPath(right).TrimStart('\\');
+
+    private static bool IsRootedInstallerPath(string path) =>
+        path.StartsWith("\\", StringComparison.Ordinal) ||
+        path.StartsWith("/", StringComparison.Ordinal) ||
+        (path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':');
+
+    private static string? InstallerDirectoryName(string path)
+    {
+        var separator = path.LastIndexOf('\\');
+        return separator < 0 ? null : path.Substring(0, separator);
+    }
+
+    private static string InstallerFileName(string path)
+    {
+        var separator = path.LastIndexOf('\\');
+        return separator < 0 ? path : path.Substring(separator + 1);
     }
 
     private static string Escape(string value) => value
