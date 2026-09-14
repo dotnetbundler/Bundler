@@ -42,7 +42,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `ne
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.13" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.14" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -60,7 +60,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.13" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.14" />
 ```
 
 ```csharp
@@ -120,6 +120,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 | `BundlerNsisInstallerHooks` | 否 | 可选的 `.nsh` 生命周期宏文件 |
 | `BundlerNsisLanguages` | 否 | `English` |
 | `BundlerNsisDisplayLanguageSelector` | 否 | `false` |
+| `BundlerNsisAllowDowngrades` | 否 | `false` |
 
 多个格式使用分号分隔，例如 `<BundlerFormats>nsis;msi</BundlerFormats>`。Task 会解析完整请求，再由 Core 规划需要执行的打包步骤。目前只有 NSIS 后端已经实现，因此请求 MSI 会明确失败，不会被静默忽略。
 
@@ -159,13 +160,15 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 默认模板提供当前用户安装、可选择并记住上次位置的安装目录、非本应用的非空目录警告、DPI 感知、压缩、可选的开始菜单与桌面快捷方式、运行程序检测和关闭、“应用和功能”卸载信息、可选删除应用数据、静默卸载以及完成页启动程序。未选择删除应用数据时，卸载只删除程序目录中属于构建载荷的路径：程序后来在新路径创建的文件会保留；如果创建或覆盖的是构建载荷中的同名路径，卸载时仍会删除。选择删除应用数据时，会递归删除整个程序安装目录，以及 `%APPDATA%\<identifier>` 和 `%LOCALAPPDATA%\<identifier>`。
 
+版本必须符合 SemVer 2.0，并且三个数字核心段都必须处于 Windows 版本资源允许的 `0-65535` 范围。安装器会在所选用户或计算机注册表上下文中检测现有安装，并通过包内使用 `NsisPlugin` 构建的 Native AOT 插件比较 `DisplayVersion`。交互安装允许用户选择先卸载或原位覆盖；静默同版本安装执行原位修复，静默升级会先卸载旧的构建载荷，同时保留应用数据。默认禁止降级，可通过 `BundlerNsisAllowDowngrades` 开启。
+
 `BundlerNsisInstallMode` 控制 Windows 安装范围。`currentUser` 不提权，卸载信息和快捷方式写入当前用户上下文；`perMachine` 请求管理员权限，安装到 Program Files，并使用所有用户 Shell 上下文和 HKLM 注册表；`both` 使用 NSIS 自带的 MultiUser 页面让用户选择。由于安装器必须具备切换到计算机范围的能力，`both` 启动时会请求最高可用权限。x64 和 arm64 包使用 64 位注册表视图。
 
 可选的 `BundlerNsisInstallerHooks` 文件可以把 `NSIS_HOOK_PREINSTALL`、`NSIS_HOOK_POSTINSTALL`、`NSIS_HOOK_PREUNINSTALL`、`NSIS_HOOK_POSTUNINSTALL` 中任意几项定义为 NSIS 宏，安装器会在相应生命周期边界调用。Hook 使用安装器当前权限执行，失败处理需要在宏中明确编写。
 
-若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。模板支持 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`input_glob`、`output_file`、`estimated_size`、`uninstall_payload`、`language_macros`、`language_files`、`display_language_selector`，写法为 `{{name}}`。
+若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。模板支持的变量包括 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`install_mode`、`target_architecture`、`allow_downgrades`、`input_glob`、`output_file`、`estimated_size`、`plugin_directory`、`uninstall_payload`、`language_macros`、`language_files`、`display_language_selector`，写法为 `{{name}}`。
 
-这是面向 Windows 的可用基线，并不等于 Tauri 功能对等。升级/降级策略、文件关联、深链接、签名和更新器命令行行为仍属于后续工作。
+这是面向 Windows 的可用基线，并不等于 Tauri 功能对等。旧 WiX 安装迁移、文件关联、深链接、签名和更新器命令行行为仍属于后续工作。
 
 ## 仓库命令
 
@@ -173,7 +176,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.13
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.14
 ```
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

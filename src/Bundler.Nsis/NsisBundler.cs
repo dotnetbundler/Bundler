@@ -24,6 +24,18 @@ public sealed class NsisBundler
         {
             throw new ArgumentNullException(nameof(bundle));
         }
+        if (!SemanticVersion.TryParse(bundle.Version, out var semanticVersion))
+        {
+            throw new ArgumentException(
+                $"NSIS package version '{bundle.Version}' must be a valid SemVer 2.0 version.",
+                nameof(bundle));
+        }
+        if (!semanticVersion!.TryGetWindowsNumericVersion(out _))
+        {
+            throw new ArgumentException(
+                $"NSIS package version '{bundle.Version}' has a numeric component outside the Windows range 0-65535.",
+                nameof(bundle));
+        }
         var unsupported = bundle.Targets
             .SelectMany(target => target.Formats)
             .FirstOrDefault(format => format != PackageFormat.Nsis);
@@ -49,7 +61,7 @@ public sealed class NsisBundler
         var template = Path.GetFullPath(_options.TemplatePath ?? embedded.TemplatePath);
         var languages = Path.GetFullPath(_options.LanguageDirectory ?? embedded.LanguageDirectory);
 
-        var backend = new NsisBundleBackend(toolset, template, languages, _configuration);
+        var backend = new NsisBundleBackend(toolset, template, languages, embedded.PluginDirectory, _configuration);
         return await new BundlePipeline([backend], _options.Logger).BuildAsync(bundle, cancellationToken);
     }
 

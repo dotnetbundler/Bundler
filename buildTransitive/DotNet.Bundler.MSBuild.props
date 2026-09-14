@@ -25,5 +25,6 @@
     <BundlerNsisInstallerHooks Condition="'$(BundlerNsisInstallerHooks)' == ''"></BundlerNsisInstallerHooks>
     <BundlerNsisLanguages Condition="'$(BundlerNsisLanguages)' == ''">English</BundlerNsisLanguages>
     <BundlerNsisDisplayLanguageSelector Condition="'$(BundlerNsisDisplayLanguageSelector)' == ''">false</BundlerNsisDisplayLanguageSelector>
+    <BundlerNsisAllowDowngrades Condition="'$(BundlerNsisAllowDowngrades)' == ''">false</BundlerNsisAllowDowngrades>
   </PropertyGroup>
 </Project>

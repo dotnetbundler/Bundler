@@ -3,6 +3,10 @@ ManifestDPIAware true
 ManifestDPIAwareness PerMonitorV2
 SetCompressor /SOLID lzma
 
+; 在解析任何插件命令之前，先注册随包提供的 Unicode 插件目录。
+; NSIS 插件 ABI 为 32 位，因此该插件编译为 win-x86。
+!addplugindir "{{plugin_directory}}"
+
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "nsDialogs.nsh"
@@ -25,6 +29,7 @@ ${UnStrStr}
 !define INSTALL_FOLDER "{{install_folder}}"
 !define INSTALL_MODE "{{install_mode}}"
 !define TARGET_ARCHITECTURE "{{target_architecture}}"
+!define ALLOW_DOWNGRADES "{{allow_downgrades}}"
 !define INPUT_GLOB "{{input_glob}}"
 !define OUTPUT_FILE "{{output_file}}"
 !define ESTIMATED_SIZE "{{estimated_size}}"
@@ -39,6 +44,20 @@ Var DesktopShortcutCheckbox
 Var StartMenuShortcutCheckbox
 Var DeleteAppData
 Var DeleteAppDataCheckbox
+Var InstalledVersion
+Var InstalledUninstaller
+Var InstalledDirectory
+Var VersionComparison
+Var ExistingInstallAction
+
+; DotNetBundlerNsis::SemverCompare 返回的比较结果。
+; 将这些名称放在状态变量附近，便于理解各个版本策略分支。
+!define VERSION_OLDER -1
+!define VERSION_SAME 0
+!define VERSION_NEWER 1
+!define VERSION_UNKNOWN 2
+!define EXISTING_ACTION_INSTALL_OVER 1
+!define EXISTING_ACTION_UNINSTALL_FIRST 2
 
 Name "${PRODUCT_NAME}"
 BrandingText "${PRODUCT_PUBLISHER}"
@@ -85,6 +104,9 @@ VIAddVersionKey "LegalCopyright" "${PRODUCT_COPYRIGHT}"
 !if "${INSTALL_MODE}" == "both"
   !insertmacro MULTIUSER_PAGE_INSTALLMODE
 !endif
+; 在所选 Shell 上下文中检测现有安装，并决定如何替换它。
+; 不存在旧版本时自动跳过此页面。
+Page custom ExistingInstallPage
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE ValidateInstallDirectory
 !insertmacro MUI_PAGE_DIRECTORY
 Page custom ShortcutOptionsPage ShortcutOptionsLeave
@@ -116,6 +138,7 @@ UninstPage custom un.AppDataOptionsPage un.AppDataOptionsLeave
 Function .onInit
   StrCpy $CreateDesktopShortcut 1
   StrCpy $CreateStartMenuShortcut 1
+  StrCpy $ExistingInstallAction 0
 {{display_language_selector}}
   !insertmacro SetInstallContext
   !if "${INSTALL_MODE}" == "both"
@@ -123,6 +146,13 @@ Function .onInit
   !else
     Call SetDefaultInstallDirectory
   !endif
+
+  ; 静默安装不会显示现有安装处理页面，因此需要在初始化阶段确定处理方式。
+  ; 交互式安装则在对应页面中确定处理方式。
+  Call DetectExistingInstall
+  ${If} ${Silent}
+    Call ApplySilentExistingInstallPolicy
+  ${EndIf}
 FunctionEnd
 
 Function un.onInit
@@ -152,6 +182,112 @@ Function SetDefaultInstallDirectory
     ReadRegStr $0 SHCTX "${UNINSTALL_KEY}" "InstallLocation"
     ${If} $0 != ""
       StrCpy $INSTDIR $0
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
+
+Function DetectExistingInstall
+  ; SHCTX 会根据所选安装范围映射到 HKCU 或 HKLM。
+  ; 必须存在 UninstallString，避免将残缺的注册表项误判为已安装。
+  ReadRegStr $InstalledUninstaller SHCTX "${UNINSTALL_KEY}" "UninstallString"
+  ReadRegStr $InstalledDirectory SHCTX "${UNINSTALL_KEY}" "InstallLocation"
+  ReadRegStr $InstalledVersion SHCTX "${UNINSTALL_KEY}" "DisplayVersion"
+  StrCpy $VersionComparison ${VERSION_UNKNOWN}
+  ${If} $InstalledUninstaller == ""
+    StrCpy $InstalledVersion ""
+    StrCpy $InstalledDirectory ""
+    Return
+  ${EndIf}
+
+  ; 打包时无法知道用户已安装的版本，因此在安装器运行时进行比较。
+  ; 随包提供的插件实现 SemVer 2.0，并支持预发布版本。
+  DotNetBundlerNsis::SemverCompare "${PRODUCT_VERSION}" "$InstalledVersion"
+  Pop $VersionComparison
+FunctionEnd
+
+Function ApplySilentExistingInstallPolicy
+  ${If} $InstalledUninstaller == ""
+    Return
+  ${EndIf}
+
+  ; 同版本静默安装会就地修复文件；静默升级会先删除旧版打包载荷，
+  ; 同时保留应用数据。
+  ${If} $VersionComparison == ${VERSION_SAME}
+    StrCpy $ExistingInstallAction ${EXISTING_ACTION_INSTALL_OVER}
+  ${ElseIf} $VersionComparison == ${VERSION_NEWER}
+    StrCpy $ExistingInstallAction ${EXISTING_ACTION_UNINSTALL_FIRST}
+  ${ElseIf} $VersionComparison == ${VERSION_OLDER}
+    !if "${ALLOW_DOWNGRADES}" == "true"
+      StrCpy $ExistingInstallAction ${EXISTING_ACTION_UNINSTALL_FIRST}
+    !else
+      ; 被禁止的静默降级必须直接返回失败，不能等待用户界面交互。
+      SetErrorLevel 2
+      Abort "$(SilentDowngradeBlocked)"
+    !endif
+  ${Else}
+    ; 缺少交互式确认时，无法安全处理无法识别的版本。
+    SetErrorLevel 2
+    Abort "$(SilentUnknownVersionBlocked)"
+  ${EndIf}
+FunctionEnd
+
+Function ExistingInstallPage
+  ; 安装模式页面可能改变 SHCTX，因此在显示交互式版本策略选项之前，
+  ; 必须重新检测现有安装。
+  Call DetectExistingInstall
+  ${If} $InstalledUninstaller == ""
+    Abort
+  ${EndIf}
+
+  ${If} $VersionComparison == ${VERSION_SAME}
+    MessageBox MB_ICONQUESTION|MB_YESNOCANCEL "$(SameVersionDetected)" IDYES existing_install_over IDNO existing_uninstall_first
+    Goto existing_cancel
+  ${ElseIf} $VersionComparison == ${VERSION_NEWER}
+    MessageBox MB_ICONQUESTION|MB_YESNOCANCEL "$(UpgradeDetected)" IDYES existing_uninstall_first IDNO existing_install_over
+    Goto existing_cancel
+  ${ElseIf} $VersionComparison == ${VERSION_OLDER}
+    !if "${ALLOW_DOWNGRADES}" == "true"
+      MessageBox MB_ICONEXCLAMATION|MB_YESNOCANCEL "$(DowngradeDetected)" IDYES existing_uninstall_first IDNO existing_install_over
+      Goto existing_cancel
+    !else
+      MessageBox MB_ICONSTOP|MB_OK "$(DowngradeBlocked)"
+      SetErrorLevel 2
+      Quit
+    !endif
+  ${Else}
+    MessageBox MB_ICONEXCLAMATION|MB_YESNOCANCEL "$(UnknownVersionDetected)" IDYES existing_uninstall_first IDNO existing_install_over
+    Goto existing_cancel
+  ${EndIf}
+
+  existing_install_over:
+    StrCpy $ExistingInstallAction ${EXISTING_ACTION_INSTALL_OVER}
+    Abort
+  existing_uninstall_first:
+    StrCpy $ExistingInstallAction ${EXISTING_ACTION_UNINSTALL_FIRST}
+    Abort
+  existing_cancel:
+    Quit
+FunctionEnd
+
+Function UninstallExistingInstallation
+  ${If} $ExistingInstallAction != ${EXISTING_ACTION_UNINSTALL_FIRST}
+    Return
+  ${EndIf}
+
+  ; `_?=` 使旧版卸载器在原安装目录中运行，而不是使用临时副本。
+  ; 默认的静默卸载会保留应用数据。
+  DetailPrint "$(RemovingExistingVersion)"
+  ClearErrors
+  ExecWait '$InstalledUninstaller /S _?=$InstalledDirectory' $0
+  ${If} ${Errors}
+  ${OrIf} $0 != 0
+  ${OrIf} ${FileExists} "$InstalledDirectory\${MAIN_EXECUTABLE}"
+    ${If} ${Silent}
+      SetErrorLevel 3
+      Quit
+    ${Else}
+      MessageBox MB_ICONSTOP|MB_OK "$(ExistingUninstallFailed)"
+      Abort
     ${EndIf}
   ${EndIf}
 FunctionEnd
@@ -253,6 +389,9 @@ FunctionEnd
 
 Section "Install" MainSection
   !insertmacro SetInstallContext
+  ; 在执行新版安装前 Hook 之前完成旧版本替换，确保 Hook 看到的是最终的
+  ; 安装目录状态，而不是旧版本遗留的文件。
+  Call UninstallExistingInstallation
   !ifmacrodef NSIS_HOOK_PREINSTALL
     !insertmacro NSIS_HOOK_PREINSTALL
   !endif

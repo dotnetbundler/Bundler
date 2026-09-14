@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.13"
+    [string]$PackageVersion = "0.1.0-alpha.14"
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,6 +17,8 @@ $packageCache = Join-Path $integrationRoot "packages"
 $bundleOutput = Join-Path $integrationRoot "bundle"
 $perMachineBundleOutput = Join-Path $integrationRoot "bundle-per-machine"
 $bothBundleOutput = Join-Path $integrationRoot "bundle-both"
+$upgradeBundleOutput = Join-Path $integrationRoot "bundle-upgrade"
+$allowedDowngradeBundleOutput = Join-Path $integrationRoot "bundle-allowed-downgrade"
 $directMsBuildOutput = Join-Path $integrationRoot "bundle-direct-msbuild"
 $testIcon = Join-Path $integrationRoot "test-installer.ico"
 $testHeaderImage = Join-Path $integrationRoot "test-header.bmp"
@@ -64,11 +66,14 @@ function Invoke-WindowsExecutable([string]$FilePath, [string]$ArgumentLine) {
 function Build-FixtureBundle(
     [string]$InstallMode,
     [string]$OutputPath,
-    [string]$PackageId = "DotNet.Bundler"
+    [string]$PackageId = "DotNet.Bundler",
+    [string]$ApplicationVersion = "1.0.0",
+    [bool]$AllowDowngrades = $false
 ) {
     Invoke-Native "dotnet" @(
         "publish", $fixtureProject, "-c", $Configuration, "--force",
         "-p:BundlerPackageVersion=$PackageVersion",
+        "-p:Version=$ApplicationVersion",
         "-p:BundlerIntegrationPackageId=$PackageId",
         "-p:BundlerPackageSource=$packageDirectory",
         "-p:BundlerIntegrationOutput=$OutputPath",
@@ -76,6 +81,7 @@ function Build-FixtureBundle(
         "-p:BundlerTestHeaderImage=$testHeaderImage",
         "-p:BundlerTestSidebarImage=$testSidebarImage",
         "-p:BundlerNsisInstallMode=$InstallMode",
+        "-p:BundlerNsisAllowDowngrades=$AllowDowngrades",
         "-p:RestorePackagesPath=$packageCache"
     )
 }
@@ -128,7 +134,9 @@ try {
             "tasks/netstandard2.0/DotNet.Bundler.Abstractions.dll",
             "tasks/netstandard2.0/DotNet.Bundler.Core.dll",
             "tasks/netstandard2.0/DotNet.Bundler.Nsis.dll",
-            "tasks/netstandard2.0/DotNet.Bundler.MSBuild.dll"
+            "tasks/netstandard2.0/DotNet.Bundler.MSBuild.dll",
+            "licenses/nsis/COPYING",
+            "licenses/nsis-plugin/LICENSE"
         )) {
             Assert-True ($entries -contains $requiredEntry) "NuGet package is missing $requiredEntry"
         }
@@ -142,6 +150,7 @@ try {
         $entries = @($nsisPackage.Entries | ForEach-Object FullName)
         Assert-True ($entries -contains "lib/netstandard2.0/DotNet.Bundler.Nsis.dll") "NSIS API package is missing its netstandard2.0 assembly."
         Assert-True ($entries -contains "licenses/nsis/COPYING") "NSIS API package is missing the upstream NSIS license."
+        Assert-True ($entries -contains "licenses/nsis-plugin/LICENSE") "NSIS API package is missing the NsisPlugin license."
     }
     finally {
         $nsisPackage.Dispose()
@@ -197,12 +206,18 @@ try {
     Build-FixtureBundle "currentUser" $directMsBuildOutput "DotNet.Bundler.MSBuild"
     Build-FixtureBundle "perMachine" $perMachineBundleOutput
     Build-FixtureBundle "both" $bothBundleOutput
+    Build-FixtureBundle "currentUser" $upgradeBundleOutput "DotNet.Bundler" "1.1.0"
+    Build-FixtureBundle "currentUser" $allowedDowngradeBundleOutput "DotNet.Bundler" "1.0.0" $true
 
     $installer = Join-Path $bundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
+    $upgradeInstaller = Join-Path $upgradeBundleOutput "win-x64\nsis\$productName-1.1.0-setup.exe"
+    $allowedDowngradeInstaller = Join-Path $allowedDowngradeBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     Assert-True (Test-Path -LiteralPath $installer) "Installer was not created: $installer"
     Assert-True (Test-Path -LiteralPath (Join-Path $directMsBuildOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Direct MSBuild package installer was not created."
     Assert-True (Test-Path -LiteralPath (Join-Path $perMachineBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Per-machine installer was not created."
     Assert-True (Test-Path -LiteralPath (Join-Path $bothBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Both-scope installer was not created."
+    Assert-True (Test-Path -LiteralPath $upgradeInstaller) "Upgrade installer was not created."
+    Assert-True (Test-Path -LiteralPath $allowedDowngradeInstaller) "Allowed-downgrade installer was not created."
 
     Invoke-WindowsExecutable $installer "/S /D=$installDirectory"
     $installedExecutable = Join-Path $installDirectory "BundlerIntegrationFixture.exe"
@@ -225,6 +240,25 @@ try {
     Invoke-WindowsExecutable $installer "/S /D=$installDirectory"
     $script:fixtureProcess.Refresh()
     Assert-True $script:fixtureProcess.HasExited "Reinstall did not close the running application."
+
+    # A silent upgrade removes the previous packaged payload but preserves runtime data.
+    $upgradePreservedData = Join-Path $installDirectory "upgrade-preserved.db"
+    Set-Content -LiteralPath $upgradePreservedData -Value "preserve" -Encoding UTF8
+    Invoke-WindowsExecutable $upgradeInstaller "/S /D=$installDirectory"
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Upgrade did not record the new semantic version."
+    Assert-True (Test-Path -LiteralPath $upgradePreservedData) "Upgrade removed runtime-created program data."
+
+    # Downgrades are disabled by default. Silent mode must fail without modifying the installation.
+    $downgradeProcess = Start-Process -FilePath $installer -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($downgradeProcess.ExitCode -ne 0) "A disabled silent downgrade unexpectedly succeeded."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Blocked downgrade modified the installed version."
+    Assert-True (Test-Path -LiteralPath $installedExecutable) "Blocked downgrade removed the installed application."
+
+    # An installer that explicitly allows downgrades follows the same uninstall-first
+    # replacement path and must continue preserving runtime-created application data.
+    Invoke-WindowsExecutable $allowedDowngradeInstaller "/S /D=$installDirectory"
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.0.0") "Allowed silent downgrade did not install the requested version."
+    Assert-True (Test-Path -LiteralPath $upgradePreservedData) "Allowed downgrade removed runtime-created program data."
 
     $runtimeData = Join-Path $installDirectory "runtime-created.db"
     Set-Content -LiteralPath $runtimeData -Value "preserve" -Encoding UTF8

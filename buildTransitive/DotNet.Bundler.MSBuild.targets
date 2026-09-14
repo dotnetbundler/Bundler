@@ -50,6 +50,7 @@
       NsisInstallerHooks="$(BundlerNsisInstallerHooks)"
       NsisLanguages="$(BundlerNsisLanguages)"
       NsisDisplayLanguageSelector="$(BundlerNsisDisplayLanguageSelector)"
+      NsisAllowDowngrades="$(BundlerNsisAllowDowngrades)"
       NsisLanguageFiles="@(BundlerNsisLanguageFile)">
       <Output TaskParameter="Artifacts" ItemName="BundlerArtifact" />
     </DotNet.Bundler.MSBuild.BundleDesktopApplication>

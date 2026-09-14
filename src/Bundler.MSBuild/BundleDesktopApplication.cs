@@ -40,6 +40,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string NsisInstallerHooks { get; set; } = "";
     public string NsisLanguages { get; set; } = "English";
     public bool NsisDisplayLanguageSelector { get; set; }
+    public bool NsisAllowDowngrades { get; set; }
     public ITaskItem[] NsisLanguageFiles { get; set; } = Array.Empty<ITaskItem>();
     [Output] public ITaskItem[] Artifacts { get; private set; } = Array.Empty<ITaskItem>();
 
@@ -88,6 +89,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 InstallerHooks = OptionalFullPath(NsisInstallerHooks),
                 Languages = ParseLanguages(),
                 DisplayLanguageSelector = NsisDisplayLanguageSelector,
+                AllowDowngrades = NsisAllowDowngrades,
                 CustomLanguageFiles = ParseCustomLanguageFiles()
             };
             var nsisOptions = new NsisBundlerOptions

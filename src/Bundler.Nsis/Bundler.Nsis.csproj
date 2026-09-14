@@ -22,7 +22,10 @@
                       LogicalName="DotNet.Bundler.Nsis.Resources.languages.English.nsh" />
     <EmbeddedResource Include="..\..\templates\nsis\languages\SimpChinese.nsh"
                       LogicalName="DotNet.Bundler.Nsis.Resources.languages.SimpChinese.nsh" />
+    <EmbeddedResource Include="..\..\third_party\nsis\plugins\x86-unicode\DotNetBundlerNsis.dll"
+                      LogicalName="DotNet.Bundler.Nsis.Resources.plugins.DotNetBundlerNsis.dll" />
     <None Include="..\..\third_party\nsis\COPYING" Pack="true" PackagePath="licenses/nsis/" />
+    <None Include="..\..\third_party\nsis-plugin\LICENSE" Pack="true" PackagePath="licenses/nsis-plugin/" />
     <None Include="..\..\README.md" Pack="true" PackagePath="/" />
     <None Include="..\..\README.zh-CN.md" Pack="true" PackagePath="/" />
     <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />

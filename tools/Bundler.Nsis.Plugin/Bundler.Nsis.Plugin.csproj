@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>DotNetBundlerNsis</AssemblyName>
+    <RootNamespace>DotNet.Bundler.Nsis.Plugin</RootNamespace>
+    <PublishAot>true</PublishAot>
+    <RuntimeIdentifier>win-x86</RuntimeIdentifier>
+    <OptimizationPreference>Size</OptimizationPreference>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <DebuggerSupport>false</DebuggerSupport>
+    <StackTraceSupport>false</StackTraceSupport>
+    <UseSizeOptimizedLinq>true</UseSizeOptimizedLinq>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <NsisPluginUseUnicode>true</NsisPluginUseUnicode>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\Bundler.Nsis\SemanticVersion.cs" Link="SemanticVersion.cs" />
+    <PackageReference Include="NsisPlugin" Version="1.0.2" />
+  </ItemGroup>
+</Project>

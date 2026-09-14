@@ -12,9 +12,14 @@
     <BundlerPublisher>Bundler Contributors</BundlerPublisher>
     <BundlerNsisLanguages>English;SimpChinese</BundlerNsisLanguages>
     <BundlerNsisDisplayLanguageSelector>true</BundlerNsisDisplayLanguageSelector>
+
+
+
+    <Version>1.0.0</Version>
+    <BundlerNsisAllowDowngrades>true</BundlerNsisAllowDowngrades>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.13" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.14" PrivateAssets="all" />
   </ItemGroup>
 </Project>

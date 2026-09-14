@@ -13,6 +13,7 @@ public sealed class NsisBundleConfiguration
     public IReadOnlyDictionary<string, string> CustomLanguageFiles { get; init; } =
         new Dictionary<string, string>();
     public bool DisplayLanguageSelector { get; init; }
+    public bool AllowDowngrades { get; init; }
 }
 
 public enum NsisInstallMode

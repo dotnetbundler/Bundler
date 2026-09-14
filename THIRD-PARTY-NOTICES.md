@@ -9,3 +9,12 @@
 - Upstream license file: `licenses/nsis/COPYING` in the generated NuGet package
 
 NSIS and its bundled compression modules use multiple licenses. Refer to the included upstream `COPYING` file for the authoritative terms.
+
+## NsisPlugin 1.0.2
+
+- Project: https://github.com/dotnetbundler/NsisPlugin
+- NuGet package: `NsisPlugin` 1.0.2
+- License: MIT
+- License file: `licenses/nsis-plugin/LICENSE` in the generated NuGet package
+
+The bundled `DotNetBundlerNsis.dll` Native AOT plug-in is built with NsisPlugin.

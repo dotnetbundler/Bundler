@@ -89,7 +89,11 @@ static async Task<int> BundleAsync(IReadOnlyDictionary<string, string> options)
         ]
     };
 
+    var allowDowngrades = options.TryGetValue("allow-downgrades", out var allowDowngradesValue)
+        ? bool.Parse(allowDowngradesValue)
+        : false;
     var bundler = new NsisBundler(
+        new NsisBundleConfiguration { AllowDowngrades = allowDowngrades },
         options: new NsisBundlerOptions
         {
             ToolsetArchivePath = options.GetValueOrDefault("toolset-archive"),

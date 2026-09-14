@@ -2,6 +2,7 @@ using DotNet.Bundler;
 using DotNet.Bundler.Core;
 using DotNet.Bundler.Nsis;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 
 var tests = new (string Name, Func<Task> Test)[]
 {
@@ -11,11 +12,14 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Rejects executable paths outside input", () => RunSync(RejectsExecutablePathEscape)),
     ("Verifies and extracts bundled NSIS", VerifiesAndExtractsBundledNsis),
     ("Selects every bundled NSIS host compiler", () => RunSync(SelectsEveryBundledNsisHostCompiler)),
+    ("Compares semantic versions for installer policy", () => RunSync(ComparesSemanticVersionsForInstallerPolicy)),
+    ("Rejects invalid NSIS package versions", RejectsInvalidNsisPackageVersions),
     ("Builds through the standalone NSIS API", BuildsThroughStandaloneNsisApi),
     ("Writes a valid Windows uninstall command", () => RunSync(WritesValidWindowsUninstallCommand)),
     ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
     ("Uninstalls only packaged payload files", () => RunSync(UninstallsOnlyPackagedPayloadFiles)),
     ("Provides interactive NSIS safety options", () => RunSync(ProvidesInteractiveNsisSafetyOptions)),
+    ("Renders existing-version policy", () => RunSync(RendersExistingVersionPolicy)),
     ("Renders NSIS install scopes", () => RunSync(RendersNsisInstallScopes)),
     ("Renders NSIS metadata, icons, and resources", () => RunSync(RendersNsisMetadataIconsAndResources)),
     ("Rejects unknown template variables", () => RunSync(RejectsUnknownTemplateVariables)),
@@ -115,7 +119,25 @@ static async Task VerifiesAndExtractsBundledNsis()
             {
                 Assert(entries.Contains(required), $"The NSIS toolset archive is missing '{required}'.");
             }
+
+            var copyingEntry = zip.GetEntry("common/COPYING") ??
+                throw new InvalidDataException("The NSIS toolset archive is missing common/COPYING.");
+            using var copyingStream = copyingEntry.Open();
+            var archiveLicenseHash = Convert.ToHexString(SHA256.HashData(copyingStream));
+            var packagedLicenseHash = Convert.ToHexString(SHA256.HashData(
+                File.ReadAllBytes(Path.Combine(repositoryRoot, "third_party", "nsis", "COPYING"))));
+            Assert(archiveLicenseHash == packagedLicenseHash,
+                "The separately packaged NSIS license must match common/COPYING in NsisToolset.");
         }
+
+
+        var pluginPath = Path.Combine(
+            repositoryRoot,
+            "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
+        Assert(File.Exists(pluginPath), "The bundled semantic-version NSIS plug-in is missing.");
+        Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))) ==
+               "3BBB61BF9A2B0E9C62DC4467485D3B9CB0F949AF1A56035A02C9A1F7441A1883",
+            "The bundled semantic-version NSIS plug-in checksum changed; rebuild and update its provenance.");
 
         var toolset = await NsisToolResolver.ResolveAsync(archive, cache);
         Assert(File.Exists(toolset.CompilerPath), "The verified NSIS toolset did not produce the host compiler.");
@@ -208,6 +230,51 @@ static void SelectsEveryBundledNsisHostCompiler()
     Assert(NsisToolResolver.GetCompilerRelativePath(OSPlatform.OSX, Architecture.Arm64)
             .Replace('\\', '/') == "hosts/osx-arm64/makensis",
         "macOS arm64 host compiler selection failed.");
+}
+
+static void ComparesSemanticVersionsForInstallerPolicy()
+{
+    static int Compare(string left, string right)
+    {
+        Assert(SemanticVersion.TryParse(left, out var leftVersion), $"Could not parse '{left}'.");
+        Assert(SemanticVersion.TryParse(right, out var rightVersion), $"Could not parse '{right}'.");
+        return Math.Sign(leftVersion!.CompareTo(rightVersion));
+    }
+
+    Assert(Compare("1.0.0", "1.0.0") == 0, "Equal releases should compare equal.");
+    Assert(Compare("1.0.0+build.2", "1.0.0+build.1") == 0,
+        "Build metadata must not affect precedence.");
+    Assert(Compare("1.0.0", "1.0.0-rc.1") > 0, "A release must be newer than its prerelease.");
+    Assert(Compare("1.0.0-beta.11", "1.0.0-beta.2") > 0,
+        "Numeric prerelease identifiers must compare numerically.");
+    Assert(Compare("2.0.0-alpha", "10.0.0-alpha") < 0,
+        "Core numeric identifiers must compare numerically.");
+    Assert(!SemanticVersion.TryParse("1.0", out _), "SemVer requires major, minor, and patch.");
+    Assert(!SemanticVersion.TryParse("1.0.0-01", out _),
+        "Numeric prerelease identifiers must reject leading zeroes.");
+    Assert(SemanticVersion.TryParse("65536.0.0", out var oversized) &&
+           !oversized!.TryGetWindowsNumericVersion(out _),
+        "Windows version resources must reject components above 65535.");
+}
+
+static Task RejectsInvalidNsisPackageVersions()
+{
+    foreach (var version in new[] { "1.0", "1.0.0-01", "65536.0.0" })
+    {
+        try
+        {
+            new NsisBundler().BuildAsync(new BundleConfiguration { Version = version })
+                .GetAwaiter().GetResult();
+            throw new InvalidOperationException($"Invalid NSIS version '{version}' was accepted.");
+        }
+        catch (ArgumentException exception)
+        {
+            Assert(exception.Message.Contains(version, StringComparison.Ordinal),
+                "The version validation error should identify the rejected value.");
+        }
+    }
+
+    return Task.CompletedTask;
 }
 
 static async Task BuildsThroughStandaloneNsisApi()
@@ -310,6 +377,53 @@ static void ProvidesInteractiveNsisSafetyOptions()
     Assert(template.Contains("UninstPage custom un.AppDataOptionsPage", StringComparison.Ordinal) &&
            template.Contains("$LOCALAPPDATA\\${PRODUCT_ID}", StringComparison.Ordinal),
         "The uninstaller should offer optional application-data deletion.");
+}
+
+static void RendersExistingVersionPolicy()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    File.WriteAllText(Path.Combine(root, "ExampleApp.exe"), "test");
+    try
+    {
+        var configuration = ValidConfiguration(new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "win-x64",
+            InputDirectory = root,
+            MainExecutable = "ExampleApp.exe",
+            Formats = [PackageFormat.Nsis]
+        });
+        var item = new BundlePlanItem(
+            new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+            PackageFormat.Nsis,
+            root,
+            "ExampleApp.exe",
+            "output",
+            false);
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+        var script = NsisBundleBackend.CreateScript(
+            template,
+            configuration,
+            new NsisBundleConfiguration { AllowDowngrades = true },
+            item,
+            "setup.exe",
+            "ExampleApp");
+
+        Assert(script.Contains("DotNetBundlerNsis::SemverCompare", StringComparison.Ordinal) &&
+               script.Contains("!define ALLOW_DOWNGRADES \"true\"", StringComparison.Ordinal),
+            "The script must use the bundled SemVer plug-in and render downgrade policy.");
+        Assert(script.Contains("Function DetectExistingInstall", StringComparison.Ordinal) &&
+               script.Contains("Function ApplySilentExistingInstallPolicy", StringComparison.Ordinal) &&
+               script.Contains("Function UninstallExistingInstallation", StringComparison.Ordinal),
+            "The script must detect and replace existing installations in interactive and silent modes.");
+        Assert(script.Contains("; 打包时无法知道用户已安装的版本", StringComparison.Ordinal) &&
+               script.Contains("; 静默安装不会显示现有安装处理页面", StringComparison.Ordinal),
+            "Non-trivial NSIS policy branches must retain Chinese explanatory comments.");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
 }
 
 static void RendersNsisInstallScopes()

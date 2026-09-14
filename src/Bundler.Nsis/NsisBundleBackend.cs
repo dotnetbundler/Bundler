@@ -8,6 +8,7 @@ internal sealed class NsisBundleBackend(
     NsisToolset toolset,
     string templatePath,
     string languageDirectory,
+    string pluginDirectory,
     NsisBundleConfiguration settings) : IBundleBackend
 {
     public PackageFormat Format => PackageFormat.Nsis;
@@ -49,7 +50,7 @@ internal sealed class NsisBundleBackend(
         var localization = PrepareLanguages(settings, context.WorkDirectory);
         File.WriteAllText(
             scriptPath,
-            CreateScript(template, configuration, settings, item, installerPath, safeProductName, localization),
+            CreateScript(template, configuration, settings, item, installerPath, safeProductName, localization, pluginDirectory),
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
         context.Logger.Log(BundleLogLevel.Trace, $"Running NSIS compiler '{fullCompilerPath}'.");
@@ -88,7 +89,8 @@ internal sealed class NsisBundleBackend(
             new NsisLocalization(
                 "!insertmacro MUI_LANGUAGE \"English\"",
                 string.Empty,
-                string.Empty));
+                string.Empty),
+            ".");
     }
 
     private static string CreateScript(
@@ -98,7 +100,8 @@ internal sealed class NsisBundleBackend(
         BundlePlanItem item,
         string installerPath,
         string safeProductName,
-        NsisLocalization localization)
+        NsisLocalization localization,
+        string nsisPluginDirectory)
     {
         var publisher = configuration.Publisher ?? configuration.ProductName;
         var description = configuration.Description ?? configuration.ProductName;
@@ -122,9 +125,11 @@ internal sealed class NsisBundleBackend(
             ["install_folder"] = Escape(safeProductName),
             ["install_mode"] = InstallModeName(settings.InstallMode),
             ["target_architecture"] = TargetArchitectureName(item.Target.Architecture),
+            ["allow_downgrades"] = settings.AllowDowngrades ? "true" : "false",
             ["input_glob"] = Escape(Path.Combine(item.InputDirectory, "*")),
             ["output_file"] = Escape(installerPath),
             ["estimated_size"] = EstimateSizeInKilobytes(item.InputDirectory).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["plugin_directory"] = Escape(Path.GetFullPath(nsisPluginDirectory)),
             ["installer_icon_directives"] = visualDirectives,
             ["license_page"] = CreateLicensePage(configuration.LicenseFile),
             ["homepage_registry"] = CreateHomepageRegistry(configuration.Homepage),
@@ -450,13 +455,13 @@ internal sealed class NsisBundleBackend(
 
     private static string NumericVersion(string version)
     {
-        var components = version.Split(new[] { '-', '+' }, 2)[0].Split('.').Take(4).ToList();
-        while (components.Count < 4)
+        if (!SemanticVersion.TryParse(version, out var semanticVersion) ||
+            !semanticVersion!.TryGetWindowsNumericVersion(out var numericVersion))
         {
-            components.Add("0");
+            throw new InvalidOperationException(
+                $"NSIS version '{version}' must be SemVer 2.0 with numeric components between 0 and 65535.");
         }
-
-        return string.Join(".", components);
+        return numericVersion;
     }
 
     private static long EstimateSizeInKilobytes(string directory)

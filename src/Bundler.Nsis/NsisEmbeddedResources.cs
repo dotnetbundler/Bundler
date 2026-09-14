@@ -24,13 +24,15 @@ internal static class NsisEmbeddedResources
         var archivePath = Path.Combine(resourceDirectory, "nsis-toolset-3.12-r1.zip");
         var templatePath = Path.Combine(resourceDirectory, "templates", "installer.nsi");
         var languageDirectory = Path.Combine(resourceDirectory, "templates", "languages");
+        var pluginDirectory = Path.Combine(resourceDirectory, "plugins", "x86-unicode");
 
         await WriteVerifiedAsync(assembly, Prefix + "nsis-toolset-3.12-r1.zip", archivePath, cancellationToken);
         await WriteVerifiedAsync(assembly, Prefix + "installer.nsi", templatePath, cancellationToken);
         await WriteVerifiedAsync(assembly, Prefix + "languages.English.nsh", Path.Combine(languageDirectory, "English.nsh"), cancellationToken);
         await WriteVerifiedAsync(assembly, Prefix + "languages.SimpChinese.nsh", Path.Combine(languageDirectory, "SimpChinese.nsh"), cancellationToken);
+        await WriteVerifiedAsync(assembly, Prefix + "plugins.DotNetBundlerNsis.dll", Path.Combine(pluginDirectory, "DotNetBundlerNsis.dll"), cancellationToken);
 
-        return new NsisResourcePaths(archivePath, templatePath, languageDirectory);
+        return new NsisResourcePaths(archivePath, templatePath, languageDirectory, pluginDirectory);
     }
 
     private static async Task WriteVerifiedAsync(
@@ -101,5 +103,6 @@ internal static class NsisEmbeddedResources
     internal sealed record NsisResourcePaths(
         string ToolsetArchivePath,
         string TemplatePath,
-        string LanguageDirectory);
+        string LanguageDirectory,
+        string PluginDirectory);
 }
