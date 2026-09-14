@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.14"
+    [string]$PackageVersion = "0.1.0-alpha.15"
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +12,8 @@ $packagePath = Join-Path $packageDirectory "DotNet.Bundler.$PackageVersion.nupkg
 $msbuildPackagePath = Join-Path $packageDirectory "DotNet.Bundler.MSBuild.$PackageVersion.nupkg"
 $nsisPackagePath = Join-Path $packageDirectory "DotNet.Bundler.Nsis.$PackageVersion.nupkg"
 $fixtureProject = Join-Path $PSScriptRoot "Fixture\BundlerIntegrationFixture.csproj"
+$legacyMsiProject = Join-Path $PSScriptRoot "LegacyMsiFixture\LegacyMsiFixture.wixproj"
+$legacyMsiPath = Join-Path $PSScriptRoot "LegacyMsiFixture\bin\$Configuration\LegacyMsiFixture.msi"
 $apiFixtureProject = Join-Path $repositoryRoot "tests\Nsis.Api.PackageFixture\Nsis.Api.PackageFixture.csproj"
 $packageCache = Join-Path $integrationRoot "packages"
 $bundleOutput = Join-Path $integrationRoot "bundle"
@@ -19,6 +21,8 @@ $perMachineBundleOutput = Join-Path $integrationRoot "bundle-per-machine"
 $bothBundleOutput = Join-Path $integrationRoot "bundle-both"
 $upgradeBundleOutput = Join-Path $integrationRoot "bundle-upgrade"
 $allowedDowngradeBundleOutput = Join-Path $integrationRoot "bundle-allowed-downgrade"
+$legacyMsiProductMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-product-migration"
+$legacyMsiUpgradeMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-upgrade-migration"
 $directMsBuildOutput = Join-Path $integrationRoot "bundle-direct-msbuild"
 $testIcon = Join-Path $integrationRoot "test-installer.ico"
 $testHeaderImage = Join-Path $integrationRoot "test-header.bmp"
@@ -28,6 +32,9 @@ $installDirectory = Join-Path $installRoot "Bundler Integration Fixture"
 $defaultInstallDirectory = Join-Path $env:LOCALAPPDATA "Programs\Bundler Integration Fixture"
 $identifier = "com.dotnetbundler.integrationfixture"
 $productName = "Bundler Integration Fixture"
+$legacyMsiProductCode = "{1D1A6B03-2BDA-4D18-B12C-574145D9CFA0}"
+$legacyMsiUpgradeCode = "{5AD89AE2-9984-4B5F-937F-0DF918FE7A22}"
+$legacyMsiInstallDirectory = Join-Path $env:LOCALAPPDATA "Bundler Legacy MSI Fixture"
 $registryPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$identifier"
 $roamingData = Join-Path $env:APPDATA $identifier
 $localData = Join-Path $env:LOCALAPPDATA $identifier
@@ -63,12 +70,21 @@ function Invoke-WindowsExecutable([string]$FilePath, [string]$ArgumentLine) {
     }
 }
 
+function Invoke-MsiExec([string]$ArgumentLine, [int[]]$AllowedExitCodes = @(0, 3010)) {
+    $process = Start-Process -FilePath "$env:WINDIR\System32\msiexec.exe" -ArgumentList $ArgumentLine -Wait -PassThru
+    if ($AllowedExitCodes -notcontains $process.ExitCode) {
+        throw "msiexec failed with exit code $($process.ExitCode): $ArgumentLine"
+    }
+}
+
 function Build-FixtureBundle(
     [string]$InstallMode,
     [string]$OutputPath,
     [string]$PackageId = "DotNet.Bundler",
     [string]$ApplicationVersion = "1.0.0",
-    [bool]$AllowDowngrades = $false
+    [bool]$AllowDowngrades = $false,
+    [string]$LegacyMsiProductCodes = "",
+    [string]$LegacyMsiUpgradeCodes = ""
 ) {
     Invoke-Native "dotnet" @(
         "publish", $fixtureProject, "-c", $Configuration, "--force",
@@ -82,6 +98,8 @@ function Build-FixtureBundle(
         "-p:BundlerTestSidebarImage=$testSidebarImage",
         "-p:BundlerNsisInstallMode=$InstallMode",
         "-p:BundlerNsisAllowDowngrades=$AllowDowngrades",
+        "-p:BundlerNsisLegacyMsiProductCodes=$LegacyMsiProductCodes",
+        "-p:BundlerNsisLegacyMsiUpgradeCodes=$LegacyMsiUpgradeCodes",
         "-p:RestorePackagesPath=$packageCache"
     )
 }
@@ -103,6 +121,7 @@ function Remove-TestState {
     if (Test-Path -LiteralPath $desktopShortcut) { Remove-Item -LiteralPath $desktopShortcut -Force }
     if (Test-Path -LiteralPath $startMenuShortcut) { Remove-Item -LiteralPath $startMenuShortcut -Force }
     if (Test-Path -LiteralPath $startMenuDirectory) { Remove-Item -LiteralPath $startMenuDirectory -Force }
+    Invoke-MsiExec "/x $legacyMsiProductCode /qn /norestart" @(0, 1605, 3010)
     foreach ($path in @($installDirectory, $installRoot)) {
         Assert-UnderIntegrationRoot $path
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
@@ -112,6 +131,12 @@ function Remove-TestState {
     }
     if (Test-Path -LiteralPath $defaultInstallDirectory) {
         Remove-Item -LiteralPath $defaultInstallDirectory -Recurse -Force
+    }
+    if ([IO.Path]::GetFileName($legacyMsiInstallDirectory) -ne "Bundler Legacy MSI Fixture") {
+        throw "Refusing to remove an unexpected legacy MSI path: $legacyMsiInstallDirectory"
+    }
+    if (Test-Path -LiteralPath $legacyMsiInstallDirectory) {
+        Remove-Item -LiteralPath $legacyMsiInstallDirectory -Recurse -Force
     }
     foreach ($path in @($roamingData, $localData)) {
         if ([IO.Path]::GetFileName($path) -ne $identifier) {
@@ -202,24 +227,44 @@ try {
         $nsisArchive.Dispose()
     }
 
+    Invoke-Native "dotnet" @("build", $legacyMsiProject, "-c", $Configuration)
+    Assert-True (Test-Path -LiteralPath $legacyMsiPath) "Legacy MSI fixture was not created."
+
     Build-FixtureBundle "currentUser" $bundleOutput
     Build-FixtureBundle "currentUser" $directMsBuildOutput "DotNet.Bundler.MSBuild"
     Build-FixtureBundle "perMachine" $perMachineBundleOutput
     Build-FixtureBundle "both" $bothBundleOutput
     Build-FixtureBundle "currentUser" $upgradeBundleOutput "DotNet.Bundler" "1.1.0"
     Build-FixtureBundle "currentUser" $allowedDowngradeBundleOutput "DotNet.Bundler" "1.0.0" $true
+    Build-FixtureBundle "currentUser" $legacyMsiProductMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false $legacyMsiProductCode ""
+    Build-FixtureBundle "currentUser" $legacyMsiUpgradeMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false "" $legacyMsiUpgradeCode
 
     $installer = Join-Path $bundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $upgradeInstaller = Join-Path $upgradeBundleOutput "win-x64\nsis\$productName-1.1.0-setup.exe"
     $allowedDowngradeInstaller = Join-Path $allowedDowngradeBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
+    $legacyMsiProductMigrationInstaller = Join-Path $legacyMsiProductMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
+    $legacyMsiUpgradeMigrationInstaller = Join-Path $legacyMsiUpgradeMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     Assert-True (Test-Path -LiteralPath $installer) "Installer was not created: $installer"
     Assert-True (Test-Path -LiteralPath (Join-Path $directMsBuildOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Direct MSBuild package installer was not created."
     Assert-True (Test-Path -LiteralPath (Join-Path $perMachineBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Per-machine installer was not created."
     Assert-True (Test-Path -LiteralPath (Join-Path $bothBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Both-scope installer was not created."
     Assert-True (Test-Path -LiteralPath $upgradeInstaller) "Upgrade installer was not created."
     Assert-True (Test-Path -LiteralPath $allowedDowngradeInstaller) "Allowed-downgrade installer was not created."
+    Assert-True (Test-Path -LiteralPath $legacyMsiProductMigrationInstaller) "ProductCode migration installer was not created."
+    Assert-True (Test-Path -LiteralPath $legacyMsiUpgradeMigrationInstaller) "UpgradeCode migration installer was not created."
 
-    Invoke-WindowsExecutable $installer "/S /D=$installDirectory"
+    # 分别按 ProductCode 和 UpgradeCode 迁移同一个一次性 MSI，验证两种精确标识路径。
+    Invoke-MsiExec "/i `"$legacyMsiPath`" /qn /norestart"
+    Assert-True (Test-Path -LiteralPath (Join-Path $legacyMsiInstallDirectory "legacy-payload.txt")) "Legacy MSI fixture was not installed."
+    Invoke-WindowsExecutable $legacyMsiProductMigrationInstaller "/S /D=$installDirectory"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $legacyMsiInstallDirectory "legacy-payload.txt"))) "ProductCode migration did not remove the legacy MSI payload."
+    Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "ProductCode migration test cleanup did not finish."
+
+    Invoke-MsiExec "/i `"$legacyMsiPath`" /qn /norestart"
+    Assert-True (Test-Path -LiteralPath (Join-Path $legacyMsiInstallDirectory "legacy-payload.txt")) "Legacy MSI fixture was not reinstalled."
+    Invoke-WindowsExecutable $legacyMsiUpgradeMigrationInstaller "/S /D=$installDirectory"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $legacyMsiInstallDirectory "legacy-payload.txt"))) "UpgradeCode migration did not remove the legacy MSI payload."
     $installedExecutable = Join-Path $installDirectory "BundlerIntegrationFixture.exe"
     $uninstaller = Join-Path $installDirectory "Uninstall.exe"
     Wait-For { Test-Path -LiteralPath $installedExecutable } "Installed executable is missing."
@@ -241,21 +286,20 @@ try {
     $script:fixtureProcess.Refresh()
     Assert-True $script:fixtureProcess.HasExited "Reinstall did not close the running application."
 
-    # A silent upgrade removes the previous packaged payload but preserves runtime data.
+    # 静默升级会删除旧版打包载荷，但保留运行时创建的数据。
     $upgradePreservedData = Join-Path $installDirectory "upgrade-preserved.db"
     Set-Content -LiteralPath $upgradePreservedData -Value "preserve" -Encoding UTF8
     Invoke-WindowsExecutable $upgradeInstaller "/S /D=$installDirectory"
     Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Upgrade did not record the new semantic version."
     Assert-True (Test-Path -LiteralPath $upgradePreservedData) "Upgrade removed runtime-created program data."
 
-    # Downgrades are disabled by default. Silent mode must fail without modifying the installation.
+    # 默认禁止降级；静默模式必须在不修改现有安装的情况下返回失败。
     $downgradeProcess = Start-Process -FilePath $installer -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
     Assert-True ($downgradeProcess.ExitCode -ne 0) "A disabled silent downgrade unexpectedly succeeded."
     Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Blocked downgrade modified the installed version."
     Assert-True (Test-Path -LiteralPath $installedExecutable) "Blocked downgrade removed the installed application."
 
-    # An installer that explicitly allows downgrades follows the same uninstall-first
-    # replacement path and must continue preserving runtime-created application data.
+    # 明确允许降级的安装器沿用先卸载后替换的路径，并继续保留运行时创建的应用数据。
     Invoke-WindowsExecutable $allowedDowngradeInstaller "/S /D=$installDirectory"
     Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.0.0") "Allowed silent downgrade did not install the requested version."
     Assert-True (Test-Path -LiteralPath $upgradePreservedData) "Allowed downgrade removed runtime-created program data."

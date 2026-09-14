@@ -1,8 +1,9 @@
 # Bundled NSIS plug-in
 
 This project builds the Unicode `win-x86` Native AOT plug-in used by the NSIS
-installer at runtime. It uses `NsisPlugin` 1.0.2 and links the same SemVer source
-used by `DotNet.Bundler.Nsis` tests.
+installer at runtime. It uses `NsisPlugin` 1.0.2, links the same SemVer source
+used by `DotNet.Bundler.Nsis` tests, and queries explicitly configured legacy
+MSI products through the native Windows Installer API.
 
 It is intentionally excluded from `Bundler.slnx`: normal library and MSBuild task
 builds retain the .NET 8 SDK baseline, while rebuilding the native plug-in requires
@@ -13,4 +14,5 @@ powershell -File tools/Bundler.Nsis.Plugin/Build.ps1
 ```
 
 Commit the regenerated `third_party/nsis/plugins/x86-unicode/DotNetBundlerNsis.dll`
-with any semantic-version implementation change and update its recorded checksum.
+with any semantic-version or MSI-query implementation change and update its
+recorded checksum.

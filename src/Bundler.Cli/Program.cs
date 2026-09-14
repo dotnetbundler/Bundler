@@ -92,8 +92,17 @@ static async Task<int> BundleAsync(IReadOnlyDictionary<string, string> options)
     var allowDowngrades = options.TryGetValue("allow-downgrades", out var allowDowngradesValue)
         ? bool.Parse(allowDowngradesValue)
         : false;
+    static IReadOnlyList<string> ListOption(IReadOnlyDictionary<string, string> values, string name) =>
+        values.TryGetValue(name, out var value)
+            ? value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : Array.Empty<string>();
     var bundler = new NsisBundler(
-        new NsisBundleConfiguration { AllowDowngrades = allowDowngrades },
+        new NsisBundleConfiguration
+        {
+            AllowDowngrades = allowDowngrades,
+            LegacyMsiProductCodes = ListOption(options, "legacy-msi-product-codes"),
+            LegacyMsiUpgradeCodes = ListOption(options, "legacy-msi-upgrade-codes")
+        },
         options: new NsisBundlerOptions
         {
             ToolsetArchivePath = options.GetValueOrDefault("toolset-archive"),

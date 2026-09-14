@@ -42,7 +42,7 @@ The MSBuild task and the Abstractions/Core/NSIS assemblies it loads all provide 
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.14" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.15" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -60,7 +60,7 @@ The installer is written to `artifacts/<rid>/nsis/` by default. Installer genera
 Applications and build tools that do not use MSBuild integration can reference `DotNet.Bundler.Nsis` directly:
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.14" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.15" />
 ```
 
 ```csharp
@@ -121,6 +121,8 @@ The current implementation needs no custom NSIS plugin. If a future feature cann
 | `BundlerNsisLanguages` | No | `English` |
 | `BundlerNsisDisplayLanguageSelector` | No | `false` |
 | `BundlerNsisAllowDowngrades` | No | `false` |
+| `BundlerNsisLegacyMsiProductCodes` | No | Semicolon-separated MSI ProductCode GUIDs |
+| `BundlerNsisLegacyMsiUpgradeCodes` | No | Semicolon-separated MSI UpgradeCode GUIDs |
 
 Multiple formats use a semicolon-separated value, for example `<BundlerFormats>nsis;msi</BundlerFormats>`. The task parses the complete request and the Core planner determines the required package steps. At present only the NSIS backend is implemented, so requesting MSI intentionally fails instead of silently skipping it.
 
@@ -162,13 +164,24 @@ The default template includes current-user installation, a user-selectable direc
 
 Versions must follow SemVer 2.0 and each numeric core component must fit the Windows `0-65535` version-resource range. The installer detects an existing installation in the selected user or machine registry context and compares `DisplayVersion` using a bundled `NsisPlugin` Native AOT plug-in. Interactive installs let the user choose between uninstall-first and in-place replacement. Silent same-version runs repair in place; silent upgrades uninstall the old packaged payload first while preserving application data. Downgrades are rejected by default and can be enabled with `BundlerNsisAllowDowngrades`.
 
+To migrate installations previously shipped as MSI, configure their exact identifiers instead of relying on product-name matching:
+
+```xml
+<PropertyGroup>
+  <BundlerNsisLegacyMsiProductCodes>{PRODUCT-CODE-GUID}</BundlerNsisLegacyMsiProductCodes>
+  <BundlerNsisLegacyMsiUpgradeCodes>{UPGRADE-CODE-GUID}</BundlerNsisLegacyMsiUpgradeCodes>
+</PropertyGroup>
+```
+
+Either property can contain multiple semicolon-separated GUIDs. Product codes identify one MSI product; an upgrade code discovers all installed related products at installer runtime. The bundled native plug-in uses Windows Installer APIs to find exact matches. MSI-to-NSIS migration always uninstalls every matching MSI before installing the NSIS payload, accepts Windows Installer success-with-reboot codes, and follows the same downgrade policy as an existing NSIS installation. No name/publisher heuristic is used because it could remove unrelated software. Real released identifiers must come from the historical MSI packages; the repository test fixture cannot prove production identifiers.
+
 `BundlerNsisInstallMode` controls Windows installation scope. `currentUser` installs without elevation and writes uninstall metadata and shortcuts in the current-user context. `perMachine` requests administrator access, installs under Program Files, and uses the all-users shell and HKLM registry context. `both` uses the standard NSIS MultiUser page to let the user choose; because NSIS must be able to select the machine scope, launching this mode requests the highest available execution level. x64 and arm64 packages use the 64-bit registry view.
 
 An optional `BundlerNsisInstallerHooks` file can define any of `NSIS_HOOK_PREINSTALL`, `NSIS_HOOK_POSTINSTALL`, `NSIS_HOOK_PREUNINSTALL`, and `NSIS_HOOK_POSTUNINSTALL` as NSIS macros. The installer calls each defined macro at the corresponding lifecycle boundary. Hook code runs with the installer's privileges and is responsible for handling failures explicitly.
 
-Set `BundlerNsisTemplate` to an absolute path to use a customized copy. Supported placeholders include `product_name`, `version`, `numeric_version`, `publisher`, `identifier`, `main_executable`, `process_name`, `install_folder`, `install_mode`, `target_architecture`, `allow_downgrades`, `input_glob`, `output_file`, `estimated_size`, `plugin_directory`, `uninstall_payload`, `language_macros`, `language_files`, and `display_language_selector`, each written as `{{name}}`.
+Set `BundlerNsisTemplate` to an absolute path to use a customized copy. Supported placeholders include `product_name`, `version`, `numeric_version`, `publisher`, `identifier`, `main_executable`, `process_name`, `install_folder`, `install_mode`, `target_architecture`, `allow_downgrades`, `legacy_msi_product_codes`, `legacy_msi_upgrade_codes`, `input_glob`, `output_file`, `estimated_size`, `plugin_directory`, `uninstall_payload`, `language_macros`, `language_files`, and `display_language_selector`, each written as `{{name}}`.
 
-This is a practical Windows baseline, not Tauri feature parity. Legacy WiX migration, file associations, deep links, signing, and updater command-line behavior remain planned work.
+This is a practical Windows baseline, not Tauri feature parity. File associations, deep links, signing, and updater command-line behavior remain planned work.
 
 ## Repository commands
 
@@ -176,7 +189,7 @@ This is a practical Windows baseline, not Tauri feature parity. Legacy WiX migra
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.14
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.15
 ```
 
 The Windows integration test installs a dedicated fixture into a Chinese path containing spaces, validates payload/resources/metadata/registry/shortcuts/process shutdown, exercises both data-preserving and full-data removal uninstalls, and cleans its test state in `finally`.

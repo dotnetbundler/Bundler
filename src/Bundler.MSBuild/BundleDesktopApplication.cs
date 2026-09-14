@@ -41,6 +41,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string NsisLanguages { get; set; } = "English";
     public bool NsisDisplayLanguageSelector { get; set; }
     public bool NsisAllowDowngrades { get; set; }
+    public string NsisLegacyMsiProductCodes { get; set; } = "";
+    public string NsisLegacyMsiUpgradeCodes { get; set; } = "";
     public ITaskItem[] NsisLanguageFiles { get; set; } = Array.Empty<ITaskItem>();
     [Output] public ITaskItem[] Artifacts { get; private set; } = Array.Empty<ITaskItem>();
 
@@ -90,6 +92,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Languages = ParseLanguages(),
                 DisplayLanguageSelector = NsisDisplayLanguageSelector,
                 AllowDowngrades = NsisAllowDowngrades,
+                LegacyMsiProductCodes = ParseSemicolonList(NsisLegacyMsiProductCodes),
+                LegacyMsiUpgradeCodes = ParseSemicolonList(NsisLegacyMsiUpgradeCodes),
                 CustomLanguageFiles = ParseCustomLanguageFiles()
             };
             var nsisOptions = new NsisBundlerOptions
@@ -172,6 +176,13 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             ? languages
             : throw new ArgumentException("At least one NSIS language is required.", nameof(NsisLanguages));
     }
+
+    private static IReadOnlyList<string> ParseSemicolonList(string value) => value
+        .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+        .Select(item => item.Trim())
+        .Where(item => item.Length > 0)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
 
     private NsisInstallMode ParseInstallMode()
     {

@@ -17,3 +17,5 @@ LangString SilentDowngradeBlocked ${LANG_ENGLISH} "A silent downgrade is not all
 LangString SilentUnknownVersionBlocked ${LANG_ENGLISH} "A silent install cannot replace an installation whose version cannot be compared."
 LangString RemovingExistingVersion ${LANG_ENGLISH} "Removing the existing version..."
 LangString ExistingUninstallFailed ${LANG_ENGLISH} "The existing installation could not be removed. Close the application and try again."
+LangString LegacyMsiDetected ${LANG_ENGLISH} "A legacy MSI installation ($InstalledVersion) was found. It must be removed before installing this NSIS version.$\r$\n$\r$\nContinue with migration?"
+LangString RemovingLegacyMsiVersion ${LANG_ENGLISH} "Removing legacy MSI product $LegacyMsiProductCode..."

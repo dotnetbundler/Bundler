@@ -126,6 +126,8 @@ internal sealed class NsisBundleBackend(
             ["install_mode"] = InstallModeName(settings.InstallMode),
             ["target_architecture"] = TargetArchitectureName(item.Target.Architecture),
             ["allow_downgrades"] = settings.AllowDowngrades ? "true" : "false",
+            ["legacy_msi_product_codes"] = Escape(CreateMsiCodeList(settings.LegacyMsiProductCodes)),
+            ["legacy_msi_upgrade_codes"] = Escape(CreateMsiCodeList(settings.LegacyMsiUpgradeCodes)),
             ["input_glob"] = Escape(Path.Combine(item.InputDirectory, "*")),
             ["output_file"] = Escape(installerPath),
             ["estimated_size"] = EstimateSizeInKilobytes(item.InputDirectory).ToString(System.Globalization.CultureInfo.InvariantCulture),
@@ -211,6 +213,11 @@ internal sealed class NsisBundleBackend(
         NsisInstallMode.Both => "both",
         _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown NSIS install mode.")
     };
+
+    private static string CreateMsiCodeList(IReadOnlyList<string> codes) => string.Join(
+        ";",
+        codes.Select(code => Guid.Parse(code).ToString("B").ToUpperInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase));
 
     private static string TargetArchitectureName(CpuArchitecture architecture) => architecture switch
     {

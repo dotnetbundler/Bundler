@@ -17,3 +17,5 @@ LangString SilentDowngradeBlocked ${LANG_SIMPCHINESE} "此安装程序不允许�
 LangString SilentUnknownVersionBlocked ${LANG_SIMPCHINESE} "静默安装无法替换版本不可比较的现有安装。"
 LangString RemovingExistingVersion ${LANG_SIMPCHINESE} "正在删除现有版本……"
 LangString ExistingUninstallFailed ${LANG_SIMPCHINESE} "无法删除现有安装。请关闭应用程序后重试。"
+LangString LegacyMsiDetected ${LANG_SIMPCHINESE} "检测到旧版 MSI 安装（$InstalledVersion）。安装当前 NSIS 版本前必须先将其卸载。$\r$\n$\r$\n是否继续迁移？"
+LangString RemovingLegacyMsiVersion ${LANG_SIMPCHINESE} "正在删除旧版 MSI 产品 $LegacyMsiProductCode……"

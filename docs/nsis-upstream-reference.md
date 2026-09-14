@@ -34,6 +34,10 @@ The available Tauri fields were checked to avoid naming gaps, but DotNet.Bundler
 
 DotNet.Bundler uses the four optional `NSIS_HOOK_*` macro names found in the upstream template because their placement is unambiguous and the convention is already documented in the NSIS bundling ecosystem. Only the naming and lifecycle boundaries are adopted; hook contents remain user-owned NSIS code.
 
+### Legacy MSI migration
+
+Tauri's runtime scan by `DisplayName` and `Publisher` was reviewed but rejected because another installed product can legitimately share both values. DotNet.Bundler requires explicit historical MSI ProductCode or UpgradeCode GUIDs and queries them through Windows Installer APIs in the bundled native plug-in. Migration always removes every exact match before writing the NSIS payload. The upstream uninstall-first behavior is retained, while detection is intentionally stricter.
+
 ## External validation still required
 
 See `docs/nsis-open-items.md` for tests that need credentials, production identifiers, or platform conditions unavailable in the repository.

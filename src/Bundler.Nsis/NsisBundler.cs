@@ -82,6 +82,28 @@ public sealed class NsisBundler
         {
             ValidateOptionalFile(file, ".nsh", nameof(settings.CustomLanguageFiles));
         }
+        ValidateMsiCodes(settings.LegacyMsiProductCodes, nameof(settings.LegacyMsiProductCodes));
+        ValidateMsiCodes(settings.LegacyMsiUpgradeCodes, nameof(settings.LegacyMsiUpgradeCodes));
+    }
+
+    private static void ValidateMsiCodes(IReadOnlyList<string> codes, string propertyName)
+    {
+        var normalized = new List<string>();
+        foreach (var code in codes)
+        {
+            if (!Guid.TryParse(code, out var parsed))
+            {
+                throw new ArgumentException($"{propertyName} contains an invalid MSI GUID: '{code}'.", propertyName);
+            }
+            normalized.Add(parsed.ToString("B"));
+        }
+
+        if (string.Join(";", normalized.Distinct(StringComparer.OrdinalIgnoreCase)).Length > 1023)
+        {
+            throw new ArgumentException(
+                $"{propertyName} exceeds the NSIS runtime string limit after normalization.",
+                propertyName);
+        }
     }
 
     private static void ValidateOptionalFile(string? path, string extension, string propertyName)

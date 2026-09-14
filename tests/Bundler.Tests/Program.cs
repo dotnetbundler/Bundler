@@ -14,6 +14,7 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Selects every bundled NSIS host compiler", () => RunSync(SelectsEveryBundledNsisHostCompiler)),
     ("Compares semantic versions for installer policy", () => RunSync(ComparesSemanticVersionsForInstallerPolicy)),
     ("Rejects invalid NSIS package versions", RejectsInvalidNsisPackageVersions),
+    ("Rejects invalid legacy MSI identifiers", RejectsInvalidLegacyMsiIdentifiers),
     ("Builds through the standalone NSIS API", BuildsThroughStandaloneNsisApi),
     ("Writes a valid Windows uninstall command", () => RunSync(WritesValidWindowsUninstallCommand)),
     ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
@@ -136,7 +137,7 @@ static async Task VerifiesAndExtractsBundledNsis()
             "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
         Assert(File.Exists(pluginPath), "The bundled semantic-version NSIS plug-in is missing.");
         Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))) ==
-               "3BBB61BF9A2B0E9C62DC4467485D3B9CB0F949AF1A56035A02C9A1F7441A1883",
+               "15CCD021F9D89BA0E53B7240135C6B10351CB5C8BDD748DA7DAFD673F0E654B2",
             "The bundled semantic-version NSIS plug-in checksum changed; rebuild and update its provenance.");
 
         var toolset = await NsisToolResolver.ResolveAsync(archive, cache);
@@ -277,6 +278,39 @@ static Task RejectsInvalidNsisPackageVersions()
     return Task.CompletedTask;
 }
 
+static async Task RejectsInvalidLegacyMsiIdentifiers()
+{
+    var bundler = new NsisBundler(new NsisBundleConfiguration
+    {
+        LegacyMsiProductCodes = ["not-a-guid"]
+    });
+    try
+    {
+        await bundler.BuildAsync(new BundleConfiguration { Version = "1.0.0" });
+        throw new InvalidOperationException("An invalid legacy MSI product code was accepted.");
+    }
+    catch (ArgumentException exception)
+    {
+        Assert(exception.Message.Contains("not-a-guid", StringComparison.Ordinal),
+            "The validation error should identify the invalid MSI GUID.");
+    }
+
+    bundler = new NsisBundler(new NsisBundleConfiguration
+    {
+        LegacyMsiUpgradeCodes = Enumerable.Range(0, 30).Select(_ => Guid.NewGuid().ToString()).ToArray()
+    });
+    try
+    {
+        await bundler.BuildAsync(new BundleConfiguration { Version = "1.0.0" });
+        throw new InvalidOperationException("An oversized legacy MSI identifier list was accepted.");
+    }
+    catch (ArgumentException exception)
+    {
+        Assert(exception.Message.Contains("string limit", StringComparison.Ordinal),
+            "The validation error should explain the NSIS runtime string limit.");
+    }
+}
+
 static async Task BuildsThroughStandaloneNsisApi()
 {
     var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Api.Tests", Guid.NewGuid().ToString("N"));
@@ -404,7 +438,12 @@ static void RendersExistingVersionPolicy()
         var script = NsisBundleBackend.CreateScript(
             template,
             configuration,
-            new NsisBundleConfiguration { AllowDowngrades = true },
+            new NsisBundleConfiguration
+            {
+                AllowDowngrades = true,
+                LegacyMsiProductCodes = ["1D1A6B03-2BDA-4D18-B12C-574145D9CFA0"],
+                LegacyMsiUpgradeCodes = ["{5AD89AE2-9984-4B5F-937F-0DF918FE7A22}"]
+            },
             item,
             "setup.exe",
             "ExampleApp");
@@ -416,6 +455,11 @@ static void RendersExistingVersionPolicy()
                script.Contains("Function ApplySilentExistingInstallPolicy", StringComparison.Ordinal) &&
                script.Contains("Function UninstallExistingInstallation", StringComparison.Ordinal),
             "The script must detect and replace existing installations in interactive and silent modes.");
+        Assert(script.Contains("!define LEGACY_MSI_PRODUCT_CODES \"{1D1A6B03-2BDA-4D18-B12C-574145D9CFA0}\"", StringComparison.Ordinal) &&
+               script.Contains("!define LEGACY_MSI_UPGRADE_CODES \"{5AD89AE2-9984-4B5F-937F-0DF918FE7A22}\"", StringComparison.Ordinal) &&
+               script.Contains("DotNetBundlerNsis::FindMsiProduct", StringComparison.Ordinal) &&
+               script.Contains("Function UninstallLegacyMsiInstallations", StringComparison.Ordinal),
+            "The script must render exact legacy MSI identifiers and the migration flow.");
         Assert(script.Contains("; 打包时无法知道用户已安装的版本", StringComparison.Ordinal) &&
                script.Contains("; 静默安装不会显示现有安装处理页面", StringComparison.Ordinal),
             "Non-trivial NSIS policy branches must retain Chinese explanatory comments.");

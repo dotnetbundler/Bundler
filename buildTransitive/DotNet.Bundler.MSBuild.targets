@@ -51,6 +51,8 @@
       NsisLanguages="$(BundlerNsisLanguages)"
       NsisDisplayLanguageSelector="$(BundlerNsisDisplayLanguageSelector)"
       NsisAllowDowngrades="$(BundlerNsisAllowDowngrades)"
+      NsisLegacyMsiProductCodes="$(BundlerNsisLegacyMsiProductCodes)"
+      NsisLegacyMsiUpgradeCodes="$(BundlerNsisLegacyMsiUpgradeCodes)"
       NsisLanguageFiles="@(BundlerNsisLanguageFile)">
       <Output TaskParameter="Artifacts" ItemName="BundlerArtifact" />
     </DotNet.Bundler.MSBuild.BundleDesktopApplication>

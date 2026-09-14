@@ -14,6 +14,8 @@ public sealed class NsisBundleConfiguration
         new Dictionary<string, string>();
     public bool DisplayLanguageSelector { get; init; }
     public bool AllowDowngrades { get; init; }
+    public IReadOnlyList<string> LegacyMsiProductCodes { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> LegacyMsiUpgradeCodes { get; init; } = Array.Empty<string>();
 }
 
 public enum NsisInstallMode

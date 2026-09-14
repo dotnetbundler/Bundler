@@ -42,7 +42,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `ne
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.14" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.15" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -60,7 +60,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.14" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.15" />
 ```
 
 ```csharp
@@ -121,6 +121,8 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 | `BundlerNsisLanguages` | 否 | `English` |
 | `BundlerNsisDisplayLanguageSelector` | 否 | `false` |
 | `BundlerNsisAllowDowngrades` | 否 | `false` |
+| `BundlerNsisLegacyMsiProductCodes` | 否 | 分号分隔的 MSI ProductCode GUID |
+| `BundlerNsisLegacyMsiUpgradeCodes` | 否 | 分号分隔的 MSI UpgradeCode GUID |
 
 多个格式使用分号分隔，例如 `<BundlerFormats>nsis;msi</BundlerFormats>`。Task 会解析完整请求，再由 Core 规划需要执行的打包步骤。目前只有 NSIS 后端已经实现，因此请求 MSI 会明确失败，不会被静默忽略。
 
@@ -162,13 +164,24 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 版本必须符合 SemVer 2.0，并且三个数字核心段都必须处于 Windows 版本资源允许的 `0-65535` 范围。安装器会在所选用户或计算机注册表上下文中检测现有安装，并通过包内使用 `NsisPlugin` 构建的 Native AOT 插件比较 `DisplayVersion`。交互安装允许用户选择先卸载或原位覆盖；静默同版本安装执行原位修复，静默升级会先卸载旧的构建载荷，同时保留应用数据。默认禁止降级，可通过 `BundlerNsisAllowDowngrades` 开启。
 
+如果产品以前使用 MSI 发布，应配置历史安装包的准确标识，不按产品名猜测：
+
+```xml
+<PropertyGroup>
+  <BundlerNsisLegacyMsiProductCodes>{PRODUCT-CODE-GUID}</BundlerNsisLegacyMsiProductCodes>
+  <BundlerNsisLegacyMsiUpgradeCodes>{UPGRADE-CODE-GUID}</BundlerNsisLegacyMsiUpgradeCodes>
+</PropertyGroup>
+```
+
+两个属性都支持填写多个以分号分隔的 GUID。ProductCode 精确表示一个 MSI 产品；UpgradeCode 会在安装器运行时查找所有已安装的关联产品。包内原生插件通过 Windows Installer API 精确查询。MSI 迁移到 NSIS 时必须先卸载所有匹配的 MSI，再安装 NSIS 载荷；Windows Installer 的“成功但需要重启”返回码会被正确处理，降级仍遵循统一策略。这里不会采用产品名和发布者匹配，因为可能误删无关软件。真实迁移标识必须从历史 MSI 中取得，仓库内测试夹具不能代替生产标识验证。
+
 `BundlerNsisInstallMode` 控制 Windows 安装范围。`currentUser` 不提权，卸载信息和快捷方式写入当前用户上下文；`perMachine` 请求管理员权限，安装到 Program Files，并使用所有用户 Shell 上下文和 HKLM 注册表；`both` 使用 NSIS 自带的 MultiUser 页面让用户选择。由于安装器必须具备切换到计算机范围的能力，`both` 启动时会请求最高可用权限。x64 和 arm64 包使用 64 位注册表视图。
 
 可选的 `BundlerNsisInstallerHooks` 文件可以把 `NSIS_HOOK_PREINSTALL`、`NSIS_HOOK_POSTINSTALL`、`NSIS_HOOK_PREUNINSTALL`、`NSIS_HOOK_POSTUNINSTALL` 中任意几项定义为 NSIS 宏，安装器会在相应生命周期边界调用。Hook 使用安装器当前权限执行，失败处理需要在宏中明确编写。
 
-若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。模板支持的变量包括 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`install_mode`、`target_architecture`、`allow_downgrades`、`input_glob`、`output_file`、`estimated_size`、`plugin_directory`、`uninstall_payload`、`language_macros`、`language_files`、`display_language_selector`，写法为 `{{name}}`。
+若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。模板支持的变量包括 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`install_mode`、`target_architecture`、`allow_downgrades`、`legacy_msi_product_codes`、`legacy_msi_upgrade_codes`、`input_glob`、`output_file`、`estimated_size`、`plugin_directory`、`uninstall_payload`、`language_macros`、`language_files`、`display_language_selector`，写法为 `{{name}}`。
 
-这是面向 Windows 的可用基线，并不等于 Tauri 功能对等。旧 WiX 安装迁移、文件关联、深链接、签名和更新器命令行行为仍属于后续工作。
+这是面向 Windows 的可用基线，并不等于 Tauri 功能对等。文件关联、深链接、签名和更新器命令行行为仍属于后续工作。
 
 ## 仓库命令
 
@@ -176,7 +189,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.14
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.15
 ```
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

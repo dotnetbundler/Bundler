@@ -26,5 +26,7 @@
     <BundlerNsisLanguages Condition="'$(BundlerNsisLanguages)' == ''">English</BundlerNsisLanguages>
     <BundlerNsisDisplayLanguageSelector Condition="'$(BundlerNsisDisplayLanguageSelector)' == ''">false</BundlerNsisDisplayLanguageSelector>
     <BundlerNsisAllowDowngrades Condition="'$(BundlerNsisAllowDowngrades)' == ''">false</BundlerNsisAllowDowngrades>
+    <BundlerNsisLegacyMsiProductCodes Condition="'$(BundlerNsisLegacyMsiProductCodes)' == ''"></BundlerNsisLegacyMsiProductCodes>
+    <BundlerNsisLegacyMsiUpgradeCodes Condition="'$(BundlerNsisLegacyMsiUpgradeCodes)' == ''"></BundlerNsisLegacyMsiUpgradeCodes>
   </PropertyGroup>
 </Project>

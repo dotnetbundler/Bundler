@@ -30,6 +30,8 @@ ${UnStrStr}
 !define INSTALL_MODE "{{install_mode}}"
 !define TARGET_ARCHITECTURE "{{target_architecture}}"
 !define ALLOW_DOWNGRADES "{{allow_downgrades}}"
+!define LEGACY_MSI_PRODUCT_CODES "{{legacy_msi_product_codes}}"
+!define LEGACY_MSI_UPGRADE_CODES "{{legacy_msi_upgrade_codes}}"
 !define INPUT_GLOB "{{input_glob}}"
 !define OUTPUT_FILE "{{output_file}}"
 !define ESTIMATED_SIZE "{{estimated_size}}"
@@ -49,6 +51,8 @@ Var InstalledUninstaller
 Var InstalledDirectory
 Var VersionComparison
 Var ExistingInstallAction
+Var ExistingInstallType
+Var LegacyMsiProductCode
 
 ; DotNetBundlerNsis::SemverCompare 返回的比较结果。
 ; 将这些名称放在状态变量附近，便于理解各个版本策略分支。
@@ -58,6 +62,8 @@ Var ExistingInstallAction
 !define VERSION_UNKNOWN 2
 !define EXISTING_ACTION_INSTALL_OVER 1
 !define EXISTING_ACTION_UNINSTALL_FIRST 2
+!define EXISTING_TYPE_NSIS 1
+!define EXISTING_TYPE_MSI 2
 
 Name "${PRODUCT_NAME}"
 BrandingText "${PRODUCT_PUBLISHER}"
@@ -193,20 +199,58 @@ Function DetectExistingInstall
   ReadRegStr $InstalledDirectory SHCTX "${UNINSTALL_KEY}" "InstallLocation"
   ReadRegStr $InstalledVersion SHCTX "${UNINSTALL_KEY}" "DisplayVersion"
   StrCpy $VersionComparison ${VERSION_UNKNOWN}
+  StrCpy $ExistingInstallType 0
   ${If} $InstalledUninstaller == ""
     StrCpy $InstalledVersion ""
     StrCpy $InstalledDirectory ""
-    Return
+    Call DetectLegacyMsiInstallation
+  ${Else}
+    StrCpy $ExistingInstallType ${EXISTING_TYPE_NSIS}
+    Call CompareInstalledVersion
   ${EndIf}
+FunctionEnd
 
+Function CompareInstalledVersion
   ; 打包时无法知道用户已安装的版本，因此在安装器运行时进行比较。
   ; 随包提供的插件实现 SemVer 2.0，并支持预发布版本。
   DotNetBundlerNsis::SemverCompare "${PRODUCT_VERSION}" "$InstalledVersion"
   Pop $VersionComparison
 FunctionEnd
 
+Function DetectLegacyMsiInstallation
+  ; 只按显式配置的 ProductCode 或 UpgradeCode 查找，避免因名称相同而误卸载其他软件。
+  DotNetBundlerNsis::FindMsiProduct "${LEGACY_MSI_PRODUCT_CODES}" "${LEGACY_MSI_UPGRADE_CODES}"
+  Pop $LegacyMsiProductCode
+  ${If} $LegacyMsiProductCode == ""
+    Return
+  ${EndIf}
+
+  ; 多个相关 MSI 并存时使用最高版本，避免因枚举顺序而绕过降级限制。
+  DotNetBundlerNsis::GetNewestMsiVersion "${LEGACY_MSI_PRODUCT_CODES}" "${LEGACY_MSI_UPGRADE_CODES}"
+  Pop $InstalledVersion
+  StrCpy $InstalledUninstaller "$SYSDIR\msiexec.exe"
+  StrCpy $InstalledDirectory ""
+  StrCpy $ExistingInstallType ${EXISTING_TYPE_MSI}
+  Call CompareInstalledVersion
+FunctionEnd
+
 Function ApplySilentExistingInstallPolicy
   ${If} $InstalledUninstaller == ""
+    Return
+  ${EndIf}
+
+  ; MSI 与 NSIS 的载荷记录不兼容，因此迁移时不能原位覆盖。
+  ${If} $ExistingInstallType == ${EXISTING_TYPE_MSI}
+    ${If} $VersionComparison == ${VERSION_OLDER}
+      !if "${ALLOW_DOWNGRADES}" != "true"
+        SetErrorLevel 2
+        Abort "$(SilentDowngradeBlocked)"
+      !endif
+    ${ElseIf} $VersionComparison == ${VERSION_UNKNOWN}
+      SetErrorLevel 2
+      Abort "$(SilentUnknownVersionBlocked)"
+    ${EndIf}
+    StrCpy $ExistingInstallAction ${EXISTING_ACTION_UNINSTALL_FIRST}
     Return
   ${EndIf}
 
@@ -237,6 +281,19 @@ Function ExistingInstallPage
   Call DetectExistingInstall
   ${If} $InstalledUninstaller == ""
     Abort
+  ${EndIf}
+
+  ; 旧 MSI 必须先卸载；仍沿用统一的降级禁止策略。
+  ${If} $ExistingInstallType == ${EXISTING_TYPE_MSI}
+    ${If} $VersionComparison == ${VERSION_OLDER}
+      !if "${ALLOW_DOWNGRADES}" != "true"
+        MessageBox MB_ICONSTOP|MB_OK "$(DowngradeBlocked)"
+        SetErrorLevel 2
+        Quit
+      !endif
+    ${EndIf}
+    MessageBox MB_ICONQUESTION|MB_OKCANCEL "$(LegacyMsiDetected)" IDOK existing_uninstall_first
+    Quit
   ${EndIf}
 
   ${If} $VersionComparison == ${VERSION_SAME}
@@ -274,6 +331,11 @@ Function UninstallExistingInstallation
     Return
   ${EndIf}
 
+  ${If} $ExistingInstallType == ${EXISTING_TYPE_MSI}
+    Call UninstallLegacyMsiInstallations
+    Return
+  ${EndIf}
+
   ; `_?=` 使旧版卸载器在原安装目录中运行，而不是使用临时副本。
   ; 默认的静默卸载会保留应用数据。
   DetailPrint "$(RemovingExistingVersion)"
@@ -290,6 +352,45 @@ Function UninstallExistingInstallation
       Abort
     ${EndIf}
   ${EndIf}
+FunctionEnd
+
+Function UninstallLegacyMsiInstallations
+  ; 每次重新查询第一个匹配项，确保同一 UpgradeCode 下的多个遗留版本都被清理。
+  legacy_msi_loop:
+    DotNetBundlerNsis::FindMsiProduct "${LEGACY_MSI_PRODUCT_CODES}" "${LEGACY_MSI_UPGRADE_CODES}"
+    Pop $LegacyMsiProductCode
+    ${If} $LegacyMsiProductCode == ""
+      Return
+    ${EndIf}
+
+    DetailPrint "$(RemovingLegacyMsiVersion)"
+    ClearErrors
+    ${If} ${Silent}
+      ExecWait '"$SYSDIR\msiexec.exe" /x "$LegacyMsiProductCode" /qn /norestart' $0
+    ${Else}
+      ExecWait '"$SYSDIR\msiexec.exe" /x "$LegacyMsiProductCode" /passive /norestart' $0
+    ${EndIf}
+
+    ; 1605 表示产品已不存在；1641 和 3010 表示操作成功但需要重新启动。
+    ${If} $0 == 0
+      Goto legacy_msi_loop
+    ${ElseIf} $0 == 1605
+      Goto legacy_msi_loop
+    ${ElseIf} $0 == 1641
+      SetRebootFlag true
+      Goto legacy_msi_loop
+    ${ElseIf} $0 == 3010
+      SetRebootFlag true
+      Goto legacy_msi_loop
+    ${EndIf}
+
+    ${If} ${Silent}
+      SetErrorLevel 3
+      Quit
+    ${Else}
+      MessageBox MB_ICONSTOP|MB_OK "$(ExistingUninstallFailed)"
+      Abort
+    ${EndIf}
 FunctionEnd
 
 Function ValidateInstallDirectory
