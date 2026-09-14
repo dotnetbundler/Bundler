@@ -42,7 +42,7 @@ The MSBuild task and the Abstractions/Core/NSIS assemblies it loads all provide 
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.15" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.16" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -60,7 +60,7 @@ The installer is written to `artifacts/<rid>/nsis/` by default. Installer genera
 Applications and build tools that do not use MSBuild integration can reference `DotNet.Bundler.Nsis` directly:
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.15" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.16" />
 ```
 
 ```csharp
@@ -137,6 +137,20 @@ Icons and extra resources are passed as MSBuild items:
 </ItemGroup>
 ```
 
+File associations and custom URL protocols are format-neutral bundle metadata:
+
+```xml
+<ItemGroup>
+  <BundlerFileAssociation Include="mydoc"
+                          Name="My App document"
+                          Description="My App document file"
+                          MimeType="application/x-myapp-document" />
+  <BundlerUrlProtocol Include="myapp" Name="My App link" />
+</ItemGroup>
+```
+
+An extension may include its leading dot. Each item represents one association; matching is case-insensitive. NSIS registers an application-specific ProgID, an Open With candidate, and Default Apps capabilities, but does not overwrite the user's current default application. `MimeType` is format-neutral metadata reserved for backends that consume MIME types; Windows NSIS does not write it into the shared extension key. A custom URL protocol is immediately launchable as `myapp:...`. Uninstall removes the protocol only while its command still points to this installation, so a later owner is preserved.
+
 For NSIS, the first configured `.ico` is the fallback for both the installer and uninstaller; the NSIS-specific icon properties can override either one. Header images should be 150×57 BMP files and sidebar images should be 164×314 BMP files. `BundlerLicenseFile` adds a license page. Description, homepage, copyright, product version, and file version are written to the applicable executable or Add/Remove Programs metadata. Each resource is installed at its relative `TargetPath`; when omitted, the source file name is used. Target collisions and paths escaping the installation directory are rejected before packaging.
 
 ## Packaging pipeline and NSIS customization
@@ -181,7 +195,7 @@ An optional `BundlerNsisInstallerHooks` file can define any of `NSIS_HOOK_PREINS
 
 Set `BundlerNsisTemplate` to an absolute path to use a customized copy. Supported placeholders include `product_name`, `version`, `numeric_version`, `publisher`, `identifier`, `main_executable`, `process_name`, `install_folder`, `install_mode`, `target_architecture`, `allow_downgrades`, `legacy_msi_product_codes`, `legacy_msi_upgrade_codes`, `input_glob`, `output_file`, `estimated_size`, `plugin_directory`, `uninstall_payload`, `language_macros`, `language_files`, and `display_language_selector`, each written as `{{name}}`.
 
-This is a practical Windows baseline, not Tauri feature parity. File associations, deep links, signing, and updater command-line behavior remain planned work.
+This is a practical Windows baseline, not Tauri feature parity. Signing and updater command-line behavior remain planned work.
 
 ## Repository commands
 
@@ -189,7 +203,7 @@ This is a practical Windows baseline, not Tauri feature parity. File association
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.15
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.16
 ```
 
 The Windows integration test installs a dedicated fixture into a Chinese path containing spaces, validates payload/resources/metadata/registry/shortcuts/process shutdown, exercises both data-preserving and full-data removal uninstalls, and cleans its test state in `finally`.

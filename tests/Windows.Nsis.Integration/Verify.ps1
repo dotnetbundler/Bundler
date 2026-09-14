@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.15"
+    [string]$PackageVersion = "0.1.0-alpha.16"
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,6 +36,14 @@ $legacyMsiProductCode = "{1D1A6B03-2BDA-4D18-B12C-574145D9CFA0}"
 $legacyMsiUpgradeCode = "{5AD89AE2-9984-4B5F-937F-0DF918FE7A22}"
 $legacyMsiInstallDirectory = Join-Path $env:LOCALAPPDATA "Bundler Legacy MSI Fixture"
 $registryPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$identifier"
+$fileExtensionRegistryPath = "HKCU:\Software\Classes\.dbfixture"
+$fileProgId = "$identifier.File.dbfixture.1"
+$fileProgIdRegistryPath = "HKCU:\Software\Classes\$fileProgId"
+$urlSchemeRegistryPath = "HKCU:\Software\Classes\bundlerfixture"
+$urlProgIdRegistryPath = "HKCU:\Software\Classes\$identifier.Url.bundlerfixture.1"
+$capabilitiesRegistryPath = "HKCU:\Software\$identifier\Capabilities"
+$registeredApplicationsRegistryPath = "HKCU:\Software\RegisteredApplications"
+$deepLinkMarker = Join-Path $env:TEMP "DotNetBundler-deep-link.txt"
 $roamingData = Join-Path $env:APPDATA $identifier
 $localData = Join-Path $env:LOCALAPPDATA $identifier
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "$productName.lnk"
@@ -118,6 +126,17 @@ function Remove-TestState {
         Stop-Process -Id $script:fixtureProcess.Id -Force -ErrorAction SilentlyContinue
     }
     if (Test-Path -LiteralPath $registryPath) { Remove-Item -LiteralPath $registryPath -Recurse -Force }
+    foreach ($path in @($fileProgIdRegistryPath, $urlSchemeRegistryPath, $urlProgIdRegistryPath, $capabilitiesRegistryPath)) {
+        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
+    }
+    if (Test-Path -LiteralPath $fileExtensionRegistryPath) {
+        Remove-ItemProperty -LiteralPath (Join-Path $fileExtensionRegistryPath "OpenWithProgids") -Name $fileProgId -ErrorAction SilentlyContinue
+        if ((Get-ChildItem -LiteralPath $fileExtensionRegistryPath -ErrorAction SilentlyContinue).Count -eq 0) {
+            Remove-Item -LiteralPath $fileExtensionRegistryPath -Recurse -Force
+        }
+    }
+    Remove-ItemProperty -LiteralPath $registeredApplicationsRegistryPath -Name $identifier -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $deepLinkMarker) { Remove-Item -LiteralPath $deepLinkMarker -Force }
     if (Test-Path -LiteralPath $desktopShortcut) { Remove-Item -LiteralPath $desktopShortcut -Force }
     if (Test-Path -LiteralPath $startMenuShortcut) { Remove-Item -LiteralPath $startMenuShortcut -Force }
     if (Test-Path -LiteralPath $startMenuDirectory) { Remove-Item -LiteralPath $startMenuDirectory -Force }
@@ -274,6 +293,15 @@ try {
     Assert-True (Test-Path -LiteralPath $registryPath) "Uninstall registry entry is missing."
     Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "Comments") -eq "Disposable Windows NSIS integration-test fixture.") "Description metadata is missing from the uninstall registry entry."
     Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "URLInfoAbout") -eq "https://example.com/dotnet-bundler-fixture") "Homepage metadata is missing from the uninstall registry entry."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath (Join-Path $fileExtensionRegistryPath "OpenWithProgids") -Name $fileProgId) -eq "") "File association was not registered as an Open With candidate."
+    Assert-True (Test-Path -LiteralPath $fileProgIdRegistryPath) "Application-specific file ProgID is missing."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $capabilitiesRegistryPath -Name "ApplicationName") -eq $productName) "Default-app capabilities are missing."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registeredApplicationsRegistryPath -Name $identifier) -eq "Software\$identifier\Capabilities") "RegisteredApplications entry is missing."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath (Join-Path $urlSchemeRegistryPath "shell\open\command") -Name "(default)") -eq "`"$installedExecutable`" `"%1`"") "Deep-link command is missing or not quoted."
+    Assert-True (Test-Path -LiteralPath $urlProgIdRegistryPath) "Application-specific URL ProgID is missing."
+    Start-Process -FilePath "bundlerfixture:integration-value"
+    Wait-For { Test-Path -LiteralPath $deepLinkMarker } "Registered deep link did not launch the installed application."
+    Assert-True ((Get-Content -Raw -LiteralPath $deepLinkMarker) -eq "bundlerfixture:integration-value") "Installed application received the wrong deep-link argument."
     Assert-True (Test-Path -LiteralPath $desktopShortcut) "Desktop shortcut is missing."
     Assert-True (Test-Path -LiteralPath $startMenuShortcut) "Start Menu shortcut is missing."
     Assert-True (Test-Path -LiteralPath $hookMarkers[0]) "Pre-install hook did not run."
@@ -320,6 +348,11 @@ try {
     Assert-True (-not (Test-Path -LiteralPath $registryPath)) "Uninstall registry entry survived uninstall."
     Assert-True (-not (Test-Path -LiteralPath $desktopShortcut)) "Desktop shortcut survived uninstall."
     Assert-True (-not (Test-Path -LiteralPath $startMenuShortcut)) "Start Menu shortcut survived uninstall."
+    Assert-True (-not (Test-Path -LiteralPath $fileProgIdRegistryPath)) "File ProgID survived uninstall."
+    Assert-True ($null -eq (Get-ItemPropertyValue -LiteralPath (Join-Path $fileExtensionRegistryPath "OpenWithProgids") -Name $fileProgId -ErrorAction SilentlyContinue)) "Open With registration survived uninstall."
+    Assert-True (-not (Test-Path -LiteralPath $urlSchemeRegistryPath)) "Owned deep-link registration survived uninstall."
+    Assert-True (-not (Test-Path -LiteralPath $urlProgIdRegistryPath)) "URL ProgID survived uninstall."
+    Assert-True (-not (Test-Path -LiteralPath $capabilitiesRegistryPath)) "Default-app capabilities survived uninstall."
     Assert-True (Test-Path -LiteralPath $hookMarkers[2]) "Pre-uninstall hook did not run."
     Assert-True (Test-Path -LiteralPath $hookMarkers[3]) "Post-uninstall hook did not run."
 
@@ -332,11 +365,14 @@ try {
     New-Item -ItemType Directory -Path $localData -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $roamingData "settings.json") -Value "{}" -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $localData "cache.bin") -Value "cache" -Encoding UTF8
+    # 模拟另一应用在卸载前接管协议，验证卸载器不会删除新的所有者。
+    Set-Item -LiteralPath (Join-Path $urlSchemeRegistryPath "shell\open\command") -Value '"C:\OtherApp\Other.exe" "%1"'
     Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
     Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "DELETEAPPDATA did not remove the complete program directory."
     Assert-True (-not (Test-Path -LiteralPath $installDirectory)) "DELETEAPPDATA did not remove the complete program directory."
     Assert-True (-not (Test-Path -LiteralPath $roamingData)) "DELETEAPPDATA did not remove roaming application data."
     Assert-True (-not (Test-Path -LiteralPath $localData)) "DELETEAPPDATA did not remove local application data."
+    Assert-True (Test-Path -LiteralPath $urlSchemeRegistryPath) "Uninstall removed a deep-link protocol owned by another application."
 
     Write-Host "PASS Windows NSIS install/uninstall integration"
 }

@@ -15,12 +15,14 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Compares semantic versions for installer policy", () => RunSync(ComparesSemanticVersionsForInstallerPolicy)),
     ("Rejects invalid NSIS package versions", RejectsInvalidNsisPackageVersions),
     ("Rejects invalid legacy MSI identifiers", RejectsInvalidLegacyMsiIdentifiers),
+    ("Rejects invalid associations and protocols", () => RunSync(RejectsInvalidAssociationsAndProtocols)),
     ("Builds through the standalone NSIS API", BuildsThroughStandaloneNsisApi),
     ("Writes a valid Windows uninstall command", () => RunSync(WritesValidWindowsUninstallCommand)),
     ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
     ("Uninstalls only packaged payload files", () => RunSync(UninstallsOnlyPackagedPayloadFiles)),
     ("Provides interactive NSIS safety options", () => RunSync(ProvidesInteractiveNsisSafetyOptions)),
     ("Renders existing-version policy", () => RunSync(RendersExistingVersionPolicy)),
+    ("Renders safe file and URL registrations", () => RunSync(RendersSafeFileAndUrlRegistrations)),
     ("Renders NSIS install scopes", () => RunSync(RendersNsisInstallScopes)),
     ("Renders NSIS metadata, icons, and resources", () => RunSync(RendersNsisMetadataIconsAndResources)),
     ("Rejects unknown template variables", () => RunSync(RejectsUnknownTemplateVariables)),
@@ -311,6 +313,48 @@ static async Task RejectsInvalidLegacyMsiIdentifiers()
     }
 }
 
+static void RejectsInvalidAssociationsAndProtocols()
+{
+    var target = new BundleTargetConfiguration
+    {
+        RuntimeIdentifier = "win-x64",
+        InputDirectory = "unused",
+        Formats = [PackageFormat.Nsis]
+    };
+    var configuration = new BundleConfiguration
+    {
+        ProductName = "ExampleApp",
+        Identifier = "com.example.app",
+        Version = "1.0.0",
+        OutputDirectory = "artifacts",
+        FileAssociations =
+        [
+            new BundleFileAssociationConfiguration { Extensions = [".safe", "bad\\key"] },
+            new BundleFileAssociationConfiguration { Extensions = ["SAFE"] }
+        ],
+        UrlProtocols =
+        [
+            new BundleUrlProtocolConfiguration { Schemes = ["1invalid"] },
+            new BundleUrlProtocolConfiguration { Schemes = ["example", "EXAMPLE"] }
+        ],
+        Targets = [target]
+    };
+
+    var issues = BundleConfigurationValidator.Validate(configuration, checkFileSystem: false);
+    Assert(issues.Any(issue => issue.Path.Contains("fileAssociations", StringComparison.Ordinal) &&
+                               issue.Message.Contains("Duplicate", StringComparison.Ordinal)),
+        "File extensions should be unique without regard to case or an optional leading dot.");
+    Assert(issues.Any(issue => issue.Path.Contains("fileAssociations", StringComparison.Ordinal) &&
+                               issue.Message.Contains("1-64", StringComparison.Ordinal)),
+        "Unsafe file-extension registry paths should be rejected.");
+    Assert(issues.Any(issue => issue.Path.Contains("urlProtocols", StringComparison.Ordinal) &&
+                               issue.Message.Contains("beginning with a letter", StringComparison.Ordinal)),
+        "URL schemes should follow URI scheme syntax.");
+    Assert(issues.Any(issue => issue.Path.Contains("urlProtocols", StringComparison.Ordinal) &&
+                               issue.Message.Contains("Duplicate", StringComparison.Ordinal)),
+        "URL schemes should be unique without regard to case.");
+}
+
 static async Task BuildsThroughStandaloneNsisApi()
 {
     var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Api.Tests", Guid.NewGuid().ToString("N"));
@@ -463,6 +507,81 @@ static void RendersExistingVersionPolicy()
         Assert(script.Contains("; 打包时无法知道用户已安装的版本", StringComparison.Ordinal) &&
                script.Contains("; 静默安装不会显示现有安装处理页面", StringComparison.Ordinal),
             "Non-trivial NSIS policy branches must retain Chinese explanatory comments.");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
+static void RendersSafeFileAndUrlRegistrations()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    File.WriteAllText(Path.Combine(root, "ExampleApp.exe"), "test");
+    try
+    {
+        var configuration = new BundleConfiguration
+        {
+            ProductName = "ExampleApp",
+            Identifier = "com.example.app",
+            Version = "1.0.0",
+            Description = "Example application",
+            OutputDirectory = "artifacts",
+            FileAssociations =
+            [
+                new BundleFileAssociationConfiguration
+                {
+                    Extensions = [".example"],
+                    Description = "Example document",
+                    MimeType = "application/x-example"
+                }
+            ],
+            UrlProtocols =
+            [
+                new BundleUrlProtocolConfiguration { Schemes = ["example-app"], Name = "Example link" }
+            ],
+            Targets =
+            [
+                new BundleTargetConfiguration
+                {
+                    RuntimeIdentifier = "win-x64",
+                    InputDirectory = root,
+                    MainExecutable = "ExampleApp.exe",
+                    Formats = [PackageFormat.Nsis]
+                }
+            ]
+        };
+        var item = new BundlePlanItem(
+            new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+            PackageFormat.Nsis,
+            root,
+            "ExampleApp.exe",
+            "output",
+            false);
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+        var script = NsisBundleBackend.CreateScript(
+            template,
+            configuration,
+            new NsisBundleConfiguration(),
+            item,
+            "setup.exe",
+            "ExampleApp");
+
+        Assert(script.Contains("Software\\Classes\\.example\\OpenWithProgids", StringComparison.Ordinal) &&
+               script.Contains("${PRODUCT_ID}.File.example.1", StringComparison.Ordinal) &&
+               script.Contains("${CAPABILITIES_KEY}\\FileAssociations", StringComparison.Ordinal),
+            "File associations should register a private ProgID, Open With candidate, and application capability.");
+        Assert(!script.Contains("WriteRegStr SHCTX \"Software\\Classes\\.example\" \"\"", StringComparison.Ordinal),
+            "Packaging must not force the extension's default ProgID.");
+        Assert(script.Contains("Software\\Classes\\example-app\\shell\\open\\command", StringComparison.Ordinal) &&
+               script.Contains("${CAPABILITIES_KEY}\\UrlAssociations", StringComparison.Ordinal),
+            "URL protocols should be directly launchable and visible to the default-apps model.");
+        Assert(script.Contains("${If} $0 == '\"$INSTDIR\\ExampleApp.exe\" \"%1\"'", StringComparison.Ordinal),
+            "Protocol uninstall should verify that this installation still owns the command.");
+        Assert(script.Contains("SHChangeNotify", StringComparison.Ordinal) &&
+               script.Contains("; 只有协议仍指向本次安装的程序时才删除", StringComparison.Ordinal),
+            "The association cache refresh and the ownership rule should remain explicit in Chinese comments.");
     }
     finally
     {

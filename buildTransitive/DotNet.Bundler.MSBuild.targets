@@ -36,6 +36,8 @@
       Formats="$(BundlerFormats)"
       Icons="@(BundlerIcon)"
       Resources="@(BundlerResource)"
+      FileAssociations="@(BundlerFileAssociation)"
+      UrlProtocols="@(BundlerUrlProtocol)"
       NsisToolsetArchivePath="$(BundlerNsisToolsetArchivePath)"
       NsisCompilerPath="$(BundlerNsisCompilerPath)"
       NsisDataDirectory="$(BundlerNsisDataDirectory)"

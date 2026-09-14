@@ -26,6 +26,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     [Required] public string Formats { get; set; } = "";
     public ITaskItem[] Icons { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] Resources { get; set; } = Array.Empty<ITaskItem>();
+    public ITaskItem[] FileAssociations { get; set; } = Array.Empty<ITaskItem>();
+    public ITaskItem[] UrlProtocols { get; set; } = Array.Empty<ITaskItem>();
     public string NsisToolsetArchivePath { get; set; } = "";
     public string NsisCompilerPath { get; set; } = "";
     public string NsisDataDirectory { get; set; } = "";
@@ -67,6 +69,18 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 {
                     Source = Path.GetFullPath(item.ItemSpec),
                     TargetPath = ResourceTargetPath(item)
+                }).ToArray(),
+                FileAssociations = FileAssociations.Select(item => new BundleFileAssociationConfiguration
+                {
+                    Extensions = new[] { item.ItemSpec },
+                    Name = EmptyMetadataToNull(item, "Name"),
+                    Description = EmptyMetadataToNull(item, "Description"),
+                    MimeType = EmptyMetadataToNull(item, "MimeType")
+                }).ToArray(),
+                UrlProtocols = UrlProtocols.Select(item => new BundleUrlProtocolConfiguration
+                {
+                    Schemes = new[] { item.ItemSpec },
+                    Name = EmptyMetadataToNull(item, "Name")
                 }).ToArray(),
                 Targets = new[]
                 {
@@ -162,6 +176,12 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     {
         var targetPath = item.GetMetadata("TargetPath").Trim();
         return targetPath.Length > 0 ? targetPath : Path.GetFileName(item.ItemSpec);
+    }
+
+    private static string? EmptyMetadataToNull(ITaskItem item, string name)
+    {
+        var value = item.GetMetadata(name).Trim();
+        return value.Length == 0 ? null : value;
     }
 
     private IReadOnlyList<string> ParseLanguages()

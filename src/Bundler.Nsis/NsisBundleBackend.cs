@@ -135,6 +135,8 @@ internal sealed class NsisBundleBackend(
             ["installer_icon_directives"] = visualDirectives,
             ["license_page"] = CreateLicensePage(configuration.LicenseFile),
             ["homepage_registry"] = CreateHomepageRegistry(configuration.Homepage),
+            ["association_install_commands"] = CreateAssociationInstallCommands(configuration),
+            ["association_uninstall_commands"] = CreateAssociationUninstallCommands(configuration, item.MainExecutable),
             ["installer_hooks_include"] = CreateInstallerHooksInclude(settings.InstallerHooks),
             ["resource_install_commands"] = CreateResourceInstallCommands(resources),
             ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory, resources),
@@ -200,6 +202,117 @@ internal sealed class NsisBundleBackend(
         string.IsNullOrWhiteSpace(homepage)
             ? string.Empty
             : $"  WriteRegStr SHCTX \"${{UNINSTALL_KEY}}\" \"URLInfoAbout\" \"{Escape(homepage!)}\"";
+
+    private static string CreateAssociationInstallCommands(BundleConfiguration configuration)
+    {
+        if (configuration.FileAssociations.Count == 0 && configuration.UrlProtocols.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var lines = new List<string>
+        {
+            "  ; 注册到 Windows 默认应用列表，但不强制替换用户已经选择的默认程序。",
+            "  WriteRegStr SHCTX \"${CAPABILITIES_KEY}\" \"ApplicationName\" \"${PRODUCT_NAME}\"",
+            "  WriteRegStr SHCTX \"${CAPABILITIES_KEY}\" \"ApplicationDescription\" \"${PRODUCT_DESCRIPTION}\"",
+            "  WriteRegStr SHCTX \"${CAPABILITIES_KEY}\" \"ApplicationCompany\" \"${PRODUCT_PUBLISHER}\"",
+            "  WriteRegStr SHCTX \"${CAPABILITIES_KEY}\" \"ApplicationIcon\" '\"$INSTDIR\\${MAIN_EXECUTABLE}\",0'",
+            "  WriteRegStr SHCTX \"Software\\RegisteredApplications\" \"${PRODUCT_ID}\" \"${CAPABILITIES_KEY}\""
+        };
+
+        foreach (var association in configuration.FileAssociations)
+        {
+            foreach (var configuredExtension in association.Extensions)
+            {
+                var extension = NormalizeExtension(configuredExtension);
+                var progId = $"${{PRODUCT_ID}}.File.{extension}.1";
+                var description = Escape(association.Description ?? association.Name ?? $"{configuration.ProductName} .{extension} file");
+                lines.Add($"  ; 注册 .{extension} 的应用专属文件类型和“打开方式”候选项。");
+                lines.Add($"  WriteRegStr SHCTX \"Software\\Classes\\{progId}\" \"\" \"{description}\"");
+                lines.Add($"  WriteRegStr SHCTX \"Software\\Classes\\{progId}\\DefaultIcon\" \"\" '\"$INSTDIR\\${{MAIN_EXECUTABLE}}\",0'");
+                lines.Add($"  WriteRegStr SHCTX \"Software\\Classes\\{progId}\\shell\\open\\command\" \"\" '\"$INSTDIR\\${{MAIN_EXECUTABLE}}\" \"%1\"'");
+                lines.Add($"  WriteRegStr SHCTX \"Software\\Classes\\.{extension}\\OpenWithProgids\" \"{progId}\" \"\"");
+                lines.Add($"  WriteRegStr SHCTX \"${{CAPABILITIES_KEY}}\\FileAssociations\" \".{extension}\" \"{progId}\"");
+            }
+        }
+
+        foreach (var protocol in configuration.UrlProtocols)
+        {
+            foreach (var configuredScheme in protocol.Schemes)
+            {
+                var scheme = configuredScheme.Trim().ToLowerInvariant();
+                var progId = $"${{PRODUCT_ID}}.Url.{scheme}.1";
+                var description = Escape(protocol.Name ?? $"{configuration.ProductName} {scheme} protocol");
+                lines.Add($"  ; 注册 {scheme}: 深链接，并保留应用专属 ProgID 供默认应用界面使用。");
+                AddUrlProtocolRegistration(lines, $"Software\\Classes\\{progId}", description);
+                AddUrlProtocolRegistration(lines, $"Software\\Classes\\{scheme}", description);
+                lines.Add($"  WriteRegStr SHCTX \"${{CAPABILITIES_KEY}}\\UrlAssociations\" \"{scheme}\" \"{progId}\"");
+            }
+        }
+
+        lines.Add("  ; 通知 Shell 重新读取文件类型和协议关联缓存。");
+        lines.Add("  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0x1000, p 0, p 0)' ");
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string CreateAssociationUninstallCommands(
+        BundleConfiguration configuration,
+        string mainExecutable)
+    {
+        if (configuration.FileAssociations.Count == 0 && configuration.UrlProtocols.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var lines = new List<string>
+        {
+            "  ; 只移除本应用注册的候选项，不清除用户为扩展名选择的其他默认程序。"
+        };
+        foreach (var association in configuration.FileAssociations)
+        {
+            foreach (var configuredExtension in association.Extensions)
+            {
+                var extension = NormalizeExtension(configuredExtension);
+                var progId = $"${{PRODUCT_ID}}.File.{extension}.1";
+                lines.Add($"  DeleteRegValue SHCTX \"Software\\Classes\\.{extension}\\OpenWithProgids\" \"{progId}\"");
+                lines.Add($"  DeleteRegKey /ifempty SHCTX \"Software\\Classes\\.{extension}\\OpenWithProgids\"");
+                lines.Add($"  DeleteRegKey /ifempty SHCTX \"Software\\Classes\\.{extension}\"");
+                lines.Add($"  DeleteRegKey SHCTX \"Software\\Classes\\{progId}\"");
+            }
+        }
+
+        foreach (var protocol in configuration.UrlProtocols)
+        {
+            foreach (var configuredScheme in protocol.Schemes)
+            {
+                var scheme = configuredScheme.Trim().ToLowerInvariant();
+                var progId = $"${{PRODUCT_ID}}.Url.{scheme}.1";
+                lines.Add($"  ; 只有协议仍指向本次安装的程序时才删除，避免破坏后来接管协议的应用。");
+                lines.Add($"  ReadRegStr $0 SHCTX \"Software\\Classes\\{scheme}\\shell\\open\\command\" \"\"");
+                lines.Add($"  ${{If}} $0 == '\"$INSTDIR\\{Escape(mainExecutable)}\" \"%1\"'");
+                lines.Add($"    DeleteRegKey SHCTX \"Software\\Classes\\{scheme}\"");
+                lines.Add("  ${EndIf}");
+                lines.Add($"  DeleteRegKey SHCTX \"Software\\Classes\\{progId}\"");
+            }
+        }
+
+        lines.Add("  DeleteRegValue SHCTX \"Software\\RegisteredApplications\" \"${PRODUCT_ID}\"");
+        lines.Add("  DeleteRegKey SHCTX \"${CAPABILITIES_KEY}\"");
+        lines.Add("  DeleteRegKey /ifempty SHCTX \"Software\\${PRODUCT_ID}\"");
+        lines.Add("  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0x1000, p 0, p 0)' ");
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static void AddUrlProtocolRegistration(List<string> lines, string key, string description)
+    {
+        lines.Add($"  WriteRegStr SHCTX \"{key}\" \"\" \"URL:{description}\"");
+        lines.Add($"  WriteRegStr SHCTX \"{key}\" \"URL Protocol\" \"\" ");
+        lines.Add($"  WriteRegStr SHCTX \"{key}\\DefaultIcon\" \"\" '\"$INSTDIR\\${{MAIN_EXECUTABLE}}\",0'");
+        lines.Add($"  WriteRegStr SHCTX \"{key}\\shell\\open\\command\" \"\" '\"$INSTDIR\\${{MAIN_EXECUTABLE}}\" \"%1\"'");
+    }
+
+    private static string NormalizeExtension(string extension) =>
+        extension.Trim().TrimStart('.').ToLowerInvariant();
 
     private static string CreateInstallerHooksInclude(string? hooksFile) =>
         string.IsNullOrWhiteSpace(hooksFile)

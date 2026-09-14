@@ -38,6 +38,10 @@ DotNet.Bundler uses the four optional `NSIS_HOOK_*` macro names found in the ups
 
 Tauri's runtime scan by `DisplayName` and `Publisher` was reviewed but rejected because another installed product can legitimately share both values. DotNet.Bundler requires explicit historical MSI ProductCode or UpgradeCode GUIDs and queries them through Windows Installer APIs in the bundled native plug-in. Migration always removes every exact match before writing the NSIS payload. The upstream uninstall-first behavior is retained, while detection is intentionally stricter.
 
+### File associations and deep links
+
+Tauri's file-association macros and ownership-checked deep-link removal were reviewed. The deep-link ownership check is adopted so uninstall cannot remove a protocol that another application subsequently claimed. Directly assigning an extension's default ProgID was rejected: modern Windows requires applications to register as candidates and leaves the effective default to the user. DotNet.Bundler therefore registers application-specific versioned ProgIDs, `OpenWithProgids`, Capabilities, and `RegisteredApplications`, then refreshes the Shell association cache. Custom URL schemes additionally receive a direct protocol key so a newly installed scheme is immediately launchable.
+
 ## External validation still required
 
 See `docs/nsis-open-items.md` for tests that need credentials, production identifiers, or platform conditions unavailable in the repository.

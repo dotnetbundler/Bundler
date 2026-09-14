@@ -36,6 +36,7 @@ ${UnStrStr}
 !define OUTPUT_FILE "{{output_file}}"
 !define ESTIMATED_SIZE "{{estimated_size}}"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_ID}"
+!define CAPABILITIES_KEY "Software\${PRODUCT_ID}\Capabilities"
 !define INSTALL_MARKER ".dotnet-bundler-${PRODUCT_ID}"
 {{installer_icon_directives}}
 {{installer_hooks_include}}
@@ -527,6 +528,7 @@ Section "Install" MainSection
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "EstimatedSize" ${ESTIMATED_SIZE}
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoModify" 1
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoRepair" 1
+{{association_install_commands}}
   !ifmacrodef NSIS_HOOK_POSTINSTALL
     !insertmacro NSIS_HOOK_POSTINSTALL
   !endif
@@ -541,6 +543,7 @@ Section "Uninstall"
   Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"
   RMDir "$SMPROGRAMS\${PRODUCT_NAME}"
+{{association_uninstall_commands}}
   DeleteRegKey SHCTX "${UNINSTALL_KEY}"
   DeleteRegKey /ifempty HKCU "Software\${PRODUCT_ID}"
   ${If} $DeleteAppData == 1

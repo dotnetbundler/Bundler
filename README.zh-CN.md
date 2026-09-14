@@ -42,7 +42,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `ne
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.15" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.16" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -60,7 +60,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.15" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.16" />
 ```
 
 ```csharp
@@ -137,6 +137,20 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 </ItemGroup>
 ```
 
+文件关联和自定义 URL 协议属于与打包格式无关的应用元数据：
+
+```xml
+<ItemGroup>
+  <BundlerFileAssociation Include="mydoc"
+                          Name="我的应用文档"
+                          Description="我的应用文档文件"
+                          MimeType="application/x-myapp-document" />
+  <BundlerUrlProtocol Include="myapp" Name="我的应用链接" />
+</ItemGroup>
+```
+
+扩展名可以带开头的点，每个 Item 表示一项关联，匹配时不区分大小写。NSIS 会注册应用专属 ProgID、“打开方式”候选项和 Windows 默认应用 Capabilities，但不会覆盖用户当前选择的默认程序。`MimeType` 是供需要 MIME 类型的后端使用的通用元数据；Windows NSIS 不会把它写入共享的扩展名注册表项。自定义 URL 协议安装后可直接通过 `myapp:...` 启动；卸载时只有协议命令仍指向本次安装目录才会删除，因此不会破坏后来接管该协议的程序。
+
 对 NSIS 而言，第一个 `.ico` 文件是安装器和卸载器的回退图标，也可以分别用 NSIS 专属属性覆盖。Header 图片建议为 150×57 BMP，Sidebar 图片建议为 164×314 BMP。`BundlerLicenseFile` 会增加许可证页面。描述、主页、版权、产品版本和文件版本会写入相应的可执行文件或“应用和功能”元数据。每个资源安装到相对的 `TargetPath`，省略时使用源文件名。目标路径冲突或逃逸安装目录会在打包前报错。
 
 ## 通用打包流程与 NSIS 定制
@@ -181,7 +195,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。模板支持的变量包括 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`install_mode`、`target_architecture`、`allow_downgrades`、`legacy_msi_product_codes`、`legacy_msi_upgrade_codes`、`input_glob`、`output_file`、`estimated_size`、`plugin_directory`、`uninstall_payload`、`language_macros`、`language_files`、`display_language_selector`，写法为 `{{name}}`。
 
-这是面向 Windows 的可用基线，并不等于 Tauri 功能对等。文件关联、深链接、签名和更新器命令行行为仍属于后续工作。
+这是面向 Windows 的可用基线，并不等于 Tauri 功能对等。签名和更新器命令行行为仍属于后续工作。
 
 ## 仓库命令
 
@@ -189,7 +203,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.15
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.16
 ```
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

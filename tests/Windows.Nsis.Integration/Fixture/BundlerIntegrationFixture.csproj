@@ -30,5 +30,10 @@
     <PackageReference Include="$(BundlerIntegrationPackageId)" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerIcon Include="$(BundlerTestIcon)" Condition="'$(BundlerTestIcon)' != ''" />
     <BundlerResource Include="Assets\license.txt" TargetPath="docs\license.txt" />
+    <BundlerFileAssociation Include="dbfixture"
+                            Name="DotNet.Bundler fixture document"
+                            Description="Disposable DotNet.Bundler integration fixture document"
+                            MimeType="application/x-dotnet-bundler-fixture" />
+    <BundlerUrlProtocol Include="bundlerfixture" Name="DotNet.Bundler fixture link" />
   </ItemGroup>
 </Project>

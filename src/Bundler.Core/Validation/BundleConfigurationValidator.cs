@@ -11,6 +11,12 @@ public static class BundleConfigurationValidator
     private static readonly Regex VersionPattern = new(
         "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
         RegexOptions.Compiled);
+    private static readonly Regex FileExtensionPattern = new(
+        "^[A-Za-z0-9][A-Za-z0-9_+-]{0,63}$",
+        RegexOptions.Compiled);
+    private static readonly Regex UrlSchemePattern = new(
+        "^[A-Za-z][A-Za-z0-9+.-]{0,63}$",
+        RegexOptions.Compiled);
 
     public static IReadOnlyList<ValidationIssue> Validate(
         BundleConfiguration configuration,
@@ -77,6 +83,8 @@ public static class BundleConfigurationValidator
                 issues.Add(new($"resources[{index}].source", $"Path does not exist: {resource.Source}"));
             }
         }
+        ValidateFileAssociations(configuration.FileAssociations, issues);
+        ValidateUrlProtocols(configuration.UrlProtocols, issues);
         ValidateDuplicateOutputs(configuration, issues);
         return issues;
     }
@@ -175,6 +183,65 @@ public static class BundleConfigurationValidator
             if (!File.Exists(paths[index]) && !Directory.Exists(paths[index]))
             {
                 issues.Add(new($"{propertyName}[{index}]", $"Path does not exist: {paths[index]}"));
+            }
+        }
+    }
+
+    private static void ValidateFileAssociations(
+        IReadOnlyList<BundleFileAssociationConfiguration> associations,
+        List<ValidationIssue> issues)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var associationIndex = 0; associationIndex < associations.Count; associationIndex++)
+        {
+            var association = associations[associationIndex];
+            if (association.Extensions.Count == 0)
+            {
+                issues.Add(new($"fileAssociations[{associationIndex}].extensions", "At least one file extension is required."));
+            }
+
+            for (var extensionIndex = 0; extensionIndex < association.Extensions.Count; extensionIndex++)
+            {
+                var configured = association.Extensions[extensionIndex].Trim();
+                var extension = configured.StartsWith(".", StringComparison.Ordinal) ? configured.Substring(1) : configured;
+                var path = $"fileAssociations[{associationIndex}].extensions[{extensionIndex}]";
+                if (!FileExtensionPattern.IsMatch(extension))
+                {
+                    issues.Add(new(path, "Must be a 1-64 character extension containing only letters, digits, '_', '+', or '-'."));
+                }
+                else if (!seen.Add(extension))
+                {
+                    issues.Add(new(path, $"Duplicate file extension: {configured}."));
+                }
+            }
+        }
+    }
+
+    private static void ValidateUrlProtocols(
+        IReadOnlyList<BundleUrlProtocolConfiguration> protocols,
+        List<ValidationIssue> issues)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var protocolIndex = 0; protocolIndex < protocols.Count; protocolIndex++)
+        {
+            var protocol = protocols[protocolIndex];
+            if (protocol.Schemes.Count == 0)
+            {
+                issues.Add(new($"urlProtocols[{protocolIndex}].schemes", "At least one URL scheme is required."));
+            }
+
+            for (var schemeIndex = 0; schemeIndex < protocol.Schemes.Count; schemeIndex++)
+            {
+                var scheme = protocol.Schemes[schemeIndex].Trim();
+                var path = $"urlProtocols[{protocolIndex}].schemes[{schemeIndex}]";
+                if (!UrlSchemePattern.IsMatch(scheme))
+                {
+                    issues.Add(new(path, "Must be a 1-64 character URI scheme beginning with a letter."));
+                }
+                else if (!seen.Add(scheme))
+                {
+                    issues.Add(new(path, $"Duplicate URL scheme: {scheme}."));
+                }
             }
         }
     }
