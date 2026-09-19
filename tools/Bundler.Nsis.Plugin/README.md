@@ -2,8 +2,9 @@
 
 This project builds the Unicode `win-x86` Native AOT plug-in used by the NSIS
 installer at runtime. It uses `NsisPlugin` 1.0.2, links the same SemVer source
-used by `DotNet.Bundler.Nsis` tests, and queries explicitly configured legacy
-MSI products through the native Windows Installer API.
+used by `DotNet.Bundler.Nsis` tests, queries explicitly configured legacy MSI
+products through the native Windows Installer API, and starts an installed app
+with the interactive desktop user's token after an elevated install.
 
 It is intentionally excluded from `Bundler.slnx`: normal library and MSBuild task
 builds retain the .NET 8 SDK baseline, while rebuilding the native plug-in requires

@@ -10,4 +10,11 @@ if (deepLink is not null)
     File.WriteAllText(Path.Combine(Path.GetTempPath(), "DotNetBundler-deep-link.txt"), deepLink);
 }
 
+if (args.Contains("--protocol-marker", StringComparer.Ordinal))
+{
+    File.WriteAllLines(
+        Path.Combine(Path.GetTempPath(), "DotNetBundler-command-line.txt"),
+        args);
+}
+
 Console.WriteLine("DotNet.Bundler integration fixture");

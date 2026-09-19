@@ -42,7 +42,7 @@ The MSBuild task and the Abstractions/Core/NSIS assemblies it loads all provide 
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.17" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.18" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -60,7 +60,7 @@ The installer is written to `artifacts/<rid>/nsis/` by default. Installer genera
 Applications and build tools that do not use MSBuild integration can reference `DotNet.Bundler.Nsis` directly:
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.17" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.18" />
 ```
 
 ```csharp
@@ -183,6 +183,24 @@ The default template includes current-user installation, a user-selectable direc
 
 Versions must follow SemVer 2.0 and each numeric core component must fit the Windows `0-65535` version-resource range. The installer detects an existing installation in the selected user or machine registry context and compares `DisplayVersion` using a bundled `NsisPlugin` Native AOT plug-in. Interactive installs let the user choose between uninstall-first and in-place replacement. Silent same-version runs repair in place; silent upgrades uninstall the old packaged payload first while preserving application data. Downgrades are rejected by default and can be enabled with `BundlerNsisAllowDowngrades`.
 
+### Installer command-line protocol
+
+These switches are part of the generated NSIS installer interface, not MSBuild properties:
+
+| Switch | Behavior |
+| --- | --- |
+| `/S` | Native NSIS silent mode with no window |
+| `/P` | Passive install or uninstall: show progress only and skip pages that require input |
+| `/UPDATE` | Updater mode; implies `/P` unless `/S` is present, installs in place, and preserves existing shortcut state and application data |
+| `/NS` | Do not create desktop or Start Menu shortcuts |
+| `/R` | After success, start the app as the desktop user rather than with the installer's administrator token; valid only with `/S`, `/P`, or `/UPDATE` |
+| `/ARGS=<argument line>` | With `/R`, pass arguments directly to the app without `cmd.exe` or PowerShell |
+| `/D=<directory>` | Native NSIS installation-directory switch; it must be the final installer argument |
+
+`/ARGS` without `=` is also accepted and consumes all remaining text as application arguments. When combining it with `/D`, use `/ARGS=<argument line>` and keep `/D` last. Automated modes accept only an empty directory or one marked as an installation of the same product; they never confirm overwriting an unrelated non-empty directory without user interaction.
+
+Stable installer exit codes are `0` success, `1` user cancellation, `2` general failure, `3` invalid arguments or automated install directory, `4` version policy blocked, `5` running application could not be closed, and `3010` success with a required Windows restart.
+
 To migrate installations previously shipped as MSI, configure their exact identifiers instead of relying on product-name matching:
 
 ```xml
@@ -255,7 +273,7 @@ The built-in signer calls Windows Authenticode APIs, so signing with it requires
 
 Set `BundlerNsisTemplate` to an absolute path to use a customized copy. A custom template must retain the signing-pass placeholders `uninstaller_finalize_command`, `uninstaller_import_define`, and `signed_uninstaller`. Other supported placeholders include `product_name`, `version`, `numeric_version`, `publisher`, `identifier`, `main_executable`, `process_name`, `install_folder`, `install_mode`, `target_architecture`, `allow_downgrades`, `legacy_msi_product_codes`, `legacy_msi_upgrade_codes`, `input_glob`, `output_file`, `estimated_size`, `plugin_directory`, `uninstall_payload`, `language_macros`, `language_files`, and `display_language_selector`, each written as `{{name}}`.
 
-This is a practical Windows baseline, not Tauri feature parity. Updater command-line behavior remains planned work.
+This is a practical Windows baseline, not Tauri feature parity.
 
 ## Repository commands
 
@@ -263,7 +281,7 @@ This is a practical Windows baseline, not Tauri feature parity. Updater command-
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.17
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.18
 ```
 
 The Windows integration test installs a dedicated fixture into a Chinese path containing spaces, validates payload/resources/metadata/registry/shortcuts/process shutdown, exercises both data-preserving and full-data removal uninstalls, and cleans its test state in `finally`.

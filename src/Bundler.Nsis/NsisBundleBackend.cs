@@ -262,7 +262,10 @@ internal sealed class NsisBundleBackend(
     private static string CreateLicensePage(string? licenseFile) =>
         string.IsNullOrWhiteSpace(licenseFile)
             ? string.Empty
-            : $"!insertmacro MUI_PAGE_LICENSE \"{Escape(Path.GetFullPath(licenseFile!))}\"";
+            : string.Join(
+                Environment.NewLine,
+                "!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive",
+                $"!insertmacro MUI_PAGE_LICENSE \"{Escape(Path.GetFullPath(licenseFile!))}\"");
 
     private static string CreateHomepageRegistry(string? homepage) =>
         string.IsNullOrWhiteSpace(homepage)

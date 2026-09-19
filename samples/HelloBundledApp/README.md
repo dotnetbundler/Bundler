@@ -97,15 +97,27 @@ dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -p:Vers
 
 再次运行同版本安装程序会展示重装策略；运行高版本和低版本安装程序会分别展示升级及降级策略。让程序保持在“按任意键退出”界面，再运行安装或卸载程序，可以展示运行进程检测和关闭。
 
-## 静默模式
+## 自动安装、更新与启动参数
 
 NSIS 的 `/D=` 必须是最后一个参数：
 
 ```powershell
+# 静默安装。
 & '.\Hello Bundled App-1.0.0-setup.exe' /S '/D=C:\演示安装目录\Hello Bundled App'
+
+# 被动安装只显示进度；/NS 禁止创建快捷方式。
+& '.\Hello Bundled App-1.0.0-setup.exe' /P /NS '/D=C:\演示安装目录\Hello Bundled App'
+
+# 自动更新并在成功后启动应用。应用收到的参数会写入
+# %LOCALAPPDATA%\com.example.hellobundledapp\last-launch.txt。
+& '.\Hello Bundled App-1.1.0-setup.exe' /UPDATE /R '/ARGS=--from-updater "你好 world"' '/D=C:\演示安装目录\Hello Bundled App'
+
+# 默认卸载保留运行时数据；/DELETEAPPDATA 同时删除数据和完整安装目录。
 & 'C:\演示安装目录\Hello Bundled App\Uninstall.exe' /S
-& 'C:\演示安装目录\Hello Bundled App\Uninstall.exe' /S /DELETEAPPDATA
+& 'C:\演示安装目录\Hello Bundled App\Uninstall.exe' /P /DELETEAPPDATA
 ```
+
+`/S` 不显示界面，`/P` 只显示进度，`/UPDATE` 在未指定 `/S` 时自动采用 `/P` 并保留已有快捷方式状态。`/R` 只允许与这些自动模式一起使用；`/ARGS=` 直接传给应用，不经过命令行 Shell。安装器退出码为：`0` 成功、`1` 取消、`2` 一般失败、`3` 参数错误、`4` 版本策略阻止、`5` 无法关闭应用、`3010` 成功但需要重启。
 
 ## 生命周期 Hook
 

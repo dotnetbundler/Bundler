@@ -42,7 +42,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `ne
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.17" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.18" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -60,7 +60,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.17" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.18" />
 ```
 
 ```csharp
@@ -183,6 +183,24 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 版本必须符合 SemVer 2.0，并且三个数字核心段都必须处于 Windows 版本资源允许的 `0-65535` 范围。安装器会在所选用户或计算机注册表上下文中检测现有安装，并通过包内使用 `NsisPlugin` 构建的 Native AOT 插件比较 `DisplayVersion`。交互安装允许用户选择先卸载或原位覆盖；静默同版本安装执行原位修复，静默升级会先卸载旧的构建载荷，同时保留应用数据。默认禁止降级，可通过 `BundlerNsisAllowDowngrades` 开启。
 
+### 安装器命令行协议
+
+这些参数属于生成后的 NSIS 安装器接口，不是 MSBuild 属性：
+
+| 参数 | 行为 |
+| --- | --- |
+| `/S` | NSIS 原生静默模式，不显示窗口 |
+| `/P` | 被动安装或卸载，只显示进度并跳过需要输入的页面 |
+| `/UPDATE` | 自动更新模式；未同时指定 `/S` 时隐含 `/P`，原位覆盖并保留现有快捷方式状态和应用数据 |
+| `/NS` | 不创建桌面和开始菜单快捷方式 |
+| `/R` | 成功后以桌面用户而非安装器管理员令牌启动应用；只允许与 `/S`、`/P` 或 `/UPDATE` 一起使用 |
+| `/ARGS=<参数行>` | 与 `/R` 配合，把参数直接传给应用，不经过 `cmd.exe` 或 PowerShell |
+| `/D=<目录>` | NSIS 原生安装目录参数，必须是整条命令的最后一个参数 |
+
+`/ARGS` 也兼容不带等号的写法，此时它后面的全部文本都会成为应用参数。需要同时使用 `/D` 时应使用 `/ARGS=<参数行>`，并仍把 `/D` 放在最后。自动模式只接受空目录或带当前产品安装标记的目录；它不会用无交互方式确认覆盖无关的非空目录。
+
+安装器稳定退出码为：`0` 成功、`1` 用户取消、`2` 一般失败、`3` 参数或自动安装目录无效、`4` 版本策略阻止、`5` 无法关闭正在运行的应用、`3010` 成功但需要重新启动 Windows。
+
 如果产品以前使用 MSI 发布，应配置历史安装包的准确标识，不按产品名猜测：
 
 ```xml
@@ -255,7 +273,7 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 
 若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。自定义模板必须保留签名两阶段编译所需的 `uninstaller_finalize_command`、`uninstaller_import_define` 和 `signed_uninstaller` 占位符。其他变量包括 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`install_mode`、`target_architecture`、`allow_downgrades`、`legacy_msi_product_codes`、`legacy_msi_upgrade_codes`、`input_glob`、`output_file`、`estimated_size`、`plugin_directory`、`uninstall_payload`、`language_macros`、`language_files`、`display_language_selector`，写法为 `{{name}}`。
 
-这是面向 Windows 的可用基线，并不等于 Tauri 功能对等。自动更新器命令行行为仍属于后续工作。
+这是面向 Windows 的可用基线，并不等于 Tauri 功能对等。
 
 ## 仓库命令
 
@@ -263,7 +281,7 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.17
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.18
 ```
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

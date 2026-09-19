@@ -56,6 +56,12 @@ Var VersionComparison
 Var ExistingInstallAction
 Var ExistingInstallType
 Var LegacyMsiProductCode
+Var PassiveMode
+Var UpdateMode
+Var NoShortcutMode
+Var RestartApplication
+Var LaunchArguments
+Var ExitCode
 
 ; DotNetBundlerNsis::SemverCompare 返回的比较结果。
 ; 将这些名称放在状态变量附近，便于理解各个版本策略分支。
@@ -67,6 +73,14 @@ Var LegacyMsiProductCode
 !define EXISTING_ACTION_UNINSTALL_FIRST 2
 !define EXISTING_TYPE_NSIS 1
 !define EXISTING_TYPE_MSI 2
+; 命令行调用方可以依赖这些稳定退出码判断安装结果。
+!define EXIT_SUCCESS 0
+!define EXIT_CANCELLED 1
+!define EXIT_FAILURE 2
+!define EXIT_INVALID_ARGUMENTS 3
+!define EXIT_VERSION_BLOCKED 4
+!define EXIT_APP_CLOSE_FAILED 5
+!define EXIT_REBOOT_REQUIRED 3010
 
 Name "${PRODUCT_NAME}"
 BrandingText "${PRODUCT_PUBLISHER}"
@@ -104,25 +118,32 @@ VIAddVersionKey "FileDescription" "${PRODUCT_DESCRIPTION}"
 VIAddVersionKey "LegalCopyright" "${PRODUCT_COPYRIGHT}"
 
 !define MUI_ABORTWARNING
+!define MUI_CUSTOMFUNCTION_ABORT RecordUserAbort
 !define MUI_FINISHPAGE_NOAUTOCLOSE
-!define MUI_FINISHPAGE_RUN "$INSTDIR\${MAIN_EXECUTABLE}"
+!define MUI_FINISHPAGE_RUN
+!define MUI_FINISHPAGE_RUN_FUNCTION LaunchApplication
 !define MUI_LANGDLL_REGISTRY_ROOT HKCU
 !define MUI_LANGDLL_REGISTRY_KEY "Software\${PRODUCT_ID}"
 !define MUI_LANGDLL_REGISTRY_VALUENAME "Installer Language"
 
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
 !insertmacro MUI_PAGE_WELCOME
 {{license_page}}
 !if "${INSTALL_MODE}" == "both"
+  !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
   !insertmacro MULTIUSER_PAGE_INSTALLMODE
 !endif
 ; 在所选 Shell 上下文中检测现有安装，并决定如何替换它。
 ; 不存在旧版本时自动跳过此页面。
 Page custom ExistingInstallPage
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE ValidateInstallDirectory
 !insertmacro MUI_PAGE_DIRECTORY
 Page custom ShortcutOptionsPage ShortcutOptionsLeave
 !insertmacro MUI_PAGE_INSTFILES
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
 !insertmacro MUI_PAGE_FINISH
+!define MUI_PAGE_CUSTOMFUNCTION_PRE un.SkipIfPassive
 !insertmacro MUI_UNPAGE_CONFIRM
 UninstPage custom un.AppDataOptionsPage un.AppDataOptionsLeave
 !insertmacro MUI_UNPAGE_INSTFILES
@@ -146,11 +167,102 @@ UninstPage custom un.AppDataOptionsPage un.AppDataOptionsLeave
   !endif
 !macroend
 
+Function ParseCommandLine
+  ; /P 显示安装进度但跳过所有需要输入的页面。
+  ${GetOptions} $CMDLINE "/P" $0
+  ${IfNot} ${Errors}
+    StrCpy $PassiveMode 1
+  ${EndIf}
+
+  ; /UPDATE 是自动更新器入口；除非同时使用 /S，否则默认采用被动模式。
+  ${GetOptions} $CMDLINE "/UPDATE" $0
+  ${IfNot} ${Errors}
+    StrCpy $UpdateMode 1
+    ; 更新器保留现有快捷方式状态，不补建用户已经删除的快捷方式。
+    StrCpy $CreateDesktopShortcut 0
+    StrCpy $CreateStartMenuShortcut 0
+    ${IfNot} ${Silent}
+      StrCpy $PassiveMode 1
+    ${EndIf}
+  ${EndIf}
+
+  ; /NS 禁止本次安装创建桌面和开始菜单快捷方式。
+  ${GetOptions} $CMDLINE "/NS" $0
+  ${IfNot} ${Errors}
+    StrCpy $NoShortcutMode 1
+    StrCpy $CreateDesktopShortcut 0
+    StrCpy $CreateStartMenuShortcut 0
+  ${EndIf}
+
+  ; /R 只允许自动化安装使用，避免与完成页的交互式启动选项冲突。
+  ${GetOptions} $CMDLINE "/R" $0
+  ${IfNot} ${Errors}
+    ${IfNot} ${Silent}
+    ${AndIf} $PassiveMode != 1
+      StrCpy $ExitCode ${EXIT_INVALID_ARGUMENTS}
+      SetErrorLevel $ExitCode
+      Abort "$(InvalidRestartMode)"
+    ${EndIf}
+    StrCpy $RestartApplication 1
+  ${EndIf}
+
+  ; /ARGS= 读取到下一个安装器选项，便于把 NSIS 要求位于末尾的 /D= 放在最后；
+  ; 兼容的 /ARGS 写法则把后续全部文本视为应用参数。
+  ${GetOptions} $CMDLINE "/ARGS=" $LaunchArguments
+  ${If} ${Errors}
+    ${GetOptions} $CMDLINE "/ARGS" $LaunchArguments
+  ${EndIf}
+  ${IfNot} ${Errors}
+    ${If} $RestartApplication != 1
+      StrCpy $ExitCode ${EXIT_INVALID_ARGUMENTS}
+      SetErrorLevel $ExitCode
+      Abort "$(ArgumentsRequireRestart)"
+    ${EndIf}
+  ${Else}
+    StrCpy $LaunchArguments ""
+  ${EndIf}
+FunctionEnd
+
+Function SkipIfPassive
+  ${If} $PassiveMode == 1
+    Abort
+  ${EndIf}
+FunctionEnd
+
+Function un.SkipIfPassive
+  ${If} $PassiveMode == 1
+    Abort
+  ${EndIf}
+FunctionEnd
+
+Function LaunchApplication
+  DotNetBundlerNsis::RunAsUser "$INSTDIR\${MAIN_EXECUTABLE}" "$LaunchArguments"
+  Pop $0
+  ${If} $0 != 0
+    StrCpy $ExitCode ${EXIT_FAILURE}
+    ${IfNot} ${Silent}
+    ${AndIf} $PassiveMode != 1
+      MessageBox MB_ICONSTOP|MB_OK "$(ApplicationLaunchFailed)"
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
+
 Function .onInit
+  StrCpy $ExitCode ${EXIT_SUCCESS}
+  StrCpy $PassiveMode 0
+  StrCpy $UpdateMode 0
+  StrCpy $NoShortcutMode 0
+  StrCpy $RestartApplication 0
+  StrCpy $LaunchArguments ""
   StrCpy $CreateDesktopShortcut 1
   StrCpy $CreateStartMenuShortcut 1
   StrCpy $ExistingInstallAction 0
+  Call ParseCommandLine
+  ; 静默与被动模式都不能显示语言选择器。
+  ${IfNot} ${Silent}
+  ${AndIf} $PassiveMode != 1
 {{display_language_selector}}
+  ${EndIf}
   !insertmacro SetInstallContext
   !if "${INSTALL_MODE}" == "both"
     !insertmacro MULTIUSER_INIT
@@ -158,16 +270,53 @@ Function .onInit
     Call SetDefaultInstallDirectory
   !endif
 
-  ; 静默安装不会显示现有安装处理页面，因此需要在初始化阶段确定处理方式。
+  ; 静默和被动安装不会显示现有安装处理页面，因此需要在初始化阶段确定处理方式。
   ; 交互式安装则在对应页面中确定处理方式。
   Call DetectExistingInstall
   ${If} ${Silent}
-    Call ApplySilentExistingInstallPolicy
+    Call ApplyAutomatedExistingInstallPolicy
+    Call ValidateAutomatedInstallDirectory
+  ${ElseIf} $PassiveMode == 1
+    Call ApplyAutomatedExistingInstallPolicy
+    Call ValidateAutomatedInstallDirectory
   ${EndIf}
 FunctionEnd
 
+Function RecordUserAbort
+  ${If} $ExitCode == ${EXIT_SUCCESS}
+    StrCpy $ExitCode ${EXIT_CANCELLED}
+  ${EndIf}
+  SetErrorLevel $ExitCode
+FunctionEnd
+
+Function .onInstFailed
+  ${If} $ExitCode == ${EXIT_SUCCESS}
+    StrCpy $ExitCode ${EXIT_FAILURE}
+  ${EndIf}
+  SetErrorLevel $ExitCode
+FunctionEnd
+
+Function .onInstSuccess
+  ; 需要重新启动时不立即运行应用，让自动化调用方先处理 3010。
+  IfRebootFlag reboot_required no_reboot_required
+  reboot_required:
+    SetErrorLevel ${EXIT_REBOOT_REQUIRED}
+    Return
+  no_reboot_required:
+    ${If} $RestartApplication == 1
+      Call LaunchApplication
+    ${EndIf}
+    SetErrorLevel $ExitCode
+FunctionEnd
+
 Function un.onInit
+  StrCpy $ExitCode ${EXIT_SUCCESS}
+  StrCpy $PassiveMode 0
   StrCpy $DeleteAppData 0
+  ${GetOptions} $CMDLINE "/P" $0
+  ${IfNot} ${Errors}
+    StrCpy $PassiveMode 1
+  ${EndIf}
   ${GetOptions} $CMDLINE "/DELETEAPPDATA" $0
   ${IfNot} ${Errors}
     StrCpy $DeleteAppData 1
@@ -239,7 +388,7 @@ Function DetectLegacyMsiInstallation
   Call CompareInstalledVersion
 FunctionEnd
 
-Function ApplySilentExistingInstallPolicy
+Function ApplyAutomatedExistingInstallPolicy
   ${If} $InstalledUninstaller == ""
     Return
   ${EndIf}
@@ -248,18 +397,40 @@ Function ApplySilentExistingInstallPolicy
   ${If} $ExistingInstallType == ${EXISTING_TYPE_MSI}
     ${If} $VersionComparison == ${VERSION_OLDER}
       !if "${ALLOW_DOWNGRADES}" != "true"
-        SetErrorLevel 2
+        StrCpy $ExitCode ${EXIT_VERSION_BLOCKED}
+        SetErrorLevel $ExitCode
         Abort "$(SilentDowngradeBlocked)"
       !endif
     ${ElseIf} $VersionComparison == ${VERSION_UNKNOWN}
-      SetErrorLevel 2
+      StrCpy $ExitCode ${EXIT_VERSION_BLOCKED}
+      SetErrorLevel $ExitCode
       Abort "$(SilentUnknownVersionBlocked)"
     ${EndIf}
     StrCpy $ExistingInstallAction ${EXISTING_ACTION_UNINSTALL_FIRST}
     Return
   ${EndIf}
 
-  ; 同版本静默安装会就地修复文件；静默升级会先删除旧版打包载荷，
+  ; 自动更新采用原位覆盖，以保留用户选择和运行时数据；它仍然遵守降级策略。
+  ${If} $UpdateMode == 1
+    ${If} $VersionComparison == ${VERSION_OLDER}
+      !if "${ALLOW_DOWNGRADES}" != "true"
+        StrCpy $ExitCode ${EXIT_VERSION_BLOCKED}
+        SetErrorLevel $ExitCode
+        Abort "$(SilentDowngradeBlocked)"
+      !endif
+    ${ElseIf} $VersionComparison == ${VERSION_UNKNOWN}
+      StrCpy $ExitCode ${EXIT_VERSION_BLOCKED}
+      SetErrorLevel $ExitCode
+      Abort "$(SilentUnknownVersionBlocked)"
+    ${EndIf}
+    ${If} $InstalledDirectory != ""
+      StrCpy $INSTDIR $InstalledDirectory
+    ${EndIf}
+    StrCpy $ExistingInstallAction ${EXISTING_ACTION_INSTALL_OVER}
+    Return
+  ${EndIf}
+
+  ; 同版本自动安装会就地修复文件；普通自动升级会先删除旧版打包载荷，
   ; 同时保留应用数据。
   ${If} $VersionComparison == ${VERSION_SAME}
     StrCpy $ExistingInstallAction ${EXISTING_ACTION_INSTALL_OVER}
@@ -269,18 +440,23 @@ Function ApplySilentExistingInstallPolicy
     !if "${ALLOW_DOWNGRADES}" == "true"
       StrCpy $ExistingInstallAction ${EXISTING_ACTION_UNINSTALL_FIRST}
     !else
-      ; 被禁止的静默降级必须直接返回失败，不能等待用户界面交互。
-      SetErrorLevel 2
+      ; 被禁止的自动降级必须直接返回失败，不能等待用户界面交互。
+      StrCpy $ExitCode ${EXIT_VERSION_BLOCKED}
+      SetErrorLevel $ExitCode
       Abort "$(SilentDowngradeBlocked)"
     !endif
   ${Else}
     ; 缺少交互式确认时，无法安全处理无法识别的版本。
-    SetErrorLevel 2
+    StrCpy $ExitCode ${EXIT_VERSION_BLOCKED}
+    SetErrorLevel $ExitCode
     Abort "$(SilentUnknownVersionBlocked)"
   ${EndIf}
 FunctionEnd
 
 Function ExistingInstallPage
+  ${If} $PassiveMode == 1
+    Abort
+  ${EndIf}
   ; 安装模式页面可能改变 SHCTX，因此在显示交互式版本策略选项之前，
   ; 必须重新检测现有安装。
   Call DetectExistingInstall
@@ -293,11 +469,14 @@ Function ExistingInstallPage
     ${If} $VersionComparison == ${VERSION_OLDER}
       !if "${ALLOW_DOWNGRADES}" != "true"
         MessageBox MB_ICONSTOP|MB_OK "$(DowngradeBlocked)"
-        SetErrorLevel 2
+        StrCpy $ExitCode ${EXIT_VERSION_BLOCKED}
+        SetErrorLevel $ExitCode
         Quit
       !endif
     ${EndIf}
     MessageBox MB_ICONQUESTION|MB_OKCANCEL "$(LegacyMsiDetected)" IDOK existing_uninstall_first
+    StrCpy $ExitCode ${EXIT_CANCELLED}
+    SetErrorLevel $ExitCode
     Quit
   ${EndIf}
 
@@ -313,7 +492,8 @@ Function ExistingInstallPage
       Goto existing_cancel
     !else
       MessageBox MB_ICONSTOP|MB_OK "$(DowngradeBlocked)"
-      SetErrorLevel 2
+      StrCpy $ExitCode ${EXIT_VERSION_BLOCKED}
+      SetErrorLevel $ExitCode
       Quit
     !endif
   ${Else}
@@ -328,6 +508,8 @@ Function ExistingInstallPage
     StrCpy $ExistingInstallAction ${EXISTING_ACTION_UNINSTALL_FIRST}
     Abort
   existing_cancel:
+    StrCpy $ExitCode ${EXIT_CANCELLED}
+    SetErrorLevel $ExitCode
     Quit
 FunctionEnd
 
@@ -350,7 +532,9 @@ Function UninstallExistingInstallation
   ${OrIf} $0 != 0
   ${OrIf} ${FileExists} "$InstalledDirectory\${MAIN_EXECUTABLE}"
     ${If} ${Silent}
-      SetErrorLevel 3
+    ${OrIf} $PassiveMode == 1
+      StrCpy $ExitCode ${EXIT_FAILURE}
+      SetErrorLevel $ExitCode
       Quit
     ${Else}
       MessageBox MB_ICONSTOP|MB_OK "$(ExistingUninstallFailed)"
@@ -372,6 +556,8 @@ Function UninstallLegacyMsiInstallations
     ClearErrors
     ${If} ${Silent}
       ExecWait '"$SYSDIR\msiexec.exe" /x "$LegacyMsiProductCode" /qn /norestart' $0
+    ${ElseIf} $PassiveMode == 1
+      ExecWait '"$SYSDIR\msiexec.exe" /x "$LegacyMsiProductCode" /passive /norestart' $0
     ${Else}
       ExecWait '"$SYSDIR\msiexec.exe" /x "$LegacyMsiProductCode" /passive /norestart' $0
     ${EndIf}
@@ -390,7 +576,9 @@ Function UninstallLegacyMsiInstallations
     ${EndIf}
 
     ${If} ${Silent}
-      SetErrorLevel 3
+    ${OrIf} $PassiveMode == 1
+      StrCpy $ExitCode ${EXIT_FAILURE}
+      SetErrorLevel $ExitCode
       Quit
     ${Else}
       MessageBox MB_ICONSTOP|MB_OK "$(ExistingUninstallFailed)"
@@ -416,7 +604,32 @@ Function ValidateInstallDirectory
   directory_valid:
 FunctionEnd
 
+Function ValidateAutomatedInstallDirectory
+  ; 自动模式不能通过对话框确认风险：只允许空目录或带本产品标记的目录。
+  IfFileExists "$INSTDIR\${INSTALL_MARKER}" automated_directory_valid
+  FindFirst $0 $1 "$INSTDIR\*"
+  automated_directory_scan:
+    StrCmp $1 "" automated_directory_empty
+    StrCmp $1 "." automated_directory_next
+    StrCmp $1 ".." automated_directory_next
+    FindClose $0
+    StrCpy $ExitCode ${EXIT_INVALID_ARGUMENTS}
+    SetErrorLevel $ExitCode
+    Abort "$(AutomatedNonEmptyDirectoryBlocked)"
+  automated_directory_next:
+    FindNext $0 $1
+    Goto automated_directory_scan
+  automated_directory_empty:
+    FindClose $0
+  automated_directory_valid:
+FunctionEnd
+
 Function ShortcutOptionsPage
+  ${If} $PassiveMode == 1
+  ${OrIf} $NoShortcutMode == 1
+  ${OrIf} $UpdateMode == 1
+    Abort
+  ${EndIf}
   !insertmacro MUI_HEADER_TEXT "$(ShortcutPageTitle)" "$(ShortcutPageSubtitle)"
   nsDialogs::Create 1018
   Pop $0
@@ -438,6 +651,9 @@ Function ShortcutOptionsLeave
 FunctionEnd
 
 Function un.AppDataOptionsPage
+  ${If} $PassiveMode == 1
+    Abort
+  ${EndIf}
   !insertmacro MUI_HEADER_TEXT "$(AppDataPageTitle)" "$(AppDataPageSubtitle)"
   nsDialogs::Create 1018
   Pop $0
@@ -459,16 +675,27 @@ Function EnsureAppClosed
   Pop $1
   ${StrStr} $2 "$1" "${PROCESS_NAME}"
   StrCmp $2 "" app_closed
-  IfSilent close_app 0
+  IfSilent close_app check_passive_close
+  check_passive_close:
+  ${If} $PassiveMode == 1
+    Goto close_app
+  ${EndIf}
   MessageBox MB_ICONEXCLAMATION|MB_OKCANCEL "$(AppRunningPrompt)" IDOK close_app IDCANCEL cancel_close
   close_app:
     nsExec::ExecToStack 'taskkill.exe /F /T /IM "${PROCESS_NAME}"'
     Pop $0
     Pop $1
     StrCmp $0 "0" app_closed
-    MessageBox MB_ICONSTOP "$(AppCloseFailed)"
+    StrCpy $ExitCode ${EXIT_APP_CLOSE_FAILED}
+    SetErrorLevel $ExitCode
+    ${IfNot} ${Silent}
+    ${AndIf} $PassiveMode != 1
+      MessageBox MB_ICONSTOP "$(AppCloseFailed)"
+    ${EndIf}
     Abort
   cancel_close:
+    StrCpy $ExitCode ${EXIT_CANCELLED}
+    SetErrorLevel $ExitCode
     Abort
   app_closed:
 FunctionEnd
@@ -479,16 +706,27 @@ Function un.EnsureAppClosed
   Pop $1
   ${UnStrStr} $2 "$1" "${PROCESS_NAME}"
   StrCmp $2 "" un_app_closed
-  IfSilent un_close_app 0
+  IfSilent un_close_app un_check_passive_close
+  un_check_passive_close:
+  ${If} $PassiveMode == 1
+    Goto un_close_app
+  ${EndIf}
   MessageBox MB_ICONEXCLAMATION|MB_OKCANCEL "$(AppRunningPrompt)" IDOK un_close_app IDCANCEL un_cancel_close
   un_close_app:
     nsExec::ExecToStack 'taskkill.exe /F /T /IM "${PROCESS_NAME}"'
     Pop $0
     Pop $1
     StrCmp $0 "0" un_app_closed
-    MessageBox MB_ICONSTOP "$(AppCloseFailed)"
+    StrCpy $ExitCode ${EXIT_APP_CLOSE_FAILED}
+    SetErrorLevel $ExitCode
+    ${IfNot} ${Silent}
+    ${AndIf} $PassiveMode != 1
+      MessageBox MB_ICONSTOP "$(AppCloseFailed)"
+    ${EndIf}
     Abort
   un_cancel_close:
+    StrCpy $ExitCode ${EXIT_CANCELLED}
+    SetErrorLevel $ExitCode
     Abort
   un_app_closed:
 FunctionEnd
@@ -541,6 +779,10 @@ Section "Install" MainSection
   !ifmacrodef NSIS_HOOK_POSTINSTALL
     !insertmacro NSIS_HOOK_POSTINSTALL
   !endif
+  ; 被动模式只保留进度窗口，并在成功后自动关闭。
+  ${If} $PassiveMode == 1
+    SetAutoClose true
+  ${EndIf}
 SectionEnd
 
 ; 导入签名卸载器时不再生成新的卸载段；卸载逻辑已包含在签名文件中。
@@ -570,5 +812,9 @@ Section "Uninstall"
   !ifmacrodef NSIS_HOOK_POSTUNINSTALL
     !insertmacro NSIS_HOOK_POSTUNINSTALL
   !endif
+  ; 被动卸载只显示进度，并在完成后自动关闭。
+  ${If} $PassiveMode == 1
+    SetAutoClose true
+  ${EndIf}
 SectionEnd
 !endif

@@ -24,6 +24,7 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
     ("Uninstalls only packaged payload files", () => RunSync(UninstallsOnlyPackagedPayloadFiles)),
     ("Provides interactive NSIS safety options", () => RunSync(ProvidesInteractiveNsisSafetyOptions)),
+    ("Renders the NSIS automation protocol", () => RunSync(RendersNsisAutomationProtocol)),
     ("Renders existing-version policy", () => RunSync(RendersExistingVersionPolicy)),
     ("Renders safe file and URL registrations", () => RunSync(RendersSafeFileAndUrlRegistrations)),
     ("Renders NSIS install scopes", () => RunSync(RendersNsisInstallScopes)),
@@ -143,7 +144,7 @@ static async Task VerifiesAndExtractsBundledNsis()
             "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
         Assert(File.Exists(pluginPath), "The bundled semantic-version NSIS plug-in is missing.");
         Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))) ==
-               "15CCD021F9D89BA0E53B7240135C6B10351CB5C8BDD748DA7DAFD673F0E654B2",
+               "30A4773D22E0CFF0E9DFEDF4A62DDB1FD9878333A6B29490900D21C60ED15064",
             "The bundled semantic-version NSIS plug-in checksum changed; rebuild and update its provenance.");
 
         var toolset = await NsisToolResolver.ResolveAsync(archive, cache);
@@ -581,6 +582,26 @@ static void ProvidesInteractiveNsisSafetyOptions()
         "The uninstaller should offer optional application-data deletion.");
 }
 
+static void RendersNsisAutomationProtocol()
+{
+    var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+    foreach (var option in new[] { "/P", "/UPDATE", "/NS", "/R", "/ARGS" })
+    {
+        Assert(template.Contains($"$CMDLINE \"{option}\"", StringComparison.Ordinal),
+            $"The NSIS template does not parse {option}.");
+    }
+
+    Assert(template.Contains("!define EXIT_INVALID_ARGUMENTS 3", StringComparison.Ordinal) &&
+           template.Contains("!define EXIT_VERSION_BLOCKED 4", StringComparison.Ordinal) &&
+           template.Contains("!define EXIT_APP_CLOSE_FAILED 5", StringComparison.Ordinal) &&
+           template.Contains("!define EXIT_REBOOT_REQUIRED 3010", StringComparison.Ordinal),
+        "The documented automation exit codes are missing from the NSIS template.");
+    Assert(template.Contains("Function SkipIfPassive", StringComparison.Ordinal) &&
+           template.Contains("Function ValidateAutomatedInstallDirectory", StringComparison.Ordinal) &&
+           template.Contains("DotNetBundlerNsis::RunAsUser", StringComparison.Ordinal),
+        "The passive-mode safety or unelevated launch flow is missing.");
+}
+
 static void RendersExistingVersionPolicy()
 {
     var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
@@ -620,16 +641,16 @@ static void RendersExistingVersionPolicy()
                script.Contains("!define ALLOW_DOWNGRADES \"true\"", StringComparison.Ordinal),
             "The script must use the bundled SemVer plug-in and render downgrade policy.");
         Assert(script.Contains("Function DetectExistingInstall", StringComparison.Ordinal) &&
-               script.Contains("Function ApplySilentExistingInstallPolicy", StringComparison.Ordinal) &&
+               script.Contains("Function ApplyAutomatedExistingInstallPolicy", StringComparison.Ordinal) &&
                script.Contains("Function UninstallExistingInstallation", StringComparison.Ordinal),
-            "The script must detect and replace existing installations in interactive and silent modes.");
+            "The script must detect and replace existing installations in interactive and automated modes.");
         Assert(script.Contains("!define LEGACY_MSI_PRODUCT_CODES \"{1D1A6B03-2BDA-4D18-B12C-574145D9CFA0}\"", StringComparison.Ordinal) &&
                script.Contains("!define LEGACY_MSI_UPGRADE_CODES \"{5AD89AE2-9984-4B5F-937F-0DF918FE7A22}\"", StringComparison.Ordinal) &&
                script.Contains("DotNetBundlerNsis::FindMsiProduct", StringComparison.Ordinal) &&
                script.Contains("Function UninstallLegacyMsiInstallations", StringComparison.Ordinal),
             "The script must render exact legacy MSI identifiers and the migration flow.");
         Assert(script.Contains("; 打包时无法知道用户已安装的版本", StringComparison.Ordinal) &&
-               script.Contains("; 静默安装不会显示现有安装处理页面", StringComparison.Ordinal),
+               script.Contains("; 静默和被动安装不会显示现有安装处理页面", StringComparison.Ordinal),
             "Non-trivial NSIS policy branches must retain Chinese explanatory comments.");
     }
     finally

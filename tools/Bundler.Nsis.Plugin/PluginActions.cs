@@ -24,4 +24,8 @@ public static class PluginActions
     [NsisAction]
     public static string GetNewestMsiVersion(string productCodes, string upgradeCodes) =>
         MsiProducts.GetNewestVersion(productCodes, upgradeCodes) ?? string.Empty;
+
+    [NsisAction]
+    public static int RunAsUser(string executable, string arguments) =>
+        UnelevatedProcess.Start(executable, arguments);
 }

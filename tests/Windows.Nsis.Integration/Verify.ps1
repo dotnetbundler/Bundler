@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.17"
+    [string]$PackageVersion = "0.1.0-alpha.18"
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,6 +46,7 @@ $urlProgIdRegistryPath = "HKCU:\Software\Classes\$identifier.Url.bundlerfixture.
 $capabilitiesRegistryPath = "HKCU:\Software\$identifier\Capabilities"
 $registeredApplicationsRegistryPath = "HKCU:\Software\RegisteredApplications"
 $deepLinkMarker = Join-Path $env:TEMP "DotNetBundler-deep-link.txt"
+$commandLineMarker = Join-Path $env:TEMP "DotNetBundler-command-line.txt"
 $roamingData = Join-Path $env:APPDATA $identifier
 $localData = Join-Path $env:LOCALAPPDATA $identifier
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "$productName.lnk"
@@ -142,6 +143,7 @@ function Remove-TestState {
     }
     Remove-ItemProperty -LiteralPath $registeredApplicationsRegistryPath -Name $identifier -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $deepLinkMarker) { Remove-Item -LiteralPath $deepLinkMarker -Force }
+    if (Test-Path -LiteralPath $commandLineMarker) { Remove-Item -LiteralPath $commandLineMarker -Force }
     if (Test-Path -LiteralPath $desktopShortcut) { Remove-Item -LiteralPath $desktopShortcut -Force }
     if (Test-Path -LiteralPath $startMenuShortcut) { Remove-Item -LiteralPath $startMenuShortcut -Force }
     if (Test-Path -LiteralPath $startMenuDirectory) { Remove-Item -LiteralPath $startMenuDirectory -Force }
@@ -303,6 +305,19 @@ try {
     Invoke-WindowsExecutable $signedUninstaller "/S /DELETEAPPDATA"
     Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Signed installer test cleanup did not finish."
 
+    # /ARGS 没有 /R 时属于调用错误，必须稳定返回 3 且不能写入载荷。
+    $invalidArgumentsProcess = Start-Process -FilePath $installer -ArgumentList "/S /ARGS orphaned /D=$installDirectory" -Wait -PassThru
+    Assert-True ($invalidArgumentsProcess.ExitCode -eq 3) "Invalid /ARGS usage did not return exit code 3."
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $installDirectory "BundlerIntegrationFixture.exe"))) "Invalid command-line arguments unexpectedly installed the application."
+
+    # /P 只显示进度且自动关闭；/NS 在首次安装时不创建任何快捷方式。
+    Invoke-WindowsExecutable $installer "/P /NS /D=$installDirectory"
+    Assert-True (Test-Path -LiteralPath (Join-Path $installDirectory "BundlerIntegrationFixture.exe")) "Passive installation did not write the application payload."
+    Assert-True (-not (Test-Path -LiteralPath $desktopShortcut)) "/NS unexpectedly created a desktop shortcut."
+    Assert-True (-not (Test-Path -LiteralPath $startMenuShortcut)) "/NS unexpectedly created a Start Menu shortcut."
+    Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/P /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Passive-mode test cleanup did not finish."
+
     # 分别按 ProductCode 和 UpgradeCode 迁移同一个一次性 MSI，验证两种精确标识路径。
     Invoke-MsiExec "/i `"$legacyMsiPath`" /qn /norestart"
     Assert-True (Test-Path -LiteralPath (Join-Path $legacyMsiInstallDirectory "legacy-payload.txt")) "Legacy MSI fixture was not installed."
@@ -345,16 +360,24 @@ try {
     $script:fixtureProcess.Refresh()
     Assert-True $script:fixtureProcess.HasExited "Reinstall did not close the running application."
 
-    # 静默升级会删除旧版打包载荷，但保留运行时创建的数据。
+    # 自动更新原位覆盖并保留运行时数据及用户删除快捷方式的选择；/R 与 /ARGS
+    # 会在成功后以桌面用户身份启动应用。
     $upgradePreservedData = Join-Path $installDirectory "upgrade-preserved.db"
     Set-Content -LiteralPath $upgradePreservedData -Value "preserve" -Encoding UTF8
-    Invoke-WindowsExecutable $upgradeInstaller "/S /D=$installDirectory"
+    Remove-Item -LiteralPath $desktopShortcut -Force
+    Invoke-WindowsExecutable $upgradeInstaller "/UPDATE /R /ARGS=--protocol-marker `"hello world`" /D=$installDirectory"
     Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Upgrade did not record the new semantic version."
     Assert-True (Test-Path -LiteralPath $upgradePreservedData) "Upgrade removed runtime-created program data."
+    Assert-True (-not (Test-Path -LiteralPath $desktopShortcut)) "/UPDATE recreated a shortcut that the user had removed."
+    Assert-True (Test-Path -LiteralPath $startMenuShortcut) "/UPDATE removed an existing shortcut."
+    Wait-For { Test-Path -LiteralPath $commandLineMarker } "/R did not start the installed application."
+    $forwardedArguments = @(Get-Content -LiteralPath $commandLineMarker)
+    Assert-True ($forwardedArguments.Count -eq 2) "/ARGS did not preserve the expected argument count."
+    Assert-True ($forwardedArguments[0] -eq "--protocol-marker" -and $forwardedArguments[1] -eq "hello world") "/ARGS changed the forwarded application arguments."
 
     # 默认禁止降级；静默模式必须在不修改现有安装的情况下返回失败。
     $downgradeProcess = Start-Process -FilePath $installer -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
-    Assert-True ($downgradeProcess.ExitCode -ne 0) "A disabled silent downgrade unexpectedly succeeded."
+    Assert-True ($downgradeProcess.ExitCode -eq 4) "A blocked downgrade did not return exit code 4."
     Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Blocked downgrade modified the installed version."
     Assert-True (Test-Path -LiteralPath $installedExecutable) "Blocked downgrade removed the installed application."
 
