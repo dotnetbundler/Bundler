@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.21"
+    [string]$PackageVersion = "0.1.0-alpha.22"
 )
 
 $ErrorActionPreference = "Stop"
@@ -491,6 +491,28 @@ try {
     $forwardedArguments = @(Get-Content -LiteralPath $commandLineMarker)
     Assert-True ($forwardedArguments.Count -eq 2) "/ARGS did not preserve the expected argument count."
     Assert-True ($forwardedArguments[0] -eq "--protocol-marker" -and $forwardedArguments[1] -eq "hello world") "/ARGS changed the forwarded application arguments."
+
+    # 非主程序载荷可能被其他进程锁定，Restart Manager 不一定能识别或关闭其所有者。
+    # 静默安装必须返回失败并保留可恢复 journal，不能跳过该文件后误报成功。
+    $lockedPayload = Join-Path $installDirectory "docs\license.txt"
+    [IO.File]::WriteAllText($lockedPayload, "locked-payload-sentinel")
+    $lockedPayloadStream = [IO.File]::Open($lockedPayload, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try {
+        $lockedPayloadProcess = Start-Process -FilePath $upgradeInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+        Assert-True ($lockedPayloadProcess.ExitCode -eq 2) "A locked payload file did not return exit code 2."
+        Assert-True (Test-Path -LiteralPath $transactionDirectory) "A failed locked-payload rollback did not preserve its active journal."
+        Assert-True ([IO.File]::ReadAllText($lockedPayload) -eq "locked-payload-sentinel") "A locked payload file was unexpectedly replaced."
+    }
+    finally {
+        $lockedPayloadStream.Dispose()
+    }
+
+    # 释放锁后，下一次启动必须先恢复事务；随后旧版本安装器应按正常版本策略阻止降级。
+    $lockedPayloadRecovery = Start-Process -FilePath $installer -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($lockedPayloadRecovery.ExitCode -eq 4) "Locked-payload recovery did not continue to the normal downgrade policy."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Locked-payload recovery did not restore the installed version."
+    Assert-True ([IO.File]::ReadAllText($lockedPayload) -eq "locked-payload-sentinel") "Locked-payload recovery did not restore the original file."
+    Assert-True (-not (Test-Path -LiteralPath $transactionDirectory)) "Locked-payload recovery did not clean up the active journal."
 
     # Hook 到达 post-install 后等待；测试进程从外部终止整个安装器进程树，模拟外层监督
     # 进程也无法进入 .onInstFailed 的崩溃。active journal 应保留，下一次安装启动时必须

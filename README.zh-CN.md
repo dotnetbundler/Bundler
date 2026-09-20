@@ -42,7 +42,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `ne
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.21" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.22" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -60,7 +60,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.21" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.22" />
 ```
 
 ```csharp
@@ -214,7 +214,7 @@ NSIS 安装和升级在修改持久状态前会把原安装目录、产品相关
 
 安装器稳定退出码为：`0` 成功、`1` 用户取消、`2` 一般失败、`3` 参数或自动安装目录无效、`4` 版本策略阻止、`5` 无法关闭正在运行的应用、`3010` 成功但需要重新启动 Windows。安装成功且重启标志已经置位时，安装事务会先提交并清理 journal，再返回 `3010`；即使指定 `/R`，也不会在重启前启动应用。卸载器中的 `/REBOOTOK` 删除真正进入系统待处理队列时，卸载器同样返回 `3010`，而不是误报为 `0`。
 
-当前普通安装载荷仍由 NSIS `File` 指令直接写入目标目录，它不会把无法覆盖的锁定文件自动转换成重启后替换。因此上述契约不能扩写为“已经支持锁定文件原位升级”：当前可验证的重启来源是旧 MSI 返回值、生命周期 Hook，以及提权卸载的 `/REBOOTOK` 删除。真实系统队列验收必须在可丢弃并允许重启的管理员 Windows 环境执行 `tests/Windows.Nsis.Reboot/Verify.ps1`；脚本不会编辑或清空共享的 `PendingFileRenameOperations`。
+当前普通安装载荷仍由 NSIS `File` 指令直接写入目标目录，它不会把无法覆盖的锁定文件自动转换成重启后替换。安装器会检测这种跳过并返回 `2`；若文件锁也阻止即时回滚，则保留 active journal，待释放锁后的下一次启动先恢复旧状态，绝不把新旧文件混合状态报告为成功。因此上述契约不能扩写为“已经支持锁定文件原位升级”：当前可验证的重启来源是旧 MSI 返回值、生命周期 Hook，以及提权卸载的 `/REBOOTOK` 删除。真实系统队列验收必须在可丢弃并允许重启的管理员 Windows 环境执行 `tests/Windows.Nsis.Reboot/Verify.ps1`；脚本不会编辑或清空共享的 `PendingFileRenameOperations`。
 
 如果产品以前使用 MSI 发布，应配置历史安装包的准确标识，不按产品名猜测：
 
@@ -296,7 +296,7 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.21
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.22
 ```
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

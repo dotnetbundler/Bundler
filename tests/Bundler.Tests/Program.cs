@@ -623,6 +623,12 @@ static void RendersNsisAutomationProtocol()
     Assert(installSection.Contains("Call CommitInstallTransaction", StringComparison.Ordinal) &&
            template.Contains("Function .onInstSuccess", StringComparison.Ordinal),
         "A successful reboot-required install must commit its transaction before the success callback reports exit code 3010.");
+    var payloadStart = installSection.IndexOf("SetOverwrite try", StringComparison.Ordinal);
+    var payloadOutput = installSection.IndexOf("SetOutPath \"$INSTDIR\"", StringComparison.Ordinal);
+    var payloadFailure = installSection.IndexOf("SetOverwrite on", StringComparison.Ordinal);
+    Assert(payloadStart >= 0 && payloadOutput > payloadStart && payloadFailure > payloadOutput &&
+           installSection.IndexOf("Call FailInstallTransaction", payloadFailure, StringComparison.Ordinal) > payloadFailure,
+        "Payload extraction should turn locked-file skips into a transactional install failure.");
     Assert(template.Contains("Function SkipIfPassive", StringComparison.Ordinal) &&
            template.Contains("Function ValidateAutomatedInstallDirectory", StringComparison.Ordinal) &&
            template.Contains("DotNetBundlerNsis::RunAsUser", StringComparison.Ordinal),

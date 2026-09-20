@@ -932,6 +932,10 @@ Section "Install" MainSection
       Call FailInstallTransaction
     ${EndIf}
   !endif
+  ; 静默安装遇到无法覆盖的锁定载荷时，NSIS 默认可能跳过该文件并继续。
+  ; 使用 try 收集错误并统一进入事务失败路径，禁止把新旧文件混合状态报告为成功。
+  ClearErrors
+  SetOverwrite try
   SetOutPath "$INSTDIR"
   File /r "${INPUT_GLOB}"
 {{resource_install_commands}}
@@ -946,6 +950,10 @@ Section "Install" MainSection
   !else
     WriteUninstaller "$INSTDIR\Uninstall.exe"
   !endif
+  SetOverwrite on
+  ${If} ${Errors}
+    Call FailInstallTransaction
+  ${EndIf}
 
   Call ConfigureShortcuts
 
