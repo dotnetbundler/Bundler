@@ -955,8 +955,15 @@ Section "Install" MainSection
     Call FailInstallTransaction
   ${EndIf}
 
+  ; 快捷方式目录和偏好写入也属于安装事务；不能忽略 CreateDirectory 或注册表错误。
+  ClearErrors
   Call ConfigureShortcuts
+  ${If} ${Errors}
+    Call FailInstallTransaction
+  ${EndIf}
 
+  ; NSIS 注册表指令通过 error flag 报告权限、视图或写入失败。
+  ClearErrors
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayName" "${PRODUCT_NAME}"
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
@@ -970,6 +977,9 @@ Section "Install" MainSection
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoModify" 1
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoRepair" 1
 {{association_install_commands}}
+  ${If} ${Errors}
+    Call FailInstallTransaction
+  ${EndIf}
   !ifmacrodef NSIS_HOOK_POSTINSTALL
     ClearErrors
     !insertmacro NSIS_HOOK_POSTINSTALL

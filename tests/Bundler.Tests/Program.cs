@@ -629,6 +629,13 @@ static void RendersNsisAutomationProtocol()
     Assert(payloadStart >= 0 && payloadOutput > payloadStart && payloadFailure > payloadOutput &&
            installSection.IndexOf("Call FailInstallTransaction", payloadFailure, StringComparison.Ordinal) > payloadFailure,
         "Payload extraction should turn locked-file skips into a transactional install failure.");
+    var shortcutWrite = installSection.IndexOf("Call ConfigureShortcuts", payloadFailure, StringComparison.Ordinal);
+    var registryWrite = installSection.IndexOf("WriteRegStr SHCTX \"${UNINSTALL_KEY}\" \"DisplayName\"", shortcutWrite, StringComparison.Ordinal);
+    var postInstallHook = installSection.IndexOf("!ifmacrodef NSIS_HOOK_POSTINSTALL", registryWrite, StringComparison.Ordinal);
+    Assert(shortcutWrite > payloadFailure && registryWrite > shortcutWrite && postInstallHook > registryWrite &&
+           installSection.LastIndexOf("Call FailInstallTransaction", registryWrite, StringComparison.Ordinal) > shortcutWrite &&
+           installSection.IndexOf("Call FailInstallTransaction", registryWrite, StringComparison.Ordinal) < postInstallHook,
+        "Shortcut and registry persistence errors should fail before the install transaction commits.");
     Assert(template.Contains("Function SkipIfPassive", StringComparison.Ordinal) &&
            template.Contains("Function ValidateAutomatedInstallDirectory", StringComparison.Ordinal) &&
            template.Contains("DotNetBundlerNsis::RunAsUser", StringComparison.Ordinal),
