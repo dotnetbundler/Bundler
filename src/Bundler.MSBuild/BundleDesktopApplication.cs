@@ -44,6 +44,15 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string NsisLanguages { get; set; } = "English";
     public bool NsisDisplayLanguageSelector { get; set; }
     public bool NsisAllowDowngrades { get; set; }
+    public bool NsisShortcutDesktop { get; set; } = true;
+    public bool NsisShortcutStartMenu { get; set; } = true;
+    public string NsisShortcutArguments { get; set; } = "";
+    public string NsisShortcutWorkingDirectory { get; set; } = "";
+    public string NsisShortcutIcon { get; set; } = "";
+    public string NsisShortcutAppUserModelId { get; set; } = "";
+    public string NsisShortcutStartMenuFolder { get; set; } = "";
+    public string NsisShortcutLegacyProductNames { get; set; } = "";
+    public string NsisShortcutLegacyMainExecutables { get; set; } = "";
     public string NsisLegacyMsiProductCodes { get; set; } = "";
     public string NsisLegacyMsiUpgradeCodes { get; set; } = "";
     public string WindowsSigningPfxFile { get; set; } = "";
@@ -112,6 +121,18 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Languages = ParseLanguages(),
                 DisplayLanguageSelector = NsisDisplayLanguageSelector,
                 AllowDowngrades = NsisAllowDowngrades,
+                Shortcuts = new NsisShortcutConfiguration
+                {
+                    Desktop = NsisShortcutDesktop,
+                    StartMenu = NsisShortcutStartMenu,
+                    Arguments = EmptyToNull(NsisShortcutArguments),
+                    WorkingDirectory = EmptyToNull(NsisShortcutWorkingDirectory),
+                    Icon = EmptyToNull(NsisShortcutIcon),
+                    AppUserModelId = EmptyToNull(NsisShortcutAppUserModelId),
+                    StartMenuFolder = EmptyToNull(NsisShortcutStartMenuFolder),
+                    LegacyProductNames = ParseSemicolonList(NsisShortcutLegacyProductNames),
+                    LegacyMainExecutables = ParseSemicolonList(NsisShortcutLegacyMainExecutables)
+                },
                 LegacyMsiProductCodes = ParseSemicolonList(NsisLegacyMsiProductCodes),
                 LegacyMsiUpgradeCodes = ParseSemicolonList(NsisLegacyMsiUpgradeCodes),
                 CustomLanguageFiles = ParseCustomLanguageFiles()

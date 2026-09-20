@@ -37,6 +37,15 @@
     <BundlerNsisSidebarImage>$(_HelloBundledAppArtworkRoot)\Wizard\nsis3-grey.bmp</BundlerNsisSidebarImage>
     <BundlerNsisInstallerHooks>$(MSBuildThisFileDirectory)Assets\installer-hooks.nsh</BundlerNsisInstallerHooks>
     <BundlerNsisAllowDowngrades>$(HelloBundledAppAllowDowngrades)</BundlerNsisAllowDowngrades>
+    <BundlerNsisShortcutDesktop>true</BundlerNsisShortcutDesktop>
+    <BundlerNsisShortcutStartMenu>true</BundlerNsisShortcutStartMenu>
+    <BundlerNsisShortcutArguments>--from-shortcut &quot;你好 world&quot;</BundlerNsisShortcutArguments>
+    <BundlerNsisShortcutWorkingDirectory>演示资源</BundlerNsisShortcutWorkingDirectory>
+    <BundlerNsisShortcutIcon>HelloBundledApp.exe</BundlerNsisShortcutIcon>
+    <BundlerNsisShortcutAppUserModelId>com.example.hellobundledapp.desktop</BundlerNsisShortcutAppUserModelId>
+    <BundlerNsisShortcutStartMenuFolder>Bundler Examples</BundlerNsisShortcutStartMenuFolder>
+    <BundlerNsisShortcutLegacyProductNames>Hello Bundled App Preview</BundlerNsisShortcutLegacyProductNames>
+    <BundlerNsisShortcutLegacyMainExecutables>HelloBundledApp.Preview.exe</BundlerNsisShortcutLegacyMainExecutables>
     <BundlerNsisLegacyMsiProductCodes>$(HelloBundledAppLegacyMsiProductCodes)</BundlerNsisLegacyMsiProductCodes>
     <BundlerNsisLegacyMsiUpgradeCodes>$(HelloBundledAppLegacyMsiUpgradeCodes)</BundlerNsisLegacyMsiUpgradeCodes>
     <BundlerWindowsSigningPfxFile>$(HelloBundledAppSigningPfxFile)</BundlerWindowsSigningPfxFile>
@@ -48,7 +57,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.18" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.19" PrivateAssets="all" />
     <BundlerIcon Include="$(_HelloBundledAppArtworkRoot)\Icons\modern-install-colorful.ico" />
     <BundlerResource Include="Assets\demo-resource.txt" TargetPath="演示资源\说明.txt" />
     <BundlerResource Include="Assets\demo.hello" TargetPath="demo.hello" />

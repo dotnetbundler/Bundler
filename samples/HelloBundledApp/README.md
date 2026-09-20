@@ -27,7 +27,7 @@ samples/HelloBundledApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe
 - 许可证页面、发布者、描述、主页、版权和版本元数据；
 - 自定义安装器/卸载器图标、Header、卸载器 Header 和 Sidebar；
 - 自定义安装目录、非空目录警告和记忆上次安装目录；
-- 可选桌面快捷方式和开始菜单快捷方式；
+- 可选桌面快捷方式和 `Bundler Examples` 开始菜单目录；快捷方式带启动参数、自定义工作目录、图标和稳定 AppUserModelID；
 - 安装前检测并关闭正在运行的应用；
 - 安装前、安装后、卸载前、卸载后的 NSIS Hook；
 - `.hello` 文件关联和 `hello-bundled:` 深链接；
@@ -44,6 +44,12 @@ samples/HelloBundledApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe
 ```
 
 卸载时选择删除应用数据会同时删除这份记录。
+
+## 快捷方式完整性
+
+示例把快捷方式参数配置为 `--from-shortcut "你好 world"`，工作目录配置为安装目录内的 `演示资源`，AppUserModelID 配置为 `com.example.hellobundledapp.desktop`。安装后从桌面或开始菜单启动程序，控制台输出和 `last-launch.txt` 都可验证参数；快捷方式属性页可验证目标、起始位置和图标。
+
+`BundlerNsisShortcutLegacyProductNames` 与 `BundlerNsisShortcutLegacyMainExecutables` 展示产品名、主程序名变更时的显式迁移入口。`/UPDATE` 只更新仍存在且仍指向本安装当前/旧主程序的快捷方式：手动删除的快捷方式不会重建；同名 `.lnk` 如果后来改为指向其他程序，卸载也不会删除。Windows 各版本的任务栏和开始菜单固定机制并不稳定，当前示例只人工检查固定项行为，不把自动取消固定列为已保证能力。
 
 ## 文件关联与深链接
 

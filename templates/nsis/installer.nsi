@@ -39,6 +39,15 @@ ${UnStrStr}
 !define CAPABILITIES_KEY "Software\${PRODUCT_ID}\Capabilities"
 !define INSTALL_MARKER ".dotnet-bundler-${PRODUCT_ID}"
 !define SIGNED_UNINSTALLER "{{signed_uninstaller}}"
+!define SHORTCUT_DESKTOP_PATH "{{shortcut_desktop_path}}"
+!define SHORTCUT_START_MENU_DIRECTORY "{{shortcut_start_menu_directory}}"
+!define SHORTCUT_START_MENU_PATH "{{shortcut_start_menu_path}}"
+!define SHORTCUT_TARGET "$INSTDIR\${MAIN_EXECUTABLE}"
+!define SHORTCUT_OWNED_TARGETS "{{shortcut_owned_targets}}"
+!define SHORTCUT_ARGUMENTS "{{shortcut_arguments}}"
+!define SHORTCUT_WORKING_DIRECTORY "{{shortcut_working_directory}}"
+!define SHORTCUT_ICON "{{shortcut_icon}}"
+!define SHORTCUT_APP_USER_MODEL_ID "{{shortcut_app_user_model_id}}"
 {{uninstaller_import_define}}
 {{installer_icon_directives}}
 {{installer_hooks_include}}
@@ -167,6 +176,15 @@ UninstPage custom un.AppDataOptionsPage un.AppDataOptionsLeave
   !endif
 !macroend
 
+!macro CheckShortcutResult
+  ; 原生 Shell 操作失败时终止安装，避免把“已选择但未创建”误报为成功。
+  ${If} $0 < 0
+    StrCpy $ExitCode ${EXIT_FAILURE}
+    SetErrorLevel $ExitCode
+    Abort
+  ${EndIf}
+!macroend
+
 Function ParseCommandLine
   ; /P 显示安装进度但跳过所有需要输入的页面。
   ${GetOptions} $CMDLINE "/P" $0
@@ -254,8 +272,8 @@ Function .onInit
   StrCpy $NoShortcutMode 0
   StrCpy $RestartApplication 0
   StrCpy $LaunchArguments ""
-  StrCpy $CreateDesktopShortcut 1
-  StrCpy $CreateStartMenuShortcut 1
+  StrCpy $CreateDesktopShortcut {{shortcut_desktop_default}}
+  StrCpy $CreateStartMenuShortcut {{shortcut_start_menu_default}}
   StrCpy $ExistingInstallAction 0
   Call ParseCommandLine
   ; 静默与被动模式都不能显示语言选择器。
@@ -630,6 +648,17 @@ Function ShortcutOptionsPage
   ${OrIf} $UpdateMode == 1
     Abort
   ${EndIf}
+  ; 已安装产品的选择会成为重新安装时的默认值；不存在记录时沿用包配置。
+  ClearErrors
+  ReadRegDWORD $0 SHCTX "${UNINSTALL_KEY}" "ShortcutDesktop"
+  ${IfNot} ${Errors}
+    StrCpy $CreateDesktopShortcut $0
+  ${EndIf}
+  ClearErrors
+  ReadRegDWORD $0 SHCTX "${UNINSTALL_KEY}" "ShortcutStartMenu"
+  ${IfNot} ${Errors}
+    StrCpy $CreateStartMenuShortcut $0
+  ${EndIf}
   !insertmacro MUI_HEADER_TEXT "$(ShortcutPageTitle)" "$(ShortcutPageSubtitle)"
   nsDialogs::Create 1018
   Pop $0
@@ -638,11 +667,73 @@ Function ShortcutOptionsPage
   ${EndIf}
   ${NSD_CreateCheckbox} 0 20u 100% 12u "$(DesktopShortcutLabel)"
   Pop $DesktopShortcutCheckbox
-  ${NSD_Check} $DesktopShortcutCheckbox
+  ${If} $CreateDesktopShortcut == 1
+    ${NSD_Check} $DesktopShortcutCheckbox
+  ${EndIf}
   ${NSD_CreateCheckbox} 0 48u 100% 12u "$(StartMenuShortcutLabel)"
   Pop $StartMenuShortcutCheckbox
-  ${NSD_Check} $StartMenuShortcutCheckbox
+  ${If} $CreateStartMenuShortcut == 1
+    ${NSD_Check} $StartMenuShortcutCheckbox
+  ${EndIf}
   nsDialogs::Show
+FunctionEnd
+
+Function ConfigureShortcuts
+  ; /UPDATE /NS 明确要求本次更新完全不触碰快捷方式。
+  ${If} $UpdateMode == 1
+  ${AndIf} $NoShortcutMode == 1
+    Return
+  ${EndIf}
+
+  ; 先迁移配置声明的旧产品名快捷方式；插件只会移动目标仍属于本安装的项。
+{{shortcut_migration_commands}}
+
+  ${If} $UpdateMode == 1
+    ; 更新只刷新仍存在且仍归本产品所有的快捷方式，不重建用户手动删除的项。
+    DotNetBundlerNsis::UpdateShortcutIfOwned "${SHORTCUT_DESKTOP_PATH}" "${SHORTCUT_OWNED_TARGETS}" "${SHORTCUT_TARGET}" "${SHORTCUT_ARGUMENTS}" "${SHORTCUT_WORKING_DIRECTORY}" "${SHORTCUT_ICON}" "${SHORTCUT_APP_USER_MODEL_ID}"
+    Pop $0
+    !insertmacro CheckShortcutResult
+    DotNetBundlerNsis::UpdateShortcutIfOwned "${SHORTCUT_START_MENU_PATH}" "${SHORTCUT_OWNED_TARGETS}" "${SHORTCUT_TARGET}" "${SHORTCUT_ARGUMENTS}" "${SHORTCUT_WORKING_DIRECTORY}" "${SHORTCUT_ICON}" "${SHORTCUT_APP_USER_MODEL_ID}"
+    Pop $0
+    !insertmacro CheckShortcutResult
+    Return
+  ${EndIf}
+
+  ${If} $CreateDesktopShortcut == 1
+    DotNetBundlerNsis::CreateShortcut "${SHORTCUT_DESKTOP_PATH}" "${SHORTCUT_OWNED_TARGETS}" "${SHORTCUT_TARGET}" "${SHORTCUT_ARGUMENTS}" "${SHORTCUT_WORKING_DIRECTORY}" "${SHORTCUT_ICON}" "${SHORTCUT_APP_USER_MODEL_ID}"
+    Pop $0
+    !insertmacro CheckShortcutResult
+  ${Else}
+    DotNetBundlerNsis::DeleteShortcutIfOwned "${SHORTCUT_DESKTOP_PATH}" "${SHORTCUT_OWNED_TARGETS}"
+    Pop $0
+    !insertmacro CheckShortcutResult
+  ${EndIf}
+
+  ${If} $CreateStartMenuShortcut == 1
+    CreateDirectory "${SHORTCUT_START_MENU_DIRECTORY}"
+    DotNetBundlerNsis::CreateShortcut "${SHORTCUT_START_MENU_PATH}" "${SHORTCUT_OWNED_TARGETS}" "${SHORTCUT_TARGET}" "${SHORTCUT_ARGUMENTS}" "${SHORTCUT_WORKING_DIRECTORY}" "${SHORTCUT_ICON}" "${SHORTCUT_APP_USER_MODEL_ID}"
+    Pop $0
+    !insertmacro CheckShortcutResult
+  ${Else}
+    DotNetBundlerNsis::DeleteShortcutIfOwned "${SHORTCUT_START_MENU_PATH}" "${SHORTCUT_OWNED_TARGETS}"
+    Pop $0
+    !insertmacro CheckShortcutResult
+    RMDir "${SHORTCUT_START_MENU_DIRECTORY}"
+  ${EndIf}
+
+  ; 选择与实际创建分开持久化，后续交互式重装可以恢复用户偏好。
+  WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "ShortcutDesktop" $CreateDesktopShortcut
+  WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "ShortcutStartMenu" $CreateStartMenuShortcut
+FunctionEnd
+
+Function un.RemoveOwnedShortcuts
+  ; 删除前由原生插件解析 .lnk 目标；同名快捷方式被其他程序接管时保持不变。
+  DotNetBundlerNsis::DeleteShortcutIfOwned "${SHORTCUT_DESKTOP_PATH}" "${SHORTCUT_OWNED_TARGETS}"
+  Pop $0
+  DotNetBundlerNsis::DeleteShortcutIfOwned "${SHORTCUT_START_MENU_PATH}" "${SHORTCUT_OWNED_TARGETS}"
+  Pop $0
+{{shortcut_legacy_cleanup_commands}}
+  RMDir "${SHORTCUT_START_MENU_DIRECTORY}"
 FunctionEnd
 
 Function ShortcutOptionsLeave
@@ -755,13 +846,7 @@ Section "Install" MainSection
     WriteUninstaller "$INSTDIR\Uninstall.exe"
   !endif
 
-  ${If} $CreateStartMenuShortcut == 1
-    CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
-    CreateShortcut "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk" "$INSTDIR\${MAIN_EXECUTABLE}"
-  ${EndIf}
-  ${If} $CreateDesktopShortcut == 1
-    CreateShortcut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\${MAIN_EXECUTABLE}"
-  ${EndIf}
+  Call ConfigureShortcuts
 
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayName" "${PRODUCT_NAME}"
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
@@ -793,9 +878,7 @@ Section "Uninstall"
     !insertmacro NSIS_HOOK_PREUNINSTALL
   !endif
   Call un.EnsureAppClosed
-  Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
-  Delete "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"
-  RMDir "$SMPROGRAMS\${PRODUCT_NAME}"
+  Call un.RemoveOwnedShortcuts
 {{association_uninstall_commands}}
   DeleteRegKey SHCTX "${UNINSTALL_KEY}"
   DeleteRegKey /ifempty HKCU "Software\${PRODUCT_ID}"

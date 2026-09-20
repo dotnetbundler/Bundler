@@ -25,6 +25,15 @@
     <BundlerNsisHeaderImage>$(BundlerTestHeaderImage)</BundlerNsisHeaderImage>
     <BundlerNsisSidebarImage>$(BundlerTestSidebarImage)</BundlerNsisSidebarImage>
     <BundlerNsisInstallerHooks>$(MSBuildProjectDirectory)\Assets\installer-hooks.nsh</BundlerNsisInstallerHooks>
+    <BundlerNsisShortcutDesktop Condition="'$(BundlerNsisShortcutDesktop)' == ''">true</BundlerNsisShortcutDesktop>
+    <BundlerNsisShortcutStartMenu Condition="'$(BundlerNsisShortcutStartMenu)' == ''">true</BundlerNsisShortcutStartMenu>
+    <BundlerNsisShortcutArguments>--shortcut-mode &quot;hello world&quot;</BundlerNsisShortcutArguments>
+    <BundlerNsisShortcutWorkingDirectory>docs</BundlerNsisShortcutWorkingDirectory>
+    <BundlerNsisShortcutIcon>BundlerIntegrationFixture.exe</BundlerNsisShortcutIcon>
+    <BundlerNsisShortcutAppUserModelId>com.dotnetbundler.integrationfixture.desktop</BundlerNsisShortcutAppUserModelId>
+    <BundlerNsisShortcutStartMenuFolder>DotNet Bundler Integration</BundlerNsisShortcutStartMenuFolder>
+    <BundlerNsisShortcutLegacyProductNames>Legacy Bundler Fixture</BundlerNsisShortcutLegacyProductNames>
+    <BundlerNsisShortcutLegacyMainExecutables>LegacyFixture.exe</BundlerNsisShortcutLegacyMainExecutables>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="$(BundlerIntegrationPackageId)" Version="$(BundlerPackageVersion)" PrivateAssets="all" />

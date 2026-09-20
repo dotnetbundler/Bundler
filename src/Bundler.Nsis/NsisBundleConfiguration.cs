@@ -14,8 +14,22 @@ public sealed class NsisBundleConfiguration
         new Dictionary<string, string>();
     public bool DisplayLanguageSelector { get; init; }
     public bool AllowDowngrades { get; init; }
+    public NsisShortcutConfiguration Shortcuts { get; init; } = new();
     public IReadOnlyList<string> LegacyMsiProductCodes { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> LegacyMsiUpgradeCodes { get; init; } = Array.Empty<string>();
+}
+
+public sealed class NsisShortcutConfiguration
+{
+    public bool Desktop { get; init; } = true;
+    public bool StartMenu { get; init; } = true;
+    public string? Arguments { get; init; }
+    public string? WorkingDirectory { get; init; }
+    public string? Icon { get; init; }
+    public string? AppUserModelId { get; init; }
+    public string? StartMenuFolder { get; init; }
+    public IReadOnlyList<string> LegacyProductNames { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> LegacyMainExecutables { get; init; } = Array.Empty<string>();
 }
 
 public enum NsisInstallMode

@@ -29,6 +29,9 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Renders safe file and URL registrations", () => RunSync(RendersSafeFileAndUrlRegistrations)),
     ("Renders NSIS install scopes", () => RunSync(RendersNsisInstallScopes)),
     ("Renders NSIS metadata, icons, and resources", () => RunSync(RendersNsisMetadataIconsAndResources)),
+    ("Renders complete shortcut configuration", () => RunSync(RendersCompleteShortcutConfiguration)),
+    ("Rejects unsafe shortcut configuration", RejectsUnsafeShortcutConfiguration),
+    ("Maps shortcut settings through MSBuild", () => RunSync(MapsShortcutSettingsThroughMsBuild)),
     ("Rejects unknown template variables", () => RunSync(RejectsUnknownTemplateVariables)),
     ("Runs backends through the common pipeline", RunsBackendsThroughCommonPipeline),
     ("Preflights every requested backend", PreflightsEveryRequestedBackend),
@@ -142,10 +145,10 @@ static async Task VerifiesAndExtractsBundledNsis()
         var pluginPath = Path.Combine(
             repositoryRoot,
             "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
-        Assert(File.Exists(pluginPath), "The bundled semantic-version NSIS plug-in is missing.");
+        Assert(File.Exists(pluginPath), "The bundled NSIS plug-in is missing.");
         Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))) ==
-               "30A4773D22E0CFF0E9DFEDF4A62DDB1FD9878333A6B29490900D21C60ED15064",
-            "The bundled semantic-version NSIS plug-in checksum changed; rebuild and update its provenance.");
+               "8269233C551E31CC3F3FC60B97E24E931ACD77C8043ED29D1840F5DBA2DFC9EA",
+            "The bundled NSIS plug-in checksum changed; rebuild and update its provenance.");
 
         var toolset = await NsisToolResolver.ResolveAsync(archive, cache);
         Assert(File.Exists(toolset.CompilerPath), "The verified NSIS toolset did not produce the host compiler.");
@@ -1003,6 +1006,76 @@ static async Task PreflightsEveryRequestedBackend()
     finally
     {
         Directory.Delete(root, recursive: true);
+    }
+}
+
+static void RendersCompleteShortcutConfiguration()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Shortcut.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "publish");
+    Directory.CreateDirectory(Path.Combine(input, "data"));
+    Directory.CreateDirectory(Path.Combine(input, "assets"));
+    File.WriteAllText(Path.Combine(input, "NewApp.exe"), "test");
+    File.WriteAllText(Path.Combine(input, "assets", "shortcut.ico"), "icon");
+    try
+    {
+        var configuration = new BundleConfiguration
+        {
+            ProductName = "New App", Identifier = "com.example.newapp", Version = "1.0.0", OutputDirectory = "artifacts",
+            Targets = [new BundleTargetConfiguration { RuntimeIdentifier = "win-x64", InputDirectory = input, MainExecutable = "NewApp.exe", Formats = [PackageFormat.Nsis] }]
+        };
+        var item = new BundlePlanItem(new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64), PackageFormat.Nsis, input, "NewApp.exe", "output", false);
+        var settings = new NsisBundleConfiguration
+        {
+            Shortcuts = new NsisShortcutConfiguration
+            {
+                Desktop = false, StartMenu = true, Arguments = "--profile demo", WorkingDirectory = "data",
+                Icon = "assets/shortcut.ico", AppUserModelId = "com.example.newapp.desktop",
+                StartMenuFolder = "Example Publisher", LegacyProductNames = ["Old App"], LegacyMainExecutables = ["OldApp.exe"]
+            }
+        };
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+        var script = NsisBundleBackend.CreateScript(template, configuration, settings, item, "setup.exe", "New App");
+
+        Assert(script.Contains("StrCpy $CreateDesktopShortcut 0", StringComparison.Ordinal) && script.Contains("StrCpy $CreateStartMenuShortcut 1", StringComparison.Ordinal), "Configured shortcut defaults were not rendered.");
+        Assert(script.Contains("!define SHORTCUT_ARGUMENTS \"--profile demo\"", StringComparison.Ordinal) &&
+               script.Contains("!define SHORTCUT_WORKING_DIRECTORY \"$INSTDIR\\data\"", StringComparison.Ordinal) &&
+               script.Contains("!define SHORTCUT_ICON \"$INSTDIR\\assets\\shortcut.ico\"", StringComparison.Ordinal) &&
+               script.Contains("!define SHORTCUT_APP_USER_MODEL_ID \"com.example.newapp.desktop\"", StringComparison.Ordinal),
+            "Shortcut arguments, working directory, icon, or AppUserModelID were not rendered.");
+        Assert(script.Contains("$SMPROGRAMS\\Example Publisher\\New App.lnk", StringComparison.Ordinal), "The configured Start Menu folder was not rendered.");
+        Assert(script.Contains("DotNetBundlerNsis::CreateShortcut", StringComparison.Ordinal) &&
+               script.Contains("DotNetBundlerNsis::UpdateShortcutIfOwned", StringComparison.Ordinal) &&
+               script.Contains("DotNetBundlerNsis::MoveShortcutIfOwned", StringComparison.Ordinal) &&
+               script.Contains("DotNetBundlerNsis::DeleteShortcutIfOwned", StringComparison.Ordinal) &&
+               script.Contains("$INSTDIR\\OldApp.exe", StringComparison.Ordinal),
+            "Safe shortcut creation, update, migration, and removal were not rendered.");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
+static async Task RejectsUnsafeShortcutConfiguration()
+{
+    var bundler = new NsisBundler(new NsisBundleConfiguration { Shortcuts = new NsisShortcutConfiguration { WorkingDirectory = "..\\outside" } });
+    try
+    {
+        await bundler.BuildAsync(new BundleConfiguration { Version = "1.0.0" });
+        throw new InvalidOperationException("A shortcut path outside the installation directory was accepted.");
+    }
+    catch (ArgumentException exception) when (exception.Message.Contains("relative", StringComparison.OrdinalIgnoreCase))
+    {
+    }
+}
+
+static void MapsShortcutSettingsThroughMsBuild()
+{
+    var targets = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
+    foreach (var property in new[] { "NsisShortcutDesktop", "NsisShortcutStartMenu", "NsisShortcutArguments", "NsisShortcutWorkingDirectory", "NsisShortcutIcon", "NsisShortcutAppUserModelId", "NsisShortcutStartMenuFolder", "NsisShortcutLegacyProductNames", "NsisShortcutLegacyMainExecutables" })
+    {
+        Assert(targets.Contains(property + "=\"$(Bundler" + property + ")\"", StringComparison.Ordinal), $"MSBuild does not map Bundler{property} to the task.");
     }
 }
 

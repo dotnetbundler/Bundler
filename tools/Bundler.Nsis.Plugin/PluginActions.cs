@@ -1,7 +1,9 @@
 using NsisPlugin;
+using System.Runtime.Versioning;
 
 namespace DotNet.Bundler.Nsis.Plugin;
 
+[SupportedOSPlatform("windows")]
 public static class PluginActions
 {
     [NsisAction]
@@ -28,4 +30,44 @@ public static class PluginActions
     [NsisAction]
     public static int RunAsUser(string executable, string arguments) =>
         UnelevatedProcess.Start(executable, arguments);
+
+    [NsisAction]
+    public static int CreateShortcut(
+        string shortcut,
+        string ownedTargets,
+        string target,
+        string arguments,
+        string workingDirectory,
+        string icon,
+        string appUserModelId) =>
+        ShortcutManager.Create(shortcut, ownedTargets, target, arguments, workingDirectory, icon, appUserModelId);
+
+    [NsisAction]
+    public static int UpdateShortcutIfOwned(
+        string shortcut,
+        string ownedTargets,
+        string target,
+        string arguments,
+        string workingDirectory,
+        string icon,
+        string appUserModelId) =>
+        ShortcutManager.UpdateIfOwned(
+            shortcut, ownedTargets, target, arguments, workingDirectory, icon, appUserModelId);
+
+    [NsisAction]
+    public static int MoveShortcutIfOwned(
+        string source,
+        string destination,
+        string ownedTargets,
+        string target,
+        string arguments,
+        string workingDirectory,
+        string icon,
+        string appUserModelId) =>
+        ShortcutManager.MoveIfOwned(
+            source, destination, ownedTargets, target, arguments, workingDirectory, icon, appUserModelId);
+
+    [NsisAction]
+    public static int DeleteShortcutIfOwned(string shortcut, string ownedTargets) =>
+        ShortcutManager.DeleteIfOwned(shortcut, ownedTargets);
 }

@@ -12,6 +12,7 @@
     <UseSizeOptimizedLinq>true</UseSizeOptimizedLinq>
     <UseSystemResourceKeys>true</UseSystemResourceKeys>
     <NsisPluginUseUnicode>true</NsisPluginUseUnicode>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\src\Bundler.Nsis\SemanticVersion.cs" Link="SemanticVersion.cs" />

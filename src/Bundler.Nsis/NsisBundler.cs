@@ -90,6 +90,55 @@ public sealed class NsisBundler
         }
         ValidateMsiCodes(settings.LegacyMsiProductCodes, nameof(settings.LegacyMsiProductCodes));
         ValidateMsiCodes(settings.LegacyMsiUpgradeCodes, nameof(settings.LegacyMsiUpgradeCodes));
+        ValidateShortcuts(settings.Shortcuts);
+    }
+
+    private static void ValidateShortcuts(NsisShortcutConfiguration shortcuts)
+    {
+        if (shortcuts is null)
+        {
+            throw new ArgumentNullException(nameof(shortcuts));
+        }
+        ValidateRelativeInstalledPath(shortcuts.WorkingDirectory, nameof(shortcuts.WorkingDirectory), allowCurrentDirectory: true);
+        ValidateRelativeInstalledPath(shortcuts.Icon, nameof(shortcuts.Icon), allowCurrentDirectory: false);
+        ValidateRelativeInstalledPath(shortcuts.StartMenuFolder, nameof(shortcuts.StartMenuFolder), allowCurrentDirectory: true);
+        foreach (var executable in shortcuts.LegacyMainExecutables)
+        {
+            ValidateRelativeInstalledPath(executable, nameof(shortcuts.LegacyMainExecutables), allowCurrentDirectory: false);
+        }
+        foreach (var productName in shortcuts.LegacyProductNames)
+        {
+            if (string.IsNullOrWhiteSpace(productName) || productName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            {
+                throw new ArgumentException("Legacy shortcut product names must be valid file names.", nameof(shortcuts));
+            }
+        }
+
+        var appUserModelId = shortcuts.AppUserModelId;
+        if (appUserModelId is not null &&
+            (string.IsNullOrWhiteSpace(appUserModelId) || appUserModelId.Length > 128 || appUserModelId.Any(char.IsWhiteSpace)))
+        {
+            throw new ArgumentException(
+                "Shortcut AppUserModelId must be non-empty, contain no whitespace, and be at most 128 characters.",
+                nameof(shortcuts));
+        }
+    }
+
+    private static void ValidateRelativeInstalledPath(string? value, string propertyName, bool allowCurrentDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(value) || (allowCurrentDirectory && value == "."))
+        {
+            return;
+        }
+        if (Path.IsPathRooted(value!) || value!.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Contains(".."))
+        {
+            throw new ArgumentException($"{propertyName} must be a path relative to the installed application directory.", propertyName);
+        }
+        if (value.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Any(component => component.Length == 0 || component.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0))
+        {
+            throw new ArgumentException($"{propertyName} contains an invalid Windows path component.", propertyName);
+        }
     }
 
     private static void ValidateMsiCodes(IReadOnlyList<string> codes, string propertyName)

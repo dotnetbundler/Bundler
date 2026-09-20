@@ -42,7 +42,7 @@ The MSBuild task and the Abstractions/Core/NSIS assemblies it loads all provide 
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.18" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.19" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -60,7 +60,7 @@ The installer is written to `artifacts/<rid>/nsis/` by default. Installer genera
 Applications and build tools that do not use MSBuild integration can reference `DotNet.Bundler.Nsis` directly:
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.18" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.19" />
 ```
 
 ```csharp
@@ -90,7 +90,9 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 `NsisBundleConfiguration` controls NSIS-specific behavior. `NsisBundlerOptions` can override the shared cache, compiler, toolset archive, NSIS data directory, template, or language directory for advanced and test scenarios; normal callers need none of those paths. When supplying a custom compiler, set `DataDirectory` too when that compiler needs an explicit `NSISDIR`.
 
-The current implementation needs no custom NSIS plugin. If a future feature cannot be implemented reliably in NSIS script alone, its native plugin must be built with [`dotnetbundler/NsisPlugin`](https://github.com/dotnetbundler/NsisPlugin) as a separate `win-x86` Native AOT project, and the compiled DLL—not a build-time SDK requirement—will be embedded in `DotNet.Bundler.Nsis`.
+For the standalone API, set `NsisBundleConfiguration.Shortcuts` to an `NsisShortcutConfiguration`. Its `Desktop`, `StartMenu`, `Arguments`, `WorkingDirectory`, `Icon`, `AppUserModelId`, and `StartMenuFolder` members correspond to the MSBuild properties below; `LegacyProductNames` and `LegacyMainExecutables` opt into safe shortcut migration after a rename.
+
+The package embeds a `win-x86` Native AOT plug-in built with [`dotnetbundler/NsisPlugin`](https://github.com/dotnetbundler/NsisPlugin). It provides SemVer comparison, MSI discovery, unelevated launch, and Shell COM shortcut operations without imposing a build-time SDK or installed-tool requirement on consumers.
 
 ## MSBuild properties
 
@@ -121,6 +123,15 @@ The current implementation needs no custom NSIS plugin. If a future feature cann
 | `BundlerNsisLanguages` | No | `English` |
 | `BundlerNsisDisplayLanguageSelector` | No | `false` |
 | `BundlerNsisAllowDowngrades` | No | `false` |
+| `BundlerNsisShortcutDesktop` | No | `true` |
+| `BundlerNsisShortcutStartMenu` | No | `true` |
+| `BundlerNsisShortcutArguments` | No | None |
+| `BundlerNsisShortcutWorkingDirectory` | No | Installation root; install-relative when set |
+| `BundlerNsisShortcutIcon` | No | Main executable; install-relative when set |
+| `BundlerNsisShortcutAppUserModelId` | No | `BundlerIdentifier` |
+| `BundlerNsisShortcutStartMenuFolder` | No | `BundlerProductName`; use `.` for the Programs root |
+| `BundlerNsisShortcutLegacyProductNames` | No | Semicolon-separated previous product names |
+| `BundlerNsisShortcutLegacyMainExecutables` | No | Semicolon-separated previous install-relative executable paths |
 | `BundlerNsisLegacyMsiProductCodes` | No | Semicolon-separated MSI ProductCode GUIDs |
 | `BundlerNsisLegacyMsiUpgradeCodes` | No | Semicolon-separated MSI UpgradeCode GUIDs |
 | `BundlerWindowsSigningPfxFile` | No | PFX/P12 code-signing certificate path |
@@ -179,7 +190,7 @@ Additional NSIS languages require a custom message file containing every `LangSt
 </ItemGroup>
 ```
 
-The default template includes current-user installation, a user-selectable directory that remembers the previous location, a warning for unrelated non-empty directories, DPI awareness, compression, optional Start Menu and desktop shortcuts, running-app detection and closure, Add/Remove Programs metadata, optional application-data cleanup, silent uninstall, and finish-page launch behavior. When application-data deletion is not selected, uninstall removes packaged payload paths from the program directory: files created later at new paths remain, while files created or replaced at a packaged path are removed. When application-data deletion is selected, uninstall recursively removes the complete program directory plus `%APPDATA%\<identifier>` and `%LOCALAPPDATA%\<identifier>`.
+The default template includes current-user installation, a user-selectable directory that remembers the previous location, a warning for unrelated non-empty directories, DPI awareness, compression, optional Start Menu and desktop shortcuts, running-app detection and closure, Add/Remove Programs metadata, optional application-data cleanup, silent uninstall, and finish-page launch behavior. Shortcut defaults, arguments, working directory, icon, stable AppUserModelID, and Start Menu folder are configurable. Working-directory and icon paths must exist in the final installed payload. Updates refresh only shortcuts that still exist and still target the current or explicitly configured legacy executable; uninstall applies the same ownership check, so a same-name shortcut taken over by another program is preserved. Legacy product names and main executables enable explicit rename migration. Automatic Start/taskbar unpinning remains a Windows-version-dependent manual validation item and is not claimed as guaranteed behavior. When application-data deletion is not selected, uninstall removes packaged payload paths from the program directory: files created later at new paths remain, while files created or replaced at a packaged path are removed. When application-data deletion is selected, uninstall recursively removes the complete program directory plus `%APPDATA%\<identifier>` and `%LOCALAPPDATA%\<identifier>`.
 
 Versions must follow SemVer 2.0 and each numeric core component must fit the Windows `0-65535` version-resource range. The installer detects an existing installation in the selected user or machine registry context and compares `DisplayVersion` using a bundled `NsisPlugin` Native AOT plug-in. Interactive installs let the user choose between uninstall-first and in-place replacement. Silent same-version runs repair in place; silent upgrades uninstall the old packaged payload first while preserving application data. Downgrades are rejected by default and can be enabled with `BundlerNsisAllowDowngrades`.
 
@@ -281,7 +292,7 @@ This is a practical Windows baseline, not Tauri feature parity.
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.18
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.19
 ```
 
 The Windows integration test installs a dedicated fixture into a Chinese path containing spaces, validates payload/resources/metadata/registry/shortcuts/process shutdown, exercises both data-preserving and full-data removal uninstalls, and cleans its test state in `finally`.

@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.18"
+    [string]$PackageVersion = "0.1.0-alpha.19"
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,6 +25,7 @@ $allowedDowngradeBundleOutput = Join-Path $integrationRoot "bundle-allowed-downg
 $legacyMsiProductMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-product-migration"
 $legacyMsiUpgradeMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-upgrade-migration"
 $signedBundleOutput = Join-Path $integrationRoot "bundle-signed"
+$noShortcutDefaultsBundleOutput = Join-Path $integrationRoot "bundle-no-shortcut-defaults"
 $directMsBuildOutput = Join-Path $integrationRoot "bundle-direct-msbuild"
 $testIcon = Join-Path $integrationRoot "test-installer.ico"
 $testHeaderImage = Join-Path $integrationRoot "test-header.bmp"
@@ -50,8 +51,10 @@ $commandLineMarker = Join-Path $env:TEMP "DotNetBundler-command-line.txt"
 $roamingData = Join-Path $env:APPDATA $identifier
 $localData = Join-Path $env:LOCALAPPDATA $identifier
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "$productName.lnk"
-$startMenuDirectory = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\$productName"
+$startMenuDirectory = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\DotNet Bundler Integration"
 $startMenuShortcut = Join-Path $startMenuDirectory "$productName.lnk"
+$legacyStartMenuDirectory = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Legacy Bundler Fixture"
+$legacyStartMenuShortcut = Join-Path $legacyStartMenuDirectory "Legacy Bundler Fixture.lnk"
 $fixtureProcess = $null
 $testCertificateThumbprint = $null
 $hookMarkers = @("preinstall", "postinstall", "preuninstall", "postuninstall") | ForEach-Object { Join-Path $env:TEMP "DotNetBundler-$_.txt" }
@@ -89,6 +92,31 @@ function Invoke-MsiExec([string]$ArgumentLine, [int[]]$AllowedExitCodes = @(0, 3
     }
 }
 
+function Get-ShortcutInfo([string]$Path) {
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($Path)
+    $folder = Split-Path -Parent $Path
+    $name = Split-Path -Leaf $Path
+    $shellApplication = New-Object -ComObject Shell.Application
+    $item = $shellApplication.NameSpace($folder).ParseName($name)
+    [pscustomobject]@{
+        TargetPath = $shortcut.TargetPath
+        Arguments = $shortcut.Arguments
+        WorkingDirectory = $shortcut.WorkingDirectory
+        IconLocation = $shortcut.IconLocation
+        AppUserModelId = $item.ExtendedProperty("System.AppUserModel.ID")
+    }
+}
+
+function Set-TestShortcut([string]$Path, [string]$TargetPath) {
+    New-Item -ItemType Directory -Path (Split-Path -Parent $Path) -Force | Out-Null
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($Path)
+    $shortcut.TargetPath = $TargetPath
+    $shortcut.WorkingDirectory = Split-Path -Parent $TargetPath
+    $shortcut.Save()
+}
+
 function Build-FixtureBundle(
     [string]$InstallMode,
     [string]$OutputPath,
@@ -97,7 +125,9 @@ function Build-FixtureBundle(
     [bool]$AllowDowngrades = $false,
     [string]$LegacyMsiProductCodes = "",
     [string]$LegacyMsiUpgradeCodes = "",
-    [string]$SigningCertificateThumbprint = ""
+    [string]$SigningCertificateThumbprint = "",
+    [bool]$ShortcutDesktop = $true,
+    [bool]$ShortcutStartMenu = $true
 ) {
     Invoke-Native "dotnet" @(
         "publish", $fixtureProject, "-c", $Configuration, "--force",
@@ -114,6 +144,8 @@ function Build-FixtureBundle(
         "-p:BundlerNsisLegacyMsiProductCodes=$LegacyMsiProductCodes",
         "-p:BundlerNsisLegacyMsiUpgradeCodes=$LegacyMsiUpgradeCodes",
         "-p:BundlerWindowsSigningCertificateThumbprint=$SigningCertificateThumbprint",
+        "-p:BundlerNsisShortcutDesktop=$ShortcutDesktop",
+        "-p:BundlerNsisShortcutStartMenu=$ShortcutStartMenu",
         "-p:RestorePackagesPath=$packageCache"
     )
 }
@@ -147,6 +179,8 @@ function Remove-TestState {
     if (Test-Path -LiteralPath $desktopShortcut) { Remove-Item -LiteralPath $desktopShortcut -Force }
     if (Test-Path -LiteralPath $startMenuShortcut) { Remove-Item -LiteralPath $startMenuShortcut -Force }
     if (Test-Path -LiteralPath $startMenuDirectory) { Remove-Item -LiteralPath $startMenuDirectory -Force }
+    if (Test-Path -LiteralPath $legacyStartMenuShortcut) { Remove-Item -LiteralPath $legacyStartMenuShortcut -Force }
+    if (Test-Path -LiteralPath $legacyStartMenuDirectory) { Remove-Item -LiteralPath $legacyStartMenuDirectory -Force }
     Invoke-MsiExec "/x $legacyMsiProductCode /qn /norestart" @(0, 1605, 3010)
     foreach ($path in @($installDirectory, $installRoot)) {
         Assert-UnderIntegrationRoot $path
@@ -283,6 +317,7 @@ try {
         -NotAfter ([DateTime]::Now.AddDays(1))
     $testCertificateThumbprint = $testCertificate.Thumbprint
     Build-FixtureBundle "currentUser" $signedBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" $testCertificateThumbprint
+    Build-FixtureBundle "currentUser" $noShortcutDefaultsBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" "" $false $false
 
     $installer = Join-Path $bundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $upgradeInstaller = Join-Path $upgradeBundleOutput "win-x64\nsis\$productName-1.1.0-setup.exe"
@@ -290,6 +325,7 @@ try {
     $legacyMsiProductMigrationInstaller = Join-Path $legacyMsiProductMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $legacyMsiUpgradeMigrationInstaller = Join-Path $legacyMsiUpgradeMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $signedInstaller = Join-Path $signedBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
+    $noShortcutDefaultsInstaller = Join-Path $noShortcutDefaultsBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     Assert-True (Test-Path -LiteralPath $installer) "Installer was not created: $installer"
     Assert-True (Test-Path -LiteralPath (Join-Path $directMsBuildOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Direct MSBuild package installer was not created."
     Assert-True (Test-Path -LiteralPath (Join-Path $perMachineBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Per-machine installer was not created."
@@ -298,6 +334,7 @@ try {
     Assert-True (Test-Path -LiteralPath $allowedDowngradeInstaller) "Allowed-downgrade installer was not created."
     Assert-True (Test-Path -LiteralPath $legacyMsiProductMigrationInstaller) "ProductCode migration installer was not created."
     Assert-True (Test-Path -LiteralPath $legacyMsiUpgradeMigrationInstaller) "UpgradeCode migration installer was not created."
+    Assert-True (Test-Path -LiteralPath $noShortcutDefaultsInstaller) "Shortcut-default fixture installer was not created."
     Assert-True ((Get-AuthenticodeSignature -LiteralPath $signedInstaller).SignerCertificate.Thumbprint -eq $testCertificateThumbprint) "The final installer does not contain the expected Authenticode certificate."
     Invoke-WindowsExecutable $signedInstaller "/S /D=$installDirectory"
     $signedUninstaller = Join-Path $installDirectory "Uninstall.exe"
@@ -317,6 +354,13 @@ try {
     Assert-True (-not (Test-Path -LiteralPath $startMenuShortcut)) "/NS unexpectedly created a Start Menu shortcut."
     Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/P /DELETEAPPDATA"
     Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Passive-mode test cleanup did not finish."
+
+    # 包配置可以默认取消两种快捷方式；这与 /NS 独立，适用于无人值守的用户选择策略。
+    Invoke-WindowsExecutable $noShortcutDefaultsInstaller "/S /D=$installDirectory"
+    Assert-True (-not (Test-Path -LiteralPath $desktopShortcut)) "Disabled desktop shortcut default was ignored."
+    Assert-True (-not (Test-Path -LiteralPath $startMenuShortcut)) "Disabled Start Menu shortcut default was ignored."
+    Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Shortcut-default test cleanup did not finish."
 
     # 分别按 ProductCode 和 UpgradeCode 迁移同一个一次性 MSI，验证两种精确标识路径。
     Invoke-MsiExec "/i `"$legacyMsiPath`" /qn /norestart"
@@ -350,6 +394,15 @@ try {
     Assert-True ((Get-Content -Raw -LiteralPath $deepLinkMarker) -eq "bundlerfixture:integration-value") "Installed application received the wrong deep-link argument."
     Assert-True (Test-Path -LiteralPath $desktopShortcut) "Desktop shortcut is missing."
     Assert-True (Test-Path -LiteralPath $startMenuShortcut) "Start Menu shortcut is missing."
+    $desktopShortcutInfo = Get-ShortcutInfo $desktopShortcut
+    Assert-True ($desktopShortcutInfo.TargetPath -eq $installedExecutable) "Desktop shortcut target is incorrect."
+    Assert-True ($desktopShortcutInfo.Arguments -eq '--shortcut-mode "hello world"') "Desktop shortcut arguments are incorrect."
+    Assert-True ($desktopShortcutInfo.WorkingDirectory -eq (Join-Path $installDirectory "docs")) "Desktop shortcut working directory is incorrect."
+    Assert-True ($desktopShortcutInfo.IconLocation.StartsWith($installedExecutable, [StringComparison]::OrdinalIgnoreCase)) "Desktop shortcut icon is incorrect."
+    Assert-True ($desktopShortcutInfo.AppUserModelId -eq "com.dotnetbundler.integrationfixture.desktop") "Desktop shortcut AppUserModelID is incorrect."
+    $startMenuShortcutInfo = Get-ShortcutInfo $startMenuShortcut
+    Assert-True ($startMenuShortcutInfo.TargetPath -eq $installedExecutable) "Start Menu shortcut target is incorrect."
+    Assert-True ($startMenuShortcutInfo.AppUserModelId -eq "com.dotnetbundler.integrationfixture.desktop") "Start Menu shortcut AppUserModelID is incorrect."
     Assert-True (Test-Path -LiteralPath $hookMarkers[0]) "Pre-install hook did not run."
     Assert-True (Test-Path -LiteralPath $hookMarkers[1]) "Post-install hook did not run."
 
@@ -364,12 +417,22 @@ try {
     # 会在成功后以桌面用户身份启动应用。
     $upgradePreservedData = Join-Path $installDirectory "upgrade-preserved.db"
     Set-Content -LiteralPath $upgradePreservedData -Value "preserve" -Encoding UTF8
+    # 模拟旧产品名和旧主程序名；更新应安全迁移该快捷方式并刷新全部属性。
+    $legacyExecutable = Join-Path $installDirectory "LegacyFixture.exe"
+    Copy-Item -LiteralPath $installedExecutable -Destination $legacyExecutable
+    Set-TestShortcut $legacyStartMenuShortcut $legacyExecutable
+    Remove-Item -LiteralPath $startMenuShortcut -Force
     Remove-Item -LiteralPath $desktopShortcut -Force
     Invoke-WindowsExecutable $upgradeInstaller "/UPDATE /R /ARGS=--protocol-marker `"hello world`" /D=$installDirectory"
     Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Upgrade did not record the new semantic version."
     Assert-True (Test-Path -LiteralPath $upgradePreservedData) "Upgrade removed runtime-created program data."
     Assert-True (-not (Test-Path -LiteralPath $desktopShortcut)) "/UPDATE recreated a shortcut that the user had removed."
-    Assert-True (Test-Path -LiteralPath $startMenuShortcut) "/UPDATE removed an existing shortcut."
+    Assert-True (Test-Path -LiteralPath $startMenuShortcut) "/UPDATE did not migrate the legacy Start Menu shortcut."
+    Assert-True (-not (Test-Path -LiteralPath $legacyStartMenuShortcut)) "/UPDATE left the legacy shortcut behind."
+    $migratedShortcutInfo = Get-ShortcutInfo $startMenuShortcut
+    Assert-True ($migratedShortcutInfo.TargetPath -eq $installedExecutable) "Migrated shortcut still targets the legacy executable."
+    Assert-True ($migratedShortcutInfo.Arguments -eq '--shortcut-mode "hello world"') "Migrated shortcut arguments were not refreshed."
+    Assert-True ($migratedShortcutInfo.AppUserModelId -eq "com.dotnetbundler.integrationfixture.desktop") "Migrated shortcut AppUserModelID was not refreshed."
     Wait-For { Test-Path -LiteralPath $commandLineMarker } "/R did not start the installed application."
     $forwardedArguments = @(Get-Content -LiteralPath $commandLineMarker)
     Assert-True ($forwardedArguments.Count -eq 2) "/ARGS did not preserve the expected argument count."
@@ -421,12 +484,20 @@ try {
     Set-Content -LiteralPath (Join-Path $localData "cache.bin") -Value "cache" -Encoding UTF8
     # 模拟另一应用在卸载前接管协议，验证卸载器不会删除新的所有者。
     Set-Item -LiteralPath (Join-Path $urlSchemeRegistryPath "shell\open\command") -Value '"C:\OtherApp\Other.exe" "%1"'
+    # 同样接管两个同名快捷方式；卸载器必须按实际目标判定所有权，而不是按名称删除。
+    $foreignShortcutTarget = Join-Path $env:WINDIR "System32\notepad.exe"
+    Set-TestShortcut $desktopShortcut $foreignShortcutTarget
+    Set-TestShortcut $startMenuShortcut $foreignShortcutTarget
     Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
     Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "DELETEAPPDATA did not remove the complete program directory."
     Assert-True (-not (Test-Path -LiteralPath $installDirectory)) "DELETEAPPDATA did not remove the complete program directory."
     Assert-True (-not (Test-Path -LiteralPath $roamingData)) "DELETEAPPDATA did not remove roaming application data."
     Assert-True (-not (Test-Path -LiteralPath $localData)) "DELETEAPPDATA did not remove local application data."
     Assert-True (Test-Path -LiteralPath $urlSchemeRegistryPath) "Uninstall removed a deep-link protocol owned by another application."
+    Assert-True (Test-Path -LiteralPath $desktopShortcut) "Uninstall removed a same-name desktop shortcut owned by another application."
+    Assert-True (Test-Path -LiteralPath $startMenuShortcut) "Uninstall removed a same-name Start Menu shortcut owned by another application."
+    Assert-True ((Get-ShortcutInfo $desktopShortcut).TargetPath -eq $foreignShortcutTarget) "Uninstall changed the foreign desktop shortcut."
+    Assert-True ((Get-ShortcutInfo $startMenuShortcut).TargetPath -eq $foreignShortcutTarget) "Uninstall changed the foreign Start Menu shortcut."
 
     Write-Host "PASS Windows NSIS install/uninstall integration"
 }

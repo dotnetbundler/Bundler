@@ -14,6 +14,7 @@
       <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
       <BundlerVersion Condition="'$(BundlerVersion)' == ''">$(Version)</BundlerVersion>
       <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''">$(TargetName).exe</BundlerMainExecutable>
+      <BundlerNsisShortcutStartMenuFolder Condition="'$(BundlerNsisShortcutStartMenuFolder)' == ''">$(BundlerProductName)</BundlerNsisShortcutStartMenuFolder>
     </PropertyGroup>
     <Error Condition="'$(BundlerIdentifier)' == ''"
            Text="BundlerIdentifier is required when BundlerEnabled is true." />
@@ -53,6 +54,15 @@
       NsisLanguages="$(BundlerNsisLanguages)"
       NsisDisplayLanguageSelector="$(BundlerNsisDisplayLanguageSelector)"
       NsisAllowDowngrades="$(BundlerNsisAllowDowngrades)"
+      NsisShortcutDesktop="$(BundlerNsisShortcutDesktop)"
+      NsisShortcutStartMenu="$(BundlerNsisShortcutStartMenu)"
+      NsisShortcutArguments="$(BundlerNsisShortcutArguments)"
+      NsisShortcutWorkingDirectory="$(BundlerNsisShortcutWorkingDirectory)"
+      NsisShortcutIcon="$(BundlerNsisShortcutIcon)"
+      NsisShortcutAppUserModelId="$(BundlerNsisShortcutAppUserModelId)"
+      NsisShortcutStartMenuFolder="$(BundlerNsisShortcutStartMenuFolder)"
+      NsisShortcutLegacyProductNames="$(BundlerNsisShortcutLegacyProductNames)"
+      NsisShortcutLegacyMainExecutables="$(BundlerNsisShortcutLegacyMainExecutables)"
       NsisLegacyMsiProductCodes="$(BundlerNsisLegacyMsiProductCodes)"
       NsisLegacyMsiUpgradeCodes="$(BundlerNsisLegacyMsiUpgradeCodes)"
       WindowsSigningPfxFile="$(BundlerWindowsSigningPfxFile)"

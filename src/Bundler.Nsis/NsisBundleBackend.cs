@@ -158,6 +158,7 @@ internal sealed class NsisBundleBackend(
         var version = NumericVersion(configuration.Version);
         var resources = ExpandResources(configuration.Resources, item.InputDirectory);
         var visualDirectives = CreateVisualDirectives(configuration.Icons, settings);
+        var shortcuts = PrepareShortcuts(configuration, settings.Shortcuts, item, resources);
 
         return TemplateRenderer.Render(template, new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -187,6 +188,18 @@ internal sealed class NsisBundleBackend(
             ["association_install_commands"] = CreateAssociationInstallCommands(configuration),
             ["association_uninstall_commands"] = CreateAssociationUninstallCommands(configuration, item.MainExecutable),
             ["installer_hooks_include"] = CreateInstallerHooksInclude(settings.InstallerHooks),
+            ["shortcut_desktop_default"] = shortcuts.DesktopDefault ? "1" : "0",
+            ["shortcut_start_menu_default"] = shortcuts.StartMenuDefault ? "1" : "0",
+            ["shortcut_arguments"] = Escape(shortcuts.Arguments),
+            ["shortcut_working_directory"] = shortcuts.WorkingDirectory,
+            ["shortcut_icon"] = shortcuts.Icon,
+            ["shortcut_app_user_model_id"] = Escape(shortcuts.AppUserModelId),
+            ["shortcut_start_menu_directory"] = shortcuts.StartMenuDirectory,
+            ["shortcut_start_menu_path"] = shortcuts.StartMenuPath,
+            ["shortcut_desktop_path"] = shortcuts.DesktopPath,
+            ["shortcut_owned_targets"] = shortcuts.OwnedTargets,
+            ["shortcut_migration_commands"] = shortcuts.MigrationCommands,
+            ["shortcut_legacy_cleanup_commands"] = shortcuts.LegacyCleanupCommands,
             ["resource_install_commands"] = CreateResourceInstallCommands(resources),
             ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory, resources),
             ["language_macros"] = localization.LanguageMacros,
@@ -400,6 +413,132 @@ internal sealed class NsisBundleBackend(
         ";",
         codes.Select(code => Guid.Parse(code).ToString("B").ToUpperInvariant())
             .Distinct(StringComparer.OrdinalIgnoreCase));
+
+    private static ShortcutRendering PrepareShortcuts(
+        BundleConfiguration configuration,
+        NsisShortcutConfiguration shortcuts,
+        BundlePlanItem item,
+        IReadOnlyList<PayloadResource> resources)
+    {
+        var mainExecutable = NormalizeTargetPath(item.MainExecutable);
+        EnsurePayloadFile(mainExecutable, item.InputDirectory, resources, nameof(item.MainExecutable));
+
+        var workingDirectory = string.IsNullOrWhiteSpace(shortcuts.WorkingDirectory) || shortcuts.WorkingDirectory == "."
+            ? "$INSTDIR"
+            : "$INSTDIR\\" + Escape(NormalizeTargetPath(shortcuts.WorkingDirectory!));
+        if (!string.IsNullOrWhiteSpace(shortcuts.WorkingDirectory) && shortcuts.WorkingDirectory != ".")
+        {
+            EnsurePayloadDirectory(NormalizeTargetPath(shortcuts.WorkingDirectory!), item.InputDirectory, resources);
+        }
+
+        var icon = string.IsNullOrWhiteSpace(shortcuts.Icon)
+            ? "$INSTDIR\\" + Escape(mainExecutable)
+            : "$INSTDIR\\" + Escape(NormalizeTargetPath(shortcuts.Icon!));
+        if (!string.IsNullOrWhiteSpace(shortcuts.Icon))
+        {
+            EnsurePayloadFile(NormalizeTargetPath(shortcuts.Icon!), item.InputDirectory, resources, nameof(shortcuts.Icon));
+        }
+
+        var appUserModelId = shortcuts.AppUserModelId ?? configuration.Identifier;
+        if (appUserModelId.Length > 128 || appUserModelId.Any(char.IsWhiteSpace))
+        {
+            throw new InvalidOperationException("The shortcut AppUserModelId must contain no whitespace and be at most 128 characters.");
+        }
+
+        var startMenuFolder = shortcuts.StartMenuFolder;
+        if (startMenuFolder is null)
+        {
+            startMenuFolder = configuration.ProductName;
+        }
+        var startMenuDirectory = string.IsNullOrWhiteSpace(startMenuFolder) || startMenuFolder == "."
+            ? "$SMPROGRAMS"
+            : "$SMPROGRAMS\\" + Escape(ToInstallerPath(startMenuFolder).Trim('\\'));
+        var productFileName = SafeFileName(configuration.ProductName);
+        var desktopPath = "$DESKTOP\\" + Escape(productFileName) + ".lnk";
+        var startMenuPath = startMenuDirectory + "\\" + Escape(productFileName) + ".lnk";
+
+        var legacyExecutables = shortcuts.LegacyMainExecutables
+            .Select(NormalizeTargetPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var ownedTargets = string.Join(
+            "|",
+            new[] { mainExecutable }.Concat(legacyExecutables)
+                .Select(executable => "$INSTDIR\\" + Escape(executable)));
+
+        var legacyPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var legacyNameValue in shortcuts.LegacyProductNames)
+        {
+            var legacyName = Escape(SafeFileName(legacyNameValue));
+            legacyPaths.Add("$DESKTOP\\" + legacyName + ".lnk");
+            legacyPaths.Add("$SMPROGRAMS\\" + legacyName + ".lnk");
+            legacyPaths.Add("$SMPROGRAMS\\" + legacyName + "\\" + legacyName + ".lnk");
+            legacyPaths.Add(startMenuDirectory + "\\" + legacyName + ".lnk");
+            legacyPaths.Add("$SMPROGRAMS\\" + legacyName + "\\" + Escape(productFileName) + ".lnk");
+        }
+        legacyPaths.Remove(desktopPath);
+        legacyPaths.Remove(startMenuPath);
+
+        var target = "$INSTDIR\\" + Escape(mainExecutable);
+        string UpdateCall(string action, string source, string destination) =>
+            $"  DotNetBundlerNsis::{action} \"{source}\" \"{destination}\" \"{ownedTargets}\" \"{target}\" \"{Escape(shortcuts.Arguments ?? string.Empty)}\" \"{workingDirectory}\" \"{icon}\" \"{Escape(appUserModelId)}\"" + Environment.NewLine +
+            "  Pop $0" + Environment.NewLine +
+            "  !insertmacro CheckShortcutResult";
+        var migrations = new List<string>();
+        foreach (var path in legacyPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            var destination = path.StartsWith("$DESKTOP", StringComparison.OrdinalIgnoreCase)
+                ? desktopPath
+                : startMenuPath;
+            migrations.Add(UpdateCall("MoveShortcutIfOwned", path, destination));
+        }
+
+        var cleanup = legacyPaths
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .Select(path => $"  DotNetBundlerNsis::DeleteShortcutIfOwned \"{path}\" \"{ownedTargets}\"" + Environment.NewLine + "  Pop $0")
+            .ToArray();
+
+        return new ShortcutRendering(
+            shortcuts.Desktop,
+            shortcuts.StartMenu,
+            shortcuts.Arguments ?? string.Empty,
+            workingDirectory,
+            icon,
+            appUserModelId,
+            startMenuDirectory,
+            startMenuPath,
+            desktopPath,
+            ownedTargets,
+            string.Join(Environment.NewLine, migrations),
+            string.Join(Environment.NewLine, cleanup));
+    }
+
+    private static void EnsurePayloadFile(
+        string relativePath,
+        string inputDirectory,
+        IReadOnlyList<PayloadResource> resources,
+        string propertyName)
+    {
+        if (File.Exists(Path.Combine(inputDirectory, relativePath)) ||
+            resources.Any(resource => resource.TargetPath.Equals(relativePath, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+        throw new InvalidOperationException($"Shortcut {propertyName} '{relativePath}' is not present in the final installed payload.");
+    }
+
+    private static void EnsurePayloadDirectory(
+        string relativePath,
+        string inputDirectory,
+        IReadOnlyList<PayloadResource> resources)
+    {
+        if (Directory.Exists(Path.Combine(inputDirectory, relativePath)) ||
+            resources.Any(resource => resource.TargetPath.StartsWith(relativePath + "\\", StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+        throw new InvalidOperationException($"Shortcut working directory '{relativePath}' is not present in the final installed payload.");
+    }
 
     private static string TargetArchitectureName(CpuArchitecture architecture) => architecture switch
     {
@@ -664,6 +803,20 @@ internal sealed class NsisBundleBackend(
         string LanguageMacros,
         string LanguageFiles,
         string DisplayLanguageSelector);
+
+    private sealed record ShortcutRendering(
+        bool DesktopDefault,
+        bool StartMenuDefault,
+        string Arguments,
+        string WorkingDirectory,
+        string Icon,
+        string AppUserModelId,
+        string StartMenuDirectory,
+        string StartMenuPath,
+        string DesktopPath,
+        string OwnedTargets,
+        string MigrationCommands,
+        string LegacyCleanupCommands);
 
     private sealed record PayloadResource(string Source, string TargetPath);
 

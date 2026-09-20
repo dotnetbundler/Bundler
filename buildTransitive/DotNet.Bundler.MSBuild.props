@@ -26,6 +26,15 @@
     <BundlerNsisLanguages Condition="'$(BundlerNsisLanguages)' == ''">English</BundlerNsisLanguages>
     <BundlerNsisDisplayLanguageSelector Condition="'$(BundlerNsisDisplayLanguageSelector)' == ''">false</BundlerNsisDisplayLanguageSelector>
     <BundlerNsisAllowDowngrades Condition="'$(BundlerNsisAllowDowngrades)' == ''">false</BundlerNsisAllowDowngrades>
+    <BundlerNsisShortcutDesktop Condition="'$(BundlerNsisShortcutDesktop)' == ''">true</BundlerNsisShortcutDesktop>
+    <BundlerNsisShortcutStartMenu Condition="'$(BundlerNsisShortcutStartMenu)' == ''">true</BundlerNsisShortcutStartMenu>
+    <BundlerNsisShortcutArguments Condition="'$(BundlerNsisShortcutArguments)' == ''"></BundlerNsisShortcutArguments>
+    <BundlerNsisShortcutWorkingDirectory Condition="'$(BundlerNsisShortcutWorkingDirectory)' == ''"></BundlerNsisShortcutWorkingDirectory>
+    <BundlerNsisShortcutIcon Condition="'$(BundlerNsisShortcutIcon)' == ''"></BundlerNsisShortcutIcon>
+    <BundlerNsisShortcutAppUserModelId Condition="'$(BundlerNsisShortcutAppUserModelId)' == ''"></BundlerNsisShortcutAppUserModelId>
+    <BundlerNsisShortcutStartMenuFolder Condition="'$(BundlerNsisShortcutStartMenuFolder)' == ''"></BundlerNsisShortcutStartMenuFolder>
+    <BundlerNsisShortcutLegacyProductNames Condition="'$(BundlerNsisShortcutLegacyProductNames)' == ''"></BundlerNsisShortcutLegacyProductNames>
+    <BundlerNsisShortcutLegacyMainExecutables Condition="'$(BundlerNsisShortcutLegacyMainExecutables)' == ''"></BundlerNsisShortcutLegacyMainExecutables>
     <BundlerNsisLegacyMsiProductCodes Condition="'$(BundlerNsisLegacyMsiProductCodes)' == ''"></BundlerNsisLegacyMsiProductCodes>
     <BundlerNsisLegacyMsiUpgradeCodes Condition="'$(BundlerNsisLegacyMsiUpgradeCodes)' == ''"></BundlerNsisLegacyMsiUpgradeCodes>
     <BundlerWindowsSigningPfxFile Condition="'$(BundlerWindowsSigningPfxFile)' == ''"></BundlerWindowsSigningPfxFile>
