@@ -609,6 +609,20 @@ static void RendersNsisAutomationProtocol()
            template.Contains("!define EXIT_APP_CLOSE_FAILED 5", StringComparison.Ordinal) &&
            template.Contains("!define EXIT_REBOOT_REQUIRED 3010", StringComparison.Ordinal),
         "The documented automation exit codes are missing from the NSIS template.");
+    Assert(template.Contains("Function un.onUninstSuccess", StringComparison.Ordinal) &&
+           template.Contains("IfRebootFlag un_reboot_required un_no_reboot_required", StringComparison.Ordinal) &&
+           template.Contains("SetErrorLevel ${EXIT_REBOOT_REQUIRED}", StringComparison.Ordinal),
+        "Install and uninstall success paths should expose reboot-required status as exit code 3010.");
+    Assert(!template.Contains("ExecWait '$InstalledUninstaller /S _?=$InstalledDirectory'", StringComparison.Ordinal),
+        "Upgrade must not run the installed uninstaller in place because that queues deletion of itself.");
+    Assert(template.Contains("GetTempFileName $1", StringComparison.Ordinal) &&
+           template.Contains("CopyFiles /SILENT \"$InstalledDirectory\\Uninstall.exe\" \"$1\"", StringComparison.Ordinal) &&
+           template.Contains("ExecWait '\"$1\" /S _?=$InstalledDirectory' $0", StringComparison.Ordinal),
+        "Upgrade should synchronously run an explicit temporary copy of the old uninstaller.");
+    var installSection = template.Substring(template.IndexOf("Section \"Install\" MainSection", StringComparison.Ordinal));
+    Assert(installSection.Contains("Call CommitInstallTransaction", StringComparison.Ordinal) &&
+           template.Contains("Function .onInstSuccess", StringComparison.Ordinal),
+        "A successful reboot-required install must commit its transaction before the success callback reports exit code 3010.");
     Assert(template.Contains("Function SkipIfPassive", StringComparison.Ordinal) &&
            template.Contains("Function ValidateAutomatedInstallDirectory", StringComparison.Ordinal) &&
            template.Contains("DotNetBundlerNsis::RunAsUser", StringComparison.Ordinal),

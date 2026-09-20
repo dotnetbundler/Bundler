@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.20"
+    [string]$PackageVersion = "0.1.0-alpha.21"
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,6 +23,7 @@ $bothBundleOutput = Join-Path $integrationRoot "bundle-both"
 $upgradeBundleOutput = Join-Path $integrationRoot "bundle-upgrade"
 $rollbackFailureBundleOutput = Join-Path $integrationRoot "bundle-rollback-failure"
 $interruptedBundleOutput = Join-Path $integrationRoot "bundle-interrupted"
+$rebootRequiredBundleOutput = Join-Path $integrationRoot "bundle-reboot-required"
 $allowedDowngradeBundleOutput = Join-Path $integrationRoot "bundle-allowed-downgrade"
 $legacyMsiProductMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-product-migration"
 $legacyMsiUpgradeMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-upgrade-migration"
@@ -34,6 +35,7 @@ $testHeaderImage = Join-Path $integrationRoot "test-header.bmp"
 $testSidebarImage = Join-Path $integrationRoot "test-sidebar.bmp"
 $failingInstallerHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-postinstall.nsh"
 $abortingInstallerHooks = Join-Path $PSScriptRoot "Fixture\Assets\aborting-postinstall.nsh"
+$rebootingInstallerHooks = Join-Path $PSScriptRoot "Fixture\Assets\rebooting-postinstall.nsh"
 $installRoot = Join-Path $integrationRoot "安装 目录"
 $installDirectory = Join-Path $installRoot "Bundler Integration Fixture"
 $externalFixtureDirectory = Join-Path $integrationRoot "same-name-external-process"
@@ -53,6 +55,7 @@ $capabilitiesRegistryPath = "HKCU:\Software\$identifier\Capabilities"
 $registeredApplicationsRegistryPath = "HKCU:\Software\RegisteredApplications"
 $deepLinkMarker = Join-Path $env:TEMP "DotNetBundler-deep-link.txt"
 $commandLineMarker = Join-Path $env:TEMP "DotNetBundler-command-line.txt"
+$interruptedHookMarker = Join-Path $env:TEMP "DotNetBundler-interrupted-postinstall.txt"
 $roamingData = Join-Path $env:APPDATA $identifier
 $localData = Join-Path $env:LOCALAPPDATA $identifier
 $transactionDirectory = Join-Path $env:LOCALAPPDATA "DotNetBundler\transactions\$identifier"
@@ -191,6 +194,7 @@ function Remove-TestState {
     Remove-ItemProperty -LiteralPath $registeredApplicationsRegistryPath -Name $identifier -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $deepLinkMarker) { Remove-Item -LiteralPath $deepLinkMarker -Force }
     if (Test-Path -LiteralPath $commandLineMarker) { Remove-Item -LiteralPath $commandLineMarker -Force }
+    if (Test-Path -LiteralPath $interruptedHookMarker) { Remove-Item -LiteralPath $interruptedHookMarker -Force }
     if (Test-Path -LiteralPath $desktopShortcut) { Remove-Item -LiteralPath $desktopShortcut -Force }
     if (Test-Path -LiteralPath $startMenuShortcut) { Remove-Item -LiteralPath $startMenuShortcut -Force }
     if (Test-Path -LiteralPath $startMenuDirectory) { Remove-Item -LiteralPath $startMenuDirectory -Force }
@@ -329,6 +333,7 @@ try {
     Build-FixtureBundle "currentUser" $upgradeBundleOutput "DotNet.Bundler" "1.1.0"
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $rollbackFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingInstallerHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $interruptedBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $abortingInstallerHooks
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $rebootRequiredBundleOutput -ApplicationVersion "1.0.0" -InstallerHooks $rebootingInstallerHooks
     Build-FixtureBundle "currentUser" $allowedDowngradeBundleOutput "DotNet.Bundler" "1.0.0" $true
     Build-FixtureBundle "currentUser" $legacyMsiProductMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false $legacyMsiProductCode ""
     Build-FixtureBundle "currentUser" $legacyMsiUpgradeMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false "" $legacyMsiUpgradeCode
@@ -347,6 +352,7 @@ try {
     $upgradeInstaller = Join-Path $upgradeBundleOutput "win-x64\nsis\$productName-1.1.0-setup.exe"
     $rollbackFailureInstaller = Join-Path $rollbackFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
     $interruptedInstaller = Join-Path $interruptedBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
+    $rebootRequiredInstaller = Join-Path $rebootRequiredBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $allowedDowngradeInstaller = Join-Path $allowedDowngradeBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $legacyMsiProductMigrationInstaller = Join-Path $legacyMsiProductMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $legacyMsiUpgradeMigrationInstaller = Join-Path $legacyMsiUpgradeMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
@@ -359,6 +365,7 @@ try {
     Assert-True (Test-Path -LiteralPath $upgradeInstaller) "Upgrade installer was not created."
     Assert-True (Test-Path -LiteralPath $rollbackFailureInstaller) "Rollback failure-injection installer was not created."
     Assert-True (Test-Path -LiteralPath $interruptedInstaller) "Interrupted-install fixture was not created."
+    Assert-True (Test-Path -LiteralPath $rebootRequiredInstaller) "Reboot-required fixture installer was not created."
     Assert-True (Test-Path -LiteralPath $allowedDowngradeInstaller) "Allowed-downgrade installer was not created."
     Assert-True (Test-Path -LiteralPath $legacyMsiProductMigrationInstaller) "ProductCode migration installer was not created."
     Assert-True (Test-Path -LiteralPath $legacyMsiUpgradeMigrationInstaller) "UpgradeCode migration installer was not created."
@@ -369,6 +376,17 @@ try {
     Assert-True ((Get-AuthenticodeSignature -LiteralPath $signedUninstaller).SignerCertificate.Thumbprint -eq $testCertificateThumbprint) "The installed uninstaller does not contain the expected Authenticode certificate."
     Invoke-WindowsExecutable $signedUninstaller "/S /DELETEAPPDATA"
     Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Signed installer test cleanup did not finish."
+
+    # SetRebootFlag 模拟一个已经成功排入系统队列的外部操作。安装事务必须先提交并清理
+    # journal，然后返回 3010；即使传入 /R，也不能在重启前启动应用。
+    $rebootRequiredProcess = Start-Process -FilePath $rebootRequiredInstaller -ArgumentList "/S /R /ARGS=--protocol-marker reboot-required /D=$installDirectory" -Wait -PassThru
+    Assert-True ($rebootRequiredProcess.ExitCode -eq 3010) "Reboot-required install did not return exit code 3010."
+    Assert-True (Test-Path -LiteralPath (Join-Path $installDirectory "BundlerIntegrationFixture.exe")) "Reboot-required install did not commit its payload."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.0.0") "Reboot-required install did not commit its registry state."
+    Assert-True (-not (Test-Path -LiteralPath $transactionDirectory)) "Reboot-required install left an active transaction journal."
+    Assert-True (-not (Test-Path -LiteralPath $commandLineMarker)) "Reboot-required install launched the application before reboot."
+    Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Reboot-required fixture cleanup did not finish."
 
     # /ARGS 没有 /R 时属于调用错误，必须稳定返回 3 且不能写入载荷。
     $invalidArgumentsProcess = Start-Process -FilePath $installer -ArgumentList "/S /ARGS orphaned /D=$installDirectory" -Wait -PassThru
@@ -474,11 +492,16 @@ try {
     Assert-True ($forwardedArguments.Count -eq 2) "/ARGS did not preserve the expected argument count."
     Assert-True ($forwardedArguments[0] -eq "--protocol-marker" -and $forwardedArguments[1] -eq "hello world") "/ARGS changed the forwarded application arguments."
 
-    # 测试 Hook 直接终止安装器进程，模拟无法进入 .onInstFailed 的崩溃。active journal 应保留，
-    # 下一次安装启动时必须先恢复 1.1.0，再开始新的事务。
+    # Hook 到达 post-install 后等待；测试进程从外部终止整个安装器进程树，模拟外层监督
+    # 进程也无法进入 .onInstFailed 的崩溃。active journal 应保留，下一次安装启动时必须
+    # 先恢复 1.1.0，再开始新的事务。
     $preInterruptedExecutableHash = (Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash
-    $interruptedProcess = Start-Process -FilePath $interruptedInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
-    Assert-True ($interruptedProcess.ExitCode -eq 2) "Interrupted-install fixture did not return exit code 2."
+    $interruptedProcess = Start-Process -FilePath $interruptedInstaller -ArgumentList "/S /UPDATE /D=$installDirectory" -PassThru
+    Wait-For { Test-Path -LiteralPath $interruptedHookMarker } "Interrupted-install fixture did not reach its post-install hook."
+    $taskkill = Start-Process -FilePath "$env:WINDIR\System32\taskkill.exe" -ArgumentList "/PID $($interruptedProcess.Id) /T /F" -Wait -PassThru -WindowStyle Hidden
+    Assert-True ($taskkill.ExitCode -eq 0) "Could not terminate the interrupted-install process tree."
+    $interruptedProcess.WaitForExit()
+    Assert-True ($interruptedProcess.ExitCode -ne 0) "Interrupted-install fixture unexpectedly returned success."
     Assert-True (Test-Path -LiteralPath $transactionDirectory) "Interrupted install did not preserve its active journal."
     Invoke-WindowsExecutable $upgradeInstaller "/S /D=$installDirectory"
     Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Startup recovery did not restore the previous installed version."

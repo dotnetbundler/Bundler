@@ -378,6 +378,24 @@ Function un.onInit
   !endif
 FunctionEnd
 
+Function un.onUninstFailed
+  ${If} $ExitCode == ${EXIT_SUCCESS}
+    StrCpy $ExitCode ${EXIT_FAILURE}
+  ${EndIf}
+  SetErrorLevel $ExitCode
+FunctionEnd
+
+Function un.onUninstSuccess
+  ; /REBOOTOK 只表示 Windows 已接受重启后的删除请求；调用方必须收到 3010，
+  ; 不能把仍有待处理文件的卸载误报成已经完整结束。
+  IfRebootFlag un_reboot_required un_no_reboot_required
+  un_reboot_required:
+    SetErrorLevel ${EXIT_REBOOT_REQUIRED}
+    Return
+  un_no_reboot_required:
+    SetErrorLevel $ExitCode
+FunctionEnd
+
 Function SetDefaultInstallDirectory
   ${If} $INSTDIR == "placeholder\${INSTALL_FOLDER}"
     !if "${INSTALL_MODE}" == "currentUser"
@@ -575,11 +593,21 @@ Function UninstallExistingInstallation
     Return
   ${EndIf}
 
-  ; `_?=` 使旧版卸载器在原安装目录中运行，而不是使用临时副本。
+  ; 先自行复制旧卸载器，再用 `_?=` 让该临时副本针对原安装目录运行。
+  ; 这样 ExecWait 会等待真正执行卸载的进程，同时安装目录中的 Uninstall.exe 不会被锁住。
   ; 默认的静默卸载会保留应用数据。
   DetailPrint "$(RemovingExistingVersion)"
+  GetTempFileName $1
   ClearErrors
-  ExecWait '$InstalledUninstaller /S _?=$InstalledDirectory' $0
+  CopyFiles /SILENT "$InstalledDirectory\Uninstall.exe" "$1"
+  ${If} ${Errors}
+    Delete "$1"
+    Call FailInstallTransaction
+  ${EndIf}
+
+  ClearErrors
+  ExecWait '"$1" /S _?=$InstalledDirectory' $0
+  Delete "$1"
   ${If} ${Errors}
   ${OrIf} $0 != 0
   ${OrIf} ${FileExists} "$InstalledDirectory\${MAIN_EXECUTABLE}"
