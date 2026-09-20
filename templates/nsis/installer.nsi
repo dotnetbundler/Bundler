@@ -952,6 +952,12 @@ Section "Install" MainSection
   !endif
   SetOverwrite on
   ${If} ${Errors}
+    ; 交互模式明确告知用户该失败可能由任意载荷文件被占用引起。
+    ; 静默和被动模式不弹窗，仍以稳定退出码 2 报告失败。
+    ${IfNot} ${Silent}
+    ${AndIf} $PassiveMode != 1
+      MessageBox MB_ICONSTOP|MB_OK "$(PayloadWriteFailed)"
+    ${EndIf}
     Call FailInstallTransaction
   ${EndIf}
 

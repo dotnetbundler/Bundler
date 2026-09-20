@@ -5,6 +5,7 @@ LangString StartMenuShortcutLabel ${LANG_SIMPCHINESE} "创建开始菜单快捷�
 LangString NonEmptyDirectoryWarning ${LANG_SIMPCHINESE} "所选目录不是空目录，也未识别为已有的 ${PRODUCT_NAME} 安装目录。$\r$\n$\r$\n同名文件可能会被覆盖，是否继续？"
 LangString AppRunningPrompt ${LANG_SIMPCHINESE} "${PRODUCT_NAME} 正在运行，继续前必须将其关闭。是否立即关闭？"
 LangString AppCloseFailed ${LANG_SIMPCHINESE} "无法关闭 ${PRODUCT_NAME}，请手动关闭后重试。"
+LangString PayloadWriteFailed ${LANG_SIMPCHINESE} "无法更新安装文件。请关闭可能正在使用安装目录内文件的应用程序，然后重试。安装器将恢复之前的安装。"
 LangString AppDataPageTitle ${LANG_SIMPCHINESE} "应用数据"
 LangString AppDataPageSubtitle ${LANG_SIMPCHINESE} "请选择是否同时删除应用数据。"
 LangString DeleteAppDataLabel ${LANG_SIMPCHINESE} "删除应用数据（设置、缓存及其他本地数据）"

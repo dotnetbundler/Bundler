@@ -627,8 +627,15 @@ static void RendersNsisAutomationProtocol()
     var payloadOutput = installSection.IndexOf("SetOutPath \"$INSTDIR\"", StringComparison.Ordinal);
     var payloadFailure = installSection.IndexOf("SetOverwrite on", StringComparison.Ordinal);
     Assert(payloadStart >= 0 && payloadOutput > payloadStart && payloadFailure > payloadOutput &&
-           installSection.IndexOf("Call FailInstallTransaction", payloadFailure, StringComparison.Ordinal) > payloadFailure,
-        "Payload extraction should turn locked-file skips into a transactional install failure.");
+            installSection.IndexOf("MessageBox MB_ICONSTOP|MB_OK \"$(PayloadWriteFailed)\"", payloadFailure, StringComparison.Ordinal) > payloadFailure &&
+            installSection.IndexOf("Call FailInstallTransaction", payloadFailure, StringComparison.Ordinal) > payloadFailure,
+        "Payload extraction should explain interactive write failures and then fail transactionally.");
+    foreach (var language in new[] { "English.nsh", "SimpChinese.nsh" })
+    {
+        var strings = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "languages", language));
+        Assert(strings.Contains("LangString PayloadWriteFailed", StringComparison.Ordinal),
+            $"{language} should define the payload-write failure message.");
+    }
     var shortcutWrite = installSection.IndexOf("Call ConfigureShortcuts", payloadFailure, StringComparison.Ordinal);
     var registryWrite = installSection.IndexOf("WriteRegStr SHCTX \"${UNINSTALL_KEY}\" \"DisplayName\"", shortcutWrite, StringComparison.Ordinal);
     var postInstallHook = installSection.IndexOf("!ifmacrodef NSIS_HOOK_POSTINSTALL", registryWrite, StringComparison.Ordinal);
