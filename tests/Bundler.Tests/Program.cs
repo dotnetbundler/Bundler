@@ -147,7 +147,7 @@ static async Task VerifiesAndExtractsBundledNsis()
             "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
         Assert(File.Exists(pluginPath), "The bundled NSIS plug-in is missing.");
         Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))) ==
-               "23690A88A1377901DEDCFC40D7F2DC7B3F86B91BF7D91794730576B6BF2C9DAD",
+               "92DA07F40B3AD9329465DC28D54006AAD81BA21C359B7667D4275B7CFE54BA50",
             "The bundled NSIS plug-in checksum changed; rebuild and update its provenance.");
 
         var toolset = await NsisToolResolver.ResolveAsync(archive, cache);

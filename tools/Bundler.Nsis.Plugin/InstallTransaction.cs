@@ -9,12 +9,15 @@ internal static class InstallTransaction
     private const string StateFileName = "state.txt";
     private const string ActiveFileName = "active";
     private const string OriginalPayloadFileName = "original-payload";
+    private const string CommittedSuffix = ".committed";
+    private const string RetainCommittedForTestFileName = ".dotnet-bundler-test-retain-committed";
 
     internal static int Begin(string transactionDirectory, string installDirectory)
     {
         try
         {
             var transaction = ValidateTransactionDirectory(transactionDirectory);
+            CleanupCommitted(transaction);
             var install = ValidateInstallDirectory(installDirectory, transaction);
             RecoverCore(transactionDirectory, install);
             Directory.CreateDirectory(transaction);
@@ -142,9 +145,29 @@ internal static class InstallTransaction
         try
         {
             var transaction = ValidateTransactionDirectory(transactionDirectory);
+            var committed = CommittedTransactionDirectory(transaction);
+            CleanupCommitted(transaction);
             if (Directory.Exists(transaction))
             {
-                Directory.Delete(transaction, recursive: true);
+                // 仓库集成 Fixture 用此内部标记确定性模拟提交后的清理失败。
+                // 它不属于公共协议，也不会改变目录重命名这一真实提交点。
+                var retainCommittedForTest = File.Exists(Path.Combine(transaction, RetainCommittedForTestFileName));
+                // 同卷目录重命名是提交点。提交后清理失败不能再回滚已完成的安装；
+                // 保留 `.committed` 目录，由下一次安装启动安全重试清理。
+                Directory.Move(transaction, committed);
+                if (!retainCommittedForTest)
+                {
+                    try
+                    {
+                        Directory.Delete(committed, recursive: true);
+                    }
+                    catch (IOException)
+                    {
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                    }
+                }
             }
             return 0;
         }
@@ -159,6 +182,7 @@ internal static class InstallTransaction
         try
         {
             var transaction = ValidateTransactionDirectory(transactionDirectory);
+            CleanupCommitted(transaction);
             RecoverCore(transaction, ValidateInstallDirectory(installDirectory, transaction));
             return 0;
         }
@@ -202,6 +226,18 @@ internal static class InstallTransaction
         RestoreFiles(transaction);
         Directory.Delete(transaction, recursive: true);
     }
+
+    private static void CleanupCommitted(string transactionDirectory)
+    {
+        var committed = CommittedTransactionDirectory(transactionDirectory);
+        if (Directory.Exists(committed))
+        {
+            Directory.Delete(committed, recursive: true);
+        }
+    }
+
+    private static string CommittedTransactionDirectory(string transactionDirectory) =>
+        ValidateTransactionDirectory(transactionDirectory) + CommittedSuffix;
 
     private static void RestoreRegistry(string transaction)
     {

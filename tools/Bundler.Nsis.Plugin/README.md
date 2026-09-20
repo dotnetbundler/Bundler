@@ -9,7 +9,10 @@ Windows Restart Manager with the full installed executable path so another
 directory's same-name process is not terminated. It also creates, inspects,
 updates, migrates, and safely deletes Windows shortcuts using Shell COM APIs,
 including AppUserModelID metadata. Install transactions use the same plug-in to
-snapshot and restore payload files, product registry state, and shortcuts.
+snapshot and restore payload files, product registry state, and shortcuts. A
+successful commit atomically renames the active journal to a `.committed`
+sibling before best-effort cleanup, so a cleanup failure cannot roll back an
+already completed install; the next installer start retries that cleanup.
 
 It is intentionally excluded from `Bundler.slnx`: normal library and MSBuild task
 builds retain the .NET 8 SDK baseline, while rebuilding the native plug-in requires

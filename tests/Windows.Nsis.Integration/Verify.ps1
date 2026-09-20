@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.23"
+    [string]$PackageVersion = "0.1.0-alpha.24"
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,6 +22,9 @@ $perMachineBundleOutput = Join-Path $integrationRoot "bundle-per-machine"
 $bothBundleOutput = Join-Path $integrationRoot "bundle-both"
 $upgradeBundleOutput = Join-Path $integrationRoot "bundle-upgrade"
 $rollbackFailureBundleOutput = Join-Path $integrationRoot "bundle-rollback-failure"
+$shortcutPersistenceFailureBundleOutput = Join-Path $integrationRoot "bundle-shortcut-persistence-failure"
+$registryPersistenceFailureBundleOutput = Join-Path $integrationRoot "bundle-registry-persistence-failure"
+$commitCleanupFailureBundleOutput = Join-Path $integrationRoot "bundle-commit-cleanup-failure"
 $interruptedBundleOutput = Join-Path $integrationRoot "bundle-interrupted"
 $rebootRequiredBundleOutput = Join-Path $integrationRoot "bundle-reboot-required"
 $allowedDowngradeBundleOutput = Join-Path $integrationRoot "bundle-allowed-downgrade"
@@ -34,6 +37,9 @@ $testIcon = Join-Path $integrationRoot "test-installer.ico"
 $testHeaderImage = Join-Path $integrationRoot "test-header.bmp"
 $testSidebarImage = Join-Path $integrationRoot "test-sidebar.bmp"
 $failingInstallerHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-postinstall.nsh"
+$failingShortcutPersistenceHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-shortcut-persistence.nsh"
+$failingRegistryPersistenceHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-registry-persistence.nsh"
+$failingCommitCleanupHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-commit-cleanup.nsh"
 $abortingInstallerHooks = Join-Path $PSScriptRoot "Fixture\Assets\aborting-postinstall.nsh"
 $rebootingInstallerHooks = Join-Path $PSScriptRoot "Fixture\Assets\rebooting-postinstall.nsh"
 $installRoot = Join-Path $integrationRoot "安装 目录"
@@ -59,6 +65,7 @@ $interruptedHookMarker = Join-Path $env:TEMP "DotNetBundler-interrupted-postinst
 $roamingData = Join-Path $env:APPDATA $identifier
 $localData = Join-Path $env:LOCALAPPDATA $identifier
 $transactionDirectory = Join-Path $env:LOCALAPPDATA "DotNetBundler\transactions\$identifier"
+$committedTransactionDirectory = "$transactionDirectory.committed"
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "$productName.lnk"
 $startMenuDirectory = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\DotNet Bundler Integration"
 $startMenuShortcut = Join-Path $startMenuDirectory "$productName.lnk"
@@ -195,11 +202,17 @@ function Remove-TestState {
     if (Test-Path -LiteralPath $deepLinkMarker) { Remove-Item -LiteralPath $deepLinkMarker -Force }
     if (Test-Path -LiteralPath $commandLineMarker) { Remove-Item -LiteralPath $commandLineMarker -Force }
     if (Test-Path -LiteralPath $interruptedHookMarker) { Remove-Item -LiteralPath $interruptedHookMarker -Force }
+    foreach ($path in $hookMarkers) {
+        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
+    }
     if (Test-Path -LiteralPath $desktopShortcut) { Remove-Item -LiteralPath $desktopShortcut -Force }
     if (Test-Path -LiteralPath $startMenuShortcut) { Remove-Item -LiteralPath $startMenuShortcut -Force }
     if (Test-Path -LiteralPath $startMenuDirectory) { Remove-Item -LiteralPath $startMenuDirectory -Force }
     if (Test-Path -LiteralPath $legacyStartMenuShortcut) { Remove-Item -LiteralPath $legacyStartMenuShortcut -Force }
     if (Test-Path -LiteralPath $legacyStartMenuDirectory) { Remove-Item -LiteralPath $legacyStartMenuDirectory -Force }
+    foreach ($path in @($transactionDirectory, $committedTransactionDirectory)) {
+        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
+    }
     Invoke-MsiExec "/x $legacyMsiProductCode /qn /norestart" @(0, 1605, 3010)
     foreach ($path in @($installDirectory, $installRoot, $externalFixtureDirectory)) {
         Assert-UnderIntegrationRoot $path
@@ -276,9 +289,6 @@ try {
     finally {
         $signingPackage.Dispose()
     }
-    foreach ($path in $hookMarkers) {
-        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
-    }
     New-Item -ItemType Directory -Path $integrationRoot -Force | Out-Null
     Assert-UnderIntegrationRoot $packageCache
     if (Test-Path -LiteralPath $packageCache) {
@@ -332,6 +342,9 @@ try {
     Build-FixtureBundle "both" $bothBundleOutput
     Build-FixtureBundle "currentUser" $upgradeBundleOutput "DotNet.Bundler" "1.1.0"
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $rollbackFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingInstallerHooks
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $shortcutPersistenceFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingShortcutPersistenceHooks
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $registryPersistenceFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingRegistryPersistenceHooks
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $commitCleanupFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingCommitCleanupHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $interruptedBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $abortingInstallerHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $rebootRequiredBundleOutput -ApplicationVersion "1.0.0" -InstallerHooks $rebootingInstallerHooks
     Build-FixtureBundle "currentUser" $allowedDowngradeBundleOutput "DotNet.Bundler" "1.0.0" $true
@@ -351,6 +364,9 @@ try {
     $installer = Join-Path $bundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $upgradeInstaller = Join-Path $upgradeBundleOutput "win-x64\nsis\$productName-1.1.0-setup.exe"
     $rollbackFailureInstaller = Join-Path $rollbackFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
+    $shortcutPersistenceFailureInstaller = Join-Path $shortcutPersistenceFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
+    $registryPersistenceFailureInstaller = Join-Path $registryPersistenceFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
+    $commitCleanupFailureInstaller = Join-Path $commitCleanupFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
     $interruptedInstaller = Join-Path $interruptedBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
     $rebootRequiredInstaller = Join-Path $rebootRequiredBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $allowedDowngradeInstaller = Join-Path $allowedDowngradeBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
@@ -364,6 +380,9 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $bothBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Both-scope installer was not created."
     Assert-True (Test-Path -LiteralPath $upgradeInstaller) "Upgrade installer was not created."
     Assert-True (Test-Path -LiteralPath $rollbackFailureInstaller) "Rollback failure-injection installer was not created."
+    Assert-True (Test-Path -LiteralPath $shortcutPersistenceFailureInstaller) "Shortcut-persistence failure fixture was not created."
+    Assert-True (Test-Path -LiteralPath $registryPersistenceFailureInstaller) "Registry-persistence failure fixture was not created."
+    Assert-True (Test-Path -LiteralPath $commitCleanupFailureInstaller) "Commit-cleanup failure fixture was not created."
     Assert-True (Test-Path -LiteralPath $interruptedInstaller) "Interrupted-install fixture was not created."
     Assert-True (Test-Path -LiteralPath $rebootRequiredInstaller) "Reboot-required fixture installer was not created."
     Assert-True (Test-Path -LiteralPath $allowedDowngradeInstaller) "Allowed-downgrade installer was not created."
@@ -514,6 +533,23 @@ try {
     Assert-True ([IO.File]::ReadAllText($lockedPayload) -eq "locked-payload-sentinel") "Locked-payload recovery did not restore the original file."
     Assert-True (-not (Test-Path -LiteralPath $transactionDirectory)) "Locked-payload recovery did not clean up the active journal."
 
+    # 通过仅限测试 Fixture 的宏分别在快捷方式和注册表持久化边界设置 error flag。
+    # 两条路径都必须返回 2，并恢复相同的旧载荷、版本、快捷方式和 journal 状态。
+    $prePersistenceFailureHash = (Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash
+    $prePersistenceFailureShortcut = Get-ShortcutInfo $startMenuShortcut
+    foreach ($failureFixture in @(
+        [pscustomobject]@{ Name = "shortcut"; Installer = $shortcutPersistenceFailureInstaller },
+        [pscustomobject]@{ Name = "registry"; Installer = $registryPersistenceFailureInstaller }
+    )) {
+        $persistenceFailure = Start-Process -FilePath $failureFixture.Installer -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+        Assert-True ($persistenceFailure.ExitCode -eq 2) "Injected $($failureFixture.Name) persistence failure did not return exit code 2."
+        Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Injected $($failureFixture.Name) persistence failure did not restore the installed version."
+        Assert-True ((Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash -eq $prePersistenceFailureHash) "Injected $($failureFixture.Name) persistence failure did not restore the executable."
+        Assert-True ((Get-ShortcutInfo $startMenuShortcut).TargetPath -eq $prePersistenceFailureShortcut.TargetPath) "Injected $($failureFixture.Name) persistence failure did not restore the Start Menu shortcut."
+        Assert-True (-not (Test-Path -LiteralPath $desktopShortcut)) "Injected $($failureFixture.Name) persistence failure recreated the removed desktop shortcut."
+        Assert-True (-not (Test-Path -LiteralPath $transactionDirectory)) "Injected $($failureFixture.Name) persistence failure left an active journal."
+    }
+
     # Hook 到达 post-install 后等待；测试进程从外部终止整个安装器进程树，模拟外层监督
     # 进程也无法进入 .onInstFailed 的崩溃。active journal 应保留，下一次安装启动时必须
     # 先恢复 1.1.0，再开始新的事务。
@@ -543,10 +579,24 @@ try {
     Assert-True ((Get-ShortcutInfo $startMenuShortcut).TargetPath -eq $preRollbackShortcut.TargetPath) "Rollback did not restore the previous Start Menu shortcut."
     Assert-True (-not (Test-Path -LiteralPath $transactionDirectory)) "Committed rollback journal was not cleaned up."
 
+    # commit 先原子重命名 transaction 目录，再尽力删除已提交快照。Fixture 的内部标记
+    # 确定性保留该目录；安装仍应成功，下一次启动只清理 `.committed`，不能回滚新版。
+    $commitCleanupProcess = Start-Process -FilePath $commitCleanupFailureInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($commitCleanupProcess.ExitCode -eq 0) "Commit cleanup failure incorrectly failed the completed installation."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.2.0") "Commit cleanup failure rolled back the committed version."
+    Assert-True (Test-Path -LiteralPath $committedTransactionDirectory) "Commit cleanup failure did not preserve the committed journal for later cleanup."
+    Assert-True (-not (Test-Path -LiteralPath $transactionDirectory)) "Commit cleanup failure left an active transaction directory."
+    Assert-True (Test-Path -LiteralPath $upgradePreservedData) "Commit cleanup failure lost runtime-created program data."
+
+    $commitCleanupRecovery = Start-Process -FilePath $upgradeInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($commitCleanupRecovery.ExitCode -eq 4) "Committed-journal cleanup did not continue to the normal downgrade policy."
+    Assert-True (-not (Test-Path -LiteralPath $committedTransactionDirectory)) "The next installer start did not clean the committed journal."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.2.0") "Committed-journal cleanup changed the installed version."
+
     # 默认禁止降级；静默模式必须在不修改现有安装的情况下返回失败。
     $downgradeProcess = Start-Process -FilePath $installer -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
     Assert-True ($downgradeProcess.ExitCode -eq 4) "A blocked downgrade did not return exit code 4."
-    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Blocked downgrade modified the installed version."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.2.0") "Blocked downgrade modified the installed version."
     Assert-True (Test-Path -LiteralPath $installedExecutable) "Blocked downgrade removed the installed application."
 
     # 明确允许降级的安装器沿用先卸载后替换的路径，并继续保留运行时创建的应用数据。

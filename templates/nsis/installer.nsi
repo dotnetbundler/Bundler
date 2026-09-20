@@ -958,6 +958,10 @@ Section "Install" MainSection
   ; 快捷方式目录和偏好写入也属于安装事务；不能忽略 CreateDirectory 或注册表错误。
   ClearErrors
   Call ConfigureShortcuts
+  ; 仅供仓库集成 Fixture 注入持久化错误，不属于公共 Hook 契约。
+  !ifmacrodef DOTNET_BUNDLER_TEST_FAIL_SHORTCUT_PERSISTENCE
+    !insertmacro DOTNET_BUNDLER_TEST_FAIL_SHORTCUT_PERSISTENCE
+  !endif
   ${If} ${Errors}
     Call FailInstallTransaction
   ${EndIf}
@@ -977,6 +981,10 @@ Section "Install" MainSection
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoModify" 1
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoRepair" 1
 {{association_install_commands}}
+  ; 仅供仓库集成 Fixture 注入持久化错误，不属于公共 Hook 契约。
+  !ifmacrodef DOTNET_BUNDLER_TEST_FAIL_REGISTRY_PERSISTENCE
+    !insertmacro DOTNET_BUNDLER_TEST_FAIL_REGISTRY_PERSISTENCE
+  !endif
   ${If} ${Errors}
     Call FailInstallTransaction
   ${EndIf}
