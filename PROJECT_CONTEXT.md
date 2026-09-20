@@ -2,9 +2,9 @@
 
 > 最后整理：2026-09-20  
 > 当前分支：`codex/modular-bundler-backends`  
-> 上一已提交基线：`41bfbb5 fix(nsis): make transaction commits cleanup-safe`
+> 上一已提交基线：`11148f4 fix(nsis): clarify locked payload failures`
 > 当前包版本：`0.1.0-alpha.25`
-> 本文档所在提交：包含锁定安装载荷安全失败策略和交互提示
+> 本文档所在提交：包含集中的人工与外部环境验收手册
 
 本文档是当前项目的“事实、决策、验证证据、协作约束与后续路线”汇总，供后续开发任务直接接续。它不是面向最终用户的使用手册；当前需要维护的用户文档以根目录的 `README.zh-CN.md` 和 `samples/HelloBundledApp/README.md` 为准。代码与自动化测试始终是实现事实的最终依据。
 
@@ -358,6 +358,7 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 | `3a79ed1` | 锁定载荷安全失败和恢复       |
 | `e900eaf` | 安装持久化错误检测         |
 | `41bfbb5` | 原子提交和提交后清理       |
+| `11148f4` | 锁定载荷策略和交互提示     |
 
 `057aca1` 是安装范围支持的历史提交，位于这条提交链的更早位置。
 
@@ -402,7 +403,7 @@ git diff --check
 
 ## 9. 已实现但仍需外部验收的事项
 
-这些事项也保存在 `docs/nsis-open-items.md`；更新其中任一处时应同步另一处。
+这些事项的外部输入摘要保存在 `docs/nsis-open-items.md`，完整的人工执行顺序、命令、预期结果、证据和清理要求集中在 `docs/manual-testing.md`。新增无法在普通本地自动化环境完成的已实现能力时，必须同步这两个文档；可自动化的测试仍由仓库测试承担。
 
 1. **正式 Authenticode**：使用生产签名身份、私钥保护设施和公开 RFC 3161 服务验证公开信任链、时间戳策略、硬件/云签名行为。
 2. **生产旧 MSI 迁移**：使用真实发布过的 ProductCode/UpgradeCode，以及 x86/x64、current-user/per-machine 旧包验证识别和权限行为。
@@ -515,7 +516,7 @@ git diff --check
 1. `PROJECT_CONTEXT.md`；
 2. `AGENTS.md`（如果存在）；
 3. `README.zh-CN.md`；
-4. `docs/nsis-open-items.md`；
+4. `docs/nsis-open-items.md` 和 `docs/manual-testing.md`；
 5. 与准备处理的阶段直接相关的代码和测试。
 
 本文档是项目交接基线，但代码和自动化测试才是最终事实。如果文档、代码、测试或 Git 状态不一致，接管者必须先调查并向用户说明差异，不能自行假设，也不能要求用户重新复述本文档已经包含的信息。
@@ -532,7 +533,7 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 预期基线：
 
 - 分支：`codex/modular-bundler-backends`
-- 上一已提交基线：`41bfbb5`；本文档所在提交包含随后完成的锁定载荷安全失败策略和交互提示
+- 上一已提交基线：`11148f4`；本文档所在提交包含随后完成的集中人工与外部环境验收手册
 - 包版本：`0.1.0-alpha.25`
 - 安装事务、Restart Manager、对应测试、示例和文档已经实现并提交；不得重新制作原型或把这些能力当作未完成项。
 

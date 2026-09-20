@@ -301,6 +301,8 @@ powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Releas
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。
 
+需要真实重启、UAC/管理员权限、生产证书、真实历史 MSI、特定 Windows 版本、ARM64 硬件或 Linux/macOS 原生宿主的验收步骤集中在 `docs/manual-testing.md`。仓库可自动化的测试仍由上述命令执行，不转为人工清单。
+
 Abstractions 保存跨包稳定契约。Core 实现与格式无关的校验、规划、编排、工作目录生命周期和通用 ZIP 工具缓存。NSIS 项目包含公共后端 API、NSIS 专属配置、模板、进程执行和资源。MSBuild 与开发用 CLI 都只是这些包的适配层，不实现 NSIS 打包逻辑。
 
 ## 安全与许可证

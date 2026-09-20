@@ -2,6 +2,8 @@
 
 This file records work that cannot be honestly completed using repository-only fixtures. It is not a substitute for implementation work that can be automated locally.
 
+Detailed prerequisites, commands, expected results, evidence fields, and cleanup steps are consolidated in `docs/manual-testing.md`. That document is the execution checklist for final manual acceptance; this table remains the short open-input index.
+
 | Item | Current reason | Input needed | Impact |
 | --- | --- | --- | --- |
 | Real Authenticode end-to-end signing | The built-in two-stage Authenticode pipeline is implemented and covered with a disposable self-signed certificate, but the repository has no production certificate/private key or public timestamp service contract. | Provide a production signing identity and RFC 3161 timestamp-service URL in a controlled release environment. | Local tests verify PE signing mechanics; public trust-chain, hardware/cloud signer, and timestamp-policy acceptance still require external credentials and infrastructure. |
