@@ -71,6 +71,10 @@ Var NoShortcutMode
 Var RestartApplication
 Var LaunchArguments
 Var ExitCode
+Var TransactionDirectory
+Var TransactionRegistryRoot
+Var TransactionRegistryView
+Var TransactionActive
 
 ; DotNetBundlerNsis::SemverCompare 返回的比较结果。
 ; 将这些名称放在状态变量附近，便于理解各个版本策略分支。
@@ -164,24 +168,44 @@ UninstPage custom un.AppDataOptionsPage un.AppDataOptionsLeave
 !macro SetInstallContext
   !if "${INSTALL_MODE}" == "currentUser"
     SetShellVarContext current
+    StrCpy $TransactionDirectory "$LOCALAPPDATA\DotNetBundler\transactions\${PRODUCT_ID}"
+    StrCpy $TransactionRegistryRoot "HKCU"
   !else if "${INSTALL_MODE}" == "perMachine"
     SetShellVarContext all
+    StrCpy $TransactionDirectory "$COMMONAPPDATA\DotNetBundler\transactions\${PRODUCT_ID}"
+    StrCpy $TransactionRegistryRoot "HKLM"
+  !else if "${INSTALL_MODE}" == "both"
+    ${If} $MultiUser.InstallMode == "AllUsers"
+      StrCpy $TransactionDirectory "$COMMONAPPDATA\DotNetBundler\transactions\${PRODUCT_ID}"
+      StrCpy $TransactionRegistryRoot "HKLM"
+    ${Else}
+      StrCpy $TransactionDirectory "$LOCALAPPDATA\DotNetBundler\transactions\${PRODUCT_ID}"
+      StrCpy $TransactionRegistryRoot "HKCU"
+    ${EndIf}
   !endif
   !if "${TARGET_ARCHITECTURE}" == "x64"
     SetRegView 64
+    StrCpy $TransactionRegistryView 64
   !else if "${TARGET_ARCHITECTURE}" == "arm64"
     SetRegView 64
+    StrCpy $TransactionRegistryView 64
   !else
     SetRegView 32
+    StrCpy $TransactionRegistryView 32
   !endif
+!macroend
+
+!macro CheckTransactionResult
+  Pop $0
+  ${If} $0 != 0
+    Call FailInstallTransaction
+  ${EndIf}
 !macroend
 
 !macro CheckShortcutResult
   ; 原生 Shell 操作失败时终止安装，避免把“已选择但未创建”误报为成功。
   ${If} $0 < 0
-    StrCpy $ExitCode ${EXIT_FAILURE}
-    SetErrorLevel $ExitCode
-    Abort
+    Call FailInstallTransaction
   ${EndIf}
 !macroend
 
@@ -275,18 +299,21 @@ Function .onInit
   StrCpy $CreateDesktopShortcut {{shortcut_desktop_default}}
   StrCpy $CreateStartMenuShortcut {{shortcut_start_menu_default}}
   StrCpy $ExistingInstallAction 0
+  StrCpy $TransactionActive 0
   Call ParseCommandLine
   ; 静默与被动模式都不能显示语言选择器。
   ${IfNot} ${Silent}
   ${AndIf} $PassiveMode != 1
 {{display_language_selector}}
   ${EndIf}
-  !insertmacro SetInstallContext
   !if "${INSTALL_MODE}" == "both"
     !insertmacro MULTIUSER_INIT
-  !else
+  !endif
+  !insertmacro SetInstallContext
+  !if "${INSTALL_MODE}" != "both"
     Call SetDefaultInstallDirectory
   !endif
+  Call RecoverInstallTransaction
 
   ; 静默和被动安装不会显示现有安装处理页面，因此需要在初始化阶段确定处理方式。
   ; 交互式安装则在对应页面中确定处理方式。
@@ -308,6 +335,11 @@ Function RecordUserAbort
 FunctionEnd
 
 Function .onInstFailed
+  ${If} $TransactionActive == 1
+    SetOutPath "$TEMP"
+    DotNetBundlerNsis::RollbackInstallTransaction "$TransactionDirectory" "$INSTDIR"
+    Pop $0
+  ${EndIf}
   ${If} $ExitCode == ${EXIT_SUCCESS}
     StrCpy $ExitCode ${EXIT_FAILURE}
   ${EndIf}
@@ -477,6 +509,8 @@ Function ExistingInstallPage
   ${EndIf}
   ; 安装模式页面可能改变 SHCTX，因此在显示交互式版本策略选项之前，
   ; 必须重新检测现有安装。
+  !insertmacro SetInstallContext
+  Call RecoverInstallTransaction
   Call DetectExistingInstall
   ${If} $InstalledUninstaller == ""
     Abort
@@ -549,15 +583,11 @@ Function UninstallExistingInstallation
   ${If} ${Errors}
   ${OrIf} $0 != 0
   ${OrIf} ${FileExists} "$InstalledDirectory\${MAIN_EXECUTABLE}"
-    ${If} ${Silent}
-    ${OrIf} $PassiveMode == 1
-      StrCpy $ExitCode ${EXIT_FAILURE}
-      SetErrorLevel $ExitCode
-      Quit
-    ${Else}
+    ${IfNot} ${Silent}
+    ${AndIf} $PassiveMode != 1
       MessageBox MB_ICONSTOP|MB_OK "$(ExistingUninstallFailed)"
-      Abort
     ${EndIf}
+    Call FailInstallTransaction
   ${EndIf}
 FunctionEnd
 
@@ -593,15 +623,11 @@ Function UninstallLegacyMsiInstallations
       Goto legacy_msi_loop
     ${EndIf}
 
-    ${If} ${Silent}
-    ${OrIf} $PassiveMode == 1
-      StrCpy $ExitCode ${EXIT_FAILURE}
-      SetErrorLevel $ExitCode
-      Quit
-    ${Else}
+    ${IfNot} ${Silent}
+    ${AndIf} $PassiveMode != 1
       MessageBox MB_ICONSTOP|MB_OK "$(ExistingUninstallFailed)"
-      Abort
     ${EndIf}
+    Call FailInstallTransaction
 FunctionEnd
 
 Function ValidateInstallDirectory
@@ -760,12 +786,47 @@ Function un.AppDataOptionsLeave
   ${NSD_GetState} $DeleteAppDataCheckbox $DeleteAppData
 FunctionEnd
 
-Function EnsureAppClosed
-  nsExec::ExecToStack 'tasklist.exe /NH /FO CSV /FI "IMAGENAME eq ${PROCESS_NAME}"'
+Function RecoverInstallTransaction
+  ; 上一次安装若在提交前崩溃，先恢复其载荷、注册表和快捷方式快照。
+  DotNetBundlerNsis::RollbackInstallTransaction "$TransactionDirectory" "$INSTDIR"
+  !insertmacro CheckTransactionResult
+FunctionEnd
+
+Function PrepareInstallTransaction
+  ; 修改任何持久状态前先建立快照；Activate 之后的失败会触发回滚。
+  DotNetBundlerNsis::BeginInstallTransaction "$TransactionDirectory" "$INSTDIR"
+  !insertmacro CheckTransactionResult
+{{transaction_snapshot_commands}}
+  DotNetBundlerNsis::ActivateInstallTransaction "$TransactionDirectory"
+  !insertmacro CheckTransactionResult
+  StrCpy $TransactionActive 1
+FunctionEnd
+
+Function CommitInstallTransaction
+  DotNetBundlerNsis::CommitInstallTransaction "$TransactionDirectory"
+  !insertmacro CheckTransactionResult
+  StrCpy $TransactionActive 0
+FunctionEnd
+
+Function FailInstallTransaction
+  ; 可预期的安装阶段失败必须在退出前立即回滚；若回滚本身失败，
+  ; 保留 active journal，供下一次安装启动时继续恢复。
+  SetOutPath "$TEMP"
+  DotNetBundlerNsis::RollbackInstallTransaction "$TransactionDirectory" "$INSTDIR"
   Pop $0
-  Pop $1
-  ${StrStr} $2 "$1" "${PROCESS_NAME}"
-  StrCmp $2 "" app_closed
+  StrCpy $TransactionActive 0
+  StrCpy $ExitCode ${EXIT_FAILURE}
+  SetErrorLevel $ExitCode
+  Abort
+FunctionEnd
+
+Function EnsureAppClosed
+  DotNetBundlerNsis::GetLockingProcessCount "${SHORTCUT_OWNED_TARGETS}"
+  Pop $0
+  ${If} $0 < 0
+    Goto close_app_failed
+  ${EndIf}
+  StrCmp $0 "0" app_closed
   IfSilent close_app check_passive_close
   check_passive_close:
   ${If} $PassiveMode == 1
@@ -773,10 +834,10 @@ Function EnsureAppClosed
   ${EndIf}
   MessageBox MB_ICONEXCLAMATION|MB_OKCANCEL "$(AppRunningPrompt)" IDOK close_app IDCANCEL cancel_close
   close_app:
-    nsExec::ExecToStack 'taskkill.exe /F /T /IM "${PROCESS_NAME}"'
+    DotNetBundlerNsis::ShutdownLockingProcesses "${SHORTCUT_OWNED_TARGETS}"
     Pop $0
-    Pop $1
     StrCmp $0 "0" app_closed
+  close_app_failed:
     StrCpy $ExitCode ${EXIT_APP_CLOSE_FAILED}
     SetErrorLevel $ExitCode
     ${IfNot} ${Silent}
@@ -792,11 +853,12 @@ Function EnsureAppClosed
 FunctionEnd
 
 Function un.EnsureAppClosed
-  nsExec::ExecToStack 'tasklist.exe /NH /FO CSV /FI "IMAGENAME eq ${PROCESS_NAME}"'
+  DotNetBundlerNsis::GetLockingProcessCount "${SHORTCUT_OWNED_TARGETS}"
   Pop $0
-  Pop $1
-  ${UnStrStr} $2 "$1" "${PROCESS_NAME}"
-  StrCmp $2 "" un_app_closed
+  ${If} $0 < 0
+    Goto un_close_app_failed
+  ${EndIf}
+  StrCmp $0 "0" un_app_closed
   IfSilent un_close_app un_check_passive_close
   un_check_passive_close:
   ${If} $PassiveMode == 1
@@ -804,10 +866,10 @@ Function un.EnsureAppClosed
   ${EndIf}
   MessageBox MB_ICONEXCLAMATION|MB_OKCANCEL "$(AppRunningPrompt)" IDOK un_close_app IDCANCEL un_cancel_close
   un_close_app:
-    nsExec::ExecToStack 'taskkill.exe /F /T /IM "${PROCESS_NAME}"'
+    DotNetBundlerNsis::ShutdownLockingProcesses "${SHORTCUT_OWNED_TARGETS}"
     Pop $0
-    Pop $1
     StrCmp $0 "0" un_app_closed
+  un_close_app_failed:
     StrCpy $ExitCode ${EXIT_APP_CLOSE_FAILED}
     SetErrorLevel $ExitCode
     ${IfNot} ${Silent}
@@ -824,13 +886,24 @@ FunctionEnd
 
 Section "Install" MainSection
   !insertmacro SetInstallContext
+  ; MSI 卸载是不可逆的外部事务边界；没有原 MSI 时无法诚实承诺自动恢复。
+  ${If} $ExistingInstallType == ${EXISTING_TYPE_MSI}
+    Call UninstallExistingInstallation
+  ${EndIf}
+  Call EnsureAppClosed
+  Call PrepareInstallTransaction
   ; 在执行新版安装前 Hook 之前完成旧版本替换，确保 Hook 看到的是最终的
   ; 安装目录状态，而不是旧版本遗留的文件。
-  Call UninstallExistingInstallation
+  ${If} $ExistingInstallType != ${EXISTING_TYPE_MSI}
+    Call UninstallExistingInstallation
+  ${EndIf}
   !ifmacrodef NSIS_HOOK_PREINSTALL
+    ClearErrors
     !insertmacro NSIS_HOOK_PREINSTALL
+    ${If} ${Errors}
+      Call FailInstallTransaction
+    ${EndIf}
   !endif
-  Call EnsureAppClosed
   SetOutPath "$INSTDIR"
   File /r "${INPUT_GLOB}"
 {{resource_install_commands}}
@@ -862,8 +935,13 @@ Section "Install" MainSection
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoRepair" 1
 {{association_install_commands}}
   !ifmacrodef NSIS_HOOK_POSTINSTALL
+    ClearErrors
     !insertmacro NSIS_HOOK_POSTINSTALL
+    ${If} ${Errors}
+      Call FailInstallTransaction
+    ${EndIf}
   !endif
+  Call CommitInstallTransaction
   ; 被动模式只保留进度窗口，并在成功后自动关闭。
   ${If} $PassiveMode == 1
     SetAutoClose true

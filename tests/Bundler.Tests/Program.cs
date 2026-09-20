@@ -147,7 +147,7 @@ static async Task VerifiesAndExtractsBundledNsis()
             "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
         Assert(File.Exists(pluginPath), "The bundled NSIS plug-in is missing.");
         Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))) ==
-               "8269233C551E31CC3F3FC60B97E24E931ACD77C8043ED29D1840F5DBA2DFC9EA",
+               "23690A88A1377901DEDCFC40D7F2DC7B3F86B91BF7D91794730576B6BF2C9DAD",
             "The bundled NSIS plug-in checksum changed; rebuild and update its provenance.");
 
         var toolset = await NsisToolResolver.ResolveAsync(archive, cache);
@@ -580,6 +580,16 @@ static void ProvidesInteractiveNsisSafetyOptions()
     Assert(template.Contains("Call EnsureAppClosed", StringComparison.Ordinal) &&
            template.Contains("Call un.EnsureAppClosed", StringComparison.Ordinal),
         "Install and uninstall should both check the running application.");
+    Assert(template.Contains("DotNetBundlerNsis::GetLockingProcessCount \"${SHORTCUT_OWNED_TARGETS}\"", StringComparison.Ordinal) &&
+           template.Contains("DotNetBundlerNsis::ShutdownLockingProcesses \"${SHORTCUT_OWNED_TARGETS}\"", StringComparison.Ordinal) &&
+           !template.Contains("taskkill.exe", StringComparison.Ordinal) &&
+           !template.Contains("tasklist.exe", StringComparison.Ordinal),
+        "Running-application coordination should use the exact installed executable path.");
+    Assert(template.Contains("Function PrepareInstallTransaction", StringComparison.Ordinal) &&
+           template.Contains("DotNetBundlerNsis::ActivateInstallTransaction", StringComparison.Ordinal) &&
+           template.Contains("DotNetBundlerNsis::RollbackInstallTransaction", StringComparison.Ordinal) &&
+           template.Contains("Call CommitInstallTransaction", StringComparison.Ordinal),
+        "The installer should snapshot, activate, roll back, and commit its persistent changes.");
     Assert(template.Contains("UninstPage custom un.AppDataOptionsPage", StringComparison.Ordinal) &&
            template.Contains("$LOCALAPPDATA\\${PRODUCT_ID}", StringComparison.Ordinal),
         "The uninstaller should offer optional application-data deletion.");

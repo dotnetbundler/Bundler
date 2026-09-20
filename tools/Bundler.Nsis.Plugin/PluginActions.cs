@@ -32,6 +32,53 @@ public static class PluginActions
         UnelevatedProcess.Start(executable, arguments);
 
     [NsisAction]
+    public static int GetLockingProcessCount(string path) =>
+        RestartManager.GetLockingProcessCount(path);
+
+    [NsisAction]
+    public static int ShutdownLockingProcesses(string path) =>
+        RestartManager.ShutdownLockingProcesses(path);
+
+    [NsisAction]
+    public static int BeginInstallTransaction(string transactionDirectory, string installDirectory) =>
+        InstallTransaction.Begin(transactionDirectory, installDirectory);
+
+    [NsisAction]
+    public static int BackupTransactionRegistryKey(
+        string transactionDirectory,
+        string name,
+        string root,
+        int viewBits,
+        string subKey) =>
+        InstallTransaction.BackupRegistryKey(transactionDirectory, name, root, viewBits, subKey);
+
+    [NsisAction]
+    public static int BackupTransactionRegistryValue(
+        string transactionDirectory,
+        string name,
+        string root,
+        int viewBits,
+        string subKey,
+        string valueName) =>
+        InstallTransaction.BackupRegistryValue(transactionDirectory, name, root, viewBits, subKey, valueName);
+
+    [NsisAction]
+    public static int BackupTransactionFile(string transactionDirectory, string name, string path) =>
+        InstallTransaction.BackupFile(transactionDirectory, name, path);
+
+    [NsisAction]
+    public static int ActivateInstallTransaction(string transactionDirectory) =>
+        InstallTransaction.Activate(transactionDirectory);
+
+    [NsisAction]
+    public static int CommitInstallTransaction(string transactionDirectory) =>
+        InstallTransaction.Commit(transactionDirectory);
+
+    [NsisAction]
+    public static int RollbackInstallTransaction(string transactionDirectory, string installDirectory) =>
+        InstallTransaction.Rollback(transactionDirectory, installDirectory);
+
+    [NsisAction]
     public static int CreateShortcut(
         string shortcut,
         string ownedTargets,

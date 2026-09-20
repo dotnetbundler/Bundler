@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.19"
+    [string]$PackageVersion = "0.1.0-alpha.20"
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,6 +21,8 @@ $bundleOutput = Join-Path $integrationRoot "bundle"
 $perMachineBundleOutput = Join-Path $integrationRoot "bundle-per-machine"
 $bothBundleOutput = Join-Path $integrationRoot "bundle-both"
 $upgradeBundleOutput = Join-Path $integrationRoot "bundle-upgrade"
+$rollbackFailureBundleOutput = Join-Path $integrationRoot "bundle-rollback-failure"
+$interruptedBundleOutput = Join-Path $integrationRoot "bundle-interrupted"
 $allowedDowngradeBundleOutput = Join-Path $integrationRoot "bundle-allowed-downgrade"
 $legacyMsiProductMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-product-migration"
 $legacyMsiUpgradeMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-upgrade-migration"
@@ -30,8 +32,11 @@ $directMsBuildOutput = Join-Path $integrationRoot "bundle-direct-msbuild"
 $testIcon = Join-Path $integrationRoot "test-installer.ico"
 $testHeaderImage = Join-Path $integrationRoot "test-header.bmp"
 $testSidebarImage = Join-Path $integrationRoot "test-sidebar.bmp"
+$failingInstallerHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-postinstall.nsh"
+$abortingInstallerHooks = Join-Path $PSScriptRoot "Fixture\Assets\aborting-postinstall.nsh"
 $installRoot = Join-Path $integrationRoot "安装 目录"
 $installDirectory = Join-Path $installRoot "Bundler Integration Fixture"
+$externalFixtureDirectory = Join-Path $integrationRoot "same-name-external-process"
 $defaultInstallDirectory = Join-Path $env:LOCALAPPDATA "Programs\Bundler Integration Fixture"
 $identifier = "com.dotnetbundler.integrationfixture"
 $productName = "Bundler Integration Fixture"
@@ -50,12 +55,14 @@ $deepLinkMarker = Join-Path $env:TEMP "DotNetBundler-deep-link.txt"
 $commandLineMarker = Join-Path $env:TEMP "DotNetBundler-command-line.txt"
 $roamingData = Join-Path $env:APPDATA $identifier
 $localData = Join-Path $env:LOCALAPPDATA $identifier
+$transactionDirectory = Join-Path $env:LOCALAPPDATA "DotNetBundler\transactions\$identifier"
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "$productName.lnk"
 $startMenuDirectory = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\DotNet Bundler Integration"
 $startMenuShortcut = Join-Path $startMenuDirectory "$productName.lnk"
 $legacyStartMenuDirectory = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Legacy Bundler Fixture"
 $legacyStartMenuShortcut = Join-Path $legacyStartMenuDirectory "Legacy Bundler Fixture.lnk"
 $fixtureProcess = $null
+$externalFixtureProcess = $null
 $testCertificateThumbprint = $null
 $hookMarkers = @("preinstall", "postinstall", "preuninstall", "postuninstall") | ForEach-Object { Join-Path $env:TEMP "DotNetBundler-$_.txt" }
 
@@ -127,8 +134,12 @@ function Build-FixtureBundle(
     [string]$LegacyMsiUpgradeCodes = "",
     [string]$SigningCertificateThumbprint = "",
     [bool]$ShortcutDesktop = $true,
-    [bool]$ShortcutStartMenu = $true
+    [bool]$ShortcutStartMenu = $true,
+    [string]$InstallerHooks = ""
 ) {
+    if ([string]::IsNullOrWhiteSpace($InstallerHooks)) {
+        $InstallerHooks = Join-Path $PSScriptRoot "Fixture\Assets\installer-hooks.nsh"
+    }
     Invoke-Native "dotnet" @(
         "publish", $fixtureProject, "-c", $Configuration, "--force",
         "-p:BundlerPackageVersion=$PackageVersion",
@@ -144,6 +155,7 @@ function Build-FixtureBundle(
         "-p:BundlerNsisLegacyMsiProductCodes=$LegacyMsiProductCodes",
         "-p:BundlerNsisLegacyMsiUpgradeCodes=$LegacyMsiUpgradeCodes",
         "-p:BundlerWindowsSigningCertificateThumbprint=$SigningCertificateThumbprint",
+        "-p:BundlerIntegrationInstallerHooks=$InstallerHooks",
         "-p:BundlerNsisShortcutDesktop=$ShortcutDesktop",
         "-p:BundlerNsisShortcutStartMenu=$ShortcutStartMenu",
         "-p:RestorePackagesPath=$packageCache"
@@ -162,6 +174,9 @@ function Wait-For([scriptblock]$Condition, [string]$Message, [int]$TimeoutSecond
 function Remove-TestState {
     if ($null -ne $script:fixtureProcess -and -not $script:fixtureProcess.HasExited) {
         Stop-Process -Id $script:fixtureProcess.Id -Force -ErrorAction SilentlyContinue
+    }
+    if ($null -ne $script:externalFixtureProcess -and -not $script:externalFixtureProcess.HasExited) {
+        Stop-Process -Id $script:externalFixtureProcess.Id -Force -ErrorAction SilentlyContinue
     }
     if (Test-Path -LiteralPath $registryPath) { Remove-Item -LiteralPath $registryPath -Recurse -Force }
     foreach ($path in @($fileProgIdRegistryPath, $urlSchemeRegistryPath, $urlProgIdRegistryPath, $capabilitiesRegistryPath)) {
@@ -182,7 +197,7 @@ function Remove-TestState {
     if (Test-Path -LiteralPath $legacyStartMenuShortcut) { Remove-Item -LiteralPath $legacyStartMenuShortcut -Force }
     if (Test-Path -LiteralPath $legacyStartMenuDirectory) { Remove-Item -LiteralPath $legacyStartMenuDirectory -Force }
     Invoke-MsiExec "/x $legacyMsiProductCode /qn /norestart" @(0, 1605, 3010)
-    foreach ($path in @($installDirectory, $installRoot)) {
+    foreach ($path in @($installDirectory, $installRoot, $externalFixtureDirectory)) {
         Assert-UnderIntegrationRoot $path
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
     }
@@ -203,6 +218,13 @@ function Remove-TestState {
             throw "Refusing to remove an unexpected application-data path: $path"
         }
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
+    }
+    if ([IO.Path]::GetFileName($transactionDirectory) -ne $identifier -or
+        [IO.Path]::GetFileName([IO.Path]::GetDirectoryName($transactionDirectory)) -ne "transactions") {
+        throw "Refusing to remove an unexpected transaction path: $transactionDirectory"
+    }
+    if (Test-Path -LiteralPath $transactionDirectory) {
+        Remove-Item -LiteralPath $transactionDirectory -Recurse -Force
     }
 }
 
@@ -305,6 +327,8 @@ try {
     Build-FixtureBundle "perMachine" $perMachineBundleOutput
     Build-FixtureBundle "both" $bothBundleOutput
     Build-FixtureBundle "currentUser" $upgradeBundleOutput "DotNet.Bundler" "1.1.0"
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $rollbackFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingInstallerHooks
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $interruptedBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $abortingInstallerHooks
     Build-FixtureBundle "currentUser" $allowedDowngradeBundleOutput "DotNet.Bundler" "1.0.0" $true
     Build-FixtureBundle "currentUser" $legacyMsiProductMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false $legacyMsiProductCode ""
     Build-FixtureBundle "currentUser" $legacyMsiUpgradeMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false "" $legacyMsiUpgradeCode
@@ -321,6 +345,8 @@ try {
 
     $installer = Join-Path $bundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $upgradeInstaller = Join-Path $upgradeBundleOutput "win-x64\nsis\$productName-1.1.0-setup.exe"
+    $rollbackFailureInstaller = Join-Path $rollbackFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
+    $interruptedInstaller = Join-Path $interruptedBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
     $allowedDowngradeInstaller = Join-Path $allowedDowngradeBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $legacyMsiProductMigrationInstaller = Join-Path $legacyMsiProductMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $legacyMsiUpgradeMigrationInstaller = Join-Path $legacyMsiUpgradeMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
@@ -331,6 +357,8 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $perMachineBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Per-machine installer was not created."
     Assert-True (Test-Path -LiteralPath (Join-Path $bothBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Both-scope installer was not created."
     Assert-True (Test-Path -LiteralPath $upgradeInstaller) "Upgrade installer was not created."
+    Assert-True (Test-Path -LiteralPath $rollbackFailureInstaller) "Rollback failure-injection installer was not created."
+    Assert-True (Test-Path -LiteralPath $interruptedInstaller) "Interrupted-install fixture was not created."
     Assert-True (Test-Path -LiteralPath $allowedDowngradeInstaller) "Allowed-downgrade installer was not created."
     Assert-True (Test-Path -LiteralPath $legacyMsiProductMigrationInstaller) "ProductCode migration installer was not created."
     Assert-True (Test-Path -LiteralPath $legacyMsiUpgradeMigrationInstaller) "UpgradeCode migration installer was not created."
@@ -406,12 +434,20 @@ try {
     Assert-True (Test-Path -LiteralPath $hookMarkers[0]) "Pre-install hook did not run."
     Assert-True (Test-Path -LiteralPath $hookMarkers[1]) "Post-install hook did not run."
 
+    Copy-Item -LiteralPath $installDirectory -Destination $externalFixtureDirectory -Recurse
+    $externalFixtureExecutable = Join-Path $externalFixtureDirectory "BundlerIntegrationFixture.exe"
+    $script:externalFixtureProcess = Start-Process -FilePath $externalFixtureExecutable -ArgumentList "--wait" -PassThru
     $script:fixtureProcess = Start-Process -FilePath $installedExecutable -ArgumentList "--wait" -PassThru
     Start-Sleep -Milliseconds 500
     Assert-True (-not $script:fixtureProcess.HasExited) "Fixture process did not remain running."
+    Assert-True (-not $script:externalFixtureProcess.HasExited) "Same-name external fixture process did not remain running."
     Invoke-WindowsExecutable $installer "/S /D=$installDirectory"
     $script:fixtureProcess.Refresh()
+    $script:externalFixtureProcess.Refresh()
     Assert-True $script:fixtureProcess.HasExited "Reinstall did not close the running application."
+    Assert-True (-not $script:externalFixtureProcess.HasExited) "Reinstall closed a same-name process outside the installation directory."
+    Stop-Process -Id $script:externalFixtureProcess.Id -Force
+    $script:externalFixtureProcess.WaitForExit()
 
     # 自动更新原位覆盖并保留运行时数据及用户删除快捷方式的选择；/R 与 /ARGS
     # 会在成功后以桌面用户身份启动应用。
@@ -437,6 +473,30 @@ try {
     $forwardedArguments = @(Get-Content -LiteralPath $commandLineMarker)
     Assert-True ($forwardedArguments.Count -eq 2) "/ARGS did not preserve the expected argument count."
     Assert-True ($forwardedArguments[0] -eq "--protocol-marker" -and $forwardedArguments[1] -eq "hello world") "/ARGS changed the forwarded application arguments."
+
+    # 测试 Hook 直接终止安装器进程，模拟无法进入 .onInstFailed 的崩溃。active journal 应保留，
+    # 下一次安装启动时必须先恢复 1.1.0，再开始新的事务。
+    $preInterruptedExecutableHash = (Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash
+    $interruptedProcess = Start-Process -FilePath $interruptedInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($interruptedProcess.ExitCode -eq 2) "Interrupted-install fixture did not return exit code 2."
+    Assert-True (Test-Path -LiteralPath $transactionDirectory) "Interrupted install did not preserve its active journal."
+    Invoke-WindowsExecutable $upgradeInstaller "/S /D=$installDirectory"
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Startup recovery did not restore the previous installed version."
+    Assert-True ((Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash -eq $preInterruptedExecutableHash) "Startup recovery did not restore the previous executable."
+    Assert-True (Test-Path -LiteralPath $upgradePreservedData) "Startup recovery lost runtime-created program data."
+    Assert-True (-not (Test-Path -LiteralPath $transactionDirectory)) "Startup recovery did not clean up the active journal."
+
+    # 在新版载荷、注册表、关联和快捷方式均已写入后让 post-install Hook 失败；
+    # 安装事务必须恢复 1.1.0 的完整可观察状态并清理 journal。
+    $preRollbackExecutableHash = (Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash
+    $preRollbackShortcut = Get-ShortcutInfo $startMenuShortcut
+    $rollbackProcess = Start-Process -FilePath $rollbackFailureInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($rollbackProcess.ExitCode -eq 2) "Injected post-install failure did not return exit code 2."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Rollback did not restore the installed version."
+    Assert-True ((Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash -eq $preRollbackExecutableHash) "Rollback did not restore the previous executable."
+    Assert-True (Test-Path -LiteralPath $upgradePreservedData) "Rollback lost runtime-created program data."
+    Assert-True ((Get-ShortcutInfo $startMenuShortcut).TargetPath -eq $preRollbackShortcut.TargetPath) "Rollback did not restore the previous Start Menu shortcut."
+    Assert-True (-not (Test-Path -LiteralPath $transactionDirectory)) "Committed rollback journal was not cleaned up."
 
     # 默认禁止降级；静默模式必须在不修改现有安装的情况下返回失败。
     $downgradeProcess = Start-Process -FilePath $installer -ArgumentList "/S /D=$installDirectory" -Wait -PassThru

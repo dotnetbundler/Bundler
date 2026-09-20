@@ -28,7 +28,7 @@ samples/HelloBundledApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe
 - 自定义安装器/卸载器图标、Header、卸载器 Header 和 Sidebar；
 - 自定义安装目录、非空目录警告和记忆上次安装目录；
 - 可选桌面快捷方式和 `Bundler Examples` 开始菜单目录；快捷方式带启动参数、自定义工作目录、图标和稳定 AppUserModelID；
-- 安装前检测并关闭正在运行的应用；
+- 安装前通过主程序完整路径检测并关闭正在运行的应用，不影响其他目录中的同名进程；
 - 安装前、安装后、卸载前、卸载后的 NSIS Hook；
 - `.hello` 文件关联和 `hello-bundled:` 深链接；
 - 安装目录自带 `demo.hello` 和 `运行深链接.cmd`，可以直接操作两项关联功能；
@@ -36,6 +36,8 @@ samples/HelloBundledApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe
 - 同版本重装、升级、降级控制；
 - 卸载时选择是否删除应用数据；
 - 静默安装和静默卸载。
+
+NSIS 安装和升级会先建立包含旧载荷、产品注册表和快捷方式的事务快照。安装 Hook 或后续写入失败时会恢复旧版本；安装器进程意外终止后，下一次运行同一产品的安装器会先恢复 active journal。快照位于用户或计算机范围的 `DotNetBundler\transactions` 目录，成功后自动清理，并会临时占用接近现有安装目录大小的磁盘空间。旧 MSI 卸载属于不可逆的外部迁移边界，不在自动恢复范围内。
 
 程序启动后会显示收到的参数、额外资源是否存在以及安装 Hook 是否执行，并将最近一次启动写入：
 

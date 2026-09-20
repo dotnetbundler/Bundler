@@ -20,11 +20,12 @@
     <BundlerNsisLanguages>English;SimpChinese</BundlerNsisLanguages>
     <BundlerNsisDisplayLanguageSelector>true</BundlerNsisDisplayLanguageSelector>
     <BundlerNsisInstallMode Condition="'$(BundlerNsisInstallMode)' == ''">currentUser</BundlerNsisInstallMode>
+    <BundlerIntegrationInstallerHooks Condition="'$(BundlerIntegrationInstallerHooks)' == ''">$(MSBuildProjectDirectory)\Assets\installer-hooks.nsh</BundlerIntegrationInstallerHooks>
     <BundlerNsisInstallerIcon>$(BundlerTestIcon)</BundlerNsisInstallerIcon>
     <BundlerNsisUninstallerIcon>$(BundlerTestIcon)</BundlerNsisUninstallerIcon>
     <BundlerNsisHeaderImage>$(BundlerTestHeaderImage)</BundlerNsisHeaderImage>
     <BundlerNsisSidebarImage>$(BundlerTestSidebarImage)</BundlerNsisSidebarImage>
-    <BundlerNsisInstallerHooks>$(MSBuildProjectDirectory)\Assets\installer-hooks.nsh</BundlerNsisInstallerHooks>
+    <BundlerNsisInstallerHooks>$(BundlerIntegrationInstallerHooks)</BundlerNsisInstallerHooks>
     <BundlerNsisShortcutDesktop Condition="'$(BundlerNsisShortcutDesktop)' == ''">true</BundlerNsisShortcutDesktop>
     <BundlerNsisShortcutStartMenu Condition="'$(BundlerNsisShortcutStartMenu)' == ''">true</BundlerNsisShortcutStartMenu>
     <BundlerNsisShortcutArguments>--shortcut-mode &quot;hello world&quot;</BundlerNsisShortcutArguments>

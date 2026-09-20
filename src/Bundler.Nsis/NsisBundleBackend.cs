@@ -200,6 +200,7 @@ internal sealed class NsisBundleBackend(
             ["shortcut_owned_targets"] = shortcuts.OwnedTargets,
             ["shortcut_migration_commands"] = shortcuts.MigrationCommands,
             ["shortcut_legacy_cleanup_commands"] = shortcuts.LegacyCleanupCommands,
+            ["transaction_snapshot_commands"] = CreateTransactionSnapshotCommands(configuration, shortcuts),
             ["resource_install_commands"] = CreateResourceInstallCommands(resources),
             ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory, resources),
             ["language_macros"] = localization.LanguageMacros,
@@ -401,6 +402,66 @@ internal sealed class NsisBundleBackend(
             ? string.Empty
             : $"!include \"{Escape(Path.GetFullPath(hooksFile!))}\"";
 
+    private static string CreateTransactionSnapshotCommands(
+        BundleConfiguration configuration,
+        ShortcutRendering shortcuts)
+    {
+        var lines = new List<string>();
+        var index = 0;
+
+        void BackupKey(string subKey)
+        {
+            lines.Add($"  DotNetBundlerNsis::BackupTransactionRegistryKey \"$TransactionDirectory\" \"key-{index++:D3}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\"");
+            lines.Add("  !insertmacro CheckTransactionResult");
+        }
+
+        void BackupValue(string subKey, string valueName)
+        {
+            lines.Add($"  DotNetBundlerNsis::BackupTransactionRegistryValue \"$TransactionDirectory\" \"value-{index++:D3}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\" \"{valueName}\"");
+            lines.Add("  !insertmacro CheckTransactionResult");
+        }
+
+        void BackupFile(string path)
+        {
+            lines.Add($"  DotNetBundlerNsis::BackupTransactionFile \"$TransactionDirectory\" \"file-{index++:D3}\" \"{path}\"");
+            lines.Add("  !insertmacro CheckTransactionResult");
+        }
+
+        BackupKey("${UNINSTALL_KEY}");
+        BackupKey("Software\\${PRODUCT_ID}");
+        BackupValue("Software\\RegisteredApplications", "${PRODUCT_ID}");
+
+        foreach (var association in configuration.FileAssociations)
+        {
+            foreach (var configuredExtension in association.Extensions)
+            {
+                var extension = NormalizeExtension(configuredExtension);
+                var progId = $"${{PRODUCT_ID}}.File.{extension}.1";
+                BackupKey($"Software\\Classes\\{progId}");
+                BackupValue($"Software\\Classes\\.{extension}\\OpenWithProgids", progId);
+            }
+        }
+
+        foreach (var protocol in configuration.UrlProtocols)
+        {
+            foreach (var configuredScheme in protocol.Schemes)
+            {
+                var scheme = configuredScheme.Trim().ToLowerInvariant();
+                BackupKey($"Software\\Classes\\${{PRODUCT_ID}}.Url.{scheme}.1");
+                BackupKey($"Software\\Classes\\{scheme}");
+            }
+        }
+
+        BackupFile(shortcuts.DesktopPath);
+        BackupFile(shortcuts.StartMenuPath);
+        foreach (var legacyPath in shortcuts.LegacyPaths)
+        {
+            BackupFile(legacyPath);
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
     private static string InstallModeName(NsisInstallMode mode) => mode switch
     {
         NsisInstallMode.CurrentUser => "currentUser",
@@ -510,7 +571,8 @@ internal sealed class NsisBundleBackend(
             desktopPath,
             ownedTargets,
             string.Join(Environment.NewLine, migrations),
-            string.Join(Environment.NewLine, cleanup));
+            string.Join(Environment.NewLine, cleanup),
+            legacyPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
     private static void EnsurePayloadFile(
@@ -816,7 +878,8 @@ internal sealed class NsisBundleBackend(
         string DesktopPath,
         string OwnedTargets,
         string MigrationCommands,
-        string LegacyCleanupCommands);
+        string LegacyCleanupCommands,
+        IReadOnlyList<string> LegacyPaths);
 
     private sealed record PayloadResource(string Source, string TargetPath);
 
