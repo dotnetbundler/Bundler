@@ -3,7 +3,7 @@
 > 审计日期：2026-09-21  
 > Tauri 仓库：`tauri-apps/tauri`  
 > 固定 commit：`5d995ed35b029cecd780fdbe614dc6023a89b81b`  
-> 本项目基线：`e143d33 docs: define bundler roadmap and product scope`
+> 本项目基线：`1943c58 feat(nsis): complete capability configuration`
 
 本文档记录 `NSIS-R1` 的逐项审计结果。目标是对齐适用于通用桌面打包器的用户能力，不复制 Tauri 字段、Rust 数据模型或 runtime 部署逻辑。状态定义和产品边界见 `docs/roadmap.md`。
 
@@ -39,16 +39,16 @@
 
 | Tauri 能力 | DotNet.Bundler 等价入口 | 状态 | 决策与后续 |
 | --- | --- | --- | --- |
-| `digestAlgorithm` | 内置 Authenticode 当前固定 SHA-256 | 部分实现 | 算法/自定义 provider 契约进入 `NSIS-R2`；不降低默认安全级别 |
-| `certificateThumbprint` | `WindowsAuthenticodeSigningOptions.CertificateThumbprint` / MSBuild 同名能力 | 部分实现 | 证书选择已实现，完整 payload 签名覆盖进入 `NSIS-R2` |
-| `timestampUrl` | `TimestampUrl` / `BundlerWindowsSigningTimestampUrl` | 部分实现 | 当前使用 RFC 3161；生产服务验证见 MT-04 |
-| `tsp` | 当前内置实现固定 RFC 3161 | 部分实现 | 是否支持旧 Authenticode timestamp 协议在 `NSIS-R2` 明确；不因字段存在自动降低协议 |
+| `digestAlgorithm` | 内置 Authenticode 固定安全默认 SHA-256；外部 provider 自行控制 | 已实现，方案不同 | 不为旧算法增加公共开关；特殊发布策略使用外部 provider |
+| `certificateThumbprint` | `WindowsAuthenticodeSigningOptions.CertificateThumbprint` / MSBuild 同名能力 | 已实现 | 证书选择和完整 staged payload/插件/卸载器/安装器链路均有自动化 |
+| `timestampUrl` | `TimestampUrl` / `BundlerWindowsSigningTimestampUrl` | 已实现，外部待验收 | 内置实现使用 RFC 3161；生产服务验证见 MT-04 |
+| `tsp` | 内置实现固定 RFC 3161 | 已决策，方案不同 | 不增加旧 Authenticode timestamp 协议开关；确有遗留 provider 时走外部命令 |
 | `webviewInstallMode` | 无 | 不适用 | Tauri runtime 专属运行时部署 |
 | `allowDowngrades` | `AllowDowngrades` / `BundlerNsisAllowDowngrades` | 已实现、默认不同 | 本项目默认禁止降级；这是更安全的明确产品决策，不复制 Tauri 的 `true` 默认值 |
 | `minimumWebview2Version` | 无 | 不适用 | 同上，不承担 WebView2 生命周期 |
 | `wix` | 将来的 `DotNet.Bundler.Wix` | 计划实现 | 属于独立安装格式，不混入 NSIS 配置 |
 | `nsis` | `NsisBundleConfiguration` | 已实现 | 本项目通过强类型后端配置而非嵌套 Tauri JSON 模型组织 |
-| `signCommand` | `IBundleSigner`；MSBuild 尚无外部命令 provider | 部分实现 | 外部命令、HSM/云签名和完整签名顺序进入 `NSIS-R2` |
+| `signCommand` | `WindowsExternalCommandSigner` / `BundlerWindowsSigningCommand` | 已实现，外部待验收 | 参数 Item 支持安全占位符；Fixture 验证替换、退出码与错误脱敏，真实 HSM/云服务见 MT-04 |
 | `bundleVCRuntime` | 无 | 不适用 | Tauri 构建/runtime 约定；调用方可把已准备文件放入输入目录或资源，不由 Bundler 发现/下载依赖 |
 
 ## 3. 通用 `BundleConfig` 中与 NSIS 有关的能力
@@ -86,7 +86,7 @@ JSON 配置加载器是未来 CLI 的共享入口。本阶段验证它会保留�
 | 快捷方式生命周期 | 已实现，固定项外部待验收 | 按 `.lnk` 实际目标判断所有权；MT-06 覆盖 OS 固定项差异 |
 | 文件关联和 URL 协议 | 已实现 | 不强抢 Windows 默认应用；协议删除有所有权检查 |
 | 完整内置语言集合 | 部分实现 | `NSIS-R3` |
-| payload、卸载器、安装器完整签名 | 部分实现 | 当前签卸载器和安装器；`NSIS-R2` 扩展 payload/provider |
+| payload、插件、卸载器、安装器完整签名 | 已实现，生产身份外部待验收 | 临时副本中签主 EXE和显式 payload，再签 Bundler 插件、卸载器和安装器；外部 provider 可替换内置实现 |
 | 真实 UAC、重启、ARM64、生产证书 | 外部待验收 | 统一见 `docs/manual-testing.md` |
 
 ## 5. 审计结论
@@ -94,5 +94,5 @@ JSON 配置加载器是未来 CLI 的共享入口。本阶段验证它会保留�
 1. `NSIS-R1` 没有遗留“未调查”的 Tauri NSIS/Windows 配置项。
 2. 本阶段新增的通用能力是四种 NSIS 压缩模式；默认保持 LZMA。
 3. 文件关联和 URL 协议原本在 API/MSBuild 路径可用，但 JSON loader 会丢失，本阶段已修复，为未来 CLI 保持同一通用模型。
-4. 完整签名和完整语言是已知部分能力，分别进入 `NSIS-R2`、`NSIS-R3`。
+4. 完整签名已在 `NSIS-R2` 收口；完整语言是剩余的已知部分能力，进入 `NSIS-R3`。
 5. WebView2、VC Runtime 和 Tauri updater 产物不构成当前通用安装器能力；不会为字段对齐制造运行时部署系统。

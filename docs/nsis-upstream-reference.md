@@ -44,7 +44,7 @@ Callers may still include prepared runtime files in their payload or use documen
 
 ### Signing
 
-Authenticode is a packaging and distribution capability, not a Tauri-specific runtime feature, so it remains an explicit alignment target. The current implementation signs the exported NSIS uninstaller and final installer. `NSIS-R2` extends this to an ordered payload/uninstaller/installer pipeline and to configurable external signing providers while preserving the existing PFX/certificate-store implementation.
+Authenticode is a packaging and distribution capability, not a Tauri-specific runtime feature. The completed pipeline signs a staging copy of the main executable and explicitly selected payload files, a private copy of the Bundler-owned NSIS plug-in, the exported uninstaller, and the final installer in that order. It never mutates the caller's input directory and does not automatically re-sign arbitrary third-party files. The built-in PFX/certificate-store provider remains available; an argument-array external provider supports HSM, cloud, token, or remote workflows without duplicating signing policy in the NSIS backend.
 
 ### Install scope
 

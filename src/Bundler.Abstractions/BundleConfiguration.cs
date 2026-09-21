@@ -43,5 +43,6 @@ public sealed class BundleTargetConfiguration
     public string RuntimeIdentifier { get; init; } = "";
     public string InputDirectory { get; init; } = "";
     public string? MainExecutable { get; init; }
+    public IReadOnlyList<string> SigningFiles { get; init; } = [];
     public IReadOnlyList<PackageFormat> Formats { get; init; } = [];
 }

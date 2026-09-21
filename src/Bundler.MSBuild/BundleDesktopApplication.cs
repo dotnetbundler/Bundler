@@ -29,6 +29,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public ITaskItem[] Resources { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] FileAssociations { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] UrlProtocols { get; set; } = Array.Empty<ITaskItem>();
+    public ITaskItem[] WindowsSigningFiles { get; set; } = Array.Empty<ITaskItem>();
     public string NsisToolsetArchivePath { get; set; } = "";
     public string NsisCompilerPath { get; set; } = "";
     public string NsisDataDirectory { get; set; } = "";
@@ -61,6 +62,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string WindowsSigningCertificateThumbprint { get; set; } = "";
     public string WindowsSigningCertificateStoreLocation { get; set; } = "CurrentUser";
     public string WindowsSigningTimestampUrl { get; set; } = "";
+    public string WindowsSigningCommand { get; set; } = "";
+    public ITaskItem[] WindowsSigningCommandArguments { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] NsisLanguageFiles { get; set; } = Array.Empty<ITaskItem>();
     [Output] public ITaskItem[] Artifacts { get; private set; } = Array.Empty<ITaskItem>();
 
@@ -105,6 +108,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         RuntimeIdentifier = RuntimeIdentifier,
                         InputDirectory = Path.GetFullPath(InputDirectory),
                         MainExecutable = MainExecutable,
+                        SigningFiles = WindowsSigningFiles.Select(item => item.ItemSpec).ToArray(),
                         Formats = formats
                     }
                 }
@@ -287,7 +291,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     {
         var pfxFile = EmptyToNull(WindowsSigningPfxFile);
         var thumbprint = EmptyToNull(WindowsSigningCertificateThumbprint);
-        if (pfxFile is null && thumbprint is null)
+        var command = EmptyToNull(WindowsSigningCommand);
+        var configuredSources = new[] { pfxFile, thumbprint, command }.Count(value => value is not null);
+        if (configuredSources == 0)
         {
             if (!string.IsNullOrWhiteSpace(WindowsSigningPfxPasswordEnvironmentVariable) ||
                 !string.IsNullOrWhiteSpace(WindowsSigningTimestampUrl))
@@ -297,10 +303,23 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             }
             return null;
         }
-        if (pfxFile is not null && thumbprint is not null)
+        if (configuredSources != 1)
         {
             throw new ArgumentException(
-                "BundlerWindowsSigningPfxFile and BundlerWindowsSigningCertificateThumbprint cannot both be set.");
+                "Configure exactly one Windows signer: PFX, certificate thumbprint, or external command.");
+        }
+        if (command is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(WindowsSigningPfxPasswordEnvironmentVariable) ||
+                !string.IsNullOrWhiteSpace(WindowsSigningTimestampUrl))
+            {
+                throw new ArgumentException("PFX password and timestamp options cannot be combined with an external signing command.");
+            }
+            return new WindowsExternalCommandSigner(new WindowsExternalCommandSigningOptions
+            {
+                Command = command,
+                Arguments = WindowsSigningCommandArguments.Select(item => item.ItemSpec).ToArray()
+            });
         }
         if (!Enum.TryParse(
                 WindowsSigningCertificateStoreLocation,

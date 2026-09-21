@@ -49,46 +49,64 @@ internal sealed class NsisBundleBackend(
         cancellationToken.ThrowIfCancellationRequested();
         var template = File.ReadAllText(fullTemplatePath);
         var localization = PrepareLanguages(settings, context.WorkDirectory);
-        if (signer is null)
+        var effectiveItem = item;
+        var effectivePluginDirectory = pluginDirectory;
+        try
         {
-            WriteScript(UninstallerMode.Unsigned);
-            await CompileAsync();
-        }
-        else
-        {
-            var uninstallerPath = Path.Combine(context.WorkDirectory, "signed-uninstaller.exe");
-            WriteScript(new UninstallerMode(
-                CreateUninstallerFinalizeCommand(uninstallerPath),
-                string.Empty,
-                string.Empty));
-            await CompileAsync();
-            if (!File.Exists(uninstallerPath))
+            if (signer is null)
             {
-                throw new InvalidOperationException("NSIS did not export the uninstaller for signing.");
+                WriteScript(UninstallerMode.Unsigned);
+                await CompileAsync();
+            }
+            else
+            {
+                effectiveItem = await PrepareSignedPayloadAsync(context, item, signer, configuration.ProductName, cancellationToken);
+                effectivePluginDirectory = await PrepareSignedPluginsAsync(
+                    context,
+                    pluginDirectory,
+                    signer,
+                    configuration.ProductName,
+                    item.Target.RuntimeIdentifier,
+                    cancellationToken);
+                var uninstallerPath = Path.Combine(context.WorkDirectory, "signed-uninstaller.exe");
+                WriteScript(new UninstallerMode(
+                    CreateUninstallerFinalizeCommand(uninstallerPath),
+                    string.Empty,
+                    string.Empty));
+                await CompileAsync();
+                if (!File.Exists(uninstallerPath))
+                {
+                    throw new InvalidOperationException("NSIS did not export the uninstaller for signing.");
+                }
+
+                context.Logger.Log(BundleLogLevel.Information, "Signing the NSIS uninstaller.");
+                await signer.SignAsync(
+                    new BundleSigningRequest(uninstallerPath, BundleSigningArtifactKind.Uninstaller, configuration.ProductName, item.Target.RuntimeIdentifier),
+                    cancellationToken);
+
+                WriteScript(new UninstallerMode(
+                    string.Empty,
+                    "!define BUNDLER_IMPORT_SIGNED_UNINSTALLER",
+                    Escape(uninstallerPath)));
+                await CompileAsync();
+                context.Logger.Log(BundleLogLevel.Information, "Signing the NSIS installer.");
+                await signer.SignAsync(
+                    new BundleSigningRequest(installerPath, BundleSigningArtifactKind.Installer, configuration.ProductName, item.Target.RuntimeIdentifier),
+                    cancellationToken);
             }
 
-            context.Logger.Log(BundleLogLevel.Information, "Signing the NSIS uninstaller.");
-            await signer.SignAsync(
-                new BundleSigningRequest(uninstallerPath, BundleSigningArtifactKind.Uninstaller, configuration.ProductName),
-                cancellationToken);
+            if (!File.Exists(installerPath))
+            {
+                throw new InvalidOperationException("NSIS reported success but did not create the installer.");
+            }
 
-            WriteScript(new UninstallerMode(
-                string.Empty,
-                "!define BUNDLER_IMPORT_SIGNED_UNINSTALLER",
-                Escape(uninstallerPath)));
-            await CompileAsync();
-            context.Logger.Log(BundleLogLevel.Information, "Signing the NSIS installer.");
-            await signer.SignAsync(
-                new BundleSigningRequest(installerPath, BundleSigningArtifactKind.Installer, configuration.ProductName),
-                cancellationToken);
+            return new BundleArtifact(Format, item.Target.RuntimeIdentifier, installerPath);
         }
-
-        if (!File.Exists(installerPath))
+        catch
         {
-            throw new InvalidOperationException("NSIS reported success but did not create the installer.");
+            TryDeleteFile(installerPath);
+            throw;
         }
-
-        return new BundleArtifact(Format, item.Target.RuntimeIdentifier, installerPath);
 
         void WriteScript(UninstallerMode mode) => File.WriteAllText(
             scriptPath,
@@ -96,11 +114,11 @@ internal sealed class NsisBundleBackend(
                 template,
                 configuration,
                 settings,
-                item,
+                effectiveItem,
                 installerPath,
                 safeProductName,
                 localization,
-                pluginDirectory,
+                effectivePluginDirectory,
                 mode),
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
@@ -116,6 +134,97 @@ internal sealed class NsisBundleBackend(
                     ? null
                     : new Dictionary<string, string> { ["NSISDIR"] = fullDataDirectory });
         }
+    }
+
+    private static async Task<BundlePlanItem> PrepareSignedPayloadAsync(
+        BundleBuildContext context,
+        BundlePlanItem item,
+        IBundleSigner signer,
+        string productName,
+        CancellationToken cancellationToken)
+    {
+        var destination = Path.Combine(context.WorkDirectory, "signed-payload");
+        CopyDirectory(item.InputDirectory, destination);
+        var signingFiles = new List<(string RelativePath, BundleSigningArtifactKind Kind)>
+        {
+            (item.MainExecutable, BundleSigningArtifactKind.PayloadExecutable)
+        };
+        signingFiles.AddRange(item.SigningFiles.Select(path => (path, BundleSigningArtifactKind.PayloadFile)));
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (relativePath, kind) in signingFiles)
+        {
+            var path = ResolvePayloadPath(destination, relativePath);
+            if (!seen.Add(path))
+            {
+                continue;
+            }
+            if (!File.Exists(path))
+            {
+                throw new FileNotFoundException($"The configured payload signing file '{relativePath}' was not found.", path);
+            }
+            context.Logger.Log(BundleLogLevel.Information, $"Signing staged payload file '{relativePath}'.");
+            await signer.SignAsync(
+                new BundleSigningRequest(path, kind, productName, item.Target.RuntimeIdentifier),
+                cancellationToken);
+        }
+        return item with { InputDirectory = destination };
+    }
+
+    private static async Task<string> PrepareSignedPluginsAsync(
+        BundleBuildContext context,
+        string sourceDirectory,
+        IBundleSigner signer,
+        string productName,
+        string targetRuntimeIdentifier,
+        CancellationToken cancellationToken)
+    {
+        var destination = Path.Combine(context.WorkDirectory, "signed-plugins");
+        CopyDirectory(sourceDirectory, destination);
+        foreach (var path in Directory.EnumerateFiles(destination, "*.dll", SearchOption.AllDirectories)
+                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            context.Logger.Log(BundleLogLevel.Information, $"Signing Bundler native component '{Path.GetFileName(path)}'.");
+            await signer.SignAsync(
+                new BundleSigningRequest(path, BundleSigningArtifactKind.NativeComponent, productName, targetRuntimeIdentifier),
+                cancellationToken);
+        }
+        return destination;
+    }
+
+    private static string ResolvePayloadPath(string root, string relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
+        {
+            throw new InvalidOperationException($"Payload signing paths must be non-empty relative paths: '{relativePath}'.");
+        }
+        var fullRoot = DirectoryPrefix(root);
+        var fullPath = Path.GetFullPath(Path.Combine(root, relativePath));
+        if (!fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Payload signing path must stay inside the input directory: '{relativePath}'.");
+        }
+        return fullPath;
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        {
+            Directory.CreateDirectory(Path.Combine(destination, RelativePath(source, directory)));
+        }
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(destination, RelativePath(source, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target, overwrite: true);
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch { }
     }
 
     internal static string CreateScript(
@@ -810,13 +919,26 @@ internal sealed class NsisBundleBackend(
     private static string RelativePath(string root, string path)
     {
         var fullPath = Path.GetFullPath(path);
-        var prefix = root + Path.DirectorySeparatorChar;
+        var prefix = DirectoryPrefix(root);
         if (!fullPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException($"Payload path is outside the input directory: {fullPath}");
         }
 
         return fullPath.Substring(prefix.Length).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+    }
+
+    private static string DirectoryPrefix(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var pathRoot = Path.GetPathRoot(fullPath) ?? string.Empty;
+        if (fullPath.Length > pathRoot.Length)
+        {
+            fullPath = fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+        return fullPath.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal)
+            ? fullPath
+            : fullPath + Path.DirectorySeparatorChar;
     }
 
     private static string ToInstallerPath(string path) => path.Replace('/', '\\');

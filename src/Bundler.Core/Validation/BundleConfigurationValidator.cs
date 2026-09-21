@@ -126,6 +126,17 @@ public static class BundleConfigurationValidator
             issues.Add(new($"{path}.mainExecutable", "Must stay inside inputDirectory."));
         }
 
+        for (var signingIndex = 0; signingIndex < targetConfiguration.SigningFiles.Count; signingIndex++)
+        {
+            var signingFile = targetConfiguration.SigningFiles[signingIndex];
+            if (string.IsNullOrWhiteSpace(signingFile) || Path.IsPathRooted(signingFile) ||
+                signingFile.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    .Contains("..", StringComparer.Ordinal))
+            {
+                issues.Add(new($"{path}.signingFiles[{signingIndex}]", "Must be a non-empty path inside inputDirectory."));
+            }
+        }
+
         if (!checkFileSystem || string.IsNullOrWhiteSpace(targetConfiguration.InputDirectory))
         {
             return;
@@ -145,6 +156,18 @@ public static class BundleConfigurationValidator
         if (!File.Exists(executablePath))
         {
             issues.Add(new($"{path}.mainExecutable", $"Main executable does not exist: {executablePath}"));
+        }
+        for (var signingIndex = 0; signingIndex < targetConfiguration.SigningFiles.Count; signingIndex++)
+        {
+            var signingFile = targetConfiguration.SigningFiles[signingIndex];
+            if (!string.IsNullOrWhiteSpace(signingFile) && !Path.IsPathRooted(signingFile))
+            {
+                var signingPath = Path.Combine(targetConfiguration.InputDirectory, signingFile);
+                if (!File.Exists(signingPath))
+                {
+                    issues.Add(new($"{path}.signingFiles[{signingIndex}]", $"Signing file does not exist: {signingPath}"));
+                }
+            }
         }
     }
 

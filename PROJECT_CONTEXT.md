@@ -2,9 +2,9 @@
 
 > 最后整理：2026-09-21
 > 当前分支：`codex/modular-bundler-backends`  
-> 上一已提交基线：`e143d33 docs: define bundler roadmap and product scope`
-> 当前包版本：`0.1.0-alpha.28`
-> 当前未提交阶段：`NSIS-R1` 能力审计与配置面收口已完成，等待用户明确提交
+> 上一已提交基线：`1943c58 feat(nsis): complete capability configuration`
+> 当前包版本：`0.1.0-alpha.29`
+> 当前未提交阶段：`NSIS-R2` 完整 Windows 签名流水线已完成并验证，等待用户明确提交
 
 本文档是当前项目的“事实、决策、验证证据与协作约束”汇总，供后续开发任务直接接续。正式后续路线、产品边界、阶段完成条件和默认下一阶段以 `docs/roadmap.md` 为唯一规范来源。本文档不是面向最终用户的使用手册；当前需要维护的用户文档以根目录的 `README.zh-CN.md` 和 `samples/HelloBundledApp/README.md` 为准。代码与自动化测试始终是实现事实的最终依据。
 
@@ -230,11 +230,14 @@ Tauri 覆盖的完整语言集合目前尚未实现。不要把“两种内置�
 - 支持 PFX/P12 和 Windows `My` 证书存储区指纹。
 - PFX 密码通过环境变量名传递，避免写入项目文件或命令行。
 - 默认 SHA-256，支持 RFC 3161 时间戳 URL。
-- 两阶段 NSIS 签名：先签临时卸载器，再封装进安装器，最后签安装器。
-- 内置实现不依赖 Windows SDK 或 `signtool.exe`，但当前签名实现要求 Windows 宿主。
+- 完整签名顺序：临时副本中的主 EXE、调用方显式选择的附加 payload、工作区中的 Bundler 原生插件、临时卸载器、最终安装器。
+- `BundleTargetConfiguration.SigningFiles` / `BundlerWindowsSigningFile` 只选择输入目录内的 DLL、sidecar 或辅助程序；不会自动重签其他第三方文件。
+- 签名在工作区副本完成，不修改调用方输入目录或内容寻址共享插件缓存；任一步失败都会删除最终安装器。
+- `WindowsExternalCommandSigner` / `BundlerWindowsSigningCommand` 为云 HSM、USB Token 和远程 provider 提供独立参数入口，支持路径、产物类别、目标 RID 和产品名占位符；普通失败信息不回显 provider 参数或输出。
+- 内置实现不依赖 Windows SDK 或 `signtool.exe`，但内置 Authenticode provider 要求 Windows 宿主；外部 provider 的宿主范围由其命令决定。
 - 本地自签名流程已经写入中英文 README 和中文示例 README。
 
-一次性自签名证书已验证 PE 签名机制。正式发布还需要生产证书、私钥保护方式和公共 RFC 3161 服务；自签名状态不受信任是正常现象，不能证明公开信任链。
+一次性自签名证书已验证 payload、Bundler 插件、卸载器和安装器的 PE 签名机制；无秘密 Fixture 已验证外部 provider 参数替换、退出码与脱敏。正式发布还需要生产证书/HSM、私钥保护方式和公共 RFC 3161 服务；自签名状态不受信任是正常现象，不能证明公开信任链或 SmartScreen 声誉。
 
 ### 5.9 安装器自动化协议
 
@@ -322,7 +325,15 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 - 已按固定 Tauri commit `5d995ed35b029cecd780fdbe614dc6023a89b81b` 完成 `NsisConfig`、`WindowsConfig` 和与 NSIS 有关的通用 `BundleConfig` 逐项审计，矩阵位于 `docs/nsis-capability-matrix.md`。
 - `NsisBundleConfiguration.Compression` 和 `BundlerNsisCompression` 支持 `lzma`、`zlib`、`bzip2`、`none`，默认 LZMA；四种模式均已实际调用内嵌 `makensis` 编译验证。
 - JSON `BundleConfigurationLoader` 现会保留文件关联和 URL 协议及其元数据，不再让未来 CLI 的共享配置入口静默丢失这些能力。
-- WebView2、VC Runtime 和 Tauri updater 产物已分类为框架/runtime 专属或尚无通用契约，不进入当前 NSIS 实现；签名与完整语言分别进入 `NSIS-R2`、`NSIS-R3`。
+- WebView2、VC Runtime 和 Tauri updater 产物已分类为框架/runtime 专属或尚无通用契约，不进入当前 NSIS 实现；签名已在 `NSIS-R2` 收口，完整语言进入 `NSIS-R3`。
+
+### 5.14 完整签名流水线
+
+- `IBundleSigner` 请求现在携带产物类别、产品名和目标 RID；类别区分主程序、显式 payload、Bundler 原生组件、卸载器和安装器。
+- 目标级 `SigningFiles` 是格式无关公共模型的一部分，JSON loader、直接 API 和 MSBuild 均保留同一语义；未配置 signer 时显式签名文件会失败而非被静默忽略。
+- NSIS 启用签名后复制 payload 与插件到私有工作区，保证源输入和共享缓存字节不变。真实 `PublishDir` 尾部分隔符路径已有回归覆盖。
+- 外部命令签名器使用可执行文件加独立参数数组，不经 shell；至少一个参数必须含 `{path}` 或 `%1`，并支持 `{artifactKind}`、`{target}`、`{productName}`。provider 输出和参数默认不进入异常消息。
+- 最终 installer 签名失败会删除已编译的输出，避免调用方把未签名文件误当成功产物。
 
 ## 6. HelloBundledApp 示例的定位
 
@@ -381,25 +392,29 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 | `d04a7b1` | 集中人工与外部环境验收手册 |
 | `ac74bf2` | 覆盖事务恢复检查点         |
 | `8f5a9c1` | 卸载失败与中断后的前向恢复 |
+| `e143d33` | 固化通用打包器产品边界与路线 |
+| `1943c58` | NSIS 能力审计、压缩配置与共享配置修复 |
 
 `057aca1` 是安装范围支持的历史提交，位于这条提交链的更早位置。
 
 ## 8. 最近一次验证证据
 
-以下是本阶段 `0.1.0-alpha.28` 完成的验证，不应扩写成未执行过的平台兼容承诺：
+以下是本阶段 `0.1.0-alpha.29` 完成的验证，不应扩写成未执行过的平台兼容承诺：
 
 ```powershell
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-tests/Windows.Nsis.Integration/Verify.ps1
+tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.29
+dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -r win-x64 --force
 ```
 
 结果：
 
-- 31 项单元/契约测试全部通过；新增覆盖四种压缩模式的脚本渲染和真实编译，以及 JSON 配置完整保留文件关联/URL 协议；
-- 生成六个 `0.1.0-alpha.28` 本地 NuGet 包；
+- 34 项单元/契约测试全部通过；新增覆盖 staged payload/插件签名顺序、输入隔离、显式 sidecar、外部 provider 占位符/失败脱敏、签名失败产物清理、无 signer 拒绝和尾部分隔符路径；
+- 生成六个 `0.1.0-alpha.29` 本地 NuGet 包；
 - Windows NSIS 安装/卸载集成测试通过；
-- `HelloBundledApp` 使用 `BundlerNsisCompression=zlib` 从 `alpha.28` 本地包成功发布并生成安装器；
+- 自签名集成实际验证最终安装器、安装后主 EXE 和卸载器均包含预期证书；构建日志确认 Bundler 原生插件也经过内置 signer；
+- `HelloBundledApp` 使用 `BundlerNsisCompression=zlib` 从 `alpha.29` 本地包成功发布并生成安装器；
 - 烟雾测试从 `.lnk` 读取并验证参数、工作目录、图标和 AppUserModelID；
 - 集成覆盖用户手动删除快捷方式后更新不重建、旧名称迁移、外部程序接管同名快捷方式后卸载保留；
 - Native AOT COM 修复后完整流程通过；
@@ -442,11 +457,10 @@ git diff --check
 
 正式路线见 `docs/roadmap.md`。当前顺序为：
 
-1. `NSIS-R2`：完整 Windows 签名流水线，包括 payload、卸载器、安装器和自定义签名 provider；
-2. `NSIS-R3`：完整内置多语言、回退和自动校验；
-3. `NSIS-R4`：重解析点/文件系统安全边界、工具缓存完整性和 NSIS 冻结；
-4. `CLI-C1`：把仓库已有的 CLI 原型产品化，验证 Core/后端没有被 MSBuild 绑定；
-5. 按完整格式依次推进 WiX/MSI、macOS 和 Linux 后端。
+1. `NSIS-R3`：完整内置多语言、回退和自动校验；
+2. `NSIS-R4`：重解析点/文件系统安全边界、工具缓存完整性和 NSIS 冻结；
+3. `CLI-C1`：把仓库已有的 CLI 原型产品化，验证 Core/后端没有被 MSBuild 绑定；
+4. 按完整格式依次推进 WiX/MSI、macOS 和 Linux 后端。
 
 Tauri 能力按“通用打包能力、格式特定能力、Tauri runtime 专属能力”分类。签名是正式路线的一部分；WebView2、VC Runtime 等任意应用运行时依赖的自动发现、下载和安装当前明确不做。真实重启、UAC、生产证书、真实旧 MSI、多宿主/ARM64 和真实 ACL/磁盘耗尽保留在外部验收队列，不反复阻塞快速开发进入下一阶段。
 
@@ -537,8 +551,8 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 预期基线：
 
 - 分支：`codex/modular-bundler-backends`
-- 上一已提交基线：`e143d33`；当前未提交变更为已完成并验证的 `NSIS-R1`
-- 包版本：`0.1.0-alpha.28`
+- 上一已提交基线：`1943c58`；当前未提交变更为已完成并验证的 `NSIS-R2`
+- 包版本：`0.1.0-alpha.29`
 - 安装事务、Restart Manager、对应测试、示例和文档已经实现并提交；不得重新制作原型或把这些能力当作未完成项。
 
 上述分支、提交和版本是本文档最后整理时的快照。如果仓库已经向前推进，应调查后续提交和改动，并更新本文档，而不是强行退回该提交。
@@ -557,7 +571,7 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 
 ### 14.3 默认下一阶段
 
-若用户没有另外指定范围，默认完整执行 `docs/roadmap.md` 的 `NSIS-R2 完整 Windows 签名流水线`。该阶段覆盖 payload、Bundler 原生插件、卸载器、最终安装器以及外部签名 provider；生产证书、HSM/云服务和 SmartScreen 仍按人工文档独立验收，不在缺少外部凭据时阻塞可自动化实现。
+若用户没有另外指定范围，默认完整执行 `docs/roadmap.md` 的 `NSIS-R3 完整内置多语言`。该阶段按已固定的 Tauri/NSIS 语言集合补齐内置文案、规范键校验、回退和非拉丁文字端到端 Fixture；母语/专业翻译质量继续按人工文档独立验收，不把机器完整性校验冒充内容审校。
 
 ### 14.4 执行约束
 

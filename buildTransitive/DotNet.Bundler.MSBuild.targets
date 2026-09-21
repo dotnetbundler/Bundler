@@ -39,6 +39,7 @@
       Resources="@(BundlerResource)"
       FileAssociations="@(BundlerFileAssociation)"
       UrlProtocols="@(BundlerUrlProtocol)"
+      WindowsSigningFiles="@(BundlerWindowsSigningFile)"
       NsisToolsetArchivePath="$(BundlerNsisToolsetArchivePath)"
       NsisCompilerPath="$(BundlerNsisCompilerPath)"
       NsisDataDirectory="$(BundlerNsisDataDirectory)"
@@ -71,6 +72,8 @@
       WindowsSigningCertificateThumbprint="$(BundlerWindowsSigningCertificateThumbprint)"
       WindowsSigningCertificateStoreLocation="$(BundlerWindowsSigningCertificateStoreLocation)"
       WindowsSigningTimestampUrl="$(BundlerWindowsSigningTimestampUrl)"
+      WindowsSigningCommand="$(BundlerWindowsSigningCommand)"
+      WindowsSigningCommandArguments="@(BundlerWindowsSigningCommandArgument)"
       NsisLanguageFiles="@(BundlerNsisLanguageFile)">
       <Output TaskParameter="Artifacts" ItemName="BundlerArtifact" />
     </DotNet.Bundler.MSBuild.BundleDesktopApplication>

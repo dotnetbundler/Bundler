@@ -75,6 +75,7 @@ public static class BundleConfigurationLoader
                 RuntimeIdentifier = target.RuntimeIdentifier,
                 InputDirectory = Resolve(baseDirectory, target.InputDirectory),
                 MainExecutable = target.MainExecutable,
+                SigningFiles = target.SigningFiles.ToArray(),
                 Formats = target.Formats
             }).ToArray()
         };

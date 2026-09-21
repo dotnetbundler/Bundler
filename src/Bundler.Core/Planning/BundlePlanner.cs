@@ -34,13 +34,16 @@ public static class BundlePlanner
 
             void AddItem(PackageFormat format, bool intermediate)
             {
-                items.Add(new(
+                items.Add(new BundlePlanItem(
                     target!,
                     format,
                     configuredTarget.InputDirectory,
                     executable,
                     Path.Combine(configuration.OutputDirectory, target!.RuntimeIdentifier, FormatName(format)),
-                    intermediate));
+                    intermediate)
+                {
+                    SigningFiles = configuredTarget.SigningFiles.ToArray()
+                });
             }
         }
 

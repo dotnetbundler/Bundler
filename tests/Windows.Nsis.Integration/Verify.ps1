@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.28",
+    [string]$PackageVersion = "0.1.0-alpha.29",
     [switch]$CleanupOnly
 )
 
@@ -410,7 +410,7 @@ try {
     Build-FixtureBundle "currentUser" $legacyMsiProductMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false $legacyMsiProductCode ""
     Build-FixtureBundle "currentUser" $legacyMsiUpgradeMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false "" $legacyMsiUpgradeCode
 
-    # 使用当前用户证书存储区验证 MSBuild 参数映射以及安装器、卸载器的双重签名。
+    # 使用当前用户证书存储区验证 MSBuild 参数映射以及 payload、插件、卸载器、安装器签名链路。
     $testCertificate = New-SelfSignedCertificate `
         -Type CodeSigningCert `
         -Subject "CN=DotNet.Bundler disposable integration certificate" `
@@ -466,7 +466,9 @@ try {
     Assert-True (Test-Path -LiteralPath $interruptedUninstallInstaller) "Interrupted forward-uninstall fixture was not created."
     Assert-True ((Get-AuthenticodeSignature -LiteralPath $signedInstaller).SignerCertificate.Thumbprint -eq $testCertificateThumbprint) "The final installer does not contain the expected Authenticode certificate."
     Invoke-WindowsExecutable $signedInstaller "/S /D=$installDirectory"
+    $signedPayload = Join-Path $installDirectory "BundlerIntegrationFixture.exe"
     $signedUninstaller = Join-Path $installDirectory "Uninstall.exe"
+    Assert-True ((Get-AuthenticodeSignature -LiteralPath $signedPayload).SignerCertificate.Thumbprint -eq $testCertificateThumbprint) "The installed main executable does not contain the expected Authenticode certificate."
     Assert-True ((Get-AuthenticodeSignature -LiteralPath $signedUninstaller).SignerCertificate.Thumbprint -eq $testCertificateThumbprint) "The installed uninstaller does not contain the expected Authenticode certificate."
     Invoke-WindowsExecutable $signedUninstaller "/S /DELETEAPPDATA"
     Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Signed installer test cleanup did not finish."

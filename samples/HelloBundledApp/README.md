@@ -167,7 +167,9 @@ dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release `
   -p:HelloBundledAppSigningTimestampUrl='https://你的-RFC3161-时间戳服务'
 ```
 
-也可以用 `HelloBundledAppSigningCertificateThumbprint` 指定当前用户 `My` 证书存储区中的证书。签名时会先签署卸载器，再把它封装进安装器，最后签署安装器；内置签名器无需安装 Windows SDK 或 `signtool.exe`，但必须在 Windows 主机运行。
+也可以用 `HelloBundledAppSigningCertificateThumbprint` 指定当前用户 `My` 证书存储区中的证书。签名时会在临时副本中签署主程序和 Bundler 原生插件，再签卸载器和最终安装器；原始 `publish` 目录不会被修改。内置签名器无需安装 Windows SDK 或 `signtool.exe`，但必须在 Windows 主机运行。
+
+外部签名服务可通过 `HelloBundledAppSigningCommand` 和分号分隔的 `HelloBundledAppSigningCommandArguments` 演示，例如 `sign;--file;{path}`。至少一个参数必须含 `{path}` 或 `%1`；还可使用 `{artifactKind}`、`{target}`、`{productName}`。凭据应由 provider 从环境变量或安全存储读取，不能放进参数。
 
 本地没有正式证书时，可以创建一次性自签名证书来验证签名链路：
 
@@ -193,6 +195,12 @@ if ($signature.SignerCertificate.Thumbprint -ne $thumbprint) {
 }
 
 # 运行安装器后检查卸载器；如果修改过安装目录，请相应修改路径。
+$mainExecutable = "$env:LOCALAPPDATA\Programs\Hello Bundled App\HelloBundledApp.exe"
+$mainSignature = Get-AuthenticodeSignature -LiteralPath $mainExecutable
+if ($mainSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
+  throw "主程序没有使用预期证书签名。"
+}
+
 $uninstaller = "$env:LOCALAPPDATA\Programs\Hello Bundled App\Uninstall.exe"
 $uninstallerSignature = Get-AuthenticodeSignature -LiteralPath $uninstaller
 if ($uninstallerSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
@@ -203,7 +211,7 @@ if ($uninstallerSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
 Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 ```
 
-自签名证书只能证明签名代码和两阶段 NSIS 流程有效。它没有受信任的证书链，因此状态通常是 `UnknownError` 或“不受信任的根证书”，不能代替正式发布证书。
+自签名证书只能证明 staged payload、插件、卸载器和安装器签名流水线有效。它没有受信任的证书链，因此状态通常是 `UnknownError` 或“不受信任的根证书”，不能代替正式发布证书。
 
 ## 高级覆盖入口
 

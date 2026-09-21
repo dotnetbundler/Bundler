@@ -133,10 +133,11 @@ git diff --check
    Get-AuthenticodeSignature -LiteralPath "<setup.exe>" | Format-List Status,StatusMessage,SignerCertificate,TimeStamperCertificate
    ```
 
-3. 安装后对安装目录中的 `Uninstall.exe` 执行同样检查。
-4. 从干净 Windows 虚拟机观察 SmartScreen/UAC 发布者，记录证书链和时间戳。
+3. 安装后对安装目录中的主 EXE、所有显式 `BundlerWindowsSigningFile` 和 `Uninstall.exe` 执行同样检查。
+4. 若生产使用 HSM、USB Token 或云签名，再用对应 `BundlerWindowsSigningCommand` provider 重复构建，确认凭据不出现在 MSBuild 日志、provider 参数记录或项目文件中。
+5. 从干净 Windows 虚拟机观察 SmartScreen/UAC 发布者，记录证书链和时间戳。
 
-**PASS**：安装器和卸载器均为 `Valid`，签名者符合生产身份，`TimeStamperCertificate` 存在，无私钥或密码进入项目、日志或构建产物。
+**PASS**：主 EXE、显式附加 payload、卸载器和安装器均为 `Valid`，签名者符合生产身份，`TimeStamperCertificate` 存在，无私钥、令牌或密码进入项目、日志或构建产物。
 
 ### MT-05：真实历史 MSI 迁移
 

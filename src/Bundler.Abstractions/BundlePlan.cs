@@ -8,4 +8,7 @@ public sealed record BundlePlanItem(
     string InputDirectory,
     string MainExecutable,
     string OutputDirectory,
-    bool Intermediate);
+    bool Intermediate)
+{
+    public IReadOnlyList<string> SigningFiles { get; init; } = [];
+}

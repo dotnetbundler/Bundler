@@ -44,6 +44,12 @@ public sealed class NsisBundler
             throw new NotSupportedException(
                 $"DotNet.Bundler.Nsis accepts NSIS targets only; '{unsupported}' requires another backend package.");
         }
+        if (_options.Signer is null && bundle.Targets.Any(target => target.SigningFiles.Count > 0))
+        {
+            throw new ArgumentException(
+                "Payload signing files were configured, but no bundle signer was provided.",
+                nameof(bundle));
+        }
 
         ValidateConfiguration(_configuration);
         var cache = _options.ResolveToolCacheDirectory();

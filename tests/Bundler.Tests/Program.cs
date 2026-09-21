@@ -6,6 +6,17 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
+if (args.Length >= 5 && args[0] == "--external-sign-fixture")
+{
+    await File.AppendAllTextAsync(args[4], string.Join("|", args[1], args[2], args[3]) + Environment.NewLine);
+    if (args.Length > 5)
+    {
+        Console.Error.WriteLine(args[5]);
+        return 17;
+    }
+    return 0;
+}
+
 var tests = new (string Name, Func<Task> Test)[]
 {
     ("Parses supported desktop RIDs", () => RunSync(ParsesSupportedDesktopRids)),
@@ -22,6 +33,9 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Builds through the standalone NSIS API", BuildsThroughStandaloneNsisApi),
     ("Builds every NSIS compression mode", BuildsEveryNsisCompressionMode),
     ("Signs both NSIS installer artifacts", SignsBothNsisInstallerArtifacts),
+    ("Runs an external Windows signing provider safely", RunsExternalWindowsSigningProviderSafely),
+    ("Removes a failed signed installer", RemovesFailedSignedInstaller),
+    ("Rejects payload signing files without a signer", RejectsPayloadSigningFilesWithoutSigner),
     ("Writes a valid Windows uninstall command", () => RunSync(WritesValidWindowsUninstallCommand)),
     ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
     ("Uninstalls only packaged payload files", () => RunSync(UninstallsOnlyPackagedPayloadFiles)),
@@ -103,12 +117,15 @@ static void RejectsExecutablePathEscape()
         RuntimeIdentifier = "win-x64",
         InputDirectory = "unused",
         MainExecutable = "../Other.exe",
+        SigningFiles = ["../Other.dll"],
         Formats = [PackageFormat.Nsis]
     });
 
     var issues = BundleConfigurationValidator.Validate(configuration, checkFileSystem: false);
     Assert(issues.Any(issue => issue.Path.EndsWith("mainExecutable", StringComparison.Ordinal)),
         "An executable outside inputDirectory should have failed validation.");
+    Assert(issues.Any(issue => issue.Path.Contains("signingFiles", StringComparison.Ordinal)),
+        "A signing file outside inputDirectory should have failed validation.");
 }
 
 static async Task VerifiesAndExtractsBundledNsis()
@@ -266,7 +283,8 @@ static async Task SignsPeFileWithoutWindowsSdk()
         await signer.SignAsync(new BundleSigningRequest(
             target,
             BundleSigningArtifactKind.Installer,
-            "Signing test"));
+            "Signing test",
+            "win-x64"));
 
         using var embedded = new X509Certificate2(X509Certificate.CreateFromSignedFile(target));
         Assert(embedded.Thumbprint == certificate.Thumbprint,
@@ -449,6 +467,7 @@ static async Task LoadsCompleteGenericBundleConfiguration()
                   "runtimeIdentifier": "win-x64",
                   "inputDirectory": "publish",
                   "mainExecutable": "Configured.exe",
+                  "signingFiles": ["Helper.dll"],
                   "formats": ["nsis"]
                 }
               ]
@@ -466,6 +485,8 @@ static async Task LoadsCompleteGenericBundleConfiguration()
             "The configuration loader dropped URL-protocol metadata.");
         Assert(configuration.Targets[0].InputDirectory == Path.Combine(root, "publish"),
             "The configuration loader did not resolve target paths relative to the configuration file.");
+        Assert(configuration.Targets[0].SigningFiles.SequenceEqual(["Helper.dll"]),
+            "The configuration loader dropped target signing files.");
     }
     finally
     {
@@ -492,7 +513,7 @@ static async Task BuildsThroughStandaloneNsisApi()
                 new BundleTargetConfiguration
                 {
                     RuntimeIdentifier = "win-x64",
-                    InputDirectory = input,
+                    InputDirectory = input + Path.DirectorySeparatorChar,
                     MainExecutable = "ExampleApp.exe",
                     Formats = [PackageFormat.Nsis]
                 }
@@ -576,7 +597,13 @@ static async Task SignsBothNsisInstallerArtifacts()
     var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.NsisSigning.Tests", Guid.NewGuid().ToString("N"));
     var input = Path.Combine(root, "publish");
     Directory.CreateDirectory(input);
-    await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp.exe"), "signed-nsis-test");
+    var executable = Environment.ProcessPath ?? throw new InvalidOperationException("No test process path is available.");
+    var mainExecutable = Path.Combine(input, "ExampleApp.exe");
+    var sidecar = Path.Combine(input, "Sidecar.dll");
+    File.Copy(executable, mainExecutable);
+    File.Copy(executable, sidecar);
+    var originalMainHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(mainExecutable)));
+    var originalSidecarHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(sidecar)));
     try
     {
         using var rsa = RSA.Create(2048);
@@ -615,16 +642,37 @@ static async Task SignsBothNsisInstallerArtifacts()
                 new BundleTargetConfiguration
                 {
                     RuntimeIdentifier = "win-x64",
-                    InputDirectory = input,
+                    InputDirectory = input + Path.DirectorySeparatorChar,
                     MainExecutable = "ExampleApp.exe",
+                    SigningFiles = ["Sidecar.dll"],
                     Formats = [PackageFormat.Nsis]
                 }
             ]
         });
 
         Assert(signer.ArtifactKinds.SequenceEqual(
-                new[] { BundleSigningArtifactKind.Uninstaller, BundleSigningArtifactKind.Installer }),
-            "NSIS signing must sign the exported uninstaller before the final installer.");
+                new[]
+                {
+                    BundleSigningArtifactKind.PayloadExecutable,
+                    BundleSigningArtifactKind.PayloadFile,
+                    BundleSigningArtifactKind.NativeComponent,
+                    BundleSigningArtifactKind.Uninstaller,
+                    BundleSigningArtifactKind.Installer
+                }),
+            "NSIS signing did not process staged payload, native component, uninstaller, and installer in order.");
+        Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(mainExecutable))) == originalMainHash &&
+               Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(sidecar))) == originalSidecarHash,
+            "NSIS signing modified the caller's input directory instead of a staging copy.");
+        Assert(signer.Paths[0].Contains("signed-payload", StringComparison.OrdinalIgnoreCase) &&
+               signer.Paths[2].Contains("signed-plugins", StringComparison.OrdinalIgnoreCase),
+            "Payload or Bundler native components were not signed from private staging directories.");
+        var cachedPlugin = Directory.EnumerateFiles(
+            Path.Combine(root, "shared-tools"),
+            "DotNetBundlerNsis.dll",
+            SearchOption.AllDirectories).Single();
+        var repositoryPlugin = Path.Combine(RepositoryRoot(), "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
+        Assert(SHA256.HashData(File.ReadAllBytes(cachedPlugin)).SequenceEqual(SHA256.HashData(File.ReadAllBytes(repositoryPlugin))),
+            "Signing modified the shared cached NSIS plugin.");
         using var embedded = new X509Certificate2(X509Certificate.CreateFromSignedFile(artifacts[0].Path));
         Assert(embedded.Thumbprint == certificate.Thumbprint,
             "The final NSIS installer did not contain the expected signing certificate.");
@@ -632,6 +680,137 @@ static async Task SignsBothNsisInstallerArtifacts()
     finally
     {
         Directory.Delete(root, recursive: true);
+    }
+}
+
+static async Task RunsExternalWindowsSigningProviderSafely()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.ExternalSigning.Tests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var payload = Path.Combine(root, "payload with spaces.exe");
+        var log = Path.Combine(root, "signing.log");
+        await File.WriteAllTextAsync(payload, "fixture");
+        var processPath = Environment.ProcessPath ?? throw new InvalidOperationException("No test process path is available.");
+        var arguments = new List<string>();
+        if (Path.GetFileNameWithoutExtension(processPath).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            arguments.Add(System.Reflection.Assembly.GetExecutingAssembly().Location);
+        }
+        arguments.AddRange(["--external-sign-fixture", "{path}", "{artifactKind}", "{target}", log]);
+        var signer = new WindowsExternalCommandSigner(new WindowsExternalCommandSigningOptions
+        {
+            Command = processPath,
+            Arguments = arguments
+        });
+        await signer.SignAsync(new BundleSigningRequest(
+            payload,
+            BundleSigningArtifactKind.PayloadExecutable,
+            "External signing fixture",
+            "win-x64"));
+        var record = await File.ReadAllTextAsync(log);
+        Assert(record.Trim() == $"{payload}|PayloadExecutable|win-x64", "External signer placeholders were not passed as isolated arguments.");
+
+        const string secret = "must-not-leak-provider-secret";
+        var failingArguments = arguments.Concat([secret]).ToArray();
+        var failingSigner = new WindowsExternalCommandSigner(new WindowsExternalCommandSigningOptions
+        {
+            Command = processPath,
+            Arguments = failingArguments
+        });
+        try
+        {
+            await failingSigner.SignAsync(new BundleSigningRequest(
+                payload,
+                BundleSigningArtifactKind.Installer,
+                "External signing fixture",
+                "win-x64"));
+            throw new InvalidOperationException("A failing external signing provider was accepted.");
+        }
+        catch (InvalidOperationException exception) when (
+            exception.Message.Contains("exit code 17", StringComparison.Ordinal) &&
+            !exception.Message.Contains(secret, StringComparison.Ordinal))
+        {
+        }
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
+static async Task RemovesFailedSignedInstaller()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.SigningFailure.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "publish");
+    Directory.CreateDirectory(input);
+    await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp.exe"), "fixture");
+    var output = Path.Combine(root, "artifacts");
+    try
+    {
+        var bundler = new NsisBundler(options: new NsisBundlerOptions
+        {
+            ToolCacheDirectory = Path.Combine(root, "tools"),
+            Signer = new FailingInstallerSigner()
+        });
+        try
+        {
+            await bundler.BuildAsync(new BundleConfiguration
+            {
+                ProductName = "Failed Signing App",
+                Identifier = "com.example.failed-signing",
+                Version = "1.0.0",
+                OutputDirectory = output,
+                Targets =
+                [
+                    new BundleTargetConfiguration
+                    {
+                        RuntimeIdentifier = "win-x64",
+                        InputDirectory = input,
+                        MainExecutable = "ExampleApp.exe",
+                        Formats = [PackageFormat.Nsis]
+                    }
+                ]
+            });
+            throw new InvalidOperationException("A final signing failure was accepted.");
+        }
+        catch (InvalidOperationException exception) when (exception.Message == "fixture signing failure")
+        {
+        }
+        var installer = Path.Combine(output, "win-x64", "nsis", "Failed Signing App-1.0.0-setup.exe");
+        Assert(!File.Exists(installer), "A signing failure left a final installer that could be mistaken for success.");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
+static async Task RejectsPayloadSigningFilesWithoutSigner()
+{
+    try
+    {
+        await new NsisBundler().BuildAsync(new BundleConfiguration
+        {
+            ProductName = "Unsigned App",
+            Identifier = "com.example.unsigned",
+            Version = "1.0.0",
+            Targets =
+            [
+                new BundleTargetConfiguration
+                {
+                    RuntimeIdentifier = "win-x64",
+                    InputDirectory = "unused",
+                    SigningFiles = ["Helper.dll"],
+                    Formats = [PackageFormat.Nsis]
+                }
+            ]
+        });
+        throw new InvalidOperationException("Signing files without a signer were silently ignored.");
+    }
+    catch (ArgumentException exception) when (exception.Message.Contains("no bundle signer", StringComparison.Ordinal))
+    {
     }
 }
 
@@ -1292,7 +1471,8 @@ static void MapsNsisSettingsThroughMsBuild()
              {
                  "NsisCompression", "NsisShortcutDesktop", "NsisShortcutStartMenu", "NsisShortcutArguments",
                  "NsisShortcutWorkingDirectory", "NsisShortcutIcon", "NsisShortcutAppUserModelId",
-                 "NsisShortcutStartMenuFolder", "NsisShortcutLegacyProductNames", "NsisShortcutLegacyMainExecutables"
+                 "NsisShortcutStartMenuFolder", "NsisShortcutLegacyProductNames", "NsisShortcutLegacyMainExecutables",
+                 "WindowsSigningCommand"
              })
     {
         Assert(targets.Contains(property + "=\"$(Bundler" + property + ")\"", StringComparison.Ordinal), $"MSBuild does not map Bundler{property} to the task.");
@@ -1302,6 +1482,10 @@ static void MapsNsisSettingsThroughMsBuild()
     Assert(task.Contains("Compression = ParseCompression()", StringComparison.Ordinal) &&
            task.Contains("BundlerNsisCompression must be lzma, zlib, bzip2, or none.", StringComparison.Ordinal),
         "The MSBuild task does not parse and validate NSIS compression.");
+    Assert(targets.Contains("WindowsSigningFiles=\"@(BundlerWindowsSigningFile)\"", StringComparison.Ordinal) &&
+           targets.Contains("WindowsSigningCommandArguments=\"@(BundlerWindowsSigningCommandArgument)\"", StringComparison.Ordinal) &&
+           task.Contains("new WindowsExternalCommandSigner", StringComparison.Ordinal),
+        "MSBuild does not expose explicit payload files and external signing command arguments.");
 }
 
 static string RepositoryRoot() => Path.GetFullPath("../../../../../", AppContext.BaseDirectory);
@@ -1358,12 +1542,26 @@ file sealed class RecordingLogger : IBundleLogger
 file sealed class RecordingSigner(IBundleSigner inner) : IBundleSigner
 {
     public List<BundleSigningArtifactKind> ArtifactKinds { get; } = [];
+    public List<string> Paths { get; } = [];
 
     public async Task SignAsync(
         BundleSigningRequest request,
         CancellationToken cancellationToken = default)
     {
         ArtifactKinds.Add(request.ArtifactKind);
+        Paths.Add(request.Path);
         await inner.SignAsync(request, cancellationToken);
+    }
+}
+
+file sealed class FailingInstallerSigner : IBundleSigner
+{
+    public Task SignAsync(BundleSigningRequest request, CancellationToken cancellationToken = default)
+    {
+        if (request.ArtifactKind == BundleSigningArtifactKind.Installer)
+        {
+            throw new InvalidOperationException("fixture signing failure");
+        }
+        return Task.CompletedTask;
     }
 }

@@ -43,5 +43,6 @@
     <BundlerWindowsSigningCertificateThumbprint Condition="'$(BundlerWindowsSigningCertificateThumbprint)' == ''"></BundlerWindowsSigningCertificateThumbprint>
     <BundlerWindowsSigningCertificateStoreLocation Condition="'$(BundlerWindowsSigningCertificateStoreLocation)' == ''">CurrentUser</BundlerWindowsSigningCertificateStoreLocation>
     <BundlerWindowsSigningTimestampUrl Condition="'$(BundlerWindowsSigningTimestampUrl)' == ''"></BundlerWindowsSigningTimestampUrl>
+    <BundlerWindowsSigningCommand Condition="'$(BundlerWindowsSigningCommand)' == ''"></BundlerWindowsSigningCommand>
   </PropertyGroup>
 </Project>
