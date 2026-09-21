@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.25"
+    [string]$PackageVersion = "0.1.0-alpha.26"
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,6 +22,11 @@ $perMachineBundleOutput = Join-Path $integrationRoot "bundle-per-machine"
 $bothBundleOutput = Join-Path $integrationRoot "bundle-both"
 $upgradeBundleOutput = Join-Path $integrationRoot "bundle-upgrade"
 $rollbackFailureBundleOutput = Join-Path $integrationRoot "bundle-rollback-failure"
+$transactionSnapshotFailureBundleOutput = Join-Path $integrationRoot "bundle-transaction-snapshot-failure"
+$transactionActivationFailureBundleOutput = Join-Path $integrationRoot "bundle-transaction-activation-failure"
+$payloadRestoreFailureBundleOutput = Join-Path $integrationRoot "bundle-payload-restore-failure"
+$registryRestoreFailureBundleOutput = Join-Path $integrationRoot "bundle-registry-restore-failure"
+$journalCleanupFailureBundleOutput = Join-Path $integrationRoot "bundle-journal-cleanup-failure"
 $shortcutPersistenceFailureBundleOutput = Join-Path $integrationRoot "bundle-shortcut-persistence-failure"
 $registryPersistenceFailureBundleOutput = Join-Path $integrationRoot "bundle-registry-persistence-failure"
 $commitCleanupFailureBundleOutput = Join-Path $integrationRoot "bundle-commit-cleanup-failure"
@@ -37,6 +42,11 @@ $testIcon = Join-Path $integrationRoot "test-installer.ico"
 $testHeaderImage = Join-Path $integrationRoot "test-header.bmp"
 $testSidebarImage = Join-Path $integrationRoot "test-sidebar.bmp"
 $failingInstallerHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-postinstall.nsh"
+$failingTransactionSnapshotHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-transaction-snapshot.nsh"
+$failingTransactionActivationHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-transaction-activation.nsh"
+$failingPayloadRestoreHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-payload-restore.nsh"
+$failingRegistryRestoreHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-registry-restore.nsh"
+$failingJournalCleanupHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-journal-cleanup.nsh"
 $failingShortcutPersistenceHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-shortcut-persistence.nsh"
 $failingRegistryPersistenceHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-registry-persistence.nsh"
 $failingCommitCleanupHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-commit-cleanup.nsh"
@@ -342,6 +352,11 @@ try {
     Build-FixtureBundle "both" $bothBundleOutput
     Build-FixtureBundle "currentUser" $upgradeBundleOutput "DotNet.Bundler" "1.1.0"
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $rollbackFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingInstallerHooks
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $transactionSnapshotFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingTransactionSnapshotHooks
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $transactionActivationFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingTransactionActivationHooks
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $payloadRestoreFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingPayloadRestoreHooks
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $registryRestoreFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingRegistryRestoreHooks
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $journalCleanupFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingJournalCleanupHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $shortcutPersistenceFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingShortcutPersistenceHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $registryPersistenceFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingRegistryPersistenceHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $commitCleanupFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingCommitCleanupHooks
@@ -364,6 +379,11 @@ try {
     $installer = Join-Path $bundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $upgradeInstaller = Join-Path $upgradeBundleOutput "win-x64\nsis\$productName-1.1.0-setup.exe"
     $rollbackFailureInstaller = Join-Path $rollbackFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
+    $transactionSnapshotFailureInstaller = Join-Path $transactionSnapshotFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
+    $transactionActivationFailureInstaller = Join-Path $transactionActivationFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
+    $payloadRestoreFailureInstaller = Join-Path $payloadRestoreFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
+    $registryRestoreFailureInstaller = Join-Path $registryRestoreFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
+    $journalCleanupFailureInstaller = Join-Path $journalCleanupFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
     $shortcutPersistenceFailureInstaller = Join-Path $shortcutPersistenceFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
     $registryPersistenceFailureInstaller = Join-Path $registryPersistenceFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
     $commitCleanupFailureInstaller = Join-Path $commitCleanupFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
@@ -380,6 +400,11 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $bothBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Both-scope installer was not created."
     Assert-True (Test-Path -LiteralPath $upgradeInstaller) "Upgrade installer was not created."
     Assert-True (Test-Path -LiteralPath $rollbackFailureInstaller) "Rollback failure-injection installer was not created."
+    Assert-True (Test-Path -LiteralPath $transactionSnapshotFailureInstaller) "Transaction-snapshot failure fixture was not created."
+    Assert-True (Test-Path -LiteralPath $transactionActivationFailureInstaller) "Transaction-activation failure fixture was not created."
+    Assert-True (Test-Path -LiteralPath $payloadRestoreFailureInstaller) "Payload-restore failure fixture was not created."
+    Assert-True (Test-Path -LiteralPath $registryRestoreFailureInstaller) "Registry-restore failure fixture was not created."
+    Assert-True (Test-Path -LiteralPath $journalCleanupFailureInstaller) "Journal-cleanup failure fixture was not created."
     Assert-True (Test-Path -LiteralPath $shortcutPersistenceFailureInstaller) "Shortcut-persistence failure fixture was not created."
     Assert-True (Test-Path -LiteralPath $registryPersistenceFailureInstaller) "Registry-persistence failure fixture was not created."
     Assert-True (Test-Path -LiteralPath $commitCleanupFailureInstaller) "Commit-cleanup failure fixture was not created."
@@ -548,6 +573,49 @@ try {
         Assert-True ((Get-ShortcutInfo $startMenuShortcut).TargetPath -eq $prePersistenceFailureShortcut.TargetPath) "Injected $($failureFixture.Name) persistence failure did not restore the Start Menu shortcut."
         Assert-True (-not (Test-Path -LiteralPath $desktopShortcut)) "Injected $($failureFixture.Name) persistence failure recreated the removed desktop shortcut."
         Assert-True (-not (Test-Path -LiteralPath $transactionDirectory)) "Injected $($failureFixture.Name) persistence failure left an active journal."
+    }
+
+    # Begin 之后的快照写入失败和快照完成后的激活失败都发生在修改旧状态之前。
+    # 失败必须删除未激活 journal，且不能改变旧载荷、注册表或快捷方式。
+    $preActivationFailureHash = (Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash
+    foreach ($failureFixture in @(
+        [pscustomobject]@{ Name = "snapshot"; Installer = $transactionSnapshotFailureInstaller },
+        [pscustomobject]@{ Name = "activation"; Installer = $transactionActivationFailureInstaller }
+    )) {
+        $preActivationFailure = Start-Process -FilePath $failureFixture.Installer -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+        Assert-True ($preActivationFailure.ExitCode -eq 2) "Injected transaction $($failureFixture.Name) failure did not return exit code 2."
+        Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Injected transaction $($failureFixture.Name) failure changed the installed version."
+        Assert-True ((Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash -eq $preActivationFailureHash) "Injected transaction $($failureFixture.Name) failure changed the executable."
+        Assert-True (Test-Path -LiteralPath $upgradePreservedData) "Injected transaction $($failureFixture.Name) failure lost runtime-created data."
+        Assert-True (Test-Path -LiteralPath $startMenuShortcut) "Injected transaction $($failureFixture.Name) failure removed the Start Menu shortcut."
+        Assert-True (-not (Test-Path -LiteralPath $desktopShortcut)) "Injected transaction $($failureFixture.Name) failure recreated the removed desktop shortcut."
+        Assert-True (-not (Test-Path -LiteralPath $transactionDirectory)) "Injected transaction $($failureFixture.Name) failure left an inactive journal."
+    }
+
+    # 激活后分别在载荷恢复前、载荷恢复后且注册表恢复前、以及全部恢复后的
+    # journal 清理点失败一次。每次都必须保留 active journal，下次启动可重入地完成恢复。
+    $preRecoveryFailureHash = (Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash
+    foreach ($failureFixture in @(
+        [pscustomobject]@{ Name = "payload"; Installer = $payloadRestoreFailureInstaller; ExpectedVersionAfterFailure = "1.2.0"; PayloadRestored = $false },
+        [pscustomobject]@{ Name = "registry"; Installer = $registryRestoreFailureInstaller; ExpectedVersionAfterFailure = "1.2.0"; PayloadRestored = $true },
+        [pscustomobject]@{ Name = "cleanup"; Installer = $journalCleanupFailureInstaller; ExpectedVersionAfterFailure = "1.1.0"; PayloadRestored = $true }
+    )) {
+        $recoveryFailure = Start-Process -FilePath $failureFixture.Installer -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+        Assert-True ($recoveryFailure.ExitCode -eq 2) "Injected $($failureFixture.Name)-recovery failure did not return exit code 2."
+        Assert-True (Test-Path -LiteralPath $transactionDirectory) "Injected $($failureFixture.Name)-recovery failure did not preserve its active journal."
+        Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq $failureFixture.ExpectedVersionAfterFailure) "Injected $($failureFixture.Name)-recovery failure stopped at the wrong registry checkpoint."
+        if ($failureFixture.PayloadRestored) {
+            Assert-True ((Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash -eq $preRecoveryFailureHash) "Injected $($failureFixture.Name)-recovery failure stopped before restoring the payload."
+        }
+        else {
+            Assert-True ((Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash -ne $preRecoveryFailureHash) "Injected $($failureFixture.Name)-recovery failure unexpectedly restored the payload."
+        }
+
+        Invoke-WindowsExecutable $upgradeInstaller "/S /D=$installDirectory"
+        Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Startup recovery after $($failureFixture.Name) failure did not restore the installed version."
+        Assert-True ((Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash -eq $preRecoveryFailureHash) "Startup recovery after $($failureFixture.Name) failure did not restore the executable."
+        Assert-True (Test-Path -LiteralPath $upgradePreservedData) "Startup recovery after $($failureFixture.Name) failure lost runtime-created data."
+        Assert-True (-not (Test-Path -LiteralPath $transactionDirectory)) "Startup recovery after $($failureFixture.Name) failure did not clean the active journal."
     }
 
     # Hook 到达 post-install 后等待；测试进程从外部终止整个安装器进程树，模拟外层监督

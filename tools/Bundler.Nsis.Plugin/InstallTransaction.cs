@@ -11,6 +11,11 @@ internal static class InstallTransaction
     private const string OriginalPayloadFileName = "original-payload";
     private const string CommittedSuffix = ".committed";
     private const string RetainCommittedForTestFileName = ".dotnet-bundler-test-retain-committed";
+    private const string FailNextSnapshotForTestFileName = ".dotnet-bundler-test-fail-next-snapshot";
+    private const string FailNextActivationForTestFileName = ".dotnet-bundler-test-fail-next-activation";
+    private const string FailNextPayloadRestoreForTestFileName = ".dotnet-bundler-test-fail-next-payload-restore";
+    private const string FailNextRegistryRestoreForTestFileName = ".dotnet-bundler-test-fail-next-registry-restore";
+    private const string FailNextJournalCleanupForTestFileName = ".dotnet-bundler-test-fail-next-journal-cleanup";
 
     internal static int Begin(string transactionDirectory, string installDirectory)
     {
@@ -48,6 +53,7 @@ internal static class InstallTransaction
     {
         try
         {
+            FailOnceForTest(transactionDirectory, FailNextSnapshotForTestFileName);
             var path = SnapshotPath(transactionDirectory, "registry", name);
             using var writer = new BinaryWriter(File.Create(path));
             writer.Write((byte)1);
@@ -79,6 +85,7 @@ internal static class InstallTransaction
     {
         try
         {
+            FailOnceForTest(transactionDirectory, FailNextSnapshotForTestFileName);
             var path = SnapshotPath(transactionDirectory, "registry", name);
             using var writer = new BinaryWriter(File.Create(path));
             writer.Write((byte)2);
@@ -106,6 +113,7 @@ internal static class InstallTransaction
     {
         try
         {
+            FailOnceForTest(transactionDirectory, FailNextSnapshotForTestFileName);
             var directory = SnapshotDirectory(transactionDirectory, "files", name);
             Directory.CreateDirectory(directory);
             File.WriteAllText(Path.Combine(directory, "path.txt"), Path.GetFullPath(path));
@@ -127,6 +135,7 @@ internal static class InstallTransaction
         try
         {
             var transaction = ValidateTransactionDirectory(transactionDirectory);
+            FailOnceForTest(transaction, FailNextActivationForTestFileName);
             if (!File.Exists(Path.Combine(transaction, StateFileName)))
             {
                 throw new InvalidOperationException("The install transaction has not been prepared.");
@@ -213,6 +222,7 @@ internal static class InstallTransaction
         {
             throw new InvalidDataException("The install transaction does not match the selected install directory.");
         }
+        FailOnceForTest(transaction, FailNextPayloadRestoreForTestFileName);
         if (Directory.Exists(install))
         {
             Directory.Delete(install, recursive: true);
@@ -222,9 +232,25 @@ internal static class InstallTransaction
             CopyDirectory(Path.Combine(transaction, "payload"), install);
         }
 
+        FailOnceForTest(transaction, FailNextRegistryRestoreForTestFileName);
         RestoreRegistry(transaction);
         RestoreFiles(transaction);
+        FailOnceForTest(transaction, FailNextJournalCleanupForTestFileName);
         Directory.Delete(transaction, recursive: true);
+    }
+
+    private static void FailOnceForTest(string transactionDirectory, string markerName)
+    {
+        var marker = Path.Combine(ValidateTransactionDirectory(transactionDirectory), markerName);
+        if (!File.Exists(marker))
+        {
+            return;
+        }
+
+        // 仅供仓库集成 Fixture 确定性验证可重试故障。
+        // 先消费标记再失败，使下次安装启动能执行真实恢复。
+        File.Delete(marker);
+        throw new IOException($"Injected one-shot install transaction failure: {markerName}");
     }
 
     private static void CleanupCommitted(string transactionDirectory)

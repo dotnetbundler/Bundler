@@ -42,7 +42,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `ne
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.25" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.26" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -60,7 +60,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.25" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.26" />
 ```
 
 ```csharp
@@ -196,6 +196,8 @@ NSIS 安装和升级在修改持久状态前会把原安装目录、产品相关
 
 版本必须符合 SemVer 2.0，并且三个数字核心段都必须处于 Windows 版本资源允许的 `0-65535` 范围。安装器会在所选用户或计算机注册表上下文中检测现有安装，并通过包内使用 `NsisPlugin` 构建的 Native AOT 插件比较 `DisplayVersion`。交互安装允许用户选择先卸载或原位覆盖；静默同版本安装执行原位修复，静默升级会先卸载旧的构建载荷，同时保留应用数据。默认禁止降级，可通过 `BundlerNsisAllowDowngrades` 开启。
 
+仓库的 Windows 集成矩阵会在事务快照、事务激活、载荷恢复、注册表恢复和 active journal 清理检查点注入一次性可控故障，验证未修改旧状态的安全失败以及下次启动的重入恢复。这些是确定性测试检查点，不代替真实 ACL 拒绝、磁盘耗尽或断电/重启环境验收。
+
 ### 安装器命令行协议
 
 这些参数属于生成后的 NSIS 安装器接口，不是 MSBuild 属性：
@@ -296,7 +298,7 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.25
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.26
 ```
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

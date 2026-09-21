@@ -824,7 +824,15 @@ Function PrepareInstallTransaction
   ; 修改任何持久状态前先建立快照；Activate 之后的失败会触发回滚。
   DotNetBundlerNsis::BeginInstallTransaction "$TransactionDirectory" "$INSTDIR"
   !insertmacro CheckTransactionResult
+  ; 仅供仓库集成 Fixture 在 Begin 之后、任何快照写入之前注入故障。
+  !ifmacrodef DOTNET_BUNDLER_TEST_AFTER_TRANSACTION_BEGIN
+    !insertmacro DOTNET_BUNDLER_TEST_AFTER_TRANSACTION_BEGIN
+  !endif
 {{transaction_snapshot_commands}}
+  ; 仅供仓库集成 Fixture 在快照完成后注入激活故障。
+  !ifmacrodef DOTNET_BUNDLER_TEST_BEFORE_TRANSACTION_ACTIVATE
+    !insertmacro DOTNET_BUNDLER_TEST_BEFORE_TRANSACTION_ACTIVATE
+  !endif
   DotNetBundlerNsis::ActivateInstallTransaction "$TransactionDirectory"
   !insertmacro CheckTransactionResult
   StrCpy $TransactionActive 1

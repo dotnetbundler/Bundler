@@ -39,6 +39,8 @@ samples/HelloBundledApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe
 
 NSIS 安装和升级会先建立包含旧载荷、产品注册表和快捷方式的事务快照。安装 Hook 或后续写入失败时会恢复旧版本；安装器进程意外终止后，下一次运行同一产品的安装器会先恢复 active journal。提交时先把 journal 原子重命名为 `.committed`，清理失败不会回滚已经完成的安装，下一次启动会重试清理。快照位于用户或计算机范围的 `DotNetBundler\transactions` 目录，并会临时占用接近现有安装目录大小的磁盘空间。旧 MSI 卸载属于不可逆的外部迁移边界，不在自动恢复范围内。
 
+仓库集成测试还会在快照、激活、载荷恢复、注册表恢复和 active journal 清理检查点注入一次性可控故障，验证下次启动能重入恢复并清理 journal；真实 ACL 拒绝、磁盘耗尽和重启仍属于外部环境验收。
+
 程序启动后会显示收到的参数、额外资源是否存在以及安装 Hook 是否执行，并将最近一次启动写入：
 
 ```text

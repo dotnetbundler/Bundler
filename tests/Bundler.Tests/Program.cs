@@ -147,7 +147,7 @@ static async Task VerifiesAndExtractsBundledNsis()
             "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
         Assert(File.Exists(pluginPath), "The bundled NSIS plug-in is missing.");
         Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))) ==
-               "92DA07F40B3AD9329465DC28D54006AAD81BA21C359B7667D4275B7CFE54BA50",
+               "DF6D6E39CABD8DEE9933863D1FD888D16BFA58E343A25CF43BB430EA01D403B2",
             "The bundled NSIS plug-in checksum changed; rebuild and update its provenance.");
 
         var toolset = await NsisToolResolver.ResolveAsync(archive, cache);
@@ -590,6 +590,9 @@ static void ProvidesInteractiveNsisSafetyOptions()
            template.Contains("DotNetBundlerNsis::RollbackInstallTransaction", StringComparison.Ordinal) &&
            template.Contains("Call CommitInstallTransaction", StringComparison.Ordinal),
         "The installer should snapshot, activate, roll back, and commit its persistent changes.");
+    Assert(template.Contains("DOTNET_BUNDLER_TEST_AFTER_TRANSACTION_BEGIN", StringComparison.Ordinal) &&
+           template.Contains("DOTNET_BUNDLER_TEST_BEFORE_TRANSACTION_ACTIVATE", StringComparison.Ordinal),
+        "The repository fixtures should be able to inject pre-activation transaction failures.");
     Assert(template.Contains("UninstPage custom un.AppDataOptionsPage", StringComparison.Ordinal) &&
            template.Contains("$LOCALAPPDATA\\${PRODUCT_ID}", StringComparison.Ordinal),
         "The uninstaller should offer optional application-data deletion.");

@@ -13,6 +13,10 @@ snapshot and restore payload files, product registry state, and shortcuts. A
 successful commit atomically renames the active journal to a `.committed`
 sibling before best-effort cleanup, so a cleanup failure cannot roll back an
 already completed install; the next installer start retries that cleanup.
+Recovery is reentrant: if restoring payload, registry state, or journal cleanup
+fails, the active journal remains available for the next installer start. The
+repository integration fixture exercises these boundaries with internal
+one-shot markers; those markers are test hooks, not a supported installer API.
 
 It is intentionally excluded from `Bundler.slnx`: normal library and MSBuild task
 builds retain the .NET 8 SDK baseline, while rebuilding the native plug-in requires
