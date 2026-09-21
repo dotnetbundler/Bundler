@@ -63,12 +63,18 @@ if ($Phase -eq "Prepare") {
         throw "The installed reboot fixture is incomplete."
     }
 
+    # 直接启动安装目录中的 NSIS 卸载器时，外层临时 launcher 不传播实际卸载进程
+    # 的退出码。显式复制并使用 `_?=`，才能验证真正的 3010，同时避免锁住原卸载器。
+    New-Item -ItemType Directory -Path $stateRoot -Force | Out-Null
+    $directUninstaller = Join-Path $stateRoot "direct-uninstaller.exe"
+    Copy-Item -LiteralPath $uninstaller -Destination $directUninstaller
     $lock = [IO.File]::Open($lockedFile, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     try {
-        $uninstall = Start-Process -FilePath $uninstaller -ArgumentList "/S /DELETEAPPDATA" -Wait -PassThru
+        $uninstall = Start-Process -FilePath $directUninstaller -ArgumentList "/S /DELETEAPPDATA _?=$fullInstallDirectory" -Wait -PassThru
     }
     finally {
         $lock.Dispose()
+        Remove-Item -LiteralPath $directUninstaller -Force -ErrorAction SilentlyContinue
     }
 
     if ($uninstall.ExitCode -ne 3010) {
@@ -79,7 +85,6 @@ if ($Phase -eq "Prepare") {
         throw "Exit code 3010 was returned, but no product-owned path was found in PendingFileRenameOperations."
     }
 
-    New-Item -ItemType Directory -Path $stateRoot -Force | Out-Null
     [pscustomobject]@{
         InstallDirectory = $fullInstallDirectory
         Identifier = $Identifier

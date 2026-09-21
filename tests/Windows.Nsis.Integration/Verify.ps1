@@ -1,6 +1,7 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.26"
+    [string]$PackageVersion = "0.1.0-alpha.27",
+    [switch]$CleanupOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,6 +38,8 @@ $legacyMsiProductMigrationBundleOutput = Join-Path $integrationRoot "bundle-lega
 $legacyMsiUpgradeMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-upgrade-migration"
 $signedBundleOutput = Join-Path $integrationRoot "bundle-signed"
 $noShortcutDefaultsBundleOutput = Join-Path $integrationRoot "bundle-no-shortcut-defaults"
+$failingUninstallBundleOutput = Join-Path $integrationRoot "bundle-failing-uninstall-forward"
+$interruptedUninstallBundleOutput = Join-Path $integrationRoot "bundle-interrupted-uninstall-forward"
 $directMsBuildOutput = Join-Path $integrationRoot "bundle-direct-msbuild"
 $testIcon = Join-Path $integrationRoot "test-installer.ico"
 $testHeaderImage = Join-Path $integrationRoot "test-header.bmp"
@@ -52,6 +55,8 @@ $failingRegistryPersistenceHooks = Join-Path $PSScriptRoot "Fixture\Assets\faili
 $failingCommitCleanupHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-commit-cleanup.nsh"
 $abortingInstallerHooks = Join-Path $PSScriptRoot "Fixture\Assets\aborting-postinstall.nsh"
 $rebootingInstallerHooks = Join-Path $PSScriptRoot "Fixture\Assets\rebooting-postinstall.nsh"
+$failingUninstallHooks = Join-Path $PSScriptRoot "Fixture\Assets\failing-postuninstall-forward.nsh"
+$interruptedUninstallHooks = Join-Path $PSScriptRoot "Fixture\Assets\interrupted-postuninstall-forward.nsh"
 $installRoot = Join-Path $integrationRoot "安装 目录"
 $installDirectory = Join-Path $installRoot "Bundler Integration Fixture"
 $externalFixtureDirectory = Join-Path $integrationRoot "same-name-external-process"
@@ -72,10 +77,14 @@ $registeredApplicationsRegistryPath = "HKCU:\Software\RegisteredApplications"
 $deepLinkMarker = Join-Path $env:TEMP "DotNetBundler-deep-link.txt"
 $commandLineMarker = Join-Path $env:TEMP "DotNetBundler-command-line.txt"
 $interruptedHookMarker = Join-Path $env:TEMP "DotNetBundler-interrupted-postinstall.txt"
+$failingUninstallHookMarker = Join-Path $env:TEMP "DotNetBundler-failing-postuninstall-forward.once"
+$interruptedUninstallHookMarker = Join-Path $env:TEMP "DotNetBundler-interrupted-postuninstall-forward.once"
 $roamingData = Join-Path $env:APPDATA $identifier
 $localData = Join-Path $env:LOCALAPPDATA $identifier
 $transactionDirectory = Join-Path $env:LOCALAPPDATA "DotNetBundler\transactions\$identifier"
 $committedTransactionDirectory = "$transactionDirectory.committed"
+$uninstallTransactionDirectory = "$transactionDirectory.uninstall"
+$committedUninstallTransactionDirectory = "$uninstallTransactionDirectory.committed"
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "$productName.lnk"
 $startMenuDirectory = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\DotNet Bundler Integration"
 $startMenuShortcut = Join-Path $startMenuDirectory "$productName.lnk"
@@ -84,6 +93,7 @@ $legacyStartMenuShortcut = Join-Path $legacyStartMenuDirectory "Legacy Bundler F
 $fixtureProcess = $null
 $externalFixtureProcess = $null
 $testCertificateThumbprint = $null
+$directUninstallerCopies = [Collections.Generic.List[string]]::new()
 $hookMarkers = @("preinstall", "postinstall", "preuninstall", "postuninstall") | ForEach-Object { Join-Path $env:TEMP "DotNetBundler-$_.txt" }
 
 function Assert-True([bool]$Condition, [string]$Message) {
@@ -110,6 +120,25 @@ function Invoke-WindowsExecutable([string]$FilePath, [string]$ArgumentLine) {
     if ($process.ExitCode -ne 0) {
         throw "Process failed with exit code $($process.ExitCode)`: $FilePath $ArgumentLine"
     }
+}
+
+function Start-DirectUninstaller(
+    [string]$UninstallerPath,
+    [string]$InstallPath,
+    [string]$ArgumentLine,
+    [switch]$Wait
+) {
+    # NSIS 从安装目录启动卸载器时会先创建一个临时 launcher；launcher 不传播真正
+    # 卸载进程的退出码。测试显式复制并传入 `_?=`，既控制实际进程，也与产品恢复路径一致。
+    $copyPath = Join-Path $integrationRoot "direct-uninstaller-$([Guid]::NewGuid().ToString('N')).exe"
+    Assert-UnderIntegrationRoot $copyPath
+    Copy-Item -LiteralPath $UninstallerPath -Destination $copyPath
+    $directUninstallerCopies.Add($copyPath)
+    $arguments = "$ArgumentLine _?=$InstallPath"
+    if ($Wait) {
+        return Start-Process -FilePath $copyPath -ArgumentList $arguments -Wait -PassThru
+    }
+    return Start-Process -FilePath $copyPath -ArgumentList $arguments -PassThru
 }
 
 function Invoke-MsiExec([string]$ArgumentLine, [int[]]$AllowedExitCodes = @(0, 3010)) {
@@ -198,6 +227,11 @@ function Remove-TestState {
     if ($null -ne $script:externalFixtureProcess -and -not $script:externalFixtureProcess.HasExited) {
         Stop-Process -Id $script:externalFixtureProcess.Id -Force -ErrorAction SilentlyContinue
     }
+    foreach ($path in $directUninstallerCopies) {
+        Assert-UnderIntegrationRoot $path
+        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
+    }
+    $directUninstallerCopies.Clear()
     if (Test-Path -LiteralPath $registryPath) { Remove-Item -LiteralPath $registryPath -Recurse -Force }
     foreach ($path in @($fileProgIdRegistryPath, $urlSchemeRegistryPath, $urlProgIdRegistryPath, $capabilitiesRegistryPath)) {
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
@@ -212,6 +246,8 @@ function Remove-TestState {
     if (Test-Path -LiteralPath $deepLinkMarker) { Remove-Item -LiteralPath $deepLinkMarker -Force }
     if (Test-Path -LiteralPath $commandLineMarker) { Remove-Item -LiteralPath $commandLineMarker -Force }
     if (Test-Path -LiteralPath $interruptedHookMarker) { Remove-Item -LiteralPath $interruptedHookMarker -Force }
+    if (Test-Path -LiteralPath $failingUninstallHookMarker) { Remove-Item -LiteralPath $failingUninstallHookMarker -Force }
+    if (Test-Path -LiteralPath $interruptedUninstallHookMarker) { Remove-Item -LiteralPath $interruptedUninstallHookMarker -Force }
     foreach ($path in $hookMarkers) {
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
     }
@@ -220,7 +256,7 @@ function Remove-TestState {
     if (Test-Path -LiteralPath $startMenuDirectory) { Remove-Item -LiteralPath $startMenuDirectory -Force }
     if (Test-Path -LiteralPath $legacyStartMenuShortcut) { Remove-Item -LiteralPath $legacyStartMenuShortcut -Force }
     if (Test-Path -LiteralPath $legacyStartMenuDirectory) { Remove-Item -LiteralPath $legacyStartMenuDirectory -Force }
-    foreach ($path in @($transactionDirectory, $committedTransactionDirectory)) {
+    foreach ($path in @($transactionDirectory, $committedTransactionDirectory, $uninstallTransactionDirectory, $committedUninstallTransactionDirectory)) {
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
     }
     Invoke-MsiExec "/x $legacyMsiProductCode /qn /norestart" @(0, 1605, 3010)
@@ -250,9 +286,17 @@ function Remove-TestState {
         [IO.Path]::GetFileName([IO.Path]::GetDirectoryName($transactionDirectory)) -ne "transactions") {
         throw "Refusing to remove an unexpected transaction path: $transactionDirectory"
     }
-    if (Test-Path -LiteralPath $transactionDirectory) {
-        Remove-Item -LiteralPath $transactionDirectory -Recurse -Force
+    foreach ($path in @($transactionDirectory, $uninstallTransactionDirectory)) {
+        if (Test-Path -LiteralPath $path) {
+            Remove-Item -LiteralPath $path -Recurse -Force
+        }
     }
+}
+
+if ($CleanupOnly) {
+    Remove-TestState
+    Write-Host "PASS Windows NSIS integration state cleanup"
+    return
 }
 
 try {
@@ -375,6 +419,8 @@ try {
     $testCertificateThumbprint = $testCertificate.Thumbprint
     Build-FixtureBundle "currentUser" $signedBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" $testCertificateThumbprint
     Build-FixtureBundle "currentUser" $noShortcutDefaultsBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" "" $false $false
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $failingUninstallBundleOutput -InstallerHooks $failingUninstallHooks
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $interruptedUninstallBundleOutput -InstallerHooks $interruptedUninstallHooks
 
     $installer = Join-Path $bundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $upgradeInstaller = Join-Path $upgradeBundleOutput "win-x64\nsis\$productName-1.1.0-setup.exe"
@@ -394,6 +440,8 @@ try {
     $legacyMsiUpgradeMigrationInstaller = Join-Path $legacyMsiUpgradeMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $signedInstaller = Join-Path $signedBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $noShortcutDefaultsInstaller = Join-Path $noShortcutDefaultsBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
+    $failingUninstallInstaller = Join-Path $failingUninstallBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
+    $interruptedUninstallInstaller = Join-Path $interruptedUninstallBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     Assert-True (Test-Path -LiteralPath $installer) "Installer was not created: $installer"
     Assert-True (Test-Path -LiteralPath (Join-Path $directMsBuildOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Direct MSBuild package installer was not created."
     Assert-True (Test-Path -LiteralPath (Join-Path $perMachineBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Per-machine installer was not created."
@@ -414,12 +462,47 @@ try {
     Assert-True (Test-Path -LiteralPath $legacyMsiProductMigrationInstaller) "ProductCode migration installer was not created."
     Assert-True (Test-Path -LiteralPath $legacyMsiUpgradeMigrationInstaller) "UpgradeCode migration installer was not created."
     Assert-True (Test-Path -LiteralPath $noShortcutDefaultsInstaller) "Shortcut-default fixture installer was not created."
+    Assert-True (Test-Path -LiteralPath $failingUninstallInstaller) "Forward-uninstall failure fixture was not created."
+    Assert-True (Test-Path -LiteralPath $interruptedUninstallInstaller) "Interrupted forward-uninstall fixture was not created."
     Assert-True ((Get-AuthenticodeSignature -LiteralPath $signedInstaller).SignerCertificate.Thumbprint -eq $testCertificateThumbprint) "The final installer does not contain the expected Authenticode certificate."
     Invoke-WindowsExecutable $signedInstaller "/S /D=$installDirectory"
     $signedUninstaller = Join-Path $installDirectory "Uninstall.exe"
     Assert-True ((Get-AuthenticodeSignature -LiteralPath $signedUninstaller).SignerCertificate.Thumbprint -eq $testCertificateThumbprint) "The installed uninstaller does not contain the expected Authenticode certificate."
     Invoke-WindowsExecutable $signedUninstaller "/S /DELETEAPPDATA"
     Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Signed installer test cleanup did not finish."
+
+    # post-uninstall Hook 失败时，已开始的删除不伪装成可回滚；保留卸载 journal
+    # 和恢复卸载器。下次安装器必须先完成旧卸载，再安装新载荷。
+    Invoke-WindowsExecutable $failingUninstallInstaller "/S /D=$installDirectory"
+    $failingUninstaller = Join-Path $installDirectory "Uninstall.exe"
+    $failingUninstall = Start-DirectUninstaller $failingUninstaller $installDirectory "/S /DELETEAPPDATA" -Wait
+    Assert-True ($failingUninstall.ExitCode -eq 2) "Injected post-uninstall failure did not return exit code 2."
+    Assert-True (Test-Path -LiteralPath $uninstallTransactionDirectory) "Failed uninstall did not preserve its active forward journal."
+    Assert-True (Test-Path -LiteralPath (Join-Path $uninstallTransactionDirectory "recovery-uninstaller.exe")) "Failed uninstall did not preserve its recovery uninstaller."
+    Assert-True (Test-Path -LiteralPath $registryPath) "Failed uninstall removed the protected recovery anchor too early."
+    Invoke-WindowsExecutable $installer "/S /D=$installDirectory"
+    Assert-True (Test-Path -LiteralPath (Join-Path $installDirectory "BundlerIntegrationFixture.exe")) "Installer did not continue after completing a failed uninstall."
+    Assert-True (-not (Test-Path -LiteralPath $uninstallTransactionDirectory)) "Installer recovery did not clean the failed-uninstall journal."
+    Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Failed-uninstall recovery cleanup did not finish."
+
+    # 在 post-uninstall 中断整个进程树，模拟无法进入 un.onUninstFailed 的崩溃。
+    # 下次安装启动应执行 journal 副本，幂等完成旧删除后再继续安装。
+    Invoke-WindowsExecutable $interruptedUninstallInstaller "/S /D=$installDirectory"
+    $interruptedUninstaller = Join-Path $installDirectory "Uninstall.exe"
+    $interruptedUninstall = Start-DirectUninstaller $interruptedUninstaller $installDirectory "/S /DELETEAPPDATA"
+    Wait-For { Test-Path -LiteralPath $interruptedUninstallHookMarker } "Interrupted-uninstall fixture did not reach its post-uninstall hook."
+    $taskkill = Start-Process -FilePath "$env:WINDIR\System32\taskkill.exe" -ArgumentList "/PID $($interruptedUninstall.Id) /T /F" -Wait -PassThru -WindowStyle Hidden
+    Assert-True ($taskkill.ExitCode -eq 0) "Could not terminate the interrupted-uninstall process tree."
+    $interruptedUninstall.WaitForExit()
+    Assert-True ($interruptedUninstall.ExitCode -ne 0) "Interrupted-uninstall fixture unexpectedly returned success."
+    Assert-True (Test-Path -LiteralPath $uninstallTransactionDirectory) "Interrupted uninstall did not preserve its active forward journal."
+    Assert-True (Test-Path -LiteralPath $registryPath) "Interrupted uninstall removed the protected recovery anchor too early."
+    Invoke-WindowsExecutable $installer "/S /D=$installDirectory"
+    Assert-True (Test-Path -LiteralPath (Join-Path $installDirectory "BundlerIntegrationFixture.exe")) "Installer did not continue after completing an interrupted uninstall."
+    Assert-True (-not (Test-Path -LiteralPath $uninstallTransactionDirectory)) "Installer recovery did not clean the interrupted-uninstall journal."
+    Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Interrupted-uninstall recovery cleanup did not finish."
 
     # SetRebootFlag 模拟一个已经成功排入系统队列的外部操作。安装事务必须先提交并清理
     # journal，然后返回 3010；即使传入 /R，也不能在重启前启动应用。

@@ -49,7 +49,7 @@ tests\Windows.Nsis.Integration\Verify.ps1
 git diff --check
 ```
 
-这组自动化覆盖包结构、模板契约、静默 current-user 安装/升级/降级/卸载、快捷方式所有权、文件关联、深链接、进程关闭、可控 `3010`、自签名证书签名机制、Fixture MSI 迁移、事务回滚、进程中断恢复、锁定载荷安全失败和提交后清理；还会在事务快照、事务激活、载荷恢复、注册表恢复和 active journal 清理五个检查点注入一次性故障，验证检查点状态与下次启动恢复。只有这组测试通过的 commit 才进入下面的人工验收。
+这组自动化覆盖包结构、模板契约、静默 current-user 安装/升级/降级/卸载、快捷方式所有权、文件关联、深链接、进程关闭、可控 `3010`、自签名证书签名机制、Fixture MSI 迁移、安装事务回滚、安装进程中断恢复、锁定载荷安全失败和提交后清理；还会在事务快照、事务激活、载荷恢复、注册表恢复和 active journal 清理五个检查点注入一次性故障，验证检查点状态与下次启动恢复。卸载自动化另行覆盖 post-uninstall Hook 失败和卸载进程树被终止：两者都必须保留前向 journal、恢复卸载器和注册表路径锚点，下一次安装启动先幂等完成旧卸载并清理 journal。只有这组测试通过的 commit 才进入下面的人工验收。
 
 ## 4. 人工验收顺序
 
@@ -110,7 +110,7 @@ git diff --check
    tests\Windows.Nsis.Reboot\Verify.ps1 -Phase Verify -ConfirmDisposableMachine
    ```
 
-**PASS**：Prepare 确认真实返回 `3010` 且存在本产品 pending delete；Verify 确认重启后目录、卸载注册表、事务 journal 和本产品 pending 项均已消失。
+**PASS**：Prepare 通过临时副本和 `_?=` 直接等待实际卸载进程，确认真实返回 `3010` 且存在本产品 pending delete；Verify 确认重启后目录、卸载注册表、安装与卸载 journal 和本产品 pending 项均已消失。不能使用安装目录内 `Uninstall.exe` 的外层自复制 launcher 退出码代替实际卸载进程证据。
 
 ### MT-04：生产 Authenticode 与 RFC 3161 时间戳
 
@@ -227,7 +227,7 @@ dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -r win-
 以下功能尚未实现或已明确不作为当前保证，因此不得在人工测试中写成“待验证已实现能力”：
 
 - 锁定安装载荷在重启后自动替换；当前策略是安全失败和恢复。
-- 事务式卸载。
+- 可回滚的事务式卸载；当前实现是保留 `/REBOOTOK` 语义的前向恢复状态机，不承诺撤销已经删除或已排队删除的文件。
 - 完整保真自定义 ACL、ADS 和所有重解析点语义。
 - WiX/MSI 新后端、macOS 安装格式和 Linux 安装格式。
 - 所有 Windows build 上都能自动取消固定。

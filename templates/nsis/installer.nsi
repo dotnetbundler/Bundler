@@ -75,6 +75,9 @@ Var TransactionDirectory
 Var TransactionRegistryRoot
 Var TransactionRegistryView
 Var TransactionActive
+Var UninstallTransactionDirectory
+Var UninstallTransactionState
+Var UninstallResumeMode
 
 ; DotNetBundlerNsis::SemverCompare 返回的比较结果。
 ; 将这些名称放在状态变量附近，便于理解各个版本策略分支。
@@ -169,17 +172,21 @@ UninstPage custom un.AppDataOptionsPage un.AppDataOptionsLeave
   !if "${INSTALL_MODE}" == "currentUser"
     SetShellVarContext current
     StrCpy $TransactionDirectory "$LOCALAPPDATA\DotNetBundler\transactions\${PRODUCT_ID}"
+    StrCpy $UninstallTransactionDirectory "$LOCALAPPDATA\DotNetBundler\transactions\${PRODUCT_ID}.uninstall"
     StrCpy $TransactionRegistryRoot "HKCU"
   !else if "${INSTALL_MODE}" == "perMachine"
     SetShellVarContext all
     StrCpy $TransactionDirectory "$COMMONAPPDATA\DotNetBundler\transactions\${PRODUCT_ID}"
+    StrCpy $UninstallTransactionDirectory "$COMMONAPPDATA\DotNetBundler\transactions\${PRODUCT_ID}.uninstall"
     StrCpy $TransactionRegistryRoot "HKLM"
   !else if "${INSTALL_MODE}" == "both"
     ${If} $MultiUser.InstallMode == "AllUsers"
       StrCpy $TransactionDirectory "$COMMONAPPDATA\DotNetBundler\transactions\${PRODUCT_ID}"
+      StrCpy $UninstallTransactionDirectory "$COMMONAPPDATA\DotNetBundler\transactions\${PRODUCT_ID}.uninstall"
       StrCpy $TransactionRegistryRoot "HKLM"
     ${Else}
       StrCpy $TransactionDirectory "$LOCALAPPDATA\DotNetBundler\transactions\${PRODUCT_ID}"
+      StrCpy $UninstallTransactionDirectory "$LOCALAPPDATA\DotNetBundler\transactions\${PRODUCT_ID}.uninstall"
       StrCpy $TransactionRegistryRoot "HKCU"
     ${EndIf}
   !endif
@@ -207,6 +214,27 @@ UninstPage custom un.AppDataOptionsPage un.AppDataOptionsLeave
   ${If} $0 < 0
     Call FailInstallTransaction
   ${EndIf}
+!macroend
+
+!macro CheckUninstallTransactionResult
+  Pop $0
+  ${If} $0 != 0
+    !insertmacro FailUninstallTransaction
+  ${EndIf}
+!macroend
+
+!macro CheckUninstallShortcutResult
+  ${If} $0 < 0
+    !insertmacro FailUninstallTransaction
+  ${EndIf}
+!macroend
+
+!macro FailUninstallTransaction
+  ; active 卸载不回滚；已安排的 /REBOOTOK 删除无法可靠撤销。
+  ; 保留 journal 和恢复卸载器，下次启动从同一删除意图继续。
+  StrCpy $ExitCode ${EXIT_FAILURE}
+  SetErrorLevel $ExitCode
+  Quit
 !macroend
 
 Function ParseCommandLine
@@ -275,6 +303,9 @@ Function un.SkipIfPassive
   ${If} $PassiveMode == 1
     Abort
   ${EndIf}
+  ${If} $UninstallTransactionState != 0
+    Abort
+  ${EndIf}
 FunctionEnd
 
 Function LaunchApplication
@@ -314,10 +345,14 @@ Function .onInit
     Call SetDefaultInstallDirectory
   !endif
   Call RecoverInstallTransaction
+  Call DetectExistingInstall
+  ; 上一次卸载若被终止，先用 journal 中保存的原卸载器继续完成删除。
+  ; 恢复过程返回 3010 时不能立即把新文件写回仍在待删除队列中的路径。
+  Call RecoverUninstallTransaction
+  Call DetectExistingInstall
 
   ; 静默和被动安装不会显示现有安装处理页面，因此需要在初始化阶段确定处理方式。
   ; 交互式安装则在对应页面中确定处理方式。
-  Call DetectExistingInstall
   ${If} ${Silent}
     Call ApplyAutomatedExistingInstallPolicy
     Call ValidateAutomatedInstallDirectory
@@ -363,6 +398,9 @@ Function un.onInit
   StrCpy $ExitCode ${EXIT_SUCCESS}
   StrCpy $PassiveMode 0
   StrCpy $DeleteAppData 0
+  StrCpy $TransactionActive 0
+  StrCpy $UninstallTransactionState 0
+  StrCpy $UninstallResumeMode 0
   ${GetOptions} $CMDLINE "/P" $0
   ${IfNot} ${Errors}
     StrCpy $PassiveMode 1
@@ -371,14 +409,38 @@ Function un.onInit
   ${IfNot} ${Errors}
     StrCpy $DeleteAppData 1
   ${EndIf}
+  ${GetOptions} $CMDLINE "/RESUME" $0
+  ${IfNot} ${Errors}
+    StrCpy $UninstallResumeMode 1
+  ${EndIf}
   !insertmacro MUI_UNGETLANGUAGE
-  !insertmacro SetInstallContext
   !if "${INSTALL_MODE}" == "both"
     !insertmacro MULTIUSER_UNINIT
   !endif
+  !insertmacro SetInstallContext
+  DotNetBundlerNsis::GetUninstallTransactionState "$UninstallTransactionDirectory" "$INSTDIR"
+  Pop $UninstallTransactionState
+  ${If} $UninstallTransactionState < 0
+    StrCpy $ExitCode ${EXIT_FAILURE}
+    SetErrorLevel $ExitCode
+    Abort
+  ${EndIf}
+  ${If} $UninstallTransactionState != 0
+    DotNetBundlerNsis::GetUninstallTransactionDeleteAppData "$UninstallTransactionDirectory"
+    Pop $0
+    ${If} $0 < 0
+      StrCpy $ExitCode ${EXIT_FAILURE}
+      SetErrorLevel $ExitCode
+      Abort
+    ${EndIf}
+    StrCpy $DeleteAppData $0
+    StrCpy $TransactionActive 1
+  ${EndIf}
 FunctionEnd
 
 Function un.onUninstFailed
+  ; 卸载从 active 开始采用前向恢复；失败时保留 journal，
+  ; 下次启动继续删除，不尝试撤销已进入 Windows 待删除队列的操作。
   ${If} $ExitCode == ${EXIT_SUCCESS}
     StrCpy $ExitCode ${EXIT_FAILURE}
   ${EndIf}
@@ -386,8 +448,8 @@ Function un.onUninstFailed
 FunctionEnd
 
 Function un.onUninstSuccess
-  ; /REBOOTOK 只表示 Windows 已接受重启后的删除请求；调用方必须收到 3010，
-  ; 不能把仍有待处理文件的卸载误报成已经完整结束。
+  ; /REBOOTOK 只表示 Windows 已接受重启后的删除请求；直接执行实际卸载逻辑的
+  ; 恢复/验证调用方必须收到 3010，不能把仍有待处理文件的卸载误报成完整结束。
   IfRebootFlag un_reboot_required un_no_reboot_required
   un_reboot_required:
     SetErrorLevel ${EXIT_REBOOT_REQUIRED}
@@ -529,6 +591,8 @@ Function ExistingInstallPage
   ; 必须重新检测现有安装。
   !insertmacro SetInstallContext
   Call RecoverInstallTransaction
+  Call DetectExistingInstall
+  Call RecoverUninstallTransaction
   Call DetectExistingInstall
   ${If} $InstalledUninstaller == ""
     Abort
@@ -784,8 +848,10 @@ Function un.RemoveOwnedShortcuts
   ; 删除前由原生插件解析 .lnk 目标；同名快捷方式被其他程序接管时保持不变。
   DotNetBundlerNsis::DeleteShortcutIfOwned "${SHORTCUT_DESKTOP_PATH}" "${SHORTCUT_OWNED_TARGETS}"
   Pop $0
+  !insertmacro CheckUninstallShortcutResult
   DotNetBundlerNsis::DeleteShortcutIfOwned "${SHORTCUT_START_MENU_PATH}" "${SHORTCUT_OWNED_TARGETS}"
   Pop $0
+  !insertmacro CheckUninstallShortcutResult
 {{shortcut_legacy_cleanup_commands}}
   RMDir "${SHORTCUT_START_MENU_DIRECTORY}"
 FunctionEnd
@@ -797,6 +863,9 @@ FunctionEnd
 
 Function un.AppDataOptionsPage
   ${If} $PassiveMode == 1
+    Abort
+  ${EndIf}
+  ${If} $UninstallTransactionState != 0
     Abort
   ${EndIf}
   !insertmacro MUI_HEADER_TEXT "$(AppDataPageTitle)" "$(AppDataPageSubtitle)"
@@ -818,6 +887,21 @@ Function RecoverInstallTransaction
   ; 上一次安装若在提交前崩溃，先恢复其载荷、注册表和快捷方式快照。
   DotNetBundlerNsis::RollbackInstallTransaction "$TransactionDirectory" "$INSTDIR"
   !insertmacro CheckTransactionResult
+FunctionEnd
+
+Function RecoverUninstallTransaction
+  DotNetBundlerNsis::RecoverUninstallTransaction "$UninstallTransactionDirectory" "$InstalledDirectory"
+  Pop $0
+  ${If} $0 == 0
+    Return
+  ${EndIf}
+  ${If} $0 == ${EXIT_REBOOT_REQUIRED}
+    StrCpy $ExitCode ${EXIT_REBOOT_REQUIRED}
+  ${Else}
+    StrCpy $ExitCode ${EXIT_FAILURE}
+  ${EndIf}
+  SetErrorLevel $ExitCode
+  Quit
 FunctionEnd
 
 Function PrepareInstallTransaction
@@ -854,6 +938,29 @@ Function FailInstallTransaction
   StrCpy $ExitCode ${EXIT_FAILURE}
   SetErrorLevel $ExitCode
   Abort
+FunctionEnd
+
+Function un.PrepareUninstallTransaction
+  ; 卸载 journal 保留一份原卸载器，使安装目录已部分删除后仍能继续恢复。
+  DotNetBundlerNsis::BeginUninstallTransaction "$UninstallTransactionDirectory" "$INSTDIR" "$INSTDIR\Uninstall.exe" "$DeleteAppData"
+  !insertmacro CheckUninstallTransactionResult
+  DotNetBundlerNsis::ActivateUninstallTransaction "$UninstallTransactionDirectory"
+  !insertmacro CheckUninstallTransactionResult
+  StrCpy $TransactionActive 1
+  StrCpy $UninstallTransactionState 1
+FunctionEnd
+
+Function un.MarkUninstallTransactionFinalizing
+  DotNetBundlerNsis::MarkUninstallTransactionFinalizing "$UninstallTransactionDirectory"
+  !insertmacro CheckUninstallTransactionResult
+  StrCpy $UninstallTransactionState 2
+FunctionEnd
+
+Function un.CommitUninstallTransaction
+  DotNetBundlerNsis::CommitUninstallTransaction "$UninstallTransactionDirectory"
+  !insertmacro CheckUninstallTransactionResult
+  StrCpy $TransactionActive 0
+  StrCpy $UninstallTransactionState 0
 FunctionEnd
 
 Function EnsureAppClosed
@@ -1020,27 +1127,89 @@ SectionEnd
 !ifndef BUNDLER_IMPORT_SIGNED_UNINSTALLER
 Section "Uninstall"
   !insertmacro SetInstallContext
-  !ifmacrodef NSIS_HOOK_PREUNINSTALL
-    !insertmacro NSIS_HOOK_PREUNINSTALL
-  !endif
+  ${If} $UninstallTransactionState == 2
+    Goto uninstall_finalize
+  ${EndIf}
   Call un.EnsureAppClosed
+  ${If} $UninstallTransactionState == 0
+    Call un.PrepareUninstallTransaction
+  ${EndIf}
+  !ifmacrodef NSIS_HOOK_PREUNINSTALL
+    ClearErrors
+    !insertmacro NSIS_HOOK_PREUNINSTALL
+    ${If} ${Errors}
+      !insertmacro FailUninstallTransaction
+    ${EndIf}
+  !endif
+  ClearErrors
   Call un.RemoveOwnedShortcuts
+  ; 开始菜单目录可因外部文件保留而非空，不将这种所有权保护视为卸载失败。
+  ClearErrors
 {{association_uninstall_commands}}
-  DeleteRegKey SHCTX "${UNINSTALL_KEY}"
   DeleteRegKey /ifempty HKCU "Software\${PRODUCT_ID}"
+  ; 删除指令在恢复重试时会遇到已不存在的键；这是幂等成功，
+  ; 后续载荷删除使用独立 error flag，不继承注册表的“未找到”状态。
+  ClearErrors
   ${If} $DeleteAppData == 1
-    RMDir /r "$APPDATA\${PRODUCT_ID}"
-    RMDir /r "$LOCALAPPDATA\${PRODUCT_ID}"
-    RMDir /r /REBOOTOK "$INSTDIR"
+    ${If} ${FileExists} "$APPDATA\${PRODUCT_ID}"
+      RMDir /r "$APPDATA\${PRODUCT_ID}"
+    ${EndIf}
+    ${If} ${FileExists} "$LOCALAPPDATA\${PRODUCT_ID}"
+      RMDir /r "$LOCALAPPDATA\${PRODUCT_ID}"
+    ${EndIf}
+    ${If} ${Errors}
+      !insertmacro FailUninstallTransaction
+    ${EndIf}
+    ClearErrors
+    ${If} ${FileExists} "$INSTDIR"
+      RMDir /r /REBOOTOK "$INSTDIR"
+    ${EndIf}
   ${Else}
 {{uninstall_payload}}
     Delete "$INSTDIR\${INSTALL_MARKER}"
     Delete /REBOOTOK "$INSTDIR\Uninstall.exe"
+    ${If} ${Errors}
+      IfRebootFlag uninstall_payload_queued uninstall_payload_failed
+      uninstall_payload_failed:
+        !insertmacro FailUninstallTransaction
+      uninstall_payload_queued:
+        ClearErrors
+    ${EndIf}
+    ; 保留应用运行时创建的其他路径时，安装目录非空是预期结果。
+    ClearErrors
     RMDir "$INSTDIR"
+    ClearErrors
+  ${EndIf}
+  ${If} ${Errors}
+    ; /REBOOTOK 无法即时删除被锁定文件时会置 error flag；
+    ; 只有 reboot flag 同时置位才表示 Windows 已接受前向删除。
+    IfRebootFlag uninstall_deletion_queued uninstall_deletion_failed
+    uninstall_deletion_failed:
+      !insertmacro FailUninstallTransaction
+    uninstall_deletion_queued:
+      ClearErrors
   ${EndIf}
   !ifmacrodef NSIS_HOOK_POSTUNINSTALL
+    ClearErrors
     !insertmacro NSIS_HOOK_POSTUNINSTALL
+    ${If} ${Errors}
+      !insertmacro FailUninstallTransaction
+    ${EndIf}
   !endif
+  Call un.MarkUninstallTransactionFinalizing
+  uninstall_finalize:
+  ; 卸载注册项保留到最后，供下次安装器用受保护的 InstallLocation
+  ; 校验可修改的 journal 路径。finalizing 阶段不再使用该路径删除文件。
+  ClearErrors
+  DeleteRegKey SHCTX "${UNINSTALL_KEY}"
+  ${If} ${Errors}
+    !insertmacro FailUninstallTransaction
+  ${EndIf}
+  ; journal 内的恢复卸载器不能重命名包含自身映像的目录。恢复子进程只完成
+  ; finalizing 持久状态并成功退出，由等待它的安装器进程原子提交和清理 journal。
+  ${If} $UninstallResumeMode != 1
+    Call un.CommitUninstallTransaction
+  ${EndIf}
   ; 被动卸载只显示进度，并在完成后自动关闭。
   ${If} $PassiveMode == 1
     SetAutoClose true

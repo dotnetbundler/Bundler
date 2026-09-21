@@ -42,7 +42,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `ne
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.26" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.27" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -60,7 +60,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.26" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.27" />
 ```
 
 ```csharp
@@ -192,7 +192,9 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 默认模板提供当前用户安装、可选择并记住上次位置的安装目录、非本应用的非空目录警告、DPI 感知、压缩、可选的开始菜单与桌面快捷方式、运行程序检测和关闭、“应用和功能”卸载信息、可选删除应用数据、静默卸载以及完成页启动程序。运行程序检测通过 Windows Restart Manager 注册安装目录中的当前主程序和显式声明的旧主程序完整路径，不再按映像文件名全局结束进程，因此不会关闭其他目录下的同名程序。快捷方式的默认选择、参数、工作目录、图标、稳定 AppUserModelID 和开始菜单目录均可配置；工作目录和图标必须存在于最终安装载荷中。更新只刷新仍存在且仍指向当前主程序或显式声明旧主程序的快捷方式；卸载采用相同所有权检查，因此同名快捷方式被其他程序接管后会保留。旧产品名和旧主程序名用于显式迁移改名版本。任务栏/开始菜单自动取消固定受 Windows 版本行为影响，目前只列为人工验收项，不宣称保证支持。未选择删除应用数据时，卸载只删除程序目录中属于构建载荷的路径：程序后来在新路径创建的文件会保留；如果创建或覆盖的是构建载荷中的同名路径，卸载时仍会删除。选择删除应用数据时，会递归删除整个程序安装目录，以及 `%APPDATA%\<identifier>` 和 `%LOCALAPPDATA%\<identifier>`。
 
-NSIS 安装和升级在修改持久状态前会把原安装目录、产品相关注册表项以及受管理的快捷方式写入用户或计算机范围的事务 journal。复制、Hook、注册或快捷方式阶段失败时会立即恢复旧状态；如果安装器进程被直接终止，下一次启动同一产品的安装器会先恢复未提交事务。journal 与当时选择的安装目录绑定，恢复时目录不一致会安全失败；首次自定义 `/D` 安装若在写入安装记录前中断，重试时应继续传入同一 `/D`。事务提交先把 journal 原子重命名为 `.committed`，再尽力删除快照；提交后的清理失败不会错误回滚已经完成的安装，而由下一次启动重试清理。快照会临时占用接近现有安装目录大小的额外磁盘空间；如果空间不足或现有安装目录包含不能安全复制的重解析点，安装会在修改旧状态前失败。当前事务范围不包含自定义 ACL 的逐项还原，也不把卸载操作描述为事务式卸载。旧 MSI 卸载是外部且不可逆的迁移边界；没有原 MSI 包时无法自动恢复，因此只保证迁移后新 NSIS 状态失败时会被清理，不宣称能重新安装已移除的 MSI。
+NSIS 安装和升级在修改持久状态前会把原安装目录、产品相关注册表项以及受管理的快捷方式写入用户或计算机范围的事务 journal。复制、Hook、注册或快捷方式阶段失败时会立即恢复旧状态；如果安装器进程被直接终止，下一次启动同一产品的安装器会先恢复未提交事务。journal 与当时选择的安装目录绑定，恢复时目录不一致会安全失败；首次自定义 `/D` 安装若在写入安装记录前中断，重试时应继续传入同一 `/D`。事务提交先把 journal 原子重命名为 `.committed`，再尽力删除快照；提交后的清理失败不会错误回滚已经完成的安装，而由下一次启动重试清理。快照会临时占用接近现有安装目录大小的额外磁盘空间；如果空间不足或现有安装目录包含不能安全复制的重解析点，安装会在修改旧状态前失败。当前安装事务不包含自定义 ACL 的逐项还原。旧 MSI 卸载是外部且不可逆的迁移边界；没有原 MSI 包时无法自动恢复，因此只保证迁移后新 NSIS 状态失败时会被清理，不宣称能重新安装已移除的 MSI。
+
+卸载采用独立的前向恢复 journal，而不是回滚事务。开始删除前会保存安装目录、删除应用数据选择和一份恢复卸载器；进入 active 后若 Hook 失败或进程中断，已完成的删除不会被伪装成可撤销，下次启动同一产品安装器时会先校验注册表中的安装目录，再用 journal 副本幂等完成剩余删除。卸载注册项保留到 finalizing 阶段作为受保护的路径锚点，完成后才删除并原子提交 journal。卸载 Hook 因此必须可重复执行；选择 `/DELETEAPPDATA` 和 `/REBOOTOK` 进入系统待删除队列的意图都会跨恢复保留。
 
 版本必须符合 SemVer 2.0，并且三个数字核心段都必须处于 Windows 版本资源允许的 `0-65535` 范围。安装器会在所选用户或计算机注册表上下文中检测现有安装，并通过包内使用 `NsisPlugin` 构建的 Native AOT 插件比较 `DisplayVersion`。交互安装允许用户选择先卸载或原位覆盖；静默同版本安装执行原位修复，静默升级会先卸载旧的构建载荷，同时保留应用数据。默认禁止降级，可通过 `BundlerNsisAllowDowngrades` 开启。
 
@@ -214,7 +216,7 @@ NSIS 安装和升级在修改持久状态前会把原安装目录、产品相关
 
 `/ARGS` 也兼容不带等号的写法，此时它后面的全部文本都会成为应用参数。需要同时使用 `/D` 时应使用 `/ARGS=<参数行>`，并仍把 `/D` 放在最后。自动模式只接受空目录或带当前产品安装标记的目录；它不会用无交互方式确认覆盖无关的非空目录。
 
-安装器稳定退出码为：`0` 成功、`1` 用户取消、`2` 一般失败、`3` 参数或自动安装目录无效、`4` 版本策略阻止、`5` 无法关闭正在运行的应用、`3010` 成功但需要重新启动 Windows。安装成功且重启标志已经置位时，安装事务会先提交并清理 journal，再返回 `3010`；即使指定 `/R`，也不会在重启前启动应用。卸载器中的 `/REBOOTOK` 删除真正进入系统待处理队列时，卸载器同样返回 `3010`，而不是误报为 `0`。
+安装器稳定退出码为：`0` 成功、`1` 用户取消、`2` 一般失败、`3` 参数或自动安装目录无效、`4` 版本策略阻止、`5` 无法关闭正在运行的应用、`3010` 成功但需要重新启动 Windows。安装成功且重启标志已经置位时，安装事务会先提交并清理 journal，再返回 `3010`；即使指定 `/R`，也不会在重启前启动应用。实际卸载进程也把一般失败映射为 `2`、把 `/REBOOTOK` 已接受的删除映射为 `3010`。但直接启动安装目录中的 NSIS `Uninstall.exe` 会先经过自复制 launcher，外层进程不可靠地传播实际退出码；仓库的恢复与验收脚本会先复制卸载器并以 `_?=` 直接模式同步等待真实进程。不要把外层 launcher 的 `0` 当成卸载已完成的证据，应同时检查产品状态或使用受控的直接模式。
 
 当前普通安装载荷仍由 NSIS `File` 指令直接写入目标目录，它不会把无法覆盖的锁定文件自动转换成重启后替换。这是当前的明确安全策略：Windows 延迟替换需要管理员上下文，不能为 `currentUser` 安装提供一致保证；排入共享系统队列也只能证明请求被接受，不能证明重启时一定成功，更不能安全纳入当前回滚。安装器会检测这种跳过并返回 `2`；交互模式会提示关闭可能占用安装目录文件的应用后重试。若文件锁也阻止即时回滚，则保留 active journal，待释放锁后的下一次启动先恢复旧状态，绝不把新旧文件混合状态报告为成功。因此上述契约不能扩写为“已经支持锁定文件原位升级”：当前可验证的重启来源是旧 MSI 返回值、生命周期 Hook，以及提权卸载的 `/REBOOTOK` 删除。真实系统队列验收必须在可丢弃并允许重启的管理员 Windows 环境执行 `tests/Windows.Nsis.Reboot/Verify.ps1`；脚本不会编辑或清空共享的 `PendingFileRenameOperations`。
 
@@ -231,7 +233,7 @@ NSIS 安装和升级在修改持久状态前会把原安装目录、产品相关
 
 `BundlerNsisInstallMode` 控制 Windows 安装范围。`currentUser` 不提权，卸载信息和快捷方式写入当前用户上下文；`perMachine` 请求管理员权限，安装到 Program Files，并使用所有用户 Shell 上下文和 HKLM 注册表；`both` 使用 NSIS 自带的 MultiUser 页面让用户选择。由于安装器必须具备切换到计算机范围的能力，`both` 启动时会请求最高可用权限。x64 和 arm64 包使用 64 位注册表视图。
 
-可选的 `BundlerNsisInstallerHooks` 文件可以把 `NSIS_HOOK_PREINSTALL`、`NSIS_HOOK_POSTINSTALL`、`NSIS_HOOK_PREUNINSTALL`、`NSIS_HOOK_POSTUNINSTALL` 中任意几项定义为 NSIS 宏，安装器会在相应生命周期边界调用。Hook 使用安装器当前权限执行。安装 Hook 可以用 `SetErrors` 或 `Abort` 报告失败，安装器会回滚已激活的事务；直接使用 `Quit` 或终止进程无法继续执行即时回滚，但 active journal 会由下一次安装启动恢复。卸载流程目前不属于事务范围，卸载 Hook 仍需自行明确失败处理。
+可选的 `BundlerNsisInstallerHooks` 文件可以把 `NSIS_HOOK_PREINSTALL`、`NSIS_HOOK_POSTINSTALL`、`NSIS_HOOK_PREUNINSTALL`、`NSIS_HOOK_POSTUNINSTALL` 中任意几项定义为 NSIS 宏，安装器会在相应生命周期边界调用。Hook 使用安装器当前权限执行。安装 Hook 可以用 `SetErrors` 或 `Abort` 报告失败，安装器会回滚已激活的事务；直接使用 `Quit` 或终止进程无法继续执行即时回滚，但 active journal 会由下一次安装启动恢复。卸载 Hook 用 `SetErrors` 报告失败时会保留前向恢复 journal；进程被终止时同样由下一次安装启动继续。由于恢复可能再次执行尚未完成的卸载阶段，卸载 Hook 必须按幂等方式编写。
 
 Windows Authenticode 签名由独立的 `DotNet.Bundler.Signing.Windows` 包实现，不依赖 Windows SDK 或外部 `signtool.exe`。NSIS 会先导出并签名卸载器，再重新编译并签名最终安装器，因此两个可执行文件都带签名。PFX 和证书存储区指纹只能二选一；PFX 密码只通过环境变量读取，不应写进项目文件或命令行。生产发布强烈建议设置可信的 RFC 3161 时间戳服务，否则证书过期后签名无法继续证明签署时证书有效。
 
@@ -298,7 +300,7 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.26
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.27
 ```
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

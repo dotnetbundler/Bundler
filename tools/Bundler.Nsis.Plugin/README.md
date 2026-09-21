@@ -15,6 +15,11 @@ sibling before best-effort cleanup, so a cleanup failure cannot roll back an
 already completed install; the next installer start retries that cleanup.
 Recovery is reentrant: if restoring payload, registry state, or journal cleanup
 fails, the active journal remains available for the next installer start. The
+plug-in also owns the separate forward-uninstall journal. It validates the
+registered install path, launches a saved recovery uninstaller in NSIS `_?=`
+direct mode, waits for its real exit code, and atomically commits the journal
+only after the child reaches its finalizing phase. Already deleted or
+`/REBOOTOK`-queued files are never described as rollback-capable.
 repository integration fixture exercises these boundaries with internal
 one-shot markers; those markers are test hooks, not a supported installer API.
 

@@ -556,7 +556,10 @@ internal sealed class NsisBundleBackend(
 
         var cleanup = legacyPaths
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .Select(path => $"  DotNetBundlerNsis::DeleteShortcutIfOwned \"{path}\" \"{ownedTargets}\"" + Environment.NewLine + "  Pop $0")
+            .Select(path =>
+                $"  DotNetBundlerNsis::DeleteShortcutIfOwned \"{path}\" \"{ownedTargets}\"" + Environment.NewLine +
+                "  Pop $0" + Environment.NewLine +
+                "  !insertmacro CheckUninstallShortcutResult")
             .ToArray();
 
         return new ShortcutRendering(

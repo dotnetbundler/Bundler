@@ -79,6 +79,38 @@ public static class PluginActions
         InstallTransaction.Rollback(transactionDirectory, installDirectory);
 
     [NsisAction]
+    public static int BeginUninstallTransaction(
+        string transactionDirectory,
+        string installDirectory,
+        string uninstallerPath,
+        int deleteAppData) =>
+        UninstallTransaction.Begin(transactionDirectory, installDirectory, uninstallerPath, deleteAppData);
+
+    [NsisAction]
+    public static int ActivateUninstallTransaction(string transactionDirectory) =>
+        UninstallTransaction.Activate(transactionDirectory);
+
+    [NsisAction]
+    public static int GetUninstallTransactionState(string transactionDirectory, string expectedInstallDirectory) =>
+        UninstallTransaction.GetState(transactionDirectory, expectedInstallDirectory);
+
+    [NsisAction]
+    public static int GetUninstallTransactionDeleteAppData(string transactionDirectory) =>
+        UninstallTransaction.GetDeleteAppData(transactionDirectory);
+
+    [NsisAction]
+    public static int MarkUninstallTransactionFinalizing(string transactionDirectory) =>
+        UninstallTransaction.MarkFinalizing(transactionDirectory);
+
+    [NsisAction]
+    public static int CommitUninstallTransaction(string transactionDirectory) =>
+        UninstallTransaction.Commit(transactionDirectory);
+
+    [NsisAction]
+    public static int RecoverUninstallTransaction(string transactionDirectory, string expectedInstallDirectory) =>
+        UninstallTransaction.Recover(transactionDirectory, expectedInstallDirectory);
+
+    [NsisAction]
     public static int CreateShortcut(
         string shortcut,
         string ownedTargets,
