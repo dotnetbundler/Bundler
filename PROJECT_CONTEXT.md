@@ -2,11 +2,11 @@
 
 > 最后整理：2026-09-21
 > 当前分支：`codex/modular-bundler-backends`  
-> 上一已提交基线：`ac74bf2 test(nsis): cover transaction recovery checkpoints`
+> 上一已提交基线：`8f5a9c1 feat(nsis): recover interrupted uninstalls`
 > 当前包版本：`0.1.0-alpha.27`
-> 当前未提交阶段：卸载前向恢复 journal、失败/中断恢复测试与文档
+> 当前未提交阶段：整理通用产品边界、Tauri 能力对齐规则和可接班实施路线
 
-本文档是当前项目的“事实、决策、验证证据、协作约束与后续路线”汇总，供后续开发任务直接接续。它不是面向最终用户的使用手册；当前需要维护的用户文档以根目录的 `README.zh-CN.md` 和 `samples/HelloBundledApp/README.md` 为准。代码与自动化测试始终是实现事实的最终依据。
+本文档是当前项目的“事实、决策、验证证据与协作约束”汇总，供后续开发任务直接接续。正式后续路线、产品边界、阶段完成条件和默认下一阶段以 `docs/roadmap.md` 为唯一规范来源。本文档不是面向最终用户的使用手册；当前需要维护的用户文档以根目录的 `README.zh-CN.md` 和 `samples/HelloBundledApp/README.md` 为准。代码与自动化测试始终是实现事实的最终依据。
 
 状态标记：
 
@@ -18,9 +18,9 @@
 
 ### 1.1 最终使用方式
 
-`DotNet.Bundler` 要发布为 NuGet 包。使用者引用包、填写 MSBuild 配置后，正常执行 `dotnet publish` 即可生成桌面安装包，不需要单独安装本项目的 CLI，也不需要预装打包工具。
+`DotNet.Bundler` 的产品目标是通用桌面打包工具，不以 .NET 应用或 MSBuild 为最终边界。Core 与各格式后端接受普通文件目录、入口程序和格式配置，不应要求输入来自 `dotnet publish`。
 
-同时保留独立公共 API：其他项目可以直接引用 `DotNet.Bundler.Nsis` 等后端包并调用 API。MSBuild Task 只是参数适配层，不拥有 NSIS、MSI 等格式的实现。将来若恢复 CLI，也必须复用同一套 Core 和后端 API。
+当前首先发布 NuGet/MSBuild 集成：.NET 使用者引用包、填写 MSBuild 配置后，正常执行 `dotnet publish` 即可生成桌面安装包，不需要单独安装 CLI，也不需要预装打包工具。同时保留独立公共 API；其他语言或构建系统后续通过正式 CLI 使用同一套 Core 和后端。MSBuild Task 和 CLI 都只是参数适配层，不拥有 NSIS、MSI 等格式的实现。
 
 ### 1.2 当前边界
 
@@ -40,7 +40,8 @@
 5. 后端仍必须启动对应的原生编译器，例如 NSIS 的 `makensis`；这是生成安装器本身所必需的原生工具调用，不等同于用 CLI 承载业务逻辑。
 6. 各格式共用校验、规划、编排、工作目录与工具缓存流程；新增格式应新增后端，不复制整条管线。
 7. NSIS 模板保存在独立文件中，不能把完整脚本硬编码在 C# 字符串里；新增 NSIS 脚本注释使用中文。
-8. 不确定的安装器语义优先核对 Tauri 的现行行为，但必须按本项目的 .NET/MSBuild 架构重新设计，不能机械照搬 Rust 数据模型。
+8. 不确定的安装器语义优先核对 Tauri 的现行行为，但只对齐适用于通用桌面打包器的用户能力，不能机械照搬字段、Rust 数据模型或 Tauri runtime 行为。
+9. 本项目不内建任意应用运行时/先决条件的发现、下载、版本检测、安装和卸载编排；WebView2、VC Runtime 等框架运行时部署不因 Tauri 支持而自动进入路线。调用方仍可装入已准备的文件或使用格式扩展点。
 
 ## 2. 已确定的项目结构
 
@@ -52,7 +53,7 @@
 | `DotNet.Bundler.Signing.Windows` | 可复用的 Windows Authenticode 签名 API                            | `netstandard2.0`        |
 | `DotNet.Bundler.MSBuild`         | 将 MSBuild 参数转换为公共请求，调用 Core/后端并输出 `ITaskItem`   | `netstandard2.0`        |
 | `DotNet.Bundler`                 | 便利元包，引入 MSBuild 集成                                       | NuGet 元包              |
-| `DotNet.Bundler.Cli`             | 将来复用同一套 API 的命令行入口；当前不发布                       | 默认 `net8.0`           |
+| `DotNet.Bundler.Cli`             | 已有的命令行原型；复用 Core/后端，但参数有限且当前不发布           | 默认 `net8.0`           |
 | `DotNet.Bundler.Wix`             | 计划中的 MSI 公共 API、生成逻辑与 WiX 工具资源                    | **尚未创建/实现**       |
 
 核心调用关系：
@@ -371,6 +372,7 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 | `11148f4` | 锁定载荷策略和交互提示     |
 | `d04a7b1` | 集中人工与外部环境验收手册 |
 | `ac74bf2` | 覆盖事务恢复检查点         |
+| `8f5a9c1` | 卸载失败与中断后的前向恢复 |
 
 `057aca1` 是安装范围支持的历史提交，位于这条提交链的更早位置。
 
@@ -429,46 +431,23 @@ git diff --check
 
 ## 10. 未完成路线与建议顺序
 
-### 第一优先级：重启恢复和事务边界补强
+正式路线见 `docs/roadmap.md`。当前顺序为：
 
-安装事务基础、进程中断恢复、精确进程协调、`3010` 传播和真实重启验收脚本已经完成；本阶段剩余可靠性缺口为：
+1. `NSIS-R1`：固定 Tauri 快照，完成能力矩阵和配置面收口；
+2. `NSIS-R2`：完整 Windows 签名流水线，包括 payload、卸载器、安装器和自定义签名 provider；
+3. `NSIS-R3`：完整内置多语言、回退和自动校验；
+4. `NSIS-R4`：重解析点/文件系统安全边界、工具缓存完整性和 NSIS 冻结；
+5. `CLI-C1`：把仓库已有的 CLI 原型产品化，验证 Core/后端没有被 MSBuild 绑定；
+6. 按完整格式依次推进 WiX/MSI、macOS 和 Linux 后端。
 
-1. 在可抛弃的管理员 Windows 虚拟机实际执行两阶段重启脚本，保存系统版本、退出码、pending rename 和重启后状态证据。
-2. 锁定安装载荷已明确采用安全失败策略；除非未来产品要求接受安装范围能力差异，并能建立独立前向恢复状态机及真实重启矩阵，否则不将安装替换写入共享 pending rename 队列。
-3. 锁定载荷导致即时回滚失败并由下次启动恢复、快捷方式/注册表可控持久化失败、提交后清理失败，以及快照、激活、载荷恢复、注册表恢复和 active journal 清理的确定性故障均已覆盖；剩余缺口是真实注册表/文件 ACL 权限拒绝和磁盘耗尽等操作系统级故障。
-4. 卸载已采用保留安全所有权检查和 `/REBOOTOK` 的前向恢复状态机；不再规划与 pending delete 语义冲突的回滚式事务卸载。
-5. 评估是否需要保存自定义 ACL/ADS 等完整文件安全元数据；当前恢复依赖目标父目录继承的 ACL。
-6. 为重解析点制定显式产品策略；当前在修改旧状态前拒绝为其建立事务快照。
-
-先稳定事务和载荷阶段，再扩大语言或签名范围，可以避免后续重复翻译和重复调整待签名文件集合。
-
-### 第二优先级：完整多语言
-
-1. 对齐 Tauri 当前支持语言集合和系统语言回退逻辑。
-2. 为每种语言提供模板所需全部 `LangString`，并自动校验缺失/重复键。
-3. 增加非 ASCII 产品名、目录、参数、注册表、卸载信息测试。
-4. 由母语使用者或专业翻译复核发布文案。
-
-### 第三优先级：签名覆盖扩展
-
-1. 明确主应用 EXE、DLL、sidecar、原生插件、卸载器和安装器各自的签名范围与顺序。
-2. 增加可插拔签名器，以适配 Azure Trusted Signing、云 HSM、USB Token 等不能导出私钥的环境。
-3. 补公共 RFC 3161 和证书过期/撤销/时间戳失败策略。
-4. 评估远程签名与非 Windows 构建宿主的签名方案。
-
-### 第四优先级：平台与宿主矩阵
-
-1. 在 Windows、Linux x64/arm64、macOS x64/arm64 runner 上真实调用内嵌 `makensis`。
-2. 验证工具缓存并发、损坏恢复、权限、长路径和 Unicode 路径。
-3. 重新审计缓存命中是否只检查文件存在；若没有按 manifest/hash 校验已解压内容，则补强。
-4. 增加 Windows x64/ARM64 目标安装和卸载矩阵。
-5. Windows + NSIS 可靠后再实现 `DotNet.Bundler.Wix`，随后再规划 macOS/Linux 安装格式。
+Tauri 能力按“通用打包能力、格式特定能力、Tauri runtime 专属能力”分类。签名是正式路线的一部分；WebView2、VC Runtime 等任意应用运行时依赖的自动发现、下载和安装当前明确不做。真实重启、UAC、生产证书、真实旧 MSI、多宿主/ARM64 和真实 ACL/磁盘耗尽保留在外部验收队列，不反复阻塞快速开发进入下一阶段。
 
 ### 仍不得宣称完成
 
 - MSI/WiX 后端；
 - macOS `.app`/DMG；
 - Linux DEB/AppImage；
+- 正式发布并受支持的 CLI（仓库当前只有功能有限的原型）；
 - Tauri 全语言集合；
 - 所有 Windows 版本的自动取消固定；
 - 所有宿主和架构的真实 CI；
@@ -484,7 +463,7 @@ git diff --check
 - 新功能要同时更新公共 API、MSBuild 属性表、示例和测试说明。
 - 实现事实、外部验收和未来计划必须分开描述。
 - 数字、版本、哈希、提交和平台结论尽量用实际产物或命令核验。
-- 每完成一个阶段，都要更新本文档中的当前版本、HEAD、验证证据、已完成能力、外部验收项和后续顺序，使下一位接管者不需要依赖旧对话恢复上下文。
+- 每完成一个阶段，都要更新本文档中的当前版本、HEAD、验证证据、已完成能力和外部验收项，并更新 `docs/roadmap.md` 的能力矩阵、阶段状态和默认下一阶段，使下一位接管者不需要依赖旧对话恢复上下文。
 
 ### 11.2 测试
 
@@ -530,10 +509,11 @@ git diff --check
 新的 AI 收到“开始接管 Bundler 项目”后，必须先完整阅读：
 
 1. `PROJECT_CONTEXT.md`；
-2. `AGENTS.md`（如果存在）；
-3. `README.zh-CN.md`；
-4. `docs/nsis-open-items.md` 和 `docs/manual-testing.md`；
-5. 与准备处理的阶段直接相关的代码和测试。
+2. `docs/roadmap.md`；
+3. `AGENTS.md`（如果存在）；
+4. `README.zh-CN.md`；
+5. `docs/nsis-upstream-reference.md`、`docs/nsis-open-items.md` 和 `docs/manual-testing.md`；
+6. 与准备处理的阶段直接相关的代码和测试。
 
 本文档是项目交接基线，但代码和自动化测试才是最终事实。如果文档、代码、测试或 Git 状态不一致，接管者必须先调查并向用户说明差异，不能自行假设，也不能要求用户重新复述本文档已经包含的信息。
 
@@ -549,7 +529,7 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 预期基线：
 
 - 分支：`codex/modular-bundler-backends`
-- 上一已提交基线：`ac74bf2`；当前未提交变更包含卸载前向恢复状态机、失败/中断回归与文档
+- 上一已提交基线：`8f5a9c1`；当前未提交变更为产品边界和正式路线文档整理
 - 包版本：`0.1.0-alpha.27`
 - 安装事务、Restart Manager、对应测试、示例和文档已经实现并提交；不得重新制作原型或把这些能力当作未完成项。
 
@@ -569,7 +549,7 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 
 ### 14.3 默认下一阶段
 
-若用户没有另外指定范围，下一阶段先在可抛弃管理员 Windows 虚拟机执行真实重启卸载验收。锁定安装载荷已明确采用安全失败策略，不默认进入延迟替换实现；卸载已选择前向恢复而非不诚实的回滚承诺。若外部环境暂不可用，下一实现阶段应在 ACL/ADS 元数据保留和重解析点产品策略中选择；真实 ACL 权限拒绝和磁盘耗尽仍按 `docs/manual-testing.md` 在专用环境验收。
+若用户没有另外指定范围，默认完整执行 `docs/roadmap.md` 的 `NSIS-R1 能力审计与配置面收口`，而不是继续零散打磨事务边界。该阶段既要形成固定上游快照和能力矩阵，也要实现审计确认的通用小型配置缺口。完成后按 `NSIS-R2` 签名、`NSIS-R3` 多语言、`NSIS-R4` 安全与冻结推进。外部环境验收按 `docs/manual-testing.md` 独立积累证据，不在没有环境时阻塞实现路线。
 
 ### 14.4 执行约束
 

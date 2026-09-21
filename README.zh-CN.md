@@ -2,11 +2,11 @@
 
 [English](README.md)
 
-`DotNet.Bundler` 是一个通过 NuGet 引用的构建包，用于把 `dotnet publish` 产物转换为桌面安装程序。使用者只需引用包并配置少量 MSBuild 属性，发布完成后便会自动生成安装包。
+`DotNet.Bundler` 是一个通用桌面应用打包工具。当前首先发布 NuGet/MSBuild 集成：使用者引用包并配置少量 MSBuild 属性后，可以把 `dotnet publish` 产物转换为桌面安装程序。Core 和格式后端本身不依赖 `.csproj` 或 .NET 应用模型，后续正式 CLI 将复用同一套 API，为其他语言和构建系统提供入口。
 
 ## 当前状态
 
-第一条已支持链路是 Windows + NSIS。MSI、macOS 和 Linux 格式属于后续路线，目前尚未实现。
+第一条已支持链路是 Windows + NSIS。正式 CLI、MSI、macOS 和 Linux 格式属于后续路线，目前尚未作为受支持功能发布。
 
 实现已经拆分为可复用的 NuGet 包。`DotNet.Bundler` 只是便利元包，实际打包代码位于以下各层。
 
@@ -17,8 +17,11 @@
 | `DotNet.Bundler.Abstractions` | 公共请求、目标、结果、日志契约和后端接口 |
 | `DotNet.Bundler.Core` | 验证、规划、编排、工作目录和共享的内容寻址 ZIP 工具缓存 |
 | `DotNet.Bundler.Nsis` | 独立 NSIS API、NSIS 配置、脚本生成、语言和内置 `makensis` 工具链 |
+| `DotNet.Bundler.Signing.Windows` | 可复用的 Windows Authenticode 签名实现 |
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
+
+仓库内已有 `DotNet.Bundler.Cli` 原型，但它的参数覆盖和发布契约尚未完成，因此当前不作为受支持入口。后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。
 
 后续实现 WiX/MSI 时再增加 `DotNet.Bundler.Wix`，当前不会发布没有实现的空占位包。
 

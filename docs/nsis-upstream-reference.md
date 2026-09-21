@@ -1,13 +1,15 @@
 # NSIS upstream reference
 
-DotNet.Bundler is not intended to clone Tauri. Upstream code is consulted only where Windows or NSIS behavior is ambiguous, and each adopted behavior is reviewed against this project's .NET/MSBuild architecture.
+DotNet.Bundler does not clone Tauri's implementation or runtime stack. It aligns the user-visible bundling capabilities that also make sense for a general desktop packager, then implements them through this project's Core, format backends, MSBuild adapter, direct API, and future supported CLI.
+
+The product boundary, capability status vocabulary, stage order, and audit procedure are defined in `docs/roadmap.md`. This file records the pinned upstream evidence and the decisions made from it.
 
 Reference snapshot:
 
 - Repository: `tauri-apps/tauri`
 - Branch: `dev`
-- Commit: `6eda56cd820fd47f90da191cbef42902d5eb6b2b`
-- Checked: 2026-09-10
+- Commit: `5d995ed35b029cecd780fdbe614dc6023a89b81b`
+- Checked: 2026-09-21
 
 Relevant upstream paths:
 
@@ -19,6 +21,26 @@ Relevant upstream paths:
 - `crates/tauri-utils/src/config.rs`
 
 ## Decisions
+
+### Capability alignment, not field copying
+
+Tauri configuration is divided into three categories before it affects this project:
+
+1. General packaging capabilities, such as metadata, artwork, install scope, associations, localization, signing, custom templates, and hooks. These should have an equivalent capability where the target format supports them.
+2. Format-specific behavior, such as NSIS compression or WiX identifiers. These belong to the relevant backend and do not become artificial cross-format settings.
+3. Tauri runtime/framework behavior, such as WebView2 installation policy and VC runtime deployment. These are not automatically Bundler capabilities.
+
+An upstream field is therefore evidence that a use case exists, not a requirement to reproduce its name, type, or implementation. `NSIS-R1` in `docs/roadmap.md` owns the complete field-by-field matrix.
+
+### Application runtime dependencies
+
+Rejected as a built-in generic facility for the current roadmap. DotNet.Bundler will not discover, download, version-check, install, repair, or uninstall arbitrary application runtimes and prerequisites. Tauri's WebView2 controls are tied to Tauri applications and do not establish a framework-neutral contract.
+
+Callers may still include prepared runtime files in their payload or use documented lifecycle hooks/custom templates. The build-time compiler/toolset required to produce a package remains the responsibility of each format backend and is separate from application runtime deployment.
+
+### Signing
+
+Authenticode is a packaging and distribution capability, not a Tauri-specific runtime feature, so it remains an explicit alignment target. The current implementation signs the exported NSIS uninstaller and final installer. `NSIS-R2` extends this to an ordered payload/uninstaller/installer pipeline and to configurable external signing providers while preserving the existing PFX/certificate-store implementation.
 
 ### Install scope
 
