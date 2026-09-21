@@ -18,7 +18,9 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Rejects invalid NSIS package versions", RejectsInvalidNsisPackageVersions),
     ("Rejects invalid legacy MSI identifiers", RejectsInvalidLegacyMsiIdentifiers),
     ("Rejects invalid associations and protocols", () => RunSync(RejectsInvalidAssociationsAndProtocols)),
+    ("Loads complete generic bundle configuration", LoadsCompleteGenericBundleConfiguration),
     ("Builds through the standalone NSIS API", BuildsThroughStandaloneNsisApi),
+    ("Builds every NSIS compression mode", BuildsEveryNsisCompressionMode),
     ("Signs both NSIS installer artifacts", SignsBothNsisInstallerArtifacts),
     ("Writes a valid Windows uninstall command", () => RunSync(WritesValidWindowsUninstallCommand)),
     ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
@@ -28,10 +30,11 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Renders existing-version policy", () => RunSync(RendersExistingVersionPolicy)),
     ("Renders safe file and URL registrations", () => RunSync(RendersSafeFileAndUrlRegistrations)),
     ("Renders NSIS install scopes", () => RunSync(RendersNsisInstallScopes)),
+    ("Renders every NSIS compression mode", () => RunSync(RendersEveryNsisCompressionMode)),
     ("Renders NSIS metadata, icons, and resources", () => RunSync(RendersNsisMetadataIconsAndResources)),
     ("Renders complete shortcut configuration", () => RunSync(RendersCompleteShortcutConfiguration)),
     ("Rejects unsafe shortcut configuration", RejectsUnsafeShortcutConfiguration),
-    ("Maps shortcut settings through MSBuild", () => RunSync(MapsShortcutSettingsThroughMsBuild)),
+    ("Maps NSIS settings through MSBuild", () => RunSync(MapsNsisSettingsThroughMsBuild)),
     ("Rejects unknown template variables", () => RunSync(RejectsUnknownTemplateVariables)),
     ("Runs backends through the common pipeline", RunsBackendsThroughCommonPipeline),
     ("Preflights every requested backend", PreflightsEveryRequestedBackend),
@@ -414,6 +417,62 @@ static void RejectsInvalidAssociationsAndProtocols()
         "URL schemes should be unique without regard to case.");
 }
 
+static async Task LoadsCompleteGenericBundleConfiguration()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Configuration.Tests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    var path = Path.Combine(root, "bundle.json");
+    try
+    {
+        await File.WriteAllTextAsync(path, """
+            {
+              "productName": "Configured App",
+              "identifier": "com.example.configured",
+              "version": "1.0.0",
+              "outputDirectory": "artifacts",
+              "fileAssociations": [
+                {
+                  "extensions": ["configured"],
+                  "name": "Configured document",
+                  "description": "Configured document type",
+                  "mimeType": "application/x-configured"
+                }
+              ],
+              "urlProtocols": [
+                {
+                  "schemes": ["configured-app"],
+                  "name": "Configured link"
+                }
+              ],
+              "targets": [
+                {
+                  "runtimeIdentifier": "win-x64",
+                  "inputDirectory": "publish",
+                  "mainExecutable": "Configured.exe",
+                  "formats": ["nsis"]
+                }
+              ]
+            }
+            """);
+
+        var configuration = await BundleConfigurationLoader.LoadAsync(path);
+        Assert(configuration.FileAssociations.Count == 1 &&
+               configuration.FileAssociations[0].Extensions.SequenceEqual(["configured"]) &&
+               configuration.FileAssociations[0].MimeType == "application/x-configured",
+            "The configuration loader dropped file-association metadata.");
+        Assert(configuration.UrlProtocols.Count == 1 &&
+               configuration.UrlProtocols[0].Schemes.SequenceEqual(["configured-app"]) &&
+               configuration.UrlProtocols[0].Name == "Configured link",
+            "The configuration loader dropped URL-protocol metadata.");
+        Assert(configuration.Targets[0].InputDirectory == Path.Combine(root, "publish"),
+            "The configuration loader did not resolve target paths relative to the configuration file.");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
 static async Task BuildsThroughStandaloneNsisApi()
 {
     var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Api.Tests", Guid.NewGuid().ToString("N"));
@@ -453,6 +512,57 @@ static async Task BuildsThroughStandaloneNsisApi()
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+}
+
+static async Task BuildsEveryNsisCompressionMode()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Compression.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "publish");
+    Directory.CreateDirectory(input);
+    await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp.exe"), "compression-test");
+    try
+    {
+        foreach (var compression in Enum.GetValues<NsisCompression>())
+        {
+            var bundler = new NsisBundler(
+                new NsisBundleConfiguration { Compression = compression },
+                new NsisBundlerOptions { ToolCacheDirectory = Path.Combine(root, "shared-tools") });
+            var artifacts = await bundler.BuildAsync(new BundleConfiguration
+            {
+                ProductName = $"Compression {compression}",
+                Identifier = $"com.example.compression.{compression.ToString().ToLowerInvariant()}",
+                Version = "1.0.0",
+                OutputDirectory = Path.Combine(root, "artifacts", compression.ToString()),
+                Targets =
+                [
+                    new BundleTargetConfiguration
+                    {
+                        RuntimeIdentifier = "win-x64",
+                        InputDirectory = input,
+                        MainExecutable = "ExampleApp.exe",
+                        Formats = [PackageFormat.Nsis]
+                    }
+                ]
+            });
+            Assert(artifacts.Count == 1 && File.Exists(artifacts[0].Path),
+                $"NSIS failed to compile an installer with {compression} compression.");
+        }
+
+        try
+        {
+            await new NsisBundler(new NsisBundleConfiguration { Compression = (NsisCompression)999 })
+                .BuildAsync(new BundleConfiguration { Version = "1.0.0" });
+            throw new InvalidOperationException("An unknown NSIS compression mode was accepted.");
+        }
+        catch (ArgumentOutOfRangeException exception) when (
+            exception.Message.Contains("compression", StringComparison.OrdinalIgnoreCase))
+        {
+        }
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
     }
 }
 
@@ -860,6 +970,57 @@ static void RendersNsisInstallScopes()
     }
 }
 
+static void RendersEveryNsisCompressionMode()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Compression.Rendering.Tests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    File.WriteAllText(Path.Combine(root, "ExampleApp.exe"), "test");
+    try
+    {
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+        var configuration = ValidConfiguration(new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "win-x64",
+            InputDirectory = root,
+            MainExecutable = "ExampleApp.exe",
+            Formats = [PackageFormat.Nsis]
+        });
+        var item = new BundlePlanItem(
+            new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+            PackageFormat.Nsis,
+            root,
+            "ExampleApp.exe",
+            "output",
+            false);
+        var expected = new Dictionary<NsisCompression, string>
+        {
+            [NsisCompression.Lzma] = "SetCompressor /SOLID lzma",
+            [NsisCompression.Zlib] = "SetCompressor /SOLID zlib",
+            [NsisCompression.Bzip2] = "SetCompressor /SOLID bzip2",
+            [NsisCompression.None] = "SetCompress off"
+        };
+
+        foreach (var pair in expected)
+        {
+            var script = NsisBundleBackend.CreateScript(
+                template,
+                configuration,
+                new NsisBundleConfiguration { Compression = pair.Key },
+                item,
+                "setup.exe",
+                "ExampleApp");
+            Assert(script.Contains(pair.Value, StringComparison.Ordinal),
+                $"The {pair.Key} compression directive was not rendered.");
+            Assert(!script.Contains("{{compression_directive}}", StringComparison.Ordinal),
+                "The compression template variable was not replaced.");
+        }
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
 static void RendersNsisMetadataIconsAndResources()
 {
     var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
@@ -1122,13 +1283,25 @@ static async Task RejectsUnsafeShortcutConfiguration()
     }
 }
 
-static void MapsShortcutSettingsThroughMsBuild()
+static void MapsNsisSettingsThroughMsBuild()
 {
+    var props = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.props"));
     var targets = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
-    foreach (var property in new[] { "NsisShortcutDesktop", "NsisShortcutStartMenu", "NsisShortcutArguments", "NsisShortcutWorkingDirectory", "NsisShortcutIcon", "NsisShortcutAppUserModelId", "NsisShortcutStartMenuFolder", "NsisShortcutLegacyProductNames", "NsisShortcutLegacyMainExecutables" })
+    var task = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
+    foreach (var property in new[]
+             {
+                 "NsisCompression", "NsisShortcutDesktop", "NsisShortcutStartMenu", "NsisShortcutArguments",
+                 "NsisShortcutWorkingDirectory", "NsisShortcutIcon", "NsisShortcutAppUserModelId",
+                 "NsisShortcutStartMenuFolder", "NsisShortcutLegacyProductNames", "NsisShortcutLegacyMainExecutables"
+             })
     {
         Assert(targets.Contains(property + "=\"$(Bundler" + property + ")\"", StringComparison.Ordinal), $"MSBuild does not map Bundler{property} to the task.");
     }
+    Assert(props.Contains("<BundlerNsisCompression Condition=\"'$(BundlerNsisCompression)' == ''\">lzma</BundlerNsisCompression>", StringComparison.Ordinal),
+        "MSBuild does not define the documented LZMA compression default.");
+    Assert(task.Contains("Compression = ParseCompression()", StringComparison.Ordinal) &&
+           task.Contains("BundlerNsisCompression must be lzma, zlib, bzip2, or none.", StringComparison.Ordinal),
+        "The MSBuild task does not parse and validate NSIS compression.");
 }
 
 static string RepositoryRoot() => Path.GetFullPath("../../../../../", AppContext.BaseDirectory);

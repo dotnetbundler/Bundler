@@ -1,0 +1,98 @@
+# NSIS 与 Tauri bundler 能力矩阵
+
+> 审计日期：2026-09-21  
+> Tauri 仓库：`tauri-apps/tauri`  
+> 固定 commit：`5d995ed35b029cecd780fdbe614dc6023a89b81b`  
+> 本项目基线：`e143d33 docs: define bundler roadmap and product scope`
+
+本文档记录 `NSIS-R1` 的逐项审计结果。目标是对齐适用于通用桌面打包器的用户能力，不复制 Tauri 字段、Rust 数据模型或 runtime 部署逻辑。状态定义和产品边界见 `docs/roadmap.md`。
+
+上游证据：
+
+- `crates/tauri-utils/src/config.rs`：`BundleConfig`、`WindowsConfig`、`NsisConfig`；
+- `crates/tauri-bundler/src/bundle/windows/nsis/mod.rs`；
+- `crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi`；
+- `crates/tauri-bundler/src/bundle/windows/sign.rs`。
+
+## 1. `NsisConfig` 逐项矩阵
+
+| Tauri 能力 | DotNet.Bundler 等价入口 | 状态 | 决策与验证 |
+| --- | --- | --- | --- |
+| `template` | `NsisBundlerOptions.TemplatePath` / `BundlerNsisTemplate` | 已实现 | 直接 API 与 MSBuild 共用同一模板渲染器；未知模板变量会失败 |
+| `headerImage` | `HeaderImage` / `BundlerNsisHeaderImage` | 已实现 | `.bmp` 校验和渲染契约测试 |
+| `sidebarImage` | `SidebarImage` / `BundlerNsisSidebarImage` | 已实现 | 同时用于安装/卸载欢迎与完成页 |
+| `installerIcon` | `InstallerIcon` / `BundlerNsisInstallerIcon` | 已实现 | 可回退到通用图标列表中的首个 `.ico` |
+| `uninstallerIcon` | `UninstallerIcon` / `BundlerNsisUninstallerIcon` | 已实现 | 可独立设置；默认回退到安装器图标 |
+| `uninstallerHeaderImage` | `UninstallerHeaderImage` / `BundlerNsisUninstallerHeaderImage` | 已实现 | 默认回退到安装器 Header |
+| `installMode` | `InstallMode` / `BundlerNsisInstallMode` | 已实现，外部待验收 | `currentUser`、`perMachine`、`both`；真实 UAC 见 MT-01/02 |
+| `languages` | `Languages` / `BundlerNsisLanguages` | 部分实现 | 语言选择与第一项回退已实现；完整内置语言集合进入 `NSIS-R3` |
+| `customLanguageFiles` | `CustomLanguageFiles` / `BundlerNsisLanguageFile` | 部分实现 | 已选择语言可使用完整自定义文案文件；语言键集合和覆盖规则的系统校验进入 `NSIS-R3` |
+| `displayLanguageSelector` | `DisplayLanguageSelector` / `BundlerNsisDisplayLanguageSelector` | 已实现 | 多语言时可显示选择器；系统语言/完整集合收口进入 `NSIS-R3` |
+| `compression` | `Compression` / `BundlerNsisCompression` | 已实现 | `lzma`、`zlib`、`bzip2`、`none`；脚本渲染和四种实际编译均有自动化测试 |
+| `startMenuFolder` | `Shortcuts.StartMenuFolder` / `BundlerNsisShortcutStartMenuFolder` | 已实现 | 本项目还提供所有权安全的创建、更新、迁移与删除 |
+| `installerHooks` | `InstallerHooks` / `BundlerNsisInstallerHooks` | 已实现 | 四个 `NSIS_HOOK_*` 生命周期点；Hook 失败接入事务/前向恢复 |
+| `minimumWebview2Version` | 无 | 不适用 | Tauri runtime 专属；本项目不安装或升级任意应用运行时 |
+
+结论：适用于通用 NSIS 后端的小型配置缺口只有压缩算法，本阶段已经补齐。语言和签名不是遗漏，分别由 `NSIS-R3`、`NSIS-R2` 完整收口。
+
+## 2. `WindowsConfig` 逐项矩阵
+
+| Tauri 能力 | DotNet.Bundler 等价入口 | 状态 | 决策与后续 |
+| --- | --- | --- | --- |
+| `digestAlgorithm` | 内置 Authenticode 当前固定 SHA-256 | 部分实现 | 算法/自定义 provider 契约进入 `NSIS-R2`；不降低默认安全级别 |
+| `certificateThumbprint` | `WindowsAuthenticodeSigningOptions.CertificateThumbprint` / MSBuild 同名能力 | 部分实现 | 证书选择已实现，完整 payload 签名覆盖进入 `NSIS-R2` |
+| `timestampUrl` | `TimestampUrl` / `BundlerWindowsSigningTimestampUrl` | 部分实现 | 当前使用 RFC 3161；生产服务验证见 MT-04 |
+| `tsp` | 当前内置实现固定 RFC 3161 | 部分实现 | 是否支持旧 Authenticode timestamp 协议在 `NSIS-R2` 明确；不因字段存在自动降低协议 |
+| `webviewInstallMode` | 无 | 不适用 | Tauri runtime 专属运行时部署 |
+| `allowDowngrades` | `AllowDowngrades` / `BundlerNsisAllowDowngrades` | 已实现、默认不同 | 本项目默认禁止降级；这是更安全的明确产品决策，不复制 Tauri 的 `true` 默认值 |
+| `minimumWebview2Version` | 无 | 不适用 | 同上，不承担 WebView2 生命周期 |
+| `wix` | 将来的 `DotNet.Bundler.Wix` | 计划实现 | 属于独立安装格式，不混入 NSIS 配置 |
+| `nsis` | `NsisBundleConfiguration` | 已实现 | 本项目通过强类型后端配置而非嵌套 Tauri JSON 模型组织 |
+| `signCommand` | `IBundleSigner`；MSBuild 尚无外部命令 provider | 部分实现 | 外部命令、HSM/云签名和完整签名顺序进入 `NSIS-R2` |
+| `bundleVCRuntime` | 无 | 不适用 | Tauri 构建/runtime 约定；调用方可把已准备文件放入输入目录或资源，不由 Bundler 发现/下载依赖 |
+
+## 3. 通用 `BundleConfig` 中与 NSIS 有关的能力
+
+| Tauri 能力 | DotNet.Bundler 方案 | 状态/决策 |
+| --- | --- | --- |
+| `active` | `BundlerEnabled` 属于 MSBuild 入口；直接 API 是否调用由调用方决定 | 已实现于入口层，不进入后端模型 |
+| `targets` | `BundleTargetConfiguration.Formats` + Core planner/backend preflight | 已实现；当前只有 NSIS 后端完成 |
+| `createUpdaterArtifacts` | 无 | 不适用当前通用安装器契约；Tauri updater 产物依赖其 updater 协议，未来若有跨框架真实需求需单独提案 |
+| `publisher`、`homepage`、`copyright` | `BundleConfiguration` 同等元数据 | 已实现 |
+| `icon` | `BundleConfiguration.Icons` + NSIS 专属覆盖 | 已实现 |
+| `resources` | `BundleResourceConfiguration`，显式 source/target | 已实现；文件和目录展开、路径逃逸与冲突均校验 |
+| `licenseFile` | `BundleConfiguration.LicenseFile` | 已实现；NSIS 支持 `.txt`/`.rtf` 许可证页 |
+| `license` 标识 | 无 NSIS 输出 | 格式不适用；未来需要该元数据的后端再加入通用模型 |
+| `category` | 无 NSIS 输出 | 格式不适用；未来 macOS/Linux 后端设计时评估 |
+| `fileAssociations` | `BundleFileAssociationConfiguration` | 已实现；本阶段修复 JSON loader 丢失该配置的缺陷 |
+| `shortDescription` / `longDescription` | 当前通用 `Description` | NSIS 等价能力已实现；需要区分长短描述的后端出现时再拆分模型 |
+| `useLocalToolsDir` | `ToolCacheDirectory` / `BundlerToolCachePath` | 已实现；默认用户级内容寻址缓存，也允许显式覆盖 |
+| `externalBin` | 完整输入目录 + `BundleResourceConfiguration` | 明确采用不同方案；调用方准备最终 payload，不复制 Tauri target-triple 自动发现约定 |
+| URL/深链接协议 | `BundleUrlProtocolConfiguration` | 已实现；本阶段修复 JSON loader 丢失该配置的缺陷 |
+
+JSON 配置加载器是未来 CLI 的共享入口。本阶段验证它会保留文件关联、URL 协议及其元数据，避免 CLI 看似接受配置但生成包时静默丢失。
+
+## 4. 用户可观察行为矩阵
+
+| 行为 | 当前状态 | 差异/证据边界 |
+| --- | --- | --- |
+| 内嵌 NSIS 工具、无需系统预装 | 已实现 | 本项目使用独立 NsisToolset 和内容寻址共享缓存 |
+| Windows/Linux/macOS 宿主生成 Windows NSIS | 已实现，外部待验收 | 解析和工具资源已实现；原生 runner 见 MT-08 |
+| SemVer 重装、升级、降级策略 | 已实现 | 本项目默认禁止降级 |
+| 旧 MSI 迁移 | 已实现，生产包外部待验收 | 本项目要求准确 ProductCode/UpgradeCode，不按显示名猜测 |
+| 运行程序协调 | 已实现 | Restart Manager 按完整程序路径关闭，不影响其他目录同名进程 |
+| 安装失败/进程中断恢复 | 已实现 | 安装回滚 journal 和卸载前向恢复均有 Windows E2E |
+| 自动更新/被动/静默参数与稳定退出码 | 已实现 | `/UPDATE`、`/P`、`/S`、`/R`、`/ARGS` 等为本项目协议 |
+| 快捷方式生命周期 | 已实现，固定项外部待验收 | 按 `.lnk` 实际目标判断所有权；MT-06 覆盖 OS 固定项差异 |
+| 文件关联和 URL 协议 | 已实现 | 不强抢 Windows 默认应用；协议删除有所有权检查 |
+| 完整内置语言集合 | 部分实现 | `NSIS-R3` |
+| payload、卸载器、安装器完整签名 | 部分实现 | 当前签卸载器和安装器；`NSIS-R2` 扩展 payload/provider |
+| 真实 UAC、重启、ARM64、生产证书 | 外部待验收 | 统一见 `docs/manual-testing.md` |
+
+## 5. 审计结论
+
+1. `NSIS-R1` 没有遗留“未调查”的 Tauri NSIS/Windows 配置项。
+2. 本阶段新增的通用能力是四种 NSIS 压缩模式；默认保持 LZMA。
+3. 文件关联和 URL 协议原本在 API/MSBuild 路径可用，但 JSON loader 会丢失，本阶段已修复，为未来 CLI 保持同一通用模型。
+4. 完整签名和完整语言是已知部分能力，分别进入 `NSIS-R2`、`NSIS-R3`。
+5. WebView2、VC Runtime 和 Tauri updater 产物不构成当前通用安装器能力；不会为字段对齐制造运行时部署系统。

@@ -73,6 +73,14 @@ public sealed class NsisBundler
 
     private static void ValidateConfiguration(NsisBundleConfiguration settings)
     {
+        if (!Enum.IsDefined(typeof(NsisCompression), settings.Compression))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(settings),
+                settings.Compression,
+                "Unknown NSIS compression mode.");
+        }
+
         if (settings.Languages.Count == 0)
         {
             throw new ArgumentException("At least one NSIS language is required.", nameof(settings));

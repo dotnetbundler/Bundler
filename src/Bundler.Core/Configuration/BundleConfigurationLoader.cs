@@ -58,6 +58,18 @@ public static class BundleConfigurationLoader
                 Source = Resolve(baseDirectory, resource.Source),
                 TargetPath = resource.TargetPath
             }).ToArray(),
+            FileAssociations = source.FileAssociations.Select(association => new BundleFileAssociationConfiguration
+            {
+                Extensions = association.Extensions.ToArray(),
+                Name = association.Name,
+                Description = association.Description,
+                MimeType = association.MimeType
+            }).ToArray(),
+            UrlProtocols = source.UrlProtocols.Select(protocol => new BundleUrlProtocolConfiguration
+            {
+                Schemes = protocol.Schemes.ToArray(),
+                Name = protocol.Name
+            }).ToArray(),
             Targets = source.Targets.Select(target => new BundleTargetConfiguration
             {
                 RuntimeIdentifier = target.RuntimeIdentifier,

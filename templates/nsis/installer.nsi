@@ -1,7 +1,7 @@
 Unicode true
 ManifestDPIAware true
 ManifestDPIAwareness PerMonitorV2
-SetCompressor /SOLID lzma
+{{compression_directive}}
 
 ; 在解析任何插件命令之前，先注册随包提供的 Unicode 插件目录。
 ; NSIS 插件 ABI 为 32 位，因此该插件编译为 win-x86。

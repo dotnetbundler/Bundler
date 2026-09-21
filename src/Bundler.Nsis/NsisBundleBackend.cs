@@ -174,6 +174,7 @@ internal sealed class NsisBundleBackend(
             ["process_name"] = Escape(Path.GetFileName(item.MainExecutable)),
             ["install_folder"] = Escape(safeProductName),
             ["install_mode"] = InstallModeName(settings.InstallMode),
+            ["compression_directive"] = CompressionDirective(settings.Compression),
             ["target_architecture"] = TargetArchitectureName(item.Target.Architecture),
             ["allow_downgrades"] = settings.AllowDowngrades ? "true" : "false",
             ["legacy_msi_product_codes"] = Escape(CreateMsiCodeList(settings.LegacyMsiProductCodes)),
@@ -468,6 +469,15 @@ internal sealed class NsisBundleBackend(
         NsisInstallMode.PerMachine => "perMachine",
         NsisInstallMode.Both => "both",
         _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown NSIS install mode.")
+    };
+
+    private static string CompressionDirective(NsisCompression compression) => compression switch
+    {
+        NsisCompression.Lzma => "SetCompressor /SOLID lzma",
+        NsisCompression.Zlib => "SetCompressor /SOLID zlib",
+        NsisCompression.Bzip2 => "SetCompressor /SOLID bzip2",
+        NsisCompression.None => "SetCompress off",
+        _ => throw new ArgumentOutOfRangeException(nameof(compression), compression, "Unknown NSIS compression mode.")
     };
 
     private static string CreateMsiCodeList(IReadOnlyList<string> codes) => string.Join(

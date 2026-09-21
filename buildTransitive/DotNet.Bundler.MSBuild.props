@@ -17,6 +17,7 @@
     <BundlerNsisDataDirectory Condition="'$(BundlerNsisDataDirectory)' == ''"></BundlerNsisDataDirectory>
     <BundlerNsisTemplate Condition="'$(BundlerNsisTemplate)' == ''"></BundlerNsisTemplate>
     <BundlerNsisInstallMode Condition="'$(BundlerNsisInstallMode)' == ''">currentUser</BundlerNsisInstallMode>
+    <BundlerNsisCompression Condition="'$(BundlerNsisCompression)' == ''">lzma</BundlerNsisCompression>
     <BundlerNsisInstallerIcon Condition="'$(BundlerNsisInstallerIcon)' == ''"></BundlerNsisInstallerIcon>
     <BundlerNsisUninstallerIcon Condition="'$(BundlerNsisUninstallerIcon)' == ''"></BundlerNsisUninstallerIcon>
     <BundlerNsisHeaderImage Condition="'$(BundlerNsisHeaderImage)' == ''"></BundlerNsisHeaderImage>

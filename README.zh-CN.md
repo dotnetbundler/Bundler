@@ -45,7 +45,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `ne
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.27" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.28" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -63,7 +63,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.27" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.28" />
 ```
 
 ```csharp
@@ -91,7 +91,7 @@ var request = new BundleConfiguration
 var artifacts = await new NsisBundler().BuildAsync(request);
 ```
 
-`NsisBundleConfiguration` 控制 NSIS 专属行为。高级调用和测试场景可以通过 `NsisBundlerOptions` 覆盖共享缓存、编译器、工具集压缩包、NSIS 数据目录、模板或语言目录；普通调用者不需要提供这些路径。提供自定义编译器时，如果编译器需要显式的 `NSISDIR`，还应设置 `DataDirectory`。
+`NsisBundleConfiguration` 控制 NSIS 专属行为，包括安装范围、压缩、Artwork、语言、Hook、降级和快捷方式。`Compression` 支持 `Lzma`（默认）、`Zlib`、`Bzip2` 和 `None`。高级调用和测试场景可以通过 `NsisBundlerOptions` 覆盖共享缓存、编译器、工具集压缩包、NSIS 数据目录、模板或语言目录；普通调用者不需要提供这些路径。提供自定义编译器时，如果编译器需要显式的 `NSISDIR`，还应设置 `DataDirectory`。
 
 独立 API 通过 `NsisBundleConfiguration.Shortcuts` 设置 `NsisShortcutConfiguration`。其中的 `Desktop`、`StartMenu`、`Arguments`、`WorkingDirectory`、`Icon`、`AppUserModelId` 和 `StartMenuFolder` 与下方 MSBuild 属性对应；`LegacyProductNames` 和 `LegacyMainExecutables` 用于在改名后显式启用安全迁移。
 
@@ -117,6 +117,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 | `BundlerToolCachePath` | 否 | `%LOCALAPPDATA%\DotNetBundler\tools` |
 | `BundlerNsisTemplate` | 否 | 包内自带模板 |
 | `BundlerNsisInstallMode` | 否 | `currentUser`；也支持 `perMachine` 和 `both` |
+| `BundlerNsisCompression` | 否 | `lzma`；也支持 `zlib`、`bzip2` 和 `none` |
 | `BundlerNsisInstallerIcon` | 否 | 第一个 `BundlerIcon` `.ico` |
 | `BundlerNsisUninstallerIcon` | 否 | 安装器图标 |
 | `BundlerNsisHeaderImage` | 否 | NSIS 默认图片；`.bmp` |
@@ -180,6 +181,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 ```xml
 <PropertyGroup>
+  <BundlerNsisCompression>zlib</BundlerNsisCompression>
   <BundlerNsisLanguages>English;SimpChinese</BundlerNsisLanguages>
   <BundlerNsisDisplayLanguageSelector>true</BundlerNsisDisplayLanguageSelector>
 </PropertyGroup>
@@ -293,7 +295,7 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 
 内置签名器直接调用 Windows 的 Authenticode API，因此启用它时构建宿主必须是 Windows；不启用签名时，Linux 和 macOS 上的 NSIS 构建不受影响。独立 API 使用者也可以直接引用 `DotNet.Bundler.Signing.Windows`，或为 `NsisBundlerOptions.Signer` 提供自己的 `IBundleSigner` 实现。
 
-若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。自定义模板必须保留签名两阶段编译所需的 `uninstaller_finalize_command`、`uninstaller_import_define` 和 `signed_uninstaller` 占位符。其他变量包括 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`install_mode`、`target_architecture`、`allow_downgrades`、`legacy_msi_product_codes`、`legacy_msi_upgrade_codes`、`input_glob`、`output_file`、`estimated_size`、`plugin_directory`、`uninstall_payload`、`language_macros`、`language_files`、`display_language_selector`，写法为 `{{name}}`。
+若要定制，可把模板复制出来，并将 `BundlerNsisTemplate` 设为其绝对路径。自定义模板必须保留签名两阶段编译所需的 `uninstaller_finalize_command`、`uninstaller_import_define` 和 `signed_uninstaller` 占位符。使用配置的压缩方式时应保留 `compression_directive`。其他变量包括 `product_name`、`version`、`numeric_version`、`publisher`、`identifier`、`main_executable`、`process_name`、`install_folder`、`install_mode`、`target_architecture`、`allow_downgrades`、`legacy_msi_product_codes`、`legacy_msi_upgrade_codes`、`input_glob`、`output_file`、`estimated_size`、`plugin_directory`、`uninstall_payload`、`language_macros`、`language_files`、`display_language_selector`，写法为 `{{name}}`。
 
 这是面向 Windows 的可用基线，并不等于 Tauri 功能对等。
 
@@ -303,7 +305,7 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.27
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.28
 ```
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

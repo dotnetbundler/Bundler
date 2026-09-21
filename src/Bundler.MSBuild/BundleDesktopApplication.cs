@@ -35,6 +35,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string ToolCacheDirectory { get; set; } = "";
     public string NsisTemplatePath { get; set; } = "";
     public string NsisInstallMode { get; set; } = "currentUser";
+    public string NsisCompression { get; set; } = "lzma";
     public string NsisInstallerIcon { get; set; } = "";
     public string NsisUninstallerIcon { get; set; } = "";
     public string NsisHeaderImage { get; set; } = "";
@@ -112,6 +113,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             var nsisConfiguration = new NsisBundleConfiguration
             {
                 InstallMode = ParseInstallMode(),
+                Compression = ParseCompression(),
                 InstallerIcon = OptionalFullPath(NsisInstallerIcon),
                 UninstallerIcon = OptionalFullPath(NsisUninstallerIcon),
                 HeaderImage = OptionalFullPath(NsisHeaderImage),
@@ -242,6 +244,19 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         throw new ArgumentException(
             "BundlerNsisInstallMode must be currentUser, perMachine, or both.",
             nameof(NsisInstallMode));
+    }
+
+    private DotNet.Bundler.Nsis.NsisCompression ParseCompression()
+    {
+        if (Enum.TryParse<DotNet.Bundler.Nsis.NsisCompression>(NsisCompression, true, out var compression) &&
+            Enum.IsDefined(typeof(DotNet.Bundler.Nsis.NsisCompression), compression))
+        {
+            return compression;
+        }
+
+        throw new ArgumentException(
+            "BundlerNsisCompression must be lzma, zlib, bzip2, or none.",
+            nameof(NsisCompression));
     }
 
     private IReadOnlyDictionary<string, string> ParseCustomLanguageFiles()

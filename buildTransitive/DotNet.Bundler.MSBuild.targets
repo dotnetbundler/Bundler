@@ -45,6 +45,7 @@
       ToolCacheDirectory="$(BundlerToolCachePath)"
       NsisTemplatePath="$(BundlerNsisTemplate)"
       NsisInstallMode="$(BundlerNsisInstallMode)"
+      NsisCompression="$(BundlerNsisCompression)"
       NsisInstallerIcon="$(BundlerNsisInstallerIcon)"
       NsisUninstallerIcon="$(BundlerNsisUninstallerIcon)"
       NsisHeaderImage="$(BundlerNsisHeaderImage)"

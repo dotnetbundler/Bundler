@@ -30,7 +30,11 @@ Tauri configuration is divided into three categories before it affects this proj
 2. Format-specific behavior, such as NSIS compression or WiX identifiers. These belong to the relevant backend and do not become artificial cross-format settings.
 3. Tauri runtime/framework behavior, such as WebView2 installation policy and VC runtime deployment. These are not automatically Bundler capabilities.
 
-An upstream field is therefore evidence that a use case exists, not a requirement to reproduce its name, type, or implementation. `NSIS-R1` in `docs/roadmap.md` owns the complete field-by-field matrix.
+An upstream field is therefore evidence that a use case exists, not a requirement to reproduce its name, type, or implementation. The completed field-by-field audit is recorded in `docs/nsis-capability-matrix.md`.
+
+### Compression
+
+Adopted as a format-specific NSIS capability. DotNet.Bundler exposes LZMA, ZLIB, BZIP2, and no compression through the standalone API and MSBuild adapter. LZMA remains the default. The generated script uses `SetCompressor /SOLID` for the three algorithms and `SetCompress off` when compression is disabled.
 
 ### Application runtime dependencies
 

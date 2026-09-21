@@ -3,6 +3,7 @@ namespace DotNet.Bundler.Nsis;
 public sealed class NsisBundleConfiguration
 {
     public NsisInstallMode InstallMode { get; init; } = NsisInstallMode.CurrentUser;
+    public NsisCompression Compression { get; init; } = NsisCompression.Lzma;
     public string? InstallerIcon { get; init; }
     public string? UninstallerIcon { get; init; }
     public string? HeaderImage { get; init; }
@@ -37,4 +38,12 @@ public enum NsisInstallMode
     CurrentUser,
     PerMachine,
     Both
+}
+
+public enum NsisCompression
+{
+    Lzma,
+    Zlib,
+    Bzip2,
+    None
 }

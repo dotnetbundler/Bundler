@@ -1,9 +1,9 @@
 # DotNet.Bundler 产品边界与实施路线
 
 > 最后整理：2026-09-21  
-> 路线状态基线：`8f5a9c1 feat(nsis): recover interrupted uninstalls`  
+> 路线状态基线：`e143d33 docs: define bundler roadmap and product scope`；`NSIS-R1` 已完成、尚未提交
 > 当前实施对象：Windows NSIS  
-> 默认下一阶段：`NSIS-R1 能力审计与配置面收口`
+> 默认下一阶段：`NSIS-R2 完整 Windows 签名流水线`
 
 本文档是项目后续路线的唯一规范来源。它记录产品边界、能力对齐方法、阶段顺序、完成条件和接班步骤，使后续开发不依赖某一次对话或某个 AI 的记忆。
 
@@ -95,7 +95,7 @@
 
 1. `PROJECT_CONTEXT.md`；
 2. 本文档；
-3. `docs/nsis-upstream-reference.md`；
+3. `docs/nsis-upstream-reference.md` 和 `docs/nsis-capability-matrix.md`；
 4. `docs/nsis-open-items.md` 和 `docs/manual-testing.md`；
 5. 当前阶段涉及的代码与测试。
 
@@ -156,7 +156,7 @@
 | --- | --- | --- |
 | 产品元数据、图标、Header/Sidebar、许可证 | 已实现 | 回归保护 |
 | `currentUser` / `perMachine` / `both` | 已实现，真实 UAC 外部待验收 | 人工 MT-01/02 |
-| 生命周期 Hook、自定义模板入口 | 已实现，但各入口暴露需统一审计 | NSIS-R1 |
+| 生命周期 Hook、自定义模板入口 | 已实现并完成入口审计 | 回归保护 |
 | 工具内嵌、内容寻址缓存、多宿主解析 | 已实现，真实宿主矩阵外部待验收 | NSIS-R4、MT-08 |
 | SemVer、升级/降级、旧 MSI 精确迁移 | 已实现 | 回归保护、MT-05 |
 | 自动化参数和稳定退出码 | 已实现 | 回归保护 |
@@ -165,12 +165,14 @@
 | 安装事务、进程中断恢复、卸载前向恢复 | 已实现 | NSIS-R4、MT-03/07/10 |
 | 内置语言 | 部分实现：English、SimpChinese 和自定义语言入口 | NSIS-R3 |
 | Authenticode | 部分实现：卸载器和最终安装器；PFX/证书存储区 | NSIS-R2 |
-| 压缩等 NSIS 配置面 | 尚未完成系统能力审计 | NSIS-R1 |
+| NSIS 压缩和配置面审计 | 已实现：LZMA、ZLIB、BZIP2、无压缩 | 回归保护 |
 | 任意应用运行时依赖安装 | 不适用/明确不做 | 不进入路线 |
 
 ## 6. NSIS 剩余实施阶段
 
 ### NSIS-R1：能力审计与配置面收口
+
+**状态：已完成（2026-09-21，`0.1.0-alpha.28`，待用户指令提交）。** 完整矩阵见 `docs/nsis-capability-matrix.md`。审计确认通用小型缺口为压缩配置，现已支持 LZMA、ZLIB、BZIP2 和无压缩；同时修复 JSON 配置加载时丢失文件关联和 URL 协议的问题。31 项单元/契约测试、六包 Pack 和 `alpha.28` Windows NSIS 集成回归通过。
 
 **目标**：以固定 Tauri commit 为参考完成一次有边界的 NSIS 能力审计，并在同一阶段实现适用于通用打包器的小型配置缺口，形成可持续维护的能力矩阵。这不是只写计划的阶段。
 
