@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using Microsoft.Win32;
 
 namespace DotNet.Bundler.Nsis.Plugin;
 
@@ -12,6 +14,20 @@ internal static class UninstallTransaction
     private const string ActiveFileName = "active";
     private const string FinalizingFileName = "finalizing";
     private const string CommittedSuffix = ".committed";
+    private const string RecoveryHashValueName = "BundlerRecoverySha256";
+
+    internal static string GetFileSha256(string path)
+    {
+        try
+        {
+            RejectExistingReparsePoints(path);
+            return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
+    }
 
     internal static int ValidateDeletionTrees(
         string installDirectory,
@@ -39,11 +55,15 @@ internal static class UninstallTransaction
         string transactionDirectory,
         string installDirectory,
         string uninstallerPath,
-        int deleteAppData)
+        int deleteAppData,
+        string rootName,
+        int viewBits,
+        string uninstallSubKey)
     {
         try
         {
             var transaction = ValidateTransactionDirectory(transactionDirectory);
+            JournalAccess.EnsureProtectedMachineRoot(transaction);
             CleanupCommitted(transaction);
             CleanupInactive(transaction);
             if (Directory.Exists(transaction))
@@ -59,6 +79,11 @@ internal static class UninstallTransaction
                 throw new InvalidDataException("The recovery uninstaller must be the installed Uninstall.exe.");
             }
             RejectReparsePoint(uninstaller);
+            var expectedHash = ReadRegisteredRecoveryHash(rootName, viewBits, uninstallSubKey);
+            if (!GetFileSha256(uninstaller).Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException("The installed uninstaller does not match the registered recovery hash.");
+            }
 
             Directory.CreateDirectory(transaction);
             File.WriteAllText(Path.Combine(transaction, StateFileName), install);
@@ -67,6 +92,10 @@ internal static class UninstallTransaction
                 deleteAppData == 0 ? "0" : "1",
                 System.Text.Encoding.ASCII);
             File.Copy(uninstaller, Path.Combine(transaction, RecoveryExecutableFileName), overwrite: false);
+            if (!GetFileSha256(Path.Combine(transaction, RecoveryExecutableFileName)).Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException("The copied recovery uninstaller does not match the registered recovery hash.");
+            }
             return 0;
         }
         catch (Exception exception)
@@ -94,6 +123,7 @@ internal static class UninstallTransaction
         try
         {
             var transaction = ValidateTransactionDirectory(transactionDirectory);
+            JournalAccess.ValidateProtectedMachineTree(transaction);
             CleanupCommitted(transaction);
             CleanupInactive(transaction);
             if (!Directory.Exists(transaction))
@@ -160,11 +190,17 @@ internal static class UninstallTransaction
         }
     }
 
-    internal static int Recover(string transactionDirectory, string expectedInstallDirectory)
+    internal static int Recover(
+        string transactionDirectory,
+        string expectedInstallDirectory,
+        string rootName,
+        int viewBits,
+        string uninstallSubKey)
     {
         try
         {
             var transaction = ValidateTransactionDirectory(transactionDirectory);
+            JournalAccess.ValidateProtectedMachineTree(transaction);
             CleanupCommitted(transaction);
             CleanupInactive(transaction);
             if (!Directory.Exists(transaction))
@@ -176,10 +212,21 @@ internal static class UninstallTransaction
                 transaction,
                 expectedInstallDirectory,
                 allowMissingExpectedPathWhenFinalizing: true);
+            if (File.Exists(Path.Combine(transaction, FinalizingFileName)))
+            {
+                // 持久状态已删除完毕；注册表锚点可能已移除，不再执行 journal 中的 EXE。
+                CommitCore(transaction);
+                return 0;
+            }
             var recoveryExecutable = Path.Combine(transaction, RecoveryExecutableFileName);
             if (!File.Exists(recoveryExecutable))
             {
                 throw new FileNotFoundException("The uninstall recovery executable is missing.", recoveryExecutable);
+            }
+            var expectedHash = ReadRegisteredRecoveryHash(rootName, viewBits, uninstallSubKey);
+            if (!GetFileSha256(recoveryExecutable).Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException("The uninstall recovery executable failed integrity validation.");
             }
 
             var startInfo = new ProcessStartInfo(recoveryExecutable)
@@ -208,6 +255,30 @@ internal static class UninstallTransaction
         {
             return exception.HResult;
         }
+    }
+
+    private static string ReadRegisteredRecoveryHash(string rootName, int viewBits, string uninstallSubKey)
+    {
+        var hive = rootName switch
+        {
+            "HKCU" => RegistryHive.CurrentUser,
+            "HKLM" => RegistryHive.LocalMachine,
+            _ => throw new InvalidDataException("The uninstall recovery registry root is invalid.")
+        };
+        var view = viewBits switch
+        {
+            32 => RegistryView.Registry32,
+            64 => RegistryView.Registry64,
+            _ => throw new InvalidDataException("The uninstall recovery registry view is invalid.")
+        };
+        using var root = RegistryKey.OpenBaseKey(hive, view);
+        using var key = root.OpenSubKey(uninstallSubKey, writable: false);
+        var hash = key?.GetValue(RecoveryHashValueName) as string;
+        if (hash is null || hash.Length != 64 || hash.Any(character => !Uri.IsHexDigit(character)))
+        {
+            throw new InvalidDataException("The registered uninstall recovery hash is missing or invalid.");
+        }
+        return hash;
     }
 
     private static string ValidateActiveTransaction(

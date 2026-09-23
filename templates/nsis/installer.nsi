@@ -78,6 +78,7 @@ Var TransactionActive
 Var UninstallTransactionDirectory
 Var UninstallTransactionState
 Var UninstallResumeMode
+Var RecoveryOnly
 
 ; DotNetBundlerNsis::SemverCompare 返回的比较结果。
 ; 将这些名称放在状态变量附近，便于理解各个版本策略分支。
@@ -96,6 +97,7 @@ Var UninstallResumeMode
 !define EXIT_INVALID_ARGUMENTS 3
 !define EXIT_VERSION_BLOCKED 4
 !define EXIT_APP_CLOSE_FAILED 5
+!define EXIT_RECOVERY_MANIFEST_MISMATCH 6
 !define EXIT_REBOOT_REQUIRED 3010
 
 Name "${PRODUCT_NAME}"
@@ -212,7 +214,15 @@ UninstPage custom un.AppDataOptionsPage un.AppDataOptionsLeave
 !macro CheckRecoveryResult
   Pop $0
   ${If} $0 != 0
-    StrCpy $ExitCode ${EXIT_FAILURE}
+    ${If} $0 == ${EXIT_RECOVERY_MANIFEST_MISMATCH}
+      StrCpy $ExitCode ${EXIT_RECOVERY_MANIFEST_MISMATCH}
+      DetailPrint "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+      ${IfNot} ${Silent}
+        MessageBox MB_ICONSTOP|MB_OK "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+      ${EndIf}
+    ${Else}
+      StrCpy $ExitCode ${EXIT_FAILURE}
+    ${EndIf}
     SetErrorLevel $ExitCode
     Quit
   ${EndIf}
@@ -247,6 +257,10 @@ UninstPage custom un.AppDataOptionsPage un.AppDataOptionsLeave
 !macroend
 
 Function ParseCommandLine
+  ${GetOptions} $CMDLINE "/RECOVERONLY" $0
+  ${IfNot} ${Errors}
+    StrCpy $RecoveryOnly 1
+  ${EndIf}
   ; /P 显示安装进度但跳过所有需要输入的页面。
   ${GetOptions} $CMDLINE "/P" $0
   ${IfNot} ${Errors}
@@ -340,6 +354,7 @@ Function .onInit
   StrCpy $CreateStartMenuShortcut {{shortcut_start_menu_default}}
   StrCpy $ExistingInstallAction 0
   StrCpy $TransactionActive 0
+  StrCpy $RecoveryOnly 0
   Call ParseCommandLine
   ; 静默与被动模式都不能显示语言选择器。
   ${IfNot} ${Silent}
@@ -354,6 +369,10 @@ Function .onInit
     Call SetDefaultInstallDirectory
   !endif
   Call RecoverInstallTransaction
+  ${If} $RecoveryOnly == 1
+    SetErrorLevel ${EXIT_SUCCESS}
+    Quit
+  ${EndIf}
   Call DetectExistingInstall
   ; 上一次卸载若被终止，先用 journal 中保存的原卸载器继续完成删除。
   ; 恢复过程返回 3010 时不能立即把新文件写回仍在待删除队列中的路径。
@@ -894,19 +913,23 @@ FunctionEnd
 Function RecoverInstallTransaction
   ; 先逐项核对 journal 目标与安装器编译时清单；全部通过后才恢复任何产品状态。
   ; 恢复动作始终使用清单中的目标，journal 中的路径和注册表元数据仅用于一致性验证。
+  DotNetBundlerNsis::ValidateTransactionSnapshotSet "$TransactionDirectory" "{{transaction_registry_snapshot_count}}" "{{transaction_file_snapshot_count}}"
+  !insertmacro CheckRecoveryResult
 {{transaction_validation_commands}}
+  DotNetBundlerNsis::ValidateTransactionSnapshotIntegrity "$TransactionDirectory" "$TransactionRegistryRoot" "$TransactionRegistryView"
+  !insertmacro CheckRecoveryResult
   DotNetBundlerNsis::BeginInstallTransactionRecovery "$TransactionDirectory" "$INSTDIR"
   !insertmacro CheckRecoveryResult
   DotNetBundlerNsis::BeginTransactionRegistryRestore "$TransactionDirectory"
   !insertmacro CheckRecoveryResult
 {{transaction_restore_commands}}
-  DotNetBundlerNsis::CompleteInstallTransactionRecovery "$TransactionDirectory"
+  DotNetBundlerNsis::CompleteInstallTransactionRecovery "$TransactionDirectory" "$TransactionRegistryRoot" "$TransactionRegistryView"
   !insertmacro CheckRecoveryResult
   StrCpy $TransactionActive 0
 FunctionEnd
 
 Function RecoverUninstallTransaction
-  DotNetBundlerNsis::RecoverUninstallTransaction "$UninstallTransactionDirectory" "$InstalledDirectory"
+  DotNetBundlerNsis::RecoverUninstallTransaction "$UninstallTransactionDirectory" "$InstalledDirectory" "$TransactionRegistryRoot" "$TransactionRegistryView" "${UNINSTALL_KEY}"
   Pop $0
   ${If} $0 == 0
     Return
@@ -933,13 +956,13 @@ Function PrepareInstallTransaction
   !ifmacrodef DOTNET_BUNDLER_TEST_BEFORE_TRANSACTION_ACTIVATE
     !insertmacro DOTNET_BUNDLER_TEST_BEFORE_TRANSACTION_ACTIVATE
   !endif
-  DotNetBundlerNsis::ActivateInstallTransaction "$TransactionDirectory"
+  DotNetBundlerNsis::ActivateInstallTransaction "$TransactionDirectory" "$TransactionRegistryRoot" "$TransactionRegistryView"
   !insertmacro CheckTransactionResult
   StrCpy $TransactionActive 1
 FunctionEnd
 
 Function CommitInstallTransaction
-  DotNetBundlerNsis::CommitInstallTransaction "$TransactionDirectory"
+  DotNetBundlerNsis::CommitInstallTransaction "$TransactionDirectory" "$TransactionRegistryRoot" "$TransactionRegistryView"
   !insertmacro CheckTransactionResult
   StrCpy $TransactionActive 0
 FunctionEnd
@@ -956,7 +979,7 @@ FunctionEnd
 
 Function un.PrepareUninstallTransaction
   ; 卸载 journal 保留一份原卸载器，使安装目录已部分删除后仍能继续恢复。
-  DotNetBundlerNsis::BeginUninstallTransaction "$UninstallTransactionDirectory" "$INSTDIR" "$INSTDIR\Uninstall.exe" "$DeleteAppData"
+  DotNetBundlerNsis::BeginUninstallTransaction "$UninstallTransactionDirectory" "$INSTDIR" "$INSTDIR\Uninstall.exe" "$DeleteAppData" "$TransactionRegistryRoot" "$TransactionRegistryView" "${UNINSTALL_KEY}"
   !insertmacro CheckUninstallTransactionResult
   DotNetBundlerNsis::ActivateUninstallTransaction "$UninstallTransactionDirectory"
   !insertmacro CheckUninstallTransactionResult
@@ -1112,6 +1135,12 @@ Section "Install" MainSection
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "QuietUninstallString" '"$INSTDIR\Uninstall.exe" /S'
+  DotNetBundlerNsis::GetUninstallRecoveryHash "$INSTDIR\Uninstall.exe"
+  Pop $1
+  ${If} $1 == ""
+    Call FailInstallTransaction
+  ${EndIf}
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "BundlerRecoverySha256" "$1"
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "EstimatedSize" ${ESTIMATED_SIZE}
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoModify" 1
   WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoRepair" 1

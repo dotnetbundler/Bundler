@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <BundlerPackageVersion Condition="'$(BundlerPackageVersion)' == ''">0.1.0-alpha.32</BundlerPackageVersion>
+    <BundlerPackageVersion Condition="'$(BundlerPackageVersion)' == ''">0.1.0-alpha.33</BundlerPackageVersion>
     <RestoreSources>$(BundlerPackageSource);https://api.nuget.org/v3/index.json</RestoreSources>
   </PropertyGroup>
   <ItemGroup>

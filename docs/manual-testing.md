@@ -177,7 +177,7 @@ git diff --check
 **需要**：两台或两个独立快照的可抛弃 Windows 虚拟机；其中一个可安全限制测试用户对安装目录/注册表的写入，另一个可通过独立虚拟磁盘或配额制造空间不足。
 
 1. ACL 用例先安装稳定旧版，保存安装目录、产品注册表、快捷方式和关键文件哈希。
-2. 分别安装 `currentUser` 与已提权 `perMachine` Fixture，使用 `icacls` 保存 `%LOCALAPPDATA%\DotNetBundler\transactions\<id>` 和 `%ProgramData%\DotNetBundler\transactions\<id>` 的 owner、继承项和标准用户有效权限。预期 current-user journal 可由该用户写入；per-machine journal 的实际 ACL 必须以提权安装创建后的目录为准，不能只从 `%ProgramData%` 父目录推断。
+2. 分别使用中断安装 Fixture 在 `currentUser` 与已提权 `perMachine` 模式留下 active journal；普通成功安装会清理 journal，不适合测 ACL。使用 `icacls` 保存 `%LOCALAPPDATA%\DotNetBundler\transactions\<id>`、`%ProgramData%\DotNetBundler\transactions\<id>` 及 `*.uninstall\recovery-uninstaller.exe` 的 owner、继承项和标准用户有效权限，并核查 HKCU/HKLM 安装摘要及 `BundlerRecoverySha256` 注册项权限。预期 current-user journal/锚点可由该用户写入；per-machine 必须以实际提权创建后的对象为准，不能只从 `%ProgramData%` 父目录推断。另在干净快照中由标准用户预先创建 `%ProgramData%\DotNetBundler`，确认提权安装不会在标准用户可写的 journal 中继续执行恢复卸载器；记录拒绝或受保护创建的实际行为。
 3. 仅对一个明确的测试文件或产品专用注册表项设置拒绝写入，执行升级；不对父目录、用户配置文件根或共享注册表根应用递归拒绝。
 4. 记录退出码、旧状态恢复情况和 active journal。恢复 ACL 后重试，确认下次启动恢复。
 5. 磁盘用例在专用虚拟磁盘/配额中执行，分别在事务快照阶段和新载荷写入阶段造成空间不足。不在日常开发机的系统盘填充文件。

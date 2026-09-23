@@ -3,8 +3,8 @@
 > 最后整理：2026-09-23
 > 当前分支：`codex/modular-bundler-backends`  
 > NSIS 冻结起点：`b116d09 feat(nsis): freeze secure packaging baseline`；当前提交以 `git rev-parse --short HEAD` 为准
-> 当前包版本：`0.1.0-alpha.32`
-> 当前阶段：NSIS journal 恢复目标加固已实现并验证；下一阶段为 `WIN-MSI-1`
+> 当前包版本：`0.1.0-alpha.33`
+> 当前阶段：NSIS 跨配置恢复与快照完整性加固；下一阶段仍为 `WIN-MSI-1`
 
 本文档是当前项目的“事实、决策、验证证据与协作约束”汇总，供后续开发任务直接接续。正式后续路线、产品边界、阶段完成条件和默认下一阶段以 `docs/roadmap.md` 为唯一规范来源。本文档不是面向最终用户的使用手册；当前需要维护的用户文档以根目录的 `README.zh-CN.md` 和 `samples/HelloBundledApp/README.md` 为准。代码与自动化测试始终是实现事实的最终依据。
 
@@ -164,13 +164,13 @@ Native AOT 下不能依赖经典 `ComImport`/RCW 自动封送来操作 Shell Lin
 
 ### 5.2 多语言
 
-- 内置 `English` 和 `SimpChinese` 模板文案。
+- 内置固定快照中的 22 种语言：Arabic、Bulgarian、Dutch、English、French、German、Italian、Japanese、Korean、Norwegian、Persian、Portuguese、PortugueseBR、Russian、SimpChinese、Spanish、SpanishInternational、Swedish、TradChinese、Turkish、Ukrainian、Vietnamese；对外 `Persian` 在 NSIS 内部映射为 `Farsi`。
 - 支持以分号配置语言列表，第一项是回退语言。
 - 配置多个语言且启用选择器时显示语言选择页。
-- 支持项目提供自定义 NSIS 语言文件，但必须覆盖模板所需的全部 `LangString`。
-- 当前示例会显示 English/简体中文选择器，并提供项目自己的简体中文文件。
+- 支持项目提供自定义 NSIS 语言文件；它完整替换该语言的内置文件，严格校验缺失、重复、未知键和 `LANG_*` 常量。
+- 当前示例选择 English、自定义 SimpChinese 和内置 Japanese，展示多语言选择器。
 
-Tauri 覆盖的完整语言集合目前尚未实现。不要把“两种内置语言 + 自定义扩展入口”描述成“已经支持 Tauri 的全部语言”。
+22 种语言均已由真实 NSIS 编译测试，另有非拉丁 Unicode 安装/卸载集成测试。译文内容、RTL 和不同缩放下的布局仍需 MT-11 外部审校；结构与可编译不等于母语质量验收。
 
 ### 5.3 安装范围
 
@@ -300,6 +300,8 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 - 安装和升级在修改旧状态前快照完整安装目录、产品相关注册表项、共享注册表值以及当前/旧名称快捷方式。
 - journal 按安装范围保存在 `%LOCALAPPDATA%\DotNetBundler\transactions` 或 `%ProgramData%\DotNetBundler\transactions`；只有快照完成后才标记为 active。
 - 恢复前先逐项比较 journal 快照目标与安装器编译时生成的固定清单；文件路径以及注册表 root、view、subkey、value name 任一不符都会在恢复载荷前失败。实际恢复再次校验，并只使用安装器清单中的目标；额外 journal 项不会被枚举执行。因此 journal 不能单独授权修改产品清单外的文件或注册表项。
+- 清单不同时返回专用退出码 `6`，保留 active journal；用创建该 journal 的原安装器及原 `/D=` 目录运行 `/S /RECOVERONLY`，只恢复旧状态，再运行新配置安装器。更早、不支持该开关的原包可按原范围/目录重试，由其自动恢复并继续自身安装，但不能保证“仅恢复”。缺失原安装器或其自身也无法完成时不会放弃清单校验自动猜测目标，需取得可信原包或人工排障；这是明确的恢复依赖而非静默兼容。
+- active 安装 journal 的静态快照树在激活时计算 SHA-256，并在相应 HKCU/HKLM 的独立注册表锚点保存；恢复前核对内容与目录结构，包括载荷和注册表快照。校验失败返回 `2` 且保留 journal，不执行部分恢复。同一用户可同时修改其 HKCU 锚点和 currentUser journal，因此这不是对同用户恶意进程的安全隔离。
 - 安装 Hook 可通过 `SetErrors` 或 `Abort` 触发失败；可继续执行失败处理时会立即回滚载荷、注册表和快捷方式。
 - 安装器进程被直接终止、无法运行 `.onInstFailed` 时保留 active journal；下一次启动同一产品安装器时先恢复旧状态，再执行版本检测和新事务。
 - journal 绑定原安装目录，恢复调用必须提供同一路径；安装目录、快捷方式路径和注册表恢复目标均不能只由可修改的 journal 决定。首次自定义 `/D` 安装若在注册安装目录前中断，重试时需要继续提供同一 `/D`。
@@ -311,12 +313,12 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 
 当前实现会临时占用接近现有安装目录大小的额外空间。构建输入、资源、安装快照/恢复、journal 和工具缓存统一拒绝 symlink、junction 与其他重解析点；安全清理只删除链接本身，不跟随目标。普通文件快照保留内容、基础属性和时间戳，但不承诺完整保真恢复自定义 ACL、ADS、稀疏文件等任意文件系统元数据。安装事务范围只覆盖 NSIS 安装和升级。旧 MSI 卸载是无法在缺少原 MSI 包时自动逆转的外部迁移边界，因此迁移后的失败只清理新 NSIS 状态，不宣称重新安装旧 MSI。安装载荷明确采用“锁定时安全失败并恢复”策略，不使用通用延迟替换：`MoveFileEx` 的延迟操作需要管理员上下文，无法为 `currentUser` 提供一致能力；共享 pending rename 队列也没有可安全纳入安装回滚事务的撤销机制。详见 `docs/nsis-locked-payload-policy.md`。
 
-权限边界核查（2026-09-23，本机当前 shell 为 Medium integrity）：`%LOCALAPPDATA%\DotNetBundler` 由当前用户拥有，当前用户具有继承的 Full Control，所以 `currentUser` journal 可被同一用户修改；这会造成同一用户权限内的完整性风险，但本身不是从普通用户到管理员的提权。`%ProgramData%` 由 SYSTEM 拥有，SYSTEM/Administrators 为 Full Control，普通 Users 在根上主要为读取/执行并具有限定的子目录创建权；本机尚不存在由提权安装器创建的 `%ProgramData%\DotNetBundler`，因此其最终继承 ACL 仍必须在 MT-01/MT-07 的真实 per-machine 安装中取证。加固不依赖这些 ACL：即使进程权限或 ACL 允许修改 journal，恢复目标仍受安装器清单限制。
+权限边界核查（2026-09-23，本机当前 shell 为 Medium integrity）：`%LOCALAPPDATA%\DotNetBundler` 由当前用户拥有，当前用户具有继承的 Full Control，currentUser journal 与 HKCU 锚点均可被同一用户修改；这不构成普通用户到管理员的提权隔离。`%ProgramData%` 由 SYSTEM 拥有，SYSTEM/Administrators 为 Full Control，普通 Users 在根上主要为读取/执行并具有限定的子目录创建权。代码现在要求 perMachine 产品目录、事务目录和 journal 树的所有者与允许 ACE 只属于 Administrators/SYSTEM，拒绝预建的宽权限目录；但本机尚无真实提权安装创建的最终 ACL，MT-01/MT-07 仍须验证创建、继承、重解析点和注册表锚点权限。目标清单约束独立于 ACL；快照内容和恢复卸载器的提权完整性则依赖受保护的锚点及目录边界。
 
 ### 5.12 卸载前向恢复
 
 - 卸载使用独立的 `${PRODUCT_ID}.uninstall` journal，不复用安装回滚快照，也不宣称能撤销已经删除或通过 `/REBOOTOK` 排队删除的文件。
-- 修改持久状态前保存原安装目录、`/DELETEAPPDATA` 选择和恢复卸载器；active 后的失败或进程中断保留这些状态。
+- 修改持久状态前保存原安装目录、`/DELETEAPPDATA` 选择和恢复卸载器；active 后的失败或进程中断保留这些状态。恢复卸载器从已安装的 `Uninstall.exe` 复制，复制前后与卸载注册项中的 `BundlerRecoverySha256` 对照；执行前再次校验 journal 副本的哈希，不匹配时不启动。
 - 卸载注册项保留到 finalizing 阶段，为下一次安装器提供受保护的 `InstallLocation`。恢复插件只接受与该目录一致的 journal，避免信任可修改 journal 选择递归删除目标。
 - 下一次安装启动会以 `_?=` 直接模式同步运行 journal 中的恢复卸载器。恢复阶段幂等重做所有权安全的快捷方式、关联、数据和载荷删除；成功进入 finalizing 后由父安装器原子提交并清理 journal，再继续新安装。
 - 若恢复返回 `3010`，新安装会停止，避免系统待删除队列在重启后删除刚写入的新载荷。
@@ -344,7 +346,7 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 
 当前示例必须持续展示：
 
-- English/简体中文语言选择与自定义中文语言文件；
+- English、自定义简体中文和内置 Japanese 的语言选择；
 - 许可证、品牌图片和版本元数据；
 - 自定义安装目录、非空目录保护与目录记忆；
 - 可选桌面/开始菜单快捷方式及参数、工作目录、图标、AUMID、目录和改名迁移；
@@ -405,7 +407,15 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 
 ## 8. 最近一次验证证据
 
-以下是 `0.1.0-alpha.32` 的验证入口与本阶段实际结果，不应扩写成未执行过的平台兼容承诺：
+`0.1.0-alpha.33` 在 2026-09-23 的实际验证：41 项 Release 单元/契约测试通过；Pack 成功，六个同版本 NuGet 包存在；完整 Windows NSIS 安装/卸载集成测试通过。集成新增用配置 A 的 1.2 安装器生成 active journal，配置不同的 B 1.3 安装器返回 `6` 并保留现场，原安装器 `/S /RECOVERONLY` 恢复旧版本与 EXE 哈希且不继续升级。载荷文件和注册表快照内容分别被篡改时返回 `2` 并保留 journal；恢复卸载器副本被篡改时同样拒绝执行。测试还覆盖原有目标路径和注册表目标篡改、失败注入、签名、语言等回归。首次新测试运行因断言把“中断时版本”误认为“恢复后版本”而失败；修正断言后完整集成通过。实际运行命令：
+
+```powershell
+dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
+dotnet pack Bundler.slnx -c Release -o artifacts/packages
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.33
+```
+
+以下保留 `0.1.0-alpha.32` 的历史验证记录，不应扩写成未执行过的平台兼容承诺：
 
 ```powershell
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
@@ -562,7 +572,7 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 
 - 分支：`codex/modular-bundler-backends`
 - NSIS 冻结起点：`b116d09`；当前 HEAD 应实时核查，不把本文档的历史提交误认为最新提交
-- 包版本：`0.1.0-alpha.32`
+- 包版本：`0.1.0-alpha.33`（Git HEAD 仍须实时核查）
 - 安装事务、Restart Manager、对应测试、示例和文档已经实现并提交；不得重新制作原型或把这些能力当作未完成项。
 
 上述分支、提交和版本是本文档最后整理时的快照。如果仓库已经向前推进，应调查后续提交和改动，并更新本文档，而不是强行退回该提交。

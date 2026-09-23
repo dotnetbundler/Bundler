@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.32",
+    [string]$PackageVersion = "0.1.0-alpha.33",
     [switch]$CleanupOnly
 )
 
@@ -32,6 +32,7 @@ $shortcutPersistenceFailureBundleOutput = Join-Path $integrationRoot "bundle-sho
 $registryPersistenceFailureBundleOutput = Join-Path $integrationRoot "bundle-registry-persistence-failure"
 $commitCleanupFailureBundleOutput = Join-Path $integrationRoot "bundle-commit-cleanup-failure"
 $interruptedBundleOutput = Join-Path $integrationRoot "bundle-interrupted"
+$differentManifestBundleOutput = Join-Path $integrationRoot "bundle-different-manifest"
 $rebootRequiredBundleOutput = Join-Path $integrationRoot "bundle-reboot-required"
 $allowedDowngradeBundleOutput = Join-Path $integrationRoot "bundle-allowed-downgrade"
 $legacyMsiProductMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-product-migration"
@@ -475,6 +476,7 @@ try {
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $registryPersistenceFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingRegistryPersistenceHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $commitCleanupFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingCommitCleanupHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $interruptedBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $abortingInstallerHooks
+    Build-FixtureBundle -InstallMode "currentUser" -OutputPath $differentManifestBundleOutput -ApplicationVersion "1.3.0" -ShortcutStartMenuFolder "Different Manifest Fixture"
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $rebootRequiredBundleOutput -ApplicationVersion "1.0.0" -InstallerHooks $rebootingInstallerHooks
     Build-FixtureBundle "currentUser" $allowedDowngradeBundleOutput "DotNet.Bundler" "1.0.0" $true
     Build-FixtureBundle "currentUser" $legacyMsiProductMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false $legacyMsiProductCode ""
@@ -516,6 +518,7 @@ try {
     $registryPersistenceFailureInstaller = Join-Path $registryPersistenceFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
     $commitCleanupFailureInstaller = Join-Path $commitCleanupFailureBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
     $interruptedInstaller = Join-Path $interruptedBundleOutput "win-x64\nsis\$productName-1.2.0-setup.exe"
+    $differentManifestInstaller = Join-Path $differentManifestBundleOutput "win-x64\nsis\$productName-1.3.0-setup.exe"
     $rebootRequiredInstaller = Join-Path $rebootRequiredBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $allowedDowngradeInstaller = Join-Path $allowedDowngradeBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $legacyMsiProductMigrationInstaller = Join-Path $legacyMsiProductMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
@@ -540,6 +543,7 @@ try {
     Assert-True (Test-Path -LiteralPath $registryPersistenceFailureInstaller) "Registry-persistence failure fixture was not created."
     Assert-True (Test-Path -LiteralPath $commitCleanupFailureInstaller) "Commit-cleanup failure fixture was not created."
     Assert-True (Test-Path -LiteralPath $interruptedInstaller) "Interrupted-install fixture was not created."
+    Assert-True (Test-Path -LiteralPath $differentManifestInstaller) "Different-manifest fixture was not created."
     Assert-True (Test-Path -LiteralPath $rebootRequiredInstaller) "Reboot-required fixture installer was not created."
     Assert-True (Test-Path -LiteralPath $allowedDowngradeInstaller) "Allowed-downgrade installer was not created."
     Assert-True (Test-Path -LiteralPath $legacyMsiProductMigrationInstaller) "ProductCode migration installer was not created."
@@ -581,6 +585,15 @@ try {
     Assert-True (Test-Path -LiteralPath $uninstallTransactionDirectory) "Failed uninstall did not preserve its active forward journal."
     Assert-True (Test-Path -LiteralPath (Join-Path $uninstallTransactionDirectory "recovery-uninstaller.exe")) "Failed uninstall did not preserve its recovery uninstaller."
     Assert-True (Test-Path -LiteralPath $registryPath) "Failed uninstall removed the protected recovery anchor too early."
+    $registeredRecoveryHash = Get-ItemPropertyValue -LiteralPath $registryPath -Name "BundlerRecoverySha256"
+    $recoveryUninstaller = Join-Path $uninstallTransactionDirectory "recovery-uninstaller.exe"
+    Assert-True ($registeredRecoveryHash -eq (Get-FileHash -LiteralPath $recoveryUninstaller -Algorithm SHA256).Hash) "Recovery uninstaller does not match the registered installer hash."
+    $originalRecoveryUninstaller = [IO.File]::ReadAllBytes($recoveryUninstaller)
+    [IO.File]::AppendAllText($recoveryUninstaller, "tampered")
+    $tamperedUninstallRecovery = Start-Process -FilePath $installer -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($tamperedUninstallRecovery.ExitCode -eq 2) "Modified recovery uninstaller was executed or accepted."
+    Assert-True (Test-Path -LiteralPath $uninstallTransactionDirectory) "Rejected recovery uninstaller did not preserve the forward journal."
+    [IO.File]::WriteAllBytes($recoveryUninstaller, $originalRecoveryUninstaller)
     Invoke-WindowsExecutable $installer "/S /D=$installDirectory"
     Assert-True (Test-Path -LiteralPath (Join-Path $installDirectory "BundlerIntegrationFixture.exe")) "Installer did not continue after completing a failed uninstall."
     Assert-True (-not (Test-Path -LiteralPath $uninstallTransactionDirectory)) "Installer recovery did not clean the failed-uninstall journal."
@@ -834,6 +847,44 @@ try {
     $interruptedProcess.WaitForExit()
     Assert-True ($interruptedProcess.ExitCode -ne 0) "Interrupted-install fixture unexpectedly returned success."
     Assert-True (Test-Path -LiteralPath $transactionDirectory) "Interrupted install did not preserve its active journal."
+    $interruptedDisplayVersion = Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion"
+
+    $differentManifestRecovery = Start-Process -FilePath $differentManifestInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($differentManifestRecovery.ExitCode -eq 6) "Different-manifest recovery did not return the dedicated mismatch exit code."
+    Assert-True (Test-Path -LiteralPath $transactionDirectory) "Different-manifest recovery did not preserve the active journal."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq $interruptedDisplayVersion) "Different-manifest recovery changed the installed version."
+
+    # 创建 journal 的原始安装器可以只恢复、不继续安装；随后新配置才能安全执行。
+    $originalManifestRecovery = Start-Process -FilePath $interruptedInstaller -ArgumentList "/S /RECOVERONLY /D=$installDirectory" -Wait -PassThru
+    Assert-True ($originalManifestRecovery.ExitCode -eq 0) "The original installer did not complete recovery-only mode."
+    Assert-True (-not (Test-Path -LiteralPath $transactionDirectory)) "Recovery-only mode did not clean the original active journal."
+    Assert-True ((Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash -eq $preInterruptedExecutableHash) "Recovery-only mode did not restore the previous executable."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Recovery-only mode installed a new version."
+
+    Remove-Item -LiteralPath $interruptedHookMarker -Force
+    $interruptedProcess = Start-Process -FilePath $interruptedInstaller -ArgumentList "/S /UPDATE /D=$installDirectory" -PassThru
+    Wait-For { Test-Path -LiteralPath $interruptedHookMarker } "Second interrupted-install fixture did not reach its post-install hook."
+    $taskkill = Start-Process -FilePath "$env:WINDIR\System32\taskkill.exe" -ArgumentList "/PID $($interruptedProcess.Id) /T /F" -Wait -PassThru -WindowStyle Hidden
+    Assert-True ($taskkill.ExitCode -eq 0) "Could not terminate the second interrupted-install process tree."
+    $interruptedProcess.WaitForExit()
+    Assert-True (Test-Path -LiteralPath $transactionDirectory) "The second interrupted install did not preserve its active journal."
+
+    $payloadSnapshot = Join-Path $transactionDirectory "payload\docs\license.txt"
+    Assert-True (Test-Path -LiteralPath $payloadSnapshot) "Interrupted journal did not contain the expected payload snapshot."
+    $originalPayloadSnapshot = [IO.File]::ReadAllBytes($payloadSnapshot)
+    [IO.File]::WriteAllText($payloadSnapshot, "modified-snapshot-content")
+    $modifiedPayloadRecovery = Start-Process -FilePath $upgradeInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($modifiedPayloadRecovery.ExitCode -eq 2) "Modified payload snapshot did not fail integrity validation."
+    Assert-True (Test-Path -LiteralPath $transactionDirectory) "Rejected payload content did not preserve the active journal."
+    [IO.File]::WriteAllBytes($payloadSnapshot, $originalPayloadSnapshot)
+
+    $contentRegistrySnapshot = Join-Path $transactionDirectory "registry\key-000.bin"
+    $originalContentRegistrySnapshot = [IO.File]::ReadAllBytes($contentRegistrySnapshot)
+    [IO.File]::AppendAllText($contentRegistrySnapshot, "modified-snapshot-content")
+    $modifiedRegistryRecovery = Start-Process -FilePath $upgradeInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($modifiedRegistryRecovery.ExitCode -eq 2) "Modified registry snapshot content did not fail integrity validation."
+    Assert-True (Test-Path -LiteralPath $transactionDirectory) "Rejected registry content did not preserve the active journal."
+    [IO.File]::WriteAllBytes($contentRegistrySnapshot, $originalContentRegistrySnapshot)
 
     # journal 只保存快照数据，不授予恢复目标。篡改快捷方式路径或注册表子键时，安装器必须
     # 在恢复任何产品状态前拒绝整个 journal，并且不得触碰清单外的 sentinel。
@@ -844,7 +895,7 @@ try {
     $originalSnapshotPath = [IO.File]::ReadAllText($pathFile)
     [IO.File]::WriteAllText($pathFile, $journalTamperFile)
     $tamperedFileRecovery = Start-Process -FilePath $upgradeInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
-    Assert-True ($tamperedFileRecovery.ExitCode -eq 2) "A tampered file recovery target did not fail safely."
+    Assert-True ($tamperedFileRecovery.ExitCode -eq 6) "A tampered file recovery target did not fail safely."
     Assert-True ([IO.File]::ReadAllText($journalTamperFile) -eq "outside-file-owned") "Recovery modified a file outside the installer manifest."
     Assert-True (Test-Path -LiteralPath $transactionDirectory) "A rejected file target did not preserve the active journal."
     [IO.File]::WriteAllText($pathFile, $originalSnapshotPath)
@@ -856,7 +907,7 @@ try {
     $originalRegistrySnapshot = [IO.File]::ReadAllBytes($registrySnapshot.FullName)
     Set-RegistrySnapshotSubKey $registrySnapshot.FullName "Software\DotNetBundler\JournalTamperSentinel"
     $tamperedRegistryRecovery = Start-Process -FilePath $upgradeInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
-    Assert-True ($tamperedRegistryRecovery.ExitCode -eq 2) "A tampered registry recovery target did not fail safely."
+    Assert-True ($tamperedRegistryRecovery.ExitCode -eq 6) "A tampered registry recovery target did not fail safely."
     Assert-True ((Get-ItemPropertyValue -LiteralPath $journalTamperRegistryPath -Name "Sentinel") -eq "outside-registry-owned") "Recovery modified a registry key outside the installer manifest."
     Assert-True (Test-Path -LiteralPath $transactionDirectory) "A rejected registry target did not preserve the active journal."
     [IO.File]::WriteAllBytes($registrySnapshot.FullName, $originalRegistrySnapshot)

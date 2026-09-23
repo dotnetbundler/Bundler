@@ -45,7 +45,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `ne
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.32" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.33" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -63,7 +63,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.32" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.33" />
 ```
 
 ```csharp
@@ -208,6 +208,10 @@ NSIS 安装和升级在修改持久状态前会把原安装目录、产品相关
 
 仓库的 Windows 集成矩阵会在事务快照、事务激活、载荷恢复、注册表恢复和 active journal 清理检查点注入一次性可控故障，验证未修改旧状态的安全失败以及下次启动的重入恢复。这些是确定性测试检查点，不代替真实 ACL 拒绝、磁盘耗尽或断电/重启环境验收。
 
+跨版本配置变化后，恢复目标必须与创建 active journal 的原安装器清单一致。新版安装器遇到不同的关联、协议或快捷方式清单时会保留 journal 并返回 `6`。若原安装器支持 `/RECOVERONLY`，用创建 journal 的原安装器执行 `"<原安装器.exe>" /S /RECOVERONLY /D=<原安装目录>`；该模式只恢复旧状态，退出码为 `0` 后再运行新版安装器。更早、不支持该开关的原安装器仍可按原安装范围和目录重试，由它先自动恢复再继续自身安装；不能将其当作“仅恢复”模式。若原安装器不可用或自身安装也无法完成，必须保留 journal 并取得可信原包或人工排障，不能删除 journal 或放弃清单校验强行继续。安装范围必须与原安装器一致。
+
+恢复前会核对安装快照摘要，卸载前向恢复副本会与安装时登记在卸载注册项中的卸载器哈希比对。摘要和哈希用于发现静态篡改或损坏；`currentUser` 用户同时可修改自己的 journal 与 HKCU 锚点，不构成抵御同一用户恶意篡改的安全边界。提权安装的实际边界还取决于 ProgramData journal 和 HKLM 的 ACL，见人工验收文档。
+
 ### 安装器命令行协议
 
 这些参数属于生成后的 NSIS 安装器接口，不是 MSBuild 属性：
@@ -218,13 +222,14 @@ NSIS 安装和升级在修改持久状态前会把原安装目录、产品相关
 | `/P` | 被动安装或卸载，只显示进度并跳过需要输入的页面 |
 | `/UPDATE` | 自动更新模式；未同时指定 `/S` 时隐含 `/P`，原位覆盖并保留现有快捷方式状态和应用数据 |
 | `/NS` | 不创建桌面和开始菜单快捷方式 |
+| `/RECOVERONLY` | 只用当前安装器清单恢复 active 安装 journal，不安装新版本；应与 `/S` 和原安装目录的 `/D=` 一起使用 |
 | `/R` | 成功后以桌面用户而非安装器管理员令牌启动应用；只允许与 `/S`、`/P` 或 `/UPDATE` 一起使用 |
 | `/ARGS=<参数行>` | 与 `/R` 配合，把参数直接传给应用，不经过 `cmd.exe` 或 PowerShell |
 | `/D=<目录>` | NSIS 原生安装目录参数，必须是整条命令的最后一个参数 |
 
 `/ARGS` 也兼容不带等号的写法，此时它后面的全部文本都会成为应用参数。需要同时使用 `/D` 时应使用 `/ARGS=<参数行>`，并仍把 `/D` 放在最后。自动模式只接受空目录或带当前产品安装标记的目录；它不会用无交互方式确认覆盖无关的非空目录。
 
-安装器稳定退出码为：`0` 成功、`1` 用户取消、`2` 一般失败、`3` 参数或自动安装目录无效、`4` 版本策略阻止、`5` 无法关闭正在运行的应用、`3010` 成功但需要重新启动 Windows。安装成功且重启标志已经置位时，安装事务会先提交并清理 journal，再返回 `3010`；即使指定 `/R`，也不会在重启前启动应用。实际卸载进程也把一般失败映射为 `2`、把 `/REBOOTOK` 已接受的删除映射为 `3010`。但直接启动安装目录中的 NSIS `Uninstall.exe` 会先经过自复制 launcher，外层进程不可靠地传播实际退出码；仓库的恢复与验收脚本会先复制卸载器并以 `_?=` 直接模式同步等待真实进程。不要把外层 launcher 的 `0` 当成卸载已完成的证据，应同时检查产品状态或使用受控的直接模式。
+安装器稳定退出码为：`0` 成功、`1` 用户取消、`2` 一般失败或快照内容完整性失败、`3` 参数或自动安装目录无效、`4` 版本策略阻止、`5` 无法关闭正在运行的应用、`6` active journal 与当前安装器恢复清单不同、`3010` 成功但需要重新启动 Windows。安装成功且重启标志已经置位时，安装事务会先提交并清理 journal，再返回 `3010`；即使指定 `/R`，也不会在重启前启动应用。实际卸载进程也把一般失败映射为 `2`、把 `/REBOOTOK` 已接受的删除映射为 `3010`。但直接启动安装目录中的 NSIS `Uninstall.exe` 会先经过自复制 launcher，外层进程不可靠地传播实际退出码；仓库的恢复与验收脚本会先复制卸载器并以 `_?=` 直接模式同步等待真实进程。不要把外层 launcher 的 `0` 当成卸载已完成的证据，应同时检查产品状态或使用受控的直接模式。
 
 当前普通安装载荷仍由 NSIS `File` 指令直接写入目标目录，它不会把无法覆盖的锁定文件自动转换成重启后替换。这是当前的明确安全策略：Windows 延迟替换需要管理员上下文，不能为 `currentUser` 安装提供一致保证；排入共享系统队列也只能证明请求被接受，不能证明重启时一定成功，更不能安全纳入当前回滚。安装器会检测这种跳过并返回 `2`；交互模式会提示关闭可能占用安装目录文件的应用后重试。若文件锁也阻止即时回滚，则保留 active journal，待释放锁后的下一次启动先恢复旧状态，绝不把新旧文件混合状态报告为成功。因此上述契约不能扩写为“已经支持锁定文件原位升级”：当前可验证的重启来源是旧 MSI 返回值、生命周期 Hook，以及提权卸载的 `/REBOOTOK` 删除。真实系统队列验收必须在可丢弃并允许重启的管理员 Windows 环境执行 `tests/Windows.Nsis.Reboot/Verify.ps1`；脚本不会编辑或清空共享的 `PendingFileRenameOperations`。
 
@@ -333,7 +338,7 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.32
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.33
 ```
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

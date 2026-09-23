@@ -329,6 +329,8 @@ internal sealed class NsisBundleBackend(
             ["transaction_snapshot_commands"] = transaction.SnapshotCommands,
             ["transaction_validation_commands"] = transaction.ValidationCommands,
             ["transaction_restore_commands"] = transaction.RestoreCommands,
+            ["transaction_registry_snapshot_count"] = transaction.RegistryCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["transaction_file_snapshot_count"] = transaction.FileCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["resource_install_commands"] = CreateResourceInstallCommands(resources),
             ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory, resources),
             ["language_macros"] = localization.LanguageMacros,
@@ -538,10 +540,13 @@ internal sealed class NsisBundleBackend(
         var validations = new List<string>();
         var restores = new List<string>();
         var index = 0;
+        var registryCount = 0;
+        var fileCount = 0;
 
         void BackupKey(string subKey)
         {
             var name = $"key-{index++:D3}";
+            registryCount++;
             snapshots.Add($"  DotNetBundlerNsis::BackupTransactionRegistryKey \"$TransactionDirectory\" \"{name}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\"");
             snapshots.Add("  !insertmacro CheckTransactionResult");
             validations.Add($"  DotNetBundlerNsis::ValidateTransactionRegistryKeySnapshot \"$TransactionDirectory\" \"{name}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\"");
@@ -553,6 +558,7 @@ internal sealed class NsisBundleBackend(
         void BackupValue(string subKey, string valueName)
         {
             var name = $"value-{index++:D3}";
+            registryCount++;
             snapshots.Add($"  DotNetBundlerNsis::BackupTransactionRegistryValue \"$TransactionDirectory\" \"{name}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\" \"{valueName}\"");
             snapshots.Add("  !insertmacro CheckTransactionResult");
             validations.Add($"  DotNetBundlerNsis::ValidateTransactionRegistryValueSnapshot \"$TransactionDirectory\" \"{name}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\" \"{valueName}\"");
@@ -564,6 +570,7 @@ internal sealed class NsisBundleBackend(
         void BackupFile(string path)
         {
             var name = $"file-{index++:D3}";
+            fileCount++;
             snapshots.Add($"  DotNetBundlerNsis::BackupTransactionFile \"$TransactionDirectory\" \"{name}\" \"{path}\"");
             snapshots.Add("  !insertmacro CheckTransactionResult");
             validations.Add($"  DotNetBundlerNsis::ValidateTransactionFileSnapshot \"$TransactionDirectory\" \"{name}\" \"{path}\"");
@@ -607,7 +614,9 @@ internal sealed class NsisBundleBackend(
         return new TransactionRendering(
             string.Join(Environment.NewLine, snapshots),
             string.Join(Environment.NewLine, validations),
-            string.Join(Environment.NewLine, restores));
+            string.Join(Environment.NewLine, restores),
+            registryCount,
+            fileCount);
     }
 
     private static string InstallModeName(NsisInstallMode mode) => mode switch
@@ -1118,7 +1127,9 @@ internal sealed class NsisBundleBackend(
     private sealed record TransactionRendering(
         string SnapshotCommands,
         string ValidationCommands,
-        string RestoreCommands);
+        string RestoreCommands,
+        int RegistryCount,
+        int FileCount);
 
     private sealed record ShortcutRendering(
         bool DesktopDefault,

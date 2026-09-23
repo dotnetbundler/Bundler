@@ -1,5 +1,7 @@
 using Microsoft.Win32;
 using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace DotNet.Bundler.Nsis.Plugin;
 
@@ -16,12 +18,15 @@ internal static class InstallTransaction
     private const string FailNextPayloadRestoreForTestFileName = ".dotnet-bundler-test-fail-next-payload-restore";
     private const string FailNextRegistryRestoreForTestFileName = ".dotnet-bundler-test-fail-next-registry-restore";
     private const string FailNextJournalCleanupForTestFileName = ".dotnet-bundler-test-fail-next-journal-cleanup";
+    private const string SealRegistryPrefix = @"Software\DotNetBundler\TransactionSeals\";
+    internal const int RecoveryManifestMismatch = 6;
 
     internal static int Begin(string transactionDirectory, string installDirectory)
     {
         try
         {
             var transaction = ValidateTransactionDirectory(transactionDirectory);
+            JournalAccess.EnsureProtectedMachineRoot(transaction);
             CleanupCommitted(transaction);
             var install = ValidateInstallDirectory(installDirectory, transaction);
             if (Directory.Exists(transaction))
@@ -134,7 +139,7 @@ internal static class InstallTransaction
         }
     }
 
-    internal static int Activate(string transactionDirectory)
+    internal static int Activate(string transactionDirectory, string rootName, int viewBits)
     {
         try
         {
@@ -144,6 +149,7 @@ internal static class InstallTransaction
             {
                 throw new InvalidOperationException("The install transaction has not been prepared.");
             }
+            WriteSeal(transaction, rootName, viewBits);
             File.WriteAllText(Path.Combine(transaction, ActiveFileName), string.Empty);
             return 0;
         }
@@ -153,7 +159,7 @@ internal static class InstallTransaction
         }
     }
 
-    internal static int Commit(string transactionDirectory)
+    internal static int Commit(string transactionDirectory, string rootName, int viewBits)
     {
         try
         {
@@ -168,6 +174,7 @@ internal static class InstallTransaction
                 // 同卷目录重命名是提交点。提交后清理失败不能再回滚已完成的安装；
                 // 保留 `.committed` 目录，由下一次安装启动安全重试清理。
                 Directory.Move(transaction, committed);
+                TryDeleteSeal(transaction, rootName, viewBits);
                 if (!retainCommittedForTest)
                 {
                     try
@@ -210,12 +217,48 @@ internal static class InstallTransaction
     internal static int ValidateFileSnapshot(string transactionDirectory, string name, string destination) =>
         Execute(() => ValidateFileSnapshotCore(transactionDirectory, name, destination));
 
+    internal static int ValidateSnapshotSet(string transactionDirectory, int registryCount, int fileCount) =>
+        Execute(() =>
+        {
+            var transaction = ValidateTransactionDirectory(transactionDirectory);
+            if (!IsActiveTransaction(transaction))
+            {
+                return;
+            }
+            JournalAccess.ValidateProtectedMachineTree(transaction);
+            var actualRegistryCount = Directory.EnumerateFiles(Path.Combine(transaction, "registry"), "*.bin").Count();
+            var actualFileCount = Directory.EnumerateDirectories(Path.Combine(transaction, "files")).Count();
+            if (actualRegistryCount != registryCount || actualFileCount != fileCount)
+            {
+                throw new RecoveryManifestMismatchException();
+            }
+        });
+
+    internal static int ValidateSnapshotIntegrity(string transactionDirectory, string rootName, int viewBits) =>
+        Execute(() =>
+        {
+            var transaction = ValidateTransactionDirectory(transactionDirectory);
+            if (!IsActiveTransaction(transaction))
+            {
+                return;
+            }
+            JournalAccess.ValidateProtectedMachineTree(transaction);
+            using var root = OpenRoot(rootName, viewBits, writable: false);
+            using var key = root.OpenSubKey(SealRegistryPath(transaction), writable: false);
+            var expected = key?.GetValue("SHA256") as string;
+            if (expected is null || !expected.Equals(HashSnapshotTree(transaction), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException("The active install transaction snapshot content failed integrity validation.");
+            }
+        });
+
     internal static int BeginRecovery(string transactionDirectory, string installDirectory)
     {
         return Execute(() =>
         {
             var transaction = ValidateTransactionDirectory(transactionDirectory);
             CleanupCommitted(transaction);
+            JournalAccess.ValidateProtectedMachineTree(transaction);
             if (!TryGetActiveTransaction(transaction, ValidateInstallDirectory(installDirectory, transaction), out var install))
             {
                 return;
@@ -263,7 +306,7 @@ internal static class InstallTransaction
     internal static int RestoreFile(string transactionDirectory, string name, string destination) =>
         Execute(() => RestoreFileSnapshot(transactionDirectory, name, destination));
 
-    internal static int CompleteRecovery(string transactionDirectory) =>
+    internal static int CompleteRecovery(string transactionDirectory, string rootName, int viewBits) =>
         Execute(() =>
         {
             var transaction = ValidateTransactionDirectory(transactionDirectory);
@@ -273,7 +316,84 @@ internal static class InstallTransaction
             }
             FailOnceForTest(transaction, FailNextJournalCleanupForTestFileName);
             SafeDeleteTree(transaction);
+            TryDeleteSeal(transaction, rootName, viewBits);
         });
+
+    private static void WriteSeal(string transaction, string rootName, int viewBits)
+    {
+        var digest = HashSnapshotTree(transaction);
+        using var root = OpenRoot(rootName, viewBits, writable: true);
+        using var key = root.CreateSubKey(SealRegistryPath(transaction), writable: true)
+            ?? throw new IOException("Cannot create the install transaction integrity seal.");
+        key.SetValue("SHA256", digest, RegistryValueKind.String);
+    }
+
+    private static void DeleteSeal(string transaction, string rootName, int viewBits)
+    {
+        using var root = OpenRoot(rootName, viewBits, writable: true);
+        root.DeleteSubKeyTree(SealRegistryPath(transaction), throwOnMissingSubKey: false);
+    }
+
+    private static void TryDeleteSeal(string transaction, string rootName, int viewBits)
+    {
+        // 提交点与恢复已完成后，清理锚点失败不能再把已完成操作报告为可回滚失败。
+        try
+        {
+            DeleteSeal(transaction, rootName, viewBits);
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private static string SealRegistryPath(string transaction) =>
+        SealRegistryPrefix + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(transaction.ToUpperInvariant())));
+
+    private static string HashSnapshotTree(string transaction)
+    {
+        var entries = new List<(string Relative, string FullPath, bool Directory)>();
+        var pending = new Stack<string>();
+        pending.Push(transaction);
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+            foreach (var entry in Directory.EnumerateFileSystemEntries(current))
+            {
+                var name = Path.GetFileName(entry);
+                if (current.Equals(transaction, StringComparison.OrdinalIgnoreCase) &&
+                    (name == ActiveFileName || name.StartsWith(".dotnet-bundler-test-", StringComparison.Ordinal)))
+                {
+                    continue;
+                }
+                RejectReparsePoint(entry);
+                var directory = Directory.Exists(entry);
+                entries.Add((Path.GetRelativePath(transaction, entry), entry, directory));
+                if (directory)
+                {
+                    pending.Push(entry);
+                }
+            }
+        }
+
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (var entry in entries.OrderBy(item => item.Relative, StringComparer.OrdinalIgnoreCase))
+        {
+            hash.AppendData(Encoding.UTF8.GetBytes((entry.Directory ? "D:" : "F:") + entry.Relative.ToUpperInvariant() + "\0"));
+            if (entry.Directory)
+            {
+                continue;
+            }
+            using var stream = File.OpenRead(entry.FullPath);
+            hash.AppendData(BitConverter.GetBytes(stream.Length));
+            var buffer = new byte[64 * 1024];
+            int count;
+            while ((count = stream.Read(buffer, 0, buffer.Length)) != 0)
+            {
+                hash.AppendData(buffer.AsSpan(0, count));
+            }
+        }
+        return Convert.ToHexString(hash.GetHashAndReset());
+    }
 
     private static int Execute(Action action)
     {
@@ -281,6 +401,10 @@ internal static class InstallTransaction
         {
             action();
             return 0;
+        }
+        catch (RecoveryManifestMismatchException)
+        {
+            return RecoveryManifestMismatch;
         }
         catch (Exception exception)
         {
@@ -411,6 +535,10 @@ internal static class InstallTransaction
     private static BinaryReader OpenRegistrySnapshot(string transaction, string name)
     {
         var snapshot = SnapshotPath(transaction, "registry", name);
+        if (!File.Exists(snapshot))
+        {
+            throw new RecoveryManifestMismatchException();
+        }
         RejectReparsePoint(snapshot);
         return new BinaryReader(File.OpenRead(snapshot));
     }
@@ -434,7 +562,7 @@ internal static class InstallTransaction
             !subKey.Equals(expectedSubKey, StringComparison.Ordinal) ||
             !string.Equals(valueName, expectedValueName, StringComparison.Ordinal))
         {
-            throw new InvalidDataException("The registry snapshot target does not match the installer recovery manifest.");
+            throw new RecoveryManifestMismatchException();
         }
     }
 
@@ -447,12 +575,16 @@ internal static class InstallTransaction
         }
 
         var snapshot = SnapshotDirectory(transaction, "files", name);
+        if (!Directory.Exists(snapshot))
+        {
+            throw new RecoveryManifestMismatchException();
+        }
         RejectReparsePoint(snapshot);
         var journalDestination = Path.GetFullPath(File.ReadAllText(Path.Combine(snapshot, "path.txt")));
         var trustedDestination = Path.GetFullPath(expectedDestination);
         if (!journalDestination.Equals(trustedDestination, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidDataException("The file snapshot target does not match the installer recovery manifest.");
+            throw new RecoveryManifestMismatchException();
         }
     }
 
@@ -711,5 +843,13 @@ internal static class InstallTransaction
         }
         RejectExistingReparsePoints(fullPath);
         return fullPath;
+    }
+
+    private sealed class RecoveryManifestMismatchException : Exception
+    {
+        internal RecoveryManifestMismatchException()
+            : base("The active transaction recovery manifest differs from this installer. Use the original installer with /S /RECOVERONLY and the same /D= directory before retrying.")
+        {
+        }
     }
 }

@@ -67,12 +67,12 @@ public static class PluginActions
         InstallTransaction.BackupFile(transactionDirectory, name, path);
 
     [NsisAction]
-    public static int ActivateInstallTransaction(string transactionDirectory) =>
-        InstallTransaction.Activate(transactionDirectory);
+    public static int ActivateInstallTransaction(string transactionDirectory, string root, int viewBits) =>
+        InstallTransaction.Activate(transactionDirectory, root, viewBits);
 
     [NsisAction]
-    public static int CommitInstallTransaction(string transactionDirectory) =>
-        InstallTransaction.Commit(transactionDirectory);
+    public static int CommitInstallTransaction(string transactionDirectory, string root, int viewBits) =>
+        InstallTransaction.Commit(transactionDirectory, root, viewBits);
 
     [NsisAction]
     public static int ValidateTransactionRegistryKeySnapshot(string transactionDirectory, string name, string root, int viewBits, string subKey) =>
@@ -85,6 +85,14 @@ public static class PluginActions
     [NsisAction]
     public static int ValidateTransactionFileSnapshot(string transactionDirectory, string name, string path) =>
         InstallTransaction.ValidateFileSnapshot(transactionDirectory, name, path);
+
+    [NsisAction]
+    public static int ValidateTransactionSnapshotSet(string transactionDirectory, int registryCount, int fileCount) =>
+        InstallTransaction.ValidateSnapshotSet(transactionDirectory, registryCount, fileCount);
+
+    [NsisAction]
+    public static int ValidateTransactionSnapshotIntegrity(string transactionDirectory, string root, int viewBits) =>
+        InstallTransaction.ValidateSnapshotIntegrity(transactionDirectory, root, viewBits);
 
     [NsisAction]
     public static int BeginInstallTransactionRecovery(string transactionDirectory, string installDirectory) =>
@@ -107,16 +115,23 @@ public static class PluginActions
         InstallTransaction.RestoreFile(transactionDirectory, name, path);
 
     [NsisAction]
-    public static int CompleteInstallTransactionRecovery(string transactionDirectory) =>
-        InstallTransaction.CompleteRecovery(transactionDirectory);
+    public static int CompleteInstallTransactionRecovery(string transactionDirectory, string root, int viewBits) =>
+        InstallTransaction.CompleteRecovery(transactionDirectory, root, viewBits);
 
     [NsisAction]
     public static int BeginUninstallTransaction(
         string transactionDirectory,
         string installDirectory,
         string uninstallerPath,
-        int deleteAppData) =>
-        UninstallTransaction.Begin(transactionDirectory, installDirectory, uninstallerPath, deleteAppData);
+        int deleteAppData,
+        string root,
+        int viewBits,
+        string uninstallSubKey) =>
+        UninstallTransaction.Begin(transactionDirectory, installDirectory, uninstallerPath, deleteAppData, root, viewBits, uninstallSubKey);
+
+    [NsisAction]
+    public static string GetUninstallRecoveryHash(string path) =>
+        UninstallTransaction.GetFileSha256(path);
 
     [NsisAction]
     public static int ValidateUninstallDeletionTrees(
@@ -151,8 +166,8 @@ public static class PluginActions
         UninstallTransaction.Commit(transactionDirectory);
 
     [NsisAction]
-    public static int RecoverUninstallTransaction(string transactionDirectory, string expectedInstallDirectory) =>
-        UninstallTransaction.Recover(transactionDirectory, expectedInstallDirectory);
+    public static int RecoverUninstallTransaction(string transactionDirectory, string expectedInstallDirectory, string root, int viewBits, string uninstallSubKey) =>
+        UninstallTransaction.Recover(transactionDirectory, expectedInstallDirectory, root, viewBits, uninstallSubKey);
 
     [NsisAction]
     public static int CreateShortcut(

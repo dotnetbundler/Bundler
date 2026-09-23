@@ -175,7 +175,7 @@ static async Task VerifiesAndExtractsBundledNsis()
             "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
         Assert(File.Exists(pluginPath), "The bundled NSIS plug-in is missing.");
         Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))) ==
-               "ED3A50B0466CEDF319AA51384E7B7BDB14ED0D5938487E28561D2DD494E423B3",
+               "F60708A67784CA379C8135F3203A2102DF0CB44D976F9B7E932F8F756A922B01",
             "The bundled NSIS plug-in checksum changed; rebuild and update its provenance.");
 
         var toolset = await NsisToolResolver.ResolveAsync(archive, cache);
@@ -1244,6 +1244,8 @@ static void ProvidesInteractiveNsisSafetyOptions()
         "Running-application coordination should use the exact installed executable path.");
     Assert(template.Contains("Function PrepareInstallTransaction", StringComparison.Ordinal) &&
            template.Contains("DotNetBundlerNsis::ActivateInstallTransaction", StringComparison.Ordinal) &&
+           template.Contains("DotNetBundlerNsis::ValidateTransactionSnapshotSet", StringComparison.Ordinal) &&
+           template.Contains("DotNetBundlerNsis::ValidateTransactionSnapshotIntegrity", StringComparison.Ordinal) &&
            template.Contains("DotNetBundlerNsis::BeginInstallTransactionRecovery", StringComparison.Ordinal) &&
            template.Contains("DotNetBundlerNsis::CompleteInstallTransactionRecovery", StringComparison.Ordinal) &&
            !template.Contains("DotNetBundlerNsis::RollbackInstallTransaction", StringComparison.Ordinal) &&
@@ -1253,6 +1255,8 @@ static void ProvidesInteractiveNsisSafetyOptions()
            template.Contains("DOTNET_BUNDLER_TEST_BEFORE_TRANSACTION_ACTIVATE", StringComparison.Ordinal),
         "The repository fixtures should be able to inject pre-activation transaction failures.");
     Assert(template.Contains("BeginUninstallTransaction", StringComparison.Ordinal) &&
+           template.Contains("GetUninstallRecoveryHash", StringComparison.Ordinal) &&
+           template.Contains("BundlerRecoverySha256", StringComparison.Ordinal) &&
            template.Contains("RecoverUninstallTransaction", StringComparison.Ordinal) &&
            template.Contains("MarkUninstallTransactionFinalizing", StringComparison.Ordinal) &&
            template.Contains("CommitUninstallTransaction", StringComparison.Ordinal),
@@ -1302,6 +1306,13 @@ static void PinsInstallRecoveryToInstallerManifest()
             Assert(script.Contains($"DotNetBundlerNsis::{action} \"$TransactionDirectory\" \"key-000\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"${{UNINSTALL_KEY}}\"", StringComparison.Ordinal),
                 $"{action} should use the same installer-defined registry snapshot name and target.");
         }
+
+        Assert(script.Contains("ValidateTransactionSnapshotSet \"$TransactionDirectory\" \"3\" \"2\"", StringComparison.Ordinal) &&
+               script.Contains("ValidateTransactionSnapshotIntegrity \"$TransactionDirectory\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\"", StringComparison.Ordinal),
+            "Recovery should reject a different snapshot set and changed snapshot content before restoring the payload.");
+        Assert(script.Contains("/RECOVERONLY", StringComparison.Ordinal) &&
+               script.Contains("EXIT_RECOVERY_MANIFEST_MISMATCH 6", StringComparison.Ordinal),
+            "A different installer manifest should have a recovery-only path and a dedicated automation error.");
 
         foreach (var action in new[]
         {
