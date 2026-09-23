@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.30",
+    [string]$PackageVersion = "0.1.0-alpha.31",
     [switch]$CleanupOnly
 )
 
@@ -61,6 +61,7 @@ $interruptedUninstallHooks = Join-Path $PSScriptRoot "Fixture\Assets\interrupted
 $installRoot = Join-Path $integrationRoot "安装 目录"
 $installDirectory = Join-Path $installRoot "Bundler Integration Fixture"
 $externalFixtureDirectory = Join-Path $integrationRoot "same-name-external-process"
+$reparseOutsideDirectory = Join-Path $integrationRoot "reparse-outside"
 $defaultInstallDirectory = Join-Path $env:LOCALAPPDATA "Programs\Bundler Integration Fixture"
 $identifier = "com.dotnetbundler.integrationfixture"
 $productName = "Bundler Integration Fixture"
@@ -291,7 +292,7 @@ function Remove-TestState {
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
     }
     Invoke-MsiExec "/x $legacyMsiProductCode /qn /norestart" @(0, 1605, 3010)
-    foreach ($path in @($installDirectory, $installRoot, $externalFixtureDirectory, $unicodeInstallRoot)) {
+    foreach ($path in @($installDirectory, $installRoot, $externalFixtureDirectory, $reparseOutsideDirectory, $unicodeInstallRoot)) {
         Assert-UnderIntegrationRoot $path
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
     }
@@ -656,6 +657,27 @@ try {
     Stop-Process -Id $script:externalFixtureProcess.Id -Force
     $script:externalFixtureProcess.WaitForExit()
 
+    # 安装快照和 journal 都必须拒绝重解析点，且不能跟随 junction 修改外部目录。
+    New-Item -ItemType Directory -Path $reparseOutsideDirectory -Force | Out-Null
+    $reparseSentinel = Join-Path $reparseOutsideDirectory "sentinel.txt"
+    Set-Content -LiteralPath $reparseSentinel -Value "outside-owned" -Encoding UTF8
+    New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($transactionDirectory)) -Force | Out-Null
+    New-Item -ItemType Junction -Path $transactionDirectory -Target $reparseOutsideDirectory | Out-Null
+    $journalReparseProcess = Start-Process -FilePath $installer -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($journalReparseProcess.ExitCode -eq 2) "A transaction-journal junction did not fail safely."
+    Assert-True ((Get-Content -Raw -LiteralPath $reparseSentinel).Trim() -eq "outside-owned") "Transaction validation followed a journal junction."
+    [IO.Directory]::Delete($transactionDirectory)
+
+    $payloadJunction = Join-Path $installDirectory "linked-outside"
+    New-Item -ItemType Junction -Path $payloadJunction -Target $reparseOutsideDirectory | Out-Null
+    $payloadReparseProcess = Start-Process -FilePath $upgradeInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($payloadReparseProcess.ExitCode -eq 2) "An installed-payload junction did not fail before snapshot mutation."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.0.0") "Reparse-point rejection changed the installed version."
+    Assert-True ((Get-Content -Raw -LiteralPath $reparseSentinel).Trim() -eq "outside-owned") "Install snapshot followed a payload junction."
+    Assert-True (-not (Test-Path -LiteralPath $transactionDirectory)) "Reparse-point snapshot failure left a transaction journal."
+    [IO.Directory]::Delete($payloadJunction)
+    Remove-Item -LiteralPath $reparseOutsideDirectory -Recurse -Force
+
     # 自动更新原位覆盖并保留运行时数据及用户删除快捷方式的选择；/R 与 /ARGS
     # 会在成功后以桌面用户身份启动应用。
     $upgradePreservedData = Join-Path $installDirectory "upgrade-preserved.db"
@@ -823,6 +845,17 @@ try {
     New-Item -ItemType Directory -Path $localData -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $roamingData "settings.json") -Value "{}" -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $localData "cache.bin") -Value "cache" -Encoding UTF8
+    New-Item -ItemType Directory -Path $reparseOutsideDirectory -Force | Out-Null
+    $reparseSentinel = Join-Path $reparseOutsideDirectory "uninstall-sentinel.txt"
+    Set-Content -LiteralPath $reparseSentinel -Value "outside-owned" -Encoding UTF8
+    $uninstallPayloadJunction = Join-Path $installDirectory "uninstall-linked-outside"
+    New-Item -ItemType Junction -Path $uninstallPayloadJunction -Target $reparseOutsideDirectory | Out-Null
+    $unsafeUninstall = Start-DirectUninstaller $uninstaller $installDirectory "/S" -Wait
+    Assert-True ($unsafeUninstall.ExitCode -eq 2) "Uninstall did not reject an installed-payload junction."
+    Assert-True (Test-Path -LiteralPath $installedExecutable) "Rejected uninstall modified the installed payload."
+    Assert-True ((Get-Content -Raw -LiteralPath $reparseSentinel).Trim() -eq "outside-owned") "Uninstall followed an installed-payload junction."
+    Assert-True (-not (Test-Path -LiteralPath $uninstallTransactionDirectory)) "Rejected uninstall left a forward journal."
+    [IO.Directory]::Delete($uninstallPayloadJunction)
     Invoke-WindowsExecutable $uninstaller "/S"
     Wait-For { -not (Test-Path -LiteralPath $installedExecutable) } "Packaged executable survived uninstall."
     Assert-True (Test-Path -LiteralPath $runtimeData) "Default uninstall should preserve runtime-created program data."
@@ -850,6 +883,14 @@ try {
     New-Item -ItemType Directory -Path $localData -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $roamingData "settings.json") -Value "{}" -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $localData "cache.bin") -Value "cache" -Encoding UTF8
+    $appDataJunction = Join-Path $roamingData "linked-outside"
+    New-Item -ItemType Junction -Path $appDataJunction -Target $reparseOutsideDirectory | Out-Null
+    $unsafeDeleteAppData = Start-DirectUninstaller (Join-Path $installDirectory "Uninstall.exe") $installDirectory "/S /DELETEAPPDATA" -Wait
+    Assert-True ($unsafeDeleteAppData.ExitCode -eq 2) "DELETEAPPDATA did not reject an application-data junction."
+    Assert-True (Test-Path -LiteralPath (Join-Path $installDirectory "BundlerIntegrationFixture.exe")) "Rejected DELETEAPPDATA modified the installation."
+    Assert-True ((Get-Content -Raw -LiteralPath $reparseSentinel).Trim() -eq "outside-owned") "DELETEAPPDATA followed an application-data junction."
+    Assert-True (-not (Test-Path -LiteralPath $uninstallTransactionDirectory)) "Rejected DELETEAPPDATA left a forward journal."
+    [IO.Directory]::Delete($appDataJunction)
     # 模拟另一应用在卸载前接管协议，验证卸载器不会删除新的所有者。
     Set-Item -LiteralPath (Join-Path $urlSchemeRegistryPath "shell\open\command") -Value '"C:\OtherApp\Other.exe" "%1"'
     # 同样接管两个同名快捷方式；卸载器必须按实际目标判定所有权，而不是按名称删除。
@@ -866,6 +907,7 @@ try {
     Assert-True (Test-Path -LiteralPath $startMenuShortcut) "Uninstall removed a same-name Start Menu shortcut owned by another application."
     Assert-True ((Get-ShortcutInfo $desktopShortcut).TargetPath -eq $foreignShortcutTarget) "Uninstall changed the foreign desktop shortcut."
     Assert-True ((Get-ShortcutInfo $startMenuShortcut).TargetPath -eq $foreignShortcutTarget) "Uninstall changed the foreign Start Menu shortcut."
+    Remove-Item -LiteralPath $reparseOutsideDirectory -Recurse -Force
 
     Write-Host "PASS Windows NSIS install/uninstall integration"
 }

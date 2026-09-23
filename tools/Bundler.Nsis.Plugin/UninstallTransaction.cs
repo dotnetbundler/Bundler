@@ -13,6 +13,28 @@ internal static class UninstallTransaction
     private const string FinalizingFileName = "finalizing";
     private const string CommittedSuffix = ".committed";
 
+    internal static int ValidateDeletionTrees(
+        string installDirectory,
+        string roamingDataDirectory,
+        string localDataDirectory,
+        int deleteAppData)
+    {
+        try
+        {
+            RejectReparsePointsInTree(Path.GetFullPath(installDirectory));
+            if (deleteAppData != 0)
+            {
+                RejectReparsePointsInTree(Path.GetFullPath(roamingDataDirectory));
+                RejectReparsePointsInTree(Path.GetFullPath(localDataDirectory));
+            }
+            return 0;
+        }
+        catch (Exception exception)
+        {
+            return exception.HResult;
+        }
+    }
+
     internal static int Begin(
         string transactionDirectory,
         string installDirectory,
@@ -36,6 +58,7 @@ internal static class UninstallTransaction
             {
                 throw new InvalidDataException("The recovery uninstaller must be the installed Uninstall.exe.");
             }
+            RejectReparsePoint(uninstaller);
 
             Directory.CreateDirectory(transaction);
             File.WriteAllText(Path.Combine(transaction, StateFileName), install);
@@ -240,7 +263,7 @@ internal static class UninstallTransaction
         Directory.Move(transaction, committed);
         try
         {
-            Directory.Delete(committed, recursive: true);
+            SafeDeleteTree(committed);
         }
         catch (IOException)
         {
@@ -254,7 +277,7 @@ internal static class UninstallTransaction
     {
         if (Directory.Exists(transaction) && !File.Exists(Path.Combine(transaction, ActiveFileName)))
         {
-            Directory.Delete(transaction, recursive: true);
+            SafeDeleteTree(transaction);
         }
     }
 
@@ -263,8 +286,80 @@ internal static class UninstallTransaction
         var committed = transaction + CommittedSuffix;
         if (Directory.Exists(committed))
         {
-            Directory.Delete(committed, recursive: true);
+            SafeDeleteTree(committed);
         }
+    }
+
+    private static void RejectReparsePoint(string path)
+    {
+        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new IOException($"Uninstall transaction cannot safely use a reparse point: {path}");
+        }
+    }
+
+    private static void RejectExistingReparsePoints(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(fullPath) ?? string.Empty;
+        var current = root;
+        foreach (var component in fullPath.Substring(root.Length)
+                     .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, component);
+            if (File.Exists(current) || Directory.Exists(current))
+            {
+                RejectReparsePoint(current);
+            }
+        }
+    }
+
+    private static void RejectReparsePointsInTree(string root)
+    {
+        if (!Directory.Exists(root))
+        {
+            return;
+        }
+        RejectReparsePoint(root);
+        var pending = new Stack<string>();
+        pending.Push(root);
+        while (pending.Count > 0)
+        {
+            foreach (var entry in Directory.EnumerateFileSystemEntries(pending.Pop()))
+            {
+                RejectReparsePoint(entry);
+                if (Directory.Exists(entry))
+                {
+                    pending.Push(entry);
+                }
+            }
+        }
+    }
+
+    private static void SafeDeleteTree(string path)
+    {
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+        {
+            Directory.Delete(path);
+            return;
+        }
+        foreach (var entry in Directory.EnumerateFileSystemEntries(path))
+        {
+            if (Directory.Exists(entry))
+            {
+                SafeDeleteTree(entry);
+            }
+            else
+            {
+                File.SetAttributes(entry, FileAttributes.Normal);
+                File.Delete(entry);
+            }
+        }
+        Directory.Delete(path);
     }
 
     private static string ValidateTransactionDirectory(string path)
@@ -276,6 +371,7 @@ internal static class UninstallTransaction
         {
             throw new ArgumentException("The uninstall transaction directory must not be a drive root.", nameof(path));
         }
+        RejectExistingReparsePoints(fullPath);
         return fullPath;
     }
 
@@ -293,6 +389,7 @@ internal static class UninstallTransaction
         {
             throw new ArgumentException("The uninstall transaction and install directories must not contain each other.", nameof(path));
         }
+        RejectExistingReparsePoints(fullPath);
         return fullPath;
     }
 }

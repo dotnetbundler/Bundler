@@ -25,7 +25,7 @@
 
 后续实现 WiX/MSI 时再增加 `DotNet.Bundler.Wix`，当前不会发布没有实现的空占位包。
 
-`DotNet.Bundler.Nsis` 完整嵌入固定版本的 [`NsisToolset` 3.12-r1](https://github.com/dotnetbundler/NsisToolset/releases/tag/v3.12-r1)，其上游 NSIS 版本为 3.12。工具集包含一份公共 NSIS 数据目录，以及 Windows、Linux x64/arm64、macOS x64/arm64 的宿主编译器。使用者无需安装 NSIS，也不需要在线下载工具。首次使用会校验 SHA-256，并解压到共享的用户工具缓存；同一台机器上的项目会复用按内容寻址的工具目录。
+`DotNet.Bundler.Nsis` 完整嵌入固定版本的 [`NsisToolset` 3.12-r1](https://github.com/dotnetbundler/NsisToolset/releases/tag/v3.12-r1)，其上游 NSIS 版本为 3.12。工具集包含一份公共 NSIS 数据目录，以及 Windows、Linux x64/arm64、macOS x64/arm64 的宿主编译器。使用者无需安装 NSIS，也不需要在线下载工具。每次解析都会先校验压缩包 SHA-256，再以压缩包内逐文件哈希清单验证共享缓存；缺失、篡改、额外文件、manifest 损坏或重解析点都会在跨进程锁内触发安全重建。缓存支持 Unicode 和长路径，同一台机器上的项目复用按内容寻址的工具目录。
 
 MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `netstandard2.0` 资产。打包决策和后端调度直接在 MSBuild 进程内完成，包不会再启动额外的 .NET CLI 驱动。NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为它本身就是安装程序编译器。因此，Windows NSIS 目标包可以在任一受支持的宿主上构建。
 
@@ -45,7 +45,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `ne
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.30" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.31" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -63,7 +63,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.30" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.31" />
 ```
 
 ```csharp
@@ -200,7 +200,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 默认模板提供当前用户安装、可选择并记住上次位置的安装目录、非本应用的非空目录警告、DPI 感知、压缩、可选的开始菜单与桌面快捷方式、运行程序检测和关闭、“应用和功能”卸载信息、可选删除应用数据、静默卸载以及完成页启动程序。运行程序检测通过 Windows Restart Manager 注册安装目录中的当前主程序和显式声明的旧主程序完整路径，不再按映像文件名全局结束进程，因此不会关闭其他目录下的同名程序。快捷方式的默认选择、参数、工作目录、图标、稳定 AppUserModelID 和开始菜单目录均可配置；工作目录和图标必须存在于最终安装载荷中。更新只刷新仍存在且仍指向当前主程序或显式声明旧主程序的快捷方式；卸载采用相同所有权检查，因此同名快捷方式被其他程序接管后会保留。旧产品名和旧主程序名用于显式迁移改名版本。任务栏/开始菜单自动取消固定受 Windows 版本行为影响，目前只列为人工验收项，不宣称保证支持。未选择删除应用数据时，卸载只删除程序目录中属于构建载荷的路径：程序后来在新路径创建的文件会保留；如果创建或覆盖的是构建载荷中的同名路径，卸载时仍会删除。选择删除应用数据时，会递归删除整个程序安装目录，以及 `%APPDATA%\<identifier>` 和 `%LOCALAPPDATA%\<identifier>`。
 
-NSIS 安装和升级在修改持久状态前会把原安装目录、产品相关注册表项以及受管理的快捷方式写入用户或计算机范围的事务 journal。复制、Hook、注册或快捷方式阶段失败时会立即恢复旧状态；如果安装器进程被直接终止，下一次启动同一产品的安装器会先恢复未提交事务。journal 与当时选择的安装目录绑定，恢复时目录不一致会安全失败；首次自定义 `/D` 安装若在写入安装记录前中断，重试时应继续传入同一 `/D`。事务提交先把 journal 原子重命名为 `.committed`，再尽力删除快照；提交后的清理失败不会错误回滚已经完成的安装，而由下一次启动重试清理。快照会临时占用接近现有安装目录大小的额外磁盘空间；如果空间不足或现有安装目录包含不能安全复制的重解析点，安装会在修改旧状态前失败。当前安装事务不包含自定义 ACL 的逐项还原。旧 MSI 卸载是外部且不可逆的迁移边界；没有原 MSI 包时无法自动恢复，因此只保证迁移后新 NSIS 状态失败时会被清理，不宣称能重新安装已移除的 MSI。
+NSIS 安装和升级在修改持久状态前会把原安装目录、产品相关注册表项以及受管理的快捷方式写入用户或计算机范围的事务 journal。复制、Hook、注册或快捷方式阶段失败时会立即恢复旧状态；如果安装器进程被直接终止，下一次启动同一产品的安装器会先恢复未提交事务。journal 与当时选择的安装目录绑定，恢复时目录不一致会安全失败；首次自定义 `/D` 安装若在写入安装记录前中断，重试时应继续传入同一 `/D`。事务提交先把 journal 原子重命名为 `.committed`，再尽力删除快照；提交后的清理失败不会错误回滚已经完成的安装，而由下一次启动重试清理。构建输入、资源、安装快照、恢复树、journal 和工具缓存统一采用“不跟随链接”的策略：遇到 symlink、junction 或其他重解析点即在越界读写前失败，清理链接时只删除链接本身。快照会临时占用接近现有安装目录大小的额外磁盘空间。普通文件的内容、基础属性和时间戳会进入安装快照，但不承诺逐项保真恢复自定义 ACL、ADS、稀疏文件等任意文件系统元数据；需要这些语义的应用应把它们当作产品专属迁移，而不是依赖通用打包器猜测。旧 MSI 卸载是外部且不可逆的迁移边界；没有原 MSI 包时无法自动恢复，因此只保证迁移后新 NSIS 状态失败时会被清理，不宣称能重新安装已移除的 MSI。
 
 卸载采用独立的前向恢复 journal，而不是回滚事务。开始删除前会保存安装目录、删除应用数据选择和一份恢复卸载器；进入 active 后若 Hook 失败或进程中断，已完成的删除不会被伪装成可撤销，下次启动同一产品安装器时会先校验注册表中的安装目录，再用 journal 副本幂等完成剩余删除。卸载注册项保留到 finalizing 阶段作为受保护的路径锚点，完成后才删除并原子提交 journal。卸载 Hook 因此必须可重复执行；选择 `/DELETEAPPDATA` 和 `/REBOOTOK` 进入系统待删除队列的意图都会跨恢复保留。
 
@@ -333,7 +333,7 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.30
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.31
 ```
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

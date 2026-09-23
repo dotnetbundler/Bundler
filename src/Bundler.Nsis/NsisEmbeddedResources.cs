@@ -25,18 +25,25 @@ internal static class NsisEmbeddedResources
         var templatePath = Path.Combine(resourceDirectory, "templates", "installer.nsi");
         var languageDirectory = Path.Combine(resourceDirectory, "templates", "languages");
         var pluginDirectory = Path.Combine(resourceDirectory, "plugins", "x86-unicode");
+        var lockDirectory = Path.Combine(cacheDirectory, ".resource-locks");
 
-        await WriteVerifiedAsync(assembly, Prefix + "nsis-toolset-3.12-r1.zip", archivePath, cancellationToken);
-        await WriteVerifiedAsync(assembly, Prefix + "installer.nsi", templatePath, cancellationToken);
+        await WriteVerifiedAsync(assembly, Prefix + "nsis-toolset-3.12-r1.zip", archivePath, lockDirectory, cancellationToken);
+        await WriteVerifiedAsync(assembly, Prefix + "installer.nsi", templatePath, lockDirectory, cancellationToken);
         foreach (var language in NsisLanguageCatalog.Definitions)
         {
             await WriteVerifiedAsync(
                 assembly,
                 Prefix + "languages." + language.Name + ".nsh",
                 Path.Combine(languageDirectory, language.Name + ".nsh"),
+                lockDirectory,
                 cancellationToken);
         }
-        await WriteVerifiedAsync(assembly, Prefix + "plugins.DotNetBundlerNsis.dll", Path.Combine(pluginDirectory, "DotNetBundlerNsis.dll"), cancellationToken);
+        await WriteVerifiedAsync(
+            assembly,
+            Prefix + "plugins.DotNetBundlerNsis.dll",
+            Path.Combine(pluginDirectory, "DotNetBundlerNsis.dll"),
+            lockDirectory,
+            cancellationToken);
 
         return new NsisResourcePaths(archivePath, templatePath, languageDirectory, pluginDirectory);
     }
@@ -45,6 +52,7 @@ internal static class NsisEmbeddedResources
         Assembly assembly,
         string resourceName,
         string destinationPath,
+        string lockDirectory,
         CancellationToken cancellationToken)
     {
         using var resource = assembly.GetManifestResourceStream(resourceName) ??
@@ -52,6 +60,10 @@ internal static class NsisEmbeddedResources
         using var memory = new MemoryStream();
         await resource.CopyToAsync(memory, 81920, cancellationToken);
         var expected = ComputeHash(memory.GetBuffer(), checked((int)memory.Length));
+
+        Directory.CreateDirectory(lockDirectory);
+        var lockPath = Path.Combine(lockDirectory, expected + ".lock");
+        using var resourceLock = await AcquireLockAsync(lockPath, cancellationToken);
 
         if (File.Exists(destinationPath) && HashFile(destinationPath).Equals(expected, StringComparison.OrdinalIgnoreCase))
         {
@@ -89,6 +101,22 @@ internal static class NsisEmbeddedResources
             if (File.Exists(temporaryPath))
             {
                 File.Delete(temporaryPath);
+            }
+        }
+    }
+
+    private static async Task<FileStream> AcquireLockAsync(string path, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException)
+            {
+                await Task.Delay(50, cancellationToken);
             }
         }
     }

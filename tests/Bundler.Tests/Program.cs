@@ -2,6 +2,7 @@ using DotNet.Bundler;
 using DotNet.Bundler.Core;
 using DotNet.Bundler.Nsis;
 using DotNet.Bundler.Signing.Windows;
+using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -24,6 +25,10 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Adds app dependency before DMG", () => RunSync(AddsAppDependencyBeforeDmg)),
     ("Rejects executable paths outside input", () => RunSync(RejectsExecutablePathEscape)),
     ("Verifies and extracts bundled NSIS", VerifiesAndExtractsBundledNsis),
+    ("Recovers and serializes the tool cache", RecoversAndSerializesToolCache),
+    ("Recovers and serializes embedded NSIS resources", RecoversAndSerializesEmbeddedNsisResources),
+    ("Rejects unsafe tool archives", RejectsUnsafeToolArchives),
+    ("Rejects reparse points in NSIS payloads", () => RunSync(RejectsReparsePointsInNsisPayloads)),
     ("Selects every bundled NSIS host compiler", () => RunSync(SelectsEveryBundledNsisHostCompiler)),
     ("Compares semantic versions for installer policy", () => RunSync(ComparesSemanticVersionsForInstallerPolicy)),
     ("Rejects invalid NSIS package versions", RejectsInvalidNsisPackageVersions),
@@ -169,7 +174,7 @@ static async Task VerifiesAndExtractsBundledNsis()
             "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
         Assert(File.Exists(pluginPath), "The bundled NSIS plug-in is missing.");
         Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))) ==
-               "B89EC3B89A3A90B36000691E027C39D6378EE8CCC59C85D35A35F2AFD06BB5AD",
+               "240B9AF98F0200244C53EFBB68FD2FFD73E63E5F352DE1FC4B3EE8BAA714ADEE",
             "The bundled NSIS plug-in checksum changed; rebuild and update its provenance.");
 
         var toolset = await NsisToolResolver.ResolveAsync(archive, cache);
@@ -244,6 +249,213 @@ static void LetsUsersChooseInstallDirectory()
            template.Contains("MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_VALUENAME \"InstallLocation\"", StringComparison.Ordinal) &&
            template.Contains("${If} $INSTDIR == \"placeholder\\${INSTALL_FOLDER}\"", StringComparison.Ordinal),
         "Fixed and selectable install scopes should restore their previously selected install directories.");
+}
+
+static async Task RecoversAndSerializesToolCache()
+{
+    var root = Path.Combine(
+        Path.GetTempPath(),
+        "DotNet.Bundler.Cache.Tests",
+        "Unicode-工具缓存",
+        new string('a', 70),
+        new string('b', 70),
+        Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    var archivePath = Path.Combine(root, "tool.zip");
+    try
+    {
+        using (var zip = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        {
+            WriteZipEntry(zip, "bin/tool.exe", "trusted executable");
+            WriteZipEntry(zip, "data/说明.txt", "trusted data");
+        }
+        var archive = new ZipToolArchive(
+            "fixture",
+            "1.0.0",
+            HashFile(archivePath),
+            "bin/tool.exe",
+            ["data/说明.txt"]);
+        var cache = Path.Combine(root, "共享缓存");
+        var results = await Task.WhenAll(
+            Enumerable.Range(0, 8).Select(_ => ZipToolCache.ResolveToolAsync(archivePath, cache, archive)));
+        Assert(results.Select(result => result.DirectoryPath).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1,
+            "Concurrent tool resolution did not converge on one cache entry.");
+
+        var executable = results[0].ExecutablePath;
+        await File.WriteAllTextAsync(executable, "corrupted");
+        await File.WriteAllTextAsync(Path.Combine(results[0].DirectoryPath, "unexpected.txt"), "corrupted");
+        var repaired = await ZipToolCache.ResolveToolAsync(archivePath, cache, archive);
+        Assert(await File.ReadAllTextAsync(repaired.ExecutablePath) == "trusted executable",
+            "A modified cached executable was not restored from the trusted archive.");
+        Assert(!File.Exists(Path.Combine(repaired.DirectoryPath, "unexpected.txt")),
+            "Unexpected cache content was not removed during recovery.");
+
+        var outside = Path.Combine(root, "outside");
+        Directory.CreateDirectory(outside);
+        var sentinel = Path.Combine(outside, "sentinel.txt");
+        await File.WriteAllTextAsync(sentinel, "keep");
+        var link = Path.Combine(repaired.DirectoryPath, "linked-outside");
+        Directory.CreateSymbolicLink(link, outside);
+        repaired = await ZipToolCache.ResolveToolAsync(archivePath, cache, archive);
+        Assert(File.Exists(sentinel) && !Directory.Exists(link),
+            "Cache recovery followed or retained a directory reparse point.");
+        Directory.Delete(repaired.DirectoryPath, recursive: true);
+        await File.WriteAllTextAsync(repaired.DirectoryPath, "directory replaced by a file");
+        repaired = await ZipToolCache.ResolveToolAsync(archivePath, cache, archive);
+        Assert(Directory.Exists(repaired.DirectoryPath) && await File.ReadAllTextAsync(repaired.ExecutablePath) == "trusted executable",
+            "A cache directory replaced by a file was not rebuilt.");
+
+        var linkedCache = Path.Combine(root, "linked-cache");
+        Directory.CreateSymbolicLink(linkedCache, outside);
+        try
+        {
+            await ZipToolCache.ResolveToolAsync(archivePath, linkedCache, archive);
+            throw new InvalidOperationException("A reparse-point tool cache root was accepted.");
+        }
+        catch (InvalidDataException)
+        {
+        }
+        Directory.Delete(linkedCache);
+        Assert(File.Exists(sentinel), "Tool cache root validation followed a reparse point.");
+        Assert(File.Exists(Path.Combine(repaired.DirectoryPath, ".bundler-tool-manifest")),
+            "A verified cache manifest was not persisted.");
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static async Task RejectsUnsafeToolArchives()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.UnsafeZip.Tests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        foreach (var (name, configure) in new (string Name, Action<ZipArchive> Configure)[]
+        {
+            ("traversal", zip => WriteZipEntry(zip, "../escaped.exe", "escape")),
+            ("symlink", zip =>
+            {
+                var entry = zip.CreateEntry("tool-link");
+                entry.ExternalAttributes = (0xA000 | 0x1FF) << 16;
+                using var writer = new StreamWriter(entry.Open());
+                writer.Write("outside");
+            })
+        })
+        {
+            var archivePath = Path.Combine(root, name + ".zip");
+            using (var zip = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+            {
+                configure(zip);
+            }
+            var descriptor = new ZipToolArchive(name, "1", HashFile(archivePath),
+                name == "traversal" ? "escaped.exe" : "tool-link");
+            try
+            {
+                await ZipToolCache.ResolveToolAsync(archivePath, Path.Combine(root, "cache"), descriptor);
+                throw new InvalidOperationException($"Unsafe {name} archive was accepted.");
+            }
+            catch (InvalidDataException)
+            {
+            }
+        }
+        Assert(!File.Exists(Path.Combine(root, "escaped.exe")),
+            "Archive traversal wrote outside the cache staging directory.");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
+static async Task RecoversAndSerializesEmbeddedNsisResources()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Resource.Tests", "资源", Guid.NewGuid().ToString("N"));
+    try
+    {
+        var resources = await Task.WhenAll(
+            Enumerable.Range(0, 4).Select(_ => NsisEmbeddedResources.MaterializeAsync(root, CancellationToken.None)));
+        Assert(resources.Select(item => item.TemplatePath).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1,
+            "Concurrent embedded resource materialization did not converge on one immutable path.");
+        var expected = await File.ReadAllTextAsync(resources[0].TemplatePath);
+        await File.WriteAllTextAsync(resources[0].TemplatePath, "corrupted");
+        var repaired = await NsisEmbeddedResources.MaterializeAsync(root, CancellationToken.None);
+        Assert(await File.ReadAllTextAsync(repaired.TemplatePath) == expected,
+            "A corrupted embedded NSIS resource was not restored.");
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static void RejectsReparsePointsInNsisPayloads()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Reparse.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "input");
+    var outside = Path.Combine(root, "outside");
+    Directory.CreateDirectory(input);
+    Directory.CreateDirectory(outside);
+    try
+    {
+        File.WriteAllText(Path.Combine(input, "ExampleApp.exe"), "fixture");
+        File.WriteAllText(Path.Combine(outside, "outside.txt"), "must not package");
+        Directory.CreateSymbolicLink(Path.Combine(input, "linked-outside"), outside);
+        var configuration = ValidConfiguration(new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "win-x64",
+            InputDirectory = input,
+            MainExecutable = "ExampleApp.exe",
+            Formats = [PackageFormat.Nsis]
+        });
+        var item = new BundlePlanItem(
+            new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+            PackageFormat.Nsis,
+            input,
+            "ExampleApp.exe",
+            Path.Combine(root, "output"),
+            false);
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+        try
+        {
+            NsisBundleBackend.CreateScript(
+                template,
+                configuration,
+                new NsisBundleConfiguration(),
+                item,
+                Path.Combine(root, "setup.exe"),
+                "ExampleApp");
+            throw new InvalidOperationException("An NSIS payload directory reparse point was accepted.");
+        }
+        catch (InvalidDataException exception) when (
+            exception.Message.Contains("reparse point", StringComparison.OrdinalIgnoreCase))
+        {
+        }
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
+static void WriteZipEntry(ZipArchive archive, string path, string contents)
+{
+    var entry = archive.CreateEntry(path);
+    using var writer = new StreamWriter(entry.Open());
+    writer.Write(contents);
+}
+
+static string HashFile(string path)
+{
+    using var stream = File.OpenRead(path);
+    return Convert.ToHexString(SHA256.HashData(stream));
 }
 
 static async Task SignsPeFileWithoutWindowsSdk()

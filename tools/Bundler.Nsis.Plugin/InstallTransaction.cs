@@ -119,6 +119,7 @@ internal static class InstallTransaction
             File.WriteAllText(Path.Combine(directory, "path.txt"), Path.GetFullPath(path));
             if (File.Exists(path))
             {
+                RejectReparsePoint(path);
                 File.Copy(path, Path.Combine(directory, "content"), overwrite: false);
                 File.WriteAllText(Path.Combine(directory, "exists"), string.Empty);
             }
@@ -213,7 +214,7 @@ internal static class InstallTransaction
         var state = Path.Combine(transaction, StateFileName);
         if (!File.Exists(active) || !File.Exists(state))
         {
-            Directory.Delete(transaction, recursive: true);
+            SafeDeleteTree(transaction);
             return;
         }
 
@@ -225,7 +226,7 @@ internal static class InstallTransaction
         FailOnceForTest(transaction, FailNextPayloadRestoreForTestFileName);
         if (Directory.Exists(install))
         {
-            Directory.Delete(install, recursive: true);
+            SafeDeleteTree(install);
         }
         if (File.Exists(Path.Combine(transaction, OriginalPayloadFileName)))
         {
@@ -236,7 +237,7 @@ internal static class InstallTransaction
         RestoreRegistry(transaction);
         RestoreFiles(transaction);
         FailOnceForTest(transaction, FailNextJournalCleanupForTestFileName);
-        Directory.Delete(transaction, recursive: true);
+        SafeDeleteTree(transaction);
     }
 
     private static void FailOnceForTest(string transactionDirectory, string markerName)
@@ -258,7 +259,7 @@ internal static class InstallTransaction
         var committed = CommittedTransactionDirectory(transactionDirectory);
         if (Directory.Exists(committed))
         {
-            Directory.Delete(committed, recursive: true);
+            SafeDeleteTree(committed);
         }
     }
 
@@ -275,6 +276,7 @@ internal static class InstallTransaction
 
         foreach (var snapshot in Directory.EnumerateFiles(directory, "*.bin").OrderBy(path => path, StringComparer.Ordinal))
         {
+            RejectReparsePoint(snapshot);
             using var reader = new BinaryReader(File.OpenRead(snapshot));
             var kind = reader.ReadByte();
             var rootName = reader.ReadString();
@@ -322,7 +324,9 @@ internal static class InstallTransaction
 
         foreach (var snapshot in Directory.EnumerateDirectories(directory).OrderBy(path => path, StringComparer.Ordinal))
         {
+            RejectReparsePoint(snapshot);
             var destination = Path.GetFullPath(File.ReadAllText(Path.Combine(snapshot, "path.txt")));
+            RejectExistingReparsePoints(destination);
             if (File.Exists(destination))
             {
                 File.Delete(destination);
@@ -488,6 +492,48 @@ internal static class InstallTransaction
         }
     }
 
+    private static void RejectExistingReparsePoints(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(fullPath) ?? string.Empty;
+        var current = root;
+        foreach (var component in fullPath.Substring(root.Length)
+                     .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, component);
+            if (File.Exists(current) || Directory.Exists(current))
+            {
+                RejectReparsePoint(current);
+            }
+        }
+    }
+
+    private static void SafeDeleteTree(string path)
+    {
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+        {
+            Directory.Delete(path);
+            return;
+        }
+        foreach (var entry in Directory.EnumerateFileSystemEntries(path))
+        {
+            if (Directory.Exists(entry))
+            {
+                SafeDeleteTree(entry);
+            }
+            else
+            {
+                File.SetAttributes(entry, FileAttributes.Normal);
+                File.Delete(entry);
+            }
+        }
+        Directory.Delete(path);
+    }
+
     private static string SnapshotPath(string transactionDirectory, string category, string name) =>
         Path.Combine(SnapshotDirectory(transactionDirectory, category, name) + ".bin");
 
@@ -507,6 +553,7 @@ internal static class InstallTransaction
         {
             throw new ArgumentException("The transaction directory must not be a drive root.", nameof(path));
         }
+        RejectExistingReparsePoints(fullPath);
         return fullPath;
     }
 
@@ -522,6 +569,7 @@ internal static class InstallTransaction
         {
             throw new ArgumentException("The transaction and install directories must not contain each other.", nameof(path));
         }
+        RejectExistingReparsePoints(fullPath);
         return fullPath;
     }
 }

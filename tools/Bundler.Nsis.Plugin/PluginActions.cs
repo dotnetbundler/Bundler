@@ -87,6 +87,18 @@ public static class PluginActions
         UninstallTransaction.Begin(transactionDirectory, installDirectory, uninstallerPath, deleteAppData);
 
     [NsisAction]
+    public static int ValidateUninstallDeletionTrees(
+        string installDirectory,
+        string roamingDataDirectory,
+        string localDataDirectory,
+        int deleteAppData) =>
+        UninstallTransaction.ValidateDeletionTrees(
+            installDirectory,
+            roamingDataDirectory,
+            localDataDirectory,
+            deleteAppData);
+
+    [NsisAction]
     public static int ActivateUninstallTransaction(string transactionDirectory) =>
         UninstallTransaction.Activate(transactionDirectory);
 

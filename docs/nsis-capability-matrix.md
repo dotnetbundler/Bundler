@@ -1,9 +1,9 @@
 # NSIS 与 Tauri bundler 能力矩阵
 
-> 审计日期：2026-09-21  
+> 审计日期：2026-09-23
 > Tauri 仓库：`tauri-apps/tauri`  
 > 固定 commit：`5d995ed35b029cecd780fdbe614dc6023a89b81b`  
-> 本项目已提交基线：`49fa6e6 feat(signing): complete Windows signing pipeline`
+> 本项目已提交基线：`0f91d8f feat(nsis): complete built-in localization`
 
 本文档记录 `NSIS-R1` 的逐项审计结果。目标是对齐适用于通用桌面打包器的用户能力，不复制 Tauri 字段、Rust 数据模型或 runtime 部署逻辑。状态定义和产品边界见 `docs/roadmap.md`。
 
@@ -66,7 +66,7 @@
 | `category` | 无 NSIS 输出 | 格式不适用；未来 macOS/Linux 后端设计时评估 |
 | `fileAssociations` | `BundleFileAssociationConfiguration` | 已实现；本阶段修复 JSON loader 丢失该配置的缺陷 |
 | `shortDescription` / `longDescription` | 当前通用 `Description` | NSIS 等价能力已实现；需要区分长短描述的后端出现时再拆分模型 |
-| `useLocalToolsDir` | `ToolCacheDirectory` / `BundlerToolCachePath` | 已实现；默认用户级内容寻址缓存，也允许显式覆盖 |
+| `useLocalToolsDir` | `ToolCacheDirectory` / `BundlerToolCachePath` | 已实现；默认用户级内容寻址缓存，也允许显式覆盖；压缩包哈希、逐文件 manifest、跨进程锁和损坏恢复已有自动化 |
 | `externalBin` | 完整输入目录 + `BundleResourceConfiguration` | 明确采用不同方案；调用方准备最终 payload，不复制 Tauri target-triple 自动发现约定 |
 | URL/深链接协议 | `BundleUrlProtocolConfiguration` | 已实现；本阶段修复 JSON loader 丢失该配置的缺陷 |
 
@@ -88,6 +88,9 @@ JSON 配置加载器是未来 CLI 的共享入口。本阶段验证它会保留�
 | 完整内置语言集合 | 已实现，内容质量外部待验收 | 22 种语言均由真实 NSIS 编译；非拉丁 Windows E2E；MT-11 审校译文/RTL/截断 |
 | payload、插件、卸载器、安装器完整签名 | 已实现，生产身份外部待验收 | 临时副本中签主 EXE和显式 payload，再签 Bundler 插件、卸载器和安装器；外部 provider 可替换内置实现 |
 | 真实 UAC、重启、ARM64、生产证书 | 外部待验收 | 统一见 `docs/manual-testing.md` |
+| symlink、junction、重解析点 | 已实现，采用安全拒绝 | 构建输入、资源、安装快照/恢复、journal 和工具缓存均不跟随；Windows E2E 验证外部目录不被修改 |
+| ACL、ADS 与任意文件系统元数据 | 明确不承诺完整保真 | 保证失败不越界且不把混合载荷报告为成功；产品专属元数据应由显式 Hook 迁移 |
+| 工具缓存完整性和并发恢复 | 已实现 | 信任锚为固定 ZIP SHA-256 和 ZIP 内逐文件哈希；覆盖篡改、额外文件、manifest、链接、并发、Unicode 与长路径 |
 
 ## 5. 审计结论
 
@@ -96,3 +99,4 @@ JSON 配置加载器是未来 CLI 的共享入口。本阶段验证它会保留�
 3. 文件关联和 URL 协议原本在 API/MSBuild 路径可用，但 JSON loader 会丢失，本阶段已修复，为未来 CLI 保持同一通用模型。
 4. 完整签名已在 `NSIS-R2` 收口；22 种内置语言、严格键校验、覆盖和回退已在 `NSIS-R3` 收口。
 5. WebView2、VC Runtime 和 Tauri updater 产物不构成当前通用安装器能力；不会为字段对齐制造运行时部署系统。
+6. `NSIS-R4` 已冻结安全边界：受管文件树拒绝重解析点，工具缓存以固定归档和逐文件哈希校验；ACL/ADS 不列为通用保真承诺。后续新增格式不得隐式放宽这些边界。

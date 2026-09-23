@@ -1131,6 +1131,10 @@ Section "Uninstall"
     Goto uninstall_finalize
   ${EndIf}
   Call un.EnsureAppClosed
+  ; 在任何持久状态删除前拒绝安装目录和所选应用数据树中的重解析点。
+  ; 恢复卸载也会重新执行该校验，避免 journal 创建后被链接替换而越界删除。
+  DotNetBundlerNsis::ValidateUninstallDeletionTrees "$INSTDIR" "$APPDATA\${PRODUCT_ID}" "$LOCALAPPDATA\${PRODUCT_ID}" "$DeleteAppData"
+  !insertmacro CheckUninstallTransactionResult
   ${If} $UninstallTransactionState == 0
     Call un.PrepareUninstallTransaction
   ${EndIf}

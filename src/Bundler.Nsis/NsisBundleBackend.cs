@@ -45,6 +45,8 @@ internal sealed class NsisBundleBackend(
             throw new DirectoryNotFoundException($"The NSIS data directory was not found: {fullDataDirectory}");
         }
 
+        InspectDirectoryTree(item.InputDirectory);
+
         var fullTemplatePath = Path.GetFullPath(templatePath);
         if (!File.Exists(fullTemplatePath))
         {
@@ -192,7 +194,8 @@ internal sealed class NsisBundleBackend(
     {
         var destination = Path.Combine(context.WorkDirectory, "signed-plugins");
         CopyDirectory(sourceDirectory, destination);
-        foreach (var path in Directory.EnumerateFiles(destination, "*.dll", SearchOption.AllDirectories)
+        foreach (var path in InspectDirectoryTree(destination).Files
+                     .Where(path => Path.GetExtension(path).Equals(".dll", StringComparison.OrdinalIgnoreCase))
                      .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
         {
             context.Logger.Log(BundleLogLevel.Information, $"Signing Bundler native component '{Path.GetFileName(path)}'.");
@@ -220,12 +223,13 @@ internal sealed class NsisBundleBackend(
 
     private static void CopyDirectory(string source, string destination)
     {
+        var tree = InspectDirectoryTree(source);
         Directory.CreateDirectory(destination);
-        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        foreach (var directory in tree.Directories)
         {
             Directory.CreateDirectory(Path.Combine(destination, RelativePath(source, directory)));
         }
-        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        foreach (var file in tree.Files)
         {
             var target = Path.Combine(destination, RelativePath(source, file));
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
@@ -748,8 +752,9 @@ internal sealed class NsisBundleBackend(
     {
         var inputRoot = Path.GetFullPath(inputDirectory)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var inputTree = InspectDirectoryTree(inputRoot);
         var targets = new HashSet<string>(
-            Directory.EnumerateFiles(inputRoot, "*", SearchOption.AllDirectories)
+            inputTree.Files
                 .Select(path => RelativePath(inputRoot, path)),
             StringComparer.OrdinalIgnoreCase);
         var resources = new List<PayloadResource>();
@@ -760,6 +765,7 @@ internal sealed class NsisBundleBackend(
             var target = NormalizeTargetPath(configured.TargetPath);
             if (File.Exists(source))
             {
+                RejectReparsePoint(source, "Bundle resource");
                 Add(source, target);
                 continue;
             }
@@ -769,7 +775,7 @@ internal sealed class NsisBundleBackend(
                 throw new FileNotFoundException("Bundle resource was not found.", source);
             }
 
-            foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+            foreach (var file in InspectDirectoryTree(source).Files)
             {
                 Add(file, CombineInstallerPath(target, RelativePath(source, file)));
             }
@@ -926,9 +932,10 @@ internal sealed class NsisBundleBackend(
         IReadOnlyList<PayloadResource> resources)
     {
         var root = Path.GetFullPath(inputDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var tree = InspectDirectoryTree(root);
         var lines = new List<string>();
 
-        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        foreach (var file in tree.Files)
         {
             lines.Add($"  Delete /REBOOTOK \"$INSTDIR\\{Escape(ToInstallerPath(RelativePath(root, file)))}\"");
         }
@@ -939,7 +946,7 @@ internal sealed class NsisBundleBackend(
         }
 
         var directories = new HashSet<string>(
-            Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories)
+            tree.Directories
                 .Select(path => ToInstallerPath(RelativePath(root, path))),
             StringComparer.OrdinalIgnoreCase);
         foreach (var resource in resources)
@@ -1035,9 +1042,49 @@ internal sealed class NsisBundleBackend(
 
     private static long EstimateSizeInKilobytes(string directory)
     {
-        var bytes = Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
+        var bytes = InspectDirectoryTree(directory).Files
             .Sum(path => new FileInfo(path).Length);
         return Math.Max(1, (bytes + 1023) / 1024);
+    }
+
+    private static DirectoryTree InspectDirectoryTree(string root)
+    {
+        var fullRoot = Path.GetFullPath(root);
+        if (!Directory.Exists(fullRoot))
+        {
+            throw new DirectoryNotFoundException($"Bundle input directory was not found: {fullRoot}");
+        }
+        RejectReparsePoint(fullRoot, "Bundle directory");
+        var directories = new List<string>();
+        var files = new List<string>();
+        var pending = new Stack<string>();
+        pending.Push(fullRoot);
+        while (pending.Count > 0)
+        {
+            var directory = pending.Pop();
+            foreach (var path in Directory.EnumerateFileSystemEntries(directory))
+            {
+                RejectReparsePoint(path, "Bundle input");
+                if (Directory.Exists(path))
+                {
+                    directories.Add(path);
+                    pending.Push(path);
+                }
+                else
+                {
+                    files.Add(path);
+                }
+            }
+        }
+        return new DirectoryTree(fullRoot, directories, files);
+    }
+
+    private static void RejectReparsePoint(string path, string description)
+    {
+        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new InvalidDataException($"{description} must not contain a symbolic link, junction, or other reparse point: {path}");
+        }
     }
 
     private sealed record NsisLocalization(
@@ -1061,6 +1108,11 @@ internal sealed class NsisBundleBackend(
         IReadOnlyList<string> LegacyPaths);
 
     private sealed record PayloadResource(string Source, string TargetPath);
+
+    private sealed record DirectoryTree(
+        string Root,
+        IReadOnlyList<string> Directories,
+        IReadOnlyList<string> Files);
 
     private sealed record UninstallerMode(
         string FinalizeCommand,
