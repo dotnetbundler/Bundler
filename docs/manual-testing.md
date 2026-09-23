@@ -49,7 +49,7 @@ tests\Windows.Nsis.Integration\Verify.ps1
 git diff --check
 ```
 
-这组自动化覆盖包结构、模板契约、静默 current-user 安装/升级/降级/卸载、快捷方式所有权、文件关联、深链接、进程关闭、可控 `3010`、自签名证书签名机制、Fixture MSI 迁移、安装事务回滚、安装进程中断恢复、锁定载荷安全失败和提交后清理；还会在事务快照、事务激活、载荷恢复、注册表恢复和 active journal 清理五个检查点注入一次性故障，验证检查点状态与下次启动恢复。卸载自动化另行覆盖 post-uninstall Hook 失败和卸载进程树被终止：两者都必须保留前向 journal、恢复卸载器和注册表路径锚点，下一次安装启动先幂等完成旧卸载并清理 journal。只有这组测试通过的 commit 才进入下面的人工验收。
+这组自动化覆盖包结构、模板契约、22 种内置语言编译和规范键校验、非拉丁 Unicode 安装、静默 current-user 安装/升级/降级/卸载、快捷方式所有权、文件关联、深链接、进程关闭、可控 `3010`、自签名证书签名机制、Fixture MSI 迁移、安装事务回滚、安装进程中断恢复、锁定载荷安全失败和提交后清理；还会在事务快照、事务激活、载荷恢复、注册表恢复和 active journal 清理五个检查点注入一次性故障，验证检查点状态与下次启动恢复。卸载自动化另行覆盖 post-uninstall Hook 失败和卸载进程树被终止：两者都必须保留前向 journal、恢复卸载器和注册表路径锚点，下一次安装启动先幂等完成旧卸载并清理 journal。只有这组测试通过的 commit 才进入下面的人工验收。
 
 ## 4. 人工验收顺序
 
@@ -223,6 +223,19 @@ dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -r win-
 
 **PASS**：安装器返回 `5`，不开始事务性载荷替换，旧安装保持不变，同名但不在安装目录的其他进程不受影响。
 
+### MT-11：内置语言内容与界面审校
+
+**需要**：能审校对应语言的母语使用者或专业本地化人员，以及有代表性的 Windows 10/11 显示缩放环境。仓库自动化只证明 22 种语言结构完整、可被真实 NSIS 编译，并验证非拉丁路径和元数据；它不能证明译文自然、准确或在所有页面中没有截断。
+
+1. 对 Arabic、Bulgarian、Dutch、English、French、German、Italian、Japanese、Korean、Norwegian、Persian、Portuguese、PortugueseBR、Russian、SimpChinese、Spanish、SpanishInternational、Swedish、TradChinese、Turkish、Ukrainian、Vietnamese 逐一生成单语言安装器。
+2. 每种语言交互走完首次安装、同版本重装、升级、禁止降级、卸载和删除应用数据页面，核对术语、语气、变量插值、换行和按钮含义。
+3. 在 100%、150% 和 200% 显示缩放下保存截图，检查 Header、正文、单选框、复选框和错误消息是否截断或重叠。
+4. Arabic 和 Persian 额外检查从右到左布局、标点、数字/版本号、产品名与路径混排；确认对外配置名 `Persian` 对应正确的波斯语界面。
+5. Japanese、Korean、SimpChinese、TradChinese 和 Vietnamese 额外检查字体回退与字符显示；Portuguese/PortugueseBR、Spanish/SpanishInternational 分别确认地区用词差异。
+6. 对至少一种系统 UI 语言不在安装器列表中的环境验证第一项语言回退；对多语言安装器验证选择器、记忆值和卸载器语言一致。
+
+**PASS**：每份译文由可识别的审校人签署；没有改变安装/卸载含义的错译，没有乱码、关键截断或错误 RTL 排版；回退、选择器和卸载语言与文档契约一致。发现内容问题时修改对应 `.nsh` 并重新运行自动化编译测试。
+
 ## 5. 暂不执行的项目
 
 以下功能尚未实现或已明确不作为当前保证，因此不得在人工测试中写成“待验证已实现能力”：
@@ -248,5 +261,6 @@ dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -r win-
 | MT-08 | 非 Windows 宿主编译 |  |  |  |
 | MT-09 | Windows x64/ARM64 目标矩阵 |  |  |  |
 | MT-10 | Restart Manager 关闭失败 |  |  |  |
+| MT-11 | 内置语言内容与界面审校 |  |  |  |
 
 只有必选项全部 PASS，或对 BLOCKED/平台限制有明确且被接受的发布边界时，才能将对应能力写入发布说明。

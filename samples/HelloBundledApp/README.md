@@ -23,7 +23,7 @@ samples/HelloBundledApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe
 
 默认安装程序直接展示以下功能：
 
-- English 与简体中文语言选择器，以及项目提供的自定义简体中文语言文件；
+- English、简体中文与日文语言选择器；简体中文由项目文件覆盖，日文使用包内置文案；
 - 许可证页面、发布者、描述、主页、版权和版本元数据；
 - 自定义安装器/卸载器图标、Header、卸载器 Header 和 Sidebar；
 - 使用 `BundlerNsisCompression=zlib` 展示可配置的 NSIS 压缩算法；

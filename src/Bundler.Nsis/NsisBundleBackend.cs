@@ -12,6 +12,17 @@ internal sealed class NsisBundleBackend(
     NsisBundleConfiguration settings,
     IBundleSigner? signer) : IBundleBackend
 {
+    private static readonly string[] RequiredLanguageKeys =
+    [
+        "ShortcutPageTitle", "ShortcutPageSubtitle", "DesktopShortcutLabel", "StartMenuShortcutLabel",
+        "NonEmptyDirectoryWarning", "AppRunningPrompt", "AppCloseFailed", "PayloadWriteFailed",
+        "AppDataPageTitle", "AppDataPageSubtitle", "DeleteAppDataLabel", "SameVersionDetected",
+        "UpgradeDetected", "DowngradeDetected", "DowngradeBlocked", "UnknownVersionDetected",
+        "SilentDowngradeBlocked", "SilentUnknownVersionBlocked", "RemovingExistingVersion",
+        "ExistingUninstallFailed", "LegacyMsiDetected", "RemovingLegacyMsiVersion", "InvalidRestartMode",
+        "ArgumentsRequireRestart", "AutomatedNonEmptyDirectoryBlocked", "ApplicationLaunchFailed"
+    ];
+
     public PackageFormat Format => PackageFormat.Nsis;
     public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
 
@@ -832,31 +843,29 @@ internal sealed class NsisBundleBackend(
         var languageIncludes = new List<string>();
         for (var index = 0; index < settings.Languages.Count; index++)
         {
-            var language = settings.Languages[index];
-            if (string.IsNullOrWhiteSpace(language) ||
-                !IsValidLanguageName(language))
-            {
-                throw new InvalidOperationException($"Invalid NSIS language name '{language}'.");
-            }
+            var configuredLanguage = settings.Languages[index];
+            var language = NsisLanguageCatalog.Resolve(configuredLanguage);
 
             var customFile = settings.CustomLanguageFiles.FirstOrDefault(
-                pair => pair.Key.Equals(language, StringComparison.OrdinalIgnoreCase)).Value;
+                pair => pair.Key.Equals(configuredLanguage, StringComparison.OrdinalIgnoreCase) ||
+                        pair.Key.Equals(language.Name, StringComparison.OrdinalIgnoreCase)).Value;
             var sourcePath = string.IsNullOrWhiteSpace(customFile)
-                ? Path.Combine(Path.GetFullPath(languageDirectory), language + ".nsh")
+                ? Path.Combine(Path.GetFullPath(languageDirectory), language.Name + ".nsh")
                 : Path.GetFullPath(customFile);
             if (!File.Exists(sourcePath))
             {
                 throw new FileNotFoundException(
-                    $"No built-in or custom message file was found for NSIS language '{language}'.",
+                    $"No built-in or custom message file was found for NSIS language '{language.Name}'.",
                     sourcePath);
             }
+            ValidateLanguageFile(sourcePath, language);
 
-            var destinationPath = Path.Combine(workDirectory, $"language-{index:D2}-{language}.nsh");
+            var destinationPath = Path.Combine(workDirectory, $"language-{index:D2}-{language.Name}.nsh");
             File.WriteAllText(
                 destinationPath,
                 File.ReadAllText(sourcePath),
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
-            languageMacros.Add($"!insertmacro MUI_LANGUAGE \"{language}\"");
+            languageMacros.Add($"!insertmacro MUI_LANGUAGE \"{language.NsisName}\"");
             languageIncludes.Add($"!include \"{Escape(destinationPath)}\"");
         }
 
@@ -871,11 +880,46 @@ internal sealed class NsisBundleBackend(
             selector);
     }
 
-    private static bool IsValidLanguageName(string value) =>
-        value.Length > 0 &&
-        value[0] is >= 'A' and <= 'Z' &&
-        value.All(character =>
-            character is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9');
+    private static void ValidateLanguageFile(string path, NsisLanguageDefinition language)
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var rawLine in File.ReadLines(path))
+        {
+            var line = rawLine.TrimStart('\uFEFF').Trim();
+            if (line.Length == 0 || line.StartsWith(";", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            var match = System.Text.RegularExpressions.Regex.Match(
+                line,
+                "^LangString\\s+([A-Za-z][A-Za-z0-9_]*)\\s+\\$\\{LANG_([A-Za-z0-9_]+)\\}\\s+\".*\"\\s*$",
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+            if (!match.Success)
+            {
+                throw new InvalidDataException($"NSIS language file '{path}' contains an invalid line: {line}");
+            }
+            var key = match.Groups[1].Value;
+            if (!RequiredLanguageKeys.Contains(key, StringComparer.Ordinal))
+            {
+                throw new InvalidDataException($"NSIS language file '{path}' contains unknown key '{key}'.");
+            }
+            if (!match.Groups[2].Value.Equals(language.ConstantName, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException(
+                    $"NSIS language file '{path}' uses LANG_{match.Groups[2].Value} for '{language.Name}'.");
+            }
+            if (!keys.Add(key))
+            {
+                throw new InvalidDataException($"NSIS language file '{path}' contains duplicate key '{key}'.");
+            }
+        }
+        var missing = RequiredLanguageKeys.Where(key => !keys.Contains(key)).ToArray();
+        if (missing.Length > 0)
+        {
+            throw new InvalidDataException(
+                $"NSIS language file '{path}' is missing required keys: {string.Join(", ", missing)}.");
+        }
+    }
 
     private static string CreateUninstallPayload(
         string inputDirectory,

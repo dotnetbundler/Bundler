@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.29",
+    [string]$PackageVersion = "0.1.0-alpha.30",
     [switch]$CleanupOnly
 )
 
@@ -41,6 +41,7 @@ $noShortcutDefaultsBundleOutput = Join-Path $integrationRoot "bundle-no-shortcut
 $failingUninstallBundleOutput = Join-Path $integrationRoot "bundle-failing-uninstall-forward"
 $interruptedUninstallBundleOutput = Join-Path $integrationRoot "bundle-interrupted-uninstall-forward"
 $directMsBuildOutput = Join-Path $integrationRoot "bundle-direct-msbuild"
+$unicodeBundleOutput = Join-Path $integrationRoot "bundle-unicode"
 $testIcon = Join-Path $integrationRoot "test-installer.ico"
 $testHeaderImage = Join-Path $integrationRoot "test-header.bmp"
 $testSidebarImage = Join-Path $integrationRoot "test-sidebar.bmp"
@@ -63,6 +64,16 @@ $externalFixtureDirectory = Join-Path $integrationRoot "same-name-external-proce
 $defaultInstallDirectory = Join-Path $env:LOCALAPPDATA "Programs\Bundler Integration Fixture"
 $identifier = "com.dotnetbundler.integrationfixture"
 $productName = "Bundler Integration Fixture"
+$unicodeProductName = "多言語テスト应用"
+$unicodeIdentifier = "com.dotnetbundler.localizationfixture"
+$unicodeDescription = "Unicode 元数据と説明"
+$unicodeInstallRoot = Join-Path $integrationRoot "多语言 安装目录"
+$unicodeInstallDirectory = Join-Path $unicodeInstallRoot "应用"
+$unicodeRegistryPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$unicodeIdentifier"
+$unicodeLanguageRegistryPath = "HKCU:\Software\$unicodeIdentifier"
+$unicodeStartMenuDirectory = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\多语言 开始菜单"
+$unicodeStartMenuShortcut = Join-Path $unicodeStartMenuDirectory "$unicodeProductName.lnk"
+$fallbackLanguage = if ((Get-UICulture).Name.StartsWith("ja", [StringComparison]::OrdinalIgnoreCase)) { "Korean" } else { "Japanese" }
 $legacyMsiProductCode = "{1D1A6B03-2BDA-4D18-B12C-574145D9CFA0}"
 $legacyMsiUpgradeCode = "{5AD89AE2-9984-4B5F-937F-0DF918FE7A22}"
 $legacyMsiInstallDirectory = Join-Path $env:LOCALAPPDATA "Bundler Legacy MSI Fixture"
@@ -184,11 +195,20 @@ function Build-FixtureBundle(
     [string]$SigningCertificateThumbprint = "",
     [bool]$ShortcutDesktop = $true,
     [bool]$ShortcutStartMenu = $true,
-    [string]$InstallerHooks = ""
+    [string]$InstallerHooks = "",
+    [string]$ProductName = "Bundler Integration Fixture",
+    [string]$Identifier = "com.dotnetbundler.integrationfixture",
+    [string]$Languages = "English;SimpChinese",
+    [bool]$DisplayLanguageSelector = $true,
+    [string]$Description = "Disposable Windows NSIS integration-test fixture.",
+    [string]$ShortcutArguments = '--shortcut-mode "hello world"',
+    [string]$ShortcutStartMenuFolder = "DotNet Bundler Integration"
 ) {
     if ([string]::IsNullOrWhiteSpace($InstallerHooks)) {
         $InstallerHooks = Join-Path $PSScriptRoot "Fixture\Assets\installer-hooks.nsh"
     }
+    $escapedLanguages = $Languages.Replace(";", "%3B")
+    $escapedShortcutArguments = $ShortcutArguments.Replace("%", "%25").Replace(";", "%3B").Replace('"', "%22")
     Invoke-Native "dotnet" @(
         "publish", $fixtureProject, "-c", $Configuration, "--force",
         "-p:BundlerPackageVersion=$PackageVersion",
@@ -207,6 +227,13 @@ function Build-FixtureBundle(
         "-p:BundlerIntegrationInstallerHooks=$InstallerHooks",
         "-p:BundlerNsisShortcutDesktop=$ShortcutDesktop",
         "-p:BundlerNsisShortcutStartMenu=$ShortcutStartMenu",
+        "-p:BundlerIntegrationProductName=$ProductName",
+        "-p:BundlerIntegrationIdentifier=$Identifier",
+        "-p:BundlerIntegrationLanguages=$escapedLanguages",
+        "-p:BundlerIntegrationDisplayLanguageSelector=$DisplayLanguageSelector",
+        "-p:BundlerIntegrationDescription=$Description",
+        "-p:BundlerIntegrationShortcutArguments=$escapedShortcutArguments",
+        "-p:BundlerIntegrationShortcutStartMenuFolder=$ShortcutStartMenuFolder",
         "-p:RestorePackagesPath=$packageCache"
     )
 }
@@ -233,6 +260,8 @@ function Remove-TestState {
     }
     $directUninstallerCopies.Clear()
     if (Test-Path -LiteralPath $registryPath) { Remove-Item -LiteralPath $registryPath -Recurse -Force }
+    if (Test-Path -LiteralPath $unicodeRegistryPath) { Remove-Item -LiteralPath $unicodeRegistryPath -Recurse -Force }
+    if (Test-Path -LiteralPath $unicodeLanguageRegistryPath) { Remove-Item -LiteralPath $unicodeLanguageRegistryPath -Recurse -Force }
     foreach ($path in @($fileProgIdRegistryPath, $urlSchemeRegistryPath, $urlProgIdRegistryPath, $capabilitiesRegistryPath)) {
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
     }
@@ -256,11 +285,13 @@ function Remove-TestState {
     if (Test-Path -LiteralPath $startMenuDirectory) { Remove-Item -LiteralPath $startMenuDirectory -Force }
     if (Test-Path -LiteralPath $legacyStartMenuShortcut) { Remove-Item -LiteralPath $legacyStartMenuShortcut -Force }
     if (Test-Path -LiteralPath $legacyStartMenuDirectory) { Remove-Item -LiteralPath $legacyStartMenuDirectory -Force }
+    if (Test-Path -LiteralPath $unicodeStartMenuShortcut) { Remove-Item -LiteralPath $unicodeStartMenuShortcut -Force }
+    if (Test-Path -LiteralPath $unicodeStartMenuDirectory) { Remove-Item -LiteralPath $unicodeStartMenuDirectory -Force }
     foreach ($path in @($transactionDirectory, $committedTransactionDirectory, $uninstallTransactionDirectory, $committedUninstallTransactionDirectory)) {
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
     }
     Invoke-MsiExec "/x $legacyMsiProductCode /qn /norestart" @(0, 1605, 3010)
-    foreach ($path in @($installDirectory, $installRoot, $externalFixtureDirectory)) {
+    foreach ($path in @($installDirectory, $installRoot, $externalFixtureDirectory, $unicodeInstallRoot)) {
         Assert-UnderIntegrationRoot $path
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
     }
@@ -421,6 +452,18 @@ try {
     Build-FixtureBundle "currentUser" $noShortcutDefaultsBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" "" $false $false
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $failingUninstallBundleOutput -InstallerHooks $failingUninstallHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $interruptedUninstallBundleOutput -InstallerHooks $interruptedUninstallHooks
+    Build-FixtureBundle `
+        -InstallMode "currentUser" `
+        -OutputPath $unicodeBundleOutput `
+        -ProductName $unicodeProductName `
+        -Identifier $unicodeIdentifier `
+        -Languages $fallbackLanguage `
+        -DisplayLanguageSelector $false `
+        -Description $unicodeDescription `
+        -ShortcutDesktop $false `
+        -ShortcutStartMenu $true `
+        -ShortcutArguments '--表示モード "你好 世界"' `
+        -ShortcutStartMenuFolder "多语言 开始菜单"
 
     $installer = Join-Path $bundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $upgradeInstaller = Join-Path $upgradeBundleOutput "win-x64\nsis\$productName-1.1.0-setup.exe"
@@ -442,6 +485,7 @@ try {
     $noShortcutDefaultsInstaller = Join-Path $noShortcutDefaultsBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $failingUninstallInstaller = Join-Path $failingUninstallBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $interruptedUninstallInstaller = Join-Path $interruptedUninstallBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
+    $unicodeInstaller = Join-Path $unicodeBundleOutput "win-x64\nsis\$unicodeProductName-1.0.0-setup.exe"
     Assert-True (Test-Path -LiteralPath $installer) "Installer was not created: $installer"
     Assert-True (Test-Path -LiteralPath (Join-Path $directMsBuildOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Direct MSBuild package installer was not created."
     Assert-True (Test-Path -LiteralPath (Join-Path $perMachineBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Per-machine installer was not created."
@@ -464,6 +508,22 @@ try {
     Assert-True (Test-Path -LiteralPath $noShortcutDefaultsInstaller) "Shortcut-default fixture installer was not created."
     Assert-True (Test-Path -LiteralPath $failingUninstallInstaller) "Forward-uninstall failure fixture was not created."
     Assert-True (Test-Path -LiteralPath $interruptedUninstallInstaller) "Interrupted forward-uninstall fixture was not created."
+    Assert-True (Test-Path -LiteralPath $unicodeInstaller) "Unicode localization fixture installer was not created."
+    Invoke-WindowsExecutable $unicodeInstaller "/S /D=$unicodeInstallDirectory"
+    $unicodeExecutable = Join-Path $unicodeInstallDirectory "BundlerIntegrationFixture.exe"
+    $unicodeUninstaller = Join-Path $unicodeInstallDirectory "Uninstall.exe"
+    Assert-True (Test-Path -LiteralPath $unicodeExecutable) "$fallbackLanguage-only installer did not fall back and install when the system UI language was not selected."
+    Assert-True (Test-Path -LiteralPath $unicodeUninstaller) "Unicode install path does not contain the uninstaller."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $unicodeRegistryPath -Name "DisplayName") -eq $unicodeProductName) "Unicode product name was not preserved in uninstall metadata."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $unicodeRegistryPath -Name "Comments") -eq $unicodeDescription) "Unicode description was not preserved in uninstall metadata."
+    Assert-True (Test-Path -LiteralPath $unicodeStartMenuShortcut) "Unicode Start Menu shortcut was not created."
+    $unicodeShortcut = Get-ShortcutInfo $unicodeStartMenuShortcut
+    Assert-True ($unicodeShortcut.TargetPath -eq $unicodeExecutable) "Unicode shortcut target is incorrect."
+    Assert-True ($unicodeShortcut.Arguments -eq '--表示モード "你好 世界"') "Unicode shortcut arguments were not preserved."
+    Invoke-WindowsExecutable $unicodeUninstaller "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $unicodeInstallDirectory) } "Unicode localization fixture cleanup did not finish."
+    Assert-True (-not (Test-Path -LiteralPath $unicodeRegistryPath)) "Unicode uninstall metadata survived uninstall."
+    Assert-True (-not (Test-Path -LiteralPath $unicodeStartMenuShortcut)) "Unicode Start Menu shortcut survived uninstall."
     Assert-True ((Get-AuthenticodeSignature -LiteralPath $signedInstaller).SignerCertificate.Thumbprint -eq $testCertificateThumbprint) "The final installer does not contain the expected Authenticode certificate."
     Invoke-WindowsExecutable $signedInstaller "/S /D=$installDirectory"
     $signedPayload = Join-Path $installDirectory "BundlerIntegrationFixture.exe"

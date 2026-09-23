@@ -3,7 +3,7 @@
 > 审计日期：2026-09-21  
 > Tauri 仓库：`tauri-apps/tauri`  
 > 固定 commit：`5d995ed35b029cecd780fdbe614dc6023a89b81b`  
-> 本项目基线：`1943c58 feat(nsis): complete capability configuration`
+> 本项目已提交基线：`49fa6e6 feat(signing): complete Windows signing pipeline`
 
 本文档记录 `NSIS-R1` 的逐项审计结果。目标是对齐适用于通用桌面打包器的用户能力，不复制 Tauri 字段、Rust 数据模型或 runtime 部署逻辑。状态定义和产品边界见 `docs/roadmap.md`。
 
@@ -25,15 +25,15 @@
 | `uninstallerIcon` | `UninstallerIcon` / `BundlerNsisUninstallerIcon` | 已实现 | 可独立设置；默认回退到安装器图标 |
 | `uninstallerHeaderImage` | `UninstallerHeaderImage` / `BundlerNsisUninstallerHeaderImage` | 已实现 | 默认回退到安装器 Header |
 | `installMode` | `InstallMode` / `BundlerNsisInstallMode` | 已实现，外部待验收 | `currentUser`、`perMachine`、`both`；真实 UAC 见 MT-01/02 |
-| `languages` | `Languages` / `BundlerNsisLanguages` | 部分实现 | 语言选择与第一项回退已实现；完整内置语言集合进入 `NSIS-R3` |
-| `customLanguageFiles` | `CustomLanguageFiles` / `BundlerNsisLanguageFile` | 部分实现 | 已选择语言可使用完整自定义文案文件；语言键集合和覆盖规则的系统校验进入 `NSIS-R3` |
-| `displayLanguageSelector` | `DisplayLanguageSelector` / `BundlerNsisDisplayLanguageSelector` | 已实现 | 多语言时可显示选择器；系统语言/完整集合收口进入 `NSIS-R3` |
+| `languages` | `Languages` / `BundlerNsisLanguages` | 已实现 | 内置固定快照中的 22 种语言；第一项在系统语言不匹配时回退；`Persian` 内部映射 NSIS `Farsi` |
+| `customLanguageFiles` | `CustomLanguageFiles` / `BundlerNsisLanguageFile` | 已实现 | 自定义文件完整替换同一已选语言；严格拒绝缺失、重复、未知键和错误语言常量 |
+| `displayLanguageSelector` | `DisplayLanguageSelector` / `BundlerNsisDisplayLanguageSelector` | 已实现 | 仅在多语言且显式启用时显示；单语言非系统语言已完成 Windows 静默安装回归 |
 | `compression` | `Compression` / `BundlerNsisCompression` | 已实现 | `lzma`、`zlib`、`bzip2`、`none`；脚本渲染和四种实际编译均有自动化测试 |
 | `startMenuFolder` | `Shortcuts.StartMenuFolder` / `BundlerNsisShortcutStartMenuFolder` | 已实现 | 本项目还提供所有权安全的创建、更新、迁移与删除 |
 | `installerHooks` | `InstallerHooks` / `BundlerNsisInstallerHooks` | 已实现 | 四个 `NSIS_HOOK_*` 生命周期点；Hook 失败接入事务/前向恢复 |
 | `minimumWebview2Version` | 无 | 不适用 | Tauri runtime 专属；本项目不安装或升级任意应用运行时 |
 
-结论：适用于通用 NSIS 后端的小型配置缺口只有压缩算法，本阶段已经补齐。语言和签名不是遗漏，分别由 `NSIS-R3`、`NSIS-R2` 完整收口。
+结论：适用于通用 NSIS 后端的小型配置、签名和本地化能力均已收口。翻译内容的母语/专业审校属于 MT-11，不把自动结构校验冒充内容审校。
 
 ## 2. `WindowsConfig` 逐项矩阵
 
@@ -85,7 +85,7 @@ JSON 配置加载器是未来 CLI 的共享入口。本阶段验证它会保留�
 | 自动更新/被动/静默参数与稳定退出码 | 已实现 | `/UPDATE`、`/P`、`/S`、`/R`、`/ARGS` 等为本项目协议 |
 | 快捷方式生命周期 | 已实现，固定项外部待验收 | 按 `.lnk` 实际目标判断所有权；MT-06 覆盖 OS 固定项差异 |
 | 文件关联和 URL 协议 | 已实现 | 不强抢 Windows 默认应用；协议删除有所有权检查 |
-| 完整内置语言集合 | 部分实现 | `NSIS-R3` |
+| 完整内置语言集合 | 已实现，内容质量外部待验收 | 22 种语言均由真实 NSIS 编译；非拉丁 Windows E2E；MT-11 审校译文/RTL/截断 |
 | payload、插件、卸载器、安装器完整签名 | 已实现，生产身份外部待验收 | 临时副本中签主 EXE和显式 payload，再签 Bundler 插件、卸载器和安装器；外部 provider 可替换内置实现 |
 | 真实 UAC、重启、ARM64、生产证书 | 外部待验收 | 统一见 `docs/manual-testing.md` |
 
@@ -94,5 +94,5 @@ JSON 配置加载器是未来 CLI 的共享入口。本阶段验证它会保留�
 1. `NSIS-R1` 没有遗留“未调查”的 Tauri NSIS/Windows 配置项。
 2. 本阶段新增的通用能力是四种 NSIS 压缩模式；默认保持 LZMA。
 3. 文件关联和 URL 协议原本在 API/MSBuild 路径可用，但 JSON loader 会丢失，本阶段已修复，为未来 CLI 保持同一通用模型。
-4. 完整签名已在 `NSIS-R2` 收口；完整语言是剩余的已知部分能力，进入 `NSIS-R3`。
+4. 完整签名已在 `NSIS-R2` 收口；22 种内置语言、严格键校验、覆盖和回退已在 `NSIS-R3` 收口。
 5. WebView2、VC Runtime 和 Tauri updater 产物不构成当前通用安装器能力；不会为字段对齐制造运行时部署系统。

@@ -45,7 +45,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `ne
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.29" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.30" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -63,7 +63,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.29" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.30" />
 ```
 
 ```csharp
@@ -180,17 +180,17 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 所有格式共用同一条管线：校验配置、生成包含格式依赖关系的计划、创建隔离工作目录、调用后端、确认产物存在、清理工作目录。后续增加 MSI、macOS 或 Linux 支持时，应增加后端，而不是复制整套调度代码。
 
-可编辑的 NSIS 源模板存放在 `templates/nsis/installer.nsi`。发布包时，该模板、语言文件和完整的多宿主 NsisToolset 压缩包会嵌入 `DotNet.Bundler.Nsis`，因此独立 API 和 MSBuild 使用者得到完全相同的资源，也不会把工具复制到项目输出目录。安装器语言按 Tauri 的方式配置：`BundlerNsisLanguages` 是分号分隔的语言列表，第一项是回退语言；只有启用多个语言并把 `BundlerNsisDisplayLanguageSelector` 设为 `true` 时才显示语言选择器。包内目前提供 English 和 SimpChinese 文案文件。
+可编辑的 NSIS 源模板存放在 `templates/nsis/installer.nsi`。发布包时，该模板、语言文件和完整的多宿主 NsisToolset 压缩包会嵌入 `DotNet.Bundler.Nsis`，因此独立 API 和 MSBuild 使用者得到完全相同的资源，也不会把工具复制到项目输出目录。安装器语言按 Tauri 的能力范围配置：`BundlerNsisLanguages` 是分号分隔的语言列表，第一项是系统语言不匹配时的回退语言；只有启用多个语言并把 `BundlerNsisDisplayLanguageSelector` 设为 `true` 时才显示语言选择器。包内提供 Arabic、Bulgarian、Dutch、English、French、German、Italian、Japanese、Korean、Norwegian、Persian、Portuguese、PortugueseBR、Russian、SimpChinese、Spanish、SpanishInternational、Swedish、TradChinese、Turkish、Ukrainian 和 Vietnamese。对外使用 `Persian`，内部会映射到 NSIS 的 `Farsi` 标识。
 
 ```xml
 <PropertyGroup>
   <BundlerNsisCompression>zlib</BundlerNsisCompression>
-  <BundlerNsisLanguages>English;SimpChinese</BundlerNsisLanguages>
+  <BundlerNsisLanguages>English;SimpChinese;Japanese</BundlerNsisLanguages>
   <BundlerNsisDisplayLanguageSelector>true</BundlerNsisDisplayLanguageSelector>
 </PropertyGroup>
 ```
 
-其他 NSIS 语言需要提供包含模板全部 `LangString` 的自定义文案文件：
+`BundlerNsisLanguageFile` 可以完整替换某个已选择语言的内置文案。同一语言只能有一个自定义文件；文件必须恰好包含模板要求的全部 `LangString`，缺失、重复、未知键或错误的 `LANG_*` 常量都会在打包时失败：
 
 ```xml
 <ItemGroup>
@@ -333,7 +333,7 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.29
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.30
 ```
 
 Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

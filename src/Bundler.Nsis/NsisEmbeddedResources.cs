@@ -28,8 +28,14 @@ internal static class NsisEmbeddedResources
 
         await WriteVerifiedAsync(assembly, Prefix + "nsis-toolset-3.12-r1.zip", archivePath, cancellationToken);
         await WriteVerifiedAsync(assembly, Prefix + "installer.nsi", templatePath, cancellationToken);
-        await WriteVerifiedAsync(assembly, Prefix + "languages.English.nsh", Path.Combine(languageDirectory, "English.nsh"), cancellationToken);
-        await WriteVerifiedAsync(assembly, Prefix + "languages.SimpChinese.nsh", Path.Combine(languageDirectory, "SimpChinese.nsh"), cancellationToken);
+        foreach (var language in NsisLanguageCatalog.Definitions)
+        {
+            await WriteVerifiedAsync(
+                assembly,
+                Prefix + "languages." + language.Name + ".nsh",
+                Path.Combine(languageDirectory, language.Name + ".nsh"),
+                cancellationToken);
+        }
         await WriteVerifiedAsync(assembly, Prefix + "plugins.DotNetBundlerNsis.dll", Path.Combine(pluginDirectory, "DotNetBundlerNsis.dll"), cancellationToken);
 
         return new NsisResourcePaths(archivePath, templatePath, languageDirectory, pluginDirectory);

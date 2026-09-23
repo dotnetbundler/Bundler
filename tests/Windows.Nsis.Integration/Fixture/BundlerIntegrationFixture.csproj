@@ -9,16 +9,24 @@
     <RestoreSources>$(BundlerPackageSource)</RestoreSources>
     <BundlerEnabled>true</BundlerEnabled>
     <BundlerIntegrationPackageId Condition="'$(BundlerIntegrationPackageId)' == ''">DotNet.Bundler</BundlerIntegrationPackageId>
-    <BundlerIdentifier>com.dotnetbundler.integrationfixture</BundlerIdentifier>
-    <BundlerProductName>Bundler Integration Fixture</BundlerProductName>
-    <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
-    <BundlerDescription>Disposable Windows NSIS integration-test fixture.</BundlerDescription>
+    <BundlerIntegrationIdentifier Condition="'$(BundlerIntegrationIdentifier)' == ''">com.dotnetbundler.integrationfixture</BundlerIntegrationIdentifier>
+    <BundlerIntegrationProductName Condition="'$(BundlerIntegrationProductName)' == ''">Bundler Integration Fixture</BundlerIntegrationProductName>
+    <BundlerIntegrationPublisher Condition="'$(BundlerIntegrationPublisher)' == ''">DotNet.Bundler Tests</BundlerIntegrationPublisher>
+    <BundlerIntegrationDescription Condition="'$(BundlerIntegrationDescription)' == ''">Disposable Windows NSIS integration-test fixture.</BundlerIntegrationDescription>
+    <BundlerIntegrationLanguages Condition="'$(BundlerIntegrationLanguages)' == ''">English;SimpChinese</BundlerIntegrationLanguages>
+    <BundlerIntegrationDisplayLanguageSelector Condition="'$(BundlerIntegrationDisplayLanguageSelector)' == ''">true</BundlerIntegrationDisplayLanguageSelector>
+    <BundlerIntegrationShortcutArguments Condition="'$(BundlerIntegrationShortcutArguments)' == ''">--shortcut-mode &quot;hello world&quot;</BundlerIntegrationShortcutArguments>
+    <BundlerIntegrationShortcutStartMenuFolder Condition="'$(BundlerIntegrationShortcutStartMenuFolder)' == ''">DotNet Bundler Integration</BundlerIntegrationShortcutStartMenuFolder>
+    <BundlerIdentifier>$(BundlerIntegrationIdentifier)</BundlerIdentifier>
+    <BundlerProductName>$(BundlerIntegrationProductName)</BundlerProductName>
+    <BundlerPublisher>$(BundlerIntegrationPublisher)</BundlerPublisher>
+    <BundlerDescription>$(BundlerIntegrationDescription)</BundlerDescription>
     <BundlerHomepage>https://example.com/dotnet-bundler-fixture</BundlerHomepage>
     <BundlerCopyright>Copyright DotNet.Bundler Tests</BundlerCopyright>
     <BundlerLicenseFile>$(MSBuildProjectDirectory)\Assets\license.txt</BundlerLicenseFile>
     <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
-    <BundlerNsisLanguages>English;SimpChinese</BundlerNsisLanguages>
-    <BundlerNsisDisplayLanguageSelector>true</BundlerNsisDisplayLanguageSelector>
+    <BundlerNsisLanguages>$(BundlerIntegrationLanguages)</BundlerNsisLanguages>
+    <BundlerNsisDisplayLanguageSelector>$(BundlerIntegrationDisplayLanguageSelector)</BundlerNsisDisplayLanguageSelector>
     <BundlerNsisInstallMode Condition="'$(BundlerNsisInstallMode)' == ''">currentUser</BundlerNsisInstallMode>
     <BundlerIntegrationInstallerHooks Condition="'$(BundlerIntegrationInstallerHooks)' == ''">$(MSBuildProjectDirectory)\Assets\installer-hooks.nsh</BundlerIntegrationInstallerHooks>
     <BundlerNsisInstallerIcon>$(BundlerTestIcon)</BundlerNsisInstallerIcon>
@@ -28,11 +36,11 @@
     <BundlerNsisInstallerHooks>$(BundlerIntegrationInstallerHooks)</BundlerNsisInstallerHooks>
     <BundlerNsisShortcutDesktop Condition="'$(BundlerNsisShortcutDesktop)' == ''">true</BundlerNsisShortcutDesktop>
     <BundlerNsisShortcutStartMenu Condition="'$(BundlerNsisShortcutStartMenu)' == ''">true</BundlerNsisShortcutStartMenu>
-    <BundlerNsisShortcutArguments>--shortcut-mode &quot;hello world&quot;</BundlerNsisShortcutArguments>
+    <BundlerNsisShortcutArguments>$(BundlerIntegrationShortcutArguments)</BundlerNsisShortcutArguments>
     <BundlerNsisShortcutWorkingDirectory>docs</BundlerNsisShortcutWorkingDirectory>
     <BundlerNsisShortcutIcon>BundlerIntegrationFixture.exe</BundlerNsisShortcutIcon>
     <BundlerNsisShortcutAppUserModelId>com.dotnetbundler.integrationfixture.desktop</BundlerNsisShortcutAppUserModelId>
-    <BundlerNsisShortcutStartMenuFolder>DotNet Bundler Integration</BundlerNsisShortcutStartMenuFolder>
+    <BundlerNsisShortcutStartMenuFolder>$(BundlerIntegrationShortcutStartMenuFolder)</BundlerNsisShortcutStartMenuFolder>
     <BundlerNsisShortcutLegacyProductNames>Legacy Bundler Fixture</BundlerNsisShortcutLegacyProductNames>
     <BundlerNsisShortcutLegacyMainExecutables>LegacyFixture.exe</BundlerNsisShortcutLegacyMainExecutables>
   </PropertyGroup>

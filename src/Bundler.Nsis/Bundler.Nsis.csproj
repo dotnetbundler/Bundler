@@ -18,10 +18,8 @@
                       LogicalName="DotNet.Bundler.Nsis.Resources.nsis-toolset-3.12-r1.zip" />
     <EmbeddedResource Include="..\..\templates\nsis\installer.nsi"
                       LogicalName="DotNet.Bundler.Nsis.Resources.installer.nsi" />
-    <EmbeddedResource Include="..\..\templates\nsis\languages\English.nsh"
-                      LogicalName="DotNet.Bundler.Nsis.Resources.languages.English.nsh" />
-    <EmbeddedResource Include="..\..\templates\nsis\languages\SimpChinese.nsh"
-                      LogicalName="DotNet.Bundler.Nsis.Resources.languages.SimpChinese.nsh" />
+    <EmbeddedResource Include="..\..\templates\nsis\languages\*.nsh"
+                      LogicalName="DotNet.Bundler.Nsis.Resources.languages.%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\..\third_party\nsis\plugins\x86-unicode\DotNetBundlerNsis.dll"
                       LogicalName="DotNet.Bundler.Nsis.Resources.plugins.DotNetBundlerNsis.dll" />
     <None Include="..\..\third_party\nsis\COPYING" Pack="true" PackagePath="licenses/nsis/" />

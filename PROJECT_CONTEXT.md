@@ -1,10 +1,10 @@
 # DotNet.Bundler 项目上下文与后续实施基线
 
-> 最后整理：2026-09-21
+> 最后整理：2026-09-23
 > 当前分支：`codex/modular-bundler-backends`  
-> 上一已提交基线：`1943c58 feat(nsis): complete capability configuration`
-> 当前包版本：`0.1.0-alpha.29`
-> 当前未提交阶段：`NSIS-R2` 完整 Windows 签名流水线已完成并验证，等待用户明确提交
+> 上一已提交基线：`49fa6e6 feat(signing): complete Windows signing pipeline`
+> 当前包版本：`0.1.0-alpha.30`
+> 当前未提交阶段：`NSIS-R3` 完整内置多语言已完成并验证，等待用户明确提交
 
 本文档是当前项目的“事实、决策、验证证据与协作约束”汇总，供后续开发任务直接接续。正式后续路线、产品边界、阶段完成条件和默认下一阶段以 `docs/roadmap.md` 为唯一规范来源。本文档不是面向最终用户的使用手册；当前需要维护的用户文档以根目录的 `README.zh-CN.md` 和 `samples/HelloBundledApp/README.md` 为准。代码与自动化测试始终是实现事实的最终依据。
 
@@ -325,7 +325,7 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 - 已按固定 Tauri commit `5d995ed35b029cecd780fdbe614dc6023a89b81b` 完成 `NsisConfig`、`WindowsConfig` 和与 NSIS 有关的通用 `BundleConfig` 逐项审计，矩阵位于 `docs/nsis-capability-matrix.md`。
 - `NsisBundleConfiguration.Compression` 和 `BundlerNsisCompression` 支持 `lzma`、`zlib`、`bzip2`、`none`，默认 LZMA；四种模式均已实际调用内嵌 `makensis` 编译验证。
 - JSON `BundleConfigurationLoader` 现会保留文件关联和 URL 协议及其元数据，不再让未来 CLI 的共享配置入口静默丢失这些能力。
-- WebView2、VC Runtime 和 Tauri updater 产物已分类为框架/runtime 专属或尚无通用契约，不进入当前 NSIS 实现；签名已在 `NSIS-R2` 收口，完整语言进入 `NSIS-R3`。
+- WebView2、VC Runtime 和 Tauri updater 产物已分类为框架/runtime 专属或尚无通用契约，不进入当前 NSIS 实现；签名已在 `NSIS-R2` 收口，完整语言已在 `NSIS-R3` 收口。
 
 ### 5.14 完整签名流水线
 
@@ -394,27 +394,30 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 | `8f5a9c1` | 卸载失败与中断后的前向恢复 |
 | `e143d33` | 固化通用打包器产品边界与路线 |
 | `1943c58` | NSIS 能力审计、压缩配置与共享配置修复 |
+| `49fa6e6` | 完整 Windows 签名流水线 |
 
 `057aca1` 是安装范围支持的历史提交，位于这条提交链的更早位置。
 
 ## 8. 最近一次验证证据
 
-以下是本阶段 `0.1.0-alpha.29` 完成的验证，不应扩写成未执行过的平台兼容承诺：
+以下是本阶段 `0.1.0-alpha.30` 完成的验证，不应扩写成未执行过的平台兼容承诺：
 
 ```powershell
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.29
+tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.30
 dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -r win-x64 --force
 ```
 
 结果：
 
-- 34 项单元/契约测试全部通过；新增覆盖 staged payload/插件签名顺序、输入隔离、显式 sidecar、外部 provider 占位符/失败脱敏、签名失败产物清理、无 signer 拒绝和尾部分隔符路径；
-- 生成六个 `0.1.0-alpha.29` 本地 NuGet 包；
+- 36 项单元/契约测试全部通过；新增覆盖固定的 22 种语言目录、真实 NSIS 全语言编译、重复/未知语言拒绝，以及自定义语言的缺项、重复键、未知键、错误常量和完整覆盖；
+- 生成六个 `0.1.0-alpha.30` 本地 NuGet 包；
 - Windows NSIS 安装/卸载集成测试通过；
 - 自签名集成实际验证最终安装器、安装后主 EXE 和卸载器均包含预期证书；构建日志确认 Bundler 原生插件也经过内置 signer；
-- `HelloBundledApp` 使用 `BundlerNsisCompression=zlib` 从 `alpha.29` 本地包成功发布并生成安装器；
+- Windows 集成在 zh-CN UI 环境运行仅含 Japanese 的安装器，成功保留 Unicode 产品名、安装路径、开始菜单目录、快捷方式参数、卸载显示名和描述，并完成清理；
+- `Persian` 对外名称已在内部映射到 NSIS 3.12 的 `Farsi`/`LANG_FARSI`，由真实编译回归保护；
+- `HelloBundledApp` 使用 English、SimpChinese 自定义文件和内置 Japanese 展示语言选择器，并已从 `alpha.30` 本地包成功发布；
 - 烟雾测试从 `.lnk` 读取并验证参数、工作目录、图标和 AppUserModelID；
 - 集成覆盖用户手动删除快捷方式后更新不重建、旧名称迁移、外部程序接管同名快捷方式后卸载保留；
 - Native AOT COM 修复后完整流程通过；
@@ -457,10 +460,9 @@ git diff --check
 
 正式路线见 `docs/roadmap.md`。当前顺序为：
 
-1. `NSIS-R3`：完整内置多语言、回退和自动校验；
-2. `NSIS-R4`：重解析点/文件系统安全边界、工具缓存完整性和 NSIS 冻结；
-3. `CLI-C1`：把仓库已有的 CLI 原型产品化，验证 Core/后端没有被 MSBuild 绑定；
-4. 按完整格式依次推进 WiX/MSI、macOS 和 Linux 后端。
+1. `NSIS-R4`：重解析点/文件系统安全边界、工具缓存完整性和 NSIS 冻结；
+2. `CLI-C1`：把仓库已有的 CLI 原型产品化，验证 Core/后端没有被 MSBuild 绑定；
+3. 按完整格式依次推进 WiX/MSI、macOS 和 Linux 后端。
 
 Tauri 能力按“通用打包能力、格式特定能力、Tauri runtime 专属能力”分类。签名是正式路线的一部分；WebView2、VC Runtime 等任意应用运行时依赖的自动发现、下载和安装当前明确不做。真实重启、UAC、生产证书、真实旧 MSI、多宿主/ARM64 和真实 ACL/磁盘耗尽保留在外部验收队列，不反复阻塞快速开发进入下一阶段。
 
@@ -470,7 +472,7 @@ Tauri 能力按“通用打包能力、格式特定能力、Tauri runtime 专属
 - macOS `.app`/DMG；
 - Linux DEB/AppImage；
 - 正式发布并受支持的 CLI（仓库当前只有功能有限的原型）；
-- Tauri 全语言集合；
+- 22 种内置语言的母语/专业内容审校、RTL 和完整 UI 缩放矩阵（MT-11）；
 - 所有 Windows 版本的自动取消固定；
 - 所有宿主和架构的真实 CI；
 - 正式证书和生产旧 MSI 的端到端验收；
@@ -551,8 +553,8 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 预期基线：
 
 - 分支：`codex/modular-bundler-backends`
-- 上一已提交基线：`1943c58`；当前未提交变更为已完成并验证的 `NSIS-R2`
-- 包版本：`0.1.0-alpha.29`
+- 上一已提交基线：`49fa6e6`；当前未提交变更为已完成并验证的 `NSIS-R3`
+- 包版本：`0.1.0-alpha.30`
 - 安装事务、Restart Manager、对应测试、示例和文档已经实现并提交；不得重新制作原型或把这些能力当作未完成项。
 
 上述分支、提交和版本是本文档最后整理时的快照。如果仓库已经向前推进，应调查后续提交和改动，并更新本文档，而不是强行退回该提交。
@@ -571,7 +573,7 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 
 ### 14.3 默认下一阶段
 
-若用户没有另外指定范围，默认完整执行 `docs/roadmap.md` 的 `NSIS-R3 完整内置多语言`。该阶段按已固定的 Tauri/NSIS 语言集合补齐内置文案、规范键校验、回退和非拉丁文字端到端 Fixture；母语/专业翻译质量继续按人工文档独立验收，不把机器完整性校验冒充内容审校。
+若用户没有另外指定范围，默认完整执行 `docs/roadmap.md` 的 `NSIS-R4 安全边界、缓存完整性与 NSIS 冻结`。该阶段收口重解析点/链接策略、ACL/ADS 明确边界和工具缓存完整性，再运行完整 NSIS 回归并冻结能力矩阵；真实重启、UAC、生产证书、真实旧 MSI、多宿主/ARM64、真实 ACL/磁盘耗尽和语言内容审校继续按人工文档验收。
 
 ### 14.4 执行约束
 

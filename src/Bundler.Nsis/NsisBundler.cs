@@ -5,6 +5,9 @@ namespace DotNet.Bundler.Nsis;
 
 public sealed class NsisBundler
 {
+    public static IReadOnlyList<string> SupportedLanguages { get; } =
+        NsisLanguageCatalog.Definitions.Select(language => language.Name).ToArray();
+
     private readonly NsisBundleConfiguration _configuration;
     private readonly NsisBundlerOptions _options;
 
@@ -101,6 +104,34 @@ public sealed class NsisBundler
         foreach (var file in settings.CustomLanguageFiles.Values)
         {
             ValidateOptionalFile(file, ".nsh", nameof(settings.CustomLanguageFiles));
+        }
+        var selectedLanguages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var language in settings.Languages)
+        {
+            var canonical = NsisLanguageCatalog.Resolve(language).Name;
+            if (!selectedLanguages.Add(canonical))
+            {
+                throw new ArgumentException(
+                    $"NSIS language '{canonical}' is selected more than once.",
+                    nameof(settings));
+            }
+        }
+        var customizedLanguages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var language in settings.CustomLanguageFiles.Keys)
+        {
+            var canonical = NsisLanguageCatalog.Resolve(language).Name;
+            if (!selectedLanguages.Contains(canonical))
+            {
+                throw new ArgumentException(
+                    $"Custom NSIS language file '{language}' does not correspond to a selected language.",
+                    nameof(settings));
+            }
+            if (!customizedLanguages.Add(canonical))
+            {
+                throw new ArgumentException(
+                    $"NSIS language '{canonical}' has more than one custom language file.",
+                    nameof(settings));
+            }
         }
         ValidateMsiCodes(settings.LegacyMsiProductCodes, nameof(settings.LegacyMsiProductCodes));
         ValidateMsiCodes(settings.LegacyMsiUpgradeCodes, nameof(settings.LegacyMsiUpgradeCodes));

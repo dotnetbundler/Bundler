@@ -31,6 +31,8 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Rejects invalid associations and protocols", () => RunSync(RejectsInvalidAssociationsAndProtocols)),
     ("Loads complete generic bundle configuration", LoadsCompleteGenericBundleConfiguration),
     ("Builds through the standalone NSIS API", BuildsThroughStandaloneNsisApi),
+    ("Builds every built-in NSIS language", BuildsEveryBuiltInNsisLanguage),
+    ("Validates custom NSIS language files", ValidatesCustomNsisLanguageFiles),
     ("Builds every NSIS compression mode", BuildsEveryNsisCompressionMode),
     ("Signs both NSIS installer artifacts", SignsBothNsisInstallerArtifacts),
     ("Runs an external Windows signing provider safely", RunsExternalWindowsSigningProviderSafely),
@@ -535,6 +537,159 @@ static async Task BuildsThroughStandaloneNsisApi()
         }
     }
 }
+
+static async Task BuildsEveryBuiltInNsisLanguage()
+{
+    string[] expectedLanguages =
+    [
+        "Arabic", "Bulgarian", "Dutch", "English", "French", "German", "Italian", "Japanese",
+        "Korean", "Norwegian", "Persian", "Portuguese", "PortugueseBR", "Russian", "SimpChinese",
+        "Spanish", "SpanishInternational", "Swedish", "TradChinese", "Turkish", "Ukrainian", "Vietnamese"
+    ];
+    Assert(NsisBundler.SupportedLanguages.SequenceEqual(expectedLanguages),
+        "The public NSIS language catalog does not match the supported Tauri language set.");
+
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Language.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "发布内容");
+    Directory.CreateDirectory(input);
+    await File.WriteAllTextAsync(Path.Combine(input, "示例应用.exe"), "language-test");
+    try
+    {
+        var bundler = new NsisBundler(
+            new NsisBundleConfiguration
+            {
+                Languages = expectedLanguages,
+                DisplayLanguageSelector = true
+            },
+            new NsisBundlerOptions { ToolCacheDirectory = Path.Combine(root, "shared-tools") });
+        var artifacts = await bundler.BuildAsync(new BundleConfiguration
+        {
+            ProductName = "多语言 اختبار برنامه",
+            Identifier = "com.example.languages",
+            Version = "1.0.0",
+            OutputDirectory = Path.Combine(root, "安装程序"),
+            Targets =
+            [
+                new BundleTargetConfiguration
+                {
+                    RuntimeIdentifier = "win-x64",
+                    InputDirectory = input,
+                    MainExecutable = "示例应用.exe",
+                    Formats = [PackageFormat.Nsis]
+                }
+            ]
+        });
+        Assert(artifacts.Count == 1 && File.Exists(artifacts[0].Path),
+            "NSIS did not compile one installer containing every built-in language.");
+
+        try
+        {
+            await new NsisBundler(new NsisBundleConfiguration { Languages = ["English", "english"] })
+                .BuildAsync(new BundleConfiguration { Version = "1.0.0" });
+            throw new InvalidOperationException("A duplicate NSIS language was accepted.");
+        }
+        catch (ArgumentException exception) when (exception.Message.Contains("more than once", StringComparison.Ordinal))
+        {
+        }
+
+        try
+        {
+            await new NsisBundler(new NsisBundleConfiguration { Languages = ["Klingon"] })
+                .BuildAsync(new BundleConfiguration { Version = "1.0.0" });
+            throw new InvalidOperationException("An unsupported NSIS language was accepted.");
+        }
+        catch (InvalidOperationException exception) when (exception.Message.Contains("Unsupported NSIS language", StringComparison.Ordinal))
+        {
+        }
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static async Task ValidatesCustomNsisLanguageFiles()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.CustomLanguage.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "publish");
+    Directory.CreateDirectory(input);
+    await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp.exe"), "custom-language-test");
+    var english = await File.ReadAllTextAsync(
+        Path.Combine(RepositoryRoot(), "templates", "nsis", "languages", "English.nsh"));
+    try
+    {
+        var cases = new Dictionary<string, string>
+        {
+            ["missing"] = string.Join(Environment.NewLine, english.Split(["\r\n", "\n"], StringSplitOptions.None).Skip(1)),
+            ["duplicate"] = english + Environment.NewLine + english.Split(["\r\n", "\n"], StringSplitOptions.None)[0],
+            ["unknown"] = english.Replace("ShortcutPageTitle", "UnexpectedMessage", StringComparison.Ordinal),
+            ["wrong-language"] = english.Replace("${LANG_ENGLISH}", "${LANG_GERMAN}", StringComparison.Ordinal)
+        };
+        foreach (var (name, content) in cases)
+        {
+            var customFile = Path.Combine(root, name + ".nsh");
+            await File.WriteAllTextAsync(customFile, content);
+            var bundler = new NsisBundler(
+                new NsisBundleConfiguration
+                {
+                    Languages = ["English"],
+                    CustomLanguageFiles = new Dictionary<string, string> { ["english"] = customFile }
+                },
+                new NsisBundlerOptions { ToolCacheDirectory = Path.Combine(root, "shared-tools") });
+            try
+            {
+                await bundler.BuildAsync(LanguageTestConfiguration(input, Path.Combine(root, "artifacts", name)));
+                throw new InvalidOperationException($"The invalid custom language case '{name}' was accepted.");
+            }
+            catch (InvalidDataException)
+            {
+            }
+        }
+
+        var validCustomFile = Path.Combine(root, "complete.nsh");
+        await File.WriteAllTextAsync(
+            validCustomFile,
+            english.Replace("Shortcut options", "Custom shortcut options", StringComparison.Ordinal));
+        var validArtifacts = await new NsisBundler(
+            new NsisBundleConfiguration
+            {
+                Languages = ["english"],
+                CustomLanguageFiles = new Dictionary<string, string> { ["English"] = validCustomFile }
+            },
+            new NsisBundlerOptions { ToolCacheDirectory = Path.Combine(root, "shared-tools") })
+            .BuildAsync(LanguageTestConfiguration(input, Path.Combine(root, "artifacts", "valid")));
+        Assert(validArtifacts.Count == 1 && File.Exists(validArtifacts[0].Path),
+            "A complete custom language file did not override and compile in place of the built-in file.");
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
+static BundleConfiguration LanguageTestConfiguration(string input, string output) => new()
+{
+    ProductName = "Custom Language App",
+    Identifier = "com.example.custom-language",
+    Version = "1.0.0",
+    OutputDirectory = output,
+    Targets =
+    [
+        new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "win-x64",
+            InputDirectory = input,
+            MainExecutable = "ExampleApp.exe",
+            Formats = [PackageFormat.Nsis]
+        }
+    ]
+};
 
 static async Task BuildsEveryNsisCompressionMode()
 {

@@ -68,6 +68,12 @@ Tauri's runtime scan by `DisplayName` and `Publisher` was reviewed but rejected 
 
 Tauri's file-association macros and ownership-checked deep-link removal were reviewed. The deep-link ownership check is adopted so uninstall cannot remove a protocol that another application subsequently claimed. Directly assigning an extension's default ProgID was rejected: modern Windows requires applications to register as candidates and leaves the effective default to the user. DotNet.Bundler therefore registers application-specific versioned ProgIDs, `OpenWithProgids`, Capabilities, and `RegisteredApplications`, then refreshes the Shell association cache. Custom URL schemes additionally receive a direct protocol key so a newly installed scheme is immediately launchable.
 
+### Localization
+
+The pinned `get_lang_data` match in `nsis/mod.rs` defines the 22-language capability snapshot adopted by DotNet.Bundler: Arabic, Bulgarian, Dutch, English, French, German, Italian, Japanese, Korean, Norwegian, Persian, Portuguese, PortugueseBR, Russian, SimpChinese, Spanish, SpanishInternational, Swedish, TradChinese, Turkish, Ukrainian, and Vietnamese. These are public configuration names, not an instruction to copy Tauri's file layout or translations.
+
+NSIS 3.12 names the Persian compiler language `Farsi` and exposes `LANG_FARSI`; DotNet.Bundler therefore keeps the upstream-facing `Persian` name while mapping it internally. Every built-in/custom file must contain exactly the canonical Bundler message keys for its language. A selected custom file replaces the built-in file rather than partially merging it. Configured language order is retained, so the first item is NSIS's fallback when the system UI language is not selected. Machine validation proves structure, compilation and Unicode transport; native linguistic and UI review remains MT-11.
+
 ## External validation still required
 
 See `docs/nsis-open-items.md` for tests that need credentials, production identifiers, or platform conditions unavailable in the repository.
