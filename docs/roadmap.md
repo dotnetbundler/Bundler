@@ -3,14 +3,13 @@
 > 最后整理：2026-09-23
 > 路线状态：`NSIS-R4` 已在 `b116d09` 形成冻结基线，随后加固 journal 恢复目标、跨配置恢复流程及快照完整性；当前提交以 Git HEAD 为准
 > 当前实施对象：Windows WiX/MSI
-> 默认下一阶段：`WIN-MSI-1 工具供应与最小安装/卸载`
+> 默认下一实施阶段：`WIN-MSI-1 工具供应与最小安装/卸载`（须用户明确说“开始 WIN-MSI-1”）
 
-本文档是项目后续路线的唯一规范来源。它记录产品边界、能力对齐方法、阶段顺序、完成条件和接班步骤，使后续开发不依赖某一次对话或某个 AI 的记忆。
+本文档是项目后续路线的规范入口；MSI 专项细则由 [`docs/msi-roadmap.md`](msi-roadmap.md) 承接，与本文具有同等实施约束。它们使后续开发不依赖某一次对话或某个 AI 的记忆。
 
 - `PROJECT_CONTEXT.md` 记录当前实现事实、验证证据和协作约束；
 - 本文档记录从当前状态向后推进的正式计划；
-- `docs/manual-testing.md` 记录普通自动化环境无法完成的人工与外部验收；
-- `docs/nsis-open-items.md` 记录这些外部验收所缺的输入；
+- `docs/manual-testing-index.md` 按格式链接独立的人工验收、能力矩阵和外部待办；
 - 代码和自动化测试是实现事实的最终依据。若它们与文档冲突，先调查差异，再同时修正文档和实现状态，不能默默选择其中一方。
 
 ## 1. 产品定位
@@ -95,8 +94,8 @@
 
 1. `PROJECT_CONTEXT.md`；
 2. 本文档；
-3. `docs/nsis-upstream-reference.md` 和 `docs/nsis-capability-matrix.md`；
-4. `docs/nsis-open-items.md` 和 `docs/manual-testing.md`；
+3. 当前格式的路线、能力矩阵及上游依据；MSI 阶段阅读 `docs/msi-roadmap.md` 和 `docs/msi-capability-matrix.md`；
+4. `docs/manual-testing-index.md` 与当前格式的人工清单、外部待办；
 5. 当前阶段涉及的代码与测试。
 
 然后核对分支、HEAD、工作区、包版本和已有实现。向用户报告以下阶段信息后，直接完成整个阶段，不把一个阶段任意拆成许多只产生局部结果的小轮次：
@@ -116,7 +115,7 @@
 
 - 每个新增或修改功能都要增加或更新自动化测试；只运行已有测试不算覆盖新行为。
 - 公开功能要同时覆盖直接 API、当前受支持的入口映射、示例和中文用户文档。
-- 普通环境做不了的测试继续写入 `docs/manual-testing.md` 和 `docs/nsis-open-items.md`，但只要自动化边界已完成，它们不阻塞快速开发转入下一阶段。
+- 普通环境做不了的测试写入当前格式的专用人工清单和外部待办。阶段明确要求的真实 Windows 安装/卸载集成测试是自动化门槛，不能作为普通人工待办延后。
 - 数据丢失、安全问题、主流程错误和会改变本阶段 API 的问题在当前阶段处理；独立增强项进入后续阶段或 backlog，不无限扩张当前范围。
 - 用户明确说“提交”后才创建 commit；不主动 push。
 - 每个阶段结束时更新本文档的状态、`PROJECT_CONTEXT.md` 的事实和验证证据。不得只在对话中宣布完成。
@@ -258,14 +257,14 @@
 
 ### WIN-MSI：WiX/MSI 后端
 
-按一个完整格式推进，不与 macOS/Linux 并行混做：
+按一个完整格式推进，不与 macOS/Linux 并行混做。用户暂定在 **Windows 宿主用 WiX 3.14.1** 构建；它的许可证、可信归档、固定哈希、最小子集、Framework 宿主条件和离线分发须在第一阶段实测过关。现有 WiX 5.0.2 仅是 NSIS 迁移测试 fixture，不是正式后端。
 
-1. `WIN-MSI-1`：工具供应、最小安装/卸载、元数据、目录和产物契约；
-2. `WIN-MSI-2`：升级、产品标识、安装范围、快捷方式、文件关联和深链接；
-3. `WIN-MSI-3`：签名、语言、自动化/退出码和失败行为；
-4. `WIN-MSI-4`：Windows E2E、人工矩阵、文档和格式冻结。
+1. `WIN-MSI-1`：工具供应与身份/版本/组件契约，最小 current user 安装和卸载；**本阶段必须通过真实 Windows 安装及卸载烟雾测试**。
+2. `WIN-MSI-2`：major upgrade、降级保护、per machine 独立产物、快捷方式、关联和 URL 协议。
+3. `WIN-MSI-3`：签名、语言、静默/被动、退出码、修复维护及失败/回滚/重启。
+4. `WIN-MSI-4`：完整 Windows/架构/安全矩阵、人工边界、文档及格式冻结；仅补缺陷和测试，不把首个安装测试拖到此阶段。
 
-WiX 后端复用已证明通用的 Core 与 Windows 签名组件，但不强迫 MSI 模拟 NSIS 的事务或脚本语义。
+各阶段的前置条件、交付物、不做事项、新增测试、人工验收和退出条件，以及产品身份等第一阶段前必须厘清的决策，详见 [`docs/msi-roadmap.md`](msi-roadmap.md)。逐项计划/边界见 [`docs/msi-capability-matrix.md`](msi-capability-matrix.md)。所有 MSI 能力当前均未实现。
 
 ### MAC：macOS `.app` 与 DMG
 
@@ -289,7 +288,7 @@ WiX 后端复用已证明通用的 Core 与 Windows 签名组件，但不强迫 
 
 ### 8.1 外部验收队列
 
-由 `docs/manual-testing.md` 维护，包括 UAC、真实重启、生产证书、历史 MSI、多宿主、Windows ARM64、真实 ACL/磁盘耗尽等。取得环境时逐项执行并保存证据；没有环境时保留准确边界。
+由 [`docs/manual-testing-index.md`](manual-testing-index.md) 按格式引导；NSIS 和 MSI 的清单、结论及外部待办分别维护，包括 UAC、真实重启、生产证书、历史 MSI、Windows ARM64、真实 ACL/磁盘耗尽等。取得环境时逐项执行并保存证据；没有环境时保留准确边界。
 
 ### 8.2 候选增强队列
 
@@ -309,7 +308,7 @@ WiX 后端复用已证明通用的 Core 与 Windows 签名组件，但不强迫 
 1. 将本文档顶部的基线和默认下一阶段更新到已验证状态；
 2. 更新第 5 节能力矩阵和对应阶段的完成状态；
 3. 在 `PROJECT_CONTEXT.md` 写入实际 HEAD、包版本、提交、验证命令和结果；
-4. 将新的外部条件同步到 `docs/nsis-open-items.md` 与 `docs/manual-testing.md`；
+4. 将新的外部条件同步到当前格式的专用 open-items 与人工测试文档，并更新 `docs/manual-testing-index.md` 的入口；
 5. 若参考 Tauri，更新 `docs/nsis-upstream-reference.md` 的固定 commit 和决策；
 6. 在提交前检查文档没有把“计划”“已实现”“外部待验收”混写。
 

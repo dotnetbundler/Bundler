@@ -4,9 +4,9 @@
 > 当前分支：`codex/modular-bundler-backends`  
 > NSIS 冻结起点：`b116d09 feat(nsis): freeze secure packaging baseline`；当前提交以 `git rev-parse --short HEAD` 为准
 > 当前包版本：`0.1.0-alpha.33`
-> 当前阶段：NSIS 跨配置恢复与快照完整性加固；下一阶段仍为 `WIN-MSI-1`
+> 当前阶段：WiX/MSI 路线与文档已规划；`WIN-MSI-1` 尚未开始，须用户明确启动
 
-本文档是当前项目的“事实、决策、验证证据与协作约束”汇总，供后续开发任务直接接续。正式后续路线、产品边界、阶段完成条件和默认下一阶段以 `docs/roadmap.md` 为唯一规范来源。本文档不是面向最终用户的使用手册；当前需要维护的用户文档以根目录的 `README.zh-CN.md` 和 `samples/HelloBundledApp/README.md` 为准。代码与自动化测试始终是实现事实的最终依据。
+本文档是当前项目的“事实、决策、验证证据与协作约束”汇总，供后续开发任务直接接续。正式后续路线、产品边界、阶段完成条件和默认下一阶段见 `docs/roadmap.md`，MSI 细则见 `docs/msi-roadmap.md`。本文档不是面向最终用户的使用手册；当前需要维护的用户文档以根目录的 `README.zh-CN.md` 和 `samples/HelloBundledApp/README.md` 为准。代码与自动化测试始终是实现事实的最终依据。
 
 状态标记：
 
@@ -465,7 +465,7 @@ git diff --check
 
 ## 9. 已实现但仍需外部验收的事项
 
-这些事项的外部输入摘要保存在 `docs/nsis-open-items.md`，完整的人工执行顺序、命令、预期结果、证据和清理要求集中在 `docs/manual-testing.md`。新增无法在普通本地自动化环境完成的已实现能力时，必须同步这两个文档；可自动化的测试仍由仓库测试承担。
+这些 NSIS 事项的外部输入摘要保存在 `docs/nsis-open-items.md`，完整的人工执行顺序、命令、预期结果、证据和清理要求集中在 `docs/manual-testing.md`。总入口见 `docs/manual-testing-index.md`，MSI 采用独立文档。新增无法在普通本地自动化环境完成的已实现能力时，必须同步对应格式的两个文档；可自动化的测试仍由仓库测试承担。
 
 1. **正式 Authenticode**：使用生产签名身份、私钥保护设施和公开 RFC 3161 服务验证公开信任链、时间戳策略、硬件/云签名行为。
 2. **生产旧 MSI 迁移**：使用真实发布过的 ProductCode/UpgradeCode，以及 x86/x64、current-user/per-machine 旧包验证识别和权限行为。
@@ -477,7 +477,7 @@ git diff --check
 
 正式路线见 `docs/roadmap.md`。当前顺序为：
 
-1. `WIN-MSI-1..4`：先完成并冻结 WiX/MSI；
+1. `WIN-MSI-1..4`：按 `docs/msi-roadmap.md` 先完成并冻结 WiX/MSI，暂定 Windows 宿主使用 WiX 3.14.1；
 2. `MAC-APP`、`MAC-DMG`；macOS 决策若正式纳入 PKG，则在 Linux 前完成 `MAC-PKG`；
 3. `LINUX-DEB`、`LINUX-RPM`、`LINUX-APPIMAGE`；
 4. 所有上述打包格式完成后再进入 `CLI-C1`，把现有 CLI 原型产品化。
@@ -519,7 +519,7 @@ Tauri 能力按“通用打包能力、格式特定能力、Tauri runtime 专属
 - 安装、升级、卸载、回滚、注册表、快捷方式、文件关联、进程协调、签名和退出码等真实 Windows 行为必须增加端到端集成测试，不能只断言生成的 NSIS 脚本包含某段文本。
 - 失败路径必须使用可控的失败注入，并断言退出码、文件、注册表、快捷方式、应用数据和 journal 等可观察状态；不能只断言“发生了失败”。
 - 新增公开功能除了自动化测试外，还必须在 `HelloBundledApp` 中提供可操作演示；示例和自动化测试两者不能互相替代。
-- 如果某项行为受 UAC、正式证书、真实旧安装包、重启或特定系统版本限制而无法在普通 CI 中自动验证，必须完成能够自动化的部分，并在 `docs/nsis-open-items.md` 和本文档中记录未覆盖条件、人工验收步骤与证据边界，不能直接省略测试说明。
+- 如果某项行为受 UAC、正式证书、真实旧安装包、重启或特定系统版本限制而无法在普通 CI 中自动验证，必须完成能够自动化的部分，并在对应格式的 open-items、人工测试文档和本文档中记录未覆盖条件与证据边界，不能直接省略测试说明。
 - 不得为了让测试通过而无依据地删除、跳过或弱化已有断言；若产品语义确实改变，应同步修改实现、测试、中文文档和本文档，并说明原因。
 - 一个阶段只有在新增测试、既有回归测试和相关集成测试全部通过后，才能标记为“已实现并自动验证”；否则必须标记为“已实现但需外部验收”或“未完成”。
 - 验证报告必须列出实际执行的命令、环境、通过/失败数量、未覆盖情形和测试遗留清理结果，不能把之前阶段的结果当成本次结果。
@@ -554,7 +554,7 @@ Tauri 能力按“通用打包能力、格式特定能力、Tauri runtime 专属
 2. `docs/roadmap.md`；
 3. `AGENTS.md`（如果存在）；
 4. `README.zh-CN.md`；
-5. `docs/nsis-upstream-reference.md`、`docs/nsis-capability-matrix.md`、`docs/nsis-open-items.md` 和 `docs/manual-testing.md`；
+5. `docs/manual-testing-index.md` 和当前格式的路线、能力矩阵、open-items、人工测试文档；NSIS 历史内容仍在 `docs/nsis-upstream-reference.md`、`docs/nsis-capability-matrix.md`、`docs/nsis-open-items.md` 和 `docs/manual-testing.md`；
 6. 与准备处理的阶段直接相关的代码和测试。
 
 本文档是项目交接基线，但代码和自动化测试才是最终事实。如果文档、代码、测试或 Git 状态不一致，接管者必须先调查并向用户说明差异，不能自行假设，也不能要求用户重新复述本文档已经包含的信息。
@@ -591,7 +591,7 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 
 ### 14.3 默认下一阶段
 
-若用户没有另外指定范围，默认完整执行 `docs/roadmap.md` 的 `WIN-MSI-1 工具供应与最小安装/卸载`。当前代码只有 `PackageFormat.Msi`、Windows 格式兼容性和通用后端接口，尚无 MSI 后端；本阶段必须先确定并固定 WiX 工具供应，生成可安装/卸载的最小 MSI，映射基础元数据与安装目录，定义产物契约并增加单元/契约及 Windows E2E。CLI 明确延后到 MSI、macOS 和 Linux 计划格式全部完成之后。
+当前代码只有 `PackageFormat.Msi`、Windows 格式兼容性和通用后端接口，尚无 MSI 后端；NSIS 迁移 fixture 的 `WixToolset.Sdk/5.0.2` 不代表正式选型。用户暂定 Windows 宿主使用 WiX 3.14.1；路线、工具分发门槛、身份/版本/组件规则与分阶段测试见 `docs/msi-roadmap.md`。**只有用户明确说“开始 WIN-MSI-1”才进入代码实现**。第一阶段必须生成可安装/卸载的最小 MSI，并通过专用 Windows VM 的真实安装和卸载烟雾测试。CLI 在计划的 MSI、macOS 和 Linux 打包格式完成后再做。
 
 ### 14.4 执行约束
 
