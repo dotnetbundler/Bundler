@@ -47,6 +47,7 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Lets users choose and restore the install directory", () => RunSync(LetsUsersChooseInstallDirectory)),
     ("Uninstalls only packaged payload files", () => RunSync(UninstallsOnlyPackagedPayloadFiles)),
     ("Provides interactive NSIS safety options", () => RunSync(ProvidesInteractiveNsisSafetyOptions)),
+    ("Pins install recovery to the installer manifest", () => RunSync(PinsInstallRecoveryToInstallerManifest)),
     ("Renders the NSIS automation protocol", () => RunSync(RendersNsisAutomationProtocol)),
     ("Renders existing-version policy", () => RunSync(RendersExistingVersionPolicy)),
     ("Renders safe file and URL registrations", () => RunSync(RendersSafeFileAndUrlRegistrations)),
@@ -174,7 +175,7 @@ static async Task VerifiesAndExtractsBundledNsis()
             "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
         Assert(File.Exists(pluginPath), "The bundled NSIS plug-in is missing.");
         Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))) ==
-               "240B9AF98F0200244C53EFBB68FD2FFD73E63E5F352DE1FC4B3EE8BAA714ADEE",
+               "ED3A50B0466CEDF319AA51384E7B7BDB14ED0D5938487E28561D2DD494E423B3",
             "The bundled NSIS plug-in checksum changed; rebuild and update its provenance.");
 
         var toolset = await NsisToolResolver.ResolveAsync(archive, cache);
@@ -1243,9 +1244,11 @@ static void ProvidesInteractiveNsisSafetyOptions()
         "Running-application coordination should use the exact installed executable path.");
     Assert(template.Contains("Function PrepareInstallTransaction", StringComparison.Ordinal) &&
            template.Contains("DotNetBundlerNsis::ActivateInstallTransaction", StringComparison.Ordinal) &&
-           template.Contains("DotNetBundlerNsis::RollbackInstallTransaction", StringComparison.Ordinal) &&
+           template.Contains("DotNetBundlerNsis::BeginInstallTransactionRecovery", StringComparison.Ordinal) &&
+           template.Contains("DotNetBundlerNsis::CompleteInstallTransactionRecovery", StringComparison.Ordinal) &&
+           !template.Contains("DotNetBundlerNsis::RollbackInstallTransaction", StringComparison.Ordinal) &&
            template.Contains("Call CommitInstallTransaction", StringComparison.Ordinal),
-        "The installer should snapshot, activate, roll back, and commit its persistent changes.");
+        "The installer should snapshot, activate, recover from its manifest, and commit persistent changes without exposing journal-directed rollback.");
     Assert(template.Contains("DOTNET_BUNDLER_TEST_AFTER_TRANSACTION_BEGIN", StringComparison.Ordinal) &&
            template.Contains("DOTNET_BUNDLER_TEST_BEFORE_TRANSACTION_ACTIVATE", StringComparison.Ordinal),
         "The repository fixtures should be able to inject pre-activation transaction failures.");
@@ -1257,6 +1260,67 @@ static void ProvidesInteractiveNsisSafetyOptions()
     Assert(template.Contains("UninstPage custom un.AppDataOptionsPage", StringComparison.Ordinal) &&
            template.Contains("$LOCALAPPDATA\\${PRODUCT_ID}", StringComparison.Ordinal),
         "The uninstaller should offer optional application-data deletion.");
+}
+
+static void PinsInstallRecoveryToInstallerManifest()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    File.WriteAllText(Path.Combine(root, "ExampleApp.exe"), "test");
+    try
+    {
+        var configuration = ValidConfiguration(new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "win-x64",
+            InputDirectory = root,
+            MainExecutable = "ExampleApp.exe",
+            Formats = [PackageFormat.Nsis]
+        });
+        var item = new BundlePlanItem(
+            new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+            PackageFormat.Nsis,
+            root,
+            "ExampleApp.exe",
+            "output",
+            false);
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+        var script = NsisBundleBackend.CreateScript(
+            template,
+            configuration,
+            new NsisBundleConfiguration(),
+            item,
+            "setup.exe",
+            "ExampleApp");
+
+        foreach (var action in new[]
+        {
+            "BackupTransactionRegistryKey",
+            "ValidateTransactionRegistryKeySnapshot",
+            "RestoreTransactionRegistryKey"
+        })
+        {
+            Assert(script.Contains($"DotNetBundlerNsis::{action} \"$TransactionDirectory\" \"key-000\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"${{UNINSTALL_KEY}}\"", StringComparison.Ordinal),
+                $"{action} should use the same installer-defined registry snapshot name and target.");
+        }
+
+        foreach (var action in new[]
+        {
+            "BackupTransactionFile",
+            "ValidateTransactionFileSnapshot",
+            "RestoreTransactionFile"
+        })
+        {
+            var command = script.Split('\n').SingleOrDefault(line =>
+                line.Contains($"DotNetBundlerNsis::{action}", StringComparison.Ordinal) &&
+                line.Contains("\"file-003\"", StringComparison.Ordinal));
+            Assert(command is not null && command.Contains("\"$DESKTOP\\ExampleApp.lnk\"", StringComparison.Ordinal),
+                $"{action} should use the same installer-defined file snapshot name and target.");
+        }
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
 }
 
 static void RendersNsisAutomationProtocol()

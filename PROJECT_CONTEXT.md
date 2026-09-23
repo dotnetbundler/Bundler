@@ -2,9 +2,9 @@
 
 > 最后整理：2026-09-23
 > 当前分支：`codex/modular-bundler-backends`  
-> 上一已提交基线：`0f91d8f feat(nsis): complete built-in localization`
-> 当前包版本：`0.1.0-alpha.31`
-> 当前阶段：`NSIS-R4` 安全边界、缓存完整性与 NSIS 冻结已完成并验证；默认下一阶段为 `CLI-C1`
+> NSIS 冻结起点：`b116d09 feat(nsis): freeze secure packaging baseline`；当前提交以 `git rev-parse --short HEAD` 为准
+> 当前包版本：`0.1.0-alpha.32`
+> 当前阶段：NSIS journal 恢复目标加固已实现并验证；下一阶段为 `WIN-MSI-1`
 
 本文档是当前项目的“事实、决策、验证证据与协作约束”汇总，供后续开发任务直接接续。正式后续路线、产品边界、阶段完成条件和默认下一阶段以 `docs/roadmap.md` 为唯一规范来源。本文档不是面向最终用户的使用手册；当前需要维护的用户文档以根目录的 `README.zh-CN.md` 和 `samples/HelloBundledApp/README.md` 为准。代码与自动化测试始终是实现事实的最终依据。
 
@@ -299,9 +299,10 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 
 - 安装和升级在修改旧状态前快照完整安装目录、产品相关注册表项、共享注册表值以及当前/旧名称快捷方式。
 - journal 按安装范围保存在 `%LOCALAPPDATA%\DotNetBundler\transactions` 或 `%ProgramData%\DotNetBundler\transactions`；只有快照完成后才标记为 active。
+- 恢复前先逐项比较 journal 快照目标与安装器编译时生成的固定清单；文件路径以及注册表 root、view、subkey、value name 任一不符都会在恢复载荷前失败。实际恢复再次校验，并只使用安装器清单中的目标；额外 journal 项不会被枚举执行。因此 journal 不能单独授权修改产品清单外的文件或注册表项。
 - 安装 Hook 可通过 `SetErrors` 或 `Abort` 触发失败；可继续执行失败处理时会立即回滚载荷、注册表和快捷方式。
 - 安装器进程被直接终止、无法运行 `.onInstFailed` 时保留 active journal；下一次启动同一产品安装器时先恢复旧状态，再执行版本检测和新事务。
-- journal 绑定原安装目录，恢复调用必须提供同一路径；不信任可修改的 journal 内容去选择递归删除目标。首次自定义 `/D` 安装若在注册安装目录前中断，重试时需要继续提供同一 `/D`。
+- journal 绑定原安装目录，恢复调用必须提供同一路径；安装目录、快捷方式路径和注册表恢复目标均不能只由可修改的 journal 决定。首次自定义 `/D` 安装若在注册安装目录前中断，重试时需要继续提供同一 `/D`。
 - 成功安装以将 active journal 原子重命名为同级 `.committed` 目录作为提交点，再尝试清理已提交快照。提交后清理失败不再回滚已完成的安装；下次启动先重试清理 `.committed`，再处理 active journal。快照阶段若磁盘空间不足或遇到不能安全复制的重解析点，会在修改旧状态前失败。
 - Windows 集成测试覆盖 post-install Hook 失败即时回滚、进程被直接终止后的下次启动恢复、可控快捷方式/注册表持久化失败和提交后清理失败。此外还在事务快照、事务激活、载荷恢复、注册表恢复和 active journal 清理五个检查点执行一次性故障注入，验证旧 EXE 哈希、版本注册表、运行时文件、快捷方式、journal 中间状态以及下次启动恢复/清理。
 - 升级的“先卸载旧版本”路径显式复制旧卸载器到唯一临时文件并同步等待；既避免安装目录内的 `Uninstall.exe` 因自锁被安排到重启删除，也避免旧卸载器与新事务并发产生竞态。
@@ -309,6 +310,8 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 - 快捷方式目录/偏好以及卸载信息、文件关联和 URL 协议注册都会在事务提交前检查 NSIS error flag；检测到持久化失败时进入同一事务回滚路径，不提交不完整安装。
 
 当前实现会临时占用接近现有安装目录大小的额外空间。构建输入、资源、安装快照/恢复、journal 和工具缓存统一拒绝 symlink、junction 与其他重解析点；安全清理只删除链接本身，不跟随目标。普通文件快照保留内容、基础属性和时间戳，但不承诺完整保真恢复自定义 ACL、ADS、稀疏文件等任意文件系统元数据。安装事务范围只覆盖 NSIS 安装和升级。旧 MSI 卸载是无法在缺少原 MSI 包时自动逆转的外部迁移边界，因此迁移后的失败只清理新 NSIS 状态，不宣称重新安装旧 MSI。安装载荷明确采用“锁定时安全失败并恢复”策略，不使用通用延迟替换：`MoveFileEx` 的延迟操作需要管理员上下文，无法为 `currentUser` 提供一致能力；共享 pending rename 队列也没有可安全纳入安装回滚事务的撤销机制。详见 `docs/nsis-locked-payload-policy.md`。
+
+权限边界核查（2026-09-23，本机当前 shell 为 Medium integrity）：`%LOCALAPPDATA%\DotNetBundler` 由当前用户拥有，当前用户具有继承的 Full Control，所以 `currentUser` journal 可被同一用户修改；这会造成同一用户权限内的完整性风险，但本身不是从普通用户到管理员的提权。`%ProgramData%` 由 SYSTEM 拥有，SYSTEM/Administrators 为 Full Control，普通 Users 在根上主要为读取/执行并具有限定的子目录创建权；本机尚不存在由提权安装器创建的 `%ProgramData%\DotNetBundler`，因此其最终继承 ACL 仍必须在 MT-01/MT-07 的真实 per-machine 安装中取证。加固不依赖这些 ACL：即使进程权限或 ACL 允许修改 journal，恢复目标仍受安装器清单限制。
 
 ### 5.12 卸载前向恢复
 
@@ -396,40 +399,42 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 | `1943c58` | NSIS 能力审计、压缩配置与共享配置修复 |
 | `49fa6e6` | 完整 Windows 签名流水线 |
 | `0f91d8f` | 完整内置多语言与本地化验证 |
+| `b116d09` | 冻结 NSIS 安全打包基线 |
 
 `057aca1` 是安装范围支持的历史提交，位于这条提交链的更早位置。
 
 ## 8. 最近一次验证证据
 
-以下是本阶段 `0.1.0-alpha.31` 完成的验证，不应扩写成未执行过的平台兼容承诺：
+以下是 `0.1.0-alpha.32` 的验证入口与本阶段实际结果，不应扩写成未执行过的平台兼容承诺：
 
 ```powershell
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.31
+tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.32
 dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -r win-x64 --force
 ```
 
 结果：
 
-- 40 项单元/契约测试全部通过；在原有 22 种语言与完整 NSIS 契约回归上，新增覆盖 ZIP 路径穿越/链接拒绝、工具缓存逐文件完整性、并发、篡改/额外文件/manifest/重解析点恢复、Unicode/长路径、嵌入资源并发恢复，以及 NSIS 构建输入重解析点拒绝；
-- 生成六个 `0.1.0-alpha.31` 本地 NuGet 包；
+- 41 项单元/契约测试全部通过，覆盖原有 22 种语言与完整 NSIS 契约回归，并新增验证同一快照名、文件路径和注册表目标贯穿备份、校验与恢复，且模板不再暴露 journal 定向的通用回滚入口；
+- 生成六个 `0.1.0-alpha.32` 本地 NuGet 包；
 - Windows NSIS 安装/卸载集成测试通过；
 - 自签名集成实际验证最终安装器、安装后主 EXE 和卸载器均包含预期证书；构建日志确认 Bundler 原生插件也经过内置 signer；
 - Windows 集成在 zh-CN UI 环境运行仅含 Japanese 的安装器，成功保留 Unicode 产品名、安装路径、开始菜单目录、快捷方式参数、卸载显示名和描述，并完成清理；
 - `Persian` 对外名称已在内部映射到 NSIS 3.12 的 `Farsi`/`LANG_FARSI`，由真实编译回归保护；
-- `HelloBundledApp` 使用 English、SimpChinese 自定义文件和内置 Japanese 展示语言选择器，并已从 `alpha.31` 本地包成功发布；
+- `HelloBundledApp` 使用 English、SimpChinese 自定义文件和内置 Japanese 展示语言选择器，并从当前本地包发布；
 - 烟雾测试从 `.lnk` 读取并验证参数、工作目录、图标和 AppUserModelID；
 - 集成覆盖用户手动删除快捷方式后更新不重建、旧名称迁移、外部程序接管同名快捷方式后卸载保留；
 - Native AOT COM 修复后完整流程通过；
 - Restart Manager 精确关闭安装目录内主程序，另一路径同名进程保持运行；
 - post-install Hook 失败后立即恢复旧 EXE、版本注册表、运行时数据和快捷方式；
 - 直接终止安装器进程后保留 active journal，下一次启动自动恢复并清理；
+- Windows 集成分别篡改 active journal 的快捷方式 `path.txt` 和注册表 snapshot subkey；两次恢复均实际返回 `2`、保留 journal，并保持清单外文件和 HKCU sentinel 不变，恢复原始 metadata 后正常恢复；
 - 可控 reboot flag 场景返回 `3010`，载荷和注册表保持已提交状态、journal 已清理且 `/R` 未启动应用；
 - 升级时显式临时复制并同步等待旧卸载器的回归路径通过；
 - 锁定非主程序载荷时稳定返回 `2`，保留 active journal；释放锁后的下一次启动恢复原文件、版本注册表并清理 journal；
 - 契约测试验证交互安装在载荷写入失败时引用中英文 `PayloadWriteFailed` 提示，再进入同一事务回滚；静默锁定载荷集成回归仍返回 `2`；
-- Native AOT 插件已重建，SHA-256 为 `240B9AF98F0200244C53EFBB68FD2FFD73E63E5F352DE1FC4B3EE8BAA714ADEE`；
+- Native AOT 插件已重建，SHA-256 为 `ED3A50B0466CEDF319AA51384E7B7BDB14ED0D5938487E28561D2DD494E423B3`；
 - 可控快捷方式和注册表持久化失败均返回 `2`，并恢复 1.1.0 版本、原 EXE 哈希和快捷方式状态；
 - 可控提交清理失败仍返回 `0` 并保留 `.committed`，下次安装器启动先清理它，不回滚已安装的 1.2.0；
 - 事务快照和激活故障均在修改持久状态前返回 `2`，保持 1.1.0 载荷、注册表、运行时数据和快捷方式不变，且不留下 active journal；
@@ -462,8 +467,10 @@ git diff --check
 
 正式路线见 `docs/roadmap.md`。当前顺序为：
 
-1. `CLI-C1`：把仓库已有的 CLI 原型产品化，验证 Core/后端没有被 MSBuild 绑定；
-2. 按完整格式依次推进 WiX/MSI、macOS 和 Linux 后端。
+1. `WIN-MSI-1..4`：先完成并冻结 WiX/MSI；
+2. `MAC-APP`、`MAC-DMG`；macOS 决策若正式纳入 PKG，则在 Linux 前完成 `MAC-PKG`；
+3. `LINUX-DEB`、`LINUX-RPM`、`LINUX-APPIMAGE`；
+4. 所有上述打包格式完成后再进入 `CLI-C1`，把现有 CLI 原型产品化。
 
 Tauri 能力按“通用打包能力、格式特定能力、Tauri runtime 专属能力”分类。签名是正式路线的一部分；WebView2、VC Runtime 等任意应用运行时依赖的自动发现、下载和安装当前明确不做。真实重启、UAC、生产证书、真实旧 MSI、多宿主/ARM64 和真实 ACL/磁盘耗尽保留在外部验收队列，不反复阻塞快速开发进入下一阶段。
 
@@ -554,8 +561,8 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 预期基线：
 
 - 分支：`codex/modular-bundler-backends`
-- 上一已提交基线：`0f91d8f`；当前未提交变更为已完成并验证的 `NSIS-R4`
-- 包版本：`0.1.0-alpha.31`
+- NSIS 冻结起点：`b116d09`；当前 HEAD 应实时核查，不把本文档的历史提交误认为最新提交
+- 包版本：`0.1.0-alpha.32`
 - 安装事务、Restart Manager、对应测试、示例和文档已经实现并提交；不得重新制作原型或把这些能力当作未完成项。
 
 上述分支、提交和版本是本文档最后整理时的快照。如果仓库已经向前推进，应调查后续提交和改动，并更新本文档，而不是强行退回该提交。
@@ -574,7 +581,7 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 
 ### 14.3 默认下一阶段
 
-若用户没有另外指定范围，默认完整执行 `docs/roadmap.md` 的 `CLI-C1 把现有 CLI 原型产品化`。该阶段固化共享配置 schema，让 CLI 的 `validate`、`plan`、`bundle` 共用 Core/后端，定义稳定退出码、机器可读输出、日志、帮助、版本与发布方式，并用 CLI 端到端 Fixture 覆盖已冻结的 NSIS 能力。无需维持早期 alpha CLI 参数兼容。
+若用户没有另外指定范围，默认完整执行 `docs/roadmap.md` 的 `WIN-MSI-1 工具供应与最小安装/卸载`。当前代码只有 `PackageFormat.Msi`、Windows 格式兼容性和通用后端接口，尚无 MSI 后端；本阶段必须先确定并固定 WiX 工具供应，生成可安装/卸载的最小 MSI，映射基础元数据与安装目录，定义产物契约并增加单元/契约及 Windows E2E。CLI 明确延后到 MSI、macOS 和 Linux 计划格式全部完成之后。
 
 ### 14.4 执行约束
 

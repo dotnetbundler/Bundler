@@ -209,6 +209,15 @@ UninstPage custom un.AppDataOptionsPage un.AppDataOptionsLeave
   ${EndIf}
 !macroend
 
+!macro CheckRecoveryResult
+  Pop $0
+  ${If} $0 != 0
+    StrCpy $ExitCode ${EXIT_FAILURE}
+    SetErrorLevel $ExitCode
+    Quit
+  ${EndIf}
+!macroend
+
 !macro CheckShortcutResult
   ; 原生 Shell 操作失败时终止安装，避免把“已选择但未创建”误报为成功。
   ${If} $0 < 0
@@ -372,8 +381,7 @@ FunctionEnd
 Function .onInstFailed
   ${If} $TransactionActive == 1
     SetOutPath "$TEMP"
-    DotNetBundlerNsis::RollbackInstallTransaction "$TransactionDirectory" "$INSTDIR"
-    Pop $0
+    Call RecoverInstallTransaction
   ${EndIf}
   ${If} $ExitCode == ${EXIT_SUCCESS}
     StrCpy $ExitCode ${EXIT_FAILURE}
@@ -884,9 +892,17 @@ Function un.AppDataOptionsLeave
 FunctionEnd
 
 Function RecoverInstallTransaction
-  ; 上一次安装若在提交前崩溃，先恢复其载荷、注册表和快捷方式快照。
-  DotNetBundlerNsis::RollbackInstallTransaction "$TransactionDirectory" "$INSTDIR"
-  !insertmacro CheckTransactionResult
+  ; 先逐项核对 journal 目标与安装器编译时清单；全部通过后才恢复任何产品状态。
+  ; 恢复动作始终使用清单中的目标，journal 中的路径和注册表元数据仅用于一致性验证。
+{{transaction_validation_commands}}
+  DotNetBundlerNsis::BeginInstallTransactionRecovery "$TransactionDirectory" "$INSTDIR"
+  !insertmacro CheckRecoveryResult
+  DotNetBundlerNsis::BeginTransactionRegistryRestore "$TransactionDirectory"
+  !insertmacro CheckRecoveryResult
+{{transaction_restore_commands}}
+  DotNetBundlerNsis::CompleteInstallTransactionRecovery "$TransactionDirectory"
+  !insertmacro CheckRecoveryResult
+  StrCpy $TransactionActive 0
 FunctionEnd
 
 Function RecoverUninstallTransaction
@@ -932,9 +948,7 @@ Function FailInstallTransaction
   ; 可预期的安装阶段失败必须在退出前立即回滚；若回滚本身失败，
   ; 保留 active journal，供下一次安装启动时继续恢复。
   SetOutPath "$TEMP"
-  DotNetBundlerNsis::RollbackInstallTransaction "$TransactionDirectory" "$INSTDIR"
-  Pop $0
-  StrCpy $TransactionActive 0
+  Call RecoverInstallTransaction
   StrCpy $ExitCode ${EXIT_FAILURE}
   SetErrorLevel $ExitCode
   Abort

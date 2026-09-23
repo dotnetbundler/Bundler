@@ -283,6 +283,7 @@ internal sealed class NsisBundleBackend(
         var resources = ExpandResources(configuration.Resources, item.InputDirectory);
         var visualDirectives = CreateVisualDirectives(configuration.Icons, settings);
         var shortcuts = PrepareShortcuts(configuration, settings.Shortcuts, item, resources);
+        var transaction = CreateTransactionRendering(configuration, shortcuts);
 
         return TemplateRenderer.Render(template, new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -325,7 +326,9 @@ internal sealed class NsisBundleBackend(
             ["shortcut_owned_targets"] = shortcuts.OwnedTargets,
             ["shortcut_migration_commands"] = shortcuts.MigrationCommands,
             ["shortcut_legacy_cleanup_commands"] = shortcuts.LegacyCleanupCommands,
-            ["transaction_snapshot_commands"] = CreateTransactionSnapshotCommands(configuration, shortcuts),
+            ["transaction_snapshot_commands"] = transaction.SnapshotCommands,
+            ["transaction_validation_commands"] = transaction.ValidationCommands,
+            ["transaction_restore_commands"] = transaction.RestoreCommands,
             ["resource_install_commands"] = CreateResourceInstallCommands(resources),
             ["uninstall_payload"] = CreateUninstallPayload(item.InputDirectory, resources),
             ["language_macros"] = localization.LanguageMacros,
@@ -527,29 +530,46 @@ internal sealed class NsisBundleBackend(
             ? string.Empty
             : $"!include \"{Escape(Path.GetFullPath(hooksFile!))}\"";
 
-    private static string CreateTransactionSnapshotCommands(
+    private static TransactionRendering CreateTransactionRendering(
         BundleConfiguration configuration,
         ShortcutRendering shortcuts)
     {
-        var lines = new List<string>();
+        var snapshots = new List<string>();
+        var validations = new List<string>();
+        var restores = new List<string>();
         var index = 0;
 
         void BackupKey(string subKey)
         {
-            lines.Add($"  DotNetBundlerNsis::BackupTransactionRegistryKey \"$TransactionDirectory\" \"key-{index++:D3}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\"");
-            lines.Add("  !insertmacro CheckTransactionResult");
+            var name = $"key-{index++:D3}";
+            snapshots.Add($"  DotNetBundlerNsis::BackupTransactionRegistryKey \"$TransactionDirectory\" \"{name}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\"");
+            snapshots.Add("  !insertmacro CheckTransactionResult");
+            validations.Add($"  DotNetBundlerNsis::ValidateTransactionRegistryKeySnapshot \"$TransactionDirectory\" \"{name}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\"");
+            validations.Add("  !insertmacro CheckRecoveryResult");
+            restores.Add($"  DotNetBundlerNsis::RestoreTransactionRegistryKey \"$TransactionDirectory\" \"{name}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\"");
+            restores.Add("  !insertmacro CheckRecoveryResult");
         }
 
         void BackupValue(string subKey, string valueName)
         {
-            lines.Add($"  DotNetBundlerNsis::BackupTransactionRegistryValue \"$TransactionDirectory\" \"value-{index++:D3}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\" \"{valueName}\"");
-            lines.Add("  !insertmacro CheckTransactionResult");
+            var name = $"value-{index++:D3}";
+            snapshots.Add($"  DotNetBundlerNsis::BackupTransactionRegistryValue \"$TransactionDirectory\" \"{name}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\" \"{valueName}\"");
+            snapshots.Add("  !insertmacro CheckTransactionResult");
+            validations.Add($"  DotNetBundlerNsis::ValidateTransactionRegistryValueSnapshot \"$TransactionDirectory\" \"{name}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\" \"{valueName}\"");
+            validations.Add("  !insertmacro CheckRecoveryResult");
+            restores.Add($"  DotNetBundlerNsis::RestoreTransactionRegistryValue \"$TransactionDirectory\" \"{name}\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"{subKey}\" \"{valueName}\"");
+            restores.Add("  !insertmacro CheckRecoveryResult");
         }
 
         void BackupFile(string path)
         {
-            lines.Add($"  DotNetBundlerNsis::BackupTransactionFile \"$TransactionDirectory\" \"file-{index++:D3}\" \"{path}\"");
-            lines.Add("  !insertmacro CheckTransactionResult");
+            var name = $"file-{index++:D3}";
+            snapshots.Add($"  DotNetBundlerNsis::BackupTransactionFile \"$TransactionDirectory\" \"{name}\" \"{path}\"");
+            snapshots.Add("  !insertmacro CheckTransactionResult");
+            validations.Add($"  DotNetBundlerNsis::ValidateTransactionFileSnapshot \"$TransactionDirectory\" \"{name}\" \"{path}\"");
+            validations.Add("  !insertmacro CheckRecoveryResult");
+            restores.Add($"  DotNetBundlerNsis::RestoreTransactionFile \"$TransactionDirectory\" \"{name}\" \"{path}\"");
+            restores.Add("  !insertmacro CheckRecoveryResult");
         }
 
         BackupKey("${UNINSTALL_KEY}");
@@ -584,7 +604,10 @@ internal sealed class NsisBundleBackend(
             BackupFile(legacyPath);
         }
 
-        return string.Join(Environment.NewLine, lines);
+        return new TransactionRendering(
+            string.Join(Environment.NewLine, snapshots),
+            string.Join(Environment.NewLine, validations),
+            string.Join(Environment.NewLine, restores));
     }
 
     private static string InstallModeName(NsisInstallMode mode) => mode switch
@@ -1091,6 +1114,11 @@ internal sealed class NsisBundleBackend(
         string LanguageMacros,
         string LanguageFiles,
         string DisplayLanguageSelector);
+
+    private sealed record TransactionRendering(
+        string SnapshotCommands,
+        string ValidationCommands,
+        string RestoreCommands);
 
     private sealed record ShortcutRendering(
         bool DesktopDefault,

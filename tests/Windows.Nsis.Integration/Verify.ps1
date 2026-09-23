@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.31",
+    [string]$PackageVersion = "0.1.0-alpha.32",
     [switch]$CleanupOnly
 )
 
@@ -94,6 +94,8 @@ $interruptedUninstallHookMarker = Join-Path $env:TEMP "DotNetBundler-interrupted
 $roamingData = Join-Path $env:APPDATA $identifier
 $localData = Join-Path $env:LOCALAPPDATA $identifier
 $transactionDirectory = Join-Path $env:LOCALAPPDATA "DotNetBundler\transactions\$identifier"
+$journalTamperFile = Join-Path $integrationRoot "journal-tamper-sentinel.txt"
+$journalTamperRegistryPath = "HKCU:\Software\DotNetBundler\JournalTamperSentinel"
 $committedTransactionDirectory = "$transactionDirectory.committed"
 $uninstallTransactionDirectory = "$transactionDirectory.uninstall"
 $committedUninstallTransactionDirectory = "$uninstallTransactionDirectory.committed"
@@ -185,6 +187,39 @@ function Set-TestShortcut([string]$Path, [string]$TargetPath) {
     $shortcut.Save()
 }
 
+function Set-RegistrySnapshotSubKey([string]$Path, [string]$SubKey) {
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $input = [IO.MemoryStream]::new($bytes, $false)
+    $reader = [IO.BinaryReader]::new($input)
+    try {
+        $kind = $reader.ReadByte()
+        $root = $reader.ReadString()
+        $view = $reader.ReadInt32()
+        $null = $reader.ReadString()
+        $tail = $reader.ReadBytes([int]($input.Length - $input.Position))
+    }
+    finally {
+        $reader.Dispose()
+        $input.Dispose()
+    }
+
+    $output = [IO.MemoryStream]::new()
+    $writer = [IO.BinaryWriter]::new($output)
+    try {
+        $writer.Write([byte]$kind)
+        $writer.Write([string]$root)
+        $writer.Write([int]$view)
+        $writer.Write($SubKey)
+        $writer.Write($tail)
+        $writer.Flush()
+        [IO.File]::WriteAllBytes($Path, $output.ToArray())
+    }
+    finally {
+        $writer.Dispose()
+        $output.Dispose()
+    }
+}
+
 function Build-FixtureBundle(
     [string]$InstallMode,
     [string]$OutputPath,
@@ -261,6 +296,7 @@ function Remove-TestState {
     }
     $directUninstallerCopies.Clear()
     if (Test-Path -LiteralPath $registryPath) { Remove-Item -LiteralPath $registryPath -Recurse -Force }
+    if (Test-Path -LiteralPath $journalTamperRegistryPath) { Remove-Item -LiteralPath $journalTamperRegistryPath -Recurse -Force }
     if (Test-Path -LiteralPath $unicodeRegistryPath) { Remove-Item -LiteralPath $unicodeRegistryPath -Recurse -Force }
     if (Test-Path -LiteralPath $unicodeLanguageRegistryPath) { Remove-Item -LiteralPath $unicodeLanguageRegistryPath -Recurse -Force }
     foreach ($path in @($fileProgIdRegistryPath, $urlSchemeRegistryPath, $urlProgIdRegistryPath, $capabilitiesRegistryPath)) {
@@ -296,6 +332,8 @@ function Remove-TestState {
         Assert-UnderIntegrationRoot $path
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
     }
+    Assert-UnderIntegrationRoot $journalTamperFile
+    if (Test-Path -LiteralPath $journalTamperFile) { Remove-Item -LiteralPath $journalTamperFile -Force }
     if ([IO.Path]::GetFileName($defaultInstallDirectory) -ne $productName) {
         throw "Refusing to remove an unexpected default install path: $defaultInstallDirectory"
     }
@@ -796,6 +834,33 @@ try {
     $interruptedProcess.WaitForExit()
     Assert-True ($interruptedProcess.ExitCode -ne 0) "Interrupted-install fixture unexpectedly returned success."
     Assert-True (Test-Path -LiteralPath $transactionDirectory) "Interrupted install did not preserve its active journal."
+
+    # journal 只保存快照数据，不授予恢复目标。篡改快捷方式路径或注册表子键时，安装器必须
+    # 在恢复任何产品状态前拒绝整个 journal，并且不得触碰清单外的 sentinel。
+    [IO.File]::WriteAllText($journalTamperFile, "outside-file-owned")
+    $fileSnapshot = Get-ChildItem -LiteralPath (Join-Path $transactionDirectory "files") -Directory | Select-Object -First 1
+    Assert-True ($null -ne $fileSnapshot) "Interrupted journal did not contain a file snapshot."
+    $pathFile = Join-Path $fileSnapshot.FullName "path.txt"
+    $originalSnapshotPath = [IO.File]::ReadAllText($pathFile)
+    [IO.File]::WriteAllText($pathFile, $journalTamperFile)
+    $tamperedFileRecovery = Start-Process -FilePath $upgradeInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($tamperedFileRecovery.ExitCode -eq 2) "A tampered file recovery target did not fail safely."
+    Assert-True ([IO.File]::ReadAllText($journalTamperFile) -eq "outside-file-owned") "Recovery modified a file outside the installer manifest."
+    Assert-True (Test-Path -LiteralPath $transactionDirectory) "A rejected file target did not preserve the active journal."
+    [IO.File]::WriteAllText($pathFile, $originalSnapshotPath)
+
+    New-Item -Path $journalTamperRegistryPath -Force | Out-Null
+    New-ItemProperty -LiteralPath $journalTamperRegistryPath -Name "Sentinel" -Value "outside-registry-owned" -PropertyType String -Force | Out-Null
+    $registrySnapshot = Get-ChildItem -LiteralPath (Join-Path $transactionDirectory "registry") -Filter "key-*.bin" -File | Select-Object -First 1
+    Assert-True ($null -ne $registrySnapshot) "Interrupted journal did not contain a registry-key snapshot."
+    $originalRegistrySnapshot = [IO.File]::ReadAllBytes($registrySnapshot.FullName)
+    Set-RegistrySnapshotSubKey $registrySnapshot.FullName "Software\DotNetBundler\JournalTamperSentinel"
+    $tamperedRegistryRecovery = Start-Process -FilePath $upgradeInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($tamperedRegistryRecovery.ExitCode -eq 2) "A tampered registry recovery target did not fail safely."
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $journalTamperRegistryPath -Name "Sentinel") -eq "outside-registry-owned") "Recovery modified a registry key outside the installer manifest."
+    Assert-True (Test-Path -LiteralPath $transactionDirectory) "A rejected registry target did not preserve the active journal."
+    [IO.File]::WriteAllBytes($registrySnapshot.FullName, $originalRegistrySnapshot)
+
     Invoke-WindowsExecutable $upgradeInstaller "/S /D=$installDirectory"
     Assert-True ((Get-ItemPropertyValue -LiteralPath $registryPath -Name "DisplayVersion") -eq "1.1.0") "Startup recovery did not restore the previous installed version."
     Assert-True ((Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash -eq $preInterruptedExecutableHash) "Startup recovery did not restore the previous executable."

@@ -24,7 +24,10 @@ internal static class InstallTransaction
             var transaction = ValidateTransactionDirectory(transactionDirectory);
             CleanupCommitted(transaction);
             var install = ValidateInstallDirectory(installDirectory, transaction);
-            RecoverCore(transactionDirectory, install);
+            if (Directory.Exists(transaction))
+            {
+                throw new InvalidOperationException("An existing install transaction must be recovered before a new transaction begins.");
+            }
             Directory.CreateDirectory(transaction);
             File.WriteAllText(Path.Combine(transaction, StateFileName), install);
 
@@ -187,13 +190,96 @@ internal static class InstallTransaction
         }
     }
 
-    internal static int Rollback(string transactionDirectory, string installDirectory)
+    internal static int ValidateRegistryKeySnapshot(
+        string transactionDirectory,
+        string name,
+        string rootName,
+        int viewBits,
+        string subKey) =>
+        Execute(() => ValidateRegistrySnapshot(transactionDirectory, name, 1, rootName, viewBits, subKey, null));
+
+    internal static int ValidateRegistryValueSnapshot(
+        string transactionDirectory,
+        string name,
+        string rootName,
+        int viewBits,
+        string subKey,
+        string valueName) =>
+        Execute(() => ValidateRegistrySnapshot(transactionDirectory, name, 2, rootName, viewBits, subKey, valueName));
+
+    internal static int ValidateFileSnapshot(string transactionDirectory, string name, string destination) =>
+        Execute(() => ValidateFileSnapshotCore(transactionDirectory, name, destination));
+
+    internal static int BeginRecovery(string transactionDirectory, string installDirectory)
     {
-        try
+        return Execute(() =>
         {
             var transaction = ValidateTransactionDirectory(transactionDirectory);
             CleanupCommitted(transaction);
-            RecoverCore(transaction, ValidateInstallDirectory(installDirectory, transaction));
+            if (!TryGetActiveTransaction(transaction, ValidateInstallDirectory(installDirectory, transaction), out var install))
+            {
+                return;
+            }
+
+            FailOnceForTest(transaction, FailNextPayloadRestoreForTestFileName);
+            if (Directory.Exists(install))
+            {
+                SafeDeleteTree(install);
+            }
+            if (File.Exists(Path.Combine(transaction, OriginalPayloadFileName)))
+            {
+                CopyDirectory(Path.Combine(transaction, "payload"), install);
+            }
+        });
+    }
+
+    internal static int BeginRegistryRestore(string transactionDirectory) =>
+        Execute(() =>
+        {
+            var transaction = ValidateTransactionDirectory(transactionDirectory);
+            if (IsActiveTransaction(transaction))
+            {
+                FailOnceForTest(transaction, FailNextRegistryRestoreForTestFileName);
+            }
+        });
+
+    internal static int RestoreRegistryKey(
+        string transactionDirectory,
+        string name,
+        string rootName,
+        int viewBits,
+        string subKey) =>
+        Execute(() => RestoreRegistrySnapshot(transactionDirectory, name, 1, rootName, viewBits, subKey, null));
+
+    internal static int RestoreRegistryValue(
+        string transactionDirectory,
+        string name,
+        string rootName,
+        int viewBits,
+        string subKey,
+        string valueName) =>
+        Execute(() => RestoreRegistrySnapshot(transactionDirectory, name, 2, rootName, viewBits, subKey, valueName));
+
+    internal static int RestoreFile(string transactionDirectory, string name, string destination) =>
+        Execute(() => RestoreFileSnapshot(transactionDirectory, name, destination));
+
+    internal static int CompleteRecovery(string transactionDirectory) =>
+        Execute(() =>
+        {
+            var transaction = ValidateTransactionDirectory(transactionDirectory);
+            if (!IsActiveTransaction(transaction))
+            {
+                return;
+            }
+            FailOnceForTest(transaction, FailNextJournalCleanupForTestFileName);
+            SafeDeleteTree(transaction);
+        });
+
+    private static int Execute(Action action)
+    {
+        try
+        {
+            action();
             return 0;
         }
         catch (Exception exception)
@@ -202,12 +288,15 @@ internal static class InstallTransaction
         }
     }
 
-    private static void RecoverCore(string transactionDirectory, string expectedInstallDirectory)
+    private static bool TryGetActiveTransaction(
+        string transaction,
+        string expectedInstallDirectory,
+        out string install)
     {
-        var transaction = ValidateTransactionDirectory(transactionDirectory);
+        install = expectedInstallDirectory;
         if (!Directory.Exists(transaction))
         {
-            return;
+            return false;
         }
 
         var active = Path.Combine(transaction, ActiveFileName);
@@ -215,30 +304,21 @@ internal static class InstallTransaction
         if (!File.Exists(active) || !File.Exists(state))
         {
             SafeDeleteTree(transaction);
-            return;
+            return false;
         }
 
-        var install = ValidateInstallDirectory(File.ReadAllText(state), transaction);
+        install = ValidateInstallDirectory(File.ReadAllText(state), transaction);
         if (!install.Equals(expectedInstallDirectory, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException("The install transaction does not match the selected install directory.");
         }
-        FailOnceForTest(transaction, FailNextPayloadRestoreForTestFileName);
-        if (Directory.Exists(install))
-        {
-            SafeDeleteTree(install);
-        }
-        if (File.Exists(Path.Combine(transaction, OriginalPayloadFileName)))
-        {
-            CopyDirectory(Path.Combine(transaction, "payload"), install);
-        }
-
-        FailOnceForTest(transaction, FailNextRegistryRestoreForTestFileName);
-        RestoreRegistry(transaction);
-        RestoreFiles(transaction);
-        FailOnceForTest(transaction, FailNextJournalCleanupForTestFileName);
-        SafeDeleteTree(transaction);
+        return true;
     }
+
+    private static bool IsActiveTransaction(string transaction) =>
+        Directory.Exists(transaction) &&
+        File.Exists(Path.Combine(transaction, ActiveFileName)) &&
+        File.Exists(Path.Combine(transaction, StateFileName));
 
     private static void FailOnceForTest(string transactionDirectory, string markerName)
     {
@@ -266,83 +346,143 @@ internal static class InstallTransaction
     private static string CommittedTransactionDirectory(string transactionDirectory) =>
         ValidateTransactionDirectory(transactionDirectory) + CommittedSuffix;
 
-    private static void RestoreRegistry(string transaction)
+    private static void ValidateRegistrySnapshot(
+        string transactionDirectory,
+        string name,
+        byte expectedKind,
+        string expectedRoot,
+        int expectedViewBits,
+        string expectedSubKey,
+        string? expectedValueName)
     {
-        var directory = Path.Combine(transaction, "registry");
-        if (!Directory.Exists(directory))
+        var transaction = ValidateTransactionDirectory(transactionDirectory);
+        if (!IsActiveTransaction(transaction))
         {
             return;
         }
 
-        foreach (var snapshot in Directory.EnumerateFiles(directory, "*.bin").OrderBy(path => path, StringComparer.Ordinal))
+        using var reader = OpenRegistrySnapshot(transaction, name);
+        ValidateRegistryTarget(reader, expectedKind, expectedRoot, expectedViewBits, expectedSubKey, expectedValueName);
+    }
+
+    private static void RestoreRegistrySnapshot(
+        string transactionDirectory,
+        string name,
+        byte expectedKind,
+        string expectedRoot,
+        int expectedViewBits,
+        string expectedSubKey,
+        string? expectedValueName)
+    {
+        var transaction = ValidateTransactionDirectory(transactionDirectory);
+        if (!IsActiveTransaction(transaction))
         {
-            RejectReparsePoint(snapshot);
-            using var reader = new BinaryReader(File.OpenRead(snapshot));
-            var kind = reader.ReadByte();
-            var rootName = reader.ReadString();
-            var viewBits = reader.ReadInt32();
-            var subKey = reader.ReadString();
-            using var root = OpenRoot(rootName, viewBits, writable: true);
-            if (kind == 1)
+            return;
+        }
+
+        using var reader = OpenRegistrySnapshot(transaction, name);
+        ValidateRegistryTarget(reader, expectedKind, expectedRoot, expectedViewBits, expectedSubKey, expectedValueName);
+        using var root = OpenRoot(expectedRoot, expectedViewBits, writable: true);
+        if (expectedKind == 1)
+        {
+            var exists = reader.ReadBoolean();
+            root.DeleteSubKeyTree(expectedSubKey, throwOnMissingSubKey: false);
+            if (exists)
             {
-                var exists = reader.ReadBoolean();
-                root.DeleteSubKeyTree(subKey, throwOnMissingSubKey: false);
-                if (exists)
-                {
-                    using var key = root.CreateSubKey(subKey, writable: true)!;
-                    ReadRegistryKey(reader, key);
-                }
+                using var key = root.CreateSubKey(expectedSubKey, writable: true)!;
+                ReadRegistryKey(reader, key);
             }
-            else if (kind == 2)
+        }
+        else
+        {
+            var exists = reader.ReadBoolean();
+            using var key = root.CreateSubKey(expectedSubKey, writable: true)!;
+            if (exists)
             {
-                var valueName = reader.ReadString();
-                var exists = reader.ReadBoolean();
-                using var key = root.CreateSubKey(subKey, writable: true)!;
-                if (exists)
-                {
-                    ReadRegistryValue(reader, key, valueName);
-                }
-                else
-                {
-                    key.DeleteValue(valueName, throwOnMissingValue: false);
-                }
+                ReadRegistryValue(reader, key, expectedValueName!);
             }
             else
             {
-                throw new InvalidDataException($"Unknown registry snapshot kind: {kind}");
+                key.DeleteValue(expectedValueName!, throwOnMissingValue: false);
             }
         }
     }
 
-    private static void RestoreFiles(string transaction)
+    private static BinaryReader OpenRegistrySnapshot(string transaction, string name)
     {
-        var directory = Path.Combine(transaction, "files");
-        if (!Directory.Exists(directory))
+        var snapshot = SnapshotPath(transaction, "registry", name);
+        RejectReparsePoint(snapshot);
+        return new BinaryReader(File.OpenRead(snapshot));
+    }
+
+    private static void ValidateRegistryTarget(
+        BinaryReader reader,
+        byte expectedKind,
+        string expectedRoot,
+        int expectedViewBits,
+        string expectedSubKey,
+        string? expectedValueName)
+    {
+        var kind = reader.ReadByte();
+        var rootName = reader.ReadString();
+        var viewBits = reader.ReadInt32();
+        var subKey = reader.ReadString();
+        var valueName = kind == 2 ? reader.ReadString() : null;
+        if (kind != expectedKind ||
+            !rootName.Equals(expectedRoot, StringComparison.Ordinal) ||
+            viewBits != expectedViewBits ||
+            !subKey.Equals(expectedSubKey, StringComparison.Ordinal) ||
+            !string.Equals(valueName, expectedValueName, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("The registry snapshot target does not match the installer recovery manifest.");
+        }
+    }
+
+    private static void ValidateFileSnapshotCore(string transactionDirectory, string name, string expectedDestination)
+    {
+        var transaction = ValidateTransactionDirectory(transactionDirectory);
+        if (!IsActiveTransaction(transaction))
         {
             return;
         }
 
-        foreach (var snapshot in Directory.EnumerateDirectories(directory).OrderBy(path => path, StringComparer.Ordinal))
+        var snapshot = SnapshotDirectory(transaction, "files", name);
+        RejectReparsePoint(snapshot);
+        var journalDestination = Path.GetFullPath(File.ReadAllText(Path.Combine(snapshot, "path.txt")));
+        var trustedDestination = Path.GetFullPath(expectedDestination);
+        if (!journalDestination.Equals(trustedDestination, StringComparison.OrdinalIgnoreCase))
         {
-            RejectReparsePoint(snapshot);
-            var destination = Path.GetFullPath(File.ReadAllText(Path.Combine(snapshot, "path.txt")));
-            RejectExistingReparsePoints(destination);
-            if (File.Exists(destination))
+            throw new InvalidDataException("The file snapshot target does not match the installer recovery manifest.");
+        }
+    }
+
+    private static void RestoreFileSnapshot(string transactionDirectory, string name, string expectedDestination)
+    {
+        ValidateFileSnapshotCore(transactionDirectory, name, expectedDestination);
+        var transaction = ValidateTransactionDirectory(transactionDirectory);
+        if (!IsActiveTransaction(transaction))
+        {
+            return;
+        }
+
+        var snapshot = SnapshotDirectory(transaction, "files", name);
+        var destination = Path.GetFullPath(expectedDestination);
+        RejectExistingReparsePoints(destination);
+        if (File.Exists(destination))
+        {
+            File.Delete(destination);
+        }
+        if (File.Exists(Path.Combine(snapshot, "exists")))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(Path.Combine(snapshot, "content"), destination, overwrite: false);
+        }
+        else
+        {
+            var parent = Path.GetDirectoryName(destination);
+            if (!string.IsNullOrEmpty(parent) && Directory.Exists(parent) && !Directory.EnumerateFileSystemEntries(parent).Any())
             {
-                File.Delete(destination);
-            }
-            if (File.Exists(Path.Combine(snapshot, "exists")))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                File.Copy(Path.Combine(snapshot, "content"), destination, overwrite: false);
-            }
-            else
-            {
-                var parent = Path.GetDirectoryName(destination);
-                if (!string.IsNullOrEmpty(parent) && Directory.Exists(parent) && !Directory.EnumerateFileSystemEntries(parent).Any())
-                {
-                    Directory.Delete(parent);
-                }
+                Directory.Delete(parent);
             }
         }
     }

@@ -75,8 +75,40 @@ public static class PluginActions
         InstallTransaction.Commit(transactionDirectory);
 
     [NsisAction]
-    public static int RollbackInstallTransaction(string transactionDirectory, string installDirectory) =>
-        InstallTransaction.Rollback(transactionDirectory, installDirectory);
+    public static int ValidateTransactionRegistryKeySnapshot(string transactionDirectory, string name, string root, int viewBits, string subKey) =>
+        InstallTransaction.ValidateRegistryKeySnapshot(transactionDirectory, name, root, viewBits, subKey);
+
+    [NsisAction]
+    public static int ValidateTransactionRegistryValueSnapshot(string transactionDirectory, string name, string root, int viewBits, string subKey, string valueName) =>
+        InstallTransaction.ValidateRegistryValueSnapshot(transactionDirectory, name, root, viewBits, subKey, valueName);
+
+    [NsisAction]
+    public static int ValidateTransactionFileSnapshot(string transactionDirectory, string name, string path) =>
+        InstallTransaction.ValidateFileSnapshot(transactionDirectory, name, path);
+
+    [NsisAction]
+    public static int BeginInstallTransactionRecovery(string transactionDirectory, string installDirectory) =>
+        InstallTransaction.BeginRecovery(transactionDirectory, installDirectory);
+
+    [NsisAction]
+    public static int BeginTransactionRegistryRestore(string transactionDirectory) =>
+        InstallTransaction.BeginRegistryRestore(transactionDirectory);
+
+    [NsisAction]
+    public static int RestoreTransactionRegistryKey(string transactionDirectory, string name, string root, int viewBits, string subKey) =>
+        InstallTransaction.RestoreRegistryKey(transactionDirectory, name, root, viewBits, subKey);
+
+    [NsisAction]
+    public static int RestoreTransactionRegistryValue(string transactionDirectory, string name, string root, int viewBits, string subKey, string valueName) =>
+        InstallTransaction.RestoreRegistryValue(transactionDirectory, name, root, viewBits, subKey, valueName);
+
+    [NsisAction]
+    public static int RestoreTransactionFile(string transactionDirectory, string name, string path) =>
+        InstallTransaction.RestoreFile(transactionDirectory, name, path);
+
+    [NsisAction]
+    public static int CompleteInstallTransactionRecovery(string transactionDirectory) =>
+        InstallTransaction.CompleteRecovery(transactionDirectory);
 
     [NsisAction]
     public static int BeginUninstallTransaction(
