@@ -3,26 +3,55 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
     <RestoreSources>$(MSBuildThisFileDirectory)..\..\artifacts\packages</RestoreSources>
+    <BundlerOutputPath>$(MSBuildProjectDirectory)\artifacts\feature-demo</BundlerOutputPath>
+    <HelloMsiAppInstallScope Condition="'$(HelloMsiAppInstallScope)' == ''">currentUser</HelloMsiAppInstallScope>
+    <HelloMsiAppLanguage Condition="'$(HelloMsiAppLanguage)' == ''">en-US</HelloMsiAppLanguage>
+    <HelloMsiAppSigningPfxFile Condition="'$(HelloMsiAppSigningPfxFile)' == ''"></HelloMsiAppSigningPfxFile>
+    <HelloMsiAppSigningPfxPasswordEnvironmentVariable Condition="'$(HelloMsiAppSigningPfxPasswordEnvironmentVariable)' == ''"></HelloMsiAppSigningPfxPasswordEnvironmentVariable>
+    <HelloMsiAppSigningCertificateThumbprint Condition="'$(HelloMsiAppSigningCertificateThumbprint)' == ''"></HelloMsiAppSigningCertificateThumbprint>
+    <HelloMsiAppSigningTimestampUrl Condition="'$(HelloMsiAppSigningTimestampUrl)' == ''"></HelloMsiAppSigningTimestampUrl>
+    <HelloMsiAppSigningCommand Condition="'$(HelloMsiAppSigningCommand)' == ''"></HelloMsiAppSigningCommand>
+    <HelloMsiAppSigningCommandArguments Condition="'$(HelloMsiAppSigningCommandArguments)' == ''"></HelloMsiAppSigningCommandArguments>
     <BundlerEnabled>true</BundlerEnabled>
     <BundlerFormats>msi</BundlerFormats>
     <BundlerProductName>Hello MSI App</BundlerProductName>
     <BundlerIdentifier>com.example.hellomsiapp</BundlerIdentifier>
     <BundlerVersion>1.0.0</BundlerVersion>
+    <Version>1.0.0</Version>
     <BundlerPublisher>Bundler Examples</BundlerPublisher>
-    <BundlerDescription>DotNet.Bundler MSI 最小示例</BundlerDescription>
-    <BundlerWixCodepage>936</BundlerWixCodepage>
+    <BundlerDescription>Demonstrates current DotNet.Bundler Windows MSI features.</BundlerDescription>
+    <BundlerHomepage>https://github.com/dotnetbundler</BundlerHomepage>
+    <BundlerCopyright>Copyright © DotNet.Bundler contributors</BundlerCopyright>
+    <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets\demo-license.rtf</BundlerLicenseFile>
+    <BundlerWixInstallScope>$(HelloMsiAppInstallScope)</BundlerWixInstallScope>
+    <BundlerWixLanguage>$(HelloMsiAppLanguage)</BundlerWixLanguage>
+    <BundlerWixCodepage>0</BundlerWixCodepage>
     <BundlerWixStartMenuShortcut>true</BundlerWixStartMenuShortcut>
     <BundlerWixDesktopShortcut>true</BundlerWixDesktopShortcut>
+    <BundlerWindowsSigningPfxFile>$(HelloMsiAppSigningPfxFile)</BundlerWindowsSigningPfxFile>
+    <BundlerWindowsSigningPfxPasswordEnvironmentVariable>$(HelloMsiAppSigningPfxPasswordEnvironmentVariable)</BundlerWindowsSigningPfxPasswordEnvironmentVariable>
+    <BundlerWindowsSigningCertificateThumbprint>$(HelloMsiAppSigningCertificateThumbprint)</BundlerWindowsSigningCertificateThumbprint>
+    <BundlerWindowsSigningTimestampUrl>$(HelloMsiAppSigningTimestampUrl)</BundlerWindowsSigningTimestampUrl>
+    <BundlerWindowsSigningCommand>$(HelloMsiAppSigningCommand)</BundlerWindowsSigningCommand>
+    <ApplicationIcon>$(MSBuildThisFileDirectory)Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.37" PrivateAssets="all" />
+    <BundlerIcon Include="Assets\app.ico" />
+    <BundlerResource Include="Assets\demo-resource.txt" TargetPath="DemoResources\Readme.txt" />
+    <BundlerResource Include="Assets\demo.hellomsi" TargetPath="demo.hellomsi" />
+    <BundlerResource Include="Assets\open-link.cmd" TargetPath="open-link.cmd" />
     <BundlerFileAssociation Include=".hellomsi">
       <Name>Hello MSI document</Name>
+      <Description>Hello MSI App sample document</Description>
       <MimeType>application/x-hellomsi</MimeType>
     </BundlerFileAssociation>
     <BundlerUrlProtocol Include="hello-msi">
       <Name>Hello MSI link</Name>
     </BundlerUrlProtocol>
+    <BundlerWindowsSigningCommandArgument Include="$(HelloMsiAppSigningCommandArguments)"
+                                         Condition="'$(HelloMsiAppSigningCommandArguments)' != ''" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,1 @@
+这是 Hello MSI App 通过 BundlerResource 安装到“演示资源”目录的文件。

@@ -33,7 +33,7 @@
 | 快速契约 | `tests/Bundler.Tests` | `tests/Bundler.Tests` |
 | 独立后端包 API fixture | `tests/Nsis.Api.PackageFixture` | `tests/Msi.Api.PackageFixture` |
 | MSBuild 包消费 fixture | `tests/Windows.Nsis.Integration/Fixture` | `tests/Windows.Msi.Integration/Fixture` |
-| Windows 集成入口 | `tests/Windows.Nsis.Integration/Verify.ps1` | `tests/Windows.Msi.Integration/Verify.ps1`；生命周期另有 `VerifyLifecycle.ps1` |
+| Windows 集成入口 | `tests/Windows.Nsis.Integration/Verify.ps1` | `tests/Windows.Msi.Integration/Verify.ps1`；生命周期另有 `VerifyLifecycle.ps1`，公开示例数据库契约见 `VerifyPublicSample.ps1`（不安装） |
 | 专用环境/人工 | `tests/Windows.Nsis.Reboot`、NSIS 人工文档 | MSI 人工文档及未来专用测试 |
 
 新增测试时尽量保持以下写法一致：
@@ -69,6 +69,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integ
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.37 -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.37 -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.37 -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.37
 ```
 
 命令中的版本是此文件最后更新时的示例值；执行前以 `Directory.Build.props`、实际包和 Git 状态为准。真实重启/UAC 等专用测试按格式文档的环境限制运行。

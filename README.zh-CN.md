@@ -22,7 +22,7 @@
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
 
-仓库内已有 `DotNet.Bundler.Cli` 原型，但它的参数覆盖和发布契约尚未完成，因此当前不作为受支持入口。后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..4` 的本机范围验证：current-user 安装、升级、修复和卸载，快捷方式与关联/协议候选注册，测试证书签名、英语/简体中文单语言包及受限故障回滚。MSI 编译把 WiX 警告视为失败，PackageCode 由 WiX 每次构建生成。per-machine 包仅生成并检查数据库；生产证书、交互 UI、提权安装、干净 Windows/ARM64 宿主和真实重启尚未验收。**冻结的是 alpha 格式配置及已验证的本机语义，尚无跨环境验收结论。**最小示例见 [`samples/HelloMsiApp/README.md`](samples/HelloMsiApp/README.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
+仓库内已有 `DotNet.Bundler.Cli` 原型，但它的参数覆盖和发布契约尚未完成，因此当前不作为受支持入口。后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..4` 的本机范围验证：current-user 安装、升级、修复和卸载，快捷方式与关联/协议候选注册，测试证书签名、英语/简体中文单语言包及受限故障回滚。MSI 编译把 WiX 警告视为失败，PackageCode 由 WiX 每次构建生成。per-machine 包仅生成并检查数据库；生产证书、交互 UI、提权安装、干净 Windows/ARM64 宿主和真实重启尚未验收。**冻结的是 alpha 格式配置及已验证的本机语义，尚无跨环境验收结论。**可操作的当前能力示例见 [`samples/HelloMsiApp/README.md`](samples/HelloMsiApp/README.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
 
 `DotNet.Bundler.Wix` 是可独立引用的 MSI 后端包和直接 API；MSBuild 调用同一后端。跨格式的开发与包消费规则见 [`docs/development-rules.md`](docs/development-rules.md)。
 
@@ -393,11 +393,12 @@ powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Releas
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -PackageVersion 0.1.0-alpha.37 -ConfirmLocalInstall
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -PackageVersion 0.1.0-alpha.37 -ConfirmLocalInstall
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -PackageVersion 0.1.0-alpha.37 -ConfirmLocalInstall
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -PackageVersion 0.1.0-alpha.37
 ```
 
 NSIS Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。
 
-MSI 集成测试每轮从本地包源还原，并核对隔离缓存中的实际包版本。基础脚本先把独立 API fixture 放在仓库外，只引用 `DotNet.Bundler.Wix` 生成真实 MSI；再用便利元包的 MSBuild fixture 执行真实安装/卸载。生命周期脚本生成两版本和同版本异内容包，检查升级、降级/异包拒绝、桌面注册、快捷方式及用户文件保留。维护脚本验证被动安装/卸载、静默修复、测试专用包的延迟故障回滚。`-ConfirmLocalInstall` 只允许这些受限测试。干净宿主、ARM64、UAC、真实重启与生产证书仍按 MSI 人工验收文档执行。
+MSI 集成测试每轮从本地包源还原，并核对隔离缓存中的实际包版本。基础脚本先把独立 API fixture 放在仓库外，只引用 `DotNet.Bundler.Wix` 生成真实 MSI；再用便利元包的 MSBuild fixture 执行真实安装/卸载。生命周期脚本生成两版本和同版本异内容包，检查升级、降级/异包拒绝、桌面注册、快捷方式及用户文件保留。维护脚本验证被动安装/卸载、静默修复、测试专用包的延迟故障回滚。公开示例脚本只构建三种 MSI 变体并检查数据库，不安装示例产品。`-ConfirmLocalInstall` 只允许受限安装测试。干净宿主、ARM64、UAC、真实重启与生产证书仍按 MSI 人工验收文档执行。
 
 人工验收入口见 [`docs/manual-testing-index.md`](docs/manual-testing-index.md)；NSIS 历史用例仍在 [`docs/manual-testing.md`](docs/manual-testing.md)，MSI 用例在 [`docs/msi-manual-testing.md`](docs/msi-manual-testing.md)。仓库可自动化的测试仍由上述命令执行，不转为人工清单。
 
