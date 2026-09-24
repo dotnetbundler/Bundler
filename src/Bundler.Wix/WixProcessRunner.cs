@@ -14,7 +14,8 @@ internal static class WixProcessRunner
         var start = new ProcessStartInfo
         {
             FileName = executable,
-            Arguments = string.Join(" ", arguments.Select(Quote)),
+            // WiX 3 otherwise exits successfully while ICE/compiler warnings disappear with captured output.
+            Arguments = string.Join(" ", new[] { "-wx" }.Concat(arguments).Select(Quote)),
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
             RedirectStandardOutput = true,

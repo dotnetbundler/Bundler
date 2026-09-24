@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-第一条已冻结的链路是 Windows + NSIS。MSI 已实现 WIN-MSI-1/2 的本机范围，尚未完成格式冻结；正式 CLI、macOS 和 Linux 格式仍属后续路线。
+第一条已冻结的链路是 Windows + NSIS。MSI 已完成 WIN-MSI-1..4 的本机自动化范围，alpha 格式配置与身份规则已冻结；其他 Windows/架构和生产条件仍按专用清单验收。正式 CLI、macOS 和 Linux 格式仍属后续路线。
 
 实现已经拆分为可复用的 NuGet 包。`DotNet.Bundler` 只是便利元包，实际打包代码位于以下各层。
 
@@ -22,7 +22,7 @@
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
 
-仓库内已有 `DotNet.Bundler.Cli` 原型，但它的参数覆盖和发布契约尚未完成，因此当前不作为受支持入口。后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1` 和 `WIN-MSI-2` 的本机范围验证：最小 current-user 安装/卸载、两版本升级与降级/同版本异包拒绝、快捷方式及关联/协议候选注册。per-machine 包仅生成并检查数据库，提权安装及干净 Windows/ARM64 宿主尚未验收；签名等后续阶段未开始，**MSI 格式尚未冻结**。最小示例见 [`samples/HelloMsiApp/README.md`](samples/HelloMsiApp/README.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
+仓库内已有 `DotNet.Bundler.Cli` 原型，但它的参数覆盖和发布契约尚未完成，因此当前不作为受支持入口。后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..4` 的本机范围验证：current-user 安装、升级、修复和卸载，快捷方式与关联/协议候选注册，测试证书签名、英语/简体中文单语言包及受限故障回滚。MSI 编译把 WiX 警告视为失败，PackageCode 由 WiX 每次构建生成。per-machine 包仅生成并检查数据库；生产证书、交互 UI、提权安装、干净 Windows/ARM64 宿主和真实重启尚未验收。**冻结的是 alpha 格式配置及已验证的本机语义，尚无跨环境验收结论。**最小示例见 [`samples/HelloMsiApp/README.md`](samples/HelloMsiApp/README.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
 
 `DotNet.Bundler.Wix` 是可独立引用的 MSI 后端包和直接 API；MSBuild 调用同一后端。跨格式的开发与包消费规则见 [`docs/development-rules.md`](docs/development-rules.md)。
 
@@ -46,7 +46,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS/WiX 程序集都提供
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.36" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.37" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -64,7 +64,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.36" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.37" />
 ```
 
 ```csharp
@@ -103,7 +103,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.36" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.37" />
 ```
 
 ```csharp
@@ -389,10 +389,10 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.36
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -PackageVersion 0.1.0-alpha.36 -ConfirmLocalInstall
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -PackageVersion 0.1.0-alpha.36 -ConfirmLocalInstall
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -PackageVersion 0.1.0-alpha.36 -ConfirmLocalInstall
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.37
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -PackageVersion 0.1.0-alpha.37 -ConfirmLocalInstall
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -PackageVersion 0.1.0-alpha.37 -ConfirmLocalInstall
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -PackageVersion 0.1.0-alpha.37 -ConfirmLocalInstall
 ```
 
 NSIS Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

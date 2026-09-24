@@ -11,6 +11,7 @@
     <PackageReadmeFile>README.zh-CN.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Bundler.Tests" />
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
     <EmbeddedResource Include="..\..\third_party\wix\wix3141-tools.zip"
                       LogicalName="DotNet.Bundler.Wix.Resources.wix3141-tools.zip" />

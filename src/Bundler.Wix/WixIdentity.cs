@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 
 namespace DotNet.Bundler.Wix;
 
-public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, Guid PackageCode, string ProductVersion)
+public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string ProductVersion)
 {
     private static readonly Guid NamespaceId = new("D9024E41-FDAB-535D-8AD9-3F961EB95FAB");
     private static readonly Regex VersionPattern = new(
@@ -61,7 +61,7 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, Guid Packag
         var productVersion = $"{major}.{minor}.{build}";
         var productLanguage = language == WixPackageLanguage.English ? 1033 : 2052;
         var productCode = Uuid5(NamespaceId, $"product|{familyCode:D}|{productVersion}|{productLanguage}");
-        return new WixIdentity(familyCode, productCode, Guid.NewGuid(), productVersion);
+        return new WixIdentity(familyCode, productCode, productVersion);
     }
 
     internal static Guid ComponentCode(string identifier, string runtimeIdentifier, WixInstallScope scope, string relativePath,

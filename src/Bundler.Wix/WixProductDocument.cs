@@ -24,7 +24,6 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
             new XAttribute("Manufacturer", bundle.Publisher ?? bundle.ProductName),
             new XAttribute("UpgradeCode", identity.UpgradeCode.ToString("B").ToUpperInvariant()),
             new XElement(Wix + "Package",
-                new XAttribute("Id", identity.PackageCode.ToString("B").ToUpperInvariant()),
                 new XAttribute("InstallerVersion", "500"),
                 new XAttribute("Compressed", "yes"),
                 new XAttribute("SummaryCodepage", settings.EffectiveCodepage),

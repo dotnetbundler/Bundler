@@ -20,6 +20,8 @@ internal static class WixTests
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) yield break;
             yield return ("Rejects unsafe MSI installation paths", RejectsUnsafeMsiPaths);
             yield return ("Builds and inspects a real WiX MSI without installing it", BuildsAndInspectsMsi);
+            yield return ("Rejects WiX compiler warnings during MSI generation", RejectsWixCompilerWarnings);
+            yield return ("Lets WiX generate a distinct package code for each MSI build", GeneratesDistinctPackageCodes);
             yield return ("Reuses only a verified MSI artifact", ReusesOnlyVerifiedMsi);
             yield return ("Rejects a changed same-version MSI payload", RejectsChangedSameVersionPayload);
             yield return ("Rejects MSI input reparse points", RejectsMsiInputReparsePoints);
@@ -474,6 +476,33 @@ internal static class WixTests
         finally { DeleteOwnedTestDirectory(root); }
     }
 
+    static async Task RejectsWixCompilerWarnings()
+    {
+        using var fixture = new WixTestFixture();
+        var toolset = await WixToolsetResolver.ResolveAsync(fixture.Cache, null, CancellationToken.None);
+        var source = Path.Combine(fixture.Root, "warning.wxs");
+        var output = Path.Combine(fixture.Root, "warning.wixobj");
+        File.WriteAllText(source,
+            "<?xml version=\"1.0\"?>\n<?warning freeze sentinel warning?>\n" +
+            "<Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\"><Fragment /></Wix>");
+        await ExpectAsync<InvalidOperationException>(() => WixProcessRunner.RunAsync(toolset.CandlePath,
+            ["-nologo", "-out", output, source], fixture.Root, CancellationToken.None), "freeze sentinel warning");
+    }
+
+    static async Task GeneratesDistinctPackageCodes()
+    {
+        using var fixture = new WixTestFixture();
+        var bundler = fixture.Bundler();
+        var first = (await bundler.BuildAsync(fixture.Request())).Single();
+        var second = (await bundler.BuildAsync(fixture.Request(outputDirectory: Path.Combine(fixture.Root, "second-output")))).Single();
+        using var firstDatabase = new MsiDatabaseReader(first.Path);
+        using var secondDatabase = new MsiDatabaseReader(second.Path);
+        Assert(firstDatabase.Property("ProductCode") == secondDatabase.Property("ProductCode") &&
+               firstDatabase.Property("UpgradeCode") == secondDatabase.Property("UpgradeCode") &&
+               firstDatabase.PackageCode != secondDatabase.PackageCode,
+            "Two MSI builds for one product version must keep product identity but use distinct package codes.");
+    }
+
     static async Task BuildsLocalizedMsi()
     {
         using var fixture = new WixTestFixture();
@@ -659,13 +688,13 @@ internal static class WixTests
         public WixBundler Bundler() => new(options: new WixBundlerOptions { ToolCacheDirectory = Cache });
 
         public BundleConfiguration Request(string? resourceTarget = null, string? licenseFile = null,
-            IReadOnlyList<string>? signingFiles = null) => new()
+            IReadOnlyList<string>? signingFiles = null, string? outputDirectory = null) => new()
         {
             ProductName = "WiX test fixture",
             Identifier = "com.example.wixtestfixture",
             Version = "1.0.0",
             LicenseFile = licenseFile,
-            OutputDirectory = Path.Combine(Root, "output"),
+            OutputDirectory = outputDirectory ?? Path.Combine(Root, "output"),
             Resources = resourceTarget is null ? [] :
                 [new BundleResourceConfiguration { Source = Path.Combine(Root, "resource.txt"), TargetPath = resourceTarget }],
             Targets = [new BundleTargetConfiguration

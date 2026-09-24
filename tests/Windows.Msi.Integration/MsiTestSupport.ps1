@@ -32,8 +32,24 @@ function Pack-MsiTestPackages(
     try {
         $entries = @($wixPackage.Entries | ForEach-Object FullName)
         foreach ($entry in @('lib/netstandard2.0/DotNet.Bundler.Wix.dll', 'licenses/wix/LICENSE.TXT',
-                'licenses/wix/wix3141-source.zip', 'licenses/wix/SHA256SUMS', 'THIRD-PARTY-NOTICES.md')) {
+                'licenses/wix/wix3141-source.zip', 'licenses/wix/README.md',
+                'licenses/wix/SHA256SUMS', 'THIRD-PARTY-NOTICES.md')) {
             if ($entries -notcontains $entry) { throw "Standalone MSI backend package is missing $entry" }
+        }
+        $sources = @{
+            'licenses/wix/LICENSE.TXT' = 'third_party/wix/LICENSE.TXT'
+            'licenses/wix/wix3141-source.zip' = 'third_party/wix/wix3141-source.zip'
+            'licenses/wix/README.md' = 'third_party/wix/README.md'
+            'licenses/wix/SHA256SUMS' = 'third_party/wix/SHA256SUMS'
+            'THIRD-PARTY-NOTICES.md' = 'THIRD-PARTY-NOTICES.md'
+        }
+        foreach ($name in $sources.Keys) {
+            $stream = $wixPackage.GetEntry($name).Open()
+            $sha = [Security.Cryptography.SHA256]::Create()
+            try { $actualHash = [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '') }
+            finally { $stream.Dispose(); $sha.Dispose() }
+            $expectedHash = (Get-FileHash -LiteralPath (Join-Path $Repository $sources[$name]) -Algorithm SHA256).Hash
+            if ($actualHash -ne $expectedHash) { throw "MSI package redistribution file differs from repository source: $name" }
         }
     }
     finally { $wixPackage.Dispose() }

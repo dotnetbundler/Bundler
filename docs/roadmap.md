@@ -1,9 +1,9 @@
 # DotNet.Bundler 产品边界与实施路线
 
-> 最后整理：2026-09-24
+> 最后整理：2026-09-25
 > 路线状态：`NSIS-R4` 已在 `b116d09` 形成冻结基线，随后加固 journal 恢复目标、跨配置恢复流程及快照完整性；当前提交以 Git HEAD 为准
 > 当前实施对象：Windows WiX/MSI
-> 当前状态：`WIN-MSI-1..3` 已完成本机范围退出条件；测试证书签名、英语/简体中文单语言产物、current-user 安装/升级/修复/卸载及安全故障回滚均有本机自动证据。per-machine 仅做产物检查；生产签名、交互 UI、外部宿主/UAC/重启矩阵未验收。下一阶段为 `WIN-MSI-4` 格式矩阵与冻结。
+> 当前状态：`WIN-MSI-1..4` 的本机自动化范围已完成，MSI alpha 格式配置和身份规则已冻结；current-user 安装/升级/修复/卸载、测试签名、双语言包及受限故障有本机证据。per-machine 仅做产物检查；生产签名、交互 UI、干净 Windows/ARM64 宿主、UAC 和真实重启仍外部待验收。默认下一阶段为 `MAC-APP`，尚未开始。
 
 本文档是项目后续路线的规范入口；跨格式执行规则见 [`docs/development-rules.md`](development-rules.md)，MSI 专项细则由 [`docs/msi-roadmap.md`](msi-roadmap.md) 承接。它们使后续开发不依赖某一次对话或某个 AI 的记忆。
 
@@ -263,7 +263,7 @@
 3. `WIN-MSI-3`：签名、语言、静默/被动、退出码、修复维护及失败/回滚/重启。
 4. `WIN-MSI-4`：完整 Windows/架构/安全矩阵、人工边界、文档及格式冻结；仅补缺陷和测试，不把首个安装测试拖到此阶段。
 
-各阶段的前置条件、交付物、不做事项、新增测试、人工验收和退出条件，以及产品身份等第一阶段前必须厘清的决策，详见 [`docs/msi-roadmap.md`](msi-roadmap.md)。逐项计划/边界见 [`docs/msi-capability-matrix.md`](msi-capability-matrix.md)。WIN-MSI-1..3 的本机 current-user 自动化已通过，per-machine 只验证构建产物和数据库；干净 Windows/ARM64 宿主、提权安装、生产签名、真实 UI 和重启尚未验收。下一阶段为 WIN-MSI-4。
+各阶段的前置条件、交付物、不做事项、新增测试、人工验收和退出条件，以及产品身份等第一阶段前必须厘清的决策，详见 [`docs/msi-roadmap.md`](msi-roadmap.md)。逐项冻结状态及平台边界见 [`docs/msi-capability-matrix.md`](msi-capability-matrix.md)。WIN-MSI-1..4 的本机 current-user 自动化已通过，`alpha.37` 以严格 WiX 告警门槛和自动 PackageCode 形成 MSI 配置/身份冻结基线；per-machine 只验证构建产物和数据库。干净 Windows/ARM64 宿主、提权安装、生产签名、真实 UI 和重启仍在 MSI 专用人工与外部清单，不能宣称通过。默认下一阶段为 `MAC-APP`。
 
 ### MAC：macOS `.app` 与 DMG
 
@@ -305,7 +305,7 @@
 每完成一个阶段，必须在同一个改动中：
 
 1. 将本文档顶部的基线和默认下一阶段更新到已验证状态；
-2. 更新第 5 节能力矩阵和对应阶段的完成状态；
+2. 更新对应格式的能力矩阵和阶段完成状态；
 3. 在 `PROJECT_CONTEXT.md` 写入实际 HEAD、包版本、提交、验证命令和结果；
 4. 将新的外部条件同步到当前格式的专用 open-items 与人工测试文档，并更新 `docs/manual-testing-index.md` 的入口；
 5. 若参考 Tauri，更新 `docs/nsis-upstream-reference.md` 的固定 commit 和决策；

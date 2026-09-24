@@ -22,6 +22,8 @@ WIN-MSI-3 adds the fifteenth entry, the unmodified `WixUIExtension.dll` (3,768,3
 
 The MS-RL grants royalty-free copyright and patent permissions subject to its conditions, including corresponding source and notice preservation. WiX's later Open Source Maintenance Fee was introduced in v6, not v3.14.1. Sources: [upstream license](https://github.com/wixtoolset/wix3/blob/wix3141rtm/LICENSE.TXT), [WiX version history](https://docs.firegiant.com/wix/whatsnew/).
 
+WIN-MSI-4 rechecked this unchanged 15-file subset on 2026-09-25. Release builds now treat WiX compiler/linker warnings as errors, with the documented per-user-only ICE91 exception. The MSI integration pack check compares the packaged license, corresponding source archive, checksum list, this README, and `THIRD-PARTY-NOTICES.md` byte-for-byte by SHA-256 against repository sources. The final package size and SHA-256 are recorded outside the package in `docs/msi-roadmap.md` section 9 to avoid a self-referential hash. No additional WiX or third-party binary was added. WiX v3 remains outside free community service, including security fixes: [official status](https://docs.firegiant.com/wix/wix3/). Reassess that maintenance risk before broad public distribution.
+
 The source archive is provided with the `DotNet.Bundler.Wix` NuGet package. Consumers of the convenience `DotNet.Bundler` package receive it through the `DotNet.Bundler.Wix` dependency. The tools are extracted into a hash-verified local cache; no tool or application runtime is downloaded when bundling.
 
 WiX v3 is out of free community service. This project does not rely on paid FireGiant support or extensions. Build-host framework and ARM64 compatibility remain subject to the Windows VM matrix in `docs/msi-roadmap.md`.

@@ -7,8 +7,7 @@ namespace DotNet.Bundler.Wix;
 
 internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguration settings, IBundleSigner? signer) : IBundleBackend
 {
-    private static readonly XNamespace Wix = "http://schemas.microsoft.com/wix/2006/wi";
-    private const string GeneratorRevision = "win-msi-3-2026-09-24-1";
+    private const string GeneratorRevision = "win-msi-4-2026-09-25-1";
 
     public PackageFormat Format => PackageFormat.Msi;
     public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
@@ -202,7 +201,6 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         WixIdentity identity, IReadOnlyList<InstallFile> files, string? icon, XElement product)
     {
         var canonical = new XElement(product);
-        canonical.Descendants(Wix + "Package").Single().SetAttributeValue("Id", "{00000000-0000-0000-0000-000000000000}");
         var text = new StringBuilder()
             .AppendLine(GeneratorRevision)
             .AppendLine(WixToolsetResolver.ArchiveSha256)
