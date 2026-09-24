@@ -12,6 +12,10 @@
     <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''"></BundlerMainExecutable>
     <BundlerOutputPath Condition="'$(BundlerOutputPath)' == ''">$(MSBuildProjectDirectory)\artifacts</BundlerOutputPath>
     <BundlerToolCachePath Condition="'$(BundlerToolCachePath)' == ''"></BundlerToolCachePath>
+    <BundlerWixToolsetArchivePath Condition="'$(BundlerWixToolsetArchivePath)' == ''"></BundlerWixToolsetArchivePath>
+    <BundlerWixInstallScope Condition="'$(BundlerWixInstallScope)' == ''">currentUser</BundlerWixInstallScope>
+    <BundlerWixUpgradeCode Condition="'$(BundlerWixUpgradeCode)' == ''"></BundlerWixUpgradeCode>
+    <BundlerWixCodepage Condition="'$(BundlerWixCodepage)' == ''">1252</BundlerWixCodepage>
     <BundlerNsisToolsetArchivePath Condition="'$(BundlerNsisToolsetArchivePath)' == ''"></BundlerNsisToolsetArchivePath>
     <BundlerNsisCompilerPath Condition="'$(BundlerNsisCompilerPath)' == ''"></BundlerNsisCompilerPath>
     <BundlerNsisDataDirectory Condition="'$(BundlerNsisDataDirectory)' == ''"></BundlerNsisDataDirectory>

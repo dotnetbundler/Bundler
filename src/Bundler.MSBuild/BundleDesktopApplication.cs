@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using DotNet.Bundler;
 using DotNet.Bundler.Nsis;
+using DotNet.Bundler.Wix;
 using DotNet.Bundler.Signing.Windows;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
@@ -34,6 +35,10 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string NsisCompilerPath { get; set; } = "";
     public string NsisDataDirectory { get; set; } = "";
     public string ToolCacheDirectory { get; set; } = "";
+    public string WixToolsetArchivePath { get; set; } = "";
+    public string WixInstallScope { get; set; } = "currentUser";
+    public string WixUpgradeCode { get; set; } = "";
+    public int WixCodepage { get; set; } = 1252;
     public string NsisTemplatePath { get; set; } = "";
     public string NsisInstallMode { get; set; } = "currentUser";
     public string NsisCompression { get; set; } = "lzma";
@@ -114,6 +119,30 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 }
             };
 
+            IReadOnlyList<BundleArtifact> artifacts;
+            if (formats.All(format => format == PackageFormat.Msi))
+            {
+                if (!Enum.TryParse<DotNet.Bundler.Wix.WixInstallScope>(WixInstallScope, true, out var scope) ||
+                    !Enum.IsDefined(typeof(DotNet.Bundler.Wix.WixInstallScope), scope))
+                {
+                    throw new ArgumentException("BundlerWixInstallScope must be currentUser or perMachine.");
+                }
+                artifacts = new WixBundler(
+                    new WixBundleConfiguration
+                    {
+                        InstallScope = scope,
+                        UpgradeCode = EmptyToNull(WixUpgradeCode),
+                        Codepage = WixCodepage
+                    },
+                    new WixBundlerOptions
+                    {
+                        ToolsetArchivePath = EmptyToNull(WixToolsetArchivePath),
+                        ToolCacheDirectory = EmptyToNull(ToolCacheDirectory),
+                        Logger = new MsBuildBundleLogger(Log)
+                    }).BuildAsync(configuration).GetAwaiter().GetResult();
+            }
+            else if (formats.All(format => format == PackageFormat.Nsis))
+            {
             var nsisConfiguration = new NsisBundleConfiguration
             {
                 InstallMode = ParseInstallMode(),
@@ -153,10 +182,15 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Signer = CreateWindowsSigner(),
                 Logger = new MsBuildBundleLogger(Log)
             };
-            var artifacts = new NsisBundler(nsisConfiguration, nsisOptions)
+            artifacts = new NsisBundler(nsisConfiguration, nsisOptions)
                 .BuildAsync(configuration)
                 .GetAwaiter()
                 .GetResult();
+            }
+            else
+            {
+                throw new NotSupportedException("WIN-MSI-1 accepts either NSIS or MSI per MSBuild invocation; mixed formats are not supported yet.");
+            }
 
             Artifacts = artifacts.Select(artifact =>
             {

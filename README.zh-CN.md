@@ -21,7 +21,7 @@
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
 
-仓库内已有 `DotNet.Bundler.Cli` 原型，但它的参数覆盖和发布契约尚未完成，因此当前不作为受支持入口。后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)；MSI 后端尚未实现，其 WiX 3.14.1 暂定方案见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
+仓库内已有 `DotNet.Bundler.Cli` 原型，但它的参数覆盖和发布契约尚未完成，因此当前不作为受支持入口。后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1` 的本机范围退出条件：最小 current-user MSI 构建、数据库验证、独立 fixture 真实安装/卸载，以及工具供应/许可工程核查。干净宿主、ARM64 和其他架构仍待验收，升级、per-machine、签名等后续阶段尚未完成，**MSI 格式尚未冻结**。最小示例见 [`samples/HelloMsiApp/README.md`](samples/HelloMsiApp/README.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
 
 后续实现 WiX/MSI 时再增加 `DotNet.Bundler.Wix`，当前不会发布没有实现的空占位包。
 
@@ -339,9 +339,12 @@ dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.33
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -ConfirmLocalInstall
 ```
 
-Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。
+NSIS Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。
+
+MSI 集成测试每轮生成独立的 current-user fixture 产品身份，在本机真实安装和卸载，检查主程序、产品注册、用户文件保留及清理；`-ConfirmLocalInstall` 只允许这一受限测试。干净宿主、ARM64、UAC 和高影响故障仍按 MSI 人工验收文档执行。
 
 人工验收入口见 [`docs/manual-testing-index.md`](docs/manual-testing-index.md)；当前 NSIS 的历史用例仍在 [`docs/manual-testing.md`](docs/manual-testing.md)，计划中的 MSI 用例独立存放。仓库可自动化的测试仍由上述命令执行，不转为人工清单。
 

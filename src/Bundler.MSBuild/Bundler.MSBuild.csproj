@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
     <ProjectReference Include="..\Bundler.Nsis\Bundler.Nsis.csproj" />
+    <ProjectReference Include="..\Bundler.Wix\Bundler.Wix.csproj" />
     <ProjectReference Include="..\Bundler.Signing.Windows\Bundler.Signing.Windows.csproj" />
     <PackageReference Include="Microsoft.Build.Utilities.Core"
                       Version="17.8.43"
@@ -31,6 +32,7 @@
     <None Include="$(TargetDir)DotNet.Bundler.Abstractions.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.Core.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.Nsis.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
+    <None Include="$(TargetDir)DotNet.Bundler.Wix.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.Signing.Windows.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="..\..\buildTransitive\DotNet.Bundler.MSBuild.props" Pack="true" PackagePath="buildTransitive/" />
     <None Include="..\..\buildTransitive\DotNet.Bundler.MSBuild.targets" Pack="true" PackagePath="buildTransitive/" />
@@ -39,5 +41,7 @@
     <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
     <None Include="..\..\third_party\nsis\COPYING" Pack="true" PackagePath="licenses/nsis/" />
     <None Include="..\..\third_party\nsis-plugin\LICENSE" Pack="true" PackagePath="licenses/nsis-plugin/" />
+    <None Include="..\..\third_party\wix\LICENSE.TXT" Pack="true" PackagePath="licenses/wix/" />
+    <None Include="..\..\third_party\wix\README.md" Pack="true" PackagePath="licenses/wix/" />
   </ItemGroup>
 </Project>

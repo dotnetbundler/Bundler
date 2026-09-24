@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerFormats>msi</BundlerFormats>
+    <BundlerIdentifier>com.example.bundler.msi.smoke</BundlerIdentifier>
+    <BundlerProductName>Bundler MSI Smoke</BundlerProductName>
+    <BundlerVersion>1.0.0</BundlerVersion>
+    <BundlerPublisher>Bundler Tests</BundlerPublisher>
+    <BundlerDescription>Isolated MSI install and uninstall smoke fixture</BundlerDescription>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" />
+    <BundlerResource Include="Assets\marker.txt" TargetPath="docs\marker.txt" />
+  </ItemGroup>
+</Project>

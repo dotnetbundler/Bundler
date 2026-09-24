@@ -1,10 +1,10 @@
 # DotNet.Bundler 项目上下文与后续实施基线
 
-> 最后整理：2026-09-23
-> 当前分支：`codex/modular-bundler-backends`  
+> 最后整理：2026-09-24
+> 当前分支：`codex/msi-development`（NSIS 开发线为 `codex/nsis-development`）
 > NSIS 冻结起点：`b116d09 feat(nsis): freeze secure packaging baseline`；当前提交以 `git rev-parse --short HEAD` 为准
 > 当前包版本：`0.1.0-alpha.33`
-> 当前阶段：WiX/MSI 路线与文档已规划；`WIN-MSI-1` 尚未开始，须用户明确启动
+> 当前阶段：`WIN-MSI-1` 已完成本机范围退出条件；本机真实 current-user 安装/卸载、工具供应/许可工程审计及本地无还原编译已通过；`WIN-MSI-2` 尚未开始
 
 本文档是当前项目的“事实、决策、验证证据与协作约束”汇总，供后续开发任务直接接续。正式后续路线、产品边界、阶段完成条件和默认下一阶段见 `docs/roadmap.md`，MSI 细则见 `docs/msi-roadmap.md`。本文档不是面向最终用户的使用手册；当前需要维护的用户文档以根目录的 `README.zh-CN.md` 和 `samples/HelloBundledApp/README.md` 为准。代码与自动化测试始终是实现事实的最终依据。
 
@@ -371,7 +371,7 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 
 ## 7. 已完成阶段与提交历史
 
-当前主实施线：`codex/modular-bundler-backends`。
+当前 MSI 实施线：`codex/msi-development`。NSIS 开发线：`codex/nsis-development`。原 `codex/modular-bundler-backends` 已按用户要求拆分；旧 `codex/nsis` 分支已删除，`master` 已快进至 NSIS 开发线的 `11dbde5`。这些分支指针仍须实时核查。
 
 | 提交      | 内容                         |
 | --------- | ---------------------------- |
@@ -486,7 +486,7 @@ Tauri 能力按“通用打包能力、格式特定能力、Tauri runtime 专属
 
 ### 仍不得宣称完成
 
-- MSI/WiX 后端；
+- 已完成全部阶段并可广泛发行的 MSI/WiX 后端；当前只有 WIN-MSI-1 的最小 current-user 能力经过本机真实安装/卸载，外部宿主、升级、per-machine、签名等仍待后续阶段；
 - macOS `.app`/DMG；
 - Linux DEB/AppImage；
 - 正式发布并受支持的 CLI（仓库当前只有功能有限的原型）；
@@ -513,13 +513,14 @@ Tauri 能力按“通用打包能力、格式特定能力、Tauri runtime 专属
 - 单元/契约测试位于 `tests/Bundler.Tests`。
 - NuGet API 消费 Fixture 位于 `tests/Nsis.Api.PackageFixture`。
 - Windows 端到端 Fixture 位于 `tests/Windows.Nsis.Integration`。
+- MSI 最小 current-user 端到端 Fixture 位于 `tests/Windows.Msi.Integration`，本机执行需显式传入 `-ConfirmLocalInstall`；干净宿主与高影响场景留给该格式的人工/外部验收。
 - 每个新增或修改的功能都必须在同一阶段新增或更新对应的自动化测试；只运行已有测试不能证明新行为已经完成。
 - 修复缺陷时必须增加能够复现原问题的回归测试，使该测试在修复前失败、修复后通过。
 - 公共 API、配置验证、MSBuild 参数映射、模板渲染和工具选择应优先添加快速的单元或契约测试。
-- 安装、升级、卸载、回滚、注册表、快捷方式、文件关联、进程协调、签名和退出码等真实 Windows 行为必须增加端到端集成测试，不能只断言生成的 NSIS 脚本包含某段文本。
+- 安装、升级、卸载、回滚、注册表、快捷方式、文件关联、进程协调、签名和退出码等真实 Windows 行为，凡当前环境可安全执行的，都必须增加端到端集成测试；NSIS 不能只断言脚本，MSI 也不能只断言 WiX XML 或数据库表。
 - 失败路径必须使用可控的失败注入，并断言退出码、文件、注册表、快捷方式、应用数据和 journal 等可观察状态；不能只断言“发生了失败”。
-- 新增公开功能除了自动化测试外，还必须在 `HelloBundledApp` 中提供可操作演示；示例和自动化测试两者不能互相替代。
-- 如果某项行为受 UAC、正式证书、真实旧安装包、重启或特定系统版本限制而无法在普通 CI 中自动验证，必须完成能够自动化的部分，并在对应格式的 open-items、人工测试文档和本文档中记录未覆盖条件与证据边界，不能直接省略测试说明。
+- 新增公开功能除了自动化测试外，还必须在对应格式的示例中提供可操作演示；NSIS 使用 `HelloBundledApp`，MSI 使用 `HelloMsiApp`。示例和自动化测试两者不能互相替代。
+- 如果某项行为受 UAC、正式证书、真实旧安装包、重启或特定系统版本限制而无法在当前环境中自动验证，必须完成能够自动化的部分，并在对应格式的 open-items、人工测试文档和本文档中记录未覆盖条件与证据边界；没有环境的测试不阻塞快速开发进入下一阶段，也不能写成已通过。
 - 不得为了让测试通过而无依据地删除、跳过或弱化已有断言；若产品语义确实改变，应同步修改实现、测试、中文文档和本文档，并说明原因。
 - 一个阶段只有在新增测试、既有回归测试和相关集成测试全部通过后，才能标记为“已实现并自动验证”；否则必须标记为“已实现但需外部验收”或“未完成”。
 - 验证报告必须列出实际执行的命令、环境、通过/失败数量、未覆盖情形和测试遗留清理结果，不能把之前阶段的结果当成本次结果。
@@ -570,7 +571,7 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 
 预期基线：
 
-- 分支：`codex/modular-bundler-backends`
+- MSI 分支：`codex/msi-development`，从 `75738ed` 继续；NSIS 开发分支：`codex/nsis-development`，指向 `11dbde5`。两者均须实时核查。
 - NSIS 冻结起点：`b116d09`；当前 HEAD 应实时核查，不把本文档的历史提交误认为最新提交
 - 包版本：`0.1.0-alpha.33`（Git HEAD 仍须实时核查）
 - 安装事务、Restart Manager、对应测试、示例和文档已经实现并提交；不得重新制作原型或把这些能力当作未完成项。
@@ -591,7 +592,9 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 
 ### 14.3 默认下一阶段
 
-当前代码只有 `PackageFormat.Msi`、Windows 格式兼容性和通用后端接口，尚无 MSI 后端；NSIS 迁移 fixture 的 `WixToolset.Sdk/5.0.2` 不代表正式选型。用户暂定 Windows 宿主使用 WiX 3.14.1；路线、工具分发门槛、身份/版本/组件规则与分阶段测试见 `docs/msi-roadmap.md`。**只有用户明确说“开始 WIN-MSI-1”才进入代码实现**。第一阶段必须生成可安装/卸载的最小 MSI，并通过专用 Windows VM 的真实安装和卸载烟雾测试。CLI 在计划的 MSI、macOS 和 Linux 打包格式完成后再做。
+用户已明确说“提交，然后开始”；规划文档提交为 `75738ed`，`WIN-MSI-1` 代码已完成本机范围阶段一；用户已要求提交，实际 HEAD 和工作区状态以 Git 为准。NSIS 迁移 fixture 的 `WixToolset.Sdk/5.0.2` 不代表正式选型；本阶段使用 WiX 3.14.1。当前已有直接 API、MSBuild 映射、固定工具子集与源码分发、最小 current user MSI 构建和数据库自动化验证。按用户要求与 NSIS 测试分层一致，2026-09-24 在当前 Windows x64 开发机使用每轮独立产品身份执行真实静默安装与卸载，检查文件、产品注册、未知用户文件保留及清理，均通过；脚本为 `tests/Windows.Msi.Integration/Verify.ps1 -ConfirmLocalInstall`，日志、MSI SHA-256、ProductCode 和环境见 `docs/msi-roadmap.md` 第 6 节。当前工作区的 49 项自动化测试及完整 Windows NSIS 安装/卸载集成回归也已通过，NSIS 固定测试路径和卸载注册项无残留。干净宿主 Framework、ARM64 宿主/用户端、UAC 与高影响故障仍待独立人工/外部验收，不宣称广泛支持。用户已于 2026-09-24 接受当前约 13.8 MB 的 WiX NuGet 包体积；第一阶段已完成本机范围退出条件：14 个工具子集文件逐项对应官方源码和许可，生成的 WiX NuGet 包包含许可证、源码及声明；49 项测试以 --no-restore 再次通过，涵盖新缓存解包 WiX 和实际编译 MSI，打包复核也通过。干净 Windows/ARM64 环境依用户说明暂不执行，保留待验收且不扩大支持声明。评价 WiX 3.14.1 自身的零环境要求时，只看 candle.exe/light.exe 及其依赖，不混入 Bundler 的 MSBuild 或应用构建环境：两个 EXE 及 wix.dll 均目标 .NET Framework 4.5；Windows 7 SP1 未预装所需 Framework，Windows 10/11 预装版本理论上足够，但干净宿主实际编译仍需 VM 验证，详见 docs/msi-roadmap.md 第 2 节。CLI 在计划的 MSI、macOS 和 Linux 打包格式完成后再做。
+
+快速开发期按 NSIS 的分层测试方式继续 MSI：本机可安全运行的功能在同阶段增加自动化和真实安装/卸载回归，不把代码生成/数据库断言当作系统行为证据；缺环境的测试单列 `docs/msi-manual-testing.md`，不阻塞下一阶段，也不扩大支持声明。2026-09-24 扩充 MSI fixture 后再次运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -Configuration Release -ConfirmLocalInstall` 通过；新增的资源文件安装/卸载和注册版本断言均通过，产物哈希与日志见 `docs/msi-roadmap.md` 第 6 节。下一实施阶段为 `WIN-MSI-2`，尚未开始；未经用户明确要求不提交或推送。
 
 ### 14.4 执行约束
 

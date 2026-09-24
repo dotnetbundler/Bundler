@@ -1,6 +1,7 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
 using DotNet.Bundler.Nsis;
+using DotNet.Bundler.Wix;
 using DotNet.Bundler.Signing.Windows;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
@@ -62,6 +63,21 @@ var tests = new (string Name, Func<Task> Test)[]
     ("Preflights every requested backend", PreflightsEveryRequestedBackend),
     ("Signs a PE file without the Windows SDK", SignsPeFileWithoutWindowsSdk)
 };
+
+tests = tests.Concat(new (string Name, Func<Task> Test)[]
+{
+    ("Keeps MSI identity and version rules stable", () => RunSync(KeepsMsiIdentityStable)),
+    ("Verifies WiX binary and source redistribution", () => RunSync(VerifiesWixRedistribution)),
+    ("Maps MSI configuration through MSBuild", () => RunSync(MapsMsiSettingsThroughMsBuild)),
+    ("Rejects MSI features outside the first stage", RejectsUnsupportedMsiFeatures)
+}).ToArray();
+if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+{
+    tests = tests.Append(("Builds and inspects a real WiX MSI without installing it", BuildsAndInspectsMsi)).ToArray();
+    tests = tests.Append(("Rejects a tampered WiX tool archive", RejectsTamperedWixArchive)).ToArray();
+    tests = tests.Append(("Serializes concurrent WiX tool cache users", SerializesConcurrentWixCacheUsers)).ToArray();
+    tests = tests.Append(("Builds an ARM64-targeted MSI on Windows x64", BuildsArm64TargetedMsi)).ToArray();
+}
 
 var failed = 0;
 foreach (var (name, test) in tests)
@@ -1930,6 +1946,332 @@ static void MapsNsisSettingsThroughMsBuild()
         "MSBuild does not expose explicit payload files and external signing command arguments.");
 }
 
+static void KeepsMsiIdentityStable()
+{
+    var first = WixIdentity.Create("com.Example.App", "1.2.3", "win-x64", WixInstallScope.CurrentUser);
+    var repeated = WixIdentity.Create("com.example.app", "1.2.3", "win-x64", WixInstallScope.CurrentUser);
+    var next = WixIdentity.Create("com.example.app", "1.2.4", "win-x64", WixInstallScope.CurrentUser);
+    var arm = WixIdentity.Create("com.example.app", "1.2.3", "win-arm64", WixInstallScope.CurrentUser);
+    Assert(first.UpgradeCode == repeated.UpgradeCode && first.ProductCode == repeated.ProductCode,
+        "MSI identity must be stable across builds and identifier casing.");
+    Assert(first.UpgradeCode == Guid.Parse("a4544d5a-7d38-54b0-bfef-2f43efedb406") &&
+           first.ProductCode == Guid.Parse("d182fb03-d132-5fe3-8098-5f008419f688"),
+        "MSI UUIDv5 identity differs from the RFC 4122 test vector for the frozen namespace and input.");
+    Assert(first.UpgradeCode == next.UpgradeCode && first.ProductCode != next.ProductCode,
+        "A new product version must change ProductCode and preserve UpgradeCode.");
+    Assert(first.UpgradeCode != arm.UpgradeCode && first.ProductCode != arm.ProductCode,
+        "Separate architectures must have separate MSI identities.");
+    var migrated = WixIdentity.Create("com.example.app", "1.2.3", "win-x64",
+        WixInstallScope.CurrentUser, "{11111111-2222-3333-4444-555555555555}");
+    Assert(migrated.UpgradeCode == Guid.Parse("11111111-2222-3333-4444-555555555555") &&
+           migrated.ProductCode != first.ProductCode,
+        "An explicit historical UpgradeCode did not establish a separate product family.");
+    foreach (var version in new[] { "1.0.0-beta.1", "1.0.0+meta", "1.0.0.1", "256.0.0", "1.256.0", "1.0.65536", "01.0.0" })
+    {
+        try
+        {
+            WixIdentity.Create("com.example.app", version, "win-x64", WixInstallScope.CurrentUser);
+            throw new InvalidOperationException("MSI accepted an unmappable version: " + version);
+        }
+        catch (ArgumentException exception) when (exception.ParamName == "version") { }
+    }
+    Assert(WixIdentity.Create("com.example.app", "255.255.65535", "win-x64", WixInstallScope.CurrentUser)
+        .ProductVersion == "255.255.65535", "MSI maximum version was rejected.");
+    try
+    {
+        WixIdentity.Create("com.example.app", "1.0.0", "win-x64", WixInstallScope.PerMachine);
+        throw new InvalidOperationException("Premature per-machine MSI support was accepted.");
+    }
+    catch (NotSupportedException) { }
+}
+
+static void MapsMsiSettingsThroughMsBuild()
+{
+    var root = RepositoryRoot();
+    var props = File.ReadAllText(Path.Combine(root, "buildTransitive", "DotNet.Bundler.MSBuild.props"));
+    var targets = File.ReadAllText(Path.Combine(root, "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
+    var task = File.ReadAllText(Path.Combine(root, "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
+    foreach (var property in new[] { "WixInstallScope", "WixUpgradeCode", "WixCodepage", "WixToolsetArchivePath" })
+    {
+        Assert(props.Contains("<Bundler" + property, StringComparison.Ordinal) &&
+               targets.Contains(property + "=\"$(Bundler" + property + ")\"", StringComparison.Ordinal),
+            "MSBuild did not map MSI property Bundler" + property + ".");
+    }
+    Assert(task.Contains("new WixBundler(", StringComparison.Ordinal) &&
+           task.Contains("Codepage = WixCodepage", StringComparison.Ordinal),
+        "MSBuild task does not call the same public MSI backend or preserve codepage.");
+}
+
+static void VerifiesWixRedistribution()
+{
+    var root = Path.Combine(RepositoryRoot(), "third_party", "wix");
+    var binary = Path.Combine(root, "wix3141-tools.zip");
+    var source = Path.Combine(root, "wix3141-source.zip");
+    Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(binary))) ==
+           "25AE0BB2A21FAC6B486C4B06155C9F463F2D845E7036BE0E9B1C98F4E48EA494",
+        "The bundled WiX binary subset changed without updating its pinned hash.");
+    Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(source))) ==
+           "A56184E798885641821666BD389FE6276F99363F65BAE8F88630B17DE297FE9F",
+        "The corresponding WiX source archive changed without review.");
+    using var toolZip = System.IO.Compression.ZipFile.OpenRead(binary);
+    var expected = File.ReadAllLines(Path.Combine(root, "SHA256SUMS"))
+        .Select(line => (Hash: line.Substring(0, 64), Name: line.Substring(66)))
+        .ToDictionary(pair => pair.Name, pair => pair.Hash, StringComparer.Ordinal);
+    Assert(toolZip.Entries.Count == expected.Count, "The WiX subset file manifest is incomplete.");
+    foreach (var entry in toolZip.Entries)
+    {
+        using var stream = entry.Open();
+        Assert(expected.TryGetValue(entry.FullName, out var hash) &&
+               Convert.ToHexString(SHA256.HashData(stream)) == hash,
+            "WiX subset entry differs from the recorded upstream file hash: " + entry.FullName);
+    }
+    using var sourceZip = System.IO.Compression.ZipFile.OpenRead(source);
+    Assert(sourceZip.GetEntry("wix3-wix3141rtm/LICENSE.TXT") is not null &&
+           sourceZip.GetEntry("wix3-wix3141rtm/src/tools/candle/candle.cs") is not null &&
+           sourceZip.GetEntry("wix3-wix3141rtm/src/tools/light/light.cs") is not null,
+        "The bundled corresponding source archive is incomplete.");
+    var licenseEntry = toolZip.GetEntry("LICENSE.TXT")!;
+    using var license = licenseEntry.Open();
+    Assert(Convert.ToHexString(SHA256.HashData(license)) ==
+           Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(root, "LICENSE.TXT")))),
+        "The distributed WiX license differs from the original binary archive.");
+}
+
+static async Task RejectsUnsupportedMsiFeatures()
+{
+    var configuration = new BundleConfiguration
+    {
+        ProductName = "Msi Test",
+        Identifier = "com.example.msitest",
+        Version = "1.0.0",
+        FileAssociations = [new BundleFileAssociationConfiguration { Extensions = [".abc"] }],
+        Targets = [new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "win-x64", InputDirectory = "unused", MainExecutable = "test.exe",
+            Formats = [PackageFormat.Msi]
+        }]
+    };
+    try
+    {
+        await new WixBundler().BuildAsync(configuration);
+        throw new InvalidOperationException("An MSI stage-2 feature was silently ignored.");
+    }
+    catch (NotSupportedException exception) when (exception.Message.Contains("WIN-MSI-2", StringComparison.Ordinal)) { }
+}
+
+static async Task BuildsAndInspectsMsi()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Msi.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "input");
+    var output = Path.Combine(root, "output");
+    var cache = Path.Combine(root, "cache");
+    Directory.CreateDirectory(Path.Combine(input, "assets"));
+    await File.WriteAllTextAsync(Path.Combine(input, "Msi Test.exe"), "MSI fixture payload");
+    await File.WriteAllTextAsync(Path.Combine(input, "assets", "说明.txt"), "user visible file");
+    var resource = Path.Combine(root, "resource.txt");
+    await File.WriteAllTextAsync(resource, "external resource");
+    var icon = Path.Combine(root, "product.ico");
+    File.WriteAllBytes(icon,
+    [
+        0,0,1,0,1,0, 1,1,0,0,1,0,32,0,48,0,0,0,22,0,0,0,
+        40,0,0,0, 1,0,0,0, 2,0,0,0, 1,0,32,0, 0,0,0,0,
+        4,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,
+        0,0,255,255, 0,0,0,0
+    ]);
+    try
+    {
+        var configuration = new BundleConfiguration
+        {
+            ProductName = "Msi 测试",
+            Identifier = "com.example.msitest",
+            Version = "1.2.3",
+            Publisher = "Bundler Tests",
+            Description = "Test MSI database",
+            Homepage = "https://example.com/msi",
+            Icons = [icon],
+            Resources = [new BundleResourceConfiguration { Source = resource, TargetPath = "docs/外部.txt" }],
+            OutputDirectory = output,
+            Targets = [new BundleTargetConfiguration
+            {
+                RuntimeIdentifier = "win-x64", InputDirectory = input,
+                MainExecutable = "Msi Test.exe", Formats = [PackageFormat.Msi]
+            }]
+        };
+        var bundler = new WixBundler(new WixBundleConfiguration { Codepage = 936 },
+            new WixBundlerOptions { ToolCacheDirectory = cache });
+        var artifact = (await bundler.BuildAsync(configuration)).Single();
+        Assert(File.Exists(artifact.Path) && Path.GetExtension(artifact.Path) == ".msi",
+            "WiX did not produce an MSI artifact.");
+        using (var database = new MsiDatabaseReader(artifact.Path))
+        {
+            var expected = WixIdentity.Create(configuration.Identifier, configuration.Version,
+                "win-x64", WixInstallScope.CurrentUser);
+            Assert(database.Property("ProductCode") == expected.ProductCode.ToString("B").ToUpperInvariant(),
+                "MSI ProductCode differs from the stable identity policy.");
+            Assert(database.Property("UpgradeCode") == expected.UpgradeCode.ToString("B").ToUpperInvariant(),
+                "MSI UpgradeCode differs from the stable identity policy.");
+            Assert(database.Property("ProductVersion") == "1.2.3", "MSI version mapping is incorrect.");
+            Assert(database.Property("ProductName") == "Msi 测试", "MSI database did not preserve the selected Chinese codepage.");
+            Assert(database.Property("Manufacturer") == "Bundler Tests", "MSI publisher is missing.");
+            Assert(database.Property("ARPCOMMENTS") == "Test MSI database", "MSI description is missing.");
+            Assert(database.Property("ARPURLINFOABOUT") == "https://example.com/msi", "MSI homepage is missing.");
+            Assert(database.Property("ARPPRODUCTICON") == "ProductIcon", "MSI product icon is missing.");
+            Assert(database.RowCount("Icon", "Name") == 1, "MSI icon table is missing the supplied icon.");
+            Assert(database.RowCount("File", "File") == 3, "MSI payload file count is incorrect.");
+            Assert(database.RowCount("Component", "Component") == 4, "MSI must give every file and cleanup a component.");
+            Assert(database.RowCount("Registry", "Registry") == 4, "Per-user components need HKCU key paths.");
+            Assert(database.RowCount("RemoveFile", "FileKey") >= 4, "Per-user directories need uninstall cleanup rows.");
+            Assert(database.RowCount("Upgrade", "UpgradeCode") == 1 &&
+                   database.RowCount("LaunchCondition", "Condition") == 2,
+                "The stage-1 MSI must reject side-by-side installs of another product version.");
+            Assert(database.Template.StartsWith("x64;", StringComparison.OrdinalIgnoreCase),
+                "MSI architecture summary is not x64.");
+            Assert(Guid.TryParse(database.PackageCode, out var packageCode) &&
+                   packageCode != expected.ProductCode,
+                "MSI package code was not written as a distinct GUID.");
+        }
+        var reused = (await bundler.BuildAsync(configuration)).Single();
+        Assert(reused.Path == artifact.Path, "A repeated identical MSI build did not reuse its verified artifact.");
+        var toolDirectory = Directory.EnumerateDirectories(cache, "wix-toolset-*").Single();
+        var compiler = Path.Combine(toolDirectory, "candle.exe");
+        await File.WriteAllTextAsync(compiler, "tampered");
+        await bundler.BuildAsync(configuration);
+        Assert(new FileInfo(compiler).Length > 10000, "The WiX tool cache did not recover a tampered compiler.");
+        var outside = Path.Combine(root, "outside");
+        Directory.CreateDirectory(outside);
+        var sentinel = Path.Combine(outside, "sentinel.txt");
+        await File.WriteAllTextAsync(sentinel, "must remain untouched");
+        var linked = Path.Combine(input, "linked-outside");
+        Directory.CreateSymbolicLink(linked, outside);
+        try
+        {
+            await bundler.BuildAsync(configuration);
+            throw new InvalidOperationException("MSI input reparse point was accepted.");
+        }
+        catch (InvalidDataException exception) when (exception.Message.Contains("reparse point", StringComparison.OrdinalIgnoreCase)) { }
+        Directory.Delete(linked);
+        Assert(File.ReadAllText(sentinel) == "must remain untouched", "MSI reparse rejection modified its target.");
+        await File.WriteAllTextAsync(Path.Combine(input, "assets", "说明.txt"), "changed payload");
+        try
+        {
+            await bundler.BuildAsync(configuration);
+            throw new InvalidOperationException("A same-version MSI with different payload was accepted.");
+        }
+        catch (IOException exception) when (exception.Message.Contains("same product version", StringComparison.Ordinal)) { }
+    }
+    finally
+    {
+        if (Directory.Exists(root)) Directory.Delete(root, true);
+    }
+}
+
+static async Task RejectsTamperedWixArchive()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Msi.Tests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var archive = Path.Combine(root, "tampered.zip");
+        File.Copy(Path.Combine(RepositoryRoot(), "third_party", "wix", "wix3141-tools.zip"), archive);
+        using (var stream = new FileStream(archive, FileMode.Open, FileAccess.Write))
+        {
+            stream.Position = 50;
+            stream.WriteByte(255);
+        }
+        var input = Path.Combine(root, "input");
+        Directory.CreateDirectory(input);
+        await File.WriteAllTextAsync(Path.Combine(input, "test.exe"), "fixture");
+        var configuration = ValidConfiguration(new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "win-x64", InputDirectory = input,
+            MainExecutable = "test.exe", Formats = [PackageFormat.Msi]
+        });
+        try
+        {
+            await new WixBundler(options: new WixBundlerOptions
+            {
+                ToolCacheDirectory = Path.Combine(root, "cache"),
+                ToolsetArchivePath = archive
+            }).BuildAsync(configuration);
+            throw new InvalidOperationException("A modified WiX archive was accepted.");
+        }
+        catch (InvalidDataException) { }
+    }
+    finally { Directory.Delete(root, true); }
+}
+
+static async Task SerializesConcurrentWixCacheUsers()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Msi.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "input");
+    Directory.CreateDirectory(input);
+    await File.WriteAllTextAsync(Path.Combine(input, "test.exe"), "fixture");
+    try
+    {
+        Task<IReadOnlyList<BundleArtifact>> Build(int index)
+        {
+            var configuration = new BundleConfiguration
+            {
+                ProductName = "Concurrent Msi",
+                Identifier = "com.example.concurrentmsi",
+                Version = "1.0.0",
+                OutputDirectory = Path.Combine(root, "output-" + index),
+                Targets = [new BundleTargetConfiguration
+                {
+                    RuntimeIdentifier = "win-x64", InputDirectory = input,
+                    MainExecutable = "test.exe", Formats = [PackageFormat.Msi]
+                }]
+            };
+            return new WixBundler(options: new WixBundlerOptions
+            {
+                ToolCacheDirectory = Path.Combine(root, "cache")
+            }).BuildAsync(configuration);
+        }
+        var artifacts = await Task.WhenAll(Build(1), Build(2));
+        Assert(artifacts.SelectMany(group => group).All(artifact => File.Exists(artifact.Path)),
+            "Concurrent MSI builds did not both produce packages.");
+        var sameOutput = await Task.WhenAll(Build(3), Build(3));
+        Assert(sameOutput[0][0].Path == sameOutput[1][0].Path &&
+               File.Exists(sameOutput[0][0].Path + ".bundler-manifest"),
+            "Concurrent builds to one MSI output did not serialize and reuse a verified package.");
+    }
+    finally { Directory.Delete(root, true); }
+}
+
+static async Task BuildsArm64TargetedMsi()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Msi.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "input");
+    Directory.CreateDirectory(input);
+    await File.WriteAllTextAsync(Path.Combine(input, "test.exe"), "fixture");
+    try
+    {
+        var configuration = new BundleConfiguration
+        {
+            ProductName = "Arm64 Msi",
+            Identifier = "com.example.arm64msi",
+            Version = "1.0.0",
+            OutputDirectory = Path.Combine(root, "output"),
+            Targets = [new BundleTargetConfiguration
+            {
+                RuntimeIdentifier = "win-arm64", InputDirectory = input,
+                MainExecutable = "test.exe", Formats = [PackageFormat.Msi]
+            }]
+        };
+        var artifact = (await new WixBundler(options: new WixBundlerOptions
+        {
+            ToolCacheDirectory = Path.Combine(root, "cache")
+        }).BuildAsync(configuration)).Single();
+        using var database = new MsiDatabaseReader(artifact.Path);
+        Assert(database.Template.StartsWith("Arm64;", StringComparison.OrdinalIgnoreCase),
+            "WiX did not mark the package ARM64.");
+        Assert(database.Property("UpgradeCode") != WixIdentity.Create(configuration.Identifier, configuration.Version,
+            "win-x64", WixInstallScope.CurrentUser).UpgradeCode.ToString("B").ToUpperInvariant(),
+            "ARM64 and x64 MSI products share an UpgradeCode.");
+    }
+    finally { Directory.Delete(root, true); }
+}
+
 static string RepositoryRoot() => Path.GetFullPath("../../../../../", AppContext.BaseDirectory);
 
 static Task RunSync(Action action)
@@ -2006,4 +2348,102 @@ file sealed class FailingInstallerSigner : IBundleSigner
         }
         return Task.CompletedTask;
     }
+}
+
+file sealed class MsiDatabaseReader : IDisposable
+{
+    private readonly IntPtr _database;
+
+    public MsiDatabaseReader(string path)
+    {
+        Check(MsiOpenDatabase(path, IntPtr.Zero, out _database));
+    }
+
+    public string Property(string name)
+    {
+        using var view = OpenView("SELECT `Value` FROM `Property` WHERE `Property`='" + name + "'");
+        return view.FetchString() ?? throw new InvalidDataException("MSI property is missing: " + name);
+    }
+
+    public int RowCount(string table, string column)
+    {
+        using var view = OpenView("SELECT `" + column + "` FROM `" + table + "`");
+        var count = 0;
+        while (view.FetchString() is not null) count++;
+        return count;
+    }
+
+    public string Template => SummaryProperty(7);
+    public string PackageCode => SummaryProperty(9);
+
+    private string SummaryProperty(uint property)
+    {
+        Check(MsiGetSummaryInformation(_database, null, 0, out var summary));
+        try
+        {
+            var text = new System.Text.StringBuilder(256);
+            uint length = (uint)text.Capacity;
+            Check(MsiSummaryInfoGetProperty(summary, property, out _, out _, out _, text, ref length));
+            return text.ToString();
+        }
+        finally { MsiCloseHandle(summary); }
+    }
+
+    public void Dispose() => MsiCloseHandle(_database);
+
+    private View OpenView(string sql)
+    {
+        Check(MsiDatabaseOpenView(_database, sql, out var handle));
+        Check(MsiViewExecute(handle, IntPtr.Zero));
+        return new View(handle);
+    }
+
+    private static void Check(uint code)
+    {
+        if (code != 0) throw new InvalidOperationException("Windows Installer database API returned " + code + ".");
+    }
+
+    private sealed class View(IntPtr handle) : IDisposable
+    {
+        public string? FetchString()
+        {
+            var result = MsiViewFetch(handle, out var record);
+            if (result == 259) return null;
+            Check(result);
+            try
+            {
+                var text = new System.Text.StringBuilder(1024);
+                uint length = (uint)text.Capacity;
+                Check(MsiRecordGetString(record, 1, text, ref length));
+                return text.ToString();
+            }
+            finally { MsiCloseHandle(record); }
+        }
+
+        public void Dispose()
+        {
+            MsiViewClose(handle);
+            MsiCloseHandle(handle);
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("msi.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "MsiOpenDatabaseW")]
+    private static extern uint MsiOpenDatabase(string path, IntPtr persist, out IntPtr database);
+    [System.Runtime.InteropServices.DllImport("msi.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "MsiDatabaseOpenViewW")]
+    private static extern uint MsiDatabaseOpenView(IntPtr database, string sql, out IntPtr view);
+    [System.Runtime.InteropServices.DllImport("msi.dll", EntryPoint = "MsiViewExecute")]
+    private static extern uint MsiViewExecute(IntPtr view, IntPtr record);
+    [System.Runtime.InteropServices.DllImport("msi.dll", EntryPoint = "MsiViewFetch")]
+    private static extern uint MsiViewFetch(IntPtr view, out IntPtr record);
+    [System.Runtime.InteropServices.DllImport("msi.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "MsiRecordGetStringW")]
+    private static extern uint MsiRecordGetString(IntPtr record, uint field, System.Text.StringBuilder value, ref uint length);
+    [System.Runtime.InteropServices.DllImport("msi.dll", EntryPoint = "MsiViewClose")]
+    private static extern uint MsiViewClose(IntPtr view);
+    [System.Runtime.InteropServices.DllImport("msi.dll", EntryPoint = "MsiCloseHandle")]
+    private static extern uint MsiCloseHandle(IntPtr handle);
+    [System.Runtime.InteropServices.DllImport("msi.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "MsiGetSummaryInformationW")]
+    private static extern uint MsiGetSummaryInformation(IntPtr database, string? path, uint count, out IntPtr summary);
+    [System.Runtime.InteropServices.DllImport("msi.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "MsiSummaryInfoGetPropertyW")]
+    private static extern uint MsiSummaryInfoGetProperty(IntPtr summary, uint property, out uint dataType,
+        out int integerValue, out long fileTime, System.Text.StringBuilder value, ref uint length);
 }

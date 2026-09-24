@@ -18,3 +18,13 @@ NSIS and its bundled compression modules use multiple licenses. Refer to the inc
 - License file: `licenses/nsis-plugin/LICENSE` in the generated NuGet package
 
 The bundled `DotNetBundlerNsis.dll` Native AOT plug-in is built with NsisPlugin.
+
+## WiX Toolset 3.14.1
+
+- Project: https://github.com/wixtoolset/wix3
+- Release: https://github.com/wixtoolset/wix3/releases/tag/wix3141rtm
+- Binary subset SHA-256: `25AE0BB2A21FAC6B486C4B06155C9F463F2D845E7036BE0E9B1C98F4E48EA494`
+- License: Microsoft Reciprocal License, `licenses/wix/LICENSE.TXT` in the WiX package
+- Corresponding source: `licenses/wix/wix3141-source.zip` in the WiX package
+
+The source and notices are distributed with the WiX backend package. See `third_party/wix/README.md` for provenance, original archive and per-file checksums.
