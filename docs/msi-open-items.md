@@ -1,6 +1,6 @@
 # MSI 外部输入与验收待办
 
-MSI 后端已完成 **WIN-MSI-1..4 本机自动化范围**，配置与身份规则形成 alpha 冻结基线；当前 Windows 11 x64 开发机上的独立 fixture 已通过真实 current-user 安装/卸载、两版本生命周期、修复、被动运行、中文包并存与受限故障回滚，per-machine 仅静态检查产物。下表记录仍需的外部环境和证据；用户已确认当前没有干净 Windows 10/11 或 ARM64 环境，也没有提权测试 VM，不扩大支持声明。人工步骤见 `docs/msi-manual-testing.md`，本机冻结审计见 `docs/msi-roadmap.md` 第 9 节。
+MSI 后端已完成 **WIN-MSI-1..4 本机自动化范围**，`alpha.37` 为既有能力基线；当前 Windows 11 x64 开发机上的独立 fixture 已通过真实 current-user 安装/卸载、两版本生命周期、修复、被动运行、中文包并存与受限故障回滚，per-machine 仅静态检查产物。用户随后确认 WIN-MSI-5..9 的**新功能计划**，见 `docs/msi-roadmap.md` 第 10 节及 `docs/msi-tauri-capability-audit.md`；下表仍只记录外部环境和证据，不把尚未实施的功能混作环境待办。当前没有干净 Windows 10/11 或 ARM64 环境，也没有提权测试 VM；这些缺口不阻塞本机可执行开发，不扩大支持声明。人工步骤见 `docs/msi-manual-testing.md`，旧基线审计见 MSI 路线第 9 节。
 
 | ID | 最早阶段 | 所需输入/环境 | 完成证据 |
 | --- | --- | --- | --- |

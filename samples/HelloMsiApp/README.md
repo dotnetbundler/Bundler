@@ -1,6 +1,6 @@
 # HelloMsiApp：Windows MSI 示例
 
-本示例用 MSBuild 调用同一 Core 和 WiX 后端，生成 Windows x64、current user MSI，并声明开始菜单/桌面快捷方式、`.hellomsi` 文件与 MIME 候选处理程序及 `hello-msi:` 协议候选处理程序。干净宿主、其他架构、per-machine 提权安装及默认应用界面的真实选择/唤起仍待外部验收，MSI 格式尚未冻结。
+本示例用 MSBuild 调用同一 Core 和 WiX 后端，生成 Windows x64、current user MSI，并声明开始菜单/桌面快捷方式、`.hellomsi` 文件与 MIME 候选处理程序及 `hello-msi:` 协议候选处理程序。干净宿主、其他架构、per-machine 提权安装及默认应用界面的真实选择/唤起仍待外部验收。`alpha.37` 是当前已实现能力的本机冻结基线；计划中的 WIN-MSI-5..9（x86、更多语言、安装 UI 等）尚不可用于此示例。
 
 与 NSIS 示例相同，项目文件把还原源指定为仓库的 `artifacts/packages`。在仓库根目录先构建本地 NuGet 包，再直接发布：
 

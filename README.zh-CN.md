@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-第一条已冻结的链路是 Windows + NSIS。MSI 已完成 WIN-MSI-1..4 的本机自动化范围，alpha 格式配置与身份规则已冻结；其他 Windows/架构和生产条件仍按专用清单验收。正式 CLI、macOS 和 Linux 格式仍属后续路线。
+第一条已冻结的链路是 Windows + NSIS。MSI 已完成 WIN-MSI-1..4 的本机自动化范围，`alpha.37` 是既有能力的配置与身份基线；用户已批准新增 WIN-MSI-5..9 补齐通用 MSI 能力，**这些新能力尚未实现**。现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。正式 CLI、macOS 和 Linux 格式仍属后续路线。
 
 实现已经拆分为可复用的 NuGet 包。`DotNet.Bundler` 只是便利元包，实际打包代码位于以下各层。
 

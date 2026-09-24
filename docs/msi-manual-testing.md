@@ -1,6 +1,6 @@
 # Windows MSI 人工验收（计划用例）
 
-> WIN-MSI-1..4 的本机自动化范围已完成，当前 Windows 11 x64 开发机已验证最小安装/卸载、两版本 current-user 生命周期、测试证书签名、中文包并存、被动安装/卸载、静默修复、损坏包拒绝和测试包延迟故障回滚。以下人工/外部环境用例均未执行。用户目前没有干净 Windows 10/11、ARM64 或提权测试 VM，不将本机结果扩写为这些平台通过。WIN-MSI-4 的实际证据和剩余支持边界见 `docs/msi-roadmap.md` 第 9 节。
+> WIN-MSI-1..4 的本机自动化范围已完成，当前 Windows 11 x64 开发机已验证最小安装/卸载、两版本 current-user 生命周期、测试证书签名、中文包并存、被动安装/卸载、静默修复、损坏包拒绝和测试包延迟故障回滚。以下人工/外部环境用例均未执行。用户目前没有干净 Windows 10/11、ARM64 或提权测试 VM，不将本机结果扩写为这些平台通过。WIN-MSI-5..9 是后来批准、尚未实现的功能路线；实现时按本文件 `MSI-MT-*` 规则新增适用人工用例，不把本轮计划写成已执行。路线见 `docs/msi-roadmap.md` 第 10 节，旧基线证据见第 9 节。
 
 `MSI-MT-02` 的自动化前置脚本位于 `tests/Windows.Msi.Integration/Verify.ps1`。普通本机 current-user fixture 需显式传入 `-ConfirmLocalInstall`；VM 可传 `-ConfirmDisposableVm`，脚本会核查虚拟机标识。2026-09-24 本机运行通过，日志与哈希见 `docs/msi-roadmap.md` 第 6 节；这不代替干净 VM 的兼容性复测。
 

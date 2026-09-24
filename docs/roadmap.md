@@ -3,7 +3,7 @@
 > 最后整理：2026-09-25
 > 路线状态：`NSIS-R4` 已在 `b116d09` 形成冻结基线，随后加固 journal 恢复目标、跨配置恢复流程及快照完整性；当前提交以 Git HEAD 为准
 > 当前实施对象：Windows WiX/MSI
-> 当前状态：`WIN-MSI-1..4` 的本机自动化范围已完成，MSI alpha 格式配置和身份规则已冻结；current-user 安装/升级/修复/卸载、测试签名、双语言包及受限故障有本机证据。per-machine 仅做产物检查；生产签名、交互 UI、干净 Windows/ARM64 宿主、UAC 和真实重启仍外部待验收。默认下一阶段为 `MAC-APP`，尚未开始。
+> 当前状态：`WIN-MSI-1..4` 的本机自动化范围已完成，`alpha.37` 为既有 MSI 能力基线。用户已确认先补齐 Tauri 中适用于通用 MSI 的能力，新增 `WIN-MSI-5..9` **尚未实施**；默认下一实施阶段为 `WIN-MSI-5`，`MAC-APP` 顺延。既有 per-machine、生产签名、交互 UI、干净宿主及重启等外部验收仍各自记录，不阻塞新增功能开发，也不冒充已通过。
 
 本文档是项目后续路线的规范入口；跨格式执行规则见 [`docs/development-rules.md`](development-rules.md)，MSI 专项细则由 [`docs/msi-roadmap.md`](msi-roadmap.md) 承接。它们使后续开发不依赖某一次对话或某个 AI 的记忆。
 
@@ -83,7 +83,7 @@
 2. 再比较用户可观察结果，而不是比较字段名或内部实现。
 3. 通用能力进入 Core/共享组件；格式行为留在对应后端；入口参数只做映射。
 4. 如果本项目已有更严格实现，例如按准确 MSI GUID 迁移而不是按显示名猜测，保留本项目方案并记录差异。
-5. 每轮审计固定 Tauri commit，并在 `docs/nsis-upstream-reference.md` 记录来源、日期和结论，避免 `dev` 分支漂移造成计划反复变化。
+5. 每轮审计固定 Tauri commit，并在**对应格式**的上游参考或能力审计文档记录来源、日期和结论（NSIS 为 `docs/nsis-upstream-reference.md`，MSI 为 `docs/msi-tauri-capability-audit.md`），避免 `dev` 分支漂移造成计划反复变化。
 
 签名属于通用发布能力，必须保留在路线中；WebView2/VC Runtime 自动部署属于框架运行时能力，当前不进入路线。这两类能力不能混为一谈。
 
@@ -263,11 +263,19 @@
 3. `WIN-MSI-3`：签名、语言、静默/被动、退出码、修复维护及失败/回滚/重启。
 4. `WIN-MSI-4`：完整 Windows/架构/安全矩阵、人工边界、文档及格式冻结；仅补缺陷和测试，不把首个安装测试拖到此阶段。
 
-各阶段的前置条件、交付物、不做事项、新增测试、人工验收和退出条件，以及产品身份等第一阶段前必须厘清的决策，详见 [`docs/msi-roadmap.md`](msi-roadmap.md)。逐项冻结状态及平台边界见 [`docs/msi-capability-matrix.md`](msi-capability-matrix.md)。WIN-MSI-1..4 的本机 current-user 自动化已通过，`alpha.37` 以严格 WiX 告警门槛和自动 PackageCode 形成 MSI 配置/身份冻结基线；per-machine 只验证构建产物和数据库。干净 Windows/ARM64 宿主、提权安装、生产签名、真实 UI 和重启仍在 MSI 专用人工与外部清单，不能宣称通过。默认下一阶段为 `MAC-APP`。
+`WIN-MSI-1..4` 的本机 current-user 自动化已通过，`alpha.37` 以严格 WiX 告警门槛和自动 PackageCode 形成**当时已承诺能力**的配置/身份基线；这不是 Tauri 通用 MSI 能力全集。per-machine 只验证构建产物和数据库，其他宿主、生产签名、真实 UI 与重启仍按 MSI 专用人工及外部清单记录。用户现已要求补齐通用能力，决定将以下阶段插入 `MAC-APP` 前，状态均为**计划、未实现**：
+
+5. `WIN-MSI-5`：x86 目标、显式安全 MSI 版本映射、可选降级及既有身份兼容。
+6. `WIN-MSI-6`：范围内安装目录、交互 UI/品牌、受管可选功能、PATH 与安全的交互后启动。
+7. `WIN-MSI-7`：更多单语言 MSI、自定义翻译、图标输入与 FIPS 构建选项。
+8. `WIN-MSI-8`：受控 WiX fragments/引用与显式专家模式的原始模板/merge module。
+9. `WIN-MSI-9`：逐项 Tauri 通用能力审计、全部本机适用回归、工具许可/体积复核和再冻结，不新增功能。
+
+前置条件、交付物、不做事项、自动化/真实安装测试及退出条件见 [`docs/msi-roadmap.md`](msi-roadmap.md) 第 10 节；[MSI Tauri 能力审计](msi-tauri-capability-audit.md)区分已实现、计划、明确排除及另立产品路线，[MSI 能力矩阵](msi-capability-matrix.md)保存逐项状态。原 WIN-MSI-4 的实际证据继续有效，不能借新路线宣称计划能力已完成。默认下一实施阶段为 `WIN-MSI-5`；未经用户明确要求不开始代码。
 
 ### MAC：macOS `.app` 与 DMG
 
-当前公共 `PackageFormat` 已明确包含 `App` 和 `Dmg`，规划器也已表达 DMG 依赖 `.app`，但仓库没有 macOS 后端。因此 MSI 冻结后依次完成 `MAC-APP`、`MAC-DMG`，每个格式按结构/元数据 → 安装或分发行为 → codesign/notarization → 原生 macOS E2E → 冻结推进。PKG 当前不在公共格式枚举中，也没有已批准的实现阶段；在 `MAC-APP` 开始前用格式决策记录决定是否加入。若决定加入，必须先更新公共模型与本文档，并在 DMG 后、Linux 前完成，不能悄悄跳过或仅留在对话中。不得在没有原生 macOS 验证环境时宣称签名和 notarization 完成。
+当前公共 `PackageFormat` 已明确包含 `App` 和 `Dmg`，规划器也已表达 DMG 依赖 `.app`，但仓库没有 macOS 后端。因此 MSI 扩展阶段 WIN-MSI-5..9 完成后依次完成 `MAC-APP`、`MAC-DMG`，每个格式按结构/元数据 → 安装或分发行为 → codesign/notarization → 原生 macOS E2E → 冻结推进。PKG 当前不在公共格式枚举中，也没有已批准的实现阶段；在 `MAC-APP` 开始前用格式决策记录决定是否加入。若决定加入，必须先更新公共模型与本文档，并在 DMG 后、Linux 前完成，不能悄悄跳过或仅留在对话中。不得在没有原生 macOS 验证环境时宣称签名和 notarization 完成。
 
 ### LINUX：Linux 格式
 
@@ -279,7 +287,7 @@
 
 届时范围为：固化共享配置 schema；让 `validate`、`plan`、`bundle` 共用 Core/后端；定义稳定退出码、机器可读输出、日志、帮助、版本和发布方式；覆盖全部已冻结格式；删除重复或错误的早期 alpha 参数而不承诺兼容。完成后 CLI、MSBuild 和直接 API 都只是同一打包能力的适配器。
 
-当前实施顺序为：`WIN-MSI-1..4` → `MAC-APP` → `MAC-DMG` →（仅当 macOS 格式决策纳入时）`MAC-PKG` → `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE` → `CLI-C1`。调整顺序必须依据真实用户需求、CI/签名环境和维护成本更新本文档，不能只在对话中临时改口。
+当前实施顺序为：已完成的 `WIN-MSI-1..4` → **计划中的 `WIN-MSI-5..9`** → `MAC-APP` → `MAC-DMG` →（仅当 macOS 格式决策纳入时）`MAC-PKG` → `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE` → `CLI-C1`。Tauri updater 协议/提升权限计划任务若有需求另立跨格式产品路线，不混入 MSI 或提前产品化 CLI。调整顺序必须依据真实用户需求、验证能力和维护成本更新本文档，不能只在对话中临时改口。
 
 ## 8. 两条不阻塞开发的并行队列
 
@@ -308,7 +316,7 @@
 2. 更新对应格式的能力矩阵和阶段完成状态；
 3. 在 `PROJECT_CONTEXT.md` 写入实际 HEAD、包版本、提交、验证命令和结果；
 4. 将新的外部条件同步到当前格式的专用 open-items 与人工测试文档，并更新 `docs/manual-testing-index.md` 的入口；
-5. 若参考 Tauri，更新 `docs/nsis-upstream-reference.md` 的固定 commit 和决策；
+5. 若参考 Tauri，更新相应格式的上游参考或能力审计文档的固定 commit 和决策；
 6. 在提交前检查文档没有把“计划”“已实现”“外部待验收”混写。
 
 接班者在任何对话缺失的情况下，都应能仅凭上述文档、Git 历史、代码和测试回答：当前做什么、为什么做、什么算完成、下一步是什么、哪些结论尚未验证。若不能回答，说明阶段交接尚未完成。

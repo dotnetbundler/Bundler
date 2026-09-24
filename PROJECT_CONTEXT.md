@@ -4,7 +4,7 @@
 > 当前分支：`codex/msi-development`（NSIS 开发线为 `codex/nsis-development`）
 > NSIS 冻结起点：`b116d09 feat(nsis): freeze secure packaging baseline`；当前提交以 `git rev-parse --short HEAD` 为准
 > 当前包版本：`0.1.0-alpha.37`（Git 状态与包版本均须实时核查）
-> 当前阶段：`WIN-MSI-1..4` 的本机自动化范围已完成，MSI alpha 格式配置和身份规则形成冻结基线；per-machine 只检查产物，生产签名、交互 UI、外部 UAC/Windows/ARM64/重启矩阵未验收。下一默认格式为 `MAC-APP`，尚未开始。
+> 当前阶段：`WIN-MSI-1..4` 的本机自动化范围已完成，`alpha.37` 是既有 MSI 能力基线。用户已确认先补齐适用于通用打包器的 Tauri MSI 能力，`WIN-MSI-5..9` 尚未实施；默认下一实施阶段为 `WIN-MSI-5`，`MAC-APP` 顺延。per-machine、生产签名与外部宿主等旧验收边界不变。
 
 本文档记录当前事实、决策与验证证据，供后续开发任务接续。跨格式开发与交接规则以 `docs/development-rules.md` 为唯一规范入口；正式路线见 `docs/roadmap.md`，MSI 细则见 `docs/msi-roadmap.md`。本文档不是面向最终用户的使用手册。代码与自动化测试始终是实现事实的最终依据。
 
@@ -557,7 +557,7 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 
 ### 14.3 默认下一阶段
 
-以下为 WIN-MSI-1/2 时的历史接管记录；**当前下一阶段以文首及 14.6 节为准**。
+以下为 WIN-MSI-1/2 时的历史接管记录；**当前下一阶段以文首及最新的 14.8 节为准**。
 
 用户已明确说“提交，然后开始”；规划文档提交为 `75738ed`，`WIN-MSI-1` 代码已完成本机范围阶段一；用户已要求提交，实际 HEAD 和工作区状态以 Git 为准。NSIS 迁移 fixture 的 `WixToolset.Sdk/5.0.2` 不代表正式选型；本阶段使用 WiX 3.14.1。当前已有直接 API、MSBuild 映射、固定工具子集与源码分发、最小 current user MSI 构建和数据库自动化验证。按用户要求与 NSIS 测试分层一致，2026-09-24 在当前 Windows x64 开发机使用每轮独立产品身份执行真实静默安装与卸载，检查文件、产品注册、未知用户文件保留及清理，均通过；脚本为 `tests/Windows.Msi.Integration/Verify.ps1 -ConfirmLocalInstall`，日志、MSI SHA-256、ProductCode 和环境见 `docs/msi-roadmap.md` 第 6 节。当前工作区的 49 项自动化测试及完整 Windows NSIS 安装/卸载集成回归也已通过，NSIS 固定测试路径和卸载注册项无残留。干净宿主 Framework、ARM64 宿主/用户端、UAC 与高影响故障仍待独立人工/外部验收，不宣称广泛支持。用户已于 2026-09-24 接受当前约 13.8 MB 的 WiX NuGet 包体积；第一阶段已完成本机范围退出条件：14 个工具子集文件逐项对应官方源码和许可，生成的 WiX NuGet 包包含许可证、源码及声明；49 项测试以 --no-restore 再次通过，涵盖新缓存解包 WiX 和实际编译 MSI，打包复核也通过。干净 Windows/ARM64 环境依用户说明暂不执行，保留待验收且不扩大支持声明。评价 WiX 3.14.1 自身的零环境要求时，只看 candle.exe/light.exe 及其依赖，不混入 Bundler 的 MSBuild 或应用构建环境：两个 EXE 及 wix.dll 均目标 .NET Framework 4.5；Windows 7 SP1 未预装所需 Framework，Windows 10/11 预装版本理论上足够，但干净宿主实际编译仍需 VM 验证，详见 docs/msi-roadmap.md 第 2 节。CLI 在计划的 MSI、macOS 和 Linux 打包格式完成后再做。
 
@@ -612,3 +612,9 @@ NSIS 全量 Windows 集成在先打出仓库本地 alpha.35 包后退出 0，输
 本机 Windows 11 Pro build 26200 x64：Release 快速测试 62/62，通过；解决方案 `--no-restore` 构建 0 警告/0 错误，Pack 生成七个 alpha.37 包。随包说明定稿后最后一次重打的 WiX 包 14,397,760 字节、SHA-256 `8892C11C9F18958E1A7916049BC524467C7E65EF82DDC9B9C0B151666C7D9025`。MSI 的 smoke、lifecycle、maintenance 三个入口均从隔离本地包源构建，每轮按哈希检查 NuGet 包内的许可证、对应源码、SHA256SUMS、供应说明和第三方声明；真实 current-user 安装、卸载、升级、降级/异包拒绝、修复、被动操作、中文并存及受限故障回滚均通过。独立直接 API 消费者只引用 `DotNet.Bundler.Wix` 包。NSIS Windows 全量集成、两个公开示例的本地 alpha.37 包消费与发布也通过。示例未安装；已知随机 MSI ProductCode 和安装目录的只读残留复核正常退出 0，均不存在。具体命令、各产物哈希、ProductCode、日志目录和首次权限/警告失败记录见 `docs/msi-roadmap.md` 第 9 节。
 
 MSI alpha 格式的本机验证范围与配置/身份规则已冻结；`docs/msi-capability-matrix.md` 逐行标注已自动验证、外部待验收或不支持，并明确只有一台非干净 Windows 11 x64 主机的实际证据。干净 Windows 10/11、ARM64 真实安装、per-machine UAC、生产证书、真实交互 UI、缺源、锁定文件及重启/3010 仍在 MSI 专用人工和外部清单中，不能扩大支持声明。按 `docs/roadmap.md`，下一个默认阶段为 `MAC-APP`；macOS 原生构建/测试环境和 PKG 是否纳入路线须在开始该格式前核对。本阶段完成后用户已明确要求提交；未要求推送。
+
+### 14.8 MSI 通用能力补齐路线确认（2026-09-25，规划阶段）
+
+第 14.7 节的 `MAC-APP` 下一阶段判断是 WIN-MSI-4 提交时的**历史结论**。用户随后澄清：现有环境无法测试的项目不阻塞快速开发；先补齐 Tauri 中适用于通用 Windows MSI 打包器的能力，应用运行时依赖自动部署仍明确不做。用户接受常规模式的受控 WiX fragments/引用，以及显式开启、由调用方承担自备安装逻辑责任的完整模板/原始 merge module 专家模式。新路线为 `WIN-MSI-5..9`，完成后再进入 `MAC-APP`。固定 Tauri 参考、逐项选择和风险见 `docs/msi-tauri-capability-audit.md`；阶段前置/交付/新增测试/退出条件见 `docs/msi-roadmap.md` 第 10 节；当前与计划状态见 `docs/msi-capability-matrix.md`。无环境的人工项继续在 MSI 专用清单/外部待办中准确保留，不冒充已通过。
+
+本轮核对时分支 `codex/msi-development`，HEAD `d61976f1ef8312c651ae7c3672b275bbe6b71a34`，包版本 `0.1.0-alpha.37`，开始时工作区干净。本轮仅落规划文档，不修改后端代码、测试或 NuGet 版本，不执行新能力测试；现有 WIN-MSI-4 的 62 项及集成结果是历史基线而非 WIN-MSI-5..9 结果。下一次用户明确要求“开始 WIN-MSI-5”时才按已落地路线推进整个阶段：先核 Git/包/身份向量，再做 x86、版本映射和可选降级、对应自动化、独立包消费、本机真实安装生命周期、示例/文档和版本迭代。未经用户明确要求不提交或推送。
