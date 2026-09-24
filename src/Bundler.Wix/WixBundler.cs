@@ -35,17 +35,9 @@ public sealed class WixBundler
         {
             throw new NotSupportedException("MSI payload signing is planned for WIN-MSI-3.");
         }
-        if (bundle.FileAssociations.Count > 0 || bundle.UrlProtocols.Count > 0)
-        {
-            throw new NotSupportedException("MSI file associations and URL protocols are planned for WIN-MSI-2.");
-        }
         if (!string.IsNullOrWhiteSpace(bundle.LicenseFile))
         {
             throw new NotSupportedException("MSI license UI is planned for WIN-MSI-3.");
-        }
-        if (_settings.InstallScope != WixInstallScope.CurrentUser)
-        {
-            throw new NotSupportedException("Per-machine MSI packages are planned for WIN-MSI-2.");
         }
         if (_settings.Codepage <= 0 || _settings.Codepage is 65000 or 65001)
         {

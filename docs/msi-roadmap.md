@@ -1,6 +1,6 @@
 # Windows MSI 后端实施路线（WiX 3.14.1 暂定）
 
-> 状态：`WIN-MSI-1` 已完成本机范围内的退出条件（2026-09-24）；本机专用 fixture 的真实 current-user 安装/卸载、工具供应审计和本地无还原编译均已通过。干净 Windows/ARM64 宿主未验收，不在支持声明内。`WIN-MSI-2..4` 均未开始。
+> 状态：`WIN-MSI-1` 已完成本机范围内的退出条件；`WIN-MSI-2` 的本机 current-user 升级/降级/桌面集成与 per-machine 静态产物检查已通过（2026-09-24），专用 UAC/其他 Windows 环境尚未验收。`WIN-MSI-3..4` 未开始，MSI 格式尚未冻结。
 > 规范入口：`docs/roadmap.md`；逐项能力见 `docs/msi-capability-matrix.md`，外部条件见 `docs/msi-open-items.md`，人工步骤见 `docs/msi-manual-testing.md`。
 
 ## 1. 已核实事实、选择及风险
@@ -66,11 +66,11 @@
 ### WIN-MSI-2：生命周期与桌面集成
 
 - **前置**：WIN-MSI-1 真实烟雾测试通过，身份契约冻结，有两版本测试产物；per-machine/UAC 的真实系统观察另需提权 VM。
-- **目标/交付**：major upgrade、阻止降级与同版本不同包、per machine 独立产物、范围/架构所有权、快捷方式、文件关联与 URL 协议的声明式注册和卸载；保留用户数据及他人接管资源。
+- **目标/交付**：major upgrade、阻止降级与同版本不同包、per machine 独立产物、范围/架构所有权、快捷方式、文件关联与 URL 协议的声明式注册和卸载；保留用户数据，不占用共享默认关联和他人注册项。MSI 对受管理快捷方式的同路径接管没有内容级保护，界限见第 7 节。
 - **新增自动化**：版本/身份矩阵、Upgrade 表、组件稳定性、配置冲突和路径保护、快捷方式与注册表表数据。本地 Windows 先以独立 current-user fixture 实测 v1→v2、降级拒绝、快捷方式及关联/协议所有权；per-machine/HKLM/UAC 仅在提权 VM/专用测试机验证，记录旧载荷与用户文件状态。
 - **人工边界**：真实标准用户与管理员、策略限制、文件关联默认应用提示、Windows 版本/架构差异见 MSI 人工文档。
 - **不做**：跨 current user/per machine 自动迁移、用显示名清理旧产品、任意删除应用数据、签名/多语言、CLI。
-- **退出**：无孤儿组件或越权删除，适合本地的升级/卸载可复现、可清理；新增行为对应自动化测试通过。per-machine 等没有真实环境的行为只可标为外部待验收，不能宣称全环境通过。
+- **退出**：无已知孤儿组件或对共享默认关联/他人注册值的越权删除，适合本地的升级/卸载可复现、可清理；新增行为对应自动化测试通过。受管理快捷方式同路径替换风险需明确披露；per-machine 等没有真实环境的行为只可标为外部待验收，不能宣称全环境通过。
 
 ### WIN-MSI-3：发布与维护行为
 
@@ -98,7 +98,7 @@
 | 专用 Windows CI/VM | per-machine/UAC、真实重启、系统级故障/回滚、损坏包、锁定文件、不同 OS/架构及干净宿主依赖；保留 verbose log 和状态断言。 |
 | 人工验收 | 生产证书和信任链、真实用户 UAC、交互 UI/语言、企业策略、真实升级来源、真实重启及难以自动覆盖的 ARM64/多 Windows 版本；按独立 MSI 用例执行。 |
 
-接班者先读 `PROJECT_CONTEXT.md`、`docs/roadmap.md`、本文、MSI 矩阵/待办/人工文档，再核 Git、代码与测试。**只有用户明确说“开始 WIN-MSI-1”才进入实现**。开始时先报告实际状态和工具选型门槛，完成整个阶段的新增测试与真实安装/卸载烟雾测试后再报告结果。未经用户明确要求不提交或推送。
+接班者先读 `PROJECT_CONTEXT.md`、`docs/roadmap.md`、本文、MSI 矩阵/待办/人工文档，再核 Git、代码与测试。WIN-MSI-1/2 的启动授权和实施结果已记录在第 6/7 节；下一阶段为 WIN-MSI-3，须由用户明确启动。每阶段完成新增自动化和适用的真实安装测试后报告结果；未经用户明确要求不提交或推送。
 
 ## 6. WIN-MSI-1 实施及完成记录（2026-09-24）
 
@@ -116,4 +116,30 @@
 - 共用 MSBuild 适配层的 NSIS 回归也已重跑：`powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.33`，最终输出 `PASS Windows NSIS install/uninstall integration`，退出码 0。结束后检查其固定安装目录、旧 MSI fixture、事务目录、应用数据目录和卸载注册项，均无残留。这是当前工作区的回归结果，不借用先前提交的测试记录。
 - **2026-09-24 本机范围内退出条件已达到**：在此前真实安装/卸载、49 项自动化测试及 NSIS 回归基础上，本轮再次运行 `dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release --no-restore`，49 项均通过，包含从新缓存提取内嵌 WiX 并实际编译/读取 MSI；代码中的工具解析只读取内嵌资源或显式本地归档，无运行时网络下载。本地 NuGet 依赖已存在，故这证明无需在线还原即可编译，不证明全新计算机无 NuGet 缓存时能还原项目。`dotnet pack src/Bundler.Wix/Bundler.Wix.csproj -c Release --no-restore -o artifacts/packages` 通过，并复核包中许可证、完整源码、哈希及声明。选定 14 个工具文件的许可归属审计见上文。阶段一最小 current-user 能力可标完成。
 
-**未验收的支持范围**：用户确认现无干净 Windows 10/11 或 ARM64 环境，本次不执行这些 VM 测试。WiX 自身在这些宿主上的直接运行、ARM64 用户端安装，以及 UAC/真实重启/故障等高影响场景继续留在 `docs/msi-open-items.md`，不作为本次本机阶段退出阻塞，也不写成已支持。下一阶段 `WIN-MSI-2` 尚未开始。
+**阶段一结项时的未验收范围**：当时用户确认现无干净 Windows 10/11 或 ARM64 环境，未执行这些 VM 测试。WiX 自身在这些宿主上的直接运行、ARM64 用户端安装，以及 UAC/真实重启/故障等高影响场景继续留在 `docs/msi-open-items.md`，不作为本机阶段退出阻塞，也不写成已支持。阶段二的后续进度见第 7 节。
+
+## 7. WIN-MSI-2 本机实施记录（2026-09-24）
+
+**事实与实现**：`MajorUpgrade` 使用 `afterInstallInitialize`，以 Windows Installer 事务卸载同一 UpgradeCode 的旧版本；拒绝降级。原 WIN-MSI-1 的 current-user 组件 GUID 字符串保持稳定。per-machine 采用独立 UpgradeCode/ProductCode/组件 GUID、`ProgramFiles64Folder` 和 HKLM；当前只编译并检查数据库，未做提权安装。快捷方式为显式选择的开始菜单及桌面链接，前者放在 identifier 专属目录，后者名称带 identifier；current-user 使用非 advertised 链接及 HKCU 组件键路径，per-machine 使用 advertised 链接及文件组件键路径以通过 ICE19/43/57。MSBuild 属性 `BundlerWixStartMenuShortcut`、`BundlerWixDesktopShortcut` 对应直接 API 同名布尔配置，默认均为 false。文件扩展名写入自身 ProgID、`OpenWithProgids` 和应用 Capabilities，若提供 MIME 类型则登记 MIME 候选能力；URL 协议写入自身 ProgID 和 `UrlAssociations`，不改同名公共 scheme 根、既有默认程序或他人 ProgID。用户需在 Windows 默认应用设置中选择处理程序；协议实际选择/唤起仍需人工观察。卸载只移除 MSI 声明的值/文件和空目录，不删除未知用户文件。快捷方式若被他人在**完全相同路径**替换，Windows Installer 原生卸载可能移除该路径；本阶段不承诺内容级接管保护，不使用不可回滚的自定义动作。
+
+**同版本限制**：同一输出目录已有内容不同的 MSI 会在构建时拒绝；运行时 Windows Installer 对同一 ProductCode 的不同包返回 `1638`。新包还写入并搜索自身定义摘要，在已安装摘要存在且不一致时设置 LaunchCondition；卸载允许通过。缺失摘要（如旧版产物或人为删改注册表）时不以摘要阻断维护，因此跨机器发布仍须由发行方保证一个版本只发布一份内容。此摘要是冲突检查，不是安全签名或抵抗同用户篡改的保证。
+
+**本机自动证据**：`dotnet build Bundler.slnx -c Release --no-restore` 0 警告/错误；`dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release --no-restore` 全部 50 项通过，包括 per-machine MSI 含快捷方式/关联/协议的真实编译、数据库 HKLM/Program Files/Shortcut 检查、Upgrade/Registry 表检查及身份范围隔离。最终 `tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -ConfirmLocalInstall` 在 Windows 11 Pro build 26200 x64 实际构建三份包：v1 `1.0.0` SHA-256 `5870AAA0AA61E4E006B28A02DF8DDA0A043B629C1AB218BB4AF178AF28C31FEE`、v2 `1.1.0` SHA-256 `EBCC0CBAC13DD37E43D5B30095534997F52AB689718FBE19D89ED7E0F3BE98B8`、同版本不同内容包 SHA-256 `76A7B9FF7C15518107D0567DA4A9C3ABB428D12891081D1D44860FDB37EEE3E9`。v1→v2 升级、旧 ProductCode 注销、旧资源删除、新资源存在、未知文件保留、降级拒绝、同版本异包拒绝、快捷方式与处理程序命令及注册值创建/卸载清理均通过。测试唯一 identifier 为 `com.example.bundler.msi.lifecycle.36184a3766ca472191fd19c7c098fe30`；verbose log 留在 `%TEMP%\Bundler-Msi-Lifecycle-36184a3766ca472191fd19c7c098fe30`。同版本异包返回 `1638`；降级返回 `1603` 并在日志中明确报告新版本已安装。阶段一 smoke 脚本也以新后端重跑通过，SHA-256 `9BE37859ADB7EDAD0525225EFF3FBEEC2127030E8059D2AB41E9C1DC0B3920E8`，日志 `%TEMP%\Bundler-Msi-Smoke-72ed6e225add4ecfbb204f0e9bc6c7e3`。共享 MSBuild 适配层的 NSIS Windows 集成脚本也通过，退出码 0。这些仅证明上述当前主机与自动化范围。
+
+**后续/外部**：per-machine 的 UAC、标准用户/管理员、干净 Windows/ARM64、默认应用 UI 中的协议选择与实际唤起均按 `docs/msi-manual-testing.md` 和 `docs/msi-open-items.md` 留待专用环境；不作为当前快速开发本机范围退出阻塞，也不宣称已经通过。进入 WIN-MSI-3 前复核当前 Git、运行新测试及集成脚本，保留上述路径所有权和 MSI 事务边界。签名、语言、完整静默/被动/修复/故障行为属于 WIN-MSI-3。
+
+公开示例 `samples/HelloMsiApp` 已用本地包源、隔离 NuGet 缓存和独立输出路径重新 restore/publish，MSI 生成通过；示例展示快捷方式、文件/MIME 候选和 URL 候选配置。生成测试包并不代表已验证默认应用 UI 或实际协议唤起。
+
+**版本迭代补正**：用户指出 WIN-MSI-2 实现仍沿用 alpha.33 的问题。按 NSIS 开发线的迭代惯例，仓库 `BundlerPackageVersion` 升为 `0.1.0-alpha.34`，当前代码重新 pack 为七个同版本 NuGet 包。此前曾把 Hello MSI 示例应用版本从 `1.0.0` 升到 `1.1.0`，并以隔离本地源还原、发布；用户随后明确要求公开示例应用版本保持稳定，故示例已恢复 `1.0.0`，升级/降级由独立 fixture 测试。此前生成的 `Hello MSI App-1.1.0.msi` 仅为历史产物。MSI 示例现与 NSIS 示例一样在项目文件中固定本地还原源和当前开发包版本。直接 `dotnet publish` 使用本地包及缓存，不会自动重打当前源码；同一包版本反复打包有旧缓存风险。上文阶段二 MSI 哈希属于版本补正前的测试记录，补正后的验证以本节后续记录为准。
+
+**版本补正后复测**：`dotnet build Bundler.slnx -c Release --no-restore` 0 警告/错误，`dotnet pack Bundler.slnx -c Release --no-restore -o artifacts/packages` 产出七个 alpha.34 包；50 项 `Bundler.Tests` 通过。`tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.34` 输出 `PASS Windows NSIS install/uninstall integration`，退出码 0。`tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -Configuration Release -ConfirmLocalInstall` 在 Windows 11 Pro build 26200 x64 本机输出 PASS，实际验证 v1→v2 升级、同版本异包与降级拒绝、快捷方式及桌面注册创建/卸载、用户文件保留。此次 v1/v2/异包 SHA-256 依次为 `8BC7FCD96F8B197A6EB82D59566A3FACC0B2844E040C5DEFA4F786788F5AD427`、`323BE18F59CAC75FDDA9A53B8C2FF95E41BC25A96DE149F75B4E13FE25DD7E6A`、`32FE4CC2B6B3AE6AA5745B94F7DFDCC02BB73CBBA702A25476300D6408264FAC`；测试标识 `com.example.bundler.msi.lifecycle.c7c55c4bfaaf4889ab488deba4356199`，verbose log 位于 `%TEMP%\Bundler-Msi-Lifecycle-c7c55c4bfaaf4889ab488deba4356199`。该复测不涉及用户安装的 Hello MSI App。
+
+**示例流程统一复测**：Hello MSI 示例原先没有 NSIS 示例的本地 `RestoreSources`，alpha.34 不在已配置公网源时普通 `dotnet publish` 报 NU1101。补齐本地源、固定 alpha.34 引用并恢复示例应用版本 `1.0.0` 后，原命令已成功还原七个 alpha.34 依赖。旧阶段一 `Hello MSI App-1.0.0.msi` 的内容与当前阶段二定义不同，后端按同版本产物保护拒绝覆盖；保留旧 MSI、manifest 和 wixpdb 至示例 `artifacts/previous-msi/` 后，原命令连续两次通过，新 MSI SHA-256 为 `E9C99B485E225D503DAB0C3690B729BD4C82CC71EFAEB317F9C776848D967281`。NSIS 示例 `dotnet publish .\samples\HelloBundledApp\HelloBundledApp.csproj -c Release` 也通过。示例构建不执行 MSI 安装；真实升级继续使用独立 lifecycle fixture。
+
+**跨层测试补齐**：对照 NSIS 的 `Nsis.Api.PackageFixture`，新增 `tests/Msi.Api.PackageFixture`，其项目只引用 `DotNet.Bundler.Wix` NuGet 包。MSI smoke 脚本把 fixture 复制到仓库外临时目录，从本轮本地包源与隔离缓存还原，核对 `project.assets.json` 与实际包文件，再直接调用 `WixBundler` 生成 MSI。脚本同时核对 WiX 包中程序集、许可证、对应源码、哈希清单和声明，MSBuild fixture 的实际包版本也加入核对；生命周期脚本采用相同包源/缓存断言。2026-09-24 Windows 11 Pro build 26200 x64 本机 smoke 通过：独立 API MSI SHA-256 `B9093A971C9CE707633E01E6F72A018C40379FAA7F8945236665C95C6E23F115`，真实安装/卸载的 MSBuild MSI SHA-256 `B33351F60C47B4D60CB1D3731E332870DBB668415851060E3F8E71EFB37AA1B0`，测试 ProductCode `{3E60AAFE-523B-5852-BD1D-B9655D93E928}`，日志与包位于 `%TEMP%\Bundler-Msi-Smoke-5ded5624895d4de78d8a8405387d2d71`。生命周期复测通过，v1/v2/异包 SHA-256 分别为 `9EFDE607A54648D016E225A907F2D757658958F77FB2C3F8122E8966D5D27B7E`、`C1C365B97AEE7B2DA0688E5EA607DF746E61E60DBE476E42FCB7FAF051D59CF3`、`502A73D2DBC4CE53ECE2C10B1EEC46679B5CCE3412D58146D6DC9D2B055647E5`，标识 `com.example.bundler.msi.lifecycle.be778c25cac143018dbcf854660b3c86`，日志位于同名 `%TEMP%\Bundler-Msi-Lifecycle-*` 目录。首次新增缓存断言误以为 NuGet 只有一个 packageFolders，实际还列出 Visual Studio fallback；修正后要求当前 Bundler 包确实存在于本轮隔离缓存，两个集成脚本均通过。跨格式规范集中在 `docs/development-rules.md`，下一阶段仍为 WIN-MSI-3；本次补齐测试不等于完成 MSI 格式冻结。
+
+**最终共享还原检查复跑**：共享 `tests/AssertLocalRestore.ps1` 增加禁止意外公网源的断言后，再次运行两个 MSI Windows 入口，均在 Windows 11 Pro build 26200 x64 通过。Smoke 的独立 API/MSBuild MSI SHA-256 依次为 `91071954ED7CBB7FA90B62EBC775A4176382FA65A53ABFF1B16E3A679F38EE06`、`DD7BAE8709DCA5B5299A39A7A77792E426DACBDC244F37745220A02D0ADECBDD`，ProductCode `{1BAE73D8-BE20-5B82-8064-149E01BCBDE8}`，包、隔离缓存和安装/卸载日志在 `%TEMP%\Bundler-Msi-Smoke-e286c715a3d04cb1afaf89807337ba2a`。Lifecycle 的 v1/v2/异包 SHA-256 为 `953C7CF84C42865C3404D08D63B3482156DD8D5FDD40932EBEE080B75EF928C1`、`A88EDF3C168B10C4B2D705877A69961DF10984A3F02EB19310C92AF0AE19B582`、`0B31B9232989AD69F5B489E664ABF6ACDC2AE9CC049B3B614CB13B2081EE0D27`，日志在 `%TEMP%\Bundler-Msi-Lifecycle-f1203328eac740ffbd099e7201142927`。快速测试现为 51 项，含版本同步回归。NSIS 全量回归第二次复跑通过；第一次在原有 rollback journal 清理断言失败，原因尚未确认，见 `PROJECT_CONTEXT.md`。以上本机证据不扩展为其他 Windows 宿主或 per-machine 安装验收。
+
+**包源约定一致性**：MSI MSBuild fixture 曾仅由集成脚本的 `dotnet restore --source` 传入本地包源，与 NSIS fixture 的 `RestoreSources=$(BundlerPackageSource)` 不一致且没有格式上的理由。现已统一：NSIS/MSI 的 API 与 MSBuild fixture 均在项目文件声明该属性，脚本传入本轮本地包目录，继续以隔离缓存和 assets 断言核对。新增快速回归断言保护四个 fixture 的这一配置；修改后本机 smoke 和 lifecycle 完整通过。最新命令、哈希和日志记录见 `PROJECT_CONTEXT.md` 的包源约定补正段。此次是测试入口修正，不改变 MSI 产品语义，也不扩展 WIN-MSI-2 的外部验收范围。
+
+本阶段语义依据：[WiX 3 MajorUpgrade](https://docs.firegiant.com/wix3/xsd/wix/majorupgrade/)、[WiX 3 Shortcut](https://docs.firegiant.com/wix3/xsd/wix/shortcut/)、[Microsoft Default Programs 注册规则](https://learn.microsoft.com/en-us/windows/win32/shell/default-programs)。本机测试是对这些规格在当前环境的实现核查，不代替其他 Windows 版本的真实验收。

@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-第一条已支持链路是 Windows + NSIS。正式 CLI、MSI、macOS 和 Linux 格式属于后续路线，目前尚未作为受支持功能发布。
+第一条已冻结的链路是 Windows + NSIS。MSI 已实现 WIN-MSI-1/2 的本机范围，尚未完成格式冻结；正式 CLI、macOS 和 Linux 格式仍属后续路线。
 
 实现已经拆分为可复用的 NuGet 包。`DotNet.Bundler` 只是便利元包，实际打包代码位于以下各层。
 
@@ -17,17 +17,18 @@
 | `DotNet.Bundler.Abstractions` | 公共请求、目标、结果、日志契约和后端接口 |
 | `DotNet.Bundler.Core` | 验证、规划、编排、工作目录和共享的内容寻址 ZIP 工具缓存 |
 | `DotNet.Bundler.Nsis` | 独立 NSIS API、NSIS 配置、脚本生成、语言和内置 `makensis` 工具链 |
+| `DotNet.Bundler.Wix` | 独立 MSI API、WiX 3.14.1 工具子集和声明式 Windows Installer 数据库生成 |
 | `DotNet.Bundler.Signing.Windows` | 可复用的 Windows Authenticode 签名实现 |
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
 
-仓库内已有 `DotNet.Bundler.Cli` 原型，但它的参数覆盖和发布契约尚未完成，因此当前不作为受支持入口。后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1` 的本机范围退出条件：最小 current-user MSI 构建、数据库验证、独立 fixture 真实安装/卸载，以及工具供应/许可工程核查。干净宿主、ARM64 和其他架构仍待验收，升级、per-machine、签名等后续阶段尚未完成，**MSI 格式尚未冻结**。最小示例见 [`samples/HelloMsiApp/README.md`](samples/HelloMsiApp/README.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
+仓库内已有 `DotNet.Bundler.Cli` 原型，但它的参数覆盖和发布契约尚未完成，因此当前不作为受支持入口。后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1` 和 `WIN-MSI-2` 的本机范围验证：最小 current-user 安装/卸载、两版本升级与降级/同版本异包拒绝、快捷方式及关联/协议候选注册。per-machine 包仅生成并检查数据库，提权安装及干净 Windows/ARM64 宿主尚未验收；签名等后续阶段未开始，**MSI 格式尚未冻结**。最小示例见 [`samples/HelloMsiApp/README.md`](samples/HelloMsiApp/README.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
 
-后续实现 WiX/MSI 时再增加 `DotNet.Bundler.Wix`，当前不会发布没有实现的空占位包。
+`DotNet.Bundler.Wix` 是可独立引用的 MSI 后端包和直接 API；MSBuild 调用同一后端。跨格式的开发与包消费规则见 [`docs/development-rules.md`](docs/development-rules.md)。
 
 `DotNet.Bundler.Nsis` 完整嵌入固定版本的 [`NsisToolset` 3.12-r1](https://github.com/dotnetbundler/NsisToolset/releases/tag/v3.12-r1)，其上游 NSIS 版本为 3.12。工具集包含一份公共 NSIS 数据目录，以及 Windows、Linux x64/arm64、macOS x64/arm64 的宿主编译器。使用者无需安装 NSIS，也不需要在线下载工具。每次解析都会先校验压缩包 SHA-256，再以压缩包内逐文件哈希清单验证共享缓存；缺失、篡改、额外文件、manifest 损坏或重解析点都会在跨进程锁内触发安全重建。缓存支持 Unicode 和长路径，同一台机器上的项目复用按内容寻址的工具目录。
 
-MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `netstandard2.0` 资产。打包决策和后端调度直接在 MSBuild 进程内完成，包不会再启动额外的 .NET CLI 驱动。NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为它本身就是安装程序编译器。因此，Windows NSIS 目标包可以在任一受支持的宿主上构建。
+MSBuild Task 及其直接加载的 Abstractions/Core/NSIS/WiX 程序集都提供 `netstandard2.0` 资产。打包决策和后端调度直接在 MSBuild 进程内完成，包不会再启动额外的 .NET CLI 驱动。NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为它本身就是安装程序编译器；MSI 编译使用包内 WiX 工具，当前仅开放 Windows 构建宿主。
 
 ## 使用配置
 
@@ -45,7 +46,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS 程序集都提供 `ne
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.33" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.34" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -63,7 +64,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.33" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.34" />
 ```
 
 ```csharp
@@ -96,6 +97,41 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 独立 API 通过 `NsisBundleConfiguration.Shortcuts` 设置 `NsisShortcutConfiguration`。其中的 `Desktop`、`StartMenu`、`Arguments`、`WorkingDirectory`、`Icon`、`AppUserModelId` 和 `StartMenuFolder` 与下方 MSBuild 属性对应；`LegacyProductNames` 和 `LegacyMainExecutables` 用于在改名后显式启用安全迁移。
 
 包内嵌了使用 [`dotnetbundler/NsisPlugin`](https://github.com/dotnetbundler/NsisPlugin) 构建的 `win-x86` Native AOT 插件。它提供 SemVer 比较、MSI 查询、降权启动和基于 Shell COM 的快捷方式操作，不要求使用者安装额外 SDK 或打包工具。
+
+## 独立 MSI API
+
+普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
+
+```xml
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.34" />
+```
+
+```csharp
+using DotNet.Bundler;
+using DotNet.Bundler.Wix;
+
+var request = new BundleConfiguration
+{
+    ProductName = "我的应用",
+    Identifier = "com.example.myapp",
+    Version = "1.0.0",
+    OutputDirectory = "artifacts",
+    Targets =
+    [
+        new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "win-x64",
+            InputDirectory = "publish/win-x64",
+            MainExecutable = "MyApp.exe",
+            Formats = [PackageFormat.Msi]
+        }
+    ]
+};
+
+var artifacts = await new WixBundler().BuildAsync(request);
+```
+
+`WixBundleConfiguration` 配置 MSI 安装范围、代码页和快捷方式；`WixBundlerOptions` 可为测试覆盖工具缓存或工具归档路径。WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。当前开发版本尚未公开到默认 NuGet 源时，先从本仓库 pack 并指定本地包源。上述包引用与实际编译由复制到仓库外目录的 `tests/Msi.Api.PackageFixture` 自动验证；MSI 产品身份和安装行为以 MSI 专用文档为准。
 
 ## MSBuild 属性
 
@@ -147,7 +183,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 | `@(BundlerWindowsSigningFile)` | 否 | 输入目录内需额外签名的 DLL、sidecar 或辅助程序相对路径 |
 | `@(BundlerWindowsSigningCommandArgument)` | 外部命令时必需 | 独立参数；至少一项含 `{path}` 或 `%1` |
 
-多个格式使用分号分隔，例如 `<BundlerFormats>nsis;msi</BundlerFormats>`。Task 会解析完整请求，再由 Core 规划需要执行的打包步骤。目前只有 NSIS 后端已经实现，因此请求 MSI 会明确失败，不会被静默忽略。
+多个格式使用分号分隔，例如 `<BundlerFormats>nsis;msi</BundlerFormats>`。Task 会解析完整请求，再由 Core 规划需要执行的打包步骤。MSI 单独请求由 WiX 后端处理；当前组合请求仍按已实现的编排契约验证，不能假定它会隐式复用单格式入口。
 
 图标和额外资源通过 MSBuild Item 传入：
 
@@ -178,7 +214,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 ## 通用打包流程与 NSIS 定制
 
-所有格式共用同一条管线：校验配置、生成包含格式依赖关系的计划、创建隔离工作目录、调用后端、确认产物存在、清理工作目录。后续增加 MSI、macOS 或 Linux 支持时，应增加后端，而不是复制整套调度代码。
+所有格式共用同一条管线：校验配置、生成包含格式依赖关系的计划、创建隔离工作目录、调用后端、确认产物存在、清理工作目录。现有 NSIS 和 MSI 后端复用该管线；增加 macOS 或 Linux 格式时继续扩展后端和入口映射，不复制整套调度代码。
 
 可编辑的 NSIS 源模板存放在 `templates/nsis/installer.nsi`。发布包时，该模板、语言文件和完整的多宿主 NsisToolset 压缩包会嵌入 `DotNet.Bundler.Nsis`，因此独立 API 和 MSBuild 使用者得到完全相同的资源，也不会把工具复制到项目输出目录。安装器语言按 Tauri 的能力范围配置：`BundlerNsisLanguages` 是分号分隔的语言列表，第一项是系统语言不匹配时的回退语言；只有启用多个语言并把 `BundlerNsisDisplayLanguageSelector` 设为 `true` 时才显示语言选择器。包内提供 Arabic、Bulgarian、Dutch、English、French、German、Italian、Japanese、Korean、Norwegian、Persian、Portuguese、PortugueseBR、Russian、SimpChinese、Spanish、SpanishInternational、Swedish、TradChinese、Turkish、Ukrainian 和 Vietnamese。对外使用 `Persian`，内部会映射到 NSIS 的 `Farsi` 标识。
 
@@ -338,15 +374,18 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.33
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -ConfirmLocalInstall
+dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release
+dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.34
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -PackageVersion 0.1.0-alpha.34 -ConfirmLocalInstall
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -PackageVersion 0.1.0-alpha.34 -ConfirmLocalInstall
 ```
 
 NSIS Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。
 
-MSI 集成测试每轮生成独立的 current-user fixture 产品身份，在本机真实安装和卸载，检查主程序、产品注册、用户文件保留及清理；`-ConfirmLocalInstall` 只允许这一受限测试。干净宿主、ARM64、UAC 和高影响故障仍按 MSI 人工验收文档执行。
+MSI 集成测试每轮从本地包源还原，并核对隔离缓存中的实际包版本。基础脚本先把独立 API fixture 放在仓库外，只引用 `DotNet.Bundler.Wix` 生成真实 MSI；再用便利元包的 MSBuild fixture 执行真实安装/卸载。生命周期脚本生成两版本和同版本异内容包，检查升级、降级/异包拒绝、桌面注册、快捷方式及用户文件保留。`-ConfirmLocalInstall` 只允许这些受限测试。干净宿主、ARM64、UAC 和高影响故障仍按 MSI 人工验收文档执行。
 
-人工验收入口见 [`docs/manual-testing-index.md`](docs/manual-testing-index.md)；当前 NSIS 的历史用例仍在 [`docs/manual-testing.md`](docs/manual-testing.md)，计划中的 MSI 用例独立存放。仓库可自动化的测试仍由上述命令执行，不转为人工清单。
+人工验收入口见 [`docs/manual-testing-index.md`](docs/manual-testing-index.md)；NSIS 历史用例仍在 [`docs/manual-testing.md`](docs/manual-testing.md)，MSI 用例在 [`docs/msi-manual-testing.md`](docs/msi-manual-testing.md)。仓库可自动化的测试仍由上述命令执行，不转为人工清单。
 
 Abstractions 保存跨包稳定契约。Core 实现与格式无关的校验、规划、编排、工作目录生命周期和通用 ZIP 工具缓存。NSIS 项目包含公共后端 API、NSIS 专属配置、模板、进程执行和资源。MSBuild 与开发用 CLI 都只是这些包的适配层，不实现 NSIS 打包逻辑。
 

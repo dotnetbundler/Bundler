@@ -22,9 +22,9 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, Guid Packag
         {
             throw new ArgumentException("An MSI identifier is required.", nameof(identifier));
         }
-        if (scope != WixInstallScope.CurrentUser)
+        if (scope is not (WixInstallScope.CurrentUser or WixInstallScope.PerMachine))
         {
-            throw new NotSupportedException("WIN-MSI-1 supports currentUser MSI packages only.");
+            throw new ArgumentOutOfRangeException(nameof(scope));
         }
         if (runtimeIdentifier != "win-x64" && runtimeIdentifier != "win-arm64")
         {
@@ -59,8 +59,8 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, Guid Packag
         return new WixIdentity(familyCode, productCode, Guid.NewGuid(), productVersion);
     }
 
-    internal static Guid ComponentCode(string identifier, string runtimeIdentifier, string relativePath) =>
-        Uuid5(NamespaceId, "component|" + identifier.ToLowerInvariant() + "|CurrentUser|" +
+    internal static Guid ComponentCode(string identifier, string runtimeIdentifier, WixInstallScope scope, string relativePath) =>
+        Uuid5(NamespaceId, "component|" + identifier.ToLowerInvariant() + "|" + scope + "|" +
               runtimeIdentifier + "|Programs|" + identifier.ToLowerInvariant() + "-" +
               runtimeIdentifier.Substring(4) + "|" +
               relativePath.Replace('\\', '/').ToLowerInvariant());

@@ -1,14 +1,14 @@
 # MSI 外部输入与验收待办
 
-MSI 后端已完成 **WIN-MSI-1 本机范围内的退出条件**；当前 Windows x64 开发机上的独立 fixture 已通过真实 current-user 安装/卸载。下表记录已完成的供应核查及仍需的外部环境和证据；用户已确认当前没有干净 Windows 10/11 或 ARM64 环境，本次不执行这些测试，也不扩大支持声明。自动化可覆盖的部分必须在对应阶段新增测试，人工步骤见 `docs/msi-manual-testing.md`。
+MSI 后端已完成 **WIN-MSI-1 与 WIN-MSI-2 本机范围内的退出条件**；当前 Windows x64 开发机上的独立 fixture 已通过真实 current-user 安装/卸载及两版本生命周期测试，per-machine 仅静态检查产物。下表记录仍需的外部环境和证据；用户已确认当前没有干净 Windows 10/11 或 ARM64 环境，也没有提权测试 VM，不扩大支持声明。人工步骤见 `docs/msi-manual-testing.md`。
 
 | ID | 最早阶段 | 所需输入/环境 | 完成证据 |
 | --- | --- | --- | --- |
 | MSI-OI-01 | MSI-1 已完成本机核查 | 官方 WiX 3.14.1 归档、实际 SHA-256、全部捆绑文件许可证、体积测量 | 来源、哈希、逐文件源码归属、包内容与大小、本地无还原编译结果见 `docs/msi-roadmap.md` 第 6 节及 `third_party/wix/README.md` |
 | MSI-OI-02 | MSI-1 记录，MSI-4 支持矩阵 | 干净 Windows 10/11 x86、x64 与 ARM64 宿主的 WiX 3.14.1 自身依赖；Windows 7 记录 Framework 缺失边界 | 仅用 WiX 二进制与准备好的 `.wxs`/载荷完成 `candle`/`light` 编译，记录 OS build、预装 Framework、架构、日志及失败边界；不把调用方 MSBuild/.NET SDK 算作 WiX 依赖 |
 | MSI-OI-03 | MSI-1 本机已通过，MSI-4 扩展矩阵 | 独立 Windows VM/CI 复跑最小安装/卸载 | 其他宿主的 verbose log、状态/清理断言；本机烟雾结果见 `docs/msi-roadmap.md` 第 6 节 |
-| MSI-OI-04 | MSI-2 | 标准用户和管理员账户，Windows UAC/策略差异 | current user/per machine 的权限与目录/注册表证据 |
-| MSI-OI-05 | MSI-2 | 真实旧发行包或受控两版本发行包 | major upgrade、降级拒绝、资源归属和用户数据证据 |
+| MSI-OI-04 | MSI-2，外部待验收 | 标准用户和管理员账户，Windows UAC/策略差异 | current user/per machine 的权限与目录/注册表证据；本机仅已验证 per-machine 数据库表 |
+| MSI-OI-05 | MSI-2，本机已通过；外部仍待复测 | 真实旧发行包或受控两版本发行包 | major upgrade、同版本异包/降级拒绝、资源归属、用户数据及默认应用实际选择/唤起证据；本机结果见 MSI 路线第 7 节 |
 | MSI-OI-06 | MSI-3 | 生产证书与时间戳设施 | 链、时间戳、签名验证；私钥不入库 |
 | MSI-OI-07 | MSI-3 | 可抛弃的重启/锁定文件/损坏包 VM | 3010 或明确失败码、重启后状态、回滚日志 |
 | MSI-OI-08 | MSI-4 | Windows 10/11 x64、ARM64 支持矩阵 | 每组合的构建、安装、升级、修复、卸载记录；未测组合限定支持声明 |

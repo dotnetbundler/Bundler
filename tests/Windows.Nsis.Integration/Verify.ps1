@@ -1,11 +1,12 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.33",
+    [string]$PackageVersion = "0.1.0-alpha.34",
     [switch]$CleanupOnly
 )
 
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+. (Join-Path $PSScriptRoot '..\AssertLocalRestore.ps1')
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $integrationRoot = Join-Path $repositoryRoot "artifacts\windows-nsis-integration"
 $packageDirectory = Join-Path $repositoryRoot "artifacts\packages"
@@ -429,6 +430,9 @@ try {
         "-p:RestorePackagesPath=$packageCache",
         "--", $apiOutput, (Join-Path $integrationRoot "shared-tools")
     )
+    Assert-LocalBundlerRestore -Project $apiFixtureProject -PackageVersion $PackageVersion `
+        -Source $packageDirectory -Cache $packageCache `
+        -RequiredPackages @('DotNet.Bundler.Nsis', 'DotNet.Bundler.Core', 'DotNet.Bundler.Abstractions')
     $apiInstaller = Join-Path $apiOutput "artifacts\win-x64\nsis\NSIS API Package Fixture-1.0.0-setup.exe"
     Assert-True (Test-Path -LiteralPath $apiInstaller) "Standalone NSIS API package did not create its installer."
 
@@ -462,6 +466,9 @@ try {
     Assert-True (Test-Path -LiteralPath $legacyMsiPath) "Legacy MSI fixture was not created."
 
     Build-FixtureBundle "currentUser" $bundleOutput
+    Assert-LocalBundlerRestore -Project $fixtureProject -PackageVersion $PackageVersion `
+        -Source $packageDirectory -Cache $packageCache `
+        -RequiredPackages @('DotNet.Bundler', 'DotNet.Bundler.MSBuild', 'DotNet.Bundler.Nsis')
     Build-FixtureBundle "currentUser" $directMsBuildOutput "DotNet.Bundler.MSBuild"
     Build-FixtureBundle "perMachine" $perMachineBundleOutput
     Build-FixtureBundle "both" $bothBundleOutput

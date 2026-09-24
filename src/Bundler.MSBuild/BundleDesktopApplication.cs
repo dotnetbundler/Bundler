@@ -39,6 +39,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string WixInstallScope { get; set; } = "currentUser";
     public string WixUpgradeCode { get; set; } = "";
     public int WixCodepage { get; set; } = 1252;
+    public bool WixStartMenuShortcut { get; set; }
+    public bool WixDesktopShortcut { get; set; }
     public string NsisTemplatePath { get; set; } = "";
     public string NsisInstallMode { get; set; } = "currentUser";
     public string NsisCompression { get; set; } = "lzma";
@@ -132,7 +134,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                     {
                         InstallScope = scope,
                         UpgradeCode = EmptyToNull(WixUpgradeCode),
-                        Codepage = WixCodepage
+                        Codepage = WixCodepage,
+                        StartMenuShortcut = WixStartMenuShortcut,
+                        DesktopShortcut = WixDesktopShortcut
                     },
                     new WixBundlerOptions
                     {

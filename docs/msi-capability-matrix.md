@@ -1,18 +1,19 @@
-# MSI 能力矩阵（WIN-MSI-1 本机范围已完成）
+# MSI 能力矩阵（WIN-MSI-2 本机范围已验证）
 
-本表仅描述通用桌面工具的 MSI 用户能力。WIN-MSI-1 的本机范围退出条件已通过：本机构建、MSBuild 包消费、MSI 数据库、工具供应/许可工程核查、无还原本地编译，以及当前 Windows x64 开发机上独立 fixture 的真实 current-user 安装/卸载。干净 Windows/ARM64 宿主与其他外部环境未验收，不在支持声明内。后续条目仍为计划；完成须同时满足 API/MSBuild 映射、对应新增自动化测试、适用的真实 Windows 行为测试和中文文档。阶段细节及证据见 `docs/msi-roadmap.md` 第 6 节。
+本表仅描述通用桌面工具的 MSI 用户能力。WIN-MSI-1 的本机范围已通过；WIN-MSI-2 在当前 Windows 11 x64 主机通过两版本真实 current-user 升级/降级/卸载及桌面集成，per-machine 仅通过静态包检查。干净 Windows/ARM64 宿主、提权安装与其他外部环境未验收。完成须有 API/MSBuild 映射、新增自动化、适用的真实 Windows 行为测试和文档。阶段细节及证据见 `docs/msi-roadmap.md` 第 6、7 节。
 
 | 能力 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- |
+| 独立后端包与直接 API | 适用，MSI-1；WIN-MSI-2 补齐包消费验证 | 仓库外普通项目只引用打出的 `DotNet.Bundler.Wix` NuGet 包，使用包内 WiX 工具直接生成真实 MSI；不能靠本仓库 `ProjectReference` 或 MSBuild 元包。`tests/Msi.Api.PackageFixture` 已在本机通过，其他构建宿主仍按支持矩阵验收。 |
 | 最小安装/卸载 | 适用，MSI-1；本机 x64 fixture 已验证 | 独立 current-user fixture 静默安装、检查载荷和产品注册，再卸载并检查残留/用户文件；不能仅生成 MSI。其他 Windows/架构及干净宿主待外部验收。 |
 | 名称、发布者、描述、图标、安装目录 | 适用，MSI-1 | API/MSBuild 同义映射、数据库和系统显示正确；目录在所属范围内，非法路径拒绝。 |
 | 产品身份、版本、组件 | 适用，MSI-1 | 稳定 UpgradeCode/组件标识、正确 ProductCode/PackageCode 生命周期；版本冲突和越界拒绝。 |
 | 目标架构 | x64、ARM64 计划，MSI-1/4 | 独立产物及身份，真实宿主和目标 VM 证据；公共模型目前无 x86，x86 目标不支持。 |
-| major upgrade 与降级 | 适用，MSI-2 | 两发行版本真实升级，旧产品与资源正确处理；降级及同版本不同包被拒。 |
-| 安装范围与权限 | current user 为 MSI-1，per machine 为 MSI-2 | 两种独立产物，HKCU/HKLM 与目录/UAC 真实验证；单个 MSI 动态切换范围、跨范围自动迁移不支持。 |
-| 快捷方式 | 适用，MSI-2 | 桌面/开始菜单创建、升级、卸载和用户改动所有权验证；不保证系统固定项自动取消固定。 |
-| 文件关联 | 适用，MSI-2 | 声明式注册、升级与卸载所有权；不强行覆盖用户默认应用。 |
-| URL 协议 | 适用，MSI-2 | 安全参数/引号、注册与清理验证；不接管他人同名协议。 |
+| major upgrade 与降级 | MSI-2，本机 current-user 已实测 | v1→v2、旧资源清理、用户文件保留、降级及同版本异包拒绝已通过；跨机器同版本唯一性由发行方负责。 |
+| 安装范围与权限 | current user 已实测；per machine 在 MSI-2 已编译/检查数据库 | 两种身份家族、HKCU/HKLM 与目录已静态验证；per-machine UAC/真实安装外部待验收。单包动态切换范围、跨范围自动迁移不支持。 |
+| 快捷方式 | MSI-2，本机已实测 | 显式启用的桌面/开始菜单链接创建、升级、卸载通过；同一路径被用户替换时 MSI 原生删除可能移除该链接，不承诺内容级所有权；系统固定项不自动取消固定。 |
+| 文件关联 | MSI-2，本机注册表已实测 | 自身 ProgID、OpenWithProgids、文件及可选 MIME Capabilities 声明与卸载通过；保留既有默认项。默认应用 UI/选择体验外部待验收。 |
+| URL 协议 | MSI-2，本机注册表已实测 | 自身 ProgID 与 UrlAssociations 声明/清理通过，不写公共 scheme 根；用户选择默认处理程序及真实协议唤起外部待验收。 |
 | payload/最终 MSI 签名 | 适用，MSI-3 | 签名顺序、验证、失败清理；生产证书另需人工验收。 |
 | 语言与交互 UI | 适用的明确语言集，MSI-3 | 每种支持的 locale 资源/安装行为验证，实际 UI 人工检查；不承诺 NSIS 全语言自动等价。 |
 | 静默/被动、退出码 | 适用，MSI-1 基础烟雾，MSI-3 完整 | 原生 msiexec `/qn`、`/passive` 的安装/卸载/修复与 0、3010 及失败码，VM 中观察状态；不复刻 NSIS 码。 |

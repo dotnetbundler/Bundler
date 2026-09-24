@@ -9,6 +9,6 @@
     <RestoreSources>$(BundlerPackageSource)</RestoreSources>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler.Nsis" Version="$(BundlerPackageVersion)" />
+    <PackageReference Include="DotNet.Bundler.Wix" Version="$(BundlerPackageVersion)" />
   </ItemGroup>
 </Project>

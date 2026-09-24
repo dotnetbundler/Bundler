@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RestoreSources>$(MSBuildThisFileDirectory)..\..\artifacts\packages</RestoreSources>
     <BundlerEnabled>true</BundlerEnabled>
     <BundlerFormats>msi</BundlerFormats>
     <BundlerProductName>Hello MSI App</BundlerProductName>
@@ -11,8 +12,17 @@
     <BundlerPublisher>Bundler Examples</BundlerPublisher>
     <BundlerDescription>DotNet.Bundler MSI 最小示例</BundlerDescription>
     <BundlerWixCodepage>936</BundlerWixCodepage>
+    <BundlerWixStartMenuShortcut>true</BundlerWixStartMenuShortcut>
+    <BundlerWixDesktopShortcut>true</BundlerWixDesktopShortcut>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.34" PrivateAssets="all" />
+    <BundlerFileAssociation Include=".hellomsi">
+      <Name>Hello MSI document</Name>
+      <MimeType>application/x-hellomsi</MimeType>
+    </BundlerFileAssociation>
+    <BundlerUrlProtocol Include="hello-msi">
+      <Name>Hello MSI link</Name>
+    </BundlerUrlProtocol>
   </ItemGroup>
 </Project>

@@ -7,6 +7,7 @@ using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Xml.Linq;
 
 if (args.Length >= 5 && args[0] == "--external-sign-fixture")
 {
@@ -68,12 +69,14 @@ tests = tests.Concat(new (string Name, Func<Task> Test)[]
 {
     ("Keeps MSI identity and version rules stable", () => RunSync(KeepsMsiIdentityStable)),
     ("Verifies WiX binary and source redistribution", () => RunSync(VerifiesWixRedistribution)),
+    ("Keeps package consumer versions aligned", () => RunSync(KeepsPackageConsumerVersionsAligned)),
     ("Maps MSI configuration through MSBuild", () => RunSync(MapsMsiSettingsThroughMsBuild)),
-    ("Rejects MSI features outside the first stage", RejectsUnsupportedMsiFeatures)
+    ("Rejects MSI features outside the second stage", RejectsUnsupportedMsiFeatures)
 }).ToArray();
 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 {
     tests = tests.Append(("Builds and inspects a real WiX MSI without installing it", BuildsAndInspectsMsi)).ToArray();
+    tests = tests.Append(("Builds an isolated per-machine WiX MSI", BuildsMachineMsi)).ToArray();
     tests = tests.Append(("Rejects a tampered WiX tool archive", RejectsTamperedWixArchive)).ToArray();
     tests = tests.Append(("Serializes concurrent WiX tool cache users", SerializesConcurrentWixCacheUsers)).ToArray();
     tests = tests.Append(("Builds an ARM64-targeted MSI on Windows x64", BuildsArm64TargetedMsi)).ToArray();
@@ -1977,12 +1980,10 @@ static void KeepsMsiIdentityStable()
     }
     Assert(WixIdentity.Create("com.example.app", "255.255.65535", "win-x64", WixInstallScope.CurrentUser)
         .ProductVersion == "255.255.65535", "MSI maximum version was rejected.");
-    try
-    {
-        WixIdentity.Create("com.example.app", "1.0.0", "win-x64", WixInstallScope.PerMachine);
-        throw new InvalidOperationException("Premature per-machine MSI support was accepted.");
-    }
-    catch (NotSupportedException) { }
+    var machine = WixIdentity.Create("com.example.app", "1.0.0", "win-x64", WixInstallScope.PerMachine);
+    var user = WixIdentity.Create("com.example.app", "1.0.0", "win-x64", WixInstallScope.CurrentUser);
+    Assert(machine.UpgradeCode != user.UpgradeCode && machine.ProductCode != user.ProductCode,
+        "Per-machine and current-user products must have separate identity families.");
 }
 
 static void MapsMsiSettingsThroughMsBuild()
@@ -1991,7 +1992,8 @@ static void MapsMsiSettingsThroughMsBuild()
     var props = File.ReadAllText(Path.Combine(root, "buildTransitive", "DotNet.Bundler.MSBuild.props"));
     var targets = File.ReadAllText(Path.Combine(root, "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
     var task = File.ReadAllText(Path.Combine(root, "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
-    foreach (var property in new[] { "WixInstallScope", "WixUpgradeCode", "WixCodepage", "WixToolsetArchivePath" })
+    foreach (var property in new[] { "WixInstallScope", "WixUpgradeCode", "WixCodepage", "WixToolsetArchivePath",
+                 "WixStartMenuShortcut", "WixDesktopShortcut" })
     {
         Assert(props.Contains("<Bundler" + property, StringComparison.Ordinal) &&
                targets.Contains(property + "=\"$(Bundler" + property + ")\"", StringComparison.Ordinal),
@@ -2037,6 +2039,59 @@ static void VerifiesWixRedistribution()
         "The distributed WiX license differs from the original binary archive.");
 }
 
+static void KeepsPackageConsumerVersionsAligned()
+{
+    var root = RepositoryRoot();
+    var version = XDocument.Load(Path.Combine(root, "Directory.Build.props"))
+        .Descendants("BundlerPackageVersion").Single().Value;
+    foreach (var path in new[]
+    {
+        Path.Combine(root, "samples", "HelloBundledApp", "HelloBundledApp.csproj"),
+        Path.Combine(root, "samples", "HelloMsiApp", "HelloMsiApp.csproj")
+    })
+    {
+        var project = XDocument.Load(path);
+        var reference = project.Descendants("PackageReference")
+            .Single(item => (string?)item.Attribute("Include") == "DotNet.Bundler");
+        Assert((string?)reference.Attribute("Version") == version,
+            "The public sample uses a different Bundler package version: " + path);
+        Assert(project.Descendants("RestoreSources").Any(item => item.Value.Contains("artifacts", StringComparison.Ordinal) &&
+               item.Value.Contains("packages", StringComparison.Ordinal)),
+            "The public sample has no repository-local package source: " + path);
+    }
+    foreach (var name in new[] { "Nsis", "Msi" })
+    {
+        var project = XDocument.Load(Path.Combine(root, "tests", name + ".Api.PackageFixture",
+            name + ".Api.PackageFixture.csproj"));
+        Assert(project.Descendants("BundlerPackageVersion").Single().Value == version,
+            "The standalone API package fixture has a stale fallback version: " + name);
+    }
+    foreach (var path in new[]
+    {
+        Path.Combine(root, "tests", "Nsis.Api.PackageFixture", "Nsis.Api.PackageFixture.csproj"),
+        Path.Combine(root, "tests", "Msi.Api.PackageFixture", "Msi.Api.PackageFixture.csproj"),
+        Path.Combine(root, "tests", "Windows.Nsis.Integration", "Fixture", "BundlerIntegrationFixture.csproj"),
+        Path.Combine(root, "tests", "Windows.Msi.Integration", "Fixture", "BundlerMsiSmoke.csproj")
+    })
+    {
+        var project = XDocument.Load(path);
+        Assert(project.Descendants("RestoreSources").SingleOrDefault()?.Value == "$(BundlerPackageSource)",
+            "The integration fixture must use the same script-provided local package source: " + path);
+    }
+    foreach (var path in new[]
+    {
+        Path.Combine(root, "tests", "Windows.Nsis.Integration", "Verify.ps1"),
+        Path.Combine(root, "tests", "Windows.Msi.Integration", "Verify.ps1"),
+        Path.Combine(root, "tests", "Windows.Msi.Integration", "VerifyLifecycle.ps1")
+    })
+    {
+        var script = File.ReadAllText(path);
+        Assert(script.Contains("[string]$PackageVersion = \"" + version + "\"", StringComparison.Ordinal) ||
+               script.Contains("[string]$PackageVersion = '" + version + "'", StringComparison.Ordinal),
+            "The integration script has a stale default package version: " + path);
+    }
+}
+
 static async Task RejectsUnsupportedMsiFeatures()
 {
     var configuration = new BundleConfiguration
@@ -2044,7 +2099,7 @@ static async Task RejectsUnsupportedMsiFeatures()
         ProductName = "Msi Test",
         Identifier = "com.example.msitest",
         Version = "1.0.0",
-        FileAssociations = [new BundleFileAssociationConfiguration { Extensions = [".abc"] }],
+        LicenseFile = "future-license.txt",
         Targets = [new BundleTargetConfiguration
         {
             RuntimeIdentifier = "win-x64", InputDirectory = "unused", MainExecutable = "test.exe",
@@ -2054,9 +2109,9 @@ static async Task RejectsUnsupportedMsiFeatures()
     try
     {
         await new WixBundler().BuildAsync(configuration);
-        throw new InvalidOperationException("An MSI stage-2 feature was silently ignored.");
+        throw new InvalidOperationException("An MSI stage-3 feature was silently ignored.");
     }
-    catch (NotSupportedException exception) when (exception.Message.Contains("WIN-MSI-2", StringComparison.Ordinal)) { }
+    catch (NotSupportedException exception) when (exception.Message.Contains("WIN-MSI-3", StringComparison.Ordinal)) { }
 }
 
 static async Task BuildsAndInspectsMsi()
@@ -2089,6 +2144,9 @@ static async Task BuildsAndInspectsMsi()
             Description = "Test MSI database",
             Homepage = "https://example.com/msi",
             Icons = [icon],
+            FileAssociations = [new BundleFileAssociationConfiguration { Extensions = [".abc"], Name = "ABC document",
+                MimeType = "application/x-abc" }],
+            UrlProtocols = [new BundleUrlProtocolConfiguration { Schemes = ["bundler-test"], Name = "Bundler test link" }],
             Resources = [new BundleResourceConfiguration { Source = resource, TargetPath = "docs/外部.txt" }],
             OutputDirectory = output,
             Targets = [new BundleTargetConfiguration
@@ -2097,7 +2155,7 @@ static async Task BuildsAndInspectsMsi()
                 MainExecutable = "Msi Test.exe", Formats = [PackageFormat.Msi]
             }]
         };
-        var bundler = new WixBundler(new WixBundleConfiguration { Codepage = 936 },
+        var bundler = new WixBundler(new WixBundleConfiguration { Codepage = 936, StartMenuShortcut = true, DesktopShortcut = true },
             new WixBundlerOptions { ToolCacheDirectory = cache });
         var artifact = (await bundler.BuildAsync(configuration)).Single();
         Assert(File.Exists(artifact.Path) && Path.GetExtension(artifact.Path) == ".msi",
@@ -2118,12 +2176,18 @@ static async Task BuildsAndInspectsMsi()
             Assert(database.Property("ARPPRODUCTICON") == "ProductIcon", "MSI product icon is missing.");
             Assert(database.RowCount("Icon", "Name") == 1, "MSI icon table is missing the supplied icon.");
             Assert(database.RowCount("File", "File") == 3, "MSI payload file count is incorrect.");
-            Assert(database.RowCount("Component", "Component") == 4, "MSI must give every file and cleanup a component.");
-            Assert(database.RowCount("Registry", "Registry") == 4, "Per-user components need HKCU key paths.");
+            Assert(database.RowCount("Component", "Component") == 5, "MSI must give every file, cleanup, and desktop registration a component.");
+            Assert(database.RowCount("Registry", "Registry") > 4, "MSI desktop capabilities and HKCU key paths are missing.");
+            Assert(database.Contains("Registry", "Name", "application/x-abc"),
+                "MSI silently ignored the configured MIME candidate registration.");
+            Assert(database.RowCount("Shortcut", "Shortcut") == 2, "MSI desktop and Start Menu shortcuts are missing.");
             Assert(database.RowCount("RemoveFile", "FileKey") >= 4, "Per-user directories need uninstall cleanup rows.");
-            Assert(database.RowCount("Upgrade", "UpgradeCode") == 1 &&
-                   database.RowCount("LaunchCondition", "Condition") == 2,
-                "The stage-1 MSI must reject side-by-side installs of another product version.");
+            Assert(database.RowCount("Upgrade", "UpgradeCode") >= 1,
+                "The MSI major-upgrade table is missing.");
+            Assert(database.Property("BUNDLER_PACKAGE_DEFINITION").Length == 64 &&
+                   database.Contains("Registry", "Name", "DefinitionHash") &&
+                   database.RowCount("AppSearch", "Property") >= 1,
+                "The same-version package definition guard is missing.");
             Assert(database.Template.StartsWith("x64;", StringComparison.OrdinalIgnoreCase),
                 "MSI architecture summary is not x64.");
             Assert(Guid.TryParse(database.PackageCode, out var packageCode) &&
@@ -2236,6 +2300,41 @@ static async Task SerializesConcurrentWixCacheUsers()
             "Concurrent builds to one MSI output did not serialize and reuse a verified package.");
     }
     finally { Directory.Delete(root, true); }
+}
+
+static async Task BuildsMachineMsi()
+{
+    var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Msi.Machine.Tests", Guid.NewGuid().ToString("N"));
+    var input = Path.Combine(root, "input");
+    Directory.CreateDirectory(input);
+    await File.WriteAllTextAsync(Path.Combine(input, "machine.exe"), "machine payload");
+    try
+    {
+        var configuration = new BundleConfiguration
+        {
+            ProductName = "Machine MSI Test", Identifier = "com.example.msimachine", Version = "2.0.0",
+            FileAssociations = [new BundleFileAssociationConfiguration { Extensions = [".machinetest"] }],
+            UrlProtocols = [new BundleUrlProtocolConfiguration { Schemes = ["machine-test"] }],
+            OutputDirectory = Path.Combine(root, "output"),
+            Targets = [new BundleTargetConfiguration { RuntimeIdentifier = "win-x64", InputDirectory = input,
+                MainExecutable = "machine.exe", Formats = [PackageFormat.Msi] }]
+        };
+        var artifact = (await new WixBundler(new WixBundleConfiguration { InstallScope = WixInstallScope.PerMachine,
+            StartMenuShortcut = true, DesktopShortcut = true },
+            new WixBundlerOptions { ToolCacheDirectory = Path.Combine(root, "cache") }).BuildAsync(configuration)).Single();
+        using var database = new MsiDatabaseReader(artifact.Path);
+        var expected = WixIdentity.Create(configuration.Identifier, configuration.Version, "win-x64", WixInstallScope.PerMachine);
+        Assert(database.Property("ProductCode") == expected.ProductCode.ToString("B").ToUpperInvariant(),
+            "Per-machine MSI identity differs from the scope-specific contract.");
+        Assert(database.Contains("Directory", "Directory", "ProgramFiles64Folder"),
+            "Per-machine MSI does not target Program Files.");
+        Assert(database.Contains("Registry", "Root", "2") && !database.Contains("Registry", "Root", "1"),
+            "Per-machine MSI must use HKLM component key paths.");
+        Assert(database.RowCount("Shortcut", "Shortcut") == 2 &&
+               database.Contains("Directory", "Directory", "ProgramMenuFolder"),
+            "Per-machine MSI shortcut directories were not compiled.");
+    }
+    finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
 }
 
 static async Task BuildsArm64TargetedMsi()
@@ -2371,6 +2470,15 @@ file sealed class MsiDatabaseReader : IDisposable
         var count = 0;
         while (view.FetchString() is not null) count++;
         return count;
+    }
+
+    public bool Contains(string table, string column, string value)
+    {
+        using var view = OpenView("SELECT `" + column + "` FROM `" + table + "`");
+        string? found;
+        while ((found = view.FetchString()) is not null)
+            if (found.Equals(value, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
     public string Template => SummaryProperty(7);

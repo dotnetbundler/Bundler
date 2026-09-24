@@ -1,13 +1,14 @@
 # DotNet.Bundler 产品边界与实施路线
 
-> 最后整理：2026-09-23
+> 最后整理：2026-09-24
 > 路线状态：`NSIS-R4` 已在 `b116d09` 形成冻结基线，随后加固 journal 恢复目标、跨配置恢复流程及快照完整性；当前提交以 Git HEAD 为准
 > 当前实施对象：Windows WiX/MSI
-> 当前状态：`WIN-MSI-1 工具供应与最小安装/卸载` 已完成本机范围退出条件；外部宿主矩阵未验收，`WIN-MSI-2` 尚未开始
+> 当前状态：`WIN-MSI-1` 已完成本机范围退出条件；`WIN-MSI-2` 的本机 current-user 生命周期与桌面集成测试已通过，per-machine 仅做产物检查；外部宿主/UAC 矩阵未验收。下一阶段为 `WIN-MSI-3`。
 
-本文档是项目后续路线的规范入口；MSI 专项细则由 [`docs/msi-roadmap.md`](msi-roadmap.md) 承接，与本文具有同等实施约束。它们使后续开发不依赖某一次对话或某个 AI 的记忆。
+本文档是项目后续路线的规范入口；跨格式执行规则见 [`docs/development-rules.md`](development-rules.md)，MSI 专项细则由 [`docs/msi-roadmap.md`](msi-roadmap.md) 承接。它们使后续开发不依赖某一次对话或某个 AI 的记忆。
 
-- `PROJECT_CONTEXT.md` 记录当前实现事实、验证证据和协作约束；
+- `PROJECT_CONTEXT.md` 记录当前实现事实与验证证据；
+- `AGENTS.md` 与 `docs/development-rules.md` 是接管和跨格式开发规则的入口；
 - 本文档记录从当前状态向后推进的正式计划；
 - `docs/manual-testing-index.md` 按格式链接独立的人工验收、能力矩阵和外部待办；
 - 代码和自动化测试是实现事实的最终依据。若它们与文档冲突，先调查差异，再同时修正文档和实现状态，不能默默选择其中一方。
@@ -93,7 +94,7 @@
 接手者必须先阅读：
 
 1. `PROJECT_CONTEXT.md`；
-2. 本文档；
+2. `AGENTS.md`、`docs/development-rules.md` 和本文档；
 3. 当前格式的路线、能力矩阵及上游依据；MSI 阶段阅读 `docs/msi-roadmap.md` 和 `docs/msi-capability-matrix.md`；
 4. `docs/manual-testing-index.md` 与当前格式的人工清单、外部待办；
 5. 当前阶段涉及的代码与测试。
@@ -113,19 +114,17 @@
 
 ### 4.2 阶段内规则
 
-- 每个新增或修改功能都要增加或更新自动化测试；只运行已有测试不算覆盖新行为。
-- 公开功能要同时覆盖直接 API、当前受支持的入口映射、示例和中文用户文档。
-- 普通环境做不了的测试写入当前格式的专用人工清单和外部待办。阶段明确要求的真实 Windows 安装/卸载集成测试是自动化门槛，不能作为普通人工待办延后。
+版本、独立后端包消费、MSBuild/CLI 应用层、测试分层、示例、文档和 Git 的共同规则仅在 `docs/development-rules.md` 维护。本节只规定阶段推进的额外约束：
+
 - 数据丢失、安全问题、主流程错误和会改变本阶段 API 的问题在当前阶段处理；独立增强项进入后续阶段或 backlog，不无限扩张当前范围。
-- 用户明确说“提交”后才创建 commit；不主动 push。
-- 每个阶段结束时更新本文档的状态、`PROJECT_CONTEXT.md` 的事实和验证证据。不得只在对话中宣布完成。
+- 每个阶段结束时更新本文档的状态和 `PROJECT_CONTEXT.md` 的事实/验证证据，不只在对话中宣布完成。
 
 ### 4.3 阶段完成定义
 
 一个阶段只有同时满足以下条件才算完成：
 
 1. 阶段列出的实现和迁移完成；
-2. 新增测试、相关回归、Pack 和适用的 Windows 集成测试通过；
+2. 新增测试、相关回归、Pack、独立后端 NuGet 包消费、当前应用层包消费和适用的 Windows 集成测试通过；具体门槛见 `docs/development-rules.md` 第 4 节；
 3. 示例和中文文档反映真实用法；
 4. 无法自动完成的验证已经进入人工验收文档；
 5. 能力矩阵和后续默认阶段已更新；
@@ -239,7 +238,7 @@
 
 ### NSIS-R4：安全边界、缓存完整性与 NSIS 冻结
 
-**状态：已完成并形成冻结基线（2026-09-23，`0.1.0-alpha.31`，`b116d09`）；随后以 `0.1.0-alpha.32` 加固 journal 恢复目标，并以 `0.1.0-alpha.33` 处理跨配置恢复及快照内容完整性，验证结果见 `PROJECT_CONTEXT.md`。** 构建输入、外部资源、安装快照/恢复、卸载删除树、journal 和工具缓存统一拒绝 symlink、junction 与其他重解析点；安全删除不跟随链接。工具缓存以固定 ZIP SHA-256 和 ZIP 内逐文件哈希为信任锚，持久化 manifest，并在跨进程锁内恢复缺失、篡改、额外文件、损坏 manifest 或链接污染；并发、Unicode 和长路径已自动验证。恢复目标由安装器编译时清单授权，journal 中的文件路径、注册表根/view/子键/值名只用于一致性校验，不能把恢复重定向到清单外目标。不同清单不会自动跨版本恢复：用原安装器 `/RECOVERONLY` 恢复旧状态后再升级。active 快照内容另由 HKCU/HKLM 哈希锚点约束，恢复卸载器按安装时登记的哈希核验；同用户 currentUser 修改及真实 perMachine ACL 属不同威胁边界，详见人工验收。ACL、ADS 与任意文件系统元数据完整保真明确不属于通用承诺。下一格式仍为 `WIN-MSI-1`。
+**状态：已完成并形成冻结基线（2026-09-23，`0.1.0-alpha.31`，`b116d09`）；随后以 `0.1.0-alpha.32` 加固 journal 恢复目标，并以 `0.1.0-alpha.33` 处理跨配置恢复及快照内容完整性，验证结果见 `PROJECT_CONTEXT.md`。** 构建输入、外部资源、安装快照/恢复、卸载删除树、journal 和工具缓存统一拒绝 symlink、junction 与其他重解析点；安全删除不跟随链接。工具缓存以固定 ZIP SHA-256 和 ZIP 内逐文件哈希为信任锚，持久化 manifest，并在跨进程锁内恢复缺失、篡改、额外文件、损坏 manifest 或链接污染；并发、Unicode 和长路径已自动验证。恢复目标由安装器编译时清单授权，journal 中的文件路径、注册表根/view/子键/值名只用于一致性校验，不能把恢复重定向到清单外目标。不同清单不会自动跨版本恢复：用原安装器 `/RECOVERONLY` 恢复旧状态后再升级。active 快照内容另由 HKCU/HKLM 哈希锚点约束，恢复卸载器按安装时登记的哈希核验；同用户 currentUser 修改及真实 perMachine ACL 属不同威胁边界，详见人工验收。ACL、ADS 与任意文件系统元数据完整保真明确不属于通用承诺。NSIS 冻结后的下一个格式为 WIN-MSI，当前进度见本文开头。
 
 **目标**：关闭会影响安全或可恢复性的已知边界，为 NSIS 第一条完整链路建立冻结基线，然后停止无限打磨并进入下一个安装格式 WiX/MSI。
 
@@ -264,7 +263,7 @@
 3. `WIN-MSI-3`：签名、语言、静默/被动、退出码、修复维护及失败/回滚/重启。
 4. `WIN-MSI-4`：完整 Windows/架构/安全矩阵、人工边界、文档及格式冻结；仅补缺陷和测试，不把首个安装测试拖到此阶段。
 
-各阶段的前置条件、交付物、不做事项、新增测试、人工验收和退出条件，以及产品身份等第一阶段前必须厘清的决策，详见 [`docs/msi-roadmap.md`](msi-roadmap.md)。逐项计划/边界见 [`docs/msi-capability-matrix.md`](msi-capability-matrix.md)。WIN-MSI-1 已通过构建/数据库验证、本机真实安装卸载、工具供应与许可工程审计及本地无还原编译；干净 Windows/ARM64 宿主未经验证并限定支持声明。后续 MSI 阶段未开始。
+各阶段的前置条件、交付物、不做事项、新增测试、人工验收和退出条件，以及产品身份等第一阶段前必须厘清的决策，详见 [`docs/msi-roadmap.md`](msi-roadmap.md)。逐项计划/边界见 [`docs/msi-capability-matrix.md`](msi-capability-matrix.md)。WIN-MSI-1 已通过本机退出条件；WIN-MSI-2 的本机 current-user 两版本安装/升级/降级/卸载及桌面注册已通过，per-machine 只验证构建产物和数据库。干净 Windows/ARM64 宿主及提权安装尚未验收；下一阶段为 WIN-MSI-3。
 
 ### MAC：macOS `.app` 与 DMG
 
