@@ -46,7 +46,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS/WiX 程序集都提供
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.34" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.35" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -64,7 +64,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.34" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.35" />
 ```
 
 ```csharp
@@ -103,7 +103,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.34" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.35" />
 ```
 
 ```csharp
@@ -376,9 +376,9 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.34
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -PackageVersion 0.1.0-alpha.34 -ConfirmLocalInstall
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -PackageVersion 0.1.0-alpha.34 -ConfirmLocalInstall
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.35
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -PackageVersion 0.1.0-alpha.35 -ConfirmLocalInstall
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -PackageVersion 0.1.0-alpha.35 -ConfirmLocalInstall
 ```
 
 NSIS Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

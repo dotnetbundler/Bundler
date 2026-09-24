@@ -3,7 +3,7 @@
 > 最后整理：2026-09-24
 > 当前分支：`codex/msi-development`（NSIS 开发线为 `codex/nsis-development`）
 > NSIS 冻结起点：`b116d09 feat(nsis): freeze secure packaging baseline`；当前提交以 `git rev-parse --short HEAD` 为准
-> 当前包版本：`0.1.0-alpha.34`（Git 状态与包版本均须实时核查）
+> 当前包版本：`0.1.0-alpha.35`（Git 状态与包版本均须实时核查）
 > 当前阶段：`WIN-MSI-1` 与 `WIN-MSI-2` 的本机范围退出条件已通过；WIN-MSI-2 已实测 current-user 两版本升级/降级及桌面集成，per-machine 只检查产物。下一阶段 `WIN-MSI-3`；外部 UAC/Windows/ARM64 矩阵未验收。
 
 本文档记录当前事实、决策与验证证据，供后续开发任务接续。跨格式开发与交接规则以 `docs/development-rules.md` 为唯一规范入口；正式路线见 `docs/roadmap.md`，MSI 细则见 `docs/msi-roadmap.md`。本文档不是面向最终用户的使用手册。代码与自动化测试始终是实现事实的最终依据。
@@ -538,7 +538,7 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 
 - MSI 分支：`codex/msi-development`，从 `75738ed` 继续；NSIS 开发分支：`codex/nsis-development`，指向 `11dbde5`。两者均须实时核查。
 - NSIS 冻结起点：`b116d09`；当前 HEAD 应实时核查，不把本文档的历史提交误认为最新提交
-- 包版本：`0.1.0-alpha.34`（交接快照；Git HEAD 与包版本均须实时核查）
+- 包版本：`0.1.0-alpha.35`（交接快照；Git HEAD 与包版本均须实时核查）
 - 安装事务、Restart Manager、对应测试、示例和文档已经实现并提交；不得重新制作原型或把这些能力当作未完成项。
 
 上述分支、提交和版本是本文档最后整理时的快照。如果仓库已经向前推进，应调查后续提交和改动，并更新本文档，而不是强行退回该提交。
@@ -579,6 +579,14 @@ WIN-MSI-2 已按用户“开始”在当前 Windows 11 Pro build 26200 x64 主�
 
 用户进一步澄清：希望各后端的**测试风格**统一，包括目录、命名、fixture、包源、入口脚本、断言、日志和清理习惯；不同格式的具体测试内容和数量按其能力决定，不要求逐项对应。根 `AGENTS.md` 提供入口，`docs/development-rules.md` 第 4 节记录规范；确有组织或调用方式上的特殊原因时说明即可。此处仅记录决策，规范细节以该文件为准。
 
-### 14.4 执行约束
+### 14.4 WiX 结构与测试重写（2026-09-24）
+
+本轮在 `codex/msi-development` 的 `9278336` 基础上整理 WIN-MSI-2 已有实现，**未启动 WIN-MSI-3，也未改变 MSI 产品语义**。`WixBundleBackend` 保留构建、输出校验与文件收集；`WixProductDocument` 承担 WiX XML 生成，`WixPackagePaths` 集中路径规范化。快速测试仍由 `tests/Bundler.Tests` 同一入口执行，WiX 用例从过长的 `Program.cs` 移到 `WixTests.cs`，MSI 数据库读取器单独存放；把原先混在一个构建用例里的已验证产物复用、同版本载荷变化、重解析点拒绝和编译器缓存恢复拆为独立回归，并新增公开 API 层的非法路径拒绝。测试用例按 MSI 语义设计，不要求 NSIS 有一一对应的场景。
+
+两份 Windows MSI 脚本共用 `MsiTestSupport.ps1`。MSBuild fixture 现在明确复制项目、程序和资源到每轮仓库外目录；lifecycle 的 v1/v2/异包分别拥有独立项目和 `obj`，同时共用本轮隔离 NuGet 缓存。首次隔离运行揭示 fixture 原来隐含依赖仓库级 `ImplicitUsings`，已在 fixture 项目中显式声明；修复后真实 current-user smoke 与 lifecycle 均通过。工具包内容变化，版本升为 `0.1.0-alpha.35`；公开示例应用版本保持 `1.0.0`。56 项快速测试通过；七个 alpha.35 NuGet 包 pack 通过。Windows 11 Pro build 26200 x64 上，smoke 的独立 API/MSBuild MSI SHA-256 分别为 `29FCAB8789ED0927E28E8697D5A7FEAE848DCB99FAB4E9BB801EFA8F30C1CC37`、`2C8FD6AF20184D18ADF75B1270FC26F1C4A94AF6E84D43A699CF036731F6EF9E`，ProductCode `{E56AC800-8B14-5155-8833-9F382F6F3611}`，包与 verbose log 留于 `%TEMP%\Bundler-Msi-Smoke-143cd6323c00486c821be65e32c671e4`；lifecycle 的 v1/v2/异包 SHA-256 分别为 `BFE26B5DF9E2648BD8FFAFAF8CDE6643655DAFF3F12314F1DC2DA31EAC81A9A1`、`6DF340A3115C0D88CE800AE16CC22574FC3CB7E1A1BEB9DF65794E70B08257D8`、`BB4BE96F33AC87FBDC3F17B0E49FC3FEBF4DD76FCC4961C40E85F89AA9348BFC`，日志留于 `%TEMP%\Bundler-Msi-Lifecycle-03d852c11f204657a8649a88569f18de`。两者均退出 0，分别实测安装/卸载及升级、降级/异包拒绝、桌面注册与用户数据保留。
+
+NSIS 全量 Windows 集成在先打出仓库本地 alpha.35 包后退出 0，输出 `PASS Windows NSIS install/uninstall integration`；第一次启动因本地包尚未生成而在测试前报 `Package not found`，不属于安装断言失败。`HelloMsiApp` 与 `HelloBundledApp` 从本地 alpha.35 包源还原并分别生成 MSI/NSIS；其 `project.assets.json` 显示七个 Bundler 包均为 alpha.35，本地源为 `artifacts/packages`。示例 MSI SHA-256 为 `FEA2458256C6796DDF29F1D278E805F7FE2F67F4CF9A794D1D864F7159AEA180`，NSIS 安装器为 `C05306150F03913310E2E0BEC284C2332FBA52C54DF7455C6EB798CC9FC74151`；公开示例未安装。WiX 包大小 13,790,283 字节。per-machine 安装、干净 Windows/ARM64、生产签名等外部验收边界不变；下一阶段仍为 WIN-MSI-3。
+
+### 14.5 执行约束
 
 执行时遵守根目录 `AGENTS.md` 与 `docs/development-rules.md`。本文只保留当前状态和证据；完成阶段后更新状态，即使尚未提交也要保证下一次仅凭仓库文档即可接续。

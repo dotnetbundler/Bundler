@@ -39,7 +39,7 @@
 新增测试时尽量保持以下写法一致：
 
 1. **目录与名称**：格式专用 API fixture 使用 `tests/<Format>.Api.PackageFixture`；系统集成测试使用 `tests/<Platform>.<Format>.Integration`，以 `Verify.ps1` 为入口，其他场景用说明用途的脚本名。快速测试沿用仓库现有测试入口和可读的用例名。不同格式的人工测试与结果分开存放。
-2. **fixture 与包源**：后端 API fixture 只引用打出的对应后端包，通过公共 API 生成产物；MSBuild fixture 引用打出的应用层包。现有 Windows fixture 都在项目文件中声明 `<RestoreSources>$(BundlerPackageSource)</RestoreSources>`，脚本传入本轮打出的本地包目录及隔离缓存；检查实际还原的包 ID、版本、源与缓存。不要让某个格式只能靠脚本里隐藏的 `--source` 才能找到开发包。
+2. **fixture 与包源**：后端 API fixture 只引用打出的对应后端包，通过公共 API 生成产物；MSBuild fixture 引用打出的应用层包。现有 Windows fixture 都在项目文件中声明 `<RestoreSources>$(BundlerPackageSource)</RestoreSources>`，脚本传入本轮打出的本地包目录及隔离缓存；检查实际还原的包 ID、版本、源与缓存。验证普通仓库外消费者时，明确复制所需项目文件与资源到每轮临时目录，fixture 项目自身声明必需的 SDK 属性，不依赖仓库级 Directory.Build.props 或旧 obj。不要让某个格式只能靠脚本里隐藏的 `--source` 才能找到开发包。
 3. **脚本组织**：复用现有的包检查与断言辅助脚本；按 Pack、还原、构建产物、执行系统行为、核对状态的顺序组织，失败时报告明确原因。每轮使用独立输出目录；有产品身份的安装测试使用独立身份。执行前检查目标未被占用，只清理本轮创建的状态，保留可核查的日志和哈希。
 4. **结果与交接**：记录运行命令、主机/架构、包和产物版本、哈希、日志、退出码、清理结果及未验证范围。公开示例用真实本地包源验证，但不代替测试 fixture。共用 Core、MSBuild 或便利元包有改动时，运行其他受影响后端的回归。
 
@@ -64,9 +64,9 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.34
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.34 -ConfirmLocalInstall
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.34 -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.35
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.35 -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.35 -ConfirmLocalInstall
 ```
 
 命令中的版本是此文件最后更新时的示例值；执行前以 `Directory.Build.props`、实际包和 Git 状态为准。真实重启/UAC 等专用测试按格式文档的环境限制运行。

@@ -1,25 +1,16 @@
 param(
     [string]$Configuration = 'Release',
-    [string]$PackageVersion = '0.1.0-alpha.34',
+    [string]$PackageVersion = '0.1.0-alpha.35',
     [switch]$ConfirmDisposableVm,
     [switch]$ConfirmLocalInstall
 )
 
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-. (Join-Path $PSScriptRoot '..\AssertLocalRestore.ps1')
-if ($ConfirmDisposableVm -eq $ConfirmLocalInstall) {
-    throw 'Pass exactly one of -ConfirmDisposableVm or -ConfirmLocalInstall.'
-}
-if ($ConfirmDisposableVm) {
-    $computer = Get-CimInstance Win32_ComputerSystem
-    if ("$($computer.Manufacturer) $($computer.Model)" -notmatch '(?i)(virtual|vmware|qemu|kvm|hyper-v|parallels|xen)') {
-        throw 'The host does not identify as a virtual machine; MSI installation was refused.'
-    }
-}
+. (Join-Path $PSScriptRoot 'MsiTestSupport.ps1')
+Assert-MsiTestHost $ConfirmDisposableVm.IsPresent $ConfirmLocalInstall.IsPresent
 
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$fixture = Join-Path $PSScriptRoot 'Fixture\BundlerMsiSmoke.csproj'
+$fixtureSource = Join-Path $PSScriptRoot 'Fixture'
 $apiFixtureSource = Join-Path $repository 'tests\Msi.Api.PackageFixture'
 $sessionId = [guid]::NewGuid().ToString('N')
 $identifier = "com.example.bundler.msi.smoke.$sessionId"
@@ -30,6 +21,7 @@ $nugetDirectory = Join-Path $sessionRoot 'nuget'
 $apiFixtureDirectory = Join-Path $sessionRoot 'api-fixture'
 $apiFixture = Join-Path $apiFixtureDirectory 'Msi.Api.PackageFixture.csproj'
 $apiOutput = Join-Path $sessionRoot 'api-output'
+$fixtureDirectory = Join-Path $sessionRoot 'msbuild-fixture'
 $installDirectory = Join-Path $env:LOCALAPPDATA "Programs\$identifier-x64"
 $mainExecutable = Join-Path $installDirectory 'BundlerMsiSmoke.exe'
 $resourceFile = Join-Path $installDirectory 'docs\marker.txt'
@@ -45,35 +37,12 @@ if (Test-Path -LiteralPath $installDirectory) {
 }
 New-Item -ItemType Directory -Force -Path $sessionRoot, $packageDirectory | Out-Null
 
-function Invoke-Msi([string[]]$Arguments) {
-    $process = Start-Process -FilePath "$env:WINDIR\System32\msiexec.exe" -ArgumentList $Arguments -Wait -PassThru -WindowStyle Hidden
-    return $process.ExitCode
-}
-
 try {
+    $fixture = Copy-MsiTestFixture -Source $fixtureSource -Destination $fixtureDirectory
+    Pack-MsiTestPackages -Repository $repository -Configuration $Configuration -PackageVersion $PackageVersion -PackageDirectory $packageDirectory
+    Restore-MsiTestFixture -Project $fixture -PackageDirectory $packageDirectory -PackageCache $nugetDirectory -PackageVersion $PackageVersion
     Push-Location $repository
     try {
-        dotnet pack Bundler.slnx -c $Configuration -o $packageDirectory -p:BundlerPackageVersion=$PackageVersion
-        if ($LASTEXITCODE -ne 0) { throw 'dotnet pack failed.' }
-        foreach ($name in @('DotNet.Bundler', 'DotNet.Bundler.Wix', 'DotNet.Bundler.MSBuild')) {
-            if (-not (Test-Path -LiteralPath (Join-Path $packageDirectory "$name.$PackageVersion.nupkg"))) {
-                throw "Expected local package is missing: $name/$PackageVersion"
-            }
-        }
-        $wixPackage = [IO.Compression.ZipFile]::OpenRead((Join-Path $packageDirectory "DotNet.Bundler.Wix.$PackageVersion.nupkg"))
-        try {
-            $entries = @($wixPackage.Entries | ForEach-Object FullName)
-            foreach ($entry in @('lib/netstandard2.0/DotNet.Bundler.Wix.dll', 'licenses/wix/LICENSE.TXT',
-                    'licenses/wix/wix3141-source.zip', 'licenses/wix/SHA256SUMS', 'THIRD-PARTY-NOTICES.md')) {
-                if ($entries -notcontains $entry) { throw "Standalone MSI backend package is missing $entry" }
-            }
-        }
-        finally { $wixPackage.Dispose() }
-        dotnet restore $fixture -p:BundlerPackageSource=$packageDirectory -p:RestorePackagesPath=$nugetDirectory `
-            -p:BundlerPackageVersion=$PackageVersion
-        if ($LASTEXITCODE -ne 0) { throw 'MSI fixture restore failed.' }
-        Assert-LocalBundlerRestore -Project $fixture -PackageVersion $PackageVersion -Source $packageDirectory `
-            -Cache $nugetDirectory -RequiredPackages @('DotNet.Bundler', 'DotNet.Bundler.MSBuild', 'DotNet.Bundler.Wix')
         dotnet publish $fixture -c $Configuration --no-restore -p:BundlerPackageSource=$packageDirectory `
             -p:RestorePackagesPath=$nugetDirectory `
             -p:BundlerPackageVersion=$PackageVersion -p:BundlerOutputPath=$outputDirectory -p:BundlerIdentifier=$identifier
@@ -97,26 +66,15 @@ try {
     $apiMsi = Join-Path $apiOutput 'artifacts\win-x64\msi\MSI API Package Fixture-1.0.0.msi'
     if (-not (Test-Path -LiteralPath $apiMsi)) { throw "Standalone MSI API did not produce an MSI: $apiMsi" }
     $apiInstaller = New-Object -ComObject WindowsInstaller.Installer
-    $apiDatabase = $apiInstaller.OpenDatabase($apiMsi, 0)
-    $apiView = $apiDatabase.OpenView("SELECT Value FROM Property WHERE Property = 'ProductName'")
-    $apiView.Execute()
-    $apiRecord = $apiView.Fetch()
-    if ($null -eq $apiRecord -or $apiRecord.StringData(1) -ne 'MSI API Package Fixture') {
+    if ((Get-MsiProperty $apiInstaller $apiMsi 'ProductName') -ne 'MSI API Package Fixture') {
         throw 'Standalone MSI API package created an unexpected product.'
     }
-    $apiView.Close()
     Write-Host "Standalone MSI API SHA-256: $((Get-FileHash -LiteralPath $apiMsi -Algorithm SHA256).Hash)"
 
     $msi = Join-Path $outputDirectory 'win-x64\msi\Bundler MSI Smoke-1.0.0.msi'
     if (-not (Test-Path -LiteralPath $msi)) { throw "MSI was not produced: $msi" }
     $installer = New-Object -ComObject WindowsInstaller.Installer
-    $database = $installer.OpenDatabase($msi, 0)
-    $view = $database.OpenView("SELECT Value FROM Property WHERE Property = 'ProductCode'")
-    $view.Execute()
-    $record = $view.Fetch()
-    if ($null -eq $record) { throw 'MSI has no ProductCode.' }
-    $productCode = $record.StringData(1)
-    $view.Close()
+    $productCode = Get-MsiProperty $installer $msi 'ProductCode'
     if ([guid]$productCode -eq [guid]::Empty -or $installer.ProductState($productCode) -ne -1) {
         throw "The test ProductCode is invalid or already registered: $productCode"
     }

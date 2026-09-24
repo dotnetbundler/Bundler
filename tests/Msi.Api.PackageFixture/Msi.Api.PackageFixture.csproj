@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <BundlerPackageVersion Condition="'$(BundlerPackageVersion)' == ''">0.1.0-alpha.34</BundlerPackageVersion>
+    <BundlerPackageVersion Condition="'$(BundlerPackageVersion)' == ''">0.1.0-alpha.35</BundlerPackageVersion>
     <RestoreSources>$(BundlerPackageSource)</RestoreSources>
   </PropertyGroup>
   <ItemGroup>

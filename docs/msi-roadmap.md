@@ -142,4 +142,6 @@
 
 **包源约定一致性**：MSI MSBuild fixture 曾仅由集成脚本的 `dotnet restore --source` 传入本地包源，与 NSIS fixture 的 `RestoreSources=$(BundlerPackageSource)` 不一致且没有格式上的理由。现已统一：NSIS/MSI 的 API 与 MSBuild fixture 均在项目文件声明该属性，脚本传入本轮本地包目录，继续以隔离缓存和 assets 断言核对。新增快速回归断言保护四个 fixture 的这一配置；修改后本机 smoke 和 lifecycle 完整通过。最新命令、哈希和日志记录见 `PROJECT_CONTEXT.md` 的包源约定补正段。此次是测试入口修正，不改变 MSI 产品语义，也不扩展 WIN-MSI-2 的外部验收范围。
 
+**WIN-MSI-2 结构与测试整理（2026-09-24）**：本次仅重组已有 WiX 后端与测试，未提前实施 WIN-MSI-3。构建/输出、产品 XML 与路径规范化分别放在 `WixBundleBackend`、`WixProductDocument`、`WixPackagePaths`；公共 API 与 MSI 身份、组件及安装语义不变。快速测试仍使用 `tests/Bundler.Tests` 的统一入口，WiX 用例单列 `WixTests.cs` 是为了避免继续扩张原 `Program.cs`，并把独立可观察的安全/复用场景拆成独立测试。MSI 集成仍以 `Verify.ps1` 为烟雾入口、`VerifyLifecycle.ps1` 为阶段专用入口；共用 `MsiTestSupport.ps1`，每轮仅从本地包源还原仓库外 fixture，生命周期三份包使用互不复用的项目中间目录。独立后端 API fixture 仍只引用 `DotNet.Bundler.Wix` NuGet 包。两类后端保持相同测试入口、包源核对、日志和清理习惯，测试内容按 MSI 语义决定。包版本随 WiX 包内容升至 alpha.35，示例应用版本不变。实际命令、56 项快速测试结果、真实安装与升级的哈希及日志见 `PROJECT_CONTEXT.md` 第 14.4 节；外部平台和 UAC 验收状态不变。
+
 本阶段语义依据：[WiX 3 MajorUpgrade](https://docs.firegiant.com/wix3/xsd/wix/majorupgrade/)、[WiX 3 Shortcut](https://docs.firegiant.com/wix3/xsd/wix/shortcut/)、[Microsoft Default Programs 注册规则](https://learn.microsoft.com/en-us/windows/win32/shell/default-programs)。本机测试是对这些规格在当前环境的实现核查，不代替其他 Windows 版本的真实验收。

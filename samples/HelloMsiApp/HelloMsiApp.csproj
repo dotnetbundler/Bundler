@@ -16,7 +16,7 @@
     <BundlerWixDesktopShortcut>true</BundlerWixDesktopShortcut>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.34" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.35" PrivateAssets="all" />
     <BundlerFileAssociation Include=".hellomsi">
       <Name>Hello MSI document</Name>
       <MimeType>application/x-hellomsi</MimeType>

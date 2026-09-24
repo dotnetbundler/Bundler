@@ -1,22 +1,16 @@
 param(
     [string]$Configuration = 'Release',
-    [string]$PackageVersion = '0.1.0-alpha.34',
+    [string]$PackageVersion = '0.1.0-alpha.35',
     [switch]$ConfirmDisposableVm,
     [switch]$ConfirmLocalInstall
 )
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot '..\AssertLocalRestore.ps1')
-if ($ConfirmDisposableVm -eq $ConfirmLocalInstall) { throw 'Pass exactly one of -ConfirmDisposableVm or -ConfirmLocalInstall.' }
-if ($ConfirmDisposableVm) {
-    $computer = Get-CimInstance Win32_ComputerSystem
-    if ("$($computer.Manufacturer) $($computer.Model)" -notmatch '(?i)(virtual|vmware|qemu|kvm|hyper-v|parallels|xen)') {
-        throw 'The host does not identify as a virtual machine; MSI installation was refused.'
-    }
-}
+. (Join-Path $PSScriptRoot 'MsiTestSupport.ps1')
+Assert-MsiTestHost $ConfirmDisposableVm.IsPresent $ConfirmLocalInstall.IsPresent
 
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$fixture = Join-Path $PSScriptRoot 'Fixture\BundlerMsiSmoke.csproj'
+$fixtureSource = Join-Path $PSScriptRoot 'Fixture'
 $id = [guid]::NewGuid().ToString('N')
 $identifier = "com.example.bundler.msi.lifecycle.$id"
 $extension = "bmsi$id"
@@ -24,6 +18,7 @@ $scheme = "bmsi-$id"
 $root = Join-Path $env:TEMP "Bundler-Msi-Lifecycle-$id"
 $packages = Join-Path $root 'packages'
 $nuget = Join-Path $root 'nuget'
+$fixtureDirectory = Join-Path $root 'msbuild-fixture'
 $install = Join-Path $env:LOCALAPPDATA "Programs\$identifier-x64"
 $unknown = Join-Path $install 'user-created.txt'
 $startMenu = Join-Path ([Environment]::GetFolderPath('StartMenu')) "Programs\$identifier\Bundler MSI Smoke.lnk"
@@ -38,18 +33,8 @@ $productCodes = @()
 $installer = $null
 $unknownCreated = $false
 
-function Invoke-Msi([string[]]$Arguments) {
-    return (Start-Process -FilePath "$env:WINDIR\System32\msiexec.exe" -ArgumentList $Arguments -Wait -PassThru -WindowStyle Hidden).ExitCode
-}
 function Read-ProductCode([string]$Path) {
-    $database = $installer.OpenDatabase($Path, 0)
-    $view = $database.OpenView("SELECT Value FROM Property WHERE Property = 'ProductCode'")
-    $null = $view.Execute()
-    $record = $view.Fetch()
-    if ($null -eq $record) { throw "MSI has no ProductCode: $Path" }
-    $code = $record.StringData(1)
-    $null = $view.Close()
-    return $code
+    return Get-MsiProperty $installer $Path 'ProductCode'
 }
 function Assert-Installed([string]$Code, [bool]$Expected) {
     $state = $installer.ProductState($Code)
@@ -101,16 +86,12 @@ try {
     New-Item -Path $fileKey, $schemeKey -Force | Out-Null
     Set-Item -LiteralPath $fileKey -Value 'Other.Test.Owner'
     Set-Item -LiteralPath $schemeKey -Value 'Other URL owner'
+    Pack-MsiTestPackages -Repository $repository -Configuration $Configuration -PackageVersion $PackageVersion -PackageDirectory $packages
     Push-Location $repository
     try {
-        dotnet pack Bundler.slnx -c $Configuration -o $packages -p:BundlerPackageVersion=$PackageVersion
-        if ($LASTEXITCODE -ne 0) { throw 'dotnet pack failed.' }
-        dotnet restore $fixture -p:BundlerPackageSource=$packages -p:RestorePackagesPath=$nuget `
-            -p:BundlerPackageVersion=$PackageVersion
-        if ($LASTEXITCODE -ne 0) { throw 'Fixture restore failed.' }
-        Assert-LocalBundlerRestore -Project $fixture -PackageVersion $PackageVersion -Source $packages `
-            -Cache $nuget -RequiredPackages @('DotNet.Bundler', 'DotNet.Bundler.MSBuild', 'DotNet.Bundler.Wix')
         foreach ($version in @('1.0.0', '1.1.0')) {
+            $fixture = Copy-MsiTestFixture -Source $fixtureSource -Destination "$fixtureDirectory-$version"
+            Restore-MsiTestFixture -Project $fixture -PackageDirectory $packages -PackageCache $nuget -PackageVersion $PackageVersion
             $output = Join-Path $root "output-$version"
             dotnet publish $fixture -c $Configuration --no-restore -p:BundlerPackageSource=$packages `
                 -p:RestorePackagesPath=$nuget -p:BundlerPackageVersion=$PackageVersion `
@@ -119,6 +100,8 @@ try {
                 -p:BundlerWixStartMenuShortcut=true -p:BundlerWixDesktopShortcut=true
             if ($LASTEXITCODE -ne 0) { throw "Fixture publish failed for $version." }
         }
+        $fixture = Copy-MsiTestFixture -Source $fixtureSource -Destination "$fixtureDirectory-variant"
+        Restore-MsiTestFixture -Project $fixture -PackageDirectory $packages -PackageCache $nuget -PackageVersion $PackageVersion
         $variantOutput = Join-Path $root 'output-variant'
         dotnet publish $fixture -c $Configuration --no-restore -p:BundlerPackageSource=$packages `
             -p:RestorePackagesPath=$nuget -p:BundlerPackageVersion=$PackageVersion `
