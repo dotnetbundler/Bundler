@@ -1,8 +1,10 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
 using DotNet.Bundler.Wix;
+using DotNet.Bundler.Signing.Windows;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Xml.Linq;
 
 internal static class WixTests
@@ -14,7 +16,7 @@ internal static class WixTests
             yield return ("Keeps MSI identity and version rules stable", () => RunSync(KeepsMsiIdentityStable));
             yield return ("Verifies WiX binary and source redistribution", () => RunSync(VerifiesWixRedistribution));
             yield return ("Maps MSI configuration through MSBuild", () => RunSync(MapsMsiSettingsThroughMsBuild));
-            yield return ("Rejects MSI features outside the second stage", RejectsUnsupportedMsiFeatures);
+            yield return ("Validates MSI language, license, and signing inputs", ValidatesMsiPublishingInputs);
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) yield break;
             yield return ("Rejects unsafe MSI installation paths", RejectsUnsafeMsiPaths);
             yield return ("Builds and inspects a real WiX MSI without installing it", BuildsAndInspectsMsi);
@@ -26,6 +28,10 @@ internal static class WixTests
             yield return ("Rejects a tampered WiX tool archive", RejectsTamperedWixArchive);
             yield return ("Serializes concurrent WiX tool cache users", SerializesConcurrentWixCacheUsers);
             yield return ("Builds an ARM64-targeted MSI on Windows x64", BuildsArm64TargetedMsi);
+            yield return ("Builds isolated English and Chinese MSI languages", BuildsLocalizedMsi);
+            yield return ("Signs staged MSI payload and final package in order", SignsMsiArtifacts);
+            yield return ("Removes a failed signed MSI output", RemovesFailedSignedMsi);
+            yield return ("Signs a real payload PE and MSI with a test certificate", SignsRealMsiWithTestCertificate);
         }
     }
 
@@ -64,6 +70,10 @@ internal static class WixTests
         var user = WixIdentity.Create("com.example.app", "1.0.0", "win-x64", WixInstallScope.CurrentUser);
         Assert(machine.UpgradeCode != user.UpgradeCode && machine.ProductCode != user.ProductCode,
             "Per-machine and current-user products must have separate identity families.");
+        var chinese = WixIdentity.Create("com.example.app", "1.2.3", "win-x64", WixInstallScope.CurrentUser,
+            language: WixPackageLanguage.ChineseSimplified);
+        Assert(chinese.UpgradeCode != first.UpgradeCode && chinese.ProductCode != first.ProductCode,
+            "Localized MSI products need separate language identity families.");
     }
 
     static async Task RejectsUnsafeMsiPaths()
@@ -94,7 +104,7 @@ internal static class WixTests
         var props = File.ReadAllText(Path.Combine(root, "buildTransitive", "DotNet.Bundler.MSBuild.props"));
         var targets = File.ReadAllText(Path.Combine(root, "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
         var task = File.ReadAllText(Path.Combine(root, "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
-        foreach (var property in new[] { "WixInstallScope", "WixUpgradeCode", "WixCodepage", "WixToolsetArchivePath",
+        foreach (var property in new[] { "WixInstallScope", "WixUpgradeCode", "WixCodepage", "WixLanguage", "WixToolsetArchivePath",
                      "WixStartMenuShortcut", "WixDesktopShortcut" })
         {
             Assert(props.Contains("<Bundler" + property, StringComparison.Ordinal) &&
@@ -102,8 +112,9 @@ internal static class WixTests
                 "MSBuild did not map MSI property Bundler" + property + ".");
         }
         Assert(task.Contains("new WixBundler(", StringComparison.Ordinal) &&
-               task.Contains("Codepage = WixCodepage", StringComparison.Ordinal),
-            "MSBuild task does not call the same public MSI backend or preserve codepage.");
+               task.Contains("Codepage = WixCodepage", StringComparison.Ordinal) &&
+               task.Contains("Signer = CreateWindowsSigner()", StringComparison.Ordinal),
+            "MSBuild task does not call the same public MSI backend or map signing.");
     }
 
     static void VerifiesWixRedistribution()
@@ -112,7 +123,7 @@ internal static class WixTests
         var binary = Path.Combine(root, "wix3141-tools.zip");
         var source = Path.Combine(root, "wix3141-source.zip");
         Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(binary))) ==
-               "25AE0BB2A21FAC6B486C4B06155C9F463F2D845E7036BE0E9B1C98F4E48EA494",
+               "ABE572B353CD4151B1C69907BB5C5E84886138E518607432C9723B454853B358",
             "The bundled WiX binary subset changed without updating its pinned hash.");
         Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(source))) ==
                "A56184E798885641821666BD389FE6276F99363F65BAE8F88630B17DE297FE9F",
@@ -122,6 +133,8 @@ internal static class WixTests
             .Select(line => (Hash: line.Substring(0, 64), Name: line.Substring(66)))
             .ToDictionary(pair => pair.Name, pair => pair.Hash, StringComparer.Ordinal);
         Assert(toolZip.Entries.Count == expected.Count, "The WiX subset file manifest is incomplete.");
+        Assert(toolZip.GetEntry("WixUIExtension.dll") is not null,
+            "The selected WiX UI/localization extension is missing.");
         foreach (var entry in toolZip.Entries)
         {
             using var stream = entry.Open();
@@ -132,7 +145,8 @@ internal static class WixTests
         using var sourceZip = System.IO.Compression.ZipFile.OpenRead(source);
         Assert(sourceZip.GetEntry("wix3-wix3141rtm/LICENSE.TXT") is not null &&
                sourceZip.GetEntry("wix3-wix3141rtm/src/tools/candle/candle.cs") is not null &&
-               sourceZip.GetEntry("wix3-wix3141rtm/src/tools/light/light.cs") is not null,
+               sourceZip.GetEntry("wix3-wix3141rtm/src/tools/light/light.cs") is not null &&
+               sourceZip.GetEntry("wix3-wix3141rtm/src/ext/UIExtension/wixext/WixUIExtension.csproj") is not null,
             "The bundled corresponding source archive is incomplete.");
         var licenseEntry = toolZip.GetEntry("LICENSE.TXT")!;
         using var license = licenseEntry.Open();
@@ -141,7 +155,7 @@ internal static class WixTests
             "The distributed WiX license differs from the original binary archive.");
     }
 
-    static async Task RejectsUnsupportedMsiFeatures()
+    static async Task ValidatesMsiPublishingInputs()
     {
         var configuration = new BundleConfiguration
         {
@@ -158,9 +172,21 @@ internal static class WixTests
         try
         {
             await new WixBundler().BuildAsync(configuration);
-            throw new InvalidOperationException("An MSI stage-3 feature was silently ignored.");
+            throw new InvalidOperationException("An unsupported MSI license format was accepted.");
         }
-        catch (NotSupportedException exception) when (exception.Message.Contains("WIN-MSI-3", StringComparison.Ordinal)) { }
+        catch (ArgumentException exception) when (exception.Message.Contains("RTF", StringComparison.Ordinal)) { }
+        using var fixture = new WixTestFixture();
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            Language = WixPackageLanguage.ChineseSimplified,
+            Codepage = 1252
+        }).BuildAsync(fixture.Request()), "936");
+        await ExpectAsync<ArgumentOutOfRangeException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            Language = (WixPackageLanguage)999
+        }).BuildAsync(fixture.Request()), "Language");
+        await ExpectAsync<ArgumentException>(() => fixture.Bundler().BuildAsync(
+            fixture.Request(signingFiles: ["fixture.exe"])), "signer");
     }
 
     static async Task BuildsAndInspectsMsi()
@@ -262,7 +288,7 @@ internal static class WixTests
                Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(repeated.Path))) == firstHash,
             "An unchanged build did not reuse the verified MSI.");
         File.WriteAllText(first.Path + ".bundler-manifest", "unverified");
-        await ExpectAsync<IOException>(() => bundler.BuildAsync(request), "different or unverified contents");
+        await ExpectAsync<IOException>(() => bundler.BuildAsync(request), "same product version");
     }
 
     static async Task RejectsChangedSameVersionPayload()
@@ -448,6 +474,149 @@ internal static class WixTests
         finally { DeleteOwnedTestDirectory(root); }
     }
 
+    static async Task BuildsLocalizedMsi()
+    {
+        using var fixture = new WixTestFixture();
+        var request = fixture.Request();
+        var english = (await fixture.Bundler().BuildAsync(request)).Single();
+        var license = Path.Combine(fixture.Root, "terms.rtf");
+        File.WriteAllText(license, "{\\rtf1\\ansi Example license terms.}");
+        request = fixture.Request(licenseFile: license);
+        var chinese = (await new WixBundler(new WixBundleConfiguration
+        {
+            Language = WixPackageLanguage.ChineseSimplified,
+            StartMenuShortcut = true,
+            DesktopShortcut = true
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(request)).Single();
+        Assert(english.Path != chinese.Path && chinese.Path.EndsWith("-zh-cn.msi", StringComparison.Ordinal),
+            "Localized MSI outputs collide with the English output.");
+        using var en = new MsiDatabaseReader(english.Path);
+        using var zh = new MsiDatabaseReader(chinese.Path);
+        Assert(en.Property("ProductLanguage") == "1033" && zh.Property("ProductLanguage") == "2052" &&
+               en.Property("UpgradeCode") != zh.Property("UpgradeCode"),
+            "Localized product language or identity is incorrect.");
+        var chineseDirectory = zh.ContainsSubstring("Directory", "DefaultDir", "com.example.wixtestfixture-x64-zh-cn");
+        var dialogCount = zh.RowCount("Dialog", "Dialog");
+        Assert(zh.Template.Contains("2052", StringComparison.Ordinal) && chineseDirectory && dialogCount > 0,
+            $"Chinese MSI did not include isolated files and a license UI. Template={zh.Template}, directory={chineseDirectory}, dialogs={dialogCount}.");
+        using var englishFixture = new WixTestFixture();
+        var englishLicense = Path.Combine(englishFixture.Root, "terms.rtf");
+        File.WriteAllText(englishLicense, "{\\rtf1\\ansi Example license terms.}");
+        var licensedEnglish = (await englishFixture.Bundler().BuildAsync(
+            englishFixture.Request(licenseFile: englishLicense))).Single();
+        using var englishUi = new MsiDatabaseReader(licensedEnglish.Path);
+        Assert(englishUi.Property("ProductLanguage") == "1033" &&
+               englishUi.RowCount("Dialog", "Dialog") > 0,
+            "English MSI did not include the configured license UI.");
+    }
+
+    static async Task SignsMsiArtifacts()
+    {
+        using var fixture = new WixTestFixture();
+        File.WriteAllText(Path.Combine(fixture.Input, "helper.dll"), "helper");
+        var signer = new MsiRecordingSigner();
+        var request = fixture.Request(signingFiles: ["helper.dll"]);
+        var artifact = (await new WixBundler(options: new WixBundlerOptions
+        {
+            ToolCacheDirectory = fixture.Cache,
+            Signer = signer
+        }).BuildAsync(request)).Single();
+        Assert(signer.Kinds.SequenceEqual([BundleSigningArtifactKind.PayloadExecutable,
+            BundleSigningArtifactKind.PayloadFile, BundleSigningArtifactKind.Installer]),
+            "MSI signing order or artifact kinds are incorrect.");
+        Assert(signer.Paths[0] != Path.Combine(fixture.Input, "fixture.exe") &&
+               File.ReadAllText(Path.Combine(fixture.Input, "fixture.exe")) == "original payload" &&
+               File.Exists(artifact.Path + ".bundler-manifest"),
+            "MSI signing changed source files or omitted final output manifest.");
+        var repeatedSigner = new MsiRecordingSigner();
+        await ExpectAsync<IOException>(() => new WixBundler(options: new WixBundlerOptions
+        {
+            ToolCacheDirectory = fixture.Cache,
+            Signer = repeatedSigner
+        }).BuildAsync(request), "same product version");
+        Assert(repeatedSigner.Kinds.Count == 0, "A rejected same-version MSI invoked the signer.");
+    }
+
+    static async Task RemovesFailedSignedMsi()
+    {
+        using var fixture = new WixTestFixture();
+        var signer = new MsiRecordingSigner { FailInstaller = true };
+        await ExpectAsync<InvalidOperationException>(() => new WixBundler(options: new WixBundlerOptions
+        {
+            ToolCacheDirectory = fixture.Cache,
+            Signer = signer
+        }).BuildAsync(fixture.Request()), "signing failed");
+        var output = Path.Combine(fixture.Root, "output");
+        Assert(!Directory.EnumerateFiles(output, "*.msi").Any() &&
+               !Directory.EnumerateFiles(output, "*.bundler-manifest").Any(),
+            "An MSI with a failed final signature remained available for publishing.");
+    }
+
+    static async Task SignsRealMsiWithTestCertificate()
+    {
+        using var fixture = new WixTestFixture();
+        var executable = Environment.ProcessPath ?? throw new InvalidOperationException("No test executable path.");
+        var input = Path.Combine(fixture.Input, "fixture.exe");
+        File.Copy(executable, input, true);
+        var originalHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(input)));
+        using var rsa = RSA.Create(2048);
+        var certificateRequest = new CertificateRequest("CN=DotNet.Bundler MSI test certificate", rsa,
+            HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        certificateRequest.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
+            new OidCollection { new("1.3.6.1.5.5.7.3.3") }, true));
+        using var certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.Now.AddMinutes(-5),
+            DateTimeOffset.Now.AddDays(1));
+        var pfx = Path.Combine(fixture.Root, "test-signing.pfx");
+        const string password = "msi-test-only-password";
+        File.WriteAllBytes(pfx, certificate.Export(X509ContentType.Pfx, password));
+        var signer = new MsiVerifyingSigner(new WindowsAuthenticodeSigner(new WindowsAuthenticodeSigningOptions
+        {
+            PfxFile = pfx,
+            PfxPassword = password
+        }), certificate.Thumbprint);
+        var artifact = (await new WixBundler(options: new WixBundlerOptions
+        {
+            ToolCacheDirectory = fixture.Cache,
+            Signer = signer
+        }).BuildAsync(fixture.Request())).Single();
+        Assert(signer.Kinds.SequenceEqual([BundleSigningArtifactKind.PayloadExecutable,
+            BundleSigningArtifactKind.Installer]) &&
+            originalHash == Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(input))) &&
+            File.Exists(artifact.Path + ".bundler-manifest"),
+            "Real MSI signing changed input files or missed a requested signature.");
+    }
+
+    private sealed class MsiVerifyingSigner(IBundleSigner inner, string thumbprint) : IBundleSigner
+    {
+        public List<BundleSigningArtifactKind> Kinds { get; } = [];
+
+        public async Task SignAsync(BundleSigningRequest request, CancellationToken cancellationToken = default)
+        {
+            await inner.SignAsync(request, cancellationToken);
+            using var signed = new X509Certificate2(X509Certificate.CreateFromSignedFile(request.Path));
+            Assert(signed.Thumbprint == thumbprint, "A signed MSI artifact has the wrong certificate.");
+            Kinds.Add(request.ArtifactKind);
+        }
+    }
+
+    private sealed class MsiRecordingSigner : IBundleSigner
+    {
+        public List<BundleSigningArtifactKind> Kinds { get; } = [];
+        public List<string> Paths { get; } = [];
+        public bool FailInstaller { get; init; }
+
+        public Task SignAsync(BundleSigningRequest request, CancellationToken cancellationToken = default)
+        {
+            Kinds.Add(request.ArtifactKind);
+            Paths.Add(request.Path);
+            if (request.ArtifactKind == BundleSigningArtifactKind.Installer && FailInstaller)
+                throw new InvalidOperationException("MSI signing failed in the test signer.");
+            if (request.ArtifactKind != BundleSigningArtifactKind.Installer)
+                File.AppendAllText(request.Path, " signed");
+            return Task.CompletedTask;
+        }
+    }
+
     private static string RepositoryRoot() => Path.GetFullPath("../../../../../", AppContext.BaseDirectory);
     private static Task RunSync(Action action) { action(); return Task.CompletedTask; }
     private static BundleConfiguration ValidConfiguration(BundleTargetConfiguration target) => new()
@@ -489,18 +658,21 @@ internal static class WixTests
 
         public WixBundler Bundler() => new(options: new WixBundlerOptions { ToolCacheDirectory = Cache });
 
-        public BundleConfiguration Request(string? resourceTarget = null) => new()
+        public BundleConfiguration Request(string? resourceTarget = null, string? licenseFile = null,
+            IReadOnlyList<string>? signingFiles = null) => new()
         {
             ProductName = "WiX test fixture",
             Identifier = "com.example.wixtestfixture",
             Version = "1.0.0",
+            LicenseFile = licenseFile,
             OutputDirectory = Path.Combine(Root, "output"),
             Resources = resourceTarget is null ? [] :
                 [new BundleResourceConfiguration { Source = Path.Combine(Root, "resource.txt"), TargetPath = resourceTarget }],
             Targets = [new BundleTargetConfiguration
             {
                 RuntimeIdentifier = "win-x64", InputDirectory = Input,
-                MainExecutable = "fixture.exe", Formats = [PackageFormat.Msi]
+                MainExecutable = "fixture.exe", Formats = [PackageFormat.Msi],
+                SigningFiles = signingFiles ?? []
             }]
         };
 

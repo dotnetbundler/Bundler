@@ -15,7 +15,8 @@
     <BundlerWixToolsetArchivePath Condition="'$(BundlerWixToolsetArchivePath)' == ''"></BundlerWixToolsetArchivePath>
     <BundlerWixInstallScope Condition="'$(BundlerWixInstallScope)' == ''">currentUser</BundlerWixInstallScope>
     <BundlerWixUpgradeCode Condition="'$(BundlerWixUpgradeCode)' == ''"></BundlerWixUpgradeCode>
-    <BundlerWixCodepage Condition="'$(BundlerWixCodepage)' == ''">1252</BundlerWixCodepage>
+    <BundlerWixCodepage Condition="'$(BundlerWixCodepage)' == ''">0</BundlerWixCodepage>
+    <BundlerWixLanguage Condition="'$(BundlerWixLanguage)' == ''">en-US</BundlerWixLanguage>
     <BundlerWixStartMenuShortcut Condition="'$(BundlerWixStartMenuShortcut)' == ''">false</BundlerWixStartMenuShortcut>
     <BundlerWixDesktopShortcut Condition="'$(BundlerWixDesktopShortcut)' == ''">false</BundlerWixDesktopShortcut>
     <BundlerNsisToolsetArchivePath Condition="'$(BundlerNsisToolsetArchivePath)' == ''"></BundlerNsisToolsetArchivePath>

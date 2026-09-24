@@ -3,7 +3,7 @@
 > 最后整理：2026-09-24
 > 路线状态：`NSIS-R4` 已在 `b116d09` 形成冻结基线，随后加固 journal 恢复目标、跨配置恢复流程及快照完整性；当前提交以 Git HEAD 为准
 > 当前实施对象：Windows WiX/MSI
-> 当前状态：`WIN-MSI-1` 已完成本机范围退出条件；`WIN-MSI-2` 的本机 current-user 生命周期与桌面集成测试已通过，per-machine 仅做产物检查；外部宿主/UAC 矩阵未验收。下一阶段为 `WIN-MSI-3`。
+> 当前状态：`WIN-MSI-1..3` 已完成本机范围退出条件；测试证书签名、英语/简体中文单语言产物、current-user 安装/升级/修复/卸载及安全故障回滚均有本机自动证据。per-machine 仅做产物检查；生产签名、交互 UI、外部宿主/UAC/重启矩阵未验收。下一阶段为 `WIN-MSI-4` 格式矩阵与冻结。
 
 本文档是项目后续路线的规范入口；跨格式执行规则见 [`docs/development-rules.md`](development-rules.md)，MSI 专项细则由 [`docs/msi-roadmap.md`](msi-roadmap.md) 承接。它们使后续开发不依赖某一次对话或某个 AI 的记忆。
 
@@ -263,7 +263,7 @@
 3. `WIN-MSI-3`：签名、语言、静默/被动、退出码、修复维护及失败/回滚/重启。
 4. `WIN-MSI-4`：完整 Windows/架构/安全矩阵、人工边界、文档及格式冻结；仅补缺陷和测试，不把首个安装测试拖到此阶段。
 
-各阶段的前置条件、交付物、不做事项、新增测试、人工验收和退出条件，以及产品身份等第一阶段前必须厘清的决策，详见 [`docs/msi-roadmap.md`](msi-roadmap.md)。逐项计划/边界见 [`docs/msi-capability-matrix.md`](msi-capability-matrix.md)。WIN-MSI-1 已通过本机退出条件；WIN-MSI-2 的本机 current-user 两版本安装/升级/降级/卸载及桌面注册已通过，per-machine 只验证构建产物和数据库。干净 Windows/ARM64 宿主及提权安装尚未验收；下一阶段为 WIN-MSI-3。
+各阶段的前置条件、交付物、不做事项、新增测试、人工验收和退出条件，以及产品身份等第一阶段前必须厘清的决策，详见 [`docs/msi-roadmap.md`](msi-roadmap.md)。逐项计划/边界见 [`docs/msi-capability-matrix.md`](msi-capability-matrix.md)。WIN-MSI-1..3 的本机 current-user 自动化已通过，per-machine 只验证构建产物和数据库；干净 Windows/ARM64 宿主、提权安装、生产签名、真实 UI 和重启尚未验收。下一阶段为 WIN-MSI-4。
 
 ### MAC：macOS `.app` 与 DMG
 

@@ -5,10 +5,10 @@ using DotNet.Bundler;
 
 namespace DotNet.Bundler.Wix;
 
-internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguration settings) : IBundleBackend
+internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguration settings, IBundleSigner? signer) : IBundleBackend
 {
     private static readonly XNamespace Wix = "http://schemas.microsoft.com/wix/2006/wi";
-    private const string GeneratorRevision = "win-msi-2-2026-09-24-1";
+    private const string GeneratorRevision = "win-msi-3-2026-09-24-1";
 
     public PackageFormat Format => PackageFormat.Msi;
     public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
@@ -18,14 +18,10 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         var bundle = context.Configuration;
         var item = context.Item;
         var identity = WixIdentity.Create(bundle.Identifier, bundle.Version, item.Target.RuntimeIdentifier,
-            settings.InstallScope, settings.UpgradeCode);
-        var files = CollectFiles(bundle, item);
-        var icon = SelectIcon(bundle.Icons);
-        var definitionHash = DefinitionHash(bundle, item, files, icon);
-        var product = new WixProductDocument(settings).Create(bundle, item, identity, files, icon, definitionHash);
-        var outputName = WixProductDocument.SafeFileName(bundle.ProductName) + "-" + identity.ProductVersion + ".msi";
+            settings.InstallScope, settings.UpgradeCode, settings.Language);
+        var outputName = WixProductDocument.SafeFileName(bundle.ProductName) + "-" + identity.ProductVersion +
+            settings.LanguageSuffix + ".msi";
         var outputPath = Path.Combine(item.OutputDirectory, outputName);
-        var fingerprint = Fingerprint(bundle, item, identity, files, icon, product);
         var manifestPath = outputPath + ".bundler-manifest";
         Directory.CreateDirectory(item.OutputDirectory);
         var lockPath = outputPath + ".bundler-lock";
@@ -34,15 +30,26 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             throw new InvalidDataException("MSI output lock must not be a reparse point: " + lockPath);
         }
         using var outputLock = await AcquireOutputLockAsync(lockPath, cancellationToken);
+        if (signer is not null && (File.Exists(outputPath) || File.Exists(manifestPath)))
+            throw new IOException("An MSI with the same product version already exists with signed or unverified contents: " + outputPath);
+        // Validate every source before copying payload into a private staging tree.
+        CollectFiles(bundle, item);
+        if (signer is not null)
+            item = await PrepareSignedPayloadAsync(context, item, signer, cancellationToken);
+        var files = CollectFiles(bundle, item);
+        var icon = SelectIcon(bundle.Icons);
+        var definitionHash = DefinitionHash(bundle, item, files, icon);
+        var product = new WixProductDocument(settings).Create(bundle, item, identity, files, icon, definitionHash);
+        var fingerprint = Fingerprint(bundle, item, identity, files, icon, product);
         if (File.Exists(outputPath) || File.Exists(manifestPath))
         {
-            if (File.Exists(outputPath) && File.Exists(manifestPath) &&
+            if (signer is null && File.Exists(outputPath) && File.Exists(manifestPath) &&
                 File.ReadAllText(manifestPath).Equals(
                     fingerprint + "\n" + HashFile(outputPath) + "\n", StringComparison.Ordinal))
             {
                 return new BundleArtifact(Format, item.Target.RuntimeIdentifier, outputPath);
             }
-            throw new IOException("An MSI with the same product version already exists with different or unverified contents: " + outputPath);
+            throw new IOException("An MSI with the same product version already exists with different, signed, or unverified contents: " + outputPath);
         }
 
         var source = Path.Combine(context.WorkDirectory, "product.wxs");
@@ -55,14 +62,21 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             await WixProcessRunner.RunAsync(toolset.CandlePath,
                 ["-nologo", "-arch", item.Target.Architecture == CpuArchitecture.Arm64 ? "arm64" : "x64",
                  "-out", obj, source], context.WorkDirectory, cancellationToken);
-            await WixProcessRunner.RunAsync(toolset.LightPath,
-                settings.InstallScope == WixInstallScope.CurrentUser
-                    ? ["-nologo", "-sice:ICE91", "-out", outputPath, obj]
-                    : ["-nologo", "-out", outputPath, obj],
-                context.WorkDirectory, cancellationToken);
+            var lightArguments = new List<string> { "-nologo" };
+            if (!string.IsNullOrWhiteSpace(bundle.LicenseFile))
+                lightArguments.AddRange(["-ext", toolset.UiExtensionPath, "-cultures:" + settings.Culture]);
+            if (settings.InstallScope == WixInstallScope.CurrentUser) lightArguments.Add("-sice:ICE91");
+            lightArguments.AddRange(["-out", outputPath, obj]);
+            await WixProcessRunner.RunAsync(toolset.LightPath, lightArguments, context.WorkDirectory, cancellationToken);
             if (!File.Exists(outputPath))
             {
                 throw new InvalidOperationException("WiX reported success without producing an MSI.");
+            }
+            if (signer is not null)
+            {
+                context.Logger.Log(BundleLogLevel.Information, "Signing the MSI installer.");
+                await signer.SignAsync(new BundleSigningRequest(outputPath, BundleSigningArtifactKind.Installer,
+                    bundle.ProductName, item.Target.RuntimeIdentifier), cancellationToken);
             }
             File.WriteAllText(manifestPath, fingerprint + "\n" + HashFile(outputPath) + "\n", Encoding.ASCII);
             return new BundleArtifact(Format, item.Target.RuntimeIdentifier, outputPath);
@@ -73,6 +87,36 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             if (File.Exists(manifestPath)) File.Delete(manifestPath);
             throw;
         }
+    }
+
+    private static async Task<BundlePlanItem> PrepareSignedPayloadAsync(
+        BundleBuildContext context, BundlePlanItem item, IBundleSigner signer, CancellationToken cancellationToken)
+    {
+        var sourceRoot = Path.GetFullPath(item.InputDirectory);
+        var destination = Path.Combine(context.WorkDirectory, "signed-payload");
+        Directory.CreateDirectory(destination);
+        foreach (var source in Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories))
+        {
+            CheckReparse(source);
+            var relative = source.Substring(sourceRoot.TrimEnd(Path.DirectorySeparatorChar).Length + 1);
+            var target = Path.Combine(destination, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source, target);
+        }
+        var signingFiles = new[] { item.MainExecutable }.Concat(item.SigningFiles).Distinct(StringComparer.OrdinalIgnoreCase);
+        foreach (var relativePath in signingFiles)
+        {
+            var normalized = WixPackagePaths.NormalizeTarget(relativePath);
+            var path = Path.Combine(destination, normalized.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                throw new FileNotFoundException("The configured MSI signing file was not found in the input directory.", path);
+            var kind = relativePath.Equals(item.MainExecutable, StringComparison.OrdinalIgnoreCase)
+                ? BundleSigningArtifactKind.PayloadExecutable : BundleSigningArtifactKind.PayloadFile;
+            context.Logger.Log(BundleLogLevel.Information, "Signing staged MSI payload file '" + normalized + "'.");
+            await signer.SignAsync(new BundleSigningRequest(path, kind, context.Configuration.ProductName,
+                item.Target.RuntimeIdentifier), cancellationToken);
+        }
+        return item with { InputDirectory = destination };
     }
 
     private static IReadOnlyList<InstallFile> CollectFiles(BundleConfiguration bundle, BundlePlanItem item)
@@ -165,13 +209,14 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             .AppendLine(bundle.ProductName).AppendLine(bundle.Identifier.ToLowerInvariant())
             .AppendLine(identity.ProductVersion).AppendLine(bundle.Publisher)
             .AppendLine(bundle.Description).AppendLine(bundle.Homepage)
-            .Append(settings.Codepage).AppendLine()
+            .Append(settings.EffectiveCodepage).AppendLine()
             .AppendLine(item.Target.RuntimeIdentifier).AppendLine(identity.UpgradeCode.ToString("D"));
         foreach (var file in files)
         {
             text.AppendLine(file.RelativePath.ToLowerInvariant()).AppendLine(HashFile(file.SourcePath));
         }
         if (icon is not null) text.AppendLine(HashFile(icon));
+        if (bundle.LicenseFile is not null) text.AppendLine(HashFile(bundle.LicenseFile));
         text.AppendLine(canonical.ToString(SaveOptions.DisableFormatting));
         using var sha = SHA256.Create();
         return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(text.ToString()))).Replace("-", "");
@@ -185,7 +230,8 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             .AppendLine(bundle.Publisher).AppendLine(bundle.Description).AppendLine(bundle.Homepage)
             .AppendLine(item.Target.RuntimeIdentifier).AppendLine(settings.InstallScope.ToString())
             .AppendLine(settings.StartMenuShortcut.ToString()).AppendLine(settings.DesktopShortcut.ToString())
-            .AppendLine(settings.Codepage.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            .AppendLine(settings.EffectiveCodepage.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .AppendLine(settings.Language.ToString());
         foreach (var association in bundle.FileAssociations)
         {
             text.AppendLine(string.Join(",", association.Extensions)).AppendLine(association.Name)
@@ -196,6 +242,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         foreach (var file in files)
             text.AppendLine(file.RelativePath.ToLowerInvariant()).AppendLine(HashFile(file.SourcePath));
         if (icon is not null) text.AppendLine(HashFile(icon));
+        if (bundle.LicenseFile is not null) text.AppendLine(HashFile(bundle.LicenseFile));
         using var sha = SHA256.Create();
         return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(text.ToString()))).Replace("-", "");
     }

@@ -3,12 +3,12 @@ using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Wix;
 
-internal sealed record WixToolset(string CandlePath, string LightPath);
+internal sealed record WixToolset(string CandlePath, string LightPath, string UiExtensionPath);
 
 internal static class WixToolsetResolver
 {
     internal const string Version = "3.14.1";
-    internal const string ArchiveSha256 = "25AE0BB2A21FAC6B486C4B06155C9F463F2D845E7036BE0E9B1C98F4E48EA494";
+    internal const string ArchiveSha256 = "ABE572B353CD4151B1C69907BB5C5E84886138E518607432C9723B454853B358";
     private const string ResourceName = "DotNet.Bundler.Wix.Resources.wix3141-tools.zip";
 
     internal static async Task<WixToolset> ResolveAsync(
@@ -27,12 +27,13 @@ internal static class WixToolsetResolver
                 Version,
                 ArchiveSha256,
                 "candle.exe",
-                ["light.exe", "wix.dll", "wconsole.dll", "winterop.dll", "darice.cub",
+                ["light.exe", "wix.dll", "wconsole.dll", "winterop.dll", "darice.cub", "WixUIExtension.dll",
                  "Microsoft.Deployment.Compression.dll", "Microsoft.Deployment.Compression.Cab.dll",
                  "Microsoft.Deployment.Resources.dll", "Microsoft.Deployment.WindowsInstaller.dll",
                  "Microsoft.Deployment.WindowsInstaller.Package.dll", "LICENSE.TXT"]),
             cancellationToken);
-        return new WixToolset(resolved.ExecutablePath, Path.Combine(resolved.DirectoryPath, "light.exe"));
+        return new WixToolset(resolved.ExecutablePath, Path.Combine(resolved.DirectoryPath, "light.exe"),
+            Path.Combine(resolved.DirectoryPath, "WixUIExtension.dll"));
     }
 
     private static async Task<string> MaterializeEmbeddedArchiveAsync(

@@ -1,6 +1,6 @@
 # Windows MSI 后端实施路线（WiX 3.14.1 暂定）
 
-> 状态：`WIN-MSI-1` 已完成本机范围内的退出条件；`WIN-MSI-2` 的本机 current-user 升级/降级/桌面集成与 per-machine 静态产物检查已通过（2026-09-24），专用 UAC/其他 Windows 环境尚未验收。`WIN-MSI-3..4` 未开始，MSI 格式尚未冻结。
+> 状态：`WIN-MSI-1..3` 已完成本机范围内的退出条件（2026-09-24）；`WIN-MSI-3` 的测试证书签名、语言、被动运行、修复与受限故障已由当前 Windows 11 x64 主机验证。生产签名、交互 UI、UAC、真实重启和其他 Windows/ARM64 环境尚未验收。`WIN-MSI-4` 未开始，MSI 格式尚未冻结。
 > 规范入口：`docs/roadmap.md`；逐项能力见 `docs/msi-capability-matrix.md`，外部条件见 `docs/msi-open-items.md`，人工步骤见 `docs/msi-manual-testing.md`。
 
 ## 1. 已核实事实、选择及风险
@@ -24,7 +24,7 @@
 
 官方来源：[WiX 3.14.1 release](https://github.com/wixtoolset/wix3/releases/tag/wix3141rtm)、[WiX 3.14.1 许可证](https://github.com/wixtoolset/wix3/blob/wix3141rtm/LICENSE.TXT)、[WiX 3 维护状态](https://docs.firegiant.com/wix/wix3/)、[WiX 3 工具入门](https://docs.firegiant.com/wix3/tutorial/)。源代码有 ARM64 目标编译选项，但不证明 ARM64 构建宿主可用：[candle 源码](https://github.com/wixtoolset/wix3/blob/wix3141rtm/src/tools/candle/candle.cs)。
 
-**已决定/尚待验收**：用户在 2026-09-24 接受当前约 13.8 MB 的 WiX NuGet 包体积。所选 14 个分发文件的源码/许可工程审计见第 6 节及 `third_party/wix/README.md`；更换文件必须重审。当前 WiX 文档所述 Open Source Maintenance Fee 从 WiX v6 才开始，不能套用到 WiX 3.14.1：[WiX 版本说明](https://docs.firegiant.com/wix/whatsnew/)。`candle.exe`、`light.exe` 和 `wix.dll` 的目标框架属性均为 `.NETFramework,Version=v4.5`，但干净 Windows/ARM64 宿主的启动条件仍需 VM 验证。若免费无补丁状态无法满足届时安全要求，应重新评估工具链。
+**已决定/尚待验收**：用户在 2026-09-24 接受当时约 13.8 MB 的 WiX NuGet 包体积；WIN-MSI-3 增加第 15 个官方 UI 扩展文件后实测约 14.4 MB，增量和哈希见第 8 节。前 14 个文件的审计见第 6 节，第 15 个见第 8 节及 `third_party/wix/README.md`；更换文件必须重审。当前 WiX 文档所述 Open Source Maintenance Fee 从 WiX v6 才开始，不能套用到 WiX 3.14.1：[WiX 版本说明](https://docs.firegiant.com/wix/whatsnew/)。`candle.exe`、`light.exe` 和 `wix.dll` 的目标框架属性均为 `.NETFramework,Version=v4.5`，但干净 Windows/ARM64 宿主的启动条件仍需 VM 验证。若免费无补丁状态无法满足届时安全要求，应重新评估工具链。
 
 ### WiX 3.14.1 自身的“零环境”边界（2026-09-24）
 
@@ -74,7 +74,7 @@
 
 ### WIN-MSI-3：发布与维护行为
 
-- **前置**：WIN-MSI-2 生命周期稳定；有测试证书、隔离故障注入 VM。
+- **前置**：WIN-MSI-2 生命周期稳定；本机生成短期测试证书。高影响故障注入需隔离 VM，按第 4 节通用验证规则列为外部验收，不阻塞本机安全实现。
 - **目标/交付**：复用 Windows 签名组件签 payload 与最终 MSI；语言资源和 MSI UI 的明确支持集；安静/被动安装、卸载、修复/维护模式与原生退出码；失败回滚、锁定文件和重启策略。
 - **新增自动化**：签名顺序与失败后无伪成功产物、每种语言资源及非法 locale、`/qn`/`/passive`/修复参数与返回码契约。本地专用 fixture 实测测试证书签名、静默/被动安装与卸载、`msiexec /f` 修复及可安全注入的失败回滚；损坏包、缺源、锁定文件、真实重启和 `3010` 的系统级场景在可抛弃 VM/专用测试机记录详细日志。任何新自定义操作都需故障/回滚用例。
 - **人工边界**：生产证书/时间戳、真实重启、UI 多语言与辅助技术、企业策略见 MSI 人工文档。
@@ -94,11 +94,11 @@
 
 | 验证层 | 内容 |
 | --- | --- |
-| 本地自动 | 输入/映射/模板、WiX 工具哈希与缓存、数据库表、身份/版本/组件规则、离线编译，以及独立 current-user fixture 的真实安装/卸载；后续扩展适合本地的升级、测试证书签名、静默/被动及修复。每次功能变更增加对应测试。 |
+| 本地自动 | 输入/映射/模板、WiX 工具哈希与缓存、数据库表、身份/版本/组件规则、离线编译，以及独立 current-user fixture 的真实安装/卸载、升级、测试证书签名、静默/被动及修复。每次功能变更增加对应测试。 |
 | 专用 Windows CI/VM | per-machine/UAC、真实重启、系统级故障/回滚、损坏包、锁定文件、不同 OS/架构及干净宿主依赖；保留 verbose log 和状态断言。 |
 | 人工验收 | 生产证书和信任链、真实用户 UAC、交互 UI/语言、企业策略、真实升级来源、真实重启及难以自动覆盖的 ARM64/多 Windows 版本；按独立 MSI 用例执行。 |
 
-接班者先读 `PROJECT_CONTEXT.md`、`docs/roadmap.md`、本文、MSI 矩阵/待办/人工文档，再核 Git、代码与测试。WIN-MSI-1/2 的启动授权和实施结果已记录在第 6/7 节；下一阶段为 WIN-MSI-3，须由用户明确启动。每阶段完成新增自动化和适用的真实安装测试后报告结果；未经用户明确要求不提交或推送。
+接班者先读 `PROJECT_CONTEXT.md`、`docs/roadmap.md`、本文、MSI 矩阵/待办/人工文档，再核 Git、代码与测试。WIN-MSI-1/2/3 的实施结果分别记录在第 6/7/8 节；下一阶段为 WIN-MSI-4，须由用户明确启动。每阶段完成新增自动化和适用的真实安装测试后报告结果；未经用户明确要求不提交或推送。
 
 ## 6. WIN-MSI-1 实施及完成记录（2026-09-24）
 
@@ -145,3 +145,17 @@
 **WIN-MSI-2 结构与测试整理（2026-09-24）**：本次仅重组已有 WiX 后端与测试，未提前实施 WIN-MSI-3。构建/输出、产品 XML 与路径规范化分别放在 `WixBundleBackend`、`WixProductDocument`、`WixPackagePaths`；公共 API 与 MSI 身份、组件及安装语义不变。快速测试仍使用 `tests/Bundler.Tests` 的统一入口，WiX 用例单列 `WixTests.cs` 是为了避免继续扩张原 `Program.cs`，并把独立可观察的安全/复用场景拆成独立测试。MSI 集成仍以 `Verify.ps1` 为烟雾入口、`VerifyLifecycle.ps1` 为阶段专用入口；共用 `MsiTestSupport.ps1`，每轮仅从本地包源还原仓库外 fixture，生命周期三份包使用互不复用的项目中间目录。独立后端 API fixture 仍只引用 `DotNet.Bundler.Wix` NuGet 包。两类后端保持相同测试入口、包源核对、日志和清理习惯，测试内容按 MSI 语义决定。包版本随 WiX 包内容升至 alpha.35，示例应用版本不变。实际命令、56 项快速测试结果、真实安装与升级的哈希及日志见 `PROJECT_CONTEXT.md` 第 14.4 节；外部平台和 UAC 验收状态不变。
 
 本阶段语义依据：[WiX 3 MajorUpgrade](https://docs.firegiant.com/wix3/xsd/wix/majorupgrade/)、[WiX 3 Shortcut](https://docs.firegiant.com/wix3/xsd/wix/shortcut/)、[Microsoft Default Programs 注册规则](https://learn.microsoft.com/en-us/windows/win32/shell/default-programs)。本机测试是对这些规格在当前环境的实现核查，不代替其他 Windows 版本的真实验收。
+
+## 8. WIN-MSI-3 本机实施记录（2026-09-24）
+
+**实现事实与产品边界**：MSI 后端使用现有 `IBundleSigner`。有签名器时复制并校验输入目录，先签私有副本中的主程序及显式 `SigningFiles`，WiX 编译后再签最终 MSI；失败删除新 MSI 和 manifest，原始输入不变。MSBuild 的 MSI 路径复用 `CreateWindowsSigner()`，与 NSIS 共用 PFX、证书存储区或外部签名命令配置。由于任意 `IBundleSigner` 无法提供可稳定比较的签名身份，已有同版本签名输出一律拒绝复用，防止新签名请求得到旧签名包；发行方应换输出目录或提升应用版本。仅代码签名测试使用短期自签名证书，生产证书和时间戳未验收。
+
+语言支持集固定为 `en-US` 和 `zh-CN`，一次构建一个语言 MSI。英文历史的 UpgradeCode/ProductCode/组件 GUID 生成不变。简体中文默认代码页 936，ProductLanguage 2052，升级身份、组件、安装目录、桌面注册和输出名加语言隔离，避免两个语言包争用同一路径；英文默认代码页仍为 1252，显式非 936 的简体中文配置拒绝。若发行方显式设置 UpgradeCode，须为各语言指定互不冲突的 GUID。WiX 3 官方 `WixUIExtension.dll` 加入同一固定官方归档子集；只有应用提供 `.rtf` 许可证时才启用内置 `WixUI_Minimal` 和相应语言资源。无许可证时保留 Windows Installer 原生基础 UI，不伪造应用许可条款。程序名、描述、许可正文等应用文本由发行方提供和翻译；交互显示、母语审校与辅助功能仍待人工验收。`third_party/wix/README.md` 固定官方资产、增量文件 SHA-256、对应源码及 MS-RL 审计。最终 alpha.36 WiX 包实测为 14,397,524 字节，比前版 13,790,283 字节增加 607,241 字节；SHA-256 `A43C43F1731F6ABB45163EECE6A25866666C9301C06572AE0523D003A7862B99`。未引入付费扩展或运行时下载。
+
+静默/被动/修复沿用 Windows Installer 原生命令和退出码。MSI 包不嵌入 Bundler 私有运行时代码或自定义故障动作，`/qn`、`/passive`、`/fomus`、`/x` 与 `/norestart` 由调用方传给 `msiexec`。本机测试只对独立随机身份的 current-user 产品操作。故障测试把正常 MSI 复制成**测试专用副本**，只在该副本加入 `InstallFiles` 后的延迟失败动作；日志确认实际 `FileCopy` 已执行，Windows Installer 返回 1603 且移除产品注册与托管文件。正式生成的 MSI 不含该动作。损坏包返回原生 1620。锁定文件、缺失修复源、UAC、真实重启及 3010 在可抛弃 VM 验证，不通过本机测试推断。
+
+**本机证据**：Windows 11 Pro build 26200 x64；`dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release --no-restore` 的 MSI 新测试覆盖两语言数据库及 UI、签名顺序/失败清理、真实测试证书签 PE 与 MSI，最终总数和结果见 `PROJECT_CONTEXT.md` 当前阶段记录。`tests/Windows.Msi.Integration/Verify.ps1 -ConfirmLocalInstall` 通过，独立 API MSI SHA-256 `845DC3424DE66E33B7EE0830CE1AFB00D07C945BCE2CC66ABB01556DDE2CE9C0`，真实安装的 MSBuild MSI SHA-256 `31E20D9181E9B29357D6479E201E290BF23831348271A43C907B68FEB966A399`，ProductCode `{F4380809-F773-50F3-8AD0-AAE85FDFB878}`，日志在 `%TEMP%\Bundler-Msi-Smoke-2652c69c944c4da98faf0084d7a0af5e`。`VerifyLifecycle.ps1 -ConfirmLocalInstall` 通过，v1/v2/同版本异包 SHA-256 分别为 `92D298276B487260EC27D47C99516BC9314398D2D157A43655ABF4B3EAE13CA2`、`8DF670271284E2E0A9E8D1948418FEC29E09FEBD2CC6E73559BC98582285CBD4`、`821896880D72FBAE23B5EC45B980E81C2A01E6283E0F2511ED22D3298FFCF15C`，日志在 `%TEMP%\Bundler-Msi-Lifecycle-95a3db36aa934c5aa470fba5b9b72ff0`。
+
+新增 `VerifyMaintenance.ps1 -ConfirmLocalInstall` 最终通过：正常英文 MSI SHA-256 `F036861FBEFF6D35D52EE50A757D6060269AC555E802B3D18A329F84C656B66F`，ProductCode `{CC390551-454A-554C-93FC-9E8A8CB617D8}`，损坏包返回 1620，延迟故障返回 1603 且无残留，被动安装/卸载、静默修复、中文许可证包与英文包并存及分别卸载均通过。日志和包在 `%TEMP%\Bundler-Msi-Maintenance-b264dcc8107d425fa85236de3f4e6e85`。MSI 三个入口均从 alpha.36 本地包源与隔离缓存还原仓库外 fixture；当前 NSIS 集成也在本轮共用 MSBuild 映射改动后通过。发布示例应用仍固定 `1.0.0`，本阶段只迭代打包工具到 `0.1.0-alpha.36`。
+
+**下一阶段与未验收项**：WIN-MSI-4 执行支持矩阵与格式冻结，不新增功能。生产证书/时间戳、真实交互 UI 与母语审校、干净 Windows 10/11/ARM64、per-machine UAC、锁定文件和真实重启/3010 仍在 `docs/msi-manual-testing.md` 与 `docs/msi-open-items.md`，未取得证据的组合不能标为通过。规格依据：[WiX 3 UI 与语言](https://docs.firegiant.com/wix3/wixui/dialog_reference/wixui_minimal/)、[WiX 3 cultures](https://docs.firegiant.com/wix3/howtos/ui_and_localization/specifying_cultures_to_build/)、[MSI 产品语言及本地化身份](https://learn.microsoft.com/en-us/windows/win32/msi/localizing-a-windows-installer-package)、[msiexec 标准参数](https://learn.microsoft.com/en-us/windows/win32/msi/standard-installer-command-line-options)、[Windows Installer 回滚](https://learn.microsoft.com/en-us/windows/win32/msi/rollback-installation) 与 [延迟动作语义](https://learn.microsoft.com/en-us/windows/win32/msi/deferred-execution-custom-actions)。

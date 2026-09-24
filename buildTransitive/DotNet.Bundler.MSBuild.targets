@@ -48,6 +48,7 @@
       WixInstallScope="$(BundlerWixInstallScope)"
       WixUpgradeCode="$(BundlerWixUpgradeCode)"
       WixCodepage="$(BundlerWixCodepage)"
+      WixLanguage="$(BundlerWixLanguage)"
       WixStartMenuShortcut="$(BundlerWixStartMenuShortcut)"
       WixDesktopShortcut="$(BundlerWixDesktopShortcut)"
       NsisTemplatePath="$(BundlerNsisTemplate)"

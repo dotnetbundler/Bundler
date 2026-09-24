@@ -23,7 +23,7 @@ The bundled `DotNetBundlerNsis.dll` Native AOT plug-in is built with NsisPlugin.
 
 - Project: https://github.com/wixtoolset/wix3
 - Release: https://github.com/wixtoolset/wix3/releases/tag/wix3141rtm
-- Binary subset SHA-256: `25AE0BB2A21FAC6B486C4B06155C9F463F2D845E7036BE0E9B1C98F4E48EA494`
+- Binary subset SHA-256: `ABE572B353CD4151B1C69907BB5C5E84886138E518607432C9723B454853B358` (includes the original WiX UI extension)
 - License: Microsoft Reciprocal License, `licenses/wix/LICENSE.TXT` in the WiX package
 - Corresponding source: `licenses/wix/wix3141-source.zip` in the WiX package
 

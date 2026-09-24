@@ -3,8 +3,8 @@
 > 最后整理：2026-09-24
 > 当前分支：`codex/msi-development`（NSIS 开发线为 `codex/nsis-development`）
 > NSIS 冻结起点：`b116d09 feat(nsis): freeze secure packaging baseline`；当前提交以 `git rev-parse --short HEAD` 为准
-> 当前包版本：`0.1.0-alpha.35`（Git 状态与包版本均须实时核查）
-> 当前阶段：`WIN-MSI-1` 与 `WIN-MSI-2` 的本机范围退出条件已通过；WIN-MSI-2 已实测 current-user 两版本升级/降级及桌面集成，per-machine 只检查产物。下一阶段 `WIN-MSI-3`；外部 UAC/Windows/ARM64 矩阵未验收。
+> 当前包版本：`0.1.0-alpha.36`（Git 状态与包版本均须实时核查）
+> 当前阶段：`WIN-MSI-1..3` 的本机范围退出条件已通过；current-user 安装/升级/修复/卸载、测试签名、双语言包及受限故障均有自动证据。per-machine 只检查产物；生产签名、交互 UI、外部 UAC/Windows/ARM64/重启矩阵未验收。下一阶段 `WIN-MSI-4` 格式矩阵与冻结。
 
 本文档记录当前事实、决策与验证证据，供后续开发任务接续。跨格式开发与交接规则以 `docs/development-rules.md` 为唯一规范入口；正式路线见 `docs/roadmap.md`，MSI 细则见 `docs/msi-roadmap.md`。本文档不是面向最终用户的使用手册。代码与自动化测试始终是实现事实的最终依据。
 
@@ -484,7 +484,7 @@ Tauri 能力按“通用打包能力、格式特定能力、Tauri runtime 专属
 
 ### 仍不得宣称完成
 
-- 已完成全部阶段并可广泛发行的 MSI/WiX 后端；当前 WIN-MSI-1/2 的本机 current-user 范围已验证，per-machine 仅做数据库检查，外部宿主/UAC、签名及 WIN-MSI-3/4 仍待后续阶段；
+- 已完成全部阶段并可广泛发行的 MSI/WiX 后端；当前 WIN-MSI-1..3 的本机 current-user 范围已验证，per-machine 仅做数据库检查，外部宿主/UAC、生产签名、真实 UI、重启及 WIN-MSI-4 仍待后续阶段；
 - macOS `.app`/DMG；
 - Linux DEB/AppImage；
 - 正式发布并受支持的 CLI（仓库当前只有功能有限的原型）；
@@ -557,6 +557,8 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 
 ### 14.3 默认下一阶段
 
+以下为 WIN-MSI-1/2 时的历史接管记录；**当前下一阶段以文首及 14.6 节为准**。
+
 用户已明确说“提交，然后开始”；规划文档提交为 `75738ed`，`WIN-MSI-1` 代码已完成本机范围阶段一；用户已要求提交，实际 HEAD 和工作区状态以 Git 为准。NSIS 迁移 fixture 的 `WixToolset.Sdk/5.0.2` 不代表正式选型；本阶段使用 WiX 3.14.1。当前已有直接 API、MSBuild 映射、固定工具子集与源码分发、最小 current user MSI 构建和数据库自动化验证。按用户要求与 NSIS 测试分层一致，2026-09-24 在当前 Windows x64 开发机使用每轮独立产品身份执行真实静默安装与卸载，检查文件、产品注册、未知用户文件保留及清理，均通过；脚本为 `tests/Windows.Msi.Integration/Verify.ps1 -ConfirmLocalInstall`，日志、MSI SHA-256、ProductCode 和环境见 `docs/msi-roadmap.md` 第 6 节。当前工作区的 49 项自动化测试及完整 Windows NSIS 安装/卸载集成回归也已通过，NSIS 固定测试路径和卸载注册项无残留。干净宿主 Framework、ARM64 宿主/用户端、UAC 与高影响故障仍待独立人工/外部验收，不宣称广泛支持。用户已于 2026-09-24 接受当前约 13.8 MB 的 WiX NuGet 包体积；第一阶段已完成本机范围退出条件：14 个工具子集文件逐项对应官方源码和许可，生成的 WiX NuGet 包包含许可证、源码及声明；49 项测试以 --no-restore 再次通过，涵盖新缓存解包 WiX 和实际编译 MSI，打包复核也通过。干净 Windows/ARM64 环境依用户说明暂不执行，保留待验收且不扩大支持声明。评价 WiX 3.14.1 自身的零环境要求时，只看 candle.exe/light.exe 及其依赖，不混入 Bundler 的 MSBuild 或应用构建环境：两个 EXE 及 wix.dll 均目标 .NET Framework 4.5；Windows 7 SP1 未预装所需 Framework，Windows 10/11 预装版本理论上足够，但干净宿主实际编译仍需 VM 验证，详见 docs/msi-roadmap.md 第 2 节。CLI 在计划的 MSI、macOS 和 Linux 打包格式完成后再做。
 
 快速开发期按 NSIS 的分层测试方式继续 MSI：本机可安全运行的功能在同阶段增加自动化和真实安装/卸载回归，不把代码生成/数据库断言当作系统行为证据；缺环境的测试单列 `docs/msi-manual-testing.md`，不阻塞下一阶段，也不扩大支持声明。WIN-MSI-1 的详细证据见 `docs/msi-roadmap.md` 第 6 节。
@@ -590,3 +592,15 @@ NSIS 全量 Windows 集成在先打出仓库本地 alpha.35 包后退出 0，输
 ### 14.5 执行约束
 
 执行时遵守根目录 `AGENTS.md` 与 `docs/development-rules.md`。本文只保留当前状态和证据；完成阶段后更新状态，即使尚未提交也要保证下一次仅凭仓库文档即可接续。
+
+### 14.6 WIN-MSI-3 本机结项与下一阶段（2026-09-24）
+
+当前分支 `codex/msi-development`，阶段开始时 HEAD `5712549` 且工作区干净；本节变更**尚未提交**，以 `git status` 和 `git rev-parse HEAD` 实时核对。包版本已迭代到 `0.1.0-alpha.36`，公开示例的应用版本仍为 `1.0.0`。只修改 MSI 后端、共享 MSBuild 的 MSI 映射、工具供应、版本引用、相应测试与文档；未做 CLI 或继续扩展 NSIS。
+
+实现事实：`WixBundlerOptions.Signer` 复用已有 Windows 签名组件，先签隔离载荷再签最终 MSI；签名失败清理输出，同版本已签产物不静默复用。`WixBundleConfiguration.Language` 提供英文 `1033` 和简体中文 `2052` 单语言产物；中文使用独立升级身份、组件、目录和文件名，英文历史身份未改。应用提供 RTF 许可时使用随包固定的官方 `WixUIExtension.dll` 最小交互 UI；未提供许可时不代应用展示许可条款。原生 `msiexec` 负责 `/qn`、`/passive`、`/fomus`、失败码与回滚；生产 MSI 不加入测试故障动作或自定义运行时代码。WiX 归档新增一个官方文件，哈希/源码/许可审计见 `third_party/wix/README.md` 和 `THIRD-PARTY-NOTICES.md`。
+
+本机 Windows 11 Pro build 26200 x64：`dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release --no-restore` 最终 **60 项全部通过**，包含新增的语言身份/数据库、签名顺序、真实短期自签名证书签 PE/MSI、签名失败及同版本拒绝。`tests/Windows.Msi.Integration/Verify.ps1 -ConfirmLocalInstall`、`VerifyLifecycle.ps1 -ConfirmLocalInstall` 和新增 `VerifyMaintenance.ps1 -ConfirmLocalInstall` 均通过。维护脚本从隔离本地 alpha.36 包源构建随机 current-user MSI；损坏包返回 1620，测试副本的延迟失败在日志记录 `FileCopy` 后返回 1603 且无托管残留；`/passive` 安装/卸载、`/fomus /qn` 修复、中文 RTF 包与英文包并存及分别卸载通过。三轮 MSI SHA-256、ProductCode、日志目录见 `docs/msi-roadmap.md` 第 8 节。NSIS Windows 集成使用同一版本本地包后退出 0，输出 `PASS Windows NSIS install/uninstall integration`；最初一次在打出 alpha.36 本地包前于测试前报 `Package not found`，随后先 pack 再完整复跑通过。任何测试证书都未进入仓库。
+
+最终 `dotnet pack Bundler.slnx -c Release --no-restore -o artifacts/packages` 产出七个 alpha.36 包。`DotNet.Bundler.Wix` 包大小 14,397,524 字节、SHA-256 `A43C43F1731F6ABB45163EECE6A25866666C9301C06572AE0523D003A7862B99`；实际包包含与仓库一致的 `THIRD-PARTY-NOTICES.md`、WiX MS-RL、对应源码归档和 SHA256SUMS。公开 `HelloMsiApp` 与 `HelloBundledApp` 都从项目声明的本地 `artifacts/packages` 恢复七个 alpha.36 依赖并发布成功；示例安装器分别留在 `%TEMP%\Bundler-Public-Sample-Msi-alpha36` 与 `%TEMP%\Bundler-Public-Sample-Nsis-alpha36`，SHA-256 分别为 `F13B8951EA105C80B4035E4B059260BC4EA51BA8C2D94EFBFD4B82B01DBAAF46` 和 `AFDF83FAC325C88E537A2AC2A32359559CBD6834C22F85B34A9B6D8145BDBD51`。公开示例未安装；真实安装使用随机 fixture。
+
+未验收：生产证书/时间戳、真实双语言交互 UI/辅助功能、UAC/per-machine、干净 Windows 10/11/ARM64、缺失修复源、锁定文件和实际重启/3010。相关人工步骤与外部待办分别保存在 `docs/msi-manual-testing.md` 和 `docs/msi-open-items.md`，不能写成已通过。下一阶段 **WIN-MSI-4：完整 Windows 验证矩阵、缺口修复和 MSI 格式冻结**；按 `docs/msi-roadmap.md` 的门槛推进，不在冻结阶段新增功能。未经用户明确要求不提交或推送。

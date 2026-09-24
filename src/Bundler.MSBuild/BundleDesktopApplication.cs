@@ -38,7 +38,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string WixToolsetArchivePath { get; set; } = "";
     public string WixInstallScope { get; set; } = "currentUser";
     public string WixUpgradeCode { get; set; } = "";
-    public int WixCodepage { get; set; } = 1252;
+    public int WixCodepage { get; set; }
+    public string WixLanguage { get; set; } = "en-US";
     public bool WixStartMenuShortcut { get; set; }
     public bool WixDesktopShortcut { get; set; }
     public string NsisTemplatePath { get; set; } = "";
@@ -129,12 +130,19 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 {
                     throw new ArgumentException("BundlerWixInstallScope must be currentUser or perMachine.");
                 }
+                var language = WixLanguage.ToLowerInvariant() switch
+                {
+                    "en-us" => WixPackageLanguage.English,
+                    "zh-cn" => WixPackageLanguage.ChineseSimplified,
+                    _ => throw new ArgumentException("BundlerWixLanguage must be en-US or zh-CN.")
+                };
                 artifacts = new WixBundler(
                     new WixBundleConfiguration
                     {
                         InstallScope = scope,
                         UpgradeCode = EmptyToNull(WixUpgradeCode),
                         Codepage = WixCodepage,
+                        Language = language,
                         StartMenuShortcut = WixStartMenuShortcut,
                         DesktopShortcut = WixDesktopShortcut
                     },
@@ -142,6 +150,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                     {
                         ToolsetArchivePath = EmptyToNull(WixToolsetArchivePath),
                         ToolCacheDirectory = EmptyToNull(ToolCacheDirectory),
+                        Signer = CreateWindowsSigner(),
                         Logger = new MsBuildBundleLogger(Log)
                     }).BuildAsync(configuration).GetAwaiter().GetResult();
             }

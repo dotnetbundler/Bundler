@@ -17,9 +17,9 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
     {
         var product = new XElement(Wix + "Product",
             new XAttribute("Id", identity.ProductCode.ToString("B").ToUpperInvariant()),
-            new XAttribute("Codepage", settings.Codepage),
+            new XAttribute("Codepage", settings.EffectiveCodepage),
             new XAttribute("Name", bundle.ProductName),
-            new XAttribute("Language", "1033"),
+            new XAttribute("Language", settings.ProductLanguage),
             new XAttribute("Version", identity.ProductVersion),
             new XAttribute("Manufacturer", bundle.Publisher ?? bundle.ProductName),
             new XAttribute("UpgradeCode", identity.UpgradeCode.ToString("B").ToUpperInvariant()),
@@ -27,16 +27,18 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
                 new XAttribute("Id", identity.PackageCode.ToString("B").ToUpperInvariant()),
                 new XAttribute("InstallerVersion", "500"),
                 new XAttribute("Compressed", "yes"),
-                new XAttribute("SummaryCodepage", settings.Codepage),
+                new XAttribute("SummaryCodepage", settings.EffectiveCodepage),
                 new XAttribute("InstallScope", settings.InstallScope == WixInstallScope.CurrentUser ? "perUser" : "perMachine")),
             new XElement(Wix + "MediaTemplate", new XAttribute("EmbedCab", "yes")));
         product.Add(new XElement(Wix + "MajorUpgrade",
             new XAttribute("Schedule", "afterInstallInitialize"),
             new XAttribute("AllowSameVersionUpgrades", "no"),
-            new XAttribute("DowngradeErrorMessage", "A newer version of [ProductName] is already installed.")));
+            new XAttribute("DowngradeErrorMessage", Localize(
+                "A newer version of [ProductName] is already installed.",
+                "已安装较新版本的 [ProductName]。"))));
         var registrationRoot = settings.InstallScope == WixInstallScope.CurrentUser ? "HKCU" : "HKLM";
         var definitionKey = "Software\\DotNetBundler\\Products\\" + bundle.Identifier.ToLowerInvariant() +
-            "\\" + item.Target.RuntimeIdentifier + "\\Components";
+            "\\" + item.Target.RuntimeIdentifier + settings.LanguageSuffix + "\\Components";
         product.Add(new XElement(Wix + "Property", new XAttribute("Id", "BUNDLER_INSTALLED_DEFINITION"),
             new XElement(Wix + "RegistrySearch", new XAttribute("Id", "FindBundlerDefinition"),
                 new XAttribute("Root", registrationRoot), new XAttribute("Key", definitionKey),
@@ -44,7 +46,9 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
         product.Add(new XElement(Wix + "Property", new XAttribute("Id", "BUNDLER_PACKAGE_DEFINITION"),
             new XAttribute("Value", definitionHash)));
         product.Add(new XElement(Wix + "Condition",
-            new XAttribute("Message", "A different MSI package already uses this product version. Use a new product version."),
+            new XAttribute("Message", Localize(
+                "A different MSI package already uses this product version. Use a new product version.",
+                "此产品版本已由另一个 MSI 包使用。请使用新的产品版本。")),
             "REMOVE=\"ALL\" OR NOT Installed OR NOT BUNDLER_INSTALLED_DEFINITION OR BUNDLER_INSTALLED_DEFINITION=BUNDLER_PACKAGE_DEFINITION"));
         if (!string.IsNullOrWhiteSpace(bundle.Description))
         {
@@ -73,7 +77,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
             : installRoot;
         var app = new XElement(Wix + "Directory", new XAttribute("Id", "INSTALLFOLDER"),
             new XAttribute("Name", bundle.Identifier.ToLowerInvariant() + "-" +
-                (item.Target.Architecture == CpuArchitecture.Arm64 ? "arm64" : "x64")));
+                (item.Target.Architecture == CpuArchitecture.Arm64 ? "arm64" : "x64") + settings.LanguageSuffix));
         programs.Add(app);
         if (settings.InstallScope == WixInstallScope.CurrentUser) installRoot.Add(programs);
         targetDir.Add(installRoot);
@@ -81,7 +85,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
         {
             targetDir.Add(new XElement(Wix + "Directory", new XAttribute("Id", "ProgramMenuFolder"),
                 new XElement(Wix + "Directory", new XAttribute("Id", "BundlerStartMenuFolder"),
-                    new XAttribute("Name", bundle.Identifier.ToLowerInvariant()))));
+                    new XAttribute("Name", bundle.Identifier.ToLowerInvariant() + settings.LanguageSuffix))));
         }
         if (settings.DesktopShortcut)
             targetDir.Add(new XElement(Wix + "Directory", new XAttribute("Id", "DesktopFolder")));
@@ -99,7 +103,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
             new XAttribute("Title", bundle.ProductName), new XAttribute("Level", "1"));
         var registryRoot = settings.InstallScope == WixInstallScope.CurrentUser ? "HKCU" : "HKLM";
         var registryKey = "Software\\DotNetBundler\\Products\\" + bundle.Identifier.ToLowerInvariant() +
-            "\\" + item.Target.RuntimeIdentifier + "\\Components";
+            "\\" + item.Target.RuntimeIdentifier + settings.LanguageSuffix + "\\Components";
         var mainExecutable = WixPackagePaths.NormalizeTarget(item.MainExecutable!);
 
         foreach (var file in files)
@@ -117,20 +121,20 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
                 if (settings.StartMenuShortcut)
                     fileElement.Add(new XElement(Wix + "Shortcut", new XAttribute("Id", "StartMenuShortcut"),
                         new XAttribute("Directory", "BundlerStartMenuFolder"),
-                        new XAttribute("Name", SafeShortcutName(bundle.ProductName)),
+                        new XAttribute("Name", SafeShortcutName(bundle.ProductName) + settings.LanguageSuffix),
                         new XAttribute("Advertise", settings.InstallScope == WixInstallScope.PerMachine ? "yes" : "no"),
                         new XAttribute("WorkingDirectory", "INSTALLFOLDER")));
                 if (settings.DesktopShortcut)
                     fileElement.Add(new XElement(Wix + "Shortcut", new XAttribute("Id", "DesktopShortcut"),
                         new XAttribute("Directory", "DesktopFolder"),
-                        new XAttribute("Name", SafeShortcutName(bundle.ProductName) + " (" + bundle.Identifier.ToLowerInvariant() + ")"),
+                        new XAttribute("Name", SafeShortcutName(bundle.ProductName) + " (" + bundle.Identifier.ToLowerInvariant() + settings.LanguageSuffix + ")"),
                         new XAttribute("Advertise", settings.InstallScope == WixInstallScope.PerMachine ? "yes" : "no"),
                         new XAttribute("WorkingDirectory", "INSTALLFOLDER")));
             }
             directory.Add(new XElement(Wix + "Component",
                 new XAttribute("Id", componentId),
                 new XAttribute("Guid", WixIdentity.ComponentCode(bundle.Identifier,
-                    item.Target.RuntimeIdentifier, settings.InstallScope, file.RelativePath).ToString("B").ToUpperInvariant()),
+                    item.Target.RuntimeIdentifier, settings.InstallScope, file.RelativePath, settings.Language).ToString("B").ToUpperInvariant()),
                 fileElement,
                 new XElement(Wix + "RegistryValue", new XAttribute("Root", registryRoot),
                     new XAttribute("Key", registryKey), new XAttribute("Name", componentId),
@@ -142,7 +146,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
 
         var cleanup = new XElement(Wix + "Component", new XAttribute("Id", "Cleanup"),
             new XAttribute("Guid", WixIdentity.ComponentCode(bundle.Identifier,
-                item.Target.RuntimeIdentifier, settings.InstallScope, "!cleanup").ToString("B").ToUpperInvariant()),
+                item.Target.RuntimeIdentifier, settings.InstallScope, "!cleanup", settings.Language).ToString("B").ToUpperInvariant()),
             new XElement(Wix + "RegistryValue", new XAttribute("Root", registryRoot),
                 new XAttribute("Key", registryKey), new XAttribute("Name", "Cleanup"),
                 new XAttribute("Type", "integer"), new XAttribute("Value", "1"),
@@ -171,6 +175,13 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
         app.Add(cleanup);
         feature.Add(new XElement(Wix + "ComponentRef", new XAttribute("Id", "Cleanup")));
         AddDesktopRegistrations();
+        if (!string.IsNullOrWhiteSpace(bundle.LicenseFile))
+        {
+            product.Add(new XElement(Wix + "UIRef", new XAttribute("Id", "WixUI_ErrorProgressText")));
+            product.Add(new XElement(Wix + "WixVariable", new XAttribute("Id", "WixUILicenseRtf"),
+                new XAttribute("Value", Path.GetFullPath(bundle.LicenseFile))));
+            product.Add(new XElement(Wix + "UIRef", new XAttribute("Id", "WixUI_Minimal")));
+        }
         product.Add(feature);
         return new XElement(Wix + "Wix", product);
 
@@ -190,9 +201,9 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
         void AddDesktopRegistrations()
         {
             if (bundle.FileAssociations.Count == 0 && bundle.UrlProtocols.Count == 0) return;
-            var applicationId = bundle.Identifier.ToLowerInvariant() + "." + item.Target.RuntimeIdentifier;
+            var applicationId = bundle.Identifier.ToLowerInvariant() + "." + item.Target.RuntimeIdentifier + settings.LanguageSuffix;
             var capabilities = "Software\\DotNetBundler\\Products\\" + bundle.Identifier.ToLowerInvariant() +
-                "\\" + item.Target.RuntimeIdentifier + "\\Capabilities";
+                "\\" + item.Target.RuntimeIdentifier + settings.LanguageSuffix + "\\Capabilities";
             var command = "\"[INSTALLFOLDER]" + mainExecutable.Replace('/', '\\') + "\" \"%1\"";
             var entries = new List<(string Key, string? Name, string Value)> {
                 (capabilities, "ApplicationName", bundle.ProductName),
@@ -224,7 +235,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
             }
             var registration = new XElement(Wix + "Component", new XAttribute("Id", "DesktopRegistration"),
                 new XAttribute("Guid", WixIdentity.ComponentCode(bundle.Identifier,
-                    item.Target.RuntimeIdentifier, settings.InstallScope, "!desktop-registration").ToString("B").ToUpperInvariant()));
+                    item.Target.RuntimeIdentifier, settings.InstallScope, "!desktop-registration", settings.Language).ToString("B").ToUpperInvariant()));
             for (var index = 0; index < entries.Count; index++)
             {
                 var entry = entries[index];
@@ -239,6 +250,9 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
             feature.Add(new XElement(Wix + "ComponentRef", new XAttribute("Id", "DesktopRegistration")));
         }
     }
+
+    private string Localize(string english, string chinese) =>
+        settings.Language == WixPackageLanguage.ChineseSimplified ? chinese : english;
 
     private static string ParentPath(string path)
     {

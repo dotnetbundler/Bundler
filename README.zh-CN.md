@@ -46,7 +46,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS/WiX 程序集都提供
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.35" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.36" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -64,7 +64,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.35" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.36" />
 ```
 
 ```csharp
@@ -103,7 +103,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.35" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.36" />
 ```
 
 ```csharp
@@ -128,10 +128,17 @@ var request = new BundleConfiguration
     ]
 };
 
-var artifacts = await new WixBundler().BuildAsync(request);
+var artifacts = await new WixBundler(new WixBundleConfiguration
+{
+    Language = WixPackageLanguage.ChineseSimplified
+}).BuildAsync(request);
 ```
 
-`WixBundleConfiguration` 配置 MSI 安装范围、代码页和快捷方式；`WixBundlerOptions` 可为测试覆盖工具缓存或工具归档路径。WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。当前开发版本尚未公开到默认 NuGet 源时，先从本仓库 pack 并指定本地包源。上述包引用与实际编译由复制到仓库外目录的 `tests/Msi.Api.PackageFixture` 自动验证；MSI 产品身份和安装行为以 MSI 专用文档为准。
+`WixBundleConfiguration` 配置 MSI 安装范围、语言（`English`/`ChineseSimplified`）、代码页和快捷方式。默认英文/1252；简体中文自动选 936，显式指定其他代码页会被拒绝。各语言是独立的单语言 MSI 产品线，中文包名带 `-zh-cn`，安装目录和 UpgradeCode 也隔离。应用可以提供 `.rtf` `LicenseFile` 以启用该语言的 WiX 最小交互界面；不提供许可证时继续使用 Windows Installer 原生的基础界面，不显示替代性许可条款。已有英文产品身份保持稳定。应用的其他显示文本由调用方提供，Bundler 不自动翻译。
+
+`WixBundlerOptions.Signer` 可复用 `WindowsAuthenticodeSigner` 或自定义 `IBundleSigner`：先签隔离副本中的主程序和显式 `SigningFiles`，再签最终 MSI。MSBuild 使用既有的 `BundlerWindowsSigning*` 属性和 `BundlerWindowsSigningFile` 项。签名失败会移除新 MSI；已有同版本签名包不会被静默复用，重新签名需新输出目录或新应用版本。生产证书和时间戳由发行方提供，私钥不进入仓库。
+
+WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。当前开发版本尚未公开到默认 NuGet 源时，先从本仓库 pack 并指定本地包源。上述包引用与实际编译由复制到仓库外目录的 `tests/Msi.Api.PackageFixture` 自动验证；MSI 产品身份和安装行为以 MSI 专用文档为准。
 
 ## MSBuild 属性
 
@@ -148,7 +155,7 @@ var artifacts = await new WixBundler().BuildAsync(request);
 | `BundlerDescription` | 否 | `$(Description)` |
 | `BundlerHomepage` | 否 | `$(PackageProjectUrl)` |
 | `BundlerCopyright` | 否 | `$(Copyright)` |
-| `BundlerLicenseFile` | 否 | 无；支持 `.txt` 或 `.rtf` |
+| `BundlerLicenseFile` | 否 | 无；NSIS 支持 `.txt`/`.rtf`，MSI 交互许可界面仅支持 `.rtf` |
 | `BundlerOutputPath` | 否 | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerToolCachePath` | 否 | `%LOCALAPPDATA%\DotNetBundler\tools` |
 | `BundlerNsisTemplate` | 否 | 包内自带模板 |
@@ -174,6 +181,12 @@ var artifacts = await new WixBundler().BuildAsync(request);
 | `BundlerNsisShortcutLegacyMainExecutables` | 否 | 分号分隔的旧主程序安装相对路径 |
 | `BundlerNsisLegacyMsiProductCodes` | 否 | 分号分隔的 MSI ProductCode GUID |
 | `BundlerNsisLegacyMsiUpgradeCodes` | 否 | 分号分隔的 MSI UpgradeCode GUID |
+| `BundlerWixInstallScope` | 否 | `currentUser`；也支持 `perMachine`，两者是独立产品线 |
+| `BundlerWixUpgradeCode` | 否 | 自动稳定生成；仅在有依据的旧产品迁移中显式指定 |
+| `BundlerWixLanguage` | 否 | `en-US`；也支持 `zh-CN`，每包一种语言 |
+| `BundlerWixCodepage` | 否 | `0` 自动选择英文 1252/简体中文 936；显式值须适合包内文字 |
+| `BundlerWixStartMenuShortcut` | 否 | `false` |
+| `BundlerWixDesktopShortcut` | 否 | `false` |
 | `BundlerWindowsSigningPfxFile` | 否 | PFX/P12 代码签名证书路径 |
 | `BundlerWindowsSigningPfxPasswordEnvironmentVariable` | 否 | 保存 PFX 密码的环境变量名 |
 | `BundlerWindowsSigningCertificateThumbprint` | 否 | Windows `My` 证书存储区中的证书指纹 |
@@ -376,14 +389,15 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.35
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -PackageVersion 0.1.0-alpha.35 -ConfirmLocalInstall
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -PackageVersion 0.1.0-alpha.35 -ConfirmLocalInstall
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.36
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -PackageVersion 0.1.0-alpha.36 -ConfirmLocalInstall
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -PackageVersion 0.1.0-alpha.36 -ConfirmLocalInstall
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -PackageVersion 0.1.0-alpha.36 -ConfirmLocalInstall
 ```
 
 NSIS Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。
 
-MSI 集成测试每轮从本地包源还原，并核对隔离缓存中的实际包版本。基础脚本先把独立 API fixture 放在仓库外，只引用 `DotNet.Bundler.Wix` 生成真实 MSI；再用便利元包的 MSBuild fixture 执行真实安装/卸载。生命周期脚本生成两版本和同版本异内容包，检查升级、降级/异包拒绝、桌面注册、快捷方式及用户文件保留。`-ConfirmLocalInstall` 只允许这些受限测试。干净宿主、ARM64、UAC 和高影响故障仍按 MSI 人工验收文档执行。
+MSI 集成测试每轮从本地包源还原，并核对隔离缓存中的实际包版本。基础脚本先把独立 API fixture 放在仓库外，只引用 `DotNet.Bundler.Wix` 生成真实 MSI；再用便利元包的 MSBuild fixture 执行真实安装/卸载。生命周期脚本生成两版本和同版本异内容包，检查升级、降级/异包拒绝、桌面注册、快捷方式及用户文件保留。维护脚本验证被动安装/卸载、静默修复、测试专用包的延迟故障回滚。`-ConfirmLocalInstall` 只允许这些受限测试。干净宿主、ARM64、UAC、真实重启与生产证书仍按 MSI 人工验收文档执行。
 
 人工验收入口见 [`docs/manual-testing-index.md`](docs/manual-testing-index.md)；NSIS 历史用例仍在 [`docs/manual-testing.md`](docs/manual-testing.md)，MSI 用例在 [`docs/msi-manual-testing.md`](docs/msi-manual-testing.md)。仓库可自动化的测试仍由上述命令执行，不转为人工清单。
 

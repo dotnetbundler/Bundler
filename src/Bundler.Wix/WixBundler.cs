@@ -31,27 +31,32 @@ public sealed class WixBundler
         {
             throw new NotSupportedException("DotNet.Bundler.Wix accepts MSI targets only.");
         }
-        if (bundle.Targets.Any(target => target.SigningFiles.Count > 0))
+        if (bundle.Targets.Any(target => target.SigningFiles.Count > 0) && _options.Signer is null)
         {
-            throw new NotSupportedException("MSI payload signing is planned for WIN-MSI-3.");
+            throw new ArgumentException("MSI signing files require a configured Windows signer.");
         }
-        if (!string.IsNullOrWhiteSpace(bundle.LicenseFile))
+        if (!Enum.IsDefined(typeof(WixPackageLanguage), _settings.Language))
         {
-            throw new NotSupportedException("MSI license UI is planned for WIN-MSI-3.");
+            throw new ArgumentOutOfRangeException(nameof(_settings.Language));
         }
-        if (_settings.Codepage <= 0 || _settings.Codepage is 65000 or 65001)
+        if (_settings.Codepage < 0 || _settings.Codepage is 65000 or 65001)
         {
-            throw new ArgumentException("WIN-MSI-1 requires a supported Windows ANSI MSI code page; UTF-7/UTF-8 are not supported by WiX 3 MSI UI.");
+            throw new ArgumentException("MSI requires a Windows ANSI code page; UTF-7/UTF-8 are not supported by WiX 3 MSI UI.");
         }
+        if (_settings.Language == WixPackageLanguage.ChineseSimplified && _settings.EffectiveCodepage != 936)
+            throw new ArgumentException("Simplified Chinese MSI UI requires Windows code page 936.");
+        if (!string.IsNullOrWhiteSpace(bundle.LicenseFile) &&
+            !Path.GetExtension(bundle.LicenseFile).Equals(".rtf", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("MSI interactive license UI requires an RTF license file.");
 
         foreach (var target in bundle.Targets)
         {
             WixIdentity.Create(bundle.Identifier, bundle.Version, target.RuntimeIdentifier,
-                _settings.InstallScope, _settings.UpgradeCode);
+                _settings.InstallScope, _settings.UpgradeCode, _settings.Language);
         }
         var toolset = await WixToolsetResolver.ResolveAsync(
             _options.ResolveToolCacheDirectory(), _options.ToolsetArchivePath, cancellationToken);
         return await new BundlePipeline(
-            [new WixBundleBackend(toolset, _settings)], _options.Logger).BuildAsync(bundle, cancellationToken);
+            [new WixBundleBackend(toolset, _settings, _options.Signer)], _options.Logger).BuildAsync(bundle, cancellationToken);
     }
 }

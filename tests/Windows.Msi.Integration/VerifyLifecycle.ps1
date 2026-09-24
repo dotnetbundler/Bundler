@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = 'Release',
-    [string]$PackageVersion = '0.1.0-alpha.35',
+    [string]$PackageVersion = '0.1.0-alpha.36',
     [switch]$ConfirmDisposableVm,
     [switch]$ConfirmLocalInstall
 )
