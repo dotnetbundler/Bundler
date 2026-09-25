@@ -533,7 +533,7 @@ NSIS `Verify.ps1` 全量集成退出 0（该轮首次运行曾因残留事务状
 **交互/UI 人工项**：真实交互 UI 的目录选择按钮流转、`InvalidDirDlg` 显示、勾选后启动、缩放/辅助功能、junction 路径显示行为，以及 per-machine UI 提权场景仍属未执行人工验收，见 `docs/msi-manual-testing.md` 的 MSI-MT-11 与 `docs/msi-open-items.md`。
 依据：[WiX 3 WixUIExtension 3.14.1 源码](https://github.com/wixtoolset/wix3/tree/wix3141rtm/src/ext/UIExtension/wixlib)（本机核对 `WixUI_InstallDir`、`WixUI_Minimal`、`InstallDirDlg`、`BrowseDlg`、`InvalidDirDlg`、`Common.wxs` 实际结构）、[MSI 条件字符串与子目录比较](https://learn.microsoft.com/en-us/windows/win32/msi/conditional-statement-syntax)、[Environment 表](https://learn.microsoft.com/en-us/windows/win32/msi/environment-table)、[ICE43](https://learn.microsoft.com/en-us/windows/win32/msi/ice43)、[MSI 自定义动作类型](https://learn.microsoft.com/en-us/windows/win32/msi/summary-list-of-all-custom-action-types)。
 
-### WIN-MSI-7：语言、输入资源和构建选项（已实现，`0.1.0-alpha.42`，提交待授权）
+### WIN-MSI-7：语言、输入资源和构建选项（已实现，`1b99b6a`，`0.1.0-alpha.42`）
 
 - **前置**：WIN-MSI-6 的 UI/目录契约稳定；清点固定 WiX 3.14.1 归档可用 locale、任何需要增补文件的来源/许可/大小，确认不复制 Tauri 翻译。
 - **目标/交付**：在实际受支持 WiX 语言范围内以 locale 列表生成**分别独立的单语言 MSI**；调用方可提供经过键集合、编码及 culture 校验的翻译资源。

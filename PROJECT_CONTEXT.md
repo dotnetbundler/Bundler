@@ -3,7 +3,7 @@
 > 最后更新：2026-09-27
 > 当前分支：`msi-development`（NSIS 开发线已并入，冻结提交 `71a5c90`）
 > 当前包版本：`0.1.0-alpha.42`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
-> 当前阶段：WIN-MSI-1..7 本机自动化范围完成（WIN-MSI-7 已实现，`0.1.0-alpha.42`，提交待授权）
+> 当前阶段：WIN-MSI-1..7 本机自动化范围完成（WIN-MSI-7 提交 `1b99b6a`）
 > 默认下一阶段：`WIN-MSI-8`（需用户明确启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
