@@ -47,6 +47,8 @@
       WixToolsetArchivePath="$(BundlerWixToolsetArchivePath)"
       WixInstallScope="$(BundlerWixInstallScope)"
       WixUpgradeCode="$(BundlerWixUpgradeCode)"
+      WixMsiVersion="$(BundlerWixMsiVersion)"
+      WixAllowDowngrades="$(BundlerWixAllowDowngrades)"
       WixCodepage="$(BundlerWixCodepage)"
       WixLanguage="$(BundlerWixLanguage)"
       WixStartMenuShortcut="$(BundlerWixStartMenuShortcut)"

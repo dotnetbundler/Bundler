@@ -1,6 +1,6 @@
 # MSI 外部输入与验收待办
 
-MSI 后端已完成 **WIN-MSI-1..4 本机自动化范围**，`alpha.37` 为既有能力基线；当前 Windows 11 x64 开发机上的独立 fixture 已通过真实 current-user 安装/卸载、两版本生命周期、修复、被动运行、中文包并存与受限故障回滚，per-machine 仅静态检查产物。用户随后确认 WIN-MSI-5..9 的**新功能计划**，见 `docs/msi-roadmap.md` 第 10 节及 `docs/msi-tauri-capability-audit.md`；下表仍只记录外部环境和证据，不把尚未实施的功能混作环境待办。当前没有干净 Windows 10/11 或 ARM64 环境，也没有提权测试 VM；这些缺口不阻塞本机可执行开发，不扩大支持声明。人工步骤见 `docs/msi-manual-testing.md`，旧基线审计见 MSI 路线第 9 节。
+MSI 后端已完成 **WIN-MSI-1..5 当前 Windows 11 x64 本机范围**，`alpha.37` 为既有 x64/ARM64 身份基线，`alpha.40` 增加 x86、显式 MSI 版本映射和可选降级。当前开发机上的独立 fixture 已通过真实 current-user 安装/卸载、两版本生命周期、x86 版本映射/降级、修复、被动运行、中文包并存与受限故障回滚，per-machine 仍仅静态检查产物。WIN-MSI-6..9 是后续功能计划，见 `docs/msi-roadmap.md` 第 10 节及 `docs/msi-tauri-capability-audit.md`；下表仍只记录外部环境和证据，不把尚未实施的功能混作环境待办。当前没有干净 Windows 10/11、ARM64 原生用户端或提权测试 VM；这些缺口不阻塞本机可执行开发，不扩大支持声明。人工步骤见 `docs/msi-manual-testing.md`。
 
 | ID | 最早阶段 | 所需输入/环境 | 完成证据 |
 | --- | --- | --- | --- |
@@ -14,6 +14,7 @@ MSI 后端已完成 **WIN-MSI-1..4 本机自动化范围**，`alpha.37` 为既�
 | MSI-OI-08 | MSI-4 | Windows 10/11 x64、ARM64 支持矩阵 | 每组合的构建、安装、升级、修复、卸载记录；未测组合限定支持声明 |
 | MSI-OI-09 | MSI-4 | 本地化审校和辅助功能使用者 | 支持语言集的 UI、缩放和可访问性记录 |
 | MSI-OI-10 | MSI-4 记录，公开发布前复核 | WiX v3 已结束免费社区维护且本项目不使用付费支持 | 每次公开发布前复核上游安全/兼容公告与风险处置；若无法接受无补丁风险，先提出免费且许可可履行的替代工具链，不默默扩大支持声明。依据：[WiX v3 官方状态](https://docs.firegiant.com/wix/wix3/) |
+| MSI-OI-11 | MSI-5 本机已通过，外部待验收 | 干净 Windows x86/x64、原生 x86/ARM64 用户端及 per-machine UAC | x86/映射版本/降级/卸载逐组合 verbose log、注册表视图、OS build 和清理证据；本机 x64 宿主证据见 `VerifyWinMsi5.ps1` |
 
 没有相应环境时保留待验收，不把预测写成通过；MSI-OI-01 已通过本机工程核查，阶段二约 13.8 MB 的体积已获用户接受；阶段三新增 UI 扩展后包大小实测 14,397,524 字节，阶段四最终 `alpha.37` 包为 14,397,760 字节、SHA-256 `8892C11C9F18958E1A7916049BC524467C7E65EF82DDC9B9C0B151666C7D9025`。干净宿主、ARM64 和其他 Windows 版本没有实际证据时，不得扩大支持声明。
 

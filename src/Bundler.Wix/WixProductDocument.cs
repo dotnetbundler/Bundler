@@ -32,9 +32,11 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
         product.Add(new XElement(Wix + "MajorUpgrade",
             new XAttribute("Schedule", "afterInstallInitialize"),
             new XAttribute("AllowSameVersionUpgrades", "no"),
-            new XAttribute("DowngradeErrorMessage", Localize(
-                "A newer version of [ProductName] is already installed.",
-                "已安装较新版本的 [ProductName]。"))));
+            settings.AllowDowngrades
+                ? new XAttribute("AllowDowngrades", "yes")
+                : new XAttribute("DowngradeErrorMessage", Localize(
+                    "A newer version of [ProductName] is already installed.",
+                    "已安装较新版本的 [ProductName]。"))));
         var registrationRoot = settings.InstallScope == WixInstallScope.CurrentUser ? "HKCU" : "HKLM";
         var definitionKey = "Software\\DotNetBundler\\Products\\" + bundle.Identifier.ToLowerInvariant() +
             "\\" + item.Target.RuntimeIdentifier + settings.LanguageSuffix + "\\Components";
@@ -70,13 +72,14 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
         var targetDir = new XElement(Wix + "Directory", new XAttribute("Id", "TARGETDIR"),
             new XAttribute("Name", "SourceDir"));
         var installRoot = new XElement(Wix + "Directory", new XAttribute("Id",
-            settings.InstallScope == WixInstallScope.CurrentUser ? "LocalAppDataFolder" : "ProgramFiles64Folder"));
+            settings.InstallScope == WixInstallScope.CurrentUser ? "LocalAppDataFolder" :
+                item.Target.Architecture == CpuArchitecture.X86 ? "ProgramFilesFolder" : "ProgramFiles64Folder"));
         var programs = settings.InstallScope == WixInstallScope.CurrentUser
             ? new XElement(Wix + "Directory", new XAttribute("Id", "BundlerProgramsDir"), new XAttribute("Name", "Programs"))
             : installRoot;
         var app = new XElement(Wix + "Directory", new XAttribute("Id", "INSTALLFOLDER"),
             new XAttribute("Name", bundle.Identifier.ToLowerInvariant() + "-" +
-                (item.Target.Architecture == CpuArchitecture.Arm64 ? "arm64" : "x64") + settings.LanguageSuffix));
+                item.Target.RuntimeIdentifier.Substring(4) + settings.LanguageSuffix));
         programs.Add(app);
         if (settings.InstallScope == WixInstallScope.CurrentUser) installRoot.Add(programs);
         targetDir.Add(installRoot);

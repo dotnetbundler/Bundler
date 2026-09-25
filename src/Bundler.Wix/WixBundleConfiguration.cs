@@ -16,6 +16,8 @@ public sealed class WixBundleConfiguration
 {
     public WixInstallScope InstallScope { get; init; } = WixInstallScope.CurrentUser;
     public string? UpgradeCode { get; init; }
+    public string? MsiVersion { get; init; }
+    public bool AllowDowngrades { get; init; }
     public WixPackageLanguage Language { get; init; } = WixPackageLanguage.English;
     // Zero selects the ANSI code page associated with Language.
     public int Codepage { get; init; }

@@ -17,7 +17,8 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         string runtimeIdentifier,
         WixInstallScope scope,
         string? upgradeCode = null,
-        WixPackageLanguage language = WixPackageLanguage.English)
+        WixPackageLanguage language = WixPackageLanguage.English,
+        string? msiVersion = null)
     {
         if (string.IsNullOrWhiteSpace(identifier))
         {
@@ -29,12 +30,13 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         }
         if (language is not (WixPackageLanguage.English or WixPackageLanguage.ChineseSimplified))
             throw new ArgumentOutOfRangeException(nameof(language));
-        if (runtimeIdentifier != "win-x64" && runtimeIdentifier != "win-arm64")
+        if (runtimeIdentifier != "win-x86" && runtimeIdentifier != "win-x64" && runtimeIdentifier != "win-arm64")
         {
             throw new NotSupportedException($"MSI target '{runtimeIdentifier}' is not supported.");
         }
 
-        var match = VersionPattern.Match(version ?? "");
+        var versionToMap = msiVersion ?? version;
+        var match = VersionPattern.Match(versionToMap ?? "");
         if (!match.Success ||
             !uint.TryParse(match.Groups[1].Value, out var major) || major > 255 ||
             !uint.TryParse(match.Groups[2].Value, out var minor) || minor > 255 ||
@@ -42,7 +44,7 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         {
             throw new ArgumentException(
                 "MSI requires a stable major.minor.patch version (major/minor 0-255, patch 0-65535); pre-release and build metadata are not supported.",
-                nameof(version));
+                msiVersion is null ? nameof(version) : nameof(msiVersion));
         }
 
         var normalizedIdentifier = identifier.ToLowerInvariant();

@@ -1,6 +1,6 @@
 # Windows MSI 后端实施路线（WiX 3.14.1 暂定）
 
-> 状态：`WIN-MSI-1..4` 的当前 Windows 11 x64 本机自动化范围已完成（2026-09-25），`alpha.37` 是既有能力的冻结基线。用户随后确认先补齐 Tauri 通用 MSI 能力，`WIN-MSI-5..9` 已规划但**尚未实施**；默认下一阶段为 `WIN-MSI-5`。原阶段证据见第 6..9 节，新增路线见第 10 节。
+> 状态：`WIN-MSI-1..5` 的当前 Windows 11 x64 本机自动化范围已完成（2026-09-25）；`alpha.37` 是既有身份基线，`alpha.40` 新增 x86、显式版本映射和可选降级。`WIN-MSI-6..9` 已规划但**尚未实施**；默认下一阶段为 `WIN-MSI-6`。原阶段证据见第 6..9 节，扩展路线及 WIN-MSI-5 证据见第 10 节。
 > 当前开发分支：`msi-development`；历史记录中的 `codex/msi-development` 是改名前的名称。
 > 规范入口：`docs/roadmap.md`；Tauri 对照见 `docs/msi-tauri-capability-audit.md`，逐项能力见 `docs/msi-capability-matrix.md`，外部条件见 `docs/msi-open-items.md`，人工步骤见 `docs/msi-manual-testing.md`。
 
@@ -193,6 +193,10 @@
 - **目标/交付**：公共目标模型增加 `win-x86`，MSI 包使用正确的 x86 目录/注册表视图、组件属性和独立产品线；NSIS 不因共享模型扩展而自动接受 x86。允许显式传入**三段有效 MSI 版本**以映射应用自身版本，拒绝第四字段、回退/碰撞及无定义的预发布自动映射。`AllowDowngrades` 默认 false、仅显式选择时为 true；同版本不同内容仍拒绝。既有身份与默认安装行为不变。公开 API、MSBuild、样例配置/说明同阶段完成。
 - **新增自动化/真实行为**：目标解析和格式支持矩阵、x86 数据库 `Template Summary`/组件/路径、各语种及架构 identity 向量、版本边界/重复/降级开关；仓库外 x86 API fixture 与 MSBuild 本地包消费。当前 x64 Windows 上构建并真实安装/卸载随机 current-user x86 fixture，执行可复现的 v2→v1 允许/拒绝降级及原 x64 升级回归，核对旧文件、用户文件与产品注册。
 - **不做/退出**：不支持自动跨 x86/x64/ARM64 或 current-user/per-machine 迁移，不把 MSI 第四版本字段当升级版本。上述自动化及本机安全的真实生命周期通过、无既有身份漂移、独立包可消费、文档与版本同步后退出；其他宿主继续只保留准确验收状态。
+
+**实施记录（2026-09-25，`0.1.0-alpha.40`）**：公共目标模型新增 `win-x86`，Core 只允许它用于 MSI；NSIS 不接受。MSI 使用 WiX `-arch x86`、`ProgramFilesFolder`（per-machine）或既有用户目录（current-user）、独立 `-x86` 安装目录和原身份算法中的新 RID，因此原 x64/ARM64 身份未变。API 的 `WixBundleConfiguration.MsiVersion` 与 MSBuild 的 `BundlerWixMsiVersion` 只接受有效三段数值；不指定时保持旧映射并拒绝预发布版本。不同应用版本映射到同一 MSI 版本时，已安装产品的同版异包保护继续拒绝覆盖；发行方仍需保证跨发布版本分配单调且唯一。`AllowDowngrades`/`BundlerWixAllowDowngrades` 默认 false；只有显式 true 才让旧包替换新版。WiX 在这种有意降级场景会触发 [ICE61](https://learn.microsoft.com/en-us/windows/win32/msi/ice61)，因此仅此时定向跳过 ICE61，其他编译/链接告警仍失败。依据：[微软 ProductVersion 三段比较与范围](https://learn.microsoft.com/en-us/windows/win32/msi/productversion)、[WiX 3 MajorUpgrade 的 AllowDowngrades 规则](https://docs.firegiant.com/wix3/xsd/wix/majorupgrade/)、[WiX Light `-sice` 说明](https://docs.firegiant.com/wix3/overview/light/)。不引入自定义安装动作或运行时下载。
+
+新增快速测试覆盖目标/NSIS 格式矩阵、x86 英中固定身份向量、MSI 版本边界、x86 Intel 模板/32 位组件/目录/注册表范围、显式版本及降级策略；仓库外独立后端包 API 与 MSBuild fixture 都生成真实 x86 MSI。当前 Windows 11 Pro build 26200 x64 上，`tests/Windows.Msi.Integration/VerifyWinMsi5.ps1 -ConfirmLocalInstall` 使用每轮随机身份实际完成 x86 current-user v1 安装、预发布应用映射到 v2 的升级、同 MSI 版本异应用版本拒绝（1638）、默认降级拒绝（1603）、显式允许降级（0）、卸载（0），检查 32 位注册表视图、受管文件与未知用户文件；脚本精确清理本轮产品，日志和 MSI 保留在 `%TEMP%\Bundler-Msi-WinMsi5-c9fb31e8471a4996878963d70a4b8e7b`。五份 MSI 的 SHA-256 依次为 v1 `0B4CB5AAECB0E1F435C785E1F6AB1E61234ADA1CA77987067DB15CE3BBD8856B`、映射 v2 `AF79F1CC0A0E3FCA2CFF5CC0C115DCFD2351CB0ADFFA3F5CAEC67DB61D1EC603`、允许降级 v1 `5F3C394C05992A9B31AA06FF94EDCC466F5B32E4BA2D05FE194FAB376A05AE11`、同版碰撞 `06ED065B42B09E34119473388FDF7D5F98069EEA58CAB2C62611E3B00D41C2D9`、独立 API `221930B02E0E9CA35EADDF977B5020FFFFC1B498586EFD9E9E3792179D13724B`。原 x64 `VerifyLifecycle.ps1 -ConfirmLocalInstall` 回归通过，日志在 `%TEMP%\Bundler-Msi-Lifecycle-ba0954338b454f1ab5312db811500ea0`。外部 x86 原生/干净宿主、per-machine UAC 等仍是未执行的人工/专用环境验收；当前开发机结果不扩大为这些环境的支持声明。
 
 ### WIN-MSI-6：安装目录、界面与桌面选项
 

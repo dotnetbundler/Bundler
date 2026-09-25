@@ -1,6 +1,6 @@
 # Tauri 通用 MSI 能力审计与补齐边界（计划，2026-09-25）
 
-本文件只记录上游参照、当前实现事实和已确认的后续产品选择；**WIN-MSI-5..9 尚未实现**。2026-09-25 核对本仓库 `codex/msi-development`、HEAD `adce4f0`、包版本 `0.1.0-alpha.37`、干净工作区。原 WIN-MSI-4 是当时已承诺能力的本机冻结基线，不代表与 Tauri 通用 MSI 能力等价。用户已要求先补齐通用能力，再进入后续格式；应用运行时依赖的自动发现、下载和安装继续不做。无现成测试环境的验收项沿用 MSI 专用人工/外部清单，不充当本轮开发阻塞或已通过证据。
+本文件记录上游参照、当前实现事实和已确认的后续产品选择。WIN-MSI-5 已完成当前 Windows 11 x64 本机范围；WIN-MSI-6..9 尚未实现。2026-09-25 当前分支为 `msi-development`，包版本为 `0.1.0-alpha.40`。原 WIN-MSI-4 是既有 MSI 身份基线，不代表与 Tauri 通用 MSI 能力等价。应用运行时依赖的自动发现、下载和安装继续不做。无现成测试环境的验收项沿用 MSI 专用人工/外部清单，不充当本轮开发阻塞或已通过证据。
 
 ## 上游快照与方法
 
@@ -12,8 +12,8 @@
 | --- | --- | --- |
 | 名称、发布者、描述、主页、图标、许可、普通资源与额外可执行文件 | 名称/发布者/描述/主页、`.ico`、调用方预备的文件树/资源、RTF 许可及额外签名文件已有；不按 Rust target triple 自动寻找 sidecar | 保留通用目录输入；WIN-MSI-6 补有意义的卸载信息字段，WIN-MSI-7 处理安全图标输入转换。`category` 等没有明确 MSI 用户结果的字段不伪造映射。 |
 | 文件关联、URL 协议、快捷方式 | 自身候选注册及开始菜单/桌面快捷方式已有；不抢占系统默认 | 保留所有权边界；WIN-MSI-6 增加 UI 中可选的受管快捷方式、可选卸载入口与相关生命周期测试。 |
-| x86、x64、ARM64 安装目标 | x64/ARM64 可生成包；公共目标模型无 x86 | WIN-MSI-5 加 `win-x86` 与独立身份，避免 NSIS 因共享模型修改而意外宣称支持。构建宿主仍限定 Windows。 |
-| 稳定 UpgradeCode、版本覆盖、允许降级 | 显式 UpgradeCode 与稳定升级身份已有；仅接受三段稳定版本，默认阻止降级/同版本异包 | WIN-MSI-5 增加显式三段 MSI 版本映射与**显式启用**的降级；默认保护不变。Windows Installer 忽略第四版本字段，故不照收四段 MSI 版本或同版本覆盖。[微软 major upgrade 规则](https://learn.microsoft.com/en-us/windows/win32/msi/major-upgrades)。 |
+| x86、x64、ARM64 安装目标 | x64/ARM64 既有包和 x86 alpha.40 均可生成；x86 在当前 x64 Windows 已真实安装 | WIN-MSI-5 已完成 x86 独立身份、32 位数据库/目录/注册表视图和 x86 API/MSBuild 生命周期；构建宿主仍限定 Windows，其他宿主/原生目标端待验收。 |
+| 稳定 UpgradeCode、版本覆盖、允许降级 | 显式三段 MSI 版本映射和显式降级已实现；默认仍阻止降级/同版本异包 | WIN-MSI-5 已通过固定 identity vector、版本边界、同 MSI 版本碰撞、默认拒绝和显式允许降级；Windows Installer 忽略第四版本字段，故仍不接受四段版本或无定义自动映射。[微软 ProductVersion 规则](https://learn.microsoft.com/en-us/windows/win32/msi/productversion)、[WiX MajorUpgrade](https://docs.firegiant.com/wix3/xsd/wix/majorupgrade/)。 |
 | 安装目录选择、功能选择、安装后启动 | 固定范围内默认目录；只有编译时布尔快捷方式；无受支持的启动选项 | WIN-MSI-6 提供范围内目录选择、可选快捷方式/PATH 功能和仅交互完成后用户会话启动。静默/被动安装不启动应用，不在提权服务上下文执行。 |
 | 安装 UI 横幅和对话框图、许可页面 | 提供 RTF 时使用 WiX 最小 UI，无自定义图片 | WIN-MSI-6 加尺寸/格式校验与 WiX UI 配置；仅对实际有意义的交互页面启用。 |
 | PATH 环境集成 | 无 | WIN-MSI-6 仅显式启用，按安装范围用 Windows Installer Environment 表附加/卸载本产品条目，不覆写整个 PATH。[微软 Environment 表](https://learn.microsoft.com/en-us/windows/win32/msi/environment-table)。 |
@@ -32,4 +32,4 @@
 
 ## 与实施路线的关系
 
-阶段目标、逐层测试和退出条件见 `docs/msi-roadmap.md` 第 10 节。计划状态不得写成已支持；公开示例必须在能力实现阶段同步更新。每轮包内容变化迭代 `BundlerPackageVersion`，示例应用版本保持稳定。WIN-MSI-9 才执行新的 Tauri 通用 MSI 对照审计与再冻结；此前 `alpha.37` 的本机结果仍有效，但不能代表新增能力已实现。
+阶段目标、逐层测试和退出条件见 `docs/msi-roadmap.md` 第 10 节。计划状态不得写成已支持；公开示例必须在能力实现阶段同步更新。每轮包内容变化迭代 `BundlerPackageVersion`，示例应用版本保持稳定。WIN-MSI-5 的 x86/版本生命周期证据见 MSI 路线第 10 节和 `VerifyWinMsi5.ps1`；WIN-MSI-9 才执行新的完整 Tauri 通用 MSI 对照审计与再冻结。

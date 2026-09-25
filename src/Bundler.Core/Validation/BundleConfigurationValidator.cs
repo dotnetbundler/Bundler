@@ -100,7 +100,7 @@ public static class BundleConfigurationValidator
         Required(targetConfiguration.InputDirectory, $"{path}.inputDirectory", issues);
         if (!BundleTarget.TryParse(targetConfiguration.RuntimeIdentifier, out var target))
         {
-            issues.Add(new($"{path}.runtimeIdentifier", "Supported RIDs: win-x64, win-arm64, osx-x64, osx-arm64, linux-x64, linux-arm64."));
+            issues.Add(new($"{path}.runtimeIdentifier", "Supported RIDs: win-x86, win-x64, win-arm64, osx-x64, osx-arm64, linux-x64, linux-arm64."));
             return;
         }
 
@@ -111,9 +111,9 @@ public static class BundleConfigurationValidator
 
         foreach (var format in targetConfiguration.Formats.Distinct())
         {
-            if (!DesktopTargetMatrix.Supports(target!.OperatingSystem, format))
+            if (!DesktopTargetMatrix.Supports(target!, format))
             {
-                issues.Add(new($"{path}.formats", $"{format} is not supported for {target.OperatingSystem}."));
+                issues.Add(new($"{path}.formats", $"{format} is not supported for {target!.RuntimeIdentifier}."));
             }
         }
 

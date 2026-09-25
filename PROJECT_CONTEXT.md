@@ -3,8 +3,8 @@
 > 最后整理：2026-09-25
 > 当前分支：`msi-development`（NSIS 开发线为 `nsis-development`）
 > NSIS 冻结起点：`71a5c90 feat(nsis): 冻结安全打包基线`；当前提交以 `git rev-parse --short HEAD` 为准
-> 当前包版本：`0.1.0-alpha.39`（本轮测试/示例命名与本地包配置整理；Git 状态与包版本均须实时核查）
-> 当前阶段：`WIN-MSI-1..4` 的本机自动化范围已完成，`alpha.37` 是既有 MSI 能力基线。用户已确认先补齐适用于通用打包器的 Tauri MSI 能力，`WIN-MSI-5..9` 尚未实施；默认下一实施阶段为 `WIN-MSI-5`，`MAC-APP` 顺延。per-machine、生产签名与外部宿主等旧验收边界不变。
+> 当前包版本：`0.1.0-alpha.40`（WIN-MSI-5 实现与测试；Git 状态与包版本均须实时核查）
+> 当前阶段：`WIN-MSI-1..5` 的当前 Windows 11 x64 本机自动化范围已完成；`alpha.37` 是既有 x64/ARM64 MSI 身份基线，`alpha.40` 增加 x86、显式 MSI 版本映射与可选降级。`WIN-MSI-6..9` 尚未实施；默认下一实施阶段为 `WIN-MSI-6`，`MAC-APP` 顺延。per-machine、生产签名、干净宿主和其他架构等外部验收边界不变。
 
 本文档记录当前事实、决策与验证证据，供后续开发任务接续。跨格式开发与交接规则以 `docs/development-rules.md` 为唯一规范入口；正式路线见 `docs/roadmap.md`，MSI 细则见 `docs/msi-roadmap.md`。本文档不是面向最终用户的使用手册。代码与自动化测试始终是实现事实的最终依据。
 
@@ -26,7 +26,7 @@
 
 - 当前只做桌面端。
 - 第一条完整链路是 **Windows 目标 + NSIS 安装包**。
-- MSI/WiX 已完成 WIN-MSI-1..4 的本机自动化范围，alpha 格式配置与身份规则已冻结，外部 Windows/UAC/生产验收仍待执行；macOS 与 Linux 安装格式尚未实现。
+- MSI/WiX 已完成 WIN-MSI-1..5 的当前主机本机自动化范围，alpha 格式配置与身份规则已冻结；WIN-MSI-5 新增 x86、显式 MSI 版本映射与可选降级。外部 Windows/UAC/生产验收仍待执行；WIN-MSI-6..9 尚未实施，macOS 与 Linux 安装格式尚未实现。
 - NSIS 目标包可以由 Windows、Linux x64/arm64、macOS x64/arm64 宿主编译；工具解析与嵌入结构已经实现，但所有宿主的真实 CI 执行矩阵仍需补齐。
 - 快速推进阶段允许破坏性修改，不要求兼容早期 alpha API 或配置。
 - 解决方案文件使用 `Bundler.slnx`。
@@ -475,16 +475,17 @@ git diff --check
 
 正式路线见 `docs/roadmap.md`。当前顺序为：
 
-1. `WIN-MSI-1..4`：按 `docs/msi-roadmap.md` 已完成本机自动化范围并形成 MSI alpha 冻结基线；Windows 宿主使用 WiX 3.14.1，外部兼容矩阵仍待验收；
-2. `MAC-APP`、`MAC-DMG`；macOS 决策若正式纳入 PKG，则在 Linux 前完成 `MAC-PKG`；
-3. `LINUX-DEB`、`LINUX-RPM`、`LINUX-APPIMAGE`；
-4. 所有上述打包格式完成后再进入 `CLI-C1`，把现有 CLI 原型产品化。
+1. `WIN-MSI-1..5`：按 `docs/msi-roadmap.md` 已完成当前主机本机自动化范围并形成 MSI alpha 冻结基线；Windows 宿主使用 WiX 3.14.1，外部兼容矩阵仍待验收；默认下一阶段为 `WIN-MSI-6`；
+2. `WIN-MSI-6..9`：完成已确认的 MSI 通用桌面能力并冻结格式；
+3. `MAC-APP`、`MAC-DMG`；macOS 决策若正式纳入 PKG，则在 Linux 前完成 `MAC-PKG`；
+4. `LINUX-DEB`、`LINUX-RPM`、`LINUX-APPIMAGE`；
+5. 所有上述打包格式完成后再进入 `CLI-C1`，把现有 CLI 原型产品化。
 
 Tauri 能力按“通用打包能力、格式特定能力、Tauri runtime 专属能力”分类。签名是正式路线的一部分；WebView2、VC Runtime 等任意应用运行时依赖的自动发现、下载和安装当前明确不做。真实重启、UAC、生产证书、真实旧 MSI、多宿主/ARM64 和真实 ACL/磁盘耗尽保留在外部验收队列，不反复阻塞快速开发进入下一阶段。
 
 ### 仍不得宣称完成
 
-- 已完成跨环境/生产验收并可广泛发行的 MSI/WiX 后端；当前 WIN-MSI-1..4 的本机范围已验证，per-machine 仅做数据库检查，外部宿主/UAC、生产签名、真实 UI 和重启仍待验收；
+- 已完成跨环境/生产验收并可广泛发行的 MSI/WiX 后端；当前 WIN-MSI-1..5 的本机范围已验证，x86 已在 x64 宿主完成真实生命周期，但原生 x86/ARM64 宿主、per-machine UAC、外部宿主、生产签名、真实 UI 和重启仍待验收；
 - macOS `.app`/DMG；
 - Linux DEB/AppImage；
 - 正式发布并受支持的 CLI（仓库当前只有功能有限的原型）；
@@ -659,8 +660,22 @@ Windows 11 x64 本机验证：从已有本地 `0.1.0-alpha.37` NuGet 包构建�
 
 用户确认改写**所有项目分支**的提交消息：主题统一为 `type(scope): 中文描述`，单后端改动使用 `nsis`、`msi` 等格式 scope。执行前工作区干净；本地有 `master`、`codex/nsis-development`、`codex/msi-development` 三个项目分支，无远端和标签。当前 MSI 分支包含 50 个提交，两个 NSIS/master 分支共用前 39 个。已将这些提交的消息逐项改为中文，保留每个提交的文件树、作者/提交者身份与时间；改写后 `master` 和 `codex/nsis-development` 指向 `6946dae`，MSI 分支在附加本次文档校正提交前指向 `23c4b8a`。当前文档中引用的 58 处旧提交 SHA 已映射到对应新 SHA，具体映射保存在忽略目录 `artifacts/history-message-map.json`。
 
-完整历史恢复包为 `artifacts/history-before-message-rewrite.bundle`，已通过 `git bundle verify`，SHA-256 为 `19A38501608257FA652881DCD77C29C75C18A3DB41E693D46B999197EC6FAD0F`。Codex 管理的快照/检查点、旧 `refs/original` 和停在旧提交的独立工作树不是项目分支，予以保留作为历史恢复点；因此 `git log --all` 仍可能显示其旧消息，正常三个项目分支的历史已统一。若要清理或改写这些应用管理的引用，应单独评估其用途。后端代码和 NuGet 包内容未变，包版本仍是 `0.1.0-alpha.39`；下一实施阶段仍为 `WIN-MSI-5`，本轮不推送。
+### 历史恢复记录（不代表当前状态）
+
+完整历史恢复包为 `artifacts/history-before-message-rewrite.bundle`，已通过 `git bundle verify`，SHA-256 为 `19A38501608257FA652881DCD77C29C75C18A3DB41E693D46B999197EC6FAD0F`。Codex 管理的快照/检查点、旧 `refs/original` 和停在旧提交的独立工作树不是项目分支，予以保留作为历史恢复点；因此 `git log --all` 仍可能显示其旧消息，正常三个项目分支的历史已统一。若要清理或改写这些应用管理的引用，应单独评估其用途。当前包版本和阶段以文首及最新阶段记录为准。
 
 ### 14.14 开发分支移除 `codex/` 前缀（2026-09-25）
 
 用户要求所有项目分支名不带 `codex/` 前缀。核对时只有三个本地项目分支，且没有远端或标签：`master` 保持原名，`codex/nsis-development` 改为 `nsis-development`（`6946dae`），当前 `codex/msi-development` 改为 `msi-development`（`e85ebd0`）。另一 Codex 工作树处于分离 HEAD，没有分支要改。两次重命名均未修改提交历史、文件树或包内容；历史实施记录中的旧分支名保留为当时事实，当前分支名以文首和 `git branch -vv` 为准。本轮未提交或推送，下一实施阶段仍为 `WIN-MSI-5`。
+
+### 14.15 WIN-MSI-5：x86、版本映射与可选降级（2026-09-25）
+
+本轮起点为分支 `msi-development`、HEAD `3cca7a0`、包版本 `0.1.0-alpha.39`；用户要求“提交然后开始下一步”。先提交分支改名文档为 `3cca7a0 docs: 同步开发分支改名记录`，随后按 MSI 路线启动 WIN-MSI-5。实现和包内容变更将版本迭代到 `0.1.0-alpha.40`；公开示例应用版本保持 `1.0.0`。
+
+实现事实：公共 `BundleTarget`/`CpuArchitecture` 增加 `win-x86`/`X86`，Core 只允许 x86 与 MSI 组合，NSIS 不因共享模型扩展而接受 x86。WiX 使用 `-arch x86`；x86 per-machine 使用 `ProgramFilesFolder`、current-user 使用既有用户目录，安装目录和组件/产品身份包含 x86 RID；x64/ARM64 既有 identity vector 未改。`WixBundleConfiguration.MsiVersion` 与 MSBuild `BundlerWixMsiVersion` 支持显式三段 MSI 版本，第四字段、预发布自动映射和越界值拒绝；未指定时保留原稳定三段版本映射。`AllowDowngrades`/`BundlerWixAllowDowngrades` 默认 false，显式 true 才允许降级；该场景只定向豁免 WiX ICE61，其他编译/链接警告仍失败。独立 API、MSBuild、示例说明和包消费 fixture 已同步。
+
+新增自动化覆盖公共 RID/格式矩阵、x86 英文/中文 identity vector、显式版本边界、x86 Intel 模板与 32 位组件/目录/注册表视图、MSBuild 属性映射、版本/降级策略。获准读取本机 SDK 路径后，`tests/Bundler.Tests` 快速测试全量通过；普通沙箱再次运行时因访问 `C:\Users\Lin\AppData\Local\Microsoft SDKs` 被拒，属于环境权限限制，不是测试断言失败。
+
+真实 Windows 证据：`tests/Windows.Msi.Integration/VerifyWinMsi5.ps1 -Configuration Release -ConfirmLocalInstall` 在 Windows 11 Pro build 26200 x64 上从本地 `alpha.40` 包源验证仓库外 API 与 MSBuild x86 消费；随机 current-user 产品完成 v1 安装、预发布应用显式映射到 v2 升级、同 MSI 版本异内容拒绝（1638）、默认降级拒绝（1603）、显式允许降级（0）、卸载（0），并检查 32 位注册表视图、受管文件和未知用户文件保留。日志和五个 MSI 保留在 `%TEMP%\Bundler-Msi-WinMsi5-c9fb31e8471a4996878963d70a4b8e7b`。原 x64 `VerifyLifecycle.ps1 -ConfirmLocalInstall` 用 alpha.40 回归通过，日志在 `%TEMP%\Bundler-Msi-Lifecycle-ba0954338b454f1ab5312db811500ea0`。本轮尝试先把 alpha.40 包写入 `artifacts/packages` 再运行 NSIS 集成，但当前受限执行环境拒绝读取 `C:\Users\Lin\AppData\Local\Microsoft SDKs`，因此 pack 在 MSB4184 处失败，NSIS alpha.40 回归未执行；这不是代码回归证据，待有 SDK 访问权限时按 `tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release` 补跑。干净 Windows、原生 x86/ARM64 用户端、per-machine UAC、生产证书和真实重启仍是人工/专用环境边界，不能由本机结果扩大支持声明。
+
+本轮工作区尚未提交或推送；下一阶段为 `WIN-MSI-6`。提交前应重新核对 Git、完整 diff、包内容和测试入口。

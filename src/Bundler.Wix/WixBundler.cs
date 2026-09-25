@@ -52,7 +52,7 @@ public sealed class WixBundler
         foreach (var target in bundle.Targets)
         {
             WixIdentity.Create(bundle.Identifier, bundle.Version, target.RuntimeIdentifier,
-                _settings.InstallScope, _settings.UpgradeCode, _settings.Language);
+                _settings.InstallScope, _settings.UpgradeCode, _settings.Language, _settings.MsiVersion);
         }
         var toolset = await WixToolsetResolver.ResolveAsync(
             _options.ResolveToolCacheDirectory(), _options.ToolsetArchivePath, cancellationToken);

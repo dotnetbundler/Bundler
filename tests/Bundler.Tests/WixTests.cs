@@ -14,6 +14,7 @@ internal static class WixTests
         get
         {
             yield return ("Keeps MSI identity and version rules stable", () => RunSync(KeepsMsiIdentityStable));
+            yield return ("Maps explicit MSI versions without changing installed product families", () => RunSync(MapsExplicitMsiVersions));
             yield return ("Verifies WiX binary and source redistribution", () => RunSync(VerifiesWixRedistribution));
             yield return ("Maps MSI configuration through MSBuild", () => RunSync(MapsMsiSettingsThroughMsBuild));
             yield return ("Validates MSI language, license, and signing inputs", ValidatesMsiPublishingInputs);
@@ -30,6 +31,8 @@ internal static class WixTests
             yield return ("Rejects a tampered WiX tool archive", RejectsTamperedWixArchive);
             yield return ("Serializes concurrent WiX tool cache users", SerializesConcurrentWixCacheUsers);
             yield return ("Builds an ARM64-targeted MSI on Windows x64", BuildsArm64TargetedMsi);
+            yield return ("Builds x86 MSI packages with isolated identity and 32-bit components", BuildsX86TargetedMsi);
+            yield return ("Builds explicit MSI versions and downgrade policy", BuildsExplicitVersionAndDowngradePolicy);
             yield return ("Builds isolated English and Chinese MSI languages", BuildsLocalizedMsi);
             yield return ("Signs staged MSI payload and final package in order", SignsMsiArtifacts);
             yield return ("Removes a failed signed MSI output", RemovesFailedSignedMsi);
@@ -43,6 +46,7 @@ internal static class WixTests
         var repeated = WixIdentity.Create("com.example.app", "1.2.3", "win-x64", WixInstallScope.CurrentUser);
         var next = WixIdentity.Create("com.example.app", "1.2.4", "win-x64", WixInstallScope.CurrentUser);
         var arm = WixIdentity.Create("com.example.app", "1.2.3", "win-arm64", WixInstallScope.CurrentUser);
+        var x86 = WixIdentity.Create("com.example.app", "1.2.3", "win-x86", WixInstallScope.CurrentUser);
         Assert(first.UpgradeCode == repeated.UpgradeCode && first.ProductCode == repeated.ProductCode,
             "MSI identity must be stable across builds and identifier casing.");
         Assert(first.UpgradeCode == Guid.Parse("a4544d5a-7d38-54b0-bfef-2f43efedb406") &&
@@ -52,6 +56,12 @@ internal static class WixTests
             "A new product version must change ProductCode and preserve UpgradeCode.");
         Assert(first.UpgradeCode != arm.UpgradeCode && first.ProductCode != arm.ProductCode,
             "Separate architectures must have separate MSI identities.");
+        Assert(first.UpgradeCode != x86.UpgradeCode && arm.UpgradeCode != x86.UpgradeCode &&
+               first.ProductCode != x86.ProductCode,
+            "The x86 product line must be isolated from x64 and ARM64.");
+        Assert(x86.UpgradeCode == Guid.Parse("f9d236f1-6d33-5a1e-940d-00257ce2a020") &&
+               x86.ProductCode == Guid.Parse("4b6c833e-0645-5d4c-83b9-1ba094b77eed"),
+            "The new x86 English identity differs from its fixed test vector.");
         var migrated = WixIdentity.Create("com.example.app", "1.2.3", "win-x64",
             WixInstallScope.CurrentUser, "{11111111-2222-3333-4444-555555555555}");
         Assert(migrated.UpgradeCode == Guid.Parse("11111111-2222-3333-4444-555555555555") &&
@@ -76,6 +86,34 @@ internal static class WixTests
             language: WixPackageLanguage.ChineseSimplified);
         Assert(chinese.UpgradeCode != first.UpgradeCode && chinese.ProductCode != first.ProductCode,
             "Localized MSI products need separate language identity families.");
+        var x86Chinese = WixIdentity.Create("com.example.app", "1.2.3", "win-x86", WixInstallScope.CurrentUser,
+            language: WixPackageLanguage.ChineseSimplified);
+        Assert(x86Chinese.UpgradeCode == Guid.Parse("c4985894-4b1c-5e49-941b-a120850e0667") &&
+               x86Chinese.ProductCode == Guid.Parse("eeeead45-80e4-57a2-ad45-faa3f2cc2be1") &&
+               x86Chinese.UpgradeCode != x86.UpgradeCode,
+            "The new x86 Chinese identity differs from its fixed test vector.");
+    }
+
+    static void MapsExplicitMsiVersions()
+    {
+        var baseline = WixIdentity.Create("com.example.app", "1.2.3", "win-x64", WixInstallScope.CurrentUser);
+        var explicitSame = WixIdentity.Create("com.example.app", "1.2.3", "win-x64", WixInstallScope.CurrentUser,
+            msiVersion: "1.2.3");
+        Assert(baseline == explicitSame, "Explicit mapping to the legacy version changed installed identity.");
+        var preview = WixIdentity.Create("com.example.app", "2.0.0-beta.1", "win-x64",
+            WixInstallScope.CurrentUser, msiVersion: "1.9.7");
+        Assert(preview.ProductVersion == "1.9.7" && preview.UpgradeCode == baseline.UpgradeCode &&
+               preview.ProductCode != baseline.ProductCode, "Explicit MSI version did not retain the product family.");
+        foreach (var version in new[] { "", "1.2.3.4", "1.2.3-beta", "01.2.3", "256.0.0", "1.256.0", "1.2.65536" })
+        {
+            try
+            {
+                WixIdentity.Create("com.example.app", "2.0.0-beta.1", "win-x64",
+                    WixInstallScope.CurrentUser, msiVersion: version);
+                throw new InvalidOperationException("An invalid explicit MSI version was accepted: " + version);
+            }
+            catch (ArgumentException exception) when (exception.ParamName == "msiVersion") { }
+        }
     }
 
     static async Task RejectsUnsafeMsiPaths()
@@ -106,7 +144,8 @@ internal static class WixTests
         var props = File.ReadAllText(Path.Combine(root, "buildTransitive", "DotNet.Bundler.MSBuild.props"));
         var targets = File.ReadAllText(Path.Combine(root, "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
         var task = File.ReadAllText(Path.Combine(root, "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
-        foreach (var property in new[] { "WixInstallScope", "WixUpgradeCode", "WixCodepage", "WixLanguage", "WixToolsetArchivePath",
+        foreach (var property in new[] { "WixInstallScope", "WixUpgradeCode", "WixMsiVersion", "WixAllowDowngrades",
+                     "WixCodepage", "WixLanguage", "WixToolsetArchivePath",
                      "WixStartMenuShortcut", "WixDesktopShortcut" })
         {
             Assert(props.Contains("<Bundler" + property, StringComparison.Ordinal) &&
@@ -474,6 +513,72 @@ internal static class WixTests
                 "ARM64 and x64 MSI products share an UpgradeCode.");
         }
         finally { DeleteOwnedTestDirectory(root); }
+    }
+
+    static async Task BuildsX86TargetedMsi()
+    {
+        using var fixture = new WixTestFixture();
+        foreach (var scope in new[] { WixInstallScope.CurrentUser, WixInstallScope.PerMachine })
+        {
+            var request = new BundleConfiguration
+            {
+                ProductName = "X86 MSI Test", Identifier = "com.example.msi.x86", Version = "1.2.3",
+                OutputDirectory = Path.Combine(fixture.Root, "x86-" + scope),
+                Targets = [new BundleTargetConfiguration
+                {
+                    RuntimeIdentifier = "win-x86", InputDirectory = fixture.Input,
+                    MainExecutable = "fixture.exe", Formats = [PackageFormat.Msi]
+                }]
+            };
+            var artifact = (await new WixBundler(new WixBundleConfiguration { InstallScope = scope },
+                new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(request)).Single();
+            using var database = new MsiDatabaseReader(artifact.Path);
+            var expected = WixIdentity.Create(request.Identifier, request.Version, "win-x86", scope);
+            Assert(database.Template.StartsWith("Intel;", StringComparison.OrdinalIgnoreCase),
+                "x86 MSI did not use the Intel template summary.");
+            Assert(database.Property("UpgradeCode") == expected.UpgradeCode.ToString("B").ToUpperInvariant() &&
+                   database.Property("ProductCode") == expected.ProductCode.ToString("B").ToUpperInvariant(),
+                "x86 MSI identity differs from the isolated target vector.");
+            Assert(database.Values("Component", "Attributes").All(value => (int.Parse(value) & 256) == 0),
+                "x86 MSI contains a 64-bit component.");
+            Assert(database.ContainsSubstring("Directory", "DefaultDir", "com.example.msi.x86-x86"),
+                "x86 MSI installation directory is not architecture-specific.");
+            Assert(scope == WixInstallScope.CurrentUser
+                    ? database.Contains("Directory", "Directory", "LocalAppDataFolder") &&
+                      database.Contains("Registry", "Root", "1")
+                    : database.Contains("Directory", "Directory", "ProgramFilesFolder") &&
+                      !database.Contains("Directory", "Directory", "ProgramFiles64Folder") &&
+                      database.Contains("Registry", "Root", "2"),
+                "x86 MSI scope or install root is incorrect.");
+        }
+    }
+
+    static async Task BuildsExplicitVersionAndDowngradePolicy()
+    {
+        using var fixture = new WixTestFixture();
+        var request = new BundleConfiguration
+        {
+            ProductName = "Mapped MSI Test", Identifier = "com.example.msi.mapped", Version = "2.0.0-beta.1",
+            OutputDirectory = Path.Combine(fixture.Root, "mapped"),
+            Targets = [new BundleTargetConfiguration
+            {
+                RuntimeIdentifier = "win-x64", InputDirectory = fixture.Input,
+                MainExecutable = "fixture.exe", Formats = [PackageFormat.Msi]
+            }]
+        };
+        await ExpectAsync<ArgumentException>(() => fixture.Bundler().BuildAsync(request), "version");
+        var mappedSettings = new WixBundleConfiguration { MsiVersion = "1.9.7", AllowDowngrades = true };
+        var artifact = (await new WixBundler(mappedSettings,
+            new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(request)).Single();
+        using var database = new MsiDatabaseReader(artifact.Path);
+        Assert(database.Property("ProductVersion") == "1.9.7" &&
+               Path.GetFileName(artifact.Path).Contains("-1.9.7.msi", StringComparison.Ordinal),
+            "Explicit MSI version did not reach the compiled product and output name.");
+        Assert(database.Property("ProductCode") == WixIdentity.Create(request.Identifier, request.Version,
+                   "win-x64", WixInstallScope.CurrentUser, msiVersion: "1.9.7").ProductCode.ToString("B").ToUpperInvariant(),
+            "Mapped MSI ProductCode differs from its documented identity.");
+        Assert(database.Values("Upgrade", "Attributes").Count > 0,
+            "Explicit downgrade policy did not compile an Upgrade table.");
     }
 
     static async Task RejectsWixCompilerWarnings()

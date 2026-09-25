@@ -86,8 +86,10 @@ return failed == 0 ? 0 : 1;
 
 static void ParsesSupportedDesktopRids()
 {
-    string[] rids = ["win-x64", "win-arm64", "osx-x64", "osx-arm64", "linux-x64", "linux-arm64"];
+    string[] rids = ["win-x86", "win-x64", "win-arm64", "osx-x64", "osx-arm64", "linux-x64", "linux-arm64"];
     Assert(rids.All(rid => BundleTarget.TryParse(rid, out _)), "One or more supported RIDs failed to parse.");
+    Assert(BundleTarget.TryParse("win-x86", out var x86) && x86!.Architecture == CpuArchitecture.X86,
+        "Windows x86 must be a distinct public target architecture.");
     Assert(!BundleTarget.TryParse("android-arm64", out _), "A mobile RID was accepted.");
 }
 
@@ -103,6 +105,20 @@ static void RejectsIncompatibleFormats()
     var issues = BundleConfigurationValidator.Validate(configuration, checkFileSystem: false);
     Assert(issues.Any(issue => issue.Message.Contains("not supported", StringComparison.Ordinal)),
         "Linux MSI should have failed validation.");
+    var x86Nsis = ValidConfiguration(new BundleTargetConfiguration
+    {
+        RuntimeIdentifier = "win-x86", InputDirectory = "unused", Formats = [PackageFormat.Nsis]
+    });
+    Assert(BundleConfigurationValidator.Validate(x86Nsis, checkFileSystem: false)
+            .Any(issue => issue.Path == "targets[0].formats"),
+        "Adding x86 to the shared model must not enable NSIS x86.");
+    var x86Msi = ValidConfiguration(new BundleTargetConfiguration
+    {
+        RuntimeIdentifier = "win-x86", InputDirectory = "unused", Formats = [PackageFormat.Msi]
+    });
+    Assert(!BundleConfigurationValidator.Validate(x86Msi, checkFileSystem: false)
+            .Any(issue => issue.Path == "targets[0].formats"),
+        "The MSI backend must accept the Windows x86 target.");
 }
 
 static void AddsAppDependencyBeforeDmg()

@@ -38,6 +38,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string WixToolsetArchivePath { get; set; } = "";
     public string WixInstallScope { get; set; } = "currentUser";
     public string WixUpgradeCode { get; set; } = "";
+    public string WixMsiVersion { get; set; } = "";
+    public bool WixAllowDowngrades { get; set; }
     public int WixCodepage { get; set; }
     public string WixLanguage { get; set; } = "en-US";
     public bool WixStartMenuShortcut { get; set; }
@@ -141,6 +143,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                     {
                         InstallScope = scope,
                         UpgradeCode = EmptyToNull(WixUpgradeCode),
+                        MsiVersion = EmptyToNull(WixMsiVersion),
+                        AllowDowngrades = WixAllowDowngrades,
                         Codepage = WixCodepage,
                         Language = language,
                         StartMenuShortcut = WixStartMenuShortcut,

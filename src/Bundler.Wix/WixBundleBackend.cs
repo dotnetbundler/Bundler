@@ -17,7 +17,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         var bundle = context.Configuration;
         var item = context.Item;
         var identity = WixIdentity.Create(bundle.Identifier, bundle.Version, item.Target.RuntimeIdentifier,
-            settings.InstallScope, settings.UpgradeCode, settings.Language);
+            settings.InstallScope, settings.UpgradeCode, settings.Language, settings.MsiVersion);
         var outputName = WixProductDocument.SafeFileName(bundle.ProductName) + "-" + identity.ProductVersion +
             settings.LanguageSuffix + ".msi";
         var outputPath = Path.Combine(item.OutputDirectory, outputName);
@@ -59,12 +59,20 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         try
         {
             await WixProcessRunner.RunAsync(toolset.CandlePath,
-                ["-nologo", "-arch", item.Target.Architecture == CpuArchitecture.Arm64 ? "arm64" : "x64",
+                ["-nologo", "-arch", item.Target.Architecture switch
+                 {
+                     CpuArchitecture.X86 => "x86",
+                     CpuArchitecture.X64 => "x64",
+                     CpuArchitecture.Arm64 => "arm64",
+                     _ => throw new NotSupportedException("Unknown MSI target architecture.")
+                 },
                  "-out", obj, source], context.WorkDirectory, cancellationToken);
             var lightArguments = new List<string> { "-nologo" };
             if (!string.IsNullOrWhiteSpace(bundle.LicenseFile))
                 lightArguments.AddRange(["-ext", toolset.UiExtensionPath, "-cultures:" + settings.Culture]);
             if (settings.InstallScope == WixInstallScope.CurrentUser) lightArguments.Add("-sice:ICE91");
+            // ICE61 拒绝移除较新产品；显式允许降级时，这正是调用方选择的行为。
+            if (settings.AllowDowngrades) lightArguments.Add("-sice:ICE61");
             lightArguments.AddRange(["-out", outputPath, obj]);
             await WixProcessRunner.RunAsync(toolset.LightPath, lightArguments, context.WorkDirectory, cancellationToken);
             if (!File.Exists(outputPath))
@@ -230,6 +238,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             .AppendLine(settings.StartMenuShortcut.ToString()).AppendLine(settings.DesktopShortcut.ToString())
             .AppendLine(settings.EffectiveCodepage.ToString(System.Globalization.CultureInfo.InvariantCulture))
             .AppendLine(settings.Language.ToString());
+        if (settings.AllowDowngrades) text.AppendLine("allow-downgrades=true");
         foreach (var association in bundle.FileAssociations)
         {
             text.AppendLine(string.Join(",", association.Extensions)).AppendLine(association.Name)

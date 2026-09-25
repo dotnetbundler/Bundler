@@ -33,6 +33,15 @@ internal sealed class MsiDatabaseReader : IDisposable
         return false;
     }
 
+    public IReadOnlyList<string> Values(string table, string column)
+    {
+        var values = new List<string>();
+        using var view = OpenView("SELECT `" + column + "` FROM `" + table + "`");
+        string? found;
+        while ((found = view.FetchString()) is not null) values.Add(found);
+        return values;
+    }
+
     public bool ContainsSubstring(string table, string column, string fragment)
     {
         using var view = OpenView("SELECT `" + column + "` FROM `" + table + "`");

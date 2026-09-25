@@ -69,10 +69,13 @@ function Copy-MsiTestFixture([string]$Source, [string]$Destination) {
 }
 
 function Restore-MsiTestFixture(
-    [string]$Project, [string]$PackageDirectory, [string]$PackageCache, [string]$PackageVersion
+    [string]$Project, [string]$PackageDirectory, [string]$PackageCache, [string]$PackageVersion,
+    [string]$RuntimeIdentifier = ''
 ) {
-    & dotnet restore $Project "-p:BundlerPackageSource=$PackageDirectory" `
-        "-p:RestorePackagesPath=$PackageCache" "-p:BundlerPackageVersion=$PackageVersion"
+    $properties = @("-p:BundlerPackageSource=$PackageDirectory", "-p:RestorePackagesPath=$PackageCache",
+        "-p:BundlerPackageVersion=$PackageVersion")
+    if ($RuntimeIdentifier) { $properties += "-p:RuntimeIdentifier=$RuntimeIdentifier" }
+    & dotnet restore $Project @properties
     if ($LASTEXITCODE -ne 0) { throw "MSI fixture restore failed: $Project" }
     Assert-LocalBundlerRestore -Project $Project -PackageVersion $PackageVersion -Source $PackageDirectory `
         -Cache $PackageCache -RequiredPackages @('DotNet.Bundler', 'DotNet.Bundler.MSBuild', 'DotNet.Bundler.Wix')

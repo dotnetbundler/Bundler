@@ -78,6 +78,27 @@ dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release `
 
 per-machine 的数据库和产物已在开发机检查，提权安装/卸载仍待专用环境验收。若使用自己已有的准确 UpgradeCode 可传 `BundlerWixUpgradeCode`；默认稳定身份已经可用于同产品正常升级，不能为碰巧同名的其他应用随意指定 GUID。
 
+## x86、显式 MSI 版本与降级
+
+`win-x86` 是与 x64、ARM64 分开的 MSI 产品线。在 x64 Windows 上也可生成并安装 x86 包；示例应用设为非自包含，运行该应用仍需要相应的 x86 .NET 运行时。使用独立输出目录演示：
+
+```powershell
+dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release `
+  -p:RuntimeIdentifier=win-x86 `
+  -p:BundlerOutputPath="$env:TEMP\HelloMsiApp-x86"
+```
+
+默认要求 `BundlerVersion` 是有效的三段 MSI 版本。应用采用预发布版本或其数值超出 MSI 范围时，必须由发行方明确指定三段 `HelloMsiAppMsiVersion`；不能用第四字段、自动去掉预发布后缀或把两个不同应用版本映射到同一个已发布 MSI 版本。下例只演示配置，不更改示例项目固定的 `1.0.0` 应用版本：
+
+```powershell
+dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release `
+  -p:RuntimeIdentifier=win-x86 -p:BundlerVersion=1.1.0-beta.1 `
+  -p:HelloMsiAppMsiVersion=1.1.0 `
+  -p:BundlerOutputPath="$env:TEMP\HelloMsiApp-mapped"
+```
+
+仅在确实需要回退时显式传 `-p:HelloMsiAppAllowDowngrades=true`，并用新输出目录构建。这个开关会让旧 MSI 版本移除较新版本后安装自身；默认仍拒绝降级。正式发行应避免复用同一 MSI 版本，先在随机身份测试产品上验证升级和回退。可运行 `tests/Windows.Msi.Integration/VerifyWinMsi5.ps1 -ConfirmLocalInstall`，它使用独立产品身份真实检查 x86 安装、显式版本升级、降级拒绝与允许、同版本碰撞和卸载。
+
 ## 签名
 
 默认不签名，仓库不保存私钥。准备代码签名 PFX 后，通过环境变量提供密码，并使用新输出目录签名。生产发行应使用受信任证书及 RFC 3161 时间戳服务：
@@ -95,4 +116,4 @@ dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release `
 
 ## 当前边界
 
-MSI 的安装目录选择、可选 PATH、安装后启动、更多语言、x86、显式降级及自备 WiX 扩展仍是 WIN-MSI-5..9 计划，不在此示例中伪装为已实现。NSIS 的 Hook、语言选择器、安装器图片、自定义快捷方式参数和 journal 恢复是该后端的特定能力，不能直接搬到 MSI。真实升级/降级和故障回滚由独立随机身份 fixture 验证；公开示例应用版本保持 `1.0.0`，不会拿它覆盖旧版本做测试。当前实现与计划状态分别见 [`docs/msi-capability-matrix.md`](../../docs/msi-capability-matrix.md)和 [`docs/msi-roadmap.md`](../../docs/msi-roadmap.md)。
+MSI 的安装目录选择、可选 PATH、安装后启动、更多语言及自备 WiX 扩展仍是 WIN-MSI-6..9 计划，不在此示例中伪装为已实现。NSIS 的 Hook、语言选择器、安装器图片、自定义快捷方式参数和 journal 恢复是该后端的特定能力，不能直接搬到 MSI。真实升级/降级和故障回滚由独立随机身份 fixture 验证；公开示例应用版本保持 `1.0.0`，不会拿它覆盖旧版本做测试。当前实现与计划状态分别见 [`docs/msi-capability-matrix.md`](../../docs/msi-capability-matrix.md)和 [`docs/msi-roadmap.md`](../../docs/msi-roadmap.md)。

@@ -10,7 +10,8 @@ public enum DesktopOperatingSystem
 public enum CpuArchitecture
 {
     X64,
-    Arm64
+    Arm64,
+    X86
 }
 
 public enum PackageFormat

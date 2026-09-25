@@ -9,6 +9,7 @@ public sealed record BundleTarget(
     {
         target = runtimeIdentifier?.ToLowerInvariant() switch
         {
+            "win-x86" => new("win-x86", DesktopOperatingSystem.Windows, CpuArchitecture.X86),
             "win-x64" => new("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
             "win-arm64" => new("win-arm64", DesktopOperatingSystem.Windows, CpuArchitecture.Arm64),
             "osx-x64" => new("osx-x64", DesktopOperatingSystem.MacOS, CpuArchitecture.X64),

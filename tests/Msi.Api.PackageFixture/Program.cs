@@ -1,13 +1,17 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Wix;
 
-if (args.Length != 2)
+if (args.Length is not (2 or 6))
 {
-    throw new ArgumentException($"Expected output and tool-cache directories; received {args.Length}.");
+    throw new ArgumentException($"Expected output/cache or output/cache/target/app-version/MSI-version/downgrade arguments; received {args.Length}.");
 }
 
 var output = Path.GetFullPath(args[0]);
 var cache = Path.GetFullPath(args[1]);
+var target = args.Length == 6 ? args[2] : "win-x64";
+var appVersion = args.Length == 6 ? args[3] : "1.0.0";
+var msiVersion = args.Length == 6 ? args[4] : null;
+var allowDowngrades = args.Length == 6 && bool.Parse(args[5]);
 var input = Path.Combine(output, "publish");
 Directory.CreateDirectory(input);
 await File.WriteAllTextAsync(Path.Combine(input, "ApiFixture.exe"), "package-api-fixture");
@@ -17,7 +21,7 @@ var request = new BundleConfiguration
 {
     ProductName = "MSI API Package Fixture",
     Identifier = "com.dotnetbundler.msiapifixture",
-    Version = "1.0.0",
+    Version = appVersion,
     Publisher = "Bundler Tests",
     OutputDirectory = Path.Combine(output, "artifacts"),
     FileAssociations = [new BundleFileAssociationConfiguration { Extensions = ["demo"], Name = "API demo" }],
@@ -26,7 +30,7 @@ var request = new BundleConfiguration
     [
         new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "win-x64",
+            RuntimeIdentifier = target,
             InputDirectory = input,
             MainExecutable = "ApiFixture.exe",
             Formats = [PackageFormat.Msi]
@@ -35,7 +39,8 @@ var request = new BundleConfiguration
 };
 
 var artifacts = await new WixBundler(
-    new WixBundleConfiguration { StartMenuShortcut = true, DesktopShortcut = true },
+    new WixBundleConfiguration { StartMenuShortcut = true, DesktopShortcut = true,
+        MsiVersion = msiVersion, AllowDowngrades = allowDowngrades },
     new WixBundlerOptions { ToolCacheDirectory = cache })
     .BuildAsync(request);
 if (artifacts.Count != 1 || artifacts[0].Format != PackageFormat.Msi ||

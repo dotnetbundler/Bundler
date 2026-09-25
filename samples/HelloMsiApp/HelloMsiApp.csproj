@@ -8,6 +8,8 @@
     <BundlerOutputPath>$(MSBuildProjectDirectory)\artifacts\feature-demo</BundlerOutputPath>
     <HelloMsiAppInstallScope Condition="'$(HelloMsiAppInstallScope)' == ''">currentUser</HelloMsiAppInstallScope>
     <HelloMsiAppLanguage Condition="'$(HelloMsiAppLanguage)' == ''">en-US</HelloMsiAppLanguage>
+    <HelloMsiAppMsiVersion Condition="'$(HelloMsiAppMsiVersion)' == ''"></HelloMsiAppMsiVersion>
+    <HelloMsiAppAllowDowngrades Condition="'$(HelloMsiAppAllowDowngrades)' == ''">false</HelloMsiAppAllowDowngrades>
     <HelloMsiAppSigningPfxFile Condition="'$(HelloMsiAppSigningPfxFile)' == ''"></HelloMsiAppSigningPfxFile>
     <HelloMsiAppSigningPfxPasswordEnvironmentVariable Condition="'$(HelloMsiAppSigningPfxPasswordEnvironmentVariable)' == ''"></HelloMsiAppSigningPfxPasswordEnvironmentVariable>
     <HelloMsiAppSigningCertificateThumbprint Condition="'$(HelloMsiAppSigningCertificateThumbprint)' == ''"></HelloMsiAppSigningCertificateThumbprint>
@@ -27,6 +29,8 @@
     <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets\demo-license.rtf</BundlerLicenseFile>
     <BundlerWixInstallScope>$(HelloMsiAppInstallScope)</BundlerWixInstallScope>
     <BundlerWixLanguage>$(HelloMsiAppLanguage)</BundlerWixLanguage>
+    <BundlerWixMsiVersion>$(HelloMsiAppMsiVersion)</BundlerWixMsiVersion>
+    <BundlerWixAllowDowngrades>$(HelloMsiAppAllowDowngrades)</BundlerWixAllowDowngrades>
     <BundlerWixCodepage>0</BundlerWixCodepage>
     <BundlerWixStartMenuShortcut>true</BundlerWixStartMenuShortcut>
     <BundlerWixDesktopShortcut>true</BundlerWixDesktopShortcut>

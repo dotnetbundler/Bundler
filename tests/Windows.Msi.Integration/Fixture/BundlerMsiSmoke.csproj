@@ -20,7 +20,7 @@
     <BundlerResource Include="Assets\v1-only.txt" TargetPath="docs\v1-only.txt"
                      Condition="'$(MsiLifecycleTest)' == 'true' and '$(BundlerVersion)' == '1.0.0'" />
     <BundlerResource Include="Assets\v2-only.txt" TargetPath="docs\v2-only.txt"
-                     Condition="'$(MsiLifecycleTest)' == 'true' and '$(BundlerVersion)' == '1.1.0'" />
+                     Condition="'$(MsiLifecycleTest)' == 'true' and ('$(BundlerVersion)' == '1.1.0' or '$(BundlerWixMsiVersion)' == '1.1.0')" />
     <BundlerResource Include="Assets\variant-only.txt" TargetPath="docs\variant-only.txt"
                      Condition="'$(MsiVariantTest)' == 'true'" />
     <BundlerFileAssociation Include="$(BundlerTestExtension)" Condition="'$(MsiLifecycleTest)' == 'true'">
