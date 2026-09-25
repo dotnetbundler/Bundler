@@ -12,8 +12,8 @@
     <BundlerVersion>1.0.0</BundlerVersion>
     <BundlerPublisher>Bundler Tests</BundlerPublisher>
     <BundlerDescription>Isolated MSI install and uninstall smoke fixture</BundlerDescription>
-    <RestoreSources>$(BundlerPackageSource)</RestoreSources>
   </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
     <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" />
     <BundlerResource Include="Assets\marker.txt" TargetPath="docs\marker.txt" />

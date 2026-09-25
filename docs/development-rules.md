@@ -18,9 +18,9 @@
 
 ## 3. 版本、包和示例
 
-- 实现、修复或随包文档调整导致 NuGet 包内容变化时，递增根目录 `BundlerPackageVersion`，同步被修改包的依赖版本、公开示例的 `PackageReference`、测试默认版本和中文说明。不要在同一个 ID/版本上重复发布不同包并指望 NuGet 缓存更新。一个阶段的未提交工作使用同一个新版本，结项前统一检查。
-- 工具包版本与被打包应用版本独立。`HelloBundledApp`、`HelloMsiApp` 等公开示例应用版本保持稳定；升级/降级使用独立 fixture 的版本参数。正式发布的应用按目标格式规则递增产品版本。MSI 后端拒绝在相同输出路径以相同产品版本覆盖不同内容；开发期旧产物应移到明确位置或选用独立输出目录，不通过弱化冲突保护处理。
-- 公开示例是可操作演示，不是自动化测试。当前 NSIS 与 MSI 示例均通过固定当前开发包版本的普通 `PackageReference`、仓库本地 `artifacts/packages` 还原源，在根目录执行 `dotnet pack Bundler.slnx -c Release -o artifacts/packages` 后直接 `dotnet publish <示例项目> -c Release`。新增公开能力要同步展示在对应示例；缺少本地包时先 pack，不能假设源码项目引用或公共 NuGet 源会提供未发布版本。
+- 实现、修复或随包文档调整导致 NuGet 包内容变化时，只在根 `Directory.Build.props` 递增 `BundlerPackageVersion`。源码包依赖及示例 `PackageReference` 使用该属性，测试脚本默认版本从该文件读取；同步面向用户的版本示例和中文说明。不要在同一个 ID/版本上重复发布不同包并指望 NuGet 缓存更新。一个阶段的未提交工作使用同一个新版本，结项前统一检查。
+- 工具包版本与被打包应用版本独立。`HelloNsisApp`、`HelloMsiApp` 等公开示例应用版本保持稳定；升级/降级使用独立 fixture 的版本参数。正式发布的应用按目标格式规则递增产品版本。MSI 后端拒绝在相同输出路径以相同产品版本覆盖不同内容；开发期旧产物应移到明确位置或选用独立输出目录，不通过弱化冲突保护处理。
+- 公开示例是可操作演示，不是自动化测试。当前 NSIS 与 MSI 示例都通过普通 `PackageReference Version="$(BundlerPackageVersion)"` 消费仓库本地 `artifacts/packages`：项目显式导入跨格式 `Bundler.LocalPackages.props`，该文件集中设置还原源，版本由根 `Directory.Build.props` 提供。在根目录执行 `dotnet pack Bundler.slnx -c Release -o artifacts/packages` 后直接 `dotnet publish <示例项目> -c Release`。新增公开能力要同步展示在对应示例；缺少本地包时先 pack，不能假设源码项目引用或公共 NuGet 源会提供未发布版本。
 
 ## 4. 测试风格与验证要求
 
@@ -38,8 +38,8 @@
 
 新增测试时尽量保持以下写法一致：
 
-1. **目录与名称**：格式专用 API fixture 使用 `tests/<Format>.Api.PackageFixture`；系统集成测试使用 `tests/<Platform>.<Format>.Integration`，以 `Verify.ps1` 为入口，其他场景用说明用途的脚本名。快速测试沿用仓库现有测试入口和可读的用例名。不同格式的人工测试与结果分开存放。
-2. **fixture 与包源**：后端 API fixture 只引用打出的对应后端包，通过公共 API 生成产物；MSBuild fixture 引用打出的应用层包。现有 Windows fixture 都在项目文件中声明 `<RestoreSources>$(BundlerPackageSource)</RestoreSources>`，脚本传入本轮打出的本地包目录及隔离缓存；检查实际还原的包 ID、版本、源与缓存。验证普通仓库外消费者时，明确复制所需项目文件与资源到每轮临时目录，fixture 项目自身声明必需的 SDK 属性，不依赖仓库级 Directory.Build.props 或旧 obj。不要让某个格式只能靠脚本里隐藏的 `--source` 才能找到开发包。
+1. **目录与名称**：只服务一个格式的示例或测试项目，其项目名、目录名和 `.csproj` 名应包含 `Nsis`、`Msi` 等格式名；跨格式快速测试 `Bundler.Tests` 保留泛用名。格式专用 API fixture 使用 `tests/<Format>.Api.PackageFixture`；系统集成测试使用 `tests/<Platform>.<Format>.Integration`，以 `Verify.ps1` 为入口，其他场景用说明用途的脚本名。快速测试沿用仓库现有测试入口和可读的用例名。不同格式的人工测试与结果分开存放。
+2. **fixture 与包源**：后端 API fixture 只引用打出的对应后端包，通过公共 API 生成产物；MSBuild fixture 引用打出的应用层包。现有 Windows fixture 都显式导入 `Bundler.LocalPackages.props`；该文件声明 `RestoreSources=$(BundlerPackageSource)`，脚本传入本轮打出的本地包目录及隔离缓存。仓库外复制测试必须连同该 props 一起复制，项目自身仍声明必需的 SDK 属性，不依赖仓库根 `Directory.Build.props` 或旧 obj；脚本将本轮包版本、包源和缓存传入并检查实际还原的包 ID、版本、源与缓存。不要让某个格式只能靠脚本里隐藏的 `--source` 才能找到开发包。
 3. **脚本组织**：复用现有的包检查与断言辅助脚本；按 Pack、还原、构建产物、执行系统行为、核对状态的顺序组织，失败时报告明确原因。每轮使用独立输出目录；有产品身份的安装测试使用独立身份。执行前检查目标未被占用，只清理本轮创建的状态，保留可核查的日志和哈希。
 4. **结果与交接**：记录运行命令、主机/架构、包和产物版本、哈希、日志、退出码、清理结果及未验证范围。公开示例用真实本地包源验证，但不代替测试 fixture。共用 Core、MSBuild 或便利元包有改动时，运行其他受影响后端的回归。
 
@@ -65,13 +65,13 @@
 dotnet build Bundler.slnx -c Release
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.38
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.38 -ConfirmLocalInstall
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.38 -ConfirmLocalInstall
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.38 -ConfirmLocalInstall
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.38
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -Configuration Release -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -Configuration Release -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -Configuration Release -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -Configuration Release
 ```
 
-命令中的版本是此文件最后更新时的示例值；执行前以 `Directory.Build.props`、实际包和 Git 状态为准。真实重启/UAC 等专用测试按格式文档的环境限制运行。
+以上测试命令省略 `-PackageVersion` 时会读取根 `Directory.Build.props` 的当前版本；执行前仍要核对实际包和 Git 状态。真实重启/UAC 等专用测试按格式文档的环境限制运行。

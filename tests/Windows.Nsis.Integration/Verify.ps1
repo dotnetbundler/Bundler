@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = "Release",
-    [string]$PackageVersion = "0.1.0-alpha.38",
+    [string]$PackageVersion,
     [switch]$CleanupOnly
 )
 
@@ -8,13 +8,14 @@ $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 . (Join-Path $PSScriptRoot '..\AssertLocalRestore.ps1')
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
+if ([string]::IsNullOrWhiteSpace($PackageVersion)) { $PackageVersion = Get-BundlerPackageVersion -Repository $repositoryRoot }
 $integrationRoot = Join-Path $repositoryRoot "artifacts\windows-nsis-integration"
 $packageDirectory = Join-Path $repositoryRoot "artifacts\packages"
 $packagePath = Join-Path $packageDirectory "DotNet.Bundler.$PackageVersion.nupkg"
 $msbuildPackagePath = Join-Path $packageDirectory "DotNet.Bundler.MSBuild.$PackageVersion.nupkg"
 $nsisPackagePath = Join-Path $packageDirectory "DotNet.Bundler.Nsis.$PackageVersion.nupkg"
 $signingPackagePath = Join-Path $packageDirectory "DotNet.Bundler.Signing.Windows.$PackageVersion.nupkg"
-$fixtureProject = Join-Path $PSScriptRoot "Fixture\BundlerIntegrationFixture.csproj"
+$fixtureProject = Join-Path $PSScriptRoot "Fixture\BundlerNsisIntegrationFixture.csproj"
 $legacyMsiProject = Join-Path $PSScriptRoot "LegacyMsiFixture\LegacyMsiFixture.wixproj"
 $legacyMsiPath = Join-Path $PSScriptRoot "LegacyMsiFixture\bin\$Configuration\LegacyMsiFixture.msi"
 $apiFixtureProject = Join-Path $repositoryRoot "tests\Nsis.Api.PackageFixture\Nsis.Api.PackageFixture.csproj"

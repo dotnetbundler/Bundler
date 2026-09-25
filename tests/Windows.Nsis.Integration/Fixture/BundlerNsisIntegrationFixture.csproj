@@ -6,7 +6,6 @@
     <SelfContained>false</SelfContained>
     <AssemblyName>BundlerIntegrationFixture</AssemblyName>
     <Version>1.0.0</Version>
-    <RestoreSources>$(BundlerPackageSource)</RestoreSources>
     <BundlerEnabled>true</BundlerEnabled>
     <BundlerIntegrationPackageId Condition="'$(BundlerIntegrationPackageId)' == ''">DotNet.Bundler</BundlerIntegrationPackageId>
     <BundlerIntegrationIdentifier Condition="'$(BundlerIntegrationIdentifier)' == ''">com.dotnetbundler.integrationfixture</BundlerIntegrationIdentifier>
@@ -44,6 +43,7 @@
     <BundlerNsisShortcutLegacyProductNames>Legacy Bundler Fixture</BundlerNsisShortcutLegacyProductNames>
     <BundlerNsisShortcutLegacyMainExecutables>LegacyFixture.exe</BundlerNsisShortcutLegacyMainExecutables>
   </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
     <PackageReference Include="$(BundlerIntegrationPackageId)" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerIcon Include="$(BundlerTestIcon)" Condition="'$(BundlerTestIcon)' != ''" />

@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-第一条已冻结的链路是 Windows + NSIS。MSI 已完成 WIN-MSI-1..4 的本机自动化范围，`alpha.37` 是既有能力的配置与身份基线；当前 `alpha.38` 仅调整随包中文文档与文档路径，不增加安装能力。用户已批准新增 WIN-MSI-5..9 补齐通用 MSI 能力，**这些新能力尚未实现**。现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。正式 CLI、macOS 和 Linux 格式仍属后续路线。
+第一条已冻结的链路是 Windows + NSIS。MSI 已完成 WIN-MSI-1..4 的本机自动化范围，`alpha.37` 是既有能力的配置与身份基线；当前 `alpha.39` 调整文档、测试和示例的命名与本地包配置，不增加安装能力。用户已批准新增 WIN-MSI-5..9 补齐通用 MSI 能力，**这些新能力尚未实现**。现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。正式 CLI、macOS 和 Linux 格式仍属后续路线。
 
 实现已经拆分为可复用的 NuGet 包。`DotNet.Bundler` 只是便利元包，实际打包代码位于以下各层。
 
@@ -44,7 +44,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS/WiX 程序集都提供
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.38" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.39" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -62,7 +62,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.38" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.39" />
 ```
 
 ```csharp
@@ -101,7 +101,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.38" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.39" />
 ```
 
 ```csharp
@@ -326,7 +326,7 @@ Windows Authenticode 签名由独立的 `DotNet.Bundler.Signing.Windows` 包实�
 
 ### 本地自签名测试
 
-下面的命令会在当前用户的 `My` 证书存储区创建一个有效期一天的一次性代码签名证书，用它构建 `HelloBundledApp`，并检查主程序、安装器和安装后的卸载器。它只用于验证签名流程；自签名证书没有受信任 CA 的证书链，因此 `Get-AuthenticodeSignature` 通常会报告 `UnknownError` 或“不受信任的根证书”，也不会让真实用户看到可信发布者。
+下面的命令会在当前用户的 `My` 证书存储区创建一个有效期一天的一次性代码签名证书，用它构建 `HelloNsisApp` 项目（安装后的应用仍叫 Hello Bundled App），并检查主程序、安装器和安装后的卸载器。它只用于验证签名流程；自签名证书没有受信任 CA 的证书链，因此 `Get-AuthenticodeSignature` 通常会报告 `UnknownError` 或“不受信任的根证书”，也不会让真实用户看到可信发布者。
 
 ```powershell
 # 在仓库根目录创建一次性测试证书。
@@ -338,11 +338,11 @@ $certificate = New-SelfSignedCertificate `
 $thumbprint = $certificate.Thumbprint
 
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release `
-  -p:HelloBundledAppSigningCertificateThumbprint=$thumbprint
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release `
+  -p:HelloNsisAppSigningCertificateThumbprint=$thumbprint
 
 $installer = Resolve-Path `
-  "samples/HelloBundledApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe"
+  "samples/HelloNsisApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe"
 $installerSignature = Get-AuthenticodeSignature -LiteralPath $installer
 $installerSignature | Select-Object Status, StatusMessage
 $installerSignature.SignerCertificate | Select-Object Subject, Thumbprint
@@ -371,7 +371,7 @@ if ($uninstallerSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
 Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 ```
 
-若要观察 UAC 发布者页面，可在构建时同时传入 `-p:HelloBundledAppInstallMode=perMachine`。自签名证书仍会显示为未知或不受信任的发布者；正式发布必须换成受信任 CA 签发的代码签名证书，并配置 RFC 3161 时间戳。
+若要观察 UAC 发布者页面，可在构建时同时传入 `-p:HelloNsisAppInstallMode=perMachine`。自签名证书仍会显示为未知或不受信任的发布者；正式发布必须换成受信任 CA 签发的代码签名证书，并配置 RFC 3161 时间戳。
 
 内置签名器直接调用 Windows 的 Authenticode API，因此启用它时构建宿主必须是 Windows；外部命令 provider 和自定义 `IBundleSigner` 可在 provider 支持的其他宿主运行。不启用签名时，Linux 和 macOS 上的 NSIS 构建不受影响。独立 API 使用者可设置每个 `BundleTargetConfiguration.SigningFiles`，并为 `NsisBundlerOptions.Signer` 使用内置或自定义实现。
 
@@ -385,13 +385,13 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 dotnet build Bundler.slnx
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.38
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -PackageVersion 0.1.0-alpha.38 -ConfirmLocalInstall
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -PackageVersion 0.1.0-alpha.38 -ConfirmLocalInstall
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -PackageVersion 0.1.0-alpha.38 -ConfirmLocalInstall
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -PackageVersion 0.1.0-alpha.38
+powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -ConfirmLocalInstall
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -ConfirmLocalInstall
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -ConfirmLocalInstall
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1
 ```
 
 NSIS Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

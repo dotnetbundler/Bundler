@@ -1,3 +1,19 @@
+function Get-BundlerPackageVersion {
+    param([Parameter(Mandatory)][string]$Repository)
+
+    $path = Join-Path $Repository 'Directory.Build.props'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Shared local package configuration is missing: $path"
+    }
+    [xml]$props = Get-Content -LiteralPath $path -Raw
+    $versionNode = $props.SelectSingleNode('/Project/PropertyGroup/BundlerPackageVersion')
+    $version = if ($null -ne $versionNode) { [string]$versionNode.InnerText } else { '' }
+    if ([string]::IsNullOrWhiteSpace($version)) {
+        throw "BundlerPackageVersion is missing from $path"
+    }
+    return $version.Trim()
+}
+
 function Assert-LocalBundlerRestore {
     param(
         [Parameter(Mandatory)][string]$Project,

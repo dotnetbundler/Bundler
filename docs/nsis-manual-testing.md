@@ -60,11 +60,11 @@ git diff --check
 1. 分别以 `perMachine` 和 `both` 生成安装器：
 
    ```powershell
-   dotnet publish samples\HelloBundledApp\HelloBundledApp.csproj -c Release -r win-x64 `
-     -p:HelloBundledAppInstallMode=perMachine `
+   dotnet publish samples\HelloNsisApp\HelloNsisApp.csproj -c Release -r win-x64 `
+     -p:HelloNsisAppInstallMode=perMachine `
      -p:BundlerOutputPath="$PWD\artifacts\manual\per-machine"
-   dotnet publish samples\HelloBundledApp\HelloBundledApp.csproj -c Release -r win-x64 `
-     -p:HelloBundledAppInstallMode=both `
+   dotnet publish samples\HelloNsisApp\HelloNsisApp.csproj -c Release -r win-x64 `
+     -p:HelloNsisAppInstallMode=both `
      -p:BundlerOutputPath="$PWD\artifacts\manual\both"
    ```
 
@@ -120,10 +120,10 @@ git diff --check
 
    ```powershell
    $env:BUNDLER_SIGNING_PASSWORD = Read-Host "PFX 密码" -MaskInput
-   dotnet publish samples\HelloBundledApp\HelloBundledApp.csproj -c Release -r win-x64 `
-     -p:HelloBundledAppSigningPfxFile="<certificate.pfx>" `
-     -p:HelloBundledAppSigningPfxPasswordEnvironmentVariable=BUNDLER_SIGNING_PASSWORD `
-     -p:HelloBundledAppSigningTimestampUrl="<RFC3161 URL>"
+   dotnet publish samples\HelloNsisApp\HelloNsisApp.csproj -c Release -r win-x64 `
+     -p:HelloNsisAppSigningPfxFile="<certificate.pfx>" `
+     -p:HelloNsisAppSigningPfxPasswordEnvironmentVariable=BUNDLER_SIGNING_PASSWORD `
+     -p:HelloNsisAppSigningTimestampUrl="<RFC3161 URL>"
    Remove-Item Env:\BUNDLER_SIGNING_PASSWORD
    ```
 
@@ -148,9 +148,9 @@ git diff --check
 3. 用真实标识构建 NSIS 安装器：
 
    ```powershell
-   dotnet publish samples\HelloBundledApp\HelloBundledApp.csproj -c Release -r win-x64 `
-     -p:HelloBundledAppLegacyMsiProductCodes="<ProductCode>" `
-     -p:HelloBundledAppLegacyMsiUpgradeCodes="<UpgradeCode>"
+   dotnet publish samples\HelloNsisApp\HelloNsisApp.csproj -c Release -r win-x64 `
+     -p:HelloNsisAppLegacyMsiProductCodes="<ProductCode>" `
+     -p:HelloNsisAppLegacyMsiUpgradeCodes="<UpgradeCode>"
    ```
 
 4. 交互执行迁移，分别检查原 MSI 产品、文件、服务/快捷方式（若有）和 NSIS 新安装。
@@ -197,7 +197,7 @@ git diff --check
 dotnet --info
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -r win-x64
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release -r win-x64
 ```
 
 记录内嵌 `makensis` 的实际宿主文件类型、退出码、生成的 Windows NSIS 安装器 SHA-256 和工具缓存位置。

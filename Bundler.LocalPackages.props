@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <!-- 版本只在根 Directory.Build.props 定义；隔离 fixture 由脚本传入版本。 -->
+    <!-- 公开示例使用仓库本地源；隔离 fixture 由脚本显式传入包源。 -->
+    <BundlerPackageSource Condition="'$(BundlerPackageSource)' == '' and '$(BundlerUseRepositoryPackageSource)' == 'true'">$(MSBuildThisFileDirectory)artifacts\packages</BundlerPackageSource>
+    <RestoreSources Condition="'$(BundlerPackageSource)' != ''">$(BundlerPackageSource)</RestoreSources>
+  </PropertyGroup>
+</Project>

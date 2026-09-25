@@ -5,9 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <BundlerPackageVersion Condition="'$(BundlerPackageVersion)' == ''">0.1.0-alpha.38</BundlerPackageVersion>
-    <RestoreSources>$(BundlerPackageSource)</RestoreSources>
   </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
     <PackageReference Include="DotNet.Bundler.Wix" Version="$(BundlerPackageVersion)" />
   </ItemGroup>

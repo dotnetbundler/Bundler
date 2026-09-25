@@ -11,7 +11,7 @@ dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
 ```
 
-默认产物为 `samples/HelloMsiApp/artifacts/feature-demo/win-x64/msi/Hello MSI App-1.0.0.msi`。`feature-demo` 将本次完整演示与仓库早期同版本示例产物隔开，让上面的直接 `publish` 命令可运行；命令行仍可用 `BundlerOutputPath` 指向其他目录。与 NSIS 示例一样，项目文件固定 `RestoreSources=artifacts/packages` 和当前开发包版本；`publish` 消费已还原的 NuGet 包，不会自动重编仓库 `src/`。实现变更应先按开发规则迭代包版本并重新打包；缺少当前版本的本地包时先执行 `pack`。
+默认产物为 `samples/HelloMsiApp/artifacts/feature-demo/win-x64/msi/Hello MSI App-1.0.0.msi`。`feature-demo` 将本次完整演示与仓库早期同版本示例产物隔开，让上面的直接 `publish` 命令可运行；命令行仍可用 `BundlerOutputPath` 指向其他目录。与 NSIS 示例一样，项目通过根 `Directory.Build.props` 取得当前开发包版本，通过 `Bundler.LocalPackages.props` 设置本地 `RestoreSources=artifacts/packages`；`publish` 消费已还原的 NuGet 包，不会自动重编仓库 `src/`。实现变更应先按开发规则迭代包版本并重新打包；缺少当前版本的本地包时先执行 `pack`。
 
 只验证示例构建契约而**不安装** MSI 时，运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1`。脚本用隔离 NuGet 缓存从本地包源还原，分别生成英语 current-user、中文 current-user 和英语 per-machine 包，检查数据库中的资源、图标、许可 UI、快捷方式、关联/协议及独立身份；输出保留在本轮 `%TEMP%` 目录。此检查不代替真实安装测试。
 

@@ -1,6 +1,6 @@
-# HelloBundledApp 功能演示
+# HelloNsisApp：Windows NSIS 功能演示
 
-这个项目不是自动化测试，而是 `DotNet.Bundler` 当前 Windows + NSIS 功能的可操作演示。项目只通过普通 `PackageReference` 使用本地生成的 NuGet 包。
+这个项目不是自动化测试，而是 `DotNet.Bundler` 当前 Windows + NSIS 功能的可操作演示。项目名为 `HelloNsisApp`，保留既有产品名 Hello Bundled App 和可执行文件 `HelloBundledApp.exe`，以免仅整理项目名称就改变安装身份。项目只通过普通 `PackageReference` 使用本地生成的 NuGet 包。
 
 ## 生成安装程序
 
@@ -8,13 +8,13 @@
 
 ```powershell
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
 ```
 
 安装程序位于：
 
 ```text
-samples/HelloBundledApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe
+samples/HelloNsisApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe
 ```
 
 构建时会从仓库固定版本的 NsisToolset 中把演示图片提取到 `obj`，用于展示安装器图标、卸载器图标、Header、卸载器 Header 和 Sidebar。它们不会写入项目源码目录。
@@ -82,13 +82,13 @@ Windows 不允许安装器静默替换用户选择的默认程序。第一次打
 
 ```powershell
 # 当前用户安装，不需要管理员权限
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -p:HelloBundledAppInstallMode=currentUser
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release -p:HelloNsisAppInstallMode=currentUser
 
 # 所有用户安装，请求管理员权限并安装到 Program Files
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -p:HelloBundledAppInstallMode=perMachine
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release -p:HelloNsisAppInstallMode=perMachine
 
 # 安装时由用户选择当前用户或所有用户
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -p:HelloBundledAppInstallMode=both
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release -p:HelloNsisAppInstallMode=both
 ```
 
 每次生成使用相同的文件名，演示不同模式时应先复制或重命名上一次的产物。
@@ -99,13 +99,13 @@ dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -p:Hell
 
 ```powershell
 # 生成升级包
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -p:Version=1.1.0
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release -p:Version=1.1.0
 
 # 生成默认禁止降级的 0.9.0
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -p:Version=0.9.0
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release -p:Version=0.9.0
 
 # 生成明确允许降级的 0.9.0
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -p:Version=0.9.0 -p:HelloBundledAppAllowDowngrades=true
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release -p:Version=0.9.0 -p:HelloNsisAppAllowDowngrades=true
 ```
 
 再次运行同版本安装程序会展示重装策略；运行高版本和低版本安装程序会分别展示升级及降级策略。让程序保持在“按任意键退出”界面，再运行安装或卸载程序，可以展示运行进程检测和关闭。
@@ -148,9 +148,9 @@ NSIS 的 `/D=` 必须是最后一个参数：
 迁移功能不能使用随意生成的 GUID 演示，否则可能匹配不到任何产品，甚至误卸载其他软件。必须使用待迁移 MSI 的真实 ProductCode 或 UpgradeCode：
 
 ```powershell
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release `
-  -p:HelloBundledAppLegacyMsiProductCodes='{真实的-PRODUCT-CODE}' `
-  -p:HelloBundledAppLegacyMsiUpgradeCodes='{真实的-UPGRADE-CODE}'
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release `
+  -p:HelloNsisAppLegacyMsiProductCodes='{真实的-PRODUCT-CODE}' `
+  -p:HelloNsisAppLegacyMsiUpgradeCodes='{真实的-UPGRADE-CODE}'
 ```
 
 仓库的自动化集成测试使用一次性 MSI Fixture 完整验证这条路径；本示例只保留安全、明确的参数入口。
@@ -161,15 +161,15 @@ dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release `
 
 ```powershell
 $env:HELLO_BUNDLED_APP_SIGNING_PASSWORD = '你的-PFX-密码'
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release `
-  -p:HelloBundledAppSigningPfxFile='C:\证书\publisher.pfx' `
-  -p:HelloBundledAppSigningPfxPasswordEnvironmentVariable=HELLO_BUNDLED_APP_SIGNING_PASSWORD `
-  -p:HelloBundledAppSigningTimestampUrl='https://你的-RFC3161-时间戳服务'
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release `
+  -p:HelloNsisAppSigningPfxFile='C:\证书\publisher.pfx' `
+  -p:HelloNsisAppSigningPfxPasswordEnvironmentVariable=HELLO_BUNDLED_APP_SIGNING_PASSWORD `
+  -p:HelloNsisAppSigningTimestampUrl='https://你的-RFC3161-时间戳服务'
 ```
 
-也可以用 `HelloBundledAppSigningCertificateThumbprint` 指定当前用户 `My` 证书存储区中的证书。签名时会在临时副本中签署主程序和 Bundler 原生插件，再签卸载器和最终安装器；原始 `publish` 目录不会被修改。内置签名器无需安装 Windows SDK 或 `signtool.exe`，但必须在 Windows 主机运行。
+也可以用 `HelloNsisAppSigningCertificateThumbprint` 指定当前用户 `My` 证书存储区中的证书。签名时会在临时副本中签署主程序和 Bundler 原生插件，再签卸载器和最终安装器；原始 `publish` 目录不会被修改。内置签名器无需安装 Windows SDK 或 `signtool.exe`，但必须在 Windows 主机运行。
 
-外部签名服务可通过 `HelloBundledAppSigningCommand` 和分号分隔的 `HelloBundledAppSigningCommandArguments` 演示，例如 `sign;--file;{path}`。至少一个参数必须含 `{path}` 或 `%1`；还可使用 `{artifactKind}`、`{target}`、`{productName}`。凭据应由 provider 从环境变量或安全存储读取，不能放进参数。
+外部签名服务可通过 `HelloNsisAppSigningCommand` 和分号分隔的 `HelloNsisAppSigningCommandArguments` 演示，例如 `sign;--file;{path}`。至少一个参数必须含 `{path}` 或 `%1`；还可使用 `{artifactKind}`、`{target}`、`{productName}`。凭据应由 provider 从环境变量或安全存储读取，不能放进参数。
 
 本地没有正式证书时，可以创建一次性自签名证书来验证签名链路：
 
@@ -181,11 +181,11 @@ $certificate = New-SelfSignedCertificate `
   -NotAfter ([DateTime]::Now.AddDays(1))
 $thumbprint = $certificate.Thumbprint
 
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release `
-  -p:HelloBundledAppSigningCertificateThumbprint=$thumbprint
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release `
+  -p:HelloNsisAppSigningCertificateThumbprint=$thumbprint
 
 $installer = Resolve-Path `
-  "samples/HelloBundledApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe"
+  "samples/HelloNsisApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe"
 $signature = Get-AuthenticodeSignature -LiteralPath $installer
 $signature | Select-Object Status, StatusMessage
 $signature.SignerCertificate | Select-Object Subject, Thumbprint

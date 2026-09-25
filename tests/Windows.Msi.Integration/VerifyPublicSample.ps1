@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = 'Release',
-    [string]$PackageVersion = '0.1.0-alpha.38'
+    [string]$PackageVersion
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,6 +11,7 @@ $root = Join-Path $env:TEMP ('Bundler-Msi-PublicSample-' + [guid]::NewGuid().ToS
 $cache = Join-Path $root 'packages'
 $installer = New-Object -ComObject WindowsInstaller.Installer
 . (Join-Path $repository 'tests\AssertLocalRestore.ps1')
+if ([string]::IsNullOrWhiteSpace($PackageVersion)) { $PackageVersion = Get-BundlerPackageVersion -Repository $repository }
 
 foreach ($name in @('DotNet.Bundler', 'DotNet.Bundler.MSBuild', 'DotNet.Bundler.Wix')) {
     $package = Join-Path $source "$name.$PackageVersion.nupkg"

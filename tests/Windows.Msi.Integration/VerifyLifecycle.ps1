@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = 'Release',
-    [string]$PackageVersion = '0.1.0-alpha.38',
+    [string]$PackageVersion,
     [switch]$ConfirmDisposableVm,
     [switch]$ConfirmLocalInstall
 )
@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 Assert-MsiTestHost $ConfirmDisposableVm.IsPresent $ConfirmLocalInstall.IsPresent
 
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+if ([string]::IsNullOrWhiteSpace($PackageVersion)) { $PackageVersion = Get-BundlerPackageVersion -Repository $repository }
 $fixtureSource = Join-Path $PSScriptRoot 'Fixture'
 $id = [guid]::NewGuid().ToString('N')
 $identifier = "com.example.bundler.msi.lifecycle.$id"

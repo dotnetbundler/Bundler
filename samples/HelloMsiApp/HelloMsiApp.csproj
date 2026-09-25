@@ -4,7 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
-    <RestoreSources>$(MSBuildThisFileDirectory)..\..\artifacts\packages</RestoreSources>
+    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
     <BundlerOutputPath>$(MSBuildProjectDirectory)\artifacts\feature-demo</BundlerOutputPath>
     <HelloMsiAppInstallScope Condition="'$(HelloMsiAppInstallScope)' == ''">currentUser</HelloMsiAppInstallScope>
     <HelloMsiAppLanguage Condition="'$(HelloMsiAppLanguage)' == ''">en-US</HelloMsiAppLanguage>
@@ -37,8 +37,9 @@
     <BundlerWindowsSigningCommand>$(HelloMsiAppSigningCommand)</BundlerWindowsSigningCommand>
     <ApplicationIcon>$(MSBuildThisFileDirectory)Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.38" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerIcon Include="Assets\app.ico" />
     <BundlerResource Include="Assets\demo-resource.txt" TargetPath="DemoResources\Readme.txt" />
     <BundlerResource Include="Assets\demo.hellomsi" TargetPath="demo.hellomsi" />

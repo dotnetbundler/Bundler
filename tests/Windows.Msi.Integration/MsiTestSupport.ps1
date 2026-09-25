@@ -61,6 +61,9 @@ function Copy-MsiTestFixture([string]$Source, [string]$Destination) {
     foreach ($name in @('BundlerMsiSmoke.csproj', 'Program.cs')) {
         Copy-Item -LiteralPath (Join-Path $Source $name) -Destination (Join-Path $Destination $name)
     }
+    $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+    Copy-Item -LiteralPath (Join-Path $repository 'Bundler.LocalPackages.props') `
+        -Destination (Join-Path $Destination 'Bundler.LocalPackages.props')
     Copy-Item -LiteralPath (Join-Path $Source 'Assets') -Destination (Join-Path $Destination 'Assets') -Recurse
     return Join-Path $Destination 'BundlerMsiSmoke.csproj'
 }

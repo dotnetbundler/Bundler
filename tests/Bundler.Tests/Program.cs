@@ -1939,51 +1939,72 @@ static void KeepsPackageConsumerVersionsAligned()
     var root = RepositoryRoot();
     var version = XDocument.Load(Path.Combine(root, "Directory.Build.props"))
         .Descendants("BundlerPackageVersion").Single().Value;
+    var consumerProps = XDocument.Load(Path.Combine(root, "Bundler.LocalPackages.props"));
+    Assert(!consumerProps.Descendants("BundlerPackageVersion").Any(),
+        "The local-package props must not duplicate the repository package version.");
+    Assert(consumerProps.Descendants("BundlerPackageSource").Single().Value.Contains("artifacts", StringComparison.Ordinal) &&
+           consumerProps.Descendants("RestoreSources").Single().Value == "$(BundlerPackageSource)",
+        "The shared props must define the repository source and fixture restore source.");
     foreach (var path in new[]
     {
-        Path.Combine(root, "samples", "HelloBundledApp", "HelloBundledApp.csproj"),
+        Path.Combine(root, "samples", "HelloNsisApp", "HelloNsisApp.csproj"),
         Path.Combine(root, "samples", "HelloMsiApp", "HelloMsiApp.csproj")
     })
     {
         var project = XDocument.Load(path);
         var reference = project.Descendants("PackageReference")
             .Single(item => (string?)item.Attribute("Include") == "DotNet.Bundler");
-        Assert((string?)reference.Attribute("Version") == version,
-            "The public sample uses a different Bundler package version: " + path);
-        Assert(project.Descendants("RestoreSources").Any(item => item.Value.Contains("artifacts", StringComparison.Ordinal) &&
-               item.Value.Contains("packages", StringComparison.Ordinal)),
-            "The public sample has no repository-local package source: " + path);
+        Assert((string?)reference.Attribute("Version") == "$(BundlerPackageVersion)" &&
+               project.Descendants("BundlerUseRepositoryPackageSource").Single().Value == "true",
+            "The public sample does not use the shared package version and source: " + path);
+        Assert(project.Descendants("Import").Any(item =>
+                   ((string?)item.Attribute("Project"))?.Contains("Bundler.LocalPackages.props", StringComparison.Ordinal) == true) &&
+               !project.Descendants("RestoreSources").Any(),
+            "The public sample must import the shared local-package props: " + path);
     }
+    var nsisSample = XDocument.Load(Path.Combine(root, "samples", "HelloNsisApp", "HelloNsisApp.csproj"));
+    Assert(nsisSample.Descendants("AssemblyName").Single().Value == "HelloBundledApp" &&
+           nsisSample.Descendants("HelloNsisAppInstallMode").Any() &&
+           !nsisSample.Descendants().Any(item => item.Name.LocalName.StartsWith("HelloBundledApp", StringComparison.Ordinal)),
+        "The NSIS sample must use format-specific build properties while preserving its executable name.");
+    Assert(XDocument.Load(Path.Combine(root, "tests", "Windows.Nsis.Integration", "Fixture",
+            "BundlerNsisIntegrationFixture.csproj"))
+        .Descendants("AssemblyName").Single().Value == "BundlerIntegrationFixture",
+        "Renaming the NSIS test project must preserve its fixture executable name.");
     foreach (var name in new[] { "Nsis", "Msi" })
     {
         var project = XDocument.Load(Path.Combine(root, "tests", name + ".Api.PackageFixture",
             name + ".Api.PackageFixture.csproj"));
-        Assert(project.Descendants("BundlerPackageVersion").Single().Value == version,
-            "The standalone API package fixture has a stale fallback version: " + name);
+        Assert(!project.Descendants("BundlerPackageVersion").Any(),
+            "The standalone API package fixture duplicates the current version: " + name);
     }
     foreach (var path in new[]
     {
         Path.Combine(root, "tests", "Nsis.Api.PackageFixture", "Nsis.Api.PackageFixture.csproj"),
         Path.Combine(root, "tests", "Msi.Api.PackageFixture", "Msi.Api.PackageFixture.csproj"),
-        Path.Combine(root, "tests", "Windows.Nsis.Integration", "Fixture", "BundlerIntegrationFixture.csproj"),
+        Path.Combine(root, "tests", "Windows.Nsis.Integration", "Fixture", "BundlerNsisIntegrationFixture.csproj"),
         Path.Combine(root, "tests", "Windows.Msi.Integration", "Fixture", "BundlerMsiSmoke.csproj")
     })
     {
         var project = XDocument.Load(path);
-        Assert(project.Descendants("RestoreSources").SingleOrDefault()?.Value == "$(BundlerPackageSource)",
-            "The integration fixture must use the same script-provided local package source: " + path);
+        Assert(project.Descendants("Import").Any(item =>
+                   ((string?)item.Attribute("Project"))?.Contains("Bundler.LocalPackages.props", StringComparison.Ordinal) == true) &&
+               !project.Descendants("RestoreSources").Any(),
+            "The fixture must import the shared local-package props: " + path);
     }
     foreach (var path in new[]
     {
         Path.Combine(root, "tests", "Windows.Nsis.Integration", "Verify.ps1"),
         Path.Combine(root, "tests", "Windows.Msi.Integration", "Verify.ps1"),
-        Path.Combine(root, "tests", "Windows.Msi.Integration", "VerifyLifecycle.ps1")
+        Path.Combine(root, "tests", "Windows.Msi.Integration", "VerifyLifecycle.ps1"),
+        Path.Combine(root, "tests", "Windows.Msi.Integration", "VerifyMaintenance.ps1"),
+        Path.Combine(root, "tests", "Windows.Msi.Integration", "VerifyPublicSample.ps1")
     })
     {
         var script = File.ReadAllText(path);
-        Assert(script.Contains("[string]$PackageVersion = \"" + version + "\"", StringComparison.Ordinal) ||
-               script.Contains("[string]$PackageVersion = '" + version + "'", StringComparison.Ordinal),
-            "The integration script has a stale default package version: " + path);
+        Assert(script.Contains("Get-BundlerPackageVersion -Repository", StringComparison.Ordinal) &&
+               !script.Contains(version, StringComparison.Ordinal),
+            "The integration script must read its default package version from Directory.Build.props: " + path);
     }
 }
 

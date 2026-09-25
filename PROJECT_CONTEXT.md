@@ -3,7 +3,7 @@
 > 最后整理：2026-09-25
 > 当前分支：`codex/msi-development`（NSIS 开发线为 `codex/nsis-development`）
 > NSIS 冻结起点：`b116d09 feat(nsis): freeze secure packaging baseline`；当前提交以 `git rev-parse --short HEAD` 为准
-> 当前包版本：`0.1.0-alpha.38`（本轮文档及随包路径调整；Git 状态与包版本均须实时核查）
+> 当前包版本：`0.1.0-alpha.39`（本轮测试/示例命名与本地包配置整理；Git 状态与包版本均须实时核查）
 > 当前阶段：`WIN-MSI-1..4` 的本机自动化范围已完成，`alpha.37` 是既有 MSI 能力基线。用户已确认先补齐适用于通用打包器的 Tauri MSI 能力，`WIN-MSI-5..9` 尚未实施；默认下一实施阶段为 `WIN-MSI-5`，`MAC-APP` 顺延。per-machine、生产签名与外部宿主等旧验收边界不变。
 
 本文档记录当前事实、决策与验证证据，供后续开发任务接续。跨格式开发与交接规则以 `docs/development-rules.md` 为唯一规范入口；正式路线见 `docs/roadmap.md`，MSI 细则见 `docs/msi-roadmap.md`。本文档不是面向最终用户的使用手册。代码与自动化测试始终是实现事实的最终依据。
@@ -338,9 +338,9 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 - 外部命令签名器使用可执行文件加独立参数数组，不经 shell；至少一个参数必须含 `{path}` 或 `%1`，并支持 `{artifactKind}`、`{target}`、`{productName}`。provider 输出和参数默认不进入异常消息。
 - 最终 installer 签名失败会删除已编译的输出，避免调用方把未签名文件误当成功产物。
 
-## 6. HelloBundledApp 示例的定位
+## 6. HelloNsisApp 示例的定位
 
-`samples/HelloBundledApp` **不是自动化测试**，而是所有已公开功能的可操作演示。示例说明只使用中文。
+`samples/HelloNsisApp` **不是自动化测试**，而是所有已公开功能的可操作演示。示例说明只使用中文。
 
 当前示例必须持续展示：
 
@@ -419,7 +419,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integrati
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.32
-dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release -r win-x64 --force
+dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release -r win-x64 --force
 ```
 
 结果：
@@ -621,7 +621,7 @@ MSI alpha 格式的本机验证范围与配置/身份规则已冻结；`docs/msi
 
 ### 14.9 公开 MSI 示例补齐（2026-09-25）
 
-用户要求先提交第 14.8 节的规划，再核对 MSI 公开示例是否像 NSIS 示例一样完整。规划文档已提交为 `26373c4`；随后对照 `samples/HelloBundledApp` 与当前 MSI 后端 API，发现原 `HelloMsiApp` 仅展示快捷方式、关联和协议声明，缺乏可实际打开的演示资源、应用参数反馈、图标、许可页面、签名配置及分范围/语言的操作说明。当前工作区补齐 `samples/HelloMsiApp` 的可操作演示、根 README 链接、本交接及 `VerifyPublicSample.ps1` 自动化，**未修改后端代码、未启动 WIN-MSI-5、未迭代 NuGet 包版本，示例应用仍为 1.0.0**。NSIS 专有 Hook、安装器图片、语言选择器、快捷方式参数和 journal 不适用于现有 MSI；WIN-MSI-5..9 计划能力不提前声称已支持。
+用户要求先提交第 14.8 节的规划，再核对 MSI 公开示例是否像 NSIS 示例一样完整。规划文档已提交为 `26373c4`；随后对照当时尚未改名的 `samples/HelloBundledApp` 与当前 MSI 后端 API，发现原 `HelloMsiApp` 仅展示快捷方式、关联和协议声明，缺乏可实际打开的演示资源、应用参数反馈、图标、许可页面、签名配置及分范围/语言的操作说明。当前工作区补齐 `samples/HelloMsiApp` 的可操作演示、根 README 链接、本交接及 `VerifyPublicSample.ps1` 自动化，**未修改后端代码、未启动 WIN-MSI-5、未迭代 NuGet 包版本，示例应用仍为 1.0.0**。NSIS 专有 Hook、安装器图片、语言选择器、快捷方式参数和 journal 不适用于现有 MSI；WIN-MSI-5..9 计划能力不提前声称已支持。
 
 Windows 11 x64 本机验证：从已有本地 `0.1.0-alpha.37` NuGet 包构建默认 `en-US/currentUser`、`zh-CN/currentUser` 和 `en-US/perMachine` 三份示例 MSI，均成功；另一次 `dotnet restore` 使用隔离缓存并通过 `Assert-LocalBundlerRestore` 检查本地包源及 `DotNet.Bundler`/MSBuild/Wix 包版本，再 `dotnet publish --no-restore` 成功。Windows Installer 数据库只读检查三份包的产品语言/独立 ProductCode 与 UpgradeCode、演示文件、RTF 许可 UI、产品图标和两个快捷方式，默认包还检查关联/协议的自身候选注册表项。默认、中文和 per-machine 三份包分别位于 `%TEMP%\Bundler-HelloMsiApp-Sample-f638475803d84cf094c55a982f35727e`、`%TEMP%\Bundler-HelloMsiApp-zhCN-cbf1b025d4e1469ab3b47d2f6e5ed88e`、`%TEMP%\Bundler-HelloMsiApp-perMachine-472e58ccbb9346a79404877293301328`，SHA-256 分别为 `EAFDCBCA878DD5771D2B83D9BA29BDC7216B0E29560964B319D3B490D2F89682`、`AA01F2F187E7C18047B85F8101F48CB2D6ED78317423ABB7737A2449AF30180E`、`D896093B9E482F22AE07FDD5429A7DF6B939224821B21189CA8D2176EA682EBD`。隔离还原产物 `%TEMP%\Bundler-HelloMsiApp-Isolated-691cf376f8374be0b01b2b10501db8ec\output` 的 SHA-256 为 `F20B0E8A62D9BCA4CCDAAA5D2CACE5249A14E3520C95D667B273A4D672262380`。三份公开示例**均未实际安装或人工验收 UI**；真实安装、升级、修复、故障行为的既有证据仍来自随机 fixture。
 
@@ -634,3 +634,13 @@ Windows 11 x64 本机验证：从已有本地 `0.1.0-alpha.37` NuGet 包构建�
 因根 README、WiX 来源说明及第三方声明进入 NuGet 包，工具包版本从 `0.1.0-alpha.37` 迭代至 `0.1.0-alpha.38`，两个示例应用版本仍是 `1.0.0`。`Directory.Build.props`、示例引用、API fixture 默认值及 Windows 集成入口默认值已同步。Windows 11 x64 本机：`dotnet build Bundler.slnx -c Release -v:q` 通过，0 警告/0 错误；`dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release --no-restore` 全部通过；`dotnet pack Bundler.slnx -c Release --no-restore -o artifacts/packages -v:q` 生成七个 alpha.38 包。逐包 ZIP 检查确认中文 `README.md` 与仓库一致、原中文镜像不再随包；WiX/MSBuild 包内 `licenses/wix/msi-wix-provenance.md` 与仓库逐字节一致，现有 MSI 包审计辅助函数再次通过。WiX 包为 14,398,423 字节，SHA-256 `213BB494106CC7B82F77B96539AF6A435D6E61575E38A836A08B7E66E75BB398`。
 
 公开 MSI 示例的 `VerifyPublicSample.ps1` 使用本地 alpha.38 包和隔离缓存，英语当前用户、简体中文当前用户和英语整机三种只读数据库检查均通过；本轮未安装 MSI。NSIS 公开示例从本地 alpha.38 包源 `dotnet publish` 成功，产生的会话专用输出已按确切路径清理。仓库 Markdown 相对链接全部解析成功，全部维护中的 Markdown 均含中文，旧文档路径搜索无命中，`git diff --check` 无空白错误。首次沙箱内 build 因无法读取本机 `C:\Users\Lin\AppData\Local\Microsoft SDKs` 被拒；获准在沙箱外读取后成功，未发现项目编译错误。本轮未提交或推送。下一实施阶段仍为 WIN-MSI-5；外部环境的既有人工验收边界不变。
+
+### 14.11 测试与示例项目命名、本地包配置收敛（2026-09-25）
+
+本轮起点为 `codex/msi-development`、HEAD `7c14a96`、工作区干净。原 NSIS 示例只演示 NSIS，因此项目目录和 `.csproj` 改为 `samples/HelloNsisApp/HelloNsisApp.csproj`；NSIS 集成 fixture 的项目文件改为 `BundlerNsisIntegrationFixture.csproj`。跨格式的 `tests/Bundler.Tests` 保留泛用名，既有 MSI 项目名已带格式名。为只整理项目名、不改变安装身份，NSIS 示例仍使用 `AssemblyName=HelloBundledApp`、原产品名与标识符、`1.0.0` 应用版本；NSIS fixture 仍使用 `AssemblyName=BundlerIntegrationFixture`。示例专属 MSBuild 参数和图片准备目标从 `HelloBundledApp*` 改为 `HelloNsisApp*`，对应中文命令已同步；这些是示例构建入口名称，不改变安装身份。旧示例目录在本轮开始前已有被忽略的构建产物，整体移动因文件占用失败；仅移动九个受 Git 跟踪的源码文件，旧产物原位保留。
+
+根 `Directory.Build.props` 是 `BundlerPackageVersion` 的唯一当前值，版本迭代到 `0.1.0-alpha.39`。新增跨格式 `Bundler.LocalPackages.props`，集中设置示例的仓库本地包源及 fixture 的 `RestoreSources=$(BundlerPackageSource)`。两个示例的 `PackageReference` 均引用 `$(BundlerPackageVersion)`；五个 Windows 集成入口省略 `-PackageVersion` 时由共用 PowerShell helper 读取根 props。四个包消费 fixture 显式导入共享 props；复制到仓库外的 MSI MSBuild/API fixture 同时复制该文件，并由脚本传入包版本、包源和隔离缓存。fixture 仍自行声明必需的 SDK 属性，不依赖仓库根 props。配置只服务开发包消费，不随 NuGet 包发布；后端和安装逻辑未改。具体规则见 `docs/development-rules.md`。
+
+本机 Windows 11 Pro build 26200 x64：Release 解决方案构建 0 警告/0 错误，更新后的快速测试全部通过；Pack 生成七个 alpha.39 包，包内 README 与仓库一致，Bundler 依赖版本均为 alpha.39。WiX 包 14,398,397 字节，SHA-256 为 `3A13CA19A63D8336538E56453ACB01D5BE76CD6D4F0DE383AF572DED5DFD9657`。NSIS 公开示例从本地包成功发布，仍生成 `HelloBundledApp.dll` 与 `Hello Bundled App-1.0.0-setup.exe`，安装器 SHA-256 为 `D80BAA724FB4D64C96A107F3D1D3A7312B8CCAC0CBF81277D7DF27ACD2DC5468`；本轮专用示例输出已按确切路径清理。MSI 公开示例省略版本参数运行 `VerifyPublicSample.ps1`，英语当前用户、中文当前用户、英语整机三种只读数据库检查通过，未安装公开示例，产物保留在 `%TEMP%\Bundler-Msi-PublicSample-f2b16791c841400a82adec761ce5fbb4`。
+
+真实 Windows 集成入口也均省略版本参数并退出 0：MSI `Verify.ps1 -ConfirmLocalInstall` 通过随机 current-user 安装/卸载和仓库外直接 API 包消费，MSI SHA-256 为 `ECBAFF26859A5458784A5D8035B4C9912E0A766D2667DA1A3E568A7D2277094D`，日志在 `%TEMP%\Bundler-Msi-Smoke-394db4e914b14e04b1c18b929ad7d0f1`；`VerifyLifecycle.ps1 -ConfirmLocalInstall` 通过升级、降级/异包拒绝与数据所有权，日志在 `%TEMP%\Bundler-Msi-Lifecycle-552806128459422086e891156501983b`；`VerifyMaintenance.ps1 -ConfirmLocalInstall` 通过损坏包 1620、故障回滚、被动安装/卸载、静默修复与语言并存，日志在 `%TEMP%\Bundler-Msi-Maintenance-34b34c995872424093c8ca0257bfbd8e`。NSIS `Verify.ps1` 全量安装/卸载集成通过，产物在 `artifacts/windows-nsis-integration`。Markdown 相对链接、旧项目路径及 `git diff --check` 均核对通过。未启动 WIN-MSI-5，未提交或推送；原有外部人工验收边界不变。

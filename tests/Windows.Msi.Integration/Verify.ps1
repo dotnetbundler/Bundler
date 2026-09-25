@@ -1,6 +1,6 @@
 param(
     [string]$Configuration = 'Release',
-    [string]$PackageVersion = '0.1.0-alpha.38',
+    [string]$PackageVersion,
     [switch]$ConfirmDisposableVm,
     [switch]$ConfirmLocalInstall
 )
@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 Assert-MsiTestHost $ConfirmDisposableVm.IsPresent $ConfirmLocalInstall.IsPresent
 
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+if ([string]::IsNullOrWhiteSpace($PackageVersion)) { $PackageVersion = Get-BundlerPackageVersion -Repository $repository }
 $fixtureSource = Join-Path $PSScriptRoot 'Fixture'
 $apiFixtureSource = Join-Path $repository 'tests\Msi.Api.PackageFixture'
 $sessionId = [guid]::NewGuid().ToString('N')
@@ -51,6 +52,8 @@ try {
         New-Item -ItemType Directory -Path $apiFixtureDirectory -Force | Out-Null
         Copy-Item -LiteralPath (Join-Path $apiFixtureSource 'Msi.Api.PackageFixture.csproj') -Destination $apiFixture
         Copy-Item -LiteralPath (Join-Path $apiFixtureSource 'Program.cs') -Destination (Join-Path $apiFixtureDirectory 'Program.cs')
+        Copy-Item -LiteralPath (Join-Path $repository 'Bundler.LocalPackages.props') `
+            -Destination (Join-Path $apiFixtureDirectory 'Bundler.LocalPackages.props')
         dotnet restore $apiFixture -p:RestorePackagesPath=$nugetDirectory `
             -p:BundlerPackageSource=$packageDirectory -p:BundlerPackageVersion=$PackageVersion
         if ($LASTEXITCODE -ne 0) { throw 'Standalone MSI API package fixture restore failed.' }
