@@ -40,6 +40,7 @@ var request = new BundleConfiguration
 
 var artifacts = await new WixBundler(
     new WixBundleConfiguration { StartMenuShortcut = true, DesktopShortcut = true,
+        InstallDirectorySelection = true, AddToPath = true, UninstallShortcut = true,
         MsiVersion = msiVersion, AllowDowngrades = allowDowngrades },
     new WixBundlerOptions { ToolCacheDirectory = cache })
     .BuildAsync(request);

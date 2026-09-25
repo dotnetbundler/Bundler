@@ -37,6 +37,12 @@ internal static class WixTests
             yield return ("Signs staged MSI payload and final package in order", SignsMsiArtifacts);
             yield return ("Removes a failed signed MSI output", RemovesFailedSignedMsi);
             yield return ("Signs a real payload PE and MSI with a test certificate", SignsRealMsiWithTestCertificate);
+            yield return ("Validates MSI UI bitmap dimensions", ValidatesMsiBitmapInputs);
+            yield return ("Builds MSI with directory selection UI and optional features", BuildsFullFeaturedMsi);
+            yield return ("Builds MSI custom UI without a license page", BuildsCustomUiWithoutLicense);
+            yield return ("Builds MSI with license and directory selection", BuildsLicensedDirectorySelection);
+            yield return ("Enforces the allowed MSI install directory root", EnforcesMsiInstallDirectoryRoot);
+            yield return ("Launches MSI only through the interactive exit checkbox", GeneratesLaunchCheckboxOnly);
         }
     }
 
@@ -146,7 +152,9 @@ internal static class WixTests
         var task = File.ReadAllText(Path.Combine(root, "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
         foreach (var property in new[] { "WixInstallScope", "WixUpgradeCode", "WixMsiVersion", "WixAllowDowngrades",
                      "WixCodepage", "WixLanguage", "WixToolsetArchivePath",
-                     "WixStartMenuShortcut", "WixDesktopShortcut" })
+                     "WixStartMenuShortcut", "WixDesktopShortcut", "WixInstallDirectorySelection",
+                     "WixBannerBitmap", "WixDialogBitmap", "WixAddToPath",
+                     "WixUninstallShortcut", "WixLaunchAfterInstall" })
         {
             Assert(props.Contains("<Bundler" + property, StringComparison.Ordinal) &&
                    targets.Contains(property + "=\"$(Bundler" + property + ")\"", StringComparison.Ordinal),
@@ -292,7 +300,7 @@ internal static class WixTests
                 Assert(database.Property("ARPPRODUCTICON") == "ProductIcon", "MSI product icon is missing.");
                 Assert(database.RowCount("Icon", "Name") == 1, "MSI icon table is missing the supplied icon.");
                 Assert(database.RowCount("File", "File") == 3, "MSI payload file count is incorrect.");
-                Assert(database.RowCount("Component", "Component") == 5, "MSI must give every file, cleanup, and desktop registration a component.");
+                Assert(database.RowCount("Component", "Component") == 7, "MSI must give every file, cleanup, registration, and shortcut a component.");
                 Assert(database.RowCount("Registry", "Registry") > 4, "MSI desktop capabilities and HKCU key paths are missing.");
                 Assert(database.Contains("Registry", "Name", "application/x-abc"),
                     "MSI silently ignored the configured MIME candidate registration.");
@@ -472,8 +480,11 @@ internal static class WixTests
                 "Per-machine MSI identity differs from the scope-specific contract.");
             Assert(database.Contains("Directory", "Directory", "ProgramFiles64Folder"),
                 "Per-machine MSI does not target Program Files.");
-            Assert(database.Contains("Registry", "Root", "2") && !database.Contains("Registry", "Root", "1"),
-                "Per-machine MSI must use HKLM component key paths.");
+            var registryRoots = database.Pairs("Registry", "Name", "Root");
+            Assert(registryRoots.Any(row => row.Second == "2") &&
+                   registryRoots.Where(row => row.Second == "1")
+                       .All(row => row.First.EndsWith("Shortcut", StringComparison.Ordinal)),
+                "Per-machine MSI must keep HKLM key paths except HKCU shortcut repair keys.");
             Assert(database.RowCount("Shortcut", "Shortcut") == 2 &&
                    database.Contains("Directory", "Directory", "ProgramMenuFolder"),
                 "Per-machine MSI shortcut directories were not compiled.");
@@ -720,6 +731,205 @@ internal static class WixTests
             "Real MSI signing changed input files or missed a requested signature.");
     }
 
+    static async Task ValidatesMsiBitmapInputs()
+    {
+        using var fixture = new WixTestFixture();
+        var wrongSize = CreateBmp(Path.Combine(fixture.Root, "wrong.bmp"), 100, 100);
+        var renamedText = Path.Combine(fixture.Root, "renamed.bmp");
+        await File.WriteAllTextAsync(renamedText, "not a bitmap");
+        var missing = Path.Combine(fixture.Root, "missing.bmp");
+        var disguised = Path.Combine(fixture.Root, "banner.png");
+        File.Copy(CreateBmp(Path.Combine(fixture.Root, "ok.png"), 493, 58), disguised);
+        var linked = Path.Combine(fixture.Root, "linked.bmp");
+        File.CreateSymbolicLink(linked, wrongSize);
+        foreach (var (banner, dialog) in new (string? Banner, string? Dialog)[]
+        {
+            (wrongSize, null), (renamedText, null), (missing, null), (disguised, null), (linked, null),
+            (null, wrongSize), (null, renamedText), (null, missing)
+        })
+        {
+            var settings = new WixBundleConfiguration { BannerBitmap = banner, DialogBitmap = dialog };
+            await ExpectAsync<ArgumentException>(() => new WixBundler(settings,
+                new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(fixture.Request()), "bmp");
+        }
+        var valid = Path.Combine(fixture.Root, "valid-banner.bmp");
+        CreateBmp(valid, 493, 58);
+        var validDialog = Path.Combine(fixture.Root, "valid-dialog.bmp");
+        CreateBmp(validDialog, 503, 314);
+        var artifact = (await new WixBundler(new WixBundleConfiguration
+        {
+            BannerBitmap = valid,
+            DialogBitmap = validDialog
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(fixture.Request())).Single();
+        using var database = new MsiDatabaseReader(artifact.Path);
+        Assert(database.RowCount("Dialog", "Dialog") > 0,
+            "Supplied UI bitmaps did not enable the interactive MSI dialog set.");
+    }
+
+    static async Task BuildsFullFeaturedMsi()
+    {
+        using var fixture = new WixTestFixture();
+        var license = Path.Combine(fixture.Root, "terms.rtf");
+        await File.WriteAllTextAsync(license, "{\\rtf1\\ansi Example license terms.}");
+        var settings = new WixBundleConfiguration
+        {
+            StartMenuShortcut = true,
+            DesktopShortcut = true,
+            InstallDirectorySelection = true,
+            BannerBitmap = CreateBmp(Path.Combine(fixture.Root, "banner.bmp"), 493, 58),
+            DialogBitmap = CreateBmp(Path.Combine(fixture.Root, "dialog.bmp"), 503, 314),
+            AddToPath = true,
+            UninstallShortcut = true,
+            LaunchAfterInstall = true
+        };
+        var artifact = (await new WixBundler(settings,
+            new WixBundlerOptions { ToolCacheDirectory = fixture.Cache })
+            .BuildAsync(fixture.Request(licenseFile: license))).Single();
+        using var database = new MsiDatabaseReader(artifact.Path);
+        foreach (var dialog in new[] { "WelcomeDlg", "LicenseAgreementDlg", "InstallDirDlg", "BrowseDlg",
+                     "VerifyReadyDlg", "ProgressDlg", "ExitDialog", "MaintenanceWelcomeDlg",
+                     "MaintenanceTypeDlg", "ErrorDlg", "InvalidDirDlg" })
+            Assert(database.Contains("Dialog", "Dialog", dialog), "The custom MSI UI is missing dialog " + dialog + ".");
+        Assert(database.Contains("Feature", "Feature", "Complete") && database.Contains("Feature", "Feature", "Shortcuts") &&
+               database.Contains("Feature", "Feature", "PathEnvironment") && database.Contains("Feature", "Feature", "UninstallShortcut"),
+            "Optional MSI features must be declared as selectable features.");
+        Assert(database.RowCount("Component", "Component") == 6,
+            "One payload file, cleanup, and each optional feature need separate components.");
+        Assert(database.RowCount("Shortcut", "Shortcut") == 3 &&
+               database.ContainsSubstring("Shortcut", "Arguments", "[ProductCode]"),
+            "MSI shortcuts or the managed uninstall entry are incorrect.");
+        Assert(database.Contains("Environment", "Name", "=-PATH") &&
+               database.Contains("Environment", "Value", "[~];[INSTALLFOLDER]"),
+            "The MSI PATH feature must append only the product directory.");
+        Assert(database.Contains("CustomAction", "Action", "BundlerInstallDirScope") &&
+               database.Contains("InstallExecuteSequence", "Action", "BundlerInstallDirScope") &&
+               database.ContainsSubstring("InstallExecuteSequence", "Condition", "LocalAppDataFolder"),
+            "The MSI install-directory scope check is missing from the execute sequence.");
+        Assert(database.Contains("CustomAction", "Action", "BundlerLaunchAfterInstall") &&
+               database.ContainsSubstring("ControlEvent", "Argument", "BundlerLaunchAfterInstall") &&
+               database.ContainsSubstring("ControlEvent", "Condition", "WIXUI_EXITDIALOGOPTIONALCHECKBOX"),
+            "The interactive launch checkbox is not wired to the exit dialog.");
+        Assert(database.Property("WIXUI_INSTALLDIR") == "INSTALLFOLDER" &&
+               database.Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT").Contains("WiX test fixture") &&
+               database.Property("ARPNOMODIFY") == "1" &&
+               database.Property("ARPCONTACT").Length > 0 &&
+               database.Contains("CustomAction", "Source", "ARPINSTALLLOCATION") &&
+               database.ContainsSubstring("CustomAction", "Target", "INSTALLFOLDER"),
+            "MSI UI or uninstall metadata properties are missing.");
+        Assert(database.Contains("AppSearch", "Property", "INSTALLFOLDER") &&
+               database.Contains("Registry", "Name", "InstallDir"),
+            "MSI must restore a user-chosen install directory during upgrades.");
+        Assert(database.Contains("Binary", "Name", "WixUI_Bmp_Banner") &&
+               database.Contains("Binary", "Name", "WixUI_Bmp_Dialog"),
+            "MSI brand bitmaps were not embedded.");
+    }
+
+    static async Task BuildsCustomUiWithoutLicense()
+    {
+        using var fixture = new WixTestFixture();
+        var artifact = (await new WixBundler(new WixBundleConfiguration
+        {
+            InstallDirectorySelection = true,
+            LaunchAfterInstall = true
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(fixture.Request())).Single();
+        using var database = new MsiDatabaseReader(artifact.Path);
+        Assert(database.Contains("Dialog", "Dialog", "InstallDirDlg") &&
+               database.Contains("Dialog", "Dialog", "WelcomeDlg") &&
+               database.Contains("Dialog", "Dialog", "VerifyReadyDlg") &&
+               database.Contains("Dialog", "Dialog", "ExitDialog") &&
+               !database.Contains("Dialog", "Dialog", "LicenseAgreementDlg"),
+            "A license-free MSI must use the custom dialog sequence without a license page.");
+    }
+
+    static async Task BuildsLicensedDirectorySelection()
+    {
+        using var fixture = new WixTestFixture();
+        var license = Path.Combine(fixture.Root, "terms.rtf");
+        await File.WriteAllTextAsync(license, "{\\rtf1\\ansi Example license terms.}");
+        var artifact = (await new WixBundler(new WixBundleConfiguration
+        {
+            InstallDirectorySelection = true,
+            Language = WixPackageLanguage.ChineseSimplified
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache })
+            .BuildAsync(fixture.Request(licenseFile: license))).Single();
+        using var database = new MsiDatabaseReader(artifact.Path);
+        Assert(database.Contains("Dialog", "Dialog", "LicenseAgreementDlg") &&
+               database.Contains("Dialog", "Dialog", "InstallDirDlg") &&
+               database.ContainsSubstring("ControlEvent", "Condition", "LicenseAccepted") &&
+               database.Property("ProductLanguage") == "2052",
+            "A licensed MSI must keep the license page before directory selection.");
+        Assert(database.Contains("Feature", "Feature", "Complete") &&
+               !database.Contains("Feature", "Feature", "Shortcuts"),
+            "Optional features must not appear unless configured.");
+    }
+
+    static async Task EnforcesMsiInstallDirectoryRoot()
+    {
+        using var fixture = new WixTestFixture();
+        foreach (var (scope, architecture, expectedRoot) in new[]
+        {
+            (WixInstallScope.CurrentUser, "win-x64", "LocalAppDataFolder"),
+            (WixInstallScope.CurrentUser, "win-x86", "LocalAppDataFolder"),
+            (WixInstallScope.PerMachine, "win-x64", "ProgramFiles64Folder"),
+            (WixInstallScope.PerMachine, "win-x86", "ProgramFilesFolder")
+        })
+        {
+            var scoped = fixture.Request(runtimeIdentifier: architecture,
+                outputDirectory: Path.Combine(fixture.Root, "scope-" + scope + "-" + architecture));
+            var artifact = (await new WixBundler(new WixBundleConfiguration { InstallScope = scope },
+                new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(scoped)).Single();
+            using var database = new MsiDatabaseReader(artifact.Path);
+            var conditions = database.Values("InstallExecuteSequence", "Condition");
+            Assert(conditions.Any(condition => condition.Contains(expectedRoot, StringComparison.Ordinal) &&
+                   condition.Contains("INSTALLFOLDER", StringComparison.Ordinal)),
+                $"The {scope}/{architecture} MSI must reject directories outside {expectedRoot}.");
+        }
+    }
+
+    static async Task GeneratesLaunchCheckboxOnly()
+    {
+        using var fixture = new WixTestFixture();
+        var license = Path.Combine(fixture.Root, "terms.rtf");
+        await File.WriteAllTextAsync(license, "{\\rtf1\\ansi Example license terms.}");
+        var artifact = (await new WixBundler(new WixBundleConfiguration
+        {
+            LaunchAfterInstall = true
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache })
+            .BuildAsync(fixture.Request(licenseFile: license))).Single();
+        using var database = new MsiDatabaseReader(artifact.Path);
+        Assert(database.Contains("CustomAction", "Action", "BundlerLaunchAfterInstall") &&
+               database.ContainsSubstring("ControlEvent", "Condition", "NOT Installed"),
+            "The licensed minimal UI must expose the opt-in launch checkbox without auto-start.");
+        var plain = (await fixture.Bundler().BuildAsync(
+            fixture.Request(outputDirectory: Path.Combine(fixture.Root, "plain")))).Single();
+        using var plainDatabase = new MsiDatabaseReader(plain.Path);
+        Assert(!plainDatabase.Contains("CustomAction", "Action", "BundlerLaunchAfterInstall") &&
+               !plainDatabase.Contains("_Tables", "Name", "Dialog"),
+            "A default MSI must not add UI or launch actions.");
+    }
+
+    private static string CreateBmp(string path, int width, int height)
+    {
+        var rowBytes = (width * 3 + 3) / 4 * 4;
+        var pixelBytes = rowBytes * height;
+        using var stream = File.Create(path);
+        using var writer = new BinaryWriter(stream);
+        writer.Write((byte)'B');
+        writer.Write((byte)'M');
+        writer.Write(54 + pixelBytes);
+        writer.Write(0);
+        writer.Write(54);
+        writer.Write(40);
+        writer.Write(width);
+        writer.Write(height);
+        writer.Write((short)1);
+        writer.Write((short)24);
+        writer.Write(0);
+        writer.Write(pixelBytes);
+        writer.Write(new byte[pixelBytes]);
+        return path;
+    }
+
     private sealed class MsiVerifyingSigner(IBundleSigner inner, string thumbprint) : IBundleSigner
     {
         public List<BundleSigningArtifactKind> Kinds { get; } = [];
@@ -793,7 +1003,8 @@ internal static class WixTests
         public WixBundler Bundler() => new(options: new WixBundlerOptions { ToolCacheDirectory = Cache });
 
         public BundleConfiguration Request(string? resourceTarget = null, string? licenseFile = null,
-            IReadOnlyList<string>? signingFiles = null, string? outputDirectory = null) => new()
+            IReadOnlyList<string>? signingFiles = null, string? outputDirectory = null,
+            string? runtimeIdentifier = null) => new()
         {
             ProductName = "WiX test fixture",
             Identifier = "com.example.wixtestfixture",
@@ -804,7 +1015,7 @@ internal static class WixTests
                 [new BundleResourceConfiguration { Source = Path.Combine(Root, "resource.txt"), TargetPath = resourceTarget }],
             Targets = [new BundleTargetConfiguration
             {
-                RuntimeIdentifier = "win-x64", InputDirectory = Input,
+                RuntimeIdentifier = runtimeIdentifier ?? "win-x64", InputDirectory = Input,
                 MainExecutable = "fixture.exe", Formats = [PackageFormat.Msi],
                 SigningFiles = signingFiles ?? []
             }]

@@ -7,7 +7,7 @@ namespace DotNet.Bundler.Wix;
 
 internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguration settings, IBundleSigner? signer) : IBundleBackend
 {
-    private const string GeneratorRevision = "win-msi-4-2026-09-25-1";
+    private const string GeneratorRevision = "win-msi-6-2026-09-26-1";
 
     public PackageFormat Format => PackageFormat.Msi;
     public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
@@ -68,7 +68,8 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
                  },
                  "-out", obj, source], context.WorkDirectory, cancellationToken);
             var lightArguments = new List<string> { "-nologo" };
-            if (!string.IsNullOrWhiteSpace(bundle.LicenseFile))
+            if (!string.IsNullOrWhiteSpace(bundle.LicenseFile) || settings.InstallDirectorySelection ||
+                settings.LaunchAfterInstall || settings.BannerBitmap is not null || settings.DialogBitmap is not null)
                 lightArguments.AddRange(["-ext", toolset.UiExtensionPath, "-cultures:" + settings.Culture]);
             if (settings.InstallScope == WixInstallScope.CurrentUser) lightArguments.Add("-sice:ICE91");
             // ICE61 拒绝移除较新产品；显式允许降级时，这正是调用方选择的行为。
@@ -223,6 +224,8 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         }
         if (icon is not null) text.AppendLine(HashFile(icon));
         if (bundle.LicenseFile is not null) text.AppendLine(HashFile(bundle.LicenseFile));
+        if (settings.BannerBitmap is not null) text.AppendLine(HashFile(settings.BannerBitmap));
+        if (settings.DialogBitmap is not null) text.AppendLine(HashFile(settings.DialogBitmap));
         text.AppendLine(canonical.ToString(SaveOptions.DisableFormatting));
         using var sha = SHA256.Create();
         return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(text.ToString()))).Replace("-", "");
@@ -236,6 +239,8 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             .AppendLine(bundle.Publisher).AppendLine(bundle.Description).AppendLine(bundle.Homepage)
             .AppendLine(item.Target.RuntimeIdentifier).AppendLine(settings.InstallScope.ToString())
             .AppendLine(settings.StartMenuShortcut.ToString()).AppendLine(settings.DesktopShortcut.ToString())
+            .AppendLine(settings.InstallDirectorySelection.ToString()).AppendLine(settings.AddToPath.ToString())
+            .AppendLine(settings.UninstallShortcut.ToString()).AppendLine(settings.LaunchAfterInstall.ToString())
             .AppendLine(settings.EffectiveCodepage.ToString(System.Globalization.CultureInfo.InvariantCulture))
             .AppendLine(settings.Language.ToString());
         if (settings.AllowDowngrades) text.AppendLine("allow-downgrades=true");
@@ -250,6 +255,8 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             text.AppendLine(file.RelativePath.ToLowerInvariant()).AppendLine(HashFile(file.SourcePath));
         if (icon is not null) text.AppendLine(HashFile(icon));
         if (bundle.LicenseFile is not null) text.AppendLine(HashFile(bundle.LicenseFile));
+        if (settings.BannerBitmap is not null) text.AppendLine(HashFile(settings.BannerBitmap));
+        if (settings.DialogBitmap is not null) text.AppendLine(HashFile(settings.DialogBitmap));
         using var sha = SHA256.Create();
         return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(text.ToString()))).Replace("-", "");
     }

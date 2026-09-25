@@ -3,7 +3,7 @@
 > 最后整理：2026-09-25
 > 路线状态：`NSIS-R4` 已在 `71a5c90` 形成冻结基线，随后加固 journal 恢复目标、跨配置恢复流程及快照完整性；当前提交以 Git HEAD 为准
 > 当前实施对象：Windows WiX/MSI
-> 当前状态：`WIN-MSI-1..5` 的本机自动化范围已完成，`alpha.37` 为既有 MSI 身份基线，`alpha.40` 增加 x86、显式版本映射与可选降级。`WIN-MSI-6..9` **尚未实施**；默认下一实施阶段为 `WIN-MSI-6`，`MAC-APP` 顺延。既有 per-machine、生产签名、交互 UI、干净宿主及重启等外部验收仍各自记录，不阻塞新增功能开发，也不冒充已通过。
+> 当前状态：`WIN-MSI-1..6` 的本机自动化范围已完成，`alpha.37` 为既有 MSI 身份基线，`alpha.40` 增加 x86、显式版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选。`WIN-MSI-7..9` **尚未实施**；默认下一实施阶段为 `WIN-MSI-7`，`MAC-APP` 顺延。既有 per-machine、生产签名、交互 UI、干净宿主及重启等外部验收仍各自记录，不阻塞新增功能开发，也不冒充已通过。
 
 本文档是项目后续路线的规范入口；跨格式执行规则见 [`docs/development-rules.md`](development-rules.md)，NSIS 历史与冻结记录见 [`docs/nsis-roadmap.md`](nsis-roadmap.md)，MSI 专项细则见 [`docs/msi-roadmap.md`](msi-roadmap.md)。它们使后续开发不依赖某一次对话或某个 AI 的记忆。
 
@@ -89,15 +89,15 @@ NSIS 原路线、能力基线、旧阶段映射和 `NSIS-R1..R4` 的历史证据
 3. `WIN-MSI-3`：签名、语言、静默/被动、退出码、修复维护及失败/回滚/重启。
 4. `WIN-MSI-4`：完整 Windows/架构/安全矩阵、人工边界、文档及格式冻结；仅补缺陷和测试，不把首个安装测试拖到此阶段。
 
-`WIN-MSI-1..5` 的当前 Windows 11 x64 主机自动化已通过；`alpha.37` 是既有 x64/ARM64 身份基线，`alpha.40` 增加 x86、显式 MSI 版本映射和可选降级。这不是 Tauri 通用 MSI 能力全集。per-machine 只验证构建产物和数据库，原生 x86/ARM64 宿主、生产证书、真实 UI 与重启仍按 MSI 专用人工及外部清单记录。WIN-MSI-6..9 仍为**计划、未实现**：
+`WIN-MSI-1..6` 的当前 Windows 11 x64 主机自动化已通过；`alpha.37` 是既有 x64/ARM64 身份基线，`alpha.40` 增加 x86、显式 MSI 版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选。这不是 Tauri 通用 MSI 能力全集。per-machine 只验证构建产物和数据库，原生 x86/ARM64 宿主、生产证书、真实 UI 与重启仍按 MSI 专用人工及外部清单记录。WIN-MSI-7..9 仍为**计划、未实现**：
 
 5. `WIN-MSI-5`（本机范围已完成）：x86 目标、显式安全 MSI 版本映射、可选降级及既有身份兼容。
-6. `WIN-MSI-6`：范围内安装目录、交互 UI/品牌、受管可选功能、PATH 与安全的交互后启动。
+6. `WIN-MSI-6`（本机范围已完成）：范围内安装目录、自定义 UI/品牌、受管可选功能、PATH 与仅交互勾选启动；交互 UI 实际行为和 junction 目标见人工清单。
 7. `WIN-MSI-7`：更多单语言 MSI、自定义翻译、图标输入与 FIPS 构建选项。
 8. `WIN-MSI-8`：受控 WiX fragments/引用与显式专家模式的原始模板/merge module。
 9. `WIN-MSI-9`：逐项 Tauri 通用能力审计、全部本机适用回归、工具许可/体积复核和再冻结，不新增功能。
 
-前置条件、交付物、不做事项、自动化/真实安装测试及退出条件见 [`docs/msi-roadmap.md`](msi-roadmap.md) 第 10 节；[MSI Tauri 能力审计](msi-tauri-capability-audit.md)区分已实现、计划、明确排除及另立产品路线，[MSI 能力矩阵](msi-capability-matrix.md)保存逐项状态。原 WIN-MSI-4 的实际证据继续有效，不能借新路线宣称计划能力已完成。默认下一实施阶段为 `WIN-MSI-6`；未经用户明确要求不开始代码。
+前置条件、交付物、不做事项、自动化/真实安装测试及退出条件见 [`docs/msi-roadmap.md`](msi-roadmap.md) 第 10 节；[MSI Tauri 能力审计](msi-tauri-capability-audit.md)区分已实现、计划、明确排除及另立产品路线，[MSI 能力矩阵](msi-capability-matrix.md)保存逐项状态。原 WIN-MSI-4 的实际证据继续有效，不能借新路线宣称计划能力已完成。默认下一实施阶段为 `WIN-MSI-7`；未经用户明确要求不开始代码。
 
 ### MAC：macOS `.app` 与 DMG
 

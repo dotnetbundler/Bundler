@@ -48,6 +48,8 @@ public sealed class WixBundler
         if (!string.IsNullOrWhiteSpace(bundle.LicenseFile) &&
             !Path.GetExtension(bundle.LicenseFile).Equals(".rtf", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("MSI interactive license UI requires an RTF license file.");
+        CheckBitmap(_settings.BannerBitmap, "MSI banner bitmap requires a 493x58 .bmp file.", 493, 58);
+        CheckBitmap(_settings.DialogBitmap, "MSI dialog bitmap requires a 503x314 .bmp file.", 503, 314);
 
         foreach (var target in bundle.Targets)
         {
@@ -58,5 +60,26 @@ public sealed class WixBundler
             _options.ResolveToolCacheDirectory(), _options.ToolsetArchivePath, cancellationToken);
         return await new BundlePipeline(
             [new WixBundleBackend(toolset, _settings, _options.Signer)], _options.Logger).BuildAsync(bundle, cancellationToken);
+    }
+
+    private static void CheckBitmap(string? path, string message, int expectedWidth, int expectedHeight)
+    {
+        if (path is null) return;
+        if (!File.Exists(path) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0 ||
+            !Path.GetExtension(path).Equals(".bmp", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException(message);
+        var header = new byte[26];
+        using (var stream = File.OpenRead(path))
+        {
+            if (stream.Read(header, 0, header.Length) != header.Length)
+                throw new ArgumentException(message);
+        }
+        var validHeader = header[0] == 'B' && header[1] == 'M' &&
+            BitConverter.ToInt32(header, 10) >= 14 &&
+            BitConverter.ToUInt32(header, 14) >= 40 &&
+            BitConverter.ToInt32(header, 18) == expectedWidth &&
+            Math.Abs(BitConverter.ToInt32(header, 22)) == expectedHeight;
+        if (!validHeader)
+            throw new ArgumentException(message);
     }
 }

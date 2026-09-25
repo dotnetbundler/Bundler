@@ -44,6 +44,12 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string WixLanguage { get; set; } = "en-US";
     public bool WixStartMenuShortcut { get; set; }
     public bool WixDesktopShortcut { get; set; }
+    public bool WixInstallDirectorySelection { get; set; }
+    public string WixBannerBitmap { get; set; } = "";
+    public string WixDialogBitmap { get; set; } = "";
+    public bool WixAddToPath { get; set; }
+    public bool WixUninstallShortcut { get; set; }
+    public bool WixLaunchAfterInstall { get; set; }
     public string NsisTemplatePath { get; set; } = "";
     public string NsisInstallMode { get; set; } = "currentUser";
     public string NsisCompression { get; set; } = "lzma";
@@ -148,7 +154,13 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         Codepage = WixCodepage,
                         Language = language,
                         StartMenuShortcut = WixStartMenuShortcut,
-                        DesktopShortcut = WixDesktopShortcut
+                        DesktopShortcut = WixDesktopShortcut,
+                        InstallDirectorySelection = WixInstallDirectorySelection,
+                        BannerBitmap = OptionalFullPath(WixBannerBitmap),
+                        DialogBitmap = OptionalFullPath(WixDialogBitmap),
+                        AddToPath = WixAddToPath,
+                        UninstallShortcut = WixUninstallShortcut,
+                        LaunchAfterInstall = WixLaunchAfterInstall
                     },
                     new WixBundlerOptions
                     {

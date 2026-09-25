@@ -51,6 +51,14 @@ internal sealed class MsiDatabaseReader : IDisposable
         return false;
     }
 
+    public IReadOnlyList<(string First, string Second)> Pairs(string table, string firstColumn, string secondColumn)
+    {
+        var rows = new List<(string, string)>();
+        using var view = OpenView("SELECT `" + firstColumn + "`, `" + secondColumn + "` FROM `" + table + "`");
+        while (view.FetchPair() is { } pair) rows.Add(pair);
+        return rows;
+    }
+
     public string Template => SummaryProperty(7);
     public string PackageCode => SummaryProperty(9);
 
@@ -94,6 +102,24 @@ internal sealed class MsiDatabaseReader : IDisposable
                 uint length = (uint)text.Capacity;
                 Check(MsiRecordGetString(record, 1, text, ref length));
                 return text.ToString();
+            }
+            finally { MsiCloseHandle(record); }
+        }
+
+        public (string, string)? FetchPair()
+        {
+            var result = MsiViewFetch(handle, out var record);
+            if (result == 259) return null;
+            Check(result);
+            try
+            {
+                var first = new System.Text.StringBuilder(1024);
+                var second = new System.Text.StringBuilder(1024);
+                uint firstLength = (uint)first.Capacity;
+                uint secondLength = (uint)second.Capacity;
+                Check(MsiRecordGetString(record, 1, first, ref firstLength));
+                Check(MsiRecordGetString(record, 2, second, ref secondLength));
+                return (first.ToString(), second.ToString());
             }
             finally { MsiCloseHandle(record); }
         }

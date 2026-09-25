@@ -69,21 +69,42 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
                 new XAttribute("Value", "ProductIcon")));
         }
 
+        var perUser = settings.InstallScope == WixInstallScope.CurrentUser;
+        var scopeRoot = perUser ? "LocalAppDataFolder" :
+            item.Target.Architecture == CpuArchitecture.X86 ? "ProgramFilesFolder" : "ProgramFiles64Folder";
+        product.Add(new XElement(Wix + "Property", new XAttribute("Id", "INSTALLFOLDER"),
+            new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerInstallDirSearch"),
+                new XAttribute("Root", registrationRoot), new XAttribute("Key", definitionKey),
+                new XAttribute("Name", "InstallDir"), new XAttribute("Type", "directory"),
+                new XAttribute("Win64", item.Target.Architecture == CpuArchitecture.X86 ? "no" : "yes"))));
+        product.Add(new XElement(Wix + "Property", new XAttribute("Id", "ARPCONTACT"),
+            new XAttribute("Value", bundle.Publisher ?? bundle.ProductName)));
+        product.Add(new XElement(Wix + "CustomAction", new XAttribute("Id", "BundlerSetArpInstallLocation"),
+            new XAttribute("Property", "ARPINSTALLLOCATION"), new XAttribute("Value", "[INSTALLFOLDER]")));
+        product.Add(new XElement(Wix + "CustomAction", new XAttribute("Id", "BundlerInstallDirScope"),
+            new XAttribute("Error", Localize(
+                "The installation folder must be a subfolder inside " + scopeRoot + ".",
+                "安装文件夹必须是 " + scopeRoot + " 内的子文件夹。"))));
+        product.Add(new XElement(Wix + "InstallExecuteSequence",
+            new XElement(Wix + "Custom", new XAttribute("Action", "BundlerSetArpInstallLocation"),
+                new XAttribute("After", "CostFinalize"), "1"),
+            new XElement(Wix + "Custom", new XAttribute("Action", "BundlerInstallDirScope"),
+                new XAttribute("After", "BundlerSetArpInstallLocation"),
+                "NOT Installed AND (NOT (INSTALLFOLDER ~<< " + scopeRoot + ") OR INSTALLFOLDER ~= " + scopeRoot + ")")));
+
         var targetDir = new XElement(Wix + "Directory", new XAttribute("Id", "TARGETDIR"),
             new XAttribute("Name", "SourceDir"));
-        var installRoot = new XElement(Wix + "Directory", new XAttribute("Id",
-            settings.InstallScope == WixInstallScope.CurrentUser ? "LocalAppDataFolder" :
-                item.Target.Architecture == CpuArchitecture.X86 ? "ProgramFilesFolder" : "ProgramFiles64Folder"));
-        var programs = settings.InstallScope == WixInstallScope.CurrentUser
+        var installRoot = new XElement(Wix + "Directory", new XAttribute("Id", scopeRoot));
+        var programs = perUser
             ? new XElement(Wix + "Directory", new XAttribute("Id", "BundlerProgramsDir"), new XAttribute("Name", "Programs"))
             : installRoot;
         var app = new XElement(Wix + "Directory", new XAttribute("Id", "INSTALLFOLDER"),
             new XAttribute("Name", bundle.Identifier.ToLowerInvariant() + "-" +
                 item.Target.RuntimeIdentifier.Substring(4) + settings.LanguageSuffix));
         programs.Add(app);
-        if (settings.InstallScope == WixInstallScope.CurrentUser) installRoot.Add(programs);
+        if (perUser) installRoot.Add(programs);
         targetDir.Add(installRoot);
-        if (settings.StartMenuShortcut)
+        if (settings.StartMenuShortcut || settings.UninstallShortcut)
         {
             targetDir.Add(new XElement(Wix + "Directory", new XAttribute("Id", "ProgramMenuFolder"),
                 new XElement(Wix + "Directory", new XAttribute("Id", "BundlerStartMenuFolder"),
@@ -118,21 +139,6 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
                 new XAttribute("Source", file.SourcePath));
             if (settings.InstallScope == WixInstallScope.PerMachine)
                 fileElement.Add(new XAttribute("KeyPath", "yes"));
-            if (file.RelativePath.Equals(mainExecutable, StringComparison.OrdinalIgnoreCase))
-            {
-                if (settings.StartMenuShortcut)
-                    fileElement.Add(new XElement(Wix + "Shortcut", new XAttribute("Id", "StartMenuShortcut"),
-                        new XAttribute("Directory", "BundlerStartMenuFolder"),
-                        new XAttribute("Name", SafeShortcutName(bundle.ProductName) + settings.LanguageSuffix),
-                        new XAttribute("Advertise", settings.InstallScope == WixInstallScope.PerMachine ? "yes" : "no"),
-                        new XAttribute("WorkingDirectory", "INSTALLFOLDER")));
-                if (settings.DesktopShortcut)
-                    fileElement.Add(new XElement(Wix + "Shortcut", new XAttribute("Id", "DesktopShortcut"),
-                        new XAttribute("Directory", "DesktopFolder"),
-                        new XAttribute("Name", SafeShortcutName(bundle.ProductName) + " (" + bundle.Identifier.ToLowerInvariant() + settings.LanguageSuffix + ")"),
-                        new XAttribute("Advertise", settings.InstallScope == WixInstallScope.PerMachine ? "yes" : "no"),
-                        new XAttribute("WorkingDirectory", "INSTALLFOLDER")));
-            }
             directory.Add(new XElement(Wix + "Component",
                 new XAttribute("Id", componentId),
                 new XAttribute("Guid", WixIdentity.ComponentCode(bundle.Identifier,
@@ -155,7 +161,10 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
                 new XAttribute("KeyPath", "yes")),
             new XElement(Wix + "RegistryValue", new XAttribute("Root", registryRoot),
                 new XAttribute("Key", registryKey), new XAttribute("Name", "DefinitionHash"),
-                new XAttribute("Type", "string"), new XAttribute("Value", definitionHash)));
+                new XAttribute("Type", "string"), new XAttribute("Value", definitionHash)),
+            new XElement(Wix + "RegistryValue", new XAttribute("Root", registryRoot),
+                new XAttribute("Key", registryKey), new XAttribute("Name", "InstallDir"),
+                new XAttribute("Type", "string"), new XAttribute("Value", "[INSTALLFOLDER]")));
         foreach (var path in directoryIds.Keys.Where(path => path.Length > 0)
                      .OrderByDescending(path => path.Count(character => character == '/'))
                      .ThenBy(path => path, StringComparer.OrdinalIgnoreCase))
@@ -166,23 +175,173 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
         }
         cleanup.Add(new XElement(Wix + "RemoveFolder", new XAttribute("Id", "RemoveAppFolder"),
             new XAttribute("Directory", "INSTALLFOLDER"), new XAttribute("On", "uninstall")));
-        if (settings.InstallScope == WixInstallScope.CurrentUser)
+        if (perUser)
         {
             cleanup.Add(new XElement(Wix + "RemoveFolder", new XAttribute("Id", "RemoveProgramsFolder"),
                 new XAttribute("Directory", "BundlerProgramsDir"), new XAttribute("On", "uninstall")));
         }
-        if (settings.StartMenuShortcut)
+        if (settings.StartMenuShortcut || settings.UninstallShortcut)
             cleanup.Add(new XElement(Wix + "RemoveFolder", new XAttribute("Id", "RemoveStartMenuFolder"),
                 new XAttribute("Directory", "BundlerStartMenuFolder"), new XAttribute("On", "uninstall")));
         app.Add(cleanup);
         feature.Add(new XElement(Wix + "ComponentRef", new XAttribute("Id", "Cleanup")));
         AddDesktopRegistrations();
-        if (!string.IsNullOrWhiteSpace(bundle.LicenseFile))
-        {
+        AddOptionalFeatures();
+        var hasLicense = !string.IsNullOrWhiteSpace(bundle.LicenseFile);
+        var usesCustomUi = settings.InstallDirectorySelection ||
+            (!hasLicense && (settings.LaunchAfterInstall ||
+                settings.BannerBitmap is not null || settings.DialogBitmap is not null));
+        if (hasLicense || usesCustomUi)
             product.Add(new XElement(Wix + "UIRef", new XAttribute("Id", "WixUI_ErrorProgressText")));
+        if (settings.BannerBitmap is not null)
+            product.Add(new XElement(Wix + "WixVariable", new XAttribute("Id", "WixUIBannerBmp"),
+                new XAttribute("Value", Path.GetFullPath(settings.BannerBitmap))));
+        if (settings.DialogBitmap is not null)
+            product.Add(new XElement(Wix + "WixVariable", new XAttribute("Id", "WixUIDialogBmp"),
+                new XAttribute("Value", Path.GetFullPath(settings.DialogBitmap))));
+        if (hasLicense)
             product.Add(new XElement(Wix + "WixVariable", new XAttribute("Id", "WixUILicenseRtf"),
                 new XAttribute("Value", Path.GetFullPath(bundle.LicenseFile))));
+        if (hasLicense && !usesCustomUi)
+        {
             product.Add(new XElement(Wix + "UIRef", new XAttribute("Id", "WixUI_Minimal")));
+        }
+        var launchPublish = settings.LaunchAfterInstall
+            ? new XElement(Wix + "Publish", new XAttribute("Dialog", "ExitDialog"),
+                new XAttribute("Control", "Finish"), new XAttribute("Event", "DoAction"),
+                new XAttribute("Value", "BundlerLaunchAfterInstall"), new XAttribute("Order", "2"),
+                "WIXUI_EXITDIALOGOPTIONALCHECKBOX = \"1\" AND NOT Installed AND NOT WIX_UPGRADE_DETECTED")
+            : null;
+        if (usesCustomUi)
+        {
+            var nextAfterWelcome = hasLicense ? "LicenseAgreementDlg" :
+                settings.InstallDirectorySelection ? "InstallDirDlg" : "VerifyReadyDlg";
+            var ui = new XElement(Wix + "UI", new XAttribute("Id", "BundlerInstallDialogSet"),
+                new XElement(Wix + "TextStyle", new XAttribute("Id", "WixUI_Font_Normal"),
+                    new XAttribute("FaceName", "Tahoma"), new XAttribute("Size", "8")),
+                new XElement(Wix + "TextStyle", new XAttribute("Id", "WixUI_Font_Bigger"),
+                    new XAttribute("FaceName", "Tahoma"), new XAttribute("Size", "12")),
+                new XElement(Wix + "TextStyle", new XAttribute("Id", "WixUI_Font_Title"),
+                    new XAttribute("FaceName", "Tahoma"), new XAttribute("Size", "9"),
+                    new XAttribute("Bold", "yes")),
+                new XElement(Wix + "Property", new XAttribute("Id", "DefaultUIFont"),
+                    new XAttribute("Value", "WixUI_Font_Normal")),
+                new XElement(Wix + "Publish", new XAttribute("Dialog", "ExitDialog"),
+                    new XAttribute("Control", "Finish"), new XAttribute("Event", "EndDialog"),
+                    new XAttribute("Value", "Return"), new XAttribute("Order", "999"), "1"),
+                new XElement(Wix + "Publish", new XAttribute("Dialog", "WelcomeDlg"),
+                    new XAttribute("Control", "Next"), new XAttribute("Event", "NewDialog"),
+                    new XAttribute("Value", nextAfterWelcome), "NOT Installed"),
+                new XElement(Wix + "Publish", new XAttribute("Dialog", "WelcomeDlg"),
+                    new XAttribute("Control", "Next"), new XAttribute("Event", "NewDialog"),
+                    new XAttribute("Value", "VerifyReadyDlg"), "Installed AND PATCH"),
+                new XElement(Wix + "Publish", new XAttribute("Dialog", "VerifyReadyDlg"),
+                    new XAttribute("Control", "Back"), new XAttribute("Event", "NewDialog"),
+                    new XAttribute("Value", settings.InstallDirectorySelection ? "InstallDirDlg" : nextAfterWelcome),
+                    new XAttribute("Order", "1"), "NOT Installed"),
+                new XElement(Wix + "Publish", new XAttribute("Dialog", "VerifyReadyDlg"),
+                    new XAttribute("Control", "Back"), new XAttribute("Event", "NewDialog"),
+                    new XAttribute("Value", "MaintenanceTypeDlg"), new XAttribute("Order", "2"),
+                    "Installed AND NOT PATCH"),
+                new XElement(Wix + "Publish", new XAttribute("Dialog", "VerifyReadyDlg"),
+                    new XAttribute("Control", "Back"), new XAttribute("Event", "NewDialog"),
+                    new XAttribute("Value", "WelcomeDlg"), new XAttribute("Order", "3"),
+                    "Installed AND PATCH"),
+                new XElement(Wix + "Publish", new XAttribute("Dialog", "MaintenanceWelcomeDlg"),
+                    new XAttribute("Control", "Next"), new XAttribute("Event", "NewDialog"),
+                    new XAttribute("Value", "MaintenanceTypeDlg"), "1"),
+                new XElement(Wix + "Publish", new XAttribute("Dialog", "MaintenanceTypeDlg"),
+                    new XAttribute("Control", "RepairButton"), new XAttribute("Event", "NewDialog"),
+                    new XAttribute("Value", "VerifyReadyDlg"), "1"),
+                new XElement(Wix + "Publish", new XAttribute("Dialog", "MaintenanceTypeDlg"),
+                    new XAttribute("Control", "RemoveButton"), new XAttribute("Event", "NewDialog"),
+                    new XAttribute("Value", "VerifyReadyDlg"), "1"),
+                new XElement(Wix + "Publish", new XAttribute("Dialog", "MaintenanceTypeDlg"),
+                    new XAttribute("Control", "Back"), new XAttribute("Event", "NewDialog"),
+                    new XAttribute("Value", "MaintenanceWelcomeDlg"), "1"),
+                new XElement(Wix + "Property", new XAttribute("Id", "ARPNOMODIFY"),
+                    new XAttribute("Value", "1")));
+            var dialogs = new List<string>
+            {
+                "ErrorDlg", "FatalError", "FilesInUse", "MsiRMFilesInUse", "PrepareDlg",
+                "ProgressDlg", "ResumeDlg", "UserExit", "WelcomeDlg", "VerifyReadyDlg",
+                "MaintenanceWelcomeDlg", "MaintenanceTypeDlg", "ExitDialog", "CancelDlg",
+                "OutOfDiskDlg", "OutOfRbDiskDlg", "WaitForCostingDlg"
+            };
+            if (hasLicense)
+            {
+                ui.Add(new XElement(Wix + "Publish", new XAttribute("Dialog", "LicenseAgreementDlg"),
+                    new XAttribute("Control", "Back"), new XAttribute("Event", "NewDialog"),
+                    new XAttribute("Value", "WelcomeDlg"), "1"));
+                ui.Add(new XElement(Wix + "Publish", new XAttribute("Dialog", "LicenseAgreementDlg"),
+                    new XAttribute("Control", "Next"), new XAttribute("Event", "NewDialog"),
+                    new XAttribute("Value", settings.InstallDirectorySelection ? "InstallDirDlg" : "VerifyReadyDlg"),
+                    "LicenseAccepted = \"1\""));
+                dialogs.Add("LicenseAgreementDlg");
+            }
+            if (settings.InstallDirectorySelection)
+            {
+                var scope = "INSTALLFOLDER ~<< " + scopeRoot + " AND INSTALLFOLDER ~<> " + scopeRoot;
+                ui.Add(new XElement(Wix + "Property", new XAttribute("Id", "WIXUI_INSTALLDIR"),
+                    new XAttribute("Value", "INSTALLFOLDER")));
+                ui.Add(new XElement(Wix + "Property", new XAttribute("Id", "WixUI_Mode"),
+                    new XAttribute("Value", "InstallDir")));
+                ui.Add(new XElement(Wix + "Publish", new XAttribute("Dialog", "InstallDirDlg"),
+                    new XAttribute("Control", "Back"), new XAttribute("Event", "NewDialog"),
+                    new XAttribute("Value", hasLicense ? "LicenseAgreementDlg" : "WelcomeDlg"), "1"));
+                ui.Add(new XElement(Wix + "Publish", new XAttribute("Dialog", "InstallDirDlg"),
+                    new XAttribute("Control", "Next"), new XAttribute("Event", "SetTargetPath"),
+                    new XAttribute("Value", "[WIXUI_INSTALLDIR]"), new XAttribute("Order", "1"), "1"));
+                ui.Add(new XElement(Wix + "Publish", new XAttribute("Dialog", "InstallDirDlg"),
+                    new XAttribute("Control", "Next"), new XAttribute("Event", "DoAction"),
+                    new XAttribute("Value", "WixUIValidatePath"), new XAttribute("Order", "2"),
+                    "NOT WIXUI_DONTVALIDATEPATH"));
+                ui.Add(new XElement(Wix + "Publish", new XAttribute("Dialog", "InstallDirDlg"),
+                    new XAttribute("Control", "Next"), new XAttribute("Event", "SpawnDialog"),
+                    new XAttribute("Value", "InvalidDirDlg"), new XAttribute("Order", "3"),
+                    "NOT WIXUI_DONTVALIDATEPATH AND WIXUI_INSTALLDIR_VALID<>\"1\""));
+                ui.Add(new XElement(Wix + "Publish", new XAttribute("Dialog", "InstallDirDlg"),
+                    new XAttribute("Control", "Next"), new XAttribute("Event", "NewDialog"),
+                    new XAttribute("Value", "VerifyReadyDlg"), new XAttribute("Order", "4"),
+                    "(WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=\"1\") AND " + scope));
+                ui.Add(new XElement(Wix + "Publish", new XAttribute("Dialog", "InstallDirDlg"),
+                    new XAttribute("Control", "Next"), new XAttribute("Event", "SpawnDialog"),
+                    new XAttribute("Value", "InvalidDirDlg"), new XAttribute("Order", "5"),
+                    "WIXUI_INSTALLDIR_VALID=\"1\" AND NOT (" + scope + ")"));
+                ui.Add(new XElement(Wix + "Publish", new XAttribute("Dialog", "InstallDirDlg"),
+                    new XAttribute("Control", "ChangeFolder"), new XAttribute("Property", "_BrowseProperty"),
+                    new XAttribute("Value", "[WIXUI_INSTALLDIR]"), new XAttribute("Order", "1"), "1"));
+                ui.Add(new XElement(Wix + "Publish", new XAttribute("Dialog", "InstallDirDlg"),
+                    new XAttribute("Control", "ChangeFolder"), new XAttribute("Event", "SpawnDialog"),
+                    new XAttribute("Value", "BrowseDlg"), new XAttribute("Order", "2"), "1"));
+                ui.Add(new XElement(Wix + "Publish", new XAttribute("Dialog", "BrowseDlg"),
+                    new XAttribute("Control", "OK"), new XAttribute("Event", "DoAction"),
+                    new XAttribute("Value", "WixUIValidatePath"), new XAttribute("Order", "3"), "1"));
+                ui.Add(new XElement(Wix + "Publish", new XAttribute("Dialog", "BrowseDlg"),
+                    new XAttribute("Control", "OK"), new XAttribute("Event", "SpawnDialog"),
+                    new XAttribute("Value", "InvalidDirDlg"), new XAttribute("Order", "4"),
+                    "NOT WIXUI_DONTVALIDATEPATH AND WIXUI_INSTALLDIR_VALID<>\"1\""));
+                dialogs.AddRange(["InstallDirDlg", "BrowseDlg", "InvalidDirDlg", "DiskCostDlg"]);
+            }
+            if (launchPublish is not null) ui.Add(launchPublish);
+            foreach (var dialog in dialogs)
+                ui.AddFirst(new XElement(Wix + "DialogRef", new XAttribute("Id", dialog)));
+            product.Add(ui);
+            product.Add(new XElement(Wix + "UIRef", new XAttribute("Id", "WixUI_Common")));
+        }
+        else if (launchPublish is not null)
+        {
+            product.Add(new XElement(Wix + "UI", launchPublish));
+        }
+        if (settings.LaunchAfterInstall)
+        {
+            product.Add(new XElement(Wix + "Property",
+                new XAttribute("Id", "WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT"),
+                new XAttribute("Value", Localize("Launch " + bundle.ProductName, "启动 " + bundle.ProductName))));
+            product.Add(new XElement(Wix + "CustomAction", new XAttribute("Id", "BundlerLaunchAfterInstall"),
+                new XAttribute("FileKey", WixIdentity.StableId("Fil", mainExecutable)),
+                new XAttribute("ExeCommand", ""), new XAttribute("Return", "asyncNoWait"),
+                new XAttribute("Impersonate", "yes")));
         }
         product.Add(feature);
         return new XElement(Wix + "Wix", product);
@@ -251,6 +410,96 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings)
             app.Add(registration);
             feature.Add(new XElement(Wix + "ComponentRef", new XAttribute("Id", "DesktopRegistration")));
         }
+
+        void AddOptionalFeatures()
+        {
+            var shortcutTarget = "[INSTALLFOLDER]" + mainExecutable.Replace('/', '\\');
+            if (settings.StartMenuShortcut || settings.DesktopShortcut)
+            {
+                var shortcuts = FeatureElement("Shortcuts", Localize("Shortcuts", "快捷方式"));
+                if (settings.StartMenuShortcut)
+                {
+                    var component = ComponentElement("CmpStartMenuShortcut", "!shortcut-startmenu");
+                    component.Add(new XElement(Wix + "Shortcut",
+                        new XAttribute("Id", "StartMenuShortcut"),
+                        new XAttribute("Directory", "BundlerStartMenuFolder"),
+                        new XAttribute("Name", SafeShortcutName(bundle.ProductName) + settings.LanguageSuffix),
+                        new XAttribute("Target", shortcutTarget),
+                        new XAttribute("WorkingDirectory", "INSTALLFOLDER")));
+                    component.Add(ShortcutKeyPath("CmpStartMenuShortcut"));
+                    app.Add(component);
+                    shortcuts.Add(new XElement(Wix + "ComponentRef", new XAttribute("Id", "CmpStartMenuShortcut")));
+                }
+                if (settings.DesktopShortcut)
+                {
+                    var component = ComponentElement("CmpDesktopShortcut", "!shortcut-desktop");
+                    component.Add(new XElement(Wix + "Shortcut",
+                        new XAttribute("Id", "DesktopShortcut"),
+                        new XAttribute("Directory", "DesktopFolder"),
+                        new XAttribute("Name", SafeShortcutName(bundle.ProductName) + " (" +
+                            bundle.Identifier.ToLowerInvariant() + settings.LanguageSuffix + ")"),
+                        new XAttribute("Target", shortcutTarget),
+                        new XAttribute("WorkingDirectory", "INSTALLFOLDER")));
+                    component.Add(ShortcutKeyPath("CmpDesktopShortcut"));
+                    app.Add(component);
+                    shortcuts.Add(new XElement(Wix + "ComponentRef", new XAttribute("Id", "CmpDesktopShortcut")));
+                }
+                product.Add(shortcuts);
+            }
+            if (settings.AddToPath)
+            {
+                var component = ComponentElement("CmpPathEnvironment", "!path-environment");
+                component.Add(new XElement(Wix + "Environment",
+                    new XAttribute("Id", "BundlerPathEnvironment"),
+                    new XAttribute("Name", "PATH"),
+                    new XAttribute("Value", "[INSTALLFOLDER]"),
+                    new XAttribute("Action", "set"), new XAttribute("Part", "last"),
+                    new XAttribute("System", settings.InstallScope == WixInstallScope.PerMachine ? "yes" : "no"),
+                    new XAttribute("Permanent", "no")));
+                component.Add(RegistryKeyPath("CmpPathEnvironment"));
+                app.Add(component);
+                var pathFeature = FeatureElement("PathEnvironment", Localize("Add to PATH", "加入 PATH"));
+                pathFeature.Add(new XElement(Wix + "ComponentRef", new XAttribute("Id", "CmpPathEnvironment")));
+                product.Add(pathFeature);
+            }
+            if (settings.UninstallShortcut)
+            {
+                var component = ComponentElement("CmpUninstallShortcut", "!uninstall-shortcut");
+                component.Add(new XElement(Wix + "Shortcut",
+                    new XAttribute("Id", "UninstallShortcut"),
+                    new XAttribute("Directory", "BundlerStartMenuFolder"),
+                    new XAttribute("Name", Localize("Uninstall ", "卸载 ") + SafeShortcutName(bundle.ProductName) + settings.LanguageSuffix),
+                    new XAttribute("Advertise", "no"),
+                    new XAttribute("Target", "[" + (item.Target.Architecture == CpuArchitecture.X86
+                        ? "SystemFolder" : "System64Folder") + "]msiexec.exe"),
+                    new XAttribute("Arguments", "/x [ProductCode]"),
+                    new XAttribute("WorkingDirectory", "INSTALLFOLDER")));
+                component.Add(ShortcutKeyPath("CmpUninstallShortcut"));
+                app.Add(component);
+                var uninstall = FeatureElement("UninstallShortcut", Localize("Uninstall shortcut", "卸载快捷方式"));
+                uninstall.Add(new XElement(Wix + "ComponentRef", new XAttribute("Id", "CmpUninstallShortcut")));
+                product.Add(uninstall);
+            }
+        }
+
+        XElement FeatureElement(string id, string title) => new(Wix + "Feature",
+            new XAttribute("Id", id), new XAttribute("Title", title), new XAttribute("Level", "1"));
+
+        XElement ComponentElement(string id, string marker) => new(Wix + "Component",
+            new XAttribute("Id", id),
+            new XAttribute("Guid", WixIdentity.ComponentCode(bundle.Identifier,
+                item.Target.RuntimeIdentifier, settings.InstallScope, marker, settings.Language).ToString("B").ToUpperInvariant()));
+
+        XElement RegistryKeyPath(string name) => new(Wix + "RegistryValue",
+            new XAttribute("Root", registryRoot), new XAttribute("Key", registryKey),
+            new XAttribute("Name", name), new XAttribute("Type", "integer"),
+            new XAttribute("Value", "1"), new XAttribute("KeyPath", "yes"));
+
+        // Non-advertised shortcuts require an HKCU key path so each profile can repair its own entry (ICE43).
+        XElement ShortcutKeyPath(string name) => new(Wix + "RegistryValue",
+            new XAttribute("Root", "HKCU"), new XAttribute("Key", registryKey),
+            new XAttribute("Name", name), new XAttribute("Type", "integer"),
+            new XAttribute("Value", "1"), new XAttribute("KeyPath", "yes"));
     }
 
     private string Localize(string english, string chinese) =>

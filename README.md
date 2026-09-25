@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-第一条已冻结的链路是 Windows + NSIS。MSI 已完成 WIN-MSI-1..5 的当前主机自动化范围，`alpha.37` 是既有 x64/ARM64 身份基线；当前 `alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，并保留原 x64/ARM64 默认身份。WIN-MSI-6..9 仍是计划。现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。正式 CLI、macOS 和 Linux 格式仍属后续路线。
+第一条已冻结的链路是 Windows + NSIS。MSI 已完成 WIN-MSI-1..6 的当前主机自动化范围，`alpha.37` 是既有 x64/ARM64 身份基线；`alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选。WIN-MSI-7..9 仍是计划。现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。正式 CLI、macOS 和 Linux 格式仍属后续路线。
 
 实现已经拆分为可复用的 NuGet 包。`DotNet.Bundler` 只是便利元包，实际打包代码位于以下各层。
 
@@ -20,7 +20,7 @@
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
 
-仓库内已有 `DotNet.Bundler.Cli` 原型，但它的参数覆盖和发布契约尚未完成，因此当前不作为受支持入口。后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..5` 的当前主机范围验证：current-user 安装、升级、修复和卸载，快捷方式与关联/协议候选注册，测试证书签名、英语/简体中文单语言包及受限故障回滚，以及 x86 目标、显式 MSI 版本映射和可选降级。MSI 编译把 WiX 警告视为失败，PackageCode 由 WiX 每次构建生成。per-machine 包仅生成并检查数据库；原生 x86/ARM64 宿主、生产证书、交互 UI、提权安装、干净 Windows 和真实重启尚未验收。**冻结的是 alpha 格式配置及已验证的本机语义，尚无跨环境验收结论。**可操作的当前能力示例见 [`samples/HelloMsiApp/msi-sample.md`](samples/HelloMsiApp/msi-sample.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
+仓库内已有 `DotNet.Bundler.Cli` 原型，但它的参数覆盖和发布契约尚未完成，因此当前不作为受支持入口。后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..6` 的当前主机范围验证：current-user 安装、升级、修复和卸载，快捷方式与关联/协议候选注册，测试证书签名、英语/简体中文单语言包及受限故障回滚，x86 目标、显式 MSI 版本映射和可选降级，以及范围内安装目录、自定义 UI 序列、可选 Feature、PATH 精确追加与仅交互启动勾选。MSI 编译把 WiX 警告视为失败，PackageCode 由 WiX 每次构建生成。per-machine 包仅生成并检查数据库；原生 x86/ARM64 宿主、生产证书、交互 UI、提权安装、干净 Windows 和真实重启尚未验收。**冻结的是 alpha 格式配置及已验证的本机语义，尚无跨环境验收结论。**可操作的当前能力示例见 [`samples/HelloMsiApp/msi-sample.md`](samples/HelloMsiApp/msi-sample.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
 
 `DotNet.Bundler.Wix` 是可独立引用的 MSI 后端包和直接 API；MSBuild 调用同一后端。跨格式的开发与包消费规则见 [`docs/development-rules.md`](docs/development-rules.md)。
 
@@ -44,7 +44,7 @@ MSBuild Task 及其直接加载的 Abstractions/Core/NSIS/WiX 程序集都提供
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.40" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.41" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -62,7 +62,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.40" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.41" />
 ```
 
 ```csharp
@@ -101,7 +101,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.40" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.41" />
 ```
 
 ```csharp
@@ -132,7 +132,7 @@ var artifacts = await new WixBundler(new WixBundleConfiguration
 }).BuildAsync(request);
 ```
 
-`WixBundleConfiguration` 配置 MSI 安装范围、语言（`English`/`ChineseSimplified`）、代码页、快捷方式、`MsiVersion` 和 `AllowDowngrades`。`win-x86`、`win-x64`、`win-arm64` 是独立产品线；x86 可在当前 x64 Windows 构建并安装。默认用三段稳定应用版本作 MSI 版本；预发布应用须显式提供有效的三段 `MsiVersion`，第四段与越界版本被拒绝。不同应用版本不得复用同一 MSI 版本，已安装的同版异包会被拒绝。降级默认禁止，只有调用方显式设置 `AllowDowngrades=true` 才允许。默认英文/1252；简体中文自动选 936，显式指定其他代码页会被拒绝。各语言是独立的单语言 MSI 产品线，中文包名带 `-zh-cn`，安装目录和 UpgradeCode 也隔离。应用可以提供 `.rtf` `LicenseFile` 以启用该语言的 WiX 最小交互界面；不提供许可证时继续使用 Windows Installer 原生的基础界面，不显示替代性许可条款。已有英文产品身份保持稳定。应用的其他显示文本由调用方提供，Bundler 不自动翻译。
+`WixBundleConfiguration` 配置 MSI 安装范围、语言（`English`/`ChineseSimplified`）、代码页、快捷方式、`MsiVersion`、`AllowDowngrades`、`InstallDirectorySelection`、`BannerBitmap`、`DialogBitmap`、`AddToPath`、`UninstallShortcut` 和 `LaunchAfterInstall`。范围内安装目录限定 current-user 在 `%LOCALAPPDATA%` 子目录、per-machine 在 Program Files 子目录，静默 `INSTALLFOLDER=` 走同一校验；启动勾选只在交互安装勾选时以用户会话执行，静默/被动/修复/升级不触发。`win-x86`、`win-x64`、`win-arm64` 是独立产品线；x86 可在当前 x64 Windows 构建并安装。默认用三段稳定应用版本作 MSI 版本；预发布应用须显式提供有效的三段 `MsiVersion`，第四段与越界版本被拒绝。不同应用版本不得复用同一 MSI 版本，已安装的同版异包会被拒绝。降级默认禁止，只有调用方显式设置 `AllowDowngrades=true` 才允许。默认英文/1252；简体中文自动选 936，显式指定其他代码页会被拒绝。各语言是独立的单语言 MSI 产品线，中文包名带 `-zh-cn`，安装目录和 UpgradeCode 也隔离。应用可以提供 `.rtf` `LicenseFile` 以启用该语言的 WiX 交互许可页；启用目录选择或品牌位图等新 UI 能力时使用自定义 dialog 序列（有许可含许可页，无许可不含），未启用任何 UI 能力时继续使用 Windows Installer 原生的基础界面，不显示替代性许可条款。已有英文产品身份保持稳定。应用的其他显示文本由调用方提供，Bundler 不自动翻译。
 
 `WixBundlerOptions.Signer` 可复用 `WindowsAuthenticodeSigner` 或自定义 `IBundleSigner`：先签隔离副本中的主程序和显式 `SigningFiles`，再签最终 MSI。MSBuild 使用既有的 `BundlerWindowsSigning*` 属性和 `BundlerWindowsSigningFile` 项。签名失败会移除新 MSI；已有同版本签名包不会被静默复用，重新签名需新输出目录或新应用版本。生产证书和时间戳由发行方提供，私钥不进入仓库。
 
@@ -187,6 +187,12 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。当前�
 | `BundlerWixCodepage` | 否 | `0` 自动选择英文 1252/简体中文 936；显式值须适合包内文字 |
 | `BundlerWixStartMenuShortcut` | 否 | `false` |
 | `BundlerWixDesktopShortcut` | 否 | `false` |
+| `BundlerWixInstallDirectorySelection` | 否 | `false`；开启后交互可选范围内子目录，静默 `INSTALLFOLDER` 走同一校验 |
+| `BundlerWixBannerBitmap` | 否 | WiX 默认横幅；`.bmp` 且必须 493×58 |
+| `BundlerWixDialogBitmap` | 否 | WiX 默认对话框图；`.bmp` 且必须 503×314 |
+| `BundlerWixAddToPath` | 否 | `false`；用户/系统 PATH 仅追加安装目录，卸载移除 |
+| `BundlerWixUninstallShortcut` | 否 | `false`；开始菜单生成 `msiexec /x` 卸载入口 |
+| `BundlerWixLaunchAfterInstall` | 否 | `false`；仅交互完成页勾选时启动，静默/被动/修复/升级不触发 |
 | `BundlerWindowsSigningPfxFile` | 否 | PFX/P12 代码签名证书路径 |
 | `BundlerWindowsSigningPfxPasswordEnvironmentVariable` | 否 | 保存 PFX 密码的环境变量名 |
 | `BundlerWindowsSigningCertificateThumbprint` | 否 | Windows `My` 证书存储区中的证书指纹 |

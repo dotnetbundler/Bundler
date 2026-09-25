@@ -13,7 +13,7 @@ dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
 
 默认产物为 `samples/HelloMsiApp/artifacts/feature-demo/win-x64/msi/Hello MSI App-1.0.0.msi`。`feature-demo` 将本次完整演示与仓库早期同版本示例产物隔开，让上面的直接 `publish` 命令可运行；命令行仍可用 `BundlerOutputPath` 指向其他目录。与 NSIS 示例一样，项目通过根 `Directory.Build.props` 取得当前开发包版本，通过 `Bundler.LocalPackages.props` 设置本地 `RestoreSources=artifacts/packages`；`publish` 消费已还原的 NuGet 包，不会自动重编仓库 `src/`。实现变更应先按开发规则迭代包版本并重新打包；缺少当前版本的本地包时先执行 `pack`。
 
-只验证示例构建契约而**不安装** MSI 时，运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1`。脚本用隔离 NuGet 缓存从本地包源还原，分别生成英语 current-user、中文 current-user 和英语 per-machine 包，检查数据库中的资源、图标、许可 UI、快捷方式、关联/协议及独立身份；输出保留在本轮 `%TEMP%` 目录。此检查不代替真实安装测试。
+只验证示例构建契约而**不安装** MSI 时，运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1`。脚本用隔离 NuGet 缓存从本地包源还原，分别生成英语 current-user、中文 current-user 和英语 per-machine 包，检查数据库中的资源、图标、自定义 UI 对话框（含许可与目录选择路由）、快捷方式、Environment/Feature、关联/协议、品牌位图及独立身份；输出保留在本轮 `%TEMP%` 目录。此检查不代替真实安装测试；真实安装/升级/修复/卸载的新能力断言由独立 fixture 的 `VerifyWinMsi6.ps1` 执行。
 
 MSI 后端拒绝在同一路径以相同应用版本覆盖不同内容。修改本示例后若已有旧 MSI，可通过 `-p:BundlerOutputPath=新的绝对目录` 指定新输出目录。移动旧 MSI 时要连同其 `.bundler-manifest` 一起保留；这只处理构建产物，不会卸载电脑上已安装的应用。已有相同产品版本的旧示例若内容不同，请先在“设置 → 应用 → 已安装的应用”卸载旧版，再安装新示例。正式发行不得向不同用户发布两个内容不同但产品版本相同的 MSI。
 
@@ -21,13 +21,30 @@ MSI 后端拒绝在同一路径以相同应用版本覆盖不同内容。修改�
 
 - x64、`currentUser`、英语单语言 MSI，产品版本 `1.0.0`；包工具版本与应用版本相互独立；
 - 名称、发布者、描述、主页、版权、应用和 MSI 图标；`Assets/app.ico` 是本示例绘制的几何图标；
-- 自写的演示 RTF 许可页面，仅展示 WiX 最小交互界面，不是实际产品许可；
+- 自写的演示 RTF 许可页面，仅展示交互许可界面，不是实际产品许可；
 - 显式开启桌面和开始菜单快捷方式；
 - `.hellomsi` 文件关联、MIME 候选及 `hello-msi:` 协议候选处理程序，不抢占 Windows 默认应用；
 - 安装目录中的 `demo.hellomsi`、`open-link.cmd` 与 `DemoResources\Readme.txt`；
+- 范围内安装目录选择、品牌横幅/对话框位图、PATH 附加、开始菜单卸载入口和安装完成后勾选启动（默认演示均开启，详见下一节）；
 - Windows Installer 原生的静默/被动安装、升级、修复、卸载与事务回滚；这些行为使用 MSI 专用 fixture 测试，本示例不包含故障注入。
 
 本项目使用 `BundlerWixCodepage=0`，让 WiX 按所选 MSI 语言选择代码页。默认英语许可 UI 所用的本地化资源是 1252，所以安装数据库中的名称、描述和目标路径使用英语；资源文件的**内容**以及应用运行时收到的参数仍可使用中文。传入 `zh-CN` 会生成独立的简体中文 MSI，但应用自带名称和描述不会被 Bundler 自动翻译。
+
+## 安装目录、界面与可选功能
+
+示例默认演示 WIN-MSI-6 的全部用户能力，均可用 `HelloMsiApp*` 开关关闭：
+
+| 开关（默认值 `true`） | 映射的 `BundlerWix*` 属性 | 演示效果 |
+| --- | --- | --- |
+| `HelloMsiAppInstallDirectorySelection` | `BundlerWixInstallDirectorySelection` | 交互安装出现目录选择页；可选择 `%LOCALAPPDATA%` 内的子目录，范围外或允许根本身被拒绝。静默 `INSTALLFOLDER=` 走同一范围校验。 |
+| `HelloMsiAppBannerBitmap` / `HelloMsiAppDialogBitmap` | `BundlerWixBannerBitmap` / `BundlerWixDialogBitmap` | `Assets/banner.bmp`（493×58）与 `Assets/dialog.bmp`（503×314）替换 WiX 默认品牌图；尺寸或格式不符时构建拒绝。置空字符串即恢复默认图。 |
+| `HelloMsiAppAddToPath` | `BundlerWixAddToPath` | 用户 PATH 只追加本产品安装目录，卸载后恢复原值，不影响其他条目。per-machine 包写系统 PATH，属提权路径（未实测）。 |
+| `HelloMsiAppUninstallShortcut` | `BundlerWixUninstallShortcut` | 开始菜单中生成"卸载 Hello MSI App"链接（`msiexec /x`）。 |
+| `HelloMsiAppLaunchAfterInstall` | `BundlerWixLaunchAfterInstall` | 交互安装完成页出现"启动 Hello MSI App"勾选；只在勾选时以当前用户启动。`/qn`、`/passive`、修复、升级均无该界面也不会启动。 |
+
+交互目录页与浏览/无效目录对话框使用自定义 dialog 序列；示例含 RTF 许可时序列含许可页。没有许可文件又开启这些 UI 能力时，Bundler 生成不含许可页的同类序列，不伪造许可条款。静默安装时 `INSTALLFOLDER` 超出范围会直接以 `1603` 失败；junction/重解析点作为安装目标的检测在当前版本未实现，见 MSI 能力矩阵的边界说明。
+
+## 安装后操作
 
 ## 安装后操作
 
@@ -116,4 +133,4 @@ dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release `
 
 ## 当前边界
 
-MSI 的安装目录选择、可选 PATH、安装后启动、更多语言及自备 WiX 扩展仍是 WIN-MSI-6..9 计划，不在此示例中伪装为已实现。NSIS 的 Hook、语言选择器、安装器图片、自定义快捷方式参数和 journal 恢复是该后端的特定能力，不能直接搬到 MSI。真实升级/降级和故障回滚由独立随机身份 fixture 验证；公开示例应用版本保持 `1.0.0`，不会拿它覆盖旧版本做测试。当前实现与计划状态分别见 [`docs/msi-capability-matrix.md`](../../docs/msi-capability-matrix.md)和 [`docs/msi-roadmap.md`](../../docs/msi-roadmap.md)。
+MSI 的更多语言、自备 WiX 扩展仍是 WIN-MSI-7..9 计划，不在此示例中伪装为已实现；安装时 junction/重解析点目录检测、交互 UI 的实际视觉/辅助功能验收也仍是人工清单项。NSIS 的 Hook、语言选择器、安装器图片、自定义快捷方式参数和 journal 恢复是该后端的特定能力，不能直接搬到 MSI。真实升级/降级和故障回滚由独立随机身份 fixture 验证；公开示例应用版本保持 `1.0.0`，不会拿它覆盖旧版本做测试。当前实现与计划状态分别见 [`docs/msi-capability-matrix.md`](../../docs/msi-capability-matrix.md)和 [`docs/msi-roadmap.md`](../../docs/msi-roadmap.md)。

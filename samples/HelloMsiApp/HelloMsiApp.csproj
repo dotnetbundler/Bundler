@@ -8,6 +8,12 @@
     <BundlerOutputPath>$(MSBuildProjectDirectory)\artifacts\feature-demo</BundlerOutputPath>
     <HelloMsiAppInstallScope Condition="'$(HelloMsiAppInstallScope)' == ''">currentUser</HelloMsiAppInstallScope>
     <HelloMsiAppLanguage Condition="'$(HelloMsiAppLanguage)' == ''">en-US</HelloMsiAppLanguage>
+    <HelloMsiAppInstallDirectorySelection Condition="'$(HelloMsiAppInstallDirectorySelection)' == ''">true</HelloMsiAppInstallDirectorySelection>
+    <HelloMsiAppAddToPath Condition="'$(HelloMsiAppAddToPath)' == ''">true</HelloMsiAppAddToPath>
+    <HelloMsiAppUninstallShortcut Condition="'$(HelloMsiAppUninstallShortcut)' == ''">true</HelloMsiAppUninstallShortcut>
+    <HelloMsiAppLaunchAfterInstall Condition="'$(HelloMsiAppLaunchAfterInstall)' == ''">true</HelloMsiAppLaunchAfterInstall>
+    <HelloMsiAppBannerBitmap Condition="'$(HelloMsiAppBannerBitmap)' == ''">$(MSBuildThisFileDirectory)Assets\banner.bmp</HelloMsiAppBannerBitmap>
+    <HelloMsiAppDialogBitmap Condition="'$(HelloMsiAppDialogBitmap)' == ''">$(MSBuildThisFileDirectory)Assets\dialog.bmp</HelloMsiAppDialogBitmap>
     <HelloMsiAppMsiVersion Condition="'$(HelloMsiAppMsiVersion)' == ''"></HelloMsiAppMsiVersion>
     <HelloMsiAppAllowDowngrades Condition="'$(HelloMsiAppAllowDowngrades)' == ''">false</HelloMsiAppAllowDowngrades>
     <HelloMsiAppSigningPfxFile Condition="'$(HelloMsiAppSigningPfxFile)' == ''"></HelloMsiAppSigningPfxFile>
@@ -34,6 +40,12 @@
     <BundlerWixCodepage>0</BundlerWixCodepage>
     <BundlerWixStartMenuShortcut>true</BundlerWixStartMenuShortcut>
     <BundlerWixDesktopShortcut>true</BundlerWixDesktopShortcut>
+    <BundlerWixInstallDirectorySelection>$(HelloMsiAppInstallDirectorySelection)</BundlerWixInstallDirectorySelection>
+    <BundlerWixBannerBitmap>$(HelloMsiAppBannerBitmap)</BundlerWixBannerBitmap>
+    <BundlerWixDialogBitmap>$(HelloMsiAppDialogBitmap)</BundlerWixDialogBitmap>
+    <BundlerWixAddToPath>$(HelloMsiAppAddToPath)</BundlerWixAddToPath>
+    <BundlerWixUninstallShortcut>$(HelloMsiAppUninstallShortcut)</BundlerWixUninstallShortcut>
+    <BundlerWixLaunchAfterInstall>$(HelloMsiAppLaunchAfterInstall)</BundlerWixLaunchAfterInstall>
     <BundlerWindowsSigningPfxFile>$(HelloMsiAppSigningPfxFile)</BundlerWindowsSigningPfxFile>
     <BundlerWindowsSigningPfxPasswordEnvironmentVariable>$(HelloMsiAppSigningPfxPasswordEnvironmentVariable)</BundlerWindowsSigningPfxPasswordEnvironmentVariable>
     <BundlerWindowsSigningCertificateThumbprint>$(HelloMsiAppSigningCertificateThumbprint)</BundlerWindowsSigningCertificateThumbprint>

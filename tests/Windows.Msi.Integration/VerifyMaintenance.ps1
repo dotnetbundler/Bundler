@@ -70,9 +70,15 @@ try {
     if ($null -eq $record) { throw 'InstallFiles action is absent from the fixture.' }
     $failureSequence = $record.IntegerData(1) + 1
     $null = $view.Close()
-    $view = $database.OpenView('CREATE TABLE `CustomAction` (`Action` CHAR(72) NOT NULL, `Type` SHORT NOT NULL, `Source` CHAR(64), `Target` CHAR(255) LOCALIZABLE PRIMARY KEY `Action`)')
+    $view = $database.OpenView("SELECT `Name` FROM `_Tables` WHERE `Name` = 'CustomAction'")
     $null = $view.Execute()
+    $hasCustomActionTable = $null -ne $view.Fetch()
     $null = $view.Close()
+    if (-not $hasCustomActionTable) {
+        $view = $database.OpenView('CREATE TABLE `CustomAction` (`Action` CHAR(72) NOT NULL, `Type` SHORT NOT NULL, `Source` CHAR(64), `Target` CHAR(255) LOCALIZABLE PRIMARY KEY `Action`)')
+        $null = $view.Execute()
+        $null = $view.Close()
+    }
     $view = $database.OpenView("INSERT INTO ``CustomAction`` (``Action``, ``Type``, ``Source``, ``Target``) VALUES ('BundlerTestFail', 1058, 'TARGETDIR', '[SystemFolder]cmd.exe /c exit /b 17')")
     $null = $view.Execute()
     $null = $view.Close()

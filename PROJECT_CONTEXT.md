@@ -3,8 +3,8 @@
 > 最后整理：2026-09-25
 > 当前分支：`msi-development`（NSIS 开发线为 `nsis-development`）
 > NSIS 冻结起点：`71a5c90 feat(nsis): 冻结安全打包基线`；当前提交以 `git rev-parse --short HEAD` 为准
-> 当前包版本：`0.1.0-alpha.40`（WIN-MSI-5 实现与测试；Git 状态与包版本均须实时核查）
-> 当前阶段：`WIN-MSI-1..5` 的当前 Windows 11 x64 本机自动化范围已完成；`alpha.37` 是既有 x64/ARM64 MSI 身份基线，`alpha.40` 增加 x86、显式 MSI 版本映射与可选降级。`WIN-MSI-6..9` 尚未实施；默认下一实施阶段为 `WIN-MSI-6`，`MAC-APP` 顺延。per-machine、生产签名、干净宿主和其他架构等外部验收边界不变。
+> 当前包版本：`0.1.0-alpha.41`（WIN-MSI-6 实现与测试；Git 状态与包版本均须实时核查）
+> 当前阶段：`WIN-MSI-1..6` 的当前 Windows 11 x64 本机自动化范围已完成；`alpha.37` 是既有 x64/ARM64 MSI 身份基线，`alpha.40` 增加 x86、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选。`WIN-MSI-7..9` 尚未实施；默认下一实施阶段为 `WIN-MSI-7`，`MAC-APP` 顺延。per-machine、生产签名、干净宿主、真实交互 UI 和其他架构等外部验收边界不变。
 
 本文档记录当前事实、决策与验证证据，供后续开发任务接续。跨格式开发与交接规则以 `docs/development-rules.md` 为唯一规范入口；正式路线见 `docs/roadmap.md`，MSI 细则见 `docs/msi-roadmap.md`。本文档不是面向最终用户的使用手册。代码与自动化测试始终是实现事实的最终依据。
 
@@ -26,7 +26,7 @@
 
 - 当前只做桌面端。
 - 第一条完整链路是 **Windows 目标 + NSIS 安装包**。
-- MSI/WiX 已完成 WIN-MSI-1..5 的当前主机本机自动化范围，alpha 格式配置与身份规则已冻结；WIN-MSI-5 新增 x86、显式 MSI 版本映射与可选降级。外部 Windows/UAC/生产验收仍待执行；WIN-MSI-6..9 尚未实施，macOS 与 Linux 安装格式尚未实现。
+- MSI/WiX 已完成 WIN-MSI-1..6 的当前主机本机自动化范围，alpha 格式配置与身份规则已冻结；WIN-MSI-5 新增 x86、显式 MSI 版本映射与可选降级，WIN-MSI-6 新增范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选。外部 Windows/UAC/生产验收与真实交互 UI 仍待执行；WIN-MSI-7..9 尚未实施，macOS 与 Linux 安装格式尚未实现。
 - NSIS 目标包可以由 Windows、Linux x64/arm64、macOS x64/arm64 宿主编译；工具解析与嵌入结构已经实现，但所有宿主的真实 CI 执行矩阵仍需补齐。
 - 快速推进阶段允许破坏性修改，不要求兼容早期 alpha API 或配置。
 - 解决方案文件使用 `Bundler.slnx`。
@@ -558,7 +558,7 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 
 ### 14.3 默认下一阶段
 
-以下为 WIN-MSI-1/2 时的历史接管记录；**当前下一阶段以文首及最新的 14.8 节为准**。
+以下为 WIN-MSI-1/2 时的历史接管记录；**当前下一阶段以文首及最新阶段记录为准**。
 
 用户已明确说“提交，然后开始”；规划文档提交为 `71b028c`，`WIN-MSI-1` 代码已完成本机范围阶段一；用户已要求提交，实际 HEAD 和工作区状态以 Git 为准。NSIS 迁移 fixture 的 `WixToolset.Sdk/5.0.2` 不代表正式选型；本阶段使用 WiX 3.14.1。当前已有直接 API、MSBuild 映射、固定工具子集与源码分发、最小 current user MSI 构建和数据库自动化验证。按用户要求与 NSIS 测试分层一致，2026-09-24 在当前 Windows x64 开发机使用每轮独立产品身份执行真实静默安装与卸载，检查文件、产品注册、未知用户文件保留及清理，均通过；脚本为 `tests/Windows.Msi.Integration/Verify.ps1 -ConfirmLocalInstall`，日志、MSI SHA-256、ProductCode 和环境见 `docs/msi-roadmap.md` 第 6 节。当前工作区的 49 项自动化测试及完整 Windows NSIS 安装/卸载集成回归也已通过，NSIS 固定测试路径和卸载注册项无残留。干净宿主 Framework、ARM64 宿主/用户端、UAC 与高影响故障仍待独立人工/外部验收，不宣称广泛支持。用户已于 2026-09-24 接受当前约 13.8 MB 的 WiX NuGet 包体积；第一阶段已完成本机范围退出条件：14 个工具子集文件逐项对应官方源码和许可，生成的 WiX NuGet 包包含许可证、源码及声明；49 项测试以 --no-restore 再次通过，涵盖新缓存解包 WiX 和实际编译 MSI，打包复核也通过。干净 Windows/ARM64 环境依用户说明暂不执行，保留待验收且不扩大支持声明。评价 WiX 3.14.1 自身的零环境要求时，只看 candle.exe/light.exe 及其依赖，不混入 Bundler 的 MSBuild 或应用构建环境：两个 EXE 及 wix.dll 均目标 .NET Framework 4.5；Windows 7 SP1 未预装所需 Framework，Windows 10/11 预装版本理论上足够，但干净宿主实际编译仍需 VM 验证，详见 docs/msi-roadmap.md 第 2 节。CLI 在计划的 MSI、macOS 和 Linux 打包格式完成后再做。
 
@@ -634,7 +634,7 @@ Windows 11 x64 本机验证：从已有本地 `0.1.0-alpha.37` NuGet 包构建�
 
 因根 README、WiX 来源说明及第三方声明进入 NuGet 包，工具包版本从 `0.1.0-alpha.37` 迭代至 `0.1.0-alpha.38`，两个示例应用版本仍是 `1.0.0`。`Directory.Build.props`、示例引用、API fixture 默认值及 Windows 集成入口默认值已同步。Windows 11 x64 本机：`dotnet build Bundler.slnx -c Release -v:q` 通过，0 警告/0 错误；`dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release --no-restore` 全部通过；`dotnet pack Bundler.slnx -c Release --no-restore -o artifacts/packages -v:q` 生成七个 alpha.38 包。逐包 ZIP 检查确认中文 `README.md` 与仓库一致、原中文镜像不再随包；WiX/MSBuild 包内 `licenses/wix/msi-wix-provenance.md` 与仓库逐字节一致，现有 MSI 包审计辅助函数再次通过。WiX 包为 14,398,423 字节，SHA-256 `213BB494106CC7B82F77B96539AF6A435D6E61575E38A836A08B7E66E75BB398`。
 
-公开 MSI 示例的 `VerifyPublicSample.ps1` 使用本地 alpha.38 包和隔离缓存，英语当前用户、简体中文当前用户和英语整机三种只读数据库检查均通过；本轮未安装 MSI。NSIS 公开示例从本地 alpha.38 包源 `dotnet publish` 成功，产生的会话专用输出已按确切路径清理。仓库 Markdown 相对链接全部解析成功，全部维护中的 Markdown 均含中文，旧文档路径搜索无命中，`git diff --check` 无空白错误。首次沙箱内 build 因无法读取本机 `C:\Users\Lin\AppData\Local\Microsoft SDKs` 被拒；获准在沙箱外读取后成功，未发现项目编译错误。本轮未提交或推送。下一实施阶段仍为 WIN-MSI-5；外部环境的既有人工验收边界不变。
+公开 MSI 示例的 `VerifyPublicSample.ps1` 使用本地 alpha.38 包和隔离缓存，英语当前用户、简体中文当前用户和英语整机三种只读数据库检查均通过；本轮未安装 MSI。NSIS 公开示例从本地 alpha.38 包源 `dotnet publish` 成功，产生的会话专用输出已按确切路径清理。仓库 Markdown 相对链接全部解析成功，全部维护中的 Markdown 均含中文，旧文档路径搜索无命中，`git diff --check` 无空白错误。首次沙箱内 build 因无法读取本机 `C:\Users\Lin\AppData\Local\Microsoft SDKs` 被拒；获准在沙箱外读取后成功，未发现项目编译错误。本轮变更随后提交为 `414864c`，未推送。下一实施阶段仍为 WIN-MSI-5；外部环境的既有人工验收边界不变。
 
 ### 14.11 测试与示例项目命名、本地包配置收敛（2026-09-25）
 
@@ -644,7 +644,7 @@ Windows 11 x64 本机验证：从已有本地 `0.1.0-alpha.37` NuGet 包构建�
 
 本机 Windows 11 Pro build 26200 x64：Release 解决方案构建 0 警告/0 错误，更新后的快速测试全部通过；Pack 生成七个 alpha.39 包，包内 README 与仓库一致，Bundler 依赖版本均为 alpha.39。WiX 包 14,398,397 字节，SHA-256 为 `3A13CA19A63D8336538E56453ACB01D5BE76CD6D4F0DE383AF572DED5DFD9657`。NSIS 公开示例从本地包成功发布，仍生成 `HelloBundledApp.dll` 与 `Hello Bundled App-1.0.0-setup.exe`，安装器 SHA-256 为 `D80BAA724FB4D64C96A107F3D1D3A7312B8CCAC0CBF81277D7DF27ACD2DC5468`；本轮专用示例输出已按确切路径清理。MSI 公开示例省略版本参数运行 `VerifyPublicSample.ps1`，英语当前用户、中文当前用户、英语整机三种只读数据库检查通过，未安装公开示例，产物保留在 `%TEMP%\Bundler-Msi-PublicSample-f2b16791c841400a82adec761ce5fbb4`。
 
-真实 Windows 集成入口也均省略版本参数并退出 0：MSI `Verify.ps1 -ConfirmLocalInstall` 通过随机 current-user 安装/卸载和仓库外直接 API 包消费，MSI SHA-256 为 `ECBAFF26859A5458784A5D8035B4C9912E0A766D2667DA1A3E568A7D2277094D`，日志在 `%TEMP%\Bundler-Msi-Smoke-394db4e914b14e04b1c18b929ad7d0f1`；`VerifyLifecycle.ps1 -ConfirmLocalInstall` 通过升级、降级/异包拒绝与数据所有权，日志在 `%TEMP%\Bundler-Msi-Lifecycle-552806128459422086e891156501983b`；`VerifyMaintenance.ps1 -ConfirmLocalInstall` 通过损坏包 1620、故障回滚、被动安装/卸载、静默修复与语言并存，日志在 `%TEMP%\Bundler-Msi-Maintenance-34b34c995872424093c8ca0257bfbd8e`。NSIS `Verify.ps1` 全量安装/卸载集成通过，产物在 `artifacts/windows-nsis-integration`。Markdown 相对链接、旧项目路径及 `git diff --check` 均核对通过。未启动 WIN-MSI-5，未提交或推送；原有外部人工验收边界不变。
+真实 Windows 集成入口也均省略版本参数并退出 0：MSI `Verify.ps1 -ConfirmLocalInstall` 通过随机 current-user 安装/卸载和仓库外直接 API 包消费，MSI SHA-256 为 `ECBAFF26859A5458784A5D8035B4C9912E0A766D2667DA1A3E568A7D2277094D`，日志在 `%TEMP%\Bundler-Msi-Smoke-394db4e914b14e04b1c18b929ad7d0f1`；`VerifyLifecycle.ps1 -ConfirmLocalInstall` 通过升级、降级/异包拒绝与数据所有权，日志在 `%TEMP%\Bundler-Msi-Lifecycle-552806128459422086e891156501983b`；`VerifyMaintenance.ps1 -ConfirmLocalInstall` 通过损坏包 1620、故障回滚、被动安装/卸载、静默修复与语言并存，日志在 `%TEMP%\Bundler-Msi-Maintenance-34b34c995872424093c8ca0257bfbd8e`。NSIS `Verify.ps1` 全量安装/卸载集成通过，产物在 `artifacts/windows-nsis-integration`。Markdown 相对链接、旧项目路径及 `git diff --check` 均核对通过。未启动 WIN-MSI-5；本轮变更随后提交为 `30cae4d`，未推送；原有外部人工验收边界不变。
 
 ### 14.12 跨格式规则重整与 NSIS 路线归档（2026-09-25）
 
@@ -652,7 +652,7 @@ Windows 11 x64 本机验证：从已有本地 `0.1.0-alpha.37` NuGet 包构建�
 
 `docs/development-rules.md` 是跨格式规则的唯一规范入口，`AGENTS.md` 保留接管摘要；总 `docs/roadmap.md` 只保留产品边界、格式顺序和阶段入口。原总路线中的 NSIS 能力基线、旧阶段映射与 `NSIS-R1..R4` 记录原样迁至 `docs/nsis-roadmap.md`，人工测试索引增加格式路线链接；NSIS 历史证据不因此变成当前新验证。新后端必须先完成直到格式冻结的路线并与用户确认关键选择，才开始第一阶段代码。当前下一实施阶段仍为 `WIN-MSI-5`，已确认的 MSI 方案以 `docs/msi-roadmap.md` 第 10 节为准；外部验收仍按各格式专用清单。
 
-本轮以 Git 旧版总路线为基准核对 NSIS 历史迁移内容，仅更改标题编号和一处已失效的“本文开头”引用，正文保留；仓库 Markdown 相对链接全部可解析，`git diff --check` 无空白错误。由于只修改未随 NuGet 包分发的协作和路线文档，没有新增或修改打包功能，本轮不重新执行安装集成测试，也不迭代包版本。未提交或推送。
+本轮以 Git 旧版总路线为基准核对 NSIS 历史迁移内容，仅更改标题编号和一处已失效的“本文开头”引用，正文保留；仓库 Markdown 相对链接全部可解析，`git diff --check` 无空白错误。由于只修改未随 NuGet 包分发的协作和路线文档，没有新增或修改打包功能，本轮不重新执行安装集成测试，也不迭代包版本。本轮变更随后提交为 `23c4b8a`，未推送。
 
 另对照可读取的旧“Nsis 开发”与早期架构任务记录，补回两条容易遗漏的要求：公开示例覆盖当前格式所有适用的用户能力（互斥或需外部条件的场景给可复现说明），以及新增人类语言代码/脚本注释使用中文；MSBuild Task 在进程内调用 Core/后端，不另起 .NET CLI 驱动。旧时要求维护中英文 README 已被后来的中文单文档决定替代，故未重新引入。
 
@@ -666,7 +666,7 @@ Windows 11 x64 本机验证：从已有本地 `0.1.0-alpha.37` NuGet 包构建�
 
 ### 14.14 开发分支移除 `codex/` 前缀（2026-09-25）
 
-用户要求所有项目分支名不带 `codex/` 前缀。核对时只有三个本地项目分支，且没有远端或标签：`master` 保持原名，`codex/nsis-development` 改为 `nsis-development`（`6946dae`），当前 `codex/msi-development` 改为 `msi-development`（`e85ebd0`）。另一 Codex 工作树处于分离 HEAD，没有分支要改。两次重命名均未修改提交历史、文件树或包内容；历史实施记录中的旧分支名保留为当时事实，当前分支名以文首和 `git branch -vv` 为准。本轮未提交或推送，下一实施阶段仍为 `WIN-MSI-5`。
+用户要求所有项目分支名不带 `codex/` 前缀。核对时只有三个本地项目分支，且没有远端或标签：`master` 保持原名，`codex/nsis-development` 改为 `nsis-development`（`6946dae`），当前 `codex/msi-development` 改为 `msi-development`（`e85ebd0`）。另一 Codex 工作树处于分离 HEAD，没有分支要改。两次重命名均未修改提交历史、文件树或包内容；历史实施记录中的旧分支名保留为当时事实，当前分支名以文首和 `git branch -vv` 为准。本轮变更随后提交为 `3cca7a0`，未推送；下一实施阶段仍为 `WIN-MSI-5`。
 
 ### 14.15 WIN-MSI-5：x86、版本映射与可选降级（2026-09-25）
 
@@ -678,4 +678,65 @@ Windows 11 x64 本机验证：从已有本地 `0.1.0-alpha.37` NuGet 包构建�
 
 真实 Windows 证据：`tests/Windows.Msi.Integration/VerifyWinMsi5.ps1 -Configuration Release -ConfirmLocalInstall` 在 Windows 11 Pro build 26200 x64 上从本地 `alpha.40` 包源验证仓库外 API 与 MSBuild x86 消费；随机 current-user 产品完成 v1 安装、预发布应用显式映射到 v2 升级、同 MSI 版本异内容拒绝（1638）、默认降级拒绝（1603）、显式允许降级（0）、卸载（0），并检查 32 位注册表视图、受管文件和未知用户文件保留。日志和五个 MSI 保留在 `%TEMP%\Bundler-Msi-WinMsi5-c9fb31e8471a4996878963d70a4b8e7b`。原 x64 `VerifyLifecycle.ps1 -ConfirmLocalInstall` 用 alpha.40 回归通过，日志在 `%TEMP%\Bundler-Msi-Lifecycle-ba0954338b454f1ab5312db811500ea0`。本轮尝试先把 alpha.40 包写入 `artifacts/packages` 再运行 NSIS 集成，但当前受限执行环境拒绝读取 `C:\Users\Lin\AppData\Local\Microsoft SDKs`，因此 pack 在 MSB4184 处失败，NSIS alpha.40 回归未执行；这不是代码回归证据，待有 SDK 访问权限时按 `tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release` 补跑。干净 Windows、原生 x86/ARM64 用户端、per-machine UAC、生产证书和真实重启仍是人工/专用环境边界，不能由本机结果扩大支持声明。
 
-本轮工作区尚未提交或推送；下一阶段为 `WIN-MSI-6`。提交前应重新核对 Git、完整 diff、包内容和测试入口。
+本轮变更随后提交为 `a3657b5 feat(msi): 完成 WIN-MSI-5 架构与版本生命周期`（其后另有 docs-only 提交 `f73c2a5`），未推送；下一阶段为 `WIN-MSI-6`。本节末段所述 NSIS alpha.40 回归因当时环境限制未执行，补跑结果见后续阶段记录。
+
+### 14.16 接管核对后的清理、文档纠正与全量验证（2026-09-25）
+
+本轮起点为 `msi-development`、HEAD `f73c2a5`、包版本 `0.1.0-alpha.40`，非实施阶段，未修改后端代码、示例或包内容，因此不迭代 `BundlerPackageVersion`。
+
+**残留移出**：以下均未跟踪且内容为被忽略的构建产物或空目录，已移至 `%TEMP%\Bundler-repo-leftovers-2026-09-25\`（含 `samples\HelloBundledApp`、`tests\Bundler.Core.Tests`、`src\Bundler.Core\Backends\Windows`、`src\Bundler.Core\Templates` 对应相对路径），确认后可删除该备份目录。`HelloBundledApp` 是 §14.11 改名时因文件占用遗留的产物目录；`Bundler.Core.Tests` 是旧测试项目合并进 `tests/Bundler.Tests` 后的空壳；两个 `src/Bundler.Core` 空目录无任何内容。
+
+**文档纠正**：§14.3 中"以最新的 14.8 节为准"改为"以最新阶段记录为准"；§14.10、§14.11、§14.12、§14.14、§14.15 末尾写作时的"本轮未提交"自述分别补记实际提交 `414864c`、`30cae4d`、`23c4b8a`、`3cca7a0`、`a3657b5`。WIN-MSI-6 两项前置决策经用户确认并写入 `docs/msi-roadmap.md` 第 10 节：可选安装目录 current-user 限定 `%LOCALAPPDATA%` 内子目录、per-machine 限定 Program Files 内子目录，静默 `INSTALLFOLDER` 走同一校验；无 RTF 许可时目录选择使用不含许可页的自定义 dialog 序列。
+
+**本机验证（Windows 11 Pro build 26200 x64，`0.1.0-alpha.40`）**：
+
+```powershell
+dotnet build Bundler.slnx -c Release -v:q            # 0 警告 / 0 错误
+dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release --no-restore   # 65 项全部 PASS
+dotnet pack Bundler.slnx -c Release -o artifacts/packages   # 7 个 alpha.40 包
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -Configuration Release -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -Configuration Release -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -Configuration Release -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi5.ps1 -Configuration Release -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -Configuration Release
+```
+
+结果：上述命令均退出 0。`DotNet.Bundler.Wix.0.1.0-alpha.40.nupkg` 14,398,984 字节。NSIS 全量安装/卸载集成输出 `PASS Windows NSIS install/uninstall integration`，补齐 §14.15 因环境限制未执行的 alpha.40 回归。MSI smoke 的独立 API/MSBuild MSI SHA-256 为 `AC52D86F132750D8AEB179727BD2D73CCE3CB0102C3425E9C5653E93323CB269`、`924A2D3BAE154FB0E3B4B0F02DDFE9CE96F5BC59289E9E83830AB2EC1ED78212`，ProductCode `{7B4D4756-8590-52D6-8F6A-6444AF3EC79C}`，日志在 `%TEMP%\Bundler-Msi-Smoke-fe2ae33a8ac543d893816e1aca3d5276`。Lifecycle v1/v2/异包 SHA-256 为 `412BE983C99DEB5CA1F9965CE18ED6FEA441C44B8C4F0A6E4DB5AF5BB215EDA3`、`9DA62316E10FEF158A86EB5D860BC0ED95353A52F65B7FAB80DE7A23888CF33B`、`EA14041D2DF96DC8DACB51334A2A3185FC37FD885155ED4AA5829A57CE484186`，日志在 `%TEMP%\Bundler-Msi-Lifecycle-9d4a4afd2ddd4792851dfe5c66fe91e3`。Maintenance MSI SHA-256 `F467AC9549A23A600120CD8771DA14B94D67F6419DC2422E490CD9BFA6B953F6`，损坏包 1620、故障回滚 1603、被动安装/卸载、静默修复、中文并存通过，日志在 `%TEMP%\Bundler-Msi-Maintenance-b603717f858e48f7899a6ea295a8bcf2`。WIN-MSI-5 x86 脚本五份 MSI SHA-256 见 `%TEMP%\Bundler-Msi-WinMsi5-1ef8c58e339946718ea33c42f2d58f6e`，v1 安装、映射 v2 升级、同版碰撞 1638、默认降级拒绝 1603、允许降级与卸载均 0。`VerifyPublicSample.ps1` 英语/中文/per-machine 三包只读数据库检查通过，未安装。本轮六个测试 ProductCode 结束后复核 ProductState 均为 `-1`，无安装残留。上一轮在受限环境的 `Microsoft SDKs` 读取失败在本机当前环境未复现。
+
+本轮未提交或推送；下一阶段仍为 `WIN-MSI-6`。
+
+### 14.17 WIN-MSI-6：安装目录、界面与桌面选项（2026-09-26）
+
+本轮起点为 `msi-development`、HEAD `f73c2a5`、包版本 `0.1.0-alpha.40`；用户说"开始"启动本阶段。前置两项设计已由用户确认：可选安装目录限定允许根（current-user 在 `%LOCALAPPDATA%` 子目录、per-machine 在 Program Files 子目录，静默 `INSTALLFOLDER=` 同一校验）；无 RTF 许可时用不含许可页的自定义 dialog 序列。实现和包内容变更将版本迭代到 `0.1.0-alpha.41`；公开示例应用版本保持 `1.0.0`。
+
+**实现事实**：
+
+- `WixProductDocument` 从 WiX 3.14.1 官方源码核对 `WixUI_InstallDir`/`WixUI_Minimal`/`InstallDirDlg`/`BrowseDlg`/`InvalidDirDlg`/`Common.wxs` 实际结构后，生成自有 `BundlerInstallDialogSet`（Welcome→[LicenseAgreement]→[InstallDir]→VerifyReady→Exit+Browse/InvalidDir/维护对话框，引用 `WixUI_Common`）。启用目录选择/无许可启动勾选/自定义位图时用该序列；有许可插入 `LicenseAgreementDlg` 且 `LicenseAccepted="1"` 才放行。仅启用原有许可 UI 时仍走 `WixUI_Minimal`。
+- 范围校验在 execute-sequence `BundlerInstallDirScope`（Type 19，`CostFinalize` 后）统一执行，条件 `NOT (INSTALLFOLDER ~<< <范围根>) OR INSTALLFOLDER ~= <范围根>`；交互 InstallDir Next 还要求同一条件并在 `WixUIValidatePath` 后弹 `InvalidDirDlg`。静默 `INSTALLFOLDER=` 实测不可绕过；升级经 `RegistrySearch`（Type=directory）恢复已选目录。**已知边界**：安装时 junction/重解析点目标无法用原生条件判定，未实现，记录为能力边界（详见 msi-roadmap §10 实施记录）。
+- 位图：`WixUIBannerBmp` 493×58、`WixUIDialogBmp` 503×314；`WixBundler` 构建时校验存在性/非重解析点/`.bmp` 扩展/BMP 头尺寸，均入产物指纹。
+- 可选 Feature：`Shortcuts`（桌面/开始菜单非 advertised 快捷方式组件，HKCU KeyPath 满足 ICE43，per-machine 亦同）、`PathEnvironment`（Environment `=-PATH`/`=-*PATH`，`[~];[INSTALLFOLDER]` 只增删本产品条目）、`UninstallShortcut`（`msiexec /x [ProductCode]`）。
+- 启动勾选：`WIXUI_EXITDIALOGOPTIONALCHECKBOX` 条件 DoAction `BundlerLaunchAfterInstall`（FileKey+`ExeCommand=""`、asyncNoWait、Impersonate），条件排除 `Installed`/`WIX_UPGRADE_DETECTED`；`/qn`、`/passive`、修复、升级不触发。
+- ARP：`ARPNOMODIFY=1`、`ARPCONTACT`、既有 comments/url/icon；`ARPINSTALLLOCATION` 由 Type 51 `BundlerSetArpInstallLocation`（`[INSTALLFOLDER]`）在 `CostFinalize` 后写入，实测在 HKLM Uninstall 键生成 `InstallLocation`。
+- MSBuild 新增 `BundlerWixInstallDirectorySelection`、`BundlerWixBannerBitmap`、`BundlerWixDialogBitmap`、`BundlerWixAddToPath`、`BundlerWixUninstallShortcut`、`BundlerWixLaunchAfterInstall` 三层贯通；`Msi.Api.PackageFixture` 覆盖直接 API 新配置；`HelloMsiApp` 默认演示全部新能力并自带 `Assets/banner.bmp`/`dialog.bmp`。
+
+**开发期间发现并修复的实现缺陷**（均有测试覆盖）：`ARPINSTALLLOCATION` 直接 Property 值含 `[INSTALLFOLDER]` 被 CNDL1077 拒绝→改 Type 51 CA；advertised Shortcut 不允许 Target（CNDL0035）→统一改非 advertised+显式 Target；per-machine 非 advertised 快捷方式组件 KeyPath 触发 ICE43/57→快捷方式组件统一 HKCU KeyPath；`Part="last"` 的实际落库为 `Name=-*PATH`、`Value=[~];[INSTALLFOLDER]`→断言按编译结果修正；UI-free MSI 无 Dialog 表导致 1615→用 `_Tables` 存在性断言。
+
+**本机证据（Windows 11 Pro build 26200 x64，`0.1.0-alpha.41`）**：
+
+```powershell
+dotnet build Bundler.slnx -c Release -v:q            # 0 警告/0 错误
+dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release   # 71/71 PASS
+dotnet pack Bundler.slnx -c Release -o artifacts/packages                  # 7 个 alpha.41 包
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -Configuration Release -ConfirmLocalInstall          # PASS
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -Configuration Release -ConfirmLocalInstall  # PASS
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -Configuration Release -ConfirmLocalInstall # PASS
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi5.ps1 -Configuration Release -ConfirmLocalInstall    # PASS
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi6.ps1 -Configuration Release -ConfirmLocalInstall    # PASS
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -Configuration Release                    # PASS（三变体只读检查）
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release                             # PASS
+```
+
+`VerifyWinMsi6.ps1` 实测要点：静默 `INSTALLFOLDER` 指向 `%LOCALAPPDATA%` 根本身与 `C:\Program Files\...` 均 1603；`LocalAppData\BundlerTests\msi6-<id>` 自定义目录安装成功；用户 PATH 只追加本产品目录且卸载后恢复原值；桌面/开始菜单（含卸载）快捷方式创建；HKLM Uninstall 键含 `InstallLocation`/`Contact`；v2 升级不传目录也恢复已选目录且未知用户文件保留；`/fomus` 修复；卸载清理无残留。MSI 与日志保留在 `%TEMP%\Bundler-Msi-WinMsi6-b98167652a894602bccd4bfa83f190c6`。`VerifyMaintenance.ps1` 因新 MSI 已自带 CustomAction 表，改为先查 `_Tables` 再按需建表；`VerifyPublicSample.ps1` 断言同步到自定义 UI/PATH/快捷方式。NSIS 全量集成首轮在中途断言失败一次，清理本轮残留事务 seal 后复跑完全通过，未改 NSIS 代码，按环境性事件记录。
+
+**未验收/交接**：真实交互 UI 流转、勾选启动、InvalidDirDlg、位图显示、缩放/辅助功能、junction 安装目标行为、per-machine 交互/UAC、干净宿主、生产证书、真实重启仍为人工/外部项（`MSI-MT-11`、`MSI-OI-12`），不视为已通过。本轮变更未提交或推送；下一阶段为 `WIN-MSI-7`。

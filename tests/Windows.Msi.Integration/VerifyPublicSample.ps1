@@ -107,10 +107,36 @@ try {
                 throw "Sample MSI is missing $expected : $msi"
             }
         }
+        $dialogs = @(Read-MsiColumn $database 'SELECT Dialog FROM Dialog')
+        foreach ($expectedDialog in @('WelcomeDlg', 'LicenseAgreementDlg', 'InstallDirDlg',
+                'VerifyReadyDlg', 'ExitDialog', 'MaintenanceWelcomeDlg', 'MaintenanceTypeDlg')) {
+            if ($dialogs -notcontains $expectedDialog) {
+                throw "Sample MSI is missing custom UI dialog $expectedDialog : $msi"
+            }
+        }
+        if ($dialogs -contains 'WelcomeEulaDlg') {
+            throw "Sample MSI should use the custom dialog set, not WixUI_Minimal: $msi"
+        }
         if (@(Read-MsiColumn $database 'SELECT Name FROM Icon') -notcontains 'ProductIcon' -or
-            @(Read-MsiColumn $database 'SELECT Dialog FROM Dialog') -notcontains 'WelcomeEulaDlg' -or
-            @(Read-MsiColumn $database 'SELECT Name FROM Shortcut').Count -ne 2) {
-            throw "Sample MSI is missing its icon, license UI, or shortcuts: $msi"
+            @(Read-MsiColumn $database 'SELECT Name FROM Shortcut').Count -ne 3) {
+            throw "Sample MSI is missing its icon or shortcuts: $msi"
+        }
+        $expectedPathName = if ($variant.Scope -eq 'perMachine') { '=-*PATH' } else { '=-PATH' }
+        $environment = @(Read-MsiColumn $database 'SELECT Name FROM Environment')
+        $environmentValues = @(Read-MsiColumn $database 'SELECT Value FROM Environment')
+        if ($environment -notcontains $expectedPathName -or
+            @($environmentValues -match 'INSTALLFOLDER').Count -ne 1 -or
+            @($environmentValues -match '^\[~\];').Count -ne 1) {
+            throw "Sample MSI PATH entry must append only the product directory: $msi"
+        }
+        $binaries = @(Read-MsiColumn $database 'SELECT Name FROM Binary')
+        if ($binaries -notcontains 'WixUI_Bmp_Banner' -or $binaries -notcontains 'WixUI_Bmp_Dialog') {
+            throw "Sample MSI is missing its brand bitmaps: $msi"
+        }
+        if ([string]$msiProperties['WIXUI_INSTALLDIR'] -ne 'INSTALLFOLDER' -or
+            [string]$msiProperties['ARPNOMODIFY'] -ne '1' -or
+            [string]$msiProperties['WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT'] -notlike '*Hello MSI App') {
+            throw "Sample MSI is missing directory-selection or launch-checkbox properties: $msi"
         }
         $registry = @(Read-MsiRegistry $database)
         if (@($registry -match 'Classes\\\.hellomsi\\OpenWithProgids').Count -eq 0 -or

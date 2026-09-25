@@ -21,6 +21,12 @@
     <BundlerWixLanguage Condition="'$(BundlerWixLanguage)' == ''">en-US</BundlerWixLanguage>
     <BundlerWixStartMenuShortcut Condition="'$(BundlerWixStartMenuShortcut)' == ''">false</BundlerWixStartMenuShortcut>
     <BundlerWixDesktopShortcut Condition="'$(BundlerWixDesktopShortcut)' == ''">false</BundlerWixDesktopShortcut>
+    <BundlerWixInstallDirectorySelection Condition="'$(BundlerWixInstallDirectorySelection)' == ''">false</BundlerWixInstallDirectorySelection>
+    <BundlerWixBannerBitmap Condition="'$(BundlerWixBannerBitmap)' == ''"></BundlerWixBannerBitmap>
+    <BundlerWixDialogBitmap Condition="'$(BundlerWixDialogBitmap)' == ''"></BundlerWixDialogBitmap>
+    <BundlerWixAddToPath Condition="'$(BundlerWixAddToPath)' == ''">false</BundlerWixAddToPath>
+    <BundlerWixUninstallShortcut Condition="'$(BundlerWixUninstallShortcut)' == ''">false</BundlerWixUninstallShortcut>
+    <BundlerWixLaunchAfterInstall Condition="'$(BundlerWixLaunchAfterInstall)' == ''">false</BundlerWixLaunchAfterInstall>
     <BundlerNsisToolsetArchivePath Condition="'$(BundlerNsisToolsetArchivePath)' == ''"></BundlerNsisToolsetArchivePath>
     <BundlerNsisCompilerPath Condition="'$(BundlerNsisCompilerPath)' == ''"></BundlerNsisCompilerPath>
     <BundlerNsisDataDirectory Condition="'$(BundlerNsisDataDirectory)' == ''"></BundlerNsisDataDirectory>
