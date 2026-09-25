@@ -1,11 +1,13 @@
 # NSIS 与 Tauri bundler 能力矩阵
 
 > 审计日期：2026-09-23
-> Tauri 仓库：`tauri-apps/tauri`  
-> 固定 commit：`5d995ed35b029cecd780fdbe614dc6023a89b81b`  
+> Tauri 仓库：`tauri-apps/tauri`
+> 固定 commit：`5d995ed35b029cecd780fdbe614dc6023a89b81b`
 > 本项目 NSIS 冻结起点：`71a5c90 feat(nsis): 冻结安全打包基线`；当前提交以 Git HEAD 为准
 
-本文档记录 `NSIS-R1` 的逐项审计结果。目标是对齐适用于通用桌面打包器的用户能力，不复制 Tauri 字段、Rust 数据模型或 runtime 部署逻辑。状态定义见 `docs/development-rules.md`，产品边界与格式顺序见 `docs/roadmap.md`，NSIS 阶段证据见 `docs/nsis-roadmap.md`。
+本文档记录 `NSIS-R1` 的逐项审计结果。
+目标是对齐适用于通用桌面打包器的用户能力，不复制 Tauri 字段、Rust 数据模型或 runtime 部署逻辑。
+状态定义见 `docs/development-rules.md`，产品边界与格式顺序见 `docs/roadmap.md`，NSIS 阶段证据见 `docs/nsis-roadmap.md`。
 
 上游证据：
 
@@ -33,7 +35,8 @@
 | `installerHooks` | `InstallerHooks` / `BundlerNsisInstallerHooks` | 已实现 | 四个 `NSIS_HOOK_*` 生命周期点；Hook 失败接入事务/前向恢复 |
 | `minimumWebview2Version` | 无 | 不适用 | Tauri runtime 专属；本项目不安装或升级任意应用运行时 |
 
-结论：适用于通用 NSIS 后端的小型配置、签名和本地化能力均已收口。翻译内容的母语/专业审校属于 MT-11，不把自动结构校验冒充内容审校。
+结论：适用于通用 NSIS 后端的小型配置、签名和本地化能力均已收口。
+翻译内容的母语/专业审校属于 MT-11，不把自动结构校验冒充内容审校。
 
 ## 2. `WindowsConfig` 逐项矩阵
 
@@ -70,7 +73,8 @@
 | `externalBin` | 完整输入目录 + `BundleResourceConfiguration` | 明确采用不同方案；调用方准备最终 payload，不复制 Tauri target-triple 自动发现约定 |
 | URL/深链接协议 | `BundleUrlProtocolConfiguration` | 已实现；本阶段修复 JSON loader 丢失该配置的缺陷 |
 
-JSON 配置加载器是未来 CLI 的共享入口。本阶段验证它会保留文件关联、URL 协议及其元数据，避免 CLI 看似接受配置但生成包时静默丢失。
+JSON 配置加载器是未来 CLI 的共享入口。
+本阶段验证它会保留文件关联、URL 协议及其元数据，避免 CLI 看似接受配置但生成包时静默丢失。
 
 ## 4. 用户可观察行为矩阵
 
@@ -99,4 +103,5 @@ JSON 配置加载器是未来 CLI 的共享入口。本阶段验证它会保留�
 3. 文件关联和 URL 协议原本在 API/MSBuild 路径可用，但 JSON loader 会丢失，本阶段已修复，为未来 CLI 保持同一通用模型。
 4. 完整签名已在 `NSIS-R2` 收口；22 种内置语言、严格键校验、覆盖和回退已在 `NSIS-R3` 收口。
 5. WebView2、VC Runtime 和 Tauri updater 产物不构成当前通用安装器能力；不会为字段对齐制造运行时部署系统。
-6. `NSIS-R4` 已冻结安全边界：受管文件树拒绝重解析点，工具缓存以固定归档和逐文件哈希校验；ACL/ADS 不列为通用保真承诺。后续新增格式不得隐式放宽这些边界。
+6. `NSIS-R4` 已冻结安全边界：受管文件树拒绝重解析点，工具缓存以固定归档和逐文件哈希校验；ACL/ADS 不列为通用保真承诺。
+   后续新增格式不得隐式放宽这些边界。

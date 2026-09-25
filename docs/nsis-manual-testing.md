@@ -1,13 +1,17 @@
 # Windows NSIS 人工与外部环境验收手册
 
-本文档是 NSIS 已实现能力中，无法在开发任务的普通本地自动化环境诚实完成的验收项清单。它集中记录需要真实重启、UAC/管理员权限、生产凭据、真实历史安装包、特定 Windows 版本、ARM64 硬件或其他操作系统宿主的测试。原 `MT-01..MT-11` 用例 ID 与本文件路径保持不变，以保留历史引用；其他格式见 [人工验收总入口](manual-testing-index.md)。
+本文档是 NSIS 已实现能力中，无法在开发任务的普通本地自动化环境诚实完成的验收项清单。
+它集中记录需要真实重启、UAC/管理员权限、生产凭据、真实历史安装包、特定 Windows 版本、ARM64 硬件或其他操作系统宿主的测试。
+原 `MT-01..MT-11` 用例 ID 与本文件路径保持不变，以保留历史引用；其他格式见 [人工验收总入口](manual-testing-index.md)。
 
-本文档不是将可自动化的测试转交给人工，也不是对尚未实现功能的验收承诺。每次准备发布时，应先由自动化完成“自动化前置”，再按本文档逐项人工验收。
+本文档不是将可自动化的测试转交给人工，也不是对尚未实现功能的验收承诺。
+每次准备发布时，应先由自动化完成“自动化前置”，再按本文档逐项人工验收。
 
 ## 1. 通用安全要求
 
 - 需要重启、UAC、系统级待处理删除、磁盘耗尽或故意修改 ACL 的测试，只能在可抛弃虚拟机或专用测试机执行。
-- 测试前创建虚拟机快照。不在主要开发机上填满系统盘、修改共享 `PendingFileRenameOperations` 或应用广泛拒绝 ACL。
+- 测试前创建虚拟机快照。
+- 不在主要开发机上填满系统盘、修改共享 `PendingFileRenameOperations` 或应用广泛拒绝 ACL。
 - 每个用例都从干净快照或已确认清理的环境开始，不共用上一用例的安装状态。
 - 生产 PFX 密码只通过环境变量传递，不写入项目、命令行记录或本文档。
 - 真实 MSI 和生产证书可以保密；验收记录只需保存非敏感标识、文件 SHA-256、命令结果和截图。
@@ -49,7 +53,12 @@ tests\Windows.Nsis.Integration\Verify.ps1
 git diff --check
 ```
 
-这组自动化覆盖包结构、模板契约、22 种内置语言编译和规范键校验、非拉丁 Unicode 安装、静默 current-user 安装/升级/降级/卸载、快捷方式所有权、文件关联、深链接、进程关闭、可控 `3010`、自签名证书签名机制、Fixture MSI 迁移、安装事务回滚、安装进程中断恢复、锁定载荷安全失败和提交后清理；还覆盖 ZIP 路径穿越/链接拒绝、工具缓存逐文件完整性、损坏与额外文件恢复、并发、Unicode/长路径，以及构建输入、已安装载荷和 journal junction 的安全拒绝。安装恢复测试还会分别篡改 active journal 的快捷方式 `path.txt` 和注册表 snapshot subkey，要求在载荷恢复前拒绝 journal，且清单外文件与 HKCU sentinel 保持不变。测试会在事务快照、事务激活、载荷恢复、注册表恢复和 active journal 清理五个检查点注入一次性故障，验证检查点状态与下次启动恢复。卸载自动化另行覆盖 post-uninstall Hook 失败和卸载进程树被终止：两者都必须保留前向 journal、恢复卸载器和注册表路径锚点，下一次安装启动先幂等完成旧卸载并清理 journal。只有这组测试通过的 commit 才进入下面的人工验收。
+这组自动化覆盖包结构、模板契约、22 种内置语言编译和规范键校验、非拉丁 Unicode 安装、静默 current-user 安装/升级/降级/卸载、快捷方式所有权、文件关联、深链接、进程关闭、可控 `3010`、自签名证书签名机制、Fixture MSI 迁移、安装事务回滚、安装进程中断恢复、锁定载荷安全失败和提交后清理；
+还覆盖 ZIP 路径穿越/链接拒绝、工具缓存逐文件完整性、损坏与额外文件恢复、并发、Unicode/长路径，以及构建输入、已安装载荷和 journal junction 的安全拒绝。
+安装恢复测试还会分别篡改 active journal 的快捷方式 `path.txt` 和注册表 snapshot subkey，要求在载荷恢复前拒绝 journal，且清单外文件与 HKCU sentinel 保持不变。
+测试会在事务快照、事务激活、载荷恢复、注册表恢复和 active journal 清理五个检查点注入一次性故障，验证检查点状态与下次启动恢复。
+卸载自动化另行覆盖 post-uninstall Hook 失败和卸载进程树被终止：两者都必须保留前向 journal、恢复卸载器和注册表路径锚点，下一次安装启动先幂等完成旧卸载并清理 journal。
+只有这组测试通过的 commit 才进入下面的人工验收。
 
 ## 4. 人工验收顺序
 
@@ -103,14 +112,17 @@ git diff --check
    tests\Windows.Nsis.Reboot\Verify.ps1 -Phase Prepare -InstallerPath $installer -ConfirmDisposableMachine
    ```
 
-3. 只在看到 `PASS prepare` 后正常重启虚拟机。不手工编辑或清空 `PendingFileRenameOperations`。
+3. 只在看到 `PASS prepare` 后正常重启虚拟机。
+   不手工编辑或清空 `PendingFileRenameOperations`。
 4. 重启后以提权 PowerShell 执行：
 
    ```powershell
    tests\Windows.Nsis.Reboot\Verify.ps1 -Phase Verify -ConfirmDisposableMachine
    ```
 
-**PASS**：Prepare 通过临时副本和 `_?=` 直接等待实际卸载进程，确认真实返回 `3010` 且存在本产品 pending delete；Verify 确认重启后目录、卸载注册表、安装与卸载 journal 和本产品 pending 项均已消失。不能使用安装目录内 `Uninstall.exe` 的外层自复制 launcher 退出码代替实际卸载进程证据。
+**PASS**：Prepare 通过临时副本和 `_?=` 直接等待实际卸载进程，确认真实返回 `3010` 且存在本产品 pending delete；
+Verify 确认重启后目录、卸载注册表、安装与卸载 journal 和本产品 pending 项均已消失。
+不能使用安装目录内 `Uninstall.exe` 的外层自复制 launcher 退出码代替实际卸载进程证据。
 
 ### MT-04：生产 Authenticode 与 RFC 3161 时间戳
 
@@ -157,7 +169,8 @@ git diff --check
 5. 分别对 ProductCode 精确命中和 UpgradeCode 枚举路径执行。
 6. 对 x86/x64 和 current-user/per-machine 组合重复，不在同一快照叠加结果。
 
-**PASS**：只识别配置的历史产品，旧 MSI 成功卸载后完成 NSIS 安装，无误删同名或无关产品。用户数据是否保留应根据该产品的明确迁移策略记录，不做默认假设。
+**PASS**：只识别配置的历史产品，旧 MSI 成功卸载后完成 NSIS 安装，无误删同名或无关产品。
+用户数据是否保留应根据该产品的明确迁移策略记录，不做默认假设。
 
 ### MT-06：开始菜单/任务栏固定项矩阵
 
@@ -168,7 +181,8 @@ git diff --check
 3. 卸载后检查两类固定项。
 4. 创建同名但指向其他应用的快捷方式，重复卸载，确认外部所有的快捷方式未被删除。
 
-**PASS**：普通快捷方式所有权保护正确；固定项的实际行为已按 OS build/策略记录。若 Windows 不提供可靠取消固定能力，应记录为平台限制，不得把观察到的单一 build 行为扩写为通用保证。
+**PASS**：普通快捷方式所有权保护正确；固定项的实际行为已按 OS build/策略记录。
+若 Windows 不提供可靠取消固定能力，应记录为平台限制，不得把观察到的单一 build 行为扩写为通用保证。
 
 ### MT-07：真实 ACL 和磁盘耗尽故障
 
@@ -177,19 +191,27 @@ git diff --check
 **需要**：两台或两个独立快照的可抛弃 Windows 虚拟机；其中一个可安全限制测试用户对安装目录/注册表的写入，另一个可通过独立虚拟磁盘或配额制造空间不足。
 
 1. ACL 用例先安装稳定旧版，保存安装目录、产品注册表、快捷方式和关键文件哈希。
-2. 分别使用中断安装 Fixture 在 `currentUser` 与已提权 `perMachine` 模式留下 active journal；普通成功安装会清理 journal，不适合测 ACL。使用 `icacls` 保存 `%LOCALAPPDATA%\DotNetBundler\transactions\<id>`、`%ProgramData%\DotNetBundler\transactions\<id>` 及 `*.uninstall\recovery-uninstaller.exe` 的 owner、继承项和标准用户有效权限，并核查 HKCU/HKLM 安装摘要及 `BundlerRecoverySha256` 注册项权限。预期 current-user journal/锚点可由该用户写入；per-machine 必须以实际提权创建后的对象为准，不能只从 `%ProgramData%` 父目录推断。另在干净快照中由标准用户预先创建 `%ProgramData%\DotNetBundler`，确认提权安装不会在标准用户可写的 journal 中继续执行恢复卸载器；记录拒绝或受保护创建的实际行为。
+2. 分别使用中断安装 Fixture 在 `currentUser` 与已提权 `perMachine` 模式留下 active journal；普通成功安装会清理 journal，不适合测 ACL。
+   使用 `icacls` 保存 `%LOCALAPPDATA%\DotNetBundler\transactions\<id>`、`%ProgramData%\DotNetBundler\transactions\<id>` 及 `*.uninstall\recovery-uninstaller.exe` 的 owner、继承项和标准用户有效权限，并核查 HKCU/HKLM 安装摘要及 `BundlerRecoverySha256` 注册项权限。
+   预期 current-user journal/锚点可由该用户写入；per-machine 必须以实际提权创建后的对象为准，不能只从 `%ProgramData%` 父目录推断。
+   另在干净快照中由标准用户预先创建 `%ProgramData%\DotNetBundler`，确认提权安装不会在标准用户可写的 journal 中继续执行恢复卸载器；记录拒绝或受保护创建的实际行为。
 3. 仅对一个明确的测试文件或产品专用注册表项设置拒绝写入，执行升级；不对父目录、用户配置文件根或共享注册表根应用递归拒绝。
-4. 记录退出码、旧状态恢复情况和 active journal。恢复 ACL 后重试，确认下次启动恢复。
-5. 磁盘用例在专用虚拟磁盘/配额中执行，分别在事务快照阶段和新载荷写入阶段造成空间不足。不在日常开发机的系统盘填充文件。
+4. 记录退出码、旧状态恢复情况和 active journal。
+   恢复 ACL 后重试，确认下次启动恢复。
+5. 磁盘用例在专用虚拟磁盘/配额中执行，分别在事务快照阶段和新载荷写入阶段造成空间不足。
+   不在日常开发机的系统盘填充文件。
 6. 解除配额或恢复磁盘空间后，重新运行安装器并检查恢复和清理。
 
-**PASS**：快照未完成时不修改旧安装；已激活事务后的失败会回滚，或在回滚同样受阻时保留 active journal，外部条件恢复后下次启动能完成恢复。不得报告新旧载荷混合状态为成功。
+**PASS**：快照未完成时不修改旧安装；已激活事务后的失败会回滚，或在回滚同样受阻时保留 active journal，外部条件恢复后下次启动能完成恢复。
+不得报告新旧载荷混合状态为成功。
 
-本项只验证失败原子性，不验证元数据镜像。产品契约不承诺逐项保存自定义 ACL、ADS、稀疏文件或其他任意 NTFS 元数据；如某个应用依赖这些数据，应由该应用提供显式迁移 Hook，并为该 Hook 单独设计验收。
+本项只验证失败原子性，不验证元数据镜像。
+产品契约不承诺逐项保存自定义 ACL、ADS、稀疏文件或其他任意 NTFS 元数据；如某个应用依赖这些数据，应由该应用提供显式迁移 Hook，并为该 Hook 单独设计验收。
 
 ### MT-08：非 Windows 宿主编译矩阵
 
-**需要**：Linux x64、Linux arm64、macOS x64、macOS arm64 的原生 runner。不用 QEMU 或 Rosetta 结果代替对应原生宿主证据。
+**需要**：Linux x64、Linux arm64、macOS x64、macOS arm64 的原生 runner。
+不用 QEMU 或 Rosetta 结果代替对应原生宿主证据。
 
 在每个 runner 上使用同一 commit 执行：
 
@@ -202,7 +224,8 @@ dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release -r win-x64
 
 记录内嵌 `makensis` 的实际宿主文件类型、退出码、生成的 Windows NSIS 安装器 SHA-256 和工具缓存位置。
 
-**PASS**：每个原生宿主都能离线解压/复用内嵌工具并生成安装器，无需系统预装 NSIS。该项只证明跨宿主编译，生成的 Windows 安装器还应在 MT-09 的目标 Windows 上执行。
+**PASS**：每个原生宿主都能离线解压/复用内嵌工具并生成安装器，无需系统预装 NSIS。
+该项只证明跨宿主编译，生成的 Windows 安装器还应在 MT-09 的目标 Windows 上执行。
 
 ### MT-09：Windows x64/ARM64 目标安装矩阵
 
@@ -217,7 +240,8 @@ dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release -r win-x64
 
 ### MT-10：Restart Manager 无法关闭进程
 
-**需要**：可抛弃 Windows 虚拟机，两个用户会话或专用的不可由当前安装上下文终止的测试进程。不得使用 Windows 关键/受保护系统进程作为 Fixture。
+**需要**：可抛弃 Windows 虚拟机，两个用户会话或专用的不可由当前安装上下文终止的测试进程。
+不得使用 Windows 关键/受保护系统进程作为 Fixture。
 
 1. 安装稳定旧版，记录安装目录、版本注册表和主程序哈希。
 2. 在另一用户会话或受控 Fixture 中运行安装目录里的主程序，使当前安装上下文可以检测它，但无权完成关闭。
@@ -228,16 +252,19 @@ dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release -r win-x64
 
 ### MT-11：内置语言内容与界面审校
 
-**需要**：能审校对应语言的母语使用者或专业本地化人员，以及有代表性的 Windows 10/11 显示缩放环境。仓库自动化只证明 22 种语言结构完整、可被真实 NSIS 编译，并验证非拉丁路径和元数据；它不能证明译文自然、准确或在所有页面中没有截断。
+**需要**：能审校对应语言的母语使用者或专业本地化人员，以及有代表性的 Windows 10/11 显示缩放环境。
+仓库自动化只证明 22 种语言结构完整、可被真实 NSIS 编译，并验证非拉丁路径和元数据；它不能证明译文自然、准确或在所有页面中没有截断。
 
 1. 对 Arabic、Bulgarian、Dutch、English、French、German、Italian、Japanese、Korean、Norwegian、Persian、Portuguese、PortugueseBR、Russian、SimpChinese、Spanish、SpanishInternational、Swedish、TradChinese、Turkish、Ukrainian、Vietnamese 逐一生成单语言安装器。
 2. 每种语言交互走完首次安装、同版本重装、升级、禁止降级、卸载和删除应用数据页面，核对术语、语气、变量插值、换行和按钮含义。
 3. 在 100%、150% 和 200% 显示缩放下保存截图，检查 Header、正文、单选框、复选框和错误消息是否截断或重叠。
 4. Arabic 和 Persian 额外检查从右到左布局、标点、数字/版本号、产品名与路径混排；确认对外配置名 `Persian` 对应正确的波斯语界面。
-5. Japanese、Korean、SimpChinese、TradChinese 和 Vietnamese 额外检查字体回退与字符显示；Portuguese/PortugueseBR、Spanish/SpanishInternational 分别确认地区用词差异。
+5. Japanese、Korean、SimpChinese、TradChinese 和 Vietnamese 额外检查字体回退与字符显示；
+   Portuguese/PortugueseBR、Spanish/SpanishInternational 分别确认地区用词差异。
 6. 对至少一种系统 UI 语言不在安装器列表中的环境验证第一项语言回退；对多语言安装器验证选择器、记忆值和卸载器语言一致。
 
-**PASS**：每份译文由可识别的审校人签署；没有改变安装/卸载含义的错译，没有乱码、关键截断或错误 RTL 排版；回退、选择器和卸载语言与文档契约一致。发现内容问题时修改对应 `.nsh` 并重新运行自动化编译测试。
+**PASS**：每份译文由可识别的审校人签署；没有改变安装/卸载含义的错译，没有乱码、关键截断或错误 RTL 排版；回退、选择器和卸载语言与文档契约一致。
+发现内容问题时修改对应 `.nsh` 并重新运行自动化编译测试。
 
 ## 5. 暂不执行的项目
 

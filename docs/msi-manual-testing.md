@@ -1,16 +1,34 @@
 # Windows MSI 人工验收（计划用例）
 
-> WIN-MSI-1..6 的当前 Windows 11 x64 本机自动化范围已完成；alpha.40 已验证 x86 目标、显式 MSI 版本映射、同版碰撞、默认降级拒绝、显式降级和用户文件所有权，alpha.41 已验证范围内安装目录、自定义 UI 表结构、可选 Feature、PATH 精确追加/还原与仅交互启动勾选的产物和静默行为。以下人工/外部环境用例均未执行。用户目前没有干净 Windows 10/11、ARM64 原生用户端或提权测试 VM，不将本机结果扩写为这些平台通过。WIN-MSI-7..9 仍是尚未实现的功能路线；实现时按本文件 `MSI-MT-*` 规则新增适用人工用例，不把计划写成已执行。路线见 `docs/msi-roadmap.md` 第 10 节。
+> WIN-MSI-1..6 的当前 Windows 11 x64 本机自动化范围已完成；
+> alpha.40 已验证 x86 目标、显式 MSI 版本映射、同版碰撞、默认降级拒绝、显式降级和用户文件所有权，alpha.41 已验证范围内安装目录、自定义 UI 表结构、可选 Feature、PATH 精确追加/还原与仅交互启动勾选的产物和静默行为。
+> 以下人工/外部环境用例均未执行。
+> 用户目前没有干净 Windows 10/11、ARM64 原生用户端或提权测试 VM，不将本机结果扩写为这些平台通过。
+> WIN-MSI-7..9 仍是尚未实现的功能路线；实现时按本文件 `MSI-MT-*` 规则新增适用人工用例，不把计划写成已执行。
+> 路线见 `docs/msi-roadmap.md` 第 10 节。
 
-`MSI-MT-02` 的自动化前置脚本位于 `tests/Windows.Msi.Integration/Verify.ps1`。普通本机 current-user fixture 需显式传入 `-ConfirmLocalInstall`；VM 可传 `-ConfirmDisposableVm`，脚本会核查虚拟机标识。2026-09-24 本机运行通过，日志与哈希见 `docs/msi-roadmap.md` 第 6 节；这不代替干净 VM 的兼容性复测。
+`MSI-MT-02` 的自动化前置脚本位于 `tests/Windows.Msi.Integration/Verify.ps1`。
+普通本机 current-user fixture 需显式传入 `-ConfirmLocalInstall`；VM 可传 `-ConfirmDisposableVm`，脚本会核查虚拟机标识。
+2026-09-24 本机运行通过，日志与哈希见 `docs/msi-roadmap.md` 第 6 节；这不代替干净 VM 的兼容性复测。
 
-`MSI-MT-04` 的本机自动前置为 `tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -ConfirmLocalInstall`（VM 用 `-ConfirmDisposableVm`）。脚本构建两个版本及同版本异内容包，检查升级、降级/异包拒绝、快捷方式、文件与协议候选注册、用户文件保留和卸载清理；结果见 `docs/msi-roadmap.md` 第 7 节。人工复测还要在 Windows 默认应用界面选择处理程序，实际打开文件/协议，观察 UAC、账户权限及同路径被其他程序接管的行为；原生 MSI 快捷方式不保证保留被替换的同路径链接。
+`MSI-MT-04` 的本机自动前置为 `tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -ConfirmLocalInstall`（VM 用 `-ConfirmDisposableVm`）。
+脚本构建两个版本及同版本异内容包，检查升级、降级/异包拒绝、快捷方式、文件与协议候选注册、用户文件保留和卸载清理；结果见 `docs/msi-roadmap.md` 第 7 节。
+人工复测还要在 Windows 默认应用界面选择处理程序，实际打开文件/协议，观察 UAC、账户权限及同路径被其他程序接管的行为；原生 MSI 快捷方式不保证保留被替换的同路径链接。
 
-`MSI-MT-05..07` 的本机自动前置为 `tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -ConfirmLocalInstall` 与 `tests/Bundler.Tests/WixTests.cs`。前者使用独立 current-user 产品，验证损坏包的原生失败码、对测试包副本注入延迟失败后的回滚、被动安装/卸载、静默修复，以及带测试 RTF 许可的中文包与英文包并存。后者用短期自签名测试证书真实签名 PE 与 MSI。该脚本不触发重启、提权或生产签名；日志、哈希和本机结果见 `docs/msi-roadmap.md` 第 8 节。人工复测仍要覆盖真实 UI、证书信任链、缺失源、锁定文件及重启。
+`MSI-MT-05..07` 的本机自动前置为 `tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -ConfirmLocalInstall` 与 `tests/Bundler.Tests/WixTests.cs`。
+前者使用独立 current-user 产品，验证损坏包的原生失败码、对测试包副本注入延迟失败后的回滚、被动安装/卸载、静默修复，以及带测试 RTF 许可的中文包与英文包并存。
+后者用短期自签名测试证书真实签名 PE 与 MSI。
+该脚本不触发重启、提权或生产签名；日志、哈希和本机结果见 `docs/msi-roadmap.md` 第 8 节。
+人工复测仍要覆盖真实 UI、证书信任链、缺失源、锁定文件及重启。
 
-`MSI-MT-11` 的本机自动前置为 `tests/Windows.Msi.Integration/VerifyWinMsi6.ps1 -ConfirmLocalInstall` 与 `tests/Bundler.Tests/WixTests.cs`。前者以随机身份真实验证静默 `INSTALLFOLDER` 范围拒绝（根目录本身与 per-machine 根均 1603）、自定义目录安装、PATH 精确追加/卸载还原、开始菜单（含卸载入口）与桌面快捷方式、ARP `InstallLocation`/`Contact`、升级恢复已选目录、静默修复与未知用户文件保留。后者断言自定义 UI 表结构与校验动作。该脚本不进入真实交互 UI：对话框流转、`InvalidDirDlg` 显示、勾选启动行为、位图显示、缩放/辅助功能和 junction 路径仍需人工执行，见下表。
+`MSI-MT-11` 的本机自动前置为 `tests/Windows.Msi.Integration/VerifyWinMsi6.ps1 -ConfirmLocalInstall` 与 `tests/Bundler.Tests/WixTests.cs`。
+前者以随机身份真实验证静默 `INSTALLFOLDER` 范围拒绝（根目录本身与 per-machine 根均 1603）、自定义目录安装、PATH 精确追加/卸载还原、开始菜单（含卸载入口）与桌面快捷方式、ARP `InstallLocation`/`Contact`、升级恢复已选目录、静默修复与未知用户文件保留。
+后者断言自定义 UI 表结构与校验动作。
+该脚本不进入真实交互 UI：对话框流转、`InvalidDirDlg` 显示、勾选启动行为、位图显示、缩放/辅助功能和 junction 路径仍需人工执行，见下表。
 
-下列人工用例只在可抛弃 VM/专用测试机运行。每轮记录 Git SHA、包版本、MSI/WiX 工具 SHA-256、OS build/架构、账户权限、MSI SHA-256、verbose log 路径、开始/结束快照和清理结果。生产私钥与密码不得写入仓库或日志。用例 ID 永不复用。
+下列人工用例只在可抛弃 VM/专用测试机运行。
+每轮记录 Git SHA、包版本、MSI/WiX 工具 SHA-256、OS build/架构、账户权限、MSI SHA-256、verbose log 路径、开始/结束快照和清理结果。
+生产私钥与密码不得写入仓库或日志。用例 ID 永不复用。
 
 | ID | 阶段 | 操作与预期 | 主要证据 |
 | --- | --- | --- | --- |
@@ -34,4 +52,5 @@ msiexec.exe /f '<package.msi>' /qn /L*v '<repair.log>'
 msiexec.exe /x '<package.msi>' /qn /L*v '<uninstall.log>'
 ```
 
-每轮结束只清理本轮创建的测试产品、日志和临时目录；保留用户原有内容，确认无测试安装残留。人工结论用“通过/失败/未执行/条件不适用”，附证据，不把未执行写为通过。
+每轮结束只清理本轮创建的测试产品、日志和临时目录；保留用户原有内容，确认无测试安装残留。
+人工结论用“通过/失败/未执行/条件不适用”，附证据，不把未执行写为通过。
