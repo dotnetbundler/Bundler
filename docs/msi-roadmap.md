@@ -1,6 +1,7 @@
 # Windows MSI 后端实施路线（WiX 3.14.1 暂定）
 
 > 状态：`WIN-MSI-1..4` 的当前 Windows 11 x64 本机自动化范围已完成（2026-09-25），`alpha.37` 是既有能力的冻结基线。用户随后确认先补齐 Tauri 通用 MSI 能力，`WIN-MSI-5..9` 已规划但**尚未实施**；默认下一阶段为 `WIN-MSI-5`。原阶段证据见第 6..9 节，新增路线见第 10 节。
+> 当前开发分支：`msi-development`；历史记录中的 `codex/msi-development` 是改名前的名称。
 > 规范入口：`docs/roadmap.md`；Tauri 对照见 `docs/msi-tauri-capability-audit.md`，逐项能力见 `docs/msi-capability-matrix.md`，外部条件见 `docs/msi-open-items.md`，人工步骤见 `docs/msi-manual-testing.md`。
 
 ## 1. 已核实事实、选择及风险

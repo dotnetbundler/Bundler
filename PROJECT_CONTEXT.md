@@ -1,7 +1,7 @@
 # DotNet.Bundler 项目上下文与后续实施基线
 
 > 最后整理：2026-09-25
-> 当前分支：`codex/msi-development`（NSIS 开发线为 `codex/nsis-development`）
+> 当前分支：`msi-development`（NSIS 开发线为 `nsis-development`）
 > NSIS 冻结起点：`71a5c90 feat(nsis): 冻结安全打包基线`；当前提交以 `git rev-parse --short HEAD` 为准
 > 当前包版本：`0.1.0-alpha.39`（本轮测试/示例命名与本地包配置整理；Git 状态与包版本均须实时核查）
 > 当前阶段：`WIN-MSI-1..4` 的本机自动化范围已完成，`alpha.37` 是既有 MSI 能力基线。用户已确认先补齐适用于通用打包器的 Tauri MSI 能力，`WIN-MSI-5..9` 尚未实施；默认下一实施阶段为 `WIN-MSI-5`，`MAC-APP` 顺延。per-machine、生产签名与外部宿主等旧验收边界不变。
@@ -369,7 +369,7 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 
 ## 7. 已完成阶段与提交历史
 
-当前 MSI 实施线：`codex/msi-development`。NSIS 开发线：`codex/nsis-development`。原 `codex/modular-bundler-backends` 已按用户要求拆分；旧 `codex/nsis` 分支已删除，`master` 已快进至 NSIS 开发线的 `6946dae`。这些分支指针仍须实时核查。
+当前 MSI 实施线：`msi-development`。NSIS 开发线：`nsis-development`。原 `codex/modular-bundler-backends` 已按用户要求拆分；旧 `codex/nsis` 分支已删除，`master` 已快进至 NSIS 开发线的 `6946dae`。这些分支指针仍须实时核查。
 
 | 提交      | 内容                         |
 | --------- | ---------------------------- |
@@ -536,7 +536,7 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 
 预期基线：
 
-- MSI 分支：`codex/msi-development`，从 `71b028c` 继续；NSIS 开发分支：`codex/nsis-development`，指向 `6946dae`。两者均须实时核查。
+- MSI 分支：`msi-development`，从 `71b028c` 继续；NSIS 开发分支：`nsis-development`，指向 `6946dae`。两者均须实时核查。
 - NSIS 冻结起点：`71a5c90`；当前 HEAD 应实时核查，不把本文档的历史提交误认为最新提交
 - 包版本：`0.1.0-alpha.35`（交接快照；Git HEAD 与包版本均须实时核查）
 - 安装事务、Restart Manager、对应测试、示例和文档已经实现并提交；不得重新制作原型或把这些能力当作未完成项。
@@ -660,3 +660,7 @@ Windows 11 x64 本机验证：从已有本地 `0.1.0-alpha.37` NuGet 包构建�
 用户确认改写**所有项目分支**的提交消息：主题统一为 `type(scope): 中文描述`，单后端改动使用 `nsis`、`msi` 等格式 scope。执行前工作区干净；本地有 `master`、`codex/nsis-development`、`codex/msi-development` 三个项目分支，无远端和标签。当前 MSI 分支包含 50 个提交，两个 NSIS/master 分支共用前 39 个。已将这些提交的消息逐项改为中文，保留每个提交的文件树、作者/提交者身份与时间；改写后 `master` 和 `codex/nsis-development` 指向 `6946dae`，MSI 分支在附加本次文档校正提交前指向 `23c4b8a`。当前文档中引用的 58 处旧提交 SHA 已映射到对应新 SHA，具体映射保存在忽略目录 `artifacts/history-message-map.json`。
 
 完整历史恢复包为 `artifacts/history-before-message-rewrite.bundle`，已通过 `git bundle verify`，SHA-256 为 `19A38501608257FA652881DCD77C29C75C18A3DB41E693D46B999197EC6FAD0F`。Codex 管理的快照/检查点、旧 `refs/original` 和停在旧提交的独立工作树不是项目分支，予以保留作为历史恢复点；因此 `git log --all` 仍可能显示其旧消息，正常三个项目分支的历史已统一。若要清理或改写这些应用管理的引用，应单独评估其用途。后端代码和 NuGet 包内容未变，包版本仍是 `0.1.0-alpha.39`；下一实施阶段仍为 `WIN-MSI-5`，本轮不推送。
+
+### 14.14 开发分支移除 `codex/` 前缀（2026-09-25）
+
+用户要求所有项目分支名不带 `codex/` 前缀。核对时只有三个本地项目分支，且没有远端或标签：`master` 保持原名，`codex/nsis-development` 改为 `nsis-development`（`6946dae`），当前 `codex/msi-development` 改为 `msi-development`（`e85ebd0`）。另一 Codex 工作树处于分离 HEAD，没有分支要改。两次重命名均未修改提交历史、文件树或包内容；历史实施记录中的旧分支名保留为当时事实，当前分支名以文首和 `git branch -vv` 为准。本轮未提交或推送，下一实施阶段仍为 `WIN-MSI-5`。
