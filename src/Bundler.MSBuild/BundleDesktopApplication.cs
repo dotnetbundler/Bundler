@@ -42,6 +42,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public bool WixAllowDowngrades { get; set; }
     public int WixCodepage { get; set; }
     public string WixLanguage { get; set; } = "en-US";
+    public string WixLanguages { get; set; } = "";
+    public ITaskItem[] WixLanguageFiles { get; set; } = Array.Empty<ITaskItem>();
+    public bool WixFipsCompliant { get; set; }
     public bool WixStartMenuShortcut { get; set; }
     public bool WixDesktopShortcut { get; set; }
     public bool WixInstallDirectorySelection { get; set; }
@@ -138,12 +141,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 {
                     throw new ArgumentException("BundlerWixInstallScope must be currentUser or perMachine.");
                 }
-                var language = WixLanguage.ToLowerInvariant() switch
-                {
-                    "en-us" => WixPackageLanguage.English,
-                    "zh-cn" => WixPackageLanguage.ChineseSimplified,
-                    _ => throw new ArgumentException("BundlerWixLanguage must be en-US or zh-CN.")
-                };
+                var languages = (string.IsNullOrWhiteSpace(WixLanguages) ? WixLanguage : WixLanguages)
+                    .Split(';').Select(entry => entry.Trim())
+                    .Where(entry => entry.Length > 0).ToArray();
                 artifacts = new WixBundler(
                     new WixBundleConfiguration
                     {
@@ -152,7 +152,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         MsiVersion = EmptyToNull(WixMsiVersion),
                         AllowDowngrades = WixAllowDowngrades,
                         Codepage = WixCodepage,
-                        Language = language,
+                        Languages = languages,
+                        LocaleFiles = ParseWixLanguageFiles(),
+                        FipsCompliant = WixFipsCompliant,
                         StartMenuShortcut = WixStartMenuShortcut,
                         DesktopShortcut = WixDesktopShortcut,
                         InstallDirectorySelection = WixInstallDirectorySelection,
@@ -324,6 +326,30 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         throw new ArgumentException(
             "BundlerNsisCompression must be lzma, zlib, bzip2, or none.",
             nameof(NsisCompression));
+    }
+
+    private IReadOnlyDictionary<string, string> ParseWixLanguageFiles()
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in WixLanguageFiles)
+        {
+            var language = item.GetMetadata("Language").Trim();
+            if (language.Length == 0)
+            {
+                throw new ArgumentException(
+                    "Each BundlerWixLanguageFile item requires Language metadata.",
+                    nameof(WixLanguageFiles));
+            }
+
+            if (result.ContainsKey(language))
+            {
+                throw new ArgumentException("Duplicate MSI locale file for '" + language + "'.");
+            }
+
+            result.Add(language, Path.GetFullPath(item.ItemSpec));
+        }
+
+        return result;
     }
 
     private IReadOnlyDictionary<string, string> ParseCustomLanguageFiles()

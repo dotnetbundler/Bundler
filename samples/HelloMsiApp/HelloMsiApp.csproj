@@ -8,6 +8,8 @@
     <BundlerOutputPath>$(MSBuildProjectDirectory)\artifacts\feature-demo</BundlerOutputPath>
     <HelloMsiAppInstallScope Condition="'$(HelloMsiAppInstallScope)' == ''">currentUser</HelloMsiAppInstallScope>
     <HelloMsiAppLanguage Condition="'$(HelloMsiAppLanguage)' == ''">en-US</HelloMsiAppLanguage>
+    <HelloMsiAppLanguages Condition="'$(HelloMsiAppLanguages)' == ''"></HelloMsiAppLanguages>
+    <HelloMsiAppFipsCompliant Condition="'$(HelloMsiAppFipsCompliant)' == ''">false</HelloMsiAppFipsCompliant>
     <HelloMsiAppInstallDirectorySelection Condition="'$(HelloMsiAppInstallDirectorySelection)' == ''">true</HelloMsiAppInstallDirectorySelection>
     <HelloMsiAppAddToPath Condition="'$(HelloMsiAppAddToPath)' == ''">true</HelloMsiAppAddToPath>
     <HelloMsiAppUninstallShortcut Condition="'$(HelloMsiAppUninstallShortcut)' == ''">true</HelloMsiAppUninstallShortcut>
@@ -35,6 +37,8 @@
     <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets\demo-license.rtf</BundlerLicenseFile>
     <BundlerWixInstallScope>$(HelloMsiAppInstallScope)</BundlerWixInstallScope>
     <BundlerWixLanguage>$(HelloMsiAppLanguage)</BundlerWixLanguage>
+    <BundlerWixLanguages>$(HelloMsiAppLanguages)</BundlerWixLanguages>
+    <BundlerWixFipsCompliant>$(HelloMsiAppFipsCompliant)</BundlerWixFipsCompliant>
     <BundlerWixMsiVersion>$(HelloMsiAppMsiVersion)</BundlerWixMsiVersion>
     <BundlerWixAllowDowngrades>$(HelloMsiAppAllowDowngrades)</BundlerWixAllowDowngrades>
     <BundlerWixCodepage>0</BundlerWixCodepage>
@@ -57,6 +61,8 @@
   <ItemGroup>
     <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerIcon Include="Assets\app.ico" />
+    <BundlerWixLanguageFile Include="Assets\locale-zh-cn.wxl" Language="zh-CN"
+        Condition="$(HelloMsiAppLanguages.Contains('zh-CN')) or $(HelloMsiAppLanguage.Contains('zh-CN'))" />
     <BundlerResource Include="Assets\demo-resource.txt" TargetPath="DemoResources\Readme.txt" />
     <BundlerResource Include="Assets\demo.hellomsi" TargetPath="demo.hellomsi" />
     <BundlerResource Include="Assets\open-link.cmd" TargetPath="open-link.cmd" />

@@ -1,17 +1,20 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Wix;
 
-if (args.Length is not (2 or 6))
+if (args.Length is not (2 or 6 or 7))
 {
-    throw new ArgumentException($"Expected output/cache or output/cache/target/app-version/MSI-version/downgrade arguments; received {args.Length}.");
+    throw new ArgumentException($"Expected output/cache or output/cache/target/app-version/MSI-version/downgrade[/languages] arguments; received {args.Length}.");
 }
 
 var output = Path.GetFullPath(args[0]);
 var cache = Path.GetFullPath(args[1]);
-var target = args.Length == 6 ? args[2] : "win-x64";
-var appVersion = args.Length == 6 ? args[3] : "1.0.0";
-var msiVersion = args.Length == 6 ? args[4] : null;
-var allowDowngrades = args.Length == 6 && bool.Parse(args[5]);
+var target = args.Length >= 6 ? args[2] : "win-x64";
+var appVersion = args.Length >= 6 ? args[3] : "1.0.0";
+var msiVersion = args.Length >= 6 ? args[4] : null;
+var allowDowngrades = args.Length >= 6 && bool.Parse(args[5]);
+var languages = args.Length == 7
+    ? args[6].Split(';').Select(entry => entry.Trim()).Where(entry => entry.Length > 0).ToArray()
+    : ["en-US"];
 var input = Path.Combine(output, "publish");
 Directory.CreateDirectory(input);
 await File.WriteAllTextAsync(Path.Combine(input, "ApiFixture.exe"), "package-api-fixture");
@@ -41,13 +44,13 @@ var request = new BundleConfiguration
 var artifacts = await new WixBundler(
     new WixBundleConfiguration { StartMenuShortcut = true, DesktopShortcut = true,
         InstallDirectorySelection = true, AddToPath = true, UninstallShortcut = true,
-        MsiVersion = msiVersion, AllowDowngrades = allowDowngrades },
+        Languages = languages, MsiVersion = msiVersion, AllowDowngrades = allowDowngrades },
     new WixBundlerOptions { ToolCacheDirectory = cache })
     .BuildAsync(request);
-if (artifacts.Count != 1 || artifacts[0].Format != PackageFormat.Msi ||
-    !File.Exists(artifacts[0].Path))
+if (artifacts.Count != languages.Length || artifacts.Any(a => a.Format != PackageFormat.Msi) ||
+    artifacts.Any(a => !File.Exists(a.Path)))
 {
-    throw new InvalidOperationException("The package-based standalone MSI API did not create an installer.");
+    throw new InvalidOperationException("The package-based standalone MSI API did not create every requested installer.");
 }
 
 Console.WriteLine($"Created {artifacts[0].Path}");

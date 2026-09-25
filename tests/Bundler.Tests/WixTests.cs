@@ -43,6 +43,10 @@ internal static class WixTests
             yield return ("Builds MSI with license and directory selection", BuildsLicensedDirectorySelection);
             yield return ("Enforces the allowed MSI install directory root", EnforcesMsiInstallDirectoryRoot);
             yield return ("Launches MSI only through the interactive exit checkbox", GeneratesLaunchCheckboxOnly);
+            yield return ("Builds one MSI per declared language", BuildsEveryDeclaredMsiLanguage);
+            yield return ("Applies caller MSI locale overrides", AppliesCallerMsiLocaleOverrides);
+            yield return ("Rejects invalid MSI locale inputs", RejectsInvalidMsiLocaleInputs);
+            yield return ("Builds MSI in FIPS mode and wires shortcut icons", BuildsFipsMsiWithIconShortcuts);
         }
     }
 
@@ -89,11 +93,11 @@ internal static class WixTests
         Assert(machine.UpgradeCode != user.UpgradeCode && machine.ProductCode != user.ProductCode,
             "Per-machine and current-user products must have separate identity families.");
         var chinese = WixIdentity.Create("com.example.app", "1.2.3", "win-x64", WixInstallScope.CurrentUser,
-            language: WixPackageLanguage.ChineseSimplified);
+            language: WixLanguageInfo.Resolve("zh-CN"));
         Assert(chinese.UpgradeCode != first.UpgradeCode && chinese.ProductCode != first.ProductCode,
             "Localized MSI products need separate language identity families.");
         var x86Chinese = WixIdentity.Create("com.example.app", "1.2.3", "win-x86", WixInstallScope.CurrentUser,
-            language: WixPackageLanguage.ChineseSimplified);
+            language: WixLanguageInfo.Resolve("zh-CN"));
         Assert(x86Chinese.UpgradeCode == Guid.Parse("c4985894-4b1c-5e49-941b-a120850e0667") &&
                x86Chinese.ProductCode == Guid.Parse("eeeead45-80e4-57a2-ad45-faa3f2cc2be1") &&
                x86Chinese.UpgradeCode != x86.UpgradeCode,
@@ -151,7 +155,7 @@ internal static class WixTests
         var targets = File.ReadAllText(Path.Combine(root, "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
         var task = File.ReadAllText(Path.Combine(root, "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
         foreach (var property in new[] { "WixInstallScope", "WixUpgradeCode", "WixMsiVersion", "WixAllowDowngrades",
-                     "WixCodepage", "WixLanguage", "WixToolsetArchivePath",
+                     "WixCodepage", "WixLanguage", "WixLanguages", "WixFipsCompliant", "WixToolsetArchivePath",
                      "WixStartMenuShortcut", "WixDesktopShortcut", "WixInstallDirectorySelection",
                      "WixBannerBitmap", "WixDialogBitmap", "WixAddToPath",
                      "WixUninstallShortcut", "WixLaunchAfterInstall" })
@@ -160,8 +164,13 @@ internal static class WixTests
                    targets.Contains(property + "=\"$(Bundler" + property + ")\"", StringComparison.Ordinal),
                 "MSBuild did not map MSI property Bundler" + property + ".");
         }
+        Assert(targets.Contains("WixLanguageFiles=\"@(BundlerWixLanguageFile)\"", StringComparison.Ordinal) &&
+               task.Contains("ParseWixLanguageFiles()", StringComparison.Ordinal) &&
+               task.Contains("BundlerWixLanguageFile", StringComparison.Ordinal),
+            "MSBuild does not map per-language MSI locale files.");
         Assert(task.Contains("new WixBundler(", StringComparison.Ordinal) &&
                task.Contains("Codepage = WixCodepage", StringComparison.Ordinal) &&
+               task.Contains("FipsCompliant = WixFipsCompliant", StringComparison.Ordinal) &&
                task.Contains("Signer = CreateWindowsSigner()", StringComparison.Ordinal),
             "MSBuild task does not call the same public MSI backend or map signing.");
     }
@@ -227,13 +236,13 @@ internal static class WixTests
         using var fixture = new WixTestFixture();
         await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
         {
-            Language = WixPackageLanguage.ChineseSimplified,
+            Languages = ["zh-CN"],
             Codepage = 1252
-        }).BuildAsync(fixture.Request()), "936");
-        await ExpectAsync<ArgumentOutOfRangeException>(() => new WixBundler(new WixBundleConfiguration
+        }).BuildAsync(fixture.Request()), "code page 1252");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
         {
-            Language = (WixPackageLanguage)999
-        }).BuildAsync(fixture.Request()), "Language");
+            Languages = ["xx-99"]
+        }).BuildAsync(fixture.Request()), "xx-99");
         await ExpectAsync<ArgumentException>(() => fixture.Bundler().BuildAsync(
             fixture.Request(signingFiles: ["fixture.exe"])), "signer");
     }
@@ -629,7 +638,7 @@ internal static class WixTests
         request = fixture.Request(licenseFile: license);
         var chinese = (await new WixBundler(new WixBundleConfiguration
         {
-            Language = WixPackageLanguage.ChineseSimplified,
+            Languages = ["zh-CN"],
             StartMenuShortcut = true,
             DesktopShortcut = true
         }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(request)).Single();
@@ -810,7 +819,7 @@ internal static class WixTests
                database.ContainsSubstring("ControlEvent", "Condition", "WIXUI_EXITDIALOGOPTIONALCHECKBOX"),
             "The interactive launch checkbox is not wired to the exit dialog.");
         Assert(database.Property("WIXUI_INSTALLDIR") == "INSTALLFOLDER" &&
-               database.Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT").Contains("WiX test fixture") &&
+               database.Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT") == "Launch [ProductName]" &&
                database.Property("ARPNOMODIFY") == "1" &&
                database.Property("ARPCONTACT").Length > 0 &&
                database.Contains("CustomAction", "Source", "ARPINSTALLLOCATION") &&
@@ -849,7 +858,7 @@ internal static class WixTests
         var artifact = (await new WixBundler(new WixBundleConfiguration
         {
             InstallDirectorySelection = true,
-            Language = WixPackageLanguage.ChineseSimplified
+            Languages = ["zh-CN"]
         }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache })
             .BuildAsync(fixture.Request(licenseFile: license))).Single();
         using var database = new MsiDatabaseReader(artifact.Path);
@@ -906,6 +915,164 @@ internal static class WixTests
         Assert(!plainDatabase.Contains("CustomAction", "Action", "BundlerLaunchAfterInstall") &&
                !plainDatabase.Contains("_Tables", "Name", "Dialog"),
             "A default MSI must not add UI or launch actions.");
+    }
+
+    static async Task BuildsEveryDeclaredMsiLanguage()
+    {
+        using var fixture = new WixTestFixture();
+        var cultures = WixLanguageInfo.Supported.Select(language => language.Culture).ToArray();
+        var artifacts = await new WixBundler(new WixBundleConfiguration
+        {
+            Languages = cultures,
+            StartMenuShortcut = true
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(fixture.Request());
+        Assert(artifacts.Count == cultures.Length,
+            $"Expected {cultures.Length} MSI artifacts, got {artifacts.Count}.");
+        var names = artifacts.Select(artifact => Path.GetFileName(artifact.Path)).ToArray();
+        Assert(names.Distinct(StringComparer.OrdinalIgnoreCase).Count() == artifacts.Count,
+            "Per-language MSI outputs must have distinct file names.");
+        Assert(names.Any(name => name.EndsWith("-ja-jp.msi", StringComparison.Ordinal)) &&
+               names.Any(name => name.EndsWith("-zh-cn.msi", StringComparison.Ordinal)) &&
+               names.Any(name => name.EndsWith("-sr-latn-cs.msi", StringComparison.Ordinal)) &&
+               !names.Any(name => name.Contains("-en-us", StringComparison.Ordinal)),
+            "Per-language MSI file suffixes are incorrect.");
+        using (var japanese = new MsiDatabaseReader(
+            artifacts.Single(a => a.Path.EndsWith("-ja-jp.msi")).Path))
+        using (var traditional = new MsiDatabaseReader(
+            artifacts.Single(a => a.Path.EndsWith("-zh-tw.msi")).Path))
+        using (var albanian = new MsiDatabaseReader(
+            artifacts.Single(a => a.Path.EndsWith("-sq-sq.msi")).Path))
+        {
+            Assert(japanese.Property("ProductLanguage") == "1041" &&
+                   traditional.Property("ProductLanguage") == "1028" &&
+                   albanian.Property("ProductLanguage") == "1052",
+                "Per-language MSI product languages are incorrect.");
+            var codes = artifacts.Select(artifact =>
+            {
+                using var database = new MsiDatabaseReader(artifact.Path);
+                return database.Property("ProductCode") + "|" + database.Property("UpgradeCode");
+            }).ToArray();
+            Assert(codes.Distinct(StringComparer.OrdinalIgnoreCase).Count() == artifacts.Count,
+                "Every language MSI must keep an isolated product identity.");
+        }
+    }
+
+    static async Task AppliesCallerMsiLocaleOverrides()
+    {
+        using var fixture = new WixTestFixture();
+        var locale = Path.Combine(fixture.Root, "override.wxl");
+        await File.WriteAllTextAsync(locale,
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+            "<WixLocalization xmlns=\"http://schemas.microsoft.com/wix/2006/localization\" " +
+            "Culture=\"ja-JP\" Codepage=\"932\">\n" +
+            "  <String Id=\"BundlerLaunchCheckboxText\">&#x8D77;&#x52D5; [ProductName]</String>\n" +
+            "  <String Id=\"BundlerShortcutsFeature\">&#x30B7;&#x30E7;&#x30FC;&#x30C8;&#x30AB;&#x30C3;&#x30C8;</String>\n" +
+            "</WixLocalization>\n");
+        var artifact = (await new WixBundler(new WixBundleConfiguration
+        {
+            Languages = ["ja-JP"],
+            LocaleFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ja-JP"] = locale
+            },
+            LaunchAfterInstall = true,
+            StartMenuShortcut = true
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(fixture.Request())).Single();
+        using var database = new MsiDatabaseReader(artifact.Path);
+        Assert(database.Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT") == "起動 [ProductName]",
+            "Caller locale overrides did not reach the MSI property.");
+        Assert(database.Contains("Feature", "Title", "ショートカット"),
+            "Caller locale overrides did not reach the MSI feature title.");
+        var english = (await new WixBundler(new WixBundleConfiguration
+        {
+            LaunchAfterInstall = true
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(
+            fixture.Request(outputDirectory: Path.Combine(fixture.Root, "en")))).Single();
+        using var englishDatabase = new MsiDatabaseReader(english.Path);
+        Assert(englishDatabase.Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT") == "Launch [ProductName]",
+            "Caller overrides for one language must not leak into another language MSI.");
+    }
+
+    static async Task RejectsInvalidMsiLocaleInputs()
+    {
+        using var fixture = new WixTestFixture();
+        var wrongCulture = Path.Combine(fixture.Root, "wrong.wxl");
+        await File.WriteAllTextAsync(wrongCulture,
+            "<?xml version=\"1.0\"?><WixLocalization xmlns=\"http://schemas.microsoft.com/wix/2006/localization\"" +
+            " Culture=\"de-DE\" Codepage=\"1252\"><String Id=\"BundlerShortcutsFeature\">x</String></WixLocalization>");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            Languages = ["ja-JP"],
+            LocaleFiles = new Dictionary<string, string> { ["ja-JP"] = wrongCulture }
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(fixture.Request()),
+            "does not match");
+        var unencodable = Path.Combine(fixture.Root, "unencodable.wxl");
+        await File.WriteAllTextAsync(unencodable,
+            "<?xml version=\"1.0\"?><WixLocalization xmlns=\"http://schemas.microsoft.com/wix/2006/localization\"" +
+            " Culture=\"ja-JP\" Codepage=\"932\"><String Id=\"BundlerShortcutsFeature\">&#x1F600;</String></WixLocalization>");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            Languages = ["ja-JP"],
+            LocaleFiles = new Dictionary<string, string> { ["ja-JP"] = unencodable }
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(fixture.Request()),
+            "code page");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            Languages = ["ja-JP"],
+            LocaleFiles = new Dictionary<string, string> { ["fr-FR"] = wrongCulture }
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(fixture.Request()),
+            "fr-FR");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            Languages = ["en-US", "en-us"]
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(fixture.Request()),
+            "duplicates");
+    }
+
+    static async Task BuildsFipsMsiWithIconShortcuts()
+    {
+        using var fixture = new WixTestFixture();
+        var icon = Path.Combine(fixture.Root, "app.ico");
+        await File.WriteAllBytesAsync(icon,
+        [
+            0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
+            0x10, 0x10, 0x00, 0x00, 0x01, 0x00, 0x20, 0x00, 0x68, 0x04,
+            0x00, 0x00, 0x16, 0x00, 0x00, 0x00,
+            .. Enumerable.Repeat((byte)0xAB, 1128)
+        ]);
+        var badIcon = Path.Combine(fixture.Root, "bad.ico");
+        await File.WriteAllTextAsync(badIcon, "not an icon");
+        var configuration = fixture.Request();
+        var iconsArtifact = await new WixBundler(new WixBundleConfiguration
+        {
+            FipsCompliant = true,
+            StartMenuShortcut = true,
+            DesktopShortcut = true,
+            UninstallShortcut = true
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache })
+            .BuildAsync(WithIcon(configuration, icon));
+        var artifact = iconsArtifact.Single();
+        using var database = new MsiDatabaseReader(artifact.Path);
+        Assert(database.RowCount("Shortcut", "Shortcut") == 3 &&
+               database.Values("Shortcut", "Icon_")
+                   .Count(value => value == "ProductIcon") == 3,
+            "The MSI icon was not wired into every shortcut.");
+        await ExpectAsync<InvalidDataException>(() => new WixBundler()
+            .BuildAsync(WithIcon(fixture.Request(outputDirectory: Path.Combine(fixture.Root, "bad")), badIcon)),
+            ".ico");
+
+        static BundleConfiguration WithIcon(BundleConfiguration configuration, string icon) =>
+            new()
+            {
+                ProductName = configuration.ProductName,
+                Identifier = configuration.Identifier,
+                Version = configuration.Version,
+                LicenseFile = configuration.LicenseFile,
+                OutputDirectory = configuration.OutputDirectory,
+                Resources = configuration.Resources,
+                Icons = [icon],
+                Targets = configuration.Targets
+            };
     }
 
     private static string CreateBmp(string path, int width, int height)

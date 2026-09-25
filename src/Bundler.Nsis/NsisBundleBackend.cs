@@ -26,7 +26,7 @@ internal sealed class NsisBundleBackend(
     public PackageFormat Format => PackageFormat.Nsis;
     public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
 
-    public async Task<BundleArtifact> BuildAsync(
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleBuildContext context,
         CancellationToken cancellationToken = default)
     {
@@ -113,7 +113,7 @@ internal sealed class NsisBundleBackend(
                 throw new InvalidOperationException("NSIS reported success but did not create the installer.");
             }
 
-            return new BundleArtifact(Format, item.Target.RuntimeIdentifier, installerPath);
+            return [new BundleArtifact(Format, item.Target.RuntimeIdentifier, installerPath)];
         }
         catch
         {

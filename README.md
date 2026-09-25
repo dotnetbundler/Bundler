@@ -7,9 +7,9 @@ Core 和格式后端本身不依赖 `.csproj` 或 .NET 应用模型，后续正�
 ## 当前状态
 
 第一条已冻结的链路是 Windows + NSIS。
-MSI 已完成 WIN-MSI-1..6 的当前主机自动化范围，`alpha.37` 是既有 x64/ARM64 身份基线；
-`alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选。
-WIN-MSI-7..9 仍是计划。
+MSI 已完成 WIN-MSI-1..7 的当前主机自动化范围，`alpha.37` 是既有 x64/ARM64 身份基线；
+`alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 翻译覆盖、快捷方式图标与 FIPS 构建选项。
+WIN-MSI-8..9 仍是计划。
 现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。
 正式 CLI、macOS 和 Linux 格式仍属后续路线。
 
@@ -65,7 +65,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.41" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.42" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -84,7 +84,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.41" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.42" />
 ```
 
 ```csharp
@@ -129,7 +129,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.41" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.42" />
 ```
 
 ```csharp
@@ -156,19 +156,19 @@ var request = new BundleConfiguration
 
 var artifacts = await new WixBundler(new WixBundleConfiguration
 {
-    Language = WixPackageLanguage.ChineseSimplified
+    Languages = ["zh-CN"]
 }).BuildAsync(request);
 ```
 
-`WixBundleConfiguration` 配置 MSI 安装范围、语言（`English`/`ChineseSimplified`）、代码页、快捷方式、`MsiVersion`、`AllowDowngrades`、`InstallDirectorySelection`、`BannerBitmap`、`DialogBitmap`、`AddToPath`、`UninstallShortcut` 和 `LaunchAfterInstall`。
+`WixBundleConfiguration` 配置 MSI 安装范围、`Languages`（culture 列表，每语言一个独立 MSI）、`LocaleFiles`（culture→`.wxl` 覆盖文件）、`FipsCompliant`、代码页、快捷方式、`MsiVersion`、`AllowDowngrades`、`InstallDirectorySelection`、`BannerBitmap`、`DialogBitmap`、`AddToPath`、`UninstallShortcut` 和 `LaunchAfterInstall`。
 范围内安装目录限定 current-user 在 `%LOCALAPPDATA%` 子目录、per-machine 在 Program Files 子目录，静默 `INSTALLFOLDER=` 走同一校验；
 启动勾选只在交互安装勾选时以用户会话执行，静默/被动/修复/升级不触发。
 `win-x86`、`win-x64`、`win-arm64` 是独立产品线；x86 可在当前 x64 Windows 构建并安装。
 默认用三段稳定应用版本作 MSI 版本；预发布应用须显式提供有效的三段 `MsiVersion`，第四段与越界版本被拒绝。
 不同应用版本不得复用同一 MSI 版本，已安装的同版异包会被拒绝。
 降级默认禁止，只有调用方显式设置 `AllowDowngrades=true` 才允许。
-默认英文/1252；简体中文自动选 936，显式指定其他代码页会被拒绝。
-各语言是独立的单语言 MSI 产品线，中文包名带 `-zh-cn`，安装目录和 UpgradeCode 也隔离。
+代码页 `0`（默认）按语言表自动选择（如英文 1252、简体中文 936）；显式值覆盖所有语言，但必须能编码该语言的合并本地化字符串。
+各语言是独立的单语言 MSI 产品线，非英语包名带 `-<culture>` 后缀（如 `-zh-cn`、`-ja-jp`），安装目录和 UpgradeCode 也隔离。
 应用可以提供 `.rtf` `LicenseFile` 以启用该语言的 WiX 交互许可页；
 启用目录选择或品牌位图等新 UI 能力时使用自定义 dialog 序列（有许可含许可页，无许可不含），未启用任何 UI 能力时继续使用 Windows Installer 原生的基础界面，不显示替代性许可条款。
 已有英文产品身份保持稳定。
@@ -228,8 +228,11 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerWixUpgradeCode` | 否 | 自动稳定生成；仅在有依据的旧产品迁移中显式指定 |
 | `BundlerWixMsiVersion` | 否 | 空；默认映射稳定三段 `BundlerVersion`，显式值须为有效三段 MSI 版本 |
 | `BundlerWixAllowDowngrades` | 否 | `false`；仅显式选择时允许旧 MSI 版本替换新版 |
-| `BundlerWixLanguage` | 否 | `en-US`；也支持 `zh-CN`，每包一种语言 |
-| `BundlerWixCodepage` | 否 | `0` 自动选择英文 1252/简体中文 936；显式值须适合包内文字 |
+| `BundlerWixLanguages` | 否 | `en-US`；分号分隔的多语言列表（命令行用 `%3B` 转义分号），每语言一个独立 MSI，支持 38 个 WiX 内嵌 culture |
+| `BundlerWixLanguage` | 否 | 旧单语言回退；`BundlerWixLanguages` 为空时生效 |
+| `BundlerWixLanguageFile`（项） | 否 | 调用方 `.wxl` 覆盖文件，要求 `Language` 元数据；键须属 Bundler 自有键集，编码/culture 经校验 |
+| `BundlerWixFipsCompliant` | 否 | `false`；仅向 `candle.exe` 透传 `-fips`，不构成 FIPS 认证声明 |
+| `BundlerWixCodepage` | 否 | `0` 按语言表自动（如英文 1252/简体中文 936）；显式值覆盖所有语言且须能编码包内文字 |
 | `BundlerWixStartMenuShortcut` | 否 | `false` |
 | `BundlerWixDesktopShortcut` | 否 | `false` |
 | `BundlerWixInstallDirectorySelection` | 否 | `false`；开启后交互可选范围内子目录，静默 `INSTALLFOLDER` 走同一校验 |

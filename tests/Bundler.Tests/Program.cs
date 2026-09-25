@@ -2056,7 +2056,7 @@ file sealed class RecordingBackend : IBundleBackend
     public string? WorkDirectory { get; private set; }
     public int InvocationCount { get; private set; }
 
-    public async Task<BundleArtifact> BuildAsync(
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleBuildContext context,
         CancellationToken cancellationToken = default)
     {
@@ -2064,7 +2064,7 @@ file sealed class RecordingBackend : IBundleBackend
         WorkDirectory = context.WorkDirectory;
         var path = Path.Combine(context.Item.OutputDirectory, "recording-installer.exe");
         await File.WriteAllTextAsync(path, "artifact", cancellationToken);
-        return new BundleArtifact(Format, context.Item.Target.RuntimeIdentifier, path);
+        return [new BundleArtifact(Format, context.Item.Target.RuntimeIdentifier, path)];
     }
 }
 

@@ -25,7 +25,8 @@ WIN-MSI-1..3 的阶段证据见 `docs/msi-roadmap.md` 第 6..8 节，WIN-MSI-4 �
 | 文件关联 | 已实现但外部待验收 | MSI-2，本机注册表已实测 | 自身 ProgID、OpenWithProgids、文件及可选 MIME Capabilities 声明与卸载通过；保留既有默认项。默认应用 UI/选择体验外部待验收。 |
 | URL 协议 | 已实现但外部待验收 | MSI-2，本机注册表已实测 | 自身 ProgID 与 UrlAssociations 声明/清理通过，不写公共 scheme 根；用户选择默认处理程序及真实协议唤起外部待验收。 |
 | payload/最终 MSI 签名 | 已实现但外部待验收 | MSI-3，本机测试证书已验证 | 对主 PE 与显式 SigningFiles 的隔离副本签名，然后签最终 MSI；真实 Authenticode 证书、签名顺序、原件不变和失败清理均有自动测试。生产证书、时间戳与信任链外部待验收。同版本已签包不静默复用。 |
-| 语言与交互 UI | 已实现但外部待验收 | MSI-3：`en-US`、`zh-CN` 单语言包 | ProductLanguage/代码页/升级身份隔离及中文包与英文包并存安装/卸载已验证；应用提供 RTF 许可时启用 WiX 最小 UI，两种语言的数据库资源已检查。未提供许可时使用基础 Windows Installer UI。真实交互显示、母语审校和辅助功能外部待验收；不承诺 NSIS 全语言等价。 |
+| 语言与交互 UI | 已实现但外部待验收 | MSI-3：`en-US`、`zh-CN`；WIN-MSI-7：38 语言静态表、多语言产物、调用方 `.wxl` 覆盖 | 随包 `WixUIExtension.dll` 内嵌 40 个 culture 资源经逐个 `light` 真编译筛选出 38 个支持项（`hi-IN`/`kk-KZ` 上游数据不可用已排除）；`Languages` 一次构建产出每语言一个独立 MSI，各语言产品线身份隔离，`en-US`/`zh-CN` 身份向量与旧版一致；ja-JP 与 en-US 并存安装/独立卸载已实测，de-DE 直接 API 产出已实测；调用方 `.wxl` 经 culture/键集/编码校验按键覆盖 Bundler 自有串，WiX 内嵌 UI 译文经 `-cultures` 兜底。母语审校、辅助功能与交互流程外部待验收；不承诺 NSIS 全语言等价。 |
+| 构建选项：FIPS | 已实现但外部待验收 | WIN-MSI-7：`FipsCompliant`/`BundlerWixFipsCompliant` | 仅向 `candle.exe` 透传 `-fips`（`light.exe` 无此开关）；参数透传经自动化断言，不构成 FIPS 认证声明，策略启用宿主实测外部待验收（MSI-OI-13）。 |
 | 静默/被动、退出码 | 已实现但外部待验收 | MSI-3，本机已验证常规路径 | 原生 msiexec `/qn` 安装/修复、`/passive` 安装/卸载返回 0；损坏包返回原生 1619/1620，延迟故障返回 1603。重启所需 3010 未在本机触发，留待 VM；不复刻 NSIS 码。调用方显式使用 `/norestart` 控制系统重启。 |
 | 失败、回滚、重启 | 已实现但外部待验收 | MSI-3，本机验证受限故障 | 仅在测试包副本加入延迟失败动作，文件复制后故障返回 1603，原生事务清除产品注册和托管文件；生产包没有自定义动作。损坏包无注册残留。锁定文件、磁盘故障、真实重启与重启后状态留在专用 VM。 |
 | 修复/维护模式 | 已实现但外部待验收 | MSI-3，本机静默修复已验证 | 删除受管理文件后 `msiexec /fomus` 从可用源恢复，未知用户文件保留；缺失源和交互维护界面外部待验收。 |

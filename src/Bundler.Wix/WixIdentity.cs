@@ -17,7 +17,7 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         string runtimeIdentifier,
         WixInstallScope scope,
         string? upgradeCode = null,
-        WixPackageLanguage language = WixPackageLanguage.English,
+        WixLanguageInfo? language = null,
         string? msiVersion = null)
     {
         if (string.IsNullOrWhiteSpace(identifier))
@@ -28,8 +28,7 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         {
             throw new ArgumentOutOfRangeException(nameof(scope));
         }
-        if (language is not (WixPackageLanguage.English or WixPackageLanguage.ChineseSimplified))
-            throw new ArgumentOutOfRangeException(nameof(language));
+        language ??= WixLanguageInfo.Resolve("en-US");
         if (runtimeIdentifier != "win-x86" && runtimeIdentifier != "win-x64" && runtimeIdentifier != "win-arm64")
         {
             throw new NotSupportedException($"MSI target '{runtimeIdentifier}' is not supported.");
@@ -48,8 +47,7 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         }
 
         var normalizedIdentifier = identifier.ToLowerInvariant();
-        var family = $"{normalizedIdentifier}|{scope}|{runtimeIdentifier}" +
-            (language == WixPackageLanguage.English ? "" : "|zh-CN");
+        var family = $"{normalizedIdentifier}|{scope}|{runtimeIdentifier}" + language.FamilyToken;
         Guid familyCode;
         if (upgradeCode is null)
         {
@@ -61,18 +59,18 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         }
 
         var productVersion = $"{major}.{minor}.{build}";
-        var productLanguage = language == WixPackageLanguage.English ? 1033 : 2052;
+        var productLanguage = language.Lcid;
         var productCode = Uuid5(NamespaceId, $"product|{familyCode:D}|{productVersion}|{productLanguage}");
         return new WixIdentity(familyCode, productCode, productVersion);
     }
 
     internal static Guid ComponentCode(string identifier, string runtimeIdentifier, WixInstallScope scope, string relativePath,
-        WixPackageLanguage language = WixPackageLanguage.English) =>
+        WixLanguageInfo? language = null) =>
         Uuid5(NamespaceId, "component|" + identifier.ToLowerInvariant() + "|" + scope + "|" +
               runtimeIdentifier + "|Programs|" + identifier.ToLowerInvariant() + "-" +
               runtimeIdentifier.Substring(4) + "|" +
               relativePath.Replace('\\', '/').ToLowerInvariant() +
-              (language == WixPackageLanguage.English ? "" : "|zh-CN"));
+              (language ?? WixLanguageInfo.Resolve("en-US")).FamilyToken);
 
     internal static string StableId(string prefix, string name)
     {

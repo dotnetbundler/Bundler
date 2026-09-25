@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- zh-CN 覆盖示例：String Id 覆盖 Bundler 自有安装器文本。 -->
+<WixLocalization xmlns="http://schemas.microsoft.com/wix/2006/localization" Culture="zh-CN" Codepage="936">
+  <String Id="BundlerLaunchCheckboxText">完成时启动 [ProductName]</String>
+  <String Id="BundlerShortcutsFeature">快捷方式（可选）</String>
+</WixLocalization>

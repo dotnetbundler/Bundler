@@ -19,6 +19,8 @@
     <BundlerWixAllowDowngrades Condition="'$(BundlerWixAllowDowngrades)' == ''">false</BundlerWixAllowDowngrades>
     <BundlerWixCodepage Condition="'$(BundlerWixCodepage)' == ''">0</BundlerWixCodepage>
     <BundlerWixLanguage Condition="'$(BundlerWixLanguage)' == ''">en-US</BundlerWixLanguage>
+    <BundlerWixLanguages Condition="'$(BundlerWixLanguages)' == ''"></BundlerWixLanguages>
+    <BundlerWixFipsCompliant Condition="'$(BundlerWixFipsCompliant)' == ''">false</BundlerWixFipsCompliant>
     <BundlerWixStartMenuShortcut Condition="'$(BundlerWixStartMenuShortcut)' == ''">false</BundlerWixStartMenuShortcut>
     <BundlerWixDesktopShortcut Condition="'$(BundlerWixDesktopShortcut)' == ''">false</BundlerWixDesktopShortcut>
     <BundlerWixInstallDirectorySelection Condition="'$(BundlerWixInstallDirectorySelection)' == ''">false</BundlerWixInstallDirectorySelection>

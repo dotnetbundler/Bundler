@@ -1,8 +1,8 @@
 # Windows MSI 后端实施路线（WiX 3.14.1）
 
 > 状态：`WIN-MSI-1..6` 的当前 Windows 11 x64 本机自动化范围已完成（2026-09-26）；
-> `alpha.37` 是既有身份基线，`alpha.40` 增加 x86、显式版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选。
-> `WIN-MSI-7..9` 已规划但**尚未实施**；默认下一阶段为 `WIN-MSI-7`。
+> `alpha.37` 是既有身份基线，`alpha.40` 增加 x86、显式版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 构建选项。
+> `WIN-MSI-8..9` 已规划但**尚未实施**；默认下一阶段为 `WIN-MSI-8`。
 > 原阶段证据见第 6..9 节，扩展路线及 WIN-MSI-5/6 证据见第 10 节。
 > 当前开发分支：`msi-development`；历史记录中的 `codex/msi-development` 是改名前的名称。
 > 规范入口：`docs/roadmap.md`；
@@ -533,7 +533,7 @@ NSIS `Verify.ps1` 全量集成退出 0（该轮首次运行曾因残留事务状
 **交互/UI 人工项**：真实交互 UI 的目录选择按钮流转、`InvalidDirDlg` 显示、勾选后启动、缩放/辅助功能、junction 路径显示行为，以及 per-machine UI 提权场景仍属未执行人工验收，见 `docs/msi-manual-testing.md` 的 MSI-MT-11 与 `docs/msi-open-items.md`。
 依据：[WiX 3 WixUIExtension 3.14.1 源码](https://github.com/wixtoolset/wix3/tree/wix3141rtm/src/ext/UIExtension/wixlib)（本机核对 `WixUI_InstallDir`、`WixUI_Minimal`、`InstallDirDlg`、`BrowseDlg`、`InvalidDirDlg`、`Common.wxs` 实际结构）、[MSI 条件字符串与子目录比较](https://learn.microsoft.com/en-us/windows/win32/msi/conditional-statement-syntax)、[Environment 表](https://learn.microsoft.com/en-us/windows/win32/msi/environment-table)、[ICE43](https://learn.microsoft.com/en-us/windows/win32/msi/ice43)、[MSI 自定义动作类型](https://learn.microsoft.com/en-us/windows/win32/msi/summary-list-of-all-custom-action-types)。
 
-### WIN-MSI-7：语言、输入资源和构建选项
+### WIN-MSI-7：语言、输入资源和构建选项（已实现，`0.1.0-alpha.42`，提交待授权）
 
 - **前置**：WIN-MSI-6 的 UI/目录契约稳定；清点固定 WiX 3.14.1 归档可用 locale、任何需要增补文件的来源/许可/大小，确认不复制 Tauri 翻译。
 - **目标/交付**：在实际受支持 WiX 语言范围内以 locale 列表生成**分别独立的单语言 MSI**；调用方可提供经过键集合、编码及 culture 校验的翻译资源。
@@ -546,6 +546,41 @@ NSIS `Verify.ps1` 全量集成退出 0（该轮首次运行曾因残留事务状
   重测最终 NuGet 的 WiX 文件来源、源码、许可、哈希和体积。
 - **不做/退出**：不把多个语言塞进同一个 MSI 造成身份混淆，不增加弱摘要或运行时下载。
   全部新增 locale 的可自动化契约、至少一个新增 locale 的真实生命周期、现有语言回归及包供应审计通过后退出；语言翻译人工审校仍单列。
+
+**实施记录（2026-09-27，`0.1.0-alpha.42`）**：
+
+- **语言表**：`src/Bundler.Wix/WixLanguage.cs` 内置 38 个 culture 的静态表，集合取自随包 `WixUIExtension.dll` 实际内嵌的 40 个 `WixLocalization` 资源，逐条以 `light.exe -cultures:<culture>` 真编译验证。
+  `hi-IN`（内嵌译文无法落入 ANSI、cp=0）与 `kk-KZ`（声明 cp1251 与译文实际字符集冲突）实测 `LGHT0311` 失败，不入表；
+  `sq` 的 wxl 声明 `Culture="sq-SQ"`（文件名 `sq-AL` 不一致，以声明值为准）。
+  每表项携带规范化 culture、LCID、ANSI 代码页、文件名后缀与身份令牌；不在表内的 culture 直接拒绝。
+- **多产物契约**：`WixBundleConfiguration.Languages` 取代二值枚举，一次构建按列表产出**每语言一个独立 MSI**；
+  `IBundleBackend.BuildAsync` 返回值改为 `IReadOnlyList<BundleArtifact>`，Core 管线扁平化产物列表，NSIS 仍返回单元素列表（契约统一、行为不变）。
+  每个语言独立走输出锁、清单、指纹、签名与同版本碰撞检查。
+- **身份隔离**：沿用既定按语言隔离产品线契约（与 Tauri 全语言共用 UpgradeCode 的做法有意不同）；
+  `en-US`/`zh-CN` 的 ProductCode/UpgradeCode 派生、文件名与 ProductLanguage 与旧版逐位一致（回归向量已断言），其余语言各自获得固定独立身份。
+- **自有串 wxl 化**：约 8 个 Bundler 自有 UI 串（降级错误、目录范围错误、启动勾选、三个 Feature 标题、卸载快捷方式名等）改用 `!(loc.<Id>)` 引用；
+  后端按目标 culture 生成声明正确 `Culture`/`Codepage` 的合并 wxl，英语为默认、zh-CN 保留中文默认，调用方 `.wxl` 按键覆盖；
+  WiX 内嵌 UI 译文仍经 `-cultures:<culture>;en-us` 兜底。
+  调用方文件校验：存在性与重解析点、culture 与请求语言匹配、WiX localization 命名空间、键属于 Bundler 自有键集、文件编码与目标代码页兼容。
+  `WixBundleConfiguration.Codepage` 语义为 `0`=按语言表自动、非 0=覆盖所有语言但必须能编码该语言的合并字符串（保留"中文件名产品"类合法用法）。
+- **图标**：`.ico` 严格校验不变；选中图标除 `ProductIcon`/`ARPPRODUCTICON` 外，显式接到开始菜单、桌面与卸载快捷方式的 `Icon` 属性；未配置时保持可执行文件图标继承行为。
+- **FIPS**：`WixBundleConfiguration.FipsCompliant`/`BundlerWixFipsCompliant` 仅向 `candle.exe` 透传 `-fips`（`light.exe` 无此开关，与 Tauri 一致）；不宣称认证，真实 FIPS 策略宿主验证属外部验收。
+- **MSBuild**：`BundlerWixLanguages`（分号分隔，命令行需 `%3B` 转义）、`BundlerWixLanguageFile` 项（要求 `Language` 元数据，对齐 NSIS 自定义语言文件模式）、`BundlerWixFipsCompliant`；
+  旧 `BundlerWixLanguage` 保留为 `BundlerWixLanguages` 为空时的单语言回退。
+- **示例**：`samples/HelloMsiApp` 新增 `HelloMsiAppLanguages`/`HelloMsiAppFipsCompliant` 开关演示多语言产物与 FIPS；`Assets/locale-zh-cn.wxl` 演示按键覆盖（完成页勾选与 Feature 名中文化，已在 MSI 数据库中核实），仅当 `zh-CN` 被请求时纳入。
+
+**本机证据（Windows 11 Pro build 26200 x64，`0.1.0-alpha.42`）**：`tests/Bundler.Tests` **75/75 通过**（新增语言表完整性、非法 culture 拒绝、en/zh 身份向量回归、新语言身份隔离、多产物、locale 校验错误矩阵、覆盖生效、FIPS 参数透传、快捷方式图标断言）；
+`dotnet build` 0 警告/0 错误。
+38 语言全量 `light` 编译逐一验证通过（`hi-IN`/`kk-KZ` 除外并据此移除）。
+新增 `tests/Windows.Msi.Integration/VerifyWinMsi7.ps1` 实机执行：一次 MSBuild 构建产出 `en-US` 与 `ja-JP` 两个 MSI，均静默安装成功、并存且各自独立卸载（退出码 0）；
+直接 API fixture 产出 `en-US` 与 `de-DE` 产物。
+回归：MSI `Verify.ps1`、`VerifyWinMsi6.ps1`、`VerifyPublicSample.ps1`（按"完成页勾选文本本地化、含 `[ProductName]` 令牌"更新断言，三变体通过）与 NSIS `Verify.ps1` 全量集成均退出 0。
+公开示例隔离本地源复跑通过：`en-US` 默认串与 `zh-CN` 覆盖串分别落入对应 MSI。
+
+**人工/外部边界**：各语言 UI 母语审校与辅助功能检查（MSI-MT-09 扩展）、真实 FIPS 策略启用宿主的 `candle -fips` 行为（MSI-OI-13）仍属外部待验收，未把参数透传冒充策略合规；
+交互式多语言安装流程检查记入 MSI-MT-12。
+WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方文件），最终包内容逐文件审计见本节退出条件对应记录。
+依据：固定 Tauri 快照 `7dbfc1f`（`languages.json` 表驱动、`default-locale-strings.xml` 按键回退、`.ico` 限制、`fipsCompliant→candle -fips`）、WiX 3.14.1 源归档 `src/ext/UIExtension/wixlib` wxl 声明值、`WixUIExtension.dll` 内嵌资源实枚举、`candle.exe -?` 实测开关。
 
 ### WIN-MSI-8：受控 WiX 扩展与专家模式
 

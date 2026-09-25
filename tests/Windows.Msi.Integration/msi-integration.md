@@ -9,6 +9,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integr
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi5.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi6.ps1 -Configuration Release -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi7.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -Configuration Release
 ```
 
@@ -40,6 +41,12 @@ HKLM Uninstall 键含 `InstallLocation`/`Contact`；
 v2 升级不传 `INSTALLFOLDER` 也恢复到已选目录并保留未知用户文件；`/fomus` 静默修复；
 卸载后 PATH 恢复原值、快捷方式/目录清理、未知用户文件保留、产品注销。
 脚本不进入真实交互 UI；勾选启动、对话框流转与 junction 目标按 `MSI-MT-11` 人工验收。
+MSI 与 verbose log 保留在临时目录。
+
+`VerifyWinMsi7.ps1` 是 WIN-MSI-7 专用回归入口：一次 MSBuild 构建经 `BundlerWixLanguages` 产出 `en-US` 与 `ja-JP` 两个独立 MSI（命令行分号须 `%3B` 转义），断言各自 ProductCode/UpgradeCode/ProductLanguage 隔离、文件名后缀、合并 wxl 与 `!(loc.*)` 引用落入数据库；
+随机身份下两语言包并存安装且各自独立卸载（退出码 0）。
+脚本再经仓库外 `Msi.Api.PackageFixture` 以 `Languages`/`LocaleFiles`/`FipsCompliant` 直接 API 产出 `en-US`/`de-DE` 产物并断言 `-fips` 仅传给 `candle`。
+各语言 UI 母语显示与 FIPS 策略宿主按 MSI-MT-12/MSI-OI-13 人工验收。
 MSI 与 verbose log 保留在临时目录。
 
 `VerifyPublicSample.ps1` 只构建公开示例的三种 MSI 变体（英文/中文 current-user、英文 per-machine）并断言数据库结构、UI 序列、快捷方式、PATH 与位图；不安装示例产品。

@@ -43,17 +43,20 @@ public sealed class BundlePipeline(
 
             try
             {
-                var artifact = await backend.BuildAsync(
+                var produced = await backend.BuildAsync(
                     new BundleBuildContext(configuration, item, workDirectory, _logger),
                     cancellationToken);
-                if (!File.Exists(artifact.Path) && !Directory.Exists(artifact.Path))
+                foreach (var artifact in produced)
                 {
-                    throw new InvalidOperationException(
-                        $"The {backend.Format} backend returned a missing artifact: {artifact.Path}");
-                }
+                    if (!File.Exists(artifact.Path) && !Directory.Exists(artifact.Path))
+                    {
+                        throw new InvalidOperationException(
+                            $"The {backend.Format} backend returned a missing artifact: {artifact.Path}");
+                    }
 
-                artifacts.Add(artifact);
-                _logger.Log(BundleLogLevel.Information, $"Created {artifact.Path}.");
+                    artifacts.Add(artifact);
+                    _logger.Log(BundleLogLevel.Information, $"Created {artifact.Path}.");
+                }
             }
             finally
             {

@@ -135,7 +135,7 @@ try {
         }
         if ([string]$msiProperties['WIXUI_INSTALLDIR'] -ne 'INSTALLFOLDER' -or
             [string]$msiProperties['ARPNOMODIFY'] -ne '1' -or
-            [string]$msiProperties['WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT'] -notlike '*Hello MSI App') {
+            -not [string]$msiProperties['WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT'].Contains('[ProductName]')) {
             throw "Sample MSI is missing directory-selection or launch-checkbox properties: $msi"
         }
         $registry = @(Read-MsiRegistry $database)

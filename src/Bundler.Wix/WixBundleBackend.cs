@@ -7,19 +7,57 @@ namespace DotNet.Bundler.Wix;
 
 internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguration settings, IBundleSigner? signer) : IBundleBackend
 {
-    private const string GeneratorRevision = "win-msi-6-2026-09-26-1";
+    private const string GeneratorRevision = "win-msi-7-2026-10-01-1";
 
     public PackageFormat Format => PackageFormat.Msi;
     public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
 
-    public async Task<BundleArtifact> BuildAsync(BundleBuildContext context, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
+        BundleBuildContext context, CancellationToken cancellationToken = default)
     {
         var bundle = context.Configuration;
         var item = context.Item;
+        var languages = settings.ResolveLanguages();
+        // A signed build must fail on pre-existing outputs before invoking the
+        // signer, so preflight every language's output path first.
+        if (signer is not null)
+        {
+            foreach (var language in languages)
+            {
+                var existing = Path.Combine(item.OutputDirectory,
+                    WixProductDocument.SafeFileName(bundle.ProductName) + "-" +
+                    WixIdentity.Create(bundle.Identifier, bundle.Version, item.Target.RuntimeIdentifier,
+                        settings.InstallScope, settings.UpgradeCode, language, settings.MsiVersion)
+                        .ProductVersion + language.Suffix + ".msi");
+                if (File.Exists(existing) || File.Exists(existing + ".bundler-manifest"))
+                    throw new IOException(
+                        "An MSI with the same product version already exists with signed or unverified contents: " + existing);
+            }
+        }
+        // Validate every source before copying payload into a private staging tree.
+        CollectFiles(bundle, item);
+        if (signer is not null)
+            item = await PrepareSignedPayloadAsync(context, item, signer, cancellationToken);
+        var files = CollectFiles(bundle, item);
+        var icon = SelectIcon(bundle.Icons);
+        var artifacts = new List<BundleArtifact>();
+        foreach (var language in languages)
+        {
+            artifacts.Add(await BuildLanguageAsync(context, bundle, item, files, icon, language, cancellationToken));
+        }
+        return artifacts;
+    }
+
+    private async Task<BundleArtifact> BuildLanguageAsync(
+        BundleBuildContext context, BundleConfiguration bundle, BundlePlanItem item,
+        IReadOnlyList<InstallFile> files, string? icon, WixLanguageInfo requested,
+        CancellationToken cancellationToken)
+    {
+        var language = requested with { Codepage = settings.EffectiveCodepage(requested) };
         var identity = WixIdentity.Create(bundle.Identifier, bundle.Version, item.Target.RuntimeIdentifier,
-            settings.InstallScope, settings.UpgradeCode, settings.Language, settings.MsiVersion);
+            settings.InstallScope, settings.UpgradeCode, language, settings.MsiVersion);
         var outputName = WixProductDocument.SafeFileName(bundle.ProductName) + "-" + identity.ProductVersion +
-            settings.LanguageSuffix + ".msi";
+            language.Suffix + ".msi";
         var outputPath = Path.Combine(item.OutputDirectory, outputName);
         var manifestPath = outputPath + ".bundler-manifest";
         Directory.CreateDirectory(item.OutputDirectory);
@@ -31,46 +69,63 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         using var outputLock = await AcquireOutputLockAsync(lockPath, cancellationToken);
         if (signer is not null && (File.Exists(outputPath) || File.Exists(manifestPath)))
             throw new IOException("An MSI with the same product version already exists with signed or unverified contents: " + outputPath);
-        // Validate every source before copying payload into a private staging tree.
-        CollectFiles(bundle, item);
-        if (signer is not null)
-            item = await PrepareSignedPayloadAsync(context, item, signer, cancellationToken);
-        var files = CollectFiles(bundle, item);
-        var icon = SelectIcon(bundle.Icons);
-        var definitionHash = DefinitionHash(bundle, item, files, icon);
-        var product = new WixProductDocument(settings).Create(bundle, item, identity, files, icon, definitionHash);
-        var fingerprint = Fingerprint(bundle, item, identity, files, icon, product);
+        var definitionHash = DefinitionHash(bundle, item, files, icon, language);
+        var product = new WixProductDocument(settings, language)
+            .Create(bundle, item, identity, files, icon, definitionHash);
+        var fingerprint = Fingerprint(bundle, item, identity, files, icon, product, language);
         if (File.Exists(outputPath) || File.Exists(manifestPath))
         {
             if (signer is null && File.Exists(outputPath) && File.Exists(manifestPath) &&
                 File.ReadAllText(manifestPath).Equals(
                     fingerprint + "\n" + HashFile(outputPath) + "\n", StringComparison.Ordinal))
-            {
-                return new BundleArtifact(Format, item.Target.RuntimeIdentifier, outputPath);
-            }
+                {
+                    return new BundleArtifact(Format, item.Target.RuntimeIdentifier, outputPath);
+                }
             throw new IOException("An MSI with the same product version already exists with different, signed, or unverified contents: " + outputPath);
         }
 
-        var source = Path.Combine(context.WorkDirectory, "product.wxs");
-        var obj = Path.Combine(context.WorkDirectory, "product.wixobj");
+        var languageTag = language.Culture.ToLowerInvariant();
+        var source = Path.Combine(context.WorkDirectory, "product-" + languageTag + ".wxs");
+        var obj = Path.Combine(context.WorkDirectory, "product-" + languageTag + ".wixobj");
         new XDocument(new XDeclaration("1.0", "utf-8", null), product)
             .Save(source);
+        var scopeRoot = settings.InstallScope == WixInstallScope.CurrentUser ? "LocalAppDataFolder" :
+            item.Target.Architecture == CpuArchitecture.X86 ? "ProgramFilesFolder" : "ProgramFiles64Folder";
+        var callerStrings = FindLocaleFile(language) is { } localeFile
+            ? WixLocale.ReadCallerStrings(localeFile, language, language.Codepage)
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var localePath = WixLocale.WriteMerged(
+            Path.Combine(context.WorkDirectory, "locale-" + languageTag + ".wxl"),
+            language, language.Codepage, scopeRoot, callerStrings);
 
         try
         {
-            await WixProcessRunner.RunAsync(toolset.CandlePath,
-                ["-nologo", "-arch", item.Target.Architecture switch
+            var candleArguments = new List<string> { "-nologo" };
+            if (settings.FipsCompliant) candleArguments.Add("-fips");
+            candleArguments.AddRange(
+            [
+                "-arch", item.Target.Architecture switch
                  {
                      CpuArchitecture.X86 => "x86",
                      CpuArchitecture.X64 => "x64",
                      CpuArchitecture.Arm64 => "arm64",
                      _ => throw new NotSupportedException("Unknown MSI target architecture.")
                  },
-                 "-out", obj, source], context.WorkDirectory, cancellationToken);
+                 "-out", obj, source]);
+            await WixProcessRunner.RunAsync(toolset.CandlePath, candleArguments,
+                context.WorkDirectory, cancellationToken);
             var lightArguments = new List<string> { "-nologo" };
             if (!string.IsNullOrWhiteSpace(bundle.LicenseFile) || settings.InstallDirectorySelection ||
                 settings.LaunchAfterInstall || settings.BannerBitmap is not null || settings.DialogBitmap is not null)
-                lightArguments.AddRange(["-ext", toolset.UiExtensionPath, "-cultures:" + settings.Culture]);
+            {
+                // Non-English MSIs fall back to en-US for strings the language
+                // resources do not override, mirroring the reference bundlers.
+                lightArguments.AddRange([
+                    "-ext", toolset.UiExtensionPath,
+                    "-cultures:" + language.Culture +
+                        (language.Culture.Equals("en-US", StringComparison.OrdinalIgnoreCase) ? "" : ";en-US")]);
+            }
+            lightArguments.AddRange(["-loc", localePath]);
             if (settings.InstallScope == WixInstallScope.CurrentUser) lightArguments.Add("-sice:ICE91");
             // ICE61 拒绝移除较新产品；显式允许降级时，这正是调用方选择的行为。
             if (settings.AllowDowngrades) lightArguments.Add("-sice:ICE61");
@@ -96,6 +151,10 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             throw;
         }
     }
+
+    private string? FindLocaleFile(WixLanguageInfo language) =>
+        settings.LocaleFiles.FirstOrDefault(pair =>
+            pair.Key.Equals(language.Culture, StringComparison.OrdinalIgnoreCase)).Value;
 
     private static async Task<BundlePlanItem> PrepareSignedPayloadAsync(
         BundleBuildContext context, BundlePlanItem item, IBundleSigner signer, CancellationToken cancellationToken)
@@ -200,14 +259,30 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         if (icons.Count == 0) return null;
         if (icons.Any(icon => !Path.GetExtension(icon).Equals(".ico", StringComparison.OrdinalIgnoreCase)))
         {
-            throw new NotSupportedException("WIN-MSI-1 accepts .ico icons only.");
+            throw new NotSupportedException("MSI icons accept .ico files only.");
         }
         foreach (var icon in icons) CheckReparse(icon);
-        return Path.GetFullPath(icons[0]);
+        var path = Path.GetFullPath(icons[0]);
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException("The MSI icon file does not exist.", path);
+        }
+        var header = new byte[4];
+        using (var stream = File.OpenRead(path))
+        {
+            if (stream.Read(header, 0, header.Length) != header.Length)
+                throw new InvalidDataException("The MSI icon file is not a valid .ico: " + path);
+        }
+        if (header[0] != 0 || header[1] != 0 || header[2] != 1 || header[3] != 0)
+        {
+            throw new InvalidDataException("The MSI icon file is not a valid .ico: " + path);
+        }
+        return path;
     }
 
     private string Fingerprint(BundleConfiguration bundle, BundlePlanItem item,
-        WixIdentity identity, IReadOnlyList<InstallFile> files, string? icon, XElement product)
+        WixIdentity identity, IReadOnlyList<InstallFile> files, string? icon, XElement product,
+        WixLanguageInfo language)
     {
         var canonical = new XElement(product);
         var text = new StringBuilder()
@@ -216,7 +291,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             .AppendLine(bundle.ProductName).AppendLine(bundle.Identifier.ToLowerInvariant())
             .AppendLine(identity.ProductVersion).AppendLine(bundle.Publisher)
             .AppendLine(bundle.Description).AppendLine(bundle.Homepage)
-            .Append(settings.EffectiveCodepage).AppendLine()
+            .Append(language.Codepage).AppendLine().AppendLine(language.Culture)
             .AppendLine(item.Target.RuntimeIdentifier).AppendLine(identity.UpgradeCode.ToString("D"));
         foreach (var file in files)
         {
@@ -232,7 +307,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
     }
 
     private string DefinitionHash(BundleConfiguration bundle, BundlePlanItem item,
-        IReadOnlyList<InstallFile> files, string? icon)
+        IReadOnlyList<InstallFile> files, string? icon, WixLanguageInfo language)
     {
         var text = new StringBuilder().AppendLine(GeneratorRevision).AppendLine(bundle.ProductName)
             .AppendLine(bundle.Identifier.ToLowerInvariant()).AppendLine(bundle.Version)
@@ -241,8 +316,8 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             .AppendLine(settings.StartMenuShortcut.ToString()).AppendLine(settings.DesktopShortcut.ToString())
             .AppendLine(settings.InstallDirectorySelection.ToString()).AppendLine(settings.AddToPath.ToString())
             .AppendLine(settings.UninstallShortcut.ToString()).AppendLine(settings.LaunchAfterInstall.ToString())
-            .AppendLine(settings.EffectiveCodepage.ToString(System.Globalization.CultureInfo.InvariantCulture))
-            .AppendLine(settings.Language.ToString());
+            .AppendLine(language.Codepage.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .AppendLine(language.Culture);
         if (settings.AllowDowngrades) text.AppendLine("allow-downgrades=true");
         foreach (var association in bundle.FileAssociations)
         {

@@ -35,16 +35,20 @@ public sealed class WixBundler
         {
             throw new ArgumentException("MSI signing files require a configured Windows signer.");
         }
-        if (!Enum.IsDefined(typeof(WixPackageLanguage), _settings.Language))
-        {
-            throw new ArgumentOutOfRangeException(nameof(_settings.Language));
-        }
+        var languages = _settings.ResolveLanguages();
         if (_settings.Codepage < 0 || _settings.Codepage is 65000 or 65001)
         {
             throw new ArgumentException("MSI requires a Windows ANSI code page; UTF-7/UTF-8 are not supported by WiX 3 MSI UI.");
         }
-        if (_settings.Language == WixPackageLanguage.ChineseSimplified && _settings.EffectiveCodepage != 936)
-            throw new ArgumentException("Simplified Chinese MSI UI requires Windows code page 936.");
+        foreach (var language in languages)
+        {
+            var localeFile = _settings.LocaleFiles.FirstOrDefault(pair =>
+                pair.Key.Equals(language.Culture, StringComparison.OrdinalIgnoreCase)).Value;
+            if (localeFile is not null)
+            {
+                WixLocale.ReadCallerStrings(localeFile, language, _settings.EffectiveCodepage(language));
+            }
+        }
         if (!string.IsNullOrWhiteSpace(bundle.LicenseFile) &&
             !Path.GetExtension(bundle.LicenseFile).Equals(".rtf", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("MSI interactive license UI requires an RTF license file.");
@@ -52,9 +56,10 @@ public sealed class WixBundler
         CheckBitmap(_settings.DialogBitmap, "MSI dialog bitmap requires a 503x314 .bmp file.", 503, 314);
 
         foreach (var target in bundle.Targets)
+        foreach (var language in languages)
         {
             WixIdentity.Create(bundle.Identifier, bundle.Version, target.RuntimeIdentifier,
-                _settings.InstallScope, _settings.UpgradeCode, _settings.Language, _settings.MsiVersion);
+                _settings.InstallScope, _settings.UpgradeCode, language, _settings.MsiVersion);
         }
         var toolset = await WixToolsetResolver.ResolveAsync(
             _options.ResolveToolCacheDirectory(), _options.ToolsetArchivePath, cancellationToken);

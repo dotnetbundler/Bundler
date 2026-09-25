@@ -54,6 +54,24 @@ MSI 后端拒绝在同一路径以相同应用版本覆盖不同内容。
 资源文件的**内容**以及应用运行时收到的参数仍可使用中文。
 传入 `zh-CN` 会生成独立的简体中文 MSI，但应用自带名称和描述不会被 Bundler 自动翻译。
 
+## 语言、翻译覆盖与 FIPS
+
+示例默认仍是单语言包（`HelloMsiAppLanguage`，默认 `en-US`）；
+`HelloMsiAppLanguages` 接收分号分隔的 culture 列表，一次构建为每语言各产一个独立 MSI（各语言产品线身份隔离）：
+
+```powershell
+dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release `
+  "-p:HelloMsiAppLanguages=en-US%3Bja-JP" `
+  -p:BundlerOutputPath="$env:TEMP\HelloMsiApp-multi"
+```
+
+支持 38 个 WiX 内嵌 culture（如 `en-US`、`zh-CN`、`zh-TW`、`ja-JP`、`ko-KR`、`de-DE`、`fr-FR`、`ar-SA` 等；`hi-IN`/`kk-KZ` 的上游译文在本工具链下不可编译，不在支持集内）。
+命令行属性中的分号必须写成 `%3B`。
+`Assets/locale-zh-cn.wxl` 演示调用方翻译覆盖：仅在请求 `zh-CN` 时纳入，按 id 覆盖 Bundler 自有串（完成页勾选文本、Feature 名等），其余文本由 WiX 内嵌译文兜底；
+覆盖文件须经 culture/键集/编码校验，未知 id 或编码不兼容会被拒绝。
+`HelloMsiAppFipsCompliant=true` 会把 `-fips` 透传给 `candle.exe`（`light.exe` 无此开关）；该选项只表示使用 WiX 的 FIPS 兼容编译路径，不构成 FIPS 认证声明。
+每个语言包沿用既有的独立身份、输出锁、清单、指纹与同版本碰撞检查。
+
 ## 安装目录、界面与可选功能
 
 示例默认演示 WIN-MSI-6 的全部用户能力，均可用 `HelloMsiApp*` 开关关闭：
