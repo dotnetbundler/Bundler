@@ -1,65 +1,78 @@
 # Bundler 开发与交接规则
 
-本文件是跨格式开发规则的唯一规范入口。`PROJECT_CONTEXT.md` 记录当前事实和验证证据，`docs/roadmap.md` 记录产品路线与阶段，格式专用文档记录各自语义；不要把历史测试结果当作当前事实。用户本次明确指令优先于本文件。
+本文件是**跨格式协作规则的唯一规范入口**。`AGENTS.md` 只提供接管入口；`docs/roadmap.md` 决定格式顺序，格式路线保存设计和阶段状态，`PROJECT_CONTEXT.md` 保存实现事实与验证证据。代码和测试用于核实事实，历史记录不能代替当前状态。用户当前任务的明确要求优先。
 
 ## 1. 接管与判断
 
-1. 阅读根目录 `AGENTS.md`、本文件、`PROJECT_CONTEXT.md`、`docs/roadmap.md`、`README.md`；再读当前格式的路线、能力矩阵、人工测试、外部待办和相关代码/测试。人工文档入口为 `docs/manual-testing-index.md`。
-2. 运行 `git branch --show-current`、`git rev-parse --short HEAD`、`git status --short`，读取 `Directory.Build.props` 的包版本。核对文档声明与实际 API、包依赖、测试及产物；快照可能过期。
-3. 先检查请求的错误前提、遗漏条件和跨层影响。向用户说明当前状态、设计判断、改动范围、验证计划和外部限制；影响产品语义的选择先问，能从代码和测试核实的细节自行核实。
-4. 一个阶段或修复要处理完整因果链：源码、独立包消费、入口映射、示例、自动化、真实系统行为和文档。若某层不适用，说明原因。不要只修用户首先观察到的一处报错。
+1. 先读 `AGENTS.md`、本文件、`PROJECT_CONTEXT.md`、`docs/roadmap.md`、`README.md`，再读当前格式的路线、能力矩阵、人工测试、外部待办、上游参考及相关代码和测试。格式入口见 `docs/manual-testing-index.md`。
+2. 核对分支、HEAD、工作区、根 `Directory.Build.props` 的 `BundlerPackageVersion`、实际 API、NuGet 包内容、示例与测试入口。交接快照和旧对话不是当前事实；文档与实现冲突时先调查，再修正状态。保留用户已有的无关改动。
+3. 先指出需求的错误前提、遗漏条件和跨层影响，区分**已核实事实、拟定方案、预测、外部待验收**。修改前向用户说明当前差距、判断、文件范围、验证方式和限制。影响产品语义、架构或成本的未定选择，先提出推荐选项与取舍，等用户确认；能从代码核实的细节自行核实。
+4. 一个阶段或缺陷要处理完整因果链：公共模型、后端、入口映射、独立包消费、示例、自动化、适用的真实系统行为和文档。某层不适用时说明原因，不只修首先看到的报错。数据丢失、安全或主流程缺陷在当前阶段处理；独立增强项按路线登记。
 
-## 2. 产品和包边界
+## 2. 新后端必须先完成整条路线
 
-- 目标是可处理调用方准备好的普通文件目录的通用桌面打包工具。`DotNet.Bundler.Abstractions` 定义公共契约；`DotNet.Bundler.Core` 负责格式无关的验证、规划、编排与工作目录；`DotNet.Bundler.Nsis`、`DotNet.Bundler.Wix` 等格式包分别提供可直接调用的公共 API、格式行为和所需构建工具。引用某个后端 NuGet 包的普通项目，即使没有本仓库源码或 MSBuild 集成，也应能生成该格式安装包。
-- `DotNet.Bundler.MSBuild` 是当前应用层：把 MSBuild 属性和 Item 映射到公共请求，再调用同一 Core/后端。`DotNet.Bundler` 是便利元包。将来正式 CLI 也是应用层，复用同一实现；现有 CLI 只是原型，按路线在计划格式完成后处理。后端公共模型不能依赖 `.csproj`、`dotnet publish`、MSBuild 类型或调用方使用 .NET。
-- MSBuild Task 及其直接加载的程序集提供 `netstandard2.0` 资产，进程内调用 Core/后端；格式必需的原生编译器可作为后端工具启动。工具随对应 NuGet 包提供，固定来源/版本/哈希/许可证，在用户级校验缓存使用；不要在运行时下载任意应用运行时或先决条件。
-- 适用的用户能力可对齐参考产品，但不照搬 Tauri/NSIS 内部实现。MSI 使用 Windows Installer 原生事务和所有权规则；不为了形式一致复制 NSIS 的 journal、自定义操作或不适用功能。
+**开始新后端第一阶段代码前，先制定覆盖该安装格式直至冻结的完整路线，讨论关键选择，并将确认后的方案写入仓库。** `PackageFormat` 枚举值、通用接口或其他测试所用工具 fixture，不等于已有该后端，也不构成正式工具选型。实施中出现改变产品语义的新需求时，先修订路线并确认选择，不边写代码边猜规则。
 
-## 3. 版本、包和示例
+完整路线至少包含：
 
-- 实现、修复或随包文档调整导致 NuGet 包内容变化时，只在根 `Directory.Build.props` 递增 `BundlerPackageVersion`。源码包依赖及示例 `PackageReference` 使用该属性，测试脚本默认版本从该文件读取；同步面向用户的版本示例和中文说明。不要在同一个 ID/版本上重复发布不同包并指望 NuGet 缓存更新。一个阶段的未提交工作使用同一个新版本，结项前统一检查。
-- 工具包版本与被打包应用版本独立。`HelloNsisApp`、`HelloMsiApp` 等公开示例应用版本保持稳定；升级/降级使用独立 fixture 的版本参数。正式发布的应用按目标格式规则递增产品版本。MSI 后端拒绝在相同输出路径以相同产品版本覆盖不同内容；开发期旧产物应移到明确位置或选用独立输出目录，不通过弱化冲突保护处理。
-- 公开示例是可操作演示，不是自动化测试。当前 NSIS 与 MSI 示例都通过普通 `PackageReference Version="$(BundlerPackageVersion)"` 消费仓库本地 `artifacts/packages`：项目显式导入跨格式 `Bundler.LocalPackages.props`，该文件集中设置还原源，版本由根 `Directory.Build.props` 提供。在根目录执行 `dotnet pack Bundler.slnx -c Release -o artifacts/packages` 后直接 `dotnet publish <示例项目> -c Release`。新增公开能力要同步展示在对应示例；缺少本地包时先 pack，不能假设源码项目引用或公共 NuGet 源会提供未发布版本。
+1. **能力与边界**：输入/输出、构建宿主、安装目标及用户场景。可参考固定提交的 Tauri 等产品，对元数据、安装/卸载、身份/版本、升级/降级、范围/权限、目录、桌面集成、签名、语言、静默/被动、退出码、失败/回滚、维护等逐项判定适用性、阶段、完成条件和明确不支持项。比较用户可观察结果，不复制上游字段、模板、翻译和内部机制；不为表面对齐引入不安全行为。
+2. **工具供应与可行性**：核查官方/可信来源、版本、许可证和对应源码/声明义务、免费条件、包体积、SHA-256 与逐文件完整性、离线包供应/缓存、构建宿主自身依赖和目标设备范围。分析单个工具环境需求时，不混入调用方 MSBuild、SDK、NuGet 还原或应用构建需求。未实测平台列验证计划，不写成支持。若候选涉及付费必需服务、许可不清或不能合法再分发，先提出免费且许可可履行的替代方案；不加入侵权文件。
+3. **格式基础语义**：身份、版本映射、升级/降级、组件和文件所有权、范围/权限、安装目录、卸载、事务/恢复及自定义扩展边界。会妨碍未来升级兼容的选择须在第一阶段产物出现前明确。格式差异留在后端，不照搬 NSIS 或 Tauri 的内部实现。
+4. **完整阶段表**：从最小可用到格式冻结，逐阶段写目标、前置条件、交付物、明确不做事项、直接 API 与应用层覆盖、新增自动化、当前宿主真实测试、专用 CI/VM 和人工边界、退出条件。安装格式第一阶段就做真实安装/卸载烟雾测试，最终阶段做矩阵与冻结。
+5. **可接班文档**：在总路线登记顺序，建立格式专用路线、能力矩阵、人工测试、外部待办及必要的上游审计；记录决策依据、未决问题、测试入口和完成标准。关键选择经用户确认才写为决定；规划完成不自动授权开始第一阶段代码。
 
-## 4. 测试风格与验证要求
+每阶段开始前重读路线和实际状态，向用户报告阶段目标、差距、设计、预计文件、测试及退出条件；得到该阶段启动指令后完成整个获授权阶段，不任意拆成只修局部的小轮次。阶段结束即更新事实与默认下一步。当前格式顺序和计划见 `docs/roadmap.md`。
 
-**统一的是测试风格，不是测试用例清单。** 新后端先参考现有模块的目录、命名、fixture、包源、脚本入口、断言、日志和清理方式；没有实际理由就沿用这些习惯，让测试看起来属于同一个项目。各格式按自身能力与系统语义决定测试内容和数量，不要求相同用例，也不把 NSIS 的 journal 行为搬到 MSI。每项新增/修改功能仍须增加或更新对应自动化测试；缺陷修复要有能区分修复前后行为的断言。
+## 3. 分层、直接 API 与工具随包供应
 
-下表是当前两个 Windows 后端的测试入口，供新后端沿用组织方式；它不是要求每个格式具备完全相同场景的清单。
+- 产品面向调用方已准备好的普通应用目录，不限定被打包应用的语言或框架。`DotNet.Bundler.Abstractions` 定义公共契约；`DotNet.Bundler.Core` 负责格式无关的验证、规划、编排和工具缓存；`DotNet.Bundler.Nsis`、`DotNet.Bundler.Wix` 等后端各自实现格式语义。共享抽象须有真实跨格式需求，不能为假想复用扩大公共模型。
+- **后端 NuGet 包本身必须可直接使用**：仓库外普通项目只引用相应后端包、没有本仓库源码或 `ProjectReference`、不引用 `DotNet.Bundler.MSBuild`，就能通过公共 API 生成该格式产物。`DotNet.Bundler.MSBuild` 是当前应用层，只把属性和 Item 映射到同一 Core/后端；Task 在 MSBuild 进程内调用它们，不再启动额外的 .NET CLI 驱动，实际格式编译器可作为工具进程启动。`DotNet.Bundler` 是便利元包。将来正式 CLI 也是应用层，按总路线在计划格式完成后产品化；现有 CLI 原型不决定后端设计。后端 API 不依赖 `.csproj`、`dotnet publish`、MSBuild 类型或应用使用 .NET。
+- **默认打包必需工具和资源随对应后端包分发**：普通使用者无需另装 NSIS/WiX，也无需运行时联网下载打包工具。参照 NSIS 的内嵌工具与校验缓存模式，但须按各工具许可证和宿主条件设计。固定可信来源、版本、哈希、包内容、合法再分发及必要源码/声明；缓存污染、损坏和并发有安全处理。显式本地工具覆盖可作为受控高级入口。NuGet 包获取和调用方 SDK/MSBuild 环境属于另一层，不能由“包内工具离线”推断整台零环境机器无需其他依赖。
+- 选择工具以**合法免费、无付费必需服务、尽量覆盖更多构建宿主和安装设备**为目标；实际支持范围以原生验证为准。MSBuild Task 及其直接加载程序集遵守现有 `netstandard2.0` 资产契约。不自动发现、下载、安装、修复或卸载任意**应用运行时/先决条件**（WebView2、VC++、.NET、JRE 等）；调用方可准备普通文件载荷。签名是打包发布能力，但生产私钥、HSM/云账户及第三方服务由发行方提供。
+- 格式受管模式须定义身份、所有权与失败边界。用户自备脚本/模板或专家模式要显式标明责任范围，不能把任意用户逻辑宣称为 Bundler 内建安全能力。MSI 用 Windows Installer 原生事务，NSIS 的 journal 不自动成为其他格式的设计。
+- 签名私钥、PFX 密码、访问令牌等秘密不得进入仓库、示例项目、普通命令行或可回显日志；签名失败不得留下被误认为成功的最终产物。生产证书与公开信任链只按真实发布环境验收。
+- 快速开发期可依据实际用例调整早期 alpha API 与配置，不为未发布兼容性阻塞正确设计；已发布安装身份、用户数据与升级路径仍须按格式迁移规则保护。
 
-| 测试用途 | 当前 NSIS 入口 | 当前 MSI 入口 |
+## 4. 版本、配置与完整示例
+
+- 实现、修复或随包文档调整导致 NuGet 包内容变化时，只在根 `Directory.Build.props` 递增 `BundlerPackageVersion`；包依赖、示例 `PackageReference` 和测试脚本默认值引用此值。结项前核对所有包及用户文档；不要在同一 ID/版本上发布不同内容并指望 NuGet 缓存刷新。一个未提交阶段使用同一新版本。工具包版本与被打包应用版本独立；公开示例应用版本保持稳定，升级/降级由独立 fixture 测试。
+- 共享本地包消费配置在 `Bundler.LocalPackages.props` 维护，不在各示例和 fixture 重复 `RestoreSources` 或版本字面量。公开示例先 Pack 到 `artifacts/packages`，再通过普通 `PackageReference` 直接 `dotnet publish`。仓库外 fixture 由脚本传入本轮包源、版本与隔离缓存。缺包先 Pack，不假定未发布版本在公网源，也不用源码引用掩盖包消费问题。
+- **每个后端有完整、可操作的专用示例项目**，可参考 `samples/HelloNsisApp` 的演示形式，不用测试 fixture 冒充示例。默认命令应直接构建并生成安装包；该格式当前公开且适用的**所有用户能力**都要在示例中有实际配置、可复现的变体命令或明确的操作演示，不能只列名称。互斥配置分开演示；包含可检查的资源、元数据、桌面集成、语言、安装范围、签名配置等适用内容，以及安装/卸载、验证和清理说明。真实证书、提权或专用环境写明前提和未验收边界，不放私钥。新增公开能力在同阶段更新示例和中文说明；不适用的格式特性无需硬塞。
+- 示例是演示，自动回归须另有 fixture。只服务一种格式的项目、目录、`.csproj` 和说明采用 `Nsis`、`Msi` 等格式名；跨格式项目和文档才用泛名。重命名项目可能改变安装身份、产物名或升级关系，须单独核对。
+
+## 5. 测试风格、证据与阶段完成
+
+**统一测试风格和组织，不统一各格式的用例清单。** 新后端参考现有目录、命名、fixture、包源、脚本入口、断言、日志和清理；有实际格式原因可采用专用方式，并在格式测试说明写明。不要模拟另一格式不存在的行为。
+
+单格式 API fixture 使用 `tests/<Format>.Api.PackageFixture`，系统集成使用 `tests/<Platform>.<Format>.Integration`，入口为 `Verify.ps1`，其他脚本名写明用途；跨格式快速测试保留 `tests/Bundler.Tests`。格式专用测试与示例项目名称显式带格式名，只有真正跨格式的项目使用泛名。
+
+| 用途 | NSIS 当前入口 | MSI 当前入口 |
 | --- | --- | --- |
-| 快速契约 | `tests/Bundler.Tests` | `tests/Bundler.Tests` |
-| 独立后端包 API fixture | `tests/Nsis.Api.PackageFixture` | `tests/Msi.Api.PackageFixture` |
+| 快速单元/契约 | `tests/Bundler.Tests` | `tests/Bundler.Tests` |
+| 仓库外直接后端 API 包消费 | `tests/Nsis.Api.PackageFixture` | `tests/Msi.Api.PackageFixture` |
 | MSBuild 包消费 fixture | `tests/Windows.Nsis.Integration/Fixture` | `tests/Windows.Msi.Integration/Fixture` |
-| Windows 集成入口 | `tests/Windows.Nsis.Integration/Verify.ps1` | `tests/Windows.Msi.Integration/Verify.ps1`；生命周期另有 `VerifyLifecycle.ps1`，公开示例数据库契约见 `VerifyPublicSample.ps1`（不安装） |
-| 专用环境/人工 | `tests/Windows.Nsis.Reboot`、NSIS 人工文档 | MSI 人工文档及未来专用测试 |
+| 真实 Windows 集成 | `tests/Windows.Nsis.Integration/Verify.ps1` | `tests/Windows.Msi.Integration/Verify.ps1`；生命周期、维护、示例检查有专用脚本 |
+| 专用环境与人工 | `tests/Windows.Nsis.Reboot`、NSIS 人工清单 | MSI 人工清单 |
 
-新增测试时尽量保持以下写法一致：
+1. 每项新增或修改功能必须**新增或更新对应自动化测试**；缺陷修复断言要区分修复前后。按功能覆盖验证/映射、真实打包、NuGet 包内容、仓库外直接 API 包消费、应用层消费和适用的系统生命周期。只运行旧测试、只查模板/数据库或只发布公开示例，不证明新系统行为。
+2. API fixture 只引用打出的后端包；MSBuild fixture 引用打出的应用层包。现有 fixture 显式导入 `Bundler.LocalPackages.props`，脚本传本轮 `BundlerPackageSource`、`BundlerPackageVersion` 和独立缓存，并检查实际还原的包 ID、版本、源与缓存。仓库外复制项目连同 props 复制；项目自身声明必要 SDK 属性，不靠根 props、旧 `obj` 或隐藏的 `--source` 才工作。
+3. 脚本按 Pack、隔离还原、生成产物、执行系统行为、断言最终状态组织，复用 `tests/AssertLocalRestore.ps1` 等 helper。每轮使用独立输出和产品身份，预检无碰撞。记录命令、宿主/架构、包与应用版本、哈希、退出码、日志、清理及未验证范围。NuGet 可列出 SDK/VS fallback 文件夹，不能要求 `packageFolders` 只有缓存一项。
+4. 安装格式最小阶段就做**真实安装/卸载烟雾测试**。新增生命周期功能在当前机器能安全执行时当阶段实测，并跑新增测试及受影响的跨后端回归。缺少 UAC、真实重启、生产证书、其他 Windows/架构、物理断网或高破坏故障环境时，列入对应格式人工/专用 CI/VM 清单；不阻塞本机可完成的开发，也不扩大支持声明。高风险试验只在可抛弃 VM/专机执行。
+5. 集成失败即使复跑通过，也记录首次失败、调查和复跑，不能仅放宽断言。保留失败现场，明确归属后只清理本轮创建的安装、证书、注册表、进程和目录；删除/移动前核对解析后的绝对路径，不清理用户旧产物。
+6. 阶段完成须满足路线的实现、包消费、入口映射、示例、中文文档、新增自动化、当前可执行真实测试、受影响回归和状态更新。外部未验收项准确保留，不能把当前可测功能推给人工，也不能把未测平台写成通过。
 
-1. **目录与名称**：只服务一个格式的示例或测试项目，其项目名、目录名和 `.csproj` 名应包含 `Nsis`、`Msi` 等格式名；跨格式快速测试 `Bundler.Tests` 保留泛用名。格式专用 API fixture 使用 `tests/<Format>.Api.PackageFixture`；系统集成测试使用 `tests/<Platform>.<Format>.Integration`，以 `Verify.ps1` 为入口，其他场景用说明用途的脚本名。快速测试沿用仓库现有测试入口和可读的用例名。不同格式的人工测试与结果分开存放。
-2. **fixture 与包源**：后端 API fixture 只引用打出的对应后端包，通过公共 API 生成产物；MSBuild fixture 引用打出的应用层包。现有 Windows fixture 都显式导入 `Bundler.LocalPackages.props`；该文件声明 `RestoreSources=$(BundlerPackageSource)`，脚本传入本轮打出的本地包目录及隔离缓存。仓库外复制测试必须连同该 props 一起复制，项目自身仍声明必需的 SDK 属性，不依赖仓库根 `Directory.Build.props` 或旧 obj；脚本将本轮包版本、包源和缓存传入并检查实际还原的包 ID、版本、源与缓存。不要让某个格式只能靠脚本里隐藏的 `--source` 才能找到开发包。
-3. **脚本组织**：复用现有的包检查与断言辅助脚本；按 Pack、还原、构建产物、执行系统行为、核对状态的顺序组织，失败时报告明确原因。每轮使用独立输出目录；有产品身份的安装测试使用独立身份。执行前检查目标未被占用，只清理本轮创建的状态，保留可核查的日志和哈希。
-4. **结果与交接**：记录运行命令、主机/架构、包和产物版本、哈希、日志、退出码、清理结果及未验证范围。公开示例用真实本地包源验证，但不代替测试 fixture。共用 Core、MSBuild 或便利元包有改动时，运行其他受影响后端的回归。
+## 6. 文档、上游与交接
 
-测试内容仍由格式和阶段决定：安装格式在最小阶段执行真实安装/卸载；新能力按其实际系统行为增加回归，不能只检查模板或数据库。当前机器能安全测试的内容当阶段执行；缺少 UAC、重启、生产证书或其他宿主时，按本格式人工文档记录未验收，不冒充通过。格式特有的功能直接设计专用测试，**无需为了形式一致制造另一后端的对应功能或测试**。若确需改变上面的组织或调用习惯，在本格式测试说明或路线中简述实际原因和采用的方式；涉及产品语义的分歧先与用户确认。
+- 仓库维护的 Markdown 和新增的人类语言代码/脚本注释使用中文；代码标识、产品名、命令和上游引用可保留原文。第三方原始许可证、版权声明和源码原样保存，不因中文化改写法定文本；不为统一语言批量改写外部源码注释。
+- 泛用文件名只用于跨格式内容。格式专用路线、能力矩阵、人工测试、外部待办、上游审计、示例说明、测试说明与工具来源均带格式名；`docs/manual-testing-index.md` 只作入口，不混放 NSIS、MSI、macOS、Linux 步骤及结论。NSIS 历史 `MT-01..MT-11` 不重编号，新增 ID 用格式前缀。移动文件时检查活动引用、包内容清单和校验脚本。
+- 参考 Tauri 等上游时，固定提交、日期、官方来源、许可、用户能力、采用/拒绝理由、计划阶段与测试证据，写入**对应格式**审计。上游变化重新核对；不把旧快照说成最新，也不复制其代码、模板或翻译。没有明确用户结果的字段不强行映射。
+- 能力矩阵统一使用可核实的状态：**已实现**须有自动化证据；**部分实现**说明缺口；**计划实现**绑定阶段；**外部待验收**指实现存在但缺专用环境证据；**不适用**用于框架或格式不相关能力；**明确拒绝**给出安全、所有权或产品边界理由。单台开发机结果不能推广为全部 Windows 或其他宿主支持。
+- 总路线保存跨格式顺序；格式路线保存确认的决策、阶段目标/退出条件与证据；能力矩阵逐项标明实现、计划和外部边界；格式人工清单与 open-items 只收外部条件。`PROJECT_CONTEXT.md` 记录当前事实、包版本、最近验证、未决问题和默认下一步。每阶段结束即更新这些文件，即使暂不提交，也要让下一位仅凭仓库、Git、代码和测试继续工作。历史证据保留日期/版本，不改写成当前验证。
+- 未经用户明确要求不提交或推送；“提交”只授权提交，不授权推送。提交前核对 Git 状态、diff 和生成物，只纳入本阶段已验证改动。不用破坏性 Git 命令或宽泛递归清理代替审查。
 
-- 当前 Windows 集成脚本共用 `tests/AssertLocalRestore.ps1`。NuGet 可能同时列出 SDK/Visual Studio 的本地 fallback 文件夹，因此检查 Bundler 包确实进入本轮隔离缓存，不能错误地要求 `packageFolders` 只有一项。
-- 阶段结束前运行新增测试和受影响的回归，验证所改功能涉及的包、入口与实际系统行为；测试范围由该格式路线和能力矩阵决定。
-- 集成测试出现失败后即使复跑通过，也记录失败断言和复跑结果；未查明根因时不能把偶发失败改写成从未发生。需要排查时先保存失败现场，不能单靠放宽断言消除信号。
+## 7. 当前主要命令入口
 
-## 5. 文档、状态与 Git
-
-- 仓库维护中的 Markdown 文档统一使用中文，根 `README.md` 是中文总入口；无需保留英文镜像。代码标识、命令、产品名称和上游引用可保留原文。第三方原始许可证、版权声明及上游源码文件须原样保存，不能因文档语言要求而改写其法定文本。
-- 只有跨格式内容使用泛用文件名。只针对一个安装格式的路线、能力矩阵、人工测试、外部待办、示例说明、测试说明及第三方工具来源文档，文件名须明确包含 `nsis`、`msi` 或后续对应格式名；即使已经放在该格式目录下也遵守。跨格式入口保留泛用文件名，并链接到格式专用文档。迁移旧文件时更新所有活动引用、打包清单和校验脚本，保留人工测试历史用例 ID。
-- 面向用户的文档只描述实际可用能力；路线、预测与外部待验收分别记录。
-- 新格式创建自己的路线、能力矩阵、外部待办和人工测试文档，统一从 `docs/manual-testing-index.md` 进入；保留 NSIS 历史用例 ID，不把不同格式的步骤混在同一清单。新增功能同步更新相应 API/入口属性说明、示例和测试入口。
-- 参考 Tauri 等上游能力时在**对应格式**文档固定上游提交、来源、对齐/排除依据与计划/已实现状态；不要把 MSI 审计混写进 NSIS 的上游参考，也不要复制上游安装器模板。专家模式用户自备 WiX 逻辑必须与 Bundler 受管语义分开标示。
-- `PROJECT_CONTEXT.md` 记录实时阶段状态、最后验证、未决问题和下一步；`docs/roadmap.md` 记录跨格式阶段顺序；格式路线记录决策与阶段证据。事实、方案、预测分开，不能把未实施、未自动验证或未人工验收的能力写成已完成。结束一个阶段时即使不提交，也更新这些文档，使下次对话无需旧聊天记录。
-- 未经用户明确要求不提交或推送。提交前核对工作区和 diff，只纳入本阶段已验证文件；保留无关改动。不使用破坏性的 Git 命令或宽泛递归清理。Windows 删除/移动本轮测试产物前核对解析后的绝对路径和归属。
-
-## 6. 当前命令入口
+以下是当前仓库入口，不替代格式路线的测试表。Windows 脚本省略 `-PackageVersion` 时从根 `Directory.Build.props` 读取当前值；执行前仍须核对 Git 和本地包。
 
 ```powershell
 dotnet build Bundler.slnx -c Release
@@ -67,11 +80,10 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
+
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -Configuration Release
 ```
-
-以上测试命令省略 `-PackageVersion` 时会读取根 `Directory.Build.props` 的当前版本；执行前仍要核对实际包和 Git 状态。真实重启/UAC 等专用测试按格式文档的环境限制运行。

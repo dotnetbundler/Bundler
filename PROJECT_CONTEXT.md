@@ -65,7 +65,7 @@ MSBuild 应用层 -> DotNet.Bundler.MSBuild -> 同一后端公共 API
 格式后端 -> DotNet.Bundler.Core -> Abstractions 契约与共享管线
 ```
 
-`DotNet.Bundler.Nsis` 和 `DotNet.Bundler.Wix` 均为可独立引用的后端包，不是 MSBuild 内部实现；调用者可以分别直接调用 `NsisBundler` 和 `WixBundler`。MSBuild/未来 CLI 是应用层。独立包消费测试见 `docs/development-rules.md` 第 4 节。
+`DotNet.Bundler.Nsis` 和 `DotNet.Bundler.Wix` 均为可独立引用的后端包，不是 MSBuild 内部实现；调用者可以分别直接调用 `NsisBundler` 和 `WixBundler`。MSBuild/未来 CLI 是应用层。独立包消费测试见 `docs/development-rules.md` 第 5 节。
 
 ## 3. NSIS 工具供应链
 
@@ -579,7 +579,7 @@ WIN-MSI-2 已按用户“开始”在当前 Windows 11 Pro build 26200 x64 主�
 
 **包源约定补正（2026-09-24）**：用户发现 MSI 的 MSBuild 集成 fixture 没有 NSIS 的 `<RestoreSources>$(BundlerPackageSource)</RestoreSources>`，此前只有 MSI 脚本的 `dotnet restore --source` 指定包源。核对后没有 MSI 特有理由，现已在 `BundlerMsiSmoke.csproj` 加入与 NSIS 相同的声明，MSI smoke/lifecycle 脚本传 `BundlerPackageSource`，API fixture 同样由项目属性选择本地源，不再依靠脚本隐藏的 `--source`。51 项快速测试中的版本/包源对齐断言已覆盖 NSIS/MSI 两类 fixture；实际 `project.assets.json` 和隔离缓存仍由 `tests/AssertLocalRestore.ps1` 核验。当前 Windows 11 Pro build 26200 x64 上重新运行 MSI smoke 与 lifecycle，均通过真实安装/卸载、升级与拒绝场景。Smoke 的独立 API/MSBuild MSI SHA-256 为 `7228EFEFA6F1B9D67D31C7804BE050813ADA4A0FF23CFBDA982A64B45BA539DE`、`E24D9D739322146ED38F1D77B2D95917AA01357E1E5DD5C4BB8BB4AE2376150C`，日志 `%TEMP%\Bundler-Msi-Smoke-f6e19c853c1445828ff8ca2083cc20ec`；lifecycle v1/v2/异包 SHA-256 为 `C364CC5A416ECB5FEC5F71C9254351FA496FFD623187E105FD599535F4E8A581`、`E106C9A9D3C35B162E4CE5EEB48719D2B9D40039192017C30C2514C56842AE9B`、`2217F66F46F973EBD4A42FDDF3C3CD9AC8A0A7EAD5ADFE80B2C950B1F71ECF21`，日志 `%TEMP%\Bundler-Msi-Lifecycle-d27c202d862c48aa9508a92a8c5bfa66`。普通沙箱下第一次启动测试时 MSBuild 无法读取本机 `AppData\Local\Microsoft SDKs`，这是沙箱访问失败、测试未执行；取得所需本机读取权限后 51 项测试通过。此次只改测试 fixture、脚本与规则文档，NuGet 包内容未变，包版本保持 alpha.34。
 
-用户进一步澄清：希望各后端的**测试风格**统一，包括目录、命名、fixture、包源、入口脚本、断言、日志和清理习惯；不同格式的具体测试内容和数量按其能力决定，不要求逐项对应。根 `AGENTS.md` 提供入口，`docs/development-rules.md` 第 4 节记录规范；确有组织或调用方式上的特殊原因时说明即可。此处仅记录决策，规范细节以该文件为准。
+用户进一步澄清：希望各后端的**测试风格**统一，包括目录、命名、fixture、包源、入口脚本、断言、日志和清理习惯；不同格式的具体测试内容和数量按其能力决定，不要求逐项对应。根 `AGENTS.md` 提供入口，`docs/development-rules.md` 第 5 节记录规范；确有组织或调用方式上的特殊原因时说明即可。此处仅记录决策，规范细节以该文件为准。
 
 ### 14.4 WiX 结构与测试重写（2026-09-24）
 
@@ -644,3 +644,13 @@ Windows 11 x64 本机验证：从已有本地 `0.1.0-alpha.37` NuGet 包构建�
 本机 Windows 11 Pro build 26200 x64：Release 解决方案构建 0 警告/0 错误，更新后的快速测试全部通过；Pack 生成七个 alpha.39 包，包内 README 与仓库一致，Bundler 依赖版本均为 alpha.39。WiX 包 14,398,397 字节，SHA-256 为 `3A13CA19A63D8336538E56453ACB01D5BE76CD6D4F0DE383AF572DED5DFD9657`。NSIS 公开示例从本地包成功发布，仍生成 `HelloBundledApp.dll` 与 `Hello Bundled App-1.0.0-setup.exe`，安装器 SHA-256 为 `D80BAA724FB4D64C96A107F3D1D3A7312B8CCAC0CBF81277D7DF27ACD2DC5468`；本轮专用示例输出已按确切路径清理。MSI 公开示例省略版本参数运行 `VerifyPublicSample.ps1`，英语当前用户、中文当前用户、英语整机三种只读数据库检查通过，未安装公开示例，产物保留在 `%TEMP%\Bundler-Msi-PublicSample-f2b16791c841400a82adec761ce5fbb4`。
 
 真实 Windows 集成入口也均省略版本参数并退出 0：MSI `Verify.ps1 -ConfirmLocalInstall` 通过随机 current-user 安装/卸载和仓库外直接 API 包消费，MSI SHA-256 为 `ECBAFF26859A5458784A5D8035B4C9912E0A766D2667DA1A3E568A7D2277094D`，日志在 `%TEMP%\Bundler-Msi-Smoke-394db4e914b14e04b1c18b929ad7d0f1`；`VerifyLifecycle.ps1 -ConfirmLocalInstall` 通过升级、降级/异包拒绝与数据所有权，日志在 `%TEMP%\Bundler-Msi-Lifecycle-552806128459422086e891156501983b`；`VerifyMaintenance.ps1 -ConfirmLocalInstall` 通过损坏包 1620、故障回滚、被动安装/卸载、静默修复与语言并存，日志在 `%TEMP%\Bundler-Msi-Maintenance-34b34c995872424093c8ca0257bfbd8e`。NSIS `Verify.ps1` 全量安装/卸载集成通过，产物在 `artifacts/windows-nsis-integration`。Markdown 相对链接、旧项目路径及 `git diff --check` 均核对通过。未启动 WIN-MSI-5，未提交或推送；原有外部人工验收边界不变。
+
+### 14.12 跨格式规则重整与 NSIS 路线归档（2026-09-25）
+
+本轮起点为 `codex/msi-development`、HEAD `2fbbf4b`、工作区干净，工具包版本仍是 `0.1.0-alpha.39`。用户要求将先规划完整后端路线、适用的 Tauri 通用能力审计、独立后端包直接消费与离线工具随包供应、完整可操作示例，以及此前有效但分散的规则写成稳定规范。本轮只重写协作/路线文档，未改代码、包内容或示例，也未启动 `WIN-MSI-5`；因此不迭代 NuGet 版本。
+
+`docs/development-rules.md` 是跨格式规则的唯一规范入口，`AGENTS.md` 保留接管摘要；总 `docs/roadmap.md` 只保留产品边界、格式顺序和阶段入口。原总路线中的 NSIS 能力基线、旧阶段映射与 `NSIS-R1..R4` 记录原样迁至 `docs/nsis-roadmap.md`，人工测试索引增加格式路线链接；NSIS 历史证据不因此变成当前新验证。新后端必须先完成直到格式冻结的路线并与用户确认关键选择，才开始第一阶段代码。当前下一实施阶段仍为 `WIN-MSI-5`，已确认的 MSI 方案以 `docs/msi-roadmap.md` 第 10 节为准；外部验收仍按各格式专用清单。
+
+本轮以 Git 旧版总路线为基准核对 NSIS 历史迁移内容，仅更改标题编号和一处已失效的“本文开头”引用，正文保留；仓库 Markdown 相对链接全部可解析，`git diff --check` 无空白错误。由于只修改未随 NuGet 包分发的协作和路线文档，没有新增或修改打包功能，本轮不重新执行安装集成测试，也不迭代包版本。未提交或推送。
+
+另对照可读取的旧“Nsis 开发”与早期架构任务记录，补回两条容易遗漏的要求：公开示例覆盖当前格式所有适用的用户能力（互斥或需外部条件的场景给可复现说明），以及新增人类语言代码/脚本注释使用中文；MSBuild Task 在进程内调用 Core/后端，不另起 .NET CLI 驱动。旧时要求维护中英文 README 已被后来的中文单文档决定替代，故未重新引入。

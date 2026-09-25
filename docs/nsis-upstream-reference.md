@@ -1,6 +1,6 @@
 # NSIS 上游参考与取舍
 
-DotNet.Bundler 不复制 Tauri 的实现或运行时体系。项目只对齐适用于通用桌面打包器的用户能力，通过自身的 Core、格式后端、MSBuild 适配层、直接 API 和未来正式 CLI 实现。产品边界、能力状态、阶段顺序和审计方法见 `docs/roadmap.md`；本文记录固定的上游证据与 NSIS 决策。
+DotNet.Bundler 不复制 Tauri 的实现或运行时体系。项目只对齐适用于通用桌面打包器的用户能力，通过自身的 Core、格式后端、MSBuild 适配层、直接 API 和未来正式 CLI 实现。产品边界与格式顺序见 `docs/roadmap.md`，状态和审计规则见 `docs/development-rules.md`，NSIS 阶段证据见 `docs/nsis-roadmap.md`；本文记录固定的上游证据与 NSIS 决策。
 
 参考快照：`tauri-apps/tauri` 仓库 `dev` 分支，提交 `5d995ed35b029cecd780fdbe614dc6023a89b81b`，核对于 2026-09-21。相关上游路径：
 
