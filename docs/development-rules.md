@@ -4,7 +4,7 @@
 
 ## 1. 接管与判断
 
-1. 阅读根目录 `AGENTS.md`、本文件、`PROJECT_CONTEXT.md`、`docs/roadmap.md`、`README.zh-CN.md`；再读当前格式的路线、能力矩阵、人工测试、外部待办和相关代码/测试。人工文档入口为 `docs/manual-testing-index.md`。
+1. 阅读根目录 `AGENTS.md`、本文件、`PROJECT_CONTEXT.md`、`docs/roadmap.md`、`README.md`；再读当前格式的路线、能力矩阵、人工测试、外部待办和相关代码/测试。人工文档入口为 `docs/manual-testing-index.md`。
 2. 运行 `git branch --show-current`、`git rev-parse --short HEAD`、`git status --short`，读取 `Directory.Build.props` 的包版本。核对文档声明与实际 API、包依赖、测试及产物；快照可能过期。
 3. 先检查请求的错误前提、遗漏条件和跨层影响。向用户说明当前状态、设计判断、改动范围、验证计划和外部限制；影响产品语义的选择先问，能从代码和测试核实的细节自行核实。
 4. 一个阶段或修复要处理完整因果链：源码、独立包消费、入口映射、示例、自动化、真实系统行为和文档。若某层不适用，说明原因。不要只修用户首先观察到的一处报错。
@@ -18,7 +18,7 @@
 
 ## 3. 版本、包和示例
 
-- 实现或修复导致 NuGet 包内容变化时，递增根目录 `BundlerPackageVersion`，同步被修改包的依赖版本、公开示例的 `PackageReference`、测试默认版本和中文说明。不要在同一个 ID/版本上重复发布不同包并指望 NuGet 缓存更新。一个阶段的未提交工作使用同一个新版本，结项前统一检查。
+- 实现、修复或随包文档调整导致 NuGet 包内容变化时，递增根目录 `BundlerPackageVersion`，同步被修改包的依赖版本、公开示例的 `PackageReference`、测试默认版本和中文说明。不要在同一个 ID/版本上重复发布不同包并指望 NuGet 缓存更新。一个阶段的未提交工作使用同一个新版本，结项前统一检查。
 - 工具包版本与被打包应用版本独立。`HelloBundledApp`、`HelloMsiApp` 等公开示例应用版本保持稳定；升级/降级使用独立 fixture 的版本参数。正式发布的应用按目标格式规则递增产品版本。MSI 后端拒绝在相同输出路径以相同产品版本覆盖不同内容；开发期旧产物应移到明确位置或选用独立输出目录，不通过弱化冲突保护处理。
 - 公开示例是可操作演示，不是自动化测试。当前 NSIS 与 MSI 示例均通过固定当前开发包版本的普通 `PackageReference`、仓库本地 `artifacts/packages` 还原源，在根目录执行 `dotnet pack Bundler.slnx -c Release -o artifacts/packages` 后直接 `dotnet publish <示例项目> -c Release`。新增公开能力要同步展示在对应示例；缺少本地包时先 pack，不能假设源码项目引用或公共 NuGet 源会提供未发布版本。
 
@@ -51,7 +51,9 @@
 
 ## 5. 文档、状态与 Git
 
-- 当前维护根 `README.zh-CN.md`；不要求同步英文 `README.md`。NSIS 示例说明使用中文。面向用户的文档只描述实际可用能力；路线、预测与外部待验收分别记录。
+- 仓库维护中的 Markdown 文档统一使用中文，根 `README.md` 是中文总入口；无需保留英文镜像。代码标识、命令、产品名称和上游引用可保留原文。第三方原始许可证、版权声明及上游源码文件须原样保存，不能因文档语言要求而改写其法定文本。
+- 只有跨格式内容使用泛用文件名。只针对一个安装格式的路线、能力矩阵、人工测试、外部待办、示例说明、测试说明及第三方工具来源文档，文件名须明确包含 `nsis`、`msi` 或后续对应格式名；即使已经放在该格式目录下也遵守。跨格式入口保留泛用文件名，并链接到格式专用文档。迁移旧文件时更新所有活动引用、打包清单和校验脚本，保留人工测试历史用例 ID。
+- 面向用户的文档只描述实际可用能力；路线、预测与外部待验收分别记录。
 - 新格式创建自己的路线、能力矩阵、外部待办和人工测试文档，统一从 `docs/manual-testing-index.md` 进入；保留 NSIS 历史用例 ID，不把不同格式的步骤混在同一清单。新增功能同步更新相应 API/入口属性说明、示例和测试入口。
 - 参考 Tauri 等上游能力时在**对应格式**文档固定上游提交、来源、对齐/排除依据与计划/已实现状态；不要把 MSI 审计混写进 NSIS 的上游参考，也不要复制上游安装器模板。专家模式用户自备 WiX 逻辑必须与 Bundler 受管语义分开标示。
 - `PROJECT_CONTEXT.md` 记录实时阶段状态、最后验证、未决问题和下一步；`docs/roadmap.md` 记录跨格式阶段顺序；格式路线记录决策与阶段证据。事实、方案、预测分开，不能把未实施、未自动验证或未人工验收的能力写成已完成。结束一个阶段时即使不提交，也更新这些文档，使下次对话无需旧聊天记录。
@@ -65,11 +67,11 @@ dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloBundledApp/HelloBundledApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.37
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.37 -ConfirmLocalInstall
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.37 -ConfirmLocalInstall
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.37 -ConfirmLocalInstall
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.37
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.38
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.38 -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.38 -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.38 -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -Configuration Release -PackageVersion 0.1.0-alpha.38
 ```
 
 命令中的版本是此文件最后更新时的示例值；执行前以 `Directory.Build.props`、实际包和 Git 状态为准。真实重启/UAC 等专用测试按格式文档的环境限制运行。

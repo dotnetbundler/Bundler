@@ -16,6 +16,5 @@
   </metadata>
   <files>
     <file src="..\..\README.md" target="" />
-    <file src="..\..\README.zh-CN.md" target="" />
   </files>
 </package>

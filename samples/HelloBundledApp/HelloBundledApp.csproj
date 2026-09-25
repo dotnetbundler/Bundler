@@ -61,7 +61,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.37" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.38" PrivateAssets="all" />
     <BundlerIcon Include="$(_HelloBundledAppArtworkRoot)\Icons\modern-install-colorful.ico" />
     <BundlerResource Include="Assets\demo-resource.txt" TargetPath="演示资源\说明.txt" />
     <BundlerResource Include="Assets\demo.hello" TargetPath="demo.hello" />

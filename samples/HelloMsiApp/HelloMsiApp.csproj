@@ -38,7 +38,7 @@
     <ApplicationIcon>$(MSBuildThisFileDirectory)Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.37" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.38" PrivateAssets="all" />
     <BundlerIcon Include="Assets\app.ico" />
     <BundlerResource Include="Assets\demo-resource.txt" TargetPath="DemoResources\Readme.txt" />
     <BundlerResource Include="Assets\demo.hellomsi" TargetPath="demo.hellomsi" />

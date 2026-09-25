@@ -3,7 +3,7 @@
 > 最后整理：2026-09-25
 > 当前分支：`codex/msi-development`（NSIS 开发线为 `codex/nsis-development`）
 > NSIS 冻结起点：`b116d09 feat(nsis): freeze secure packaging baseline`；当前提交以 `git rev-parse --short HEAD` 为准
-> 当前包版本：`0.1.0-alpha.37`（Git 状态与包版本均须实时核查）
+> 当前包版本：`0.1.0-alpha.38`（本轮文档及随包路径调整；Git 状态与包版本均须实时核查）
 > 当前阶段：`WIN-MSI-1..4` 的本机自动化范围已完成，`alpha.37` 是既有 MSI 能力基线。用户已确认先补齐适用于通用打包器的 Tauri MSI 能力，`WIN-MSI-5..9` 尚未实施；默认下一实施阶段为 `WIN-MSI-5`，`MAC-APP` 顺延。per-machine、生产签名与外部宿主等旧验收边界不变。
 
 本文档记录当前事实、决策与验证证据，供后续开发任务接续。跨格式开发与交接规则以 `docs/development-rules.md` 为唯一规范入口；正式路线见 `docs/roadmap.md`，MSI 细则见 `docs/msi-roadmap.md`。本文档不是面向最终用户的使用手册。代码与自动化测试始终是实现事实的最终依据。
@@ -463,7 +463,7 @@ git diff --check
 
 ## 9. 已实现但仍需外部验收的事项
 
-这些 NSIS 事项的外部输入摘要保存在 `docs/nsis-open-items.md`，完整的人工执行顺序、命令、预期结果、证据和清理要求集中在 `docs/manual-testing.md`。总入口见 `docs/manual-testing-index.md`，MSI 采用独立文档。新增无法在普通本地自动化环境完成的已实现能力时，必须同步对应格式的两个文档；可自动化的测试仍由仓库测试承担。
+这些 NSIS 事项的外部输入摘要保存在 `docs/nsis-open-items.md`，完整的人工执行顺序、命令、预期结果、证据和清理要求集中在 `docs/nsis-manual-testing.md`。总入口见 `docs/manual-testing-index.md`，MSI 采用独立文档。新增无法在普通本地自动化环境完成的已实现能力时，必须同步对应格式的两个文档；可自动化的测试仍由仓库测试承担。
 
 1. **正式 Authenticode**：使用生产签名身份、私钥保护设施和公开 RFC 3161 服务验证公开信任链、时间戳策略、硬件/云签名行为。
 2. **生产旧 MSI 迁移**：使用真实发布过的 ProductCode/UpgradeCode，以及 x86/x64、current-user/per-machine 旧包验证识别和权限行为。
@@ -519,8 +519,8 @@ Tauri 能力按“通用打包能力、格式特定能力、Tauri runtime 专属
 
 1. `PROJECT_CONTEXT.md`；
 2. `AGENTS.md` 和 `docs/development-rules.md`；
-3. `docs/roadmap.md`、`README.zh-CN.md`；
-4. `docs/manual-testing-index.md` 和当前格式的路线、能力矩阵、open-items、人工测试文档；NSIS 历史内容仍在 `docs/nsis-upstream-reference.md`、`docs/nsis-capability-matrix.md`、`docs/nsis-open-items.md` 和 `docs/manual-testing.md`；
+3. `docs/roadmap.md`、`README.md`；
+4. `docs/manual-testing-index.md` 和当前格式的路线、能力矩阵、open-items、人工测试文档；NSIS 历史内容仍在 `docs/nsis-upstream-reference.md`、`docs/nsis-capability-matrix.md`、`docs/nsis-open-items.md` 和 `docs/nsis-manual-testing.md`；
 5. 与准备处理的阶段直接相关的代码和测试。
 
 本文档是项目交接基线，但代码和自动化测试才是最终事实。如果文档、代码、测试或 Git 状态不一致，接管者必须先调查并向用户说明差异，不能自行假设，也不能要求用户重新复述本文档已经包含的信息。
@@ -597,7 +597,7 @@ NSIS 全量 Windows 集成在先打出仓库本地 alpha.35 包后退出 0，输
 
 当前分支 `codex/msi-development`，阶段开始时 HEAD `5712549` 且工作区干净；本节阶段三变更后来提交为 `abad328`，当前状态仍以 `git status` 和 `git rev-parse HEAD` 实时核对。阶段三包版本为 `0.1.0-alpha.36`，公开示例的应用版本仍为 `1.0.0`。只修改 MSI 后端、共享 MSBuild 的 MSI 映射、工具供应、版本引用、相应测试与文档；未做 CLI 或继续扩展 NSIS。
 
-实现事实：`WixBundlerOptions.Signer` 复用已有 Windows 签名组件，先签隔离载荷再签最终 MSI；签名失败清理输出，同版本已签产物不静默复用。`WixBundleConfiguration.Language` 提供英文 `1033` 和简体中文 `2052` 单语言产物；中文使用独立升级身份、组件、目录和文件名，英文历史身份未改。应用提供 RTF 许可时使用随包固定的官方 `WixUIExtension.dll` 最小交互 UI；未提供许可时不代应用展示许可条款。原生 `msiexec` 负责 `/qn`、`/passive`、`/fomus`、失败码与回滚；生产 MSI 不加入测试故障动作或自定义运行时代码。WiX 归档新增一个官方文件，哈希/源码/许可审计见 `third_party/wix/README.md` 和 `THIRD-PARTY-NOTICES.md`。
+实现事实：`WixBundlerOptions.Signer` 复用已有 Windows 签名组件，先签隔离载荷再签最终 MSI；签名失败清理输出，同版本已签产物不静默复用。`WixBundleConfiguration.Language` 提供英文 `1033` 和简体中文 `2052` 单语言产物；中文使用独立升级身份、组件、目录和文件名，英文历史身份未改。应用提供 RTF 许可时使用随包固定的官方 `WixUIExtension.dll` 最小交互 UI；未提供许可时不代应用展示许可条款。原生 `msiexec` 负责 `/qn`、`/passive`、`/fomus`、失败码与回滚；生产 MSI 不加入测试故障动作或自定义运行时代码。WiX 归档新增一个官方文件，哈希/源码/许可审计见 `third_party/wix/msi-wix-provenance.md` 和 `THIRD-PARTY-NOTICES.md`。
 
 本机 Windows 11 Pro build 26200 x64：`dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release --no-restore` 最终 **60 项全部通过**，包含新增的语言身份/数据库、签名顺序、真实短期自签名证书签 PE/MSI、签名失败及同版本拒绝。`tests/Windows.Msi.Integration/Verify.ps1 -ConfirmLocalInstall`、`VerifyLifecycle.ps1 -ConfirmLocalInstall` 和新增 `VerifyMaintenance.ps1 -ConfirmLocalInstall` 均通过。维护脚本从隔离本地 alpha.36 包源构建随机 current-user MSI；损坏包返回 1620，测试副本的延迟失败在日志记录 `FileCopy` 后返回 1603 且无托管残留；`/passive` 安装/卸载、`/fomus /qn` 修复、中文 RTF 包与英文包并存及分别卸载通过。三轮 MSI SHA-256、ProductCode、日志目录见 `docs/msi-roadmap.md` 第 8 节。NSIS Windows 集成使用同一版本本地包后退出 0，输出 `PASS Windows NSIS install/uninstall integration`；最初一次在打出 alpha.36 本地包前于测试前报 `Package not found`，随后先 pack 再完整复跑通过。任何测试证书都未进入仓库。
 
@@ -626,3 +626,11 @@ MSI alpha 格式的本机验证范围与配置/身份规则已冻结；`docs/msi
 Windows 11 x64 本机验证：从已有本地 `0.1.0-alpha.37` NuGet 包构建默认 `en-US/currentUser`、`zh-CN/currentUser` 和 `en-US/perMachine` 三份示例 MSI，均成功；另一次 `dotnet restore` 使用隔离缓存并通过 `Assert-LocalBundlerRestore` 检查本地包源及 `DotNet.Bundler`/MSBuild/Wix 包版本，再 `dotnet publish --no-restore` 成功。Windows Installer 数据库只读检查三份包的产品语言/独立 ProductCode 与 UpgradeCode、演示文件、RTF 许可 UI、产品图标和两个快捷方式，默认包还检查关联/协议的自身候选注册表项。默认、中文和 per-machine 三份包分别位于 `%TEMP%\Bundler-HelloMsiApp-Sample-f638475803d84cf094c55a982f35727e`、`%TEMP%\Bundler-HelloMsiApp-zhCN-cbf1b025d4e1469ab3b47d2f6e5ed88e`、`%TEMP%\Bundler-HelloMsiApp-perMachine-472e58ccbb9346a79404877293301328`，SHA-256 分别为 `EAFDCBCA878DD5771D2B83D9BA29BDC7216B0E29560964B319D3B490D2F89682`、`AA01F2F187E7C18047B85F8101F48CB2D6ED78317423ABB7737A2449AF30180E`、`D896093B9E482F22AE07FDD5429A7DF6B939224821B21189CA8D2176EA682EBD`。隔离还原产物 `%TEMP%\Bundler-HelloMsiApp-Isolated-691cf376f8374be0b01b2b10501db8ec\output` 的 SHA-256 为 `F20B0E8A62D9BCA4CCDAAA5D2CACE5249A14E3520C95D667B273A4D672262380`。三份公开示例**均未实际安装或人工验收 UI**；真实安装、升级、修复、故障行为的既有证据仍来自随机 fixture。
 
 首次为默认英语包加入 RTF UI 后，WiX `light` 报 `LGHT0311`：英语 UI 本地化资源要求数据库 1252，原中文描述与目标路径无法编码。示例将默认安装数据库文本改为英语、`BundlerWixCodepage=0` 交由现有语言配置选择（英语 1252、简体中文 936）；中文可保留在文件内容和运行参数里。重跑上述三种构建后均通过。仓库原 `artifacts/win-x64/msi` 中有早期同版本 MSI，不应覆盖；示例默认 `BundlerOutputPath` 改为 `artifacts/feature-demo`，在本机直接执行 `dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release` 成功，产物 SHA-256 `FB193DCC3E43861BA5BE6DC768CCD6A8EE9EB815EEFE2A2F6F20A626C9896F34`。新增 `VerifyPublicSample.ps1` 首跑因脚本把缺失的 `ALLUSERS` 属性与空字符串直接比较而失败，修正为空字符串规范化后复跑三变体全部通过；最后一轮日志与产物在 `%TEMP%\Bundler-Msi-PublicSample-e220eaf6eb0b45c3b2e92a273460d205`，三包 SHA-256 分别为 `031FF0C6E280145D0210DE67531CC3C926F5DB0FB83DDB58722F419D8776F750`、`72C49B649B5B5B8E3FF0ED11CC6AF9022A141CAE637F24425C31CE0B8E241CF7`、`98CB5331BEBADAC64F9FDE3B2D7D68F28A1A7015E71395307984922F399BC382`；脚本只读检查数据库，不安装 MSI。若未来要支持英语 UI 搭配中文数据库字段，需要单独审计 WiX 本地化与代码页规则，不能仅在示例中继续写 936。用户现已明确要求提交本轮示例改动；未要求推送，提交哈希以 Git 为准。
+
+### 14.10 中文文档与格式命名整理（2026-09-25）
+
+本轮起点为 `codex/msi-development`、HEAD `23389ed`、工作区干净；**仅做文档组织、中文化和随包文档配置调整**，未开始 WIN-MSI-5，未改变 NSIS/MSI 安装语义。根 `README.md` 改为中文跨格式入口，旧英文内容移出，原中文镜像不再重复维护。NSIS 历史人工清单改名 `docs/nsis-manual-testing.md`，原 `MT-01..MT-11` 编号不变；示例、MSI 集成说明、NSIS 插件与三类第三方来源说明均改为带格式名称的文件名。NSIS 上游审计、外部待办、插件说明及第三方声明译为中文；原始 `COPYING`/`LICENSE`/`LICENSE.TXT` 许可文本未改。跨格式命名与语言规则写入 `docs/development-rules.md`；活动链接和包内文件列表随之调整。
+
+因根 README、WiX 来源说明及第三方声明进入 NuGet 包，工具包版本从 `0.1.0-alpha.37` 迭代至 `0.1.0-alpha.38`，两个示例应用版本仍是 `1.0.0`。`Directory.Build.props`、示例引用、API fixture 默认值及 Windows 集成入口默认值已同步。Windows 11 x64 本机：`dotnet build Bundler.slnx -c Release -v:q` 通过，0 警告/0 错误；`dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release --no-restore` 全部通过；`dotnet pack Bundler.slnx -c Release --no-restore -o artifacts/packages -v:q` 生成七个 alpha.38 包。逐包 ZIP 检查确认中文 `README.md` 与仓库一致、原中文镜像不再随包；WiX/MSBuild 包内 `licenses/wix/msi-wix-provenance.md` 与仓库逐字节一致，现有 MSI 包审计辅助函数再次通过。WiX 包为 14,398,423 字节，SHA-256 `213BB494106CC7B82F77B96539AF6A435D6E61575E38A836A08B7E66E75BB398`。
+
+公开 MSI 示例的 `VerifyPublicSample.ps1` 使用本地 alpha.38 包和隔离缓存，英语当前用户、简体中文当前用户和英语整机三种只读数据库检查均通过；本轮未安装 MSI。NSIS 公开示例从本地 alpha.38 包源 `dotnet publish` 成功，产生的会话专用输出已按确切路径清理。仓库 Markdown 相对链接全部解析成功，全部维护中的 Markdown 均含中文，旧文档路径搜索无命中，`git diff --check` 无空白错误。首次沙箱内 build 因无法读取本机 `C:\Users\Lin\AppData\Local\Microsoft SDKs` 被拒；获准在沙箱外读取后成功，未发现项目编译错误。本轮未提交或推送。下一实施阶段仍为 WIN-MSI-5；外部环境的既有人工验收边界不变。

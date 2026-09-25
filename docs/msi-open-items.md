@@ -4,7 +4,7 @@ MSI 后端已完成 **WIN-MSI-1..4 本机自动化范围**，`alpha.37` 为既�
 
 | ID | 最早阶段 | 所需输入/环境 | 完成证据 |
 | --- | --- | --- | --- |
-| MSI-OI-01 | MSI-1 已完成本机核查 | 官方 WiX 3.14.1 归档、实际 SHA-256、全部捆绑文件许可证、体积测量 | 来源、哈希、逐文件源码归属、包内容与大小、本地无还原编译结果见 `docs/msi-roadmap.md` 第 6 节及 `third_party/wix/README.md` |
+| MSI-OI-01 | MSI-1 已完成本机核查 | 官方 WiX 3.14.1 归档、实际 SHA-256、全部捆绑文件许可证、体积测量 | 来源、哈希、逐文件源码归属、包内容与大小、本地无还原编译结果见 `docs/msi-roadmap.md` 第 6 节及 `third_party/wix/msi-wix-provenance.md` |
 | MSI-OI-02 | MSI-1 记录，MSI-4 支持矩阵 | 干净 Windows 10/11 x86、x64 与 ARM64 宿主的 WiX 3.14.1 自身依赖；Windows 7 记录 Framework 缺失边界 | 仅用 WiX 二进制与准备好的 `.wxs`/载荷完成 `candle`/`light` 编译，记录 OS build、预装 Framework、架构、日志及失败边界；不把调用方 MSBuild/.NET SDK 算作 WiX 依赖 |
 | MSI-OI-03 | MSI-1 本机已通过，MSI-4 扩展矩阵 | 独立 Windows VM/CI 复跑最小安装/卸载 | 其他宿主的 verbose log、状态/清理断言；本机烟雾结果见 `docs/msi-roadmap.md` 第 6 节 |
 | MSI-OI-04 | MSI-2，外部待验收 | 标准用户和管理员账户，Windows UAC/策略差异 | current user/per machine 的权限与目录/注册表证据；本机仅已验证 per-machine 数据库表 |

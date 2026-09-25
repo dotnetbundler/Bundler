@@ -8,7 +8,7 @@
     <Authors>Bundler contributors</Authors>
     <Description>Reusable WiX 3.14.1 MSI packaging API for Windows desktop applications.</Description>
     <PackageTags>dotnet;bundler;installer;msi;wix;desktop</PackageTags>
-    <PackageReadmeFile>README.zh-CN.md</PackageReadmeFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Bundler.Tests" />
@@ -17,9 +17,9 @@
                       LogicalName="DotNet.Bundler.Wix.Resources.wix3141-tools.zip" />
     <None Include="..\..\third_party\wix\wix3141-source.zip" Pack="true" PackagePath="licenses/wix/" />
     <None Include="..\..\third_party\wix\LICENSE.TXT" Pack="true" PackagePath="licenses/wix/" />
-    <None Include="..\..\third_party\wix\README.md" Pack="true" PackagePath="licenses/wix/" />
+    <None Include="..\..\third_party\wix\msi-wix-provenance.md" Pack="true" PackagePath="licenses/wix/" />
     <None Include="..\..\third_party\wix\SHA256SUMS" Pack="true" PackagePath="licenses/wix/" />
-    <None Include="..\..\README.zh-CN.md" Pack="true" PackagePath="/" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
     <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

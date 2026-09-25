@@ -37,11 +37,10 @@
     <None Include="..\..\buildTransitive\DotNet.Bundler.MSBuild.props" Pack="true" PackagePath="buildTransitive/" />
     <None Include="..\..\buildTransitive\DotNet.Bundler.MSBuild.targets" Pack="true" PackagePath="buildTransitive/" />
     <None Include="..\..\README.md" Pack="true" PackagePath="/" />
-    <None Include="..\..\README.zh-CN.md" Pack="true" PackagePath="/" />
     <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
     <None Include="..\..\third_party\nsis\COPYING" Pack="true" PackagePath="licenses/nsis/" />
     <None Include="..\..\third_party\nsis-plugin\LICENSE" Pack="true" PackagePath="licenses/nsis-plugin/" />
     <None Include="..\..\third_party\wix\LICENSE.TXT" Pack="true" PackagePath="licenses/wix/" />
-    <None Include="..\..\third_party\wix\README.md" Pack="true" PackagePath="licenses/wix/" />
+    <None Include="..\..\third_party\wix\msi-wix-provenance.md" Pack="true" PackagePath="licenses/wix/" />
   </ItemGroup>
 </Project>

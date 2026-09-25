@@ -32,14 +32,14 @@ function Pack-MsiTestPackages(
     try {
         $entries = @($wixPackage.Entries | ForEach-Object FullName)
         foreach ($entry in @('lib/netstandard2.0/DotNet.Bundler.Wix.dll', 'licenses/wix/LICENSE.TXT',
-                'licenses/wix/wix3141-source.zip', 'licenses/wix/README.md',
+                'licenses/wix/wix3141-source.zip', 'licenses/wix/msi-wix-provenance.md',
                 'licenses/wix/SHA256SUMS', 'THIRD-PARTY-NOTICES.md')) {
             if ($entries -notcontains $entry) { throw "Standalone MSI backend package is missing $entry" }
         }
         $sources = @{
             'licenses/wix/LICENSE.TXT' = 'third_party/wix/LICENSE.TXT'
             'licenses/wix/wix3141-source.zip' = 'third_party/wix/wix3141-source.zip'
-            'licenses/wix/README.md' = 'third_party/wix/README.md'
+            'licenses/wix/msi-wix-provenance.md' = 'third_party/wix/msi-wix-provenance.md'
             'licenses/wix/SHA256SUMS' = 'third_party/wix/SHA256SUMS'
             'THIRD-PARTY-NOTICES.md' = 'THIRD-PARTY-NOTICES.md'
         }
