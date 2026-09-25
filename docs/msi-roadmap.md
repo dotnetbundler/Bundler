@@ -5,7 +5,7 @@
 
 ## 1. 已核实事实、选择及风险
 
-2026-09-23 规划时核对分支 `codex/modular-bundler-backends`、HEAD `11dbde55e38fc880c5699caa5b7f0b6e513d569d`、包版本 `0.1.0-alpha.33`、干净工作区。当时代码有 `PackageFormat.Msi`、Core 规划与 `IBundleBackend`，但没有 MSI 后端、MSI MSBuild 映射或 MSI E2E。`tests/Windows.Nsis.Integration/LegacyMsiFixture` 的 `WixToolset.Sdk/5.0.2` 只生成 NSIS 迁移测试所需旧 MSI，不构成正式选型。该段是规划时的历史快照，当前进度以第 6 节及实际 Git/测试为准。
+2026-09-23 规划时核对分支 `codex/modular-bundler-backends`、HEAD `6946daea16dff84113988b7838f36fe08a03498e`、包版本 `0.1.0-alpha.33`、干净工作区。当时代码有 `PackageFormat.Msi`、Core 规划与 `IBundleBackend`，但没有 MSI 后端、MSI MSBuild 映射或 MSI E2E。`tests/Windows.Nsis.Integration/LegacyMsiFixture` 的 `WixToolset.Sdk/5.0.2` 只生成 NSIS 迁移测试所需旧 MSI，不构成正式选型。该段是规划时的历史快照，当前进度以第 6 节及实际 Git/测试为准。
 
 用户已暂定 **WiX 3.14.1**，仅在 Windows 上构建 MSI；不要求非 Windows 宿主生成 MSI。选它是为了复用成熟的 WiX 3 工具链和 Windows Installer 原生语义，缩短实现工作量。这是产品选择，不等于已验证零环境、ARM64 宿主或未来安全维护。WiX 3 已归档且免费社区维护结束；因此在 WIN-MSI-1 设置实际分发门槛，后续每次冻结前复核风险。若门槛失败，停止该工具选型并记录替代决策，不通过静默安装 SDK/运行时、附带未核许可文件或声称不受支持的宿主来绕过。
 
@@ -102,7 +102,7 @@
 
 ## 6. WIN-MSI-1 实施及完成记录（2026-09-24）
 
-用户已明确说“提交，然后开始”。规划文档提交为 `75738ed`。随后按用户要求把原实施分支拆成 `codex/nsis-development`（指向父提交 `11dbde5`）与当前 `codex/msi-development`（包含 `75738ed`）；旧 `codex/nsis` 已删除，`master` 已快进至 `11dbde5`。2026-09-24 用户要求提交本阶段结果；后续接班者应核对实时 HEAD 与状态，不把第一阶段结果写成整个 MSI 格式完成。
+用户已明确说“提交，然后开始”。规划文档提交为 `71b028c`。随后按用户要求把原实施分支拆成 `codex/nsis-development`（指向父提交 `6946dae`）与当前 `codex/msi-development`（包含 `71b028c`）；旧 `codex/nsis` 已删除，`master` 已快进至 `6946dae`。2026-09-24 用户要求提交本阶段结果；后续接班者应核对实时 HEAD 与状态，不把第一阶段结果写成整个 MSI 格式完成。
 
 - 从官方 `wix314-binaries.zip`（41,297,555 字节，SHA-256 `6AC824E1642D6F7277D0ED7EA09411A508F6116BA6FAE0AA5F2C7DAA2FF43D31`）提取必需工具，子集 `third_party/wix/wix3141-tools.zip` 为 1,038,060 字节，SHA-256 `25AE0BB2A21FAC6B486C4B06155C9F463F2D845E7036BE0E9B1C98F4E48EA494`。官方标签对应源码归档 `wix3141-source.zip` 为 13,599,826 字节，SHA-256 `A56184E798885641821666BD389FE6276F99363F65BAE8F88630B17DE297FE9F`，连同 MS-RL 许可证放入 WiX NuGet 包。逐文件哈希见 `third_party/wix/SHA256SUMS`。原始来源、许可证及免费社区维护状态见第 2 节。
 - 本机核对工具子集共 14 项，逐项哈希测试与原始发行归档匹配；逐项找到 `wix3141rtm` 对应源码文件或项目，12 份适用的源码/配置/项目头部声明 MS-RL，`darice.cub` 原文件与许可证文本亦在源码归档内。生成的 WiX NuGet 包实含 `licenses/wix/LICENSE.TXT`、`README.md`、`SHA256SUMS`、完整 `wix3141-source.zip` 和 `THIRD-PARTY-NOTICES.md`；未发现该子集另有单独许可。重新打包并检查上述条目，包大小 13,786,712 字节；用户于 2026-09-24 确认约 13.8 MB 可接受。逐项归属记录见 `third_party/wix/msi-wix-provenance.md`。这是对选定文件的工程审计，不等同于法律保证；更换文件须重新审计。依据：[官方发行页](https://github.com/wixtoolset/wix3/releases/tag/wix3141rtm)、[官方 MS-RL 文本](https://github.com/wixtoolset/wix3/blob/wix3141rtm/LICENSE.TXT)。
@@ -162,7 +162,7 @@
 
 ## 9. WIN-MSI-4 本机冻结审计（2026-09-25）
 
-**范围和结论**：用户以“开始”启动本阶段。起点为 `codex/msi-development` 的 `abad328`、干净工作区、`0.1.0-alpha.36`。本轮冻结的是现有 MSI 配置、身份及当前主机已验证行为，不把一台 Windows 11 开发机的结果推广为干净 Windows 10/11、ARM64、per-machine UAC 或生产证书的兼容性结论。未完成的外部组合继续留在 MSI 专用人工清单和外部待办；不以缺少 VM 阻塞后续格式，也不把未执行写成通过。MSI 不新增用户能力、CLI 或 NSIS 功能。
+**范围和结论**：用户以“开始”启动本阶段。起点为 `codex/msi-development` 的 `89a535c`、干净工作区、`0.1.0-alpha.36`。本轮冻结的是现有 MSI 配置、身份及当前主机已验证行为，不把一台 Windows 11 开发机的结果推广为干净 Windows 10/11、ARM64、per-machine UAC 或生产证书的兼容性结论。未完成的外部组合继续留在 MSI 专用人工清单和外部待办；不以缺少 VM 阻塞后续格式，也不把未执行写成通过。MSI 不新增用户能力、CLI 或 NSIS 功能。
 
 **冻结前修复**：原 `WixProcessRunner` 捕获但丢弃成功退出时的 WiX 输出，ICE/编译警告不会进入构建结果。WiX 3 编译和链接现均使用 `-wx`，任何未豁免警告使构建失败；current-user MSI 仍仅豁免 `ICE91`，因为该 ICE 对只用于 per-user 上下文的用户目录文件警告不构成问题。[WiX 3 Candle 警告开关](https://docs.firegiant.com/wix3/msbuild/task_reference/candle/)、[Light 验证与警告开关](https://docs.firegiant.com/wix3/overview/light/)、[Microsoft ICE91 解释](https://learn.microsoft.com/en-us/windows/win32/msi/ice91)。首次启用严格告警后，真实构建暴露 `CNDL1091`：显式 `Package/@Id` 即使每次随机，也会警告存在复用风险；按 [WiX 3 Package 规则](https://docs.firegiant.com/wix3/xsd/wix/package/)取消显式赋值，改由 WiX 每次构建自动生成 PackageCode。公开 `WixIdentity` 不再误导性地返回由后端预先生成但不应写入的 PackageCode；UpgradeCode/ProductCode、英文既有身份和组件 GUID 均保持不变。同一产品版本在独立输出目录两次构建的 ProductCode/UpgradeCode 相同、PackageCode 不同，新增测试实证。发行方仍只能对外发布同一版本的一份内容。
 
@@ -188,7 +188,7 @@
 
 ### WIN-MSI-5：目标架构与版本生命周期
 
-- **前置**：核对 `d61976f` 后实际 Git、当前包版本、目标模型与固定身份向量；以 MSI 三段版本和 major upgrade 官方规则复核新配置。`docs/msi-tauri-capability-audit.md` 为已确认范围。
+- **前置**：核对 `adce4f0` 后实际 Git、当前包版本、目标模型与固定身份向量；以 MSI 三段版本和 major upgrade 官方规则复核新配置。`docs/msi-tauri-capability-audit.md` 为已确认范围。
 - **目标/交付**：公共目标模型增加 `win-x86`，MSI 包使用正确的 x86 目录/注册表视图、组件属性和独立产品线；NSIS 不因共享模型扩展而自动接受 x86。允许显式传入**三段有效 MSI 版本**以映射应用自身版本，拒绝第四字段、回退/碰撞及无定义的预发布自动映射。`AllowDowngrades` 默认 false、仅显式选择时为 true；同版本不同内容仍拒绝。既有身份与默认安装行为不变。公开 API、MSBuild、样例配置/说明同阶段完成。
 - **新增自动化/真实行为**：目标解析和格式支持矩阵、x86 数据库 `Template Summary`/组件/路径、各语种及架构 identity 向量、版本边界/重复/降级开关；仓库外 x86 API fixture 与 MSBuild 本地包消费。当前 x64 Windows 上构建并真实安装/卸载随机 current-user x86 fixture，执行可复现的 v2→v1 允许/拒绝降级及原 x64 升级回归，核对旧文件、用户文件与产品注册。
 - **不做/退出**：不支持自动跨 x86/x64/ARM64 或 current-user/per-machine 迁移，不把 MSI 第四版本字段当升级版本。上述自动化及本机安全的真实生命周期通过、无既有身份漂移、独立包可消费、文档与版本同步后退出；其他宿主继续只保留准确验收状态。

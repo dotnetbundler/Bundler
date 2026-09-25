@@ -3,7 +3,7 @@
 > 审计日期：2026-09-23
 > Tauri 仓库：`tauri-apps/tauri`  
 > 固定 commit：`5d995ed35b029cecd780fdbe614dc6023a89b81b`  
-> 本项目 NSIS 冻结起点：`b116d09 feat(nsis): freeze secure packaging baseline`；当前提交以 Git HEAD 为准
+> 本项目 NSIS 冻结起点：`71a5c90 feat(nsis): 冻结安全打包基线`；当前提交以 Git HEAD 为准
 
 本文档记录 `NSIS-R1` 的逐项审计结果。目标是对齐适用于通用桌面打包器的用户能力，不复制 Tauri 字段、Rust 数据模型或 runtime 部署逻辑。状态定义见 `docs/development-rules.md`，产品边界与格式顺序见 `docs/roadmap.md`，NSIS 阶段证据见 `docs/nsis-roadmap.md`。
 
