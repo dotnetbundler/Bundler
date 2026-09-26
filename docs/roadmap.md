@@ -141,10 +141,17 @@ PKG 当前不在公共格式枚举中，也没有已批准的实现阶段；
 每个格式分别完成元数据、文件布局、桌面集成、升级/卸载语义、签名或仓库验证边界、原生发行版 E2E，再进入下一个格式。
 若真实用户需求或可用原生验证环境要求调整，必须先在本文档写明依据和新顺序。
 
+### ARCHIVE：通用压缩包格式
+
+记录一项后续格式决策（2026-10-03，用户提出）：在平台格式全部完成后增加一个压缩包后端
+（zip / tar.gz 等归档分发形式），跨 Windows/macOS/Linux 通用，阶段号 `ARCHIVE`。
+当前仅登记意图：公共模型 `PackageFormat` 尚无对应枚举，无能力清单与阶段分解；
+在阶段启动前先做格式决策记录（归档类型范围、可执行位/符号链接保留、校验和与签名策略等）。
+
 ### CLI-C1：在打包格式完成后产品化 CLI
 
 仓库中的 `DotNet.Bundler.Cli` 目前只是有限 NSIS 参数的原型，不是当前阶段。
-CLI 不产生新的格式能力，也不应反过来驱动后端设计；先完成公共模型已经列出的 MSI、App、DMG、DEB、RPM、AppImage 及 macOS 决策新增的必需格式，再进入 CLI-C1。
+CLI 不产生新的格式能力，也不应反过来驱动后端设计；先完成公共模型已经列出的 MSI、App、DMG、DEB、RPM、AppImage 及 macOS 决策新增的必需格式和 ARCHIVE，再进入 CLI-C1。
 
 届时范围为：固化共享配置 schema；
 让 `validate`、`plan`、`bundle` 共用 Core/后端；
@@ -153,7 +160,7 @@ CLI 不产生新的格式能力，也不应反过来驱动后端设计；先完�
 删除重复或错误的早期 alpha 参数而不承诺兼容。
 完成后 CLI、MSBuild 和直接 API 都只是同一打包能力的适配器。
 
-当前实施顺序为：已完成并冻结的 `WIN-MSI-1..9` → `MAC-APP` → `MAC-DMG` →（仅当 macOS 格式决策纳入时）`MAC-PKG` → `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE` → `CLI-C1`。
+当前实施顺序为：已完成并冻结的 `WIN-MSI-1..9` → `MAC-APP` → `MAC-DMG` →（仅当 macOS 格式决策纳入时）`MAC-PKG` → `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE` → `ARCHIVE` → `CLI-C1`。
 Tauri updater 协议/提升权限计划任务若有需求另立跨格式产品路线，不混入 MSI 或提前产品化 CLI。
 调整顺序必须依据真实用户需求、验证能力和维护成本更新本文档，不能只在对话中临时改口。
 
