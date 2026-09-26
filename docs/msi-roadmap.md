@@ -437,7 +437,7 @@ CLI 仍在全部计划格式完成之后。
    仅运行旧测试不构成阶段完成。
 5. 无当前环境的 UAC、ARM64 原生宿主、生产证书、真实重启等仍按 MSI 专用人工/外部清单保留“未执行”；不据此阻塞当前机器可完成的阶段，也不把这些条件算作已通过。
 
-### WIN-MSI-5：目标架构与版本生命周期（已实现，`a3657b5`，`0.1.0-alpha.40`）
+### WIN-MSI-5：目标架构与版本生命周期（已实现，`0.1.0-alpha.40`）
 
 - **前置**：核对 `adce4f0` 后实际 Git、当前包版本、目标模型与固定身份向量；以 MSI 三段版本和 major upgrade 官方规则复核新配置。
   `docs/msi-tauri-capability-audit.md` 为已确认范围。
@@ -469,7 +469,7 @@ WiX 在这种有意降级场景会触发 [ICE61](https://learn.microsoft.com/en-
 原 x64 `VerifyLifecycle.ps1 -ConfirmLocalInstall` 回归通过，日志在 `%TEMP%\Bundler-Msi-Lifecycle-ba0954338b454f1ab5312db811500ea0`。
 外部 x86 原生/干净宿主、per-machine UAC 等仍是未执行的人工/专用环境验收；当前开发机结果不扩大为这些环境的支持声明。
 
-### WIN-MSI-6：安装目录、界面与桌面选项（已实现，`46612e8`，`0.1.0-alpha.41`）
+### WIN-MSI-6：安装目录、界面与桌面选项（已实现，`0.1.0-alpha.41`）
 
 - **前置**：WIN-MSI-5 身份/生命周期通过；先确定 UI 与静默 `INSTALLFOLDER` 的允许根、恢复原安装目录和回滚规则。
   默认目录不改，范围内路径校验不能被静默参数绕过。
@@ -533,7 +533,7 @@ NSIS `Verify.ps1` 全量集成退出 0（该轮首次运行曾因残留事务状
 **交互/UI 人工项**：真实交互 UI 的目录选择按钮流转、`InvalidDirDlg` 显示、勾选后启动、缩放/辅助功能、junction 路径显示行为，以及 per-machine UI 提权场景仍属未执行人工验收，见 `docs/msi-manual-testing.md` 的 MSI-MT-11 与 `docs/msi-open-items.md`。
 依据：[WiX 3 WixUIExtension 3.14.1 源码](https://github.com/wixtoolset/wix3/tree/wix3141rtm/src/ext/UIExtension/wixlib)（本机核对 `WixUI_InstallDir`、`WixUI_Minimal`、`InstallDirDlg`、`BrowseDlg`、`InvalidDirDlg`、`Common.wxs` 实际结构）、[MSI 条件字符串与子目录比较](https://learn.microsoft.com/en-us/windows/win32/msi/conditional-statement-syntax)、[Environment 表](https://learn.microsoft.com/en-us/windows/win32/msi/environment-table)、[ICE43](https://learn.microsoft.com/en-us/windows/win32/msi/ice43)、[MSI 自定义动作类型](https://learn.microsoft.com/en-us/windows/win32/msi/summary-list-of-all-custom-action-types)。
 
-### WIN-MSI-7：语言、输入资源和构建选项（已实现，`1b99b6a`，`0.1.0-alpha.42`）
+### WIN-MSI-7：语言、输入资源和构建选项（已实现，`0.1.0-alpha.42`）
 
 - **前置**：WIN-MSI-6 的 UI/目录契约稳定；清点固定 WiX 3.14.1 归档可用 locale、任何需要增补文件的来源/许可/大小，确认不复制 Tauri 翻译。
 - **目标/交付**：在实际受支持 WiX 语言范围内以 locale 列表生成**分别独立的单语言 MSI**；调用方可提供经过键集合、编码及 culture 校验的翻译资源。
@@ -582,7 +582,7 @@ NSIS `Verify.ps1` 全量集成退出 0（该轮首次运行曾因残留事务状
 WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方文件），最终包内容逐文件审计见本节退出条件对应记录。
 依据：固定 Tauri 快照 `7dbfc1f`（`languages.json` 表驱动、`default-locale-strings.xml` 按键回退、`.ico` 限制、`fipsCompliant→candle -fips`）、WiX 3.14.1 源归档 `src/ext/UIExtension/wixlib` wxl 声明值、`WixUIExtension.dll` 内嵌资源实枚举、`candle.exe -?` 实测开关。
 
-### WIN-MSI-8：受控 WiX 扩展与专家模式（已实现，`c897c57`，`0.1.0-alpha.43`）
+### WIN-MSI-8：受控 WiX 扩展与专家模式（已实现，`0.1.0-alpha.43`）
 
 - **前置**：前述身份、目录、语言和组件规则稳定；先把**常规模式 WiX 元素/引用白名单**、ID 命名空间、文件来源、组件 key path/安装所有权、hash 与版本变化的规则写入本格式文档及测试向量，再开放输入。
 - **目标/交付**：常规模式可提供经解析校验的 `.wxs` fragments 与明确 Component/Feature 引用，以受管声明式扩展原生 MSI 资源；不允许自定义动作、任意脚本、全目录删除或改写内建身份。
@@ -611,7 +611,7 @@ WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方
   专家 `BundlerWixExpertTemplate`（prop→路径）+ `BundlerWixExpertMergeModule`（item）。命名一眼可分。
 - **i18n 关系**：fragment/模板是语言无关输入（culture 由我们的合并 wxl 决定）；专家模板若引用 `!(loc.*)` 可用 Bundler 自有 id 或调用方自带 wxl。
 
-**实施记录（2026-10-02，提交 `c897c57`）**：
+**实施记录（2026-10-02，`0.1.0-alpha.43`）**：
 
 - **常规模式落地**：`ExtensionFragments`（`.wxs` fragment item）+ `ExtensionIdPrefix`（必填自定义前缀，保留 `Cmp`/`Fil`/`Rem`/`WixUI_`/`Wix`/`Bundler` 等 Bundler/WiX 前缀拒用）+ `ExtensionComponentRefs`/`ExtensionComponentGroupRefs`/`ExtensionFeatureRefs` 注入 Product Feature；
   `WixExtensionValidator` 逐 fragment 解析校验：XML 结构、`Fragment` 根、白名单元素（`Component`/`ComponentGroup`/`Directory`/`DirectoryRef`/`File`/`RegistryKey`/`RegistryValue`/`Environment`/`Condition`/`Shortcut`/`Property` 等核心声明式表），
