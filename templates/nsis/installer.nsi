@@ -32,6 +32,8 @@ ${UnStrStr}
 !define ALLOW_DOWNGRADES "{{allow_downgrades}}"
 !define LEGACY_MSI_PRODUCT_CODES "{{legacy_msi_product_codes}}"
 !define LEGACY_MSI_UPGRADE_CODES "{{legacy_msi_upgrade_codes}}"
+!define LEGACY_MSI_AUTODETECT_NAME "{{legacy_msi_autodetect_name}}"
+!define LEGACY_MSI_AUTODETECT_PUBLISHER "{{legacy_msi_autodetect_publisher}}"
 !define INPUT_GLOB "{{input_glob}}"
 !define OUTPUT_FILE "{{output_file}}"
 !define ESTIMATED_SIZE "{{estimated_size}}"
@@ -530,14 +532,14 @@ FunctionEnd
 
 Function DetectLegacyMsiInstallation
   ; 只按显式配置的 ProductCode 或 UpgradeCode 查找，避免因名称相同而误卸载其他软件。
-  DotNetBundlerNsis::FindMsiProduct "${LEGACY_MSI_PRODUCT_CODES}" "${LEGACY_MSI_UPGRADE_CODES}"
+  DotNetBundlerNsis::FindMsiProduct "${LEGACY_MSI_PRODUCT_CODES}" "${LEGACY_MSI_UPGRADE_CODES}" "${LEGACY_MSI_AUTODETECT_NAME}" "${LEGACY_MSI_AUTODETECT_PUBLISHER}"
   Pop $LegacyMsiProductCode
   ${If} $LegacyMsiProductCode == ""
     Return
   ${EndIf}
 
   ; 多个相关 MSI 并存时使用最高版本，避免因枚举顺序而绕过降级限制。
-  DotNetBundlerNsis::GetNewestMsiVersion "${LEGACY_MSI_PRODUCT_CODES}" "${LEGACY_MSI_UPGRADE_CODES}"
+  DotNetBundlerNsis::GetNewestMsiVersion "${LEGACY_MSI_PRODUCT_CODES}" "${LEGACY_MSI_UPGRADE_CODES}" "${LEGACY_MSI_AUTODETECT_NAME}" "${LEGACY_MSI_AUTODETECT_PUBLISHER}"
   Pop $InstalledVersion
   StrCpy $InstalledUninstaller "$SYSDIR\msiexec.exe"
   StrCpy $InstalledDirectory ""
@@ -713,7 +715,7 @@ FunctionEnd
 Function UninstallLegacyMsiInstallations
   ; 每次重新查询第一个匹配项，确保同一 UpgradeCode 下的多个遗留版本都被清理。
   legacy_msi_loop:
-    DotNetBundlerNsis::FindMsiProduct "${LEGACY_MSI_PRODUCT_CODES}" "${LEGACY_MSI_UPGRADE_CODES}"
+    DotNetBundlerNsis::FindMsiProduct "${LEGACY_MSI_PRODUCT_CODES}" "${LEGACY_MSI_UPGRADE_CODES}" "${LEGACY_MSI_AUTODETECT_NAME}" "${LEGACY_MSI_AUTODETECT_PUBLISHER}"
     Pop $LegacyMsiProductCode
     ${If} $LegacyMsiProductCode == ""
       Return
@@ -740,6 +742,13 @@ Function UninstallLegacyMsiInstallations
     ${ElseIf} $0 == 3010
       SetRebootFlag true
       Goto legacy_msi_loop
+    ${ElseIf} $0 == 1602
+      ; 用户在 MSI 卸载界面取消（Tauri 对齐）：按用户取消处理并退出安装；
+      ; Call 进来的 Function 里 Abort 只退出函数，必须用 existing_cancel 同款模式。
+      ; 静默/被动模式下 /qn 与 /passive 不会返回 1602。
+      StrCpy $ExitCode ${EXIT_CANCELLED}
+      SetErrorLevel $ExitCode
+      Quit
     ${EndIf}
 
     ${IfNot} ${Silent}

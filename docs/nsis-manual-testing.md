@@ -168,8 +168,12 @@ Verify 确认重启后目录、卸载注册表、安装与卸载 journal 和本�
 4. 交互执行迁移，分别检查原 MSI 产品、文件、服务/快捷方式（若有）和 NSIS 新安装。
 5. 分别对 ProductCode 精确命中和 UpgradeCode 枚举路径执行。
 6. 对 x86/x64 和 current-user/per-machine 组合重复，不在同一快照叠加结果。
+7. 启用 `BundlerNsisLegacyMsiAutoDetect` 重复 per-machine 场景，验证 HKLM 64 位视图枚举在
+   提权安装上下文中也能命中；本机已覆盖 per-user 自动检测与多版本并存取最高版本，
+   per-machine 真实命中只在外部验收记录。
 
-**PASS**：只识别配置的历史产品，旧 MSI 成功卸载后完成 NSIS 安装，无误删同名或无关产品。
+**PASS**：只识别配置的历史产品（自动检测时还要求 DisplayName+Publisher 且卸载命令含
+`msiexec`），旧 MSI 成功卸载后完成 NSIS 安装，无误删同名或无关产品。
 用户数据是否保留应根据该产品的明确迁移策略记录，不做默认假设。
 
 ### MT-06：开始菜单/任务栏固定项矩阵

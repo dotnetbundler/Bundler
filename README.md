@@ -8,8 +8,8 @@ Core 和格式后端本身不依赖 `.csproj` 或 .NET 应用模型，后续正�
 
 第一条已冻结的链路是 Windows + NSIS。
 MSI 已完成 WIN-MSI-1..9，`alpha.37` 是既有 x64/ARM64 身份基线；
-`alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 翻译覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
-WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线。
+`alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 翻译覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式，`alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 读取前 NSIS 安装目录延续）。
+WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线；`alpha.44` 在其上只做跨格式收尾。
 现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。
 正式 CLI、macOS 和 Linux 格式仍属后续路线。
 
@@ -65,7 +65,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.43" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.44" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -84,7 +84,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.43" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.44" />
 ```
 
 ```csharp
@@ -129,7 +129,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.43" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.44" />
 ```
 
 ```csharp
@@ -224,6 +224,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerNsisShortcutLegacyMainExecutables` | 否 | 分号分隔的旧主程序安装相对路径 |
 | `BundlerNsisLegacyMsiProductCodes` | 否 | 分号分隔的 MSI ProductCode GUID |
 | `BundlerNsisLegacyMsiUpgradeCodes` | 否 | 分号分隔的 MSI UpgradeCode GUID |
+| `BundlerNsisLegacyMsiAutoDetect` | 否 | `false`；启用后按 DisplayName+Publisher+msiexec 自动匹配旧 MSI |
 | `BundlerWixInstallScope` | 否 | `currentUser`；也支持 `perMachine`，两者是独立产品线 |
 | `BundlerWixUpgradeCode` | 否 | 自动稳定生成；仅在有依据的旧产品迁移中显式指定 |
 | `BundlerWixMsiVersion` | 否 | 空；默认映射稳定三段 `BundlerVersion`，显式值须为有效三段 MSI 版本 |

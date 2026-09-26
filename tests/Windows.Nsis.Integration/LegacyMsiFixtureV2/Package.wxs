@@ -1,0 +1,27 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Bundler Integration Fixture"
+           Manufacturer="DotNet.Bundler Tests"
+           Version="0.8.0"
+           ProductCode="{7B3E8C14-6A2D-4F5B-9C1E-8D4A5F6B7C8D}"
+           UpgradeCode="{5AD89AE2-9984-4B5F-937F-0DF918FE7A22}"
+           UpgradeStrategy="none"
+           Scope="perUser">
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="Bundler Legacy MSI Fixture V2">
+        <Component Id="LegacyPayloadComponent" Guid="{A15D3E6B-2F4C-4B8A-9D7E-1C5F8A3B6D9E}">
+          <File Id="LegacyPayloadFile" Source="legacy-payload.txt" />
+          <RegistryValue Root="HKCU"
+                         Key="Software\DotNet.Bundler\LegacyMsiFixtureV2"
+                         Name="Installed"
+                         Type="integer"
+                         Value="1"
+                         KeyPath="yes" />
+          <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <Feature Id="MainFeature">
+      <ComponentRef Id="LegacyPayloadComponent" />
+    </Feature>
+  </Package>
+</Wix>

@@ -173,8 +173,15 @@ Windows 集成测试同时运行安装目录内的程序和另一路径中的同
 - 静默同版本执行原位修复；静默升级先移除旧构建载荷并保留应用数据。
 - 默认禁止降级，可显式允许。
 - 支持通过准确的历史 MSI ProductCode/UpgradeCode 迁移旧 WiX/MSI 产品，不按产品名猜测。
+- 可选的 Tauri 对齐自动检测（`LegacyMsiAutoDetect`/`BundlerNsisLegacyMsiAutoDetect`，默认关闭）：
+  显式启用后按卸载注册项的 DisplayName+Publisher 匹配，并要求卸载命令含 `msiexec`；
+  枚举 HKCU 与 HKLM 的 32/64 位视图，per-user 与 per-machine MSI 均可命中。
+  与显式 GUID 列表相互独立、结果合并去重；匹配不到时不影响安装。
+- 旧 MSI 卸载返回码：`0`/`1605`（已不存在）继续清理循环，`1641`/`3010` 置重启标记，
+  `1602`（用户在 MSI 界面取消）按用户取消退出安装，其余非零视为迁移失败并回滚新状态。
+- 同一 UpgradeCode 下多个版本并存时取最高版本做版本判定，迁移循环逐个移除全部匹配产品。
 
-一次性 MSI Fixture 已验证通用迁移机制。
+一次性 MSI Fixture 已验证通用迁移机制、自动检测与多版本清理。
 真实已发布产品的历史 GUID、x86/x64、current-user/per-machine MSI 仍需生产输入验收。
 
 ### 4.5 生命周期 Hook

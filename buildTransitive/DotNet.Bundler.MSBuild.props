@@ -57,6 +57,7 @@
     <BundlerNsisShortcutLegacyMainExecutables Condition="'$(BundlerNsisShortcutLegacyMainExecutables)' == ''"></BundlerNsisShortcutLegacyMainExecutables>
     <BundlerNsisLegacyMsiProductCodes Condition="'$(BundlerNsisLegacyMsiProductCodes)' == ''"></BundlerNsisLegacyMsiProductCodes>
     <BundlerNsisLegacyMsiUpgradeCodes Condition="'$(BundlerNsisLegacyMsiUpgradeCodes)' == ''"></BundlerNsisLegacyMsiUpgradeCodes>
+    <BundlerNsisLegacyMsiAutoDetect Condition="'$(BundlerNsisLegacyMsiAutoDetect)' == ''">false</BundlerNsisLegacyMsiAutoDetect>
     <BundlerWindowsSigningPfxFile Condition="'$(BundlerWindowsSigningPfxFile)' == ''"></BundlerWindowsSigningPfxFile>
     <BundlerWindowsSigningPfxPasswordEnvironmentVariable Condition="'$(BundlerWindowsSigningPfxPasswordEnvironmentVariable)' == ''"></BundlerWindowsSigningPfxPasswordEnvironmentVariable>
     <BundlerWindowsSigningCertificateThumbprint Condition="'$(BundlerWindowsSigningCertificateThumbprint)' == ''"></BundlerWindowsSigningCertificateThumbprint>

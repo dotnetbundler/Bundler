@@ -92,6 +92,7 @@
       NsisShortcutLegacyMainExecutables="$(BundlerNsisShortcutLegacyMainExecutables)"
       NsisLegacyMsiProductCodes="$(BundlerNsisLegacyMsiProductCodes)"
       NsisLegacyMsiUpgradeCodes="$(BundlerNsisLegacyMsiUpgradeCodes)"
+      NsisLegacyMsiAutoDetect="$(BundlerNsisLegacyMsiAutoDetect)"
       WindowsSigningPfxFile="$(BundlerWindowsSigningPfxFile)"
       WindowsSigningPfxPasswordEnvironmentVariable="$(BundlerWindowsSigningPfxPasswordEnvironmentVariable)"
       WindowsSigningCertificateThumbprint="$(BundlerWindowsSigningCertificateThumbprint)"

@@ -18,6 +18,8 @@ $signingPackagePath = Join-Path $packageDirectory "DotNet.Bundler.Signing.Window
 $fixtureProject = Join-Path $PSScriptRoot "Fixture\BundlerNsisIntegrationFixture.csproj"
 $legacyMsiProject = Join-Path $PSScriptRoot "LegacyMsiFixture\LegacyMsiFixture.wixproj"
 $legacyMsiPath = Join-Path $PSScriptRoot "LegacyMsiFixture\bin\$Configuration\LegacyMsiFixture.msi"
+$legacyMsiV2Project = Join-Path $PSScriptRoot "LegacyMsiFixtureV2\LegacyMsiFixtureV2.wixproj"
+$legacyMsiV2Path = Join-Path $PSScriptRoot "LegacyMsiFixtureV2\bin\$Configuration\LegacyMsiFixtureV2.msi"
 $apiFixtureProject = Join-Path $repositoryRoot "tests\Nsis.Api.PackageFixture\Nsis.Api.PackageFixture.csproj"
 $packageCache = Join-Path $integrationRoot "packages"
 $bundleOutput = Join-Path $integrationRoot "bundle"
@@ -39,6 +41,11 @@ $rebootRequiredBundleOutput = Join-Path $integrationRoot "bundle-reboot-required
 $allowedDowngradeBundleOutput = Join-Path $integrationRoot "bundle-allowed-downgrade"
 $legacyMsiProductMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-product-migration"
 $legacyMsiUpgradeMigrationBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-upgrade-migration"
+$legacyMsiAutoDetectBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-autodetect"
+$legacyMsiNameMismatchBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-name-mismatch"
+$legacyMsiPublisherMismatchBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-publisher-mismatch"
+$legacyMsiDowngradeProbeBundleOutput = Join-Path $integrationRoot "bundle-legacy-msi-downgrade-probe"
+$msiContinuityBundleOutput = Join-Path $integrationRoot "bundle-msi-continuity"
 $signedBundleOutput = Join-Path $integrationRoot "bundle-signed"
 $noShortcutDefaultsBundleOutput = Join-Path $integrationRoot "bundle-no-shortcut-defaults"
 $failingUninstallBundleOutput = Join-Path $integrationRoot "bundle-failing-uninstall-forward"
@@ -81,6 +88,12 @@ $fallbackLanguage = if ((Get-UICulture).Name.StartsWith("ja", [StringComparison]
 $legacyMsiProductCode = "{1D1A6B03-2BDA-4D18-B12C-574145D9CFA0}"
 $legacyMsiUpgradeCode = "{5AD89AE2-9984-4B5F-937F-0DF918FE7A22}"
 $legacyMsiInstallDirectory = Join-Path $env:LOCALAPPDATA "Bundler Legacy MSI Fixture"
+$legacyMsiV2ProductCode = "{7B3E8C14-6A2D-4F5B-9C1E-8D4A5F6B7C8D}"
+$legacyMsiV2InstallDirectory = Join-Path $env:LOCALAPPDATA "Bundler Legacy MSI Fixture V2"
+$nsisContinuityDirectory = Join-Path $env:LOCALAPPDATA "DotNetBundlerNsisContinuityProbe"
+$nsisOutOfScopeDirectory = Join-Path $env:USERPROFILE ".dotnetbundler-scope-probe"
+$msiContinuityDefaultDirectory = Join-Path $env:LOCALAPPDATA "Programs\$identifier-x64"
+$bundlerDefinitionInstallDirPath = "HKCU:\Software\DotNetBundler\Products\$identifier\win-x64\Components"
 $registryPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$identifier"
 $fileExtensionRegistryPath = "HKCU:\Software\Classes\.dbfixture"
 $fileProgId = "$identifier.File.dbfixture.1"
@@ -165,6 +178,19 @@ function Invoke-MsiExec([string]$ArgumentLine, [int[]]$AllowedExitCodes = @(0, 3
     }
 }
 
+function Get-MsiProductCode([string]$MsiPath) {
+    $installer = New-Object -ComObject WindowsInstaller.Installer
+    $database = $installer.OpenDatabase($MsiPath, 0)
+    $view = $database.OpenView("SELECT Value FROM Property WHERE Property = 'ProductCode'")
+    try {
+        $null = $view.Execute()
+        $record = $view.Fetch()
+        if ($null -eq $record) { throw "MSI ProductCode is missing: $MsiPath" }
+        return $record.StringData(1)
+    }
+    finally { $null = $view.Close() }
+}
+
 function Get-ShortcutInfo([string]$Path) {
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($Path)
@@ -231,6 +257,9 @@ function Build-FixtureBundle(
     [bool]$AllowDowngrades = $false,
     [string]$LegacyMsiProductCodes = "",
     [string]$LegacyMsiUpgradeCodes = "",
+    [bool]$LegacyMsiAutoDetect = $false,
+    [string]$Publisher = "",
+    [string]$Formats = "",
     [string]$SigningCertificateThumbprint = "",
     [bool]$ShortcutDesktop = $true,
     [bool]$ShortcutStartMenu = $true,
@@ -248,7 +277,7 @@ function Build-FixtureBundle(
     }
     $escapedLanguages = $Languages.Replace(";", "%3B")
     $escapedShortcutArguments = $ShortcutArguments.Replace("%", "%25").Replace(";", "%3B").Replace('"', "%22")
-    Invoke-Native "dotnet" @(
+    $arguments = @(
         "publish", $fixtureProject, "-c", $Configuration, "--force",
         "-p:BundlerPackageVersion=$PackageVersion",
         "-p:Version=$ApplicationVersion",
@@ -262,6 +291,7 @@ function Build-FixtureBundle(
         "-p:BundlerNsisAllowDowngrades=$AllowDowngrades",
         "-p:BundlerNsisLegacyMsiProductCodes=$LegacyMsiProductCodes",
         "-p:BundlerNsisLegacyMsiUpgradeCodes=$LegacyMsiUpgradeCodes",
+        "-p:BundlerNsisLegacyMsiAutoDetect=$LegacyMsiAutoDetect",
         "-p:BundlerWindowsSigningCertificateThumbprint=$SigningCertificateThumbprint",
         "-p:BundlerIntegrationInstallerHooks=$InstallerHooks",
         "-p:BundlerNsisShortcutDesktop=$ShortcutDesktop",
@@ -275,6 +305,17 @@ function Build-FixtureBundle(
         "-p:BundlerIntegrationShortcutStartMenuFolder=$ShortcutStartMenuFolder",
         "-p:RestorePackagesPath=$packageCache"
     )
+    if (-not [string]::IsNullOrWhiteSpace($Publisher)) {
+        $arguments += "-p:BundlerIntegrationPublisher=$Publisher"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Formats)) {
+        $arguments += "-p:BundlerFormats=$Formats"
+        if ($Formats -eq "msi") {
+            # fixture 的 TXT 许可不符合 MSI 交互许可页要求；目录延续腿不需要许可页。
+            $arguments += "-p:BundlerLicenseFile="
+        }
+    }
+    Invoke-Native "dotnet" $arguments
 }
 
 function Wait-For([scriptblock]$Condition, [string]$Message, [int]$TimeoutSeconds = 15) {
@@ -331,8 +372,25 @@ function Remove-TestState {
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
     }
     Invoke-MsiExec "/x $legacyMsiProductCode /qn /norestart" @(0, 1605, 3010)
+    Invoke-MsiExec "/x $legacyMsiV2ProductCode /qn /norestart" @(0, 1605, 3010)
+    $continuityMsi = Join-Path $msiContinuityBundleOutput "win-x64\msi\$productName-1.0.0.msi"
+    if (Test-Path -LiteralPath $continuityMsi) {
+        Invoke-MsiExec "/x $(Get-MsiProductCode $continuityMsi) /qn /norestart" @(0, 1605, 3010)
+    }
+    foreach ($key in @("HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\com.dotnetbundler.otherfixture",
+                      "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\com.dotnetbundler.pubmismatch",
+                      $bundlerDefinitionInstallDirPath)) {
+        if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
+    }
     foreach ($path in @($installDirectory, $installRoot, $externalFixtureDirectory, $reparseOutsideDirectory, $unicodeInstallRoot)) {
         Assert-UnderIntegrationRoot $path
+        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
+    }
+    foreach ($path in @($nsisContinuityDirectory, $nsisOutOfScopeDirectory, $msiContinuityDefaultDirectory,
+                       (Join-Path $env:LOCALAPPDATA "Programs\bundler-precedence-probe"))) {
+        if ([IO.Path]::GetFileName($path) -notmatch 'ContinuityProbe|scope-probe|integrationfixture-x64|precedence-probe') {
+            throw "Refusing to remove an unexpected probe path: $path"
+        }
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
     }
     Assert-UnderIntegrationRoot $journalTamperFile
@@ -348,6 +406,12 @@ function Remove-TestState {
     }
     if (Test-Path -LiteralPath $legacyMsiInstallDirectory) {
         Remove-Item -LiteralPath $legacyMsiInstallDirectory -Recurse -Force
+    }
+    if ([IO.Path]::GetFileName($legacyMsiV2InstallDirectory) -ne "Bundler Legacy MSI Fixture V2") {
+        throw "Refusing to remove an unexpected legacy MSI V2 path: $legacyMsiV2InstallDirectory"
+    }
+    if (Test-Path -LiteralPath $legacyMsiV2InstallDirectory) {
+        Remove-Item -LiteralPath $legacyMsiV2InstallDirectory -Recurse -Force
     }
     foreach ($path in @($roamingData, $localData)) {
         if ([IO.Path]::GetFileName($path) -ne $identifier) {
@@ -465,6 +529,8 @@ try {
 
     Invoke-Native "dotnet" @("build", $legacyMsiProject, "-c", $Configuration)
     Assert-True (Test-Path -LiteralPath $legacyMsiPath) "Legacy MSI fixture was not created."
+    Invoke-Native "dotnet" @("build", $legacyMsiV2Project, "-c", $Configuration)
+    Assert-True (Test-Path -LiteralPath $legacyMsiV2Path) "Legacy MSI fixture V2 was not created."
 
     Build-FixtureBundle "currentUser" $bundleOutput
     Assert-LocalBundlerRestore -Project $fixtureProject -PackageVersion $PackageVersion `
@@ -489,6 +555,11 @@ try {
     Build-FixtureBundle "currentUser" $allowedDowngradeBundleOutput "DotNet.Bundler" "1.0.0" $true
     Build-FixtureBundle "currentUser" $legacyMsiProductMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false $legacyMsiProductCode ""
     Build-FixtureBundle "currentUser" $legacyMsiUpgradeMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false "" $legacyMsiUpgradeCode
+    Build-FixtureBundle "currentUser" $legacyMsiAutoDetectBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" -LegacyMsiAutoDetect $true
+    Build-FixtureBundle "currentUser" $legacyMsiNameMismatchBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" -LegacyMsiAutoDetect $true -ProductName "Bundler Other Fixture" -Identifier "com.dotnetbundler.otherfixture"
+    Build-FixtureBundle "currentUser" $legacyMsiPublisherMismatchBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" -LegacyMsiAutoDetect $true -Publisher "Other Publisher" -Identifier "com.dotnetbundler.pubmismatch"
+    Build-FixtureBundle "currentUser" $legacyMsiDowngradeProbeBundleOutput "DotNet.Bundler" "0.8.5" $false "" $legacyMsiUpgradeCode
+    Build-FixtureBundle "currentUser" $msiContinuityBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" -Formats "msi"
 
     # 使用当前用户证书存储区验证 MSBuild 参数映射以及 payload、插件、卸载器、安装器签名链路。
     $testCertificate = New-SelfSignedCertificate `
@@ -497,8 +568,8 @@ try {
         -CertStoreLocation "Cert:\CurrentUser\My" `
         -NotAfter ([DateTime]::Now.AddDays(1))
     $testCertificateThumbprint = $testCertificate.Thumbprint
-    Build-FixtureBundle "currentUser" $signedBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" $testCertificateThumbprint
-    Build-FixtureBundle "currentUser" $noShortcutDefaultsBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" "" $false $false
+    Build-FixtureBundle "currentUser" $signedBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" -SigningCertificateThumbprint $testCertificateThumbprint
+    Build-FixtureBundle "currentUser" $noShortcutDefaultsBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" -ShortcutDesktop $false -ShortcutStartMenu $false
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $failingUninstallBundleOutput -InstallerHooks $failingUninstallHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $interruptedUninstallBundleOutput -InstallerHooks $interruptedUninstallHooks
     Build-FixtureBundle `
@@ -531,6 +602,11 @@ try {
     $allowedDowngradeInstaller = Join-Path $allowedDowngradeBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $legacyMsiProductMigrationInstaller = Join-Path $legacyMsiProductMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $legacyMsiUpgradeMigrationInstaller = Join-Path $legacyMsiUpgradeMigrationBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
+    $legacyMsiAutoDetectInstaller = Join-Path $legacyMsiAutoDetectBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
+    $legacyMsiNameMismatchInstaller = Join-Path $legacyMsiNameMismatchBundleOutput "win-x64\nsis\Bundler Other Fixture-1.0.0-setup.exe"
+    $legacyMsiPublisherMismatchInstaller = Join-Path $legacyMsiPublisherMismatchBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
+    $legacyMsiDowngradeProbeInstaller = Join-Path $legacyMsiDowngradeProbeBundleOutput "win-x64\nsis\$productName-0.8.5-setup.exe"
+    $msiContinuityInstaller = Join-Path $msiContinuityBundleOutput "win-x64\msi\$productName-1.0.0.msi"
     $signedInstaller = Join-Path $signedBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $noShortcutDefaultsInstaller = Join-Path $noShortcutDefaultsBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $failingUninstallInstaller = Join-Path $failingUninstallBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
@@ -556,6 +632,11 @@ try {
     Assert-True (Test-Path -LiteralPath $allowedDowngradeInstaller) "Allowed-downgrade installer was not created."
     Assert-True (Test-Path -LiteralPath $legacyMsiProductMigrationInstaller) "ProductCode migration installer was not created."
     Assert-True (Test-Path -LiteralPath $legacyMsiUpgradeMigrationInstaller) "UpgradeCode migration installer was not created."
+    Assert-True (Test-Path -LiteralPath $legacyMsiAutoDetectInstaller) "Auto-detect migration installer was not created."
+    Assert-True (Test-Path -LiteralPath $legacyMsiNameMismatchInstaller) "Name-mismatch migration installer was not created."
+    Assert-True (Test-Path -LiteralPath $legacyMsiPublisherMismatchInstaller) "Publisher-mismatch migration installer was not created."
+    Assert-True (Test-Path -LiteralPath $legacyMsiDowngradeProbeInstaller) "Downgrade-probe installer was not created."
+    Assert-True (Test-Path -LiteralPath $msiContinuityInstaller) "MSI continuity installer was not created."
     Assert-True (Test-Path -LiteralPath $noShortcutDefaultsInstaller) "Shortcut-default fixture installer was not created."
     Assert-True (Test-Path -LiteralPath $failingUninstallInstaller) "Forward-uninstall failure fixture was not created."
     Assert-True (Test-Path -LiteralPath $interruptedUninstallInstaller) "Interrupted forward-uninstall fixture was not created."
@@ -664,6 +745,78 @@ try {
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $legacyMsiInstallDirectory "legacy-payload.txt"))) "ProductCode migration did not remove the legacy MSI payload."
     Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
     Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "ProductCode migration test cleanup did not finish."
+
+    # Tauri 对齐的可选自动检测：不显式配置 GUID，仅按卸载注册项的
+    # DisplayName+Publisher+msiexec 匹配；默认关闭且三项条件缺一不可。
+    Invoke-MsiExec "/i `"$legacyMsiPath`" /qn /norestart"
+    Assert-True (Test-Path -LiteralPath (Join-Path $legacyMsiInstallDirectory "legacy-payload.txt")) "Legacy MSI fixture was not installed for auto-detect."
+    Invoke-WindowsExecutable $legacyMsiAutoDetectInstaller "/S /D=$installDirectory"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $legacyMsiInstallDirectory "legacy-payload.txt"))) "Auto-detect migration did not remove the legacy MSI payload."
+    Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Auto-detect migration test cleanup did not finish."
+
+    Invoke-MsiExec "/i `"$legacyMsiPath`" /qn /norestart"
+    Invoke-WindowsExecutable $legacyMsiNameMismatchInstaller "/S /D=$installDirectory"
+    Assert-True (Test-Path -LiteralPath (Join-Path $legacyMsiInstallDirectory "legacy-payload.txt")) "Auto-detect removed an MSI whose product name did not match."
+    Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Name-mismatch test cleanup did not finish."
+    Invoke-MsiExec "/x $legacyMsiProductCode /qn /norestart" @(0, 1605, 3010)
+
+    Invoke-MsiExec "/i `"$legacyMsiPath`" /qn /norestart"
+    Invoke-WindowsExecutable $legacyMsiPublisherMismatchInstaller "/S /D=$installDirectory"
+    Assert-True (Test-Path -LiteralPath (Join-Path $legacyMsiInstallDirectory "legacy-payload.txt")) "Auto-detect removed an MSI whose publisher did not match."
+    Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Publisher-mismatch test cleanup did not finish."
+    Invoke-MsiExec "/x $legacyMsiProductCode /qn /norestart" @(0, 1605, 3010)
+
+    # 同一 UpgradeCode 并存 0.9.0 与 0.8.0：版本判定必须取最高版本（0.8.5 探针被 0.9.0
+    # 拦下而不是成功覆盖），迁移循环必须把两个产品都移除而不是只处理枚举到的第一个。
+    Invoke-MsiExec "/i `"$legacyMsiV2Path`" /qn /norestart"
+    Invoke-MsiExec "/i `"$legacyMsiPath`" /qn /norestart"
+    Assert-True (Test-Path -LiteralPath (Join-Path $legacyMsiV2InstallDirectory "legacy-payload.txt")) "Legacy MSI fixture V2 was not installed."
+    $downgradeProbe = Start-Process -FilePath $legacyMsiDowngradeProbeInstaller -ArgumentList "/S /D=$installDirectory" -Wait -PassThru
+    Assert-True ($downgradeProbe.ExitCode -eq 4) "Migration did not use the highest installed MSI version for the downgrade check."
+    Assert-True (Test-Path -LiteralPath (Join-Path $legacyMsiInstallDirectory "legacy-payload.txt")) "A blocked downgrade removed the legacy MSI."
+    Invoke-WindowsExecutable $legacyMsiUpgradeMigrationInstaller "/S /D=$installDirectory"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $legacyMsiInstallDirectory "legacy-payload.txt"))) "Multi-version migration did not remove the 0.9.0 payload."
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $legacyMsiV2InstallDirectory "legacy-payload.txt"))) "Multi-version migration did not remove the 0.8.0 payload."
+    Invoke-WindowsExecutable (Join-Path $installDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $installDirectory) } "Multi-version migration test cleanup did not finish."
+
+    # NSIS→MSI 目录延续（Tauri 对齐）：MSI 读 NSIS 卸载键 InstallLocation 作为默认安装
+    # 目录；Bundler 自家 InstallDir 注册优先；范围外目录被忽略并回落到 MSI 默认目录。
+    $msiContinuityProductCode = Get-MsiProductCode $msiContinuityInstaller
+    $msiPrecedenceDirectory = Join-Path $env:LOCALAPPDATA "Programs\bundler-precedence-probe"
+
+    Invoke-WindowsExecutable $installer "/S /D=$nsisContinuityDirectory"
+    Wait-For { Test-Path -LiteralPath (Join-Path $nsisContinuityDirectory "Uninstall.exe") } "NSIS install for MSI continuity did not finish."
+    Invoke-MsiExec "/i `"$msiContinuityInstaller`" /qn /norestart"
+    Assert-True (Test-Path -LiteralPath (Join-Path $nsisContinuityDirectory "BundlerIntegrationFixture.exe")) "MSI did not continue into the previous NSIS install directory."
+    Invoke-MsiExec "/x $msiContinuityProductCode /qn /norestart"
+    Invoke-WindowsExecutable (Join-Path $nsisContinuityDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $nsisContinuityDirectory) } "NSIS continuity directory cleanup did not finish."
+
+    New-Item -Path $bundlerDefinitionInstallDirPath -Force | Out-Null
+    Set-ItemProperty -LiteralPath $bundlerDefinitionInstallDirPath -Name "InstallDir" -Value $msiPrecedenceDirectory
+    New-Item -ItemType Directory -Path $msiPrecedenceDirectory -Force | Out-Null
+    Invoke-WindowsExecutable $installer "/S /D=$nsisContinuityDirectory"
+    Wait-For { Test-Path -LiteralPath (Join-Path $nsisContinuityDirectory "Uninstall.exe") } "NSIS reinstall for precedence test did not finish."
+    Invoke-MsiExec "/i `"$msiContinuityInstaller`" /qn /norestart"
+    Assert-True (Test-Path -LiteralPath (Join-Path $msiPrecedenceDirectory "BundlerIntegrationFixture.exe")) "Bundler's own InstallDir registration did not take precedence over the NSIS InstallLocation."
+    Invoke-MsiExec "/x $msiContinuityProductCode /qn /norestart"
+    Invoke-WindowsExecutable (Join-Path $nsisContinuityDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $nsisContinuityDirectory) } "Precedence test NSIS cleanup did not finish."
+    if (Test-Path -LiteralPath $msiPrecedenceDirectory) { Remove-Item -LiteralPath $msiPrecedenceDirectory -Recurse -Force }
+    Remove-Item -LiteralPath $bundlerDefinitionInstallDirPath -Recurse -Force -ErrorAction SilentlyContinue
+
+    Invoke-WindowsExecutable $installer "/S /D=$nsisOutOfScopeDirectory"
+    Wait-For { Test-Path -LiteralPath (Join-Path $nsisOutOfScopeDirectory "Uninstall.exe") } "NSIS out-of-scope install did not finish."
+    Invoke-MsiExec "/i `"$msiContinuityInstaller`" /qn /norestart"
+    Assert-True (Test-Path -LiteralPath (Join-Path $msiContinuityDefaultDirectory "BundlerIntegrationFixture.exe")) "MSI used an out-of-scope NSIS directory instead of its own default."
+    Invoke-MsiExec "/x $msiContinuityProductCode /qn /norestart"
+    if (Test-Path -LiteralPath $msiContinuityDefaultDirectory) { Remove-Item -LiteralPath $msiContinuityDefaultDirectory -Recurse -Force }
+    Invoke-WindowsExecutable (Join-Path $nsisOutOfScopeDirectory "Uninstall.exe") "/S /DELETEAPPDATA"
+    Wait-For { -not (Test-Path -LiteralPath $nsisOutOfScopeDirectory) } "Out-of-scope NSIS cleanup did not finish."
 
     Invoke-MsiExec "/i `"$legacyMsiPath`" /qn /norestart"
     Assert-True (Test-Path -LiteralPath (Join-Path $legacyMsiInstallDirectory "legacy-payload.txt")) "Legacy MSI fixture was not reinstalled."

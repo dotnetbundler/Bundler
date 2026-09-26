@@ -304,6 +304,8 @@ internal sealed class NsisBundleBackend(
             ["allow_downgrades"] = settings.AllowDowngrades ? "true" : "false",
             ["legacy_msi_product_codes"] = Escape(CreateMsiCodeList(settings.LegacyMsiProductCodes)),
             ["legacy_msi_upgrade_codes"] = Escape(CreateMsiCodeList(settings.LegacyMsiUpgradeCodes)),
+            ["legacy_msi_autodetect_name"] = Escape(settings.LegacyMsiAutoDetect ? configuration.ProductName : ""),
+            ["legacy_msi_autodetect_publisher"] = Escape(settings.LegacyMsiAutoDetect ? publisher : ""),
             ["input_glob"] = Escape(Path.Combine(item.InputDirectory, "*")),
             ["output_file"] = Escape(installerPath),
             ["estimated_size"] = EstimateSizeInKilobytes(item.InputDirectory).ToString(System.Globalization.CultureInfo.InvariantCulture),

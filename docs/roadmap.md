@@ -108,7 +108,7 @@ NSIS 原路线、能力基线、旧阶段映射和 `NSIS-R1..R4` 的历史证据
 4. `WIN-MSI-4`：完整 Windows/架构/安全矩阵、人工边界、文档及格式冻结；仅补缺陷和测试，不把首个安装测试拖到此阶段。
 
 `WIN-MSI-1..8` 的当前 Windows 11 x64 主机自动化已通过；
-`alpha.37` 是既有 x64/ARM64 身份基线，`alpha.40` 增加 x86、显式 MSI 版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
+`alpha.37` 是既有 x64/ARM64 身份基线，`alpha.40` 增加 x86、显式 MSI 版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 选项，`alpha.43` 增加受控 WiX 扩展与专家模式，`alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 读取前 NSIS 安装目录延续）。
 这不是 Tauri 通用 MSI 能力全集。
 per-machine 只验证构建产物和数据库，原生 x86/ARM64 宿主、生产证书、真实 UI、FIPS 策略宿主与重启仍按 MSI 专用人工及外部清单记录。
 `WIN-MSI-1..9` 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`：

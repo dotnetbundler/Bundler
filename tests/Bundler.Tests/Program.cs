@@ -195,7 +195,7 @@ static async Task VerifiesAndExtractsBundledNsis()
             "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
         Assert(File.Exists(pluginPath), "The bundled NSIS plug-in is missing.");
         Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))) ==
-               "F60708A67784CA379C8135F3203A2102DF0CB44D976F9B7E932F8F756A922B01",
+               "AFD65CB6BAA3C931CF9DEA4A9AB41579EFA4D23774C71CE5707E76E3AC1ADC9D",
             "The bundled NSIS plug-in checksum changed; rebuild and update its provenance.");
 
         var toolset = await NsisToolResolver.ResolveAsync(archive, cache);
@@ -1437,11 +1437,14 @@ static void RendersExistingVersionPolicy()
             {
                 AllowDowngrades = true,
                 LegacyMsiProductCodes = ["1D1A6B03-2BDA-4D18-B12C-574145D9CFA0"],
-                LegacyMsiUpgradeCodes = ["{5AD89AE2-9984-4B5F-937F-0DF918FE7A22}"]
+                LegacyMsiUpgradeCodes = ["{5AD89AE2-9984-4B5F-937F-0DF918FE7A22}"],
+                LegacyMsiAutoDetect = true
             },
             item,
             "setup.exe",
             "ExampleApp");
+        var defaultScript = NsisBundleBackend.CreateScript(
+            template, configuration, new NsisBundleConfiguration(), item, "setup.exe", "ExampleApp");
 
         Assert(script.Contains("DotNetBundlerNsis::SemverCompare", StringComparison.Ordinal) &&
                script.Contains("!define ALLOW_DOWNGRADES \"true\"", StringComparison.Ordinal),
@@ -1455,6 +1458,15 @@ static void RendersExistingVersionPolicy()
                script.Contains("DotNetBundlerNsis::FindMsiProduct", StringComparison.Ordinal) &&
                script.Contains("Function UninstallLegacyMsiInstallations", StringComparison.Ordinal),
             "The script must render exact legacy MSI identifiers and the migration flow.");
+        Assert(script.Contains("!define LEGACY_MSI_AUTODETECT_NAME \"ExampleApp\"", StringComparison.Ordinal) &&
+               script.Contains("!define LEGACY_MSI_AUTODETECT_PUBLISHER \"ExampleApp\"", StringComparison.Ordinal) &&
+               script.Contains("\"${LEGACY_MSI_AUTODETECT_NAME}\" \"${LEGACY_MSI_AUTODETECT_PUBLISHER}\"", StringComparison.Ordinal),
+            "The script must pass opt-in name/publisher auto-detection to the plug-in calls.");
+        Assert(script.Contains("${ElseIf} $0 == 1602", StringComparison.Ordinal),
+            "The migration flow must treat a cancelled MSI uninstall as an abort, not a hard failure.");
+        Assert(defaultScript.Contains("!define LEGACY_MSI_AUTODETECT_NAME \"\"", StringComparison.Ordinal) &&
+               defaultScript.Contains("!define LEGACY_MSI_AUTODETECT_PUBLISHER \"\"", StringComparison.Ordinal),
+            "Auto-detection must render empty name/publisher unless explicitly enabled.");
         Assert(script.Contains("; 打包时无法知道用户已安装的版本", StringComparison.Ordinal) &&
                script.Contains("; 静默和被动安装不会显示现有安装处理页面", StringComparison.Ordinal),
             "Non-trivial NSIS policy branches must retain Chinese explanatory comments.");
@@ -1934,6 +1946,7 @@ static void MapsNsisSettingsThroughMsBuild()
                  "NsisCompression", "NsisShortcutDesktop", "NsisShortcutStartMenu", "NsisShortcutArguments",
                  "NsisShortcutWorkingDirectory", "NsisShortcutIcon", "NsisShortcutAppUserModelId",
                  "NsisShortcutStartMenuFolder", "NsisShortcutLegacyProductNames", "NsisShortcutLegacyMainExecutables",
+                 "NsisLegacyMsiProductCodes", "NsisLegacyMsiUpgradeCodes", "NsisLegacyMsiAutoDetect",
                  "WindowsSigningCommand"
              })
     {
@@ -1941,6 +1954,8 @@ static void MapsNsisSettingsThroughMsBuild()
     }
     Assert(props.Contains("<BundlerNsisCompression Condition=\"'$(BundlerNsisCompression)' == ''\">lzma</BundlerNsisCompression>", StringComparison.Ordinal),
         "MSBuild does not define the documented LZMA compression default.");
+    Assert(props.Contains("<BundlerNsisLegacyMsiAutoDetect Condition=\"'$(BundlerNsisLegacyMsiAutoDetect)' == ''\">false</BundlerNsisLegacyMsiAutoDetect>", StringComparison.Ordinal),
+        "MSBuild must default legacy MSI auto-detection to disabled.");
     Assert(task.Contains("Compression = ParseCompression()", StringComparison.Ordinal) &&
            task.Contains("BundlerNsisCompression must be lzma, zlib, bzip2, or none.", StringComparison.Ordinal),
         "The MSBuild task does not parse and validate NSIS compression.");

@@ -2,8 +2,9 @@
 
 > 最后更新：2026-09-27
 > 当前分支：`msi-development`（NSIS 开发线已并入，冻结提交 `71a5c90`）
-> 当前包版本：`0.1.0-alpha.43`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
-> 当前阶段：WIN-MSI-1..9 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`
+> 当前包版本：`0.1.0-alpha.44`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前阶段：WIN-MSI-1..9 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；
+> `alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 前 NSIS 安装目录延续、事务清理竞态修复）
 > 默认下一阶段：`MAC-APP`（需用户明确启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
@@ -59,14 +60,21 @@ WIN-MSI-1..8 实现与本机自动化验证完成：
 
 `MAC-APP`、`MAC-DMG`、`MAC-PKG`、`LINUX-DEB`、`LINUX-RPM`、`LINUX-APPIMAGE`、`CLI-C1`：无实现，顺序与边界见 `docs/roadmap.md`。
 
-## 3. 最近验证（2026-10-02，Windows 11 Pro build 26200 x64，WIN-MSI-9 冻结回归）
+## 3. 最近验证（2026-10-03，Windows 11 Pro build 26200 x64，跨格式收尾回归）
 
 - `dotnet build Bundler.slnx -c Release`：0 警告/0 错误。
-- `tests/Bundler.Tests` Release：78/78 PASS。
-- MSI 集成**全套** PASS：`Verify.ps1`、`VerifyLifecycle.ps1`、`VerifyMaintenance.ps1`、`VerifyWinMsi5..8.ps1`、`VerifyPublicSample.ps1`（`alpha.43` 本地包，日志/产物保留于各临时目录）。
-- NSIS `Verify.ps1`：首次运行遇已知的事务目录清理竞态 flake（`Committed rollback journal was not cleaned up`，残留属本轮测试），复核确认无遗留后复跑全绿；该竞态为既有已知项，不改变 NSIS 冻结语义。
-- 包供应复核：7 包 `0.1.0-alpha.43`；`DotNet.Bundler.Wix` 14,417,031 字节/11 文件，WiX 源码归档与许可证哈希与 `third_party/wix/SHA256SUMS` 一致。
-- Tauri 快照漂移复核：`dev` 移至 `15468de7`，MSI 相关文件与 `7dbfc1f` 比对无实质差异。
+- `tests/Bundler.Tests` Release：78/78 PASS（新增自动检测渲染/默认关闭、1602 分支、MSBuild 映射断言）。
+- NSIS `Verify.ps1` **全绿一次通过**（`alpha.44` 本地包）：既有全部用例 + 新增旧 MSI 自动检测命中、
+  名称/发布者不匹配负例、同 UpgradeCode 多版本取最高并全部清理、NSIS→MSI 目录延续/优先级/范围外回落。
+  此前两次复现的"committed journal 未清理"断言本轮未出现（`SafeDeleteTree` 瞬态占用重试修复）。
+- MSI 集成**全套** PASS：`Verify.ps1`、`VerifyLifecycle.ps1`、`VerifyMaintenance.ps1`、`VerifyWinMsi5..8.ps1`、
+  `VerifyPublicSample.ps1`（`alpha.44`，`WixProductDocument` 新增 NSIS 目录搜索+条件 CA 后全量复跑）。
+- 环境检查：无遗留安装、注册表项、事务目录或探测目录残留。
+- 原生插件重建：`DotNetBundlerNsis.dll` SHA-256 见 `third_party/nsis-plugin/nsis-plugin-provenance.md`，
+  与 `Bundler.Tests` 断言一致。
+
+历史验证（2026-10-02，WIN-MSI-9 冻结回归，`alpha.43`）：MSI 全套集成与 78/78 测试通过；
+NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修复）；包供应与 Tauri 快照漂移复核完成。
 
 ## 4. 外部验收边界（未执行，不视为完成）
 

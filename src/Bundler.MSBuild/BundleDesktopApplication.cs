@@ -83,6 +83,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string NsisShortcutLegacyMainExecutables { get; set; } = "";
     public string NsisLegacyMsiProductCodes { get; set; } = "";
     public string NsisLegacyMsiUpgradeCodes { get; set; } = "";
+    public bool NsisLegacyMsiAutoDetect { get; set; }
     public string WindowsSigningPfxFile { get; set; } = "";
     public string WindowsSigningPfxPasswordEnvironmentVariable { get; set; } = "";
     public string WindowsSigningCertificateThumbprint { get; set; } = "";
@@ -220,6 +221,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 },
                 LegacyMsiProductCodes = ParseSemicolonList(NsisLegacyMsiProductCodes),
                 LegacyMsiUpgradeCodes = ParseSemicolonList(NsisLegacyMsiUpgradeCodes),
+                LegacyMsiAutoDetect = NsisLegacyMsiAutoDetect,
                 CustomLanguageFiles = ParseCustomLanguageFiles()
             };
             var nsisOptions = new NsisBundlerOptions

@@ -63,3 +63,17 @@ WIN-MSI-5/6/7/8 的实施证据见 MSI 路线第 10 节及 `VerifyWinMsi5.ps1`/`
 以固定快照 `7dbfc1f` 逐项复核全部 Tauri 通用 MSI 用户能力；上游 `dev` 已移至 `15468de7`，MSI 相关文件（`main.wxs`、`WixSettings`、`msi/mod.rs`）与固定快照比对无实质差异，结论不受漂移影响。
 逐行结论归入四类：等价已实现（身份/版本/范围/语言/图标/位图/PATH/ARP/签名/退出码/扩展）、有意更安全语义（每语言隔离身份、常规模式白名单校验、专家模式构建后身份回读、默认拒绝降级）、明确不适用/不支持（自动运行时部署、受管模式任意脚本与全目录删除）、另立跨格式产品路线（updater/提升权限计划任务、CLI-C1）。
 冻结说明：此后 MSI alpha 基线冻结于 `0.1.0-alpha.43` 行为面；无现成环境的验收项（MSI-OI-*、MSI-MT-*）继续保留为外部待办，不计入冻结证据。
+
+## 跨格式 MSI↔NSIS 收尾（WIN-MSI-9 后续，`0.1.0-alpha.44`）
+
+逐项复核 Tauri `installer.nsi`/`main.wxs` 中两个仅存在于跨格式面的通用能力并补齐：
+
+| Tauri 能力 | Bundler 落地 |
+| --- | --- |
+| NSIS 安装器按卸载注册项 DisplayName+Publisher 识别旧 MSI，校验卸载命令含 `msiexec` | `NsisBundleConfiguration.LegacyMsiAutoDetect`/`BundlerNsisLegacyMsiAutoDetect`（默认关闭，有意更安全：默认仍只认显式 ProductCode/UpgradeCode）；原生插件枚举 HKCU/HKLM 的 32/64 位视图，与显式 GUID 结果合并去重 |
+| Tauri 对 MSI 卸载返回 `1602` 按用户取消返回决策流 | 模板内 `1602` 按 `EXIT_CANCELLED` 退出安装（`Abort` 在被 `Call` 的 Function 中只退出函数，故采用取消退出模式）；`1605`/`1641`/`3010` 语义不变 |
+| Tauri MSI 搜索旧 NSIS 安装目录作默认安装位置 | MSI `RegistrySearch` 读 NSIS 卸载键 `InstallLocation`（HKCU/HKLM 32 位视图），仅在范围内且 Bundler 未找到自己的 `InstallDir` 注册时设为 `INSTALLFOLDER`；有意收紧：Bundler 注册目录优先、范围外值回落默认目录 |
+
+同时修复既知事务清理竞态：`SafeDeleteTree` 对瞬态占用（杀软/索引器持有刚写入的快照文件）有限重试后仍失败才返回错误。
+
+集成证据：`tests/Windows.Nsis.Integration/Verify.ps1` 覆盖自动检测命中/名称或发布者不匹配不误卸、同 UpgradeCode 多版本取最高版本并全部清理、NSIS→MSI 目录延续/优先级/范围外回落。per-machine 提权枚举与真实历史产品迁移留在 NSIS MT-05。

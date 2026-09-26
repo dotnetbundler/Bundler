@@ -20,12 +20,12 @@ public static class PluginActions
     }
 
     [NsisAction]
-    public static string FindMsiProduct(string productCodes, string upgradeCodes) =>
-        MsiProducts.FindFirst(productCodes, upgradeCodes) ?? string.Empty;
+    public static string FindMsiProduct(string productCodes, string upgradeCodes, string displayName, string publisher) =>
+        MsiProducts.FindFirst(productCodes, upgradeCodes, displayName, publisher) ?? string.Empty;
 
     [NsisAction]
-    public static string GetNewestMsiVersion(string productCodes, string upgradeCodes) =>
-        MsiProducts.GetNewestVersion(productCodes, upgradeCodes) ?? string.Empty;
+    public static string GetNewestMsiVersion(string productCodes, string upgradeCodes, string displayName, string publisher) =>
+        MsiProducts.GetNewestVersion(productCodes, upgradeCodes, displayName, publisher) ?? string.Empty;
 
     [NsisAction]
     public static int RunAsUser(string executable, string arguments) =>

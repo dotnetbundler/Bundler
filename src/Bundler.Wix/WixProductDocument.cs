@@ -68,18 +68,44 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
         var perUser = settings.InstallScope == WixInstallScope.CurrentUser;
         var scopeRoot = perUser ? "LocalAppDataFolder" :
             item.Target.Architecture == CpuArchitecture.X86 ? "ProgramFilesFolder" : "ProgramFiles64Folder";
+        // 跨安装器目录延续（Tauri 对齐）：先读旧 NSIS 安装器写入的卸载键 InstallLocation，
+        // 再到 Bundler 自家注册；Bundler 注册的目录优先（后写者胜）。
+        var nsisUninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\" + bundle.Identifier;
+        var nsisSearches = new XElement(Wix + "Property", new XAttribute("Id", "PREVIOUS_NSIS_INSTALLDIR"),
+            new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerNsisDirSearchMachine"),
+                new XAttribute("Root", "HKLM"), new XAttribute("Key", nsisUninstallKey),
+                new XAttribute("Name", "InstallLocation"), new XAttribute("Type", "directory"),
+                new XAttribute("Win64", "no")),
+            new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerNsisDirSearchUser"),
+                new XAttribute("Root", "HKCU"), new XAttribute("Key", nsisUninstallKey),
+                new XAttribute("Name", "InstallLocation"), new XAttribute("Type", "directory"),
+                new XAttribute("Win64", "no")));
+        product.Add(nsisSearches);
         product.Add(new XElement(Wix + "Property", new XAttribute("Id", "INSTALLFOLDER"),
             new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerInstallDirSearch"),
                 new XAttribute("Root", registrationRoot), new XAttribute("Key", definitionKey),
                 new XAttribute("Name", "InstallDir"), new XAttribute("Type", "directory"),
                 new XAttribute("Win64", item.Target.Architecture == CpuArchitecture.X86 ? "no" : "yes"))));
+        // 仅当 NSIS 旧目录在安装范围内且 Bundler 未找到自己的注册目录时，把默认目录设为旧目录；
+        // 范围外默认会被 BundlerInstallDirScope 拦截，故先按范围收紧。
+        product.Add(new XElement(Wix + "CustomAction", new XAttribute("Id", "BundlerUseNsisInstallDir"),
+            new XAttribute("Property", "INSTALLFOLDER"), new XAttribute("Value", "[PREVIOUS_NSIS_INSTALLDIR]")));
         product.Add(new XElement(Wix + "Property", new XAttribute("Id", "ARPCONTACT"),
             new XAttribute("Value", bundle.Publisher ?? bundle.ProductName)));
         product.Add(new XElement(Wix + "CustomAction", new XAttribute("Id", "BundlerSetArpInstallLocation"),
             new XAttribute("Property", "ARPINSTALLLOCATION"), new XAttribute("Value", "[INSTALLFOLDER]")));
         product.Add(new XElement(Wix + "CustomAction", new XAttribute("Id", "BundlerInstallDirScope"),
             new XAttribute("Error", Loc("InstallDirScopeError"))));
+        product.Add(new XElement(Wix + "InstallUISequence",
+            new XElement(Wix + "Custom", new XAttribute("Action", "BundlerUseNsisInstallDir"),
+                new XAttribute("After", "AppSearch"),
+                "NOT Installed AND NOT INSTALLFOLDER AND PREVIOUS_NSIS_INSTALLDIR ~<< " + scopeRoot +
+                " AND PREVIOUS_NSIS_INSTALLDIR ~<> " + scopeRoot)));
         product.Add(new XElement(Wix + "InstallExecuteSequence",
+            new XElement(Wix + "Custom", new XAttribute("Action", "BundlerUseNsisInstallDir"),
+                new XAttribute("After", "AppSearch"),
+                "NOT Installed AND NOT INSTALLFOLDER AND PREVIOUS_NSIS_INSTALLDIR ~<< " + scopeRoot +
+                " AND PREVIOUS_NSIS_INSTALLDIR ~<> " + scopeRoot),
             new XElement(Wix + "Custom", new XAttribute("Action", "BundlerSetArpInstallLocation"),
                 new XAttribute("After", "CostFinalize"), "1"),
             new XElement(Wix + "Custom", new XAttribute("Action", "BundlerInstallDirScope"),

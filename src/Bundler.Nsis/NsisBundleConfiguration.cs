@@ -18,6 +18,9 @@ public sealed class NsisBundleConfiguration
     public NsisShortcutConfiguration Shortcuts { get; init; } = new();
     public IReadOnlyList<string> LegacyMsiProductCodes { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> LegacyMsiUpgradeCodes { get; init; } = Array.Empty<string>();
+    // 显式启用后才按本产品 DisplayName+Publisher 匹配卸载注册项中的 MSI（Tauri 对齐；
+    // 默认仍只使用精确 GUID，不按名称猜测）。
+    public bool LegacyMsiAutoDetect { get; init; }
 }
 
 public sealed class NsisShortcutConfiguration

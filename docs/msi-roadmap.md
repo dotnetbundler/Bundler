@@ -1,7 +1,7 @@
 # Windows MSI 后端实施路线（WiX 3.14.1）
 
 > 状态：`WIN-MSI-1..6` 的当前 Windows 11 x64 本机自动化范围已完成（2026-09-26）；
-> `alpha.37` 是既有身份基线，`alpha.40` 增加 x86、显式版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
+> `alpha.37` 是既有身份基线，`alpha.40` 增加 x86、显式版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式，`alpha.44` 增加 Tauri 对齐的跨格式收尾（MSI 读前 NSIS 安装目录延续）。
 > `WIN-MSI-1..9` 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；默认下一格式为 `MAC-APP`。
 > 原阶段证据见第 6..9 节，扩展路线及 WIN-MSI-5/6 证据见第 10 节。
 > 当前开发分支：`msi-development`；历史记录中的 `codex/msi-development` 是改名前的名称。
@@ -656,3 +656,14 @@ WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方
   `Verify.ps1`、`VerifyLifecycle.ps1`、`VerifyMaintenance.ps1`、`VerifyWinMsi5.ps1`、`VerifyWinMsi6.ps1`、`VerifyWinMsi7.ps1`、`VerifyWinMsi8.ps1`、`VerifyPublicSample.ps1` 全部 PASS（各自临时目录保留 MSI 与 verbose log）；NSIS `Verify.ps1` 回归见 `PROJECT_CONTEXT.md` 最近验证节。
 - **文档一致性**：审计、能力矩阵、人工清单、外部待办、公开示例、README 与路线文件统一推进到冻结态；无新用户可见能力，无版本 bump 之外的包内容变化。
 - **冻结声明**：`0.1.0-alpha.43` 为 MSI 后端冻结基线；后续 MSI 仅接受缺陷修复或外部验收证据回填，不新增能力。外部待验收项仍为 MSI-OI-*/MSI-MT-* 原清单。
+
+**跨格式收尾记录（2026-10-03，`0.1.0-alpha.44`）**：
+
+冻结后按用户指示补做 Tauri 的 MSI↔NSIS 跨格式通用能力，不构成新格式/新阶段：
+
+- **NSIS 自动检测旧 MSI（Tauri 对齐，可选）**：`LegacyMsiAutoDetect`/`BundlerNsisLegacyMsiAutoDetect` 默认关闭；启用后原生插件枚举卸载注册项（HKCU/HKLM × 32/64 位视图），按 DisplayName+Publisher 匹配且要求卸载命令含 `msiexec`，与显式 GUID 结果合并去重。默认仍只认精确 GUID 的语义未变。
+- **1602 用户取消语义**：旧 MSI 卸载返回 `1602` 按用户取消退出安装（修正了 Function 内 `Abort` 只退函数不中止安装的实现偏差）。
+- **MSI 前 NSIS 目录延续**：`RegistrySearch` 读 NSIS 卸载键 `InstallLocation`，仅在范围内且 Bundler 未找到自己的 `InstallDir` 时设为 `INSTALLFOLDER` 默认；Bundler 注册优先、范围外回落默认目录，真实 NSIS 安装→MSI 安装已验证三腿（延续/优先级/范围外）。
+- **事务清理竞态修复**：`SafeDeleteTree` 对瞬态文件占用有限重试，修复集成中两次复现的"committed journal 未清理"断言抖动。
+- **测试**：`Bundler.Tests` 更新（自动检测渲染/默认关闭断言、1602 分支、MSBuild 映射与默认值）；`Verify.ps1` 新增自动检测命中/双负例、多版本取最高并全清、目录延续三腿。per-machine 提权枚举与真实历史产品迁移仍在 NSIS MT-05 外列。
+- **包**：版本升至 `0.1.0-alpha.44`；嵌入原生插件重建（SHA-256 见 `third_party/nsis-plugin/nsis-plugin-provenance.md`）。

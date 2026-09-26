@@ -20,6 +20,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integ
 - `tests/Nsis.Api.PackageFixture`：仅引用 `DotNet.Bundler.Nsis` 等后端 NuGet 包，通过公共 API 构建，验证仓库外直接 API 消费。
 - `Fixture/BundlerNsisIntegrationFixture.csproj`：MSBuild 消费 fixture，随参数生成 current-user、per-machine、both、升级、允许降级、Unicode 产品、签名、无快捷方式默认值及各类故障注入变体。
 - `LegacyMsiFixture/LegacyMsiFixture.wixproj`：用 WiX SDK 5.0.2 构建的一次性旧 MSI 产品（非 Bundler 产物），用于按 ProductCode 与 UpgradeCode 两条精确路径验证旧 MSI 迁移。
+- `LegacyMsiFixtureV2/LegacyMsiFixtureV2.wixproj`：同一 UpgradeCode 的第二个一次性 MSI（0.8.0、独立 ProductCode/安装目录），验证多版本并存取最高版本判定与迁移循环全部清理。
+- 同一 fixture 项目的 `BundlerFormats=msi` 变体产出 Bundler MSI，验证 NSIS→MSI 目录延续（读卸载键 `InstallLocation`）、Bundler `InstallDir` 注册优先与范围外回落。
 
 集成断言覆盖：
 
@@ -30,6 +32,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integ
 - 文件关联与 URL 协议注册、卸载时的所有权检查；
 - 生命周期 Hook 与安装/卸载事务回滚：事务快照、激活、载荷恢复、注册表恢复、journal 清理各检查点的一次性故障注入，以及安装器进程树中断后的下次启动恢复；
 - 卸载前向恢复：post-uninstall Hook 失败与进程中断后保留 journal 与恢复卸载器，下次安装先幂等完成旧卸载；
+- 旧 MSI 迁移：ProductCode/UpgradeCode 精确路径、`LegacyMsiAutoDetect` 自动检测命中（DisplayName+Publisher+msiexec）、名称/发布者不匹配的负例、多版本并存取最高版本并全部清理；
+- NSIS→MSI 目录延续、Bundler `InstallDir` 优先级与范围外回落；
 - journal 篡改（快捷方式 `path.txt`、注册表 snapshot subkey）在恢复前被拒绝；
 - 重解析点/junction 在快照、journal 与构建输入中的安全拒绝；
 - Restart Manager 只关闭安装目录内主程序，不影响另一路径同名进程；

@@ -782,6 +782,26 @@ internal static class InstallTransaction
 
     private static void SafeDeleteTree(string path)
     {
+        // 杀毒软件/索引器对刚写入的快照文件有短暂占用窗口；
+        // 有限重试缓解抖动，仍不把持久性锁文件伪装成已清理。
+        const int maxAttempts = 3;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                SafeDeleteTreeCore(path);
+                return;
+            }
+            catch (Exception exception) when (attempt < maxAttempts &&
+                (exception is IOException || exception is UnauthorizedAccessException))
+            {
+                System.Threading.Thread.Sleep(150 * attempt);
+            }
+        }
+    }
+
+    private static void SafeDeleteTreeCore(string path)
+    {
         if (!Directory.Exists(path))
         {
             return;
@@ -795,7 +815,7 @@ internal static class InstallTransaction
         {
             if (Directory.Exists(entry))
             {
-                SafeDeleteTree(entry);
+                SafeDeleteTreeCore(entry);
             }
             else
             {
