@@ -10,6 +10,7 @@
 
 沿用仓库既有固定快照：`tauri-apps/tauri` `dev` 分支提交 `7dbfc1fe5c36143b6a4614cbbd9d4c14ee9dfdcf`（与 `docs/msi-tauri-capability-audit.md` 同一基线，首次核对于 2026-09-25）。
 2026-09-26 复核上游漂移：`dev` 已移至 `9f8922a0388986c38158e531707115ce473a3fa2`；`crates/tauri-bundler/src/bundle/macos/**`、`settings.rs` 与 `tauri-utils/src/config.rs` 的 macOS 相关表面逐文件比对无实质差异（仅一处 `unwrap_or`→`unwrap_or_else` 风格改动与一段与本格式无关的文档注释增补），本审计维持 `7dbfc1f` 基线结论有效。
+2026-09-26 MAC-APP-5 冻结前复核：`dev` 再移至 `447fa9f3f993fe77724189e355078b38ce20baea`；`app.rs`/`sign.rs`/`icon.rs`/`dmg/mod.rs`/`settings.rs`/`config.rs`/`tauri-macos-sign`（lib.rs、keychain.rs）共 8 个 macOS 相关文件与 `9f8922a` 字节一致，无新能力缺口，基线结论继续有效。
 
 固定比较点（均按快照 SHA 链接）：
 

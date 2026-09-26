@@ -1,6 +1,6 @@
 # macOS `.app` 后端实施路线（MAC-APP）
 
-> 状态：**路线已确认，`MAC-APP-1`、`MAC-APP-2`、`MAC-APP-3`、`MAC-APP-4` 已完成**（云 macOS VM 已验证，证据见各小节验收记录）；下一阶段 `MAC-APP-5` 待启动指令。
+> 状态：**路线已确认，`MAC-APP-1`..`MAC-APP-5` 全部完成，`.app` 格式已冻结**（冻结基线：`mac-app-development` 分支 `BundlerPackageVersion=0.1.0-alpha.45`，行为契约=`mac-app-capability-matrix.md` 定稿表+本文件各节验收记录；冻结后仅缺陷修复附回归测试）。下一阶段默认 `MAC-DMG`。
 > 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)；PKG 取舍见 [`docs/mac-format-decision.md`](mac-format-decision.md)；逐项能力状态见 [`docs/mac-app-capability-matrix.md`](mac-app-capability-matrix.md)；外部条件见 [`docs/mac-app-open-items.md`](mac-app-open-items.md)；人工步骤见 [`docs/mac-app-manual-testing.md`](mac-app-manual-testing.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 
@@ -197,6 +197,12 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 - **新增自动化**：补齐矩阵缺口；冻结测试向量。
 - **不做**：新增功能；冻结后仅缺陷修复附回归测试。
 - **退出**：矩阵与文档一致；冻结基线写入本文件与 `PROJECT_CONTEXT.md`；`docs/roadmap.md` 默认下一阶段推进到 `MAC-DMG`。
+- **验收记录（2026-09-26）**：
+  - 上游漂移复核：`tauri dev` 自 `9f8922a` 移至 `447fa9f`，`app.rs`/`sign.rs`/`icon.rs`/`dmg/mod.rs`/`settings.rs`/`config.rs`/`tauri-macos-sign` 共 8 个 macOS 相关文件字节一致，无新能力缺口，审计基线 `7dbfc1f` 结论继续有效（记于 `mac-tauri-capability-audit.md`）；
+  - 能力矩阵定稿：逐项状态与 MAC-APP-1..4 验收证据对齐，无悬空"计划实现"行；
+  - 许可/供应链复核：本格式无第三方内嵌工具，全部打包步骤走宿主系统工具（`plutil`/`codesign`/`security`/`xattr`/`ditto`/`spctl`）或 Xcode 桥接工具（`xcrun notarytool`/`stapler`、`actool` 可降级），复核点=宿主工具版本下限（已记录 §2 三层下限口径）与凭证边界（`APPLE_*` 环境变量/显式配置，秘密不入库）；
+  - 外部待办收口：OI-01..07 逐条复核登记口径不变，仍属外部待验收，未宣称已通过；
+  - 冻结基线：`.app` 配置面（`MacAppBundleConfiguration`+`Signing`）与行为（骨架/plist 键/图标/关联/签名公证顺序）冻结于 `0.1.0-alpha.45`；`Bundler.Tests` 81/81 与 `Verify.sh` 全绿为冻结测试向量。
 
 ## 5. 验证分层与交接
 

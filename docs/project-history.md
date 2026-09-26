@@ -846,3 +846,11 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 4. 版本替换升级：v1（`CFBundleVersion=2026.9.1`）拷入 `~/Applications`+`lsregister -f`+启动 → 原地删除换 v2（`2026.9.2`）→ 重注册+启动成功、`lsregister -dump` 确认 identifier 保持（MT-06 主体已自动化，剩用户数据保留人工核对）。
 5. 干净宿主复核（依赖面盘点）：后端必需工具仅 `plutil`；签名加 `xattr`/`codesign`/`security`/`spctl`；公证才需 `xcrun notarytool`/`stapler`（Xcode 13+）；`actool` 缺失降级 `.icns`。`lipo`/`open`/`lsregister`/`clang` 仅测试脚本使用且有降级分支——无 Xcode/CLT 必需依赖。
 6. 文档同步：路线验收记录、能力矩阵（osx-x64、Gatekeeper 行状态更新）、manual-testing（MT-05/06 自动化边界）、PROJECT_CONTEXT、open-items 口径不变。
+
+### 14.24 MAC-APP-5：审计与 `.app` 格式冻结（2026-09-26，分支 `mac-app-development`）
+
+1. 上游漂移复核：`tauri dev` 自 `9f8922a` 移至 `447fa9f`；`app.rs`/`sign.rs`/`icon.rs`/`dmg/mod.rs`/`settings.rs`/`config.rs`/`tauri-macos-sign`（lib.rs、keychain.rs）8 个 macOS 相关文件字节一致，无新能力缺口，审计基线 `7dbfc1f` 结论继续有效。
+2. 能力矩阵定稿：逐项状态与 MAC-APP-1..4 验收证据对齐，无悬空"计划实现"行；矩阵头部改为冻结口径。
+3. 许可/供应链复核：本格式无第三方内嵌工具，全部步骤走宿主系统工具或 Xcode 桥接工具（`actool` 可降级），复核点收敛为宿主工具版本下限（三层下限口径已在路线 §2 落定）与凭证边界。
+4. 外部待办收口：OI-01..07 口径复核不变，全部维持外部待验收。
+5. 冻结基线：`.app` 配置面与行为契约冻结于 `0.1.0-alpha.45`（分支 `mac-app-development`）；冻结测试向量=`Bundler.Tests` 81/81 + `Verify.sh` 全绿；`docs/roadmap.md` 默认下一阶段推进到 `MAC-DMG`。

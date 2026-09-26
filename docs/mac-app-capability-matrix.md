@@ -3,7 +3,7 @@
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
 计划实现与外部待验收行绑定到 `docs/mac-app-roadmap.md`、`docs/mac-app-open-items.md`、`docs/mac-app-manual-testing.md` 中的明确阶段/ID。
 上游参照：`docs/mac-tauri-capability-audit.md`；PKG 取舍：`docs/mac-format-decision.md`。
-`MAC-APP-1` 已完成（云 macOS VM 已验证，`2026-09-26`），表内“已实现”行为均附本机证据；表内全部为非冻结状态。
+`MAC-APP-1`..`MAC-APP-5` 已完成（云 macOS VM 已验证，`2026-09-26`），`.app` 格式已冻结；表内“已实现”行为均附本机证据，冻结基线见 `docs/mac-app-roadmap.md` MAC-APP-5 验收记录。
 
 ## 结构与核心元数据
 

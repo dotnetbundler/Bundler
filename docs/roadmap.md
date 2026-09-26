@@ -130,8 +130,8 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 
 ### MAC：macOS `.app`、DMG 与 PKG（候选）
 
-`MAC-APP-1` 已完成（2026-09-26，分支 `mac-app-development`）：`DotNet.Bundler.MacApp` 后端 + MSBuild/直接 API 入口交付最小可用 `.app`（骨架、Info.plist 核心键、`.icns`、Contents 载荷映射），云 macOS VM 已验证生成→校验→启动→删除链路；`PackageFormat.Pkg` 已进公共枚举与 osx 目标矩阵。
-下一阶段 `MAC-APP-2`（分发与桌面集成）待启动指令。
+`MAC-APP-1`..`MAC-APP-5` 已完成（2026-09-26，分支 `mac-app-development`），macOS `.app` 格式已冻结：`DotNet.Bundler.MacApp` 后端 + MSBuild/直接 API 入口交付 `.app`（骨架、Info.plist 键组、`.icns`/`Assets.car` 图标、文件关联/URL scheme/ATS、签名与显式公证管线、原生 E2E 矩阵），云 macOS VM 全链实测通过；`PackageFormat.Pkg` 已进公共枚举与 osx 目标矩阵。
+默认下一阶段为 `MAC-DMG`，待启动指令。
 2026-09-26 规划轮已产出该格式要求的完整前置文档（分支 `mac-app-development`）：
 
 - 上游审计 [`mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)：固定快照 `7dbfc1f`（复核 `dev` `9f8922a` 无实质漂移），逐项登记 `.app`/`DMG` 用户可观察能力与选择阶段；
