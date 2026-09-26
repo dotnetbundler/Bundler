@@ -12,7 +12,7 @@
 | `.app` 目录骨架与 `<产品名>.app` 产物 | 计划实现 | MAC-APP-1 | `Contents/{Info.plist,MacOS,Resources,Frameworks}` 标准布局；输出目录约定 `artifacts/<rid>/app` |
 | `CFBundleIdentifier`/`CFBundleName`/`CFBundleDisplayName`/`CFBundleExecutable` | 计划实现 | MAC-APP-1 | identifier 按 Apple 规则校验；`CFBundleName` 可独立配置 |
 | `CFBundleShortVersionString`/`CFBundleVersion` | 计划实现 | MAC-APP-1 | 格式校验，不静默截断；`CFBundleVersion` 默认取版本可独立覆盖 |
-| `LSMinimumSystemVersion`、`LSApplicationCategoryType`、`NSHumanReadableCopyright` | 计划实现 | MAC-APP-1 | 类别受限枚举；最低系统版本显式可选 |
+| `LSMinimumSystemVersion`、`LSApplicationCategoryType`、`NSHumanReadableCopyright` | 计划实现 | MAC-APP-1 | 类别受限枚举；最低系统版本由调用方显式配置、未配置不写入 |
 | `Info.plist` 固定键（`CFBundleInfoDictionaryVersion`/`CFBundlePackageType`/`NSHighResolutionCapable` 等） | 计划实现 | MAC-APP-1 | 上游 `LSRequiresCarbon` 死键不复制 |
 | 主可执行/资源/framework/任意 `Contents` 映射 | 计划实现 | MAC-APP-1 | framework 仅显式路径；不做宿主标准目录隐式查找 |
 | `osx-x64`/`osx-arm64` 产物 | 计划实现 | MAC-APP-1 | 独立产物；x64 运行依赖 Rosetta 属系统行为 |

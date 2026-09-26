@@ -53,9 +53,8 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 1. 构建前探测每个必需工具（`xcrun -f`/PATH）并记录版本与路径；缺必需工具立即报清晰错误，不静默降级；缺可选工具降级并警告。
 2. 不自动安装 Xcode/CLT，不替用户激活 Rosetta；宿主缺项写入构建日志与错误信息。
 3. 无网络下载：公证之外的每一步离线可用；公证是显式开启的网络动作。
-4. 构建宿主范围——**待用户确认**。已核实事实：`.app` 结构生成本身不需 Apple 工具（仅文件系统操作+plist 写入）；上游 Tauri 的 `macos` 模块整体 `#[cfg(target_os = "macos")]` 门控，在非 macOS 宿主上请求 `.app`/`.dmg` 只警告并静默跳过（快照 `7dbfc1f` `bundle.rs`）。
-   开放跨宿主的真实代价：Windows 宿主不能保留 Mach-O 可执行位（+x），产出的 `.app` 需经保留权限位的归档交付；且签名/公证/DMG/PKG 无论如何都需要 macOS。
-   建议：未签名 `.app` 结构生成放开任意宿主（跨宿主产物附明确警告与权限位说明），凡需 Apple 工具的步骤（codesign/notarytool/hdiutil/pkgbuild）在非 macOS 宿主明确报错——比上游 Tauri 的 macOS-only 更宽，与“工具覆盖尽量多宿主”原则一致。
+4. 构建宿主范围（已确认，2026-09-26）：未签名 `.app` 结构生成放开任意宿主（纯文件系统操作+plist 写入，不需 Apple 工具；跨宿主产物附明确警告，说明 Windows 宿主不保留 Mach-O 可执行位、需经保留权限位的归档交付）；凡需 Apple 工具的步骤（codesign/notarytool/hdiutil/pkgbuild）在非 macOS 宿主明确报错。
+   对照：上游 Tauri 的 `macos` 模块整体 `#[cfg(target_os = "macos")]` 门控，非 macOS 宿主请求 `.app`/`.dmg` 仅警告并跳过（快照 `7dbfc1f` `bundle.rs`）；本方案有意比上游宽一档，与“工具覆盖尽量多宿主”原则一致。
 5. 后端包形态（已确认，2026-09-26）：按格式分包，与 `Bundler.Nsis`/`Bundler.Wix` 惯例一致——`Bundler.MacApp`、`Bundler.MacDmg`、`Bundler.MacPkg` 各自独立；共享的签名/公证/钥匙串/工具探测基础设施另立 `Bundler.Signing.Mac`（对齐 `Bundler.Signing.Windows` 先例），必要时再加 `Bundler.Mac.Common` 承载 plist/束结构等公共代码。
 
 ## 3. 第一阶段前必须固定的 `.app` 语义
@@ -66,8 +65,9 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 1. **身份**：`Identifier` 映射 `CFBundleIdentifier`，按 Apple 规则校验（字母数字、连字符、点分段，段首非数字，建议 reverse-DNS）；
    校验不通过即拒绝，不静默改写；一经发布的 bundle ID 不再变化，否则 LaunchServices 关联、升级与用户授权记录断裂。
    `CFBundleName` 可独立于 `CFBundleDisplayName`/`ProductName` 配置。
-2. **版本**：`CFBundleShortVersionString` 取规范化用户可见版本；`CFBundleVersion` 为构建迭代号，默认取同一版本串，可显式配置；
-   两者都按 Apple 格式校验（至多三段数字），不接受的输入明确报错，不截断。
+2. **版本**（默认值已确认，2026-09-26）：`CFBundleShortVersionString` 取规范化用户可见版本；`CFBundleVersion` 为构建迭代号，默认取同一版本串、可显式配置；
+   `LSMinimumSystemVersion` 由调用方显式配置——未配置时不写入该键（不代设下限，等价于任何版本可装），配置了才写；
+   版本键按 Apple 格式校验（至多三段数字），不接受的输入明确报错，不截断。
 3. **载荷映射**：`InputDirectory` 不默认拍平进 bundle；
    约定映射为：主可执行（`MainExecutable`，Mach-O 校验）→ `Contents/MacOS/`；
    `Resources` 项 → `Contents/Resources/` 保留目标相对路径；

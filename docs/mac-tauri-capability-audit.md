@@ -34,7 +34,7 @@
 | Info.plist 固定键 `CFBundleInfoDictionaryVersion=6.0`、`CFBundlePackageType=APPL`、`CFBundleDevelopmentRegion`、`NSHighResolutionCapable`、`CSResourcesFileMapped` | 无 | MAC-APP-1；上游另写 `LSRequiresCarbon=true`，属无效果的遗留死键，**不复制** |
 | `CFBundleDisplayName`/`CFBundleName`（可独立于显示名）、`CFBundleExecutable`、`CFBundleIdentifier` | `ProductName`/`Identifier`/`MainExecutable` 已有；`bundleName` 无对应字段 | MAC-APP-1；`CFBundleName` 与 `CFBundleDisplayName` 的差异是真实用户可见面（菜单栏/访达），提供独立可配置项 |
 | `CFBundleShortVersionString`（用户可见）与 `CFBundleVersion`（构建迭代号，上游可独立配置） | 公共模型只有单一 `Version` | MAC-APP-1；版本映射规则见 `mac-app-roadmap.md` 第 3 节 |
-| `LSMinimumSystemVersion`（上游默认 `10.13`，`null` 移除该键） | 无 | MAC-APP-1；默认不写或写可配置值是决策点，见路线第 3 节 |
+| `LSMinimumSystemVersion`（上游默认 `10.13`，`null` 移除该键） | 无 | MAC-APP-1；已确认由调用方显式配置、未配置不写入（不代设下限，与上游默认 10.13 不同），见路线第 3 节 |
 | `LSApplicationCategoryType`（`category`，38 项枚举） | 公共模型无 `Category` 字段 | MAC-APP-1 提供受限枚举；访达“显示简介”可见，属真实用户结果 |
 | `NSHumanReadableCopyright`（`copyright`） | 公共模型 `Copyright` 已有 | MAC-APP-1 |
 | 图标：`.icns` 直接采用；PNG 等位图合成 `.icns`（按 `@2x` 文件名判定密度、向下取 2 的幂缩放）；`.icon`（Icon Composer）经 `actool` 编译出 `Assets.car` 并置 `CFBundleIconName`（需 Xcode 26+）；`.car` 直接采用 | 公共模型 `Icons` 已有 | `.icns` 透传与 PNG 合成进 MAC-APP-1；`Assets.car` 管线进 MAC-APP-2（构建宿主要求 actool≥26，缺失时降级只用 `.icns` 并报警告） |

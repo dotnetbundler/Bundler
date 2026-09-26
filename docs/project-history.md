@@ -791,4 +791,6 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 3. 后端分包：按格式分包 `Bundler.MacApp`/`Bundler.MacDmg`/`Bundler.MacPkg`，共享签名基础设施另立 `Bundler.Signing.Mac`（对齐 `Bundler.Signing.Windows` 先例）。
 4. universal：不加 `osx-universal` 枚举，`osx-x64`/`osx-arm64` 双产物；fat 输入校验保留为 MAC-APP-2 能力。
 5. 用户澄清：“尽量支持更多设备”指构建工具本身的宿主覆盖范围，产出物兼容哪些设备由应用开发者决定。
-   遗留待确认：`CFBundleVersion` 默认策略、`LSMinimumSystemVersion` 默认值（建议默认=版本号/默认不写入）、构建宿主范围（建议未签名 `.app` 放开任意宿主、Apple 工具步骤限 macOS；上游 Tauri 经源码核实为 macOS-only——`bundle/macos` 模块 `#[cfg(target_os = "macos")]` 门控，非 macOS 宿主请求仅警告跳过）。
+   同日最终确认：`CFBundleVersion` 默认=版本号可覆盖；`LSMinimumSystemVersion` 调用方显式配置、未配置不写入（不代设下限）；构建宿主=未签名 `.app` 任意宿主（跨宿主产物附权限位警告），需 Apple 工具的步骤限 macOS。
+   上游 Tauri 经源码核实为 macOS-only：`bundle/macos` 模块 `#[cfg(target_os = "macos")]` 门控，非 macOS 宿主请求仅警告跳过；本方案有意比上游宽一档。
+   MAC 规划轮至此全部决策确认完毕，待 `MAC-APP-1` 启动指令。

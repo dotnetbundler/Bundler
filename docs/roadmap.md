@@ -6,7 +6,7 @@
 > 当前状态：`WIN-MSI-1..9` 全部完成，MSI 基线冻结于 `alpha.43`；版本沿革：`alpha.37` 为既有 MSI 身份基线，`alpha.40` 增加 x86、显式版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方翻译覆盖、快捷方式图标与 FIPS 选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
 > 2026-09-26 完成 MAC 规划轮（分支 `mac-app-development`）：上游审计 [`mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)、PKG 格式决策 [`mac-format-decision.md`](mac-format-decision.md)、`MAC-APP-1..5` 阶段分解 [`mac-app-roadmap.md`](mac-app-roadmap.md) 均已就位。
 > PKG 已确认纳入公共 `PackageFormat`（顺序：`MAC-DMG` 后、Linux 前）；工具供应采用宿主检测策略；后端按格式分包；universal 走双产物。
-> 剩余待确认项：版本/最低系统版本默认值与构建宿主限定（路线第 2、3 节），确认后启动 `MAC-APP-1`。
+> 全部决策已确认（2026-09-26），`MAC-APP` 待用户下达 `MAC-APP-1` 启动指令。
 > 默认下一实施阶段为 `MAC-APP`。
 > 既有 per-machine、生产签名、交互 UI、干净宿主及重启等外部验收仍各自记录，不阻塞新增功能开发，也不冒充已通过。
 
@@ -135,7 +135,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 
 - 上游审计 [`mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)：固定快照 `7dbfc1f`（复核 `dev` `9f8922a` 无实质漂移），逐项登记 `.app`/`DMG` 用户可观察能力与选择阶段；
 - 格式决策 [`mac-format-decision.md`](mac-format-decision.md)：PKG 已确认纳入公共 `PackageFormat`；
-- 阶段分解 [`mac-app-roadmap.md`](mac-app-roadmap.md)：`MAC-APP-1..5`（结构/元数据 → 分发与桌面集成 → codesign/notarization → 原生 E2E → 冻结），含宿主工具供应策略与 `.app` 语义契约；默认值/宿主限定两项仍待用户确认；
+- 阶段分解 [`mac-app-roadmap.md`](mac-app-roadmap.md)：`MAC-APP-1..5`（结构/元数据 → 分发与桌面集成 → codesign/notarization → 原生 E2E → 冻结），含宿主工具供应策略与 `.app` 语义契约，全部决策已确认；
 - 能力矩阵 [`mac-app-capability-matrix.md`](mac-app-capability-matrix.md)、人工清单 [`mac-app-manual-testing.md`](mac-app-manual-testing.md)、外部待办 [`mac-app-open-items.md`](mac-app-open-items.md)。
 
 规划确认不等于实施授权；`MAC-APP-1` 代码需用户明确启动指令。
