@@ -867,3 +867,15 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 6. 产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg`（不沿用上游 名称_版本_架构）；
 7. 窗口布局全可配（尺寸/位置/图标位/大小/背景图/卷图标），默认对齐上游 660×400、app=180,170、Applications=480,170、图标 128。
 阶段分解 `MAC-DMG-1..5`；打包工具下限≈任意 macOS（`SetFile` 可降级），DMG 必须 macOS 宿主（不可跨宿主）。
+
+### 14.26 MAC-DMG-1：最小可用 `.dmg` 镜像（2026-09-26，分支 `mac-dmg-development`）
+
+交付 `src/Bundler.MacDmg`（netstandard2.0，`DotNet.Bundler.MacDmg` 包）：
+
+- `MacDmgBundleBackend`：`hdiutil create -srcfolder`（UDRW 读写镜像）→ `attach -readwrite` 挂载 → 暂存目录内含 `.app` + `ln -s /Applications` 拖放链接 + `SetFile -a E` 隐藏扩展名（可降级）→ `detach` EBUSY 指数退避（250/500/1000/2000ms）→ `hdiutil convert` 只读压缩（`Udzo`/`Ulmo`/`Udbz` 枚举，默认 `Ulmo`）；非 macOS 宿主拒绝（`HostCheck` 测试缝）；失败强制卸载残留卷+删产物与读写镜像。
+- `MacDmgBundler` 公共入口：仅接受 `Dmg` 目标，`VolumeName` 非空校验，内部编排 `MacAppBundleBackend`+`MacDmgBundleBackend`。
+- `MacDmgProcessRunner`：`Handler` 静态委托测试缝（`Request`/`Result` 记录）；`TryRunAsync` 供可降级工具（SetFile）探测。
+- MSBuild：`BundlerFormats=dmg` 分支接线 `BundlerMacDmgCompression`/`BundlerMacDmgVolumeName`（props 默认值齐备）；任务包装载 `DotNet.Bundler.MacDmg.dll`；`MacAppBundleBackend.SanitizeFileName` 改 internal + `InternalsVisibleTo` 共享。
+- 验证（云 macOS VM 26.5.2 arm64 实测）：`Bundler.Tests` 90/90 全绿（新增 9 条）；`tests/MacOS.Dmg.Integration/Verify.sh` 全绿——真实产出 `.dmg`、attach 断言 `.app`+`/Applications` 链接、卷内二进制启动、detach、`hdiutil verify` VALID、Udzo 变体 `Format: UDZO` 挂载通过；`samples/HelloMacDmg`（`BundlerFormats=dmg` 全旋钮演示）实测产出与挂载。
+- 踩坑修正：集成 fixture 在只读卷内写 `.launch-marker` 会崩（改 try/catch，stdout 标记已足够）；`unzip -l | grep -q` 在 `pipefail` 下偶发 SIGPIPE（改先落盘再 grep）。
+

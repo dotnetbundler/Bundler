@@ -352,7 +352,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             _ => null
         };
 
-    private static string SanitizeFileName(string name)
+    internal static string SanitizeFileName(string name)
     {
         var sanitized = name.Replace(':', '-').Replace('/', '-');
         foreach (var invalid in Path.GetInvalidFileNameChars())

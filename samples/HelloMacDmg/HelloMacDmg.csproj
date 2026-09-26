@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    HelloMacDmg：DotNet.Bundler macOS .dmg 全功能演示示例。
+    压缩格式 / 卷名 / 自动产出的 .app 中间产物等所有当前公开能力都可用下方旋钮演示；
+    .app 自身的完整旋钮请参考 samples/HelloMacApp（dmg 打包会先生成同样的 .app）。
+    变体命令见 mac-dmg-sample.md。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">osx-arm64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <Nullable>enable</Nullable>
+    <AssemblyName>HelloMacDmg</AssemblyName>
+    <Version>1.0.0</Version>
+
+    <BundlerEnabled>true</BundlerEnabled>
+    <!-- dmg 请求会让规划器自动先产出 .app 中间产物，再打 .dmg。 -->
+    <BundlerFormats>dmg</BundlerFormats>
+    <BundlerIdentifier>com.dotnetbundler.hellomacdmg</BundlerIdentifier>
+    <BundlerProductName>Hello Mac DMG</BundlerProductName>
+    <BundlerPublisher>DotNet.Bundler Samples</BundlerPublisher>
+    <BundlerDescription>DotNet.Bundler macOS .dmg demonstration sample.</BundlerDescription>
+    <BundlerCopyright>Copyright DotNet.Bundler Samples</BundlerCopyright>
+
+    <!-- .dmg 公开旋钮：压缩格式（Udzo/Ulmo/Udbz，默认 Ulmo）与卷名（默认=产品名）。 -->
+    <BundlerMacDmgCompression Condition="'$(HelloMacDmgCompression)' != ''">$(HelloMacDmgCompression)</BundlerMacDmgCompression>
+    <BundlerMacDmgVolumeName Condition="'$(HelloMacDmgVolumeName)' != ''">$(HelloMacDmgVolumeName)</BundlerMacDmgVolumeName>
+
+    <!-- .app 侧旋钮：与 HelloMacApp 相同，可搭配演示。 -->
+    <BundlerMacAppBundleName>HelloMacDmg</BundlerMacAppBundleName>
+    <BundlerMacAppDisplayName>Hello Mac DMG</BundlerMacAppDisplayName>
+    <BundlerMacAppMinimumSystemVersion Condition="'$(HelloMacDmgMinSystemVersion)' != ''">$(HelloMacDmgMinSystemVersion)</BundlerMacAppMinimumSystemVersion>
+    <BundlerMacAppSignIdentity Condition="'$(HelloMacDmgSignIdentity)' != ''">$(HelloMacDmgSignIdentity)</BundlerMacAppSignIdentity>
+    <BundlerMacAppHardenedRuntime Condition="'$(HelloMacDmgHardenedRuntime)' != ''">$(HelloMacDmgHardenedRuntime)</BundlerMacAppHardenedRuntime>
+    <BundlerMacAppEntitlementsFile Condition="'$(HelloMacDmgEntitlementsFile)' != ''">$(HelloMacDmgEntitlementsFile)</BundlerMacAppEntitlementsFile>
+  </PropertyGroup>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+
+  <ItemGroup>
+    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
+    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+  </ItemGroup>
+</Project>

@@ -6,6 +6,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Bundler.Core\Bundler.Core.csproj" />
     <ProjectReference Include="..\..\src\Bundler.MacApp\Bundler.MacApp.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.MacDmg\Bundler.MacDmg.csproj" />
     <ProjectReference Include="..\..\src\Bundler.Nsis\Bundler.Nsis.csproj" />
     <ProjectReference Include="..\..\src\Bundler.Wix\Bundler.Wix.csproj" />
     <ProjectReference Include="..\..\src\Bundler.Signing.Windows\Bundler.Signing.Windows.csproj" />

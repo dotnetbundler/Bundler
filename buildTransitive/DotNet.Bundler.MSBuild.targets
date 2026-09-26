@@ -127,6 +127,8 @@
       MacAppNotaryApiKeyPath="$(BundlerMacAppNotaryApiKeyPath)"
       MacAppNotaryApiKeyId="$(BundlerMacAppNotaryApiKeyId)"
       MacAppNotaryApiIssuer="$(BundlerMacAppNotaryApiIssuer)"
+      MacDmgCompression="$(BundlerMacDmgCompression)"
+      MacDmgVolumeName="$(BundlerMacDmgVolumeName)"
       MacContents="@(BundlerMacContent)"
       MacFrameworks="@(BundlerMacFramework)"
       MacDocumentTypes="@(BundlerMacDocumentType)"

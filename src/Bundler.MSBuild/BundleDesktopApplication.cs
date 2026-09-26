@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using DotNet.Bundler;
 using DotNet.Bundler.MacApp;
+using DotNet.Bundler.MacDmg;
 using DotNet.Bundler.Nsis;
 using DotNet.Bundler.Wix;
 using DotNet.Bundler.Signing.Windows;
@@ -118,6 +119,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacAppNotaryApiKeyPath { get; set; } = "";
     public string MacAppNotaryApiKeyId { get; set; } = "";
     public string MacAppNotaryApiIssuer { get; set; } = "";
+    public string MacDmgCompression { get; set; } = "";
+    public string MacDmgVolumeName { get; set; } = "";
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -272,62 +275,24 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             else if (formats.All(format => format == PackageFormat.App))
             {
                 artifacts = new MacAppBundler(
-                    new MacAppBundleConfiguration
-                    {
-                        BundleName = EmptyToNull(MacAppBundleName),
-                        BundleDisplayName = EmptyToNull(MacAppDisplayName),
-                        ShortVersion = EmptyToNull(MacAppShortVersion),
-                        BuildVersion = EmptyToNull(MacAppBuildVersion),
-                        MinimumSystemVersion = EmptyToNull(MacAppMinimumSystemVersion),
-                        Category = EmptyToNull(MacAppCategory),
-                        IconName = EmptyToNull(MacAppIconName),
-                        Contents = MacContents.Select(item => new MacAppContentConfiguration
-                        {
-                            Source = Path.GetFullPath(item.ItemSpec),
-                            TargetPath = item.GetMetadata("TargetPath").Trim()
-                        }).ToArray(),
-                        Frameworks = MacFrameworks.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
-                        DocumentTypes = MacDocumentTypes.Select(item => new MacAppDocumentTypeConfiguration
-                        {
-                            Extensions = MacListMetadata(item, "Extensions", item.ItemSpec),
-                            Name = EmptyMetadataToNull(item, "Name"),
-                            Description = EmptyMetadataToNull(item, "Description"),
-                            Role = MacEnumMetadata<MacAppTypeRole>(item, "Role"),
-                            Rank = MacEnumMetadata<MacAppHandlerRank>(item, "Rank"),
-                            ContentTypes = MacListMetadata(item, "ContentTypes"),
-                            MimeType = EmptyMetadataToNull(item, "MimeType"),
-                            ExportedTypeIdentifier = EmptyMetadataToNull(item, "ExportedTypeIdentifier"),
-                            ExportedTypeConformsTo = MacListMetadata(item, "ExportedTypeConformsTo")
-                        }).ToArray(),
-                        UrlTypes = MacUrlTypes.Select(item => new MacAppUrlTypeConfiguration
-                        {
-                            Schemes = MacListMetadata(item, "Schemes", item.ItemSpec),
-                            Name = EmptyMetadataToNull(item, "Name"),
-                            Role = MacEnumMetadata<MacAppTypeRole>(item, "Role")
-                        }).ToArray(),
-                        ExceptionDomain = EmptyToNull(MacAppExceptionDomain),
-                        InfoPlistFile = OptionalFullPath(MacAppInfoPlistFile),
-                        InfoPlistXml = EmptyToNull(MacAppInfoPlistXml),
-                        Signing = new MacAppSigningConfiguration
-                        {
-                            Identity = EmptyToNull(MacAppSignIdentity),
-                            TemporaryCertificatePath = OptionalFullPath(MacAppSigningCertificatePath),
-                            TemporaryCertificatePassword = EmptyToNull(MacAppSigningCertificatePassword),
-                            HardenedRuntime = MacAppHardenedRuntime,
-                            EntitlementsFile = OptionalFullPath(MacAppEntitlementsFile),
-                            Notarize = MacAppNotarize,
-                            NotaryWait = MacAppNotaryWait,
-                            SkipStapling = MacAppSkipStapling,
-                            KeychainProfile = EmptyToNull(MacAppNotaryProfile),
-                            AppleId = EmptyToNull(MacAppAppleId),
-                            ApplePassword = EmptyToNull(MacAppApplePassword),
-                            AppleTeamId = EmptyToNull(MacAppAppleTeamId),
-                            ApiKeyPath = OptionalFullPath(MacAppNotaryApiKeyPath),
-                            ApiKeyId = EmptyToNull(MacAppNotaryApiKeyId),
-                            ApiIssuer = EmptyToNull(MacAppNotaryApiIssuer)
-                        }
-                    },
+                    BuildMacAppConfiguration(),
                     new MacAppBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
+                    .BuildAsync(configuration)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            else if (formats.All(format => format == PackageFormat.Dmg))
+            {
+                artifacts = new MacDmgBundler(
+                    new MacDmgBundleConfiguration
+                    {
+                        Compression = MacEnumValue<DotNet.Bundler.MacDmg.MacDmgCompression>(
+                                MacDmgCompression, "BundlerMacDmgCompression")
+                            ?? DotNet.Bundler.MacDmg.MacDmgCompression.Ulmo,
+                        VolumeName = EmptyToNull(MacDmgVolumeName)
+                    },
+                    BuildMacAppConfiguration(),
+                    new MacDmgBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     .BuildAsync(configuration)
                     .GetAwaiter()
                     .GetResult();
@@ -353,6 +318,63 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             return false;
         }
     }
+
+    private MacAppBundleConfiguration BuildMacAppConfiguration() =>
+        new()
+        {
+            BundleName = EmptyToNull(MacAppBundleName),
+            BundleDisplayName = EmptyToNull(MacAppDisplayName),
+            ShortVersion = EmptyToNull(MacAppShortVersion),
+            BuildVersion = EmptyToNull(MacAppBuildVersion),
+            MinimumSystemVersion = EmptyToNull(MacAppMinimumSystemVersion),
+            Category = EmptyToNull(MacAppCategory),
+            IconName = EmptyToNull(MacAppIconName),
+            Contents = MacContents.Select(item => new MacAppContentConfiguration
+            {
+                Source = Path.GetFullPath(item.ItemSpec),
+                TargetPath = item.GetMetadata("TargetPath").Trim()
+            }).ToArray(),
+            Frameworks = MacFrameworks.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
+            DocumentTypes = MacDocumentTypes.Select(item => new MacAppDocumentTypeConfiguration
+            {
+                Extensions = MacListMetadata(item, "Extensions", item.ItemSpec),
+                Name = EmptyMetadataToNull(item, "Name"),
+                Description = EmptyMetadataToNull(item, "Description"),
+                Role = MacEnumMetadata<MacAppTypeRole>(item, "Role"),
+                Rank = MacEnumMetadata<MacAppHandlerRank>(item, "Rank"),
+                ContentTypes = MacListMetadata(item, "ContentTypes"),
+                MimeType = EmptyMetadataToNull(item, "MimeType"),
+                ExportedTypeIdentifier = EmptyMetadataToNull(item, "ExportedTypeIdentifier"),
+                ExportedTypeConformsTo = MacListMetadata(item, "ExportedTypeConformsTo")
+            }).ToArray(),
+            UrlTypes = MacUrlTypes.Select(item => new MacAppUrlTypeConfiguration
+            {
+                Schemes = MacListMetadata(item, "Schemes", item.ItemSpec),
+                Name = EmptyMetadataToNull(item, "Name"),
+                Role = MacEnumMetadata<MacAppTypeRole>(item, "Role")
+            }).ToArray(),
+            ExceptionDomain = EmptyToNull(MacAppExceptionDomain),
+            InfoPlistFile = OptionalFullPath(MacAppInfoPlistFile),
+            InfoPlistXml = EmptyToNull(MacAppInfoPlistXml),
+            Signing = new MacAppSigningConfiguration
+            {
+                Identity = EmptyToNull(MacAppSignIdentity),
+                TemporaryCertificatePath = OptionalFullPath(MacAppSigningCertificatePath),
+                TemporaryCertificatePassword = EmptyToNull(MacAppSigningCertificatePassword),
+                HardenedRuntime = MacAppHardenedRuntime,
+                EntitlementsFile = OptionalFullPath(MacAppEntitlementsFile),
+                Notarize = MacAppNotarize,
+                NotaryWait = MacAppNotaryWait,
+                SkipStapling = MacAppSkipStapling,
+                KeychainProfile = EmptyToNull(MacAppNotaryProfile),
+                AppleId = EmptyToNull(MacAppAppleId),
+                ApplePassword = EmptyToNull(MacAppApplePassword),
+                AppleTeamId = EmptyToNull(MacAppAppleTeamId),
+                ApiKeyPath = OptionalFullPath(MacAppNotaryApiKeyPath),
+                ApiKeyId = EmptyToNull(MacAppNotaryApiKeyId),
+                ApiIssuer = EmptyToNull(MacAppNotaryApiIssuer)
+            }
+        };
 
     private IReadOnlyList<PackageFormat> ParseFormats()
     {
@@ -403,6 +425,20 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         var source = value.Length == 0 ? (fallback ?? "") : value;
         return source.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(entry => entry.Trim()).Where(entry => entry.Length > 0).ToArray();
+    }
+
+    private static TEnum? MacEnumValue<TEnum>(string value, string propertyName) where TEnum : struct
+    {
+        if (value.Trim().Length == 0)
+        {
+            return null;
+        }
+        if (!Enum.TryParse<TEnum>(value.Trim(), true, out var parsed) || !Enum.IsDefined(typeof(TEnum), parsed))
+        {
+            throw new ArgumentException(
+                $"{propertyName} must be one of {string.Join(", ", Enum.GetNames(typeof(TEnum)))}; got '{value}'.");
+        }
+        return parsed;
     }
 
     private static TEnum? MacEnumMetadata<TEnum>(ITaskItem item, string name) where TEnum : struct

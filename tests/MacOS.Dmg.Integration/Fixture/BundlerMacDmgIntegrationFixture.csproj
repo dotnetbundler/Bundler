@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">osx-arm64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <AssemblyName>BundlerMacDmgIntegrationFixture</AssemblyName>
+    <Version>1.0.0</Version>
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerIntegrationIdentifier Condition="'$(BundlerIntegrationIdentifier)' == ''">com.dotnetbundler.macdmgintegrationfixture</BundlerIntegrationIdentifier>
+    <BundlerIntegrationProductName Condition="'$(BundlerIntegrationProductName)' == ''">Bundler Mac DMG Fixture</BundlerIntegrationProductName>
+    <BundlerFormats>dmg</BundlerFormats>
+    <BundlerIdentifier>$(BundlerIntegrationIdentifier)</BundlerIdentifier>
+    <BundlerProductName>$(BundlerIntegrationProductName)</BundlerProductName>
+    <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
+    <BundlerDescription>Disposable macOS .dmg integration-test fixture.</BundlerDescription>
+    <BundlerCopyright>Copyright DotNet.Bundler Tests</BundlerCopyright>
+    <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
+    <BundlerMacAppBundleName>DmgFixture</BundlerMacAppBundleName>
+    <BundlerMacAppDisplayName>Bundler Mac DMG Fixture</BundlerMacAppDisplayName>
+    <BundlerMacAppBuildVersion>2026.9.1</BundlerMacAppBuildVersion>
+    <BundlerMacAppMinimumSystemVersion>11.0</BundlerMacAppMinimumSystemVersion>
+    <BundlerMacAppCategory>public.app-category.utilities</BundlerMacAppCategory>
+    <BundlerMacDmgCompression Condition="'$(BundlerTestDmgCompression)' == ''">Ulmo</BundlerMacDmgCompression>
+    <BundlerMacDmgCompression Condition="'$(BundlerTestDmgCompression)' != ''">$(BundlerTestDmgCompression)</BundlerMacDmgCompression>
+    <BundlerMacDmgVolumeName Condition="'$(BundlerTestDmgVolumeName)' != ''">$(BundlerTestDmgVolumeName)</BundlerMacDmgVolumeName>
+  </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <ItemGroup>
+    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
+    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+  </ItemGroup>
+</Project>

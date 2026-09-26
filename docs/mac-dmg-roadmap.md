@@ -1,6 +1,6 @@
 # macOS `.dmg` 后端实施路线（MAC-DMG）
 
-> 状态：**路线已确认（2026-09-26），`MAC-DMG-1` 待启动指令**。
+> 状态：**`MAC-DMG-1` 已完成（2026-09-26 云 macOS VM 实测），`MAC-DMG-2` 待启动指令**。
 > 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md) 的 `.dmg` 节（同一 `7dbfc1f` 快照基线）；
 > `.app` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
@@ -40,6 +40,7 @@
 - **目标/交付**：`Bundler.MacDmg` 后端（netstandard2.0，`DotNet.Bundler.MacDmg` 包）；`hdiutil create -srcfolder`(UDRW)→resize→挂载→写入 `/Applications` 符号链接+隐藏 `.app` 扩展名→detach（EBUSY 指数退避）→`convert` 只读压缩（默认 `Ulmo`，可配 `Udzo`/`Udbz`）全链；非 macOS 宿主明确拒绝；MSBuild 映射与直接 API；`Bundler.Tests` 新用例 + `tests/MacOS.Dmg.Integration` bash 实测（构建→`hdiutil attach` 挂载→断言卷内容→detach→`hdiutil verify`）+ 示例 `samples/HelloMacDmg`（`BundlerFormats=dmg`，顺带演示 `.app` 中间产物自动产出）。
 - **不做**：Finder 布局、背景/卷图标、EULA、DMG 签名。
 - **退出**：本机真实产出可挂载/可校验 DMG；失败路径无残留卷与伪产物。
+- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64）**：`Bundler.Tests` 90/90 全绿（新增 9 条 dmg 用例：格式/宿主/卷名校验、链序、压缩枚举映射、detach 重试与耗尽清理、convert 失败无产物、MSBuild 映射）；`tests/MacOS.Dmg.Integration/Verify.sh` 全绿（真实产出 `.dmg`→attach→断言 `.app`+`/Applications` 链接→卷内启动→detach→`hdiutil verify` VALID→Udzo 变体 `Format: UDZO`）；`samples/HelloMacDmg` 实测产出 `.app`+`.dmg` 且挂载校验通过。踩坑修正：集成 fixture 在只读卷内写标记文件会崩（改 try/catch）；`unzip -l | grep -q` 在 pipefail 下偶发 SIGPIPE（改先落盘再 grep）。文件名 sanitize 复用 `MacAppBundleBackend.SanitizeFileName`（改 internal + InternalsVisibleTo）。
 
 ### MAC-DMG-2：Finder 布局与品牌
 

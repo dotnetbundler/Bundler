@@ -86,5 +86,7 @@
     <BundlerMacAppNotaryApiKeyPath Condition="'$(BundlerMacAppNotaryApiKeyPath)' == ''"></BundlerMacAppNotaryApiKeyPath>
     <BundlerMacAppNotaryApiKeyId Condition="'$(BundlerMacAppNotaryApiKeyId)' == ''"></BundlerMacAppNotaryApiKeyId>
     <BundlerMacAppNotaryApiIssuer Condition="'$(BundlerMacAppNotaryApiIssuer)' == ''"></BundlerMacAppNotaryApiIssuer>
+    <BundlerMacDmgCompression Condition="'$(BundlerMacDmgCompression)' == ''">Ulmo</BundlerMacDmgCompression>
+    <BundlerMacDmgVolumeName Condition="'$(BundlerMacDmgVolumeName)' == ''"></BundlerMacDmgVolumeName>
   </PropertyGroup>
 </Project>

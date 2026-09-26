@@ -27,6 +27,7 @@ WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线；`alpha.44
 | `DotNet.Bundler.Wix` | 独立 MSI API、WiX 3.14.1 工具子集和声明式 Windows Installer 数据库生成 |
 | `DotNet.Bundler.Signing.Windows` | 可复用的 Windows Authenticode 签名实现 |
 | `DotNet.Bundler.MacApp` | 独立 macOS `.app` API、Info.plist/`.icns` 生成与 Contents 载荷映射（不内嵌 Apple 工具） |
+| `DotNet.Bundler.MacDmg` | 独立 macOS `.dmg` API、`hdiutil` 全链与拖放卷生成（压缩可配 `Udzo`/`Ulmo`/`Udbz`） |
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
 

@@ -1,13 +1,13 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-09-26
-> 当前分支：`mac-app-development`（基于 `main` `993b0ad`；NSIS 开发线已并入 main，冻结提交 `71a5c90`）
+> 当前分支：`mac-dmg-development`（基于 `main` `b59e610`；`.app` 线已并入 main）
 > 当前包版本：`0.1.0-alpha.45`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：WIN-MSI-1..9 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；
 > `alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 前 NSIS 安装目录延续、事务清理竞态修复）
 > `alpha.45` 将 SDK 基线升至 .NET 10（MSBuild 任务链保留 `netstandard2.0`），无后端功能变更
-> `MAC-APP-1`（最小可用 `.app`）与 `MAC-APP-2`（分发与桌面集成）已完成，云 macOS VM 已验证
-> 默认下一阶段：`MAC-APP-3`（codesign 签名与公证，需用户明确启动指令）
+> `.app` 格式已冻结（MAC-APP-1..5，冻结基线 `0.1.0-alpha.45`）并合入 `main`；`MAC-DMG-1`（最小可用 `.dmg`）已完成，云 macOS VM 已验证
+> 默认下一阶段：`MAC-DMG-2`（Finder 布局与品牌，需用户明确启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -23,15 +23,17 @@
 | `src/Bundler.Wix` | Windows + WiX 3.14.1/MSI 后端（内嵌固定 WiX 工具子集） | `netstandard2.0` |
 | `src/Bundler.Signing.Windows` | Windows Authenticode 签名 API（NSIS/MSI 共用） | `netstandard2.0` |
 | `src/Bundler.MacApp` | macOS `.app` 后端（骨架/Info.plist/`.icns`/Contents 载荷映射） | `netstandard2.0` |
+| `src/Bundler.MacDmg` | macOS `.dmg` 后端（`hdiutil` 全链、拖放卷、`Ulmo`/`Udzo`/`Udbz`） | `netstandard2.0` |
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
 | `src/Bundler.Cli` | 开发原型（`IsPackable=false`，不发布） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
-| `tests/Bundler.Tests` | 唯一快速测试入口（当前 81 项，macOS 宿主口径全绿） | `net10.0` |
+| `tests/Bundler.Tests` | 唯一快速测试入口（当前 90 项，macOS 宿主口径全绿） | `net10.0` |
 | `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
 | `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
 | `tests/MacOS.App.Integration` | 真实 macOS `.app` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
+| `tests/MacOS.Dmg.Integration` | 真实 macOS `.dmg` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
 | `tests/Windows.Nsis.Reboot` | 需可抛弃 VM 的重启测试占位 | — |
-| `samples/HelloNsisApp` / `samples/HelloMsiApp` / `samples/HelloMacApp` | 公开可运行示例（应用版本 `1.0.0`） | `net10.0` |
+| `samples/HelloNsisApp` / `samples/HelloMsiApp` / `samples/HelloMacApp` / `samples/HelloMacDmg` | 公开可运行示例（应用版本 `1.0.0`） | `net10.0` |
 | `tools/Bundler.Nsis.Plugin` | NSIS 原生插件源码（有意在 slnx 之外，重建需 .NET 10 + Windows 原生链） | `net10.0` |
 | `third_party/` | 第三方归档、许可证、逐文件 SHA-256 与 provenance 文档 | — |
 
@@ -119,12 +121,13 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - `MAC-APP-OI-*` 外部事项（Developer ID 证书/公证凭证、Rosetta/Intel 宿主、干净宿主矩阵等）待有对应环境时验收；MAC-APP-4 已将 quarantine 拦截、LSMinimumSystemVersion 超限拒绝、v1→v2 原地升级、osx-x64 产物结构转自动化。
 - `.app` 格式已冻结（2026-09-26，MAC-APP-5）：冻结基线 `mac-app-development` @ `BundlerPackageVersion=0.1.0-alpha.45`，行为契约=`docs/mac-app-capability-matrix.md` 定稿表+路线各节验收记录；冻结后仅缺陷修复附回归测试。
 - `mac-app-development` 已合入 `main`（2026-09-26，快进合并，`b59e610`）；MAC-DMG 在 `mac-dmg-development` 分支推进。
+- `MAC-DMG-1` 完成（2026-09-26 云 macOS VM 验证）：`src/Bundler.MacDmg`（netstandard2.0）交付 `hdiutil` 全链（create UDRW→attach→`/Applications` 链接+`SetFile -a E`→detach 退避→`convert`，默认 `Ulmo` 可配 `Udzo`/`Udbz`）；`BundlerFormats=dmg` MSBuild 映射与 `MacDmgBundler` 直接 API；`Bundler.Tests` 新增 9 条、`tests/MacOS.Dmg.Integration/Verify.sh` 真实 attach/断言/detach/verify、`samples/HelloMacDmg`。
 - MAC-DMG 规划轮已确认（2026-09-26）：C# 原生编排 `hdiutil`/`osascript`/`SetFile`/`sips` 不内嵌 create-dmg fork；DMG 本体可 `codesign`（`-` 跳过）不做公证；无 GUI 会话跳过布局+警告，`BundlerDmgSkipWindowLayout` 开关；EULA 经 `hdiutil udifrez` 注入 SLA；压缩格式可配置枚举 Udzo/Ulmo/Udbz、默认 `Ulmo`（挂载侧需 macOS 10.12+）；产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg`；窗口布局全可配默认对齐上游。
 
 ## 6. 默认下一步
 
-`MAC-DMG-1`：MAC-DMG 规划轮已完成（`docs/mac-dmg-roadmap.md`，分支 `mac-dmg-development`）；下一阶段为最小可用镜像（`hdiutil` UDRW→挂载→拖放链接→detach→`convert UDZO` 全链 + MSBuild/直接 API + 原生集成实测）。
-等用户明确 `MAC-DMG-1` 启动指令再实施；未经明确要求不提交、不推送。
+`MAC-DMG-2`：`MAC-DMG-1` 已完成（最小可用镜像全链本机实测通过）；下一阶段为 Finder 布局与品牌（`osascript` 窗口布局/背景图/卷图标/GUI 会话降级）。
+等用户明确 `MAC-DMG-2` 启动指令再实施；未经明确要求不提交、不推送。
 
 ## 7. 历史记录
 

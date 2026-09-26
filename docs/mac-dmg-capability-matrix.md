@@ -3,19 +3,19 @@
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
 计划实现与外部待验收行绑定到 `docs/mac-dmg-roadmap.md`、`docs/mac-dmg-open-items.md`、`docs/mac-dmg-manual-testing.md` 中的明确阶段/ID。
 上游参照：`docs/mac-tauri-capability-audit.md` 的 `.dmg` 节。
-路线已确认（`2026-09-26`），各阶段未启动，表内全部为非冻结状态。
+路线已确认（`2026-09-26`）；`MAC-DMG-1` 已实现（2026-09-26 云 macOS VM 实测），其余阶段未启动，表内非冻结状态。
 
 ## 镜像与内容
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `.dmg` 产物（只读压缩镜像） | 计划实现 | MAC-DMG-1 | `hdiutil create`→挂载→`convert`；产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg` |
-| `.app` 中间产物输入 | 计划实现 | MAC-DMG-1 | 规划器自动补 `App` 步骤；只读输入，不改写 `.app` |
-| `/Applications` 拖放符号链接 | 计划实现 | MAC-DMG-1 | 卷内标准拖放安装形态 |
-| 隐藏 `.app` 扩展名 | 计划实现 | MAC-DMG-1 | Finder 侧不显示扩展名 |
-| 非 macOS 宿主拒绝 | 计划实现 | MAC-DMG-1 | `hdiutil`/`osascript` 不可跨宿主，明确 `NotSupportedException` |
-| 压缩格式枚举（`Udzo`/`Ulmo`/`Udbz`，默认 `Ulmo`） | 计划实现 | MAC-DMG-1 | Ulmo 挂载侧需 macOS 10.12+；史前宿主改 `Udzo` |
-| 失败清理（残留卷/临时镜像） | 计划实现 | MAC-DMG-1 | 卸载残留卷+删临时文件，不留伪产物 |
+| `.dmg` 产物（只读压缩镜像） | 已实现 | MAC-DMG-1 | `hdiutil create`→挂载→`convert`；产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg` |
+| `.app` 中间产物输入 | 已实现 | MAC-DMG-1 | 规划器自动补 `App` 步骤；只读输入，不改写 `.app` |
+| `/Applications` 拖放符号链接 | 已实现 | MAC-DMG-1 | 卷内标准拖放安装形态 |
+| 隐藏 `.app` 扩展名 | 已实现 | MAC-DMG-1 | Finder 侧不显示扩展名 |
+| 非 macOS 宿主拒绝 | 已实现 | MAC-DMG-1 | `hdiutil`/`osascript` 不可跨宿主，明确 `NotSupportedException` |
+| 压缩格式枚举（`Udzo`/`Ulmo`/`Udbz`，默认 `Ulmo`） | 已实现 | MAC-DMG-1 | Ulmo 挂载侧需 macOS 10.12+；史前宿主改 `Udzo` |
+| 失败清理（残留卷/临时镜像） | 已实现 | MAC-DMG-1 | 卸载残留卷+删临时文件，不留伪产物 |
 
 ## Finder 布局与品牌
 
