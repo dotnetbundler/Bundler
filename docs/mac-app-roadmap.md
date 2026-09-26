@@ -53,7 +53,7 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 
 规则：
 
-0. 宿主 OS 下限分两层，Bundler 不设额外 Bundler 专属下限：
+0. 宿主 OS 下限分两层（分层口径的通用方法见 `docs/development-rules.md` 第 3 节“构建宿主能力下限的计算口径”），Bundler 不设额外 Bundler 专属下限：
    打包方式自身的下限：未签名 `.app` 目录组装只是文件系统操作，格式本身不绑定宿主 OS（这也是开放任意宿主的依据）；凡走 Apple 系统工具的步骤才绑定 macOS，且 `codesign`/`hdiutil`/`plutil`/`pkgbuild` 等存在多年、几乎所有现代 macOS 都在；公证改自带 Notary API 客户端后不再受 `notarytool` 的 Xcode 13+ 约束；剩余方式层面门槛只有 `.icon`→`Assets.car`（Xcode 26，宿主约 macOS 15.6+）与 `stapler` 上钉两个可降级特性。
    后端运行时下限（不含 MSBuild 应用层，见 `docs/development-rules.md` 第 3 节“后端包本身可直接使用”）：后端是 `netstandard2.0` 库，宿主装任一仍可用的 .NET 运行时即可加载。
    官方支持口径：.NET 8/9/10 当前的官方支持列表都只列 macOS 14/15/26（微软随 Apple 支持期滚动更新，macOS 12/13 已 EOL 移出）→ 官方支持下限现为 macOS 14；
