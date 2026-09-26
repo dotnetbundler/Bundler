@@ -52,10 +52,12 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 
 规则：
 
-0. 宿主下限按口径分层（方法见 `docs/development-rules.md` 第 3 节“构建宿主能力下限的计算口径”）：
-   **打包能力下限（方式自身，不含 Bundler 抬高的约束）**：未签名 `.app` 目录组装只是文件系统操作，格式不绑定宿主 OS（开放任意宿主的依据）；走 Apple 工具的步骤绑定 macOS，但 `codesign`/`hdiutil`/`plutil`/`pkgbuild` 等系统工具存在多年、几乎所有现代 macOS 都在。
-   **不公证时打包能力下限 ≈ 任意 macOS**（无版本门槛；arm64 宿主天然 ≥ macOS 11.0 是硬件边界，非版本要求）；公证是唯一抬高下限的环节——`xcrun notarytool`/`stapler` 需 Xcode 13+、宿主约 macOS 11.3+（与上游 Tauri 同等）；`.icon`→`Assets.car`（Xcode 26，宿主约 macOS 15.6+）为可降级特性。
-   **产品约束（不属于打包能力下限，单列）**：后端是 `netstandard2.0` 库，实际可跑的宿主=能装任一加載它的 .NET 运行时的机器——官方支持口径现 macOS 14+（.NET 8/9/10 支持列表随 Apple 支持期滚动，macOS 12/13 已 EOL）；技术口径 EOL 运行时（如 .NET Core 3.1 / .NET 6-7）可及 macOS 10.12–10.15，只记“可运行”不承诺；MSBuild 应用层另需 .NET 10 SDK（macOS 14），属入口层约束。
+0. 宿主下限按三层口径分层（定义见 `docs/development-rules.md` 第 3 节“构建宿主下限的三层口径”）：
+   **打包工具下限**：未签名 `.app` 目录组装只是文件系统操作，格式不绑定宿主 OS（开放任意宿主的依据）；走 Apple 工具的步骤绑定 macOS。
+   不公证链路（`.app`+DMG+PKG）：Intel 宿主 **macOS 10.7+**（`pkgbuild`/`productbuild` 10.7 才引入；仅 `.app`+DMG 可至 10.5，`codesign` 自 10.5 起）；arm64 宿主天然 ≥ macOS 11.0（硬件边界，非版本要求）。
+   公证是唯一抬高打包工具下限的环节：`xcrun notarytool`/`stapler` 需 Xcode 13+、宿主约 macOS 11.3+（与上游 Tauri 同等）；`.icon`→`Assets.car`（Xcode 26，宿主约 macOS 15.6+）为可降级特性。
+   **后端下限**：`netstandard2.0` 库，宿主能装的 .NET 运行时决定——官方支持口径现 macOS 14+（.NET 8/9/10 支持列表随 Apple 支持期滚动）；技术口径 EOL 运行时（.NET Core 3.1 / .NET 6-7）可及 macOS 10.12–10.15，只记“可运行”不承诺。
+   **入口下限**：MSBuild 应用层需 .NET 10 SDK（macOS 14）；CLI 入口未实现，待定。
 1. 构建前探测每个必需工具（`xcrun -f`/PATH）并记录版本与路径；缺必需工具立即报清晰错误，不静默降级；缺可选工具降级并警告。
 2. 不自动安装 Xcode/CLT，不替用户激活 Rosetta；宿主缺项写入构建日志与错误信息。
 3. 无网络下载：公证之外的每一步离线可用；公证是显式开启的网络动作。
