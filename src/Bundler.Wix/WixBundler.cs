@@ -36,6 +36,7 @@ public sealed class WixBundler
             throw new ArgumentException("MSI signing files require a configured Windows signer.");
         }
         var languages = _settings.ResolveLanguages();
+        _settings.ValidateExtensionSurface();
         if (_settings.Codepage < 0 || _settings.Codepage is 65000 or 65001)
         {
             throw new ArgumentException("MSI requires a Windows ANSI code page; UTF-7/UTF-8 are not supported by WiX 3 MSI UI.");

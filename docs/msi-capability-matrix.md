@@ -31,8 +31,9 @@ WIN-MSI-1..3 的阶段证据见 `docs/msi-roadmap.md` 第 6..8 节，WIN-MSI-4 �
 | 失败、回滚、重启 | 已实现但外部待验收 | MSI-3，本机验证受限故障 | 仅在测试包副本加入延迟失败动作，文件复制后故障返回 1603，原生事务清除产品注册和托管文件；生产包没有自定义动作。损坏包无注册残留。锁定文件、磁盘故障、真实重启与重启后状态留在专用 VM。 |
 | 修复/维护模式 | 已实现但外部待验收 | MSI-3，本机静默修复已验证 | 删除受管理文件后 `msiexec /fomus` 从可用源恢复，未知用户文件保留；缺失源和交互维护界面外部待验收。 |
 | 离线构建与工具缓存 | 已实现并本机自动验证 | 适用，MSI-1；MSI-4 复核实际包 | 官方归档 SHA-256/逐文件哈希、许可证、缓存污染、本地包源与隔离缓存及 `--no-restore` 构建已验证；物理断网的干净宿主仍待外部验收。 |
-| 任意应用运行时自动部署 | 明确不支持 | 不适用，明确不支持 | Bundler 不下载或安装 WebView2、VC Runtime、.NET Runtime 等第三方运行时；未来专家模式中的用户自备逻辑不构成本产品内建能力。 |
-| 受管模式的任意脚本/目录全删 | 明确不支持 | 明确不支持 | 不为表面对齐引入未定义所有权或破坏 MSI 回滚的动作。WIN-MSI-8 的显式专家模式若启用原始 WiX，则用户自备逻辑不享有本行的受管安装保证。 |
+| 声明式 WiX 扩展与专家模式 | 已实现并本机自动验证 | WIN-MSI-8 | 常规模式：`ExtensionFragments` 白名单校验的 `.wxs` fragment（仅 `Component`/`ComponentGroup`/`Directory`/`DirectoryRef`/`File`/`RegistryKey`/`RegistryValue`/`Environment`/`Condition`/`Shortcut`/`Property` 等声明式核心元素）+ 调用方前缀 `ExtensionIdPrefix` + 显式 Component/Feature 引用注入 Product Feature；禁止自定义动作、序列表、Binary、身份/UI/升级元素与扩展命名空间；不安全输入、ID 冲突、未解析引用均有拒绝测试；MSBuild fixture 真实安装/卸载扩展内容已验证。专家模式：`ExpertTemplate` 整份替换产品文档 + `ExpertMergeModules` 直传 light，`candle -d` 身份变量 + 构建后 `MsiIdentityProbe` 回读强制 Bundler 身份；专家产物是调用方自备逻辑，不享有受管安装保证。扩展输入全部计入指纹/定义哈希。 |
+| 任意应用运行时自动部署 | 明确不支持 | 不适用，明确不支持 | Bundler 不下载或安装 WebView2、VC Runtime、.NET Runtime 等第三方运行时；专家模式中的用户自备逻辑不构成本产品内建能力。 |
+| 受管模式的任意脚本/目录全删 | 明确不支持 | 明确不支持 | 不为表面对齐引入未定义所有权或破坏 MSI 回滚的动作。显式专家模式启用原始 WiX 时，用户自备逻辑不享有本行的受管安装保证。 |
 | CLI | 未实现（MSI 路线外） | MSI 路线之外 | 所有计划格式完成后再按 `CLI-C1` 产品化。 |
 
 ## 尚未实现的 Tauri 通用能力补齐计划
@@ -42,9 +43,6 @@ WIN-MSI-1..3 的阶段证据见 `docs/msi-roadmap.md` 第 6..8 节，WIN-MSI-4 �
 
 | 用户能力 | 当前差距 | 计划阶段和完成条件 |
 | --- | --- | --- |
-| 更多单语言 MSI 与调用方翻译 | 仅 `en-US`/`zh-CN` | WIN-MSI-7：官方 WiX 3.14.1 可供资源核查后确定内置集；每 locale 独立身份、产物和生命周期，自定义翻译严格校验，现有语言 GUID 不变。 |
-| 图标输入与 FIPS 构建 | MSI 图标仅 `.ico`；无 FIPS 选项 | WIN-MSI-7：安全转换实际支持的图标格式并测试；WiX 编译和链接都按所选 FIPS 选项执行，不宣称未经验证的系统级认证。 |
-| 声明式 WiX 扩展 | 无 fragments、引用或 merge 支持 | WIN-MSI-8：常规受控 fragments/引用经白名单、身份和所有权检查；原始 merge 与完整模板只在显式专家模式，测试产物和失败清理，区分用户自备逻辑的责任。 |
 | Tauri 通用 MSI 再审计 | WIN-MSI-4 仅审当时已承诺能力 | WIN-MSI-9：固定上游快照逐项分类、本机测试/包供应/文档一致性完成后再冻结；不把 Tauri 专属 updater 或应用运行时部署混入 MSI。 |
 
 ## 已验证的平台范围

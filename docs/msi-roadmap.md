@@ -1,8 +1,8 @@
 # Windows MSI 后端实施路线（WiX 3.14.1）
 
 > 状态：`WIN-MSI-1..6` 的当前 Windows 11 x64 本机自动化范围已完成（2026-09-26）；
-> `alpha.37` 是既有身份基线，`alpha.40` 增加 x86、显式版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 构建选项。
-> `WIN-MSI-8..9` 已规划但**尚未实施**；默认下一阶段为 `WIN-MSI-8`。
+> `alpha.37` 是既有身份基线，`alpha.40` 增加 x86、显式版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
+> `WIN-MSI-8` 已完成（受控 WiX 扩展与专家模式）；`WIN-MSI-9` 已规划但**尚未实施**，为默认下一阶段。
 > 原阶段证据见第 6..9 节，扩展路线及 WIN-MSI-5/6 证据见第 10 节。
 > 当前开发分支：`msi-development`；历史记录中的 `codex/msi-development` 是改名前的名称。
 > 规范入口：`docs/roadmap.md`；
@@ -593,6 +593,45 @@ WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方
   若扩展引入第三方二进制，责任与许可归属单独检查。
 - **不做/退出**：不把专家模式的原始动作描述成受管、可回滚或 Bundler 内建运行时安装；不默认执行应用提供的脚本。
   两模式边界及测试通过、独立包消费/示例可操作、工具分发审计通过后退出。
+
+**已确认决策（2026-09-27，用户拍板 + Tauri `7dbfc1f` 对照）**：
+
+- **模式划分**：常规模式对照 Tauri `fragmentPaths`+`componentRefs`/`componentGroupRefs`/`featureRefs`/`mergeRefs` 注入模型，但 Tauri 不做任何内容校验——我们按规格收紧为白名单解析校验，**这是有意偏离**；
+  专家模式对照 Tauri `template`（整份 `main.wxs` 全替换）+ merge module 直传，同等自由度。
+- **ID 命名空间（用户选择）**：常规模式要求调用方声明自定义前缀 `ExtensionIdPrefix`（如 `Acme.`），fragment 内**所有** `@Id`/`@Directory`/`@File` 等标识符必须以该前缀开头；
+  前缀本身须为合法 WiX id 形态、不得与 Bundler 生成 id 或 `WixUI_*`/`INSTALLFOLDER` 等保留名冲突。无此前缀或未声明即拒绝。
+- **专家身份兜底（用户选择）**：模板完整替换 `product-<lang>.wxs`；`candle -d` 暴露 `$(var.BundlerProductCode)`、`$(var.BundlerUpgradeCode)`、`$(var.BundlerProductName)`、`$(var.BundlerProductVersion)`、`$(var.BundlerInstallScope)` 等身份变量；
+  `light` 产物生成后用 `MsiDatabaseReader` 校验 ProductCode/UpgradeCode/ProductLanguage/范围标记符合既定身份，不符即构建失败不发布。
+- **白名单（建议采纳）**：常规模式允许 `Component`/`ComponentGroup`/`Directory`/`DirectoryRef`/`File`/`RegistryKey`/`RegistryValue`/`Environment`/`Condition`/`Shortcut`/`Property` 等核心 schema 元素（Shortcut/Environment 经组件所有权自动纳入卸载管理）；
+  禁止 `CustomAction`、两个序列表、`Binary`、`Product`/`Package`/`Module`/`Media`/`Feature`/`Upgrade`/`MajorUpgrade`、任意 UI 元素，及所有扩展命名空间（`util:` 等）元素——需要扩展能力的调用方走专家模式。
+  扩展程序集沿用 Tauri 机制：按 fragment/模板渲染后 XML 的 `xmlns` 自动向 `candle`/`light` 追加 `Wix*.dll -ext`（专家模式可用任意扩展；常规模式因白名单天然不含扩展元素）。
+- **指纹与碰撞**：fragment 文件、模板、merge module 二进制与引用 id 列表全部计入 `Fingerprint`/`DefinitionHash`；
+  同版本不同扩展内容触发既有同版本拒绝。
+- **MSBuild 命名**：常规 `BundlerWixExtensionFragment`（item）+ `BundlerWixExtensionComponentRef`/`BundlerWixExtensionComponentGroupRef`/`BundlerWixExtensionFeatureRef`/`BundlerWixExtensionMergeRef`（item）+ `BundlerWixExtensionIdPrefix`（prop）；
+  专家 `BundlerWixExpertTemplate`（prop→路径）+ `BundlerWixExpertMergeModule`（item）。命名一眼可分。
+- **i18n 关系**：fragment/模板是语言无关输入（culture 由我们的合并 wxl 决定）；专家模板若引用 `!(loc.*)` 可用 Bundler 自有 id 或调用方自带 wxl。
+
+**实施记录（2026-10-02，提交 `<win-msi-8-commit>`）**：
+
+- **常规模式落地**：`ExtensionFragments`（`.wxs` fragment item）+ `ExtensionIdPrefix`（必填自定义前缀，保留 `Cmp`/`Fil`/`Rem`/`WixUI_`/`Wix`/`Bundler` 等 Bundler/WiX 前缀拒用）+ `ExtensionComponentRefs`/`ExtensionComponentGroupRefs`/`ExtensionFeatureRefs` 注入 Product Feature；
+  `WixExtensionValidator` 逐 fragment 解析校验：XML 结构、`Fragment` 根、白名单元素（`Component`/`ComponentGroup`/`Directory`/`DirectoryRef`/`File`/`RegistryKey`/`RegistryValue`/`Environment`/`Condition`/`Shortcut`/`Property` 等核心声明式表），
+  禁止 `CustomAction`、序列表、`Binary`、`Product`/`Package`/`Module`/`Media`/`Feature`/`Upgrade`/`MajorUpgrade`、UI 元素、外部引用与一切扩展命名空间元素；
+  fragment 内全部 `@Id` 必须以前缀开头，与 Bundler 生成 id 冲突或未解析引用即失败。
+- **专家模式落地**：`ExpertTemplate` 完整替换 `product-<lang>.wxs`；`ExpertMergeModules` 的 `.msm` 直传 light；
+  `candle -d` 暴露 `$(var.BundlerProductCode)`/`BundlerUpgradeCode`/`BundlerProductName`/`BundlerProductVersion`/`BundlerInstallScope` 等身份变量；
+  light 产物经新增 `MsiIdentityProbe`（内置精简 MSI 读取器）回读校验 ProductCode/UpgradeCode/ProductLanguage/范围标记，不符即构建失败不发布；
+  专家产物是调用方自备逻辑，不享有受管安装保证，文档明确标注回滚/所有权责任归调用方。
+- **扩展程序集**：按渲染后 XML 的 `xmlns` 自动向 candle/light 追加 `-ext Wix*.dll`（Tauri 机制同构）；常规模式白名单天然不含扩展元素，专家模式可用任意扩展。
+- **文件解析**：fragment 相对 `Source` 路径经 `light -b <fragment 目录>` 绑定路径解析（LGHT0103 实证修复）；专家模板以其所在目录为绑定路径；
+  fragment/模板/merge module/引用 id 列表全部计入 `Fingerprint`/`DefinitionHash`，同版本不同扩展内容触发同版本拒绝；重解析点仍拒绝。
+- **MSBuild 面**：`BundlerWixExtensionFragment`（item）、`BundlerWixExtensionComponentRef`/`ComponentGroupRef`/`FeatureRef`（item）、`BundlerWixExtensionIdPrefix`（prop）、`BundlerWixExpertTemplate`（prop）、`BundlerWixExpertMergeModule`（item）；常规/专家输入互斥校验。
+- **测试**：快速套件新增 3 项至 **78/78**（常规 fragment 构建、不安全输入拒绝矩阵、专家模板编译与身份强制）；MSBuild/API 映射断言扩展。
+- **本机真实证据**：`tests/Windows.Msi.Integration/VerifyWinMsi8.ps1` 通过——隔离本地包源 + 隔离缓存还原仓库外 MSBuild fixture（`Ext.` 前缀 + `extra.wxs` 声明式组件/注册表），常规模式 MSI 真实安装后断言扩展标记文件/注册表落位、卸载后清除（退出码 0）；
+  同脚本经 `Msi.Api.PackageFixture` 专家模板参数构建专家 MSI，身份回读通过、真实安装/卸载成功；日志与产物保留在临时目录。
+- **修复过程**：集成首轮发现 fixture 前缀 `BundlerExt.` 撞保留前缀（校验器按设计拒绝），改为 `Ext.`；
+  fragment 相对 `Source` 需 `light -b` 绑定路径（LGHT0103）；专家模板受 ICE38 约束改为 HKCU RegistryValue KeyPath。
+- **边界**：专家模式可编译不等于调用方逻辑受管/可回滚/安全——任意自定义动作、脚本、服务注册只在专家模式可能，责任归属写入文档；第三方二进制责任与许可归属单独检查。
+  依据：固定 Tauri 快照 `7dbfc1f`（`WixSettings` fragment/refs/template/mergeModules、xmlns→`-ext` 自动加载），内容与身份校验为有意收紧偏离。
 
 ### WIN-MSI-9：完整通用能力审计与再冻结
 

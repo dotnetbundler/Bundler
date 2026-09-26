@@ -179,6 +179,13 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
                 new XAttribute("Directory", "BundlerStartMenuFolder"), new XAttribute("On", "uninstall")));
         app.Add(cleanup);
         feature.Add(new XElement(Wix + "ComponentRef", new XAttribute("Id", "Cleanup")));
+        // Caller extension refs: ids were prefix-validated in WixBundler.
+        foreach (var id in settings.ExtensionComponentRefs)
+            feature.Add(new XElement(Wix + "ComponentRef", new XAttribute("Id", id)));
+        foreach (var id in settings.ExtensionComponentGroupRefs)
+            feature.Add(new XElement(Wix + "ComponentGroupRef", new XAttribute("Id", id)));
+        foreach (var id in settings.ExtensionFeatureRefs)
+            feature.Add(new XElement(Wix + "FeatureRef", new XAttribute("Id", id)));
         AddDesktopRegistrations();
         AddOptionalFeatures();
         var hasLicense = !string.IsNullOrWhiteSpace(bundle.LicenseFile);

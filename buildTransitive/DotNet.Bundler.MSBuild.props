@@ -29,6 +29,8 @@
     <BundlerWixAddToPath Condition="'$(BundlerWixAddToPath)' == ''">false</BundlerWixAddToPath>
     <BundlerWixUninstallShortcut Condition="'$(BundlerWixUninstallShortcut)' == ''">false</BundlerWixUninstallShortcut>
     <BundlerWixLaunchAfterInstall Condition="'$(BundlerWixLaunchAfterInstall)' == ''">false</BundlerWixLaunchAfterInstall>
+    <BundlerWixExtensionIdPrefix Condition="'$(BundlerWixExtensionIdPrefix)' == ''"></BundlerWixExtensionIdPrefix>
+    <BundlerWixExpertTemplate Condition="'$(BundlerWixExpertTemplate)' == ''"></BundlerWixExpertTemplate>
     <BundlerNsisToolsetArchivePath Condition="'$(BundlerNsisToolsetArchivePath)' == ''"></BundlerNsisToolsetArchivePath>
     <BundlerNsisCompilerPath Condition="'$(BundlerNsisCompilerPath)' == ''"></BundlerNsisCompilerPath>
     <BundlerNsisDataDirectory Condition="'$(BundlerNsisDataDirectory)' == ''"></BundlerNsisDataDirectory>

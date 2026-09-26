@@ -7,7 +7,7 @@ namespace DotNet.Bundler.Wix;
 
 internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguration settings, IBundleSigner? signer) : IBundleBackend
 {
-    private const string GeneratorRevision = "win-msi-7-2026-10-01-1";
+    private const string GeneratorRevision = "win-msi-8-2026-10-02-1";
 
     public PackageFormat Format => PackageFormat.Msi;
     public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
@@ -36,6 +36,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         }
         // Validate every source before copying payload into a private staging tree.
         CollectFiles(bundle, item);
+        var extensionInputs = await PrepareExtensionInputs(context, cancellationToken);
         if (signer is not null)
             item = await PrepareSignedPayloadAsync(context, item, signer, cancellationToken);
         var files = CollectFiles(bundle, item);
@@ -43,15 +44,81 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         var artifacts = new List<BundleArtifact>();
         foreach (var language in languages)
         {
-            artifacts.Add(await BuildLanguageAsync(context, bundle, item, files, icon, language, cancellationToken));
+            artifacts.Add(await BuildLanguageAsync(context, bundle, item, files, icon, language,
+                extensionInputs, cancellationToken));
         }
         return artifacts;
+    }
+
+    private sealed record ExtensionInputs(
+        IReadOnlyList<string> FragmentWixObjects,
+        IReadOnlyList<string> FragmentBindPaths,
+        IReadOnlyList<string> ExtensionDlls,
+        string? ExpertTemplatePath,
+        IReadOnlyList<string> MergeModules);
+
+    // Fragments are language-neutral: compile once, then each language's light
+    // run links them with that language's merged .wxl. Expert templates carry
+    // the whole product document so they compile per language instead.
+    private async Task<ExtensionInputs> PrepareExtensionInputs(
+        BundleBuildContext context, CancellationToken cancellationToken)
+    {
+        var toolsetDirectory = Path.GetDirectoryName(toolset.CandlePath)!;
+        var extensionDlls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var fragmentObjects = new List<string>();
+        if (settings.IsExpertMode)
+        {
+            var template = settings.ExpertTemplate!;
+            if (!File.Exists(template) ||
+                (File.GetAttributes(template) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new ArgumentException(
+                    "MSI expert template must be a real .wxs file: " + template);
+            }
+            foreach (var dll in WixExtensionValidator.DetectExtensionDlls(
+                         File.ReadAllText(template), toolsetDirectory))
+            {
+                extensionDlls.Add(dll);
+            }
+            foreach (var module in settings.ExpertMergeModules)
+            {
+                if (!File.Exists(module) ||
+                    (File.GetAttributes(module) & FileAttributes.ReparsePoint) != 0 ||
+                    !Path.GetExtension(module).Equals(".msm", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new ArgumentException(
+                        "MSI expert merge module must be a real .msm file: " + module);
+                }
+            }
+            return new ExtensionInputs(fragmentObjects,
+                [Path.GetDirectoryName(Path.GetFullPath(template))!], [.. extensionDlls],
+                Path.GetFullPath(template), settings.ExpertMergeModules.Select(Path.GetFullPath).ToArray());
+        }
+        var prefix = settings.ExtensionIdPrefix ?? "";
+        for (var index = 0; index < settings.ExtensionFragments.Count; index++)
+        {
+            var fragment = settings.ExtensionFragments[index];
+            var content = WixExtensionValidator.ValidateFragment(fragment, prefix);
+            foreach (var dll in WixExtensionValidator.DetectExtensionDlls(content, toolsetDirectory))
+            {
+                extensionDlls.Add(dll);
+            }
+            var obj = Path.Combine(context.WorkDirectory, "fragment-" + index + ".wixobj");
+            await WixProcessRunner.RunAsync(toolset.CandlePath,
+                ["-nologo", "-out", obj, fragment], context.WorkDirectory, cancellationToken);
+            fragmentObjects.Add(obj);
+        }
+        return new ExtensionInputs(fragmentObjects,
+            settings.ExtensionFragments
+                .Select(fragment => Path.GetDirectoryName(Path.GetFullPath(fragment))!)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            [.. extensionDlls], null, []);
     }
 
     private async Task<BundleArtifact> BuildLanguageAsync(
         BundleBuildContext context, BundleConfiguration bundle, BundlePlanItem item,
         IReadOnlyList<InstallFile> files, string? icon, WixLanguageInfo requested,
-        CancellationToken cancellationToken)
+        ExtensionInputs extensionInputs, CancellationToken cancellationToken)
     {
         var language = requested with { Codepage = settings.EffectiveCodepage(requested) };
         var identity = WixIdentity.Create(bundle.Identifier, bundle.Version, item.Target.RuntimeIdentifier,
@@ -87,8 +154,15 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         var languageTag = language.Culture.ToLowerInvariant();
         var source = Path.Combine(context.WorkDirectory, "product-" + languageTag + ".wxs");
         var obj = Path.Combine(context.WorkDirectory, "product-" + languageTag + ".wixobj");
-        new XDocument(new XDeclaration("1.0", "utf-8", null), product)
-            .Save(source);
+        if (extensionInputs.ExpertTemplatePath is null)
+        {
+            new XDocument(new XDeclaration("1.0", "utf-8", null), product)
+                .Save(source);
+        }
+        else
+        {
+            File.Copy(extensionInputs.ExpertTemplatePath, source, overwrite: true);
+        }
         var scopeRoot = settings.InstallScope == WixInstallScope.CurrentUser ? "LocalAppDataFolder" :
             item.Target.Architecture == CpuArchitecture.X86 ? "ProgramFilesFolder" : "ProgramFiles64Folder";
         var callerStrings = FindLocaleFile(language) is { } localeFile
@@ -110,8 +184,28 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
                      CpuArchitecture.X64 => "x64",
                      CpuArchitecture.Arm64 => "arm64",
                      _ => throw new NotSupportedException("Unknown MSI target architecture.")
-                 },
-                 "-out", obj, source]);
+                 }]);
+            foreach (var dll in extensionInputs.ExtensionDlls)
+                candleArguments.AddRange(["-ext", dll]);
+            if (extensionInputs.ExpertTemplatePath is not null)
+            {
+                // Identity stays Bundler-derived; the expert template consumes
+                // these as $(var.Bundler.*) preprocessor values.
+                candleArguments.AddRange(
+                [
+                    "-dBundler.ProductCode=" + identity.ProductCode.ToString("B").ToUpperInvariant(),
+                    "-dBundler.UpgradeCode=" + identity.UpgradeCode.ToString("B").ToUpperInvariant(),
+                    "-dBundler.ProductVersion=" + identity.ProductVersion,
+                    "-dBundler.ProductName=" + bundle.ProductName,
+                    "-dBundler.ProductLanguage=" +
+                        language.Lcid.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    "-dBundler.Codepage=" + language.Codepage,
+                    "-dBundler.InstallScope=" +
+                        (settings.InstallScope == WixInstallScope.CurrentUser ? "perUser" : "perMachine"),
+                    "-dBundler.Manufacturer=" + (bundle.Publisher ?? bundle.ProductName)
+                ]);
+            }
+            candleArguments.AddRange(["-out", obj, source]);
             await WixProcessRunner.RunAsync(toolset.CandlePath, candleArguments,
                 context.WorkDirectory, cancellationToken);
             var lightArguments = new List<string> { "-nologo" };
@@ -125,15 +219,27 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
                     "-cultures:" + language.Culture +
                         (language.Culture.Equals("en-US", StringComparison.OrdinalIgnoreCase) ? "" : ";en-US")]);
             }
+            foreach (var dll in extensionInputs.ExtensionDlls)
+                lightArguments.AddRange(["-ext", dll]);
+            foreach (var bindPath in extensionInputs.FragmentBindPaths)
+                lightArguments.AddRange(["-b", bindPath]);
             lightArguments.AddRange(["-loc", localePath]);
             if (settings.InstallScope == WixInstallScope.CurrentUser) lightArguments.Add("-sice:ICE91");
             // ICE61 拒绝移除较新产品；显式允许降级时，这正是调用方选择的行为。
             if (settings.AllowDowngrades) lightArguments.Add("-sice:ICE61");
-            lightArguments.AddRange(["-out", outputPath, obj]);
+            lightArguments.Add("-out");
+            lightArguments.Add(outputPath);
+            lightArguments.Add(obj);
+            lightArguments.AddRange(extensionInputs.FragmentWixObjects);
+            lightArguments.AddRange(extensionInputs.MergeModules);
             await WixProcessRunner.RunAsync(toolset.LightPath, lightArguments, context.WorkDirectory, cancellationToken);
             if (!File.Exists(outputPath))
             {
                 throw new InvalidOperationException("WiX reported success without producing an MSI.");
+            }
+            if (extensionInputs.ExpertTemplatePath is not null)
+            {
+                MsiIdentityProbe.VerifyExpertMsi(outputPath, identity, language, settings.InstallScope);
             }
             if (signer is not null)
             {
@@ -301,9 +407,21 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         if (bundle.LicenseFile is not null) text.AppendLine(HashFile(bundle.LicenseFile));
         if (settings.BannerBitmap is not null) text.AppendLine(HashFile(settings.BannerBitmap));
         if (settings.DialogBitmap is not null) text.AppendLine(HashFile(settings.DialogBitmap));
+        AppendExtensionFingerprint(text);
         text.AppendLine(canonical.ToString(SaveOptions.DisableFormatting));
         using var sha = SHA256.Create();
         return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(text.ToString()))).Replace("-", "");
+    }
+
+    private void AppendExtensionFingerprint(StringBuilder text)
+    {
+        if (settings.ExtensionIdPrefix is not null) text.AppendLine(settings.ExtensionIdPrefix);
+        foreach (var fragment in settings.ExtensionFragments) text.AppendLine(HashFile(fragment));
+        foreach (var id in settings.ExtensionComponentRefs
+                     .Concat(settings.ExtensionComponentGroupRefs)
+                     .Concat(settings.ExtensionFeatureRefs)) text.AppendLine(id);
+        if (settings.ExpertTemplate is not null) text.AppendLine(HashFile(settings.ExpertTemplate));
+        foreach (var module in settings.ExpertMergeModules) text.AppendLine(HashFile(module));
     }
 
     private string DefinitionHash(BundleConfiguration bundle, BundlePlanItem item,
@@ -332,6 +450,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         if (bundle.LicenseFile is not null) text.AppendLine(HashFile(bundle.LicenseFile));
         if (settings.BannerBitmap is not null) text.AppendLine(HashFile(settings.BannerBitmap));
         if (settings.DialogBitmap is not null) text.AppendLine(HashFile(settings.DialogBitmap));
+        AppendExtensionFingerprint(text);
         using var sha = SHA256.Create();
         return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(text.ToString()))).Replace("-", "");
     }

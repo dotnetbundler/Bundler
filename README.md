@@ -7,9 +7,9 @@ Core 和格式后端本身不依赖 `.csproj` 或 .NET 应用模型，后续正�
 ## 当前状态
 
 第一条已冻结的链路是 Windows + NSIS。
-MSI 已完成 WIN-MSI-1..7 的当前主机自动化范围，`alpha.37` 是既有 x64/ARM64 身份基线；
-`alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 翻译覆盖、快捷方式图标与 FIPS 构建选项。
-WIN-MSI-8..9 仍是计划。
+MSI 已完成 WIN-MSI-1..8 的当前主机自动化范围，`alpha.37` 是既有 x64/ARM64 身份基线；
+`alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 翻译覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
+WIN-MSI-9 仍是计划。
 现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。
 正式 CLI、macOS 和 Linux 格式仍属后续路线。
 
@@ -65,7 +65,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.42" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.43" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -84,7 +84,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.42" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.43" />
 ```
 
 ```csharp
@@ -129,7 +129,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.42" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.43" />
 ```
 
 ```csharp
@@ -241,6 +241,11 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerWixAddToPath` | 否 | `false`；用户/系统 PATH 仅追加安装目录，卸载移除 |
 | `BundlerWixUninstallShortcut` | 否 | `false`；开始菜单生成 `msiexec /x` 卸载入口 |
 | `BundlerWixLaunchAfterInstall` | 否 | `false`；仅交互完成页勾选时启动，静默/被动/修复/升级不触发 |
+| `BundlerWixExtensionFragment`（项） | 否 | 常规模式 `.wxs` fragment；白名单声明式元素，所有 `@Id` 须以 `BundlerWixExtensionIdPrefix` 开头 |
+| `BundlerWixExtensionIdPrefix` | 否 | 常规模式必填自定义 id 前缀（如 `Ext.`）；保留 Bundler/WiX 前缀不可用 |
+| `BundlerWixExtensionComponentRef`/`…ComponentGroupRef`/`…FeatureRef`（项） | 否 | 常规模式显式引用 id，注入 Product Feature |
+| `BundlerWixExpertTemplate` | 否 | 专家模式：整份 `.wxs` 替换生成的产品文档；身份经 `candle -d` 变量与构建后回读强制 |
+| `BundlerWixExpertMergeModule`（项） | 否 | 专家模式 `.msm` 直传 light；专家产物为调用方自备逻辑，不受管、不担保可回滚 |
 | `BundlerWindowsSigningPfxFile` | 否 | PFX/P12 代码签名证书路径 |
 | `BundlerWindowsSigningPfxPasswordEnvironmentVariable` | 否 | 保存 PFX 密码的环境变量名 |
 | `BundlerWindowsSigningCertificateThumbprint` | 否 | Windows `My` 证书存储区中的证书指纹 |

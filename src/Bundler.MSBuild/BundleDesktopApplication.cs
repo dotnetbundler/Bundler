@@ -53,6 +53,13 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public bool WixAddToPath { get; set; }
     public bool WixUninstallShortcut { get; set; }
     public bool WixLaunchAfterInstall { get; set; }
+    public ITaskItem[] WixExtensionFragments { get; set; } = Array.Empty<ITaskItem>();
+    public string WixExtensionIdPrefix { get; set; } = "";
+    public ITaskItem[] WixExtensionComponentRefs { get; set; } = Array.Empty<ITaskItem>();
+    public ITaskItem[] WixExtensionComponentGroupRefs { get; set; } = Array.Empty<ITaskItem>();
+    public ITaskItem[] WixExtensionFeatureRefs { get; set; } = Array.Empty<ITaskItem>();
+    public string WixExpertTemplate { get; set; } = "";
+    public ITaskItem[] WixExpertMergeModules { get; set; } = Array.Empty<ITaskItem>();
     public string NsisTemplatePath { get; set; } = "";
     public string NsisInstallMode { get; set; } = "currentUser";
     public string NsisCompression { get; set; } = "lzma";
@@ -162,7 +169,19 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         DialogBitmap = OptionalFullPath(WixDialogBitmap),
                         AddToPath = WixAddToPath,
                         UninstallShortcut = WixUninstallShortcut,
-                        LaunchAfterInstall = WixLaunchAfterInstall
+                        LaunchAfterInstall = WixLaunchAfterInstall,
+                        ExtensionFragments = WixExtensionFragments
+                            .Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
+                        ExtensionIdPrefix = EmptyToNull(WixExtensionIdPrefix),
+                        ExtensionComponentRefs = WixExtensionComponentRefs
+                            .Select(item => item.ItemSpec).ToArray(),
+                        ExtensionComponentGroupRefs = WixExtensionComponentGroupRefs
+                            .Select(item => item.ItemSpec).ToArray(),
+                        ExtensionFeatureRefs = WixExtensionFeatureRefs
+                            .Select(item => item.ItemSpec).ToArray(),
+                        ExpertTemplate = OptionalFullPath(WixExpertTemplate),
+                        ExpertMergeModules = WixExpertMergeModules
+                            .Select(item => Path.GetFullPath(item.ItemSpec)).ToArray()
                     },
                     new WixBundlerOptions
                     {

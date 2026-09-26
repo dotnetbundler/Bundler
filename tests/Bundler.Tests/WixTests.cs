@@ -47,6 +47,9 @@ internal static class WixTests
             yield return ("Applies caller MSI locale overrides", AppliesCallerMsiLocaleOverrides);
             yield return ("Rejects invalid MSI locale inputs", RejectsInvalidMsiLocaleInputs);
             yield return ("Builds MSI in FIPS mode and wires shortcut icons", BuildsFipsMsiWithIconShortcuts);
+            yield return ("Builds MSI with regular extension fragments", BuildsRegularMsiExtensionFragments);
+            yield return ("Rejects unsafe MSI extension inputs", RejectsUnsafeMsiExtensions);
+            yield return ("Builds expert MSI template and enforces identity", BuildsExpertMsiTemplate);
         }
     }
 
@@ -158,7 +161,8 @@ internal static class WixTests
                      "WixCodepage", "WixLanguage", "WixLanguages", "WixFipsCompliant", "WixToolsetArchivePath",
                      "WixStartMenuShortcut", "WixDesktopShortcut", "WixInstallDirectorySelection",
                      "WixBannerBitmap", "WixDialogBitmap", "WixAddToPath",
-                     "WixUninstallShortcut", "WixLaunchAfterInstall" })
+                     "WixUninstallShortcut", "WixLaunchAfterInstall",
+                     "WixExtensionIdPrefix", "WixExpertTemplate" })
         {
             Assert(props.Contains("<Bundler" + property, StringComparison.Ordinal) &&
                    targets.Contains(property + "=\"$(Bundler" + property + ")\"", StringComparison.Ordinal),
@@ -168,6 +172,14 @@ internal static class WixTests
                task.Contains("ParseWixLanguageFiles()", StringComparison.Ordinal) &&
                task.Contains("BundlerWixLanguageFile", StringComparison.Ordinal),
             "MSBuild does not map per-language MSI locale files.");
+        Assert(targets.Contains("WixExtensionFragments=\"@(BundlerWixExtensionFragment)\"", StringComparison.Ordinal) &&
+               targets.Contains("WixExtensionComponentRefs=\"@(BundlerWixExtensionComponentRef)\"", StringComparison.Ordinal) &&
+               targets.Contains("WixExtensionComponentGroupRefs=\"@(BundlerWixExtensionComponentGroupRef)\"", StringComparison.Ordinal) &&
+               targets.Contains("WixExtensionFeatureRefs=\"@(BundlerWixExtensionFeatureRef)\"", StringComparison.Ordinal) &&
+               targets.Contains("WixExpertMergeModules=\"@(BundlerWixExpertMergeModule)\"", StringComparison.Ordinal) &&
+               task.Contains("ExtensionFragments", StringComparison.Ordinal) &&
+               task.Contains("ExpertMergeModules", StringComparison.Ordinal),
+            "MSBuild does not map the MSI extension surface.");
         Assert(task.Contains("new WixBundler(", StringComparison.Ordinal) &&
                task.Contains("Codepage = WixCodepage", StringComparison.Ordinal) &&
                task.Contains("FipsCompliant = WixFipsCompliant", StringComparison.Ordinal) &&
@@ -1073,6 +1085,167 @@ internal static class WixTests
                 Icons = [icon],
                 Targets = configuration.Targets
             };
+    }
+
+    static async Task BuildsRegularMsiExtensionFragments()
+    {
+        using var fixture = new WixTestFixture();
+        var fragment = Path.Combine(fixture.Root, "extras.wxs");
+        await File.WriteAllTextAsync(fragment,
+            "<Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\"><Fragment>" +
+            "<ComponentGroup Id=\"Acme.Extras\">" +
+            "<Component Id=\"Acme.ExtraComponent\" Guid=\"{11111111-2222-3333-4444-555555555555}\" " +
+            " Directory=\"INSTALLFOLDER\">" +
+            "<RegistryValue Root=\"HKCU\" Key=\"Software\\Acme\\Extras\" Name=\"Flag\" " +
+            " Type=\"string\" Value=\"yes\" KeyPath=\"yes\"/>" +
+            "</Component></ComponentGroup></Fragment></Wix>");
+        var artifact = (await new WixBundler(new WixBundleConfiguration
+        {
+            ExtensionFragments = [fragment],
+            ExtensionIdPrefix = "Acme.",
+            ExtensionComponentGroupRefs = ["Acme.Extras"]
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache })
+            .BuildAsync(fixture.Request())).Single();
+        using var database = new MsiDatabaseReader(artifact.Path);
+        Assert(database.Contains("Registry", "Key", "Software\\Acme\\Extras"),
+            "The caller fragment registry row did not reach the MSI.");
+        Assert(database.RowCount("Component", "Component") == 3,
+            "The caller component must join the payload and cleanup components.");
+        // A same-version rebuild with changed fragment content must be rejected.
+        await File.AppendAllTextAsync(fragment, "<!-- changed -->");
+        await ExpectAsync<IOException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            ExtensionFragments = [fragment],
+            ExtensionIdPrefix = "Acme.",
+            ExtensionComponentGroupRefs = ["Acme.Extras"]
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache })
+            .BuildAsync(fixture.Request()), "same product version");
+    }
+
+    static async Task RejectsUnsafeMsiExtensions()
+    {
+        using var fixture = new WixTestFixture();
+        var customAction = Path.Combine(fixture.Root, "action.wxs");
+        await File.WriteAllTextAsync(customAction,
+            "<Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\"><Fragment>" +
+            "<CustomAction Id=\"Acme.Run\" Execute=\"deferred\" ExeCommand=\"cmd.exe\"/>" +
+            "</Fragment></Wix>");
+        var extensionNs = Path.Combine(fixture.Root, "util.wxs");
+        await File.WriteAllTextAsync(extensionNs,
+            "<Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\" " +
+            "xmlns:util=\"http://schemas.microsoft.com/wix/UtilExtension\"><Fragment>" +
+            "<Component Id=\"Acme.C\" Guid=\"{11111111-2222-3333-4444-555555555555}\" " +
+            "Directory=\"INSTALLFOLDER\"><util:User Id=\"Acme.U\" Name=\"x\"/>" +
+            "</Component></Fragment></Wix>");
+        var unprefixed = Path.Combine(fixture.Root, "plain.wxs");
+        await File.WriteAllTextAsync(unprefixed,
+            "<Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\"><Fragment>" +
+            "<Component Id=\"Bare\" Guid=\"{11111111-2222-3333-4444-555555555555}\" " +
+            "Directory=\"INSTALLFOLDER\"/></Fragment></Wix>");
+        var broken = Path.Combine(fixture.Root, "broken.wxs");
+        await File.WriteAllTextAsync(broken, "<Wix><Fragment>");
+        var notWxs = Path.Combine(fixture.Root, "fake.xml");
+        await File.WriteAllTextAsync(notWxs, "<Wix/>");
+        var options = new WixBundlerOptions { ToolCacheDirectory = fixture.Cache };
+
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            ExtensionFragments = [customAction]
+        }, options).BuildAsync(fixture.Request()), "ExtensionIdPrefix");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            ExtensionFragments = [customAction], ExtensionIdPrefix = "Acme."
+        }, options).BuildAsync(fixture.Request()), "whitelist");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            ExtensionFragments = [extensionNs], ExtensionIdPrefix = "Acme."
+        }, options).BuildAsync(fixture.Request()), "expert mode");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            ExtensionFragments = [unprefixed], ExtensionIdPrefix = "Acme."
+        }, options).BuildAsync(fixture.Request()), "prefix");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            ExtensionFragments = [broken], ExtensionIdPrefix = "Acme."
+        }, options).BuildAsync(fixture.Request()), "valid XML");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            ExtensionFragments = [notWxs], ExtensionIdPrefix = "Acme."
+        }, options).BuildAsync(fixture.Request()), ".wxs");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            ExtensionIdPrefix = "Acme.", ExtensionComponentRefs = ["NotMine.Component"]
+        }, options).BuildAsync(fixture.Request()), "prefix");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            ExtensionIdPrefix = "bad-prefix", ExtensionComponentRefs = ["x"]
+        }, options).BuildAsync(fixture.Request()), "prefix");
+        var template = Path.Combine(fixture.Root, "expert.wxs");
+        await File.WriteAllTextAsync(template, "<Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\"/>");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            ExpertTemplate = template, ExtensionFragments = [customAction], ExtensionIdPrefix = "Acme."
+        }, options).BuildAsync(fixture.Request()), "cannot be combined");
+        await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            ExpertMergeModules = [template]
+        }, options).BuildAsync(fixture.Request()), "expert mode");
+    }
+
+    static async Task BuildsExpertMsiTemplate()
+    {
+        using var fixture = new WixTestFixture();
+        var template = Path.Combine(fixture.Root, "expert.wxs");
+        await File.WriteAllTextAsync(template,
+            "<Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\">" +
+            "<Product Id=\"$(var.Bundler.ProductCode)\" Name=\"$(var.Bundler.ProductName)\" " +
+            " Language=\"$(var.Bundler.ProductLanguage)\" Version=\"$(var.Bundler.ProductVersion)\" " +
+            " Manufacturer=\"$(var.Bundler.Manufacturer)\" " +
+            " UpgradeCode=\"$(var.Bundler.UpgradeCode)\" Codepage=\"$(var.Bundler.Codepage)\">" +
+            "<Package InstallerVersion=\"500\" Compressed=\"yes\" " +
+            " InstallScope=\"$(var.Bundler.InstallScope)\"/>" +
+            "<Media Id=\"1\" Cabinet=\"app.cab\" EmbedCab=\"yes\"/>" +
+            "<MajorUpgrade Schedule=\"afterInstallInitialize\" AllowSameVersionUpgrades=\"no\" " +
+            " DowngradeErrorMessage=\"!(loc.BundlerDowngradeErrorMessage)\"/>" +
+            "<Property Id=\"MSIINSTALLPERUSER\" Value=\"1\"/>" +
+            "<Directory Id=\"TARGETDIR\" Name=\"SourceDir\">" +
+            "<Directory Id=\"LocalAppDataFolder\">" +
+            "<Directory Id=\"INSTALLFOLDER\" Name=\"$(var.Bundler.ProductName)\"/></Directory>" +
+            "</Directory>" +
+            "<DirectoryRef Id=\"INSTALLFOLDER\">" +
+            "<Component Id=\"Expert.App\" Guid=\"{22222222-3333-4444-5555-666666666666}\">" +
+            "<File Source=\"" + Path.Combine(fixture.Input, "fixture.exe") + "\"/>" +
+            "<RemoveFolder Id=\"Expert.RemoveFolder\" On=\"uninstall\"/>" +
+            "<RegistryValue Root=\"HKCU\" Key=\"Software\\Expert\\Fixture\" Name=\"Mark\" " +
+            " Type=\"string\" Value=\"expert\" KeyPath=\"yes\"/>" +
+            "</Component></DirectoryRef>" +
+            "<Feature Id=\"Complete\" Title=\"$(var.Bundler.ProductName)\" Level=\"1\">" +
+            "<ComponentRef Id=\"Expert.App\"/></Feature>" +
+            "</Product></Wix>");
+        var artifact = (await new WixBundler(new WixBundleConfiguration
+        {
+            ExpertTemplate = template
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache })
+            .BuildAsync(fixture.Request())).Single();
+        using (var database = new MsiDatabaseReader(artifact.Path))
+        {
+            var identity = WixIdentity.Create("com.example.wixtestfixture", "1.0.0",
+                "win-x64", WixInstallScope.CurrentUser);
+            Assert(database.Property("ProductCode") == identity.ProductCode.ToString("B").ToUpperInvariant(),
+                "The expert MSI must carry the Bundler-derived ProductCode.");
+            Assert(database.Contains("Registry", "Key", "Software\\Expert\\Fixture"),
+                "The expert template's own rows did not reach the MSI.");
+        }
+        var forged = Path.Combine(fixture.Root, "forged.wxs");
+        await File.WriteAllTextAsync(forged,
+            (await File.ReadAllTextAsync(template)).Replace("$(var.Bundler.ProductCode)",
+                "{99999999-9999-9999-9999-999999999999}"));
+        await ExpectAsync<InvalidOperationException>(() => new WixBundler(new WixBundleConfiguration
+        {
+            ExpertTemplate = forged
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache })
+            .BuildAsync(fixture.Request(outputDirectory: Path.Combine(fixture.Root, "forged-out"))),
+            "does not match the Bundler identity");
     }
 
     private static string CreateBmp(string path, int width, int height)

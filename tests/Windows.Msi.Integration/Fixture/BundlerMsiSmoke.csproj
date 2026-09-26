@@ -30,5 +30,7 @@
     <BundlerUrlProtocol Include="$(BundlerTestScheme)" Condition="'$(MsiLifecycleTest)' == 'true'">
       <Name>Bundler MSI lifecycle link</Name>
     </BundlerUrlProtocol>
+    <BundlerWixExtensionFragment Include="Assets\extra.wxs" Condition="'$(MsiExtensionTest)' == 'true'" />
+    <BundlerWixExtensionComponentGroupRef Include="Ext.Extras" Condition="'$(MsiExtensionTest)' == 'true'" />
   </ItemGroup>
 </Project>

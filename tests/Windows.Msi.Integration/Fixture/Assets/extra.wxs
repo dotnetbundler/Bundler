@@ -1,0 +1,13 @@
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <ComponentGroup Id="Ext.Extras">
+      <Component Id="Ext.ExtraPayload" Guid="{7c4a5f2e-9b31-4d68-8a2f-6e1c5d9a0b7f}"
+                 Directory="INSTALLFOLDER">
+        <File Id="Ext.ExtensionMarkerFile" Name="extension-marker.txt"
+              Source="extension-marker.txt"/>
+        <RegistryValue Root="HKCU" Key="Software\BundlerTests\WinMsi8" Name="Installed"
+                       Type="string" Value="yes" KeyPath="yes"/>
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

@@ -10,6 +10,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integr
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi5.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi6.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi7.ps1 -Configuration Release -ConfirmLocalInstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi8.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -Configuration Release
 ```
 
@@ -47,6 +48,12 @@ MSI 与 verbose log 保留在临时目录。
 随机身份下两语言包并存安装且各自独立卸载（退出码 0）。
 脚本再经仓库外 `Msi.Api.PackageFixture` 以 `Languages`/`LocaleFiles`/`FipsCompliant` 直接 API 产出 `en-US`/`de-DE` 产物并断言 `-fips` 仅传给 `candle`。
 各语言 UI 母语显示与 FIPS 策略宿主按 MSI-MT-12/MSI-OI-13 人工验收。
+MSI 与 verbose log 保留在临时目录。
+
+`VerifyWinMsi8.ps1` 是 WIN-MSI-8 专用回归入口：隔离本地包源 + 隔离缓存还原仓库外 MSBuild fixture（`Ext.` 调用方前缀 + `Assets/extra.wxs` 声明式 fragment），断言常规模式 MSI 构建、真实安装后扩展标记文件与注册表落位、卸载后清除（退出码 0）；
+再经仓库外 `Msi.Api.PackageFixture` 传专家模板参数构建专家 MSI，断言身份回读通过并真实安装/卸载；
+不安全扩展输入与身份篡改由快速套件的拒绝矩阵覆盖（`Bundler.Tests`）。
+专家模式只保证 Bundler 身份/工具链/清理可验证，调用方自备逻辑不受管、不担保可回滚。
 MSI 与 verbose log 保留在临时目录。
 
 `VerifyPublicSample.ps1` 只构建公开示例的三种 MSI 变体（英文/中文 current-user、英文 per-machine）并断言数据库结构、UI 序列、快捷方式、PATH 与位图；不安装示例产品。

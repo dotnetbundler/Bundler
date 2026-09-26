@@ -1,9 +1,9 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Wix;
 
-if (args.Length is not (2 or 6 or 7))
+if (args.Length is not (2 or 6 or 7 or 8))
 {
-    throw new ArgumentException($"Expected output/cache or output/cache/target/app-version/MSI-version/downgrade[/languages] arguments; received {args.Length}.");
+    throw new ArgumentException($"Expected output/cache or output/cache/target/app-version/MSI-version/downgrade[/languages[/expert-template]] arguments; received {args.Length}.");
 }
 
 var output = Path.GetFullPath(args[0]);
@@ -12,9 +12,10 @@ var target = args.Length >= 6 ? args[2] : "win-x64";
 var appVersion = args.Length >= 6 ? args[3] : "1.0.0";
 var msiVersion = args.Length >= 6 ? args[4] : null;
 var allowDowngrades = args.Length >= 6 && bool.Parse(args[5]);
-var languages = args.Length == 7
+var languages = args.Length >= 7
     ? args[6].Split(';').Select(entry => entry.Trim()).Where(entry => entry.Length > 0).ToArray()
     : ["en-US"];
+var expertTemplate = args.Length == 8 ? Path.GetFullPath(args[7]) : null;
 var input = Path.Combine(output, "publish");
 Directory.CreateDirectory(input);
 await File.WriteAllTextAsync(Path.Combine(input, "ApiFixture.exe"), "package-api-fixture");
@@ -44,7 +45,8 @@ var request = new BundleConfiguration
 var artifacts = await new WixBundler(
     new WixBundleConfiguration { StartMenuShortcut = true, DesktopShortcut = true,
         InstallDirectorySelection = true, AddToPath = true, UninstallShortcut = true,
-        Languages = languages, MsiVersion = msiVersion, AllowDowngrades = allowDowngrades },
+        Languages = languages, MsiVersion = msiVersion, AllowDowngrades = allowDowngrades,
+        ExpertTemplate = expertTemplate },
     new WixBundlerOptions { ToolCacheDirectory = cache })
     .BuildAsync(request);
 if (artifacts.Count != languages.Length || artifacts.Any(a => a.Format != PackageFormat.Msi) ||

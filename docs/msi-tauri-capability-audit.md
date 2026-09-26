@@ -1,8 +1,8 @@
 # Tauri 通用 MSI 能力审计与补齐边界（2026-09-25 快照；WIN-MSI-6 已实施）
 
 本文件记录上游参照、当前实现事实和已确认的后续产品选择。
-WIN-MSI-5/6/7 已完成当前 Windows 11 x64 本机范围；WIN-MSI-8..9 尚未实现。
-2026-09-26 当前分支为 `msi-development`，包版本为 `0.1.0-alpha.41`。
+WIN-MSI-5/6/7/8 已完成当前 Windows 11 x64 本机范围；WIN-MSI-9 尚未实现。
+2026-10-02 当前分支为 `msi-development`，包版本为 `0.1.0-alpha.43`。
 原 WIN-MSI-4 是既有 MSI 身份基线，不代表与 Tauri 通用 MSI 能力等价。
 应用运行时依赖的自动发现、下载和安装继续不做。
 无现成测试环境的验收项沿用 MSI 专用人工/外部清单，不充当本轮开发阻塞或已通过证据。
@@ -29,7 +29,7 @@ Tauri 的通用配置字段不一定对 MSI 有独立含义，优先比较用户
 | PATH 环境集成 | `AddToPath` 已实现（显式启用） | WIN-MSI-6 已实现：按安装范围用 Windows Installer Environment 表附加/卸载本产品条目（`[~];[INSTALLFOLDER]`），实测不覆写既有 PATH 值。[微软 Environment 表](https://learn.microsoft.com/en-us/windows/win32/msi/environment-table)。 |
 | 多语言分别生成及调用方自定义翻译 | 38 语言静态表（WiX 3.14.1 内嵌 40 项中实测可编译者）、一次构建每语言一个独立 MSI、调用方 `.wxl` 按键覆盖 | WIN-MSI-7 已实现；每种语言独立稳定身份、输出名和安装目录，旧英语/中文测试向量不变；母语审校外列。 |
 | FIPS 构建选项 | `FipsCompliant`/`BundlerWixFipsCompliant` 仅向 `candle` 透传 `-fips` | WIN-MSI-7 已实现参数透传；选项通过不等于环境或产品取得合规认证，FIPS 策略宿主实测外部待验收（MSI-OI-13）。 |
-| WiX fragments、组件/功能引用、merge module、完整模板 | 无；当前产品由声明式后端生成 WiX | WIN-MSI-8：常规模式支持受控声明式 fragments/引用；原始 merge module 和完整模板替换只进入**显式专家模式**。详见下节。 |
+| WiX fragments、组件/功能引用、merge module、完整模板 | 常规模式：白名单 `.wxs` fragment + 调用方前缀 + 显式 Component/Feature 引用；专家模式：整份模板替换 + merge module 直传，身份经 `candle -d` 变量与构建后数据库回读强制 | WIN-MSI-8 已实现；相对 Tauri 的零校验模型有意收紧（内容白名单、前缀命名空间、身份回读）。MSBuild/API 名称两模式一眼可分，默认常规；专家产物不享有受管安装保证。详见下节。 |
 | 证书选择、签名命令、时间戳、摘要配置 | 现有 PFX/证书存储指纹、外部签名命令、SHA-256 与 RFC 3161 时间戳路径 | 保留已验证的签名顺序与失败清理；WIN-MSI-9 对照用户结果审计。不为了字段对齐提供弱摘要算法。生产证书验收仍按 MSI 专用外部清单。 |
 | WebView2、VC++、.NET 等应用运行时部署 | 无 | 产品边界不变：不自动发现、下载、安装、升级或卸载任意应用运行时。用户可将**已准备好的普通文件**作为载荷，但 Bundler 不管理其先决条件。[Tauri WebView2 模式](https://v2.tauri.app/distribute/windows-installer/#webview2-installation-options)。 |
 | Tauri elevated update task、updater 专属签名包 | 无 | 与 Tauri 更新协议/运行时绑定，不通过 MSI 模板字段伪装成通用更新器；如要支持应用更新，另立跨格式协议、密钥与回滚路线，不列入 WIN-MSI-5..9。 |
@@ -40,7 +40,7 @@ Tauri 的通用配置字段不一定对 MSI 有独立含义，优先比较用户
    解析来源文件、拒绝重解析点和越界路径；
    禁止更改 Bundler 管理的 ProductCode/UpgradeCode/PackageCode、既有组件 key path 与产品目录；
    拒绝自定义动作、任意执行脚本、全目录删除及未受控外部工具下载。
-   允许的元素和引用在 WIN-MSI-8 前写成精确白名单。
+   白名单在 WIN-MSI-8 已落成 `WixExtensionValidator`：仅 `Component`/`ComponentGroup`/`Directory`/`DirectoryRef`/`File`/`RegistryKey`/`RegistryValue`/`Environment`/`Condition`/`Shortcut`/`Property` 等声明式核心元素，全部 `@Id` 须以调用方声明前缀开头。
    不是所有合法 WiX XML 都会在常规模式获准。
 2. **显式专家模式**：允许用户自备整份 `.wxs` 或原始 merge module。
    此时扩展内容可能创建服务、执行自定义动作或改写系统状态；Bundler 只对自身工具供应、输入路径、编译结果、约定的产品身份/版本/范围、签名和失败清理作可验证保证，**不为用户自备安装逻辑保证原生事务、所有权或运行时依赖边界**。
@@ -55,4 +55,4 @@ Tauri 的通用配置字段不一定对 MSI 有独立含义，优先比较用户
 阶段目标、逐层测试和退出条件见 `docs/msi-roadmap.md` 第 10 节。
 计划状态不得写成已支持；公开示例必须在能力实现阶段同步更新。
 每轮包内容变化迭代 `BundlerPackageVersion`，示例应用版本保持稳定。
-WIN-MSI-5/6 的实施证据见 MSI 路线第 10 节、`VerifyWinMsi5.ps1` 与 `VerifyWinMsi6.ps1`；WIN-MSI-9 才执行新的完整 Tauri 通用 MSI 对照审计与再冻结。
+WIN-MSI-5/6/7/8 的实施证据见 MSI 路线第 10 节及 `VerifyWinMsi5.ps1`/`VerifyWinMsi6.ps1`/`VerifyWinMsi7.ps1`/`VerifyWinMsi8.ps1`；WIN-MSI-9 才执行新的完整 Tauri 通用 MSI 对照审计与再冻结。
