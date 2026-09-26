@@ -50,7 +50,11 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 
 规则：
 
-0. 宿主 OS 下限 = .NET 运行时下限：Bundler 的构建进程能跑在一切能运行 .NET 10 SDK/`dotnet msbuild` 的 macOS 上；官方支持口径为 macOS 14 Sonoma 及更新（.NET 10 官方支持列表仅列 Apple 支持期内的 14/15/26），Bundler 不设额外宿主门槛。可选特性另有独立下限：`notarytool`/`stapler` 需 Xcode 13+（约 macOS 11.3+），`.icon`→`Assets.car` 需 actool/Xcode 26（宿主约 macOS 15.6+）——均按降级处理，不阻塞打包。
+0. 宿主 OS 下限只看后端（不含 MSBuild 应用层，见 `docs/development-rules.md` 第 3 节“后端包本身可直接使用”）：后端是 `netstandard2.0` 库，宿主装任一仍可用的 .NET 运行时即可加载，Bundler 不设额外 Bundler 专属下限。
+   官方支持口径：.NET 8/9/10 当前的官方支持列表都只列 macOS 14/15/26（微软随 Apple 支持期滚动更新，macOS 12/13 已 EOL 移出）→ 官方支持下限现为 macOS 14；
+   技术口径：`netstandard2.0` 可被更老的 .NET Core 加载（理论可及更老 macOS），但那些运行时已 EOL，不作支持承诺。
+   MSBuild 应用层有自己的宿主下限（.NET 10 SDK → macOS 14），属于入口层，不构成后端下限。
+   可选特性另有独立下限：`notarytool`/`stapler` 需 Xcode 13+（约 macOS 11.3+），`.icon`→`Assets.car` 需 actool/Xcode 26（宿主约 macOS 15.6+）——均按降级处理，不阻塞打包。
 1. 构建前探测每个必需工具（`xcrun -f`/PATH）并记录版本与路径；缺必需工具立即报清晰错误，不静默降级；缺可选工具降级并警告。
 2. 不自动安装 Xcode/CLT，不替用户激活 Rosetta；宿主缺项写入构建日志与错误信息。
 3. 无网络下载：公证之外的每一步离线可用；公证是显式开启的网络动作。
