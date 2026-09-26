@@ -70,7 +70,7 @@
 
 | 项 | 说明 |
 | --- | --- |
-| `.pkg` 系统安装/卸载/收据 | 由 `docs/mac-format-decision.md` 决策是否另立 MAC-PKG，不混入 `.app` 语义 |
+| `.pkg` 系统安装/卸载/收据 | 已确认另立 `MAC-PKG`（`docs/mac-format-decision.md`），不混入 `.app` 语义 |
 | `lipo` fat binary 合成、rpath 改写、依赖解析 | 调用方构建职责 |
 | `providerShortName`、`LSRequiresCarbon` 等上游死键 | 上游无人消费/无效果，不复制 |
 | `MACOSX_DEPLOYMENT_TARGET` 环境变量联动 | 调用方编译链职责 |

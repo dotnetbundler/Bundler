@@ -1,6 +1,8 @@
-# macOS 格式决策：PKG 是否纳入（待用户确认）
+# macOS 格式决策：PKG 已确认纳入
 
-> 状态：**待用户确认**。本文只记录分析、建议与备选，不构成已批准方案；用户确认后按确认结论更新 `docs/roadmap.md`、`PROJECT_CONTEXT.md` 与本文件状态。
+> 状态：**已确认（2026-09-26，用户拍板纳入 `PackageFormat.Pkg`）**。
+> 实施顺序：`MAC-APP` → `MAC-DMG` → `MAC-PKG` → Linux；`Pkg` 枚举值与矩阵放行在 `MAC-APP-1` 起手时进入公共模型（本会话不写实现）。
+> 本文保留决策依据与边界，作为 MAC-PKG 阶段的输入。
 > 背景：`docs/roadmap.md` MAC 节要求在 `MAC-APP` 开始前用格式决策记录决定 PKG 是否加入公共 `PackageFormat`；若加入，顺序固定为 `MAC-DMG` 之后、Linux 之前。
 > 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)；`.app` 阶段分解见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)。
 
@@ -37,7 +39,7 @@
 3. 载荷可复用：`MAC-PKG` 的 payload 可以是 `MAC-APP` 产出的 `.app`（规划器沿用 `Dmg`→`App` 同款中间产物依赖），也可是一般文件树。
 4. 提前纳入可在 `MAC-APP`/`MAC-DMG` 设计期就保留正确的公共模型形状（枚举值、矩阵、规划器依赖），避免后补造成的公开 API 变更。
 
-## 4. 纳入时必须同时固定的边界（建议，随决策一并确认）
+## 4. 纳入时必须同时固定的边界（已随决策确认）
 
 - **受管模式不开放任意 `preinstall`/`postinstall` 脚本**：提权执行的任意脚本等价于 MSI 自定义动作的风险面；确有需求时走显式专家模式并在文档中显著标注责任边界，与 `docs/development-rules.md` 第 3 节一致。
 - **升级语义独立设计**：`.pkg` 无 MSI major upgrade 等价物，覆盖安装、降级、收据清理规则须在 MAC-PKG 第一阶段前写进其格式路线，不套用 `.app` 或 MSI 的规则。
@@ -51,7 +53,8 @@
 - **延后到 Linux 之后**：可行但无收益；PKG 与 APP/DMG 共享签名/公证基础设施，紧跟 DMG 更省重复接入。
 - **替代工具**：`packages`（第三方 GUI）等不提供收益且引入再分发问题，不采用。
 
-## 6. 需要用户拍板
+## 6. 决策结果
 
-1. 是否将 `Pkg` 加入 `PackageFormat` 并接受第 4 节边界？（建议：是）
-2. 确认实施顺序 `MAC-APP` → `MAC-DMG` → `MAC-PKG` → `LINUX-DEB` → …（建议：是，与现行文档一致）。
+1. `Pkg` 加入 `PackageFormat`：已通过（2026-09-26 用户确认），并采纳第 4 节边界。
+2. 实施顺序确认：`MAC-APP` → `MAC-DMG` → `MAC-PKG` → `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE`。
+3. 落地方式：`MAC-APP-1` 起手时把 `Pkg` 枚举值与 `DesktopTargetMatrix.MacOS` 放行一并进入公共模型，不为其单独开实现阶段；MAC-PKG 自身的语义冻结（升级/降级/收据/受管边界）按其路线文档在阶段启动前补齐。

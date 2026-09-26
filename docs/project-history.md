@@ -781,3 +781,13 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 
 本轮仅文档，未动代码；所有标注“待用户确认”的决策点在 `mac-format-decision.md` 第 6 节与 `mac-app-roadmap.md` 第 2、3 节汇总。
 下一阶段为 `MAC-APP-1`，需用户确认决策后明确启动。
+
+### 14.19 MAC 规划轮决策确认（2026-09-26，同日）
+
+用户对 14.18 规划轮的拍板结果（已写入对应文档）：
+
+1. PKG 确认纳入 `PackageFormat.Pkg`，顺序 `MAC-DMG` 之后、Linux 之前；枚举值在 `MAC-APP-1` 起手时进公共模型。
+2. 工具供应：不内嵌 Apple 工具，采用宿主检测+版本下限策略；补充原则“尽量支持更多设备”——优先系统自带工具，Xcode 专属工具只服务可选能力且必须可降级。
+3. 后端分包：按格式分包 `Bundler.MacApp`/`Bundler.MacDmg`/`Bundler.MacPkg`，共享签名基础设施另立 `Bundler.Signing.Mac`（对齐 `Bundler.Signing.Windows` 先例）。
+4. universal：不加 `osx-universal` 枚举，`osx-x64`/`osx-arm64` 双产物；fat 输入校验保留为 MAC-APP-2 能力。
+5. 遗留待确认：`CFBundleVersion` 默认策略、`LSMinimumSystemVersion` 默认值、构建宿主是否限定 macOS（建议限定）。

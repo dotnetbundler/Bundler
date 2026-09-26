@@ -28,10 +28,12 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 
 ## 2. 工具供应与宿主门槛
 
-**关键差异：macOS 打包工具不可再分发，本格式不适用“工具随包供应”的字面条款，改为“宿主工具检测+版本下限+明确报错”策略——此为对 `docs/development-rules.md` 第 3 节的格式级偏差，待用户确认。**
+**已确认（2026-09-26 用户拍板）：macOS 打包工具不可再分发，本格式不适用“工具随包供应”的字面条款，采用“宿主工具检测+版本下限+明确报错”策略——此为对 `docs/development-rules.md` 第 3 节的格式级偏差。**
 
 理由：`codesign`/`notarytool`/`hdiutil`/`osascript`/`plutil`/`security` 等是 Apple 专有二进制，许可上只能随 macOS/Xcode 使用，且免费随系统/Xcode 提供，没有合法再分发渠道；
 这与 NSIS/WiX 必须随包内嵌的情形不同，目标是免费、无付费必需服务、覆盖合规的 macOS 构建宿主。
+
+**用户补充原则：尽量支持更多设备**——优先使用系统自带工具；Xcode 专属工具（`actool`/`assetutil`/`SetFile`）只服务可选能力，缺失时必须可降级而非报错；版本下限只在功能确实需要时才设，不设无谓门槛；能用命令行工具链（CLT）完成的能力不得要求完整 Xcode。
 
 | 工具 | 来源 | 用途与门槛 |
 | --- | --- | --- |
@@ -50,8 +52,8 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 1. 构建前探测每个必需工具（`xcrun -f`/PATH）并记录版本与路径；缺必需工具立即报清晰错误，不静默降级；缺可选工具降级并警告。
 2. 不自动安装 Xcode/CLT，不替用户激活 Rosetta；宿主缺项写入构建日志与错误信息。
 3. 无网络下载：公证之外的每一步离线可用；公证是显式开启的网络动作。
-4. `.app` 目录结构本身不含机器码，理论上跨宿主可生成；但所有可验证手段（签名、`plutil` 行为、真实启动）都在 macOS，**建议第一阶段起限定 macOS 宿主构建，跨宿主无签名结构生成登记为候选增强——待用户确认。**
-5. 后端包形态建议：`DotNet.Bundler.Mac` 单包承载 macOS 系列后端（`App`/`Dmg`/未来的 `Pkg` 共享签名、公证与工具探测基础设施），各格式仍按独立阶段冻结——待用户确认；若按格式分包则签名共享层另立 `Bundler.Signing.Mac`。
+4. `.app` 目录结构本身不含机器码，理论上跨宿主可生成；但所有可验证手段（签名、`plutil` 行为、真实启动）都在 macOS，**建议第一阶段起限定 macOS 宿主构建，跨宿主无签名结构生成登记为候选增强——待用户确认（建议：限定 macOS 宿主）。**
+5. 后端包形态（已确认，2026-09-26）：按格式分包，与 `Bundler.Nsis`/`Bundler.Wix` 惯例一致——`Bundler.MacApp`、`Bundler.MacDmg`、`Bundler.MacPkg` 各自独立；共享的签名/公证/钥匙串/工具探测基础设施另立 `Bundler.Signing.Mac`（对齐 `Bundler.Signing.Windows` 先例），必要时再加 `Bundler.Mac.Common` 承载 plist/束结构等公共代码。
 
 ## 3. 第一阶段前必须固定的 `.app` 语义
 
@@ -74,7 +76,7 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
    Bundler 不伪造 MSI 式事务/回滚/注册语义；损坏 zip 式交付、部分拷贝等用户侧情形不属于后端承诺。
 5. **架构**：`osx-x64`/`osx-arm64` 各为独立产物；`osx-x64` 产物在 Apple Silicon 依赖 Rosetta 属系统行为，非后端能力。
    请求 universal 语义时要求调用方提供已合成的 fat Mach-O（构建期 `lipo -info` 校验）；
-   Bundler 不做 `lipo` 合成。是否在公共模型增加 `osx-universal` 目标表达待用户确认（当前建议：不加，用 `osx-x64`/`osx-arm64` 双产物覆盖）。
+   Bundler 不做 `lipo` 合成。已确认（2026-09-26）：不在公共模型增加 `osx-universal` 目标，用 `osx-x64`/`osx-arm64` 双产物覆盖；fat 输入校验保留为 MAC-APP-2 能力。
 6. **签名语义**：默认产物不签名，载荷既有签名（如 .NET apphost 的 linker ad-hoc 签名）原样保留；
    显式配置后才执行 `codesign`：identity 字符串、`"-"` ad-hoc、临时钥匙串证书导入三种提供器；
    hardened runtime 默认开启且只作用于可执行目标；entitlements 显式给定（文件路径或 plist 内容）；

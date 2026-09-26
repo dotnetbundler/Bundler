@@ -106,7 +106,8 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - 本仓库开源许可证尚未确定。
 - WiX v3 已退出免费社区服务；大范围公开分发前须重新评估维护风险（见 `third_party/wix/msi-wix-provenance.md`）。
 - `MSI-OI-12`/`MSI-OI-13` 等外部事项待有对应环境时验收。
-- MAC 规划轮待确认项（`docs/mac-format-decision.md` 第 6 节与 `docs/mac-app-roadmap.md` 第 2、3 节）：PKG 是否纳入 `PackageFormat`；宿主工具供应策略例外；`DotNet.Bundler.Mac` 单包 vs 分包；`osx-universal` 目标表达；`CFBundleVersion` 默认策略与 `LSMinimumSystemVersion` 默认值；跨宿主（非 macOS 构建 `.app`）是否放开。
+- MAC 规划轮已确认项（2026-09-26）：PKG 纳入 `PackageFormat`（`MAC-DMG` 后、Linux 前）；宿主工具检测策略替代内嵌供应（原则：尽量支持更多设备，Xcode 专属工具只服务可选能力）；后端按格式分包 `Bundler.MacApp`/`Bundler.MacDmg`/`Bundler.MacPkg` + 共享 `Bundler.Signing.Mac`；universal 走 `osx-x64`/`osx-arm64` 双产物不加枚举。
+- MAC 规划轮剩余待确认项（`docs/mac-app-roadmap.md` 第 2、3 节）：`CFBundleVersion` 默认策略与 `LSMinimumSystemVersion` 默认值；构建宿主是否限定 macOS（建议限定）。
 - `MAC-APP-OI-*` 外部事项（Developer ID 证书/公证凭证、Rosetta/Intel 宿主、干净宿主矩阵等）待有对应环境时验收。
 
 ## 6. 默认下一步
