@@ -9,11 +9,12 @@
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `.dmg` 产物（UDZO 只读压缩镜像） | 计划实现 | MAC-DMG-1 | `hdiutil create`→挂载→`convert UDZO`；产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg` |
+| `.dmg` 产物（只读压缩镜像） | 计划实现 | MAC-DMG-1 | `hdiutil create`→挂载→`convert`；产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg` |
 | `.app` 中间产物输入 | 计划实现 | MAC-DMG-1 | 规划器自动补 `App` 步骤；只读输入，不改写 `.app` |
 | `/Applications` 拖放符号链接 | 计划实现 | MAC-DMG-1 | 卷内标准拖放安装形态 |
 | 隐藏 `.app` 扩展名 | 计划实现 | MAC-DMG-1 | Finder 侧不显示扩展名 |
 | 非 macOS 宿主拒绝 | 计划实现 | MAC-DMG-1 | `hdiutil`/`osascript` 不可跨宿主，明确 `NotSupportedException` |
+| 压缩格式枚举（`Udzo`/`Ulmo`/`Udbz`，默认 `Ulmo`） | 计划实现 | MAC-DMG-1 | Ulmo 挂载侧需 macOS 10.12+；史前宿主改 `Udzo` |
 | 失败清理（残留卷/临时镜像） | 计划实现 | MAC-DMG-1 | 卸载残留卷+删临时文件，不留伪产物 |
 
 ## Finder 布局与品牌
@@ -48,7 +49,7 @@
 
 | 项 | 说明 |
 | --- | --- |
-| `UDBZ`/`ULFO`/`ULMO`/`bless`/`internet-enable` 遗留压缩与开关 | 上游亦未暴露；需要时再议（非破坏扩展） |
+| `bless`/`internet-enable` 遗留开关 | 上游亦未暴露；压缩格式已开放 `Udzo`/`Ulmo`/`Udbz` 三选一 |
 | DMG 本体公证 | 已确认不做（内部 `.app` stapled 票据足够） |
 | 内嵌 create-dmg fork | 与宿主检测策略冲突，C# 原生编排替代 |
 | `名称_版本_架构` 命名 | 与输出目录契约冲突，不沿用 |

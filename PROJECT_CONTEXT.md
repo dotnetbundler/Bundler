@@ -119,7 +119,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - `MAC-APP-OI-*` 外部事项（Developer ID 证书/公证凭证、Rosetta/Intel 宿主、干净宿主矩阵等）待有对应环境时验收；MAC-APP-4 已将 quarantine 拦截、LSMinimumSystemVersion 超限拒绝、v1→v2 原地升级、osx-x64 产物结构转自动化。
 - `.app` 格式已冻结（2026-09-26，MAC-APP-5）：冻结基线 `mac-app-development` @ `BundlerPackageVersion=0.1.0-alpha.45`，行为契约=`docs/mac-app-capability-matrix.md` 定稿表+路线各节验收记录；冻结后仅缺陷修复附回归测试。
 - `mac-app-development` 已合入 `main`（2026-09-26，快进合并，`b59e610`）；MAC-DMG 在 `mac-dmg-development` 分支推进。
-- MAC-DMG 规划轮已确认（2026-09-26）：C# 原生编排 `hdiutil`/`osascript`/`SetFile`/`sips` 不内嵌 create-dmg fork；DMG 本体可 `codesign`（`-` 跳过）不做公证；无 GUI 会话跳过布局+警告，`BundlerDmgSkipWindowLayout` 开关；EULA 经 `hdiutil udifrez` 注入 SLA；固定 UDZO 压缩；产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg`；窗口布局全可配默认对齐上游。
+- MAC-DMG 规划轮已确认（2026-09-26）：C# 原生编排 `hdiutil`/`osascript`/`SetFile`/`sips` 不内嵌 create-dmg fork；DMG 本体可 `codesign`（`-` 跳过）不做公证；无 GUI 会话跳过布局+警告，`BundlerDmgSkipWindowLayout` 开关；EULA 经 `hdiutil udifrez` 注入 SLA；压缩格式可配置枚举 Udzo/Ulmo/Udbz、默认 `Ulmo`（挂载侧需 macOS 10.12+）；产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg`；窗口布局全可配默认对齐上游。
 
 ## 6. 默认下一步
 

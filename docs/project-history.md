@@ -863,7 +863,7 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 2. DMG 本体支持 `codesign`（复用 `.app` 签名配置，`-` 跳过），不做本体公证（内部 `.app` stapled 票据足够，与上游一致）；
 3. 无 GUI 会话跳过 Finder 布局+警告仍产可挂载 DMG，显式开关 `BundlerDmgSkipWindowLayout`；
 4. EULA 支持：`LicenseFile` 经 `hdiutil udifrez` 注入 SLA；
-5. 压缩固定 `UDZO`（zlib，OS X 10.1 起全系统可挂载）；
+5. 压缩可配置枚举 `Udzo`/`Ulmo`/`Udbz`，默认 `Ulmo`（LZFSE，挂载侧需 macOS 10.12+，史前宿主改 `Udzo`）；
 6. 产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg`（不沿用上游 名称_版本_架构）；
 7. 窗口布局全可配（尺寸/位置/图标位/大小/背景图/卷图标），默认对齐上游 660×400、app=180,170、Applications=480,170、图标 128。
 阶段分解 `MAC-DMG-1..5`；打包工具下限≈任意 macOS（`SetFile` 可降级），DMG 必须 macOS 宿主（不可跨宿主）。
