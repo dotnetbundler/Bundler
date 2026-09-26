@@ -1,0 +1,72 @@
+# macOS `.dmg` 后端实施路线（MAC-DMG）
+
+> 状态：**路线已确认（2026-09-26），`MAC-DMG-1` 待启动指令**。
+> 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md) 的 `.dmg` 节（同一 `7dbfc1f` 快照基线）；
+> `.app` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)。
+> 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
+> 逐项能力状态见 [`docs/mac-dmg-capability-matrix.md`](mac-dmg-capability-matrix.md)；外部条件见 [`docs/mac-dmg-open-items.md`](mac-dmg-open-items.md)；人工步骤见 [`docs/mac-dmg-manual-testing.md`](mac-dmg-manual-testing.md)。
+
+## 1. 已确认决策（2026-09-26，全部落定）
+
+1. **实现方式**：C# 原生编排 `hdiutil`/`osascript`/`SetFile`/`sips`，不内嵌上游 create-dmg fork（与"工具走宿主检测不内嵌第三方"策略一致，参数全可控）。
+2. **DMG 本体签名/公证**：DMG 支持 `codesign`（复用 `.app` 签名配置面，`Identity="-"` 跳过）；DMG 本体不做公证——Gatekeeper 核验的是内部 `.app` 的 stapled 票据（与上游一致）。
+3. **Finder 布局降级**：探测无 GUI 会话时跳过布局+警告、仍产可挂载 DMG；显式开关 `BundlerDmgSkipWindowLayout`（`BundlerMacDmgSkipWindowLayout` MSBuild 属性）。
+4. **EULA**：支持 `LicenseFile`（txt/rtf）经 `hdiutil udifrez` 注入 SLA 资源，挂载时弹同意/不同意；复用公共模型 `LicenseFile`。
+5. **压缩格式**：固定 `UDZO`（zlib，自 OS X 10.1 起全系统可挂载，行业标准默认）；`UDBZ`/`ULFO`/`ULMO`/`bless`/`internet-enable` 遗留项不暴露，需要时再加枚举属非破坏扩展。
+6. **产物命名**：`OutputDirectory/<rid>/dmg/<产品名>.dmg`（不带版本/架构，与 `.app` 输出契约一致；不沿用上游 `名称_版本_架构` 写法，因输出目录已区分架构且文件名带版本破坏重建指纹）。
+7. **窗口布局可配置面**：窗口尺寸/位置、`.app` 图标位、`/Applications` 图标位、图标大小、窗口背景图（png/jpg/gif）、卷图标 `.VolumeIcon.icns`，全部可选、默认对齐上游（660×400、app=180,170、Applications=480,170、图标 128）。
+
+## 2. 打包工具下限（三层口径）
+
+- **打包工具（能力）下限**：`hdiutil` 自 Mac OS X 10.0 起存在；`osascript`+Finder 布局、`udifrez`、`sips` 均为长期系统自带；`SetFile`（卷图标 `icnC`）属 Xcode/CLT 附带，**可降级**（缺失跳过卷图标不阻塞）。链路无实质版本下限（arm64 宿主天然 ≥11.0）。
+- **宿主边界**：DMG 制作必须 macOS 宿主（`hdiutil`/`osascript` 不可跨宿主）——与未签名 `.app` 跨宿主构建不同；非 macOS 宿主请求 DMG 明确拒绝。
+- **后端下限**：netstandard2.0 库，同 `.app` 口径（官方 macOS 14+）。
+- **入口下限**：MSBuild=macOS 14（.NET 10 SDK）；CLI 待定。
+
+## 3. 语义契约
+
+- 输入契约：DMG 后端只接受已存在的 `.app` 目录（规划器在请求 `Dmg` 时自动补 `App` 中间产物）；不重复签名 `.app` 内部、不改写 `.app` 内容。
+- 失败语义：构建任何一步失败 → 卸载残留卷、删临时 `.dmg`，不留伪产物。
+- 安装/升级/卸载语义：`.dmg` 无安装事务，沿用 `.app` 拖放惯例（受管安装归 MAC-PKG）。
+- 输出：`OutputDirectory/<rid>/dmg/<产品名>.dmg`。
+- 卷内容标准形态：`.app` + `/Applications` 拖放符号链接 + 隐藏 `.app` 扩展名；可选窗口背景图、卷图标、EULA。
+
+## 4. 阶段分解
+
+### MAC-DMG-1：最小可用镜像
+
+- **前置**：MAC-APP 已冻结（已完成）。
+- **目标/交付**：`Bundler.MacDmg` 后端（netstandard2.0，`DotNet.Bundler.MacDmg` 包）；`hdiutil create -srcfolder`(UDRW)→resize→挂载→写入 `/Applications` 符号链接+隐藏 `.app` 扩展名→detach（EBUSY 指数退避）→`convert UDZO` 只读压缩全链；非 macOS 宿主明确拒绝；MSBuild 映射与直接 API；`Bundler.Tests` 新用例 + `tests/MacOS.Dmg.Integration` bash 实测（构建→`hdiutil attach` 挂载→断言卷内容→detach→`hdiutil verify`）。
+- **不做**：Finder 布局、背景/卷图标、EULA、DMG 签名。
+- **退出**：本机真实产出可挂载/可校验 DMG；失败路径无残留卷与伪产物。
+
+### MAC-DMG-2：Finder 布局与品牌
+
+- **前置**：MAC-DMG-1 通过。
+- **目标/交付**：`osascript` 窗口布局（尺寸/位置/图标位/图标大小/隐藏扩展名/背景图拷贝+写 `.DS_Store`）；`.VolumeIcon.icns`+`SetFile -c icnC`（SetFile 缺失降级警告）；GUI 会话探测失败→跳过布局+警告；`BundlerDmgSkipWindowLayout` 显式开关。
+- **退出**：本机实测布局写盘与降级分支均走通。
+
+### MAC-DMG-3：签名与 EULA
+
+- **前置**：MAC-DMG-2 通过。
+- **目标/交付**：DMG 本体 `codesign`（复用 `.app` 签名配置/identity/临时钥匙串，`--timestamp`）；`LicenseFile`→`hdiutil udifrez` SLA 注入；与已签名 `.app` 的组合验证。
+- **退出**：ad-hoc 签名 DMG 本机验签通过；EULA 注入后挂载弹许可（或 `udifrez` 断言）。
+
+### MAC-DMG-4：原生 E2E 与支持矩阵
+
+- **前置**：MAC-DMG-1..3 完成。
+- **目标/交付**：osx-x64/osx-arm64 产物、quarantine/首次挂载行为、错误路径清理断言、文档与示例收口。
+- **退出**：矩阵实测格子有证据；未测格子限缩声明。
+
+### MAC-DMG-5：审计与格式冻结
+
+- **前置**：MAC-DMG-4 完成。
+- **目标/交付**：上游漂移复核、能力矩阵定稿、冻结基线；`docs/roadmap.md` 推进到 `MAC-PKG`。
+
+## 5. 验证分层
+
+| 验证层 | 内容 |
+| --- | --- |
+| 本机自动 | DMG 生成、`hdiutil attach/verify`、卷内容断言、布局写盘、签名验签、失败清理 |
+| 人工/外部 | 真实 Finder 双击挂载观感截图、DMG 本体公证（如启用）、Intel/Rosetta 宿主挂载 |
+EOF

@@ -854,3 +854,16 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 3. 许可/供应链复核：本格式无第三方内嵌工具，全部步骤走宿主系统工具或 Xcode 桥接工具（`actool` 可降级），复核点收敛为宿主工具版本下限（三层下限口径已在路线 §2 落定）与凭证边界。
 4. 外部待办收口：OI-01..07 口径复核不变，全部维持外部待验收。
 5. 冻结基线：`.app` 配置面与行为契约冻结于 `0.1.0-alpha.45`（分支 `mac-app-development`）；冻结测试向量=`Bundler.Tests` 81/81 + `Verify.sh` 全绿；`docs/roadmap.md` 默认下一阶段推进到 `MAC-DMG`。
+
+### 14.25 MAC-DMG 规划轮（2026-09-26，分支 `mac-dmg-development`，自 `main` @ `b59e610` 创建）
+
+用户确认全部 7 项决策并产出规划文档：
+
+1. 实现方式：C# 原生编排 `hdiutil`/`osascript`/`SetFile`/`sips`，不内嵌上游 create-dmg fork（宿主检测策略一致、参数可控）；
+2. DMG 本体支持 `codesign`（复用 `.app` 签名配置，`-` 跳过），不做本体公证（内部 `.app` stapled 票据足够，与上游一致）；
+3. 无 GUI 会话跳过 Finder 布局+警告仍产可挂载 DMG，显式开关 `BundlerDmgSkipWindowLayout`；
+4. EULA 支持：`LicenseFile` 经 `hdiutil udifrez` 注入 SLA；
+5. 压缩固定 `UDZO`（zlib，OS X 10.1 起全系统可挂载）；
+6. 产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg`（不沿用上游 名称_版本_架构）；
+7. 窗口布局全可配（尺寸/位置/图标位/大小/背景图/卷图标），默认对齐上游 660×400、app=180,170、Applications=480,170、图标 128。
+阶段分解 `MAC-DMG-1..5`；打包工具下限≈任意 macOS（`SetFile` 可降级），DMG 必须 macOS 宿主（不可跨宿主）。

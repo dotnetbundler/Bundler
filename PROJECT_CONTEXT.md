@@ -118,11 +118,13 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - MAC 规划轮决策全部确认（2026-09-26）：`CFBundleVersion` 默认=版本号可覆盖；`LSMinimumSystemVersion` 调用方显式配置、未配置不写入；构建宿主=未签名 `.app` 任意宿主可构建（附权限位警告），需 Apple 工具的步骤限 macOS；宿主下限对齐 Tauri 同等标准（公证走 `notarytool`，Xcode 13+/macOS 11.3+），`actool`/`SetFile` 为可降级可选增强。
 - `MAC-APP-OI-*` 外部事项（Developer ID 证书/公证凭证、Rosetta/Intel 宿主、干净宿主矩阵等）待有对应环境时验收；MAC-APP-4 已将 quarantine 拦截、LSMinimumSystemVersion 超限拒绝、v1→v2 原地升级、osx-x64 产物结构转自动化。
 - `.app` 格式已冻结（2026-09-26，MAC-APP-5）：冻结基线 `mac-app-development` @ `BundlerPackageVersion=0.1.0-alpha.45`，行为契约=`docs/mac-app-capability-matrix.md` 定稿表+路线各节验收记录；冻结后仅缺陷修复附回归测试。
+- `mac-app-development` 已合入 `main`（2026-09-26，快进合并，`b59e610`）；MAC-DMG 在 `mac-dmg-development` 分支推进。
+- MAC-DMG 规划轮已确认（2026-09-26）：C# 原生编排 `hdiutil`/`osascript`/`SetFile`/`sips` 不内嵌 create-dmg fork；DMG 本体可 `codesign`（`-` 跳过）不做公证；无 GUI 会话跳过布局+警告，`BundlerDmgSkipWindowLayout` 开关；EULA 经 `hdiutil udifrez` 注入 SLA；固定 UDZO 压缩；产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg`；窗口布局全可配默认对齐上游。
 
 ## 6. 默认下一步
 
-`MAC-DMG`：`.app` 格式已冻结（mac-app-roadmap.md MAC-APP-5 验收记录）；下一阶段为 DMG 后端（上游审计同 `mac-tauri-capability-audit.md` 的 dmg 部分：create-dmg 内嵌 fork、`hdiutil`/`osascript`/`SetFile` 系统工具链、窗口布局/图标摆放/许可面板等用户可观察能力）。
-等用户明确 `MAC-DMG` 启动指令再实施；未经明确要求不提交、不推送。
+`MAC-DMG-1`：MAC-DMG 规划轮已完成（`docs/mac-dmg-roadmap.md`，分支 `mac-dmg-development`）；下一阶段为最小可用镜像（`hdiutil` UDRW→挂载→拖放链接→detach→`convert UDZO` 全链 + MSBuild/直接 API + 原生集成实测）。
+等用户明确 `MAC-DMG-1` 启动指令再实施；未经明确要求不提交、不推送。
 
 ## 7. 历史记录
 
