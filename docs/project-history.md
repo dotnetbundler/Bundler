@@ -879,3 +879,14 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 - 验证（云 macOS VM 26.5.2 arm64 实测）：`Bundler.Tests` 90/90 全绿（新增 9 条）；`tests/MacOS.Dmg.Integration/Verify.sh` 全绿——真实产出 `.dmg`、attach 断言 `.app`+`/Applications` 链接、卷内二进制启动、detach、`hdiutil verify` VALID、Udzo 变体 `Format: UDZO` 挂载通过；`samples/HelloMacDmg`（`BundlerFormats=dmg` 全旋钮演示）实测产出与挂载。
 - 踩坑修正：集成 fixture 在只读卷内写 `.launch-marker` 会崩（改 try/catch，stdout 标记已足够）；`unzip -l | grep -q` 在 `pipefail` 下偶发 SIGPIPE（改先落盘再 grep）。
 
+
+### 14.27 MAC-DMG-2：Finder 布局与品牌（2026-09-26，分支 `mac-dmg-development`）
+
+交付 `src/Bundler.MacDmg` 布局与品牌面（`DotNet.Bundler.MacDmg` 包）：
+
+- `MacDmgBundleConfiguration` 扩展：`SkipWindowLayout`、`WindowX/Y`（200/120）、`WindowWidth/Height`（660/400）、`AppIconX/Y`（180,170）、`ApplicationsIconX/Y`（480,170）、`IconSize`（128）、`BackgroundFile`、`VolumeIconFile`，默认对齐上游 create-dmg。
+- `MacDmgBundleBackend.ApplyBrandingAsync`：卷图标拷为 `.VolumeIcon.icns` + `SetFile -a C`（SetFile 缺失降级警告）；背景图拷入 `.background/`；`SkipWindowLayout` 记信息跳过；否则 `BuildFinderLayoutScript` 生成 `tell application "Finder"`/`tell disk` 脚本（bounds、icon view options、`background picture`、图标位、`update without registering applications`、close/open）逐行经 `osascript -e`，失败降级 "no GUI session" 警告仍产 `.dmg`。
+- 修正两处宿主实测问题：`hdiutil resize -size +64m` 相对增量在 `-srcfolder` 产出的大镜像上报 `Invalid argument`，改走 `resize -limits` 取当前扇区数 +131072（64MiB）后以 `-sectors` 绝对值增长；`attach -nobrowse` 隐藏卷导致 Finder `Can't get disk`(-1728)，布局运行时去掉该参数（跳过时保留）。
+- MSBuild：新增 12 个 `BundlerMacDmg*` 属性/目标项（props 默认值齐备），`MacIntValue` 非负整型映射辅助。
+- 验证（云 macOS VM 26.5.2 arm64 实测）：`Bundler.Tests` 95/95 全绿（新增 5 条：默认布局脚本/-nobrowse 条件断言、无 GUI 降级、显式跳过、品牌文件落卷、缺失背景拒绝）；`Verify.sh` 全绿——品牌文件 `.background/bg.png`+`.VolumeIcon.icns` 落卷断言、`.DS_Store` 在无 GUI 宿主条件跳过（osascript -1728 实测降级）、UDZO/SkipWindowLayout 变体照常；`samples/HelloMacDmg` 全旋钮（含布局/品牌资产）实测产出。
+- GUI 宿主观感核对登记 `MAC-DMG-OI-01`/`MAC-DMG-MT-01`（headless 宿主无法驱动 Finder 布局）。

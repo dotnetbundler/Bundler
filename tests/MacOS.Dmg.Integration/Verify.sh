@@ -81,6 +81,18 @@ mounted_volume="$mount_root"
 plutil -lint "$mounted_volume/Bundler Mac DMG Fixture.app/Contents/Info.plist" >/dev/null \
     || fail "The .app inside the mounted .dmg has a broken Info.plist."
 
+# MAC-DMG-2 branding: background + volume icon are copied unconditionally (no GUI needed).
+[[ -f "$mounted_volume/.background/bg.png" ]] \
+    || fail "Mounted volume lacks .background/bg.png."
+[[ -f "$mounted_volume/.VolumeIcon.icns" ]] \
+    || fail "Mounted volume lacks .VolumeIcon.icns."
+# Finder 布局需要 GUI 会话；无 GUI 的宿主（CI）降级为警告，镜像仍可挂载。
+if [[ -f "$mounted_volume/.DS_Store" ]]; then
+    log "Finder layout written (.DS_Store present)"
+else
+    log "note: headless host — Finder layout degraded (no .DS_Store)"
+fi
+
 # 直接启动挂载卷内的 .app（只读卷上的二进制仍可执行；启动标记写不进卷内属预期）。
 mounted_app="$mounted_volume/Bundler Mac DMG Fixture.app"
 if "$mounted_app/Contents/MacOS/BundlerMacDmgIntegrationFixture" | grep -q "BundlerMacDmgIntegrationFixture"; then
@@ -112,5 +124,15 @@ mounted_volume="$mount_root"
 [[ -d "$mounted_volume/Bundler Mac DMG Fixture.app" ]] || fail "UDZO volume lacks the .app."
 hdiutil detach "$mounted_volume" >/dev/null || fail "UDZO detach failed."
 mounted_volume=""
+
+log "== SkipWindowLayout variant =="
+dotnet publish "$fixture_project" -c Release \
+    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
+    -p:BundlerIntegrationOutput="$integration_root/bundle-skip" \
+    -p:BundlerTestDmgSkipWindowLayout=true \
+    --packages "$package_cache" >/dev/null
+skip_dmg="$integration_root/bundle-skip/osx-arm64/dmg/Bundler Mac DMG Fixture.dmg"
+[[ -f "$skip_dmg" ]] || fail "The SkipWindowLayout .dmg variant is missing."
+hdiutil verify "$skip_dmg" >/dev/null || fail "hdiutil verify failed on the SkipWindowLayout .dmg."
 
 log "PASS: macOS .dmg integration checks passed."

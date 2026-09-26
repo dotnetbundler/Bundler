@@ -29,12 +29,22 @@ dotnet publish samples/HelloMacDmg/HelloMacDmg.csproj -c Release
 
 - **`.app` 中间产物自动产出**：`BundlerFormats=dmg` 不需要手工先打 app，同一次 publish 同时给出 `app/` 与 `dmg/` 两个产物目录。
 - **`.app` 侧全部旋钮同 HelloMacApp**：`HelloMacDmgMinSystemVersion`、`HelloMacDmgSignIdentity=-`（ad-hoc 签名）、`HelloMacDmgHardenedRuntime`、`HelloMacDmgEntitlementsFile` 等均透传到中间 `.app`。
+- **窗口背景图与卷图标**（默认演示 `Assets/bg.png` 与 `Assets/volume.icns`，可关闭）：背景图拷入卷内 `.background/` 并被 `.DS_Store` 引用；卷图标落盘 `.VolumeIcon.icns` 并 `SetFile -a C` 触发 `icns` 资源派生。
+- **Finder 窗口布局全旋钮**（默认对齐上游：窗口 200,120 + 660×400，`.app` 图标位 180,170，`/Applications` 图标位 480,170，图标大小 128）：
+  `HelloMacDmgWindowX/Y/Width/Height`、`HelloMacDmgAppIconX/Y`、`HelloMacDmgApplicationsIconX/Y`、`HelloMacDmgIconSize`。
+- **显式跳过布局**：
+
+  ```bash
+  dotnet publish samples/HelloMacDmg/HelloMacDmg.csproj -c Release -p:HelloMacDmgSkipWindowLayout=true
+  ```
+
+  无 GUI 会话宿主（无人值守 CI）自动降级为警告并仍产可挂载 `.dmg`；GUI 宿主上才真实写 `.DS_Store`。
 
 ## 手动验收
 
 ```bash
 hdiutil attach artifacts/samples/HelloMacDmg/osx-arm64/dmg/Hello\ Mac\ DMG.dmg -nobrowse
-# Finder/hdiutil 卷内应见 "Hello Mac DMG.app" 与 Applications 拖放链接
+# Finder/hdiutil 卷内应见 "Hello Mac DMG.app" 与 Applications 拖放链接、.background/bg.png、.VolumeIcon.icns
 hdiutil verify artifacts/samples/HelloMacDmg/osx-arm64/dmg/Hello\ Mac\ DMG.dmg
 ```
 
@@ -42,4 +52,4 @@ hdiutil verify artifacts/samples/HelloMacDmg/osx-arm64/dmg/Hello\ Mac\ DMG.dmg
 
 ## 未在示例中演示的能力（阶段边界）
 
-Finder 窗口布局、背景图、卷图标、EULA 许可面板、DMG 本体签名——均属 MAC-DMG-2/3 阶段，尚未开放配置面。
+EULA 许可面板、DMG 本体签名——均属 MAC-DMG-3 阶段，尚未开放配置面。

@@ -1,6 +1,6 @@
 # macOS `.dmg` 后端实施路线（MAC-DMG）
 
-> 状态：**`MAC-DMG-1` 已完成（2026-09-26 云 macOS VM 实测），`MAC-DMG-2` 待启动指令**。
+> 状态：**`MAC-DMG-1`/`MAC-DMG-2` 已完成（2026-09-26 云 macOS VM 实测），`MAC-DMG-3` 待启动指令**。
 > 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md) 的 `.dmg` 节（同一 `7dbfc1f` 快照基线）；
 > `.app` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
@@ -47,6 +47,7 @@
 - **前置**：MAC-DMG-1 通过。
 - **目标/交付**：`osascript` 窗口布局（尺寸/位置/图标位/图标大小/隐藏扩展名/背景图拷贝+写 `.DS_Store`）；`.VolumeIcon.icns`+`SetFile -c icnC`（SetFile 缺失降级警告）；GUI 会话探测失败→跳过布局+警告；`BundlerDmgSkipWindowLayout` 显式开关。
 - **退出**：本机实测布局写盘与降级分支均走通。
+- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64）**：`Bundler.Tests` 95/95 全绿（新增 5 条：默认布局脚本断言/无 GUI 降级/显式跳过/品牌落盘/缺失背景拒绝）。`Verify.sh` 全绿：品牌文件 `.background/bg.png`+`.VolumeIcon.icns` 落卷断言通过，`.DS_Store` 断言在无 GUI 宿主按设计条件跳过（headless `osascript` 返回 -1728 `Can't get disk` 降级为警告），UDZO/SkipWindowLayout 变体照常验证。布局参数全可配（窗口 200,120+660×400、app=180,170、Applications=480,170、icon 128 默认对齐上游）。踩坑修正两条：(a) `hdiutil resize -size +64m` 相对增量在 `-srcfolder` 产出的大镜像上被报 `Invalid argument`，改走 `resize -limits` 取当前扇区数 +131072（64MiB）后用 `-sectors` 绝对值增长；(b) `attach -nobrowse` 会隐藏卷使 Finder `Can't get disk`，布局运行时去掉该参数。
 
 ### MAC-DMG-3：签名与 EULA
 

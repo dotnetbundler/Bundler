@@ -88,5 +88,17 @@
     <BundlerMacAppNotaryApiIssuer Condition="'$(BundlerMacAppNotaryApiIssuer)' == ''"></BundlerMacAppNotaryApiIssuer>
     <BundlerMacDmgCompression Condition="'$(BundlerMacDmgCompression)' == ''">Ulmo</BundlerMacDmgCompression>
     <BundlerMacDmgVolumeName Condition="'$(BundlerMacDmgVolumeName)' == ''"></BundlerMacDmgVolumeName>
+    <BundlerMacDmgSkipWindowLayout Condition="'$(BundlerMacDmgSkipWindowLayout)' == ''">false</BundlerMacDmgSkipWindowLayout>
+    <BundlerMacDmgWindowX Condition="'$(BundlerMacDmgWindowX)' == ''">200</BundlerMacDmgWindowX>
+    <BundlerMacDmgWindowY Condition="'$(BundlerMacDmgWindowY)' == ''">120</BundlerMacDmgWindowY>
+    <BundlerMacDmgWindowWidth Condition="'$(BundlerMacDmgWindowWidth)' == ''">660</BundlerMacDmgWindowWidth>
+    <BundlerMacDmgWindowHeight Condition="'$(BundlerMacDmgWindowHeight)' == ''">400</BundlerMacDmgWindowHeight>
+    <BundlerMacDmgAppIconX Condition="'$(BundlerMacDmgAppIconX)' == ''">180</BundlerMacDmgAppIconX>
+    <BundlerMacDmgAppIconY Condition="'$(BundlerMacDmgAppIconY)' == ''">170</BundlerMacDmgAppIconY>
+    <BundlerMacDmgApplicationsIconX Condition="'$(BundlerMacDmgApplicationsIconX)' == ''">480</BundlerMacDmgApplicationsIconX>
+    <BundlerMacDmgApplicationsIconY Condition="'$(BundlerMacDmgApplicationsIconY)' == ''">170</BundlerMacDmgApplicationsIconY>
+    <BundlerMacDmgIconSize Condition="'$(BundlerMacDmgIconSize)' == ''">128</BundlerMacDmgIconSize>
+    <BundlerMacDmgBackgroundFile Condition="'$(BundlerMacDmgBackgroundFile)' == ''"></BundlerMacDmgBackgroundFile>
+    <BundlerMacDmgVolumeIconFile Condition="'$(BundlerMacDmgVolumeIconFile)' == ''"></BundlerMacDmgVolumeIconFile>
   </PropertyGroup>
 </Project>

@@ -121,6 +121,18 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacAppNotaryApiIssuer { get; set; } = "";
     public string MacDmgCompression { get; set; } = "";
     public string MacDmgVolumeName { get; set; } = "";
+    public string MacDmgSkipWindowLayout { get; set; } = "";
+    public string MacDmgWindowX { get; set; } = "";
+    public string MacDmgWindowY { get; set; } = "";
+    public string MacDmgWindowWidth { get; set; } = "";
+    public string MacDmgWindowHeight { get; set; } = "";
+    public string MacDmgAppIconX { get; set; } = "";
+    public string MacDmgAppIconY { get; set; } = "";
+    public string MacDmgApplicationsIconX { get; set; } = "";
+    public string MacDmgApplicationsIconY { get; set; } = "";
+    public string MacDmgIconSize { get; set; } = "";
+    public string MacDmgBackgroundFile { get; set; } = "";
+    public string MacDmgVolumeIconFile { get; set; } = "";
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -289,7 +301,22 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         Compression = MacEnumValue<DotNet.Bundler.MacDmg.MacDmgCompression>(
                                 MacDmgCompression, "BundlerMacDmgCompression")
                             ?? DotNet.Bundler.MacDmg.MacDmgCompression.Ulmo,
-                        VolumeName = EmptyToNull(MacDmgVolumeName)
+                        VolumeName = EmptyToNull(MacDmgVolumeName),
+                        SkipWindowLayout = string.Equals(
+                            MacDmgSkipWindowLayout, "true", StringComparison.OrdinalIgnoreCase),
+                        WindowX = MacIntValue(MacDmgWindowX, "BundlerMacDmgWindowX", 200),
+                        WindowY = MacIntValue(MacDmgWindowY, "BundlerMacDmgWindowY", 120),
+                        WindowWidth = MacIntValue(MacDmgWindowWidth, "BundlerMacDmgWindowWidth", 660),
+                        WindowHeight = MacIntValue(MacDmgWindowHeight, "BundlerMacDmgWindowHeight", 400),
+                        AppIconX = MacIntValue(MacDmgAppIconX, "BundlerMacDmgAppIconX", 180),
+                        AppIconY = MacIntValue(MacDmgAppIconY, "BundlerMacDmgAppIconY", 170),
+                        ApplicationsIconX = MacIntValue(
+                            MacDmgApplicationsIconX, "BundlerMacDmgApplicationsIconX", 480),
+                        ApplicationsIconY = MacIntValue(
+                            MacDmgApplicationsIconY, "BundlerMacDmgApplicationsIconY", 170),
+                        IconSize = MacIntValue(MacDmgIconSize, "BundlerMacDmgIconSize", 128),
+                        BackgroundFile = EmptyToNull(MacDmgBackgroundFile),
+                        VolumeIconFile = EmptyToNull(MacDmgVolumeIconFile)
                     },
                     BuildMacAppConfiguration(),
                     new MacDmgBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
@@ -437,6 +464,19 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         {
             throw new ArgumentException(
                 $"{propertyName} must be one of {string.Join(", ", Enum.GetNames(typeof(TEnum)))}; got '{value}'.");
+        }
+        return parsed;
+    }
+
+    private static int MacIntValue(string value, string propertyName, int fallback)
+    {
+        if (value.Trim().Length == 0)
+        {
+            return fallback;
+        }
+        if (!int.TryParse(value.Trim(), out var parsed) || parsed < 0)
+        {
+            throw new ArgumentException($"{propertyName} must be a non-negative integer; got '{value}'.");
         }
         return parsed;
     }

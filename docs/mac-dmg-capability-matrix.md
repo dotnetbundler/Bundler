@@ -3,7 +3,7 @@
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
 计划实现与外部待验收行绑定到 `docs/mac-dmg-roadmap.md`、`docs/mac-dmg-open-items.md`、`docs/mac-dmg-manual-testing.md` 中的明确阶段/ID。
 上游参照：`docs/mac-tauri-capability-audit.md` 的 `.dmg` 节。
-路线已确认（`2026-09-26`）；`MAC-DMG-1` 已实现（2026-09-26 云 macOS VM 实测），其余阶段未启动，表内非冻结状态。
+路线已确认（`2026-09-26`）；`MAC-DMG-1`/`MAC-DMG-2` 已实现（2026-09-26 云 macOS VM 实测），其余阶段未启动，表内非冻结状态。
 
 ## 镜像与内容
 
@@ -21,10 +21,10 @@
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `osascript` 窗口布局（尺寸/位置/图标位/图标大小） | 计划实现 | MAC-DMG-2 | 默认 660×400、app=180,170、Applications=480,170、图标 128；写 `.DS_Store` |
-| 窗口背景图（png/jpg/gif） | 计划实现 | MAC-DMG-2 | 拷入卷内 `.background/` |
-| 卷图标 `.VolumeIcon.icns` + `SetFile -c icnC` | 计划实现 | MAC-DMG-2 | `SetFile` 属 Xcode/CLT 附带，缺失降级警告跳过 |
-| 无 GUI 会话降级 | 计划实现 | MAC-DMG-2 | 跳过布局+警告仍产可挂载 DMG；`BundlerDmgSkipWindowLayout` 显式开关 |
+| `osascript` 窗口布局（尺寸/位置/图标位/图标大小） | 已实现 | MAC-DMG-2 | 默认 660×400、app=180,170、Applications=480,170、图标 128；写 `.DS_Store`；无 GUI 宿主实测降级 |
+| 窗口背景图（png/jpg/gif） | 已实现 | MAC-DMG-2 | 拷入卷内 `.background/` 并由 `.DS_Store` 引用 |
+| 卷图标 `.VolumeIcon.icns` + `SetFile -c icnC` | 已实现 | MAC-DMG-2 | `SetFile` 属 Xcode/CLT 附带，缺失降级警告跳过；本机实测落卷 |
+| 无 GUI 会话降级 | 已实现 | MAC-DMG-2 | 跳过布局+警告仍产可挂载 DMG；`BundlerMacDmgSkipWindowLayout` 显式开关 |
 
 ## 签名与许可
 

@@ -69,11 +69,51 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                  "-format", "UDRW", "-ov", readWriteImage],
                 workDirectory, cancellationToken);
 
+            // Layout/branding extras need headroom that -srcfolder auto-sizing doesn't leave.
+            if (!settings.SkipWindowLayout ||
+                settings.BackgroundFile is not null ||
+                settings.VolumeIconFile is not null)
+            {
+                // Relative "+64m" is rejected on -srcfolder-sized images; grow via -limits math.
+                var limits = await MacDmgProcessRunner.TryRunAsync(
+                    "hdiutil", ["resize", "-limits", readWriteImage],
+                    workDirectory, cancellationToken);
+                var fields = limits is { ExitCode: 0 }
+                    ? limits.StandardOutput.Trim().Split(
+                        new[] { ' ', '\t', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                    : Array.Empty<string>();
+                MacDmgProcessRunner.Result? resized = null;
+                if (fields.Length >= 2 && long.TryParse(fields[1], out var currentSectors))
+                {
+                    resized = await MacDmgProcessRunner.TryRunAsync(
+                        "hdiutil",
+                        ["resize", "-sectors", (currentSectors + 131072).ToString(), readWriteImage],
+                        workDirectory, cancellationToken);
+                }
+                if (resized is not { ExitCode: 0 })
+                {
+                    logger.Log(
+                        BundleLogLevel.Warning,
+                        "hdiutil resize failed; layout extras may not fit in the image. " +
+                        (resized is { } r ? r.StandardError.Trim()
+                            : limits is { } l ? l.StandardError.Trim()
+                            : "hdiutil could not be started"));
+                }
+            }
+
+            // -nobrowse hides the volume from Finder — drop it when the layout pass runs.
+            var attachArgs = new List<string>
+            {
+                "attach", readWriteImage, "-readwrite", "-noverify"
+            };
+            if (settings.SkipWindowLayout)
+            {
+                attachArgs.Add("-nobrowse");
+            }
+            attachArgs.Add("-mountpoint");
+            attachArgs.Add(mountDirectory);
             await MacDmgProcessRunner.RunAsync(
-                "hdiutil",
-                ["attach", readWriteImage, "-readwrite", "-noverify", "-nobrowse",
-                 "-mountpoint", mountDirectory],
-                workDirectory, cancellationToken);
+                "hdiutil", attachArgs, workDirectory, cancellationToken);
             mounted = true;
 
             // Hidden .app extension flag (SetFile ships with Xcode/CLT — degrade to a warning).
@@ -86,6 +126,10 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                     BundleLogLevel.Warning,
                     "SetFile is unavailable (Xcode/CLT tool); the .app extension will stay visible.");
             }
+
+            await ApplyBrandingAsync(
+                mountDirectory, applicationName, volumeName, workDirectory,
+                cancellationToken, logger);
 
             await DetachWithRetryAsync(mountDirectory, workDirectory, cancellationToken, logger);
             mounted = false;
@@ -135,6 +179,106 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 File.Delete(readWriteImage);
             }
         }
+    }
+
+    private async Task ApplyBrandingAsync(
+        string mountDirectory,
+        string applicationName,
+        string volumeName,
+        string workDirectory,
+        CancellationToken cancellationToken,
+        IBundleLogger logger)
+    {
+        // Volume icon: .VolumeIcon.icns + custom-icon flag on the volume root.
+        if (settings.VolumeIconFile is { Length: > 0 } volumeIconFile)
+        {
+            if (!File.Exists(volumeIconFile))
+            {
+                throw new FileNotFoundException(
+                    $"The .dmg volume icon does not exist: {volumeIconFile}", volumeIconFile);
+            }
+            File.Copy(volumeIconFile, Path.Combine(mountDirectory, ".VolumeIcon.icns"), overwrite: true);
+            var flag = await MacDmgProcessRunner.TryRunAsync(
+                "SetFile", ["-a", "C", mountDirectory], workDirectory, cancellationToken);
+            if (flag is not { ExitCode: 0 })
+            {
+                logger.Log(
+                    BundleLogLevel.Warning,
+                    "SetFile is unavailable; the custom volume icon flag was not set.");
+            }
+        }
+
+        // Window background goes into the hidden .background folder on the volume.
+        string? backgroundItemName = null;
+        if (settings.BackgroundFile is { Length: > 0 } backgroundFile)
+        {
+            if (!File.Exists(backgroundFile))
+            {
+                throw new FileNotFoundException(
+                    $"The .dmg background image does not exist: {backgroundFile}", backgroundFile);
+            }
+            var backgroundDirectory = Path.Combine(mountDirectory, ".background");
+            Directory.CreateDirectory(backgroundDirectory);
+            backgroundItemName = Path.GetFileName(backgroundFile);
+            File.Copy(backgroundFile, Path.Combine(backgroundDirectory, backgroundItemName), overwrite: true);
+        }
+
+        if (settings.SkipWindowLayout)
+        {
+            logger.Log(
+                BundleLogLevel.Information,
+                "Skipping the Finder window layout (SkipWindowLayout).");
+            return;
+        }
+
+        var script = BuildFinderLayoutScript(volumeName, applicationName, backgroundItemName);
+        var scriptArgs = script.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .SelectMany(line => (string[])["-e", line])
+            .ToArray();
+        var layout = await MacDmgProcessRunner.TryRunAsync(
+            "osascript", scriptArgs, workDirectory, cancellationToken);
+        if (layout is not { ExitCode: 0 })
+        {
+            logger.Log(
+                BundleLogLevel.Warning,
+                "Finder layout skipped (no GUI session, e.g. headless CI): " +
+                (layout is null ? "osascript could not be started" : layout.StandardError.Trim()));
+        }
+    }
+
+    private string BuildFinderLayoutScript(
+        string volumeName, string applicationName, string? backgroundItemName)
+    {
+        var script = new System.Text.StringBuilder();
+        script.AppendLine("tell application \"Finder\"");
+        script.AppendLine($"  tell disk \"{volumeName}\"");
+        script.AppendLine("    open");
+        script.AppendLine("    set current view of container window to icon view");
+        script.AppendLine("    set toolbar visible of container window to false");
+        script.AppendLine("    set statusbar visible of container window to false");
+        script.AppendLine(
+            $"    set the bounds of container window to {{{settings.WindowX}, {settings.WindowY}, " +
+            $"{settings.WindowX + settings.WindowWidth}, {settings.WindowY + settings.WindowHeight}}}");
+        script.AppendLine("    set theViewOptions to the icon view options of container window");
+        script.AppendLine("    set arrangement of theViewOptions to not arranged");
+        script.AppendLine($"    set icon size of theViewOptions to {settings.IconSize}");
+        if (backgroundItemName is not null)
+        {
+            script.AppendLine(
+                $"    set background picture of theViewOptions to file \".background:{backgroundItemName}\"");
+        }
+        script.AppendLine(
+            $"    set position of item \"{applicationName}\" of container window to " +
+            $"{{{settings.AppIconX}, {settings.AppIconY}}}");
+        script.AppendLine(
+            "    set position of item \"Applications\" of container window to " +
+            $"{{{settings.ApplicationsIconX}, {settings.ApplicationsIconY}}}");
+        script.AppendLine("    update without registering applications");
+        script.AppendLine("    close");
+        script.AppendLine("    open");
+        script.AppendLine("  end tell");
+        script.AppendLine("end tell");
+        return script.ToString();
     }
 
     private static async Task DetachWithRetryAsync(

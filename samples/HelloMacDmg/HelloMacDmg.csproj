@@ -27,6 +27,22 @@
     <BundlerMacDmgCompression Condition="'$(HelloMacDmgCompression)' != ''">$(HelloMacDmgCompression)</BundlerMacDmgCompression>
     <BundlerMacDmgVolumeName Condition="'$(HelloMacDmgVolumeName)' != ''">$(HelloMacDmgVolumeName)</BundlerMacDmgVolumeName>
 
+    <!-- Finder 布局与品牌（MAC-DMG-2）：默认演示背景图+卷图标；HelloMacDmgSkipWindowLayout 可整体跳过。 -->
+    <BundlerMacDmgSkipWindowLayout Condition="'$(HelloMacDmgSkipWindowLayout)' != ''">$(HelloMacDmgSkipWindowLayout)</BundlerMacDmgSkipWindowLayout>
+    <BundlerMacDmgWindowX Condition="'$(HelloMacDmgWindowX)' != ''">$(HelloMacDmgWindowX)</BundlerMacDmgWindowX>
+    <BundlerMacDmgWindowY Condition="'$(HelloMacDmgWindowY)' != ''">$(HelloMacDmgWindowY)</BundlerMacDmgWindowY>
+    <BundlerMacDmgWindowWidth Condition="'$(HelloMacDmgWindowWidth)' != ''">$(HelloMacDmgWindowWidth)</BundlerMacDmgWindowWidth>
+    <BundlerMacDmgWindowHeight Condition="'$(HelloMacDmgWindowHeight)' != ''">$(HelloMacDmgWindowHeight)</BundlerMacDmgWindowHeight>
+    <BundlerMacDmgAppIconX Condition="'$(HelloMacDmgAppIconX)' != ''">$(HelloMacDmgAppIconX)</BundlerMacDmgAppIconX>
+    <BundlerMacDmgAppIconY Condition="'$(HelloMacDmgAppIconY)' != ''">$(HelloMacDmgAppIconY)</BundlerMacDmgAppIconY>
+    <BundlerMacDmgApplicationsIconX Condition="'$(HelloMacDmgApplicationsIconX)' != ''">$(HelloMacDmgApplicationsIconX)</BundlerMacDmgApplicationsIconX>
+    <BundlerMacDmgApplicationsIconY Condition="'$(HelloMacDmgApplicationsIconY)' != ''">$(HelloMacDmgApplicationsIconY)</BundlerMacDmgApplicationsIconY>
+    <BundlerMacDmgIconSize Condition="'$(HelloMacDmgIconSize)' != ''">$(HelloMacDmgIconSize)</BundlerMacDmgIconSize>
+    <BundlerMacDmgBackgroundFile Condition="'$(HelloMacDmgBackgroundFile)' != ''">$(HelloMacDmgBackgroundFile)</BundlerMacDmgBackgroundFile>
+    <BundlerMacDmgBackgroundFile Condition="'$(HelloMacDmgBackgroundFile)' == ''">$(MSBuildThisFileDirectory)Assets/bg.png</BundlerMacDmgBackgroundFile>
+    <BundlerMacDmgVolumeIconFile Condition="'$(HelloMacDmgVolumeIconFile)' != ''">$(HelloMacDmgVolumeIconFile)</BundlerMacDmgVolumeIconFile>
+    <BundlerMacDmgVolumeIconFile Condition="'$(HelloMacDmgVolumeIconFile)' == ''">$(MSBuildThisFileDirectory)Assets/volume.icns</BundlerMacDmgVolumeIconFile>
+
     <!-- .app 侧旋钮：与 HelloMacApp 相同，可搭配演示。 -->
     <BundlerMacAppBundleName>HelloMacDmg</BundlerMacAppBundleName>
     <BundlerMacAppDisplayName>Hello Mac DMG</BundlerMacAppDisplayName>

@@ -24,6 +24,9 @@
     <BundlerMacDmgCompression Condition="'$(BundlerTestDmgCompression)' == ''">Ulmo</BundlerMacDmgCompression>
     <BundlerMacDmgCompression Condition="'$(BundlerTestDmgCompression)' != ''">$(BundlerTestDmgCompression)</BundlerMacDmgCompression>
     <BundlerMacDmgVolumeName Condition="'$(BundlerTestDmgVolumeName)' != ''">$(BundlerTestDmgVolumeName)</BundlerMacDmgVolumeName>
+    <BundlerMacDmgSkipWindowLayout Condition="'$(BundlerTestDmgSkipWindowLayout)' != ''">$(BundlerTestDmgSkipWindowLayout)</BundlerMacDmgSkipWindowLayout>
+    <BundlerMacDmgBackgroundFile>$(MSBuildThisFileDirectory)Assets/bg.png</BundlerMacDmgBackgroundFile>
+    <BundlerMacDmgVolumeIconFile>$(MSBuildThisFileDirectory)Assets/volume.icns</BundlerMacDmgVolumeIconFile>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
