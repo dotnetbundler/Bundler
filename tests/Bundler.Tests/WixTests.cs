@@ -739,7 +739,7 @@ internal static class WixTests
         {
             PfxFile = pfx,
             PfxPassword = password
-        }), certificate.Thumbprint);
+        }), certificate);
         var artifact = (await new WixBundler(options: new WixBundlerOptions
         {
             ToolCacheDirectory = fixture.Cache,
@@ -1270,15 +1270,15 @@ internal static class WixTests
         return path;
     }
 
-    private sealed class MsiVerifyingSigner(IBundleSigner inner, string thumbprint) : IBundleSigner
+    private sealed class MsiVerifyingSigner(IBundleSigner inner, X509Certificate2 certificate) : IBundleSigner
     {
         public List<BundleSigningArtifactKind> Kinds { get; } = [];
 
         public async Task SignAsync(BundleSigningRequest request, CancellationToken cancellationToken = default)
         {
             await inner.SignAsync(request, cancellationToken);
-            using var signed = new X509Certificate2(X509Certificate.CreateFromSignedFile(request.Path));
-            Assert(signed.Thumbprint == thumbprint, "A signed MSI artifact has the wrong certificate.");
+            Assert(SignedFileCertificates.EmbeddedSignatureContains(request.Path, certificate),
+                "A signed MSI artifact has the wrong certificate.");
             Kinds.Add(request.ArtifactKind);
         }
     }

@@ -17,7 +17,7 @@
 仓库集成 fixture 使用内部一次性标记测试这些边界；
 这些标记只是测试钩子，不属于受支持的安装器 API。
 
-该项目有意排除在 `Bundler.slnx` 之外：普通库和 MSBuild Task 构建保持 .NET 8 SDK 基线，而重建原生插件需要 .NET 10 和 Windows 原生工具链。
+该项目有意排除在 `Bundler.slnx` 之外：仓库已统一以 .NET 10 SDK 构建，而重建原生插件还需要 Windows 原生工具链。
 
 ```powershell
 powershell -File tools/Bundler.Nsis.Plugin/Build.ps1

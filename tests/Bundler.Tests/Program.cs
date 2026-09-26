@@ -521,8 +521,7 @@ static async Task SignsPeFileWithoutWindowsSdk()
             "Signing test",
             "win-x64"));
 
-        using var embedded = new X509Certificate2(X509Certificate.CreateFromSignedFile(target));
-        Assert(embedded.Thumbprint == certificate.Thumbprint,
+        Assert(SignedFileCertificates.EmbeddedSignatureContains(target, certificate),
             "The signed PE file did not contain the expected test certificate.");
     }
     finally
@@ -1061,8 +1060,7 @@ static async Task SignsBothNsisInstallerArtifacts()
         var repositoryPlugin = Path.Combine(RepositoryRoot(), "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
         Assert(SHA256.HashData(File.ReadAllBytes(cachedPlugin)).SequenceEqual(SHA256.HashData(File.ReadAllBytes(repositoryPlugin))),
             "Signing modified the shared cached NSIS plugin.");
-        using var embedded = new X509Certificate2(X509Certificate.CreateFromSignedFile(artifacts[0].Path));
-        Assert(embedded.Thumbprint == certificate.Thumbprint,
+        Assert(SignedFileCertificates.EmbeddedSignatureContains(artifacts[0].Path, certificate),
             "The final NSIS installer did not contain the expected signing certificate.");
     }
     finally
