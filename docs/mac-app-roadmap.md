@@ -50,6 +50,7 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 
 规则：
 
+0. 宿主 OS 下限 = .NET 运行时下限：Bundler 的构建进程能跑在一切能运行 .NET 10 SDK/`dotnet msbuild` 的 macOS 上；官方支持口径为 macOS 14 Sonoma 及更新（.NET 10 官方支持列表仅列 Apple 支持期内的 14/15/26），Bundler 不设额外宿主门槛。可选特性另有独立下限：`notarytool`/`stapler` 需 Xcode 13+（约 macOS 11.3+），`.icon`→`Assets.car` 需 actool/Xcode 26（宿主约 macOS 15.6+）——均按降级处理，不阻塞打包。
 1. 构建前探测每个必需工具（`xcrun -f`/PATH）并记录版本与路径；缺必需工具立即报清晰错误，不静默降级；缺可选工具降级并警告。
 2. 不自动安装 Xcode/CLT，不替用户激活 Rosetta；宿主缺项写入构建日志与错误信息。
 3. 无网络下载：公证之外的每一步离线可用；公证是显式开启的网络动作。
