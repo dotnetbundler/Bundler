@@ -37,7 +37,7 @@
 ### MAC-DMG-1：最小可用镜像
 
 - **前置**：MAC-APP 已冻结（已完成）。
-- **目标/交付**：`Bundler.MacDmg` 后端（netstandard2.0，`DotNet.Bundler.MacDmg` 包）；`hdiutil create -srcfolder`(UDRW)→resize→挂载→写入 `/Applications` 符号链接+隐藏 `.app` 扩展名→detach（EBUSY 指数退避）→`convert UDZO` 只读压缩全链；非 macOS 宿主明确拒绝；MSBuild 映射与直接 API；`Bundler.Tests` 新用例 + `tests/MacOS.Dmg.Integration` bash 实测（构建→`hdiutil attach` 挂载→断言卷内容→detach→`hdiutil verify`）。
+- **目标/交付**：`Bundler.MacDmg` 后端（netstandard2.0，`DotNet.Bundler.MacDmg` 包）；`hdiutil create -srcfolder`(UDRW)→resize→挂载→写入 `/Applications` 符号链接+隐藏 `.app` 扩展名→detach（EBUSY 指数退避）→`convert` 只读压缩（默认 `Ulmo`，可配 `Udzo`/`Udbz`）全链；非 macOS 宿主明确拒绝；MSBuild 映射与直接 API；`Bundler.Tests` 新用例 + `tests/MacOS.Dmg.Integration` bash 实测（构建→`hdiutil attach` 挂载→断言卷内容→detach→`hdiutil verify`）+ 示例 `samples/HelloMacDmg`（`BundlerFormats=dmg`，顺带演示 `.app` 中间产物自动产出）。
 - **不做**：Finder 布局、背景/卷图标、EULA、DMG 签名。
 - **退出**：本机真实产出可挂载/可校验 DMG；失败路径无残留卷与伪产物。
 
