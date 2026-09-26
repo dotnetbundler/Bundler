@@ -19,8 +19,10 @@
     <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
     <BundlerMacAppBundleName>MacFixture</BundlerMacAppBundleName>
     <BundlerMacAppDisplayName>Bundler Mac Fixture</BundlerMacAppDisplayName>
-    <BundlerMacAppBuildVersion>2026.9.1</BundlerMacAppBuildVersion>
-    <BundlerMacAppMinimumSystemVersion>11.0</BundlerMacAppMinimumSystemVersion>
+    <BundlerMacAppBuildVersion Condition="'$(BundlerTestBuildVersion)' == ''">2026.9.1</BundlerMacAppBuildVersion>
+    <BundlerMacAppBuildVersion Condition="'$(BundlerTestBuildVersion)' != ''">$(BundlerTestBuildVersion)</BundlerMacAppBuildVersion>
+    <BundlerMacAppMinimumSystemVersion Condition="'$(BundlerTestMinSystemVersion)' == ''">11.0</BundlerMacAppMinimumSystemVersion>
+    <BundlerMacAppMinimumSystemVersion Condition="'$(BundlerTestMinSystemVersion)' != ''">$(BundlerTestMinSystemVersion)</BundlerMacAppMinimumSystemVersion>
     <BundlerMacAppCategory>public.app-category.utilities</BundlerMacAppCategory>
     <BundlerMacAppIconName>FixtureIcon</BundlerMacAppIconName>
     <BundlerMacAppExceptionDomain>bundler.invalid</BundlerMacAppExceptionDomain>

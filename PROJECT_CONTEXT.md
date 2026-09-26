@@ -116,12 +116,12 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - `MSI-OI-12`/`MSI-OI-13` 等外部事项待有对应环境时验收。
 - MAC 规划轮已确认项（2026-09-26）：PKG 纳入 `PackageFormat`（`MAC-DMG` 后、Linux 前）；宿主工具检测策略替代内嵌供应（原则：构建工具尽量覆盖更多宿主设备；Xcode 专属工具只服务可选能力且须可降级；产出物设备兼容范围由应用开发者决定）；后端按格式分包 `Bundler.MacApp`/`Bundler.MacDmg`/`Bundler.MacPkg` + 共享 `Bundler.Signing.Mac`；universal 走 `osx-x64`/`osx-arm64` 双产物不加枚举。
 - MAC 规划轮决策全部确认（2026-09-26）：`CFBundleVersion` 默认=版本号可覆盖；`LSMinimumSystemVersion` 调用方显式配置、未配置不写入；构建宿主=未签名 `.app` 任意宿主可构建（附权限位警告），需 Apple 工具的步骤限 macOS；宿主下限对齐 Tauri 同等标准（公证走 `notarytool`，Xcode 13+/macOS 11.3+），`actool`/`SetFile` 为可降级可选增强。
-- `MAC-APP-OI-*` 外部事项（Developer ID 证书/公证凭证、Rosetta/Intel 宿主、干净宿主矩阵等）待有对应环境时验收。
+- `MAC-APP-OI-*` 外部事项（Developer ID 证书/公证凭证、Rosetta/Intel 宿主、干净宿主矩阵等）待有对应环境时验收；MAC-APP-4 已将 quarantine 拦截、LSMinimumSystemVersion 超限拒绝、v1→v2 原地升级、osx-x64 产物结构转自动化。
 
 ## 6. 默认下一步
 
-`MAC-APP-4`：`MAC-APP-3` 已完成并验证（mac-app-roadmap.md 第 4 节验收记录）；下一阶段为原生 macOS E2E 与支持矩阵（干净宿主/双架构/LSMinimumSystemVersion/quarantine 首启/升级替换/卸载残留）。
-等用户明确 `MAC-APP-4` 启动指令再实施；未经明确要求不提交、不推送。
+`MAC-APP-5`：`MAC-APP-4` 已完成并验证（mac-app-roadmap.md 第 4 节验收记录；Verify.sh 含 quarantine 首启/LSMinimumSystemVersion/v1→v2 升级/osx-x64 结构段落全绿）；下一阶段为审计与格式冻结（Tauri 漂移复核、能力矩阵定稿、外部待办收口）。
+等用户明确 `MAC-APP-5` 启动指令再实施；未经明确要求不提交、不推送。
 
 ## 7. 历史记录
 

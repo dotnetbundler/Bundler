@@ -835,3 +835,14 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 5. 踩坑记录：签主可执行时 codesign 实际封条整个 bundle，`Contents/MacOS` 下的托管 .dll 虽非 Mach-O 也被当作"未签名嵌套代码"拒绝——嵌套签名范围从"仅 Mach-O"修正为约定代码目录内全部常规文件；netstandard2.0 无 `Convert.ToHexString`/`StringSplitOptions.TrimEntries`/`BundleLogLevel.Info`（用 `Information`）；`MacProcessRunner.Handler` 静态委托作测试桩缝。
 6. MSBuild 新增 15 个 `BundlerMacApp*` 属性（SignIdentity/SigningCertificate*/HardenedRuntime/EntitlementsFile/Notarize/NotaryWait/SkipStapling/NotaryProfile/AppleId/ApplePassword/AppleTeamId/NotaryApiKeyPath/NotaryApiKeyId/NotaryApiIssuer），props 补默认值。
 7. 测试：`tests/Bundler.Tests` 新增 6 条（签名选项互斥/参数组装/凭证解析/桩注入 inside-out 顺序+verify/临时钥匙串失败清理/无伪产物），macOS 宿主全套件 81 项全绿；`Verify.sh` 新增真实段：`BundlerMacAppSignIdentity=-`+hardened runtime+entitlements 的 `.app` 过 `codesign --verify --deep --strict`、`Signature=adhoc` 断言与真实启动落盘标记，缺失证书路径失败且无产物。
+
+### 14.23 MAC-APP-4：原生 macOS E2E 与支持矩阵（2026-09-26，分支 `mac-app-development`）
+
+在云 macOS VM（26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）上把支持矩阵的可自动化格子全部转为 `Verify.sh` 实测：
+
+1. `osx-x64` 产物：fixture 以 `RuntimeIdentifier=osx-x64` 真实发布产 `.app`，`lipo -info` 断言 x86_64、`plutil -lint` 通过；顺带实测后端架构校验拒绝把 arm64-only dylib 带进 osx-x64 产物（测试用 dylib 改为 arm64+x86_64 fat）。本机无 Rosetta（`arch -x86_64` 报 Bad CPU type），x64 运行态启动记 MAC-APP-MT-03/OI-02 外部待验收。
+2. quarantine 首启：对 `.app` 副本写入 `com.apple.quarantine` 后 `open` 被 LaunchServices/Gatekeeper 拦截（未签名隔离包不放行）；`xattr -d` 可移除。踩坑：Gatekeeper 弹窗在无人值守宿主上使 `open -W` 永久挂起——隔离断言用后台 open+限时 30s 实现，不在去隔离副本上重开（未隔离启动已由主流程证明）。
+3. `LSMinimumSystemVersion`：`BundlerMacAppMinimumSystemVersion=99.0` 产出的包被 LaunchServices 拒绝打开，超限即拒断言通过（MT-05 高于下限侧已自动化）。
+4. 版本替换升级：v1（`CFBundleVersion=2026.9.1`）拷入 `~/Applications`+`lsregister -f`+启动 → 原地删除换 v2（`2026.9.2`）→ 重注册+启动成功、`lsregister -dump` 确认 identifier 保持（MT-06 主体已自动化，剩用户数据保留人工核对）。
+5. 干净宿主复核（依赖面盘点）：后端必需工具仅 `plutil`；签名加 `xattr`/`codesign`/`security`/`spctl`；公证才需 `xcrun notarytool`/`stapler`（Xcode 13+）；`actool` 缺失降级 `.icns`。`lipo`/`open`/`lsregister`/`clang` 仅测试脚本使用且有降级分支——无 Xcode/CLT 必需依赖。
+6. 文档同步：路线验收记录、能力矩阵（osx-x64、Gatekeeper 行状态更新）、manual-testing（MT-05/06 自动化边界）、PROJECT_CONTEXT、open-items 口径不变。

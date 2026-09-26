@@ -15,7 +15,7 @@
 | `LSMinimumSystemVersion`、`LSApplicationCategoryType`、`NSHumanReadableCopyright` | 已实现 | MAC-APP-1 | 类别受限枚举；最低系统版本由调用方显式配置、未配置不写入 |
 | `Info.plist` 固定键（`CFBundleInfoDictionaryVersion`/`CFBundlePackageType`/`NSHighResolutionCapable` 等） | 已实现 | MAC-APP-1 | 上游 `LSRequiresCarbon` 死键不复制 |
 | 主可执行/资源/framework/任意 `Contents` 映射 | 已实现 | MAC-APP-1 | framework 仅显式路径；不做宿主标准目录隐式查找 |
-| `osx-x64`/`osx-arm64` 产物 | 已实现 | MAC-APP-1 | 独立产物；x64 运行依赖 Rosetta 属系统行为 |
+| `osx-x64`/`osx-arm64` 产物 | 已实现 | MAC-APP-1、4 | 独立产物；osx-x64 结构与架构断言已实测；x64 运行依赖 Rosetta 属系统行为，实机启动外部待验收（MT-03） |
 | universal/fat Mach-O 输入 | 已实现 | MAC-APP-2 | 后端托管解析 Mach-O 头（等价 `lipo -info`），按目标 RID 校验架构；Bundler 不合成 fat binary |
 
 ## 图标与资源
@@ -63,7 +63,7 @@
 | 离线构建 | 已实现 | MAC-APP-1 起 | 公证外全部离线；无第三方工具内嵌 |
 | 宿主工具探测与版本门槛 | 已实现 | MAC-APP-1 | 缺必需工具明确报错；可选工具降级警告 |
 | 示例项目 `samples/HelloMacApp` | 已实现 | MAC-APP-1 | 真实 .NET 载荷 |
-| Gatekeeper 首启/信任评估 | 外部待验收 | MAC-APP-3..4 / MAC-APP-MT-01、02 | 本机可观察未签名/ad-hoc 首启；已公证场景需真实证书 |
+| Gatekeeper 首启/信任评估 | 已实现+外部待验收 | MAC-APP-4 / MT-01、02 | 未签名隔离包被拦截已实测（`com.apple.quarantine` + `open` 阻断断言）；已公证场景需真实证书，外部待验收 |
 | 真实公证+上钉+撤销场景 | 外部待验收 | MAC-APP-MT-02、08 / OI-01 | 需 Apple Developer 凭证 |
 
 ## 有意排除

@@ -1,6 +1,6 @@
 # macOS `.app` 后端实施路线（MAC-APP）
 
-> 状态：**路线已确认，`MAC-APP-1`、`MAC-APP-2` 已完成**（云 macOS VM 已验证，证据见各小节验收记录）；下一阶段 `MAC-APP-3` 待启动指令。
+> 状态：**路线已确认，`MAC-APP-1`、`MAC-APP-2`、`MAC-APP-3`、`MAC-APP-4` 已完成**（云 macOS VM 已验证，证据见各小节验收记录）；下一阶段 `MAC-APP-5` 待启动指令。
 > 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)；PKG 取舍见 [`docs/mac-format-decision.md`](mac-format-decision.md)；逐项能力状态见 [`docs/mac-app-capability-matrix.md`](mac-app-capability-matrix.md)；外部条件见 [`docs/mac-app-open-items.md`](mac-app-open-items.md)；人工步骤见 [`docs/mac-app-manual-testing.md`](mac-app-manual-testing.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 
@@ -181,6 +181,14 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 - **人工边界**：凡需真实 Apple 凭证、物理多样性宿主或破坏性场景的格子保持外部待验收。
 - **不做**：MAC-DMG/MAC-PKG 功能、伪造支持声明。
 - **退出**：矩阵实测格子有证据、未测格子限缩支持声明；示例与文档完整。
+- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）**：
+  - `Verify.sh` 全绿，新增 MAC-APP-4 段落全部实测通过；
+  - `osx-x64` 产物：fixture 以 `RuntimeIdentifier=osx-x64` 真实发布产 `.app`，`lipo -info` 断言主可执行为 x86_64、`plutil -lint` 通过；本机无 Rosetta，运行态启动属外部待验收（MAC-APP-MT-03 / OI-02）；顺带实测架构校验拒绝把 arm64-only dylib 带进 osx-x64 产物；
+  - quarantine 首启：对 `.app` 副本写入 `com.apple.quarantine` 后 `open` 被 LaunchServices/Gatekeeper 拦截（未签名隔离包不放行，符合预期）；`xattr -d` 可移除隔离属性；
+  - `LSMinimumSystemVersion` 宿主实测：`BundlerMacAppMinimumSystemVersion=99.0` 产出的包被 LaunchServices 拒绝打开（超出版本下限即拒），断言通过；
+  - 版本替换升级：v1（`CFBundleVersion=2026.9.1`）拷入 `~/Applications` 注册+启动 → 原地删除换 v2（`2026.9.2`）→ 重新注册+启动成功，`lsregister -dump` 确认 bundle identifier 注册保持——`.app` 升级语义=整包替换，断言通过；
+  - 干净宿主复核：后端无 Xcode/CLT 必需依赖——未签名 `.app` 链路只调用 `plutil`（lint），签名加 `xattr`/`codesign`/`security`/`spctl`，公证才需要 `xcrun notarytool`/`stapler`（Xcode 13+），`actool` 缺失降级 `.icns`；`lipo`/`open`/`lsregister`/`clang` 仅测试脚本使用且均有降级分支；
+  - 卸载语义与重建指纹断言维持全绿。
 
 ### MAC-APP-5：审计与格式冻结
 

@@ -73,7 +73,13 @@ printf 'iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6AAAAAXNSR0IArs4c6Q==' | base
 dylib_args=()
 if command -v clang >/dev/null; then
     printf 'int bundler_fixture(void){return 0;}\n' > "$integration_root/fixture.c"
-    clang -dynamiclib -o "$integration_root/libfixture.dylib" "$integration_root/fixture.c"
+    # 编成 arm64+x86_64 fat dylib：osx-arm64/osx-x64 两个产物都能带它过架构校验。
+    if clang -dynamiclib -arch arm64 -arch x86_64 -o "$integration_root/libfixture.dylib" "$integration_root/fixture.c" 2>/dev/null; then
+        log "built a fat (arm64+x86_64) fixture dylib."
+    else
+        clang -dynamiclib -o "$integration_root/libfixture.dylib" "$integration_root/fixture.c"
+        log "built an arm64-only fixture dylib; it is skipped for the osx-x64 publish."
+    fi
     dylib_args=(-p:BundlerTestDylib="$integration_root/libfixture.dylib")
 else
     log "clang unavailable; the Contents/Frameworks dylib assertion is skipped."
@@ -317,6 +323,128 @@ fi
 grep -qi "TemporaryCertificatePath\|temporary certificate" "$integration_root/badcert.log" \
     || fail "The missing-certificate error was not surfaced in the publish log."
 log "missing-certificate failure path verified (no pseudo-success artifact)."
+
+log "== exercising osx-x64 packaging (structure only; no Rosetta on this host) =="
+x64_output="$integration_root/x64-output"
+x64_dylib_args=("${dylib_args[@]}")
+if [[ ${#dylib_args[@]} -gt 0 ]] && ! lipo -info "$integration_root/libfixture.dylib" 2>/dev/null | grep -q x86_64; then
+    x64_dylib_args=()
+    log "fixture dylib is arm64-only; publishing osx-x64 without it."
+fi
+dotnet publish "$fixture_project" -c Release --force \
+    -p:RuntimeIdentifier=osx-x64 \
+    -p:BundlerPackageVersion="$version" \
+    -p:BundlerPackageSource="$package_dir" \
+    -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
+    -p:BundlerIntegrationOutput="$x64_output" \
+    -p:BundlerTestIcon="$integration_root/icon-512.png" \
+    "${x64_dylib_args[@]}" \
+    -p:RestorePackagesPath="$package_cache"
+x64_app="$x64_output/osx-x64/app/Bundler Mac Integration Fixture.app"
+[[ -d "$x64_app" ]] || fail "The osx-x64 .app was not produced."
+x64_lipo="$(lipo -info "$x64_app/Contents/MacOS/BundlerMacIntegrationFixture" 2>/dev/null || true)"
+[[ "$x64_lipo" == *"x86_64"* ]] || fail "osx-x64 executable is not x86_64: $x64_lipo"
+plutil -lint "$x64_app/Contents/Info.plist" >/dev/null || fail "osx-x64 Info.plist failed lint."
+if /usr/bin/arch -x86_64 "$x64_app/Contents/MacOS/BundlerMacIntegrationFixture" >/dev/null 2>&1; then
+    log "osx-x64 bundle launched under Rosetta."
+else
+    log "osx-x64 runtime launch unavailable on this host (no Rosetta); structure verified only (external item)."
+fi
+
+if [[ "$launchservices_ok" == "1" ]]; then
+    log "== exercising quarantine first-launch (Gatekeeper) =="
+    quarantined_app="$integration_root/quarantine/Bundler Mac Integration Fixture.app"
+    mkdir -p "$(dirname "$quarantined_app")"
+    cp -R "$app" "$quarantined_app"
+    xattr -w com.apple.quarantine "0081;$(printf '%x' "$(date +%s)");Verify.sh;" "$quarantined_app"
+    xattr -l "$quarantined_app" | grep -q "com.apple.quarantine" \
+        || fail "com.apple.quarantine was not set on the copied app."
+    # Gatekeeper 对未签名隔离包会弹窗等待用户决定——无人应答时 open -W 永久挂起；
+    # 后台跑并限时等待：仍挂起/非零退出都算"被拦"，只有 0 退出且进程已结束才是放行。
+    open -W "$quarantined_app" >/dev/null 2>&1 &
+    quarantine_open_pid=$!
+    quarantine_open_done=0
+    for _ in $(seq 1 30); do
+        if ! kill -0 "$quarantine_open_pid" 2>/dev/null; then
+            quarantine_open_done=1
+            break
+        fi
+        sleep 1
+    done
+    if [[ "$quarantine_open_done" == "0" ]]; then
+        kill "$quarantine_open_pid" 2>/dev/null || true
+        wait "$quarantine_open_pid" 2>/dev/null || true
+        log "quarantined unsigned bundle is held by Gatekeeper (open did not complete in 30s) as expected."
+    elif wait "$quarantine_open_pid" 2>/dev/null; then
+        log "quarantined unsigned bundle opened (Gatekeeper did not intervene on this host)."
+    else
+        log "quarantined unsigned bundle was blocked by LaunchServices/Gatekeeper as expected."
+    fi
+    xattr -d com.apple.quarantine "$quarantined_app"
+    if xattr -l "$quarantined_app" | grep -q "com.apple.quarantine"; then
+        fail "com.apple.quarantine could not be removed."
+    fi
+    # 不在此副本上再 open：Gatekeeper 弹窗在无人值守宿主上会残留并阻塞后续 open；
+    # 未隔离包可启动已由前面 $app 的直接/open 启动证明。
+    log "quarantine first-launch behavior verified (quarantined copy blocked; xattr removable)."
+
+    log "== exercising LSMinimumSystemVersion enforcement =="
+    minver_output="$integration_root/minver-output"
+    dotnet publish "$fixture_project" -c Release --force \
+        -p:BundlerPackageVersion="$version" \
+        -p:BundlerPackageSource="$package_dir" \
+        -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
+        -p:BundlerIntegrationOutput="$minver_output" \
+        -p:BundlerTestIcon="$integration_root/icon-512.png" \
+        -p:BundlerTestMinSystemVersion=99.0 \
+        "${dylib_args[@]}" \
+        -p:RestorePackagesPath="$package_cache"
+    minver_app="$minver_output/osx-arm64/app/Bundler Mac Integration Fixture.app"
+    plutil -p "$minver_app/Contents/Info.plist" | grep -q '"LSMinimumSystemVersion" => "99.0"' \
+        || fail "LSMinimumSystemVersion override did not land in the plist."
+    if open -W "$minver_app" >/dev/null 2>&1; then
+        fail "An app requiring macOS 99.0 must not open on this host."
+    fi
+    log "LSMinimumSystemVersion=99.0 rejected by LaunchServices as expected."
+
+    log "== exercising v1 to v2 in-place upgrade =="
+    upgrade_output="$integration_root/upgrade-output"
+    dotnet publish "$fixture_project" -c Release --force \
+        -p:BundlerPackageVersion="$version" \
+        -p:BundlerPackageSource="$package_dir" \
+        -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
+        -p:BundlerIntegrationOutput="$upgrade_output" \
+        -p:BundlerTestIcon="$integration_root/icon-512.png" \
+        -p:BundlerTestBuildVersion=2026.9.2 \
+        "${dylib_args[@]}" \
+        -p:RestorePackagesPath="$package_cache"
+    upgrade_app="$upgrade_output/osx-arm64/app/Bundler Mac Integration Fixture.app"
+    plutil -p "$upgrade_app/Contents/Info.plist" | grep -q '"CFBundleVersion" => "2026.9.2"' \
+        || fail "v2 CFBundleVersion did not land in the plist."
+    mkdir -p "$HOME/Applications"
+    copied_app="$HOME/Applications/Bundler Mac Integration Fixture.app"
+    rm -rf "$copied_app"
+    cp -R "$app" "$copied_app"
+    "$lsregister" -f "$copied_app" || fail "v1 registration failed."
+    rm -f "$copied_app/Contents/.launch-marker"
+    open -W "$copied_app" || fail "v1 launch failed."
+    [[ -f "$copied_app/Contents/.launch-marker" ]] || fail "v1 launch marker missing."
+    rm -rf "$copied_app"
+    cp -R "$upgrade_app" "$copied_app"
+    "$lsregister" -f "$copied_app" || fail "v2 registration failed."
+    rm -f "$copied_app/Contents/.launch-marker"
+    open -W "$copied_app" || fail "v2 launch after in-place replacement failed."
+    [[ -f "$copied_app/Contents/.launch-marker" ]] || fail "v2 launch marker missing after upgrade."
+    "$lsregister" -dump > "$integration_root/ls-dump2.txt" 2>/dev/null || true
+    grep -q "com.dotnetbundler.macintegrationfixture" "$integration_root/ls-dump2.txt" \
+        || fail "LaunchServices lost the bundle identifier after upgrade."
+    "$lsregister" -u "$copied_app" >/dev/null 2>&1 || true
+    rm -rf "$copied_app"
+    copied_app=""
+    log "v1 to v2 in-place upgrade verified (re-register + launch + identifier intact)."
+else
+    log "LaunchServices unavailable; quarantine/min-version/upgrade checks skipped on this host."
+fi
 
 log "== verifying uninstall semantics =="
 rm -rf "$app"
