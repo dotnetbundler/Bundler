@@ -16,7 +16,7 @@
 | `Info.plist` 固定键（`CFBundleInfoDictionaryVersion`/`CFBundlePackageType`/`NSHighResolutionCapable` 等） | 已实现 | MAC-APP-1 | 上游 `LSRequiresCarbon` 死键不复制 |
 | 主可执行/资源/framework/任意 `Contents` 映射 | 已实现 | MAC-APP-1 | framework 仅显式路径；不做宿主标准目录隐式查找 |
 | `osx-x64`/`osx-arm64` 产物 | 已实现 | MAC-APP-1 | 独立产物；x64 运行依赖 Rosetta 属系统行为 |
-| universal/fat Mach-O 输入 | 计划实现 | MAC-APP-2 | `lipo -info` 校验；Bundler 不合成 fat binary |
+| universal/fat Mach-O 输入 | 已实现 | MAC-APP-2 | 后端托管解析 Mach-O 头（等价 `lipo -info`），按目标 RID 校验架构；Bundler 不合成 fat binary |
 
 ## 图标与资源
 
@@ -24,19 +24,19 @@
 | --- | --- | --- | --- |
 | `.icns` 直接采用 | 已实现 | MAC-APP-1 | `CFBundleIconFile` |
 | 位图合成 `.icns`（PNG 等） | 已实现 | MAC-APP-1 | 密度/缩放规则与上游对齐 |
-| `.icon`→`Assets.car`（`CFBundleIconName`） | 计划实现 | MAC-APP-2 | 需 Xcode≥26 `actool`；缺失降级 `.icns` 并警告 |
-| `*.car` 直接采用 | 计划实现 | MAC-APP-2 | 同上 |
+| `.icon`→`Assets.car`（`CFBundleIconName`） | 已实现 | MAC-APP-2 | 需 Xcode≥26 `actool`；缺失/失败降级并警告，不阻塞打包；`assetutil` 回读图标名 |
+| `*.car` 直接采用 | 已实现 | MAC-APP-2 | 直接拷贝为 `Resources/Assets.car`，优先于 `.icon` |
 
 ## 桌面集成与分发行为
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `CFBundleDocumentTypes` 文件关联 | 计划实现 | MAC-APP-2 | 扩展名/名称/role/rank/contentTypes |
-| `UTExportedTypeDeclarations` 导出 UTI | 计划实现 | MAC-APP-2 | 含扩展名/MIME→UTI 推断 |
-| `CFBundleURLTypes` URL scheme | 计划实现 | MAC-APP-2 | schemes/name/role |
+| `CFBundleDocumentTypes` 文件关联 | 已实现 | MAC-APP-2 | 扩展名/名称/role/rank/contentTypes；与共享 `FileAssociations` 按扩展名重叠合并 |
+| `UTExportedTypeDeclarations` 导出 UTI | 已实现 | MAC-APP-2 | 含扩展名/MIME→UTI 推断表 |
+| `CFBundleURLTypes` URL scheme | 已实现 | MAC-APP-2 | schemes/name/role；与共享 `UrlProtocols` 按 scheme 重叠合并 |
 | universal links（`associated-domains`） | 外部待验收 | MAC-APP-3 后 | 需 provisioning profile 与开发者账号，走 expert 边界 |
-| `NSAppTransportSecurity` 例外域 | 计划实现 | MAC-APP-2 | 默认关闭，显式配置才放宽 |
-| 调用方自备 Info.plist 合并 | 计划实现 | MAC-APP-2 | 身份键合并后回读强制一致，冲突即拒绝 |
+| `NSAppTransportSecurity` 例外域 | 已实现 | MAC-APP-2 | 默认关闭，显式配置才放宽（HTTP+子域） |
+| 调用方自备 Info.plist 合并 | 已实现 | MAC-APP-2 | 文件或内联 XML 二选一；身份键合并后回读强制一致，冲突即拒绝 |
 | 安装/卸载/升级事务 | 不适用 | — | `.app` 无该语义；安装=拷贝、卸载=删除、升级=替换，见路线第 3 节 |
 | per-user/per-machine 安装范围 | 不适用 | — | 同上；受管安装归 MAC-PKG 候选 |
 

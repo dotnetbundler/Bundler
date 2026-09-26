@@ -811,3 +811,15 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 5. 本机验证：`Verify.sh` 全绿——包内容断言→fixture 发布产 `.app`→结构/plist 全键回读→Mach-O `+x`→直接执行输出标记→`open -W` 接受→重建 Info.plist 指纹一致→删除即卸载→独立 API fixture 再产 `.app`。
 6. 既有套件回归：macOS 宿主上此前 5 条 NSIS/WiX 用例失败；逐条核查后定性——4 条为真实跨宿主缺陷（NSIS 安装路径校验用宿主分隔符/非法字符集致 POSIX 上 `..` 与 Windows 非法字符逃逸、`EnsurePayloadFile/Directory` 用 `\\` 路径查 POSIX 文件系统、输入树与资源目标冲突集合分隔符不一致、`SafeFileName` 宿主相关、两处 license 断言未做 CRLF/LF 归一），已修复（新增 `WindowsFileNames` 统一 Windows 文件名规则）；1 条 `ValidatesMsiPublishingInputs` 属真 Windows-only（`WixBundler` 刻意宿主门控最先），移入 OS 门控区块。修复后 macOS 宿主全套 66 项全绿。
 7. 边界按路线拒绝：文件关联/URL scheme（MAC-APP-2）、签名（MAC-APP-3）、`.app` 无 license 语义，均明确 `NotSupportedException`；`BundlerIntegrationOutput` 等参数复用既有 fixture 约定。
+
+### 14.21 MAC-APP-2：分发与桌面集成（2026-09-26，分支 `mac-app-development`）
+
+实现 `.app` 的分发与桌面集成行为并本机实测通过（云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）：
+
+1. `Bundler.MacApp`：`MacAppDesktopIntegration`（`CFBundleDocumentTypes`/`UTExportedTypeDeclarations`/`CFBundleURLTypes`/`NSAppTransportSecurity` 生成与共享模型合并）与 `MacAppAssetsCar`（`.car` 直接采用优先、`.icon` 经 `actool --version` 探测≥26 才编译、缺失/失败警告降级、`assetutil` 回读图标名）两个新模块；`InfoPlist` 升级为类型化读写（`Dictionary<string,object>` + `ParseXml`/`ReadDictionary`）。
+2. 合并语义：`BundlerMacDocumentType`/`BundlerMacUrlType` 专用条目按扩展名/scheme 重叠吸收共享 `FileAssociations`/`UrlProtocols`（并集 + 名称/描述/MIME 回退），同令牌跨条目冲突拒绝；未配专用条目的共享条目按 Editor/Default 默认输出。
+3. 调用方 Info.plist 合并：`BundlerMacAppInfoPlistFile`/`BundlerMacAppInfoPlistXml` 二选一互斥，浅合并后 `CFBundleIdentifier`/`CFBundleExecutable`/`CFBundlePackageType`/`CFBundleName`/`CFBundleShortVersionString` 五个身份键回读校验，冲突即 `InvalidOperationException`。
+4. Mach-O 架构校验：托管实现 `MachO.ReadArchitectures` 解析 thin/fat 全端序头（不依赖 `lipo`，跨宿主一致），osx-arm64/osx-x64 目标校验载荷含对应架构；`Verify.sh` 用真 `lipo -info` 交叉断言。刻意偏离已记入路线验收记录。
+5. MSBuild：`BundlerMacDocumentType`/`BundlerMacUrlType` 项组 + `BundlerMacAppExceptionDomain`/`BundlerMacAppInfoPlistFile`/`BundlerMacAppInfoPlistXml` 属性。
+6. 测试：`tests/Bundler.Tests` 新增 9 条（docTypes/URLTypes/UTI 导出/冲突拒绝/ATS/合并与身份键拒绝/fat-thin 架构校验/`.car` 透传与 `.icon` 降级/重复 asset 拒绝），macOS 宿主全套件 75 项全绿；`tests/MacOS.App.Integration` fixture 启用全部新配置，`Verify.sh` 真实跑通 `lsregister -f` 注册+dump 可见、`open <.hifix>` 与 `open <hifix://>` 唤起（应用内 `.launch-marker` 落盘为证）、`~/Applications` 拷入-启动-注销-移出；`MacApp.Api.PackageFixture` 直接 API 同样断言 MAC-APP-2 键组。
+7. 踩坑记录：`lsregister -dump | grep -q` 在 `pipefail` 下因 SIGPIPE 恒判失败（改为落盘再 grep）；`plutil -extract` 对标量键不支持 JSON 输出（标量走 `plutil -p` 断言）；真实 `.icon` 结构取自 Xcode 26.6 自带 `Icon Composer Icon.xctemplate` 模板并实测编译出 `Assets.car`。

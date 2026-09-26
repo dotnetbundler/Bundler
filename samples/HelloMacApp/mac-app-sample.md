@@ -25,7 +25,9 @@ samples/HelloMacApp/artifacts/osx-arm64/app/Hello Mac App.app
 - `Contents/MacOS/` 承载发布目录（apphost `HelloMacApp` + 依赖），`Contents/Resources/` 承载 `BundlerResource` 与图标，`Contents/SharedSupport/` 承载 `BundlerMacContent` 显式映射；
 - Info.plist 核心键：bundle ID、双版本键、`LSMinimumSystemVersion=12.0`、分类 `public.app-category.developer-tools`、版权与显示名；
 - `Assets/icon-256.png` + `icon-512.png` 自动合成 `Contents/Resources/HelloMacAppIcon.icns`；
-- Mach-O 主可执行自动获得 `+x`。
+- Mach-O 主可执行自动获得 `+x`；
+- `.hellomac` 文件关联（`CFBundleDocumentTypes` + 导出 UTI `com.example.hellomacapp.hellomac`）与 `hellomac://` URL scheme（`CFBundleURLTypes`）；
+- `extra.plist` 演示调用方 Info.plist 合并（`NSSupportsSuddenTermination` + 自定义键）。
 
 ## 验证
 
@@ -36,4 +38,5 @@ plutil -lint "samples/HelloMacApp/artifacts/osx-arm64/app/Hello Mac App.app/Cont
 
 ## 未演示（后续阶段）
 
-文件关联与 URL scheme（MAC-APP-2）、签名与公证（MAC-APP-3）、DMG/PKG 容器。
+签名与公证（MAC-APP-3）、DMG/PKG 容器。
+`BundlerMacAppExceptionDomain`（ATS HTTP 例外）与 `.icon`/`*.car` 图标输入可用但未在本示例开启。

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# MAC-APP-1 macOS .app 集成验证：本机真实 生成→plutil 校验→启动→卸载 烟雾测试。
+# MAC-APP-1/2 macOS .app 集成验证：本机真实 生成→plutil 校验→启动→桌面集成→卸载 烟雾测试。
+# MAC-APP-2 覆盖：文件关联/URL scheme 的 plist 键、lsregister 注册、open <文件>/<scheme> 唤起、
+# ~/Applications 拷入拷出、lipo 架构交叉校验。
 # 用法: bash tests/MacOS.App.Integration/Verify.sh
-# 需要 macOS 宿主与 dotnet SDK；产物仅在 artifacts/macos-app-integration 下落盘并全部清理。
+# 需要 macOS 宿主与 dotnet SDK；产物仅在 artifacts/macos-app-integration 与 ~/Applications 下落盘并全部清理。
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
@@ -18,7 +20,13 @@ identity="BundlerMacOSAppIntegration"
 log() { printf '%s\n' "$*"; }
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
+copied_app=""
 cleanup() {
+    if [[ -n "$copied_app" && -e "$copied_app" ]]; then
+        /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+            -u "$copied_app" >/dev/null 2>&1 || true
+        rm -rf "$copied_app"
+    fi
     if [[ -f "$integration_root/.bundler-identity" ]] && grep -qx "$identity" "$integration_root/.bundler-identity" 2>/dev/null; then
         rm -rf "$integration_root"
     fi
@@ -26,9 +34,11 @@ cleanup() {
 trap cleanup EXIT
 
 [[ "$(uname -s)" == "Darwin" ]] || fail "This integration test requires a macOS host."
-for tool in dotnet plutil unzip; do
+for tool in dotnet plutil unzip python3 lipo; do
     command -v "$tool" >/dev/null || fail "$tool is unavailable on this host."
 done
+lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+[[ -x "$lsregister" ]] || fail "lsregister is unavailable on this host."
 
 version="$(sed -n 's:.*<BundlerPackageVersion>\(.*\)</BundlerPackageVersion>.*:\1:p' "$repo_root/Directory.Build.props" | head -n1 | tr -d '[:space:]')"
 [[ -n "$version" ]] || fail "BundlerPackageVersion is missing from Directory.Build.props."
@@ -125,6 +135,56 @@ check_key "LSApplicationCategoryType" "public.app-category.utilities"
 check_key "NSHumanReadableCopyright" "Copyright DotNet.Bundler Tests"
 grep -q '"CFBundleIdentifier"' <<<"$plist_dump" || fail "CFBundleIdentifier missing from plist dump."
 
+log "== validating MAC-APP-2 desktop integration keys =="
+plist_json() {
+    plutil -extract "$1" json -o - "$app/Contents/Info.plist" 2>/dev/null
+}
+plist_json "CFBundleDocumentTypes" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+assert len(d) == 1, f"expected one document type, got {d}"
+entry = d[0]
+assert entry["CFBundleTypeExtensions"] == ["hifix"], entry
+assert entry["CFBundleTypeName"] == "HiFix Document", entry
+assert entry["CFBundleTypeRole"] == "Editor" and entry["LSHandlerRank"] == "Owner", entry
+assert entry["LSItemContentTypes"] == ["com.dotnetbundler.hifix"], entry
+' || fail "CFBundleDocumentTypes structure mismatch."
+plist_json "UTExportedTypeDeclarations" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+assert len(d) == 1, f"expected one exported UTI, got {d}"
+entry = d[0]
+assert entry["UTTypeIdentifier"] == "com.dotnetbundler.hifix", entry
+assert entry["UTTypeConformsTo"] == ["public.data"], entry
+assert entry["UTTypeTagSpecification"]["public.filename-extension"] == ["hifix"], entry
+assert entry["UTTypeTagSpecification"]["public.mime-type"] == "application/x-hifix", entry
+' || fail "UTExportedTypeDeclarations structure mismatch."
+plist_json "CFBundleURLTypes" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+assert len(d) == 1, f"expected one URL type, got {d}"
+entry = d[0]
+assert entry["CFBundleURLSchemes"] == ["hifix"], entry
+assert entry["CFBundleURLName"] == "HiFix Link", entry
+assert entry["CFBundleTypeRole"] == "Viewer", entry
+' || fail "CFBundleURLTypes structure mismatch."
+plist_json "NSAppTransportSecurity.NSExceptionDomains" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+entry = d["bundler.invalid"]
+assert entry["NSExceptionAllowsInsecureHTTPLoads"] is True, entry
+assert entry["NSIncludesSubdomains"] is True, entry
+' || fail "NSAppTransportSecurity exception domain mismatch."
+grep -Eq '"NSSupportsSuddenTermination" => (true|1)' <<<"$plist_dump" \
+    || fail "Caller-plist boolean key did not merge."
+grep -q '"HiFixCustomKey" => "from-extra-plist"' <<<"$plist_dump" \
+    || fail "Caller-plist string key did not merge."
+
+log "== cross-checking Mach-O architectures with lipo =="
+lipo_info="$(lipo -info "$app/Contents/MacOS/BundlerMacIntegrationFixture" 2>/dev/null || true)"
+[[ "$lipo_info" == *"arm64"* ]] || fail "lipo -info did not report arm64: $lipo_info"
+log "lipo -info: $lipo_info"
+
 log "== launching the produced .app =="
 executable="$app/Contents/MacOS/BundlerMacIntegrationFixture"
 [[ -x "$executable" ]] || fail "The Mach-O main executable lost its executable bit."
@@ -135,8 +195,55 @@ log "launch output: $launch_output"
 
 if open -n -W "$app" 2>/dev/null; then
     log "open -W launch accepted the bundle."
+    launchservices_ok=1
 else
     log "open -W launch failed or is unavailable on this host (headless LaunchServices); direct exec already verified."
+    launchservices_ok=0
+fi
+
+if [[ "$launchservices_ok" == "1" ]]; then
+    log "== exercising LaunchServices registration and dispatch =="
+    marker="$app/Contents/.launch-marker"
+    "$lsregister" -f "$app" || fail "lsregister -f failed to register the bundle."
+    # lsregister 注册到 -dump 可见是异步的，最多轮询 10 秒。
+    registered=0
+    for _ in $(seq 1 20); do
+        "$lsregister" -dump > "$integration_root/ls-dump.txt" 2>/dev/null || true
+        if grep -q "com.dotnetbundler.macintegrationfixture" "$integration_root/ls-dump.txt"; then
+            registered=1
+            break
+        fi
+        sleep 0.5
+    done
+    [[ "$registered" == "1" ]] || fail "lsregister -dump does not list the bundle identifier."
+
+    sample_file="$integration_root/sample.hifix"
+    printf 'hifix-payload\n' > "$sample_file"
+    rm -f "$marker"
+    open -W "$sample_file" || fail "open <file> did not route to the registered app."
+    [[ -f "$marker" ]] || fail "open <file> returned success but the app never ran (no launch marker)."
+    log "file association dispatch verified via launch marker."
+
+    rm -f "$marker"
+    open -W "hifix://ping" || fail "open <scheme>:// did not route to the registered app."
+    [[ -f "$marker" ]] || fail "open <scheme>:// returned success but the app never ran (no launch marker)."
+    log "URL scheme dispatch verified via launch marker."
+    rm -f "$marker"
+
+    log "== exercising the user-domain ~/Applications drop install =="
+    mkdir -p "$HOME/Applications"
+    copied_app="$HOME/Applications/Bundler Mac Integration Fixture.app"
+    cp -R "$app" "$copied_app"
+    "$lsregister" -f "$copied_app" || fail "lsregister failed to register the ~/Applications copy."
+    rm -f "$copied_app/Contents/.launch-marker"
+    open -W "$copied_app" || fail "open failed for the ~/Applications copy."
+    [[ -f "$copied_app/Contents/.launch-marker" ]] || fail "The ~/Applications copy never ran."
+    "$lsregister" -u "$copied_app" >/dev/null 2>&1 || true
+    rm -rf "$copied_app"
+    copied_app=""
+    log "~/Applications drop install + launch verified."
+else
+    log "LaunchServices unavailable; association/protocol dispatch stays verified by plist assertions only."
 fi
 
 log "== checking rebuild determinism =="

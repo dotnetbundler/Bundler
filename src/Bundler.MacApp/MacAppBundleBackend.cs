@@ -21,6 +21,8 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         var item = context.Item;
         var metadata = MacAppMetadata.Resolve(bundle, settings);
         var contents = ResolveContentsMappings(settings);
+        var documentTypes = MacAppDesktopIntegration.ResolveDocumentTypes(bundle, settings);
+        var urlTypes = MacAppDesktopIntegration.ResolveUrlTypes(bundle, settings);
 
         var applicationName = SanitizeFileName(bundle.ProductName) + ".app";
         var staging = Path.Combine(context.WorkDirectory, applicationName);
@@ -41,7 +43,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             throw new FileNotFoundException(
                 "The .app main executable is missing from the input directory.", executablePath);
         }
-        if (!MachO.IsMachO(executablePath))
+        if (MachO.ReadArchitectures(executablePath).Count == 0)
         {
             throw new InvalidDataException(
                 "The .app main executable must be a Mach-O binary: " + executablePath);
@@ -64,7 +66,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             CopyPayloadEntry(framework, Path.Combine(frameworksDirectory, name), destinations);
         }
 
-        var plistValues = new Dictionary<string, string>(StringComparer.Ordinal)
+        var plistValues = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["CFBundleDevelopmentRegion"] = "en",
             ["CFBundleDisplayName"] = metadata.DisplayName,
@@ -76,14 +78,27 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             ["CFBundleShortVersionString"] = metadata.ShortVersion,
             ["CFBundleVersion"] = metadata.BuildVersion,
             ["CFBundleSignature"] = "????",
-            ["NSHighResolutionCapable"] = "true"
+            ["NSHighResolutionCapable"] = true
         };
+        MacAppDesktopIntegration.EmitDocumentTypes(plistValues, documentTypes);
+        MacAppDesktopIntegration.EmitUrlTypes(plistValues, urlTypes, bundle.Identifier);
+
+        var iconInputs = bundle.Icons.Select(Path.GetFullPath).ToArray();
+        var bitmapIcons = iconInputs.Where(IsBitmapIcon).ToArray();
         var iconFileName = metadata.IconFileName;
-        if (iconFileName is not null)
+        if (bitmapIcons.Length > 0 && iconFileName is not null)
         {
             plistValues["CFBundleIconFile"] = iconFileName;
-            WriteIcon(bundle, iconFileName, resourcesDirectory);
+            WriteIcon(bitmapIcons, iconFileName, resourcesDirectory);
         }
+        var assetsIconName = await MacAppAssetsCar.BuildAsync(
+            iconInputs.Where(IsAssetCatalogInput).ToArray(),
+            resourcesDirectory, context.WorkDirectory, context.Logger, cancellationToken);
+        if (assetsIconName is not null)
+        {
+            plistValues["CFBundleIconName"] = assetsIconName;
+        }
+
         if (metadata.MinimumSystemVersion is not null)
         {
             plistValues["LSMinimumSystemVersion"] = metadata.MinimumSystemVersion;
@@ -96,12 +111,23 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         {
             plistValues["NSHumanReadableCopyright"] = copyright;
         }
+        MacAppDesktopIntegration.EmitAppTransportSecurity(plistValues, settings.ExceptionDomain);
+
+        MacAppDesktopIntegration.MergeCallerPlist(plistValues, settings);
+        MacAppDesktopIntegration.EnforceIdentityKeys(plistValues, new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["CFBundleIdentifier"] = bundle.Identifier,
+            ["CFBundleExecutable"] = item.MainExecutable,
+            ["CFBundleShortVersionString"] = metadata.ShortVersion,
+            ["CFBundleVersion"] = metadata.BuildVersion,
+            ["CFBundlePackageType"] = "APPL"
+        });
 
         var plistPath = Path.Combine(contentsDirectory, "Info.plist");
         InfoPlist.Write(plistPath, plistValues);
         File.WriteAllText(Path.Combine(contentsDirectory, "PkgInfo"), "APPL????", Encoding.ASCII);
 
-        await ApplyExecutablePermissions(context, contentsDirectory, cancellationToken);
+        await InspectPayload(context, contentsDirectory, item.Target.RuntimeIdentifier, cancellationToken);
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             await MacProcessRunner.RunAsync(
@@ -240,18 +266,25 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         }
     }
 
+    private static bool IsBitmapIcon(string icon) =>
+        icon.EndsWith(".icns", StringComparison.OrdinalIgnoreCase) ||
+        icon.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAssetCatalogInput(string icon) =>
+        icon.EndsWith(".car", StringComparison.OrdinalIgnoreCase) ||
+        icon.EndsWith(".icon", StringComparison.OrdinalIgnoreCase);
+
     private static void WriteIcon(
-        BundleConfiguration bundle, string iconFileName, string resourcesDirectory)
+        IReadOnlyList<string> bitmapIcons, string iconFileName, string resourcesDirectory)
     {
-        var icons = bundle.Icons.Select(Path.GetFullPath).ToArray();
-        var icns = icons.Where(icon => icon.EndsWith(".icns", StringComparison.OrdinalIgnoreCase)).ToArray();
-        var pngs = icons.Where(icon => icon.EndsWith(".png", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var icns = bitmapIcons.Where(icon => icon.EndsWith(".icns", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var pngs = bitmapIcons.Where(icon => icon.EndsWith(".png", StringComparison.OrdinalIgnoreCase)).ToArray();
         if (icns.Length > 1 || (icns.Length == 1 && pngs.Length > 0))
         {
             throw new ArgumentException(
                 ".app icons accept either a single .icns or PNG bitmaps; do not mix .icns with other sources.");
         }
-        if (icns.Length == 0 && pngs.Length != icons.Length)
+        if (icns.Length == 0 && pngs.Length == 0)
         {
             throw new ArgumentException(".app icons accept .icns or .png files only.");
         }
@@ -266,25 +299,53 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         File.WriteAllBytes(destination, IcnsBuilder.BuildFromPngs(pngs.Select(File.ReadAllBytes).ToArray()));
     }
 
-    private async Task ApplyExecutablePermissions(
-        BundleBuildContext context, string contentsDirectory, CancellationToken cancellationToken)
+    /// <summary>
+    /// Single payload pass: Mach-O architecture check against the target RID (managed header
+    /// parse — the equivalent of `lipo -info`, available on every build host) plus executable-bit
+    /// chmod on POSIX hosts.
+    /// </summary>
+    private async Task InspectPayload(
+        BundleBuildContext context, string contentsDirectory, string runtimeIdentifier,
+        CancellationToken cancellationToken)
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        var requiredArchitecture = RequiredArchitecture(runtimeIdentifier);
+        var windows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        if (windows)
         {
             context.Logger.Log(BundleLogLevel.Warning,
                 "The build host cannot set executable bits inside the .app; deliver it through a " +
                 "permission-preserving archive (zip/tar) before launching on macOS.");
-            return;
         }
         foreach (var file in Directory.EnumerateFiles(contentsDirectory, "*", SearchOption.AllDirectories))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (MachO.IsMachO(file))
+            var architectures = MachO.ReadArchitectures(file);
+            if (architectures.Count == 0)
+            {
+                continue;
+            }
+            if (requiredArchitecture is not null &&
+                !architectures.Contains(requiredArchitecture, StringComparer.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    $"Mach-O payload '{file}' does not contain '{requiredArchitecture}' required by " +
+                    $"{runtimeIdentifier} (architectures: {string.Join(", ", architectures)}). " +
+                    "Provide a universal (fat) binary or per-RID input.");
+            }
+            if (!windows)
             {
                 await MacProcessRunner.RunAsync("chmod", ["755", file], context.WorkDirectory, cancellationToken);
             }
         }
     }
+
+    internal static string? RequiredArchitecture(string runtimeIdentifier) =>
+        runtimeIdentifier switch
+        {
+            "osx-arm64" => "arm64",
+            "osx-x64" => "x86_64",
+            _ => null
+        };
 
     private static string SanitizeFileName(string name)
     {

@@ -25,6 +25,15 @@ internal static class MacAppTests
             yield return ("Rejects reparse points inside the .app payload", RejectsReparsePointsInAppPayload);
             yield return ("Synthesizes .icns icons from PNG bitmaps", SynthesizesIcnsFromPngs);
             yield return ("Rejects invalid icon inputs", RejectsInvalidIconInputs);
+            yield return ("Emits document types for shared file associations", EmitsDocumentTypesForSharedAssociations);
+            yield return ("Applies macOS document type overrides and exports UTIs", AppliesDocumentTypeOverridesAndExportedUtis);
+            yield return ("Rejects conflicting or empty document types", RejectsConflictingOrEmptyDocumentTypes);
+            yield return ("Emits URL types with defaults and overrides", EmitsUrlTypesWithDefaultsAndOverrides);
+            yield return ("Emits ATS exception domains when configured", EmitsAtsExceptionDomains);
+            yield return ("Merges a caller Info.plist and enforces identity keys", MergesCallerPlistAndEnforcesIdentityKeys);
+            yield return ("Validates Mach-O payload architectures per RID", ValidatesMachOArchitecturesPerRid);
+            yield return ("Passes .car icons through and degrades .icon without actool", PassesCarAndDegradesIconInputs);
+            yield return ("Rejects duplicated asset-catalog icon inputs", RejectsDuplicatedAssetIcons);
             yield return ("Rejects features owned by later MAC stages", RejectsLaterStageFeatures);
             yield return ("Rebuilds identical .app bundles", RebuildsIdenticalAppBundles);
             yield return ("Maps .app settings through MSBuild", () => RunSync(MapsAppSettingsThroughMsBuild));
@@ -413,21 +422,422 @@ internal static class MacAppTests
         }
     }
 
+    static async Task EmitsDocumentTypesForSharedAssociations()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var artifacts = await new MacAppBundler().BuildAsync(MacConfiguration(
+                input, output,
+                fileAssociations:
+                [
+                    new BundleFileAssociationConfiguration { Extensions = [".txt", "xyz"], Name = "Document" },
+                    new BundleFileAssociationConfiguration { Extensions = ["png"], Description = "Image" }
+                ]));
+            var plist = InfoPlist.ReadDictionary(Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
+            var docTypes = (List<object>)plist["CFBundleDocumentTypes"];
+            Assert(docTypes.Count == 2, "One CFBundleDocumentTypes entry per association is expected.");
+            var first = (Dictionary<string, object>)docTypes[0];
+            Assert(((List<object>)first["CFBundleTypeExtensions"]).SequenceEqual(["txt", "xyz"]),
+                "Extensions keep their configured order with the leading dot stripped.");
+            Assert((string)first["CFBundleTypeName"] == "Document", "Configured CFBundleTypeName must win.");
+            Assert((string)first["CFBundleTypeRole"] == "Editor" && (string)first["LSHandlerRank"] == "Default",
+                "Shared associations default to Editor/Default.");
+            var contentTypes = (List<object>)first["LSItemContentTypes"];
+            Assert(contentTypes.Contains("public.plain-text"), ".txt must infer public.plain-text.");
+            Assert(!contentTypes.Any(value => (string)value == "xyz"),
+                "Unknown extensions must not appear as content types.");
+            var second = (Dictionary<string, object>)docTypes[1];
+            Assert(((List<object>)second["LSItemContentTypes"]).Contains("public.png"),
+                ".png must infer public.png.");
+            Assert(!plist.ContainsKey("UTExportedTypeDeclarations"),
+                "Shared associations without an exported type emit no UTExportedTypeDeclarations.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static async Task AppliesDocumentTypeOverridesAndExportedUtis()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var artifacts = await new MacAppBundler(new MacAppBundleConfiguration
+            {
+                DocumentTypes =
+                [
+                    new MacAppDocumentTypeConfiguration
+                    {
+                        Extensions = ["abc"],
+                        Role = MacAppTypeRole.Viewer,
+                        Rank = MacAppHandlerRank.Owner,
+                        ExportedTypeIdentifier = "com.example.abc",
+                        ExportedTypeConformsTo = ["public.data"]
+                    },
+                    new MacAppDocumentTypeConfiguration
+                    {
+                        ContentTypes = ["public.plain-text"],
+                        Name = "Any Text"
+                    }
+                ]
+            }).BuildAsync(MacConfiguration(
+                input, output,
+                fileAssociations:
+                [
+                    new BundleFileAssociationConfiguration
+                    {
+                        Extensions = ["abc"], Name = "ABC File",
+                        Description = "ABC document", MimeType = "application/x-abc"
+                    }
+                ]));
+            var plist = InfoPlist.ReadDictionary(Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
+            var docTypes = (List<object>)plist["CFBundleDocumentTypes"];
+            Assert(docTypes.Count == 2,
+                "The mac override must absorb the shared association instead of duplicating it.");
+            var merged = (Dictionary<string, object>)docTypes[0];
+            Assert((string)merged["CFBundleTypeName"] == "ABC File",
+                "The shared association name fills the mac entry when unset.");
+            Assert((string)merged["CFBundleTypeRole"] == "Viewer" &&
+                   (string)merged["LSHandlerRank"] == "Owner",
+                "mac-specific role/rank must be honored.");
+            var contentTypes = (List<object>)merged["LSItemContentTypes"];
+            Assert(contentTypes.SequenceEqual(["com.example.abc"]),
+                "An exported UTI replaces inferred content types.");
+            var exported = (List<object>)plist["UTExportedTypeDeclarations"];
+            var declaration = (Dictionary<string, object>)exported[0];
+            Assert((string)declaration["UTTypeIdentifier"] == "com.example.abc",
+                "UTTypeIdentifier mismatch.");
+            Assert((string)declaration["UTTypeDescription"] == "ABC document",
+                "The shared description feeds UTTypeDescription.");
+            Assert(((List<object>)declaration["UTTypeConformsTo"]).SequenceEqual(["public.data"]),
+                "UTTypeConformsTo mismatch.");
+            var tags = (Dictionary<string, object>)declaration["UTTypeTagSpecification"];
+            Assert(((List<object>)tags["public.filename-extension"]).SequenceEqual(["abc"]),
+                "The exported UTI must tag the extension.");
+            Assert((string)tags["public.mime-type"] == "application/x-abc",
+                "The shared MIME type feeds public.mime-type.");
+            var standalone = (Dictionary<string, object>)docTypes[1];
+            Assert(!standalone.ContainsKey("CFBundleTypeExtensions"),
+                "ContentTypes-only entries emit no extension list.");
+            Assert((string)standalone["CFBundleTypeName"] == "Any Text",
+                "Standalone entries keep their configured name.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static async Task RejectsConflictingOrEmptyDocumentTypes()
+    {
+        var input = CreateInputDirectory();
+        try
+        {
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    DocumentTypes =
+                    [
+                        new MacAppDocumentTypeConfiguration { Extensions = ["abc"] },
+                        new MacAppDocumentTypeConfiguration { Extensions = ["ABC"] }
+                    ]
+                }).BuildAsync(MacConfiguration(input)),
+                "Two document types claiming the same extension must be rejected.");
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    DocumentTypes = [new MacAppDocumentTypeConfiguration()]
+                }).BuildAsync(MacConfiguration(input)),
+                "An empty document type entry must be rejected.");
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    DocumentTypes = [new MacAppDocumentTypeConfiguration { Extensions = ["bad!ext"] }]
+                }).BuildAsync(MacConfiguration(input)),
+                "Invalid extensions must be rejected.");
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    DocumentTypes =
+                    [
+                        new MacAppDocumentTypeConfiguration
+                        {
+                            Extensions = ["abc"], ExportedTypeIdentifier = "not-a-uti!"
+                        }
+                    ]
+                }).BuildAsync(MacConfiguration(input)),
+                "Invalid exported UTI identifiers must be rejected.");
+        }
+        finally
+        {
+            Cleanup(input, input + ".artifacts");
+        }
+    }
+
+    static async Task EmitsUrlTypesWithDefaultsAndOverrides()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var artifacts = await new MacAppBundler(new MacAppBundleConfiguration
+            {
+                UrlTypes = [new MacAppUrlTypeConfiguration { Schemes = ["myapp"], Role = MacAppTypeRole.Viewer }]
+            }).BuildAsync(MacConfiguration(
+                input, output,
+                urlProtocols:
+                [
+                    new BundleUrlProtocolConfiguration { Schemes = ["myapp"], Name = "MyApp Link" },
+                    new BundleUrlProtocolConfiguration { Schemes = ["helper", "helper2"] }
+                ]));
+            var plist = InfoPlist.ReadDictionary(Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
+            var urlTypes = (List<object>)plist["CFBundleURLTypes"];
+            Assert(urlTypes.Count == 2, "The mac override merges into the shared URL protocol.");
+            var merged = (Dictionary<string, object>)urlTypes[0];
+            Assert(((List<object>)merged["CFBundleURLSchemes"]).SequenceEqual(["myapp"]),
+                "Merged URL types keep the scheme list.");
+            Assert((string)merged["CFBundleURLName"] == "MyApp Link",
+                "The shared URL name must be preserved.");
+            Assert((string)merged["CFBundleTypeRole"] == "Viewer", "Role override must apply.");
+            var standalone = (Dictionary<string, object>)urlTypes[1];
+            Assert((string)standalone["CFBundleURLName"] == "com.example.app helper",
+                "CFBundleURLName defaults to '<bundle-id> <first-scheme>'.");
+            Assert((string)standalone["CFBundleTypeRole"] == "Editor",
+                "URL types default to the Editor role.");
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    UrlTypes = [new MacAppUrlTypeConfiguration()]
+                }).BuildAsync(MacConfiguration(input)),
+                "URL types without a scheme must be rejected.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static async Task EmitsAtsExceptionDomains()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var plain = await new MacAppBundler().BuildAsync(MacConfiguration(input, output));
+            Assert(!InfoPlist.ReadDictionary(Path.Combine(plain[0].Path, "Contents", "Info.plist"))
+                    .ContainsKey("NSAppTransportSecurity"),
+                "ATS must stay strict unless an exception domain is configured.");
+            var relaxed = await new MacAppBundler(new MacAppBundleConfiguration
+            {
+                ExceptionDomain = "dev.example.com"
+            }).BuildAsync(MacConfiguration(input, output));
+            var ats = (Dictionary<string, object>)InfoPlist
+                .ReadDictionary(Path.Combine(relaxed[0].Path, "Contents", "Info.plist"))["NSAppTransportSecurity"];
+            var domains = (Dictionary<string, object>)ats["NSExceptionDomains"];
+            var domain = (Dictionary<string, object>)domains["dev.example.com"];
+            Assert((bool)domain["NSExceptionAllowsInsecureHTTPLoads"] &&
+                   (bool)domain["NSIncludesSubdomains"],
+                "The exception domain must allow insecure HTTP including subdomains.");
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration { ExceptionDomain = "  " })
+                    .BuildAsync(MacConfiguration(input)),
+                "A blank exception domain must be rejected.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static async Task MergesCallerPlistAndEnforcesIdentityKeys()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var inline = """
+                <plist version="1.0"><dict>
+                <key>NSSupportsSuddenTermination</key><true/>
+                <key>MyAppFlags</key><dict><key>Experimental</key><true/><key>Level</key><integer>3</integer></dict>
+                <key>CFBundleDisplayName</key><string>Caller Name</string>
+                </dict></plist>
+                """;
+            var artifacts = await new MacAppBundler(new MacAppBundleConfiguration { InfoPlistXml = inline })
+                .BuildAsync(MacConfiguration(input, output));
+            var plist = InfoPlist.ReadDictionary(Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
+            Assert(plist["NSSupportsSuddenTermination"] is true, "Caller boolean keys must merge.");
+            Assert((string)plist["CFBundleDisplayName"] == "Caller Name",
+                "Caller plist wins over generated non-identity keys.");
+            var flags = (Dictionary<string, object>)plist["MyAppFlags"];
+            Assert(flags["Experimental"] is true && (long)flags["Level"] == 3,
+                "Nested caller dicts must merge typed.");
+            Assert((string)plist["CFBundleIdentifier"] == "com.example.app",
+                "Identity keys survive the merge.");
+
+            var file = Path.Combine(input, "custom.plist");
+            File.WriteAllText(file, "<plist version=\"1.0\"><dict><key>MyFileKey</key><string>v</string></dict></plist>");
+            var fromFile = await new MacAppBundler(new MacAppBundleConfiguration { InfoPlistFile = file })
+                .BuildAsync(MacConfiguration(input, output));
+            Assert(InfoPlist.ReadDictionary(Path.Combine(fromFile[0].Path, "Contents", "Info.plist"))
+                    .ContainsKey("MyFileKey"),
+                "InfoPlistFile must merge like inline XML.");
+
+            await AssertThrows<InvalidOperationException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    InfoPlistXml = "<dict><key>CFBundleIdentifier</key><string>com.evil.app</string></dict>"
+                }).BuildAsync(MacConfiguration(input)),
+                "Caller plists must not override identity keys.");
+            await AssertThrows<InvalidOperationException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    InfoPlistXml = "<dict><key>CFBundlePackageType</key><string>BNDL</string></dict>"
+                }).BuildAsync(MacConfiguration(input)),
+                "CFBundlePackageType conflicts must be rejected.");
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    InfoPlistFile = file, InfoPlistXml = "<dict/>"
+                }).BuildAsync(MacConfiguration(input)),
+                "InfoPlistFile and InfoPlistXml are mutually exclusive.");
+            await AssertThrows<InvalidDataException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    InfoPlistXml = "<dict><key>oops</key>"
+                }).BuildAsync(MacConfiguration(input)),
+                "Invalid caller plist XML must fail the build.");
+            await AssertThrows<FileNotFoundException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    InfoPlistFile = Path.Combine(input, "missing.plist")
+                }).BuildAsync(MacConfiguration(input)),
+                "A missing caller plist file must fail early.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static async Task ValidatesMachOArchitecturesPerRid()
+    {
+        var arm64Input = CreateInputDirectory();
+        var wrongArchInput = CreateInputDirectory();
+        File.WriteAllBytes(Path.Combine(wrongArchInput, "ExampleApp"), FakeMachO(0x01000007));
+        var fatInput = CreateInputDirectory();
+        File.WriteAllBytes(Path.Combine(fatInput, "ExampleApp"), FakeFatMachO(0x01000007, 0x0100000C));
+        File.WriteAllBytes(Path.Combine(fatInput, "helper"), FakeFatMachO(0x01000007, 0x0100000C));
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            await AssertThrows<InvalidDataException>(
+                () => new MacAppBundler().BuildAsync(MacConfiguration(
+                    wrongArchInput, Path.Combine(output, "wrong"))),
+                "An x86_64 executable must not pass in an osx-arm64 target.");
+            var fat = await new MacAppBundler().BuildAsync(MacConfiguration(
+                fatInput, Path.Combine(output, "fat"), rid: "osx-x64"));
+            Assert(File.Exists(Path.Combine(fat[0].Path, "Contents", "MacOS", "ExampleApp")),
+                "Fat binaries satisfy both osx targets.");
+            var thin = await new MacAppBundler().BuildAsync(MacConfiguration(
+                arm64Input, Path.Combine(output, "thin"), rid: "osx-arm64"));
+            Assert(thin.Count == 1, "A matching thin binary must build.");
+            var mismatchedHelper = CreateInputDirectory();
+            File.WriteAllBytes(Path.Combine(mismatchedHelper, "helper"), FakeMachO(0x01000007));
+            try
+            {
+                await AssertThrows<InvalidDataException>(
+                    () => new MacAppBundler().BuildAsync(MacConfiguration(
+                        mismatchedHelper, Path.Combine(output, "helper"))),
+                    "Payload binaries of the wrong architecture must be rejected, not only the main executable.");
+            }
+            finally
+            {
+                Cleanup(mismatchedHelper);
+            }
+        }
+        finally
+        {
+            Cleanup(arm64Input, wrongArchInput, fatInput, output);
+        }
+    }
+
+    static async Task PassesCarAndDegradesIconInputs()
+    {
+        var input = CreateInputDirectory();
+        var assets = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var logger = new ListLogger();
+        try
+        {
+            Directory.CreateDirectory(assets);
+            var car = Path.Combine(assets, "App.car");
+            File.WriteAllBytes(car, [1, 2, 3, 4]);
+            var artifacts = await new MacAppBundler(new MacAppBundleConfiguration(),
+                    new MacAppBundlerOptions { Logger = logger })
+                .BuildAsync(MacConfiguration(input, output, icons: [car]));
+            Assert(File.Exists(Path.Combine(artifacts[0].Path, "Contents", "Resources", "Assets.car")),
+                "A .car input must be copied to Resources/Assets.car.");
+            var plist = InfoPlist.ReadDictionary(Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
+            Assert(!plist.ContainsKey("CFBundleIconFile"),
+                "A .car-only icon set writes no CFBundleIconFile.");
+            var iconDir = Path.Combine(assets, "Icon.icon");
+            Directory.CreateDirectory(iconDir);
+            File.WriteAllText(Path.Combine(iconDir, "icon.json"), "{}");
+            var degraded = await new MacAppBundler(new MacAppBundleConfiguration(),
+                    new MacAppBundlerOptions { Logger = logger })
+                .BuildAsync(MacConfiguration(input, Path.Combine(output, "icon"), icons: [iconDir]));
+            var degradedPlist = InfoPlist.ReadDictionary(
+                Path.Combine(degraded[0].Path, "Contents", "Info.plist"));
+            var hasCar = File.Exists(Path.Combine(degraded[0].Path, "Contents", "Resources", "Assets.car"));
+            // actool compiles a fabricated .icon only when the Xcode 26 toolchain accepts it;
+            // otherwise the backend must degrade with a warning instead of failing the build.
+            Assert(hasCar || logger.Messages.Any(m => m.Contains("Skipping Assets.car")),
+                "A rejected .icon input must degrade with an Assets.car warning.");
+            Assert(degradedPlist.ContainsKey("CFBundleIconName") == hasCar,
+                "CFBundleIconName tracks a produced Assets.car.");
+            var notADir = Path.Combine(assets, "NotADir.icon");
+            File.WriteAllBytes(notADir, [1]);
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler().BuildAsync(MacConfiguration(
+                    input, Path.Combine(output, "missing"), icons: [notADir])),
+                "A non-directory .icon input must be rejected.");
+        }
+        finally
+        {
+            Cleanup(input, assets, output);
+        }
+    }
+
+    static async Task RejectsDuplicatedAssetIcons()
+    {
+        var input = CreateInputDirectory();
+        var assets = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(assets);
+            var carA = Path.Combine(assets, "a.car");
+            var carB = Path.Combine(assets, "b.car");
+            File.WriteAllBytes(carA, [1]);
+            File.WriteAllBytes(carB, [2]);
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler().BuildAsync(MacConfiguration(input, icons: [carA, carB])),
+                "Multiple .car inputs must be rejected.");
+        }
+        finally
+        {
+            Cleanup(input, assets);
+        }
+    }
+
     static async Task RejectsLaterStageFeatures()
     {
         var input = CreateInputDirectory();
         try
         {
-            await AssertThrows<NotSupportedException>(
-                () => new MacAppBundler().BuildAsync(MacConfiguration(
-                    input,
-                    fileAssociations: [new BundleFileAssociationConfiguration { Extensions = ["hello"] }])),
-                "File associations must be rejected until MAC-APP-2.");
-            await AssertThrows<NotSupportedException>(
-                () => new MacAppBundler().BuildAsync(MacConfiguration(
-                    input,
-                    urlProtocols: [new BundleUrlProtocolConfiguration { Schemes = ["hello"] }])),
-                "URL schemes must be rejected until MAC-APP-2.");
             await AssertThrows<NotSupportedException>(
                 () => new MacAppBundler().BuildAsync(MacConfiguration(input, signingFiles: ["ExampleApp"])),
                 "Signing files must be rejected until MAC-APP-3.");
@@ -478,15 +888,18 @@ internal static class MacAppTests
         foreach (var property in new[]
                  {
                      "MacAppBundleName", "MacAppDisplayName", "MacAppShortVersion", "MacAppBuildVersion",
-                     "MacAppMinimumSystemVersion", "MacAppCategory", "MacAppIconName"
+                     "MacAppMinimumSystemVersion", "MacAppCategory", "MacAppIconName",
+                     "MacAppExceptionDomain", "MacAppInfoPlistFile", "MacAppInfoPlistXml"
                  })
         {
             Assert(targets.Contains(property + "=\"$(Bundler" + property + ")\"", StringComparison.Ordinal),
                 $"MSBuild does not map Bundler{property} to the task.");
         }
         Assert(targets.Contains("MacContents=\"@(BundlerMacContent)\"", StringComparison.Ordinal) &&
-               targets.Contains("MacFrameworks=\"@(BundlerMacFramework)\"", StringComparison.Ordinal),
-            "MSBuild does not map BundlerMacContent/BundlerMacFramework item groups.");
+               targets.Contains("MacFrameworks=\"@(BundlerMacFramework)\"", StringComparison.Ordinal) &&
+               targets.Contains("MacDocumentTypes=\"@(BundlerMacDocumentType)\"", StringComparison.Ordinal) &&
+               targets.Contains("MacUrlTypes=\"@(BundlerMacUrlType)\"", StringComparison.Ordinal),
+            "MSBuild does not map the BundlerMac* item groups.");
         Assert(targets.Contains("StartsWith('osx-')", StringComparison.Ordinal),
             "MSBuild must default the main executable name without '.exe' for osx targets.");
         Assert(task.Contains("new MacAppBundler(", StringComparison.Ordinal) &&
@@ -543,7 +956,18 @@ internal static class MacAppTests
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         try
         {
-            var artifacts = await new MacAppBundler().BuildAsync(MacConfiguration(input, output));
+            var artifacts = await new MacAppBundler(new MacAppBundleConfiguration
+            {
+                ExceptionDomain = "dev.example.com",
+                DocumentTypes = [new MacAppDocumentTypeConfiguration
+                {
+                    Extensions = ["abc"], ExportedTypeIdentifier = "com.example.abc"
+                }],
+                InfoPlistXml = "<dict><key>Merged</key><dict><key>Flag</key><true/></dict></dict>"
+            }).BuildAsync(MacConfiguration(
+                input, output,
+                fileAssociations: [new BundleFileAssociationConfiguration { Extensions = ["txt"] }],
+                urlProtocols: [new BundleUrlProtocolConfiguration { Schemes = ["myapp"] }]));
             var plist = Path.Combine(artifacts[0].Path, "Contents", "Info.plist");
             using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
@@ -554,7 +978,8 @@ internal static class MacAppTests
                 UseShellExecute = false
             })!;
             process.WaitForExit();
-            Assert(process.ExitCode == 0, $"plutil -lint failed: {process.StandardError.ReadToEnd()}");
+            Assert(process.ExitCode == 0,
+                $"plutil -lint failed on a typed plist (arrays/dicts/booleans): {process.StandardError.ReadToEnd()}");
         }
         finally
         {
@@ -608,10 +1033,28 @@ internal static class MacAppTests
         return input;
     }
 
-    static byte[] FakeMachO()
+    static byte[] FakeMachO(uint cpuType = 0x0100000C)
     {
         var bytes = new byte[64];
         bytes[0] = 0xCF; bytes[1] = 0xFA; bytes[2] = 0xED; bytes[3] = 0xFE;
+        bytes[4] = (byte)cpuType; bytes[5] = (byte)(cpuType >> 8);
+        bytes[6] = (byte)(cpuType >> 16); bytes[7] = (byte)(cpuType >> 24);
+        return bytes;
+    }
+
+    static byte[] FakeFatMachO(params uint[] cpuTypes)
+    {
+        var bytes = new byte[8 + 20 * cpuTypes.Length];
+        bytes[0] = 0xCA; bytes[1] = 0xFE; bytes[2] = 0xBA; bytes[3] = 0xBE;
+        bytes[7] = (byte)cpuTypes.Length;
+        for (var index = 0; index < cpuTypes.Length; index++)
+        {
+            var offset = 8 + index * 20;
+            bytes[offset] = (byte)(cpuTypes[index] >> 24);
+            bytes[offset + 1] = (byte)(cpuTypes[index] >> 16);
+            bytes[offset + 2] = (byte)(cpuTypes[index] >> 8);
+            bytes[offset + 3] = (byte)cpuTypes[index];
+        }
         return bytes;
     }
 

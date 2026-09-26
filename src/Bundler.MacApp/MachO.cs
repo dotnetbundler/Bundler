@@ -2,33 +2,115 @@ namespace DotNet.Bundler.MacApp;
 
 internal static class MachO
 {
-    // MH_MAGIC / MH_MAGIC_64 (little-endian on disk) and FAT_MAGIC / FAT_CIGAM (big-endian).
-    private static readonly byte[][] Signatures =
-    [
-        [0xCF, 0xFA, 0xED, 0xFE],
-        [0xCE, 0xFA, 0xED, 0xFE],
-        [0xCA, 0xFE, 0xBA, 0xBE],
-        [0xBE, 0xBA, 0xFE, 0xCA]
-    ];
+    private const uint ThinLittleEndian32 = 0xCEFAEDFE; // MH_CIGAM: little-endian MH_MAGIC on disk
+    private const uint ThinLittleEndian64 = 0xCFFAEDFE; // MH_CIGAM_64
+    private const uint ThinBigEndian32 = 0xFEEDFACE;    // MH_MAGIC
+    private const uint ThinBigEndian64 = 0xFEEDFACF;    // MH_MAGIC_64
+    private const uint FatBigEndian32 = 0xCAFEBABE;     // FAT_MAGIC (always big-endian on disk)
+    private const uint FatBigEndian64 = 0xCAFEBABF;     // FAT_MAGIC_64
+    private const uint FatLittleEndian32 = 0xBEBAFECA;  // FAT_CIGAM
+    private const uint FatLittleEndian64 = 0xBFBAFECA;  // FAT_CIGAM_64
 
-    internal static bool IsMachO(string path)
+    internal static bool IsMachO(string path) => ReadArchitectures(path).Count > 0;
+
+    /// <summary>
+    /// Parses the Mach-O/FAT headers in managed code (equivalent to `lipo -info` output) and
+    /// returns the contained CPU architectures, for example "x86_64"/"arm64". Returns an empty
+    /// list when the file is not a Mach-O or the header cannot be parsed. Being managed, this
+    /// check works on every build host.
+    /// </summary>
+    internal static IReadOnlyList<string> ReadArchitectures(string path)
     {
-        var header = new byte[4];
+        byte[] header;
         using (var stream = File.OpenRead(path))
         {
+            header = new byte[8];
             if (stream.Read(header, 0, header.Length) != header.Length)
             {
-                return false;
+                return [];
             }
         }
-        foreach (var signature in Signatures)
+
+        var magic = ReadBigEndian32(header, 0);
+        switch (magic)
         {
-            if (header[0] == signature[0] && header[1] == signature[1] &&
-                header[2] == signature[2] && header[3] == signature[3])
+            case ThinLittleEndian32:
+            case ThinLittleEndian64:
+                return [CpuTypeName(ReadUInt32(path, 4, bigEndian: false))];
+            case ThinBigEndian32:
+            case ThinBigEndian64:
+                return [CpuTypeName(ReadUInt32(path, 4, bigEndian: true))];
+            case FatBigEndian32:
+                return ReadFatArchitectures(path, entrySize: 20, bigEndian: true);
+            case FatBigEndian64:
+                return ReadFatArchitectures(path, entrySize: 32, bigEndian: true);
+            case FatLittleEndian32:
+                return ReadFatArchitectures(path, entrySize: 20, bigEndian: false);
+            case FatLittleEndian64:
+                return ReadFatArchitectures(path, entrySize: 32, bigEndian: false);
+            default:
+                return [];
+        }
+    }
+
+    private static IReadOnlyList<string> ReadFatArchitectures(string path, int entrySize, bool bigEndian)
+    {
+        var count = ReadUInt32(path, 4, bigEndian);
+        if (count == 0 || count > 64)
+        {
+            return [];
+        }
+        var buffer = new byte[count * entrySize];
+        using (var stream = File.OpenRead(path))
+        {
+            stream.Position = 8;
+            var read = stream.Read(buffer, 0, buffer.Length);
+            if (read != buffer.Length)
             {
-                return true;
+                return [];
             }
         }
-        return false;
+        var architectures = new List<string>((int)count);
+        for (var index = 0; index < count; index++)
+        {
+            var offset = index * entrySize;
+            var cpuType = bigEndian ? ReadBigEndian32(buffer, offset) : ReadLittleEndian32(buffer, offset);
+            architectures.Add(CpuTypeName(cpuType));
+        }
+        return architectures;
     }
+
+    private static uint ReadUInt32(string path, int offset, bool bigEndian)
+    {
+        var buffer = new byte[4];
+        using (var stream = File.OpenRead(path))
+        {
+            stream.Position = offset;
+            if (stream.Read(buffer, 0, buffer.Length) != buffer.Length)
+            {
+                return uint.MaxValue;
+            }
+        }
+        return bigEndian ? ReadBigEndian32(buffer, 0) : ReadLittleEndian32(buffer, 0);
+    }
+
+    private static uint ReadBigEndian32(byte[] buffer, int offset) =>
+        ((uint)buffer[offset] << 24) | ((uint)buffer[offset + 1] << 16) |
+        ((uint)buffer[offset + 2] << 8) | buffer[offset + 3];
+
+    private static uint ReadLittleEndian32(byte[] buffer, int offset) =>
+        buffer[offset] | ((uint)buffer[offset + 1] << 8) |
+        ((uint)buffer[offset + 2] << 16) | ((uint)buffer[offset + 3] << 24);
+
+    private static string CpuTypeName(uint cpuType) => cpuType switch
+    {
+        0x00000007 => "i386",
+        0x01000007 => "x86_64",
+        0x0000000B => "ppc",
+        0x0100000B => "ppc64",
+        0x0000000C => "arm",
+        0x0100000C => "arm64",
+        0x0200000C => "arm64_32",
+        _ => $"0x{cpuType:X8}"
+    };
 }

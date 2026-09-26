@@ -11,7 +11,7 @@ MSI 已完成 WIN-MSI-1..9，`alpha.37` 是既有 x64/ARM64 身份基线；
 `alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 翻译覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式，`alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 读取前 NSIS 安装目录延续）。
 WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线；`alpha.44` 在其上只做跨格式收尾。
 现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。
-正式 CLI 和 Linux 格式仍属后续路线；macOS `.app` 已在 `mac-app-development` 分支可用（MAC-APP-1，未冻结）。
+正式 CLI 和 Linux 格式仍属后续路线；macOS `.app` 已在 `mac-app-development` 分支可用（MAC-APP-1/2，未冻结）。
 可操作的当前能力示例见 [`samples/HelloMacApp/mac-app-sample.md`](samples/HelloMacApp/mac-app-sample.md)。
 
 实现已经拆分为可复用的 NuGet 包。

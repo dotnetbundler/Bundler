@@ -42,14 +42,6 @@ public sealed class MacAppBundler
                     $"got '{target.MainExecutable}'.");
             }
         }
-        if (bundle.FileAssociations.Count > 0)
-        {
-            throw new NotSupportedException(".app file associations arrive with MAC-APP-2.");
-        }
-        if (bundle.UrlProtocols.Count > 0)
-        {
-            throw new NotSupportedException(".app URL schemes arrive with MAC-APP-2.");
-        }
         if (bundle.LicenseFile is not null)
         {
             throw new NotSupportedException(
@@ -60,9 +52,24 @@ public sealed class MacAppBundler
             throw new NotSupportedException("Payload signing arrives with MAC-APP-3.");
         }
 
-        // Fail on invalid metadata, mappings, and icons before touching the file system.
+        // Fail on invalid metadata, mappings, integration config, and icons before touching
+        // the file system.
         MacAppMetadata.Resolve(bundle, _configuration);
         MacAppBundleBackend.ResolveContentsMappings(_configuration);
+        MacAppDesktopIntegration.ResolveDocumentTypes(bundle, _configuration);
+        MacAppDesktopIntegration.ResolveUrlTypes(bundle, _configuration);
+        if (_configuration.ExceptionDomain is { } domain && domain.Trim().Length == 0)
+        {
+            throw new ArgumentException("ExceptionDomain must not be empty.");
+        }
+        if (_configuration.InfoPlistFile is not null && _configuration.InfoPlistXml is not null)
+        {
+            throw new ArgumentException("InfoPlistFile and InfoPlistXml are mutually exclusive.");
+        }
+        if (_configuration.InfoPlistFile is { } plistFile && !File.Exists(Path.GetFullPath(plistFile)))
+        {
+            throw new FileNotFoundException("The caller Info.plist does not exist.", plistFile);
+        }
         foreach (var framework in _configuration.Frameworks)
         {
             var name = Path.GetFileName(framework);
@@ -75,9 +82,17 @@ public sealed class MacAppBundler
         }
         if (bundle.Icons.Any(icon =>
                 !icon.EndsWith(".icns", StringComparison.OrdinalIgnoreCase) &&
-                !icon.EndsWith(".png", StringComparison.OrdinalIgnoreCase)))
+                !icon.EndsWith(".png", StringComparison.OrdinalIgnoreCase) &&
+                !icon.EndsWith(".car", StringComparison.OrdinalIgnoreCase) &&
+                !icon.EndsWith(".icon", StringComparison.OrdinalIgnoreCase)))
         {
-            throw new ArgumentException(".app icons accept .icns or .png files only.");
+            throw new ArgumentException(
+                ".app icons accept .icns/.png bitmaps, an Icon Composer .icon directory, or a .car file.");
+        }
+        if (bundle.Icons.Count(icon => icon.EndsWith(".car", StringComparison.OrdinalIgnoreCase)) > 1 ||
+            bundle.Icons.Count(icon => icon.EndsWith(".icon", StringComparison.OrdinalIgnoreCase)) > 1)
+        {
+            throw new ArgumentException(".app icons accept a single .car or .icon input.");
         }
 
         return await new BundlePipeline(

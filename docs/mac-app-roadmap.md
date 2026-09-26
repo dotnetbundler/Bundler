@@ -1,6 +1,6 @@
 # macOS `.app` 后端实施路线（MAC-APP）
 
-> 状态：**路线已确认，`MAC-APP-1` 已完成**（云 macOS VM 已验证，证据见 MAC-APP-1 小节验收记录）；下一阶段 `MAC-APP-2` 待启动指令。
+> 状态：**路线已确认，`MAC-APP-1`、`MAC-APP-2` 已完成**（云 macOS VM 已验证，证据见各小节验收记录）；下一阶段 `MAC-APP-3` 待启动指令。
 > 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)；PKG 取舍见 [`docs/mac-format-decision.md`](mac-format-decision.md)；逐项能力状态见 [`docs/mac-app-capability-matrix.md`](mac-app-capability-matrix.md)；外部条件见 [`docs/mac-app-open-items.md`](mac-app-open-items.md)；人工步骤见 [`docs/mac-app-manual-testing.md`](mac-app-manual-testing.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 
@@ -145,6 +145,15 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 - **人工边界**：Gatekeeper 对未签名/ad-hoc 首启的实际对话框表现；最小系统版本宿主的实际拒绝/允许。
 - **不做**：正式签名/公证、MDM/企业分发、universal links（依赖 provisioning profile，MAC-APP-3 后外部边界）。
 - **退出**：新增测试与回归通过；本机 LaunchServices/唤起链路可复现；外部项保留待验收。
+- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）**：
+  - `CFBundleDocumentTypes`/`CFBundleURLTypes`：共享 `FileAssociations`/`UrlProtocols` 直接产出默认 Editor/Default 条目；`BundlerMacDocumentType`/`BundlerMacUrlType` 专用条目按扩展名/scheme 重叠吸收共享条目（并集 + 名称/描述/MIME 回退），同令牌跨条目冲突拒绝；role/rank/contentTypes 均可覆盖；
+  - `UTExportedTypeDeclarations`：按配置的 `ExportedTypeIdentifier`/`ConformsTo` 输出，`UTTypeTagSpecification` 携带扩展名与 MIME；未导出时 `LSItemContentTypes` 为显式 contentTypes ∪ 扩展名/ MIME 推断（24 条扩展名表、19+前缀 MIME 表）；
+  - `NSAppTransportSecurity` 例外域：单域 `NSExceptionAllowsInsecureHTTPLoads`+`NSIncludesSubdomains`，不配置不放宽；
+  - 调用方 Info.plist 合并：`BundlerMacAppInfoPlistFile`（文件）/`BundlerMacAppInfoPlistXml`（内联）二选一，合并后 `CFBundleIdentifier`/`CFBundleExecutable`/`CFBundlePackageType`/`CFBundleName`/`CFBundleShortVersionString` 身份键回读校验，冲突即拒绝；
+  - `Assets.car` 管线：`BundlerIcon` 接受 `.car`（直接拷贝优先）与 `.icon` 目录（`actool --version` 探测≥26 才编译，缺失/失败记警告不阻塞），`assetutil` 回读图标名写 `CFBundleIconName`；本机已用 Xcode 26.6 自带模板 `.icon` 真实编译出 `Assets.car` 并提取图标名；
+  - universal/fat 校验：托管实现解析 thin/fat 全端序 Mach-O 头（不依赖 `lipo`），osx-arm64/osx-x64 各校验载荷含对应架构，`Verify.sh` 用真实 `lipo -info` 交叉断言；
+  - 新增 9 条单测（macOS 宿主全套件 75 项全绿）；`Verify.sh` 真实跑通 `lsregister -f` 注册+dump 可见、`open <文件>`/`open <scheme>://` 唤起（`.launch-marker` 落盘为证）、`~/Applications` 拷入-启动-移出、独立 API fixture 同样输出 MAC-APP-2 键组；
+  - 刻意偏离说明：架构校验用托管 Mach-O 解析替代 `lipo -info`（语义等价、无工具依赖、跨宿主一致），`Verify.sh` 保留真 `lipo` 交叉断言作为证据。
 
 ### MAC-APP-3：codesign 与 notarization
 

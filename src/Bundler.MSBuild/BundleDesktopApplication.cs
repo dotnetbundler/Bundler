@@ -100,8 +100,13 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacAppMinimumSystemVersion { get; set; } = "";
     public string MacAppCategory { get; set; } = "";
     public string MacAppIconName { get; set; } = "";
+    public string MacAppExceptionDomain { get; set; } = "";
+    public string MacAppInfoPlistFile { get; set; } = "";
+    public string MacAppInfoPlistXml { get; set; } = "";
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
+    public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
+    public ITaskItem[] MacUrlTypes { get; set; } = Array.Empty<ITaskItem>();
     [Output] public ITaskItem[] Artifacts { get; private set; } = Array.Empty<ITaskItem>();
 
     public override bool Execute()
@@ -266,7 +271,28 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                             Source = Path.GetFullPath(item.ItemSpec),
                             TargetPath = item.GetMetadata("TargetPath").Trim()
                         }).ToArray(),
-                        Frameworks = MacFrameworks.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray()
+                        Frameworks = MacFrameworks.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
+                        DocumentTypes = MacDocumentTypes.Select(item => new MacAppDocumentTypeConfiguration
+                        {
+                            Extensions = MacListMetadata(item, "Extensions", item.ItemSpec),
+                            Name = EmptyMetadataToNull(item, "Name"),
+                            Description = EmptyMetadataToNull(item, "Description"),
+                            Role = MacEnumMetadata<MacAppTypeRole>(item, "Role"),
+                            Rank = MacEnumMetadata<MacAppHandlerRank>(item, "Rank"),
+                            ContentTypes = MacListMetadata(item, "ContentTypes"),
+                            MimeType = EmptyMetadataToNull(item, "MimeType"),
+                            ExportedTypeIdentifier = EmptyMetadataToNull(item, "ExportedTypeIdentifier"),
+                            ExportedTypeConformsTo = MacListMetadata(item, "ExportedTypeConformsTo")
+                        }).ToArray(),
+                        UrlTypes = MacUrlTypes.Select(item => new MacAppUrlTypeConfiguration
+                        {
+                            Schemes = MacListMetadata(item, "Schemes", item.ItemSpec),
+                            Name = EmptyMetadataToNull(item, "Name"),
+                            Role = MacEnumMetadata<MacAppTypeRole>(item, "Role")
+                        }).ToArray(),
+                        ExceptionDomain = EmptyToNull(MacAppExceptionDomain),
+                        InfoPlistFile = OptionalFullPath(MacAppInfoPlistFile),
+                        InfoPlistXml = EmptyToNull(MacAppInfoPlistXml)
                     },
                     new MacAppBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     .BuildAsync(configuration)
@@ -336,6 +362,30 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     {
         var value = item.GetMetadata(name).Trim();
         return value.Length == 0 ? null : value;
+    }
+
+    private static IReadOnlyList<string> MacListMetadata(ITaskItem item, string name, string? fallback = null)
+    {
+        var value = item.GetMetadata(name).Trim();
+        var source = value.Length == 0 ? (fallback ?? "") : value;
+        return source.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(entry => entry.Trim()).Where(entry => entry.Length > 0).ToArray();
+    }
+
+    private static TEnum? MacEnumMetadata<TEnum>(ITaskItem item, string name) where TEnum : struct
+    {
+        var value = item.GetMetadata(name).Trim();
+        if (value.Length == 0)
+        {
+            return null;
+        }
+        if (!Enum.TryParse<TEnum>(value, true, out var parsed) || !Enum.IsDefined(typeof(TEnum), parsed))
+        {
+            throw new ArgumentException(
+                $"BundlerMac* metadata {name} must be one of " +
+                $"{string.Join(", ", Enum.GetNames(typeof(TEnum)))}; got '{value}'.");
+        }
+        return parsed;
     }
 
     private IReadOnlyList<string> ParseLanguages()

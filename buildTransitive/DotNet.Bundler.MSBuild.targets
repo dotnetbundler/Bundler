@@ -109,8 +109,13 @@
       MacAppMinimumSystemVersion="$(BundlerMacAppMinimumSystemVersion)"
       MacAppCategory="$(BundlerMacAppCategory)"
       MacAppIconName="$(BundlerMacAppIconName)"
+      MacAppExceptionDomain="$(BundlerMacAppExceptionDomain)"
+      MacAppInfoPlistFile="$(BundlerMacAppInfoPlistFile)"
+      MacAppInfoPlistXml="$(BundlerMacAppInfoPlistXml)"
       MacContents="@(BundlerMacContent)"
-      MacFrameworks="@(BundlerMacFramework)">
+      MacFrameworks="@(BundlerMacFramework)"
+      MacDocumentTypes="@(BundlerMacDocumentType)"
+      MacUrlTypes="@(BundlerMacUrlType)">
       <Output TaskParameter="Artifacts" ItemName="BundlerArtifact" />
     </DotNet.Bundler.MSBuild.BundleDesktopApplication>
   </Target>

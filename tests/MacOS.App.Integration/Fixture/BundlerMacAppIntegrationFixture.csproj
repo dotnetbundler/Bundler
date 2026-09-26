@@ -23,12 +23,19 @@
     <BundlerMacAppMinimumSystemVersion>11.0</BundlerMacAppMinimumSystemVersion>
     <BundlerMacAppCategory>public.app-category.utilities</BundlerMacAppCategory>
     <BundlerMacAppIconName>FixtureIcon</BundlerMacAppIconName>
+    <BundlerMacAppExceptionDomain>bundler.invalid</BundlerMacAppExceptionDomain>
+    <BundlerMacAppInfoPlistFile Condition="'$(BundlerTestInfoPlistFile)' == ''">$(MSBuildThisFileDirectory)extra.plist</BundlerMacAppInfoPlistFile>
+    <BundlerMacAppInfoPlistFile Condition="'$(BundlerTestInfoPlistFile)' != ''">$(BundlerTestInfoPlistFile)</BundlerMacAppInfoPlistFile>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
     <PackageReference Include="$(BundlerIntegrationPackageId)" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerIcon Include="$(BundlerTestIcon)" Condition="'$(BundlerTestIcon)' != ''" />
     <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <BundlerFileAssociation Include="hifix" Name="HiFix Document" Description="Integration fixture document" MimeType="application/x-hifix" />
+    <BundlerUrlProtocol Include="hifix" Name="HiFix Link" />
+    <BundlerMacDocumentType Include="hifix" Rank="Owner" ExportedTypeIdentifier="com.dotnetbundler.hifix" ExportedTypeConformsTo="public.data" />
+    <BundlerMacUrlType Include="hifix" Role="Viewer" />
     <BundlerMacContent Include="Assets/shared.txt" TargetPath="SharedSupport/shared.txt" />
     <BundlerMacFramework Include="$(BundlerTestDylib)" Condition="'$(BundlerTestDylib)' != ''" />
   </ItemGroup>
