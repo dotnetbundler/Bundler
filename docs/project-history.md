@@ -823,3 +823,15 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 5. MSBuild：`BundlerMacDocumentType`/`BundlerMacUrlType` 项组 + `BundlerMacAppExceptionDomain`/`BundlerMacAppInfoPlistFile`/`BundlerMacAppInfoPlistXml` 属性。
 6. 测试：`tests/Bundler.Tests` 新增 9 条（docTypes/URLTypes/UTI 导出/冲突拒绝/ATS/合并与身份键拒绝/fat-thin 架构校验/`.car` 透传与 `.icon` 降级/重复 asset 拒绝），macOS 宿主全套件 75 项全绿；`tests/MacOS.App.Integration` fixture 启用全部新配置，`Verify.sh` 真实跑通 `lsregister -f` 注册+dump 可见、`open <.hifix>` 与 `open <hifix://>` 唤起（应用内 `.launch-marker` 落盘为证）、`~/Applications` 拷入-启动-注销-移出；`MacApp.Api.PackageFixture` 直接 API 同样断言 MAC-APP-2 键组。
 7. 踩坑记录：`lsregister -dump | grep -q` 在 `pipefail` 下因 SIGPIPE 恒判失败（改为落盘再 grep）；`plutil -extract` 对标量键不支持 JSON 输出（标量走 `plutil -p` 断言）；真实 `.icon` 结构取自 Xcode 26.6 自带 `Icon Composer Icon.xctemplate` 模板并实测编译出 `Assets.car`。
+
+### 14.22 MAC-APP-3：codesign 签名与公证（2026-09-26，分支 `mac-app-development`）
+
+实现 `.app` 的签名与显式公证管线并本机实测通过（云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）：
+
+1. `MacAppSigningConfiguration` 挂在 `MacAppBundleConfiguration.Signing`：`Identity`（`-`=ad-hoc）与 `TemporaryCertificatePath`（.p12 临时钥匙串导入）互斥；`HardenedRuntime`/`EntitlementsFile`；`Notarize` 显式开启，`NotaryWait` 默认 true，`SkipStapling`；公证凭证三模式（keychain profile / Apple ID 三元组 / API key 三元组）显式配置优先、`APPLE_*` 环境变量回退，残缺组拒绝。
+2. `MacAppSigning`：签名在 staging 目录内完成，任何失败不留伪成功产物；`xattr -crs` 清属性→约定代码目录（`MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries`）内全部常规文件先签→主可执行（带 entitlements）→整包；签后 `codesign --verify --deep --strict --verbose=4` 硬断言；非 ad-hoc 跑 `spctl -a -t execute -vv`（拒绝记警告）。非 macOS 宿主预检即 `NotSupportedException`。
+3. 临时钥匙串：`security create-keychain`（随机口令）→读出并前置插入用户搜索表→unlock→`import -P -T /usr/bin/codesign`→`set-key-partition-list`→`find-identity -v -p codesigning` 反推 identity；finally 恢复搜索表 + delete-keychain + 删文件。
+4. 公证：`ditto -c -k --keepParent`→`xcrun notarytool submit <zip> <凭证> --output-format json [--wait]`→成功且 wait 且未 skipStapling 时 `xcrun stapler staple`；zip finally 清理。真实提交/上钉/凭证链路全部外部待验收（MAC-APP-OI-01）。
+5. 踩坑记录：签主可执行时 codesign 实际封条整个 bundle，`Contents/MacOS` 下的托管 .dll 虽非 Mach-O 也被当作"未签名嵌套代码"拒绝——嵌套签名范围从"仅 Mach-O"修正为约定代码目录内全部常规文件；netstandard2.0 无 `Convert.ToHexString`/`StringSplitOptions.TrimEntries`/`BundleLogLevel.Info`（用 `Information`）；`MacProcessRunner.Handler` 静态委托作测试桩缝。
+6. MSBuild 新增 15 个 `BundlerMacApp*` 属性（SignIdentity/SigningCertificate*/HardenedRuntime/EntitlementsFile/Notarize/NotaryWait/SkipStapling/NotaryProfile/AppleId/ApplePassword/AppleTeamId/NotaryApiKeyPath/NotaryApiKeyId/NotaryApiIssuer），props 补默认值。
+7. 测试：`tests/Bundler.Tests` 新增 6 条（签名选项互斥/参数组装/凭证解析/桩注入 inside-out 顺序+verify/临时钥匙串失败清理/无伪产物），macOS 宿主全套件 81 项全绿；`Verify.sh` 新增真实段：`BundlerMacAppSignIdentity=-`+hardened runtime+entitlements 的 `.app` 过 `codesign --verify --deep --strict`、`Signature=adhoc` 断言与真实启动落盘标记，缺失证书路径失败且无产物。

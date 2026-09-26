@@ -103,6 +103,21 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacAppExceptionDomain { get; set; } = "";
     public string MacAppInfoPlistFile { get; set; } = "";
     public string MacAppInfoPlistXml { get; set; } = "";
+    public string MacAppSignIdentity { get; set; } = "";
+    public string MacAppSigningCertificatePath { get; set; } = "";
+    public string MacAppSigningCertificatePassword { get; set; } = "";
+    public bool MacAppHardenedRuntime { get; set; }
+    public string MacAppEntitlementsFile { get; set; } = "";
+    public bool MacAppNotarize { get; set; }
+    public bool MacAppNotaryWait { get; set; } = true;
+    public bool MacAppSkipStapling { get; set; }
+    public string MacAppNotaryProfile { get; set; } = "";
+    public string MacAppAppleId { get; set; } = "";
+    public string MacAppApplePassword { get; set; } = "";
+    public string MacAppAppleTeamId { get; set; } = "";
+    public string MacAppNotaryApiKeyPath { get; set; } = "";
+    public string MacAppNotaryApiKeyId { get; set; } = "";
+    public string MacAppNotaryApiIssuer { get; set; } = "";
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -292,7 +307,25 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         }).ToArray(),
                         ExceptionDomain = EmptyToNull(MacAppExceptionDomain),
                         InfoPlistFile = OptionalFullPath(MacAppInfoPlistFile),
-                        InfoPlistXml = EmptyToNull(MacAppInfoPlistXml)
+                        InfoPlistXml = EmptyToNull(MacAppInfoPlistXml),
+                        Signing = new MacAppSigningConfiguration
+                        {
+                            Identity = EmptyToNull(MacAppSignIdentity),
+                            TemporaryCertificatePath = OptionalFullPath(MacAppSigningCertificatePath),
+                            TemporaryCertificatePassword = EmptyToNull(MacAppSigningCertificatePassword),
+                            HardenedRuntime = MacAppHardenedRuntime,
+                            EntitlementsFile = OptionalFullPath(MacAppEntitlementsFile),
+                            Notarize = MacAppNotarize,
+                            NotaryWait = MacAppNotaryWait,
+                            SkipStapling = MacAppSkipStapling,
+                            KeychainProfile = EmptyToNull(MacAppNotaryProfile),
+                            AppleId = EmptyToNull(MacAppAppleId),
+                            ApplePassword = EmptyToNull(MacAppApplePassword),
+                            AppleTeamId = EmptyToNull(MacAppAppleTeamId),
+                            ApiKeyPath = OptionalFullPath(MacAppNotaryApiKeyPath),
+                            ApiKeyId = EmptyToNull(MacAppNotaryApiKeyId),
+                            ApiIssuer = EmptyToNull(MacAppNotaryApiIssuer)
+                        }
                     },
                     new MacAppBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     .BuildAsync(configuration)

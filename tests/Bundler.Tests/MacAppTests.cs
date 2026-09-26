@@ -35,6 +35,12 @@ internal static class MacAppTests
             yield return ("Passes .car icons through and degrades .icon without actool", PassesCarAndDegradesIconInputs);
             yield return ("Rejects duplicated asset-catalog icon inputs", RejectsDuplicatedAssetIcons);
             yield return ("Rejects features owned by later MAC stages", RejectsLaterStageFeatures);
+            yield return ("Rejects conflicting or incomplete signing options", RejectsInvalidSigningOptions);
+            yield return ("Assembles codesign arguments per target kind", AssemblesCodesignArguments);
+            yield return ("Resolves notary credentials and rejects partial sets", ResolvesNotaryCredentials);
+            yield return ("Signs inside-out then verifies on a stubbed toolchain", SignsInsideOutOnStubbedTools);
+            yield return ("Cleans up the temporary keychain when signing fails", CleansUpKeychainOnFailure);
+            yield return ("Leaves no output artifact when signing fails", SigningFailureLeavesNoArtifact);
             yield return ("Rebuilds identical .app bundles", RebuildsIdenticalAppBundles);
             yield return ("Maps .app settings through MSBuild", () => RunSync(MapsAppSettingsThroughMsBuild));
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -848,6 +854,319 @@ internal static class MacAppTests
         finally
         {
             Cleanup(input, input + ".artifacts");
+        }
+    }
+
+    static async Task RejectsInvalidSigningOptions()
+    {
+        var input = CreateInputDirectory();
+        var temp = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var certificate = Path.Combine(temp, "cert.p12");
+        File.WriteAllBytes(certificate, [1, 2, 3]);
+        var entitlements = Path.Combine(temp, "entitlements.plist");
+        File.WriteAllText(entitlements, "<plist/>");
+        try
+        {
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    Signing = new MacAppSigningConfiguration
+                    {
+                        Identity = "Dev ID", TemporaryCertificatePath = certificate
+                    }
+                }).BuildAsync(MacConfiguration(input)),
+                "Identity and a temporary certificate are mutually exclusive.");
+            await AssertThrows<FileNotFoundException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    Signing = new MacAppSigningConfiguration
+                    {
+                        TemporaryCertificatePath = Path.Combine(temp, "missing.p12")
+                    }
+                }).BuildAsync(MacConfiguration(input)),
+                "A missing temporary certificate must be rejected before any tool runs.");
+            await AssertThrows<FileNotFoundException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    Signing = new MacAppSigningConfiguration
+                    {
+                        Identity = "-", EntitlementsFile = Path.Combine(temp, "missing.plist")
+                    }
+                }).BuildAsync(MacConfiguration(input)),
+                "A missing entitlements file must be rejected before any tool runs.");
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    Signing = new MacAppSigningConfiguration { Identity = "-", Notarize = true }
+                }).BuildAsync(MacConfiguration(input)),
+                "Ad-hoc signatures cannot be notarized.");
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    Signing = new MacAppSigningConfiguration { SkipStapling = true }
+                }).BuildAsync(MacConfiguration(input)),
+                "SkipStapling without Notarize must be rejected.");
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    Signing = new MacAppSigningConfiguration { Identity = "-", NotaryWait = false }
+                }).BuildAsync(MacConfiguration(input)),
+                "NotaryWait=false without Notarize must be rejected.");
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ||
+                RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                await AssertThrows<NotSupportedException>(
+                    () => new MacAppBundler(new MacAppBundleConfiguration
+                    {
+                        Signing = new MacAppSigningConfiguration { Identity = "-" }
+                    }).BuildAsync(MacConfiguration(input)),
+                    "Signing on a non-macOS host must fail before any build work.");
+            }
+        }
+        finally
+        {
+            Cleanup(input, temp, input + ".artifacts");
+        }
+        await Task.CompletedTask;
+    }
+
+    static async Task AssemblesCodesignArguments()
+    {
+        var entitlements = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests",
+            Guid.NewGuid().ToString("N"), "e.plist");
+        Directory.CreateDirectory(Path.GetDirectoryName(entitlements)!);
+        File.WriteAllText(entitlements, "<plist/>");
+        try
+        {
+            var signing = new MacAppSigningConfiguration
+            {
+                Identity = "Developer ID Application: X",
+                HardenedRuntime = true,
+                EntitlementsFile = entitlements
+            };
+            var inner = MacAppSigning.CodesignArguments(signing.Identity, signing, false, "/tmp/app/Contents/Frameworks/lib.dylib");
+            var innerText = string.Join(' ', inner);
+            Assert(innerText.Contains("--force") && innerText.Contains("--sign") &&
+                   innerText.Contains("--options runtime") && innerText.Contains("--timestamp"),
+                "Nested signing must force-sign with the hardened runtime and a secure timestamp.");
+            Assert(!innerText.Contains("--entitlements"),
+                "Nested Mach-O files must not receive entitlements.");
+            var bundle = MacAppSigning.CodesignArguments(signing.Identity, signing, true, "/tmp/app");
+            var bundleText = string.Join(' ', bundle);
+            Assert(bundleText.Contains("--entitlements") &&
+                   bundleText.Contains(Path.GetFullPath(entitlements)),
+                "The bundle signature must carry the configured entitlements.");
+            var adhoc = MacAppSigning.CodesignArguments("-", new MacAppSigningConfiguration(), false, "/tmp/app");
+            Assert(string.Join(' ', adhoc).Contains("--timestamp=none"),
+                "Ad-hoc signatures must disable secure timestamps.");
+        }
+        finally
+        {
+            Cleanup(Path.GetDirectoryName(entitlements)!);
+        }
+        await Task.CompletedTask;
+    }
+
+    static async Task ResolvesNotaryCredentials()
+    {
+        var profile = MacAppSigning.ResolveCredentials(
+            new MacAppSigningConfiguration { KeychainProfile = "my-profile" });
+        Assert(string.Join(' ', profile) == "--keychain-profile my-profile",
+            "A keychain profile wins over every other credential mode.");
+        var apiKey = MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration
+        {
+            ApiKeyPath = "/keys/AuthKey_ABC.p8", ApiKeyId = "ABC", ApiIssuer = "ISSUER"
+        });
+        Assert(string.Join(' ', apiKey) == "--key /keys/AuthKey_ABC.p8 --key-id ABC --issuer ISSUER",
+            "API-key credentials assemble the notarytool key arguments.");
+        var appleId = MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration
+        {
+            AppleId = "dev@example.com", ApplePassword = "app-pw", AppleTeamId = "TEAM"
+        });
+        Assert(string.Join(' ', appleId) ==
+               "--apple-id dev@example.com --password app-pw --team-id TEAM",
+            "Apple-ID credentials assemble id/password/team.");
+        try
+        {
+            MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration { ApiKeyId = "ABC" });
+            throw new InvalidOperationException("A partial API-key credential set must be rejected.");
+        }
+        catch (ArgumentException)
+        {
+        }
+        try
+        {
+            MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration { AppleId = "dev@example.com" });
+            throw new InvalidOperationException("A partial Apple-ID credential set must be rejected.");
+        }
+        catch (ArgumentException)
+        {
+        }
+        try
+        {
+            MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration());
+            throw new InvalidOperationException("Notarization without credentials must be rejected.");
+        }
+        catch (ArgumentException)
+        {
+        }
+        await Task.CompletedTask;
+    }
+
+    static async Task SignsInsideOutOnStubbedTools()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return; // signing itself is macOS-only; the stub still needs a mac host's paths
+        }
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var requests = new List<MacProcessRunner.Request>();
+        var previous = MacProcessRunner.Handler;
+        MacProcessRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            return Task.FromResult(new MacProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            var entitlements = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests",
+                Guid.NewGuid().ToString("N"), "e.plist");
+            Directory.CreateDirectory(Path.GetDirectoryName(entitlements)!);
+            File.WriteAllText(entitlements, "<plist/>");
+            var artifacts = await new MacAppBundler(new MacAppBundleConfiguration
+            {
+                Signing = new MacAppSigningConfiguration
+                {
+                    Identity = "-", EntitlementsFile = entitlements, HardenedRuntime = true
+                }
+            }).BuildAsync(MacConfiguration(input, output));
+            Cleanup(Path.GetDirectoryName(entitlements)!);
+            var codesign = requests.Where(r => r.Executable == "codesign").ToList();
+            var xattr = requests.Where(r => r.Executable == "xattr").ToList();
+            Assert(xattr.Count == 1 && xattr[0].Arguments.SequenceEqual(new[] { "-crs", codesign[0].Arguments.Last().Split("/Contents")[0] }),
+                "xattr -crs must run once on the .app before signing.");
+            // codesign calls: nested files under Contents/MacOS (the managed ExampleApp.dll is
+            // signed as nested code even though it is not Mach-O) + main executable + bundle + verify.
+            Assert(codesign.Count == 4,
+                $"Expected nested + main executable + bundle + verify calls, got {codesign.Count}.");
+            Assert(codesign[0].Arguments.Last().EndsWith("/Contents/MacOS/ExampleApp.dll", StringComparison.Ordinal) &&
+                   !string.Join(' ', codesign[0].Arguments).Contains("--entitlements"),
+                "Nested payload files are signed first, without entitlements.");
+            var bundleArgs = string.Join(' ', codesign[2].Arguments);
+            Assert(codesign[1].Arguments.Last().EndsWith("/Contents/MacOS/ExampleApp", StringComparison.Ordinal),
+                "The main executable is signed before the bundle.");
+            Assert(codesign[2].Arguments.Last().EndsWith(".app", StringComparison.Ordinal) &&
+                   bundleArgs.Contains("--entitlements"),
+                "The bundle is signed after the executable and carries entitlements.");
+            Assert(codesign[3].Arguments.Take(3).SequenceEqual(new[] { "--verify", "--deep", "--strict" }),
+                "A --verify --deep --strict pass must follow signing.");
+            Assert(requests.Any(r => r.Executable == "codesign") &&
+                   !requests.Any(r => r.Executable == "spctl"),
+                "Ad-hoc signatures skip the spctl assessment.");
+        }
+        finally
+        {
+            MacProcessRunner.Handler = previous;
+            Cleanup(input, output);
+        }
+    }
+
+    static async Task CleansUpKeychainOnFailure()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return;
+        }
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var temp = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var certificate = Path.Combine(temp, "cert.p12");
+        File.WriteAllBytes(certificate, [1, 2, 3]);
+        var calls = new List<string>();
+        var deleted = false;
+        var previous = MacProcessRunner.Handler;
+        MacProcessRunner.Handler = (request, _) =>
+        {
+            var joined = string.Join(' ', request.Arguments);
+            calls.Add(request.Executable + " " + joined);
+            if (request.Executable == "security" && joined.StartsWith("list-keychains") &&
+                !joined.Contains("-s", StringComparison.Ordinal))
+            {
+                return Task.FromResult(new MacProcessRunner.Result(0, "\"/Users/x/Library/Keychains/login.keychain-db\"\n", ""));
+            }
+            if (request.Executable == "security" && joined.StartsWith("find-identity"))
+            {
+                return Task.FromResult(new MacProcessRunner.Result(0,
+                    "  1) AA11BB22CC33DD44EE55FF6600112233AABBCCDD \"Bundler Test\"\n     1 valid identities found\n", ""));
+            }
+            if (request.Executable == "security" && joined.StartsWith("delete-keychain"))
+            {
+                deleted = true;
+            }
+            if (request.Executable == "codesign" && !joined.Contains("--verify"))
+            {
+                return Task.FromResult(new MacProcessRunner.Result(1, "", "boom"));
+            }
+            return Task.FromResult(new MacProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await AssertThrows<Exception>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    Signing = new MacAppSigningConfiguration
+                    {
+                        TemporaryCertificatePath = certificate,
+                        TemporaryCertificatePassword = "pw"
+                    }
+                }).BuildAsync(MacConfiguration(input, output)),
+                "A failing codesign must surface as a build failure.");
+            Assert(deleted, "The temporary keychain must be deleted even when codesign fails.");
+            Assert(calls.Any(c => c.StartsWith("security list-keychains") && c.Contains("-s") &&
+                                  c.Contains("login.keychain")),
+                "The user's keychain search list must be restored after failure.");
+            Assert(calls.Any(c => c.StartsWith("security create-keychain")) &&
+                   calls.Any(c => c.StartsWith("security import")),
+                "The temporary keychain is created and the certificate imported before signing.");
+        }
+        finally
+        {
+            MacProcessRunner.Handler = previous;
+            Cleanup(input, output, temp);
+        }
+    }
+
+    static async Task SigningFailureLeavesNoArtifact()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return;
+        }
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var previous = MacProcessRunner.Handler;
+        MacProcessRunner.Handler = (request, _) =>
+            Task.FromResult(request.Executable == "codesign" && request.Arguments.Contains("--verify")
+                ? new MacProcessRunner.Result(1, "", "not signed at all")
+                : new MacProcessRunner.Result(0, "", ""));
+        try
+        {
+            await AssertThrows<Exception>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    Signing = new MacAppSigningConfiguration { Identity = "-" }
+                }).BuildAsync(MacConfiguration(input, output)),
+                "A failed --verify must fail the build.");
+            Assert(!Directory.Exists(Path.Combine(output, "ExampleApp.app")),
+                "A failed signing run must not leave a pseudo-success .app at the output path.");
+        }
+        finally
+        {
+            MacProcessRunner.Handler = previous;
+            Cleanup(input, output);
         }
     }
 

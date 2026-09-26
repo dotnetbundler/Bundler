@@ -139,6 +139,11 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
                 "plutil lint skipped: the build host is not macOS.");
         }
 
+        // Signing + notarization happen inside the staging directory: a failure leaves no
+        // pseudo-success artifact at the final path.
+        await MacAppSigning.RunAsync(
+            context, staging, item.MainExecutable, settings.Signing, cancellationToken);
+
         var outputPath = Path.Combine(item.OutputDirectory, applicationName);
         if (Directory.Exists(outputPath))
         {

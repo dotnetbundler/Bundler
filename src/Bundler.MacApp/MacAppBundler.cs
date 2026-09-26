@@ -49,8 +49,11 @@ public sealed class MacAppBundler
         }
         if (bundle.Targets.Any(target => target.SigningFiles.Count > 0))
         {
-            throw new NotSupportedException("Payload signing arrives with MAC-APP-3.");
+            throw new NotSupportedException(
+                ".app signing covers every Mach-O inside the bundle automatically; " +
+                "per-file SigningFiles has no macOS meaning. Use MacAppBundleConfiguration.Signing.");
         }
+        MacAppSigning.Validate(_configuration.Signing);
 
         // Fail on invalid metadata, mappings, integration config, and icons before touching
         // the file system.
@@ -94,7 +97,6 @@ public sealed class MacAppBundler
         {
             throw new ArgumentException(".app icons accept a single .car or .icon input.");
         }
-
         return await new BundlePipeline(
             [new MacAppBundleBackend(_configuration)], _options.Logger).BuildAsync(bundle, cancellationToken);
     }

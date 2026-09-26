@@ -71,5 +71,20 @@
     <BundlerMacAppMinimumSystemVersion Condition="'$(BundlerMacAppMinimumSystemVersion)' == ''"></BundlerMacAppMinimumSystemVersion>
     <BundlerMacAppCategory Condition="'$(BundlerMacAppCategory)' == ''"></BundlerMacAppCategory>
     <BundlerMacAppIconName Condition="'$(BundlerMacAppIconName)' == ''"></BundlerMacAppIconName>
+    <BundlerMacAppSignIdentity Condition="'$(BundlerMacAppSignIdentity)' == ''"></BundlerMacAppSignIdentity>
+    <BundlerMacAppSigningCertificatePath Condition="'$(BundlerMacAppSigningCertificatePath)' == ''"></BundlerMacAppSigningCertificatePath>
+    <BundlerMacAppSigningCertificatePassword Condition="'$(BundlerMacAppSigningCertificatePassword)' == ''"></BundlerMacAppSigningCertificatePassword>
+    <BundlerMacAppHardenedRuntime Condition="'$(BundlerMacAppHardenedRuntime)' == ''">false</BundlerMacAppHardenedRuntime>
+    <BundlerMacAppEntitlementsFile Condition="'$(BundlerMacAppEntitlementsFile)' == ''"></BundlerMacAppEntitlementsFile>
+    <BundlerMacAppNotarize Condition="'$(BundlerMacAppNotarize)' == ''">false</BundlerMacAppNotarize>
+    <BundlerMacAppNotaryWait Condition="'$(BundlerMacAppNotaryWait)' == ''">true</BundlerMacAppNotaryWait>
+    <BundlerMacAppSkipStapling Condition="'$(BundlerMacAppSkipStapling)' == ''">false</BundlerMacAppSkipStapling>
+    <BundlerMacAppNotaryProfile Condition="'$(BundlerMacAppNotaryProfile)' == ''"></BundlerMacAppNotaryProfile>
+    <BundlerMacAppAppleId Condition="'$(BundlerMacAppAppleId)' == ''"></BundlerMacAppAppleId>
+    <BundlerMacAppApplePassword Condition="'$(BundlerMacAppApplePassword)' == ''"></BundlerMacAppApplePassword>
+    <BundlerMacAppAppleTeamId Condition="'$(BundlerMacAppAppleTeamId)' == ''"></BundlerMacAppAppleTeamId>
+    <BundlerMacAppNotaryApiKeyPath Condition="'$(BundlerMacAppNotaryApiKeyPath)' == ''"></BundlerMacAppNotaryApiKeyPath>
+    <BundlerMacAppNotaryApiKeyId Condition="'$(BundlerMacAppNotaryApiKeyId)' == ''"></BundlerMacAppNotaryApiKeyId>
+    <BundlerMacAppNotaryApiIssuer Condition="'$(BundlerMacAppNotaryApiIssuer)' == ''"></BundlerMacAppNotaryApiIssuer>
   </PropertyGroup>
 </Project>

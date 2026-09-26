@@ -164,6 +164,14 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 - **人工边界**：Developer ID Application 证书、真实公证提交/上钉/撤销、Gatekeeper 离线验票、`APPLE_*` 凭证链路——全部外部待验收（MAC-APP-OI-01 起）。
 - **不做**：DMG 签名、Developer ID Installer（属 PKG）、生产证书入库、任何默认自动上传。
 - **退出**：本机 ad-hoc 签名链可复现、失败清理断言通过；所有需凭证项登记外部待办。
+- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）**：
+  - `MacAppSigningConfiguration`（挂在 `MacAppBundleConfiguration.Signing`）：`Identity`（`-`=ad-hoc）与 `TemporaryCertificatePath`+`Password`（临时钥匙串导入）互斥，`HardenedRuntime`、`EntitlementsFile`、`Notarize`/`NotaryWait`（默认 true）/`SkipStapling`、公证凭证键（keychain profile / Apple ID 三元组 / API key 三元组，显式配置优先、回退 `APPLE_PROFILE`/`APPLE_ID`/`APPLE_PASSWORD`/`APPLE_TEAM_ID`/`APPLE_API_KEY_PATH`/`APPLE_API_KEY`/`APPLE_API_ISSUER` 环境变量）；
+  - `MacAppSigning`：签名在非 macOS 宿主预检即 `NotSupportedException`；`xattr -crs` 清扩展属性→按 `MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries` 约定目录内全部常规文件先签（修正：嵌套代码不只 Mach-O，托管 .dll 也需签名——真实构建暴露出"未签名子组件"错误后按此修正）→主可执行（带 entitlements）→整包（带 entitlements）；签后 `codesign --verify --deep --strict --verbose=4` 硬断言；非 ad-hoc 再跑 `spctl -a -t execute -vv`（拒绝记警告不失败）；签名在 staging 内完成，失败不留伪成功产物；
+  - 临时钥匙串：`security create-keychain`（随机口令）→ 读出并前置插入 `list-keychains -s` 搜索表 → unlock → `import -P`（`-T /usr/bin/codesign`）→ `set-key-partition-list` → `find-identity -v -p codesigning` 反推 identity；dispose 恢复搜索表+delete-keychain+删文件，失败路径同样执行；
+  - 公证管线（显式 opt-in）：`ditto -c -k --keepParent`→`xcrun notarytool submit <zip> <凭证> --output-format json [--wait]`→成功且 wait 且未 skipStapling 时 `xcrun stapler staple`；zip finally 清理；ad-hoc/无凭证/不完整凭证组预检拒绝；`NotaryWait=false`/`SkipStapling` 未开公证也拒绝；
+  - MSBuild：`BundlerMacAppSignIdentity`/`BundlerMacAppSigningCertificatePath`/`...Password`/`BundlerMacAppHardenedRuntime`/`BundlerMacAppEntitlementsFile`/`BundlerMacAppNotarize`/`BundlerMacAppNotaryWait`/`BundlerMacAppSkipStapling`/`BundlerMacAppNotaryProfile`/`BundlerMacAppAppleId`/`...Password`/`...TeamId`/`BundlerMacAppNotaryApiKeyPath`/`...KeyId`/`...Issuer` 共 15 个新属性；
+  - 新增 6 条单测（参数组装、凭证解析与残缺组拒绝、桩注入 inside-out 顺序+verify+spctl 跳过断言、临时钥匙串失败清理、无伪产物）全绿，macOS 宿主全套件 81 项全绿；`Verify.sh` 新增真实段：`BundlerMacAppSignIdentity=-`+hardened runtime+entitlements 的 `.app` 经 `codesign --verify --deep --strict`+`Signature=adhoc`+真实启动落盘标记，缺失证书发布路径失败且无产物；
+  - 测试缝：`MacProcessRunner.Handler` 静态委托拦截全部进程调用，供单测断言参数/顺序与注入失败。
 
 ### MAC-APP-4：原生 macOS E2E 与支持矩阵
 

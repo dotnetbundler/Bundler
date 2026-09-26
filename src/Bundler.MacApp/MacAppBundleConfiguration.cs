@@ -56,6 +56,13 @@ public sealed class MacAppBundleConfiguration
     public string? ExceptionDomain { get; init; }
 
     /// <summary>
+    /// codesign/notarization options. Signing is opt-in: an empty instance leaves the bundle
+    /// unsigned; set <see cref="MacAppSigningConfiguration.Identity"/> ("-" for ad-hoc) or
+    /// <see cref="MacAppSigningConfiguration.TemporaryCertificatePath"/> to sign.
+    /// </summary>
+    public MacAppSigningConfiguration Signing { get; init; } = new();
+
+    /// <summary>
     /// Path to a caller-supplied Info.plist whose top-level dict is shallow-merged over the
     /// generated keys (caller values win). Identity keys (CFBundleIdentifier, CFBundleExecutable,
     /// CFBundleShortVersionString, CFBundleVersion, CFBundlePackageType) are read back after the
@@ -164,4 +171,69 @@ public sealed class MacAppUrlTypeConfiguration
 
     /// <summary>CFBundleTypeRole; defaults to Editor.</summary>
     public MacAppTypeRole? Role { get; init; }
+}
+
+/// <summary>
+/// codesign + notarization configuration for the produced .app. Signing runs only on macOS
+/// hosts; on other hosts any non-empty option fails the build up front.
+/// </summary>
+public sealed class MacAppSigningConfiguration
+{
+    /// <summary>
+    /// codesign identity: "-" for ad-hoc, otherwise a certificate name or SHA-1 already present
+    /// in a keychain (for example "Developer ID Application: &lt;team&gt;"). Mutually exclusive
+    /// with <see cref="TemporaryCertificatePath"/>.
+    /// </summary>
+    public string? Identity { get; init; }
+
+    /// <summary>
+    /// Path to a .p12/.pfx certificate imported into a throwaway keychain for this build
+    /// (the keychain is deleted afterwards). Mutually exclusive with <see cref="Identity"/>;
+    /// the identity is derived from the certificate unless <see cref="Identity"/> is also set
+    /// (setting both is rejected to keep the identity unambiguous).
+    /// </summary>
+    public string? TemporaryCertificatePath { get; init; }
+
+    /// <summary>Password of the temporary certificate (may be empty).</summary>
+    public string? TemporaryCertificatePassword { get; init; }
+
+    /// <summary>--options runtime on every executable signature (required for notarization).</summary>
+    public bool HardenedRuntime { get; init; }
+
+    /// <summary>Entitlements .plist applied to the main executable and the bundle itself.</summary>
+    public string? EntitlementsFile { get; init; }
+
+    /// <summary>
+    /// Opt-in notarization via `xcrun notarytool` + `xcrun stapler`. Never runs by default and
+    /// requires a real signing identity (not "-"). Credentials resolve from the properties below
+    /// first, then the APPLE_* environment variables used by other bundlers.
+    /// </summary>
+    public bool Notarize { get; init; }
+
+    /// <summary>Submit with --wait (default true). When false, stapling is skipped.</summary>
+    public bool NotaryWait { get; init; } = true;
+
+    /// <summary>Skip `xcrun stapler staple` after a successful (waited) submission.</summary>
+    public bool SkipStapling { get; init; }
+
+    /// <summary>notarytool --keychain-profile; falls back to the APPLE_PROFILE env var.</summary>
+    public string? KeychainProfile { get; init; }
+
+    /// <summary>notarytool --apple-id; falls back to APPLE_ID.</summary>
+    public string? AppleId { get; init; }
+
+    /// <summary>notarytool --password (app-specific password); falls back to APPLE_PASSWORD.</summary>
+    public string? ApplePassword { get; init; }
+
+    /// <summary>notarytool --team-id; falls back to APPLE_TEAM_ID.</summary>
+    public string? AppleTeamId { get; init; }
+
+    /// <summary>notarytool --key (AuthKey_*.p8 path); falls back to APPLE_API_KEY_PATH.</summary>
+    public string? ApiKeyPath { get; init; }
+
+    /// <summary>notarytool --key-id; falls back to APPLE_API_KEY.</summary>
+    public string? ApiKeyId { get; init; }
+
+    /// <summary>notarytool --issuer; falls back to APPLE_API_ISSUER.</summary>
+    public string? ApiIssuer { get; init; }
 }

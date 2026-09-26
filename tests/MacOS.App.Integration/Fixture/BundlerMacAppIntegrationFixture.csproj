@@ -26,6 +26,10 @@
     <BundlerMacAppExceptionDomain>bundler.invalid</BundlerMacAppExceptionDomain>
     <BundlerMacAppInfoPlistFile Condition="'$(BundlerTestInfoPlistFile)' == ''">$(MSBuildThisFileDirectory)extra.plist</BundlerMacAppInfoPlistFile>
     <BundlerMacAppInfoPlistFile Condition="'$(BundlerTestInfoPlistFile)' != ''">$(BundlerTestInfoPlistFile)</BundlerMacAppInfoPlistFile>
+    <BundlerMacAppSignIdentity Condition="'$(BundlerTestSignIdentity)' != ''">$(BundlerTestSignIdentity)</BundlerMacAppSignIdentity>
+    <BundlerMacAppHardenedRuntime Condition="'$(BundlerTestHardenedRuntime)' != ''">$(BundlerTestHardenedRuntime)</BundlerMacAppHardenedRuntime>
+    <BundlerMacAppEntitlementsFile Condition="'$(BundlerTestEntitlementsFile)' != ''">$(BundlerTestEntitlementsFile)</BundlerMacAppEntitlementsFile>
+    <BundlerMacAppSigningCertificatePath Condition="'$(BundlerTestSigningCertificate)' != ''">$(BundlerTestSigningCertificate)</BundlerMacAppSigningCertificatePath>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>

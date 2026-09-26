@@ -4,12 +4,32 @@ namespace DotNet.Bundler.MacApp;
 
 internal static class MacProcessRunner
 {
+    internal sealed record Request(string Executable, IReadOnlyList<string> Arguments, string WorkingDirectory);
+
+    /// <summary>
+    /// Test seam: when set, both RunAsync and TryRunAsync delegate to it instead of spawning a
+    /// process. Tests use it to assert argument assembly and to simulate tool failures.
+    /// </summary>
+    internal static Func<Request, CancellationToken, Task<Result>>? Handler;
+
     internal static async Task RunAsync(
         string executable,
         IEnumerable<string> arguments,
         string workingDirectory,
         CancellationToken cancellationToken)
     {
+        if (Handler is not null)
+        {
+            var intercepted = await Handler(
+                new Request(executable, arguments.ToArray(), workingDirectory), cancellationToken);
+            if (intercepted.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    $"'{Path.GetFileName(executable)}' exited with code {intercepted.ExitCode}." +
+                    $"{Environment.NewLine}{intercepted.StandardOutput}{intercepted.StandardError}".TrimEnd());
+            }
+            return;
+        }
         var startInfo = new ProcessStartInfo
         {
             FileName = executable,
@@ -50,6 +70,11 @@ internal static class MacProcessRunner
         string workingDirectory,
         CancellationToken cancellationToken)
     {
+        if (Handler is not null)
+        {
+            return await Handler(
+                new Request(executable, arguments.ToArray(), workingDirectory), cancellationToken);
+        }
         var startInfo = new ProcessStartInfo
         {
             FileName = executable,

@@ -26,7 +26,7 @@
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
 | `src/Bundler.Cli` | 开发原型（`IsPackable=false`，不发布） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
-| `tests/Bundler.Tests` | 唯一快速测试入口（当前 75 项，macOS 宿主口径全绿） | `net10.0` |
+| `tests/Bundler.Tests` | 唯一快速测试入口（当前 81 项，macOS 宿主口径全绿） | `net10.0` |
 | `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
 | `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
 | `tests/MacOS.App.Integration` | 真实 macOS `.app` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
@@ -63,14 +63,15 @@ WIN-MSI-1..8 实现与本机自动化验证完成：
 设计决策、阶段目标、实施记录与验证证据见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)；
 能力状态见 [`docs/msi-capability-matrix.md`](docs/msi-capability-matrix.md)。
 
-### macOS（`MAC-APP-1`/`MAC-APP-2` 已实现，未冻结）
+### macOS（`MAC-APP-1`/`MAC-APP-2`/`MAC-APP-3` 已实现，未冻结）
 
 `MAC-APP`：上游审计、PKG 格式决策、`MAC-APP-1..5` 阶段分解已写入 `docs/mac-*.md` 一套文档，全部决策已确认。
 `MAC-APP-1` 完成（2026-09-26 云 macOS VM 验证）：`src/Bundler.MacApp`（netstandard2.0）交付 `.app` 骨架生成、Info.plist 核心键、`.icns` 透传/合成、Contents 载荷映射语义；`BundlerFormats=app` MSBuild 映射与 `MacAppBundler` 直接 API；`tests/Bundler.Tests` 新增 22 条单测、`tests/MacApp.Api.PackageFixture` NuGet 消费 fixture、`tests/MacOS.App.Integration/Verify.sh` 真实生成→`plutil`→启动→删除链路、`samples/HelloMacApp`。
 `MAC-APP-2` 完成（2026-09-26 云 macOS VM 验证）：文件关联（`CFBundleDocumentTypes`+`UTExportedTypeDeclarations`+UTI 推断表）、URL scheme（`CFBundleURLTypes`）、ATS 例外域、调用方 Info.plist 合并（文件/内联二选一，身份键回读拒绝）、`Assets.car` 管线（`.car` 直接采用优先，`.icon` 经 `actool`≥26 编译、缺失降级，`assetutil` 回读 `CFBundleIconName`）、托管 Mach-O fat/thin 架构校验（等价 `lipo -info`，Verify.sh 用真 `lipo` 交叉断言）。
 MSBuild 映射：`BundlerMacDocumentType`/`BundlerMacUrlType` 项组与 `BundlerMacAppExceptionDomain`/`BundlerMacAppInfoPlistFile`/`BundlerMacAppInfoPlistXml` 属性。
 Verify.sh 真实通过 `lsregister` 注册、`open <文件>`/`open <scheme>://` 唤起、`~/Applications` 拷入拷出。
-新增 9 条单测，macOS 宿主全套件 75 项全绿。
+`MAC-APP-3` 完成（2026-09-26 云 macOS VM 验证）：`MacAppBundleConfiguration.Signing` + `MacAppSigning`——ad-hoc/identity/临时钥匙串三模式、`xattr -crs`、inside-out 嵌套签名（`MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries` 内全部常规文件，含非 Mach-O 托管 dll）、`codesign --verify --deep --strict` 硬断言、非 ad-hoc `spctl` 评估、hardened runtime、entitlements；显式公证管线（ditto→`notarytool submit`--wait→`stapler staple`，凭证显式配置优先、`APPLE_*` env 回退，`skipStapling`/`NotaryWait` 开关）；临时钥匙串创建/导入/销毁与失败清理；MSBuild 新增 15 个 `BundlerMacApp*` 签名/公证属性。
+新增 15 条单测（MAC-APP-2 九条 + MAC-APP-3 六条），macOS 宿主全套件 81 项全绿。
 关键已登记分歧：macOS 打包工具不可再分发，采用“宿主工具检测+版本下限”策略替代字面“工具随包供应”（路线第 2 节）；默认产物不签名、公证默认关闭。
 本机（云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）已实测全部所需宿主工具在位；缺 codesigning 身份、Rosetta、`pwsh`，记入 `docs/mac-app-open-items.md`。
 
@@ -119,8 +120,8 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 ## 6. 默认下一步
 
-`MAC-APP-3`：`MAC-APP-2` 已完成并验证（mac-app-roadmap.md 第 4 节验收记录）；下一阶段交付签名提供器（identity/临时钥匙串/ad-hoc）、hardened runtime、entitlements、inside-out 嵌套签名、显式公证管线。
-等用户明确 `MAC-APP-3` 启动指令再实施；未经明确要求不提交、不推送。
+`MAC-APP-4`：`MAC-APP-3` 已完成并验证（mac-app-roadmap.md 第 4 节验收记录）；下一阶段为原生 macOS E2E 与支持矩阵（干净宿主/双架构/LSMinimumSystemVersion/quarantine 首启/升级替换/卸载残留）。
+等用户明确 `MAC-APP-4` 启动指令再实施；未经明确要求不提交、不推送。
 
 ## 7. 历史记录
 

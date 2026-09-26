@@ -259,6 +259,65 @@ dotnet publish "$fixture_project" -c Release --force \
 second_plist_hash="$(shasum -a 256 "$app/Contents/Info.plist" | cut -d' ' -f1)"
 [[ "$first_plist_hash" == "$second_plist_hash" ]] || fail "A rebuilt .app produced a different Info.plist."
 
+log "== exercising ad-hoc signing (MAC-APP-3) =="
+signed_output="$integration_root/signed-output"
+entitlements_file="$integration_root/entitlements.plist"
+cat > "$entitlements_file" <<'ENTITLEMENTS'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>
+ENTITLEMENTS
+dotnet publish "$fixture_project" -c Release --force \
+    -p:BundlerPackageVersion="$version" \
+    -p:BundlerPackageSource="$package_dir" \
+    -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
+    -p:BundlerIntegrationOutput="$signed_output" \
+    -p:BundlerTestIcon="$integration_root/icon-512.png" \
+    -p:BundlerTestSignIdentity="-" \
+    -p:BundlerTestHardenedRuntime="true" \
+    -p:BundlerTestEntitlementsFile="$entitlements_file" \
+    "${dylib_args[@]}" \
+    -p:RestorePackagesPath="$package_cache"
+signed_app="$signed_output/osx-arm64/app/Bundler Mac Integration Fixture.app"
+[[ -d "$signed_app" ]] || fail "The signed .app was not produced."
+codesign --verify --deep --strict "$signed_app" || fail "codesign --verify rejected the ad-hoc signed bundle."
+authority="$(codesign -dv --verbose=4 "$signed_app" 2>&1 | grep -c 'Signature=adhoc' || true)"
+[[ "$authority" -ge 1 ]] || fail "The bundle is not ad-hoc signed."
+"$signed_app/Contents/MacOS/BundlerMacIntegrationFixture" signed-launch >"$integration_root/signed-launch.txt" \
+    || fail "The ad-hoc signed bundle did not launch."
+grep -q "signed-launch" "$integration_root/signed-launch.txt" || fail "Signed launch produced no output."
+[[ -f "$signed_app/Contents/.launch-marker" ]] || fail "The signed app did not write its launch marker."
+rm -f "$signed_app/Contents/.launch-marker"
+log "ad-hoc signing chain verified: codesign -s - → --verify --deep --strict → launch."
+
+log "== asserting a missing certificate fails before any tool runs =="
+missing_cert_output="$integration_root/badcert-output"
+if dotnet publish "$fixture_project" -c Release --force \
+    -p:BundlerPackageVersion="$version" \
+    -p:BundlerPackageSource="$package_dir" \
+    -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
+    -p:BundlerIntegrationOutput="$missing_cert_output" \
+    -p:BundlerTestIcon="$integration_root/icon-512.png" \
+    -p:BundlerTestSigningCertificate="$integration_root/missing.p12" \
+    "${dylib_args[@]}" \
+    -p:RestorePackagesPath="$package_cache" >"$integration_root/badcert.log" 2>&1; then
+    fail "A missing temporary certificate must fail the publish."
+fi
+[[ ! -e "$missing_cert_output/osx-arm64/app/Bundler Mac Integration Fixture.app" ]] \
+    || fail "A failed signing run left a pseudo-success .app."
+grep -qi "TemporaryCertificatePath\|temporary certificate" "$integration_root/badcert.log" \
+    || fail "The missing-certificate error was not surfaced in the publish log."
+log "missing-certificate failure path verified (no pseudo-success artifact)."
+
 log "== verifying uninstall semantics =="
 rm -rf "$app"
 [[ ! -e "$app" ]] || fail "Deleting the .app left residue."

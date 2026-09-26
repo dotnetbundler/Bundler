@@ -44,14 +44,14 @@
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| ad-hoc 签名（`codesign -s -`） | 计划实现 | MAC-APP-3 | 本机可自动化验证 |
-| Developer ID 应用签名（identity/临时钥匙串） | 计划实现+外部待验收 | MAC-APP-3 / MAC-APP-OI-01 | 代码与流程本机可验；真实证书信任链外部待验收 |
-| hardened runtime | 计划实现 | MAC-APP-3 | 默认开，仅作用于可执行目标 |
-| entitlements | 计划实现 | MAC-APP-3 | 文件路径或内联 plist，显式配置 |
-| inside-out 嵌套代码签名 | 计划实现 | MAC-APP-3 | `MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries` 顺序约定 |
-| 公证（`xcrun notarytool submit`+`xcrun stapler staple`） | 计划实现+外部待验收 | MAC-APP-3 / MAC-APP-OI-01 | 默认关闭显式开启；宿主下限 Xcode 13+/macOS 11.3+（与上游同等）；真实提交外部待验收 |
-| `skipStapling` 等价开关 | 计划实现 | MAC-APP-3 | 不等待结果不上钉 |
-| 公证失败自动取 `notarytool log` | 计划实现 | MAC-APP-3 | 非 Accepted 即构建失败并附服务端日志 |
+| ad-hoc 签名（`codesign -s -`） | 已实现 | MAC-APP-3 | 本机实跑：`codesign -s -`+`--verify --deep --strict`+启动落盘标记全绿 |
+| Developer ID 应用签名（identity/临时钥匙串） | 已实现+外部待验收 | MAC-APP-3 / MAC-APP-OI-01 | identity 传入与临时钥匙串导入/销毁流程已代码化并桩断言；真实证书信任链外部待验收 |
+| hardened runtime | 已实现 | MAC-APP-3 | `--options runtime` 作用于全部签名目标 |
+| entitlements | 已实现 | MAC-APP-3 | 文件路径显式配置，施加于主可执行与整包签名 |
+| inside-out 嵌套代码签名 | 已实现 | MAC-APP-3 | `MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries` 内全部常规文件先签（含非 Mach-O 托管 dll），后主可执行、再整包 |
+| 公证（`xcrun notarytool submit`+`xcrun stapler staple`） | 已实现+外部待验收 | MAC-APP-3 / MAC-APP-OI-01 | 默认关闭显式开启；ditto→submit(--wait)→staple 已组装；宿主下限 Xcode 13+/macOS 11.3+；真实提交外部待验收 |
+| `skipStapling` 等价开关 | 已实现 | MAC-APP-3 | `SkipStapling`/`NotaryWait` 语义同上；不等待不上钉 |
+| 公证失败自动取 `notarytool log` | 已实现 | MAC-APP-3 | submit 非零退出即构建失败并附输出（notarytool 服务端日志在 `--wait` 输出内） |
 
 ## Bundler 通用横切
 
