@@ -809,5 +809,5 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 3. MSBuild：`BundlerFormats=app` + `BundlerMacAppBundleName/DisplayName/ShortVersion/BuildVersion/MinimumSystemVersion/Category/IconName` + `BundlerMacContent`/`BundlerMacFramework` 项组；osx RID 默认 `MainExecutable=$(TargetName)` 无 `.exe`；混合格式报错文案改为通用表述。
 4. 测试与示例：`tests/Bundler.Tests/MacAppTests.cs` 新增 22 条（结构/plist 回读/校验拒绝/载荷映射/图标合成/权限位/确定性重建/MSBuild 文本断言/Pkg 规划）；`tests/MacApp.Api.PackageFixture`（NuGet 消费直接 API）；`tests/MacOS.App.Integration/Verify.sh`（bash 全流程）+ `samples/HelloMacApp`。
 5. 本机验证：`Verify.sh` 全绿——包内容断言→fixture 发布产 `.app`→结构/plist 全键回读→Mach-O `+x`→直接执行输出标记→`open -W` 接受→重建 Info.plist 指纹一致→删除即卸载→独立 API fixture 再产 `.app`。
-6. 既有套件回归：macOS 宿主上 5 条 NSIS/WiX 用例失败为预存环境限制（NSIS 需要 win 载荷工具断言/WiX MSI 编译需 Windows 宿主；`git stash` 基线复核失败集合一致），与本改动无关。
+6. 既有套件回归：macOS 宿主上此前 5 条 NSIS/WiX 用例失败；逐条核查后定性——4 条为真实跨宿主缺陷（NSIS 安装路径校验用宿主分隔符/非法字符集致 POSIX 上 `..` 与 Windows 非法字符逃逸、`EnsurePayloadFile/Directory` 用 `\\` 路径查 POSIX 文件系统、输入树与资源目标冲突集合分隔符不一致、`SafeFileName` 宿主相关、两处 license 断言未做 CRLF/LF 归一），已修复（新增 `WindowsFileNames` 统一 Windows 文件名规则）；1 条 `ValidatesMsiPublishingInputs` 属真 Windows-only（`WixBundler` 刻意宿主门控最先），移入 OS 门控区块。修复后 macOS 宿主全套 66 项全绿。
 7. 边界按路线拒绝：文件关联/URL scheme（MAC-APP-2）、签名（MAC-APP-3）、`.app` 无 license 语义，均明确 `NotSupportedException`；`BundlerIntegrationOutput` 等参数复用既有 fixture 约定。

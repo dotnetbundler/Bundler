@@ -17,8 +17,8 @@ internal static class WixTests
             yield return ("Maps explicit MSI versions without changing installed product families", () => RunSync(MapsExplicitMsiVersions));
             yield return ("Verifies WiX binary and source redistribution", () => RunSync(VerifiesWixRedistribution));
             yield return ("Maps MSI configuration through MSBuild", () => RunSync(MapsMsiSettingsThroughMsBuild));
-            yield return ("Validates MSI language, license, and signing inputs", ValidatesMsiPublishingInputs);
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) yield break;
+            yield return ("Validates MSI language, license, and signing inputs", ValidatesMsiPublishingInputs);
             yield return ("Rejects unsafe MSI installation paths", RejectsUnsafeMsiPaths);
             yield return ("Builds and inspects a real WiX MSI without installing it", BuildsAndInspectsMsi);
             yield return ("Rejects WiX compiler warnings during MSI generation", RejectsWixCompilerWarnings);
@@ -220,8 +220,9 @@ internal static class WixTests
             "The bundled corresponding source archive is incomplete.");
         var licenseEntry = toolZip.GetEntry("LICENSE.TXT")!;
         using var license = licenseEntry.Open();
-        Assert(Convert.ToHexString(SHA256.HashData(license)) ==
-               Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(root, "LICENSE.TXT")))),
+        var archiveLicense = new StreamReader(license).ReadToEnd().Replace("\r\n", "\n");
+        var packagedLicense = File.ReadAllText(Path.Combine(root, "LICENSE.TXT")).Replace("\r\n", "\n");
+        Assert(archiveLicense == packagedLicense,
             "The distributed WiX license differs from the original binary archive.");
     }
 

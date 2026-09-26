@@ -153,7 +153,7 @@ public sealed class NsisBundler
         }
         foreach (var productName in shortcuts.LegacyProductNames)
         {
-            if (string.IsNullOrWhiteSpace(productName) || productName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            if (string.IsNullOrWhiteSpace(productName) || WindowsFileNames.ContainsInvalidCharacter(productName))
             {
                 throw new ArgumentException("Legacy shortcut product names must be valid file names.", nameof(shortcuts));
             }
@@ -175,12 +175,12 @@ public sealed class NsisBundler
         {
             return;
         }
-        if (Path.IsPathRooted(value!) || value!.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Contains(".."))
+        var components = value!.Split('\\', '/');
+        if (Path.IsPathRooted(value!) || components.Contains(".."))
         {
             throw new ArgumentException($"{propertyName} must be a path relative to the installed application directory.", propertyName);
         }
-        if (value.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            .Any(component => component.Length == 0 || component.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0))
+        if (components.Any(component => component.Length == 0 || WindowsFileNames.ContainsInvalidCharacter(component)))
         {
             throw new ArgumentException($"{propertyName} contains an invalid Windows path component.", propertyName);
         }

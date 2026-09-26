@@ -752,7 +752,8 @@ internal sealed class NsisBundleBackend(
         IReadOnlyList<PayloadResource> resources,
         string propertyName)
     {
-        if (File.Exists(Path.Combine(inputDirectory, relativePath)) ||
+        var hostPath = relativePath.Replace('\\', Path.DirectorySeparatorChar);
+        if (File.Exists(Path.Combine(inputDirectory, hostPath)) ||
             resources.Any(resource => resource.TargetPath.Equals(relativePath, StringComparison.OrdinalIgnoreCase)))
         {
             return;
@@ -765,7 +766,8 @@ internal sealed class NsisBundleBackend(
         string inputDirectory,
         IReadOnlyList<PayloadResource> resources)
     {
-        if (Directory.Exists(Path.Combine(inputDirectory, relativePath)) ||
+        var hostPath = relativePath.Replace('\\', Path.DirectorySeparatorChar);
+        if (Directory.Exists(Path.Combine(inputDirectory, hostPath)) ||
             resources.Any(resource => resource.TargetPath.StartsWith(relativePath + "\\", StringComparison.OrdinalIgnoreCase)))
         {
             return;
@@ -789,7 +791,7 @@ internal sealed class NsisBundleBackend(
         var inputTree = InspectDirectoryTree(inputRoot);
         var targets = new HashSet<string>(
             inputTree.Files
-                .Select(path => RelativePath(inputRoot, path)),
+                .Select(path => ToInstallerPath(RelativePath(inputRoot, path))),
             StringComparer.OrdinalIgnoreCase);
         var resources = new List<PayloadResource>();
 
@@ -1058,8 +1060,7 @@ internal sealed class NsisBundleBackend(
 
     private static string SafeFileName(string value)
     {
-        var invalid = new HashSet<char>(Path.GetInvalidFileNameChars());
-        var result = new string(value.Select(character => invalid.Contains(character) ? '_' : character).ToArray()).Trim();
+        var result = WindowsFileNames.Sanitize(value).Trim();
         return string.IsNullOrWhiteSpace(result) || result is "." or ".." ? "Application" : result;
     }
 

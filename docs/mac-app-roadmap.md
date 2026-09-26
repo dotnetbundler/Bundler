@@ -133,7 +133,7 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
   - `PackageFormat.Pkg` 进公共枚举（osx 目标矩阵放行，win/linux 拒绝；`Pkg` 计划自动插入中间 `.app` 步骤）；`BundlerMainExecutable` 对 osx RID 默认 `$(TargetName)` 无 `.exe`；
   - 载荷语义：输入树整体保留相对结构进 `Contents/MacOS/`、`BundlerResource`→`Contents/Resources/`、`BundlerMacFramework`（仅 `.framework`/`.dylib`）→`Contents/Frameworks/`、`BundlerMacContent`→`Contents/` 任意非保留位置；顶层保留名（`MacOS`/`Resources`/`Frameworks`/`Info.plist`/`PkgInfo`）与 `..`/绝对路径拒绝；跨通道目标路径冲突拒绝；符号链接/reparse 拒绝；主可执行 Mach-O 魔数校验；POSIX 宿主对 Mach-O 赋 `+x`（Windows 宿主告警降级）；
   - Info.plist 核心键全写入（含 `NSHighResolutionCapable`），`plutil -lint` 内联校验（macOS 宿主），`LSMinimumSystemVersion` 未配置不写入；`.icns` 透传或 PNG 位图合成（iconutil 不依赖）；
-  - 新增 22 条单测全过（其余既有用例无回归；macOS 宿主上 5 条 NSIS/WiX 预存失败与改动无关，基线核对一致）；`tests/MacOS.App.Integration/Verify.sh` 真实跑通 打包→nupkg 断言→发布→结构/plist 回读→`+x`→直接启动输出标记→`open -W`→重建指纹→删除即卸载→独立 API fixture 再产 `.app`；示例 `samples/HelloMacApp`；
+  - 新增 22 条单测全过；顺带修复了 macOS 宿主上暴露的既有移植性缺陷：`NsisBundler` 安装路径校验此前用宿主分隔符/非法字符集（POSIX 上 `..` 与 `<>"|?*` 逃逸）、`EnsurePayloadFile/Directory` 用 `\` 规范化路径查 POSIX 文件系统、资源冲突集合分隔符不一致、`SafeFileName` 宿主相关；两处 license 断言改为换行规范化文本比对（zip 内 CRLF vs 检出 LF）；`ValidatesMsiPublishingInputs` 移入 Windows-only 区块（`WixBundler` 刻意宿主门控最先）；修复后全套件 66 项全绿；`tests/MacOS.App.Integration/Verify.sh` 真实跑通 打包→nupkg 断言→发布→结构/plist 回读→`+x`→直接启动输出标记→`open -W`→重建指纹→删除即卸载→独立 API fixture 再产 `.app`；示例 `samples/HelloMacApp`；
   - 未做项按阶段拒绝：`FileAssociations`/`UrlProtocols`/`SigningFiles`/`LicenseFile` 明确 `NotSupportedException`。
 
 ### MAC-APP-2：分发与桌面集成行为

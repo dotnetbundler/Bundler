@@ -26,7 +26,7 @@
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
 | `src/Bundler.Cli` | 开发原型（`IsPackable=false`，不发布） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
-| `tests/Bundler.Tests` | 唯一快速测试入口（当前 67 项，macOS 宿主口径；其中 5 条 NSIS/WiX 用例为预存 Windows 宿主限制失败） | `net10.0` |
+| `tests/Bundler.Tests` | 唯一快速测试入口（当前 66 项，macOS 宿主口径全绿） | `net10.0` |
 | `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
 | `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
 | `tests/MacOS.App.Integration` | 真实 macOS `.app` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |

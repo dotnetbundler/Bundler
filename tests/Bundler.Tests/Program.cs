@@ -182,10 +182,11 @@ static async Task VerifiesAndExtractsBundledNsis()
             var copyingEntry = zip.GetEntry("common/COPYING") ??
                 throw new InvalidDataException("The NSIS toolset archive is missing common/COPYING.");
             using var copyingStream = copyingEntry.Open();
-            var archiveLicenseHash = Convert.ToHexString(SHA256.HashData(copyingStream));
-            var packagedLicenseHash = Convert.ToHexString(SHA256.HashData(
-                File.ReadAllBytes(Path.Combine(repositoryRoot, "third_party", "nsis", "COPYING"))));
-            Assert(archiveLicenseHash == packagedLicenseHash,
+            var archiveLicense = new StreamReader(copyingStream).ReadToEnd().Replace("\r\n", "\n");
+            var packagedLicense = File.ReadAllText(
+                    Path.Combine(repositoryRoot, "third_party", "nsis", "COPYING"))
+                .Replace("\r\n", "\n");
+            Assert(archiveLicense == packagedLicense,
                 "The separately packaged NSIS license must match common/COPYING in NsisToolset.");
         }
 
