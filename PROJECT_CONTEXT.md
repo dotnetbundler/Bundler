@@ -1,12 +1,13 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-09-27
-> 当前分支：`msi-development`（NSIS 开发线已并入，冻结提交 `71a5c90`）
+> 最后更新：2026-09-26
+> 当前分支：`mac-app-development`（基于 `main` `993b0ad`；NSIS 开发线已并入 main，冻结提交 `71a5c90`）
 > 当前包版本：`0.1.0-alpha.45`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：WIN-MSI-1..9 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；
 > `alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 前 NSIS 安装目录延续、事务清理竞态修复）
 > `alpha.45` 将 SDK 基线升至 .NET 10（MSBuild 任务链保留 `netstandard2.0`），无后端功能变更
-> 默认下一阶段：`MAC-APP`（需用户明确启动指令）
+> MAC 规划轮已完成（仅文档，无实现）：上游审计 `docs/mac-tauri-capability-audit.md`、PKG 决策 `docs/mac-format-decision.md`、路线 `docs/mac-app-roadmap.md` + 矩阵/人工/待办三件套
+> 默认下一阶段：`MAC-APP`（需用户确认规划并明确启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -60,9 +61,15 @@ WIN-MSI-1..8 实现与本机自动化验证完成：
 设计决策、阶段目标、实施记录与验证证据见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)；
 能力状态见 [`docs/msi-capability-matrix.md`](docs/msi-capability-matrix.md)。
 
+### macOS（规划完成，无实现）
+
+`MAC-APP`：上游审计、PKG 格式决策、`MAC-APP-1..5` 阶段分解已写入 `docs/mac-*.md` 一套文档，全部决策点标注待用户确认。
+关键已登记分歧：macOS 打包工具不可再分发，拟采用“宿主工具检测+版本下限”策略替代字面“工具随包供应”（路线第 2 节）；默认产物不签名、公证默认关闭。
+本机（云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）已实测全部所需宿主工具在位；缺 codesigning 身份、Rosetta、`pwsh`，记入 `docs/mac-app-open-items.md`。
+
 ### 未开始的格式
 
-`MAC-APP`、`MAC-DMG`、`MAC-PKG`、`LINUX-DEB`、`LINUX-RPM`、`LINUX-APPIMAGE`、`CLI-C1`：无实现，顺序与边界见 `docs/roadmap.md`。
+`MAC-APP`（待启动指令）、`MAC-DMG`、`MAC-PKG`（待格式决策）、`LINUX-DEB`、`LINUX-RPM`、`LINUX-APPIMAGE`、`CLI-C1`：无实现，顺序与边界见 `docs/roadmap.md`。
 
 ## 3. 最近验证（2026-10-03，Windows 11 Pro build 26200 x64，跨格式收尾回归）
 
@@ -99,11 +106,13 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - 本仓库开源许可证尚未确定。
 - WiX v3 已退出免费社区服务；大范围公开分发前须重新评估维护风险（见 `third_party/wix/msi-wix-provenance.md`）。
 - `MSI-OI-12`/`MSI-OI-13` 等外部事项待有对应环境时验收。
+- MAC 规划轮待确认项（`docs/mac-format-decision.md` 第 6 节与 `docs/mac-app-roadmap.md` 第 2、3 节）：PKG 是否纳入 `PackageFormat`；宿主工具供应策略例外；`DotNet.Bundler.Mac` 单包 vs 分包；`osx-universal` 目标表达；`CFBundleVersion` 默认策略与 `LSMinimumSystemVersion` 默认值；跨宿主（非 macOS 构建 `.app`）是否放开。
+- `MAC-APP-OI-*` 外部事项（Developer ID 证书/公证凭证、Rosetta/Intel 宿主、干净宿主矩阵等）待有对应环境时验收。
 
 ## 6. 默认下一步
 
-`MAC-APP`：macOS `.app` 捆绑后端，结构/元数据 → 签名边界 → 原生 macOS E2E → 冻结。
-详细目标/退出条件见 `docs/roadmap.md` 相应节；开始前需先做格式决策与阶段分解。
+`MAC-APP`：路线草案已完成（`docs/mac-app-roadmap.md`，`MAC-APP-1..5`：结构/元数据 → 分发与桌面集成 → codesign/notarization → 原生 macOS E2E → 冻结）。
+等用户确认第 5 节决策点后，按 `MAC-APP-1` 启动指令进入实施。
 未经用户明确启动指令不实施；未经明确要求不提交、不推送。
 
 ## 7. 历史记录

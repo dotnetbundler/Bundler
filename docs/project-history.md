@@ -754,3 +754,30 @@ NSIS 全量集成首轮在中途断言失败一次，清理本轮残留事务 se
 **未验收/交接**：真实交互 UI 流转、勾选启动、InvalidDirDlg、位图显示、缩放/辅助功能、junction 安装目标行为、per-machine 交互/UAC、干净宿主、生产证书、真实重启仍为人工/外部项（`MSI-MT-11`、`MSI-OI-12`），不视为已通过。
 本轮变更未提交或推送；
 下一阶段为 `WIN-MSI-7`。
+
+### 14.18 MAC 规划轮：macOS 调研、决策与文档（2026-09-26，仅文档）
+
+本轮起点为用户指令：基于 `main`（`993b0ad`）创建 `mac-app-development` 分支，只做调研决策与文档、不写实现。
+产出与提交均在本分支。
+
+**环境自检（云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401，实测）**：
+`hdiutil`/`pkgbuild`/`productbuild`/`productsign`/`codesign`/`xcrun notarytool`/`xcrun stapler`/`plutil`/`ditto`/`security`/`osascript`/`xar`/`pkgutil`/`installer`/`spctl`/`lipo`/`iconutil`/`actool`/`assetutil` 全部在位；
+缺口：无 codesigning 身份（`security find-identity -v -p codesigning`=0）、Rosetta 未激活、无 `pwsh`（macOS 集成脚本改用 bash）。
+真实 Developer ID 签名/公证、osx-x64 原生运行属外部待验收，记入 `docs/mac-app-open-items.md`。
+
+**Tauri 审计**：沿用仓库固定快照 `7dbfc1f`（复核 `dev` HEAD `9f8922a`，macOS bundler 表面无实质漂移）；
+逐项审计 `.app`/`DMG` 用户可观察能力并标注选择/阶段归属 → `docs/mac-tauri-capability-audit.md`。
+上游 `PackageType` 无 `.pkg`；`providerShortName`/`LSRequiresCarbon` 为上游死配置不采纳。
+
+**PKG 决策**：`.pkg` 是 macOS 唯一原生受管安装格式（收据库、系统域、提权、MDM 部署），与 `.app`/.dmg 拖放分发面不重叠；
+建议纳入 `PackageFormat.Pkg` 并置于 `MAC-DMG` 之后、Linux 之前，受管模式不开放任意安装脚本 → `docs/mac-format-decision.md`，待用户确认。
+
+**MAC-APP 路线**：`MAC-APP-1..5`（结构/元数据 → 分发与桌面集成 → codesign/notarization → 原生 macOS E2E → 冻结）；
+关键偏差登记：Apple 工具不可再分发，采用“宿主工具检测+版本下限”策略替代字面“工具随包供应”；
+默认产物不签名、公证默认关闭显式开启；
+`.app` 无安装事务/卸载器/收据语义；
+universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-capability-matrix.md`/`mac-app-manual-testing.md`/`mac-app-open-items.md`。
+`docs/roadmap.md` MAC 节、`PROJECT_CONTEXT.md`、`docs/manual-testing-index.md` 已同步。
+
+本轮仅文档，未动代码；所有标注“待用户确认”的决策点在 `mac-format-decision.md` 第 6 节与 `mac-app-roadmap.md` 第 2、3 节汇总。
+下一阶段为 `MAC-APP-1`，需用户确认决策后明确启动。

@@ -1,9 +1,10 @@
 # DotNet.Bundler 产品边界与实施路线
 
-> 最后整理：2026-09-25
+> 最后整理：2026-09-26
 > 路线状态：`NSIS-R4` 已在 `71a5c90` 形成冻结基线，随后加固 journal 恢复目标、跨配置恢复流程及快照完整性；当前提交以 Git HEAD 为准
 > 当前实施对象：MSI 已收官，下一格式 macOS
 > 当前状态：`WIN-MSI-1..9` 全部完成，MSI 基线冻结于 `alpha.43`；版本沿革：`alpha.37` 为既有 MSI 身份基线，`alpha.40` 增加 x86、显式版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方翻译覆盖、快捷方式图标与 FIPS 选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
+> 2026-09-26 完成 MAC 规划轮（分支 `mac-app-development`）：上游审计 [`mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)、PKG 格式决策 [`mac-format-decision.md`](mac-format-decision.md)、`MAC-APP-1..5` 阶段分解 [`mac-app-roadmap.md`](mac-app-roadmap.md) 均已就位，**待用户确认后启动 `MAC-APP-1`**。
 > 默认下一实施阶段为 `MAC-APP`。
 > 既有 per-machine、生产签名、交互 UI、干净宿主及重启等外部验收仍各自记录，不阻塞新增功能开发，也不冒充已通过。
 
@@ -125,13 +126,18 @@ per-machine 只验证构建产物和数据库，原生 x86/ARM64 宿主、生产
 MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 未经用户明确要求不开始代码。
 
-### MAC：macOS `.app` 与 DMG
+### MAC：macOS `.app`、DMG 与 PKG（候选）
 
 当前公共 `PackageFormat` 已明确包含 `App` 和 `Dmg`，规划器也已表达 DMG 依赖 `.app`，但仓库没有 macOS 后端。
-因此 MSI 扩展阶段 WIN-MSI-5..9 完成后依次完成 `MAC-APP`、`MAC-DMG`，每个格式按结构/元数据 → 安装或分发行为 → codesign/notarization → 原生 macOS E2E → 冻结推进。
-PKG 当前不在公共格式枚举中，也没有已批准的实现阶段；
-在 `MAC-APP` 开始前用格式决策记录决定是否加入。
-若决定加入，必须先更新公共模型与本文档，并在 DMG 后、Linux 前完成，不能悄悄跳过或仅留在对话中。
+2026-09-26 规划轮已产出该格式要求的完整前置文档（分支 `mac-app-development`，仅文档无实现）：
+
+- 上游审计 [`mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)：固定快照 `7dbfc1f`（复核 `dev` `9f8922a` 无实质漂移），逐项登记 `.app`/`DMG` 用户可观察能力与选择阶段；
+- 格式决策 [`mac-format-decision.md`](mac-format-decision.md)：PKG 是否纳入公共 `PackageFormat`，**待用户确认**（建议纳入）；
+- 阶段分解 [`mac-app-roadmap.md`](mac-app-roadmap.md)：`MAC-APP-1..5`（结构/元数据 → 分发与桌面集成 → codesign/notarization → 原生 E2E → 冻结），含宿主工具供应策略与 `.app` 语义契约，**待用户确认**；
+- 能力矩阵 [`mac-app-capability-matrix.md`](mac-app-capability-matrix.md)、人工清单 [`mac-app-manual-testing.md`](mac-app-manual-testing.md)、外部待办 [`mac-app-open-items.md`](mac-app-open-items.md)。
+
+规划确认不等于实施授权；`MAC-APP-1` 代码需用户明确启动指令。
+PKG 决策通过前 `Pkg` 不进公共枚举；若加入，顺序固定为 `MAC-DMG` 之后、Linux 之前，且须先更新公共模型与本节。
 不得在没有原生 macOS 验证环境时宣称签名和 notarization 完成。
 
 ### LINUX：Linux 格式
@@ -160,7 +166,7 @@ CLI 不产生新的格式能力，也不应反过来驱动后端设计；先完�
 删除重复或错误的早期 alpha 参数而不承诺兼容。
 完成后 CLI、MSBuild 和直接 API 都只是同一打包能力的适配器。
 
-当前实施顺序为：已完成并冻结的 `WIN-MSI-1..9` → `MAC-APP` → `MAC-DMG` →（仅当 macOS 格式决策纳入时）`MAC-PKG` → `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE` → `ARCHIVE` → `CLI-C1`。
+当前实施顺序为：已完成并冻结的 `WIN-MSI-1..9` → `MAC-APP`（规划完成待确认）→ `MAC-DMG` →（仅当 macOS 格式决策纳入时）`MAC-PKG` → `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE` → `ARCHIVE` → `CLI-C1`。
 Tauri updater 协议/提升权限计划任务若有需求另立跨格式产品路线，不混入 MSI 或提前产品化 CLI。
 调整顺序必须依据真实用户需求、验证能力和维护成本更新本文档，不能只在对话中临时改口。
 

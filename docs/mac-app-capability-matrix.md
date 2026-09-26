@@ -1,0 +1,77 @@
+# macOS `.app` 能力矩阵
+
+`已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
+计划实现与外部待验收行绑定到 `docs/mac-app-roadmap.md`、`docs/mac-app-open-items.md`、`docs/mac-app-manual-testing.md` 中的明确阶段/ID。
+上游参照：`docs/mac-tauri-capability-audit.md`；PKG 取舍：`docs/mac-format-decision.md`。
+当前无任何 `.app` 实现，表内全部为非冻结状态。
+
+## 结构与核心元数据
+
+| 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
+| --- | --- | --- | --- |
+| `.app` 目录骨架与 `<产品名>.app` 产物 | 计划实现 | MAC-APP-1 | `Contents/{Info.plist,MacOS,Resources,Frameworks}` 标准布局；输出目录约定 `artifacts/<rid>/app` |
+| `CFBundleIdentifier`/`CFBundleName`/`CFBundleDisplayName`/`CFBundleExecutable` | 计划实现 | MAC-APP-1 | identifier 按 Apple 规则校验；`CFBundleName` 可独立配置 |
+| `CFBundleShortVersionString`/`CFBundleVersion` | 计划实现 | MAC-APP-1 | 格式校验，不静默截断；`CFBundleVersion` 默认取版本可独立覆盖 |
+| `LSMinimumSystemVersion`、`LSApplicationCategoryType`、`NSHumanReadableCopyright` | 计划实现 | MAC-APP-1 | 类别受限枚举；最低系统版本显式可选 |
+| `Info.plist` 固定键（`CFBundleInfoDictionaryVersion`/`CFBundlePackageType`/`NSHighResolutionCapable` 等） | 计划实现 | MAC-APP-1 | 上游 `LSRequiresCarbon` 死键不复制 |
+| 主可执行/资源/framework/任意 `Contents` 映射 | 计划实现 | MAC-APP-1 | framework 仅显式路径；不做宿主标准目录隐式查找 |
+| `osx-x64`/`osx-arm64` 产物 | 计划实现 | MAC-APP-1 | 独立产物；x64 运行依赖 Rosetta 属系统行为 |
+| universal/fat Mach-O 输入 | 计划实现 | MAC-APP-2 | `lipo -info` 校验；Bundler 不合成 fat binary |
+
+## 图标与资源
+
+| 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
+| --- | --- | --- | --- |
+| `.icns` 直接采用 | 计划实现 | MAC-APP-1 | `CFBundleIconFile` |
+| 位图合成 `.icns`（PNG 等） | 计划实现 | MAC-APP-1 | 密度/缩放规则与上游对齐 |
+| `.icon`→`Assets.car`（`CFBundleIconName`） | 计划实现 | MAC-APP-2 | 需 Xcode≥26 `actool`；缺失降级 `.icns` 并警告 |
+| `*.car` 直接采用 | 计划实现 | MAC-APP-2 | 同上 |
+
+## 桌面集成与分发行为
+
+| 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
+| --- | --- | --- | --- |
+| `CFBundleDocumentTypes` 文件关联 | 计划实现 | MAC-APP-2 | 扩展名/名称/role/rank/contentTypes |
+| `UTExportedTypeDeclarations` 导出 UTI | 计划实现 | MAC-APP-2 | 含扩展名/MIME→UTI 推断 |
+| `CFBundleURLTypes` URL scheme | 计划实现 | MAC-APP-2 | schemes/name/role |
+| universal links（`associated-domains`） | 外部待验收 | MAC-APP-3 后 | 需 provisioning profile 与开发者账号，走 expert 边界 |
+| `NSAppTransportSecurity` 例外域 | 计划实现 | MAC-APP-2 | 默认关闭，显式配置才放宽 |
+| 调用方自备 Info.plist 合并 | 计划实现 | MAC-APP-2 | 身份键合并后回读强制一致，冲突即拒绝 |
+| 安装/卸载/升级事务 | 不适用 | — | `.app` 无该语义；安装=拷贝、卸载=删除、升级=替换，见路线第 3 节 |
+| per-user/per-machine 安装范围 | 不适用 | — | 同上；受管安装归 MAC-PKG 候选 |
+
+## 签名与公证
+
+| 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
+| --- | --- | --- | --- |
+| ad-hoc 签名（`codesign -s -`） | 计划实现 | MAC-APP-3 | 本机可自动化验证 |
+| Developer ID 应用签名（identity/临时钥匙串） | 计划实现+外部待验收 | MAC-APP-3 / MAC-APP-OI-01 | 代码与流程本机可验；真实证书信任链外部待验收 |
+| hardened runtime | 计划实现 | MAC-APP-3 | 默认开，仅作用于可执行目标 |
+| entitlements | 计划实现 | MAC-APP-3 | 文件路径或内联 plist，显式配置 |
+| inside-out 嵌套代码签名 | 计划实现 | MAC-APP-3 | `MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries` 顺序约定 |
+| 公证（`notarytool submit`+`stapler staple`） | 计划实现+外部待验收 | MAC-APP-3 / MAC-APP-OI-01 | 默认关闭显式开启；真实提交外部待验收 |
+| `skipStapling` 等价开关 | 计划实现 | MAC-APP-3 | 不等待结果不上钉 |
+| 公证失败自动取 `notarytool log` | 计划实现 | MAC-APP-3 | 非 Accepted 即构建失败 |
+
+## Bundler 通用横切
+
+| 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
+| --- | --- | --- | --- |
+| 独立后端包与直接 API | 计划实现 | MAC-APP-1 | `DotNet.Bundler.Mac` 或按确认的分包方案 |
+| 仓库外 NuGet 包消费 | 计划实现 | MAC-APP-1 | `tests/MacApp.Api.PackageFixture` |
+| MSBuild 集成映射 | 计划实现 | MAC-APP-1 | 与直接 API 同 Core 一致 |
+| 离线构建 | 计划实现 | MAC-APP-1 起 | 公证外全部离线；无第三方工具内嵌 |
+| 宿主工具探测与版本门槛 | 计划实现 | MAC-APP-1 | 缺必需工具明确报错；可选工具降级警告 |
+| 示例项目 `samples/HelloMacApp` | 计划实现 | MAC-APP-1 | 真实 .NET 载荷 |
+| Gatekeeper 首启/信任评估 | 外部待验收 | MAC-APP-3..4 / MAC-APP-MT-01、02 | 本机可观察未签名/ad-hoc 首启；已公证场景需真实证书 |
+| 真实公证+上钉+撤销场景 | 外部待验收 | MAC-APP-MT-02、08 / OI-01 | 需 Apple Developer 凭证 |
+
+## 有意排除
+
+| 项 | 说明 |
+| --- | --- |
+| `.pkg` 系统安装/卸载/收据 | 由 `docs/mac-format-decision.md` 决策是否另立 MAC-PKG，不混入 `.app` 语义 |
+| `lipo` fat binary 合成、rpath 改写、依赖解析 | 调用方构建职责 |
+| `providerShortName`、`LSRequiresCarbon` 等上游死键 | 上游无人消费/无效果，不复制 |
+| `MACOSX_DEPLOYMENT_TARGET` 环境变量联动 | 调用方编译链职责 |
+| iOS/Updater | 桌面打包器边界外/另立跨格式路线 |
