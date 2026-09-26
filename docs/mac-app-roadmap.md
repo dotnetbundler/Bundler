@@ -33,7 +33,8 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 理由：`codesign`/`notarytool`/`hdiutil`/`osascript`/`plutil`/`security` 等是 Apple 专有二进制，许可上只能随 macOS/Xcode 使用，且免费随系统/Xcode 提供，没有合法再分发渠道；
 这与 NSIS/WiX 必须随包内嵌的情形不同，目标是免费、无付费必需服务、覆盖合规的 macOS 构建宿主。
 
-**用户补充原则：尽量支持更多设备**——优先使用系统自带工具；Xcode 专属工具（`actool`/`assetutil`/`SetFile`）只服务可选能力，缺失时必须可降级而非报错；版本下限只在功能确实需要时才设，不设无谓门槛；能用命令行工具链（CLT）完成的能力不得要求完整 Xcode。
+**用户补充原则（2026-09-26 澄清）：构建工具本身尽量覆盖更多宿主设备**——优先使用系统自带工具；Xcode 专属工具（`actool`/`assetutil`/`SetFile`）只服务可选能力，缺失时必须可降级而非报错；版本下限只在功能确实需要时才设；能用 CLT 完成的能力不得要求完整 Xcode。
+产出物（`.app`）支持哪些 macOS 版本/设备由应用开发者自行决定（`LSMinimumSystemVersion` 等键由调用方控制），Bundler 不代为设限。
 
 | 工具 | 来源 | 用途与门槛 |
 | --- | --- | --- |
@@ -52,7 +53,9 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 1. 构建前探测每个必需工具（`xcrun -f`/PATH）并记录版本与路径；缺必需工具立即报清晰错误，不静默降级；缺可选工具降级并警告。
 2. 不自动安装 Xcode/CLT，不替用户激活 Rosetta；宿主缺项写入构建日志与错误信息。
 3. 无网络下载：公证之外的每一步离线可用；公证是显式开启的网络动作。
-4. `.app` 目录结构本身不含机器码，理论上跨宿主可生成；但所有可验证手段（签名、`plutil` 行为、真实启动）都在 macOS，**建议第一阶段起限定 macOS 宿主构建，跨宿主无签名结构生成登记为候选增强——待用户确认（建议：限定 macOS 宿主）。**
+4. 构建宿主范围——**待用户确认**。已核实事实：`.app` 结构生成本身不需 Apple 工具（仅文件系统操作+plist 写入）；上游 Tauri 的 `macos` 模块整体 `#[cfg(target_os = "macos")]` 门控，在非 macOS 宿主上请求 `.app`/`.dmg` 只警告并静默跳过（快照 `7dbfc1f` `bundle.rs`）。
+   开放跨宿主的真实代价：Windows 宿主不能保留 Mach-O 可执行位（+x），产出的 `.app` 需经保留权限位的归档交付；且签名/公证/DMG/PKG 无论如何都需要 macOS。
+   建议：未签名 `.app` 结构生成放开任意宿主（跨宿主产物附明确警告与权限位说明），凡需 Apple 工具的步骤（codesign/notarytool/hdiutil/pkgbuild）在非 macOS 宿主明确报错——比上游 Tauri 的 macOS-only 更宽，与“工具覆盖尽量多宿主”原则一致。
 5. 后端包形态（已确认，2026-09-26）：按格式分包，与 `Bundler.Nsis`/`Bundler.Wix` 惯例一致——`Bundler.MacApp`、`Bundler.MacDmg`、`Bundler.MacPkg` 各自独立；共享的签名/公证/钥匙串/工具探测基础设施另立 `Bundler.Signing.Mac`（对齐 `Bundler.Signing.Windows` 先例），必要时再加 `Bundler.Mac.Common` 承载 plist/束结构等公共代码。
 
 ## 3. 第一阶段前必须固定的 `.app` 语义
