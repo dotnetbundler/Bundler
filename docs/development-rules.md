@@ -94,7 +94,9 @@
   NuGet 包获取和调用方 SDK/MSBuild 环境属于另一层，不能由“包内工具离线”推断整台零环境机器无需其他依赖。
 - 选择工具以**合法免费、无付费必需服务、尽量覆盖更多构建宿主和安装设备**为目标；
   实际支持范围以原生验证为准。
-  MSBuild Task 及其直接加载程序集遵守现有 `netstandard2.0` 资产契约。
+  MSBuild Task 及其直接加载程序集遵守 `netstandard2.0` 资产契约。
+  任务程序集须同时被 .NET Framework `MSBuild.exe` 和 `dotnet msbuild`（.NET SDK）双宿主加载，`netstandard2.0` 是两者的公共面；
+  测试、示例、fixture、原型工具等可执行项目使用 .NET 10。
   不自动发现、下载、安装、修复或卸载任意**应用运行时/先决条件**（WebView2、VC++、.NET、JRE 等）；
   调用方可准备普通文件载荷。
   签名是打包发布能力，但生产私钥、HSM/云账户及第三方服务由发行方提供。

@@ -2,9 +2,10 @@
 
 > 最后更新：2026-09-27
 > 当前分支：`msi-development`（NSIS 开发线已并入，冻结提交 `71a5c90`）
-> 当前包版本：`0.1.0-alpha.44`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.45`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：WIN-MSI-1..9 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；
 > `alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 前 NSIS 安装目录延续、事务清理竞态修复）
+> `alpha.45` 将 SDK 基线升至 .NET 10（MSBuild 任务链保留 `netstandard2.0`），无后端功能变更
 > 默认下一阶段：`MAC-APP`（需用户明确启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
@@ -16,20 +17,23 @@
 | 项目 | 角色 | 目标框架 |
 | --- | --- | --- |
 | `src/Bundler.Abstractions` | 跨包稳定契约 | `netstandard2.0` |
-| `src/Bundler.Core` | 格式无关的校验、规划、编排、工作目录生命周期、内容寻址工具缓存 | `netstandard2.0;net8.0` |
+| `src/Bundler.Core` | 格式无关的校验、规划、编排、工作目录生命周期、内容寻址工具缓存 | `netstandard2.0;net10.0` |
 | `src/Bundler.Nsis` | Windows + NSIS 后端（内嵌 NsisToolset 3.12-r1 多宿主工具与 win-x86 Native AOT 插件） | `netstandard2.0` |
 | `src/Bundler.Wix` | Windows + WiX 3.14.1/MSI 后端（内嵌固定 WiX 工具子集） | `netstandard2.0` |
 | `src/Bundler.Signing.Windows` | Windows Authenticode 签名 API（NSIS/MSI 共用） | `netstandard2.0` |
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
-| `src/Bundler.Cli` | 开发原型（`IsPackable=false`，不发布） | `net8.0` |
+| `src/Bundler.Cli` | 开发原型（`IsPackable=false`，不发布） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合 NSIS+WiX 与 MSBuild 支持） | `netstandard2.0` |
-| `tests/Bundler.Tests` | 唯一快速测试入口（当前 78 项） | `net8.0` |
-| `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net8.0` |
-| `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net8.0` |
+| `tests/Bundler.Tests` | 唯一快速测试入口（当前 78 项） | `net10.0` |
+| `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
+| `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
 | `tests/Windows.Nsis.Reboot` | 需可抛弃 VM 的重启测试占位 | — |
-| `samples/HelloNsisApp` / `samples/HelloMsiApp` | 公开可运行示例（应用版本 `1.0.0`） | `net8.0` |
-| `tools/Bundler.Nsis.Plugin` | NSIS 原生插件源码（有意在 slnx 之外，重建需 .NET 10 + Windows 原生链） | — |
+| `samples/HelloNsisApp` / `samples/HelloMsiApp` | 公开可运行示例（应用版本 `1.0.0`） | `net10.0` |
+| `tools/Bundler.Nsis.Plugin` | NSIS 原生插件源码（有意在 slnx 之外，重建需 .NET 10 + Windows 原生链） | `net10.0` |
 | `third_party/` | 第三方归档、许可证、逐文件 SHA-256 与 provenance 文档 | — |
+
+根 `Directory.Build.props` 的默认 `TargetFramework` 为 `net10.0`；
+MSBuild 任务链（`Bundler.MSBuild` 及其加载的 Abstractions/Core/Nsis/Wix/Signing.Windows）保留 `netstandard2.0`，因为任务程序集须同时被 .NET Framework `MSBuild.exe` 和 `dotnet msbuild` 双宿主加载（见 `docs/development-rules.md` 第 3 节）。
 
 ## 2. 各格式当前状态
 

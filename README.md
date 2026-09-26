@@ -45,7 +45,7 @@ per-machine 包仅生成并检查数据库；原生 x86/ARM64 宿主、生产证
 每次解析都会先校验压缩包 SHA-256，再以压缩包内逐文件哈希清单验证共享缓存；缺失、篡改、额外文件、manifest 损坏或重解析点都会在跨进程锁内触发安全重建。
 缓存支持 Unicode 和长路径，同一台机器上的项目复用按内容寻址的工具目录。
 
-MSBuild Task 及其直接加载的 Abstractions/Core/NSIS/WiX 程序集都提供 `netstandard2.0` 资产。
+MSBuild Task 及其直接加载的 Abstractions/Core/NSIS/WiX 程序集都提供 `netstandard2.0` 资产，使任务能同时被 .NET Framework `MSBuild.exe` 和 `dotnet msbuild` 双宿主加载。
 打包决策和后端调度直接在 MSBuild 进程内完成，包不会再启动额外的 .NET CLI 驱动。
 NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为它本身就是安装程序编译器；MSI 编译使用包内 WiX 工具，当前仅开放 Windows 构建宿主。
 
@@ -55,7 +55,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
 
     <BundlerEnabled>true</BundlerEnabled>
@@ -65,7 +65,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.44" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.45" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -84,7 +84,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.44" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.45" />
 ```
 
 ```csharp
@@ -129,7 +129,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.44" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.45" />
 ```
 
 ```csharp

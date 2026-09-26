@@ -7,7 +7,7 @@ $project = Join-Path $projectDirectory "Bundler.Nsis.Plugin.csproj"
 $publishedPlugin = Join-Path $projectDirectory "bin\$Configuration\net10.0\win-x86\publish\DotNetBundlerNsis.dll"
 $embeddedPlugin = Join-Path $repositoryRoot "third_party\nsis\plugins\x86-unicode\DotNetBundlerNsis.dll"
 
-# 插件单独构建，使 Bundler 的常规构建仍以 .NET 8 SDK 为基线。
+# 插件单独构建：它需要 Windows 原生工具链，与 Bundler 的常规 .NET 10 SDK 构建分开。
 dotnet publish $project -c $Configuration
 if ($LASTEXITCODE -ne 0) { throw "Native AOT plug-in publish failed with exit code $LASTEXITCODE." }
 
