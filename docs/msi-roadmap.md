@@ -582,7 +582,7 @@ NSIS `Verify.ps1` 全量集成退出 0（该轮首次运行曾因残留事务状
 WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方文件），最终包内容逐文件审计见本节退出条件对应记录。
 依据：固定 Tauri 快照 `7dbfc1f`（`languages.json` 表驱动、`default-locale-strings.xml` 按键回退、`.ico` 限制、`fipsCompliant→candle -fips`）、WiX 3.14.1 源归档 `src/ext/UIExtension/wixlib` wxl 声明值、`WixUIExtension.dll` 内嵌资源实枚举、`candle.exe -?` 实测开关。
 
-### WIN-MSI-8：受控 WiX 扩展与专家模式
+### WIN-MSI-8：受控 WiX 扩展与专家模式（已实现，`c897c57`，`0.1.0-alpha.43`）
 
 - **前置**：前述身份、目录、语言和组件规则稳定；先把**常规模式 WiX 元素/引用白名单**、ID 命名空间、文件来源、组件 key path/安装所有权、hash 与版本变化的规则写入本格式文档及测试向量，再开放输入。
 - **目标/交付**：常规模式可提供经解析校验的 `.wxs` fragments 与明确 Component/Feature 引用，以受管声明式扩展原生 MSI 资源；不允许自定义动作、任意脚本、全目录删除或改写内建身份。
@@ -611,7 +611,7 @@ WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方
   专家 `BundlerWixExpertTemplate`（prop→路径）+ `BundlerWixExpertMergeModule`（item）。命名一眼可分。
 - **i18n 关系**：fragment/模板是语言无关输入（culture 由我们的合并 wxl 决定）；专家模板若引用 `!(loc.*)` 可用 Bundler 自有 id 或调用方自带 wxl。
 
-**实施记录（2026-10-02，提交 `<win-msi-8-commit>`）**：
+**实施记录（2026-10-02，提交 `c897c57`）**：
 
 - **常规模式落地**：`ExtensionFragments`（`.wxs` fragment item）+ `ExtensionIdPrefix`（必填自定义前缀，保留 `Cmp`/`Fil`/`Rem`/`WixUI_`/`Wix`/`Bundler` 等 Bundler/WiX 前缀拒用）+ `ExtensionComponentRefs`/`ExtensionComponentGroupRefs`/`ExtensionFeatureRefs` 注入 Product Feature；
   `WixExtensionValidator` 逐 fragment 解析校验：XML 结构、`Fragment` 根、白名单元素（`Component`/`ComponentGroup`/`Directory`/`DirectoryRef`/`File`/`RegistryKey`/`RegistryValue`/`Environment`/`Condition`/`Shortcut`/`Property` 等核心声明式表），
