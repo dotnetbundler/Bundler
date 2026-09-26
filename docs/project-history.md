@@ -793,5 +793,6 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 5. 用户澄清：“尽量支持更多设备”指构建工具本身的宿主覆盖范围，产出物兼容哪些设备由应用开发者决定。
    同日最终确认：`CFBundleVersion` 默认=版本号可覆盖；`LSMinimumSystemVersion` 调用方显式配置、未配置不写入（不代设下限）；构建宿主=未签名 `.app` 任意宿主（跨宿主产物附权限位警告），需 Apple 工具的步骤限 macOS。
    上游 Tauri 经源码核实为 macOS-only：`bundle/macos` 模块 `#[cfg(target_os = "macos")]` 门控，非 macOS 宿主请求仅警告跳过；本方案有意比上游宽一档。
-6. 用户追加要求：很老的 macOS 宿主也要能完成含公证的完全打包 → 公证不依赖 `notarytool`（Xcode 13+），改为自带 Apple Notary API 客户端（HTTPS+JWT/ES256）；`stapler` 上钉与 `.icon`→`Assets.car`（actool/Xcode 26）降级为可选增强。整条链路不再依赖 Xcode，只剩 macOS 系统自带工具。
+6. 宿主下限讨论：曾考虑为很老宿主自带 Notary API 客户端（公证不依赖 `notarytool`）；用户最终拍板**下限对齐 Tauri 同等标准即可**——公证沿用 `xcrun notarytool`/`stapler`（Xcode 13+，宿主约 macOS 11.3+），不做自带客户端。
+   另：宿主能力下限的分层计算口径（打包方式自身/后端运行时/入口层/可选特性降级）已入 `docs/development-rules.md` 第 3 节。
    MAC 规划轮至此全部决策确认完毕，待 `MAC-APP-1` 启动指令。
