@@ -49,9 +49,9 @@
 | hardened runtime | 计划实现 | MAC-APP-3 | 默认开，仅作用于可执行目标 |
 | entitlements | 计划实现 | MAC-APP-3 | 文件路径或内联 plist，显式配置 |
 | inside-out 嵌套代码签名 | 计划实现 | MAC-APP-3 | `MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries` 顺序约定 |
-| 公证（`notarytool submit`+`stapler staple`） | 计划实现+外部待验收 | MAC-APP-3 / MAC-APP-OI-01 | 默认关闭显式开启；真实提交外部待验收 |
-| `skipStapling` 等价开关 | 计划实现 | MAC-APP-3 | 不等待结果不上钉 |
-| 公证失败自动取 `notarytool log` | 计划实现 | MAC-APP-3 | 非 Accepted 即构建失败 |
+| 公证（自带 Notary API 客户端 + 可选 `stapler` 上钉） | 计划实现+外部待验收 | MAC-APP-3 / MAC-APP-OI-01 | 默认关闭显式开启；不依赖 `notarytool`/Xcode，老宿主可用；真实提交外部待验收 |
+| `skipStapling` 等价开关 | 计划实现 | MAC-APP-3 | 不等待结果不上钉；`stapler` 缺失时自动降级跳过 |
+| 公证失败自动取 submission log | 计划实现 | MAC-APP-3 | 非 Accepted 即构建失败并附服务端日志 |
 
 ## Bundler 通用横切
 

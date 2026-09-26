@@ -107,7 +107,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - WiX v3 已退出免费社区服务；大范围公开分发前须重新评估维护风险（见 `third_party/wix/msi-wix-provenance.md`）。
 - `MSI-OI-12`/`MSI-OI-13` 等外部事项待有对应环境时验收。
 - MAC 规划轮已确认项（2026-09-26）：PKG 纳入 `PackageFormat`（`MAC-DMG` 后、Linux 前）；宿主工具检测策略替代内嵌供应（原则：构建工具尽量覆盖更多宿主设备；Xcode 专属工具只服务可选能力且须可降级；产出物设备兼容范围由应用开发者决定）；后端按格式分包 `Bundler.MacApp`/`Bundler.MacDmg`/`Bundler.MacPkg` + 共享 `Bundler.Signing.Mac`；universal 走 `osx-x64`/`osx-arm64` 双产物不加枚举。
-- MAC 规划轮决策全部确认（2026-09-26）：`CFBundleVersion` 默认=版本号可覆盖；`LSMinimumSystemVersion` 调用方显式配置、未配置不写入；构建宿主=未签名 `.app` 任意宿主可构建（附权限位警告），需 Apple 工具的步骤限 macOS。
+- MAC 规划轮决策全部确认（2026-09-26）：`CFBundleVersion` 默认=版本号可覆盖；`LSMinimumSystemVersion` 调用方显式配置、未配置不写入；构建宿主=未签名 `.app` 任意宿主可构建（附权限位警告），需 Apple 工具的步骤限 macOS；用户要求很老 macOS 宿主也能完全打包 → 公证用自带 Notary API 客户端（不依赖 notarytool/Xcode），`stapler`/`actool`/`SetFile` 降级为可选增强。
 - `MAC-APP-OI-*` 外部事项（Developer ID 证书/公证凭证、Rosetta/Intel 宿主、干净宿主矩阵等）待有对应环境时验收。
 
 ## 6. 默认下一步

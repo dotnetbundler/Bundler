@@ -42,25 +42,28 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 | `ditto`、`xattr` | 系统 | 公证打包 zip、扩展属性清理；MAC-APP-3 必需 |
 | `codesign` | 系统 | ad-hoc/正式签名；MAC-APP-3 必需 |
 | `security` | 系统 | 临时钥匙串导入 CI 证书；MAC-APP-3 必需 |
-| `xcrun notarytool`、`xcrun stapler` | Xcode（`xcrun` 查找） | 公证与上钉；MAC-APP-3 显式开启时必需 |
+| 公证服务（Apple Notary API） | 自带实现 | MAC-APP-3：自带 HTTPS+JWT 客户端直连 Notary API，**不依赖 `notarytool`/Xcode**，老宿主也可公证 |
+| `xcrun stapler` | Xcode（`xcrun` 查找） | 公证票据上钉；可选增强，缺失时降级跳过（在线核验仍有效） |
 | `actool`、`assetutil` | Xcode ≥26 | `.icon`→`Assets.car` 图标管线；可选，缺失降级 `.icns` 并警告 |
 | `lipo` | 系统/CLT | universal 载荷校验（`lipo -info`）；MAC-APP-2 |
 | `hdiutil`、`osascript`、`sw_vers`、`SetFile`、`bless`、`file` | 系统/Xcode | DMG 阶段（MAC-DMG）才需要，不在本路线要求 |
 | `pkgbuild`、`productbuild`、`productsign`、`xar`、`pkgutil`、`installer` | 系统 | PKG 阶段（MAC-PKG，待决策）才需要 |
 
+**已确认（2026-09-26 用户要求）：很老的 macOS 宿主也要能完成含公证在内的完全打包**——整条链路只依赖系统自带工具+自带代码，不依赖 Xcode：`codesign`/`hdiutil`/`osascript`/`pkgbuild`/`plutil` 等系统工具存在多年不构成门槛；公证用自带 Notary API 客户端（HTTPS+JWT）而非 `notarytool`；`stapler`/`actool`/`SetFile` 这类 Xcode 专属工具全部降级为可选增强。
+
 规则：
 
 0. 宿主 OS 下限分两层，Bundler 不设额外 Bundler 专属下限：
-   打包方式自身的下限：未签名 `.app` 目录组装只是文件系统操作，格式本身不绑定宿主 OS（这也是开放任意宿主的依据）；凡走 Apple 工具的步骤才绑定 macOS，且这些系统工具存在多年、`codesign`/`hdiutil`/`plutil`/`pkgbuild` 等在几乎所有现代 macOS 上都在，方式层面的实质门槛来自公证（`notarytool` 需 Xcode 13+，宿主约 macOS 11.3+）与 `.icon`→`Assets.car`（Xcode 26，宿主约 macOS 15.6+）两个可降级特性。
+   打包方式自身的下限：未签名 `.app` 目录组装只是文件系统操作，格式本身不绑定宿主 OS（这也是开放任意宿主的依据）；凡走 Apple 系统工具的步骤才绑定 macOS，且 `codesign`/`hdiutil`/`plutil`/`pkgbuild` 等存在多年、几乎所有现代 macOS 都在；公证改自带 Notary API 客户端后不再受 `notarytool` 的 Xcode 13+ 约束；剩余方式层面门槛只有 `.icon`→`Assets.car`（Xcode 26，宿主约 macOS 15.6+）与 `stapler` 上钉两个可降级特性。
    后端运行时下限（不含 MSBuild 应用层，见 `docs/development-rules.md` 第 3 节“后端包本身可直接使用”）：后端是 `netstandard2.0` 库，宿主装任一仍可用的 .NET 运行时即可加载。
    官方支持口径：.NET 8/9/10 当前的官方支持列表都只列 macOS 14/15/26（微软随 Apple 支持期滚动更新，macOS 12/13 已 EOL 移出）→ 官方支持下限现为 macOS 14；
    技术口径：`netstandard2.0` 可被更老的 .NET Core 加载（理论可及更老 macOS），但那些运行时已 EOL，不作支持承诺。
    MSBuild 应用层有自己的宿主下限（.NET 10 SDK → macOS 14），属于入口层，不构成后端下限。
-   可选特性另有独立下限：`notarytool`/`stapler` 需 Xcode 13+（约 macOS 11.3+），`.icon`→`Assets.car` 需 actool/Xcode 26（宿主约 macOS 15.6+）——均按降级处理，不阻塞打包。
+   可选特性另有独立下限：`.icon`→`Assets.car` 需 actool/Xcode 26（宿主约 macOS 15.6+）、`stapler` 上钉需 Xcode——均按降级处理，不阻塞打包；公证不走 `notarytool`，无 Xcode 下限。
 1. 构建前探测每个必需工具（`xcrun -f`/PATH）并记录版本与路径；缺必需工具立即报清晰错误，不静默降级；缺可选工具降级并警告。
 2. 不自动安装 Xcode/CLT，不替用户激活 Rosetta；宿主缺项写入构建日志与错误信息。
 3. 无网络下载：公证之外的每一步离线可用；公证是显式开启的网络动作。
-4. 构建宿主范围（已确认，2026-09-26）：未签名 `.app` 结构生成放开任意宿主（纯文件系统操作+plist 写入，不需 Apple 工具；跨宿主产物附明确警告，说明 Windows 宿主不保留 Mach-O 可执行位、需经保留权限位的归档交付）；凡需 Apple 工具的步骤（codesign/notarytool/hdiutil/pkgbuild）在非 macOS 宿主明确报错。
+4. 构建宿主范围（已确认，2026-09-26）：未签名 `.app` 结构生成放开任意宿主（纯文件系统操作+plist 写入，不需 Apple 工具；跨宿主产物附明确警告，说明 Windows 宿主不保留 Mach-O 可执行位、需经保留权限位的归档交付）；凡需 Apple 系统工具的步骤（codesign/hdiutil/pkgbuild）在非 macOS 宿主明确报错；公证是自带 HTTPS 客户端，但只在已签名产物上运行，签名已在 macOS 侧锁定故公证实质仍只发生在 macOS。
    对照：上游 Tauri 的 `macos` 模块整体 `#[cfg(target_os = "macos")]` 门控，非 macOS 宿主请求 `.app`/`.dmg` 仅警告并跳过（快照 `7dbfc1f` `bundle.rs`）；本方案有意比上游宽一档，与“工具覆盖尽量多宿主”原则一致。
 5. 后端包形态（已确认，2026-09-26）：按格式分包，与 `Bundler.Nsis`/`Bundler.Wix` 惯例一致——`Bundler.MacApp`、`Bundler.MacDmg`、`Bundler.MacPkg` 各自独立；共享的签名/公证/钥匙串/工具探测基础设施另立 `Bundler.Signing.Mac`（对齐 `Bundler.Signing.Windows` 先例），必要时再加 `Bundler.Mac.Common` 承载 plist/束结构等公共代码。
 
@@ -92,9 +95,10 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
    hardened runtime 默认开启且只作用于可执行目标；entitlements 显式给定（文件路径或 plist 内容）；
    一律 inside-out 顺序并对整个 bundle 收尾；签名前 `xattr -crs`；签名失败不留下看似成功的产物。
 7. **公证语义**：公证是显式开启的网络上传，默认关闭；
-   凭证经环境变量/密钥提供器传入（Apple ID 或 App Store Connect API Key），不进仓库、项目文件、命令行回显或可回显日志；
-   `skipStapling` 等价开关单独存在；`notarytool` 非 Accepted 结果即构建失败并自动附 `notarytool log`；
-   上钉失败不把产物标成“已公证”。
+   自带 Notary API 客户端（HTTPS+JWT/ES256），不依赖 `notarytool`/Xcode，老宿主可用；
+   凭证经环境变量/密钥提供器传入（App Store Connect API Key），不进仓库、项目文件、命令行回显或可回显日志；
+   `skipStapling` 等价开关单独存在；服务返回非 Accepted 即构建失败并自动附 submission log；
+   `stapler` 缺失时降级跳过上钉并警告（在线核验仍有效），上钉失败不把产物标成“已公证”。
 8. **秘密处理**：证书/密码/API key 只允许经密钥提供器或约定环境变量；临时钥匙串用完即删；
    本机只允许 ad-hoc 签名断言，Developer ID/公证一律外部待验收。
 
@@ -140,9 +144,9 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 ### MAC-APP-3：codesign 与 notarization
 
 - **前置**：MAC-APP-2 通过；本阶段全部签名代码路径可在无真实证书下完成开发。
-- **目标/交付**：签名提供器（identity/临时钥匙串证书导入/`codesign -s -` ad-hoc）、hardened runtime 开关（仅可执行目标）、entitlements、inside-out 嵌套签名顺序（`MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries` 约定）、`xattr -crs`、签后 `codesign --verify --deep --strict` 与 `spctl` 断言、显式公证（ditto zip→签→`notarytool submit`--wait/异步→`stapler staple`）、`skipStapling`、凭证环境变量与密钥提供器、失败清理不留伪成功产物。
+- **目标/交付**：签名提供器（identity/临时钥匙串证书导入/`codesign -s -` ad-hoc）、hardened runtime 开关（仅可执行目标）、entitlements、inside-out 嵌套签名顺序（`MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries` 约定）、`xattr -crs`、签后 `codesign --verify --deep --strict` 与 `spctl` 断言、显式公证（ditto zip→签→自带 Notary API 客户端 submit→轮询/`--wait` 等价→`stapler` 存在则上钉否则降级）、`skipStapling`、凭证环境变量与密钥提供器、失败清理不留伪成功产物。
 - **新增自动化**：签名顺序、entitlements 传递、hardened runtime 目标筛选、临时钥匙串创建/销毁、失败路径无伪产物、公证参数组装（不上传的桩断言）；
-  本机真实测试：全链 `codesign -s -` ad-hoc 签名 + `--verify` + 启动 + 证书缺失路径。
+  本机真实测试：全链 `codesign -s -` ad-hoc 签名 + `--verify` + 启动 + 证书缺失路径；公证客户端对可注入的 HTTP 桩做请求/轮询/失败断言（真实提交外部待验收）。
 - **人工边界**：Developer ID Application 证书、真实公证提交/上钉/撤销、Gatekeeper 离线验票、`APPLE_*` 凭证链路——全部外部待验收（MAC-APP-OI-01 起）。
 - **不做**：DMG 签名、Developer ID Installer（属 PKG）、生产证书入库、任何默认自动上传。
 - **退出**：本机 ad-hoc 签名链可复现、失败清理断言通过；所有需凭证项登记外部待办。
