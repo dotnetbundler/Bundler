@@ -7,9 +7,9 @@ Core 和格式后端本身不依赖 `.csproj` 或 .NET 应用模型，后续正�
 ## 当前状态
 
 第一条已冻结的链路是 Windows + NSIS。
-MSI 已完成 WIN-MSI-1..8 的当前主机自动化范围，`alpha.37` 是既有 x64/ARM64 身份基线；
+MSI 已完成 WIN-MSI-1..9，`alpha.37` 是既有 x64/ARM64 身份基线；
 `alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 翻译覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
-WIN-MSI-9 仍是计划。
+WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线。
 现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。
 正式 CLI、macOS 和 Linux 格式仍属后续路线。
 

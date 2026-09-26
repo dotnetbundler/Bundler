@@ -3,8 +3,8 @@
 > 最后更新：2026-09-27
 > 当前分支：`msi-development`（NSIS 开发线已并入，冻结提交 `71a5c90`）
 > 当前包版本：`0.1.0-alpha.43`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
-> 当前阶段：WIN-MSI-1..8 本机自动化范围完成
-> 默认下一阶段：`WIN-MSI-9`（需用户明确启动指令）
+> 当前阶段：WIN-MSI-1..9 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`
+> 默认下一阶段：`MAC-APP`（需用户明确启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -59,14 +59,14 @@ WIN-MSI-1..8 实现与本机自动化验证完成：
 
 `MAC-APP`、`MAC-DMG`、`MAC-PKG`、`LINUX-DEB`、`LINUX-RPM`、`LINUX-APPIMAGE`、`CLI-C1`：无实现，顺序与边界见 `docs/roadmap.md`。
 
-## 3. 最近验证（2026-10-02，Windows 11 Pro build 26200 x64）
+## 3. 最近验证（2026-10-02，Windows 11 Pro build 26200 x64，WIN-MSI-9 冻结回归）
 
 - `dotnet build Bundler.slnx -c Release`：0 警告/0 错误。
 - `tests/Bundler.Tests` Release：78/78 PASS。
-- MSI 集成全部 PASS：`Verify.ps1`、`VerifyWinMsi7.ps1`、`VerifyPublicSample.ps1`、新增 `VerifyWinMsi8.ps1`（常规 fragment 真实安装/卸载、专家模板身份回读与安装/卸载，均经隔离本地包源消费）。
-- 38 个支持 culture 的 `light` 真编译逐一验证；`hi-IN`/`kk-KZ` 上游译文不可编译，已排除在支持表外。
-- NSIS 全量集成 PASS（`IBundleBackend` 多产物契约变更后的回归，2026-09-27）。
-- 测试 ProductCode 复核无安装残留。
+- MSI 集成**全套** PASS：`Verify.ps1`、`VerifyLifecycle.ps1`、`VerifyMaintenance.ps1`、`VerifyWinMsi5..8.ps1`、`VerifyPublicSample.ps1`（`alpha.43` 本地包，日志/产物保留于各临时目录）。
+- NSIS `Verify.ps1`：首次运行遇已知的事务目录清理竞态 flake（`Committed rollback journal was not cleaned up`，残留属本轮测试），复核确认无遗留后复跑全绿；该竞态为既有已知项，不改变 NSIS 冻结语义。
+- 包供应复核：7 包 `0.1.0-alpha.43`；`DotNet.Bundler.Wix` 14,417,031 字节/11 文件，WiX 源码归档与许可证哈希与 `third_party/wix/SHA256SUMS` 一致。
+- Tauri 快照漂移复核：`dev` 移至 `15468de7`，MSI 相关文件与 `7dbfc1f` 比对无实质差异。
 
 ## 4. 外部验收边界（未执行，不视为完成）
 
@@ -90,8 +90,8 @@ WIN-MSI-1..8 实现与本机自动化验证完成：
 
 ## 6. 默认下一步
 
-`WIN-MSI-9`：逐项 Tauri 通用能力审计、全部本机适用回归、工具许可/体积复核和 MSI alpha 基线再冻结，不新增功能。
-详细目标/退出条件见 `docs/roadmap.md` 与 `docs/msi-roadmap.md` 相应阶段节。
+`MAC-APP`：macOS `.app` 捆绑后端，结构/元数据 → 签名边界 → 原生 macOS E2E → 冻结。
+详细目标/退出条件见 `docs/roadmap.md` 相应节；开始前需先做格式决策与阶段分解。
 未经用户明确启动指令不实施；未经明确要求不提交、不推送。
 
 ## 7. 历史记录

@@ -2,10 +2,9 @@
 
 > 最后整理：2026-09-25
 > 路线状态：`NSIS-R4` 已在 `71a5c90` 形成冻结基线，随后加固 journal 恢复目标、跨配置恢复流程及快照完整性；当前提交以 Git HEAD 为准
-> 当前实施对象：Windows WiX/MSI
-> 当前状态：`WIN-MSI-1..7` 的本机自动化范围已完成，`alpha.37` 为既有 MSI 身份基线，`alpha.40` 增加 x86、显式版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方翻译覆盖、快捷方式图标与 FIPS 选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
-> `WIN-MSI-7..9` **尚未实施**；
-> 默认下一实施阶段为 `WIN-MSI-7`，`MAC-APP` 顺延。
+> 当前实施对象：MSI 已收官，下一格式 macOS
+> 当前状态：`WIN-MSI-1..9` 全部完成，MSI 基线冻结于 `alpha.43`；版本沿革：`alpha.37` 为既有 MSI 身份基线，`alpha.40` 增加 x86、显式版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方翻译覆盖、快捷方式图标与 FIPS 选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
+> 默认下一实施阶段为 `MAC-APP`。
 > 既有 per-machine、生产签名、交互 UI、干净宿主及重启等外部验收仍各自记录，不阻塞新增功能开发，也不冒充已通过。
 
 本文档是项目后续路线的规范入口；
@@ -112,18 +111,18 @@ NSIS 原路线、能力基线、旧阶段映射和 `NSIS-R1..R4` 的历史证据
 `alpha.37` 是既有 x64/ARM64 身份基线，`alpha.40` 增加 x86、显式 MSI 版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
 这不是 Tauri 通用 MSI 能力全集。
 per-machine 只验证构建产物和数据库，原生 x86/ARM64 宿主、生产证书、真实 UI、FIPS 策略宿主与重启仍按 MSI 专用人工及外部清单记录。
-WIN-MSI-9 仍为**计划、未实现**：
+`WIN-MSI-1..9` 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`：
 
 5. `WIN-MSI-5`（本机范围已完成）：x86 目标、显式安全 MSI 版本映射、可选降级及既有身份兼容。
 6. `WIN-MSI-6`（本机范围已完成）：范围内安装目录、自定义 UI/品牌、受管可选功能、PATH 与仅交互勾选启动；交互 UI 实际行为和 junction 目标见人工清单。
 7. `WIN-MSI-7`（本机范围已完成）：38 语言独立 MSI 产物、调用方 `.wxl` 覆盖、快捷方式图标、`candle -fips` 透传；各语言母语审校与 FIPS 策略宿主见人工清单。
 8. `WIN-MSI-8`（本机范围已完成）：常规模式白名单 `.wxs` fragment + 调用方 ID 前缀 + 显式 Component/Feature 引用；显式专家模式整份模板/merge module，身份经 `candle -d` 变量与构建后数据库回读强制；扩展输入计入指纹。
-9. `WIN-MSI-9`：逐项 Tauri 通用能力审计、全部本机适用回归、工具许可/体积复核和再冻结，不新增功能。
+9. `WIN-MSI-9`（已完成）：逐项 Tauri 通用能力审计（快照漂移复核无 MSI 实质变化）、全部本机适用回归、工具许可/体积复核和再冻结，无新增功能。
 
 前置条件、交付物、不做事项、自动化/真实安装测试及退出条件见 [`docs/msi-roadmap.md`](msi-roadmap.md) 第 10 节；
 [MSI Tauri 能力审计](msi-tauri-capability-audit.md)区分已实现、计划、明确排除及另立产品路线，[MSI 能力矩阵](msi-capability-matrix.md)保存逐项状态。
 原 WIN-MSI-4 的实际证据继续有效，不能借新路线宣称计划能力已完成。
-默认下一实施阶段为 `WIN-MSI-9`；
+MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 未经用户明确要求不开始代码。
 
 ### MAC：macOS `.app` 与 DMG
@@ -154,7 +153,7 @@ CLI 不产生新的格式能力，也不应反过来驱动后端设计；先完�
 删除重复或错误的早期 alpha 参数而不承诺兼容。
 完成后 CLI、MSBuild 和直接 API 都只是同一打包能力的适配器。
 
-当前实施顺序为：已完成本机范围的 `WIN-MSI-1..8` → **计划中的 `WIN-MSI-9`** → `MAC-APP` → `MAC-DMG` →（仅当 macOS 格式决策纳入时）`MAC-PKG` → `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE` → `CLI-C1`。
+当前实施顺序为：已完成并冻结的 `WIN-MSI-1..9` → `MAC-APP` → `MAC-DMG` →（仅当 macOS 格式决策纳入时）`MAC-PKG` → `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE` → `CLI-C1`。
 Tauri updater 协议/提升权限计划任务若有需求另立跨格式产品路线，不混入 MSI 或提前产品化 CLI。
 调整顺序必须依据真实用户需求、验证能力和维护成本更新本文档，不能只在对话中临时改口。
 

@@ -1,7 +1,8 @@
-# Tauri 通用 MSI 能力审计与补齐边界（2026-09-25 快照；WIN-MSI-6 已实施）
+# Tauri 通用 MSI 能力审计与补齐边界（2026-09-25 快照；WIN-MSI-9 已冻结）
 
 本文件记录上游参照、当前实现事实和已确认的后续产品选择。
-WIN-MSI-5/6/7/8 已完成当前 Windows 11 x64 本机范围；WIN-MSI-9 尚未实现。
+WIN-MSI-5..9 已完成；本文件即为 WIN-MSI-9 逐项审计结论。
+2026-10-02 复核上游：`dev` 已移至 `15468de79772c442a424c6e02658b872c0a24b38`，但 MSI 相关表面（`main.wxs`、`WixSettings`、`msi/mod.rs`）与固定快照 `7dbfc1f` 逐文件比对无实质差异（仅 `HashMap→BTreeMap` 内部类型），本审计维持 `7dbfc1f` 基线结论有效。
 2026-10-02 当前分支为 `msi-development`，包版本为 `0.1.0-alpha.43`。
 原 WIN-MSI-4 是既有 MSI 身份基线，不代表与 Tauri 通用 MSI 能力等价。
 应用运行时依赖的自动发现、下载和安装继续不做。
@@ -30,7 +31,7 @@ Tauri 的通用配置字段不一定对 MSI 有独立含义，优先比较用户
 | 多语言分别生成及调用方自定义翻译 | 38 语言静态表（WiX 3.14.1 内嵌 40 项中实测可编译者）、一次构建每语言一个独立 MSI、调用方 `.wxl` 按键覆盖 | WIN-MSI-7 已实现；每种语言独立稳定身份、输出名和安装目录，旧英语/中文测试向量不变；母语审校外列。 |
 | FIPS 构建选项 | `FipsCompliant`/`BundlerWixFipsCompliant` 仅向 `candle` 透传 `-fips` | WIN-MSI-7 已实现参数透传；选项通过不等于环境或产品取得合规认证，FIPS 策略宿主实测外部待验收（MSI-OI-13）。 |
 | WiX fragments、组件/功能引用、merge module、完整模板 | 常规模式：白名单 `.wxs` fragment + 调用方前缀 + 显式 Component/Feature 引用；专家模式：整份模板替换 + merge module 直传，身份经 `candle -d` 变量与构建后数据库回读强制 | WIN-MSI-8 已实现；相对 Tauri 的零校验模型有意收紧（内容白名单、前缀命名空间、身份回读）。MSBuild/API 名称两模式一眼可分，默认常规；专家产物不享有受管安装保证。详见下节。 |
-| 证书选择、签名命令、时间戳、摘要配置 | 现有 PFX/证书存储指纹、外部签名命令、SHA-256 与 RFC 3161 时间戳路径 | 保留已验证的签名顺序与失败清理；WIN-MSI-9 对照用户结果审计。不为了字段对齐提供弱摘要算法。生产证书验收仍按 MSI 专用外部清单。 |
+| 证书选择、签名命令、时间戳、摘要配置 | PFX/证书存储指纹、外部签名命令、SHA-256 与 RFC 3161 时间戳均已实现并验证签名顺序与失败清理 | WIN-MSI-9 审计结论：等价已实现（用户可观察能力覆盖 Tauri 的证书指纹/摘要/时间戳配置）；不提供弱摘要算法，生产证书验收仍按 MSI 专用外部清单（MSI-OI-系列）。 |
 | WebView2、VC++、.NET 等应用运行时部署 | 无 | 产品边界不变：不自动发现、下载、安装、升级或卸载任意应用运行时。用户可将**已准备好的普通文件**作为载荷，但 Bundler 不管理其先决条件。[Tauri WebView2 模式](https://v2.tauri.app/distribute/windows-installer/#webview2-installation-options)。 |
 | Tauri elevated update task、updater 专属签名包 | 无 | 与 Tauri 更新协议/运行时绑定，不通过 MSI 模板字段伪装成通用更新器；如要支持应用更新，另立跨格式协议、密钥与回滚路线，不列入 WIN-MSI-5..9。 |
 
@@ -56,3 +57,9 @@ Tauri 的通用配置字段不一定对 MSI 有独立含义，优先比较用户
 计划状态不得写成已支持；公开示例必须在能力实现阶段同步更新。
 每轮包内容变化迭代 `BundlerPackageVersion`，示例应用版本保持稳定。
 WIN-MSI-5/6/7/8 的实施证据见 MSI 路线第 10 节及 `VerifyWinMsi5.ps1`/`VerifyWinMsi6.ps1`/`VerifyWinMsi7.ps1`/`VerifyWinMsi8.ps1`；WIN-MSI-9 才执行新的完整 Tauri 通用 MSI 对照审计与再冻结。
+
+## WIN-MSI-9 审计结论（2026-10-02，`0.1.0-alpha.43`）
+
+以固定快照 `7dbfc1f` 逐项复核全部 Tauri 通用 MSI 用户能力；上游 `dev` 已移至 `15468de7`，MSI 相关文件（`main.wxs`、`WixSettings`、`msi/mod.rs`）与固定快照比对无实质差异，结论不受漂移影响。
+逐行结论归入四类：等价已实现（身份/版本/范围/语言/图标/位图/PATH/ARP/签名/退出码/扩展）、有意更安全语义（每语言隔离身份、常规模式白名单校验、专家模式构建后身份回读、默认拒绝降级）、明确不适用/不支持（自动运行时部署、受管模式任意脚本与全目录删除）、另立跨格式产品路线（updater/提升权限计划任务、CLI-C1）。
+冻结说明：此后 MSI alpha 基线冻结于 `0.1.0-alpha.43` 行为面；无现成环境的验收项（MSI-OI-*、MSI-MT-*）继续保留为外部待办，不计入冻结证据。

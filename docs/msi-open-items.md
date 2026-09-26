@@ -1,8 +1,8 @@
 # MSI 外部输入与验收待办
 
-MSI 后端已完成 **WIN-MSI-1..8 当前 Windows 11 x64 本机范围**，`alpha.37` 为既有 x64/ARM64 身份基线，`alpha.40` 增加 x86、显式 MSI 版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI 序列、可选 Feature、PATH 精确追加与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
+MSI 后端已完成 **WIN-MSI-1..9 当前 Windows 11 x64 本机范围**（`0.1.0-alpha.43` 为冻结基线），`alpha.37` 为既有 x64/ARM64 身份基线，`alpha.40` 增加 x86、显式 MSI 版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI 序列、可选 Feature、PATH 精确追加与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
 当前开发机上的独立 fixture 已通过真实 current-user 安装/卸载、两版本生命周期、x86 版本映射/降级、修复、被动运行、中文包并存、受限故障回滚，自定义目录安装、静默范围拒绝、PATH 保留与升级恢复目录，以及 en-US/ja-JP 双语并存安装与独立卸载；per-machine 仍仅静态检查产物。
-WIN-MSI-8..9 是后续功能计划，见 `docs/msi-roadmap.md` 第 10 节及 `docs/msi-tauri-capability-audit.md`；下表仍只记录外部环境和证据，不把尚未实施的功能混作环境待办。
+WIN-MSI-9 已完成 Tauri 通用能力审计与再冻结，见 `docs/msi-roadmap.md` 第 10 节及 `docs/msi-tauri-capability-audit.md`；下表仍只记录外部环境和证据。
 当前没有干净 Windows 10/11、ARM64 原生用户端或提权测试 VM；这些缺口不阻塞本机可执行开发，不扩大支持声明。
 人工步骤见 `docs/msi-manual-testing.md`。
 

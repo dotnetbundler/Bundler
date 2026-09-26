@@ -2,7 +2,7 @@
 
 > 状态：`WIN-MSI-1..6` 的当前 Windows 11 x64 本机自动化范围已完成（2026-09-26）；
 > `alpha.37` 是既有身份基线，`alpha.40` 增加 x86、显式版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
-> `WIN-MSI-8` 已完成（受控 WiX 扩展与专家模式）；`WIN-MSI-9` 已规划但**尚未实施**，为默认下一阶段。
+> `WIN-MSI-1..9` 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；默认下一格式为 `MAC-APP`。
 > 原阶段证据见第 6..9 节，扩展路线及 WIN-MSI-5/6 证据见第 10 节。
 > 当前开发分支：`msi-development`；历史记录中的 `codex/msi-development` 是改名前的名称。
 > 规范入口：`docs/roadmap.md`；
@@ -633,7 +633,7 @@ WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方
 - **边界**：专家模式可编译不等于调用方逻辑受管/可回滚/安全——任意自定义动作、脚本、服务注册只在专家模式可能，责任归属写入文档；第三方二进制责任与许可归属单独检查。
   依据：固定 Tauri 快照 `7dbfc1f`（`WixSettings` fragment/refs/template/mergeModules、xmlns→`-ext` 自动加载），内容与身份校验为有意收紧偏离。
 
-### WIN-MSI-9：完整通用能力审计与再冻结
+### WIN-MSI-9：完整通用能力审计与再冻结（已实现，`0.1.0-alpha.43`）
 
 - **前置**：WIN-MSI-5..8 的可本机自动执行门槛均通过，冻结前逐条核对新旧配置、产物身份和版本迭代记录。
 - **目标/交付**：以固定 Tauri 快照更新 `docs/msi-tauri-capability-audit.md`，每个通用用户能力明确为“等价已实现”“有意采用更安全语义”“另立跨格式产品路线”或“明确不适用”；
@@ -646,3 +646,13 @@ WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方
 - **不做/退出**：不在冻结阶段临时加功能，不把 Tauri 专属 updater、应用运行时或其他未实施能力写成已支持；不要求凭空完成无环境验收。
   矩阵每条有实现/排除依据、新增自动化和本机真实操作通过、文档间状态一致后退出，默认下一格式恢复为 `MAC-APP`。
   提交和推送仍只按用户明确指令执行。
+
+**实施记录（2026-10-02，`0.1.0-alpha.43`）**：
+
+- **上游快照复核**：`dev` 已移至 `15468de79772c442a424c6e02658b872c0a24b38`；`main.wxs`、`WixSettings`、`msi/mod.rs` 与 `7dbfc1f` 逐文件比对无实质差异（仅 `HashMap→BTreeMap`），审计结论不受漂移影响，维持固定快照基线。
+- **逐项审计**：`docs/msi-tauri-capability-audit.md` 全部行已归入四类——等价已实现（身份/版本/范围/38 语言/图标/位图/PATH/ARP/签名/退出码/受控扩展）、有意更安全语义（每语言隔离身份、常规模式白名单、专家模式构建后身份回读、默认拒绝降级/同版本异包）、明确不支持（自动运行时部署、受管模式任意脚本与全目录删除）、另立跨格式路线（updater/提升计划任务、CLI-C1）。
+- **包供应复核**：`dotnet pack` 产出 7 包 `0.1.0-alpha.43`；`DotNet.Bundler.Wix` 14,417,031 字节、11 个文件（dll + README + THIRD-PARTY-NOTICES + licenses/wix 四项），`wix3141-source.zip` SHA-256 `A56184E7…FE9F`、`LICENSE.TXT` `40043709…0000` 与随包 `SHA256SUMS`/`third_party/wix` 一致；工具随包与逐文件哈希仍由 `Verifies WiX binary and source redistribution` 测试守护；无付费组件、无运行时下载。
+- **本机回归证据（Windows 11 Pro build 26200 x64）**：`dotnet build` 0 警告/0 错误；`tests/Bundler.Tests` 78/78 PASS；
+  `Verify.ps1`、`VerifyLifecycle.ps1`、`VerifyMaintenance.ps1`、`VerifyWinMsi5.ps1`、`VerifyWinMsi6.ps1`、`VerifyWinMsi7.ps1`、`VerifyWinMsi8.ps1`、`VerifyPublicSample.ps1` 全部 PASS（各自临时目录保留 MSI 与 verbose log）；NSIS `Verify.ps1` 回归见 `PROJECT_CONTEXT.md` 最近验证节。
+- **文档一致性**：审计、能力矩阵、人工清单、外部待办、公开示例、README 与路线文件统一推进到冻结态；无新用户可见能力，无版本 bump 之外的包内容变化。
+- **冻结声明**：`0.1.0-alpha.43` 为 MSI 后端冻结基线；后续 MSI 仅接受缺陷修复或外部验收证据回填，不新增能力。外部待验收项仍为 MSI-OI-*/MSI-MT-* 原清单。
