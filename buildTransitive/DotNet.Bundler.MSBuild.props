@@ -64,5 +64,12 @@
     <BundlerWindowsSigningCertificateStoreLocation Condition="'$(BundlerWindowsSigningCertificateStoreLocation)' == ''">CurrentUser</BundlerWindowsSigningCertificateStoreLocation>
     <BundlerWindowsSigningTimestampUrl Condition="'$(BundlerWindowsSigningTimestampUrl)' == ''"></BundlerWindowsSigningTimestampUrl>
     <BundlerWindowsSigningCommand Condition="'$(BundlerWindowsSigningCommand)' == ''"></BundlerWindowsSigningCommand>
+    <BundlerMacAppBundleName Condition="'$(BundlerMacAppBundleName)' == ''"></BundlerMacAppBundleName>
+    <BundlerMacAppDisplayName Condition="'$(BundlerMacAppDisplayName)' == ''"></BundlerMacAppDisplayName>
+    <BundlerMacAppShortVersion Condition="'$(BundlerMacAppShortVersion)' == ''"></BundlerMacAppShortVersion>
+    <BundlerMacAppBuildVersion Condition="'$(BundlerMacAppBuildVersion)' == ''"></BundlerMacAppBuildVersion>
+    <BundlerMacAppMinimumSystemVersion Condition="'$(BundlerMacAppMinimumSystemVersion)' == ''"></BundlerMacAppMinimumSystemVersion>
+    <BundlerMacAppCategory Condition="'$(BundlerMacAppCategory)' == ''"></BundlerMacAppCategory>
+    <BundlerMacAppIconName Condition="'$(BundlerMacAppIconName)' == ''"></BundlerMacAppIconName>
   </PropertyGroup>
 </Project>

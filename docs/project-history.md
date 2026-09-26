@@ -796,3 +796,18 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 6. 宿主下限讨论：曾考虑为很老宿主自带 Notary API 客户端（公证不依赖 `notarytool`）；用户最终拍板**下限对齐 Tauri 同等标准即可**——公证沿用 `xcrun notarytool`/`stapler`（Xcode 13+，宿主约 macOS 11.3+），不做自带客户端。
    另：宿主能力下限的分层计算口径（打包方式自身/后端运行时/入口层/可选特性降级）已入 `docs/development-rules.md` 第 3 节。
    MAC 规划轮至此全部决策确认完毕，待 `MAC-APP-1` 启动指令。
+
+### 14.20 MAC-APP-1：最小可用 `.app`（2026-09-26，分支 `mac-app-development`）
+
+实现最小可用 `.app` 后端并本机实测通过（云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）：
+
+1. 公共层：`PackageFormat.Pkg` 入枚举（osx 矩阵放行；win/linux 拒绝）；`BundlePlanner` 对 `Dmg`/`Pkg` 自动插入中间 `App` 步骤；`BundleConfigurationValidator` 新增 `outputDirectory` 不得位于 `inputDirectory` 内的拒绝规则（防整树递归复制）。
+2. `src/Bundler.MacApp`（netstandard2.0，`DotNet.Bundler.MacApp` 包）：`MacAppBundler`/`MacAppBundleConfiguration` 公开 API、`MacAppBundleBackend` 走 `BundlePipeline`；
+   载荷语义：输入树保相对结构进 `Contents/MacOS/`，资源→`Contents/Resources/`，`.framework`/`.dylib`→`Contents/Frameworks/`，`Contents` 显式映射拒绝顶层保留名/`..`/绝对路径/跨通道冲突；
+   符号链接与 reparse 拒绝；主可执行限单层文件名 + Mach-O 魔数校验；POSIX 宿主 `chmod 755`（Windows 宿主告警降级）；`plutil -lint` 仅 macOS 宿主执行。
+   Info.plist 全键（含 `NSHighResolutionCapable`）XML 生成；`PkgInfo`=`APPL????`；`.icns` 透传或 PNG 位图合成（ic07..ic12 类型映射，不依赖 iconutil）。
+3. MSBuild：`BundlerFormats=app` + `BundlerMacAppBundleName/DisplayName/ShortVersion/BuildVersion/MinimumSystemVersion/Category/IconName` + `BundlerMacContent`/`BundlerMacFramework` 项组；osx RID 默认 `MainExecutable=$(TargetName)` 无 `.exe`；混合格式报错文案改为通用表述。
+4. 测试与示例：`tests/Bundler.Tests/MacAppTests.cs` 新增 22 条（结构/plist 回读/校验拒绝/载荷映射/图标合成/权限位/确定性重建/MSBuild 文本断言/Pkg 规划）；`tests/MacApp.Api.PackageFixture`（NuGet 消费直接 API）；`tests/MacOS.App.Integration/Verify.sh`（bash 全流程）+ `samples/HelloMacApp`。
+5. 本机验证：`Verify.sh` 全绿——包内容断言→fixture 发布产 `.app`→结构/plist 全键回读→Mach-O `+x`→直接执行输出标记→`open -W` 接受→重建 Info.plist 指纹一致→删除即卸载→独立 API fixture 再产 `.app`。
+6. 既有套件回归：macOS 宿主上 5 条 NSIS/WiX 用例失败为预存环境限制（NSIS 需要 win 载荷工具断言/WiX MSI 编译需 Windows 宿主；`git stash` 基线复核失败集合一致），与本改动无关。
+7. 边界按路线拒绝：文件关联/URL scheme（MAC-APP-2）、签名（MAC-APP-3）、`.app` 无 license 语义，均明确 `NotSupportedException`；`BundlerIntegrationOutput` 等参数复用既有 fixture 约定。

@@ -20,6 +20,7 @@ public enum PackageFormat
     Msi,
     App,
     Dmg,
+    Pkg,
     Deb,
     Rpm,
     AppImage

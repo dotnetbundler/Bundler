@@ -3,27 +3,27 @@
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
 计划实现与外部待验收行绑定到 `docs/mac-app-roadmap.md`、`docs/mac-app-open-items.md`、`docs/mac-app-manual-testing.md` 中的明确阶段/ID。
 上游参照：`docs/mac-tauri-capability-audit.md`；PKG 取舍：`docs/mac-format-decision.md`。
-当前无任何 `.app` 实现，表内全部为非冻结状态。
+`MAC-APP-1` 已完成（云 macOS VM 已验证，`2026-09-26`），表内“已实现”行为均附本机证据；表内全部为非冻结状态。
 
 ## 结构与核心元数据
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `.app` 目录骨架与 `<产品名>.app` 产物 | 计划实现 | MAC-APP-1 | `Contents/{Info.plist,MacOS,Resources,Frameworks}` 标准布局；输出目录约定 `artifacts/<rid>/app` |
-| `CFBundleIdentifier`/`CFBundleName`/`CFBundleDisplayName`/`CFBundleExecutable` | 计划实现 | MAC-APP-1 | identifier 按 Apple 规则校验；`CFBundleName` 可独立配置 |
-| `CFBundleShortVersionString`/`CFBundleVersion` | 计划实现 | MAC-APP-1 | 格式校验，不静默截断；`CFBundleVersion` 默认取版本可独立覆盖 |
-| `LSMinimumSystemVersion`、`LSApplicationCategoryType`、`NSHumanReadableCopyright` | 计划实现 | MAC-APP-1 | 类别受限枚举；最低系统版本由调用方显式配置、未配置不写入 |
-| `Info.plist` 固定键（`CFBundleInfoDictionaryVersion`/`CFBundlePackageType`/`NSHighResolutionCapable` 等） | 计划实现 | MAC-APP-1 | 上游 `LSRequiresCarbon` 死键不复制 |
-| 主可执行/资源/framework/任意 `Contents` 映射 | 计划实现 | MAC-APP-1 | framework 仅显式路径；不做宿主标准目录隐式查找 |
-| `osx-x64`/`osx-arm64` 产物 | 计划实现 | MAC-APP-1 | 独立产物；x64 运行依赖 Rosetta 属系统行为 |
+| `.app` 目录骨架与 `<产品名>.app` 产物 | 已实现 | MAC-APP-1 | `Contents/{Info.plist,MacOS,Resources,Frameworks}` 标准布局；输出目录约定 `artifacts/<rid>/app` |
+| `CFBundleIdentifier`/`CFBundleName`/`CFBundleDisplayName`/`CFBundleExecutable` | 已实现 | MAC-APP-1 | identifier 按 Apple 规则校验；`CFBundleName` 可独立配置 |
+| `CFBundleShortVersionString`/`CFBundleVersion` | 已实现 | MAC-APP-1 | 格式校验，不静默截断；`CFBundleVersion` 默认取版本可独立覆盖 |
+| `LSMinimumSystemVersion`、`LSApplicationCategoryType`、`NSHumanReadableCopyright` | 已实现 | MAC-APP-1 | 类别受限枚举；最低系统版本由调用方显式配置、未配置不写入 |
+| `Info.plist` 固定键（`CFBundleInfoDictionaryVersion`/`CFBundlePackageType`/`NSHighResolutionCapable` 等） | 已实现 | MAC-APP-1 | 上游 `LSRequiresCarbon` 死键不复制 |
+| 主可执行/资源/framework/任意 `Contents` 映射 | 已实现 | MAC-APP-1 | framework 仅显式路径；不做宿主标准目录隐式查找 |
+| `osx-x64`/`osx-arm64` 产物 | 已实现 | MAC-APP-1 | 独立产物；x64 运行依赖 Rosetta 属系统行为 |
 | universal/fat Mach-O 输入 | 计划实现 | MAC-APP-2 | `lipo -info` 校验；Bundler 不合成 fat binary |
 
 ## 图标与资源
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `.icns` 直接采用 | 计划实现 | MAC-APP-1 | `CFBundleIconFile` |
-| 位图合成 `.icns`（PNG 等） | 计划实现 | MAC-APP-1 | 密度/缩放规则与上游对齐 |
+| `.icns` 直接采用 | 已实现 | MAC-APP-1 | `CFBundleIconFile` |
+| 位图合成 `.icns`（PNG 等） | 已实现 | MAC-APP-1 | 密度/缩放规则与上游对齐 |
 | `.icon`→`Assets.car`（`CFBundleIconName`） | 计划实现 | MAC-APP-2 | 需 Xcode≥26 `actool`；缺失降级 `.icns` 并警告 |
 | `*.car` 直接采用 | 计划实现 | MAC-APP-2 | 同上 |
 
@@ -57,12 +57,12 @@
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| 独立后端包与直接 API | 计划实现 | MAC-APP-1 | `DotNet.Bundler.Mac` 或按确认的分包方案 |
-| 仓库外 NuGet 包消费 | 计划实现 | MAC-APP-1 | `tests/MacApp.Api.PackageFixture` |
-| MSBuild 集成映射 | 计划实现 | MAC-APP-1 | 与直接 API 同 Core 一致 |
-| 离线构建 | 计划实现 | MAC-APP-1 起 | 公证外全部离线；无第三方工具内嵌 |
-| 宿主工具探测与版本门槛 | 计划实现 | MAC-APP-1 | 缺必需工具明确报错；可选工具降级警告 |
-| 示例项目 `samples/HelloMacApp` | 计划实现 | MAC-APP-1 | 真实 .NET 载荷 |
+| 独立后端包与直接 API | 已实现 | MAC-APP-1 | `DotNet.Bundler.MacApp`（netstandard2.0） |
+| 仓库外 NuGet 包消费 | 已实现 | MAC-APP-1 | `tests/MacApp.Api.PackageFixture` |
+| MSBuild 集成映射 | 已实现 | MAC-APP-1 | 与直接 API 同 Core 一致 |
+| 离线构建 | 已实现 | MAC-APP-1 起 | 公证外全部离线；无第三方工具内嵌 |
+| 宿主工具探测与版本门槛 | 已实现 | MAC-APP-1 | 缺必需工具明确报错；可选工具降级警告 |
+| 示例项目 `samples/HelloMacApp` | 已实现 | MAC-APP-1 | 真实 .NET 载荷 |
 | Gatekeeper 首启/信任评估 | 外部待验收 | MAC-APP-3..4 / MAC-APP-MT-01、02 | 本机可观察未签名/ad-hoc 首启；已公证场景需真实证书 |
 | 真实公证+上钉+撤销场景 | 外部待验收 | MAC-APP-MT-02、08 / OI-01 | 需 Apple Developer 凭证 |
 

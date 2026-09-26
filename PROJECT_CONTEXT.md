@@ -6,8 +6,8 @@
 > 当前阶段：WIN-MSI-1..9 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；
 > `alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 前 NSIS 安装目录延续、事务清理竞态修复）
 > `alpha.45` 将 SDK 基线升至 .NET 10（MSBuild 任务链保留 `netstandard2.0`），无后端功能变更
-> MAC 规划轮已完成（仅文档，无实现）：上游审计 `docs/mac-tauri-capability-audit.md`、PKG 决策 `docs/mac-format-decision.md`、路线 `docs/mac-app-roadmap.md` + 矩阵/人工/待办三件套
-> 默认下一阶段：`MAC-APP`（需用户确认规划并明确启动指令）
+> MAC 规划轮已完成：`docs/mac-*.md` 一套就位且全部决策确认；`MAC-APP-1` 已完成（云 macOS VM 已验证，`Bundler.MacApp` 后端 + MSBuild/API 入口 + `HelloMacApp` 示例）
+> 默认下一阶段：`MAC-APP-2`（分发与桌面集成，需用户明确启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -22,14 +22,16 @@
 | `src/Bundler.Nsis` | Windows + NSIS 后端（内嵌 NsisToolset 3.12-r1 多宿主工具与 win-x86 Native AOT 插件） | `netstandard2.0` |
 | `src/Bundler.Wix` | Windows + WiX 3.14.1/MSI 后端（内嵌固定 WiX 工具子集） | `netstandard2.0` |
 | `src/Bundler.Signing.Windows` | Windows Authenticode 签名 API（NSIS/MSI 共用） | `netstandard2.0` |
+| `src/Bundler.MacApp` | macOS `.app` 后端（骨架/Info.plist/`.icns`/Contents 载荷映射） | `netstandard2.0` |
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
 | `src/Bundler.Cli` | 开发原型（`IsPackable=false`，不发布） | `net10.0` |
-| `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合 NSIS+WiX 与 MSBuild 支持） | `netstandard2.0` |
-| `tests/Bundler.Tests` | 唯一快速测试入口（当前 78 项） | `net10.0` |
-| `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
+| `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
+| `tests/Bundler.Tests` | 唯一快速测试入口（当前 67 项，macOS 宿主口径；其中 5 条 NSIS/WiX 用例为预存 Windows 宿主限制失败） | `net10.0` |
+| `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
 | `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
+| `tests/MacOS.App.Integration` | 真实 macOS `.app` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
 | `tests/Windows.Nsis.Reboot` | 需可抛弃 VM 的重启测试占位 | — |
-| `samples/HelloNsisApp` / `samples/HelloMsiApp` | 公开可运行示例（应用版本 `1.0.0`） | `net10.0` |
+| `samples/HelloNsisApp` / `samples/HelloMsiApp` / `samples/HelloMacApp` | 公开可运行示例（应用版本 `1.0.0`） | `net10.0` |
 | `tools/Bundler.Nsis.Plugin` | NSIS 原生插件源码（有意在 slnx 之外，重建需 .NET 10 + Windows 原生链） | `net10.0` |
 | `third_party/` | 第三方归档、许可证、逐文件 SHA-256 与 provenance 文档 | — |
 
@@ -61,10 +63,11 @@ WIN-MSI-1..8 实现与本机自动化验证完成：
 设计决策、阶段目标、实施记录与验证证据见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)；
 能力状态见 [`docs/msi-capability-matrix.md`](docs/msi-capability-matrix.md)。
 
-### macOS（规划完成，无实现）
+### macOS（`MAC-APP-1` 已实现，未冻结）
 
-`MAC-APP`：上游审计、PKG 格式决策、`MAC-APP-1..5` 阶段分解已写入 `docs/mac-*.md` 一套文档，全部决策点标注待用户确认。
-关键已登记分歧：macOS 打包工具不可再分发，拟采用“宿主工具检测+版本下限”策略替代字面“工具随包供应”（路线第 2 节）；默认产物不签名、公证默认关闭。
+`MAC-APP`：上游审计、PKG 格式决策、`MAC-APP-1..5` 阶段分解已写入 `docs/mac-*.md` 一套文档，全部决策已确认。
+`MAC-APP-1` 完成（2026-09-26 云 macOS VM 验证）：`src/Bundler.MacApp`（netstandard2.0）交付 `.app` 骨架生成、Info.plist 核心键、`.icns` 透传/合成、Contents 载荷映射语义；`BundlerFormats=app` MSBuild 映射与 `MacAppBundler` 直接 API；`tests/Bundler.Tests` 新增 22 条单测、`tests/MacApp.Api.PackageFixture` NuGet 消费 fixture、`tests/MacOS.App.Integration/Verify.sh` 真实生成→`plutil`→启动→删除链路、`samples/HelloMacApp`。
+关键已登记分歧：macOS 打包工具不可再分发，采用“宿主工具检测+版本下限”策略替代字面“工具随包供应”（路线第 2 节）；默认产物不签名、公证默认关闭。
 本机（云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）已实测全部所需宿主工具在位；缺 codesigning 身份、Rosetta、`pwsh`，记入 `docs/mac-app-open-items.md`。
 
 ### 未开始的格式
@@ -112,9 +115,8 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 ## 6. 默认下一步
 
-`MAC-APP`：路线草案已完成（`docs/mac-app-roadmap.md`，`MAC-APP-1..5`：结构/元数据 → 分发与桌面集成 → codesign/notarization → 原生 macOS E2E → 冻结）。
-等用户确认第 5 节决策点后，按 `MAC-APP-1` 启动指令进入实施。
-未经用户明确启动指令不实施；未经明确要求不提交、不推送。
+`MAC-APP-2`：`MAC-APP-1` 已完成并验证（mac-app-roadmap.md 第 4 节验收记录）；下一阶段交付 `CFBundleDocumentTypes`/`CFBundleURLTypes`/ATS 例外域/调用方 plist 合并/`Assets.car` 降级/`lipo` 校验。
+等用户明确 `MAC-APP-2` 启动指令再实施；未经明确要求不提交、不推送。
 
 ## 7. 历史记录
 

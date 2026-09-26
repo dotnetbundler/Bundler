@@ -126,6 +126,19 @@ public static class BundleConfigurationValidator
             issues.Add(new($"{path}.mainExecutable", "Must stay inside inputDirectory."));
         }
 
+        if (!string.IsNullOrWhiteSpace(targetConfiguration.InputDirectory))
+        {
+            var inputDirectory = Path.GetFullPath(targetConfiguration.InputDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var outputDirectory = Path.GetFullPath(configuration.OutputDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (outputDirectory.StartsWith(inputDirectory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(outputDirectory, inputDirectory, StringComparison.OrdinalIgnoreCase))
+            {
+                issues.Add(new("outputDirectory", "Must not be inside a target inputDirectory."));
+            }
+        }
+
         for (var signingIndex = 0; signingIndex < targetConfiguration.SigningFiles.Count; signingIndex++)
         {
             var signingFile = targetConfiguration.SigningFiles[signingIndex];

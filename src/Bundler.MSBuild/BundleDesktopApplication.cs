@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using DotNet.Bundler;
+using DotNet.Bundler.MacApp;
 using DotNet.Bundler.Nsis;
 using DotNet.Bundler.Wix;
 using DotNet.Bundler.Signing.Windows;
@@ -92,6 +93,15 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string WindowsSigningCommand { get; set; } = "";
     public ITaskItem[] WindowsSigningCommandArguments { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] NsisLanguageFiles { get; set; } = Array.Empty<ITaskItem>();
+    public string MacAppBundleName { get; set; } = "";
+    public string MacAppDisplayName { get; set; } = "";
+    public string MacAppShortVersion { get; set; } = "";
+    public string MacAppBuildVersion { get; set; } = "";
+    public string MacAppMinimumSystemVersion { get; set; } = "";
+    public string MacAppCategory { get; set; } = "";
+    public string MacAppIconName { get; set; } = "";
+    public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
+    public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     [Output] public ITaskItem[] Artifacts { get; private set; } = Array.Empty<ITaskItem>();
 
     public override bool Execute()
@@ -239,9 +249,33 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 .GetAwaiter()
                 .GetResult();
             }
+            else if (formats.All(format => format == PackageFormat.App))
+            {
+                artifacts = new MacAppBundler(
+                    new MacAppBundleConfiguration
+                    {
+                        BundleName = EmptyToNull(MacAppBundleName),
+                        BundleDisplayName = EmptyToNull(MacAppDisplayName),
+                        ShortVersion = EmptyToNull(MacAppShortVersion),
+                        BuildVersion = EmptyToNull(MacAppBuildVersion),
+                        MinimumSystemVersion = EmptyToNull(MacAppMinimumSystemVersion),
+                        Category = EmptyToNull(MacAppCategory),
+                        IconName = EmptyToNull(MacAppIconName),
+                        Contents = MacContents.Select(item => new MacAppContentConfiguration
+                        {
+                            Source = Path.GetFullPath(item.ItemSpec),
+                            TargetPath = item.GetMetadata("TargetPath").Trim()
+                        }).ToArray(),
+                        Frameworks = MacFrameworks.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray()
+                    },
+                    new MacAppBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
+                    .BuildAsync(configuration)
+                    .GetAwaiter()
+                    .GetResult();
+            }
             else
             {
-                throw new NotSupportedException("WIN-MSI-1 accepts either NSIS or MSI per MSBuild invocation; mixed formats are not supported yet.");
+                throw new NotSupportedException("Bundler accepts one package format per MSBuild invocation; mixed formats are not supported yet.");
             }
 
             Artifacts = artifacts.Select(artifact =>

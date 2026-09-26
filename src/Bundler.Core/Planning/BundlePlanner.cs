@@ -22,7 +22,8 @@ public static class BundlePlanner
                     : configuration.ProductName);
 
             var requestedFormats = configuredTarget.Formats.Distinct().ToArray();
-            if (requestedFormats.Contains(PackageFormat.Dmg) && !requestedFormats.Contains(PackageFormat.App))
+            if (requestedFormats.Any(format => format is PackageFormat.Dmg or PackageFormat.Pkg) &&
+                !requestedFormats.Contains(PackageFormat.App))
             {
                 AddItem(PackageFormat.App, intermediate: true);
             }
@@ -54,6 +55,7 @@ public static class BundlePlanner
     {
         PackageFormat.App => 0,
         PackageFormat.Dmg => 1,
+        PackageFormat.Pkg => 2,
         _ => 0
     };
 

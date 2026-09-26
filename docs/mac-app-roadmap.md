@@ -1,6 +1,6 @@
 # macOS `.app` 后端实施路线（MAC-APP）
 
-> 状态：**路线草案已完成，待用户确认**；确认后按 `MAC-APP-1` 启动指令进入实施，未确认前不写实现代码。
+> 状态：**路线已确认，`MAC-APP-1` 已完成**（云 macOS VM 已验证，证据见 MAC-APP-1 小节验收记录）；下一阶段 `MAC-APP-2` 待启动指令。
 > 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)；PKG 取舍见 [`docs/mac-format-decision.md`](mac-format-decision.md)；逐项能力状态见 [`docs/mac-app-capability-matrix.md`](mac-app-capability-matrix.md)；外部条件见 [`docs/mac-app-open-items.md`](mac-app-open-items.md)；人工步骤见 [`docs/mac-app-manual-testing.md`](mac-app-manual-testing.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 
@@ -67,7 +67,7 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 
 ## 3. 第一阶段前必须固定的 `.app` 语义
 
-这些是计划契约，`MAC-APP-1` 首次写代码前以 Apple 官方文档与本机可执行测试核实，并在公开 API 中固定；
+这些契约已于 `MAC-APP-1` 在公开 API 中固定并经本机可执行测试核实；
 若实测推翻，先改本文与能力矩阵，不产出带错误身份的包。
 
 1. **身份**：`Identifier` 映射 `CFBundleIdentifier`，按 Apple 规则校验（字母数字、连字符、点分段，段首非数字，建议 reverse-DNS）；
@@ -122,12 +122,19 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 ### MAC-APP-1：可用的最小 `.app`（结构/元数据）
 
 - **前置**：本路线第 2、3 节的工具策略与语义决策经用户确认；`MAC-PKG` 决策结论已知（不阻塞本阶段）；核对当前 Git 与公共模型。
-- **目标/交付**：`DotNet.Bundler.Mac` 后端（或直接 API 等价物）、MSBuild 映射、`.app` 骨架生成、Info.plist 核心键（身份/显示名/bundle name/可执行名/两版本键/最低系统版本/类别/版权/图标名）、`.icns`（透传 + 位图合成）、第 3 节载荷映射、产物命名契约（`<产品名>.app`，输出目录 `artifacts/<rid>/app`）、`plutil -lint` 校验、示例 `samples/HelloMacApp`。
+- **目标/交付**：`DotNet.Bundler.MacApp` 后端（或直接 API 等价物）、MSBuild 映射、`.app` 骨架生成、Info.plist 核心键（身份/显示名/bundle name/可执行名/两版本键/最低系统版本/类别/版权/图标名）、`.icns`（透传 + 位图合成）、第 3 节载荷映射、产物命名契约（`<产品名>.app`，输出目录 `artifacts/<rid>/app`）、`plutil -lint` 校验、示例 `samples/HelloMacApp`。
 - **新增自动化**：输入校验（identifier 规则、版本格式、路径拒绝、保留名冲突）、plist 键值断言（`plutil -p` 读回）、目录结构断言、`.icns` 生成断言、MSBuild/API 同 Core 结果、NuGet 包内容、重复构建指纹。
   本机真实测试：构建含真实 .NET 载荷的 `.app` → `plutil -lint` → `open`/`open -W` 启动退出码与进程断言 → 卸载语义（删除 bundle 后无残留登记）。
 - **人工边界**：干净宿主（未装 Xcode/CLT 的新建用户）构建本机已产出的 `.app` 并首启；Intel 宿主。
 - **不做**：正式签名/公证/entitlements、文件关联与 URL scheme、`Assets.car`、universal 校验、DMG。
 - **退出**：新增测试与受影响回归通过；本机 `.app` 生成→校验→启动烟雾测试通过；未支持项明确报错；外部项逐条登记。
+- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）**：
+  - 交付 `src/Bundler.MacApp`（netstandard2.0，`MacAppBundler`/`MacAppBundleConfiguration`/`MacAppBundleBackend`），MSBuild 经 `BundlerFormats=app` + `BundlerMacApp*` 属性/`BundlerMacContent`/`BundlerMacFramework` 项映射，直接 API 与 MSBuild 同 Core；
+  - `PackageFormat.Pkg` 进公共枚举（osx 目标矩阵放行，win/linux 拒绝；`Pkg` 计划自动插入中间 `.app` 步骤）；`BundlerMainExecutable` 对 osx RID 默认 `$(TargetName)` 无 `.exe`；
+  - 载荷语义：输入树整体保留相对结构进 `Contents/MacOS/`、`BundlerResource`→`Contents/Resources/`、`BundlerMacFramework`（仅 `.framework`/`.dylib`）→`Contents/Frameworks/`、`BundlerMacContent`→`Contents/` 任意非保留位置；顶层保留名（`MacOS`/`Resources`/`Frameworks`/`Info.plist`/`PkgInfo`）与 `..`/绝对路径拒绝；跨通道目标路径冲突拒绝；符号链接/reparse 拒绝；主可执行 Mach-O 魔数校验；POSIX 宿主对 Mach-O 赋 `+x`（Windows 宿主告警降级）；
+  - Info.plist 核心键全写入（含 `NSHighResolutionCapable`），`plutil -lint` 内联校验（macOS 宿主），`LSMinimumSystemVersion` 未配置不写入；`.icns` 透传或 PNG 位图合成（iconutil 不依赖）；
+  - 新增 22 条单测全过（其余既有用例无回归；macOS 宿主上 5 条 NSIS/WiX 预存失败与改动无关，基线核对一致）；`tests/MacOS.App.Integration/Verify.sh` 真实跑通 打包→nupkg 断言→发布→结构/plist 回读→`+x`→直接启动输出标记→`open -W`→重建指纹→删除即卸载→独立 API fixture 再产 `.app`；示例 `samples/HelloMacApp`；
+  - 未做项按阶段拒绝：`FileAssociations`/`UrlProtocols`/`SigningFiles`/`LicenseFile` 明确 `NotSupportedException`。
 
 ### MAC-APP-2：分发与桌面集成行为
 

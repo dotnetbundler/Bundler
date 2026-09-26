@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>HelloMacApp</AssemblyName>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">osx-arm64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
+
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerFormats>app</BundlerFormats>
+    <BundlerIdentifier>com.example.hellomacapp</BundlerIdentifier>
+    <BundlerProductName>Hello Mac App</BundlerProductName>
+    <BundlerPublisher>Bundler Contributors</BundlerPublisher>
+    <BundlerDescription>演示 DotNet.Bundler 当前支持的 macOS .app 功能。</BundlerDescription>
+    <BundlerHomepage>https://github.com/dotnetbundler</BundlerHomepage>
+    <BundlerCopyright>Copyright © DotNet.Bundler contributors</BundlerCopyright>
+    <BundlerMacAppDisplayName>Hello Mac App</BundlerMacAppDisplayName>
+    <BundlerMacAppBuildVersion>1</BundlerMacAppBuildVersion>
+    <BundlerMacAppMinimumSystemVersion>12.0</BundlerMacAppMinimumSystemVersion>
+    <BundlerMacAppCategory>public.app-category.developer-tools</BundlerMacAppCategory>
+    <BundlerMacAppIconName>HelloMacAppIcon</BundlerMacAppIconName>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <ItemGroup>
+    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
+    <BundlerIcon Include="Assets/icon-256.png" />
+    <BundlerIcon Include="Assets/icon-512.png" />
+    <BundlerResource Include="Assets/demo-resource.txt" TargetPath="docs/readme.txt" />
+    <BundlerMacContent Include="Assets/shared-note.txt" TargetPath="SharedSupport/shared-note.txt" />
+  </ItemGroup>
+</Project>

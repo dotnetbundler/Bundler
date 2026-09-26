@@ -130,16 +130,16 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 
 ### MAC：macOS `.app`、DMG 与 PKG（候选）
 
-当前公共 `PackageFormat` 已明确包含 `App` 和 `Dmg`，规划器也已表达 DMG 依赖 `.app`，但仓库没有 macOS 后端。
-2026-09-26 规划轮已产出该格式要求的完整前置文档（分支 `mac-app-development`，仅文档无实现）：
+`MAC-APP-1` 已完成（2026-09-26，分支 `mac-app-development`）：`DotNet.Bundler.MacApp` 后端 + MSBuild/直接 API 入口交付最小可用 `.app`（骨架、Info.plist 核心键、`.icns`、Contents 载荷映射），云 macOS VM 已验证生成→校验→启动→删除链路；`PackageFormat.Pkg` 已进公共枚举与 osx 目标矩阵。
+下一阶段 `MAC-APP-2`（分发与桌面集成）待启动指令。
+2026-09-26 规划轮已产出该格式要求的完整前置文档（分支 `mac-app-development`）：
 
 - 上游审计 [`mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)：固定快照 `7dbfc1f`（复核 `dev` `9f8922a` 无实质漂移），逐项登记 `.app`/`DMG` 用户可观察能力与选择阶段；
 - 格式决策 [`mac-format-decision.md`](mac-format-decision.md)：PKG 已确认纳入公共 `PackageFormat`；
 - 阶段分解 [`mac-app-roadmap.md`](mac-app-roadmap.md)：`MAC-APP-1..5`（结构/元数据 → 分发与桌面集成 → codesign/notarization → 原生 E2E → 冻结），含宿主工具供应策略与 `.app` 语义契约，全部决策已确认；
 - 能力矩阵 [`mac-app-capability-matrix.md`](mac-app-capability-matrix.md)、人工清单 [`mac-app-manual-testing.md`](mac-app-manual-testing.md)、外部待办 [`mac-app-open-items.md`](mac-app-open-items.md)。
 
-规划确认不等于实施授权；`MAC-APP-1` 代码需用户明确启动指令。
-`Pkg` 的枚举值与目标矩阵放行在 `MAC-APP-1` 起手时进入公共模型；顺序固定为 `MAC-DMG` 之后、Linux 之前。
+`Pkg` 枚举值与目标矩阵放行已随 `MAC-APP-1` 进入公共模型；格式顺序固定为 `MAC-DMG` 之后、Linux 之前，PKG 实现等待 `MAC-PKG` 阶段启动指令。
 不得在没有原生 macOS 验证环境时宣称签名和 notarization 完成。
 
 ### LINUX：Linux 格式

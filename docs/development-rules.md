@@ -148,13 +148,13 @@
 跨格式快速测试保留 `tests/Bundler.Tests`。
 格式专用测试与示例项目名称显式带格式名，只有真正跨格式的项目使用泛名。
 
-| 用途 | NSIS 当前入口 | MSI 当前入口 |
-| --- | --- | --- |
-| 快速单元/契约 | `tests/Bundler.Tests` | `tests/Bundler.Tests` |
-| 仓库外直接后端 API 包消费 | `tests/Nsis.Api.PackageFixture` | `tests/Msi.Api.PackageFixture` |
-| MSBuild 包消费 fixture | `tests/Windows.Nsis.Integration/Fixture` | `tests/Windows.Msi.Integration/Fixture` |
-| 真实 Windows 集成 | `tests/Windows.Nsis.Integration/Verify.ps1` | `tests/Windows.Msi.Integration/Verify.ps1`；生命周期、维护、示例检查有专用脚本 |
-| 专用环境与人工 | `tests/Windows.Nsis.Reboot`、NSIS 人工清单 | MSI 人工清单 |
+| 用途 | NSIS 当前入口 | MSI 当前入口 | macOS `.app` 当前入口 |
+| --- | --- | --- | --- |
+| 快速单元/契约 | `tests/Bundler.Tests` | `tests/Bundler.Tests` | `tests/Bundler.Tests` |
+| 仓库外直接后端 API 包消费 | `tests/Nsis.Api.PackageFixture` | `tests/Msi.Api.PackageFixture` | `tests/MacApp.Api.PackageFixture` |
+| MSBuild 包消费 fixture | `tests/Windows.Nsis.Integration/Fixture` | `tests/Windows.Msi.Integration/Fixture` | `tests/MacOS.App.Integration/Fixture` |
+| 真实集成 | `tests/Windows.Nsis.Integration/Verify.ps1` | `tests/Windows.Msi.Integration/Verify.ps1`；生命周期、维护、示例检查有专用脚本 | `tests/MacOS.App.Integration/Verify.sh`（bash，macOS 宿主） |
+| 专用环境与人工 | `tests/Windows.Nsis.Reboot`、NSIS 人工清单 | MSI 人工清单 | `docs/mac-app-manual-testing.md` |
 
 1. 每项新增或修改功能必须**新增或更新对应自动化测试**；缺陷修复断言要区分修复前后。
    按功能覆盖验证/映射、真实打包、NuGet 包内容、仓库外直接 API 包消费、应用层消费和适用的系统生命周期。
@@ -248,4 +248,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integr
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi7.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi8.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -Configuration Release
+
+bash tests/MacOS.App.Integration/Verify.sh
 ```

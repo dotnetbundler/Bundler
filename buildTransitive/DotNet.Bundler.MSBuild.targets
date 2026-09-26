@@ -13,6 +13,7 @@
     <PropertyGroup>
       <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
       <BundlerVersion Condition="'$(BundlerVersion)' == ''">$(Version)</BundlerVersion>
+      <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')) == 'true'">$(TargetName)</BundlerMainExecutable>
       <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''">$(TargetName).exe</BundlerMainExecutable>
       <BundlerNsisShortcutStartMenuFolder Condition="'$(BundlerNsisShortcutStartMenuFolder)' == ''">$(BundlerProductName)</BundlerNsisShortcutStartMenuFolder>
     </PropertyGroup>
@@ -100,7 +101,16 @@
       WindowsSigningTimestampUrl="$(BundlerWindowsSigningTimestampUrl)"
       WindowsSigningCommand="$(BundlerWindowsSigningCommand)"
       WindowsSigningCommandArguments="@(BundlerWindowsSigningCommandArgument)"
-      NsisLanguageFiles="@(BundlerNsisLanguageFile)">
+      NsisLanguageFiles="@(BundlerNsisLanguageFile)"
+      MacAppBundleName="$(BundlerMacAppBundleName)"
+      MacAppDisplayName="$(BundlerMacAppDisplayName)"
+      MacAppShortVersion="$(BundlerMacAppShortVersion)"
+      MacAppBuildVersion="$(BundlerMacAppBuildVersion)"
+      MacAppMinimumSystemVersion="$(BundlerMacAppMinimumSystemVersion)"
+      MacAppCategory="$(BundlerMacAppCategory)"
+      MacAppIconName="$(BundlerMacAppIconName)"
+      MacContents="@(BundlerMacContent)"
+      MacFrameworks="@(BundlerMacFramework)">
       <Output TaskParameter="Artifacts" ItemName="BundlerArtifact" />
     </DotNet.Bundler.MSBuild.BundleDesktopApplication>
   </Target>

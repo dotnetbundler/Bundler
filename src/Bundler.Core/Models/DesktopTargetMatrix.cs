@@ -12,7 +12,7 @@ public static class DesktopTargetMatrix
         operatingSystem switch
         {
             DesktopOperatingSystem.Windows => format is PackageFormat.Nsis or PackageFormat.Msi,
-            DesktopOperatingSystem.MacOS => format is PackageFormat.App or PackageFormat.Dmg,
+            DesktopOperatingSystem.MacOS => format is PackageFormat.App or PackageFormat.Dmg or PackageFormat.Pkg,
             DesktopOperatingSystem.Linux => format is PackageFormat.Deb or PackageFormat.Rpm or PackageFormat.AppImage,
             _ => false
         };

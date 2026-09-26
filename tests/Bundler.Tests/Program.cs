@@ -65,7 +65,7 @@ var tests = new (string Name, Func<Task> Test)[]
 };
 
 tests = tests.Append(("Keeps package consumer versions aligned", () => RunSync(KeepsPackageConsumerVersionsAligned)))
-    .Concat(WixTests.Cases).ToArray();
+    .Concat(WixTests.Cases).Concat(MacAppTests.Cases).ToArray();
 
 var failed = 0;
 foreach (var (name, test) in tests)

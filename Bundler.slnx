@@ -3,6 +3,7 @@
     <Project Path="src/Bundler.Abstractions/Bundler.Abstractions.csproj" />
     <Project Path="src/Bundler.Cli/Bundler.Cli.csproj" />
     <Project Path="src/Bundler.Core/Bundler.Core.csproj" />
+    <Project Path="src/Bundler.MacApp/Bundler.MacApp.csproj" />
     <Project Path="src/Bundler.Nsis/Bundler.Nsis.csproj" />
     <Project Path="src/Bundler.Signing.Windows/Bundler.Signing.Windows.csproj" />
     <Project Path="src/Bundler.Wix/Bundler.Wix.csproj" />
