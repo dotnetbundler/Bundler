@@ -10,8 +10,8 @@
 > `ARCHIVE-1` 已完成（分支 `archive-development`，`0.1.0-alpha.59`）：`DotNet.Bundler.Archive` 纯托管 zip/tar.gz 写入器（zip 自实现 unix mode/symlink）、单顶层目录布局、执行位与符号链接双保留、`.sha256` 侧车、`BundlerArchivePackageName`/`Version`/`ArchiveName` + `@(BundlerArchiveFile)` 接线、`zip;targz` 与五格式混排扇出；`Bundler.Tests` 181/181 + `tests/Archive.Integration/Verify.sh` 真实解包断言全绿；证据见 `docs/archive-roadmap.md` §4
 > `ARCHIVE-2` 已完成（同分支，同版本）：旋钮面对照决策复核无缺口；收口断言补强（确定性构建 sha256 一致、目录源拒绝、Zip64 拒绝）；`Bundler.Tests` 184/184 + `Verify.sh` 全绿
 > `ARCHIVE-3` 已完成（同分支，同版本）：宿主矩阵收口（python3 zipfile/tarfile 跨实现互读断言接入 `Verify.sh`）、干净宿主审计（零进程出口）、能力矩阵定稿、OI/MT 收口——**`.zip`/`.tar.gz` 归档冻结基线 `0.1.0-alpha.59`**
-> `CLI-C1` 规划轮已完成（分支 `cli-development`）：决策清单 15 项 + `CLI-1..3` 三段骨架 + MSBuild↔CLI 映射表入档 `docs/cli-roadmap.md`，配套 cli-capability-matrix / cli-manual-testing / cli-open-items；待逐条裁决
-> 当前：`CLI-C1` 规划完成待裁决，默认下一阶段 `CLI-1`（删旧原型、新 CLI 骨架、三命令最小链路）
+> `CLI-C1` 规划轮已完成（分支 `cli-development`）：决策清单 15 项 + `CLI-1..3` 三段骨架 + MSBuild↔CLI 映射表入档 `docs/cli-roadmap.md`，配套 cli-capability-matrix / cli-manual-testing / cli-open-items；决策已按推荐项放行
+> 当前：`CLI-C1` 规划完成且决策已放行，默认下一阶段 `CLI-1`（删旧原型、新 CLI 骨架、三命令最小链路）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。

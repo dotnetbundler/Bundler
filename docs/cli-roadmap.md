@@ -1,10 +1,10 @@
 # CLI 产品化路线（CLI-C1）
 
-> 状态：规划轮完成，待逐条裁决；实施尚未开始。
+> 状态：规划轮完成，决策清单已按推荐项全部裁决放行（2026-09-27）；实施尚未开始——用户明确本轮仅规划。
 > 范围依据：`docs/roadmap.md` CLI-C1 节——固化共享配置 schema、`validate`/`plan`/`bundle` 共用 Core/后端、稳定退出码/机器可读输出/日志/帮助/版本/发布方式、覆盖全部已冻结格式、删除早期 alpha 参数不承诺兼容。
 > 上游参照：`tauri-cli` 审计（`tauri-apps/tauri` DeepWiki）——命令面分层、`--bundles` 参数优先于配置文件 `bundle.targets`、`--config` 层叠、环境变量 verbosity 等模式已复核取舍；Tauri 面向"开发工具链"（dev/build/init/migrate/mobile），本 CLI 只做打包，范围更窄。
 
-## 1. 决策清单（待裁决，推荐项已标出）
+## 1. 决策清单（已裁决——按推荐项放行）
 
 | # | 决策点 | 候选 | 推荐与理由 |
 | --- | --- | --- | --- |
