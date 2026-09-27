@@ -2,7 +2,7 @@
 
 > 最后更新：2026-09-26
 > 当前分支：`mac-dmg-development`（基于 `main` `b59e610`；`.app` 线已并入 main）
-> 当前包版本：`0.1.0-alpha.45`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.46`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.app`/`.dmg` 冻结基线均记录于 `alpha.45`）
 > 当前阶段：WIN-MSI-1..9 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；
 > `alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 前 NSIS 安装目录延续、事务清理竞态修复）
 > `alpha.45` 将 SDK 基线升至 .NET 10（MSBuild 任务链保留 `netstandard2.0`），无后端功能变更
