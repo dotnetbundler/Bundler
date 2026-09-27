@@ -27,7 +27,11 @@ bash tests/Linux.Deb.Integration/Verify.sh
 - 桌面集成（LINUX-DEB-2）：生成的 `.desktop` 落 `usr/share/applications/` 且逐字段断言（含 `MimeType` 并集与 `%u` 占位符）、`desktop-file-validate` 通过、hicolor `48x48` 与 `48x48@2` 图标落位、metainfo/`copyright`/`changelog.gz` 内容与 gzip 可解、`BundlerDebFile` `/etc` 落位；
 - 元数据变体：`Depends`/`Recommends`/`Provides`/`Conflicts`/`Replaces`/`Section`/`Priority` 逐项 control 断言；
 - `BundlerDebDesktopFile` 覆盖变体：自定义 `.desktop` 原样落位并通过 `desktop-file-validate`；
-- 失败路径：相对 `InstallRoot`、非法 `Priority`、非法 `Categories` 均使 publish 失败且无 `.deb` 产物；
+- 脚本变体（LINUX-DEB-3）：`postinst`/`prerm`/`postrm` 入 control 归档 0755、shebang 断言、conffiles 成员内容，真实 `dpkg -i/-r` 下标记文件断言脚本执行；
+- systemd 变体：unit 落 `usr/lib/systemd/system/`、postinst 含 `daemon-reload` 尾段且保留调用方脚本主体；
+- 升级变体：`dpkg -i` 1.0.0→1.0.1 版本更新 + 本地修改的 conffile 经 `--force-confold` 保留；
+- conffile 语义：`/etc` DebFile 自动登记 conffile——`dpkg -r` 保留、`dpkg -P` 清除（断言已随 DEB-3 更新为两段式）；
+- 失败路径：相对 `InstallRoot`、非法 `Priority`、非法 `Categories`、非 `gzip` 压缩均使 publish 失败且无 `.deb` 产物；
 - `tests/Deb.Api.PackageFixture`（直接 API 消费 `DotNet.Bundler.Deb` NuGet 包）冒烟；
 - 真实装卸：`sudo dpkg -i` 后 `dpkg -s`/`dpkg -L`（含 `.desktop`/图标/metainfo/`copyright`/`changelog.gz`/`/etc` 逐项路径断言）与 `/usr/bin` 链接启动均通过，装后 `.desktop` 回读 + `desktop-file-validate` 复核，`sudo dpkg -r` 后零残留断言；
 - `lintian` 以信息级跑全包（不阻断），残余发现登记 `docs/linux-deb-open-items.md` LINUX-DEB-OI-07。

@@ -179,6 +179,13 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string DebDesktopFile { get; set; } = "";
     public string DebMetainfoFile { get; set; } = "";
     public string DebChangelogFile { get; set; } = "";
+    public string DebPreinstFile { get; set; } = "";
+    public string DebPostinstFile { get; set; } = "";
+    public string DebPrermFile { get; set; } = "";
+    public string DebPostrmFile { get; set; } = "";
+    public string DebSystemdServiceFile { get; set; } = "";
+    public string DebConffiles { get; set; } = "";
+    public string DebCompression { get; set; } = "";
     public ITaskItem[] DebFiles { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
@@ -444,6 +451,13 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         DesktopFile = OptionalFullPath(DebDesktopFile),
                         MetainfoFile = OptionalFullPath(DebMetainfoFile),
                         ChangelogFile = OptionalFullPath(DebChangelogFile),
+                        PreinstFile = OptionalFullPath(DebPreinstFile),
+                        PostinstFile = OptionalFullPath(DebPostinstFile),
+                        PrermFile = OptionalFullPath(DebPrermFile),
+                        PostrmFile = OptionalFullPath(DebPostrmFile),
+                        SystemdServiceFile = OptionalFullPath(DebSystemdServiceFile),
+                        Conffiles = SplitList(DebConffiles),
+                        Compression = EmptyToNull(DebCompression),
                         Files = DebFiles.Select(item => new DebFileEntry
                         {
                             Source = Path.GetFullPath(item.ItemSpec),

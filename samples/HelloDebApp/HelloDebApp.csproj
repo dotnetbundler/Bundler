@@ -56,6 +56,21 @@
     <BundlerDebMetainfoFile Condition="'$(HelloDebMetainfoFile)' != ''">$(HelloDebMetainfoFile)</BundlerDebMetainfoFile>
     <BundlerDebChangelogFile>$(MSBuildThisFileDirectory)Assets/CHANGELOG.md</BundlerDebChangelogFile>
     <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets/LICENSE.txt</BundlerLicenseFile>
+
+    <!-- LINUX-DEB-3 范围：维护者脚本（shebang + LF 必备，入 control 归档 0755）；
+         SystemdServiceFile 托管 unit（装到 usr/lib/systemd/system/，postinst 自动合成
+         daemon-reload 尾段——与自定义 postinst 合并）；Conffiles 显式登记
+         （/etc 下的 BundlerDebFile 自动登记为 conffile）；Compression 仅支持 gzip。 -->
+    <BundlerDebPostinstFile>$(MSBuildThisFileDirectory)Assets/postinst.sh</BundlerDebPostinstFile>
+    <BundlerDebPostinstFile Condition="'$(HelloDebPostinstFile)' != ''">$(HelloDebPostinstFile)</BundlerDebPostinstFile>
+    <BundlerDebPrermFile>$(MSBuildThisFileDirectory)Assets/prerm.sh</BundlerDebPrermFile>
+    <BundlerDebPrermFile Condition="'$(HelloDebPrermFile)' != ''">$(HelloDebPrermFile)</BundlerDebPrermFile>
+    <BundlerDebPostrmFile>$(MSBuildThisFileDirectory)Assets/postrm.sh</BundlerDebPostrmFile>
+    <BundlerDebPostrmFile Condition="'$(HelloDebPostrmFile)' != ''">$(HelloDebPostrmFile)</BundlerDebPostrmFile>
+    <BundlerDebPreinstFile Condition="'$(HelloDebPreinstFile)' != ''">$(HelloDebPreinstFile)</BundlerDebPreinstFile>
+    <BundlerDebSystemdServiceFile Condition="'$(HelloDebSystemdServiceFile)' != ''">$(HelloDebSystemdServiceFile)</BundlerDebSystemdServiceFile>
+    <BundlerDebConffiles Condition="'$(HelloDebConffiles)' != ''">$(HelloDebConffiles)</BundlerDebConffiles>
+    <BundlerDebCompression Condition="'$(HelloDebCompression)' != ''">$(HelloDebCompression)</BundlerDebCompression>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>

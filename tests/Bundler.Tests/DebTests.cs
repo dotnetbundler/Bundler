@@ -21,6 +21,9 @@ internal static class DebTests
             yield return ("Writes relation and doc fields", () => RunSync(WritesRelationAndDocFields));
             yield return ("Rejects invalid metadata", () => RunSync(RejectsInvalidMetadata));
             yield return ("Honors a verbatim DesktopFile override", () => RunSync(DesktopFileOverride));
+            yield return ("Packs maintainer scripts and conffiles", () => RunSync(MaintainerScriptsAndConffiles));
+            yield return ("Synthesizes postinst daemon-reload for a systemd unit", () => RunSync(SystemdUnitDaemonReload));
+            yield return ("Rejects invalid DEB-3 knobs", () => RunSync(RejectsInvalidDeb3Knobs));
             yield return ("Produces deterministic .deb bytes", () => RunSync(DeterministicBytes));
             yield return ("Writes a correct sha256 sidecar", () => RunSync(Sha256Sidecar));
             yield return ("Maps deb settings through MSBuild", () => RunSync(MapsDebSettingsThroughMsBuild));
@@ -549,6 +552,169 @@ internal static class DebTests
         }
     }
 
+    static void MaintainerScriptsAndConffiles()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var filesDir = Path.Combine(output, "..", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(filesDir);
+        var postinst = Path.Combine(filesDir, "postinst.sh");
+        var prerm = Path.Combine(filesDir, "prerm.sh");
+        var conf = Path.Combine(filesDir, "defaults.conf");
+        File.WriteAllText(postinst, "#!/bin/sh\nset -e\ntouch /tmp/marker\n");
+        File.WriteAllText(prerm, "#!/bin/sh\nexit 0\n");
+        File.WriteAllText(conf, "key=value\n");
+        try
+        {
+            var configuration = DebConfiguration(input, output);
+            var deb = new DebBundler(new DebBundleConfiguration
+                {
+                    PostinstFile = postinst,
+                    PrermFile = prerm,
+                    Conffiles = ["/usr/lib/example-app/libplaceholder.conf"],
+                    Files = [new DebFileEntry { Source = conf, Destination = "/etc/example-app/defaults.conf" },
+                             new DebFileEntry { Source = conf, Destination = "/usr/lib/example-app/libplaceholder.conf" }]
+                })
+                .BuildAsync(new BundleConfiguration
+                {
+                    ProductName = configuration.ProductName,
+                    Identifier = configuration.Identifier,
+                    Publisher = configuration.Publisher,
+                    Version = configuration.Version,
+                    Description = configuration.Description,
+                    OutputDirectory = configuration.OutputDirectory,
+                    Targets = configuration.Targets
+                }).GetAwaiter().GetResult().Single();
+            var members = DebPackageReader.ReadAr(deb.Path);
+            var controlEntries = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[1].Content));
+
+            var postinstEntry = controlEntries.Single(e => e.Name == "./postinst");
+            Assert(postinstEntry.Mode == 493, "postinst must be mode 0755.");
+            Assert(Encoding.UTF8.GetString(postinstEntry.Content).Contains("touch /tmp/marker", StringComparison.Ordinal),
+                "postinst content must be verbatim.");
+            Assert(controlEntries.Any(e => e.Name == "./prerm" && e.Mode == 493),
+                "prerm must be present with mode 0755.");
+            Assert(!controlEntries.Any(e => e.Name == "./preinst" || e.Name == "./postrm"),
+                "Unset scripts must not be packed.");
+
+            var conffiles = controlEntries.SingleOrDefault(e => e.Name == "./conffiles");
+            Assert(conffiles is not null, "conffiles member is missing.");
+            var list = Encoding.UTF8.GetString(conffiles!.Content);
+            Assert(list == "/etc/example-app/defaults.conf\n/usr/lib/example-app/libplaceholder.conf\n",
+                $"conffiles must list the /etc DebFile destination plus explicit entries:\n{list}");
+        }
+        finally
+        {
+            Cleanup(input, output, filesDir);
+        }
+    }
+
+    static void SystemdUnitDaemonReload()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var filesDir = Path.Combine(output, "..", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(filesDir);
+        var unit = Path.Combine(filesDir, "fixture.service");
+        var postinst = Path.Combine(filesDir, "postinst.sh");
+        File.WriteAllText(unit, "[Unit]\nDescription=Fixture\n[Service]\nExecStart=/usr/bin/example-app\n");
+        File.WriteAllText(postinst, "#!/bin/sh\nset -e\nldconfig\n");
+        try
+        {
+            var configuration = DebConfiguration(input, output);
+            var deb = new DebBundler(new DebBundleConfiguration
+                {
+                    SystemdServiceFile = unit,
+                    PostinstFile = postinst
+                })
+                .BuildAsync(new BundleConfiguration
+                {
+                    ProductName = configuration.ProductName,
+                    Identifier = configuration.Identifier,
+                    Publisher = configuration.Publisher,
+                    Version = configuration.Version,
+                    Description = configuration.Description,
+                    OutputDirectory = configuration.OutputDirectory,
+                    Targets = configuration.Targets
+                }).GetAwaiter().GetResult().Single();
+            var members = DebPackageReader.ReadAr(deb.Path);
+            var controlEntries = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[1].Content));
+            var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
+
+            var unitEntry = data.SingleOrDefault(e => e.Name == "./usr/lib/systemd/system/example-app.service");
+            Assert(unitEntry is not null, "The systemd unit must land under usr/lib/systemd/system/.");
+            Assert(Encoding.UTF8.GetString(unitEntry!.Content).Contains("ExecStart=/usr/bin/example-app"),
+                "The unit content must be verbatim.");
+
+            var postinstEntry = controlEntries.Single(e => e.Name == "./postinst");
+            var postinstText = Encoding.UTF8.GetString(postinstEntry.Content);
+            Assert(postinstText.Contains("ldconfig", StringComparison.Ordinal) &&
+                   postinstText.Contains("systemctl daemon-reload || true", StringComparison.Ordinal),
+                $"postinst must merge the caller script with daemon-reload:\n{postinstText}");
+            Assert(postinstEntry.Mode == 493, "The synthesized postinst must be 0755.");
+
+            // Unit only (no caller postinst) must still synthesize a valid script.
+            var deb2 = new DebBundler(new DebBundleConfiguration { SystemdServiceFile = unit })
+                .BuildAsync(configuration).GetAwaiter().GetResult().Single();
+            var control2 = DebPackageReader.ReadTar(
+                DebPackageReader.Ungzip(DebPackageReader.ReadAr(deb2.Path)[1].Content));
+            var soloPostinst = control2.Single(e => e.Name == "./postinst");
+            var soloText = Encoding.UTF8.GetString(soloPostinst.Content);
+            Assert(soloText.StartsWith("#!/bin/sh\n", StringComparison.Ordinal) &&
+                   soloText.Contains("systemctl daemon-reload || true", StringComparison.Ordinal),
+                $"The synthesized postinst must be self-contained:\n{soloText}");
+        }
+        finally
+        {
+            Cleanup(input, output, filesDir);
+        }
+    }
+
+    static void RejectsInvalidDeb3Knobs()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var filesDir = Path.Combine(output, "..", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(filesDir);
+        var noShebang = Path.Combine(filesDir, "bad.sh");
+        var crlf = Path.Combine(filesDir, "crlf.sh");
+        var conf = Path.Combine(filesDir, "x.conf");
+        File.WriteAllText(noShebang, "echo hi\n");
+        File.WriteAllText(crlf, "#!/bin/sh\r\nexit 0\r\n");
+        File.WriteAllText(conf, "x=1\n");
+        try
+        {
+            var cases = new (string Name, DebBundleConfiguration Settings)[]
+            {
+                ("xz compression", new DebBundleConfiguration { Compression = "xz" }),
+                ("zstd compression", new DebBundleConfiguration { Compression = "zstd" }),
+                ("script without shebang", new DebBundleConfiguration { PostinstFile = noShebang }),
+                ("script with CRLF", new DebBundleConfiguration { PrermFile = crlf }),
+                ("conffile not in payload", new DebBundleConfiguration { Conffiles = ["/etc/absent.conf"] }),
+                ("conffile relative path", new DebBundleConfiguration { Conffiles = ["etc/x.conf"] }),
+                ("conffile traversal", new DebBundleConfiguration { Conffiles = ["/etc/../x.conf"] })
+            };
+            foreach (var (name, settings) in cases)
+            {
+                var thrown = false;
+                try
+                {
+                    new DebBundler(settings).BuildAsync(DebConfiguration(input, output))
+                        .GetAwaiter().GetResult();
+                }
+                catch (Exception exception) when (exception is ArgumentException or FileNotFoundException)
+                {
+                    thrown = true;
+                }
+                Assert(thrown, $"The '{name}' case must fail validation.");
+            }
+        }
+        finally
+        {
+            Cleanup(input, output, filesDir);
+        }
+    }
+
     static byte[] PngBytes(int width, int height)
     {
         var png = new byte[33];
@@ -662,6 +828,13 @@ internal static class DebTests
                targets.Contains("DebDesktopFile=\"$(BundlerDebDesktopFile)\"", StringComparison.Ordinal) &&
                targets.Contains("DebMetainfoFile=\"$(BundlerDebMetainfoFile)\"", StringComparison.Ordinal) &&
                targets.Contains("DebChangelogFile=\"$(BundlerDebChangelogFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebPreinstFile=\"$(BundlerDebPreinstFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebPostinstFile=\"$(BundlerDebPostinstFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebPrermFile=\"$(BundlerDebPrermFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebPostrmFile=\"$(BundlerDebPostrmFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebSystemdServiceFile=\"$(BundlerDebSystemdServiceFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebConffiles=\"$(BundlerDebConffiles)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebCompression=\"$(BundlerDebCompression)\"", StringComparison.Ordinal) &&
                targets.Contains("DebFiles=\"@(BundlerDebFile)\"", StringComparison.Ordinal) &&
                task.Contains("DebFiles.Select(item => new DebFileEntry", StringComparison.Ordinal),
             "MSBuild does not map the BundlerDeb* properties to the task.");
@@ -669,7 +842,11 @@ internal static class DebTests
                props.Contains("<BundlerDebInstallRoot", StringComparison.Ordinal) &&
                props.Contains("<BundlerDebDepends", StringComparison.Ordinal) &&
                props.Contains("<BundlerDebCategories", StringComparison.Ordinal) &&
-               props.Contains("<BundlerDebChangelogFile", StringComparison.Ordinal),
+               props.Contains("<BundlerDebChangelogFile", StringComparison.Ordinal) &&
+               props.Contains("<BundlerDebPostinstFile", StringComparison.Ordinal) &&
+               props.Contains("<BundlerDebSystemdServiceFile", StringComparison.Ordinal) &&
+               props.Contains("<BundlerDebConffiles", StringComparison.Ordinal) &&
+               props.Contains("<BundlerDebCompression", StringComparison.Ordinal),
             "The BundlerDeb* properties lack defaults in the .props file.");
         Assert(task.Contains("new DebBundler(", StringComparison.Ordinal) &&
                task.Contains("PackageFormat.Deb", StringComparison.Ordinal),

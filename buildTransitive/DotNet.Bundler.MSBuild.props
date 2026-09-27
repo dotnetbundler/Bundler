@@ -143,5 +143,12 @@
     <BundlerDebDesktopFile Condition="'$(BundlerDebDesktopFile)' == ''"></BundlerDebDesktopFile>
     <BundlerDebMetainfoFile Condition="'$(BundlerDebMetainfoFile)' == ''"></BundlerDebMetainfoFile>
     <BundlerDebChangelogFile Condition="'$(BundlerDebChangelogFile)' == ''"></BundlerDebChangelogFile>
+    <BundlerDebPreinstFile Condition="'$(BundlerDebPreinstFile)' == ''"></BundlerDebPreinstFile>
+    <BundlerDebPostinstFile Condition="'$(BundlerDebPostinstFile)' == ''"></BundlerDebPostinstFile>
+    <BundlerDebPrermFile Condition="'$(BundlerDebPrermFile)' == ''"></BundlerDebPrermFile>
+    <BundlerDebPostrmFile Condition="'$(BundlerDebPostrmFile)' == ''"></BundlerDebPostrmFile>
+    <BundlerDebSystemdServiceFile Condition="'$(BundlerDebSystemdServiceFile)' == ''"></BundlerDebSystemdServiceFile>
+    <BundlerDebConffiles Condition="'$(BundlerDebConffiles)' == ''"></BundlerDebConffiles>
+    <BundlerDebCompression Condition="'$(BundlerDebCompression)' == ''"></BundlerDebCompression>
   </PropertyGroup>
 </Project>

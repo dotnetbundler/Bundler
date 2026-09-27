@@ -1,0 +1,11 @@
+[Unit]
+Description=Bundler Deb fixture service
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bundler-deb-fixture
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

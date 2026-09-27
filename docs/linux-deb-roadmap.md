@@ -1,6 +1,6 @@
 # Linux `.deb` 后端实施路线（LINUX-DEB）
 
-> 状态：**LINUX-DEB-2 已完成并验证**（2026-09-27，分支 `linux-deb-development`，`BundlerPackageVersion` `0.1.0-alpha.49`）。
+> 状态：**LINUX-DEB-3 已完成并验证**（2026-09-27，分支 `linux-deb-development`，`BundlerPackageVersion` `0.1.0-alpha.50`）。
 > 上游审计见 [`docs/linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `tauri-apps/tauri@447fa9f`）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 > 逐项能力状态见 [`docs/linux-deb-capability-matrix.md`](linux-deb-capability-matrix.md)；外部条件见 [`docs/linux-deb-open-items.md`](linux-deb-open-items.md)；人工步骤见 [`docs/linux-deb-manual-testing.md`](linux-deb-manual-testing.md)。
@@ -92,6 +92,9 @@
 - **前置**：LINUX-DEB-2 通过。
 - **目标/交付**：`preinst`/`postinst`/`prerm`/`postrm` 专家旋钮（0755 归档）；`SystemdServiceFile` 托管 unit（含 postinst `daemon-reload` 片段的自动合成与调用方脚本冲突校验）；`Conffiles`；压缩枚举（默认 gzip；xz/zstd 在该阶段按宿主 dpkg 支持矩阵裁决或登记拒绝）；升级/降级语义实测（同包 `dpkg -i` 新版升级、`dpkg -r` conffiles 保留与 `-P` 清除断言）。
 - **退出**：脚本在真实 `dpkg -i` 中执行断言（标记文件）；unit 安装路径断言；重复安装/升级/卸载回归全绿。
+- **状态**：已完成（2026-09-27）。维护者脚本四旋钮（shebang+LF 校验，0755 入 control 归档）；`SystemdServiceFile` 落 `usr/lib/systemd/system/<包名>.service`（0644，装而不启）+ postinst `daemon-reload` 尾段自动合成/合并；`conffiles` 成员（`/etc` 下 `BundlerDebFile` 自动登记 + `Conffiles` 显式列表，均校验载荷存在）；压缩枚举仅 `gzip`，xz/zstd 登记拒绝（netstandard2.0 无托管编码器、zstd 需宿主 dpkg≥1.21.18）。
+- **证据**：`Bundler.Tests` 新增 3 项（合计 140 全绿）；`Verify.sh` 新增 scripts/systemd/upgrade/失败四变体——真实 `dpkg -i/-r` 下 postinst/prerm/postrm 标记断言、conffile `-r` 保留/`-P` 清除、修改后 conffile 升级保留（`--force-confold`）。
+- **实现注记**：`/etc` 下 `BundlerDebFile` 自动登记 conffile 改变了 `dpkg -r` 对这类文件的语义（由删除变为保留）——DEB-2 的零残留断言相应改为 `-r` 保留 + `-P` 清除两段式。
 
 ### LINUX-DEB-4：原生 E2E 与支持矩阵
 

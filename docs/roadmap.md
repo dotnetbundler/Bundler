@@ -155,7 +155,8 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 核心决策：deb/rpm 用纯托管写入器（无原生工具、任意构建宿主），AppImage 内嵌固定版本 `appimagetool`（构建限 Linux 宿主）。
 2026-09-27 `LINUX-DEB-1` 已完成（分支 `linux-deb-development`，`0.1.0-alpha.48`）：`DotNet.Bundler.Deb` 纯托管 ar/tar/gzip 写入器落地——最小 control 字段、`md5sums`、`usr/lib`+`usr/bin` 布局、SemVer→deb 版本映射、`.sha256` 侧车；MSBuild `BundlerDeb*` 接线、`Deb.Api.PackageFixture`、`tests/Linux.Deb.Integration/Verify.sh`（含真实 `sudo dpkg -i/-r`）、示例 `samples/HelloDebApp` 全部就位且验证全绿。
 2026-09-27 `LINUX-DEB-2` 已完成（同分支，`0.1.0-alpha.49`）：`Depends`/`Recommends`/`Provides`/`Conflicts`/`Replaces` 透传、`Section`/`Priority` 覆盖、`.desktop` 生成（决策 5 全字段含 `x-scheme-handler/` 并集）与 `BundlerDebDesktopFile` 整文件覆盖、hicolor PNG 图标（尺寸探测 + `@2x`）、AppStream metainfo、`changelog.gz`/`copyright`、`@(BundlerDebFile)` 绝对路径映射；`desktop-file-validate` 与装后 `dpkg -L` 回读断言全绿，lintian 信息级残余登记 LINUX-DEB-OI-07。
-`LINUX-DEB-3`（维护者脚本、systemd 与压缩）待用户下达启动指令；`LINUX-RPM`/`LINUX-APPIMAGE` 的详细路线在各自规划轮定稿。
+2026-09-27 `LINUX-DEB-3` 已完成（同分支，`0.1.0-alpha.50`）：`preinst`/`postinst`/`prerm`/`postrm` 专家旋钮（0755、shebang+LF 校验）、`BundlerDebSystemdServiceFile` 托管 unit（`usr/lib/systemd/system/` 落位 + postinst `daemon-reload` 自动合成/合并）、conffiles（`/etc` 下 `BundlerDebFile` 自动登记 + 显式列表，真实 `-r` 保留/`-P` 清除断言）、压缩枚举仅 gzip（xz/zstd 登记拒绝并记 OI-08）、同包升级与 conffile 修改保留实测全绿。
+`LINUX-DEB-4`（原生 E2E 与支持矩阵）待用户下达启动指令；`LINUX-RPM`/`LINUX-APPIMAGE` 的详细路线在各自规划轮定稿。
 
 ### ARCHIVE：通用压缩包格式
 

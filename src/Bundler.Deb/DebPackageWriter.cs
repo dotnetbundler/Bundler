@@ -56,6 +56,13 @@ internal static class DebPackageWriter
             throw new ArgumentException(
                 "The .deb maintainer must be a non-empty single line; set Publisher or Maintainer.");
         }
+        if (settings.Compression is { Length: > 0 } compression &&
+            !string.Equals(compression.Trim(), "gzip", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                $"'{compression}' is not a supported .deb compression; only 'gzip' is supported " +
+                "(the managed writer has no xz/zstd encoder; zstd also needs dpkg >= 1.21.18).");
+        }
 
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings);
         var dataTarGz = Gzip(TarData(payload));
@@ -303,6 +310,13 @@ internal static class DebPackageWriter
             AddFile(destination, RequireExisting(file.Source, "DebFile"), 420 /* 0644 */);
         }
 
+        if (settings.SystemdServiceFile is { Length: > 0 } unitSource)
+        {
+            AddFile(
+                "usr/lib/systemd/system/" + packageName + ".service",
+                RequireExisting(unitSource, "SystemdServiceFile"), 420 /* 0644 */);
+        }
+
         return entries;
     }
 
@@ -497,23 +511,124 @@ internal static class DebPackageWriter
             md5sums.Append(hash).Append("  ").Append(entry.ArchivePath).Append('\n');
         }
 
-        return
-        [
-            new TarEntry
+        var entries = new List<TarEntry>
+        {
+            new() { Name = "./control", Kind = TarEntryKind.File, Mode = 420 /* 0644 */,
+                Content = new UTF8Encoding(false).GetBytes(control.ToString()) },
+            new() { Name = "./md5sums", Kind = TarEntryKind.File, Mode = 420 /* 0644 */,
+                Content = new UTF8Encoding(false).GetBytes(md5sums.ToString()) }
+        };
+
+        var conffiles = ConffilePaths(payload, settings);
+        if (conffiles.Length > 0)
+        {
+            entries.Add(new TarEntry
             {
-                Name = "./control",
-                Kind = TarEntryKind.File,
-                Mode = 420 /* 0644 */,
-                Content = new UTF8Encoding(false).GetBytes(control.ToString())
-            },
-            new TarEntry
+                Name = "./conffiles", Kind = TarEntryKind.File, Mode = 420 /* 0644 */,
+                Content = new UTF8Encoding(false).GetBytes(string.Join("\n", conffiles) + "\n")
+            });
+        }
+
+        // Maintainer scripts land in the control archive with mode 0755. A
+        // systemd unit auto-appends a daemon-reload epilogue to postinst.
+        var daemonReload = settings.SystemdServiceFile is { Length: > 0 };
+        AddScript(entries, "preinst", settings.PreinstFile, needsShebang: true);
+        var postinst = settings.PostinstFile is { Length: > 0 }
+            ? ReadScript(settings.PostinstFile, "PostinstFile")
+            : null;
+        if (daemonReload)
+        {
+            var body = postinst is null
+                ? "#!/bin/sh\nset -e\n"
+                : postinst + "\n";
+            body += "\n# Bundler: systemd unit installed; reload unit definitions.\n" +
+                "systemctl daemon-reload || true\n";
+            postinst = body;
+        }
+        if (postinst is not null)
+        {
+            entries.Add(new TarEntry
             {
-                Name = "./md5sums",
-                Kind = TarEntryKind.File,
-                Mode = 420 /* 0644 */,
-                Content = new UTF8Encoding(false).GetBytes(md5sums.ToString())
+                Name = "./postinst", Kind = TarEntryKind.File, Mode = 493 /* 0755 */,
+                Content = new UTF8Encoding(false).GetBytes(postinst)
+            });
+        }
+        AddScript(entries, "prerm", settings.PrermFile, needsShebang: true);
+        AddScript(entries, "postrm", settings.PostrmFile, needsShebang: true);
+
+        return entries;
+    }
+
+    private static string[] ConffilePaths(List<PayloadEntry> payload, DebBundleConfiguration settings)
+    {
+        var payloadFiles = new HashSet<string>(
+            payload.Where(e => e.Kind == TarEntryKind.File).Select(e => e.ArchivePath),
+            StringComparer.Ordinal);
+        var conffiles = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        void Add(string destination, string knob)
+        {
+            var path = destination.Trim().Replace('\\', '/');
+            if (!path.StartsWith("/", StringComparison.Ordinal) ||
+                path.Split('/').Skip(1).Any(segment => segment is "" or "." or ".."))
+            {
+                throw new ArgumentException(
+                    $"A {knob} entry must be an absolute package path: '{destination}'.");
             }
-        ];
+            var archivePath = path.TrimStart('/');
+            if (!payloadFiles.Contains(archivePath))
+            {
+                throw new ArgumentException(
+                    $"The {knob} entry '{path}' has no file in the payload.");
+            }
+            if (seen.Add(path))
+            {
+                conffiles.Add(path);
+            }
+        }
+        foreach (var file in settings.Files ?? [])
+        {
+            var destination = file.Destination.Trim().Replace('\\', '/');
+            if (destination.StartsWith("/etc/", StringComparison.Ordinal))
+            {
+                Add(destination, "DebFile(/etc)");
+            }
+        }
+        foreach (var path in settings.Conffiles ?? [])
+        {
+            Add(path, "Conffiles");
+        }
+        return conffiles.ToArray();
+    }
+
+    private static void AddScript(List<TarEntry> entries, string name, string? file, bool needsShebang)
+    {
+        if (file is not { Length: > 0 })
+        {
+            return;
+        }
+        entries.Add(new TarEntry
+        {
+            Name = "./" + name, Kind = TarEntryKind.File, Mode = 493 /* 0755 */,
+            Content = new UTF8Encoding(false).GetBytes(ReadScript(file, name + "File"))
+        });
+    }
+
+    private static string ReadScript(string path, string knob)
+    {
+        var full = RequireExisting(path, knob);
+        var text = File.ReadAllText(full);
+        if (!text.StartsWith("#!", StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"The .deb maintainer script '{knob}' must start with a shebang: {full}");
+        }
+        if (text.IndexOf('\r') >= 0)
+        {
+            throw new ArgumentException(
+                $"The .deb maintainer script '{knob}' must use LF line endings: {full}");
+        }
+        return text;
     }
 
     private static readonly System.Text.RegularExpressions.Regex SectionPattern = new(

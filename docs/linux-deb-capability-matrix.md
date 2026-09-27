@@ -38,11 +38,11 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| maintainer 脚本（preinst/postinst/prerm/postrm） | 计划实现 | LINUX-DEB-3 | 专家旋钮整文件注入 0755；真实 `dpkg -i` 执行断言；责任边界标注 |
-| systemd unit（`usr/lib/systemd/system/`） | 计划实现 | LINUX-DEB-3 | 默认装不启用；postinst `daemon-reload` 片段合成 |
-| conffiles 声明 | 计划实现 | LINUX-DEB-3 | `dpkg -r` 保留 / `dpkg -P` 清除断言 |
-| 压缩选项（gzip 默认；xz/zstd 候选） | 计划实现 | LINUX-DEB-3 | 按宿主 dpkg 版本矩阵裁决；`data.tar.zst` 需 dpkg≥1.21.18 |
-| 升级/降级语义实测 | 计划实现 | LINUX-DEB-3 | 同包新版 `dpkg -i` 升级、降级策略写实文档 |
+| maintainer 脚本（preinst/postinst/prerm/postrm） | 已实现 | LINUX-DEB-3 | `BundlerDeb{Preinst,Postinst,Prerm,Postrm}File` 整文件注入 control 归档 0755（shebang+LF 校验）；真实 `dpkg -i/-r` 标记断言 |
+| systemd unit（`usr/lib/systemd/system/`） | 已实现（落位+合成）/外部待验收（真实 enable/start） | LINUX-DEB-3 | `BundlerDebSystemdServiceFile` → `usr/lib/systemd/system/<包名>.service`；postinst `daemon-reload` 自动合成（与调用方脚本合并）；OI-04 保留真实 systemd 宿主验收 |
+| conffiles 声明 | 已实现 | LINUX-DEB-3 | `BundlerDebConffiles` 显式列表 + `/etc` 下 `BundlerDebFile` 自动登记（均校验载荷存在）；真实 `-r` 保留/`-P` 清除与升级 `--force-confold` 断言 |
+| 压缩选项（gzip 默认；xz/zstd 候选） | 已实现（gzip）/登记拒绝（xz/zstd） | LINUX-DEB-3 | `BundlerDebCompression` 仅接受 `gzip`；xz/zstd 拒绝并说明（netstandard2.0 无托管编码器；zstd 另需 dpkg≥1.21.18） |
+| 升级/降级语义实测 | 已实现（升级）/写实登记（降级） | LINUX-DEB-3 | 同包 `dpkg -i` 1.0.0→1.0.1 + conffile 修改保留断言；降级需 `--force-downgrade` 属 dpkg 语义写实 |
 
 ## 签名与分发
 
@@ -57,7 +57,7 @@
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
 | `dpkg -i` 真实安装（本机 sudo） | 已实现 | LINUX-DEB-1 | Verify.sh 装卸烟雾 + `dpkg -s`/`dpkg -L`/链接启动断言 |
-| `dpkg -r`/`dpkg -P` 卸载语义 | 已实现（`-r` 零残留）/计划实现（`-P`） | LINUX-DEB-1/3 | `-r` 全清已断言；conffiles 保留语义 LINUX-DEB-3 起 |
-| 同包升级覆盖安装 | 计划实现 | LINUX-DEB-3 | `dpkg -i` v1→v2 版本更新断言 |
+| `dpkg -r`/`dpkg -P` 卸载语义 | 已实现 | LINUX-DEB-1/3 | `-r` 删普通文件留 conffile、`-P` 全清——真实断言 |
+| 同包升级覆盖安装 | 已实现 | LINUX-DEB-3 | `dpkg -i` 1.0.0→1.0.1 后 `dpkg -s` 版本断言 + conffile 本地修改保留 |
 | `linux-arm64` 产物 | 计划实现（结构）/外部待验收（运行） | LINUX-DEB-4 | 结构断言本机可做；arm64 真实安装属 LINUX-DEB-OI-01 |
 | 多发行版安装矩阵 | 部分本机自动/外部待验收 | LINUX-DEB-4 | docker debian/ubuntu 容器本机可测；GUI/更多发行版属 LINUX-DEB-OI-02 |

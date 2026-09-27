@@ -122,8 +122,55 @@ public sealed class DebBundleConfiguration
     /// Extra files mapped to absolute paths inside the package (e.g. a config under
     /// <c>/etc</c>); each entry's <c>Destination</c> is an absolute package path
     /// (leading '/' optional) with a file name, outside the payload root.
+    /// Files planted under <c>/etc</c> are also registered as conffiles so
+    /// <c>dpkg -r</c> keeps them (purge removes them).
     /// </summary>
     public IReadOnlyList<DebFileEntry>? Files { get; init; }
+
+    /// <summary>
+    /// Expert knob: path to a caller-supplied <c>preinst</c> maintainer script,
+    /// packed into the control archive with mode 0755. Must start with a shebang
+    /// and use LF line endings.
+    /// </summary>
+    public string? PreinstFile { get; init; }
+
+    /// <summary>
+    /// Expert knob: caller-supplied <c>postinst</c> script (0755). When
+    /// <see cref="SystemdServiceFile"/> is also set, a
+    /// <c>systemctl daemon-reload</c> epilogue is appended automatically.
+    /// </summary>
+    public string? PostinstFile { get; init; }
+
+    /// <summary>Expert knob: caller-supplied <c>prerm</c> script (0755).</summary>
+    public string? PrermFile { get; init; }
+
+    /// <summary>Expert knob: caller-supplied <c>postrm</c> script (0755).</summary>
+    public string? PostrmFile { get; init; }
+
+    /// <summary>
+    /// Managed systemd unit: path to a <c>.service</c> file installed at
+    /// <c>usr/lib/systemd/system/&lt;package&gt;.service</c> (0644). A
+    /// <c>systemctl daemon-reload</c> epilogue is synthesized into
+    /// <c>postinst</c> (appended to a caller-supplied <see cref="PostinstFile"/>
+    /// when present). The unit is installed but not enabled or started —
+    /// enabling policy stays with the caller's scripts.
+    /// </summary>
+    public string? SystemdServiceFile { get; init; }
+
+    /// <summary>
+    /// Additional conffile paths (absolute package paths that exist in the
+    /// payload), written to the <c>conffiles</c> control member. Destinations of
+    /// <see cref="Files"/> under <c>/etc</c> are registered automatically.
+    /// </summary>
+    public IReadOnlyList<string>? Conffiles { get; init; }
+
+    /// <summary>
+    /// Payload/control compression: only <c>"gzip"</c> is supported — the
+    /// writer is pure managed code and netstandard2.0 ships no xz/zstd encoder
+    /// without a third-party dependency; zstd additionally needs dpkg ≥ 1.21.18
+    /// on the install host. Any other value is rejected.
+    /// </summary>
+    public string? Compression { get; init; }
 }
 
 /// <summary>A file planted at an absolute path inside the .deb payload.</summary>

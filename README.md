@@ -267,7 +267,11 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerDebDesktopFile` | 否 | 无；`.desktop` 整文件覆盖，跳过自动生成 |
 | `BundlerDebMetainfoFile` | 否 | 无；AppStream metainfo → `usr/share/metainfo/<包名>.metainfo.xml` |
 | `BundlerDebChangelogFile` | 否 | 无；→ `usr/share/doc/<包名>/changelog.gz`（自动 gzip；`BundlerLicenseFile` → `copyright`） |
-| `@(BundlerDebFile)`（`Destination`） | 否 | 无；任意文件 → 包内绝对路径（含文件名，拒相对/`..`/空段） |
+| `@(BundlerDebFile)`（`Destination`） | 否 | 无；任意文件 → 包内绝对路径（含文件名，拒相对/`..`/空段；`/etc` 下自动登记 conffile） |
+| `BundlerDebPreinstFile`/`PostinstFile`/`PrermFile`/`PostrmFile` | 否 | 无；维护者脚本整文件注入 control 归档（0755，须 shebang+LF） |
+| `BundlerDebSystemdServiceFile` | 否 | 无；unit → `usr/lib/systemd/system/<包名>.service`，postinst 自动合成 `daemon-reload`（装而不启） |
+| `BundlerDebConffiles` | 否 | 无；显式 conffile 绝对路径列表（须存在于载荷） |
+| `BundlerDebCompression` | 否 | `gzip`；xz/zstd 暂拒绝（无托管编码器，zstd 另需 dpkg≥1.21.18） |
 | `BundlerWindowsSigningPfxFile` | 否 | PFX/P12 代码签名证书路径 |
 | `BundlerWindowsSigningPfxPasswordEnvironmentVariable` | 否 | 保存 PFX 密码的环境变量名 |
 | `BundlerWindowsSigningCertificateThumbprint` | 否 | Windows `My` 证书存储区中的证书指纹 |

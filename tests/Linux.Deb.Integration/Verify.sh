@@ -300,18 +300,111 @@ if sudo -n true 2>/dev/null; then
         desktop-file-validate /usr/share/applications/bundler-deb-fixture.desktop \
             || fail "desktop-file-validate rejects the installed .desktop."
     fi
+    # conffile 语义：/etc DebFile 自动登记 conffile → -r 保留 → -P 清除。
+    status_conf="$(dpkg-query -W -f='${Conffiles}' bundler-deb-fixture)"         || fail "dpkg-query Conffiles failed."
+    printf '%s' "$status_conf" | grep -q "etc/bundler-deb-fixture/defaults.conf" \
+        || fail "The /etc file is not registered as a conffile: $status_conf"
+    echo "local_edit=1" | sudo -n tee /etc/bundler-deb-fixture/defaults.conf >/dev/null
     sudo -n dpkg -r bundler-deb-fixture >/dev/null || fail "dpkg -r failed."
     [[ ! -e /usr/lib/bundler-deb-fixture && ! -e /usr/bin/bundler-deb-fixture \
-        && ! -e /usr/share/applications/bundler-deb-fixture.desktop \
-        && ! -e /etc/bundler-deb-fixture/defaults.conf ]] \
+        && ! -e /usr/share/applications/bundler-deb-fixture.desktop ]] \
         || fail "Removal left payload residue."
+    grep -qx "local_edit=1" /etc/bundler-deb-fixture/defaults.conf \
+        || fail "dpkg -r must keep the modified conffile."
+    sudo -n dpkg -P bundler-deb-fixture >/dev/null || fail "dpkg -P failed."
+    [[ ! -e /etc/bundler-deb-fixture ]] \
+        || fail "dpkg -P did not purge the conffile."
     if dpkg -s bundler-deb-fixture >/dev/null 2>&1; then
-        fail "dpkg -s still reports the package after removal."
+        fail "dpkg -s still reports the package after purge."
     fi
-    log "real dpkg install/remove verified"
+    log "real dpkg install/remove verified (conffile -r keep / -P purge)"
 else
     log "SKIP: passwordless sudo unavailable; real dpkg -i/-r not exercised."
 fi
+
+log "== scripts variant (maintainer scripts) =="
+publish_fixture scripts \
+    -p:BundlerTestDebPostinstFile="$script_dir/Fixture/Assets/postinst.sh" \
+    -p:BundlerTestDebPrermFile="$script_dir/Fixture/Assets/prerm.sh" \
+    -p:BundlerTestDebPostrmFile="$script_dir/Fixture/Assets/postrm.sh" >/dev/null
+scripts_deb="$integration_root/scripts/linux-x64/deb/bundler-deb-fixture_1.0.0-1_amd64.deb"
+[[ -f "$scripts_deb" ]] || fail "Scripts variant produced no .deb."
+deb_control "$scripts_deb" scripts
+for member in postinst prerm postrm; do
+    [[ -f "$extract_root/control/scripts/$member" ]] \
+        || fail "control archive lacks $member."
+    [[ "$(stat -c %a "$extract_root/control/scripts/$member")" == "755" ]] \
+        || fail "$member is not mode 0755."
+    head -c2 "$extract_root/control/scripts/$member" | grep -qx '#!' \
+        || fail "$member lacks a shebang."
+done
+[[ ! -f "$extract_root/control/scripts/preinst" ]] || fail "Unset preinst must not be packed."
+[[ -f "$extract_root/control/scripts/conffiles" ]] \
+    || fail "conffiles member missing in scripts variant."
+grep -qx "/etc/bundler-deb-fixture/defaults.conf" "$extract_root/control/scripts/conffiles" \
+    || fail "conffiles lacks the /etc DebFile destination."
+if sudo -n true 2>/dev/null; then
+    sudo -n rm -f /var/lib/bundler-deb-fixture-postinst.ran \
+        /tmp/bundler-deb-fixture-postinst.ran /tmp/bundler-deb-fixture-prerm.ran \
+        /tmp/bundler-deb-fixture-postrm.ran
+    sudo -n dpkg -i "$scripts_deb" >/dev/null || fail "dpkg -i (scripts) failed."
+    [[ -f /var/lib/bundler-deb-fixture-postinst.ran || -f /tmp/bundler-deb-fixture-postinst.ran ]] \
+        || fail "postinst did not run (no marker file)."
+    sudo -n dpkg -r bundler-deb-fixture >/dev/null || fail "dpkg -r (scripts) failed."
+    [[ -f /tmp/bundler-deb-fixture-prerm.ran ]] || fail "prerm did not run."
+    [[ -f /tmp/bundler-deb-fixture-postrm.ran ]] || fail "postrm did not run."
+    sudo -n dpkg -P bundler-deb-fixture >/dev/null 2>&1 || true
+    sudo -n rm -f /var/lib/bundler-deb-fixture-postinst.ran \
+        /tmp/bundler-deb-fixture-postinst.ran /tmp/bundler-deb-fixture-prerm.ran \
+        /tmp/bundler-deb-fixture-postrm.ran
+    sudo -n rm -rf /etc/bundler-deb-fixture
+    log "maintainer scripts executed under real dpkg -i/-r"
+fi
+
+log "== systemd unit variant (daemon-reload synthesis) =="
+publish_fixture systemd \
+    -p:BundlerTestDebSystemdServiceFile="$script_dir/Fixture/Assets/fixture.service" \
+    -p:BundlerTestDebPostinstFile="$script_dir/Fixture/Assets/postinst.sh" >/dev/null
+systemd_deb="$integration_root/systemd/linux-x64/deb/bundler-deb-fixture_1.0.0-1_amd64.deb"
+deb_control "$systemd_deb" systemd
+deb_data "$systemd_deb" systemd
+[[ -f "$extract_root/data/systemd/usr/lib/systemd/system/bundler-deb-fixture.service" ]] \
+    || fail "The systemd unit is missing from the payload."
+grep -qx "ExecStart=/usr/bin/bundler-deb-fixture" \
+    "$extract_root/data/systemd/usr/lib/systemd/system/bundler-deb-fixture.service" \
+    || fail "The unit content differs."
+postinst_text="$(cat "$extract_root/control/systemd/postinst")"
+printf '%s\n' "$postinst_text" | grep -qx "systemctl daemon-reload || true" \
+    || fail "postinst lacks the daemon-reload epilogue: $(printf '%s\n' "$postinst_text")"
+printf '%s\n' "$postinst_text" | grep -q "bundler-deb-fixture-postinst.ran" \
+    || fail "postinst lost the caller script body."
+
+log "== upgrade variant (same package, newer version) =="
+publish_fixture upgrade -p:BundlerVersion="1.0.1" >/dev/null
+upgrade_deb="$integration_root/upgrade/linux-x64/deb/bundler-deb-fixture_1.0.1-1_amd64.deb"
+[[ -f "$upgrade_deb" ]] || fail "Upgrade variant produced no .deb."
+if sudo -n true 2>/dev/null; then
+    sudo -n dpkg -i "$deb_path" >/dev/null || fail "dpkg -i v1.0.0 failed."
+    echo "user_custom=42" | sudo -n tee /etc/bundler-deb-fixture/defaults.conf >/dev/null
+    sudo -n dpkg -i --force-confold "$upgrade_deb" >/dev/null \
+        || fail "Upgrade dpkg -i v1.0.1 failed."
+    status="$(dpkg -s bundler-deb-fixture)" || fail "dpkg -s failed after upgrade."
+    printf '%s' "$status" | grep -qF "Version: 1.0.1-1" \
+        || fail "dpkg reports the wrong version after upgrade."
+    grep -qx "user_custom=42" /etc/bundler-deb-fixture/defaults.conf \
+        || fail "Upgrade overwrote the locally modified conffile."
+    sudo -n dpkg -P bundler-deb-fixture >/dev/null || fail "dpkg -P after upgrade failed."
+    [[ ! -e /etc/bundler-deb-fixture ]] || fail "Purge left the conffile."
+    log "upgrade + conffile preservation verified"
+fi
+
+log "== failure variant (unsupported compression) =="
+if publish_fixture fail-compression -p:BundlerTestDebCompression=xz \
+        >"$integration_root/fail-compression.log" 2>&1; then
+    fail "An unsupported compression must fail the publish."
+fi
+grep -qi "compression" "$integration_root/fail-compression.log" \
+    || fail "The compression failure did not mention compression."
 
 if command -v lintian >/dev/null; then
     log "== lintian audit (informational) =="

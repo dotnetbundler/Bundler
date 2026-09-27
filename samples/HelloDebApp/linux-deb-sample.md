@@ -109,6 +109,29 @@ sudo dpkg -r hello-deb-app
   dotnet publish ... -p:HelloDebDesktopFile=Assets/custom.desktop
   ```
 
-## 已知边界（LINUX-DEB-2 未做）
+- **维护者脚本**（`preinst`/`postinst`/`prerm`/`postrm`，shebang + LF 必备，入 control 归档 0755）：示例默认装 `postinst`/`prerm`/`postrm`（postinst 建 `/var/lib/hello-deb-app`，postrm 清除）；覆盖：
 
-维护者脚本/systemd/conffiles/压缩格式选择属 `LINUX-DEB-3`；详见 `docs/linux-deb-roadmap.md`。
+  ```bash
+  dotnet publish ... -p:HelloDebPostinstFile=Assets/postinst.sh -p:HelloDebPreinstFile=path/to/preinst.sh
+  ```
+
+- **托管 systemd unit**（`BundlerDebSystemdServiceFile` → `usr/lib/systemd/system/<包名>.service`，0644；postinst 自动合成 `systemctl daemon-reload` 尾段——有自定义 postinst 时与其合并）。装而不启，启用策略归调用方脚本：
+
+  ```bash
+  dotnet publish ... -p:HelloDebSystemdServiceFile=Assets/hello-deb-app.service
+  ```
+
+- **conffile 语义**（`BundlerDebFile` 落到 `/etc` 下自动登记 conffile；`HelloDebConffiles` 可显式追加其他包内绝对路径）：本示例 `/etc/hello-deb-app/defaults.conf` 即 conffile——`dpkg -r` 保留本地修改，`dpkg -P` 才清除；升级时本地修改默认保留（`-confold`）。
+
+  ```bash
+  sudo dpkg -i .../hello-deb-app_1.0.0-1_amd64.deb
+  echo "local=1" | sudo tee /etc/hello-deb-app/defaults.conf
+  sudo dpkg -r hello-deb-app      # conffile 保留
+  sudo dpkg -P hello-deb-app      # 清除
+  ```
+
+- **压缩格式**：`BundlerDebCompression` 当前仅 `gzip`——托管写入器在 netstandard2.0 无 xz/zstd 编码器（引第三方依赖属单独裁决），且 zstd 要求安装宿主 dpkg ≥ 1.21.18。
+
+## 已知边界（LINUX-DEB-3 未做）
+
+systemd 真实 enable/start、升级/降级多版本链、xz/zstd 压缩属 `LINUX-DEB-4` 或已登记边界；详见 `docs/linux-deb-roadmap.md`。

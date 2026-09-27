@@ -36,6 +36,13 @@
     <BundlerDebMetainfoFile Condition="'$(BundlerTestDebMetainfoFile)' != ''">$(BundlerTestDebMetainfoFile)</BundlerDebMetainfoFile>
     <BundlerDebChangelogFile>$(MSBuildThisFileDirectory)Assets/CHANGELOG.md</BundlerDebChangelogFile>
     <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets/LICENSE.txt</BundlerLicenseFile>
+    <BundlerDebPreinstFile Condition="'$(BundlerTestDebPreinstFile)' != ''">$(BundlerTestDebPreinstFile)</BundlerDebPreinstFile>
+    <BundlerDebPostinstFile Condition="'$(BundlerTestDebPostinstFile)' != ''">$(BundlerTestDebPostinstFile)</BundlerDebPostinstFile>
+    <BundlerDebPrermFile Condition="'$(BundlerTestDebPrermFile)' != ''">$(BundlerTestDebPrermFile)</BundlerDebPrermFile>
+    <BundlerDebPostrmFile Condition="'$(BundlerTestDebPostrmFile)' != ''">$(BundlerTestDebPostrmFile)</BundlerDebPostrmFile>
+    <BundlerDebSystemdServiceFile Condition="'$(BundlerTestDebSystemdServiceFile)' != ''">$(BundlerTestDebSystemdServiceFile)</BundlerDebSystemdServiceFile>
+    <BundlerDebConffiles Condition="'$(BundlerTestDebConffiles)' != ''">$(BundlerTestDebConffiles)</BundlerDebConffiles>
+    <BundlerDebCompression Condition="'$(BundlerTestDebCompression)' != ''">$(BundlerTestDebCompression)</BundlerDebCompression>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
