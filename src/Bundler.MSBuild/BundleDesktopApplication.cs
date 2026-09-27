@@ -5,6 +5,7 @@ using System.Linq;
 using DotNet.Bundler;
 using DotNet.Bundler.MacApp;
 using DotNet.Bundler.MacDmg;
+using DotNet.Bundler.MacPkg;
 using DotNet.Bundler.Nsis;
 using DotNet.Bundler.Wix;
 using DotNet.Bundler.Signing.Windows;
@@ -136,6 +137,10 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacDmgSignIdentity { get; set; } = "";
     public string MacDmgSignCertificatePath { get; set; } = "";
     public string MacDmgSignCertificatePassword { get; set; } = "";
+    public string MacPkgIdentifier { get; set; } = "";
+    public string MacPkgVersion { get; set; } = "";
+    public string MacPkgInstallLocation { get; set; } = "";
+    public ITaskItem[] MacPkgPayloadItems { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -292,6 +297,28 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 artifacts = new MacAppBundler(
                     BuildMacAppConfiguration(),
                     new MacAppBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
+                    .BuildAsync(configuration)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            else if (formats.All(format => format == PackageFormat.Pkg))
+            {
+                artifacts = new MacPkgBundler(
+                    new MacPkgBundleConfiguration
+                    {
+                        Identifier = EmptyToNull(MacPkgIdentifier),
+                        Version = EmptyToNull(MacPkgVersion),
+                        InstallLocation = string.IsNullOrWhiteSpace(MacPkgInstallLocation)
+                            ? "/Applications"
+                            : MacPkgInstallLocation.Trim(),
+                        PayloadItems = MacPkgPayloadItems.Select(item => new MacPkgPayloadItem
+                        {
+                            Source = Path.GetFullPath(item.ItemSpec),
+                            Destination = EmptyMetadataToNull(item, "Destination")
+                        }).ToArray()
+                    },
+                    BuildMacAppConfiguration(),
+                    new MacPkgBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     .BuildAsync(configuration)
                     .GetAwaiter()
                     .GetResult();

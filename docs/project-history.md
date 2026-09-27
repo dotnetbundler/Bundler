@@ -936,3 +936,11 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 阶段分解 `MAC-PKG-1`..`5`：组件包 → 分发包与页面（per-user 真实安装实测）→ 签名公证+专家脚本 → E2E 矩阵 → 冻结。
 产出 `mac-pkg-roadmap.md`/`mac-pkg-capability-matrix.md`/`mac-pkg-open-items.md`（OI-01..05）/`mac-pkg-manual-testing.md`（MT-01..06）；roadmap.md、manual-testing-index.md、PROJECT_CONTEXT.md 同步。
 `mac-dmg-development` 已合入 `main`（`8cf5de5`），包版本推进 `0.1.0-alpha.46`。
+
+### 14.32 MAC-PKG-1：最小可用组件包（2026-09-26，分支 `mac-pkg-development`）
+
+`src/Bundler.MacPkg` 落地（netstandard2.0，`DotNet.Bundler.MacPkg` 包）：`pkgbuild --root` 全链——identifier 默认取 `BundlerIdentifier`、version 默认取 `Version`（均可覆盖）、`--install-location` 默认 `/Applications`（相对路径拒绝）、`--ownership recommended`、`BundlerPkgPayload` 任意文件树载荷按 `Destination` 映射、非 macOS 宿主明确拒绝、失败删除伪 `.pkg`。
+`MacPkgBundler` 直接 API（仅接受 `Pkg` 目标，规划器自动先产 `.app`）；MSBuild `BundlerMacPkgIdentifier`/`BundlerMacPkgVersion`/`BundlerMacPkgInstallLocation` 属性 + `@(BundlerPkgPayload)` 项接线；`DotNet.Bundler.MSBuild` 包装载 `DotNet.Bundler.MacPkg.dll`。
+测试缝：`MacPkgProcessRunner.Handler` 桩注入、`MacPkgBundleBackend.HostCheck` 桩宿主门控。
+验证（macOS 26.5.2 arm64 云 VM）：`Bundler.Tests` **109 项全绿**（新增 10 条）；`tests/MacOS.Pkg.Integration/Verify.sh` 全绿——expand-full 断言 payload（`.app`+显式载荷项）、PackageInfo identifier/version/install-location 默认与覆盖回读、xar 结构、installer 解析、payload 内 `.app` 二进制真实启动、非法 install-location 失败且无产物；`samples/HelloMacPkg` 全旋钮实测产出 32MB `.pkg`。
+踩坑：`installer -dominfo` 对组件包返回空（域名声明属分发包 distribution.xml，MAC-PKG-2），断言口径改为"installer 解析通过"；`DotNet.Bundler.MSBuild` 包须显式 `<None Pack>` 装载后端 dll（`ProjectReference` 不会自动传递打包）。

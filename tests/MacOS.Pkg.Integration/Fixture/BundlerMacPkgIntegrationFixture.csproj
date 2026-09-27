@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">osx-arm64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <AssemblyName>BundlerMacPkgIntegrationFixture</AssemblyName>
+    <Version>1.0.0</Version>
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerIntegrationIdentifier Condition="'$(BundlerIntegrationIdentifier)' == ''">com.dotnetbundler.macpkgintegrationfixture</BundlerIntegrationIdentifier>
+    <BundlerIntegrationProductName Condition="'$(BundlerIntegrationProductName)' == ''">Bundler Mac PKG Fixture</BundlerIntegrationProductName>
+    <BundlerFormats>pkg</BundlerFormats>
+    <BundlerIdentifier>$(BundlerIntegrationIdentifier)</BundlerIdentifier>
+    <BundlerProductName>$(BundlerIntegrationProductName)</BundlerProductName>
+    <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
+    <BundlerDescription>Disposable macOS .pkg integration-test fixture.</BundlerDescription>
+    <BundlerCopyright>Copyright DotNet.Bundler Tests</BundlerCopyright>
+    <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
+    <BundlerMacAppBundleName>PkgFixture</BundlerMacAppBundleName>
+    <BundlerMacAppDisplayName>Bundler Mac PKG Fixture</BundlerMacAppDisplayName>
+    <BundlerMacAppBuildVersion>2026.9.1</BundlerMacAppBuildVersion>
+    <BundlerMacPkgIdentifier Condition="'$(BundlerTestPkgIdentifier)' != ''">$(BundlerTestPkgIdentifier)</BundlerMacPkgIdentifier>
+    <BundlerMacPkgVersion Condition="'$(BundlerTestPkgVersion)' != ''">$(BundlerTestPkgVersion)</BundlerMacPkgVersion>
+    <BundlerMacPkgInstallLocation Condition="'$(BundlerTestPkgInstallLocation)' != ''">$(BundlerTestPkgInstallLocation)</BundlerMacPkgInstallLocation>
+  </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <ItemGroup>
+    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
+    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <BundlerPkgPayload Include="Assets/helper.txt" Destination="support/helper.txt" />
+  </ItemGroup>
+</Project>

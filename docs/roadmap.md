@@ -141,7 +141,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 - 能力矩阵 [`mac-app-capability-matrix.md`](mac-app-capability-matrix.md)、人工清单 [`mac-app-manual-testing.md`](mac-app-manual-testing.md)、外部待办 [`mac-app-open-items.md`](mac-app-open-items.md)。
 
 `Pkg` 枚举值与目标矩阵放行已随 `MAC-APP-1` 进入公共模型；格式顺序固定为 `MAC-DMG` 之后、Linux 之前。
-2026-09-26 `MAC-PKG` 规划轮已收官（分支 `mac-pkg-development`）：11 项决策全部确认（C# 原生编排 `pkgbuild`/`productbuild` 等系统工具、默认组件包+分发特性自动升级、Developer ID Installer 签名可选且无 ad-hoc、`.pkg` 本体可公证、`LicenseFile` 复用为许可页、域名 `system`/`current-user-home`、专家脚本旋钮、覆盖安装升级语义、`OutputDirectory/<rid>/pkg/<产品名>.pkg`），路线见 [`docs/mac-pkg-roadmap.md`](mac-pkg-roadmap.md)；默认下一阶段 `MAC-PKG-1`，待启动指令。
+2026-09-26 `MAC-PKG-1` 已完成（分支 `mac-pkg-development`）：`DotNet.Bundler.MacPkg` 后端落地——`pkgbuild` 组件包全链（identifier/version/install-location 默认与覆盖、`BundlerPkgPayload` 任意载荷、宿主门控、失败清理），MSBuild `BundlerMacPkg*` 接线；`Bundler.Tests` 109 项 + `tests/MacOS.Pkg.Integration` 实测全绿；示例 `samples/HelloMacPkg`；路线见 [`docs/mac-pkg-roadmap.md`](mac-pkg-roadmap.md)；默认下一阶段 `MAC-PKG-2`（分发包与页面），待启动指令。
 不得在没有原生 macOS 验证环境时宣称签名和 notarization 完成。
 
 ### LINUX：Linux 格式

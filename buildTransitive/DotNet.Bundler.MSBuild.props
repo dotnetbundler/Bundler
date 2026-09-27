@@ -103,5 +103,8 @@
     <BundlerMacDmgSignIdentity Condition="'$(BundlerMacDmgSignIdentity)' == ''"></BundlerMacDmgSignIdentity>
     <BundlerMacDmgSignCertificatePath Condition="'$(BundlerMacDmgSignCertificatePath)' == ''"></BundlerMacDmgSignCertificatePath>
     <BundlerMacDmgSignCertificatePassword Condition="'$(BundlerMacDmgSignCertificatePassword)' == ''"></BundlerMacDmgSignCertificatePassword>
+    <BundlerMacPkgIdentifier Condition="'$(BundlerMacPkgIdentifier)' == ''"></BundlerMacPkgIdentifier>
+    <BundlerMacPkgVersion Condition="'$(BundlerMacPkgVersion)' == ''"></BundlerMacPkgVersion>
+    <BundlerMacPkgInstallLocation Condition="'$(BundlerMacPkgInstallLocation)' == ''">/Applications</BundlerMacPkgInstallLocation>
   </PropertyGroup>
 </Project>

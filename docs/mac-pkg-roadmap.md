@@ -1,6 +1,6 @@
 # macOS `.pkg` 后端实施路线（MAC-PKG）
 
-> 状态：**规划轮已收官，决策全部确认**（2026-09-26，分支 `mac-pkg-development`）；默认下一阶段 `MAC-PKG-1`，待启动指令。
+> 状态：**`MAC-PKG-1` 已完成**（2026-09-26，分支 `mac-pkg-development`）；默认下一阶段 `MAC-PKG-2`，待启动指令。
 > `.pkg` 无上游参照：tauri 无 `.pkg` 输出（`PackageType` 仅 `MacOsBundle`/`IosBundle`/`Dmg`/`Updater` + Linux/Windows 各项），决策依据为原生 macOS 工具链语义与 [`docs/mac-format-decision.md`](mac-format-decision.md) 已确认边界。
 > `.app`/`.dmg` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)、[`docs/mac-dmg-roadmap.md`](mac-dmg-roadmap.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
@@ -44,6 +44,7 @@
 - **目标/交付**：`Bundler.MacDmg` 同构的 `Bundler.MacPkg` 后端（netstandard2.0，`DotNet.Bundler.MacPkg` 包）；`pkgbuild --root`/`--component` 全链（identifier 默认规则、version、install-location、`--ownership`）；非 macOS 宿主明确拒绝；MSBuild 映射（`BundlerMacPkg*`）与直接 API；`Bundler.Tests` 新用例 + `tests/MacOS.Pkg.Integration` bash 实测（`pkgutil --expand-full` 断言 payload/`PackageInfo`、`xar -tf` 结构、`installer -dominfo` 域名信息）+ 示例 `samples/HelloMacPkg`。
 - **不做**：分发包、签名、公证、脚本。
 - **退出**：本机真实产出结构可验 `.pkg`；失败路径无残留。
+- **验收记录（2026-09-26，macOS 26.5.2 arm64）**：`Bundler.Tests` 109 项全绿（新增 10 条）；`Verify.sh` 全绿——fixture 产出 `osx-arm64/pkg/<产品名>.pkg`（规划器自动先产 `.app`），`pkgutil --expand-full` 断言 payload 含 `.app`+`BundlerPkgPayload` 显式项、`PackageInfo` identifier/version/install-location 默认值与覆盖值回读，`xar -tf` 断言 PackageInfo/Payload/Bom，`installer -dominfo -plist`/`-pkginfo` 解析通过，非法 install-location 使 publish 失败且无 `.pkg` 残留；`samples/HelloMacPkg` 全旋钮演示实测产出。踩坑修正：组件包无 domains 声明，`installer -dominfo` 断言口径改为"解析通过"（域名属 MAC-PKG-2 分发包）。
 
 ### MAC-PKG-2：分发包与页面
 
