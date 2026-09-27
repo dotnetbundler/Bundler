@@ -4,3 +4,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("DotNet.Bundler.Deb")]
 [assembly: InternalsVisibleTo("DotNet.Bundler.Rpm")]
 [assembly: InternalsVisibleTo("DotNet.Bundler.AppImage")]
+[assembly: InternalsVisibleTo("DotNet.Bundler.Archive")]

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using DotNet.Bundler;
 using DotNet.Bundler.AppImage;
+using DotNet.Bundler.Archive;
 using DotNet.Bundler.Deb;
 using DotNet.Bundler.MacApp;
 using DotNet.Bundler.MacDmg;
@@ -232,6 +233,10 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string AppImageCategories { get; set; } = "";
     public string AppImageMetainfoFile { get; set; } = "";
     public ITaskItem[] AppImageFiles { get; set; } = Array.Empty<ITaskItem>();
+    public string ArchivePackageName { get; set; } = "";
+    public string ArchiveVersion { get; set; } = "";
+    public string ArchiveName { get; set; } = "";
+    public ITaskItem[] ArchiveFiles { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -567,6 +572,25 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         }).ToArray()
                     },
                     new RpmBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
+                    .BuildAsync(configuration)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            else if (format is PackageFormat.Zip or PackageFormat.TarGz)
+            {
+                produced = new ArchiveBundler(
+                    new ArchiveBundleConfiguration
+                    {
+                        PackageName = EmptyToNull(ArchivePackageName),
+                        Version = EmptyToNull(ArchiveVersion),
+                        ArchiveName = EmptyToNull(ArchiveName),
+                        Files = ArchiveFiles.Select(item => new ArchiveFileEntry
+                        {
+                            Source = Path.GetFullPath(item.ItemSpec),
+                            Destination = item.GetMetadata("Destination")
+                        }).ToArray()
+                    },
+                    new ArchiveBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     .BuildAsync(configuration)
                     .GetAwaiter()
                     .GetResult();

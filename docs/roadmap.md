@@ -168,13 +168,15 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 2026-09-27 `LINUX-APPIMAGE-2` 已完成（同分支，`0.1.0-alpha.57`）：`BundlerAppImageFile` 任意 AppDir 相对路径映射 + 生成件碰撞/逃逸/缺源拒绝；APPIMAGE-1 已接齐九旋钮，本阶段实质为 File 映射收口；`Bundler.Tests` 173 + `Verify.sh`（files/bad-file 变体）全绿。
 2026-09-27 `LINUX-APPIMAGE-3` 已完成（同分支，`0.1.0-alpha.58`）：aarch64 载荷深读断言（hsqs 偏移直读 squashfs）、appimagelint 实跑裁决为信息级（载荷 ABI 属性+工具 `@2` scale 解析局限）、干净宿主进程出口审计（仅 appimagetool+chmod/ln）。
 2026-09-27 `LINUX-APPIMAGE-4` 已完成（同分支，`0.1.0-alpha.58`）：上游复核（dev HEAD 漂移至 `d15cf9b` 但审计引用文件逐一 diff 字节级一致）、矩阵定稿、OI/MT 收口、冻结基线写入——`.AppImage` 格式冻结。默认下一格式 `ARCHIVE`。
+2026-09-27 `ARCHIVE` 规划轮与 `ARCHIVE-1` 已完成（分支 `archive-development`，`0.1.0-alpha.59`）：纯托管 zip/tar.gz 写入器、`Bundler.Tests` 181/181、`Verify.sh` 全绿。
 
 ### ARCHIVE：通用压缩包格式
 
 记录一项后续格式决策（2026-10-03，用户提出）：在平台格式全部完成后增加一个压缩包后端
 （zip / tar.gz 等归档分发形式），跨 Windows/macOS/Linux 通用，阶段号 `ARCHIVE`。
-当前仅登记意图：公共模型 `PackageFormat` 尚无对应枚举，无能力清单与阶段分解；
-在阶段启动前先做格式决策记录（归档类型范围、可执行位/符号链接保留、校验和与签名策略等）。
+规划轮已完成（`docs/archive-roadmap.md`：zip+tar.gz、纯托管写入器、单顶层目录、执行位与符号链接保留、`.sha256` 侧车、拒绝签名与 tar.xz/zst/7z）。
+`ARCHIVE-1` 已完成：`src/Bundler.Archive` 托管双写入器 + 三 OS 矩阵放开 + `BundlerFormats=zip;targz` 接线，
+`Bundler.Tests` 181/181 与 `tests/Archive.Integration/Verify.sh`（真实解包/mode/symlink 还原/五格式扇出/交叉目标）全绿。
 
 ### CLI-C1：在打包格式完成后产品化 CLI
 

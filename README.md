@@ -15,6 +15,7 @@ WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线；`alpha.44
 Linux `.deb` 已冻结于 `linux-deb-development` 分支（`LINUX-DEB-1..5`，冻结基线 `0.1.0-alpha.51`）：纯托管 ar/tar/gzip 写入器（无原生工具依赖、任意构建宿主可产出），control 全字段+维护者脚本+conffiles+systemd unit+桌面集成，`sudo dpkg -i/-r/-P` 真实装卸、lintian 硬断言、docker debian/ubuntu 矩阵全部验证。
 Linux `.rpm` **已冻结**（`0.1.0-alpha.55`，`linux-rpm-development` 分支）：纯托管 lead/header/cpio/gzip 写入器，六族关系字段 + License/Group/Url + freedesktop 桌面集成（.desktop/图标/metainfo）+ 任意路径映射 + 四 scriptlet/systemd unit/%config(noreplace)，`rpm -qip` 逐字段断言、`desktop-file-validate`、docker `fedora/rockylinux/opensuse` 三容器真实 `rpm -i`/`rpm -U`/`rpm -e` 与 `.rpmsave` 语义验证、`rpmlint` 豁免清单硬基线、`deb;rpm` 同次 publish 扇出已放开。
 Linux `.AppImage` 进行中（`linux-appimage-development` 分支，`LINUX-APPIMAGE-1..4` 完成并冻结于 `0.1.0-alpha.58`）：`DotNet.Bundler.AppImage` 内嵌固定版本 `appimagetool`+type2 runtime（SHA-256 provenance、不联网下载），AppDir 组装复用共享 freedesktop 件 + 脚本式 `AppRun` + 根 `.desktop` 符号链接/`.DirIcon`/`@(BundlerAppImageFile)` 任意映射，仅 Linux 宿主构建、x86_64 宿主可交叉产 aarch64；`--appimage-extract` 结构断言、解出程序真实运行、docker 三容器 extract-and-run 冒烟、`deb;rpm;appimage` 扇出全绿。
+通用 `.zip`/`.tar.gz` 归档进行中（`archive-development` 分支，`ARCHIVE-1` 完成于 `0.1.0-alpha.59`）：`DotNet.Bundler.Archive` 纯托管写入器（zip 自实现 unix mode/symlink，tar.gz 复用共享 ustar 写入器），单顶层目录 `<pkg>-<ver>-<rid>/` 布局，执行位与符号链接双保留，`.sha256` 侧车，`BundlerFormats=zip;targz` 与 `deb;rpm;appimage;zip;targz` 扇出；`unzip`/`zipinfo -l`/`tar` 真实解包逐路径断言、解出载荷运行、mode/symlink 还原断言全绿。
 可操作的当前能力示例见 [`samples/HelloMacApp/mac-app-sample.md`](samples/HelloMacApp/mac-app-sample.md)、[`samples/HelloDebApp/linux-deb-sample.md`](samples/HelloDebApp/linux-deb-sample.md) 与 [`samples/HelloRpmApp/linux-rpm-sample.md`](samples/HelloRpmApp/linux-rpm-sample.md)。
 
 实现已经拆分为可复用的 NuGet 包。
@@ -293,6 +294,10 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerAppImageCategories` | 否 | `Utility`；分号分隔 freedesktop 分类 |
 | `BundlerAppImageMetainfoFile` | 否 | AppStream metainfo → `usr/share/metainfo/<包名>.metainfo.xml` |
 | `@(BundlerAppImageFile)`（`Destination`） | 否 | 无；任意文件 → AppDir 相对路径（含文件名；拒绝对路径/`..`/空段/反斜杠/生成件碰撞） |
+| `BundlerArchivePackageName` | 否 | `BundlerProductName` 的 kebab-case 化；进入归档名与顶层目录 |
+| `BundlerArchiveVersion` | 否 | `BundlerVersion` 原样 |
+| `BundlerArchiveName` | 否 | `<包名>-<版本>-<rid>`；整名覆盖，须为单一路径段 |
+| `@(BundlerArchiveFile)`（`Destination`） | 否 | 无；任意文件 → 顶层目录内相对 POSIX 路径（拒绝对路径/`..`/`.`/空段/反斜杠/载荷碰撞） |
 | `BundlerWindowsSigningPfxFile` | 否 | PFX/P12 代码签名证书路径 |
 | `BundlerWindowsSigningPfxPasswordEnvironmentVariable` | 否 | 保存 PFX 密码的环境变量名 |
 | `BundlerWindowsSigningCertificateThumbprint` | 否 | Windows `My` 证书存储区中的证书指纹 |
@@ -304,7 +309,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 
 多个格式使用分号分隔，例如 `<BundlerFormats>nsis;msi</BundlerFormats>`。
 Task 会解析完整请求，再由 Core 规划需要执行的打包步骤。
-MSI 单独请求由 WiX 后端处理，`.deb` 单独请求由 Deb 后端处理，`.rpm` 单独请求由 Rpm 后端处理；`deb;rpm;appimage` 组合请求已由管线扇出产出全部格式，其他组合请求按已实现的编排契约验证，不能假定它会隐式复用单格式入口。
+MSI 单独请求由 WiX 后端处理，`.deb` 单独请求由 Deb 后端处理，`.rpm` 单独请求由 Rpm 后端处理；`deb;rpm;appimage` 组合请求已由管线扇出产出全部格式，`zip`/`targz` 与它们的任意混排同样支持，其他组合请求按已实现的编排契约验证，不能假定它会隐式复用单格式入口。
 
 图标和额外资源通过 MSBuild Item 传入：
 

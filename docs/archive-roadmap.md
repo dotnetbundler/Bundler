@@ -39,3 +39,17 @@
 | `ARCHIVE-1` | `src/Bundler.Archive` 托管 zip/tar.gz 写入器 + `ArchiveBundleConfiguration` + MSBuild `BundlerFormats=zip;targz` 接线 + 单元测试 + `tests/Archive.Integration/Verify.sh` + `samples/HelloArchiveApp` | zipinfo/tar 真实解包逐路径断言、解出载荷运行、mode/symlink 还原断言、`deb;rpm;appimage;zip;targz` 扇出 |
 | `ARCHIVE-2` | `@(BundlerArchiveFile)` 映射与拒绝路径、旋钮收口 | 映射落位/碰撞/逃逸拒绝断言全绿 |
 | `ARCHIVE-3` | 宿主矩阵收口（多 OS 归档互读：Linux 产 zip 在 Windows 解等，可到面则记 MT）、干净宿主审计、能力矩阵定稿、冻结基线写入 | 冻结文档与 OI/MT 清单完备 |
+
+## 4. 阶段实施证据
+
+### ARCHIVE-1（`0.1.0-alpha.59`，分支 `archive-development`）
+
+- `src/Bundler.Archive`：`ArchiveBundler` 门面（3 OS × zip/targz 六个后端实例）+ `ArchiveBundleBackend` + `ArchiveTree` 载荷收集 + `ArchiveIdentity` 命名/包名校验。
+- zip 写入器自实现（`System.IO.Compression` 无法写 unix mode/symlink）：local+central directory、`version made by=Unix`、external attrs 高字 unix mode（S_IFREG|S_IFDIR|S_IFLNK）、deflate 带 stored 回落、CRC32 自实现；Zip64 显式拒绝。
+- tar.gz 复用 `Bundler.Deb` tar 写法提取到 `Bundler.Core` 的 `Archives/TarWriter`（ustar、固定 mtime 1980、`./` 前缀惯例、长名 prefix 拆分）；`Bundler.Deb` 行为不变由既有 141+ 断言背书。
+- mode 语义：Linux/macOS 用 libc `access(X_OK)` 判真实执行位，其他宿主回落 ELF/shebang 魔数探测；符号链接经 `ReparsePoint`+libc `readlink` 保留目标。
+- MSBuild：`BundlerFormats=zip;targz`、`BundlerArchivePackageName`/`Version`/`ArchiveName` 三旋钮、`@(BundlerArchiveFile)` 归档相对映射（拒绝对路径/`..`/`.`/空段/反斜杠/碰撞）；MSBuild 包装载 `DotNet.Bundler.Archive.dll`。
+- `PackageFormat` 增 `Zip`/`TarGz`；`DesktopTargetMatrix` 三 OS 全放开；`BundlePlanner` 输出 `zip/`、`targz/` 目录。
+- 单元测试：`Bundler.Tests` 新增 8 项（结构/mode/symlink/映射/拒绝/扇出/MSBuild 接线），合计 181/181 全绿。
+- `tests/Archive.Integration/Verify.sh` 全绿：`unzip -l`/`zipinfo -l`/`tar -tvf` 清单与 mode 断言、真实解包逐路径+载荷运行+执行位+符号链接还原断言、覆盖变体、映射与非法目标失败变体（不留半成品）、`deb;rpm;appimage;zip;targz` 单 publish 扇出、`win-x64`/`osx-arm64` 交叉目标 zip。
+- `samples/HelloArchiveApp`：publish 产出 zip+tar.gz 并解出运行实测通过。

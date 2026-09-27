@@ -23,5 +23,7 @@ public enum PackageFormat
     Pkg,
     Deb,
     Rpm,
-    AppImage
+    AppImage,
+    Zip,
+    TarGz
 }

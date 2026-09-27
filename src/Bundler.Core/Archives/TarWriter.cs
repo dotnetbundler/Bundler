@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace DotNet.Bundler.Deb;
+namespace DotNet.Bundler.Core;
 
 internal enum TarEntryKind
 {

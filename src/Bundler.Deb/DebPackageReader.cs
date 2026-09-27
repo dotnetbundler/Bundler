@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Deb;
 

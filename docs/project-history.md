@@ -4049,3 +4049,13 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 - 能力矩阵定稿；OI-01..05 维持登记（OI-06 消解），MT-01..05 保留；GPG 签名按 rpm 口径冻结外后置评估。
 - 冻结基线：`AppImageBundleConfiguration` 配置面与行为契约冻结于 `0.1.0-alpha.58`；冻结测试向量 `Bundler.Tests` 173/173 + `Verify.sh` 全绿。
 - `docs/roadmap.md` 推进 `ARCHIVE`。
+
+## 2026-09-27 ARCHIVE-1（`0.1.0-alpha.59`，分支 `archive-development`）
+
+- `src/Bundler.Archive` 新后端：`ArchiveBundler` 门面 + 6 个 `ArchiveBundleBackend`（3 OS × zip/targz）。
+- zip 自实现写入器（local+central、version made by=Unix、external attrs unix mode、deflate/stored 回落、自实现 CRC32）；tar.gz 复用提取到 `Bundler.Core` 的 `TarWriter`。
+- 单顶层目录 `<pkg>-<ver>-<rid>/`；执行位（libc access(X_OK)/魔数探测）与符号链接（ReparsePoint+readlink）双格式保留；`.sha256` 侧车。
+- MSBuild `BundlerFormats=zip;targz` + `BundlerArchivePackageName`/`Version`/`ArchiveName` + `@(BundlerArchiveFile)` 接线；`PackageFormat` 增 `Zip`/`TarGz`、三 OS 矩阵放开。
+- `Bundler.Tests` 181/181（新增 8 项 archive 断言）；`tests/Archive.Integration/Verify.sh` 全绿（unzip/zipinfo/tar 清单与 mode 断言、解出载荷运行、执行位与符号链接还原、覆盖/映射/非法目标失败变体、`deb;rpm;appimage;zip;targz` 扇出、win-x64/osx-arm64 交叉 zip）。
+- `samples/HelloArchiveApp` 实测 publish 产出 zip+tar.gz 并解出运行通过。
+- 计划偏差如实记录：`BundlerArchiveFile` 映射原属 ARCHIVE-2，因实现面小随本阶段提前落地，能力矩阵与阶段表已同步口径。

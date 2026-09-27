@@ -11,9 +11,12 @@ public static class DesktopTargetMatrix
     public static bool Supports(DesktopOperatingSystem operatingSystem, PackageFormat format) =>
         operatingSystem switch
         {
-            DesktopOperatingSystem.Windows => format is PackageFormat.Nsis or PackageFormat.Msi,
-            DesktopOperatingSystem.MacOS => format is PackageFormat.App or PackageFormat.Dmg or PackageFormat.Pkg,
-            DesktopOperatingSystem.Linux => format is PackageFormat.Deb or PackageFormat.Rpm or PackageFormat.AppImage,
+            DesktopOperatingSystem.Windows => format is PackageFormat.Nsis or PackageFormat.Msi
+                or PackageFormat.Zip or PackageFormat.TarGz,
+            DesktopOperatingSystem.MacOS => format is PackageFormat.App or PackageFormat.Dmg or PackageFormat.Pkg
+                or PackageFormat.Zip or PackageFormat.TarGz,
+            DesktopOperatingSystem.Linux => format is PackageFormat.Deb or PackageFormat.Rpm or PackageFormat.AppImage
+                or PackageFormat.Zip or PackageFormat.TarGz,
             _ => false
         };
 }

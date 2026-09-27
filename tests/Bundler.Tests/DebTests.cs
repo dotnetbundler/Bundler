@@ -1,4 +1,5 @@
 using DotNet.Bundler;
+using DotNet.Bundler.Core;
 using DotNet.Bundler.Deb;
 using System.Text;
 

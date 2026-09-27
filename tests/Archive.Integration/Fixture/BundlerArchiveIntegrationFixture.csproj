@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <AssemblyName>BundlerArchiveIntegrationFixture</AssemblyName>
+    <Version>1.0.0</Version>
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerFormats>zip;targz</BundlerFormats>
+    <BundlerIdentifier>com.dotnetbundler.archiveintegrationfixture</BundlerIdentifier>
+    <BundlerProductName>Bundler Archive Fixture</BundlerProductName>
+    <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
+    <BundlerDescription>Disposable archive integration-test fixture</BundlerDescription>
+    <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
+    <BundlerArchivePackageName Condition="'$(BundlerTestArchivePackageName)' != ''">$(BundlerTestArchivePackageName)</BundlerArchivePackageName>
+    <BundlerArchiveVersion Condition="'$(BundlerTestArchiveVersion)' != ''">$(BundlerTestArchiveVersion)</BundlerArchiveVersion>
+    <BundlerArchiveName Condition="'$(BundlerTestArchiveName)' != ''">$(BundlerTestArchiveName)</BundlerArchiveName>
+    <BundlerFormats Condition="'$(BundlerTestFormats)' != ''">$(BundlerTestFormats)</BundlerFormats>
+  </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <ItemGroup>
+    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
+    <BundlerArchiveFile Condition="'$(BundlerTestArchiveFiles)' == '1'"
+        Include="Assets/defaults.conf" Destination="extras/defaults.conf" />
+    <BundlerArchiveFile Condition="'$(BundlerTestArchiveBadFile)' == '1'"
+        Include="Assets/defaults.conf" Destination="/etc/escape.conf" />
+  </ItemGroup>
+  <!-- dotnet publish 载荷本身不含符号链接，但真实 .NET 载荷常见 lib*.so 链接；
+       在 Bundler 目标读取 PublishDir 之前注入一条入口链接，供 mode/symlink 还原断言。 -->
+  <Target Name="StageArchiveSymlink" BeforeTargets="BundleDesktopApplication"
+          Condition="$(BundlerFormats.Contains('zip')) Or $(BundlerFormats.Contains('targz'))">
+    <Exec Command="ln -sf ./BundlerArchiveIntegrationFixture &quot;$(PublishDir)BundlerArchiveIntegrationFixture.link&quot;" />
+  </Target>
+</Project>

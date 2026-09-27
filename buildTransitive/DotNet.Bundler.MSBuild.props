@@ -191,5 +191,8 @@
     <BundlerAppImageDesktopFile Condition="'$(BundlerAppImageDesktopFile)' == ''"></BundlerAppImageDesktopFile>
     <BundlerAppImageCategories Condition="'$(BundlerAppImageCategories)' == ''"></BundlerAppImageCategories>
     <BundlerAppImageMetainfoFile Condition="'$(BundlerAppImageMetainfoFile)' == ''"></BundlerAppImageMetainfoFile>
+    <BundlerArchivePackageName Condition="'$(BundlerArchivePackageName)' == ''"></BundlerArchivePackageName>
+    <BundlerArchiveVersion Condition="'$(BundlerArchiveVersion)' == ''"></BundlerArchiveVersion>
+    <BundlerArchiveName Condition="'$(BundlerArchiveName)' == ''"></BundlerArchiveName>
   </PropertyGroup>
 </Project>

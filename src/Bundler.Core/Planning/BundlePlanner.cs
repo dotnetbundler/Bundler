@@ -62,6 +62,7 @@ public static class BundlePlanner
     private static string FormatName(PackageFormat format) => format switch
     {
         PackageFormat.AppImage => "appimage",
+        PackageFormat.TarGz => "targz",
         _ => format.ToString().ToLowerInvariant()
     };
 }
