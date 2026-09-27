@@ -13,7 +13,7 @@
     <PropertyGroup>
       <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
       <BundlerVersion Condition="'$(BundlerVersion)' == ''">$(Version)</BundlerVersion>
-      <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')) == 'true'">$(TargetName)</BundlerMainExecutable>
+      <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == '' and ($([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')) == 'true' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-')) == 'true')">$(TargetName)</BundlerMainExecutable>
       <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''">$(TargetName).exe</BundlerMainExecutable>
       <BundlerNsisShortcutStartMenuFolder Condition="'$(BundlerNsisShortcutStartMenuFolder)' == ''">$(BundlerProductName)</BundlerNsisShortcutStartMenuFolder>
     </PropertyGroup>
@@ -166,6 +166,14 @@
       MacPkgNotaryApiKeyPath="$(BundlerMacPkgNotaryApiKeyPath)"
       MacPkgNotaryApiKeyId="$(BundlerMacPkgNotaryApiKeyId)"
       MacPkgNotaryApiIssuer="$(BundlerMacPkgNotaryApiIssuer)"
+      DebPackageName="$(BundlerDebPackageName)"
+      DebVersion="$(BundlerDebVersion)"
+      DebRevision="$(BundlerDebRevision)"
+      DebEpoch="$(BundlerDebEpoch)"
+      DebArchitecture="$(BundlerDebArchitecture)"
+      DebMaintainer="$(BundlerDebMaintainer)"
+      DebInstallRoot="$(BundlerDebInstallRoot)"
+      DebBinLink="$(BundlerDebBinLink)"
       MacContents="@(BundlerMacContent)"
       MacFrameworks="@(BundlerMacFramework)"
       MacDocumentTypes="@(BundlerMacDocumentType)"

@@ -2,10 +2,10 @@
 
 > 最后更新：2026-09-27
 > 当前分支：`linux-deb-development`（基于 `main` `60b1c7c`；`.app`/`.dmg`/`.pkg` 三线均已并入 main）
-> 当前包版本：`0.1.0-alpha.47`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
+> 当前包版本：`0.1.0-alpha.48`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
 > 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
-> `LINUX-DEB` 规划轮完成——上游审计 `docs/linux-tauri-capability-audit.md`（快照 `447fa9f`）与路线 `docs/linux-deb-roadmap.md` 已确认入档
-> 默认下一阶段：`LINUX-DEB-1`（需用户明确启动指令）
+> `LINUX-DEB-1` 已完成（`linux-deb-development`）：纯托管 `.deb` 写入器 + `BundlerFormats=deb` 接线 + 全绿验证链
+> 默认下一阶段：`LINUX-DEB-2`（元数据与桌面集成；需用户明确启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -22,16 +22,19 @@
 | `src/Bundler.Signing.Windows` | Windows Authenticode 签名 API（NSIS/MSI 共用） | `netstandard2.0` |
 | `src/Bundler.MacApp` | macOS `.app` 后端（骨架/Info.plist/`.icns`/Contents 载荷映射） | `netstandard2.0` |
 | `src/Bundler.MacDmg` | macOS `.dmg` 后端（`hdiutil` 全链、拖放卷、`Ulmo`/`Udzo`/`Udbz`） | `netstandard2.0` |
+| `src/Bundler.MacPkg` | macOS `.pkg` 后端（`pkgbuild`/`productbuild` 组件与分发包、签名/公证/专家脚本） | `netstandard2.0` |
+| `src/Bundler.Deb` | Debian `.deb` 后端（纯托管 ar/tar/gzip 写入器，无原生工具依赖，任意构建宿主） | `netstandard2.0` |
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
 | `src/Bundler.Cli` | 开发原型（`IsPackable=false`，不发布） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
-| `tests/Bundler.Tests` | 唯一快速测试入口（当前 122 项，macOS 宿主口径全绿） | `net10.0` |
-| `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
+| `tests/Bundler.Tests` | 唯一快速测试入口（当前 133 项，Linux 宿主口径全绿；macOS 宿主口径多 MacPkg 公证等宿主用例） | `net10.0` |
+| `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` / `tests/Deb.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
 | `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
 | `tests/MacOS.App.Integration` | 真实 macOS `.app` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
 | `tests/MacOS.Dmg.Integration` | 真实 macOS `.dmg` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
+| `tests/Linux.Deb.Integration` | 真实 `.deb` 集成入口（`Verify.sh`，bash，含免密 `sudo dpkg -i/-r` 烟雾）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
 | `tests/Windows.Nsis.Reboot` | 需可抛弃 VM 的重启测试占位 | — |
-| `samples/HelloNsisApp` / `samples/HelloMsiApp` / `samples/HelloMacApp` / `samples/HelloMacDmg` | 公开可运行示例（应用版本 `1.0.0`） | `net10.0` |
+| `samples/HelloNsisApp` / `samples/HelloMsiApp` / `samples/HelloMacApp` / `samples/HelloMacDmg` / `samples/HelloMacPkg` / `samples/HelloDebApp` | 公开可运行示例（应用版本 `1.0.0`） | `net10.0` |
 | `tools/Bundler.Nsis.Plugin` | NSIS 原生插件源码（有意在 slnx 之外，重建需 .NET 10 + Windows 原生链） | `net10.0` |
 | `third_party/` | 第三方归档、许可证、逐文件 SHA-256 与 provenance 文档 | — |
 
@@ -78,7 +81,7 @@ Verify.sh 真实通过 `lsregister` 注册、`open <文件>`/`open <scheme>://` 
 ### 未开始的格式
 
 `.pkg` 已冻结（`MAC-PKG-1..5` 全部完成）。
-`LINUX-DEB`：规划轮完成（2026-09-27，`linux-deb-development` 分支）——上游审计 `docs/linux-tauri-capability-audit.md`、路线/能力矩阵/人工清单/外部待办已入档，无实现代码；
+`LINUX-DEB`：`LINUX-DEB-1` 完成（2026-09-27，`linux-deb-development` 分支）——`src/Bundler.Deb` 托管 ar/tar/gzip 写入器、最小 control+`md5sums`、`usr/lib`+`usr/bin` 布局、SemVer→deb 映射与八旋钮、`BundlerFormats=deb` 接线；133 项 Bundler.Tests + `Verify.sh`（真实 `sudo dpkg -i/-r`）全绿；`samples/HelloDebApp` 产出可装 `.deb`；
 `LINUX-RPM`、`LINUX-APPIMAGE`、`CLI-C1`：无实现，顺序与边界见 `docs/roadmap.md`。
 
 ## 3. 最近验证（2026-10-03，Windows 11 Pro build 26200 x64，跨格式收尾回归）
@@ -137,8 +140,8 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 ## 6. 默认下一步
 
 `.pkg` 已冻结于 `0.1.0-alpha.47`（`MAC-PKG-1..5` 全部完成）。macOS 线三种格式（`.app`/`.dmg`/`.pkg`）全部冻结。
-`LINUX-DEB` 规划轮已完成（2026-09-27）：决策与 `LINUX-DEB-1..5` 阶段分解见 `docs/linux-deb-roadmap.md`。
-默认下一步：`LINUX-DEB-1`（托管 ar/tar/gzip 写入器 + 最小可用 `.deb` + 真实 `dpkg -i` 装卸）；等用户明确启动指令再实施。
+`LINUX-DEB` 规划轮已完成（2026-09-27），`LINUX-DEB-1` 已于同日完成并验证。
+默认下一步：`LINUX-DEB-2`（Depends 关系字段、`.desktop`/图标/metainfo 桌面集成、`usr/share/doc` 文档、`BundlerDebFile` 任意路径映射）；等用户明确启动指令再实施。
 
 ## 7. 历史记录
 

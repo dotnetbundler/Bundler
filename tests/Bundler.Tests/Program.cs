@@ -65,7 +65,7 @@ var tests = new (string Name, Func<Task> Test)[]
 };
 
 tests = tests.Append(("Keeps package consumer versions aligned", () => RunSync(KeepsPackageConsumerVersionsAligned)))
-    .Concat(WixTests.Cases).Concat(MacAppTests.Cases).Concat(MacDmgTests.Cases).Concat(MacPkgTests.Cases).ToArray();
+    .Concat(WixTests.Cases).Concat(MacAppTests.Cases).Concat(MacDmgTests.Cases).Concat(MacPkgTests.Cases).Concat(DebTests.Cases).ToArray();
 
 var failed = 0;
 foreach (var (name, test) in tests)
@@ -1973,12 +1973,14 @@ static void KeepsPackageConsumerVersionsAligned()
     Assert(!consumerProps.Descendants("BundlerPackageVersion").Any(),
         "The local-package props must not duplicate the repository package version.");
     Assert(consumerProps.Descendants("BundlerPackageSource").Single().Value.Contains("artifacts", StringComparison.Ordinal) &&
-           consumerProps.Descendants("RestoreSources").Single().Value == "$(BundlerPackageSource)",
-        "The shared props must define the repository source and fixture restore source.");
+           consumerProps.Descendants("RestoreSources").Single().Value.StartsWith("$(BundlerPackageSource);", StringComparison.Ordinal) &&
+           consumerProps.Descendants("RestoreSources").Single().Value.Contains("nuget.org", StringComparison.Ordinal),
+        "The shared props must define the repository source and fixture restore source (nuget.org must remain appended for runtime packs on clean hosts).");
     foreach (var path in new[]
     {
         Path.Combine(root, "samples", "HelloNsisApp", "HelloNsisApp.csproj"),
-        Path.Combine(root, "samples", "HelloMsiApp", "HelloMsiApp.csproj")
+        Path.Combine(root, "samples", "HelloMsiApp", "HelloMsiApp.csproj"),
+        Path.Combine(root, "samples", "HelloDebApp", "HelloDebApp.csproj")
     })
     {
         var project = XDocument.Load(path);
@@ -2012,8 +2014,10 @@ static void KeepsPackageConsumerVersionsAligned()
     {
         Path.Combine(root, "tests", "Nsis.Api.PackageFixture", "Nsis.Api.PackageFixture.csproj"),
         Path.Combine(root, "tests", "Msi.Api.PackageFixture", "Msi.Api.PackageFixture.csproj"),
+        Path.Combine(root, "tests", "Deb.Api.PackageFixture", "Deb.Api.PackageFixture.csproj"),
         Path.Combine(root, "tests", "Windows.Nsis.Integration", "Fixture", "BundlerNsisIntegrationFixture.csproj"),
-        Path.Combine(root, "tests", "Windows.Msi.Integration", "Fixture", "BundlerMsiSmoke.csproj")
+        Path.Combine(root, "tests", "Windows.Msi.Integration", "Fixture", "BundlerMsiSmoke.csproj"),
+        Path.Combine(root, "tests", "Linux.Deb.Integration", "Fixture", "BundlerDebIntegrationFixture.csproj")
     })
     {
         var project = XDocument.Load(path);

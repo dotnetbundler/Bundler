@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using DotNet.Bundler;
+using DotNet.Bundler.Deb;
 using DotNet.Bundler.MacApp;
 using DotNet.Bundler.MacDmg;
 using DotNet.Bundler.MacPkg;
@@ -159,6 +160,14 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacPkgNotaryApiKeyPath { get; set; } = "";
     public string MacPkgNotaryApiKeyId { get; set; } = "";
     public string MacPkgNotaryApiIssuer { get; set; } = "";
+    public string DebPackageName { get; set; } = "";
+    public string DebVersion { get; set; } = "";
+    public string DebRevision { get; set; } = "";
+    public string DebEpoch { get; set; } = "";
+    public string DebArchitecture { get; set; } = "";
+    public string DebMaintainer { get; set; } = "";
+    public string DebInstallRoot { get; set; } = "";
+    public string DebBinLink { get; set; } = "";
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -393,6 +402,27 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                     },
                     BuildMacAppConfiguration(),
                     new MacDmgBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
+                    .BuildAsync(configuration)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            else if (formats.All(format => format == PackageFormat.Deb))
+            {
+                artifacts = new DebBundler(
+                    new DebBundleConfiguration
+                    {
+                        PackageName = EmptyToNull(DebPackageName),
+                        Version = EmptyToNull(DebVersion),
+                        Revision = EmptyToNull(DebRevision),
+                        Epoch = EmptyToNull(DebEpoch),
+                        Architecture = EmptyToNull(DebArchitecture),
+                        Maintainer = EmptyToNull(DebMaintainer),
+                        InstallRoot = EmptyToNull(DebInstallRoot),
+                        BinLink = string.Equals(DebBinLink, "none", StringComparison.OrdinalIgnoreCase)
+                            ? ""
+                            : EmptyToNull(DebBinLink)
+                    },
+                    new DebBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     .BuildAsync(configuration)
                     .GetAwaiter()
                     .GetResult();

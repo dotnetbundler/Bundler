@@ -21,6 +21,7 @@
     <ProjectReference Include="..\Bundler.MacApp\Bundler.MacApp.csproj" />
     <ProjectReference Include="..\Bundler.MacDmg\Bundler.MacDmg.csproj" />
     <ProjectReference Include="..\Bundler.MacPkg\Bundler.MacPkg.csproj" />
+    <ProjectReference Include="..\Bundler.Deb\Bundler.Deb.csproj" />
     <ProjectReference Include="..\Bundler.Nsis\Bundler.Nsis.csproj" />
     <ProjectReference Include="..\Bundler.Wix\Bundler.Wix.csproj" />
     <ProjectReference Include="..\Bundler.Signing.Windows\Bundler.Signing.Windows.csproj" />
@@ -37,6 +38,7 @@
     <None Include="$(TargetDir)DotNet.Bundler.MacApp.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.MacDmg.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.MacPkg.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
+    <None Include="$(TargetDir)DotNet.Bundler.Deb.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.Nsis.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.Wix.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.Signing.Windows.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />

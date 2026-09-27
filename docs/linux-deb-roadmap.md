@@ -1,6 +1,6 @@
 # Linux `.deb` 后端实施路线（LINUX-DEB）
 
-> 状态：**规划完成，待用户下达 LINUX-DEB-1 启动指令**（规划轮 2026-09-27，分支 `linux-deb-development`）。
+> 状态：**LINUX-DEB-1 已完成并验证**（2026-09-27，分支 `linux-deb-development`，`BundlerPackageVersion` `0.1.0-alpha.48`）。
 > 上游审计见 [`docs/linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `tauri-apps/tauri@447fa9f`）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 > 逐项能力状态见 [`docs/linux-deb-capability-matrix.md`](linux-deb-capability-matrix.md)；外部条件见 [`docs/linux-deb-open-items.md`](linux-deb-open-items.md)；人工步骤见 [`docs/linux-deb-manual-testing.md`](linux-deb-manual-testing.md)。
@@ -71,6 +71,12 @@
   示例 `samples/HelloDebApp` 骨架（默认命令即产出可装 `.deb`）。
 - **不做**：Depends 等关系字段、.desktop/图标、维护者脚本、systemd、conffiles、压缩选项。
 - **退出**：`dpkg-deb` 识别产物、`dpkg -i/-r` 真实装卸零残留断言、失败路径无伪 `.deb`。
+- **状态**：**已完成**（2026-09-27）。
+  交付按规划落地：`src/Bundler.Deb` 纯托管 ar/tar/gzip 写入器、`DebBundler`/`DebBundleConfiguration` 公共面、`BundlerFormats=deb` MSBuild 接线与 `BundlerDeb*` 八个旋钮；
+  验证：`tests/Bundler.Tests` 新增 12 项 DebTests（结构/映射/覆盖/失败/确定性/sha256/MSBuild 接线断言）全绿（合计 133 项）；
+  `tests/Linux.Deb.Integration/Verify.sh` 全绿——`ar t` 三成员、`dpkg-deb -I/-c` 元数据与清单、解包运行、`md5sum -c`、`sha256sum -c`、覆盖/SemVer/失败变体、`Deb.Api.PackageFixture` NuGet 冒烟、免密 `sudo dpkg -i`/`dpkg -r` 真实装卸零残留；
+  `samples/HelloDebApp` 默认 publish 产出 `hello-deb-app_1.0.0-1_amd64.deb` 并被 `dpkg-deb` 识别；
+  `Bundler.LocalPackages.props` 修正 `RestoreSources` 丢失 nuget.org 的既有缺陷（干净宿主还原必需，属顺带修复）。
 
 ### LINUX-DEB-2：元数据与桌面集成
 

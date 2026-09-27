@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>DotNet.Bundler.Deb</AssemblyName>
+    <RootNamespace>DotNet.Bundler.Deb</RootNamespace>
+    <PackageId>DotNet.Bundler.Deb</PackageId>
+    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
+    <Authors>Bundler contributors</Authors>
+    <Description>Reusable Debian .deb package writer for desktop applications (pure managed, no host tools).</Description>
+    <PackageTags>dotnet;bundler;linux;debian;deb;installer;desktop</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Bundler.Tests" />
+    <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
+    <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

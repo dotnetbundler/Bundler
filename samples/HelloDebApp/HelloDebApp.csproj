@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    HelloDebApp：DotNet.Bundler Linux .deb 演示示例。
+    默认 publish 即产出可安装的 .deb（托管写入器，任意宿主可构建，无需 dpkg-deb）。
+    全部公开旋钮（package-name/version/revision/epoch/architecture/maintainer/
+    install-root/bin-link）可用下方 HelloDeb* 属性变体演示；命令见 linux-deb-sample.md。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <Nullable>enable</Nullable>
+    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
+    <AssemblyName>HelloDebApp</AssemblyName>
+    <Version>1.0.0</Version>
+
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerFormats>deb</BundlerFormats>
+    <BundlerIdentifier>com.dotnetbundler.hellodebapp</BundlerIdentifier>
+    <BundlerProductName>Hello Deb App</BundlerProductName>
+    <BundlerPublisher>DotNet.Bundler Samples</BundlerPublisher>
+    <BundlerDescription>DotNet.Bundler Linux .deb demonstration sample.</BundlerDescription>
+    <BundlerHomepage>https://github.com/dotnetbundler/Bundler</BundlerHomepage>
+
+    <!-- .deb 公开旋钮（LINUX-DEB-1 范围）：包名默认取产品名的 kebab-case；
+         version 覆盖走完整 Debian 版本（可用 epoch:upstream-revision 直接给出）；
+         revision 默认 1（空串=不附加）；epoch 是独立数字前缀；
+         architecture 默认按 RID 映射（x64→amd64、arm64→arm64）可显式写 Debian 架构名；
+         maintainer 默认 Publisher→Identifier 回退；
+         install-root 默认 /usr/lib/<包名>；bin-link 默认包名，"none" 关闭。 -->
+    <BundlerDebPackageName Condition="'$(HelloDebPackageName)' != ''">$(HelloDebPackageName)</BundlerDebPackageName>
+    <BundlerDebVersion Condition="'$(HelloDebVersion)' != ''">$(HelloDebVersion)</BundlerDebVersion>
+    <BundlerDebRevision Condition="'$(HelloDebRevision)' != ''">$(HelloDebRevision)</BundlerDebRevision>
+    <BundlerDebEpoch Condition="'$(HelloDebEpoch)' != ''">$(HelloDebEpoch)</BundlerDebEpoch>
+    <BundlerDebArchitecture Condition="'$(HelloDebArchitecture)' != ''">$(HelloDebArchitecture)</BundlerDebArchitecture>
+    <BundlerDebMaintainer Condition="'$(HelloDebMaintainer)' != ''">$(HelloDebMaintainer)</BundlerDebMaintainer>
+    <BundlerDebInstallRoot Condition="'$(HelloDebInstallRoot)' != ''">$(HelloDebInstallRoot)</BundlerDebInstallRoot>
+    <BundlerDebBinLink Condition="'$(HelloDebBinLink)' != ''">$(HelloDebBinLink)</BundlerDebBinLink>
+  </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <ItemGroup>
+    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
+    <!-- 资源项演示：随载荷落到 install-root 下的 docs/readme.txt。 -->
+    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+  </ItemGroup>
+</Project>

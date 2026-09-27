@@ -124,5 +124,13 @@
     <BundlerMacPkgNotaryApiKeyPath Condition="'$(BundlerMacPkgNotaryApiKeyPath)' == ''"></BundlerMacPkgNotaryApiKeyPath>
     <BundlerMacPkgNotaryApiKeyId Condition="'$(BundlerMacPkgNotaryApiKeyId)' == ''"></BundlerMacPkgNotaryApiKeyId>
     <BundlerMacPkgNotaryApiIssuer Condition="'$(BundlerMacPkgNotaryApiIssuer)' == ''"></BundlerMacPkgNotaryApiIssuer>
+    <BundlerDebPackageName Condition="'$(BundlerDebPackageName)' == ''"></BundlerDebPackageName>
+    <BundlerDebVersion Condition="'$(BundlerDebVersion)' == ''"></BundlerDebVersion>
+    <BundlerDebRevision Condition="'$(BundlerDebRevision)' == ''"></BundlerDebRevision>
+    <BundlerDebEpoch Condition="'$(BundlerDebEpoch)' == ''"></BundlerDebEpoch>
+    <BundlerDebArchitecture Condition="'$(BundlerDebArchitecture)' == ''"></BundlerDebArchitecture>
+    <BundlerDebMaintainer Condition="'$(BundlerDebMaintainer)' == ''"></BundlerDebMaintainer>
+    <BundlerDebInstallRoot Condition="'$(BundlerDebInstallRoot)' == ''"></BundlerDebInstallRoot>
+    <BundlerDebBinLink Condition="'$(BundlerDebBinLink)' == ''"></BundlerDebBinLink>
   </PropertyGroup>
 </Project>
