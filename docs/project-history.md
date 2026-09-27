@@ -951,3 +951,12 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 新增 `MacPkgInstallDomain` 枚举（`System`/`CurrentUserHome`）与 `MacPkgBundleConfiguration` 分发配置面（`Title`/`WelcomeFile`/`ConclusionFile`/`Domain`）；MSBuild 接线 `BundlerMacPkgTitle`/`BundlerMacPkgWelcomeFile`/`BundlerMacPkgConclusionFile`/`BundlerMacPkgDomain`（许可页复用 `BundlerLicenseFile`）。
 验证（macOS 26.5.2 arm64）：`Bundler.Tests` **114 项全绿**（新增 5 条）；`Verify.sh` 全绿——分发包 `xar` 结构（`Distribution`+`component.pkg`+`Resources/*`）、Distribution 回读、`installer -dominfo` 报告 `currentUserHome`、**免提权真实安装**：`installer -pkg -target CurrentUserHomeDirectory` 装出 `~/Applications/<app>`+`support/helper.txt`、应用启动、`pkgutil --pkgs/--files/--forget --volume ~` 收据断言；示例分发全旋钮实测。
 踩坑：分发文档必须含 `<options hostArchitectures="arm64"/>`，否则 Apple Silicon 宿主误报 Rosetta 缺失；`pkgbuild` 写的 `<relocate>` 使同 id `.app` 残留时 payload 重定位到旧位置，测试需先清中间副本；per-user 收据在 `~/Library/Receipts` 需 `--volume ~`；`installer -dominfo` 不带 `-plist` 时静默无输出。
+
+### 14.34 MAC-PKG-3：签名、公证与专家脚本（2026-09-27，分支 `mac-pkg-development`）
+
+`MacPkgSigningConfiguration`（identity 与 TemporaryCertificatePath 互斥、无 ad-hoc——`"-"` 明确拒绝）、公证字段镜像 `.app`（Notarize/NotaryWait/SkipStapling + KeychainProfile/Apple ID/API key 三模式，env 回退复用同一 `ResolveCredentials` 字段级重载）。
+签名分两路：组件包 `pkgbuild --sign <identity> --timestamp [--keychain <临时链>]`；分发包先 `productbuild` 出未签名档再 `productsign --sign` 落到产物路径（unsigned→signed 改名法）。公证直接把 `.pkg` 本体交给 `xcrun notarytool submit`（pkg 是受支持的归档格式，免 ditto），`--wait`+`stapler staple`。
+`ScriptsDirectory` 专家旋钮：`pkgbuild --scripts` 原样收目录，`preinstall`/`postinstall` 以安装器权限运行；文档标注责任边界。
+复用：`MacAppSigning.TemporaryKeychain` 与 `NotarySubmissionId` 经 InternalsVisibleTo 共享（`Path` 属性转 internal）；公证凭证解析抽为字段级重载供 `.pkg` 复用。
+验证（macOS 26.5.2 arm64）：`Bundler.Tests` **122 项全绿**（+8）；`Verify.sh` 全绿——scripts 变体 `component.pkg/Scripts` cpio 归档断言 `postinstall` 收进包，**per-user 真实安装后 postinstall 真实执行**（标记文件断言），无效签名身份 publish 诚实失败无伪产物；示例全旋钮实测。
+踩坑：自签名 p12 不满足 productsign 的身份策略（`find-identity -v` 0 命中）——真实 Developer ID Installer 证书登记 OI-02；内嵌组件包在分发 xar 中为展开形态、`Scripts` 为独立 cpio 归档；XML 注释内不能含 `--`。

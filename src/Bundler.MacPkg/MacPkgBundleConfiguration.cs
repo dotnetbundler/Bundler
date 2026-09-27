@@ -80,4 +80,72 @@ public sealed class MacPkgBundleConfiguration
     /// installing without administrator rights; setting it upgrades the output.
     /// </summary>
     public MacPkgInstallDomain Domain { get; init; } = MacPkgInstallDomain.System;
+
+    /// <summary>
+    /// Expert knob: directory handed to <c>pkgbuild --scripts</c> verbatim. When it contains
+    /// <c>preinstall</c>/<c>postinstall</c> they run as the package's top-level scripts with
+    /// full installer privileges — the caller owns their contents and responsibility.
+    /// </summary>
+    public string? ScriptsDirectory { get; init; }
+
+    /// <summary>
+    /// Optional signature settings. There is no ad-hoc signing for .pkg: either a real
+    /// "Developer ID Installer" identity (or an imported certificate) signs the package,
+    /// or it is left unsigned.
+    /// </summary>
+    public MacPkgSigningConfiguration Signing { get; init; } = new();
+}
+
+/// <summary>Signature and notarization settings for the macOS .pkg backend.</summary>
+public sealed class MacPkgSigningConfiguration
+{
+    /// <summary>
+    /// Developer ID Installer identity already present in a keychain
+    /// (e.g. "Developer ID Installer: &lt;team&gt;"). Mutually exclusive with
+    /// <see cref="TemporaryCertificatePath"/>. There is no ad-hoc equivalent ("-" is rejected).
+    /// </summary>
+    public string? Identity { get; init; }
+
+    /// <summary>
+    /// Path to a .p12/.pfx certificate imported into a throwaway keychain for this build
+    /// (the keychain is deleted afterwards). Mutually exclusive with <see cref="Identity"/>.
+    /// </summary>
+    public string? TemporaryCertificatePath { get; init; }
+
+    /// <summary>Password of the temporary certificate (may be empty).</summary>
+    public string? TemporaryCertificatePassword { get; init; }
+
+    /// <summary>
+    /// Opt-in notarization of the .pkg via <c>xcrun notarytool</c> + <c>xcrun stapler</c>.
+    /// Never runs by default and requires a signing identity. Credentials resolve from the
+    /// properties below first, then the APPLE_* environment variables used by other bundlers.
+    /// </summary>
+    public bool Notarize { get; init; }
+
+    /// <summary>Submit with --wait (default true). When false, stapling is skipped.</summary>
+    public bool NotaryWait { get; init; } = true;
+
+    /// <summary>Skip <c>xcrun stapler staple</c> after a successful (waited) submission.</summary>
+    public bool SkipStapling { get; init; }
+
+    /// <summary>notarytool --keychain-profile; falls back to the APPLE_PROFILE env var.</summary>
+    public string? KeychainProfile { get; init; }
+
+    /// <summary>notarytool --apple-id; falls back to APPLE_ID.</summary>
+    public string? AppleId { get; init; }
+
+    /// <summary>notarytool --password (app-specific password); falls back to APPLE_PASSWORD.</summary>
+    public string? ApplePassword { get; init; }
+
+    /// <summary>notarytool --team-id; falls back to APPLE_TEAM_ID.</summary>
+    public string? AppleTeamId { get; init; }
+
+    /// <summary>notarytool --key (AuthKey_*.p8 path); falls back to APPLE_API_KEY_PATH.</summary>
+    public string? ApiKeyPath { get; init; }
+
+    /// <summary>notarytool --key-id; falls back to APPLE_API_KEY.</summary>
+    public string? ApiKeyId { get; init; }
+
+    /// <summary>notarytool --issuer; falls back to APPLE_API_ISSUER.</summary>
+    public string? ApiIssuer { get; init; }
 }

@@ -22,6 +22,15 @@ internal static class MacPkgTests
             yield return ("Declares the current-user-home domain", CurrentUserHomeDomain);
             yield return ("Copies distribution page files into the resources directory", DistributionResources);
             yield return ("Rejects a missing welcome page file", () => RunSync(MissingWelcomeRejected));
+            // MAC-PKG-3: signing, notarization, scripts knob.
+            yield return ("Signs the component package via pkgbuild --sign", SignsComponentPackage);
+            yield return ("Signs the distribution package via productsign", SignsDistributionPackage);
+            yield return ("Rejects ad-hoc identity for .pkg", () => RunSync(RejectsAdHocIdentity));
+            yield return ("Rejects mutually exclusive sign identity and certificate", () => RunSync(RejectsExclusiveSigning));
+            yield return ("Rejects notarization without signing", () => RunSync(RejectsNotarizeWithoutSigning));
+            yield return ("Passes --scripts to pkgbuild when configured", PassesScriptsToPkgbuild);
+            yield return ("Rejects a missing scripts directory", () => RunSync(MissingScriptsRejected));
+            yield return ("Notarizes the .pkg with notarytool and stapler", NotarizesPackage);
         }
     }
 
@@ -636,6 +645,326 @@ internal static class MacPkgTests
                 thrown = true;
             }
             Assert(thrown, "A missing welcome page file must fail the build.");
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    // MAC-PKG-3: signing / notarization / scripts knob.
+
+    static async Task SignsComponentPackage()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var requests = new List<MacPkgProcessRunner.Request>();
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Signing = new MacPkgSigningConfiguration
+                    {
+                        Identity = "Developer ID Installer: Example"
+                    }
+                })
+                .BuildAsync(PkgConfiguration(input, output));
+            var pkgbuild = requests.Single(request => request.Executable == "pkgbuild");
+            var args = pkgbuild.Arguments.ToList();
+            var signIndex = args.IndexOf("--sign");
+            Assert(signIndex > 0 && args[signIndex + 1] == "Developer ID Installer: Example",
+                $"pkgbuild must sign the component package, got: {string.Join(' ', args)}");
+            Assert(args.Contains("--timestamp"),
+                "A real Developer ID signature must carry a trusted timestamp.");
+            Assert(!args.Contains("--keychain"),
+                "No temporary certificate → no --keychain argument.");
+            Assert(requests.All(request => request.Executable != "productsign"),
+                "A component package is signed inside pkgbuild; productsign must not run.");
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    static async Task SignsDistributionPackage()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var requests = new List<MacPkgProcessRunner.Request>();
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            if (request.Executable == "productsign")
+            {
+                // productsign reads <unsigned.pkg> and writes <output.pkg>: emulate the rename.
+                File.WriteAllText(request.Arguments[request.Arguments.Count - 1], "pkg");
+            }
+            else
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Title = "T",
+                    Signing = new MacPkgSigningConfiguration
+                    {
+                        Identity = "Developer ID Installer: Example"
+                    }
+                })
+                .BuildAsync(PkgConfiguration(input, output));
+            var pkgbuild = requests.Single(request => request.Executable == "pkgbuild");
+            Assert(!pkgbuild.Arguments.Contains("--sign"),
+                "Under a distribution package the component stays unsigned; the product gets signed.");
+            var productsign = requests.Single(request => request.Executable == "productsign");
+            var args = productsign.Arguments.ToList();
+            Assert(args[0] == "--sign" && args[1] == "Developer ID Installer: Example" &&
+                   args[args.Count - 2].EndsWith("unsigned.pkg", StringComparison.Ordinal) &&
+                   args[args.Count - 1].EndsWith(".pkg", StringComparison.Ordinal),
+                $"Unexpected productsign arguments: {string.Join(' ', args)}");
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    static void RejectsAdHocIdentity()
+    {
+        var input = CreateInputDirectory();
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        MacPkgBundleBackend.HostCheck = () => true;
+        try
+        {
+            var thrown = false;
+            try
+            {
+                new MacPkgBundler(new MacPkgBundleConfiguration
+                    {
+                        Signing = new MacPkgSigningConfiguration { Identity = "-" }
+                    })
+                    .BuildAsync(PkgConfiguration(input))
+                    .GetAwaiter().GetResult();
+            }
+            catch (ArgumentException)
+            {
+                thrown = true;
+            }
+            Assert(thrown, "\"-\" must be rejected: .pkg has no ad-hoc signature equivalent.");
+        }
+        finally
+        {
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input);
+        }
+    }
+
+    static void RejectsExclusiveSigning()
+    {
+        var input = CreateInputDirectory();
+        var certificate = CreateTextFile(input, "cert.p12", "p12");
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        MacPkgBundleBackend.HostCheck = () => true;
+        try
+        {
+            var thrown = false;
+            try
+            {
+                new MacPkgBundler(new MacPkgBundleConfiguration
+                    {
+                        Signing = new MacPkgSigningConfiguration
+                        {
+                            Identity = "Developer ID Installer: Example",
+                            TemporaryCertificatePath = certificate
+                        }
+                    })
+                    .BuildAsync(PkgConfiguration(input))
+                    .GetAwaiter().GetResult();
+            }
+            catch (ArgumentException)
+            {
+                thrown = true;
+            }
+            Assert(thrown, "SignIdentity and TemporaryCertificatePath are mutually exclusive.");
+        }
+        finally
+        {
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input);
+        }
+    }
+
+    static void RejectsNotarizeWithoutSigning()
+    {
+        var input = CreateInputDirectory();
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        MacPkgBundleBackend.HostCheck = () => true;
+        try
+        {
+            var thrown = false;
+            try
+            {
+                new MacPkgBundler(new MacPkgBundleConfiguration
+                    {
+                        Signing = new MacPkgSigningConfiguration { Notarize = true }
+                    })
+                    .BuildAsync(PkgConfiguration(input))
+                    .GetAwaiter().GetResult();
+            }
+            catch (ArgumentException)
+            {
+                thrown = true;
+            }
+            Assert(thrown, "Notarization without a signing identity must fail.");
+        }
+        finally
+        {
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input);
+        }
+    }
+
+    static async Task PassesScriptsToPkgbuild()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var scripts = Path.Combine(input, "scripts");
+        Directory.CreateDirectory(scripts);
+        File.WriteAllText(Path.Combine(scripts, "postinstall"), "#!/bin/sh\nexit 0\n");
+        var requests = new List<MacPkgProcessRunner.Request>();
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    ScriptsDirectory = scripts
+                })
+                .BuildAsync(PkgConfiguration(input, output));
+            var pkgbuild = requests.Single(request => request.Executable == "pkgbuild");
+            var args = pkgbuild.Arguments.ToList();
+            var index = args.IndexOf("--scripts");
+            Assert(index > 0 && args[index + 1] == Path.GetFullPath(scripts),
+                $"--scripts must forward the configured directory, got: {string.Join(' ', args)}");
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    static void MissingScriptsRejected()
+    {
+        var input = CreateInputDirectory();
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        MacPkgBundleBackend.HostCheck = () => true;
+        try
+        {
+            var thrown = false;
+            try
+            {
+                new MacPkgBundler(new MacPkgBundleConfiguration
+                    {
+                        ScriptsDirectory = Path.Combine(input, "absent-scripts")
+                    })
+                    .BuildAsync(PkgConfiguration(input))
+                    .GetAwaiter().GetResult();
+            }
+            catch (DirectoryNotFoundException)
+            {
+                thrown = true;
+            }
+            Assert(thrown, "A missing scripts directory must fail the build.");
+        }
+        finally
+        {
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input);
+        }
+    }
+
+    static async Task NotarizesPackage()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var requests = new List<MacPkgProcessRunner.Request>();
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            var last = request.Arguments[request.Arguments.Count - 1];
+            if (last.EndsWith(".pkg", StringComparison.Ordinal) &&
+                request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(last)!);
+                File.WriteAllText(last, "pkg");
+            }
+            var stdout = request.Executable == "xcrun" &&
+                         request.Arguments.Contains("notarytool")
+                ? "{\"id\":\"123e4567-e89b-12d3-a456-426614174000\"}"
+                : "";
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, stdout, ""));
+        };
+        try
+        {
+            await new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Signing = new MacPkgSigningConfiguration
+                    {
+                        Identity = "Developer ID Installer: Example",
+                        Notarize = true,
+                        KeychainProfile = "test-profile"
+                    }
+                })
+                .BuildAsync(PkgConfiguration(input, output));
+            var submit = requests.Single(request =>
+                request.Executable == "xcrun" && request.Arguments.Contains("submit"));
+            var args = submit.Arguments.ToList();
+            Assert(args.Contains("--keychain-profile") && args.Contains("test-profile") &&
+                   args.Contains("--wait") && args.Any(a => a.EndsWith(".pkg", StringComparison.Ordinal)),
+                $"The .pkg itself must be submitted, got: {string.Join(' ', args)}");
+            Assert(requests.Any(request =>
+                    request.Executable == "xcrun" && request.Arguments.Contains("stapler")),
+                "stapler must attach the ticket to the .pkg.");
         }
         finally
         {

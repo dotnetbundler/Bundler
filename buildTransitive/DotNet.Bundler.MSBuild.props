@@ -110,5 +110,19 @@
     <BundlerMacPkgWelcomeFile Condition="'$(BundlerMacPkgWelcomeFile)' == ''"></BundlerMacPkgWelcomeFile>
     <BundlerMacPkgConclusionFile Condition="'$(BundlerMacPkgConclusionFile)' == ''"></BundlerMacPkgConclusionFile>
     <BundlerMacPkgDomain Condition="'$(BundlerMacPkgDomain)' == ''">System</BundlerMacPkgDomain>
+    <BundlerMacPkgScriptsDirectory Condition="'$(BundlerMacPkgScriptsDirectory)' == ''"></BundlerMacPkgScriptsDirectory>
+    <BundlerMacPkgSignIdentity Condition="'$(BundlerMacPkgSignIdentity)' == ''"></BundlerMacPkgSignIdentity>
+    <BundlerMacPkgSignCertificatePath Condition="'$(BundlerMacPkgSignCertificatePath)' == ''"></BundlerMacPkgSignCertificatePath>
+    <BundlerMacPkgSignCertificatePassword Condition="'$(BundlerMacPkgSignCertificatePassword)' == ''"></BundlerMacPkgSignCertificatePassword>
+    <BundlerMacPkgNotarize Condition="'$(BundlerMacPkgNotarize)' == ''">false</BundlerMacPkgNotarize>
+    <BundlerMacPkgNotaryWait Condition="'$(BundlerMacPkgNotaryWait)' == ''">true</BundlerMacPkgNotaryWait>
+    <BundlerMacPkgSkipStapling Condition="'$(BundlerMacPkgSkipStapling)' == ''">false</BundlerMacPkgSkipStapling>
+    <BundlerMacPkgNotaryProfile Condition="'$(BundlerMacPkgNotaryProfile)' == ''"></BundlerMacPkgNotaryProfile>
+    <BundlerMacPkgAppleId Condition="'$(BundlerMacPkgAppleId)' == ''"></BundlerMacPkgAppleId>
+    <BundlerMacPkgApplePassword Condition="'$(BundlerMacPkgApplePassword)' == ''"></BundlerMacPkgApplePassword>
+    <BundlerMacPkgAppleTeamId Condition="'$(BundlerMacPkgAppleTeamId)' == ''"></BundlerMacPkgAppleTeamId>
+    <BundlerMacPkgNotaryApiKeyPath Condition="'$(BundlerMacPkgNotaryApiKeyPath)' == ''"></BundlerMacPkgNotaryApiKeyPath>
+    <BundlerMacPkgNotaryApiKeyId Condition="'$(BundlerMacPkgNotaryApiKeyId)' == ''"></BundlerMacPkgNotaryApiKeyId>
+    <BundlerMacPkgNotaryApiIssuer Condition="'$(BundlerMacPkgNotaryApiIssuer)' == ''"></BundlerMacPkgNotaryApiIssuer>
   </PropertyGroup>
 </Project>

@@ -1,7 +1,7 @@
 # macOS `.pkg` 能力矩阵
 
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
-已实现行验收证据：`Bundler.Tests` 114 项 + `tests/MacOS.Pkg.Integration/Verify.sh`（macOS 26.5.2 arm64 全绿）；外部待验收行绑定到 `docs/mac-pkg-open-items.md`、`docs/mac-pkg-manual-testing.md` 中的明确 ID。
+已实现行验收证据：`Bundler.Tests` 122 项 + `tests/MacOS.Pkg.Integration/Verify.sh`（macOS 26.5.2 arm64 全绿）；外部待验收行绑定到 `docs/mac-pkg-open-items.md`、`docs/mac-pkg-manual-testing.md` 中的明确 ID。
 `.pkg` 无上游参照（tauri 无 `.pkg` 输出），能力集由原生工具链语义与 `docs/mac-format-decision.md` 边界决定。
 决策已于 `2026-09-26` 全部确认；`MAC-PKG-1` 完成同日，状态列如实反映当前实现。
 
@@ -31,10 +31,10 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| Developer ID Installer 签名 | 计划实现 | MAC-PKG-3 | `pkgbuild --sign`/`productsign --sign`；无 ad-hoc 等价物 |
-| 临时钥匙串证书导入 | 计划实现 | MAC-PKG-3 | 复用 `MacAppSigning.TemporaryKeychain` |
-| `.pkg` 公证 + `stapler` | 计划实现 | MAC-PKG-3 | 默认关闭；复用 `.app` 公证凭证三模式 |
-| `ScriptsDirectory` 专家脚本旋钮 | 计划实现 | MAC-PKG-3 | 默认关闭，显著责任边界标注（`mac-format-decision.md` §4） |
+| Developer ID Installer 签名 | 已实现 | MAC-PKG-3 实测 | 组件包 `pkgbuild --sign --timestamp`、分发包 `productsign --sign`；`"-"`（ad-hoc）明确拒绝；无效身份真实失败已验 |
+| 临时钥匙串证书导入 | 已实现 | MAC-PKG-3 单测 | p12 → 一次性 keychain → `--keychain`；构建后销毁 |
+| `.pkg` 公证 + `stapler` | 已实现（接线） | MAC-PKG-3 单测 | `xcrun notarytool submit` 直接收 `.pkg` + `stapler`；默认关闭；真实凭证属外部待验收 OI-03 |
+| `ScriptsDirectory` 专家脚本旋钮 | 已实现 | MAC-PKG-3 实测 | `pkgbuild --scripts` 原样收目录；`postinstall` 在 per-user 真实安装中执行已验（标记文件断言）；责任边界已标注 |
 | `preinstall`/`postinstall` 任意脚本默认面 | 明确拒绝 | — | 提权任意脚本风险面等价 MSI 自定义动作，仅专家模式 |
 
 ## 生命周期

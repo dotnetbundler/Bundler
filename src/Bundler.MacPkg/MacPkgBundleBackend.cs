@@ -43,13 +43,29 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                 $"The .pkg install location must be an absolute path: '{installLocation}'.");
         }
 
+        MacPkgSigning.Validate(settings.Signing);
+        var scriptsDirectory = settings.ScriptsDirectory;
+        if (scriptsDirectory is { Length: > 0 } &&
+            !Directory.Exists(Path.GetFullPath(scriptsDirectory)))
+        {
+            throw new DirectoryNotFoundException(
+                $"The .pkg scripts directory does not exist: {Path.GetFullPath(scriptsDirectory)}");
+        }
+
         var workDirectory = context.WorkDirectory;
         var stageDirectory = Path.Combine(workDirectory, "pkg-root");
         var packageName = MacAppBundleBackend.SanitizeFileName(bundle.ProductName) + ".pkg";
         var outputPath = Path.Combine(item.OutputDirectory, packageName);
+        MacAppSigning.TemporaryKeychain? keychain = null;
+        var identity = "";
 
         try
         {
+            if (MacPkgSigning.Configured(settings.Signing))
+            {
+                (identity, keychain) = await MacPkgSigning.ResolveIdentityAsync(
+                    context, settings.Signing, cancellationToken);
+            }
             Directory.CreateDirectory(stageDirectory);
 
             var payloadItems = settings.PayloadItems ?? Array.Empty<MacPkgPayloadItem>();
@@ -116,15 +132,28 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             {
                 File.Delete(outputPath);
             }
+            var pkgbuildArguments = new List<string>
+            {
+                "--root", stageDirectory,
+                "--install-location", installLocation,
+                "--identifier", identifier,
+                "--version", version,
+                "--ownership", "recommended"
+            };
+            if (scriptsDirectory is { Length: > 0 })
+            {
+                pkgbuildArguments.Add("--scripts");
+                pkgbuildArguments.Add(Path.GetFullPath(scriptsDirectory));
+            }
+            // Component packages are signed inside pkgbuild; distribution packages are
+            // signed by productsign after productbuild emits the unsigned product archive.
+            if (identity.Length > 0 && !useDistribution)
+            {
+                pkgbuildArguments.AddRange(MacPkgSigning.PkgbuildSignArguments(identity, keychain));
+            }
+            pkgbuildArguments.Add(packagePath);
             await MacPkgProcessRunner.RunAsync(
-                "pkgbuild",
-                ["--root", stageDirectory,
-                 "--install-location", installLocation,
-                 "--identifier", identifier,
-                 "--version", version,
-                 "--ownership", "recommended",
-                 packagePath],
-                workDirectory, cancellationToken);
+                "pkgbuild", pkgbuildArguments, workDirectory, cancellationToken);
 
             if (useDistribution)
             {
@@ -148,12 +177,31 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                      "--resources", resourcesDirectory,
                      outputPath],
                     workDirectory, cancellationToken);
+                if (identity.Length > 0)
+                {
+                    await MacPkgSigning.SignProductAsync(
+                        context, outputPath, identity, keychain, cancellationToken);
+                }
+            }
+
+            if (settings.Signing.Notarize)
+            {
+                await MacPkgSigning.NotarizeAsync(
+                    context, outputPath, settings.Signing, cancellationToken);
+            }
+            if (keychain is not null)
+            {
+                await keychain.DisposeAsync(workDirectory, cancellationToken);
             }
 
             return [new BundleArtifact(PackageFormat.Pkg, item.Target.RuntimeIdentifier, outputPath)];
         }
         catch
         {
+            if (keychain is not null)
+            {
+                await keychain.DisposeAsync(workDirectory, CancellationToken.None);
+            }
             if (File.Exists(outputPath))
             {
                 File.Delete(outputPath);

@@ -60,6 +60,29 @@ dotnet publish samples/HelloMacPkg/HelloMacPkg.csproj -c Release
   rm -rf ~/Applications/"Hello Mac PKG.app" ~/Applications/support
   ```
 
+- **安装脚本（专家旋钮）**——`Scripts/` 目录原样交给 pkgbuild 的 scripts 旗标；内含 `postinstall` 会在真实安装时以安装器权限运行（本示例写一行到 `~/.hello-macpkg-postinstall.log`）：
+
+  ```bash
+  dotnet publish ... -p:HelloMacPkgScripts=true -p:HelloMacPkgDomain=CurrentUserHome
+  installer -pkg "artifacts/.../Hello Mac PKG.pkg" -target CurrentUserHomeDirectory
+  cat ~/.hello-macpkg-postinstall.log   # 证明脚本真实执行过
+  ```
+
+- **签名与公证**（MAC-PKG-3 能力；需要真实 Developer ID Installer 证书与 Apple 公证凭证，外部条件）：
+
+  ```bash
+  dotnet publish ... \
+      -p:HelloMacPkgSignIdentity="Developer ID Installer: Your Name (TEAMID)"
+  # 或临时证书路径（导入一次性钥匙串，构建后销毁）：
+  dotnet publish ... \
+      -p:HelloMacPkgSignCertificatePath=/path/cert.p12 \
+      -p:HelloMacPkgSignCertificatePassword=***
+  # 公证（签名开启后）：
+  dotnet publish ... -p:HelloMacPkgNotarize=true -p:HelloMacPkgNotaryProfile=my-profile
+  ```
+
+  注意 `.pkg` **没有 ad-hoc 签名**——要么用真实 Installer 证书签名，要么不签；签名是公证的前置条件（公证的正是这个签名包本身）。
+
 ## 验证
 
 ```bash
@@ -79,4 +102,4 @@ pkgutil --files com.dotnetbundler.hellomacpkg
 sudo pkgutil --forget com.dotnetbundler.hellomacpkg   # 只清收据，文件需自行删除
 ```
 
-分发包页面（欢迎/许可/结语）与安装域名已在 MAC-PKG-2 交付；Developer ID Installer 签名与公证属 MAC-PKG-3，本示例暂不含。
+签名、公证与安装脚本旋钮已在 MAC-PKG-3 接入示例（上节），真实证书/公证属外部凭证待验收（MAC-PKG-OI-02/03）。

@@ -38,6 +38,24 @@
     <BundlerMacPkgConclusionFile Condition="'$(HelloMacPkgConclusion)' == 'true'">Assets/conclusion.rtf</BundlerMacPkgConclusionFile>
     <BundlerLicenseFile Condition="'$(HelloMacPkgLicense)' == 'true'">Assets/license.txt</BundlerLicenseFile>
     <BundlerMacPkgDomain Condition="'$(HelloMacPkgDomain)' != ''">$(HelloMacPkgDomain)</BundlerMacPkgDomain>
+
+    <!-- 签名/公证/脚本旋钮（MAC-PKG-3）：.pkg 只有真实 Developer ID Installer 签名，无 ad-hoc；
+         Notarize 走 notarytool+stapler（凭证取显式属性或 APPLE_* 环境变量）；
+         ScriptsDirectory 是专家旋钮：目录原样交给 pkgbuild 的 scripts 旗标，脚本以安装器权限运行。 -->
+    <BundlerMacPkgScriptsDirectory Condition="'$(HelloMacPkgScripts)' == 'true'">Scripts</BundlerMacPkgScriptsDirectory>
+    <BundlerMacPkgSignIdentity Condition="'$(HelloMacPkgSignIdentity)' != ''">$(HelloMacPkgSignIdentity)</BundlerMacPkgSignIdentity>
+    <BundlerMacPkgSignCertificatePath Condition="'$(HelloMacPkgSignCertificatePath)' != ''">$(HelloMacPkgSignCertificatePath)</BundlerMacPkgSignCertificatePath>
+    <BundlerMacPkgSignCertificatePassword Condition="'$(HelloMacPkgSignCertificatePassword)' != ''">$(HelloMacPkgSignCertificatePassword)</BundlerMacPkgSignCertificatePassword>
+    <BundlerMacPkgNotarize Condition="'$(HelloMacPkgNotarize)' == 'true'">true</BundlerMacPkgNotarize>
+    <BundlerMacPkgNotaryWait Condition="'$(HelloMacPkgNotaryWait)' != ''">$(HelloMacPkgNotaryWait)</BundlerMacPkgNotaryWait>
+    <BundlerMacPkgSkipStapling Condition="'$(HelloMacPkgSkipStapling)' == 'true'">true</BundlerMacPkgSkipStapling>
+    <BundlerMacPkgNotaryProfile Condition="'$(HelloMacPkgNotaryProfile)' != ''">$(HelloMacPkgNotaryProfile)</BundlerMacPkgNotaryProfile>
+    <BundlerMacPkgAppleId Condition="'$(HelloMacPkgAppleId)' != ''">$(HelloMacPkgAppleId)</BundlerMacPkgAppleId>
+    <BundlerMacPkgApplePassword Condition="'$(HelloMacPkgApplePassword)' != ''">$(HelloMacPkgApplePassword)</BundlerMacPkgApplePassword>
+    <BundlerMacPkgAppleTeamId Condition="'$(HelloMacPkgAppleTeamId)' != ''">$(HelloMacPkgAppleTeamId)</BundlerMacPkgAppleTeamId>
+    <BundlerMacPkgNotaryApiKeyPath Condition="'$(HelloMacPkgNotaryApiKeyPath)' != ''">$(HelloMacPkgNotaryApiKeyPath)</BundlerMacPkgNotaryApiKeyPath>
+    <BundlerMacPkgNotaryApiKeyId Condition="'$(HelloMacPkgNotaryApiKeyId)' != ''">$(HelloMacPkgNotaryApiKeyId)</BundlerMacPkgNotaryApiKeyId>
+    <BundlerMacPkgNotaryApiIssuer Condition="'$(HelloMacPkgNotaryApiIssuer)' != ''">$(HelloMacPkgNotaryApiIssuer)</BundlerMacPkgNotaryApiIssuer>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>

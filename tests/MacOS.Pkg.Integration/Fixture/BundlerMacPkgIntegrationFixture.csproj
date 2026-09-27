@@ -27,6 +27,9 @@
     <BundlerMacPkgConclusionFile Condition="'$(BundlerTestPkgConclusion)' == 'true'">Assets/conclusion.rtf</BundlerMacPkgConclusionFile>
     <BundlerMacPkgDomain Condition="'$(BundlerTestPkgDomain)' != ''">$(BundlerTestPkgDomain)</BundlerMacPkgDomain>
     <BundlerLicenseFile Condition="'$(BundlerTestPkgLicense)' == 'true'">Assets/license.txt</BundlerLicenseFile>
+    <BundlerMacPkgScriptsDirectory Condition="'$(BundlerTestPkgScripts)' == 'true'">Scripts</BundlerMacPkgScriptsDirectory>
+    <BundlerMacPkgSignIdentity Condition="'$(BundlerTestPkgSignIdentity)' != ''">$(BundlerTestPkgSignIdentity)</BundlerMacPkgSignIdentity>
+    <BundlerMacPkgNotarize Condition="'$(BundlerTestPkgNotarize)' == 'true'">true</BundlerMacPkgNotarize>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>

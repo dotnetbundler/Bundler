@@ -181,16 +181,24 @@ internal static class MacAppSigning
     /// Resolves notary credentials: explicit config first, then APPLE_* env vars
     /// (the names other bundlers use). Returns the credential argument set or throws.
     /// </summary>
-    internal static IReadOnlyList<string> ResolveCredentials(MacAppSigningConfiguration signing)
+    internal static IReadOnlyList<string> ResolveCredentials(MacAppSigningConfiguration signing) =>
+        ResolveCredentials(
+            signing.KeychainProfile, signing.ApiKeyPath, signing.ApiKeyId, signing.ApiIssuer,
+            signing.AppleId, signing.ApplePassword, signing.AppleTeamId);
+
+    /// <summary>Field-level overload shared with the .pkg backend's signing configuration.</summary>
+    internal static IReadOnlyList<string> ResolveCredentials(
+        string? keychainProfile, string? apiKeyPath, string? apiKeyId, string? apiIssuer,
+        string? appleId, string? applePassword, string? appleTeamId)
     {
-        var profile = signing.KeychainProfile ?? Env("APPLE_PROFILE");
+        var profile = keychainProfile ?? Env("APPLE_PROFILE");
         if (profile is { Length: > 0 })
         {
             return ["--keychain-profile", profile];
         }
-        var keyPath = signing.ApiKeyPath ?? Env("APPLE_API_KEY_PATH") ?? Env("APPLE_API_KEY_PATH_UNSET");
-        var keyId = signing.ApiKeyId ?? Env("APPLE_API_KEY");
-        var issuer = signing.ApiIssuer ?? Env("APPLE_API_ISSUER");
+        var keyPath = apiKeyPath ?? Env("APPLE_API_KEY_PATH") ?? Env("APPLE_API_KEY_PATH_UNSET");
+        var keyId = apiKeyId ?? Env("APPLE_API_KEY");
+        var issuer = apiIssuer ?? Env("APPLE_API_ISSUER");
         if (keyPath is { Length: > 0 } || keyId is { Length: > 0 } || issuer is { Length: > 0 })
         {
             if (keyPath is not { Length: > 0 } || keyId is not { Length: > 0 } ||
@@ -202,23 +210,23 @@ internal static class MacAppSigning
             }
             return ["--key", keyPath, "--key-id", keyId, "--issuer", issuer];
         }
-        var appleId = signing.AppleId ?? Env("APPLE_ID");
-        var applePassword = signing.ApplePassword ?? Env("APPLE_PASSWORD");
-        var appleTeam = signing.AppleTeamId ?? Env("APPLE_TEAM_ID");
-        if (appleId is { Length: > 0 } || applePassword is { Length: > 0 } || appleTeam is { Length: > 0 })
+        var id = appleId ?? Env("APPLE_ID");
+        var password = applePassword ?? Env("APPLE_PASSWORD");
+        var team = appleTeamId ?? Env("APPLE_TEAM_ID");
+        if (id is { Length: > 0 } || password is { Length: > 0 } || team is { Length: > 0 })
         {
-            if (appleId is not { Length: > 0 } || applePassword is not { Length: > 0 } ||
-                appleTeam is not { Length: > 0 })
+            if (id is not { Length: > 0 } || password is not { Length: > 0 } ||
+                team is not { Length: > 0 })
             {
                 throw new ArgumentException(
                     "Notarization Apple-ID credentials need all of AppleId/ApplePassword/AppleTeamId " +
                     "(or APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID).");
             }
-            return ["--apple-id", appleId, "--password", applePassword, "--team-id", appleTeam];
+            return ["--apple-id", id, "--password", password, "--team-id", team];
         }
         throw new ArgumentException(
             "Notarization is enabled but no credentials were provided: set a keychain profile " +
-            "(MacAppSigning.KeychainProfile/APPLE_PROFILE), an API key (ApiKeyPath/ApiKeyId/ApiIssuer " +
+            "(Signing.KeychainProfile/APPLE_PROFILE), an API key (ApiKeyPath/ApiKeyId/ApiIssuer " +
             "or APPLE_API_KEY_PATH/APPLE_API_KEY/APPLE_API_ISSUER), or Apple ID credentials " +
             "(AppleId/ApplePassword/AppleTeamId or APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID).");
     }
@@ -314,7 +322,8 @@ internal static class MacAppSigning
             PreviousKeychains = previousKeychains;
         }
 
-        private string Path { get; }
+        /// <summary>Keychain file path; exposed so sibling backends can pass --keychain.</summary>
+        internal string Path { get; }
         private string Password { get; }
         internal string Identity { get; }
         private IReadOnlyList<string> PreviousKeychains { get; }

@@ -145,6 +145,20 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacPkgWelcomeFile { get; set; } = "";
     public string MacPkgConclusionFile { get; set; } = "";
     public string MacPkgDomain { get; set; } = "";
+    public string MacPkgScriptsDirectory { get; set; } = "";
+    public string MacPkgSignIdentity { get; set; } = "";
+    public string MacPkgSignCertificatePath { get; set; } = "";
+    public string MacPkgSignCertificatePassword { get; set; } = "";
+    public bool MacPkgNotarize { get; set; }
+    public bool MacPkgNotaryWait { get; set; } = true;
+    public bool MacPkgSkipStapling { get; set; }
+    public string MacPkgNotaryProfile { get; set; } = "";
+    public string MacPkgAppleId { get; set; } = "";
+    public string MacPkgApplePassword { get; set; } = "";
+    public string MacPkgAppleTeamId { get; set; } = "";
+    public string MacPkgNotaryApiKeyPath { get; set; } = "";
+    public string MacPkgNotaryApiKeyId { get; set; } = "";
+    public string MacPkgNotaryApiIssuer { get; set; } = "";
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -326,7 +340,24 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         Domain = string.IsNullOrWhiteSpace(MacPkgDomain)
                             ? MacPkgInstallDomain.System
                             : (MacPkgInstallDomain)Enum.Parse(
-                                typeof(MacPkgInstallDomain), MacPkgDomain.Trim(), true)
+                                typeof(MacPkgInstallDomain), MacPkgDomain.Trim(), true),
+                        ScriptsDirectory = OptionalFullPath(MacPkgScriptsDirectory),
+                        Signing = new MacPkgSigningConfiguration
+                        {
+                            Identity = EmptyToNull(MacPkgSignIdentity),
+                            TemporaryCertificatePath = OptionalFullPath(MacPkgSignCertificatePath),
+                            TemporaryCertificatePassword = EmptyToNull(MacPkgSignCertificatePassword),
+                            Notarize = MacPkgNotarize,
+                            NotaryWait = MacPkgNotaryWait,
+                            SkipStapling = MacPkgSkipStapling,
+                            KeychainProfile = EmptyToNull(MacPkgNotaryProfile),
+                            AppleId = EmptyToNull(MacPkgAppleId),
+                            ApplePassword = EmptyToNull(MacPkgApplePassword),
+                            AppleTeamId = EmptyToNull(MacPkgAppleTeamId),
+                            ApiKeyPath = OptionalFullPath(MacPkgNotaryApiKeyPath),
+                            ApiKeyId = EmptyToNull(MacPkgNotaryApiKeyId),
+                            ApiIssuer = EmptyToNull(MacPkgNotaryApiIssuer)
+                        }
                     },
                     BuildMacAppConfiguration(),
                     new MacPkgBundlerOptions { Logger = new MsBuildBundleLogger(Log) })

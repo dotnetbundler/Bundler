@@ -1,0 +1,4 @@
+#!/bin/sh
+# 示例脚本：真实安装时由 installer 以安装器权限执行。
+echo "HelloMacPkg postinstall ran" >> "${HOME:-/tmp}/.hello-macpkg-postinstall.log"
+exit 0

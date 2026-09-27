@@ -173,16 +173,56 @@ dominfo="$(installer -dominfo -pkg "$dist_pkg" -plist)" \
 printf '%s' "$dominfo" | grep -qi "currentuserhome" \
     || fail "installer -dominfo did not report the CurrentUserHome domain: '$dominfo'."
 
+log "== scripts knob: postinstall archived into the package =="
+rm -f "$HOME/.bundler-pkg-postinstall-ran"
+dotnet publish "$fixture_project" -c Release \
+    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
+    -p:BundlerIntegrationOutput="$integration_root/bundle-scripts" \
+    -p:BundlerTestPkgScripts=true \
+    -p:BundlerTestPkgDomain=CurrentUserHome \
+    --packages "$package_cache" >/dev/null
+scripts_pkg="$integration_root/bundle-scripts/osx-arm64/pkg/Bundler Mac PKG Fixture.pkg"
+[[ -f "$scripts_pkg" ]] || fail "The scripts variant .pkg is missing."
+# 脚本归档进内嵌组件包：展开 product 包再找 component.pkg 内的 Scripts 载荷。
+mkdir -p "$expand_root/scripts-product"
+xar -xf "$scripts_pkg" -C "$expand_root/scripts-product" >/dev/null \
+    || fail "xar could not unpack the scripts variant .pkg."
+# 内嵌组件包在 xar 中是展开形态（component.pkg/Bom|Payload|PackageInfo|Scripts）；
+# Scripts 是 cpio 归档，解开它断言 postinstall 确实被收进包里。
+component_scripts="$expand_root/scripts-product/component.pkg/Scripts"
+[[ -f "$component_scripts" ]] \
+    || fail "pkgbuild did not archive a Scripts payload into the component package."
+mkdir -p "$expand_root/scripts-cpio"
+( cd "$expand_root/scripts-cpio" && cat "$component_scripts" | gunzip | cpio -i --quiet ) \
+    || fail "The Scripts cpio archive could not be unpacked."
+[[ -f "$expand_root/scripts-cpio/postinstall" ]] \
+    || fail "The Scripts archive does not contain the postinstall script."
+
+log "== signing plumbing: bogus identity fails honestly =="
+# 没有真实 Developer ID Installer 证书（外部待验收 MAC-PKG-OI-02），
+# 但签名接线可被实测：不存在的身份必须让 pkgbuild --sign 诚实失败。
+if dotnet publish "$fixture_project" -c Release \
+    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
+    -p:BundlerIntegrationOutput="$integration_root/bundle-sign-fail" \
+    -p:BundlerTestPkgSignIdentity="Nonexistent Installer Identity" \
+    --packages "$package_cache" >/dev/null 2>&1; then
+    fail "A nonexistent signing identity must fail the publish."
+fi
+if find "$integration_root/bundle-sign-fail" -name '*.pkg' 2>/dev/null | grep -q .; then
+    fail "A failed signing build left a .pkg artifact."
+fi
+
 # 本机唯一可无管理员实测的安装路径：current-user-home 域真实安装 + 收据断言。
 # per-user 收据写 ~/Library/Receipts，pkgutil 需要 --volume ~ 才能看到。
 # 注意：installer 对 <relocate> 标记的 bundle 有重定位行为——若同 id 的 .app 已存在于
 # 本机别处（本脚本此前产出的各变体中间 .app），payload 会被装到那个旧位置。
 # 安装前清掉 artifacts 树下全部中间 .app，确保按 install-location 落到 ~/Applications。
 find "$integration_root" -name "*.app" -type d -exec rm -rf {} + 2>/dev/null || true
-log "== real per-user install (CurrentUserHome domain) =="
+log "== real per-user install (CurrentUserHome domain, scripts variant) =="
+# 用 scripts 变体实测安装：postinstall 由 installer 真实执行并留下标记文件。
 home_app="$HOME/Applications/Bundler Mac PKG Fixture.app"
 home_helper="$HOME/Applications/support/helper.txt"
-if ! installer -pkg "$dist_pkg" -target CurrentUserHomeDirectory -dumplog \
+if ! installer -pkg "$scripts_pkg" -target CurrentUserHomeDirectory -dumplog \
         >"$integration_root/install.log" 2>&1; then
     cat "$integration_root/install.log" >&2 || true
     fail "installer could not install the distribution pkg into the home domain."
@@ -200,6 +240,9 @@ pkgutil --files com.dotnetbundler.macpkgintegrationfixture --volume ~ \
     || fail "pkgutil --files lacks the payload entry for the fixture."
 pkgutil --forget com.dotnetbundler.macpkgintegrationfixture --volume ~ >/dev/null \
     || fail "pkgutil --forget failed for the fixture receipt."
+[[ -f "$HOME/.bundler-pkg-postinstall-ran" ]] \
+    || fail "The postinstall script was not executed during the real install."
+rm -f "$HOME/.bundler-pkg-postinstall-ran"
 rm -rf "$home_app" "$HOME/Applications/support"
 
 log "== failure path leaves nothing behind =="
