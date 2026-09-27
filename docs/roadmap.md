@@ -146,7 +146,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 
 ### LINUX：Linux 格式
 
-公共模型已经包含 `Deb`、`Rpm`、`AppImage`；`.deb` 已冻结入 `main`，`.rpm` 后端已实现 LINUX-RPM-1/2，`AppImage` 无后端。
+公共模型已经包含 `Deb`、`Rpm`、`AppImage`；`.deb` 已冻结入 `main`，`.rpm` 后端已实现 LINUX-RPM-1..3，`AppImage` 无后端。
 为避免每次交接重新选择，默认顺序固定为 `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE`，仍然一次只推进一个完整格式。
 每个格式分别完成元数据、文件布局、桌面集成、升级/卸载语义、签名或仓库验证边界、原生发行版 E2E，再进入下一个格式。
 若真实用户需求或可用原生验证环境要求调整，必须先在本文档写明依据和新顺序。

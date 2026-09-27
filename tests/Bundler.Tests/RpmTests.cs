@@ -26,6 +26,173 @@ internal static class RpmTests
             yield return ("Honours a caller-supplied .desktop file", () => RunSync(DesktopFileOverride));
             yield return ("Maps arbitrary absolute destinations", () => RunSync(MapsArbitraryFiles));
             yield return ("Rejects invalid dependency clauses", () => RunSync(RejectsInvalidDependencyClauses));
+            yield return ("Stages scriptlets with interpreter tags", () => RunSync(StagesScriptlets));
+            yield return ("Synthesizes daemon-reload scriptlets for systemd units", () => RunSync(SystemdScriptletSynthesis));
+            yield return ("Marks /etc files and explicit paths as %config(noreplace)", () => RunSync(ConfigFileFlags));
+            yield return ("Rejects invalid scriptlets and compression", () => RunSync(RejectsInvalidScriptlets));
+        }
+    }
+
+    static void StagesScriptlets()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var script = Path.Combine(input, "pre.sh");
+        File.WriteAllText(script, "#!/bin/bash\necho hello\n");
+        var plain = Path.Combine(input, "post.sh");
+        File.WriteAllText(plain, "echo post\n");
+        try
+        {
+            var artifact = new RpmBundler(new RpmBundleConfiguration
+            {
+                PreInstallFile = script,
+                PostInstallFile = plain,
+                PostInstallProgram = "/usr/bin/python3"
+            }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
+            var package = RpmPackageReader.Read(artifact.Path);
+            // Shebang stripped from body; interpreter comes from the shebang.
+            Assert(package.Main.Text(1023) == "echo hello\n",
+                "PREIN must carry the body without the shebang line.");
+            Assert(package.Main.Text(1085) == "/bin/bash",
+                "PREINPROG must come from the script's shebang.");
+            // No shebang and no program -> /bin/sh default.
+            Assert(package.Main.Text(1024) == "echo post\n", "POSTIN body.");
+            Assert(package.Main.Text(1086) == "/usr/bin/python3",
+                "Explicit *Program overrides the default interpreter.");
+            // Unset scriptlets stay absent.
+            Assert(!package.Main.Tags.ContainsKey(1025) && !package.Main.Tags.ContainsKey(1087),
+                "No PREUN/PREUNPROG when unset.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void SystemdScriptletSynthesis()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var unit = Path.Combine(input, "app.service");
+        File.WriteAllText(unit, "[Service]\nExecStart=/bin/true\n");
+        var postin = Path.Combine(input, "post.sh");
+        File.WriteAllText(postin, "echo custom\n");
+        try
+        {
+            var artifact = new RpmBundler(new RpmBundleConfiguration
+            {
+                SystemdServiceFile = unit,
+                PostInstallFile = postin
+            }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
+            var package = RpmPackageReader.Read(artifact.Path);
+            Assert(package.Payload.Any(e =>
+                    e.Path == "/usr/lib/systemd/system/example-app.service"),
+                "The unit must land under /usr/lib/systemd/system/<pkg>.service.");
+            var post = package.Main.Text(1024);
+            Assert(post.Contains("echo custom") && post.Contains("daemon-reload"),
+                "POSTIN must merge the caller body with the daemon-reload epilogue.");
+            Assert(package.Main.Text(1086) == "/bin/sh",
+                "Synthesized POSTIN defaults to /bin/sh.");
+            var postun = package.Main.Text(1026);
+            Assert(postun.Contains("daemon-reload") && package.Main.Text(1088) == "/bin/sh",
+                "POSTUN must be synthesized for daemon-reload too.");
+            Assert(!package.Main.Tags.ContainsKey(1023) && !package.Main.Tags.ContainsKey(1025),
+                "PREIN/PREUN stay absent with only a unit knob set.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void ConfigFileFlags()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var config = Path.Combine(input, "defaults.conf");
+        File.WriteAllText(config, "k=v");
+        var extra = Path.Combine(input, "extra.conf");
+        File.WriteAllText(extra, "e=1");
+        try
+        {
+            var artifact = new RpmBundler(new RpmBundleConfiguration
+            {
+                Files =
+                [
+                    new RpmFileEntry { Source = config, Destination = "/etc/example/defaults.conf" },
+                    new RpmFileEntry { Source = extra, Destination = "/opt/example/extra.conf" }
+                ],
+                ConfigFiles = ["/opt/example/extra.conf"]
+            }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
+            var package = RpmPackageReader.Read(artifact.Path);
+            var dirnames = package.Main.Strings(1118);
+            var dirindexes = package.Main.Ints(1116);
+            var basenames = package.Main.Strings(1117);
+            var flags = package.Main.Ints(1037);
+            string Full(int i) => dirnames[dirindexes[i]] + basenames[i];
+            int Flag(string path)
+            {
+                for (var i = 0; i < basenames.Length; i++)
+                {
+                    if (Full(i) == path + "/") return flags[i]; // dirnames keep trailing '/'
+                    if (Full(i).TrimEnd('/') == path) return flags[i];
+                }
+                throw new InvalidOperationException("missing " + path);
+            }
+            var etc = Flag("/etc/example/defaults.conf");
+            Assert((etc & 1) != 0 && (etc & 16) != 0,
+                "/etc files must be %config(noreplace) (flags 1|16).");
+            var opt = Flag("/opt/example/extra.conf");
+            Assert((opt & 1) != 0 && (opt & 16) != 0,
+                "Explicit ConfigFiles entries must be %config(noreplace) too.");
+            var bin = Flag("/usr/lib/example-app/ExampleApp");
+            Assert((bin & 17) == 0, "Non-config files must not get config flags.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void RejectsInvalidScriptlets()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var crlf = Path.Combine(input, "crlf.sh");
+        File.WriteAllText(crlf, "#!/bin/sh\r\necho hi\r\n");
+        var lonelyCr = Path.Combine(input, "cr.sh");
+        File.WriteAllText(lonelyCr, "#!/bin/sh\necho a\rb\n");
+        var emptyShebang = Path.Combine(input, "empty.sh");
+        File.WriteAllText(emptyShebang, "#!\necho hi\n");
+        try
+        {
+            foreach (var (cfg, label) in new (RpmBundleConfiguration, string)[]
+            {
+                (new RpmBundleConfiguration { PreInstallFile = crlf }, "CRLF body must be rejected"),
+                (new RpmBundleConfiguration { PreInstallFile = lonelyCr }, "lone CR must be rejected"),
+                (new RpmBundleConfiguration { PreInstallFile = emptyShebang }, "empty shebang must be rejected"),
+                (new RpmBundleConfiguration { PreInstallFile = input + "/missing.sh" }, "missing file must be rejected"),
+                (new RpmBundleConfiguration { Compression = "xz" }, "xz compression must be rejected"),
+                (new RpmBundleConfiguration { ConfigFiles = ["/usr/lib/example-app/nowhere.conf"] },
+                    "ConfigFiles must reference a real payload file")
+            })
+            {
+                var thrown = false;
+                try
+                {
+                    new RpmBundler(cfg).BuildAsync(RpmConfiguration(input, output))
+                        .GetAwaiter().GetResult();
+                }
+                catch (Exception e) when (e is ArgumentException or FileNotFoundException)
+                {
+                    thrown = true;
+                }
+                Assert(thrown, label);
+            }
+        }
+        finally
+        {
+            Cleanup(input, output);
         }
     }
 

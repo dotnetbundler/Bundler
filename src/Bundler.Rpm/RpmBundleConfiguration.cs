@@ -135,10 +135,64 @@ public sealed class RpmBundleConfiguration
     /// Extra files mapped to absolute paths inside the package (e.g. a config
     /// under <c>/etc</c>); each entry's <c>Destination</c> is an absolute
     /// package path (leading '/' optional) with a file name, outside the
-    /// payload root. <c>%config(noreplace)</c> marking for destinations under
-    /// <c>/etc</c> is a later-stage concern.
+    /// payload root. Destinations under <c>/etc</c> are marked
+    /// <c>%config(noreplace)</c> automatically — <c>rpm -e</c> leaves a modified
+    /// file behind as <c>.rpmsave</c>.
     /// </summary>
     public IReadOnlyList<RpmFileEntry>? Files { get; init; }
+
+    /// <summary>
+    /// Additional package paths (absolute, must exist in the payload) marked
+    /// <c>%config(noreplace)</c>. Destinations of <see cref="Files"/> under
+    /// <c>/etc</c> are marked automatically.
+    /// </summary>
+    public IReadOnlyList<string>? ConfigFiles { get; init; }
+
+    /// <summary>
+    /// Managed systemd unit: path to a <c>.service</c> file installed at
+    /// <c>usr/lib/systemd/system/&lt;package&gt;.service</c> (0644). A
+    /// <c>systemctl daemon-reload</c> epilogue is synthesized into
+    /// <c>%post</c> and <c>%postun</c> (appended to caller-supplied scriptlets
+    /// when present). The unit is installed but not enabled or started —
+    /// enabling policy stays with the caller's scriptlets.
+    /// </summary>
+    public string? SystemdServiceFile { get; init; }
+
+    /// <summary>
+    /// Expert knob: path to a caller-supplied <c>%pre</c> scriptlet file
+    /// (<c>PREIN</c>/<c>PREINPROG</c> tags). LF line endings only; a
+    /// <c>#!interpreter</c> first line is stripped and becomes the interpreter
+    /// tag (default <c>/bin/sh</c>). rpm passes the install count in $1.
+    /// </summary>
+    public string? PreInstallFile { get; init; }
+
+    /// <summary>Expert knob: caller-supplied <c>%post</c> scriptlet file; see <see cref="PreInstallFile"/>.</summary>
+    public string? PostInstallFile { get; init; }
+
+    /// <summary>Expert knob: caller-supplied <c>%preun</c> scriptlet file; see <see cref="PreInstallFile"/>.</summary>
+    public string? PreUninstallFile { get; init; }
+
+    /// <summary>Expert knob: caller-supplied <c>%postun</c> scriptlet file; see <see cref="PreInstallFile"/>.</summary>
+    public string? PostUninstallFile { get; init; }
+
+    /// <summary>Explicit interpreter for <c>%pre</c> (<c>PREINPROG</c>), overriding any shebang-derived one.</summary>
+    public string? PreInstallProgram { get; init; }
+
+    /// <summary>Explicit interpreter for <c>%post</c> (<c>POSTINPROG</c>).</summary>
+    public string? PostInstallProgram { get; init; }
+
+    /// <summary>Explicit interpreter for <c>%preun</c> (<c>PREUNPROG</c>).</summary>
+    public string? PreUninstallProgram { get; init; }
+
+    /// <summary>Explicit interpreter for <c>%postun</c> (<c>POSTUNPROG</c>).</summary>
+    public string? PostUninstallProgram { get; init; }
+
+    /// <summary>
+    /// Payload compression: only <c>"gzip"</c> is supported — the writer is
+    /// pure managed code and netstandard2.0 ships no xz/zstd encoder without
+    /// a third-party dependency. Any other value is rejected.
+    /// </summary>
+    public string? Compression { get; init; }
 }
 
 /// <summary>A file planted at an absolute path inside the .rpm payload.</summary>

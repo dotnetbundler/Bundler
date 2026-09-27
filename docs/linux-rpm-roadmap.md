@@ -1,6 +1,6 @@
 # Linux `.rpm` 后端实施路线（LINUX-RPM）
 
-> 状态：**LINUX-RPM-2 已实现，默认下一阶段 LINUX-RPM-3**（2026-09-27，分支 `linux-rpm-development`，包版本 `0.1.0-alpha.53`）。
+> 状态：**LINUX-RPM-3 已实现，默认下一阶段 LINUX-RPM-4**（2026-09-27，分支 `linux-rpm-development`，包版本 `0.1.0-alpha.54`）。
 > 上游审计见 [`docs/linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `tauri-apps/tauri@447fa9f`，DEB-5 复核确认零漂移）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 > 逐项能力状态见 [`docs/linux-rpm-capability-matrix.md`](linux-rpm-capability-matrix.md)；外部条件见 [`docs/linux-rpm-open-items.md`](linux-rpm-open-items.md)；人工步骤见 [`docs/linux-rpm-manual-testing.md`](linux-rpm-manual-testing.md)。
@@ -71,10 +71,11 @@
 - **退出达成**：`rpm -qip`/`--queryformat` 逐字段断言全绿；生成与覆盖 `.desktop` 均过 `desktop-file-validate`；docker `fedora:latest` 装后 `rpm -ql` 逐路径断言 + `rpm -qd` %doc 可见 + 卸载零残留全绿。
 - **不做**：scriptlet、systemd、`%config(noreplace)` 标记（`/etc` 文件暂为普通文件）、压缩选项、rpmlint 硬基线（信息级：6E4W，与预期一致）。
 
-### LINUX-RPM-3：脚本、systemd、config 与压缩
+### LINUX-RPM-3：脚本、systemd、config 与压缩（已实现 2026-09-27）
 
-- **目标/交付**：四 scriptlet 专家旋钮；托管 unit + daemon-reload 合成；`/etc` 自动 `%config(noreplace)` + `ConfigFiles` 显式列表；压缩枚举（gzip，xz/zstd 登记拒绝）；升级/卸载语义实测（`rpm -U`、conffile 保留）。
-- **退出**：容器内 `rpm -i/-U/-e` 脚本标记与 conffile 断言全绿。
+- **交付**：`PreInstallFile`/`PostInstallFile`/`PreUninstallFile`/`PostUninstallFile` 四 scriptlet 专家旋钮 + `*Program` 解释器覆盖——文件 LF 行尾强制（拒 CRLF/裸 CR），`#!` 首行剥离为 `*PROG` tag（缺省 `/bin/sh`）；`SystemdServiceFile` 落 `/usr/lib/systemd/system/<pkg>.service` 并向 `%post`/`%postun` 合成 `daemon-reload` 尾段（装而不启）；`/etc` 下 `RpmFile` 目标自动 `%config(noreplace)`（FILEFLAGS 17）+ `ConfigFiles` 显式列表（须命中载荷常规文件）；`Compression` 仅 `gzip`（xz/zstd 拒绝）。
+- **实测注记**：scriptlet 语义为解释器喂体——script tag 存无 shebang 的正文，PROG tag 存解释器；rpm 安装/升级/卸载计数以 `$1` 传给 scriptlet。
+- **退出达成**：容器内 `rpm -i`/`rpm -e` 四个 scriptlet 标记断言、`rpm -U`（Release 1→2）升级 + `%config(noreplace)` `.rpmsave`/原地保留断言全绿；`PREINPROG`/`--scripts`/FILEFLAGS 主机侧断言全绿。
 
 ### LINUX-RPM-4：原生 E2E 与支持矩阵
 

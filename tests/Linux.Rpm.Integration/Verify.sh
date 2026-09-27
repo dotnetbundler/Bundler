@@ -282,6 +282,50 @@ if publish_fixture badfile >/dev/null 2>&1 -p:BundlerTestRpmBadFile=1; then
     fail "A relative RpmFile destination must fail the publish."
 fi
 
+log "== variant: scriptlets + systemd unit =="
+publish_fixture scripts >/dev/null -p:BundlerTestRpmScripts=1 -p:BundlerTestRpmSystemd=1
+scr="$(find "$integration_root/scripts/linux-x64/rpm" -name '*.rpm' | head -n1)"
+[[ -n "$scr" ]] || fail "The scripts variant produced no .rpm."
+if [[ $have_rpm -eq 1 ]]; then
+    [[ "$(rpm_field "$scr" PREINPROG)" == "/bin/sh" ]] \
+        || fail "PREINPROG must be /bin/sh: $(rpm_field "$scr" PREINPROG)"
+    rpm -qp --scripts "$scr" | grep -q "echo prein" || fail "PREIN scriptlet missing."
+    rpm -qp --scripts "$scr" | grep -q "echo postun" || fail "POSTUN scriptlet missing."
+    rpm -qp --scripts "$scr" | grep -q "daemon-reload" \
+        || fail "The systemd daemon-reload epilogue missing from scriptlets."
+fi
+
+log "== variant: %config(noreplace) and compression =="
+publish_fixture configx >/dev/null -p:BundlerTestRpmConfigFiles='/usr/lib/bundler-rpm-fixture/docs/readme.txt'
+cfg="$(find "$integration_root/configx/linux-x64/rpm" -name '*.rpm' | head -n1)"
+[[ -n "$cfg" ]] || fail "The config variant produced no .rpm."
+# 升级语义需要不同 EVR：同包 Release=2 作为升级目标。
+publish_fixture configx-v2 >/dev/null \
+    -p:BundlerTestRpmConfigFiles='/usr/lib/bundler-rpm-fixture/docs/readme.txt' \
+    -p:BundlerTestRpmRelease=2
+cfg_v2="$(find "$integration_root/configx-v2/linux-x64/rpm" -name '*.rpm' | head -n1)"
+[[ -n "$cfg_v2" ]] || fail "The config v2 variant produced no .rpm."
+if [[ $have_rpm -eq 1 ]]; then
+    ff="$(rpm -qp --queryformat '[%{FILENAMES} %{FILEFLAGS}\n]' "$cfg" || true)"
+    echo "$ff" | grep -E '/etc/bundler-rpm-fixture/defaults\.conf +17' \
+        || fail "/etc file must carry flags 17 (config|noreplace): $ff"
+    echo "$ff" | grep -E '/usr/lib/bundler-rpm-fixture/docs/readme\.txt +17' \
+        || fail "Explicit ConfigFiles path must carry flags 17: $ff"
+    [[ "$(rpm_field "$cfg" PAYLOADCOMPRESSOR)" == "gzip" ]] \
+        || fail "PAYLOADCOMPRESSOR must be gzip."
+fi
+
+log "== variant: failure — bad scriptlet and compression =="
+if publish_fixture badscript >/dev/null 2>&1 -p:BundlerTestRpmCrlfScript=1; then
+    fail "A CRLF scriptlet must fail the publish."
+fi
+if publish_fixture badcfg >/dev/null 2>&1 -p:BundlerTestRpmConfigFiles='/usr/lib/bundler-rpm-fixture/missing.conf'; then
+    fail "A ConfigFiles path outside the payload must fail the publish."
+fi
+if publish_fixture badcomp >/dev/null 2>&1 -p:BundlerTestRpmCompression='xz'; then
+    fail "A non-gzip compression must fail the publish."
+fi
+
 log "== variant: deb;rpm multi-format fanout =="
 publish_fixture fanout >/dev/null -p:BundlerTestFormats="deb%3Brpm"
 fan_rpm="$(find "$integration_root/fanout/linux-x64/rpm" -name '*.rpm' 2>/dev/null | head -n1)"
@@ -322,13 +366,47 @@ if [[ $have_docker -eq 1 ]]; then
         ' || fail "rpm -i/-e failed in $image."
         log "docker matrix: $image PASS"
     done
+
+    if [[ -n "$scr" && -n "$cfg" ]]; then
+        log "== docker: scriptlet markers, %config .rpmsave, rpm -U upgrade =="
+        docker run --rm \
+            -v "$scr:/tmp/scripts.rpm:ro" -v "$cfg:/tmp/config.rpm:ro" \
+            -v "$cfg_v2:/tmp/config-v2.rpm:ro" \
+            fedora:latest sh -c '
+                set -e
+                rpm -i /tmp/scripts.rpm
+                grep -qx prein /tmp/bundler-rpm-scripts.log
+                grep -qx postin /tmp/bundler-rpm-scripts.log
+                grep -c . /tmp/bundler-rpm-scripts.log | grep -qx 2
+                test -f /usr/lib/systemd/system/bundler-rpm-fixture.service
+                rpm -e bundler-rpm-fixture
+                grep -qx preun /tmp/bundler-rpm-scripts.log
+                grep -qx postun /tmp/bundler-rpm-scripts.log
+                # %config(noreplace): 本地修改的 /etc 配置在卸载时保留为 .rpmsave。
+                rpm -i /tmp/config.rpm
+                echo changed > /etc/bundler-rpm-fixture/defaults.conf
+                rpm -e bundler-rpm-fixture
+                test -f /etc/bundler-rpm-fixture/defaults.conf.rpmsave
+                grep -qx changed /etc/bundler-rpm-fixture/defaults.conf.rpmsave
+                # rpm -U 真实升级（1.0.0-1 → 1.0.0-2）：修改过的 %config(noreplace)
+                # 原地保留、不产生 .rpmnew。
+                rpm -i /tmp/config.rpm
+                echo upgraded > /etc/bundler-rpm-fixture/defaults.conf
+                rpm -U /tmp/config-v2.rpm
+                rpm -q bundler-rpm-fixture | grep -q 1.0.0-2
+                grep -qx upgraded /etc/bundler-rpm-fixture/defaults.conf
+                test ! -e /etc/bundler-rpm-fixture/defaults.conf.rpmnew
+                rpm -e bundler-rpm-fixture
+            ' || fail "Scriptlet/config/upgrade semantics failed in fedora:latest."
+        log "docker: scriptlets + %config + rpm -U PASS"
+    fi
 else
     log "SKIP: docker unavailable; container install assertions skipped."
 fi
 
 if command -v rpmlint >/dev/null; then
     log "== rpmlint report (informational until the RPM-3 baseline) =="
-    rpmlint "$rpm_path" || log "note: rpmlint reported findings (baseline lands in RPM-3)."
+    rpmlint "$rpm_path" || log "note: rpmlint reported findings (baseline lands in RPM-4)."
 fi
 
-log "PASS: LINUX-RPM-1 integration checks complete."
+log "PASS: LINUX-RPM-1..3 integration checks complete."

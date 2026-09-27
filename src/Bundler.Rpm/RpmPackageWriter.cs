@@ -79,6 +79,13 @@ internal static class RpmPackageWriter
             }
         }
 
+        if (settings.Compression is { Length: > 0 } compression &&
+            !string.Equals(compression, "gzip", StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"The .rpm payload compression '{compression}' is not supported; only 'gzip' is available.");
+        }
+
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings);
         var cpio = CpioWriter.Write(payload.Select(ToCpioEntry).ToList());
         var compressedPayload = Gzip(cpio);
@@ -328,7 +335,77 @@ internal static class RpmPackageWriter
         RpmDependency.Emit(entries, settings.Obsoletes, 1090, 1114, 1115);   // OBSOLETE*
         RpmDependency.Emit(entries, settings.Recommends, 5046, 5048, 5047);  // RECOMMEND*
         RpmDependency.Emit(entries, settings.Suggests, 5049, 5051, 5050);    // SUGGEST*
+        EmitScriptlets(entries, settings);
         return entries;
+    }
+
+    // rpm scriptlets are interpreter-fed bodies: the PROG tag carries the
+    // interpreter (default /bin/sh) and the script tag carries the body with
+    // no shebang line. A managed systemd unit appends a daemon-reload epilogue
+    // to %post and %postun.
+    private static void EmitScriptlets(
+        List<RpmHeaderWriter.Entry> entries, RpmBundleConfiguration settings)
+    {
+        var daemonReload = settings.SystemdServiceFile is { Length: > 0 };
+        var epilogue = daemonReload
+            ? "\n# Bundler: systemd unit installed; reload unit definitions.\n" +
+              "systemctl daemon-reload > /dev/null 2>&1 || :\n"
+            : null;
+        Emit(entries, 1023, 1085, settings.PreInstallFile, settings.PreInstallProgram,
+            "PreInstallFile", epilogue: null);
+        Emit(entries, 1024, 1086, settings.PostInstallFile, settings.PostInstallProgram,
+            "PostInstallFile", epilogue);
+        Emit(entries, 1025, 1087, settings.PreUninstallFile, settings.PreUninstallProgram,
+            "PreUninstallFile", epilogue: null);
+        Emit(entries, 1026, 1088, settings.PostUninstallFile, settings.PostUninstallProgram,
+            "PostUninstallFile", epilogue);
+
+        static void Emit(
+            List<RpmHeaderWriter.Entry> entries, int scriptTag, int progTag,
+            string? file, string? program, string knob, string? epilogue)
+        {
+            var (body, shebangProg) = file is { Length: > 0 }
+                ? ReadScriptlet(file, knob)
+                : (null, null);
+            if (body is null && epilogue is null)
+            {
+                return;
+            }
+            if (epilogue is not null)
+            {
+                body = (body ?? "") + epilogue;
+            }
+            entries.Add(RpmHeaderWriter.Str(scriptTag, body!));
+            entries.Add(RpmHeaderWriter.Str(progTag, program ?? shebangProg ?? "/bin/sh"));
+        }
+    }
+
+    // Reads a caller-supplied scriptlet file: LF only; a "#!" first line is
+    // stripped from the body and supplies the interpreter when no explicit
+    // *Program knob is set.
+    private static (string? body, string? prog) ReadScriptlet(string path, string knob)
+    {
+        var full = FreedesktopFiles.RequireExisting(path, knob);
+        var text = File.ReadAllText(full);
+        if (text.IndexOf('\r') >= 0)
+        {
+            throw new ArgumentException(
+                $"The .rpm scriptlet '{knob}' must use LF line endings: {full}");
+        }
+        if (!text.StartsWith("#!", StringComparison.Ordinal))
+        {
+            return (text, null);
+        }
+        var lineEnd = text.IndexOf('\n');
+        var prog = (lineEnd < 0 ? text : text.Substring(0, lineEnd))
+            .Substring(2).Trim();
+        if (prog.Length == 0)
+        {
+            throw new ArgumentException(
+                $"The .rpm scriptlet '{knob}' has an empty shebang: {full}");
+        }
+        var body = lineEnd < 0 ? "" : text.Substring(lineEnd + 1);
+        return (body, prog);
     }
 
     private static string SummaryOf(BundleConfiguration bundle) =>
@@ -522,6 +599,32 @@ internal static class RpmPackageWriter
                 FreedesktopFiles.RequireExisting(file.Source, "RpmFile"), 420 /* 0644 */);
         }
 
+        if (settings.SystemdServiceFile is { Length: > 0 } unit)
+        {
+            AddFile("/usr/lib/systemd/system/" + packageName + ".service",
+                FreedesktopFiles.RequireExisting(unit, "SystemdServiceFile"), 420 /* 0644 */);
+        }
+
+        // %config(noreplace): /etc destinations of RpmFile entries are marked
+        // via FileFlagsFor; explicit ConfigFiles paths are resolved here and
+        // must already exist as regular files in the payload.
+        var byPath = new Dictionary<string, PayloadEntry>(StringComparer.Ordinal);
+        foreach (var entry in entries)
+        {
+            byPath[entry.ArchivePath] = entry;
+        }
+        foreach (var path in settings.ConfigFiles ?? [])
+        {
+            var destination = FreedesktopFiles.NormalizeAbsoluteDestination(path, "rpm");
+            if (!byPath.TryGetValue(destination, out var entry) ||
+                entry.IsDirectory || entry.IsSymlink)
+            {
+                throw new ArgumentException(
+                    $"The ConfigFiles entry '{path}' has no regular file in the payload.");
+            }
+            entry.FileFlags |= 17; // RPMFILE_CONFIG | RPMFILE_NOREPLACE
+        }
+
         // Emit the owned directory entries (install root plus everything below it).
         ClaimDirectory(installRoot);
         foreach (var dir in directories.OrderBy(d => d, StringComparer.Ordinal))
@@ -578,19 +681,25 @@ internal static class RpmPackageWriter
     // ---- helpers ------------------------------------------------------------
 
     // RPMFILE_* bits the package sets itself: files under the doc/man trees are
-    // documentation, files under /usr/share/licenses are license texts.
+    // documentation, files under /usr/share/licenses are license texts, files
+    // under /etc are %config(noreplace).
     private static int FileFlagsFor(string archivePath)
     {
+        var flags = 0;
         if (archivePath.StartsWith("/usr/share/licenses/", StringComparison.Ordinal))
         {
-            return 128; // RPMFILE_LICENSE
+            flags |= 128; // RPMFILE_LICENSE
         }
         if (archivePath.StartsWith("/usr/share/doc/", StringComparison.Ordinal) ||
             archivePath.StartsWith("/usr/share/man/", StringComparison.Ordinal))
         {
-            return 2; // RPMFILE_DOC
+            flags |= 2; // RPMFILE_DOC
         }
-        return 0;
+        if (archivePath.StartsWith("/etc/", StringComparison.Ordinal))
+        {
+            flags |= 17; // RPMFILE_CONFIG | RPMFILE_NOREPLACE
+        }
+        return flags;
     }
 
     internal static string MapArchitecture(CpuArchitecture architecture) => architecture switch

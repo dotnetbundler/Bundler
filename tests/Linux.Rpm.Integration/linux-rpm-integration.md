@@ -1,6 +1,6 @@
 # Linux .rpm 集成测试
 
-LINUX-RPM-1/2 的本机真实验证入口：真实 .NET payload → `BundlerFormats=rpm` → `rpm -qip`/`--queryformat` 逐字段断言（含关系字段三件套与 FILEFLAGS %doc/%license）→ `desktop-file-validate` → `rpm2cpio`/`cpio` 载荷回读 → docker `fedora:latest` 容器真实 `rpm -i`/`rpm -ql` 逐路径/`rpm -e` 零残留。
+LINUX-RPM-1..3 的本机真实验证入口：真实 .NET payload → `BundlerFormats=rpm` → `rpm -qip`/`--queryformat` 逐字段断言（含关系字段三件套与 FILEFLAGS %doc/%license）→ `desktop-file-validate` → `rpm2cpio`/`cpio` 载荷回读 → docker `fedora:latest` 容器真实 `rpm -i`/`rpm -ql` 逐路径/`rpm -e` 零残留。
 
 ## 运行
 
@@ -33,8 +33,9 @@ bash tests/Linux.Rpm.Integration/Verify.sh
 - 关系字段变体：Requires/Provides/Conflicts/Obsoletes/Recommends/Suggests 与 License/Group/Url 覆盖经 `rpm -qp --requires/--provides/--conflicts/--obsoletes/--recommends/--suggests` 与 `--queryformat` 逐项断言；
 - 失败变体扩展：非法依赖子句（`!=`）与相对 `BundlerRpmFile` 目标均使 publish 失败；
 - 容器断言扩展：装后 `rpm -ql` 逐路径 + `rpm -qd` %doc 可见 + 卸载带走包自有叶子目录；
+- RPM-3 断言：`-p:BundlerTestRpmScripts=1` 变体在容器内真实执行 `%pre`/`%post`/`%preun`/`%postun`（标记文件逐行断言）、systemd unit 落位与 `daemon-reload` 合成；`%config(noreplace)` 语义——`rpm -e` 对修改过的 `/etc` 文件保留 `.rpmsave`、`rpm -U` 升级（Release=1→2）原地保留；CRLF scriptlet/越界 ConfigFiles/非 gzip 压缩三失败变体；
 - `tests/Rpm.Api.PackageFixture`（直接 API 消费 `DotNet.Bundler.Rpm` NuGet 包）冒烟；
-- `rpmlint` 信息级跑全包（不阻断）——基线硬断言在 LINUX-RPM-4 落地，残余发现届时入档豁免清单。
+- `rpmlint` 信息级跑全包（不阻断）——基线硬断言在 LINUX-RPM-4 落地，当前残余 6E3W（no-signature/no-packager/no-group/no-changelogname/invalid-license/rpath×2/summary-dot/no-manual-page）。
 
 ## 已知边界
 

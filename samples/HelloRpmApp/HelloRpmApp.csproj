@@ -58,6 +58,14 @@
     <BundlerRpmMetainfoFile>$(MSBuildThisFileDirectory)Assets/app.metainfo.xml</BundlerRpmMetainfoFile>
     <BundlerRpmMetainfoFile Condition="'$(HelloRpmMetainfoFile)' != ''">$(HelloRpmMetainfoFile)</BundlerRpmMetainfoFile>
     <BundlerRpmChangelogFile>$(MSBuildThisFileDirectory)Assets/CHANGELOG.md</BundlerRpmChangelogFile>
+    <BundlerRpmConfigFiles Condition="'$(HelloRpmConfigFiles)' != ''">$(HelloRpmConfigFiles)</BundlerRpmConfigFiles>
+    <BundlerRpmSystemdServiceFile Condition="'$(HelloRpmSystemdServiceFile)' != ''">$(HelloRpmSystemdServiceFile)</BundlerRpmSystemdServiceFile>
+    <BundlerRpmPostInstallFile Condition="'$(HelloRpmPostInstallFile)' != ''">$(HelloRpmPostInstallFile)</BundlerRpmPostInstallFile>
+    <BundlerRpmPreInstallFile Condition="'$(HelloRpmPreInstallFile)' != ''">$(HelloRpmPreInstallFile)</BundlerRpmPreInstallFile>
+    <BundlerRpmPreUninstallFile Condition="'$(HelloRpmPreUninstallFile)' != ''">$(HelloRpmPreUninstallFile)</BundlerRpmPreUninstallFile>
+    <BundlerRpmPostUninstallFile Condition="'$(HelloRpmPostUninstallFile)' != ''">$(HelloRpmPostUninstallFile)</BundlerRpmPostUninstallFile>
+    <BundlerRpmPostInstallProgram Condition="'$(HelloRpmPostInstallProgram)' != ''">$(HelloRpmPostInstallProgram)</BundlerRpmPostInstallProgram>
+    <BundlerRpmCompression Condition="'$(HelloRpmCompression)' != ''">$(HelloRpmCompression)</BundlerRpmCompression>
     <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets/LICENSE.txt</BundlerLicenseFile>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />

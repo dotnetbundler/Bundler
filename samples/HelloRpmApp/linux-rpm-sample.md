@@ -113,6 +113,26 @@ sudo rpm -e hello-rpm-app
 
   注意：MSBuild `-p:` 传含分号的属性须用 `%3B` 转义（关系字段列表同理）。
 
-## 已知边界（LINUX-RPM-2 未做）
+- **维护者 scriptlet**（`%pre`/`%post`/`%preun`/`%postun` 专家旋钮，文件注入；LF 行尾强制，`#!` 首行剥离为解释器 tag，缺省 `/bin/sh`，`*Program` 属性可显式覆盖）：
 
-维护者 scriptlet（PREIN/POSTIN/PREUN/POSTUN）、systemd unit、`%config(noreplace)` 标记（`/etc` 文件暂为普通文件）、非 gzip 压缩、GPG 签名、rpmlint 硬基线——属 LINUX-RPM-3/4 或已登记边界；详见 `docs/linux-rpm-roadmap.md`。
+  ```bash
+  dotnet publish ... -p:HelloRpmPostInstallFile="$PWD/samples/HelloRpmApp/Assets/post-install.sh"
+  ```
+
+- **托管 systemd unit**（`BundlerRpmSystemdServiceFile` 落 `/usr/lib/systemd/system/<包名>.service`；`%post`/`%postun` 自动合成 `daemon-reload` 尾段，装而不启）：
+
+  ```bash
+  dotnet publish ... -p:HelloRpmSystemdServiceFile="$PWD/samples/HelloRpmApp/Assets/hello-rpm-app.service"
+  ```
+
+- **`%config(noreplace)`**（`/etc` 下的 `BundlerRpmFile` 目标自动标记；`BundlerRpmConfigFiles` 显式列表可把任意载荷路径标为 `%config(noreplace)`——装后本地修改经 `rpm -e` 保留为 `.rpmsave`、`rpm -U` 升级原地保留）：
+
+  ```bash
+  dotnet publish ... -p:HelloRpmConfigFiles="/etc/hello-rpm-app/defaults.conf"
+  ```
+
+- **压缩枚举**：仅 `gzip`；xz/zstd 登记拒绝（netstandard2.0 无托管编码器）。
+
+## 已知边界（LINUX-RPM-3 未做）
+
+GPG 包签名、rpmlint 硬基线、rockylinux/opensuse 容器矩阵、arm64 真机安装——属 LINUX-RPM-4/后续独立阶段或已登记边界；详见 `docs/linux-rpm-roadmap.md` 与 `linux-rpm-open-items.md`。

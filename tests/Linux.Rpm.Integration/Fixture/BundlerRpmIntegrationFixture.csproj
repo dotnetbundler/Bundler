@@ -39,6 +39,15 @@
     <BundlerRpmMetainfoFile Condition="'$(BundlerTestRpmMetainfoFile)' != ''">$(BundlerTestRpmMetainfoFile)</BundlerRpmMetainfoFile>
     <BundlerRpmChangelogFile>$(MSBuildThisFileDirectory)Assets/CHANGELOG.md</BundlerRpmChangelogFile>
     <BundlerFormats Condition="'$(BundlerTestFormats)' != ''">$(BundlerTestFormats)</BundlerFormats>
+    <BundlerRpmPreInstallFile Condition="'$(BundlerTestRpmScripts)' == '1'">$(MSBuildThisFileDirectory)Assets/preinstall.sh</BundlerRpmPreInstallFile>
+    <BundlerRpmPostInstallFile Condition="'$(BundlerTestRpmScripts)' == '1'">$(MSBuildThisFileDirectory)Assets/postinstall.sh</BundlerRpmPostInstallFile>
+    <BundlerRpmPreUninstallFile Condition="'$(BundlerTestRpmScripts)' == '1'">$(MSBuildThisFileDirectory)Assets/preuninstall.sh</BundlerRpmPreUninstallFile>
+    <BundlerRpmPostUninstallFile Condition="'$(BundlerTestRpmScripts)' == '1'">$(MSBuildThisFileDirectory)Assets/postuninstall.sh</BundlerRpmPostUninstallFile>
+    <BundlerRpmPreInstallFile Condition="'$(BundlerTestRpmCrlfScript)' == '1'">$(MSBuildThisFileDirectory)Assets/bad-crlf.sh</BundlerRpmPreInstallFile>
+    <BundlerRpmPreInstallProgram Condition="'$(BundlerTestRpmProg)' != ''">$(BundlerTestRpmProg)</BundlerRpmPreInstallProgram>
+    <BundlerRpmSystemdServiceFile Condition="'$(BundlerTestRpmSystemd)' == '1'">$(MSBuildThisFileDirectory)Assets/fixture.service</BundlerRpmSystemdServiceFile>
+    <BundlerRpmConfigFiles Condition="'$(BundlerTestRpmConfigFiles)' != ''">$(BundlerTestRpmConfigFiles)</BundlerRpmConfigFiles>
+    <BundlerRpmCompression Condition="'$(BundlerTestRpmCompression)' != ''">$(BundlerTestRpmCompression)</BundlerRpmCompression>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>

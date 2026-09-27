@@ -171,5 +171,16 @@
     <BundlerRpmDesktopFile Condition="'$(BundlerRpmDesktopFile)' == ''"></BundlerRpmDesktopFile>
     <BundlerRpmMetainfoFile Condition="'$(BundlerRpmMetainfoFile)' == ''"></BundlerRpmMetainfoFile>
     <BundlerRpmChangelogFile Condition="'$(BundlerRpmChangelogFile)' == ''"></BundlerRpmChangelogFile>
+    <BundlerRpmConfigFiles Condition="'$(BundlerRpmConfigFiles)' == ''"></BundlerRpmConfigFiles>
+    <BundlerRpmSystemdServiceFile Condition="'$(BundlerRpmSystemdServiceFile)' == ''"></BundlerRpmSystemdServiceFile>
+    <BundlerRpmPreInstallFile Condition="'$(BundlerRpmPreInstallFile)' == ''"></BundlerRpmPreInstallFile>
+    <BundlerRpmPostInstallFile Condition="'$(BundlerRpmPostInstallFile)' == ''"></BundlerRpmPostInstallFile>
+    <BundlerRpmPreUninstallFile Condition="'$(BundlerRpmPreUninstallFile)' == ''"></BundlerRpmPreUninstallFile>
+    <BundlerRpmPostUninstallFile Condition="'$(BundlerRpmPostUninstallFile)' == ''"></BundlerRpmPostUninstallFile>
+    <BundlerRpmPreInstallProgram Condition="'$(BundlerRpmPreInstallProgram)' == ''"></BundlerRpmPreInstallProgram>
+    <BundlerRpmPostInstallProgram Condition="'$(BundlerRpmPostInstallProgram)' == ''"></BundlerRpmPostInstallProgram>
+    <BundlerRpmPreUninstallProgram Condition="'$(BundlerRpmPreUninstallProgram)' == ''"></BundlerRpmPreUninstallProgram>
+    <BundlerRpmPostUninstallProgram Condition="'$(BundlerRpmPostUninstallProgram)' == ''"></BundlerRpmPostUninstallProgram>
+    <BundlerRpmCompression Condition="'$(BundlerRpmCompression)' == ''"></BundlerRpmCompression>
   </PropertyGroup>
 </Project>

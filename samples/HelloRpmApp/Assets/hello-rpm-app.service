@@ -1,0 +1,8 @@
+[Unit]
+Description=Hello RPM App
+After=network.target
+[Service]
+Type=simple
+ExecStart=/usr/bin/hello-rpm-app
+[Install]
+WantedBy=multi-user.target

@@ -210,6 +210,17 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string RpmMetainfoFile { get; set; } = "";
     public string RpmChangelogFile { get; set; } = "";
     public ITaskItem[] RpmFiles { get; set; } = Array.Empty<ITaskItem>();
+    public string RpmConfigFiles { get; set; } = "";
+    public string RpmSystemdServiceFile { get; set; } = "";
+    public string RpmPreInstallFile { get; set; } = "";
+    public string RpmPostInstallFile { get; set; } = "";
+    public string RpmPreUninstallFile { get; set; } = "";
+    public string RpmPostUninstallFile { get; set; } = "";
+    public string RpmPreInstallProgram { get; set; } = "";
+    public string RpmPostInstallProgram { get; set; } = "";
+    public string RpmPreUninstallProgram { get; set; } = "";
+    public string RpmPostUninstallProgram { get; set; } = "";
+    public string RpmCompression { get; set; } = "";
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -527,6 +538,17 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         DesktopFile = OptionalFullPath(RpmDesktopFile),
                         MetainfoFile = OptionalFullPath(RpmMetainfoFile),
                         ChangelogFile = OptionalFullPath(RpmChangelogFile),
+                        ConfigFiles = SplitList(RpmConfigFiles),
+                        SystemdServiceFile = OptionalFullPath(RpmSystemdServiceFile),
+                        PreInstallFile = OptionalFullPath(RpmPreInstallFile),
+                        PostInstallFile = OptionalFullPath(RpmPostInstallFile),
+                        PreUninstallFile = OptionalFullPath(RpmPreUninstallFile),
+                        PostUninstallFile = OptionalFullPath(RpmPostUninstallFile),
+                        PreInstallProgram = EmptyToNull(RpmPreInstallProgram),
+                        PostInstallProgram = EmptyToNull(RpmPostInstallProgram),
+                        PreUninstallProgram = EmptyToNull(RpmPreUninstallProgram),
+                        PostUninstallProgram = EmptyToNull(RpmPostUninstallProgram),
+                        Compression = EmptyToNull(RpmCompression),
                         Files = RpmFiles.Select(item => new RpmFileEntry
                         {
                             Source = Path.GetFullPath(item.ItemSpec),
