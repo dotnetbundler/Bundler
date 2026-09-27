@@ -16,7 +16,19 @@ internal sealed class CliArguments
     {
         "input-dir", "output-dir", "rid", "formats", "product-name", "identifier",
         "package-version", "main-executable", "publisher", "description", "homepage",
-        "copyright", "license-file"
+        "copyright", "license-file", "config"
+    };
+
+    private static bool IsKnownValueOption(string name) =>
+        ValueOptions.Contains(name) ||
+        // --<format>.<knob> overrides (e.g. --deb.maintainer=…) merge into the
+        // matching bundler.json section; validated against real sections there.
+        (name.Contains('.') && FormatSections.Contains(
+            name[..name.IndexOf('.')].ToLowerInvariant()));
+
+    private static readonly HashSet<string> FormatSections = new(StringComparer.Ordinal)
+    {
+        "nsis", "msi", "app", "dmg", "pkg", "deb", "rpm", "appimage", "archive"
     };
 
     private static readonly HashSet<string> FlagOptions = new(StringComparer.Ordinal)
@@ -81,7 +93,7 @@ internal sealed class CliArguments
                 continue;
             }
 
-            if (!ValueOptions.Contains(name))
+            if (!IsKnownValueOption(name))
             {
                 throw CliUsageException($"Unknown option '--{name}'.");
             }

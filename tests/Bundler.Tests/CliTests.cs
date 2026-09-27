@@ -16,6 +16,10 @@ internal static class CliTests
             yield return ("Bundle produces a real zip artifact", () => RunSync(BundleProducesZip));
             yield return ("Bundle exits 2 on matrix violation", () => RunSync(BundleMatrixViolation));
             yield return ("--version prints the package version", () => RunSync(PrintsVersion));
+            yield return ("Config file drives bundle end-to-end", () => RunSync(ConfigFileBundle));
+            yield return ("CLI options override config file values", () => RunSync(ConfigCliOverride));
+            yield return ("Unknown config keys are rejected", () => RunSync(RejectsUnknownConfigKey));
+            yield return ("Dotted format knobs merge into config", () => RunSync(DottedKnobOverride));
         }
     }
 
@@ -193,6 +197,116 @@ internal static class CliTests
         finally
         {
             Directory.Delete(input, true);
+        }
+    }
+
+    static string WriteConfig(string input, string output)
+    {
+        var document = new
+        {
+            productName = "CfgApp",
+            identifier = "dev.example.cfg",
+            version = "2.0.0",
+            outputDirectory = output,
+            targets = new[]
+            {
+                new
+                {
+                    runtimeIdentifier = "linux-x64",
+                    inputDirectory = input,
+                    mainExecutable = "cli-fixture",
+                    formats = new[] { "zip" }
+                }
+            },
+            archive = new { archiveName = "from-config" },
+            deb = new { section = "utils" }
+        };
+        return System.Text.Json.JsonSerializer.Serialize(document);
+    }
+
+    static void ConfigFileBundle()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "bundler-cli-cfg-" + Guid.NewGuid().ToString("N"));
+        var config = Path.Combine(Path.GetTempPath(), $"bundler-{Guid.NewGuid():N}.json");
+        File.WriteAllText(config, WriteConfig(input, output));
+        try
+        {
+            var (code, stdout, err) = Run("bundle", "--config", config, "--quiet");
+            Assert(code == 0, $"config-driven bundle must exit 0, got {code}: {err}");
+            var zip = Path.Combine(output, "linux-x64", "zip", "from-config.zip");
+            Assert(File.Exists(zip), $"config archiveName must land at {zip}");
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            File.Delete(config);
+            if (Directory.Exists(output)) { Directory.Delete(output, true); }
+        }
+    }
+
+    static void ConfigCliOverride()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "bundler-cli-ovr-" + Guid.NewGuid().ToString("N"));
+        var config = Path.Combine(Path.GetTempPath(), $"bundler-{Guid.NewGuid():N}.json");
+        File.WriteAllText(config, WriteConfig(input, output));
+        try
+        {
+            var (code, stdout, _) = Run(
+                "plan", "--config", config, "--formats", "targz", "--json");
+            Assert(code == 0, $"plan must exit 0, got {code}");
+            Assert(stdout.Contains("\"format\":\"targz\"") && !stdout.Contains("\"zip\""),
+                "cli --formats must override the config file");
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            File.Delete(config);
+        }
+    }
+
+    static void RejectsUnknownConfigKey()
+    {
+        var input = CreateInputDirectory();
+        var config = Path.Combine(Path.GetTempPath(), $"bundler-{Guid.NewGuid():N}.json");
+        File.WriteAllText(config, WriteConfig(input, "/tmp/x").Replace(
+            "\"archive\"", "\"achive\""));
+        try
+        {
+            var (code, _, err) = Run("plan", "--config", config);
+            Assert(code == 2, $"unknown config key must exit 2, got {code}");
+            Assert(err.Contains("achive"), "error must name the unknown key");
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            File.Delete(config);
+        }
+    }
+
+    static void DottedKnobOverride()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "bundler-cli-dot-" + Guid.NewGuid().ToString("N"));
+        var config = Path.Combine(Path.GetTempPath(), $"bundler-{Guid.NewGuid():N}.json");
+        File.WriteAllText(config, WriteConfig(input, output));
+        try
+        {
+            var (code, stdout, err) = Run(
+                "bundle", "--config", config, "--archive.archive-name=dotted-override", "--quiet");
+            Assert(code == 0, $"dotted-knob bundle must exit 0, got {code}: {err}");
+            Assert(File.Exists(Path.Combine(output, "linux-x64", "zip", "dotted-override.zip")),
+                "--archive.archive-name must override the config file");
+            var (badCode, _, badErr) = Run("plan", "--config", config, "--deb.bogus=1");
+            Assert(badCode == 2, $"unknown dotted knob must exit 2, got {badCode}");
+            Assert(badErr.Contains("deb.bogus"), "error must name the unknown knob");
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            File.Delete(config);
+            if (Directory.Exists(output)) { Directory.Delete(output, true); }
         }
     }
 

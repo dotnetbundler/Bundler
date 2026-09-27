@@ -61,47 +61,18 @@ public static class CliProgram
         }
 
         var logger = new CliBundleLogger(stderr, parsed.Quiet, parsed.Verbose);
-        var configuration = BuildConfiguration(parsed);
+        var resolved = CliConfig.Resolve(parsed);
+        var configuration = resolved.Bundle;
         return parsed.Command switch
         {
             "validate" => RunValidate(configuration, parsed, stdout, stderr),
             "plan" => RunPlan(configuration, parsed, stdout),
-            "bundle" => RunBundle(configuration, parsed, stdout, logger),
+            "bundle" => RunBundle(configuration, resolved, parsed, stdout, logger),
             _ => 2
         };
     }
 
-    internal static BundleConfiguration BuildConfiguration(CliArguments parsed)
-    {
-        var formats = ParseFormats(
-            parsed.RequiredOption("formats"),
-            parsed.RequiredOption("rid"));
-        return new BundleConfiguration
-        {
-            ProductName = parsed.RequiredOption("product-name"),
-            Identifier = parsed.RequiredOption("identifier"),
-            Version = parsed.RequiredOption("package-version"),
-            Publisher = parsed.OptionalOption("publisher"),
-            Description = parsed.OptionalOption("description"),
-            Homepage = parsed.OptionalOption("homepage"),
-            Copyright = parsed.OptionalOption("copyright"),
-            LicenseFile = parsed.OptionalOption("license-file") is { } license
-                ? Path.GetFullPath(license)
-                : null,
-            OutputDirectory = Path.GetFullPath(
-                parsed.OptionalOption("output-dir") ?? "bundler-out"),
-            Targets =
-            [
-                new BundleTargetConfiguration
-                {
-                    RuntimeIdentifier = parsed.RequiredOption("rid"),
-                    InputDirectory = Path.GetFullPath(parsed.RequiredOption("input-dir")),
-                    MainExecutable = parsed.OptionalOption("main-executable"),
-                    Formats = formats
-                }
-            ]
-        };
-    }
+
 
     internal static IReadOnlyList<PackageFormat> ParseFormats(string value, string rid)
     {
@@ -203,14 +174,15 @@ public static class CliProgram
     }
 
     private static int RunBundle(
-        BundleConfiguration configuration, CliArguments parsed, TextWriter stdout, IBundleLogger logger)
+        BundleConfiguration configuration, CliResolvedConfiguration resolved,
+        CliArguments parsed, TextWriter stdout, IBundleLogger logger)
     {
-        var formats = configuration.Targets[0].Formats.Distinct().ToArray();
+        var formats = configuration.Targets.SelectMany(t => t.Formats).Distinct().ToArray();
         var artifacts = new List<BundleArtifact>();
         foreach (var format in formats)
         {
             var single = SingleFormatConfiguration(configuration, format);
-            var produced = FormatDispatcher.BuildAsync(format, single, logger)
+            var produced = FormatDispatcher.BuildAsync(format, single, resolved, logger)
                 .GetAwaiter().GetResult();
             artifacts.AddRange(produced);
         }

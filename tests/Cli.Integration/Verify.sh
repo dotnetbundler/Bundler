@@ -125,4 +125,56 @@ code=$?
 chmod 755 "$empty_dir/locked"
 [ "$code" -eq 1 ] || die "backend failure must exit 1, got $code"
 
+log "bundler.json drives bundle; CLI options and dotted knobs override"
+CFG_DIR="$ARTIFACTS/cfg"; mkdir -p "$CFG_DIR/docs"
+printf 'readme-content' > "$CFG_DIR/docs/readme.txt"
+cat > "$CFG_DIR/bundler.json" <<EOF
+{
+  "productName": "CfgApp",
+  "identifier": "dev.example.cfg",
+  "version": "2.0.0",
+  "outputDirectory": "$CFG_DIR/out",
+  "targets": [{
+    "runtimeIdentifier": "linux-x64",
+    "inputDirectory": "$PUBLISH_DIR",
+    "mainExecutable": "BundlerCliIntegrationFixture",
+    "formats": ["zip"]
+  }],
+  "archive": {
+    "archiveName": "from-config",
+    "files": [{ "source": "docs/readme.txt", "destination": "docs/readme.txt" }]
+  },
+  "deb": { "section": "utils", "maintainer": "Lin <lin@example.com>" }
+}
+EOF
+$CLI bundle --config "$CFG_DIR/bundler.json" --quiet \
+  || die "config-driven bundle must exit 0"
+CFG_ZIP="$CFG_DIR/out/linux-x64/zip/from-config.zip"
+[ -f "$CFG_ZIP" ] || die "config archiveName must produce from-config.zip"
+python3 -c 'import zipfile,sys; n=zipfile.ZipFile(sys.argv[1]).namelist(); \
+  assert any(e.endswith("/docs/readme.txt") for e in n), n' \
+  "$CFG_ZIP" || die "config file mapping must land docs/readme.txt"
+
+$CLI plan --config "$CFG_DIR/bundler.json" --formats targz --json > "$ARTIFACTS/ovr.json" \
+  || die "plan with --formats override must exit 0"
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); \
+  f=[i["format"] for i in d["items"]]; assert f==["targz"], f' \
+  "$ARTIFACTS/ovr.json" || die "--formats must override config formats"
+
+$CLI bundle --config "$CFG_DIR/bundler.json" --archive.archive-name=dotted --quiet \
+  || die "dotted-knob bundle must exit 0"
+[ -f "$CFG_DIR/out/linux-x64/zip/dotted.zip" ] \
+  || die "--archive.archive-name must override the config file"
+
+log "unknown config keys and dotted knobs are rejected"
+python3 -c 'import sys; s=open(sys.argv[1]).read(); \
+  open(sys.argv[2],"w").write(s.replace("\"archive\"","\"achive\""))' \
+  "$CFG_DIR/bundler.json" "$CFG_DIR/bad.json"
+$CLI plan --config "$CFG_DIR/bad.json" >/dev/null 2>&1; code=$?
+[ "$code" -eq 2 ] || die "unknown top-level key must exit 2, got $code"
+$CLI plan --config "$CFG_DIR/bundler.json" --deb.bogus=1 >/dev/null 2>&1; code=$?
+[ "$code" -eq 2 ] || die "unknown dotted knob must exit 2, got $code"
+$CLI plan --config "$CFG_DIR/missing.json" >/dev/null 2>&1; code=$?
+[ "$code" -eq 2 ] || die "missing config file must exit 2, got $code"
+
 log "all CLI integration assertions passed"

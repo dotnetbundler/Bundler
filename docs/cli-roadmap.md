@@ -60,3 +60,12 @@
 - 单元测试：`Bundler.Tests` 新增 10 项（用法/退出码/json 形态/`all` 展开/真实 zip 产物/矩阵拒绝），合计 194/194 全绿。
 - `tests/Cli.Integration/Verify.sh` 全绿：真实 publish 目录上五格式 bundle（deb/rpm/appimage/zip/targz 产物逐件断言 + sha256 侧车）、`--json` 形状断言、退出码分级（含后端失败=1 用 chmod 000 文件触发）、quiet/verbose 行为。
 - 本机不产格式（nsis/msi/app/dmg/pkg）：CLI 面可达、经 validate/plan 覆盖；真实打包装上 Windows/macOS 宿主，登记 MT-01/02。
+
+### CLI-2（`0.1.0-alpha.61`，分支 `cli-development`）
+
+- `bundler.json` schema 固化：顶层字段与 `BundleConfiguration` 一一对应（`productName`/`identifier`/`version`/`publisher`/`description`/`homepage`/`copyright`/`licenseFile`/`outputDirectory`/`icons`/`resources`/`fileAssociations`/`urlProtocols`/`targets`），`targets[]` 项为 `runtimeIdentifier`/`inputDirectory`/`mainExecutable`/`signingFiles`/`formats`；格式段 `nsis|msi|app|dmg|pkg|deb|rpm|appimage|archive` 直接反序列化进各 `XxxBundleConfiguration`。
+- 层叠：`--config` 载入文件 → CLI 共享参数覆盖顶层字段 → 目标参数（`--rid`/`--input-dir`/`--main-executable`/`--formats`）写 `targets[0]` → `--<fmt>.<knob>=<v>` 并入格式段；值自动判型（true/false/整数/`[`/`{` 字面量/逗号列表/字符串）。
+- 严格 schema：未知顶层键、`targets[]` 键、格式段旋钮一律拒绝并列出合法键名（退出码 2）；`--config` 缺失/非对象同 2。
+- 相对路径按配置文件目录解析（`licenseFile`/`outputDirectory`/`icons`/`resources[].source`/`targets[].inputDirectory`/`signingFiles` + 格式段 `*File`/`*Path` 标量与 `files`/`payloadItems`/`contents`/`frameworks` 数组的 `source`）。
+- 单元测试：`Bundler.Tests` 新增 4 项（config 驱动 bundle、CLI 覆盖文件值、未知键拒绝、点号旋钮并入），合计 198/198 全绿。
+- `tests/Cli.Integration/Verify.sh` 扩展全绿：config 驱动 zip+文件映射断言、`--formats` 覆盖、`--archive.archive-name` 点号覆盖、未知顶层键/未知点号旋钮/缺失文件三拒绝路径。

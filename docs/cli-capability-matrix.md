@@ -13,8 +13,8 @@
 | `--json` 机器可读输出 | 已实现 | CLI-1 | stdout=JSON、stderr=人类日志 |
 | `--quiet`/`--verbose` 三档日志 | 已实现 | CLI-1 | 走 `IBundleLogger` 适配 |
 | `--help`/`--version` | 已实现 | CLI-1 | — |
-| `bundler.json` 配置 + 参数层叠 | 计划实现 | CLI-2 | schema 与 MSBuild `Bundler*` 一一对应 |
-| 全格式旋钮透传（`--<format>.<knob>=`） | 计划实现 | CLI-2 | 高频项参数化，文件映射仅配置承载 |
+| `bundler.json` 配置 + 参数层叠 | 已实现 | CLI-2 | schema 与 MSBuild `Bundler*` 一一对应；未知键拒绝；相对路径按配置文件目录解析 |
+| 全格式旋钮透传（`--<format>.<knob>=`） | 已实现 | CLI-2 | 高频项参数化，文件映射仅配置承载；未知旋钮拒绝 |
 | `dotnet tool` 分发（`bundler`） | 计划实现 | CLI-3 | `DotNetCliTool` nupkg |
 | 自包含/AOT 单二进制分发 | 外部待验收 | — | OI-01：体积与 RID 扇出成本需实测 |
 | 旧 `src/Bundler.Cli` 原型 | 已删除 | CLI-1 | 164 行 NSIS-only，不承诺兼容 |

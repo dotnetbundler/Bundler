@@ -4083,3 +4083,8 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 
 - 删除 164 行 NSIS-only 旧原型，重建 `src/Bundler.Cli`：validate/plan/bundle + 手写解析器 + 三级退出码（0/1/2）+ `--json` + quiet/verbose 三档 + `DOTNET_BUNDLER_VERBOSE` + `--formats all`。
 - `Bundler.Tests` 184→194 全绿；`tests/Cli.Integration/Verify.sh` 全绿（五格式真实产出、退出码分级、json 形状、quiet/verbose）。
+
+## 2026-09-27 CLI-2（`0.1.0-alpha.61`，分支 `cli-development`）
+
+- `bundler.json` schema 固化：共享字段 + `targets[]` + 九格式段；`--config` 层叠 + CLI 覆盖 + `--<fmt>.<knob>=` 透传；相对路径按配置目录解析；未知键/旋钮严格拒绝。
+- `Bundler.Tests` 194→198 全绿；`tests/Cli.Integration/Verify.sh` 扩 config 驱动/覆盖/三拒绝路径全绿。
