@@ -15,5 +15,6 @@
     <ProjectReference Include="..\..\src\Bundler.Nsis\Bundler.Nsis.csproj" />
     <ProjectReference Include="..\..\src\Bundler.Wix\Bundler.Wix.csproj" />
     <ProjectReference Include="..\..\src\Bundler.Signing.Windows\Bundler.Signing.Windows.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Cli\Bundler.Cli.csproj" />
   </ItemGroup>
 </Project>

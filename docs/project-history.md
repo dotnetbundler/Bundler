@@ -4078,3 +4078,8 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 - `tauri-cli` 审计取舍：`--bundles` 参数优先于配置文件、config 层叠、verbosity 环境变量模式采纳；dev/init/migrate/mobile/hooks 属开发工具链职责，不引入。
 - 产出 `docs/cli-roadmap.md`：15 项决策（三命令面/手写解析器/`bundler.json`+参数层叠/`--json`/三级退出码/三档日志/删除旧原型/dotnet tool 首发）+ MSBuild↔CLI 映射表 + `CLI-1..3` 阶段表。
 - 配套 cli-capability-matrix / cli-manual-testing / cli-open-items 三件套与 manual-testing-index 行。
+
+## 2026-09-27 CLI-1（`0.1.0-alpha.60`，分支 `cli-development`）
+
+- 删除 164 行 NSIS-only 旧原型，重建 `src/Bundler.Cli`：validate/plan/bundle + 手写解析器 + 三级退出码（0/1/2）+ `--json` + quiet/verbose 三档 + `DOTNET_BUNDLER_VERBOSE` + `--formats all`。
+- `Bundler.Tests` 184→194 全绿；`tests/Cli.Integration/Verify.sh` 全绿（五格式真实产出、退出码分级、json 形状、quiet/verbose）。

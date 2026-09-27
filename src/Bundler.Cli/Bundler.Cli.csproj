@@ -2,10 +2,19 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <AssemblyName>bundler</AssemblyName>
+    <RootNamespace>DotNet.Bundler.Cli</RootNamespace>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
     <ProjectReference Include="..\Bundler.Nsis\Bundler.Nsis.csproj" />
+    <ProjectReference Include="..\Bundler.Wix\Bundler.Wix.csproj" />
+    <ProjectReference Include="..\Bundler.MacApp\Bundler.MacApp.csproj" />
+    <ProjectReference Include="..\Bundler.MacDmg\Bundler.MacDmg.csproj" />
+    <ProjectReference Include="..\Bundler.MacPkg\Bundler.MacPkg.csproj" />
+    <ProjectReference Include="..\Bundler.Deb\Bundler.Deb.csproj" />
+    <ProjectReference Include="..\Bundler.Rpm\Bundler.Rpm.csproj" />
+    <ProjectReference Include="..\Bundler.AppImage\Bundler.AppImage.csproj" />
+    <ProjectReference Include="..\Bundler.Archive\Bundler.Archive.csproj" />
   </ItemGroup>
 </Project>

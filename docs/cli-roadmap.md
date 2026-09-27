@@ -48,4 +48,15 @@
 
 ## 4. 阶段实施证据
 
-（实施阶段回填。）
+### CLI-1（`0.1.0-alpha.60`，分支 `cli-development`）
+
+- 删除旧 `src/Bundler.Cli` 原型（164 行 NSIS-only、`IsPackable=false`），按决策面重建。
+- `src/Bundler.Cli`（`bundler` exe）：手写参数解析器（`--name value`/`--name=value`/旗标/拒未知项与重复项）；`validate`/`plan`/`bundle` 三命令；`--input-dir`/`--rid`/`--formats`/`--product-name`/`--identifier`/`--package-version`/`--output-dir`/`--main-executable`/`--publisher`/`--description`/`--homepage`/`--copyright`/`--license-file` 参数面。
+- 三级退出码：0 成功 / 1 后端或 IO 失败 / 2 用法或配置校验失败；`BundleValidationException` 归 2。
+- `--json`：`validate`/`plan`/`bundle` stdout 只出 JSON（`valid`+`issues` / `items[]` / `artifacts[]`），日志走 stderr。
+- 日志三档：默认 Information 起；`--quiet` 只留 Error；`--verbose` 加 Trace；`DOTNET_BUNDLER_VERBOSE` 环境变量同效。
+- `--formats all` 按 rid 展开矩阵支持集（linux-x64 → deb/rpm/appimage/zip/targz）；`tar.gz` 作为 `targz` 别名接受。
+- `FormatDispatcher`：格式→门面映射，逐格式单格式配置分发（与 MSBuild 任务同一契约）。
+- 单元测试：`Bundler.Tests` 新增 10 项（用法/退出码/json 形态/`all` 展开/真实 zip 产物/矩阵拒绝），合计 194/194 全绿。
+- `tests/Cli.Integration/Verify.sh` 全绿：真实 publish 目录上五格式 bundle（deb/rpm/appimage/zip/targz 产物逐件断言 + sha256 侧车）、`--json` 形状断言、退出码分级（含后端失败=1 用 chmod 000 文件触发）、quiet/verbose 行为。
+- 本机不产格式（nsis/msi/app/dmg/pkg）：CLI 面可达、经 validate/plan 覆盖；真实打包装上 Windows/macOS 宿主，登记 MT-01/02。
