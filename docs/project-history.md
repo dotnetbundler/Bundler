@@ -4100,3 +4100,7 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 - `src/Bundler.Cli` 开 `PublishAot`：source-gen `BundlerJsonContext` 取代反射反序列化与键枚举；JSON 输出改 `JsonObject` DOM；`JsonNode.Parse` 补注释/尾逗号选项。
 - `dotnet publish -r linux-x64` 产出 ~49.5MB 原生 ELF，免 `DOTNET_ROOT` 直跑；`Verify.sh` 增 AOT 段全绿；`Bundler.Tests` 198/198。
 - CLI-OI-01（AOT 分发评估）消解；CLI 契约冻结基线移至 `alpha.62`。
+
+## 2026-09-27 需求登记：应用自更新/升级包
+
+- 用户提出新需求方向“升级/更新包”，记入 `docs/roadmap.md` §7.2 候选清单，暂缓实施；正式立项需先明确更新通道、信任模型、各宿主语义与回滚策略。
