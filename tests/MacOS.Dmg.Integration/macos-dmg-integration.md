@@ -25,5 +25,6 @@ bash tests/MacOS.Dmg.Integration/Verify.sh
 - `hdiutil detach` + `hdiutil verify` 校验通过；
 - `BundlerMacDmgCompression=Udzo` 变体：`hdiutil imageinfo` 断言 `Format: UDZO` 并可挂载；
 - `BundlerMacDmgSkipWindowLayout=true` 变体：构建产物照常验证（跳过 osascript 的断言在单测覆盖）。
+- MAC-DMG-3 EULA+签名变体（`BundlerTestDmgLicense=true` + `BundlerTestDmgSignIdentity=-`）：`hdiutil udifderez -xml` 回读断言 `LPic`/`STR#`/`TEXT` SLA 资源已注入；`codesign --verify` 通过且 `codesign -dvvv` 报 `Signature=adhoc`。
 
 产物仅落在 `artifacts/macos-dmg-integration`（脚本用 `.bundler-identity` 标记自建目录，退出时整体清理；已挂载卷强制 detach）。

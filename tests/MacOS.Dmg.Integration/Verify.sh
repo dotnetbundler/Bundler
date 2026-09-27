@@ -135,4 +135,28 @@ skip_dmg="$integration_root/bundle-skip/osx-arm64/dmg/Bundler Mac DMG Fixture.dm
 [[ -f "$skip_dmg" ]] || fail "The SkipWindowLayout .dmg variant is missing."
 hdiutil verify "$skip_dmg" >/dev/null || fail "hdiutil verify failed on the SkipWindowLayout .dmg."
 
+# MAC-DMG-3: EULA 经 udifrez 注入（udifderez 回读断言资源），DMG 本体 ad-hoc 签名。
+log "== EULA + ad-hoc signed variant =="
+dotnet publish "$fixture_project" -c Release \
+    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
+    -p:BundlerIntegrationOutput="$integration_root/bundle-eula" \
+    -p:BundlerTestDmgSkipWindowLayout=true \
+    -p:BundlerTestDmgLicense=true \
+    -p:BundlerTestDmgSignIdentity=- \
+    --packages "$package_cache" >/dev/null
+eula_dmg="$integration_root/bundle-eula/osx-arm64/dmg/Bundler Mac DMG Fixture.dmg"
+[[ -f "$eula_dmg" ]] || fail "The signed+EULA .dmg variant is missing."
+udifderez_xml="$(hdiutil udifderez -xml "$eula_dmg")" \
+    || fail "udifderez could not read the SLA resources back."
+printf '%s' "$udifderez_xml" | grep -q "<key>LPic</key>" \
+    || fail "The embedded SLA is missing the LPic resource."
+printf '%s' "$udifderez_xml" | grep -q "<key>STR#</key>" \
+    || fail "The embedded SLA is missing the STR# resource."
+printf '%s' "$udifderez_xml" | grep -q "<key>TEXT</key>" \
+    || fail "The embedded SLA is missing the TEXT license body."
+codesign --verify --verbose=2 "$eula_dmg" 2>"$integration_root/codesign-verify.log" \
+    || fail "codesign --verify failed on the ad-hoc signed .dmg."
+codesign -dvvv "$eula_dmg" 2>&1 | grep -q "Signature=adhoc" \
+    || fail "Expected an ad-hoc .dmg signature (Signature=adhoc)."
+
 log "PASS: macOS .dmg integration checks passed."

@@ -40,6 +40,24 @@ dotnet publish samples/HelloMacDmg/HelloMacDmg.csproj -c Release
 
   无 GUI 会话宿主（无人值守 CI）自动降级为警告并仍产可挂载 `.dmg`；GUI 宿主上才真实写 `.DS_Store`。
 
+- **EULA 许可面板**（默认演示 `Assets/eula.txt`；`hdiutil udifrez` 注入 SLA 资源，挂载时弹"同意/不同意"）：换 `.rtf` 文件或关闭：
+
+  ```bash
+  dotnet publish samples/HelloMacDmg/HelloMacDmg.csproj -c Release -p:HelloMacDmgLicenseFile=path/to/license.rtf
+  dotnet publish samples/HelloMacDmg/HelloMacDmg.csproj -c Release -p:HelloMacDmgLicenseFile=none   # 不注入 SLA
+  hdiutil udifderez -xml artifacts/samples/HelloMacDmg/osx-arm64/dmg/Hello\ Mac\ DMG.dmg   # 回读 SLA 资源
+  ```
+
+- **DMG 本体签名**（`codesign`，与已签名 `.app` 组合）；ad-hoc 直接可演示，真实证书走 identity 或 p12 钥匙串：
+
+  ```bash
+  dotnet publish samples/HelloMacDmg/HelloMacDmg.csproj -c Release -p:HelloMacDmgDmgSignIdentity=-
+  codesign -dvvv artifacts/samples/HelloMacDmg/osx-arm64/dmg/Hello\ Mac\ DMG.dmg   # Signature=adhoc
+  dotnet publish samples/HelloMacDmg/HelloMacDmg.csproj -c Release -p:HelloMacDmgDmgSignIdentity="Developer ID Application: ..."
+  dotnet publish samples/HelloMacDmg/HelloMacDmg.csproj -c Release \
+      -p:HelloMacDmgDmgSignCertificatePath=cert.p12 -p:HelloMacDmgDmgSignCertificatePassword=...
+  ```
+
 ## 手动验收
 
 ```bash
@@ -48,8 +66,4 @@ hdiutil attach artifacts/samples/HelloMacDmg/osx-arm64/dmg/Hello\ Mac\ DMG.dmg -
 hdiutil verify artifacts/samples/HelloMacDmg/osx-arm64/dmg/Hello\ Mac\ DMG.dmg
 ```
 
-自动化等价入口：`tests/MacOS.Dmg.Integration`（真实 attach/断言/detach/verify）。
-
-## 未在示例中演示的能力（阶段边界）
-
-EULA 许可面板、DMG 本体签名——均属 MAC-DMG-3 阶段，尚未开放配置面。
+自动化等价入口：`tests/MacOS.Dmg.Integration`（真实 attach/断言/detach/verify + SLA 回读 + ad-hoc 验签）。

@@ -890,3 +890,16 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 - MSBuild：新增 12 个 `BundlerMacDmg*` 属性/目标项（props 默认值齐备），`MacIntValue` 非负整型映射辅助。
 - 验证（云 macOS VM 26.5.2 arm64 实测）：`Bundler.Tests` 95/95 全绿（新增 5 条：默认布局脚本/-nobrowse 条件断言、无 GUI 降级、显式跳过、品牌文件落卷、缺失背景拒绝）；`Verify.sh` 全绿——品牌文件 `.background/bg.png`+`.VolumeIcon.icns` 落卷断言、`.DS_Store` 在无 GUI 宿主条件跳过（osascript -1728 实测降级）、UDZO/SkipWindowLayout 变体照常；`samples/HelloMacDmg` 全旋钮（含布局/品牌资产）实测产出。
 - GUI 宿主观感核对登记 `MAC-DMG-OI-01`/`MAC-DMG-MT-01`（headless 宿主无法驱动 Finder 布局）。
+
+
+### 14.28 MAC-DMG-3：DMG 签名与 EULA（2026-09-26，分支 `mac-dmg-development`）
+
+交付 `src/Bundler.MacDmg` 签名与许可面（`DotNet.Bundler.MacDmg` 包）：
+
+- `MacDmgBundleConfiguration.Signing`（`MacDmgSigningConfiguration`）：`Identity`（`-`=ad-hoc）与 `TemporaryCertificatePath`+`TemporaryCertificatePassword` 互斥、临时证书路径存在性预检拒绝；DMG 本体 `codesign --force --sign <identity>`（ad-hoc 自动 `--timestamp=none`，否则 `--timestamp`）→ `--verify` 硬断言；临时钥匙串复用 `MacAppSigning.TemporaryKeychain`（改 internal + InternalsVisibleTo）。
+- `MacDmgLicenseResources`：`LicenseFile`（.txt→`TEXT` MacRoman，非 ASCII 告警并建议 .rtf；.rtf→`RTF `）→ `udifrez` SLA plist（`LPic`/`STR#`/`TEXT`|`RTF ` 三类资源，`Attributes`/`ID`/`Name`/`Data` schema）。
+- 管线顺序：convert（UDIF）→ EULA 注入（`hdiutil udifrez -xml <plist> -image <dmg>`）→ codesign→verify。
+- 踩坑修正三条（均实测确认）：`udifrez` 镜像参数必须走 `-image` 旗标（位置参数报 "no image specified"）；只认转换后 UDIF（UDRW 报 `Function not implemented (78)`，故排在 convert 后）；SLA `LPic`/`STR#` 字节格式按上游 `argv-minus-one/dmg-license` 源码订正（`resID−5000` 相对编号 + doubleByte 字段），`udifderez` 回读通过。
+- MSBuild：`BundlerMacDmgSignIdentity`/`BundlerMacDmgSignCertificatePath`/`BundlerMacDmgSignCertificatePassword` 接线；`LicenseFile` 复用公共 `BundlerLicenseFile`。
+- 验证（云 macOS VM 26.5.2 arm64 实测）：`Bundler.Tests` 99/99 全绿（新增 4 条：SLA 注入+codesign 顺序/互斥拒绝/缺失许可拒绝/SLA plist 结构与告警）；`Verify.sh` 全绿——EULA+ad-hoc 变体 `udifderez -xml` 回读三类资源、`codesign --verify` 通过、`Signature=adhoc`；`samples/HelloMacDmg` 补 `HelloMacDmgLicenseFile`（默认 `Assets/eula.txt`）与 `HelloMacDmgDmgSign*` 旋钮实测。
+- 外部待验收：GUI 挂载许可面板观感（MAC-DMG-OI-01/MAC-DMG-MT-02）、Developer ID 真实签名（MAC-DMG-OI-02/MAC-DMG-MT-03）。

@@ -133,6 +133,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacDmgIconSize { get; set; } = "";
     public string MacDmgBackgroundFile { get; set; } = "";
     public string MacDmgVolumeIconFile { get; set; } = "";
+    public string MacDmgSignIdentity { get; set; } = "";
+    public string MacDmgSignCertificatePath { get; set; } = "";
+    public string MacDmgSignCertificatePassword { get; set; } = "";
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -316,7 +319,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                             MacDmgApplicationsIconY, "BundlerMacDmgApplicationsIconY", 170),
                         IconSize = MacIntValue(MacDmgIconSize, "BundlerMacDmgIconSize", 128),
                         BackgroundFile = EmptyToNull(MacDmgBackgroundFile),
-                        VolumeIconFile = EmptyToNull(MacDmgVolumeIconFile)
+                        VolumeIconFile = EmptyToNull(MacDmgVolumeIconFile),
+                        Signing = BuildMacDmgSigning()
                     },
                     BuildMacAppConfiguration(),
                     new MacDmgBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
@@ -402,6 +406,22 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 ApiIssuer = EmptyToNull(MacAppNotaryApiIssuer)
             }
         };
+
+    private MacDmgSigningConfiguration? BuildMacDmgSigning()
+    {
+        var identity = EmptyToNull(MacDmgSignIdentity);
+        var certificatePath = OptionalFullPath(MacDmgSignCertificatePath);
+        if (identity is null && certificatePath is null)
+        {
+            return null;
+        }
+        return new MacDmgSigningConfiguration
+        {
+            Identity = identity,
+            TemporaryCertificatePath = certificatePath,
+            TemporaryCertificatePassword = EmptyToNull(MacDmgSignCertificatePassword)
+        };
+    }
 
     private IReadOnlyList<PackageFormat> ParseFormats()
     {

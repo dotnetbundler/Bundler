@@ -43,6 +43,18 @@
     <BundlerMacDmgVolumeIconFile Condition="'$(HelloMacDmgVolumeIconFile)' != ''">$(HelloMacDmgVolumeIconFile)</BundlerMacDmgVolumeIconFile>
     <BundlerMacDmgVolumeIconFile Condition="'$(HelloMacDmgVolumeIconFile)' == ''">$(MSBuildThisFileDirectory)Assets/volume.icns</BundlerMacDmgVolumeIconFile>
 
+    <!-- EULA（MAC-DMG-3）：HelloMacDmgLicenseFile 默认演示 Assets/eula.txt，挂载时弹许可面板；
+         置空（-p:HelloMacDmgLicenseFile=none）则不注入 SLA。也可改指 .rtf 文件。 -->
+    <BundlerLicenseFile Condition="'$(HelloMacDmgLicenseFile)' == 'none'"></BundlerLicenseFile>
+    <BundlerLicenseFile Condition="'$(HelloMacDmgLicenseFile)' != '' and '$(HelloMacDmgLicenseFile)' != 'none'">$(HelloMacDmgLicenseFile)</BundlerLicenseFile>
+    <BundlerLicenseFile Condition="'$(HelloMacDmgLicenseFile)' == ''">$(MSBuildThisFileDirectory)Assets/eula.txt</BundlerLicenseFile>
+
+    <!-- DMG 本体签名（MAC-DMG-3）：identity（"-"=ad-hoc）与临时钥匙串证书互斥；
+         ad-hoc 组合可直接演示（HelloMacDmgDmgSignIdentity=-），真实证书走 identity 或 p12+密码。 -->
+    <BundlerMacDmgSignIdentity Condition="'$(HelloMacDmgDmgSignIdentity)' != ''">$(HelloMacDmgDmgSignIdentity)</BundlerMacDmgSignIdentity>
+    <BundlerMacDmgSignCertificatePath Condition="'$(HelloMacDmgDmgSignCertificatePath)' != ''">$(HelloMacDmgDmgSignCertificatePath)</BundlerMacDmgSignCertificatePath>
+    <BundlerMacDmgSignCertificatePassword Condition="'$(HelloMacDmgDmgSignCertificatePassword)' != ''">$(HelloMacDmgDmgSignCertificatePassword)</BundlerMacDmgSignCertificatePassword>
+
     <!-- .app 侧旋钮：与 HelloMacApp 相同，可搭配演示。 -->
     <BundlerMacAppBundleName>HelloMacDmg</BundlerMacAppBundleName>
     <BundlerMacAppDisplayName>Hello Mac DMG</BundlerMacAppDisplayName>

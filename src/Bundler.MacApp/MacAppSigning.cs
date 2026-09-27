@@ -301,8 +301,9 @@ internal static class MacAppSigning
     /// Throwaway keychain holding an imported signing certificate for the duration of one build.
     /// The keychain is prepended to the user search list so codesign resolves the identity, then
     /// the search list is restored and the keychain deleted on dispose.
+    /// Shared with the .dmg backend, which signs the image with the same certificate story.
     /// </summary>
-    private sealed class TemporaryKeychain
+    internal sealed class TemporaryKeychain
     {
         private TemporaryKeychain(string path, string password, string identity,
             IReadOnlyList<string> previousKeychains)

@@ -1,6 +1,6 @@
 # macOS `.dmg` 后端实施路线（MAC-DMG）
 
-> 状态：**`MAC-DMG-1`/`MAC-DMG-2` 已完成（2026-09-26 云 macOS VM 实测），`MAC-DMG-3` 待启动指令**。
+> 状态：**`MAC-DMG-1`/`MAC-DMG-2`/`MAC-DMG-3` 已完成（2026-09-26 云 macOS VM 实测），`MAC-DMG-4` 待启动指令**。
 > 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md) 的 `.dmg` 节（同一 `7dbfc1f` 快照基线）；
 > `.app` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
@@ -54,6 +54,7 @@
 - **前置**：MAC-DMG-2 通过。
 - **目标/交付**：DMG 本体 `codesign`（复用 `.app` 签名配置/identity/临时钥匙串，`--timestamp`）；`LicenseFile`→`hdiutil udifrez` SLA 注入；与已签名 `.app` 的组合验证。
 - **退出**：ad-hoc 签名 DMG 本机验签通过；EULA 注入后挂载弹许可（或 `udifrez` 断言）。
+- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64）**：`Bundler.Tests` 99/99 全绿（新增 4 条：SLA 注入+codesign 顺序、签名互斥拒绝、缺失许可拒绝、SLA plist 结构/LPic 字节/RTF 分支/非 ASCII 告警）。`Verify.sh` 全绿：EULA+ad-hoc 变体 `udifderez -xml` 回读 LPic/STR#/TEXT 三类资源、`codesign --verify` 通过、`codesign -dvvv` 报 `Signature=adhoc`。`samples/HelloMacDmg` 补 `BundlerLicenseFile`（默认 `Assets/eula.txt`，`HelloMacDmgLicenseFile=none` 关闭）与 `BundlerMacDmgSign*`（`HelloMacDmgDmgSignIdentity=-` 直接演示 ad-hoc），实测产出签名 DMG。踩坑修正三条（均实测确认）：(a) `udifrez` 镜像必须走 `-image` 旗标，位置参数报 "no image specified"；(b) `udifrez` 只认转换后 UDIF 镜像，UDRW 报 `Function not implemented (78)`，EULA 注入排在 convert 之后；(c) SLA `LPic`/`STR#` 字节格式按上游 `dmg-license` 源码实测订正（`resID−5000` 相对编号 + doubleByte 字段），`udifderez` 回读通过。`MacAppSigning.TemporaryKeychain` 提取为 internal 供 MacDmg 经 InternalsVisibleTo 复用；identity/临时证书互斥与临时证书路径存在性在预检拒绝。真实证书签名与挂载观感弹窗登记 MAC-DMG-OI-01/OI-02。
 
 ### MAC-DMG-4：原生 E2E 与支持矩阵
 

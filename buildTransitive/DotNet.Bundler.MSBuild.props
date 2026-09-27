@@ -100,5 +100,8 @@
     <BundlerMacDmgIconSize Condition="'$(BundlerMacDmgIconSize)' == ''">128</BundlerMacDmgIconSize>
     <BundlerMacDmgBackgroundFile Condition="'$(BundlerMacDmgBackgroundFile)' == ''"></BundlerMacDmgBackgroundFile>
     <BundlerMacDmgVolumeIconFile Condition="'$(BundlerMacDmgVolumeIconFile)' == ''"></BundlerMacDmgVolumeIconFile>
+    <BundlerMacDmgSignIdentity Condition="'$(BundlerMacDmgSignIdentity)' == ''"></BundlerMacDmgSignIdentity>
+    <BundlerMacDmgSignCertificatePath Condition="'$(BundlerMacDmgSignCertificatePath)' == ''"></BundlerMacDmgSignCertificatePath>
+    <BundlerMacDmgSignCertificatePassword Condition="'$(BundlerMacDmgSignCertificatePassword)' == ''"></BundlerMacDmgSignCertificatePassword>
   </PropertyGroup>
 </Project>

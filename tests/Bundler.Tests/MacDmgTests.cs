@@ -22,6 +22,10 @@ internal static class MacDmgTests
             yield return ("SkipWindowLayout skips osascript", SkipWindowLayoutSkipsOsascript);
             yield return ("Stages background and volume icon", StagesBrandingFiles);
             yield return ("Rejects a missing background image", MissingBackgroundRejected);
+            yield return ("Injects the SLA then signs the image", InjectsLicenseThenSigns);
+            yield return ("Rejects conflicting DMG signing inputs", RejectsConflictingSigning);
+            yield return ("Rejects a missing license file", MissingLicenseRejected);
+            yield return ("Builds the SLA resource plist", () => RunSync(BuildsSlaPlist));
             yield return ("Maps .dmg settings through MSBuild", () => RunSync(MapsDmgSettingsThroughMsBuild));
         }
     }
@@ -555,6 +559,174 @@ internal static class MacDmgTests
         }
     }
 
+    static async Task InjectsLicenseThenSigns()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var license = Path.Combine(input, "license.txt");
+        File.WriteAllText(license, "Test license.");
+        var requests = new List<MacDmgProcessRunner.Request>();
+        var slaPlist = "";
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = MacDmgProcessRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        MacDmgProcessRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            CreateMountPoint(request);
+            WriteConvertArtifact(request);
+            if (request.Arguments.Contains("udifrez"))
+            {
+                // The work directory is deleted after the build; capture the SLA
+                // plist while the udifrez call is in flight.
+                var args = request.Arguments.ToList();
+                slaPlist = File.ReadAllText(args[args.IndexOf("-xml") + 1]);
+            }
+            return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacDmgBundler(new MacDmgBundleConfiguration
+                {
+                    SkipWindowLayout = true,
+                    Signing = new MacDmgSigningConfiguration { Identity = "-" }
+                })
+                .BuildAsync(DmgConfiguration(input, output, licenseFile: license));
+            var verbs = requests
+                .Where(request => request.Executable == "hdiutil" || request.Executable == "codesign")
+                .Select(request =>
+                    request.Executable == "codesign"
+                        ? "codesign " + (request.Arguments.Contains("--sign") ? "sign" : "verify")
+                        : request.Arguments[0])
+                .ToList();
+            var convert = verbs.IndexOf("convert");
+            var udifrez = verbs.IndexOf("udifrez");
+            var sign = verbs.IndexOf("codesign sign");
+            var verify = verbs.IndexOf("codesign verify");
+            Assert(convert >= 0 && udifrez > convert && sign > udifrez && verify > sign,
+                $"Expected convert → udifrez → codesign --sign → --verify order, got: {string.Join(",", verbs)}");
+            var signCall = requests.First(request =>
+                request.Executable == "codesign" && request.Arguments.Contains("--sign"));
+            Assert(signCall.Arguments.Contains("--timestamp=none"),
+                "Ad-hoc signatures must skip the timestamp server.");
+            var frezCall = requests.First(request => request.Arguments.Contains("udifrez"));
+            Assert(frezCall.Arguments.Contains("-xml") && frezCall.Arguments.Contains("-image"),
+                "udifrez must take the generated SLA plist via -xml and the image via -image.");
+            Assert(slaPlist.Contains("<key>TEXT</key>") && slaPlist.Contains("<key>STR#</key>") &&
+                   slaPlist.Contains("<key>LPic</key>"),
+                "The SLA plist must carry LPic/STR#/TEXT resources.");
+        }
+        finally
+        {
+            MacDmgProcessRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    static async Task RejectsConflictingSigning()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var certificate = Path.Combine(input, "cert.p12");
+        File.WriteAllText(certificate, "cert");
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        MacDmgBundleBackend.HostCheck = () => true;
+        try
+        {
+            var thrown = false;
+            try
+            {
+                await new MacDmgBundler(new MacDmgBundleConfiguration
+                    {
+                        Signing = new MacDmgSigningConfiguration
+                        {
+                            Identity = "-",
+                            TemporaryCertificatePath = certificate
+                        }
+                    })
+                    .BuildAsync(DmgConfiguration(input, output));
+            }
+            catch (ArgumentException exception)
+            {
+                thrown = exception.Message.Contains("mutually exclusive");
+            }
+            Assert(thrown, "Identity and TemporaryCertificatePath must be mutually exclusive.");
+        }
+        finally
+        {
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    static async Task MissingLicenseRejected()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = MacDmgProcessRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        MacDmgProcessRunner.Handler = (request, _) =>
+        {
+            CreateMountPoint(request);
+            WriteConvertArtifact(request);
+            return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            var thrown = false;
+            try
+            {
+                await new MacDmgBundler(new MacDmgBundleConfiguration { SkipWindowLayout = true })
+                    .BuildAsync(DmgConfiguration(
+                        input, output, licenseFile: Path.Combine(input, "missing.txt")));
+            }
+            catch (BundleValidationException)
+            {
+                thrown = true;
+            }
+            Assert(thrown, "A missing license file must fail the build.");
+        }
+        finally
+        {
+            MacDmgProcessRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    static void BuildsSlaPlist()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var warnings = new List<string>();
+            var logger = new ListLogger(warnings);
+            var txt = Path.Combine(directory, "sla.txt");
+            File.WriteAllText(txt, "Plain license text.");
+            var plist = MacDmgLicenseResources.BuildPlist(txt, logger);
+            Assert(plist.Contains("<key>LPic</key>") && plist.Contains("<key>STR#</key>") &&
+                   plist.Contains("<key>TEXT</key>"),
+                "The SLA plist must carry LPic/STR#/TEXT resources.");
+            var rtf = Path.Combine(directory, "sla.rtf");
+            File.WriteAllText(rtf, "{\\rtf1 ansi hello}");
+            var rtfPlist = MacDmgLicenseResources.BuildPlist(rtf, logger);
+            Assert(rtfPlist.Contains("<key>RTF </key>"),
+                ".rtf licenses must land in the 'RTF ' resource, not TEXT.");
+            var unicode = Path.Combine(directory, "sla-unicode.txt");
+            File.WriteAllText(unicode, "License 中文 text.");
+            MacDmgLicenseResources.BuildPlist(unicode, logger);
+            Assert(warnings.Any(message => message.Contains("non-ASCII")),
+                "Non-ASCII .txt licenses must warn about the TEXT-resource charset limit.");
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
     static void CreateMountPoint(MacDmgProcessRunner.Request request)
     {
         var index = request.Arguments.ToList().IndexOf("-mountpoint");
@@ -599,17 +771,23 @@ internal static class MacDmgTests
         Assert(task.Contains("new MacDmgBundler(", StringComparison.Ordinal) &&
                task.Contains("PackageFormat.Dmg", StringComparison.Ordinal),
             "The MSBuild task does not construct the .dmg backend.");
+        Assert(targets.Contains("MacDmgSignIdentity=\"$(BundlerMacDmgSignIdentity)\"", StringComparison.Ordinal) &&
+               targets.Contains("MacDmgSignCertificatePath=\"$(BundlerMacDmgSignCertificatePath)\"", StringComparison.Ordinal) &&
+               targets.Contains("LicenseFile=\"$(BundlerLicenseFile)\"", StringComparison.Ordinal),
+            "MSBuild does not map the .dmg signing/license properties to the task.");
     }
 
     static BundleConfiguration DmgConfiguration(
         string input,
         string output = "",
         string rid = "osx-arm64",
-        IReadOnlyList<PackageFormat>? formats = null) => new()
+        IReadOnlyList<PackageFormat>? formats = null,
+        string? licenseFile = null) => new()
         {
             ProductName = "ExampleApp",
             Identifier = "com.example.app",
             Version = "1.0.0",
+            LicenseFile = licenseFile,
             OutputDirectory = output.Length == 0 ? input + ".artifacts" : output,
             Targets =
             [

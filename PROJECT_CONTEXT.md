@@ -6,8 +6,8 @@
 > 当前阶段：WIN-MSI-1..9 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；
 > `alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 前 NSIS 安装目录延续、事务清理竞态修复）
 > `alpha.45` 将 SDK 基线升至 .NET 10（MSBuild 任务链保留 `netstandard2.0`），无后端功能变更
-> `.app` 格式已冻结（MAC-APP-1..5，冻结基线 `0.1.0-alpha.45`）并合入 `main`；`MAC-DMG-1`/`MAC-DMG-2` 已完成，云 macOS VM 已验证
-> 默认下一阶段：`MAC-DMG-3`（DMG 签名与 EULA，需用户明确启动指令）
+> `.app` 格式已冻结（MAC-APP-1..5，冻结基线 `0.1.0-alpha.45`）并合入 `main`；`MAC-DMG-1`/`MAC-DMG-2`/`MAC-DMG-3` 已完成，云 macOS VM 已验证
+> 默认下一阶段：`MAC-DMG-4`（原生 E2E 与支持矩阵，需用户明确启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -27,7 +27,7 @@
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
 | `src/Bundler.Cli` | 开发原型（`IsPackable=false`，不发布） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
-| `tests/Bundler.Tests` | 唯一快速测试入口（当前 95 项，macOS 宿主口径全绿） | `net10.0` |
+| `tests/Bundler.Tests` | 唯一快速测试入口（当前 99 项，macOS 宿主口径全绿） | `net10.0` |
 | `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
 | `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
 | `tests/MacOS.App.Integration` | 真实 macOS `.app` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
@@ -123,12 +123,13 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - `mac-app-development` 已合入 `main`（2026-09-26，快进合并，`b59e610`）；MAC-DMG 在 `mac-dmg-development` 分支推进。
 - `MAC-DMG-1` 完成（2026-09-26 云 macOS VM 验证）：`src/Bundler.MacDmg`（netstandard2.0）交付 `hdiutil` 全链（create UDRW→attach→`/Applications` 链接+`SetFile -a E`→detach 退避→`convert`，默认 `Ulmo` 可配 `Udzo`/`Udbz`）；`BundlerFormats=dmg` MSBuild 映射与 `MacDmgBundler` 直接 API；`Bundler.Tests` 新增 9 条、`tests/MacOS.Dmg.Integration/Verify.sh` 真实 attach/断言/detach/verify、`samples/HelloMacDmg`。
 - `MAC-DMG-2` 完成（2026-09-26 云 macOS VM 验证）：Finder 布局与品牌——`osascript` 窗口布局全可配（窗口 200,120+660×400、app=180,170、Applications=480,170、icon 128 默认对齐上游）、背景图拷入 `.background/`、卷图标 `.VolumeIcon.icns`+`SetFile -a C`（缺失降级）、无 GUI 会话降级警告+`BundlerMacDmgSkipWindowLayout` 显式开关；`Bundler.Tests` 新增 5 条（95 项全绿）、Verify.sh 品牌落卷断言+`.DS_Store` 条件断言全绿；修正 `hdiutil resize` 为 `-limits` 扇区数绝对值增长、`attach` 在布局运行时去掉 `-nobrowse`。
+- `MAC-DMG-3` 完成（2026-09-26 云 macOS VM 验证）：DMG 本体 `codesign`（`MacDmgSigningConfiguration`：identity `-`=ad-hoc 与 `TemporaryCertificatePath`+Password 互斥，复用 `.app` 临时钥匙串）+ `LicenseFile`→`udifrez` SLA 注入（`LPic`/`STR#`/`TEXT`|`RTF `，字节格式按上游 dmg-license 源码订正）；`Bundler.Tests` 新增 4 条（99 项全绿）、Verify.sh EULA+签名变体 `udifderez` 回读+`codesign --verify`/`Signature=adhoc` 全绿；踩坑：`udifrez` 需 `-image` 旗标、只认转换后 UDIF（UDRW 报 78）。示例补 `HelloMacDmgLicenseFile`/`HelloMacDmgDmgSign*` 旋钮。
 - MAC-DMG 规划轮已确认（2026-09-26）：C# 原生编排 `hdiutil`/`osascript`/`SetFile`/`sips` 不内嵌 create-dmg fork；DMG 本体可 `codesign`（`-` 跳过）不做公证；无 GUI 会话跳过布局+警告，`BundlerDmgSkipWindowLayout` 开关；EULA 经 `hdiutil udifrez` 注入 SLA；压缩格式可配置枚举 Udzo/Ulmo/Udbz、默认 `Ulmo`（挂载侧需 macOS 10.12+）；产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg`；窗口布局全可配默认对齐上游。
 
 ## 6. 默认下一步
 
-`MAC-DMG-3`：`MAC-DMG-1`/`MAC-DMG-2` 已完成（镜像全链+Finder 布局与品牌本机实测通过）；下一阶段为 DMG 本体签名与 EULA（`codesign` 复用 `.app` 签名配置、`LicenseFile`→`hdiutil udifrez` SLA 注入）。
-等用户明确 `MAC-DMG-3` 启动指令再实施；未经明确要求不提交、不推送。
+`MAC-DMG-4`：`MAC-DMG-1`/`MAC-DMG-2`/`MAC-DMG-3` 已完成（镜像全链+布局品牌+签名与 EULA 本机实测通过）；下一阶段为原生 E2E 与支持矩阵（osx-x64、quarantine 首挂载、干净宿主、文档示例收口）。
+等用户明确 `MAC-DMG-4` 启动指令再实施；未经明确要求不提交、不推送。
 
 ## 7. 历史记录
 

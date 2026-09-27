@@ -3,7 +3,7 @@
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
 计划实现与外部待验收行绑定到 `docs/mac-dmg-roadmap.md`、`docs/mac-dmg-open-items.md`、`docs/mac-dmg-manual-testing.md` 中的明确阶段/ID。
 上游参照：`docs/mac-tauri-capability-audit.md` 的 `.dmg` 节。
-路线已确认（`2026-09-26`）；`MAC-DMG-1`/`MAC-DMG-2` 已实现（2026-09-26 云 macOS VM 实测），其余阶段未启动，表内非冻结状态。
+路线已确认（`2026-09-26`）；`MAC-DMG-1`/`MAC-DMG-2`/`MAC-DMG-3` 已实现（2026-09-26 云 macOS VM 实测），其余阶段未启动，表内非冻结状态。
 
 ## 镜像与内容
 
@@ -30,18 +30,18 @@
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| DMG 本体 `codesign`（identity/临时钥匙串，`-` 跳过） | 计划实现 | MAC-DMG-3 | 复用 `.app` 签名配置面；`--timestamp` |
-| EULA 许可面板（`hdiutil udifrez` SLA 注入） | 计划实现 | MAC-DMG-3 | 复用 `LicenseFile`（txt/rtf），挂载时弹同意/不同意 |
+| DMG 本体 `codesign`（identity/临时钥匙串，`-` 跳过） | 已实现 | MAC-DMG-3 | ad-hoc 验签与 `Signature=adhoc` 本机实测；真实证书为外部待验收（MAC-DMG-OI-02） |
+| EULA 许可面板（`hdiutil udifrez` SLA 注入） | 已实现 | MAC-DMG-3 | 复用 `LicenseFile`（txt/rtf）；`udifderez` 回读断言本机实测；挂载弹窗观感为外部待验收（MAC-DMG-OI-01） |
 | DMG 本体公证 | 不适用 | — | 已确认不做：Gatekeeper 核验内部 `.app` 的 stapled 票据 |
 
 ## Bundler 通用横切
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| 独立后端包与直接 API | 计划实现 | MAC-DMG-1 | `DotNet.Bundler.MacDmg`（netstandard2.0） |
-| MSBuild 集成映射 | 计划实现 | MAC-DMG-1 | `BundlerMacDmg*` 属性 |
-| 离线构建 | 计划实现 | MAC-DMG-1 起 | 全链离线，无第三方内嵌工具 |
-| 宿主工具探测与版本门槛 | 计划实现 | MAC-DMG-1 | 缺必需工具明确报错；可选工具降级警告 |
+| 独立后端包与直接 API | 已实现 | MAC-DMG-1 | `DotNet.Bundler.MacDmg`（netstandard2.0） |
+| MSBuild 集成映射 | 已实现 | MAC-DMG-1 | `BundlerMacDmg*` 属性 |
+| 离线构建 | 已实现 | MAC-DMG-1 起 | 全链离线，无第三方内嵌工具 |
+| 宿主工具探测与版本门槛 | 已实现 | MAC-DMG-1 | 缺必需工具明确报错；可选工具降级警告 |
 | osx-x64/osx-arm64 产物 | 计划实现 | MAC-DMG-4 | 双产物矩阵实测 |
 | quarantine/首挂载行为 | 计划实现 | MAC-DMG-4 | 带 `com.apple.quarantine` 的挂载观察 |
 

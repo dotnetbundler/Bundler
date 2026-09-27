@@ -27,6 +27,8 @@
     <BundlerMacDmgSkipWindowLayout Condition="'$(BundlerTestDmgSkipWindowLayout)' != ''">$(BundlerTestDmgSkipWindowLayout)</BundlerMacDmgSkipWindowLayout>
     <BundlerMacDmgBackgroundFile>$(MSBuildThisFileDirectory)Assets/bg.png</BundlerMacDmgBackgroundFile>
     <BundlerMacDmgVolumeIconFile>$(MSBuildThisFileDirectory)Assets/volume.icns</BundlerMacDmgVolumeIconFile>
+    <BundlerLicenseFile Condition="'$(BundlerTestDmgLicense)' == 'true'">$(MSBuildThisFileDirectory)Assets/license.txt</BundlerLicenseFile>
+    <BundlerMacDmgSignIdentity Condition="'$(BundlerTestDmgSignIdentity)' != ''">$(BundlerTestDmgSignIdentity)</BundlerMacDmgSignIdentity>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>

@@ -43,6 +43,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         {
             throw new ArgumentException("The .dmg volume name must not be empty.");
         }
+        ValidateSigning(settings.Signing);
 
         var workDirectory = context.WorkDirectory;
         var stageDirectory = Path.Combine(workDirectory, "dmg-root");
@@ -148,6 +149,24 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 "hdiutil",
                 ["convert", readWriteImage, "-format", compressionArgument, "-o", outputPath],
                 workDirectory, cancellationToken);
+
+            // SLA resources land on the converted UDIF image (udifrez rejects read-write images).
+            if (bundle.LicenseFile is { Length: > 0 } licenseFile)
+            {
+                if (!File.Exists(licenseFile))
+                {
+                    throw new FileNotFoundException(
+                        $"The .dmg license file does not exist: {licenseFile}", licenseFile);
+                }
+                var slaPlist = Path.Combine(workDirectory, "sla.plist");
+                File.WriteAllText(
+                    slaPlist, MacDmgLicenseResources.BuildPlist(licenseFile, logger));
+                await MacDmgProcessRunner.RunAsync(
+                    "hdiutil", ["udifrez", "-xml", slaPlist, "-image", outputPath],
+                    workDirectory, cancellationToken);
+            }
+
+            await SignImageAsync(outputPath, workDirectory, cancellationToken, logger);
 
             return [new BundleArtifact(PackageFormat.Dmg, item.Target.RuntimeIdentifier, outputPath)];
         }
@@ -279,6 +298,80 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         script.AppendLine("  end tell");
         script.AppendLine("end tell");
         return script.ToString();
+    }
+
+    private static void ValidateSigning(MacDmgSigningConfiguration? signing)
+    {
+        if (signing is null)
+        {
+            return;
+        }
+        if (signing.Identity is not null && signing.TemporaryCertificatePath is not null)
+        {
+            throw new ArgumentException(
+                "DMG SignIdentity and TemporaryCertificatePath are mutually exclusive.");
+        }
+        if (signing.Identity is { Length: 0 })
+        {
+            throw new ArgumentException("DMG SignIdentity cannot be empty (use \"-\" for ad-hoc).");
+        }
+        if (signing.TemporaryCertificatePath is { Length: > 0 } certificatePath &&
+            !File.Exists(Path.GetFullPath(certificatePath)))
+        {
+            throw new FileNotFoundException(
+                "DMG TemporaryCertificatePath does not exist.", certificatePath);
+        }
+    }
+
+    private async Task SignImageAsync(
+        string imagePath,
+        string workDirectory,
+        CancellationToken cancellationToken,
+        IBundleLogger logger)
+    {
+        var signing = settings.Signing;
+        if (signing is null ||
+            (signing.Identity is null && signing.TemporaryCertificatePath is null))
+        {
+            return;
+        }
+
+        MacAppSigning.TemporaryKeychain? keychain = null;
+        string identity;
+        try
+        {
+            if (signing.TemporaryCertificatePath is { Length: > 0 } certificatePath)
+            {
+                keychain = await MacAppSigning.TemporaryKeychain.CreateAsync(
+                    workDirectory, Path.GetFullPath(certificatePath),
+                    signing.TemporaryCertificatePassword ?? "", logger, cancellationToken);
+                identity = keychain.Identity;
+            }
+            else
+            {
+                identity = signing.Identity!;
+            }
+
+            logger.Log(
+                BundleLogLevel.Information,
+                identity == "-"
+                    ? "Signing the .dmg ad-hoc (codesign -s -)."
+                    : $"Signing the .dmg with identity '{identity}'.");
+            await MacDmgProcessRunner.RunAsync(
+                "codesign",
+                ["--force", "--sign", identity,
+                 identity == "-" ? "--timestamp=none" : "--timestamp", imagePath],
+                workDirectory, cancellationToken);
+            await MacDmgProcessRunner.RunAsync(
+                "codesign", ["--verify", imagePath], workDirectory, cancellationToken);
+        }
+        finally
+        {
+            if (keychain is not null)
+            {
+                await keychain.DisposeAsync(workDirectory, cancellationToken);
+            }
+        }
     }
 
     private static async Task DetachWithRetryAsync(

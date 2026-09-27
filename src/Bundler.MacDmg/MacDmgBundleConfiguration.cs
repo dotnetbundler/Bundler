@@ -57,4 +57,24 @@ public sealed class MacDmgBundleConfiguration
 
     /// <summary>Optional volume icon file (.icns) written to .VolumeIcon.icns with the custom-icon flag.</summary>
     public string? VolumeIconFile { get; init; }
+
+    /// <summary>Optional .dmg body signing; null leaves the image unsigned.</summary>
+    public MacDmgSigningConfiguration? Signing { get; init; }
+}
+
+/// <summary>
+/// .dmg body codesign settings. Mirrors the applicable subset of the .app signing surface:
+/// identity ("-" = ad-hoc) or a temporary keychain certificate, mutually exclusive.
+/// Hardened runtime / entitlements / notarization do not apply to the image container.
+/// </summary>
+public sealed class MacDmgSigningConfiguration
+{
+    /// <summary>codesign identity; "-" produces an ad-hoc signature (self-verify only).</summary>
+    public string? Identity { get; init; }
+
+    /// <summary>PKCS#12 certificate imported into a throwaway keychain for the build.</summary>
+    public string? TemporaryCertificatePath { get; init; }
+
+    /// <summary>Password for <see cref="TemporaryCertificatePath"/>.</summary>
+    public string? TemporaryCertificatePassword { get; init; }
 }
