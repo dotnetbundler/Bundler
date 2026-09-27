@@ -168,6 +168,18 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string DebMaintainer { get; set; } = "";
     public string DebInstallRoot { get; set; } = "";
     public string DebBinLink { get; set; } = "";
+    public string DebDepends { get; set; } = "";
+    public string DebRecommends { get; set; } = "";
+    public string DebProvides { get; set; } = "";
+    public string DebConflicts { get; set; } = "";
+    public string DebReplaces { get; set; } = "";
+    public string DebSection { get; set; } = "";
+    public string DebPriority { get; set; } = "";
+    public string DebCategories { get; set; } = "";
+    public string DebDesktopFile { get; set; } = "";
+    public string DebMetainfoFile { get; set; } = "";
+    public string DebChangelogFile { get; set; } = "";
+    public ITaskItem[] DebFiles { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -420,7 +432,23 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         InstallRoot = EmptyToNull(DebInstallRoot),
                         BinLink = string.Equals(DebBinLink, "none", StringComparison.OrdinalIgnoreCase)
                             ? ""
-                            : EmptyToNull(DebBinLink)
+                            : EmptyToNull(DebBinLink),
+                        Depends = SplitList(DebDepends),
+                        Recommends = SplitList(DebRecommends),
+                        Provides = SplitList(DebProvides),
+                        Conflicts = SplitList(DebConflicts),
+                        Replaces = SplitList(DebReplaces),
+                        Section = EmptyToNull(DebSection),
+                        Priority = EmptyToNull(DebPriority),
+                        Categories = EmptyToNull(DebCategories),
+                        DesktopFile = OptionalFullPath(DebDesktopFile),
+                        MetainfoFile = OptionalFullPath(DebMetainfoFile),
+                        ChangelogFile = OptionalFullPath(DebChangelogFile),
+                        Files = DebFiles.Select(item => new DebFileEntry
+                        {
+                            Source = Path.GetFullPath(item.ItemSpec),
+                            Destination = item.GetMetadata("Destination")
+                        }).ToArray()
                     },
                     new DebBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     .BuildAsync(configuration)
@@ -552,6 +580,14 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
 
     private static string? OptionalFullPath(string value) =>
         string.IsNullOrWhiteSpace(value) ? null : Path.GetFullPath(value);
+
+    // Debian relation fields hold comma-separated clauses, so the MSBuild-facing
+    // list separator is ';' (e.g. "libc6 (>= 2.35);libssl3").
+    private static IReadOnlyList<string>? SplitList(string value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Split(';').Select(entry => entry.Trim())
+                .Where(entry => entry.Length > 0).ToArray();
 
     private static string ResourceTargetPath(ITaskItem item)
     {

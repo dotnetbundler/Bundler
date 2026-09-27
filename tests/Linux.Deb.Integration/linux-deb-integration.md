@@ -12,7 +12,8 @@ bash tests/Linux.Deb.Integration/Verify.sh
 
 - Linux 宿主（脚本自带 `uname` 检查，非 Linux 直接拒绝），dpkg/apt 系发行版；
 - dotnet SDK（打包 `DotNet.Bundler*` 包供 fixture 消费）；
-- `ar`/`tar`/`md5sum`/`sha256sum`/`dpkg-deb`/`unzip`；
+- `ar`/`tar`/`md5sum`/`sha256sum`/`dpkg-deb`/`unzip`/`gzip`；
+- 可选：`desktop-file-validate`、`lintian`（缺失时对应断言记 SKIP/信息级）；
 - 免密 `sudo`（`sudo -n true`）用于真实 `dpkg -i/-r`；缺失时该段自动 SKIP，其余断言不受影响。
 
 ## 断言范围
@@ -23,10 +24,14 @@ bash tests/Linux.Deb.Integration/Verify.sh
 - control 核心字段（`Package`/`Version`/`Architecture`/`Maintainer`/`Priority`/`Homepage`/`Installed-Size`/`Description`）与 `md5sums` 真实性；
 - 覆盖变体（`BundlerDebPackageName`/`BundlerDebVersion`/`BundlerDebMaintainer`/`BundlerDebInstallRoot`/`BundlerDebBinLink`）逐项回读断言——`InstallRoot` 非 `/usr` 下时链接目标转绝对路径；
 - SemVer 预发布映射变体（`2.5.0-beta.3+build.1` → `2.5.0~beta.3+build.1-1`）；
-- 失败路径：相对 `InstallRoot` 使 publish 失败且无 `.deb` 产物；
+- 桌面集成（LINUX-DEB-2）：生成的 `.desktop` 落 `usr/share/applications/` 且逐字段断言（含 `MimeType` 并集与 `%u` 占位符）、`desktop-file-validate` 通过、hicolor `48x48` 与 `48x48@2` 图标落位、metainfo/`copyright`/`changelog.gz` 内容与 gzip 可解、`BundlerDebFile` `/etc` 落位；
+- 元数据变体：`Depends`/`Recommends`/`Provides`/`Conflicts`/`Replaces`/`Section`/`Priority` 逐项 control 断言；
+- `BundlerDebDesktopFile` 覆盖变体：自定义 `.desktop` 原样落位并通过 `desktop-file-validate`；
+- 失败路径：相对 `InstallRoot`、非法 `Priority`、非法 `Categories` 均使 publish 失败且无 `.deb` 产物；
 - `tests/Deb.Api.PackageFixture`（直接 API 消费 `DotNet.Bundler.Deb` NuGet 包）冒烟；
-- 真实装卸：`sudo dpkg -i` 后 `dpkg -s`/`dpkg -L`/`/usr/bin` 链接启动均通过，`sudo dpkg -r` 后零残留断言。
+- 真实装卸：`sudo dpkg -i` 后 `dpkg -s`/`dpkg -L`（含 `.desktop`/图标/metainfo/`copyright`/`changelog.gz`/`/etc` 逐项路径断言）与 `/usr/bin` 链接启动均通过，装后 `.desktop` 回读 + `desktop-file-validate` 复核，`sudo dpkg -r` 后零残留断言；
+- `lintian` 以信息级跑全包（不阻断），残余发现登记 `docs/linux-deb-open-items.md` LINUX-DEB-OI-07。
 
 产物仅落在 `artifacts/linux-deb-integration`（脚本用 `.bundler-identity` 标记自建目录，退出时整体清理）。
 
-真实 `dpkg -i/-r` 修改宿主 dpkg 数据库；其余发行版矩阵（rpm 系宿主构建、Debian 老版本、ARM64 机器）与 lintian 告警审计属外部待验收（`docs/linux-deb-open-items.md` / `linux-deb-manual-testing.md`）。
+真实 `dpkg -i/-r` 修改宿主 dpkg 数据库；其余发行版矩阵（rpm 系宿主构建、Debian 老版本、ARM64 机器）、真实桌面环境观感与 lintian 残余处置属外部待验收（`docs/linux-deb-open-items.md` / `linux-deb-manual-testing.md`）。

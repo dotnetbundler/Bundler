@@ -21,12 +21,16 @@ internal sealed class TarEntry
 }
 
 /// <summary>
-/// Writes POSIX ustar archives. Deterministic: uid/gid 0 ("root"), mtime 0,
-/// caller-controlled entry order. Long names use the ustar prefix field;
-/// entries not expressible in ustar are rejected.
+/// Writes POSIX ustar archives. Deterministic: uid/gid 0 ("root"), a fixed
+/// mtime (<see cref="EntryMtime"/>), caller-controlled entry order. Long names
+/// use the ustar prefix field; entries not expressible in ustar are rejected.
 /// </summary>
 internal static class TarWriter
 {
+    // Fixed mtime keeps archives byte-identical across builds; 1980-01-01 UTC
+    // instead of the Unix epoch because linters (e.g. lintian's
+    // package-contains-ancient-file) flag dates at/below the mid-70s.
+    internal const long EntryMtime = 315532800L;
     internal static void Write(Stream output, IEnumerable<TarEntry> entries)
     {
         var header = new byte[512];
@@ -51,7 +55,7 @@ internal static class TarWriter
             WriteOctal(header, 108, 8, 0);               // uid
             WriteOctal(header, 116, 8, 0);               // gid
             WriteOctal(header, 124, 12, entry.Kind == TarEntryKind.File ? entry.Content.Length : 0);
-            WriteOctal(header, 136, 12, 0);              // mtime
+            WriteOctal(header, 136, 12, EntryMtime);     // mtime
             for (var i = 148; i < 156; i++)
             {
                 header[i] = (byte)' ';

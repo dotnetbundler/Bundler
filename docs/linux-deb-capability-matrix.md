@@ -3,7 +3,7 @@
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
 外部待验收行绑定到 `docs/linux-deb-open-items.md`、`docs/linux-deb-manual-testing.md` 中的明确 ID。
 上游参照见 `docs/linux-tauri-capability-audit.md`；决策与阶段见 `docs/linux-deb-roadmap.md`。
-本矩阵于 2026-09-27 规划轮建立；LINUX-DEB-1 已于同日完成，相关行更新为"已实现"并以 `tests/Linux.Deb.Integration/Verify.sh` 与 `tests/Bundler.Tests` DebTests 为证据。
+本矩阵于 2026-09-27 规划轮建立；LINUX-DEB-1/2 已于同日完成，相关行更新为"已实现"并以 `tests/Linux.Deb.Integration/Verify.sh` 与 `tests/Bundler.Tests` DebTests 为证据。
 
 ## 产物与载荷
 
@@ -17,21 +17,21 @@
 | 架构映射 `linux-x64→amd64`、`linux-arm64→arm64` | 已实现 | LINUX-DEB-1 | 其他 deb 架构名经 `BundlerDebArchitecture` 覆盖 |
 | control 核心字段（Package/Version/Architecture/Installed-Size/Maintainer/Priority/Homepage/Description） | 已实现 | LINUX-DEB-1 | `Package` 默认 ProductName kebab 化，`Maintainer` 默认 Publisher→Identifier 回退 |
 | `md5sums` 清单 | 已实现 | LINUX-DEB-1 | 逐文件 MD5；Verify.sh 用 `md5sum -c` 对解包载荷真实核对 |
-| 确定性构建（tar 条目排序、uid/gid 0、归一化时间戳策略） | 已实现 | LINUX-DEB-1 | mtime 0、uid/gid 0、排序条目；DebTests 断言同输入字节级一致 |
+| 确定性构建（tar 条目排序、uid/gid 0、归一化时间戳策略） | 已实现 | LINUX-DEB-1 | uid/gid 0、固定 mtime 1980-01-01 UTC、排序条目；DebTests 断言同输入字节级一致（1980 取值规避 lintian ancient-file） |
 | 失败清理 | 已实现 | LINUX-DEB-1 | 构建失败删除半成品 `.deb` 与侧车；验证测试断言无残留 |
 
 ## 元数据与桌面集成
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `Depends`/`Recommends`/`Provides`/`Conflicts`/`Replaces` 显式透传 | 计划实现 | LINUX-DEB-2 | 纯元数据直通；不做运行时依赖探测 |
-| `Section`/`Priority`/`Maintainer`/`Homepage`/`Installed-Size` 覆盖 | 计划实现 | LINUX-DEB-2 | — |
-| `.desktop` 生成与 `usr/share/applications/` 落位 | 计划实现 | LINUX-DEB-2 | `desktop-file-validate` 断言；`MimeType` 合并文件关联与 `x-scheme-handler/<scheme>` |
-| 自定义 `.desktop` 整文件覆盖 | 计划实现 | LINUX-DEB-2 | `BundlerDebDesktopFile` 专家旋钮；责任边界标注 |
-| hicolor 图标（PNG 尺寸探测、`@2x` 密度目录） | 计划实现 | LINUX-DEB-2 | 非 PNG 首版不支持 |
-| AppStream metainfo | 计划实现 | LINUX-DEB-2 | `BundlerDebMetainfoFile` 可选，落 `usr/share/metainfo/` |
-| `ChangelogFile`→`changelog.gz`、`LicenseFile`→`copyright` | 计划实现 | LINUX-DEB-2 | `usr/share/doc/<package>/` |
-| 包内绝对路径自定义映射（`/etc` 等载荷外路径） | 计划实现 | LINUX-DEB-2 | `BundlerDebFile`；逃逸与冲突校验 |
+| `Depends`/`Recommends`/`Provides`/`Conflicts`/`Replaces` 显式透传 | 已实现 | LINUX-DEB-2 | `BundlerDeb*` 分号列表 → control 逗号子句，原样透传、拒换行；Verify.sh metadata 变体逐字段断言 |
+| `Section`/`Priority`/`Maintainer`/`Homepage`/`Installed-Size` 覆盖 | 已实现 | LINUX-DEB-2 | `Section`/`Priority` 校验（Priority 限定五值，默认 optional）；`Maintainer`/`Homepage`/`Installed-Size` 为 DEB-1 既有面 |
+| `.desktop` 生成与 `usr/share/applications/` 落位 | 已实现 | LINUX-DEB-2 | 决策 5 全字段（Type/Name/Comment/Exec 占位符/Icon/Terminal/Categories/MimeType 并集）；`desktop-file-validate` 对生成与安装后文件双重断言 |
+| 自定义 `.desktop` 整文件覆盖 | 已实现 | LINUX-DEB-2 | `BundlerDebDesktopFile` 原样打包到 applications 路径；内容合法性属调用方责任 |
+| hicolor 图标（PNG 尺寸探测、`@2x` 密度目录） | 已实现 | LINUX-DEB-2 | PNG 签名+IHDR 探测尺寸；`@2x` 文件名后缀 → `<W>x<H>@2`；非 PNG 报错 |
+| AppStream metainfo | 已实现 | LINUX-DEB-2 | `BundlerDebMetainfoFile` 可选 → `usr/share/metainfo/<包名>.metainfo.xml` |
+| `ChangelogFile`→`changelog.gz`、`LicenseFile`→`copyright` | 已实现 | LINUX-DEB-2 | `usr/share/doc/<包名>/`；changelog 自动 gzip |
+| 包内绝对路径自定义映射（`/etc` 等载荷外路径） | 已实现 | LINUX-DEB-2 | `@(BundlerDebFile)` `Destination` 元数据（绝对路径含文件名，拒相对/`..`/空段）；API 面 `DebFileEntry` |
 | 桌面观感（菜单项/图标渲染/关联双击打开） | 外部待验收 | LINUX-DEB-4 起 | 需 GUI 桌面环境：LINUX-DEB-MT-01 |
 
 ## 脚本、服务与压缩

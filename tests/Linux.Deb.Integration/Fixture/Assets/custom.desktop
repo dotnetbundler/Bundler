@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Bundler Deb Fixture Custom
+Exec=/usr/lib/bundler-deb-fixture/BundlerDebIntegrationFixture
+Terminal=false

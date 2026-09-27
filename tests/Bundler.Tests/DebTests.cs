@@ -17,6 +17,10 @@ internal static class DebTests
             yield return ("Derives a kebab-case package name", () => RunSync(DerivesKebabName));
             yield return ("Writes matching md5sums", () => RunSync(Md5sumsMatch));
             yield return ("Stages resources under the install root", () => RunSync(StagesResources));
+            yield return ("Writes desktop integration files", () => RunSync(WritesDesktopIntegration));
+            yield return ("Writes relation and doc fields", () => RunSync(WritesRelationAndDocFields));
+            yield return ("Rejects invalid metadata", () => RunSync(RejectsInvalidMetadata));
+            yield return ("Honors a verbatim DesktopFile override", () => RunSync(DesktopFileOverride));
             yield return ("Produces deterministic .deb bytes", () => RunSync(DeterministicBytes));
             yield return ("Writes a correct sha256 sidecar", () => RunSync(Sha256Sidecar));
             yield return ("Maps deb settings through MSBuild", () => RunSync(MapsDebSettingsThroughMsBuild));
@@ -313,6 +317,251 @@ internal static class DebTests
         }
     }
 
+    static void WritesDesktopIntegration()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var icon = Path.Combine(input, "..", Guid.NewGuid().ToString("N") + "-icon.png");
+        var icon2x = Path.Combine(input, "..", Guid.NewGuid().ToString("N") + "-icon@2x.png");
+        File.WriteAllBytes(icon, PngBytes(48, 48));
+        File.WriteAllBytes(icon2x, PngBytes(96, 96));
+        // The hicolor slot comes from the @2x file stem, not the generated name.
+        var namedIcon = Path.Combine(Path.GetDirectoryName(icon2x)!,
+            "app@2x.png");
+        File.Move(icon2x, namedIcon);
+        try
+        {
+            var configuration = DebConfiguration(input, output);
+            var deb = new DebBundler(new DebBundleConfiguration
+                {
+                    Categories = "Utility;Development"
+                })
+                .BuildAsync(new BundleConfiguration
+                {
+                    ProductName = configuration.ProductName,
+                    Identifier = configuration.Identifier,
+                    Publisher = configuration.Publisher,
+                    Version = configuration.Version,
+                    Description = configuration.Description,
+                    OutputDirectory = configuration.OutputDirectory,
+                    Icons = [icon, namedIcon],
+                    FileAssociations =
+                    [
+                        new BundleFileAssociationConfiguration
+                        {
+                            Extensions = [".bdl"],
+                            MimeType = "application/x-bundle"
+                        }
+                    ],
+                    UrlProtocols =
+                    [
+                        new BundleUrlProtocolConfiguration { Schemes = ["bdl"] }
+                    ],
+                    Targets = configuration.Targets
+                }).GetAwaiter().GetResult().Single();
+            var members = DebPackageReader.ReadAr(deb.Path);
+            var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
+
+            var desktop = Encoding.UTF8.GetString(
+                data.Single(e => e.Name == "./usr/share/applications/example-app.desktop").Content);
+            Assert(desktop.Contains("Type=Application\n", StringComparison.Ordinal) &&
+                   desktop.Contains("Name=Example App\n", StringComparison.Ordinal) &&
+                   desktop.Contains("Comment=Example application\n", StringComparison.Ordinal) &&
+                   desktop.Contains("Exec=example-app %u\n", StringComparison.Ordinal) &&
+                   desktop.Contains("Icon=example-app\n", StringComparison.Ordinal) &&
+                   desktop.Contains("Terminal=false\n", StringComparison.Ordinal) &&
+                   desktop.Contains("Categories=Utility;Development;\n", StringComparison.Ordinal) &&
+                   desktop.Contains("MimeType=application/x-bundle;x-scheme-handler/bdl;\n", StringComparison.Ordinal),
+                $"The generated .desktop content is wrong:\n{desktop}");
+
+            Assert(data.Any(e => e.Name == "./usr/share/icons/hicolor/48x48/apps/example-app.png") &&
+                   data.Any(e => e.Name == "./usr/share/icons/hicolor/48x48@2/apps/example-app.png"),
+                "Icons must land under hicolor <WxH> and <WxH>@2 directories.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+            File.Delete(icon);
+            File.Delete(namedIcon);
+        }
+    }
+
+    static void WritesRelationAndDocFields()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var filesDir = Path.Combine(output, "..", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(filesDir);
+        var changelog = Path.Combine(filesDir, "CHANGELOG.md");
+        var licenseFile = Path.Combine(filesDir, "LICENSE.txt");
+        var metainfo = Path.Combine(filesDir, "app.metainfo.xml");
+        var extraConf = Path.Combine(filesDir, "defaults.conf");
+        File.WriteAllText(changelog, "# Changelog\n");
+        File.WriteAllText(licenseFile, "MIT\n");
+        File.WriteAllText(metainfo, "<component type=\"desktop-application\"/>\n");
+        File.WriteAllText(extraConf, "key=value\n");
+        try
+        {
+            var configuration = DebConfiguration(input, output);
+            var deb = new DebBundler(new DebBundleConfiguration
+                {
+                    Depends = ["libc6 (>= 2.35)", "libssl3"],
+                    Recommends = ["ca-certificates"],
+                    Provides = ["virtual-example"],
+                    Conflicts = ["legacy-example"],
+                    Replaces = ["legacy-example"],
+                    Section = "utils",
+                    Priority = "extra",
+                    MetainfoFile = metainfo,
+                    ChangelogFile = changelog,
+                    Files =
+                    [
+                        new DebFileEntry { Source = extraConf, Destination = "/etc/example-app/defaults.conf" }
+                    ]
+                })
+                .BuildAsync(new BundleConfiguration
+                {
+                    ProductName = configuration.ProductName,
+                    Identifier = configuration.Identifier,
+                    Publisher = configuration.Publisher,
+                    Version = configuration.Version,
+                    Description = configuration.Description,
+                    LicenseFile = licenseFile,
+                    OutputDirectory = configuration.OutputDirectory,
+                    Targets = configuration.Targets
+                }).GetAwaiter().GetResult().Single();
+            var members = DebPackageReader.ReadAr(deb.Path);
+            var control = Encoding.UTF8.GetString(
+                DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[1].Content))
+                    .Single(e => e.Name == "./control").Content);
+            foreach (var field in new[]
+            {
+                "Depends: libc6 (>= 2.35), libssl3\n",
+                "Recommends: ca-certificates\n",
+                "Provides: virtual-example\n",
+                "Conflicts: legacy-example\n",
+                "Replaces: legacy-example\n",
+                "Section: utils\n",
+                "Priority: extra\n"
+            })
+            {
+                Assert(control.Contains(field, StringComparison.Ordinal),
+                    $"control lacks '{field.Trim()}':\n{control}");
+            }
+            var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
+            Assert(data.Any(e => e.Name == "./usr/share/metainfo/example-app.metainfo.xml"),
+                "metainfo must land under usr/share/metainfo.");
+            var copyright = data.SingleOrDefault(e => e.Name == "./usr/share/doc/example-app/copyright");
+            Assert(copyright is not null && Encoding.UTF8.GetString(copyright.Content) == "MIT\n",
+                "LicenseFile must land at usr/share/doc/<pkg>/copyright.");
+            var gz = data.Single(e => e.Name == "./usr/share/doc/example-app/changelog.gz");
+            Assert(Encoding.UTF8.GetString(DebPackageReader.Ungzip(gz.Content)) == "# Changelog\n",
+                "ChangelogFile must land gzipped at changelog.gz.");
+            var conf = data.SingleOrDefault(e => e.Name == "./etc/example-app/defaults.conf");
+            Assert(conf is not null && Encoding.UTF8.GetString(conf.Content) == "key=value\n",
+                "DebFile entries must land at their absolute destination.");
+        }
+        finally
+        {
+            Cleanup(input, output, filesDir);
+        }
+    }
+
+    static void RejectsInvalidMetadata()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var filesDir = Path.Combine(output, "..", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(filesDir);
+        var anyFile = Path.Combine(filesDir, "x.txt");
+        var notPng = Path.Combine(filesDir, "icon.png");
+        File.WriteAllText(anyFile, "x");
+        File.WriteAllBytes(notPng, [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+        try
+        {
+            var cases = new (string Name, DebBundleConfiguration Settings, string[] Icons)[]
+            {
+                ("bad priority", new DebBundleConfiguration { Priority = "ultra" }, []),
+                ("bad section", new DebBundleConfiguration { Section = "Bad Section!" }, []),
+                ("newline in Depends", new DebBundleConfiguration { Depends = ["libc6\nbad"] }, []),
+                ("relative file destination",
+                    new DebBundleConfiguration { Files = [new DebFileEntry { Source = anyFile, Destination = "etc/x.conf" }] }, []),
+                ("traversal file destination",
+                    new DebBundleConfiguration { Files = [new DebFileEntry { Source = anyFile, Destination = "/etc/../x.conf" }] }, []),
+                ("non-PNG icon", new DebBundleConfiguration(), [notPng]),
+                ("missing DesktopFile", new DebBundleConfiguration { DesktopFile = Path.Combine(filesDir, "nope.desktop") }, []),
+                ("bad categories", new DebBundleConfiguration { Categories = "Not A Category!" }, [])
+            };
+            foreach (var (name, settings, icons) in cases)
+            {
+                var thrown = false;
+                try
+                {
+                    var configuration = DebConfiguration(input, output);
+                    new DebBundler(settings).BuildAsync(new BundleConfiguration
+                        {
+                            ProductName = configuration.ProductName,
+                            Identifier = configuration.Identifier,
+                            Publisher = configuration.Publisher,
+                            Version = configuration.Version,
+                            Description = configuration.Description,
+                            OutputDirectory = configuration.OutputDirectory,
+                            Icons = icons,
+                            Targets = configuration.Targets
+                        }).GetAwaiter().GetResult();
+                }
+                catch (Exception exception) when (exception is ArgumentException or FileNotFoundException or InvalidOperationException)
+                {
+                    thrown = true;
+                }
+                Assert(thrown, $"The '{name}' case must fail validation.");
+            }
+        }
+        finally
+        {
+            Cleanup(input, output, filesDir);
+        }
+    }
+
+    static void DesktopFileOverride()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var filesDir = Path.Combine(output, "..", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(filesDir);
+        var desktop = Path.Combine(filesDir, "custom.desktop");
+        const string custom = "[Desktop Entry]\nType=Application\nName=Custom\nExec=/opt/x/run\n";
+        File.WriteAllText(desktop, custom);
+        try
+        {
+            var deb = new DebBundler(new DebBundleConfiguration { DesktopFile = desktop })
+                .BuildAsync(DebConfiguration(input, output))
+                .GetAwaiter().GetResult().Single();
+            var members = DebPackageReader.ReadAr(deb.Path);
+            var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
+            var entry = data.Single(e => e.Name == "./usr/share/applications/example-app.desktop");
+            Assert(Encoding.UTF8.GetString(entry.Content) == custom,
+                "A DesktopFile override must be packed verbatim.");
+        }
+        finally
+        {
+            Cleanup(input, output, filesDir);
+        }
+    }
+
+    static byte[] PngBytes(int width, int height)
+    {
+        var png = new byte[33];
+        new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }.CopyTo(png, 0);
+        png[11] = 0x0D; // IHDR length
+        png[12] = (byte)'I'; png[13] = (byte)'H'; png[14] = (byte)'D'; png[15] = (byte)'R';
+        png[16] = (byte)(width >> 24); png[17] = (byte)(width >> 16);
+        png[18] = (byte)(width >> 8); png[19] = (byte)width;
+        png[20] = (byte)(height >> 24); png[21] = (byte)(height >> 16);
+        png[22] = (byte)(height >> 8); png[23] = (byte)height;
+        return png;
+    }
+
     static void StagesResources()
     {
         var input = CreateInputDirectory();
@@ -401,10 +650,26 @@ internal static class DebTests
                targets.Contains("DebArchitecture=\"$(BundlerDebArchitecture)\"", StringComparison.Ordinal) &&
                targets.Contains("DebMaintainer=\"$(BundlerDebMaintainer)\"", StringComparison.Ordinal) &&
                targets.Contains("DebInstallRoot=\"$(BundlerDebInstallRoot)\"", StringComparison.Ordinal) &&
-               targets.Contains("DebBinLink=\"$(BundlerDebBinLink)\"", StringComparison.Ordinal),
+               targets.Contains("DebBinLink=\"$(BundlerDebBinLink)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebDepends=\"$(BundlerDebDepends)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebRecommends=\"$(BundlerDebRecommends)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebProvides=\"$(BundlerDebProvides)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebConflicts=\"$(BundlerDebConflicts)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebReplaces=\"$(BundlerDebReplaces)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebSection=\"$(BundlerDebSection)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebPriority=\"$(BundlerDebPriority)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebCategories=\"$(BundlerDebCategories)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebDesktopFile=\"$(BundlerDebDesktopFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebMetainfoFile=\"$(BundlerDebMetainfoFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebChangelogFile=\"$(BundlerDebChangelogFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebFiles=\"@(BundlerDebFile)\"", StringComparison.Ordinal) &&
+               task.Contains("DebFiles.Select(item => new DebFileEntry", StringComparison.Ordinal),
             "MSBuild does not map the BundlerDeb* properties to the task.");
         Assert(props.Contains("<BundlerDebPackageName", StringComparison.Ordinal) &&
-               props.Contains("<BundlerDebInstallRoot", StringComparison.Ordinal),
+               props.Contains("<BundlerDebInstallRoot", StringComparison.Ordinal) &&
+               props.Contains("<BundlerDebDepends", StringComparison.Ordinal) &&
+               props.Contains("<BundlerDebCategories", StringComparison.Ordinal) &&
+               props.Contains("<BundlerDebChangelogFile", StringComparison.Ordinal),
             "The BundlerDeb* properties lack defaults in the .props file.");
         Assert(task.Contains("new DebBundler(", StringComparison.Ordinal) &&
                task.Contains("PackageFormat.Deb", StringComparison.Ordinal),

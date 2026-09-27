@@ -37,11 +37,39 @@
     <BundlerDebMaintainer Condition="'$(HelloDebMaintainer)' != ''">$(HelloDebMaintainer)</BundlerDebMaintainer>
     <BundlerDebInstallRoot Condition="'$(HelloDebInstallRoot)' != ''">$(HelloDebInstallRoot)</BundlerDebInstallRoot>
     <BundlerDebBinLink Condition="'$(HelloDebBinLink)' != ''">$(HelloDebBinLink)</BundlerDebBinLink>
+
+    <!-- LINUX-DEB-2 范围：关系字段纯透传（分号 = 子句分隔，逗号是 Debian 语法）；
+         Section/Priority 覆盖（Priority 合法值 required/important/standard/optional/extra）；
+         Categories 是 freedesktop 分号列表；
+         DesktopFile/MetainfoFile/ChangelogFile 指向本地文件，DesktopFile 是整文件覆盖。 -->
+    <BundlerDebDepends Condition="'$(HelloDebDepends)' != ''">$(HelloDebDepends)</BundlerDebDepends>
+    <BundlerDebRecommends Condition="'$(HelloDebRecommends)' != ''">$(HelloDebRecommends)</BundlerDebRecommends>
+    <BundlerDebProvides Condition="'$(HelloDebProvides)' != ''">$(HelloDebProvides)</BundlerDebProvides>
+    <BundlerDebConflicts Condition="'$(HelloDebConflicts)' != ''">$(HelloDebConflicts)</BundlerDebConflicts>
+    <BundlerDebReplaces Condition="'$(HelloDebReplaces)' != ''">$(HelloDebReplaces)</BundlerDebReplaces>
+    <BundlerDebSection Condition="'$(HelloDebSection)' != ''">$(HelloDebSection)</BundlerDebSection>
+    <BundlerDebPriority Condition="'$(HelloDebPriority)' != ''">$(HelloDebPriority)</BundlerDebPriority>
+    <BundlerDebCategories>Utility;Development</BundlerDebCategories>
+    <BundlerDebCategories Condition="'$(HelloDebCategories)' != ''">$(HelloDebCategories)</BundlerDebCategories>
+    <BundlerDebDesktopFile Condition="'$(HelloDebDesktopFile)' != ''">$(HelloDebDesktopFile)</BundlerDebDesktopFile>
+    <BundlerDebMetainfoFile>$(MSBuildThisFileDirectory)Assets/app.metainfo.xml</BundlerDebMetainfoFile>
+    <BundlerDebMetainfoFile Condition="'$(HelloDebMetainfoFile)' != ''">$(HelloDebMetainfoFile)</BundlerDebMetainfoFile>
+    <BundlerDebChangelogFile>$(MSBuildThisFileDirectory)Assets/CHANGELOG.md</BundlerDebChangelogFile>
+    <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets/LICENSE.txt</BundlerLicenseFile>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
     <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <!-- 资源项演示：随载荷落到 install-root 下的 docs/readme.txt。 -->
     <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <!-- 图标（PNG，尺寸自动探测；文件名 @2x 后缀 → hicolor <WxH>@2 槽位）。 -->
+    <BundlerIcon Include="Assets/icon48.png" />
+    <BundlerIcon Include="Assets/icon@2x.png" />
+    <!-- 文件关联与 URL 协议 → .desktop 的 MimeType（含 x-scheme-handler/ 前缀）。 -->
+    <BundlerFileAssociation Include=".hellodeb" Name="Hello Deb document"
+        Description="HelloDebApp sample document" MimeType="application/x-hellodeb" />
+    <BundlerUrlProtocol Include="hellodeb" Name="Hello Deb" />
+    <!-- BundlerDebFile：任意文件落进包内绝对路径（含文件名，禁止相对路径与 ..）。 -->
+    <BundlerDebFile Include="Assets/defaults.conf" Destination="/etc/hello-deb-app/defaults.conf" />
   </ItemGroup>
 </Project>

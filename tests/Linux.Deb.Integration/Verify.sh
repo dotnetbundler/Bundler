@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# LINUX-DEB-1 .deb 集成验证：真实 .NET payload → BundlerFormats=deb → ar/dpkg-deb 结构断言
+# LINUX-DEB-1/2 .deb 集成验证：真实 .NET payload → BundlerFormats=deb → ar/dpkg-deb 结构断言
 # → dpkg-deb -I/-c 元数据与内容清单核对 → md5sums/sha256 校验 → sudo dpkg -i/-r 真实装卸。
 # 用法: bash tests/Linux.Deb.Integration/Verify.sh
 # 需要 Linux 宿主（dpkg/apt 系）与 dotnet SDK；产物仅在 artifacts/linux-deb-integration 下落盘并全部清理。
@@ -27,9 +27,11 @@ cleanup() {
 trap cleanup EXIT
 
 [[ "$(uname -s)" == "Linux" ]] || fail "This integration test requires a Linux host."
-for tool in dotnet ar tar md5sum sha256sum dpkg-deb unzip; do
+for tool in dotnet ar tar md5sum sha256sum dpkg-deb unzip gzip; do
     command -v "$tool" >/dev/null || fail "$tool is unavailable on this host."
 done
+# 可选断言工具：缺失则记 SKIP（desktop-file-validate/lintian）。
+optional_tools="desktop-file-validate lintian"
 
 version="$(sed -n 's:.*<BundlerPackageVersion>\(.*\)</BundlerPackageVersion>.*:\1:p' "$repo_root/Directory.Build.props" | head -n1 | tr -d '[:space:]')"
 [[ -n "$version" ]] || fail "BundlerPackageVersion is missing from Directory.Build.props."
@@ -120,8 +122,44 @@ printf '%s' "$listing" | grep -q "usr/bin/bundler-deb-fixture -> ../lib/bundler-
     || fail "Payload lacks the relative usr/bin symlink: $(printf '%s' "$listing")"
 printf '%s' "$listing" | grep -qE "^-rwxr-xr-x .*usr/lib/bundler-deb-fixture/BundlerDebIntegrationFixture$" \
     || fail "The main executable lacks mode 0755: $(printf '%s' "$listing")"
+printf '%s' "$listing" | grep -q "usr/share/applications/bundler-deb-fixture.desktop" \
+    || fail "The payload listing lacks the .desktop file."
 
+log "== desktop integration payload (.desktop/icons/metainfo/doc/DebFile) =="
 deb_data "$deb_path" default
+data_root="$extract_root/data/default"
+desktop_file="$data_root/usr/share/applications/bundler-deb-fixture.desktop"
+[[ -f "$desktop_file" ]] || fail "The generated .desktop file is missing."
+desktop="$(cat "$desktop_file")"
+for line in "Type=Application" "Name=Bundler Deb Fixture" \
+    "Comment=Disposable .deb integration-test fixture." "Exec=bundler-deb-fixture %u" \
+    "Icon=bundler-deb-fixture" "Terminal=false" "Categories=Utility;Development;" \
+    "MimeType=application/x-bundler-fixture;x-scheme-handler/bdlfixture;"; do
+    printf '%s\n' "$desktop" | grep -qxF "$line" \
+        || fail "The .desktop file lacks '$line': $(printf '%s\n' "$desktop")"
+done
+[[ -f "$data_root/usr/share/icons/hicolor/48x48/apps/bundler-deb-fixture.png" ]] \
+    || fail "The hicolor 48x48 icon is missing."
+[[ -f "$data_root/usr/share/icons/hicolor/48x48@2/apps/bundler-deb-fixture.png" ]] \
+    || fail "The hicolor @2 icon is missing."
+[[ -f "$data_root/usr/share/metainfo/bundler-deb-fixture.metainfo.xml" ]] \
+    || fail "The metainfo file is missing."
+[[ -f "$data_root/usr/share/doc/bundler-deb-fixture/copyright" ]] \
+    || fail "The copyright file is missing."
+grep -qx "MIT License" <(head -n1 "$data_root/usr/share/doc/bundler-deb-fixture/copyright") \
+    || fail "The copyright content is wrong."
+[[ -f "$data_root/usr/share/doc/bundler-deb-fixture/changelog.gz" ]] \
+    || fail "changelog.gz is missing."
+gzip -dc "$data_root/usr/share/doc/bundler-deb-fixture/changelog.gz" | grep -q "# Changelog" \
+    || fail "changelog.gz does not contain the changelog."
+[[ -f "$data_root/etc/bundler-deb-fixture/defaults.conf" ]] \
+    || fail "The BundlerDebFile /etc entry is missing."
+if command -v desktop-file-validate >/dev/null; then
+    desktop-file-validate "$desktop_file" || fail "desktop-file-validate rejects the generated file."
+else
+    log "SKIP: desktop-file-validate unavailable on this host."
+fi
+
 app="$extract_root/data/default/usr/lib/bundler-deb-fixture/BundlerDebIntegrationFixture"
 [[ -x "$app" ]] || fail "Extracted executable is not executable."
 [[ "$("$app")" == BundlerDebIntegrationFixture:* ]] || fail "The extracted app did not run."
@@ -161,6 +199,54 @@ deb_control "$semver_deb" semver
 grep -qF "Version: 2.5.0~beta.3+build.1-1" "$extract_root/control/semver/control" \
     || fail "SemVer mapping missing in control: $(cat "$extract_root/control/semver/control")"
 
+log "== metadata variant (relations/section/priority) =="
+publish_fixture metadata \
+    -p:BundlerTestDebDepends="libc6 (>= 2.35)%3Blibssl3" \
+    -p:BundlerTestDebRecommends="ca-certificates" \
+    -p:BundlerTestDebProvides="virtual-fixture" \
+    -p:BundlerTestDebConflicts="legacy-fixture" \
+    -p:BundlerTestDebReplaces="legacy-fixture" \
+    -p:BundlerTestDebSection=utils \
+    -p:BundlerTestDebPriority=extra >/dev/null
+metadata_deb="$integration_root/metadata/linux-x64/deb/bundler-deb-fixture_1.0.0-1_amd64.deb"
+[[ -f "$metadata_deb" ]] || fail "Metadata variant produced no .deb."
+deb_control "$metadata_deb" metadata
+control="$(cat "$extract_root/control/metadata/control")"
+for field in "Depends: libc6 (>= 2.35), libssl3" "Recommends: ca-certificates" \
+    "Provides: virtual-fixture" "Conflicts: legacy-fixture" "Replaces: legacy-fixture" \
+    "Section: utils" "Priority: extra"; do
+    printf '%s\n' "$control" | grep -qF "$field" \
+        || fail "Metadata control lacks '$field': $(printf '%s\n' "$control")"
+done
+
+log "== desktop override variant (BundlerDebDesktopFile) =="
+publish_fixture desktop-override \
+    -p:BundlerTestDebDesktopFile="$script_dir/Fixture/Assets/custom.desktop" >/dev/null
+desktop_deb="$integration_root/desktop-override/linux-x64/deb/bundler-deb-fixture_1.0.0-1_amd64.deb"
+deb_data "$desktop_deb" desktop-override
+custom_desktop="$extract_root/data/desktop-override/usr/share/applications/bundler-deb-fixture.desktop"
+[[ -f "$custom_desktop" ]] || fail "The override .desktop is missing."
+grep -qx "Name=Bundler Deb Fixture Custom" "$custom_desktop" \
+    || fail "The override .desktop content differs: $(cat "$custom_desktop")"
+if command -v desktop-file-validate >/dev/null; then
+    desktop-file-validate "$custom_desktop" \
+        || fail "desktop-file-validate rejects the override .desktop."
+fi
+
+log "== failure variants (invalid DEB-2 knobs) =="
+if publish_fixture fail-priority -p:BundlerTestDebPriority=ultra \
+        >"$integration_root/fail-priority.log" 2>&1; then
+    fail "An invalid Priority must fail the publish."
+fi
+grep -qi "priority" "$integration_root/fail-priority.log" \
+    || fail "The Priority failure did not mention Priority."
+if publish_fixture fail-categories -p:BundlerTestDebCategories="Not A Category!" \
+        >"$integration_root/fail-categories.log" 2>&1; then
+    fail "Invalid Categories must fail the publish."
+fi
+grep -qi "categor" "$integration_root/fail-categories.log" \
+    || fail "The Categories failure did not mention Categories."
+
 log "== failure variant (relative install root) =="
 if publish_fixture failure -p:BundlerTestDebInstallRoot="relative/path" \
         >"$integration_root/failure.log" 2>&1; then
@@ -194,8 +280,30 @@ if sudo -n true 2>/dev/null; then
         || fail "The installed symlink did not launch the app."
     [[ "$(dpkg-deb -f "$deb_path" Installed-Size)" =~ ^[0-9]+$ ]] \
         || fail "Installed-Size is not numeric."
+    log "== installed desktop integration (dpkg -L + readback) =="
+    installed_files="$(dpkg -L bundler-deb-fixture)" || fail "dpkg -L failed."
+    for path in "/usr/share/applications/bundler-deb-fixture.desktop" \
+        "/usr/share/icons/hicolor/48x48/apps/bundler-deb-fixture.png" \
+        "/usr/share/icons/hicolor/48x48@2/apps/bundler-deb-fixture.png" \
+        "/usr/share/metainfo/bundler-deb-fixture.metainfo.xml" \
+        "/usr/share/doc/bundler-deb-fixture/copyright" \
+        "/usr/share/doc/bundler-deb-fixture/changelog.gz" \
+        "/etc/bundler-deb-fixture/defaults.conf"; do
+        printf '%s\n' "$installed_files" | grep -qxF "$path" \
+            || fail "dpkg -L lacks '$path'."
+        [[ -e "$path" ]] || fail "Installed path missing: $path"
+    done
+    installed_desktop="$(cat /usr/share/applications/bundler-deb-fixture.desktop)"
+    printf '%s\n' "$installed_desktop" | grep -qx "Exec=bundler-deb-fixture %u" \
+        || fail "The installed .desktop differs from the generated one."
+    if command -v desktop-file-validate >/dev/null; then
+        desktop-file-validate /usr/share/applications/bundler-deb-fixture.desktop \
+            || fail "desktop-file-validate rejects the installed .desktop."
+    fi
     sudo -n dpkg -r bundler-deb-fixture >/dev/null || fail "dpkg -r failed."
-    [[ ! -e /usr/lib/bundler-deb-fixture && ! -e /usr/bin/bundler-deb-fixture ]] \
+    [[ ! -e /usr/lib/bundler-deb-fixture && ! -e /usr/bin/bundler-deb-fixture \
+        && ! -e /usr/share/applications/bundler-deb-fixture.desktop \
+        && ! -e /etc/bundler-deb-fixture/defaults.conf ]] \
         || fail "Removal left payload residue."
     if dpkg -s bundler-deb-fixture >/dev/null 2>&1; then
         fail "dpkg -s still reports the package after removal."
@@ -205,4 +313,11 @@ else
     log "SKIP: passwordless sudo unavailable; real dpkg -i/-r not exercised."
 fi
 
-log "PASS: LINUX-DEB-1 integration checks complete."
+if command -v lintian >/dev/null; then
+    log "== lintian audit (informational) =="
+    lintian "$deb_path" || log "note: lintian reported findings (recorded, not blocking)."
+else
+    log "SKIP: lintian unavailable on this host."
+fi
+
+log "PASS: LINUX-DEB-1/2 integration checks complete."

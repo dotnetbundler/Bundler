@@ -261,6 +261,13 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerDebMaintainer` | 否 | `BundlerPublisher` → `BundlerIdentifier` 回退 |
 | `BundlerDebInstallRoot` | 否 | `/usr/lib/<包名>`；须为绝对路径且无 `..`；非 `/usr` 根下时 `usr/bin` 链接目标转绝对路径 |
 | `BundlerDebBinLink` | 否 | 包名；`none`（不分大小写）关闭 `usr/bin` 链接 |
+| `BundlerDebDepends`/`Recommends`/`Provides`/`Conflicts`/`Replaces` | 否 | 空；分号分隔子句、原样透传 control（`-p:` 含分号需 `%3B` 转义） |
+| `BundlerDebSection`/`BundlerDebPriority` | 否 | Section 省略 / `optional`；Priority 限 `required`/`important`/`standard`/`optional`/`extra` |
+| `BundlerDebCategories` | 否 | 省略；生成 `.desktop` 的 `Categories`（freedesktop 分号列表） |
+| `BundlerDebDesktopFile` | 否 | 无；`.desktop` 整文件覆盖，跳过自动生成 |
+| `BundlerDebMetainfoFile` | 否 | 无；AppStream metainfo → `usr/share/metainfo/<包名>.metainfo.xml` |
+| `BundlerDebChangelogFile` | 否 | 无；→ `usr/share/doc/<包名>/changelog.gz`（自动 gzip；`BundlerLicenseFile` → `copyright`） |
+| `@(BundlerDebFile)`（`Destination`） | 否 | 无；任意文件 → 包内绝对路径（含文件名，拒相对/`..`/空段） |
 | `BundlerWindowsSigningPfxFile` | 否 | PFX/P12 代码签名证书路径 |
 | `BundlerWindowsSigningPfxPasswordEnvironmentVariable` | 否 | 保存 PFX 密码的环境变量名 |
 | `BundlerWindowsSigningCertificateThumbprint` | 否 | Windows `My` 证书存储区中的证书指纹 |

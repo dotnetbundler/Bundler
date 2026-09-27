@@ -22,10 +22,30 @@
     <BundlerDebMaintainer Condition="'$(BundlerTestDebMaintainer)' != ''">$(BundlerTestDebMaintainer)</BundlerDebMaintainer>
     <BundlerDebInstallRoot Condition="'$(BundlerTestDebInstallRoot)' != ''">$(BundlerTestDebInstallRoot)</BundlerDebInstallRoot>
     <BundlerDebBinLink Condition="'$(BundlerTestDebBinLink)' != ''">$(BundlerTestDebBinLink)</BundlerDebBinLink>
+    <BundlerDebDepends Condition="'$(BundlerTestDebDepends)' != ''">$(BundlerTestDebDepends)</BundlerDebDepends>
+    <BundlerDebRecommends Condition="'$(BundlerTestDebRecommends)' != ''">$(BundlerTestDebRecommends)</BundlerDebRecommends>
+    <BundlerDebProvides Condition="'$(BundlerTestDebProvides)' != ''">$(BundlerTestDebProvides)</BundlerDebProvides>
+    <BundlerDebConflicts Condition="'$(BundlerTestDebConflicts)' != ''">$(BundlerTestDebConflicts)</BundlerDebConflicts>
+    <BundlerDebReplaces Condition="'$(BundlerTestDebReplaces)' != ''">$(BundlerTestDebReplaces)</BundlerDebReplaces>
+    <BundlerDebSection Condition="'$(BundlerTestDebSection)' != ''">$(BundlerTestDebSection)</BundlerDebSection>
+    <BundlerDebPriority Condition="'$(BundlerTestDebPriority)' != ''">$(BundlerTestDebPriority)</BundlerDebPriority>
+    <BundlerDebCategories>Utility;Development</BundlerDebCategories>
+    <BundlerDebCategories Condition="'$(BundlerTestDebCategories)' != ''">$(BundlerTestDebCategories)</BundlerDebCategories>
+    <BundlerDebDesktopFile Condition="'$(BundlerTestDebDesktopFile)' != ''">$(BundlerTestDebDesktopFile)</BundlerDebDesktopFile>
+    <BundlerDebMetainfoFile Condition="'$(BundlerTestDebSkipMetainfo)' != 'true'">$(MSBuildThisFileDirectory)Assets/app.metainfo.xml</BundlerDebMetainfoFile>
+    <BundlerDebMetainfoFile Condition="'$(BundlerTestDebMetainfoFile)' != ''">$(BundlerTestDebMetainfoFile)</BundlerDebMetainfoFile>
+    <BundlerDebChangelogFile>$(MSBuildThisFileDirectory)Assets/CHANGELOG.md</BundlerDebChangelogFile>
+    <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets/LICENSE.txt</BundlerLicenseFile>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
     <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <BundlerIcon Include="Assets/icon48.png" />
+    <BundlerIcon Include="Assets/icon@2x.png" />
+    <BundlerFileAssociation Include=".bdlfixture" Name="Bundler fixture document"
+        MimeType="application/x-bundler-fixture" />
+    <BundlerUrlProtocol Include="bdlfixture" Name="Bundler fixture" />
+    <BundlerDebFile Include="Assets/defaults.conf" Destination="/etc/bundler-deb-fixture/defaults.conf" />
   </ItemGroup>
 </Project>

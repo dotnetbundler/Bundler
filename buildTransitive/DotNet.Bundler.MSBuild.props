@@ -132,5 +132,16 @@
     <BundlerDebMaintainer Condition="'$(BundlerDebMaintainer)' == ''"></BundlerDebMaintainer>
     <BundlerDebInstallRoot Condition="'$(BundlerDebInstallRoot)' == ''"></BundlerDebInstallRoot>
     <BundlerDebBinLink Condition="'$(BundlerDebBinLink)' == ''"></BundlerDebBinLink>
+    <BundlerDebDepends Condition="'$(BundlerDebDepends)' == ''"></BundlerDebDepends>
+    <BundlerDebRecommends Condition="'$(BundlerDebRecommends)' == ''"></BundlerDebRecommends>
+    <BundlerDebProvides Condition="'$(BundlerDebProvides)' == ''"></BundlerDebProvides>
+    <BundlerDebConflicts Condition="'$(BundlerDebConflicts)' == ''"></BundlerDebConflicts>
+    <BundlerDebReplaces Condition="'$(BundlerDebReplaces)' == ''"></BundlerDebReplaces>
+    <BundlerDebSection Condition="'$(BundlerDebSection)' == ''"></BundlerDebSection>
+    <BundlerDebPriority Condition="'$(BundlerDebPriority)' == ''"></BundlerDebPriority>
+    <BundlerDebCategories Condition="'$(BundlerDebCategories)' == ''"></BundlerDebCategories>
+    <BundlerDebDesktopFile Condition="'$(BundlerDebDesktopFile)' == ''"></BundlerDebDesktopFile>
+    <BundlerDebMetainfoFile Condition="'$(BundlerDebMetainfoFile)' == ''"></BundlerDebMetainfoFile>
+    <BundlerDebChangelogFile Condition="'$(BundlerDebChangelogFile)' == ''"></BundlerDebChangelogFile>
   </PropertyGroup>
 </Project>

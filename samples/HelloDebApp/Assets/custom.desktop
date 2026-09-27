@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Hello Deb App Custom
+Exec=/usr/lib/hello-deb-app/HelloDebApp
+Terminal=false
+Categories=Utility;

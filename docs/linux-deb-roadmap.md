@@ -1,6 +1,6 @@
 # Linux `.deb` 后端实施路线（LINUX-DEB）
 
-> 状态：**LINUX-DEB-1 已完成并验证**（2026-09-27，分支 `linux-deb-development`，`BundlerPackageVersion` `0.1.0-alpha.48`）。
+> 状态：**LINUX-DEB-2 已完成并验证**（2026-09-27，分支 `linux-deb-development`，`BundlerPackageVersion` `0.1.0-alpha.49`）。
 > 上游审计见 [`docs/linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `tauri-apps/tauri@447fa9f`）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 > 逐项能力状态见 [`docs/linux-deb-capability-matrix.md`](linux-deb-capability-matrix.md)；外部条件见 [`docs/linux-deb-open-items.md`](linux-deb-open-items.md)；人工步骤见 [`docs/linux-deb-manual-testing.md`](linux-deb-manual-testing.md)。
@@ -83,6 +83,9 @@
 - **前置**：LINUX-DEB-1 通过。
 - **目标/交付**：`Depends`/`Recommends`/`Provides`/`Conflicts`/`Replaces`/`Section`/`Priority`/`Maintainer` 覆盖；`.desktop` 生成（决策 5 全字段，`MimeType` 并集含 `x-scheme-handler/`）；hicolor 图标（PNG 尺寸探测、`@2x`）；`ChangelogFile`→changelog.gz、`LicenseFile`→copyright；`BundlerDebFile` 包内绝对路径映射；`DesktopFile` 整文件覆盖旋钮；`BundlerDebInstallRoot`/`BundlerDebBinLink`。
 - **退出**：`desktop-file-validate` 通过断言；图标/桌面文件落入正确 hicolor/applications 路径断言；装后 `dpkg -L` 与 .desktop 内容回读。
+- **状态**：已完成（2026-09-27）。关系字段透传 + Section/Priority 校验、`.desktop` 生成与整文件覆盖、PNG 尺寸探测 + `@2x` hicolor 落位、metainfo、`changelog.gz`/`copyright`、`BundlerDebFile` 绝对路径映射全部实现；`BundlerDeb*` MSBuild 接线 + `@(BundlerDebFile)`（`Destination` 元数据）就位。
+- **证据**：`Bundler.Tests` 新增 4 项（合计 137 全绿）；`Verify.sh` 新增元数据/桌面覆盖/失败变体与 `desktop-file-validate`、装后 `dpkg -L` 回读断言全绿；`lintian` 信息级审计已运行，残余发现登记于 `linux-deb-open-items.md`。
+- **实现注记**：tar 条目 mtime 由 epoch 0 改为固定值 1980-01-01 UTC（`TarWriter.EntryMtime`）——保持字节级确定性的同时规避 lintian `package-contains-ancient-file`。
 
 ### LINUX-DEB-3：维护者脚本、systemd 与压缩
 
