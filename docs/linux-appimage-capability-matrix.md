@@ -17,8 +17,8 @@
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
 | freedesktop 三件套（`.desktop`/hicolor 图标/metainfo） | 已实现 | LINUX-APPIMAGE-1 | 复用 `Bundler.Core` 共享生成器（`AlwaysEmitIcon`）；生成 `Categories` 缺省 `Utility`（appimagetool 硬要求）；`desktop-file-validate` 通过 |
-| `BundlerAppImage*` 旋钮面（名称/版本/架构/install-root/bin-link/图标/桌面文件/categories/metainfo） | 部分实现 | LINUX-APPIMAGE-1 已接全部九旋钮；文件映射归 APPIMAGE-2 | 压缩旋钮移除（决策 10：pinned mksquashfs 仅 zstd）；非法输入拒绝断言已覆盖 |
-| `BundlerAppImageFile` 任意 AppDir 路径映射 | 计划实现 | LINUX-APPIMAGE-2 | 逃逸校验同 deb/rpm 口径 |
+| `BundlerAppImage*` 旋钮面（名称/版本/架构/install-root/bin-link/图标/桌面文件/categories/metainfo） | 已实现 | LINUX-APPIMAGE-1/2 | 九旋钮 + File 映射全接；压缩旋钮移除（决策 10：pinned mksquashfs 仅 zstd）；非法输入拒绝断言覆盖 |
+| `BundlerAppImageFile` 任意 AppDir 路径映射 | 已实现 | LINUX-APPIMAGE-2 | AppDir 相对 POSIX 目标；拒绝对路径/`..`/空段/反斜杠/生成件碰撞/已存在路径 |
 
 ## 维护者能力
 

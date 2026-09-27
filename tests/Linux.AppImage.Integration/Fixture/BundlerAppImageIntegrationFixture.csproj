@@ -36,5 +36,9 @@
     <BundlerFileAssociation Include=".bdlfixture" Name="Bundler fixture document"
         MimeType="application/x-bundler-fixture" />
     <BundlerUrlProtocol Include="bdlfixture" Name="Bundler fixture" />
+    <BundlerAppImageFile Condition="'$(BundlerTestAppImageFiles)' == '1'"
+        Include="Assets/defaults.conf" Destination="opt/extras/defaults.conf" />
+    <BundlerAppImageFile Condition="'$(BundlerTestAppImageBadFile)' == '1'"
+        Include="Assets/defaults.conf" Destination="/etc/escape.conf" />
   </ItemGroup>
 </Project>

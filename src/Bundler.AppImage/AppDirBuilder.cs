@@ -182,6 +182,48 @@ internal static class AppDirBuilder
         File.WriteAllText(appRunPath, appRun);
         AppImageToolset.Chmod(appRunPath, "+x");
 
+        // Arbitrary caller files last; collisions with generated entries are
+        // rejected rather than silently shadowed.
+        if (settings.Files is { Count: > 0 } files)
+        {
+            var reserved = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "AppRun", ".DirIcon",
+                packageName + ".desktop", packageName + ".png"
+            };
+            foreach (var entry in files)
+            {
+                var destination = (entry.Destination ?? "").Replace('\\', '/').Trim('/');
+                if (destination.Length == 0 ||
+                    destination.Split('/').Any(segment => segment is "" or "." or "..") ||
+                    (entry.Destination ?? "").Contains('\\') ||
+                    (entry.Destination ?? "").TrimStart().StartsWith("/"))
+                {
+                    throw new ArgumentException(
+                        $"BundlerAppImageFile destinations must be relative paths inside the AppDir, got '{entry.Destination}'.");
+                }
+                if (reserved.Contains(destination))
+                {
+                    throw new ArgumentException(
+                        $"BundlerAppImageFile destination '{destination}' collides with a generated AppDir entry.");
+                }
+                var source = FreedesktopFiles.RequireExisting(entry.Source, "BundlerAppImageFile");
+                var hostDestination = Path.Combine(appDir, destination.Replace('/', Path.DirectorySeparatorChar));
+                // File.Exists follows symlinks; check the dir listing too so a
+                // symlink is spotted even if its target does not exist.
+                var hostParent = Path.GetDirectoryName(hostDestination) ?? appDir;
+                if (File.Exists(hostDestination) || Directory.Exists(hostDestination) ||
+                    (Directory.Exists(hostParent) &&
+                     Directory.GetFiles(hostParent, Path.GetFileName(hostDestination)).Length > 0))
+                {
+                    throw new ArgumentException(
+                        $"BundlerAppImageFile destination '{destination}' already exists in the AppDir.");
+                }
+                Directory.CreateDirectory(Path.GetDirectoryName(hostDestination)!);
+                File.Copy(source, hostDestination);
+            }
+        }
+
         return new Result
         {
             AppDirPath = appDir,

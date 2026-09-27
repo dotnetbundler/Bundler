@@ -1,6 +1,6 @@
 # Linux .AppImage 集成验证（tests/Linux.AppImage.Integration）
 
-`Verify.sh` 是 `.AppImage` 后端的真实验证入口，覆盖 `LINUX-APPIMAGE-1` 的退出条件。
+`Verify.sh` 是 `.AppImage` 后端的真实验证入口，覆盖 `LINUX-APPIMAGE-1..2` 的退出条件。
 
 ## 用法
 
@@ -18,6 +18,7 @@ bash tests/Linux.AppImage.Integration/Verify.sh
 - `--appimage-extract` 结构断言：`AppRun`（sh 脚本、exec 经 usr/bin 链接）、根 `<pkg>.desktop` 符号链接、`usr/share/applications/` staged 件（`desktop-file-validate`）、`<pkg>.png`/`.DirIcon`、hicolor 图标、metainfo、`usr/lib/<pkg>/` 载荷与 `usr/bin` 链接、`BundlerResource` 落位。
 - 真实运行：解出的 `AppRun hello world` 与整包 `--appimage-extract-and-run hi` 均输出 `BundlerAppImageIntegrationFixture:<args>`。
 - 覆盖变体：包名/版本/BinLink/InstallRoot/IconFile 逐一断言；`.desktop` 整文件覆盖变体断言内容与根链接。
+- 任意文件映射变体：`@(BundlerAppImageFile)` 落 AppDir 相对路径并回读内容断言；bad-file 变体（绝对路径目标）必须使 publish 失败。
 - 失败变体：`Architecture=ppc64` 必须使 publish 失败。
 - arm64 结构断言：`-r linux-arm64` → `*_aarch64.AppImage`、ELF magic、e_machine=0xb7（EM_AARCH64）；宿主为 x86_64 不解包不运行。
 - 扇出：`BundlerTestFormats=deb%3Brpm%3Bappimage` 一次 publish 三件产物齐备。

@@ -66,3 +66,10 @@
 - 证据：`Bundler.Tests` 171/171（新增 8 项：AppDir 结构/AppRun 内容/命名/默认图标/非法拒绝/真实构建/交叉构建/接线断言）；`tests/Linux.AppImage.Integration/Verify.sh` 全绿：`--appimage-extract` 结构断言 + 解出 `AppRun` 与 `--appimage-extract-and-run` 真实运行 + 覆盖/桌面覆盖/失败变体 + aarch64 ELF 结构断言 + `deb;rpm;appimage` 扇出 + docker debian/ubuntu/fedora 容器冒烟 + 直 API nupkg 消费。
 - 实测修正：决策 4 可交叉（runtime 内嵌方案）；决策 10 仅 zstd（pinned mksquashfs 约束）；pinned appimagetool 不带 `--runtime-file` 会联网下载 runtime——已改为始终内嵌供应；appimagetool 强制 `Categories=`——生成件缺省补 `Utility`。
 - 边界：`BundlerAppImageFile` 任意映射归 APPIMAGE-2；appimagelint 归 APPIMAGE-3；aarch64 真机运行 OI-01。
+
+### LINUX-APPIMAGE-2（已实现，`0.1.0-alpha.57`）
+
+- 交付：`AppImageFileEntry` + `AppImageBundleConfiguration.Files`（AppDir 相对 POSIX 目标，拒绝对路径/`..`/`.`/空段/反斜杠）；落位晚于生成件，与 `AppRun`/`.DirIcon`/根 `<name>.desktop`/`<name>.png` 及已存在路径碰撞即拒绝；MSBuild `@(BundlerAppImageFile)`（`Destination` 元数据）接线。
+- 证据：`Bundler.Tests` 173/173（新增 2 项：任意文件落位 + 8 类非法目标/碰撞/缺源拒绝）；`Verify.sh` 新增 files 变体（解出断言内容一致）与 bad-file 失败变体（绝对路径目标 publish 失败）；示例 `HelloAppImageApp` 演示 `HelloAppImageFiles=1`。
+- 边界：压缩旋钮已在 APPIMAGE-1 按实测移除（决策 10）；freedesktop 旋钮族九件在 APPIMAGE-1 一次接齐，本阶段仅余 File 映射收口。
+- 阶段范围修正：原 APPIMAGE-2 范围中除 File 映射外的旋钮在 APPIMAGE-1 已落地，故此阶段实质为 File 映射 + 拒绝路径收口。

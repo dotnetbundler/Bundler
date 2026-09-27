@@ -58,5 +58,8 @@
     <BundlerFileAssociation Include=".hello-appimage" Name="Hello AppImage document"
         MimeType="application/x-hello-appimage" />
     <BundlerUrlProtocol Include="hello-appimage" Name="Hello AppImage" />
+    <!-- 任意 AppDir 相对路径映射演示：opt/hello-appimage-app/defaults.conf。 -->
+    <BundlerAppImageFile Condition="'$(HelloAppImageFiles)' == '1'"
+        Include="Assets/defaults.conf" Destination="opt/hello-appimage-app/defaults.conf" />
   </ItemGroup>
 </Project>

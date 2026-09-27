@@ -231,6 +231,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string AppImageDesktopFile { get; set; } = "";
     public string AppImageCategories { get; set; } = "";
     public string AppImageMetainfoFile { get; set; } = "";
+    public ITaskItem[] AppImageFiles { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -586,6 +587,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         DesktopFile = OptionalFullPath(AppImageDesktopFile),
                         Categories = EmptyToNull(AppImageCategories),
                         MetainfoFile = OptionalFullPath(AppImageMetainfoFile),
+                        Files = AppImageFiles.Select(item => new AppImageFileEntry
+                        {
+                            Source = Path.GetFullPath(item.ItemSpec),
+                            Destination = item.GetMetadata("Destination")
+                        }).ToArray()
                     },
                     new AppImageBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     .BuildAsync(configuration)

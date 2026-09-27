@@ -67,4 +67,28 @@ public sealed class AppImageBundleConfiguration
     /// <c>usr/share/metainfo/&lt;name&gt;.metainfo.xml</c>.
     /// </summary>
     public string? MetainfoFile { get; init; }
+
+    /// <summary>
+    /// Arbitrary files planted at AppDir-relative destinations
+    /// (e.g. <c>usr/lib/&lt;pkg&gt;/tools/helper.sh</c> or <c>opt/x</c>).
+    /// Destinations must be relative POSIX paths with no
+    /// <c>..</c>/<c>.</c>/empty segments and may not collide with entries the
+    /// builder generates (<c>AppRun</c>, <c>.DirIcon</c>, root
+    /// <c>&lt;name&gt;.desktop</c>/<c>&lt;name&gt;.png</c>).
+    /// </summary>
+    public IReadOnlyList<AppImageFileEntry>? Files { get; init; }
+}
+
+/// <summary>A file planted at an AppDir-relative path.</summary>
+public sealed class AppImageFileEntry
+{
+    /// <summary>Host path of the file to pack.</summary>
+    public string Source { get; init; } = "";
+
+    /// <summary>
+    /// AppDir-relative target path including the file name
+    /// (e.g. <c>opt/myapp/extra.conf</c>). No leading '/', no
+    /// '..' / '.' / empty segments.
+    /// </summary>
+    public string Destination { get; init; } = "";
 }

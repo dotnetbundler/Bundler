@@ -13,6 +13,8 @@ internal static class AppImageTests
             yield return ("Falls back to the bundled default icon", () => RunSync(DefaultIconFallback));
             yield return ("Maps appimage naming and arch", () => RunSync(MapsNamingAndArch));
             yield return ("Rejects invalid appimage settings", () => RunSync(RejectsInvalidSettings));
+            yield return ("Rejects invalid file mappings", () => RunSync(RejectsInvalidFileMappings));
+            yield return ("Stages arbitrary AppDir files", () => RunSync(StagesArbitraryFiles));
             yield return ("Builds a real .AppImage via bundled appimagetool", () => RunSync(BuildsRealAppImage));
             yield return ("Cross-builds aarch64 via the embedded runtime", () => RunSync(CrossBuildsAarch64));
             yield return ("Maps appimage settings through MSBuild", () => RunSync(MapsAppImageSettingsThroughMsBuild));
@@ -157,6 +159,79 @@ internal static class AppImageTests
         }
     }
 
+    static void StagesArbitraryFiles()
+    {
+        var input = CreateInputDirectory();
+        var work = input + ".work";
+        var extra = Path.Combine(input, "extra.conf");
+        File.WriteAllText(extra, "k=v");
+        try
+        {
+            var result = AppDirBuilder.Build(
+                BundleWith(null), PlanItem(input, work), new AppImageBundleConfiguration
+                {
+                    Files =
+                    [
+                        new AppImageFileEntry { Source = extra, Destination = "opt/extras/extra.conf" },
+                        new AppImageFileEntry { Source = extra, Destination = "usr/share/example-app/extra-copy.conf" }
+                    ]
+                }, work);
+            Assert(File.ReadAllText(Path.Combine(result.AppDirPath, "opt", "extras", "extra.conf")) == "k=v",
+                "AppDir file must land at the relative destination");
+            Assert(File.Exists(Path.Combine(result.AppDirPath, "usr", "share", "example-app", "extra-copy.conf")),
+                "second destination must land too");
+        }
+        finally
+        {
+            Cleanup(input, work);
+        }
+    }
+
+    static void RejectsInvalidFileMappings()
+    {
+        var input = CreateInputDirectory();
+        var work = input + ".work";
+        var extra = Path.Combine(input, "extra.conf");
+        File.WriteAllText(extra, "k=v");
+        AppImageFileEntry Entry(string dest) => new() { Source = extra, Destination = dest };
+        try
+        {
+            foreach (var bad in new[] { "/abs/x", "../escape", "a//b", "a/./b", "a/../b", "win\\sep", "" })
+            {
+                AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
+                    BundleWith(null), PlanItem(input, work),
+                    new AppImageBundleConfiguration { Files = [Entry(bad)] }, work),
+                    $"bad destination '{bad}' must be rejected");
+            }
+            foreach (var collision in new[] { "AppRun", ".DirIcon", "example-app.desktop", "example-app.png" })
+            {
+                AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
+                    BundleWith(null), PlanItem(input, work),
+                    new AppImageBundleConfiguration { Files = [Entry(collision)] }, work),
+                    $"generated-entry collision '{collision}' must be rejected");
+            }
+            // Payload file already under the AppDir.
+            AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
+                BundleWith(null), PlanItem(input, work),
+                new AppImageBundleConfiguration
+                {
+                    Files = [Entry("usr/lib/example-app/ExampleApp.dll")]
+                }, work),
+                "existing payload path must be rejected");
+            AssertThrows<FileNotFoundException>(() => AppDirBuilder.Build(
+                BundleWith(null), PlanItem(input, work),
+                new AppImageBundleConfiguration
+                {
+                    Files = [new AppImageFileEntry { Source = input + "/missing", Destination = "opt/x" }]
+                }, work),
+                "missing source must be rejected");
+        }
+        finally
+        {
+            Cleanup(input, work);
+        }
+    }
+
     // Real end-to-end runs of the bundled appimagetool (Linux host only).
     static void BuildsRealAppImage()
     {
@@ -221,7 +296,8 @@ internal static class AppImageTests
                targets.Contains("AppImageIconFile=\"$(BundlerAppImageIconFile)\"", StringComparison.Ordinal) &&
                targets.Contains("AppImageDesktopFile=\"$(BundlerAppImageDesktopFile)\"", StringComparison.Ordinal) &&
                targets.Contains("AppImageCategories=\"$(BundlerAppImageCategories)\"", StringComparison.Ordinal) &&
-               targets.Contains("AppImageMetainfoFile=\"$(BundlerAppImageMetainfoFile)\"", StringComparison.Ordinal),
+               targets.Contains("AppImageMetainfoFile=\"$(BundlerAppImageMetainfoFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("AppImageFiles=\"@(BundlerAppImageFile)\"", StringComparison.Ordinal),
             "MSBuild does not map the BundlerAppImage* properties to the task.");
         Assert(props.Contains("<BundlerAppImagePackageName", StringComparison.Ordinal) &&
                props.Contains("<BundlerAppImageIconFile", StringComparison.Ordinal),

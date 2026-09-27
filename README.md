@@ -14,7 +14,7 @@ WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线；`alpha.44
 正式 CLI 仍属后续路线；macOS `.app` 已在 `mac-app-development` 分支可用并冻结（MAC-APP-1..5，冻结基线 `0.1.0-alpha.45`）。
 Linux `.deb` 已冻结于 `linux-deb-development` 分支（`LINUX-DEB-1..5`，冻结基线 `0.1.0-alpha.51`）：纯托管 ar/tar/gzip 写入器（无原生工具依赖、任意构建宿主可产出），control 全字段+维护者脚本+conffiles+systemd unit+桌面集成，`sudo dpkg -i/-r/-P` 真实装卸、lintian 硬断言、docker debian/ubuntu 矩阵全部验证。
 Linux `.rpm` **已冻结**（`0.1.0-alpha.55`，`linux-rpm-development` 分支）：纯托管 lead/header/cpio/gzip 写入器，六族关系字段 + License/Group/Url + freedesktop 桌面集成（.desktop/图标/metainfo）+ 任意路径映射 + 四 scriptlet/systemd unit/%config(noreplace)，`rpm -qip` 逐字段断言、`desktop-file-validate`、docker `fedora/rockylinux/opensuse` 三容器真实 `rpm -i`/`rpm -U`/`rpm -e` 与 `.rpmsave` 语义验证、`rpmlint` 豁免清单硬基线、`deb;rpm` 同次 publish 扇出已放开。
-Linux `.AppImage` 进行中（`linux-appimage-development` 分支，`LINUX-APPIMAGE-1` 完成于 `0.1.0-alpha.56`）：`DotNet.Bundler.AppImage` 内嵌固定版本 `appimagetool`+type2 runtime（SHA-256 provenance、不联网下载），AppDir 组装复用共享 freedesktop 件 + 脚本式 `AppRun` + 根 `.desktop` 符号链接/`.DirIcon`，仅 Linux 宿主构建、x86_64 宿主可交叉产 aarch64；`--appimage-extract` 结构断言、解出程序真实运行、docker 三容器 extract-and-run 冒烟、`deb;rpm;appimage` 扇出全绿。
+Linux `.AppImage` 进行中（`linux-appimage-development` 分支，`LINUX-APPIMAGE-1..2` 完成于 `0.1.0-alpha.57`）：`DotNet.Bundler.AppImage` 内嵌固定版本 `appimagetool`+type2 runtime（SHA-256 provenance、不联网下载），AppDir 组装复用共享 freedesktop 件 + 脚本式 `AppRun` + 根 `.desktop` 符号链接/`.DirIcon`/`@(BundlerAppImageFile)` 任意映射，仅 Linux 宿主构建、x86_64 宿主可交叉产 aarch64；`--appimage-extract` 结构断言、解出程序真实运行、docker 三容器 extract-and-run 冒烟、`deb;rpm;appimage` 扇出全绿。
 可操作的当前能力示例见 [`samples/HelloMacApp/mac-app-sample.md`](samples/HelloMacApp/mac-app-sample.md)、[`samples/HelloDebApp/linux-deb-sample.md`](samples/HelloDebApp/linux-deb-sample.md) 与 [`samples/HelloRpmApp/linux-rpm-sample.md`](samples/HelloRpmApp/linux-rpm-sample.md)。
 
 实现已经拆分为可复用的 NuGet 包。
@@ -292,6 +292,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerAppImageDesktopFile` | 否 | 整文件覆盖生成的 `.desktop`（须含 `Categories=`，appimagetool 硬要求） |
 | `BundlerAppImageCategories` | 否 | `Utility`；分号分隔 freedesktop 分类 |
 | `BundlerAppImageMetainfoFile` | 否 | AppStream metainfo → `usr/share/metainfo/<包名>.metainfo.xml` |
+| `@(BundlerAppImageFile)`（`Destination`） | 否 | 无；任意文件 → AppDir 相对路径（含文件名；拒绝对路径/`..`/空段/反斜杠/生成件碰撞） |
 | `BundlerWindowsSigningPfxFile` | 否 | PFX/P12 代码签名证书路径 |
 | `BundlerWindowsSigningPfxPasswordEnvironmentVariable` | 否 | 保存 PFX 密码的环境变量名 |
 | `BundlerWindowsSigningCertificateThumbprint` | 否 | Windows `My` 证书存储区中的证书指纹 |

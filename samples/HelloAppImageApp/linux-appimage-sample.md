@@ -58,6 +58,13 @@ dotnet publish samples/HelloAppImageApp/HelloAppImageApp.csproj -c Release
       -p:HelloAppImageDesktopFile=$PWD/samples/HelloAppImageApp/Assets/custom.desktop
   ```
 
+- **任意 AppDir 相对路径映射**（`@(BundlerAppImageFile)` 带 `Destination` 元数据，落到 AppDir 内相对路径；拒绝绝对路径/`..`/与生成件碰撞）：
+
+  ```bash
+  dotnet publish samples/HelloAppImageApp/HelloAppImageApp.csproj -c Release -p:HelloAppImageFiles=1
+  # 解包后可见 opt/hello-appimage-app/defaults.conf
+  ```
+
 - **Categories/metainfo 覆盖**（命令行分号用 `%3B` 转义）：
 
   ```bash

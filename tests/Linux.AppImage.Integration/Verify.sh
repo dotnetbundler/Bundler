@@ -179,6 +179,22 @@ grep -q "Name=Bundler AppImage Fixture Custom" \
    "usr/share/applications/bundler-appimage-fixture.desktop" ]] \
     || fail "root .desktop symlink must still point at the staged file."
 
+log "== arbitrary-file mapping variant (@(BundlerAppImageFile)) =="
+publish_fixture files -p:BundlerTestAppImageFiles=1 >/dev/null
+fmap="$(find "$integration_root/files/linux-x64/appimage" -name '*.AppImage' | head -n1)"
+appimage_extract "$fmap" files
+[[ -f "$extract_root/files/squashfs-root/opt/extras/defaults.conf" ]] \
+    || fail "BundlerAppImageFile payload missing at AppDir-relative destination."
+cmp -s "$extract_root/files/squashfs-root/opt/extras/defaults.conf" \
+    "$script_dir/Fixture/Assets/defaults.conf" \
+    || fail "BundlerAppImageFile payload content mismatch."
+
+if publish_fixture bad-file -p:BundlerTestAppImageBadFile=1 >/dev/null 2>&1; then
+    fail "Absolute BundlerAppImageFile destination must fail the publish."
+else
+    log "bad-file publish correctly failed."
+fi
+
 log "== failure variant: unsupported architecture must fail publish =="
 if publish_fixture bad-arch -p:BundlerTestAppImageArchitecture="ppc64" >/dev/null 2>&1; then
     fail "Architecture=ppc64 must fail the publish."
@@ -236,4 +252,4 @@ if [[ "$(uname -m)" == "x86_64" ]]; then
     grep -q "OK: " "$integration_root/api.log" || fail "API fixture did not produce an .AppImage."
 fi
 
-log "ALL CHECKS PASSED (LINUX-APPIMAGE-1)"
+log "ALL CHECKS PASSED (LINUX-APPIMAGE-1..2)"

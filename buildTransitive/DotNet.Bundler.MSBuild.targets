@@ -234,6 +234,7 @@
       AppImageDesktopFile="$(BundlerAppImageDesktopFile)"
       AppImageCategories="$(BundlerAppImageCategories)"
       AppImageMetainfoFile="$(BundlerAppImageMetainfoFile)"
+      AppImageFiles="@(BundlerAppImageFile)"
       RpmFiles="@(BundlerRpmFile)"
       MacContents="@(BundlerMacContent)"
       MacFrameworks="@(BundlerMacFramework)"
