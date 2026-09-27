@@ -1,0 +1,70 @@
+namespace DotNet.Bundler.AppImage;
+
+/// <summary>
+/// Settings for the Linux .AppImage backend. The backend assembles an AppDir
+/// and drives the embedded appimagetool binary; it requires a Linux build host.
+/// </summary>
+public sealed class AppImageBundleConfiguration
+{
+    /// <summary>
+    /// Package name used for the AppImage file name, the root
+    /// <c>&lt;name&gt;.desktop</c> entry and the icon name. Defaults to
+    /// <c>ProductName</c> normalized to kebab-case.
+    /// </summary>
+    public string? PackageName { get; init; }
+
+    /// <summary>
+    /// Version string used in the file name
+    /// (<c>&lt;name&gt;_&lt;version&gt;_&lt;arch&gt;.AppImage</c>); defaults to
+    /// the bundle's <c>Version</c> verbatim — AppImage has no EVR rules.
+    /// </summary>
+    public string? Version { get; init; }
+
+    /// <summary>
+    /// Target architecture token (<c>x86_64</c>/<c>aarch64</c>/<c>i686</c>)
+    /// passed to appimagetool via <c>ARCH</c>. Defaults to the RID mapping
+    /// (linux-x64 → x86_64, linux-arm64 → aarch64). Cross-arch output uses the
+    /// bundled runtime file when one is embedded for the target arch.
+    /// </summary>
+    public string? Architecture { get; init; }
+
+    /// <summary>
+    /// Payload root inside the AppDir; defaults to <c>usr/lib/&lt;package&gt;</c>.
+    /// Relative to the AppDir root (no leading '/'), no '..' segments.
+    /// </summary>
+    public string? InstallRoot { get; init; }
+
+    /// <summary>
+    /// Name of the symlink created at <c>usr/bin/&lt;name&gt;</c> inside the
+    /// AppDir pointing at the main executable under <see cref="InstallRoot"/>.
+    /// Defaults to the package name; <c>none</c> disables the link.
+    /// </summary>
+    public string? BinLink { get; init; }
+
+    /// <summary>
+    /// Root icon override: a PNG copied to the AppDir root as
+    /// <c>&lt;name&gt;.png</c> and <c>.DirIcon</c>. When unset, the largest
+    /// square icon from the bundle's <c>Icons</c> hicolor set is linked;
+    /// with no icons at all a bundled default PNG is used.
+    /// </summary>
+    public string? IconFile { get; init; }
+
+    /// <summary>
+    /// Caller-supplied <c>.desktop</c> file replacing the generated entry
+    /// verbatim (written to <c>usr/share/applications/&lt;name&gt;.desktop</c>
+    /// and linked from the AppDir root).
+    /// </summary>
+    public string? DesktopFile { get; init; }
+
+    /// <summary>
+    /// Semicolon-separated freedesktop categories for the generated
+    /// <c>.desktop</c> entry (for example <c>Utility;Development</c>).
+    /// </summary>
+    public string? Categories { get; init; }
+
+    /// <summary>
+    /// Optional AppStream metainfo XML file staged under
+    /// <c>usr/share/metainfo/&lt;name&gt;.metainfo.xml</c>.
+    /// </summary>
+    public string? MetainfoFile { get; init; }
+}

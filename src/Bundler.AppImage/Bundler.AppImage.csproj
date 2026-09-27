@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>DotNet.Bundler.AppImage</AssemblyName>
+    <RootNamespace>DotNet.Bundler.AppImage</RootNamespace>
+    <PackageId>DotNet.Bundler.AppImage</PackageId>
+    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
+    <Authors>Bundler contributors</Authors>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>Linux .AppImage backend for DotNet.Bundler: assembles the AppDir and drives the bundled appimagetool, on Linux hosts only.</Description>
+    <PackageTags>bundler;installer;appimage;linux</PackageTags>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
+    <InternalsVisibleTo Include="Bundler.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\third_party\appimagetool\appimagetool-x86_64.AppImage"
+      LogicalName="DotNet.Bundler.AppImage.Toolset.x86_64" />
+    <EmbeddedResource Include="..\..\third_party\appimagetool\appimagetool-aarch64.AppImage"
+      LogicalName="DotNet.Bundler.AppImage.Toolset.aarch64" />
+    <EmbeddedResource Include="..\..\third_party\appimagetool\runtime-x86_64"
+        LogicalName="DotNet.Bundler.AppImage.Runtime.x86_64" />
+    <EmbeddedResource Include="..\..\third_party\appimagetool\runtime-aarch64"
+      LogicalName="DotNet.Bundler.AppImage.Runtime.aarch64" />
+    <EmbeddedResource Include="Assets\default-icon.png"
+      LogicalName="DotNet.Bundler.AppImage.DefaultIcon" />
+    <None Include="..\..\third_party\appimagetool\LICENSE-appimagetool" Pack="true" PackagePath="licenses/appimagetool/" />
+    <None Include="..\..\third_party\appimagetool\LICENSE-runtime" Pack="true" PackagePath="licenses/appimagetool/" />
+    <None Include="..\..\third_party\appimagetool\appimagetool-provenance.md" Pack="true" PackagePath="licenses/appimagetool/" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
+    <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

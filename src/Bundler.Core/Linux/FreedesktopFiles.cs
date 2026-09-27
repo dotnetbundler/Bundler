@@ -29,6 +29,7 @@ internal static class FreedesktopFiles
         internal string? MetainfoFile;   // AppStream metainfo XML
         internal string? Categories;     // freedesktop semicolon categories
         internal string Format = "";     // "deb"/"rpm" — error context only
+        internal bool AlwaysEmitIcon;    // appimage: Icon= is mandatory (icon fallback guaranteed)
     }
 
     /// <summary>
@@ -53,7 +54,7 @@ internal static class FreedesktopFiles
                     ? File.ReadAllBytes(RequireExisting(desktopSource, "DesktopFile"))
                     : DesktopFileContent(
                         bundle, packageName, installRoot, mainExecutable, binLink,
-                        options.Categories, options.Format)
+                        options.Categories, options.Format, options.AlwaysEmitIcon)
             }
         };
 
@@ -124,7 +125,8 @@ internal static class FreedesktopFiles
         string mainExecutable,
         string binLink,
         string? categories,
-        string format)
+        string format,
+        bool alwaysEmitIcon = false)
     {
         static string SanitizeDesktopValue(string? value, string field)
         {
@@ -154,7 +156,7 @@ internal static class FreedesktopFiles
         var hasFiles = bundle.FileAssociations.Any(a => a.Extensions.Count > 0);
         builder.Append("Exec=").Append(exec)
             .Append(hasUrls ? " %u" : hasFiles ? " %f" : "").Append('\n');
-        if (bundle.Icons.Count > 0)
+        if (bundle.Icons.Count > 0 || alwaysEmitIcon)
         {
             builder.Append("Icon=").Append(packageName).Append('\n');
         }

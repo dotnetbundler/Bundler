@@ -8,6 +8,7 @@
     <Project Path="src/Bundler.MacPkg/Bundler.MacPkg.csproj" />
     <Project Path="src/Bundler.Deb/Bundler.Deb.csproj" />
     <Project Path="src/Bundler.Rpm/Bundler.Rpm.csproj" />
+    <Project Path="src/Bundler.AppImage/Bundler.AppImage.csproj" />
     <Project Path="src/Bundler.Nsis/Bundler.Nsis.csproj" />
     <Project Path="src/Bundler.Signing.Windows/Bundler.Signing.Windows.csproj" />
     <Project Path="src/Bundler.Wix/Bundler.Wix.csproj" />

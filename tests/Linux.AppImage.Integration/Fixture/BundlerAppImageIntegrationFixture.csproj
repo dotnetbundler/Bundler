@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <AssemblyName>BundlerAppImageIntegrationFixture</AssemblyName>
+    <Version>1.0.0</Version>
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerFormats>appimage</BundlerFormats>
+    <BundlerIdentifier>com.dotnetbundler.appimageintegrationfixture</BundlerIdentifier>
+    <BundlerProductName>Bundler AppImage Fixture</BundlerProductName>
+    <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
+    <BundlerDescription>Disposable .AppImage integration-test fixture</BundlerDescription>
+    <BundlerHomepage>https://example.com/appimage-fixture</BundlerHomepage>
+    <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
+    <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets/LICENSE.txt</BundlerLicenseFile>
+    <BundlerAppImagePackageName Condition="'$(BundlerTestAppImagePackageName)' != ''">$(BundlerTestAppImagePackageName)</BundlerAppImagePackageName>
+    <BundlerAppImageVersion Condition="'$(BundlerTestAppImageVersion)' != ''">$(BundlerTestAppImageVersion)</BundlerAppImageVersion>
+    <BundlerAppImageArchitecture Condition="'$(BundlerTestAppImageArchitecture)' != ''">$(BundlerTestAppImageArchitecture)</BundlerAppImageArchitecture>
+    <BundlerAppImageInstallRoot Condition="'$(BundlerTestAppImageInstallRoot)' != ''">$(BundlerTestAppImageInstallRoot)</BundlerAppImageInstallRoot>
+    <BundlerAppImageBinLink Condition="'$(BundlerTestAppImageBinLink)' != ''">$(BundlerTestAppImageBinLink)</BundlerAppImageBinLink>
+    <BundlerAppImageIconFile Condition="'$(BundlerTestAppImageIconFile)' != ''">$(BundlerTestAppImageIconFile)</BundlerAppImageIconFile>
+    <BundlerAppImageDesktopFile Condition="'$(BundlerTestAppImageDesktopFile)' != ''">$(BundlerTestAppImageDesktopFile)</BundlerAppImageDesktopFile>
+    <BundlerAppImageCategories Condition="'$(BundlerTestAppImageCategories)' != ''">$(BundlerTestAppImageCategories)</BundlerAppImageCategories>
+    <BundlerAppImageMetainfoFile Condition="'$(BundlerTestAppImageSkipMetainfo)' != 'true'">$(MSBuildThisFileDirectory)Assets/app.metainfo.xml</BundlerAppImageMetainfoFile>
+    <BundlerAppImageMetainfoFile Condition="'$(BundlerTestAppImageMetainfoFile)' != ''">$(BundlerTestAppImageMetainfoFile)</BundlerAppImageMetainfoFile>
+    <BundlerFormats Condition="'$(BundlerTestFormats)' != ''">$(BundlerTestFormats)</BundlerFormats>
+  </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <ItemGroup>
+    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
+    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <BundlerIcon Include="Assets/icon48.png" />
+    <BundlerIcon Include="Assets/icon@2x.png" />
+    <BundlerFileAssociation Include=".bdlfixture" Name="Bundler fixture document"
+        MimeType="application/x-bundler-fixture" />
+    <BundlerUrlProtocol Include="bdlfixture" Name="Bundler fixture" />
+  </ItemGroup>
+</Project>

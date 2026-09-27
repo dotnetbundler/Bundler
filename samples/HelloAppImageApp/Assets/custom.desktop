@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Hello AppImage App Custom
+Exec=hello-appimage-app
+Icon=hello-appimage-app
+Categories=Utility;
+Terminal=false

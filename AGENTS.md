@@ -7,7 +7,7 @@
 ## 0. 一句话现状
 
 `DotNet.Bundler` 是通用桌面打包工具，按"一次一个安装格式"推进。
-Windows NSIS 与 WiX/MSI（WIN-MSI-1..9）、macOS `.app`/`.dmg`/`.pkg` 均已冻结并入 `main`；Linux `.deb` 已冻结于 `linux-deb-development`（`LINUX-DEB-1..5`）并入 `main`，`.rpm` 已冻结于 `linux-rpm-development`（`LINUX-RPM-1..5`）；当前推进 Linux 线 `LINUX-APPIMAGE` 规划。
+Windows NSIS 与 WiX/MSI（WIN-MSI-1..9）、macOS `.app`/`.dmg`/`.pkg` 均已冻结并入 `main`；Linux `.deb` 已冻结于 `linux-deb-development`（`LINUX-DEB-1..5`）并入 `main`，`.rpm` 已冻结于 `linux-rpm-development`（`LINUX-RPM-1..5`）；当前推进 Linux 线 `LINUX-APPIMAGE`（APPIMAGE-1 完成于 `linux-appimage-development`）。
 准确的当前阶段、包版本和下一步以 `PROJECT_CONTEXT.md` 文首为准——不要凭本文档或对话记忆判断现状。
 
 ## 1. 接管顺序（未完成前不得改代码）

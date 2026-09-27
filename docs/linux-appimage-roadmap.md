@@ -11,13 +11,13 @@
 | 1 | 打包工具供应 | **内嵌固定版本 `appimagetool`**（x86_64 必备、aarch64 按需）入 `third_party/appimagetool/` + SHA-256 provenance，随 `DotNet.Bundler.AppImage` 包分发 | 上游 Tauri 用 linuxdeploy 打包时联网下载——违反"工具随包供应"硬规则；appimagetool 是 AppImage 官方规范工具，自包含（内嵌 runtime+mksquashfs） |
 | 2 | 不引入 linuxdeploy | **明确拒绝**：linuxdeploy 的职责是依赖拷贝/插件编排（gtk/gstreamer/webkit2gtk），属应用运行时依赖编排，超出产品边界 §2 | AppDir 只装调用方准备好的自包含载荷；契约写进示例文档："依赖须打进 publish 载荷" |
 | 3 | 构建宿主限制 | **Linux 宿主限定**（x86_64；aarch64 宿主取决决 4 结论） | appimagetool 是 Linux ELF；与 deb/rpm 不同，本格式不再是"任意宿主可产" |
-| 4 | 架构覆盖 | x86_64 宿主产 `amd64`（实为 x86_64 命名按上游惯例写 `<arch>` 段）；**aarch64 产物**待 APPIMAGE-1 实测 appimagetool 的 runtime 文件供应方式（`--runtime-file`/内嵌 arch 判定）后裁决：可交叉则嵌入 aarch64 runtime，不可交叉则 aarch64 产物限 aarch64 宿主并登记 OI | appimagetool 的 AppImage runtime 须与目标架构一致；不确定 flag 形态，规划期不臆断 |
+| 4 | 架构覆盖 | **已裁决（APPIMAGE-1 实测）**：x86_64 宿主产 `amd64` 命名产物；**可交叉**——`runtime-x86_64`/`runtime-aarch64` 双双内嵌并始终经 `--runtime-file` 供应（实测：所钉 appimagetool 构建不内嵌 runtime，缺省会联网下载，必须始终外供）；x86_64 宿主产出的 aarch64 AppImage 为合法 ELF（e_machine=0xb7）；运行验收仍归 OI-01 | `ARCH` env + `--runtime-file` 路径实测成立 |
 | 5 | FUSE-less 运行 | 内嵌 appimagetool 一律以 `APPIMAGE_EXTRACT_AND_RUN=1`（或等价 `--appimage-extract-and-run`）方式调用 | 容器/CI 常无 FUSE；上游同样走此路径 |
 | 6 | AppDir 结构 | `usr/` 子树复用 `Bundler.Core` 共享 freedesktop 生成器（同 deb/rpm 数据树：`.desktop`+hicolor 图标+metainfo+`usr/lib/<pkg>/`+`usr/bin` 相对链接）；根级 `AppRun` 用**受控生成脚本**（`exec "$APPDIR/usr/bin/<main>" "$@"`）而非预编译二进制 | 上游复用 deb 数据树生成的做法同构；脚本 AppRun 可读可审 |
 | 7 | 图标策略 | `BundlerAppImageIconFile` 可选；缺省用 Bundler 自带默认 PNG 图标（`third_party` 登记来源） | appimagetool 对无图标硬失败；与上游"默认 tauri 图标"惯例一致 |
 | 8 | `.desktop` 与根图标 | 根级 `<name>.desktop` + `.DirIcon`/根 PNG 按 AppImage 规范落位；根 `.desktop` 由共享生成器产出后按 AppDir 约定修正 `Exec`/`Icon` 字段 | appimagetool 校验根 desktop 与图标存在性 |
 | 9 | 产物命名与位置 | `<ProductName>_<version>_<amd64|aarch64>.AppImage` 落 `OutputDirectory/<rid>/appimage/` + `.sha256` 侧车 | 沿用上游文件命名与本仓输出契约 |
-| 10 | 压缩 | `BundlerAppImageCompression` 透传枚举 `{gzip,xz,zstd}`（默认 gzip），APPIMAGE-1 实测 appimagetool 接受值后定稿 | appimagetool 自己做 squashfs 压缩，无托管编码器限制 |
+| 10 | 压缩 | **已裁决（APPIMAGE-1 实测）**：**仅 zstd**——所钉 appimagetool continuous 构建的 mksquashfs 只编译进 zstd（`--comp gzip`/`xz` 均报 "Compressor not supported" 实测）；故不暴露 `BundlerAppImageCompression` 旋钮，固定走工具默认 zstd | 工具能力约束，非托管限制；上游未钉版本同样由此决定可用集 |
 | 11 | 更新元数据 | **明确拒绝**首个版本做 updateinfo/zsync | 上游同样不产 `.zsync`；需要时另立跨格式更新路线 |
 | 12 | 本体签名 | **冻结外后置评估**（`LINUX-APPIMAGE-SIGN`，未排期）：appimagetool `--sign` 走 gpg2 | 与 rpm 签名同处置口径；冻结基线仅 `sha256` 侧车 |
 | 13 | 真实验证 | 产物 `--appimage-extract` 解包结构断言 + 解出载荷真实运行 + 容器（debian/ubuntu/fedora）内 `--appimage-extract-and-run` 冒烟；`appimagelint` 可用则作信息级，硬基线视其误报情况裁决 | AppImage 无包管理器安装语义，"真实验证"= 规范级运行形态断言 |
@@ -60,4 +60,9 @@
 
 ## 4. 实施证据（阶段落地后逐行回填）
 
-（规划轮占位——各阶段完成时按"交付/证据/边界"格式回填，同 deb/rpm-roadmap 惯例。）
+### LINUX-APPIMAGE-1（已实现，`0.1.0-alpha.56`）
+
+- 交付：`third_party/appimagetool/` 四件（tool x86_64/aarch64 + runtime x86_64/aarch64，SHA-256 provenance）；`src/Bundler.AppImage`（netstandard2.0）：`AppImageBundler`/`AppImageBundleBackend`/`AppDirBuilder`/`AppImageToolset`（嵌入资源→哈希校验→缓存目录落位）/`AppImageProcessRunner`/`AppImageIdentity`；`BundlerFormats=appimage` 接线 + MSBuild 包装载 dll；`FreedesktopFiles.Options.AlwaysEmitIcon`；示例 `samples/HelloAppImageApp`。
+- 证据：`Bundler.Tests` 171/171（新增 8 项：AppDir 结构/AppRun 内容/命名/默认图标/非法拒绝/真实构建/交叉构建/接线断言）；`tests/Linux.AppImage.Integration/Verify.sh` 全绿：`--appimage-extract` 结构断言 + 解出 `AppRun` 与 `--appimage-extract-and-run` 真实运行 + 覆盖/桌面覆盖/失败变体 + aarch64 ELF 结构断言 + `deb;rpm;appimage` 扇出 + docker debian/ubuntu/fedora 容器冒烟 + 直 API nupkg 消费。
+- 实测修正：决策 4 可交叉（runtime 内嵌方案）；决策 10 仅 zstd（pinned mksquashfs 约束）；pinned appimagetool 不带 `--runtime-file` 会联网下载 runtime——已改为始终内嵌供应；appimagetool 强制 `Categories=`——生成件缺省补 `Utility`。
+- 边界：`BundlerAppImageFile` 任意映射归 APPIMAGE-2；appimagelint 归 APPIMAGE-3；aarch64 真机运行 OI-01。

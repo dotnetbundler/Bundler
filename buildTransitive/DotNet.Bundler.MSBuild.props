@@ -182,5 +182,14 @@
     <BundlerRpmPreUninstallProgram Condition="'$(BundlerRpmPreUninstallProgram)' == ''"></BundlerRpmPreUninstallProgram>
     <BundlerRpmPostUninstallProgram Condition="'$(BundlerRpmPostUninstallProgram)' == ''"></BundlerRpmPostUninstallProgram>
     <BundlerRpmCompression Condition="'$(BundlerRpmCompression)' == ''"></BundlerRpmCompression>
+    <BundlerAppImagePackageName Condition="'$(BundlerAppImagePackageName)' == ''"></BundlerAppImagePackageName>
+    <BundlerAppImageVersion Condition="'$(BundlerAppImageVersion)' == ''"></BundlerAppImageVersion>
+    <BundlerAppImageArchitecture Condition="'$(BundlerAppImageArchitecture)' == ''"></BundlerAppImageArchitecture>
+    <BundlerAppImageInstallRoot Condition="'$(BundlerAppImageInstallRoot)' == ''"></BundlerAppImageInstallRoot>
+    <BundlerAppImageBinLink Condition="'$(BundlerAppImageBinLink)' == ''"></BundlerAppImageBinLink>
+    <BundlerAppImageIconFile Condition="'$(BundlerAppImageIconFile)' == ''"></BundlerAppImageIconFile>
+    <BundlerAppImageDesktopFile Condition="'$(BundlerAppImageDesktopFile)' == ''"></BundlerAppImageDesktopFile>
+    <BundlerAppImageCategories Condition="'$(BundlerAppImageCategories)' == ''"></BundlerAppImageCategories>
+    <BundlerAppImageMetainfoFile Condition="'$(BundlerAppImageMetainfoFile)' == ''"></BundlerAppImageMetainfoFile>
   </PropertyGroup>
 </Project>

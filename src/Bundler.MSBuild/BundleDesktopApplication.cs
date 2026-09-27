@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using DotNet.Bundler;
+using DotNet.Bundler.AppImage;
 using DotNet.Bundler.Deb;
 using DotNet.Bundler.MacApp;
 using DotNet.Bundler.MacDmg;
@@ -221,6 +222,15 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string RpmPreUninstallProgram { get; set; } = "";
     public string RpmPostUninstallProgram { get; set; } = "";
     public string RpmCompression { get; set; } = "";
+    public string AppImagePackageName { get; set; } = "";
+    public string AppImageVersion { get; set; } = "";
+    public string AppImageArchitecture { get; set; } = "";
+    public string AppImageInstallRoot { get; set; } = "";
+    public string AppImageBinLink { get; set; } = "";
+    public string AppImageIconFile { get; set; } = "";
+    public string AppImageDesktopFile { get; set; } = "";
+    public string AppImageCategories { get; set; } = "";
+    public string AppImageMetainfoFile { get; set; } = "";
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -556,6 +566,28 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         }).ToArray()
                     },
                     new RpmBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
+                    .BuildAsync(configuration)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            else if (format == PackageFormat.AppImage)
+            {
+                produced = new AppImageBundler(
+                    new AppImageBundleConfiguration
+                    {
+                        PackageName = EmptyToNull(AppImagePackageName),
+                        Version = EmptyToNull(AppImageVersion),
+                        Architecture = EmptyToNull(AppImageArchitecture),
+                        InstallRoot = EmptyToNull(AppImageInstallRoot),
+                        BinLink = string.Equals(AppImageBinLink, "none", StringComparison.OrdinalIgnoreCase)
+                            ? ""
+                            : EmptyToNull(AppImageBinLink),
+                        IconFile = OptionalFullPath(AppImageIconFile),
+                        DesktopFile = OptionalFullPath(AppImageDesktopFile),
+                        Categories = EmptyToNull(AppImageCategories),
+                        MetainfoFile = OptionalFullPath(AppImageMetainfoFile),
+                    },
+                    new AppImageBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     .BuildAsync(configuration)
                     .GetAwaiter()
                     .GetResult();

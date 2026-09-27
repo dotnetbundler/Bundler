@@ -1,0 +1,251 @@
+using DotNet.Bundler;
+using DotNet.Bundler.Core;
+
+namespace DotNet.Bundler.AppImage;
+
+/// <summary>
+/// Assembles the <c>&lt;name&gt;.AppDir</c> tree appimagetool packs:
+/// <c>usr/lib/&lt;pkg&gt;/</c> payload + <c>usr/bin/&lt;name&gt;</c> relative
+/// symlink, shared freedesktop entries, a generated script <c>AppRun</c>, and
+/// root <c>&lt;name&gt;.desktop</c>/<c>&lt;name&gt;.png</c>/<c>.DirIcon</c>
+/// links (the upstream convention: root entries point into <c>usr/</c>).
+/// </summary>
+internal static class AppDirBuilder
+{
+    internal sealed class Result
+    {
+        internal string AppDirPath = "";
+        internal string PackageName = "";
+        internal string Version = "";
+        internal string EnvironmentArchitecture = "";
+        internal string FileArchitecture = "";
+    }
+
+    internal static Result Build(
+        BundleConfiguration bundle,
+        BundlePlanItem item,
+        AppImageBundleConfiguration settings,
+        string workDirectory)
+    {
+        var packageName = AppImageIdentity.PackageName(settings.PackageName, bundle.ProductName);
+        var version = (settings.Version ?? bundle.Version).Trim();
+        if (version.Length == 0 || version.IndexOfAny(new[] { '/', '\\', ' ', '\n', '\r' }) >= 0)
+        {
+            throw new ArgumentException(
+                $"The AppImage version must be a single token usable in a file name, got '{version}'.");
+        }
+        var envArch = settings.Architecture is { Length: > 0 } override_
+            ? AppImageIdentity.NormalizeArchitecture(override_)
+            : AppImageIdentity.EnvironmentArchitecture(item.Target.RuntimeIdentifier);
+
+        var installRoot = (settings.InstallRoot ?? "usr/lib/" + packageName)
+            .Replace('\\', '/').Trim('/');
+        if (installRoot.Length == 0 ||
+            installRoot.Split('/').Any(segment => segment is "" or "." or "..") ||
+            (settings.InstallRoot is { } explicit_ && explicit_.TrimStart().StartsWith("/")))
+        {
+            throw new ArgumentException(
+                $"The AppDir install root must be a relative path inside the AppDir, got '{settings.InstallRoot}'.");
+        }
+
+        var binLink = settings.BinLink is { Length: > 0 } ? settings.BinLink : packageName;
+        if (string.Equals(binLink, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            binLink = "";
+        }
+        var mainExecutable = item.MainExecutable.Replace('\\', '/');
+        var mainPosixName = mainExecutable.Contains('/')
+            ? mainExecutable.Substring(mainExecutable.LastIndexOf('/') + 1)
+            : mainExecutable;
+
+        var appDir = Path.Combine(workDirectory, packageName + ".AppDir");
+        if (Directory.Exists(appDir))
+        {
+            Directory.Delete(appDir, recursive: true);
+        }
+        Directory.CreateDirectory(appDir);
+
+        // usr/lib/<pkg>/ payload, then usr/bin/<link> → ../lib/<pkg>/<main>.
+        var input = item.InputDirectory;
+        var payloadRoot = Path.Combine(appDir, installRoot.Replace('/', Path.DirectorySeparatorChar));
+        CopyTree(input, payloadRoot);
+        var mainHostPath = Path.Combine(payloadRoot, mainPosixName);
+        if (!File.Exists(mainHostPath))
+        {
+            throw new FileNotFoundException(
+                $"The main executable '{mainExecutable}' was not found in '{input}'.", mainHostPath);
+        }
+        AppImageToolset.Chmod(mainHostPath, "+x");
+
+        foreach (var resource in bundle.Resources)
+        {
+            var target = resource.TargetPath.Replace('\\', '/').Trim('/');
+            if (target.Length == 0 || target.Split('/').Contains(".."))
+            {
+                throw new ArgumentException(
+                    $"The resource target must stay inside the payload: '{resource.TargetPath}'.");
+            }
+            var source = Path.GetFullPath(resource.Source);
+            var destinationDir = Path.Combine(payloadRoot, target.Replace('/', Path.DirectorySeparatorChar));
+            if (Directory.Exists(source))
+            {
+                CopyTree(source, destinationDir);
+            }
+            else if (File.Exists(source))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(destinationDir)!);
+                File.Copy(source, destinationDir, overwrite: true);
+            }
+            else
+            {
+                throw new FileNotFoundException(
+                    $"The resource source does not exist: {source}", source);
+            }
+        }
+
+        var binDir = Path.Combine(appDir, "usr", "bin");
+        Directory.CreateDirectory(binDir);
+        if (binLink.Length > 0)
+        {
+            var linkTarget = RelativePath("usr/bin", installRoot + "/" + mainExecutable);
+            AppImageToolset.Symlink(linkTarget, Path.Combine(binDir, binLink));
+        }
+
+        // Shared freedesktop staging (.desktop + hicolor icons + metainfo).
+        // AppImage always emits Icon= because an icon is guaranteed (default
+        // fallback below); AlwaysEmitIcon keeps deb/rpm behavior unchanged.
+        var staged = FreedesktopFiles.Collect(
+            bundle, packageName, "/" + installRoot, mainPosixName, binLink,
+            new FreedesktopFiles.Options
+            {
+                DesktopFile = settings.DesktopFile,
+                MetainfoFile = settings.MetainfoFile,
+                // appimagetool hard-requires a Categories= key; "Utility" is the
+                // conventional default when the caller does not supply one.
+                Categories = settings.Categories ?? "Utility",
+                Format = "appimage",
+                AlwaysEmitIcon = true
+            });
+        string? largestSquareIcon = null;
+        var largestSquareSize = 0;
+        foreach (var entry in staged)
+        {
+            var destination = Path.Combine(appDir, entry.ArchivePath.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.WriteAllBytes(destination, entry.ReadBytes());
+            if (entry.Mode != 420 && !entry.ArchivePath.EndsWith(".desktop", StringComparison.Ordinal))
+            {
+                AppImageToolset.Chmod(destination, entry.Mode.ToString("0"));
+            }
+            int squareSize;
+            if (entry.ArchivePath.StartsWith("usr/share/icons/hicolor/", StringComparison.Ordinal) &&
+                TrySquareSize(entry.ArchivePath, out squareSize) && squareSize > largestSquareSize)
+            {
+                largestSquareSize = squareSize;
+                largestSquareIcon = entry.ArchivePath;
+            }
+        }
+
+        // Root entries: <name>.desktop symlink, <name>.png + .DirIcon.
+        var desktopStaged = "usr/share/applications/" + packageName + ".desktop";
+        AppImageToolset.Symlink(desktopStaged, Path.Combine(appDir, packageName + ".desktop"));
+        var rootIconSource = settings.IconFile is { Length: > 0 } iconFile
+            ? FreedesktopFiles.RequireExisting(iconFile, "IconFile")
+            : null;
+        if (rootIconSource is not null)
+        {
+            File.Copy(rootIconSource, Path.Combine(appDir, packageName + ".png"), overwrite: true);
+            File.Copy(rootIconSource, Path.Combine(appDir, ".DirIcon"), overwrite: true);
+        }
+        else if (largestSquareIcon is not null)
+        {
+            AppImageToolset.Symlink(largestSquareIcon, Path.Combine(appDir, packageName + ".png"));
+            AppImageToolset.Symlink(largestSquareIcon, Path.Combine(appDir, ".DirIcon"));
+        }
+        else
+        {
+            var fallback = AppImageToolset.DefaultIcon();
+            File.WriteAllBytes(Path.Combine(appDir, packageName + ".png"), fallback);
+            File.WriteAllBytes(Path.Combine(appDir, ".DirIcon"), fallback);
+        }
+
+        // AppRun: upstream uses a precompiled helper; a readable script is
+        // equivalent and auditable (APPDIR is set by the runtime; the dirname
+        // fallback keeps --appimage-extract squashfs-root runs working).
+        var execPath = binLink.Length > 0
+            ? "usr/bin/" + binLink
+            : installRoot + "/" + mainExecutable;
+        var appRun = "#!/bin/sh\n" +
+                     "APPDIR=\"${APPDIR:-$(dirname \"$(readlink -f \"$0\")\")}\"\n" +
+                     "exec \"$APPDIR/" + execPath + "\" \"$@\"\n";
+        var appRunPath = Path.Combine(appDir, "AppRun");
+        File.WriteAllText(appRunPath, appRun);
+        AppImageToolset.Chmod(appRunPath, "+x");
+
+        return new Result
+        {
+            AppDirPath = appDir,
+            PackageName = packageName,
+            Version = version,
+            EnvironmentArchitecture = envArch,
+            FileArchitecture = AppImageIdentity.FileArchitectureForEnv(envArch)
+        };
+    }
+
+    private static void CopyTree(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var directory in Directory.GetDirectories(source, "*", SearchOption.AllDirectories))
+        {
+            Directory.CreateDirectory(Path.Combine(
+                destination, PathRelative(source, directory)));
+        }
+        foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(
+                destination, PathRelative(source, file));
+            File.Copy(file, target, overwrite: true);
+        }
+    }
+
+    private static string PathRelative(string baseDir, string path)
+    {
+        var baseUri = new Uri(baseDir.TrimEnd(Path.DirectorySeparatorChar) +
+            Path.DirectorySeparatorChar, UriKind.Absolute);
+        var pathUri = new Uri(Path.GetFullPath(path), UriKind.Absolute);
+        return Uri.UnescapeDataString(baseUri.MakeRelativeUri(pathUri).ToString());
+    }
+
+    // POSIX relative path between two slash-separated AppDir-relative paths
+    // ("usr/bin" → "usr/lib/<pkg>/main" = "../lib/<pkg>/main").
+    private static string RelativePath(string baseDir, string path)
+    {
+        var from = baseDir.Split('/');
+        var to = path.Split('/');
+        var common = 0;
+        while (common < from.Length && common < to.Length &&
+               from[common] == to[common])
+        {
+            common++;
+        }
+        var ups = Enumerable.Repeat("..", from.Length - common);
+        return string.Join("/", ups.Concat(to.Skip(common)));
+    }
+
+    private static bool TrySquareSize(string hicolorPath, out int size)
+    {
+        size = 0;
+        var segments = hicolorPath.Split('/');
+        if (segments.Length < 5) return false;
+        var dir = segments[3]; // e.g. 256x256 or 48x48@2
+        var parts = dir.Split('@')[0].Split('x');
+        if (parts.Length == 2 &&
+            int.TryParse(parts[0], out var w) && int.TryParse(parts[1], out var h) &&
+            w == h)
+        {
+            size = w;
+            return true;
+        }
+        return false;
+    }
+}

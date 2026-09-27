@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Bundler AppImage Fixture Custom
+Exec=bundler-appimage-fixture
+Icon=bundler-appimage-fixture
+Categories=Utility;
+Terminal=false

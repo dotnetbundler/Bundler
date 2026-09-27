@@ -4020,3 +4020,11 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 - OI-01..07/MT-01..07 逐条复核维持登记；冻结基线写入 rpm-roadmap 与 PROJECT_CONTEXT。
 - **`.rpm` 冻结基线 `0.1.0-alpha.55`**：配置面与行为契约冻结，仅接受带回归测试的缺陷修复。
 - `docs/roadmap.md` 推进至 `LINUX-APPIMAGE`。
+
+## 2026-09-27 LINUX-APPIMAGE-1（`0.1.0-alpha.56`，分支 `linux-appimage-development`）
+
+- `src/Bundler.AppImage`（netstandard2.0，`DotNet.Bundler.AppImage`）：`AppImageBundler` 门面 + `AppImageBundleBackend` + `AppDirBuilder`（共享 freedesktop 件 + 脚本 `AppRun` + 根 desktop 符号链接 + `.DirIcon`/图标三态回落）+ `AppImageToolset`（嵌入资源 SHA-256 校验→缓存落位）+ `AppImageProcessRunner` + `AppImageIdentity`。
+- `third_party/appimagetool/` 四件内嵌：appimagetool x86_64/aarch64 + type2 runtime x86_64/aarch64，MIT 许可 + provenance；pinned 构建不内嵌 runtime（缺省联网下载）故始终 `--runtime-file` 外供。
+- 决策回填：决策 4 可交叉（x86_64 宿主产 aarch64 ELF 实测）；决策 10 仅 zstd（pinned mksquashfs 实测 gzip/xz 报不支持），故不设压缩旋钮；appimagetool 硬要求 `Categories=`，生成件缺省补 `Utility`。
+- MSBuild：`BundlerFormats=appimage` + 九 `BundlerAppImage*` 旋钮接线 + 包装载 dll；`deb;rpm;appimage` 扇出。
+- 测试：`Bundler.Tests` 新增 8 项共 171 全绿（含真实 appimagetool 端到端与 aarch64 交叉用例）；`tests/Linux.AppImage.Integration/Verify.sh` 全绿（extract 结构断言 + AppRun/extract-and-run 真实运行 + 覆盖/桌面/失败变体 + arm64 ELF 结构 + 扇出 + docker debian/ubuntu/fedora 冒烟）；`tests/AppImage.Api.PackageFixture` nupkg 直 API 消费通过；示例 `samples/HelloAppImageApp`。
