@@ -903,3 +903,15 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 - MSBuild：`BundlerMacDmgSignIdentity`/`BundlerMacDmgSignCertificatePath`/`BundlerMacDmgSignCertificatePassword` 接线；`LicenseFile` 复用公共 `BundlerLicenseFile`。
 - 验证（云 macOS VM 26.5.2 arm64 实测）：`Bundler.Tests` 99/99 全绿（新增 4 条：SLA 注入+codesign 顺序/互斥拒绝/缺失许可拒绝/SLA plist 结构与告警）；`Verify.sh` 全绿——EULA+ad-hoc 变体 `udifderez -xml` 回读三类资源、`codesign --verify` 通过、`Signature=adhoc`；`samples/HelloMacDmg` 补 `HelloMacDmgLicenseFile`（默认 `Assets/eula.txt`）与 `HelloMacDmgDmgSign*` 旋钮实测。
 - 外部待验收：GUI 挂载许可面板观感（MAC-DMG-OI-01/MAC-DMG-MT-02）、Developer ID 真实签名（MAC-DMG-OI-02/MAC-DMG-MT-03）。
+
+
+### 14.29 MAC-DMG-4：原生 E2E 与支持矩阵（2026-09-26，分支 `mac-dmg-development`）
+
+原生 E2E 收口，全部在 `tests/MacOS.Dmg.Integration/Verify.sh` 真实断言（云 macOS VM 26.5.2 arm64 实测全绿）：
+
+- **SLA 真实挂载门控**：带 EULA 的 DMG 在 `hdiutil attach` 且 stdin 关闭时被取消（"attach canceled"），回答 `Y` 才挂载且卷内容齐全——EULA 不只是资源写入，是真实的挂载门控。
+- **quarantine 传播**：对 DMG 写 `com.apple.quarantine` 后挂载，拷出的 `.app` 携带隔离属性——Gatekeeper 分发语义成立。
+- **osx-x64 产物**：`-p:RuntimeIdentifier=osx-x64` 变体产出 `.dmg`、可挂载、内部载荷 `file` 断言 x86_64 Mach-O；本机无 Rosetta，运行态启动登记 MAC-DMG-OI-03。
+- **失败路径**：非法 `BundlerMacDmgCompression` 值 → publish 失败、无 `.dmg` 产物、无残留挂载（`hdiutil info` 断言）。
+- **干净宿主复核**：后端必需工具仅 `hdiutil`/`osascript`（品牌/布局可选 `SetFile`，签名可选 `codesign`/`security`），均无 Xcode/CLT 必需依赖；GUI 观感、Intel/Rosetta、干净宿主首启登记 MAC-DMG-OI-01/03/04 与 MAC-DMG-MT-01..05。
+- `Bundler.Tests` 99/99 全绿（本阶段无新增后端代码，纯验证扩展）；README `BundlerLicenseFile` 行补 DMG SLA 口径。

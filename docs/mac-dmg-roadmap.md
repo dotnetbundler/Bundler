@@ -1,6 +1,6 @@
 # macOS `.dmg` 后端实施路线（MAC-DMG）
 
-> 状态：**`MAC-DMG-1`/`MAC-DMG-2`/`MAC-DMG-3` 已完成（2026-09-26 云 macOS VM 实测），`MAC-DMG-4` 待启动指令**。
+> 状态：**`MAC-DMG-1`..`MAC-DMG-4` 已完成（2026-09-26 云 macOS VM 实测），`MAC-DMG-5` 待启动指令**。
 > 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md) 的 `.dmg` 节（同一 `7dbfc1f` 快照基线）；
 > `.app` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
@@ -61,6 +61,7 @@
 - **前置**：MAC-DMG-1..3 完成。
 - **目标/交付**：osx-x64/osx-arm64 产物、quarantine/首次挂载行为、错误路径清理断言、文档与示例收口。
 - **退出**：矩阵实测格子有证据；未测格子限缩声明。
+- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64）**：`Verify.sh` 全绿扩展——(a) SLA 真实挂载门控：`hdiutil attach` stdin 关闭时被 EULA 取消（"attach canceled"），回 `Y` 即挂载且卷内容齐全；(b) quarantine 传播：对 DMG 写 `com.apple.quarantine` 后挂载，拷出的 `.app` 携带隔离属性（Gatekeeper 分发语义成立）；(c) `osx-x64` 变体：产物存在、可挂载、内部载荷 `file` 断言 x86_64 Mach-O（本机无 Rosetta，运行态启动属 MAC-DMG-OI-03）；(d) 失败路径：非法 `BundlerMacDmgCompression` 值 publish 失败、无 `.dmg` 产物、无残留挂载。`Bundler.Tests` 99/99 仍全绿。干净宿主复核：后端必需工具仅 `hdiutil`/`osascript`（品牌/布局可选 `SetFile`，签名可选 `codesign`/`security`），均无 Xcode/CLT 必需依赖；GUI 观感、Intel/Rosetta 宿主、干净宿主首启仍登记外部待验收（MAC-DMG-OI-01/03/04）。
 
 ### MAC-DMG-5：审计与格式冻结
 

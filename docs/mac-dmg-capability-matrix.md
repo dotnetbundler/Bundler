@@ -3,7 +3,7 @@
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
 计划实现与外部待验收行绑定到 `docs/mac-dmg-roadmap.md`、`docs/mac-dmg-open-items.md`、`docs/mac-dmg-manual-testing.md` 中的明确阶段/ID。
 上游参照：`docs/mac-tauri-capability-audit.md` 的 `.dmg` 节。
-路线已确认（`2026-09-26`）；`MAC-DMG-1`/`MAC-DMG-2`/`MAC-DMG-3` 已实现（2026-09-26 云 macOS VM 实测），其余阶段未启动，表内非冻结状态。
+路线已确认（`2026-09-26`）；`MAC-DMG-1`..`MAC-DMG-4` 已实现（2026-09-26 云 macOS VM 实测），其余阶段未启动，表内非冻结状态。
 
 ## 镜像与内容
 
@@ -42,8 +42,8 @@
 | MSBuild 集成映射 | 已实现 | MAC-DMG-1 | `BundlerMacDmg*` 属性 |
 | 离线构建 | 已实现 | MAC-DMG-1 起 | 全链离线，无第三方内嵌工具 |
 | 宿主工具探测与版本门槛 | 已实现 | MAC-DMG-1 | 缺必需工具明确报错；可选工具降级警告 |
-| osx-x64/osx-arm64 产物 | 计划实现 | MAC-DMG-4 | 双产物矩阵实测 |
-| quarantine/首挂载行为 | 计划实现 | MAC-DMG-4 | 带 `com.apple.quarantine` 的挂载观察 |
+| osx-x64/osx-arm64 产物 | 已实现 | MAC-DMG-4 | 双产物结构+挂载实测；x64 运行态启动属外部待验收（MAC-DMG-OI-03） |
+| quarantine/首挂载行为 | 已实现 | MAC-DMG-4 | 带 `com.apple.quarantine` 挂载+拷出传播断言实测；GUI 观感属 MAC-DMG-OI-01 |
 
 ## 有意排除
 

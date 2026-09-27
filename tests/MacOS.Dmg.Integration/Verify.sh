@@ -159,4 +159,71 @@ codesign --verify --verbose=2 "$eula_dmg" 2>"$integration_root/codesign-verify.l
 codesign -dvvv "$eula_dmg" 2>&1 | grep -q "Signature=adhoc" \
     || fail "Expected an ad-hoc .dmg signature (Signature=adhoc)."
 
+# SLA 是真实挂载门控：stdin 关闭时 attach 取消，回答 Y 才挂载。
+if hdiutil attach "$eula_dmg" -nobrowse -readonly -mountpoint "$mount_root" </dev/null >/dev/null 2>&1; then
+    hdiutil detach "$mount_root" >/dev/null 2>&1 || true
+    mounted_volume=""
+    fail "The SLA image mounted without the license being accepted."
+fi
+echo Y | hdiutil attach "$eula_dmg" -nobrowse -readonly -mountpoint "$mount_root" >/dev/null \
+    || fail "The SLA image did not mount after accepting the license."
+mounted_volume="$mount_root"
+[[ -d "$mounted_volume/Bundler Mac DMG Fixture.app" ]] \
+    || fail "The EULA-mounted volume lacks the .app."
+hdiutil detach "$mounted_volume" >/dev/null || fail "EULA-mounted detach failed."
+mounted_volume=""
+
+# MAC-DMG-4: quarantine 传播——带 com.apple.quarantine 的 dmg 挂载后，
+# 拷出的 .app 携带隔离属性（Gatekeeper 分发语义）。
+log "== quarantine propagation =="
+quar_dmg="$integration_root/quarantine.dmg"
+cp "$dmg_path" "$quar_dmg"
+xattr -w com.apple.quarantine \
+    "0181;00000000;curl;00000000-0000-0000-0000-000000000000" "$quar_dmg"
+mkdir -p "$mount_root"
+hdiutil attach "$quar_dmg" -nobrowse -readonly -mountpoint "$mount_root" >/dev/null \
+    || fail "hdiutil attach failed on the quarantined .dmg."
+mounted_volume="$mount_root"
+cp -R "$mounted_volume/Bundler Mac DMG Fixture.app" "$integration_root/quar-app.app"
+hdiutil detach "$mounted_volume" >/dev/null || fail "Quarantined detach failed."
+mounted_volume=""
+xattr -p com.apple.quarantine "$integration_root/quar-app.app" >/dev/null 2>&1 \
+    || fail "Quarantine did not propagate to files copied off the .dmg."
+rm -rf "$integration_root/quar-app.app" "$quar_dmg"
+
+# osx-x64 产物：结构与挂载断言（本机无 Rosetta，运行态属外部待验收）。
+log "== osx-x64 variant =="
+dotnet publish "$fixture_project" -c Release \
+    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
+    -p:BundlerIntegrationOutput="$integration_root/bundle-x64" \
+    -p:RuntimeIdentifier=osx-x64 \
+    -p:BundlerTestDmgSkipWindowLayout=true \
+    --packages "$package_cache" >/dev/null
+x64_dmg="$integration_root/bundle-x64/osx-x64/dmg/Bundler Mac DMG Fixture.dmg"
+[[ -f "$x64_dmg" ]] || fail "The osx-x64 .dmg variant is missing."
+mkdir -p "$mount_root"
+hdiutil attach "$x64_dmg" -nobrowse -readonly -mountpoint "$mount_root" >/dev/null \
+    || fail "hdiutil attach failed on the osx-x64 .dmg."
+mounted_volume="$mount_root"
+file "$mounted_volume/Bundler Mac DMG Fixture.app/Contents/MacOS/BundlerMacDmgIntegrationFixture" \
+    | grep -q "x86_64" || fail "The osx-x64 payload is not an x86_64 Mach-O."
+hdiutil detach "$mounted_volume" >/dev/null || fail "osx-x64 detach failed."
+mounted_volume=""
+
+# 失败路径真实断言：非法压缩值 → publish 失败、无 .dmg 产物、无残留挂载。
+log "== failure path leaves nothing behind =="
+if dotnet publish "$fixture_project" -c Release \
+    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
+    -p:BundlerIntegrationOutput="$integration_root/bundle-bad" \
+    -p:BundlerTestDmgCompression=Bogus \
+    --packages "$package_cache" >/dev/null 2>&1; then
+    fail "An invalid compression value must fail the publish."
+fi
+if find "$integration_root/bundle-bad" -name '*.dmg' 2>/dev/null | grep -q .; then
+    fail "A failed build left a .dmg artifact."
+fi
+if hdiutil info 2>/dev/null | grep -q "$integration_root"; then
+    fail "A failed build left a mounted volume."
+fi
+
 log "PASS: macOS .dmg integration checks passed."

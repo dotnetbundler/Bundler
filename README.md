@@ -201,7 +201,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerDescription` | 否 | `$(Description)` |
 | `BundlerHomepage` | 否 | `$(PackageProjectUrl)` |
 | `BundlerCopyright` | 否 | `$(Copyright)` |
-| `BundlerLicenseFile` | 否 | 无；NSIS 支持 `.txt`/`.rtf`，MSI 交互许可界面仅支持 `.rtf` |
+| `BundlerLicenseFile` | 否 | 无；NSIS 支持 `.txt`/`.rtf`，MSI 交互许可界面仅支持 `.rtf`，DMG 将其注入 SLA 挂载许可面板 |
 | `BundlerOutputPath` | 否 | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerToolCachePath` | 否 | `%LOCALAPPDATA%\DotNetBundler\tools` |
 | `BundlerNsisTemplate` | 否 | 包内自带模板 |
