@@ -9,6 +9,8 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 integration_root="$repo_root/artifacts/macos-pkg-integration"
 package_dir="$repo_root/artifacts/packages"
 fixture_project="$script_dir/Fixture/BundlerMacPkgIntegrationFixture.csproj"
+api_fixture_project="$repo_root/tests/MacPkg.Api.PackageFixture/MacPkg.Api.PackageFixture.csproj"
+api_output="$integration_root/api"
 package_cache="$integration_root/nuget-cache"
 expand_root="$integration_root/expand"
 identity="BundlerMacOSPkgIntegration"
@@ -292,5 +294,19 @@ fi
 if find "$integration_root/bundle-bad" -name '*.pkg' 2>/dev/null | grep -q .; then
     fail "A failed build left a .pkg artifact."
 fi
+
+log "== exercising the standalone package API =="
+dotnet run --project "$api_fixture_project" -c Release \
+    -p:BundlerPackageVersion="$version" \
+    -p:BundlerPackageSource="$package_dir" \
+    -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
+    -p:RestorePackagesPath="$package_cache" \
+    -- "$api_output"
+api_pkg="$api_output/artifacts/osx-arm64/pkg/PKG API Package Fixture.pkg"
+[[ -f "$api_pkg" ]] || fail "The standalone API package did not create a .pkg."
+pkgutil --expand-full "$api_pkg" "$expand_root/api" >/dev/null \
+    || fail "pkgutil --expand-full failed on the API fixture .pkg."
+[[ -d "$expand_root/api/Payload/PKG API Package Fixture.app" ]] \
+    || fail "The API fixture .pkg payload lacks the .app bundle."
 
 log "PASS: macOS .pkg integration checks passed."

@@ -973,3 +973,9 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 能力矩阵定稿，无悬空"计划实现"行；OI-01..05 逐条复核维持登记（管理员宿主/Installer 证书/公证凭证/Intel 宿主/GUI 观感）。
 `.pkg` 配置与行为基线冻结于 `0.1.0-alpha.47`；冻结测试向量 = `Bundler.Tests` 122/122 + `Verify.sh` 全绿。
 `docs/roadmap.md` 推进 `LINUX`；包版本 `0.1.0-alpha.46`→`0.1.0-alpha.47`。
+
+### 14.37 补齐 MacDmg/MacPkg API PackageFixture（2026-09-27，分支 `mac-pkg-development`）
+
+缺口修正：`tests/` 惯例要求每后端有 `*.Api.PackageFixture`（直接 API 消费 NuGet 包冒烟），此前仅 `Nsis`/`Msi`/`MacApp` 具备，`MacDmg`/`MacPkg` 缺失。
+新增 `tests/MacDmg.Api.PackageFixture`（`MacDmgBundler` 直调：断言 `.dmg`+`.app` 中间产物、`SkipWindowLayout` 头less 安全）与 `tests/MacPkg.Api.PackageFixture`（`MacPkgBundler` 直调：断言 `.pkg`+`.app`）；各自接入对应 `Verify.sh` 末段——dmg 侧 `hdiutil attach` 断言卷内 `.app`+`/Applications` 链接，pkg 侧 `pkgutil --expand-full` 断言 payload。
+两条集成验证本机全绿。

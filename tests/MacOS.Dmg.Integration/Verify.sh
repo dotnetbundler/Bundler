@@ -9,6 +9,8 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 integration_root="$repo_root/artifacts/macos-dmg-integration"
 package_dir="$repo_root/artifacts/packages"
 fixture_project="$script_dir/Fixture/BundlerMacDmgIntegrationFixture.csproj"
+api_fixture_project="$repo_root/tests/MacDmg.Api.PackageFixture/MacDmg.Api.PackageFixture.csproj"
+api_output="$integration_root/api"
 package_cache="$integration_root/nuget-cache"
 mount_root="$integration_root/mount"
 identity="BundlerMacOSDmgIntegration"
@@ -225,5 +227,21 @@ fi
 if hdiutil info 2>/dev/null | grep -q "$integration_root"; then
     fail "A failed build left a mounted volume."
 fi
+
+log "== exercising the standalone package API =="
+dotnet run --project "$api_fixture_project" -c Release \
+    -p:BundlerPackageVersion="$version" \
+    -p:BundlerPackageSource="$package_dir" \
+    -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
+    -p:RestorePackagesPath="$package_cache" \
+    -- "$api_output"
+api_dmg="$api_output/artifacts/osx-arm64/dmg/DMG API Package Fixture.dmg"
+[[ -f "$api_dmg" ]] || fail "The standalone API package did not create a .dmg."
+hdiutil attach "$api_dmg" -nobrowse -mountpoint "$integration_root/api-mount" >/dev/null \
+    || fail "The API fixture .dmg failed to mount."
+[[ -d "$integration_root/api-mount/DMG API Package Fixture.app" && \
+   -L "$integration_root/api-mount/Applications" ]] \
+    || fail "The API fixture .dmg volume lacks the .app or the /Applications link."
+hdiutil detach "$integration_root/api-mount" >/dev/null || fail "Failed to detach the API fixture volume."
 
 log "PASS: macOS .dmg integration checks passed."
