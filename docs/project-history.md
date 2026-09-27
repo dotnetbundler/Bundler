@@ -4072,3 +4072,9 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 - 干净宿主审计：`src/Bundler.Archive` 零进程出口，仅 libc `readlink`/`access` P/Invoke。
 - 能力矩阵定稿（新增第三方互读行）、OI-01..05/MT-01..05 收口；**`.zip`/`.tar.gz` 冻结基线 `0.1.0-alpha.59`**。
 - 全部规划格式冻结完毕（MSI/APP/DMG/PKG/DEB/RPM/AppImage/Archive），`docs/roadmap.md` 推进 `CLI-C1`。
+
+## 2026-09-27 CLI-C1 规划轮（分支 `cli-development`）
+
+- `tauri-cli` 审计取舍：`--bundles` 参数优先于配置文件、config 层叠、verbosity 环境变量模式采纳；dev/init/migrate/mobile/hooks 属开发工具链职责，不引入。
+- 产出 `docs/cli-roadmap.md`：15 项决策（三命令面/手写解析器/`bundler.json`+参数层叠/`--json`/三级退出码/三档日志/删除旧原型/dotnet tool 首发）+ MSBuild↔CLI 映射表 + `CLI-1..3` 阶段表。
+- 配套 cli-capability-matrix / cli-manual-testing / cli-open-items 三件套与 manual-testing-index 行。
