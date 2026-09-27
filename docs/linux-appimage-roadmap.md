@@ -81,3 +81,10 @@
 - 干净宿主审计：`src/Bundler.AppImage` 进程出口仅 appimagetool（固定 argv）与 `chmod`/`ln` 小工具调用，无 shell、无网络下载——与决策 1/5/15 一致。
 - 证据：`Verify.sh` 全绿含新 arm64 载荷断言与 appimagelint 信息级实跑输出；容器矩阵（debian/ubuntu/fedora）维持全绿。
 - 边界：aarch64 真机执行仍为 OI-01；appimagelint 保持信息级（硬基线需其支持 tag/豁免机制，登记留尾）。
+
+### LINUX-APPIMAGE-4（已实现，`0.1.0-alpha.58`）
+
+- 上游复核：`git ls-remote` 显示 `tauri dev` HEAD 由 `447fa9f` 漂移至 `d15cf9b`；对审计引用文件（`bundle/linux/appimage/{mod,linuxdeploy}.rs`、`freedesktop/mod.rs`、`config.rs`、`category.rs`）按两快照逐一取回 diff——**全部字节级一致**，AppImage 侧审计行基线保持有效。
+- 收口：能力矩阵定稿无悬空"计划实现"行（GPG 签名按 rpm 口径标冻结外后置评估 `LINUX-APPIMAGE-SIGN`）；OI-01..05 维持登记，OI-06 消解；MT-01..05 全量保留。
+- 冻结基线：`AppImageBundleConfiguration` 配置面与行为契约冻结于 `0.1.0-alpha.58`；冻结测试向量 = `Bundler.Tests` 173/173 + `Verify.sh` 全绿（extract/AppRun 真实运行、三容器矩阵、arm64 载荷深读、appimagelint 信息级段）。
+- 冻结后仅接受带回归测试的缺陷修复。

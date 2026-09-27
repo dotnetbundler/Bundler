@@ -35,5 +35,5 @@
 | --- | --- | --- | --- |
 | x86_64 Linux 宿主构建 + 容器运行冒烟 | 已实现 | LINUX-APPIMAGE-1 | debian:stable/ubuntu:latest/fedora:latest 容器 `--appimage-extract-and-run` 实测输出断言 |
 | `linux-arm64`（aarch64）产物 | 已实现（产出）/外部待验收（运行） | LINUX-APPIMAGE-1 | 可交叉（决策 4）：嵌入 runtime-aarch64 + `--runtime-file`；e_machine 结构断言；真机运行 OI-01 |
-| `appimagelint` 基线 | 计划实现 | LINUX-APPIMAGE-3 | 先评估误报情况再定信息级或硬断言 |
+| `appimagelint` 基线 | 已实现（信息级） | LINUX-APPIMAGE-3 | 实跑：有效项全过，✖ 项为载荷 glibc 地板（xenial/trusty）与 `@2` scale 目录解析局限；无 tag 豁免体系 → 信息级接入 Verify.sh 非阻断段 |
 | 多格式扇出（`deb;rpm;appimage`） | 已实现 | LINUX-APPIMAGE-1 | 同次 publish 三产物断言（Verify.sh fanout 变体） |

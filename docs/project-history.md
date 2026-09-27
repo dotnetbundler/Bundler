@@ -4042,3 +4042,10 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 - appimagelint 实跑并裁决信息级：发现项为载荷 ABI 属性（glibc 地板，xenial/trusty 未达属预期）与工具自身局限（不解析 freedesktop `@2` scale 目录、无 tag 豁免体系）；接入 `Verify.sh` 非阻断段。
 - 干净宿主审计：后端进程出口仅 appimagetool（固定 argv）与 chmod/ln 小工具，无 shell、无下载——与决策 1/5/15 一致。
 - `Bundler.Tests` 173/173、`Verify.sh` 全绿（含 docker 三容器矩阵）。
+
+## 2026-09-27 LINUX-APPIMAGE-4（`0.1.0-alpha.58`，分支 `linux-appimage-development`）——格式冻结
+
+- 上游复核：`tauri dev` HEAD `447fa9f`→`d15cf9b`，审计引用五文件逐一 diff 字节级一致，基线保持有效。
+- 能力矩阵定稿；OI-01..05 维持登记（OI-06 消解），MT-01..05 保留；GPG 签名按 rpm 口径冻结外后置评估。
+- 冻结基线：`AppImageBundleConfiguration` 配置面与行为契约冻结于 `0.1.0-alpha.58`；冻结测试向量 `Bundler.Tests` 173/173 + `Verify.sh` 全绿。
+- `docs/roadmap.md` 推进 `ARCHIVE`。

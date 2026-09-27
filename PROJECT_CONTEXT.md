@@ -6,8 +6,8 @@
 > 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
 > `LINUX-DEB-1..5` 全部完成，`.deb` 冻结并已入 `main`：冻结基线 `0.1.0-alpha.51`，测试向量 141/141 + `Verify.sh` 全绿
 > `.rpm` 已冻结于 `0.1.0-alpha.55`（`linux-rpm-development`，`LINUX-RPM-1..5` 完成）：`DotNet.Bundler.Rpm` 纯托管写入器 + `deb;rpm` 扇出 + 六族关系字段 + License/Group/Url 覆盖 + 共享 freedesktop 件 + `BundlerRpmFile` 映射 + 四 scriptlet/systemd unit/%config(noreplace)/gzip-only 压缩；fedora/rockylinux/opensuse 三容器真实装卸与升级语义 + rpmlint 豁免门控 + arm64 结构断言全绿；决策与证据见 `docs/linux-rpm-roadmap.md`
-> `LINUX-APPIMAGE-1..3` 已完成于 `linux-appimage-development`（`0.1.0-alpha.58`）：`DotNet.Bundler.AppImage` 内嵌 appimagetool×2 + type2 runtime×2（SHA-256 provenance，始终 `--runtime-file` 外供不联网），AppDir 共享 freedesktop 件 + 脚本 AppRun + 根 desktop 链接/.DirIcon/默认 PNG 回落，压缩固定 zstd（pinned mksquashfs 约束）；九旋钮接线 + `deb;rpm;appimage` 扇出；`--appimage-extract` 结构断言 + 解出真实运行 + 三容器冒烟全绿
-> 默认下一阶段：`LINUX-APPIMAGE-4`（审计复核与冻结——上游漂移复核、能力矩阵定稿、OI/MT 收口、冻结基线写入；`.rpm` 已冻结于 `0.1.0-alpha.55`）
+> `LINUX-APPIMAGE-1..4` 已完成，`.AppImage` 冻结于 `linux-appimage-development`（`0.1.0-alpha.58`）：`DotNet.Bundler.AppImage` 内嵌 appimagetool×2 + type2 runtime×2（SHA-256 provenance，始终 `--runtime-file` 外供不联网），AppDir 共享 freedesktop 件 + 脚本 AppRun + 根 desktop 链接/.DirIcon/默认 PNG 回落，压缩固定 zstd（pinned mksquashfs 约束）；九旋钮接线 + `deb;rpm;appimage` 扇出；`--appimage-extract` 结构断言 + 解出真实运行 + 三容器冒烟全绿
+> 默认下一阶段：`ARCHIVE` 规划轮（`.zip`/`.tar.gz` 等归档格式；`.rpm` 冻结于 `0.1.0-alpha.55`、`.AppImage` 冻结于 `0.1.0-alpha.58`）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -86,7 +86,7 @@ Verify.sh 真实通过 `lsregister` 注册、`open <文件>`/`open <scheme>://` 
 
 `.pkg` 已冻结（`MAC-PKG-1..5` 全部完成）。
 `LINUX-DEB`：**1..5 全部完成，格式冻结并入 `main`**（2026-09-27，冻结基线 `0.1.0-alpha.51`）——`src/Bundler.Deb` 托管 ar/tar/gzip 写入器；DEB-1 最小 control+`md5sums`、`usr/lib`+`usr/bin` 布局、SemVer→deb 映射与八旋钮；DEB-2 关系字段透传、Section/Priority、`.desktop` 生成与 `DesktopFile` 覆盖、hicolor 图标（PNG 探测/`@2x`）、metainfo、`changelog.gz`/`copyright`、`BundlerDebFile` 绝对路径映射；DEB-3 维护者脚本四旋钮（0755/shebang+LF）、`SystemdServiceFile` 托管 unit + postinst `daemon-reload` 合成、conffiles（`/etc` DebFile 自动登记）、压缩仅 gzip（xz/zstd 登记拒绝）、升级/conffile 保留语义实测；DEB-4 lintian 硬断言基线（豁免清单入档）、`changelog.Debian.gz` 自动补发与扩展描述默认行、`linux-arm64` 结构断言、docker `debian:stable`/`ubuntu:latest` 装卸矩阵；141 项 Bundler.Tests + `Verify.sh`（真实 `sudo dpkg -i/-r/-P`、`desktop-file-validate`、`dpkg -L` 回读、lintian 信息级审计）全绿；`samples/HelloDebApp` 演示全旋钮；
-`LINUX-APPIMAGE`：`LINUX-APPIMAGE-1..3` 完成（`0.1.0-alpha.58`），细节见 `docs/linux-appimage-roadmap.md` §4；`CLI-C1` 无实现。
+`LINUX-APPIMAGE`：全部完成并冻结（`0.1.0-alpha.58`），细节见 `docs/linux-appimage-roadmap.md` §4；`CLI-C1` 无实现。
 
 ## 3. 最近验证（2026-10-03，Windows 11 Pro build 26200 x64，跨格式收尾回归）
 
