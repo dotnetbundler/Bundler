@@ -1,6 +1,6 @@
 # macOS `.pkg` 后端实施路线（MAC-PKG）
 
-> 状态：**`MAC-PKG-3` 已完成**（2026-09-27，分支 `mac-pkg-development`）；默认下一阶段 `MAC-PKG-4`，待启动指令。
+> 状态：**`MAC-PKG-4` 已完成**（2026-09-27，分支 `mac-pkg-development`）；默认下一阶段 `MAC-PKG-5`（审计与冻结），待启动指令。
 > `.pkg` 无上游参照：tauri 无 `.pkg` 输出（`PackageType` 仅 `MacOsBundle`/`IosBundle`/`Dmg`/`Updater` + Linux/Windows 各项），决策依据为原生 macOS 工具链语义与 [`docs/mac-format-decision.md`](mac-format-decision.md) 已确认边界。
 > `.app`/`.dmg` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)、[`docs/mac-dmg-roadmap.md`](mac-dmg-roadmap.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。

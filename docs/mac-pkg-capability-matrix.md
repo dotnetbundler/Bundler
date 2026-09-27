@@ -42,7 +42,7 @@
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
 | 收据记录（`pkgutil --pkgs`/`--files`） | 已实现（per-user 域） | MAC-PKG-2 实测 | per-user 收据写 `~/Library/Receipts`，`pkgutil --pkgs/--files/--forget --volume ~` 可枚举；system 域属外部待验收 |
-| 覆盖安装升级 | 计划实现 | MAC-PKG-4 | 收据版本随装更新；无降级保护 |
+| 覆盖安装升级 | 已实现 | MAC-PKG-4 实测 | 同 identifier v1→v2 覆盖安装实测：收据 `pkg-version` 更新到 2.0.0；无降级保护 |
 | 一键卸载 | 明确拒绝 | — | `.pkg` 无此语义；`pkgutil --forget` 只清收据，文件按 BOM 清单清理 |
-| `osx-x64` 产物 | 计划实现 | MAC-PKG-4 | 结构与 payload 架构断言；运行态属外部待验收 |
+| `osx-x64` 产物 | 已实现（结构） | MAC-PKG-4 实测 | `osx-x64/pkg/` 产出、expand-full payload 内 `file` 断言 x86_64 Mach-O；运行态需 Rosetta/Intel 宿主，属 OI-04 |
 | `system` 域管理员安装 | 外部待验收 | MAC-PKG-4 | 本机无 root，登记 MAC-PKG-OI-01 |

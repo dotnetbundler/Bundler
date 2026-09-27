@@ -960,3 +960,9 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 复用：`MacAppSigning.TemporaryKeychain` 与 `NotarySubmissionId` 经 InternalsVisibleTo 共享（`Path` 属性转 internal）；公证凭证解析抽为字段级重载供 `.pkg` 复用。
 验证（macOS 26.5.2 arm64）：`Bundler.Tests` **122 项全绿**（+8）；`Verify.sh` 全绿——scripts 变体 `component.pkg/Scripts` cpio 归档断言 `postinstall` 收进包，**per-user 真实安装后 postinstall 真实执行**（标记文件断言），无效签名身份 publish 诚实失败无伪产物；示例全旋钮实测。
 踩坑：自签名 p12 不满足 productsign 的身份策略（`find-identity -v` 0 命中）——真实 Developer ID Installer 证书登记 OI-02；内嵌组件包在分发 xar 中为展开形态、`Scripts` 为独立 cpio 归档；XML 注释内不能含 `--`。
+
+### 14.35 MAC-PKG-4：原生 E2E 与支持矩阵（2026-09-27，分支 `mac-pkg-development`）
+
+`Verify.sh` 扩展两段实测：**覆盖安装升级**——同 identifier v1(scripts 变体)→v2 连续 per-user 安装，`pkgutil --pkg-info-plist --volume ~` 断言收据 `pkg-version` 更新到 2.0.0；**osx-x64 产物**——`osx-x64/pkg/` 产出、expand-full payload 内 `file` 断言 x86_64 Mach-O（运行态需 Rosetta/Intel 宿主，登记 OI-04）。
+干净宿主复核定稿：后端必需工具仅 `pkgbuild`/`productbuild`/`productsign`/`xar`/`pkgutil`/`installer`（全系统自带零供应成本）；`xcrun notarytool`/`stapler` 仅公证路径需要（Xcode 13+）；签名/公证凭证属外部项。无第三方内嵌工具、无运行时下载。
+`Bundler.Tests` 122 项全绿、`Verify.sh` 全绿（本阶段无后端代码改动，纯验证扩展）。

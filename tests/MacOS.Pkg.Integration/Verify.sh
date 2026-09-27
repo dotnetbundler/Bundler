@@ -243,7 +243,43 @@ pkgutil --forget com.dotnetbundler.macpkgintegrationfixture --volume ~ >/dev/nul
 [[ -f "$HOME/.bundler-pkg-postinstall-ran" ]] \
     || fail "The postinstall script was not executed during the real install."
 rm -f "$HOME/.bundler-pkg-postinstall-ran"
+
+log "== overwrite-install upgrade (same identifier, version bump) =="
+# 覆盖安装升级语义：同 identifier 的 v2 装上后，收据版本必须更新到 2.0.0。
+dotnet publish "$fixture_project" -c Release \
+    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
+    -p:BundlerIntegrationOutput="$integration_root/bundle-v2" \
+    -p:BundlerTestPkgVersion=2.0.0 \
+    -p:BundlerTestPkgDomain=CurrentUserHome \
+    --packages "$package_cache" >/dev/null
+v2_pkg="$integration_root/bundle-v2/osx-arm64/pkg/Bundler Mac PKG Fixture.pkg"
+[[ -f "$v2_pkg" ]] || fail "The v2 .pkg variant is missing."
+if ! installer -pkg "$v2_pkg" -target CurrentUserHomeDirectory -dumplog \
+        >"$integration_root/install-v2.log" 2>&1; then
+    cat "$integration_root/install-v2.log" >&2 || true
+    fail "The v2 overwrite install failed."
+fi
+pkg_info="$(pkgutil --pkg-info-plist com.dotnetbundler.macpkgintegrationfixture --volume ~)" \
+    || fail "pkgutil --pkg-info-plist failed after the upgrade install."
+printf '%s' "$pkg_info" | grep -q "<string>2.0.0</string>" \
+    || fail "The receipt version did not move to 2.0.0 after overwrite install: $pkg_info"
+pkgutil --forget com.dotnetbundler.macpkgintegrationfixture --volume ~ >/dev/null || true
 rm -rf "$home_app" "$HOME/Applications/support"
+
+log "== osx-x64 artifact variant =="
+dotnet publish "$fixture_project" -c Release -r osx-x64 \
+    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
+    -p:BundlerIntegrationOutput="$integration_root/bundle-x64" \
+    --packages "$package_cache" >/dev/null
+x64_pkg="$integration_root/bundle-x64/osx-x64/pkg/Bundler Mac PKG Fixture.pkg"
+[[ -f "$x64_pkg" ]] || fail "The osx-x64 .pkg variant is missing."
+pkgutil --expand-full "$x64_pkg" "$expand_root/x64" >/dev/null \
+    || fail "pkgutil --expand-full failed on the osx-x64 .pkg."
+x64_bin="$expand_root/x64/Payload/Bundler Mac PKG Fixture.app/Contents/MacOS/BundlerMacPkgIntegrationFixture"
+[[ -f "$x64_bin" ]] || fail "The osx-x64 payload lacks the main executable."
+file "$x64_bin" | grep -q "x86_64" \
+    || fail "The osx-x64 payload binary is not x86_64: $(file "$x64_bin")"
+# 运行态需 Rosetta——本机不具备，登记外部待验收（MAC-PKG-OI-04）。
 
 log "== failure path leaves nothing behind =="
 if dotnet publish "$fixture_project" -c Release \

@@ -3,11 +3,11 @@
 > 最后更新：2026-09-26
 > 当前分支：`mac-pkg-development`（基于 `main` `8cf5de5`；`.app` 与 `.dmg` 线均已并入 main）
 > 当前包版本：`0.1.0-alpha.46`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.app`/`.dmg` 冻结基线均记录于 `alpha.45`）
-> 当前阶段：WIN-MSI-1..9 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；`MAC-PKG-1..3` 完成；
+> 当前阶段：WIN-MSI-1..9 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；`MAC-PKG-1..4` 完成；
 > `alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 前 NSIS 安装目录延续、事务清理竞态修复）
 > `alpha.45` 将 SDK 基线升至 .NET 10（MSBuild 任务链保留 `netstandard2.0`），无后端功能变更
 > `.app` 与 `.dmg` 格式均已冻结（MAC-APP-1..5 / MAC-DMG-1..5，冻结基线 `0.1.0-alpha.45`）；`.app` 线已合入 `main`，`.dmg` 线在 `mac-dmg-development` 分支待审
-> 默认下一阶段：`MAC-PKG-4`（`MAC-PKG-1..3` 完成并实测全绿；需用户明确启动指令）
+> 默认下一阶段：`MAC-PKG-5`（`MAC-PKG-1..4` 完成并实测全绿；需用户明确启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -79,7 +79,7 @@ Verify.sh 真实通过 `lsregister` 注册、`open <文件>`/`open <scheme>://` 
 
 ### 未开始的格式
 
-`MAC-PKG` 进行中（`MAC-PKG-1..3` 已完成）；`LINUX-DEB`、`LINUX-RPM`、`LINUX-APPIMAGE`、`CLI-C1`：无实现，顺序与边界见 `docs/roadmap.md`。
+`MAC-PKG` 进行中（`MAC-PKG-1..4` 已完成）；`LINUX-DEB`、`LINUX-RPM`、`LINUX-APPIMAGE`、`CLI-C1`：无实现，顺序与边界见 `docs/roadmap.md`。
 
 ## 3. 最近验证（2026-10-03，Windows 11 Pro build 26200 x64，跨格式收尾回归）
 
@@ -128,13 +128,15 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - `MAC-DMG-5` 完成（2026-09-26）：`.dmg` 格式冻结——上游复核无漂移（dev 头仍 `447fa9f`，`bundle_dmg`/`dmg/mod.rs` 字节一致），矩阵定稿，供应链复核确认无第三方内嵌工具；冻结基线 `0.1.0-alpha.45`，冻结测试向量 = `Bundler.Tests` 99/99 + Verify.sh 全绿；roadmap 推进 `MAC-PKG`。
 - `mac-dmg-development` 已合入 `main`（2026-09-26 快进合并，`8cf5de5`），包版本推进 `0.1.0-alpha.46`；`MAC-PKG` 规划轮收官：11 项决策全部确认（`docs/mac-pkg-roadmap.md`）。
 - `MAC-PKG-1` 完成（2026-09-26，macOS 26.5.2 arm64）：`Bundler.MacPkg` 后端落地（`pkgbuild` 全链、identifier/version/install-location 默认与覆盖、`BundlerPkgPayload` 任意载荷、宿主门控、失败清理）；MSBuild `BundlerMacPkg*` 接线；`Bundler.Tests` 109 项全绿 + `tests/MacOS.Pkg.Integration/Verify.sh` 全绿；示例 `samples/HelloMacPkg`。
-- `MAC-PKG-2` 完成（2026-09-27）：分发包与页面——配置任一分发特性自动升级 `productbuild`，`distribution.xml` 生成（title 默认产品名、welcome/conclusion/license 页、许可页复用 `LicenseFile`、域名 `system`/`current-user-home`）；`Bundler.Tests` 114 项全绿 + `Verify.sh` 全绿含 **per-user 域免提权真实安装**（`~/Applications` 落位、`pkgutil --volume ~` 收据断言、启动验证）。踩坑：分发文档须声明 `<options hostArchitectures>` 否则 arm64 宿主误报 Rosetta；`<relocate>` bundle 重定位会抢占 install-location；per-user 收据在 `~/Library/Receipts`。- `MAC-PKG-3` 完成（2026-09-27）：签名与公证+专家脚本——`MacPkgSigningConfiguration`（identity/临时证书/公证三模式凭证）、组件包 `pkgbuild --sign --timestamp`、分发包 `productsign --sign`（productbuild 出未签名档再签）、`.pkg` 公证 `notarytool submit`（直接收 pkg）+`stapler`、`ScriptsDirectory` 专家旋钮（`pkgbuild --scripts`）；`Bundler.Tests` 122 项全绿 + `Verify.sh` 全绿（postinstall 真实执行标记断言、无效身份失败路径）。真实签名/公证凭证属 OI-02/03。默认下一阶段 `MAC-PKG-4`。
+- `MAC-PKG-2` 完成（2026-09-27）：分发包与页面——配置任一分发特性自动升级 `productbuild`，`distribution.xml` 生成（title 默认产品名、welcome/conclusion/license 页、许可页复用 `LicenseFile`、域名 `system`/`current-user-home`）；`Bundler.Tests` 114 项全绿 + `Verify.sh` 全绿含 **per-user 域免提权真实安装**（`~/Applications` 落位、`pkgutil --volume ~` 收据断言、启动验证）。踩坑：分发文档须声明 `<options hostArchitectures>` 否则 arm64 宿主误报 Rosetta；`<relocate>` bundle 重定位会抢占 install-location；per-user 收据在 `~/Library/Receipts`。
+- `MAC-PKG-3` 完成（2026-09-27）：签名与公证+专家脚本——`MacPkgSigningConfiguration`（identity/临时证书/公证三模式凭证）、组件包 `pkgbuild --sign --timestamp`、分发包 `productsign --sign`（productbuild 出未签名档再签）、`.pkg` 公证 `notarytool submit`（直接收 pkg）+`stapler`、`ScriptsDirectory` 专家旋钮（`pkgbuild --scripts`）；`Bundler.Tests` 122 项全绿 + `Verify.sh` 全绿（postinstall 真实执行标记断言、无效身份失败路径）。真实签名/公证凭证属 OI-02/03。
+- `MAC-PKG-4` 完成（2026-09-27）：原生 E2E 与支持矩阵——覆盖安装升级实测（v1→v2 收据版本更新）、osx-x64 产物结构+x86_64 payload 断言（运行态 OI-04）、干净宿主复核（纯系统工具链，公证路径需 Xcode）；`Bundler.Tests` 122 项全绿 + `Verify.sh` 全绿。默认下一阶段 `MAC-PKG-5`。
 - MAC-DMG 规划轮已确认（2026-09-26）：C# 原生编排 `hdiutil`/`osascript`/`SetFile`/`sips` 不内嵌 create-dmg fork；DMG 本体可 `codesign`（`-` 跳过）不做公证；无 GUI 会话跳过布局+警告，`BundlerDmgSkipWindowLayout` 开关；EULA 经 `hdiutil udifrez` 注入 SLA；压缩格式可配置枚举 Udzo/Ulmo/Udbz、默认 `Ulmo`（挂载侧需 macOS 10.12+）；产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg`；窗口布局全可配默认对齐上游。
 
 ## 6. 默认下一步
 
-`MAC-PKG-4`：原生 E2E 与支持矩阵——osx-x64 产物、payload 落位复核、错误路径清理、干净宿主复核、文档示例收口；决策与阶段分解见 `docs/mac-pkg-roadmap.md`。
-等用户明确 `MAC-PKG-4` 启动指令再实施；未经明确要求不提交、不推送。
+`MAC-PKG-5`：审计与格式冻结——上游复核、能力矩阵定稿、外部待办收口、冻结基线、roadmap 推进 `LINUX`；决策与阶段分解见 `docs/mac-pkg-roadmap.md`。
+等用户明确 `MAC-PKG-5` 启动指令再实施；未经明确要求不提交、不推送。
 
 ## 7. 历史记录
 
