@@ -4005,3 +4005,10 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 - 压缩枚举仅 `gzip`，xz/zstd 拒绝（netstandard2.0 无托管编码器）。
 - 验证：`Bundler.Tests` 新增 4 项（163 全绿）；`Verify.sh` 新增 scriptlets/config/失败三变体与容器内 scriptlet 标记、`.rpmsave`、`rpm -U` Release 1→2 升级原地保留断言——全绿；rpmlint 信息级残余 6E3W（RPM-4 转硬基线）。
 
+
+### 2026-09-27 LINUX-RPM-4：原生 E2E 与支持矩阵收口（`linux-rpm-development`，`0.1.0-alpha.55`）
+
+- rpmlint 硬断言门控：`rpmlint-exemptions.txt` 豁免清单入档（7 项），新 tag 即失败；`summary-ended-with-dot` 以修 fixture 描述消解。
+- `linux-arm64` 产物结构断言（`*.aarch64.rpm`/`ARCH=aarch64`/载荷结构）；docker 矩阵扩为 fedora+rockylinux:9+opensuse/leap 三容器真实 `rpm -i/-e`。
+- 验证：`Bundler.Tests` 163 全绿（无新增用例）；`Verify.sh` 全绿。干净宿主复核：`src/Bundler.Rpm` 零外部进程调用。
+- 收口注记：arm64 真机安装（OI-01）、更广发行版（OI-04）、GPG 签名仍登记。

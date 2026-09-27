@@ -2,11 +2,11 @@
 
 > 最后更新：2026-09-27
 > 当前分支：`linux-rpm-development`（自 `main` `7436f25` 拉出；`.deb` 已并入 main）
-> 当前包版本：`0.1.0-alpha.54`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
+> 当前包版本：`0.1.0-alpha.55`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
 > 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
 > `LINUX-DEB-1..5` 全部完成，`.deb` 冻结并已入 `main`：冻结基线 `0.1.0-alpha.51`，测试向量 141/141 + `Verify.sh` 全绿
 > `LINUX-RPM-1..3` 已实现（`linux-rpm-development`）：`DotNet.Bundler.Rpm` 纯托管写入器 + `deb;rpm` 扇出 + 六族关系字段 + License/Group/Url 覆盖 + 共享 freedesktop 件 + `BundlerRpmFile` 映射 + 四 scriptlet/systemd unit/%config(noreplace)/gzip-only 压缩；fedora 容器真实装卸与升级语义全绿；决策与证据见 `docs/linux-rpm-roadmap.md`
-> 默认下一阶段：`LINUX-RPM-4`（原生 E2E 与支持矩阵收口：rpmlint 硬基线、arm64 结构、rockylinux/opensuse 容器矩阵，待用户启动指令）
+> 默认下一阶段：`LINUX-RPM-5`（审计复核与冻结，待用户启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。

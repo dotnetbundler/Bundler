@@ -1,0 +1,7 @@
+no-signature
+no-packager-tag
+no-manual-page-for-binary
+no-group-tag
+no-changelogname-tag
+invalid-license
+binary-or-shlib-defines-rpath

@@ -35,8 +35,11 @@ bash tests/Linux.Rpm.Integration/Verify.sh
 - 容器断言扩展：装后 `rpm -ql` 逐路径 + `rpm -qd` %doc 可见 + 卸载带走包自有叶子目录；
 - RPM-3 断言：`-p:BundlerTestRpmScripts=1` 变体在容器内真实执行 `%pre`/`%post`/`%preun`/`%postun`（标记文件逐行断言）、systemd unit 落位与 `daemon-reload` 合成；`%config(noreplace)` 语义——`rpm -e` 对修改过的 `/etc` 文件保留 `.rpmsave`、`rpm -U` 升级（Release=1→2）原地保留；CRLF scriptlet/越界 ConfigFiles/非 gzip 压缩三失败变体；
 - `tests/Rpm.Api.PackageFixture`（直接 API 消费 `DotNet.Bundler.Rpm` NuGet 包）冒烟；
-- `rpmlint` 信息级跑全包（不阻断）——基线硬断言在 LINUX-RPM-4 落地，当前残余 6E3W（no-signature/no-packager/no-group/no-changelogname/invalid-license/rpath×2/summary-dot/no-manual-page）。
+- `rpmlint` 硬断言门控（LINUX-RPM-4 起生效）：出现 `rpmlint-exemptions.txt` 之外的 tag 即失败；当前豁免 7 项（no-signature/no-packager-tag/no-group-tag/no-changelogname-tag/invalid-license/binary-or-shlib-defines-rpath/no-manual-page-for-binary）。
 
 ## 已知边界
 
-arm64 真机安装、rpm 系其他发行版（rocky/opensuse）容器矩阵、`rpmlint` 基线、GPG 签名——登记 `docs/linux-rpm-open-items.md`，按规划轮决策排后续阶段。
+linux-arm64 产物结构断言（`*.aarch64.rpm`、`ARCH=aarch64`、载荷结构——结构已测、真机安装仍登记 OI）
+- docker 发行版装卸矩阵：`fedora:latest`+`rockylinux:9`+`opensuse/leap:latest` 三容器真实 `rpm -i/-e`（镜像不可拉取时记 SKIP）
+
+arm64 真机安装、GPG 签名——登记 `docs/linux-rpm-open-items.md`，按规划轮决策排后续阶段。

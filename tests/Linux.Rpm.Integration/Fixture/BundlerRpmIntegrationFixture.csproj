@@ -11,7 +11,7 @@
     <BundlerIdentifier>com.dotnetbundler.rpmintegrationfixture</BundlerIdentifier>
     <BundlerProductName>Bundler Rpm Fixture</BundlerProductName>
     <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
-    <BundlerDescription>Disposable .rpm integration-test fixture.</BundlerDescription>
+    <BundlerDescription>Disposable .rpm integration-test fixture</BundlerDescription>
     <BundlerHomepage>https://example.com/rpm-fixture</BundlerHomepage>
     <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
     <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets/LICENSE.txt</BundlerLicenseFile>

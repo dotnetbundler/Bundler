@@ -1,6 +1,6 @@
 # Linux `.rpm` 后端实施路线（LINUX-RPM）
 
-> 状态：**LINUX-RPM-3 已实现，默认下一阶段 LINUX-RPM-4**（2026-09-27，分支 `linux-rpm-development`，包版本 `0.1.0-alpha.54`）。
+> 状态：**LINUX-RPM-4 已实现，默认下一阶段 LINUX-RPM-5**（2026-09-27，分支 `linux-rpm-development`，包版本 `0.1.0-alpha.55`）。
 > 上游审计见 [`docs/linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `tauri-apps/tauri@447fa9f`，DEB-5 复核确认零漂移）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 > 逐项能力状态见 [`docs/linux-rpm-capability-matrix.md`](linux-rpm-capability-matrix.md)；外部条件见 [`docs/linux-rpm-open-items.md`](linux-rpm-open-items.md)；人工步骤见 [`docs/linux-rpm-manual-testing.md`](linux-rpm-manual-testing.md)。
@@ -77,7 +77,13 @@
 - **实测注记**：scriptlet 语义为解释器喂体——script tag 存无 shebang 的正文，PROG tag 存解释器；rpm 安装/升级/卸载计数以 `$1` 传给 scriptlet。
 - **退出达成**：容器内 `rpm -i`/`rpm -e` 四个 scriptlet 标记断言、`rpm -U`（Release 1→2）升级 + `%config(noreplace)` `.rpmsave`/原地保留断言全绿；`PREINPROG`/`--scripts`/FILEFLAGS 主机侧断言全绿。
 
-### LINUX-RPM-4：原生 E2E 与支持矩阵
+### LINUX-RPM-4：原生 E2E 与支持矩阵（已实现 2026-09-27）
+
+- 交付：`rpmlint` 硬断言门控（`rpmlint-exemptions.txt` 豁免清单入档，7 项豁免——no-signature/no-packager-tag/no-group-tag/no-changelogname-tag/invalid-license/binary-or-shlib-defines-rpath/no-manual-page-for-binary；`summary-ended-with-dot` 以修 fixture 描述消解而非豁免）；`linux-arm64` 产物结构断言（`*.aarch64.rpm`+`ARCH=aarch64`+载荷结构）；docker 发行版装卸矩阵扩为 `fedora:latest`+`rockylinux:9`+`opensuse/leap:latest` 三容器真实 `rpm -i/-e`（镜像不可拉取记 SKIP）；干净宿主复核：`src/Bundler.Rpm` 零外部进程调用。
+- 证据：`Verify.sh` 全绿含三容器矩阵 + `rpm -U`/`%config` 语义段 + rpmlint 门控；`Bundler.Tests` 163 全绿无新增用例（纯测试基建与断言强化）。
+- 边界：arm64 真机安装（OI-01）、更广发行版宿主（OI-04）、dnf/zypper 仓库（OI-06）、GUI 桌面（OI-02）、systemd 真机（OI-03）、GPG 签名（后置评估）——均登记未冒充。
+
+### LINUX-RPM-4 原始范围（存档）
 
 - **目标/交付**：`rpmlint` 硬断言基线（豁免清单入档）；`linux-arm64` 产物结构断言；docker 发行版矩阵（`fedora:latest`+`rockylinux:9`+`opensuse/leap`）；干净宿主复核；示例全旋钮收口。
 - **退出**：矩阵实测格子有证据；未测格子进 OI/MT 清单。

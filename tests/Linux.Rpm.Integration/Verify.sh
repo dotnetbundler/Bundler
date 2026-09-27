@@ -326,6 +326,18 @@ if publish_fixture badcomp >/dev/null 2>&1 -p:BundlerTestRpmCompression='xz'; th
     fail "A non-gzip compression must fail the publish."
 fi
 
+log "== variant: arm64 structure (cross-arch; install is OI) =="
+publish_fixture arm64 -r linux-arm64 >"$integration_root/arm64.log" 2>&1 \
+    || { cat "$integration_root/arm64.log"; fail "linux-arm64 publish failed."; }
+arm64_rpm="$(find "$integration_root/arm64" -name "*.aarch64.rpm" | head -1)"
+[[ -n "$arm64_rpm" ]] || fail "No *.aarch64.rpm produced for linux-arm64."
+if [[ $have_rpm -eq 1 ]]; then
+    [[ "$(rpm_field "$arm64_rpm" ARCH)" == "aarch64" ]] \
+        || fail "arm64 package lacks ARCH=aarch64: $(rpm_field "$arm64_rpm" ARCH)"
+    rpm -qpl "$arm64_rpm" | grep -q /usr/lib/bundler-rpm-fixture/BundlerRpmIntegrationFixture \
+        || fail "arm64 payload structure mismatch."
+fi
+
 log "== variant: deb;rpm multi-format fanout =="
 publish_fixture fanout >/dev/null -p:BundlerTestFormats="deb%3Brpm"
 fan_rpm="$(find "$integration_root/fanout/linux-x64/rpm" -name '*.rpm' 2>/dev/null | head -n1)"
@@ -335,7 +347,12 @@ fan_deb="$(find "$integration_root/fanout/linux-x64/deb" -name '*.deb' 2>/dev/nu
 
 if [[ $have_docker -eq 1 ]]; then
     log "== docker install/remove matrix =="
-    for image in fedora:latest; do
+    for image in fedora:latest rockylinux:9 opensuse/leap:latest; do
+        if ! docker image inspect "$image" >/dev/null 2>&1 && \
+           ! docker pull -q "$image" >/dev/null 2>&1; then
+            log "SKIP: image $image unavailable (pull failed)."
+            continue
+        fi
         docker run --rm -v "$rpm_path:/tmp/pkg.rpm:ro" "$image" sh -c '
             set -e
             rpm -i /tmp/pkg.rpm
@@ -405,8 +422,19 @@ else
 fi
 
 if command -v rpmlint >/dev/null; then
-    log "== rpmlint report (informational until the RPM-3 baseline) =="
-    rpmlint "$rpm_path" || log "note: rpmlint reported findings (baseline lands in RPM-4)."
+    log "== rpmlint gate (exemption list enforced) =="
+    rpmlint_out="$(rpmlint "$rpm_path" || true)"
+    printf '%s\n' "$rpmlint_out" | sed -n 's/^[^ ]*: [EW]: \([^ ]*\).*/\1/p' \
+        | sort -u >"$integration_root/rpmlint-tags.txt"
+    unexpected="$(comm -23 "$integration_root/rpmlint-tags.txt" \
+        <(sort -u "$script_dir/rpmlint-exemptions.txt") || true)"
+    if [[ -n "$unexpected" ]]; then
+        printf '%s\n' "$rpmlint_out" >&2
+        fail "rpmlint reported non-exempt tags: $unexpected"
+    fi
+    log "rpmlint: $(wc -l <"$integration_root/rpmlint-tags.txt") exempted tag(s); findings all within baseline (rpmlint-exemptions.txt)"
+else
+    log "SKIP: rpmlint unavailable; gate skipped."
 fi
 
-log "PASS: LINUX-RPM-1..3 integration checks complete."
+log "PASS: LINUX-RPM-1..4 integration checks complete."

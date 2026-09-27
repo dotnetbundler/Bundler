@@ -161,6 +161,8 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 2026-09-27 `LINUX-RPM` 规划轮完成并确认（分支 `linux-rpm-development`）：决策清单见 `docs/linux-rpm-roadmap.md` §1（托管 RPM 写入器、SemVer→rpm 版本映射、scriptlet/systemd/config 对应关系、gzip-only 压缩、`deb;rpm` 多格式扇出）。
 2026-09-27 `LINUX-RPM-1` 已完成（同分支，`0.1.0-alpha.52`）：`DotNet.Bundler.Rpm` 纯托管 lead/header/cpio/gzip 写入器落地，`rpm -qip` 识别 + `RpmPackageReader` 回读互证，docker `fedora:latest` 真实 `rpm -i`/`rpm -e` 零残留全绿；`BundlerFormats=deb;rpm` 多格式扇出落地。`LINUX-APPIMAGE` 仍在其规划轮定稿。
 2026-09-27 `LINUX-RPM-2` 已完成（同分支，`0.1.0-alpha.53`）：六族关系字段（Requires/Provides/Conflicts/Obsoletes/Recommends/Suggests，`name [op evr]` 解析）透传 + License(SPDX)/Group/Url 覆盖 + freedesktop 生成器提取到 `Bundler.Core` 内部件供 deb/rpm 复用（deb 行为不变）+ `changelog.gz`%doc/`usr/share/licenses/<pkg>/`%license + `BundlerRpmFile` 任意路径映射；`rpm -qip`/`--queryformat` 逐字段、`desktop-file-validate`、docker 装后 `rpm -ql` 逐路径全绿；cpio 成员名 `./` 前缀修正（rpmlib PayloadFilesHavePrefix 的真实语义）。
+2026-09-27 `LINUX-RPM-3` 已完成（同分支，`0.1.0-alpha.54`）：四 scriptlet 旋钮 + `*Program` 解释器覆盖 + systemd unit 与 `daemon-reload` 合成 + `%config(noreplace)` 自动/显式标记 + gzip-only 压缩；容器内 `rpm -i/-e` 标记、`rpm -U` 升级原地保留、`rpm -e` `.rpmsave` 断言全绿。
+2026-09-27 `LINUX-RPM-4` 已完成（同分支，`0.1.0-alpha.55`）：`rpmlint` 豁免清单硬断言（`rpmlint-exemptions.txt`，7 项豁免入档，新 tag 即失败；`summary-ended-with-dot` 修 fixture 描述消解）；`linux-arm64` 产物结构断言；docker 矩阵扩为 `fedora:latest`+`rockylinux:9`+`opensuse/leap:latest` 三容器真实 `rpm -i/-e` 全绿；`src/Bundler.Rpm` 零外部进程复核通过。
 
 ### ARCHIVE：通用压缩包格式
 

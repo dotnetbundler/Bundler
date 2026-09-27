@@ -133,6 +133,6 @@ sudo rpm -e hello-rpm-app
 
 - **压缩枚举**：仅 `gzip`；xz/zstd 登记拒绝（netstandard2.0 无托管编码器）。
 
-## 已知边界（LINUX-RPM-3 未做）
+## 已知边界
 
-GPG 包签名、rpmlint 硬基线、rockylinux/opensuse 容器矩阵、arm64 真机安装——属 LINUX-RPM-4/后续独立阶段或已登记边界；详见 `docs/linux-rpm-roadmap.md` 与 `linux-rpm-open-items.md`。
+GPG 包签名、arm64 真机安装——属后续独立阶段或已登记边界；rpmlint 硬基线与 fedora/rockylinux/opensuse 三容器矩阵已在 LINUX-RPM-4 收口。详见 `docs/linux-rpm-roadmap.md` 与 `linux-rpm-open-items.md`。
