@@ -176,7 +176,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 记录一项后续格式决策（2026-10-03，用户提出）：在平台格式全部完成后增加一个压缩包后端
 （zip / tar.gz 等归档分发形式），跨 Windows/macOS/Linux 通用，阶段号 `ARCHIVE`。
 规划轮已完成（`docs/archive-roadmap.md`：zip+tar.gz、纯托管写入器、单顶层目录、执行位与符号链接保留、`.sha256` 侧车、拒绝签名与 tar.xz/zst/7z）。
-`ARCHIVE-1` 已完成：`src/Bundler.Archive` 托管双写入器 + 三 OS 矩阵放开 + `BundlerFormats=zip;targz` 接线，
+`ARCHIVE-1..3` 已全部完成，`.zip`/`.tar.gz` 冻结于 `0.1.0-alpha.59`：`src/Bundler.Archive` 托管双写入器 + 三 OS 矩阵放开 + `BundlerFormats=zip;targz` 接线，
 `Bundler.Tests` 181/181 与 `tests/Archive.Integration/Verify.sh`（真实解包/mode/symlink 还原/五格式扇出/交叉目标）全绿。
 
 ### CLI-C1：在打包格式完成后产品化 CLI
@@ -191,7 +191,7 @@ CLI 不产生新的格式能力，也不应反过来驱动后端设计；先完�
 删除重复或错误的早期 alpha 参数而不承诺兼容。
 完成后 CLI、MSBuild 和直接 API 都只是同一打包能力的适配器。
 
-当前实施顺序为：已完成并冻结的 `WIN-MSI-1..9` → `MAC-APP`（已冻结并入 main）→ `MAC-DMG`（已冻结并入 main）→ `MAC-PKG`（规划完成，默认下一阶段）→ `LINUX-DEB`（已冻结）→ `LINUX-RPM`（已冻结）→ `LINUX-APPIMAGE`（已冻结） → `ARCHIVE` → `CLI-C1`。
+当前实施顺序为：已完成并冻结的 `WIN-MSI-1..9` → `MAC-APP`（已冻结并入 main）→ `MAC-DMG`（已冻结并入 main）→ `MAC-PKG`（规划完成，默认下一阶段）→ `LINUX-DEB`（已冻结）→ `LINUX-RPM`（已冻结）→ `LINUX-APPIMAGE`（已冻结） → `ARCHIVE`（已冻结）→ `CLI-C1`（默认下一阶段：规划轮）。
 Tauri updater 协议/提升权限计划任务若有需求另立跨格式产品路线，不混入 MSI 或提前产品化 CLI。
 调整顺序必须依据真实用户需求、验证能力和维护成本更新本文档，不能只在对话中临时改口。
 

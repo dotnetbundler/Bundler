@@ -143,6 +143,23 @@ rm -rf "$extract_root/zip" && mkdir -p "$extract_root/zip"
 unzip -q "$zip" -d "$extract_root/zip" || fail "unzip extraction failed."
 assert_extracted_runs "$extract_root/zip" "$stem"
 
+log "== cross-implementation reads: python3 zipfile/tarfile =="
+python3 - "$zip" "$tgz" "$stem" "$exe" <<'PYEOF'
+import sys, tarfile, zipfile
+zip_path, tgz_path, stem, exe = sys.argv[1:5]
+z = zipfile.ZipFile(zip_path)
+names = z.namelist()
+assert f"{stem}/{exe}" in names, "zipfile: payload entry missing"
+info = z.getinfo(f"{stem}/{exe}")
+assert (info.external_attr >> 16) & 0o111 != 0, "zipfile: exec bits not visible"
+assert z.read(f"{stem}/{exe}.link") == b"./" + exe.encode(), "zipfile: symlink content mismatch"
+t = tarfile.open(tgz_path, "r:gz")
+t_names = t.getnames()
+assert f"{stem}/{exe}" in t_names, "tarfile: payload entry missing"
+sym = t.getmember(f"{stem}/{exe}.link")
+assert sym.issym() and sym.linkname == f"./{exe}", "tarfile: symlink member mismatch"
+PYEOF
+
 log "== real extraction: tar -xzf payload runs, exec bit + symlink restored =="
 rm -rf "$extract_root/targz" && mkdir -p "$extract_root/targz"
 tar -xzf "$tgz" -C "$extract_root/targz" || fail "tar -xzf extraction failed."

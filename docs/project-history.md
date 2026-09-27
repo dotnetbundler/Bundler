@@ -4065,3 +4065,10 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 - 旋钮面收口：`BundlerArchiveFile` 已在 ARCHIVE-1 提前落地，本阶段对照决策 8 复核最小集齐备、无缺口。
 - Destination 校验口径与 `BundlerAppImageFile` 对齐复核通过（段校验更严属超集）。
 - 断言补强：确定性构建（sha256 逐字节一致）、目录源拒绝、Zip64 拒绝；`Bundler.Tests` 181→184 全绿；`Verify.sh` 复跑全绿。
+
+## 2026-09-27 ARCHIVE-3（`0.1.0-alpha.59`，分支 `archive-development`）——归档格式冻结
+
+- 宿主矩阵收口：`Verify.sh` 新增 python3 zipfile/tarfile 跨实现互读断言；跨 OS 互读登记 MT/OI 未冒充。
+- 干净宿主审计：`src/Bundler.Archive` 零进程出口，仅 libc `readlink`/`access` P/Invoke。
+- 能力矩阵定稿（新增第三方互读行）、OI-01..05/MT-01..05 收口；**`.zip`/`.tar.gz` 冻结基线 `0.1.0-alpha.59`**。
+- 全部规划格式冻结完毕（MSI/APP/DMG/PKG/DEB/RPM/AppImage/Archive），`docs/roadmap.md` 推进 `CLI-C1`。

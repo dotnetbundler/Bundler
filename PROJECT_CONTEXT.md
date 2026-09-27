@@ -1,7 +1,7 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-09-27
-> 当前分支：`linux-rpm-development`（自 `main` `7436f25` 拉出；`.deb` 已并入 main）
+> 当前分支：`archive-development`（自 `main` `b58d7a5` 拉出；`.deb`/`.rpm`/`.AppImage` 已并入 main）
 > 当前包版本：`0.1.0-alpha.59`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.rpm` 冻结基线 `alpha.55`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
 > 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
 > `LINUX-DEB-1..5` 全部完成，`.deb` 冻结并已入 `main`：冻结基线 `0.1.0-alpha.51`，测试向量 141/141 + `Verify.sh` 全绿
@@ -9,7 +9,8 @@
 > `LINUX-APPIMAGE-1..4` 已完成，`.AppImage` 冻结于 `linux-appimage-development`（`0.1.0-alpha.58`）：`DotNet.Bundler.AppImage` 内嵌 appimagetool×2 + type2 runtime×2（SHA-256 provenance，始终 `--runtime-file` 外供不联网），AppDir 共享 freedesktop 件 + 脚本 AppRun + 根 desktop 链接/.DirIcon/默认 PNG 回落，压缩固定 zstd（pinned mksquashfs 约束）；九旋钮接线 + `deb;rpm;appimage` 扇出；`--appimage-extract` 结构断言 + 解出真实运行 + 三容器冒烟全绿
 > `ARCHIVE-1` 已完成（分支 `archive-development`，`0.1.0-alpha.59`）：`DotNet.Bundler.Archive` 纯托管 zip/tar.gz 写入器（zip 自实现 unix mode/symlink）、单顶层目录布局、执行位与符号链接双保留、`.sha256` 侧车、`BundlerArchivePackageName`/`Version`/`ArchiveName` + `@(BundlerArchiveFile)` 接线、`zip;targz` 与五格式混排扇出；`Bundler.Tests` 181/181 + `tests/Archive.Integration/Verify.sh` 真实解包断言全绿；证据见 `docs/archive-roadmap.md` §4
 > `ARCHIVE-2` 已完成（同分支，同版本）：旋钮面对照决策复核无缺口；收口断言补强（确定性构建 sha256 一致、目录源拒绝、Zip64 拒绝）；`Bundler.Tests` 184/184 + `Verify.sh` 全绿
-> 当前：`ARCHIVE-2` 完成，默认下一阶段 `ARCHIVE-3`（宿主矩阵收口、干净宿主审计、能力矩阵定稿、冻结基线写入）
+> `ARCHIVE-3` 已完成（同分支，同版本）：宿主矩阵收口（python3 zipfile/tarfile 跨实现互读断言接入 `Verify.sh`）、干净宿主审计（零进程出口）、能力矩阵定稿、OI/MT 收口——**`.zip`/`.tar.gz` 归档冻结基线 `0.1.0-alpha.59`**
+> 当前：`ARCHIVE-3` 完成，`.zip`/`.tar.gz` 归档已冻结——全部规划格式收官完毕，默认下一阶段 `CLI-C1` 规划轮
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。

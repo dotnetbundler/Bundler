@@ -1,6 +1,6 @@
 # ARCHIVE 格式路线（`.zip` / `.tar.gz`）
 
-> 状态：规划轮完成，待逐条裁决；实施尚未开始。
+> 状态：**`.zip`/`.tar.gz` 归档格式已冻结于 `0.1.0-alpha.59`**——ARCHIVE-1..3 全部完成；冻结基线与收口明细见 §4 ARCHIVE-3 节。
 > 范围依据：`docs/roadmap.md` ARCHIVE 节——压缩包后端（zip / tar.gz 等归档分发形式），跨 Windows/macOS/Linux 通用。
 > 上游参照：Tauri 不产生归档格式（审计已覆盖 deb/rpm/appimage/dmg），本格式无上游可直接对照，决策按本仓库既有立场推导。
 
@@ -61,3 +61,12 @@
 - `BundlerArchiveFile` 校验口径复核：与 `BundlerAppImageFile` 对齐（尾部斜杠归一化、反斜杠/绝对路径/空段/`.`/`..` 段/载荷碰撞拒绝，目录源拒绝），段校验更严属超集。
 - 收口断言补强：确定性构建（两次构建 sha256 逐字节一致）、目录源拒绝、Zip64 拒绝（>65535 条目触发显式 throw）；`Bundler.Tests` 合计 184/184 全绿。
 - `tests/Archive.Integration/Verify.sh` 复跑全绿（映射落位/逃逸拒绝/失败不留半成品断言在 ARCHIVE-1 已就位）。
+
+### ARCHIVE-3（`0.1.0-alpha.59`，分支 `archive-development`）
+
+- 宿主矩阵收口：本机 Linux 宿主实测到面；跨 OS 互读（Linux 产归档在 Windows/macOS 解出）本机无宿主，登记 ARCHIVE-MT-01..04/ARCHIVE-OI-01..04，未冒充。
+- 跨实现互读补强：`Verify.sh` 新增 python3 `zipfile`/`tarfile` 段——第三方实现（非 .NET/Info-ZIP/GNU tar）读 zip（条目存在、external attrs 执行位、symlink 内容）与 tar.gz（条目、symlink 类型与目标）断言全绿。
+- 干净宿主审计：`grep` 全量复核 `src/Bundler.Archive`——零 `System.Diagnostics.Process` 出口，外部调用面仅 `UnixLinks.cs` 两处 libc P/Invoke（`readlink`/`access`）；与决策 2"纯托管写入器、零外部进程"一致。
+- 能力矩阵定稿：十二行定稿——十行已实现/明确拒绝，"跨 OS 互读实测"维持外部待验收（对应 OI-01..04），新增"第三方实现互读"已实现行；矩阵内无悬空"计划实现"行。
+- OI/MT 收口：ARCHIVE-OI-01..05 逐条复核维持登记；ARCHIVE-MT-01..05 人工验收清单全量保留。
+- 冻结基线：`ArchiveBundleConfiguration`/`ArchiveBundler` 公共配置面与行为契约冻结于 `0.1.0-alpha.59`；冻结测试向量 = `Bundler.Tests` 184/184 全绿 + `tests/Archive.Integration/Verify.sh` 全绿（unzip/zipinfo/tar 解包断言、载荷运行、mode/symlink 还原、python3 互读、映射与失败变体、五格式扇出、win/mac 交叉 zip）。冻结后仅接受带回归测试的缺陷修复。

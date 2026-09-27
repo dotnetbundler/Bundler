@@ -16,4 +16,5 @@
 | 归档签名 | 明确拒绝 | — | 无通行惯例；签名诉求属平台格式层 |
 | tar.xz/tar.zst/7z | 明确拒绝 | — | 编码器依赖/普及度；需要时另起决策 |
 | Windows 宿主产归档 | 已实现 | ARCHIVE-1 | 托管写入器任意宿主可产 |
-| 跨 OS 互读实测（Linux 产 → Windows/macOS 解） | 外部待验收 | ARCHIVE-3 | 本机无 Windows/macOS 宿主 |
+| 跨 OS 互读实测（Linux 产 → Windows/macOS 解） | 外部待验收 | ARCHIVE-3 | 本机无 Windows/macOS 宿主，OI-01..04 |
+| 第三方实现互读（python3 `zipfile`/`tarfile` 读产物） | 已实现 | ARCHIVE-3 | Verify.sh 断言：条目/执行位/symlink |
