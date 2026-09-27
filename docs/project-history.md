@@ -927,3 +927,12 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 - 外部待办 MAC-DMG-OI-01..04 逐条复核维持登记。
 - 冻结基线：`MacDmgBundleConfiguration`+`Signing` 配置面与行为契约冻结于 `0.1.0-alpha.45`；冻结测试向量 = `Bundler.Tests` 99/99 + `tests/MacOS.Dmg.Integration/Verify.sh` 全绿；冻结后仅缺陷修复附回归测试。
 - `docs/roadmap.md` 推进到 `MAC-PKG`。
+
+
+### 14.31 MAC-PKG 规划轮：决策与阶段分解（2026-09-26，分支 `mac-pkg-development`）
+
+`.pkg` 无上游参照（tauri 无 `.pkg` 输出），规划依据原生工具链语义与 `mac-format-decision.md` 已确认边界。
+11 项决策全部确认：C# 原生编排 `pkgbuild`/`productbuild`/`productsign`/`xar`/`pkgutil`/`installer`（全系统自带）；默认纯组件包、配置分发特性时自动升级 `productbuild` 分发包；载荷默认 `.app` 中间产物、安装位置默认 `/Applications`；Developer ID Installer 签名可选（无 ad-hoc 等价物）；`.pkg` 本体可公证+stapler 默认关闭；welcome/license/conclusion 页（`license` 复用 `LicenseFile`）；域名 `system`/`current-user-home`（per-user 域不提权，本机无 root 下唯一可实测装态）；identifier/版本默认取 `.app` 的 CFBundle 键；专家旋钮 `ScriptsDirectory`（默认关闭）；覆盖安装升级、无降级保护、无一键卸载；产物 `OutputDirectory/<rid>/pkg/<产品名>.pkg`。
+阶段分解 `MAC-PKG-1`..`5`：组件包 → 分发包与页面（per-user 真实安装实测）→ 签名公证+专家脚本 → E2E 矩阵 → 冻结。
+产出 `mac-pkg-roadmap.md`/`mac-pkg-capability-matrix.md`/`mac-pkg-open-items.md`（OI-01..05）/`mac-pkg-manual-testing.md`（MT-01..06）；roadmap.md、manual-testing-index.md、PROJECT_CONTEXT.md 同步。
+`mac-dmg-development` 已合入 `main`（`8cf5de5`），包版本推进 `0.1.0-alpha.46`。

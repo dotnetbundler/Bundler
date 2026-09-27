@@ -9,6 +9,7 @@
 | Windows MSI | [msi-roadmap.md](msi-roadmap.md) | [msi-manual-testing.md](msi-manual-testing.md) | [能力矩阵](msi-capability-matrix.md)；[Tauri 通用能力审计](msi-tauri-capability-audit.md) | [msi-open-items.md](msi-open-items.md) | `MSI-MT-xx` |
 | macOS `.app` | [mac-app-roadmap.md](mac-app-roadmap.md) | [mac-app-manual-testing.md](mac-app-manual-testing.md) | [能力矩阵](mac-app-capability-matrix.md)；[Tauri 通用能力审计](mac-tauri-capability-audit.md)；[PKG 格式决策](mac-format-decision.md) | [mac-app-open-items.md](mac-app-open-items.md) | `MAC-APP-MT-xx` / `MAC-APP-OI-xx` |
 | macOS `.dmg` | [mac-dmg-roadmap.md](mac-dmg-roadmap.md) | [mac-dmg-manual-testing.md](mac-dmg-manual-testing.md) | [能力矩阵](mac-dmg-capability-matrix.md)；[Tauri 通用能力审计](mac-tauri-capability-audit.md) | [mac-dmg-open-items.md](mac-dmg-open-items.md) | `MAC-DMG-MT-xx` / `MAC-DMG-OI-xx` |
+| macOS `.pkg` | [mac-pkg-roadmap.md](mac-pkg-roadmap.md) | [mac-pkg-manual-testing.md](mac-pkg-manual-testing.md) | [能力矩阵](mac-pkg-capability-matrix.md)；[PKG 格式决策](mac-format-decision.md) | [mac-pkg-open-items.md](mac-pkg-open-items.md) | `MAC-PKG-MT-xx` / `MAC-PKG-OI-xx` |
 
 未来 macOS DMG/PKG（若纳入）和 Linux DEB/RPM/AppImage 各建立自己的 `<format>-roadmap.md`、`<format>-manual-testing.md`、`<format>-capability-matrix.md`、`<format>-open-items.md`，各用独立格式前缀；
 总索引只列入口，不混合测试步骤或结论。

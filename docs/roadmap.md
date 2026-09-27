@@ -140,7 +140,8 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 - 阶段分解 [`mac-app-roadmap.md`](mac-app-roadmap.md)：`MAC-APP-1..5`（结构/元数据 → 分发与桌面集成 → codesign/notarization → 原生 E2E → 冻结），含宿主工具供应策略与 `.app` 语义契约，全部决策已确认；
 - 能力矩阵 [`mac-app-capability-matrix.md`](mac-app-capability-matrix.md)、人工清单 [`mac-app-manual-testing.md`](mac-app-manual-testing.md)、外部待办 [`mac-app-open-items.md`](mac-app-open-items.md)。
 
-`Pkg` 枚举值与目标矩阵放行已随 `MAC-APP-1` 进入公共模型；格式顺序固定为 `MAC-DMG` 之后、Linux 之前，PKG 实现等待 `MAC-PKG` 阶段启动指令。
+`Pkg` 枚举值与目标矩阵放行已随 `MAC-APP-1` 进入公共模型；格式顺序固定为 `MAC-DMG` 之后、Linux 之前。
+2026-09-26 `MAC-PKG` 规划轮已收官（分支 `mac-pkg-development`）：11 项决策全部确认（C# 原生编排 `pkgbuild`/`productbuild` 等系统工具、默认组件包+分发特性自动升级、Developer ID Installer 签名可选且无 ad-hoc、`.pkg` 本体可公证、`LicenseFile` 复用为许可页、域名 `system`/`current-user-home`、专家脚本旋钮、覆盖安装升级语义、`OutputDirectory/<rid>/pkg/<产品名>.pkg`），路线见 [`docs/mac-pkg-roadmap.md`](mac-pkg-roadmap.md)；默认下一阶段 `MAC-PKG-1`，待启动指令。
 不得在没有原生 macOS 验证环境时宣称签名和 notarization 完成。
 
 ### LINUX：Linux 格式
@@ -169,7 +170,7 @@ CLI 不产生新的格式能力，也不应反过来驱动后端设计；先完�
 删除重复或错误的早期 alpha 参数而不承诺兼容。
 完成后 CLI、MSBuild 和直接 API 都只是同一打包能力的适配器。
 
-当前实施顺序为：已完成并冻结的 `WIN-MSI-1..9` → `MAC-APP`（规划完成待确认）→ `MAC-DMG` → `MAC-PKG`（已确认纳入）→ `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE` → `ARCHIVE` → `CLI-C1`。
+当前实施顺序为：已完成并冻结的 `WIN-MSI-1..9` → `MAC-APP`（已冻结并入 main）→ `MAC-DMG`（已冻结并入 main）→ `MAC-PKG`（规划完成，默认下一阶段）→ `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE` → `ARCHIVE` → `CLI-C1`。
 Tauri updater 协议/提升权限计划任务若有需求另立跨格式产品路线，不混入 MSI 或提前产品化 CLI。
 调整顺序必须依据真实用户需求、验证能力和维护成本更新本文档，不能只在对话中临时改口。
 
