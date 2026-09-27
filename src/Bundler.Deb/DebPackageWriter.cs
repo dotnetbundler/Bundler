@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using DotNet.Bundler;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Deb;
 
@@ -260,29 +261,26 @@ internal static class DebPackageWriter
             });
         }
 
-        // Desktop integration: a generated or caller-supplied .desktop entry plus
-        // hicolor icons, optional AppStream metainfo and usr/share/doc files.
-        AddGeneratedFile(
-            "usr/share/applications/" + packageName + ".desktop",
-            settings.DesktopFile is { Length: > 0 } desktopSource
-                ? File.ReadAllBytes(RequireExisting(desktopSource, "DesktopFile"))
-                : DesktopFileContent(bundle, packageName, installRoot, mainExecutable, binLink, settings),
-            420 /* 0644 */);
-
-        foreach (var icon in bundle.Icons)
+        // Desktop integration (shared with the .rpm backend): a generated or
+        // caller-supplied .desktop entry, hicolor icons and optional metainfo.
+        foreach (var file in FreedesktopFiles.Collect(
+            bundle, packageName, "/" + installRoot, mainExecutable, binLink,
+            new FreedesktopFiles.Options
+            {
+                DesktopFile = settings.DesktopFile,
+                MetainfoFile = settings.MetainfoFile,
+                Categories = settings.Categories,
+                Format = "deb"
+            }))
         {
-            var iconSource = RequireExisting(icon, "Icons");
-            var iconBytes = File.ReadAllBytes(iconSource);
-            var directory = HicolorIconDirectory(icon, iconBytes);
-            AddGeneratedFile(
-                directory + "/" + packageName + ".png", iconBytes, 420 /* 0644 */);
-        }
-
-        if (settings.MetainfoFile is { Length: > 0 } metainfoSource)
-        {
-            AddFile(
-                "usr/share/metainfo/" + packageName + ".metainfo.xml",
-                RequireExisting(metainfoSource, "MetainfoFile"), 420 /* 0644 */);
+            if (file.SourcePath is { } sourcePath)
+            {
+                AddFile(file.ArchivePath, sourcePath, file.Mode);
+            }
+            else
+            {
+                AddGeneratedFile(file.ArchivePath, file.Content!, file.Mode);
+            }
         }
 
         var docRoot = "usr/share/doc/" + packageName;
@@ -299,163 +297,29 @@ internal static class DebPackageWriter
         {
             AddGeneratedFile(
                 docRoot + "/changelog.gz",
-                Gzip(File.ReadAllBytes(RequireExisting(changelogSource, "ChangelogFile"))),
+                Gzip(File.ReadAllBytes(FreedesktopFiles.RequireExisting(changelogSource, "ChangelogFile"))),
                 420 /* 0644 */);
         }
         if (bundle.LicenseFile is { Length: > 0 } license && license is not null)
         {
-            AddFile(docRoot + "/copyright", RequireExisting(license, "LicenseFile"), 420 /* 0644 */);
+            AddFile(docRoot + "/copyright", FreedesktopFiles.RequireExisting(license, "LicenseFile"), 420 /* 0644 */);
         }
 
         foreach (var file in settings.Files ?? [])
         {
-            var destination = file.Destination.Replace('\\', '/').Trim('/');
-            if (file.Destination.Trim().Length == 0 || !file.Destination.TrimStart().StartsWith("/", StringComparison.Ordinal) ||
-                destination.Length == 0 ||
-                destination.Split('/').Any(segment => segment is "" or "." or "..") ||
-                destination.EndsWith("/", StringComparison.Ordinal))
-            {
-                throw new ArgumentException(
-                    $"The .deb file destination must be an absolute path with a file name: '{file.Destination}'.");
-            }
-            AddFile(destination, RequireExisting(file.Source, "DebFile"), 420 /* 0644 */);
+            var destination = FreedesktopFiles.NormalizeAbsoluteDestination(
+                file.Destination, "deb").TrimStart('/');
+            AddFile(destination, FreedesktopFiles.RequireExisting(file.Source, "DebFile"), 420 /* 0644 */);
         }
 
         if (settings.SystemdServiceFile is { Length: > 0 } unitSource)
         {
             AddFile(
                 "usr/lib/systemd/system/" + packageName + ".service",
-                RequireExisting(unitSource, "SystemdServiceFile"), 420 /* 0644 */);
+                FreedesktopFiles.RequireExisting(unitSource, "SystemdServiceFile"), 420 /* 0644 */);
         }
 
         return entries;
-    }
-
-    private static string RequireExisting(string path, string knob)
-    {
-        var full = Path.GetFullPath(path);
-        if (!File.Exists(full))
-        {
-            throw new FileNotFoundException(
-                $"The {knob} file does not exist: {full}", full);
-        }
-        return full;
-    }
-
-    private static string HicolorIconDirectory(string iconPath, byte[] content)
-    {
-        var (width, height) = PngSize(content);
-        var stem = Path.GetFileNameWithoutExtension(iconPath);
-        var scale = 1;
-        if (stem.EndsWith("@2x", StringComparison.OrdinalIgnoreCase))
-        {
-            scale = 2;
-        }
-        if (width % scale != 0 || height % scale != 0)
-        {
-            throw new ArgumentException(
-                $"The icon '{iconPath}' pixel size {width}x{height} is not divisible by its {scale}x density.");
-        }
-        var logicalWidth = width / scale;
-        var logicalHeight = height / scale;
-        return "usr/share/icons/hicolor/" + logicalWidth + "x" + logicalHeight +
-            (scale == 1 ? "" : "@2") + "/apps";
-    }
-
-    private static (int Width, int Height) PngSize(byte[] content)
-    {
-        var signature = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
-        if (content.Length < 24 ||
-            !content.Take(8).SequenceEqual(signature) ||
-            content[12] != 'I' || content[13] != 'H' || content[14] != 'D' || content[15] != 'R')
-        {
-            throw new ArgumentException(
-                "Only PNG icons are supported: the file is not a PNG or its IHDR is missing.");
-        }
-        var width = (content[16] << 24) | (content[17] << 16) | (content[18] << 8) | content[19];
-        var height = (content[20] << 24) | (content[21] << 16) | (content[22] << 8) | content[23];
-        if (width <= 0 || height <= 0)
-        {
-            throw new ArgumentException("The PNG icon reports a non-positive dimension.");
-        }
-        return (width, height);
-    }
-
-    private static byte[] DesktopFileContent(
-        BundleConfiguration bundle,
-        string packageName,
-        string installRoot,
-        string mainExecutable,
-        string binLink,
-        DebBundleConfiguration settings)
-    {
-        static string SanitizeDesktopValue(string? value, string field)
-        {
-            var trimmed = (value ?? "").Trim();
-            if (trimmed.IndexOfAny(new[] { '\r', '\n' }) >= 0 ||
-                trimmed.IndexOfAny(new[] { '\0' }) >= 0)
-            {
-                throw new ArgumentException(
-                    $"The .desktop {field} must be a single line.");
-            }
-            return trimmed;
-        }
-
-        var builder = new StringBuilder();
-        builder.Append("[Desktop Entry]\n");
-        builder.Append("Type=Application\n");
-        builder.Append("Name=").Append(SanitizeDesktopValue(bundle.ProductName, "Name")).Append('\n');
-        var comment = SanitizeDesktopValue(
-            (bundle.Description ?? "").Split('\n').FirstOrDefault(line => line.Trim().Length > 0),
-            "Comment");
-        if (comment.Length > 0)
-        {
-            builder.Append("Comment=").Append(comment).Append('\n');
-        }
-        // Exec prefers the usr/bin link; without it the absolute install-root path is used.
-        var exec = binLink.Length > 0 ? binLink : "/" + installRoot + "/" + mainExecutable;
-        var hasUrls = bundle.UrlProtocols.Any(p => p.Schemes.Count > 0);
-        var hasFiles = bundle.FileAssociations.Any(a => a.Extensions.Count > 0);
-        builder.Append("Exec=").Append(exec)
-            .Append(hasUrls ? " %u" : hasFiles ? " %f" : "").Append('\n');
-        if (bundle.Icons.Count > 0)
-        {
-            builder.Append("Icon=").Append(packageName).Append('\n');
-        }
-        builder.Append("Terminal=false\n");
-        if (settings.Categories is { Length: > 0 } categories)
-        {
-            var list = categories.Split(';')
-                .Select(c => c.Trim())
-                .Where(c => c.Length > 0)
-                .ToArray();
-            if (list.Length == 0 || list.Any(c => !c.All(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_')))
-            {
-                throw new ArgumentException(
-                    $"BundlerDebCategories must be a semicolon list of freedesktop categories, got '{categories}'.");
-            }
-            builder.Append("Categories=").Append(string.Join(";", list)).Append(";\n");
-        }
-        var mimeTypes = bundle.FileAssociations
-            .Select(a => a.MimeType)
-            .Where(m => !string.IsNullOrWhiteSpace(m))
-            .Select(m => m!.Trim())
-            .Concat(bundle.UrlProtocols
-                .SelectMany(p => p.Schemes)
-                .Where(scheme => !string.IsNullOrWhiteSpace(scheme))
-                .Select(scheme => "x-scheme-handler/" + scheme.Trim()))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        if (mimeTypes.Any(m => m.IndexOf('/') <= 0 || m.IndexOfAny(new[] { ' ', '\t', ';' }) >= 0))
-        {
-            throw new ArgumentException(
-                $"Invalid MimeType entry for the .desktop file: '{string.Join(";", mimeTypes)}'.");
-        }
-        if (mimeTypes.Length > 0)
-        {
-            builder.Append("MimeType=").Append(string.Join(";", mimeTypes)).Append(";\n");
-        }
-        return new UTF8Encoding(false).GetBytes(builder.ToString());
     }
 
     private static List<TarEntry> ControlEntries(
@@ -628,7 +492,7 @@ internal static class DebPackageWriter
 
     private static string ReadScript(string path, string knob)
     {
-        var full = RequireExisting(path, knob);
+        var full = FreedesktopFiles.RequireExisting(path, knob);
         var text = File.ReadAllText(full);
         if (!text.StartsWith("#!", StringComparison.Ordinal))
         {

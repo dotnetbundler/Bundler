@@ -196,6 +196,20 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string RpmVendor { get; set; } = "";
     public string RpmInstallRoot { get; set; } = "";
     public string RpmBinLink { get; set; } = "";
+    public string RpmRequires { get; set; } = "";
+    public string RpmProvides { get; set; } = "";
+    public string RpmConflicts { get; set; } = "";
+    public string RpmObsoletes { get; set; } = "";
+    public string RpmRecommends { get; set; } = "";
+    public string RpmSuggests { get; set; } = "";
+    public string RpmLicense { get; set; } = "";
+    public string RpmGroup { get; set; } = "";
+    public string RpmUrl { get; set; } = "";
+    public string RpmCategories { get; set; } = "";
+    public string RpmDesktopFile { get; set; } = "";
+    public string RpmMetainfoFile { get; set; } = "";
+    public string RpmChangelogFile { get; set; } = "";
+    public ITaskItem[] RpmFiles { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -499,7 +513,25 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         InstallRoot = EmptyToNull(RpmInstallRoot),
                         BinLink = string.Equals(RpmBinLink, "none", StringComparison.OrdinalIgnoreCase)
                             ? ""
-                            : EmptyToNull(RpmBinLink)
+                            : EmptyToNull(RpmBinLink),
+                        Requires = SplitList(RpmRequires),
+                        Provides = SplitList(RpmProvides),
+                        Conflicts = SplitList(RpmConflicts),
+                        Obsoletes = SplitList(RpmObsoletes),
+                        Recommends = SplitList(RpmRecommends),
+                        Suggests = SplitList(RpmSuggests),
+                        License = EmptyToNull(RpmLicense),
+                        Group = EmptyToNull(RpmGroup),
+                        Url = EmptyToNull(RpmUrl),
+                        Categories = EmptyToNull(RpmCategories),
+                        DesktopFile = OptionalFullPath(RpmDesktopFile),
+                        MetainfoFile = OptionalFullPath(RpmMetainfoFile),
+                        ChangelogFile = OptionalFullPath(RpmChangelogFile),
+                        Files = RpmFiles.Select(item => new RpmFileEntry
+                        {
+                            Source = Path.GetFullPath(item.ItemSpec),
+                            Destination = item.GetMetadata("Destination")
+                        }).ToArray()
                     },
                     new RpmBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     .BuildAsync(configuration)

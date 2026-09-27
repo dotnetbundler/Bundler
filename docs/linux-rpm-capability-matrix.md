@@ -18,11 +18,11 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `Requires`/`Provides`/`Conflicts`/`Obsoletes`/`Recommends`/`Suggests` 透传 | 计划实现 | LINUX-RPM-2 | 显式声明透传，`rpmlib(...)` 自依赖按特性集如实写；不探测运行时依赖 |
-| `License`(SPDX)/`Vendor`/`Group`/`URL`/`Summary`/`Description` | 计划实现 | LINUX-RPM-2 | `BundlerRpmLicense` 字符串旋钮；`LicenseFile` 仍落 doc 目录 |
-| `.desktop` 生成与 `usr/share/applications/` 落位 | 计划实现 | LINUX-RPM-2 | 与 deb 同一生成器（共享 freedesktop 件），`desktop-file-validate` 断言 |
-| hicolor 图标 / AppStream metainfo / `usr/share/doc` | 计划实现 | LINUX-RPM-2 | 同 deb 行 |
-| 包内绝对路径自定义映射 | 计划实现 | LINUX-RPM-2 | `@BundlerRpmFile` `Destination` 元数据 |
+| `Requires`/`Provides`/`Conflicts`/`Obsoletes`/`Recommends`/`Suggests` 透传 | 已实现 | LINUX-RPM-2 | `BundlerRpm*` 分号列表 → `name [op evr]` 解析（`< <= = >= >`，拒 `!=`）写入三件套 tag；`rpmlib(...)` 自依赖保留；不探测运行时依赖 |
+| `License`(SPDX)/`Vendor`/`Group`/`URL`/`Summary`/`Description` | 已实现 | LINUX-RPM-2 | `BundlerRpmLicense`/`Group`/`Url` 覆盖（`Group`/`Url` 置空省略 tag）；包级 `BundlerLicenseFile` 按 rpm 原生惯例落 `/usr/share/licenses/<pkg>/` 并标 %license（128） |
+| `.desktop` 生成与 `usr/share/applications/` 落位 | 已实现 | LINUX-RPM-2 | `Bundler.Core` 共享 `FreedesktopFiles` 生成器（deb 行为不变）；`BundlerRpmDesktopFile` 整文件覆盖；`desktop-file-validate` 断言 |
+| hicolor 图标 / AppStream metainfo / `usr/share/doc` | 已实现 | LINUX-RPM-2 | PNG 尺寸探测 + `@2x`→`48x48@2` 目录；metainfo 落 `/usr/share/metainfo/`；`BundlerRpmChangelogFile`→`changelog.gz` 标 %doc；hicolor 子树不占有（发行版惯例） |
+| 包内绝对路径自定义映射 | 已实现 | LINUX-RPM-2 | `@BundlerRpmFile` `Destination` 元数据；逃逸校验（拒相对/`..`/空段）；新非共享父目录占有、`/etc` 等共享根不占有 |
 
 ## 脚本、服务与压缩
 

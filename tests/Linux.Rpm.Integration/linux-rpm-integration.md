@@ -1,6 +1,6 @@
 # Linux .rpm 集成测试
 
-LINUX-RPM-1 的本机真实验证入口：真实 .NET payload → `BundlerFormats=rpm` → `rpm -qip` 元数据断言 → `rpm2cpio`/`cpio` 载荷回读 → docker `fedora:latest` 容器真实 `rpm -i`/`rpm -e` 烟雾。
+LINUX-RPM-1/2 的本机真实验证入口：真实 .NET payload → `BundlerFormats=rpm` → `rpm -qip`/`--queryformat` 逐字段断言（含关系字段三件套与 FILEFLAGS %doc/%license）→ `desktop-file-validate` → `rpm2cpio`/`cpio` 载荷回读 → docker `fedora:latest` 容器真实 `rpm -i`/`rpm -ql` 逐路径/`rpm -e` 零残留。
 
 ## 运行
 
@@ -13,7 +13,7 @@ bash tests/Linux.Rpm.Integration/Verify.sh
 - Linux 宿主（脚本自带 `uname` 检查，非 Linux 直接拒绝）；
 - dotnet SDK（打包 `DotNet.Bundler*` 包供 fixture 消费）；
 - `sha256sum`/`unzip`/`gzip`（必需）；
-- 可选：`rpm`、`rpm2cpio`+`cpio`、`rpmlint`、`docker`（缺失时对应断言记 SKIP）；
+- 可选：`rpm`、`rpm2cpio`+`cpio`、`rpmlint`、`docker`、`desktop-file-validate`（缺失时对应断言记 SKIP）；
 - docker 可用时 `fedora:latest` 容器内真实 `rpm -i`/`rpm -q`/`rpm -ql`/运行/`rpm -V`/`rpm -e` 零残留断言。
 
 ## 断言范围
@@ -28,8 +28,13 @@ bash tests/Linux.Rpm.Integration/Verify.sh
 - SemVer 预发布映射变体：`1.0.0-alpha.2` → `Version: 1.0.0` + `Release: 0.1.alpha.2`；
 - 失败路径：非法包名使 publish 失败且不残留 `.rpm`；
 - `deb;rpm` 多格式扇出变体：`-p:BundlerTestFormats="deb%3Brpm"` 同次 publish 同时产出 `.deb` 与 `.rpm`；
+- RPM-2 落位断言：`.desktop`（生成/覆盖两态）+ hicolor 图标（`48x48`/`48x48@2`）+ metainfo + `changelog.gz` + `/usr/share/licenses/<pkg>/` + `/etc/<pkg>/` 自定义文件逐项进 `rpm -qpl` 清单；
+- FILEFLAGS 断言：license 文件 flag 128、doc 文件 flag 2；目录占有规则断言（包叶子目录占有、`/usr/share/icons` 子树与共享系统目录不占有）；
+- 关系字段变体：Requires/Provides/Conflicts/Obsoletes/Recommends/Suggests 与 License/Group/Url 覆盖经 `rpm -qp --requires/--provides/--conflicts/--obsoletes/--recommends/--suggests` 与 `--queryformat` 逐项断言；
+- 失败变体扩展：非法依赖子句（`!=`）与相对 `BundlerRpmFile` 目标均使 publish 失败；
+- 容器断言扩展：装后 `rpm -ql` 逐路径 + `rpm -qd` %doc 可见 + 卸载带走包自有叶子目录；
 - `tests/Rpm.Api.PackageFixture`（直接 API 消费 `DotNet.Bundler.Rpm` NuGet 包）冒烟；
-- `rpmlint` 信息级跑全包（不阻断）——基线硬断言在 LINUX-RPM-3 落地，残余发现届时入档豁免清单。
+- `rpmlint` 信息级跑全包（不阻断）——基线硬断言在 LINUX-RPM-4 落地，残余发现届时入档豁免清单。
 
 ## 已知边界
 

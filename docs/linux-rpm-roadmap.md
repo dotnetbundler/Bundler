@@ -1,6 +1,6 @@
 # Linux `.rpm` 后端实施路线（LINUX-RPM）
 
-> 状态：**LINUX-RPM-1 已实现，默认下一阶段 LINUX-RPM-2**（2026-09-27，分支 `linux-rpm-development`，包版本 `0.1.0-alpha.52`）。
+> 状态：**LINUX-RPM-2 已实现，默认下一阶段 LINUX-RPM-3**（2026-09-27，分支 `linux-rpm-development`，包版本 `0.1.0-alpha.53`）。
 > 上游审计见 [`docs/linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `tauri-apps/tauri@447fa9f`，DEB-5 复核确认零漂移）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 > 逐项能力状态见 [`docs/linux-rpm-capability-matrix.md`](linux-rpm-capability-matrix.md)；外部条件见 [`docs/linux-rpm-open-items.md`](linux-rpm-open-items.md)；人工步骤见 [`docs/linux-rpm-manual-testing.md`](linux-rpm-manual-testing.md)。
@@ -63,10 +63,13 @@
 - **实测修正**（相对原始格式笔记）：ENCODING tag 实为 5062（5012=BUGURL）；PAYLOADDIGEST(5092) 是**压缩后**载荷 sha256、PAYLOADDIGESTALT(5097) 才是解压前 cpio 的；GNU cpio 提取不为符号链接自动建缺失父目录（`rpm -i` 无此问题），Verify.sh 按清单预建。
 - **不做**：关系字段、.desktop/图标、脚本、config 标记、压缩选项、rpmlint（信息级运行，RPM-3 转硬基线）。
 
-### LINUX-RPM-2：元数据与桌面集成
+### LINUX-RPM-2：元数据与桌面集成（已实现 2026-09-27）
 
-- **目标/交付**：`Requires`/`Provides`/`Conflicts`/`Obsoletes`/`Recommends`/`Suggests` 透传；`License`（SPDX）/`Vendor`/`Group`/`URL` 覆盖；共享 freedesktop 生成器落地（`.desktop`/`DesktopFile` 覆盖/图标/metainfo/doc）；`@BundlerRpmFile` 任意绝对路径映射。
-- **退出**：`rpm -qip`/`--queryformat` 逐字段断言；`desktop-file-validate`；装后 `rpm -ql` 逐路径断言。
+- **交付**：`Requires`/`Provides`/`Conflicts`/`Obsoletes`/`Recommends`/`Suggests` 六族透传——`RpmDependency` 解析 `name [op evr]` 子句（`< <= = >= >` → LESS/GREATER/EQUAL 位组合，拒 `!=`）写入 REQUIRE*/PROVIDE*/CONFLICT*/OBSOLETE*/RECOMMEND*/SUGGEST* 三件套 tag；`License`（SPDX 惯例，`Unspecified` 默认）/`Group`（可置空省略 tag）/`Url`（默认 `Homepage`，置空省略）覆盖；共享 freedesktop 件提取到 `Bundler.Core` 内部 `FreedesktopFiles`（`.desktop` 生成/覆盖 + hicolor 图标 + metainfo，deb/rpm 双后端复用，deb 行为不变——153 断言背书）；`ChangelogFile`→`usr/share/doc/<pkg>/changelog.gz`（%doc 标记）；包级 `LicenseFile`→`usr/share/licenses/<pkg>/<文件名>`（%license=128 标记，rpm 原生惯例）；`@BundlerRpmFile` 任意绝对路径映射（逃逸校验）；目录占有规则对齐发行版惯例（包自有叶子目录占有，`/usr/share/icons` 子树与共享系统目录不占有）。
+- **实测修正**：cpio 成员名需带 `./` 前缀——`rpmlib(PayloadFilesHavePrefix)` 依赖的真实含义；绝对路径成员名会让裸 `cpio` 提取（rpmlint 管线）撞上宿主根权限而 fatal。`rpm -i` 本不受影响，但按上游惯例修正，RPM-1 产物缺陷一并回填。
+- **AUTOREQPROV 注记**：路线图曾列 `AUTOREQPROV`——实测它不是二进制 header tag（specfile 指令），无需落位；`rpmlib(...)` 自依赖已覆盖。
+- **退出达成**：`rpm -qip`/`--queryformat` 逐字段断言全绿；生成与覆盖 `.desktop` 均过 `desktop-file-validate`；docker `fedora:latest` 装后 `rpm -ql` 逐路径断言 + `rpm -qd` %doc 可见 + 卸载零残留全绿。
+- **不做**：scriptlet、systemd、`%config(noreplace)` 标记（`/etc` 文件暂为普通文件）、压缩选项、rpmlint 硬基线（信息级：6E4W，与预期一致）。
 
 ### LINUX-RPM-3：脚本、systemd、config 与压缩
 

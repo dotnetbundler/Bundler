@@ -3,7 +3,10 @@
     HelloRpmApp：DotNet.Bundler Linux .rpm 演示示例。
     默认 publish 即产出可安装的 .rpm（托管写入器，任意宿主可构建，无需 rpmbuild）。
     全部公开旋钮（package-name/version/release/epoch/architecture/vendor/
-    install-root/bin-link）可用下方 HelloRpm* 属性变体演示；命令见 linux-rpm-sample.md。
+    install-root/bin-link 与 RPM-2 的 requires/provides/conflicts/obsoletes/
+    recommends/suggests/license/group/url/categories/desktop-file/metainfo/
+    changelog + BundlerRpmFile 映射）可用下方 HelloRpm* 属性变体演示；
+    命令见 linux-rpm-sample.md。
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -37,11 +40,39 @@
     <BundlerRpmVendor Condition="'$(HelloRpmVendor)' != ''">$(HelloRpmVendor)</BundlerRpmVendor>
     <BundlerRpmInstallRoot Condition="'$(HelloRpmInstallRoot)' != ''">$(HelloRpmInstallRoot)</BundlerRpmInstallRoot>
     <BundlerRpmBinLink Condition="'$(HelloRpmBinLink)' != ''">$(HelloRpmBinLink)</BundlerRpmBinLink>
+    <!-- RPM-2 元数据旋钮：关系字段按分号列表透传（命令行传参用 %3B 转义分号）；
+         License 惯例上写 SPDX 表达式；Group 现代包可留空；Url 默认取 BundlerHomepage。 -->
+    <BundlerRpmRequires Condition="'$(HelloRpmRequires)' != ''">$(HelloRpmRequires)</BundlerRpmRequires>
+    <BundlerRpmProvides Condition="'$(HelloRpmProvides)' != ''">$(HelloRpmProvides)</BundlerRpmProvides>
+    <BundlerRpmConflicts Condition="'$(HelloRpmConflicts)' != ''">$(HelloRpmConflicts)</BundlerRpmConflicts>
+    <BundlerRpmObsoletes Condition="'$(HelloRpmObsoletes)' != ''">$(HelloRpmObsoletes)</BundlerRpmObsoletes>
+    <BundlerRpmRecommends Condition="'$(HelloRpmRecommends)' != ''">$(HelloRpmRecommends)</BundlerRpmRecommends>
+    <BundlerRpmSuggests Condition="'$(HelloRpmSuggests)' != ''">$(HelloRpmSuggests)</BundlerRpmSuggests>
+    <BundlerRpmLicense>MIT</BundlerRpmLicense>
+    <BundlerRpmLicense Condition="'$(HelloRpmLicense)' != ''">$(HelloRpmLicense)</BundlerRpmLicense>
+    <BundlerRpmGroup Condition="'$(HelloRpmGroup)' != ''">$(HelloRpmGroup)</BundlerRpmGroup>
+    <BundlerRpmUrl Condition="'$(HelloRpmUrl)' != ''">$(HelloRpmUrl)</BundlerRpmUrl>
+    <BundlerRpmCategories>Utility;Development</BundlerRpmCategories>
+    <BundlerRpmCategories Condition="'$(HelloRpmCategories)' != ''">$(HelloRpmCategories)</BundlerRpmCategories>
+    <BundlerRpmDesktopFile Condition="'$(HelloRpmDesktopFile)' != ''">$(HelloRpmDesktopFile)</BundlerRpmDesktopFile>
+    <BundlerRpmMetainfoFile>$(MSBuildThisFileDirectory)Assets/app.metainfo.xml</BundlerRpmMetainfoFile>
+    <BundlerRpmMetainfoFile Condition="'$(HelloRpmMetainfoFile)' != ''">$(HelloRpmMetainfoFile)</BundlerRpmMetainfoFile>
+    <BundlerRpmChangelogFile>$(MSBuildThisFileDirectory)Assets/CHANGELOG.md</BundlerRpmChangelogFile>
+    <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets/LICENSE.txt</BundlerLicenseFile>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
     <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <!-- 资源项演示：随载荷落到 install-root 下的 docs/readme.txt。 -->
     <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <!-- freedesktop 集成演示：图标落 hicolor 树、.desktop 由后端生成
+         （Exec 取 /usr/bin 链接名、MimeType 合并 FileAssociation/UrlProtocol）。 -->
+    <BundlerIcon Include="Assets/icon48.png" />
+    <BundlerIcon Include="Assets/icon@2x.png" />
+    <BundlerFileAssociation Include=".hello-rpm" Name="Hello rpm document"
+        MimeType="application/x-hello-rpm" />
+    <BundlerUrlProtocol Include="hello-rpm" Name="Hello rpm" />
+    <!-- 任意绝对路径映射演示：/etc/hello-rpm-app/defaults.conf。 -->
+    <BundlerRpmFile Include="Assets/defaults.conf" Destination="/etc/hello-rpm-app/defaults.conf" />
   </ItemGroup>
 </Project>

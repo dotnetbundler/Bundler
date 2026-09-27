@@ -2,11 +2,11 @@
 
 > 最后更新：2026-09-27
 > 当前分支：`linux-rpm-development`（自 `main` `7436f25` 拉出；`.deb` 已并入 main）
-> 当前包版本：`0.1.0-alpha.52`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
+> 当前包版本：`0.1.0-alpha.53`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
 > 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
 > `LINUX-DEB-1..5` 全部完成，`.deb` 冻结并已入 `main`：冻结基线 `0.1.0-alpha.51`，测试向量 141/141 + `Verify.sh` 全绿
-> `LINUX-RPM-1` 已实现（`linux-rpm-development`）：`DotNet.Bundler.Rpm` 纯托管写入器 + `deb;rpm` 扇出 + fedora 容器真实装卸全绿；决策与证据见 `docs/linux-rpm-roadmap.md`
-> 默认下一阶段：`LINUX-RPM-2`（元数据与桌面集成，待用户启动指令）
+> `LINUX-RPM-1/2` 已实现（`linux-rpm-development`）：`DotNet.Bundler.Rpm` 纯托管写入器 + `deb;rpm` 扇出 + 六族关系字段 + License/Group/Url 覆盖 + 共享 freedesktop 件 + `BundlerRpmFile` 映射；fedora 容器真实装卸逐路径全绿；决策与证据见 `docs/linux-rpm-roadmap.md`
+> 默认下一阶段：`LINUX-RPM-3`（scriptlet/systemd/config/压缩，待用户启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -29,7 +29,7 @@
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
 | `src/Bundler.Cli` | 开发原型（`IsPackable=false`，不发布） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
-| `tests/Bundler.Tests` | 唯一快速测试入口（当前 153 项，Linux 宿主口径全绿；macOS 宿主口径多 MacPkg 公证等宿主用例） | `net10.0` |
+| `tests/Bundler.Tests` | 唯一快速测试入口（当前 159 项，Linux 宿主口径全绿；macOS 宿主口径多 MacPkg 公证等宿主用例） | `net10.0` |
 | `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` / `tests/Deb.Api.PackageFixture` / `tests/Rpm.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
 | `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
 | `tests/MacOS.App.Integration` | 真实 macOS `.app` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |

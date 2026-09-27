@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# LINUX-RPM-1 .rpm 集成验证：真实 .NET payload → BundlerFormats=rpm → rpm -qip/rpm -qp --qf 元数据断言
-# → rpm2cpio|cpio 载荷清单核对 → sha256 校验 → docker fedora 容器真实 rpm -i/rpm -e → deb;rpm 扇出断言。
+# LINUX-RPM-1/2 .rpm 集成验证：真实 .NET payload → BundlerFormats=rpm → rpm -qip/--queryformat 逐字段断言
+# （关系字段三件套、LICENSE/GROUP/URL、FILEFLAGS %doc/%license）→ desktop-file-validate
+# → rpm2cpio|cpio 载荷清单核对 → sha256 校验 → docker fedora 容器真实 rpm -i/rpm -e + rpm -ql → deb;rpm 扇出断言。
 # 用法: bash tests/Linux.Rpm.Integration/Verify.sh
 # 需要 Linux 宿主与 dotnet SDK；产物仅在 artifacts/linux-rpm-integration 下落盘并全部清理。
 set -euo pipefail
@@ -30,8 +31,8 @@ trap cleanup EXIT
 for tool in dotnet sha256sum unzip gzip; do
     command -v "$tool" >/dev/null || fail "$tool is unavailable on this host."
 done
-# 可选断言工具：缺失则记 SKIP（rpm/rpm2cpio/cpio/rpmlint/docker）。
-optional_tools="rpm rpm2cpio cpio rpmlint docker"
+# 可选断言工具：缺失则记 SKIP（rpm/rpm2cpio/cpio/rpmlint/docker/desktop-file-validate）。
+optional_tools="rpm rpm2cpio cpio rpmlint docker desktop-file-validate"
 for tool in $optional_tools; do
     if command -v "$tool" >/dev/null; then
         log "optional tool present: $tool"
@@ -125,8 +126,48 @@ if [[ $have_rpm -eq 1 ]]; then
     files="$(rpm -qplv "$rpm_path" || true)"
     case "$files" in *"drwxr-xr-x"*"/usr/lib/bundler-rpm-fixture"*) ;; *) fail "Install root dir entry missing: $files";; esac
     case "$files" in *"/usr/bin/bundler-rpm-fixture -> "*) ;; *) fail "bin symlink missing: $files";; esac
+
+    log "== RPM-2 freedesktop/doc/files 落位断言 =="
+    filelist="$(rpm -qpl "$rpm_path" || true)"
+    for expected in \
+        "/usr/share/applications/bundler-rpm-fixture.desktop" \
+        "/usr/share/icons/hicolor/48x48/apps/bundler-rpm-fixture.png" \
+        "/usr/share/icons/hicolor/48x48@2/apps/bundler-rpm-fixture.png" \
+        "/usr/share/metainfo/bundler-rpm-fixture.metainfo.xml" \
+        "/usr/share/doc/bundler-rpm-fixture/changelog.gz" \
+        "/usr/share/licenses/bundler-rpm-fixture/LICENSE.txt" \
+        "/etc/bundler-rpm-fixture/defaults.conf"; do
+        case "$filelist" in *"$expected"*) ;; *) fail "Missing payload path: $expected";; esac
+    done
+    # 共享系统目录不被包占有；包自有叶子目录须占有（目录条目按 rpm -qplv 的 d 行识别，
+    # rpm 的 FILENAMES 对目录不带尾斜杠）。
+    dirs="$(rpm -qplv "$rpm_path" | awk '$1 ~ /^d/ {print $NF}' || true)"
+    case "$dirs" in *"/usr/share/licenses/bundler-rpm-fixture"*) ;; *) fail "licenses/<pkg> dir not owned: $dirs";; esac
+    case "$dirs" in *"/usr/share/doc/bundler-rpm-fixture"*) ;; *) fail "doc/<pkg> dir not owned: $dirs";; esac
+    case "$dirs" in *"/etc/bundler-rpm-fixture"*) ;; *) fail "/etc/<pkg> dir not owned: $dirs";; esac
+    for shared in "/etc" "/usr/share" "/usr/share/applications" "/usr/share/doc" "/usr/share/icons" "/usr/share/metainfo"; do
+        if printf '%s\n' "$dirs" | grep -qx "$shared"; then
+            fail "Shared dir must not be owned: $shared"
+        fi
+    done
+    # FILEFLAGS：LICENSE=128、DOC=2 按路径落位。
+    flags="$(rpm -qp --queryformat "[%{FILENAMES} %{FILEFLAGS}\n]" "$rpm_path" || true)"
+    case "$flags" in *"/usr/share/licenses/bundler-rpm-fixture/LICENSE.txt 128"*) ;; *) fail "License file must carry flag 128: $flags";; esac
+    case "$flags" in *"/usr/share/doc/bundler-rpm-fixture/changelog.gz 2"*) ;; *) fail "changelog.gz must carry %doc flag 2: $flags";; esac
+    # LICENSE/GROUP/URL 默认：Group=Unspecified、URL=BundlerHomepage。
+    [[ "$(rpm_field "$rpm_path" GROUP)" == "Unspecified" ]] || fail "Default GROUP mismatch."
+    [[ "$(rpm_field "$rpm_path" URL)" == "https://example.com/rpm-fixture" ]] || fail "URL must default to Homepage."
 else
     log "SKIP: host rpm not available; -qip assertions skipped."
+fi
+
+if command -v desktop-file-validate >/dev/null && [[ $have_cpio -eq 1 ]]; then
+    log "== desktop-file-validate on the generated .desktop =="
+    [[ -d "$extract_root/payload" ]] || rpm_extract "$rpm_path" payload
+    desktop-file-validate "$extract_root/payload/usr/share/applications/bundler-rpm-fixture.desktop" \
+        || fail "The generated .desktop fails desktop-file-validate."
+else
+    log "SKIP: desktop-file-validate or cpio missing; .desktop validation skipped."
 fi
 
 if [[ $have_cpio -eq 1 ]]; then
@@ -177,12 +218,69 @@ if [[ $have_rpm -eq 1 ]]; then
     [[ "$(rpm_field "$pre" RELEASE)" == "0.1.alpha.2" ]] || fail "Prerelease RELEASE mismatch."
 fi
 
+log "== variant: relation clauses + metadata overrides =="
+publish_fixture metadata >/dev/null \
+    -p:BundlerTestRpmRequires='libpng%3Bzlib >= 1.2' \
+    -p:BundlerTestRpmProvides='bundler-plugin = 2.0' \
+    -p:BundlerTestRpmConflicts='old-bundler' \
+    -p:BundlerTestRpmObsoletes='bundler-rpm-legacy < 1.0' \
+    -p:BundlerTestRpmRecommends='bundler-extras' \
+    -p:BundlerTestRpmSuggests='bundler-docs >= 0.9' \
+    -p:BundlerTestRpmLicense='MIT OR Apache-2.0' \
+    -p:BundlerTestRpmGroup='Applications/Engineering' \
+    -p:BundlerTestRpmUrl='https://example.com/rpm-override'
+meta="$(find "$integration_root/metadata/linux-x64/rpm" -name '*.rpm' | head -n1)"
+[[ -n "$meta" ]] || fail "The metadata variant produced no .rpm."
+if [[ $have_rpm -eq 1 ]]; then
+    req="$(rpm -qp --requires "$meta" || true)"
+    case "$req" in *"libpng"*) ;; *) fail "Requires libpng missing: $req";; esac
+    case "$req" in *"zlib >= 1.2"*|*"zlib  >=  1.2"*) ;; *) fail "Requires 'zlib >= 1.2' missing: $req";; esac
+    prov="$(rpm -qp --provides "$meta" || true)"
+    case "$prov" in *"bundler-plugin = 2.0"*|*"bundler-plugin  =  2.0"*) ;; *) fail "Provides missing: $prov";; esac
+    con="$(rpm -qp --conflicts "$meta" || true)"
+    case "$con" in *"old-bundler"*) ;; *) fail "Conflicts missing: $con";; esac
+    obs="$(rpm -qp --obsoletes "$meta" || true)"
+    case "$obs" in *"bundler-rpm-legacy"*) ;; *) fail "Obsoletes missing: $obs";; esac
+    rec="$(rpm -qp --recommends "$meta" || true)"
+    case "$rec" in *"bundler-extras"*) ;; *) fail "Recommends missing: $rec";; esac
+    sug="$(rpm -qp --suggests "$meta" || true)"
+    case "$sug" in *"bundler-docs"*) ;; *) fail "Suggests missing: $sug";; esac
+    [[ "$(rpm_field "$meta" LICENSE)" == "MIT OR Apache-2.0" ]] || fail "LICENSE override missing."
+    [[ "$(rpm_field "$meta" GROUP)" == "Applications/Engineering" ]] || fail "GROUP override missing."
+    [[ "$(rpm_field "$meta" URL)" == "https://example.com/rpm-override" ]] || fail "URL override missing."
+fi
+
+log "== variant: caller-supplied .desktop override =="
+publish_fixture desktop-override >/dev/null \
+    -p:BundlerTestRpmDesktopFile="$script_dir/Fixture/Assets/custom.desktop"
+ovd="$(find "$integration_root/desktop-override/linux-x64/rpm" -name '*.rpm' | head -n1)"
+[[ -n "$ovd" ]] || fail "The desktop-override variant produced no .rpm."
+if [[ $have_cpio -eq 1 ]]; then
+    rpm_extract "$ovd" desktop-override
+    grep -q "Name=Bundler Rpm Fixture Custom" \
+        "$extract_root/desktop-override/usr/share/applications/bundler-rpm-fixture.desktop" \
+        || fail "The custom .desktop did not replace the generated one."
+    if command -v desktop-file-validate >/dev/null; then
+        desktop-file-validate \
+            "$extract_root/desktop-override/usr/share/applications/bundler-rpm-fixture.desktop" \
+            || fail "The override .desktop fails validation."
+    fi
+fi
+
 log "== variant: failure leaves no artifact =="
 if publish_fixture failure >/dev/null 2>&1 -p:BundlerTestRpmPackageName='Bad Name'; then
     fail "An invalid package name must fail the publish."
 fi
 [[ -z "$(find "$integration_root/failure" -name '*.rpm' 2>/dev/null)" ]] \
     || fail "A failed build left a .rpm behind."
+
+log "== variant: invalid dependency clause and bad Files destination =="
+if publish_fixture baddep >/dev/null 2>&1 -p:BundlerTestRpmRequires='foo != 1.0'; then
+    fail "An invalid dependency operator must fail the publish."
+fi
+if publish_fixture badfile >/dev/null 2>&1 -p:BundlerTestRpmBadFile=1; then
+    fail "A relative RpmFile destination must fail the publish."
+fi
 
 log "== variant: deb;rpm multi-format fanout =="
 publish_fixture fanout >/dev/null -p:BundlerTestFormats="deb%3Brpm"
@@ -200,10 +298,27 @@ if [[ $have_docker -eq 1 ]]; then
             rpm -q bundler-rpm-fixture | grep -q bundler-rpm-fixture
             rpm -ql bundler-rpm-fixture | grep -q /usr/lib/bundler-rpm-fixture/BundlerRpmIntegrationFixture
             /usr/bin/bundler-rpm-fixture probe | grep -q probe
+            # RPM-2 落位：装后逐路径断言 freedesktop/doc/license/etc 文件。
+            for path in \
+                /usr/share/applications/bundler-rpm-fixture.desktop \
+                /usr/share/icons/hicolor/48x48/apps/bundler-rpm-fixture.png \
+                /usr/share/metainfo/bundler-rpm-fixture.metainfo.xml \
+                /usr/share/doc/bundler-rpm-fixture/changelog.gz \
+                /usr/share/licenses/bundler-rpm-fixture/LICENSE.txt \
+                /etc/bundler-rpm-fixture/defaults.conf; do
+                rpm -ql bundler-rpm-fixture | grep -qx "$path"
+                test -e "$path"
+            done
+            # %doc 标记经 rpm 查询可见。
+            rpm -qd bundler-rpm-fixture | grep -q changelog.gz
             rpm -V bundler-rpm-fixture
             rpm -e bundler-rpm-fixture
             test ! -e /usr/lib/bundler-rpm-fixture
             test ! -L /usr/bin/bundler-rpm-fixture
+            # 卸载须带走包自有叶子目录。
+            test ! -e /usr/share/licenses/bundler-rpm-fixture
+            test ! -e /usr/share/doc/bundler-rpm-fixture
+            test ! -e /etc/bundler-rpm-fixture
         ' || fail "rpm -i/-e failed in $image."
         log "docker matrix: $image PASS"
     done

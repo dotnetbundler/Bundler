@@ -146,7 +146,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 
 ### LINUX：Linux 格式
 
-公共模型已经包含 `Deb`、`Rpm`、`AppImage`；`.deb` 已冻结入 `main`，`.rpm` 后端已实现 LINUX-RPM-1，`AppImage` 无后端。
+公共模型已经包含 `Deb`、`Rpm`、`AppImage`；`.deb` 已冻结入 `main`，`.rpm` 后端已实现 LINUX-RPM-1/2，`AppImage` 无后端。
 为避免每次交接重新选择，默认顺序固定为 `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE`，仍然一次只推进一个完整格式。
 每个格式分别完成元数据、文件布局、桌面集成、升级/卸载语义、签名或仓库验证边界、原生发行版 E2E，再进入下一个格式。
 若真实用户需求或可用原生验证环境要求调整，必须先在本文档写明依据和新顺序。
@@ -160,6 +160,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 2026-09-27 `LINUX-DEB-5` 已完成——**`.deb` 冻结基线 `0.1.0-alpha.51`**：上游复核零漂移（`tauri@dev` 仍为 `447fa9f`）、能力矩阵定稿、OI/MT 收口、冻结写入路线与 PROJECT_CONTEXT。
 2026-09-27 `LINUX-RPM` 规划轮完成并确认（分支 `linux-rpm-development`）：决策清单见 `docs/linux-rpm-roadmap.md` §1（托管 RPM 写入器、SemVer→rpm 版本映射、scriptlet/systemd/config 对应关系、gzip-only 压缩、`deb;rpm` 多格式扇出）。
 2026-09-27 `LINUX-RPM-1` 已完成（同分支，`0.1.0-alpha.52`）：`DotNet.Bundler.Rpm` 纯托管 lead/header/cpio/gzip 写入器落地，`rpm -qip` 识别 + `RpmPackageReader` 回读互证，docker `fedora:latest` 真实 `rpm -i`/`rpm -e` 零残留全绿；`BundlerFormats=deb;rpm` 多格式扇出落地。`LINUX-APPIMAGE` 仍在其规划轮定稿。
+2026-09-27 `LINUX-RPM-2` 已完成（同分支，`0.1.0-alpha.53`）：六族关系字段（Requires/Provides/Conflicts/Obsoletes/Recommends/Suggests，`name [op evr]` 解析）透传 + License(SPDX)/Group/Url 覆盖 + freedesktop 生成器提取到 `Bundler.Core` 内部件供 deb/rpm 复用（deb 行为不变）+ `changelog.gz`%doc/`usr/share/licenses/<pkg>/`%license + `BundlerRpmFile` 任意路径映射；`rpm -qip`/`--queryformat` 逐字段、`desktop-file-validate`、docker 装后 `rpm -ql` 逐路径全绿；cpio 成员名 `./` 前缀修正（rpmlib PayloadFilesHavePrefix 的真实语义）。
 
 ### ARCHIVE：通用压缩包格式
 

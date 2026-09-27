@@ -158,5 +158,18 @@
     <BundlerRpmVendor Condition="'$(BundlerRpmVendor)' == ''"></BundlerRpmVendor>
     <BundlerRpmInstallRoot Condition="'$(BundlerRpmInstallRoot)' == ''"></BundlerRpmInstallRoot>
     <BundlerRpmBinLink Condition="'$(BundlerRpmBinLink)' == ''"></BundlerRpmBinLink>
+    <BundlerRpmRequires Condition="'$(BundlerRpmRequires)' == ''"></BundlerRpmRequires>
+    <BundlerRpmProvides Condition="'$(BundlerRpmProvides)' == ''"></BundlerRpmProvides>
+    <BundlerRpmConflicts Condition="'$(BundlerRpmConflicts)' == ''"></BundlerRpmConflicts>
+    <BundlerRpmObsoletes Condition="'$(BundlerRpmObsoletes)' == ''"></BundlerRpmObsoletes>
+    <BundlerRpmRecommends Condition="'$(BundlerRpmRecommends)' == ''"></BundlerRpmRecommends>
+    <BundlerRpmSuggests Condition="'$(BundlerRpmSuggests)' == ''"></BundlerRpmSuggests>
+    <BundlerRpmLicense Condition="'$(BundlerRpmLicense)' == ''"></BundlerRpmLicense>
+    <BundlerRpmGroup Condition="'$(BundlerRpmGroup)' == ''"></BundlerRpmGroup>
+    <BundlerRpmUrl Condition="'$(BundlerRpmUrl)' == ''"></BundlerRpmUrl>
+    <BundlerRpmCategories Condition="'$(BundlerRpmCategories)' == ''"></BundlerRpmCategories>
+    <BundlerRpmDesktopFile Condition="'$(BundlerRpmDesktopFile)' == ''"></BundlerRpmDesktopFile>
+    <BundlerRpmMetainfoFile Condition="'$(BundlerRpmMetainfoFile)' == ''"></BundlerRpmMetainfoFile>
+    <BundlerRpmChangelogFile Condition="'$(BundlerRpmChangelogFile)' == ''"></BundlerRpmChangelogFile>
   </PropertyGroup>
 </Project>

@@ -155,6 +155,12 @@ public sealed class RpmPackageReader
             var nameSize = Field(11);
             var nameStart = offset + 110;
             var name = Encoding.UTF8.GetString(data, nameStart, nameSize - 1);
+            // cpio members carry the "./" payload prefix; normalize back to
+            // the absolute filesystem path the header entries use.
+            if (name.StartsWith("./", StringComparison.Ordinal))
+            {
+                name = name.Substring(1);
+            }
             offset = nameStart + nameSize;
             offset = (offset + 3) & ~3;
             if (name == "TRAILER!!!") break;

@@ -20,6 +20,12 @@ internal static class RpmTests
             yield return ("Produces deterministic .rpm bytes", () => RunSync(DeterministicBytes));
             yield return ("Writes a correct sha256 sidecar", () => RunSync(Sha256Sidecar));
             yield return ("Maps rpm settings through MSBuild", () => RunSync(MapsRpmSettingsThroughMsBuild));
+            yield return ("Maps rpm relation clauses to tag triples", () => RunSync(MapsRelationTags));
+            yield return ("Maps license, group and URL overrides", () => RunSync(MapsLicenseGroupUrl));
+            yield return ("Stages freedesktop and doc files", () => RunSync(StagesFreedesktopFiles));
+            yield return ("Honours a caller-supplied .desktop file", () => RunSync(DesktopFileOverride));
+            yield return ("Maps arbitrary absolute destinations", () => RunSync(MapsArbitraryFiles));
+            yield return ("Rejects invalid dependency clauses", () => RunSync(RejectsInvalidDependencyClauses));
         }
     }
 
@@ -375,7 +381,21 @@ internal static class RpmTests
                targets.Contains("RpmArchitecture=\"$(BundlerRpmArchitecture)\"", StringComparison.Ordinal) &&
                targets.Contains("RpmVendor=\"$(BundlerRpmVendor)\"", StringComparison.Ordinal) &&
                targets.Contains("RpmInstallRoot=\"$(BundlerRpmInstallRoot)\"", StringComparison.Ordinal) &&
-               targets.Contains("RpmBinLink=\"$(BundlerRpmBinLink)\"", StringComparison.Ordinal),
+               targets.Contains("RpmBinLink=\"$(BundlerRpmBinLink)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmRequires=\"$(BundlerRpmRequires)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmProvides=\"$(BundlerRpmProvides)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmConflicts=\"$(BundlerRpmConflicts)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmObsoletes=\"$(BundlerRpmObsoletes)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmRecommends=\"$(BundlerRpmRecommends)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmSuggests=\"$(BundlerRpmSuggests)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmLicense=\"$(BundlerRpmLicense)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmGroup=\"$(BundlerRpmGroup)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmUrl=\"$(BundlerRpmUrl)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmCategories=\"$(BundlerRpmCategories)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmDesktopFile=\"$(BundlerRpmDesktopFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmMetainfoFile=\"$(BundlerRpmMetainfoFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmChangelogFile=\"$(BundlerRpmChangelogFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmFiles=\"@(BundlerRpmFile)\"", StringComparison.Ordinal),
             "MSBuild does not map the BundlerRpm* properties to the task.");
         Assert(props.Contains("<BundlerRpmPackageName", StringComparison.Ordinal) &&
                props.Contains("<BundlerRpmVersion", StringComparison.Ordinal) &&
@@ -384,7 +404,13 @@ internal static class RpmTests
                props.Contains("<BundlerRpmArchitecture", StringComparison.Ordinal) &&
                props.Contains("<BundlerRpmVendor", StringComparison.Ordinal) &&
                props.Contains("<BundlerRpmInstallRoot", StringComparison.Ordinal) &&
-               props.Contains("<BundlerRpmBinLink", StringComparison.Ordinal),
+               props.Contains("<BundlerRpmBinLink", StringComparison.Ordinal) &&
+               props.Contains("<BundlerRpmRequires", StringComparison.Ordinal) &&
+               props.Contains("<BundlerRpmLicense", StringComparison.Ordinal) &&
+               props.Contains("<BundlerRpmCategories", StringComparison.Ordinal) &&
+               props.Contains("<BundlerRpmDesktopFile", StringComparison.Ordinal) &&
+               props.Contains("<BundlerRpmMetainfoFile", StringComparison.Ordinal) &&
+               props.Contains("<BundlerRpmChangelogFile", StringComparison.Ordinal),
             "The BundlerRpm* properties lack defaults in the .props file.");
         Assert(task.Contains("new RpmBundler(", StringComparison.Ordinal) &&
                task.Contains("PackageFormat.Rpm", StringComparison.Ordinal),
@@ -396,6 +422,276 @@ internal static class RpmTests
         Assert(task.Contains("foreach (var format in formats.Distinct())", StringComparison.Ordinal) &&
                task.Contains("artifacts.AddRange(produced)", StringComparison.Ordinal),
             "The MSBuild dispatch must fan out per format.");
+    }
+
+    static void MapsRelationTags()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var artifact = new RpmBundler(new RpmBundleConfiguration
+            {
+                Requires = ["libc.so.6", "libfoo >= 1.2-3"],
+                Provides = ["example-plugin = 2.0"],
+                Conflicts = ["old-example < 1.0"],
+                Obsoletes = ["example-legacy"],
+                Recommends = ["example-extra >= 0.5"],
+                Suggests = ["example-docs"]
+            }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
+            var package = RpmPackageReader.Read(artifact.Path);
+
+            var requireNames = package.Main.Strings(1049);
+            var requireFlags = package.Main.Ints(1048);
+            var requireVersions = package.Main.Strings(1050);
+            var at = Array.IndexOf(requireNames, "libfoo");
+            Assert(at >= 3, "Caller Requires must be appended after the rpmlib clauses.");
+            Assert(requireFlags[at] == (4 | 8) && requireVersions[at] == "1.2-3",
+                "'libfoo >= 1.2-3' must parse to GREATER|EQUAL + '1.2-3'.");
+            at = Array.IndexOf(requireNames, "libc.so.6");
+            Assert(requireFlags[at] == 0 && requireVersions[at] == "",
+                "A bare Requires name must carry no flags or version.");
+
+            var provideNames = package.Main.Strings(1047);
+            var provideFlags = package.Main.Ints(1112);
+            var provideVersions = package.Main.Strings(1113);
+            at = Array.IndexOf(provideNames, "example-plugin");
+            Assert(at == 2 && provideFlags[at] == 8 && provideVersions[at] == "2.0",
+                "Caller Provides must be appended after the self-provides.");
+
+            Assert(package.Main.Strings(1054).SequenceEqual(new[] { "old-example" }) &&
+                   package.Main.Ints(1053).SequenceEqual(new[] { 2 }) &&
+                   package.Main.Strings(1055).SequenceEqual(new[] { "1.0" }),
+                "Conflicts must land in CONFLICTNAME/FLAGS/VERSION (1054/1053/1055).");
+            Assert(package.Main.Strings(1090).SequenceEqual(new[] { "example-legacy" }) &&
+                   package.Main.Ints(1114).SequenceEqual(new[] { 0 }),
+                "Obsoletes must land in OBSOLETENAME/FLAGS (1090/1114).");
+            Assert(package.Main.Strings(5046).SequenceEqual(new[] { "example-extra" }) &&
+                   package.Main.Ints(5048).SequenceEqual(new[] { 4 | 8 }) &&
+                   package.Main.Strings(5047).SequenceEqual(new[] { "0.5" }),
+                "Recommends must land in RECOMMENDNAME/VERSION/FLAGS (5046/5047/5048).");
+            Assert(package.Main.Strings(5049).SequenceEqual(new[] { "example-docs" }),
+                "Suggests must land in SUGGESTNAME (5049).");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void MapsLicenseGroupUrl()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var artifact = new RpmBundler(new RpmBundleConfiguration
+            {
+                License = "MIT OR Apache-2.0",
+                Group = "Applications/Engineering",
+                Url = "https://example.com/rpm-override"
+            }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
+            var package = RpmPackageReader.Read(artifact.Path);
+            Assert(package.Main.Text(1014) == "MIT OR Apache-2.0", "LICENSE must take the SPDX string.");
+            Assert(package.Main.Text(1016) == "Applications/Engineering", "GROUP override.");
+            Assert(package.Main.Text(1020) == "https://example.com/rpm-override",
+                "URL must prefer the explicit knob over Homepage.");
+
+            // Defaults: License 'Unspecified', Group 'Unspecified', URL = Homepage.
+            var defaults = RpmPackageReader.Read(new RpmBundler()
+                .BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single().Path);
+            Assert(defaults.Main.Text(1014) == "Unspecified", "Default LICENSE.");
+            Assert(defaults.Main.Text(1016) == "Unspecified", "Default GROUP.");
+            Assert(defaults.Main.Text(1020) == "https://example.com/app", "Default URL = Homepage.");
+
+            // Explicit empty Url/Group omit the tags entirely.
+            var omitted = RpmPackageReader.Read(new RpmBundler(
+                    new RpmBundleConfiguration { Url = "", Group = "" })
+                .BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single().Path);
+            Assert(omitted.Main.Strings(1020).Length == 0, "Url=\"\" must omit the URL tag.");
+            Assert(omitted.Main.Strings(1016).Length == 0, "Group=\"\" must omit the GROUP tag.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void StagesFreedesktopFiles()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var icon = Path.Combine(input, "icon.png");
+        File.WriteAllBytes(icon, Png48x48());
+        var metainfo = Path.Combine(input, "app.metainfo.xml");
+        File.WriteAllText(metainfo, "<component/>");
+        var changelog = Path.Combine(input, "CHANGELOG.md");
+        File.WriteAllText(changelog, "# changes");
+        var license = Path.Combine(input, "LICENSE.txt");
+        File.WriteAllText(license, "MIT");
+        try
+        {
+            var config = RpmConfiguration(input, output);
+            config = new BundleConfiguration
+            {
+                ProductName = config.ProductName,
+                Identifier = config.Identifier,
+                Publisher = config.Publisher,
+                Version = config.Version,
+                Homepage = config.Homepage,
+                Description = config.Description,
+                LicenseFile = license,
+                OutputDirectory = config.OutputDirectory,
+                Icons = [icon],
+                UrlProtocols = [new BundleUrlProtocolConfiguration { Schemes = ["example"], Name = "Example" }],
+                Targets = config.Targets
+            };
+            var artifact = new RpmBundler(new RpmBundleConfiguration
+            {
+                Categories = "Utility;Development",
+                MetainfoFile = metainfo,
+                ChangelogFile = changelog
+            }).BuildAsync(config).GetAwaiter().GetResult().Single();
+            var package = RpmPackageReader.Read(artifact.Path);
+            var paths = package.Payload.Select(e => e.Path).ToArray();
+
+            var desktop = package.Payload.Single(e => e.Path == "/usr/share/applications/example-app.desktop");
+            var content = Encoding.UTF8.GetString(desktop.Data);
+            Assert(content.Contains("Type=Application") &&
+                   content.Contains("Exec=example-app %u") &&
+                   content.Contains("Icon=example-app") &&
+                   content.Contains("Categories=Utility;Development;") &&
+                   content.Contains("MimeType=x-scheme-handler/example;"),
+                "The generated .desktop must carry exec/icon/categories/protocol mime entries.");
+            Assert(paths.Contains("/usr/share/icons/hicolor/48x48/apps/example-app.png"),
+                "A 48px PNG must land in the hicolor tree.");
+            Assert(paths.Contains("/usr/share/metainfo/example-app.metainfo.xml"),
+                "Metainfo must land in /usr/share/metainfo.");
+            Assert(paths.Contains("/usr/share/doc/example-app/changelog.gz"),
+                "The changelog must land gzipped in /usr/share/doc/<pkg>.");
+            Assert(paths.Contains("/usr/share/licenses/example-app/LICENSE.txt"),
+                "LicenseFile must land in /usr/share/licenses/<pkg>.");
+
+            // File flags: %license=128 on license files, %doc=2 on doc/man files.
+            var basenames = package.Main.Strings(1117);
+            var dirnames = package.Main.Strings(1118);
+            var dirindexes = package.Main.Ints(1116);
+            var flags = package.Main.Ints(1037);
+            string FullPath(int i) => dirnames[dirindexes[i]] + basenames[i];
+            for (var i = 0; i < basenames.Length; i++)
+            {
+                var path = FullPath(i);
+                if (path == "/usr/share/licenses/example-app/LICENSE.txt")
+                {
+                    Assert(flags[i] == 128, "License files must carry RPMFILE_LICENSE (128).");
+                }
+                else if (path == "/usr/share/doc/example-app/changelog.gz")
+                {
+                    Assert(flags[i] == 2, "Doc files must carry RPMFILE_DOC (2).");
+                }
+            }
+
+            // Owned dirs: the license/doc package dirs, but never shared parents.
+            var dirs = package.Payload.Where(e => (e.Mode & 0xF000) == 0x4000)
+                .Select(e => e.Path).ToArray();
+            Assert(dirs.Contains("/usr/share/licenses/example-app") &&
+                   dirs.Contains("/usr/share/doc/example-app"),
+                "Package-owned leaf dirs must be claimed.");
+            Assert(!dirs.Contains("/usr/share") && !dirs.Contains("/usr/share/applications") &&
+                   !dirs.Contains("/usr/share/icons") && !dirs.Contains("/usr/share/doc"),
+                "Shared system dirs must not be owned.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void DesktopFileOverride()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var custom = Path.Combine(input, "custom.desktop");
+        File.WriteAllText(custom, "[Desktop Entry]\nName=Custom\n");
+        try
+        {
+            var artifact = new RpmBundler(
+                    new RpmBundleConfiguration { DesktopFile = custom })
+                .BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
+            var package = RpmPackageReader.Read(artifact.Path);
+            var desktop = package.Payload.Single(e => e.Path == "/usr/share/applications/example-app.desktop");
+            Assert(Encoding.UTF8.GetString(desktop.Data).Contains("Name=Custom"),
+                "DesktopFile must replace the generated .desktop verbatim.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void MapsArbitraryFiles()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var config = Path.Combine(input, "defaults.conf");
+        File.WriteAllText(config, "key=value");
+        try
+        {
+            var artifact = new RpmBundler(new RpmBundleConfiguration
+            {
+                Files = [new RpmFileEntry { Source = config, Destination = "/etc/example/defaults.conf" }]
+            }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
+            var package = RpmPackageReader.Read(artifact.Path);
+            var entry = package.Payload.Single(e => e.Path == "/etc/example/defaults.conf");
+            Assert(Encoding.UTF8.GetString(entry.Data) == "key=value",
+                "RpmFile entries must land at their absolute destination.");
+            var dirs = package.Payload.Where(e => (e.Mode & 0xF000) == 0x4000)
+                .Select(e => e.Path).ToArray();
+            Assert(dirs.Contains("/etc/example") && !dirs.Contains("/etc"),
+                "New non-shared parents are owned; /etc itself is not.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void RejectsInvalidDependencyClauses()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            foreach (var clause in new[] { "foo != 1.0", "foo bar", "", "foo =" })
+            {
+                var thrown = false;
+                try
+                {
+                    new RpmBundler(new RpmBundleConfiguration { Requires = [clause] })
+                        .BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult();
+                }
+                catch (ArgumentException)
+                {
+                    thrown = true;
+                }
+                Assert(thrown, $"The clause '{clause}' must be rejected.");
+            }
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static byte[] Png48x48()
+    {
+        // Minimal valid PNG header whose IHDR declares 48x48.
+        var png = new byte[33];
+        byte[] magic = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        magic.CopyTo(png, 0);
+        png[12] = 0x49; png[13] = 0x48; png[14] = 0x44; png[15] = 0x52; // "IHDR"
+        png[19] = 48; png[23] = 48;                                    // width/height 48
+        return png;
     }
 
     static BundleConfiguration RpmConfiguration(

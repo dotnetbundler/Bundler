@@ -61,4 +61,95 @@ public sealed class RpmBundleConfiguration
     /// name; set to "" or "none" to omit the link.
     /// </summary>
     public string? BinLink { get; init; }
+
+    /// <summary>
+    /// Explicit dependency clauses written to the <c>REQUIRE*</c> tags, e.g.
+    /// <c>"libc.so.6"</c> or <c>"libfoo &gt;= 1.2"</c>. Clause syntax is
+    /// <c>name</c> or <c>name &lt;op&gt; evr</c> with op one of
+    /// <c>&lt;</c>, <c>&lt;=</c>, <c>=</c>, <c>&gt;=</c>, <c>&gt;</c>. Pure
+    /// pass-through — no runtime probing is performed; the writer already
+    /// registers the <c>rpmlib(...)</c> self-dependencies.
+    /// </summary>
+    public IReadOnlyList<string>? Requires { get; init; }
+
+    /// <summary><c>PROVIDE*</c> clauses, same syntax as <see cref="Requires"/>; the self-provides <c>name = evr</c> and <c>name(arch) = evr</c> are always emitted.</summary>
+    public IReadOnlyList<string>? Provides { get; init; }
+
+    /// <summary><c>CONFLICT*</c> clauses, same syntax as <see cref="Requires"/>.</summary>
+    public IReadOnlyList<string>? Conflicts { get; init; }
+
+    /// <summary><c>OBSOLETE*</c> clauses, same syntax as <see cref="Requires"/>.</summary>
+    public IReadOnlyList<string>? Obsoletes { get; init; }
+
+    /// <summary>Weak dependency <c>RECOMMEND*</c> clauses, same syntax as <see cref="Requires"/>.</summary>
+    public IReadOnlyList<string>? Recommends { get; init; }
+
+    /// <summary>Weak dependency <c>SUGGEST*</c> clauses, same syntax as <see cref="Requires"/>.</summary>
+    public IReadOnlyList<string>? Suggests { get; init; }
+
+    /// <summary>
+    /// <c>LICENSE</c> tag, conventionally an SPDX expression (e.g. "MIT");
+    /// defaults to <c>Unspecified</c>.
+    /// </summary>
+    public string? License { get; init; }
+
+    /// <summary>
+    /// <c>GROUP</c> tag (legacy rpm group string); defaults to
+    /// <c>Unspecified</c>. Modern packages omit a group — pass "" to omit.
+    /// </summary>
+    public string? Group { get; init; }
+
+    /// <summary>
+    /// <c>URL</c> tag; defaults to the bundle's <c>Homepage</c>. Pass "" to omit
+    /// the tag entirely.
+    /// </summary>
+    public string? Url { get; init; }
+
+    /// <summary>
+    /// Semicolon-separated freedesktop categories for the generated
+    /// <c>.desktop</c> file (e.g. "Utility;Development").
+    /// </summary>
+    public string? Categories { get; init; }
+
+    /// <summary>
+    /// Expert knob: path to a caller-supplied <c>.desktop</c> file that replaces the
+    /// generated one verbatim at <c>usr/share/applications/&lt;package&gt;.desktop</c>.
+    /// The caller owns its validity — the backend does not lint it.
+    /// </summary>
+    public string? DesktopFile { get; init; }
+
+    /// <summary>
+    /// Optional AppStream metainfo XML installed at
+    /// <c>usr/share/metainfo/&lt;package&gt;.metainfo.xml</c>.
+    /// </summary>
+    public string? MetainfoFile { get; init; }
+
+    /// <summary>
+    /// Optional upstream changelog installed gzipped at
+    /// <c>usr/share/doc/&lt;package&gt;/changelog.gz</c> and flagged
+    /// <c>%doc</c>.
+    /// </summary>
+    public string? ChangelogFile { get; init; }
+
+    /// <summary>
+    /// Extra files mapped to absolute paths inside the package (e.g. a config
+    /// under <c>/etc</c>); each entry's <c>Destination</c> is an absolute
+    /// package path (leading '/' optional) with a file name, outside the
+    /// payload root. <c>%config(noreplace)</c> marking for destinations under
+    /// <c>/etc</c> is a later-stage concern.
+    /// </summary>
+    public IReadOnlyList<RpmFileEntry>? Files { get; init; }
+}
+
+/// <summary>A file planted at an absolute path inside the .rpm payload.</summary>
+public sealed class RpmFileEntry
+{
+    /// <summary>Host path of the file to pack.</summary>
+    public string Source { get; init; } = "";
+
+    /// <summary>
+    /// Absolute target path inside the package including the file name
+    /// (e.g. <c>/etc/myapp/settings.conf</c>). No '..' or '.' segments.
+    /// </summary>
+    public string Destination { get; init; } = "";
 }

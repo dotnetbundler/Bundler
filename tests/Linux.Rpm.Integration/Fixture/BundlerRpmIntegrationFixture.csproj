@@ -23,11 +23,34 @@
     <BundlerRpmVendor Condition="'$(BundlerTestRpmVendor)' != ''">$(BundlerTestRpmVendor)</BundlerRpmVendor>
     <BundlerRpmInstallRoot Condition="'$(BundlerTestRpmInstallRoot)' != ''">$(BundlerTestRpmInstallRoot)</BundlerRpmInstallRoot>
     <BundlerRpmBinLink Condition="'$(BundlerTestRpmBinLink)' != ''">$(BundlerTestRpmBinLink)</BundlerRpmBinLink>
+    <BundlerRpmRequires Condition="'$(BundlerTestRpmRequires)' != ''">$(BundlerTestRpmRequires)</BundlerRpmRequires>
+    <BundlerRpmProvides Condition="'$(BundlerTestRpmProvides)' != ''">$(BundlerTestRpmProvides)</BundlerRpmProvides>
+    <BundlerRpmConflicts Condition="'$(BundlerTestRpmConflicts)' != ''">$(BundlerTestRpmConflicts)</BundlerRpmConflicts>
+    <BundlerRpmObsoletes Condition="'$(BundlerTestRpmObsoletes)' != ''">$(BundlerTestRpmObsoletes)</BundlerRpmObsoletes>
+    <BundlerRpmRecommends Condition="'$(BundlerTestRpmRecommends)' != ''">$(BundlerTestRpmRecommends)</BundlerRpmRecommends>
+    <BundlerRpmSuggests Condition="'$(BundlerTestRpmSuggests)' != ''">$(BundlerTestRpmSuggests)</BundlerRpmSuggests>
+    <BundlerRpmLicense Condition="'$(BundlerTestRpmLicense)' != ''">$(BundlerTestRpmLicense)</BundlerRpmLicense>
+    <BundlerRpmGroup Condition="'$(BundlerTestRpmGroup)' != ''">$(BundlerTestRpmGroup)</BundlerRpmGroup>
+    <BundlerRpmUrl Condition="'$(BundlerTestRpmUrl)' != ''">$(BundlerTestRpmUrl)</BundlerRpmUrl>
+    <BundlerRpmCategories>Utility;Development</BundlerRpmCategories>
+    <BundlerRpmCategories Condition="'$(BundlerTestRpmCategories)' != ''">$(BundlerTestRpmCategories)</BundlerRpmCategories>
+    <BundlerRpmDesktopFile Condition="'$(BundlerTestRpmDesktopFile)' != ''">$(BundlerTestRpmDesktopFile)</BundlerRpmDesktopFile>
+    <BundlerRpmMetainfoFile Condition="'$(BundlerTestRpmSkipMetainfo)' != 'true'">$(MSBuildThisFileDirectory)Assets/app.metainfo.xml</BundlerRpmMetainfoFile>
+    <BundlerRpmMetainfoFile Condition="'$(BundlerTestRpmMetainfoFile)' != ''">$(BundlerTestRpmMetainfoFile)</BundlerRpmMetainfoFile>
+    <BundlerRpmChangelogFile>$(MSBuildThisFileDirectory)Assets/CHANGELOG.md</BundlerRpmChangelogFile>
     <BundlerFormats Condition="'$(BundlerTestFormats)' != ''">$(BundlerTestFormats)</BundlerFormats>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
     <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <BundlerIcon Include="Assets/icon48.png" />
+    <BundlerIcon Include="Assets/icon@2x.png" />
+    <BundlerFileAssociation Include=".bdlfixture" Name="Bundler fixture document"
+        MimeType="application/x-bundler-fixture" />
+    <BundlerUrlProtocol Include="bdlfixture" Name="Bundler fixture" />
+    <BundlerRpmFile Include="Assets/defaults.conf" Destination="/etc/bundler-rpm-fixture/defaults.conf" />
+    <BundlerRpmFile Condition="'$(BundlerTestRpmBadFile)' == '1'"
+        Include="Assets/defaults.conf" Destination="etc/relative.conf" />
   </ItemGroup>
 </Project>

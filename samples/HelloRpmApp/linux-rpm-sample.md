@@ -13,6 +13,8 @@ dotnet publish samples/HelloRpmApp/HelloRpmApp.csproj -c Release
 
 默认装载布局：`/usr/lib/hello-rpm-app/`（载荷，目录条目显式登记进包）+ `/usr/bin/hello-rpm-app`（相对符号链接 `../lib/hello-rpm-app/HelloRpmApp`）+ `docs/readme.txt`（`BundlerResource` 演示项）。
 
+RPM-2 起默认再带 freedesktop 与文档件：`/usr/share/applications/hello-rpm-app.desktop`（自动生成，`Exec` 取 `/usr/bin` 链接名，`MimeType` 合并 `BundlerFileAssociation`/`BundlerUrlProtocol`）+ hicolor 图标 `/usr/share/icons/hicolor/{48x48,48x48@2}/apps/hello-rpm-app.png` + `/usr/share/metainfo/hello-rpm-app.metainfo.xml` + `/usr/share/doc/hello-rpm-app/changelog.gz`（%doc 标记）+ `/usr/share/licenses/hello-rpm-app/LICENSE.txt`（%license 标记，`BundlerLicenseFile` 包级旋钮）+ `/etc/hello-rpm-app/defaults.conf`（`BundlerRpmFile` 任意绝对路径映射演示）。
+
 在 Fedora/RHEL 系宿主上可真实安装：
 
 ```bash
@@ -79,14 +81,38 @@ sudo rpm -e hello-rpm-app
 
 - **`BundlerResource` 任意资源**（`TargetPath` 为 install-root 内相对路径）：`Assets/readme.txt` → `/usr/lib/hello-rpm-app/docs/readme.txt`。
 
+- **关系字段透传**（Requires/Provides/Conflicts/Obsoletes/Recommends/Suggests 六族；子句语法 `name` 或 `name <op> evr`，op ∈ `< <= = >= >`；分号列表）：
+
+  ```bash
+  dotnet publish ... -p:HelloRpmRequires="libc.so.6%3Blibpng >= 1.6" -p:HelloRpmProvides="hello-plugin = 2.0"
+  ```
+
+- **License/Group/Url 覆盖**（License 惯例写 SPDX 表达式，默认 `Unspecified`；Group 默认 `Unspecified`，Url 默认 `BundlerHomepage`）：
+
+  ```bash
+  dotnet publish ... -p:HelloRpmLicense="MIT OR Apache-2.0" -p:HelloRpmGroup="Applications/Engineering" -p:HelloRpmUrl="https://example.com"
+  ```
+
+- **`.desktop` 覆盖**（`BundlerRpmDesktopFile` 整文件替换生成产物，`Assets/custom.desktop` 演示）：
+
+  ```bash
+  dotnet publish ... -p:HelloRpmDesktopFile="$PWD/samples/HelloRpmApp/Assets/custom.desktop"
+  ```
+
+- **`BundlerRpmFile` 任意绝对路径映射**（`Destination` 须为带文件名的绝对路径；包自有叶子目录自动占有，共享系统目录不占有）：
+
+  ```xml
+  <BundlerRpmFile Include="Assets/defaults.conf" Destination="/etc/hello-rpm-app/defaults.conf" />
+  ```
+
 - **`deb;rpm` 同次 publish 扇出**（`BundlerFormats` 接受分号分隔多格式，各格式按自身契约并行产出）：
 
   ```bash
   dotnet publish samples/HelloRpmApp/HelloRpmApp.csproj -c Release -p:BundlerFormats="deb%3Brpm"
   ```
 
-  注意：MSBuild `-p:` 传含分号的属性须用 `%3B` 转义。
+  注意：MSBuild `-p:` 传含分号的属性须用 `%3B` 转义（关系字段列表同理）。
 
-## 已知边界（LINUX-RPM-1 未做）
+## 已知边界（LINUX-RPM-2 未做）
 
-关系字段（Requires/Provides 等专家声明）、`.desktop`/图标/metainfo、维护者脚本与 systemd unit、`%config` 标记、非 gzip 压缩、GPG 签名、rpmlint 硬基线——分别属 LINUX-RPM-2/3/4 或已登记边界；详见 `docs/linux-rpm-roadmap.md`。
+维护者 scriptlet（PREIN/POSTIN/PREUN/POSTUN）、systemd unit、`%config(noreplace)` 标记（`/etc` 文件暂为普通文件）、非 gzip 压缩、GPG 签名、rpmlint 硬基线——属 LINUX-RPM-3/4 或已登记边界；详见 `docs/linux-rpm-roadmap.md`。

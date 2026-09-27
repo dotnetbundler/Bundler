@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using DotNet.Bundler;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Rpm;
 
@@ -29,13 +30,15 @@ internal static class RpmPackageWriter
         internal string ArchivePath = "";   // "/usr/lib/pkg/app", absolute, no trailing slash
         internal int Mode;                  // st_mode including type bits
         internal string? SourcePath;        // host file for regular files
+        internal byte[]? Content;           // in-memory content for generated files
         internal string LinkTarget = "";    // for symlinks
         internal int Size;
+        internal int FileFlags;             // RPMFILE_* bits (%doc=2, %license=128, ...)
 
         internal bool IsDirectory => (Mode & 0xF000) == 0x4000;
         internal bool IsSymlink => (Mode & 0xF000) == 0xA000;
         internal byte[] ReadBytes() =>
-            IsSymlink ? Encoding.UTF8.GetBytes(LinkTarget) : File.ReadAllBytes(SourcePath!);
+            Content ?? (IsSymlink ? Encoding.UTF8.GetBytes(LinkTarget) : File.ReadAllBytes(SourcePath!));
     }
 
     internal static Result Build(
@@ -65,14 +68,24 @@ internal static class RpmPackageWriter
             throw new ArgumentException(
                 "The .rpm vendor must be a non-empty single line; set Publisher or Vendor.");
         }
+        foreach (var (knob, value) in new[]
+        {
+            ("License", settings.License), ("Group", settings.Group), ("Url", settings.Url)
+        })
+        {
+            if (value is { } v && v.IndexOf('\n') >= 0)
+            {
+                throw new ArgumentException($"The .rpm {knob} must be a single line.");
+            }
+        }
 
-        var payload = CollectPayload(bundle, item, installRoot, binLink);
+        var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings);
         var cpio = CpioWriter.Write(payload.Select(ToCpioEntry).ToList());
         var compressedPayload = Gzip(cpio);
 
         var mainHeader = RpmHeaderWriter.Write(MainHeaderEntries(
             bundle, item, payload, packageName, mapped, architecture, installRoot, vendor,
-            cpio, compressedPayload), 63);
+            settings, cpio, compressedPayload), 63);
         var signatureHeader = RpmHeaderWriter.Write(SignatureEntries(
             mainHeader, compressedPayload, cpio), 62);
         signatureHeader = Align8(signatureHeader);
@@ -159,6 +172,7 @@ internal static class RpmPackageWriter
         string architecture,
         string installRoot,
         string vendor,
+        RpmBundleConfiguration settings,
         byte[] cpio,
         byte[] compressedPayload)
     {
@@ -203,7 +217,7 @@ internal static class RpmPackageWriter
             // regular files hash their bytes — matching rpm's own rules.
             fileDigests[i] = entry.IsDirectory ? "" : Sha256Hex(entry.ReadBytes());
             fileLinkTos[i] = entry.IsSymlink ? entry.LinkTarget : "";
-            fileFlags[i] = 0;
+            fileFlags[i] = entry.FileFlags;
             fileUsers[i] = "root";
             fileGroups[i] = "root";
             fileVerifyFlags[i] = -1;
@@ -226,8 +240,7 @@ internal static class RpmPackageWriter
             RpmHeaderWriter.Str(1007, "bundler-build"),                    // BUILDHOST
             RpmHeaderWriter.Int32s(1009, checked((int)installedSize)),     // SIZE
             RpmHeaderWriter.Str(1011, vendor),                             // VENDOR
-            RpmHeaderWriter.Str(1014, "Unspecified"),                      // LICENSE
-            RpmHeaderWriter.Strings(1016, ["Unspecified"], type: 9),       // GROUP i18n
+            RpmHeaderWriter.Str(1014, settings.License ?? "Unspecified"),  // LICENSE
             RpmHeaderWriter.Str(1021, "linux"),                            // OS
             RpmHeaderWriter.Str(1022, architecture),                       // ARCH
             RpmHeaderWriter.Str(1064, RpmToolVersion()),                   // RPMVERSION
@@ -258,25 +271,63 @@ internal static class RpmPackageWriter
             RpmHeaderWriter.Strings(1118, dirNames),                       // DIRNAMES
             RpmHeaderWriter.Int32s(5011, 8),                               // FILEDIGESTALGO = sha256
             RpmHeaderWriter.Str(5062, "utf-8"),                            // ENCODING
-            // Self provide: "<name> = <evr>" plus the arch-qualified form.
-            RpmHeaderWriter.Strings(1047, [packageName, packageName + "(" + architecture + ")"]),
-            RpmHeaderWriter.Int32s(1112, 8, 8),                            // PROVIDEFLAGS = EQUAL
-            RpmHeaderWriter.Strings(1113, [evr, evr]),                     // PROVIDEVERSION
-            // rpmlib self-dependencies every package must declare.
-            RpmHeaderWriter.Strings(1049,
-                ["rpmlib(CompressedFileNames)", "rpmlib(FileDigests)",
-                 "rpmlib(PayloadFilesHavePrefix)"]),
-            RpmHeaderWriter.Int32s(1048, 16777226, 16777226, 16777226),    // RPMLIB|LESS|EQUAL
-            RpmHeaderWriter.Strings(1050, ["3.0.4-1", "4.6.0-1", "4.0-1"]),
         };
+        var group = settings.Group ?? "Unspecified";
+        if (group.Length > 0)
+        {
+            entries.Add(RpmHeaderWriter.Strings(1016, [group], type: 9));  // GROUP i18n
+        }
+        var url = settings.Url ?? bundle.Homepage;
+        if (url is { Length: > 0 })
+        {
+            entries.Add(RpmHeaderWriter.Str(1020, url));                   // URL
+        }
         if (mapped.Epoch > 0)
         {
             entries.Add(RpmHeaderWriter.Int32s(1003, mapped.Epoch));       // EPOCH
         }
-        if (bundle.Homepage is { Length: > 0 } homepage)
+        // Self provide: "<name> = <evr>" plus the arch-qualified form, then
+        // any caller-supplied Provides clauses.
+        var provideNames = new List<string> { packageName, packageName + "(" + architecture + ")" };
+        var provideFlags = new List<int> { RpmDependency.Equal, RpmDependency.Equal };
+        var provideVersions = new List<string> { evr, evr };
+        foreach (var clause in settings.Provides ?? [])
         {
-            entries.Add(RpmHeaderWriter.Str(1020, homepage));              // URL
+            var parsed = RpmDependency.Parse(clause);
+            provideNames.Add(parsed.Name);
+            provideFlags.Add(parsed.Flags);
+            provideVersions.Add(parsed.Version);
         }
+        entries.Add(RpmHeaderWriter.Strings(1047, provideNames));          // PROVIDENAME
+        entries.Add(RpmHeaderWriter.Int32s(1112, provideFlags.ToArray())); // PROVIDEFLAGS
+        entries.Add(RpmHeaderWriter.Strings(1113, provideVersions));       // PROVIDEVERSION
+        // rpmlib self-dependencies every package must declare, then Requires.
+        var requireNames = new List<string>
+        {
+            "rpmlib(CompressedFileNames)", "rpmlib(FileDigests)",
+            "rpmlib(PayloadFilesHavePrefix)"
+        };
+        var requireFlags = new List<int>
+        {
+            RpmDependency.Rpmlib | RpmDependency.Less | RpmDependency.Equal,
+            RpmDependency.Rpmlib | RpmDependency.Less | RpmDependency.Equal,
+            RpmDependency.Rpmlib | RpmDependency.Less | RpmDependency.Equal
+        };
+        var requireVersions = new List<string> { "3.0.4-1", "4.6.0-1", "4.0-1" };
+        foreach (var clause in settings.Requires ?? [])
+        {
+            var parsed = RpmDependency.Parse(clause);
+            requireNames.Add(parsed.Name);
+            requireFlags.Add(parsed.Flags);
+            requireVersions.Add(parsed.Version);
+        }
+        entries.Add(RpmHeaderWriter.Strings(1049, requireNames));          // REQUIRENAME
+        entries.Add(RpmHeaderWriter.Int32s(1048, requireFlags.ToArray())); // REQUIREFLAGS
+        entries.Add(RpmHeaderWriter.Strings(1050, requireVersions));       // REQUIREVERSION
+        RpmDependency.Emit(entries, settings.Conflicts, 1054, 1053, 1055);   // CONFLICT*
+        RpmDependency.Emit(entries, settings.Obsoletes, 1090, 1114, 1115);   // OBSOLETE*
+        RpmDependency.Emit(entries, settings.Recommends, 5046, 5048, 5047);  // RECOMMEND*
+        RpmDependency.Emit(entries, settings.Suggests, 5049, 5051, 5050);    // SUGGEST*
         return entries;
     }
 
@@ -299,23 +350,40 @@ internal static class RpmPackageWriter
         BundleConfiguration bundle,
         BundlePlanItem item,
         string installRoot,
-        string binLink)
+        string binLink,
+        string packageName,
+        RpmBundleConfiguration settings)
     {
         var entries = new List<PayloadEntry>();
         var claimed = new HashSet<string>(StringComparer.Ordinal);
         var directories = new HashSet<string>(StringComparer.Ordinal);
 
-        // rpm owns the directories it creates (explicit dir entries); the system
-        // dirs above the install root ("/usr", "/usr/lib", …) stay unowned.
+        // Directories the distro owns and a leaf package must not claim — rpm's
+        // own convention: a package owns the directories only it creates (e.g.
+        // /usr/share/licenses/<pkg>) but not shared parents like /usr/share/doc
+        // or anything under /usr/share/icons (hicolor-icon-theme owns those).
+        var sharedDirs = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "/", "/bin", "/sbin", "/lib", "/lib64", "/etc", "/opt", "/var",
+            "/usr", "/usr/bin", "/usr/sbin", "/usr/lib", "/usr/lib64",
+            "/usr/local", "/usr/share", "/usr/share/applications",
+            "/usr/share/metainfo", "/usr/share/doc", "/usr/share/licenses",
+            "/usr/share/man", "/usr/share/info", "/usr/share/icons",
+            "/usr/lib/systemd", "/usr/lib/systemd/system"
+        };
+
+        // rpm owns the directories it creates (explicit dir entries); claiming
+        // walks ancestors from the leaf up to the nearest shared directory.
         void ClaimDirectory(string path)
         {
             var current = path;
-            while (current.Length > 0 && current != "/")
+            while (current.Length > 0 && !sharedDirs.Contains(current))
             {
-                if (current == installRoot || current.StartsWith(installRoot + "/", StringComparison.Ordinal))
+                if (current.StartsWith("/usr/share/icons/", StringComparison.Ordinal))
                 {
-                    directories.Add(current);
+                    break; // hicolor subtree belongs to hicolor-icon-theme
                 }
+                directories.Add(current);
                 var slash = current.LastIndexOf('/');
                 current = slash <= 0 ? "" : current.Substring(0, slash);
             }
@@ -336,7 +404,27 @@ internal static class RpmPackageWriter
                 ArchivePath = path,
                 Mode = mode | 0x8000,
                 SourcePath = sourcePath,
-                Size = (int)info.Length
+                Size = (int)info.Length,
+                FileFlags = FileFlagsFor(path)
+            });
+        }
+
+        void AddGeneratedFile(string path, byte[] content, int mode)
+        {
+            var dir = path.Substring(0, path.LastIndexOf('/'));
+            ClaimDirectory(dir);
+            if (!claimed.Add(path))
+            {
+                throw new InvalidOperationException(
+                    $"Two payload sources map to the same .rpm path: '{path}'.");
+            }
+            entries.Add(new PayloadEntry
+            {
+                ArchivePath = path,
+                Mode = mode | 0x8000,
+                Content = content,
+                Size = content.Length,
+                FileFlags = FileFlagsFor(path)
             });
         }
 
@@ -388,6 +476,52 @@ internal static class RpmPackageWriter
             }
         }
 
+        // Desktop integration (shared with the .deb backend): a generated or
+        // caller-supplied .desktop entry, hicolor icons and optional metainfo.
+        foreach (var file in FreedesktopFiles.Collect(
+            bundle, packageName, installRoot, mainExecutable, binLink,
+            new FreedesktopFiles.Options
+            {
+                DesktopFile = settings.DesktopFile,
+                MetainfoFile = settings.MetainfoFile,
+                Categories = settings.Categories,
+                Format = "rpm"
+            }))
+        {
+            var path = "/" + file.ArchivePath;
+            if (file.SourcePath is { } sourcePath)
+            {
+                AddFile(path, sourcePath, file.Mode);
+            }
+            else
+            {
+                AddGeneratedFile(path, file.Content!, file.Mode);
+            }
+        }
+
+        if (settings.ChangelogFile is { Length: > 0 } changelogSource)
+        {
+            AddGeneratedFile(
+                "/usr/share/doc/" + packageName + "/changelog.gz",
+                Gzip(File.ReadAllBytes(
+                    FreedesktopFiles.RequireExisting(changelogSource, "ChangelogFile"))),
+                420 /* 0644 */);
+        }
+        if (bundle.LicenseFile is { Length: > 0 } license && license is not null)
+        {
+            var source = FreedesktopFiles.RequireExisting(license, "LicenseFile");
+            AddFile("/usr/share/licenses/" + packageName + "/" + Path.GetFileName(source),
+                source, 420 /* 0644 */);
+        }
+
+        foreach (var file in settings.Files ?? [])
+        {
+            var destination = FreedesktopFiles.NormalizeAbsoluteDestination(
+                file.Destination, "rpm");
+            AddFile(destination,
+                FreedesktopFiles.RequireExisting(file.Source, "RpmFile"), 420 /* 0644 */);
+        }
+
         // Emit the owned directory entries (install root plus everything below it).
         ClaimDirectory(installRoot);
         foreach (var dir in directories.OrderBy(d => d, StringComparer.Ordinal))
@@ -431,7 +565,10 @@ internal static class RpmPackageWriter
     {
         return new CpioWriter.Entry
         {
-            Name = entry.ArchivePath,
+            // cpio member names carry the "./" prefix the rpmlib
+            // PayloadFilesHavePrefix dependency advertises; absolute member
+            // names break tools that extract the payload verbatim (rpmlint).
+            Name = "." + entry.ArchivePath,
             Mode = entry.Mode,
             Data = entry.IsDirectory ? [] : entry.ReadBytes(),
             Inode = 0
@@ -439,6 +576,22 @@ internal static class RpmPackageWriter
     }
 
     // ---- helpers ------------------------------------------------------------
+
+    // RPMFILE_* bits the package sets itself: files under the doc/man trees are
+    // documentation, files under /usr/share/licenses are license texts.
+    private static int FileFlagsFor(string archivePath)
+    {
+        if (archivePath.StartsWith("/usr/share/licenses/", StringComparison.Ordinal))
+        {
+            return 128; // RPMFILE_LICENSE
+        }
+        if (archivePath.StartsWith("/usr/share/doc/", StringComparison.Ordinal) ||
+            archivePath.StartsWith("/usr/share/man/", StringComparison.Ordinal))
+        {
+            return 2; // RPMFILE_DOC
+        }
+        return 0;
+    }
 
     internal static string MapArchitecture(CpuArchitecture architecture) => architecture switch
     {

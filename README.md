@@ -13,7 +13,7 @@ WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线；`alpha.44
 现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。
 正式 CLI 仍属后续路线；macOS `.app` 已在 `mac-app-development` 分支可用并冻结（MAC-APP-1..5，冻结基线 `0.1.0-alpha.45`）。
 Linux `.deb` 已冻结于 `linux-deb-development` 分支（`LINUX-DEB-1..5`，冻结基线 `0.1.0-alpha.51`）：纯托管 ar/tar/gzip 写入器（无原生工具依赖、任意构建宿主可产出），control 全字段+维护者脚本+conffiles+systemd unit+桌面集成，`sudo dpkg -i/-r/-P` 真实装卸、lintian 硬断言、docker debian/ubuntu 矩阵全部验证。
-Linux `.rpm` 进行中（`linux-rpm-development` 分支，`LINUX-RPM-1` 已完成于 `0.1.0-alpha.52`）：纯托管 lead/header/cpio/gzip 写入器，`rpm -qip` 识别、docker `fedora:latest` 真实 `rpm -i`/`rpm -e` 零残留验证，`deb;rpm` 同次 publish 扇出已放开。
+Linux `.rpm` 进行中（`linux-rpm-development` 分支，`LINUX-RPM-1/2` 已完成于 `0.1.0-alpha.53`）：纯托管 lead/header/cpio/gzip 写入器，六族关系字段 + License/Group/Url + freedesktop 桌面集成（.desktop/图标/metainfo）+ 任意路径映射，`rpm -qip` 逐字段断言、`desktop-file-validate`、docker `fedora:latest` 真实 `rpm -i`/`rpm -ql` 逐路径/`rpm -e` 零残留验证，`deb;rpm` 同次 publish 扇出已放开。
 可操作的当前能力示例见 [`samples/HelloMacApp/mac-app-sample.md`](samples/HelloMacApp/mac-app-sample.md)、[`samples/HelloDebApp/linux-deb-sample.md`](samples/HelloDebApp/linux-deb-sample.md) 与 [`samples/HelloRpmApp/linux-rpm-sample.md`](samples/HelloRpmApp/linux-rpm-sample.md)。
 
 实现已经拆分为可复用的 NuGet 包。
@@ -32,7 +32,7 @@ Linux `.rpm` 进行中（`linux-rpm-development` 分支，`LINUX-RPM-1` 已完�
 | `DotNet.Bundler.MacDmg` | 独立 macOS `.dmg` API、`hdiutil` 全链与拖放卷生成（压缩可配 `Udzo`/`Ulmo`/`Udbz`） |
 | `DotNet.Bundler.MacPkg` | 独立 macOS `.pkg` API、`pkgbuild` 组件包生成（identifier/version/install-location 可配、任意载荷映射） |
 | `DotNet.Bundler.Deb` | 独立 Debian `.deb` API、纯托管 ar/tar/gzip 写入器（核心 control 字段、md5sums、`usr/lib`+`usr/bin` 链接布局、SemVer→deb 版本映射），无原生工具依赖 |
-| `DotNet.Bundler.Rpm` | 独立 RPM `.rpm` API、纯托管 lead/header/cpio/gzip 写入器（核心 tag 集、文件清单、`usr/lib`+`usr/bin` 链接布局、SemVer→rpm 版本映射、`RpmPackageReader` 回读器），无原生工具依赖 |
+| `DotNet.Bundler.Rpm` | 独立 RPM `.rpm` API、纯托管 lead/header/cpio/gzip 写入器（核心 tag 集、六族关系字段、文件清单与 %doc/%license 标记、`usr/lib`+`usr/bin` 链接布局、freedesktop 桌面集成、SemVer→rpm 版本映射、`RpmPackageReader` 回读器），无原生工具依赖 |
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
 
