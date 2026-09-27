@@ -2,7 +2,7 @@
 # LINUX-APPIMAGE-1 .AppImage 集成验证：真实 .NET payload → BundlerFormats=appimage
 # → 命名/侧车断言 → --appimage-extract 结构断言（AppRun/根 desktop 链接/.DirIcon/usr 树）
 # → 解出 AppRun 与整包 --appimage-extract-and-run 真实运行 → 覆盖变体
-# → arm64 结构断言（ELF e_machine，宿主不可执行故不解包）→ deb;rpm;appimage 扇出
+# → arm64 断言（ELF e_machine + squashfs 载荷直读，不执行 aarch64 运行时）→ deb;rpm;appimage 扇出
 # → docker debian/ubuntu/fedora 容器 extract-and-run 冒烟 → 直 API NuGet 消费。
 # 用法: bash tests/Linux.AppImage.Integration/Verify.sh
 # 需要 Linux 宿主与 dotnet SDK；产物仅在 artifacts/linux-appimage-integration 下落盘并全部清理。
@@ -214,6 +214,19 @@ arm="$(find "$integration_root/arm64/linux-arm64/appimage" -name '*.AppImage' | 
     || fail "aarch64 build: ELF e_machine must be 0xb7 (EM_AARCH64)."
 log "aarch64 AppImage produced with the embedded aarch64 runtime."
 
+# The aarch64 runtime cannot execute on this host; read the squashfs payload
+# directly: type2 AppImage = runtime ELF + squashfs appended at the 'hsqs' magic.
+sq_off="$(grep -aboF 'hsqs' "$arm" | head -n1 | cut -d: -f1)"
+[[ -n "$sq_off" ]] || fail "Could not locate squashfs magic in aarch64 AppImage."
+rm -rf "$extract_root/arm64-payload"
+unsquashfs -q -o "$sq_off" -d "$extract_root/arm64-payload" "$arm" \
+    || fail "unsquashfs on aarch64 AppImage failed."
+arm_bin="$extract_root/arm64-payload/usr/lib/bundler-appimage-fixture/BundlerAppImageIntegrationFixture"
+[[ -f "$arm_bin" ]] || fail "aarch64 payload missing expected entry binary."
+[[ "$(od -An -tx1 -j18 -N2 "$arm_bin" | tr -d ' ')" == "b700" ]] \
+    || fail "payload entry binary is not EM_AARCH64."
+log "aarch64 payload inspected via direct squashfs read (no aarch64 execution)."
+
 log "== multi-format fanout (deb;rpm;appimage in one publish) =="
 publish_fixture fanout '-p:BundlerTestFormats=deb%3Brpm%3Bappimage' >/dev/null
 [[ -n "$(find "$integration_root/fanout/linux-x64/deb" -name '*.deb' | head -n1)" ]] \
@@ -223,6 +236,21 @@ publish_fixture fanout '-p:BundlerTestFormats=deb%3Brpm%3Bappimage' >/dev/null
 [[ -n "$(find "$integration_root/fanout/linux-x64/appimage" -name '*.AppImage' | head -n1)" ]] \
     || fail "fanout missing .AppImage."
 log "deb;rpm;appimage fanout produced all three artifacts."
+
+# appimagelint is informational-level (APPIMAGE-3 finding): its findings are
+# mostly payload-ABI properties (glibc floor) and tool limitations (it cannot
+# parse freedesktop '@2' scale dirs), not packaging defects — no tag system to
+# exempt against, so it reports but never gates.
+lint_bin=""
+for c in ./appimagelint-x86_64.AppImage "$HOME/bin/appimagelint-x86_64.AppImage" appimagelint; do
+    if [[ -x "$c" ]] || command -v "$c" >/dev/null 2>&1; then lint_bin="$c"; break; fi
+done
+if [[ -n "$lint_bin" ]]; then
+    log "== appimagelint (informational, never fails) =="
+    "$lint_bin" "$appimage" 2>&1 | tail -n 20 || true
+else
+    log "SKIP: appimagelint not available (informational only)."
+fi
 
 if [[ $have_docker -eq 1 ]]; then
     log "== docker extract-and-run matrix =="
@@ -252,4 +280,4 @@ if [[ "$(uname -m)" == "x86_64" ]]; then
     grep -q "OK: " "$integration_root/api.log" || fail "API fixture did not produce an .AppImage."
 fi
 
-log "ALL CHECKS PASSED (LINUX-APPIMAGE-1..2)"
+log "ALL CHECKS PASSED (LINUX-APPIMAGE-1..3)"

@@ -73,3 +73,11 @@
 - 证据：`Bundler.Tests` 173/173（新增 2 项：任意文件落位 + 8 类非法目标/碰撞/缺源拒绝）；`Verify.sh` 新增 files 变体（解出断言内容一致）与 bad-file 失败变体（绝对路径目标 publish 失败）；示例 `HelloAppImageApp` 演示 `HelloAppImageFiles=1`。
 - 边界：压缩旋钮已在 APPIMAGE-1 按实测移除（决策 10）；freedesktop 旋钮族九件在 APPIMAGE-1 一次接齐，本阶段仅余 File 映射收口。
 - 阶段范围修正：原 APPIMAGE-2 范围中除 File 映射外的旋钮在 APPIMAGE-1 已落地，故此阶段实质为 File 映射 + 拒绝路径收口。
+
+### LINUX-APPIMAGE-3（已实现，`0.1.0-alpha.58`）
+
+- 交付：aarch64 产物载荷深读断言（`hsqs` 魔数定位 squashfs 偏移，unsquashfs 直读断言入口二进制 EM_AARCH64——不执行 aarch64 运行时的前提下覆盖载荷层）；appimagelint 信息级段入 `Verify.sh`（检测到才跑、永不阻断）；干净宿主进程出口审计。
+- appimagelint 裁决（信息级而非硬断言，理由入档）：其报告多为载荷 ABI 属性（宿主构建 glibc 地板，xenial/trusty 未达属预期）与工具自身局限——不能解析 freedesktop `@2` scale 目录（`48x48@2` 是规范内合法 scale 路径）且无 tag 豁免体系；glibc/libstdc++/图标/.desktop 有效项全为 ✔ 或预期性 ✖。
+- 干净宿主审计：`src/Bundler.AppImage` 进程出口仅 appimagetool（固定 argv）与 `chmod`/`ln` 小工具调用，无 shell、无网络下载——与决策 1/5/15 一致。
+- 证据：`Verify.sh` 全绿含新 arm64 载荷断言与 appimagelint 信息级实跑输出；容器矩阵（debian/ubuntu/fedora）维持全绿。
+- 边界：aarch64 真机执行仍为 OI-01；appimagelint 保持信息级（硬基线需其支持 tag/豁免机制，登记留尾）。

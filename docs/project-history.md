@@ -4035,3 +4035,10 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 - MSBuild `@(BundlerAppImageFile)`（`Destination` 元数据）接线。
 - `Bundler.Tests` 173/173；`Verify.sh` files/bad-file 变体全绿；示例 `HelloAppImageFiles=1` 演示。
 - 阶段注记：APPIMAGE-2 原定旋钮面大部分在 APPIMAGE-1 已落地，本阶段实质为 File 映射收口。
+
+## 2026-09-27 LINUX-APPIMAGE-3（`0.1.0-alpha.58`，分支 `linux-appimage-development`）
+
+- aarch64 断言加深：`hsqs` 魔数定位 type2 镜像内 squashfs 偏移，`unsquashfs` 直读载荷断言入口二进制 EM_AARCH64——不执行 aarch64 运行时即覆盖载荷层。
+- appimagelint 实跑并裁决信息级：发现项为载荷 ABI 属性（glibc 地板，xenial/trusty 未达属预期）与工具自身局限（不解析 freedesktop `@2` scale 目录、无 tag 豁免体系）；接入 `Verify.sh` 非阻断段。
+- 干净宿主审计：后端进程出口仅 appimagetool（固定 argv）与 chmod/ln 小工具，无 shell、无下载——与决策 1/5/15 一致。
+- `Bundler.Tests` 173/173、`Verify.sh` 全绿（含 docker 三容器矩阵）。
