@@ -15,7 +15,7 @@
 | `--help`/`--version` | 已实现 | CLI-1 | — |
 | `bundler.json` 配置 + 参数层叠 | 已实现 | CLI-2 | schema 与 MSBuild `Bundler*` 一一对应；未知键拒绝；相对路径按配置文件目录解析 |
 | 全格式旋钮透传（`--<format>.<knob>=`） | 已实现 | CLI-2 | 高频项参数化，文件映射仅配置承载；未知旋钮拒绝 |
-| `dotnet tool` 分发（`bundler`） | 计划实现 | CLI-3 | `DotNetCliTool` nupkg |
+| `dotnet tool` 分发（`bundler`） | 已实现 | CLI-3 | `DotNet.Bundler.Cli` nupkg（PackAsTool），本机 `--tool-path` 实装后 `bundler` bundle deb/zip 实测通过；需 `DOTNET_ROOT` 指向 SDK 安装 |
 | 自包含/AOT 单二进制分发 | 外部待验收 | — | OI-01：体积与 RID 扇出成本需实测 |
 | 旧 `src/Bundler.Cli` 原型 | 已删除 | CLI-1 | 164 行 NSIS-only，不承诺兼容 |
 | `info`/`formats` 独立命令 | 明确拒绝 | — | `plan --json` 已覆盖 |

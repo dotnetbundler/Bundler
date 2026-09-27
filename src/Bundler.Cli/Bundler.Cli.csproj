@@ -3,7 +3,14 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>bundler</AssemblyName>
     <RootNamespace>DotNet.Bundler.Cli</RootNamespace>
-    <IsPackable>false</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>bundler</ToolCommandName>
+    <PackageId>DotNet.Bundler.Cli</PackageId>
+    <Version>$(BundlerPackageVersion)</Version>
+    <Authors>Bundler contributors</Authors>
+    <Description>Command-line interface for DotNet.Bundler — validate, plan and bundle desktop application publish directories into native installers.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <IncludeSymbols>false</IncludeSymbols>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />

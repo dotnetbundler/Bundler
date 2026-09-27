@@ -38,7 +38,16 @@ Linux `.AppImage` 进行中（`linux-appimage-development` 分支，`LINUX-APPIM
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
 
-`bundler` CLI（`src/Bundler.Cli`）提供 `validate`/`plan`/`bundle` 三命令，覆盖全部冻结格式；dotnet tool 分发契约在 CLI-3 固化。
+`bundler` CLI（`src/Bundler.Cli`）提供 `validate`/`plan`/`bundle` 三命令，覆盖全部冻结格式，以 dotnet tool 分发（`DotNet.Bundler.Cli` nupkg，`ToolCommandName=bundler`）。
+
+```powershell
+dotnet tool install --global DotNet.Bundler.Cli
+bundler bundle --input-dir <publish目录> --rid linux-x64 --formats zip,deb \
+  --product-name MyApp --identifier com.example.myapp --package-version 1.0.0 \
+  --main-executable myapp --output-dir dist
+```
+
+也可用 `bundler.json` 承载配置（CLI 参数覆盖文件值，`--<fmt>.<knob>=` 透传格式旋钮），schema 与 MSBuild `Bundler*` 属性一一对应，映射表与退出码/`--json` 契约见 [`docs/cli-roadmap.md`](docs/cli-roadmap.md)。
 后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。
 WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..6` 的当前主机范围验证：current-user 安装、升级、修复和卸载，快捷方式与关联/协议候选注册，测试证书签名、英语/简体中文单语言包及受限故障回滚，x86 目标、显式 MSI 版本映射和可选降级，以及范围内安装目录、自定义 UI 序列、可选 Feature、PATH 精确追加与仅交互启动勾选。
 MSI 编译把 WiX 警告视为失败，PackageCode 由 WiX 每次构建生成。

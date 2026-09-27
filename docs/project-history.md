@@ -4088,3 +4088,9 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 
 - `bundler.json` schema 固化：共享字段 + `targets[]` + 九格式段；`--config` 层叠 + CLI 覆盖 + `--<fmt>.<knob>=` 透传；相对路径按配置目录解析；未知键/旋钮严格拒绝。
 - `Bundler.Tests` 194→198 全绿；`tests/Cli.Integration/Verify.sh` 扩 config 驱动/覆盖/三拒绝路径全绿。
+
+## 2026-09-27 CLI-3（`0.1.0-alpha.61`，分支 `cli-development`）——CLI-C1 冻结
+
+- `src/Bundler.Cli` 转 `PackAsTool`（`DotNet.Bundler.Cli` nupkg，`ToolCommandName=bundler`）；本机 `dotnet tool install --tool-path` 实装 + `bundler bundle`（zip+deb）实测通过。
+- 宿主注记：`~/.dotnet` 非默认布局需 `DOTNET_ROOT` 指安装根——宿主事项非 CLI 缺陷。
+- CLI 契约（命令面/退出码/JSON/`bundler.json` schema/旋钮面）冻结于 `0.1.0-alpha.61`；Windows/macOS 宿主打包、CI 管道消费、AOT 分发保留 CLI-OI/MT 清单。

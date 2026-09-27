@@ -1,6 +1,6 @@
 # CLI 产品化路线（CLI-C1）
 
-> 状态：规划轮完成，决策清单已按推荐项全部裁决放行（2026-09-27）；实施尚未开始——用户明确本轮仅规划。
+> 状态：**已冻结**于 `0.1.0-alpha.61`（2026-09-27，分支 `cli-development`）。CLI-1/2/3 全部完成，证据见 §4。
 > 范围依据：`docs/roadmap.md` CLI-C1 节——固化共享配置 schema、`validate`/`plan`/`bundle` 共用 Core/后端、稳定退出码/机器可读输出/日志/帮助/版本/发布方式、覆盖全部已冻结格式、删除早期 alpha 参数不承诺兼容。
 > 上游参照：`tauri-cli` 审计（`tauri-apps/tauri` DeepWiki）——命令面分层、`--bundles` 参数优先于配置文件 `bundle.targets`、`--config` 层叠、环境变量 verbosity 等模式已复核取舍；Tauri 面向"开发工具链"（dev/build/init/migrate/mobile），本 CLI 只做打包，范围更窄。
 
@@ -69,3 +69,10 @@
 - 相对路径按配置文件目录解析（`licenseFile`/`outputDirectory`/`icons`/`resources[].source`/`targets[].inputDirectory`/`signingFiles` + 格式段 `*File`/`*Path` 标量与 `files`/`payloadItems`/`contents`/`frameworks` 数组的 `source`）。
 - 单元测试：`Bundler.Tests` 新增 4 项（config 驱动 bundle、CLI 覆盖文件值、未知键拒绝、点号旋钮并入），合计 198/198 全绿。
 - `tests/Cli.Integration/Verify.sh` 扩展全绿：config 驱动 zip+文件映射断言、`--formats` 覆盖、`--archive.archive-name` 点号覆盖、未知顶层键/未知点号旋钮/缺失文件三拒绝路径。
+### CLI-3（`0.1.0-alpha.61`，分支 `cli-development`）
+
+- `src/Bundler.Cli` 转为 `PackAsTool`：`PackageId=DotNet.Bundler.Cli`、`ToolCommandName=bundler`、`net10.0` any 布局、`Version=$(BundlerPackageVersion)`。
+- `dotnet pack` 产出 `DotNet.Bundler.Cli.0.1.0-alpha.61.nupkg`；本机 `dotnet tool install --tool-path` 实装成功，`bundler --version`/`--help`/`bundle`（zip+deb 真实产出 + sha256 侧车）实测通过。
+- 如实注记：本机 `dotnet` 位于 `~/.dotnet` 非默认搜索路径，shim 需 `DOTNET_ROOT` 指向安装根才能启动——属宿主布局事项而非 CLI 缺陷，`.NET` 常规安装位置不受影响。
+- 冻结基线：CLI 契约（命令面/退出码/JSON 形状/`bundler.json` schema/格式旋钮面）冻结于 `0.1.0-alpha.61`；冻结测试向量 = `Bundler.Tests` 198/198 + `tests/Cli.Integration/Verify.sh` 全绿（含 config 层叠与拒绝路径）。
+- 冻结后仅接受带回归测试的缺陷修复；Windows/macOS 宿主打包、CI 管道消费、AOT 分发评估保留 CLI-OI/MT 清单。
