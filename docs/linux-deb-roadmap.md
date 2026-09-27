@@ -1,6 +1,6 @@
 # Linux `.deb` 后端实施路线（LINUX-DEB）
 
-> 状态：**LINUX-DEB-1..5 全部完成，`.deb` 冻结**（2026-09-27，分支 `linux-deb-development`）。
+> 状态：**LINUX-DEB-1..5 全部完成，`.deb` 冻结并已并入 `main`**（2026-09-27，`412d3bb`）。
 > 冻结基线：`DebBundleConfiguration` 配置面与行为契约冻结于 `0.1.0-alpha.51`；冻结测试向量 = `Bundler.Tests` 141/141 + `tests/Linux.Deb.Integration/Verify.sh` 全绿；冻结后仅缺陷修复附回归测试。
 > 上游审计见 [`docs/linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `tauri-apps/tauri@447fa9f`）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
