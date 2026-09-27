@@ -12,6 +12,7 @@
 | macOS `.pkg` | [mac-pkg-roadmap.md](mac-pkg-roadmap.md) | [mac-pkg-manual-testing.md](mac-pkg-manual-testing.md) | [能力矩阵](mac-pkg-capability-matrix.md)；[PKG 格式决策](mac-format-decision.md) | [mac-pkg-open-items.md](mac-pkg-open-items.md) | `MAC-PKG-MT-xx` / `MAC-PKG-OI-xx` |
 | Linux `.deb` | [linux-deb-roadmap.md](linux-deb-roadmap.md) | [linux-deb-manual-testing.md](linux-deb-manual-testing.md) | [能力矩阵](linux-deb-capability-matrix.md)；[Tauri 通用能力审计](linux-tauri-capability-audit.md) | [linux-deb-open-items.md](linux-deb-open-items.md) | `LINUX-DEB-MT-xx` / `LINUX-DEB-OI-xx` |
 | Linux `.rpm` | [linux-rpm-roadmap.md](linux-rpm-roadmap.md) | [linux-rpm-manual-testing.md](linux-rpm-manual-testing.md) | [能力矩阵](linux-rpm-capability-matrix.md)；[Tauri 通用能力审计](linux-tauri-capability-audit.md) | [linux-rpm-open-items.md](linux-rpm-open-items.md) | `LINUX-RPM-MT-xx` / `LINUX-RPM-OI-xx` |
+| Linux `.AppImage` | [linux-appimage-roadmap.md](linux-appimage-roadmap.md) | [linux-appimage-manual-testing.md](linux-appimage-manual-testing.md) | [能力矩阵](linux-appimage-capability-matrix.md)；[Tauri 通用能力审计](linux-tauri-capability-audit.md) | [linux-appimage-open-items.md](linux-appimage-open-items.md) | `LINUX-APPIMAGE-MT-xx` / `LINUX-APPIMAGE-OI-xx` |
 
 Linux RPM/AppImage 在各自规划轮建立自己的 `<format>-roadmap.md`、`<format>-manual-testing.md`、`<format>-capability-matrix.md`、`<format>-open-items.md`，各用独立格式前缀；
 总索引只列入口，不混合测试步骤或结论。
