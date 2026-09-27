@@ -31,6 +31,9 @@ bash tests/Linux.Deb.Integration/Verify.sh
 - systemd 变体：unit 落 `usr/lib/systemd/system/`、postinst 含 `daemon-reload` 尾段且保留调用方脚本主体；
 - 升级变体：`dpkg -i` 1.0.0→1.0.1 版本更新 + 本地修改的 conffile 经 `--force-confold` 保留；
 - conffile 语义：`/etc` DebFile 自动登记 conffile——`dpkg -r` 保留、`dpkg -P` 清除（断言已随 DEB-3 更新为两段式）；
+- arm64 变体（LINUX-DEB-4）：`linux-arm64` publish → `_arm64.deb` + `Architecture: arm64` + 载荷结构断言（x86_64 宿主不能装测，真机安装属 OI-01）；
+- docker 矩阵（LINUX-DEB-4）：`debian:stable`/`ubuntu:latest` 容器内真实 `dpkg -i`/运行/`-r`/`-P` 全绿；
+- lintian 基线（LINUX-DEB-4）：豁免清单 `lintian-exemptions.txt` 硬断言，新 tag 即失败；
 - 失败路径：相对 `InstallRoot`、非法 `Priority`、非法 `Categories`、非 `gzip` 压缩均使 publish 失败且无 `.deb` 产物；
 - `tests/Deb.Api.PackageFixture`（直接 API 消费 `DotNet.Bundler.Deb` NuGet 包）冒烟；
 - 真实装卸：`sudo dpkg -i` 后 `dpkg -s`/`dpkg -L`（含 `.desktop`/图标/metainfo/`copyright`/`changelog.gz`/`/etc` 逐项路径断言）与 `/usr/bin` 链接启动均通过，装后 `.desktop` 回读 + `desktop-file-validate` 复核，`sudo dpkg -r` 后零残留断言；

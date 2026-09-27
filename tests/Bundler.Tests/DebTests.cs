@@ -24,6 +24,7 @@ internal static class DebTests
             yield return ("Packs maintainer scripts and conffiles", () => RunSync(MaintainerScriptsAndConffiles));
             yield return ("Synthesizes postinst daemon-reload for a systemd unit", () => RunSync(SystemdUnitDaemonReload));
             yield return ("Rejects invalid DEB-3 knobs", () => RunSync(RejectsInvalidDeb3Knobs));
+            yield return ("Writes the packaging changelog and extended description", () => RunSync(WritesPackagingChangelog));
             yield return ("Produces deterministic .deb bytes", () => RunSync(DeterministicBytes));
             yield return ("Writes a correct sha256 sidecar", () => RunSync(Sha256Sidecar));
             yield return ("Maps deb settings through MSBuild", () => RunSync(MapsDebSettingsThroughMsBuild));
@@ -756,6 +757,35 @@ internal static class DebTests
             Assert(data.Any(e => e.Name == "./usr/lib/example-app/docs/note.txt" &&
                                  e.Mode == 420),
                 "A resource must land under the install root at its TargetPath.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void WritesPackagingChangelog()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var deb = new DebBundler().BuildAsync(DebConfiguration(input, output))
+                .GetAwaiter().GetResult().Single();
+            var members = DebPackageReader.ReadAr(deb.Path);
+            var control = Encoding.UTF8.GetString(
+                DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[1].Content))
+                    .Single(e => e.Name == "./control").Content);
+            Assert(control.Contains(" Packaged with DotNet.Bundler.\n", StringComparison.Ordinal),
+                $"A single-line description must gain an extended line:\n{control}");
+            var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
+            var changelog = data.SingleOrDefault(
+                e => e.Name == "./usr/share/doc/example-app/changelog.Debian.gz");
+            Assert(changelog is not null, "The payload lacks changelog.Debian.gz.");
+            var text = Encoding.UTF8.GetString(DebPackageReader.Ungzip(changelog!.Content));
+            Assert(text.StartsWith("example-app (1.0.0-1) unstable; urgency=low", StringComparison.Ordinal) &&
+                   text.Contains(" -- Example Publisher  Tue, 01 Jan 1980", StringComparison.Ordinal),
+                $"changelog.Debian.gz lacks the expected stanza:\n{text}");
         }
         finally
         {

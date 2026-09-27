@@ -103,7 +103,7 @@ log "== control metadata =="
 deb_control "$deb_path" default
 control="$(cat "$extract_root/control/default/control")"
 for field in "Package: bundler-deb-fixture" "Version: 1.0.0-1" "Architecture: amd64" \
-    "Maintainer: DotNet.Bundler Tests" "Priority: optional" \
+    "Maintainer: DotNet.Bundler Tests <tests@example.com>" "Priority: optional" "Section: utils" \
     "Homepage: https://example.com/deb-fixture" "Installed-Size:" \
     "Description: Disposable .deb integration-test fixture."; do
     printf '%s\n' "$control" | grep -qF "$field" || fail "control lacks '$field': $(printf '%s\n' "$control")"
@@ -144,6 +144,11 @@ done
     || fail "The hicolor @2 icon is missing."
 [[ -f "$data_root/usr/share/metainfo/bundler-deb-fixture.metainfo.xml" ]] \
     || fail "The metainfo file is missing."
+[[ -f "$data_root/usr/share/doc/bundler-deb-fixture/changelog.Debian.gz" ]] \
+    || fail "The payload lacks the auto-generated changelog.Debian.gz."
+zcat "$data_root/usr/share/doc/bundler-deb-fixture/changelog.Debian.gz" \
+    | grep -q "bundler-deb-fixture (1.0.0-1) unstable" \
+    || fail "changelog.Debian.gz lacks the package stanza."
 [[ -f "$data_root/usr/share/doc/bundler-deb-fixture/copyright" ]] \
     || fail "The copyright file is missing."
 grep -qx "MIT License" <(head -n1 "$data_root/usr/share/doc/bundler-deb-fixture/copyright") \
@@ -406,11 +411,56 @@ fi
 grep -qi "compression" "$integration_root/fail-compression.log" \
     || fail "The compression failure did not mention compression."
 
+log "== arm64 variant (cross-arch structure; install is OI-01) =="
+publish_fixture arm64 -r linux-arm64 >"$integration_root/arm64.log" 2>&1 \
+    || { cat "$integration_root/arm64.log"; fail "linux-arm64 publish failed."; }
+arm64_deb="$(find "$integration_root/arm64" -name "*_arm64.deb" | head -1)"
+[[ -n "$arm64_deb" ]] || fail "No *_arm64.deb produced for linux-arm64."
+arm64_info="$(dpkg-deb -I "$arm64_deb")" || fail "dpkg-deb -I rejects the arm64 package."
+printf '%s' "$arm64_info" | grep -q "Architecture: arm64" \
+    || fail "arm64 package lacks Architecture: arm64: $(printf '%s' "$arm64_info")"
+arm64_listing="$(dpkg-deb -c "$arm64_deb")" || fail "dpkg-deb -c rejects the arm64 package."
+printf '%s' "$arm64_listing" \
+    | grep -q "usr/lib/bundler-deb-fixture/BundlerDebIntegrationFixture" \
+    || fail "arm64 payload lacks the usr/lib payload."
+log "arm64 package structure verified (host install not possible on amd64)."
+
 if command -v lintian >/dev/null; then
-    log "== lintian audit (informational) =="
-    lintian "$deb_path" || log "note: lintian reported findings (recorded, not blocking)."
+    log "== lintian gate (exemption list enforced) =="
+    lintian_out="$(lintian "$deb_path" || true)"
+    printf '%s\n' "$lintian_out" | sed -n 's/^[EW]: [^:]*: \([^ ]*\).*/\1/p' \
+        | sort -u >"$integration_root/lintian-tags.txt"
+    unexpected="$(comm -23 "$integration_root/lintian-tags.txt" <(sort -u "$script_dir/lintian-exemptions.txt") || true)"
+    if [[ -n "$unexpected" ]]; then
+        printf '%s\n' "$lintian_out" >&2
+        fail "lintian reported non-exempt tags: $unexpected"
+    fi
+    printf '%s\n' "$lintian_out" | sed 's/^/lintian: /'
 else
     log "SKIP: lintian unavailable on this host."
 fi
 
-log "PASS: LINUX-DEB-1/2 integration checks complete."
+if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
+    for image in debian:stable ubuntu:latest; do
+        log "== docker matrix: $image =="
+        if ! docker run --rm -v "$deb_path:/tmp/pkg.deb:ro" "$image" sh -c '
+            set -e
+            dpkg -i /tmp/pkg.deb >/dev/null
+            dpkg -s bundler-deb-fixture | grep -q "Status: install ok installed"
+            bundler-deb-fixture smoke | grep -q "BundlerDebIntegrationFixture:smoke"
+            test -f /etc/bundler-deb-fixture/defaults.conf
+            dpkg -r bundler-deb-fixture >/dev/null
+            test -f /etc/bundler-deb-fixture/defaults.conf   # conffile survives -r
+            ! dpkg -s bundler-deb-fixture >/dev/null 2>&1
+            dpkg -P bundler-deb-fixture >/dev/null 2>&1 || true  # purge leftover conffile
+            test ! -e /etc/bundler-deb-fixture/defaults.conf
+        '; then
+            fail "docker $image install/run/remove failed."
+        fi
+    done
+    log "docker matrix green on debian:stable + ubuntu:latest."
+else
+    log "SKIP: docker unavailable — container matrix not run."
+fi
+
+log "PASS: LINUX-DEB-1..4 integration checks complete."

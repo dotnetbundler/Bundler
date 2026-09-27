@@ -64,7 +64,7 @@ internal static class DebPackageWriter
                 "(the managed writer has no xz/zstd encoder; zstd also needs dpkg >= 1.21.18).");
         }
 
-        var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings);
+        var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, version, maintainer, settings);
         var dataTarGz = Gzip(TarData(payload));
         var controlTarGz = Gzip(TarBytes(ControlEntries(bundle, payload, packageName, version,
             architecture, maintainer, settings)));
@@ -117,6 +117,8 @@ internal static class DebPackageWriter
         string installRoot,
         string binLink,
         string packageName,
+        string version,
+        string maintainer,
         DebBundleConfiguration settings)
     {
         var entries = new List<PayloadEntry>();
@@ -284,6 +286,15 @@ internal static class DebPackageWriter
         }
 
         var docRoot = "usr/share/doc/" + packageName;
+        // Debian policy wants the packaging changelog at changelog.Debian.gz;
+        // emit a deterministic stub (fixed date matching TarWriter.EntryMtime).
+        var debianChangelog = packageName + " (" + version + ") unstable; urgency=low\n\n" +
+            "  * Packaged with DotNet.Bundler.\n\n" +
+            " -- " + maintainer + "  Tue, 01 Jan 1980 00:00:00 +0000\n";
+        AddGeneratedFile(
+            docRoot + "/changelog.Debian.gz",
+            Gzip(new UTF8Encoding(false).GetBytes(debianChangelog)),
+            420 /* 0644 */);
         if (settings.ChangelogFile is { Length: > 0 } changelogSource)
         {
             AddGeneratedFile(
@@ -499,10 +510,11 @@ internal static class DebPackageWriter
         control.Append("Description: ").Append(shortDescription).Append('\n');
         var extended = string.Join("\n", lines.SkipWhile(line => line.Trim().Length == 0).Skip(1)
             .Select(line => line.Trim().Length == 0 ? " ." : " " + line.TrimEnd()));
-        if (extended.Length > 0)
+        if (extended.Length == 0)
         {
-            control.Append(extended).Append('\n');
+            extended = " Packaged with DotNet.Bundler.";
         }
+        control.Append(extended).Append('\n');
 
         var md5sums = new StringBuilder();
         foreach (var entry in payload.Where(e => e.Kind == TarEntryKind.File))

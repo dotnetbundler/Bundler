@@ -11,6 +11,8 @@
     <BundlerIdentifier>com.dotnetbundler.debintegrationfixture</BundlerIdentifier>
     <BundlerProductName>Bundler Deb Fixture</BundlerProductName>
     <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
+    <BundlerDebMaintainer>DotNet.Bundler Tests &lt;tests@example.com&gt;</BundlerDebMaintainer>
+    <BundlerDebSection>utils</BundlerDebSection>
     <BundlerDescription>Disposable .deb integration-test fixture.</BundlerDescription>
     <BundlerHomepage>https://example.com/deb-fixture</BundlerHomepage>
     <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>

@@ -4,8 +4,8 @@
 > 当前分支：`linux-deb-development`（基于 `main` `60b1c7c`；`.app`/`.dmg`/`.pkg` 三线均已并入 main）
 > 当前包版本：`0.1.0-alpha.48`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
 > 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
-> `LINUX-DEB-3` 已完成（`linux-deb-development`）：维护者脚本、systemd unit（装而不启）、conffiles、压缩枚举（gzip）、升降级语义 + 全绿验证链
-> 默认下一阶段：`LINUX-DEB-4`（原生 E2E 与支持矩阵；需用户明确启动指令）
+> `LINUX-DEB-4` 已完成（`linux-deb-development`）：lintian 硬断言基线 + `changelog.Debian.gz` 补发 + arm64 结构断言 + docker 发行版矩阵
+> 默认下一阶段：`LINUX-DEB-5`（上游复核、能力矩阵定稿、OI/MT 收口、冻结基线；需用户明确启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -81,7 +81,7 @@ Verify.sh 真实通过 `lsregister` 注册、`open <文件>`/`open <scheme>://` 
 ### 未开始的格式
 
 `.pkg` 已冻结（`MAC-PKG-1..5` 全部完成）。
-`LINUX-DEB`：`LINUX-DEB-3` 完成（2026-09-27，`linux-deb-development` 分支）——`src/Bundler.Deb` 托管 ar/tar/gzip 写入器；DEB-1 最小 control+`md5sums`、`usr/lib`+`usr/bin` 布局、SemVer→deb 映射与八旋钮；DEB-2 关系字段透传、Section/Priority、`.desktop` 生成与 `DesktopFile` 覆盖、hicolor 图标（PNG 探测/`@2x`）、metainfo、`changelog.gz`/`copyright`、`BundlerDebFile` 绝对路径映射；DEB-3 维护者脚本四旋钮（0755/shebang+LF）、`SystemdServiceFile` 托管 unit + postinst `daemon-reload` 合成、conffiles（`/etc` DebFile 自动登记）、压缩仅 gzip（xz/zstd 登记拒绝）、升级/conffile 保留语义实测；140 项 Bundler.Tests + `Verify.sh`（真实 `sudo dpkg -i/-r/-P`、`desktop-file-validate`、`dpkg -L` 回读、lintian 信息级审计）全绿；`samples/HelloDebApp` 演示全旋钮；
+`LINUX-DEB`：`LINUX-DEB-4` 完成（2026-09-27，`linux-deb-development` 分支）——`src/Bundler.Deb` 托管 ar/tar/gzip 写入器；DEB-1 最小 control+`md5sums`、`usr/lib`+`usr/bin` 布局、SemVer→deb 映射与八旋钮；DEB-2 关系字段透传、Section/Priority、`.desktop` 生成与 `DesktopFile` 覆盖、hicolor 图标（PNG 探测/`@2x`）、metainfo、`changelog.gz`/`copyright`、`BundlerDebFile` 绝对路径映射；DEB-3 维护者脚本四旋钮（0755/shebang+LF）、`SystemdServiceFile` 托管 unit + postinst `daemon-reload` 合成、conffiles（`/etc` DebFile 自动登记）、压缩仅 gzip（xz/zstd 登记拒绝）、升级/conffile 保留语义实测；DEB-4 lintian 硬断言基线（豁免清单入档）、`changelog.Debian.gz` 自动补发与扩展描述默认行、`linux-arm64` 结构断言、docker `debian:stable`/`ubuntu:latest` 装卸矩阵；141 项 Bundler.Tests + `Verify.sh`（真实 `sudo dpkg -i/-r/-P`、`desktop-file-validate`、`dpkg -L` 回读、lintian 信息级审计）全绿；`samples/HelloDebApp` 演示全旋钮；
 `LINUX-RPM`、`LINUX-APPIMAGE`、`CLI-C1`：无实现，顺序与边界见 `docs/roadmap.md`。
 
 ## 3. 最近验证（2026-10-03，Windows 11 Pro build 26200 x64，跨格式收尾回归）
@@ -141,7 +141,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 `.pkg` 已冻结于 `0.1.0-alpha.47`（`MAC-PKG-1..5` 全部完成）。macOS 线三种格式（`.app`/`.dmg`/`.pkg`）全部冻结。
 `LINUX-DEB` 规划轮已完成（2026-09-27），`LINUX-DEB-1` 已于同日完成并验证。
-默认下一步：`LINUX-DEB-4`（原生 E2E 与支持矩阵：多发行版/架构装测、示例矩阵、能力矩阵收口）；等用户明确启动指令再实施。
+默认下一步：`LINUX-DEB-5`（审计与格式冻结：上游漂移复核、能力矩阵定稿、OI/MT 收口、冻结基线写入）；等用户明确启动指令再实施。
 
 ## 7. 历史记录
 

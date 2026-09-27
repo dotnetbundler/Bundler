@@ -1,6 +1,6 @@
 # Linux `.deb` 后端实施路线（LINUX-DEB）
 
-> 状态：**LINUX-DEB-3 已完成并验证**（2026-09-27，分支 `linux-deb-development`，`BundlerPackageVersion` `0.1.0-alpha.50`）。
+> 状态：**LINUX-DEB-4 已完成并验证**（2026-09-27，分支 `linux-deb-development`，`BundlerPackageVersion` `0.1.0-alpha.51`）。
 > 上游审计见 [`docs/linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `tauri-apps/tauri@447fa9f`）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 > 逐项能力状态见 [`docs/linux-deb-capability-matrix.md`](linux-deb-capability-matrix.md)；外部条件见 [`docs/linux-deb-open-items.md`](linux-deb-open-items.md)；人工步骤见 [`docs/linux-deb-manual-testing.md`](linux-deb-manual-testing.md)。
@@ -101,6 +101,8 @@
 - **前置**：LINUX-DEB-1..3 完成。
 - **目标/交付**：`lintian` 接入 Verify.sh（基线断言+豁免清单显式登记）；`linux-arm64` 产物结构断言（arm64 运行态装测属外部）；docker `debian:stable`/`ubuntu:latest` 容器真实装卸矩阵；干净宿主复核（构建侧零系统依赖复核）；示例全旋钮收口；矩阵/文档/未验证格如实限缩。
 - **退出**：矩阵实测格子有证据；未测格子进 OI/MT 清单。
+- **状态**：已完成（2026-09-27）。lintian 由信息级升级为硬断言——`tests/Linux.Deb.Integration/lintian-exemptions.txt` 登记豁免，新 tag 即失败；自动补发 `changelog.Debian.gz`（打包侧 changelog，固定日期保确定性）+ 扩展描述默认行 + fixture Maintainer 邮箱格式/Section 默认值消解了 DEB-2/3 的全部可修发现；`linux-arm64` 产物结构与 `Architecture: arm64` 断言（装测仍属 OI-01）；docker `debian:stable`/`ubuntu:latest` 真实装卸+运行+conffile `-r` 保留/`-P` 清除矩阵全绿；构建侧零系统依赖复核（`src/Bundler.Deb` 无任何外部进程调用）。
+- **证据**：`Bundler.Tests` 141 全绿（新增 changelog.Debian.gz/扩展描述用例）；`Verify.sh` 全绿含 arm64 变体与 docker 矩阵；lintian 输出仅剩 5 个已登记豁免 tag。
 
 ### LINUX-DEB-5：审计与格式冻结
 

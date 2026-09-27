@@ -1,0 +1,5 @@
+embedded-library
+undeclared-elf-prerequisites
+no-manual-page
+changelog-not-compressed-with-max-compression
+initial-upload-closes-no-bugs

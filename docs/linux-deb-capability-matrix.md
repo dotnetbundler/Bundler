@@ -31,8 +31,10 @@
 | hicolor 图标（PNG 尺寸探测、`@2x` 密度目录） | 已实现 | LINUX-DEB-2 | PNG 签名+IHDR 探测尺寸；`@2x` 文件名后缀 → `<W>x<H>@2`；非 PNG 报错 |
 | AppStream metainfo | 已实现 | LINUX-DEB-2 | `BundlerDebMetainfoFile` 可选 → `usr/share/metainfo/<包名>.metainfo.xml` |
 | `ChangelogFile`→`changelog.gz`、`LicenseFile`→`copyright` | 已实现 | LINUX-DEB-2 | `usr/share/doc/<包名>/`；changelog 自动 gzip |
+| `changelog.Debian.gz` 打包侧变更日志 | 已实现 | LINUX-DEB-4 | 自动补发单行打包条目（固定日期 Tue, 01 Jan 1980 保字节确定性）；消解 lintian `debian-changelog-file-missing-or-wrong-name` |
 | 包内绝对路径自定义映射（`/etc` 等载荷外路径） | 已实现 | LINUX-DEB-2 | `@(BundlerDebFile)` `Destination` 元数据（绝对路径含文件名，拒相对/`..`/空段）；API 面 `DebFileEntry` |
 | 桌面观感（菜单项/图标渲染/关联双击打开） | 外部待验收 | LINUX-DEB-4 起 | 需 GUI 桌面环境：LINUX-DEB-MT-01 |
+| `lintian` 基线断言 | 已实现 | LINUX-DEB-4 | `lintian-exemptions.txt` 豁免清单硬断言：新 tag 即失败；豁免 5 项——embedded-library/undeclared-elf-prerequisites（自包含载荷固有）、no-manual-page、changelog-not-compressed-with-max-compression（netstandard2.0 GZipStream 无最大档）、initial-upload-closes-no-bugs（非 Debian 官方包固有） |
 
 ## 脚本、服务与压缩
 
@@ -59,5 +61,5 @@
 | `dpkg -i` 真实安装（本机 sudo） | 已实现 | LINUX-DEB-1 | Verify.sh 装卸烟雾 + `dpkg -s`/`dpkg -L`/链接启动断言 |
 | `dpkg -r`/`dpkg -P` 卸载语义 | 已实现 | LINUX-DEB-1/3 | `-r` 删普通文件留 conffile、`-P` 全清——真实断言 |
 | 同包升级覆盖安装 | 已实现 | LINUX-DEB-3 | `dpkg -i` 1.0.0→1.0.1 后 `dpkg -s` 版本断言 + conffile 本地修改保留 |
-| `linux-arm64` 产物 | 计划实现（结构）/外部待验收（运行） | LINUX-DEB-4 | 结构断言本机可做；arm64 真实安装属 LINUX-DEB-OI-01 |
-| 多发行版安装矩阵 | 部分本机自动/外部待验收 | LINUX-DEB-4 | docker debian/ubuntu 容器本机可测；GUI/更多发行版属 LINUX-DEB-OI-02 |
+| `linux-arm64` 产物 | 已实现（结构）/外部待验收（运行） | LINUX-DEB-4 | `linux-arm64` publish → `_arm64.deb`、`Architecture: arm64`、载荷结构断言全绿；arm64 真实安装属 LINUX-DEB-OI-01 |
+| 多发行版安装矩阵 | 已实现（debian:stable + ubuntu:latest 容器）/外部待验收（更广矩阵） | LINUX-DEB-4 | docker 容器内真实 `dpkg -i`/运行/`-r`/`-P` 断言全绿；GUI/更多发行版属 LINUX-DEB-OI-02 |
