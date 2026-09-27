@@ -13,7 +13,8 @@ WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线；`alpha.44
 现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。
 正式 CLI 仍属后续路线；macOS `.app` 已在 `mac-app-development` 分支可用并冻结（MAC-APP-1..5，冻结基线 `0.1.0-alpha.45`）。
 Linux `.deb` 已冻结于 `linux-deb-development` 分支（`LINUX-DEB-1..5`，冻结基线 `0.1.0-alpha.51`）：纯托管 ar/tar/gzip 写入器（无原生工具依赖、任意构建宿主可产出），control 全字段+维护者脚本+conffiles+systemd unit+桌面集成，`sudo dpkg -i/-r/-P` 真实装卸、lintian 硬断言、docker debian/ubuntu 矩阵全部验证。
-可操作的当前能力示例见 [`samples/HelloMacApp/mac-app-sample.md`](samples/HelloMacApp/mac-app-sample.md) 与 [`samples/HelloDebApp/linux-deb-sample.md`](samples/HelloDebApp/linux-deb-sample.md)。
+Linux `.rpm` 进行中（`linux-rpm-development` 分支，`LINUX-RPM-1` 已完成于 `0.1.0-alpha.52`）：纯托管 lead/header/cpio/gzip 写入器，`rpm -qip` 识别、docker `fedora:latest` 真实 `rpm -i`/`rpm -e` 零残留验证，`deb;rpm` 同次 publish 扇出已放开。
+可操作的当前能力示例见 [`samples/HelloMacApp/mac-app-sample.md`](samples/HelloMacApp/mac-app-sample.md)、[`samples/HelloDebApp/linux-deb-sample.md`](samples/HelloDebApp/linux-deb-sample.md) 与 [`samples/HelloRpmApp/linux-rpm-sample.md`](samples/HelloRpmApp/linux-rpm-sample.md)。
 
 实现已经拆分为可复用的 NuGet 包。
 `DotNet.Bundler` 只是便利元包，实际打包代码位于以下各层。
@@ -31,6 +32,7 @@ Linux `.deb` 已冻结于 `linux-deb-development` 分支（`LINUX-DEB-1..5`，�
 | `DotNet.Bundler.MacDmg` | 独立 macOS `.dmg` API、`hdiutil` 全链与拖放卷生成（压缩可配 `Udzo`/`Ulmo`/`Udbz`） |
 | `DotNet.Bundler.MacPkg` | 独立 macOS `.pkg` API、`pkgbuild` 组件包生成（identifier/version/install-location 可配、任意载荷映射） |
 | `DotNet.Bundler.Deb` | 独立 Debian `.deb` API、纯托管 ar/tar/gzip 写入器（核心 control 字段、md5sums、`usr/lib`+`usr/bin` 链接布局、SemVer→deb 版本映射），无原生工具依赖 |
+| `DotNet.Bundler.Rpm` | 独立 RPM `.rpm` API、纯托管 lead/header/cpio/gzip 写入器（核心 tag 集、文件清单、`usr/lib`+`usr/bin` 链接布局、SemVer→rpm 版本映射、`RpmPackageReader` 回读器），无原生工具依赖 |
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
 
@@ -272,6 +274,14 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerDebSystemdServiceFile` | 否 | 无；unit → `usr/lib/systemd/system/<包名>.service`，postinst 自动合成 `daemon-reload`（装而不启） |
 | `BundlerDebConffiles` | 否 | 无；显式 conffile 绝对路径列表（须存在于载荷） |
 | `BundlerDebCompression` | 否 | `gzip`；xz/zstd 暂拒绝（无托管编码器，zstd 另需 dpkg≥1.21.18） |
+| `BundlerRpmPackageName` | 否 | `BundlerProductName` 的 kebab-case 化；须匹配 rpm 包名规则 `[A-Za-z0-9][A-Za-z0-9+._-]+` 且≥2 字符 |
+| `BundlerRpmVersion` | 否 | 空时由 `BundlerVersion` 按 SemVer→rpm 映射（预发布段→Release `0.<n>.<label>`、`+build`→Release 后缀）；显式值禁含 `-`、须匹配 `[0-9A-Za-z.+_]+` |
+| `BundlerRpmRelease` | 否 | `1`（或 SemVer 预发布映射值）；rpm Release 字符串 |
+| `BundlerRpmEpoch` | 否 | 无；非负整数写入 EPOCH tag，不进文件名 |
+| `BundlerRpmArchitecture` | 否 | 按 RID 映射（x64→`x86_64`、arm64→`aarch64`、x86→`i686`）；显式值须为 rpm 架构名（如 `noarch`） |
+| `BundlerRpmVendor` | 否 | `BundlerPublisher` → `BundlerIdentifier` 回退 |
+| `BundlerRpmInstallRoot` | 否 | `/usr/lib/<包名>`；须为绝对路径且无 `..`/空格；非 `/usr` 根下时 `usr/bin` 链接目标转绝对路径 |
+| `BundlerRpmBinLink` | 否 | 包名；`none`（不分大小写）关闭 `usr/bin` 链接 |
 | `BundlerWindowsSigningPfxFile` | 否 | PFX/P12 代码签名证书路径 |
 | `BundlerWindowsSigningPfxPasswordEnvironmentVariable` | 否 | 保存 PFX 密码的环境变量名 |
 | `BundlerWindowsSigningCertificateThumbprint` | 否 | Windows `My` 证书存储区中的证书指纹 |
@@ -283,7 +293,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 
 多个格式使用分号分隔，例如 `<BundlerFormats>nsis;msi</BundlerFormats>`。
 Task 会解析完整请求，再由 Core 规划需要执行的打包步骤。
-MSI 单独请求由 WiX 后端处理，`.deb` 单独请求由 Deb 后端处理；当前组合请求仍按已实现的编排契约验证，不能假定它会隐式复用单格式入口。
+MSI 单独请求由 WiX 后端处理，`.deb` 单独请求由 Deb 后端处理，`.rpm` 单独请求由 Rpm 后端处理；`deb;rpm` 组合请求已由管线扇出产出全部格式，其他组合请求按已实现的编排契约验证，不能假定它会隐式复用单格式入口。
 
 图标和额外资源通过 MSBuild Item 传入：
 

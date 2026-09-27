@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <AssemblyName>BundlerRpmIntegrationFixture</AssemblyName>
+    <Version>1.0.0</Version>
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerFormats>rpm</BundlerFormats>
+    <BundlerIdentifier>com.dotnetbundler.rpmintegrationfixture</BundlerIdentifier>
+    <BundlerProductName>Bundler Rpm Fixture</BundlerProductName>
+    <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
+    <BundlerDescription>Disposable .rpm integration-test fixture.</BundlerDescription>
+    <BundlerHomepage>https://example.com/rpm-fixture</BundlerHomepage>
+    <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
+    <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets/LICENSE.txt</BundlerLicenseFile>
+    <BundlerRpmPackageName Condition="'$(BundlerTestRpmPackageName)' != ''">$(BundlerTestRpmPackageName)</BundlerRpmPackageName>
+    <BundlerRpmVersion Condition="'$(BundlerTestRpmVersion)' != ''">$(BundlerTestRpmVersion)</BundlerRpmVersion>
+    <BundlerRpmRelease Condition="'$(BundlerTestRpmRelease)' != ''">$(BundlerTestRpmRelease)</BundlerRpmRelease>
+    <BundlerRpmEpoch Condition="'$(BundlerTestRpmEpoch)' != ''">$(BundlerTestRpmEpoch)</BundlerRpmEpoch>
+    <BundlerRpmArchitecture Condition="'$(BundlerTestRpmArchitecture)' != ''">$(BundlerTestRpmArchitecture)</BundlerRpmArchitecture>
+    <BundlerRpmVendor Condition="'$(BundlerTestRpmVendor)' != ''">$(BundlerTestRpmVendor)</BundlerRpmVendor>
+    <BundlerRpmInstallRoot Condition="'$(BundlerTestRpmInstallRoot)' != ''">$(BundlerTestRpmInstallRoot)</BundlerRpmInstallRoot>
+    <BundlerRpmBinLink Condition="'$(BundlerTestRpmBinLink)' != ''">$(BundlerTestRpmBinLink)</BundlerRpmBinLink>
+    <BundlerFormats Condition="'$(BundlerTestFormats)' != ''">$(BundlerTestFormats)</BundlerFormats>
+  </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <ItemGroup>
+    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
+    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+  </ItemGroup>
+</Project>

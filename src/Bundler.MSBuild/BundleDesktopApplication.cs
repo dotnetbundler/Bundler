@@ -8,6 +8,7 @@ using DotNet.Bundler.MacApp;
 using DotNet.Bundler.MacDmg;
 using DotNet.Bundler.MacPkg;
 using DotNet.Bundler.Nsis;
+using DotNet.Bundler.Rpm;
 using DotNet.Bundler.Wix;
 using DotNet.Bundler.Signing.Windows;
 using Microsoft.Build.Framework;
@@ -187,6 +188,14 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string DebConffiles { get; set; } = "";
     public string DebCompression { get; set; } = "";
     public ITaskItem[] DebFiles { get; set; } = Array.Empty<ITaskItem>();
+    public string RpmPackageName { get; set; } = "";
+    public string RpmVersion { get; set; } = "";
+    public string RpmRelease { get; set; } = "";
+    public string RpmEpoch { get; set; } = "";
+    public string RpmArchitecture { get; set; } = "";
+    public string RpmVendor { get; set; } = "";
+    public string RpmInstallRoot { get; set; } = "";
+    public string RpmBinLink { get; set; } = "";
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -198,7 +207,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         try
         {
             var formats = ParseFormats();
-            var configuration = new BundleConfiguration
+            BundleConfiguration Configure(IReadOnlyList<PackageFormat> targetFormats) =>
+                new BundleConfiguration
             {
                 ProductName = ProductName,
                 Identifier = Identifier,
@@ -235,13 +245,19 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         InputDirectory = Path.GetFullPath(InputDirectory),
                         MainExecutable = MainExecutable,
                         SigningFiles = WindowsSigningFiles.Select(item => item.ItemSpec).ToArray(),
-                        Formats = formats
+                        Formats = targetFormats
                     }
                 }
             };
 
-            IReadOnlyList<BundleArtifact> artifacts;
-            if (formats.All(format => format == PackageFormat.Msi))
+            // Multi-format fanout: each backend runs once per requested format
+            // against a configuration whose targets carry only that format.
+            var artifacts = new List<BundleArtifact>();
+            foreach (var format in formats.Distinct())
+            {
+                var configuration = Configure([format]);
+                IReadOnlyList<BundleArtifact> produced;
+                if (format == PackageFormat.Msi)
             {
                 if (!Enum.TryParse<DotNet.Bundler.Wix.WixInstallScope>(WixInstallScope, true, out var scope) ||
                     !Enum.IsDefined(typeof(DotNet.Bundler.Wix.WixInstallScope), scope))
@@ -251,7 +267,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 var languages = (string.IsNullOrWhiteSpace(WixLanguages) ? WixLanguage : WixLanguages)
                     .Split(';').Select(entry => entry.Trim())
                     .Where(entry => entry.Length > 0).ToArray();
-                artifacts = new WixBundler(
+                produced = new WixBundler(
                     new WixBundleConfiguration
                     {
                         InstallScope = scope,
@@ -291,7 +307,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         Logger = new MsBuildBundleLogger(Log)
                     }).BuildAsync(configuration).GetAwaiter().GetResult();
             }
-            else if (formats.All(format => format == PackageFormat.Nsis))
+            else if (format == PackageFormat.Nsis)
             {
             var nsisConfiguration = new NsisBundleConfiguration
             {
@@ -333,23 +349,23 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Signer = CreateWindowsSigner(),
                 Logger = new MsBuildBundleLogger(Log)
             };
-            artifacts = new NsisBundler(nsisConfiguration, nsisOptions)
+            produced = new NsisBundler(nsisConfiguration, nsisOptions)
                 .BuildAsync(configuration)
                 .GetAwaiter()
                 .GetResult();
             }
-            else if (formats.All(format => format == PackageFormat.App))
+            else if (format == PackageFormat.App)
             {
-                artifacts = new MacAppBundler(
+                produced = new MacAppBundler(
                     BuildMacAppConfiguration(),
                     new MacAppBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     .BuildAsync(configuration)
                     .GetAwaiter()
                     .GetResult();
             }
-            else if (formats.All(format => format == PackageFormat.Pkg))
+            else if (format == PackageFormat.Pkg)
             {
-                artifacts = new MacPkgBundler(
+                produced = new MacPkgBundler(
                     new MacPkgBundleConfiguration
                     {
                         Identifier = EmptyToNull(MacPkgIdentifier),
@@ -393,9 +409,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                     .GetAwaiter()
                     .GetResult();
             }
-            else if (formats.All(format => format == PackageFormat.Dmg))
+            else if (format == PackageFormat.Dmg)
             {
-                artifacts = new MacDmgBundler(
+                produced = new MacDmgBundler(
                     new MacDmgBundleConfiguration
                     {
                         Compression = MacEnumValue<DotNet.Bundler.MacDmg.MacDmgCompression>(
@@ -425,9 +441,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                     .GetAwaiter()
                     .GetResult();
             }
-            else if (formats.All(format => format == PackageFormat.Deb))
+            else if (format == PackageFormat.Deb)
             {
-                artifacts = new DebBundler(
+                produced = new DebBundler(
                     new DebBundleConfiguration
                     {
                         PackageName = EmptyToNull(DebPackageName),
@@ -469,9 +485,32 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                     .GetAwaiter()
                     .GetResult();
             }
+            else if (format == PackageFormat.Rpm)
+            {
+                produced = new RpmBundler(
+                    new RpmBundleConfiguration
+                    {
+                        PackageName = EmptyToNull(RpmPackageName),
+                        Version = EmptyToNull(RpmVersion),
+                        Release = EmptyToNull(RpmRelease),
+                        Epoch = EmptyToNull(RpmEpoch),
+                        Architecture = EmptyToNull(RpmArchitecture),
+                        Vendor = EmptyToNull(RpmVendor),
+                        InstallRoot = EmptyToNull(RpmInstallRoot),
+                        BinLink = string.Equals(RpmBinLink, "none", StringComparison.OrdinalIgnoreCase)
+                            ? ""
+                            : EmptyToNull(RpmBinLink)
+                    },
+                    new RpmBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
+                    .BuildAsync(configuration)
+                    .GetAwaiter()
+                    .GetResult();
+            }
             else
             {
-                throw new NotSupportedException("Bundler accepts one package format per MSBuild invocation; mixed formats are not supported yet.");
+                throw new NotSupportedException($"Bundler does not support the '{format}' package format.");
+            }
+                artifacts.AddRange(produced);
             }
 
             Artifacts = artifacts.Select(artifact =>

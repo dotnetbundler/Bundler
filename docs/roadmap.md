@@ -146,7 +146,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 
 ### LINUX：Linux 格式
 
-公共模型已经包含 `Deb`、`Rpm`、`AppImage`，当前均无后端。
+公共模型已经包含 `Deb`、`Rpm`、`AppImage`；`.deb` 已冻结入 `main`，`.rpm` 后端已实现 LINUX-RPM-1，`AppImage` 无后端。
 为避免每次交接重新选择，默认顺序固定为 `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE`，仍然一次只推进一个完整格式。
 每个格式分别完成元数据、文件布局、桌面集成、升级/卸载语义、签名或仓库验证边界、原生发行版 E2E，再进入下一个格式。
 若真实用户需求或可用原生验证环境要求调整，必须先在本文档写明依据和新顺序。
@@ -158,7 +158,8 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 2026-09-27 `LINUX-DEB-3` 已完成（同分支，`0.1.0-alpha.50`）：`preinst`/`postinst`/`prerm`/`postrm` 专家旋钮（0755、shebang+LF 校验）、`BundlerDebSystemdServiceFile` 托管 unit（`usr/lib/systemd/system/` 落位 + postinst `daemon-reload` 自动合成/合并）、conffiles（`/etc` 下 `BundlerDebFile` 自动登记 + 显式列表，真实 `-r` 保留/`-P` 清除断言）、压缩枚举仅 gzip（xz/zstd 登记拒绝并记 OI-08）、同包升级与 conffile 修改保留实测全绿。
 2026-09-27 `LINUX-DEB-4` 已完成（同分支，`0.1.0-alpha.51`）：lintian 由信息级升级为豁免清单硬断言（`lintian-exemptions.txt`，新 tag 即失败）；自动补发 `changelog.Debian.gz` 与扩展描述默认行消解全部可修 lintian 发现；`linux-arm64` 产物结构与 `Architecture: arm64` 断言（真机安装仍属 OI-01）；docker `debian:stable`/`ubuntu:latest` 容器真实装卸+运行+conffile 语义矩阵全绿；构建侧零系统依赖复核完成（`src/Bundler.Deb` 无外部进程调用）。
 2026-09-27 `LINUX-DEB-5` 已完成——**`.deb` 冻结基线 `0.1.0-alpha.51`**：上游复核零漂移（`tauri@dev` 仍为 `447fa9f`）、能力矩阵定稿、OI/MT 收口、冻结写入路线与 PROJECT_CONTEXT。
-2026-09-27 `LINUX-RPM` 规划轮文档已入档（分支 `linux-rpm-development`）：决策清单草案见 `docs/linux-rpm-roadmap.md` §1（托管 RPM 写入器、SemVer→rpm 版本映射、scriptlet/systemd/config 对应关系、gzip-only 压缩、`deb;rpm` 多格式扇出）；`LINUX-RPM-1` 待用户逐条确认决策后启动。`LINUX-APPIMAGE` 仍在其规划轮定稿。
+2026-09-27 `LINUX-RPM` 规划轮完成并确认（分支 `linux-rpm-development`）：决策清单见 `docs/linux-rpm-roadmap.md` §1（托管 RPM 写入器、SemVer→rpm 版本映射、scriptlet/systemd/config 对应关系、gzip-only 压缩、`deb;rpm` 多格式扇出）。
+2026-09-27 `LINUX-RPM-1` 已完成（同分支，`0.1.0-alpha.52`）：`DotNet.Bundler.Rpm` 纯托管 lead/header/cpio/gzip 写入器落地，`rpm -qip` 识别 + `RpmPackageReader` 回读互证，docker `fedora:latest` 真实 `rpm -i`/`rpm -e` 零残留全绿；`BundlerFormats=deb;rpm` 多格式扇出落地。`LINUX-APPIMAGE` 仍在其规划轮定稿。
 
 ### ARCHIVE：通用压缩包格式
 

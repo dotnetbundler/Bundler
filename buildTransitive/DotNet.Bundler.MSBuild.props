@@ -150,5 +150,13 @@
     <BundlerDebSystemdServiceFile Condition="'$(BundlerDebSystemdServiceFile)' == ''"></BundlerDebSystemdServiceFile>
     <BundlerDebConffiles Condition="'$(BundlerDebConffiles)' == ''"></BundlerDebConffiles>
     <BundlerDebCompression Condition="'$(BundlerDebCompression)' == ''"></BundlerDebCompression>
+    <BundlerRpmPackageName Condition="'$(BundlerRpmPackageName)' == ''"></BundlerRpmPackageName>
+    <BundlerRpmVersion Condition="'$(BundlerRpmVersion)' == ''"></BundlerRpmVersion>
+    <BundlerRpmRelease Condition="'$(BundlerRpmRelease)' == ''"></BundlerRpmRelease>
+    <BundlerRpmEpoch Condition="'$(BundlerRpmEpoch)' == ''"></BundlerRpmEpoch>
+    <BundlerRpmArchitecture Condition="'$(BundlerRpmArchitecture)' == ''"></BundlerRpmArchitecture>
+    <BundlerRpmVendor Condition="'$(BundlerRpmVendor)' == ''"></BundlerRpmVendor>
+    <BundlerRpmInstallRoot Condition="'$(BundlerRpmInstallRoot)' == ''"></BundlerRpmInstallRoot>
+    <BundlerRpmBinLink Condition="'$(BundlerRpmBinLink)' == ''"></BundlerRpmBinLink>
   </PropertyGroup>
 </Project>

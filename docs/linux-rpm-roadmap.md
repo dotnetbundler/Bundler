@@ -1,11 +1,11 @@
 # Linux `.rpm` 后端实施路线（LINUX-RPM）
 
-> 状态：**规划轮**（2026-09-27，分支 `linux-rpm-development`；待用户逐条确认决策后实现）。
+> 状态：**LINUX-RPM-1 已实现，默认下一阶段 LINUX-RPM-2**（2026-09-27，分支 `linux-rpm-development`，包版本 `0.1.0-alpha.52`）。
 > 上游审计见 [`docs/linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `tauri-apps/tauri@447fa9f`，DEB-5 复核确认零漂移）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 > 逐项能力状态见 [`docs/linux-rpm-capability-matrix.md`](linux-rpm-capability-matrix.md)；外部条件见 [`docs/linux-rpm-open-items.md`](linux-rpm-open-items.md)；人工步骤见 [`docs/linux-rpm-manual-testing.md`](linux-rpm-manual-testing.md)。
 
-## 1. 决策清单（草案，待用户逐条确认）
+## 1. 已确认决策（2026-09-27，用户"按推荐执行"确认）
 
 1. **格式范围**：本线只做 `Rpm`（公共枚举已有）；dnf/yum（Fedora/RHEL/Rocky/openSUSE 经 zypper 亦可消费 rpm）为安装面。
    SUSE 专属宏与 `pattern`/`product` 等发行版扩展不做，按通用 RPM 4 规范产出。
@@ -56,12 +56,12 @@
 
 ## 4. 阶段分解
 
-### LINUX-RPM-1：托管写入器最小可用
+### LINUX-RPM-1：托管写入器最小可用（已实现 2026-09-27）
 
-- **前置**：本路线决策经用户确认；`linux-rpm-development` 分支。
-- **目标/交付**：`src/Bundler.Rpm`——lead+签名 header（SIZE/SHA256HEADER 最小集）+主 header（核心 tag 集：NAME/VERSION/RELEASE/EPOCH/SUMMARY/DESCRIPTION/BUILDTIME/RPMVERSION/LICENSE?/URL?/OS/ARCH/PAYLOAD*、文件清单全 tag、rpmlib 自依赖）+cpio newc+gzip；`RpmPackageReader` 回读器（测试互证）；SemVer→rpm 映射与核心旋钮（PackageName/Version/Release/Epoch/Architecture/InstallRoot/BinLink）；usr/lib+usr/bin 布局、目录显式条目；`.sha256` 侧车；MSBuild `BundlerFormats=rpm` 接线（**顺带放开多格式扇出** `deb;rpm` 同次 publish——deb 决策 11）；`Deb.Api.PackageFixture` 同款 `Rpm.Api.PackageFixture`；`Verify.sh` 最小闭环（`rpm -qip`、结构断言、docker `fedora` 容器真实 `rpm -i`/`rpm -e`）。
-- **退出**：`rpm -qip` 识别产物、容器内 `rpm -i`/`rpm -e` 零残留断言通过；`deb;rpm` 扇出 publish 断言。
-- **不做**：关系字段、.desktop/图标、脚本、config 标记、压缩选项、rpmlint。
+- **交付**：`src/Bundler.Rpm`——lead+签名 header（SIZE/MD5/PAYLOADSIZE/SHA1HEADER/SHA256HEADER）+主 header（NAME/VERSION/RELEASE/EPOCH/SUMMARY/DESCRIPTION/BUILDTIME/BUILDHOST/SIZE/VENDOR/LICENSE/GROUP/URL/OS/ARCH/RPMVERSION/PAYLOAD*、文件清单全 tag、rpmlib 三依赖、自提供 `name = evr` 与 `name(arch) = evr`）+cpio newc+gzip；`RpmPackageReader` 回读器；SemVer→rpm 映射与八旋钮（PackageName/Version/Release/Epoch/Architecture/Vendor/InstallRoot/BinLink）；usr/lib+usr/bin 布局、目录显式条目；`.sha256` 侧车；MSBuild `BundlerFormats=rpm` 接线与 `deb;rpm` 扇出；`Rpm.Api.PackageFixture`；`Verify.sh` 全闭环。
+- **退出达成**：`rpm -qip` 识别产物；docker `fedora:latest` 真实 `rpm -i`/`rpm -q`/`rpm -ql`/运行/`rpm -V`/`rpm -e` 零残留全绿；`deb;rpm` 扇出断言通过。
+- **实测修正**（相对原始格式笔记）：ENCODING tag 实为 5062（5012=BUGURL）；PAYLOADDIGEST(5092) 是**压缩后**载荷 sha256、PAYLOADDIGESTALT(5097) 才是解压前 cpio 的；GNU cpio 提取不为符号链接自动建缺失父目录（`rpm -i` 无此问题），Verify.sh 按清单预建。
+- **不做**：关系字段、.desktop/图标、脚本、config 标记、压缩选项、rpmlint（信息级运行，RPM-3 转硬基线）。
 
 ### LINUX-RPM-2：元数据与桌面集成
 

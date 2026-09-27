@@ -2,11 +2,11 @@
 
 > 最后更新：2026-09-27
 > 当前分支：`linux-rpm-development`（自 `main` `7436f25` 拉出；`.deb` 已并入 main）
-> 当前包版本：`0.1.0-alpha.51`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
+> 当前包版本：`0.1.0-alpha.52`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
 > 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
 > `LINUX-DEB-1..5` 全部完成，`.deb` 冻结并已入 `main`：冻结基线 `0.1.0-alpha.51`，测试向量 141/141 + `Verify.sh` 全绿
-> `LINUX-RPM` 规划轮已入档（`linux-rpm-development`）：决策清单草案在 `docs/linux-rpm-roadmap.md` §1
-> 默认下一阶段：`LINUX-RPM-1`（待用户逐条确认决策后启动）
+> `LINUX-RPM-1` 已实现（`linux-rpm-development`）：`DotNet.Bundler.Rpm` 纯托管写入器 + `deb;rpm` 扇出 + fedora 容器真实装卸全绿；决策与证据见 `docs/linux-rpm-roadmap.md`
+> 默认下一阶段：`LINUX-RPM-2`（元数据与桌面集成，待用户启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -25,17 +25,19 @@
 | `src/Bundler.MacDmg` | macOS `.dmg` 后端（`hdiutil` 全链、拖放卷、`Ulmo`/`Udzo`/`Udbz`） | `netstandard2.0` |
 | `src/Bundler.MacPkg` | macOS `.pkg` 后端（`pkgbuild`/`productbuild` 组件与分发包、签名/公证/专家脚本） | `netstandard2.0` |
 | `src/Bundler.Deb` | Debian `.deb` 后端（纯托管 ar/tar/gzip 写入器，无原生工具依赖，任意构建宿主） | `netstandard2.0` |
+| `src/Bundler.Rpm` | RPM `.rpm` 后端（纯托管 lead/header/cpio/gzip 写入器，无原生工具依赖，任意构建宿主） | `netstandard2.0` |
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
 | `src/Bundler.Cli` | 开发原型（`IsPackable=false`，不发布） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
-| `tests/Bundler.Tests` | 唯一快速测试入口（当前 133 项，Linux 宿主口径全绿；macOS 宿主口径多 MacPkg 公证等宿主用例） | `net10.0` |
-| `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` / `tests/Deb.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
+| `tests/Bundler.Tests` | 唯一快速测试入口（当前 153 项，Linux 宿主口径全绿；macOS 宿主口径多 MacPkg 公证等宿主用例） | `net10.0` |
+| `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` / `tests/Deb.Api.PackageFixture` / `tests/Rpm.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
 | `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
 | `tests/MacOS.App.Integration` | 真实 macOS `.app` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
 | `tests/MacOS.Dmg.Integration` | 真实 macOS `.dmg` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
 | `tests/Linux.Deb.Integration` | 真实 `.deb` 集成入口（`Verify.sh`，bash，含免密 `sudo dpkg -i/-r` 烟雾）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
+| `tests/Linux.Rpm.Integration` | 真实 `.rpm` 集成入口（`Verify.sh`，bash，含 docker `fedora:latest` 容器 `rpm -i/-e` 烟雾）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
 | `tests/Windows.Nsis.Reboot` | 需可抛弃 VM 的重启测试占位 | — |
-| `samples/HelloNsisApp` / `samples/HelloMsiApp` / `samples/HelloMacApp` / `samples/HelloMacDmg` / `samples/HelloMacPkg` / `samples/HelloDebApp` | 公开可运行示例（应用版本 `1.0.0`） | `net10.0` |
+| `samples/HelloNsisApp` / `samples/HelloMsiApp` / `samples/HelloMacApp` / `samples/HelloMacDmg` / `samples/HelloMacPkg` / `samples/HelloDebApp` / `samples/HelloRpmApp` | 公开可运行示例（应用版本 `1.0.0`） | `net10.0` |
 | `tools/Bundler.Nsis.Plugin` | NSIS 原生插件源码（有意在 slnx 之外，重建需 .NET 10 + Windows 原生链） | `net10.0` |
 | `third_party/` | 第三方归档、许可证、逐文件 SHA-256 与 provenance 文档 | — |
 

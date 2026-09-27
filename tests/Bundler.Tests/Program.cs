@@ -65,7 +65,7 @@ var tests = new (string Name, Func<Task> Test)[]
 };
 
 tests = tests.Append(("Keeps package consumer versions aligned", () => RunSync(KeepsPackageConsumerVersionsAligned)))
-    .Concat(WixTests.Cases).Concat(MacAppTests.Cases).Concat(MacDmgTests.Cases).Concat(MacPkgTests.Cases).Concat(DebTests.Cases).ToArray();
+    .Concat(WixTests.Cases).Concat(MacAppTests.Cases).Concat(MacDmgTests.Cases).Concat(MacPkgTests.Cases).Concat(DebTests.Cases).Concat(RpmTests.Cases).ToArray();
 
 var failed = 0;
 foreach (var (name, test) in tests)
@@ -2015,9 +2015,11 @@ static void KeepsPackageConsumerVersionsAligned()
         Path.Combine(root, "tests", "Nsis.Api.PackageFixture", "Nsis.Api.PackageFixture.csproj"),
         Path.Combine(root, "tests", "Msi.Api.PackageFixture", "Msi.Api.PackageFixture.csproj"),
         Path.Combine(root, "tests", "Deb.Api.PackageFixture", "Deb.Api.PackageFixture.csproj"),
+        Path.Combine(root, "tests", "Rpm.Api.PackageFixture", "Rpm.Api.PackageFixture.csproj"),
         Path.Combine(root, "tests", "Windows.Nsis.Integration", "Fixture", "BundlerNsisIntegrationFixture.csproj"),
         Path.Combine(root, "tests", "Windows.Msi.Integration", "Fixture", "BundlerMsiSmoke.csproj"),
-        Path.Combine(root, "tests", "Linux.Deb.Integration", "Fixture", "BundlerDebIntegrationFixture.csproj")
+        Path.Combine(root, "tests", "Linux.Deb.Integration", "Fixture", "BundlerDebIntegrationFixture.csproj"),
+        Path.Combine(root, "tests", "Linux.Rpm.Integration", "Fixture", "BundlerRpmIntegrationFixture.csproj")
     })
     {
         var project = XDocument.Load(path);
