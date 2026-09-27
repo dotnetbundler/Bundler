@@ -966,3 +966,10 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 `Verify.sh` 扩展两段实测：**覆盖安装升级**——同 identifier v1(scripts 变体)→v2 连续 per-user 安装，`pkgutil --pkg-info-plist --volume ~` 断言收据 `pkg-version` 更新到 2.0.0；**osx-x64 产物**——`osx-x64/pkg/` 产出、expand-full payload 内 `file` 断言 x86_64 Mach-O（运行态需 Rosetta/Intel 宿主，登记 OI-04）。
 干净宿主复核定稿：后端必需工具仅 `pkgbuild`/`productbuild`/`productsign`/`xar`/`pkgutil`/`installer`（全系统自带零供应成本）；`xcrun notarytool`/`stapler` 仅公证路径需要（Xcode 13+）；签名/公证凭证属外部项。无第三方内嵌工具、无运行时下载。
 `Bundler.Tests` 122 项全绿、`Verify.sh` 全绿（本阶段无后端代码改动，纯验证扩展）。
+
+### 14.36 MAC-PKG-5：审计与格式冻结（2026-09-27，分支 `mac-pkg-development`）
+
+上游复核：`.pkg` 无上游参照（tauri 不产 pkg），复核点收敛为宿主工具链口径——`pkgbuild`/`productbuild`/`productsign`/`xar`/`pkgutil`/`installer` 全系统自带，`xcrun notarytool`/`stapler` 属 Xcode；供应链面零第三方内嵌工具。
+能力矩阵定稿，无悬空"计划实现"行；OI-01..05 逐条复核维持登记（管理员宿主/Installer 证书/公证凭证/Intel 宿主/GUI 观感）。
+`.pkg` 配置与行为基线冻结于 `0.1.0-alpha.47`；冻结测试向量 = `Bundler.Tests` 122/122 + `Verify.sh` 全绿。
+`docs/roadmap.md` 推进 `LINUX`；包版本 `0.1.0-alpha.46`→`0.1.0-alpha.47`。

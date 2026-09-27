@@ -141,7 +141,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 - 能力矩阵 [`mac-app-capability-matrix.md`](mac-app-capability-matrix.md)、人工清单 [`mac-app-manual-testing.md`](mac-app-manual-testing.md)、外部待办 [`mac-app-open-items.md`](mac-app-open-items.md)。
 
 `Pkg` 枚举值与目标矩阵放行已随 `MAC-APP-1` 进入公共模型；格式顺序固定为 `MAC-DMG` 之后、Linux 之前。
-2026-09-27 `MAC-PKG-4` 已完成（覆盖升级实测+osx-x64 产物+干净宿主复核）；`MAC-PKG-3` 已完成（签名/公证/专家脚本：`pkgbuild --sign`+`productsign --sign`、notarytool+stapler 接线、`--scripts` 旋钮实测真实执行）；`MAC-PKG-2` 已完成（分发包与页面：title/页面/域名自动升级 `productbuild`，per-user 免提权真实安装实测通过）；`MAC-PKG-1` 已完成（2026-09-26（分支 `mac-pkg-development`）：`DotNet.Bundler.MacPkg` 后端落地——`pkgbuild` 组件包全链（identifier/version/install-location 默认与覆盖、`BundlerPkgPayload` 任意载荷、宿主门控、失败清理），MSBuild `BundlerMacPkg*` 接线；`Bundler.Tests` 109 项 + `tests/MacOS.Pkg.Integration` 实测全绿；示例 `samples/HelloMacPkg`；路线见 [`docs/mac-pkg-roadmap.md`](mac-pkg-roadmap.md)；默认下一阶段 `MAC-PKG-5`（审计与格式冻结），待启动指令。
+2026-09-27 `MAC-PKG-1..5` 全部完成、`.pkg` 冻结于 `0.1.0-alpha.47`；`MAC-PKG-3` 已完成（签名/公证/专家脚本：`pkgbuild --sign`+`productsign --sign`、notarytool+stapler 接线、`--scripts` 旋钮实测真实执行）；`MAC-PKG-2` 已完成（分发包与页面：title/页面/域名自动升级 `productbuild`，per-user 免提权真实安装实测通过）；`MAC-PKG-1` 已完成（2026-09-26（分支 `mac-pkg-development`）：`DotNet.Bundler.MacPkg` 后端落地——`pkgbuild` 组件包全链（identifier/version/install-location 默认与覆盖、`BundlerPkgPayload` 任意载荷、宿主门控、失败清理），MSBuild `BundlerMacPkg*` 接线；`Bundler.Tests` 109 项 + `tests/MacOS.Pkg.Integration` 实测全绿；示例 `samples/HelloMacPkg`；路线见 [`docs/mac-pkg-roadmap.md`](mac-pkg-roadmap.md)；`.pkg` 已冻结（`MAC-PKG-1..5` 全部完成，基线 `0.1.0-alpha.47`）；默认下一阶段 `LINUX` 规划轮，待启动指令。
 不得在没有原生 macOS 验证环境时宣称签名和 notarization 完成。
 
 ### LINUX：Linux 格式
