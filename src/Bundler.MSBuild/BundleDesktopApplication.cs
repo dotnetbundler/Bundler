@@ -141,6 +141,10 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacPkgVersion { get; set; } = "";
     public string MacPkgInstallLocation { get; set; } = "";
     public ITaskItem[] MacPkgPayloadItems { get; set; } = Array.Empty<ITaskItem>();
+    public string MacPkgTitle { get; set; } = "";
+    public string MacPkgWelcomeFile { get; set; } = "";
+    public string MacPkgConclusionFile { get; set; } = "";
+    public string MacPkgDomain { get; set; } = "";
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -315,7 +319,14 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         {
                             Source = Path.GetFullPath(item.ItemSpec),
                             Destination = EmptyMetadataToNull(item, "Destination")
-                        }).ToArray()
+                        }).ToArray(),
+                        Title = EmptyToNull(MacPkgTitle),
+                        WelcomeFile = OptionalFullPath(MacPkgWelcomeFile),
+                        ConclusionFile = OptionalFullPath(MacPkgConclusionFile),
+                        Domain = string.IsNullOrWhiteSpace(MacPkgDomain)
+                            ? MacPkgInstallDomain.System
+                            : (MacPkgInstallDomain)Enum.Parse(
+                                typeof(MacPkgInstallDomain), MacPkgDomain.Trim(), true)
                     },
                     BuildMacAppConfiguration(),
                     new MacPkgBundlerOptions { Logger = new MsBuildBundleLogger(Log) })

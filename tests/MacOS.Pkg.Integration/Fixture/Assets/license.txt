@@ -1,0 +1,1 @@
+Integration-test fixture license text (MAC-PKG-2 license page).

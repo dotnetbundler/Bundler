@@ -1,6 +1,6 @@
 # macOS `.pkg` 后端实施路线（MAC-PKG）
 
-> 状态：**`MAC-PKG-1` 已完成**（2026-09-26，分支 `mac-pkg-development`）；默认下一阶段 `MAC-PKG-2`，待启动指令。
+> 状态：**`MAC-PKG-2` 已完成**（2026-09-27，分支 `mac-pkg-development`）；默认下一阶段 `MAC-PKG-3`，待启动指令。
 > `.pkg` 无上游参照：tauri 无 `.pkg` 输出（`PackageType` 仅 `MacOsBundle`/`IosBundle`/`Dmg`/`Updater` + Linux/Windows 各项），决策依据为原生 macOS 工具链语义与 [`docs/mac-format-decision.md`](mac-format-decision.md) 已确认边界。
 > `.app`/`.dmg` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)、[`docs/mac-dmg-roadmap.md`](mac-dmg-roadmap.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
@@ -51,6 +51,8 @@
 - **前置**：MAC-PKG-1 通过。
 - **目标/交付**：`productbuild --distribution` 分发包；`distribution.xml` 生成（title、welcome/license/conclusion 页、domains）；`LicenseFile` 复用为 license 页；域名 `system`/`current-user-home`；`current-user-home` 域下非管理员真实安装实测（`installer -pkg -target CurrentUserHomeDirectory`）+ 收据断言。
 - **退出**：分发包装载欢迎/许可页在本机可验；per-user 真实安装与 `pkgutil` 收据断言通过。
+- **验收记录（2026-09-27，macOS 26.5.2 arm64）**：`Bundler.Tests` 114 项全绿（新增 5 条分发用例）；`Verify.sh` 全绿——分发包变体 `xar -tf` 断言 `Distribution`+`component.pkg`+三页 Resources、Distribution 文档 title/domains 回读、`installer -dominfo -plist` 报告 `currentUserHome`；**真实免提权安装**：`installer -pkg -target CurrentUserHomeDirectory` 装出 `~/Applications/<app>.app`+`support/helper.txt`、应用真实启动、`pkgutil --pkgs/--files --volume ~` 收据断言、`--forget` 清理；`samples/HelloMacPkg` 分发全旋钮实测产出。
+  踩坑修正：分发文档必须声明 `<options hostArchitectures="arm64"/>`，否则 Apple Silicon 宿主误报 Rosetta 缺失（`pkg-ref` 无 `arch` 属性）；installer 对 `<relocate>` 标记 bundle 有重定位行为，同 id `.app` 残留会把 payload 装到旧位置，集成测试安装前清理中间副本；per-user 收据在 `~/Library/Receipts` 需 `--volume ~`。
 
 ### MAC-PKG-3：签名与公证 + 专家脚本
 

@@ -11,6 +11,7 @@
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">osx-arm64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <Nullable>enable</Nullable>
+    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
     <AssemblyName>HelloMacPkg</AssemblyName>
     <Version>1.0.0</Version>
 
@@ -28,6 +29,15 @@
     <BundlerMacPkgIdentifier Condition="'$(HelloMacPkgIdentifier)' != ''">$(HelloMacPkgIdentifier)</BundlerMacPkgIdentifier>
     <BundlerMacPkgVersion Condition="'$(HelloMacPkgVersion)' != ''">$(HelloMacPkgVersion)</BundlerMacPkgVersion>
     <BundlerMacPkgInstallLocation Condition="'$(HelloMacPkgInstallLocation)' != ''">$(HelloMacPkgInstallLocation)</BundlerMacPkgInstallLocation>
+
+    <!-- 分发包旋钮（任一配置即将产物升级为 productbuild 分发包）：
+         title（默认=产品名）、welcome/conclusion 富文本页、许可页复用 BundlerLicenseFile、
+         安装域名 System（默认，需管理员）/CurrentUserHome（免提权装到 ~/）。 -->
+    <BundlerMacPkgTitle Condition="'$(HelloMacPkgTitle)' != ''">$(HelloMacPkgTitle)</BundlerMacPkgTitle>
+    <BundlerMacPkgWelcomeFile Condition="'$(HelloMacPkgWelcome)' == 'true'">Assets/welcome.txt</BundlerMacPkgWelcomeFile>
+    <BundlerMacPkgConclusionFile Condition="'$(HelloMacPkgConclusion)' == 'true'">Assets/conclusion.rtf</BundlerMacPkgConclusionFile>
+    <BundlerLicenseFile Condition="'$(HelloMacPkgLicense)' == 'true'">Assets/license.txt</BundlerLicenseFile>
+    <BundlerMacPkgDomain Condition="'$(HelloMacPkgDomain)' != ''">$(HelloMacPkgDomain)</BundlerMacPkgDomain>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>

@@ -22,6 +22,11 @@
     <BundlerMacPkgIdentifier Condition="'$(BundlerTestPkgIdentifier)' != ''">$(BundlerTestPkgIdentifier)</BundlerMacPkgIdentifier>
     <BundlerMacPkgVersion Condition="'$(BundlerTestPkgVersion)' != ''">$(BundlerTestPkgVersion)</BundlerMacPkgVersion>
     <BundlerMacPkgInstallLocation Condition="'$(BundlerTestPkgInstallLocation)' != ''">$(BundlerTestPkgInstallLocation)</BundlerMacPkgInstallLocation>
+    <BundlerMacPkgTitle Condition="'$(BundlerTestPkgTitle)' != ''">$(BundlerTestPkgTitle)</BundlerMacPkgTitle>
+    <BundlerMacPkgWelcomeFile Condition="'$(BundlerTestPkgWelcome)' == 'true'">Assets/welcome.txt</BundlerMacPkgWelcomeFile>
+    <BundlerMacPkgConclusionFile Condition="'$(BundlerTestPkgConclusion)' == 'true'">Assets/conclusion.rtf</BundlerMacPkgConclusionFile>
+    <BundlerMacPkgDomain Condition="'$(BundlerTestPkgDomain)' != ''">$(BundlerTestPkgDomain)</BundlerMacPkgDomain>
+    <BundlerLicenseFile Condition="'$(BundlerTestPkgLicense)' == 'true'">Assets/license.txt</BundlerLicenseFile>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>

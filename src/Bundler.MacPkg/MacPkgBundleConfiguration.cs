@@ -13,7 +13,26 @@ public sealed class MacPkgPayloadItem
     public string? Destination { get; init; }
 }
 
-/// <summary>Settings for the macOS .pkg backend (MAC-PKG-1 minimal component-package scope).</summary>
+/// <summary>Where a .pkg may be installed (distribution-package <c>&lt;domains&gt;</c> declaration).</summary>
+public enum MacPkgInstallDomain
+{
+    /// <summary>Install into the system domain (default; requires administrator rights).</summary>
+    System,
+
+    /// <summary>
+    /// Install into the user's home without elevation (payload lands under
+    /// <c>~/</c>-relative equivalents, e.g. <c>~/Applications</c>).
+    /// </summary>
+    CurrentUserHome,
+}
+
+/// <summary>
+/// Settings for the macOS .pkg backend.
+/// With no distribution settings the backend emits a plain component package via
+/// <c>pkgbuild</c>; configuring any distribution feature (title, welcome/license/
+/// conclusion page, or a non-default install domain) upgrades the output to a
+/// <c>productbuild</c> distribution package wrapping the component package.
+/// </summary>
 public sealed class MacPkgBundleConfiguration
 {
     /// <summary>
@@ -36,4 +55,29 @@ public sealed class MacPkgBundleConfiguration
     /// Destinations are relative to <see cref="InstallLocation"/>.
     /// </summary>
     public IReadOnlyList<MacPkgPayloadItem>? PayloadItems { get; init; }
+
+    /// <summary>
+    /// Installer window title for a distribution package; defaults to the product name.
+    /// Setting it upgrades the output to a distribution package.
+    /// </summary>
+    public string? Title { get; init; }
+
+    /// <summary>
+    /// Welcome page shown before installation (.html/.rtf/.rtfd/.txt);
+    /// setting it upgrades the output to a distribution package.
+    /// </summary>
+    public string? WelcomeFile { get; init; }
+
+    /// <summary>
+    /// Conclusion page shown after installation (.html/.rtf/.rtfd/.txt);
+    /// setting it upgrades the output to a distribution package.
+    /// </summary>
+    public string? ConclusionFile { get; init; }
+
+    /// <summary>
+    /// Install domain declaration for a distribution package; defaults to
+    /// <see cref="MacPkgInstallDomain.System"/>. <c>CurrentUserHome</c> allows
+    /// installing without administrator rights; setting it upgrades the output.
+    /// </summary>
+    public MacPkgInstallDomain Domain { get; init; } = MacPkgInstallDomain.System;
 }

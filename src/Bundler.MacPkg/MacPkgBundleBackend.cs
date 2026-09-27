@@ -97,6 +97,21 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                 }
             }
 
+            var licenseFile = bundle.LicenseFile;
+            var useDistribution = settings.Title != null
+                || settings.WelcomeFile != null
+                || settings.ConclusionFile != null
+                || licenseFile != null
+                || settings.Domain != MacPkgInstallDomain.System;
+
+            var packagePath = useDistribution
+                ? Path.Combine(workDirectory, "component.pkg")
+                : outputPath;
+
+            if (File.Exists(packagePath))
+            {
+                File.Delete(packagePath);
+            }
             if (File.Exists(outputPath))
             {
                 File.Delete(outputPath);
@@ -108,8 +123,32 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                  "--identifier", identifier,
                  "--version", version,
                  "--ownership", "recommended",
-                 outputPath],
+                 packagePath],
                 workDirectory, cancellationToken);
+
+            if (useDistribution)
+            {
+                var distributionPath = Path.Combine(workDirectory, "distribution.xml");
+                var resourcesDirectory = Path.Combine(workDirectory, "pkg-resources");
+                WriteDistributionXml(
+                    distributionPath,
+                    resourcesDirectory,
+                    bundle,
+                    identifier,
+                    version,
+                    installLocation,
+                    Path.GetFileName(packagePath),
+                    ArchitectureName(item.Target.Architecture),
+                    logger,
+                    settings);
+                await MacPkgProcessRunner.RunAsync(
+                    "productbuild",
+                    ["--distribution", distributionPath,
+                     "--package-path", workDirectory,
+                     "--resources", resourcesDirectory,
+                     outputPath],
+                    workDirectory, cancellationToken);
+            }
 
             return [new BundleArtifact(PackageFormat.Pkg, item.Target.RuntimeIdentifier, outputPath)];
         }
@@ -122,6 +161,98 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             throw;
         }
     }
+
+    // Writes distribution.xml plus a resources directory holding the page files.
+    // Returns void for clarity; validation failures throw ArgumentException.
+    internal static void WriteDistributionXml(
+        string distributionPath,
+        string resourcesDirectory,
+        BundleConfiguration bundle,
+        string identifier,
+        string version,
+        string installLocation,
+        string componentFileName,
+        string architecture,
+        IBundleLogger logger,
+        MacPkgBundleConfiguration? settings = null)
+    {
+        settings ??= new MacPkgBundleConfiguration();
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+        sb.AppendLine("<installer-gui-script minSpecVersion=\"1\">");
+        sb.AppendLine($"    <title>{XmlEscape(settings.Title ?? bundle.ProductName)}</title>");
+
+        var resources = new List<(string element, string file)>();
+        AddPage(resources, "welcome", settings.WelcomeFile);
+        AddPage(resources, "conclusion", settings.ConclusionFile);
+        AddPage(resources, "license", bundle.LicenseFile);
+        foreach (var (element, source) in resources)
+        {
+            var full = Path.GetFullPath(source);
+            if (!File.Exists(full))
+            {
+                throw new FileNotFoundException(
+                    $"The .pkg {element} page file does not exist: {full}", full);
+            }
+            var name = element + Path.GetExtension(source);
+            Directory.CreateDirectory(resourcesDirectory);
+            File.Copy(full, Path.Combine(resourcesDirectory, name), overwrite: true);
+            sb.AppendLine($"    <{element} file=\"{XmlEscape(name)}\" mime-type=\"{MimeType(source)}\"/>");
+        }
+
+        if (settings.Domain == MacPkgInstallDomain.CurrentUserHome)
+        {
+            sb.AppendLine(
+                "    <domains enable_anywhere=\"false\" enable_currentUserHome=\"true\" " +
+                "enable_localSystem=\"false\"/>");
+        }
+
+        // The installer gates on the declared architectures: without
+        // hostArchitectures an Apple Silicon host wrongly demands Rosetta 2.
+        sb.AppendLine(
+            $"    <options customize=\"never\" allow-external-scripts=\"no\" " +
+            $"hostArchitectures=\"{XmlEscape(architecture)}\"/>");
+
+        var choiceId = identifier + ".choice";
+        sb.AppendLine("    <choices-outline>");
+        sb.AppendLine($"        <line choice=\"{XmlEscape(choiceId)}\"/>");
+        sb.AppendLine("    </choices-outline>");
+        sb.AppendLine($"    <choice id=\"{XmlEscape(choiceId)}\" title=\"{XmlEscape(bundle.ProductName)}\">");
+        sb.AppendLine($"        <pkg-ref id=\"{XmlEscape(identifier)}\"/>");
+        sb.AppendLine("    </choice>");
+        sb.AppendLine(
+            $"    <pkg-ref id=\"{XmlEscape(identifier)}\" version=\"{XmlEscape(version)}\" " +
+            $"install-location=\"{XmlEscape(installLocation)}\">{XmlEscape(componentFileName)}</pkg-ref>");
+        sb.AppendLine("</installer-gui-script>");
+        File.WriteAllText(distributionPath, sb.ToString());
+    }
+
+    private static void AddPage(List<(string element, string file)> pages, string element, string? file)
+    {
+        if (file != null)
+        {
+            pages.Add((element, file));
+        }
+    }
+
+    private static string MimeType(string file) =>
+        Path.GetExtension(file).ToLowerInvariant() switch
+        {
+            ".html" or ".htm" => "text/html",
+            ".rtf" or ".rtfd" => "text/richtext",
+            _ => "text/plain",
+        };
+
+    private static string XmlEscape(string value) =>
+        value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
+            .Replace("\"", "&quot;").Replace("'", "&apos;");
+
+    private static string ArchitectureName(CpuArchitecture architecture) => architecture switch
+    {
+        CpuArchitecture.Arm64 => "arm64",
+        CpuArchitecture.X64 => "x86_64",
+        _ => "i386",
+    };
 
     private static void CopyTree(string source, string destination)
     {

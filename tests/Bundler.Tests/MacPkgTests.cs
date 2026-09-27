@@ -17,6 +17,11 @@ internal static class MacPkgTests
             yield return ("Rejects a build with no .app and no payload", () => RunSync(NoPayloadRejected));
             yield return ("Leaves no .pkg artifact when pkgbuild fails", PkgbuildFailureLeavesNoArtifact);
             yield return ("Maps .pkg settings through MSBuild", () => RunSync(MapsPkgSettingsThroughMsBuild));
+            yield return ("Upgrades to a distribution package when configured", DistributionUpgrade);
+            yield return ("Keeps the plain component package without distribution settings", NoDistributionByDefault);
+            yield return ("Declares the current-user-home domain", CurrentUserHomeDomain);
+            yield return ("Copies distribution page files into the resources directory", DistributionResources);
+            yield return ("Rejects a missing welcome page file", () => RunSync(MissingWelcomeRejected));
         }
     }
 
@@ -391,9 +396,11 @@ internal static class MacPkgTests
         string input,
         string output = "",
         string rid = "osx-arm64",
-        IReadOnlyList<PackageFormat>? formats = null) => new()
+        IReadOnlyList<PackageFormat>? formats = null,
+        string? license = null) => new()
         {
             ProductName = "ExampleApp",
+            LicenseFile = license,
             Identifier = "com.example.app",
             Version = "1.0.0",
             OutputDirectory = output.Length == 0 ? input + ".artifacts" : output,
@@ -408,6 +415,242 @@ internal static class MacPkgTests
                 }
             ]
         };
+
+    // MAC-PKG-2: distribution upgrade — stub the toolchain, assert the chain
+    // runs pkgbuild → productbuild with a generated distribution.xml.
+    static async Task DistributionUpgrade()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var requests = new List<MacPkgProcessRunner.Request>();
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        // The pipeline deletes the work directory after each step, so the
+        // distribution document must be read inside the productbuild call.
+        var distribution = "";
+        var productbuildArgs = new List<string>();
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            if (request.Executable == "productbuild")
+            {
+                productbuildArgs = request.Arguments.ToList();
+                distribution = File.ReadAllText(
+                    productbuildArgs[productbuildArgs.IndexOf("--distribution") + 1]);
+            }
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            var artifacts = await new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Title = "Installer Title",
+                    WelcomeFile = CreateTextFile(input, "welcome.html", "<b>hi</b>"),
+                    ConclusionFile = CreateTextFile(input, "conclusion.rtf", "done"),
+                })
+                .BuildAsync(PkgConfiguration(input, output, license: CreateTextFile(input, "license.txt", "EULA")));
+            var pkg = artifacts.Single(artifact => artifact.Format == PackageFormat.Pkg);
+            var productbuild = requests.SingleOrDefault(request => request.Executable == "productbuild");
+            Assert(productbuild != null,
+                "Distribution settings must upgrade the output to a productbuild call.");
+            var pargs = productbuildArgs;
+            Assert(pargs[0] == "--distribution" && pargs.Contains("--package-path") &&
+                   pargs[pargs.Count - 1] == pkg.Path,
+                $"Unexpected productbuild arguments: {string.Join(' ', pargs)}");
+            Assert(distribution.Contains("<installer-gui-script"),
+                "distribution.xml must be an installer-gui-script document.");
+            Assert(distribution.Contains("<title>Installer Title</title>"),
+                "distribution.xml must carry the configured title.");
+            Assert(distribution.Contains("<welcome file=\"welcome.html\" mime-type=\"text/html\"/>"),
+                "distribution.xml must reference the welcome page.");
+            Assert(distribution.Contains("<license file=\"license.txt\" mime-type=\"text/plain\"/>"),
+                "distribution.xml must reference the license page (bundle LicenseFile).");
+            Assert(distribution.Contains("<conclusion file=\"conclusion.rtf\" mime-type=\"text/richtext\"/>"),
+                "distribution.xml must reference the conclusion page.");
+            Assert(distribution.Contains("<pkg-ref id=\"com.example.app\" version=\"1.0.0\""),
+                "distribution.xml must reference the component package.");
+            var pkgbuild = requests.Single(request => request.Executable == "pkgbuild");
+            var bargs = pkgbuild.Arguments.ToList();
+            Assert(bargs[bargs.Count - 1].EndsWith("component.pkg", StringComparison.Ordinal),
+                "Under a distribution package pkgbuild must emit an intermediate component.pkg.");
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    static async Task NoDistributionByDefault()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var requests = new List<MacPkgProcessRunner.Request>();
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacPkgBundler().BuildAsync(PkgConfiguration(input, output));
+            Assert(requests.All(request => request.Executable != "productbuild"),
+                "Without distribution settings the backend must not invoke productbuild.");
+            var pkgbuild = requests.Single(request => request.Executable == "pkgbuild");
+            Assert(pkgbuild.Arguments[pkgbuild.Arguments.Count - 1]
+                       .EndsWith(Path.Combine("pkg", "ExampleApp.pkg"), StringComparison.Ordinal),
+                "Without distribution settings pkgbuild writes the final .pkg directly.");
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    static async Task CurrentUserHomeDomain()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var requests = new List<MacPkgProcessRunner.Request>();
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        var distribution = "";
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            if (request.Executable == "productbuild")
+            {
+                var pargs = request.Arguments.ToList();
+                distribution = File.ReadAllText(
+                    pargs[pargs.IndexOf("--distribution") + 1]);
+            }
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Domain = MacPkgInstallDomain.CurrentUserHome
+                })
+                .BuildAsync(PkgConfiguration(input, output));
+            Assert(requests.Any(request => request.Executable == "productbuild"),
+                "A non-default domain must upgrade to a productbuild call.");
+            Assert(distribution.Contains("enable_currentUserHome=\"true\"") &&
+                   distribution.Contains("enable_localSystem=\"false\""),
+                $"The current-user-home domain must be declared, got: {distribution}");
+            Assert(distribution.Contains("<title>ExampleApp</title>"),
+                "The title must default to the product name.");
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    static async Task DistributionResources()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var resources = new List<string>();
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            if (request.Executable == "productbuild")
+            {
+                var pargs = request.Arguments.ToList();
+                var dir = pargs[pargs.IndexOf("--resources") + 1];
+                resources.AddRange(Directory.GetFiles(dir).Select(Path.GetFileName)!);
+            }
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    WelcomeFile = CreateTextFile(input, "welcome.txt", "hi"),
+                })
+                .BuildAsync(PkgConfiguration(input, output));
+            Assert(resources.Contains("welcome.txt"),
+                $"The welcome page must be copied into the resources dir, got: {string.Join(',', resources)}");
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    static void MissingWelcomeRejected()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            var thrown = false;
+            try
+            {
+                new MacPkgBundler(new MacPkgBundleConfiguration
+                    {
+                        WelcomeFile = Path.Combine(input, "absent.html")
+                    })
+                    .BuildAsync(PkgConfiguration(input, output))
+                    .GetAwaiter().GetResult();
+            }
+            catch (FileNotFoundException)
+            {
+                thrown = true;
+            }
+            Assert(thrown, "A missing welcome page file must fail the build.");
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    static string CreateTextFile(string directory, string name, string content)
+    {
+        var path = Path.Combine(directory, name);
+        File.WriteAllText(path, content);
+        return path;
+    }
 
     static string CreateInputDirectory()
     {

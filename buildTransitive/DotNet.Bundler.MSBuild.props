@@ -106,5 +106,9 @@
     <BundlerMacPkgIdentifier Condition="'$(BundlerMacPkgIdentifier)' == ''"></BundlerMacPkgIdentifier>
     <BundlerMacPkgVersion Condition="'$(BundlerMacPkgVersion)' == ''"></BundlerMacPkgVersion>
     <BundlerMacPkgInstallLocation Condition="'$(BundlerMacPkgInstallLocation)' == ''">/Applications</BundlerMacPkgInstallLocation>
+    <BundlerMacPkgTitle Condition="'$(BundlerMacPkgTitle)' == ''"></BundlerMacPkgTitle>
+    <BundlerMacPkgWelcomeFile Condition="'$(BundlerMacPkgWelcomeFile)' == ''"></BundlerMacPkgWelcomeFile>
+    <BundlerMacPkgConclusionFile Condition="'$(BundlerMacPkgConclusionFile)' == ''"></BundlerMacPkgConclusionFile>
+    <BundlerMacPkgDomain Condition="'$(BundlerMacPkgDomain)' == ''">System</BundlerMacPkgDomain>
   </PropertyGroup>
 </Project>

@@ -135,6 +135,73 @@ printf '%s' "$override_info" | grep -q 'version="9.9.9"' \
 printf '%s' "$override_info" | grep -q 'install-location="/opt/bundler-test"' \
     || fail "Override install location missing from PackageInfo."
 
+log "== distribution package variant (pages + per-user domain) =="
+dotnet publish "$fixture_project" -c Release \
+    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
+    -p:BundlerIntegrationOutput="$integration_root/bundle-dist" \
+    -p:BundlerTestPkgTitle="Fixture Installer" \
+    -p:BundlerTestPkgWelcome=true \
+    -p:BundlerTestPkgConclusion=true \
+    -p:BundlerTestPkgLicense=true \
+    -p:BundlerTestPkgDomain=CurrentUserHome \
+    --packages "$package_cache" >/dev/null
+dist_pkg="$integration_root/bundle-dist/osx-arm64/pkg/Bundler Mac PKG Fixture.pkg"
+[[ -f "$dist_pkg" ]] || fail "The distribution .pkg variant is missing."
+xar_listing="$(xar -tf "$dist_pkg")" || fail "xar -tf failed on the distribution .pkg."
+printf '%s' "$xar_listing" | grep -q "Distribution" \
+    || fail "A distribution .pkg must contain a Distribution document."
+printf '%s' "$xar_listing" | grep -q "component.pkg" \
+    || fail "A distribution .pkg must embed the component package."
+printf '%s' "$xar_listing" | grep -q "Resources/welcome.txt" \
+    || fail "The distribution .pkg is missing the welcome resource."
+printf '%s' "$xar_listing" | grep -q "Resources/conclusion.rtf" \
+    || fail "The distribution .pkg is missing the conclusion resource."
+printf '%s' "$xar_listing" | grep -q "Resources/license.txt" \
+    || fail "The distribution .pkg is missing the license resource."
+mkdir -p "$expand_root/dist-doc"
+xar -xf "$dist_pkg" -C "$expand_root/dist-doc" \
+    || fail "Could not extract the Distribution document."
+[[ -f "$expand_root/dist-doc/Distribution" ]] \
+    || fail "The extracted package lacks the Distribution document."
+distribution_doc="$(cat "$expand_root/dist-doc/Distribution")"
+printf '%s' "$distribution_doc" | grep -q "<title>Fixture Installer</title>" \
+    || fail "The Distribution document lacks the configured title."
+printf '%s' "$distribution_doc" | grep -q 'enable_currentUserHome="true"' \
+    || fail "The Distribution document lacks the current-user-home domain."
+dominfo="$(installer -dominfo -pkg "$dist_pkg" -plist)" \
+    || fail "installer -dominfo failed on the distribution .pkg."
+printf '%s' "$dominfo" | grep -qi "currentuserhome" \
+    || fail "installer -dominfo did not report the CurrentUserHome domain: '$dominfo'."
+
+# 本机唯一可无管理员实测的安装路径：current-user-home 域真实安装 + 收据断言。
+# per-user 收据写 ~/Library/Receipts，pkgutil 需要 --volume ~ 才能看到。
+# 注意：installer 对 <relocate> 标记的 bundle 有重定位行为——若同 id 的 .app 已存在于
+# 本机别处（本脚本此前产出的各变体中间 .app），payload 会被装到那个旧位置。
+# 安装前清掉 artifacts 树下全部中间 .app，确保按 install-location 落到 ~/Applications。
+find "$integration_root" -name "*.app" -type d -exec rm -rf {} + 2>/dev/null || true
+log "== real per-user install (CurrentUserHome domain) =="
+home_app="$HOME/Applications/Bundler Mac PKG Fixture.app"
+home_helper="$HOME/Applications/support/helper.txt"
+if ! installer -pkg "$dist_pkg" -target CurrentUserHomeDirectory -dumplog \
+        >"$integration_root/install.log" 2>&1; then
+    cat "$integration_root/install.log" >&2 || true
+    fail "installer could not install the distribution pkg into the home domain."
+fi
+[[ -d "$home_app" ]] || fail "The per-user install did not place the .app under ~/Applications."
+[[ -f "$home_helper" ]] || fail "The per-user install did not place the payload helper under ~/Applications/support."
+plutil -lint "$home_app/Contents/Info.plist" >/dev/null \
+    || fail "The installed .app has a broken Info.plist."
+"$home_app/Contents/MacOS/BundlerMacPkgIntegrationFixture" | grep -q "BundlerMacPkgIntegrationFixture" \
+    || fail "The installed .app did not run."
+pkgutil --pkgs --volume ~ | grep -q "com.dotnetbundler.macpkgintegrationfixture" \
+    || fail "pkgutil --pkgs --volume ~ lacks the fixture receipt."
+pkgutil --files com.dotnetbundler.macpkgintegrationfixture --volume ~ \
+    | grep -q "support/helper.txt" \
+    || fail "pkgutil --files lacks the payload entry for the fixture."
+pkgutil --forget com.dotnetbundler.macpkgintegrationfixture --volume ~ >/dev/null \
+    || fail "pkgutil --forget failed for the fixture receipt."
+rm -rf "$home_app" "$HOME/Applications/support"
+
 log "== failure path leaves nothing behind =="
 if dotnet publish "$fixture_project" -c Release \
     -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \

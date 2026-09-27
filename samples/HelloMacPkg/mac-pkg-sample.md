@@ -39,6 +39,27 @@ dotnet publish samples/HelloMacPkg/HelloMacPkg.csproj -c Release
 
 - **`.app` 中间产物自动产出**：`BundlerFormats=pkg` 不需要手工先打 app，同一次 publish 同时给出 `app/` 与 `pkg/` 两个产物目录。
 
+- **分发包（配置任一分发特性即自动升级 `productbuild`）**——标题/欢迎/许可/结语页 + 安装域名：
+
+  ```bash
+  dotnet publish samples/HelloMacPkg/HelloMacPkg.csproj -c Release \
+      -p:HelloMacPkgTitle="Hello PKG Installer" \
+      -p:HelloMacPkgWelcome=true -p:HelloMacPkgConclusion=true -p:HelloMacPkgLicense=true
+  xar -tf "artifacts/.../Hello Mac PKG.pkg"   # 含 Distribution + Resources/*
+  ```
+
+- **免提权安装域**（`CurrentUserHome`，payload 落到 `~/Applications`，收据写 `~/Library/Receipts`）：
+
+  ```bash
+  dotnet publish ... -p:HelloMacPkgDomain=CurrentUserHome
+  installer -pkg "artifacts/samples/HelloMacPkg/osx-arm64/pkg/Hello Mac PKG.pkg" \
+      -target CurrentUserHomeDirectory -dumplog
+  pkgutil --pkgs --volume ~ | grep hellomacpkg
+  pkgutil --files com.dotnetbundler.hellomacpkg --volume ~
+  pkgutil --forget com.dotnetbundler.hellomacpkg --volume ~
+  rm -rf ~/Applications/"Hello Mac PKG.app" ~/Applications/support
+  ```
+
 ## 验证
 
 ```bash
@@ -58,4 +79,4 @@ pkgutil --files com.dotnetbundler.hellomacpkg
 sudo pkgutil --forget com.dotnetbundler.hellomacpkg   # 只清收据，文件需自行删除
 ```
 
-分发包页面（欢迎/许可/结语）、Developer ID Installer 签名与公证属 MAC-PKG-2/3 阶段能力，本示例暂不含。
+分发包页面（欢迎/许可/结语）与安装域名已在 MAC-PKG-2 交付；Developer ID Installer 签名与公证属 MAC-PKG-3，本示例暂不含。

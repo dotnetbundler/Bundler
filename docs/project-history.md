@@ -944,3 +944,10 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 测试缝：`MacPkgProcessRunner.Handler` 桩注入、`MacPkgBundleBackend.HostCheck` 桩宿主门控。
 验证（macOS 26.5.2 arm64 云 VM）：`Bundler.Tests` **109 项全绿**（新增 10 条）；`tests/MacOS.Pkg.Integration/Verify.sh` 全绿——expand-full 断言 payload（`.app`+显式载荷项）、PackageInfo identifier/version/install-location 默认与覆盖回读、xar 结构、installer 解析、payload 内 `.app` 二进制真实启动、非法 install-location 失败且无产物；`samples/HelloMacPkg` 全旋钮实测产出 32MB `.pkg`。
 踩坑：`installer -dominfo` 对组件包返回空（域名声明属分发包 distribution.xml，MAC-PKG-2），断言口径改为"installer 解析通过"；`DotNet.Bundler.MSBuild` 包须显式 `<None Pack>` 装载后端 dll（`ProjectReference` 不会自动传递打包）。
+
+### 14.33 MAC-PKG-2：分发包与页面（2026-09-27，分支 `mac-pkg-development`）
+
+配置任一分发特性（title/welcome/conclusion/`LicenseFile` 许可页/非默认安装域）自动由组件包升级为 `productbuild` 分发包：后端生成分发 `distribution.xml`（`installer-gui-script` 结构、`<domains>`、`<options hostArchitectures>`、choices/pkg-ref 链），页面文件拷入 `--resources` 目录；无分发特性时保持纯 `pkgbuild` 组件包不变。
+新增 `MacPkgInstallDomain` 枚举（`System`/`CurrentUserHome`）与 `MacPkgBundleConfiguration` 分发配置面（`Title`/`WelcomeFile`/`ConclusionFile`/`Domain`）；MSBuild 接线 `BundlerMacPkgTitle`/`BundlerMacPkgWelcomeFile`/`BundlerMacPkgConclusionFile`/`BundlerMacPkgDomain`（许可页复用 `BundlerLicenseFile`）。
+验证（macOS 26.5.2 arm64）：`Bundler.Tests` **114 项全绿**（新增 5 条）；`Verify.sh` 全绿——分发包 `xar` 结构（`Distribution`+`component.pkg`+`Resources/*`）、Distribution 回读、`installer -dominfo` 报告 `currentUserHome`、**免提权真实安装**：`installer -pkg -target CurrentUserHomeDirectory` 装出 `~/Applications/<app>`+`support/helper.txt`、应用启动、`pkgutil --pkgs/--files/--forget --volume ~` 收据断言；示例分发全旋钮实测。
+踩坑：分发文档必须含 `<options hostArchitectures="arm64"/>`，否则 Apple Silicon 宿主误报 Rosetta 缺失；`pkgbuild` 写的 `<relocate>` 使同 id `.app` 残留时 payload 重定位到旧位置，测试需先清中间副本；per-user 收据在 `~/Library/Receipts` 需 `--volume ~`；`installer -dominfo` 不带 `-plist` 时静默无输出。
