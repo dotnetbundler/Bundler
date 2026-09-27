@@ -91,7 +91,7 @@ Verify.sh 真实通过 `lsregister` 注册、`open <文件>`/`open <scheme>://` 
 
 `.pkg` 已冻结（`MAC-PKG-1..5` 全部完成）。
 `LINUX-DEB`：**1..5 全部完成，格式冻结并入 `main`**（2026-09-27，冻结基线 `0.1.0-alpha.51`）——`src/Bundler.Deb` 托管 ar/tar/gzip 写入器；DEB-1 最小 control+`md5sums`、`usr/lib`+`usr/bin` 布局、SemVer→deb 映射与八旋钮；DEB-2 关系字段透传、Section/Priority、`.desktop` 生成与 `DesktopFile` 覆盖、hicolor 图标（PNG 探测/`@2x`）、metainfo、`changelog.gz`/`copyright`、`BundlerDebFile` 绝对路径映射；DEB-3 维护者脚本四旋钮（0755/shebang+LF）、`SystemdServiceFile` 托管 unit + postinst `daemon-reload` 合成、conffiles（`/etc` DebFile 自动登记）、压缩仅 gzip（xz/zstd 登记拒绝）、升级/conffile 保留语义实测；DEB-4 lintian 硬断言基线（豁免清单入档）、`changelog.Debian.gz` 自动补发与扩展描述默认行、`linux-arm64` 结构断言、docker `debian:stable`/`ubuntu:latest` 装卸矩阵；141 项 Bundler.Tests + `Verify.sh`（真实 `sudo dpkg -i/-r/-P`、`desktop-file-validate`、`dpkg -L` 回读、lintian 信息级审计）全绿；`samples/HelloDebApp` 演示全旋钮；
-`LINUX-APPIMAGE`：全部完成并冻结（`0.1.0-alpha.58`），细节见 `docs/linux-appimage-roadmap.md` §4；`CLI-C1` 无实现。
+`CLI-C1`：全部完成并冻结（`0.1.0-alpha.62`），细节见 `docs/cli-roadmap.md` §4。
 
 ## 3. 最近验证（2026-10-03，Windows 11 Pro build 26200 x64，跨格式收尾回归）
 
