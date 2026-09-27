@@ -151,6 +151,10 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 每个格式分别完成元数据、文件布局、桌面集成、升级/卸载语义、签名或仓库验证边界、原生发行版 E2E，再进入下一个格式。
 若真实用户需求或可用原生验证环境要求调整，必须先在本文档写明依据和新顺序。
 
+2026-09-27 `LINUX-DEB` 规划轮完成（分支 `linux-deb-development`）：上游审计 [`linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `447fa9f`）、阶段分解与决策 [`linux-deb-roadmap.md`](linux-deb-roadmap.md)、能力矩阵/人工清单/外部待办均已就位，全部决策已确认。
+核心决策：deb/rpm 用纯托管写入器（无原生工具、任意构建宿主），AppImage 内嵌固定版本 `appimagetool`（构建限 Linux 宿主）。
+`LINUX-DEB` 待用户下达启动指令；`LINUX-RPM`/`LINUX-APPIMAGE` 的详细路线在各自规划轮定稿。
+
 ### ARCHIVE：通用压缩包格式
 
 记录一项后续格式决策（2026-10-03，用户提出）：在平台格式全部完成后增加一个压缩包后端

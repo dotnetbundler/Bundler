@@ -1,13 +1,11 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-09-26
-> 当前分支：`mac-pkg-development`（基于 `main` `8cf5de5`；`.app` 与 `.dmg` 线均已并入 main）
-> 当前包版本：`0.1.0-alpha.47`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.app`/`.dmg` 冻结基线均记录于 `alpha.45`）
-> 当前阶段：WIN-MSI-1..9 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；`MAC-PKG-1..4` 完成；
-> `alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 前 NSIS 安装目录延续、事务清理竞态修复）
-> `alpha.45` 将 SDK 基线升至 .NET 10（MSBuild 任务链保留 `netstandard2.0`），无后端功能变更
-> `.app` 与 `.dmg` 格式均已冻结（MAC-APP-1..5 / MAC-DMG-1..5，冻结基线 `0.1.0-alpha.45`）；`.app` 线已合入 `main`，`.dmg` 线在 `mac-dmg-development` 分支待审
-> 默认下一阶段：`LINUX` 规划轮（`.pkg` 已冻结并实测全绿；需用户明确启动指令）
+> 最后更新：2026-09-27
+> 当前分支：`linux-deb-development`（基于 `main` `60b1c7c`；`.app`/`.dmg`/`.pkg` 三线均已并入 main）
+> 当前包版本：`0.1.0-alpha.47`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
+> 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
+> `LINUX-DEB` 规划轮完成——上游审计 `docs/linux-tauri-capability-audit.md`（快照 `447fa9f`）与路线 `docs/linux-deb-roadmap.md` 已确认入档
+> 默认下一阶段：`LINUX-DEB-1`（需用户明确启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -79,7 +77,9 @@ Verify.sh 真实通过 `lsregister` 注册、`open <文件>`/`open <scheme>://` 
 
 ### 未开始的格式
 
-`.pkg` 已冻结（`MAC-PKG-1..5` 全部完成）；`LINUX-DEB`、`LINUX-RPM`、`LINUX-APPIMAGE`、`CLI-C1`：无实现，顺序与边界见 `docs/roadmap.md`。
+`.pkg` 已冻结（`MAC-PKG-1..5` 全部完成）。
+`LINUX-DEB`：规划轮完成（2026-09-27，`linux-deb-development` 分支）——上游审计 `docs/linux-tauri-capability-audit.md`、路线/能力矩阵/人工清单/外部待办已入档，无实现代码；
+`LINUX-RPM`、`LINUX-APPIMAGE`、`CLI-C1`：无实现，顺序与边界见 `docs/roadmap.md`。
 
 ## 3. 最近验证（2026-10-03，Windows 11 Pro build 26200 x64，跨格式收尾回归）
 
@@ -137,7 +137,8 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 ## 6. 默认下一步
 
 `.pkg` 已冻结于 `0.1.0-alpha.47`（`MAC-PKG-1..5` 全部完成）。macOS 线三种格式（`.app`/`.dmg`/`.pkg`）全部冻结。
-默认下一步：`LINUX` 规划轮（`docs/roadmap.md` 格式顺序）；等用户明确启动指令再实施。
+`LINUX-DEB` 规划轮已完成（2026-09-27）：决策与 `LINUX-DEB-1..5` 阶段分解见 `docs/linux-deb-roadmap.md`。
+默认下一步：`LINUX-DEB-1`（托管 ar/tar/gzip 写入器 + 最小可用 `.deb` + 真实 `dpkg -i` 装卸）；等用户明确启动指令再实施。
 
 ## 7. 历史记录
 
