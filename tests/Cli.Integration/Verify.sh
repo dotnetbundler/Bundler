@@ -177,4 +177,18 @@ $CLI plan --config "$CFG_DIR/bundler.json" --deb.bogus=1 >/dev/null 2>&1; code=$
 $CLI plan --config "$CFG_DIR/missing.json" >/dev/null 2>&1; code=$?
 [ "$code" -eq 2 ] || die "missing config file must exit 2, got $code"
 
+log "native AOT binary: publish + end-to-end smoke"
+dotnet publish "$REPO_ROOT/src/Bundler.Cli/Bundler.Cli.csproj" -c Release -r linux-x64 \
+  -o "$ARTIFACTS/aot" -v q >"$ARTIFACTS/aot-publish.log" 2>&1 \
+  || die "AOT publish failed (see $ARTIFACTS/aot-publish.log)"
+NATIVE="$ARTIFACTS/aot/bundler"
+file "$NATIVE" | grep -q "ELF 64-bit" || die "AOT output must be a native ELF binary"
+$NATIVE --version | grep -q "$(grep -oPm1 'BundlerPackageVersion>\K[0-9a-zA-Z.-]+' "$REPO_ROOT/Directory.Build.props")" \
+  || die "native --version must report the package version"
+NATIVE_OUT="$ARTIFACTS/aot-out"
+$NATIVE bundle ${BASE/--output-dir $OUT_DIR/--output-dir $NATIVE_OUT} \
+  --formats zip --quiet || die "native bundle must exit 0"
+find "$NATIVE_OUT" -name "*.zip" -print -quit | grep -q . \
+  || die "native bundle must produce a zip artifact"
+
 log "all CLI integration assertions passed"

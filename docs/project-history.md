@@ -4094,3 +4094,9 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 - `src/Bundler.Cli` 转 `PackAsTool`（`DotNet.Bundler.Cli` nupkg，`ToolCommandName=bundler`）；本机 `dotnet tool install --tool-path` 实装 + `bundler bundle`（zip+deb）实测通过。
 - 宿主注记：`~/.dotnet` 非默认布局需 `DOTNET_ROOT` 指安装根——宿主事项非 CLI 缺陷。
 - CLI 契约（命令面/退出码/JSON/`bundler.json` schema/旋钮面）冻结于 `0.1.0-alpha.61`；Windows/macOS 宿主打包、CI 管道消费、AOT 分发保留 CLI-OI/MT 清单。
+
+## 2026-09-27 CLI-AOT（`0.1.0-alpha.62`，分支 `cli-development`）——用户追加
+
+- `src/Bundler.Cli` 开 `PublishAot`：source-gen `BundlerJsonContext` 取代反射反序列化与键枚举；JSON 输出改 `JsonObject` DOM；`JsonNode.Parse` 补注释/尾逗号选项。
+- `dotnet publish -r linux-x64` 产出 ~49.5MB 原生 ELF，免 `DOTNET_ROOT` 直跑；`Verify.sh` 增 AOT 段全绿；`Bundler.Tests` 198/198。
+- CLI-OI-01（AOT 分发评估）消解；CLI 契约冻结基线移至 `alpha.62`。

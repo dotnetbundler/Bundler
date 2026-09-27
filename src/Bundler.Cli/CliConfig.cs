@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 using DotNet.Bundler;
 using DotNet.Bundler.AppImage;
 using DotNet.Bundler.Archive;
@@ -35,10 +36,9 @@ internal sealed class CliResolvedConfiguration
 
 internal static class CliConfig
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonDocumentOptions DocumentOptions = new()
     {
-        PropertyNameCaseInsensitive = true,
-        ReadCommentHandling = JsonCommentHandling.Skip,
+        CommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true
     };
 
@@ -59,7 +59,7 @@ internal static class CliConfig
             {
                 throw new CliUsageException($"Configuration file not found: {fullPath}");
             }
-            document = JsonNode.Parse(File.ReadAllText(fullPath)) as JsonObject
+            document = JsonNode.Parse(File.ReadAllText(fullPath), documentOptions: DocumentOptions) as JsonObject
                 ?? throw new CliUsageException($"Configuration file '{fullPath}' must be a JSON object.");
             baseDirectory = Path.GetDirectoryName(fullPath)!;
         }
@@ -140,9 +140,10 @@ internal static class CliConfig
             {
                 continue;
             }
-            var known = type.GetProperties(System.Reflection.BindingFlags.Public |
-                        System.Reflection.BindingFlags.Instance)
-                .Select(p => char.ToLowerInvariant(p.Name[0]) + p.Name[1..])
+            var known = (BundlerJsonContext.Default.GetTypeInfo(type)?.Properties
+                    ?? throw new InvalidOperationException(
+                        $"No JSON metadata for {type.Name}."))
+                .Select(p => p.Name)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var key in child.Select(pair => pair.Key).ToArray())
             {
@@ -350,7 +351,7 @@ internal static class CliConfig
         else
         {
             target = new JsonObject();
-            targetsNode.Add(target);
+            targetsNode.Insert(targetsNode.Count, target);
         }
         foreach (var (option, field) in TargetFields)
         {
@@ -364,7 +365,7 @@ internal static class CliConfig
         {
             target["formats"] = new JsonArray(
                 CliProgram.ParseFormats(formats, TargetRid(target, parsed))
-                    .Select<PackageFormat, JsonNode?>(f => FormatName(f)).ToArray());
+                    .Select(f => (JsonNode?)JsonValue.Create(FormatName(f))).ToArray());
         }
         if (target["formats"] is null)
         {
@@ -428,8 +429,12 @@ internal static class CliConfig
 
     private static IReadOnlyList<T> ListOf<T>(JsonNode? node) =>
         node is JsonArray arr
-            ? arr.Select(entry => entry!.Deserialize<T>(JsonOptions)!).ToArray()
+            ? arr.Select(entry => (T)entry!.Deserialize(TypeInfoFor<T>())!).ToArray()
             : [];
+
+    private static JsonTypeInfo TypeInfoFor<T>() =>
+        BundlerJsonContext.Default.GetTypeInfo(typeof(T))
+        ?? throw new InvalidOperationException($"No JSON metadata for {typeof(T).Name}.");
 
     private static IReadOnlyList<PackageFormat> FormatList(JsonNode? node, string rid)
     {
@@ -449,7 +454,7 @@ internal static class CliConfig
 
     private static T? Section<T>(JsonObject document, string name) where T : class =>
         document[name] is JsonObject child
-            ? child.Deserialize<T>(JsonOptions)
+            ? (T)child.Deserialize(TypeInfoFor<T>())!
             : null;
 
     private static string FormatName(PackageFormat format) => format switch

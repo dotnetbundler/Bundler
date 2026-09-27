@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
@@ -123,10 +124,14 @@ public static class CliProgram
         var issues = BundleConfigurationValidator.Validate(configuration);
         if (parsed.Json)
         {
-            WriteJson(stdout, new
+            WriteJson(stdout, new JsonObject
             {
-                valid = issues.Count == 0,
-                issues = issues.Select(issue => new { path = issue.Path, message = issue.Message })
+                ["valid"] = issues.Count == 0,
+                ["issues"] = new JsonArray(issues.Select(issue => (JsonNode)new JsonObject
+                {
+                    ["path"] = issue.Path,
+                    ["message"] = issue.Message
+                }).ToArray())
             });
         }
         else if (issues.Count == 0)
@@ -148,17 +153,17 @@ public static class CliProgram
         var plan = BundlePlanner.Create(configuration);
         if (parsed.Json)
         {
-            WriteJson(stdout, new
+            WriteJson(stdout, new JsonObject
             {
-                items = plan.Items.Select(item => new
+                ["items"] = new JsonArray(plan.Items.Select(item => (JsonNode)new JsonObject
                 {
-                    runtimeIdentifier = item.Target.RuntimeIdentifier,
-                    format = FormatName(item.Format),
-                    inputDirectory = item.InputDirectory,
-                    outputDirectory = item.OutputDirectory,
-                    mainExecutable = item.MainExecutable,
-                    intermediate = item.Intermediate
-                })
+                    ["runtimeIdentifier"] = item.Target.RuntimeIdentifier,
+                    ["format"] = FormatName(item.Format),
+                    ["inputDirectory"] = item.InputDirectory,
+                    ["outputDirectory"] = item.OutputDirectory,
+                    ["mainExecutable"] = item.MainExecutable,
+                    ["intermediate"] = item.Intermediate
+                }).ToArray())
             });
         }
         else
@@ -189,15 +194,15 @@ public static class CliProgram
 
         if (parsed.Json)
         {
-            WriteJson(stdout, new
+            WriteJson(stdout, new JsonObject
             {
-                outputDirectory = configuration.OutputDirectory,
-                artifacts = artifacts.Select(artifact => new
+                ["outputDirectory"] = configuration.OutputDirectory,
+                ["artifacts"] = new JsonArray(artifacts.Select(artifact => (JsonNode)new JsonObject
                 {
-                    format = FormatName(artifact.Format),
-                    runtimeIdentifier = artifact.RuntimeIdentifier,
-                    path = artifact.Path
-                })
+                    ["format"] = FormatName(artifact.Format),
+                    ["runtimeIdentifier"] = artifact.RuntimeIdentifier,
+                    ["path"] = artifact.Path
+                }).ToArray())
             });
         }
         else
@@ -248,13 +253,8 @@ public static class CliProgram
         ?? typeof(CliProgram).Assembly.GetName().Version?.ToString()
         ?? "unknown";
 
-    private static void WriteJson(TextWriter stdout, object payload) =>
-        stdout.WriteLine(JsonSerializer.Serialize(payload, JsonOptions));
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = false
-    };
+    private static void WriteJson(TextWriter stdout, JsonObject payload) =>
+        stdout.WriteLine(payload.ToJsonString());
 
     private static void PrintUsage(TextWriter writer)
     {

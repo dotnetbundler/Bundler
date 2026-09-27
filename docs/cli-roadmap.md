@@ -1,6 +1,6 @@
 # CLI 产品化路线（CLI-C1）
 
-> 状态：**已冻结**于 `0.1.0-alpha.61`（2026-09-27，分支 `cli-development`）。CLI-1/2/3 全部完成，证据见 §4。
+> 状态：**已冻结**于 `0.1.0-alpha.62`（2026-09-27，分支 `cli-development`）。CLI-1/2/3 + CLI-AOT 全部完成，证据见 §4。
 > 范围依据：`docs/roadmap.md` CLI-C1 节——固化共享配置 schema、`validate`/`plan`/`bundle` 共用 Core/后端、稳定退出码/机器可读输出/日志/帮助/版本/发布方式、覆盖全部已冻结格式、删除早期 alpha 参数不承诺兼容。
 > 上游参照：`tauri-cli` 审计（`tauri-apps/tauri` DeepWiki）——命令面分层、`--bundles` 参数优先于配置文件 `bundle.targets`、`--config` 层叠、环境变量 verbosity 等模式已复核取舍；Tauri 面向"开发工具链"（dev/build/init/migrate/mobile），本 CLI 只做打包，范围更窄。
 
@@ -74,5 +74,13 @@
 - `src/Bundler.Cli` 转为 `PackAsTool`：`PackageId=DotNet.Bundler.Cli`、`ToolCommandName=bundler`、`net10.0` any 布局、`Version=$(BundlerPackageVersion)`。
 - `dotnet pack` 产出 `DotNet.Bundler.Cli.0.1.0-alpha.61.nupkg`；本机 `dotnet tool install --tool-path` 实装成功，`bundler --version`/`--help`/`bundle`（zip+deb 真实产出 + sha256 侧车）实测通过。
 - 如实注记：本机 `dotnet` 位于 `~/.dotnet` 非默认搜索路径，shim 需 `DOTNET_ROOT` 指向安装根才能启动——属宿主布局事项而非 CLI 缺陷，`.NET` 常规安装位置不受影响。
-- 冻结基线：CLI 契约（命令面/退出码/JSON 形状/`bundler.json` schema/格式旋钮面）冻结于 `0.1.0-alpha.61`；冻结测试向量 = `Bundler.Tests` 198/198 + `tests/Cli.Integration/Verify.sh` 全绿（含 config 层叠与拒绝路径）。
+- 冻结基线：CLI 契约（命令面/退出码/JSON 形状/`bundler.json` schema/格式旋钮面）冻结于 `0.1.0-alpha.62`；冻结测试向量 = `Bundler.Tests` 198/198 + `tests/Cli.Integration/Verify.sh` 全绿（含 config 层叠与拒绝路径）。
 - 冻结后仅接受带回归测试的缺陷修复；Windows/macOS 宿主打包、CI 管道消费、AOT 分发评估保留 CLI-OI/MT 清单。
+
+### CLI-AOT（`0.1.0-alpha.62`，分支 `cli-development`）——用户追加需求
+
+- `src/Bundler.Cli` 增 `PublishAot`/`IsAotCompatible`/`InvariantGlobalization`；`dotnet publish -r linux-x64` 产出原生 ELF（~49.5MB，stripped，无 dotnet 运行时依赖）。
+- AOT 化改造：新增 `BundlerJsonContext`（source-gen，camelCase）承载 bundler.json 全部载荷类型；`CliConfig` 反序列化与 `EnforceSchema` 合法键枚举改走 `JsonTypeInfo`（零反射）；`CliProgram` 输出 payload 由匿名类型改为 `JsonObject` DOM 构建。
+- 顺带修复：`JsonNode.Parse` 补 `JsonDocumentOptions`（注释/尾逗号），与 Core `BundleConfigurationLoader` 口径一致。
+- `Verify.sh` 新增 AOT 段：原生二进制 `--version`/bundle zip 实测断言（并证明无 `DOTNET_ROOT` 下运行）。
+- 实测：`bundler bundle --config bundler.json`（zip+targz+deb+文件映射+点号旋钮）原生二进制全绿。

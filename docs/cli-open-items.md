@@ -5,7 +5,7 @@
 
 | ID | 关联阶段 | 外部条件 | 待办内容 |
 | --- | --- | --- | --- |
-| CLI-OI-01 | 后置评估 | 多 RID 宿主 | 自包含/AOT 单二进制分发的体积与扇出成本实测评估 |
+| CLI-OI-01 | ~~后置评估~~ 已消解 | — | AOT 已于 CLI-AOT 落地（linux-x64 实测 ~49.5MB ELF）；其余 RID 二进制产出为 `dotnet publish -r <rid>` 例行扩展，不再单独立项 |
 | CLI-OI-02 | CLI-3 | Windows 宿主 | MT-01 用例执行与记录 |
 | CLI-OI-03 | CLI-3 | macOS 宿主 | MT-02 用例执行与记录 |
 | CLI-OI-04 | CLI-3 | CI 环境 | MT-04：无 tty 管道消费 `--json` 与退出码判定 |

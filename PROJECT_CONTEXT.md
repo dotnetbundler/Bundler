@@ -2,7 +2,7 @@
 
 > 最后更新：2026-09-27
 > 当前分支：`cli-development`（自 `main` `6592a0f` 拉出；八种格式全部冻结入 main）
-> 当前包版本：`0.1.0-alpha.61`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.rpm` 冻结基线 `alpha.55`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
+> 当前包版本：`0.1.0-alpha.62`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.rpm` 冻结基线 `alpha.55`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
 > 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
 > `LINUX-DEB-1..5` 全部完成，`.deb` 冻结并已入 `main`：冻结基线 `0.1.0-alpha.51`，测试向量 141/141 + `Verify.sh` 全绿
 > `.rpm` 已冻结于 `0.1.0-alpha.55`（`linux-rpm-development`，`LINUX-RPM-1..5` 完成）：`DotNet.Bundler.Rpm` 纯托管写入器 + `deb;rpm` 扇出 + 六族关系字段 + License/Group/Url 覆盖 + 共享 freedesktop 件 + `BundlerRpmFile` 映射 + 四 scriptlet/systemd unit/%config(noreplace)/gzip-only 压缩；fedora/rockylinux/opensuse 三容器真实装卸与升级语义 + rpmlint 豁免门控 + arm64 结构断言全绿；决策与证据见 `docs/linux-rpm-roadmap.md`
@@ -11,7 +11,7 @@
 > `ARCHIVE-2` 已完成（同分支，同版本）：旋钮面对照决策复核无缺口；收口断言补强（确定性构建 sha256 一致、目录源拒绝、Zip64 拒绝）；`Bundler.Tests` 184/184 + `Verify.sh` 全绿
 > `ARCHIVE-3` 已完成（同分支，同版本）：宿主矩阵收口（python3 zipfile/tarfile 跨实现互读断言接入 `Verify.sh`）、干净宿主审计（零进程出口）、能力矩阵定稿、OI/MT 收口——**`.zip`/`.tar.gz` 归档冻结基线 `0.1.0-alpha.59`**
 > `CLI-C1` 规划轮已完成（分支 `cli-development`）：决策清单 15 项 + `CLI-1..3` 三段骨架 + MSBuild↔CLI 映射表入档 `docs/cli-roadmap.md`，配套 cli-capability-matrix / cli-manual-testing / cli-open-items；决策已按推荐项放行
-> `CLI-C1` 已完成（分支 `cli-development`，`0.1.0-alpha.61`）：CLI 契约冻结——三命令/退出码/`--json`/`bundler.json` schema/全格式旋钮面/dotnet tool（`DotNet.Bundler.Cli` nupkg 实装实测）；`Bundler.Tests` 198/198 + `tests/Cli.Integration/Verify.sh` 全绿。待指令合并 `main`。
+> `CLI-C1` 已完成（分支 `cli-development`，`0.1.0-alpha.62`）：CLI 契约冻结——三命令/退出码/`--json`/`bundler.json` schema/全格式旋钮面/dotnet tool nupkg + 原生 AOT 二进制双分发；`Bundler.Tests` 198/198 + `tests/Cli.Integration/Verify.sh`（含 AOT 段）全绿。待指令合并 `main`。
 > 当前：`CLI-1` 完成，默认下一阶段 `CLI-2`（bundler.json schema 固化 + 层叠 + 全格式旋钮透传）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。

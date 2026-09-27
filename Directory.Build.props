@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <BundlerPackageVersion>0.1.0-alpha.61</BundlerPackageVersion>
+    <BundlerPackageVersion>0.1.0-alpha.62</BundlerPackageVersion>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

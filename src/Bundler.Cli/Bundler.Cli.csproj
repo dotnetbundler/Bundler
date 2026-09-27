@@ -11,6 +11,11 @@
     <Description>Command-line interface for DotNet.Bundler — validate, plan and bundle desktop application publish directories into native installers.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <IncludeSymbols>false</IncludeSymbols>
+    <!-- Native AOT binary alongside the dotnet tool package: `dotnet publish -r <rid>` -->
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <StackSizeSupport>false</StackSizeSupport>
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
