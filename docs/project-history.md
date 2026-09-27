@@ -4059,3 +4059,9 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 - `Bundler.Tests` 181/181（新增 8 项 archive 断言）；`tests/Archive.Integration/Verify.sh` 全绿（unzip/zipinfo/tar 清单与 mode 断言、解出载荷运行、执行位与符号链接还原、覆盖/映射/非法目标失败变体、`deb;rpm;appimage;zip;targz` 扇出、win-x64/osx-arm64 交叉 zip）。
 - `samples/HelloArchiveApp` 实测 publish 产出 zip+tar.gz 并解出运行通过。
 - 计划偏差如实记录：`BundlerArchiveFile` 映射原属 ARCHIVE-2，因实现面小随本阶段提前落地，能力矩阵与阶段表已同步口径。
+
+## 2026-09-27 ARCHIVE-2（`0.1.0-alpha.59`，分支 `archive-development`）
+
+- 旋钮面收口：`BundlerArchiveFile` 已在 ARCHIVE-1 提前落地，本阶段对照决策 8 复核最小集齐备、无缺口。
+- Destination 校验口径与 `BundlerAppImageFile` 对齐复核通过（段校验更严属超集）。
+- 断言补强：确定性构建（sha256 逐字节一致）、目录源拒绝、Zip64 拒绝；`Bundler.Tests` 181→184 全绿；`Verify.sh` 复跑全绿。

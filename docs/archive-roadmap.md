@@ -53,3 +53,11 @@
 - 单元测试：`Bundler.Tests` 新增 8 项（结构/mode/symlink/映射/拒绝/扇出/MSBuild 接线），合计 181/181 全绿。
 - `tests/Archive.Integration/Verify.sh` 全绿：`unzip -l`/`zipinfo -l`/`tar -tvf` 清单与 mode 断言、真实解包逐路径+载荷运行+执行位+符号链接还原断言、覆盖变体、映射与非法目标失败变体（不留半成品）、`deb;rpm;appimage;zip;targz` 单 publish 扇出、`win-x64`/`osx-arm64` 交叉目标 zip。
 - `samples/HelloArchiveApp`：publish 产出 zip+tar.gz 并解出运行实测通过。
+
+### ARCHIVE-2（`0.1.0-alpha.59`，分支 `archive-development`）
+
+- 旋钮面对照决策 8 复核：`PackageName`/`Version`/`ArchiveName` + `@(BundlerArchiveFile)` 最小集齐备，无缺口；
+  freedesktop/desktop 件确认不引（归档无安装语义）。
+- `BundlerArchiveFile` 校验口径复核：与 `BundlerAppImageFile` 对齐（尾部斜杠归一化、反斜杠/绝对路径/空段/`.`/`..` 段/载荷碰撞拒绝，目录源拒绝），段校验更严属超集。
+- 收口断言补强：确定性构建（两次构建 sha256 逐字节一致）、目录源拒绝、Zip64 拒绝（>65535 条目触发显式 throw）；`Bundler.Tests` 合计 184/184 全绿。
+- `tests/Archive.Integration/Verify.sh` 复跑全绿（映射落位/逃逸拒绝/失败不留半成品断言在 ARCHIVE-1 已就位）。

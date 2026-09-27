@@ -18,6 +18,9 @@ internal static class ArchiveTests
             yield return ("Rejects invalid archive file mappings", () => RunSync(RejectsInvalidFileMappings));
             yield return ("Produces zip and targz in one fanout", () => RunSync(FanoutProducesBoth));
             yield return ("Maps archive settings through MSBuild", () => RunSync(MapsArchiveSettingsThroughMsBuild));
+            yield return ("Builds deterministically (identical sha256)", () => RunSync(BuildsDeterministically));
+            yield return ("Rejects a directory as a mapped file source", () => RunSync(RejectsDirectorySource));
+            yield return ("Zip writer rejects archives beyond classic zip limits", () => RunSync(RejectsZip64));
         }
     }
 
@@ -208,6 +211,61 @@ internal static class ArchiveTests
         {
             Cleanup(input);
         }
+    }
+
+    static void BuildsDeterministically()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "det-out");
+        try
+        {
+            new ArchiveBundler().BuildAsync(Configuration(
+                input, output, formats: [PackageFormat.Zip, PackageFormat.TarGz]))
+                .GetAwaiter().GetResult();
+            var dir = Path.Combine(output, "linux-x64");
+            var zipHash1 = File.ReadAllText(Path.Combine(dir, "zip", "example-app-1.0.0-linux-x64.zip.sha256"));
+            var tgzHash1 = File.ReadAllText(Path.Combine(dir, "targz", "example-app-1.0.0-linux-x64.tar.gz.sha256"));
+            foreach (var leftover in Directory.GetFiles(dir, "*", SearchOption.AllDirectories)) File.Delete(leftover);
+            new ArchiveBundler().BuildAsync(Configuration(
+                input, output, formats: [PackageFormat.Zip, PackageFormat.TarGz]))
+                .GetAwaiter().GetResult();
+            Assert(File.ReadAllText(Path.Combine(dir, "zip", "example-app-1.0.0-linux-x64.zip.sha256")) == zipHash1,
+                "two builds of the same input must produce identical zip sha256");
+            Assert(File.ReadAllText(Path.Combine(dir, "targz", "example-app-1.0.0-linux-x64.tar.gz.sha256")) == tgzHash1,
+                "two builds of the same input must produce identical tar.gz sha256");
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
+    static void RejectsDirectorySource()
+    {
+        var input = CreateInputDirectory();
+        var dir = Path.Combine(input, "a-dir");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            AssertThrows<ArgumentException>(
+                () => BuildWithFile(input, dir, "docs/x"),
+                "a directory source must be rejected");
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
+    static void RejectsZip64()
+    {
+        var entries = Enumerable.Range(0, 65536)
+            .Select(i => new ZipEntry { Name = $"e{i}", Kind = ZipEntryKind.File, Mode = 420 })
+            .ToArray();
+        using var stream = new MemoryStream();
+        AssertThrows<InvalidOperationException>(
+            () => ZipWriter.Write(stream, entries),
+            "more than 65535 entries must hit the Zip64 guard");
     }
 
     static void MapsArchiveSettingsThroughMsBuild()

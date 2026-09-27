@@ -8,7 +8,8 @@
 > `.rpm` 已冻结于 `0.1.0-alpha.55`（`linux-rpm-development`，`LINUX-RPM-1..5` 完成）：`DotNet.Bundler.Rpm` 纯托管写入器 + `deb;rpm` 扇出 + 六族关系字段 + License/Group/Url 覆盖 + 共享 freedesktop 件 + `BundlerRpmFile` 映射 + 四 scriptlet/systemd unit/%config(noreplace)/gzip-only 压缩；fedora/rockylinux/opensuse 三容器真实装卸与升级语义 + rpmlint 豁免门控 + arm64 结构断言全绿；决策与证据见 `docs/linux-rpm-roadmap.md`
 > `LINUX-APPIMAGE-1..4` 已完成，`.AppImage` 冻结于 `linux-appimage-development`（`0.1.0-alpha.58`）：`DotNet.Bundler.AppImage` 内嵌 appimagetool×2 + type2 runtime×2（SHA-256 provenance，始终 `--runtime-file` 外供不联网），AppDir 共享 freedesktop 件 + 脚本 AppRun + 根 desktop 链接/.DirIcon/默认 PNG 回落，压缩固定 zstd（pinned mksquashfs 约束）；九旋钮接线 + `deb;rpm;appimage` 扇出；`--appimage-extract` 结构断言 + 解出真实运行 + 三容器冒烟全绿
 > `ARCHIVE-1` 已完成（分支 `archive-development`，`0.1.0-alpha.59`）：`DotNet.Bundler.Archive` 纯托管 zip/tar.gz 写入器（zip 自实现 unix mode/symlink）、单顶层目录布局、执行位与符号链接双保留、`.sha256` 侧车、`BundlerArchivePackageName`/`Version`/`ArchiveName` + `@(BundlerArchiveFile)` 接线、`zip;targz` 与五格式混排扇出；`Bundler.Tests` 181/181 + `tests/Archive.Integration/Verify.sh` 真实解包断言全绿；证据见 `docs/archive-roadmap.md` §4
-> 当前：`ARCHIVE-1` 完成，默认下一阶段 `ARCHIVE-2`（旋钮面收口；`BundlerArchiveFile` 已提前落地，本阶段实质为收口复核）
+> `ARCHIVE-2` 已完成（同分支，同版本）：旋钮面对照决策复核无缺口；收口断言补强（确定性构建 sha256 一致、目录源拒绝、Zip64 拒绝）；`Bundler.Tests` 184/184 + `Verify.sh` 全绿
+> 当前：`ARCHIVE-2` 完成，默认下一阶段 `ARCHIVE-3`（宿主矩阵收口、干净宿主审计、能力矩阵定稿、冻结基线写入）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。

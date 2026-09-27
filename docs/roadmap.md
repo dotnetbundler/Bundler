@@ -169,6 +169,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 2026-09-27 `LINUX-APPIMAGE-3` 已完成（同分支，`0.1.0-alpha.58`）：aarch64 载荷深读断言（hsqs 偏移直读 squashfs）、appimagelint 实跑裁决为信息级（载荷 ABI 属性+工具 `@2` scale 解析局限）、干净宿主进程出口审计（仅 appimagetool+chmod/ln）。
 2026-09-27 `LINUX-APPIMAGE-4` 已完成（同分支，`0.1.0-alpha.58`）：上游复核（dev HEAD 漂移至 `d15cf9b` 但审计引用文件逐一 diff 字节级一致）、矩阵定稿、OI/MT 收口、冻结基线写入——`.AppImage` 格式冻结。默认下一格式 `ARCHIVE`。
 2026-09-27 `ARCHIVE` 规划轮与 `ARCHIVE-1` 已完成（分支 `archive-development`，`0.1.0-alpha.59`）：纯托管 zip/tar.gz 写入器、`Bundler.Tests` 181/181、`Verify.sh` 全绿。
+2026-09-27 `ARCHIVE-2` 已完成（同分支）：旋钮面收口复核无缺口，确定性构建/目录源/Zip64 拒绝断言补强，`Bundler.Tests` 184/184。
 
 ### ARCHIVE：通用压缩包格式
 
