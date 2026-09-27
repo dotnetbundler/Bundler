@@ -126,6 +126,10 @@
   公开示例先 Pack 到 `artifacts/packages`，再通过普通 `PackageReference` 直接 `dotnet publish`。
   仓库外 fixture 由脚本传入本轮包源、版本与隔离缓存。
   缺包先 Pack，不假定未发布版本在公网源，也不用源码引用掩盖包消费问题。
+  `RestoreSources` 须在仓库源之后保留公共 NuGet 源（`$(BundlerPackageSource);https://api.nuget.org/v3/index.json`）；
+  干净宿主的 runtime pack 还原依赖公网回退，截断该源会让示例默认命令失败（2026-09-27 LINUX-DEB-1 修复并由契约测试断言）。
+- MSBuild 默认值须按 RID 族推导：`BundlerMainExecutable` 对 `osx-*`/`linux-*` 取 `$(TargetName)`（无 `.exe` 后缀），其余取 `$(TargetName).exe`；
+  新增 RID 族或新宿主后缀规则时同步检查该默认（2026-09-27 LINUX-DEB-1 修正 linux 漏项）。
 - **每个后端有完整、可操作的专用示例项目**，可参考 `samples/HelloNsisApp` 的演示形式，不用测试 fixture 冒充示例。
   默认命令应直接构建并生成安装包；
   该格式当前公开且适用的**所有用户能力**都要在示例中有实际配置、可复现的变体命令或明确的操作演示，不能只列名称。
