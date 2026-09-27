@@ -38,14 +38,14 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| 包级 GPG 签名 | 计划实现（后置评估） | LINUX-RPM-3 后独立阶段 | rpm 生态真实惯例；签名 header 结构与密钥引用另行裁决，默认仅 `sha256` 侧车 |
+| 包级 GPG 签名 | 计划实现（冻结外后置评估） | `LINUX-RPM-SIGN` 独立阶段（未排期，需要时另起） | rpm 生态真实惯例；签名 header 结构与密钥引用另行裁决；冻结基线不含签名，仅 `sha256` 侧车 |
 | dnf/zypper 仓库生成 | 明确拒绝 | — | 仓库管理属分发管线而非打包器 |
 
 ## 生命周期与宿主矩阵
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| 容器真实装卸（fedora/rockylinux/opensuse） | 已实现（fedora）/计划实现（rockylinux/opensuse） | LINUX-RPM-1/4 | fedora:latest 容器 `rpm -i`/`rpm -q`/`rpm -ql`/运行/`rpm -V`/`rpm -e` 零残留全绿；其余两容器属 RPM-4 |
+| 容器真实装卸（fedora/rockylinux/opensuse） | 已实现 | LINUX-RPM-1/4 | `fedora:latest`+`rockylinux:9`+`opensuse/leap:latest` 三容器真实 `rpm -i`/`rpm -q`/`rpm -ql`/运行/`rpm -V`/`rpm -e` 零残留全绿；镜像不可拉取记 SKIP |
 | `rpmlint` 基线 | 已实现 | LINUX-RPM-4 | `rpmlint-exemptions.txt` 豁免清单硬断言；7 项豁免入档，新 tag 即失败 |
 | `linux-arm64` 产物 | 已实现（结构）/外部待验收（运行） | LINUX-RPM-4 | `*.aarch64.rpm`+`ARCH=aarch64`+载荷结构断言全绿；真机安装 OI-01 |
 | 多格式扇出（`deb;rpm` 同次 publish） | 已实现 | LINUX-RPM-1 | `BundlerFormats=deb;rpm` 同次 publish 双产物断言；MSBuild `-p:` 分号须 `%3B` 转义 |

@@ -1,6 +1,6 @@
 # Linux `.rpm` 后端实施路线（LINUX-RPM）
 
-> 状态：**LINUX-RPM-4 已实现，默认下一阶段 LINUX-RPM-5**（2026-09-27，分支 `linux-rpm-development`，包版本 `0.1.0-alpha.55`）。
+> 状态：**`.rpm` 冻结基线 `0.1.0-alpha.55`**（2026-09-27 LINUX-RPM-5 收口，`linux-rpm-development` 分支）。冻结后仅接受带回归测试的缺陷修复。
 > 上游审计见 [`docs/linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `tauri-apps/tauri@447fa9f`，DEB-5 复核确认零漂移）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 > 逐项能力状态见 [`docs/linux-rpm-capability-matrix.md`](linux-rpm-capability-matrix.md)；外部条件见 [`docs/linux-rpm-open-items.md`](linux-rpm-open-items.md)；人工步骤见 [`docs/linux-rpm-manual-testing.md`](linux-rpm-manual-testing.md)。
@@ -87,6 +87,14 @@
 
 - **目标/交付**：`rpmlint` 硬断言基线（豁免清单入档）；`linux-arm64` 产物结构断言；docker 发行版矩阵（`fedora:latest`+`rockylinux:9`+`opensuse/leap`）；干净宿主复核；示例全旋钮收口。
 - **退出**：矩阵实测格子有证据；未测格子进 OI/MT 清单。
+
+### LINUX-RPM-5：审计复核与冻结（已实现 2026-09-27）
+
+- 上游复核：`git ls-remote` 确认 `tauri-apps/tauri` `dev` HEAD 仍为 `447fa9f`——rpm 侧审计行（rpm crate 托管写入器、PGP 签名路径、`usr/lib` 布局惯例）基线保持有效，零漂移。
+- 能力矩阵定稿：无悬空"计划实现"行；GPG 签名明确为冻结外后置评估（`LINUX-RPM-SIGN`，未排期）。
+- OI/MT 收口：OI-01..07 逐条复核维持登记（OI-04 备注 fedora/rockylinux/opensuse 已由容器覆盖）；MT-01..07 全量保留。
+- **冻结基线**：`RpmBundleConfiguration` 配置面与行为契约冻结于 `0.1.0-alpha.55`；冻结测试向量 = `Bundler.Tests` 163/163 + `Verify.sh` 全绿（三容器真实 `rpm -i/-e/-U`、`%config`/scriptlet 语义、rpmlint 豁免门控、arm64 结构断言）。
+- 冻结后规则：仅接受带回归测试的缺陷修复；新能力另起阶段。
 
 ### LINUX-RPM-5：审计与格式冻结
 

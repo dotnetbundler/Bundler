@@ -13,6 +13,7 @@
 该提交与 `docs/mac-tauri-capability-audit.md` 的 MAC-APP-5/MAC-DMG-5 复核基线相同；
 2026-09-27 克隆核对 `dev` 头仍指向 `447fa9f`，自 MAC 冻结复核以来上游无新提交，本审计无漂移问题。
 2026-09-27 LINUX-DEB-5 复核：`git ls-remote` 确认 `dev` HEAD 仍为 `447fa9f`（提交时间 2026-09-26），审计行基线保持有效。
+2026-09-27 LINUX-RPM-5 复核：`git ls-remote` 确认 `dev` HEAD 仍为 `447fa9f`——rpm 侧审计行（rpm crate、签名路径、布局）基线保持有效，无漂移。
 
 固定比较点（均按快照 SHA 链接）：
 

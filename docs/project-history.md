@@ -4012,3 +4012,11 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 - `linux-arm64` 产物结构断言（`*.aarch64.rpm`/`ARCH=aarch64`/载荷结构）；docker 矩阵扩为 fedora+rockylinux:9+opensuse/leap 三容器真实 `rpm -i/-e`。
 - 验证：`Bundler.Tests` 163 全绿（无新增用例）；`Verify.sh` 全绿。干净宿主复核：`src/Bundler.Rpm` 零外部进程调用。
 - 收口注记：arm64 真机安装（OI-01）、更广发行版（OI-04）、GPG 签名仍登记。
+
+### 2026-09-27 LINUX-RPM-5：审计复核与冻结（`linux-rpm-development`，`0.1.0-alpha.55`）
+
+- 上游复核：`git ls-remote` 确认 `tauri@dev` HEAD 仍为 `447fa9f`，rpm 侧审计行零漂移。
+- 能力矩阵定稿：容器行翻"已实现"（fedora/rockylinux:9/opensuse-leap 三容器全绿）；GPG 签名标冻结外后置评估（`LINUX-RPM-SIGN` 未排期）。
+- OI-01..07/MT-01..07 逐条复核维持登记；冻结基线写入 rpm-roadmap 与 PROJECT_CONTEXT。
+- **`.rpm` 冻结基线 `0.1.0-alpha.55`**：配置面与行为契约冻结，仅接受带回归测试的缺陷修复。
+- `docs/roadmap.md` 推进至 `LINUX-APPIMAGE`。

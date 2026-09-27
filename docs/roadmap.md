@@ -146,8 +146,8 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 
 ### LINUX：Linux 格式
 
-公共模型已经包含 `Deb`、`Rpm`、`AppImage`；`.deb` 已冻结入 `main`，`.rpm` 后端已实现 LINUX-RPM-1..3，`AppImage` 无后端。
-为避免每次交接重新选择，默认顺序固定为 `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE`，仍然一次只推进一个完整格式。
+公共模型已经包含 `Deb`、`Rpm`、`AppImage`；`.deb` 已冻结入 `main`，`.rpm` 后端已冻结，`AppImage` 无后端。
+为避免每次交接重新选择，默认顺序固定为 `LINUX-DEB`（已冻结）→ `LINUX-RPM`（已冻结）→ `LINUX-APPIMAGE`，仍然一次只推进一个完整格式。
 每个格式分别完成元数据、文件布局、桌面集成、升级/卸载语义、签名或仓库验证边界、原生发行版 E2E，再进入下一个格式。
 若真实用户需求或可用原生验证环境要求调整，必须先在本文档写明依据和新顺序。
 
@@ -163,6 +163,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 2026-09-27 `LINUX-RPM-2` 已完成（同分支，`0.1.0-alpha.53`）：六族关系字段（Requires/Provides/Conflicts/Obsoletes/Recommends/Suggests，`name [op evr]` 解析）透传 + License(SPDX)/Group/Url 覆盖 + freedesktop 生成器提取到 `Bundler.Core` 内部件供 deb/rpm 复用（deb 行为不变）+ `changelog.gz`%doc/`usr/share/licenses/<pkg>/`%license + `BundlerRpmFile` 任意路径映射；`rpm -qip`/`--queryformat` 逐字段、`desktop-file-validate`、docker 装后 `rpm -ql` 逐路径全绿；cpio 成员名 `./` 前缀修正（rpmlib PayloadFilesHavePrefix 的真实语义）。
 2026-09-27 `LINUX-RPM-3` 已完成（同分支，`0.1.0-alpha.54`）：四 scriptlet 旋钮 + `*Program` 解释器覆盖 + systemd unit 与 `daemon-reload` 合成 + `%config(noreplace)` 自动/显式标记 + gzip-only 压缩；容器内 `rpm -i/-e` 标记、`rpm -U` 升级原地保留、`rpm -e` `.rpmsave` 断言全绿。
 2026-09-27 `LINUX-RPM-4` 已完成（同分支，`0.1.0-alpha.55`）：`rpmlint` 豁免清单硬断言（`rpmlint-exemptions.txt`，7 项豁免入档，新 tag 即失败；`summary-ended-with-dot` 修 fixture 描述消解）；`linux-arm64` 产物结构断言；docker 矩阵扩为 `fedora:latest`+`rockylinux:9`+`opensuse/leap:latest` 三容器真实 `rpm -i/-e` 全绿；`src/Bundler.Rpm` 零外部进程复核通过。
+2026-09-27 `LINUX-RPM-5` 已完成——**`.rpm` 冻结基线 `0.1.0-alpha.55`**：上游复核零漂移（`tauri@dev` 仍为 `447fa9f`）、能力矩阵定稿、OI-01..07/MT-01..07 收口、冻结写入路线与 PROJECT_CONTEXT；GPG 签名明确为冻结外后置评估（`LINUX-RPM-SIGN` 未排期）。
 
 ### ARCHIVE：通用压缩包格式
 
@@ -183,7 +184,7 @@ CLI 不产生新的格式能力，也不应反过来驱动后端设计；先完�
 删除重复或错误的早期 alpha 参数而不承诺兼容。
 完成后 CLI、MSBuild 和直接 API 都只是同一打包能力的适配器。
 
-当前实施顺序为：已完成并冻结的 `WIN-MSI-1..9` → `MAC-APP`（已冻结并入 main）→ `MAC-DMG`（已冻结并入 main）→ `MAC-PKG`（规划完成，默认下一阶段）→ `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE` → `ARCHIVE` → `CLI-C1`。
+当前实施顺序为：已完成并冻结的 `WIN-MSI-1..9` → `MAC-APP`（已冻结并入 main）→ `MAC-DMG`（已冻结并入 main）→ `MAC-PKG`（规划完成，默认下一阶段）→ `LINUX-DEB`（已冻结）→ `LINUX-RPM`（已冻结）→ `LINUX-APPIMAGE` → `ARCHIVE` → `CLI-C1`。
 Tauri updater 协议/提升权限计划任务若有需求另立跨格式产品路线，不混入 MSI 或提前产品化 CLI。
 调整顺序必须依据真实用户需求、验证能力和维护成本更新本文档，不能只在对话中临时改口。
 
