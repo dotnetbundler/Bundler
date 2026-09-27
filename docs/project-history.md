@@ -915,3 +915,15 @@ universal 只校验不合成 → `docs/mac-app-roadmap.md`，配套 `mac-app-cap
 - **失败路径**：非法 `BundlerMacDmgCompression` 值 → publish 失败、无 `.dmg` 产物、无残留挂载（`hdiutil info` 断言）。
 - **干净宿主复核**：后端必需工具仅 `hdiutil`/`osascript`（品牌/布局可选 `SetFile`，签名可选 `codesign`/`security`），均无 Xcode/CLT 必需依赖；GUI 观感、Intel/Rosetta、干净宿主首启登记 MAC-DMG-OI-01/03/04 与 MAC-DMG-MT-01..05。
 - `Bundler.Tests` 99/99 全绿（本阶段无新增后端代码，纯验证扩展）；README `BundlerLicenseFile` 行补 DMG SLA 口径。
+
+
+### 14.30 MAC-DMG-5：审计与格式冻结（2026-09-26，分支 `mac-dmg-development`）
+
+`.dmg` 格式冻结，收尾收口：
+
+- 上游漂移复核：tauri `dev` 头仍 `447fa9f`（自 MAC-APP-5 无新提交）；`.dmg` 侧 `dmg/mod.rs` 与内嵌 `bundle_dmg`（create-dmg 1.2.1 fork，638 行字节一致）在 `7dbfc1f`..`447fa9f` 间无漂移，无新能力缺口，记录入 `mac-tauri-capability-audit.md`。
+- 能力矩阵定稿：逐项状态与 MAC-DMG-1..4 验收证据对齐，无悬空"计划实现"行；外部待验收行维持登记。
+- 许可/供应链复核：本格式无第三方内嵌工具，全走宿主系统工具（`hdiutil`/`osascript`/`SetFile`/`codesign`/`security`，`SetFile` 可降级）；复核点收敛为宿主工具版本下限与凭证边界。
+- 外部待办 MAC-DMG-OI-01..04 逐条复核维持登记。
+- 冻结基线：`MacDmgBundleConfiguration`+`Signing` 配置面与行为契约冻结于 `0.1.0-alpha.45`；冻结测试向量 = `Bundler.Tests` 99/99 + `tests/MacOS.Dmg.Integration/Verify.sh` 全绿；冻结后仅缺陷修复附回归测试。
+- `docs/roadmap.md` 推进到 `MAC-PKG`。

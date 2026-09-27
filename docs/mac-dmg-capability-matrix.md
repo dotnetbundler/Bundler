@@ -3,7 +3,7 @@
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
 计划实现与外部待验收行绑定到 `docs/mac-dmg-roadmap.md`、`docs/mac-dmg-open-items.md`、`docs/mac-dmg-manual-testing.md` 中的明确阶段/ID。
 上游参照：`docs/mac-tauri-capability-audit.md` 的 `.dmg` 节。
-路线已确认（`2026-09-26`）；`MAC-DMG-1`..`MAC-DMG-4` 已实现（2026-09-26 云 macOS VM 实测），其余阶段未启动，表内非冻结状态。
+路线已确认（`2026-09-26`）；`MAC-DMG-1`..`MAC-DMG-5` 已完成，**`.dmg` 配置与行为基线冻结于 `0.1.0-alpha.45`**（2026-09-26，冻结测试向量 = `Bundler.Tests` 99/99 全绿 + `tests/MacOS.Dmg.Integration/Verify.sh` 全绿）；冻结后仅缺陷修复附回归测试；外部待验收行维持登记口径不变。
 
 ## 镜像与内容
 

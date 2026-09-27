@@ -6,8 +6,8 @@
 > 当前阶段：WIN-MSI-1..9 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；
 > `alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 前 NSIS 安装目录延续、事务清理竞态修复）
 > `alpha.45` 将 SDK 基线升至 .NET 10（MSBuild 任务链保留 `netstandard2.0`），无后端功能变更
-> `.app` 格式已冻结（MAC-APP-1..5，冻结基线 `0.1.0-alpha.45`）并合入 `main`；`MAC-DMG-1`..`MAC-DMG-4` 已完成，云 macOS VM 已验证
-> 默认下一阶段：`MAC-DMG-5`（审计与格式冻结，需用户明确启动指令）
+> `.app` 与 `.dmg` 格式均已冻结（MAC-APP-1..5 / MAC-DMG-1..5，冻结基线 `0.1.0-alpha.45`）；`.app` 线已合入 `main`，`.dmg` 线在 `mac-dmg-development` 分支待审
+> 默认下一阶段：`MAC-PKG`（macOS 安装包格式，路线决策已见 `docs/mac-format-decision.md`，需用户明确启动指令）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -125,12 +125,13 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - `MAC-DMG-2` 完成（2026-09-26 云 macOS VM 验证）：Finder 布局与品牌——`osascript` 窗口布局全可配（窗口 200,120+660×400、app=180,170、Applications=480,170、icon 128 默认对齐上游）、背景图拷入 `.background/`、卷图标 `.VolumeIcon.icns`+`SetFile -a C`（缺失降级）、无 GUI 会话降级警告+`BundlerMacDmgSkipWindowLayout` 显式开关；`Bundler.Tests` 新增 5 条（95 项全绿）、Verify.sh 品牌落卷断言+`.DS_Store` 条件断言全绿；修正 `hdiutil resize` 为 `-limits` 扇区数绝对值增长、`attach` 在布局运行时去掉 `-nobrowse`。
 - `MAC-DMG-3` 完成（2026-09-26 云 macOS VM 验证）：DMG 本体 `codesign`（`MacDmgSigningConfiguration`：identity `-`=ad-hoc 与 `TemporaryCertificatePath`+Password 互斥，复用 `.app` 临时钥匙串）+ `LicenseFile`→`udifrez` SLA 注入（`LPic`/`STR#`/`TEXT`|`RTF `，字节格式按上游 dmg-license 源码订正）；`Bundler.Tests` 新增 4 条（99 项全绿）、Verify.sh EULA+签名变体 `udifderez` 回读+`codesign --verify`/`Signature=adhoc` 全绿；踩坑：`udifrez` 需 `-image` 旗标、只认转换后 UDIF（UDRW 报 78）。示例补 `HelloMacDmgLicenseFile`/`HelloMacDmgDmgSign*` 旋钮。
 - `MAC-DMG-4` 完成（2026-09-26 云 macOS VM 验证）：原生 E2E 与支持矩阵——Verify.sh 全绿扩展（SLA 真实挂载门控 stdin 取消/`Y` 挂载、quarantine 传播到拷出副本、osx-x64 产物挂载+`file` x86_64 断言、非法压缩值失败无产物无残留）；干净宿主复核：必需工具仅 `hdiutil`/`osascript`（`SetFile`/`codesign`/`security` 按能力可选），无 Xcode/CLT 必需依赖；x64 运行态、GUI 观感、干净宿主首启登记外部待验收（OI-01/03/04）。
+- `MAC-DMG-5` 完成（2026-09-26）：`.dmg` 格式冻结——上游复核无漂移（dev 头仍 `447fa9f`，`bundle_dmg`/`dmg/mod.rs` 字节一致），矩阵定稿，供应链复核确认无第三方内嵌工具；冻结基线 `0.1.0-alpha.45`，冻结测试向量 = `Bundler.Tests` 99/99 + Verify.sh 全绿；roadmap 推进 `MAC-PKG`。
 - MAC-DMG 规划轮已确认（2026-09-26）：C# 原生编排 `hdiutil`/`osascript`/`SetFile`/`sips` 不内嵌 create-dmg fork；DMG 本体可 `codesign`（`-` 跳过）不做公证；无 GUI 会话跳过布局+警告，`BundlerDmgSkipWindowLayout` 开关；EULA 经 `hdiutil udifrez` 注入 SLA；压缩格式可配置枚举 Udzo/Ulmo/Udbz、默认 `Ulmo`（挂载侧需 macOS 10.12+）；产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg`；窗口布局全可配默认对齐上游。
 
 ## 6. 默认下一步
 
-`MAC-DMG-5`：`MAC-DMG-1`..`MAC-DMG-4` 已完成（镜像全链+布局品牌+签名 EULA+原生 E2E 矩阵本机实测通过）；下一阶段为审计与格式冻结（上游漂移复核、能力矩阵定稿、冻结基线、roadmap.md 推进 MAC-PKG）。
-等用户明确 `MAC-DMG-5` 启动指令再实施；未经明确要求不提交、不推送。
+`MAC-PKG`：`MAC-DMG-1`..`MAC-DMG-5` 已完成且 `.dmg` 已冻结；下一阶段为 macOS `.pkg` 安装包格式（`PackageFormat.Pkg` 已在公共枚举；决策见 `docs/mac-format-decision.md`，规划轮产出 `mac-pkg-*` 文档后才实施）。
+等用户明确 `MAC-PKG` 启动指令再实施；未经明确要求不提交、不推送。
 
 ## 7. 历史记录
 

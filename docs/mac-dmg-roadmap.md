@@ -1,6 +1,6 @@
 # macOS `.dmg` 后端实施路线（MAC-DMG）
 
-> 状态：**`MAC-DMG-1`..`MAC-DMG-4` 已完成（2026-09-26 云 macOS VM 实测），`MAC-DMG-5` 待启动指令**。
+> 状态：**`MAC-DMG-1`..`MAC-DMG-5` 已完成，`.dmg` 格式已冻结（2026-09-26，冻结基线 `0.1.0-alpha.45`）**；`docs/roadmap.md` 默认下一阶段推进到 `MAC-PKG`。
 > 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md) 的 `.dmg` 节（同一 `7dbfc1f` 快照基线）；
 > `.app` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
@@ -67,6 +67,7 @@
 
 - **前置**：MAC-DMG-4 完成。
 - **目标/交付**：上游漂移复核、能力矩阵定稿、冻结基线；`docs/roadmap.md` 推进到 `MAC-PKG`。
+- **验收记录（2026-09-26）**：上游漂移复核——tauri `dev` 头仍为 `447fa9f`（自 MAC-APP-5 无新提交），`.dmg` 侧 `dmg/mod.rs` 与内嵌 `bundle_dmg`（create-dmg 1.2.1 fork，638 行字节一致）在 `7dbfc1f`..`447fa9f` 间无漂移，无新能力缺口；能力矩阵定稿（逐项与 MAC-DMG-1..4 验收证据对齐，无悬空"计划实现"行）；许可/供应链复核——本格式无第三方内嵌工具，全走宿主系统工具（`hdiutil`/`osascript`/`SetFile`/`codesign`/`security`，`SetFile` 可降级），复核点收敛为宿主工具版本下限与凭证边界；外部待办 MAC-DMG-OI-01..04 逐条复核维持登记。**冻结基线**：`MacDmgBundleConfiguration`+`Signing` 配置面与行为契约冻结于 `0.1.0-alpha.45`；冻结测试向量 = `Bundler.Tests` 99/99 + `Verify.sh` 全绿；冻结后仅缺陷修复附回归测试。`docs/roadmap.md` 推进到 `MAC-PKG`。
 
 ## 5. 验证分层
 
