@@ -358,7 +358,11 @@ internal static class CliConfig
             var value = parsed.Options.TryGetValue(option, out var v) ? v : null;
             if (value is not null)
             {
-                target[field] = value;
+                // CLI 输入相对当前工作目录解析；此处在 ResolveRelativePaths 之后，
+                // target 级 CLI 字段需要自己绝对化（后端在独立工作目录执行）。
+                target[field] = field == "inputDirectory" && !Path.IsPathRooted(value)
+                    ? Path.GetFullPath(value)
+                    : value;
             }
         }
         if (parsed.Options.TryGetValue("formats", out var formats))
