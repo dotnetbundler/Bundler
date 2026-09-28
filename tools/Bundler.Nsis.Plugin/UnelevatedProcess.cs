@@ -44,6 +44,13 @@ internal static class UnelevatedProcess
 
         using (shellToken)
         {
+            // UAC 已禁用（EnableLUA=0）或外壳自身已提升时，不存在可降级的桌面
+            // 令牌；此时当前令牌就代表该用户，直接用它启动。
+            if (IsTokenElevated(shellToken))
+            {
+                return StartWithCurrentToken(executable, arguments);
+            }
+
             var commandLine = BuildCommandLine(executable, arguments);
             var startupInfo = new StartupInfo
             {
@@ -92,15 +99,21 @@ internal static class UnelevatedProcess
 
         using (token)
         {
-            var elevation = new TokenElevation();
-            var size = Marshal.SizeOf<TokenElevation>();
-            return !GetTokenInformation(
-                       token.DangerousGetHandle(),
-                       TokenInformationClass.Elevation,
-                       ref elevation,
-                       size,
-                       out _) || elevation.IsElevated != 0;
+            return IsTokenElevated(token);
         }
+    }
+
+    private static bool IsTokenElevated(SafeKernelHandle token)
+    {
+        var elevation = new TokenElevation();
+        var size = Marshal.SizeOf<TokenElevation>();
+        // 读取失败时按已提升处理，沿用提升路径的保守策略。
+        return !GetTokenInformation(
+                   token.DangerousGetHandle(),
+                   TokenInformationClass.Elevation,
+                   ref elevation,
+                   size,
+                   out _) || elevation.IsElevated != 0;
     }
 
     private static int StartWithCurrentToken(string executable, string arguments)
