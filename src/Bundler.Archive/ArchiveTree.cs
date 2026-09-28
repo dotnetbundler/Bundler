@@ -1,3 +1,4 @@
+using DotNet.Bundler;
 using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Archive;
@@ -22,11 +23,12 @@ internal static class ArchiveTree
 
     internal static List<Entry> Build(
         BundleConfiguration bundle, BundlePlanItem item,
-        ArchiveBundleConfiguration settings, string workDirectory)
+        ArchiveBundleConfiguration settings, string workDirectory,
+        IBundleLogger logger)
     {
         var payloadRoot = item.InputDirectory;
         var entries = new List<Entry>();
-        Collect(payloadRoot, "", entries);
+        Collect(payloadRoot, "", entries, logger);
 
         if (settings.Files is { Count: > 0 } files)
         {
@@ -53,13 +55,13 @@ internal static class ArchiveTree
         return entries;
     }
 
-    private static void Collect(string directory, string relativePrefix, List<Entry> entries)
+    private static void Collect(string directory, string relativePrefix, List<Entry> entries, IBundleLogger log)
     {
         foreach (var dir in Directory.GetDirectories(directory).OrderBy(d => d, StringComparer.Ordinal))
         {
             var rel = relativePrefix + Path.GetFileName(dir);
             entries.Add(new Entry { ArchivePath = rel, Kind = TarEntryKind.Directory, Mode = 493 /* 0755 */ });
-            Collect(dir, rel + "/", entries);
+            Collect(dir, rel + "/", entries, log);
         }
         foreach (var file in Directory.GetFiles(directory).OrderBy(f => f, StringComparer.Ordinal))
         {
@@ -86,6 +88,10 @@ internal static class ArchiveTree
                 });
             }
             // Sockets, FIFOs and device nodes cannot be archived; skip them.
+            else
+            {
+                log.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
+            }
         }
     }
 

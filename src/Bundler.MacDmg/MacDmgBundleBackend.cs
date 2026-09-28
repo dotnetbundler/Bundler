@@ -59,7 +59,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             // Stage the volume contents: the .app plus the /Applications drop link.
             Directory.CreateDirectory(stageDirectory);
             Directory.CreateDirectory(mountDirectory);
-            CopyTree(appPath, Path.Combine(stageDirectory, applicationName));
+            CopyTree(appPath, Path.Combine(stageDirectory, applicationName), logger);
             await MacDmgProcessRunner.RunAsync(
                 "ln", ["-s", "/Applications", Path.Combine(stageDirectory, "Applications")],
                 workDirectory, cancellationToken);
@@ -451,7 +451,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         }
     }
 
-    private static void CopyTree(string source, string destination)
+    private static void CopyTree(string source, string destination, IBundleLogger log)
     {
         Directory.CreateDirectory(destination);
         foreach (var file in Directory.GetFiles(source))
@@ -459,13 +459,14 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             // Sockets, FIFOs and device nodes cannot be copied; skip them.
             if (!UnixFileTypes.IsRegularFile(file))
             {
+                log.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
                 continue;
             }
             File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), overwrite: true);
         }
         foreach (var directory in Directory.GetDirectories(source))
         {
-            CopyTree(directory, Path.Combine(destination, Path.GetFileName(directory)));
+            CopyTree(directory, Path.Combine(destination, Path.GetFileName(directory)), log);
         }
     }
 }

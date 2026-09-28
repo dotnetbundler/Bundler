@@ -36,7 +36,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
 
         // destination -> source bookkeeping catches collisions across every channel.
         var destinations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        CopyTree(item.InputDirectory, executablesDirectory, destinations);
+        CopyTree(item.InputDirectory, executablesDirectory, destinations, context.Logger);
 
         var executablePath = Path.Combine(executablesDirectory, item.MainExecutable);
         if (!File.Exists(executablePath))
@@ -53,18 +53,18 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         foreach (var resource in bundle.Resources)
         {
             var target = Path.Combine(resourcesDirectory, NormalizeNestedPath(resource.TargetPath, "resources"));
-            CopyPayloadEntry(resource.Source, target, destinations);
+            CopyPayloadEntry(resource.Source, target, destinations, context.Logger);
         }
         foreach (var mapping in contents)
         {
             CopyPayloadEntry(mapping.Source,
                 Path.Combine(contentsDirectory, mapping.TargetPath.Replace('/', Path.DirectorySeparatorChar)),
-                destinations);
+                destinations, context.Logger);
         }
         foreach (var framework in settings.Frameworks)
         {
             var name = Path.GetFileName(framework);
-            CopyPayloadEntry(framework, Path.Combine(frameworksDirectory, name), destinations);
+            CopyPayloadEntry(framework, Path.Combine(frameworksDirectory, name), destinations, context.Logger);
         }
 
         var plistValues = new Dictionary<string, object>(StringComparer.Ordinal)
@@ -213,7 +213,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         return normalized;
     }
 
-    private static void CopyTree(string sourceDirectory, string destinationDirectory, HashSet<string> destinations)
+    private static void CopyTree(string sourceDirectory, string destinationDirectory, HashSet<string> destinations, IBundleLogger log)
     {
         var root = Path.GetFullPath(sourceDirectory);
         CheckReparse(root);
@@ -234,6 +234,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
                 // Sockets, FIFOs and device nodes cannot be copied; skip them.
                 if (!UnixFileTypes.IsRegularFile(file))
                 {
+                    log.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
                     continue;
                 }
                 CopyFileEntry(file, Path.Combine(destination, Path.GetFileName(file)), destinations);
@@ -241,7 +242,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         }
     }
 
-    private static void CopyPayloadEntry(string source, string destination, HashSet<string> destinations)
+    private static void CopyPayloadEntry(string source, string destination, HashSet<string> destinations, IBundleLogger log)
     {
         var fullSource = Path.GetFullPath(source);
         CheckReparse(fullSource);
@@ -252,7 +253,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         }
         if (Directory.Exists(fullSource))
         {
-            CopyTree(fullSource, destination, destinations);
+            CopyTree(fullSource, destination, destinations, log);
             return;
         }
         throw new FileNotFoundException("The .app payload source does not exist.", fullSource);

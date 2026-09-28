@@ -25,7 +25,8 @@ internal static class AppDirBuilder
         BundleConfiguration bundle,
         BundlePlanItem item,
         AppImageBundleConfiguration settings,
-        string workDirectory)
+        string workDirectory,
+        IBundleLogger logger)
     {
         var packageName = AppImageIdentity.PackageName(settings.PackageName, bundle.ProductName);
         var version = (settings.Version ?? bundle.Version).Trim();
@@ -68,7 +69,7 @@ internal static class AppDirBuilder
         // usr/lib/<pkg>/ payload, then usr/bin/<link> → ../lib/<pkg>/<main>.
         var input = item.InputDirectory;
         var payloadRoot = Path.Combine(appDir, installRoot.Replace('/', Path.DirectorySeparatorChar));
-        CopyTree(input, payloadRoot);
+        CopyTree(input, payloadRoot, logger);
         var mainHostPath = Path.Combine(payloadRoot, mainPosixName);
         if (!File.Exists(mainHostPath))
         {
@@ -89,7 +90,7 @@ internal static class AppDirBuilder
             var destinationDir = Path.Combine(payloadRoot, target.Replace('/', Path.DirectorySeparatorChar));
             if (Directory.Exists(source))
             {
-                CopyTree(source, destinationDir);
+                CopyTree(source, destinationDir, logger);
             }
             else if (File.Exists(source))
             {
@@ -234,7 +235,7 @@ internal static class AppDirBuilder
         };
     }
 
-    private static void CopyTree(string source, string destination)
+    private static void CopyTree(string source, string destination, IBundleLogger log)
     {
         Directory.CreateDirectory(destination);
         foreach (var directory in Directory.GetDirectories(source, "*", SearchOption.AllDirectories))
@@ -248,6 +249,7 @@ internal static class AppDirBuilder
             // the archive formats do.
             if (!UnixFileTypes.IsRegularFile(file))
             {
+                log.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
                 continue;
             }
             var target = Path.Combine(

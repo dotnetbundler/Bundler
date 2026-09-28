@@ -87,7 +87,7 @@ internal static class RpmPackageWriter
         }
 
         ValidateSigning(settings);
-        var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings);
+        var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
         var cpio = CpioWriter.Write(payload.Select(ToCpioEntry).ToList());
         var compressedPayload = Gzip(cpio);
 
@@ -471,7 +471,8 @@ internal static class RpmPackageWriter
         string installRoot,
         string binLink,
         string packageName,
-        RpmBundleConfiguration settings)
+        RpmBundleConfiguration settings,
+        IBundleLogger logger)
     {
         var entries = new List<PayloadEntry>();
         var claimed = new HashSet<string>(StringComparer.Ordinal);
@@ -563,6 +564,7 @@ internal static class RpmPackageWriter
             // Sockets, FIFOs and device nodes cannot be packaged; skip them.
             if (!UnixFileTypes.IsRegularFile(file))
             {
+                logger.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
                 continue;
             }
             var relative = ToPosixPath(RelativePath(input, file));
@@ -587,6 +589,7 @@ internal static class RpmPackageWriter
                 {
                     if (!UnixFileTypes.IsRegularFile(file))
                     {
+                        logger.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
                         continue;
                     }
                     var relative = ToPosixPath(RelativePath(source, file));

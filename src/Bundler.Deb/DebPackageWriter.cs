@@ -65,7 +65,7 @@ internal static class DebPackageWriter
                 "(the managed writer has no xz/zstd encoder; zstd also needs dpkg >= 1.21.18).");
         }
 
-        var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, version, maintainer, settings);
+        var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, version, maintainer, settings, logger);
         var dataTarGz = Gzip(TarData(payload));
         var controlTarGz = Gzip(TarBytes(ControlEntries(bundle, payload, packageName, version,
             architecture, maintainer, settings)));
@@ -120,7 +120,8 @@ internal static class DebPackageWriter
         string packageName,
         string version,
         string maintainer,
-        DebBundleConfiguration settings)
+        DebBundleConfiguration settings,
+        IBundleLogger logger)
     {
         var entries = new List<PayloadEntry>();
         var claimed = new HashSet<string>(StringComparer.Ordinal);
@@ -205,6 +206,7 @@ internal static class DebPackageWriter
             // Sockets, FIFOs and device nodes cannot be packaged; skip them.
             if (!UnixFileTypes.IsRegularFile(file))
             {
+                logger.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
                 continue;
             }
             var relative = ToPosixPath(RelativePath(input, file));
@@ -230,6 +232,7 @@ internal static class DebPackageWriter
                 {
                     if (!UnixFileTypes.IsRegularFile(file))
                     {
+                        logger.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
                         continue;
                     }
                     var relative = ToPosixPath(RelativePath(source, file));

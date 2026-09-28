@@ -43,7 +43,10 @@ internal static class UnixFileTypes
     // struct stat st_mode offset: 64-bit ABIs that give st_nlink a full
     // machine word (x86_64, s390x, ppc64le) put st_mode at 24; the asm-generic
     // layout every other Linux arch uses puts it at 16. macOS (u32 st_dev +
-    // u16 st_mode) puts it at 4.
+    // u16 st_mode) puts it at 4. An ABI not covered above defaults to the
+    // asm-generic offset on a best-effort basis — a wrong guess misreads
+    // mode bits and just falls back to the pre-skip failure mode (File.Copy
+    // throwing), it cannot copy something unsafe.
     private static int LinuxModeOffset()
     {
         var architecture = RuntimeInformation.ProcessArchitecture;

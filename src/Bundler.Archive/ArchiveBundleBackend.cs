@@ -25,7 +25,7 @@ internal sealed class ArchiveBundleBackend(
         var version = settings.Version ?? context.Configuration.Version;
         var stem = ArchiveIdentity.ArchiveStem(settings, packageName, version, context.Item);
         var entries = ArchiveTree.UnderStem(ArchiveTree.Build(
-            context.Configuration, context.Item, settings, context.WorkDirectory), stem);
+            context.Configuration, context.Item, settings, context.WorkDirectory, context.Logger), stem);
         var extension = format == PackageFormat.Zip ? ".zip" : ".tar.gz";
         Directory.CreateDirectory(context.Item.OutputDirectory);
         var outputPath = Path.Combine(context.Item.OutputDirectory, stem + extension);

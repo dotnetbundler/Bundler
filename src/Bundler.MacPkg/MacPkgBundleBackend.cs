@@ -75,7 +75,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                 bundle.OutputDirectory, item.Target.RuntimeIdentifier, "app", applicationName);
             if (Directory.Exists(appPath))
             {
-                CopyTree(appPath, Path.Combine(stageDirectory, applicationName));
+                CopyTree(appPath, Path.Combine(stageDirectory, applicationName), logger);
             }
             else if (payloadItems.Count == 0)
             {
@@ -105,7 +105,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                         .TrimStart('/'));
                 if (Directory.Exists(source))
                 {
-                    CopyTree(source, destination);
+                    CopyTree(source, destination, logger);
                 }
                 else
                 {
@@ -303,7 +303,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
         _ => "i386",
     };
 
-    private static void CopyTree(string source, string destination)
+    private static void CopyTree(string source, string destination, IBundleLogger log)
     {
         Directory.CreateDirectory(destination);
         foreach (var file in Directory.GetFiles(source))
@@ -311,13 +311,14 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             // Sockets, FIFOs and device nodes cannot be copied; skip them.
             if (!UnixFileTypes.IsRegularFile(file))
             {
+                log.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
                 continue;
             }
             File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), overwrite: true);
         }
         foreach (var directory in Directory.GetDirectories(source))
         {
-            CopyTree(directory, Path.Combine(destination, Path.GetFileName(directory)));
+            CopyTree(directory, Path.Combine(destination, Path.GetFileName(directory)), log);
         }
     }
 }

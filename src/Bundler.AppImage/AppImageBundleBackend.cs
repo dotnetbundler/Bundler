@@ -16,7 +16,7 @@ internal sealed class AppImageBundleBackend(
         BundleBuildContext context, CancellationToken cancellationToken)
     {
         var built = AppDirBuilder.Build(
-            context.Configuration, context.Item, settings, context.WorkDirectory);
+            context.Configuration, context.Item, settings, context.WorkDirectory, context.Logger);
         var toolset = AppImageToolset.Resolve(
             built.EnvironmentArchitecture, options.ToolsetCacheDirectory, cancellationToken);
         var signing = PrepareSigning(settings, context.WorkDirectory);

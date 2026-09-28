@@ -55,7 +55,7 @@ internal static class AppImageTests
                 {
                     Categories = "Utility;Development",
                     DesktopFile = desktop
-                }, work);
+                }, work, NullBundleLogger.Instance);
             var dir = result.AppDirPath;
             Assert(File.Exists(Path.Combine(dir, "usr", "lib", "example-app", "ExampleApp")),
                 "payload binary must land under usr/lib/<pkg>");
@@ -86,7 +86,7 @@ internal static class AppImageTests
         try
         {
             var result = AppDirBuilder.Build(
-                BundleWith(null), PlanItem(input, work), new AppImageBundleConfiguration(), work);
+                BundleWith(null), PlanItem(input, work), new AppImageBundleConfiguration(), work, NullBundleLogger.Instance);
             var png = File.ReadAllBytes(Path.Combine(result.AppDirPath, "example-app.png"));
             Assert(png.Length > 4 && png[0] == 0x89 && png[1] == 'P',
                 "default icon must be a real PNG");
@@ -115,7 +115,7 @@ internal static class AppImageTests
                 {
                     PackageName = "My App",
                     Version = "2.0.0-beta.1"
-                }, work);
+                }, work, NullBundleLogger.Instance);
             Assert(result.PackageName == "my-app", "package name must kebab-case");
             Assert(result.Version == "2.0.0-beta.1", "version passes through verbatim");
             Assert(result.FileArchitecture == "aarch64" && result.EnvironmentArchitecture == "aarch64",
@@ -137,23 +137,23 @@ internal static class AppImageTests
         {
             AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
                 BundleWith(null), PlanItem(input, work),
-                new AppImageBundleConfiguration { InstallRoot = "../escape" }, work),
+                new AppImageBundleConfiguration { InstallRoot = "../escape" }, work, NullBundleLogger.Instance),
                 "escaping install root must be rejected");
             AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
                 BundleWith(null), PlanItem(input, work),
-                new AppImageBundleConfiguration { Architecture = "ppc64" }, work),
+                new AppImageBundleConfiguration { Architecture = "ppc64" }, work, NullBundleLogger.Instance),
                 "unknown arch must be rejected");
             AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
                 BundleWith(null), PlanItem(input, work),
-                new AppImageBundleConfiguration { PackageName = "a" }, work),
+                new AppImageBundleConfiguration { PackageName = "a" }, work, NullBundleLogger.Instance),
                 "one-char package name must be rejected");
             AssertThrows<FileNotFoundException>(() => AppDirBuilder.Build(
                 BundleWith(null), PlanItem(input, work),
-                new AppImageBundleConfiguration { IconFile = input + "/missing.png" }, work),
+                new AppImageBundleConfiguration { IconFile = input + "/missing.png" }, work, NullBundleLogger.Instance),
                 "missing icon file must be rejected");
             AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
                 BundleWith(null), PlanItem(input, work),
-                new AppImageBundleConfiguration { Categories = "Bad;Name!" }, work),
+                new AppImageBundleConfiguration { Categories = "Bad;Name!" }, work, NullBundleLogger.Instance),
                 "invalid categories must be rejected");
         }
         finally
@@ -178,7 +178,7 @@ internal static class AppImageTests
                         new AppImageFileEntry { Source = extra, Destination = "opt/extras/extra.conf" },
                         new AppImageFileEntry { Source = extra, Destination = "usr/share/example-app/extra-copy.conf" }
                     ]
-                }, work);
+                }, work, NullBundleLogger.Instance);
             Assert(File.ReadAllText(Path.Combine(result.AppDirPath, "opt", "extras", "extra.conf")) == "k=v",
                 "AppDir file must land at the relative destination");
             Assert(File.Exists(Path.Combine(result.AppDirPath, "usr", "share", "example-app", "extra-copy.conf")),
@@ -203,14 +203,14 @@ internal static class AppImageTests
             {
                 AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
                     BundleWith(null), PlanItem(input, work),
-                    new AppImageBundleConfiguration { Files = [Entry(bad)] }, work),
+                    new AppImageBundleConfiguration { Files = [Entry(bad)] }, work, NullBundleLogger.Instance),
                     $"bad destination '{bad}' must be rejected");
             }
             foreach (var collision in new[] { "AppRun", ".DirIcon", "example-app.desktop", "example-app.png" })
             {
                 AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
                     BundleWith(null), PlanItem(input, work),
-                    new AppImageBundleConfiguration { Files = [Entry(collision)] }, work),
+                    new AppImageBundleConfiguration { Files = [Entry(collision)] }, work, NullBundleLogger.Instance),
                     $"generated-entry collision '{collision}' must be rejected");
             }
             // Payload file already under the AppDir.
@@ -219,14 +219,14 @@ internal static class AppImageTests
                 new AppImageBundleConfiguration
                 {
                     Files = [Entry("usr/lib/example-app/ExampleApp.dll")]
-                }, work),
+                }, work, NullBundleLogger.Instance),
                 "existing payload path must be rejected");
             AssertThrows<FileNotFoundException>(() => AppDirBuilder.Build(
                 BundleWith(null), PlanItem(input, work),
                 new AppImageBundleConfiguration
                 {
                     Files = [new AppImageFileEntry { Source = input + "/missing", Destination = "opt/x" }]
-                }, work),
+                }, work, NullBundleLogger.Instance),
                 "missing source must be rejected");
         }
         finally
@@ -247,7 +247,7 @@ internal static class AppImageTests
         {
             CreateUnixSocket(Path.Combine(input, "agent.sock"));
             var result = AppDirBuilder.Build(
-                BundleWith(null), PlanItem(input, work), new AppImageBundleConfiguration(), work);
+                BundleWith(null), PlanItem(input, work), new AppImageBundleConfiguration(), work, NullBundleLogger.Instance);
             Assert(File.Exists(Path.Combine(result.AppDirPath, "usr", "lib", "example-app", "ExampleApp")),
                 "regular payload files still stage");
             Assert(!File.Exists(Path.Combine(result.AppDirPath, "usr", "lib", "example-app", "agent.sock")),
