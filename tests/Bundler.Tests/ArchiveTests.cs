@@ -14,6 +14,7 @@ internal static class ArchiveTests
             yield return ("Writes a valid .zip with unix modes", () => RunSync(WritesZip));
             yield return ("Writes a valid .tar.gz with modes and symlink", () => RunSync(WritesTarGz));
             yield return ("Stages arbitrary archive files", () => RunSync(StagesArbitraryFiles));
+            yield return ("Skips non-regular payload files", () => RunSync(SkipsNonRegularPayloadFiles));
             yield return ("Rejects invalid archive settings", () => RunSync(RejectsInvalidSettings));
             yield return ("Rejects invalid archive file mappings", () => RunSync(RejectsInvalidFileMappings));
             yield return ("Produces zip and targz in one fanout", () => RunSync(FanoutProducesBoth));
@@ -365,6 +366,41 @@ internal static class ArchiveTests
     {
         try { File.CreateSymbolicLink(path, target); }
         catch { /* filesystem/permission does not allow links — the assertion tolerates it */ }
+    }
+
+    // A unix socket (or any other non-regular file) inside the input must be
+    // skipped rather than archived.
+    static void SkipsNonRegularPayloadFiles()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "socket-skip-out");
+        try
+        {
+            using (var socket = new System.Net.Sockets.Socket(
+                       System.Net.Sockets.AddressFamily.Unix,
+                       System.Net.Sockets.SocketType.Stream,
+                       System.Net.Sockets.ProtocolType.Unspecified))
+            {
+                socket.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(
+                    Path.Combine(input, "agent.sock")));
+            }
+            var artifact = new ArchiveBundler(new ArchiveBundleConfiguration
+            {
+                ArchiveName = "socket-skip"
+            }).BuildAsync(Configuration(input, output, formats: [PackageFormat.Zip]))
+                .GetAwaiter().GetResult().Single();
+            using var archive = ZipFile.OpenRead(artifact.Path);
+            var names = archive.Entries.Select(e => e.FullName).ToArray();
+            Assert(names.Any(name => name == "socket-skip/ExampleApp"),
+                "regular payload files must still be archived");
+            Assert(!names.Any(name => name.EndsWith("agent.sock", StringComparison.Ordinal)),
+                $"a unix socket must not be archived: {string.Join(',', names)}");
+        }
+        finally
+        {
+            Cleanup(input);
+        }
     }
 
     static BundleConfiguration Configuration(string input, string output,

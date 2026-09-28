@@ -15,6 +15,7 @@ internal static class AppImageTests
             yield return ("Rejects invalid appimage settings", () => RunSync(RejectsInvalidSettings));
             yield return ("Rejects invalid file mappings", () => RunSync(RejectsInvalidFileMappings));
             yield return ("Stages arbitrary AppDir files", () => RunSync(StagesArbitraryFiles));
+            yield return ("Skips non-regular payload files", () => RunSync(SkipsNonRegularPayloadFiles));
             yield return ("Builds a real .AppImage via bundled appimagetool", () => RunSync(BuildsRealAppImage));
             yield return ("Cross-builds aarch64 via the embedded runtime", () => RunSync(CrossBuildsAarch64));
             yield return ("Maps appimage settings through MSBuild", () => RunSync(MapsAppImageSettingsThroughMsBuild));
@@ -234,6 +235,43 @@ internal static class AppImageTests
         }
     }
 
+    // A unix socket (or any other non-regular file) inside the input must be
+    // skipped rather than copied into the AppDir.
+    static void SkipsNonRegularPayloadFiles()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var input = CreateInputDirectory();
+        var work = input + ".work";
+        var output = input + ".artifacts";
+        try
+        {
+            CreateUnixSocket(Path.Combine(input, "agent.sock"));
+            var result = AppDirBuilder.Build(
+                BundleWith(null), PlanItem(input, work), new AppImageBundleConfiguration(), work);
+            Assert(File.Exists(Path.Combine(result.AppDirPath, "usr", "lib", "example-app", "ExampleApp")),
+                "regular payload files still stage");
+            Assert(!File.Exists(Path.Combine(result.AppDirPath, "usr", "lib", "example-app", "agent.sock")),
+                "a unix socket in the input must not reach the AppDir");
+            var artifact = new AppImageBundler().BuildAsync(
+                Configuration(input, output)).GetAwaiter().GetResult().Single();
+            Assert(File.Exists(artifact.Path),
+                "the .AppImage build must succeed with a socket inside the input");
+        }
+        finally
+        {
+            Cleanup(input, work, output);
+        }
+    }
+
+    static void CreateUnixSocket(string path)
+    {
+        using var socket = new System.Net.Sockets.Socket(
+            System.Net.Sockets.AddressFamily.Unix,
+            System.Net.Sockets.SocketType.Stream,
+            System.Net.Sockets.ProtocolType.Unspecified);
+        socket.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(path));
+    }
+
     // Real end-to-end runs of the bundled appimagetool (Linux host only).
     static void BuildsRealAppImage()
     {
@@ -290,12 +328,14 @@ internal static class AppImageTests
         if (!OperatingSystem.IsLinux()) return;
         var input = CreateInputDirectory();
         var output = input + ".artifacts";
-        var gnupg = Path.Combine(input, "gnupg");
+        // The throwaway keyring must stay out of the packaged input: a live
+        // gpg-agent drops unix sockets inside its home that cannot be copied.
+        var gnupg = input + "-gnupg";
         Directory.CreateDirectory(gnupg);
-        var keyFile = Path.Combine(input, "key.asc");
+        var keyFile = Path.Combine(gnupg, "key.asc");
         try
         {
-            var batch = Path.Combine(input, "keygen.txt");
+            var batch = Path.Combine(gnupg, "keygen.txt");
             File.WriteAllText(batch,
                 "Key-Type: RSA\nKey-Length: 2048\nName-Real: Bundler Test\n" +
                 "Name-Email: bundler-test@example.com\nExpire-Date: 0\n" +
@@ -327,7 +367,9 @@ internal static class AppImageTests
         }
         finally
         {
-            Cleanup(input, output);
+            try { Run("gpgconf", gnupg, ["--kill", "gpg-agent"]); }
+            catch (InvalidOperationException) { }
+            Cleanup(input, output, gnupg);
         }
     }
 

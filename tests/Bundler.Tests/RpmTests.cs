@@ -22,6 +22,7 @@ internal static class RpmTests
             yield return ("Rejects invalid rpm settings", () => RunSync(RejectsInvalidSettings));
             yield return ("Derives a kebab-case package name", () => RunSync(DerivesKebabName));
             yield return ("Stages resources under the install root", () => RunSync(StagesResources));
+            yield return ("Skips non-regular payload files", () => RunSync(SkipsNonRegularPayloadFiles));
             yield return ("Owns explicit directory entries", () => RunSync(OwnsDirectoryEntries));
             yield return ("Produces deterministic .rpm bytes", () => RunSync(DeterministicBytes));
             yield return ("Writes a correct sha256 sidecar", () => RunSync(Sha256Sidecar));
@@ -995,6 +996,38 @@ internal static class RpmTests
         png[12] = 0x49; png[13] = 0x48; png[14] = 0x44; png[15] = 0x52; // "IHDR"
         png[19] = 48; png[23] = 48;                                    // width/height 48
         return png;
+    }
+
+    // A unix socket (or any other non-regular file) inside the input must be
+    // skipped rather than packaged.
+    static void SkipsNonRegularPayloadFiles()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            using (var socket = new System.Net.Sockets.Socket(
+                       System.Net.Sockets.AddressFamily.Unix,
+                       System.Net.Sockets.SocketType.Stream,
+                       System.Net.Sockets.ProtocolType.Unspecified))
+            {
+                socket.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(
+                    Path.Combine(input, "agent.sock")));
+            }
+            var artifact = new RpmBundler().BuildAsync(RpmConfiguration(input, output))
+                .GetAwaiter().GetResult().Single();
+            var package = RpmPackageReader.Read(artifact.Path);
+            var paths = package.Payload.Select(e => e.Path).ToArray();
+            Assert(paths.Contains("/usr/lib/example-app/ExampleApp"),
+                "regular payload files must still be packaged");
+            Assert(!paths.Any(path => path.EndsWith("agent.sock", StringComparison.Ordinal)),
+                $"a unix socket must not be packaged: {string.Join(',', paths)}");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
     }
 
     static BundleConfiguration RpmConfiguration(

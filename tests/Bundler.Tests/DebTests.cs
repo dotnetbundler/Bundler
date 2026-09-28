@@ -18,6 +18,7 @@ internal static class DebTests
             yield return ("Derives a kebab-case package name", () => RunSync(DerivesKebabName));
             yield return ("Writes matching md5sums", () => RunSync(Md5sumsMatch));
             yield return ("Stages resources under the install root", () => RunSync(StagesResources));
+            yield return ("Skips non-regular payload files", () => RunSync(SkipsNonRegularPayloadFiles));
             yield return ("Writes desktop integration files", () => RunSync(WritesDesktopIntegration));
             yield return ("Writes relation and doc fields", () => RunSync(WritesRelationAndDocFields));
             yield return ("Rejects invalid metadata", () => RunSync(RejectsInvalidMetadata));
@@ -885,6 +886,39 @@ internal static class DebTests
         var msbuildProject = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "Bundler.MSBuild.csproj"));
         Assert(msbuildProject.Contains("DotNet.Bundler.Deb.dll", StringComparison.Ordinal),
             "The MSBuild package does not pack the Deb backend assembly.");
+    }
+
+    // A unix socket (or any other non-regular file) inside the input must be
+    // skipped rather than packaged.
+    static void SkipsNonRegularPayloadFiles()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            using (var socket = new System.Net.Sockets.Socket(
+                       System.Net.Sockets.AddressFamily.Unix,
+                       System.Net.Sockets.SocketType.Stream,
+                       System.Net.Sockets.ProtocolType.Unspecified))
+            {
+                socket.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(
+                    Path.Combine(input, "agent.sock")));
+            }
+            var artifact = new DebBundler().BuildAsync(DebConfiguration(input, output))
+                .GetAwaiter().GetResult().Single();
+            var members = DebPackageReader.ReadAr(artifact.Path);
+            var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
+            var names = data.Select(e => e.Name).ToArray();
+            Assert(names.Contains("./usr/lib/example-app/ExampleApp"),
+                "regular payload files must still be packaged");
+            Assert(!names.Any(name => name.EndsWith("agent.sock", StringComparison.Ordinal)),
+                $"a unix socket must not be packaged: {string.Join(',', names)}");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
     }
 
     static BundleConfiguration DebConfiguration(

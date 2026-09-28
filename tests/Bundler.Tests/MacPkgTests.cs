@@ -13,6 +13,7 @@ internal static class MacPkgTests
             yield return ("Runs the pkgbuild chain on stubbed tools", RunsPkgbuildOnStubbedTools);
             yield return ("Maps identifier/version/install-location overrides", MapsOverrides);
             yield return ("Stages explicit payload items", StagesPayloadItems);
+            yield return ("Skips non-regular payload files", SkipsNonRegularPayloadFiles);
             yield return ("Rejects a missing payload source", () => RunSync(MissingPayloadRejected));
             yield return ("Rejects a build with no .app and no payload", () => RunSync(NoPayloadRejected));
             yield return ("Leaves no .pkg artifact when pkgbuild fails", PkgbuildFailureLeavesNoArtifact);
@@ -262,6 +263,64 @@ internal static class MacPkgTests
             MacPkgProcessRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
+        }
+    }
+
+    // A unix socket (or any other non-regular file) inside a payload directory
+    // must be skipped rather than copied into the package root.
+    static async Task SkipsNonRegularPayloadFiles()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var payload = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(payload);
+        File.WriteAllText(Path.Combine(payload, "helper.txt"), "helper");
+        var staged = new List<string>();
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            if (request.Executable == "pkgbuild")
+            {
+                var args = request.Arguments.ToList();
+                var root = args[args.IndexOf("--root") + 1];
+                staged.AddRange(Directory.GetFileSystemEntries(root, "*", SearchOption.AllDirectories)
+                    .Select(path => Path.GetRelativePath(root, path)));
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            using (var socket = new System.Net.Sockets.Socket(
+                       System.Net.Sockets.AddressFamily.Unix,
+                       System.Net.Sockets.SocketType.Stream,
+                       System.Net.Sockets.ProtocolType.Unspecified))
+            {
+                socket.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(
+                    Path.Combine(payload, "agent.sock")));
+            }
+            await new MacPkgBundler(new MacPkgBundleConfiguration
+            {
+                PayloadItems =
+                [
+                    new MacPkgPayloadItem { Source = payload, Destination = "support" }
+                ]
+            }).BuildAsync(PkgConfiguration(input, output));
+            Assert(staged.Any(path => path.Replace('\\', '/') == "support/helper.txt"),
+                $"regular files still stage: {string.Join(',', staged)}");
+            Assert(!staged.Any(path => path.Contains("agent.sock")),
+                "a unix socket must not be staged");
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output, payload);
         }
     }
 

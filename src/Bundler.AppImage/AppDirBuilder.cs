@@ -244,6 +244,12 @@ internal static class AppDirBuilder
         }
         foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
         {
+            // Sockets, FIFOs and device nodes cannot be copied; skip them like
+            // the archive formats do.
+            if (!UnixFileTypes.IsRegularFile(file))
+            {
+                continue;
+            }
             var target = Path.Combine(
                 destination, PathRelative(source, file));
             File.Copy(file, target, overwrite: true);
