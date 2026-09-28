@@ -100,7 +100,9 @@ internal static class ArchiveTests
                 "top-level directory must be a tar dir entry mode 0755");
             var executable = entries.First(e => e.Name.EndsWith("/ExampleApp", StringComparison.Ordinal));
             Assert(executable.Mode == 493, "shebang payload must carry mode 0755");
-            if (File.GetAttributes(link) == 0) { /* symlink fixture skipped on this fs */ }
+            if (!File.Exists(link) ||
+                !(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()))
+            { /* symlink fixture skipped on this fs/host */ }
             else
             {
                 var sym = entries.FirstOrDefault(e => e.Name.EndsWith("/linked.so", StringComparison.Ordinal));

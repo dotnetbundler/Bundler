@@ -145,7 +145,7 @@ internal static class MacDmgTests
                 string.Join(' ', request.Arguments.Take(1))).ToList();
 
             Assert(order[0] == "ln -s" &&
-                   requests[0].Arguments.Last().EndsWith("/Applications", StringComparison.Ordinal),
+                   requests[0].Arguments.Last().Replace('\\', '/').EndsWith("/Applications", StringComparison.Ordinal),
                 $"The /Applications drop link must be staged first, got: {order[0]}");
             Assert(order.Any(step => step == "hdiutil create") &&
                    order.Any(step => step == "hdiutil attach") &&
