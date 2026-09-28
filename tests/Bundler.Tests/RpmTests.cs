@@ -1007,13 +1007,15 @@ internal static class RpmTests
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         try
         {
+            var bindPath = Path.Combine(Path.GetTempPath(), "bt" + Guid.NewGuid().ToString("N")[..8]);
             using (var socket = new System.Net.Sockets.Socket(
                        System.Net.Sockets.AddressFamily.Unix,
                        System.Net.Sockets.SocketType.Stream,
                        System.Net.Sockets.ProtocolType.Unspecified))
             {
-                socket.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(
-                    Path.Combine(input, "agent.sock")));
+                socket.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(bindPath));
+                // .NET unlinks the bound path on dispose; move the node while bound
+                File.Move(bindPath, Path.Combine(input, "agent.sock"));
             }
             var artifact = new RpmBundler().BuildAsync(RpmConfiguration(input, output))
                 .GetAwaiter().GetResult().Single();
