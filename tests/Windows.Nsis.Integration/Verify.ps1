@@ -192,8 +192,9 @@ function Get-MsiProductCode([string]$MsiPath) {
 }
 
 function Get-ShortcutInfo([string]$Path) {
-    $shell = New-Object -ComObject WScript.Shell
-    $shortcut = $shell.CreateShortcut($Path)
+    # WScript.Shell 的 SetPath/GetPath 走 ANSI 代码页，无法读写含非本机代码页
+    # 字符的目标路径；改用 IShellLinkW（Unicode）读取，AppUserModelId 仍走属性存储。
+    $shortcut = Get-ShellShortcut $Path
     $folder = Split-Path -Parent $Path
     $name = Split-Path -Leaf $Path
     $shellApplication = New-Object -ComObject Shell.Application

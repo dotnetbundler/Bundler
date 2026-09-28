@@ -44,7 +44,7 @@ function Assert-Installed([string]$Code, [bool]$Expected) {
 }
 function Assert-Shortcut([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) { throw "Shortcut is missing: $Path" }
-    $target = (New-Object -ComObject WScript.Shell).CreateShortcut($Path).TargetPath
+    $target = (Get-ShellShortcut $Path).TargetPath
     if ($target -ne (Join-Path $install 'BundlerMsiSmoke.exe')) { throw "Shortcut target is wrong: $target" }
 }
 function Assert-Registrations {
