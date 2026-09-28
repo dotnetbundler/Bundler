@@ -28,3 +28,12 @@ NSIS 及随附的压缩模块适用多种许可证。准确条款以随包保留
 - 对应源码：WiX 包中的 `licenses/wix/wix3141-source.zip`
 
 源码和声明随 WiX 后端包分发。来源、原始归档及逐文件校验值见 `third_party/wix/msi-wix-provenance.md`。
+
+## BouncyCastle.Cryptography 2.5.1
+
+- 项目：https://www.bouncycastle.org/ （仓库 https://github.com/bcgit/bc-csharp）
+- NuGet 包：`BouncyCastle.Cryptography` 2.5.1
+- 许可证：MIT（upstream legion of the Bouncy Castle license，与 MIT 等价条款）
+
+`DotNet.Bundler.Rpm` 用它以纯托管方式生成嵌入 rpm signature header 的
+OpenPGP 签名包（`RPMSIGTAG_PGP`）；`DotNet.Bundler.MSBuild` 包内随带其程序集。

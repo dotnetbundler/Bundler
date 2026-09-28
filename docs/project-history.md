@@ -4104,3 +4104,15 @@ MSBuild 接线同时放开**多格式扇出**：`BundlerFormats=deb;rpm` 同次 
 ## 2026-09-27 需求登记：应用自更新/升级包
 
 - 用户提出新需求方向“升级/更新包”，记入 `docs/roadmap.md` §7.2 候选清单，暂缓实施；正式立项需先明确更新通道、信任模型、各宿主语义与回滚策略。
+
+## 2026-09-27 · SIGN-1：`.rpm` 可选 OpenPGP 签名
+
+`RpmSigner`（BouncyCastle，纯托管）生成 v3 binary-document 签名包写入
+`RPMSIGTAG_PGP`（tag 1002，覆盖主 header+载荷）；旋钮
+`BundlerRpmSigningKeyFile`/`SigningKeyPassphrase`（MSBuild）与 bundler.json
+`rpm.signingKeyFile`/`signingKeyPassphrase`（CLI 自动透传）；半配置拒绝、
+无密钥产物与未签名构建逐字节一致。测试密钥 `gpg --batch` 现生成（隔离
+GNUPGHOME，不入库）；隔离 rpmdb `rpm --import`+`rpm -K` 实测
+`digests signatures OK`；`Bundler.Tests` 201/201、`Verify.sh` 全绿。
+修正：决策 1 的 `RPMSIGTAG_RSA` 按 rpm-rs 口径改为 `RPMSIGTAG_PGP`；
+MSBuild 包补载 `BouncyCastle.Cryptography.dll`。

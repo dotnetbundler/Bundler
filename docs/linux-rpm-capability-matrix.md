@@ -38,7 +38,7 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| 包级 GPG 签名 | 计划实现（冻结外后置评估） | `LINUX-RPM-SIGN` 独立阶段（未排期，需要时另起） | rpm 生态真实惯例；签名 header 结构与密钥引用另行裁决；冻结基线不含签名，仅 `sha256` 侧车 |
+| 包级 GPG 签名 | 已实现 | `SIGN-1`（`signing-development`，`0.1.0-alpha.62+`） | 可选能力：供 `BundlerRpmSigningKeyFile`/`Passphrase` 即嵌 `RPMSIGTAG_PGP`（BouncyCastle OpenPGP v3 包，纯托管）；不供则产物与未签名构建逐字节一致；隔离 rpmdb `rpm --import`+`rpm -K` 实测 `digests signatures OK` |
 | dnf/zypper 仓库生成 | 明确拒绝 | — | 仓库管理属分发管线而非打包器 |
 
 ## 生命周期与宿主矩阵

@@ -1,5 +1,11 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Rpm;
+using Org.BouncyCastle.Bcpg;
+using Org.BouncyCastle.Bcpg.OpenPgp;
+using Org.BouncyCastle.Bcpg.Sig;
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Generators;
+using Org.BouncyCastle.Security;
 using System.Text;
 
 internal static class RpmTests
@@ -30,7 +36,137 @@ internal static class RpmTests
             yield return ("Synthesizes daemon-reload scriptlets for systemd units", () => RunSync(SystemdScriptletSynthesis));
             yield return ("Marks /etc files and explicit paths as %config(noreplace)", () => RunSync(ConfigFileFlags));
             yield return ("Rejects invalid scriptlets and compression", () => RunSync(RejectsInvalidScriptlets));
+            yield return ("Signs the package with an OpenPGP key", () => RunSync(SignsPackage));
+            yield return ("Rejects half-configured signing", () => RunSync(RejectsIncompleteSigning));
+            yield return ("Rejects a wrong key passphrase", () => RunSync(RejectsWrongPassphrase));
         }
+    }
+
+    static void SignsPackage()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var keyFile = Path.Combine(input, "test-signing-key.asc");
+        var publicKey = GenerateTestKey(keyFile, "test-passphrase");
+        try
+        {
+            var signed = new RpmBundler(new RpmBundleConfiguration
+            {
+                SigningKeyFile = keyFile,
+                SigningKeyPassphrase = "test-passphrase"
+            }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
+
+            var package = RpmPackageReader.Read(signed.Path);
+            Assert(package.Signature.Tags[1002] is byte[],
+                "RPMSIGTAG_PGP (1002) must carry the OpenPGP signature packet.");
+            var sigPacket = (byte[])package.Signature.Tags[1002];
+
+            // rpm signs main header + payload: bytes from the main header to EOF.
+            var rpmBytes = File.ReadAllBytes(signed.Path);
+            var signedData = rpmBytes[SignedDataOffset(rpmBytes)..];
+            var signature = ((PgpSignatureList)new PgpObjectFactory(sigPacket).NextPgpObject())[0];
+            signature.InitVerify(publicKey);
+            signature.Update(signedData);
+            Assert(signature.Verify(),
+                "The embedded signature must verify over header+payload bytes.");
+
+            var unsignedOutput = output + "-unsigned";
+            var unsigned = new RpmBundler(new RpmBundleConfiguration())
+                .BuildAsync(RpmConfiguration(input, unsignedOutput)).GetAwaiter().GetResult().Single();
+            Assert(!RpmPackageReader.Read(unsigned.Path).Signature.Tags.ContainsKey(1002),
+                "No RPMSIGTAG_PGP when signing is not configured.");
+            Cleanup(unsignedOutput);
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void RejectsIncompleteSigning()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            foreach (var (caseName, settings) in new (string, RpmBundleConfiguration)[]
+            {
+                ("passphrase without key file",
+                    new RpmBundleConfiguration { SigningKeyPassphrase = "x" }),
+                ("missing key file",
+                    new RpmBundleConfiguration { SigningKeyFile = Path.Combine(input, "missing.asc") }),
+            })
+            {
+                try
+                {
+                    new RpmBundler(settings).BuildAsync(RpmConfiguration(input, output))
+                        .GetAwaiter().GetResult();
+                    throw new InvalidOperationException(caseName + " should have been rejected.");
+                }
+                catch (ArgumentException) { }
+            }
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void RejectsWrongPassphrase()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var keyFile = Path.Combine(input, "test-signing-key.asc");
+        GenerateTestKey(keyFile, "right-passphrase");
+        try
+        {
+            try
+            {
+                new RpmBundler(new RpmBundleConfiguration
+                {
+                    SigningKeyFile = keyFile,
+                    SigningKeyPassphrase = "wrong-passphrase"
+                }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult();
+                throw new InvalidOperationException("Wrong passphrase should have been rejected.");
+            }
+            catch (InvalidOperationException error) when (error.Message.Contains("passphrase", StringComparison.OrdinalIgnoreCase)) { }
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    private static int SignedDataOffset(byte[] rpm)
+    {
+        int At(int i) => (rpm[i] << 24) | (rpm[i + 1] << 16) | (rpm[i + 2] << 8) | rpm[i + 3];
+        var indexCount = At(96 + 8);
+        var storeSize = At(96 + 12);
+        var signatureEnd = 96 + 16 + indexCount * 16 + storeSize;
+        return (signatureEnd + 7) & ~7;
+    }
+
+    private static PgpPublicKey GenerateTestKey(string keyFile, string passphrase)
+    {
+        var keyPairs = new RsaKeyPairGenerator();
+        keyPairs.Init(new Org.BouncyCastle.Crypto.KeyGenerationParameters(new SecureRandom(), 2048));
+        var pair = new PgpKeyPair(
+            PublicKeyAlgorithmTag.RsaGeneral, keyPairs.GenerateKeyPair(), DateTime.UtcNow);
+        var hashed = new PgpSignatureSubpacketGenerator();
+        hashed.SetKeyFlags(false, KeyFlags.SignData | KeyFlags.CertifyOther);
+        var ringGenerator = new PgpKeyRingGenerator(
+            PgpSignature.DefaultCertification, pair, "Bundler Test <test@example.com>",
+            SymmetricKeyAlgorithmTag.Aes256, false, passphrase.ToCharArray(), true,
+            hashed.Generate(), new PgpSignatureSubpacketGenerator().Generate(),
+            new SecureRandom());
+        var secretRing = ringGenerator.GenerateSecretKeyRing();
+        var publicKey = secretRing.GetSecretKey().PublicKey;
+        using (var file = File.Create(keyFile))
+        using (var armored = new ArmoredOutputStream(file))
+        {
+            secretRing.Encode(armored);
+        }
+        return publicKey;
     }
 
     static void StagesScriptlets()

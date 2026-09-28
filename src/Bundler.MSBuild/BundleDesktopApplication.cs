@@ -223,6 +223,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string RpmPreUninstallProgram { get; set; } = "";
     public string RpmPostUninstallProgram { get; set; } = "";
     public string RpmCompression { get; set; } = "";
+    public string RpmSigningKeyFile { get; set; } = "";
+    public string RpmSigningKeyPassphrase { get; set; } = "";
     public string AppImagePackageName { get; set; } = "";
     public string AppImageVersion { get; set; } = "";
     public string AppImageArchitecture { get; set; } = "";
@@ -565,6 +567,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         PreUninstallProgram = EmptyToNull(RpmPreUninstallProgram),
                         PostUninstallProgram = EmptyToNull(RpmPostUninstallProgram),
                         Compression = EmptyToNull(RpmCompression),
+                        SigningKeyFile = OptionalFullPath(RpmSigningKeyFile),
+                        SigningKeyPassphrase = EmptyToNull(RpmSigningKeyPassphrase),
                         Files = RpmFiles.Select(item => new RpmFileEntry
                         {
                             Source = Path.GetFullPath(item.ItemSpec),

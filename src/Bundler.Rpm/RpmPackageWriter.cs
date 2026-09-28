@@ -86,6 +86,7 @@ internal static class RpmPackageWriter
                 $"The .rpm payload compression '{compression}' is not supported; only 'gzip' is available.");
         }
 
+        ValidateSigning(settings);
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings);
         var cpio = CpioWriter.Write(payload.Select(ToCpioEntry).ToList());
         var compressedPayload = Gzip(cpio);
@@ -93,8 +94,17 @@ internal static class RpmPackageWriter
         var mainHeader = RpmHeaderWriter.Write(MainHeaderEntries(
             bundle, item, payload, packageName, mapped, architecture, installRoot, vendor,
             settings, cpio, compressedPayload), 63);
+        var signature = settings.SigningKeyFile is { Length: > 0 } keyFile
+            ? RpmSigner.Sign(
+                ConcatBytes(mainHeader, compressedPayload), keyFile,
+                settings.SigningKeyPassphrase)
+            : null;
+        if (signature is not null)
+        {
+            logger.Log(BundleLogLevel.Information, "Signing package (RPMSIGTAG_PGP).");
+        }
         var signatureHeader = RpmHeaderWriter.Write(SignatureEntries(
-            mainHeader, compressedPayload, cpio), 62);
+            mainHeader, compressedPayload, cpio, signature), 62);
         signatureHeader = Align8(signatureHeader);
 
         var fileName = packageName + "-" + mapped.Version + "-" + mapped.Release +
@@ -151,8 +161,33 @@ internal static class RpmPackageWriter
 
     // ---- headers ------------------------------------------------------------
 
+    private static void ValidateSigning(RpmBundleConfiguration settings)
+    {
+        var hasKey = settings.SigningKeyFile is { Length: > 0 };
+        var hasPassphrase = settings.SigningKeyPassphrase is { Length: > 0 };
+        if (hasPassphrase && !hasKey)
+        {
+            throw new ArgumentException(
+                "SigningKeyPassphrase requires SigningKeyFile to point at an OpenPGP secret key.");
+        }
+        if (hasKey && !File.Exists(settings.SigningKeyFile!))
+        {
+            throw new ArgumentException(
+                $"SigningKeyFile '{settings.SigningKeyFile}' does not exist.");
+        }
+    }
+
+    private static byte[] ConcatBytes(byte[] first, byte[] second)
+    {
+        var both = new byte[first.Length + second.Length];
+        Buffer.BlockCopy(first, 0, both, 0, first.Length);
+        Buffer.BlockCopy(second, 0, both, first.Length, second.Length);
+        return both;
+    }
+
     private static List<RpmHeaderWriter.Entry> SignatureEntries(
-        byte[] mainHeader, byte[] compressedPayload, byte[] cpio)
+        byte[] mainHeader, byte[] compressedPayload, byte[] cpio,
+        byte[]? signature)
     {
         // RPMSIGTAG_SIZE = main header bytes + compressed payload bytes
         var packageSize = mainHeader.Length + compressedPayload.Length;
@@ -160,14 +195,21 @@ internal static class RpmPackageWriter
         var md5Bytes = new byte[mainHeader.Length + compressedPayload.Length];
         Buffer.BlockCopy(mainHeader, 0, md5Bytes, 0, mainHeader.Length);
         Buffer.BlockCopy(compressedPayload, 0, md5Bytes, mainHeader.Length, compressedPayload.Length);
-        return
-        [
+        var entries = new List<RpmHeaderWriter.Entry>
+        {
             RpmHeaderWriter.Int32s(1000, packageSize),                    // RPMSIGTAG_SIZE
             RpmHeaderWriter.Bin(1004, md5.ComputeHash(md5Bytes)),         // RPMSIGTAG_MD5
             RpmHeaderWriter.Int32s(1007, cpio.Length),                    // RPMSIGTAG_PAYLOADSIZE
             RpmHeaderWriter.Str(269, Hex(SHA1.Create().ComputeHash(mainHeader))),   // SHA1HEADER
             RpmHeaderWriter.Str(273, Hex(SHA256.Create().ComputeHash(mainHeader))), // SHA256HEADER
-        ];
+        };
+        if (signature is not null)
+        {
+            // RPMSIGTAG_PGP (1002): OpenPGP binary-document signature packet
+            // over main header + payload — what `rpm -K` verifies.
+            entries.Add(RpmHeaderWriter.Bin(1002, signature));
+        }
+        return entries;
     }
 
     private static List<RpmHeaderWriter.Entry> MainHeaderEntries(

@@ -68,6 +68,8 @@ unzip -l "$package_dir/DotNet.Bundler.MSBuild.$version.nupkg" > "$integration_ro
     || fail "Cannot list the DotNet.Bundler.MSBuild package."
 grep -q "DotNet.Bundler.Rpm.dll" "$integration_root/msbuild-package.list" \
     || fail "DotNet.Bundler.MSBuild package is missing the Rpm backend assembly."
+grep -q "BouncyCastle.Cryptography.dll" "$integration_root/msbuild-package.list" \
+    || fail "DotNet.Bundler.MSBuild package is missing the signing dependency assembly."
 
 publish_fixture() {
     # $1: 输出子目录；其余参数透传为 -p:BundlerTestRpm* 等覆盖。
@@ -419,6 +421,57 @@ if [[ $have_docker -eq 1 ]]; then
     fi
 else
     log "SKIP: docker unavailable; container install assertions skipped."
+fi
+
+if command -v gpg >/dev/null && [[ $have_rpm -eq 1 ]]; then
+    log "== rpm OpenPGP signing (generated test key, rpm --import + rpm -K) =="
+    sign_dir="$integration_root/signing"
+    mkdir -p "$sign_dir/rpmdb"
+    gnupg_home="$sign_dir/gnupg"
+    mkdir -p "$gnupg_home"
+    chmod 700 "$gnupg_home"
+    cat > "$sign_dir/keygen.txt" <<KEYEOF
+Key-Type: RSA
+Key-Length: 2048
+Name-Real: Bundler Test
+Name-Email: bundler-test@example.com
+Expire-Date: 0
+Passphrase: bundler-test-pass
+%commit
+KEYEOF
+    GNUPGHOME="$gnupg_home" gpg --batch --gen-key "$sign_dir/keygen.txt" \
+        2> "$sign_dir/gpg-keygen.log" || fail "gpg test key generation failed."
+    GNUPGHOME="$gnupg_home" gpg --batch --yes \
+        --pinentry-mode loopback --passphrase bundler-test-pass \
+        --export-secret-keys --armor bundler-test@example.com \
+        > "$sign_dir/signing-key.asc" || fail "gpg secret key export failed."
+    GNUPGHOME="$gnupg_home" gpg --batch --export --armor bundler-test@example.com \
+        > "$sign_dir/signing-key.pub.asc" || fail "gpg public key export failed."
+
+    publish_fixture signed \
+        -p:BundlerRpmSigningKeyFile="$sign_dir/signing-key.asc" \
+        -p:BundlerRpmSigningKeyPassphrase=bundler-test-pass >/dev/null
+    signed_rpm="$(find "$integration_root/signed/linux-x64/rpm" -name '*.rpm' | head -n1)"
+    [[ -n "$signed_rpm" ]] || fail "No signed .rpm artifact produced."
+
+    # 隔离 rpmdb：导入测试公钥后 rpm -K 必须确认签名；未签名包不得出现
+    # "signatures OK"（rpm 对未签名包只报告 digest 校验）。
+    rpm --dbpath "$sign_dir/rpmdb" --initdb || fail "rpm --initdb failed."
+    rpm --dbpath "$sign_dir/rpmdb" --import "$sign_dir/signing-key.pub.asc" \
+        || fail "rpm --import of the test public key failed."
+    signed_check="$(rpm --dbpath "$sign_dir/rpmdb" -K "$signed_rpm" || true)"
+    case "$signed_check" in
+        *"signatures OK"*) ;;
+        *) fail "rpm -K did not verify the embedded signature: $signed_check";;
+    esac
+    unsigned_check="$(rpm --dbpath "$sign_dir/rpmdb" -K "$rpm_path" || true)"
+    case "$unsigned_check" in
+        *"signatures OK"*) fail "Unsigned rpm unexpectedly reports a signature.";;
+        *) ;;
+    esac
+    log "rpm -K signed: $signed_check"
+else
+    log "SKIP: gpg or rpm unavailable; signing verification skipped."
 fi
 
 if command -v rpmlint >/dev/null; then

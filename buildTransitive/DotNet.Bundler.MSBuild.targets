@@ -225,6 +225,8 @@
       RpmPreUninstallProgram="$(BundlerRpmPreUninstallProgram)"
       RpmPostUninstallProgram="$(BundlerRpmPostUninstallProgram)"
       RpmCompression="$(BundlerRpmCompression)"
+      RpmSigningKeyFile="$(BundlerRpmSigningKeyFile)"
+      RpmSigningKeyPassphrase="$(BundlerRpmSigningKeyPassphrase)"
       AppImagePackageName="$(BundlerAppImagePackageName)"
       AppImageVersion="$(BundlerAppImageVersion)"
       AppImageArchitecture="$(BundlerAppImageArchitecture)"

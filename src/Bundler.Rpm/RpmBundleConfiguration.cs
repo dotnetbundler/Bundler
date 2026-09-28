@@ -193,6 +193,23 @@ public sealed class RpmBundleConfiguration
     /// a third-party dependency. Any other value is rejected.
     /// </summary>
     public string? Compression { get; init; }
+
+    /// <summary>
+    /// Optional OpenPGP secret-key file (ASCII-armored or binary) used to sign
+    /// the package: a <c>RPMSIGTAG_PGP</c> signature packet over the main
+    /// header + payload is embedded in the signature header, verifiable with
+    /// <c>rpm --import</c> + <c>rpm -K</c>/<c>--checksig</c>. Unset produces an
+    /// unsigned package identical to a build with no signing configured.
+    /// The file is read at build time; its bytes are never logged.
+    /// </summary>
+    public string? SigningKeyFile { get; init; }
+
+    /// <summary>
+    /// Passphrase for <see cref="SigningKeyFile"/>. Supplying one without a
+    /// key file (or vice versa) is a configuration error. Prefer feeding the
+    /// value from a secret store — it is a secret, do not commit it.
+    /// </summary>
+    public string? SigningKeyPassphrase { get; init; }
 }
 
 /// <summary>A file planted at an absolute path inside the .rpm payload.</summary>
