@@ -11,4 +11,4 @@
 | LINUX-RPM-OI-04 | LINUX-RPM-4 | 更广发行版宿主矩阵（RHEL 8/CentOS Stream/Alma/SUSE 旧版；fedora/rockylinux:9/opensuse-leap 已由 docker 矩阵覆盖） | 各宿主 `rpm -i/-e` 行为差异记录（对应 MT-03） |
 | LINUX-RPM-OI-05 | LINUX-RPM-1 | Windows/macOS 构建宿主 | 跨宿主产出 `.rpm` 并在 rpm 宿主安装的记录（托管写入器使跨宿主成为设计目标，对应 MT-06） |
 | LINUX-RPM-OI-06 | LINUX-RPM-4 | `dnf`/`zypper` 仓库环境 | 本地文件安装与最小仓库工作流验证（对应 MT-05） |
-| LINUX-RPM-OI-07 | 后置 | GPG 密钥与签名验证流程 | 若引入包级签名：`rpm --import`/`rpm -K` 验证记录（对应 MT-07） |
+| LINUX-RPM-OI-07 | 后置 | GPG 密钥与签名验证流程 | 签名为可选能力：开发者供密钥才签，不供不签（2026-09-27 用户确认产品口径）；若引入包级签名：`rpm --import`/`rpm -K` 验证记录（对应 MT-07） |
