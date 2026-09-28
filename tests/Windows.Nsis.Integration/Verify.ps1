@@ -210,11 +210,7 @@ function Get-ShortcutInfo([string]$Path) {
 
 function Set-TestShortcut([string]$Path, [string]$TargetPath) {
     New-Item -ItemType Directory -Path (Split-Path -Parent $Path) -Force | Out-Null
-    $shell = New-Object -ComObject WScript.Shell
-    $shortcut = $shell.CreateShortcut($Path)
-    $shortcut.TargetPath = $TargetPath
-    $shortcut.WorkingDirectory = Split-Path -Parent $TargetPath
-    $shortcut.Save()
+    Set-ShellShortcut $Path $TargetPath (Split-Path -Parent $TargetPath)
 }
 
 function Set-RegistrySnapshotSubKey([string]$Path, [string]$SubKey) {

@@ -1,4 +1,4 @@
-if (-not ('BundlerShortcutReader' -as [type])) {
+if (-not ('BundlerShortcutWriter' -as [type])) {
     Add-Type -Language CSharp -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -51,6 +51,27 @@ public sealed class BundlerShortcutInfo
     public string IconLocation;
 }
 
+public static class BundlerShortcutWriter
+{
+    public static void Write(string path, string targetPath, string workingDirectory)
+    {
+        var link = (IShellLinkW)new ShellLinkCoClass();
+        try
+        {
+            link.SetPath(targetPath);
+            if (!string.IsNullOrEmpty(workingDirectory))
+            {
+                link.SetWorkingDirectory(workingDirectory);
+            }
+            ((IPersistFile)link).Save(path, true);
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(link);
+        }
+    }
+}
+
 public static class BundlerShortcutReader
 {
     private const int BufferCapacity = 4096;
@@ -95,6 +116,15 @@ public static class BundlerShortcutReader
 function Get-ShellShortcut {
     param([Parameter(Mandatory)][string]$Path)
     return [BundlerShortcutReader]::Read($Path)
+}
+
+function Set-ShellShortcut {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$TargetPath,
+        [string]$WorkingDirectory = ''
+    )
+    [BundlerShortcutWriter]::Write($Path, $TargetPath, $WorkingDirectory)
 }
 
 function Get-BundlerPackageVersion {
