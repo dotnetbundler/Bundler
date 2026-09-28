@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using DotNet.Bundler;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.MacApp;
 
@@ -230,6 +231,11 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             foreach (var file in Directory.EnumerateFiles(source)
                          .OrderBy(path => path, StringComparer.Ordinal))
             {
+                // Sockets, FIFOs and device nodes cannot be copied; skip them.
+                if (!UnixFileTypes.IsRegularFile(file))
+                {
+                    continue;
+                }
                 CopyFileEntry(file, Path.Combine(destination, Path.GetFileName(file)), destinations);
             }
         }

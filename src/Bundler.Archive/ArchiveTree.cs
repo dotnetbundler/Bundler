@@ -75,7 +75,7 @@ internal static class ArchiveTree
                     LinkTarget = target
                 });
             }
-            else
+            else if (UnixFileTypes.IsRegularFile(file))
             {
                 entries.Add(new Entry
                 {
@@ -85,6 +85,7 @@ internal static class ArchiveTree
                     SourcePath = file
                 });
             }
+            // Sockets, FIFOs and device nodes cannot be archived; skip them.
         }
     }
 

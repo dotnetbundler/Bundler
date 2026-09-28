@@ -202,6 +202,11 @@ internal static class DebPackageWriter
         foreach (var file in Directory.GetFiles(input, "*", SearchOption.AllDirectories)
                      .OrderBy(path => path, StringComparer.Ordinal))
         {
+            // Sockets, FIFOs and device nodes cannot be packaged; skip them.
+            if (!UnixFileTypes.IsRegularFile(file))
+            {
+                continue;
+            }
             var relative = ToPosixPath(RelativePath(input, file));
             var mode = string.Equals(relative, mainExecutable, StringComparison.Ordinal)
                 ? 493 /* 0755 */
@@ -223,6 +228,10 @@ internal static class DebPackageWriter
                 foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories)
                              .OrderBy(path => path, StringComparer.Ordinal))
                 {
+                    if (!UnixFileTypes.IsRegularFile(file))
+                    {
+                        continue;
+                    }
                     var relative = ToPosixPath(RelativePath(source, file));
                     AddFile(installRoot + "/" + target + "/" + relative, file, 420 /* 0644 */);
                 }

@@ -9,6 +9,6 @@
 | LINUX-APPIMAGE-OI-02 | LINUX-APPIMAGE-3 | ARM64 Linux 宿主（本机 x86_64） | aarch64 产物真机运行记录（对应 MT-02）；决策 4 已实测可交叉，宿主仅做 ELF+squashfs 载荷断言 |
 | LINUX-APPIMAGE-OI-03 | LINUX-APPIMAGE-3 | ~~旧 glibc 发行版宿主~~ 已验证 | **已消解**：2026-09-28 centos7/ubuntu18.04 容器实测——runtime 在老 glibc 可挂载；补记边界发现：.NET 10 自包含载荷需 `GLIBCXX_3.4.20+`，centos7 的 libstdc++ 4.8.5 不满足属载荷 ABI 下限非缺陷（对应 MT-03） |
 | LINUX-APPIMAGE-OI-04 | LINUX-APPIMAGE-1 | ~~真 FUSE 宿主~~ 已验证 | **已消解**：2026-09-28 真 FUSE 容器内原生挂载运行与 extract-and-run 行为差异记录 |
-| LINUX-APPIMAGE-OI-07 | 测试基建 | 任意宿主 | `Signs the .AppImage via appimagetool --sign` 单测环境级 flake：隔离 `GNUPGHOME` 下 gpg-agent 报 `No such device or address: S.gpg-agent.browser`，x64 宿主与 arm64 qemu 容器均复现（非 qemu 特有）；`gpg` 裸调正常，疑为 appimagetool 内 gpg 调用的 agent 启动竞态，待复跑加固 |
+| LINUX-APPIMAGE-OI-07 | 测试基建 | ~~任意宿主~~ 已查明 | **已消解**：真因非 gpg/appimagetool 竞态——测试把 `GNUPGHOME` 建在打包 input 内，`/run/user/<uid>/gnupg` socketdir 不可用时活跃 gpg-agent 在该目录落下 `S.gpg-agent*` unix 套接字，`AppDirBuilder.CopyTree` 对套接字执行 `File.Copy` 必报 ENXIO；keyring 已移出 input，各后端 staging 统一经 stat 跳过非普通文件（本 PR 修复） |
 | ~~LINUX-APPIMAGE-OI-05~~ | ~~后置~~ | ~~GPG 密钥与 appimagetool `--sign` 验证流程~~ | **已消解**：`SIGN-2` 落地可选签名——隔离 `GNUPGHOME` 导入私钥 + `APPIMAGETOOL_SIGN_PASSPHRASE` 注入 + `gpgv` 断言（Verify.sh 签名段），签名产物验证已自动化；生产密钥流程仍归分发侧人工事项 |
 | ~~LINUX-APPIMAGE-OI-06~~ | LINUX-APPIMAGE-1 | ~~`appimagetool` aarch64 runtime 供应方式确认~~ | **已消解**：实测 pinned appimagetool 不内嵌 runtime、缺省联网下载 → 双 runtime 内嵌 `third_party/` 并始终 `--runtime-file` 外供；x86_64 宿主交叉产 aarch64 已验证（决策 4 回填）。 |

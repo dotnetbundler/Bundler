@@ -22,6 +22,7 @@ internal static class MacAppTests
             yield return ("Maps payload into the Contents layout", MapsPayloadIntoContentsLayout);
             yield return ("Rejects unsafe Contents mappings", RejectsUnsafeContentsMappings);
             yield return ("Rejects colliding .app payload destinations", RejectsCollidingPayloadDestinations);
+            yield return ("Skips non-regular payload files", SkipsNonRegularPayloadFiles);
             yield return ("Rejects reparse points inside the .app payload", RejectsReparsePointsInAppPayload);
             yield return ("Synthesizes .icns icons from PNG bitmaps", SynthesizesIcnsFromPngs);
             yield return ("Rejects invalid icon inputs", RejectsInvalidIconInputs);
@@ -1350,6 +1351,36 @@ internal static class MacAppTests
         File.WriteAllText(Path.Combine(input, "ExampleApp.dll"), "payload");
         Directory.CreateDirectory(Path.Combine(input, "nested"));
         return input;
+    }
+
+    // A unix socket (or any other non-regular file) inside the input must be
+    // skipped rather than copied into the bundle.
+    static async Task SkipsNonRegularPayloadFiles()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            using (var socket = new System.Net.Sockets.Socket(
+                       System.Net.Sockets.AddressFamily.Unix,
+                       System.Net.Sockets.SocketType.Stream,
+                       System.Net.Sockets.ProtocolType.Unspecified))
+            {
+                socket.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(
+                    Path.Combine(input, "agent.sock")));
+            }
+            var artifacts = await new MacAppBundler().BuildAsync(MacConfiguration(input, output));
+            var macos = Path.Combine(artifacts[0].Path, "Contents", "MacOS");
+            Assert(File.Exists(Path.Combine(macos, "ExampleApp")),
+                "regular payload files still stage");
+            Assert(!File.Exists(Path.Combine(macos, "agent.sock")),
+                "a unix socket in the input must not reach the .app");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
     }
 
     static byte[] FakeMachO(uint cpuType = 0x0100000C)

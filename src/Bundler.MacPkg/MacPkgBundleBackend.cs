@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using DotNet.Bundler;
+using DotNet.Bundler.Core;
 using DotNet.Bundler.MacApp;
 
 namespace DotNet.Bundler.MacPkg;
@@ -307,6 +308,11 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
         Directory.CreateDirectory(destination);
         foreach (var file in Directory.GetFiles(source))
         {
+            // Sockets, FIFOs and device nodes cannot be copied; skip them.
+            if (!UnixFileTypes.IsRegularFile(file))
+            {
+                continue;
+            }
             File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), overwrite: true);
         }
         foreach (var directory in Directory.GetDirectories(source))
