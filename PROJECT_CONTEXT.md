@@ -11,6 +11,7 @@
 > `ARCHIVE-2` 已完成（同分支，同版本）：旋钮面对照决策复核无缺口；收口断言补强（确定性构建 sha256 一致、目录源拒绝、Zip64 拒绝）；`Bundler.Tests` 184/184 + `Verify.sh` 全绿
 > `ARCHIVE-3` 已完成（同分支，同版本）：宿主矩阵收口（python3 zipfile/tarfile 跨实现互读断言接入 `Verify.sh`）、干净宿主审计（零进程出口）、能力矩阵定稿、OI/MT 收口——**`.zip`/`.tar.gz` 归档冻结基线 `0.1.0-alpha.59`**
 > `CLI-C1` 规划轮已完成（分支 `cli-development`）：决策清单 15 项 + `CLI-1..3` 三段骨架 + MSBuild↔CLI 映射表入档 `docs/cli-roadmap.md`，配套 cli-capability-matrix / cli-manual-testing / cli-open-items；决策已按推荐项放行
+> `SIGN` 规划轮已完成（分支 `signing-development`）：rpm+AppImage 可选签名（deb 维持拒绝）——决策清单 14 项 + `SIGN-1/2` 两段 + 矩阵/OI/MT 入档 `docs/signing-roadmap.md`，待逐条裁决
 > `CLI-C1` 已完成（分支 `cli-development`，`0.1.0-alpha.62`）：CLI 契约冻结——三命令/退出码/`--json`/`bundler.json` schema/全格式旋钮面/dotnet tool nupkg + 原生 AOT 二进制双分发；`Bundler.Tests` 198/198 + `tests/Cli.Integration/Verify.sh`（含 AOT 段）全绿。待指令合并 `main`。
 > 当前：`CLI-1` 完成，默认下一阶段 `CLI-2`（bundler.json schema 固化 + 层叠 + 全格式旋钮透传）
 >
