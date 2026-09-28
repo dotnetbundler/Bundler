@@ -1,4 +1,4 @@
-if (-not ('BundlerShortcutWriter' -as [type])) {
+﻿if (-not ('BundlerShortcutWriter' -as [type])) {
     Add-Type -Language CSharp -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
