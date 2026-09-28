@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
@@ -492,19 +493,21 @@ internal static class CliConfig
         return elements;
     }
 
+    // Every type reachable here is rooted in BundlerJsonContext, so the generated
+    // parameterized creators keep the public parameterless ctor referenced and
+    // untrimmed under AOT; Activator is only a fallback for init-only types where
+    // JsonTypeInfo.CreateObject is not populated.
+    [UnconditionalSuppressMessage("Trimming", "IL2067",
+        Justification = "Types reaching this method are rooted in BundlerJsonContext; " +
+            "the generated parameterized creators keep the public parameterless ctor " +
+            "referenced and untrimmed under AOT.")]
     private static JsonObject? DefaultsObject(Type type, JsonSerializerOptions options)
     {
         if (options.GetTypeInfo(type) is not { Kind: JsonTypeInfoKind.Object } info)
         {
             return null;
         }
-        // Every type reachable here is rooted in BundlerJsonContext, so the generated
-        // parameterized creators keep the public parameterless ctor referenced and
-        // untrimmed under AOT; Activator is only a fallback for init-only types where
-        // JsonTypeInfo.CreateObject is not populated.
-#pragma warning disable IL2067
         var instance = info.CreateObject?.Invoke() ?? Activator.CreateInstance(type);
-#pragma warning restore IL2067
         return instance is null
             ? null
             : (JsonObject)JsonSerializer.SerializeToNode(instance, info)!;
