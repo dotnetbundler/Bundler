@@ -16,10 +16,10 @@
 
 | 能力 | 状态 | 落地阶段 | 证据/备注 |
 | --- | --- | --- | --- |
-| `BundlerAppImageSigningKeyFile`/`Passphrase` 旋钮 | 计划实现 | SIGN-2 | 同 rpm 口径 |
-| appimagetool `--sign`（隔离 GNUPGHOME） | 计划实现 | SIGN-2 | 唯一外部进程出口，仅供密钥时触发 |
-| `gpgv`/`--validate` 验签断言 | 计划实现 | SIGN-2 | Verify.sh 段 |
-| 无密钥产物与现状一致 | 计划实现 | SIGN-2 | sha256 对比断言 |
+| `BundlerAppImageSigningKeyFile`/`Passphrase` 旋钮 | 已实现 | SIGN-2 | 同 rpm 口径；MSBuild/CLI 自动透传 |
+| appimagetool `--sign`（隔离 GNUPGHOME） | 已实现 | SIGN-2 | 唯一外部进程出口，仅供密钥时触发；口令经 `APPIMAGETOOL_SIGN_PASSPHRASE` 注入不上命令行 |
+| `gpgv`/`--validate` 验签断言 | 已实现 | SIGN-2 | Verify.sh：两段置零→sha256 裸 hex→`gpgv` Good signature |
+| 无密钥产物与现状一致 | 已实现 | SIGN-2 | 未签构建 `.sha256_sig` 保持全零断言 |
 
 ## 明确不做
 

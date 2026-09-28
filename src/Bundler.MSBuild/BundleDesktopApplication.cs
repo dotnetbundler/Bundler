@@ -234,6 +234,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string AppImageDesktopFile { get; set; } = "";
     public string AppImageCategories { get; set; } = "";
     public string AppImageMetainfoFile { get; set; } = "";
+    public string AppImageSigningKeyFile { get; set; } = "";
+    public string AppImageSigningKeyPassphrase { get; set; } = "";
     public ITaskItem[] AppImageFiles { get; set; } = Array.Empty<ITaskItem>();
     public string ArchivePackageName { get; set; } = "";
     public string ArchiveVersion { get; set; } = "";
@@ -615,6 +617,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         DesktopFile = OptionalFullPath(AppImageDesktopFile),
                         Categories = EmptyToNull(AppImageCategories),
                         MetainfoFile = OptionalFullPath(AppImageMetainfoFile),
+                        SigningKeyFile = OptionalFullPath(AppImageSigningKeyFile),
+                        SigningKeyPassphrase = EmptyToNull(AppImageSigningKeyPassphrase),
                         Files = AppImageFiles.Select(item => new AppImageFileEntry
                         {
                             Source = Path.GetFullPath(item.ItemSpec),

@@ -55,7 +55,8 @@ internal static class AppImageProcessRunner
         string executable,
         IEnumerable<string> arguments,
         string workingDirectory,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? environment = null)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -67,6 +68,13 @@ internal static class AppImageProcessRunner
             CreateNoWindow = true
         };
         startInfo.Arguments = string.Join(" ", arguments.Select(QuoteArgument));
+        if (environment is not null)
+        {
+            foreach (var pair in environment)
+            {
+                startInfo.EnvironmentVariables[pair.Key] = pair.Value;
+            }
+        }
         using var process = new Process { StartInfo = startInfo };
         if (!process.Start())
         {

@@ -27,7 +27,7 @@
 | scriptlet / systemd unit / conffile | 不适用 | — | AppImage 无安装事务；无包管理器生命周期 |
 | 关系字段（Requires 族） | 不适用 | — | 无依赖解析层；契约=自包含载荷 |
 | 更新元数据（updateinfo/zsync） | 明确拒绝 | — | 首个版本不做；需要时另立跨格式更新路线 |
-| 本体 GPG 签名（`appimagetool --sign`） | 计划实现（冻结外后置评估） | `LINUX-APPIMAGE-SIGN`（未排期） | 同 rpm 签名处置口径；冻结基线仅 `sha256` 侧车 |
+| 本体 GPG 签名（`appimagetool --sign`） | 已实现（可选能力） | `SIGN-2` | `BundlerAppImageSigningKeyFile`/`Passphrase` 供密钥才签；隔离 `GNUPGHOME` 导入 + `APPIMAGETOOL_SIGN_PASSPHRASE` 注入；`gpgv` 实测验签；无密钥产物不变 |
 
 ## 宿主与验证矩阵
 

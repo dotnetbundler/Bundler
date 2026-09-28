@@ -18,6 +18,8 @@ internal static class AppImageTests
             yield return ("Builds a real .AppImage via bundled appimagetool", () => RunSync(BuildsRealAppImage));
             yield return ("Cross-builds aarch64 via the embedded runtime", () => RunSync(CrossBuildsAarch64));
             yield return ("Maps appimage settings through MSBuild", () => RunSync(MapsAppImageSettingsThroughMsBuild));
+            yield return ("Signs the .AppImage via appimagetool --sign", () => RunSync(SignsAppImage));
+            yield return ("Rejects half-configured appimage signing", () => RunSync(RejectsIncompleteSigning));
         }
     }
 
@@ -280,6 +282,122 @@ internal static class AppImageTests
         finally
         {
             Cleanup(input, output);
+        }
+    }
+
+    static void SignsAppImage()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var input = CreateInputDirectory();
+        var output = input + ".artifacts";
+        var gnupg = Path.Combine(input, "gnupg");
+        Directory.CreateDirectory(gnupg);
+        var keyFile = Path.Combine(input, "key.asc");
+        try
+        {
+            var batch = Path.Combine(input, "keygen.txt");
+            File.WriteAllText(batch,
+                "Key-Type: RSA\nKey-Length: 2048\nName-Real: Bundler Test\n" +
+                "Name-Email: bundler-test@example.com\nExpire-Date: 0\n" +
+                "Passphrase: test-pass\n%commit\n");
+            Run("chmod", null, ["700", gnupg]);
+            Run("gpg", gnupg, ["--batch", "--gen-key", batch]);
+            Run("gpg", gnupg, ["--batch", "--yes", "--pinentry-mode", "loopback",
+                "--passphrase", "test-pass", "--export-secret-keys", "--armor",
+                "bundler-test@example.com"], stdoutTo: keyFile);
+
+            var artifact = new AppImageBundler(new AppImageBundleConfiguration
+            {
+                SigningKeyFile = keyFile,
+                SigningKeyPassphrase = "test-pass"
+            }).BuildAsync(Configuration(input, output)).GetAwaiter().GetResult().Single();
+
+            // The runtime ELF template always carries both signature sections;
+            // unsigned = zero-filled, signed = non-zero embedded data.
+            var signedSection = ElfSection(File.ReadAllBytes(artifact.Path), ".sha256_sig");
+            Assert(signedSection.Length > 0 && signedSection.Any(b => b != 0),
+                "a signed .AppImage must carry a non-zero .sha256_sig section");
+            var unsignedOut = output + "-unsigned";
+            var unsigned = new AppImageBundler().BuildAsync(
+                Configuration(input, unsignedOut)).GetAwaiter().GetResult().Single();
+            var unsignedSection = ElfSection(File.ReadAllBytes(unsigned.Path), ".sha256_sig");
+            Assert(unsignedSection.Length == 0 || unsignedSection.All(b => b == 0),
+                "unsigned builds must leave .sha256_sig zeroed");
+            Cleanup(unsignedOut);
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void RejectsIncompleteSigning()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var input = CreateInputDirectory();
+        var output = input + ".artifacts";
+        try
+        {
+            AssertThrows<ArgumentException>(() => new AppImageBundler(
+                new AppImageBundleConfiguration { SigningKeyPassphrase = "x" })
+                .BuildAsync(Configuration(input, output)).GetAwaiter().GetResult(),
+                "passphrase without a key file must be rejected");
+            AssertThrows<ArgumentException>(() => new AppImageBundler(
+                new AppImageBundleConfiguration { SigningKeyFile = input + "/missing.asc" })
+                .BuildAsync(Configuration(input, output)).GetAwaiter().GetResult(),
+                "a missing key file must be rejected");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    private static byte[] ElfSection(byte[] elf, string name)
+    {
+        var shOff = (int)BitConverter.ToInt64(elf, 0x28);
+        var shSize = (int)BitConverter.ToUInt16(elf, 0x3A);
+        var shNum = (int)BitConverter.ToUInt16(elf, 0x3C);
+        var shStrNdx = (int)BitConverter.ToUInt16(elf, 0x3E);
+        var strOff = (int)BitConverter.ToInt64(elf, shOff + shStrNdx * shSize + 24);
+        for (var i = 0; i < shNum; i++)
+        {
+            var sh = shOff + i * shSize;
+            var nameOff = (int)(strOff + BitConverter.ToInt32(elf, sh));
+            var end = Array.IndexOf(elf, (byte)0, nameOff);
+            if (Encoding.ASCII.GetString(elf, nameOff, end - nameOff) == name)
+            {
+                var offset = (int)BitConverter.ToInt64(elf, sh + 24);
+                var size = (int)BitConverter.ToInt64(elf, sh + 32);
+                return elf[offset..(offset + size)];
+            }
+        }
+        return Array.Empty<byte>();
+    }
+
+    private static void Run(string tool, string? gnupgHome, string[] arguments,
+        string? stdoutTo = null)
+    {
+        var info = new System.Diagnostics.ProcessStartInfo(tool)
+        {
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        };
+        info.Arguments = string.Join(" ",
+            arguments.Select(a => "\"" + a.Replace("\"", "\\\"") + "\""));
+        if (gnupgHome is not null)
+        {
+            info.EnvironmentVariables["GNUPGHOME"] = gnupgHome;
+        }
+        using var process = System.Diagnostics.Process.Start(info)!;
+        var stdOut = process.StandardOutput.ReadToEnd();
+        var stdErr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        Assert(process.ExitCode == 0, tool + " failed: " + stdErr);
+        if (stdoutTo is not null)
+        {
+            File.WriteAllText(stdoutTo, stdOut);
         }
     }
 

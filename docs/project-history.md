@@ -4116,3 +4116,5 @@ GNUPGHOME，不入库）；隔离 rpmdb `rpm --import`+`rpm -K` 实测
 `digests signatures OK`；`Bundler.Tests` 201/201、`Verify.sh` 全绿。
 修正：决策 1 的 `RPMSIGTAG_RSA` 按 rpm-rs 口径改为 `RPMSIGTAG_PGP`；
 MSBuild 包补载 `BouncyCastle.Cryptography.dll`。
+2026-09-28 `SIGN-2` 已完成（分支 `signing-development`）：`.AppImage` 可选 GPG 签名落地——`AppImageBundleConfiguration.SigningKeyFile`/`SigningKeyPassphrase`（MSBuild `BundlerAppImageSigning*`、CLI `appimage.*` 自动透传）→ 隔离 `GNUPGHOME` 导入私钥 + `APPIMAGETOOL_SIGN_PASSPHRASE` 注入走 `appimagetool --sign`（实为 gpgme detached sig，嵌 `.sha256_sig`/`.sig_key` ELF 段）；验签口径实测=双段置零镜像 sha256 裸 hex，`gpgv` `Good signature`；未签产物段全零、半配置拒绝；`Bundler.Tests` 203/203、`Verify.sh` 全绿。SIGN 收官：rpm/AppImage 可选签名齐备，deb 维持不签。
+

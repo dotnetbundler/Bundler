@@ -19,6 +19,7 @@ internal sealed class AppImageBundleBackend(
             context.Configuration, context.Item, settings, context.WorkDirectory);
         var toolset = AppImageToolset.Resolve(
             built.EnvironmentArchitecture, options.ToolsetCacheDirectory, cancellationToken);
+        var signing = PrepareSigning(settings, context.WorkDirectory);
 
         var fileName = $"{built.PackageName}_{built.Version}_{built.FileArchitecture}.AppImage";
         Directory.CreateDirectory(context.Item.OutputDirectory);
@@ -37,19 +38,32 @@ internal sealed class AppImageBundleBackend(
             "--runtime-file", toolset.RuntimePath,
             built.AppDirPath
         };
+        if (signing is not null)
+        {
+            arguments.Insert(0, "--sign");
+        }
         arguments.Add(outputPath);
 
+        var environment = new Dictionary<string, string>
+        {
+            ["ARCH"] = built.EnvironmentArchitecture,
+            ["APPIMAGE_EXTRACT_AND_RUN"] = "1"
+        };
         context.Logger.Log(BundleLogLevel.Information,
             $"Running appimagetool ({built.EnvironmentArchitecture}) → {fileName}");
         try
         {
+            if (signing is not null)
+            {
+                environment["GNUPGHOME"] = signing.GnupgHome;
+                if (settings.SigningKeyPassphrase is { Length: > 0 } passphrase)
+                {
+                    environment["APPIMAGETOOL_SIGN_PASSPHRASE"] = passphrase;
+                }
+            }
             await AppImageProcessRunner.RunAsync(
                 toolset.ToolPath, arguments, context.WorkDirectory, cancellationToken,
-                new Dictionary<string, string>
-                {
-                    ["ARCH"] = built.EnvironmentArchitecture,
-                    ["APPIMAGE_EXTRACT_AND_RUN"] = "1"
-                });
+                environment);
         }
         catch
         {
@@ -59,6 +73,10 @@ internal sealed class AppImageBundleBackend(
                 File.Delete(outputPath);
             }
             throw;
+        }
+        finally
+        {
+            signing?.Dispose();
         }
         if (!File.Exists(outputPath))
         {
@@ -70,6 +88,28 @@ internal sealed class AppImageBundleBackend(
 
         return [new BundleArtifact(
             PackageFormat.AppImage, context.Item.Target.RuntimeIdentifier, outputPath)];
+    }
+
+    private static AppImageSigning.SigningContext? PrepareSigning(
+        AppImageBundleConfiguration settings, string workDirectory)
+    {
+        var hasKey = settings.SigningKeyFile is { Length: > 0 };
+        var hasPassphrase = settings.SigningKeyPassphrase is { Length: > 0 };
+        if (hasPassphrase && !hasKey)
+        {
+            throw new ArgumentException(
+                "SigningKeyPassphrase requires SigningKeyFile to point at an OpenPGP secret key.");
+        }
+        if (!hasKey)
+        {
+            return null;
+        }
+        if (!File.Exists(settings.SigningKeyFile!))
+        {
+            throw new ArgumentException(
+                $"SigningKeyFile '{settings.SigningKeyFile}' does not exist.");
+        }
+        return AppImageSigning.Prepare(settings.SigningKeyFile!, workDirectory);
     }
 
     private static void WriteSha256Sidecar(string path)

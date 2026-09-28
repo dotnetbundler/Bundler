@@ -280,4 +280,79 @@ if [[ "$(uname -m)" == "x86_64" ]]; then
     grep -q "OK: " "$integration_root/api.log" || fail "API fixture did not produce an .AppImage."
 fi
 
-log "ALL CHECKS PASSED (LINUX-APPIMAGE-1..3)"
+log "== optional GPG signing variant (--sign via appimagetool) =="
+sign_dir="$integration_root/signing"
+mkdir -p "$sign_dir/gnupg" && chmod 700 "$sign_dir/gnupg"
+export GNUPGHOME="$sign_dir/gnupg"
+cat > "$sign_dir/keygen.txt" <<'KEYGEN'
+Key-Type: RSA
+Key-Length: 2048
+Name-Real: Bundler AppImage Test
+Name-Email: bundler-appimage-test@example.com
+Expire-Date: 0
+Passphrase: bundler-sign-pass
+%commit
+KEYGEN
+gpg --batch --gen-key "$sign_dir/keygen.txt" >"$sign_dir/keygen.log" 2>&1 \
+    || fail "gpg key generation failed."
+gpg --batch --yes --pinentry-mode loopback --passphrase bundler-sign-pass \
+    --export-secret-keys --armor bundler-appimage-test@example.com \
+    > "$sign_dir/sec.asc" || fail "secret key export failed."
+gpg --batch --export --armor bundler-appimage-test@example.com \
+    > "$sign_dir/pub.asc" || fail "public key export failed."
+gpg --batch --no-default-keyring --keyring "$sign_dir/verify.gpg" \
+    --import "$sign_dir/pub.asc" >"$sign_dir/import.log" 2>&1 \
+    || fail "verify keyring import failed."
+unset GNUPGHOME
+
+publish_fixture signed \
+    -p:BundlerTestAppImageSigningKeyFile="$sign_dir/sec.asc" \
+    -p:BundlerTestAppImageSigningKeyPassphrase="bundler-sign-pass" >/dev/null
+signed="$(find "$integration_root/signed/linux-x64/appimage" -name '*.AppImage' | head -n1)"
+[[ -n "$signed" ]] || fail "signed publish produced no .AppImage."
+
+# The runtime template always carries both signature sections;
+# unsigned = zero-filled, signed = armored OpenPGP data.
+objcopy -O binary --only-section=.sha256_sig "$signed" "$sign_dir/sig.bin" \
+    || fail "objcopy could not extract .sha256_sig."
+[[ -s "$sign_dir/sig.bin" ]] || fail ".sha256_sig section missing."
+[[ "$(tr -d '\0' < "$sign_dir/sig.bin" | wc -c)" -gt 0 ]] \
+    || fail ".sha256_sig is zero-filled on a signed build."
+grep -q "BEGIN PGP SIGNATURE" "$sign_dir/sig.bin" \
+    || fail ".sha256_sig does not carry an armored PGP signature."
+
+# Verify the detached signature semantics: sha256 of the image with both
+# signature sections zeroed, signed as a bare hex string (no newline).
+python3 - "$signed" "$sign_dir/digest.txt" <<'PYDIGEST'
+import hashlib, re, subprocess, sys
+path, out = sys.argv[1], sys.argv[2]
+elf = subprocess.check_output(['readelf', '-SW', path], text=True)
+data = bytearray(open(path, 'rb').read())
+found = 0
+for line in elf.splitlines():
+    m = re.search(r'\]\s+(\.sha256_sig|\.sig_key)\s+\w+\s+\w+\s+([0-9a-f]+)\s+([0-9a-f]+)', line)
+    if m:
+        off, size = int(m.group(2), 16), int(m.group(3), 16)
+        data[off:off + size] = b'\0' * size
+        found += 1
+assert found == 2, 'expected both signature sections'
+open(out, 'w').write(hashlib.sha256(bytes(data)).hexdigest())
+PYDIGEST
+gpgv --keyring "$sign_dir/verify.gpg" "$sign_dir/sig.bin" "$sign_dir/digest.txt" \
+    > "$sign_dir/gpgv.log" 2>&1 || fail "gpgv invocation failed."
+grep -q "Good signature" "$sign_dir/gpgv.log" \
+    || { cat "$sign_dir/gpgv.log"; fail "gpgv rejected the embedded signature."; }
+
+objcopy -O binary --only-section=.sha256_sig "$appimage" "$sign_dir/usig.bin" \
+    || fail "objcopy could not extract the unsigned .sha256_sig."
+[[ "$(tr -d '\0' < "$sign_dir/usig.bin" | wc -c)" -eq 0 ]] \
+    || fail "unsigned build must leave .sha256_sig zeroed."
+
+if publish_fixture half-sign \
+    -p:BundlerTestAppImageSigningKeyPassphrase="orphan-pass" >/dev/null 2>&1; then
+    fail "passphrase without a key file must fail the publish."
+else
+    log "half-configured signing correctly failed."
+fi
+
+log "ALL CHECKS PASSED (LINUX-APPIMAGE-1..3 + SIGN-2)"

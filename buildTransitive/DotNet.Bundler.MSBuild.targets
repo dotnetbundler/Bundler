@@ -236,6 +236,8 @@
       AppImageDesktopFile="$(BundlerAppImageDesktopFile)"
       AppImageCategories="$(BundlerAppImageCategories)"
       AppImageMetainfoFile="$(BundlerAppImageMetainfoFile)"
+      AppImageSigningKeyFile="$(BundlerAppImageSigningKeyFile)"
+      AppImageSigningKeyPassphrase="$(BundlerAppImageSigningKeyPassphrase)"
       AppImageFiles="@(BundlerAppImageFile)"
       ArchivePackageName="$(BundlerArchivePackageName)"
       ArchiveVersion="$(BundlerArchiveVersion)"

@@ -28,7 +28,7 @@
 | 阶段 | 范围 | 退出条件 |
 | --- | --- | --- |
 | `SIGN-1` | `RpmBundleConfiguration` 签名旋钮 + BouncyCastle OpenPGP 签名写 signature header + MSBuild/CLI 接线 + 单元测试 + Verify.sh 容器 `rpm -K` 断言 + 测试密钥现生成 + 无密钥回归 | 已签 rpm 容器内 `rpm --import`+`-K`/`--checksig` 真实验签断言全绿；未供密钥产物与现状一致；半配置拒绝断言；`Bundler.Tests` 全绿 |
-| `SIGN-2` | `AppImageBundleConfiguration` 签名旋钮 + appimagetool `--sign`（隔离 GNUPGHOME）+ 同上接线/测试/验证 + 冻结基线前移 | 已签 AppImage `gpgv` 验签断言全绿；未供密钥产物与现状一致；文档矩阵/OI/MT 收口 |
+| ~~`SIGN-2`~~（完成） | `AppImageBundleConfiguration` 签名旋钮 + appimagetool `--sign`（隔离 GNUPGHOME）+ 同上接线/测试/验证 | 已签 AppImage `gpgv` 验签断言全绿；未供密钥产物与现状一致；文档矩阵/OI/MT 收口 |
 
 ## 3. 技术注记
 
@@ -62,3 +62,28 @@
   发布签名包 → 隔离 rpmdb `rpm --import` + `rpm -K` 实测
   `digests signatures OK`；未签名包断言不含 `signatures OK`；docker
   三容器装卸矩阵与 rpmlint 基线维持全绿。
+
+### SIGN-2 · AppImage `--sign`（完成，2026-09-28）
+
+- 实现：`src/Bundler.AppImage/AppImageSigning.cs`——隔离 `GNUPGHOME`
+  （工作目录内 `gnupg/`，chmod 700）导入调用方私钥文件，
+  `appimagetool --sign` 通过 `APPIMAGETOOL_SIGN_PASSPHRASE` 环境变量
+  供口令（官方注入口径，口令不上命令行）；构建结束 `gpgconf --kill`
+  回收专属 agent。宿主 `gpg` 仅在供密钥时成为外部依赖。
+- 语义修正：appimagetool 实为 **gpgme** 库签名（`SIGN --detached`），
+  非 gpg 子进程——`APPIMAGETOOL_SIGN_PASSPHRASE` 走 gpgme loopback，
+  免 `gpg-preset-passphrase` 链路（该二进制不在 `$PATH`，初版方案作废）。
+- 验签口径（实测确认，上游文档未写明）：`.sha256_sig` 为 detached
+  armor 签名，被签数据 = 将 `.sha256_sig`+`.sig_key` 两段置零后的
+  镜像 sha256 **裸 hex 字符串**（无换行）；`gpgv --keyring <pub>` 实测
+  `Good signature`。
+- 旋钮：`AppImageBundleConfiguration.SigningKeyFile`/`SigningKeyPassphrase`；
+  MSBuild `BundlerAppImageSigningKeyFile`/`BundlerAppImageSigningKeyPassphrase`；
+  CLI `appimage.signingKeyFile`/`signingKeyPassphrase` + `--appimage.*=` 自动透传。
+- 半配置拒绝：只给口令/密钥文件不存在 → `ArgumentException`。
+- 测试：`Bundler.Tests` 203/203（新增 `.sha256_sig` ELF 段非零断言 +
+  未签构建全零回归 + 半配置拒绝；ELF 段解析器自实现）。
+- 真实验证：`tests/Linux.AppImage.Integration/Verify.sh` 新增签名段——
+  `gpg --batch` 现生成 RSA-2048 密钥 → 签名产物 → `objcopy` 提取
+  `.sha256_sig` + 双段置零 sha256 + `gpgv` `Good signature` 断言；
+  未签产物段全零断言；半配置 publish 拒绝断言；docker 矩阵维持全绿。
