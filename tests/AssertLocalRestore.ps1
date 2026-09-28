@@ -158,14 +158,8 @@ function Assert-LocalBundlerRestore {
     $expectedSource = [IO.Path]::GetFullPath($Source).TrimEnd('\', '/')
     $expectedCache = [IO.Path]::GetFullPath($Cache).TrimEnd('\', '/')
     $configuredSources = @($assets.project.restore.sources.PSObject.Properties.Name)
-    # 开发规则要求 RestoreSources 保留公共 NuGet 源作 runtime pack 回退；
-    # 这里只保证不引入其他远程源，包的真实来源由下方 .nupkg.metadata 核验。
-    $unexpectedSources = @($configuredSources | Where-Object {
-        $_ -match '^[a-zA-Z][a-zA-Z0-9+.-]*://' -and $_ -ne 'https://api.nuget.org/v3/index.json'
-    })
-    if ($unexpectedSources.Count -gt 0) {
-        throw "Restore unexpectedly used a network source: $($unexpectedSources -join ', ')"
-    }
+    # 本地源经 RestoreAdditionalProjectSources 追加注入，源列表随宿主机 NuGet 配置变化——
+    # 不校验源清单形状，只要求本地源在场；包的真实来源由下方 .nupkg.metadata 逐包核验。
     $sources = @($configuredSources |
         Where-Object { $_ -notmatch '^[a-zA-Z][a-zA-Z0-9+.-]*://' } |
         ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\', '/') })

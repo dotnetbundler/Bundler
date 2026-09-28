@@ -3,6 +3,10 @@
     <!-- 版本只在根 Directory.Build.props 定义；隔离 fixture 由脚本传入版本。 -->
     <!-- 公开示例使用仓库本地源；隔离 fixture 由脚本显式传入包源。 -->
     <BundlerPackageSource Condition="'$(BundlerPackageSource)' == '' and '$(BundlerUseRepositoryPackageSource)' == 'true'">$(MSBuildThisFileDirectory)artifacts\packages</BundlerPackageSource>
-    <RestoreSources Condition="'$(BundlerPackageSource)' != ''">$(BundlerPackageSource);https://api.nuget.org/v3/index.json</RestoreSources>
+    <!-- 只把本地源追加进还原源，源列表所有权归 NuGet 默认配置（nuget.org 等照常可用）。 -->
+    <RestoreAdditionalProjectSources Condition="'$(BundlerPackageSource)' != ''">$(BundlerPackageSource)</RestoreAdditionalProjectSources>
+    <!-- DotNet.Bundler.* 未发布到公网且还原锁定确切版本，多源并存不会取错包；
+         包的真实来源仍由 Assert-LocalBundlerRestore 按 .nupkg.metadata 逐包核验。 -->
+    <NoWarn>$(NoWarn);NU1507</NoWarn>
   </PropertyGroup>
 </Project>

@@ -1973,9 +1973,9 @@ static void KeepsPackageConsumerVersionsAligned()
     Assert(!consumerProps.Descendants("BundlerPackageVersion").Any(),
         "The local-package props must not duplicate the repository package version.");
     Assert(consumerProps.Descendants("BundlerPackageSource").Single().Value.Contains("artifacts", StringComparison.Ordinal) &&
-           consumerProps.Descendants("RestoreSources").Single().Value.StartsWith("$(BundlerPackageSource);", StringComparison.Ordinal) &&
-           consumerProps.Descendants("RestoreSources").Single().Value.Contains("nuget.org", StringComparison.Ordinal),
-        "The shared props must define the repository source and fixture restore source (nuget.org must remain appended for runtime packs on clean hosts).");
+           consumerProps.Descendants("RestoreAdditionalProjectSources").Single().Value == "$(BundlerPackageSource)" &&
+           !consumerProps.Descendants("RestoreSources").Any(),
+        "The shared props must append the repository source without owning the restore source list.");
     foreach (var path in new[]
     {
         Path.Combine(root, "samples", "HelloNsisApp", "HelloNsisApp.csproj"),
