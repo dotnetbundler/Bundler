@@ -97,11 +97,13 @@ fi
 
 # 直接启动挂载卷内的 .app（只读卷上的二进制仍可执行；启动标记写不进卷内属预期）。
 mounted_app="$mounted_volume/Bundler Mac DMG Fixture.app"
-if "$mounted_app/Contents/MacOS/BundlerMacDmgIntegrationFixture" | grep -q "BundlerMacDmgIntegrationFixture"; then
-    log "mounted .app launches"
-else
-    fail "The .app inside the mounted .dmg did not run."
-fi
+# pipefail 下 `<cmd> | grep -q` 有 SIGPIPE 竞态（grep 命中即退会打断上游写），
+# 先捕获输出再 grep，避免间歇性误判。
+app_output="$("$mounted_app/Contents/MacOS/BundlerMacDmgIntegrationFixture" 2>&1)" \
+    || fail "The .app inside the mounted .dmg did not run."
+printf '%s' "$app_output" | grep -q "BundlerMacDmgIntegrationFixture" \
+    || fail "The .app inside the mounted .dmg did not run."
+log "mounted .app launches"
 
 hdiutil detach "$mounted_volume" >/dev/null || fail "hdiutil detach failed."
 mounted_volume=""
@@ -158,7 +160,9 @@ printf '%s' "$udifderez_xml" | grep -q "<key>TEXT</key>" \
     || fail "The embedded SLA is missing the TEXT license body."
 codesign --verify --verbose=2 "$eula_dmg" 2>"$integration_root/codesign-verify.log" \
     || fail "codesign --verify failed on the ad-hoc signed .dmg."
-codesign -dvvv "$eula_dmg" 2>&1 | grep -q "Signature=adhoc" \
+codesign_desc="$(codesign -dvvv "$eula_dmg" 2>&1)" \
+    || fail "codesign -dvvv failed on the ad-hoc signed .dmg."
+printf '%s' "$codesign_desc" | grep -q "Signature=adhoc" \
     || fail "Expected an ad-hoc .dmg signature (Signature=adhoc)."
 
 # SLA 是真实挂载门控：stdin 关闭时 attach 取消，回答 Y 才挂载。
@@ -221,10 +225,11 @@ if dotnet publish "$fixture_project" -c Release \
     --packages "$package_cache" >/dev/null 2>&1; then
     fail "An invalid compression value must fail the publish."
 fi
-if find "$integration_root/bundle-bad" -name '*.dmg' 2>/dev/null | grep -q .; then
+if [[ -n "$(find "$integration_root/bundle-bad" -name '*.dmg' -print -quit 2>/dev/null)" ]]; then
     fail "A failed build left a .dmg artifact."
 fi
-if hdiutil info 2>/dev/null | grep -q "$integration_root"; then
+hdiutil_info="$(hdiutil info 2>/dev/null || true)"
+if printf '%s' "$hdiutil_info" | grep -qF "$integration_root"; then
     fail "A failed build left a mounted volume."
 fi
 

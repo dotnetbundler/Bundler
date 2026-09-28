@@ -82,12 +82,13 @@ payload_dir="$expand_root/root/Payload"
 plutil -lint "$payload_dir/Bundler Mac PKG Fixture.app/Contents/Info.plist" >/dev/null \
     || fail "The .app inside the payload has a broken Info.plist."
 # payload 内二进制真实启动（pkg 解包出的副本可执行）。
-if "$payload_dir/Bundler Mac PKG Fixture.app/Contents/MacOS/BundlerMacPkgIntegrationFixture" \
-    | grep -q "BundlerMacPkgIntegrationFixture"; then
-    log "payload .app launches"
-else
-    fail "The .app inside the expanded payload did not run."
-fi
+# pipefail 下 `<cmd> | grep -q` 有 SIGPIPE 竞态（grep 命中即退会打断上游写），
+# 先捕获输出再 grep，避免间歇性误判。
+payload_output="$("$payload_dir/Bundler Mac PKG Fixture.app/Contents/MacOS/BundlerMacPkgIntegrationFixture" 2>&1)" \
+    || fail "The .app inside the expanded payload did not run."
+printf '%s' "$payload_output" | grep -q "BundlerMacPkgIntegrationFixture" \
+    || fail "The .app inside the expanded payload did not run."
+log "payload .app launches"
 
 log "== PackageInfo metadata assertions =="
 package_info="$(cat "$expand_root/root/PackageInfo")"
@@ -210,7 +211,7 @@ if dotnet publish "$fixture_project" -c Release \
     --packages "$package_cache" >/dev/null 2>&1; then
     fail "A nonexistent signing identity must fail the publish."
 fi
-if find "$integration_root/bundle-sign-fail" -name '*.pkg' 2>/dev/null | grep -q .; then
+if [[ -n "$(find "$integration_root/bundle-sign-fail" -name '*.pkg' -print -quit 2>/dev/null)" ]]; then
     fail "A failed signing build left a .pkg artifact."
 fi
 
@@ -233,12 +234,17 @@ fi
 [[ -f "$home_helper" ]] || fail "The per-user install did not place the payload helper under ~/Applications/support."
 plutil -lint "$home_app/Contents/Info.plist" >/dev/null \
     || fail "The installed .app has a broken Info.plist."
-"$home_app/Contents/MacOS/BundlerMacPkgIntegrationFixture" | grep -q "BundlerMacPkgIntegrationFixture" \
+home_output="$("$home_app/Contents/MacOS/BundlerMacPkgIntegrationFixture" 2>&1)" \
     || fail "The installed .app did not run."
-pkgutil --pkgs --volume ~ | grep -q "com.dotnetbundler.macpkgintegrationfixture" \
+printf '%s' "$home_output" | grep -q "BundlerMacPkgIntegrationFixture" \
+    || fail "The installed .app did not run."
+pkgs_list="$(pkgutil --pkgs --volume ~)" \
+    || fail "pkgutil --pkgs --volume ~ failed."
+printf '%s' "$pkgs_list" | grep -q "com.dotnetbundler.macpkgintegrationfixture" \
     || fail "pkgutil --pkgs --volume ~ lacks the fixture receipt."
-pkgutil --files com.dotnetbundler.macpkgintegrationfixture --volume ~ \
-    | grep -q "support/helper.txt" \
+pkg_files="$(pkgutil --files com.dotnetbundler.macpkgintegrationfixture --volume ~)" \
+    || fail "pkgutil --files failed for the fixture receipt."
+printf '%s' "$pkg_files" | grep -q "support/helper.txt" \
     || fail "pkgutil --files lacks the payload entry for the fixture."
 pkgutil --forget com.dotnetbundler.macpkgintegrationfixture --volume ~ >/dev/null \
     || fail "pkgutil --forget failed for the fixture receipt."
@@ -291,7 +297,7 @@ if dotnet publish "$fixture_project" -c Release \
     --packages "$package_cache" >/dev/null 2>&1; then
     fail "A relative install location must fail the publish."
 fi
-if find "$integration_root/bundle-bad" -name '*.pkg' 2>/dev/null | grep -q .; then
+if [[ -n "$(find "$integration_root/bundle-bad" -name '*.pkg' -print -quit 2>/dev/null)" ]]; then
     fail "A failed build left a .pkg artifact."
 fi
 
