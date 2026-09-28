@@ -2,15 +2,21 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 using DotNet.Bundler;
-using DotNet.Bundler.AppImage;
 using DotNet.Bundler.Archive;
 using DotNet.Bundler.Deb;
 using DotNet.Bundler.MacApp;
+#if BUNDLER_HOST_MACOS
 using DotNet.Bundler.MacDmg;
 using DotNet.Bundler.MacPkg;
+#endif
 using DotNet.Bundler.Nsis;
 using DotNet.Bundler.Rpm;
+#if BUNDLER_HOST_WINDOWS
 using DotNet.Bundler.Wix;
+#endif
+#if BUNDLER_HOST_LINUX
+using DotNet.Bundler.AppImage;
+#endif
 
 namespace DotNet.Bundler.Cli;
 
@@ -24,13 +30,19 @@ internal sealed class CliResolvedConfiguration
 {
     public required BundleConfiguration Bundle { get; init; }
     public NsisBundleConfiguration? Nsis { get; init; }
+#if BUNDLER_HOST_WINDOWS
     public WixBundleConfiguration? Msi { get; init; }
+#endif
     public MacAppBundleConfiguration? App { get; init; }
+#if BUNDLER_HOST_MACOS
     public MacDmgBundleConfiguration? Dmg { get; init; }
     public MacPkgBundleConfiguration? Pkg { get; init; }
+#endif
     public DebBundleConfiguration? Deb { get; init; }
     public RpmBundleConfiguration? Rpm { get; init; }
+#if BUNDLER_HOST_LINUX
     public AppImageBundleConfiguration? AppImage { get; init; }
+#endif
     public ArchiveBundleConfiguration? Archive { get; init; }
 }
 
@@ -44,7 +56,19 @@ internal static class CliConfig
 
     private static readonly HashSet<string> FormatSections = new(StringComparer.Ordinal)
     {
-        "nsis", "msi", "app", "dmg", "pkg", "deb", "rpm", "appimage", "archive"
+        "nsis",
+#if BUNDLER_HOST_WINDOWS
+        "msi",
+#endif
+        "app",
+#if BUNDLER_HOST_MACOS
+        "dmg", "pkg",
+#endif
+        "deb", "rpm",
+#if BUNDLER_HOST_LINUX
+        "appimage",
+#endif
+        "archive"
     };
 
     public static CliResolvedConfiguration Resolve(CliArguments parsed)
@@ -91,13 +115,19 @@ internal static class CliConfig
     private static readonly Dictionary<string, Type> SectionTypes = new(StringComparer.Ordinal)
     {
         ["nsis"] = typeof(NsisBundleConfiguration),
+#if BUNDLER_HOST_WINDOWS
         ["msi"] = typeof(WixBundleConfiguration),
+#endif
         ["app"] = typeof(MacAppBundleConfiguration),
+#if BUNDLER_HOST_MACOS
         ["dmg"] = typeof(MacDmgBundleConfiguration),
         ["pkg"] = typeof(MacPkgBundleConfiguration),
+#endif
         ["deb"] = typeof(DebBundleConfiguration),
         ["rpm"] = typeof(RpmBundleConfiguration),
+#if BUNDLER_HOST_LINUX
         ["appimage"] = typeof(AppImageBundleConfiguration),
+#endif
         ["archive"] = typeof(ArchiveBundleConfiguration)
     };
 
@@ -406,13 +436,19 @@ internal static class CliConfig
         {
             Bundle = bundle,
             Nsis = Section<NsisBundleConfiguration>(document, "nsis"),
+#if BUNDLER_HOST_WINDOWS
             Msi = Section<WixBundleConfiguration>(document, "msi"),
+#endif
             App = Section<MacAppBundleConfiguration>(document, "app"),
+#if BUNDLER_HOST_MACOS
             Dmg = Section<MacDmgBundleConfiguration>(document, "dmg"),
             Pkg = Section<MacPkgBundleConfiguration>(document, "pkg"),
+#endif
             Deb = Section<DebBundleConfiguration>(document, "deb"),
             Rpm = Section<RpmBundleConfiguration>(document, "rpm"),
+#if BUNDLER_HOST_LINUX
             AppImage = Section<AppImageBundleConfiguration>(document, "appimage"),
+#endif
             Archive = Section<ArchiveBundleConfiguration>(document, "archive")
         };
     }
@@ -500,16 +536,20 @@ internal static class CliConfig
     // runtime Type carries no DynamicallyAccessedMembers annotation.
     private static readonly Dictionary<Type, Func<object>> DefaultFactories = new()
     {
+#if BUNDLER_HOST_LINUX
         [typeof(AppImageFileEntry)] = static () => new AppImageFileEntry(),
+#endif
         [typeof(ArchiveFileEntry)] = static () => new ArchiveFileEntry(),
         [typeof(DebFileEntry)] = static () => new DebFileEntry(),
         [typeof(MacAppContentConfiguration)] = static () => new MacAppContentConfiguration(),
         [typeof(MacAppDocumentTypeConfiguration)] = static () => new MacAppDocumentTypeConfiguration(),
         [typeof(MacAppSigningConfiguration)] = static () => new MacAppSigningConfiguration(),
         [typeof(MacAppUrlTypeConfiguration)] = static () => new MacAppUrlTypeConfiguration(),
+#if BUNDLER_HOST_MACOS
         [typeof(MacDmgSigningConfiguration)] = static () => new MacDmgSigningConfiguration(),
         [typeof(MacPkgPayloadItem)] = static () => new MacPkgPayloadItem(),
         [typeof(MacPkgSigningConfiguration)] = static () => new MacPkgSigningConfiguration(),
+#endif
         [typeof(NsisShortcutConfiguration)] = static () => new NsisShortcutConfiguration(),
         [typeof(RpmFileEntry)] = static () => new RpmFileEntry(),
     };

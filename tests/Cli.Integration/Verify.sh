@@ -191,4 +191,22 @@ $NATIVE bundle ${BASE/--output-dir $OUT_DIR/--output-dir $NATIVE_OUT} \
 find "$NATIVE_OUT" -name "*.zip" -print -quit | grep -q . \
   || die "native bundle must produce a zip artifact"
 
+log "AOT publish embeds only linux-capable backends"
+for asm in Wix MacDmg MacPkg; do
+  [ ! -e "$ARTIFACTS/aot/DotNet.Bundler.$asm.pdb" ] \
+    || die "host-restricted backend $asm must not be published on linux-x64"
+done
+[ -f "$ARTIFACTS/aot/DotNet.Bundler.AppImage.pdb" ] \
+  || die "linux-capable AppImage backend must still be published"
+if strings -n 8 "$NATIVE" | grep -qE 'wix3141|candle\.exe|hdiutil'; then
+  die "windows/mac toolset payload must be trimmed out of the linux binary"
+fi
+for fmt in msi dmg pkg; do
+  $NATIVE bundle ${BASE/--output-dir $OUT_DIR/--output-dir "$ARTIFACTS/aot-$fmt"} \
+    --formats "$fmt" >/dev/null 2>"$ARTIFACTS/aot-$fmt.err"; code=$?
+  [ "$code" -eq 1 ] || die "$fmt on a linux AOT build must exit 1, got $code"
+  grep -qE "requires a (Windows|macOS) host" "$ARTIFACTS/aot-$fmt.err" \
+    || die "$fmt dispatch must fail with an explicit host error"
+done
+
 log "all CLI integration assertions passed"

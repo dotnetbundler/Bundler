@@ -160,8 +160,10 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 ## 6. 默认下一步
 
 全部八种格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`）与 Archive、CLI 均已冻结并入 `main`（`83fd134`）。
-三平台全量验收完成（§3）；ARM64 qemu 仿真验收进行中，结果待回填。
-剩余工作仅为外部待验收项（各格式 OI 清单）与测试基建修正（CLI-OI-05、nsis Verify.ps1 幂等清理、AppImage 签名 gpg-agent flake）。
+三平台全量验收完成（§3）；ARM64 qemu 仿真验收完成（partial，仿真已验/真机待验如实分级）。
+验收期缺陷修复并入 `main`：`58cd607`（CLI `DefaultsObject` 静态工厂，修复 AOT IL2067 发布回归）、`f1930f7`（打包输入跳过非普通文件 + AppImage 签名 keyring 移出暂存输入）。
+**CLI AOT 按宿主裁剪自研后端已实现**（`docs/roadmap.md` §7.2，未提交）：RID 条件引用 + `#if` 裁剪，`linux-x64` 实发 47.4 MiB（-2.3 MB），四种编译口径零警告，`Cli.Integration` 新断言全绿；待用户授权提交。
+剩余工作仅为外部待验收项（各格式 OI 清单）与测试基建修正（CLI-OI-05、nsis Verify.ps1 幂等清理）。
 
 ## 7. 历史记录
 

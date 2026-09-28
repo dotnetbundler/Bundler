@@ -16,18 +16,28 @@
     <IsAotCompatible>true</IsAotCompatible>
     <StackSizeSupport>false</StackSizeSupport>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Per-RID host gating: host-restricted backends are only compiled into
+         the publish that can run them, so their embedded toolsets stay out of
+         other platforms' AOT binaries. A build with no RuntimeIdentifier
+         (class library, dotnet tool package) keeps every backend. -->
+    <BundlerHostWindows Condition="'$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win'))">true</BundlerHostWindows>
+    <BundlerHostMacos Condition="'$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx'))">true</BundlerHostMacos>
+    <BundlerHostLinux Condition="'$(RuntimeIdentifier)' == '' or (!$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win')) and !$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx')))">true</BundlerHostLinux>
+    <DefineConstants Condition="'$(BundlerHostWindows)' == 'true'">$(DefineConstants);BUNDLER_HOST_WINDOWS</DefineConstants>
+    <DefineConstants Condition="'$(BundlerHostMacos)' == 'true'">$(DefineConstants);BUNDLER_HOST_MACOS</DefineConstants>
+    <DefineConstants Condition="'$(BundlerHostLinux)' == 'true'">$(DefineConstants);BUNDLER_HOST_LINUX</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
     <ProjectReference Include="..\Bundler.Nsis\Bundler.Nsis.csproj" />
-    <ProjectReference Include="..\Bundler.Wix\Bundler.Wix.csproj" />
     <ProjectReference Include="..\Bundler.MacApp\Bundler.MacApp.csproj" />
-    <ProjectReference Include="..\Bundler.MacDmg\Bundler.MacDmg.csproj" />
-    <ProjectReference Include="..\Bundler.MacPkg\Bundler.MacPkg.csproj" />
     <ProjectReference Include="..\Bundler.Deb\Bundler.Deb.csproj" />
     <ProjectReference Include="..\Bundler.Rpm\Bundler.Rpm.csproj" />
-    <ProjectReference Include="..\Bundler.AppImage\Bundler.AppImage.csproj" />
     <ProjectReference Include="..\Bundler.Archive\Bundler.Archive.csproj" />
+    <ProjectReference Include="..\Bundler.Wix\Bundler.Wix.csproj" Condition="'$(BundlerHostWindows)' == 'true'" />
+    <ProjectReference Include="..\Bundler.MacDmg\Bundler.MacDmg.csproj" Condition="'$(BundlerHostMacos)' == 'true'" />
+    <ProjectReference Include="..\Bundler.MacPkg\Bundler.MacPkg.csproj" Condition="'$(BundlerHostMacos)' == 'true'" />
+    <ProjectReference Include="..\Bundler.AppImage\Bundler.AppImage.csproj" Condition="'$(BundlerHostLinux)' == 'true'" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Bundler.Tests" />
