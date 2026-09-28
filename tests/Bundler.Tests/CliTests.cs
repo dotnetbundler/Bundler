@@ -20,6 +20,7 @@ internal static class CliTests
             yield return ("CLI options override config file values", () => RunSync(ConfigCliOverride));
             yield return ("Unknown config keys are rejected", () => RunSync(RejectsUnknownConfigKey));
             yield return ("Dotted format knobs merge into config", () => RunSync(DottedKnobOverride));
+            yield return ("Config sections keep member defaults", () => RunSync(ConfigSectionMemberDefaults));
         }
     }
 
@@ -307,6 +308,53 @@ internal static class CliTests
             Directory.Delete(input, true);
             File.Delete(config);
             if (Directory.Exists(output)) { Directory.Delete(output, true); }
+        }
+    }
+
+    static void ConfigSectionMemberDefaults()
+    {
+        var input = CreateInputDirectory();
+        var config = Path.Combine(Path.GetTempPath(), $"bundler-{Guid.NewGuid():N}.json");
+        File.WriteAllText(config, """
+            {
+              "productName": "CfgDefaults",
+              "identifier": "dev.example.cfg",
+              "version": "1.0.0",
+              "targets": [
+                {
+                  "runtimeIdentifier": "linux-x64",
+                  "inputDirectory": "<input>",
+                  "mainExecutable": "cli-fixture",
+                  "formats": [ "zip" ]
+                }
+              ],
+              "app": { "signing": { "identity": "-" } },
+              "pkg": { "signing": { "identity": "Developer ID Installer: Example" } },
+              "archive": { "files": [ { "destination": "bin/cli-fixture" } ] }
+            }
+            """.Replace("<input>", input));
+        try
+        {
+            var resolved = CliConfig.Resolve(CliArguments.Parse(["bundle", "--config", config]));
+
+            var app = resolved.App;
+            Assert(app is not null, "the app section must deserialize");
+            Assert(app!.Contents is { Count: 0 } &&
+                app.DocumentTypes is { Count: 0 } && app.UrlTypes is { Count: 0 } &&
+                app.Frameworks is { Count: 0 },
+                "absent app collection keys must keep their empty initializers");
+            Assert(app.Signing is { Identity: "-", NotaryWait: true },
+                "app.signing must merge onto defaults: identity set, NotaryWait stays true");
+            Assert(resolved.Pkg?.Signing.NotaryWait == true,
+                "pkg.signing must merge onto defaults: NotaryWait stays true");
+            var file = resolved.Archive?.Files?.SingleOrDefault();
+            Assert(file is { Source: "", Destination: "bin/cli-fixture" },
+                "files[] elements must merge onto defaults: absent source stays empty");
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            File.Delete(config);
         }
     }
 

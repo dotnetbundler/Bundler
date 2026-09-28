@@ -29,4 +29,7 @@
     <ProjectReference Include="..\Bundler.AppImage\Bundler.AppImage.csproj" />
     <ProjectReference Include="..\Bundler.Archive\Bundler.Archive.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Bundler.Tests" />
+  </ItemGroup>
 </Project>

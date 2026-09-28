@@ -427,10 +427,84 @@ internal static class CliConfig
                 .Where(s => s.Length > 0).ToArray()
             : [];
 
-    private static IReadOnlyList<T> ListOf<T>(JsonNode? node) =>
+    private static IReadOnlyList<T> ListOf<T>(JsonNode? node) where T : class, new() =>
         node is JsonArray arr
-            ? arr.Select(entry => (T)entry!.Deserialize(TypeInfoFor<T>())!).ToArray()
+            ? arr.Select(entry => entry is JsonObject element
+                    ? DeserializeWithDefaults(element, TypeInfoFor<T>(), new T())
+                    : (T)entry!.Deserialize(TypeInfoFor<T>())!).ToArray()
             : [];
+
+    // The source-generated deserializer routes every init-only member through an
+    // object-initializer factory, so keys absent from the user's JSON are assigned
+    // default(T) and the type's C# initializers (`= []`, `Signing = new()`,
+    // `NotaryWait = true`) are silently lost. Deserialize a member-wise merge of
+    // the serialized defaults and the user's object instead; explicit null still
+    // maps to null.
+    private static T DeserializeWithDefaults<T>(JsonObject overrides, JsonTypeInfo info, T defaults)
+        where T : class =>
+        (T)MergeWithDefaults(overrides, info,
+            (JsonObject)JsonSerializer.SerializeToNode(defaults, info)!).Deserialize(info)!;
+
+    private static JsonObject MergeWithDefaults(
+        JsonObject overrides, JsonTypeInfo typeInfo, JsonObject baseline)
+    {
+        var merged = (JsonObject)baseline.DeepClone();
+        var options = typeInfo.Options;
+        foreach (var pair in overrides)
+        {
+            var property = typeInfo.Properties.FirstOrDefault(candidate =>
+                string.Equals(candidate.Name, pair.Key, StringComparison.OrdinalIgnoreCase));
+            var key = property?.Name ?? pair.Key;
+            merged[key] = MergeValue(pair.Value, property, options);
+        }
+        return merged;
+    }
+
+    private static JsonNode? MergeValue(
+        JsonNode? overlay, JsonPropertyInfo? property, JsonSerializerOptions options) =>
+        overlay switch
+        {
+            JsonObject overlayObject when property?.PropertyType is { } objectType &&
+                DefaultsObject(objectType, options) is { } objectDefaults =>
+                MergeWithDefaults(overlayObject, options.GetTypeInfo(objectType), objectDefaults),
+            JsonArray overlayArray when property?.PropertyType is { } collectionType &&
+                options.GetTypeInfo(collectionType) is { ElementType: { } elementType } =>
+                MergeArrayElements(overlayArray, elementType, options),
+            _ => overlay?.DeepClone()
+        };
+
+    private static JsonArray MergeArrayElements(
+        JsonArray overlay, Type elementType, JsonSerializerOptions options)
+    {
+        var elements = new JsonArray();
+        foreach (var element in overlay)
+        {
+            elements.Add(element is JsonObject elementObject &&
+                DefaultsObject(elementType, options) is { } elementDefaults
+                    ? MergeWithDefaults(elementObject, options.GetTypeInfo(elementType),
+                        elementDefaults)
+                    : element?.DeepClone());
+        }
+        return elements;
+    }
+
+    private static JsonObject? DefaultsObject(Type type, JsonSerializerOptions options)
+    {
+        if (options.GetTypeInfo(type) is not { Kind: JsonTypeInfoKind.Object } info)
+        {
+            return null;
+        }
+        // Every type reachable here is rooted in BundlerJsonContext, so the generated
+        // parameterized creators keep the public parameterless ctor referenced and
+        // untrimmed under AOT; Activator is only a fallback for init-only types where
+        // JsonTypeInfo.CreateObject is not populated.
+#pragma warning disable IL2067
+        var instance = info.CreateObject?.Invoke() ?? Activator.CreateInstance(type);
+#pragma warning restore IL2067
+        return instance is null
+            ? null
+            : (JsonObject)JsonSerializer.SerializeToNode(instance, info)!;
+    }
 
     private static JsonTypeInfo TypeInfoFor<T>() =>
         BundlerJsonContext.Default.GetTypeInfo(typeof(T))
@@ -452,9 +526,9 @@ internal static class CliConfig
         return [];
     }
 
-    private static T? Section<T>(JsonObject document, string name) where T : class =>
+    private static T? Section<T>(JsonObject document, string name) where T : class, new() =>
         document[name] is JsonObject child
-            ? (T)child.Deserialize(TypeInfoFor<T>())!
+            ? DeserializeWithDefaults(child, TypeInfoFor<T>(), new T())
             : null;
 
     private static string FormatName(PackageFormat format) => format switch
