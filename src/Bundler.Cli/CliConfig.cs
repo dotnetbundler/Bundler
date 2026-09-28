@@ -492,22 +492,37 @@ internal static class CliConfig
         return elements;
     }
 
+    // Every nested payload type DefaultsObject can instantiate: the schema is
+    // fixed, so a statically reachable `new()` keeps each parameterless ctor
+    // under trimming. JsonTypeInfo.CreateObject is null for all of them (init-only
+    // members route deserialization through parameterized creators) and
+    // Activator.CreateInstance(Type) fails trim analysis (IL2067) because the
+    // runtime Type carries no DynamicallyAccessedMembers annotation.
+    private static readonly Dictionary<Type, Func<object>> DefaultFactories = new()
+    {
+        [typeof(AppImageFileEntry)] = static () => new AppImageFileEntry(),
+        [typeof(ArchiveFileEntry)] = static () => new ArchiveFileEntry(),
+        [typeof(DebFileEntry)] = static () => new DebFileEntry(),
+        [typeof(MacAppContentConfiguration)] = static () => new MacAppContentConfiguration(),
+        [typeof(MacAppDocumentTypeConfiguration)] = static () => new MacAppDocumentTypeConfiguration(),
+        [typeof(MacAppSigningConfiguration)] = static () => new MacAppSigningConfiguration(),
+        [typeof(MacAppUrlTypeConfiguration)] = static () => new MacAppUrlTypeConfiguration(),
+        [typeof(MacDmgSigningConfiguration)] = static () => new MacDmgSigningConfiguration(),
+        [typeof(MacPkgPayloadItem)] = static () => new MacPkgPayloadItem(),
+        [typeof(MacPkgSigningConfiguration)] = static () => new MacPkgSigningConfiguration(),
+        [typeof(NsisShortcutConfiguration)] = static () => new NsisShortcutConfiguration(),
+        [typeof(RpmFileEntry)] = static () => new RpmFileEntry(),
+    };
+
     private static JsonObject? DefaultsObject(Type type, JsonSerializerOptions options)
     {
         if (options.GetTypeInfo(type) is not { Kind: JsonTypeInfoKind.Object } info)
         {
             return null;
         }
-        // Every type reachable here is rooted in BundlerJsonContext, so the generated
-        // parameterized creators keep the public parameterless ctor referenced and
-        // untrimmed under AOT; Activator is only a fallback for init-only types where
-        // JsonTypeInfo.CreateObject is not populated.
-#pragma warning disable IL2067
-        var instance = info.CreateObject?.Invoke() ?? Activator.CreateInstance(type);
-#pragma warning restore IL2067
-        return instance is null
-            ? null
-            : (JsonObject)JsonSerializer.SerializeToNode(instance, info)!;
+        return DefaultFactories.TryGetValue(type, out var createDefault)
+            ? (JsonObject)JsonSerializer.SerializeToNode(createDefault(), info)!
+            : throw new InvalidOperationException($"No default factory for {type.Name}.");
     }
 
     private static JsonTypeInfo TypeInfoFor<T>() =>
