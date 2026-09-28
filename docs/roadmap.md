@@ -222,6 +222,7 @@ NSIS 和 MSI 的清单、结论及外部待办分别维护，包括 UAC、真实
 已登记的用户需求候选：
 
 - **应用自更新/升级包**（2026-09-27 用户提出，暂缓实施）：为打包产物增加升级/更新能力（Tauri updater 协议参照对象之一）。正式立项前需明确：更新通道与签名信任模型、各宿主落地语义（Windows 引导程序替换 / macOS 换 app 包 / Linux 包管理器外更新与包管理器安装的边界）、差分还是全量、回滚策略。满足 §7.2 准入条件后另立 `UPDATE` 路线，不混入现有格式阶段。
+- **CLI AOT 按宿主裁剪自研后端**（2026-09-28 用户提出并立项，**已实现，待合并**）：AOT 发布的 CLI 单二进制此前内嵌全部后端及工具载荷（约 49 MB）。按 RID 剔除宿主不可用后端：`win-*` 剔 `MacDmg`/`MacPkg`/`AppImage`，`linux-*` 剔 `Wix`/`MacDmg`/`MacPkg`，`osx-*` 剔 `Wix`/`AppImage`；`MacApp` 在非 mac 宿主仍可产未签名 `.app`，全宿主保留；`Nsis`/`Deb`/`Rpm`/`Archive` 全宿主保留。实现：`Bundler.Cli.csproj` 按 `RuntimeIdentifier` 推导 `BundlerHostWindows`/`BundlerHostMacos`/`BundlerHostLinux`（无 RID 构建三者全真），`Wix`/`MacDmg`/`MacPkg`/`AppImage` 的 `ProjectReference` 加条件，`FormatDispatcher`/`CliConfig`/`BundlerJsonContext` 内对应符号以 `#if BUNDLER_HOST_*` 裁剪；被剔格式分发时抛 `PlatformNotSupportedException`，对应 bundler.json 段按未知键拒绝。验证：四种编译口径（无 RID、`linux-x64`/`win-x64`/`osx-arm64` RID）零错误零警告；`linux-x64` 实发 47.4 MiB（-2.3 MB），产物零 `Wix`/`Mac*` 引用、保留 `AppImage`，`--formats msi/dmg/pkg` 各报宿主错误；`Cli.Integration` 已加裁剪断言并全绿。
 
 
 ## 8. 路线维护与接班
