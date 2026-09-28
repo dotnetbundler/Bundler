@@ -130,7 +130,8 @@ internal static class CliTests
             Assert(code == 0, $"plan must exit 0, got {code}");
             Assert(stdout.Contains("\"format\":\"zip\""), "plan json must include zip");
             Assert(stdout.Contains("\"format\":\"targz\""), "plan json must include targz");
-            Assert(stdout.Contains($"\"outputDirectory\":\"{output}/linux-x64/zip\""),
+            var expectedOutputDir = Path.Combine(output, "linux-x64", "zip").Replace("\\", "\\\\");
+            Assert(stdout.Contains($"\"outputDirectory\":\"{expectedOutputDir}\""),
                 "plan json must include the per-format output directory");
         }
         finally
