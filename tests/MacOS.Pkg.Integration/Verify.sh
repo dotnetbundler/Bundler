@@ -305,7 +305,6 @@ log "== exercising the standalone package API =="
 dotnet run --project "$api_fixture_project" -c Release \
     -p:BundlerPackageVersion="$version" \
     -p:BundlerPackageSource="$package_dir" \
-    -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
     -p:RestorePackagesPath="$package_cache" \
     -- "$api_output"
 api_pkg="$api_output/artifacts/osx-arm64/pkg/PKG API Package Fixture.pkg"
