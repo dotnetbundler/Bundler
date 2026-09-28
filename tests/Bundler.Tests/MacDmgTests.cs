@@ -119,6 +119,7 @@ internal static class MacDmgTests
         MacDmgProcessRunner.Handler = (request, _) =>
         {
             requests.Add(request);
+            WriteDsStore(request);
             // The convert step's -o artifact must exist for the pipeline artifact check.
             if (request.Arguments.Contains("convert"))
             {
@@ -196,6 +197,7 @@ internal static class MacDmgTests
             MacDmgProcessRunner.Handler = (request, _) =>
             {
                 requests.Add(request);
+                WriteDsStore(request);
                 if (request.Arguments.Contains("convert"))
                 {
                     var index = request.Arguments.ToList().IndexOf("-o");
@@ -241,6 +243,7 @@ internal static class MacDmgTests
         var detachAttempts = 0;
         MacDmgProcessRunner.Handler = (request, _) =>
         {
+            WriteDsStore(request);
             if (request.Arguments.Contains("detach") && !request.Arguments.Contains("-force"))
             {
                 detachAttempts++;
@@ -280,6 +283,7 @@ internal static class MacDmgTests
         var forcedDetach = false;
         MacDmgProcessRunner.Handler = (request, _) =>
         {
+            WriteDsStore(request);
             if (request.Arguments.Contains("detach") && request.Arguments.Contains("-force"))
             {
                 forcedDetach = true;
@@ -321,8 +325,11 @@ internal static class MacDmgTests
         var previous = MacDmgProcessRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
         MacDmgProcessRunner.Handler = (request, _) =>
-            Task.FromResult(new MacDmgProcessRunner.Result(
+        {
+            WriteDsStore(request);
+            return Task.FromResult(new MacDmgProcessRunner.Result(
                 request.Arguments.Contains("convert") ? 2 : 0, "", "convert failed"));
+        };
         try
         {
             var thrown = false;
@@ -360,6 +367,7 @@ internal static class MacDmgTests
         {
             requests.Add(request);
             CreateMountPoint(request);
+            WriteDsStore(request);
             WriteConvertArtifact(request);
             return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
         };
@@ -374,8 +382,11 @@ internal static class MacDmgTests
                 $"Default icon positions must be app=180,170 / Applications=480,170, got:\n{script}");
             Assert(script.Contains("set icon size of theViewOptions to 128"),
                 $"Default icon size must be 128, got:\n{script}");
-            Assert(script.Contains("tell disk \"ExampleApp\""),
-                "The layout script must target the configured volume name.");
+            Assert(script.Contains("set theDisk to disk (name of (POSIX file") &&
+                   script.Contains("dmg-mount") && script.Contains("tell theDisk"),
+                $"The layout script must resolve the disk via the mount point, got:\n{script}");
+            Assert(!script.Contains("tell disk \"ExampleApp\""),
+                "Finder keys a custom-mountpoint disk by mount name, not volume name.");
             Assert(requests.Any(request =>
                     request.Executable == "hdiutil" && request.Arguments.Contains("resize")),
                 "The read-write image must gain headroom before the layout pass.");
@@ -404,6 +415,7 @@ internal static class MacDmgTests
         MacDmgProcessRunner.Handler = (request, _) =>
         {
             CreateMountPoint(request);
+            WriteDsStore(request);
             WriteConvertArtifact(request);
             return Task.FromResult(new MacDmgProcessRunner.Result(
                 request.Executable == "osascript" ? 1 : 0, "", "no GUI session"));
@@ -443,6 +455,7 @@ internal static class MacDmgTests
         {
             requests.Add(request);
             CreateMountPoint(request);
+            WriteDsStore(request);
             WriteConvertArtifact(request);
             return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
         };
@@ -477,12 +490,15 @@ internal static class MacDmgTests
         var previous = MacDmgProcessRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
         var stagedBackground = false;
-        var stagedVolumeIcon = false;
-        var volumeIconFlagged = false;
+        var stagedVolumeIconEarly = false;
+        var volumeIconStagedLate = false;
+        var volumeIconFlaggedLate = false;
+        var osascriptSeen = false;
         var mountDirectory = "";
         MacDmgProcessRunner.Handler = (request, _) =>
         {
             CreateMountPoint(request);
+            WriteDsStore(request);
             WriteConvertArtifact(request);
             var mountIndex = request.Arguments.ToList().IndexOf("-mountpoint");
             if (mountIndex >= 0)
@@ -491,14 +507,17 @@ internal static class MacDmgTests
             }
             if (request.Executable == "osascript")
             {
+                osascriptSeen = true;
                 stagedBackground = File.Exists(
                     Path.Combine(mountDirectory, ".background", "bg.png"));
-                stagedVolumeIcon = File.Exists(
+                stagedVolumeIconEarly = File.Exists(
                     Path.Combine(mountDirectory, ".VolumeIcon.icns"));
             }
             if (request.Executable == "SetFile" && request.Arguments.Contains("C"))
             {
-                volumeIconFlagged = true;
+                volumeIconFlaggedLate = osascriptSeen;
+                volumeIconStagedLate = File.Exists(
+                    Path.Combine(mountDirectory, ".VolumeIcon.icns"));
             }
             return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
         };
@@ -511,8 +530,12 @@ internal static class MacDmgTests
                 })
                 .BuildAsync(DmgConfiguration(input, output));
             Assert(stagedBackground, "The background image must land in .background/ on the volume.");
-            Assert(stagedVolumeIcon, "The volume icon must land as .VolumeIcon.icns on the volume.");
-            Assert(volumeIconFlagged, "SetFile -a C must mark the volume for the custom icon.");
+            Assert(!stagedVolumeIconEarly,
+                "Finder strips a pre-staged .VolumeIcon.icns during the window pass; it must be copied after osascript.");
+            Assert(volumeIconStagedLate,
+                "The volume icon must land as .VolumeIcon.icns after the layout pass.");
+            Assert(volumeIconFlaggedLate,
+                "SetFile -a C must mark the volume after the layout pass ran.");
         }
         finally
         {
@@ -532,6 +555,7 @@ internal static class MacDmgTests
         MacDmgProcessRunner.Handler = (request, _) =>
         {
             CreateMountPoint(request);
+            WriteDsStore(request);
             return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
         };
         try
@@ -574,6 +598,7 @@ internal static class MacDmgTests
         {
             requests.Add(request);
             CreateMountPoint(request);
+            WriteDsStore(request);
             WriteConvertArtifact(request);
             if (request.Arguments.Contains("udifrez"))
             {
@@ -670,6 +695,7 @@ internal static class MacDmgTests
         MacDmgProcessRunner.Handler = (request, _) =>
         {
             CreateMountPoint(request);
+            WriteDsStore(request);
             WriteConvertArtifact(request);
             return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
         };
@@ -733,6 +759,18 @@ internal static class MacDmgTests
         if (index >= 0)
         {
             Directory.CreateDirectory(request.Arguments[index + 1]);
+        }
+    }
+
+    static void WriteDsStore(MacDmgProcessRunner.Request request)
+    {
+        if (request.Executable == "osascript")
+        {
+            // Finder flushes .DS_Store to the volume asynchronously after the layout pass;
+            // the stub writes it up front so the post-layout wait returns immediately.
+            var mount = Path.Combine(request.WorkingDirectory, "dmg-mount");
+            Directory.CreateDirectory(mount);
+            File.WriteAllText(Path.Combine(mount, ".DS_Store"), "store");
         }
     }
 

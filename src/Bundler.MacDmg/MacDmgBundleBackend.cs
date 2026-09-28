@@ -129,7 +129,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             }
 
             await ApplyBrandingAsync(
-                mountDirectory, applicationName, volumeName, workDirectory,
+                mountDirectory, applicationName, workDirectory,
                 cancellationToken, logger);
 
             await DetachWithRetryAsync(mountDirectory, workDirectory, cancellationToken, logger);
@@ -203,12 +203,41 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
     private async Task ApplyBrandingAsync(
         string mountDirectory,
         string applicationName,
-        string volumeName,
         string workDirectory,
         CancellationToken cancellationToken,
         IBundleLogger logger)
     {
+        // Window background goes into the hidden .background folder on the volume.
+        string? backgroundItemName = null;
+        if (settings.BackgroundFile is { Length: > 0 } backgroundFile)
+        {
+            if (!File.Exists(backgroundFile))
+            {
+                throw new FileNotFoundException(
+                    $"The .dmg background image does not exist: {backgroundFile}", backgroundFile);
+            }
+            var backgroundDirectory = Path.Combine(mountDirectory, ".background");
+            Directory.CreateDirectory(backgroundDirectory);
+            backgroundItemName = Path.GetFileName(backgroundFile);
+            File.Copy(backgroundFile, Path.Combine(backgroundDirectory, backgroundItemName), overwrite: true);
+        }
+
+        if (!settings.SkipWindowLayout)
+        {
+            await ApplyWindowLayoutAsync(
+                mountDirectory, applicationName, backgroundItemName,
+                workDirectory, cancellationToken, logger);
+        }
+        else
+        {
+            logger.Log(
+                BundleLogLevel.Information,
+                "Skipping the Finder window layout (SkipWindowLayout).");
+        }
+
         // Volume icon: .VolumeIcon.icns + custom-icon flag on the volume root.
+        // Written after the Finder pass: opening the volume window makes Finder strip a
+        // pre-staged .VolumeIcon.icns and clear the custom-icon bit on modern macOS.
         if (settings.VolumeIconFile is { Length: > 0 } volumeIconFile)
         {
             if (!File.Exists(volumeIconFile))
@@ -226,51 +255,65 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                     "SetFile is unavailable; the custom volume icon flag was not set.");
             }
         }
+    }
 
-        // Window background goes into the hidden .background folder on the volume.
-        string? backgroundItemName = null;
-        if (settings.BackgroundFile is { Length: > 0 } backgroundFile)
-        {
-            if (!File.Exists(backgroundFile))
-            {
-                throw new FileNotFoundException(
-                    $"The .dmg background image does not exist: {backgroundFile}", backgroundFile);
-            }
-            var backgroundDirectory = Path.Combine(mountDirectory, ".background");
-            Directory.CreateDirectory(backgroundDirectory);
-            backgroundItemName = Path.GetFileName(backgroundFile);
-            File.Copy(backgroundFile, Path.Combine(backgroundDirectory, backgroundItemName), overwrite: true);
-        }
-
-        if (settings.SkipWindowLayout)
-        {
-            logger.Log(
-                BundleLogLevel.Information,
-                "Skipping the Finder window layout (SkipWindowLayout).");
-            return;
-        }
-
-        var script = BuildFinderLayoutScript(volumeName, applicationName, backgroundItemName);
+    private async Task ApplyWindowLayoutAsync(
+        string mountDirectory,
+        string applicationName,
+        string? backgroundItemName,
+        string workDirectory,
+        CancellationToken cancellationToken,
+        IBundleLogger logger)
+    {
+        var script = BuildFinderLayoutScript(mountDirectory, applicationName, backgroundItemName);
         var scriptArgs = script.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
             .SelectMany(line => (string[])["-e", line])
             .ToArray();
-        var layout = await MacDmgProcessRunner.TryRunAsync(
-            "osascript", scriptArgs, workDirectory, cancellationToken);
+        // Finder can take a moment to register a freshly attached volume; retry before degrading.
+        MacDmgProcessRunner.Result? layout = null;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            layout = await MacDmgProcessRunner.TryRunAsync(
+                "osascript", scriptArgs, workDirectory, cancellationToken);
+            if (layout is null or { ExitCode: 0 })
+            {
+                break;
+            }
+            await Task.Delay(800, cancellationToken);
+        }
         if (layout is not { ExitCode: 0 })
         {
             logger.Log(
                 BundleLogLevel.Warning,
                 "Finder layout skipped (no GUI session, e.g. headless CI): " +
                 (layout is null ? "osascript could not be started" : layout.StandardError.Trim()));
+            return;
+        }
+
+        // Finder persists the layout to .DS_Store asynchronously; detaching before it lands
+        // silently drops the configured window state, so wait briefly for the file to appear.
+        var dsStore = Path.Combine(mountDirectory, ".DS_Store");
+        for (var wait = 0; wait < 40 && !File.Exists(dsStore); wait++)
+        {
+            await Task.Delay(250, cancellationToken);
+        }
+        if (File.Exists(dsStore))
+        {
+            // Let Finder finish flushing the tail of the write.
+            await Task.Delay(250, cancellationToken);
         }
     }
 
     private string BuildFinderLayoutScript(
-        string volumeName, string applicationName, string? backgroundItemName)
+        string mountDirectory, string applicationName, string? backgroundItemName)
     {
+        // Finder names a volume mounted at a custom -mountpoint after the mount directory,
+        // not the filesystem volume name, so resolve the disk through the mount point itself.
         var script = new System.Text.StringBuilder();
         script.AppendLine("tell application \"Finder\"");
-        script.AppendLine($"  tell disk \"{volumeName}\"");
+        script.AppendLine(
+            $"  set theDisk to disk (name of (POSIX file \"{EscapeAppleScript(mountDirectory)}\" as alias))");
+        script.AppendLine("  tell theDisk");
         script.AppendLine("    open");
         script.AppendLine("    set current view of container window to icon view");
         script.AppendLine("    set toolbar visible of container window to false");
@@ -299,6 +342,9 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         script.AppendLine("end tell");
         return script.ToString();
     }
+
+    private static string EscapeAppleScript(string value) =>
+        value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     private static void ValidateSigning(MacDmgSigningConfiguration? signing)
     {
