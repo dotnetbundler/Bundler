@@ -1,7 +1,7 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-09-27
-> 当前分支：`cli-development`（自 `main` `6592a0f` 拉出；八种格式全部冻结入 main）
+> 最后更新：2026-09-28
+> 当前分支：`main`（八种格式与 CLI 全部冻结并入；HEAD `83fd134`，含验收修复 PR #2/#3/#4 合并）
 > 当前包版本：`0.1.0-alpha.62`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.rpm` 冻结基线 `alpha.55`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
 > 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
 > `LINUX-DEB-1..5` 全部完成，`.deb` 冻结并已入 `main`：冻结基线 `0.1.0-alpha.51`，测试向量 141/141 + `Verify.sh` 全绿
@@ -12,8 +12,8 @@
 > `ARCHIVE-3` 已完成（同分支，同版本）：宿主矩阵收口（python3 zipfile/tarfile 跨实现互读断言接入 `Verify.sh`）、干净宿主审计（零进程出口）、能力矩阵定稿、OI/MT 收口——**`.zip`/`.tar.gz` 归档冻结基线 `0.1.0-alpha.59`**
 > `CLI-C1` 规划轮已完成（分支 `cli-development`）：决策清单 15 项 + `CLI-1..3` 三段骨架 + MSBuild↔CLI 映射表入档 `docs/cli-roadmap.md`，配套 cli-capability-matrix / cli-manual-testing / cli-open-items；决策已按推荐项放行
 > `SIGN` 进行中（分支 `signing-development`）：`SIGN-1` RPM 可选 OpenPGP 签名完成（`RPMSIGTAG_PGP`、`rpm -K` 实测通过，密钥文件+口令旋钮、无密钥即未签名产物）；`SIGN-2` AppImage `--sign` 完成（隔离 GNUPGHOME + `APPIMAGETOOL_SIGN_PASSPHRASE`，`gpgv` 实测验签，`.sha256_sig`/`.sig_key` 嵌段）；SIGN 收官——rpm/AppImage 可选签名齐备，deb 不签。路线/证据：`docs/signing-roadmap.md`
-> `CLI-C1` 已完成（分支 `cli-development`，`0.1.0-alpha.62`）：CLI 契约冻结——三命令/退出码/`--json`/`bundler.json` schema/全格式旋钮面/dotnet tool nupkg + 原生 AOT 二进制双分发；`Bundler.Tests` 198/198 + `tests/Cli.Integration/Verify.sh`（含 AOT 段）全绿。待指令合并 `main`。
-> 当前：`CLI-1` 完成，默认下一阶段 `CLI-2`（bundler.json schema 固化 + 层叠 + 全格式旋钮透传）
+> `CLI-C1` 已完成（分支 `cli-development`，`0.1.0-alpha.62`）：CLI 契约冻结——三命令/退出码/`--json`/`bundler.json` schema/全格式旋钮面/dotnet tool nupkg + 原生 AOT 二进制双分发；`Bundler.Tests` 198/198 + `tests/Cli.Integration/Verify.sh`（含 AOT 段）全绿。已并入 `main`。
+> 当前：全部格式与 CLI 已冻结并入 `main`；三平台全量验收完成（见 §3），ARM64 仿真验收进行中
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -34,9 +34,9 @@
 | `src/Bundler.Deb` | Debian `.deb` 后端（纯托管 ar/tar/gzip 写入器，无原生工具依赖，任意构建宿主） | `netstandard2.0` |
 | `src/Bundler.Rpm` | RPM `.rpm` 后端（纯托管 lead/header/cpio/gzip 写入器，无原生工具依赖，任意构建宿主） | `netstandard2.0` |
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
-| `src/Bundler.Cli` | 开发原型（`IsPackable=false`，不发布） | `net10.0` |
+| `src/Bundler.Cli` | CLI 适配层（dotnet tool nupkg + `PublishAot` 原生二进制双分发） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
-| `tests/Bundler.Tests` | 唯一快速测试入口（当前 163 项，Linux 宿主口径全绿；macOS 宿主口径多 MacPkg 公证等宿主用例） | `net10.0` |
+| `tests/Bundler.Tests` | 唯一快速测试入口（当前 204 项，Linux 宿主口径；macOS/Windows 宿主口径另有宿主用例） | `net10.0` |
 | `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` / `tests/Deb.Api.PackageFixture` / `tests/Rpm.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
 | `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
 | `tests/MacOS.App.Integration` | 真实 macOS `.app` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
@@ -60,7 +60,7 @@ MSBuild 任务链（`Bundler.MSBuild` 及其加载的 Abstractions/Core/Nsis/Wix
 能力矩阵、人工清单、外部待办、上游取舍、专项决策分别在对应 `nsis-*.md`。
 NSIS 集成 `tests/Windows.Nsis.Integration/Verify.ps1` 在 2026-09-27 的 alpha.42 回归中保持全绿（`IBundleBackend` 多产物契约变更未改变 NSIS 行为）。
 
-### Windows + WiX/MSI（进行中）
+### Windows + WiX/MSI（已冻结，`0.1.0-alpha.43`）
 
 WIN-MSI-1..8 实现与本机自动化验证完成：
 
@@ -76,7 +76,7 @@ WIN-MSI-1..8 实现与本机自动化验证完成：
 设计决策、阶段目标、实施记录与验证证据见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)；
 能力状态见 [`docs/msi-capability-matrix.md`](docs/msi-capability-matrix.md)。
 
-### macOS（`MAC-APP-1`/`MAC-APP-2`/`MAC-APP-3` 已实现，未冻结）
+### macOS（`.app`/`.dmg`/`.pkg` 均已冻结，基线 `alpha.45`/`alpha.45`/`alpha.47`）
 
 `MAC-APP`：上游审计、PKG 格式决策、`MAC-APP-1..5` 阶段分解已写入 `docs/mac-*.md` 一套文档，全部决策已确认。
 `MAC-APP-1` 完成（2026-09-26 云 macOS VM 验证）：`src/Bundler.MacApp`（netstandard2.0）交付 `.app` 骨架生成、Info.plist 核心键、`.icns` 透传/合成、Contents 载荷映射语义；`BundlerFormats=app` MSBuild 映射与 `MacAppBundler` 直接 API；`tests/Bundler.Tests` 新增 22 条单测、`tests/MacApp.Api.PackageFixture` NuGet 消费 fixture、`tests/MacOS.App.Integration/Verify.sh` 真实生成→`plutil`→启动→删除链路、`samples/HelloMacApp`。
@@ -88,13 +88,23 @@ Verify.sh 真实通过 `lsregister` 注册、`open <文件>`/`open <scheme>://` 
 关键已登记分歧：macOS 打包工具不可再分发，采用“宿主工具检测+版本下限”策略替代字面“工具随包供应”（路线第 2 节）；默认产物不签名、公证默认关闭。
 本机（云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）已实测全部所需宿主工具在位；缺 codesigning 身份、Rosetta、`pwsh`，记入 `docs/mac-app-open-items.md`。
 
-### 未开始的格式
+### 其余格式
 
 `.pkg` 已冻结（`MAC-PKG-1..5` 全部完成）。
 `LINUX-DEB`：**1..5 全部完成，格式冻结并入 `main`**（2026-09-27，冻结基线 `0.1.0-alpha.51`）——`src/Bundler.Deb` 托管 ar/tar/gzip 写入器；DEB-1 最小 control+`md5sums`、`usr/lib`+`usr/bin` 布局、SemVer→deb 映射与八旋钮；DEB-2 关系字段透传、Section/Priority、`.desktop` 生成与 `DesktopFile` 覆盖、hicolor 图标（PNG 探测/`@2x`）、metainfo、`changelog.gz`/`copyright`、`BundlerDebFile` 绝对路径映射；DEB-3 维护者脚本四旋钮（0755/shebang+LF）、`SystemdServiceFile` 托管 unit + postinst `daemon-reload` 合成、conffiles（`/etc` DebFile 自动登记）、压缩仅 gzip（xz/zstd 登记拒绝）、升级/conffile 保留语义实测；DEB-4 lintian 硬断言基线（豁免清单入档）、`changelog.Debian.gz` 自动补发与扩展描述默认行、`linux-arm64` 结构断言、docker `debian:stable`/`ubuntu:latest` 装卸矩阵；141 项 Bundler.Tests + `Verify.sh`（真实 `sudo dpkg -i/-r/-P`、`desktop-file-validate`、`dpkg -L` 回读、lintian 信息级审计）全绿；`samples/HelloDebApp` 演示全旋钮；
 `CLI-C1`：全部完成并冻结（`0.1.0-alpha.62`），细节见 `docs/cli-roadmap.md` §4。
 
-## 3. 最近验证（2026-10-03，Windows 11 Pro build 26200 x64，跨格式收尾回归）
+## 3. 最近验证
+
+### 2026-09-28 三平台全量验收（`main` @ `83fd134`）
+
+- Windows Server 2022 x64：**268/268 全绿**（`Bundler.Tests` 235 + NSIS `Verify.ps1` 全量 + MSI 8 脚本全 exit 0）；验收发现 8 项缺陷已修复并经 PR #3 并入。
+- Ubuntu 22.04 x86_64：**244/244 全绿、零缺陷**；五个 `Verify.sh` 全绿（docker 发行版矩阵、lintian/rpmlint 门控、GPG 签名段、Zip64 >4GB 确定性拒绝），另实测 systemd `enable --now`、apt/dnf 仓库工作流、KDE 桌面观感；CLI `linux-x64` AOT 51.9MB ELF 实跑通过。
+- macOS 26.5.2 arm64：**243/244**；唯一未过项为 `Cli.Integration/Verify.sh` 缺 Linux `uname` 门禁在 macOS 上误报 appimage 段（测试基建缺口非产品缺陷，登记 CLI-OI-05）；验收发现 4 项缺陷已修复并经 PR #2/#4 并入；GUI 实做 DMG SLA 面板、Installer.app 页面、`sudo installer -pkg -target /` system 域安装、quarantine 首启阻断。
+- ARM64（qemu 仿真）：进行中，待回填。
+- 剩余外部待验收项（UAC 交互、真实重启、Apple Developer 凭证/公证、Intel/Rosetta、Windows ARM64、生产签名、干净宿主矩阵、22 语言审校等）按各格式 OI 清单如实保留。
+
+### 2026-09-26 Windows 11 Pro build 26200 x64 跨格式收尾回归
 
 - `dotnet build Bundler.slnx -c Release`：0 警告/0 错误。
 - `tests/Bundler.Tests` Release：78/78 PASS（新增自动检测渲染/默认关闭、1602 分支、MSBuild 映射断言）。
@@ -107,7 +117,7 @@ Verify.sh 真实通过 `lsregister` 注册、`open <文件>`/`open <scheme>://` 
 - 原生插件重建：`DotNetBundlerNsis.dll` SHA-256 见 `third_party/nsis-plugin/nsis-plugin-provenance.md`，
   与 `Bundler.Tests` 断言一致。
 
-历史验证（2026-10-02，WIN-MSI-9 冻结回归，`alpha.43`）：MSI 全套集成与 78/78 测试通过；
+历史验证（2026-09-26，WIN-MSI-9 冻结回归，`alpha.43`）：MSI 全套集成与 78/78 测试通过；
 NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修复）；包供应与 Tauri 快照漂移复核完成。
 
 ## 4. 外部验收边界（未执行，不视为完成）
@@ -149,9 +159,9 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 ## 6. 默认下一步
 
-`.pkg` 已冻结于 `0.1.0-alpha.47`（`MAC-PKG-1..5` 全部完成）。macOS 线三种格式（`.app`/`.dmg`/`.pkg`）全部冻结。
-`LINUX-DEB` 规划轮已完成（2026-09-27），`LINUX-DEB-1` 已于同日完成并验证。
-默认下一步：`LINUX-RPM-1`——规划轮文档已入档（`docs/linux-rpm-roadmap.md` 决策清单草案 + `LINUX-RPM-1..5` 阶段表 + 能力矩阵/MT/OI 骨架）；等用户逐条确认决策后实施。
+全部八种格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`）与 Archive、CLI 均已冻结并入 `main`（`83fd134`）。
+三平台全量验收完成（§3）；ARM64 qemu 仿真验收进行中，结果待回填。
+剩余工作仅为外部待验收项（各格式 OI 清单）与测试基建修正（CLI-OI-05、nsis Verify.ps1 幂等清理、AppImage 签名 gpg-agent flake）。
 
 ## 7. 历史记录
 

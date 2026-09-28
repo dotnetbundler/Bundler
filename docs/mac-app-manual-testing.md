@@ -15,13 +15,13 @@
 
 | ID | 阶段 | 操作与预期 | 主要证据 |
 | --- | --- | --- | --- |
-| MAC-APP-MT-01 | MAC-APP-1..2 | 干净宿主：未装 Xcode/CLT 的 macOS 用户环境下，拷贝本机产出的 `.app` 至 `/Applications`（或任意目录），双击/`open` 首启；未签名与 ad-hoc 各测一次，记录 Gatekeeper 实际对话框与放行路径 | 首启日志、Gatekeeper 截图、系统报告 |
+| MAC-APP-MT-01 | MAC-APP-1..2 | 干净宿主：未装 Xcode/CLT 的 macOS 用户环境下，拷贝本机产出的 `.app` 至 `/Applications`（或任意目录），双击/`open` 首启；未签名与 ad-hoc 各测一次，记录 Gatekeeper 实际对话框与放行路径 | **部分已验证**（2026-09-28）：quarantine 首启 Gatekeeper 阻断对话框截图已记；干净宿主（无 Xcode/CLT）段未验 |
 | MAC-APP-MT-02 | MAC-APP-3 | 真实 Developer ID Application 证书签名 → `notarytool submit` → `stapler staple` → 打包分发下载（带 quarantine）→ `spctl -a -vvv`/`stapler validate` 断言 → 首启无警告 | notarytool 输出、stapler validate、spctl 记录 |
 | MAC-APP-MT-03 | MAC-APP-4 | `osx-x64` `.app` 在 Intel 宿主或已激活 Rosetta 的 arm64 宿主实际启动 | 架构标记、启动日志 |
 | MAC-APP-MT-04 | MAC-APP-2 | 文件关联与 URL scheme 实际唤起：`lsregister` 后 `open` 文件/`open scheme://`，切换处理器与多 handler 共存 | LaunchServices 记录、唤起日志 |
 | MAC-APP-MT-05 | MAC-APP-4 | `LSMinimumSystemVersion` 边界：低于下限宿主拒绝运行、等于/高于可运行；**高于下限已自动化**（Verify.sh 以 `BundlerMacAppMinimumSystemVersion=99.0` 实测 LaunchServices 拒绝）；剩余=低于下限的旧宿主真实拒跑 | 系统提示与版本号 |
-| MAC-APP-MT-06 | MAC-APP-4 | 升级替换：**已自动化**（Verify.sh v1→v2 `~/Applications` 原地替换+重新注册+启动+identifier 保持）；剩余人工项=用户数据保留（沙盒/非沙盒偏好与容器目录）核对 | 两版产物 SHA、关联检查输出 |
+| MAC-APP-MT-06 | MAC-APP-4 | 升级替换：**已自动化**（Verify.sh v1→v2 `~/Applications` 原地替换+重新注册+启动+identifier 保持）；剩余人工项=用户数据保留（沙盒/非沙盒偏好与容器目录）核对 | **已验证**（2026-09-28）：v1→v2 升级用户数据/偏好保留核对记录 |
 | MAC-APP-MT-07 | MAC-APP-2 | universal/fat `.app` 在 `x86_64` 与 `arm64` 宿主各自原生启动 | `lipo -info`、两种启动日志 |
 | MAC-APP-MT-08 | MAC-APP-3 | 公证异常路径：凭证缺失/错误、非 Accepted、撤销后的离线首启；`skipStapling` 产品行为 | 错误日志、`notarytool log` |
-| MAC-APP-MT-09 | MAC-APP-1..2 | 访达展示核对：图标（Retina/暗黑变体若有）、`CFBundleDisplayName` 显示、`Get Info` 面板版本/版权字段 | 截图与 plist 读回对照 |
+| MAC-APP-MT-09 | MAC-APP-1..2 | 访达展示核对：图标（Retina/暗黑变体若有）、`CFBundleDisplayName` 显示、`Get Info` 面板版本/版权字段 | **已验证**（2026-09-28）：Get Info 面板版本/版权字段与 plist 读回对照截图 |
 | MAC-APP-MT-10 | MAC-APP-4 | 时间戳/证书轮换边界：签名时间戳存在性断言、证书到期/撤销后已签产物的验签行为（评估用） | `codesign -dvvv`、验签输出 |

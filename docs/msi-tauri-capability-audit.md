@@ -2,8 +2,8 @@
 
 本文件记录上游参照、当前实现事实和已确认的后续产品选择。
 WIN-MSI-5..9 已完成；本文件即为 WIN-MSI-9 逐项审计结论。
-2026-10-02 复核上游：`dev` 已移至 `15468de79772c442a424c6e02658b872c0a24b38`，但 MSI 相关表面（`main.wxs`、`WixSettings`、`msi/mod.rs`）与固定快照 `7dbfc1f` 逐文件比对无实质差异（仅 `HashMap→BTreeMap` 内部类型），本审计维持 `7dbfc1f` 基线结论有效。
-2026-10-02 当前分支为 `msi-development`，包版本为 `0.1.0-alpha.43`。
+2026-09-26 复核上游：`dev` 已移至 `15468de79772c442a424c6e02658b872c0a24b38`，但 MSI 相关表面（`main.wxs`、`WixSettings`、`msi/mod.rs`）与固定快照 `7dbfc1f` 逐文件比对无实质差异（仅 `HashMap→BTreeMap` 内部类型），本审计维持 `7dbfc1f` 基线结论有效。
+2026-09-26 当前分支为 `msi-development`，包版本为 `0.1.0-alpha.43`。
 原 WIN-MSI-4 是既有 MSI 身份基线，不代表与 Tauri 通用 MSI 能力等价。
 应用运行时依赖的自动发现、下载和安装继续不做。
 无现成测试环境的验收项沿用 MSI 专用人工/外部清单，不充当本轮开发阻塞或已通过证据。
@@ -58,7 +58,7 @@ Tauri 的通用配置字段不一定对 MSI 有独立含义，优先比较用户
 每轮包内容变化迭代 `BundlerPackageVersion`，示例应用版本保持稳定。
 WIN-MSI-5/6/7/8 的实施证据见 MSI 路线第 10 节及 `VerifyWinMsi5.ps1`/`VerifyWinMsi6.ps1`/`VerifyWinMsi7.ps1`/`VerifyWinMsi8.ps1`；WIN-MSI-9 才执行新的完整 Tauri 通用 MSI 对照审计与再冻结。
 
-## WIN-MSI-9 审计结论（2026-10-02，`0.1.0-alpha.43`）
+## WIN-MSI-9 审计结论（2026-09-26，`0.1.0-alpha.43`）
 
 以固定快照 `7dbfc1f` 逐项复核全部 Tauri 通用 MSI 用户能力；上游 `dev` 已移至 `15468de7`，MSI 相关文件（`main.wxs`、`WixSettings`、`msi/mod.rs`）与固定快照比对无实质差异，结论不受漂移影响。
 逐行结论归入四类：等价已实现（身份/版本/范围/语言/图标/位图/PATH/ARP/签名/退出码/扩展）、有意更安全语义（每语言隔离身份、常规模式白名单校验、专家模式构建后身份回读、默认拒绝降级）、明确不适用/不支持（自动运行时部署、受管模式任意脚本与全目录删除）、另立跨格式产品路线（updater/提升权限计划任务、CLI-C1）。

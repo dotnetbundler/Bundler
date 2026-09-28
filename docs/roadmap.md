@@ -175,7 +175,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 
 ### ARCHIVE：通用压缩包格式
 
-记录一项后续格式决策（2026-10-03，用户提出）：在平台格式全部完成后增加一个压缩包后端
+记录一项后续格式决策（2026-09-26，用户提出）：在平台格式全部完成后增加一个压缩包后端
 （zip / tar.gz 等归档分发形式），跨 Windows/macOS/Linux 通用，阶段号 `ARCHIVE`。
 规划轮已完成（`docs/archive-roadmap.md`：zip+tar.gz、纯托管写入器、单顶层目录、执行位与符号链接保留、`.sha256` 侧车、拒绝签名与 tar.xz/zst/7z）。
 `ARCHIVE-1..3` 已全部完成，`.zip`/`.tar.gz` 冻结于 `0.1.0-alpha.59`：`src/Bundler.Archive` 托管双写入器 + 三 OS 矩阵放开 + `BundlerFormats=zip;targz` 接线，

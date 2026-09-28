@@ -9,10 +9,10 @@
 | --- | --- | --- | --- |
 | LINUX-DEB-OI-01 | LINUX-DEB-4 | ARM64 Linux 宿主（本机 x86_64，无 qemu/ARM 设备） | `linux-arm64` 产物 `dpkg -i` 安装与启动记录 |
 | LINUX-DEB-OI-02 | LINUX-DEB-4 | 更多发行版宿主/容器（Debian oldstable、非 systemd 发行版、旧 dpkg 版本宿主） | 各发行版 `dpkg -i`/`dpkg -r` 记录与 `lintian` 差异核对 |
-| LINUX-DEB-OI-03 | LINUX-DEB-2 | 有桌面环境的 Linux 宿主（GNOME/KDE 任一） | 菜单项、图标、`.desktop` 验证器通过之外的观感截图；文件关联/URL scheme 真实双击唤起记录 |
-| LINUX-DEB-OI-04 | LINUX-DEB-3 | 启用 systemd 的真实宿主（容器内 systemd 不充分） | unit 落位、`systemctl status`/`daemon-reload` 真实记录 |
+| LINUX-DEB-OI-03 | LINUX-DEB-2 | 有桌面环境的 Linux 宿主（GNOME/KDE 任一） | **部分已验证**（2026-09-28，KDE 真桌面）：菜单项、图标、点击启动观感截图已记录；文件关联/URL scheme 双击唤起未验——验收 fixture 未声明任何关联对象，无唤起目标可测 |
+| LINUX-DEB-OI-04 | LINUX-DEB-3 | ~~启用 systemd 的真实宿主~~ 已验证 | **已消解**：2026-09-28 Ubuntu 宿主 unit 落位、`systemctl daemon-reload`/`enable --now` 真实启动记录 |
 | LINUX-DEB-OI-05 | LINUX-DEB-1 | Windows/macOS 构建宿主 | 跨宿主产出 `.deb` 并在 Linux 宿主 `dpkg -i` 安装的记录（托管写入器使跨宿主成为设计目标） |
-| LINUX-DEB-OI-06 | LINUX-DEB-4 | apt 仓库与 `apt install ./pkg.deb` 工作流环境 | apt 元数据/本地安装记录；明确"单包可装但仓库管理在外"的边界证据 |
+| LINUX-DEB-OI-06 | LINUX-DEB-4 | ~~apt 仓库与 `apt install ./pkg.deb` 工作流环境~~ 已验证 | **已消解**：2026-09-28 `apt install ./pkg.deb` 本地文件安装与最小仓库工作流记录；"单包可装、仓库管理在外"边界已明 |
 | LINUX-DEB-OI-07 | 已收口（DEB-4） | lintian 基线已转硬断言 | DEB-4 消解全部可修发现（`changelog.Debian.gz` 补发、扩展描述默认行、Maintainer 邮箱、Section、copyright 年份）；残余 5 项豁免登记在 `tests/Linux.Deb.Integration/lintian-exemptions.txt`（自包含载荷/工具链固有）；更高发行版 lintian 版本复跑属矩阵扩展 |
 | LINUX-DEB-OI-08 | LINUX-DEB-3 已登记拒绝 | 若需要 xz/zstd：第三方托管压缩依赖裁决 + 宿主 dpkg 版本矩阵 | `BundlerDebCompression` 放开 xz/zstd 的实现记录；zstd 需安装宿主 dpkg≥1.21.18 |
 

@@ -611,7 +611,7 @@ WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方
   专家 `BundlerWixExpertTemplate`（prop→路径）+ `BundlerWixExpertMergeModule`（item）。命名一眼可分。
 - **i18n 关系**：fragment/模板是语言无关输入（culture 由我们的合并 wxl 决定）；专家模板若引用 `!(loc.*)` 可用 Bundler 自有 id 或调用方自带 wxl。
 
-**实施记录（2026-10-02，`0.1.0-alpha.43`）**：
+**实施记录（2026-09-26，`0.1.0-alpha.43`）**：
 
 - **常规模式落地**：`ExtensionFragments`（`.wxs` fragment item）+ `ExtensionIdPrefix`（必填自定义前缀，保留 `Cmp`/`Fil`/`Rem`/`WixUI_`/`Wix`/`Bundler` 等 Bundler/WiX 前缀拒用）+ `ExtensionComponentRefs`/`ExtensionComponentGroupRefs`/`ExtensionFeatureRefs` 注入 Product Feature；
   `WixExtensionValidator` 逐 fragment 解析校验：XML 结构、`Fragment` 根、白名单元素（`Component`/`ComponentGroup`/`Directory`/`DirectoryRef`/`File`/`RegistryKey`/`RegistryValue`/`Environment`/`Condition`/`Shortcut`/`Property` 等核心声明式表），
@@ -647,7 +647,7 @@ WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方
   矩阵每条有实现/排除依据、新增自动化和本机真实操作通过、文档间状态一致后退出，默认下一格式恢复为 `MAC-APP`。
   提交和推送仍只按用户明确指令执行。
 
-**实施记录（2026-10-02，`0.1.0-alpha.43`）**：
+**实施记录（2026-09-26，`0.1.0-alpha.43`）**：
 
 - **上游快照复核**：`dev` 已移至 `15468de79772c442a424c6e02658b872c0a24b38`；`main.wxs`、`WixSettings`、`msi/mod.rs` 与 `7dbfc1f` 逐文件比对无实质差异（仅 `HashMap→BTreeMap`），审计结论不受漂移影响，维持固定快照基线。
 - **逐项审计**：`docs/msi-tauri-capability-audit.md` 全部行已归入四类——等价已实现（身份/版本/范围/38 语言/图标/位图/PATH/ARP/签名/退出码/受控扩展）、有意更安全语义（每语言隔离身份、常规模式白名单、专家模式构建后身份回读、默认拒绝降级/同版本异包）、明确不支持（自动运行时部署、受管模式任意脚本与全目录删除）、另立跨格式路线（updater/提升计划任务、CLI-C1）。
@@ -657,7 +657,7 @@ WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方
 - **文档一致性**：审计、能力矩阵、人工清单、外部待办、公开示例、README 与路线文件统一推进到冻结态；无新用户可见能力，无版本 bump 之外的包内容变化。
 - **冻结声明**：`0.1.0-alpha.43` 为 MSI 后端冻结基线；后续 MSI 仅接受缺陷修复或外部验收证据回填，不新增能力。外部待验收项仍为 MSI-OI-*/MSI-MT-* 原清单。
 
-**跨格式收尾记录（2026-10-03，`0.1.0-alpha.44`）**：
+**跨格式收尾记录（2026-09-26，`0.1.0-alpha.44`）**：
 
 冻结后按用户指示补做 Tauri 的 MSI↔NSIS 跨格式通用能力，不构成新格式/新阶段：
 

@@ -6,9 +6,9 @@
 | ID | 关联阶段 | 外部条件 | 待办内容 |
 | --- | --- | --- | --- |
 | LINUX-RPM-OI-01 | LINUX-RPM-4 | ARM64 Linux 宿主（本机 x86_64，无 qemu/ARM 设备） | `linux-arm64` 产物 `rpm -i` 安装与启动记录 |
-| LINUX-RPM-OI-02 | LINUX-RPM-4 | GUI 桌面环境宿主（本机无桌面） | 菜单项/图标渲染、关联双击打开观感验收（对应 MT-01） |
-| LINUX-RPM-OI-03 | LINUX-RPM-3 | 启用 systemd 的真实宿主（容器内 systemd 不充分） | unit 落位、`systemctl status`/`daemon-reload`/`enable --now` 真实记录（对应 MT-04） |
+| LINUX-RPM-OI-02 | LINUX-RPM-4 | ~~GUI 桌面环境宿主~~ 已验证 | **已消解**：2026-09-28 KDE 真桌面——菜单项/图标渲染与点击启动观感记录（对应 MT-01）；关联双击唤起未验（fixture 未声明关联对象） |
+| LINUX-RPM-OI-03 | LINUX-RPM-3 | ~~启用 systemd 的真实宿主~~ 已验证 | **已消解**：2026-09-28 Ubuntu 宿主——unit 落位、`systemctl status`/`daemon-reload`/`enable --now` 真实记录（对应 MT-04） |
 | LINUX-RPM-OI-04 | LINUX-RPM-4 | 更广发行版宿主矩阵（RHEL 8/CentOS Stream/Alma/SUSE 旧版；fedora/rockylinux:9/opensuse-leap 已由 docker 矩阵覆盖） | 各宿主 `rpm -i/-e` 行为差异记录（对应 MT-03） |
 | LINUX-RPM-OI-05 | LINUX-RPM-1 | Windows/macOS 构建宿主 | 跨宿主产出 `.rpm` 并在 rpm 宿主安装的记录（托管写入器使跨宿主成为设计目标，对应 MT-06） |
-| LINUX-RPM-OI-06 | LINUX-RPM-4 | `dnf`/`zypper` 仓库环境 | 本地文件安装与最小仓库工作流验证（对应 MT-05） |
+| LINUX-RPM-OI-06 | LINUX-RPM-4 | ~~`dnf`/`zypper` 仓库环境~~ 已验证 | **已消解**：2026-09-28 fedora/opensuse 容器——`dnf`/`zypper` 本地文件安装 + createrepo_c 最小仓库工作流验证（对应 MT-05） |
 | LINUX-RPM-OI-07 | 已消解 | GPG 密钥与签名验证流程 | `SIGN-1` 已实现可选包级签名（`BundlerRpmSigningKeyFile`/`Passphrase` → `RPMSIGTAG_PGP`），`rpm --import`+`rpm -K` 已实测验签（`digests signatures OK`）；生产密钥的保管与分发仍属发布者自身流程 |
