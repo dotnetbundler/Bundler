@@ -263,7 +263,19 @@ public static class CliProgram
         writer.WriteLine("      --product-name <name> --identifier <id> --package-version <ver>");
         writer.WriteLine("      [--output-dir <dir>] [--main-executable <name>] [--json] [--quiet|--verbose]");
         writer.WriteLine("  bundler --version | --help");
-        writer.WriteLine("Formats: nsis msi app dmg pkg deb rpm appimage zip targz all");
+        writer.WriteLine("Formats: nsis"
+#if BUNDLER_HOST_WINDOWS
+            + " msi"
+#endif
+            + " app"
+#if BUNDLER_HOST_MACOS
+            + " dmg pkg"
+#endif
+            + " deb rpm"
+#if BUNDLER_HOST_LINUX
+            + " appimage"
+#endif
+            + " zip targz all");
         writer.WriteLine("RIDs:    win-x86 win-x64 win-arm64 osx-x64 osx-arm64 linux-x64 linux-arm64");
         writer.WriteLine("Exit codes: 0 success, 1 packaging/IO failure, 2 usage or validation failure");
     }
