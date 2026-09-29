@@ -38,7 +38,7 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| 包级 GPG 签名 | 已实现 | `SIGN-1`（`signing-development`，`0.1.0-alpha.62+`） | 可选能力：供 `BundlerRpmSigningKeyFile`/`Passphrase` 即嵌 `RPMSIGTAG_PGP`（BouncyCastle OpenPGP v3 包，纯托管）；不供则产物与未签名构建逐字节一致；隔离 rpmdb `rpm --import`+`rpm -K` 实测 `digests signatures OK` |
+| 包级 GPG 签名 | 已实现 | `SIGN-1`（`signing-development`，`0.1.0-alpha.62+`） | 可选能力：供 `BundlerRpmSigningKeyFile`/`Passphrase` 即嵌双标签 `RPMSIGTAG_RSA`(268)+`RPMSIGTAG_PGP`(1002)（BouncyCastle OpenPGP v3 包，纯托管，同 rpmsign 形态）；不供则产物与未签名构建逐字节一致；隔离 rpmdb `rpm --import`+`rpm -K` 实测 `digests signatures OK`；zypper 认 RSA 标签（PGP-only 曾被报 unsigned） |
 | dnf/zypper 仓库生成 | 明确拒绝 | — | 仓库管理属分发管线而非打包器 |
 
 ## 生命周期与宿主矩阵

@@ -60,22 +60,36 @@ internal static class RpmTests
             var package = RpmPackageReader.Read(signed.Path);
             Assert(package.Signature.Tags[1002] is byte[],
                 "RPMSIGTAG_PGP (1002) must carry the OpenPGP signature packet.");
+            Assert(package.Signature.Tags[268] is byte[],
+                "RPMSIGTAG_RSA (268) must carry the header-only signature packet.");
             var sigPacket = (byte[])package.Signature.Tags[1002];
+            var rsaPacket = (byte[])package.Signature.Tags[268];
+
+            var rpmBytes = File.ReadAllBytes(signed.Path);
+            var headerStart = SignedDataOffset(rpmBytes);
+            var headerLength = HeaderLength(rpmBytes, headerStart);
 
             // rpm signs main header + payload: bytes from the main header to EOF.
-            var rpmBytes = File.ReadAllBytes(signed.Path);
-            var signedData = rpmBytes[SignedDataOffset(rpmBytes)..];
             var signature = ((PgpSignatureList)new PgpObjectFactory(sigPacket).NextPgpObject())[0];
             signature.InitVerify(publicKey);
-            signature.Update(signedData);
+            signature.Update(rpmBytes, headerStart, rpmBytes.Length - headerStart);
             Assert(signature.Verify(),
                 "The embedded signature must verify over header+payload bytes.");
+
+            // RPMSIGTAG_RSA signs the main header alone — what zypper checks.
+            var rsaSignature = ((PgpSignatureList)new PgpObjectFactory(rsaPacket).NextPgpObject())[0];
+            rsaSignature.InitVerify(publicKey);
+            rsaSignature.Update(rpmBytes, headerStart, headerLength);
+            Assert(rsaSignature.Verify(),
+                "The RPMSIGTAG_RSA signature must verify over the main header bytes.");
 
             var unsignedOutput = output + "-unsigned";
             var unsigned = new RpmBundler(new RpmBundleConfiguration())
                 .BuildAsync(RpmConfiguration(input, unsignedOutput)).GetAwaiter().GetResult().Single();
             Assert(!RpmPackageReader.Read(unsigned.Path).Signature.Tags.ContainsKey(1002),
                 "No RPMSIGTAG_PGP when signing is not configured.");
+            Assert(!RpmPackageReader.Read(unsigned.Path).Signature.Tags.ContainsKey(268),
+                "No RPMSIGTAG_RSA when signing is not configured.");
             Cleanup(unsignedOutput);
         }
         finally
@@ -145,6 +159,12 @@ internal static class RpmTests
         var storeSize = At(96 + 12);
         var signatureEnd = 96 + 16 + indexCount * 16 + storeSize;
         return (signatureEnd + 7) & ~7;
+    }
+
+    private static int HeaderLength(byte[] rpm, int offset)
+    {
+        int At(int i) => (rpm[i] << 24) | (rpm[i + 1] << 16) | (rpm[i + 2] << 8) | rpm[i + 3];
+        return 16 + At(offset + 8) * 16 + At(offset + 12);
     }
 
     private static PgpPublicKey GenerateTestKey(string keyFile, string passphrase)

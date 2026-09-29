@@ -4,10 +4,11 @@ using Org.BouncyCastle.Bcpg.OpenPgp;
 namespace DotNet.Bundler.Rpm;
 
 /// <summary>
-/// Produces the OpenPGP signature packet carried by <c>RPMSIGTAG_PGP</c>
-/// (tag 1002): a v3 binary-document signature over the concatenated
-/// main header + compressed payload bytes — the same bytes <c>rpm -K</c>
-/// and <c>rpmsign</c> verify. Signing is entirely managed (BouncyCastle);
+/// Produces the v3 binary-document signature packets carried by
+/// <c>RPMSIGTAG_RSA</c> (tag 268, signed over the main header alone — the
+/// form libzypp/zypper requires) and <c>RPMSIGTAG_PGP</c> (tag 1002, signed
+/// over main header + compressed payload — what <c>rpm -K</c> and
+/// <c>rpmsign</c> verify). Signing is entirely managed (BouncyCastle);
 /// the signing key never leaves the caller-supplied file.
 /// </summary>
 internal static class RpmSigner

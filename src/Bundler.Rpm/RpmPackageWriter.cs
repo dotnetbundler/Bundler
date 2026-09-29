@@ -94,17 +94,20 @@ internal static class RpmPackageWriter
         var mainHeader = RpmHeaderWriter.Write(MainHeaderEntries(
             bundle, item, payload, packageName, mapped, architecture, installRoot, vendor,
             settings, cpio, compressedPayload), 63);
-        var signature = settings.SigningKeyFile is { Length: > 0 } keyFile
-            ? RpmSigner.Sign(
-                ConcatBytes(mainHeader, compressedPayload), keyFile,
-                settings.SigningKeyPassphrase)
-            : null;
-        if (signature is not null)
+        byte[]? pgpSignature = null;
+        byte[]? rsaSignature = null;
+        if (settings.SigningKeyFile is { Length: > 0 } keyFile)
         {
-            logger.Log(BundleLogLevel.Information, "Signing package (RPMSIGTAG_PGP).");
+            rsaSignature = RpmSigner.Sign(
+                mainHeader, keyFile, settings.SigningKeyPassphrase);
+            pgpSignature = RpmSigner.Sign(
+                ConcatBytes(mainHeader, compressedPayload), keyFile,
+                settings.SigningKeyPassphrase);
+            logger.Log(BundleLogLevel.Information,
+                "Signing package (RPMSIGTAG_RSA + RPMSIGTAG_PGP).");
         }
         var signatureHeader = RpmHeaderWriter.Write(SignatureEntries(
-            mainHeader, compressedPayload, cpio, signature), 62);
+            mainHeader, compressedPayload, cpio, rsaSignature, pgpSignature), 62);
         signatureHeader = Align8(signatureHeader);
 
         var fileName = packageName + "-" + mapped.Version + "-" + mapped.Release +
@@ -187,7 +190,7 @@ internal static class RpmPackageWriter
 
     private static List<RpmHeaderWriter.Entry> SignatureEntries(
         byte[] mainHeader, byte[] compressedPayload, byte[] cpio,
-        byte[]? signature)
+        byte[]? rsaSignature, byte[]? pgpSignature)
     {
         // RPMSIGTAG_SIZE = main header bytes + compressed payload bytes
         var packageSize = mainHeader.Length + compressedPayload.Length;
@@ -203,11 +206,18 @@ internal static class RpmPackageWriter
             RpmHeaderWriter.Str(269, Hex(SHA1.Create().ComputeHash(mainHeader))),   // SHA1HEADER
             RpmHeaderWriter.Str(273, Hex(SHA256.Create().ComputeHash(mainHeader))), // SHA256HEADER
         };
-        if (signature is not null)
+        if (rsaSignature is not null)
+        {
+            // RPMSIGTAG_RSA (268): v3 signature packet over the main header
+            // alone — the tag libzypp/zypper requires to see a package as
+            // signed. The format requires PGP to accompany it.
+            entries.Add(RpmHeaderWriter.Bin(268, rsaSignature));
+        }
+        if (pgpSignature is not null)
         {
             // RPMSIGTAG_PGP (1002): OpenPGP binary-document signature packet
             // over main header + payload — what `rpm -K` verifies.
-            entries.Add(RpmHeaderWriter.Bin(1002, signature));
+            entries.Add(RpmHeaderWriter.Bin(1002, pgpSignature));
         }
         return entries;
     }
