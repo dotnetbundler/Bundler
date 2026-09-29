@@ -777,6 +777,7 @@ internal sealed class NsisBundleBackend(
 
     private static string TargetArchitectureName(CpuArchitecture architecture) => architecture switch
     {
+        CpuArchitecture.X86 => "x86",
         CpuArchitecture.X64 => "x64",
         CpuArchitecture.Arm64 => "arm64",
         _ => throw new ArgumentOutOfRangeException(nameof(architecture), architecture, "Unknown target architecture.")

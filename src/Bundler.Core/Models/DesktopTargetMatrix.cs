@@ -5,8 +5,7 @@ namespace DotNet.Bundler.Core;
 public static class DesktopTargetMatrix
 {
     public static bool Supports(BundleTarget target, PackageFormat format) =>
-        Supports(target.OperatingSystem, format) &&
-        (target.Architecture != CpuArchitecture.X86 || format == PackageFormat.Msi);
+        Supports(target.OperatingSystem, format);
 
     public static bool Supports(DesktopOperatingSystem operatingSystem, PackageFormat format) =>
         operatingSystem switch

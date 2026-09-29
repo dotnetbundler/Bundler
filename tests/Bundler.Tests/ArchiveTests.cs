@@ -21,6 +21,7 @@ internal static class ArchiveTests
             yield return ("Maps archive settings through MSBuild", () => RunSync(MapsArchiveSettingsThroughMsBuild));
             yield return ("Builds deterministically (identical sha256)", () => RunSync(BuildsDeterministically));
             yield return ("Rejects a directory as a mapped file source", () => RunSync(RejectsDirectorySource));
+            yield return ("Produces a win-x86 archive", () => RunSync(BuildsWinX86Archive));
             yield return ("Zip writer rejects archives beyond classic zip limits", () => RunSync(RejectsZip64));
         }
     }
@@ -258,6 +259,24 @@ internal static class ArchiveTests
             AssertThrows<ArgumentException>(
                 () => BuildWithFile(input, dir, "docs/x"),
                 "a directory source must be rejected");
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
+    static void BuildsWinX86Archive()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "x86-out");
+        try
+        {
+            var artifacts = new ArchiveBundler().BuildAsync(
+                Configuration(input, output, "win-x86", [PackageFormat.Zip]))
+                .GetAwaiter().GetResult();
+            Assert(artifacts.Single().Path.EndsWith("-win-x86.zip", StringComparison.Ordinal),
+                "the Windows x86 target must produce a zip artifact");
         }
         finally
         {
