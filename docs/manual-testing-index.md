@@ -15,7 +15,7 @@
 | Linux `.AppImage` | [linux-appimage-roadmap.md](linux-appimage-roadmap.md) | [linux-appimage-manual-testing.md](linux-appimage-manual-testing.md) | [能力矩阵](linux-appimage-capability-matrix.md)；[Tauri 通用能力审计](linux-tauri-capability-audit.md) | [linux-appimage-open-items.md](linux-appimage-open-items.md) | `LINUX-APPIMAGE-MT-xx` / `LINUX-APPIMAGE-OI-xx` |
 | ARCHIVE（zip/tar.gz） | [archive-roadmap.md](archive-roadmap.md) | [archive-manual-testing.md](archive-manual-testing.md) | [能力矩阵](archive-capability-matrix.md) | [archive-open-items.md](archive-open-items.md) | `ARCHIVE-MT-xx` / `ARCHIVE-OI-xx` |
 | CLI | [cli-roadmap.md](cli-roadmap.md) | [cli-manual-testing.md](cli-manual-testing.md) | [能力矩阵](cli-capability-matrix.md) | [cli-open-items.md](cli-open-items.md) | `CLI-MT-xx` / `CLI-OI-xx` |
-| 签名（rpm/AppImage） | [`signing-manual-testing.md`](signing-manual-testing.md) | [`signing-open-items.md`](signing-open-items.md) |
+| 签名（rpm/AppImage） | [signing-roadmap.md](signing-roadmap.md) | [signing-manual-testing.md](signing-manual-testing.md) | [能力矩阵](signing-capability-matrix.md) | [signing-open-items.md](signing-open-items.md) | `SIGN-*` |
 
 Linux RPM/AppImage 在各自规划轮建立自己的 `<format>-roadmap.md`、`<format>-manual-testing.md`、`<format>-capability-matrix.md`、`<format>-open-items.md`，各用独立格式前缀；
 总索引只列入口，不混合测试步骤或结论。
