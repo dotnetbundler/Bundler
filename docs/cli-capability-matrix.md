@@ -24,3 +24,5 @@
 | shell completions | 明确拒绝 | — | 手写解析器下维护成本不值 |
 | 遥测/联网 | 明确拒绝 | — | 打包工具不联网 |
 | Windows/macOS 宿主跑 CLI 全格式 | 外部待验收 | CLI-3 | MT-01/02 |
+| centos7 等旧 glibc 宿主跑 CLI | 明确拒绝 | — | CLI 为 net10.0 托管工具 + AOT 二进制走现代 glibc，centos7（glibc 2.17）两头均不可运行；产物 `.deb`/`.rpm` 装向 centos7 无格式障碍（载荷自身运行时兼容属载荷侧） |
+| centos7 等旧 glibc 宿主跑 MSBuild 入口 | 不支持 | — | task 为 netstandard2.0 程序集，理论上可由 .NET 6 SDK（centos7 可装的最高 SDK，已 EOL）宿主加载——灰色组合未验证不承诺；.NET 8+ SDK 本身装不上 centos7 |
