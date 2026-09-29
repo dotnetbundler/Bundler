@@ -24,6 +24,11 @@ if [ -d "$ARTIFACTS" ]; then
 fi
 mkdir -p "$ARTIFACTS"
 
+IS_LINUX=0
+[ "$(uname -s)" = "Linux" ] && IS_LINUX=1
+BUNDLE_FORMATS="deb,rpm,zip,targz"
+[ "$IS_LINUX" -eq 1 ] && BUNDLE_FORMATS="deb,rpm,appimage,zip,targz"
+
 log "building the CLI"
 dotnet build "$REPO_ROOT/src/Bundler.Cli/Bundler.Cli.csproj" -c Release -o "$ARTIFACTS/cli" >/dev/null \
   || die "CLI build failed"
@@ -80,8 +85,8 @@ formats = {i["format"] for i in json.load(open(sys.argv[1]))["items"]}
 assert formats == {"deb", "rpm", "appimage", "zip", "targz"}, formats
 PYEOF
 
-log "bundle: five linux-producible formats"
-$CLI bundle $BASE --formats deb,rpm,appimage,zip,targz > "$ARTIFACTS/bundle.txt" 2>"$ARTIFACTS/bundle.err" \
+log "bundle: linux-producible formats"
+$CLI bundle $BASE --formats $BUNDLE_FORMATS > "$ARTIFACTS/bundle.txt" 2>"$ARTIFACTS/bundle.err" \
   || die "bundle must exit 0 (see $ARTIFACTS/bundle.err)"
 expected=(
   "deb/clifixture_1.0.0-1_amd64.deb"
@@ -93,9 +98,13 @@ for rel in "${expected[@]}"; do
   [ -f "$OUT_DIR/linux-x64/$rel" ] || die "artifact missing: linux-x64/$rel"
   grep -qF "$OUT_DIR/linux-x64/$rel" "$ARTIFACTS/bundle.txt" || die "stdout must list linux-x64/$rel"
 done
-appimage_path=$(find "$OUT_DIR/linux-x64/appimage" -name '*.AppImage' -print -quit)
-[ -n "$appimage_path" ] || die "appimage artifact missing"
-[ -f "$appimage_path.sha256" ] || die "appimage sha256 sidecar missing"
+if [ "$IS_LINUX" -eq 1 ]; then
+  appimage_path=$(find "$OUT_DIR/linux-x64/appimage" -name '*.AppImage' -print -quit)
+  [ -n "$appimage_path" ] || die "appimage artifact missing"
+  [ -f "$appimage_path.sha256" ] || die "appimage sha256 sidecar missing"
+else
+  log "appimage bundle leg skipped: non-Linux host"
+fi
 
 log "bundle --json emits artifact list on stdout only"
 $CLI bundle $BASE --formats zip --json > "$ARTIFACTS/bundle.json" 2>"$ARTIFACTS/bundle-json.err" \
@@ -177,6 +186,7 @@ $CLI plan --config "$CFG_DIR/bundler.json" --deb.bogus=1 >/dev/null 2>&1; code=$
 $CLI plan --config "$CFG_DIR/missing.json" >/dev/null 2>&1; code=$?
 [ "$code" -eq 2 ] || die "missing config file must exit 2, got $code"
 
+if [ "$IS_LINUX" -eq 1 ]; then
 log "native AOT binary: publish + end-to-end smoke"
 dotnet publish "$REPO_ROOT/src/Bundler.Cli/Bundler.Cli.csproj" -c Release -r linux-x64 \
   -o "$ARTIFACTS/aot" -v q >"$ARTIFACTS/aot-publish.log" 2>&1 \
@@ -208,5 +218,8 @@ for fmt in msi dmg pkg; do
   grep -qE "requires a (Windows|macOS) host" "$ARTIFACTS/aot-$fmt.err" \
     || die "$fmt dispatch must fail with an explicit host error"
 done
+else
+  log "AOT native section skipped: non-Linux host"
+fi
 
 log "all CLI integration assertions passed"

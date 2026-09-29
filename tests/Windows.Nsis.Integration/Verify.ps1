@@ -482,6 +482,10 @@ try {
     if (Test-Path -LiteralPath $packageCache) {
         Remove-Item -LiteralPath $packageCache -Recurse -Force
     }
+    foreach ($staleBundle in Get-ChildItem -LiteralPath $integrationRoot -Directory -Filter 'bundle-*' -ErrorAction SilentlyContinue) {
+        Assert-UnderIntegrationRoot $staleBundle.FullName
+        Remove-Item -LiteralPath $staleBundle.FullName -Recurse -Force
+    }
     Remove-TestState
 
     $apiOutput = Join-Path $integrationRoot "standalone-api"
