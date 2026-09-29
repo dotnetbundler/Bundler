@@ -89,7 +89,6 @@ log "== publishing fixture with the packaged MSBuild entry =="
 dotnet publish "$fixture_project" -c Release --force \
     -p:BundlerPackageVersion="$version" \
     -p:BundlerPackageSource="$package_dir" \
-    -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$bundle_output" \
     -p:BundlerTestIcon="$integration_root/icon-512.png" \
     "${dylib_args[@]}" \
@@ -257,7 +256,6 @@ first_plist_hash="$(shasum -a 256 "$app/Contents/Info.plist" | cut -d' ' -f1)"
 dotnet publish "$fixture_project" -c Release --force \
     -p:BundlerPackageVersion="$version" \
     -p:BundlerPackageSource="$package_dir" \
-    -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$bundle_output" \
     -p:BundlerTestIcon="$integration_root/icon-512.png" \
     "${dylib_args[@]}" \
@@ -285,7 +283,6 @@ ENTITLEMENTS
 dotnet publish "$fixture_project" -c Release --force \
     -p:BundlerPackageVersion="$version" \
     -p:BundlerPackageSource="$package_dir" \
-    -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$signed_output" \
     -p:BundlerTestIcon="$integration_root/icon-512.png" \
     -p:BundlerTestSignIdentity="-" \
@@ -310,7 +307,6 @@ missing_cert_output="$integration_root/badcert-output"
 if dotnet publish "$fixture_project" -c Release --force \
     -p:BundlerPackageVersion="$version" \
     -p:BundlerPackageSource="$package_dir" \
-    -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$missing_cert_output" \
     -p:BundlerTestIcon="$integration_root/icon-512.png" \
     -p:BundlerTestSigningCertificate="$integration_root/missing.p12" \
@@ -335,7 +331,6 @@ dotnet publish "$fixture_project" -c Release --force \
     -p:RuntimeIdentifier=osx-x64 \
     -p:BundlerPackageVersion="$version" \
     -p:BundlerPackageSource="$package_dir" \
-    -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$x64_output" \
     -p:BundlerTestIcon="$integration_root/icon-512.png" \
     "${x64_dylib_args[@]}" \
@@ -393,8 +388,7 @@ if [[ "$launchservices_ok" == "1" ]]; then
     dotnet publish "$fixture_project" -c Release --force \
         -p:BundlerPackageVersion="$version" \
         -p:BundlerPackageSource="$package_dir" \
-        -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
-        -p:BundlerIntegrationOutput="$minver_output" \
+            -p:BundlerIntegrationOutput="$minver_output" \
         -p:BundlerTestIcon="$integration_root/icon-512.png" \
         -p:BundlerTestMinSystemVersion=99.0 \
         "${dylib_args[@]}" \
@@ -412,8 +406,7 @@ if [[ "$launchservices_ok" == "1" ]]; then
     dotnet publish "$fixture_project" -c Release --force \
         -p:BundlerPackageVersion="$version" \
         -p:BundlerPackageSource="$package_dir" \
-        -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
-        -p:BundlerIntegrationOutput="$upgrade_output" \
+            -p:BundlerIntegrationOutput="$upgrade_output" \
         -p:BundlerTestIcon="$integration_root/icon-512.png" \
         -p:BundlerTestBuildVersion=2026.9.2 \
         "${dylib_args[@]}" \
@@ -455,7 +448,6 @@ log "== exercising the standalone package API =="
 dotnet run --project "$api_fixture_project" -c Release \
     -p:BundlerPackageVersion="$version" \
     -p:BundlerPackageSource="$package_dir" \
-    -p:RestoreAdditionalProjectSources="https://api.nuget.org/v3/index.json" \
     -p:RestorePackagesPath="$package_cache" \
     -- "$api_output"
 api_app="$api_output/artifacts/osx-arm64/app/Mac API Package Fixture.app"
