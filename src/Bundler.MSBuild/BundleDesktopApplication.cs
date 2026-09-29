@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using DotNet.Bundler;
+using DotNet.Bundler.Core;
 using DotNet.Bundler.AppImage;
 using DotNet.Bundler.Archive;
 using DotNet.Bundler.Deb;
@@ -646,6 +647,14 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             }).ToArray();
 
             return true;
+        }
+        catch (BundleValidationException validation)
+        {
+            foreach (var issue in validation.Issues)
+            {
+                Log.LogError($"{issue.Path}: {issue.Message}");
+            }
+            return false;
         }
         catch (Exception exception)
         {

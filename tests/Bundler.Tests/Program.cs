@@ -65,6 +65,7 @@ var tests = new (string Name, Func<Task> Test)[]
 };
 
 tests = tests.Append(("Keeps package consumer versions aligned", () => RunSync(KeepsPackageConsumerVersionsAligned)))
+    .Append(("Passes validation issue details through MSBuild errors", () => RunSync(PassesValidationIssueDetailsThroughMsBuild)))
     .Concat(WixTests.Cases).Concat(MacAppTests.Cases).Concat(MacDmgTests.Cases).Concat(MacPkgTests.Cases).Concat(DebTests.Cases).Concat(RpmTests.Cases).Concat(AppImageTests.Cases).Concat(ArchiveTests.Cases).Concat(CliTests.Cases).ToArray();
 
 var failed = 0;
@@ -109,9 +110,17 @@ static void RejectsIncompatibleFormats()
     {
         RuntimeIdentifier = "win-x86", InputDirectory = "unused", Formats = [PackageFormat.Nsis]
     });
-    Assert(BundleConfigurationValidator.Validate(x86Nsis, checkFileSystem: false)
+    Assert(!BundleConfigurationValidator.Validate(x86Nsis, checkFileSystem: false)
             .Any(issue => issue.Path == "targets[0].formats"),
-        "Adding x86 to the shared model must not enable NSIS x86.");
+        "The NSIS backend must accept the Windows x86 target.");
+    var x86Archive = ValidConfiguration(new BundleTargetConfiguration
+    {
+        RuntimeIdentifier = "win-x86", InputDirectory = "unused",
+        Formats = [PackageFormat.Zip, PackageFormat.TarGz]
+    });
+    Assert(!BundleConfigurationValidator.Validate(x86Archive, checkFileSystem: false)
+            .Any(issue => issue.Path == "targets[0].formats"),
+        "Zip/TarGz must accept the Windows x86 target.");
     var x86Msi = ValidConfiguration(new BundleTargetConfiguration
     {
         RuntimeIdentifier = "win-x86", InputDirectory = "unused", Formats = [PackageFormat.Msi]
@@ -1962,6 +1971,15 @@ static void MapsNsisSettingsThroughMsBuild()
            targets.Contains("WindowsSigningCommandArguments=\"@(BundlerWindowsSigningCommandArgument)\"", StringComparison.Ordinal) &&
            task.Contains("new WindowsExternalCommandSigner", StringComparison.Ordinal),
         "MSBuild does not expose explicit payload files and external signing command arguments.");
+}
+
+static void PassesValidationIssueDetailsThroughMsBuild()
+{
+    var task = File.ReadAllText(Path.Combine(
+        RepositoryRoot(), "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
+    Assert(task.Contains("catch (BundleValidationException", StringComparison.Ordinal) &&
+           task.Contains("issue.Path") && task.Contains("issue.Message"),
+        "The MSBuild task must log each validation issue's path and message, not only the count.");
 }
 
 static void KeepsPackageConsumerVersionsAligned()

@@ -96,7 +96,7 @@ internal static class ArchiveTree
     }
 
     // netstandard2.0 has no Unix-mode API; on Linux/macOS ask libc whether the
-    // file is executable, elsewhere probe ELF/shebang markers — publish
+    // file is executable, elsewhere probe ELF/shebang/Mach-O markers — publish
     // payloads mark native entry binaries that way — else 0644.
     private static int UnixMode(string path)
     {
@@ -108,14 +108,34 @@ internal static class ArchiveTree
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             var head = new byte[4];
-            if (stream.Read(head, 0, 4) >= 2 &&
-                ((head[0] == 0x7F && head[1] == (byte)'E') || head[0] == (byte)'#' && head[1] == (byte)'!'))
+            var read = stream.Read(head, 0, 4);
+            if (read >= 2 && HasExecutableMagic(head, read))
             {
                 return 493 /* 0755 */;
             }
         }
         catch (IOException) { }
         return 420 /* 0644 */;
+    }
+
+    private static bool HasExecutableMagic(byte[] head, int read)
+    {
+        if ((head[0] == 0x7F && head[1] == (byte)'E') ||              // ELF "\x7fE"
+            (head[0] == (byte)'#' && head[1] == (byte)'!'))         // shebang "#!"
+        {
+            return true;
+        }
+        if (read < 4)
+        {
+            return false;
+        }
+        // Mach-O thin/fat magics in both endiannesses — macOS apphosts and dylibs.
+        var magic = ((uint)head[0] << 24) | ((uint)head[1] << 16) | ((uint)head[2] << 8) | head[3];
+        return magic is
+            0xCEFAEDFE or 0xCFFAEDFE or  // thin, little-endian on disk (x86_64/arm64)
+            0xFEEDFACE or 0xFEEDFACF or  // thin, big-endian on disk
+            0xCAFEBABE or 0xCAFEBABF or  // fat, big-endian on disk
+            0xBEBAFECA or 0xBFBAFECA;    // fat, little-endian on disk
     }
 
     private static string ValidateDestination(string? destination)

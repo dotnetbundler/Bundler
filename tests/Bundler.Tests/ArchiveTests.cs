@@ -21,6 +21,7 @@ internal static class ArchiveTests
             yield return ("Maps archive settings through MSBuild", () => RunSync(MapsArchiveSettingsThroughMsBuild));
             yield return ("Builds deterministically (identical sha256)", () => RunSync(BuildsDeterministically));
             yield return ("Rejects a directory as a mapped file source", () => RunSync(RejectsDirectorySource));
+            yield return ("Produces a win-x86 archive", () => RunSync(BuildsWinX86Archive));
             yield return ("Zip writer rejects archives beyond classic zip limits", () => RunSync(RejectsZip64));
         }
     }
@@ -69,6 +70,9 @@ internal static class ArchiveTests
             var regular = archive.GetEntry("my-app-1.0.0-linux-x64/ExampleApp.dll")!;
             Assert(((regular.ExternalAttributes >> 16) & 0xFFFF) == 33188 /* 0100644 */,
                 "regular payload must carry unix mode 0644");
+            var macho = archive.GetEntry("my-app-1.0.0-linux-x64/ExampleMacApp")!;
+            Assert(((macho.ExternalAttributes >> 16) & 0xFFFF) == 33261 /* 0100755 */,
+                "Mach-O payload must carry unix mode 0755 in external attributes");
         }
         finally
         {
@@ -101,6 +105,8 @@ internal static class ArchiveTests
                 "top-level directory must be a tar dir entry mode 0755");
             var executable = entries.First(e => e.Name.EndsWith("/ExampleApp", StringComparison.Ordinal));
             Assert(executable.Mode == 493, "shebang payload must carry mode 0755");
+            var macho = entries.First(e => e.Name.EndsWith("/ExampleMacApp", StringComparison.Ordinal));
+            Assert(macho.Mode == 493, "Mach-O payload must carry mode 0755");
             if (!File.Exists(link) ||
                 !(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()))
             { /* symlink fixture skipped on this fs/host */ }
@@ -253,6 +259,24 @@ internal static class ArchiveTests
             AssertThrows<ArgumentException>(
                 () => BuildWithFile(input, dir, "docs/x"),
                 "a directory source must be rejected");
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
+    static void BuildsWinX86Archive()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "x86-out");
+        try
+        {
+            var artifacts = new ArchiveBundler().BuildAsync(
+                Configuration(input, output, "win-x86", [PackageFormat.Zip]))
+                .GetAwaiter().GetResult();
+            Assert(artifacts.Single().Path.EndsWith("-win-x86.zip", StringComparison.Ordinal),
+                "the Windows x86 target must produce a zip artifact");
         }
         finally
         {
@@ -435,12 +459,16 @@ internal static class ArchiveTests
         Directory.CreateDirectory(input);
         File.WriteAllText(Path.Combine(input, "ExampleApp"), "#!/bin/sh\necho ok\n");
         File.WriteAllText(Path.Combine(input, "ExampleApp.dll"), "payload");
+        // Mach-O thin-64 little-endian magic (CF FA ED FE) + padding: on Windows the
+        // archive writer can only see magic bytes, on Unix the FS mode must agree.
+        File.WriteAllBytes(Path.Combine(input, "ExampleMacApp"), [0xCF, 0xFA, 0xED, 0xFE, 0, 0, 0, 0]);
         if (!OperatingSystem.IsWindows())
         {
-            File.SetUnixFileMode(Path.Combine(input, "ExampleApp"),
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            var executable = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
                 UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
-                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
+            File.SetUnixFileMode(Path.Combine(input, "ExampleApp"), executable);
+            File.SetUnixFileMode(Path.Combine(input, "ExampleMacApp"), executable);
         }
         return input;
     }
