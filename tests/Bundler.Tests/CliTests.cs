@@ -333,7 +333,7 @@ internal static class CliTests
               "pkg": { "signing": { "identity": "Developer ID Installer: Example" } },
               "archive": { "files": [ { "destination": "bin/cli-fixture" } ] }
             }
-            """.Replace("<input>", input));
+            """.Replace("<input>", input.Replace("\\", "\\\\")));
         try
         {
             var resolved = CliConfig.Resolve(CliArguments.Parse(["bundle", "--config", config]));
