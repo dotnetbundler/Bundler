@@ -20,7 +20,7 @@ dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
 默认产物为 `samples/HelloMsiApp/artifacts/feature-demo/win-x64/msi/Hello MSI App-1.0.0.msi`。
 `feature-demo` 将本次完整演示与仓库早期同版本示例产物隔开，让上面的直接 `publish` 命令可运行；
 命令行仍可用 `BundlerOutputPath` 指向其他目录。
-与 NSIS 示例一样，项目通过根 `Directory.Build.props` 取得当前开发包版本，通过 `Bundler.LocalPackages.props` 设置本地 `RestoreSources=artifacts/packages`；
+与 NSIS 示例一样，项目通过根 `Directory.Build.props` 取得当前开发包版本，通过 `Bundler.LocalPackages.props` 向还原追加本地源 `artifacts/packages`；
 `publish` 消费已还原的 NuGet 包，不会自动重编仓库 `src/`。
 实现变更应先按开发规则迭代包版本并重新打包；
 缺少当前版本的本地包时先执行 `pack`。

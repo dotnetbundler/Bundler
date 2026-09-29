@@ -15,6 +15,7 @@
     <Version>1.0.0</Version>
 
     <BundlerEnabled>true</BundlerEnabled>
+    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
     <!-- dmg 请求会让规划器自动先产出 .app 中间产物，再打 .dmg。 -->
     <BundlerFormats>dmg</BundlerFormats>
     <BundlerIdentifier>com.dotnetbundler.hellomacdmg</BundlerIdentifier>

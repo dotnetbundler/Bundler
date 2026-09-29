@@ -7,8 +7,7 @@
 
 ```bash
 dotnet pack ../.. -c Release -o ../../artifacts/packages   # 先出 DotNet.Bundler* nupkg
-dotnet publish -c Release \
-  -p:RestoreSources="../../artifacts/packages;https://api.nuget.org/v3/index.json"
+dotnet publish -c Release                                 # 项目内经 Bundler.LocalPackages.props 注入本地源
 ```
 
 产物在 `artifacts/linux-x64/{zip,targz}/` 下（`BundlerOutputPath` 未设置时的默认布局），

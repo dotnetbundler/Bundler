@@ -7,6 +7,7 @@
     <AssemblyName>HelloArchiveApp</AssemblyName>
     <Version>1.2.3</Version>
     <BundlerEnabled>true</BundlerEnabled>
+    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
     <BundlerFormats>zip;targz</BundlerFormats>
     <BundlerIdentifier>com.dotnetbundler.helloarchiveapp</BundlerIdentifier>
     <BundlerProductName>Hello Archive App</BundlerProductName>
