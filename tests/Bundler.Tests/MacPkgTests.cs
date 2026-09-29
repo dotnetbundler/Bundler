@@ -296,13 +296,15 @@ internal static class MacPkgTests
         };
         try
         {
+            var bindPath = Path.Combine(Path.GetTempPath(), "bt" + Guid.NewGuid().ToString("N")[..8]);
             using (var socket = new System.Net.Sockets.Socket(
                        System.Net.Sockets.AddressFamily.Unix,
                        System.Net.Sockets.SocketType.Stream,
                        System.Net.Sockets.ProtocolType.Unspecified))
             {
-                socket.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(
-                    Path.Combine(payload, "agent.sock")));
+                socket.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(bindPath));
+                // .NET unlinks the bound path on dispose; move the node while bound
+                File.Move(bindPath, Path.Combine(payload, "agent.sock"));
             }
             await new MacPkgBundler(new MacPkgBundleConfiguration
             {

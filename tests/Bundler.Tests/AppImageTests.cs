@@ -252,10 +252,13 @@ internal static class AppImageTests
                 "regular payload files still stage");
             Assert(!File.Exists(Path.Combine(result.AppDirPath, "usr", "lib", "example-app", "agent.sock")),
                 "a unix socket in the input must not reach the AppDir");
-            var artifact = new AppImageBundler().BuildAsync(
-                Configuration(input, output)).GetAwaiter().GetResult().Single();
-            Assert(File.Exists(artifact.Path),
-                "the .AppImage build must succeed with a socket inside the input");
+            if (OperatingSystem.IsLinux())
+            {
+                var artifact = new AppImageBundler().BuildAsync(
+                    Configuration(input, output)).GetAwaiter().GetResult().Single();
+                Assert(File.Exists(artifact.Path),
+                    "the .AppImage build must succeed with a socket inside the input");
+            }
         }
         finally
         {
@@ -265,11 +268,17 @@ internal static class AppImageTests
 
     static void CreateUnixSocket(string path)
     {
-        using var socket = new System.Net.Sockets.Socket(
-            System.Net.Sockets.AddressFamily.Unix,
-            System.Net.Sockets.SocketType.Stream,
-            System.Net.Sockets.ProtocolType.Unspecified);
-        socket.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(path));
+        // sun_path is ~104 bytes on unix; bind a short name, then move the node into place
+        var bindPath = Path.Combine(Path.GetTempPath(), "bt" + Guid.NewGuid().ToString("N")[..8]);
+        using (var socket = new System.Net.Sockets.Socket(
+                   System.Net.Sockets.AddressFamily.Unix,
+                   System.Net.Sockets.SocketType.Stream,
+                   System.Net.Sockets.ProtocolType.Unspecified))
+        {
+            socket.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(bindPath));
+            // .NET unlinks the bound path on dispose; move the node while bound
+            File.Move(bindPath, path);
+        }
     }
 
     // Real end-to-end runs of the bundled appimagetool (Linux host only).
