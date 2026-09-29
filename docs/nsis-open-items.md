@@ -13,4 +13,4 @@
 | 真实 ACL 拒绝与磁盘耗尽 | 确定性故障注入覆盖事务检查点，但不等于 NTFS/注册表 ACL 拒绝或实际物理磁盘/配额耗尽。 | 按 MT-07 在可丢弃 Windows VM 中使用窄范围拒绝规则及专用虚拟磁盘或配额。 | 产品承诺安全失败与恢复，不承诺完整 ACL/ADS 元数据保真；真实系统故障仍需外部证据。 |
 | 原生构建宿主与 Windows ARM64 矩阵 | 工具选择和包覆盖 Windows、Linux x64/arm64、macOS x64/arm64 宿主及 Windows x64/arm64 目标，但单台开发机不能代表全部组合。 | 按 MT-08/09 使用原生 runner 和 Windows ARM64 设备或 VM。 | 仓库测试验证选择、缓存完整性和本机 Windows x64 行为；原生执行声明只能覆盖实际测试环境。 |
 | 内置语言文案审校 | 自动测试验证统一键集、编译 22 种内置语言并运行非拉丁文字 Windows 安装/卸载 fixture；新增翻译尚未由母语者或专业译者审校。 | 每种语言的母语/专业审校，附代表性缩放下的 Windows 截图；阿拉伯语、波斯语重点检查从右到左布局。 | 本机已验证结构与 Unicode 传输；语言准确性、地区术语、文字截断和 RTL 视觉质量仍是 MT-11 的外部内容验收。 |
-| `tests/Windows.Nsis.Integration/Verify.ps1` 重跑幂等（测试基建） | 2026-09-28 Windows 验收实测：脚本重跑前不清理上一轮 `bundle-*` 输出目录时会受残留干扰，非幂等。 | **已补待复验**：预检段已加 `bundle-*` 目录清扫（沿用 `Assert-UnderIntegrationRoot` 护栏）；Windows 宿主连跑两遍复验进行中。 | 属测试基建修正，不涉产品行为。 |
+| `tests/Windows.Nsis.Integration/Verify.ps1` 重跑幂等（测试基建） | 2026-09-28 Windows 验收实测：脚本重跑前不清理上一轮 `bundle-*` 输出目录时会受残留干扰，非幂等。 | **已消解**：预检段已加 `bundle-*` 目录清扫（`Assert-UnderIntegrationRoot` 护栏，main@92d5076）；Windows 宿主实测连跑两遍均 exit 0/PASS，第二遍零手工清理——脚本现已幂等。 | 属测试基建修正，不涉产品行为。 |
