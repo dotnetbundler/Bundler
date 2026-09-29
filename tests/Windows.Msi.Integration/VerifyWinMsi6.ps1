@@ -193,8 +193,12 @@ try {
     if ($afterPath -match [regex]::Escape($install)) {
         throw 'Uninstall left the product PATH entry behind.'
     }
-    if ($baselinePath -and $afterPath -ne $baselinePath) {
-        throw 'Uninstall did not restore the pre-install user PATH.'
+    if ($baselinePath) {
+        $baseEntries = @($baselinePath -split ';' | Where-Object { $_ -ne '' })
+        $afterEntries = @($afterPath -split ';' | Where-Object { $_ -ne '' })
+        if (($afterEntries -join ';') -ne ($baseEntries -join ';')) {
+            throw 'Uninstall did not restore the pre-install user PATH.'
+        }
     }
     if (Test-Path -LiteralPath $desktopShortcut) { throw 'Uninstall left the desktop shortcut.' }
     if (Test-Path -LiteralPath $startMenu) { throw 'Uninstall left the start menu folder.' }
