@@ -139,6 +139,21 @@ static void RejectsIncompatibleFormats()
     Assert(!BundleConfigurationValidator.Validate(x86Msi, checkFileSystem: false)
             .Any(issue => issue.Path == "targets[0].formats"),
         "The MSI backend must accept the Windows x86 target.");
+    var osxFormats = ValidConfiguration(new BundleTargetConfiguration
+    {
+        RuntimeIdentifier = "osx", InputDirectory = "unused",
+        Formats = [PackageFormat.App, PackageFormat.Dmg, PackageFormat.Pkg, PackageFormat.Zip, PackageFormat.TarGz]
+    });
+    Assert(!BundleConfigurationValidator.Validate(osxFormats, checkFileSystem: false)
+            .Any(issue => issue.Path == "targets[0].formats"),
+        "The universal osx target must accept the macOS format set.");
+    var osxNsis = ValidConfiguration(new BundleTargetConfiguration
+    {
+        RuntimeIdentifier = "osx", InputDirectory = "unused", Formats = [PackageFormat.Nsis]
+    });
+    Assert(BundleConfigurationValidator.Validate(osxNsis, checkFileSystem: false)
+            .Any(issue => issue.Message.Contains("not supported", StringComparison.Ordinal)),
+        "Windows formats must still be rejected for the osx target.");
 }
 
 static void AddsAppDependencyBeforeDmg()

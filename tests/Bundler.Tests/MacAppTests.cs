@@ -752,6 +752,13 @@ internal static class MacAppTests
             var thin = await new MacAppBundler().BuildAsync(MacConfiguration(
                 arm64Input, Path.Combine(output, "thin"), rid: "osx-arm64"));
             Assert(thin.Count == 1, "A matching thin binary must build.");
+            var universal = await new MacAppBundler().BuildAsync(MacConfiguration(
+                fatInput, Path.Combine(output, "universal"), rid: "osx"));
+            Assert(universal.Count == 1, "A fully-fat payload must build for the osx target.");
+            await AssertThrows<InvalidDataException>(
+                () => new MacAppBundler().BuildAsync(MacConfiguration(
+                    arm64Input, Path.Combine(output, "osx-thin"), rid: "osx")),
+                "The osx target must reject a payload missing the x86_64 slice.");
             var mismatchedHelper = CreateInputDirectory();
             File.WriteAllBytes(Path.Combine(mismatchedHelper, "helper"), FakeMachO(0x01000007));
             try

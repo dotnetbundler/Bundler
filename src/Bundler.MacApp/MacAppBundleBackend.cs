@@ -320,7 +320,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         BundleBuildContext context, string contentsDirectory, string runtimeIdentifier,
         CancellationToken cancellationToken)
     {
-        var requiredArchitecture = RequiredArchitecture(runtimeIdentifier);
+        var requiredArchitectures = RequiredArchitectures(runtimeIdentifier);
         var windows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         if (windows)
         {
@@ -336,11 +336,12 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             {
                 continue;
             }
-            if (requiredArchitecture is not null &&
-                !architectures.Contains(requiredArchitecture, StringComparer.OrdinalIgnoreCase))
+            var missing = requiredArchitectures.Where(
+                required => !architectures.Contains(required, StringComparer.OrdinalIgnoreCase)).ToArray();
+            if (missing.Length > 0)
             {
                 throw new InvalidDataException(
-                    $"Mach-O payload '{file}' does not contain '{requiredArchitecture}' required by " +
+                    $"Mach-O payload '{file}' does not contain '{string.Join(", ", missing)}' required by " +
                     $"{runtimeIdentifier} (architectures: {string.Join(", ", architectures)}). " +
                     "Provide a universal (fat) binary or per-RID input.");
             }
@@ -351,12 +352,13 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         }
     }
 
-    internal static string? RequiredArchitecture(string runtimeIdentifier) =>
+    internal static string[] RequiredArchitectures(string runtimeIdentifier) =>
         runtimeIdentifier switch
         {
-            "osx-arm64" => "arm64",
-            "osx-x64" => "x86_64",
-            _ => null
+            "osx" => ["x86_64", "arm64"],
+            "osx-arm64" => ["arm64"],
+            "osx-x64" => ["x86_64"],
+            _ => []
         };
 
     internal static string SanitizeFileName(string name)
