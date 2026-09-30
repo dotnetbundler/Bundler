@@ -218,6 +218,12 @@ NSIS 和 MSI 的清单、结论及外部待办分别维护，包括 UAC、真实
 
 - **应用自更新/升级包**（2026-09-27 用户提出，暂缓实施）：为打包产物增加升级/更新能力（Tauri updater 协议参照对象之一）。正式立项前需明确：更新通道与签名信任模型、各宿主落地语义（Windows 引导程序替换 / macOS 换 app 包 / Linux 包管理器外更新与包管理器安装的边界）、差分还是全量、回滚策略。满足 §7.2 准入条件后另立 `UPDATE` 路线，不混入现有格式阶段。
 - **CLI AOT 按宿主裁剪自研后端**（2026-09-28 用户提出并立项，**已实现并入 `main` `8f2ff8b`**）：AOT 发布的 CLI 单二进制此前内嵌全部后端及工具载荷（约 49 MB）。按 RID 剔除宿主不可用后端：`win-*` 剔 `MacDmg`/`MacPkg`/`AppImage`，`linux-*` 剔 `Wix`/`MacDmg`/`MacPkg`，`osx-*` 剔 `Wix`/`AppImage`；`MacApp` 在非 mac 宿主仍可产未签名 `.app`，全宿主保留；`Nsis`/`Deb`/`Rpm`/`Archive` 全宿主保留。实现：`Bundler.Cli.csproj` 按 `RuntimeIdentifier` 推导 `BundlerHostWindows`/`BundlerHostMacos`/`BundlerHostLinux`（无 RID 构建三者全真），`Wix`/`MacDmg`/`MacPkg`/`AppImage` 的 `ProjectReference` 加条件，`FormatDispatcher`/`CliConfig`/`BundlerJsonContext` 内对应符号以 `#if BUNDLER_HOST_*` 裁剪；被剔格式分发时抛 `PlatformNotSupportedException`，对应 bundler.json 段按未知键拒绝。验证：四种编译口径（无 RID、`linux-x64`/`win-x64`/`osx-arm64` RID）零错误零警告；`linux-x64` 实发 47.4 MiB（-2.3 MB），产物零 `Wix`/`Mac*` 引用、保留 `AppImage`，`--formats msi/dmg/pkg` 各报宿主错误；`Cli.Integration` 已加裁剪断言并全绿。
+- **Alpine `.apk` 后端**（2026-09-30 用户提出并登记）：为 Alpine/musl 生态增加 `.apk` 包后端。apk v2 格式为单个 gzip 流串接三个 tar 段（签名段 + 控制段 `.PKGINFO`/脚本 + 数据段），可做纯托管写入器、零宿主工具依赖（模式参照 `Bundler.Deb`/`Bundler.Rpm`）；对应载荷 RID 为 `linux-musl-x64`/`linux-musl-arm64`，架构名映射 x86_64/aarch64；签名可选 RSA（未签名安装需 `apk --allow-untrusted`）。**命名注意：此指 Alpine APK，非 Android `.apk`**——移动端支持若在非常后期立项另立路线，届时格式与文档命名须显式区分（如 `AlpineApk`/`AndroidApk`）。立项须按 §7.2 准入与新后端完整路线规则执行。
+- **`osx` 通用 RID 目标**（2026-09-30 登记）：接受通用二进制载荷（osx-x64+osx-arm64 合并的 fat binary 输入目录）。`MacApp` 后端 Mach-O 检查器已解析 fat 头；所需改动：`BundleTarget.TryParse` 增加 `osx` 条目（需"双架构"表达方式）、`DesktopTargetMatrix` 映射 app/dmg/pkg/zip/targz、`RequiredArchitecture` 改为要求载荷同时含 x86_64+arm64 切片。上游前提：`dotnet publish -r osx` 不直接产 fat 二进制，载荷须由调用方以双 RID 发布+lipo 合并或等效方式提供。
+- **`linux-musl-x64`/`linux-musl-arm64` 目标**（2026-09-30 登记）：musl/Alpine 载荷目标，仅挂 `zip`/`targz`——`deb`/`rpm` 属 glibc 发行版包管理语义、`AppImage` 内嵌 runtime 为 glibc 链接，两类产物在 musl 目标上安装/运行语义不成立，按 `docs/development-rules.md` 的门禁原则拒绝；Alpine `.apk` 后端落地后 musl 获得原生包格式。
+- **不予登记的 RID 类别**（2026-09-30 裁决，记录理由）：发行版专属 RID（`ubuntu.20.04`/`rhel.8` 等——.NET 8 起官方弃用便携 RID 外枚举，产出载荷与便携 RID 完全相同，登记只会制造差异假象）；`linux-bionic-*`（Android——非桌面边界，移动端若另立路线再议）；稀有架构（`linux-arm`/`s390x`/`ppc64le`/`riscv64`/`loongarch64`——各后端补架构名映射即可支持，但无验收宿主且暂无真实需求，出现需求时再按行补）。
+
+目标 RID 的门禁原则与本次 RID 扩展讨论结论见 `docs/development-rules.md` §3 "目标与格式门禁"条。
 
 
 ## 8. 路线维护与接班
