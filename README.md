@@ -47,6 +47,8 @@ dotnet tool install --global DotNet.Bundler.Cli
 bundler bundle --input-dir <publish目录> --rid linux-x64 --formats zip,deb \
   --product-name MyApp --identifier com.example.myapp --package-version 1.0.0 \
   --main-executable myapp --output-dir dist
+# 多目录 universal 合并：--input-dir 可重复，≥2 个目录先合并再打包
+bundler bundle --input-dir bin/osx-x64 --input-dir bin/osx-arm64 --rid osx --formats zip
 ```
 
 也可用 `bundler.json` 承载配置（CLI 参数覆盖文件值，`--<fmt>.<knob>=` 透传格式旋钮），schema 与 MSBuild `Bundler*` 属性一一对应，映射表与退出码/`--json` 契约见 [`docs/cli-roadmap.md`](docs/cli-roadmap.md)。

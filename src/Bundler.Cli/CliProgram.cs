@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
+using DotNet.Bundler.MacApp;
 
 namespace DotNet.Bundler.Cli;
 
@@ -63,13 +64,68 @@ public static class CliProgram
 
         var logger = new CliBundleLogger(stderr, parsed.Quiet, parsed.Verbose);
         var resolved = CliConfig.Resolve(parsed);
-        var configuration = resolved.Bundle;
-        return parsed.Command switch
+        var mergedDirectory = (string?)null;
+        try
         {
-            "validate" => RunValidate(configuration, parsed, stdout, stderr),
-            "plan" => RunPlan(configuration, parsed, stdout),
-            "bundle" => RunBundle(configuration, resolved, parsed, stdout, logger),
-            _ => 2
+            var configuration = ApplyInputDirectories(resolved.Bundle, parsed, out mergedDirectory);
+            return parsed.Command switch
+            {
+                "validate" => RunValidate(configuration, parsed, stdout, stderr),
+                "plan" => RunPlan(configuration, parsed, stdout),
+                "bundle" => RunBundle(configuration, resolved, parsed, stdout, logger),
+                _ => 2
+            };
+        }
+        finally
+        {
+            if (mergedDirectory is not null && Directory.Exists(mergedDirectory))
+            {
+                Directory.Delete(mergedDirectory, recursive: true);
+            }
+        }
+    }
+
+    // Repeated --input-dir feeds one target: a single value wins as before; two or more
+    // directories are universal-merged (fat Mach-O + dedup rules) into a temp payload dir.
+    private static BundleConfiguration ApplyInputDirectories(
+        BundleConfiguration source, CliArguments parsed, out string? mergedDirectory)
+    {
+        mergedDirectory = null;
+        if (parsed.InputDirectories.Count <= 1 || source.Targets.Count == 0)
+        {
+            return source;
+        }
+        var dirs = parsed.InputDirectories.Select(Path.GetFullPath).ToArray();
+        var input = Path.Combine(Path.GetTempPath(), "bundler-universal-" + Guid.NewGuid().ToString("N"));
+        MacUniversalPayloadMerger.Merge(dirs, input);
+        mergedDirectory = input;
+
+        var first = source.Targets[0];
+        var targets = source.Targets.ToArray();
+        targets[0] = new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = first.RuntimeIdentifier,
+            InputDirectory = input,
+            MainExecutable = first.MainExecutable,
+            SigningFiles = first.SigningFiles,
+            Formats = first.Formats
+        };
+        return new BundleConfiguration
+        {
+            ProductName = source.ProductName,
+            Identifier = source.Identifier,
+            Version = source.Version,
+            Publisher = source.Publisher,
+            Description = source.Description,
+            Homepage = source.Homepage,
+            Copyright = source.Copyright,
+            LicenseFile = source.LicenseFile,
+            OutputDirectory = source.OutputDirectory,
+            Icons = source.Icons,
+            Resources = source.Resources,
+            FileAssociations = source.FileAssociations,
+            UrlProtocols = source.UrlProtocols,
+            Targets = targets
         };
     }
 
@@ -261,7 +317,8 @@ public static class CliProgram
     private static void PrintUsage(TextWriter writer)
     {
         writer.WriteLine("Usage:");
-        writer.WriteLine("  bundler validate|plan|bundle --input-dir <dir> --rid <rid> --formats <csv>");
+        writer.WriteLine("  bundler validate|plan|bundle --input-dir <dir> [--input-dir <dir>...] --rid <rid> --formats <csv>");
+        writer.WriteLine("      (--input-dir repeated merges the dirs into a universal payload, e.g. osx-x64 + osx-arm64)");
         writer.WriteLine("      --product-name <name> --identifier <id> --package-version <ver>");
         writer.WriteLine("      [--output-dir <dir>] [--main-executable <name>] [--json] [--quiet|--verbose]");
         writer.WriteLine("  bundler --version | --help");

@@ -12,6 +12,9 @@ internal sealed class CliArguments
     public IReadOnlyDictionary<string, string> Options { get; private init; } =
         new Dictionary<string, string>();
 
+    /// <summary>Repeatable --input-dir values, in command-line order.</summary>
+    public IReadOnlyList<string> InputDirectories { get; private init; } = [];
+
     private static readonly HashSet<string> ValueOptions = new(StringComparer.Ordinal)
     {
         "input-dir", "output-dir", "rid", "formats", "product-name", "identifier",
@@ -38,9 +41,9 @@ internal sealed class CliArguments
 
     public static CliArguments Parse(string[] args)
     {
-        var result = new CliArguments();
         var command = "";
         var options = new Dictionary<string, string>(StringComparer.Ordinal);
+        var inputDirs = new List<string>();
         var json = false;
         var quiet = false;
         var verbose = false;
@@ -106,6 +109,16 @@ internal sealed class CliArguments
                 }
                 value = args[++index];
             }
+            if (name == "input-dir")
+            {
+                inputDirs.Add(value);
+                // First occurrence feeds the config path like before; extras merge in CliProgram.
+                if (inputDirs.Count == 1)
+                {
+                    options.TryAdd(name, value);
+                }
+                continue;
+            }
             if (!options.TryAdd(name, value))
             {
                 throw CliUsageException($"Option '--{name}' was specified more than once.");
@@ -123,7 +136,7 @@ internal sealed class CliArguments
             verbose = true;
         }
 
-        result = new CliArguments
+        return new CliArguments
         {
             Command = command,
             Json = json,
@@ -131,9 +144,9 @@ internal sealed class CliArguments
             Verbose = verbose,
             Help = help,
             ShowVersion = version,
-            Options = options
+            Options = options,
+            InputDirectories = inputDirs
         };
-        return result;
     }
 
     public string RequiredOption(string name) =>
