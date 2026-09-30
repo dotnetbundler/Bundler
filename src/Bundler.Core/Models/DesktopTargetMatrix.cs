@@ -16,6 +16,7 @@ public static class DesktopTargetMatrix
                 or PackageFormat.Zip or PackageFormat.TarGz,
             DesktopOperatingSystem.Linux => format is PackageFormat.Deb or PackageFormat.Rpm or PackageFormat.AppImage
                 or PackageFormat.Zip or PackageFormat.TarGz,
+            DesktopOperatingSystem.LinuxMusl => format is PackageFormat.Zip or PackageFormat.TarGz,
             _ => false
         };
 }

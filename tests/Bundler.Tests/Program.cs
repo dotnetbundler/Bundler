@@ -154,6 +154,26 @@ static void RejectsIncompatibleFormats()
     Assert(BundleConfigurationValidator.Validate(osxNsis, checkFileSystem: false)
             .Any(issue => issue.Message.Contains("not supported", StringComparison.Ordinal)),
         "Windows formats must still be rejected for the osx target.");
+    foreach (var rid in new[] { "linux-musl-x64", "linux-musl-arm64" })
+    {
+        var muslArchive = ValidConfiguration(new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = rid, InputDirectory = "unused",
+            Formats = [PackageFormat.Zip, PackageFormat.TarGz]
+        });
+        Assert(!BundleConfigurationValidator.Validate(muslArchive, checkFileSystem: false)
+                .Any(issue => issue.Path == "targets[0].formats"),
+            $"Zip/TarGz must accept the musl target {rid}.");
+        var muslGlibc = ValidConfiguration(new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = rid, InputDirectory = "unused",
+            Formats = [PackageFormat.Deb, PackageFormat.Rpm, PackageFormat.AppImage]
+        });
+        var muslIssues = BundleConfigurationValidator.Validate(muslGlibc, checkFileSystem: false)
+            .Where(issue => issue.Path == "targets[0].formats").ToArray();
+        Assert(muslIssues.Length == 3,
+            $"Deb/Rpm/AppImage must each be rejected for the musl target {rid} (glibc-distro semantics).");
+    }
 }
 
 static void AddsAppDependencyBeforeDmg()

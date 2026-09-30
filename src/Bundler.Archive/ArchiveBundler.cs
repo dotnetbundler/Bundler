@@ -47,7 +47,8 @@ public sealed class ArchiveBundler
         {
             DesktopOperatingSystem.Windows,
             DesktopOperatingSystem.MacOS,
-            DesktopOperatingSystem.Linux
+            DesktopOperatingSystem.Linux,
+            DesktopOperatingSystem.LinuxMusl
         })
         {
             backends.Add(new ArchiveBundleBackend(_configuration, _options, os, PackageFormat.Zip));
