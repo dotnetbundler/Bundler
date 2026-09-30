@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>DotNet.Bundler.AlpineApk</AssemblyName>
+    <RootNamespace>DotNet.Bundler.AlpineApk</RootNamespace>
+    <PackageId>DotNet.Bundler.AlpineApk</PackageId>
+    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
+    <Authors>Bundler contributors</Authors>
+    <Description>Reusable Alpine .apk package writer for desktop applications (pure managed, no host tools).</Description>
+    <PackageTags>dotnet;bundler;linux;alpine;apk;musl;installer;desktop</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Bundler.Tests" />
+    <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
+    <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

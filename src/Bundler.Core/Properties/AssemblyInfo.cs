@@ -8,3 +8,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("DotNet.Bundler.MacApp")]
 [assembly: InternalsVisibleTo("DotNet.Bundler.MacDmg")]
 [assembly: InternalsVisibleTo("DotNet.Bundler.MacPkg")]
+[assembly: InternalsVisibleTo("DotNet.Bundler.AlpineApk")]

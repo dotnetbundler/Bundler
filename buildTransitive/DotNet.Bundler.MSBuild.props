@@ -194,5 +194,26 @@
     <BundlerArchivePackageName Condition="'$(BundlerArchivePackageName)' == ''"></BundlerArchivePackageName>
     <BundlerArchiveVersion Condition="'$(BundlerArchiveVersion)' == ''"></BundlerArchiveVersion>
     <BundlerArchiveName Condition="'$(BundlerArchiveName)' == ''"></BundlerArchiveName>
+    <BundlerAlpineApkPackageName Condition="'$(BundlerAlpineApkPackageName)' == ''"></BundlerAlpineApkPackageName>
+    <BundlerAlpineApkVersion Condition="'$(BundlerAlpineApkVersion)' == ''"></BundlerAlpineApkVersion>
+    <BundlerAlpineApkArchitecture Condition="'$(BundlerAlpineApkArchitecture)' == ''"></BundlerAlpineApkArchitecture>
+    <BundlerAlpineApkOrigin Condition="'$(BundlerAlpineApkOrigin)' == ''"></BundlerAlpineApkOrigin>
+    <BundlerAlpineApkDescription Condition="'$(BundlerAlpineApkDescription)' == ''"></BundlerAlpineApkDescription>
+    <BundlerAlpineApkUrl Condition="'$(BundlerAlpineApkUrl)' == ''"></BundlerAlpineApkUrl>
+    <BundlerAlpineApkBinLink Condition="'$(BundlerAlpineApkBinLink)' == ''"></BundlerAlpineApkBinLink>
+    <BundlerAlpineApkRelease Condition="'$(BundlerAlpineApkRelease)' == ''"></BundlerAlpineApkRelease>
+    <BundlerAlpineApkLicense Condition="'$(BundlerAlpineApkLicense)' == ''"></BundlerAlpineApkLicense>
+    <BundlerAlpineApkBuildDate Condition="'$(BundlerAlpineApkBuildDate)' == ''"></BundlerAlpineApkBuildDate>
+    <BundlerAlpineApkDepends Condition="'$(BundlerAlpineApkDepends)' == ''"></BundlerAlpineApkDepends>
+    <BundlerAlpineApkProvides Condition="'$(BundlerAlpineApkProvides)' == ''"></BundlerAlpineApkProvides>
+    <BundlerAlpineApkTriggers Condition="'$(BundlerAlpineApkTriggers)' == ''"></BundlerAlpineApkTriggers>
+    <BundlerAlpineApkPreInstallScript Condition="'$(BundlerAlpineApkPreInstallScript)' == ''"></BundlerAlpineApkPreInstallScript>
+    <BundlerAlpineApkPostInstallScript Condition="'$(BundlerAlpineApkPostInstallScript)' == ''"></BundlerAlpineApkPostInstallScript>
+    <BundlerAlpineApkPreDeinstallScript Condition="'$(BundlerAlpineApkPreDeinstallScript)' == ''"></BundlerAlpineApkPreDeinstallScript>
+    <BundlerAlpineApkPostDeinstallScript Condition="'$(BundlerAlpineApkPostDeinstallScript)' == ''"></BundlerAlpineApkPostDeinstallScript>
+    <BundlerAlpineApkPreUpgradeScript Condition="'$(BundlerAlpineApkPreUpgradeScript)' == ''"></BundlerAlpineApkPreUpgradeScript>
+    <BundlerAlpineApkPostUpgradeScript Condition="'$(BundlerAlpineApkPostUpgradeScript)' == ''"></BundlerAlpineApkPostUpgradeScript>
+    <BundlerAlpineApkSigningKeyFile Condition="'$(BundlerAlpineApkSigningKeyFile)' == ''"></BundlerAlpineApkSigningKeyFile>
+    <BundlerAlpineApkSigningKeyPassphrase Condition="'$(BundlerAlpineApkSigningKeyPassphrase)' == ''"></BundlerAlpineApkSigningKeyPassphrase>
   </PropertyGroup>
 </Project>

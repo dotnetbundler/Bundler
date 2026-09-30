@@ -38,6 +38,7 @@
     <ProjectReference Include="..\Bundler.MacDmg\Bundler.MacDmg.csproj" Condition="'$(BundlerHostMacos)' == 'true'" />
     <ProjectReference Include="..\Bundler.MacPkg\Bundler.MacPkg.csproj" Condition="'$(BundlerHostMacos)' == 'true'" />
     <ProjectReference Include="..\Bundler.AppImage\Bundler.AppImage.csproj" Condition="'$(BundlerHostLinux)' == 'true'" />
+    <ProjectReference Include="..\Bundler.AlpineApk\Bundler.AlpineApk.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Bundler.Tests" />

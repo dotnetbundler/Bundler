@@ -12,6 +12,7 @@
     <Project Path="src/Bundler.Archive/Bundler.Archive.csproj" />
     <Project Path="src/Bundler.Nsis/Bundler.Nsis.csproj" />
     <Project Path="src/Bundler.Signing.Windows/Bundler.Signing.Windows.csproj" />
+    <Project Path="src/Bundler.AlpineApk/Bundler.AlpineApk.csproj" />
     <Project Path="src/Bundler.Wix/Bundler.Wix.csproj" />
     <Project Path="src/Bundler.MSBuild/Bundler.MSBuild.csproj" />
     <Project Path="src/Bundler.Package/Bundler.Package.csproj" />

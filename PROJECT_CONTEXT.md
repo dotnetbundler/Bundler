@@ -1,8 +1,8 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-09-30
-> 当前分支：`main`（全部格式与 CLI 冻结并入；HEAD `02b2521`，RID 泛化 + `osx`/`linux-musl` 目标已并入）
-> 当前包版本：`0.1.0-alpha.62`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.rpm` 冻结基线 `alpha.55`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
+> 当前分支：`devin/alpine-apk`（基于 `main` `e98bc96`；APK-1..5 已实现，待终审合并——未冻结）
+> 当前包版本：`0.1.0-alpha.63`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.rpm` 冻结基线 `alpha.55`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`；`.apk` 实现版本 `alpha.63`，冻结基线待终审后宣告）
 > 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
 > `LINUX-DEB-1..5` 全部完成，`.deb` 冻结并已入 `main`：冻结基线 `0.1.0-alpha.51`，测试向量 141/141 + `Verify.sh` 全绿
 > `.rpm` 已冻结于 `0.1.0-alpha.55`（`linux-rpm-development`，`LINUX-RPM-1..5` 完成）：`DotNet.Bundler.Rpm` 纯托管写入器 + `deb;rpm` 扇出 + 六族关系字段 + License/Group/Url 覆盖 + 共享 freedesktop 件 + `BundlerRpmFile` 映射 + 四 scriptlet/systemd unit/%config(noreplace)/gzip-only 压缩；fedora/rockylinux/opensuse 三容器真实装卸与升级语义 + rpmlint 豁免门控 + arm64 结构断言全绿；决策与证据见 `docs/linux-rpm-roadmap.md`
@@ -13,7 +13,8 @@
 > `CLI-C1` 规划轮已完成（分支 `cli-development`）：决策清单 15 项 + `CLI-1..3` 三段骨架 + MSBuild↔CLI 映射表入档 `docs/cli-roadmap.md`，配套 cli-capability-matrix / cli-manual-testing / cli-open-items；决策已按推荐项放行
 > `SIGN` 进行中（分支 `signing-development`）：`SIGN-1` RPM 可选 OpenPGP 签名完成（`RPMSIGTAG_PGP`、`rpm -K` 实测通过，密钥文件+口令旋钮、无密钥即未签名产物）；`SIGN-2` AppImage `--sign` 完成（隔离 GNUPGHOME + `APPIMAGETOOL_SIGN_PASSPHRASE`，`gpgv` 实测验签，`.sha256_sig`/`.sig_key` 嵌段）；SIGN 收官——rpm/AppImage 可选签名齐备，deb 不签。路线/证据：`docs/signing-roadmap.md`
 > `CLI-C1` 已完成（分支 `cli-development`，`0.1.0-alpha.62`）：CLI 契约冻结——三命令/退出码/`--json`/`bundler.json` schema/全格式旋钮面/dotnet tool nupkg + 原生 AOT 二进制双分发；`Bundler.Tests` 198/198 + `tests/Cli.Integration/Verify.sh`（含 AOT 段）全绿。已并入 `main`。
-> 当前：全部格式与 CLI 已冻结并入 `main`；四平台全量验收与跨宿主联合测试四轮全绿（见 §3）
+> 当前：全部既有格式与 CLI 已冻结并入 `main`；四平台全量验收与跨宿主联合测试四轮全绿（见 §3）
+> Alpine `.apk` 后端：`APK-1..5` 全部完成于 `devin/alpine-apk` 分支（`074c203`/`06e7550`/`ed87ea4`/`63eabaf` + 文档提交）——`DotNet.Bundler.AlpineApk` 纯托管三段 gzip 写入器、`.PKGINFO`+六脚本+任意映射、pax `APK-TOOLS.checksum.SHA1`（真实 apk 解剖口径：十六进制、符号链接按目标哈希、全条目 ctime/atime=0）、可选 RSA 签名段；`linux-musl-x64/arm64` 矩阵、`alpineapk`/`apk` CLI 别名与 bundler.json 段、MSBuild `BundlerAlpineApk*` 全端接线；`Bundler.Tests` 225 全绿、`tests/Alpine.Apk.Integration/Verify.sh` 全绿（`alpine:latest` 实装/卸载/可信签名/aarch64 binfmt/确定性）；决策与逐段证据见 `docs/alpine-apk-roadmap.md`
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -35,6 +36,7 @@
 | `src/Bundler.Rpm` | RPM `.rpm` 后端（纯托管 lead/header/cpio/gzip 写入器，无原生工具依赖，任意构建宿主） | `netstandard2.0` |
 | `src/Bundler.AppImage` | Linux `.AppImage` 后端（内嵌 appimagetool+type2 runtime，仅 Linux 宿主构建） | `netstandard2.0` |
 | `src/Bundler.Archive` | `.zip`/`.tar.gz` 归档后端（纯托管写入器，任意构建宿主） | `netstandard2.0` |
+| `src/Bundler.AlpineApk` | Alpine `.apk` 后端（纯托管三段 gzip 写入器，任意构建宿主；可选 RSA 签名经 BouncyCastle） | `netstandard2.0` |
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
 | `src/Bundler.Cli` | CLI 适配层（dotnet tool nupkg + `PublishAot` 原生二进制双分发） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |

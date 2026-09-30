@@ -16,7 +16,8 @@ Linux `.deb` 已冻结于 `linux-deb-development` 分支（`LINUX-DEB-1..5`，�
 Linux `.rpm` **已冻结**（`0.1.0-alpha.55`，`linux-rpm-development` 分支）：纯托管 lead/header/cpio/gzip 写入器，六族关系字段 + License/Group/Url + freedesktop 桌面集成（.desktop/图标/metainfo）+ 任意路径映射 + 四 scriptlet/systemd unit/%config(noreplace)，`rpm -qip` 逐字段断言、`desktop-file-validate`、docker `fedora/rockylinux/opensuse` 三容器真实 `rpm -i`/`rpm -U`/`rpm -e` 与 `.rpmsave` 语义验证、`rpmlint` 豁免清单硬基线、`deb;rpm` 同次 publish 扇出已放开；可选 OpenPGP 签名（供私钥即嵌 `RPMSIGTAG_PGP`，`rpm -K` 实测验签通过）。
 Linux `.AppImage` 已冻结并入 `main`（`LINUX-APPIMAGE-1..4` 完成，冻结基线 `0.1.0-alpha.58`）：`DotNet.Bundler.AppImage` 内嵌固定版本 `appimagetool`+type2 runtime（SHA-256 provenance、不联网下载），AppDir 组装复用共享 freedesktop 件 + 脚本式 `AppRun` + 根 `.desktop` 符号链接/`.DirIcon`/`@(BundlerAppImageFile)` 任意映射，仅 Linux 宿主构建、x86_64 宿主可交叉产 aarch64；`--appimage-extract` 结构断言、解出程序真实运行、docker 三容器 extract-and-run 冒烟、`deb;rpm;appimage` 扇出全绿；可选 GPG 签名（供 OpenPGP 私钥即走 `appimagetool --sign`，`gpgv` 实测验签通过）。
 通用 `.zip`/`.tar.gz` 归档已冻结并入 `main`（`ARCHIVE-1..3` 完成，冻结基线 `0.1.0-alpha.59`）：`DotNet.Bundler.Archive` 纯托管写入器（zip 自实现 unix mode/symlink，tar.gz 复用共享 ustar 写入器），单顶层目录 `<pkg>-<ver>-<rid>/` 布局，执行位与符号链接双保留，`.sha256` 侧车，`BundlerFormats=zip;targz` 与 `deb;rpm;appimage;zip;targz` 扇出；`unzip`/`zipinfo -l`/`tar` 真实解包逐路径断言、解出载荷运行、mode/symlink 还原断言全绿。
-可操作的当前能力示例见 [`samples/HelloMacApp/mac-app-sample.md`](samples/HelloMacApp/mac-app-sample.md)、[`samples/HelloDebApp/linux-deb-sample.md`](samples/HelloDebApp/linux-deb-sample.md) 与 [`samples/HelloRpmApp/linux-rpm-sample.md`](samples/HelloRpmApp/linux-rpm-sample.md)。
+Alpine `.apk` 已在 `devin/alpine-apk` 分支完成 `APK-1..5`（`0.1.0-alpha.63`，待终审合并、未冻结）：`DotNet.Bundler.AlpineApk` 纯托管三段 gzip 写入器（签名段+控制段 `.PKGINFO`/六脚本+数据段），`linux-musl-x64/arm64` → `x86_64`/`aarch64`，逐文件 pax `APK-TOOLS.checksum.SHA1`、`depend`/`provides`/`triggers`/`license`/`release`/`builddate` 与 `@(BundlerAlpineApkFile)` 任意绝对路径映射，可选 RSA 签名（`.SIGN.RSA.<密钥名>.rsa.pub`，公钥入 `/etc/apk/keys/` 后免 `--allow-untrusted`）；`alpine:latest` 容器 x86_64 直跑 + aarch64 qemu binfmt 真实 `apk add`/`apk del` 全绿。
+可操作的当前能力示例见 [`samples/HelloMacApp/mac-app-sample.md`](samples/HelloMacApp/mac-app-sample.md)、[`samples/HelloDebApp/linux-deb-sample.md`](samples/HelloDebApp/linux-deb-sample.md)、[`samples/HelloRpmApp/linux-rpm-sample.md`](samples/HelloRpmApp/linux-rpm-sample.md) 与 [`samples/HelloAlpineApkApp/alpine-apk-sample.md`](samples/HelloAlpineApkApp/alpine-apk-sample.md)。
 
 实现已经拆分为可复用的 NuGet 包。
 `DotNet.Bundler` 只是便利元包，实际打包代码位于以下各层。
@@ -35,6 +36,7 @@ Linux `.AppImage` 已冻结并入 `main`（`LINUX-APPIMAGE-1..4` 完成，冻结
 | `DotNet.Bundler.MacPkg` | 独立 macOS `.pkg` API、`pkgbuild` 组件包生成（identifier/version/install-location 可配、任意载荷映射） |
 | `DotNet.Bundler.Deb` | 独立 Debian `.deb` API、纯托管 ar/tar/gzip 写入器（核心 control 字段、md5sums、`usr/lib`+`usr/bin` 链接布局、SemVer→deb 版本映射），无原生工具依赖 |
 | `DotNet.Bundler.Rpm` | 独立 RPM `.rpm` API、纯托管 lead/header/cpio/gzip 写入器（核心 tag 集、六族关系字段、文件清单与 %doc/%license 标记、`usr/lib`+`usr/bin` 链接布局、freedesktop 桌面集成、SemVer→rpm 版本映射、`RpmPackageReader` 回读器），无原生工具依赖 |
+| `DotNet.Bundler.AlpineApk` | 独立 Alpine `.apk` API、纯托管三段 gzip 写入器（`.PKGINFO`、六段安装脚本、`depend`/`provides`/`triggers`、`usr/lib`+`usr/bin` 链接、逐文件 pax 校验和、可选 RSA 签名段、`ApkPackageReader` 回读器），无原生工具依赖 |
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
 
@@ -312,6 +314,19 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerArchiveVersion` | 否 | `BundlerVersion` 原样 |
 | `BundlerArchiveName` | 否 | `<包名>-<版本>-<rid>`；整名覆盖，须为单一路径段 |
 | `@(BundlerArchiveFile)`（`Destination`） | 否 | 无；任意文件 → 顶层目录内相对 POSIX 路径（拒绝对路径/`..`/`.`/空段/反斜杠/载荷碰撞） |
+| `BundlerAlpineApkPackageName` | 否 | `BundlerProductName` 的 kebab-case 化；进 `pkgname` 与文件名 |
+| `BundlerAlpineApkVersion` | 否 | 空时由 `BundlerVersion` 按 SemVer→apk 映射；显式值须为 apk 版本串 |
+| `BundlerAlpineApkRelease` | 否 | `0`（SemVer 预发布映射值优先）；非负整数，`pkgver=<version>-r<release>` |
+| `BundlerAlpineApkArchitecture` | 否 | 按 RID 映射（x64→`x86_64`、arm64→`aarch64`）；仅 `linux-musl-*` RID 适用 |
+| `BundlerAlpineApkLicense` | 否 | 无；SPDX 表达式写入 `license` 键 |
+| `BundlerAlpineApkBuildDate` | 否 | `0`；Unix 秒，确定性构建不建议覆盖 |
+| `BundlerAlpineApkDepends`/`Provides` | 否 | 无；分号列表逐行写入 `.PKGINFO` |
+| `BundlerAlpineApkTriggers` | 否 | 无；绝对路径分号列表，空格串联写入 `triggers` 键 |
+| `BundlerAlpineApkBinLink` | 否 | 包名；`none`（不分大小写）关闭 `usr/bin` 链接 |
+| `BundlerAlpineApkPreInstallScript`/`PostInstallScript`/`PreDeinstallScript`/`PostDeinstallScript`/`PreUpgradeScript`/`PostUpgradeScript` | 否 | 无；脚本整文件注入控制段（0755，须非空+LF） |
+| `@(BundlerAlpineApkFile)`（`Destination`） | 否 | 无；任意文件 → 绝对路径（含文件名；拒相对/`..`/`.`/尾斜杠/重复目标） |
+| `BundlerAlpineApkSigningKeyFile` | 否 | PEM RSA 私钥（未加密或密码保护）；供则前置 `.SIGN.RSA.<文件名>.rsa.pub` 签名段，不供即未签名产物 |
+| `BundlerAlpineApkSigningKeyPassphrase` | 否 | 私钥口令；只给口令不给密钥文件为配置错误，口令属秘密勿入库 |
 | `BundlerWindowsSigningPfxFile` | 否 | PFX/P12 代码签名证书路径 |
 | `BundlerWindowsSigningPfxPasswordEnvironmentVariable` | 否 | 保存 PFX 密码的环境变量名 |
 | `BundlerWindowsSigningCertificateThumbprint` | 否 | Windows `My` 证书存储区中的证书指纹 |
@@ -365,7 +380,7 @@ Header 图片建议为 150×57 BMP，Sidebar 图片建议为 164×314 BMP。
 所有格式共用同一条管线：校验配置、生成包含格式依赖关系的计划、创建隔离工作目录、调用后端、确认产物存在、清理工作目录。
 现有 NSIS 和 MSI 后端复用该管线；增加 macOS 或 Linux 格式时继续扩展后端和入口映射，不复制整套调度代码。
 
-产物确定性边界：`.deb`/`.rpm`/`.zip`/`.tar.gz` 为纯托管写入器，相同输入与条件下产物逐字节确定（联合测试实测：同宿主跨轮与 linux↔qemu 同型跨宿主一致）；`.nsis` 与 `.AppImage` 不承诺逐字节一致——makensis 将源文件时间戳编入输出、appimagetool 的 squashfs 元数据与内嵌 runtime 摘要随构建环境变化，属上游工具性质而非写入器缺陷。
+产物确定性边界：`.deb`/`.rpm`/`.zip`/`.tar.gz`/`.apk` 为纯托管写入器，相同输入与条件下产物逐字节确定（联合测试实测：同宿主跨轮与 linux↔qemu 同型跨宿主一致；`.apk` 含可选 RSA 签名段亦逐字节确定——RSA PKCS#1 v1.5 为确定性签名）；`.nsis` 与 `.AppImage` 不承诺逐字节一致——makensis 将源文件时间戳编入输出、appimagetool 的 squashfs 元数据与内嵌 runtime 摘要随构建环境变化，属上游工具性质而非写入器缺陷。
 
 可编辑的 NSIS 源模板存放在 `templates/nsis/installer.nsi`。
 发布包时，该模板、语言文件和完整的多宿主 NsisToolset 压缩包会嵌入 `DotNet.Bundler.Nsis`，因此独立 API 和 MSBuild 使用者得到完全相同的资源，也不会把工具复制到项目输出目录。

@@ -113,9 +113,10 @@ public static class CliProgram
         "appimage" => PackageFormat.AppImage,
         "zip" => PackageFormat.Zip,
         "targz" or "tar.gz" => PackageFormat.TarGz,
+        "alpineapk" or "apk" => PackageFormat.AlpineApk,
         "all" => AllFormatsSentinel,
         _ => throw new CliUsageException(
-            $"Unknown format '{name}'. Supported: nsis, msi, app, dmg, pkg, deb, rpm, appimage, zip, targz, all.")
+            $"Unknown format '{name}'. Supported: nsis, msi, app, dmg, pkg, deb, rpm, appimage, zip, targz, alpineapk, all.")
     };
 
     private static int RunValidate(
@@ -244,6 +245,7 @@ public static class CliProgram
     private static string FormatName(PackageFormat format) => format switch
     {
         PackageFormat.TarGz => "targz",
+        PackageFormat.AlpineApk => "apk",
         _ => format.ToString().ToLowerInvariant()
     };
 
@@ -275,7 +277,7 @@ public static class CliProgram
 #if BUNDLER_HOST_LINUX
             + " appimage"
 #endif
-            + " zip targz all");
+            + " zip targz alpineapk all");
         writer.WriteLine("RIDs:    win-x86 win-x64 win-arm64 osx osx-x64 osx-arm64 linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64");
         writer.WriteLine("Exit codes: 0 success, 1 packaging/IO failure, 2 usage or validation failure");
     }
