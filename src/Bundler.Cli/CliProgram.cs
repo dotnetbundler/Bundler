@@ -97,8 +97,8 @@ public static class CliProgram
         }
         var dirs = parsed.InputDirectories.Select(Path.GetFullPath).ToArray();
         var input = Path.Combine(Path.GetTempPath(), "bundler-universal-" + Guid.NewGuid().ToString("N"));
+        mergedDirectory = input; // assign before Merge so the finally cleanup also covers merge failures
         MacUniversalPayloadMerger.Merge(dirs, input);
-        mergedDirectory = input;
 
         var first = source.Targets[0];
         var targets = source.Targets.ToArray();

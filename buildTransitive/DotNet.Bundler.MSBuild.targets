@@ -30,7 +30,20 @@
            Text="RuntimeIdentifier is required when BundlerEnabled is true." />
     <ItemGroup Condition="'$(BundlerUniversalRuntimeIdentifiers)' != ''">
       <_BundlerUniversalRid Include="$(BundlerUniversalRuntimeIdentifiers)" />
+      <!-- Flag any RID that is not an osx-* identifier or carries path/shell content; identities are
+           interpolated into the inner publish -o path and the shell command line. -->
+      <_BundlerUniversalRidBad Include="@(_BundlerUniversalRid)"
+          Condition="$([System.String]::Copy('%(_BundlerUniversalRid.Identity)').StartsWith('osx-')) != 'true'
+            or $([System.String]::Copy('%(_BundlerUniversalRid.Identity)').Contains('..'))
+            or $([System.String]::Copy('%(_BundlerUniversalRid.Identity)').Contains(';'))
+            or $([System.String]::Copy('%(_BundlerUniversalRid.Identity)').Contains('&quot;'))
+            or $([System.IO.Path]::GetFileName('%(_BundlerUniversalRid.Identity)')) != '%(_BundlerUniversalRid.Identity)'" />
     </ItemGroup>
+    <Error Condition="'@(_BundlerUniversalRidBad)' != ''"
+           Text="BundlerUniversalRuntimeIdentifiers only accepts plain osx-* runtime identifiers (got '@(_BundlerUniversalRidBad)')." />
+    <!-- Clean stale per-RID and merged outputs: publish -o does not remove files deleted since a previous run. -->
+    <RemoveDir Condition="'$(BundlerUniversalRuntimeIdentifiers)' != ''"
+               Directories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)');$(_BundlerUniversalDir)merged" />
     <Exec Condition="'$(BundlerUniversalRuntimeIdentifiers)' != ''"
           Command="dotnet publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) -f $(TargetFramework) -r %(_BundlerUniversalRid.Identity) -o &quot;$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity)&quot; -p:BundlerEnabled=false" />
     <DotNet.Bundler.MSBuild.MergeUniversalPayload

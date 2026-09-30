@@ -53,6 +53,15 @@ public static class MacUniversalPayloadMerger
 
             if (sources.Length == 1)
             {
+                // A one-sided thin Mach-O can never satisfy the every-Mach-O-fat contract —
+                // a pre-merged fat file may pass through, a single-architecture slice may not.
+                if (MachO.IsMachO(sources[0]) && MachO.ReadSliceInfos(sources[0]).Count < 2)
+                {
+                    throw new InvalidDataException(
+                        $"Universal merge conflict: '{relative}' is a single-architecture Mach-O present in " +
+                        $"only one input ({sources[0]}). Every Mach-O in a universal payload must carry " +
+                        "at least two architecture slices or appear in every input directory.");
+                }
                 Copy(sources[0], destination);
                 continue;
             }

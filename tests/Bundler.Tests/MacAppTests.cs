@@ -827,6 +827,16 @@ internal static class MacAppTests
                     Path.Combine(output, "conflict"))),
                 "Differing non-Mach-O files must fail the universal merge.").GetAwaiter().GetResult();
             Cleanup(conflictArm);
+
+            // A thin Mach-O present on only one side can never become universal — reject it.
+            var thinOnly = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+            var thinOut = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(thinOnly);
+            File.WriteAllBytes(Path.Combine(thinOnly, "helper"), FakeMachO(0x0100000C));
+            AssertThrows<InvalidDataException>(
+                () => Task.Run(() => MacUniversalPayloadMerger.Merge([x64, thinOnly], thinOut)),
+                "A one-sided thin Mach-O must fail the universal merge.").GetAwaiter().GetResult();
+            Cleanup(thinOnly, thinOut);
         }
         finally
         {
