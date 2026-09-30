@@ -5,20 +5,45 @@ public sealed record BundleTarget(
     DesktopOperatingSystem OperatingSystem,
     CpuArchitecture Architecture)
 {
+    // RID 语法解析：<os>[-<variant>]-<arch>，不做组合白名单——能否产出由后端能力决定。
     public static bool TryParse(string? runtimeIdentifier, out BundleTarget? target)
     {
-        target = runtimeIdentifier?.ToLowerInvariant() switch
-        {
-            "win-x86" => new("win-x86", DesktopOperatingSystem.Windows, CpuArchitecture.X86),
-            "win-x64" => new("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
-            "win-arm64" => new("win-arm64", DesktopOperatingSystem.Windows, CpuArchitecture.Arm64),
-            "osx-x64" => new("osx-x64", DesktopOperatingSystem.MacOS, CpuArchitecture.X64),
-            "osx-arm64" => new("osx-arm64", DesktopOperatingSystem.MacOS, CpuArchitecture.Arm64),
-            "linux-x64" => new("linux-x64", DesktopOperatingSystem.Linux, CpuArchitecture.X64),
-            "linux-arm64" => new("linux-arm64", DesktopOperatingSystem.Linux, CpuArchitecture.Arm64),
-            _ => null
-        };
-
+        target = runtimeIdentifier?.ToLowerInvariant() is { } rid
+            ? Parse(rid)
+            : null;
         return target is not null;
+    }
+
+    private static BundleTarget? Parse(string runtimeIdentifier)
+    {
+        if (runtimeIdentifier == "osx")
+        {
+            return new("osx", DesktopOperatingSystem.MacOS, CpuArchitecture.Universal);
+        }
+
+        var separator = runtimeIdentifier.LastIndexOf('-');
+        if (separator < 0)
+        {
+            return null;
+        }
+
+        var operatingSystem = runtimeIdentifier.Substring(0, separator) switch
+        {
+            "win" => DesktopOperatingSystem.Windows,
+            "osx" => DesktopOperatingSystem.MacOS,
+            "linux" => DesktopOperatingSystem.Linux,
+            "linux-musl" => DesktopOperatingSystem.LinuxMusl,
+            _ => (DesktopOperatingSystem?)null
+        };
+        var architecture = runtimeIdentifier.Substring(separator + 1) switch
+        {
+            "x86" => CpuArchitecture.X86,
+            "x64" => CpuArchitecture.X64,
+            "arm64" => CpuArchitecture.Arm64,
+            _ => (CpuArchitecture?)null
+        };
+        return operatingSystem is { } os && architecture is { } arch
+            ? new(runtimeIdentifier, os, arch)
+            : null;
     }
 }

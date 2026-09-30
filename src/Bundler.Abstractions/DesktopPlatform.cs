@@ -4,14 +4,16 @@ public enum DesktopOperatingSystem
 {
     Windows,
     MacOS,
-    Linux
+    Linux,
+    LinuxMusl
 }
 
 public enum CpuArchitecture
 {
     X64,
     Arm64,
-    X86
+    X86,
+    Universal
 }
 
 public enum PackageFormat

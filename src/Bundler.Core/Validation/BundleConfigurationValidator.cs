@@ -100,7 +100,7 @@ public static class BundleConfigurationValidator
         Required(targetConfiguration.InputDirectory, $"{path}.inputDirectory", issues);
         if (!BundleTarget.TryParse(targetConfiguration.RuntimeIdentifier, out var target))
         {
-            issues.Add(new($"{path}.runtimeIdentifier", "Supported RIDs: win-x86, win-x64, win-arm64, osx-x64, osx-arm64, linux-x64, linux-arm64."));
+            issues.Add(new($"{path}.runtimeIdentifier", "Supported RIDs: win-x86, win-x64, win-arm64, osx, osx-x64, osx-arm64, linux-x64, linux-arm64, linux-musl-x64, linux-musl-arm64."));
             return;
         }
 

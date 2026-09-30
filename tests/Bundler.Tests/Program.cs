@@ -87,11 +87,22 @@ return failed == 0 ? 0 : 1;
 
 static void ParsesSupportedDesktopRids()
 {
-    string[] rids = ["win-x86", "win-x64", "win-arm64", "osx-x64", "osx-arm64", "linux-x64", "linux-arm64"];
+    string[] rids = ["win-x86", "win-x64", "win-arm64", "osx", "osx-x64", "osx-arm64", "linux-x64", "linux-arm64", "linux-musl-x64", "linux-musl-arm64"];
     Assert(rids.All(rid => BundleTarget.TryParse(rid, out _)), "One or more supported RIDs failed to parse.");
     Assert(BundleTarget.TryParse("win-x86", out var x86) && x86!.Architecture == CpuArchitecture.X86,
         "Windows x86 must be a distinct public target architecture.");
+    Assert(BundleTarget.TryParse("osx", out var osx) &&
+            osx!.OperatingSystem == DesktopOperatingSystem.MacOS && osx.Architecture == CpuArchitecture.Universal,
+        "The bare osx RID must map to a universal macOS target.");
+    Assert(BundleTarget.TryParse("linux-musl-x64", out var musl) &&
+            musl!.OperatingSystem == DesktopOperatingSystem.LinuxMusl && musl.Architecture == CpuArchitecture.X64,
+        "linux-musl-x64 must parse as a distinct musl target.");
+    Assert(BundleTarget.TryParse("linux-musl-arm64", out var muslArm) &&
+            muslArm!.OperatingSystem == DesktopOperatingSystem.LinuxMusl,
+        "linux-musl-arm64 must parse as a distinct musl target.");
     Assert(!BundleTarget.TryParse("android-arm64", out _), "A mobile RID was accepted.");
+    Assert(!BundleTarget.TryParse("linux-musl", out _), "A musl RID without an architecture was accepted.");
+    Assert(!BundleTarget.TryParse("win", out _), "An OS RID without an architecture was accepted.");
 }
 
 static void RejectsIncompatibleFormats()

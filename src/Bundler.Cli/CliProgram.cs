@@ -89,7 +89,7 @@ public static class CliProgram
             if (!BundleTarget.TryParse(rid, out var target) || target is null)
             {
                 throw new CliUsageException(
-                    $"Unknown rid '{rid}'. Supported: win-x86, win-x64, win-arm64, osx-x64, osx-arm64, linux-x64, linux-arm64.");
+                    $"Unknown rid '{rid}'. Supported: win-x86, win-x64, win-arm64, osx, osx-x64, osx-arm64, linux-x64, linux-arm64, linux-musl-x64, linux-musl-arm64.");
             }
             return Enum.GetValues<PackageFormat>()
                 .Where(format => DesktopTargetMatrix.Supports(target, format))
@@ -276,7 +276,7 @@ public static class CliProgram
             + " appimage"
 #endif
             + " zip targz all");
-        writer.WriteLine("RIDs:    win-x86 win-x64 win-arm64 osx-x64 osx-arm64 linux-x64 linux-arm64");
+        writer.WriteLine("RIDs:    win-x86 win-x64 win-arm64 osx osx-x64 osx-arm64 linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64");
         writer.WriteLine("Exit codes: 0 success, 1 packaging/IO failure, 2 usage or validation failure");
     }
 }
