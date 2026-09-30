@@ -1,7 +1,7 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-09-29
-> 当前分支：`main`（全部格式与 CLI 冻结并入；HEAD `5aaf295`，含验收修复与后续修正）
+> 当前分支：`main`（全部格式与 CLI 冻结并入；HEAD `ffd1025`，PR #12 联合测试批次修复已并入）
 > 当前包版本：`0.1.0-alpha.62`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.rpm` 冻结基线 `alpha.55`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`）
 > 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
 > `LINUX-DEB-1..5` 全部完成，`.deb` 冻结并已入 `main`：冻结基线 `0.1.0-alpha.51`，测试向量 141/141 + `Verify.sh` 全绿
@@ -13,7 +13,7 @@
 > `CLI-C1` 规划轮已完成（分支 `cli-development`）：决策清单 15 项 + `CLI-1..3` 三段骨架 + MSBuild↔CLI 映射表入档 `docs/cli-roadmap.md`，配套 cli-capability-matrix / cli-manual-testing / cli-open-items；决策已按推荐项放行
 > `SIGN` 进行中（分支 `signing-development`）：`SIGN-1` RPM 可选 OpenPGP 签名完成（`RPMSIGTAG_PGP`、`rpm -K` 实测通过，密钥文件+口令旋钮、无密钥即未签名产物）；`SIGN-2` AppImage `--sign` 完成（隔离 GNUPGHOME + `APPIMAGETOOL_SIGN_PASSPHRASE`，`gpgv` 实测验签，`.sha256_sig`/`.sig_key` 嵌段）；SIGN 收官——rpm/AppImage 可选签名齐备，deb 不签。路线/证据：`docs/signing-roadmap.md`
 > `CLI-C1` 已完成（分支 `cli-development`，`0.1.0-alpha.62`）：CLI 契约冻结——三命令/退出码/`--json`/`bundler.json` schema/全格式旋钮面/dotnet tool nupkg + 原生 AOT 二进制双分发；`Bundler.Tests` 198/198 + `tests/Cli.Integration/Verify.sh`（含 AOT 段）全绿。已并入 `main`。
-> 当前：全部格式与 CLI 已冻结并入 `main`；三平台全量验收与 ARM64 仿真验收已完成（见 §3）
+> 当前：全部格式与 CLI 已冻结并入 `main`；四平台全量验收与跨宿主联合测试四轮全绿（见 §3）
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -109,6 +109,14 @@ Verify.sh 真实通过 `lsregister` 注册、`open <文件>`/`open <scheme>://` 
 - macOS 26.5.2 arm64：**243/244**；唯一未过项为 `Cli.Integration/Verify.sh` 缺 Linux `uname` 门禁在 macOS 上误报 appimage 段（测试基建缺口非产品缺陷，登记 CLI-OI-05）；验收发现 4 项缺陷已修复并经 PR #2/#4 并入；GUI 实做 DMG SLA 面板、Installer.app 页面、`sudo installer -pkg -target /` system 域安装、quarantine 首启阻断。
 - ARM64（qemu 仿真）：验收完成（partial）——仿真环境已验，真机 ARM64 保留为外部待验收。
 - 剩余外部待验收项（UAC 交互、真实重启、Apple Developer 凭证/公证、Intel/Rosetta、Windows ARM64、生产签名、干净宿主矩阵、22 语言审校等）按各格式 OI 清单如实保留。
+
+### 2026-09-29/30 四平台全量验收 ×4 + 跨宿主联合测试 ×5（`main` @ `ffd1025`）
+
+- 验收腿（每轮逐格一致零漂移）：Windows Server 2022 x64 13 腿（构建 0 警告、`Bundler.Tests` 244、NSIS 全量+MSI 8 脚本+CLI 冒烟、win-x86 三格式产出回归）；Ubuntu 22.04 x86_64 9 腿（212 单测、五 `Verify.sh` 全绿）；macOS 26.5.2 arm64 9 腿（213 单测、.app/.dmg/.pkg `Verify.sh` 全绿、Archive 门禁 not_run）；arm64 qemu 7 腿（宿主构建、arm64 容器真实装卸运行、`AI\x02` binfmt、AOT 交叉）。
+- 联合测试：每轮产方全格式×7 RID 扇出 → sha256 清单分发 → 各装方核 sha 后真实装卸/运行；装腿 win 39 / linux 32 / mac 28 / qemu 18，四轮全过。
+- 发现并修复（PR #12 并入）：Windows 产 osx 产物丢 unix 执行位（`ArchiveTree` 探针补 8 个 Mach-O 魔数）；win-x86 被 `DesktopTargetMatrix` 硬规则误关（nsis/zip/targz 开放 + `TargetArchitectureName` 补 `X86=>"x86"`）；MSBuild 校验失败吞明细（逐条透传 `issue.Path: issue.Message`）。
+- 确定性结论：托管写入器（deb/rpm/zip/targz）同条件逐字节确定（同宿主跨轮 + linux↔qemu 同型跨宿主 16/16 对一致）；nsis/appimage 差异归因外部工具内嵌时间戳（上游性质，非缺陷）；跨 OS archive 差异归因 publish 载荷元数据与宿主 mode 表达。
+- 非缺陷登记：pkg 重定位为宿主预存同 CFBundleIdentifier 副本触发的系统语义；x86 载荷运行需宿主有 32 位 .NET 运行时（`0x800700C1` 为环境前置）。
 
 ### 2026-09-26 Windows 11 Pro build 26200 x64 跨格式收尾回归
 

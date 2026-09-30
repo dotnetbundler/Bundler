@@ -52,7 +52,7 @@ bundler bundle --input-dir <publish目录> --rid linux-x64 --formats zip,deb \
 WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..6` 的当前主机范围验证：current-user 安装、升级、修复和卸载，快捷方式与关联/协议候选注册，测试证书签名、英语/简体中文单语言包及受限故障回滚，x86 目标、显式 MSI 版本映射和可选降级，以及范围内安装目录、自定义 UI 序列、可选 Feature、PATH 精确追加与仅交互启动勾选。
 MSI 编译把 WiX 警告视为失败，PackageCode 由 WiX 每次构建生成。
 per-machine 包仅生成并检查数据库；原生 x86/ARM64 宿主、生产证书、交互 UI、提权安装、干净 Windows 和真实重启尚未验收。
-**冻结的是 alpha 格式配置及已验证的本机语义，尚无跨环境验收结论。**
+**冻结的是 alpha 格式配置及已验证语义；2026-09-29/30 已完成四宿主跨环境联合验收（win/linux/mac/qemu 互产互装、四轮全绿），其余环境类能力按各格式 OI 清单如实保留外部待验收。**
 可操作的当前能力示例见 [`samples/HelloMsiApp/msi-sample.md`](samples/HelloMsiApp/msi-sample.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
 
 `DotNet.Bundler.Wix` 是可独立引用的 MSI 后端包和直接 API；MSBuild 调用同一后端。
@@ -133,6 +133,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 `NsisBundleConfiguration` 控制 NSIS 专属行为，包括安装范围、压缩、Artwork、语言、Hook、降级和快捷方式。
 `Compression` 支持 `Lzma`（默认）、`Zlib`、`Bzip2` 和 `None`。
+`win-x86`、`win-x64`、`win-arm64` 目标均可产出 NSIS 安装器；x86 载荷需在装有 32 位 .NET 运行时的宿主上运行（仅 x64 运行时的宿主启动报 `0x800700C1`），属目标环境前置而非打包限制。
 高级调用和测试场景可以通过 `NsisBundlerOptions` 覆盖共享缓存、编译器、工具集压缩包、NSIS 数据目录、模板或语言目录；普通调用者不需要提供这些路径。
 提供自定义编译器时，如果编译器需要显式的 `NSISDIR`，还应设置 `DataDirectory`。
 
@@ -363,6 +364,8 @@ Header 图片建议为 150×57 BMP，Sidebar 图片建议为 164×314 BMP。
 
 所有格式共用同一条管线：校验配置、生成包含格式依赖关系的计划、创建隔离工作目录、调用后端、确认产物存在、清理工作目录。
 现有 NSIS 和 MSI 后端复用该管线；增加 macOS 或 Linux 格式时继续扩展后端和入口映射，不复制整套调度代码。
+
+产物确定性边界：`.deb`/`.rpm`/`.zip`/`.tar.gz` 为纯托管写入器，相同输入与条件下产物逐字节确定（联合测试实测：同宿主跨轮与 linux↔qemu 同型跨宿主一致）；`.nsis` 与 `.AppImage` 不承诺逐字节一致——makensis 将源文件时间戳编入输出、appimagetool 的 squashfs 元数据与内嵌 runtime 摘要随构建环境变化，属上游工具性质而非写入器缺陷。
 
 可编辑的 NSIS 源模板存放在 `templates/nsis/installer.nsi`。
 发布包时，该模板、语言文件和完整的多宿主 NsisToolset 压缩包会嵌入 `DotNet.Bundler.Nsis`，因此独立 API 和 MSBuild 使用者得到完全相同的资源，也不会把工具复制到项目输出目录。

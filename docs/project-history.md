@@ -4118,3 +4118,15 @@ GNUPGHOME，不入库）；隔离 rpmdb `rpm --import`+`rpm -K` 实测
 MSBuild 包补载 `BouncyCastle.Cryptography.dll`。
 2026-09-28 `SIGN-2` 已完成（分支 `signing-development`）：`.AppImage` 可选 GPG 签名落地——`AppImageBundleConfiguration.SigningKeyFile`/`SigningKeyPassphrase`（MSBuild `BundlerAppImageSigning*`、CLI `appimage.*` 自动透传）→ 隔离 `GNUPGHOME` 导入私钥 + `APPIMAGETOOL_SIGN_PASSPHRASE` 注入走 `appimagetool --sign`（实为 gpgme detached sig，嵌 `.sha256_sig`/`.sig_key` ELF 段）；验签口径实测=双段置零镜像 sha256 裸 hex，`gpgv` `Good signature`；未签产物段全零、半配置拒绝；`Bundler.Tests` 203/203、`Verify.sh` 全绿。SIGN 收官：rpm/AppImage 可选签名齐备，deb 维持不签。
 
+
+## 2026-09-29/30 · 四宿主联合测试与批次修复（PR #12 并入 `main`）
+
+方法：四宿主（Windows Server 2022 x64、Ubuntu 22.04 x86_64、macOS 26.5.2 arm64、Linux arm64 qemu 仿真）全格式×全 RID 扇出产出 → sha256 清单分发 → 各装方核 sha 后真实装卸/运行；四轮循环（首轮+三连验证轮+合并后轮）逐格全绿，装腿 win 39 / linux 32 / mac 28 / qemu 18/轮。
+
+发现并修复（PR #12，`devin/batch-fixes` → `ffd1025`）：
+
+- `ArchiveTree` 执行位探针补 8 个 Mach-O 魔数——此前非 POSIX 宿主产 osx 载荷全部 0644 拒运行（`.app` tar、archive zip/targz 共 6 件）；linux 载荷本正常因 ELF 命中探针。
+- `DesktopTargetMatrix` 删 `arch != X86 || format == Msi` 硬规则 + `NsisBundleBackend.TargetArchitectureName` 补 `X86=>"x86"`——win-x86 的 nsis/zip/targz 开放（msi 本就支持，原门控为格式级误判）；x86 nsis.exe 经 WoW64 实装卸过，载荷运行需宿主 32 位 .NET 运行时（`0x800700C1` 为环境前置）。
+- `BundleDesktopApplication` 捕获 `BundleValidationException` 逐条透传 `issue.Path: issue.Message`——此前 MSBuild 只报数量不报原因。
+
+确定性边界查明：托管写入器（deb/rpm/zip/targz）同条件逐字节确定（同宿主跨轮 + linux↔qemu 同型跨宿主一致）；nsis/appimage 差异归因外部工具内嵌时间戳（输入级元数据，给定相同输入 makensis 输出确定）；跨 OS archive 差异归因 publish 载荷元数据与宿主 mode 表达。pkg 重定位为宿主预存同 CFBundleIdentifier 副本触发的系统语义，清除后不复现。

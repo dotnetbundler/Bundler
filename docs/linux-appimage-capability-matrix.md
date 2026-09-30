@@ -37,3 +37,4 @@
 | `linux-arm64`（aarch64）产物 | 已实现（产出）/外部待验收（运行） | LINUX-APPIMAGE-1 | 可交叉（决策 4）：嵌入 runtime-aarch64 + `--runtime-file`；e_machine 结构断言；真机运行 OI-01 |
 | `appimagelint` 基线 | 已实现（信息级） | LINUX-APPIMAGE-3 | 实跑：有效项全过，✖ 项为载荷 glibc 地板（xenial/trusty）与 `@2` scale 目录解析局限；无 tag 豁免体系 → 信息级接入 Verify.sh 非阻断段 |
 | 多格式扇出（`deb;rpm;appimage`） | 已实现 | LINUX-APPIMAGE-1 | 同次 publish 三产物断言（Verify.sh fanout 变体） |
+| 跨产方产物 sha256 差异 | 已归因（非缺陷） | 2026-09-29/30 联合测试 | 同输入跨产方 sha 不同——squashfs 元数据与内嵌 runtime 摘要 blob 随构建环境变化，解包树逐字节一致；上游 appimagetool 性质，不在确定性承诺范围 |
