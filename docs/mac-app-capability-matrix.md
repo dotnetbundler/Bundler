@@ -17,6 +17,7 @@
 | 主可执行/资源/framework/任意 `Contents` 映射 | 已实现 | MAC-APP-1 | framework 仅显式路径；不做宿主标准目录隐式查找 |
 | `osx-x64`/`osx-arm64`/`osx` 产物 | 已实现 | MAC-APP-1、4、`e7dfeae` | 独立产物+裸 `osx` 通用目标；osx-x64 结构与架构断言已实测；x64 运行依赖 Rosetta 属系统行为，实机启动外部待验收（MT-03） |
 | universal/fat Mach-O 输入 | 已实现 | MAC-APP-2、`e7dfeae` | 后端托管解析 Mach-O 头（等价 `lipo -info`），按目标 RID 校验必需切片集——`osx` 要求**每个** Mach-O 同时含 x86_64+arm64；Bundler 不合成 fat binary |
+| `osx` 通用载荷契约 | 已实现（契约） | `e7dfeae`、main@`3811005` 三配方实测 | `osx` 仅接收**已合并 universal 目录**——①每个 Mach-O 双切片（强制校验）；②非 Mach-O 资产须架构便携（契约声明，不可通用判定）；已实测可跑配方：`PublishSingleFile`×2+lipo、`PublishAot`×2+lipo、FDD（托管集**不带 `-r`** 发布保持中立+双 apphost lipo）；松散目录式自包含物理不可跑（运行时散件无中立形态），契约不承诺 |
 
 ## 图标与资源
 
