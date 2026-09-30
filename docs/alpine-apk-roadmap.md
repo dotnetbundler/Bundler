@@ -71,7 +71,7 @@
 ### APK-5：审计与格式冻结
 
 范围：干净宿主审计、OI 清单（`alpine-apk-open-items.md`：真实官方签名密钥、`apk` 仓库索引集成等）、manual-testing 清单、能力矩阵定稿、冻结基线版本号。
-实施证据（2026-09-30，本 commit）：能力矩阵/OI/MT 三文档定稿、`manual-testing-index` 收录、`PROJECT_CONTEXT`/`docs/roadmap.md`/`README` 状态同步、示例 `samples/HelloAlpineApkApp` 落地并经 `alpine:latest` 容器实装运行验证；**冻结基线未宣告**——本分支留 `devin/alpine-apk` 待用户终审合并，合并后方以 `0.1.0-alpha.63` 为准冻结。
+实施证据（2026-09-30，本 commit）：能力矩阵/OI/MT 三文档定稿、`manual-testing-index` 收录、`PROJECT_CONTEXT`/`docs/roadmap.md`/`README` 状态同步、示例 `samples/HelloAlpineApkApp` 落地并经 `alpine:latest` 容器实装运行验证；**已冻结**——2026-09-30 终审合并入 `main`（PR #13，`5585843`），冻结基线 `0.1.0-alpha.63`。
 
 ## 5. 验证分层
 

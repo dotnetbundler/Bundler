@@ -4141,3 +4141,12 @@ MSBuild 包补载 `BouncyCastle.Cryptography.dll`。
 - `02b2521` feat(linux)：`linux-musl-x64/arm64` 挂 `zip`/`targz`（矩阵映射 + `ArchiveBundler` 注册）；`deb`/`rpm`/`appimage` 按 glibc 语义拒绝（3 条断言）。
 
 测试：`Bundler.Tests` 全量 PASS（含 RID 解析、矩阵放通/拒绝、osx fat/thin 断言）；构建零警告零错误。
+
+## 2026-09-30 · Alpine `.apk` 后端（APK-1..5，PR #13 终审并入 `main`）
+
+路线草案经用户裁决（命名定 `AlpineApk` 与 Android `.apk` 区分）后由 linux 子会话在 `devin/alpine-apk` 分支五阶段实施，终审合并 `5585843`：
+
+- `DotNet.Bundler.AlpineApk` 纯托管 apk v2 写入器——单 gzip 流串接签名段+控制段+数据段，`.PKGINFO`（pkgname/pkgver/depend/provides/triggers/license/release/builddate 默认 0）+六安装脚本+`@(BundlerAlpineApkFile)` 任意绝对路径映射；逐文件 pax `APK-TOOLS.checksum.SHA1`（真实 apk 解剖口径：十六进制 sha1、符号链接按目标哈希、全条目 ctime/atime=0）；可选 RSA+SHA1 `.SIGN.RSA.<密钥名>.rsa.pub` 签名段（BouncyCastle，PEM 加密/未加密皆可）。
+- 接线：`linux-musl-x64/arm64` → `x86_64`/`aarch64` 矩阵映射；CLI `alpineapk`/`apk` 别名 + bundler.json 段 + MSBuild `BundlerAlpineApk*` 全旋钮；musl 自包含载荷显式 `depend libstdc++/libgcc`。
+- 验证：`Bundler.Tests` 225/225；`tests/Alpine.Apk.Integration/Verify.sh` 全绿——`alpine:latest` 容器 x86_64 真实 `apk add`/`apk del`、未签名拒装、自签密钥入 `/etc/apk/keys/` 免 `--allow-untrusted`、openssl 独立验签、aarch64 qemu binfmt 实装、同条件三产逐字节确定性。
+- 冻结基线 `0.1.0-alpha.63`；外部待办（真机 aarch64、apk 仓库索引、upgrade 脚本实测等）见 `docs/alpine-apk-open-items.md`。

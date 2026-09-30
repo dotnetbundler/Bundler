@@ -1,8 +1,8 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-09-30
-> 当前分支：`devin/alpine-apk`（基于 `main` `e98bc96`；APK-1..5 已实现，待终审合并——未冻结）
-> 当前包版本：`0.1.0-alpha.63`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.rpm` 冻结基线 `alpha.55`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`；`.apk` 实现版本 `alpha.63`，冻结基线待终审后宣告）
+> 当前分支：`main`（Alpine `.apk` `APK-1..5` 终审并入，PR #13 merge `5585843`；HEAD `5585843`）
+> 当前包版本：`0.1.0-alpha.63`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.rpm` 冻结基线 `alpha.55`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`；`.apk` 冻结基线 `alpha.63`）
 > 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
 > `LINUX-DEB-1..5` 全部完成，`.deb` 冻结并已入 `main`：冻结基线 `0.1.0-alpha.51`，测试向量 141/141 + `Verify.sh` 全绿
 > `.rpm` 已冻结于 `0.1.0-alpha.55`（`linux-rpm-development`，`LINUX-RPM-1..5` 完成）：`DotNet.Bundler.Rpm` 纯托管写入器 + `deb;rpm` 扇出 + 六族关系字段 + License/Group/Url 覆盖 + 共享 freedesktop 件 + `BundlerRpmFile` 映射 + 四 scriptlet/systemd unit/%config(noreplace)/gzip-only 压缩；fedora/rockylinux/opensuse 三容器真实装卸与升级语义 + rpmlint 豁免门控 + arm64 结构断言全绿；决策与证据见 `docs/linux-rpm-roadmap.md`
@@ -14,7 +14,7 @@
 > `SIGN` 进行中（分支 `signing-development`）：`SIGN-1` RPM 可选 OpenPGP 签名完成（`RPMSIGTAG_PGP`、`rpm -K` 实测通过，密钥文件+口令旋钮、无密钥即未签名产物）；`SIGN-2` AppImage `--sign` 完成（隔离 GNUPGHOME + `APPIMAGETOOL_SIGN_PASSPHRASE`，`gpgv` 实测验签，`.sha256_sig`/`.sig_key` 嵌段）；SIGN 收官——rpm/AppImage 可选签名齐备，deb 不签。路线/证据：`docs/signing-roadmap.md`
 > `CLI-C1` 已完成（分支 `cli-development`，`0.1.0-alpha.62`）：CLI 契约冻结——三命令/退出码/`--json`/`bundler.json` schema/全格式旋钮面/dotnet tool nupkg + 原生 AOT 二进制双分发；`Bundler.Tests` 198/198 + `tests/Cli.Integration/Verify.sh`（含 AOT 段）全绿。已并入 `main`。
 > 当前：全部既有格式与 CLI 已冻结并入 `main`；四平台全量验收与跨宿主联合测试四轮全绿（见 §3）
-> Alpine `.apk` 后端：`APK-1..5` 全部完成于 `devin/alpine-apk` 分支（`074c203`/`06e7550`/`ed87ea4`/`63eabaf` + 文档提交）——`DotNet.Bundler.AlpineApk` 纯托管三段 gzip 写入器、`.PKGINFO`+六脚本+任意映射、pax `APK-TOOLS.checksum.SHA1`（真实 apk 解剖口径：十六进制、符号链接按目标哈希、全条目 ctime/atime=0）、可选 RSA 签名段；`linux-musl-x64/arm64` 矩阵、`alpineapk`/`apk` CLI 别名与 bundler.json 段、MSBuild `BundlerAlpineApk*` 全端接线；`Bundler.Tests` 225 全绿、`tests/Alpine.Apk.Integration/Verify.sh` 全绿（`alpine:latest` 实装/卸载/可信签名/aarch64 binfmt/确定性）；决策与逐段证据见 `docs/alpine-apk-roadmap.md`
+> Alpine `.apk` 后端：`APK-1..5` 已冻结并入 `main`（PR #13 终审合并 `5585843`，冻结基线 `0.1.0-alpha.63`）——`DotNet.Bundler.AlpineApk` 纯托管三段 gzip 写入器、`.PKGINFO`+六脚本+任意映射、pax `APK-TOOLS.checksum.SHA1`（真实 apk 解剖口径：十六进制、符号链接按目标哈希、全条目 ctime/atime=0）、可选 RSA 签名段；`linux-musl-x64/arm64` 矩阵、`alpineapk`/`apk` CLI 别名与 bundler.json 段、MSBuild `BundlerAlpineApk*` 全端接线；`Bundler.Tests` 225 全绿、`tests/Alpine.Apk.Integration/Verify.sh` 全绿（`alpine:latest` 实装/卸载/可信签名/aarch64 binfmt/确定性）；决策与逐段证据见 `docs/alpine-apk-roadmap.md`
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -171,17 +171,17 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - `MAC-PKG-3` 完成（2026-09-27）：签名与公证+专家脚本——`MacPkgSigningConfiguration`（identity/临时证书/公证三模式凭证）、组件包 `pkgbuild --sign --timestamp`、分发包 `productsign --sign`（productbuild 出未签名档再签）、`.pkg` 公证 `notarytool submit`（直接收 pkg）+`stapler`、`ScriptsDirectory` 专家旋钮（`pkgbuild --scripts`）；`Bundler.Tests` 122 项全绿 + `Verify.sh` 全绿（postinstall 真实执行标记断言、无效身份失败路径）。真实签名/公证凭证属 OI-02/03。
 - `MAC-PKG-4` 完成（2026-09-27）：原生 E2E 与支持矩阵——覆盖安装升级实测（v1→v2 收据版本更新）、osx-x64 产物结构+x86_64 payload 断言（运行态 OI-04）、干净宿主复核（纯系统工具链，公证路径需 Xcode）；`Bundler.Tests` 122 项全绿 + `Verify.sh` 全绿。
 - `MAC-PKG-5` 完成（2026-09-27）：`.pkg` 冻结——能力矩阵定稿、OI-01..05 收口、冻结基线 `0.1.0-alpha.47`（冻结测试向量：122/122 + Verify.sh 全绿）；roadmap 推进 `LINUX`。默认下一阶段：`LINUX` 规划轮。
-- 目标扩展候选已登记（2026-09-30，`docs/roadmap.md` §7.2）：Alpine `.apk` 后端（未启动；注意与 Android `.apk` 区分，移动端若立项在非常后期另立路线）；`osx` 通用 RID 与 `linux-musl-x64/arm64`（限挂 `zip`/`targz`）已实现并入 `main`（`7feea33`/`e7dfeae`/`02b2521`）；不予登记：发行版专属 RID、`linux-bionic-*`、稀有架构。门禁原则已写入 `docs/development-rules.md` §3。
+- 目标扩展候选（2026-09-30，`docs/roadmap.md` §7.2）：Alpine `.apk` 后端已实现并入 `main`（PR #13 `5585843`，冻结基线 `0.1.0-alpha.63`）；`osx` 通用 RID 与 `linux-musl-x64/arm64`（`zip`/`targz`/`alpineapk`）已实现并入 `main`（`7feea33`/`e7dfeae`/`02b2521`）；不予登记：发行版专属 RID、`linux-bionic-*`、稀有架构（移动端若立项注意 Alpine/Android `.apk` 区分）。门禁原则已写入 `docs/development-rules.md` §3。
 - MAC-DMG 规划轮已确认（2026-09-26）：C# 原生编排 `hdiutil`/`osascript`/`SetFile`/`sips` 不内嵌 create-dmg fork；DMG 本体可 `codesign`（`-` 跳过）不做公证；无 GUI 会话跳过布局+警告，`BundlerDmgSkipWindowLayout` 开关；EULA 经 `hdiutil udifrez` 注入 SLA；压缩格式可配置枚举 Udzo/Ulmo/Udbz、默认 `Ulmo`（挂载侧需 macOS 10.12+）；产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg`；窗口布局全可配默认对齐上游。
 
 ## 6. 默认下一步
 
-全部格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`/`.zip`/`.tar.gz`）与 CLI 均已冻结并入 `main`（HEAD `5aaf295`）。
+全部格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`/`.zip`/`.tar.gz`/`.apk`）与 CLI 均已冻结并入 `main`（HEAD `5585843`）。
 三平台全量验收完成（§3）；ARM64 qemu 仿真验收完成（partial，仿真已验/真机待验如实分级）。
 验收期缺陷修复并入 `main`：`58cd607`（CLI `DefaultsObject` 静态工厂，修复 AOT IL2067 发布回归）、`f1930f7`（打包输入跳过非普通文件 + AppImage 签名 keyring 移出暂存输入）。
 **CLI AOT 按宿主裁剪自研后端已实现并入 `main` `8f2ff8b`**（`docs/roadmap.md` §7.2）：RID 条件引用 + `#if` 裁剪，`linux-x64` 实发 47.4 MiB（-2.3 MB），四种编译口径零警告，`Cli.Integration` 新断言全绿。
 剩余工作仅为外部待验收项（各格式 OI 清单）。
-已登记候选（未启动，立项按 §7.2 准入与新后端完整路线规则）：Alpine `.apk` 后端。
+候选队列现状：Alpine `.apk` 已实现并入 `main`（PR #13）；无未启动的后端立项项（立项仍按 §7.2 准入与新后端完整路线规则）。
 已实现并入 `main`：`osx` 通用 RID（`e7dfeae`，fat 双切片校验）与 `linux-musl-x64/arm64` archive 目标（`02b2521`）；RID 解析已泛化为 `<os>-<arch>` 语法（`7feea33`）。
 
 ## 7. 历史记录
