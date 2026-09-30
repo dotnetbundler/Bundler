@@ -123,12 +123,19 @@ internal static class AlpineApkTests
             Assert(link is { TypeFlag: '2' } && link.LinkTarget == "../lib/example-app/ExampleApp",
                 $"usr/bin symlink mismatch: {link?.LinkTarget}");
 
-            foreach (var file in data.Where(e => e.TypeFlag == '0'))
+            Assert(data.All(e =>
+                    e.Pax.TryGetValue("ctime", out var ctime) && ctime == "0" &&
+                    e.Pax.TryGetValue("atime", out var atime) && atime == "0"),
+                "Every entry needs atime=0/ctime=0 pax records like abuild output.");
+            foreach (var file in data.Where(e => e.TypeFlag is '0' or '2'))
             {
                 Assert(file.Pax.TryGetValue("APK-TOOLS.checksum.SHA1", out var sha1),
-                    $"File {file.Name} lacks the APK-TOOLS.checksum.SHA1 pax record.");
+                    $"Entry {file.Name} lacks the APK-TOOLS.checksum.SHA1 pax record.");
                 using var hasher = SHA1.Create();
-                Assert(Convert.ToBase64String(hasher.ComputeHash(file.Content)) == sha1,
+                var hashed = file.TypeFlag == '2'
+                    ? Encoding.UTF8.GetBytes(file.LinkTarget)
+                    : file.Content;
+                Assert(Convert.ToHexString(hasher.ComputeHash(hashed)).ToLowerInvariant() == sha1,
                     $"SHA1 checksum mismatch for {file.Name}.");
             }
 

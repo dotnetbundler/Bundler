@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-musl-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <AssemblyName>BundlerAlpineApkIntegrationFixture</AssemblyName>
+    <Version>1.0.0</Version>
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerFormats>alpineapk</BundlerFormats>
+    <BundlerIdentifier>com.dotnetbundler.alpineapkintegrationfixture</BundlerIdentifier>
+    <BundlerProductName>Bundler Apk Fixture</BundlerProductName>
+    <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
+    <BundlerDescription>Disposable .apk integration-test fixture.</BundlerDescription>
+    <BundlerHomepage>https://example.com/apk-fixture</BundlerHomepage>
+    <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
+    <BundlerAlpineApkPackageName>bundler-apk-fixture</BundlerAlpineApkPackageName>
+    <BundlerAlpineApkPackageName Condition="'$(BundlerTestAlpineApkPackageName)' != ''">$(BundlerTestAlpineApkPackageName)</BundlerAlpineApkPackageName>
+    <BundlerAlpineApkRelease Condition="'$(BundlerTestAlpineApkRelease)' != ''">$(BundlerTestAlpineApkRelease)</BundlerAlpineApkRelease>
+    <BundlerAlpineApkLicense Condition="'$(BundlerTestAlpineApkLicense)' != ''">$(BundlerTestAlpineApkLicense)</BundlerAlpineApkLicense>
+    <BundlerAlpineApkBuildDate Condition="'$(BundlerTestAlpineApkBuildDate)' != ''">$(BundlerTestAlpineApkBuildDate)</BundlerAlpineApkBuildDate>
+    <!-- musl 自包含 .NET 运行时需要 libstdc++/libgcc；声明为依赖让 apk 自动解析。 -->
+    <BundlerAlpineApkDepends>libstdc++;libgcc</BundlerAlpineApkDepends>
+    <BundlerAlpineApkDepends Condition="'$(BundlerTestAlpineApkDepends)' != ''">$(BundlerTestAlpineApkDepends)</BundlerAlpineApkDepends>
+    <BundlerAlpineApkProvides Condition="'$(BundlerTestAlpineApkProvides)' != ''">$(BundlerTestAlpineApkProvides)</BundlerAlpineApkProvides>
+    <BundlerAlpineApkTriggers Condition="'$(BundlerTestAlpineApkTriggers)' != ''">$(BundlerTestAlpineApkTriggers)</BundlerAlpineApkTriggers>
+    <BundlerAlpineApkBinLink Condition="'$(BundlerTestAlpineApkBinLink)' != ''">$(BundlerTestAlpineApkBinLink)</BundlerAlpineApkBinLink>
+    <BundlerAlpineApkPreInstallScript Condition="'$(BundlerTestAlpineApkPreInstallScript)' != ''">$(BundlerTestAlpineApkPreInstallScript)</BundlerAlpineApkPreInstallScript>
+    <BundlerAlpineApkPostInstallScript Condition="'$(BundlerTestAlpineApkPostInstallScript)' != ''">$(BundlerTestAlpineApkPostInstallScript)</BundlerAlpineApkPostInstallScript>
+    <BundlerAlpineApkPreDeinstallScript Condition="'$(BundlerTestAlpineApkPreDeinstallScript)' != ''">$(BundlerTestAlpineApkPreDeinstallScript)</BundlerAlpineApkPreDeinstallScript>
+    <BundlerAlpineApkPostDeinstallScript Condition="'$(BundlerTestAlpineApkPostDeinstallScript)' != ''">$(BundlerTestAlpineApkPostDeinstallScript)</BundlerAlpineApkPostDeinstallScript>
+    <BundlerAlpineApkPreUpgradeScript Condition="'$(BundlerTestAlpineApkPreUpgradeScript)' != ''">$(BundlerTestAlpineApkPreUpgradeScript)</BundlerAlpineApkPreUpgradeScript>
+    <BundlerAlpineApkPostUpgradeScript Condition="'$(BundlerTestAlpineApkPostUpgradeScript)' != ''">$(BundlerTestAlpineApkPostUpgradeScript)</BundlerAlpineApkPostUpgradeScript>
+    <BundlerAlpineApkSigningKeyFile Condition="'$(BundlerTestAlpineApkSigningKeyFile)' != ''">$(BundlerTestAlpineApkSigningKeyFile)</BundlerAlpineApkSigningKeyFile>
+    <BundlerAlpineApkSigningKeyPassphrase Condition="'$(BundlerTestAlpineApkSigningKeyPassphrase)' != ''">$(BundlerTestAlpineApkSigningKeyPassphrase)</BundlerAlpineApkSigningKeyPassphrase>
+  </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <ItemGroup>
+    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
+    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <BundlerAlpineApkFile Include="Assets/defaults.conf" Destination="/etc/bundler-apk-fixture/defaults.conf" />
+  </ItemGroup>
+</Project>

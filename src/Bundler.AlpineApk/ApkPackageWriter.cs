@@ -79,7 +79,8 @@ internal static class ApkPackageWriter
                 Name = ".PKGINFO",
                 Kind = TarEntryKind.File,
                 Mode = 420, // 0644
-                Content = new UTF8Encoding(false).GetBytes(pkginfo)
+                Content = new UTF8Encoding(false).GetBytes(pkginfo),
+                PaxRecords = TimestampRecords
             }
         };
         EmitScripts(controlEntries, settings);
@@ -105,7 +106,8 @@ internal static class ApkPackageWriter
                     Name = memberName,
                     Kind = TarEntryKind.File,
                     Mode = 420, // 0644
-                    Content = signature
+                    Content = signature,
+                    PaxRecords = TimestampRecords
                 }
             ], omitEndOfArchive: true));
         }
@@ -275,7 +277,8 @@ internal static class ApkPackageWriter
                 Name = name,
                 Kind = TarEntryKind.File,
                 Mode = 493, // 0755
-                Content = bytes
+                Content = bytes,
+                PaxRecords = TimestampRecords
             });
         }
     }
@@ -438,9 +441,7 @@ internal static class ApkPackageWriter
                     ? entry.ReadBytes()
                     : [],
                 LinkTarget = entry.LinkTarget,
-                PaxRecords = entry.Kind == TarEntryKind.File
-                    ? [ChecksumRecord(entry)]
-                    : null
+                PaxRecords = PayloadPaxRecords(entry)
             }), omitEndOfArchive);
         return buffer.ToArray();
     }
@@ -452,10 +453,31 @@ internal static class ApkPackageWriter
         return buffer.ToArray();
     }
 
-    private static KeyValuePair<string, string> ChecksumRecord(PayloadEntry entry)
+    // Every apk entry carries atime/ctime = 0 like abuild output; regular
+    // files add the APK-TOOLS.checksum.SHA1 pax record (hex sha1 of content,
+    // hex sha1 of the link target for symlinks) that apk requires to extract.
+    private static readonly KeyValuePair<string, string>[] TimestampRecords =
+    [
+        new("ctime", "0"),
+        new("atime", "0")
+    ];
+
+    private static KeyValuePair<string, string>[] PayloadPaxRecords(PayloadEntry entry)
     {
+        if (entry.Kind is not (TarEntryKind.File or TarEntryKind.Symlink))
+        {
+            return TimestampRecords;
+        }
         using var sha1 = SHA1.Create();
-        return new("APK-TOOLS.checksum.SHA1", Convert.ToBase64String(sha1.ComputeHash(entry.ReadBytes())));
+        var content = entry.Kind == TarEntryKind.Symlink
+            ? new UTF8Encoding(false).GetBytes(entry.LinkTarget)
+            : entry.ReadBytes();
+        return
+        [
+            new("ctime", "0"),
+            new("atime", "0"),
+            new("APK-TOOLS.checksum.SHA1", Hex(sha1.ComputeHash(content)))
+        ];
     }
 
     private static byte[] Gzip(byte[] content)
