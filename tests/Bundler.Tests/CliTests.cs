@@ -21,6 +21,7 @@ internal static class CliTests
             yield return ("Unknown config keys are rejected", () => RunSync(RejectsUnknownConfigKey));
             yield return ("Dotted format knobs merge into config", () => RunSync(DottedKnobOverride));
             yield return ("Config sections keep member defaults", () => RunSync(ConfigSectionMemberDefaults));
+            yield return ("Repeated input dirs merge universally into a zip", () => RunSync(MergesRepeatedInputDirs));
         }
     }
 
@@ -200,6 +201,67 @@ internal static class CliTests
         {
             Directory.Delete(input, true);
         }
+    }
+
+    static void MergesRepeatedInputDirs()
+    {
+        var x64 = Path.Combine(Path.GetTempPath(), "bundler-cli-merge-x64-" + Guid.NewGuid().ToString("N"));
+        var arm64 = Path.Combine(Path.GetTempPath(), "bundler-cli-merge-arm64-" + Guid.NewGuid().ToString("N"));
+        var output = Path.Combine(Path.GetTempPath(), "bundler-cli-merge-out-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(x64);
+            Directory.CreateDirectory(arm64);
+            WriteThinMachO(Path.Combine(x64, "cli-fixture"), 0x01000007);
+            WriteThinMachO(Path.Combine(arm64, "cli-fixture"), 0x0100000C);
+            File.WriteAllText(Path.Combine(x64, "shared.txt"), "portable payload\n");
+            File.WriteAllText(Path.Combine(arm64, "shared.txt"), "portable payload\n");
+            var (code, _, err) = Run(
+                "bundle", "--input-dir", x64, "--input-dir", arm64,
+                "--rid", "osx", "--formats", "zip",
+                "--product-name", "CliFixture", "--identifier", "dev.example.cli",
+                "--package-version", "1.0.0", "--main-executable", "cli-fixture",
+                "--output-dir", output);
+            Assert(code == 0, $"merged bundle must exit 0, got {code}: {err}");
+            var zip = Path.Combine(output, "osx", "zip", "clifixture-1.0.0-osx.zip");
+            Assert(File.Exists(zip), $"merged archive missing at {zip}");
+            using var archive = new System.IO.Compression.ZipArchive(
+                File.OpenRead(zip), System.IO.Compression.ZipArchiveMode.Read);
+            var exeEntry = archive.GetEntry("clifixture-1.0.0-osx/cli-fixture");
+            Assert(exeEntry is not null, "merged archive must contain cli-fixture");
+            var extracted = Path.GetTempFileName();
+            using (var stream = exeEntry!.Open())
+            using (var file = File.Create(extracted))
+            {
+                stream.CopyTo(file);
+            }
+            var cpus = DotNet.Bundler.MacApp.MachO.ReadSliceInfos(extracted)
+                .Select(s => s.CpuType).OrderBy(c => c).ToArray();
+            File.Delete(extracted);
+            Assert(cpus.Length == 2 && cpus[0] == 0x01000007 && cpus[1] == 0x0100000C,
+                "merged executable must be a fat Mach-O with x86_64 + arm64 slices, got "
+                + string.Join(",", cpus.Select(c => c.ToString("X8"))));
+            Assert(archive.GetEntry("clifixture-1.0.0-osx/shared.txt") is not null,
+                "portable files must survive the merge");
+        }
+        finally
+        {
+            Directory.Delete(x64, true);
+            Directory.Delete(arm64, true);
+            if (Directory.Exists(output)) Directory.Delete(output, true);
+        }
+    }
+
+    static void WriteThinMachO(string path, uint cpuType)
+    {
+        using var writer = new BinaryWriter(File.Create(path));
+        writer.Write(0xFEEDFACFu);           // MH_MAGIC_64 little-endian
+        writer.Write(cpuType);               // cputype
+        writer.Write(3u);                    // cpusubtype
+        writer.Write(2u);                    // filetype MH_EXECUTE
+        writer.Write(0u); writer.Write(0u);  // ncmds + sizeofcmds
+        writer.Write(0u);                    // flags
+        writer.Write(0u);                    // reserved
     }
 
     static string WriteConfig(string input, string output)
