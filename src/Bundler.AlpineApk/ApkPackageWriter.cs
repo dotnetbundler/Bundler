@@ -85,6 +85,36 @@ internal static class ApkPackageWriter
         EmitScripts(controlEntries, settings);
         var controlGzip = Gzip(TarData(controlEntries, omitEndOfArchive: true));
 
+        // Optional signature segment: a tar holding .SIGN.RSA.<key name>.rsa.pub
+        // whose content is the raw PKCS1v15 RSA-SHA1 signature over the control
+        // gzip stream. It precedes the control segment.
+        byte[]? signatureGzip = null;
+        if (settings.SigningKeyFile is { Length: > 0 } keyFile)
+        {
+            if (!File.Exists(keyFile))
+            {
+                throw new FileNotFoundException(
+                    $"The .apk signing key does not exist: {keyFile}", keyFile);
+            }
+            var signature = ApkSigner.Sign(controlGzip, keyFile, settings.SigningKeyPassphrase);
+            var memberName = ".SIGN.RSA." + Path.GetFileName(keyFile) + ".rsa.pub";
+            signatureGzip = Gzip(TarData(
+            [
+                new TarEntry
+                {
+                    Name = memberName,
+                    Kind = TarEntryKind.File,
+                    Mode = 420, // 0644
+                    Content = signature
+                }
+            ], omitEndOfArchive: true));
+        }
+        else if (settings.SigningKeyPassphrase is { Length: > 0 })
+        {
+            throw new ArgumentException(
+                "SigningKeyPassphrase requires SigningKeyFile to point at a PEM RSA private key.");
+        }
+
         Directory.CreateDirectory(item.OutputDirectory);
         var fileName = packageName + "-" + pkgver + ".apk";
         var outputPath = Path.Combine(item.OutputDirectory, fileName);
@@ -98,6 +128,10 @@ internal static class ApkPackageWriter
         {
             using (var stream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
+                if (signatureGzip is not null)
+                {
+                    stream.Write(signatureGzip, 0, signatureGzip.Length);
+                }
                 stream.Write(controlGzip, 0, controlGzip.Length);
                 stream.Write(dataGzip, 0, dataGzip.Length);
             }

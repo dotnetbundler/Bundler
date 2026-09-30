@@ -213,5 +213,7 @@
     <BundlerAlpineApkPostDeinstallScript Condition="'$(BundlerAlpineApkPostDeinstallScript)' == ''"></BundlerAlpineApkPostDeinstallScript>
     <BundlerAlpineApkPreUpgradeScript Condition="'$(BundlerAlpineApkPreUpgradeScript)' == ''"></BundlerAlpineApkPreUpgradeScript>
     <BundlerAlpineApkPostUpgradeScript Condition="'$(BundlerAlpineApkPostUpgradeScript)' == ''"></BundlerAlpineApkPostUpgradeScript>
+    <BundlerAlpineApkSigningKeyFile Condition="'$(BundlerAlpineApkSigningKeyFile)' == ''"></BundlerAlpineApkSigningKeyFile>
+    <BundlerAlpineApkSigningKeyPassphrase Condition="'$(BundlerAlpineApkSigningKeyPassphrase)' == ''"></BundlerAlpineApkSigningKeyPassphrase>
   </PropertyGroup>
 </Project>

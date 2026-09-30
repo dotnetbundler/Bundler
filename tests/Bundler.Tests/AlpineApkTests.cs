@@ -30,6 +30,10 @@ internal static class AlpineApkTests
             yield return ("Maps arbitrary file destinations", () => RunSync(MapsArbitraryFileDestinations));
             yield return ("Rejects invalid apk metadata knobs", () => RunSync(RejectsInvalidMetadataKnobs));
             yield return ("Rejects invalid script and file inputs", () => RunSync(RejectsInvalidScriptAndFileInputs));
+            yield return ("Signs and verifies the signature segment", () => RunSync(SignsAndVerifiesSignatureSegment));
+            yield return ("Signs with an encrypted key", () => RunSync(SignsWithEncryptedKey));
+            yield return ("Rejects invalid signing inputs", () => RunSync(RejectsInvalidSigningInputs));
+            yield return ("Produces deterministic signed .apk bytes", () => RunSync(DeterministicSignedBytes));
         }
     }
 
@@ -680,6 +684,258 @@ internal static class AlpineApkTests
             Cleanup(input, output);
         }
     }
+
+    static void SignsAndVerifiesSignatureSegment()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var keyPath = WriteKey(output, "testkey.rsa", TestPrivateKeyPem);
+            var artifact = new AlpineApkBundler(new AlpineApkBundleConfiguration
+            {
+                SigningKeyFile = keyPath
+            }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single();
+
+            var apk = File.ReadAllBytes(artifact.Path);
+            var members = ApkPackageReader.GzipMemberOffsets(apk);
+            Assert(members.Count == 3,
+                $"A signed .apk must carry signature+control+data members: {members.Count}");
+            var segments = ApkPackageReader.SplitGzipStreams(apk);
+            Assert(!EndsWithZeroBlocks(segments[0]), "The signature tar has no end-of-archive blocks.");
+            Assert(!EndsWithZeroBlocks(segments[1]), "The control tar has no end-of-archive blocks.");
+            Assert(EndsWithZeroBlocks(segments[2]), "The data tar keeps its end-of-archive blocks.");
+
+            var sig = ApkPackageReader.ReadTar(segments[0]);
+            Assert(sig.Count == 1 && sig[0].Name == ".SIGN.RSA.testkey.rsa.rsa.pub" &&
+                sig[0].TypeFlag == '0' && sig[0].Mode == 420,
+                $"Signature member mismatch: {string.Join(',', sig.Select(e => e.Name))}");
+            var control = ApkPackageReader.ReadTar(segments[1]);
+            Assert(control.Any(e => e.Name == ".PKGINFO"), ".PKGINFO must follow the signature.");
+
+            // PKCS1v15 RSA-SHA1 over the raw control gzip stream.
+            var controlGzip = apk.Skip(members[1]).Take(members[2] - members[1]).ToArray();
+            using var rsa = RSA.Create();
+            rsa.ImportFromPem(TestPublicKeyPem);
+            Assert(rsa.VerifyData(controlGzip, sig[0].Content,
+                    HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1),
+                "The .SIGN.RSA blob must be a valid RSA-SHA1 signature of the control stream.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void SignsWithEncryptedKey()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var keyPath = WriteKey(output, "enckey.rsa", EncryptedPrivateKeyPem);
+            var artifact = new AlpineApkBundler(new AlpineApkBundleConfiguration
+            {
+                SigningKeyFile = keyPath,
+                SigningKeyPassphrase = "test-pass"
+            }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single();
+
+            var apk = File.ReadAllBytes(artifact.Path);
+            var members = ApkPackageReader.GzipMemberOffsets(apk);
+            var sig = ApkPackageReader.ReadTar(ApkPackageReader.SplitGzipStreams(apk)[0]);
+            var controlGzip = apk.Skip(members[1]).Take(members[2] - members[1]).ToArray();
+            using var rsa = RSA.Create();
+            rsa.ImportFromPem(EncryptedPublicKeyPem);
+            Assert(sig.Count == 1 && sig[0].Name == ".SIGN.RSA.enckey.rsa.rsa.pub" &&
+                rsa.VerifyData(controlGzip, sig[0].Content,
+                    HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1),
+                "The encrypted key must produce a verifiable signature.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void RejectsInvalidSigningInputs()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            // Passphrase without a key file is a half configuration.
+            var thrown = false;
+            try
+            {
+                new AlpineApkBundler(new AlpineApkBundleConfiguration
+                {
+                    SigningKeyPassphrase = "x"
+                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
+            }
+            catch (ArgumentException) { thrown = true; }
+            Assert(thrown, "A passphrase without a key must be rejected.");
+
+            // Missing key file.
+            thrown = false;
+            try
+            {
+                new AlpineApkBundler(new AlpineApkBundleConfiguration
+                {
+                    SigningKeyFile = Path.Combine(output, "missing.rsa")
+                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
+            }
+            catch (FileNotFoundException) { thrown = true; }
+            Assert(thrown, "A missing key file must be rejected.");
+
+            // Non-PEM key content.
+            var garbage = WriteKey(output, "garbage.rsa", "definitely not a pem");
+            thrown = false;
+            try
+            {
+                new AlpineApkBundler(new AlpineApkBundleConfiguration
+                {
+                    SigningKeyFile = garbage
+                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
+            }
+            catch (ArgumentException) { thrown = true; }
+            Assert(thrown, "A non-PEM key must be rejected.");
+
+            // Wrong passphrase on an encrypted key fails (crypto layer, any exception).
+            var enc = WriteKey(output, "enckey.rsa", EncryptedPrivateKeyPem);
+            thrown = false;
+            try
+            {
+                new AlpineApkBundler(new AlpineApkBundleConfiguration
+                {
+                    SigningKeyFile = enc,
+                    SigningKeyPassphrase = "wrong"
+                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
+            }
+            catch (Exception) { thrown = true; }
+            Assert(thrown, "A wrong passphrase must fail.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void DeterministicSignedBytes()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var keyPath = WriteKey(output, "testkey.rsa", TestPrivateKeyPem);
+            var settings = new AlpineApkBundleConfiguration { SigningKeyFile = keyPath };
+            var first = new AlpineApkBundler(settings)
+                .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single().Path;
+            var second = new AlpineApkBundler(settings)
+                .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single().Path;
+            Assert(File.ReadAllBytes(first).SequenceEqual(File.ReadAllBytes(second)),
+                "Signed .apk bytes must be deterministic.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static string WriteKey(string directory, string name, string pem)
+    {
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, name);
+        File.WriteAllText(path, pem);
+        return path;
+    }
+
+    const string TestPrivateKeyPem = """
+        -----BEGIN PRIVATE KEY-----
+        MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDDR4h8wDPZOzmt
+        5aGtxe6Ue9K5J9vQzmmTsjvcUZJc24D6tmFrVlzbpnRlZnA+YAKLyx5z5I/cI5Ij
+        3DMYH3/vkDzq8+OTjp1WLxlSuSU4Q5nCGupCX/o71DwMGrwyS00Ruyd+CdkTz706
+        9VlY4dPgNM8XmAW+I/I32WrvqHzlqilSJnYZIdn1CnKBPXktxnO19ylz7aG3Lc3X
+        asX6ZXfOME7LLr3O4thQ0KIhpvY9eSV0Cmq0wxmf/EbBG8s08ovm7E8oLSesSyJb
+        VBIcUi9dQR8f5mGWFV+GdOcYHJ9gitjIcQuSQYK2EvaUQCdNh0PlU/S325HcGxIM
+        PTh4/63VAgMBAAECggEABz5dCruacMFop1GwSKDh87IQI/wdhEZT1j2zSL3h3v3p
+        b+NaA8BFW4R2JtjA6x9mmMblD0l4KKNNJXVik89/UGSaTeDUHUIaBftjRhVGEys2
+        xeN3sxSaVKPPwmcvefIfHrxBf8RfwANhspEtSkW+NT/gOrDR7bapona3J8KpN1+i
+        251CTxBU9zMAc8gxSG9Z4gP1Vcg+n1/wTurzo3NZ89KuSah9mNBFQFGUkkUlG71j
+        5K+nv4kjGwbVIpQqlt/RuNFZ9sqpsskYzWt+rWivuKRwqaFkWIzeSV60FRkLI7oQ
+        i9s3GrS1af62G+CwtCYdpM+EX32VsPVH6WSCvEDoYQKBgQDxkna8/J9Kj45dkSFi
+        YM6EFpwXnbcjwNy+ZUJ8iWm67ejo9D2+1Gd85Ux/yLE1wpBmflafbeyhEmX+lzEy
+        D6YXX7TbuaJSotMUxySwY6rZJjmiipOYjEV3wJYs/NbwwYUZwF7pXy8jySoodZWo
+        GEJyqFEV8DGoPzF//U9BqY9BWQKBgQDO8UYA5Xj5YlQ1FERqIyXQ8JBRXSeZ6JFU
+        pbrrkifsj8IRdBT75HydLKp6MFdvuOHVl7YQp0+BfKOjhsPT5wT+n4jgMsR9DxJe
+        0i3lrjCkh0F6eEDHx94jj9lPB+HukP7EaRVMA7Qb4F1eU93uN9Cvpz+c23c9shT4
+        c1jxJgnk3QKBgQCMfWN0sW5qTGa9X8QMlMRF6WhKC70Qm/9E81rhVoEY53fG0xR9
+        wMWWyzvcLPlyjH6yPNNf0OwHGM4cbA1+Ub+EZHKoPqN6b5tWwCJEOxKHS0XFk9YW
+        p61W4bf03e6bAdDIkyofiu29YCaWdRveMI2kZOMTYSdf87B0APtw8o2PsQKBgQDD
+        Z4m9cPERMqrmz/Nl8ThVGcJ8QaUSLEuGjVN5+zFdq8UJa/4gd/i/BR0YcasuYHpG
+        kJGnGgT19PYjhC5HWf4aXBQH94gXunKTPI2AMkHWKa1HcmNhAbYdCEie2oeZGCqo
+        1bz5YQnhxLMFTdXiiauxIRDtEUJ/7Dbm/yv90PhItQKBgQCMRSCPn3zfjiSnhPR8
+        f7Kq/XcpgaJ/x4oa+EbG9Eh7pN/k9pT809xv9pO9KdKZQNQ+doXDkTB16D/LHLsf
+        VEvc+QsfaW33yUsCbBvDcjGW7VaGd4hnTDxXRCVMrhlFaHcnQmhmFyNHmtDR0tS6
+        3ShG2udEmvoxxusmmu5AOTrgFg==
+        -----END PRIVATE KEY-----
+        """;
+
+    const string TestPublicKeyPem = """
+        -----BEGIN PUBLIC KEY-----
+        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw0eIfMAz2Ts5reWhrcXu
+        lHvSuSfb0M5pk7I73FGSXNuA+rZha1Zc26Z0ZWZwPmACi8sec+SP3COSI9wzGB9/
+        75A86vPjk46dVi8ZUrklOEOZwhrqQl/6O9Q8DBq8MktNEbsnfgnZE8+9OvVZWOHT
+        4DTPF5gFviPyN9lq76h85aopUiZ2GSHZ9QpygT15LcZztfcpc+2hty3N12rF+mV3
+        zjBOyy69zuLYUNCiIab2PXkldApqtMMZn/xGwRvLNPKL5uxPKC0nrEsiW1QSHFIv
+        XUEfH+ZhlhVfhnTnGByfYIrYyHELkkGCthL2lEAnTYdD5VP0t9uR3BsSDD04eP+t
+        1QIDAQAB
+        -----END PUBLIC KEY-----
+        """;
+
+    const string EncryptedPrivateKeyPem = """
+        -----BEGIN ENCRYPTED PRIVATE KEY-----
+        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
+        -----END ENCRYPTED PRIVATE KEY-----
+        """;
+
+    const string EncryptedPublicKeyPem = """
+        -----BEGIN PUBLIC KEY-----
+        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAooTzdNRsnRZIiZCnlNQu
+        H4uJEYAO+j9SnztXEA4zsCXzEnybfP4dtpOtOLVOMoYtAnzqwMOy3UgwvrHOBmcL
+        RUYD0r7SJkR5hGxklmEZmzLOHvoPh9KQmthaQdPaLe/ol5mAAVcOWm18x07INgvm
+        RdCY7S4jSsNoNIp1yDg3lrQG13g4Ab8gY5QgNi9XF8pjOpbODK9/nXyeomjZzV1R
+        edvuxVYb6LebiwsQ/EUzdN0ZVq4eugeij3ZwY3FMdxbdQEQAafglG7btXwYuqSmd
+        iLHSQLt+xtV81Fn3Xm/FEbDY6yP0uiXURDRJH+lE+YFo55B7kvZjIm2bNussaAsI
+        jwIDAQAB
+        -----END PUBLIC KEY-----
+        """;
 
     static bool EndsWithZeroBlocks(byte[] tar)
     {

@@ -114,6 +114,19 @@ public sealed class AlpineApkBundleConfiguration
     public string? PostUpgradeScript { get; init; }
 
     /// <summary>
+    /// Optional PEM-encoded RSA private key used to sign the package. When
+    /// set, a signature segment carrying
+    /// <c>.SIGN.RSA.&lt;key-file-name&gt;.rsa.pub</c> is prepended to the package.
+    /// </summary>
+    public string? SigningKeyFile { get; init; }
+
+    /// <summary>
+    /// Passphrase for <see cref="SigningKeyFile"/>. Supplying one without a
+    /// key file is rejected.
+    /// </summary>
+    public string? SigningKeyPassphrase { get; init; }
+
+    /// <summary>
     /// Escape hatch: extra <c>.PKGINFO</c> key/value pairs appended after the
     /// built-in fields (e.g. "replaces", "install_if"). Keys must match
     /// <c>[A-Za-z0-9._-]+</c> and must not collide with fields the writer emits.

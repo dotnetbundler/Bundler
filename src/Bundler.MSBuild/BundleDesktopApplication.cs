@@ -263,6 +263,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string AlpineApkPreUpgradeScript { get; set; } = "";
     public string AlpineApkPostUpgradeScript { get; set; } = "";
     public ITaskItem[] AlpineApkFiles { get; set; } = Array.Empty<ITaskItem>();
+    public string AlpineApkSigningKeyFile { get; set; } = "";
+    public string AlpineApkSigningKeyPassphrase { get; set; } = "";
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -653,7 +655,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         {
                             Source = Path.GetFullPath(item.ItemSpec),
                             Destination = item.GetMetadata("Destination")
-                        }).ToArray()
+                        }).ToArray(),
+                        SigningKeyFile = OptionalFullPath(AlpineApkSigningKeyFile),
+                        SigningKeyPassphrase = EmptyToNull(AlpineApkSigningKeyPassphrase)
                     },
                     new AlpineApkBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     .BuildAsync(configuration)

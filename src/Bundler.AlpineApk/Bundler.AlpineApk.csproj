@@ -13,6 +13,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Bundler.Tests" />
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
     <None Include="..\..\README.md" Pack="true" PackagePath="/" />
     <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
   </ItemGroup>

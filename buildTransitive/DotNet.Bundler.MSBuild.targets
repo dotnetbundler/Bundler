@@ -263,6 +263,8 @@
       AlpineApkPreUpgradeScript="$(BundlerAlpineApkPreUpgradeScript)"
       AlpineApkPostUpgradeScript="$(BundlerAlpineApkPostUpgradeScript)"
       AlpineApkFiles="@(BundlerAlpineApkFile)"
+      AlpineApkSigningKeyFile="$(BundlerAlpineApkSigningKeyFile)"
+      AlpineApkSigningKeyPassphrase="$(BundlerAlpineApkSigningKeyPassphrase)"
       RpmFiles="@(BundlerRpmFile)"
       MacContents="@(BundlerMacContent)"
       MacFrameworks="@(BundlerMacFramework)"
