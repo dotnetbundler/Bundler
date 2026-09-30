@@ -75,4 +75,29 @@ internal static class ApkIdentity
                 $"'{architecture}' is not a valid Alpine architecture (lowercase letters, digits, '_').");
         }
     }
+
+    /// <summary>
+    /// apk release and builddate knobs are non-negative integers.
+    /// </summary>
+    internal static void ValidateNonNegativeInteger(string value, string knob)
+    {
+        if (value.Length == 0 || !value.All(char.IsDigit))
+        {
+            throw new ArgumentException(
+                $"'{value}' is not a valid value for {knob} (a non-negative integer is required).");
+        }
+    }
+
+    /// <summary>
+    /// depend/provides/triggers entries must be non-empty and contain no
+    /// whitespace (a field value is a single token).
+    /// </summary>
+    internal static void ValidateListEntry(string entry, string knob)
+    {
+        if (entry.Length == 0 || entry.Any(char.IsWhiteSpace))
+        {
+            throw new ArgumentException(
+                $"'{entry}' is not a valid {knob} entry (non-empty, no whitespace).");
+        }
+    }
 }

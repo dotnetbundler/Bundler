@@ -556,6 +556,7 @@ internal static class CliConfig
 #endif
         [typeof(NsisShortcutConfiguration)] = static () => new NsisShortcutConfiguration(),
         [typeof(RpmFileEntry)] = static () => new RpmFileEntry(),
+        [typeof(AlpineApkFileEntry)] = static () => new AlpineApkFileEntry(),
     };
 
     private static JsonObject? DefaultsObject(Type type, JsonSerializerOptions options)

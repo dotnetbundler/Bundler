@@ -41,7 +41,9 @@ internal static class ApkPackageWriter
         var packageName = settings.PackageName ?? ApkIdentity.SanitizeName(bundle.ProductName);
         ApkIdentity.ValidateName(packageName);
         var upstream = ApkIdentity.MapVersion(settings.Version ?? bundle.Version);
-        var pkgver = upstream + "-r0";
+        var release = settings.Release ?? "0";
+        ApkIdentity.ValidateNonNegativeInteger(release, "Release");
+        var pkgver = upstream + "-r" + release;
         var architecture = settings.Architecture ?? ApkIdentity.MapArchitecture(item.Target.Architecture);
         ApkIdentity.ValidateArchitecture(architecture);
         var origin = settings.Origin ?? packageName;
@@ -51,10 +53,13 @@ internal static class ApkPackageWriter
             description = bundle.ProductName;
         }
         var url = settings.Url ?? bundle.Homepage ?? "";
+        var license = settings.License ?? "";
+        var buildDate = settings.BuildDate ?? "0";
+        ApkIdentity.ValidateNonNegativeInteger(buildDate, "BuildDate");
         var installRoot = "usr/lib/" + packageName;
         var binLink = settings.BinLink ?? packageName;
 
-        var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, logger);
+        var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
 
         // Data segment first: .PKGINFO carries the sha256 of its gzip stream.
         var dataTar = TarData(payload, omitEndOfArchive: false);
@@ -65,7 +70,8 @@ internal static class ApkPackageWriter
             .Sum(entry => entry.Size);
 
         var pkginfo = PackageInfo(
-            packageName, pkgver, description, url, architecture, origin, installedSize, dataHash);
+            packageName, pkgver, description, url, architecture, origin, license, buildDate,
+            installedSize, dataHash, settings);
         var controlEntries = new List<TarEntry>
         {
             new()
@@ -76,6 +82,7 @@ internal static class ApkPackageWriter
                 Content = new UTF8Encoding(false).GetBytes(pkginfo)
             }
         };
+        EmitScripts(controlEntries, settings);
         var controlGzip = Gzip(TarData(controlEntries, omitEndOfArchive: true));
 
         Directory.CreateDirectory(item.OutputDirectory);
@@ -108,6 +115,12 @@ internal static class ApkPackageWriter
         return new Result { Path = outputPath };
     }
 
+    private static readonly string[] BuiltInFields =
+    [
+        "pkgname", "pkgver", "pkgdesc", "url", "arch", "origin", "license",
+        "depend", "provides", "triggers", "builddate", "size", "datahash"
+    ];
+
     private static string PackageInfo(
         string packageName,
         string pkgver,
@@ -115,8 +128,11 @@ internal static class ApkPackageWriter
         string url,
         string architecture,
         string origin,
+        string license,
+        string buildDate,
         long installedSize,
-        string dataHash)
+        string dataHash,
+        AlpineApkBundleConfiguration settings)
     {
         var builder = new StringBuilder();
         void Field(string key, string value)
@@ -137,10 +153,97 @@ internal static class ApkPackageWriter
         }
         Field("arch", architecture);
         Field("origin", origin);
-        Field("builddate", "0");
+        if (license.Length > 0)
+        {
+            Field("license", license);
+        }
+        foreach (var depend in settings.Depends ?? [])
+        {
+            ApkIdentity.ValidateListEntry(depend, nameof(settings.Depends));
+            Field("depend", depend);
+        }
+        foreach (var provide in settings.Provides ?? [])
+        {
+            ApkIdentity.ValidateListEntry(provide, nameof(settings.Provides));
+            Field("provides", provide);
+        }
+        if (settings.Triggers is { Count: > 0 } triggers)
+        {
+            foreach (var trigger in triggers)
+            {
+                if (!trigger.StartsWith("/", StringComparison.Ordinal))
+                {
+                    throw new ArgumentException(
+                        $"Trigger directories must be absolute paths: '{trigger}'.");
+                }
+                ApkIdentity.ValidateListEntry(trigger, nameof(settings.Triggers));
+            }
+            Field("triggers", string.Join(" ", triggers));
+        }
+        Field("builddate", buildDate);
         Field("size", installedSize.ToString());
         Field("datahash", dataHash);
+        if (settings.ExtraPkgInfo is not null)
+        {
+            foreach (var pair in settings.ExtraPkgInfo)
+            {
+                if (!pair.Key.All(c => char.IsLetterOrDigit(c) || c is '.' or '_' or '-') ||
+                    pair.Key.Length == 0)
+                {
+                    throw new ArgumentException(
+                        $"Invalid .PKGINFO key: '{pair.Key}'.");
+                }
+                if (BuiltInFields.Contains(pair.Key, StringComparer.Ordinal))
+                {
+                    throw new ArgumentException(
+                        $"The .PKGINFO key '{pair.Key}' collides with a built-in field.");
+                }
+                Field(pair.Key, pair.Value);
+            }
+        }
         return builder.ToString();
+    }
+
+    // apk install scripts live in the control segment as dotted names
+    // (.pre-install, ...). Like rpm scriptlets they must use LF line endings.
+    private static void EmitScripts(List<TarEntry> controlEntries, AlpineApkBundleConfiguration settings)
+    {
+        (string? path, string name)[] scripts =
+        [
+            (settings.PreInstallScript, ".pre-install"),
+            (settings.PostInstallScript, ".post-install"),
+            (settings.PreDeinstallScript, ".pre-deinstall"),
+            (settings.PostDeinstallScript, ".post-deinstall"),
+            (settings.PreUpgradeScript, ".pre-upgrade"),
+            (settings.PostUpgradeScript, ".post-upgrade")
+        ];
+        foreach (var (path, name) in scripts)
+        {
+            if (path is null)
+            {
+                continue;
+            }
+            var full = Path.GetFullPath(path);
+            if (!File.Exists(full))
+            {
+                throw new FileNotFoundException(
+                    $"The .apk script '{name}' does not exist: {full}", full);
+            }
+            var bytes = File.ReadAllBytes(full);
+            if (bytes.Length == 0 ||
+                Encoding.UTF8.GetString(bytes).Contains('\r'))
+            {
+                throw new ArgumentException(
+                    $"The .apk script '{name}' must be non-empty with LF line endings: {full}");
+            }
+            controlEntries.Add(new TarEntry
+            {
+                Name = name,
+                Kind = TarEntryKind.File,
+                Mode = 493, // 0755
+                Content = bytes
+            });
+        }
     }
 
     private static List<PayloadEntry> CollectPayload(
@@ -149,6 +252,7 @@ internal static class ApkPackageWriter
         string installRoot,
         string binLink,
         string packageName,
+        AlpineApkBundleConfiguration settings,
         IBundleLogger logger)
     {
         var entries = new List<PayloadEntry>();
@@ -240,6 +344,24 @@ internal static class ApkPackageWriter
                 throw new FileNotFoundException(
                     $"The resource source does not exist: {source}", source);
             }
+        }
+
+        foreach (var file in settings.Files ?? [])
+        {
+            var destination = FreedesktopFiles.NormalizeAbsoluteDestination(
+                file.Destination, "apk");
+            var source = Path.GetFullPath(file.Source);
+            if (!File.Exists(source))
+            {
+                throw new FileNotFoundException(
+                    $"The .apk mapped file does not exist: {source}", source);
+            }
+            if (!UnixFileTypes.IsRegularFile(source))
+            {
+                throw new ArgumentException(
+                    $"The .apk mapped file must be a regular file: {source}");
+            }
+            AddFile(destination.TrimStart('/'), source, 420 /* 0644 */);
         }
 
         if (binLink.Length > 0)

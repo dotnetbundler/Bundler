@@ -25,6 +25,11 @@ internal static class AlpineApkTests
             yield return ("Writes a correct sha256 sidecar", () => RunSync(Sha256Sidecar));
             yield return ("Parses alpineapk through the CLI", () => RunSync(ParsesAlpineApkThroughCli));
             yield return ("Maps apk settings through MSBuild", () => RunSync(MapsApkSettingsThroughMsBuild));
+            yield return ("Writes release, license and metadata knobs", () => RunSync(WritesReleaseLicenseAndRelations));
+            yield return ("Writes the six install scripts", () => RunSync(WritesInstallScripts));
+            yield return ("Maps arbitrary file destinations", () => RunSync(MapsArbitraryFileDestinations));
+            yield return ("Rejects invalid apk metadata knobs", () => RunSync(RejectsInvalidMetadataKnobs));
+            yield return ("Rejects invalid script and file inputs", () => RunSync(RejectsInvalidScriptAndFileInputs));
         }
     }
 
@@ -108,6 +113,8 @@ internal static class AlpineApkTests
                 $"Data files must have mode 0644, got {Convert.ToString(dll.Mode, 8)}.");
             Assert(data.Where(e => e.TypeFlag == '5').All(e => e.Mode == 493),
                 "Directories must have mode 0755.");
+            Assert(data.Where(e => e.TypeFlag == '5').All(e => e.Name.EndsWith('/')),
+                "Directory entries must carry the trailing '/' marker.");
             var link = data.SingleOrDefault(e => e.Name == "usr/bin/example-app");
             Assert(link is { TypeFlag: '2' } && link.LinkTarget == "../lib/example-app/ExampleApp",
                 $"usr/bin symlink mismatch: {link?.LinkTarget}");
@@ -430,7 +437,20 @@ internal static class AlpineApkTests
                targets.Contains("AlpineApkOrigin=\"$(BundlerAlpineApkOrigin)\"", StringComparison.Ordinal) &&
                targets.Contains("AlpineApkDescription=\"$(BundlerAlpineApkDescription)\"", StringComparison.Ordinal) &&
                targets.Contains("AlpineApkUrl=\"$(BundlerAlpineApkUrl)\"", StringComparison.Ordinal) &&
-               targets.Contains("AlpineApkBinLink=\"$(BundlerAlpineApkBinLink)\"", StringComparison.Ordinal),
+               targets.Contains("AlpineApkBinLink=\"$(BundlerAlpineApkBinLink)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkRelease=\"$(BundlerAlpineApkRelease)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkLicense=\"$(BundlerAlpineApkLicense)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkBuildDate=\"$(BundlerAlpineApkBuildDate)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkDepends=\"$(BundlerAlpineApkDepends)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkProvides=\"$(BundlerAlpineApkProvides)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkTriggers=\"$(BundlerAlpineApkTriggers)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkPreInstallScript=\"$(BundlerAlpineApkPreInstallScript)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkPostInstallScript=\"$(BundlerAlpineApkPostInstallScript)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkPreDeinstallScript=\"$(BundlerAlpineApkPreDeinstallScript)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkPostDeinstallScript=\"$(BundlerAlpineApkPostDeinstallScript)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkPreUpgradeScript=\"$(BundlerAlpineApkPreUpgradeScript)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkPostUpgradeScript=\"$(BundlerAlpineApkPostUpgradeScript)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkFiles=\"@(BundlerAlpineApkFile)\"", StringComparison.Ordinal),
             "MSBuild does not map the BundlerAlpineApk* properties to the task.");
         Assert(props.Contains("<BundlerAlpineApkPackageName", StringComparison.Ordinal) &&
                props.Contains("<BundlerAlpineApkBinLink", StringComparison.Ordinal),
@@ -441,6 +461,224 @@ internal static class AlpineApkTests
         var msbuildProject = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "Bundler.MSBuild.csproj"));
         Assert(msbuildProject.Contains("DotNet.Bundler.AlpineApk.dll", StringComparison.Ordinal),
             "The MSBuild package does not pack the AlpineApk backend assembly.");
+    }
+
+    static void WritesReleaseLicenseAndRelations()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var artifact = new AlpineApkBundler(new AlpineApkBundleConfiguration
+            {
+                Release = "3",
+                License = "MIT",
+                BuildDate = "1700000000",
+                Depends = ["busybox", "so:libc.musl-x86_64.so.1>=1.2"],
+                Provides = ["virtual-example", "example-shim=1.0"],
+                Triggers = ["/usr/share/example", "/usr/lib/example-triggers"],
+                ExtraPkgInfo = new Dictionary<string, string> { ["install_if"] = "example-gui" }
+            }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single();
+            Assert(Path.GetFileName(artifact.Path) == "example-app-1.0.0-r3.apk",
+                $"Release must enter the file name: {artifact.Path}");
+
+            var control = ApkPackageReader.ReadTar(
+                ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifact.Path))[0]);
+            var text = Encoding.UTF8.GetString(
+                control.Single(e => e.Name == ".PKGINFO").Content);
+            var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            Assert(lines.Contains("pkgver = 1.0.0-r3"), "pkgver must carry the release.");
+            Assert(lines.Contains("license = MIT"), "license field missing.");
+            Assert(lines.Contains("builddate = 1700000000"), "builddate override missing.");
+            Assert(lines.Count(l => l == "depend = busybox" ||
+                l == "depend = so:libc.musl-x86_64.so.1>=1.2") == 2,
+                $"depend lines missing: {text}");
+            Assert(lines.Count(l => l == "provides = virtual-example" ||
+                l == "provides = example-shim=1.0") == 2,
+                $"provides lines missing: {text}");
+            Assert(lines.Contains("triggers = /usr/share/example /usr/lib/example-triggers"),
+                $"triggers must be a single space-joined line: {text}");
+            Assert(lines.Contains("install_if = example-gui"),
+                $"ExtraPkgInfo escape hatch missing: {text}");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    static void WritesInstallScripts()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var scripts = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(scripts);
+            string[] scriptFiles =
+            [
+                "pre-install", "post-install", "pre-deinstall", "post-deinstall",
+                "pre-upgrade", "post-upgrade"
+            ];
+            foreach (var entryName in scriptFiles)
+            {
+                File.WriteAllText(Path.Combine(scripts, entryName + ".sh"),
+                    "#!/bin/sh\necho " + entryName + "\n");
+            }
+            var all = new AlpineApkBundleConfiguration
+            {
+                PreInstallScript = Path.Combine(scripts, "pre-install.sh"),
+                PostInstallScript = Path.Combine(scripts, "post-install.sh"),
+                PreDeinstallScript = Path.Combine(scripts, "pre-deinstall.sh"),
+                PostDeinstallScript = Path.Combine(scripts, "post-deinstall.sh"),
+                PreUpgradeScript = Path.Combine(scripts, "pre-upgrade.sh"),
+                PostUpgradeScript = Path.Combine(scripts, "post-upgrade.sh")
+            };
+            var artifact = new AlpineApkBundler(all)
+                .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single();
+            var control = ApkPackageReader.ReadTar(
+                ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifact.Path))[0]);
+            foreach (var name in scriptFiles.Select(n => "." + n))
+            {
+                var entry = control.SingleOrDefault(e => e.Name == name);
+                Assert(entry is not null && entry.Mode == 493 &&
+                    Encoding.UTF8.GetString(entry.Content).Contains(name.TrimStart('.')),
+                    $"Script {name} missing from the control segment.");
+            }
+        }
+        finally
+        {
+            Cleanup(input, output, scripts);
+        }
+    }
+
+    static void MapsArbitraryFileDestinations()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var extra = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(extra);
+            var conf = Path.Combine(extra, "settings.conf");
+            File.WriteAllText(conf, "key=value");
+            var artifact = new AlpineApkBundler(new AlpineApkBundleConfiguration
+            {
+                Files = [new AlpineApkFileEntry { Source = conf, Destination = "/etc/example-app/settings.conf" }]
+            }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single();
+            var data = ApkPackageReader.ReadTar(
+                ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifact.Path))[1]);
+            var entry = data.SingleOrDefault(e => e.Name == "etc/example-app/settings.conf");
+            Assert(entry is not null && entry.Mode == 420 &&
+                Encoding.UTF8.GetString(entry.Content) == "key=value",
+                $"Mapped file must land at its absolute destination: {string.Join(',', data.Select(e => e.Name))}");
+            Assert(entry!.Pax.ContainsKey("APK-TOOLS.checksum.SHA1"),
+                "Mapped files need the sha1 pax record like any payload file.");
+            Assert(data.Any(e => e.Name == "etc/" && e.TypeFlag == '5') &&
+                data.Any(e => e.Name == "etc/example-app/" && e.TypeFlag == '5'),
+                "Parent directories of mapped files must be claimed: " +
+                string.Join(',', data.Select(e => e.Name + "(" + e.TypeFlag + ")")));
+        }
+        finally
+        {
+            Cleanup(input, output, extra);
+        }
+    }
+
+    static void RejectsInvalidMetadataKnobs()
+    {
+        var input = CreateInputDirectory();
+        try
+        {
+            foreach (var (settings, label) in new (AlpineApkBundleConfiguration, string)[]
+            {
+                (new AlpineApkBundleConfiguration { Release = "abc" }, "release"),
+                (new AlpineApkBundleConfiguration { Release = "-1" }, "release"),
+                (new AlpineApkBundleConfiguration { BuildDate = "soon" }, "builddate"),
+                (new AlpineApkBundleConfiguration { Depends = ["libc dev"] }, "depend"),
+                (new AlpineApkBundleConfiguration { Provides = [""] }, "provides"),
+                (new AlpineApkBundleConfiguration { Triggers = ["relative/path"] }, "triggers"),
+                (new AlpineApkBundleConfiguration
+                {
+                    ExtraPkgInfo = new Dictionary<string, string> { ["pkgname"] = "x" }
+                }, "extra pkginfo"),
+                (new AlpineApkBundleConfiguration
+                {
+                    ExtraPkgInfo = new Dictionary<string, string> { ["bad key"] = "x" }
+                }, "extra pkginfo")
+            })
+            {
+                var thrown = false;
+                try
+                {
+                    new AlpineApkBundler(settings)
+                        .BuildAsync(ApkConfiguration(input)).GetAwaiter().GetResult();
+                }
+                catch (ArgumentException)
+                {
+                    thrown = true;
+                }
+                Assert(thrown, $"Invalid {label} must be rejected.");
+            }
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
+    static void RejectsInvalidScriptAndFileInputs()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            // CRLF script is rejected.
+            Directory.CreateDirectory(output);
+            var script = Path.Combine(output, "post.sh");
+            File.WriteAllText(script, "#!/bin/sh\r\necho hi\r\n");
+            var thrown = false;
+            try
+            {
+                new AlpineApkBundler(new AlpineApkBundleConfiguration { PostInstallScript = script })
+                    .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
+            }
+            catch (ArgumentException) { thrown = true; }
+            Assert(thrown, "A CRLF script must be rejected.");
+
+            // Missing script file is rejected.
+            thrown = false;
+            try
+            {
+                new AlpineApkBundler(new AlpineApkBundleConfiguration
+                {
+                    PreInstallScript = Path.Combine(output, "missing.sh")
+                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
+            }
+            catch (FileNotFoundException) { thrown = true; }
+            Assert(thrown, "A missing script file must be rejected.");
+
+            // Relative destination and '..' segments are rejected.
+            var extra = Path.Combine(output, "conf.txt");
+            File.WriteAllText(extra, "x");
+            foreach (var destination in new[] { "etc/x.conf", "/etc/../x.conf", "/etc/" })
+            {
+                thrown = false;
+                try
+                {
+                    new AlpineApkBundler(new AlpineApkBundleConfiguration
+                    {
+                        Files = [new AlpineApkFileEntry { Source = extra, Destination = destination }]
+                    }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
+                }
+                catch (ArgumentException) { thrown = true; }
+                Assert(thrown, $"Destination '{destination}' must be rejected.");
+            }
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
     }
 
     static bool EndsWithZeroBlocks(byte[] tar)
