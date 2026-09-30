@@ -6,6 +6,8 @@
 
   <UsingTask TaskName="DotNet.Bundler.MSBuild.BundleDesktopApplication"
              AssemblyFile="$(_BundlerTaskAssembly)" />
+  <UsingTask TaskName="DotNet.Bundler.MSBuild.MergeUniversalPayload"
+             AssemblyFile="$(_BundlerTaskAssembly)" />
 
   <Target Name="BundleDesktopApplication"
           AfterTargets="Publish"
@@ -13,15 +15,31 @@
     <PropertyGroup>
       <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
       <BundlerVersion Condition="'$(BundlerVersion)' == ''">$(Version)</BundlerVersion>
-      <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == '' and ($([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')) == 'true' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-')) == 'true' or '$(RuntimeIdentifier)' == 'osx')">$(TargetName)</BundlerMainExecutable>
+      <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == '' and ($([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')) == 'true' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-')) == 'true' or '$(RuntimeIdentifier)' == 'osx' or '$(BundlerUniversalRuntimeIdentifiers)' != '')">$(TargetName)</BundlerMainExecutable>
       <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''">$(TargetName).exe</BundlerMainExecutable>
       <BundlerNsisShortcutStartMenuFolder Condition="'$(BundlerNsisShortcutStartMenuFolder)' == ''">$(BundlerProductName)</BundlerNsisShortcutStartMenuFolder>
+      <_BundlerUniversalDir Condition="'$(BundlerUniversalRuntimeIdentifiers)' != ''">$(IntermediateOutputPath)BundlerUniversal\</_BundlerUniversalDir>
+      <_BundlerEffectiveInput Condition="'$(BundlerUniversalRuntimeIdentifiers)' != ''">$(_BundlerUniversalDir)merged</_BundlerEffectiveInput>
+      <_BundlerEffectiveInput Condition="'$(BundlerUniversalRuntimeIdentifiers)' == ''">$(PublishDir)</_BundlerEffectiveInput>
+      <_BundlerEffectiveRid Condition="'$(BundlerUniversalRuntimeIdentifiers)' != ''">osx</_BundlerEffectiveRid>
+      <_BundlerEffectiveRid Condition="'$(BundlerUniversalRuntimeIdentifiers)' == ''">$(RuntimeIdentifier)</_BundlerEffectiveRid>
     </PropertyGroup>
     <Error Condition="'$(BundlerIdentifier)' == ''"
            Text="BundlerIdentifier is required when BundlerEnabled is true." />
-    <Error Condition="'$(RuntimeIdentifier)' == ''"
+    <Error Condition="'$(RuntimeIdentifier)' == '' and '$(BundlerUniversalRuntimeIdentifiers)' == ''"
            Text="RuntimeIdentifier is required when BundlerEnabled is true." />
-    <Message Importance="high" Text="Bundling $(BundlerProductName) for $(RuntimeIdentifier): $(BundlerFormats)..." />
+    <ItemGroup Condition="'$(BundlerUniversalRuntimeIdentifiers)' != ''">
+      <_BundlerUniversalRid Include="$(BundlerUniversalRuntimeIdentifiers)" />
+    </ItemGroup>
+    <Exec Condition="'$(BundlerUniversalRuntimeIdentifiers)' != ''"
+          Command="dotnet publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) -f $(TargetFramework) -r %(_BundlerUniversalRid.Identity) -o &quot;$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity)&quot; -p:BundlerEnabled=false" />
+    <DotNet.Bundler.MSBuild.MergeUniversalPayload
+      SourceDirectories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)')"
+      OutputDirectory="$(_BundlerUniversalDir)merged"
+      Condition="'$(BundlerUniversalRuntimeIdentifiers)' != ''">
+      <Output TaskParameter="MergedDirectory" PropertyName="_BundlerEffectiveInput" />
+    </DotNet.Bundler.MSBuild.MergeUniversalPayload>
+    <Message Importance="high" Text="Bundling $(BundlerProductName) for $(_BundlerEffectiveRid): $(BundlerFormats)..." />
     <DotNet.Bundler.MSBuild.BundleDesktopApplication
       ProductName="$(BundlerProductName)"
       Identifier="$(BundlerIdentifier)"
@@ -31,8 +49,8 @@
       Homepage="$(BundlerHomepage)"
       Copyright="$(BundlerCopyright)"
       LicenseFile="$(BundlerLicenseFile)"
-      RuntimeIdentifier="$(RuntimeIdentifier)"
-      InputDirectory="$(PublishDir)"
+      RuntimeIdentifier="$(_BundlerEffectiveRid)"
+      InputDirectory="$(_BundlerEffectiveInput)"
       OutputDirectory="$(BundlerOutputPath)"
       MainExecutable="$(BundlerMainExecutable)"
       Formats="$(BundlerFormats)"

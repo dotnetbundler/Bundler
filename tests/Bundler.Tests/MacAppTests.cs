@@ -33,6 +33,7 @@ internal static class MacAppTests
             yield return ("Emits ATS exception domains when configured", EmitsAtsExceptionDomains);
             yield return ("Merges a caller Info.plist and enforces identity keys", MergesCallerPlistAndEnforcesIdentityKeys);
             yield return ("Validates Mach-O payload architectures per RID", ValidatesMachOArchitecturesPerRid);
+            yield return ("Merges per-architecture payload directories universally", MergesUniversalPayloadDirectories);
             yield return ("Passes .car icons through and degrades .icon without actool", PassesCarAndDegradesIconInputs);
             yield return ("Rejects duplicated asset-catalog icon inputs", RejectsDuplicatedAssetIcons);
             yield return ("Rejects features owned by later MAC stages", RejectsLaterStageFeatures);
@@ -777,6 +778,61 @@ internal static class MacAppTests
         {
             Cleanup(arm64Input, wrongArchInput, fatInput, output);
         }
+    }
+
+    static Task MergesUniversalPayloadDirectories()
+    {
+        var x64 = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var arm64 = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(x64);
+            Directory.CreateDirectory(arm64);
+            // Mach-O files merge per architecture slice.
+            File.WriteAllBytes(Path.Combine(x64, "ExampleApp"), FakeMachO(0x01000007));
+            File.WriteAllBytes(Path.Combine(arm64, "ExampleApp"), FakeMachO(0x0100000C));
+            // Identical non-Mach-O files collapse to one copy.
+            var shared = Encoding.UTF8.GetBytes("{\"Runtime\":true}");
+            File.WriteAllBytes(Path.Combine(x64, "ExampleApp.dll"), shared);
+            File.WriteAllBytes(Path.Combine(arm64, "ExampleApp.dll"), shared);
+            File.WriteAllBytes(Path.Combine(x64, "runtimeconfig.json"), shared);
+            File.WriteAllBytes(Path.Combine(arm64, "runtimeconfig.json"), shared);
+            // One-sided files pass through.
+            File.WriteAllBytes(Path.Combine(arm64, "arm64-only.txt"), [9, 9]);
+
+            MacUniversalPayloadMerger.Merge([x64, arm64], output);
+
+            var merged = MachO.ReadSliceInfos(Path.Combine(output, "ExampleApp"));
+            var cpus = merged.Select(s => s.CpuType).OrderBy(c => c).ToArray();
+            Assert(cpus.Length == 2 && cpus[0] == 0x01000007 && cpus[1] == 0x0100000C,
+                "Merged Mach-O must contain both x86_64 and arm64 slices.");
+            foreach (var slice in merged)
+            {
+                Assert(slice.Offset > 0 && slice.Size == 64,
+                    "Fat slice records must point at real slice content.");
+            }
+            Assert(File.ReadAllBytes(Path.Combine(output, "ExampleApp.dll")).SequenceEqual(shared),
+                "Identical managed files must merge to a single copy.");
+            Assert(File.Exists(Path.Combine(output, "arm64-only.txt")),
+                "Files present on one side only must pass through.");
+
+            var conflictArm = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(conflictArm);
+            File.WriteAllBytes(Path.Combine(conflictArm, "ExampleApp"), FakeMachO(0x0100000C));
+            File.WriteAllBytes(Path.Combine(conflictArm, "differing.json"), [1, 2, 3]);
+            File.WriteAllBytes(Path.Combine(x64, "differing.json"), [4, 5, 6]);
+            AssertThrows<InvalidDataException>(
+                () => Task.Run(() => MacUniversalPayloadMerger.Merge([x64, conflictArm],
+                    Path.Combine(output, "conflict"))),
+                "Differing non-Mach-O files must fail the universal merge.").GetAwaiter().GetResult();
+            Cleanup(conflictArm);
+        }
+        finally
+        {
+            Cleanup(x64, arm64, output);
+        }
+        return Task.CompletedTask;
     }
 
     static async Task PassesCarAndDegradesIconInputs()

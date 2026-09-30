@@ -156,6 +156,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - WiX v3 已退出免费社区服务；大范围公开分发前须重新评估维护风险（见 `third_party/wix/msi-wix-provenance.md`）。
 - `MSI-OI-12`/`MSI-OI-13` 等外部事项待有对应环境时验收。
 - MSBuild 入口 `osx` 打包姿势待研（2026-09-30 Lin 登记）：参考 MAUI（net-macos TFM `RuntimeIdentifiers` 复数发布即产 universal）评估更优雅的处理方式；现状需直调 `BundleDesktopApplication` 目标手工喂预合并 universal 目录。
+  → 已实现于分支 `devin/osx-universal-msbuild`（待 Lin 审）：`BundlerUniversalRuntimeIdentifiers` 复数 RID 内层发布 + `Bundler.MacApp` 纯托管 fat 合并器 + `MergeUniversalPayload` MSBuild 任务；Linux 宿主 E2E 产 fat osx zip，mac arm64 实跑 PASS。
 - MAC 规划轮已确认项（2026-09-26）：PKG 纳入 `PackageFormat`（`MAC-DMG` 后、Linux 前）；宿主工具检测策略替代内嵌供应（原则：构建工具尽量覆盖更多宿主设备；Xcode 专属工具只服务可选能力且须可降级；产出物设备兼容范围由应用开发者决定）；后端按格式分包 `Bundler.MacApp`/`Bundler.MacDmg`/`Bundler.MacPkg` + 共享 `Bundler.Signing.Mac`；universal 走 `osx-x64`/`osx-arm64` 双产物不加枚举。
 - MAC 规划轮决策全部确认（2026-09-26）：`CFBundleVersion` 默认=版本号可覆盖；`LSMinimumSystemVersion` 调用方显式配置、未配置不写入；构建宿主=未签名 `.app` 任意宿主可构建（附权限位警告），需 Apple 工具的步骤限 macOS；宿主下限对齐 Tauri 同等标准（公证走 `notarytool`，Xcode 13+/macOS 11.3+），`actool`/`SetFile` 为可降级可选增强。
 - `MAC-APP-OI-*` 外部事项（Developer ID 证书/公证凭证、Rosetta/Intel 宿主、干净宿主矩阵等）待有对应环境时验收；MAC-APP-4 已将 quarantine 拦截、LSMinimumSystemVersion 超限拒绝、v1→v2 原地升级、osx-x64 产物结构转自动化。

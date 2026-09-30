@@ -211,8 +211,9 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | --- | --- | --- |
 | `BundlerEnabled` | 是 | `false` |
 | `BundlerIdentifier` | 是 | — |
-| `RuntimeIdentifier` | 是 | — |
+| `RuntimeIdentifier` | 是 | —；`BundlerUniversalRuntimeIdentifiers` 设置时可省略 |
 | `BundlerFormats` | 否 | `nsis` |
+| `BundlerUniversalRuntimeIdentifiers` | 否 | 无；macOS universal 用——复数 RID（如 `osx-x64;osx-arm64`）对每个 RID 内层 `dotnet publish` 后托管合并成 universal 目录再按 `osx` 打包 |
 | `BundlerProductName` | 否 | `$(AssemblyName)` |
 | `BundlerVersion` | 否 | `$(Version)` |
 | `BundlerMainExecutable` | 否 | `$(TargetName).exe` |

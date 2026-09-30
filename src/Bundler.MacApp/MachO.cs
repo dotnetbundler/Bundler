@@ -53,6 +53,87 @@ internal static class MachO
         }
     }
 
+    /// <summary>
+    /// Header detail for merging: each entry is one architecture slice — cpu type/subtype and the
+    /// byte range (offset+size) of its code inside the file. Thin files produce a single entry
+    /// covering the whole file. Empty list when the file is not Mach-O.
+    /// </summary>
+    internal static IReadOnlyList<MachOSliceInfo> ReadSliceInfos(string path)
+    {
+        byte[] header;
+        using (var stream = File.OpenRead(path))
+        {
+            header = new byte[8];
+            if (stream.Read(header, 0, header.Length) != header.Length)
+            {
+                return [];
+            }
+        }
+
+        var magic = ReadBigEndian32(header, 0);
+        var fileSize = new FileInfo(path).Length;
+        switch (magic)
+        {
+            case ThinLittleEndian32:
+            case ThinLittleEndian64:
+                return [new MachOSliceInfo(ReadUInt32(path, 4, bigEndian: false), ReadUInt32(path, 8, bigEndian: false), 0, fileSize)];
+            case ThinBigEndian32:
+            case ThinBigEndian64:
+                return [new MachOSliceInfo(ReadUInt32(path, 4, bigEndian: true), ReadUInt32(path, 8, bigEndian: true), 0, fileSize)];
+            case FatBigEndian32:
+                return ReadFatSliceInfos(path, entrySize: 20, bigEndian: true, wideOffsets: false);
+            case FatBigEndian64:
+                return ReadFatSliceInfos(path, entrySize: 32, bigEndian: true, wideOffsets: true);
+            case FatLittleEndian32:
+                return ReadFatSliceInfos(path, entrySize: 20, bigEndian: false, wideOffsets: false);
+            case FatLittleEndian64:
+                return ReadFatSliceInfos(path, entrySize: 32, bigEndian: false, wideOffsets: true);
+            default:
+                return [];
+        }
+    }
+
+    private static IReadOnlyList<MachOSliceInfo> ReadFatSliceInfos(string path, int entrySize, bool bigEndian, bool wideOffsets)
+    {
+        var count = ReadUInt32(path, 4, bigEndian);
+        if (count == 0 || count > 64)
+        {
+            return [];
+        }
+        var buffer = new byte[count * entrySize];
+        using (var stream = File.OpenRead(path))
+        {
+            stream.Position = 8;
+            var read = stream.Read(buffer, 0, buffer.Length);
+            if (read != buffer.Length)
+            {
+                return [];
+            }
+        }
+        var slices = new List<MachOSliceInfo>((int)count);
+        for (var index = 0; index < count; index++)
+        {
+            var at = index * entrySize;
+            uint Read32(int rel) => bigEndian ? ReadBigEndian32(buffer, at + rel) : ReadLittleEndian32(buffer, at + rel);
+            var cpuType = Read32(0);
+            var cpuSubtype = Read32(4);
+            long offset;
+            long size;
+            if (wideOffsets)
+            {
+                offset = ((long)Read32(8) << 32) | Read32(12);
+                size = ((long)Read32(16) << 32) | Read32(20);
+            }
+            else
+            {
+                offset = Read32(8);
+                size = Read32(12);
+            }
+            slices.Add(new MachOSliceInfo(cpuType, cpuSubtype, offset, size));
+        }
+        return slices;
+    }
+
     private static IReadOnlyList<string> ReadFatArchitectures(string path, int entrySize, bool bigEndian)
     {
         var count = ReadUInt32(path, 4, bigEndian);
@@ -113,4 +194,21 @@ internal static class MachO
         0x0200000C => "arm64_32",
         _ => $"0x{cpuType:X8}"
     };
+}
+
+/// <summary>One architecture slice inside a Mach-O: cpu identity plus byte range.</summary>
+internal sealed class MachOSliceInfo
+{
+    internal MachOSliceInfo(uint cpuType, uint cpuSubtype, long offset, long size)
+    {
+        CpuType = cpuType;
+        CpuSubtype = cpuSubtype;
+        Offset = offset;
+        Size = size;
+    }
+
+    internal uint CpuType { get; }
+    internal uint CpuSubtype { get; }
+    internal long Offset { get; }
+    internal long Size { get; }
 }
