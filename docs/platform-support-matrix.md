@@ -6,22 +6,52 @@
 
 ## 1. 各后端打包工具：生产侧 × 消费侧
 
-每个工具/格式一行：**生产侧**=哪些系统可产出该格式，**消费侧**=产物可装/可运行的目标系统。两侧各含 OS、架构、版本下限；括注口径。
+记号：**✓**=已实测通过，**○**=支持（契约或官方口径，未实测），**✗**=不支持，**—**=不适用（该格式不面向该宿主）。
+宿主版本下限另列于表注；格内只答"行/不行"。
 
-| 工具/格式 | 生产侧（可产宿主：OS+架构+版本） | 消费侧（产物可装/可运行：OS+架构+版本） |
-| --- | --- | --- |
-| `.nsis`（makensis 3.12-r1 内嵌） | **Windows**（x86 原生工具→x64/arm64 经 x86 仿真，契约）、**Linux** x64/arm64（内嵌宿主二进）、**macOS** x64/arm64（内嵌宿主二进）。版本随工具构建基线——已实测 ubuntu 22.04（glibc 2.35）/macOS 26.5 arm64/Windows Server 2022 x64/qemu aarch64；musl 宿主未实测 | **Windows NT 系**（官方支持面约 XP 起，更老未实测）：x86 stub 在 x64 经 WoW64、arm64 经 x86 仿真装卸实过；win-x64/win-arm64/win-x86 产物真实 Windows 装卸全过（实测 Win10/11/Server 2022） |
-| `.msi`（WiX 3.14.1 内嵌） | **仅 Windows**（契约硬拒非 Windows）；x86 进程，x64/arm64 宿主经仿真；宿主须预装 .NET Framework 4.5+（Win10+ 预装满足零额外安装，Win7 需另装未实测） | **Windows Installer 5.0+ = Windows 7 / Server 2008R2 起**（`InstallerVersion="500"` 契约）；x64/arm64/x86 目标各自独立产物 |
-| `.app`（纯托管写入器） | **任意 .NET 宿主**（契约）；POSIX 宿主保 unix 执行位，非 POSIX 宿主产物丢执行位（降级警告，契约） | **macOS**：版本由应用自身 `LSMinimumSystemVersion` 决定（调用方显式配置）；x86_64/arm64/universal 载荷均可；实过 macOS 26.5 arm64 实装+运行 |
-| `.dmg`（`hdiutil`/`osascript`/`SetFile`） | **仅 macOS**（契约硬拒）；Intel 宿主约 10.5+、arm64 宿主 ≥11.0（硬件边界） | **macOS**：挂载侧按压缩格式——默认 `Ulmo` 需 10.12+，`Udzo`/`Udbz` 可到更老；x86_64/arm64 产物实过挂载（arm64 实测，x64 结构断言） |
-| `.pkg`（`pkgbuild`/`productbuild`） | **仅 macOS**（契约硬拒）；≥10.7（工具自 10.7 引入）、arm64 ≥11.0 | **macOS**：随 Apple Installer 支持面（保守记 10.7+，更低未实测）；arm64 实过 per-user 域免提权安装+收据 |
-| `.deb`（纯托管 ar/tar/gzip） | **任意 .NET 宿主**（契约，零外部进程） | **dpkg 系发行版**（Debian/Ubuntu 及衍生，x86_64/arm64 等按载荷）：官方支持随发行版滚动，EOL 只记可运行；实过 debian:stable/ubuntu 容器 `dpkg -i/-r` |
-| `.rpm`（纯托管 lead/header/cpio/gzip） | **任意 .NET 宿主**（契约，零外部进程） | **RPM 系发行版**（Fedora/RHEL 系/openSUSE 及衍生）：gzip-only 载荷，SUSE/RHEL 旧版宏差异如实记；实过 fedora/rockylinux/opensuse 三容器 `rpm -i/-e` |
-| `.AppImage`（appimagetool+type2 runtime 内嵌） | **仅 Linux** x86_64/aarch64（契约硬拒，appimagetool 为 ELF）；glibc 宿主已实测 ubuntu 22.04/qemu aarch64，musl 宿主未实测 | **Linux**：运行下限=载荷自身 glibc/运行时约束+宿主 FUSE 或 `--appimage-extract`；x86_64/aarch64 产物结构实过（aarch64 经 binfmt 运行） |
-| `.apk`（纯托管三段 gzip） | **任意 .NET 宿主**（契约，零外部进程；可选 RSA 签名经 BouncyCastle） | **apk 系发行版**（Alpine 及衍生，musl）：实过 `alpine:latest` x86_64/aarch64(binfmt) 实装/卸载/可信签名验签 |
-| `.zip`/`.tar.gz`（纯托管写入器） | **任意 .NET 宿主**（契约，零外部进程） | **任意可解压宿主**：`.zip` 拒绝 >4GB（Zip64 不支持）；unix mode/symlink 还原依赖解出工具（Windows 解出降级为普通文件，契约如实记录） |
-| Windows Authenticode 签名 | **仅 Windows** 宿主（内嵌 provider，无 signtool 依赖） | 生产证书/时间戳属外部待验收 |
-| macOS codesign/公证 | **仅 macOS**：codesign ≥10.5；**公证腿** `notarytool`/`stapler` 需 Xcode 13+（宿主约 macOS 11.3+，对齐 Tauri）；`.icon`→`Assets.car` 需 Xcode 26+（约 macOS 15.6+，可降级可选） | 公证是唯一抬高生产侧下限的环节；不公证时 `.app`+`.dmg`+`.pkg` 消费侧下限如上各行 |
+### 1.1 生产侧：什么宿主能产出该格式
+
+| 格式 | Win x64 | Win arm64 | Win x86 | Linux x64 | Linux arm64 | Linux musl | mac x64 | mac arm64 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `.nsis` [a] | ✓ | ○ | ○ | ✓ | ✓ | ✗ | ○ | ✓ |
+| `.msi` [b] | ✓ | ○ | ○ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `.app` [c] | ✓ | ○ | ○ | ✓ | ✓ | ○ | ○ | ✓ |
+| `.dmg` [d] | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ○ | ✓ |
+| `.pkg` [e] | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ○ | ✓ |
+| `.deb` [f] | ✓ | ○ | ○ | ✓ | ✓ | ○ | ○ | ✓ |
+| `.rpm` [f] | ✓ | ○ | ○ | ✓ | ✓ | ○ | ○ | ✓ |
+| `.AppImage` [g] | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | ✗ |
+| `.apk` [f] | ✓ | ○ | ○ | ✓ | ✓ | ○ | ○ | ✓ |
+| `.zip` / `.tar.gz` [f] | ✓ | ○ | ○ | ✓ | ✓ | ○ | ○ | ✓ |
+| Windows 签名（Authenticode） [h] | ✓ | ○ | ○ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| macOS codesign/公证 [i] | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ○ | ○ |
+
+### 1.2 消费侧：产物能装/能跑在什么系统
+
+| 格式 | Win x64 | Win arm64 | Win x86 | mac x64 | mac arm64 | Linux x64 | Linux arm64 | Linux musl |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `.nsis` [a] | ✓ | ✓ | ✓ | — | — | — | — | — |
+| `.msi` [b] | ✓ | ○ | ✓ | — | — | — | — | — |
+| `.app` [c] | — | — | — | ○ | ✓ | — | — | — |
+| `.dmg` [d] | — | — | — | ○ | ✓ | — | — | — |
+| `.pkg` [e] | — | — | — | ○ | ✓ | — | — | — |
+| `.deb` [f] | — | — | — | — | — | ✓ | ✓ | — |
+| `.rpm` [f] | — | — | — | — | — | ✓ | ✓ | — |
+| `.AppImage` [g] | — | — | — | — | — | ✓ | ✓ | ✗ |
+| `.apk` [f] | — | — | — | — | — | — | — | ✓ |
+| `.zip` / `.tar.gz` [f] | ✓ | ○ | ○ | ○ | ✓ | ✓ | ✓ | ○ |
+
+### 表注（版本下限与条件）
+
+- **[a] `.nsis`**：生产侧任意 Windows 架构皆走内嵌 `win-x86` makensis（x64 经 WoW64、arm64 经 x86 仿真）；linux/osx 走内嵌 `linux-{x64,arm64}`、`osx-{x64,arm64}` 二进，版本随工具构建基线（已实测 ubuntu 22.04/macOS 26.5 arm64/Win Server 2022/qemu aarch64）；musl 宿主无对应工具（glibc ELF，推断不可跑）。消费侧=Windows NT 系（官方面 XP 起，更老未实测），x86 stub 经 WoW64/x86 仿真在全架构实过。
+- **[b] `.msi`**：生产侧仅 Windows，宿主须预装 .NET Framework 4.5+（Win10+ 自带，Win7 需另装未实测）；消费侧 `InstallerVersion="500"` → Windows Installer 5.0 = **Windows 7/Server 2008R2 起**；win-arm64 消费格为 ○（arm64 MSI 已产出并结构验证，真机 arm64 安装未验）。
+- **[c] `.app`**：生产侧任意 .NET 宿主，非 POSIX 宿主产物丢 unix 执行位（降级警告）。消费侧 macOS 版本由应用 `LSMinimumSystemVersion` 决定（不配置不写入）；实测 macOS 26.5 arm64 实装+运行。
+- **[d] `.dmg`**：生产侧仅 macOS——Intel 宿主约 10.5+（hdiutil 自 10.5 起）、arm64 宿主 ≥11.0（硬件边界）。消费侧按压缩格式：默认 `Ulmo` 需 macOS 10.12+（`Udzo`/`Udbz` 可到更老）。
+- **[e] `.pkg`**：生产侧仅 macOS ≥10.7（pkgbuild/productbuild 自 10.7 引入）、arm64 ≥11.0；消费侧随 Apple Installer 支持面（保守记 10.7+，更低未实测）；实过 per-user 域免提权安装+收据。
+- **[f] 纯托管后端（deb/rpm/apk/zip/targz）**：零外部进程，生产侧=任意 .NET 宿主，○ 格仅为未实测而非不支持。消费侧 deb→dpkg 系、rpm→RPM 系、apk→apk 系（Alpine 及衍生，musl）；zip/targz 任意可解压宿主，`.zip` 拒 >4GB，mode/symlink 还原依赖解出工具。
+- **[g] `.AppImage`**：生产侧仅 Linux x86_64/aarch64（appimagetool 为 ELF，代码硬拒），musl 宿主无对应运行时。消费侧 type2 runtime 为 glibc 链接 → musl ✗；运行需 FUSE 或 `--appimage-extract`，版本下限=载荷自身约束。
+- **[h] Windows 签名**：内嵌 Authenticode provider（无 signtool 依赖）仅 Windows 宿主；生产证书/时间戳属外部待验收。
+- **[i] macOS 签名/公证**：codesign ≥10.5；`notarytool`/`stapler` 需 Xcode 13+（宿主约 macOS 11.3+）；`.icon`→`Assets.car` 需 Xcode 26+（约 macOS 15.6+，可降级可选）。公证是唯一抬高生产侧下限的环节；生产证书/真机公证属外部待验收。
 
 ## 2. MSBuild 入口下限（按后端分）
 
