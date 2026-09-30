@@ -45,5 +45,5 @@
 | 覆盖安装升级 | 已实现 | MAC-PKG-4 实测 | 同 identifier v1→v2 覆盖安装实测：收据 `pkg-version` 更新到 2.0.0；无降级保护 |
 | 同 bundle 标识既有副本时的安装重定位 | 已记录边界 | 2026-09-30 联合测试实测 | 宿主存在同 CFBundleIdentifier 的既有 `.app` 副本时，macOS installer 将新 pkg 载荷安装到既有副本位置（重定位）而非全新目标路径；移除旧副本后按默认目标安装——系统原生语义非缺陷 |
 | 一键卸载 | 明确拒绝 | — | `.pkg` 无此语义；`pkgutil --forget` 只清收据，文件按 BOM 清单清理 |
-| `osx-x64` 产物 | 已实现（结构） | MAC-PKG-4 实测 | `osx-x64/pkg/` 产出、expand-full payload 内 `file` 断言 x86_64 Mach-O；运行态需 Rosetta/Intel 宿主，属 OI-04 |
+| `osx-x64` 产物 | 已实现（结构） | MAC-PKG-4 实测 | `osx-x64/pkg/` 产出、expand-full payload 内 `file` 断言 x86_64 Mach-O；运行态需 Rosetta/Intel 宿主，属 OI-04；裸 `osx` 通用目标 `e7dfeae` 起亦通 |
 | `system` 域管理员安装 | 外部待验收 | MAC-PKG-4 | 本机无 root，登记 MAC-PKG-OI-01 |

@@ -4130,3 +4130,14 @@ MSBuild 包补载 `BouncyCastle.Cryptography.dll`。
 - `BundleDesktopApplication` 捕获 `BundleValidationException` 逐条透传 `issue.Path: issue.Message`——此前 MSBuild 只报数量不报原因。
 
 确定性边界查明：托管写入器（deb/rpm/zip/targz）同条件逐字节确定（同宿主跨轮 + linux↔qemu 同型跨宿主一致）；nsis/appimage 差异归因外部工具内嵌时间戳（输入级元数据，给定相同输入 makensis 输出确定）；跨 OS archive 差异归因 publish 载荷元数据与宿主 mode 表达。pkg 重定位为宿主预存同 CFBundleIdentifier 副本触发的系统语义，清除后不复现。
+
+
+## 2026-09-30 · RID 泛化与 osx/linux-musl 目标（三笔并入 `main`）
+
+按 `docs/development-rules.md` §3 门禁原则落地（只按工具链真实能力与产物语义真实性限制）：
+
+- `7feea33` feat(core)：`BundleTarget.TryParse` 从 7 条组合白名单改为 `<os>-<arch>` 语法解析——os∈win/osx/linux/linux-musl、arch∈x86/x64/arm64（枚举即全集，枚举外解析失败、有需求按行补）；新增 `CpuArchitecture.Universal` 与 `DesktopOperatingSystem.LinuxMusl`；校验器/CLI 三处 RID 清单文案同步。
+- `e7dfeae` feat(mac)：裸 `osx` 通用目标——`MacApp` 校验从单架构改必需切片集，`osx` 要求载荷内每个 Mach-O 同时含 x86_64+arm64（fake-fat/thin 断言）；修 MSBuild 裸 `osx` 误配 `.exe` 后缀。上游前提：fat 载荷须调用方预合并，Bundler 不合成。
+- `02b2521` feat(linux)：`linux-musl-x64/arm64` 挂 `zip`/`targz`（矩阵映射 + `ArchiveBundler` 注册）；`deb`/`rpm`/`appimage` 按 glibc 语义拒绝（3 条断言）。
+
+测试：`Bundler.Tests` 全量 PASS（含 RID 解析、矩阵放通/拒绝、osx fat/thin 断言）；构建零警告零错误。
