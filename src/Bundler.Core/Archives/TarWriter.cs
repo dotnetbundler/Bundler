@@ -6,7 +6,10 @@ internal enum TarEntryKind
 {
     File,
     Directory,
-    Symlink
+    Symlink,
+
+    /// <summary>pax extended header; <see cref="TarEntry.Content"/> holds the records block.</summary>
+    PaxHeader
 }
 
 /// <summary>A single ustar archive entry. <see cref="Content"/> is used for files only.</summary>
@@ -18,6 +21,12 @@ internal sealed class TarEntry
     internal int Mode;
     internal byte[] Content = [];
     internal string LinkTarget = "";
+
+    /// <summary>
+    /// Optional pax extended-header records written as an 'x'-type entry
+    /// immediately before this entry (e.g. apk's APK-TOOLS.checksum.SHA1).
+    /// </summary>
+    internal IReadOnlyList<KeyValuePair<string, string>>? PaxRecords;
 }
 
 /// <summary>
@@ -31,11 +40,36 @@ internal static class TarWriter
     // instead of the Unix epoch because linters (e.g. lintian's
     // package-contains-ancient-file) flag dates at/below the mid-70s.
     internal const long EntryMtime = 315532800L;
-    internal static void Write(Stream output, IEnumerable<TarEntry> entries)
+
+    internal static void Write(Stream output, IEnumerable<TarEntry> entries) =>
+        Write(output, entries, omitEndOfArchive: false);
+
+    /// <summary>
+    /// Writes the entries; <paramref name="omitEndOfArchive"/> drops the final
+    /// pair of zero blocks for tar fragments that continue inside a larger
+    /// container (apk signature/control gzip streams never carry the end marker).
+    /// </summary>
+    internal static void Write(Stream output, IEnumerable<TarEntry> entries, bool omitEndOfArchive)
     {
         var header = new byte[512];
         var zeroBlock = new byte[512];
         foreach (var entry in entries)
+        {
+            if (entry.PaxRecords is { Count: > 0 } paxRecords)
+            {
+                WriteEntry(output, header, zeroBlock, PaxEntry(entry.Name, paxRecords));
+            }
+            WriteEntry(output, header, zeroBlock, entry);
+        }
+        if (!omitEndOfArchive)
+        {
+            output.Write(zeroBlock, 0, zeroBlock.Length);
+            output.Write(zeroBlock, 0, zeroBlock.Length);
+        }
+    }
+
+    private static void WriteEntry(Stream output, byte[] header, byte[] zeroBlock, TarEntry entry)
+    {
         {
             Array.Clear(header, 0, header.Length);
             var name = entry.Name;
@@ -54,7 +88,7 @@ internal static class TarWriter
             WriteOctal(header, 100, 8, entry.Mode);
             WriteOctal(header, 108, 8, 0);               // uid
             WriteOctal(header, 116, 8, 0);               // gid
-            WriteOctal(header, 124, 12, entry.Kind == TarEntryKind.File ? entry.Content.Length : 0);
+            WriteOctal(header, 124, 12, entry.Kind is TarEntryKind.File or TarEntryKind.PaxHeader ? entry.Content.Length : 0);
             WriteOctal(header, 136, 12, EntryMtime);     // mtime
             for (var i = 148; i < 156; i++)
             {
@@ -64,6 +98,7 @@ internal static class TarWriter
             {
                 TarEntryKind.Directory => (byte)'5',
                 TarEntryKind.Symlink => (byte)'2',
+                TarEntryKind.PaxHeader => (byte)'x',
                 _ => (byte)'0',
             };
             if (entry.Kind == TarEntryKind.Symlink)
@@ -84,7 +119,7 @@ internal static class TarWriter
             var checksum = header.Sum(b => (int)b);
             WriteChecksum(header, checksum);
             output.Write(header, 0, header.Length);
-            if (entry.Kind == TarEntryKind.File && entry.Content.Length > 0)
+            if (entry.Kind is TarEntryKind.File or TarEntryKind.PaxHeader && entry.Content.Length > 0)
             {
                 output.Write(entry.Content, 0, entry.Content.Length);
                 var remainder = entry.Content.Length % 512;
@@ -94,8 +129,42 @@ internal static class TarWriter
                 }
             }
         }
-        output.Write(zeroBlock, 0, zeroBlock.Length);
-        output.Write(zeroBlock, 0, zeroBlock.Length);
+    }
+
+    // pax extended headers carry per-entry metadata that ustar cannot express;
+    // apk uses them for per-file APK-TOOLS.checksum.SHA1 digests.
+    private static TarEntry PaxEntry(string name, IReadOnlyList<KeyValuePair<string, string>> records) =>
+        new()
+        {
+            Name = name,
+            Kind = TarEntryKind.PaxHeader,
+            Mode = 420, // 0644
+            Content = BuildPaxData(records)
+        };
+
+    // Each record is "<len> <key>=<value>\n" where <len> counts itself.
+    private static byte[] BuildPaxData(IReadOnlyList<KeyValuePair<string, string>> records)
+    {
+        using var buffer = new MemoryStream();
+        foreach (var record in records)
+        {
+            var tail = Encoding.UTF8.GetBytes(record.Key + "=" + record.Value + "\n");
+            // len = digits(len) + 1 (space) + tail bytes; solve for the digit count.
+            var length = 0;
+            for (var d = 1; ; d++)
+            {
+                var candidate = tail.Length + 1 + d;
+                if (candidate.ToString().Length == d)
+                {
+                    length = candidate;
+                    break;
+                }
+            }
+            var prefix = Encoding.ASCII.GetBytes(length + " ");
+            buffer.Write(prefix, 0, prefix.Length);
+            buffer.Write(tail, 0, tail.Length);
+        }
+        return buffer.ToArray();
     }
 
     // Splits a path into ustar prefix/name so each fits its field.

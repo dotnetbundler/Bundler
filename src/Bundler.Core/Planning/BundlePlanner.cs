@@ -63,6 +63,7 @@ public static class BundlePlanner
     {
         PackageFormat.AppImage => "appimage",
         PackageFormat.TarGz => "targz",
+        PackageFormat.AlpineApk => "apk",
         _ => format.ToString().ToLowerInvariant()
     };
 }

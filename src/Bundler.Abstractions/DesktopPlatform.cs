@@ -27,5 +27,6 @@ public enum PackageFormat
     Rpm,
     AppImage,
     Zip,
-    TarGz
+    TarGz,
+    AlpineApk
 }

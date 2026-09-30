@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 using DotNet.Bundler;
+using DotNet.Bundler.AlpineApk;
 using DotNet.Bundler.Archive;
 using DotNet.Bundler.Deb;
 using DotNet.Bundler.MacApp;
@@ -40,6 +41,7 @@ internal sealed class CliResolvedConfiguration
 #endif
     public DebBundleConfiguration? Deb { get; init; }
     public RpmBundleConfiguration? Rpm { get; init; }
+    public AlpineApkBundleConfiguration? AlpineApk { get; init; }
 #if BUNDLER_HOST_LINUX
     public AppImageBundleConfiguration? AppImage { get; init; }
 #endif
@@ -68,7 +70,7 @@ internal static class CliConfig
 #if BUNDLER_HOST_LINUX
         "appimage",
 #endif
-        "archive"
+        "archive", "alpineapk"
     };
 
     public static CliResolvedConfiguration Resolve(CliArguments parsed)
@@ -128,7 +130,8 @@ internal static class CliConfig
 #if BUNDLER_HOST_LINUX
         ["appimage"] = typeof(AppImageBundleConfiguration),
 #endif
-        ["archive"] = typeof(ArchiveBundleConfiguration)
+        ["archive"] = typeof(ArchiveBundleConfiguration),
+        ["alpineapk"] = typeof(AlpineApkBundleConfiguration)
     };
 
     private static void EnforceSchema(JsonObject document)
@@ -449,7 +452,8 @@ internal static class CliConfig
 #if BUNDLER_HOST_LINUX
             AppImage = Section<AppImageBundleConfiguration>(document, "appimage"),
 #endif
-            Archive = Section<ArchiveBundleConfiguration>(document, "archive")
+            Archive = Section<ArchiveBundleConfiguration>(document, "archive"),
+            AlpineApk = Section<AlpineApkBundleConfiguration>(document, "alpineapk")
         };
     }
 

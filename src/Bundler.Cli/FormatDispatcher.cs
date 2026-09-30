@@ -1,4 +1,5 @@
 using DotNet.Bundler;
+using DotNet.Bundler.AlpineApk;
 using DotNet.Bundler.Archive;
 using DotNet.Bundler.Deb;
 using DotNet.Bundler.MacApp;
@@ -62,6 +63,9 @@ internal static class FormatDispatcher
 #endif
             PackageFormat.Zip or PackageFormat.TarGz => new ArchiveBundler(
                     resolved.Archive, new ArchiveBundlerOptions { Logger = logger })
+                .BuildAsync(singleFormatConfiguration, cancellationToken),
+            PackageFormat.AlpineApk => new AlpineApkBundler(
+                    resolved.AlpineApk, new AlpineApkBundlerOptions { Logger = logger })
                 .BuildAsync(singleFormatConfiguration, cancellationToken),
             // The arm for each host-restricted format is compiled only into its
             // own host build; anywhere else the format name still parses but

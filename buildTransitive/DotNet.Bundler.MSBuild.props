@@ -194,5 +194,12 @@
     <BundlerArchivePackageName Condition="'$(BundlerArchivePackageName)' == ''"></BundlerArchivePackageName>
     <BundlerArchiveVersion Condition="'$(BundlerArchiveVersion)' == ''"></BundlerArchiveVersion>
     <BundlerArchiveName Condition="'$(BundlerArchiveName)' == ''"></BundlerArchiveName>
+    <BundlerAlpineApkPackageName Condition="'$(BundlerAlpineApkPackageName)' == ''"></BundlerAlpineApkPackageName>
+    <BundlerAlpineApkVersion Condition="'$(BundlerAlpineApkVersion)' == ''"></BundlerAlpineApkVersion>
+    <BundlerAlpineApkArchitecture Condition="'$(BundlerAlpineApkArchitecture)' == ''"></BundlerAlpineApkArchitecture>
+    <BundlerAlpineApkOrigin Condition="'$(BundlerAlpineApkOrigin)' == ''"></BundlerAlpineApkOrigin>
+    <BundlerAlpineApkDescription Condition="'$(BundlerAlpineApkDescription)' == ''"></BundlerAlpineApkDescription>
+    <BundlerAlpineApkUrl Condition="'$(BundlerAlpineApkUrl)' == ''"></BundlerAlpineApkUrl>
+    <BundlerAlpineApkBinLink Condition="'$(BundlerAlpineApkBinLink)' == ''"></BundlerAlpineApkBinLink>
   </PropertyGroup>
 </Project>

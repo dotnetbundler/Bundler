@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
+using DotNet.Bundler.AlpineApk;
 using DotNet.Bundler.AppImage;
 using DotNet.Bundler.Archive;
 using DotNet.Bundler.Deb;
@@ -242,6 +243,13 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string ArchiveVersion { get; set; } = "";
     public string ArchiveName { get; set; } = "";
     public ITaskItem[] ArchiveFiles { get; set; } = Array.Empty<ITaskItem>();
+    public string AlpineApkPackageName { get; set; } = "";
+    public string AlpineApkVersion { get; set; } = "";
+    public string AlpineApkArchitecture { get; set; } = "";
+    public string AlpineApkOrigin { get; set; } = "";
+    public string AlpineApkDescription { get; set; } = "";
+    public string AlpineApkUrl { get; set; } = "";
+    public string AlpineApkBinLink { get; set; } = "";
     public ITaskItem[] MacContents { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -598,6 +606,26 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         }).ToArray()
                     },
                     new ArchiveBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
+                    .BuildAsync(configuration)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            else if (format == PackageFormat.AlpineApk)
+            {
+                produced = new AlpineApkBundler(
+                    new AlpineApkBundleConfiguration
+                    {
+                        PackageName = EmptyToNull(AlpineApkPackageName),
+                        Version = EmptyToNull(AlpineApkVersion),
+                        Architecture = EmptyToNull(AlpineApkArchitecture),
+                        Origin = EmptyToNull(AlpineApkOrigin),
+                        Description = EmptyToNull(AlpineApkDescription),
+                        Url = EmptyToNull(AlpineApkUrl),
+                        BinLink = string.Equals(AlpineApkBinLink, "none", StringComparison.OrdinalIgnoreCase)
+                            ? ""
+                            : EmptyToNull(AlpineApkBinLink)
+                    },
+                    new AlpineApkBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     .BuildAsync(configuration)
                     .GetAwaiter()
                     .GetResult();

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DotNet.Bundler;
+using DotNet.Bundler.AlpineApk;
 using DotNet.Bundler.Archive;
 using DotNet.Bundler.Deb;
 using DotNet.Bundler.MacApp;
@@ -44,4 +45,5 @@ namespace DotNet.Bundler.Cli;
 [JsonSerializable(typeof(AppImageBundleConfiguration))]
 #endif
 [JsonSerializable(typeof(ArchiveBundleConfiguration))]
+[JsonSerializable(typeof(AlpineApkBundleConfiguration))]
 internal partial class BundlerJsonContext : JsonSerializerContext;

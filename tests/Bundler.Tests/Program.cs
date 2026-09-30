@@ -66,7 +66,7 @@ var tests = new (string Name, Func<Task> Test)[]
 
 tests = tests.Append(("Keeps package consumer versions aligned", () => RunSync(KeepsPackageConsumerVersionsAligned)))
     .Append(("Passes validation issue details through MSBuild errors", () => RunSync(PassesValidationIssueDetailsThroughMsBuild)))
-    .Concat(WixTests.Cases).Concat(MacAppTests.Cases).Concat(MacDmgTests.Cases).Concat(MacPkgTests.Cases).Concat(DebTests.Cases).Concat(RpmTests.Cases).Concat(AppImageTests.Cases).Concat(ArchiveTests.Cases).Concat(CliTests.Cases).ToArray();
+    .Concat(WixTests.Cases).Concat(MacAppTests.Cases).Concat(MacDmgTests.Cases).Concat(MacPkgTests.Cases).Concat(DebTests.Cases).Concat(RpmTests.Cases).Concat(AppImageTests.Cases).Concat(ArchiveTests.Cases).Concat(AlpineApkTests.Cases).Concat(CliTests.Cases).ToArray();
 
 var failed = 0;
 foreach (var (name, test) in tests)
@@ -159,11 +159,11 @@ static void RejectsIncompatibleFormats()
         var muslArchive = ValidConfiguration(new BundleTargetConfiguration
         {
             RuntimeIdentifier = rid, InputDirectory = "unused",
-            Formats = [PackageFormat.Zip, PackageFormat.TarGz]
+            Formats = [PackageFormat.Zip, PackageFormat.TarGz, PackageFormat.AlpineApk]
         });
         Assert(!BundleConfigurationValidator.Validate(muslArchive, checkFileSystem: false)
                 .Any(issue => issue.Path == "targets[0].formats"),
-            $"Zip/TarGz must accept the musl target {rid}.");
+            $"Zip/TarGz/AlpineApk must accept the musl target {rid}.");
         var muslGlibc = ValidConfiguration(new BundleTargetConfiguration
         {
             RuntimeIdentifier = rid, InputDirectory = "unused",
