@@ -1,7 +1,7 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-09-30
-> 当前分支：`main`（Alpine `.apk` `APK-1..5` 终审并入，PR #13 merge `5585843`；HEAD `5585843`）
+> 当前分支：`main`（osx universal 编排并入，PR #14 merge `cf0aa1a`；HEAD `cf0aa1a`）
 > 当前包版本：`0.1.0-alpha.63`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；`.deb` 冻结基线 `alpha.51`，`.rpm` 冻结基线 `alpha.55`，`.pkg` 冻结基线 `alpha.47`，`.app`/`.dmg` 冻结基线 `alpha.45`；`.apk` 冻结基线 `alpha.63`）
 > 当前阶段：WIN-MSI-1..9 全部完成（MSI 冻结于 `alpha.43`）；macOS `.app`/`.dmg`/`.pkg` 均已冻结；
 > `LINUX-DEB-1..5` 全部完成，`.deb` 冻结并已入 `main`：冻结基线 `0.1.0-alpha.51`，测试向量 141/141 + `Verify.sh` 全绿
@@ -15,6 +15,7 @@
 > `CLI-C1` 已完成（分支 `cli-development`，`0.1.0-alpha.62`）：CLI 契约冻结——三命令/退出码/`--json`/`bundler.json` schema/全格式旋钮面/dotnet tool nupkg + 原生 AOT 二进制双分发；`Bundler.Tests` 198/198 + `tests/Cli.Integration/Verify.sh`（含 AOT 段）全绿。已并入 `main`。
 > 当前：全部既有格式与 CLI 已冻结并入 `main`；四平台全量验收与跨宿主联合测试四轮全绿（见 §3）
 > Alpine `.apk` 后端：`APK-1..5` 已冻结并入 `main`（PR #13 终审合并 `5585843`，冻结基线 `0.1.0-alpha.63`）——`DotNet.Bundler.AlpineApk` 纯托管三段 gzip 写入器、`.PKGINFO`+六脚本+任意映射、pax `APK-TOOLS.checksum.SHA1`（真实 apk 解剖口径：十六进制、符号链接按目标哈希、全条目 ctime/atime=0）、可选 RSA 签名段；`linux-musl-x64/arm64` 矩阵、`alpineapk`/`apk` CLI 别名与 bundler.json 段、MSBuild `BundlerAlpineApk*` 全端接线；`Bundler.Tests` 225 全绿、`tests/Alpine.Apk.Integration/Verify.sh` 全绿（`alpine:latest` 实装/卸载/可信签名/aarch64 binfmt/确定性）；决策与逐段证据见 `docs/alpine-apk-roadmap.md`
+> osx universal 编排已并入 `main`（PR #14 `cf0aa1a`）：`BundlerUniversalRuntimeIdentifiers` 复数 RID 内层发布 + `Bundler.MacApp` 纯托管 fat 合并器（Mach-O 并片、`.pdb`/`.dSYM` 取首份、其余不同即拒、单边薄 Mach-O 拒产）+ CLI `--input-dir` 可重复多目录合并；Devin Review 复审修复增量发布清陈/临时目录泄漏/RID 逐条校验；四宿主联合验收全绿
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
 > 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
@@ -155,8 +156,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - 本仓库开源许可证尚未确定。
 - WiX v3 已退出免费社区服务；大范围公开分发前须重新评估维护风险（见 `third_party/wix/msi-wix-provenance.md`）。
 - `MSI-OI-12`/`MSI-OI-13` 等外部事项待有对应环境时验收。
-- MSBuild 入口 `osx` 打包姿势待研（2026-09-30 Lin 登记）：参考 MAUI（net-macos TFM `RuntimeIdentifiers` 复数发布即产 universal）评估更优雅的处理方式；现状需直调 `BundleDesktopApplication` 目标手工喂预合并 universal 目录。
-  → 已实现于分支 `devin/osx-universal-msbuild`（待 Lin 审）：`BundlerUniversalRuntimeIdentifiers` 复数 RID 内层发布 + `Bundler.MacApp` 纯托管 fat 合并器 + `MergeUniversalPayload` MSBuild 任务；Linux 宿主 E2E 产 fat osx zip，mac arm64 实跑 PASS。
+- MSBuild 入口 `osx` 打包姿势待研（2026-09-30 Lin 登记）→ 已解决并入 `main`（PR #14 `cf0aa1a`）：`BundlerUniversalRuntimeIdentifiers` 复数 RID 内层发布 + 纯托管 fat 合并器 + `MergeUniversalPayload` 任务；CLI 侧 `--input-dir` 可重复。
 - MAC 规划轮已确认项（2026-09-26）：PKG 纳入 `PackageFormat`（`MAC-DMG` 后、Linux 前）；宿主工具检测策略替代内嵌供应（原则：构建工具尽量覆盖更多宿主设备；Xcode 专属工具只服务可选能力且须可降级；产出物设备兼容范围由应用开发者决定）；后端按格式分包 `Bundler.MacApp`/`Bundler.MacDmg`/`Bundler.MacPkg` + 共享 `Bundler.Signing.Mac`；universal 走 `osx-x64`/`osx-arm64` 双产物不加枚举。
 - MAC 规划轮决策全部确认（2026-09-26）：`CFBundleVersion` 默认=版本号可覆盖；`LSMinimumSystemVersion` 调用方显式配置、未配置不写入；构建宿主=未签名 `.app` 任意宿主可构建（附权限位警告），需 Apple 工具的步骤限 macOS；宿主下限对齐 Tauri 同等标准（公证走 `notarytool`，Xcode 13+/macOS 11.3+），`actool`/`SetFile` 为可降级可选增强。
 - `MAC-APP-OI-*` 外部事项（Developer ID 证书/公证凭证、Rosetta/Intel 宿主、干净宿主矩阵等）待有对应环境时验收；MAC-APP-4 已将 quarantine 拦截、LSMinimumSystemVersion 超限拒绝、v1→v2 原地升级、osx-x64 产物结构转自动化。
@@ -178,7 +178,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 ## 6. 默认下一步
 
-全部格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`/`.zip`/`.tar.gz`/`.apk`）与 CLI 均已冻结并入 `main`（HEAD `5585843`）。
+全部格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`/`.zip`/`.tar.gz`/`.apk`）与 CLI 均已冻结并入 `main`（HEAD `cf0aa1a`）。
 三平台全量验收完成（§3）；ARM64 qemu 仿真验收完成（partial，仿真已验/真机待验如实分级）。
 验收期缺陷修复并入 `main`：`58cd607`（CLI `DefaultsObject` 静态工厂，修复 AOT IL2067 发布回归）、`f1930f7`（打包输入跳过非普通文件 + AppImage 签名 keyring 移出暂存输入）。
 **CLI AOT 按宿主裁剪自研后端已实现并入 `main` `8f2ff8b`**（`docs/roadmap.md` §7.2）：RID 条件引用 + `#if` 裁剪，`linux-x64` 实发 47.4 MiB（-2.3 MB），四种编译口径零警告，`Cli.Integration` 新断言全绿。
