@@ -6,50 +6,60 @@
 
 ## 1. 各后端打包工具：生产侧 × 消费侧
 
-记号：**✓**=已实测通过，**○**=支持（契约或官方口径，未实测），**✗**=不支持，**—**=不适用（该格式不面向该宿主）。
+记号：
+
+- **✓** = 已实测通过
+- **○** = 支持（契约或官方口径，未实测）
+- **空白** = 不支持
+
 宿主版本下限另列于表注；格内只答"行/不行"。
 
 ### 1.1 生产侧：什么宿主能产出该格式
 
-| 格式 | Win x64 | Win arm64 | Win x86 | Linux x64 | Linux arm64 | Linux musl | mac x64 | mac arm64 |
+| 格式＼宿主 | Win x64 | Win arm64 | Win x86 | mac x64 | mac arm64 | Linux x64 | Linux arm64 | Linux musl |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `.nsis` [a] | ✓ | ○ | ○ | ✓ | ✓ | ✗ | ○ | ✓ |
-| `.msi` [b] | ✓ | ○ | ○ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| `.app` [c] | ✓ | ○ | ○ | ✓ | ✓ | ○ | ○ | ✓ |
-| `.dmg` [d] | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ○ | ✓ |
-| `.pkg` [e] | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ○ | ✓ |
-| `.deb` [f] | ✓ | ○ | ○ | ✓ | ✓ | ○ | ○ | ✓ |
-| `.rpm` [f] | ✓ | ○ | ○ | ✓ | ✓ | ○ | ○ | ✓ |
-| `.AppImage` [g] | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | ✗ |
-| `.apk` [f] | ✓ | ○ | ○ | ✓ | ✓ | ○ | ○ | ✓ |
-| `.zip` / `.tar.gz` [f] | ✓ | ○ | ○ | ✓ | ✓ | ○ | ○ | ✓ |
-| Windows 签名（Authenticode） [h] | ✓ | ○ | ○ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| macOS codesign/公证 [i] | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ○ | ○ |
+| `nsis` [a] | ✓ | ○ | ○ | ○ | ✓ | ✓ | ✓ |  |
+| `msi` [b] | ✓ | ○ | ○ |  |  |  |  |  |
+| `app` [c] | ✓ | ○ | ○ | ○ | ✓ | ✓ | ✓ | ○ |
+| `dmg` [d] |  |  |  | ○ | ✓ |  |  |  |
+| `pkg` [e] |  |  |  | ○ | ✓ |  |  |  |
+| `deb` [f] | ✓ | ○ | ○ | ○ | ✓ | ✓ | ✓ | ○ |
+| `rpm` [f] | ✓ | ○ | ○ | ○ | ✓ | ✓ | ✓ | ○ |
+| `AppImage` [g] |  |  |  |  |  | ✓ | ✓ |  |
+| `apk` [f] | ✓ | ○ | ○ | ○ | ✓ | ✓ | ✓ | ○ |
+| `zip` / `tar.gz` [f] | ✓ | ○ | ○ | ○ | ✓ | ✓ | ✓ | ○ |
 
 ### 1.2 消费侧：产物能装/能跑在什么系统
 
-| 格式 | Win x64 | Win arm64 | Win x86 | mac x64 | mac arm64 | Linux x64 | Linux arm64 | Linux musl |
+| 格式＼宿主 | Win x64 | Win arm64 | Win x86 | mac x64 | mac arm64 | Linux x64 | Linux arm64 | Linux musl |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `.nsis` [a] | ✓ | ✓ | ✓ | — | — | — | — | — |
-| `.msi` [b] | ✓ | ○ | ✓ | — | — | — | — | — |
-| `.app` [c] | — | — | — | ○ | ✓ | — | — | — |
-| `.dmg` [d] | — | — | — | ○ | ✓ | — | — | — |
-| `.pkg` [e] | — | — | — | ○ | ✓ | — | — | — |
-| `.deb` [f] | — | — | — | — | — | ✓ | ✓ | — |
-| `.rpm` [f] | — | — | — | — | — | ✓ | ✓ | — |
-| `.AppImage` [g] | — | — | — | — | — | ✓ | ✓ | ✗ |
-| `.apk` [f] | — | — | — | — | — | — | — | ✓ |
-| `.zip` / `.tar.gz` [f] | ✓ | ○ | ○ | ○ | ✓ | ✓ | ✓ | ○ |
+| `nsis` [a] | ✓ | ✓ | ✓ |  |  |  |  |  |
+| `msi` [b] | ✓ | ○ | ✓ |  |  |  |  |  |
+| `app` [c] |  |  |  | ○ | ✓ |  |  |  |
+| `dmg` [d] |  |  |  | ○ | ✓ |  |  |  |
+| `pkg` [e] |  |  |  | ○ | ✓ |  |  |  |
+| `deb` [f] |  |  |  |  |  | ✓ | ✓ |  |
+| `rpm` [f] |  |  |  |  |  | ✓ | ✓ |  |
+| `AppImage` [g] |  |  |  |  |  | ✓ | ✓ |  |
+| `apk` [f] |  |  |  |  |  |  |  | ✓ |
+| `zip` / `tar.gz` [f] | ✓ | ○ | ○ | ○ | ✓ | ✓ | ✓ | ○ |
+
+### 1.3 签名（横切能力，单独记不占格式行）
+
+| 签名项＼宿主 | Win x64 | Win arm64 | Win x86 | mac x64 | mac arm64 | Linux | 备注 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Windows Authenticode [h] | ✓ | ○ | ○ |  |  |  | 内嵌 provider，无 signtool 依赖 |
+| macOS codesign/公证 [i] |  |  |  | ○ | ○ |  | adhoc/自签实过，生产证书+公证外部待验 |
 
 ### 表注（版本下限与条件）
 
-- **[a] `.nsis`**：生产侧任意 Windows 架构皆走内嵌 `win-x86` makensis（x64 经 WoW64、arm64 经 x86 仿真）；linux/osx 走内嵌 `linux-{x64,arm64}`、`osx-{x64,arm64}` 二进，版本随工具构建基线（已实测 ubuntu 22.04/macOS 26.5 arm64/Win Server 2022/qemu aarch64）；musl 宿主无对应工具（glibc ELF，推断不可跑）。消费侧=Windows NT 系（官方面 XP 起，更老未实测），x86 stub 经 WoW64/x86 仿真在全架构实过。
-- **[b] `.msi`**：生产侧仅 Windows，宿主须预装 .NET Framework 4.5+（Win10+ 自带，Win7 需另装未实测）；消费侧 `InstallerVersion="500"` → Windows Installer 5.0 = **Windows 7/Server 2008R2 起**；win-arm64 消费格为 ○（arm64 MSI 已产出并结构验证，真机 arm64 安装未验）。
-- **[c] `.app`**：生产侧任意 .NET 宿主，非 POSIX 宿主产物丢 unix 执行位（降级警告）。消费侧 macOS 版本由应用 `LSMinimumSystemVersion` 决定（不配置不写入）；实测 macOS 26.5 arm64 实装+运行。
-- **[d] `.dmg`**：生产侧仅 macOS——Intel 宿主约 10.5+（hdiutil 自 10.5 起）、arm64 宿主 ≥11.0（硬件边界）。消费侧按压缩格式：默认 `Ulmo` 需 macOS 10.12+（`Udzo`/`Udbz` 可到更老）。
-- **[e] `.pkg`**：生产侧仅 macOS ≥10.7（pkgbuild/productbuild 自 10.7 引入）、arm64 ≥11.0；消费侧随 Apple Installer 支持面（保守记 10.7+，更低未实测）；实过 per-user 域免提权安装+收据。
-- **[f] 纯托管后端（deb/rpm/apk/zip/targz）**：零外部进程，生产侧=任意 .NET 宿主，○ 格仅为未实测而非不支持。消费侧 deb→dpkg 系、rpm→RPM 系、apk→apk 系（Alpine 及衍生，musl）；zip/targz 任意可解压宿主，`.zip` 拒 >4GB，mode/symlink 还原依赖解出工具。
-- **[g] `.AppImage`**：生产侧仅 Linux x86_64/aarch64（appimagetool 为 ELF，代码硬拒），musl 宿主无对应运行时。消费侧 type2 runtime 为 glibc 链接 → musl ✗；运行需 FUSE 或 `--appimage-extract`，版本下限=载荷自身约束。
+- **[a] `nsis`（产物 `.exe`）**：生产侧任意 Windows 架构皆走内嵌 `win-x86` makensis（x64 经 WoW64、arm64 经 x86 仿真）；linux/osx 走内嵌 `linux-{x64,arm64}`、`osx-{x64,arm64}` 二进，版本随工具构建基线（已实测 ubuntu 22.04/macOS 26.5 arm64/Win Server 2022/qemu aarch64）；musl 宿主与 32 位 Linux 架构（x86/arm）无对应工具，均非目标。消费侧=Windows NT 系（官方面 XP 起，更老未实测），x86 stub 经 WoW64/x86 仿真在全架构实过。
+- **[b] `msi`（产物 `.msi`）**：生产侧仅 Windows，宿主须预装 .NET Framework 4.5+（Win10+ 自带，Win7 需另装未实测）；消费侧 `InstallerVersion="500"` → Windows Installer 5.0 = **Windows 7/Server 2008R2 起**；win-arm64 消费格为 ○（arm64 MSI 已产出并结构验证，真机 arm64 安装未验）。
+- **[c] `app`（产物 `.app` 目录束）**：生产侧任意 .NET 宿主，非 POSIX 宿主产物丢 unix 执行位（降级警告）。消费侧 macOS 版本由应用 `LSMinimumSystemVersion` 决定（不配置不写入）；实测 macOS 26.5 arm64 实装+运行。
+- **[d] `dmg`（产物 `.dmg`）**：生产侧仅 macOS——Intel 宿主约 10.5+（hdiutil 自 10.5 起）、arm64 宿主 ≥11.0（硬件边界）。消费侧按压缩格式：默认 `Ulmo` 需 macOS 10.12+（`Udzo`/`Udbz` 可到更老）。
+- **[e] `pkg`（产物 `.pkg`）**：生产侧仅 macOS ≥10.7（pkgbuild/productbuild 自 10.7 引入）、arm64 ≥11.0；消费侧随 Apple Installer 支持面（保守记 10.7+，更低未实测）；实过 per-user 域免提权安装+收据。
+- **[f] 纯托管后端（产物 `.deb`/`.rpm`/`.apk`/`.zip`/`.tar.gz`）**：零外部进程，生产侧=任意 .NET 宿主，○ 格仅为未实测而非不支持。消费侧 deb→dpkg 系、rpm→RPM 系、apk→apk 系（Alpine 及衍生，musl）；zip/targz 任意可解压宿主，`.zip` 拒 >4GB，mode/symlink 还原依赖解出工具。
+- **[g] `AppImage`（产物 `.AppImage`）**：生产侧仅 Linux x86_64/aarch64（appimagetool 为 ELF，代码硬拒），musl 宿主与 32 位 Linux 架构（x86/arm）无对应运行时，均非目标。消费侧 type2 runtime 为 glibc 链接且仅含 x86_64/aarch64 → musl 与 32 位架构不支持；运行需 FUSE 或 `--appimage-extract`，版本下限=载荷自身约束。
 - **[h] Windows 签名**：内嵌 Authenticode provider（无 signtool 依赖）仅 Windows 宿主；生产证书/时间戳属外部待验收。
 - **[i] macOS 签名/公证**：codesign ≥10.5；`notarytool`/`stapler` 需 Xcode 13+（宿主约 macOS 11.3+）；`.icon`→`Assets.car` 需 Xcode 26+（约 macOS 15.6+，可降级可选）。公证是唯一抬高生产侧下限的环节；生产证书/真机公证属外部待验收。
 
