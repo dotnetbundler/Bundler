@@ -35,19 +35,24 @@
   - `Alpine`：`Alpine Linux(musl)`
 - `nsis`
   - 使用 `nsis` 作为打包工具，宿主下限以 [NsisToolset](https://github.com/dotnetbundler/NsisToolset#system-support) 声明为准。
+  - 签名(可选)：Authenticode 纯托管（`PfxFile`/`CertificateThumbprint` 供证书，支持时间戳），签安装器/卸载器与载荷文件；也支持外部签名命令。
   - 安装包支持 NT4+ 系统（[NSIS 文档](https://nsis.sourceforge.io/Docs/Chapter1.html)）。
 - `msi`
   - 使用 `wix` 作为打包工具，他依赖于 `.NETFramework,Version=v4.5`（简称 Fx4.5）。Fx4.5 在 Win8+ 预装，支持装于 Win7 SP1+ （[.NET Framework 系统要求](https://learn.microsoft.com/en-us/dotnet/framework/get-started/system-requirements)）。
+  - 签名(可选)：Authenticode 纯托管（与 `nsis` 共享签名器），签 MSI 与载荷文件。
   - 安装包支持 Win7+ 系统；使用 `Windows Installer 5.0` 安装，它随 Win7/Server2008R2 起发行（[Windows Installer 发行版本](https://learn.microsoft.com/en-us/windows/win32/msi/released-versions-of-windows-installer)）
 - `app`
   - 打包能力纯托管无外部工具依赖。
-  - 仅 macOS 宿主可产已签名束；**签名**依赖于 `codesign`，**公证**依赖于 `Xcode` 的 `notarytool`、`stapler`，**Assets.car** 图标依赖于 `Xcode 26+` 的 `actool`。
+    - 注：**Assets.car** 图标依赖于 `Xcode 26+` 的 `actool`
+  - 签名/公证(可选)：依赖 `codesign` 依赖 `Xcode` 的 `notarytool`、`stapler`，仅 macOS 宿主。
   - Windows 宿主产 `.app` 无执行位，可再套 `zip`/`tar.gz` 携带执行位。
 - `dmg`
   - 使用系统 `hdiutil` 打包；默认压缩（`Ulmo`）需 macOS 10.15+（[hdiutil(1) man](https://keith.github.io/xcode-man-pages/hdiutil.1.html)）。
+  - 签名(可选)：依赖 `codesign`（ad-hoc 或开发者身份），仅 macOS 宿主。
   - 安装包挂载支持 macOS 10.15+（`Ulmo` 压缩）。
 - `pkg`
   - 使用系统 `pkgbuild`/`productbuild` 打包，macOS 10.7+。
+  - 签名(可选)：依赖 `productbuild --sign`（安装器证书），仅 macOS 宿主。
   - 安装包安装支持 macOS 10.7+。
 - `deb`
   - 打包能力纯托管无外部工具依赖，不提供签名能力。
@@ -60,6 +65,7 @@
   - 安装包支持 `rpm` 系发行版。
 - `AppImage`
   - 使用 `appimagetool` 作为打包工具，仅支持 x64/arm64；musl 未实测。
+  - 签名(可选)：GPG 签名嵌 `.sha256_sig` ELF 段，`gpgv` 可验。
   - 安装包运行依赖于 FUSE 或 `--appimage-extract`。
 - `apk`
   - 打包能力纯托管无外部工具依赖。
