@@ -6,63 +6,38 @@
 
 ## 1. 各后端打包工具：生产侧 × 消费侧
 
-记号：
-
-- **✓** = 已实测通过
-- **○** = 支持但未实测
-- **留空** = 不支持
-
-格内 = 记号 + 版本下限（无版本下限记"不限"，条件跟在版本后）；版本数写在下限约束的格子上。
-
-### 1.1 生产侧：什么宿主能产出该格式
-
-| 格式＼宿主 | Win x64 | Win arm64 | Win x86 | mac x64 | mac arm64 | Linux x64 | Linux arm64 | Linux musl |
+| 格式＼系统 | Windows | macOS | Linux | Linux musl | Windows | macOS | Linux | Linux musl |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `nsis` | ✓ NT4+ | ○ 仿真 | ○ NT4+ | ○ 15.5+ | ✓ 11+ | ✓ glibc2.14+ | ✓ glibc2.17+ |  |
-| `msi` | ✓ .NETFx4.5 | ○ .NETFx4.5 | ○ .NETFx4.5 |  |  |  |  |  |
-| `app` | ✓ 不限·未签名·丢exec位 | ○ 不限·未签名·丢exec位 | ○ 不限·未签名·丢exec位 | ○ 不限 | ✓ 不限 | ✓ 不限·未签名 | ✓ 不限·未签名 | ○ 不限·未签名 |
-| `dmg` |  |  |  | ○ 10.15+ | ✓ 11+ |  |  |  |
-| `pkg` |  |  |  | ○ 10.7+ | ✓ 11+ |  |  |  |
-| `deb` | ✓ 不限 | ○ 不限 | ○ 不限 | ○ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ○ 不限 |
-| `rpm` | ✓ 不限 | ○ 不限 | ○ 不限 | ○ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ○ 不限 |
-| `AppImage` |  |  |  |  |  | ✓ 不限 | ✓ 不限 | ○ 不限 |
-| `apk` | ✓ 不限 | ○ 不限 | ○ 不限 | ○ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ○ 不限 |
-| `zip` / `tar.gz` | ✓ 不限 | ○ 不限 | ○ 不限 | ○ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ○ 不限 |
+|  |  | **生产** |  |  |  | **消费** |  |  |
+| `nsis` | ✓ 2000+ | ✓ 10.13+ | ✓ glibc2.17+ | ✗ | ✓ NT4+ | ✗ | ✗ | ✗ |
+| `msi` | ✓ Fx4.5 | ✗ | ✗ | ✗ | ✓ 7+ | ✗ | ✗ | ✗ |
+| `app` | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✗ | ✓ 自设 | ✗ | ✗ |
+| `dmg` | ✗ | ✓ 10.15+ | ✗ | ✗ | ✗ | ✓ 10.15+ | ✗ | ✗ |
+| `pkg` | ✗ | ✓ 10.7+ | ✗ | ✗ | ✗ | ✓ 10.7+ | ✗ | ✗ |
+| `deb` | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✗ | ✗ | ✓ 不限 | ✗ |
+| `rpm` | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✗ | ✗ | ✓ 不限 | ✗ |
+| `AppImage` | ✗ | ✗ | ✓ 不限 | ✓ 不限 | ✗ | ✗ | ✓ FUSE | ✓ FUSE |
+| `apk` | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✗ | ✗ | ✗ | ✓ 不限 |
+| `zip` / `tar.gz` | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
 
-- nsis：win-x86 工具覆盖全部 Windows 架构（x64 WoW64、arm64 仿真契约口径），PE 子系统下限 4.0（NT4 头口径）；osx-x64 二进 Mach-O 头声明 MIN_MACOSX=15.5，osx-arm64 未声明（arm64 硬件≥11）；linux 为 glibc 动态链接，musl 与 32 位无工具。依据：`third_party/nsis` 内嵌二进头 + [NSIS 官方文档](https://nsis.sourceforge.io/Docs/Chapter1.html)。
+- nsis：宿主下限以 [NsisToolset README 声明](https://github.com/dotnetbundler/NsisToolset#system-support)为准——Windows 2000+（win-x86 工具覆盖全架构，arm64 经仿真）、Linux glibc 2.17+、macOS 10.13+（osx-x64）/11.0+（osx-arm64）；与内嵌二进头逐条相符（osx-x64 minos=10.13.0、osx-arm64 minos=11.0.0、glibc 符号 ≤2.17）；linux 二进为 glibc 动态链接，musl 与 32 位无工具。
 - WiX（msi）工具目标框架 `.NETFramework,Version=v4.5` 且为 32 位进程（见 [msi-roadmap.md](msi-roadmap.md)）；.NET Framework 4.5 可装于 Vista SP2+/Win7 SP1+，Win8+ 预装（[Microsoft 系统要求](https://learn.microsoft.com/en-us/dotnet/framework/get-started/system-requirements)）。
 - `app`/`deb`/`rpm`/`apk`/`zip`·`tar.gz` 纯托管零外部进程；`app` 仅 macOS 宿主可产已签名束，Windows 宿主产 `.app` 丢执行位（警告建议经 zip/tar 投递）；zip/tar.gz 条目模式由 libc 或 ELF/shebang/Mach-O 魔数探测，Windows 宿主不丢 exec 位。
 - `dmg` 默认 `Ulmo` 压缩创建/挂载均需 macOS 10.15+（`Ulfo` 10.11+，`Udzo`/`Udbz` 可到更老，[hdiutil(1) man](https://keith.github.io/xcode-man-pages/hdiutil.1.html)）；`pkg` 系统工具自 macOS 10.7 起存在（[mac-pkg-roadmap.md](mac-pkg-roadmap.md)）。
-- AppImage 内嵌 appimagetool 与运行时均为 static-pie ELF、无 libc 依赖（`third_party/appimagetool`），musl 未实测记 ○。
-- 实测宿主：Windows Server 2022、macOS 26.5 arm64、ubuntu 22.04 x86_64、qemu aarch64。
-
-### 1.2 消费侧：产物能装/能跑在什么系统
-
-| 格式＼宿主 | Win x64 | Win arm64 | Win x86 | mac x64 | mac arm64 | Linux x64 | Linux arm64 | Linux musl |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `nsis` | ✓ NT4+ | ○ 仿真 | ✓ NT4+ |  |  |  |  |  |
-| `msi` | ✓ 7+ | ○ 7+ | ✓ 7+ |  |  |  |  |  |
-| `app` |  |  |  | ○ 自设 | ✓ 自设 |  |  |  |
-| `dmg` |  |  |  | ○ 10.15+ | ✓ 10.15+ |  |  |  |
-| `pkg` |  |  |  | ○ 10.7+ | ✓ 10.7+ |  |  |  |
-| `deb` |  |  |  |  |  | ✓ 不限 | ✓ 不限 |  |
-| `rpm` |  |  |  |  |  | ✓ 不限 | ✓ 不限 |  |
-| `AppImage` |  |  |  |  |  | ✓ FUSE | ✓ FUSE | ○ FUSE |
-| `apk` |  |  |  |  |  |  |  | ✓ 不限 |
-| `zip` / `tar.gz` | ✓ 不限 | ○ 不限 | ○ 不限 | ○ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ○ 不限 |
-
+- AppImage 内嵌 appimagetool 与运行时均为 static-pie ELF、无 libc 依赖（`third_party/appimagetool`），musl 侧未实测。
 - nsis 安装器 NT 系全兼容：Unicode stub 不支持 95/98/ME（[NSIS Chapter1](https://nsis.sourceforge.io/Docs/Chapter1.html)），内嵌 stub PE 子系统=4.0；arm64 经 x86 仿真属契约口径未实装。
 - `msi` 由 `InstallerVersion=500` 推出：Windows Installer 5.0 随 Win7/Server2008R2 起（[Microsoft 版本对应表](https://learn.microsoft.com/en-us/windows/win32/msi/released-versions-of-windows-installer)）。
 - `app` 自设 = 应用自定 `LSMinimumSystemVersion`；`dmg` 默认 `Ulmo` 挂载/创建均需 10.15+（[hdiutil(1) man](https://keith.github.io/xcode-man-pages/hdiutil.1.html)）。
-- `deb`/`rpm`/`apk` 各对 dpkg/rpm/apk 系发行版；`AppImage` 运行时为 static-pie（无 libc 依赖），需 FUSE 或 `--appimage-extract`，musl 未实测记 ○。
+- `deb`/`rpm`/`apk` 各对 dpkg/rpm/apk 系发行版；`AppImage` 运行时为 static-pie（无 libc 依赖），需 FUSE 或 `--appimage-extract`，musl 侧未实测。
 - `zip`/`tar.gz` 任意可解压宿主；`.zip` 拒 >4GB，mode/symlink 还原依赖解出工具。
+- 实测宿主：Windows Server 2022、macOS 26.5 arm64、ubuntu 22.04 x86_64、qemu aarch64。
 
-### 1.3 签名（横切能力，单独记不占格式行）
+### 签名（横切能力，单独记不占格式行）
 
 | 签名项＼宿主 | Win x64 | Win arm64 | Win x86 | mac x64 | mac arm64 | Linux | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Windows Authenticode | ✓ | ○ | ○ |  |  |  | 内嵌 provider，无 signtool 依赖；生产证书/时间戳外部待验 |
-| macOS codesign/公证 |  |  |  | ○ | ○ |  | codesign≥10.5；公证 Xcode 13+（宿主约 11.3+）；Assets.car 需 Xcode 26+（可降级）；生产证书/真机公证外部待验 |
+| Windows Authenticode | ✓ | ✓ | ✓ |  |  |  | 内嵌 provider，无 signtool 依赖；生产证书/时间戳外部待验 |
+| macOS codesign/公证 |  |  |  | ✓ | ✓ |  | codesign≥10.5；公证 Xcode 13+（宿主约 11.3+）；Assets.car 需 Xcode 26+（可降级）；生产证书/真机公证外部待验 |
 
 ## 2. MSBuild 入口下限（按后端分）
 
