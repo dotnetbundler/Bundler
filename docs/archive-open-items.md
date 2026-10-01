@@ -10,3 +10,4 @@
 | ARCHIVE-OI-03 | ARCHIVE-3 | ~~老发行版宿主~~ 已验证 | **已消解**：2026-09-28 centos7 容器（yum vault 修复后装 UnZip 6.00）——老 unzip 解 zip、mode/symlink 还原记录 |
 | ARCHIVE-OI-04 | ARCHIVE-3 | ~~交叉宿主对~~ 已验证 | **已消解**：2026-09-29/30 四宿主联合测试——win/linux/mac/qemu 互产互装归档，解压+exec 位/symlink 还原+载荷运行全过（覆盖 MT-04 场景） |
 | ARCHIVE-OI-05 | ARCHIVE-3 | ~~大载荷场景~~ 已消解 | **已消解**：2026-09-28 Linux 验收会话实测 >4GB 载荷走 Zip64 确定性拒绝路径（非失败即拒绝，按设计） |
+| ARCHIVE-OI-06 | 待定 | 大载荷评估 | tar.gz 单条目 ~2GiB 上限：`TarEntry.Content` 为内存 `byte[]`（.NET 数组硬顶），早于 tar 八进制尺寸字段 ~8GiB 格式顶触发；>2GiB 单文件当前无解。待评估：是否做流式 tar 条目（写出端不整读内存）。 |

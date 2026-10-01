@@ -22,12 +22,12 @@
 | `deb` 消费 |  |   |   | ✓ |   |   |
 | `rpm` 生产 | 托管实现 | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `rpm` 消费 |  |   |   |   | ✓ |   |
-| `AppImage` 生产 | [appimagetool](https://github.com/AppImage/appimagetool) b295 |   |   | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `AppImage` 生产 | [appimagetool](https://github.com/AppImage/appimagetool) [b295](https://github.com/AppImage/appimagetool/actions/runs/19475763690) |   |   | ✓ | ✓ | ✓ |
 | `AppImage` 消费 |  |   |   | ✓ FUSE | ✓ FUSE | ✓ FUSE |
-| `apk` 生产 | 托管实现 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
-| `apk` 消费 |  |   |   |   |   | ✓ 不限 |
-| `zip` / `tar.gz` 生产 | 托管实现 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
-| `zip` / `tar.gz` 消费 |  | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `apk` 生产 | 托管实现 | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `apk` 消费 |  |   |   |   |   | ✓ |
+| `zip` / `tar.gz` 生产 | 托管实现 | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `zip` / `tar.gz` 消费 |  | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 - Linux 只列三大派系：
   - `Debian Family`：`Debian`、`Ubuntu`、`UOS`、`Ubuntu Kylin`等
@@ -58,12 +58,17 @@
     - `rpm -K`/`rpm --checksig`：验 `RPMSIGTAG_PGP`（主头+载荷签名）与完整性摘要，均随包嵌入。
     - `dnf`/`zypper`（安装时经 `librpm`、`libzypp` 验签）：验 `RPMSIGTAG_RSA`（主头签名），随包嵌入。
   - 安装包支持 `rpm` 系发行版。
-- `apk` / `zip`·`tar.gz`
-  - 打包能力纯托管无外部工具依赖。
-  - 安装包支持 apk 系发行版；zip/tar.gz 任意宿主可解压，`.zip` 拒 >4GB。
 - `AppImage`
-  - 使用 `appimagetool` 打包，static-pie ELF 无 libc 依赖，仅 x64/arm64；musl 未实测。
-  - 安装包运行依赖于 FUSE 或 `--appimage-extract`；musl 未实测。
+  - 使用 `appimagetool` 作为打包工具，仅支持 x64/arm64；musl 未实测。
+  - 安装包运行依赖于 FUSE 或 `--appimage-extract`。
+- `apk`
+  - 打包能力纯托管无外部工具依赖。
+  - 签名(可选)： RSA 签名为纯托管（BouncyCastle，PEM/PKCS8/加密私钥），签名为 `.SIGN.RSA` 前置段。
+    - 验签需公钥预置目标机 `/etc/apk/keys/`，未签名或密钥未分发装时需 `apk add --allow-untrusted`。
+  - 安装包支持 `apk` 系发行版。
+- `zip`·`tar.gz`
+  - 打包能力纯托管无外部工具依赖。
+  - 任意宿主可解压，`.zip` 拒 >4GB。
 - 实测宿主：Windows Server 2022、macOS 26.5 arm64、ubuntu 22.04 x86_64、qemu aarch64。
 
 ### 签名（横切能力，单独记不占格式行）
