@@ -6,29 +6,33 @@
 
 ## 1. 各打包工具：生产侧 × 消费侧
 
-| 格式＼系统 | 工具 | Windows | macOS | Linux | Linux musl |
-| --- | --- | --- | --- | --- | --- |
-| `nsis` 生产 | [NSIS 3.12](https://nsis.sourceforge.io/)（[toolset r1](https://github.com/dotnetbundler/NsisToolset)） | ✓ 2000+ | ✓ 10.13+ | ✓ glibc2.17+ |   |
-| `nsis` 消费 |  | ✓ NT4+ |   |   |   |
-| `msi` 生产 | [WiX 3.14.1](https://github.com/wixtoolset/wix3) | ✓ Fx4.5 |   |   |   |
-| `msi` 消费 |  | ✓ 7+ |   |   |   |
-| `app` 生产 | 托管实现 | ✓\*  | ✓  | ✓\*  | ✓\*  |
-| `app` 消费 |  |   | ✓ |   |   |
-| `dmg` 生产 | 系统 [hdiutil](https://keith.github.io/xcode-man-pages/hdiutil.1.html) |   | ✓ 10.15+ |   |   |
-| `dmg` 消费 |  |   | ✓ 10.15+ |   |   |
-| `pkg` 生产 | 系统 [pkgbuild](https://keith.github.io/xcode-man-pages/pkgbuild.1.html)/[productbuild](https://keith.github.io/xcode-man-pages/productbuild.1.html) |   | ✓ 10.7+ |   |   |
-| `pkg` 消费 |  |   | ✓ 10.7+ |   |   |
-| `deb` 生产 | 托管实现 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
-| `deb` 消费 |  |   |   | ✓ 不限 |   |
-| `rpm` 生产 | 托管实现 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
-| `rpm` 消费 |  |   |   | ✓ 不限 |   |
-| `AppImage` 生产 | [appimagetool](https://github.com/AppImage/appimagetool) b295 |   |   | ✓ 不限 | ✓ 不限 |
-| `AppImage` 消费 |  |   |   | ✓ FUSE | ✓ FUSE |
-| `apk` 生产 | 托管实现 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
-| `apk` 消费 |  |   |   |   | ✓ 不限 |
-| `zip` / `tar.gz` 生产 | 托管实现 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
-| `zip` / `tar.gz` 消费 |  | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| 格式＼系统 | 工具 | Windows | macOS | Debian Family | Red Hat Family | Alpine |
+| --- | --- | --- | --- | --- | --- | --- |
+| `nsis` 生产 | [NSIS 3.12](https://nsis.sourceforge.io/)（[toolset r1](https://github.com/dotnetbundler/NsisToolset)） | ✓ 2000+ | ✓ 10.13+ | ✓ glibc2.17+ | ✓ glibc2.17+ |   |
+| `nsis` 消费 |  | ✓ NT4+ |   |   |   |   |
+| `msi` 生产 | [WiX 3.14.1](https://github.com/wixtoolset/wix3) | ✓ Fx4.5 |   |   |   |   |
+| `msi` 消费 |  | ✓ 7+ |   |   |   |   |
+| `app` 生产 | 托管实现 | ✓\*  | ✓  | ✓\*  | ✓\*  | ✓\*  |
+| `app` 消费 |  |   | ✓ |   |   |   |
+| `dmg` 生产 | 系统 [hdiutil](https://keith.github.io/xcode-man-pages/hdiutil.1.html) |   | ✓ 10.15+ |   |   |   |
+| `dmg` 消费 |  |   | ✓ 10.15+ |   |   |   |
+| `pkg` 生产 | 系统 [pkgbuild](https://keith.github.io/xcode-man-pages/pkgbuild.1.html)/[productbuild](https://keith.github.io/xcode-man-pages/productbuild.1.html) |   | ✓ 10.7+ |   |   |   |
+| `pkg` 消费 |  |   | ✓ 10.7+ |   |   |   |
+| `deb` 生产 | 托管实现 | ✓  | ✓  | ✓  | ✓  | ✓  |
+| `deb` 消费 |  |   |   | ✓ |   |   |
+| `rpm` 生产 | 托管实现 | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `rpm` 消费 |  |   |   |   | ✓ |   |
+| `AppImage` 生产 | [appimagetool](https://github.com/AppImage/appimagetool) b295 |   |   | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `AppImage` 消费 |  |   |   | ✓ FUSE | ✓ FUSE | ✓ FUSE |
+| `apk` 生产 | 托管实现 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `apk` 消费 |  |   |   |   |   | ✓ 不限 |
+| `zip` / `tar.gz` 生产 | 托管实现 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `zip` / `tar.gz` 消费 |  | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
 
+- Linux 只列三大派系：
+  - `Debian Family`：`Debian`、`Ubuntu`、`UOS`、`Ubuntu Kylin`等
+  - `Red Hat Family`：`RHEL`、`Fedora`、`CentOS`、`openSUSE` 等
+  - `Alpine`：`Alpine Linux(musl)`
 - `nsis`
   - 使用 `nsis` 作为打包工具，宿主下限以 [NsisToolset](https://github.com/dotnetbundler/NsisToolset#system-support) 声明为准。
   - 安装包支持 NT4+ 系统（[NSIS 文档](https://nsis.sourceforge.io/Docs/Chapter1.html)）。
@@ -40,14 +44,23 @@
   - 仅 macOS 宿主可产已签名束；**签名**依赖于 `codesign`，**公证**依赖于 `Xcode` 的 `notarytool`、`stapler`，**Assets.car** 图标依赖于 `Xcode 26+` 的 `actool`。
   - Windows 宿主产 `.app` 无执行位，可再套 `zip`/`tar.gz` 携带执行位。
 - `dmg`
-  - 使用系统 `hdiutil` 打包；默认 `Ulmo` 压缩需 macOS 10.15+（[hdiutil(1) man](https://keith.github.io/xcode-man-pages/hdiutil.1.html)）。
-  - 安装包挂载支持 macOS 10.15+（默认 `Ulmo` 压缩）。
+  - 使用系统 `hdiutil` 打包；默认压缩（`Ulmo`）需 macOS 10.15+（[hdiutil(1) man](https://keith.github.io/xcode-man-pages/hdiutil.1.html)）。
+  - 安装包挂载支持 macOS 10.15+（`Ulmo` 压缩）。
 - `pkg`
   - 使用系统 `pkgbuild`/`productbuild` 打包，macOS 10.7+。
   - 安装包安装支持 macOS 10.7+。
-- `deb` / `rpm` / `apk` / `zip`·`tar.gz`
-  - 纯托管打包，零外部进程。
-  - 安装包支持 dpkg/rpm/apk 系发行版；zip/tar.gz 任意宿主可解压，`.zip` 拒 >4GB。
+- `deb`
+  - 打包能力纯托管无外部工具依赖，不提供签名能力。
+  - 安装包支持 `dpkg` 系发行版。
+- `rpm`
+  - 打包能力纯托管无外部工具依赖。
+  - 签名(可选)：GPG 签名为纯托管（BouncyCastle OpenPGP），任意宿主可签，签名嵌于包内签名头，形态与 `rpmsign --addsign` 一致（v3 OpenPGP 签名包）。
+    - `rpm -K`/`rpm --checksig`：验 `RPMSIGTAG_PGP`（主头+载荷签名）与完整性摘要，均随包嵌入。
+    - `dnf`/`zypper`（安装时经 `librpm`、`libzypp` 验签）：验 `RPMSIGTAG_RSA`（主头签名），随包嵌入。
+  - 安装包支持 `rpm` 系发行版。
+- `apk` / `zip`·`tar.gz`
+  - 打包能力纯托管无外部工具依赖。
+  - 安装包支持 apk 系发行版；zip/tar.gz 任意宿主可解压，`.zip` 拒 >4GB。
 - `AppImage`
   - 使用 `appimagetool` 打包，static-pie ELF 无 libc 依赖，仅 x64/arm64；musl 未实测。
   - 安装包运行依赖于 FUSE 或 `--appimage-extract`；musl 未实测。
