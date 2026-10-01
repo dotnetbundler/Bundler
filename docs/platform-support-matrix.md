@@ -6,19 +6,28 @@
 
 ## 1. 各后端打包工具：生产侧 × 消费侧
 
-| 格式＼系统 | Windows | macOS | Linux | Linux musl | Windows | macOS | Linux | Linux musl |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  |  | **生产** |  |  |  | **消费** |  |  |
-| `nsis` | ✓ 2000+ | ✓ 10.13+ | ✓ glibc2.17+ | ✗ | ✓ NT4+ | ✗ | ✗ | ✗ |
-| `msi` | ✓ Fx4.5 | ✗ | ✗ | ✗ | ✓ 7+ | ✗ | ✗ | ✗ |
-| `app` | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✗ | ✓ 自设 | ✗ | ✗ |
-| `dmg` | ✗ | ✓ 10.15+ | ✗ | ✗ | ✗ | ✓ 10.15+ | ✗ | ✗ |
-| `pkg` | ✗ | ✓ 10.7+ | ✗ | ✗ | ✗ | ✓ 10.7+ | ✗ | ✗ |
-| `deb` | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✗ | ✗ | ✓ 不限 | ✗ |
-| `rpm` | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✗ | ✗ | ✓ 不限 | ✗ |
-| `AppImage` | ✗ | ✗ | ✓ 不限 | ✓ 不限 | ✗ | ✗ | ✓ FUSE | ✓ FUSE |
-| `apk` | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✗ | ✗ | ✗ | ✓ 不限 |
-| `zip` / `tar.gz` | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| 格式＼系统 | Windows | macOS | Linux | Linux musl |
+| --- | --- | --- | --- | --- |
+| `nsis` 生产 | ✓ 2000+ | ✓ 10.13+ | ✓ glibc2.17+ | ✗ |
+| `nsis` 消费 | ✓ NT4+ | ✗ | ✗ | ✗ |
+| `msi` 生产 | ✓ Fx4.5 | ✗ | ✗ | ✗ |
+| `msi` 消费 | ✓ 7+ | ✗ | ✗ | ✗ |
+| `app` 生产 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `app` 消费 | ✗ | ✓ 自设 | ✗ | ✗ |
+| `dmg` 生产 | ✗ | ✓ 10.15+ | ✗ | ✗ |
+| `dmg` 消费 | ✗ | ✓ 10.15+ | ✗ | ✗ |
+| `pkg` 生产 | ✗ | ✓ 10.7+ | ✗ | ✗ |
+| `pkg` 消费 | ✗ | ✓ 10.7+ | ✗ | ✗ |
+| `deb` 生产 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `deb` 消费 | ✗ | ✗ | ✓ 不限 | ✗ |
+| `rpm` 生产 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `rpm` 消费 | ✗ | ✗ | ✓ 不限 | ✗ |
+| `AppImage` 生产 | ✗ | ✗ | ✓ 不限 | ✓ 不限 |
+| `AppImage` 消费 | ✗ | ✗ | ✓ FUSE | ✓ FUSE |
+| `apk` 生产 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `apk` 消费 | ✗ | ✗ | ✗ | ✓ 不限 |
+| `zip` / `tar.gz` 生产 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `zip` / `tar.gz` 消费 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
 
 - nsis：宿主下限以 [NsisToolset README 声明](https://github.com/dotnetbundler/NsisToolset#system-support)为准——Windows 2000+（win-x86 工具覆盖全架构，arm64 经仿真）、Linux glibc 2.17+、macOS 10.13+（osx-x64）/11.0+（osx-arm64）；与内嵌二进头逐条相符（osx-x64 minos=10.13.0、osx-arm64 minos=11.0.0、glibc 符号 ≤2.17）；linux 二进为 glibc 动态链接，musl 与 32 位无工具。
 - WiX（msi）工具目标框架 `.NETFramework,Version=v4.5` 且为 32 位进程（见 [msi-roadmap.md](msi-roadmap.md)）；.NET Framework 4.5 可装于 Vista SP2+/Win7 SP1+，Win8+ 预装（[Microsoft 系统要求](https://learn.microsoft.com/en-us/dotnet/framework/get-started/system-requirements)）。
