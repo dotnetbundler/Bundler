@@ -4,41 +4,53 @@
 口径分三级并如实标注：**契约/代码口径**（源码硬约束）、**官方支持口径**（上游支持矩阵，随支持期滚动）、**已实测口径**（本仓库实际跑通的宿主，单台结果不外推）。
 三层下限定义见 `docs/development-rules.md` 第 3 节；安装侧版本下限（产物对目标系统的要求）单列，不与构建宿主混记。
 
-## 1. 各后端打包工具：生产侧 × 消费侧
+## 1. 各打包工具：生产侧 × 消费侧
 
-| 格式＼系统 | Windows | macOS | Linux | Linux musl |
-| --- | --- | --- | --- | --- |
-| `nsis` 生产 | ✓ 2000+ | ✓ 10.13+ | ✓ glibc2.17+ |   |
-| `nsis` 消费 | ✓ NT4+ |   |   |   |
-| `msi` 生产 | ✓ Fx4.5 |   |   |   |
-| `msi` 消费 | ✓ 7+ |   |   |   |
-| `app` 生产 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
-| `app` 消费 |   | ✓ 自设 |   |   |
-| `dmg` 生产 |   | ✓ 10.15+ |   |   |
-| `dmg` 消费 |   | ✓ 10.15+ |   |   |
-| `pkg` 生产 |   | ✓ 10.7+ |   |   |
-| `pkg` 消费 |   | ✓ 10.7+ |   |   |
-| `deb` 生产 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
-| `deb` 消费 |   |   | ✓ 不限 |   |
-| `rpm` 生产 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
-| `rpm` 消费 |   |   | ✓ 不限 |   |
-| `AppImage` 生产 |   |   | ✓ 不限 | ✓ 不限 |
-| `AppImage` 消费 |   |   | ✓ FUSE | ✓ FUSE |
-| `apk` 生产 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
-| `apk` 消费 |   |   |   | ✓ 不限 |
-| `zip` / `tar.gz` 生产 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
-| `zip` / `tar.gz` 消费 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| 格式＼系统 | 工具 | Windows | macOS | Linux | Linux musl |
+| --- | --- | --- | --- | --- | --- |
+| `nsis` 生产 | [NSIS 3.12](https://nsis.sourceforge.io/)（[toolset r1](https://github.com/dotnetbundler/NsisToolset)） | ✓ 2000+ | ✓ 10.13+ | ✓ glibc2.17+ |   |
+| `nsis` 消费 |  | ✓ NT4+ |   |   |   |
+| `msi` 生产 | [WiX 3.14.1](https://github.com/wixtoolset/wix3) | ✓ Fx4.5 |   |   |   |
+| `msi` 消费 |  | ✓ 7+ |   |   |   |
+| `app` 生产 | 托管实现 | ✓\*  | ✓  | ✓\*  | ✓\*  |
+| `app` 消费 |  |   | ✓ |   |   |
+| `dmg` 生产 | 系统 [hdiutil](https://keith.github.io/xcode-man-pages/hdiutil.1.html) |   | ✓ 10.15+ |   |   |
+| `dmg` 消费 |  |   | ✓ 10.15+ |   |   |
+| `pkg` 生产 | 系统 [pkgbuild](https://keith.github.io/xcode-man-pages/pkgbuild.1.html)/[productbuild](https://keith.github.io/xcode-man-pages/productbuild.1.html) |   | ✓ 10.7+ |   |   |
+| `pkg` 消费 |  |   | ✓ 10.7+ |   |   |
+| `deb` 生产 | 托管实现 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `deb` 消费 |  |   |   | ✓ 不限 |   |
+| `rpm` 生产 | 托管实现 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `rpm` 消费 |  |   |   | ✓ 不限 |   |
+| `AppImage` 生产 | [appimagetool](https://github.com/AppImage/appimagetool) b295 |   |   | ✓ 不限 | ✓ 不限 |
+| `AppImage` 消费 |  |   |   | ✓ FUSE | ✓ FUSE |
+| `apk` 生产 | 托管实现 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `apk` 消费 |  |   |   |   | ✓ 不限 |
+| `zip` / `tar.gz` 生产 | 托管实现 | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
+| `zip` / `tar.gz` 消费 |  | ✓ 不限 | ✓ 不限 | ✓ 不限 | ✓ 不限 |
 
-- nsis：宿主下限以 [NsisToolset README 声明](https://github.com/dotnetbundler/NsisToolset#system-support)为准——Windows 2000+（win-x86 工具覆盖全架构，arm64 经仿真）、Linux glibc 2.17+、macOS 10.13+（osx-x64）/11.0+（osx-arm64）；与内嵌二进头逐条相符（osx-x64 minos=10.13.0、osx-arm64 minos=11.0.0、glibc 符号 ≤2.17）；linux 二进为 glibc 动态链接，musl 与 32 位无工具。
-- WiX（msi）工具目标框架 `.NETFramework,Version=v4.5` 且为 32 位进程（见 [msi-roadmap.md](msi-roadmap.md)）；.NET Framework 4.5 可装于 Vista SP2+/Win7 SP1+，Win8+ 预装（[Microsoft 系统要求](https://learn.microsoft.com/en-us/dotnet/framework/get-started/system-requirements)）。
-- `app`/`deb`/`rpm`/`apk`/`zip`·`tar.gz` 纯托管零外部进程；`app` 仅 macOS 宿主可产已签名束，Windows 宿主产 `.app` 丢执行位（警告建议经 zip/tar 投递）；zip/tar.gz 条目模式由 libc 或 ELF/shebang/Mach-O 魔数探测，Windows 宿主不丢 exec 位。
-- `dmg` 默认 `Ulmo` 压缩创建/挂载均需 macOS 10.15+（`Ulfo` 10.11+，`Udzo`/`Udbz` 可到更老，[hdiutil(1) man](https://keith.github.io/xcode-man-pages/hdiutil.1.html)）；`pkg` 系统工具自 macOS 10.7 起存在（[mac-pkg-roadmap.md](mac-pkg-roadmap.md)）。
-- AppImage 内嵌 appimagetool 与运行时均为 static-pie ELF、无 libc 依赖（`third_party/appimagetool`），musl 侧未实测。
-- nsis 安装器 NT 系全兼容：Unicode stub 不支持 95/98/ME（[NSIS Chapter1](https://nsis.sourceforge.io/Docs/Chapter1.html)），内嵌 stub PE 子系统=4.0；arm64 经 x86 仿真属契约口径未实装。
-- `msi` 由 `InstallerVersion=500` 推出：Windows Installer 5.0 随 Win7/Server2008R2 起（[Microsoft 版本对应表](https://learn.microsoft.com/en-us/windows/win32/msi/released-versions-of-windows-installer)）。
-- `app` 自设 = 应用自定 `LSMinimumSystemVersion`；`dmg` 默认 `Ulmo` 挂载/创建均需 10.15+（[hdiutil(1) man](https://keith.github.io/xcode-man-pages/hdiutil.1.html)）。
-- `deb`/`rpm`/`apk` 各对 dpkg/rpm/apk 系发行版；`AppImage` 运行时为 static-pie（无 libc 依赖），需 FUSE 或 `--appimage-extract`，musl 侧未实测。
-- `zip`/`tar.gz` 任意可解压宿主；`.zip` 拒 >4GB，mode/symlink 还原依赖解出工具。
+- `nsis`
+  - 使用 `nsis` 作为打包工具，宿主下限以 [NsisToolset](https://github.com/dotnetbundler/NsisToolset#system-support) 声明为准。
+  - 安装包支持 NT4+ 系统（[NSIS 文档](https://nsis.sourceforge.io/Docs/Chapter1.html)）。
+- `msi`
+  - 使用 `wix` 作为打包工具，他依赖于 `.NETFramework,Version=v4.5`（简称 Fx4.5）。Fx4.5 在 Win8+ 预装，支持装于 Win7 SP1+ （[.NET Framework 系统要求](https://learn.microsoft.com/en-us/dotnet/framework/get-started/system-requirements)）。
+  - 安装包支持 Win7+ 系统；使用 `Windows Installer 5.0` 安装，它随 Win7/Server2008R2 起发行（[Windows Installer 发行版本](https://learn.microsoft.com/en-us/windows/win32/msi/released-versions-of-windows-installer)）
+- `app`
+  - 打包能力纯托管无外部工具依赖。
+  - 仅 macOS 宿主可产已签名束；**签名**依赖于 `codesign`，**公证**依赖于 `Xcode` 的 `notarytool`、`stapler`，**Assets.car** 图标依赖于 `Xcode 26+` 的 `actool`。
+  - Windows 宿主产 `.app` 无执行位，可再套 `zip`/`tar.gz` 携带执行位。
+- `dmg`
+  - 使用系统 `hdiutil` 打包；默认 `Ulmo` 压缩需 macOS 10.15+（[hdiutil(1) man](https://keith.github.io/xcode-man-pages/hdiutil.1.html)）。
+  - 安装包挂载支持 macOS 10.15+（默认 `Ulmo` 压缩）。
+- `pkg`
+  - 使用系统 `pkgbuild`/`productbuild` 打包，macOS 10.7+。
+  - 安装包安装支持 macOS 10.7+。
+- `deb` / `rpm` / `apk` / `zip`·`tar.gz`
+  - 纯托管打包，零外部进程。
+  - 安装包支持 dpkg/rpm/apk 系发行版；zip/tar.gz 任意宿主可解压，`.zip` 拒 >4GB。
+- `AppImage`
+  - 使用 `appimagetool` 打包，static-pie ELF 无 libc 依赖，仅 x64/arm64；musl 未实测。
+  - 安装包运行依赖于 FUSE 或 `--appimage-extract`；musl 未实测。
 - 实测宿主：Windows Server 2022、macOS 26.5 arm64、ubuntu 22.04 x86_64、qemu aarch64。
 
 ### 签名（横切能力，单独记不占格式行）
