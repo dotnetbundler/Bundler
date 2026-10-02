@@ -408,8 +408,8 @@ internal static class AlpineApkTests
 
         var all = CliProgram.ParseFormats("all", "linux-musl-x64");
         Assert(all.Contains(PackageFormat.AlpineApk) && all.Contains(PackageFormat.Zip) &&
-            all.Contains(PackageFormat.TarGz) && all.Count == 3,
-            $"musl 'all' must expand to zip/targz/alpineapk: {string.Join(',', all)}");
+            all.Contains(PackageFormat.TarGz) && all.Contains(PackageFormat.AppImage) && all.Count == 4,
+            $"musl 'all' must expand to zip/targz/alpineapk/appimage: {string.Join(',', all)}");
         var glibcAll = CliProgram.ParseFormats("all", "linux-x64");
         Assert(!glibcAll.Contains(PackageFormat.AlpineApk),
             "glibc 'all' must not include alpineapk.");

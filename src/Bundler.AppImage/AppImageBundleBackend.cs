@@ -7,14 +7,16 @@ namespace DotNet.Bundler.AppImage;
 
 internal sealed class AppImageBundleBackend(
     AppImageBundleConfiguration settings,
-    AppImageBundlerOptions options) : IBundleBackend
+    AppImageBundlerOptions options,
+    DesktopOperatingSystem operatingSystem) : IBundleBackend
 {
     public PackageFormat Format => PackageFormat.AppImage;
-    public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Linux;
+    public DesktopOperatingSystem OperatingSystem => operatingSystem;
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleBuildContext context, CancellationToken cancellationToken)
     {
+        // glibc 与 musl 目标共用同一后端：runtime 为静态 ELF，两族皆可运行。
         var built = AppDirBuilder.Build(
             context.Configuration, context.Item, settings, context.WorkDirectory, context.Logger);
         var toolset = AppImageToolset.Resolve(

@@ -38,7 +38,10 @@ public sealed class AppImageBundler
                 $"DotNet.Bundler.AppImage accepts AppImage targets only; '{unsupported}' requires another backend package.");
         }
         return await new BundlePipeline(
-            [new AppImageBundleBackend(_configuration, _options)],
+            [
+                new AppImageBundleBackend(_configuration, _options, DesktopOperatingSystem.Linux),
+                new AppImageBundleBackend(_configuration, _options, DesktopOperatingSystem.LinuxMusl)
+            ],
             _options.Logger).BuildAsync(bundle, cancellationToken);
     }
 }

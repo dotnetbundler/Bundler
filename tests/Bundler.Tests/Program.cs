@@ -159,20 +159,20 @@ static void RejectsIncompatibleFormats()
         var muslArchive = ValidConfiguration(new BundleTargetConfiguration
         {
             RuntimeIdentifier = rid, InputDirectory = "unused",
-            Formats = [PackageFormat.Zip, PackageFormat.TarGz, PackageFormat.AlpineApk]
+            Formats = [PackageFormat.Zip, PackageFormat.TarGz, PackageFormat.AlpineApk, PackageFormat.AppImage]
         });
         Assert(!BundleConfigurationValidator.Validate(muslArchive, checkFileSystem: false)
                 .Any(issue => issue.Path == "targets[0].formats"),
-            $"Zip/TarGz/AlpineApk must accept the musl target {rid}.");
+            $"Zip/TarGz/AlpineApk/AppImage must accept the musl target {rid}.");
         var muslGlibc = ValidConfiguration(new BundleTargetConfiguration
         {
             RuntimeIdentifier = rid, InputDirectory = "unused",
-            Formats = [PackageFormat.Deb, PackageFormat.Rpm, PackageFormat.AppImage]
+            Formats = [PackageFormat.Deb, PackageFormat.Rpm]
         });
         var muslIssues = BundleConfigurationValidator.Validate(muslGlibc, checkFileSystem: false)
             .Where(issue => issue.Path == "targets[0].formats").ToArray();
-        Assert(muslIssues.Length == 3,
-            $"Deb/Rpm/AppImage must each be rejected for the musl target {rid} (glibc-distro semantics).");
+        Assert(muslIssues.Length == 2,
+            $"Deb/Rpm must each be rejected for the musl target {rid} (glibc-distro semantics).");
     }
 }
 
