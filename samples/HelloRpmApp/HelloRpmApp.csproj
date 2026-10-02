@@ -66,6 +66,10 @@
     <BundlerRpmPostUninstallFile Condition="'$(HelloRpmPostUninstallFile)' != ''">$(HelloRpmPostUninstallFile)</BundlerRpmPostUninstallFile>
     <BundlerRpmPostInstallProgram Condition="'$(HelloRpmPostInstallProgram)' != ''">$(HelloRpmPostInstallProgram)</BundlerRpmPostInstallProgram>
     <BundlerRpmCompression Condition="'$(HelloRpmCompression)' != ''">$(HelloRpmCompression)</BundlerRpmCompression>
+    <!-- GPG 签名旋钮（SIGN-1）：供 OpenPGP 私钥文件才签，纯托管 BouncyCastle 无外部进程；
+         产出 RPMSIGTAG_RSA+PGP 双标签 v3 签名包，`rpm -K`/zypper/dnf 可验。 -->
+    <BundlerRpmSigningKeyFile Condition="'$(HelloRpmSigningKeyFile)' != ''">$(HelloRpmSigningKeyFile)</BundlerRpmSigningKeyFile>
+    <BundlerRpmSigningKeyPassphrase Condition="'$(HelloRpmSigningKeyPassphrase)' != ''">$(HelloRpmSigningKeyPassphrase)</BundlerRpmSigningKeyPassphrase>
     <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets/LICENSE.txt</BundlerLicenseFile>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />

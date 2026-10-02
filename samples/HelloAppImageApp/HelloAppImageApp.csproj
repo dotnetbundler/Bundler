@@ -45,6 +45,11 @@
     <BundlerAppImageCategories Condition="'$(HelloAppImageCategories)' != ''">$(HelloAppImageCategories)</BundlerAppImageCategories>
     <BundlerAppImageMetainfoFile>$(MSBuildThisFileDirectory)Assets/app.metainfo.xml</BundlerAppImageMetainfoFile>
     <BundlerAppImageMetainfoFile Condition="'$(HelloAppImageMetainfoFile)' != ''">$(HelloAppImageMetainfoFile)</BundlerAppImageMetainfoFile>
+    <!-- GPG 签名旋钮（SIGN-2）：供私钥文件才签，走内嵌 appimagetool 签名
+         （隔离 GNUPGHOME 导入 + APPIMAGETOOL_SIGN_PASSPHRASE 注入），
+         签名嵌 .sha256_sig/.sig_key 段，gpgv 可验。 -->
+    <BundlerAppImageSigningKeyFile Condition="'$(HelloAppImageSigningKeyFile)' != ''">$(HelloAppImageSigningKeyFile)</BundlerAppImageSigningKeyFile>
+    <BundlerAppImageSigningKeyPassphrase Condition="'$(HelloAppImageSigningKeyPassphrase)' != ''">$(HelloAppImageSigningKeyPassphrase)</BundlerAppImageSigningKeyPassphrase>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
