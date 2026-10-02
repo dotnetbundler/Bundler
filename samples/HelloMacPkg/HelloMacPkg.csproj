@@ -11,7 +11,6 @@
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">osx-arm64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <Nullable>enable</Nullable>
-    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
     <AssemblyName>HelloMacPkg</AssemblyName>
     <Version>1.0.0</Version>
 
@@ -57,9 +56,8 @@
     <BundlerMacPkgNotaryApiKeyId Condition="'$(HelloMacPkgNotaryApiKeyId)' != ''">$(HelloMacPkgNotaryApiKeyId)</BundlerMacPkgNotaryApiKeyId>
     <BundlerMacPkgNotaryApiIssuer Condition="'$(HelloMacPkgNotaryApiIssuer)' != ''">$(HelloMacPkgNotaryApiIssuer)</BundlerMacPkgNotaryApiIssuer>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <!-- 任意文件树载荷演示：该文件随 .app 一起进入 payload，落到 install-location 下的 support/ 目录。 -->
     <BundlerPkgPayload Include="Assets/readme.txt" Destination="support/readme.txt" />
   </ItemGroup>

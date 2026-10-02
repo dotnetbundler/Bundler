@@ -62,7 +62,6 @@ publish_fixture() {
     # $1: 输出子目录；其余参数透传为 -p:BundlerTest* 覆盖。
     local name="$1"; shift
     dotnet publish "$fixture_project" -c Release \
-        -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
         -p:BundlerIntegrationOutput="$integration_root/$name" \
         --packages "$package_cache" "$@"
 }
@@ -202,7 +201,6 @@ grep -qx "fixture=defaults" "$extract_root/files/$stem/extras/defaults.conf" \
 
 log "== failure variant: absolute BundlerArchiveFile destination must fail =="
 if dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/badfile" \
     -p:BundlerTestArchiveBadFile=1 \
     --packages "$package_cache" > "$integration_root/badfile.log" 2>&1; then
@@ -227,7 +225,6 @@ log "== cross-OS matrix: windows/macOS targets accept zip =="
 for rid in win-x64 osx-arm64; do
     out_dir="$integration_root/cross-$rid"
     dotnet publish "$fixture_project" -c Release -r "$rid" \
-        -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
         -p:BundlerIntegrationOutput="$out_dir" \
         -p:BundlerTestFormats=zip \
         --packages "$package_cache" >/dev/null \
@@ -239,7 +236,6 @@ done
 log "== direct API consumption via DotNet.Bundler.Archive nupkg =="
 ARCHIVE_API_FIXTURE_OUTPUT="$integration_root/api" \
     dotnet run --project "$api_fixture_project" -c Release \
-        -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
         --packages "$package_cache" | tee "$integration_root/api.log"
 grep -q "OK: " "$integration_root/api.log" || fail "API fixture did not produce archives."
 

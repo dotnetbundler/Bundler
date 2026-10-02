@@ -46,9 +46,8 @@
     <BundlerDebConffiles Condition="'$(BundlerTestDebConffiles)' != ''">$(BundlerTestDebConffiles)</BundlerDebConffiles>
     <BundlerDebCompression Condition="'$(BundlerTestDebCompression)' != ''">$(BundlerTestDebCompression)</BundlerDebCompression>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
     <BundlerIcon Include="Assets/icon48.png" />
     <BundlerIcon Include="Assets/icon@2x.png" />

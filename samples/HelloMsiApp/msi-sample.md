@@ -1,8 +1,8 @@
 # HelloMsiApp：Windows MSI 功能演示
 
 这是 `DotNet.Bundler` 当前 Windows + MSI 能力的可操作示例，不是自动化测试。
-项目只通过普通 `PackageReference` 消费本地打出的 NuGet 包；
-没有本仓库源码的普通项目也能按相同方式使用后端。
+项目经 `Bundler.ProjectReference.targets` 以项目引用接入仓内 `src/`；
+没有本仓库源码的普通项目改用 NuGet 包引用，用法见 `README.md`。
 MSI 使用包内固定的 WiX 3.14.1 工具子集；
 构建宿主必须是 Windows。
 示例应用设置 `SelfContained=false`，运行应用需要目标电脑已有相应的 .NET 运行时；
@@ -13,17 +13,14 @@ Bundler 不会下载或安装应用运行时。
 在仓库根目录执行：
 
 ```powershell
-dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
 ```
 
 默认产物为 `samples/HelloMsiApp/artifacts/feature-demo/win-x64/msi/Hello MSI App-1.0.0.msi`。
 `feature-demo` 将本次完整演示与仓库早期同版本示例产物隔开，让上面的直接 `publish` 命令可运行；
 命令行仍可用 `BundlerOutputPath` 指向其他目录。
-与 NSIS 示例一样，项目通过根 `Directory.Build.props` 取得当前开发包版本，通过 `Bundler.LocalPackages.props` 向还原追加本地源 `artifacts/packages`；
-`publish` 消费已还原的 NuGet 包，不会自动重编仓库 `src/`。
-实现变更应先按开发规则迭代包版本并重新打包；
-缺少当前版本的本地包时先执行 `pack`。
+与 NSIS 示例一样，项目经 `Bundler.ProjectReference.targets` 以项目引用接入仓内 `src/Bundler.MSBuild`；
+`publish` 会先编译 `src/` 再执行打包任务，源码改动直接反映到示例产物。
 
 只验证示例构建契约而**不安装** MSI 时，运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1`。
 脚本用隔离 NuGet 缓存从本地包源还原，分别生成英语 current-user、中文 current-user 和英语 per-machine 包，检查数据库中的资源、图标、自定义 UI 对话框（含许可与目录选择路由）、快捷方式、Environment/Feature、关联/协议、品牌位图及独立身份；

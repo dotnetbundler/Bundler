@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
-    <_BundlerPackageRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\'))</_BundlerPackageRoot>
-    <_BundlerTaskAssembly>$(_BundlerPackageRoot)tasks\netstandard2.0\DotNet.Bundler.MSBuild.dll</_BundlerTaskAssembly>
+    <_BundlerPackageRoot Condition="'$(_BundlerPackageRoot)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\'))</_BundlerPackageRoot>
+    <_BundlerTaskAssembly Condition="'$(_BundlerTaskAssembly)' == ''">$(_BundlerPackageRoot)tasks\netstandard2.0\DotNet.Bundler.MSBuild.dll</_BundlerTaskAssembly>
   </PropertyGroup>
 
   <UsingTask TaskName="DotNet.Bundler.MSBuild.BundleDesktopApplication"

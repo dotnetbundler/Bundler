@@ -50,7 +50,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'MSI fixture publish failed.' }
 
         New-Item -ItemType Directory -Path $apiFixtureDirectory -Force | Out-Null
-        Copy-Item -LiteralPath (Join-Path $apiFixtureSource 'Msi.Api.PackageFixture.csproj') -Destination $apiFixture
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Standalone\Msi.Api.PackageFixture.csproj') -Destination $apiFixture
         Copy-Item -LiteralPath (Join-Path $apiFixtureSource 'Program.cs') -Destination (Join-Path $apiFixtureDirectory 'Program.cs')
         Copy-Item -LiteralPath (Join-Path $repository 'Bundler.LocalPackages.props') `
             -Destination (Join-Path $apiFixtureDirectory 'Bundler.LocalPackages.props')

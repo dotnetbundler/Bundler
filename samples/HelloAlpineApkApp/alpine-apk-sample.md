@@ -5,7 +5,6 @@ DotNet.Bundler 的 Alpine `.apk` 演示：`BundlerFormats=alpineapk` 由纯托�
 ## 运行
 
 ```bash
-dotnet pack Bundler.slnx -c Release -o artifacts/packages   # 本仓库打包为本地 nupkg
 dotnet publish samples/HelloAlpineApkApp/HelloAlpineApkApp.csproj -c Release
 ```
 

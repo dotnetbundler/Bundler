@@ -5,8 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler.Deb" Version="$(BundlerPackageVersion)" />
+    <ProjectReference Include="..\..\src\Bundler.Deb\Bundler.Deb.csproj" />
   </ItemGroup>
 </Project>

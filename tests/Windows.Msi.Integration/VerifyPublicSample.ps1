@@ -78,8 +78,6 @@ try {
         )
         & dotnet restore $sample @properties --force -v:minimal
         if ($LASTEXITCODE -ne 0) { throw "Sample restore failed: $($variant.Name)" }
-        Assert-LocalBundlerRestore -Project $sample -PackageVersion $PackageVersion -Source $source `
-            -Cache $cache -RequiredPackages @('DotNet.Bundler', 'DotNet.Bundler.MSBuild', 'DotNet.Bundler.Wix')
         & dotnet publish $sample -c $Configuration --no-restore @properties -v:minimal
         if ($LASTEXITCODE -ne 0) { throw "Sample publish failed: $($variant.Name)" }
 

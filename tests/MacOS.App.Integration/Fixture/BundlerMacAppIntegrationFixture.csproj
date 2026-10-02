@@ -7,7 +7,6 @@
     <AssemblyName>BundlerMacIntegrationFixture</AssemblyName>
     <Version>1.0.0</Version>
     <BundlerEnabled>true</BundlerEnabled>
-    <BundlerIntegrationPackageId Condition="'$(BundlerIntegrationPackageId)' == ''">DotNet.Bundler</BundlerIntegrationPackageId>
     <BundlerIntegrationIdentifier Condition="'$(BundlerIntegrationIdentifier)' == ''">com.dotnetbundler.macintegrationfixture</BundlerIntegrationIdentifier>
     <BundlerIntegrationProductName Condition="'$(BundlerIntegrationProductName)' == ''">Bundler Mac Integration Fixture</BundlerIntegrationProductName>
     <BundlerFormats>app</BundlerFormats>
@@ -33,9 +32,8 @@
     <BundlerMacAppEntitlementsFile Condition="'$(BundlerTestEntitlementsFile)' != ''">$(BundlerTestEntitlementsFile)</BundlerMacAppEntitlementsFile>
     <BundlerMacAppSigningCertificatePath Condition="'$(BundlerTestSigningCertificate)' != ''">$(BundlerTestSigningCertificate)</BundlerMacAppSigningCertificatePath>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="$(BundlerIntegrationPackageId)" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerIcon Include="$(BundlerTestIcon)" Condition="'$(BundlerTestIcon)' != ''" />
     <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
     <BundlerFileAssociation Include="hifix" Name="HiFix Document" Description="Integration fixture document" MimeType="application/x-hifix" />

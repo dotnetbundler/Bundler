@@ -5,8 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler.AlpineApk" Version="$(BundlerPackageVersion)" />
+    <ProjectReference Include="..\..\src\Bundler.AlpineApk\Bundler.AlpineApk.csproj" />
   </ItemGroup>
 </Project>

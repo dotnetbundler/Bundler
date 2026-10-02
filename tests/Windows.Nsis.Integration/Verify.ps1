@@ -50,7 +50,6 @@ $signedBundleOutput = Join-Path $integrationRoot "bundle-signed"
 $noShortcutDefaultsBundleOutput = Join-Path $integrationRoot "bundle-no-shortcut-defaults"
 $failingUninstallBundleOutput = Join-Path $integrationRoot "bundle-failing-uninstall-forward"
 $interruptedUninstallBundleOutput = Join-Path $integrationRoot "bundle-interrupted-uninstall-forward"
-$directMsBuildOutput = Join-Path $integrationRoot "bundle-direct-msbuild"
 $unicodeBundleOutput = Join-Path $integrationRoot "bundle-unicode"
 $testIcon = Join-Path $integrationRoot "test-installer.ico"
 $testHeaderImage = Join-Path $integrationRoot "test-header.bmp"
@@ -249,7 +248,6 @@ function Set-RegistrySnapshotSubKey([string]$Path, [string]$SubKey) {
 function Build-FixtureBundle(
     [string]$InstallMode,
     [string]$OutputPath,
-    [string]$PackageId = "DotNet.Bundler",
     [string]$ApplicationVersion = "1.0.0",
     [bool]$AllowDowngrades = $false,
     [string]$LegacyMsiProductCodes = "",
@@ -276,10 +274,7 @@ function Build-FixtureBundle(
     $escapedShortcutArguments = $ShortcutArguments.Replace("%", "%25").Replace(";", "%3B").Replace('"', "%22")
     $arguments = @(
         "publish", $fixtureProject, "-c", $Configuration, "--force",
-        "-p:BundlerPackageVersion=$PackageVersion",
         "-p:Version=$ApplicationVersion",
-        "-p:BundlerIntegrationPackageId=$PackageId",
-        "-p:BundlerPackageSource=$packageDirectory",
         "-p:BundlerIntegrationOutput=$OutputPath",
         "-p:BundlerTestIcon=$testIcon",
         "-p:BundlerTestHeaderImage=$testHeaderImage",
@@ -491,14 +486,9 @@ try {
     $apiOutput = Join-Path $integrationRoot "standalone-api"
     Invoke-Native "dotnet" @(
         "run", "--project", $apiFixtureProject, "-c", $Configuration,
-        "-p:BundlerPackageVersion=$PackageVersion",
-        "-p:BundlerPackageSource=$packageDirectory",
         "-p:RestorePackagesPath=$packageCache",
         "--", $apiOutput, (Join-Path $integrationRoot "shared-tools")
     )
-    Assert-LocalBundlerRestore -Project $apiFixtureProject -PackageVersion $PackageVersion `
-        -Source $packageDirectory -Cache $packageCache `
-        -RequiredPackages @('DotNet.Bundler.Nsis', 'DotNet.Bundler.Core', 'DotNet.Bundler.Abstractions')
     $apiInstaller = Join-Path $apiOutput "artifacts\win-x64\nsis\NSIS API Package Fixture-1.0.0-setup.exe"
     Assert-True (Test-Path -LiteralPath $apiInstaller) "Standalone NSIS API package did not create its installer."
 
@@ -534,13 +524,9 @@ try {
     Assert-True (Test-Path -LiteralPath $legacyMsiV2Path) "Legacy MSI fixture V2 was not created."
 
     Build-FixtureBundle "currentUser" $bundleOutput
-    Assert-LocalBundlerRestore -Project $fixtureProject -PackageVersion $PackageVersion `
-        -Source $packageDirectory -Cache $packageCache `
-        -RequiredPackages @('DotNet.Bundler', 'DotNet.Bundler.MSBuild', 'DotNet.Bundler.Nsis')
-    Build-FixtureBundle "currentUser" $directMsBuildOutput "DotNet.Bundler.MSBuild"
     Build-FixtureBundle "perMachine" $perMachineBundleOutput
     Build-FixtureBundle "both" $bothBundleOutput
-    Build-FixtureBundle "currentUser" $upgradeBundleOutput "DotNet.Bundler" "1.1.0"
+    Build-FixtureBundle "currentUser" $upgradeBundleOutput -ApplicationVersion "1.1.0"
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $rollbackFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingInstallerHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $transactionSnapshotFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingTransactionSnapshotHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $transactionActivationFailureBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $failingTransactionActivationHooks
@@ -614,7 +600,6 @@ try {
     $interruptedUninstallInstaller = Join-Path $interruptedUninstallBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe"
     $unicodeInstaller = Join-Path $unicodeBundleOutput "win-x64\nsis\$unicodeProductName-1.0.0-setup.exe"
     Assert-True (Test-Path -LiteralPath $installer) "Installer was not created: $installer"
-    Assert-True (Test-Path -LiteralPath (Join-Path $directMsBuildOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Direct MSBuild package installer was not created."
     Assert-True (Test-Path -LiteralPath (Join-Path $perMachineBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Per-machine installer was not created."
     Assert-True (Test-Path -LiteralPath (Join-Path $bothBundleOutput "win-x64\nsis\$productName-1.0.0-setup.exe")) "Both-scope installer was not created."
     Assert-True (Test-Path -LiteralPath $upgradeInstaller) "Upgrade installer was not created."

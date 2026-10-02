@@ -7,7 +7,6 @@
     <AssemblyName>BundlerIntegrationFixture</AssemblyName>
     <Version>1.0.0</Version>
     <BundlerEnabled>true</BundlerEnabled>
-    <BundlerIntegrationPackageId Condition="'$(BundlerIntegrationPackageId)' == ''">DotNet.Bundler</BundlerIntegrationPackageId>
     <BundlerIntegrationIdentifier Condition="'$(BundlerIntegrationIdentifier)' == ''">com.dotnetbundler.integrationfixture</BundlerIntegrationIdentifier>
     <BundlerIntegrationProductName Condition="'$(BundlerIntegrationProductName)' == ''">Bundler Integration Fixture</BundlerIntegrationProductName>
     <BundlerIntegrationPublisher Condition="'$(BundlerIntegrationPublisher)' == ''">DotNet.Bundler Tests</BundlerIntegrationPublisher>
@@ -43,9 +42,8 @@
     <BundlerNsisShortcutLegacyProductNames>Legacy Bundler Fixture</BundlerNsisShortcutLegacyProductNames>
     <BundlerNsisShortcutLegacyMainExecutables>LegacyFixture.exe</BundlerNsisShortcutLegacyMainExecutables>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="$(BundlerIntegrationPackageId)" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerIcon Include="$(BundlerTestIcon)" Condition="'$(BundlerTestIcon)' != ''" />
     <BundlerResource Include="Assets\license.txt" TargetPath="docs\license.txt" />
     <BundlerFileAssociation Include="dbfixture"

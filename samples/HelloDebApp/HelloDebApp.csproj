@@ -11,7 +11,6 @@
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <Nullable>enable</Nullable>
-    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
     <AssemblyName>HelloDebApp</AssemblyName>
     <Version>1.0.0</Version>
 
@@ -72,9 +71,8 @@
     <BundlerDebConffiles Condition="'$(HelloDebConffiles)' != ''">$(HelloDebConffiles)</BundlerDebConffiles>
     <BundlerDebCompression Condition="'$(HelloDebCompression)' != ''">$(HelloDebCompression)</BundlerDebCompression>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <!-- 资源项演示：随载荷落到 install-root 下的 docs/readme.txt。 -->
     <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
     <!-- 图标（PNG，尺寸自动探测；文件名 @2x 后缀 → hicolor <WxH>@2 槽位）。 -->

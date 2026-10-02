@@ -5,7 +5,6 @@
     <TargetFramework>net10.0</TargetFramework>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">osx-arm64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
-    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
     <!-- png=PNG 合成 icns；car=采用预编译 Assets.car（Assets/hello.car）；icon=HelloMacAppIconSource 指向 Icon Composer .icon 目录，经 actool 编译 -->
     <HelloMacAppIconMode Condition="'$(HelloMacAppIconMode)' == ''">png</HelloMacAppIconMode>
     <HelloMacAppIconSource Condition="'$(HelloMacAppIconSource)' == ''"></HelloMacAppIconSource>
@@ -63,9 +62,8 @@
     <Version>1.0.0</Version>
   </PropertyGroup>
 
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerIcon Include="Assets/icon-256.png" Condition="'$(HelloMacAppIconMode)' == 'png'" />
     <BundlerIcon Include="Assets/icon-512.png" Condition="'$(HelloMacAppIconMode)' == 'png'" />
     <BundlerIcon Include="Assets/hello.car" Condition="'$(HelloMacAppIconMode)' == 'car'" />

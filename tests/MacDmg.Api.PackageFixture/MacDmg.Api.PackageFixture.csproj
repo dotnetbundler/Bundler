@@ -6,8 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler.MacDmg" Version="$(BundlerPackageVersion)" />
+    <ProjectReference Include="..\..\src\Bundler.MacDmg\Bundler.MacDmg.csproj" />
   </ItemGroup>
 </Project>

@@ -5,7 +5,6 @@ DotNet.Bundler 的 Linux `.deb` 演示：`BundlerFormats=deb` 由纯托管 `Bund
 ## 运行
 
 ```bash
-dotnet pack Bundler.slnx -c Release -o artifacts/packages   # 本仓库打包为本地 nupkg
 dotnet publish samples/HelloDebApp/HelloDebApp.csproj -c Release
 ```
 

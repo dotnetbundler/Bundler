@@ -5,7 +5,6 @@
     <TargetFramework>net10.0</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
-    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
     <HelloNsisAppInstallMode Condition="'$(HelloNsisAppInstallMode)' == ''">currentUser</HelloNsisAppInstallMode>
     <HelloNsisAppAllowDowngrades Condition="'$(HelloNsisAppAllowDowngrades)' == ''">false</HelloNsisAppAllowDowngrades>
     <HelloNsisAppLegacyMsiProductCodes Condition="'$(HelloNsisAppLegacyMsiProductCodes)' == ''"></HelloNsisAppLegacyMsiProductCodes>
@@ -61,9 +60,8 @@
     <ApplicationIcon>$(_HelloNsisAppArtworkRoot)\Icons\modern-install-colorful.ico</ApplicationIcon>
   </PropertyGroup>
 
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerIcon Include="$(_HelloNsisAppArtworkRoot)\Icons\modern-install-colorful.ico" />
     <BundlerResource Include="Assets\demo-resource.txt" TargetPath="演示资源\说明.txt" />
     <BundlerResource Include="Assets\demo.hello" TargetPath="demo.hello" />

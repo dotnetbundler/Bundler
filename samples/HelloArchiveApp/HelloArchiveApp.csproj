@@ -7,7 +7,6 @@
     <AssemblyName>HelloArchiveApp</AssemblyName>
     <Version>1.2.3</Version>
     <BundlerEnabled>true</BundlerEnabled>
-    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
     <BundlerFormats>zip;targz</BundlerFormats>
     <BundlerIdentifier>com.dotnetbundler.helloarchiveapp</BundlerIdentifier>
     <BundlerProductName>Hello Archive App</BundlerProductName>
@@ -15,9 +14,8 @@
     <BundlerDescription>Sample .zip/.tar.gz bundle produced by DotNet.Bundler</BundlerDescription>
     <BundlerArchivePackageName>hello-archive-app</BundlerArchivePackageName>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerArchiveFile Include="assets/readme.txt" Destination="docs/readme.txt" />
   </ItemGroup>
 </Project>

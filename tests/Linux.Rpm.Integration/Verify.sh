@@ -75,7 +75,6 @@ publish_fixture() {
     # $1: 输出子目录；其余参数透传为 -p:BundlerTestRpm* 等覆盖。
     local name="$1"; shift
     dotnet publish "$fixture_project" -c Release \
-        -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
         -p:BundlerIntegrationOutput="$integration_root/$name" \
         --packages "$package_cache" "$@"
 }

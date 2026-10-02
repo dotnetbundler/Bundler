@@ -1,14 +1,13 @@
 # HelloMacApp：macOS .app 功能演示
 
 这个项目不是自动化测试，而是 `DotNet.Bundler` 当前 macOS `.app` **全部公开能力**的可操作演示。
-项目只通过普通 `PackageReference` 使用本地生成的 NuGet 包。
+项目经 `Bundler.ProjectReference.targets` 以项目引用接入仓内 `src/`；仓库外项目的 NuGet 包用法见 `README.md`。
 
 ## 生成 .app
 
 在仓库根目录执行（macOS 宿主；未签名构建也可在非 macOS 宿主执行，产物带权限位告警）：
 
 ```bash
-dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloMacApp/HelloMacApp.csproj -c Release
 ```
 
