@@ -189,6 +189,24 @@ done
 [[ "$(tar -tf "$extract_root/scripts/member0.tar" | grep -c "^\.pre-install$")" == "0" ]] \
     || fail "Unset scripts must not be packed."
 
+log "== upgrade variant (v1 -r0 -> v2 -r1 upgrade scripts) =="
+publish_fixture upgrade-v1 \
+    -p:BundlerTestAlpineApkPostInstallScript="$script_dir/Fixture/Assets/post-install.sh" >/dev/null
+upgrade_v1_apk="$integration_root/upgrade-v1/linux-musl-x64/apk/bundler-apk-fixture-1.0.0-r0.apk"
+[[ -f "$upgrade_v1_apk" ]] || fail "Upgrade v1 variant produced no .apk."
+publish_fixture upgrade-v2 \
+    -p:BundlerTestAlpineApkRelease=1 \
+    -p:BundlerTestAlpineApkPreUpgradeScript="$script_dir/Fixture/Assets/pre-upgrade.sh" \
+    -p:BundlerTestAlpineApkPostUpgradeScript="$script_dir/Fixture/Assets/post-upgrade.sh" \
+    -p:BundlerTestAlpineApkPostInstallScript="$script_dir/Fixture/Assets/post-install-v2.sh" >/dev/null
+upgrade_v2_apk="$integration_root/upgrade-v2/linux-musl-x64/apk/bundler-apk-fixture-1.0.0-r1.apk"
+[[ -f "$upgrade_v2_apk" ]] || fail "Upgrade v2 variant produced no .apk."
+split_apk "$upgrade_v2_apk" "$extract_root/upgrade-v2" >/dev/null
+for member in .pre-upgrade .post-upgrade .post-install; do
+    tar -tf "$extract_root/upgrade-v2/member0.tar" | grep -q "^$member$" \
+        || fail "v2 control segment missing $member."
+done
+
 log "== signing variant (.SIGN.RSA member) =="
 mkdir -p "$integration_root/keys"
 openssl genrsa -out "$integration_root/keys/bundler-test.rsa" 2048 2>/dev/null \
@@ -255,6 +273,21 @@ if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
         ! test -e /usr/lib/bundler-apk-fixture
         ! test -e /usr/bin/bundler-apk-fixture
     ' || fail "alpine install/run/remove leg failed."
+
+    log "== docker: v1 install -> v2 upgrade runs upgrade scripts =="
+    docker run --rm \
+        -v "$upgrade_v1_apk:/tmp/v1.apk:ro" \
+        -v "$upgrade_v2_apk:/tmp/v2.apk:ro" \
+        alpine:latest sh -c '
+            set -e
+            apk add --allow-untrusted /tmp/v1.apk >/dev/null
+            test -f /tmp/bundler-apk-fixture-post-install.ran
+            apk add --allow-untrusted /tmp/v2.apk >/dev/null
+            test -f /tmp/bundler-apk-fixture-pre-upgrade.ran
+            test -f /tmp/bundler-apk-fixture-post-upgrade.ran
+            ! test -e /tmp/bundler-apk-fixture-post-install-v2.ran
+            apk list --installed | grep -q "bundler-apk-fixture-1.0.0-r1"
+        ' || fail "alpine v1->v2 upgrade leg failed."
 
     log "== docker: unsigned package rejected without --allow-untrusted =="
     if docker run --rm -v "$apk_path:/tmp/pkg.apk:ro" alpine:latest \
