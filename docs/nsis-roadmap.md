@@ -115,12 +115,16 @@ third_party/nsis/plugins/x86-unicode/DotNetBundlerNsis.dll
 ```
 
 插件使用 `win-x86` Native AOT 构建，因为 NSIS 插件宿主采用 x86 Unicode ABI。
-当前插件承担：
+当前插件承担（`installer.nsi` 调用面 24 个导出函数）：
 
-- SemVer 比较；
+- 安装/卸载事务日志：事务开启、激活、提交、崩溃恢复、注册表回滚与快照完整性校验；
+- 快捷方式生命周期：创建、读取、所有权判断、更新、迁移与安全删除；
 - 已安装 MSI 查询和旧 MSI 迁移辅助；
-- 安装完成后的降权进程启动；
-- 快捷方式创建、读取、所有权判断、更新、迁移与安全删除。
+- 锁定进程处理（Restart Manager：`rstrtmgr` 会话枚举与关闭）；
+- 安装完成后的降权进程启动（RunAsUser）；
+- SemVer 比较。
+
+因插件为 `.NET 10` Native AOT 构建且加载期依赖 UCRT 与 Win8+ API，消费机实际下限为 Windows 10 1607+（[.NET 10 支持的操作系统](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md)）。
 
 Native AOT 下不能依赖经典 `ComImport`/RCW 自动封送来操作 Shell Link；
 此前运行时出现 `InvalidOperation_ComInteropRequireComWrapperInstance`，现已改成直接调用 COM vtable。
