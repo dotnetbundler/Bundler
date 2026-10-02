@@ -34,6 +34,7 @@
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
 | x86_64 Linux 宿主构建 + 容器运行冒烟 | 已实现 | LINUX-APPIMAGE-1 | debian:stable/ubuntu:latest/fedora:latest 容器 `--appimage-extract-and-run` 实测输出断言 |
+| `linux-musl-x64`/`linux-musl-arm64` 目标 | 已实现（musl-x64 产+跑实测、musl-arm64 产出实测） | 2026-10-01 门禁放行 | runtime 为静态 ELF（非 glibc 链接）——alpine 容器真产 `linux-musl-x64` AppImage，`APPIMAGE_EXTRACT_AND_RUN` 与 FUSE 挂载双路运行 musl 载荷通过；`musl-arm64` 产出实测（runtime-aarch64 嵌入、e_machine=AArch64）、运行腿待仿真 |
 | `linux-arm64`（aarch64）产物 | 已实现（产出）/外部待验收（运行） | LINUX-APPIMAGE-1 | 可交叉（决策 4）：嵌入 runtime-aarch64 + `--runtime-file`；e_machine 结构断言；真机运行 OI-01 |
 | `appimagelint` 基线 | 已实现（信息级） | LINUX-APPIMAGE-3 | 实跑：有效项全过，✖ 项为载荷 glibc 地板（xenial/trusty）与 `@2` scale 目录解析局限；无 tag 豁免体系 → 信息级接入 Verify.sh 非阻断段 |
 | 多格式扇出（`deb;rpm;appimage`） | 已实现 | LINUX-APPIMAGE-1 | 同次 publish 三产物断言（Verify.sh fanout 变体） |

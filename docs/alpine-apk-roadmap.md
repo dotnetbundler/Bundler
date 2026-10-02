@@ -80,7 +80,7 @@
 | 写入器单测 | 三流结构、字段、pax 头、datahash、签名字节、确定性 | `Bundler.Tests`（任意宿主） |
 | 读出器/拆包 | 自产 apk 回读字段；tar/gzsplit 等价拆解 | `Bundler.Tests` + alpine 容器 |
 | 真实装卸 | `apk add`/`apk info`/`apk remove`、装后运行、签名免开关 | alpine docker（x86_64 + aarch64 qemu） |
-| 门禁回归 | musl+apk 放通、glibc 目标拒绝、非 musl RID 拒绝 | `Bundler.Tests` 矩阵断言 |
+| 门禁回归 | musl 放通 zip/targz/apk/appimage、deb/rpm 拒绝、glibc 目标拒绝 apk | `Bundler.Tests` 矩阵断言 |
 
 ## 6. 已知风险与留待裁决
 
