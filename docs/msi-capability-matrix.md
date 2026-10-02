@@ -35,7 +35,7 @@ WIN-MSI-1..3 的阶段证据见 `docs/msi-roadmap.md` 第 6..8 节，WIN-MSI-4 �
 | 声明式 WiX 扩展与专家模式 | 已实现并本机自动验证 | WIN-MSI-8 | 常规模式：`ExtensionFragments` 白名单校验的 `.wxs` fragment（仅 `Component`/`ComponentGroup`/`Directory`/`DirectoryRef`/`File`/`RegistryKey`/`RegistryValue`/`Environment`/`Condition`/`Shortcut`/`Property` 等声明式核心元素）+ 调用方前缀 `ExtensionIdPrefix` + 显式 Component/Feature 引用注入 Product Feature；禁止自定义动作、序列表、Binary、身份/UI/升级元素与扩展命名空间；不安全输入、ID 冲突、未解析引用均有拒绝测试；MSBuild fixture 真实安装/卸载扩展内容已验证。专家模式：`ExpertTemplate` 整份替换产品文档 + `ExpertMergeModules` 直传 light，`candle -d` 身份变量 + 构建后 `MsiIdentityProbe` 回读强制 Bundler 身份；专家产物是调用方自备逻辑，不享有受管安装保证。扩展输入全部计入指纹/定义哈希。 |
 | 任意应用运行时自动部署 | 明确不支持 | 不适用，明确不支持 | Bundler 不下载或安装 WebView2、VC Runtime、.NET Runtime 等第三方运行时；专家模式中的用户自备逻辑不构成本产品内建能力。 |
 | 受管模式的任意脚本/目录全删 | 明确不支持 | 明确不支持 | 不为表面对齐引入未定义所有权或破坏 MSI 回滚的动作。显式专家模式启用原始 WiX 时，用户自备逻辑不享有本行的受管安装保证。 |
-| CLI | 未实现（MSI 路线外） | MSI 路线之外 | 所有计划格式完成后再按 `CLI-C1` 产品化。 |
+| CLI | 已实现 | CLI-C1（`alpha.62`） | `bundler bundle --formats msi` 或 bundler.json targets；仅 Windows 宿主可产（WiX 宿主边界），其余宿主 `bundle` 拒绝。 |
 
 ## Tauri 通用能力补齐状态
 

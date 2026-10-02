@@ -53,7 +53,7 @@ bundler bundle --input-dir bin/osx-x64 --input-dir bin/osx-arm64 --rid osx --for
 
 也可用 `bundler.json` 承载配置（CLI 参数覆盖文件值，`--<fmt>.<knob>=` 透传格式旋钮），schema 与 MSBuild `Bundler*` 属性一一对应，映射表与退出码/`--json` 契约见 [`docs/cli-roadmap.md`](docs/cli-roadmap.md)。
 后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。
-WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..6` 的当前主机范围验证：current-user 安装、升级、修复和卸载，快捷方式与关联/协议候选注册，测试证书签名、英语/简体中文单语言包及受限故障回滚，x86 目标、显式 MSI 版本映射和可选降级，以及范围内安装目录、自定义 UI 序列、可选 Feature、PATH 精确追加与仅交互启动勾选。
+WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..9` 的当前主机范围验证：current-user 安装、升级、修复和卸载，快捷方式与关联/协议候选注册，测试证书签名、英语/简体中文单语言包及受限故障回滚，x86 目标、显式 MSI 版本映射和可选降级，范围内安装目录、自定义 UI 序列、可选 Feature、PATH 精确追加与仅交互启动勾选，多语言输入资源与构建选项、受控 WiX 扩展与专家模式，以及通用能力审计与再冻结。
 MSI 编译把 WiX 警告视为失败，PackageCode 由 WiX 每次构建生成。
 per-machine 包仅生成并检查数据库；原生 x86/ARM64 宿主、生产证书、交互 UI、提权安装、干净 Windows 和真实重启尚未验收。
 **冻结的是 alpha 格式配置及已验证语义；2026-09-29/30 已完成四宿主跨环境联合验收（win/linux/mac/qemu 互产互装、四轮全绿），其余环境类能力按各格式 OI 清单如实保留外部待验收。**

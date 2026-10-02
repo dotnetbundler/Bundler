@@ -1,7 +1,7 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-10-01
-> 当前分支：`main`（HEAD `ade67d5`，最新提交为文档整理）
+> 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
 > 当前包版本：`0.1.0-alpha.63`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
@@ -146,7 +146,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 ## 6. 默认下一步
 
-全部格式与 CLI 均已冻结并入 `main`（HEAD `ade67d5`），四宿主完整测试全绿（§3）。
+全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 无未启动的后端立项项；新立项按 `docs/roadmap.md` §7.2 准入与新后端完整路线规则。
 剩余工作：文档整理（本轮进行中）、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（tar 流式条目、Zip64 等按 `docs/archive-open-items.md` 评估）。
 

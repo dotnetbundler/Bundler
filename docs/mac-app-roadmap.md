@@ -57,7 +57,7 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
    不公证链路（`.app`+DMG+PKG）：Intel 宿主 **macOS 10.7+**（`pkgbuild`/`productbuild` 10.7 才引入；仅 `.app`+DMG 可至 10.5，`codesign` 自 10.5 起）；arm64 宿主天然 ≥ macOS 11.0（硬件边界，非版本要求）。
    公证是唯一抬高打包工具下限的环节：`xcrun notarytool`/`stapler` 需 Xcode 13+、宿主约 macOS 11.3+（与上游 Tauri 同等）；`.icon`→`Assets.car`（Xcode 26，宿主约 macOS 15.6+）为可降级特性。
    **后端下限**：`netstandard2.0` 库，宿主能装的 .NET 运行时决定——官方支持口径现 macOS 14+（.NET 8/9/10 支持列表随 Apple 支持期滚动）；技术口径 EOL 运行时（.NET Core 3.1 / .NET 6-7）可及 macOS 10.12–10.15，只记“可运行”不承诺。
-   **入口下限**：MSBuild 应用层需 .NET 10 SDK（macOS 14）；CLI 入口未实现，待定。
+   **入口下限**：MSBuild 应用层需 .NET 10 SDK（macOS 14）；CLI=.NET 10 运行时或 NativeAOT 支持的宿主（dotnet tool 与 AOT 二进制双形态；`.app` 纯托管产出不受宿主限制）。
 1. 构建前探测每个必需工具（`xcrun -f`/PATH）并记录版本与路径；缺必需工具立即报清晰错误，不静默降级；缺可选工具降级并警告。
 2. 不自动安装 Xcode/CLT，不替用户激活 Rosetta；宿主缺项写入构建日志与错误信息。
 3. 无网络下载：公证之外的每一步离线可用；公证是显式开启的网络动作。

@@ -44,7 +44,7 @@
 - **打包工具（能力）下限**：无原生工具——`Bundler.Deb` 以托管代码写出 ar/tar/gzip，能力下限即后端可运行的宿主；
   打包工具不绑定宿主 OS，任意能跑 .NET 的宿主可产 `.deb`。
 - **后端下限**：`netstandard2.0` 库，同其他后端口径。
-- **入口下限**：MSBuild=.NET SDK 支持的全部宿主；CLI 待定（CLI-C1）。
+- **入口下限**：MSBuild=.NET SDK 支持的全部宿主；CLI=.NET 10 运行时或 NativeAOT 支持的宿主（dotnet tool 与 AOT 二进制双形态）。
 - **安装宿主边界**：`.deb` 产物面向 dpkg 系发行版（Debian/Ubuntu 及其衍生）；deb 版本字段、zst 压缩等特性按各发行版 dpkg 版本滚动核对，EOL 发行版只记"可运行"不作支持承诺。
 - **验证工具分层**：`lintian`/`desktop-file-validate`/`dpkg`/`apt` 只用于本仓库验收链，不属产物依赖；缺失时集成脚本降级跳过对应断言并记录（验证工具 ≠ 打包工具）。
 - **可选特性降级**：图标尺寸探测、systemd unit、metainfo 等均为可选配置，缺失不抬高必需链路。

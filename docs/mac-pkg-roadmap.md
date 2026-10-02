@@ -28,7 +28,7 @@
 - **宿主边界**：`.pkg` 制作必须 macOS 宿主（无跨宿主替代）；非 macOS 宿主请求明确 `NotSupportedException`。
 - **安装宿主边界**：`system` 域安装需管理员授权；`current-user-home` 域不需提权（本机 uid 501 无 sudo，系统域真实安装属外部待验收）。
 - **后端下限**：netstandard2.0 库，同 `.app`/`.dmg` 口径。
-- **入口下限**：MSBuild=macOS 14（.NET 10 SDK）；CLI 待定。
+- **入口下限**：MSBuild=macOS 14（.NET 10 SDK）；CLI=macOS 宿主（`pkgbuild`/`productbuild` 依赖；dotnet tool 需 .NET 10 运行时，或 osx AOT 二进制）。
 
 ## 3. 语义契约
 

@@ -22,7 +22,7 @@
 - **产物可挂载下限**（产出物侧，由调用方压缩选型决定）：默认 `Ulmo` 要求挂载宿主 macOS 10.12+；选 `Udzo` 可到 OS X 10.1。
 - **宿主边界**：DMG 制作必须 macOS 宿主（`hdiutil`/`osascript` 不可跨宿主）——与未签名 `.app` 跨宿主构建不同；非 macOS 宿主请求 DMG 明确拒绝。
 - **后端下限**：netstandard2.0 库，同 `.app` 口径（官方 macOS 14+）。
-- **入口下限**：MSBuild=macOS 14（.NET 10 SDK）；CLI 待定。
+- **入口下限**：MSBuild=macOS 14（.NET 10 SDK）；CLI=macOS 宿主（`hdiutil` 依赖；dotnet tool 需 .NET 10 运行时，或 osx AOT 二进制）。
 
 ## 3. 语义契约
 
