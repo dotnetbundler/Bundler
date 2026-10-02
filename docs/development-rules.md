@@ -132,6 +132,8 @@
   缺包先 Pack，不假定未发布版本在公网源，也不用源码引用掩盖包消费问题。
   `RestoreSources` 须在仓库源之后保留公共 NuGet 源（`$(BundlerPackageSource);https://api.nuget.org/v3/index.json`）；
   干净宿主的 runtime pack 还原依赖公网回退，截断该源会让示例默认命令失败（2026-09-27 LINUX-DEB-1 修复并由契约测试断言）。
+  勿用 `-p:Restore*` 命令行全局属性做还原——会遮蔽 `Bundler.LocalPackages.props` 的注入；
+  换本地源目录用 `-p:BundlerPackageSource=<dir>`。
 - MSBuild 默认值须按 RID 族推导：`BundlerMainExecutable` 对 `osx-*`/`linux-*` 取 `$(TargetName)`（无 `.exe` 后缀），其余取 `$(TargetName).exe`；
   新增 RID 族或新宿主后缀规则时同步检查该默认（2026-09-27 LINUX-DEB-1 修正 linux 漏项）。
 - **每个后端有完整、可操作的专用示例项目**，可参考 `samples/HelloNsisApp` 的演示形式，不用测试 fixture 冒充示例。
