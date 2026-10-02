@@ -1,15 +1,11 @@
-# 宿主与版本下限矩阵
-
-本文汇总三类下限：各后端打包工具（能力）下限、MSBuild 入口下限（按后端分）、CLI 入口下限（含 AOT 二进制）。
-口径分三级并如实标注：**契约/代码口径**（源码硬约束）、**官方支持口径**（上游支持矩阵，随支持期滚动）、**已实测口径**（本仓库实际跑通的宿主，单台结果不外推）。
-三层下限定义见 `docs/development-rules.md` 第 3 节；安装侧版本下限（产物对目标系统的要求）单列，不与构建宿主混记。
+# 打包能力支持矩阵
 
 ## 1. 各打包工具：生产侧 × 消费侧
 
 | 格式 | 工具 | Windows | macOS | Debian Family | Red Hat Family | Alpine |
 | --- | --- | --- | --- | --- | --- | --- |
 | `nsis` 生产 | [NSIS 3.12](https://nsis.sourceforge.io/)（[toolset r1](https://github.com/dotnetbundler/NsisToolset)） | ✓ 2000+ | ✓ 10.13+ | ✓ glibc2.17+ | ✓ glibc2.17+ |   |
-| `nsis` 消费 |  | ✓ NT4+ |   |   |   |   |
+| `nsis` 消费 |  | ✓\* NT4+ |   |   |   |   |
 | `msi` 生产 | [WiX 3.14.1](https://github.com/wixtoolset/wix3) | ✓ Fx4.5 |   |   |   |   |
 | `msi` 消费 |  | ✓ 7+ |   |   |   |   |
 | `app` 生产 | 托管实现 | ✓\*  | ✓  | ✓\*  | ✓\*  | ✓\*  |
@@ -36,12 +32,15 @@
 - `nsis`
   - 使用 `nsis` 作为打包工具，宿主下限以 [NsisToolset](https://github.com/dotnetbundler/NsisToolset#system-support) 声明为准。
   - 安装包支持 NT4+ 系统（[NSIS 文档](https://nsis.sourceforge.io/Docs/Chapter1.html)）。
+    - 因安装器内嵌 `.NET 10 Native AOT` 构建的插件，消费机实际下限抬至 Windows 10 1607+（[.NET 10 支持的操作系统](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md)）。
 - `msi`
   - 使用 `wix` 作为打包工具，他依赖于 `.NETFramework,Version=v4.5`（简称 Fx4.5）。Fx4.5 在 Win8+ 预装，支持装于 Win7 SP1+ （[.NET Framework 系统要求](https://learn.microsoft.com/en-us/dotnet/framework/get-started/system-requirements)）。
   - 安装包支持 Win7+ 系统；使用 `Windows Installer 5.0` 安装，它随 Win7/Server2008R2 起发行（[Windows Installer 发行版本](https://learn.microsoft.com/en-us/windows/win32/msi/released-versions-of-windows-installer)）
 - `app`
-  - 打包能力纯托管无外部工具依赖（注：**Assets.car** 图标能力依赖于 `Xcode 26+` 的 `actool`）。
-  - Windows 宿主产 `.app` 无执行位，可再套 `zip`/`tar.gz` 携带执行位。
+  - 打包能力纯托管无外部工具依赖。
+    - Windows 宿主产 `.app` 无执行位，可再套 `zip`/`tar.gz` 携带执行位。
+    - 注：**Assets.car** 图标能力依赖于 `Xcode 26+` 的 `actool`
+  - 所有 macOS 均可使用 `.app` 包
 - `dmg`
   - 使用系统 `hdiutil` 打包；默认压缩（`Ulmo`）需 macOS 10.15+（[hdiutil(1) man](https://keith.github.io/xcode-man-pages/hdiutil.1.html)）。
   - 安装包挂载支持 macOS 10.15+（`Ulmo` 压缩）。
@@ -61,8 +60,8 @@
   - 打包能力纯托管无外部工具依赖。
   - 安装包支持 `apk` 系发行版。
 - `zip`/`tar.gz`
-  - 打包能力纯托管无外部工具依赖。
-  - 任意宿主可解压，`.zip` 拒 >4GB。
+  - 打包能力纯托管无外部工具依赖，`.zip` 拒 >4GB。
+  - 任意宿主可解压。
 
 ### 签名
 
