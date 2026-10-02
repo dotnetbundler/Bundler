@@ -128,6 +128,8 @@
   公开示例应用版本保持稳定，升级/降级由独立 fixture 测试。
 - 仓内示例与 fixture 一律以项目引用消费打包系统：共享接线在 `Bundler.ProjectReference.targets` 维护，
   它引用 `src/Bundler.MSBuild`（`ReferenceOutputAssembly=false`）、把 `_BundlerTaskAssembly` 指向源树构建输出并导入 `buildTransitive` 的 props/targets；
+  `BuildReference=false` 使消费方不重建任务工程——任务程序集由 `dotnet build Bundler.slnx` 预建，
+  避免常驻 MSBuild 节点持锁时消费方重写同一输出（MSB3021/3027）；
   消费项目只加一行 `GetPathOfFileAbove` 导入即可直接 `dotnet publish`，无需先 pack。
   API fixture 直引对应后端项目；`tests/Bundler.Tests` 同样使用项目引用。
 - 仓外复制的独立包消费 fixture（模拟外部用户消费发布的 nupkg，是包契约的验收腿）仍走 `PackageReference`：

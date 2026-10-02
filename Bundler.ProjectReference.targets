@@ -1,12 +1,14 @@
 <Project>
   <!-- 仓库内部项目的打包接线：项目引用取代 DotNet.Bundler 包引用。
-       与 NuGet 包消费等价的两点差别：
+       与 NuGet 包消费等价的三点差别：
        - targets/props 直接取自源树 buildTransitive/，不经 buildTransitive 注入；
        - 任务程序集取 Bundler.MSBuild 的源树构建输出，其 CopyLocalLockFileAssemblies
-         已把全部后端程序集与 deps.json 放在同一输出目录，与包内 tasks/ 布局一致。 -->
+         已把全部后端程序集与 deps.json 放在同一输出目录，与包内 tasks/ 布局一致；
+       - BuildReference=false：消费项目不重建任务工程（先 dotnet build Bundler.slnx 预建），
+         否则常驻 MSBuild 节点持有任务程序集时，消费方重编译会被文件锁挡下（MSB3021/3027）。 -->
   <ItemGroup>
     <ProjectReference Include="$(MSBuildThisFileDirectory)src\Bundler.MSBuild\Bundler.MSBuild.csproj"
-                      ReferenceOutputAssembly="false" PrivateAssets="all" />
+                      ReferenceOutputAssembly="false" PrivateAssets="all" BuildReference="false" />
   </ItemGroup>
   <PropertyGroup>
     <_BundlerTaskAssembly Condition="'$(_BundlerTaskAssembly)' == ''">$(MSBuildThisFileDirectory)src\Bundler.MSBuild\bin\$(Configuration)\netstandard2.0\DotNet.Bundler.MSBuild.dll</_BundlerTaskAssembly>

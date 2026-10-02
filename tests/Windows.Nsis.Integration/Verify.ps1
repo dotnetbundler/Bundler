@@ -539,14 +539,14 @@ try {
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $interruptedBundleOutput -ApplicationVersion "1.2.0" -InstallerHooks $abortingInstallerHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $differentManifestBundleOutput -ApplicationVersion "1.3.0" -ShortcutStartMenuFolder "Different Manifest Fixture"
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $rebootRequiredBundleOutput -ApplicationVersion "1.0.0" -InstallerHooks $rebootingInstallerHooks
-    Build-FixtureBundle "currentUser" $allowedDowngradeBundleOutput "DotNet.Bundler" "1.0.0" $true
-    Build-FixtureBundle "currentUser" $legacyMsiProductMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false $legacyMsiProductCode ""
-    Build-FixtureBundle "currentUser" $legacyMsiUpgradeMigrationBundleOutput "DotNet.Bundler" "1.0.0" $false "" $legacyMsiUpgradeCode
-    Build-FixtureBundle "currentUser" $legacyMsiAutoDetectBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" -LegacyMsiAutoDetect $true
-    Build-FixtureBundle "currentUser" $legacyMsiNameMismatchBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" -LegacyMsiAutoDetect $true -ProductName "Bundler Other Fixture" -Identifier "com.dotnetbundler.otherfixture"
-    Build-FixtureBundle "currentUser" $legacyMsiPublisherMismatchBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" -LegacyMsiAutoDetect $true -Publisher "Other Publisher" -Identifier "com.dotnetbundler.pubmismatch"
-    Build-FixtureBundle "currentUser" $legacyMsiDowngradeProbeBundleOutput "DotNet.Bundler" "0.8.5" $false "" $legacyMsiUpgradeCode
-    Build-FixtureBundle "currentUser" $msiContinuityBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" -Formats "msi"
+    Build-FixtureBundle "currentUser" $allowedDowngradeBundleOutput "1.0.0" $true
+    Build-FixtureBundle "currentUser" $legacyMsiProductMigrationBundleOutput "1.0.0" $false $legacyMsiProductCode ""
+    Build-FixtureBundle "currentUser" $legacyMsiUpgradeMigrationBundleOutput "1.0.0" $false "" $legacyMsiUpgradeCode
+    Build-FixtureBundle "currentUser" $legacyMsiAutoDetectBundleOutput "1.0.0" $false "" "" -LegacyMsiAutoDetect $true
+    Build-FixtureBundle "currentUser" $legacyMsiNameMismatchBundleOutput "1.0.0" $false "" "" -LegacyMsiAutoDetect $true -ProductName "Bundler Other Fixture" -Identifier "com.dotnetbundler.otherfixture"
+    Build-FixtureBundle "currentUser" $legacyMsiPublisherMismatchBundleOutput "1.0.0" $false "" "" -LegacyMsiAutoDetect $true -Publisher "Other Publisher" -Identifier "com.dotnetbundler.pubmismatch"
+    Build-FixtureBundle "currentUser" $legacyMsiDowngradeProbeBundleOutput "0.8.5" $false "" $legacyMsiUpgradeCode
+    Build-FixtureBundle "currentUser" $msiContinuityBundleOutput "1.0.0" $false "" "" -Formats "msi"
 
     # 使用当前用户证书存储区验证 MSBuild 参数映射以及 payload、插件、卸载器、安装器签名链路。
     $testCertificate = New-SelfSignedCertificate `
@@ -555,8 +555,8 @@ try {
         -CertStoreLocation "Cert:\CurrentUser\My" `
         -NotAfter ([DateTime]::Now.AddDays(1))
     $testCertificateThumbprint = $testCertificate.Thumbprint
-    Build-FixtureBundle "currentUser" $signedBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" -SigningCertificateThumbprint $testCertificateThumbprint
-    Build-FixtureBundle "currentUser" $noShortcutDefaultsBundleOutput "DotNet.Bundler" "1.0.0" $false "" "" -ShortcutDesktop $false -ShortcutStartMenu $false
+    Build-FixtureBundle "currentUser" $signedBundleOutput "1.0.0" $false "" "" -SigningCertificateThumbprint $testCertificateThumbprint
+    Build-FixtureBundle "currentUser" $noShortcutDefaultsBundleOutput "1.0.0" $false "" "" -ShortcutDesktop $false -ShortcutStartMenu $false
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $failingUninstallBundleOutput -InstallerHooks $failingUninstallHooks
     Build-FixtureBundle -InstallMode "currentUser" -OutputPath $interruptedUninstallBundleOutput -InstallerHooks $interruptedUninstallHooks
     Build-FixtureBundle `
