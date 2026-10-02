@@ -1,6 +1,6 @@
 # macOS `.dmg` 后端实施路线（MAC-DMG）
 
-> 状态：**`MAC-DMG-1`..`MAC-DMG-5` 已完成，`.dmg` 格式已冻结（2026-09-26，冻结基线 `0.1.0-alpha.45`）**；`docs/roadmap.md` 默认下一阶段推进到 `MAC-PKG`。
+> 状态：**`MAC-DMG-1`..`MAC-DMG-5` 已完成，`.dmg` 格式已冻结（2026-09-26，冻结基线 `0.1.0-alpha.45`）**。
 > 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md) 的 `.dmg` 节（同一 `7dbfc1f` 快照基线）；
 > `.app` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。

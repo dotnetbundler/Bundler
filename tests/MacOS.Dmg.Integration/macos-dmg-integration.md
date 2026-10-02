@@ -1,6 +1,6 @@
 # macOS .dmg 集成测试
 
-MAC-DMG-1/2 的本机真实验证入口：真实 .NET payload → `BundlerFormats=dmg`（自动产出 `.app` 中间产物）→ `hdiutil attach` 挂载断言卷内容 → `detach` → `hdiutil verify`。
+MAC-DMG-1..4 的本机真实验证入口：真实 .NET payload → `BundlerFormats=dmg`（自动产出 `.app` 中间产物）→ `hdiutil attach` 挂载断言卷内容 → `detach` → `hdiutil verify`；另覆盖 Finder 布局/背景图/卷图标、SLA 注入与真实挂载门控、quarantine 传播、osx-x64 产物、DMG 本体 codesign、非法压缩值失败路径。
 
 ## 运行
 

@@ -49,7 +49,7 @@
 | `webviewInstallMode` | 无 | 不适用 | Tauri runtime 专属运行时部署 |
 | `allowDowngrades` | `AllowDowngrades` / `BundlerNsisAllowDowngrades` | 已实现、默认不同 | 本项目默认禁止降级；这是更安全的明确产品决策，不复制 Tauri 的 `true` 默认值 |
 | `minimumWebview2Version` | 无 | 不适用 | 同上，不承担 WebView2 生命周期 |
-| `wix` | 将来的 `DotNet.Bundler.Wix` | 计划实现 | 属于独立安装格式，不混入 NSIS 配置 |
+| `wix` | `DotNet.Bundler.Wix` | 已实现 | 属于独立安装格式，不混入 NSIS 配置 |
 | `nsis` | `NsisBundleConfiguration` | 已实现 | 本项目通过强类型后端配置而非嵌套 Tauri JSON 模型组织 |
 | `signCommand` | `WindowsExternalCommandSigner` / `BundlerWindowsSigningCommand` | 已实现，外部待验收 | 参数 Item 支持安全占位符；Fixture 验证替换、退出码与错误脱敏，真实 HSM/云服务见 MT-04 |
 | `bundleVCRuntime` | 无 | 不适用 | Tauri 构建/runtime 约定；调用方可把已准备文件放入输入目录或资源，不由 Bundler 发现/下载依赖 |
@@ -73,7 +73,7 @@
 | `externalBin` | 完整输入目录 + `BundleResourceConfiguration` | 明确采用不同方案；调用方准备最终 payload，不复制 Tauri target-triple 自动发现约定 |
 | URL/深链接协议 | `BundleUrlProtocolConfiguration` | 已实现；本阶段修复 JSON loader 丢失该配置的缺陷 |
 
-JSON 配置加载器是未来 CLI 的共享入口。
+JSON 配置加载器是 CLI 的共享配置入口。
 本阶段验证它会保留文件关联、URL 协议及其元数据，避免 CLI 看似接受配置但生成包时静默丢失。
 
 ## 4. 用户可观察行为矩阵
@@ -101,7 +101,7 @@ JSON 配置加载器是未来 CLI 的共享入口。
 
 1. `NSIS-R1` 没有遗留“未调查”的 Tauri NSIS/Windows 配置项。
 2. 本阶段新增的通用能力是四种 NSIS 压缩模式；默认保持 LZMA。
-3. 文件关联和 URL 协议原本在 API/MSBuild 路径可用，但 JSON loader 会丢失，本阶段已修复，为未来 CLI 保持同一通用模型。
+3. 文件关联和 URL 协议原本在 API/MSBuild 路径可用，但 JSON loader 会丢失，已修复，CLI 保持同一通用模型。
 4. 完整签名已在 `NSIS-R2` 收口；22 种内置语言、严格键校验、覆盖和回退已在 `NSIS-R3` 收口。
 5. WebView2、VC Runtime 和 Tauri updater 产物不构成当前通用安装器能力；不会为字段对齐制造运行时部署系统。
 6. `NSIS-R4` 已冻结安全边界：受管文件树拒绝重解析点，工具缓存以固定归档和逐文件哈希校验；ACL/ADS 不列为通用保真承诺。

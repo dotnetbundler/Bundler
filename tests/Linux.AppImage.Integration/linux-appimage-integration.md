@@ -1,6 +1,6 @@
 # Linux .AppImage 集成验证（tests/Linux.AppImage.Integration）
 
-`Verify.sh` 是 `.AppImage` 后端的真实验证入口，覆盖 `LINUX-APPIMAGE-1..3` 的退出条件。
+`Verify.sh` 是 `.AppImage` 后端的真实验证入口，覆盖 `LINUX-APPIMAGE-1..4` 与 SIGN-2（可选 GPG 签名：测试密钥现生成，`gpgv` 验签断言）的退出条件。
 
 ## 用法
 

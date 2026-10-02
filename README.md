@@ -11,13 +11,13 @@ MSI 已完成 WIN-MSI-1..9，`alpha.37` 是既有 x64/ARM64 身份基线；
 `alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 翻译覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式，`alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 读取前 NSIS 安装目录延续）。
 WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线；`alpha.44` 在其上只做跨格式收尾。
 现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。
-`bundler` CLI 已完成并入 `main`（CLI-C1 冻结于 `0.1.0-alpha.62`，dotnet tool nupkg 与原生 AOT 二进制双分发，用法见下文）；macOS `.app` 已冻结（MAC-APP-1..5，冻结基线 `0.1.0-alpha.45`）。
-Linux `.deb` 已冻结于 `linux-deb-development` 分支（`LINUX-DEB-1..5`，冻结基线 `0.1.0-alpha.51`）：纯托管 ar/tar/gzip 写入器（无原生工具依赖、任意构建宿主可产出），control 全字段+维护者脚本+conffiles+systemd unit+桌面集成，`sudo dpkg -i/-r/-P` 真实装卸、lintian 硬断言、docker debian/ubuntu 矩阵全部验证。
-Linux `.rpm` **已冻结**（`0.1.0-alpha.55`，`linux-rpm-development` 分支）：纯托管 lead/header/cpio/gzip 写入器，六族关系字段 + License/Group/Url + freedesktop 桌面集成（.desktop/图标/metainfo）+ 任意路径映射 + 四 scriptlet/systemd unit/%config(noreplace)，`rpm -qip` 逐字段断言、`desktop-file-validate`、docker `fedora/rockylinux/opensuse` 三容器真实 `rpm -i`/`rpm -U`/`rpm -e` 与 `.rpmsave` 语义验证、`rpmlint` 豁免清单硬基线、`deb;rpm` 同次 publish 扇出已放开；可选 OpenPGP 签名（供私钥即嵌 `RPMSIGTAG_PGP`，`rpm -K` 实测验签通过）。
+`bundler` CLI 已完成并入 `main`（CLI-C1 冻结于 `0.1.0-alpha.62`，dotnet tool nupkg 与原生 AOT 二进制双分发，用法见下文）；macOS `.app`/`.dmg`/`.pkg` 均已冻结（MAC-APP-1..5 / MAC-DMG-1..5 冻结基线 `0.1.0-alpha.45`，MAC-PKG-1..5 冻结基线 `0.1.0-alpha.47`）。
+Linux `.deb` 已冻结并入 `main`（`LINUX-DEB-1..5`，冻结基线 `0.1.0-alpha.51`）：纯托管 ar/tar/gzip 写入器（无原生工具依赖、任意构建宿主可产出），control 全字段+维护者脚本+conffiles+systemd unit+桌面集成，`sudo dpkg -i/-r/-P` 真实装卸、lintian 硬断言、docker debian/ubuntu 矩阵全部验证。
+Linux `.rpm` 已冻结并入 `main`（`0.1.0-alpha.55`，`LINUX-RPM-1..5`）：纯托管 lead/header/cpio/gzip 写入器，六族关系字段 + License/Group/Url + freedesktop 桌面集成（.desktop/图标/metainfo）+ 任意路径映射 + 四 scriptlet/systemd unit/%config(noreplace)，`rpm -qip` 逐字段断言、`desktop-file-validate`、docker `fedora/rockylinux/opensuse` 三容器真实 `rpm -i`/`rpm -U`/`rpm -e` 与 `.rpmsave` 语义验证、`rpmlint` 豁免清单硬基线、`deb;rpm` 同次 publish 扇出已放开；可选 OpenPGP 签名（供私钥即嵌 `RPMSIGTAG_RSA`+`PGP` 双标签，`rpm -K`/zypper/dnf 实测验签通过）。
 Linux `.AppImage` 已冻结并入 `main`（`LINUX-APPIMAGE-1..4` 完成，冻结基线 `0.1.0-alpha.58`）：`DotNet.Bundler.AppImage` 内嵌固定版本 `appimagetool`+type2 runtime（SHA-256 provenance、不联网下载），AppDir 组装复用共享 freedesktop 件 + 脚本式 `AppRun` + 根 `.desktop` 符号链接/`.DirIcon`/`@(BundlerAppImageFile)` 任意映射，仅 Linux 宿主构建、x86_64 宿主可交叉产 aarch64；`--appimage-extract` 结构断言、解出程序真实运行、docker 三容器 extract-and-run 冒烟、`deb;rpm;appimage` 扇出全绿；可选 GPG 签名（供 OpenPGP 私钥即走 `appimagetool --sign`，`gpgv` 实测验签通过）。
 通用 `.zip`/`.tar.gz` 归档已冻结并入 `main`（`ARCHIVE-1..3` 完成，冻结基线 `0.1.0-alpha.59`）：`DotNet.Bundler.Archive` 纯托管写入器（zip 自实现 unix mode/symlink，tar.gz 复用共享 ustar 写入器），单顶层目录 `<pkg>-<ver>-<rid>/` 布局，执行位与符号链接双保留，`.sha256` 侧车，`BundlerFormats=zip;targz` 与 `deb;rpm;appimage;zip;targz` 扇出；`unzip`/`zipinfo -l`/`tar` 真实解包逐路径断言、解出载荷运行、mode/symlink 还原断言全绿。
 Alpine `.apk` 已冻结并入 `main`（`0.1.0-alpha.63`，`APK-1..5` 完成、PR #13 终审合并）：`DotNet.Bundler.AlpineApk` 纯托管三段 gzip 写入器（签名段+控制段 `.PKGINFO`/六脚本+数据段），`linux-musl-x64/arm64` → `x86_64`/`aarch64`，逐文件 pax `APK-TOOLS.checksum.SHA1`、`depend`/`provides`/`triggers`/`license`/`release`/`builddate` 与 `@(BundlerAlpineApkFile)` 任意绝对路径映射，可选 RSA 签名（`.SIGN.RSA.<密钥名>.rsa.pub`，公钥入 `/etc/apk/keys/` 后免 `--allow-untrusted`）；`alpine:latest` 容器 x86_64 直跑 + aarch64 qemu binfmt 真实 `apk add`/`apk del` 全绿。
-可操作的当前能力示例见 [`samples/HelloMacApp/mac-app-sample.md`](samples/HelloMacApp/mac-app-sample.md)、[`samples/HelloDebApp/linux-deb-sample.md`](samples/HelloDebApp/linux-deb-sample.md)、[`samples/HelloRpmApp/linux-rpm-sample.md`](samples/HelloRpmApp/linux-rpm-sample.md) 与 [`samples/HelloAlpineApkApp/alpine-apk-sample.md`](samples/HelloAlpineApkApp/alpine-apk-sample.md)。
+各格式可运行示例见 `samples/`：[`HelloNsisApp`](samples/HelloNsisApp/nsis-sample.md)、[`HelloMsiApp`](samples/HelloMsiApp/msi-sample.md)、[`HelloMacApp`](samples/HelloMacApp/mac-app-sample.md)、[`HelloMacDmg`](samples/HelloMacDmg/mac-dmg-sample.md)、[`HelloMacPkg`](samples/HelloMacPkg/mac-pkg-sample.md)、[`HelloDebApp`](samples/HelloDebApp/linux-deb-sample.md)、[`HelloRpmApp`](samples/HelloRpmApp/linux-rpm-sample.md)、[`HelloAppImageApp`](samples/HelloAppImageApp/linux-appimage-sample.md)、[`HelloArchiveApp`](samples/HelloArchiveApp/archive-sample.md) 与 [`HelloAlpineApkApp`](samples/HelloAlpineApkApp/alpine-apk-sample.md)。
 
 实现已经拆分为可复用的 NuGet 包。
 `DotNet.Bundler` 只是便利元包，实际打包代码位于以下各层。
@@ -33,14 +33,14 @@ Alpine `.apk` 已冻结并入 `main`（`0.1.0-alpha.63`，`APK-1..5` 完成、PR
 | `DotNet.Bundler.Signing.Windows` | 可复用的 Windows Authenticode 签名实现 |
 | `DotNet.Bundler.MacApp` | 独立 macOS `.app` API、Info.plist/`.icns` 生成与 Contents 载荷映射（不内嵌 Apple 工具） |
 | `DotNet.Bundler.MacDmg` | 独立 macOS `.dmg` API、`hdiutil` 全链与拖放卷生成（压缩可配 `Udzo`/`Ulmo`/`Udbz`） |
-| `DotNet.Bundler.MacPkg` | 独立 macOS `.pkg` API、`pkgbuild` 组件包生成（identifier/version/install-location 可配、任意载荷映射） |
+| `DotNet.Bundler.MacPkg` | 独立 macOS `.pkg` API、`pkgbuild` 组件包 + `productbuild` 分发包生成（identifier/version/install-location/domain/页面/脚本可配、任意载荷映射），`pkgbuild --sign`/`productsign` 签名与 notarytool 公证管线 |
 | `DotNet.Bundler.Deb` | 独立 Debian `.deb` API、纯托管 ar/tar/gzip 写入器（核心 control 字段、md5sums、`usr/lib`+`usr/bin` 链接布局、SemVer→deb 版本映射），无原生工具依赖 |
 | `DotNet.Bundler.Rpm` | 独立 RPM `.rpm` API、纯托管 lead/header/cpio/gzip 写入器（核心 tag 集、六族关系字段、文件清单与 %doc/%license 标记、`usr/lib`+`usr/bin` 链接布局、freedesktop 桌面集成、SemVer→rpm 版本映射、`RpmPackageReader` 回读器），无原生工具依赖 |
 | `DotNet.Bundler.AlpineApk` | 独立 Alpine `.apk` API、纯托管三段 gzip 写入器（`.PKGINFO`、六段安装脚本、`depend`/`provides`/`triggers`、`usr/lib`+`usr/bin` 链接、逐文件 pax 校验和、可选 RSA 签名段、`ApkPackageReader` 回读器），无原生工具依赖 |
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
 
-`bundler` CLI（`src/Bundler.Cli`）提供 `validate`/`plan`/`bundle` 三命令，覆盖全部冻结格式，以 dotnet tool 分发（`DotNet.Bundler.Cli` nupkg，`ToolCommandName=bundler`）。
+`bundler` CLI（`src/Bundler.Cli`）提供 `validate`/`plan`/`bundle` 三命令，覆盖全部冻结格式，双分发：dotnet tool（`DotNet.Bundler.Cli` nupkg，`ToolCommandName=bundler`）与原生 AOT 单二进制（`dotnet publish -r <rid>`，宿主裁剪自研后端）。
 
 ```powershell
 dotnet tool install --global DotNet.Bundler.Cli
@@ -88,7 +88,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.45" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.63" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -107,7 +107,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.45" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.63" />
 ```
 
 ```csharp
@@ -153,7 +153,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.45" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.63" />
 ```
 
 ```csharp
@@ -214,7 +214,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerEnabled` | 是 | `false` |
 | `BundlerIdentifier` | 是 | — |
 | `RuntimeIdentifier` | 是 | —；`BundlerUniversalRuntimeIdentifiers` 设置时可省略 |
-| `BundlerFormats` | 否 | `nsis` |
+| `BundlerFormats` | 否 | `nsis`；分号分隔多值扇出，可用 `nsis`/`msi`/`app`/`dmg`/`pkg`/`deb`/`rpm`/`appimage`/`zip`/`targz`/`alpineapk`（CLI 另收 `apk`/`all`） |
 | `BundlerUniversalRuntimeIdentifiers` | 否 | 无；macOS universal 用——复数 RID（如 `osx-x64;osx-arm64`）对每个 RID 内层 `dotnet publish` 后托管合并成 universal 目录再按 `osx` 打包 |
 | `BundlerProductName` | 否 | `$(AssemblyName)` |
 | `BundlerVersion` | 否 | `$(Version)` |
@@ -272,6 +272,45 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerWixExtensionComponentRef`/`…ComponentGroupRef`/`…FeatureRef`（项） | 否 | 常规模式显式引用 id，注入 Product Feature |
 | `BundlerWixExpertTemplate` | 否 | 专家模式：整份 `.wxs` 替换生成的产品文档；身份经 `candle -d` 变量与构建后回读强制 |
 | `BundlerWixExpertMergeModule`（项） | 否 | 专家模式 `.msm` 直传 light；专家产物为调用方自备逻辑，不受管、不担保可回滚 |
+| `BundlerMacAppBundleName` | 否 | `BundlerProductName`；`CFBundleName` |
+| `BundlerMacAppDisplayName` | 否 | `BundlerProductName`；`CFBundleDisplayName` |
+| `BundlerMacAppShortVersion` | 否 | `BundlerVersion`；`CFBundleShortVersionString` |
+| `BundlerMacAppBuildVersion` | 否 | `BundlerVersion`；`CFBundleVersion` |
+| `BundlerMacAppMinimumSystemVersion` | 否 | 无；未配置不写入 `LSMinimumSystemVersion`，安装宿主超限拒绝靠安装时校验 |
+| `BundlerMacAppCategory` | 否 | 无；`LSApplicationCategoryType` |
+| `BundlerMacAppIconName` | 否 | `AppIcon`；`CFBundleIconName`（`.car` 直通/`actool` 管线时匹配 Assets 目录件） |
+| `@(BundlerMacDocumentType)`/`@(BundlerMacUrlType)` | 否 | 文件关联 `CFBundleDocumentTypes`+UTI 导出 / `CFBundleURLTypes` 项组 |
+| `@(BundlerMacContent)`/`@(BundlerMacFramework)` | 否 | Contents 下任意相对路径 / `Frameworks` 嵌套项（`Destination` 元数据） |
+| `BundlerMacAppExceptionDomain` | 否 | 无；ATS `NSExceptionDomains` 单一域（允许不安全 HTTP 载荷含子域） |
+| `BundlerMacAppInfoPlistFile`/`…InfoPlistXml` | 否 | 无；调用方 plist 整文件 / 内联 XML 合并（二选一；身份键回读拒绝） |
+| `BundlerMacAppSignIdentity` | 否 | 无；`-`=ad-hoc / 证书 CN，开启 inside-out `codesign` 管线（仅 macOS 宿主） |
+| `BundlerMacAppSigningCertificatePath`/`…Password` | 否 | 无；p12 证书导入临时钥匙串签名（与 identity 互斥；密码属秘密勿入库） |
+| `BundlerMacAppHardenedRuntime` | 否 | `false`；开启后每个可执行签名加 `--options runtime`（公证必需） |
+| `BundlerMacAppEntitlementsFile` | 否 | 无；entitlements plist 文件 |
+| `BundlerMacAppNotarize` | 否 | `false`；显式公证管线（ditto→`notarytool`→`stapler`，需凭证） |
+| `BundlerMacAppNotaryWait`/`…SkipStapling` | 否 | `true`/`false`；notarytool 不等待 / 跳过 stapler |
+| `BundlerMacAppNotaryProfile` | 否 | 无；keychain profile 名（公证凭证三模式之一） |
+| `BundlerMacAppAppleId`/`…ApplePassword`/`…AppleTeamId` | 否 | 无；Apple ID 凭证三元组（密码属秘密勿入库） |
+| `BundlerMacAppNotaryApiKeyPath`/`…KeyId`/`…Issuer` | 否 | 无；App Store Connect API key 凭证三元组 |
+| `BundlerMacDmgCompression` | 否 | `Ulmo`；也支持 `Udzo`/`Udbz` |
+| `BundlerMacDmgVolumeName` | 否 | `BundlerProductName`；挂载显示卷名 |
+| `BundlerMacDmgSkipWindowLayout` | 否 | `false`；显式跳过 `.DS_Store` 布局（无 GUI 宿主自动降级+警告仍产可挂载 DMG） |
+| `BundlerMacDmgWindowX`/`Y`/`Width`/`Height` | 否 | `200`/`120`/`660`/`400`；Finder 窗口位/尺寸 |
+| `BundlerMacDmgAppIconX`/`Y` | 否 | `180`/`170`；`.app` 图标位 |
+| `BundlerMacDmgApplicationsIconX`/`Y` | 否 | `480`/`170`；`/Applications` 图标位 |
+| `BundlerMacDmgIconSize` | 否 | `128`；图标尺寸 |
+| `BundlerMacDmgBackgroundFile` | 否 | 无；拷入卷内 `.background/` 并被 `.DS_Store` 引用 |
+| `BundlerMacDmgVolumeIconFile` | 否 | 无；落盘 `.VolumeIcon.icns` + `SetFile -a C` |
+| `BundlerMacDmgSignIdentity`/`…SignCertificatePath`/`…SignCertificatePassword` | 否 | 无；DMG 本体 `codesign`（同 app 三模式，仅 macOS 宿主） |
+| `BundlerMacPkgIdentifier`/`BundlerMacPkgVersion` | 否 | `BundlerIdentifier`/`BundlerVersion` |
+| `BundlerMacPkgInstallLocation` | 否 | `/Applications` |
+| `BundlerMacPkgTitle` | 否 | `BundlerProductName`；分发包 `<title>` |
+| `BundlerMacPkgWelcomeFile`/`…ConclusionFile` | 否 | 无；分发包欢迎/结语页文件 |
+| `BundlerMacPkgDomain` | 否 | `System`；也支持 `CurrentUserHome`（免提权装 `~/Applications`，枚举名不区分大小写） |
+| `BundlerMacPkgScriptsDirectory` | 否 | 无；`pkgbuild --scripts` 专家脚本目录 |
+| `@(BundlerPkgPayload)`（`Destination`） | 否 | 无；任意文件树 → install-location 相对路径 |
+| `BundlerMacPkgSignIdentity`/`…SignCertificatePath`/`…SignCertificatePassword` | 否 | 无；`pkgbuild --sign`/`productsign --sign`（Installer 证书，仅 macOS 宿主） |
+| `BundlerMacPkgNotarize`/`…NotaryWait`/`…SkipStapling`/`…NotaryProfile`/`…AppleId`/`…ApplePassword`/`…AppleTeamId`/`…NotaryApiKeyPath`/`…KeyId`/`…Issuer` | 否 | 同 `.app` 公证组（`.pkg` 直接过 notarytool，无 ad-hoc 签名等价物） |
 | `BundlerDebPackageName` | 否 | `BundlerProductName` 的 kebab-case 化；须匹配 Debian 包名规则 `[a-z0-9][a-z0-9+.-]+` |
 | `BundlerDebVersion` | 否 | 空时由 `BundlerVersion` 按 SemVer→deb 映射（预发布 `-`→`~`、`+build` 保留）；显式值须为完整 Debian 版本（可含 `epoch:`与`-revision`） |
 | `BundlerDebRevision` | 否 | `1`；空值（MSBuild 传 `none` 以外的字面空不可达，直接 API 用 `""`）省略 `-revision` |
@@ -381,7 +420,7 @@ Header 图片建议为 150×57 BMP，Sidebar 图片建议为 164×314 BMP。
 ## 通用打包流程与 NSIS 定制
 
 所有格式共用同一条管线：校验配置、生成包含格式依赖关系的计划、创建隔离工作目录、调用后端、确认产物存在、清理工作目录。
-现有 NSIS 和 MSI 后端复用该管线；增加 macOS 或 Linux 格式时继续扩展后端和入口映射，不复制整套调度代码。
+全部格式后端（NSIS/Wix/MacApp/MacDmg/MacPkg/Deb/Rpm/AppImage/Archive/AlpineApk）复用同一管线；后续新增格式按同样方式扩展后端和入口映射，不复制整套调度代码。
 
 产物确定性边界：`.deb`/`.rpm`/`.zip`/`.tar.gz`/`.apk` 为纯托管写入器，相同输入与条件下产物逐字节确定（联合测试实测：同宿主跨轮与 linux↔qemu 同型跨宿主一致；`.apk` 含可选 RSA 签名段亦逐字节确定——RSA PKCS#1 v1.5 为确定性签名）；`.nsis` 与 `.AppImage` 不承诺逐字节一致——makensis 将源文件时间戳编入输出、appimagetool 的 squashfs 元数据与内嵌 runtime 摘要随构建环境变化，属上游工具性质而非写入器缺陷。
 
@@ -623,6 +662,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integratio
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -ConfirmLocalInstall
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -ConfirmLocalInstall
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1
+```
+
+Linux/macOS 宿主对应的真实集成入口（bash）：
+
+```bash
+bash tests/Linux.Deb.Integration/Verify.sh
+bash tests/Linux.Rpm.Integration/Verify.sh
+bash tests/Linux.AppImage.Integration/Verify.sh
+bash tests/Archive.Integration/Verify.sh
+bash tests/Alpine.Apk.Integration/Verify.sh
+bash tests/Cli.Integration/Verify.sh
+bash tests/MacOS.App.Integration/Verify.sh    # 仅 macOS 宿主
+bash tests/MacOS.Dmg.Integration/Verify.sh    # 仅 macOS 宿主
+bash tests/MacOS.Pkg.Integration/Verify.sh    # 仅 macOS 宿主
 ```
 
 NSIS Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。

@@ -1,6 +1,6 @@
 # Alpine `.apk` 后端实施路线（APK）
 
-> 状态：已确认（2026-09-30 用户逐项确认，D1 改判 `AlpineApk`，其余按推荐）
+> 状态：**APK-1..5 全部完成并已冻结并入 `main`**（2026-09-30/10-01，PR #13 `5585843`，冻结基线 `0.1.0-alpha.63`）；此前已确认决策（D1 改判 `AlpineApk`，其余按推荐）。
 > 格式指 Alpine Linux 的 `.apk`（apk-tools v2），**非 Android `.apk`**；移动端支持若将来立项另立路线，届时命名须显式区分（如 `AlpineApk`/`AndroidApk`）。
 > 本文档只放本格式的设计决策、阶段目标与实施证据；泛用规则在 `docs/development-rules.md`。
 

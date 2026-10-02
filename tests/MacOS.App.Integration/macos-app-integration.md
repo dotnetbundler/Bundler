@@ -1,6 +1,6 @@
 # macOS .app 集成测试
 
-MAC-APP-1/2 的本机真实验证入口：真实 .NET payload → 打包 → `plutil` 校验 → 直接启动产物 → LaunchServices 注册与唤起 → 删除即卸载。
+MAC-APP-1..4 的本机真实验证入口：真实 .NET payload → 打包 → `plutil` 校验 → 直接启动产物 → LaunchServices 注册与唤起 → 文件关联/URL scheme/ATS/plist 合并断言 → inside-out codesign 签名与公证（ad-hoc 可演示，`codesign --verify --deep --strict` 硬断言）→ 删除即卸载。
 
 ## 运行
 

@@ -20,7 +20,7 @@
 `DotNet.Bundler` 是通用桌面应用打包工具，不是只服务 .NET 应用的安装器生成器。
 
 当前首先通过 MSBuild 集成，是因为项目现阶段需要在 `dotnet publish` 中使用它；这只是一个入口，不是产品边界。
-直接公共 API、MSBuild Task 和将来正式发布的 CLI 必须调用相同的 Core 与格式后端，不得各自实现打包语义。
+直接公共 API、MSBuild Task 与正式 CLI 都调用相同的 Core 与格式后端，不得各自实现打包语义。
 
 稳定的分层应为：
 
@@ -123,7 +123,7 @@ per-machine 只验证构建产物和数据库，原生 x86/ARM64 宿主、生产
 MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 未经用户明确要求不开始代码。
 
-### MAC：macOS `.app`、DMG 与 PKG（候选）
+### MAC：macOS `.app`、DMG 与 PKG（均已完成并冻结）
 
 `MAC-APP-1`..`MAC-APP-5` 已完成（2026-09-26，分支 `mac-app-development`），macOS `.app` 格式已冻结：`DotNet.Bundler.MacApp` 后端 + MSBuild/直接 API 入口交付 `.app`（骨架、Info.plist 键组、`.icns`/`Assets.car` 图标、文件关联/URL scheme/ATS、签名与显式公证管线、原生 E2E 矩阵），云 macOS VM 全链实测通过；`PackageFormat.Pkg` 已进公共枚举与 osx 目标矩阵。
 2026-09-26 `MAC-DMG` 规划轮已收官（分支 `mac-dmg-development`）：决策全部确认（C# 原生编排不内嵌 create-dmg、DMG 本体可签名不公证、GUI 缺失降级、EULA SLA、固定 UDZO、`OutputDirectory/<rid>/dmg/<产品名>.dmg`、布局全可配），路线见 [`docs/mac-dmg-roadmap.md`](mac-dmg-roadmap.md)。
@@ -141,7 +141,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 
 ### LINUX：Linux 格式
 
-公共模型已经包含 `Deb`、`Rpm`、`AppImage`；`.deb` 已冻结入 `main`，`.rpm` 后端已冻结，`AppImage` 后端已起步（APPIMAGE-1）。
+公共模型已经包含 `Deb`、`Rpm`、`AppImage`；三个 Linux 格式（`.deb`/`.rpm`/`.AppImage`）均已冻结并入 `main`。
 为避免每次交接重新选择，默认顺序固定为 `LINUX-DEB`（已冻结）→ `LINUX-RPM`（已冻结）→ `LINUX-APPIMAGE`（已冻结），仍然一次只推进一个完整格式。
 每个格式分别完成元数据、文件布局、桌面集成、升级/卸载语义、签名或仓库验证边界、原生发行版 E2E，再进入下一个格式。
 若真实用户需求或可用原生验证环境要求调整，必须先在本文档写明依据和新顺序。
@@ -176,19 +176,13 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 `ARCHIVE-1..3` 已全部完成，`.zip`/`.tar.gz` 冻结于 `0.1.0-alpha.59`：`src/Bundler.Archive` 托管双写入器 + 三 OS 矩阵放开 + `BundlerFormats=zip;targz` 接线，
 `Bundler.Tests` 181/181 与 `tests/Archive.Integration/Verify.sh`（真实解包/mode/symlink 还原/五格式扇出/交叉目标）全绿。
 
-### CLI-C1：在打包格式完成后产品化 CLI
+### CLI-C1：在打包格式完成后产品化 CLI（已完成并冻结）
 
-仓库中的 `DotNet.Bundler.Cli` 目前只是有限 NSIS 参数的原型，不是当前阶段。
-CLI 不产生新的格式能力，也不应反过来驱动后端设计；先完成公共模型已经列出的 MSI、App、DMG、DEB、RPM、AppImage 及 macOS 决策新增的必需格式和 ARCHIVE，再进入 CLI-C1。
+CLI-C1 已完成并冻结于 `0.1.0-alpha.62`（分支 `cli-development` 并入 `main`）：共享配置 schema（`bundler.json`）、`validate`/`plan`/`bundle` 共用 Core/后端、稳定退出码/机器可读输出（`--json`）/日志/帮助/版本、覆盖全部已冻结格式、dotnet tool nupkg + `PublishAot` 原生二进制双分发。
+细节见 `docs/cli-roadmap.md` §4 与 `docs/cli-capability-matrix.md`。
+CLI、MSBuild 和直接 API 都只是同一打包能力的适配器；CLI 不产生新的格式能力，也不反过来驱动后端设计。
 
-届时范围为：固化共享配置 schema；
-让 `validate`、`plan`、`bundle` 共用 Core/后端；
-定义稳定退出码、机器可读输出、日志、帮助、版本和发布方式；
-覆盖全部已冻结格式；
-删除重复或错误的早期 alpha 参数而不承诺兼容。
-完成后 CLI、MSBuild 和直接 API 都只是同一打包能力的适配器。
-
-当前实施顺序为：已完成并冻结的 `WIN-MSI-1..9` → `MAC-APP`（已冻结并入 main）→ `MAC-DMG`（已冻结并入 main）→ `MAC-PKG`（规划完成，默认下一阶段）→ `LINUX-DEB`（已冻结）→ `LINUX-RPM`（已冻结）→ `LINUX-APPIMAGE`（已冻结） → `ARCHIVE`（已冻结）→ `CLI-C1`（CLI-1..3+AOT 已完成，`cli-development`，CLI 契约冻结于 `0.1.0-alpha.62`）。
+实施顺序（全部完成并并入 `main`）：`WIN-MSI-1..9` → `MAC-APP` → `MAC-DMG` → `MAC-PKG` → `LINUX-DEB` → `LINUX-RPM` → `LINUX-APPIMAGE` → `ARCHIVE` → `CLI-C1`（冻结于 `0.1.0-alpha.62`）→ `APK`（冻结于 `0.1.0-alpha.63`）。
 Tauri updater 协议/提升权限计划任务若有需求另立跨格式产品路线，不混入 MSI 或提前产品化 CLI。
 调整顺序必须依据真实用户需求、验证能力和维护成本更新本文档，不能只在对话中临时改口。
 

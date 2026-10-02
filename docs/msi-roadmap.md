@@ -2,9 +2,9 @@
 
 > 状态：`WIN-MSI-1..6` 的当前 Windows 11 x64 本机自动化范围已完成（2026-09-26）；
 > `alpha.37` 是既有身份基线，`alpha.40` 增加 x86、显式版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式，`alpha.44` 增加 Tauri 对齐的跨格式收尾（MSI 读前 NSIS 安装目录延续）。
-> `WIN-MSI-1..9` 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；默认下一格式为 `MAC-APP`。
+> `WIN-MSI-1..9` 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；已全部并入 `main`。
 > 原阶段证据见第 6..9 节，扩展路线及 WIN-MSI-5/6 证据见第 10 节。
-> 当前开发分支：`msi-development`；历史记录中的 `codex/msi-development` 是改名前的名称。
+> 原开发分支 `msi-development`（已并入 `main`）；历史记录中的 `codex/msi-development` 是改名前的名称。
 > 规范入口：`docs/roadmap.md`；
 > Tauri 对照见 `docs/msi-tauri-capability-audit.md`，逐项能力见 `docs/msi-capability-matrix.md`，外部条件见 `docs/msi-open-items.md`，人工步骤见 `docs/msi-manual-testing.md`；
 > 更早的分轮记录见 `docs/project-history.md`。
@@ -24,8 +24,8 @@ WiX 3 已归档且免费社区维护结束；因此在 WIN-MSI-1 设置实际分
 
 产品只打包调用方已准备的文件。
 不内建 WebView2、VC Runtime、.NET Runtime 等任意应用运行时依赖的发现、下载或安装。
-MSBuild 是当前入口；直接 API 和未来 CLI 必须复用同一个 Core 与 MSI 后端。
-CLI 在路线所列打包格式完成后再做。
+MSBuild 是当前入口；直接 API 与正式 CLI 复用同一个 Core 与 MSI 后端。
+CLI 在全部格式冻结后交付（`CLI-C1`）。
 能力对齐以通用桌面用户需求为准，不复制 Tauri 或 NSIS 的内部实现；尤其不在 MSI 上复刻 NSIS journal 或强行使用任意脚本自定义操作。
 
 ## 2. WiX 工具供应与发布门槛

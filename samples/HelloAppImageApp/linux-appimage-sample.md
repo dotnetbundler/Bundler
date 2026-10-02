@@ -72,6 +72,18 @@ dotnet publish samples/HelloAppImageApp/HelloAppImageApp.csproj -c Release
       -p:HelloAppImageCategories='Utility%3BDevelopment' -p:HelloAppImageMetainfoFile= Assets/app.metainfo.xml 已默认装载
   ```
 
+- **GPG 签名**（SIGN-2 能力）：供 OpenPGP 私钥文件才签——走内嵌 `appimagetool --sign`，私钥经隔离 `GNUPGHOME` 导入、口令经 `APPIMAGETOOL_SIGN_PASSPHRASE` 注入不上命令行；签名嵌 `.sha256_sig`/`.sig_key` ELF 段，`gpgv` 可验，无密钥产物与未签名现状一致：
+
+  ```bash
+  gpg --batch --quick-gen-key "Hello AppImage Test <test@local>" rsa4096
+  gpg --export-secret-keys --armor "test@local" > /tmp/hello-appimage.rsa
+  dotnet publish samples/HelloAppImageApp/HelloAppImageApp.csproj -c Release \
+      -p:HelloAppImageSigningKeyFile=/tmp/hello-appimage.rsa
+  ```
+
+  可选 `HelloAppImageSigningKeyPassphrase` 配加密私钥；测试密钥即弃不入库。
+  验签口径：取 `.sha256_sig` 段内分离签名，对"两段置零"镜像的 sha256 裸 hex 做 `gpgv` 断言（`tests/Linux.AppImage.Integration/Verify.sh` 已封此链路）。
+
 ## 说明
 
 - 压缩固定 zstd：所钉 appimagetool 构建的 mksquashfs 仅支持 zstd（决策 10 按实测收口）。

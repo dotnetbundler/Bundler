@@ -1,6 +1,6 @@
 # Linux .rpm 集成测试
 
-LINUX-RPM-1..3 的本机真实验证入口：真实 .NET payload → `BundlerFormats=rpm` → `rpm -qip`/`--queryformat` 逐字段断言（含关系字段三件套与 FILEFLAGS %doc/%license）→ `desktop-file-validate` → `rpm2cpio`/`cpio` 载荷回读 → docker `fedora:latest` 容器真实 `rpm -i`/`rpm -ql` 逐路径/`rpm -e` 零残留。
+LINUX-RPM-1..4 与 SIGN-1 的本机真实验证入口：真实 .NET payload → `BundlerFormats=rpm` → `rpm -qip`/`--queryformat` 逐字段断言（含关系字段三件套与 FILEFLAGS %doc/%license）→ `desktop-file-validate` → `rpm2cpio`/`cpio` 载荷回读 → docker `fedora`/`rockylinux`/`opensuse` 三容器真实 `rpm -i`/`rpm -ql` 逐路径/`rpm -e` 零残留 + rpmlint 豁免基线门控 → 可选 GPG 签名腿（测试密钥现生成，容器内 `rpm --import` + `rpm -K` 验签断言）。
 
 ## 运行
 
@@ -42,4 +42,4 @@ bash tests/Linux.Rpm.Integration/Verify.sh
 linux-arm64 产物结构断言（`*.aarch64.rpm`、`ARCH=aarch64`、载荷结构——结构已测、真机安装仍登记 OI）
 - docker 发行版装卸矩阵：`fedora:latest`+`rockylinux:9`+`opensuse/leap:latest` 三容器真实 `rpm -i/-e`（镜像不可拉取时记 SKIP）
 
-arm64 真机安装、GPG 签名——登记 `docs/linux-rpm-open-items.md`，按规划轮决策排后续阶段。
+arm64 真机安装属外部待验收——登记 `docs/linux-rpm-open-items.md`；GPG 签名已实现（SIGN-1，本脚本含签名腿断言）。

@@ -7,7 +7,7 @@
 ## 0. 一句话现状
 
 `DotNet.Bundler` 是通用桌面打包工具，按"一次一个安装格式"推进。
-Windows NSIS 与 WiX/MSI（WIN-MSI-1..9）、macOS `.app`/`.dmg`/`.pkg` 均已冻结并入 `main`；Linux `.deb` 已冻结于 `linux-deb-development`（`LINUX-DEB-1..5`）并入 `main`，`.rpm` 已冻结于 `linux-rpm-development`（`LINUX-RPM-1..5`）；全部格式（NSIS/MSI/APP/DMG/PKG/DEB/RPM/AppImage/Archive/Alpine `.apk`）与 `CLI-C1`（冻结于 `0.1.0-alpha.62`，`.apk` 冻结于 `0.1.0-alpha.63`）均已完成并并入 `main`。
+全部格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`/`.zip`/`.tar.gz`/Alpine `.apk`）与 CLI 均已冻结并入 `main`（最新冻结基线 `0.1.0-alpha.63`），当前无进行中的格式阶段。
 准确的当前阶段、包版本和下一步以 `PROJECT_CONTEXT.md` 文首为准——不要凭本文档或对话记忆判断现状。
 
 ## 1. 接管顺序（未完成前不得改代码）
@@ -53,7 +53,7 @@ git status --short
 3. **新后端先立完整路线**：覆盖到格式冻结的路线经用户确认并写入仓库后，才能写第一阶段代码。
 4. **一次一个完整阶段**：不跨阶段、不只做局部修补；缺环境的能力记入对应格式的人工/外部清单，不阻塞、也不冒充已通过。
 5. **工具随包供应**：默认打包必需的工具内嵌在后端 NuGet 包中并带固定哈希校验，不运行时下载，不引入付费必需服务。
-6. **入口只是适配层**：MSBuild Task 与未来 CLI 调用同一 Core/后端公共 API；后端不依赖 MSBuild、`.csproj`、dotnet publish 或 .NET 应用模型。
+6. **入口只是适配层**：MSBuild Task 与正式 CLI 调用同一 Core/后端公共 API；后端不依赖 MSBuild、`.csproj`、dotnet publish 或 .NET 应用模型。
 7. **新功能必有新测试**：每项新增/修改功能要有可区分旧行为的自动化断言；本机可安全执行的真实测试当阶段跑完；只运行旧测试不算完成。
 8. **秘密不入库**：签名私钥、PFX 密码、令牌不进入仓库、项目文件、普通命令行或可回显日志。
 9. **文档各司其职**：泛用规则只在 `docs/development-rules.md`；某格式的规则、契约、路线、证据只放该格式的文档；

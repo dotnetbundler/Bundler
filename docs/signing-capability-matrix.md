@@ -7,10 +7,10 @@
 
 | 能力 | 状态 | 落地阶段 | 证据/备注 |
 | --- | --- | --- | --- |
-| `BundlerRpmSigningKeyFile`/`Passphrase` 旋钮 | 计划实现 | SIGN-1 | 供密钥才签；半配置拒绝 |
+| `BundlerRpmSigningKeyFile`/`Passphrase` 旋钮 | 已实现 | SIGN-1 | 供密钥才签；半配置拒绝 |
 | OpenPGP 签名写 rpm signature header（RPMSIGTAG_RSA） | 已实现 | SIGN-1 | 纯托管 BouncyCastle；无外部进程；双标签：RSA(268，仅签 header——zypper 所验）+PGP(1002，签 header+payload——`rpm -K` 所验），v3 签名包 |
-| 容器内 `rpm --import` + `rpm -K` 验签 | 计划实现 | SIGN-1 | Verify.sh docker 段 |
-| 无密钥产物与现状一致 | 计划实现 | SIGN-1 | sha256 对比断言 |
+| 容器内 `rpm --import` + `rpm -K` 验签 | 已实现 | SIGN-1 | Verify.sh docker 段 |
+| 无密钥产物与现状一致 | 已实现 | SIGN-1 | sha256 对比断言 |
 
 ## AppImage 签名
 

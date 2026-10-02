@@ -17,7 +17,7 @@
 | 全格式旋钮透传（`--<format>.<knob>=`） | 已实现 | CLI-2 | 高频项参数化，文件映射仅配置承载；未知旋钮拒绝 |
 | `dotnet tool` 分发（`bundler`） | 已实现 | CLI-3 | `DotNet.Bundler.Cli` nupkg（PackAsTool），本机 `--tool-path` 实装后 `bundler` bundle deb/zip 实测通过；需 `DOTNET_ROOT` 指向 SDK 安装 |
 | 原生 AOT 二进制分发 | 已实现 | CLI-AOT | `dotnet publish -r <rid>` 产出免运行时 ELF；linux-x64 本机实测 |
-| 自包含/AOT 单二进制分发 | 外部待验收 | — | OI-01：体积与 RID 扇出成本需实测 |
+| 自包含/AOT 单二进制分发 | 已实现 | CLI-AOT | 即上行同能力；CLI-OI-01 已消解（体积实测见 `docs/cli-roadmap.md`） |
 | 旧 `src/Bundler.Cli` 原型 | 已删除 | CLI-1 | 164 行 NSIS-only，不承诺兼容 |
 | `info`/`formats` 独立命令 | 明确拒绝 | — | `plan --json` 已覆盖 |
 | hooks/脚本化扩展 | 明确拒绝 | — | 干净宿主立场 |

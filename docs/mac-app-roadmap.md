@@ -1,6 +1,6 @@
 # macOS `.app` 后端实施路线（MAC-APP）
 
-> 状态：**路线已确认，`MAC-APP-1`..`MAC-APP-5` 全部完成，`.app` 格式已冻结**（冻结基线：`mac-app-development` 分支 `BundlerPackageVersion=0.1.0-alpha.45`，行为契约=`mac-app-capability-matrix.md` 定稿表+本文件各节验收记录；冻结后仅缺陷修复附回归测试）。下一阶段默认 `MAC-DMG`。
+> 状态：**路线已确认，`MAC-APP-1`..`MAC-APP-5` 全部完成，`.app` 格式已冻结**（冻结基线：`mac-app-development` 分支 `BundlerPackageVersion=0.1.0-alpha.45`，行为契约=`mac-app-capability-matrix.md` 定稿表+本文件各节验收记录；冻结后仅缺陷修复附回归测试）。
 > 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)；PKG 取舍见 [`docs/mac-format-decision.md`](mac-format-decision.md)；逐项能力状态见 [`docs/mac-app-capability-matrix.md`](mac-app-capability-matrix.md)；外部条件见 [`docs/mac-app-open-items.md`](mac-app-open-items.md)；人工步骤见 [`docs/mac-app-manual-testing.md`](mac-app-manual-testing.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 

@@ -3,7 +3,7 @@
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
 外部待验收行绑定到 `docs/linux-deb-open-items.md`、`docs/linux-deb-manual-testing.md` 中的明确 ID。
 上游参照见 `docs/linux-tauri-capability-audit.md`；决策与阶段见 `docs/linux-deb-roadmap.md`。
-本矩阵于 2026-09-27 规划轮建立；LINUX-DEB-1/2 已于同日完成，相关行更新为"已实现"并以 `tests/Linux.Deb.Integration/Verify.sh` 与 `tests/Bundler.Tests` DebTests 为证据。
+本矩阵于 2026-09-27 规划轮建立，已于 LINUX-DEB-5 定稿（冻结基线 `0.1.0-alpha.51`）；"已实现"行以 `tests/Linux.Deb.Integration/Verify.sh` 与 `tests/Bundler.Tests` DebTests 为证据。
 
 ## 产物与载荷
 

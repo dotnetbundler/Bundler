@@ -1,7 +1,7 @@
 # Linux `.AppImage` 能力矩阵（LINUX-APPIMAGE）
 
 > `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
-> 每行记录完成条件与边界；本矩阵随 `LINUX-APPIMAGE-1..4` 推进逐行更新，冻结时定稿。
+> 每行记录完成条件与边界；本矩阵随 `LINUX-APPIMAGE-1..4` 推进逐行更新，已于 LINUX-APPIMAGE-4 定稿（冻结基线 `0.1.0-alpha.58`）。
 
 ## 工具与产物
 

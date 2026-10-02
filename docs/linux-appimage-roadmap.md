@@ -1,6 +1,6 @@
 # Linux `.AppImage` 路线图（LINUX-APPIMAGE）
 
-> 状态：**规划轮待用户裁决**（2026-09-27，`linux-appimage-development` 分支；`.rpm` 已冻结于 `0.1.0-alpha.55`）。
+> 状态：**`.AppImage` 已冻结于 `0.1.0-alpha.58`**（`LINUX-APPIMAGE-1..4` 全部完成，`linux-appimage-development` 分支并入 `main`；冻结后仅缺陷修复附回归测试）。
 > 本文件只放 AppImage 的设计决策、阶段分解与实施证据；泛用规则见 `docs/development-rules.md`。
 > 上游依据：`docs/linux-tauri-capability-audit.md` AppImage 段（快照 `447fa9f`）。
 

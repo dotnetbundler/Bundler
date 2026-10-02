@@ -56,7 +56,7 @@
 | 关系字段：`depends`→`Requires`、`recommends`、`provides`、`conflicts`、`obsoletes`（`Dependency::any` 直传） | 无 | LINUX-RPM 显式透传；额外 `supplements`/`suggests` 等弱依赖按需评估 |
 | 压缩 `compression`：Gzip(6) 默认 / Zstd / Xz / Bzip2 / None 可配 | 无 | LINUX-RPM 托管写入器内实现 gzip；xz/zstd 依赖可用编码器另行裁决 |
 | 四脚本 `pre/post-install/remove`（rpm `%pre`/`%post`/`%preun`/`%postun`） | 无 | LINUX-RPM 专家旋钮（脚本内容注入 header tag） |
-| GPG 签名：`TAURI_SIGNING_RPM_KEY`/`…_PASSPHRASE` 环境变量，`build_and_sign` 写签名 header | 秘密管理规则已有 | LINUX-RPM 后续阶段：显式密钥配置（引用凭据，不入库）；rpm 生态包签名是真实惯例，与 deb 侧"仓库签名为主"不同 |
+| GPG 签名：`TAURI_SIGNING_RPM_KEY`/`…_PASSPHRASE` 环境变量，`build_and_sign` 写签名 header | 已实现（SIGN-1） | `BundlerRpmSigningKeyFile`/`Passphrase` 显式密钥配置（不入库），嵌 `RPMSIGTAG_RSA`+`PGP`，`rpm -K` 实测验签；rpm 生态包签名是真实惯例，与 deb 侧"仓库签名为主"不同 |
 | `License:` 标签取 `settings.license`（SPDX 字符串） | `LicenseFile` 是文件路径 | LINUX-RPM 提供 `BundlerRpmLicense`（SPDX 标识符）字段；`LicenseFile` 仍落 `/usr/share/doc` |
 | 载荷/桌面集成与 deb 完全同构（二进制 `usr/bin`、资源 `usr/lib/<name>`、同一 `.desktop` 生成、同一图标布局、`files` 映射） | 同 deb 行 | LINUX-RPM；共享 freedesktop 数据树生成器（落地方式见 `linux-deb-roadmap.md` §1 决策 4） |
 
@@ -71,7 +71,7 @@
 | 产物 `<产品名>_<version>_<amd64|aarch64>.AppImage` | 输出契约 `OutputDirectory/<rid>/<format>/` | LINUX-APPIMAGE；沿用上游文件命名 |
 | `bundle_media_framework`（gstreamer 打包） | 无 | 不适用：Tauri webkit/媒体栈专属 |
 | 无内嵌更新元数据（上游 updater 走独立机制，不产 `.zsync`） | 无 | 明确拒绝首个版本做 updateinfo/zsync；需要时另立跨格式更新路线 |
-| AppImage 本体签名（`--sign` GPG，上游未实现） | 无 | 计划实现评估：`appimagetool` 支持 `--sign`；排 LINUX-APPIMAGE 后期阶段或外部待办 |
+| AppImage 本体签名（`--sign` GPG，上游未实现） | 已实现（SIGN-2） | `appimagetool --sign` 落地：`BundlerAppImageSigningKeyFile`/`Passphrase` 供密钥才签，隔离 `GNUPGHOME` + `gpgv` 实测验签 |
 
 ## 跨格式公共观察
 

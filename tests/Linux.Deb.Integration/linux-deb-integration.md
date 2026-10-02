@@ -1,6 +1,6 @@
 # Linux .deb 集成测试
 
-LINUX-DEB-1 的本机真实验证入口：真实 .NET payload → `BundlerFormats=deb` → `ar`/`dpkg-deb` 结构断言 → `dpkg-deb -I/-c` 元数据与清单核对 → `md5sums`/`sha256` 校验 → 免密 `sudo dpkg -i/-r` 真实装卸烟雾。
+LINUX-DEB-1..4 的本机真实验证入口：真实 .NET payload → `BundlerFormats=deb` → `ar`/`dpkg-deb` 结构断言 → `dpkg-deb -I/-c` 元数据与清单核对 → `md5sums`/`sha256` 校验 → 免密 `sudo dpkg -i/-r` 真实装卸烟雾 → lintian 豁免基线门控 + docker `debian:stable`/`ubuntu:latest` 容器装卸矩阵。
 
 ## 运行
 

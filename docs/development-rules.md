@@ -83,8 +83,7 @@
   `DotNet.Bundler.MSBuild` 是当前应用层，只把属性和 Item 映射到同一 Core/后端；
   Task 在 MSBuild 进程内调用它们，不再启动额外的 .NET CLI 驱动，实际格式编译器可作为工具进程启动。
   `DotNet.Bundler` 是便利元包。
-  将来正式 CLI 也是应用层，按总路线在计划格式完成后产品化；
-  现有 CLI 原型不决定后端设计。
+  已完成的正式 CLI（`DotNet.Bundler.Cli`）与 MSBuild Task 同为应用层适配器，不决定后端设计。
   后端 API 不依赖 `.csproj`、`dotnet publish`、MSBuild 类型或应用使用 .NET。
 - **默认打包必需工具和资源随对应后端包分发**：普通使用者无需另装 NSIS/WiX，也无需运行时联网下载打包工具。
   参照 NSIS 的内嵌工具与校验缓存模式，但须按各工具许可证和宿主条件设计。

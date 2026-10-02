@@ -132,6 +132,6 @@ sudo dpkg -r hello-deb-app
 
 - **压缩格式**：`BundlerDebCompression` 当前仅 `gzip`——托管写入器在 netstandard2.0 无 xz/zstd 编码器（引第三方依赖属单独裁决），且 zstd 要求安装宿主 dpkg ≥ 1.21.18。
 
-## 已知边界（LINUX-DEB-3 未做）
+## 已知边界
 
-systemd 真实 enable/start、升级/降级多版本链、xz/zstd 压缩属 `LINUX-DEB-4` 或已登记边界；详见 `docs/linux-deb-roadmap.md`。
+xz/zstd 压缩明确拒绝（仅 gzip）；arm64 真机安装属外部待验收；其余边界见 `docs/linux-deb-roadmap.md` 与 `docs/linux-deb-open-items.md`。

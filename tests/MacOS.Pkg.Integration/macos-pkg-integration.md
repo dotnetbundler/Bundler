@@ -1,6 +1,6 @@
 # macOS .pkg 集成测试
 
-MAC-PKG-1 的本机真实验证入口：真实 .NET payload → `BundlerFormats=pkg`（自动产出 `.app` 中间产物）→ `pkgutil --expand-full` 断言 payload/PackageInfo → `xar -tf` 结构 → `installer -dominfo` 域名信息。
+MAC-PKG-1..4 的本机真实验证入口：真实 .NET payload → `BundlerFormats=pkg`（自动产出 `.app` 中间产物）→ `pkgutil --expand-full` 断言 payload/PackageInfo → `xar -tf` 结构 → `installer -dominfo` 域名信息；另覆盖 per-user 域免提权真实安装（`~/Applications` 落位+收据断言）、分发包页面、`--scripts` 专家脚本真实执行、覆盖升级、osx-x64 产物、签名拒绝路径。
 
 ## 运行
 

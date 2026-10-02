@@ -1,6 +1,6 @@
 # 签名能力路线（SIGN）
 
-> 状态：规划轮文档组，决策清单待用户逐条裁决或直接放行（2026-09-27，分支 `signing-development`）。
+> 状态：**SIGN-1、SIGN-2 全部完成**（2026-09-27/28，分支 `signing-development` 并入 `main`）——rpm 与 AppImage 可选签名齐备，deb 维持不签裁决。
 > 范围依据：用户裁决——`deb` 不提供签名（维持拒绝）；`rpm` 与 `AppImage` 提供**可选**签名能力（开发者供密钥才签，不供不签）。
 > 上游参照：`docs/linux-tauri-capability-audit.md` + 定点复核——rpm 侧 Tauri `build_and_sign` 走 `rpm` crate `pgp::Signer`：`RPMSIGTAG_PGP`(1002) 写 OpenPGP 签名包（覆盖 header+payload，SHA256 系），密钥为 armor 私钥 env + passphrase env（`TAURI_SIGNING_RPM_KEY`/`…_PASSPHRASE`）；AppImage 侧上游未实现 `--sign`。
 
@@ -27,7 +27,7 @@
 
 | 阶段 | 范围 | 退出条件 |
 | --- | --- | --- |
-| `SIGN-1` | `RpmBundleConfiguration` 签名旋钮 + BouncyCastle OpenPGP 签名写 signature header + MSBuild/CLI 接线 + 单元测试 + Verify.sh 容器 `rpm -K` 断言 + 测试密钥现生成 + 无密钥回归 | 已签 rpm 容器内 `rpm --import`+`-K`/`--checksig` 真实验签断言全绿；未供密钥产物与现状一致；半配置拒绝断言；`Bundler.Tests` 全绿 |
+| ~~`SIGN-1`~~（完成） | `RpmBundleConfiguration` 签名旋钮 + BouncyCastle OpenPGP 签名写 signature header + MSBuild/CLI 接线 + 单元测试 + Verify.sh 容器 `rpm -K` 断言 + 测试密钥现生成 + 无密钥回归 | 已签 rpm 容器内 `rpm --import`+`-K`/`--checksig` 真实验签断言全绿；未供密钥产物与现状一致；半配置拒绝断言；`Bundler.Tests` 全绿 |
 | ~~`SIGN-2`~~（完成） | `AppImageBundleConfiguration` 签名旋钮 + appimagetool `--sign`（隔离 GNUPGHOME）+ 同上接线/测试/验证 | 已签 AppImage `gpgv` 验签断言全绿；未供密钥产物与现状一致；文档矩阵/OI/MT 收口 |
 
 ## 3. 技术注记
