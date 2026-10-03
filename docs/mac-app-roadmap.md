@@ -114,9 +114,9 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 | 用途 | macOS `.app` 入口 |
 | --- | --- |
 | 快速单元/契约 | `tests/Bundler.Tests` |
-| 仓库外直接后端 API 包消费 | `tests/MacApp.Api.PackageFixture` |
+| 仓库外直接后端 API 包消费 | `tests/Bundler.ApiTests`（`MacAppApiTests`） |
 | MSBuild 包消费 fixture | `tests/MacOS.App.Integration/Fixture` |
-| 真实 macOS 集成 | `tests/MacOS.App.Integration/Verify.sh`（独立身份、预检无碰撞、`finally` 只清理本轮产物） |
+| 真实 macOS 集成 | `tests/MacOS.App.Integration/Verify.sh`（薄入口，转发 `Bundler.IntegrationTests` 的 `MacAppIntegrationTests`；独立身份、预检无碰撞、只清理本轮产物） |
 | 专用环境与人工 | `docs/mac-app-manual-testing.md`、`docs/mac-app-open-items.md` |
 
 ### MAC-APP-1：可用的最小 `.app`（结构/元数据）
