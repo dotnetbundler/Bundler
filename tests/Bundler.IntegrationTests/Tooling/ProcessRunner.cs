@@ -29,6 +29,25 @@ internal static class ProcessRunner
     private static Result Run(string filePath, IEnumerable<string>? arguments,
         string? argumentLine, Options? options)
     {
+        // dotnet 子命令进程内串行：多个夹具/腿并发的 publish/build/restore 会共享
+        // 上游 src/*/obj 还原目标，NuGet 对 project.assets.json 有并发写防护。
+        // 宿主工具与 docker 调用不经此闸，保持并行。
+        var fileName = Path.GetFileNameWithoutExtension(filePath);
+        if (string.Equals(fileName, "dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            lock (DotnetGate)
+            {
+                return RunCore(filePath, arguments, argumentLine, options);
+            }
+        }
+        return RunCore(filePath, arguments, argumentLine, options);
+    }
+
+    private static readonly object DotnetGate = new();
+
+    private static Result RunCore(string filePath, IEnumerable<string>? arguments,
+        string? argumentLine, Options? options)
+    {
         options ??= new Options();
         var startInfo = new ProcessStartInfo
         {
