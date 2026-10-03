@@ -19,6 +19,8 @@ function Pack-MsiTestPackages(
 ) {
     Push-Location $Repository
     try {
+        # 常驻 MSBuild 节点可能已加载任务程序集；pack 原地重建 src 输出会被文件锁挡住（Windows MSB3026/3027）
+        & dotnet build-server shutdown | Out-Null
         & dotnet pack Bundler.slnx -c $Configuration -o $PackageDirectory "-p:BundlerPackageVersion=$PackageVersion"
         if ($LASTEXITCODE -ne 0) { throw 'dotnet pack failed.' }
     }
