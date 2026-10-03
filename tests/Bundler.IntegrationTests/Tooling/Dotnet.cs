@@ -21,12 +21,23 @@ internal static class Dotnet
         => Checked(["build", Path.Combine(RepositoryLayout.Root, "Bundler.slnx"), "-c", configuration],
             "dotnet build Bundler.slnx");
 
+    // nodeReuse 文件锁只在 Windows 存在：常驻 MSBuild 节点锁住任务程序集时 pack 无法覆盖。
+    // POSIX 允许覆盖使用中的文件无需 shutdown，且 musl 上 VBCSCompiler -shutdown
+    // 子进程间歇性不退出会让 muxer 挂死——shutdown 因此限 Windows。
+    public static void ShutdownBuildServers()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Run(["build-server", "shutdown"]);
+        }
+    }
+
     // Pack-MsiTestPackages 的 C# 形态：先杀常驻 MSBuild 节点释放任务程序集文件锁，
     // 再 build+pack，断言全部 nupkg 落在目标目录。
     public static void BuildAndPack(string packageDirectory, string configuration = "Release")
     {
         Directory.CreateDirectory(packageDirectory);
-        Run(["build-server", "shutdown"]);
+        ShutdownBuildServers();
         BuildSolution(configuration);
         Checked(["pack", Path.Combine(RepositoryLayout.Root, "Bundler.slnx"), "-c", configuration,
                 "-o", packageDirectory], "dotnet pack Bundler.slnx");

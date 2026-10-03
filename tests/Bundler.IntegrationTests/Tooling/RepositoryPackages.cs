@@ -6,7 +6,7 @@ internal static class RepositoryPackages
     {
         var dir = RepositoryLayout.PackageDirectory;
         System.IO.Directory.CreateDirectory(dir);
-        Dotnet.Run(["build-server", "shutdown"]);
+        Dotnet.ShutdownBuildServers();
         Dotnet.BuildSolution();
         Dotnet.Checked(
             ["pack", Path.Combine(RepositoryLayout.Root, "Bundler.slnx"), "-c", "Release", "-o", dir],

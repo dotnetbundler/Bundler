@@ -8,7 +8,7 @@ internal static class MsiSupport
     // 对应 Pack-MsiTestPackages：pack 前先杀常驻 MSBuild 节点（nodeReuse 文件锁根因）。
     public static string PackPackages(string packageDir)
     {
-        Dotnet.Run(["build-server", "shutdown"]);
+        Dotnet.ShutdownBuildServers();
         var version = RepositoryLayout.PackageVersion;
         ProcessRunner.AssertSuccess(
             Dotnet.Run(["pack", "Bundler.slnx", "-c", "Release", "-o", packageDir,
