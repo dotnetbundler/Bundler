@@ -6,25 +6,31 @@ using System.Diagnostics;
 [System.Runtime.Versioning.SupportedOSPlatform("linux")]
 public sealed class ArchiveFixture : IDisposable
 {
-    public IntegrationWorkspace Ws { get; }
-    public string CacheDir { get; }
-    public string ExtractRoot { get; }
-    public string FixtureProject { get; }
+    public IntegrationWorkspace Ws { get; private set; } = null!;
+    public string CacheDir { get; private set; } = null!;
+    public string ExtractRoot { get; private set; } = null!;
+    public string FixtureProject { get; private set; } = null!;
 
     public const string Stem = "bundler-archive-fixture-1.0.0-linux-x64";
     public const string Exe = "BundlerArchiveIntegrationFixture";
 
-    public string DefaultZip { get; }
-    public string DefaultTgz { get; }
-    public string OverrideZip { get; }
-    public string NamedZip { get; }
-    public string FilesZip { get; }
-    public string FilesTgz { get; }
-    public string FanoutDir { get; }
-    public string CrossWinDir { get; }
-    public string CrossOsxDir { get; }
+    public string DefaultZip { get; private set; } = null!;
+    public string DefaultTgz { get; private set; } = null!;
+    public string OverrideZip { get; private set; } = null!;
+    public string NamedZip { get; private set; } = null!;
+    public string FilesZip { get; private set; } = null!;
+    public string FilesTgz { get; private set; } = null!;
+    public string FanoutDir { get; private set; } = null!;
+    public string CrossWinDir { get; private set; } = null!;
+    public string CrossOsxDir { get; private set; } = null!;
 
-    public ArchiveFixture()
+    private readonly Lazy<bool> _init;
+
+    public ArchiveFixture() => _init = new Lazy<bool>(() => { Initialize(); return true; });
+
+    public bool Ensure() => _init.Value;
+
+    private void Initialize()
     {
         Assert.SkipWhen(!TestPlatform.IsLinux, "SKIP: archive integration test requires a Linux host.");
         foreach (var tool in new[] { "sha256sum", "unzip", "zipinfo", "tar" })
@@ -86,7 +92,7 @@ public sealed class ArchiveFixture : IDisposable
         return matches[0];
     }
 
-    public void Dispose() => Ws.Dispose();
+    public void Dispose() => Ws?.Dispose();
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("linux")]
@@ -94,7 +100,11 @@ public sealed class ArchiveIntegrationTests : IClassFixture<ArchiveFixture>
 {
     private readonly ArchiveFixture _f;
 
-    public ArchiveIntegrationTests(ArchiveFixture fixture) => _f = fixture;
+    public ArchiveIntegrationTests(ArchiveFixture fixture)
+    {
+        _f = fixture;
+        _f.Ensure();
+    }
 
     [Fact]
     public void RepositoryPackagesCarryArchiveBackend()

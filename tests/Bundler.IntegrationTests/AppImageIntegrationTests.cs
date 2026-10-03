@@ -8,22 +8,28 @@ using System.Text.RegularExpressions;
 [System.Runtime.Versioning.SupportedOSPlatform("linux")]
 public sealed class AppImageFixture : IDisposable
 {
-    public IntegrationWorkspace Ws { get; }
-    public string CacheDir { get; }
-    public string ExtractRoot { get; }
-    public string FixtureProject { get; }
-    public string FixtureDir { get; }
+    public IntegrationWorkspace Ws { get; private set; } = null!;
+    public string CacheDir { get; private set; } = null!;
+    public string ExtractRoot { get; private set; } = null!;
+    public string FixtureProject { get; private set; } = null!;
+    public string FixtureDir { get; private set; } = null!;
 
-    public string DefaultImage { get; }
-    public string OverridesImage { get; }
-    public string DesktopImage { get; }
-    public string FilesImage { get; }
-    public string Arm64Image { get; }
-    public string FanoutDir { get; }
-    public string SignedImage { get; }
-    public string SignDir { get; }
+    public string DefaultImage { get; private set; } = null!;
+    public string OverridesImage { get; private set; } = null!;
+    public string DesktopImage { get; private set; } = null!;
+    public string FilesImage { get; private set; } = null!;
+    public string Arm64Image { get; private set; } = null!;
+    public string FanoutDir { get; private set; } = null!;
+    public string SignedImage { get; private set; } = null!;
+    public string SignDir { get; private set; } = null!;
 
-    public AppImageFixture()
+    private readonly Lazy<bool> _init;
+
+    public AppImageFixture() => _init = new Lazy<bool>(() => { Initialize(); return true; });
+
+    public bool Ensure() => _init.Value;
+
+    private void Initialize()
     {
         Assert.SkipWhen(!TestPlatform.IsLinux, "SKIP: AppImage integration test requires a Linux host.");
         foreach (var tool in new[] { "sha256sum", "unzip", "od", "objcopy", "readelf" })
@@ -140,7 +146,7 @@ public sealed class AppImageFixture : IDisposable
         return root;
     }
 
-    public void Dispose() => Ws.Dispose();
+    public void Dispose() => Ws?.Dispose();
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("linux")]
@@ -148,7 +154,11 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
 {
     private readonly AppImageFixture _f;
 
-    public AppImageIntegrationTests(AppImageFixture fixture) => _f = fixture;
+    public AppImageIntegrationTests(AppImageFixture fixture)
+    {
+        _f = fixture;
+        _f.Ensure();
+    }
 
     [Fact]
     public void RepositoryPackagesCarryAppImageBackendAndToolset()
@@ -288,6 +298,7 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
         var magic = "hsqs"u8.ToArray();
         var offset = data.AsSpan().IndexOf(magic);
         Assert.True(offset >= 0, "Could not locate squashfs magic in aarch64 AppImage.");
+        Directory.CreateDirectory(_f.ExtractRoot);
         var dest = Path.Combine(_f.ExtractRoot, "arm64-payload");
         if (Directory.Exists(dest))
         {

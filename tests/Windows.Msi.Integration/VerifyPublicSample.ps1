@@ -2,7 +2,7 @@
 # 测试体已收编进 tests/Bundler.IntegrationTests；本脚本只是薄入口。
 param([string]$Configuration = 'Release')
 $ErrorActionPreference = 'Stop'
-$repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'\'..'))
-dotnet test (Join-Path $repository 'tests' 'Bundler.IntegrationTests' 'Bundler.IntegrationTests.csproj') `
+$repository = [IO.Path]::GetFullPath([IO.Path]::Combine($PSScriptRoot, '..', '..'))
+dotnet test ([IO.Path]::Combine($repository, 'tests', 'Bundler.IntegrationTests', 'Bundler.IntegrationTests.csproj')) `
     -c $Configuration -- --filter-class MsiIntegrationTests --filter-method PublicSampleMsiTableContract
 exit $LASTEXITCODE

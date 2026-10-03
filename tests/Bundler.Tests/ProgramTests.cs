@@ -2012,10 +2012,14 @@ public static class ProgramTests
         })
         {
             var script = File.ReadAllText(path);
-            Assert.True(script.Contains("Get-BundlerPackageVersion -Repository", StringComparison.Ordinal) &&
+            Assert.True(script.Contains("Bundler.IntegrationTests.csproj", StringComparison.Ordinal) &&
                    !script.Contains(version, StringComparison.Ordinal),
-                "The integration script must read its default package version from Directory.Build.props: " + path);
+                "The thin integration entry must forward to Bundler.IntegrationTests without hardcoding the package version: " + path);
         }
+        var layout = File.ReadAllText(Path.Combine(
+            root, "tests", "Bundler.IntegrationTests", "Tooling", "RepositoryLayout.cs"));
+        Assert.Contains("Directory.Build.props", layout, StringComparison.Ordinal);
+        Assert.Contains("BundlerPackageVersion", layout, StringComparison.Ordinal);
     }
 
     static string RepositoryRoot() => Path.GetFullPath("../../../../../", AppContext.BaseDirectory);

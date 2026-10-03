@@ -342,16 +342,18 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
         var marker = Path.Combine(_f.App, "Contents", ".launch-marker");
         var sample = _f.Ws.Combine("sample.hifix");
         File.WriteAllText(sample, "hifix-payload\n");
+        // 路由腿不用 -W 等退出（进程秒退时 open 的 kqueue 附加会偶发 No such process），
+        // open 返回后轮询启动标记——标记才是"路由成功"的真实断言。
         File.Delete(marker);
-        ProcessRunner.AssertSuccess(ProcessRunner.Run("open", ["-W", sample]),
+        ProcessRunner.AssertSuccess(ProcessRunner.Run("open", [sample]),
             "open <file> did not route to the registered app.");
-        Assert.True(File.Exists(marker),
+        WaitFor.Until(() => File.Exists(marker),
             "open <file> returned success but the app never ran (no launch marker).");
 
         File.Delete(marker);
-        ProcessRunner.AssertSuccess(ProcessRunner.Run("open", ["-W", "hifix://ping"]),
+        ProcessRunner.AssertSuccess(ProcessRunner.Run("open", ["hifix://ping"]),
             "open <scheme>:// did not route to the registered app.");
-        Assert.True(File.Exists(marker),
+        WaitFor.Until(() => File.Exists(marker),
             "open <scheme>:// returned success but the app never ran (no launch marker).");
 
         // ~/Applications 拖放式安装
@@ -481,10 +483,16 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
         var listed = ProcessRunner.Run("xattr", ["-l", quarantined]);
         Assert.Contains("com.apple.quarantine", listed.StdOut);
 
-        // Gatekeeper 弹窗会挂起 open -W：限时等待，挂起或非零都算"被拦"。
-        var open = ProcessRunner.Run("open", ["-W", quarantined],
-            new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(30) });
-        _ = open; // 0=放行/非零=拦下/超时杀进程——脚本不判定哪个结果，这里也不闸（行为观察腿）。
+        // Gatekeeper 弹窗会挂起 open -W：限时等待，放行/拦下/超时挂起都算"被拦"的合法观察结果。
+        try
+        {
+            _ = ProcessRunner.Run("open", ["-W", quarantined],
+                new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(30) });
+        }
+        catch (TimeoutException)
+        {
+            // 挂起被杀属预期分支，脚本同样不判定具体结果。
+        }
         ProcessRunner.AssertSuccess(
             ProcessRunner.Run("xattr", ["-d", "com.apple.quarantine", quarantined]),
             "com.apple.quarantine could not be removed.");
@@ -592,6 +600,7 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
         _f.Ensure();
         // 卸载=删 .app 目录；脚本最后删掉产物 app——测试里建一个副本验证删除语义。
         var copy = _f.Ws.Combine("delete-me", "Bundler Mac Integration Fixture.app");
+        Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
         CopyDirectory(_f.App, copy);
         Directory.Delete(copy, recursive: true);
         Assert.False(Directory.Exists(copy), "Deleting the .app left residue.");

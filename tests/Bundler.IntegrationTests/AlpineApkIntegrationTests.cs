@@ -8,24 +8,30 @@ using System.Text.RegularExpressions;
 [System.Runtime.Versioning.SupportedOSPlatform("linux")]
 public sealed class AlpineApkFixture : IDisposable
 {
-    public IntegrationWorkspace Ws { get; }
-    public string CacheDir { get; }
-    public string ExtractRoot { get; }
-    public string KeysDir { get; }
-    public string FixtureProject { get; }
+    public IntegrationWorkspace Ws { get; private set; } = null!;
+    public string CacheDir { get; private set; } = null!;
+    public string ExtractRoot { get; private set; } = null!;
+    public string KeysDir { get; private set; } = null!;
+    public string FixtureProject { get; private set; } = null!;
 
-    public string DefaultApk { get; }
-    public string OverrideApk { get; }
-    public string ScriptsApk { get; }
-    public string UpgradeV1Apk { get; }
-    public string UpgradeV2Apk { get; }
-    public string SignedApk { get; }
-    public string Det1Apk { get; }
-    public string Det2Apk { get; }
-    public string Det3Apk { get; }
-    public string Arm64Apk { get; }
+    public string DefaultApk { get; private set; } = null!;
+    public string OverrideApk { get; private set; } = null!;
+    public string ScriptsApk { get; private set; } = null!;
+    public string UpgradeV1Apk { get; private set; } = null!;
+    public string UpgradeV2Apk { get; private set; } = null!;
+    public string SignedApk { get; private set; } = null!;
+    public string Det1Apk { get; private set; } = null!;
+    public string Det2Apk { get; private set; } = null!;
+    public string Det3Apk { get; private set; } = null!;
+    public string Arm64Apk { get; private set; } = null!;
 
-    public AlpineApkFixture()
+    private readonly Lazy<bool> _init;
+
+    public AlpineApkFixture() => _init = new Lazy<bool>(() => { Initialize(); return true; });
+
+    public bool Ensure() => _init.Value;
+
+    private void Initialize()
     {
         Assert.SkipWhen(!TestPlatform.IsLinux, "SKIP: apk integration test requires a Linux host.");
         foreach (var tool in new[] { "tar", "sha256sum", "openssl", "python3", "unzip" })
@@ -115,7 +121,7 @@ public sealed class AlpineApkFixture : IDisposable
     public string SplitTo(string apkPath, string name)
         => ExtractRoot + "/" + name;
 
-    public void Dispose() => Ws.Dispose();
+    public void Dispose() => Ws?.Dispose();
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("linux")]
@@ -123,7 +129,11 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
 {
     private readonly AlpineApkFixture _f;
 
-    public AlpineApkIntegrationTests(AlpineApkFixture fixture) => _f = fixture;
+    public AlpineApkIntegrationTests(AlpineApkFixture fixture)
+    {
+        _f = fixture;
+        _f.Ensure();
+    }
 
     [Fact]
     public void RepositoryPackagesCarryAlpineApkBackend()

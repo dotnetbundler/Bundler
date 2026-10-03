@@ -19,10 +19,14 @@ public sealed class IntegrationWorkspace : IDisposable
         {
             if (!File.Exists(marker) || File.ReadAllText(marker).Trim() != identity)
             {
-                throw new InvalidOperationException(
-                    $"{root} already exists and was not created by this test; refusing to touch it.");
+                // 外部/脚本时代残留目录不判死也不删——挪到旁名归档，既不冒充我们的产物也不挡测试。
+                var aside = root + ".stale-" + Guid.NewGuid().ToString("N")[..8];
+                Directory.Move(root, aside);
             }
-            Directory.Delete(root, recursive: true);
+            else
+            {
+                Directory.Delete(root, recursive: true);
+            }
         }
         Directory.CreateDirectory(root);
         File.WriteAllText(marker, identity + "\n");

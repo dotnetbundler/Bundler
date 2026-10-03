@@ -7,10 +7,10 @@ param(
     [switch]$ConfirmLocalInstall
 )
 $ErrorActionPreference = 'Stop'
-$repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'\'..'))
+$repository = [IO.Path]::GetFullPath([IO.Path]::Combine($PSScriptRoot, '..', '..'))
 if ($ConfirmLocalInstall.IsPresent -or $ConfirmDisposableVm.IsPresent) {
     $env:BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL = '1'
 }
-dotnet test (Join-Path $repository 'tests' 'Bundler.IntegrationTests' 'Bundler.IntegrationTests.csproj') `
+dotnet test ([IO.Path]::Combine($repository, 'tests', 'Bundler.IntegrationTests', 'Bundler.IntegrationTests.csproj')) `
     -c $Configuration -- --filter-class MsiIntegrationTests --filter-method "MsiIntegrationTests.MajorUpgradeVariantCollisionAndDowngradeRejected"
 exit $LASTEXITCODE

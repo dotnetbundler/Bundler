@@ -9,25 +9,31 @@ using System.Text.RegularExpressions;
 [System.Runtime.Versioning.SupportedOSPlatform("linux")]
 public sealed class RpmFixture : IDisposable
 {
-    public IntegrationWorkspace Ws { get; }
-    public string CacheDir { get; }
-    public string ExtractRoot { get; }
-    public string FixtureProject { get; }
-    public string FixtureDir { get; }
+    public IntegrationWorkspace Ws { get; private set; } = null!;
+    public string CacheDir { get; private set; } = null!;
+    public string ExtractRoot { get; private set; } = null!;
+    public string FixtureProject { get; private set; } = null!;
+    public string FixtureDir { get; private set; } = null!;
 
-    public string DefaultRpm { get; }
-    public string OverridesRpm { get; }
-    public string PrereleaseRpm { get; }
-    public string MetadataRpm { get; }
-    public string DesktopOverrideRpm { get; }
-    public string ScriptsRpm { get; }
-    public string ConfigRpm { get; }
-    public string ConfigV2Rpm { get; }
-    public string Arm64Rpm { get; }
-    public string FanoutRpm { get; }
-    public string FanoutDeb { get; }
+    public string DefaultRpm { get; private set; } = null!;
+    public string OverridesRpm { get; private set; } = null!;
+    public string PrereleaseRpm { get; private set; } = null!;
+    public string MetadataRpm { get; private set; } = null!;
+    public string DesktopOverrideRpm { get; private set; } = null!;
+    public string ScriptsRpm { get; private set; } = null!;
+    public string ConfigRpm { get; private set; } = null!;
+    public string ConfigV2Rpm { get; private set; } = null!;
+    public string Arm64Rpm { get; private set; } = null!;
+    public string FanoutRpm { get; private set; } = null!;
+    public string FanoutDeb { get; private set; } = null!;
 
-    public RpmFixture()
+    private readonly Lazy<bool> _init;
+
+    public RpmFixture() => _init = new Lazy<bool>(() => { Initialize(); return true; });
+
+    public bool Ensure() => _init.Value;
+
+    private void Initialize()
     {
         Assert.SkipWhen(!TestPlatform.IsLinux, "SKIP: rpm integration test requires a Linux host.");
         foreach (var tool in new[] { "sha256sum", "unzip", "gzip" })
@@ -111,7 +117,7 @@ public sealed class RpmFixture : IDisposable
         return match;
     }
 
-    public void Dispose() => Ws.Dispose();
+    public void Dispose() => Ws?.Dispose();
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("linux")]
@@ -119,7 +125,11 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
 {
     private readonly RpmFixture _f;
 
-    public RpmIntegrationTests(RpmFixture fixture) => _f = fixture;
+    public RpmIntegrationTests(RpmFixture fixture)
+    {
+        _f = fixture;
+        _f.Ensure();
+    }
 
     [Fact]
     public void RepositoryPackagesCarryRpmBackendAndSigningDependency()

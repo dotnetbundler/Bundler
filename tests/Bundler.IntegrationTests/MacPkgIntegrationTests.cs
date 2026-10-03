@@ -37,9 +37,9 @@ public sealed class MacPkgFixture : IDisposable
         => Ws.Combine(name, rid, "pkg", "Bundler Mac PKG Fixture.pkg");
 
     private string PublishPkg(string name, params string[] extra)
-        => PublishPkg(name, "osx-arm64", extra);
+        => PublishPkgForRid(name, "osx-arm64", extra);
 
-    private string PublishPkg(string name, string rid, params string[] extra)
+    private string PublishPkgForRid(string name, string rid, params string[] extra)
     {
         var ridArg = rid == "osx-x64" ? new[] { "-r", "osx-x64" } : [];
         ProcessRunner.AssertSuccess(
@@ -105,7 +105,7 @@ public sealed class MacPkgFixture : IDisposable
         V2Pkg = PublishPkg("bundle-v2",
             "-p:BundlerTestPkgVersion=2.0.0",
             "-p:BundlerTestPkgDomain=CurrentUserHome");
-        X64Pkg = PublishPkg("bundle-x64", "osx-x64");
+        X64Pkg = PublishPkgForRid("bundle-x64", "osx-x64");
         return true;
     }
 

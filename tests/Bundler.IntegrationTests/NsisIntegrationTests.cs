@@ -120,8 +120,14 @@ public sealed class NsisFixture : IAsyncLifetime
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, false));
         request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
             [new Oid("1.3.6.1.5.5.7.3.3")], false));
-        _certificate = request.CreateSelfSigned(DateTimeOffset.Now.AddMinutes(-5),
+        // CreateSelfSigned 返回的私钥是 ephemeral CNG 密钥——store.Add 只存证书不持久化密钥，
+        // 签名时 HasPrivateKey=false。导出 PFX 再以 PersistKeySet 重导入让密钥落到用户密钥库。
+        using var ephemeral = request.CreateSelfSigned(DateTimeOffset.Now.AddMinutes(-5),
             DateTimeOffset.Now.AddDays(1));
+        var pfx = ephemeral.Export(X509ContentType.Pfx);
+        _certificate = X509CertificateLoader.LoadPkcs12(pfx, password: null,
+            X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable);
+        CryptographicOperations.ZeroMemory(pfx);
         using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
         store.Open(OpenFlags.ReadWrite);
         store.Add(_certificate);
@@ -283,6 +289,11 @@ public sealed class NsisFixture : IAsyncLifetime
             using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
             store.Open(OpenFlags.ReadWrite);
             store.Remove(_certificate);
+            // PersistKeySet 落地的 CNG 密钥容器独立于证书存储，需显式删除。
+            if (_certificate.GetECDsaPrivateKey() is ECDsaCng cng && cng.Key is not null)
+            {
+                cng.Key.Delete();
+            }
         }
         Ws.Dispose();
         return ValueTask.CompletedTask;

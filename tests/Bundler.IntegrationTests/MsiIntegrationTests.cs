@@ -1,5 +1,5 @@
 // Windows.Msi.Integration 全部 8 个脚本的 C# 收编：smoke/lifecycle/maintenance/win5-8/public-sample。
-// 门控：Windows + BUNDLER_MSI_ALLOW_LOCAL_INSTALL=1（对应脚本的 -ConfirmLocalInstall/-ConfirmDisposableVm
+// 门控：Windows + BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1（对应脚本的 -ConfirmLocalInstall/-ConfirmDisposableVm
 // 人工同意闸）——会在真实用户配置里装卸 MSI，未经同意一律 Skip。
 // 对外仍走 msiexec/真实安装；MSI 数据库读取改走 WixToolset.Dtf（替代原 WindowsInstaller.Installer COM）。
 using Microsoft.Win32;
@@ -549,22 +549,54 @@ public sealed class MsiIntegrationTests(MsiFixture fixture) : IClassFixture<MsiF
             var unknownCreated = false;
             try
             {
-                MsiexecLogged("install-v2", root, ["/i", $"\"{v2}\""], 0);
-                AssertInstalled(code2, true);
-                MsiexecLogged("downgrade-v1", root, ["/i", $"\"{v1}\""], 1603);
-                AssertInstalled(code1, false);
-                AssertInstalled(code2, true);
-                MsiexecLogged("install-v1-allowed", root, ["/i", $"\"{v1Allow}\""], 0);
+                MsiexecLogged("install-v1", root, ["/i", $"\"{v1}\""], 0);
                 AssertInstalled(code1, true);
-                AssertInstalled(code2, false);
+                Assert.True(File.Exists(Path.Combine(install, "docs", "v1-only.txt")),
+                    "x86 v1 payload is missing.");
+                // x86 包的组件注册必须落在 32 位注册表视图。
+                using (var reg32 = RegistryKey.OpenBaseKey(
+                    RegistryHive.CurrentUser, RegistryView.Registry32))
+                using (var componentKey = reg32.OpenSubKey(
+                    $@"Software\DotNetBundler\Products\{id}\win-x86\Components"))
+                {
+                    Assert.NotNull(componentKey);
+                    Assert.NotNull(componentKey!.GetValue("DefinitionHash"));
+                }
                 File.WriteAllText(unknown, "preserve user data");
                 unknownCreated = true;
-                MsiexecLogged("collision-v2", root, ["/i", $"\"{v2Collision}\""], 1638);
+
+                MsiexecLogged("upgrade-v2", root, ["/i", $"\"{v2}\""], 0);
+                AssertInstalled(code1, false);
+                AssertInstalled(code2, true);
+                Assert.False(File.Exists(Path.Combine(install, "docs", "v1-only.txt")),
+                    "Upgrade retained v1 payload.");
+                Assert.True(File.Exists(Path.Combine(install, "docs", "v2-only.txt")),
+                    "Upgrade lost mapped v2 payload.");
+                Assert.True(File.Exists(unknown), "Upgrade removed unknown user data.");
+
+                // 同 ProductCode 不同版本 = 1638 collision（此时 code2 在装态）。
+                MsiexecLogged("mapped-version-collision", root, ["/i", $"\"{v2Collision}\""], 1638);
+                AssertInstalled(code2, true);
+
+                MsiexecLogged("downgrade-rejected", root, ["/i", $"\"{v1}\""], 1603);
+                Assert.Contains("A newer version of Bundler MSI Smoke is already installed",
+                    File.ReadAllText(Path.Combine(root, "downgrade-rejected.log")),
+                    StringComparison.Ordinal);
+                AssertInstalled(code2, true);
+
+                MsiexecLogged("downgrade-allowed", root, ["/i", $"\"{v1Allow}\""], 0);
                 AssertInstalled(code1, true);
+                AssertInstalled(code2, false);
+                Assert.True(File.Exists(Path.Combine(install, "docs", "v1-only.txt")) &&
+                       !File.Exists(Path.Combine(install, "docs", "v2-only.txt")) &&
+                       File.Exists(unknown),
+                    "Downgrade did not replace managed files while preserving user data.");
+
                 MsiexecLogged("uninstall-v1", root, ["/x", code1], 0);
                 AssertInstalled(code1, false);
-                Assert.True(File.Exists(unknown), "Uninstall removed unknown user data.");
-                Assert.False(File.Exists(Path.Combine(install, "BundlerMsiSmoke.exe")));
+                Assert.True(File.Exists(unknown) &&
+                       !File.Exists(Path.Combine(install, "BundlerMsiSmoke.exe")),
+                    "Uninstall did not preserve only the unknown user file.");
             }
             finally
             {

@@ -8,23 +8,29 @@ using System.Text.RegularExpressions;
 [System.Runtime.Versioning.SupportedOSPlatform("linux")]
 public sealed class DebFixture : IDisposable
 {
-    public IntegrationWorkspace Ws { get; }
-    public string CacheDir { get; }
-    public string ExtractRoot { get; }
-    public string FixtureProject { get; }
-    public string FixtureDir { get; }
+    public IntegrationWorkspace Ws { get; private set; } = null!;
+    public string CacheDir { get; private set; } = null!;
+    public string ExtractRoot { get; private set; } = null!;
+    public string FixtureProject { get; private set; } = null!;
+    public string FixtureDir { get; private set; } = null!;
 
-    public string DefaultDeb { get; }
-    public string OverrideDeb { get; }
-    public string SemverDeb { get; }
-    public string MetadataDeb { get; }
-    public string DesktopOverrideDeb { get; }
-    public string ScriptsDeb { get; }
-    public string SystemdDeb { get; }
-    public string UpgradeDeb { get; }
-    public string Arm64Deb { get; }
+    public string DefaultDeb { get; private set; } = null!;
+    public string OverrideDeb { get; private set; } = null!;
+    public string SemverDeb { get; private set; } = null!;
+    public string MetadataDeb { get; private set; } = null!;
+    public string DesktopOverrideDeb { get; private set; } = null!;
+    public string ScriptsDeb { get; private set; } = null!;
+    public string SystemdDeb { get; private set; } = null!;
+    public string UpgradeDeb { get; private set; } = null!;
+    public string Arm64Deb { get; private set; } = null!;
 
-    public DebFixture()
+    private readonly Lazy<bool> _init;
+
+    public DebFixture() => _init = new Lazy<bool>(() => { Initialize(); return true; });
+
+    public bool Ensure() => _init.Value;
+
+    private void Initialize()
     {
         Assert.SkipWhen(!TestPlatform.IsLinux, "SKIP: deb integration test requires a Linux host.");
         foreach (var tool in new[] { "ar", "tar", "md5sum", "sha256sum", "dpkg-deb", "unzip", "gzip" })
@@ -111,7 +117,7 @@ public sealed class DebFixture : IDisposable
     public string ControlDir(string key) => Path.Combine(ExtractRoot, "control", key);
     public string DataDir(string key) => Path.Combine(ExtractRoot, "data", key);
 
-    public void Dispose() => Ws.Dispose();
+    public void Dispose() => Ws?.Dispose();
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("linux")]
@@ -119,7 +125,11 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
 {
     private readonly DebFixture _f;
 
-    public DebIntegrationTests(DebFixture fixture) => _f = fixture;
+    public DebIntegrationTests(DebFixture fixture)
+    {
+        _f = fixture;
+        _f.Ensure();
+    }
 
     [Fact]
     public void RepositoryPackagesCarryDebBackend()
