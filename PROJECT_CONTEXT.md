@@ -33,7 +33,7 @@
 | `src/Bundler.Cli` | CLI 适配层（dotnet tool nupkg + `PublishAot` 原生二进制双分发） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
 | `tests/Bundler.Tests` | 唯一快速测试入口（用例数随宿主门控变化，以每次实跑输出为准） | `net10.0` |
-| `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` / `tests/MacDmg.Api.PackageFixture` / `tests/MacPkg.Api.PackageFixture` / `tests/Deb.Api.PackageFixture` / `tests/Rpm.Api.PackageFixture` / `tests/AppImage.Api.PackageFixture` / `tests/Archive.Api.PackageFixture` / `tests/AlpineApk.Api.PackageFixture` | 仅引用 NuGet 后端的 API 消费 fixture | `net10.0` |
+| `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` / `tests/MacDmg.Api.PackageFixture` / `tests/MacPkg.Api.PackageFixture` / `tests/Deb.Api.PackageFixture` / `tests/Rpm.Api.PackageFixture` / `tests/AppImage.Api.PackageFixture` / `tests/Archive.Api.PackageFixture` / `tests/AlpineApk.Api.PackageFixture` | 直引对应后端项目的 API 消费 fixture（仓内项目引用） | `net10.0` |
 | `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
 | `tests/MacOS.App.Integration` | 真实 macOS `.app` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
 | `tests/MacOS.Dmg.Integration` | 真实 macOS `.dmg` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
@@ -84,6 +84,15 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-02 四宿主完整测试（项目引用改造验证，PR #15 并入 `main`）
+
+- 改造内容：仓内 29 个示例/fixture 由 `PackageReference` 改项目引用，接线在 `Bundler.ProjectReference.targets`；
+  MSI 仓外复制腿保留包引用作为包契约验收（`Bundler.LocalPackages.props` 收窄为仓外垫片，待决见 §5）。
+- 全量腿四宿主全绿：干净构建 0W/0E + 16 nupkg；`Bundler.Tests` 268(win)/236(linux)/237(mac)/231-236(alpine，5 项 makensis glibc 边界)；
+  各集成腿全过（win：NSIS 复验 29 bundles + MSI 8 脚本本真安装；linux：6 `Verify.sh` 含 AppImage 双腿；mac：App/Dmg/Pkg 全过；alpine：Apk 全过含 binfmt 实装）。
+- 联合测试：四产方 99 件产出 sha256 核对 130/130 行全吻合；99 格装卸全过（仅 msi-x86 缺 x86 运行时、msi-arm64 拒装两个预期边界）。
+- 修复闭环：NSIS `Verify.ps1` 位置参数残留 10 处、nodeReuse 文件锁（`BuildReference=false` 根因消除）均已修复并在 win-x64 复验。
 
 ### 2026-10-01 四宿主完整测试两轮（全量验收+联合测试，`main` @ `ade67d5`）
 

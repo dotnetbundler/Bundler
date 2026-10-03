@@ -120,7 +120,7 @@
 ## 4. 版本、配置与完整示例
 
 - 实现、修复或随包文档调整导致 NuGet 包内容变化时，只在根 `Directory.Build.props` 递增 `BundlerPackageVersion`；
-  包依赖、示例 `PackageReference` 和测试脚本默认值引用此值。
+  包依赖、仓外包消费 fixture 的 `PackageReference` 与测试脚本默认值引用此值。
   结项前核对所有包及用户文档；
   不要在同一 ID/版本上发布不同内容并指望 NuGet 缓存刷新。
   一个未提交阶段使用同一新版本。
