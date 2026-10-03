@@ -34,16 +34,16 @@ public static class CliTests
     static void PrintsUsage()
     {
         var (code, _, err) = Run();
-        Assert.True(code == 2, $"no command must exit 2, got {code}");
-        Assert.True(err.Contains("Usage:"), "usage text expected on stderr");
+        Assert.Equal(2, code);
+        Assert.Contains("Usage:", err);
     }
 
     [Fact]
     static void RejectsUnknownCommand()
     {
         var (code, _, err) = Run("frobnicate");
-        Assert.True(code == 2, $"unknown command must exit 2, got {code}");
-        Assert.True(err.Contains("Unknown command"), "error must name the command");
+        Assert.Equal(2, code);
+        Assert.Contains("Unknown command", err);
     }
 
     [Fact]
@@ -56,8 +56,8 @@ public static class CliTests
                 "bundle", "--input-dir", input, "--rid", "linux-x64", "--formats", "bogus",
                 "--product-name", "CliFixture", "--identifier", "dev.example.cli",
                 "--package-version", "1.0.0");
-            Assert.True(code == 2, $"unknown format must exit 2, got {code}");
-            Assert.True(err.Contains("Unknown format"), "error must name the format");
+            Assert.Equal(2, code);
+            Assert.Contains("Unknown format", err);
         }
         finally
         {
@@ -72,8 +72,8 @@ public static class CliTests
         try
         {
             var (code, stdout, _) = Run(BaseArgs("validate", input));
-            Assert.True(code == 0, $"valid configuration must exit 0, got {code}");
-            Assert.True(stdout.Contains("valid"), "success message expected");
+            Assert.Equal(0, code);
+            Assert.Contains("valid", stdout);
         }
         finally
         {
@@ -86,8 +86,8 @@ public static class CliTests
     {
         var missing = Path.Combine(Path.GetTempPath(), "bundler-cli-missing-" + Guid.NewGuid().ToString("N"));
         var (code, _, err) = Run(BaseArgs("validate", missing));
-        Assert.True(code == 2, $"missing input must exit 2, got {code}");
-        Assert.True(err.Contains("inputDirectory"), "issue path must be reported");
+        Assert.Equal(2, code);
+        Assert.Contains("inputDirectory", err);
     }
 
     [Fact]
@@ -100,12 +100,11 @@ public static class CliTests
             var args = BaseArgs("plan", input, output)
                 .Select(a => a == "zip" ? "zip,targz" : a).Concat(["--json"]).ToArray();
             var (code, stdout, _) = Run(args);
-            Assert.True(code == 0, $"plan must exit 0, got {code}");
-            Assert.True(stdout.Contains("\"format\":\"zip\""), "plan json must include zip");
-            Assert.True(stdout.Contains("\"format\":\"targz\""), "plan json must include targz");
+            Assert.Equal(0, code);
+            Assert.Contains("\"format\":\"zip\"", stdout);
+            Assert.Contains("\"format\":\"targz\"", stdout);
             var expectedOutputDir = Path.Combine(output, "linux-x64", "zip").Replace("\\", "\\\\");
-            Assert.True(stdout.Contains($"\"outputDirectory\":\"{expectedOutputDir}\""),
-                "plan json must include the per-format output directory");
+            Assert.Contains($"\"outputDirectory\":\"{expectedOutputDir}\"", stdout);
         }
         finally
         {
@@ -125,9 +124,9 @@ public static class CliTests
             var rewritten = args.Select(a => a == "zip" ? "all" : a).ToArray();
             var (code, stdout, err) = Run(rewritten);
             Assert.True(code == 0, $"plan --formats all must exit 0, got {code}: {err}");
-            Assert.True(stdout.Contains("deb"), "all must include deb on linux-x64");
-            Assert.True(stdout.Contains("appimage"), "all must include appimage on linux-x64");
-            Assert.True(!stdout.Contains("nsis"), "all must exclude windows formats on linux-x64");
+            Assert.Contains("deb", stdout);
+            Assert.Contains("appimage", stdout);
+            Assert.DoesNotContain("nsis", stdout);
         }
         finally
         {
@@ -143,11 +142,11 @@ public static class CliTests
         try
         {
             var (code, stdout, _) = Run(BaseArgs("bundle", input, output).Concat(["--quiet"]).ToArray());
-            Assert.True(code == 0, $"bundle must exit 0, got {code}");
+            Assert.Equal(0, code);
             var zip = Path.Combine(output, "linux-x64", "zip", "clifixture-1.0.0-linux-x64.zip");
             Assert.True(File.Exists(zip), $"zip artifact must exist at {zip}");
             Assert.True(File.Exists(zip + ".sha256"), "sha256 sidecar must exist");
-            Assert.True(stdout.Contains(zip), "stdout must list the artifact path");
+            Assert.Contains(zip, stdout);
         }
         finally
         {
@@ -169,8 +168,8 @@ public static class CliTests
                 "bundle", "--input-dir", input, "--rid", "linux-x64", "--formats", "nsis",
                 "--product-name", "CliFixture", "--identifier", "dev.example.cli",
                 "--package-version", "1.0.0", "--main-executable", "cli-fixture");
-            Assert.True(code == 2, $"nsis on linux-x64 must exit 2, got {code}");
-            Assert.True(err.Contains("not supported"), "matrix violation must be reported");
+            Assert.Equal(2, code);
+            Assert.Contains("not supported", err);
         }
         finally
         {
@@ -204,7 +203,7 @@ public static class CliTests
             using var archive = new System.IO.Compression.ZipArchive(
                 File.OpenRead(zip), System.IO.Compression.ZipArchiveMode.Read);
             var exeEntry = archive.GetEntry("clifixture-1.0.0-osx/cli-fixture");
-            Assert.True(exeEntry is not null, "merged archive must contain cli-fixture");
+            Assert.NotNull(exeEntry);
             var extracted = Path.GetTempFileName();
             using (var stream = exeEntry!.Open())
             using (var file = File.Create(extracted))
@@ -217,8 +216,7 @@ public static class CliTests
             Assert.True(cpus.Length == 2 && cpus[0] == 0x01000007 && cpus[1] == 0x0100000C,
                 "merged executable must be a fat Mach-O with x86_64 + arm64 slices, got "
                 + string.Join(",", cpus.Select(c => c.ToString("X8"))));
-            Assert.True(archive.GetEntry("clifixture-1.0.0-osx/shared.txt") is not null,
-                "portable files must survive the merge");
+            Assert.NotNull(archive.GetEntry("clifixture-1.0.0-osx/shared.txt"));
         }
         finally
         {
@@ -297,7 +295,7 @@ public static class CliTests
         {
             var (code, stdout, _) = Run(
                 "plan", "--config", config, "--formats", "targz", "--json");
-            Assert.True(code == 0, $"plan must exit 0, got {code}");
+            Assert.Equal(0, code);
             Assert.True(stdout.Contains("\"format\":\"targz\"") && !stdout.Contains("\"zip\""),
                 "cli --formats must override the config file");
         }
@@ -318,8 +316,8 @@ public static class CliTests
         try
         {
             var (code, _, err) = Run("plan", "--config", config);
-            Assert.True(code == 2, $"unknown config key must exit 2, got {code}");
-            Assert.True(err.Contains("achive"), "error must name the unknown key");
+            Assert.Equal(2, code);
+            Assert.Contains("achive", err);
         }
         finally
         {
@@ -343,8 +341,8 @@ public static class CliTests
             Assert.True(File.Exists(Path.Combine(output, "linux-x64", "zip", "dotted-override.zip")),
                 "--archive.archive-name must override the config file");
             var (badCode, _, badErr) = Run("plan", "--config", config, "--deb.bogus=1");
-            Assert.True(badCode == 2, $"unknown dotted knob must exit 2, got {badCode}");
-            Assert.True(badErr.Contains("deb.bogus"), "error must name the unknown knob");
+            Assert.Equal(2, badCode);
+            Assert.Contains("deb.bogus", badErr);
         }
         finally
         {
@@ -382,7 +380,7 @@ public static class CliTests
             var resolved = CliConfig.Resolve(CliArguments.Parse(["bundle", "--config", config]));
 
             var app = resolved.App;
-            Assert.True(app is not null, "the app section must deserialize");
+            Assert.NotNull(app);
             Assert.True(app!.Contents is { Count: 0 } &&
                 app.DocumentTypes is { Count: 0 } && app.UrlTypes is { Count: 0 } &&
                 app.Frameworks is { Count: 0 },
@@ -406,7 +404,7 @@ public static class CliTests
     static void PrintsVersion()
     {
         var (code, stdout, _) = Run("--version");
-        Assert.True(code == 0, $"--version must exit 0, got {code}");
+        Assert.Equal(0, code);
         Assert.True(stdout.Trim().Length > 0, "version output must be non-empty");
     }
 }

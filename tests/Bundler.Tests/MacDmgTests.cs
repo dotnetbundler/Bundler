@@ -114,11 +114,9 @@ public static class MacDmgTests
         {
             var artifacts = await new MacDmgBundler()
                 .BuildAsync(DmgConfiguration(input, output));
-            Assert.True(artifacts.Count == 2,
-                $"A dmg request must produce the intermediate .app plus the .dmg, got {artifacts.Count}.");
+            Assert.Equal(2, artifacts.Count);
             var dmg = artifacts.Single(artifact => artifact.Format == PackageFormat.Dmg);
-            Assert.True(dmg.Path.EndsWith(Path.Combine("osx-arm64", "dmg", "ExampleApp.dmg"), StringComparison.Ordinal),
-                $"Unexpected .dmg artifact path: {dmg.Path}");
+            Assert.EndsWith(Path.Combine("osx-arm64", "dmg", "ExampleApp.dmg"), dmg.Path);
 
             var joined = string.Join("\n", requests.Select(request =>
                 request.Executable + " " + string.Join(' ', request.Arguments)));
@@ -139,14 +137,12 @@ public static class MacDmgTests
                 "The master image must be a UDRW read-write image from -srcfolder.");
             var convertArgs = requests.First(request =>
                 request.Executable == "hdiutil" && request.Arguments.Contains("convert"));
-            Assert.True(convertArgs.Arguments.Contains("ULMO"),
-                "The default compression must map to hdiutil -format ULMO.");
+            Assert.Contains("ULMO", convertArgs.Arguments);
             var convertArgList = convertArgs.Arguments.ToList();
             var outputFlag = convertArgList.IndexOf("-o");
             Assert.True(outputFlag >= 0 && convertArgList[outputFlag + 1] == dmg.Path,
                 "The convert output must be written via -o <artifact path>.");
-            Assert.True(requests.Any(request => request.Executable == "SetFile"),
-                "SetFile should hide the .app extension inside the mounted volume.");
+            Assert.Contains(requests, request => request.Executable == "SetFile");
             Assert.True(order.IndexOf("hdiutil attach") < order.IndexOf("hdiutil detach") &&
                    order.IndexOf("hdiutil detach") < order.LastIndexOf("hdiutil convert"),
                 "attach → detach → convert ordering is required.");
@@ -202,8 +198,7 @@ public static class MacDmgTests
                     $"Compression {compression} must map to -format {expected}.");
                 var createArgs = requests.First(request =>
                     request.Executable == "hdiutil" && request.Arguments.Contains("create"));
-                Assert.True(createArgs.Arguments.Contains("Custom Volume"),
-                    "A configured volume name must reach hdiutil create -volname.");
+                Assert.Contains("Custom Volume", createArgs.Arguments);
             }
             finally
             {
@@ -244,8 +239,7 @@ public static class MacDmgTests
         try
         {
             await new MacDmgBundler().BuildAsync(DmgConfiguration(input, output));
-            Assert.True(detachAttempts == 3,
-                $"A busy detach must retry with backoff until it succeeds; got {detachAttempts} attempts.");
+            Assert.Equal(3, detachAttempts);
         }
         finally
         {
@@ -288,9 +282,7 @@ public static class MacDmgTests
             }
             Assert.True(thrown, "Detach retries must give up after the backoff budget.");
             Assert.True(forcedDetach, "A leftover mounted volume must be force-detached on failure.");
-            Assert.True(!Directory.EnumerateFiles(
-                    Path.Combine(output, "osx-arm64", "dmg"), "*", SearchOption.AllDirectories).Any(),
-                "A failed DMG build must not leave an output artifact.");
+            Assert.Empty(Directory.EnumerateFiles( Path.Combine(output, "osx-arm64", "dmg"), "*", SearchOption.AllDirectories));
         }
         finally
         {
@@ -361,26 +353,21 @@ public static class MacDmgTests
             await new MacDmgBundler().BuildAsync(DmgConfiguration(input, output));
             var osascript = requests.Single(request => request.Executable == "osascript");
             var script = string.Join("\n", osascript.Arguments);
-            Assert.True(script.Contains("{200, 120, 860, 520}"),
-                $"Default window bounds must be 200,120 + 660x400, got:\n{script}");
+            Assert.Contains("{200, 120, 860, 520}", script);
             Assert.True(script.Contains("{180, 170}") && script.Contains("{480, 170}"),
                 $"Default icon positions must be app=180,170 / Applications=480,170, got:\n{script}");
-            Assert.True(script.Contains("set icon size of theViewOptions to 128"),
-                $"Default icon size must be 128, got:\n{script}");
+            Assert.Contains("set icon size of theViewOptions to 128", script);
             Assert.True(script.Contains("set theDisk to disk (name of (POSIX file") &&
                    script.Contains("dmg-mount") && script.Contains("tell theDisk"),
                 $"The layout script must resolve the disk via the mount point, got:\n{script}");
-            Assert.True(!script.Contains("tell disk \"ExampleApp\""),
-                "Finder keys a custom-mountpoint disk by mount name, not volume name.");
+            Assert.DoesNotContain("tell disk \"ExampleApp\"", script);
             Assert.True(requests.Any(request =>
                     request.Executable == "hdiutil" && request.Arguments.Contains("resize")),
                 "The read-write image must gain headroom before the layout pass.");
-            Assert.True(!script.Contains("background picture"),
-                "No background picture statement is expected without a background file.");
+            Assert.DoesNotContain("background picture", script);
             var attach = requests.First(request =>
                 request.Executable == "hdiutil" && request.Arguments.Contains("attach"));
-            Assert.True(!attach.Arguments.Contains("-nobrowse"),
-                "Finder needs visibility: -nobrowse must be absent while the layout pass runs.");
+            Assert.DoesNotContain("-nobrowse", attach.Arguments);
         }
         finally
         {
@@ -417,9 +404,8 @@ public static class MacDmgTests
                         Logger = new ListLogger(warnings)
                     })
                 .BuildAsync(DmgConfiguration(input, output));
-            Assert.True(artifacts.Count == 2, "A headless host must still produce the .dmg.");
-            Assert.True(warnings.Any(message => message.Contains("GUI session")),
-                $"A missing GUI session must degrade to a warning, got: {string.Join(" | ", warnings)}");
+            Assert.Equal(2, artifacts.Count);
+            Assert.Contains(warnings, message => message.Contains("GUI session"));
         }
         finally
         {
@@ -450,12 +436,10 @@ public static class MacDmgTests
         {
             await new MacDmgBundler(new MacDmgBundleConfiguration { SkipWindowLayout = true })
                 .BuildAsync(DmgConfiguration(input, output));
-            Assert.True(!requests.Any(request => request.Executable == "osascript"),
-                "SkipWindowLayout must not invoke osascript.");
+            Assert.False(requests.Any(request => request.Executable == "osascript"), "SkipWindowLayout must not invoke osascript.");
             var attach = requests.First(request =>
                 request.Executable == "hdiutil" && request.Arguments.Contains("attach"));
-            Assert.True(attach.Arguments.Contains("-nobrowse"),
-                "SkipWindowLayout should keep the -nobrowse attach flag.");
+            Assert.Contains("-nobrowse", attach.Arguments);
         }
         finally
         {
@@ -518,8 +502,7 @@ public static class MacDmgTests
                 })
                 .BuildAsync(DmgConfiguration(input, output));
             Assert.True(stagedBackground, "The background image must land in .background/ on the volume.");
-            Assert.True(!stagedVolumeIconEarly,
-                "Finder strips a pre-staged .VolumeIcon.icns during the window pass; it must be copied after osascript.");
+            Assert.False(stagedVolumeIconEarly, "Finder strips a pre-staged .VolumeIcon.icns during the window pass; it must be copied after osascript.");
             Assert.True(volumeIconStagedLate,
                 "The volume icon must land as .VolumeIcon.icns after the layout pass.");
             Assert.True(volumeIconFlaggedLate,
@@ -622,8 +605,7 @@ public static class MacDmgTests
                 $"Expected convert → udifrez → codesign --sign → --verify order, got: {string.Join(",", verbs)}");
             var signCall = requests.First(request =>
                 request.Executable == "codesign" && request.Arguments.Contains("--sign"));
-            Assert.True(signCall.Arguments.Contains("--timestamp=none"),
-                "Ad-hoc signatures must skip the timestamp server.");
+            Assert.Contains("--timestamp=none", signCall.Arguments);
             var frezCall = requests.First(request => request.Arguments.Contains("udifrez"));
             Assert.True(frezCall.Arguments.Contains("-xml") && frezCall.Arguments.Contains("-image"),
                 "udifrez must take the generated SLA plist via -xml and the image via -image.");
@@ -732,13 +714,11 @@ public static class MacDmgTests
             var rtf = Path.Combine(directory, "sla.rtf");
             File.WriteAllText(rtf, "{\\rtf1 ansi hello}");
             var rtfPlist = MacDmgLicenseResources.BuildPlist(rtf, logger);
-            Assert.True(rtfPlist.Contains("<key>RTF </key>"),
-                ".rtf licenses must land in the 'RTF ' resource, not TEXT.");
+            Assert.Contains("<key>RTF </key>", rtfPlist);
             var unicode = Path.Combine(directory, "sla-unicode.txt");
             File.WriteAllText(unicode, "License 中文 text.");
             MacDmgLicenseResources.BuildPlist(unicode, logger);
-            Assert.True(warnings.Any(message => message.Contains("non-ASCII")),
-                "Non-ASCII .txt licenses must warn about the TEXT-resource charset limit.");
+            Assert.Contains(warnings, message => message.Contains("non-ASCII"));
         }
         finally
         {
@@ -798,8 +778,7 @@ public static class MacDmgTests
         Assert.True(targets.Contains("MacDmgCompression=\"$(BundlerMacDmgCompression)\"", StringComparison.Ordinal) &&
                targets.Contains("MacDmgVolumeName=\"$(BundlerMacDmgVolumeName)\"", StringComparison.Ordinal),
             "MSBuild does not map the BundlerMacDmg* properties to the task.");
-        Assert.True(props.Contains("<BundlerMacDmgCompression Condition=\"'$(BundlerMacDmgCompression)' == ''\">Ulmo<", StringComparison.Ordinal),
-            "The default BundlerMacDmgCompression must be Ulmo.");
+        Assert.Contains("<BundlerMacDmgCompression Condition=\"'$(BundlerMacDmgCompression)' == ''\">Ulmo<", props);
         Assert.True(task.Contains("new MacDmgBundler(", StringComparison.Ordinal) &&
                task.Contains("PackageFormat.Dmg", StringComparison.Ordinal),
             "The MSBuild task does not construct the .dmg backend.");

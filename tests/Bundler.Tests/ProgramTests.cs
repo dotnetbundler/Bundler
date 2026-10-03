@@ -27,9 +27,9 @@ public static class ProgramTests
         Assert.True(BundleTarget.TryParse("linux-musl-arm64", out var muslArm) &&
                 muslArm!.OperatingSystem == DesktopOperatingSystem.LinuxMusl,
             "linux-musl-arm64 must parse as a distinct musl target.");
-        Assert.True(!BundleTarget.TryParse("android-arm64", out _), "A mobile RID was accepted.");
-        Assert.True(!BundleTarget.TryParse("linux-musl", out _), "A musl RID without an architecture was accepted.");
-        Assert.True(!BundleTarget.TryParse("win", out _), "An OS RID without an architecture was accepted.");
+        Assert.False(BundleTarget.TryParse("android-arm64", out _), "A mobile RID was accepted.");
+        Assert.False(BundleTarget.TryParse("linux-musl", out _), "A musl RID without an architecture was accepted.");
+        Assert.False(BundleTarget.TryParse("win", out _), "An OS RID without an architecture was accepted.");
     }
 
     [Fact]
@@ -43,45 +43,34 @@ public static class ProgramTests
         });
 
         var issues = BundleConfigurationValidator.Validate(configuration, checkFileSystem: false);
-        Assert.True(issues.Any(issue => issue.Message.Contains("not supported", StringComparison.Ordinal)),
-            "Linux MSI should have failed validation.");
+        Assert.Contains(issues, issue => issue.Message.Contains("not supported", StringComparison.Ordinal));
         var x86Nsis = ValidConfiguration(new BundleTargetConfiguration
         {
             RuntimeIdentifier = "win-x86", InputDirectory = "unused", Formats = [PackageFormat.Nsis]
         });
-        Assert.True(!BundleConfigurationValidator.Validate(x86Nsis, checkFileSystem: false)
-                .Any(issue => issue.Path == "targets[0].formats"),
-            "The NSIS backend must accept the Windows x86 target.");
+        Assert.False(BundleConfigurationValidator.Validate(x86Nsis, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "The NSIS backend must accept the Windows x86 target.");
         var x86Archive = ValidConfiguration(new BundleTargetConfiguration
         {
             RuntimeIdentifier = "win-x86", InputDirectory = "unused",
             Formats = [PackageFormat.Zip, PackageFormat.TarGz]
         });
-        Assert.True(!BundleConfigurationValidator.Validate(x86Archive, checkFileSystem: false)
-                .Any(issue => issue.Path == "targets[0].formats"),
-            "Zip/TarGz must accept the Windows x86 target.");
+        Assert.False(BundleConfigurationValidator.Validate(x86Archive, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "Zip/TarGz must accept the Windows x86 target.");
         var x86Msi = ValidConfiguration(new BundleTargetConfiguration
         {
             RuntimeIdentifier = "win-x86", InputDirectory = "unused", Formats = [PackageFormat.Msi]
         });
-        Assert.True(!BundleConfigurationValidator.Validate(x86Msi, checkFileSystem: false)
-                .Any(issue => issue.Path == "targets[0].formats"),
-            "The MSI backend must accept the Windows x86 target.");
+        Assert.False(BundleConfigurationValidator.Validate(x86Msi, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "The MSI backend must accept the Windows x86 target.");
         var osxFormats = ValidConfiguration(new BundleTargetConfiguration
         {
             RuntimeIdentifier = "osx", InputDirectory = "unused",
             Formats = [PackageFormat.App, PackageFormat.Dmg, PackageFormat.Pkg, PackageFormat.Zip, PackageFormat.TarGz]
         });
-        Assert.True(!BundleConfigurationValidator.Validate(osxFormats, checkFileSystem: false)
-                .Any(issue => issue.Path == "targets[0].formats"),
-            "The universal osx target must accept the macOS format set.");
+        Assert.False(BundleConfigurationValidator.Validate(osxFormats, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "The universal osx target must accept the macOS format set.");
         var osxNsis = ValidConfiguration(new BundleTargetConfiguration
         {
             RuntimeIdentifier = "osx", InputDirectory = "unused", Formats = [PackageFormat.Nsis]
         });
-        Assert.True(BundleConfigurationValidator.Validate(osxNsis, checkFileSystem: false)
-                .Any(issue => issue.Message.Contains("not supported", StringComparison.Ordinal)),
-            "Windows formats must still be rejected for the osx target.");
+        Assert.Contains(BundleConfigurationValidator.Validate(osxNsis, checkFileSystem: false), issue => issue.Message.Contains("not supported", StringComparison.Ordinal));
         foreach (var rid in new[] { "linux-musl-x64", "linux-musl-arm64" })
         {
             var muslArchive = ValidConfiguration(new BundleTargetConfiguration
@@ -89,9 +78,7 @@ public static class ProgramTests
                 RuntimeIdentifier = rid, InputDirectory = "unused",
                 Formats = [PackageFormat.Zip, PackageFormat.TarGz, PackageFormat.AlpineApk, PackageFormat.AppImage]
             });
-            Assert.True(!BundleConfigurationValidator.Validate(muslArchive, checkFileSystem: false)
-                    .Any(issue => issue.Path == "targets[0].formats"),
-                $"Zip/TarGz/AlpineApk/AppImage must accept the musl target {rid}.");
+            Assert.False(BundleConfigurationValidator.Validate(muslArchive, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), $"Zip/TarGz/AlpineApk/AppImage must accept the musl target {rid}.");
             var muslGlibc = ValidConfiguration(new BundleTargetConfiguration
             {
                 RuntimeIdentifier = rid, InputDirectory = "unused",
@@ -115,7 +102,7 @@ public static class ProgramTests
         });
 
         var plan = BundlePlanner.Create(configuration, checkFileSystem: false);
-        Assert.True(plan.Items.Count == 2, "DMG plan should contain an app and a DMG step.");
+        Assert.Equal(2, plan.Items.Count);
         Assert.True(plan.Items[0].Format == PackageFormat.App && plan.Items[0].Intermediate,
             "The intermediate app step must be first.");
         Assert.True(plan.Items[1].Format == PackageFormat.Dmg && !plan.Items[1].Intermediate,
@@ -135,10 +122,8 @@ public static class ProgramTests
         });
 
         var issues = BundleConfigurationValidator.Validate(configuration, checkFileSystem: false);
-        Assert.True(issues.Any(issue => issue.Path.EndsWith("mainExecutable", StringComparison.Ordinal)),
-            "An executable outside inputDirectory should have failed validation.");
-        Assert.True(issues.Any(issue => issue.Path.Contains("signingFiles", StringComparison.Ordinal)),
-            "A signing file outside inputDirectory should have failed validation.");
+        Assert.Contains(issues, issue => issue.Path.EndsWith("mainExecutable", StringComparison.Ordinal));
+        Assert.Contains(issues, issue => issue.Path.Contains("signingFiles", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -162,7 +147,7 @@ public static class ProgramTests
                     "hosts/osx-arm64/makensis"
                 })
                 {
-                    Assert.True(entries.Contains(required), $"The NSIS toolset archive is missing '{required}'.");
+                    Assert.Contains(required, entries);
                 }
 
                 var copyingEntry = zip.GetEntry("common/COPYING") ??
@@ -224,10 +209,8 @@ public static class ProgramTests
 
             var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
             var script = NsisBundleBackend.CreateScript(template, configuration, new NsisBundleConfiguration(), item, "setup.exe", "ExampleApp");
-            Assert.True(script.Contains("\"UninstallString\" '\"$INSTDIR\\Uninstall.exe\"'", StringComparison.Ordinal),
-                "UninstallString must contain ordinary quotes around the executable path.");
-            Assert.True(!script.Contains("'$\"$INSTDIR", StringComparison.Ordinal),
-                "UninstallString must not write NSIS escape markers into the registry.");
+            Assert.Contains("\"UninstallString\" '\"$INSTDIR\\Uninstall.exe\"'", script);
+            Assert.DoesNotContain("'$\"$INSTDIR", script);
         }
         finally
         {
@@ -245,8 +228,7 @@ public static class ProgramTests
         }
         catch (InvalidDataException exception)
         {
-            Assert.True(exception.Message.Contains("missing", StringComparison.Ordinal),
-                "The template error should identify the missing variable.");
+            Assert.Contains("missing", exception.Message);
         }
     }
 
@@ -254,8 +236,7 @@ public static class ProgramTests
     static void LetsUsersChooseInstallDirectory()
     {
         var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
-        Assert.True(template.Contains("!insertmacro MUI_PAGE_DIRECTORY", StringComparison.Ordinal),
-            "The installer must display the NSIS directory selection page.");
+        Assert.Contains("!insertmacro MUI_PAGE_DIRECTORY", template);
         Assert.True(template.Contains("ReadRegStr $0 SHCTX \"${UNINSTALL_KEY}\" \"InstallLocation\"", StringComparison.Ordinal) &&
                template.Contains("MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_VALUENAME \"InstallLocation\"", StringComparison.Ordinal) &&
                template.Contains("${If} $INSTDIR == \"placeholder\\${INSTALL_FOLDER}\"", StringComparison.Ordinal),
@@ -299,8 +280,7 @@ public static class ProgramTests
             var repaired = await ZipToolCache.ResolveToolAsync(archivePath, cache, archive);
             Assert.True(await File.ReadAllTextAsync(repaired.ExecutablePath) == "trusted executable",
                 "A modified cached executable was not restored from the trusted archive.");
-            Assert.True(!File.Exists(Path.Combine(repaired.DirectoryPath, "unexpected.txt")),
-                "Unexpected cache content was not removed during recovery.");
+            Assert.False(File.Exists(Path.Combine(repaired.DirectoryPath, "unexpected.txt")), "Unexpected cache content was not removed during recovery.");
 
             var outside = Path.Combine(root, "outside");
             Directory.CreateDirectory(outside);
@@ -376,8 +356,7 @@ public static class ProgramTests
                 {
                 }
             }
-            Assert.True(!File.Exists(Path.Combine(root, "escaped.exe")),
-                "Archive traversal wrote outside the cache staging directory.");
+            Assert.False(File.Exists(Path.Combine(root, "escaped.exe")), "Archive traversal wrote outside the cache staging directory.");
         }
         finally
         {
@@ -398,8 +377,7 @@ public static class ProgramTests
             var expected = await File.ReadAllTextAsync(resources[0].TemplatePath);
             await File.WriteAllTextAsync(resources[0].TemplatePath, "corrupted");
             var repaired = await NsisEmbeddedResources.MaterializeAsync(root, CancellationToken.None);
-            Assert.True(await File.ReadAllTextAsync(repaired.TemplatePath) == expected,
-                "A corrupted embedded NSIS resource was not restored.");
+            Assert.Equal(expected, await File.ReadAllTextAsync(repaired.TemplatePath));
         }
         finally
         {
@@ -552,7 +530,7 @@ public static class ProgramTests
             return Math.Sign(leftVersion!.CompareTo(rightVersion));
         }
 
-        Assert.True(Compare("1.0.0", "1.0.0") == 0, "Equal releases should compare equal.");
+        Assert.Equal(0, Compare("1.0.0", "1.0.0"));
         Assert.True(Compare("1.0.0+build.2", "1.0.0+build.1") == 0,
             "Build metadata must not affect precedence.");
         Assert.True(Compare("1.0.0", "1.0.0-rc.1") > 0, "A release must be newer than its prerelease.");
@@ -560,9 +538,8 @@ public static class ProgramTests
             "Numeric prerelease identifiers must compare numerically.");
         Assert.True(Compare("2.0.0-alpha", "10.0.0-alpha") < 0,
             "Core numeric identifiers must compare numerically.");
-        Assert.True(!SemanticVersion.TryParse("1.0", out _), "SemVer requires major, minor, and patch.");
-        Assert.True(!SemanticVersion.TryParse("1.0.0-01", out _),
-            "Numeric prerelease identifiers must reject leading zeroes.");
+        Assert.False(SemanticVersion.TryParse("1.0", out _), "SemVer requires major, minor, and patch.");
+        Assert.False(SemanticVersion.TryParse("1.0.0-01", out _), "Numeric prerelease identifiers must reject leading zeroes.");
         Assert.True(SemanticVersion.TryParse("65536.0.0", out var oversized) &&
                !oversized!.TryGetWindowsNumericVersion(out _),
             "Windows version resources must reject components above 65535.");
@@ -581,8 +558,7 @@ public static class ProgramTests
             }
             catch (ArgumentException exception)
             {
-                Assert.True(exception.Message.Contains(version, StringComparison.Ordinal),
-                    "The version validation error should identify the rejected value.");
+                Assert.Contains(version, exception.Message);
             }
         }
 
@@ -603,8 +579,7 @@ public static class ProgramTests
         }
         catch (ArgumentException exception)
         {
-            Assert.True(exception.Message.Contains("not-a-guid", StringComparison.Ordinal),
-                "The validation error should identify the invalid MSI GUID.");
+            Assert.Contains("not-a-guid", exception.Message);
         }
 
         bundler = new NsisBundler(new NsisBundleConfiguration
@@ -618,8 +593,7 @@ public static class ProgramTests
         }
         catch (ArgumentException exception)
         {
-            Assert.True(exception.Message.Contains("string limit", StringComparison.Ordinal),
-                "The validation error should explain the NSIS runtime string limit.");
+            Assert.Contains("string limit", exception.Message);
         }
     }
 
@@ -715,10 +689,8 @@ public static class ProgramTests
                    configuration.UrlProtocols[0].Schemes.SequenceEqual(["configured-app"]) &&
                    configuration.UrlProtocols[0].Name == "Configured link",
                 "The configuration loader dropped URL-protocol metadata.");
-            Assert.True(configuration.Targets[0].InputDirectory == Path.Combine(root, "publish"),
-                "The configuration loader did not resolve target paths relative to the configuration file.");
-            Assert.True(configuration.Targets[0].SigningFiles.SequenceEqual(["Helper.dll"]),
-                "The configuration loader dropped target signing files.");
+            Assert.Equal(Path.Combine(root, "publish"), configuration.Targets[0].InputDirectory);
+            Assert.Equal(configuration.Targets[0].SigningFiles, ["Helper.dll"]);
         }
         finally
         {
@@ -778,8 +750,7 @@ public static class ProgramTests
             "Korean", "Norwegian", "Persian", "Portuguese", "PortugueseBR", "Russian", "SimpChinese",
             "Spanish", "SpanishInternational", "Swedish", "TradChinese", "Turkish", "Ukrainian", "Vietnamese"
         ];
-        Assert.True(NsisBundler.SupportedLanguages.SequenceEqual(expectedLanguages),
-            "The public NSIS language catalog does not match the supported Tauri language set.");
+        Assert.Equal(NsisBundler.SupportedLanguages, expectedLanguages);
 
         var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Language.Tests", Guid.NewGuid().ToString("N"));
         var input = Path.Combine(root, "发布内容");
@@ -1037,16 +1008,7 @@ public static class ProgramTests
                 ]
             });
 
-            Assert.True(signer.ArtifactKinds.SequenceEqual(
-                    new[]
-                    {
-                        BundleSigningArtifactKind.PayloadExecutable,
-                        BundleSigningArtifactKind.PayloadFile,
-                        BundleSigningArtifactKind.NativeComponent,
-                        BundleSigningArtifactKind.Uninstaller,
-                        BundleSigningArtifactKind.Installer
-                    }),
-                "NSIS signing did not process staged payload, native component, uninstaller, and installer in order.");
+            Assert.Equal(new[] { BundleSigningArtifactKind.PayloadExecutable, BundleSigningArtifactKind.PayloadFile, BundleSigningArtifactKind.NativeComponent, BundleSigningArtifactKind.Uninstaller, BundleSigningArtifactKind.Installer }, signer.ArtifactKinds);
             Assert.True(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(mainExecutable))) == originalMainHash &&
                    Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(sidecar))) == originalSidecarHash,
                 "NSIS signing modified the caller's input directory instead of a staging copy.");
@@ -1058,8 +1020,7 @@ public static class ProgramTests
                 "DotNetBundlerNsis.dll",
                 SearchOption.AllDirectories).Single();
             var repositoryPlugin = Path.Combine(RepositoryRoot(), "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
-            Assert.True(SHA256.HashData(File.ReadAllBytes(cachedPlugin)).SequenceEqual(SHA256.HashData(File.ReadAllBytes(repositoryPlugin))),
-                "Signing modified the shared cached NSIS plugin.");
+            Assert.Equal(SHA256.HashData(File.ReadAllBytes(cachedPlugin)), SHA256.HashData(File.ReadAllBytes(repositoryPlugin)));
             Assert.True(SignedFileCertificates.EmbeddedSignatureContains(artifacts[0].Path, certificate),
                 "The final NSIS installer did not contain the expected signing certificate.");
         }
@@ -1097,7 +1058,7 @@ public static class ProgramTests
                 "External signing fixture",
                 "win-x64"));
             var record = await File.ReadAllTextAsync(log);
-            Assert.True(record.Trim() == $"{payload}|PayloadExecutable|win-x64", "External signer placeholders were not passed as isolated arguments.");
+            Assert.Equal($"{payload}|PayloadExecutable|win-x64", record.Trim());
 
             const string secret = "must-not-leak-provider-secret";
             var failingArguments = arguments.Concat([secret]).ToArray();
@@ -1167,7 +1128,7 @@ public static class ProgramTests
             {
             }
             var installer = Path.Combine(output, "win-x64", "nsis", "Failed Signing App-1.0.0-setup.exe");
-            Assert.True(!File.Exists(installer), "A signing failure left a final installer that could be mistaken for success.");
+            Assert.False(File.Exists(installer), "A signing failure left a final installer that could be mistaken for success.");
         }
         finally
         {
@@ -1231,10 +1192,8 @@ public static class ProgramTests
             var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
             var script = NsisBundleBackend.CreateScript(template, configuration, new NsisBundleConfiguration(), item, "setup.exe", "ExampleApp");
 
-            Assert.True(script.Contains("Delete /REBOOTOK \"$INSTDIR\\ExampleApp.exe\"", StringComparison.Ordinal),
-                "The uninstaller should delete the packaged executable explicitly.");
-            Assert.True(script.Contains("Delete /REBOOTOK \"$INSTDIR\\assets\\data.txt\"", StringComparison.Ordinal),
-                "The uninstaller should delete packaged nested files explicitly.");
+            Assert.Contains("Delete /REBOOTOK \"$INSTDIR\\ExampleApp.exe\"", script);
+            Assert.Contains("Delete /REBOOTOK \"$INSTDIR\\assets\\data.txt\"", script);
             Assert.True(script.Contains("${If} $DeleteAppData == 1", StringComparison.Ordinal) &&
                    script.Contains("RMDir /r /REBOOTOK \"$INSTDIR\"", StringComparison.Ordinal),
                 "Choosing application-data deletion should remove the complete program directory.");
@@ -1252,8 +1211,7 @@ public static class ProgramTests
     static void ProvidesInteractiveNsisSafetyOptions()
     {
         var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
-        Assert.True(template.Contains("Page custom ShortcutOptionsPage", StringComparison.Ordinal),
-            "The installer should provide shortcut selection controls.");
+        Assert.Contains("Page custom ShortcutOptionsPage", template);
         Assert.True(template.Contains("Function ValidateInstallDirectory", StringComparison.Ordinal) &&
                template.Contains("${INSTALL_MARKER}", StringComparison.Ordinal),
             "The installer should distinguish its own directory from another non-empty directory.");
@@ -1327,8 +1285,7 @@ public static class ProgramTests
                 "RestoreTransactionRegistryKey"
             })
             {
-                Assert.True(script.Contains($"DotNetBundlerNsis::{action} \"$TransactionDirectory\" \"key-000\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"${{UNINSTALL_KEY}}\"", StringComparison.Ordinal),
-                    $"{action} should use the same installer-defined registry snapshot name and target.");
+                Assert.Contains($"DotNetBundlerNsis::{action} \"$TransactionDirectory\" \"key-000\" \"$TransactionRegistryRoot\" \"$TransactionRegistryView\" \"${{UNINSTALL_KEY}}\"", script);
             }
 
             Assert.True(script.Contains("ValidateTransactionSnapshotSet \"$TransactionDirectory\" \"3\" \"2\"", StringComparison.Ordinal) &&
@@ -1364,8 +1321,7 @@ public static class ProgramTests
         var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
         foreach (var option in new[] { "/P", "/UPDATE", "/NS", "/R", "/ARGS" })
         {
-            Assert.True(template.Contains($"$CMDLINE \"{option}\"", StringComparison.Ordinal),
-                $"The NSIS template does not parse {option}.");
+            Assert.Contains($"$CMDLINE \"{option}\"", template);
         }
 
         Assert.True(template.Contains("!define EXIT_INVALID_ARGUMENTS 3", StringComparison.Ordinal) &&
@@ -1377,8 +1333,7 @@ public static class ProgramTests
                template.Contains("IfRebootFlag un_reboot_required un_no_reboot_required", StringComparison.Ordinal) &&
                template.Contains("SetErrorLevel ${EXIT_REBOOT_REQUIRED}", StringComparison.Ordinal),
             "Install and uninstall success paths should expose reboot-required status as exit code 3010.");
-        Assert.True(!template.Contains("ExecWait '$InstalledUninstaller /S _?=$InstalledDirectory'", StringComparison.Ordinal),
-            "Upgrade must not run the installed uninstaller in place because that queues deletion of itself.");
+        Assert.DoesNotContain("ExecWait '$InstalledUninstaller /S _?=$InstalledDirectory'", template);
         Assert.True(template.Contains("GetTempFileName $1", StringComparison.Ordinal) &&
                template.Contains("CopyFiles /SILENT \"$InstalledDirectory\\Uninstall.exe\" \"$1\"", StringComparison.Ordinal) &&
                template.Contains("ExecWait '\"$1\" /S _?=$InstalledDirectory' $0", StringComparison.Ordinal),
@@ -1468,8 +1423,7 @@ public static class ProgramTests
                    script.Contains("!define LEGACY_MSI_AUTODETECT_PUBLISHER \"ExampleApp\"", StringComparison.Ordinal) &&
                    script.Contains("\"${LEGACY_MSI_AUTODETECT_NAME}\" \"${LEGACY_MSI_AUTODETECT_PUBLISHER}\"", StringComparison.Ordinal),
                 "The script must pass opt-in name/publisher auto-detection to the plug-in calls.");
-            Assert.True(script.Contains("${ElseIf} $0 == 1602", StringComparison.Ordinal),
-                "The migration flow must treat a cancelled MSI uninstall as an abort, not a hard failure.");
+            Assert.Contains("${ElseIf} $0 == 1602", script);
             Assert.True(defaultScript.Contains("!define LEGACY_MSI_AUTODETECT_NAME \"\"", StringComparison.Ordinal) &&
                    defaultScript.Contains("!define LEGACY_MSI_AUTODETECT_PUBLISHER \"\"", StringComparison.Ordinal),
                 "Auto-detection must render empty name/publisher unless explicitly enabled.");
@@ -1542,13 +1496,11 @@ public static class ProgramTests
                    script.Contains("${PRODUCT_ID}.File.example.1", StringComparison.Ordinal) &&
                    script.Contains("${CAPABILITIES_KEY}\\FileAssociations", StringComparison.Ordinal),
                 "File associations should register a private ProgID, Open With candidate, and application capability.");
-            Assert.True(!script.Contains("WriteRegStr SHCTX \"Software\\Classes\\.example\" \"\"", StringComparison.Ordinal),
-                "Packaging must not force the extension's default ProgID.");
+            Assert.DoesNotContain("WriteRegStr SHCTX \"Software\\Classes\\.example\" \"\"", script);
             Assert.True(script.Contains("Software\\Classes\\example-app\\shell\\open\\command", StringComparison.Ordinal) &&
                    script.Contains("${CAPABILITIES_KEY}\\UrlAssociations", StringComparison.Ordinal),
                 "URL protocols should be directly launchable and visible to the default-apps model.");
-            Assert.True(script.Contains("${If} $0 == '\"$INSTDIR\\ExampleApp.exe\" \"%1\"'", StringComparison.Ordinal),
-                "Protocol uninstall should verify that this installation still owns the command.");
+            Assert.Contains("${If} $0 == '\"$INSTDIR\\ExampleApp.exe\" \"%1\"'", script);
             Assert.True(script.Contains("SHChangeNotify", StringComparison.Ordinal) &&
                    script.Contains("; 只有协议仍指向本次安装的程序时才删除", StringComparison.Ordinal),
                 "The association cache refresh and the ownership rule should remain explicit in Chinese comments.");
@@ -1671,10 +1623,8 @@ public static class ProgramTests
                     item,
                     "setup.exe",
                     "ExampleApp");
-                Assert.True(script.Contains(pair.Value, StringComparison.Ordinal),
-                    $"The {pair.Key} compression directive was not rendered.");
-                Assert.True(!script.Contains("{{compression_directive}}", StringComparison.Ordinal),
-                    "The compression template variable was not replaced.");
+                Assert.Contains(pair.Value, script);
+                Assert.DoesNotContain("{{compression_directive}}", script);
             }
         }
         finally
@@ -1762,8 +1712,7 @@ public static class ProgramTests
                 "setup.exe",
                 "ExampleApp");
 
-            Assert.True(script.Contains("!define PRODUCT_DESCRIPTION \"Example Description\"", StringComparison.Ordinal),
-                "The configured description should be rendered into installer metadata.");
+            Assert.Contains("!define PRODUCT_DESCRIPTION \"Example Description\"", script);
             Assert.True(script.Contains("!define MUI_ICON", StringComparison.Ordinal) &&
                    script.Contains("!define MUI_UNICON", StringComparison.Ordinal),
                 "The configured .ico should apply to the installer and uninstaller.");
@@ -1782,8 +1731,7 @@ public static class ProgramTests
             Assert.True(script.Contains("SetOutPath \"$INSTDIR\\docs\"", StringComparison.Ordinal) &&
                    script.Contains("/oname=license.txt", StringComparison.Ordinal),
                 "The external resource should be installed at its configured target path.");
-            Assert.True(script.Contains("Delete /REBOOTOK \"$INSTDIR\\docs\\license.txt\"", StringComparison.Ordinal),
-                "The external resource should be included in the safe uninstall manifest.");
+            Assert.Contains("Delete /REBOOTOK \"$INSTDIR\\docs\\license.txt\"", script);
         }
         finally
         {
@@ -1827,8 +1775,7 @@ public static class ProgramTests
                 "The common pipeline should return an existing backend artifact.");
             Assert.True(backend.WorkDirectory is not null && !Directory.Exists(backend.WorkDirectory),
                 "The common pipeline should clean its backend work directory.");
-            Assert.True(logger.Messages.Any(message => message.Contains("Created", StringComparison.Ordinal)),
-                "The common pipeline should report progress through the public logging contract.");
+            Assert.Contains(logger.Messages, message => message.Contains("Created", StringComparison.Ordinal));
         }
         finally
         {
@@ -1875,10 +1822,8 @@ public static class ProgramTests
             }
             catch (NotSupportedException exception)
             {
-                Assert.True(exception.Message.Contains("Msi", StringComparison.Ordinal),
-                    "The preflight error should identify the missing format backend.");
-                Assert.True(backend.InvocationCount == 0,
-                    "No backend should run until every planned format has passed preflight.");
+                Assert.Contains("Msi", exception.Message);
+                Assert.Equal(0, backend.InvocationCount);
             }
         }
         finally
@@ -1922,7 +1867,7 @@ public static class ProgramTests
                    script.Contains("!define SHORTCUT_ICON \"$INSTDIR\\assets\\shortcut.ico\"", StringComparison.Ordinal) &&
                    script.Contains("!define SHORTCUT_APP_USER_MODEL_ID \"com.example.newapp.desktop\"", StringComparison.Ordinal),
                 "Shortcut arguments, working directory, icon, or AppUserModelID were not rendered.");
-            Assert.True(script.Contains("$SMPROGRAMS\\Example Publisher\\New App.lnk", StringComparison.Ordinal), "The configured Start Menu folder was not rendered.");
+            Assert.Contains("$SMPROGRAMS\\Example Publisher\\New App.lnk", script);
             Assert.True(script.Contains("DotNetBundlerNsis::CreateShortcut", StringComparison.Ordinal) &&
                    script.Contains("DotNetBundlerNsis::UpdateShortcutIfOwned", StringComparison.Ordinal) &&
                    script.Contains("DotNetBundlerNsis::MoveShortcutIfOwned", StringComparison.Ordinal) &&
@@ -1965,12 +1910,10 @@ public static class ProgramTests
                      "WindowsSigningCommand"
                  })
         {
-            Assert.True(targets.Contains(property + "=\"$(Bundler" + property + ")\"", StringComparison.Ordinal), $"MSBuild does not map Bundler{property} to the task.");
+            Assert.Contains(property + "=\"$(Bundler" + property + ")\"", targets);
         }
-        Assert.True(props.Contains("<BundlerNsisCompression Condition=\"'$(BundlerNsisCompression)' == ''\">lzma</BundlerNsisCompression>", StringComparison.Ordinal),
-            "MSBuild does not define the documented LZMA compression default.");
-        Assert.True(props.Contains("<BundlerNsisLegacyMsiAutoDetect Condition=\"'$(BundlerNsisLegacyMsiAutoDetect)' == ''\">false</BundlerNsisLegacyMsiAutoDetect>", StringComparison.Ordinal),
-            "MSBuild must default legacy MSI auto-detection to disabled.");
+        Assert.Contains("<BundlerNsisCompression Condition=\"'$(BundlerNsisCompression)' == ''\">lzma</BundlerNsisCompression>", props);
+        Assert.Contains("<BundlerNsisLegacyMsiAutoDetect Condition=\"'$(BundlerNsisLegacyMsiAutoDetect)' == ''\">false</BundlerNsisLegacyMsiAutoDetect>", props);
         Assert.True(task.Contains("Compression = ParseCompression()", StringComparison.Ordinal) &&
                task.Contains("BundlerNsisCompression must be lzma, zlib, bzip2, or none.", StringComparison.Ordinal),
             "The MSBuild task does not parse and validate NSIS compression.");
@@ -1997,8 +1940,7 @@ public static class ProgramTests
         var version = XDocument.Load(Path.Combine(root, "Directory.Build.props"))
             .Descendants("BundlerPackageVersion").Single().Value;
         var consumerProps = XDocument.Load(Path.Combine(root, "Bundler.LocalPackages.props"));
-        Assert.True(!consumerProps.Descendants("BundlerPackageVersion").Any(),
-            "The local-package props must not duplicate the repository package version.");
+        Assert.Empty(consumerProps.Descendants("BundlerPackageVersion"));
         Assert.True(consumerProps.Descendants("RestoreAdditionalProjectSources").Single().Value == "$(BundlerPackageSource)" &&
                !consumerProps.Descendants("RestoreSources").Any(),
             "The standalone-fixture props must append the script-supplied package source without owning the restore source list.");

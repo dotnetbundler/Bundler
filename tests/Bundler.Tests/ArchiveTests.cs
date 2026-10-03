@@ -37,25 +37,20 @@ public static class ArchiveTests
             }).BuildAsync(Configuration(input, output, formats: [PackageFormat.Zip]))
                 .GetAwaiter().GetResult();
             var zip = artifacts.Single().Path;
-            Assert.True(zip.EndsWith("my-app-1.0.0-linux-x64.zip", StringComparison.Ordinal),
-                "zip naming must use <stem>.zip");
+            Assert.EndsWith("my-app-1.0.0-linux-x64.zip", zip);
             Assert.True(File.Exists(zip + ".sha256"), "sha256 sidecar must exist");
             using var archive = ZipFile.OpenRead(zip);
             var names = archive.Entries.Select(e => e.FullName).ToArray();
-            Assert.True(names.Any(n => n == "my-app-1.0.0-linux-x64/"),
-                "single top-level directory must wrap the payload");
+            Assert.Contains(names, n => n == "my-app-1.0.0-linux-x64/");
             Assert.True(names.Any(n => n == "my-app-1.0.0-linux-x64/ExampleApp") &&
                    names.Any(n => n == "my-app-1.0.0-linux-x64/ExampleApp.dll"),
                 "payload files must land under the top-level directory");
             var executable = archive.GetEntry("my-app-1.0.0-linux-x64/ExampleApp")!;
-            Assert.True(((executable.ExternalAttributes >> 16) & 0xFFFF) == 33261 /* 0100755 */,
-                "shebang payload must carry unix mode 0755 in external attributes");
+            Assert.Equal(33261 /* 0100755 */, ((executable.ExternalAttributes >> 16) & 0xFFFF));
             var regular = archive.GetEntry("my-app-1.0.0-linux-x64/ExampleApp.dll")!;
-            Assert.True(((regular.ExternalAttributes >> 16) & 0xFFFF) == 33188 /* 0100644 */,
-                "regular payload must carry unix mode 0644");
+            Assert.Equal(33188 /* 0100644 */, ((regular.ExternalAttributes >> 16) & 0xFFFF));
             var macho = archive.GetEntry("my-app-1.0.0-linux-x64/ExampleMacApp")!;
-            Assert.True(((macho.ExternalAttributes >> 16) & 0xFFFF) == 33261 /* 0100755 */,
-                "Mach-O payload must carry unix mode 0755 in external attributes");
+            Assert.Equal(33261 /* 0100755 */, ((macho.ExternalAttributes >> 16) & 0xFFFF));
         }
         finally
         {
@@ -77,20 +72,18 @@ public static class ArchiveTests
                 Configuration(input, output, formats: [PackageFormat.TarGz]))
                 .GetAwaiter().GetResult();
             var tgz = artifacts.Single().Path;
-            Assert.True(tgz.EndsWith("-linux-x64.tar.gz", StringComparison.Ordinal),
-                "tar.gz naming must end with .tar.gz");
+            Assert.EndsWith("-linux-x64.tar.gz", tgz);
             using var gzip = new GZipStream(File.OpenRead(tgz), CompressionMode.Decompress);
             var entries = ReadTar(gzip);
             var names = entries.Select(e => e.Name).ToArray();
-            Assert.True(names.Any(n => n.EndsWith("/ExampleApp", StringComparison.Ordinal)),
-                "tar.gz must contain the payload under the top-level directory");
+            Assert.Contains(names, n => n.EndsWith("/ExampleApp", StringComparison.Ordinal));
             var dir = entries.First(e => e.Name.EndsWith("linux-x64/", StringComparison.Ordinal));
             Assert.True(dir.Kind == TarEntryKind.Directory && dir.Mode == 493,
                 "top-level directory must be a tar dir entry mode 0755");
             var executable = entries.First(e => e.Name.EndsWith("/ExampleApp", StringComparison.Ordinal));
-            Assert.True(executable.Mode == 493, "shebang payload must carry mode 0755");
+            Assert.Equal(493, executable.Mode);
             var macho = entries.First(e => e.Name.EndsWith("/ExampleMacApp", StringComparison.Ordinal));
-            Assert.True(macho.Mode == 493, "Mach-O payload must carry mode 0755");
+            Assert.Equal(493, macho.Mode);
             if (!File.Exists(link) ||
                 !(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()))
             { /* symlink fixture skipped on this fs/host */ }
@@ -124,7 +117,7 @@ public static class ArchiveTests
             using var archive = ZipFile.OpenRead(artifacts.Single().Path);
             var entry = archive.Entries.First(e => e.FullName.EndsWith("/docs/notes/extra.conf", StringComparison.Ordinal));
             using var reader = new StreamReader(entry.Open());
-            Assert.True(reader.ReadToEnd() == "key=value", "mapped file content must match");
+            Assert.Equal("key=value", reader.ReadToEnd());
         }
         finally
         {
@@ -227,10 +220,8 @@ public static class ArchiveTests
             new ArchiveBundler().BuildAsync(Configuration(
                 input, output, formats: [PackageFormat.Zip, PackageFormat.TarGz]))
                 .GetAwaiter().GetResult();
-            Assert.True(File.ReadAllText(Path.Combine(dir, "zip", "example-app-1.0.0-linux-x64.zip.sha256")) == zipHash1,
-                "two builds of the same input must produce identical zip sha256");
-            Assert.True(File.ReadAllText(Path.Combine(dir, "targz", "example-app-1.0.0-linux-x64.tar.gz.sha256")) == tgzHash1,
-                "two builds of the same input must produce identical tar.gz sha256");
+            Assert.Equal(zipHash1, File.ReadAllText(Path.Combine(dir, "zip", "example-app-1.0.0-linux-x64.zip.sha256")));
+            Assert.Equal(tgzHash1, File.ReadAllText(Path.Combine(dir, "targz", "example-app-1.0.0-linux-x64.tar.gz.sha256")));
         }
         finally
         {
@@ -266,8 +257,7 @@ public static class ArchiveTests
             var artifacts = new ArchiveBundler().BuildAsync(
                 Configuration(input, output, "win-x86", [PackageFormat.Zip]))
                 .GetAwaiter().GetResult();
-            Assert.True(artifacts.Single().Path.EndsWith("-win-x86.zip", StringComparison.Ordinal),
-                "the Windows x86 target must produce a zip artifact");
+            Assert.EndsWith("-win-x86.zip", artifacts.Single().Path);
         }
         finally
         {
@@ -299,16 +289,14 @@ public static class ArchiveTests
         Assert.True(targets.Contains("ArchivePackageName=\"$(BundlerArchivePackageName)\"", StringComparison.Ordinal) &&
                targets.Contains("ArchiveFiles=\"@(BundlerArchiveFile)\"", StringComparison.Ordinal),
             "MSBuild does not map the BundlerArchive* properties to the task.");
-        Assert.True(props.Contains("<BundlerArchivePackageName", StringComparison.Ordinal),
-            "The BundlerArchive* properties lack defaults in the .props file.");
+        Assert.Contains("<BundlerArchivePackageName", props);
         Assert.True(task.Contains("new ArchiveBundler(", StringComparison.Ordinal) &&
                task.Contains("PackageFormat.Zip", StringComparison.Ordinal) &&
                task.Contains("PackageFormat.TarGz", StringComparison.Ordinal),
             "The MSBuild task does not construct the archive backend.");
         var msbuildProject = File.ReadAllText(Path.Combine(
             RepositoryRoot(), "src", "Bundler.MSBuild", "Bundler.MSBuild.csproj"));
-        Assert.True(msbuildProject.Contains("DotNet.Bundler.Archive.dll", StringComparison.Ordinal),
-            "The MSBuild package must ship DotNet.Bundler.Archive.dll.");
+        Assert.Contains("DotNet.Bundler.Archive.dll", msbuildProject);
     }
 
     // Minimal tar reader for assertions (the writer's own TarWriter output).
@@ -412,10 +400,8 @@ public static class ArchiveTests
                 .GetAwaiter().GetResult().Single();
             using var archive = ZipFile.OpenRead(artifact.Path);
             var names = archive.Entries.Select(e => e.FullName).ToArray();
-            Assert.True(names.Any(name => name == "socket-skip/ExampleApp"),
-                "regular payload files must still be archived");
-            Assert.True(!names.Any(name => name.EndsWith("agent.sock", StringComparison.Ordinal)),
-                $"a unix socket must not be archived: {string.Join(',', names)}");
+            Assert.Contains(names, name => name == "socket-skip/ExampleApp");
+            Assert.False(names.Any(name => name.EndsWith("agent.sock", StringComparison.Ordinal)), $"a unix socket must not be archived: {string.Join(',', names)}");
         }
         finally
         {

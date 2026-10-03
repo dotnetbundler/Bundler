@@ -78,8 +78,7 @@ public static class AppImageTests
             var desktopText = Encoding.UTF8.GetString(
                 File.ReadAllBytes(Path.Combine(result.AppDirPath,
                     "usr", "share", "applications", "example-app.desktop")));
-            Assert.True(desktopText.Contains("Icon=example-app"),
-                "generated .desktop must carry Icon= for the fallback icon");
+            Assert.Contains("Icon=example-app", desktopText);
         }
         finally
         {
@@ -101,12 +100,12 @@ public static class AppImageTests
                     PackageName = "My App",
                     Version = "2.0.0-beta.1"
                 }, work, NullBundleLogger.Instance);
-            Assert.True(result.PackageName == "my-app", "package name must kebab-case");
-            Assert.True(result.Version == "2.0.0-beta.1", "version passes through verbatim");
+            Assert.Equal("my-app", result.PackageName);
+            Assert.Equal("2.0.0-beta.1", result.Version);
             Assert.True(result.FileArchitecture == "aarch64" && result.EnvironmentArchitecture == "aarch64",
                 "linux-arm64 must map to aarch64");
             var normalized = AppImageIdentity.NormalizeArchitecture("amd64");
-            Assert.True(normalized == "x86_64", "amd64 must normalize to x86_64");
+            Assert.Equal("x86_64", normalized);
         }
         finally
         {
@@ -166,8 +165,7 @@ public static class AppImageTests
                         new AppImageFileEntry { Source = extra, Destination = "usr/share/example-app/extra-copy.conf" }
                     ]
                 }, work, NullBundleLogger.Instance);
-            Assert.True(File.ReadAllText(Path.Combine(result.AppDirPath, "opt", "extras", "extra.conf")) == "k=v",
-                "AppDir file must land at the relative destination");
+            Assert.Equal("k=v", File.ReadAllText(Path.Combine(result.AppDirPath, "opt", "extras", "extra.conf")));
             Assert.True(File.Exists(Path.Combine(result.AppDirPath, "usr", "share", "example-app", "extra-copy.conf")),
                 "second destination must land too");
         }
@@ -239,8 +237,7 @@ public static class AppImageTests
                 BundleWith(null), PlanItem(input, work), new AppImageBundleConfiguration(), work, NullBundleLogger.Instance);
             Assert.True(File.Exists(Path.Combine(result.AppDirPath, "usr", "lib", "example-app", "ExampleApp")),
                 "regular payload files still stage");
-            Assert.True(!File.Exists(Path.Combine(result.AppDirPath, "usr", "lib", "example-app", "agent.sock")),
-                "a unix socket in the input must not reach the AppDir");
+            Assert.False(File.Exists(Path.Combine(result.AppDirPath, "usr", "lib", "example-app", "agent.sock")), "a unix socket in the input must not reach the AppDir");
             if (OperatingSystem.IsLinux())
             {
                 var artifact = new AppImageBundler().BuildAsync(
@@ -281,15 +278,13 @@ public static class AppImageTests
         {
             var artifact = new AppImageBundler().BuildAsync(
                 Configuration(input, output)).GetAwaiter().GetResult().Single();
-            Assert.True(Path.GetFileName(artifact.Path) == "example-app_1.0.0_amd64.AppImage",
-                "file name must follow <pkg>_<version>_<arch>.AppImage");
+            Assert.Equal("example-app_1.0.0_amd64.AppImage", Path.GetFileName(artifact.Path));
             var magic = File.ReadAllBytes(artifact.Path).Take(4).ToArray();
             Assert.True(magic[0] == 0x7F && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F',
                 "an .AppImage is an ELF");
             Assert.True(File.Exists(artifact.Path + ".sha256"), "sha256 sidecar must exist");
             var sidecar = File.ReadAllText(artifact.Path + ".sha256");
-            Assert.True(sidecar.Contains(Sha256(File.ReadAllBytes(artifact.Path))),
-                "sidecar must carry the artifact's sha256");
+            Assert.Contains(Sha256(File.ReadAllBytes(artifact.Path)), sidecar);
         }
         finally
         {
@@ -310,8 +305,7 @@ public static class AppImageTests
             var artifact = new AppImageBundler(
                 new AppImageBundleConfiguration { Architecture = "aarch64" }).BuildAsync(
                 Configuration(input, output)).GetAwaiter().GetResult().Single();
-            Assert.True(Path.GetFileName(artifact.Path) == "example-app_1.0.0_aarch64.AppImage",
-                "cross build must name the aarch64 file");
+            Assert.Equal("example-app_1.0.0_aarch64.AppImage", Path.GetFileName(artifact.Path));
             // ELF e_machine at bytes 18-19: 0xB7 0x00 = EM_AARCH64.
             var header = File.ReadAllBytes(artifact.Path);
             Assert.True(header[18] == 0xB7 && header[19] == 0x00,
@@ -470,8 +464,7 @@ public static class AppImageTests
             "The MSBuild task does not construct the .appimage backend.");
         var msbuildProject = File.ReadAllText(Path.Combine(
             RepositoryRoot(), "src", "Bundler.MSBuild", "Bundler.MSBuild.csproj"));
-        Assert.True(msbuildProject.Contains("DotNet.Bundler.AppImage.dll", StringComparison.Ordinal),
-            "The MSBuild package must ship DotNet.Bundler.AppImage.dll.");
+        Assert.Contains("DotNet.Bundler.AppImage.dll", msbuildProject);
     }
 
     static BundleConfiguration BundleWith(string? icon)

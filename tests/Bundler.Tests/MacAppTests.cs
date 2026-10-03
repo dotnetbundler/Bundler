@@ -12,7 +12,7 @@ public static class MacAppTests
     {
         var configuration = MacConfiguration(CreateInputDirectory(), formats: [PackageFormat.Pkg]);
         var plan = BundlePlanner.Create(configuration, checkFileSystem: false);
-        Assert.True(plan.Items.Count == 2, "A PKG plan should contain an app and a PKG step.");
+        Assert.Equal(2, plan.Items.Count);
         Assert.True(plan.Items[0].Format == PackageFormat.App && plan.Items[0].Intermediate,
             "The intermediate app step must come first.");
         Assert.True(plan.Items[1].Format == PackageFormat.Pkg && !plan.Items[1].Intermediate,
@@ -24,8 +24,7 @@ public static class MacAppTests
     {
         var configuration = MacConfiguration(CreateInputDirectory(), rid: "win-x64", formats: [PackageFormat.Pkg]);
         var issues = BundleConfigurationValidator.Validate(configuration, checkFileSystem: false);
-        Assert.True(issues.Any(issue => issue.Path.EndsWith("formats", StringComparison.Ordinal)),
-            "PKG must be rejected for a Windows target.");
+        Assert.Contains(issues, issue => issue.Path.EndsWith("formats", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -37,12 +36,10 @@ public static class MacAppTests
         {
             var artifacts = await new MacAppBundler()
                 .BuildAsync(MacConfiguration(input, output));
-            Assert.True(artifacts.Count == 1, "A single .app artifact is expected.");
-            var appPath = artifacts[0].Path;
-            Assert.True(artifacts[0].Format == PackageFormat.App, "The artifact format must be App.");
-            Assert.True(Path.GetFileName(appPath) == "ExampleApp.app", "The bundle must be named '<ProductName>.app'.");
-            Assert.True(appPath.EndsWith(Path.Combine("osx-arm64", "app", "ExampleApp.app"), StringComparison.Ordinal),
-                "The artifact must land in artifacts/<rid>/app/.");
+            var appPath = Assert.Single(artifacts).Path;
+            Assert.Equal(PackageFormat.App, artifacts[0].Format);
+            Assert.Equal("ExampleApp.app", Path.GetFileName(appPath));
+            Assert.EndsWith(Path.Combine("osx-arm64", "app", "ExampleApp.app"), appPath);
             foreach (var required in new[]
                      {
                          "Contents/Info.plist", "Contents/PkgInfo",
@@ -53,8 +50,7 @@ public static class MacAppTests
                 var path = Path.Combine(appPath, required.Replace('/', Path.DirectorySeparatorChar));
                 Assert.True(File.Exists(path) || Directory.Exists(path), $"Missing bundle entry: {required}");
             }
-            Assert.True(File.ReadAllText(Path.Combine(appPath, "Contents", "PkgInfo")) == "APPL????",
-                "PkgInfo must contain 'APPL????'.");
+            Assert.Equal("APPL????", File.ReadAllText(Path.Combine(appPath, "Contents", "PkgInfo")));
         }
         finally
         {
@@ -72,19 +68,18 @@ public static class MacAppTests
             var artifacts = await new MacAppBundler().BuildAsync(MacConfiguration(input, output));
             var values = InfoPlist.ReadStringValues(
                 Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
-            Assert.True(values["CFBundleIdentifier"] == "com.example.app", "CFBundleIdentifier mismatch.");
+            Assert.Equal("com.example.app", values["CFBundleIdentifier"]);
             Assert.True(values["CFBundleName"] == "ExampleApp" && values["CFBundleDisplayName"] == "ExampleApp",
                 "Name keys must default to the product name.");
-            Assert.True(values["CFBundleExecutable"] == "ExampleApp", "CFBundleExecutable mismatch.");
-            Assert.True(values["CFBundlePackageType"] == "APPL", "CFBundlePackageType must be APPL.");
+            Assert.Equal("ExampleApp", values["CFBundleExecutable"]);
+            Assert.Equal("APPL", values["CFBundlePackageType"]);
             Assert.True(values["CFBundleShortVersionString"] == "1.0.0" && values["CFBundleVersion"] == "1.0.0",
                 "Both version keys must default to the package version.");
             Assert.True(values["CFBundleSignature"] == "????" && values["CFBundleInfoDictionaryVersion"] == "6.0" &&
                    values["NSHighResolutionCapable"] == "true",
                 "InfoDictionaryVersion/signature/high-resolution keys mismatch.");
-            Assert.True(!values.ContainsKey("LSMinimumSystemVersion"),
-                "LSMinimumSystemVersion must not be written unless configured.");
-            Assert.True(!values.ContainsKey("CFBundleIconFile"), "No icon key without icon input.");
+            Assert.False(values.ContainsKey("LSMinimumSystemVersion"), "LSMinimumSystemVersion must not be written unless configured.");
+            Assert.False(values.ContainsKey("CFBundleIconFile"), "No icon key without icon input.");
         }
         finally
         {
@@ -114,8 +109,8 @@ public static class MacAppTests
                    values["CFBundleDisplayName"] == "Long Display Name", "Name overrides must be honored.");
             Assert.True(values["CFBundleShortVersionString"] == "2.0" && values["CFBundleVersion"] == "2026.9.1",
                 "Version overrides must be honored.");
-            Assert.True(values["LSMinimumSystemVersion"] == "11.0", "Configured minimum system must be written.");
-            Assert.True(values["LSApplicationCategoryType"] == "public.app-category.utilities", "Category mismatch.");
+            Assert.Equal("11.0", values["LSMinimumSystemVersion"]);
+            Assert.Equal("public.app-category.utilities", values["LSApplicationCategoryType"]);
         }
         finally
         {
@@ -346,12 +341,12 @@ public static class MacAppTests
             var iconPath = Path.Combine(artifacts[0].Path, "Contents", "Resources", "AppIcon.icns");
             Assert.True(File.Exists(iconPath), "The synthesized .icns icon is missing.");
             var icns = File.ReadAllBytes(iconPath);
-            Assert.True(Encoding.ASCII.GetString(icns, 0, 4) == "icns", "The icon is not an icns container.");
+            Assert.Equal("icns", Encoding.ASCII.GetString(icns, 0, 4));
             var firstChunk = Encoding.ASCII.GetString(icns, 8, 4);
             Assert.True(firstChunk == "ic07" || firstChunk == "ic08", "Unexpected first icns chunk type.");
             var values = InfoPlist.ReadStringValues(
                 Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
-            Assert.True(values["CFBundleIconFile"] == "AppIcon.icns", "CFBundleIconFile mismatch.");
+            Assert.Equal("AppIcon.icns", values["CFBundleIconFile"]);
         }
         finally
         {
@@ -405,22 +400,18 @@ public static class MacAppTests
                 ]));
             var plist = InfoPlist.ReadDictionary(Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
             var docTypes = (List<object>)plist["CFBundleDocumentTypes"];
-            Assert.True(docTypes.Count == 2, "One CFBundleDocumentTypes entry per association is expected.");
+            Assert.Equal(2, docTypes.Count);
             var first = (Dictionary<string, object>)docTypes[0];
-            Assert.True(((List<object>)first["CFBundleTypeExtensions"]).SequenceEqual(["txt", "xyz"]),
-                "Extensions keep their configured order with the leading dot stripped.");
-            Assert.True((string)first["CFBundleTypeName"] == "Document", "Configured CFBundleTypeName must win.");
+            Assert.Equal(((List<object>)first["CFBundleTypeExtensions"]), ["txt", "xyz"]);
+            Assert.Equal("Document", (string)first["CFBundleTypeName"]);
             Assert.True((string)first["CFBundleTypeRole"] == "Editor" && (string)first["LSHandlerRank"] == "Default",
                 "Shared associations default to Editor/Default.");
             var contentTypes = (List<object>)first["LSItemContentTypes"];
-            Assert.True(contentTypes.Contains("public.plain-text"), ".txt must infer public.plain-text.");
-            Assert.True(!contentTypes.Any(value => (string)value == "xyz"),
-                "Unknown extensions must not appear as content types.");
+            Assert.Contains("public.plain-text", contentTypes);
+            Assert.False(contentTypes.Any(value => (string)value == "xyz"), "Unknown extensions must not appear as content types.");
             var second = (Dictionary<string, object>)docTypes[1];
-            Assert.True(((List<object>)second["LSItemContentTypes"]).Contains("public.png"),
-                ".png must infer public.png.");
-            Assert.True(!plist.ContainsKey("UTExportedTypeDeclarations"),
-                "Shared associations without an exported type emit no UTExportedTypeDeclarations.");
+            Assert.Contains("public.png", ((List<object>)second["LSItemContentTypes"]));
+            Assert.False(plist.ContainsKey("UTExportedTypeDeclarations"), "Shared associations without an exported type emit no UTExportedTypeDeclarations.");
         }
         finally
         {
@@ -465,35 +456,25 @@ public static class MacAppTests
                 ]));
             var plist = InfoPlist.ReadDictionary(Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
             var docTypes = (List<object>)plist["CFBundleDocumentTypes"];
-            Assert.True(docTypes.Count == 2,
-                "The mac override must absorb the shared association instead of duplicating it.");
+            Assert.Equal(2, docTypes.Count);
             var merged = (Dictionary<string, object>)docTypes[0];
-            Assert.True((string)merged["CFBundleTypeName"] == "ABC File",
-                "The shared association name fills the mac entry when unset.");
+            Assert.Equal("ABC File", (string)merged["CFBundleTypeName"]);
             Assert.True((string)merged["CFBundleTypeRole"] == "Viewer" &&
                    (string)merged["LSHandlerRank"] == "Owner",
                 "mac-specific role/rank must be honored.");
             var contentTypes = (List<object>)merged["LSItemContentTypes"];
-            Assert.True(contentTypes.SequenceEqual(["com.example.abc"]),
-                "An exported UTI replaces inferred content types.");
+            Assert.Equal(contentTypes, ["com.example.abc"]);
             var exported = (List<object>)plist["UTExportedTypeDeclarations"];
             var declaration = (Dictionary<string, object>)exported[0];
-            Assert.True((string)declaration["UTTypeIdentifier"] == "com.example.abc",
-                "UTTypeIdentifier mismatch.");
-            Assert.True((string)declaration["UTTypeDescription"] == "ABC document",
-                "The shared description feeds UTTypeDescription.");
-            Assert.True(((List<object>)declaration["UTTypeConformsTo"]).SequenceEqual(["public.data"]),
-                "UTTypeConformsTo mismatch.");
+            Assert.Equal("com.example.abc", (string)declaration["UTTypeIdentifier"]);
+            Assert.Equal("ABC document", (string)declaration["UTTypeDescription"]);
+            Assert.Equal(((List<object>)declaration["UTTypeConformsTo"]), ["public.data"]);
             var tags = (Dictionary<string, object>)declaration["UTTypeTagSpecification"];
-            Assert.True(((List<object>)tags["public.filename-extension"]).SequenceEqual(["abc"]),
-                "The exported UTI must tag the extension.");
-            Assert.True((string)tags["public.mime-type"] == "application/x-abc",
-                "The shared MIME type feeds public.mime-type.");
+            Assert.Equal(((List<object>)tags["public.filename-extension"]), ["abc"]);
+            Assert.Equal("application/x-abc", (string)tags["public.mime-type"]);
             var standalone = (Dictionary<string, object>)docTypes[1];
-            Assert.True(!standalone.ContainsKey("CFBundleTypeExtensions"),
-                "ContentTypes-only entries emit no extension list.");
-            Assert.True((string)standalone["CFBundleTypeName"] == "Any Text",
-                "Standalone entries keep their configured name.");
+            Assert.False(standalone.ContainsKey("CFBundleTypeExtensions"), "ContentTypes-only entries emit no extension list.");
+            Assert.Equal("Any Text", (string)standalone["CFBundleTypeName"]);
         }
         finally
         {
@@ -567,13 +548,12 @@ public static class MacAppTests
                 ]));
             var plist = InfoPlist.ReadDictionary(Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
             var urlTypes = (List<object>)plist["CFBundleURLTypes"];
-            Assert.True(urlTypes.Count == 2, "The mac override merges into the shared URL protocol.");
+            Assert.Equal(2, urlTypes.Count);
             var merged = (Dictionary<string, object>)urlTypes[0];
-            Assert.True(((List<object>)merged["CFBundleURLSchemes"]).SequenceEqual(["myapp"]),
-                "Merged URL types keep the scheme list.");
+            Assert.Equal(((List<object>)merged["CFBundleURLSchemes"]), ["myapp"]);
             Assert.True((string)merged["CFBundleURLName"] == "MyApp Link",
                 "The shared URL name must be preserved.");
-            Assert.True((string)merged["CFBundleTypeRole"] == "Viewer", "Role override must apply.");
+            Assert.Equal("Viewer", (string)merged["CFBundleTypeRole"]);
             var standalone = (Dictionary<string, object>)urlTypes[1];
             Assert.True((string)standalone["CFBundleURLName"] == "com.example.app helper",
                 "CFBundleURLName defaults to '<bundle-id> <first-scheme>'.");
@@ -600,9 +580,7 @@ public static class MacAppTests
         try
         {
             var plain = await new MacAppBundler().BuildAsync(MacConfiguration(input, output));
-            Assert.True(!InfoPlist.ReadDictionary(Path.Combine(plain[0].Path, "Contents", "Info.plist"))
-                    .ContainsKey("NSAppTransportSecurity"),
-                "ATS must stay strict unless an exception domain is configured.");
+            Assert.False(InfoPlist.ReadDictionary(Path.Combine(plain[0].Path, "Contents", "Info.plist")) .ContainsKey("NSAppTransportSecurity"), "ATS must stay strict unless an exception domain is configured.");
             var relaxed = await new MacAppBundler(new MacAppBundleConfiguration
             {
                 ExceptionDomain = "dev.example.com"
@@ -643,13 +621,11 @@ public static class MacAppTests
                 .BuildAsync(MacConfiguration(input, output));
             var plist = InfoPlist.ReadDictionary(Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
             Assert.True(plist["NSSupportsSuddenTermination"] is true, "Caller boolean keys must merge.");
-            Assert.True((string)plist["CFBundleDisplayName"] == "Caller Name",
-                "Caller plist wins over generated non-identity keys.");
+            Assert.Equal("Caller Name", (string)plist["CFBundleDisplayName"]);
             var flags = (Dictionary<string, object>)plist["MyAppFlags"];
             Assert.True(flags["Experimental"] is true && (long)flags["Level"] == 3,
                 "Nested caller dicts must merge typed.");
-            Assert.True((string)plist["CFBundleIdentifier"] == "com.example.app",
-                "Identity keys survive the merge.");
+            Assert.Equal("com.example.app", (string)plist["CFBundleIdentifier"]);
 
             var file = Path.Combine(input, "custom.plist");
             File.WriteAllText(file, "<plist version=\"1.0\"><dict><key>MyFileKey</key><string>v</string></dict></plist>");
@@ -718,10 +694,10 @@ public static class MacAppTests
                 "Fat binaries satisfy both osx targets.");
             var thin = await new MacAppBundler().BuildAsync(MacConfiguration(
                 arm64Input, Path.Combine(output, "thin"), rid: "osx-arm64"));
-            Assert.True(thin.Count == 1, "A matching thin binary must build.");
+            Assert.Single(thin);
             var universal = await new MacAppBundler().BuildAsync(MacConfiguration(
                 fatInput, Path.Combine(output, "universal"), rid: "osx"));
-            Assert.True(universal.Count == 1, "A fully-fat payload must build for the osx target.");
+            Assert.Single(universal);
             await AssertThrows<InvalidDataException>(
                 () => new MacAppBundler().BuildAsync(MacConfiguration(
                     arm64Input, Path.Combine(output, "osx-thin"), rid: "osx")),
@@ -779,8 +755,7 @@ public static class MacAppTests
                 Assert.True(slice.Offset > 0 && slice.Size == 64,
                     "Fat slice records must point at real slice content.");
             }
-            Assert.True(File.ReadAllBytes(Path.Combine(output, "ExampleApp.dll")).SequenceEqual(shared),
-                "Identical managed files must merge to a single copy.");
+            Assert.Equal(File.ReadAllBytes(Path.Combine(output, "ExampleApp.dll")), shared);
             Assert.True(File.Exists(Path.Combine(output, "arm64-only.txt")),
                 "Files present on one side only must pass through.");
 
@@ -830,8 +805,7 @@ public static class MacAppTests
             Assert.True(File.Exists(Path.Combine(artifacts[0].Path, "Contents", "Resources", "Assets.car")),
                 "A .car input must be copied to Resources/Assets.car.");
             var plist = InfoPlist.ReadDictionary(Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
-            Assert.True(!plist.ContainsKey("CFBundleIconFile"),
-                "A .car-only icon set writes no CFBundleIconFile.");
+            Assert.False(plist.ContainsKey("CFBundleIconFile"), "A .car-only icon set writes no CFBundleIconFile.");
             var iconDir = Path.Combine(assets, "Icon.icon");
             Directory.CreateDirectory(iconDir);
             File.WriteAllText(Path.Combine(iconDir, "icon.json"), "{}");
@@ -845,8 +819,7 @@ public static class MacAppTests
             // otherwise the backend must degrade with a warning instead of failing the build.
             Assert.True(hasCar || logger.Messages.Any(m => m.Contains("Skipping Assets.car")),
                 "A rejected .icon input must degrade with an Assets.car warning.");
-            Assert.True(degradedPlist.ContainsKey("CFBundleIconName") == hasCar,
-                "CFBundleIconName tracks a produced Assets.car.");
+            Assert.Equal(hasCar, degradedPlist.ContainsKey("CFBundleIconName"));
             var notADir = Path.Combine(assets, "NotADir.icon");
             File.WriteAllBytes(notADir, [1]);
             await AssertThrows<ArgumentException>(
@@ -996,16 +969,14 @@ public static class MacAppTests
             Assert.True(innerText.Contains("--force") && innerText.Contains("--sign") &&
                    innerText.Contains("--options runtime") && innerText.Contains("--timestamp"),
                 "Nested signing must force-sign with the hardened runtime and a secure timestamp.");
-            Assert.True(!innerText.Contains("--entitlements"),
-                "Nested Mach-O files must not receive entitlements.");
+            Assert.DoesNotContain("--entitlements", innerText);
             var bundle = MacAppSigning.CodesignArguments(signing.Identity, signing, true, "/tmp/app");
             var bundleText = string.Join(' ', bundle);
             Assert.True(bundleText.Contains("--entitlements") &&
                    bundleText.Contains(Path.GetFullPath(entitlements)),
                 "The bundle signature must carry the configured entitlements.");
             var adhoc = MacAppSigning.CodesignArguments("-", new MacAppSigningConfiguration(), false, "/tmp/app");
-            Assert.True(string.Join(' ', adhoc).Contains("--timestamp=none"),
-                "Ad-hoc signatures must disable secure timestamps.");
+            Assert.Contains("--timestamp=none", string.Join(' ', adhoc));
         }
         finally
         {
@@ -1094,19 +1065,16 @@ public static class MacAppTests
                 "xattr -crs must run once on the .app before signing.");
             // codesign calls: nested files under Contents/MacOS (the managed ExampleApp.dll is
             // signed as nested code even though it is not Mach-O) + main executable + bundle + verify.
-            Assert.True(codesign.Count == 4,
-                $"Expected nested + main executable + bundle + verify calls, got {codesign.Count}.");
+            Assert.Equal(4, codesign.Count);
             Assert.True(codesign[0].Arguments.Last().EndsWith("/Contents/MacOS/ExampleApp.dll", StringComparison.Ordinal) &&
                    !string.Join(' ', codesign[0].Arguments).Contains("--entitlements"),
                 "Nested payload files are signed first, without entitlements.");
             var bundleArgs = string.Join(' ', codesign[2].Arguments);
-            Assert.True(codesign[1].Arguments.Last().EndsWith("/Contents/MacOS/ExampleApp", StringComparison.Ordinal),
-                "The main executable is signed before the bundle.");
+            Assert.EndsWith("/Contents/MacOS/ExampleApp", codesign[1].Arguments.Last());
             Assert.True(codesign[2].Arguments.Last().EndsWith(".app", StringComparison.Ordinal) &&
                    bundleArgs.Contains("--entitlements"),
                 "The bundle is signed after the executable and carries entitlements.");
-            Assert.True(codesign[3].Arguments.Take(3).SequenceEqual(new[] { "--verify", "--deep", "--strict" }),
-                "A --verify --deep --strict pass must follow signing.");
+            Assert.Equal(new[] { "--verify", "--deep", "--strict" }, codesign[3].Arguments.Take(3));
             Assert.True(requests.Any(r => r.Executable == "codesign") &&
                    !requests.Any(r => r.Executable == "spctl"),
                 "Ad-hoc signatures skip the spctl assessment.");
@@ -1201,8 +1169,7 @@ public static class MacAppTests
                     Signing = new MacAppSigningConfiguration { Identity = "-" }
                 }).BuildAsync(MacConfiguration(input, output)),
                 "A failed --verify must fail the build.");
-            Assert.True(!Directory.Exists(Path.Combine(output, "ExampleApp.app")),
-                "A failed signing run must not leave a pseudo-success .app at the output path.");
+            Assert.False(Directory.Exists(Path.Combine(output, "ExampleApp.app")), "A failed signing run must not leave a pseudo-success .app at the output path.");
         }
         finally
         {
@@ -1223,9 +1190,9 @@ public static class MacAppTests
             var first = await bundler.BuildAsync(configuration);
             var firstPlist = File.ReadAllBytes(Path.Combine(first[0].Path, "Contents", "Info.plist"));
             var second = await bundler.BuildAsync(configuration);
-            Assert.True(second[0].Path == first[0].Path, "Rebuilding must replace the existing .app in place.");
+            Assert.Equal(first[0].Path, second[0].Path);
             var secondPlist = File.ReadAllBytes(Path.Combine(second[0].Path, "Contents", "Info.plist"));
-            Assert.True(firstPlist.SequenceEqual(secondPlist), "A rebuilt Info.plist differs from the first build.");
+            Assert.Equal(firstPlist, secondPlist);
             var firstFiles = Directory.EnumerateFiles(first[0].Path, "*", SearchOption.AllDirectories)
                 .Select(path => path.Substring(first[0].Path.Length))
                 .OrderBy(path => path, StringComparer.Ordinal)
@@ -1234,7 +1201,7 @@ public static class MacAppTests
                 .Select(path => path.Substring(second[0].Path.Length))
                 .OrderBy(path => path, StringComparer.Ordinal)
                 .ToArray();
-            Assert.True(firstFiles.SequenceEqual(secondFiles), "A rebuilt .app has a different file set.");
+            Assert.Equal(firstFiles, secondFiles);
         }
         finally
         {
@@ -1254,16 +1221,14 @@ public static class MacAppTests
                      "MacAppExceptionDomain", "MacAppInfoPlistFile", "MacAppInfoPlistXml"
                  })
         {
-            Assert.True(targets.Contains(property + "=\"$(Bundler" + property + ")\"", StringComparison.Ordinal),
-                $"MSBuild does not map Bundler{property} to the task.");
+            Assert.Contains(property + "=\"$(Bundler" + property + ")\"", targets);
         }
         Assert.True(targets.Contains("MacContents=\"@(BundlerMacContent)\"", StringComparison.Ordinal) &&
                targets.Contains("MacFrameworks=\"@(BundlerMacFramework)\"", StringComparison.Ordinal) &&
                targets.Contains("MacDocumentTypes=\"@(BundlerMacDocumentType)\"", StringComparison.Ordinal) &&
                targets.Contains("MacUrlTypes=\"@(BundlerMacUrlType)\"", StringComparison.Ordinal),
             "MSBuild does not map the BundlerMac* item groups.");
-        Assert.True(targets.Contains("StartsWith('osx-')", StringComparison.Ordinal),
-            "MSBuild must default the main executable name without '.exe' for osx targets.");
+        Assert.Contains("StartsWith('osx-')", targets);
         Assert.True(task.Contains("new MacAppBundler(", StringComparison.Ordinal) &&
                task.Contains("MacAppContentConfiguration", StringComparison.Ordinal),
             "The MSBuild task does not construct the .app backend.");
@@ -1284,8 +1249,7 @@ public static class MacAppTests
             var artifacts = await new MacAppBundler().BuildAsync(MacConfiguration(input, output));
             var executable = Path.Combine(artifacts[0].Path, "Contents", "MacOS", "ExampleApp");
             var mode = File.GetUnixFileMode(executable);
-            Assert.True((mode & UnixFileMode.UserExecute) == UnixFileMode.UserExecute,
-                "The Mach-O main executable lost its executable bit.");
+            Assert.Equal(UnixFileMode.UserExecute, (mode & UnixFileMode.UserExecute));
             var payload = Path.Combine(artifacts[0].Path, "Contents", "MacOS", "ExampleApp.dll");
             Assert.True((File.GetUnixFileMode(payload) & UnixFileMode.UserExecute) == 0,
                 "Non-Mach-O payload files must not gain the executable bit.");
@@ -1307,8 +1271,7 @@ public static class MacAppTests
         {
             await new MacAppBundler(options: new MacAppBundlerOptions { Logger = logger })
                 .BuildAsync(MacConfiguration(input, output));
-            Assert.True(logger.Messages.Any(message => message.Contains("executable bit", StringComparison.Ordinal)),
-                "Windows hosts must warn about the missing executable bit.");
+            Assert.Contains(logger.Messages, message => message.Contains("executable bit", StringComparison.Ordinal));
         }
         finally
         {
@@ -1346,8 +1309,7 @@ public static class MacAppTests
                 UseShellExecute = false
             })!;
             process.WaitForExit();
-            Assert.True(process.ExitCode == 0,
-                $"plutil -lint failed on a typed plist (arrays/dicts/booleans): {process.StandardError.ReadToEnd()}");
+            Assert.Equal(0, process.ExitCode);
         }
         finally
         {
@@ -1425,8 +1387,7 @@ public static class MacAppTests
             var macos = Path.Combine(artifacts[0].Path, "Contents", "MacOS");
             Assert.True(File.Exists(Path.Combine(macos, "ExampleApp")),
                 "regular payload files still stage");
-            Assert.True(!File.Exists(Path.Combine(macos, "agent.sock")),
-                "a unix socket in the input must not reach the .app");
+            Assert.False(File.Exists(Path.Combine(macos, "agent.sock")), "a unix socket in the input must not reach the .app");
         }
         finally
         {

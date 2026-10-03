@@ -55,10 +55,8 @@ public static class RpmTests
             var unsignedOutput = output + "-unsigned";
             var unsigned = new RpmBundler(new RpmBundleConfiguration())
                 .BuildAsync(RpmConfiguration(input, unsignedOutput)).GetAwaiter().GetResult().Single();
-            Assert.True(!RpmPackageReader.Read(unsigned.Path).Signature.Tags.ContainsKey(1002),
-                "No RPMSIGTAG_PGP when signing is not configured.");
-            Assert.True(!RpmPackageReader.Read(unsigned.Path).Signature.Tags.ContainsKey(268),
-                "No RPMSIGTAG_RSA when signing is not configured.");
+            Assert.False(RpmPackageReader.Read(unsigned.Path).Signature.Tags.ContainsKey(1002), "No RPMSIGTAG_PGP when signing is not configured.");
+            Assert.False(RpmPackageReader.Read(unsigned.Path).Signature.Tags.ContainsKey(268), "No RPMSIGTAG_RSA when signing is not configured.");
             Cleanup(unsignedOutput);
         }
         finally
@@ -180,12 +178,10 @@ public static class RpmTests
             }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
             var package = RpmPackageReader.Read(artifact.Path);
             // Shebang stripped from body; interpreter comes from the shebang.
-            Assert.True(package.Main.Text(1023) == "echo hello\n",
-                "PREIN must carry the body without the shebang line.");
-            Assert.True(package.Main.Text(1085) == "/bin/bash",
-                "PREINPROG must come from the script's shebang.");
+            Assert.Equal("echo hello\n", package.Main.Text(1023));
+            Assert.Equal("/bin/bash", package.Main.Text(1085));
             // No shebang and no program -> /bin/sh default.
-            Assert.True(package.Main.Text(1024) == "echo post\n", "POSTIN body.");
+            Assert.Equal("echo post\n", package.Main.Text(1024));
             Assert.True(package.Main.Text(1086) == "/usr/bin/python3",
                 "Explicit *Program overrides the default interpreter.");
             // Unset scriptlets stay absent.
@@ -215,9 +211,7 @@ public static class RpmTests
                 PostInstallFile = postin
             }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
             var package = RpmPackageReader.Read(artifact.Path);
-            Assert.True(package.Payload.Any(e =>
-                    e.Path == "/usr/lib/systemd/system/example-app.service"),
-                "The unit must land under /usr/lib/systemd/system/<pkg>.service.");
+            Assert.Contains(package.Payload, e => e.Path == "/usr/lib/systemd/system/example-app.service");
             var post = package.Main.Text(1024);
             Assert.True(post.Contains("echo custom") && post.Contains("daemon-reload"),
                 "POSTIN must merge the caller body with the daemon-reload epilogue.");
@@ -364,27 +358,25 @@ public static class RpmTests
                 .BuildAsync(RpmConfiguration(input, output))
                 .GetAwaiter().GetResult().Single();
             var expectedName = "example-app-1.0.0-1.x86_64.rpm";
-            Assert.True(artifact.Path.EndsWith(
-                    Path.Combine("linux-x64", "rpm", expectedName), StringComparison.Ordinal),
-                $"Unexpected .rpm artifact path: {artifact.Path}");
+            Assert.EndsWith(Path.Combine("linux-x64", "rpm", expectedName), artifact.Path);
 
             var package = RpmPackageReader.Read(artifact.Path);
-            Assert.True(package.Main.Text(1000) == "example-app", "NAME tag must be the package name.");
-            Assert.True(package.Main.Text(1001) == "1.0.0", "VERSION tag must be '1.0.0'.");
-            Assert.True(package.Main.Text(1002) == "1", "RELEASE tag must be '1'.");
-            Assert.True(package.Main.Text(1021) == "linux", "OS tag must be 'linux'.");
-            Assert.True(package.Main.Text(1022) == "x86_64", "ARCH tag must be 'x86_64'.");
-            Assert.True(package.Main.Text(1124) == "cpio", "PAYLOADFORMAT must be 'cpio'.");
-            Assert.True(package.Main.Text(1125) == "gzip", "PAYLOADCOMPRESSOR must be 'gzip'.");
-            Assert.True(package.Main.Ints(5011).Single() == 8, "FILEDIGESTALGO must be sha256 (8).");
+            Assert.Equal("example-app", package.Main.Text(1000));
+            Assert.Equal("1.0.0", package.Main.Text(1001));
+            Assert.Equal("1", package.Main.Text(1002));
+            Assert.Equal("linux", package.Main.Text(1021));
+            Assert.Equal("x86_64", package.Main.Text(1022));
+            Assert.Equal("cpio", package.Main.Text(1124));
+            Assert.Equal("gzip", package.Main.Text(1125));
+            Assert.Equal(8, package.Main.Ints(5011).Single());
             Assert.True(package.Signature.Tag(1000) > 0, "RPMSIGTAG_SIZE must be present.");
             Assert.True(package.Signature.Tag(1007) > 0, "RPMSIGTAG_PAYLOADSIZE must be present.");
-            Assert.True(package.Signature.Text(273).Length == 64, "SHA256HEADER must be a hex digest.");
-            Assert.True(package.Signature.Text(269).Length == 40, "SHA1HEADER must be a hex digest.");
+            Assert.Equal(64, package.Signature.Text(273).Length);
+            Assert.Equal(40, package.Signature.Text(269).Length);
 
             // rpmlib self-dependencies.
             var requires = package.Main.Strings(1049);
-            Assert.True(requires.Contains("rpmlib(CompressedFileNames)"), "rpmlib deps must be declared.");
+            Assert.Contains("rpmlib(CompressedFileNames)", requires);
 
             // Self provides.
             var provides = package.Main.Strings(1047);
@@ -393,26 +385,24 @@ public static class RpmTests
 
             // Payload contents.
             var paths = package.Payload.Select(e => e.Path).ToArray();
-            Assert.True(paths.Contains("/usr/lib/example-app/ExampleApp"), "Payload must carry the executable.");
-            Assert.True(paths.Contains("/usr/bin/example-app"), "Payload must carry the bin symlink.");
+            Assert.Contains("/usr/lib/example-app/ExampleApp", paths);
+            Assert.Contains("/usr/bin/example-app", paths);
             var link = package.Payload.Single(e => e.Path == "/usr/bin/example-app");
-            Assert.True((link.Mode & 0xF000) == 0xA000, "The bin entry must be a symlink.");
+            Assert.Equal(0xA000, (link.Mode & 0xF000));
             Assert.True(Encoding.UTF8.GetString(link.Data) == "../lib/example-app/ExampleApp",
                 "The bin symlink must target the install root.");
             var exe = package.Payload.Single(e => e.Path == "/usr/lib/example-app/ExampleApp");
-            Assert.True((exe.Mode & 511) == 493 /* 0755 */, "The main executable must be 0755.");
-            Assert.True(Encoding.UTF8.GetString(exe.Data) == "fake executable", "Payload bytes must round-trip.");
+            Assert.Equal(493 /* 0755 */, (exe.Mode & 511));
+            Assert.Equal("fake executable", Encoding.UTF8.GetString(exe.Data));
 
             // File list consistency with cpio entries.
             var basenames = package.Main.Strings(1117);
             var dirnames = package.Main.Strings(1118);
             var dirIndexes = package.Main.Ints(1116);
             var fileModes = package.Main.Ints(1030);
-            Assert.True(basenames.Length == package.Payload.Count,
-                "Header file count must match the cpio entries.");
+            Assert.Equal(package.Payload.Count, basenames.Length);
             var expectedPaths = basenames.Select((b, i) => dirnames[dirIndexes[i]] + b).ToArray();
-            Assert.True(paths.SequenceEqual(expectedPaths),
-                "BASENAMES+DIRNAMES must reconstruct the payload paths.");
+            Assert.Equal(paths, expectedPaths);
             var digests = package.Main.Strings(1035);
             Assert.True(digests.SequenceEqual(package.Payload.Select(e =>
                 (e.Mode & 0xF000) == 0x4000 ? "" : Sha256(e.Data))),
@@ -471,16 +461,14 @@ public static class RpmTests
                 Architecture = "noarch",
                 InstallRoot = "/opt/custom"
             }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
-            Assert.True(artifact.Path.EndsWith("custom-name-9.9-7.el9.noarch.rpm", StringComparison.Ordinal),
-                $"Unexpected file name: {artifact.Path}");
+            Assert.EndsWith("custom-name-9.9-7.el9.noarch.rpm", artifact.Path);
             var package = RpmPackageReader.Read(artifact.Path);
-            Assert.True(package.Main.Text(1000) == "custom-name", "NAME override.");
+            Assert.Equal("custom-name", package.Main.Text(1000));
             Assert.True(package.Main.Text(1001) == "9.9" && package.Main.Text(1002) == "7.el9",
                 "Version/Release override.");
-            Assert.True(package.Main.Ints(1003).Single() == 2, "EPOCH override must land in tag 1003.");
-            Assert.True(package.Main.Text(1022) == "noarch", "ARCH override.");
-            Assert.True(package.Payload.Any(e => e.Path == "/opt/custom/ExampleApp"),
-                "InstallRoot override must move the payload.");
+            Assert.Equal(2, package.Main.Ints(1003).Single());
+            Assert.Equal("noarch", package.Main.Text(1022));
+            Assert.Contains(package.Payload, e => e.Path == "/opt/custom/ExampleApp");
         }
         finally
         {
@@ -559,8 +547,7 @@ public static class RpmTests
                 .BuildAsync(RpmConfiguration(input, output, productName: "My Cool_App!"))
                 .GetAwaiter().GetResult().Single();
             var package = RpmPackageReader.Read(artifact.Path);
-            Assert.True(package.Main.Text(1000) == "my-cool-app",
-                $"Product name must normalize to kebab-case (got {package.Main.Text(1000)}).");
+            Assert.Equal("my-cool-app", package.Main.Text(1000));
         }
         finally
         {
@@ -598,9 +585,8 @@ public static class RpmTests
             var package = RpmPackageReader.Read(artifact.Path);
             var resource = package.Payload.SingleOrDefault(
                 e => e.Path == "/usr/lib/example-app/docs/note.txt");
-            Assert.True(resource is not null, "Resources must stage under the install root.");
-            Assert.True(Encoding.UTF8.GetString(resource!.Data) == "hello rpm",
-                "Resource content must round-trip.");
+            Assert.NotNull(resource);
+            Assert.Equal("hello rpm", Encoding.UTF8.GetString(resource!.Data));
             Assert.True(package.Payload.Any(e => e.Path == "/usr/lib/example-app/docs" &&
                 (e.Mode & 0xF000) == 0x4000), "Resource parent dirs must be owned entries.");
         }
@@ -624,8 +610,8 @@ public static class RpmTests
             var package = RpmPackageReader.Read(artifact.Path);
             var dirs = package.Payload.Where(e => (e.Mode & 0xF000) == 0x4000)
                 .Select(e => e.Path).ToArray();
-            Assert.True(dirs.Contains("/usr/lib/example-app"), "The install root must be an owned dir entry.");
-            Assert.True(dirs.Contains("/usr/lib/example-app/sub"), "Nested dirs must be owned entries.");
+            Assert.Contains("/usr/lib/example-app", dirs);
+            Assert.Contains("/usr/lib/example-app/sub", dirs);
             Assert.True(!dirs.Contains("/usr") && !dirs.Contains("/usr/lib") && !dirs.Contains("/usr/bin"),
                 "System dirs above the install root must not be owned.");
         }
@@ -647,8 +633,7 @@ public static class RpmTests
                 .GetAwaiter().GetResult().Single();
             var next = new RpmBundler().BuildAsync(RpmConfiguration(input, second))
                 .GetAwaiter().GetResult().Single();
-            Assert.True(File.ReadAllBytes(first.Path).SequenceEqual(File.ReadAllBytes(next.Path)),
-                "Identical inputs must produce identical .rpm bytes.");
+            Assert.Equal(File.ReadAllBytes(first.Path), File.ReadAllBytes(next.Path));
         }
         finally
         {
@@ -670,8 +655,7 @@ public static class RpmTests
             Assert.True(parts.Length == 2 && parts[0].Length == 64 &&
                    parts[1] == Path.GetFileName(artifact.Path),
                 $"The sha256 sidecar must be '<digest>  <filename>', got '{sidecar}'.");
-            Assert.True(parts[0] == Sha256(File.ReadAllBytes(artifact.Path)),
-                "The sidecar digest must match the file bytes.");
+            Assert.Equal(Sha256(File.ReadAllBytes(artifact.Path)), parts[0]);
         }
         finally
         {
@@ -727,8 +711,7 @@ public static class RpmTests
                task.Contains("PackageFormat.Rpm", StringComparison.Ordinal),
             "The MSBuild task does not construct the .rpm backend.");
         var msbuildProject = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "Bundler.MSBuild.csproj"));
-        Assert.True(msbuildProject.Contains("DotNet.Bundler.Rpm.dll", StringComparison.Ordinal),
-            "The MSBuild package does not pack the Rpm backend assembly.");
+        Assert.Contains("DotNet.Bundler.Rpm.dll", msbuildProject);
         // The multi-format fanout is the RPM-1 contract.
         Assert.True(task.Contains("foreach (var format in formats.Distinct())", StringComparison.Ordinal) &&
                task.Contains("artifacts.AddRange(produced)", StringComparison.Ordinal),
@@ -782,8 +765,7 @@ public static class RpmTests
                    package.Main.Ints(5048).SequenceEqual(new[] { 4 | 8 }) &&
                    package.Main.Strings(5047).SequenceEqual(new[] { "0.5" }),
                 "Recommends must land in RECOMMENDNAME/VERSION/FLAGS (5046/5047/5048).");
-            Assert.True(package.Main.Strings(5049).SequenceEqual(new[] { "example-docs" }),
-                "Suggests must land in SUGGESTNAME (5049).");
+            Assert.Equal(new[] { "example-docs" }, package.Main.Strings(5049));
         }
         finally
         {
@@ -806,7 +788,7 @@ public static class RpmTests
             }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
             var package = RpmPackageReader.Read(artifact.Path);
             Assert.True(package.Main.Text(1014) == "MIT OR Apache-2.0", "LICENSE must take the SPDX string.");
-            Assert.True(package.Main.Text(1016) == "Applications/Engineering", "GROUP override.");
+            Assert.Equal("Applications/Engineering", package.Main.Text(1016));
             Assert.True(package.Main.Text(1020) == "https://example.com/rpm-override",
                 "URL must prefer the explicit knob over Homepage.");
 
@@ -821,8 +803,8 @@ public static class RpmTests
             var omitted = RpmPackageReader.Read(new RpmBundler(
                     new RpmBundleConfiguration { Url = "", Group = "" })
                 .BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single().Path);
-            Assert.True(omitted.Main.Strings(1020).Length == 0, "Url=\"\" must omit the URL tag.");
-            Assert.True(omitted.Main.Strings(1016).Length == 0, "Group=\"\" must omit the GROUP tag.");
+            Assert.Empty(omitted.Main.Strings(1020));
+            Assert.Empty(omitted.Main.Strings(1016));
         }
         finally
         {
@@ -877,14 +859,10 @@ public static class RpmTests
                    content.Contains("Categories=Utility;Development;") &&
                    content.Contains("MimeType=x-scheme-handler/example;"),
                 "The generated .desktop must carry exec/icon/categories/protocol mime entries.");
-            Assert.True(paths.Contains("/usr/share/icons/hicolor/48x48/apps/example-app.png"),
-                "A 48px PNG must land in the hicolor tree.");
-            Assert.True(paths.Contains("/usr/share/metainfo/example-app.metainfo.xml"),
-                "Metainfo must land in /usr/share/metainfo.");
-            Assert.True(paths.Contains("/usr/share/doc/example-app/changelog.gz"),
-                "The changelog must land gzipped in /usr/share/doc/<pkg>.");
-            Assert.True(paths.Contains("/usr/share/licenses/example-app/LICENSE.txt"),
-                "LicenseFile must land in /usr/share/licenses/<pkg>.");
+            Assert.Contains("/usr/share/icons/hicolor/48x48/apps/example-app.png", paths);
+            Assert.Contains("/usr/share/metainfo/example-app.metainfo.xml", paths);
+            Assert.Contains("/usr/share/doc/example-app/changelog.gz", paths);
+            Assert.Contains("/usr/share/licenses/example-app/LICENSE.txt", paths);
 
             // File flags: %license=128 on license files, %doc=2 on doc/man files.
             var basenames = package.Main.Strings(1117);
@@ -901,7 +879,7 @@ public static class RpmTests
                 }
                 else if (path == "/usr/share/doc/example-app/changelog.gz")
                 {
-                    Assert.True(flags[i] == 2, "Doc files must carry RPMFILE_DOC (2).");
+                    Assert.Equal(2, flags[i]);
                 }
             }
 
@@ -935,8 +913,7 @@ public static class RpmTests
                 .BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
             var package = RpmPackageReader.Read(artifact.Path);
             var desktop = package.Payload.Single(e => e.Path == "/usr/share/applications/example-app.desktop");
-            Assert.True(Encoding.UTF8.GetString(desktop.Data).Contains("Name=Custom"),
-                "DesktopFile must replace the generated .desktop verbatim.");
+            Assert.Contains("Name=Custom", Encoding.UTF8.GetString(desktop.Data));
         }
         finally
         {
@@ -959,8 +936,7 @@ public static class RpmTests
             }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
             var package = RpmPackageReader.Read(artifact.Path);
             var entry = package.Payload.Single(e => e.Path == "/etc/example/defaults.conf");
-            Assert.True(Encoding.UTF8.GetString(entry.Data) == "key=value",
-                "RpmFile entries must land at their absolute destination.");
+            Assert.Equal("key=value", Encoding.UTF8.GetString(entry.Data));
             var dirs = package.Payload.Where(e => (e.Mode & 0xF000) == 0x4000)
                 .Select(e => e.Path).ToArray();
             Assert.True(dirs.Contains("/etc/example") && !dirs.Contains("/etc"),
@@ -1035,10 +1011,8 @@ public static class RpmTests
                 .GetAwaiter().GetResult().Single();
             var package = RpmPackageReader.Read(artifact.Path);
             var paths = package.Payload.Select(e => e.Path).ToArray();
-            Assert.True(paths.Contains("/usr/lib/example-app/ExampleApp"),
-                "regular payload files must still be packaged");
-            Assert.True(!paths.Any(path => path.EndsWith("agent.sock", StringComparison.Ordinal)),
-                $"a unix socket must not be packaged: {string.Join(',', paths)}");
+            Assert.Contains("/usr/lib/example-app/ExampleApp", paths);
+            Assert.False(paths.Any(path => path.EndsWith("agent.sock", StringComparison.Ordinal)), $"a unix socket must not be packaged: {string.Join(',', paths)}");
         }
         finally
         {

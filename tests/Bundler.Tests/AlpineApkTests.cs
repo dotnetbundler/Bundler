@@ -46,43 +46,36 @@ public static class AlpineApkTests
                 .GetAwaiter().GetResult();
             var artifact = artifacts.Single();
             var expectedName = "example-app-1.0.0-r0.apk";
-            Assert.True(artifact.Path.EndsWith(
-                    Path.Combine("linux-musl-x64", "apk", expectedName), StringComparison.Ordinal),
-                $"Unexpected .apk artifact path: {artifact.Path}");
+            Assert.EndsWith(Path.Combine("linux-musl-x64", "apk", expectedName), artifact.Path);
 
             var apk = File.ReadAllBytes(artifact.Path);
             var starts = ApkPackageReader.GzipMemberOffsets(apk);
             var segments = ApkPackageReader.SplitGzipStreams(apk);
-            Assert.True(segments.Count == 2,
-                $"An unsigned .apk must hold exactly 2 gzip streams (control+data), got {segments.Count}.");
+            Assert.Equal(2, segments.Count);
             var dataGzipBytes = apk.Skip(starts[1]).ToArray();
 
             var control = ApkPackageReader.ReadTar(segments[0]);
             var data = ApkPackageReader.ReadTar(segments[1]);
 
             var pkginfo = control.SingleOrDefault(e => e.Name == ".PKGINFO");
-            Assert.True(pkginfo is not null, "The control segment lacks .PKGINFO.");
+            Assert.NotNull(pkginfo);
             Assert.True(control.All(e => !e.Name.StartsWith(".SIGN.", StringComparison.Ordinal)),
                 "An unsigned package must not contain .SIGN.* members.");
             var fields = PkgInfoFields(pkginfo!.Content);
-            Assert.True(fields["pkgname"] == "example-app", $"pkgname mismatch: {fields["pkgname"]}");
-            Assert.True(fields["pkgver"] == "1.0.0-r0", $"pkgver mismatch: {fields["pkgver"]}");
-            Assert.True(fields["pkgdesc"] == "Example application", $"pkgdesc mismatch: {fields["pkgdesc"]}");
-            Assert.True(fields["url"] == "https://example.com/app", $"url mismatch: {fields["url"]}");
-            Assert.True(fields["arch"] == "x86_64", $"arch mismatch: {fields["arch"]}");
-            Assert.True(fields["origin"] == "example-app", $"origin mismatch: {fields["origin"]}");
-            Assert.True(fields["builddate"] == "0", $"builddate must default to 0: {fields["builddate"]}");
-            Assert.True(fields["datahash"] == Sha256Hex(dataGzipBytes),
-                "datahash must be the sha256 of the data gzip stream.");
+            Assert.Equal("example-app", fields["pkgname"]);
+            Assert.Equal("1.0.0-r0", fields["pkgver"]);
+            Assert.Equal("Example application", fields["pkgdesc"]);
+            Assert.Equal("https://example.com/app", fields["url"]);
+            Assert.Equal("x86_64", fields["arch"]);
+            Assert.Equal("example-app", fields["origin"]);
+            Assert.Equal("0", fields["builddate"]);
+            Assert.Equal(Sha256Hex(dataGzipBytes), fields["datahash"]);
             var payloadSize = data.Where(e => e.TypeFlag == '0').Sum(e => (long)e.Content.Length);
-            Assert.True(fields["size"] == payloadSize.ToString(),
-                $"size must be the installed payload size: {fields["size"]} != {payloadSize}");
+            Assert.Equal(payloadSize.ToString(), fields["size"]);
 
             var names = data.Select(e => e.Name).ToArray();
-            Assert.True(names.Contains("usr/lib/example-app/ExampleApp"),
-                $"Payload lacks the main executable: {string.Join(',', names)}");
-            Assert.True(names.Contains("usr/lib/example-app/ExampleApp.dll"),
-                $"Payload lacks the library: {string.Join(',', names)}");
+            Assert.Contains("usr/lib/example-app/ExampleApp", names);
+            Assert.Contains("usr/lib/example-app/ExampleApp.dll", names);
             var exe = data.Single(e => e.Name == "usr/lib/example-app/ExampleApp");
             Assert.True(exe.Mode == 493,
                 $"The main executable must have mode 0755, got {Convert.ToString(exe.Mode, 8)}.");
@@ -115,8 +108,7 @@ public static class AlpineApkTests
 
             // Signature/control segments carry no trailing zero blocks; the data
             // segment ends the archive and keeps the two 512-byte zero records.
-            Assert.True(!EndsWithZeroBlocks(segments[0]),
-                "The control segment must not end with zero blocks.");
+            Assert.False(EndsWithZeroBlocks(segments[0]), "The control segment must not end with zero blocks.");
             Assert.True(EndsWithZeroBlocks(segments[1]),
                 "The data segment must end with the two 512-byte zero records.");
         }
@@ -144,8 +136,7 @@ public static class AlpineApkTests
                 BinLink = "custom-cli"
             }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
             var artifact = artifacts.Single();
-            Assert.True(artifact.Path.EndsWith("custom-pkg-2.5.0-r0.apk", StringComparison.Ordinal),
-                $"Override file name mismatch: {artifact.Path}");
+            Assert.EndsWith("custom-pkg-2.5.0-r0.apk", artifact.Path);
 
             var segments = ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifact.Path));
             var fields = PkgInfoFields(
@@ -155,11 +146,9 @@ public static class AlpineApkTests
                 fields["url"] == "https://example.com/custom",
                 $"Override fields missing: {string.Join(',', fields.Select(kv => kv.Key + '=' + kv.Value))}");
             var data = ApkPackageReader.ReadTar(segments[1]);
-            Assert.True(data.Any(e => e.Name == "usr/lib/custom-pkg/ExampleApp"),
-                "Payload must land under /usr/lib/<package-name>.");
+            Assert.Contains(data, e => e.Name == "usr/lib/custom-pkg/ExampleApp");
             var link = data.Single(e => e.Name == "usr/bin/custom-cli");
-            Assert.True(link.LinkTarget == "../lib/custom-pkg/ExampleApp",
-                $"BinLink target mismatch: {link.LinkTarget}");
+            Assert.Equal("../lib/custom-pkg/ExampleApp", link.LinkTarget);
         }
         finally
         {
@@ -178,8 +167,7 @@ public static class AlpineApkTests
                 .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
             var data = ApkPackageReader.ReadTar(
                 ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifacts.Single().Path))[1]);
-            Assert.True(!data.Any(e => e.Name.StartsWith("usr/bin", StringComparison.Ordinal)),
-                "An empty BinLink must not create a usr/bin entry.");
+            Assert.False(data.Any(e => e.Name.StartsWith("usr/bin", StringComparison.Ordinal)), "An empty BinLink must not create a usr/bin entry.");
         }
         finally
         {
@@ -230,8 +218,7 @@ public static class AlpineApkTests
         {
             var configuration = ApkConfiguration(input, output, productName: "My Fancy App!");
             var artifacts = new AlpineApkBundler().BuildAsync(configuration).GetAwaiter().GetResult();
-            Assert.True(artifacts.Single().Path.EndsWith("my-fancy-app-1.0.0-r0.apk", StringComparison.Ordinal),
-                $"Kebab-case name derivation failed: {artifacts.Single().Path}");
+            Assert.EndsWith("my-fancy-app-1.0.0-r0.apk", artifacts.Single().Path);
         }
         finally
         {
@@ -296,13 +283,9 @@ public static class AlpineApkTests
             // The matrix keeps the validator symmetric: apk on a glibc Linux
             // target is a configuration issue, not just a missing backend.
             var glibc = ApkConfiguration(input, rid: "linux-x64");
-            Assert.True(BundleConfigurationValidator.Validate(glibc, checkFileSystem: false)
-                    .Any(issue => issue.Path == "targets[0].formats"),
-                "The validator must reject AlpineApk on linux-x64.");
+            Assert.Contains(BundleConfigurationValidator.Validate(glibc, checkFileSystem: false), issue => issue.Path == "targets[0].formats");
             var musl = ApkConfiguration(input, rid: "linux-musl-arm64");
-            Assert.True(!BundleConfigurationValidator.Validate(musl, checkFileSystem: false)
-                    .Any(issue => issue.Path == "targets[0].formats"),
-                "The validator must accept AlpineApk on linux-musl-arm64.");
+            Assert.False(BundleConfigurationValidator.Validate(musl, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "The validator must accept AlpineApk on linux-musl-arm64.");
         }
         finally
         {
@@ -350,9 +333,7 @@ public static class AlpineApkTests
         {
             var first = new AlpineApkBundler().BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
             var second = new AlpineApkBundler().BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
-            Assert.True(File.ReadAllBytes(first.Single().Path).SequenceEqual(
-                    File.ReadAllBytes(second.Single().Path)),
-                "Two identical builds must produce byte-identical .apk files.");
+            Assert.Equal(File.ReadAllBytes(first.Single().Path), File.ReadAllBytes(second.Single().Path));
         }
         finally
         {
@@ -374,8 +355,7 @@ public static class AlpineApkTests
             var content = File.ReadAllText(sidecarPath);
             using var sha256 = SHA256.Create();
             var hash = Hex(sha256.ComputeHash(File.ReadAllBytes(artifact.Path)));
-            Assert.True(content == hash + "  " + Path.GetFileName(artifact.Path) + "\n",
-                $"Sidecar mismatch: {content}");
+            Assert.Equal(hash + "  " + Path.GetFileName(artifact.Path) + "\n", content);
         }
         finally
         {
@@ -387,16 +367,14 @@ public static class AlpineApkTests
     static void ParsesAlpineApkThroughCli()
     {
         var formats = CliProgram.ParseFormats("alpineapk,zip", "linux-musl-x64");
-        Assert.True(formats.SequenceEqual(new[] { PackageFormat.AlpineApk, PackageFormat.Zip }),
-            $"--formats alpineapk must parse: {string.Join(',', formats)}");
+        Assert.Equal(new[] { PackageFormat.AlpineApk, PackageFormat.Zip }, formats);
 
         var all = CliProgram.ParseFormats("all", "linux-musl-x64");
         Assert.True(all.Contains(PackageFormat.AlpineApk) && all.Contains(PackageFormat.Zip) &&
             all.Contains(PackageFormat.TarGz) && all.Contains(PackageFormat.AppImage) && all.Count == 4,
             $"musl 'all' must expand to zip/targz/alpineapk/appimage: {string.Join(',', all)}");
         var glibcAll = CliProgram.ParseFormats("all", "linux-x64");
-        Assert.True(!glibcAll.Contains(PackageFormat.AlpineApk),
-            "glibc 'all' must not include alpineapk.");
+        Assert.DoesNotContain(PackageFormat.AlpineApk, glibcAll);
 
         // plan output uses the 'apk' subdirectory name.
         var input = CreateInputDirectory();
@@ -455,8 +433,7 @@ public static class AlpineApkTests
                task.Contains("PackageFormat.AlpineApk", StringComparison.Ordinal),
             "The MSBuild task does not construct the .apk backend.");
         var msbuildProject = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "Bundler.MSBuild.csproj"));
-        Assert.True(msbuildProject.Contains("DotNet.Bundler.AlpineApk.dll", StringComparison.Ordinal),
-            "The MSBuild package does not pack the AlpineApk backend assembly.");
+        Assert.Contains("DotNet.Bundler.AlpineApk.dll", msbuildProject);
     }
 
     [Fact]
@@ -476,17 +453,16 @@ public static class AlpineApkTests
                 Triggers = ["/usr/share/example", "/usr/lib/example-triggers"],
                 ExtraPkgInfo = new Dictionary<string, string> { ["install_if"] = "example-gui" }
             }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single();
-            Assert.True(Path.GetFileName(artifact.Path) == "example-app-1.0.0-r3.apk",
-                $"Release must enter the file name: {artifact.Path}");
+            Assert.Equal("example-app-1.0.0-r3.apk", Path.GetFileName(artifact.Path));
 
             var control = ApkPackageReader.ReadTar(
                 ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifact.Path))[0]);
             var text = Encoding.UTF8.GetString(
                 control.Single(e => e.Name == ".PKGINFO").Content);
             var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            Assert.True(lines.Contains("pkgver = 1.0.0-r3"), "pkgver must carry the release.");
-            Assert.True(lines.Contains("license = MIT"), "license field missing.");
-            Assert.True(lines.Contains("builddate = 1700000000"), "builddate override missing.");
+            Assert.Contains("pkgver = 1.0.0-r3", lines);
+            Assert.Contains("license = MIT", lines);
+            Assert.Contains("builddate = 1700000000", lines);
             Assert.True(lines.Count(l => l == "depend = busybox" ||
                 l == "depend = so:libc.musl-x86_64.so.1>=1.2") == 2,
                 $"depend lines missing: {text}");
@@ -697,11 +673,10 @@ public static class AlpineApkTests
 
             var apk = File.ReadAllBytes(artifact.Path);
             var members = ApkPackageReader.GzipMemberOffsets(apk);
-            Assert.True(members.Count == 3,
-                $"A signed .apk must carry signature+control+data members: {members.Count}");
+            Assert.Equal(3, members.Count);
             var segments = ApkPackageReader.SplitGzipStreams(apk);
-            Assert.True(!EndsWithZeroBlocks(segments[0]), "The signature tar has no end-of-archive blocks.");
-            Assert.True(!EndsWithZeroBlocks(segments[1]), "The control tar has no end-of-archive blocks.");
+            Assert.False(EndsWithZeroBlocks(segments[0]), "The signature tar has no end-of-archive blocks.");
+            Assert.False(EndsWithZeroBlocks(segments[1]), "The control tar has no end-of-archive blocks.");
             Assert.True(EndsWithZeroBlocks(segments[2]), "The data tar keeps its end-of-archive blocks.");
 
             var sig = ApkPackageReader.ReadTar(segments[0]);
@@ -709,7 +684,7 @@ public static class AlpineApkTests
                 sig[0].TypeFlag == '0' && sig[0].Mode == 420,
                 $"Signature member mismatch: {string.Join(',', sig.Select(e => e.Name))}");
             var control = ApkPackageReader.ReadTar(segments[1]);
-            Assert.True(control.Any(e => e.Name == ".PKGINFO"), ".PKGINFO must follow the signature.");
+            Assert.Contains(control, e => e.Name == ".PKGINFO");
 
             // PKCS1v15 RSA-SHA1 over the raw control gzip stream.
             var controlGzip = apk.Skip(members[1]).Take(members[2] - members[1]).ToArray();
@@ -833,8 +808,7 @@ public static class AlpineApkTests
                 .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single().Path;
             var second = new AlpineApkBundler(settings)
                 .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single().Path;
-            Assert.True(File.ReadAllBytes(first).SequenceEqual(File.ReadAllBytes(second)),
-                "Signed .apk bytes must be deterministic.");
+            Assert.Equal(File.ReadAllBytes(first), File.ReadAllBytes(second));
         }
         finally
         {
