@@ -93,8 +93,10 @@ public sealed class AppImageFixture : IDisposable
             ProcessRunner.Run("gpg", ["--batch", "--gen-key", Path.Combine(SignDir, "keygen.txt")], env),
             "gpg key generation failed.");
         var secAsc = Path.Combine(SignDir, "sec.asc");
+        var passFile = Path.Combine(SignDir, "sign.pass");
+        File.WriteAllText(passFile, "bundler-sign-pass");
         ProcessRunner.AssertSuccess(ProcessRunner.Run("/bin/sh",
-            ["-c", $"gpg --batch --yes --pinentry-mode loopback --passphrase bundler-sign-pass --export-secret-keys --armor bundler-appimage-test@example.com > '{secAsc}'"], env),
+            ["-c", $"gpg --batch --yes --pinentry-mode loopback --passphrase-file '{passFile}' --export-secret-keys --armor bundler-appimage-test@example.com > '{secAsc}'"], env),
             "secret key export failed.");
         var pubAsc = Path.Combine(SignDir, "pub.asc");
         ProcessRunner.AssertSuccess(ProcessRunner.Run("/bin/sh",
@@ -105,8 +107,8 @@ public sealed class AppImageFixture : IDisposable
              "--import", pubAsc], env),
             "verify keyring import failed.");
         Publish("signed",
-            $"-p:BundlerTestAppImageSigningKeyFile={secAsc}",
-            "-p:BundlerTestAppImageSigningKeyPassphrase=bundler-sign-pass");
+            new Dictionary<string, string?> { ["BundlerTestAppImageSigningKeyPassphrase"] = "bundler-sign-pass" },
+            $"-p:BundlerTestAppImageSigningKeyFile={secAsc}");
         SignedImage = RequireImage(Ws.Combine("signed", "linux-x64", "appimage"));
     }
 
@@ -115,6 +117,15 @@ public sealed class AppImageFixture : IDisposable
             [$"-p:BundlerIntegrationOutput={Ws.Combine(name)}", "--packages", CacheDir,
              .. extraProperties],
             $"appimage fixture publish '{name}' failed", noRestore: false);
+
+    // 带 env 的 publish——口令类值走环境变量（MSBuild 自动导入为同名属性），
+    // 不进 argv：进程列表与失败日志都不回显。
+    public void Publish(string name, Dictionary<string, string?> environment,
+        params string[] extraProperties)
+        => Dotnet.Publish(FixtureProject, "Release",
+            [$"-p:BundlerIntegrationOutput={Ws.Combine(name)}", "--packages", CacheDir,
+             .. extraProperties],
+            $"appimage fixture publish '{name}' failed", noRestore: false, environment);
 
     private static string RequireImage(string dir, string pattern = "*.AppImage")
     {
@@ -393,8 +404,14 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
         var result = Dotnet.Run(
             ["publish", _f.FixtureProject, "-c", "Release",
              $"-p:BundlerIntegrationOutput={_f.Ws.Combine("half-sign")}",
-             "-p:BundlerTestAppImageSigningKeyPassphrase=orphan-pass",
-             "--packages", _f.CacheDir]);
+             "--packages", _f.CacheDir],
+            new ProcessRunner.Options
+            {
+                Environment = new Dictionary<string, string?>
+                {
+                    ["BundlerTestAppImageSigningKeyPassphrase"] = "orphan-pass",
+                },
+            });
         Assert.NotEqual(0, result.ExitCode);
     }
 

@@ -70,7 +70,8 @@ internal static class Dotnet
         => Checked(["restore", project, .. properties], what);
 
     public static ProcessRunner.Result Publish(string project, string configuration,
-        IEnumerable<string> properties, string what, bool noRestore = true)
+        IEnumerable<string> properties, string what, bool noRestore = true,
+        Dictionary<string, string?>? environment = null)
     {
         var args = new List<string> { "publish", project, "-c", configuration };
         if (noRestore)
@@ -78,7 +79,7 @@ internal static class Dotnet
             args.Add("--no-restore");
         }
         args.AddRange(properties);
-        return Checked(args, what);
+        return Checked(args, what, new ProcessRunner.Options { Environment = environment });
     }
 
     public static ProcessRunner.Result Test(string project, string configuration,

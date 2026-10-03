@@ -501,7 +501,6 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                          "多语言 开始菜单"),
                      TransactionDir, CommittedTransactionDir, UninstallTransactionDir,
                      CommittedUninstallTransactionDir,
-                     Path.GetDirectoryName(TransactionDir)!,
                      InstallRoot, UnicodeInstallDir, _f.Ws.Combine("多语言 安装目录"),
                      _f.Ws.Combine("same-name-external-process"), ReparseOutsideDir,
                      NsisContinuityDir, NsisOutOfScopeDir, MsiContinuityDefaultDir,
@@ -516,6 +515,9 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                 catch { /* 目录非空时由测试断言兜底 */ }
             }
         }
+        // transactions 父目录跨产品共享——只在已空时修剪，不动其他产品的事务记录。
+        try { Directory.Delete(Path.GetDirectoryName(TransactionDir)!); }
+        catch { /* 非空即有其他产品记录，保留 */ }
         MsiexecRemoveLegacy();
     }
 

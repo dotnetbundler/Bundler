@@ -108,6 +108,14 @@ public sealed class RpmFixture : IDisposable
              .. extraProperties],
             $"rpm fixture publish '{name}' failed", noRestore: false);
 
+    // 带 env 的 publish——口令类值走环境变量（MSBuild 自动导入为同名属性），不进 argv。
+    public void Publish(string name, Dictionary<string, string?> environment,
+        params string[] extraProperties)
+        => Dotnet.Publish(FixtureProject, "Release",
+            [$"-p:BundlerIntegrationOutput={Ws.Combine(name)}", "--packages", CacheDir,
+             .. extraProperties],
+            $"rpm fixture publish '{name}' failed", noRestore: false, environment);
+
     private static string RequireRpm(string dir, string pattern = "*.rpm")
     {
         var match = Directory.Exists(dir)
@@ -507,8 +515,10 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
             ProcessRunner.Run("gpg", ["--batch", "--gen-key", keygen], env),
             "gpg test key generation failed.");
         var secretAsc = Path.Combine(signDir, "signing-key.asc");
+        var passFile = Path.Combine(signDir, "sign.pass");
+        File.WriteAllText(passFile, "bundler-test-pass");
         var exportSecret = ProcessRunner.Run("/bin/sh",
-            ["-c", $"gpg --batch --yes --pinentry-mode loopback --passphrase bundler-test-pass --export-secret-keys --armor bundler-test@example.com > '{secretAsc}'"], env);
+            ["-c", $"gpg --batch --yes --pinentry-mode loopback --passphrase-file '{passFile}' --export-secret-keys --armor bundler-test@example.com > '{secretAsc}'"], env);
         ProcessRunner.AssertSuccess(exportSecret, "gpg secret key export failed.");
         var pubAsc = Path.Combine(signDir, "signing-key.pub.asc");
         var exportPub = ProcessRunner.Run("/bin/sh",
@@ -516,8 +526,8 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
         ProcessRunner.AssertSuccess(exportPub, "gpg public key export failed.");
 
         _f.Publish("signed",
-            $"-p:BundlerRpmSigningKeyFile={secretAsc}",
-            "-p:BundlerRpmSigningKeyPassphrase=bundler-test-pass");
+            new Dictionary<string, string?> { ["BundlerRpmSigningKeyPassphrase"] = "bundler-test-pass" },
+            $"-p:BundlerRpmSigningKeyFile={secretAsc}");
         var signedRpm = Directory.EnumerateFiles(_f.Ws.Combine("signed"), "*.rpm",
             SearchOption.AllDirectories).FirstOrDefault();
         Assert.NotNull(signedRpm);

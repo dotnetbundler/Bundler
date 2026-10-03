@@ -348,13 +348,15 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var marker = Path.Combine(home, ".bundler-pkg-postinstall-ran");
         File.Delete(marker);
-        var install = ProcessRunner.Run("installer",
-            ["-pkg", _f.ScriptsPkg, "-target", "CurrentUserHomeDirectory", "-dumplog"],
-            new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(10) });
-        ProcessRunner.AssertSuccess(install,
-            $"installer could not install the distribution pkg into the home domain.\n{install.StdOut}");
+        // installer 也必须进 try——失败时 finally 仍要恢复被隐藏的中间态 .app，
+        // 否则夹具共享产物保持隐藏，后续事实连锁找不到。
         try
         {
+            var install = ProcessRunner.Run("installer",
+                ["-pkg", _f.ScriptsPkg, "-target", "CurrentUserHomeDirectory", "-dumplog"],
+                new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(10) });
+            ProcessRunner.AssertSuccess(install,
+                $"installer could not install the distribution pkg into the home domain.\n{install.StdOut}");
             var homeApp = Path.Combine(home, "Applications", "Bundler Mac PKG Fixture.app");
             Assert.True(Directory.Exists(homeApp),
                 "The per-user install did not place the .app under ~/Applications.");
@@ -385,10 +387,22 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
             {
                 Directory.Delete(homeApp, recursive: true);
             }
+            // support 是通用目录名——只删收据登记的我们装的文件，目录仅空时才修剪，
+            // 不碰用户可能既有的同名目录内容。
             var support = Path.Combine(home, "Applications", "support");
+            var installed = ProcessRunner.Run("pkgutil",
+                ["--files", FixtureIdentifier, "--volume", home]);
+            foreach (var line in installed.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var rel = line.Trim();
+                if (!rel.StartsWith("support/", StringComparison.Ordinal)) continue;
+                var abs = Path.Combine(home, "Applications", rel);
+                if (File.Exists(abs)) File.Delete(abs);
+            }
             if (Directory.Exists(support))
             {
-                Directory.Delete(support, recursive: true);
+                try { Directory.Delete(support); }
+                catch { /* 目录非空：用户既有内容，保留 */ }
             }
             _f.RestoreIntermediateApps();
         }
@@ -424,10 +438,22 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
             {
                 Directory.Delete(homeApp, recursive: true);
             }
+            // support 是通用目录名——只删收据登记的我们装的文件，目录仅空时才修剪，
+            // 不碰用户可能既有的同名目录内容。
             var support = Path.Combine(home, "Applications", "support");
+            var installed = ProcessRunner.Run("pkgutil",
+                ["--files", FixtureIdentifier, "--volume", home]);
+            foreach (var line in installed.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var rel = line.Trim();
+                if (!rel.StartsWith("support/", StringComparison.Ordinal)) continue;
+                var abs = Path.Combine(home, "Applications", rel);
+                if (File.Exists(abs)) File.Delete(abs);
+            }
             if (Directory.Exists(support))
             {
-                Directory.Delete(support, recursive: true);
+                try { Directory.Delete(support); }
+                catch { /* 目录非空：用户既有内容，保留 */ }
             }
             _f.RestoreIntermediateApps();
         }
