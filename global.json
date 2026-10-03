@@ -1,0 +1,6 @@
+{
+  // dotnet test 走 Microsoft.Testing.Platform（xUnit v3 测试工程所需）
+  "test": {
+    "runner": "Microsoft.Testing.Platform"
+  }
+}

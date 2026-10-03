@@ -20,7 +20,7 @@ $legacyMsiProject = Join-Path $PSScriptRoot "LegacyMsiFixture\LegacyMsiFixture.w
 $legacyMsiPath = Join-Path $PSScriptRoot "LegacyMsiFixture\bin\$Configuration\LegacyMsiFixture.msi"
 $legacyMsiV2Project = Join-Path $PSScriptRoot "LegacyMsiFixtureV2\LegacyMsiFixtureV2.wixproj"
 $legacyMsiV2Path = Join-Path $PSScriptRoot "LegacyMsiFixtureV2\bin\$Configuration\LegacyMsiFixtureV2.msi"
-$apiFixtureProject = Join-Path $repositoryRoot "tests\Nsis.Api.PackageFixture\Nsis.Api.PackageFixture.csproj"
+$apiFixtureProject = Join-Path $repositoryRoot "tests\Bundler.ApiTests\Bundler.ApiTests.csproj"
 $packageCache = Join-Path $integrationRoot "packages"
 $bundleOutput = Join-Path $integrationRoot "bundle"
 $perMachineBundleOutput = Join-Path $integrationRoot "bundle-per-machine"
@@ -484,10 +484,11 @@ try {
     Remove-TestState
 
     $apiOutput = Join-Path $integrationRoot "standalone-api"
+    $env:NSIS_API_FIXTURE_OUTPUT = $apiOutput
+    $env:NSIS_API_FIXTURE_CACHE = Join-Path $integrationRoot "shared-tools"
     Invoke-Native "dotnet" @(
-        "run", "--project", $apiFixtureProject, "-c", $Configuration,
-        "-p:RestorePackagesPath=$packageCache",
-        "--", $apiOutput, (Join-Path $integrationRoot "shared-tools")
+        "test", $apiFixtureProject, "-c", $Configuration,
+        "--", "--filter-class", "NsisApiTests"
     )
     $apiInstaller = Join-Path $apiOutput "artifacts\win-x64\nsis\NSIS API Package Fixture-1.0.0-setup.exe"
     Assert-True (Test-Path -LiteralPath $apiInstaller) "Standalone NSIS API package did not create its installer."

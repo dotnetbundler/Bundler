@@ -12,7 +12,7 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 integration_root="$repo_root/artifacts/archive-integration"
 package_dir="$repo_root/artifacts/packages"
 fixture_project="$script_dir/Fixture/BundlerArchiveIntegrationFixture.csproj"
-api_fixture_project="$repo_root/tests/Archive.Api.PackageFixture/Archive.Api.PackageFixture.csproj"
+api_fixture_project="$repo_root/tests/Bundler.ApiTests/Bundler.ApiTests.csproj"
 package_cache="$integration_root/nuget-cache"
 extract_root="$integration_root/extract"
 identity="BundlerArchiveIntegration"
@@ -235,8 +235,10 @@ done
 
 log "== direct API consumption via DotNet.Bundler.Archive nupkg =="
 ARCHIVE_API_FIXTURE_OUTPUT="$integration_root/api" \
-    dotnet run --project "$api_fixture_project" -c Release \
-        --packages "$package_cache" | tee "$integration_root/api.log"
-grep -q "OK: " "$integration_root/api.log" || fail "API fixture did not produce archives."
+    dotnet test "$api_fixture_project" -c Release \
+        -- --filter-class "ArchiveApiTests" >"$integration_root/api.log"
+[[ -n "$(find "$integration_root/api/artifacts" -name '*.zip' -print -quit)" && \
+   -n "$(find "$integration_root/api/artifacts" -name '*.tar.gz' -print -quit)" ]] \
+    || fail "API fixture did not produce archives."
 
 log "== all archive integration assertions passed =="

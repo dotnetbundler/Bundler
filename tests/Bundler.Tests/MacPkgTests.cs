@@ -1,40 +1,10 @@
 using DotNet.Bundler;
 using DotNet.Bundler.MacPkg;
 
-internal static class MacPkgTests
+public static class MacPkgTests
 {
-    internal static IEnumerable<(string Name, Func<Task> Test)> Cases
-    {
-        get
-        {
-            yield return ("Rejects non-PKG formats", () => RunSync(RejectsNonPkgFormats));
-            yield return ("Rejects non-macOS hosts for PKG", () => RunSync(RejectsNonMacOsHost));
-            yield return ("Rejects a relative install location", () => RunSync(RejectsRelativeInstallLocation));
-            yield return ("Runs the pkgbuild chain on stubbed tools", RunsPkgbuildOnStubbedTools);
-            yield return ("Maps identifier/version/install-location overrides", MapsOverrides);
-            yield return ("Stages explicit payload items", StagesPayloadItems);
-            yield return ("Skips non-regular payload files", SkipsNonRegularPayloadFiles);
-            yield return ("Rejects a missing payload source", () => RunSync(MissingPayloadRejected));
-            yield return ("Rejects a build with no .app and no payload", () => RunSync(NoPayloadRejected));
-            yield return ("Leaves no .pkg artifact when pkgbuild fails", PkgbuildFailureLeavesNoArtifact);
-            yield return ("Maps .pkg settings through MSBuild", () => RunSync(MapsPkgSettingsThroughMsBuild));
-            yield return ("Upgrades to a distribution package when configured", DistributionUpgrade);
-            yield return ("Keeps the plain component package without distribution settings", NoDistributionByDefault);
-            yield return ("Declares the current-user-home domain", CurrentUserHomeDomain);
-            yield return ("Copies distribution page files into the resources directory", DistributionResources);
-            yield return ("Rejects a missing welcome page file", () => RunSync(MissingWelcomeRejected));
-            // MAC-PKG-3: signing, notarization, scripts knob.
-            yield return ("Signs the component package via pkgbuild --sign", SignsComponentPackage);
-            yield return ("Signs the distribution package via productsign", SignsDistributionPackage);
-            yield return ("Rejects ad-hoc identity for .pkg", () => RunSync(RejectsAdHocIdentity));
-            yield return ("Rejects mutually exclusive sign identity and certificate", () => RunSync(RejectsExclusiveSigning));
-            yield return ("Rejects notarization without signing", () => RunSync(RejectsNotarizeWithoutSigning));
-            yield return ("Passes --scripts to pkgbuild when configured", PassesScriptsToPkgbuild);
-            yield return ("Rejects a missing scripts directory", () => RunSync(MissingScriptsRejected));
-            yield return ("Notarizes the .pkg with notarytool and stapler", NotarizesPackage);
-        }
-    }
 
+    [Fact]
     static void RejectsNonPkgFormats()
     {
         var input = CreateInputDirectory();
@@ -51,7 +21,7 @@ internal static class MacPkgTests
             {
                 thrown = exception.Message.Contains("Pkg targets only");
             }
-            Assert(thrown, "A non-PKG target must be rejected with NotSupportedException.");
+            Assert.True(thrown, "A non-PKG target must be rejected with NotSupportedException.");
         }
         finally
         {
@@ -59,6 +29,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static void RejectsNonMacOsHost()
     {
         var input = CreateInputDirectory();
@@ -77,7 +48,7 @@ internal static class MacPkgTests
             {
                 thrown = exception.Message.Contains("macOS host");
             }
-            Assert(thrown, "PKG builds must be rejected off macOS hosts.");
+            Assert.True(thrown, "PKG builds must be rejected off macOS hosts.");
         }
         finally
         {
@@ -86,6 +57,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static void RejectsRelativeInstallLocation()
     {
         var input = CreateInputDirectory();
@@ -107,7 +79,7 @@ internal static class MacPkgTests
             {
                 thrown = exception.Message.Contains("absolute path");
             }
-            Assert(thrown, "A relative install location must be rejected.");
+            Assert.True(thrown, "A relative install location must be rejected.");
         }
         finally
         {
@@ -116,6 +88,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static async Task RunsPkgbuildOnStubbedTools()
     {
         var input = CreateInputDirectory();
@@ -143,29 +116,24 @@ internal static class MacPkgTests
         {
             var artifacts = await new MacPkgBundler()
                 .BuildAsync(PkgConfiguration(input, output));
-            Assert(artifacts.Count == 2,
-                $"A pkg request must produce the intermediate .app plus the .pkg, got {artifacts.Count}.");
+            Assert.Equal(2, artifacts.Count);
             var pkg = artifacts.Single(artifact => artifact.Format == PackageFormat.Pkg);
-            Assert(pkg.Path.EndsWith(Path.Combine("osx-arm64", "pkg", "ExampleApp.pkg"), StringComparison.Ordinal),
-                $"Unexpected .pkg artifact path: {pkg.Path}");
+            Assert.EndsWith(Path.Combine("osx-arm64", "pkg", "ExampleApp.pkg"), pkg.Path);
 
             var pkgbuild = requests.Single(request => request.Executable == "pkgbuild");
             var args = pkgbuild.Arguments.ToList();
-            Assert(args.Contains("--install-location") && args.Contains("--identifier") &&
+            Assert.True(args.Contains("--install-location") && args.Contains("--identifier") &&
                    args.Contains("--version") && args.Contains("--ownership"),
                 $"pkgbuild arguments must carry install-location/identifier/version/ownership: {string.Join(' ', args)}");
-            Assert(args[args.IndexOf("--install-location") + 1] == "/Applications",
+            Assert.True(args[args.IndexOf("--install-location") + 1] == "/Applications",
                 "The default install location must be /Applications.");
-            Assert(args[args.IndexOf("--identifier") + 1] == "com.example.app",
+            Assert.True(args[args.IndexOf("--identifier") + 1] == "com.example.app",
                 "The default identifier must come from the bundle Identifier.");
-            Assert(args[args.IndexOf("--version") + 1] == "1.0.0",
+            Assert.True(args[args.IndexOf("--version") + 1] == "1.0.0",
                 "The default version must come from the bundle Version.");
-            Assert(args[args.IndexOf("--ownership") + 1] == "recommended",
-                "pkgbuild must run with --ownership recommended.");
-            Assert(args[args.Count - 1] == pkg.Path,
-                "The pkgbuild output path must be the last argument.");
-            Assert(staged.Contains("ExampleApp.app"),
-                $"The intermediate .app must be staged in the payload root, got: {string.Join(',', staged)}");
+            Assert.Equal("recommended", args[args.IndexOf("--ownership") + 1]);
+            Assert.Equal(pkg.Path, args[args.Count - 1]);
+            Assert.Contains("ExampleApp.app", staged);
         }
         finally
         {
@@ -175,6 +143,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static async Task MapsOverrides()
     {
         var input = CreateInputDirectory();
@@ -204,12 +173,9 @@ internal static class MacPkgTests
                 })
                 .BuildAsync(PkgConfiguration(input, output));
             var args = requests.Single(request => request.Executable == "pkgbuild").Arguments.ToList();
-            Assert(args[args.IndexOf("--identifier") + 1] == "com.example.pkg.override",
-                "An explicit identifier must override the bundle Identifier.");
-            Assert(args[args.IndexOf("--version") + 1] == "2.5.1",
-                "An explicit version must override the bundle Version.");
-            Assert(args[args.IndexOf("--install-location") + 1] == "/usr/local",
-                "An explicit install location must reach --install-location.");
+            Assert.Equal("com.example.pkg.override", args[args.IndexOf("--identifier") + 1]);
+            Assert.Equal("2.5.1", args[args.IndexOf("--version") + 1]);
+            Assert.Equal("/usr/local", args[args.IndexOf("--install-location") + 1]);
         }
         finally
         {
@@ -219,6 +185,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static async Task StagesPayloadItems()
     {
         var input = CreateInputDirectory();
@@ -253,10 +220,9 @@ internal static class MacPkgTests
                     ]
                 })
                 .BuildAsync(PkgConfiguration(input, output));
-            Assert(staged.Any(path => path.Replace('\\', '/') == "support/helper.txt"),
+            Assert.True(staged.Any(path => path.Replace('\\', '/') == "support/helper.txt"),
                 $"The payload item must be staged at its destination, got: {string.Join(',', staged)}");
-            Assert(staged.Any(path => path.Contains("ExampleApp.app")),
-                "The intermediate .app must still be staged next to explicit payload items.");
+            Assert.Contains(staged, path => path.Contains("ExampleApp.app"));
         }
         finally
         {
@@ -268,9 +234,10 @@ internal static class MacPkgTests
 
     // A unix socket (or any other non-regular file) inside a payload directory
     // must be skipped rather than copied into the package root.
+    [Fact]
     static async Task SkipsNonRegularPayloadFiles()
     {
-        if (OperatingSystem.IsWindows()) return;
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "requires a non-Windows host");
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var payload = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
@@ -313,10 +280,9 @@ internal static class MacPkgTests
                     new MacPkgPayloadItem { Source = payload, Destination = "support" }
                 ]
             }).BuildAsync(PkgConfiguration(input, output));
-            Assert(staged.Any(path => path.Replace('\\', '/') == "support/helper.txt"),
+            Assert.True(staged.Any(path => path.Replace('\\', '/') == "support/helper.txt"),
                 $"regular files still stage: {string.Join(',', staged)}");
-            Assert(!staged.Any(path => path.Contains("agent.sock")),
-                "a unix socket must not be staged");
+            Assert.False(staged.Any(path => path.Contains("agent.sock")), "a unix socket must not be staged");
         }
         finally
         {
@@ -326,6 +292,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static void MissingPayloadRejected()
     {
         var input = CreateInputDirectory();
@@ -354,7 +321,7 @@ internal static class MacPkgTests
             {
                 thrown = true;
             }
-            Assert(thrown, "A missing payload source must fail the build.");
+            Assert.True(thrown, "A missing payload source must fail the build.");
         }
         finally
         {
@@ -366,6 +333,7 @@ internal static class MacPkgTests
 
     // The bundler's planner always produces the .app intermediate first, so the
     // "no payload at all" branch is only reachable by invoking the backend directly.
+    [Fact]
     static void NoPayloadRejected()
     {
         var input = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
@@ -396,7 +364,7 @@ internal static class MacPkgTests
             {
                 thrown = true;
             }
-            Assert(thrown, "A pkg build with no .app and no payload must fail.");
+            Assert.True(thrown, "A pkg build with no .app and no payload must fail.");
         }
         finally
         {
@@ -410,6 +378,7 @@ internal static class MacPkgTests
         public void Log(BundleLogLevel level, string message) { }
     }
 
+    [Fact]
     static async Task PkgbuildFailureLeavesNoArtifact()
     {
         var input = CreateInputDirectory();
@@ -431,9 +400,9 @@ internal static class MacPkgTests
             {
                 thrown = exception.Message.Contains("pkgbuild");
             }
-            Assert(thrown, "A pkgbuild failure must fail the build.");
+            Assert.True(thrown, "A pkgbuild failure must fail the build.");
             var pkgDirectory = Path.Combine(output, "osx-arm64", "pkg");
-            Assert(!Directory.Exists(pkgDirectory) ||
+            Assert.True(!Directory.Exists(pkgDirectory) ||
                    !Directory.EnumerateFiles(pkgDirectory, "*.pkg").Any(),
                 "A failed pkg build must not leave an output artifact.");
         }
@@ -445,19 +414,19 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static void MapsPkgSettingsThroughMsBuild()
     {
         var targets = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
         var props = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.props"));
         var task = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
-        Assert(targets.Contains("MacPkgIdentifier=\"$(BundlerMacPkgIdentifier)\"", StringComparison.Ordinal) &&
+        Assert.True(targets.Contains("MacPkgIdentifier=\"$(BundlerMacPkgIdentifier)\"", StringComparison.Ordinal) &&
                targets.Contains("MacPkgVersion=\"$(BundlerMacPkgVersion)\"", StringComparison.Ordinal) &&
                targets.Contains("MacPkgInstallLocation=\"$(BundlerMacPkgInstallLocation)\"", StringComparison.Ordinal) &&
                targets.Contains("MacPkgPayloadItems=\"@(BundlerPkgPayload)\"", StringComparison.Ordinal),
             "MSBuild does not map the BundlerMacPkg* properties to the task.");
-        Assert(props.Contains("<BundlerMacPkgInstallLocation Condition=\"'$(BundlerMacPkgInstallLocation)' == ''\">/Applications<", StringComparison.Ordinal),
-            "The default BundlerMacPkgInstallLocation must be /Applications.");
-        Assert(task.Contains("new MacPkgBundler(", StringComparison.Ordinal) &&
+        Assert.Contains("<BundlerMacPkgInstallLocation Condition=\"'$(BundlerMacPkgInstallLocation)' == ''\">/Applications<", props);
+        Assert.True(task.Contains("new MacPkgBundler(", StringComparison.Ordinal) &&
                task.Contains("PackageFormat.Pkg", StringComparison.Ordinal),
             "The MSBuild task does not construct the .pkg backend.");
     }
@@ -488,6 +457,7 @@ internal static class MacPkgTests
 
     // MAC-PKG-2: distribution upgrade — stub the toolchain, assert the chain
     // runs pkgbuild → productbuild with a generated distribution.xml.
+    [Fact]
     static async Task DistributionUpgrade()
     {
         var input = CreateInputDirectory();
@@ -525,28 +495,20 @@ internal static class MacPkgTests
                 .BuildAsync(PkgConfiguration(input, output, license: CreateTextFile(input, "license.txt", "EULA")));
             var pkg = artifacts.Single(artifact => artifact.Format == PackageFormat.Pkg);
             var productbuild = requests.SingleOrDefault(request => request.Executable == "productbuild");
-            Assert(productbuild != null,
-                "Distribution settings must upgrade the output to a productbuild call.");
+            Assert.NotNull(productbuild);
             var pargs = productbuildArgs;
-            Assert(pargs[0] == "--distribution" && pargs.Contains("--package-path") &&
+            Assert.True(pargs[0] == "--distribution" && pargs.Contains("--package-path") &&
                    pargs[pargs.Count - 1] == pkg.Path,
                 $"Unexpected productbuild arguments: {string.Join(' ', pargs)}");
-            Assert(distribution.Contains("<installer-gui-script"),
-                "distribution.xml must be an installer-gui-script document.");
-            Assert(distribution.Contains("<title>Installer Title</title>"),
-                "distribution.xml must carry the configured title.");
-            Assert(distribution.Contains("<welcome file=\"welcome.html\" mime-type=\"text/html\"/>"),
-                "distribution.xml must reference the welcome page.");
-            Assert(distribution.Contains("<license file=\"license.txt\" mime-type=\"text/plain\"/>"),
-                "distribution.xml must reference the license page (bundle LicenseFile).");
-            Assert(distribution.Contains("<conclusion file=\"conclusion.rtf\" mime-type=\"text/richtext\"/>"),
-                "distribution.xml must reference the conclusion page.");
-            Assert(distribution.Contains("<pkg-ref id=\"com.example.app\" version=\"1.0.0\""),
-                "distribution.xml must reference the component package.");
+            Assert.Contains("<installer-gui-script", distribution);
+            Assert.Contains("<title>Installer Title</title>", distribution);
+            Assert.Contains("<welcome file=\"welcome.html\" mime-type=\"text/html\"/>", distribution);
+            Assert.Contains("<license file=\"license.txt\" mime-type=\"text/plain\"/>", distribution);
+            Assert.Contains("<conclusion file=\"conclusion.rtf\" mime-type=\"text/richtext\"/>", distribution);
+            Assert.Contains("<pkg-ref id=\"com.example.app\" version=\"1.0.0\"", distribution);
             var pkgbuild = requests.Single(request => request.Executable == "pkgbuild");
             var bargs = pkgbuild.Arguments.ToList();
-            Assert(bargs[bargs.Count - 1].EndsWith("component.pkg", StringComparison.Ordinal),
-                "Under a distribution package pkgbuild must emit an intermediate component.pkg.");
+            Assert.EndsWith("component.pkg", bargs[bargs.Count - 1]);
         }
         finally
         {
@@ -556,6 +518,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static async Task NoDistributionByDefault()
     {
         var input = CreateInputDirectory();
@@ -575,12 +538,10 @@ internal static class MacPkgTests
         try
         {
             await new MacPkgBundler().BuildAsync(PkgConfiguration(input, output));
-            Assert(requests.All(request => request.Executable != "productbuild"),
+            Assert.True(requests.All(request => request.Executable != "productbuild"),
                 "Without distribution settings the backend must not invoke productbuild.");
             var pkgbuild = requests.Single(request => request.Executable == "pkgbuild");
-            Assert(pkgbuild.Arguments[pkgbuild.Arguments.Count - 1]
-                       .EndsWith(Path.Combine("pkg", "ExampleApp.pkg"), StringComparison.Ordinal),
-                "Without distribution settings pkgbuild writes the final .pkg directly.");
+            Assert.EndsWith(Path.Combine("pkg", "ExampleApp.pkg"), pkgbuild.Arguments[pkgbuild.Arguments.Count - 1]);
         }
         finally
         {
@@ -590,6 +551,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static async Task CurrentUserHomeDomain()
     {
         var input = CreateInputDirectory();
@@ -620,13 +582,11 @@ internal static class MacPkgTests
                     Domain = MacPkgInstallDomain.CurrentUserHome
                 })
                 .BuildAsync(PkgConfiguration(input, output));
-            Assert(requests.Any(request => request.Executable == "productbuild"),
-                "A non-default domain must upgrade to a productbuild call.");
-            Assert(distribution.Contains("enable_currentUserHome=\"true\"") &&
+            Assert.Contains(requests, request => request.Executable == "productbuild");
+            Assert.True(distribution.Contains("enable_currentUserHome=\"true\"") &&
                    distribution.Contains("enable_localSystem=\"false\""),
                 $"The current-user-home domain must be declared, got: {distribution}");
-            Assert(distribution.Contains("<title>ExampleApp</title>"),
-                "The title must default to the product name.");
+            Assert.Contains("<title>ExampleApp</title>", distribution);
         }
         finally
         {
@@ -636,6 +596,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static async Task DistributionResources()
     {
         var input = CreateInputDirectory();
@@ -664,8 +625,7 @@ internal static class MacPkgTests
                     WelcomeFile = CreateTextFile(input, "welcome.txt", "hi"),
                 })
                 .BuildAsync(PkgConfiguration(input, output));
-            Assert(resources.Contains("welcome.txt"),
-                $"The welcome page must be copied into the resources dir, got: {string.Join(',', resources)}");
+            Assert.Contains("welcome.txt", resources);
         }
         finally
         {
@@ -675,6 +635,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static void MissingWelcomeRejected()
     {
         var input = CreateInputDirectory();
@@ -705,7 +666,7 @@ internal static class MacPkgTests
             {
                 thrown = true;
             }
-            Assert(thrown, "A missing welcome page file must fail the build.");
+            Assert.True(thrown, "A missing welcome page file must fail the build.");
         }
         finally
         {
@@ -717,6 +678,7 @@ internal static class MacPkgTests
 
     // MAC-PKG-3: signing / notarization / scripts knob.
 
+    [Fact]
     static async Task SignsComponentPackage()
     {
         var input = CreateInputDirectory();
@@ -746,13 +708,11 @@ internal static class MacPkgTests
             var pkgbuild = requests.Single(request => request.Executable == "pkgbuild");
             var args = pkgbuild.Arguments.ToList();
             var signIndex = args.IndexOf("--sign");
-            Assert(signIndex > 0 && args[signIndex + 1] == "Developer ID Installer: Example",
+            Assert.True(signIndex > 0 && args[signIndex + 1] == "Developer ID Installer: Example",
                 $"pkgbuild must sign the component package, got: {string.Join(' ', args)}");
-            Assert(args.Contains("--timestamp"),
-                "A real Developer ID signature must carry a trusted timestamp.");
-            Assert(!args.Contains("--keychain"),
-                "No temporary certificate → no --keychain argument.");
-            Assert(requests.All(request => request.Executable != "productsign"),
+            Assert.Contains("--timestamp", args);
+            Assert.DoesNotContain("--keychain", args);
+            Assert.True(requests.All(request => request.Executable != "productsign"),
                 "A component package is signed inside pkgbuild; productsign must not run.");
         }
         finally
@@ -763,6 +723,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static async Task SignsDistributionPackage()
     {
         var input = CreateInputDirectory();
@@ -799,11 +760,10 @@ internal static class MacPkgTests
                 })
                 .BuildAsync(PkgConfiguration(input, output));
             var pkgbuild = requests.Single(request => request.Executable == "pkgbuild");
-            Assert(!pkgbuild.Arguments.Contains("--sign"),
-                "Under a distribution package the component stays unsigned; the product gets signed.");
+            Assert.DoesNotContain("--sign", pkgbuild.Arguments);
             var productsign = requests.Single(request => request.Executable == "productsign");
             var args = productsign.Arguments.ToList();
-            Assert(args[0] == "--sign" && args[1] == "Developer ID Installer: Example" &&
+            Assert.True(args[0] == "--sign" && args[1] == "Developer ID Installer: Example" &&
                    args[args.Count - 2].EndsWith("unsigned.pkg", StringComparison.Ordinal) &&
                    args[args.Count - 1].EndsWith(".pkg", StringComparison.Ordinal),
                 $"Unexpected productsign arguments: {string.Join(' ', args)}");
@@ -816,6 +776,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static void RejectsAdHocIdentity()
     {
         var input = CreateInputDirectory();
@@ -837,7 +798,7 @@ internal static class MacPkgTests
             {
                 thrown = true;
             }
-            Assert(thrown, "\"-\" must be rejected: .pkg has no ad-hoc signature equivalent.");
+            Assert.True(thrown, "\"-\" must be rejected: .pkg has no ad-hoc signature equivalent.");
         }
         finally
         {
@@ -846,6 +807,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static void RejectsExclusiveSigning()
     {
         var input = CreateInputDirectory();
@@ -872,7 +834,7 @@ internal static class MacPkgTests
             {
                 thrown = true;
             }
-            Assert(thrown, "SignIdentity and TemporaryCertificatePath are mutually exclusive.");
+            Assert.True(thrown, "SignIdentity and TemporaryCertificatePath are mutually exclusive.");
         }
         finally
         {
@@ -881,6 +843,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static void RejectsNotarizeWithoutSigning()
     {
         var input = CreateInputDirectory();
@@ -902,7 +865,7 @@ internal static class MacPkgTests
             {
                 thrown = true;
             }
-            Assert(thrown, "Notarization without a signing identity must fail.");
+            Assert.True(thrown, "Notarization without a signing identity must fail.");
         }
         finally
         {
@@ -911,6 +874,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static async Task PassesScriptsToPkgbuild()
     {
         var input = CreateInputDirectory();
@@ -940,7 +904,7 @@ internal static class MacPkgTests
             var pkgbuild = requests.Single(request => request.Executable == "pkgbuild");
             var args = pkgbuild.Arguments.ToList();
             var index = args.IndexOf("--scripts");
-            Assert(index > 0 && args[index + 1] == Path.GetFullPath(scripts),
+            Assert.True(index > 0 && args[index + 1] == Path.GetFullPath(scripts),
                 $"--scripts must forward the configured directory, got: {string.Join(' ', args)}");
         }
         finally
@@ -951,6 +915,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static void MissingScriptsRejected()
     {
         var input = CreateInputDirectory();
@@ -972,7 +937,7 @@ internal static class MacPkgTests
             {
                 thrown = true;
             }
-            Assert(thrown, "A missing scripts directory must fail the build.");
+            Assert.True(thrown, "A missing scripts directory must fail the build.");
         }
         finally
         {
@@ -981,6 +946,7 @@ internal static class MacPkgTests
         }
     }
 
+    [Fact]
     static async Task NotarizesPackage()
     {
         var input = CreateInputDirectory();
@@ -1020,10 +986,10 @@ internal static class MacPkgTests
             var submit = requests.Single(request =>
                 request.Executable == "xcrun" && request.Arguments.Contains("submit"));
             var args = submit.Arguments.ToList();
-            Assert(args.Contains("--keychain-profile") && args.Contains("test-profile") &&
+            Assert.True(args.Contains("--keychain-profile") && args.Contains("test-profile") &&
                    args.Contains("--wait") && args.Any(a => a.EndsWith(".pkg", StringComparison.Ordinal)),
                 $"The .pkg itself must be submitted, got: {string.Join(' ', args)}");
-            Assert(requests.Any(request =>
+            Assert.True(requests.Any(request =>
                     request.Executable == "xcrun" && request.Arguments.Contains("stapler")),
                 "stapler must attach the ticket to the .pkg.");
         }
@@ -1073,17 +1039,5 @@ internal static class MacPkgTests
 
     static string RepositoryRoot() => Path.GetFullPath("../../../../../", AppContext.BaseDirectory);
 
-    static Task RunSync(Action action)
-    {
-        action();
-        return Task.CompletedTask;
-    }
 
-    static void Assert(bool condition, string message)
-    {
-        if (!condition)
-        {
-            throw new InvalidOperationException("Assertion failed: " + message);
-        }
-    }
 }

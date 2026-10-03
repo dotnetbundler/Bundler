@@ -57,6 +57,6 @@
 | `BundlerFormats=alpineapk`（MSBuild） | 已实现 | APK-1 | `linux-musl-*` RID 上扇出；与其他格式混排（`zip;targz;alpineapk`）支持 |
 | `bundler --formats apk` / `--formats alpineapk`（CLI 别名） | 已实现 | APK-1 | `Bundling for linux-musl-x64: apk` 等实录可见；`--version` 内嵌真实包版本 |
 | `bundler.json` `"alpineapk"` 段 + `apk` 别名 | 已实现 | APK-1 | `BundlerJsonContext` 覆盖全部格式旋钮 |
-| `DotNet.Bundler.AlpineApk` NuGet 直接消费 | 已实现 | APK-4 | `AlpineApkBundler().BuildAsync(BundleConfiguration)` 契约测试 + `tests/AlpineApk.Api.PackageFixture`（`alpineapk` API 用法） |
+| `DotNet.Bundler.AlpineApk` NuGet 直接消费 | 已实现 | APK-4 | `AlpineApkBundler().BuildAsync(BundleConfiguration)` 契约测试 + `tests/Bundler.ApiTests`（`AlpineApkApiTests`，`alpineapk` API 用法） |
 | `DotNet.Bundler` 便利元包传递 AlpineApk | 已实现 | APK-1 | `BundleDesktopApplication` Task 接线 + `buildTransitive` 传递 |
 | AOT 发布干净性（`netstandard2.0` + `BouncyCastle`） | 已实现 | APK-1 | `Bundler.Cli` `PublishAot` 原生二进制内嵌生成 apk（IL2026 干净） |

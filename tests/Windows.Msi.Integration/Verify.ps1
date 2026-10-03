@@ -12,7 +12,7 @@ Assert-MsiTestHost $ConfirmDisposableVm.IsPresent $ConfirmLocalInstall.IsPresent
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 if ([string]::IsNullOrWhiteSpace($PackageVersion)) { $PackageVersion = Get-BundlerPackageVersion -Repository $repository }
 $fixtureSource = Join-Path $PSScriptRoot 'Fixture'
-$apiFixtureSource = Join-Path $repository 'tests\Msi.Api.PackageFixture'
+$apiFixtureSource = Join-Path $PSScriptRoot 'Standalone'
 $sessionId = [guid]::NewGuid().ToString('N')
 $identifier = "com.example.bundler.msi.smoke.$sessionId"
 $sessionRoot = Join-Path $env:TEMP "Bundler-Msi-Smoke-$sessionId"

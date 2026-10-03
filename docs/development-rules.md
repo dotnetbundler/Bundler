@@ -156,14 +156,14 @@
 ** 新后端参考现有目录、命名、fixture、包源、脚本入口、断言、日志和清理；有实际格式原因可采用专用方式，并在格式测试说明写明。
 不要模拟另一格式不存在的行为。
 
-单格式 API fixture 使用 `tests/<Format>.Api.PackageFixture`，系统集成使用 `tests/<Platform>.<Format>.Integration`，入口为 `Verify.ps1`，其他脚本名写明用途；
+单格式 API fixture 收编为 `tests/Bundler.ApiTests` 的 `<Format>ApiTests` 测试类（`dotnet test` 入口、宿主门控经 `Assert.Skip`），系统集成使用 `tests/<Platform>.<Format>.Integration`，入口为 `Verify.ps1`，其他脚本名写明用途；
 跨格式快速测试保留 `tests/Bundler.Tests`。
 格式专用测试与示例项目名称显式带格式名，只有真正跨格式的项目使用泛名。
 
 | 用途 | NSIS 当前入口 | MSI 当前入口 | macOS `.app` 当前入口 |
 | --- | --- | --- | --- |
 | 快速单元/契约 | `tests/Bundler.Tests` | `tests/Bundler.Tests` | `tests/Bundler.Tests` |
-| 后端 API fixture（仓内项目引用） | `tests/Nsis.Api.PackageFixture` | `tests/Msi.Api.PackageFixture` | `tests/MacApp.Api.PackageFixture` |
+| 后端 API fixture（仓内项目引用） | `tests/Bundler.ApiTests/NsisApiTests.cs` | `tests/Bundler.ApiTests/MsiApiTests.cs` | `tests/Bundler.ApiTests/MacAppApiTests.cs` |
 | MSBuild fixture（仓内项目引用） | `tests/Windows.Nsis.Integration/Fixture` | — | `tests/MacOS.App.Integration/Fixture` |
 | 仓外独立包消费 fixture | — | `tests/Windows.Msi.Integration/Fixture` + `Standalone/` | — |
 | 真实集成 | `tests/Windows.Nsis.Integration/Verify.ps1` | `tests/Windows.Msi.Integration/Verify.ps1`；生命周期、维护、示例检查有专用脚本 | `tests/MacOS.App.Integration/Verify.sh`（bash，macOS 宿主） |
@@ -248,7 +248,7 @@ Windows 脚本省略 `-PackageVersion` 时从根 `Directory.Build.props` 读取�
 
 ```powershell
 dotnet build Bundler.slnx -c Release
-dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
+dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release

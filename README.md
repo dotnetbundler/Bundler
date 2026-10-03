@@ -205,7 +205,7 @@ MSBuild 使用既有的 `BundlerWindowsSigning*` 属性和 `BundlerWindowsSignin
 
 WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 当前开发版本尚未公开到默认 NuGet 源时，先从本仓库 pack 并指定本地包源。
-上述包引用与实际编译由复制到仓库外目录的 `tests/Msi.Api.PackageFixture` 自动验证；MSI 产品身份和安装行为以 MSI 专用文档为准。
+上述包引用与实际编译由复制到仓库外目录的 `tests/Windows.Msi.Integration/Standalone` fixture 自动验证；MSI 产品身份和安装行为以 MSI 专用文档为准。
 
 ## MSBuild 属性
 
@@ -653,7 +653,7 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 
 ```powershell
 dotnet build Bundler.slnx
-dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
+dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
