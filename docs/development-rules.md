@@ -126,14 +126,16 @@
   一个未提交阶段使用同一新版本。
   工具包版本与被打包应用版本独立；
   公开示例应用版本保持稳定，升级/降级由独立 fixture 测试。
-- 共享本地包消费配置在 `Bundler.LocalPackages.props` 维护，不在各示例和 fixture 重复 `RestoreSources` 或版本字面量。
-  公开示例先 Pack 到 `artifacts/packages`，再通过普通 `PackageReference` 直接 `dotnet publish`。
-  仓库外 fixture 由脚本传入本轮包源、版本与隔离缓存。
-  缺包先 Pack，不假定未发布版本在公网源，也不用源码引用掩盖包消费问题。
-  `RestoreSources` 须在仓库源之后保留公共 NuGet 源（`$(BundlerPackageSource);https://api.nuget.org/v3/index.json`）；
-  干净宿主的 runtime pack 还原依赖公网回退，截断该源会让示例默认命令失败（2026-09-27 LINUX-DEB-1 修复并由契约测试断言）。
-  勿用 `-p:Restore*` 命令行全局属性做还原——会遮蔽 `Bundler.LocalPackages.props` 的注入；
-  换本地源目录用 `-p:BundlerPackageSource=<dir>`。
+- 仓内示例与 fixture 一律以项目引用消费打包系统：共享接线在 `Bundler.ProjectReference.targets` 维护，
+  它引用 `src/Bundler.MSBuild`（`ReferenceOutputAssembly=false`）、把 `_BundlerTaskAssembly` 指向源树构建输出并导入 `buildTransitive` 的 props/targets；
+  `BuildReference=false` 使消费方不重建任务工程——任务程序集由 `dotnet build Bundler.slnx` 预建，
+  避免常驻 MSBuild 节点持锁时消费方重写同一输出（MSB3021/3027）；
+  消费项目只加一行 `GetPathOfFileAbove` 导入即可直接 `dotnet publish`，无需先 pack。
+  API fixture 直引对应后端项目；`tests/Bundler.Tests` 同样使用项目引用。
+- 仓外复制的独立包消费 fixture（模拟外部用户消费发布的 nupkg，是包契约的验收腿）仍走 `PackageReference`：
+  还原垫片只保留在 `Bundler.LocalPackages.props`，由脚本连同项目复制并传入本轮包源、版本与隔离缓存，
+  真实还原来源由 `Assert-LocalBundlerRestore` 逐包核验。
+  缺包先 Pack，不假定未发布版本在公网源，也不用项目引用掩盖包消费问题。
 - MSBuild 默认值须按 RID 族推导：`BundlerMainExecutable` 对 `osx-*`/`linux-*` 取 `$(TargetName)`（无 `.exe` 后缀），其余取 `$(TargetName).exe`；
   新增 RID 族或新宿主后缀规则时同步检查该默认（2026-09-27 LINUX-DEB-1 修正 linux 漏项）。
 - **每个后端有完整、可操作的专用示例项目**，可参考 `samples/HelloNsisApp` 的演示形式，不用测试 fixture 冒充示例。
@@ -161,17 +163,19 @@
 | 用途 | NSIS 当前入口 | MSI 当前入口 | macOS `.app` 当前入口 |
 | --- | --- | --- | --- |
 | 快速单元/契约 | `tests/Bundler.Tests` | `tests/Bundler.Tests` | `tests/Bundler.Tests` |
-| 仓库外直接后端 API 包消费 | `tests/Nsis.Api.PackageFixture` | `tests/Msi.Api.PackageFixture` | `tests/MacApp.Api.PackageFixture` |
-| MSBuild 包消费 fixture | `tests/Windows.Nsis.Integration/Fixture` | `tests/Windows.Msi.Integration/Fixture` | `tests/MacOS.App.Integration/Fixture` |
+| 后端 API fixture（仓内项目引用） | `tests/Nsis.Api.PackageFixture` | `tests/Msi.Api.PackageFixture` | `tests/MacApp.Api.PackageFixture` |
+| MSBuild fixture（仓内项目引用） | `tests/Windows.Nsis.Integration/Fixture` | — | `tests/MacOS.App.Integration/Fixture` |
+| 仓外独立包消费 fixture | — | `tests/Windows.Msi.Integration/Fixture` + `Standalone/` | — |
 | 真实集成 | `tests/Windows.Nsis.Integration/Verify.ps1` | `tests/Windows.Msi.Integration/Verify.ps1`；生命周期、维护、示例检查有专用脚本 | `tests/MacOS.App.Integration/Verify.sh`（bash，macOS 宿主） |
 | 专用环境与人工 | `tests/Windows.Nsis.Reboot`、NSIS 人工清单 | MSI 人工清单 | `docs/mac-app-manual-testing.md` |
 
 1. 每项新增或修改功能必须**新增或更新对应自动化测试**；缺陷修复断言要区分修复前后。
    按功能覆盖验证/映射、真实打包、NuGet 包内容、仓库外直接 API 包消费、应用层消费和适用的系统生命周期。
    只运行旧测试、只查模板/数据库或只发布公开示例，不证明新系统行为。
-2. API fixture 只引用打出的后端包；
-   MSBuild fixture 引用打出的应用层包。
-   现有 fixture 显式导入 `Bundler.LocalPackages.props`，脚本传本轮 `BundlerPackageSource`、`BundlerPackageVersion` 和独立缓存，并检查实际还原的包 ID、版本、源与缓存。
+2. API fixture 以项目引用直引对应后端项目；
+   MSBuild fixture 经 `Bundler.ProjectReference.targets` 接入 `src/Bundler.MSbuild`。
+   仓库外复制的独立包消费 fixture（`tests/Windows.Msi.Integration/Fixture` 与 `Standalone/` 模板）保留 `PackageReference` 与 props 垫片，
+   脚本传本轮 `BundlerPackageSource`、`BundlerPackageVersion` 和独立缓存，并用 `Assert-LocalBundlerRestore` 核验实际还原的包 ID、版本、源与缓存。
    仓库外复制项目连同 props 复制；
    项目自身声明必要 SDK 属性，不靠根 props、旧 `obj` 或隐藏的 `--source` 才工作。
 3. 脚本按 Pack、隔离还原、生成产物、执行系统行为、断言最终状态组织，复用 `tests/AssertLocalRestore.ps1` 等 helper。

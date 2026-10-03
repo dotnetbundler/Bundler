@@ -56,7 +56,6 @@ grep -q "DotNet.Bundler.MacPkg.dll" "$integration_root/msbuild-package.list" \
 
 log "== publishing fixture (BundlerFormats=pkg) =="
 dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle" \
     --packages "$package_cache" >/dev/null
 
@@ -120,7 +119,6 @@ printf '%s' "$pkginfo" | grep -qi "Bundler Mac PKG Fixture" \
 
 log "== override variant (identifier/version/install-location) =="
 dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle-override" \
     -p:BundlerTestPkgIdentifier=com.example.custom.pkg \
     -p:BundlerTestPkgVersion=9.9.9 \
@@ -140,7 +138,6 @@ printf '%s' "$override_info" | grep -q 'install-location="/opt/bundler-test"' \
 
 log "== distribution package variant (pages + per-user domain) =="
 dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle-dist" \
     -p:BundlerTestPkgTitle="Fixture Installer" \
     -p:BundlerTestPkgWelcome=true \
@@ -179,7 +176,6 @@ printf '%s' "$dominfo" | grep -qi "currentuserhome" \
 log "== scripts knob: postinstall archived into the package =="
 rm -f "$HOME/.bundler-pkg-postinstall-ran"
 dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle-scripts" \
     -p:BundlerTestPkgScripts=true \
     -p:BundlerTestPkgDomain=CurrentUserHome \
@@ -205,7 +201,6 @@ log "== signing plumbing: bogus identity fails honestly =="
 # 没有真实 Developer ID Installer 证书（外部待验收 MAC-PKG-OI-02），
 # 但签名接线可被实测：不存在的身份必须让 pkgbuild --sign 诚实失败。
 if dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle-sign-fail" \
     -p:BundlerTestPkgSignIdentity="Nonexistent Installer Identity" \
     --packages "$package_cache" >/dev/null 2>&1; then
@@ -255,7 +250,6 @@ rm -f "$HOME/.bundler-pkg-postinstall-ran"
 log "== overwrite-install upgrade (same identifier, version bump) =="
 # 覆盖安装升级语义：同 identifier 的 v2 装上后，收据版本必须更新到 2.0.0。
 dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle-v2" \
     -p:BundlerTestPkgVersion=2.0.0 \
     -p:BundlerTestPkgDomain=CurrentUserHome \
@@ -276,7 +270,6 @@ rm -rf "$home_app" "$HOME/Applications/support"
 
 log "== osx-x64 artifact variant =="
 dotnet publish "$fixture_project" -c Release -r osx-x64 \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle-x64" \
     --packages "$package_cache" >/dev/null
 x64_pkg="$integration_root/bundle-x64/osx-x64/pkg/Bundler Mac PKG Fixture.pkg"
@@ -291,7 +284,6 @@ file "$x64_bin" | grep -q "x86_64" \
 
 log "== failure path leaves nothing behind =="
 if dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle-bad" \
     -p:BundlerTestPkgInstallLocation=relative/path \
     --packages "$package_cache" >/dev/null 2>&1; then
@@ -303,8 +295,6 @@ fi
 
 log "== exercising the standalone package API =="
 dotnet run --project "$api_fixture_project" -c Release \
-    -p:BundlerPackageVersion="$version" \
-    -p:BundlerPackageSource="$package_dir" \
     -p:RestorePackagesPath="$package_cache" \
     -- "$api_output"
 api_pkg="$api_output/artifacts/osx-arm64/pkg/PKG API Package Fixture.pkg"

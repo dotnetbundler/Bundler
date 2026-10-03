@@ -18,9 +18,8 @@
     <BundlerArchiveName Condition="'$(BundlerTestArchiveName)' != ''">$(BundlerTestArchiveName)</BundlerArchiveName>
     <BundlerFormats Condition="'$(BundlerTestFormats)' != ''">$(BundlerTestFormats)</BundlerFormats>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerArchiveFile Condition="'$(BundlerTestArchiveFiles)' == '1'"
         Include="Assets/defaults.conf" Destination="extras/defaults.conf" />
     <BundlerArchiveFile Condition="'$(BundlerTestArchiveBadFile)' == '1'"

@@ -142,6 +142,9 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - 本仓库开源许可证尚未确定。
 - WiX v3 已退出免费社区服务；大范围公开分发前须重新评估维护风险（见 `third_party/wix/msi-wix-provenance.md`）。
 - 各格式外部事项按 OI 清单等待对应环境输入：`docs/<format>-open-items.md` 全套（生产证书/公证凭证、UAC 提权、真实重启、干净宿主矩阵、ARM64 真机、语言审校等；MSI 签名已裁决不补集成腿——`Bundler.Tests/WixTests` 三断言已覆盖，外部仅余 MSI-OI-06 生产证书/时间戳）。
+- 仓外独立包消费 fixture（`tests/Windows.Msi.Integration/Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`，
+  作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
+  是否换处理方式（如公开发布后改验公网源、或移入独立验收仓）留待后续裁决。
 
 ## 6. 默认下一步
 

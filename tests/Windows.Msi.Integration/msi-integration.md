@@ -19,8 +19,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integr
 MSI MSBuild fixture 显式导入随项目一起复制的 `Bundler.LocalPackages.props`，由该文件声明 `RestoreSources=$(BundlerPackageSource)`；
 脚本将项目文件、该 props、程序和 Assets 复制到每轮独立的仓库外临时目录，避免继承仓库根 `Directory.Build.props` 或旧 obj。
 脚本传入本轮本地包目录、包版本和独立缓存，并断言 `project.assets.json` 与缓存实际使用当前版本。
-随后把 `tests/Msi.Api.PackageFixture` 连同该 props 复制到仓库外临时目录，仅引用后端 NuGet 包，通过公共 `WixBundler` API 和包内工具生成 MSI；
-它不使用 `ProjectReference` 或 MSBuild 便利元包。
+随后把 `Standalone/Msi.Api.PackageFixture.csproj` 与 `tests/Msi.Api.PackageFixture` 的 Program.cs 连同该 props 复制到仓库外临时目录，
+仅引用后端 NuGet 包，通过公共 `WixBundler` API 和包内工具生成 MSI；
+它不使用 `ProjectReference` 或 MSBuild 便利元包，是发布包独立消费的验收腿。
 最后才安装每轮新建的 current-user MSBuild 测试产品，预检安装目录和 ProductCode 未被占用，通过 `msiexec` 静默安装并卸载。
 断言主程序、额外资源内容、产品名称/版本/注册状态、托管文件卸载和未知用户文件保留。
 `finally` 只针对本轮 ProductCode、未知文件和空目录清理；保留 MSI、哈希和 verbose log 供核查。

@@ -13,12 +13,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Integ
 
 `Verify.ps1` 先打包当前工作区的 NuGet 包，并逐包断言清单条目：便利元包与 MSBuild 包的 buildTransitive 文件、netstandard2.0 程序集、NSIS 工具集与许可证、第三方声明。
 集成根目录为 `artifacts\windows-nsis-integration`，包缓存在其下的 `packages` 子目录，每轮重建。
-所有项目都通过 `-p:BundlerPackageSource=` 与独立 `packages` 缓存只从本地包源还原；`tests/AssertLocalRestore.ps1` 断言 `project.assets.json` 实际使用了本地源与缓存且未访问网络源，省略 `-PackageVersion` 时从根 `Directory.Build.props` 读取当前版本。
+fixture 与 API 项目经 `Bundler.ProjectReference.targets` 以项目引用接入仓内 `src/`，仍使用独立 `packages` 缓存隔离第三方还原；
+打出的 nupkg 仅用于包内容清单断言，不再被仓内项目消费。
 
 脚本通过三条消费路径生成本轮安装器：
 
-- `tests/Nsis.Api.PackageFixture`：仅引用 `DotNet.Bundler.Nsis` 等后端 NuGet 包，通过公共 API 构建，验证仓库外直接 API 消费。
-- `Fixture/BundlerNsisIntegrationFixture.csproj`：MSBuild 消费 fixture，随参数生成 current-user、per-machine、both、升级、允许降级、Unicode 产品、签名、无快捷方式默认值及各类故障注入变体。
+- `tests/Nsis.Api.PackageFixture`：以项目引用直引 `src/Bundler.Nsis`，通过公共 API 构建，验证直接 API 消费。
+- `Fixture/BundlerNsisIntegrationFixture.csproj`：MSBuild 任务消费 fixture（项目引用接入），随参数生成 current-user、per-machine、both、升级、允许降级、Unicode 产品、签名、无快捷方式默认值及各类故障注入变体。
 - `LegacyMsiFixture/LegacyMsiFixture.wixproj`：用 WiX SDK 5.0.2 构建的一次性旧 MSI 产品（非 Bundler 产物），用于按 ProductCode 与 UpgradeCode 两条精确路径验证旧 MSI 迁移。
 - `LegacyMsiFixtureV2/LegacyMsiFixtureV2.wixproj`：同一 UpgradeCode 的第二个一次性 MSI（0.8.0、独立 ProductCode/安装目录），验证多版本并存取最高版本判定与迁移循环全部清理。
 - 同一 fixture 项目的 `BundlerFormats=msi` 变体产出 Bundler MSI，验证 NSIS→MSI 目录延续（读卸载键 `InstallLocation`）、Bundler `InstallDir` 注册优先与范围外回落。

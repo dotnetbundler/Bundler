@@ -2,14 +2,13 @@
 
 这个项目不是自动化测试，而是 `DotNet.Bundler` 当前 Windows + NSIS 功能的可操作演示。
 项目名为 `HelloNsisApp`，保留既有产品名 Hello Bundled App 和可执行文件 `HelloBundledApp.exe`，以免仅整理项目名称就改变安装身份。
-项目只通过普通 `PackageReference` 使用本地生成的 NuGet 包。
+项目经 `Bundler.ProjectReference.targets` 以项目引用接入仓内 `src/`；仓库外项目的 NuGet 包用法见 `README.md`。
 
 ## 生成安装程序
 
 在仓库根目录执行：
 
 ```powershell
-dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
 ```
 

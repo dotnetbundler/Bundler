@@ -60,7 +60,6 @@ grep -q "DotNet.Bundler.MacDmg.dll" "$integration_root/msbuild-package.list" \
 
 log "== publishing fixture (BundlerFormats=dmg) =="
 dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle" \
     --packages "$package_cache" >/dev/null
 
@@ -113,7 +112,6 @@ hdiutil verify "$dmg_path" >/dev/null || fail "hdiutil verify failed on the prod
 
 log "== UDZO compression variant =="
 dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle-udzo" \
     -p:BundlerTestDmgCompression=Udzo \
     --packages "$package_cache" >/dev/null
@@ -131,7 +129,6 @@ mounted_volume=""
 
 log "== SkipWindowLayout variant =="
 dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle-skip" \
     -p:BundlerTestDmgSkipWindowLayout=true \
     --packages "$package_cache" >/dev/null
@@ -142,7 +139,6 @@ hdiutil verify "$skip_dmg" >/dev/null || fail "hdiutil verify failed on the Skip
 # MAC-DMG-3: EULA 经 udifrez 注入（udifderez 回读断言资源），DMG 本体 ad-hoc 签名。
 log "== EULA + ad-hoc signed variant =="
 dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle-eula" \
     -p:BundlerTestDmgSkipWindowLayout=true \
     -p:BundlerTestDmgLicense=true \
@@ -200,7 +196,6 @@ rm -rf "$integration_root/quar-app.app" "$quar_dmg"
 # osx-x64 产物：结构与挂载断言（本机无 Rosetta，运行态属外部待验收）。
 log "== osx-x64 variant =="
 dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle-x64" \
     -p:RuntimeIdentifier=osx-x64 \
     -p:BundlerTestDmgSkipWindowLayout=true \
@@ -219,7 +214,6 @@ mounted_volume=""
 # 失败路径真实断言：非法压缩值 → publish 失败、无 .dmg 产物、无残留挂载。
 log "== failure path leaves nothing behind =="
 if dotnet publish "$fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/bundle-bad" \
     -p:BundlerTestDmgCompression=Bogus \
     --packages "$package_cache" >/dev/null 2>&1; then
@@ -235,8 +229,6 @@ fi
 
 log "== exercising the standalone package API =="
 dotnet run --project "$api_fixture_project" -c Release \
-    -p:BundlerPackageVersion="$version" \
-    -p:BundlerPackageSource="$package_dir" \
     -p:RestorePackagesPath="$package_cache" \
     -- "$api_output"
 api_dmg="$api_output/artifacts/osx-arm64/dmg/DMG API Package Fixture.dmg"

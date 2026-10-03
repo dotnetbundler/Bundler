@@ -78,9 +78,9 @@ try {
     $apiSource = Join-Path $repository 'tests\Msi.Api.PackageFixture'
     $apiDir = Join-Path $root 'api-fixture'
     New-Item -ItemType Directory -Path $apiDir | Out-Null
-    foreach ($name in @('Msi.Api.PackageFixture.csproj', 'Program.cs')) {
-        Copy-Item -LiteralPath (Join-Path $apiSource $name) -Destination (Join-Path $apiDir $name)
-    }
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Standalone\Msi.Api.PackageFixture.csproj') `
+        -Destination (Join-Path $apiDir 'Msi.Api.PackageFixture.csproj')
+    Copy-Item -LiteralPath (Join-Path $apiSource 'Program.cs') -Destination (Join-Path $apiDir 'Program.cs')
     Copy-Item -LiteralPath (Join-Path $repository 'Bundler.LocalPackages.props') -Destination $apiDir
     $apiProject = Join-Path $apiDir 'Msi.Api.PackageFixture.csproj'
     dotnet restore $apiProject "-p:BundlerPackageSource=$packages" `

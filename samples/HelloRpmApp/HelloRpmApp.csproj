@@ -14,7 +14,6 @@
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <Nullable>enable</Nullable>
-    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
     <AssemblyName>HelloRpmApp</AssemblyName>
     <Version>1.0.0</Version>
 
@@ -72,9 +71,8 @@
     <BundlerRpmSigningKeyPassphrase Condition="'$(HelloRpmSigningKeyPassphrase)' != ''">$(HelloRpmSigningKeyPassphrase)</BundlerRpmSigningKeyPassphrase>
     <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets/LICENSE.txt</BundlerLicenseFile>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <!-- 资源项演示：随载荷落到 install-root 下的 docs/readme.txt。 -->
     <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
     <!-- freedesktop 集成演示：图标落 hicolor 树、.desktop 由后端生成

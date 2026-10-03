@@ -2036,27 +2036,32 @@ static void KeepsPackageConsumerVersionsAligned()
     var consumerProps = XDocument.Load(Path.Combine(root, "Bundler.LocalPackages.props"));
     Assert(!consumerProps.Descendants("BundlerPackageVersion").Any(),
         "The local-package props must not duplicate the repository package version.");
-    Assert(consumerProps.Descendants("BundlerPackageSource").Single().Value.Contains("artifacts", StringComparison.Ordinal) &&
-           consumerProps.Descendants("RestoreAdditionalProjectSources").Single().Value == "$(BundlerPackageSource)" &&
+    Assert(consumerProps.Descendants("RestoreAdditionalProjectSources").Single().Value == "$(BundlerPackageSource)" &&
            !consumerProps.Descendants("RestoreSources").Any(),
-        "The shared props must append the repository source without owning the restore source list.");
+        "The standalone-fixture props must append the script-supplied package source without owning the restore source list.");
+    var wiring = XDocument.Load(Path.Combine(root, "Bundler.ProjectReference.targets"));
+    Assert(wiring.Descendants("ProjectReference").Any(item =>
+               ((string?)item.Attribute("Include"))?.Contains("Bundler.MSBuild.csproj", StringComparison.Ordinal) == true) &&
+           wiring.Descendants("_BundlerTaskAssembly").Any() &&
+           wiring.Descendants("Import").Any(item =>
+               ((string?)item.Attribute("Project"))?.Contains("DotNet.Bundler.MSBuild.targets", StringComparison.Ordinal) == true),
+        "The shared wiring must reference Bundler.MSbuild, locate its task assembly, and import its targets.");
     foreach (var path in new[]
     {
         Path.Combine(root, "samples", "HelloNsisApp", "HelloNsisApp.csproj"),
         Path.Combine(root, "samples", "HelloMsiApp", "HelloMsiApp.csproj"),
-        Path.Combine(root, "samples", "HelloDebApp", "HelloDebApp.csproj")
+        Path.Combine(root, "samples", "HelloDebApp", "HelloDebApp.csproj"),
+        Path.Combine(root, "tests", "Windows.Nsis.Integration", "Fixture", "BundlerNsisIntegrationFixture.csproj"),
+        Path.Combine(root, "tests", "Linux.Deb.Integration", "Fixture", "BundlerDebIntegrationFixture.csproj"),
+        Path.Combine(root, "tests", "Linux.Rpm.Integration", "Fixture", "BundlerRpmIntegrationFixture.csproj")
     })
     {
         var project = XDocument.Load(path);
-        var reference = project.Descendants("PackageReference")
-            .Single(item => (string?)item.Attribute("Include") == "DotNet.Bundler");
-        Assert((string?)reference.Attribute("Version") == "$(BundlerPackageVersion)" &&
-               project.Descendants("BundlerUseRepositoryPackageSource").Single().Value == "true",
-            "The public sample does not use the shared package version and source: " + path);
-        Assert(project.Descendants("Import").Any(item =>
-                   ((string?)item.Attribute("Project"))?.Contains("Bundler.LocalPackages.props", StringComparison.Ordinal) == true) &&
-               !project.Descendants("RestoreSources").Any(),
-            "The public sample must import the shared local-package props: " + path);
+        Assert(!project.Descendants("PackageReference").Any(item =>
+                   ((string?)item.Attribute("Include"))?.StartsWith("DotNet.Bundler", StringComparison.Ordinal) == true) &&
+               project.Descendants("Import").Any(item =>
+                   ((string?)item.Attribute("Project"))?.Contains("Bundler.ProjectReference.targets", StringComparison.Ordinal) == true),
+            "The internal consumer must use the shared project-reference wiring, not a package: " + path);
     }
     var nsisSample = XDocument.Load(Path.Combine(root, "samples", "HelloNsisApp", "HelloNsisApp.csproj"));
     Assert(nsisSample.Descendants("AssemblyName").Single().Value == "HelloBundledApp" &&
@@ -2067,30 +2072,30 @@ static void KeepsPackageConsumerVersionsAligned()
             "BundlerNsisIntegrationFixture.csproj"))
         .Descendants("AssemblyName").Single().Value == "BundlerIntegrationFixture",
         "Renaming the NSIS test project must preserve its fixture executable name.");
-    foreach (var name in new[] { "Nsis", "Msi" })
+    foreach (var pair in new[] { ("Nsis", "Bundler.Nsis"), ("Msi", "Bundler.Wix"), ("Deb", "Bundler.Deb"), ("Rpm", "Bundler.Rpm") })
     {
-        var project = XDocument.Load(Path.Combine(root, "tests", name + ".Api.PackageFixture",
-            name + ".Api.PackageFixture.csproj"));
-        Assert(!project.Descendants("BundlerPackageVersion").Any(),
-            "The standalone API package fixture duplicates the current version: " + name);
+        var project = XDocument.Load(Path.Combine(root, "tests", pair.Item1 + ".Api.PackageFixture",
+            pair.Item1 + ".Api.PackageFixture.csproj"));
+        Assert(project.Descendants("ProjectReference").Any(item =>
+                   ((string?)item.Attribute("Include"))?.Contains("src\\" + pair.Item2 + "\\" + pair.Item2 + ".csproj", StringComparison.Ordinal) == true) &&
+               !project.Descendants("BundlerPackageVersion").Any() &&
+               !project.Descendants("PackageReference").Any(item =>
+                   ((string?)item.Attribute("Include"))?.StartsWith("DotNet.Bundler", StringComparison.Ordinal) == true),
+            "The API fixture must reference its backend project, not the package: " + pair.Item1);
     }
     foreach (var path in new[]
     {
-        Path.Combine(root, "tests", "Nsis.Api.PackageFixture", "Nsis.Api.PackageFixture.csproj"),
-        Path.Combine(root, "tests", "Msi.Api.PackageFixture", "Msi.Api.PackageFixture.csproj"),
-        Path.Combine(root, "tests", "Deb.Api.PackageFixture", "Deb.Api.PackageFixture.csproj"),
-        Path.Combine(root, "tests", "Rpm.Api.PackageFixture", "Rpm.Api.PackageFixture.csproj"),
-        Path.Combine(root, "tests", "Windows.Nsis.Integration", "Fixture", "BundlerNsisIntegrationFixture.csproj"),
         Path.Combine(root, "tests", "Windows.Msi.Integration", "Fixture", "BundlerMsiSmoke.csproj"),
-        Path.Combine(root, "tests", "Linux.Deb.Integration", "Fixture", "BundlerDebIntegrationFixture.csproj"),
-        Path.Combine(root, "tests", "Linux.Rpm.Integration", "Fixture", "BundlerRpmIntegrationFixture.csproj")
+        Path.Combine(root, "tests", "Windows.Msi.Integration", "Standalone", "Msi.Api.PackageFixture.csproj")
     })
     {
         var project = XDocument.Load(path);
-        Assert(project.Descendants("Import").Any(item =>
-                   ((string?)item.Attribute("Project"))?.Contains("Bundler.LocalPackages.props", StringComparison.Ordinal) == true) &&
-               !project.Descendants("RestoreSources").Any(),
-            "The fixture must import the shared local-package props: " + path);
+        Assert(project.Descendants("PackageReference").Any(item =>
+                   ((string?)item.Attribute("Include"))?.StartsWith("DotNet.Bundler", StringComparison.Ordinal) == true &&
+                   (string?)item.Attribute("Version") == "$(BundlerPackageVersion)") &&
+               project.Descendants("Import").Any(item =>
+                   ((string?)item.Attribute("Project"))?.Contains("Bundler.LocalPackages.props", StringComparison.Ordinal) == true),
+            "The standalone package-consumption fixture must keep its package reference: " + path);
     }
     foreach (var path in new[]
     {

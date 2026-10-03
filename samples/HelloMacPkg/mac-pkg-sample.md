@@ -5,7 +5,6 @@ DotNet.Bundler 的 macOS `.pkg` 演示：`BundlerFormats=pkg` 会先经规划器
 ## 运行
 
 ```bash
-dotnet pack Bundler.slnx -c Release -o artifacts/packages   # 本仓库打包为本地 nupkg
 dotnet publish samples/HelloMacPkg/HelloMacPkg.csproj -c Release
 ```
 

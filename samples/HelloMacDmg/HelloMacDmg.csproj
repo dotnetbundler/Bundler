@@ -15,7 +15,6 @@
     <Version>1.0.0</Version>
 
     <BundlerEnabled>true</BundlerEnabled>
-    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
     <!-- dmg 请求会让规划器自动先产出 .app 中间产物，再打 .dmg。 -->
     <BundlerFormats>dmg</BundlerFormats>
     <BundlerIdentifier>com.dotnetbundler.hellomacdmg</BundlerIdentifier>
@@ -65,10 +64,9 @@
     <BundlerMacAppEntitlementsFile Condition="'$(HelloMacDmgEntitlementsFile)' != ''">$(HelloMacDmgEntitlementsFile)</BundlerMacAppEntitlementsFile>
   </PropertyGroup>
 
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
   </ItemGroup>
 </Project>

@@ -34,9 +34,8 @@
     <BundlerAlpineApkSigningKeyFile Condition="'$(BundlerTestAlpineApkSigningKeyFile)' != ''">$(BundlerTestAlpineApkSigningKeyFile)</BundlerAlpineApkSigningKeyFile>
     <BundlerAlpineApkSigningKeyPassphrase Condition="'$(BundlerTestAlpineApkSigningKeyPassphrase)' != ''">$(BundlerTestAlpineApkSigningKeyPassphrase)</BundlerAlpineApkSigningKeyPassphrase>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
     <BundlerAlpineApkFile Include="Assets/defaults.conf" Destination="/etc/bundler-apk-fixture/defaults.conf" />
   </ItemGroup>

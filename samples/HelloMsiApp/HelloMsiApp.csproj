@@ -4,7 +4,6 @@
     <TargetFramework>net10.0</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
-    <BundlerUseRepositoryPackageSource>true</BundlerUseRepositoryPackageSource>
     <BundlerOutputPath>$(MSBuildProjectDirectory)\artifacts\feature-demo</BundlerOutputPath>
     <HelloMsiAppInstallScope Condition="'$(HelloMsiAppInstallScope)' == ''">currentUser</HelloMsiAppInstallScope>
     <HelloMsiAppLanguage Condition="'$(HelloMsiAppLanguage)' == ''">en-US</HelloMsiAppLanguage>
@@ -57,9 +56,8 @@
     <BundlerWindowsSigningCommand>$(HelloMsiAppSigningCommand)</BundlerWindowsSigningCommand>
     <ApplicationIcon>$(MSBuildThisFileDirectory)Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerIcon Include="Assets\app.ico" />
     <BundlerWixLanguageFile Include="Assets\locale-zh-cn.wxl" Language="zh-CN"
         Condition="$(HelloMsiAppLanguages.Contains('zh-CN')) or $(HelloMsiAppLanguage.Contains('zh-CN'))" />

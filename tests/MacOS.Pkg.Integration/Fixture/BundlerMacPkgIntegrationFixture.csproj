@@ -31,9 +31,8 @@
     <BundlerMacPkgSignIdentity Condition="'$(BundlerTestPkgSignIdentity)' != ''">$(BundlerTestPkgSignIdentity)</BundlerMacPkgSignIdentity>
     <BundlerMacPkgNotarize Condition="'$(BundlerTestPkgNotarize)' == 'true'">true</BundlerMacPkgNotarize>
   </PropertyGroup>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" PrivateAssets="all" />
     <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
     <BundlerPkgPayload Include="Assets/helper.txt" Destination="support/helper.txt" />
   </ItemGroup>

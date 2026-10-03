@@ -60,7 +60,6 @@ publish_fixture() {
     # $1: 输出子目录；其余参数透传为 -p:BundlerTestAlpineApk* / -r 等覆盖。
     local name="$1"; shift
     dotnet publish "$fixture_project" -c Release \
-        -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
         -p:BundlerIntegrationOutput="$integration_root/$name" \
         --packages "$package_cache" "$@"
 }
@@ -243,7 +242,6 @@ sha3="$(sha256sum "$integration_root/det3/linux-musl-x64/apk/bundler-apk-fixture
 log "== API fixture (direct AlpineApkBundler via NuGet) =="
 APK_API_FIXTURE_OUTPUT="$api_output" \
     dotnet run --project "$api_fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     --packages "$package_cache" >/dev/null
 api_apk="$api_output/artifacts/linux-musl-x64/apk/api-fixture-1.0.0-r0.apk"
 [[ -f "$api_apk" ]] || fail "The direct-API fixture produced no .apk."

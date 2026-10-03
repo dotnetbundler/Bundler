@@ -87,8 +87,6 @@ fi
 
 log "== publishing fixture with the packaged MSBuild entry =="
 dotnet publish "$fixture_project" -c Release --force \
-    -p:BundlerPackageVersion="$version" \
-    -p:BundlerPackageSource="$package_dir" \
     -p:BundlerIntegrationOutput="$bundle_output" \
     -p:BundlerTestIcon="$integration_root/icon-512.png" \
     "${dylib_args[@]}" \
@@ -96,9 +94,9 @@ dotnet publish "$fixture_project" -c Release --force \
 
 assets_json="$script_dir/Fixture/obj/project.assets.json"
 [[ -f "$assets_json" ]] || fail "Fixture restore assets are missing."
-for required in "DotNet.Bundler.MacApp/$version" "DotNet.Bundler/$version" "DotNet.Bundler.MSBuild/$version"; do
-    grep -q "\"$required\"" "$assets_json" || fail "Fixture restored an unexpected package set (missing $required)."
-done
+if grep -q '"DotNet.Bundler' "$assets_json"; then
+    fail "Fixture unexpectedly restored DotNet.Bundler packages; internal consumers must use project references."
+fi
 
 app="$bundle_output/osx-arm64/app/Bundler Mac Integration Fixture.app"
 [[ -d "$app" ]] || fail "The .app bundle was not produced at $app"
@@ -254,8 +252,6 @@ fi
 log "== checking rebuild determinism =="
 first_plist_hash="$(shasum -a 256 "$app/Contents/Info.plist" | cut -d' ' -f1)"
 dotnet publish "$fixture_project" -c Release --force \
-    -p:BundlerPackageVersion="$version" \
-    -p:BundlerPackageSource="$package_dir" \
     -p:BundlerIntegrationOutput="$bundle_output" \
     -p:BundlerTestIcon="$integration_root/icon-512.png" \
     "${dylib_args[@]}" \
@@ -281,8 +277,6 @@ cat > "$entitlements_file" <<'ENTITLEMENTS'
 </plist>
 ENTITLEMENTS
 dotnet publish "$fixture_project" -c Release --force \
-    -p:BundlerPackageVersion="$version" \
-    -p:BundlerPackageSource="$package_dir" \
     -p:BundlerIntegrationOutput="$signed_output" \
     -p:BundlerTestIcon="$integration_root/icon-512.png" \
     -p:BundlerTestSignIdentity="-" \
@@ -305,8 +299,6 @@ log "ad-hoc signing chain verified: codesign -s - â†’ --verify --deep --strict â
 log "== asserting a missing certificate fails before any tool runs =="
 missing_cert_output="$integration_root/badcert-output"
 if dotnet publish "$fixture_project" -c Release --force \
-    -p:BundlerPackageVersion="$version" \
-    -p:BundlerPackageSource="$package_dir" \
     -p:BundlerIntegrationOutput="$missing_cert_output" \
     -p:BundlerTestIcon="$integration_root/icon-512.png" \
     -p:BundlerTestSigningCertificate="$integration_root/missing.p12" \
@@ -329,8 +321,6 @@ if [[ ${#dylib_args[@]} -gt 0 ]] && ! lipo -info "$integration_root/libfixture.d
 fi
 dotnet publish "$fixture_project" -c Release --force \
     -p:RuntimeIdentifier=osx-x64 \
-    -p:BundlerPackageVersion="$version" \
-    -p:BundlerPackageSource="$package_dir" \
     -p:BundlerIntegrationOutput="$x64_output" \
     -p:BundlerTestIcon="$integration_root/icon-512.png" \
     "${x64_dylib_args[@]}" \
@@ -386,8 +376,6 @@ if [[ "$launchservices_ok" == "1" ]]; then
     log "== exercising LSMinimumSystemVersion enforcement =="
     minver_output="$integration_root/minver-output"
     dotnet publish "$fixture_project" -c Release --force \
-        -p:BundlerPackageVersion="$version" \
-        -p:BundlerPackageSource="$package_dir" \
             -p:BundlerIntegrationOutput="$minver_output" \
         -p:BundlerTestIcon="$integration_root/icon-512.png" \
         -p:BundlerTestMinSystemVersion=99.0 \
@@ -404,8 +392,6 @@ if [[ "$launchservices_ok" == "1" ]]; then
     log "== exercising v1 to v2 in-place upgrade =="
     upgrade_output="$integration_root/upgrade-output"
     dotnet publish "$fixture_project" -c Release --force \
-        -p:BundlerPackageVersion="$version" \
-        -p:BundlerPackageSource="$package_dir" \
             -p:BundlerIntegrationOutput="$upgrade_output" \
         -p:BundlerTestIcon="$integration_root/icon-512.png" \
         -p:BundlerTestBuildVersion=2026.9.2 \
@@ -446,8 +432,6 @@ log "uninstall = delete the .app directory; no uninstaller or receipt involved."
 
 log "== exercising the standalone package API =="
 dotnet run --project "$api_fixture_project" -c Release \
-    -p:BundlerPackageVersion="$version" \
-    -p:BundlerPackageSource="$package_dir" \
     -p:RestorePackagesPath="$package_cache" \
     -- "$api_output"
 api_app="$api_output/artifacts/osx-arm64/app/Mac API Package Fixture.app"

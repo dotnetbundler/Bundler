@@ -61,7 +61,6 @@ publish_fixture() {
     # $1: 输出子目录；其余参数透传为 -p:BundlerTestDeb* 等覆盖。
     local name="$1"; shift
     dotnet publish "$fixture_project" -c Release \
-        -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
         -p:BundlerIntegrationOutput="$integration_root/$name" \
         --packages "$package_cache" "$@"
 }
@@ -264,7 +263,6 @@ grep -q "InstallRoot" "$integration_root/failure.log" || fail "The failure did n
 log "== API fixture (direct DebBundler via NuGet) =="
 DEB_API_FIXTURE_OUTPUT="$api_output" \
     dotnet run --project "$api_fixture_project" -c Release \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     --packages "$package_cache" >/dev/null
 api_deb="$api_output/artifacts/linux-x64/deb/api-fixture_1.0.0-1_amd64.deb"
 [[ -f "$api_deb" ]] || fail "The direct-API fixture produced no .deb."

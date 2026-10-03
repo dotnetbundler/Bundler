@@ -77,7 +77,6 @@ publish_fixture() {
     # $1: 输出子目录；其余参数透传为 -p:BundlerTestAppImage* 等覆盖。
     local name="$1"; shift
     dotnet publish "$fixture_project" -c Release \
-        -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
         -p:BundlerIntegrationOutput="$integration_root/$name" \
         --packages "$package_cache" "$@"
 }
@@ -204,7 +203,6 @@ fi
 
 log "== linux-arm64 structural variant (cannot execute on x86_64) =="
 dotnet publish "$fixture_project" -c Release -r linux-arm64 \
-    -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
     -p:BundlerIntegrationOutput="$integration_root/arm64" \
     --packages "$package_cache" >/dev/null
 arm="$(find "$integration_root/arm64/linux-arm64/appimage" -name '*.AppImage' | head -n1)"
@@ -275,7 +273,6 @@ if [[ "$(uname -m)" == "x86_64" ]]; then
     log "== direct API consumption (DotNet.Bundler.AppImage nupkg) =="
     APPIMAGE_API_FIXTURE_OUTPUT="$integration_root/api" \
     dotnet run --project "$api_fixture_project" -c Release \
-        -p:RestoreSources="$package_dir;https://api.nuget.org/v3/index.json" \
         --packages "$package_cache" | tee "$integration_root/api.log"
     grep -q "OK: " "$integration_root/api.log" || fail "API fixture did not produce an .AppImage."
 fi
