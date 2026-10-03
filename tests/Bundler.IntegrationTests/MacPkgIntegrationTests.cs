@@ -55,6 +55,7 @@ public sealed class MacPkgFixture : IDisposable
 
     public string Expand(string pkg, string subdir)
     {
+        Directory.CreateDirectory(ExpandRoot);
         var root = Path.Combine(ExpandRoot, subdir);
         ProcessRunner.AssertSuccess(
             ProcessRunner.Run("pkgutil", ["--expand-full", pkg, root]),

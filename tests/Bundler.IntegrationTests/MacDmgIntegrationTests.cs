@@ -282,7 +282,10 @@ public sealed class MacDmgIntegrationTests : IClassFixture<MacDmgFixture>
              "--packages", _f.CacheDir],
             new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) });
         Assert.NotEqual(0, result.ExitCode);
-        Assert.Empty(Directory.EnumerateFiles(badDir, "*.dmg", SearchOption.AllDirectories));
+        var leftovers = Directory.Exists(badDir)
+            ? Directory.EnumerateFiles(badDir, "*.dmg", SearchOption.AllDirectories)
+            : [];
+        Assert.Empty(leftovers);
         var mounted = ProcessRunner.Run("hdiutil", ["info"]);
         Assert.DoesNotContain(_f.Ws.Root, mounted.StdOut);
     }
