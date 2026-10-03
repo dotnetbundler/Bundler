@@ -2,28 +2,10 @@ using DotNet.Bundler;
 using DotNet.Bundler.AppImage;
 using System.Text;
 
-internal static class AppImageTests
+public static class AppImageTests
 {
-    internal static IEnumerable<(string Name, Func<Task> Test)> Cases
-    {
-        get
-        {
-            yield return ("Rejects non-appimage formats", () => RunSync(RejectsNonAppImageFormats));
-            yield return ("Assembles a correct AppDir", () => RunSync(AssemblesAppDir));
-            yield return ("Falls back to the bundled default icon", () => RunSync(DefaultIconFallback));
-            yield return ("Maps appimage naming and arch", () => RunSync(MapsNamingAndArch));
-            yield return ("Rejects invalid appimage settings", () => RunSync(RejectsInvalidSettings));
-            yield return ("Rejects invalid file mappings", () => RunSync(RejectsInvalidFileMappings));
-            yield return ("Stages arbitrary AppDir files", () => RunSync(StagesArbitraryFiles));
-            yield return ("Skips non-regular payload files", () => RunSync(SkipsNonRegularPayloadFiles));
-            yield return ("Builds a real .AppImage via bundled appimagetool", () => RunSync(BuildsRealAppImage));
-            yield return ("Cross-builds aarch64 via the embedded runtime", () => RunSync(CrossBuildsAarch64));
-            yield return ("Maps appimage settings through MSBuild", () => RunSync(MapsAppImageSettingsThroughMsBuild));
-            yield return ("Signs the .AppImage via appimagetool --sign", () => RunSync(SignsAppImage));
-            yield return ("Rejects half-configured appimage signing", () => RunSync(RejectsIncompleteSigning));
-        }
-    }
 
+    [Fact]
     static void RejectsNonAppImageFormats()
     {
         var input = CreateInputDirectory();
@@ -40,6 +22,7 @@ internal static class AppImageTests
         }
     }
 
+    [Fact]
     static void AssemblesAppDir()
     {
         var input = CreateInputDirectory();
@@ -57,20 +40,20 @@ internal static class AppImageTests
                     DesktopFile = desktop
                 }, work, NullBundleLogger.Instance);
             var dir = result.AppDirPath;
-            Assert(File.Exists(Path.Combine(dir, "usr", "lib", "example-app", "ExampleApp")),
+            Assert.True(File.Exists(Path.Combine(dir, "usr", "lib", "example-app", "ExampleApp")),
                 "payload binary must land under usr/lib/<pkg>");
-            Assert(File.Exists(Path.Combine(dir, "usr", "bin", "example-app")),
+            Assert.True(File.Exists(Path.Combine(dir, "usr", "bin", "example-app")),
                 "usr/bin link must exist");
-            Assert(File.Exists(Path.Combine(dir, "usr", "share", "applications", "example-app.desktop")),
+            Assert.True(File.Exists(Path.Combine(dir, "usr", "share", "applications", "example-app.desktop")),
                 "staged .desktop must exist");
             var appRun = File.ReadAllText(Path.Combine(dir, "AppRun"));
-            Assert(appRun.StartsWith("#!/bin/sh") && appRun.Contains("usr/bin/example-app"),
+            Assert.True(appRun.StartsWith("#!/bin/sh") && appRun.Contains("usr/bin/example-app"),
                 "AppRun must exec the usr/bin link");
-            Assert(File.Exists(Path.Combine(dir, "example-app.desktop")) &&
+            Assert.True(File.Exists(Path.Combine(dir, "example-app.desktop")) &&
                    File.Exists(Path.Combine(dir, "example-app.png")) &&
                    File.Exists(Path.Combine(dir, ".DirIcon")),
                 "root desktop/icon/.DirIcon entries must exist");
-            Assert(result.FileArchitecture == "amd64" && result.EnvironmentArchitecture == "x86_64",
+            Assert.True(result.FileArchitecture == "amd64" && result.EnvironmentArchitecture == "x86_64",
                 "linux-x64 must map to file arch amd64 / env arch x86_64");
         }
         finally
@@ -79,6 +62,7 @@ internal static class AppImageTests
         }
     }
 
+    [Fact]
     static void DefaultIconFallback()
     {
         var input = CreateInputDirectory();
@@ -88,13 +72,13 @@ internal static class AppImageTests
             var result = AppDirBuilder.Build(
                 BundleWith(null), PlanItem(input, work), new AppImageBundleConfiguration(), work, NullBundleLogger.Instance);
             var png = File.ReadAllBytes(Path.Combine(result.AppDirPath, "example-app.png"));
-            Assert(png.Length > 4 && png[0] == 0x89 && png[1] == 'P',
+            Assert.True(png.Length > 4 && png[0] == 0x89 && png[1] == 'P',
                 "default icon must be a real PNG");
             // AlwaysEmitIcon: generated .desktop carries Icon= even without bundle icons.
             var desktopText = Encoding.UTF8.GetString(
                 File.ReadAllBytes(Path.Combine(result.AppDirPath,
                     "usr", "share", "applications", "example-app.desktop")));
-            Assert(desktopText.Contains("Icon=example-app"),
+            Assert.True(desktopText.Contains("Icon=example-app"),
                 "generated .desktop must carry Icon= for the fallback icon");
         }
         finally
@@ -103,6 +87,7 @@ internal static class AppImageTests
         }
     }
 
+    [Fact]
     static void MapsNamingAndArch()
     {
         var input = CreateInputDirectory();
@@ -116,12 +101,12 @@ internal static class AppImageTests
                     PackageName = "My App",
                     Version = "2.0.0-beta.1"
                 }, work, NullBundleLogger.Instance);
-            Assert(result.PackageName == "my-app", "package name must kebab-case");
-            Assert(result.Version == "2.0.0-beta.1", "version passes through verbatim");
-            Assert(result.FileArchitecture == "aarch64" && result.EnvironmentArchitecture == "aarch64",
+            Assert.True(result.PackageName == "my-app", "package name must kebab-case");
+            Assert.True(result.Version == "2.0.0-beta.1", "version passes through verbatim");
+            Assert.True(result.FileArchitecture == "aarch64" && result.EnvironmentArchitecture == "aarch64",
                 "linux-arm64 must map to aarch64");
             var normalized = AppImageIdentity.NormalizeArchitecture("amd64");
-            Assert(normalized == "x86_64", "amd64 must normalize to x86_64");
+            Assert.True(normalized == "x86_64", "amd64 must normalize to x86_64");
         }
         finally
         {
@@ -129,6 +114,7 @@ internal static class AppImageTests
         }
     }
 
+    [Fact]
     static void RejectsInvalidSettings()
     {
         var input = CreateInputDirectory();
@@ -162,6 +148,7 @@ internal static class AppImageTests
         }
     }
 
+    [Fact]
     static void StagesArbitraryFiles()
     {
         var input = CreateInputDirectory();
@@ -179,9 +166,9 @@ internal static class AppImageTests
                         new AppImageFileEntry { Source = extra, Destination = "usr/share/example-app/extra-copy.conf" }
                     ]
                 }, work, NullBundleLogger.Instance);
-            Assert(File.ReadAllText(Path.Combine(result.AppDirPath, "opt", "extras", "extra.conf")) == "k=v",
+            Assert.True(File.ReadAllText(Path.Combine(result.AppDirPath, "opt", "extras", "extra.conf")) == "k=v",
                 "AppDir file must land at the relative destination");
-            Assert(File.Exists(Path.Combine(result.AppDirPath, "usr", "share", "example-app", "extra-copy.conf")),
+            Assert.True(File.Exists(Path.Combine(result.AppDirPath, "usr", "share", "example-app", "extra-copy.conf")),
                 "second destination must land too");
         }
         finally
@@ -190,6 +177,7 @@ internal static class AppImageTests
         }
     }
 
+    [Fact]
     static void RejectsInvalidFileMappings()
     {
         var input = CreateInputDirectory();
@@ -237,9 +225,10 @@ internal static class AppImageTests
 
     // A unix socket (or any other non-regular file) inside the input must be
     // skipped rather than copied into the AppDir.
+    [Fact]
     static void SkipsNonRegularPayloadFiles()
     {
-        if (OperatingSystem.IsWindows()) return;
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "requires a non-Windows host");
         var input = CreateInputDirectory();
         var work = input + ".work";
         var output = input + ".artifacts";
@@ -248,15 +237,15 @@ internal static class AppImageTests
             CreateUnixSocket(Path.Combine(input, "agent.sock"));
             var result = AppDirBuilder.Build(
                 BundleWith(null), PlanItem(input, work), new AppImageBundleConfiguration(), work, NullBundleLogger.Instance);
-            Assert(File.Exists(Path.Combine(result.AppDirPath, "usr", "lib", "example-app", "ExampleApp")),
+            Assert.True(File.Exists(Path.Combine(result.AppDirPath, "usr", "lib", "example-app", "ExampleApp")),
                 "regular payload files still stage");
-            Assert(!File.Exists(Path.Combine(result.AppDirPath, "usr", "lib", "example-app", "agent.sock")),
+            Assert.True(!File.Exists(Path.Combine(result.AppDirPath, "usr", "lib", "example-app", "agent.sock")),
                 "a unix socket in the input must not reach the AppDir");
             if (OperatingSystem.IsLinux())
             {
                 var artifact = new AppImageBundler().BuildAsync(
                     Configuration(input, output)).GetAwaiter().GetResult().Single();
-                Assert(File.Exists(artifact.Path),
+                Assert.True(File.Exists(artifact.Path),
                     "the .AppImage build must succeed with a socket inside the input");
             }
         }
@@ -282,23 +271,24 @@ internal static class AppImageTests
     }
 
     // Real end-to-end runs of the bundled appimagetool (Linux host only).
+    [Fact]
     static void BuildsRealAppImage()
     {
-        if (!OperatingSystem.IsLinux()) return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "requires a Linux host");
         var input = CreateInputDirectory();
         var output = input + ".artifacts";
         try
         {
             var artifact = new AppImageBundler().BuildAsync(
                 Configuration(input, output)).GetAwaiter().GetResult().Single();
-            Assert(Path.GetFileName(artifact.Path) == "example-app_1.0.0_amd64.AppImage",
+            Assert.True(Path.GetFileName(artifact.Path) == "example-app_1.0.0_amd64.AppImage",
                 "file name must follow <pkg>_<version>_<arch>.AppImage");
             var magic = File.ReadAllBytes(artifact.Path).Take(4).ToArray();
-            Assert(magic[0] == 0x7F && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F',
+            Assert.True(magic[0] == 0x7F && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F',
                 "an .AppImage is an ELF");
-            Assert(File.Exists(artifact.Path + ".sha256"), "sha256 sidecar must exist");
+            Assert.True(File.Exists(artifact.Path + ".sha256"), "sha256 sidecar must exist");
             var sidecar = File.ReadAllText(artifact.Path + ".sha256");
-            Assert(sidecar.Contains(Sha256(File.ReadAllBytes(artifact.Path))),
+            Assert.True(sidecar.Contains(Sha256(File.ReadAllBytes(artifact.Path))),
                 "sidecar must carry the artifact's sha256");
         }
         finally
@@ -307,11 +297,12 @@ internal static class AppImageTests
         }
     }
 
+    [Fact]
     static void CrossBuildsAarch64()
     {
-        if (!OperatingSystem.IsLinux() ||
-            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture !=
-            System.Runtime.InteropServices.Architecture.X64) return;
+        Assert.SkipUnless(OperatingSystem.IsLinux() &&
+            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
+            System.Runtime.InteropServices.Architecture.X64, "requires an x64 Linux host");
         var input = CreateInputDirectory();
         var output = input + ".artifacts";
         try
@@ -319,11 +310,11 @@ internal static class AppImageTests
             var artifact = new AppImageBundler(
                 new AppImageBundleConfiguration { Architecture = "aarch64" }).BuildAsync(
                 Configuration(input, output)).GetAwaiter().GetResult().Single();
-            Assert(Path.GetFileName(artifact.Path) == "example-app_1.0.0_aarch64.AppImage",
+            Assert.True(Path.GetFileName(artifact.Path) == "example-app_1.0.0_aarch64.AppImage",
                 "cross build must name the aarch64 file");
             // ELF e_machine at bytes 18-19: 0xB7 0x00 = EM_AARCH64.
             var header = File.ReadAllBytes(artifact.Path);
-            Assert(header[18] == 0xB7 && header[19] == 0x00,
+            Assert.True(header[18] == 0xB7 && header[19] == 0x00,
                 "cross-built AppImage must carry the aarch64 runtime");
         }
         finally
@@ -332,9 +323,10 @@ internal static class AppImageTests
         }
     }
 
+    [Fact]
     static void SignsAppImage()
     {
-        if (!OperatingSystem.IsLinux()) return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "requires a Linux host");
         var input = CreateInputDirectory();
         var output = input + ".artifacts";
         // The throwaway keyring must stay out of the packaged input: a live
@@ -364,13 +356,13 @@ internal static class AppImageTests
             // The runtime ELF template always carries both signature sections;
             // unsigned = zero-filled, signed = non-zero embedded data.
             var signedSection = ElfSection(File.ReadAllBytes(artifact.Path), ".sha256_sig");
-            Assert(signedSection.Length > 0 && signedSection.Any(b => b != 0),
+            Assert.True(signedSection.Length > 0 && signedSection.Any(b => b != 0),
                 "a signed .AppImage must carry a non-zero .sha256_sig section");
             var unsignedOut = output + "-unsigned";
             var unsigned = new AppImageBundler().BuildAsync(
                 Configuration(input, unsignedOut)).GetAwaiter().GetResult().Single();
             var unsignedSection = ElfSection(File.ReadAllBytes(unsigned.Path), ".sha256_sig");
-            Assert(unsignedSection.Length == 0 || unsignedSection.All(b => b == 0),
+            Assert.True(unsignedSection.Length == 0 || unsignedSection.All(b => b == 0),
                 "unsigned builds must leave .sha256_sig zeroed");
             Cleanup(unsignedOut);
         }
@@ -382,9 +374,10 @@ internal static class AppImageTests
         }
     }
 
+    [Fact]
     static void RejectsIncompleteSigning()
     {
-        if (!OperatingSystem.IsLinux()) return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "requires a Linux host");
         var input = CreateInputDirectory();
         var output = input + ".artifacts";
         try
@@ -445,19 +438,20 @@ internal static class AppImageTests
         var stdOut = process.StandardOutput.ReadToEnd();
         var stdErr = process.StandardError.ReadToEnd();
         process.WaitForExit();
-        Assert(process.ExitCode == 0, tool + " failed: " + stdErr);
+        Assert.True(process.ExitCode == 0, tool + " failed: " + stdErr);
         if (stdoutTo is not null)
         {
             File.WriteAllText(stdoutTo, stdOut);
         }
     }
 
+    [Fact]
     static void MapsAppImageSettingsThroughMsBuild()
     {
         var targets = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
         var props = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.props"));
         var task = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
-        Assert(targets.Contains("AppImagePackageName=\"$(BundlerAppImagePackageName)\"", StringComparison.Ordinal) &&
+        Assert.True(targets.Contains("AppImagePackageName=\"$(BundlerAppImagePackageName)\"", StringComparison.Ordinal) &&
                targets.Contains("AppImageVersion=\"$(BundlerAppImageVersion)\"", StringComparison.Ordinal) &&
                targets.Contains("AppImageArchitecture=\"$(BundlerAppImageArchitecture)\"", StringComparison.Ordinal) &&
                targets.Contains("AppImageInstallRoot=\"$(BundlerAppImageInstallRoot)\"", StringComparison.Ordinal) &&
@@ -468,15 +462,15 @@ internal static class AppImageTests
                targets.Contains("AppImageMetainfoFile=\"$(BundlerAppImageMetainfoFile)\"", StringComparison.Ordinal) &&
                targets.Contains("AppImageFiles=\"@(BundlerAppImageFile)\"", StringComparison.Ordinal),
             "MSBuild does not map the BundlerAppImage* properties to the task.");
-        Assert(props.Contains("<BundlerAppImagePackageName", StringComparison.Ordinal) &&
+        Assert.True(props.Contains("<BundlerAppImagePackageName", StringComparison.Ordinal) &&
                props.Contains("<BundlerAppImageIconFile", StringComparison.Ordinal),
             "The BundlerAppImage* properties lack defaults in the .props file.");
-        Assert(task.Contains("new AppImageBundler(", StringComparison.Ordinal) &&
+        Assert.True(task.Contains("new AppImageBundler(", StringComparison.Ordinal) &&
                task.Contains("PackageFormat.AppImage", StringComparison.Ordinal),
             "The MSBuild task does not construct the .appimage backend.");
         var msbuildProject = File.ReadAllText(Path.Combine(
             RepositoryRoot(), "src", "Bundler.MSBuild", "Bundler.MSBuild.csproj"));
-        Assert(msbuildProject.Contains("DotNet.Bundler.AppImage.dll", StringComparison.Ordinal),
+        Assert.True(msbuildProject.Contains("DotNet.Bundler.AppImage.dll", StringComparison.Ordinal),
             "The MSBuild package must ship DotNet.Bundler.AppImage.dll.");
     }
 
@@ -563,20 +557,9 @@ internal static class AppImageTests
 
     static void AssertThrows<T>(Action action, string because) where T : Exception
     {
-        try
-        {
-            action();
-        }
-        catch (T)
-        {
-            return;
-        }
-        catch (Exception other) when (other is not T)
-        {
-            throw new InvalidOperationException(
-                $"Assertion failed: expected {typeof(T).Name} ({because}), got {other.GetType().Name}: {other.Message}");
-        }
-        throw new InvalidOperationException($"Assertion failed: expected {typeof(T).Name} ({because}).");
+        var exception = Record.Exception(action);
+        Assert.True(exception is T,
+            $"{because}: expected {typeof(T).Name}, got {exception?.GetType().Name}: {exception?.Message}");
     }
 
     static void Cleanup(params string[] paths)
@@ -592,17 +575,5 @@ internal static class AppImageTests
 
     static string RepositoryRoot() => Path.GetFullPath("../../../../../", AppContext.BaseDirectory);
 
-    static Task RunSync(Action action)
-    {
-        action();
-        return Task.CompletedTask;
-    }
 
-    static void Assert(bool condition, string message)
-    {
-        if (!condition)
-        {
-            throw new InvalidOperationException("Assertion failed: " + message);
-        }
-    }
 }

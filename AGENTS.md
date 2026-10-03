@@ -88,7 +88,7 @@ git status --short
 
 ```powershell
 dotnet build Bundler.slnx -c Release
-dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
+dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 ```
 

@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-01
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.65`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.66`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -32,7 +32,7 @@
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
 | `src/Bundler.Cli` | CLI 适配层（dotnet tool nupkg + `PublishAot` 原生二进制双分发） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
-| `tests/Bundler.Tests` | 唯一快速测试入口（用例数随宿主门控变化，以每次实跑输出为准） | `net10.0` |
+| `tests/Bundler.Tests` | 唯一快速测试入口（xUnit v3，`dotnet test`；用例全注册、宿主门控经 `Assert.Skip` 跳过，以每次实跑输出为准） | `net10.0` |
 | `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` / `tests/MacDmg.Api.PackageFixture` / `tests/MacPkg.Api.PackageFixture` / `tests/Deb.Api.PackageFixture` / `tests/Rpm.Api.PackageFixture` / `tests/AppImage.Api.PackageFixture` / `tests/Archive.Api.PackageFixture` / `tests/AlpineApk.Api.PackageFixture` | 直引对应后端项目的 API 消费 fixture（仓内项目引用） | `net10.0` |
 | `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
 | `tests/MacOS.App.Integration` | 真实 macOS `.app` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |

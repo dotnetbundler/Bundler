@@ -653,7 +653,7 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 
 ```powershell
 dotnet build Bundler.slnx
-dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj
+dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release

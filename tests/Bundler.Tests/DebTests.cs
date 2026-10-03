@@ -3,36 +3,10 @@ using DotNet.Bundler.Core;
 using DotNet.Bundler.Deb;
 using System.Text;
 
-internal static class DebTests
+public static class DebTests
 {
-    internal static IEnumerable<(string Name, Func<Task> Test)> Cases
-    {
-        get
-        {
-            yield return ("Rejects non-deb formats", () => RunSync(RejectsNonDebFormats));
-            yield return ("Produces a structurally valid .deb", () => RunSync(ProducesValidDeb));
-            yield return ("Maps SemVer to Debian versions", () => RunSync(MapsSemVerToDebianVersion));
-            yield return ("Maps deb overrides", () => RunSync(MapsOverrides));
-            yield return ("Disables the bin link", () => RunSync(DisablesBinLink));
-            yield return ("Rejects invalid deb settings", () => RunSync(RejectsInvalidSettings));
-            yield return ("Derives a kebab-case package name", () => RunSync(DerivesKebabName));
-            yield return ("Writes matching md5sums", () => RunSync(Md5sumsMatch));
-            yield return ("Stages resources under the install root", () => RunSync(StagesResources));
-            yield return ("Skips non-regular payload files", () => RunSync(SkipsNonRegularPayloadFiles));
-            yield return ("Writes desktop integration files", () => RunSync(WritesDesktopIntegration));
-            yield return ("Writes relation and doc fields", () => RunSync(WritesRelationAndDocFields));
-            yield return ("Rejects invalid metadata", () => RunSync(RejectsInvalidMetadata));
-            yield return ("Honors a verbatim DesktopFile override", () => RunSync(DesktopFileOverride));
-            yield return ("Packs maintainer scripts and conffiles", () => RunSync(MaintainerScriptsAndConffiles));
-            yield return ("Synthesizes postinst daemon-reload for a systemd unit", () => RunSync(SystemdUnitDaemonReload));
-            yield return ("Rejects invalid DEB-3 knobs", () => RunSync(RejectsInvalidDeb3Knobs));
-            yield return ("Writes the packaging changelog and extended description", () => RunSync(WritesPackagingChangelog));
-            yield return ("Produces deterministic .deb bytes", () => RunSync(DeterministicBytes));
-            yield return ("Writes a correct sha256 sidecar", () => RunSync(Sha256Sidecar));
-            yield return ("Maps deb settings through MSBuild", () => RunSync(MapsDebSettingsThroughMsBuild));
-        }
-    }
 
+    [Fact]
     static void RejectsNonDebFormats()
     {
         var input = CreateInputDirectory();
@@ -49,7 +23,7 @@ internal static class DebTests
             {
                 thrown = exception.Message.Contains("Deb targets only");
             }
-            Assert(thrown, "A non-deb target must be rejected with NotSupportedException.");
+            Assert.True(thrown, "A non-deb target must be rejected with NotSupportedException.");
         }
         finally
         {
@@ -57,6 +31,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void ProducesValidDeb()
     {
         var input = CreateInputDirectory();
@@ -68,22 +43,22 @@ internal static class DebTests
                 .GetAwaiter().GetResult();
             var artifact = artifacts.Single();
             var expectedName = "example-app_1.0.0-1_amd64.deb";
-            Assert(artifact.Path.EndsWith(
+            Assert.True(artifact.Path.EndsWith(
                     Path.Combine("linux-x64", "deb", expectedName), StringComparison.Ordinal),
                 $"Unexpected .deb artifact path: {artifact.Path}");
 
             var members = DebPackageReader.ReadAr(artifact.Path);
-            Assert(members.Select(m => m.Name).SequenceEqual(
+            Assert.True(members.Select(m => m.Name).SequenceEqual(
                     new[] { "debian-binary", "control.tar.gz", "data.tar.gz" }),
                 $"Unexpected ar members: {string.Join(',', members.Select(m => m.Name))}");
-            Assert(Encoding.ASCII.GetString(members[0].Content) == "2.0\n",
+            Assert.True(Encoding.ASCII.GetString(members[0].Content) == "2.0\n",
                 "debian-binary must be '2.0\\n'.");
 
             var controlEntries = DebPackageReader.ReadTar(
                 DebPackageReader.Ungzip(members[1].Content));
             var control = Encoding.UTF8.GetString(
                 controlEntries.Single(e => e.Name == "./control").Content);
-            Assert(control.Contains("Package: example-app\n", StringComparison.Ordinal) &&
+            Assert.True(control.Contains("Package: example-app\n", StringComparison.Ordinal) &&
                    control.Contains("Version: 1.0.0-1\n", StringComparison.Ordinal) &&
                    control.Contains("Architecture: amd64\n", StringComparison.Ordinal) &&
                    control.Contains("Maintainer: Example Publisher\n", StringComparison.Ordinal) &&
@@ -92,25 +67,25 @@ internal static class DebTests
                    control.Contains("Installed-Size: ", StringComparison.Ordinal) &&
                    control.Contains("Description: Example application\n", StringComparison.Ordinal),
                 $"Control file is missing core fields:\n{control}");
-            Assert(controlEntries.Any(e => e.Name == "./md5sums"),
+            Assert.True(controlEntries.Any(e => e.Name == "./md5sums"),
                 "control.tar must contain md5sums.");
 
             var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
             var names = data.Select(e => e.Name).ToArray();
-            Assert(names.Contains("./usr/lib/example-app/ExampleApp") &&
+            Assert.True(names.Contains("./usr/lib/example-app/ExampleApp") &&
                    names.Contains("./usr/lib/example-app/ExampleApp.dll") &&
                    names.Contains("./usr/bin/example-app"),
                 $"data.tar is missing payload entries: {string.Join(',', names)}");
             var executable = data.Single(e => e.Name == "./usr/lib/example-app/ExampleApp");
-            Assert(executable.Mode == 493 /* 0755 */,
+            Assert.True(executable.Mode == 493 /* 0755 */,
                 $"The main executable must be 0755, got {Convert.ToString(executable.Mode, 8)}.");
             var lib = data.Single(e => e.Name == "./usr/lib/example-app/ExampleApp.dll");
-            Assert(lib.Mode == 420 /* 0644 */, "Payload data files must be 0644.");
+            Assert.True(lib.Mode == 420 /* 0644 */, "Payload data files must be 0644.");
             var link = data.Single(e => e.Name == "./usr/bin/example-app");
-            Assert(link.Kind == TarEntryKind.Symlink &&
+            Assert.True(link.Kind == TarEntryKind.Symlink &&
                    link.LinkTarget == "../lib/example-app/ExampleApp",
                 $"usr/bin must be a relative symlink into the install root, got '{link.LinkTarget}'.");
-            Assert(data.Any(e => e.Kind == TarEntryKind.Directory && e.Name == "./usr/lib/example-app"),
+            Assert.True(data.Any(e => e.Kind == TarEntryKind.Directory && e.Name == "./usr/lib/example-app"),
                 "The install-root directory entry must be present.");
         }
         finally
@@ -119,6 +94,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void MapsSemVerToDebianVersion()
     {
         var input = CreateInputDirectory();
@@ -139,13 +115,13 @@ internal static class DebTests
             };
             var artifacts = new DebBundler().BuildAsync(configuration).GetAwaiter().GetResult();
             var deb = artifacts.Single();
-            Assert(deb.Path.EndsWith("example-app_2.5.0~beta.3+build.7-1_arm64.deb", StringComparison.Ordinal),
+            Assert.True(deb.Path.EndsWith("example-app_2.5.0~beta.3+build.7-1_arm64.deb", StringComparison.Ordinal),
                 $"SemVer must map to '~' prerelease and '_arm64' file naming, got: {deb.Path}");
             var members = DebPackageReader.ReadAr(deb.Path);
             var control = Encoding.UTF8.GetString(
                 DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[1].Content))
                     .Single(e => e.Name == "./control").Content);
-            Assert(control.Contains("Version: 2.5.0~beta.3+build.7-1\n", StringComparison.Ordinal) &&
+            Assert.True(control.Contains("Version: 2.5.0~beta.3+build.7-1\n", StringComparison.Ordinal) &&
                    control.Contains("Architecture: arm64\n", StringComparison.Ordinal),
                 $"Control lacks the mapped version/arm64:\n{control}");
         }
@@ -155,6 +131,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void MapsOverrides()
     {
         var input = CreateInputDirectory();
@@ -174,22 +151,22 @@ internal static class DebTests
                 .GetAwaiter().GetResult();
             var deb = artifacts.Single();
             // The file name drops the epoch and keeps the explicit arch/revision.
-            Assert(deb.Path.EndsWith("custom-name_9.9.9-5_armhf.deb", StringComparison.Ordinal),
+            Assert.True(deb.Path.EndsWith("custom-name_9.9.9-5_armhf.deb", StringComparison.Ordinal),
                 $"Unexpected override artifact name: {deb.Path}");
             var members = DebPackageReader.ReadAr(deb.Path);
             var control = Encoding.UTF8.GetString(
                 DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[1].Content))
                     .Single(e => e.Name == "./control").Content);
-            Assert(control.Contains("Package: custom-name\n", StringComparison.Ordinal) &&
+            Assert.True(control.Contains("Package: custom-name\n", StringComparison.Ordinal) &&
                    control.Contains("Version: 2:9.9.9-5\n", StringComparison.Ordinal) &&
                    control.Contains("Architecture: armhf\n", StringComparison.Ordinal) &&
                    control.Contains("Maintainer: Custom Maintainer <m@example.com>\n", StringComparison.Ordinal),
                 $"Control lacks the overrides:\n{control}");
             var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
             var link = data.SingleOrDefault(e => e.Name == "./usr/bin/custom-cli");
-            Assert(link is not null && link.LinkTarget == "/opt/custom-name/ExampleApp",
+            Assert.True(link is not null && link.LinkTarget == "/opt/custom-name/ExampleApp",
                 $"A non-usr install root must use an absolute link target, got '{link?.LinkTarget}'.");
-            Assert(data.Any(e => e.Name == "./opt/custom-name/ExampleApp"),
+            Assert.True(data.Any(e => e.Name == "./opt/custom-name/ExampleApp"),
                 "The payload must land under the overridden install root.");
         }
         finally
@@ -198,6 +175,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void DisablesBinLink()
     {
         var input = CreateInputDirectory();
@@ -209,7 +187,7 @@ internal static class DebTests
                 .GetAwaiter().GetResult();
             var members = DebPackageReader.ReadAr(artifacts.Single().Path);
             var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
-            Assert(!data.Any(e => e.Name.StartsWith("./usr/bin/", StringComparison.Ordinal)),
+            Assert.True(!data.Any(e => e.Name.StartsWith("./usr/bin/", StringComparison.Ordinal)),
                 "BinLink=\"\" must remove the usr/bin symlink.");
         }
         finally
@@ -218,6 +196,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void RejectsInvalidSettings()
     {
         var input = CreateInputDirectory();
@@ -248,9 +227,9 @@ internal static class DebTests
                 {
                     thrown = true;
                 }
-                Assert(thrown, $"The '{name}' case must fail validation.");
+                Assert.True(thrown, $"The '{name}' case must fail validation.");
                 var debDir = Path.Combine(output, "linux-x64", "deb");
-                Assert(!Directory.Exists(debDir) || !Directory.EnumerateFiles(debDir, "*.deb").Any(),
+                Assert.True(!Directory.Exists(debDir) || !Directory.EnumerateFiles(debDir, "*.deb").Any(),
                     $"The '{name}' case left a .deb artifact behind.");
             }
         }
@@ -260,6 +239,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void DerivesKebabName()
     {
         var input = CreateInputDirectory();
@@ -278,7 +258,7 @@ internal static class DebTests
                 Targets = configuration.Targets
             };
             var artifacts = new DebBundler().BuildAsync(renamed).GetAwaiter().GetResult();
-            Assert(artifacts.Single().Path.EndsWith("hello-deb-app_1.0.0-1_amd64.deb", StringComparison.Ordinal),
+            Assert.True(artifacts.Single().Path.EndsWith("hello-deb-app_1.0.0-1_amd64.deb", StringComparison.Ordinal),
                 $"The product name must kebab-case into the package name, got: {artifacts.Single().Path}");
         }
         finally
@@ -287,6 +267,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void Md5sumsMatch()
     {
         var input = CreateInputDirectory();
@@ -310,10 +291,10 @@ internal static class DebTests
                 var actual = string.Concat(
                     System.Security.Cryptography.MD5.HashData(entry.Content)
                         .Select(b => b.ToString("x2")));
-                Assert(expectedHash == actual,
+                Assert.True(expectedHash == actual,
                     $"md5sums mismatch for {path}.");
             }
-            Assert(md5sums.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            Assert.True(md5sums.Split('\n', StringSplitOptions.RemoveEmptyEntries)
                     .All(line => !line.Contains("usr/bin/example-app")),
                 "The md5sums list must cover regular files only, not the symlink.");
         }
@@ -323,6 +304,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void WritesDesktopIntegration()
     {
         var input = CreateInputDirectory();
@@ -370,7 +352,7 @@ internal static class DebTests
 
             var desktop = Encoding.UTF8.GetString(
                 data.Single(e => e.Name == "./usr/share/applications/example-app.desktop").Content);
-            Assert(desktop.Contains("Type=Application\n", StringComparison.Ordinal) &&
+            Assert.True(desktop.Contains("Type=Application\n", StringComparison.Ordinal) &&
                    desktop.Contains("Name=Example App\n", StringComparison.Ordinal) &&
                    desktop.Contains("Comment=Example application\n", StringComparison.Ordinal) &&
                    desktop.Contains("Exec=example-app %u\n", StringComparison.Ordinal) &&
@@ -380,7 +362,7 @@ internal static class DebTests
                    desktop.Contains("MimeType=application/x-bundle;x-scheme-handler/bdl;\n", StringComparison.Ordinal),
                 $"The generated .desktop content is wrong:\n{desktop}");
 
-            Assert(data.Any(e => e.Name == "./usr/share/icons/hicolor/48x48/apps/example-app.png") &&
+            Assert.True(data.Any(e => e.Name == "./usr/share/icons/hicolor/48x48/apps/example-app.png") &&
                    data.Any(e => e.Name == "./usr/share/icons/hicolor/48x48@2/apps/example-app.png"),
                 "Icons must land under hicolor <WxH> and <WxH>@2 directories.");
         }
@@ -392,6 +374,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void WritesRelationAndDocFields()
     {
         var input = CreateInputDirectory();
@@ -451,20 +434,20 @@ internal static class DebTests
                 "Priority: extra\n"
             })
             {
-                Assert(control.Contains(field, StringComparison.Ordinal),
+                Assert.True(control.Contains(field, StringComparison.Ordinal),
                     $"control lacks '{field.Trim()}':\n{control}");
             }
             var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
-            Assert(data.Any(e => e.Name == "./usr/share/metainfo/example-app.metainfo.xml"),
+            Assert.True(data.Any(e => e.Name == "./usr/share/metainfo/example-app.metainfo.xml"),
                 "metainfo must land under usr/share/metainfo.");
             var copyright = data.SingleOrDefault(e => e.Name == "./usr/share/doc/example-app/copyright");
-            Assert(copyright is not null && Encoding.UTF8.GetString(copyright.Content) == "MIT\n",
+            Assert.True(copyright is not null && Encoding.UTF8.GetString(copyright.Content) == "MIT\n",
                 "LicenseFile must land at usr/share/doc/<pkg>/copyright.");
             var gz = data.Single(e => e.Name == "./usr/share/doc/example-app/changelog.gz");
-            Assert(Encoding.UTF8.GetString(DebPackageReader.Ungzip(gz.Content)) == "# Changelog\n",
+            Assert.True(Encoding.UTF8.GetString(DebPackageReader.Ungzip(gz.Content)) == "# Changelog\n",
                 "ChangelogFile must land gzipped at changelog.gz.");
             var conf = data.SingleOrDefault(e => e.Name == "./etc/example-app/defaults.conf");
-            Assert(conf is not null && Encoding.UTF8.GetString(conf.Content) == "key=value\n",
+            Assert.True(conf is not null && Encoding.UTF8.GetString(conf.Content) == "key=value\n",
                 "DebFile entries must land at their absolute destination.");
         }
         finally
@@ -473,6 +456,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void RejectsInvalidMetadata()
     {
         var input = CreateInputDirectory();
@@ -520,7 +504,7 @@ internal static class DebTests
                 {
                     thrown = true;
                 }
-                Assert(thrown, $"The '{name}' case must fail validation.");
+                Assert.True(thrown, $"The '{name}' case must fail validation.");
             }
         }
         finally
@@ -529,6 +513,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void DesktopFileOverride()
     {
         var input = CreateInputDirectory();
@@ -546,7 +531,7 @@ internal static class DebTests
             var members = DebPackageReader.ReadAr(deb.Path);
             var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
             var entry = data.Single(e => e.Name == "./usr/share/applications/example-app.desktop");
-            Assert(Encoding.UTF8.GetString(entry.Content) == custom,
+            Assert.True(Encoding.UTF8.GetString(entry.Content) == custom,
                 "A DesktopFile override must be packed verbatim.");
         }
         finally
@@ -555,6 +540,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void MaintainerScriptsAndConffiles()
     {
         var input = CreateInputDirectory();
@@ -592,18 +578,18 @@ internal static class DebTests
             var controlEntries = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[1].Content));
 
             var postinstEntry = controlEntries.Single(e => e.Name == "./postinst");
-            Assert(postinstEntry.Mode == 493, "postinst must be mode 0755.");
-            Assert(Encoding.UTF8.GetString(postinstEntry.Content).Contains("touch /tmp/marker", StringComparison.Ordinal),
+            Assert.True(postinstEntry.Mode == 493, "postinst must be mode 0755.");
+            Assert.True(Encoding.UTF8.GetString(postinstEntry.Content).Contains("touch /tmp/marker", StringComparison.Ordinal),
                 "postinst content must be verbatim.");
-            Assert(controlEntries.Any(e => e.Name == "./prerm" && e.Mode == 493),
+            Assert.True(controlEntries.Any(e => e.Name == "./prerm" && e.Mode == 493),
                 "prerm must be present with mode 0755.");
-            Assert(!controlEntries.Any(e => e.Name == "./preinst" || e.Name == "./postrm"),
+            Assert.True(!controlEntries.Any(e => e.Name == "./preinst" || e.Name == "./postrm"),
                 "Unset scripts must not be packed.");
 
             var conffiles = controlEntries.SingleOrDefault(e => e.Name == "./conffiles");
-            Assert(conffiles is not null, "conffiles member is missing.");
+            Assert.True(conffiles is not null, "conffiles member is missing.");
             var list = Encoding.UTF8.GetString(conffiles!.Content);
-            Assert(list == "/etc/example-app/defaults.conf\n/usr/lib/example-app/libplaceholder.conf\n",
+            Assert.True(list == "/etc/example-app/defaults.conf\n/usr/lib/example-app/libplaceholder.conf\n",
                 $"conffiles must list the /etc DebFile destination plus explicit entries:\n{list}");
         }
         finally
@@ -612,6 +598,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void SystemdUnitDaemonReload()
     {
         var input = CreateInputDirectory();
@@ -645,16 +632,16 @@ internal static class DebTests
             var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
 
             var unitEntry = data.SingleOrDefault(e => e.Name == "./usr/lib/systemd/system/example-app.service");
-            Assert(unitEntry is not null, "The systemd unit must land under usr/lib/systemd/system/.");
-            Assert(Encoding.UTF8.GetString(unitEntry!.Content).Contains("ExecStart=/usr/bin/example-app"),
+            Assert.True(unitEntry is not null, "The systemd unit must land under usr/lib/systemd/system/.");
+            Assert.True(Encoding.UTF8.GetString(unitEntry!.Content).Contains("ExecStart=/usr/bin/example-app"),
                 "The unit content must be verbatim.");
 
             var postinstEntry = controlEntries.Single(e => e.Name == "./postinst");
             var postinstText = Encoding.UTF8.GetString(postinstEntry.Content);
-            Assert(postinstText.Contains("ldconfig", StringComparison.Ordinal) &&
+            Assert.True(postinstText.Contains("ldconfig", StringComparison.Ordinal) &&
                    postinstText.Contains("systemctl daemon-reload || true", StringComparison.Ordinal),
                 $"postinst must merge the caller script with daemon-reload:\n{postinstText}");
-            Assert(postinstEntry.Mode == 493, "The synthesized postinst must be 0755.");
+            Assert.True(postinstEntry.Mode == 493, "The synthesized postinst must be 0755.");
 
             // Unit only (no caller postinst) must still synthesize a valid script.
             var deb2 = new DebBundler(new DebBundleConfiguration { SystemdServiceFile = unit })
@@ -663,7 +650,7 @@ internal static class DebTests
                 DebPackageReader.Ungzip(DebPackageReader.ReadAr(deb2.Path)[1].Content));
             var soloPostinst = control2.Single(e => e.Name == "./postinst");
             var soloText = Encoding.UTF8.GetString(soloPostinst.Content);
-            Assert(soloText.StartsWith("#!/bin/sh\n", StringComparison.Ordinal) &&
+            Assert.True(soloText.StartsWith("#!/bin/sh\n", StringComparison.Ordinal) &&
                    soloText.Contains("systemctl daemon-reload || true", StringComparison.Ordinal),
                 $"The synthesized postinst must be self-contained:\n{soloText}");
         }
@@ -673,6 +660,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void RejectsInvalidDeb3Knobs()
     {
         var input = CreateInputDirectory();
@@ -709,7 +697,7 @@ internal static class DebTests
                 {
                     thrown = true;
                 }
-                Assert(thrown, $"The '{name}' case must fail validation.");
+                Assert.True(thrown, $"The '{name}' case must fail validation.");
             }
         }
         finally
@@ -731,6 +719,7 @@ internal static class DebTests
         return png;
     }
 
+    [Fact]
     static void StagesResources()
     {
         var input = CreateInputDirectory();
@@ -756,7 +745,7 @@ internal static class DebTests
                 }).GetAwaiter().GetResult().Single();
             var members = DebPackageReader.ReadAr(deb.Path);
             var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
-            Assert(data.Any(e => e.Name == "./usr/lib/example-app/docs/note.txt" &&
+            Assert.True(data.Any(e => e.Name == "./usr/lib/example-app/docs/note.txt" &&
                                  e.Mode == 420),
                 "A resource must land under the install root at its TargetPath.");
         }
@@ -766,6 +755,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void WritesPackagingChangelog()
     {
         var input = CreateInputDirectory();
@@ -778,14 +768,14 @@ internal static class DebTests
             var control = Encoding.UTF8.GetString(
                 DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[1].Content))
                     .Single(e => e.Name == "./control").Content);
-            Assert(control.Contains(" Packaged with DotNet.Bundler.\n", StringComparison.Ordinal),
+            Assert.True(control.Contains(" Packaged with DotNet.Bundler.\n", StringComparison.Ordinal),
                 $"A single-line description must gain an extended line:\n{control}");
             var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
             var changelog = data.SingleOrDefault(
                 e => e.Name == "./usr/share/doc/example-app/changelog.Debian.gz");
-            Assert(changelog is not null, "The payload lacks changelog.Debian.gz.");
+            Assert.True(changelog is not null, "The payload lacks changelog.Debian.gz.");
             var text = Encoding.UTF8.GetString(DebPackageReader.Ungzip(changelog!.Content));
-            Assert(text.StartsWith("example-app (1.0.0-1) unstable; urgency=low", StringComparison.Ordinal) &&
+            Assert.True(text.StartsWith("example-app (1.0.0-1) unstable; urgency=low", StringComparison.Ordinal) &&
                    text.Contains(" -- Example Publisher  Tue, 01 Jan 1980", StringComparison.Ordinal),
                 $"changelog.Debian.gz lacks the expected stanza:\n{text}");
         }
@@ -795,6 +785,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void DeterministicBytes()
     {
         var input = CreateInputDirectory();
@@ -806,7 +797,7 @@ internal static class DebTests
             var secondDir = Path.Combine(output, "second");
             var second = new DebBundler().BuildAsync(DebConfiguration(input, secondDir))
                 .GetAwaiter().GetResult().Single().Path;
-            Assert(File.ReadAllBytes(first).SequenceEqual(File.ReadAllBytes(second)),
+            Assert.True(File.ReadAllBytes(first).SequenceEqual(File.ReadAllBytes(second)),
                 "Two builds of the same input must produce byte-identical .deb files.");
         }
         finally
@@ -815,6 +806,7 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void Sha256Sidecar()
     {
         var input = CreateInputDirectory();
@@ -824,10 +816,10 @@ internal static class DebTests
             var deb = new DebBundler().BuildAsync(DebConfiguration(input, output))
                 .GetAwaiter().GetResult().Single();
             var sidecar = deb.Path + ".sha256";
-            Assert(File.Exists(sidecar), "The .sha256 sidecar is missing.");
+            Assert.True(File.Exists(sidecar), "The .sha256 sidecar is missing.");
             var expected = DebPackageWriter.Sha256Hex(File.ReadAllBytes(deb.Path));
             var line = File.ReadAllText(sidecar).Trim();
-            Assert(line == expected + "  " + Path.GetFileName(deb.Path),
+            Assert.True(line == expected + "  " + Path.GetFileName(deb.Path),
                 $"The sidecar must be '<sha256>  <file>', got '{line}'.");
         }
         finally
@@ -836,12 +828,13 @@ internal static class DebTests
         }
     }
 
+    [Fact]
     static void MapsDebSettingsThroughMsBuild()
     {
         var targets = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
         var props = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.props"));
         var task = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
-        Assert(targets.Contains("DebPackageName=\"$(BundlerDebPackageName)\"", StringComparison.Ordinal) &&
+        Assert.True(targets.Contains("DebPackageName=\"$(BundlerDebPackageName)\"", StringComparison.Ordinal) &&
                targets.Contains("DebVersion=\"$(BundlerDebVersion)\"", StringComparison.Ordinal) &&
                targets.Contains("DebRevision=\"$(BundlerDebRevision)\"", StringComparison.Ordinal) &&
                targets.Contains("DebEpoch=\"$(BundlerDebEpoch)\"", StringComparison.Ordinal) &&
@@ -870,7 +863,7 @@ internal static class DebTests
                targets.Contains("DebFiles=\"@(BundlerDebFile)\"", StringComparison.Ordinal) &&
                task.Contains("DebFiles.Select(item => new DebFileEntry", StringComparison.Ordinal),
             "MSBuild does not map the BundlerDeb* properties to the task.");
-        Assert(props.Contains("<BundlerDebPackageName", StringComparison.Ordinal) &&
+        Assert.True(props.Contains("<BundlerDebPackageName", StringComparison.Ordinal) &&
                props.Contains("<BundlerDebInstallRoot", StringComparison.Ordinal) &&
                props.Contains("<BundlerDebDepends", StringComparison.Ordinal) &&
                props.Contains("<BundlerDebCategories", StringComparison.Ordinal) &&
@@ -880,19 +873,20 @@ internal static class DebTests
                props.Contains("<BundlerDebConffiles", StringComparison.Ordinal) &&
                props.Contains("<BundlerDebCompression", StringComparison.Ordinal),
             "The BundlerDeb* properties lack defaults in the .props file.");
-        Assert(task.Contains("new DebBundler(", StringComparison.Ordinal) &&
+        Assert.True(task.Contains("new DebBundler(", StringComparison.Ordinal) &&
                task.Contains("PackageFormat.Deb", StringComparison.Ordinal),
             "The MSBuild task does not construct the .deb backend.");
         var msbuildProject = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "Bundler.MSBuild.csproj"));
-        Assert(msbuildProject.Contains("DotNet.Bundler.Deb.dll", StringComparison.Ordinal),
+        Assert.True(msbuildProject.Contains("DotNet.Bundler.Deb.dll", StringComparison.Ordinal),
             "The MSBuild package does not pack the Deb backend assembly.");
     }
 
     // A unix socket (or any other non-regular file) inside the input must be
     // skipped rather than packaged.
+    [Fact]
     static void SkipsNonRegularPayloadFiles()
     {
-        if (OperatingSystem.IsWindows()) return;
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "requires a non-Windows host");
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         try
@@ -912,9 +906,9 @@ internal static class DebTests
             var members = DebPackageReader.ReadAr(artifact.Path);
             var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
             var names = data.Select(e => e.Name).ToArray();
-            Assert(names.Contains("./usr/lib/example-app/ExampleApp"),
+            Assert.True(names.Contains("./usr/lib/example-app/ExampleApp"),
                 "regular payload files must still be packaged");
-            Assert(!names.Any(name => name.EndsWith("agent.sock", StringComparison.Ordinal)),
+            Assert.True(!names.Any(name => name.EndsWith("agent.sock", StringComparison.Ordinal)),
                 $"a unix socket must not be packaged: {string.Join(',', names)}");
         }
         finally
@@ -970,17 +964,5 @@ internal static class DebTests
 
     static string RepositoryRoot() => Path.GetFullPath("../../../../../", AppContext.BaseDirectory);
 
-    static Task RunSync(Action action)
-    {
-        action();
-        return Task.CompletedTask;
-    }
 
-    static void Assert(bool condition, string message)
-    {
-        if (!condition)
-        {
-            throw new InvalidOperationException("Assertion failed: " + message);
-        }
-    }
 }

@@ -248,7 +248,7 @@ Windows 脚本省略 `-PackageVersion` 时从根 `Directory.Build.props` 读取�
 
 ```powershell
 dotnet build Bundler.slnx -c Release
-dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
+dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
