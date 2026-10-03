@@ -118,6 +118,11 @@ internal static class DockerRunner
         {
             foreach (var mount in mounts)
             {
+                // docker 对不存在的 -v 源会在宿主自动建 root 属空目录——污染工作区
+                // 且让后续 publish 撞 EACCES；挂载源缺失必须先于 docker run 失败。
+                Assert.True(
+                    File.Exists(mount.HostPath) || Directory.Exists(mount.HostPath),
+                    $"docker mount source missing on host: {mount.HostPath}");
                 args.AddRange(["-v", $"{mount.HostPath}:{mount.ContainerPath}{(mount.ReadOnly ? ":ro" : "")}"]);
             }
         }
