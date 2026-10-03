@@ -1,8 +1,8 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-01
+> 最后更新：2026-10-03
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.66`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.67`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -85,6 +85,18 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-03 四宿主完整测试（测试正规化验证，PR #16 并入 `main`）
+
+- 改造内容：`tests/Bundler.Tests` 迁 xUnit v3（270 用例全注册，`dotnet test` + MTP，宿主门控 `Assert.Skip`，`--external-sign-fixture` 自调用保留）；
+  断言语义分级惯用化（368 处）；10 个 `*.Api.PackageFixture` 收编 `tests/Bundler.ApiTests`（产出契约改 `<FORMAT>_API_FIXTURE_OUTPUT` 环境变量，
+  集成脚本 `dotnet test --filter-class` 复用）；MSI 共享 `Program.cs` 移入 `Standalone/`（仓外包消费腿不变）；
+  `Pack-MsiTestPackages` 前导 `dotnet build-server shutdown` 消除四轮复现的 nodeReuse 任务程序集文件锁。
+- 全量腿四宿主全绿：构建 0W/0E + 16 nupkg（`alpha.67`）；`Bundler.Tests` 254/231/231/226（win/linux/mac/alpine，0 败；alpine 5 败=makensis glibc 边界）；
+  `Bundler.ApiTests` 门禁符合预期（win 7P/3S、linux 7P/3S、mac 8P/2S、alpine 6P/4S）；集成腿全过（win：NSIS 28 bundles+MSI 9 脚本本真安装；
+  linux：6 `Verify.sh` 含 FUSE 挂载；mac：App/Dmg/Pkg/Cli；alpine：Apk 含 binfmt 实装）。
+- 联合测试：四产方 99 件产出 sha256 核对 130/130 行全吻合；99 格装卸全过（msi-x86 缺 x86 运行时、msi-arm64 拒装两个预期边界）。
+- 修复闭环：`KeepsPackageConsumerVersionsAligned` 断言改指 ApiTests 全后端项目引用；`IsMusl` 改探测 `ld-musl-*` 加载器覆盖非 Alpine musl（Devin Review 发现）。
+
 ### 2026-10-02 四宿主完整测试（项目引用改造验证，PR #15 并入 `main`）
 
 - 改造内容：仓内 29 个示例/fixture 由 `PackageReference` 改项目引用，接线在 `Bundler.ProjectReference.targets`；
@@ -159,7 +171,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 无未启动的后端立项项；新立项按 `docs/roadmap.md` §7.2 准入与新后端完整路线规则。
-剩余工作：文档整理（本轮进行中）、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（tar 流式条目、Zip64 等按 `docs/archive-open-items.md` 评估）。
+剩余工作：外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（tar 流式条目、Zip64 等按 `docs/archive-open-items.md` 评估）。
 
 ## 7. 历史记录
 
