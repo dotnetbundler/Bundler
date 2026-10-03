@@ -90,6 +90,7 @@ git status --short
 dotnet build Bundler.slnx -c Release
 dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet test tests/Bundler.ApiTests/Bundler.ApiTests.csproj -c Release
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 ```
 

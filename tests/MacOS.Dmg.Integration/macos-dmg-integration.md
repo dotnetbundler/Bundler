@@ -1,16 +1,19 @@
 # macOS .dmg 集成测试
 
-MAC-DMG-1..4 的本机真实验证入口：真实 .NET payload → `BundlerFormats=dmg`（自动产出 `.app` 中间产物）→ `hdiutil attach` 挂载断言卷内容 → `detach` → `hdiutil verify`；另覆盖 Finder 布局/背景图/卷图标、SLA 注入与真实挂载门控、quarantine 传播、osx-x64 产物、DMG 本体 codesign、非法压缩值失败路径。
+测试体已收编进 `tests/Bundler.IntegrationTests`（`MacDmgIntegrationTests`，xUnit v3）；
+`Verify.sh` 只是薄入口，按 `--filter-class` 转发到对应测试类。覆盖 MAC-DMG-1..4 的本机真实验证：真实 .NET payload → `BundlerFormats=dmg`（自动产出 `.app` 中间产物）→ `hdiutil attach` 挂载断言卷内容 → `detach` → `hdiutil verify`；另覆盖 Finder 布局/背景图/卷图标、SLA 注入与真实挂载门控、quarantine 传播、osx-x64 产物、DMG 本体 codesign、非法压缩值失败路径。
 
 ## 运行
 
 ```bash
 bash tests/MacOS.Dmg.Integration/Verify.sh
+# 直接入口
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release -- --filter-class MacDmgIntegrationTests
 ```
 
 ## 前置条件
 
-- macOS 宿主（脚本自带 `uname` 检查，非 macOS 直接拒绝）；
+- macOS 宿主（非 macOS 宿主类级门禁全部记 SKIP）；
 - dotnet SDK（打包 `DotNet.Bundler*` 包供 fixture 消费）；
 - `hdiutil`/`plutil`/`unzip`/`python3`（macOS 自带）；
 - GUI 会话（可选）：无 GUI 时 Finder 布局按设计降级为警告，`.DS_Store` 断言自动跳过。
@@ -27,4 +30,4 @@ bash tests/MacOS.Dmg.Integration/Verify.sh
 - `BundlerMacDmgSkipWindowLayout=true` 变体：构建产物照常验证（跳过 osascript 的断言在单测覆盖）。
 - MAC-DMG-3 EULA+签名变体（`BundlerTestDmgLicense=true` + `BundlerTestDmgSignIdentity=-`）：`hdiutil udifderez -xml` 回读断言 `LPic`/`STR#`/`TEXT` SLA 资源已注入；`codesign --verify` 通过且 `codesign -dvvv` 报 `Signature=adhoc`。
 
-产物仅落在 `artifacts/macos-dmg-integration`（脚本用 `.bundler-identity` 标记自建目录，退出时整体清理；已挂载卷强制 detach）。
+产物仅落在 `artifacts/macos-dmg-integration`（测试工作区用 `.bundler-identity` 标记自建目录，退出时整体清理；已挂载卷强制 detach）。

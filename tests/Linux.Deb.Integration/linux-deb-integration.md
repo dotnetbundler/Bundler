@@ -1,16 +1,19 @@
 # Linux .deb 集成测试
 
-LINUX-DEB-1..4 的本机真实验证入口：真实 .NET payload → `BundlerFormats=deb` → `ar`/`dpkg-deb` 结构断言 → `dpkg-deb -I/-c` 元数据与清单核对 → `md5sums`/`sha256` 校验 → 免密 `sudo dpkg -i/-r` 真实装卸烟雾 → lintian 豁免基线门控 + docker `debian:stable`/`ubuntu:latest` 容器装卸矩阵。
+测试体已收编进 `tests/Bundler.IntegrationTests`（`DebIntegrationTests`，xUnit v3）；
+`Verify.sh` 只是薄入口，按 `--filter-class` 转发到对应测试类。覆盖 LINUX-DEB-1..4 的本机真实验证：真实 .NET payload → `BundlerFormats=deb` → `ar`/`dpkg-deb` 结构断言 → `dpkg-deb -I/-c` 元数据与清单核对 → `md5sums`/`sha256` 校验 → 免密 `sudo dpkg -i/-r` 真实装卸烟雾 → lintian 豁免基线门控 + docker `debian:stable`/`ubuntu:latest` 容器装卸矩阵。
 
 ## 运行
 
 ```bash
 bash tests/Linux.Deb.Integration/Verify.sh
+# 直接入口
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release -- --filter-class DebIntegrationTests
 ```
 
 ## 前置条件
 
-- Linux 宿主（脚本自带 `uname` 检查，非 Linux 直接拒绝），dpkg/apt 系发行版；
+- Linux 宿主（非 Linux 宿主类级门禁全部记 SKIP），dpkg/apt 系发行版；
 - dotnet SDK（打包 `DotNet.Bundler*` 包供 fixture 消费）；
 - `ar`/`tar`/`md5sum`/`sha256sum`/`dpkg-deb`/`unzip`/`gzip`；
 - 可选：`desktop-file-validate`、`lintian`（缺失时对应断言记 SKIP/信息级）；
@@ -35,10 +38,12 @@ bash tests/Linux.Deb.Integration/Verify.sh
 - docker 矩阵（LINUX-DEB-4）：`debian:stable`/`ubuntu:latest` 容器内真实 `dpkg -i`/运行/`-r`/`-P` 全绿；
 - lintian 基线（LINUX-DEB-4）：豁免清单 `lintian-exemptions.txt` 硬断言，新 tag 即失败；
 - 失败路径：相对 `InstallRoot`、非法 `Priority`、非法 `Categories`、非 `gzip` 压缩均使 publish 失败且无 `.deb` 产物；
-- `tests/Deb.Api.PackageFixture`（直接 API 消费 `DotNet.Bundler.Deb` NuGet 包）冒烟；
+- `tests/Bundler.ApiTests` 的 `DebApiTests`（直接 API 消费 `DotNet.Bundler.Deb` NuGet 包）冒烟；
 - 真实装卸：`sudo dpkg -i` 后 `dpkg -s`/`dpkg -L`（含 `.desktop`/图标/metainfo/`copyright`/`changelog.gz`/`/etc` 逐项路径断言）与 `/usr/bin` 链接启动均通过，装后 `.desktop` 回读 + `desktop-file-validate` 复核，`sudo dpkg -r` 后零残留断言；
 - `lintian` 以信息级跑全包（不阻断），残余发现登记 `docs/linux-deb-open-items.md` LINUX-DEB-OI-07。
 
-产物仅落在 `artifacts/linux-deb-integration`（脚本用 `.bundler-identity` 标记自建目录，退出时整体清理）。
+产物仅落在 `artifacts/linux-deb-integration`（测试工作区用 `.bundler-identity` 标记自建目录，退出时整体清理）。
+
+宿主 `dpkg` 架构口径非 `amd64`（如 musl 发行版的 dpkg）或缺失时宿主真装腿记 SKIP，真实装卸覆盖由 docker 发行版矩阵腿承担。
 
 真实 `dpkg -i/-r` 修改宿主 dpkg 数据库；其余发行版矩阵（rpm 系宿主构建、Debian 老版本、ARM64 机器）、真实桌面环境观感与 lintian 残余处置属外部待验收（`docs/linux-deb-open-items.md` / `linux-deb-manual-testing.md`）。

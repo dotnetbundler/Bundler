@@ -1,16 +1,19 @@
 # Linux .rpm 集成测试
 
-LINUX-RPM-1..4 与 SIGN-1 的本机真实验证入口：真实 .NET payload → `BundlerFormats=rpm` → `rpm -qip`/`--queryformat` 逐字段断言（含关系字段三件套与 FILEFLAGS %doc/%license）→ `desktop-file-validate` → `rpm2cpio`/`cpio` 载荷回读 → docker `fedora`/`rockylinux`/`opensuse` 三容器真实 `rpm -i`/`rpm -ql` 逐路径/`rpm -e` 零残留 + rpmlint 豁免基线门控 → 可选 GPG 签名腿（测试密钥现生成，容器内 `rpm --import` + `rpm -K` 验签断言）。
+测试体已收编进 `tests/Bundler.IntegrationTests`（`RpmIntegrationTests`，xUnit v3）；
+`Verify.sh` 只是薄入口，按 `--filter-class` 转发到对应测试类。覆盖 LINUX-RPM-1..4 与 SIGN-1 的本机真实验证：真实 .NET payload → `BundlerFormats=rpm` → `rpm -qip`/`--queryformat` 逐字段断言（含关系字段三件套与 FILEFLAGS %doc/%license）→ `desktop-file-validate` → `rpm2cpio`/`cpio` 载荷回读 → docker `fedora`/`rockylinux`/`opensuse` 三容器真实 `rpm -i`/`rpm -ql` 逐路径/`rpm -e` 零残留 + rpmlint 豁免基线门控 → 可选 GPG 签名腿（测试密钥现生成，容器内 `rpm --import` + `rpm -K` 验签断言）。
 
 ## 运行
 
 ```bash
 bash tests/Linux.Rpm.Integration/Verify.sh
+# 直接入口
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release -- --filter-class RpmIntegrationTests
 ```
 
 ## 前置条件
 
-- Linux 宿主（脚本自带 `uname` 检查，非 Linux 直接拒绝）；
+- Linux 宿主（非 Linux 宿主类级门禁全部记 SKIP）；
 - dotnet SDK（打包 `DotNet.Bundler*` 包供 fixture 消费）；
 - `sha256sum`/`unzip`/`gzip`（必需）；
 - 可选：`rpm`、`rpm2cpio`+`cpio`、`rpmlint`、`docker`、`desktop-file-validate`（缺失时对应断言记 SKIP）；
@@ -34,7 +37,7 @@ bash tests/Linux.Rpm.Integration/Verify.sh
 - 失败变体扩展：非法依赖子句（`!=`）与相对 `BundlerRpmFile` 目标均使 publish 失败；
 - 容器断言扩展：装后 `rpm -ql` 逐路径 + `rpm -qd` %doc 可见 + 卸载带走包自有叶子目录；
 - RPM-3 断言：`-p:BundlerTestRpmScripts=1` 变体在容器内真实执行 `%pre`/`%post`/`%preun`/`%postun`（标记文件逐行断言）、systemd unit 落位与 `daemon-reload` 合成；`%config(noreplace)` 语义——`rpm -e` 对修改过的 `/etc` 文件保留 `.rpmsave`、`rpm -U` 升级（Release=1→2）原地保留；CRLF scriptlet/越界 ConfigFiles/非 gzip 压缩三失败变体；
-- `tests/Rpm.Api.PackageFixture`（直接 API 消费 `DotNet.Bundler.Rpm` NuGet 包）冒烟；
+- `tests/Bundler.ApiTests` 的 `RpmApiTests`（直接 API 消费 `DotNet.Bundler.Rpm` NuGet 包）冒烟；
 - `rpmlint` 硬断言门控（LINUX-RPM-4 起生效）：出现 `rpmlint-exemptions.txt` 之外的 tag 即失败；当前豁免 7 项（no-signature/no-packager-tag/no-group-tag/no-changelogname-tag/invalid-license/binary-or-shlib-defines-rpath/no-manual-page-for-binary）。
 
 ## 已知边界
@@ -42,4 +45,4 @@ bash tests/Linux.Rpm.Integration/Verify.sh
 linux-arm64 产物结构断言（`*.aarch64.rpm`、`ARCH=aarch64`、载荷结构——结构已测、真机安装仍登记 OI）
 - docker 发行版装卸矩阵：`fedora:latest`+`rockylinux:9`+`opensuse/leap:latest` 三容器真实 `rpm -i/-e`（镜像不可拉取时记 SKIP）
 
-arm64 真机安装属外部待验收——登记 `docs/linux-rpm-open-items.md`；GPG 签名已实现（SIGN-1，本脚本含签名腿断言）。
+arm64 真机安装属外部待验收——登记 `docs/linux-rpm-open-items.md`；GPG 签名已实现（SIGN-1，测试内含签名腿断言）。

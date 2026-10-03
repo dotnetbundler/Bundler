@@ -86,15 +86,17 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
-### 2026-10-03 集成测试体全量收编 `Bundler.IntegrationTests`（进行中，未提交）
+### 2026-10-03 集成测试体全量收编 `Bundler.IntegrationTests`（分支 `devin/1791047844-integration-tests-csharp` @ `7a7fcc8` 已推送，四宿主全绿，未并入 `main`）
 
 - 改造内容：全部集成脚本的测试点逐腿收编进 `tests/Bundler.IntegrationTests`（xUnit v3，--filter-class/-method 选择），
   覆盖 Archive/AlpineApk/Deb/Rpm/AppImage/Cli/MacApp/MacDmg/MacPkg 九脚本 + Windows.Nsis.Integration/Verify.ps1（~30 变体、事务故障注入、旧 MSI 迁移、junction/篡改拒绝、签名链）
   + Windows.Msi.Integration 八脚本（DTF 表级断言 + msiexec 真装卸）。
 - 脚本归宿：`Verify.sh`/`Verify.ps1` 全部降为薄入口转发 `dotnet test`；`tests/AssertLocalRestore.ps1`、`MsiTestSupport.ps1` 删除（能力并入 Tooling）；`Windows.Nsis.Reboot/Verify.ps1` 保留（真实重启属外部待验收）。
 - 同意闸统一为 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1`（薄入口按其原开关语义置位）；NSIS 原脚本无开关，跑脚本即同意。
-- 验证：本机（linux-x64）`dotnet build` 0W/0E；`--filter-class NsisIntegrationTests` 实测 27 事实=1 过+26 按门禁跳过（跳过语义在事实体内生效）；
-  Windows 真装腿未在本机验证——待四宿主完整测试轮复验（win 会话须置 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1`）。
+- 验证（同 HEAD `7a7fcc8` 四宿主 `dotnet test` 全量，0 败）：win 182/49P/133S（Nsis 27+Msi 8+Cli 13 真装真卸）、linux 182/111P/71S（docker 矩阵真装+FUSE 真挂载）、
+  mac 182/51P/131S（MacApp/Dmg/Pkg 含 per-user 真装+relocate 语义）、alpine(musl 容器) 182/97P/85S（含 `linux-musl-x64` 真 AOT 实跑）；本机 linux 计数与宿主逐位吻合。
+- 迭代修复链 7 提交（全部测试侧）：夹具门禁惰性化（ctor 内 SkipWhen 记 fail）与陈旧工作区自愈、dotnet 子命令进程内串行（并发还原撞 `project.assets.json`）、
+  msiexec 1618 整机单例闸+重试、pkg 装腿 relocate 诱饵改隐藏-恢复、进程退出 EOF 等待限时（`build-server shutdown` 挂死根因）、musl 边界腿改真跑/门禁（AOT 宿主 RID、root/dpkg 架构 SKIP）。
 - 版本：`BundlerPackageVersion` 推进 `alpha.68`。
 
 ### 2026-10-03 四宿主完整测试（测试正规化验证，PR #16 并入 `main`）
@@ -182,6 +184,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 ## 6. 默认下一步
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
+在途：集成测试收编分支 `devin/1791047844-integration-tests-csharp` @ `7a7fcc8` 四宿主全绿待裁决并入（§3 首条）。
 无未启动的后端立项项；新立项按 `docs/roadmap.md` §7.2 准入与新后端完整路线规则。
 剩余工作：外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（tar 流式条目、Zip64 等按 `docs/archive-open-items.md` 评估）。
 

@@ -1,15 +1,18 @@
-# Linux .AppImage 集成验证（tests/Linux.AppImage.Integration）
+# Linux .AppImage 集成测试（tests/Linux.AppImage.Integration）
 
-`Verify.sh` 是 `.AppImage` 后端的真实验证入口，覆盖 `LINUX-APPIMAGE-1..4` 与 SIGN-2（可选 GPG 签名：测试密钥现生成，`gpgv` 验签断言）的退出条件。
+测试体已收编进 `tests/Bundler.IntegrationTests`（`AppImageIntegrationTests`，xUnit v3）；
+`Verify.sh` 只是薄入口，按 `--filter-class` 转发到对应测试类。覆盖 `LINUX-APPIMAGE-1..4` 与 SIGN-2（可选 GPG 签名：测试密钥现生成，`gpgv` 验签断言）的退出条件。
 
 ## 用法
 
 ```bash
 bash tests/Linux.AppImage.Integration/Verify.sh
+# 直接入口
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release -- --filter-class AppImageIntegrationTests
 ```
 
-需要 Linux 宿主与 dotnet SDK；可选工具缺失记 SKIP（docker、desktop-file-validate）。
-所有产物落在 `artifacts/linux-appimage-integration/` 并在结束时自清理。
+需要 Linux 宿主与 dotnet SDK；可选工具缺失对应断言记 SKIP（docker、desktop-file-validate）。
+所有产物落在 `artifacts/linux-appimage-integration/`（`.bundler-identity` 身份标记）并由测试工作区退出时清理。
 
 ## 断言面
 
@@ -24,7 +27,7 @@ bash tests/Linux.AppImage.Integration/Verify.sh
 - appimagelint 信息级段：检测到工具则跑、输出不入断言（裁决依据见 roadmap §4 APPIMAGE-3）。
 - 扇出：`BundlerTestFormats=deb%3Brpm%3Bappimage` 一次 publish 三件产物齐备。
 - docker 冒烟：`debian:stable`、`ubuntu:latest`、`fedora:latest` 容器内 `--appimage-extract-and-run` 真实运行断言输出；镜像拉取失败记 SKIP。
-- 直 API 消费：`tests/AppImage.Api.PackageFixture` 经 nupkg 调 `AppImageBundler` 产出真实 `.AppImage`（仅 x86_64 宿主执行）。
+- 直 API 消费：`tests/Bundler.ApiTests` 的 `AppImageApiTests` 经 nupkg 调 `AppImageBundler` 产出真实 `.AppImage`（仅 x86_64 宿主执行）。
 
 ## 与 deb/rpm 的差异
 

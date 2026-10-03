@@ -1,6 +1,7 @@
-# Archive 集成验证说明
+# Archive 集成测试说明
 
-`tests/Archive.Integration/Verify.sh` 是 `.zip`/`.tar.gz` 归档格式的真实集成入口。
+测试体已收编进 `tests/Bundler.IntegrationTests`（`ArchiveIntegrationTests`，xUnit v3）；
+`Verify.sh` 只是薄入口，按 `--filter-class` 转发到对应测试类，是 `.zip`/`.tar.gz` 归档格式的真实集成入口。
 
 ## 覆盖范围
 
@@ -12,7 +13,7 @@
 - `@(BundlerArchiveFile)` 映射落位与非法目标失败变体（不留半成品）。
 - `deb;rpm;appimage;zip;targz` 单 publish 五格式扇出。
 - `win-x64`/`osx-arm64` 交叉目标接受 `zip`。
-- `tests/Archive.Api.PackageFixture`：`DotNet.Bundler.Archive` nupkg 仓库外直 API 消费。
+- `tests/Bundler.ApiTests` 的 `ArchiveApiTests`：`DotNet.Bundler.Archive` nupkg 仓库外直 API 消费。
 
 ## 前提
 
@@ -24,6 +25,8 @@
 
 ```bash
 bash tests/Archive.Integration/Verify.sh
+# 直接入口
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release -- --filter-class ArchiveIntegrationTests
 ```
 
-全部产物落在 `artifacts/archive-integration/` 并由脚本退出时清理。
+全部产物落在 `artifacts/archive-integration/`（`.bundler-identity` 身份标记），由测试工作区退出时清理。
