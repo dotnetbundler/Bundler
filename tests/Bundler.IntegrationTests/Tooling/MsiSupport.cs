@@ -153,10 +153,30 @@ internal static class MsiSupport
         Assert.Empty(wrong);
     }
 
+    // Windows Installer 是整机单例服务：并行测试类并发调用或外部安装会撞 1618。
+    // 进程内串行覆盖本类竞态，1618 有界重试覆盖仓外安装占用。
+    private static readonly object MsiexecGate = new();
+
     public static ProcessRunner.Result Msiexec(string argumentLine)
-        => ProcessRunner.Run(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "msiexec.exe"),
-            argumentLine, new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(10) });
+    {
+        var path = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "msiexec.exe");
+        const int maxAttempts = 4;
+        for (var attempt = 1; ; attempt++)
+        {
+            ProcessRunner.Result result;
+            lock (MsiexecGate)
+            {
+                result = ProcessRunner.Run(path, argumentLine,
+                    new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(10) });
+            }
+            if (result.ExitCode != 1618 || attempt == maxAttempts)
+            {
+                return result;
+            }
+            Thread.Sleep(TimeSpan.FromSeconds(15));
+        }
+    }
 
     public static void MsiexecExpect(string argumentLine, params int[] allowed)
     {

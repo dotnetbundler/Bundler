@@ -1167,6 +1167,8 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             RunOk(Installer("bundle-upgrade", "1.1.0"), $"/S /D={InstallDir}");
             var preserved = Path.Combine(InstallDir, "upgrade-preserved.db");
             File.WriteAllText(preserved, "preserve");
+            // 与快照/激活失败腿同款前置：删掉桌面快捷方式，断言"用户已删"状态被回滚保留。
+            File.Delete(DesktopShortcut);
             var hash = Sha256(Exe);
             var shortcut = ShellLink.Read(StartMenuShortcut);
             foreach (var bundle in new[] { "bundle-shortcut-persistence-failure",

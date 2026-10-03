@@ -110,12 +110,21 @@ public sealed class MacPkgFixture : IDisposable
         return true;
     }
 
-    // installer 对 <relocate> bundle 会重定位到已存在的同 id .app——
-    // 真安装前清掉工作区里的全部中间 .app（脚本同款清理）。
+    // installer 对 <relocate> bundle 会重定位到已存在的同 id .app——真安装前清中间态 .app（脚本同款）。
+    // 装腿前置：清掉其余变体 publish 的中间态 .app，让 installer 只能吃 pkg 载荷。
+    // 共享夹具产物本体（App）与展开目录必须豁免——装腿与结构腿无序执行，
+    // 删掉它们会让后跑的断言读空路径。
     public void RemoveIntermediateApps()
     {
+        var keep = Path.GetFullPath(App);
+        var expand = Path.GetFullPath(ExpandRoot);
         foreach (var app in Directory.EnumerateDirectories(Ws.Root, "*.app", SearchOption.AllDirectories))
         {
+            var full = Path.GetFullPath(app);
+            if (full == keep || full.StartsWith(expand + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            {
+                continue;
+            }
             Directory.Delete(app, recursive: true);
         }
     }

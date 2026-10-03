@@ -4,5 +4,5 @@ param([string]$Configuration = 'Release')
 $ErrorActionPreference = 'Stop'
 $repository = [IO.Path]::GetFullPath([IO.Path]::Combine($PSScriptRoot, '..', '..'))
 dotnet test ([IO.Path]::Combine($repository, 'tests', 'Bundler.IntegrationTests', 'Bundler.IntegrationTests.csproj')) `
-    -c $Configuration -- --filter-class MsiIntegrationTests --filter-method PublicSampleMsiTableContract
+    -c $Configuration -- --filter-class MsiIntegrationTests --filter-method "MsiIntegrationTests.PublicSampleMsiTableContract"
 exit $LASTEXITCODE
