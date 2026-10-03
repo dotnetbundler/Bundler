@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <!-- 集成腿大量使用子进程同步等待与共享安装状态；禁止集合内并行，保持串行模型 -->
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="4.0.1" />
+    <PackageReference Include="WixToolset.Dtf.WindowsInstaller" Version="5.0.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\TestPlatform.cs" />
+  </ItemGroup>
+</Project>

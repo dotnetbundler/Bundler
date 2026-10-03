@@ -1,9 +1,13 @@
 # Windows MSI 集成回归
 
-`Verify.ps1` 是 MSI 专用的真实 Windows 安装/卸载测试入口；它与 NSIS 的 `tests/Windows.Nsis.Integration` 分开维护。
+测试体已收编进 `tests/Bundler.IntegrationTests`（`MsiIntegrationTests`，xUnit v3）；
+`Verify*.ps1` 全部只是薄入口，按 `--filter-class`/`-method` 转发到对应事实。
+`Fixture/`、`Standalone/`、`Assets/` 仍在原目录，由测试代码复制到隔离工作区使用。
+
 当前普通本机用法：
 
 ```powershell
+# 薄入口：-ConfirmLocalInstall / -ConfirmDisposableVm 会置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -Configuration Release -ConfirmLocalInstall
@@ -12,52 +16,41 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integr
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi7.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyWinMsi8.ps1 -Configuration Release -ConfirmLocalInstall
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1 -Configuration Release
+
+# 直接入口
+$env:BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL = '1'
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release -- --filter-class MsiIntegrationTests
 ```
 
-`Verify.ps1` 先从当前工作区打出七个 NuGet 包，检查独立 `DotNet.Bundler.Wix` 包的程序集、许可证、对应源码、哈希清单及第三方声明。
-`MsiTestSupport.ps1` 复用打包、fixture 复制、本地还原检查、MSI 属性读取和安装调用。
+脚本名与 `[Fact]` 的对应：`Verify.ps1→SmokeInstallUninstallPreservesUserData`、`VerifyLifecycle→MajorUpgradeVariantCollisionAndDowngradeRejected`、
+`VerifyMaintenance→DamageInjectionRepairAndLocalizedIdentity`、`VerifyWinMsi5→X86VersionMappingAndDowngradePolicy`、
+`VerifyWinMsi6→FeatureSetScopePathAndCustomDirectory`、`VerifyWinMsi7→PerLanguageMsisInstallCoexistAndUninstallIndependently`、
+`VerifyWinMsi8→ExtensionFragmentAndExpertTemplateInstallAndUninstall`、`VerifyPublicSample→PublicSampleMsiTableContract`。
+
+fixture 初始化做三件事（`Lazy<bool> Ensure`，跳过语义落在事实体内）：
+先 `dotnet build-server shutdown` 释放常驻 MSBuild 节点持有的任务程序集文件锁，再 build+pack 仓内 NuGet 包，
+并逐项核对 `DotNet.Bundler.Wix` 包的程序集、许可证、对应源码、哈希清单及第三方声明与仓库文件一致。
 MSI MSBuild fixture 显式导入随项目一起复制的 `Bundler.LocalPackages.props`，由该文件声明 `RestoreSources=$(BundlerPackageSource)`；
-脚本将项目文件、该 props、程序和 Assets 复制到每轮独立的仓库外临时目录，避免继承仓库根 `Directory.Build.props` 或旧 obj。
-脚本传入本轮本地包目录、包版本和独立缓存，并断言 `project.assets.json` 与缓存实际使用当前版本。
-随后把 `Standalone/Msi.Api.PackageFixture.csproj` 与 `tests/Msi.Api.PackageFixture` 的 Program.cs 连同该 props 复制到仓库外临时目录，
-仅引用后端 NuGet 包，通过公共 `WixBundler` API 和包内工具生成 MSI；
-它不使用 `ProjectReference` 或 MSBuild 便利元包，是发布包独立消费的验收腿。
-最后才安装每轮新建的 current-user MSBuild 测试产品，预检安装目录和 ProductCode 未被占用，通过 `msiexec` 静默安装并卸载。
-断言主程序、额外资源内容、产品名称/版本/注册状态、托管文件卸载和未知用户文件保留。
-`finally` 只针对本轮 ProductCode、未知文件和空目录清理；保留 MSI、哈希和 verbose log 供核查。
+测试把项目文件、该 props、程序和 Assets 复制到每轮独立的集成工作区，避免继承仓库根 `Directory.Build.props` 或旧 obj，
+并断言 `project.assets.json` 与缓存实际使用当前版本。
+`Standalone/Msi.Api.PackageFixture.csproj` 连同该 props 复制到仓库外工作区，仅引用后端 NuGet 包，
+通过公共 `WixBundler` API 和包内工具生成 MSI——不使用 `ProjectReference` 或 MSBuild 便利元包，是发布包独立消费的验收腿。
 
-`VerifyLifecycle.ps1` 同样从本轮本地包源和独立缓存还原，检查包版本，使用各自独立的临时项目和 obj 生成两个版本及同版本异内容包，真实检查升级、降级/异包拒绝、注册、快捷方式及数据所有权。
-`VerifyMaintenance.ps1` 检查损坏包、测试包副本的延迟故障回滚、被动安装/卸载、静默修复及英语/简体中文包并存；生产包不包含故障动作。
-三个脚本通过 `MsiTestSupport.ps1` 与 NSIS 集成入口共用 `tests/AssertLocalRestore.ps1`；
-省略 `-PackageVersion` 时从根 `Directory.Build.props` 读取当前版本。
-Pack 辅助流程逐项核对 WiX NuGet 包中的许可证、对应源码、哈希清单、供应说明及第三方声明与仓库文件一致。
-每次运行都要确认退出码、产品状态、目录及日志。
-跨格式共同规则见 `docs/development-rules.md`。
+真装腿用 `msiexec /qn /norestart /L*v` 真实安装每轮随机 identifier 的 current-user 产品，
+经 `WixToolset.Dtf` 校验注册表/产品状态/表结构，经 IShellLinkW 校验快捷方式；
+卸载断言主程序、额外资源、注册状态、托管文件卸载和未知用户文件保留。
+`finally` 清理只针对本轮 ProductCode、identifier 键与空目录；MSI、哈希和 verbose log 保留在集成工作区供核查。
 
-`VerifyWinMsi5.ps1` 是 WIN-MSI-5 专用回归入口：它从隔离本地包源消费 alpha 包，分别通过仓库外的 MSI API fixture 和 MSBuild fixture 生成 `win-x86` 包，检查显式 MSI 版本映射、同 MSI 版本碰撞（1638）、默认降级拒绝（1603）、显式允许降级、32 位注册表视图、受管文件卸载和未知用户文件保留。
-该脚本会安装、升级、降级和卸载本轮随机身份的产品，MSI 与 verbose log 保留在临时目录；它不替代 `VerifyLifecycle.ps1` 的 x64 生命周期回归。
+各事实覆盖：
 
-`VerifyWinMsi6.ps1` 是 WIN-MSI-6 专用回归入口：从本轮本地包源和隔离缓存还原仓库外 MSBuild fixture，生成开启目录选择、快捷方式、PATH、卸载入口、启动勾选和 ARP 元数据的随机身份 current-user 产品，以及同产品线的 v2 升级包。
-脚本实际验证：静默 `INSTALLFOLDER=` 指向允许根本身（`%LOCALAPPDATA%`）和范围外根（`C:\Program Files\...`）均被范围校验拒绝（1603）；允许根内自定义子目录安装成功且载荷落位；用户 PATH 只追加本产品目录且既有条目完全保留；开始菜单（含受管卸载链接）与桌面快捷方式创建；
-HKLM Uninstall 键含 `InstallLocation`/`Contact`；
-v2 升级不传 `INSTALLFOLDER` 也恢复到已选目录并保留未知用户文件；`/fomus` 静默修复；
-卸载后 PATH 恢复原值、快捷方式/目录清理、未知用户文件保留、产品注销。
-脚本不进入真实交互 UI；勾选启动、对话框流转与 junction 目标按 `MSI-MT-11` 人工验收。
-MSI 与 verbose log 保留在临时目录。
-
-`VerifyWinMsi7.ps1` 是 WIN-MSI-7 专用回归入口：一次 MSBuild 构建经 `BundlerWixLanguages` 产出 `en-US` 与 `ja-JP` 两个独立 MSI（命令行分号须 `%3B` 转义），断言各自 ProductCode/UpgradeCode/ProductLanguage 隔离、文件名后缀、合并 wxl 与 `!(loc.*)` 引用落入数据库；
-随机身份下两语言包并存安装且各自独立卸载（退出码 0）。
-脚本再经仓库外 `Msi.Api.PackageFixture` 以 `Languages`/`LocaleFiles`/`FipsCompliant` 直接 API 产出 `en-US`/`de-DE` 产物并断言 `-fips` 仅传给 `candle`。
-各语言 UI 母语显示与 FIPS 策略宿主按 MSI-MT-12/MSI-OI-13 人工验收。
-MSI 与 verbose log 保留在临时目录。
-
-`VerifyWinMsi8.ps1` 是 WIN-MSI-8 专用回归入口：隔离本地包源 + 隔离缓存还原仓库外 MSBuild fixture（`Ext.` 调用方前缀 + `Assets/extra.wxs` 声明式 fragment），断言常规模式 MSI 构建、真实安装后扩展标记文件与注册表落位、卸载后清除（退出码 0）；
-再经仓库外 `Msi.Api.PackageFixture` 传专家模板参数构建专家 MSI，断言身份回读通过并真实安装/卸载；
-不安全扩展输入与身份篡改由快速套件的拒绝矩阵覆盖（`Bundler.Tests`）。
-专家模式只保证 Bundler 身份/工具链/清理可验证，调用方自备逻辑不受管、不担保可回滚。
-MSI 与 verbose log 保留在临时目录。
-
-`VerifyPublicSample.ps1` 只构建公开示例的三种 MSI 变体（英文/中文 current-user、英文 per-machine）并断言数据库结构、UI 序列、快捷方式、PATH 与位图；不安装示例产品。
+- `Verify.ps1`：冒烟装卸、资源内容与注册表元数据、用户文件保留；
+- `VerifyLifecycle.ps1`：大变体升级、同 MSI 版本异内容包 1638 拒绝、默认降级 1603、注册/快捷方式/数据所有权；
+- `VerifyMaintenance.ps1`：损坏包 1619/1620、注入 CustomAction 1058 的延迟故障 1603 全量回滚、被动安装、`/fomus` 静默修复、zh-CN 独立语言包并存；
+- `VerifyWinMsi5.ps1`：`win-x86` 包生成、显式 MSI 版本映射、版本碰撞 1638、默认降级 1603、显式允许降级、32 位注册表视图、受管文件卸载；
+- `VerifyWinMsi6.ps1`：目录选择范围校验（允许根本身/范围外根 1603 拒绝）、自定义子目录安装、PATH 仅追加且升级后恢复、开始菜单含受管卸载链接、HKLM Uninstall `InstallLocation`/`Contact`、v2 升级不传 `INSTALLFOLDER` 恢复已选目录、`/fomus` 修复、卸载恢复 PATH 与注销；
+- `VerifyWinMsi7.ps1`：`BundlerWixLanguages=en-US%3Bja-JP` 双 MSI 的 ProductCode/UpgradeCode/ProductLanguage 隔离、文件名后缀、合并 wxl 与 `!(loc.*)` 引用入库、并存安装独立卸载；`Msi.Api.PackageFixture` 的 `Languages`/`LocaleFiles`/`FipsCompliant` 直 API 产 `en-US`/`de-DE` 并断言 `-fips` 仅传给 `candle`；
+- `VerifyWinMsi8.ps1`：`Ext.` 前缀 + 声明式 fragment 的常规模式 MSI 构建、扩展标记文件与注册表装卸、专家模板参数的身份回读与真实装卸；
+- `VerifyPublicSample.ps1`：公开示例三变体（英文/中文 current-user、英文 per-machine）的数据库结构、UI 序列、快捷方式、PATH 与位图断言，不安装——免 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL` 门禁但仍仅 Windows（表结构依赖 DTF）。
 
 后续每增加或修改一个 MSI 用户能力，需同时增加快速单元/契约测试和当前机器能安全运行的真实 Windows 集成断言。
 升级要用两个真实 MSI 版本检查旧文件与用户文件；快捷方式、文件关联、协议要检查系统状态和卸载所有权；签名、修复、失败回滚及退出码要检查可观察结果，不能只检查 WiX XML 或数据库行。
