@@ -41,7 +41,7 @@ public sealed class CliFixture : IDisposable
             var publish = Dotnet.Run(
                 ["publish",
                  Path.Combine(RepositoryLayout.Root, "src", "Bundler.Cli", "Bundler.Cli.csproj"),
-                 "-c", "Release", "-r", "linux-x64", "-o", aotDir, "-v", "q"],
+                 "-c", "Release", "-r", TestPlatform.LinuxRuntimeIdentifier, "-o", aotDir, "-v", "q"],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) });
             ProcessRunner.AssertSuccess(publish, $"AOT publish failed:\n{publish.Output}");
             return Path.Combine(aotDir, "bundler");
@@ -223,6 +223,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     public void BackendFailureExits1()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "SKIP: chmod-based failure leg is POSIX-only.");
+        Assert.SkipWhen(TestPlatform.IsRoot, "SKIP: running as root bypasses chmod-based permission checks.");
         var emptyDir = _f.Ws.Combine("empty");
         Directory.CreateDirectory(emptyDir);
         File.WriteAllText(Path.Combine(emptyDir, _f.MainExe), "x");
@@ -357,7 +358,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
         foreach (var asm in new[] { "Wix", "MacDmg", "MacPkg" })
         {
             Assert.False(File.Exists(Path.Combine(aotDir, $"DotNet.Bundler.{asm}.pdb")),
-                $"host-restricted backend {asm} must not be published on linux-x64");
+                $"host-restricted backend {asm} must not be published on Linux");
         }
         Assert.True(File.Exists(Path.Combine(aotDir, "DotNet.Bundler.AppImage.pdb")),
             "linux-capable AppImage backend must still be published");

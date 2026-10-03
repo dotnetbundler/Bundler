@@ -131,6 +131,16 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
         _f.Ensure();
     }
 
+    // 宿主 dpkg 的架构口径非 amd64（Alpine apk 版报 musl-linux-amd64）或缺失时，
+    // amd64 .deb 装不上且载荷为 glibc 链接也跑不了——真装覆盖由 docker 发行版矩阵腿承担。
+    private static void SkipWhenHostDpkgNotAmd64()
+    {
+        var arch = ProcessRunner.Run("dpkg", ["--print-architecture"]);
+        Assert.SkipWhen(arch.ExitCode != 0 || arch.StdOut.Trim() != "amd64",
+            $"SKIP: host dpkg architecture is '{(arch.ExitCode == 0 ? arch.StdOut.Trim() : "unavailable")}', " +
+            "amd64 packages cannot be installed here.");
+    }
+
     [Fact]
     public void RepositoryPackagesCarryDebBackend()
     {
@@ -449,6 +459,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     [Fact]
     public void RealDpkgInstallRemoveAndConffileSemantics()
     {
+        SkipWhenHostDpkgNotAmd64();
         ElevatedRunner.RequireSudo("real dpkg -i/-r not exercised.");
         try
         {
@@ -520,6 +531,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     [Fact]
     public void MaintainerScriptsRunUnderRealDpkg()
     {
+        SkipWhenHostDpkgNotAmd64();
         ElevatedRunner.RequireSudo("maintainer-script leg not exercised.");
         var markers = new[]
         {
@@ -550,6 +562,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     [Fact]
     public void UpgradePreservesModifiedConffile()
     {
+        SkipWhenHostDpkgNotAmd64();
         ElevatedRunner.RequireSudo("upgrade leg not exercised.");
         try
         {
