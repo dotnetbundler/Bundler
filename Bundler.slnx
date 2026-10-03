@@ -19,5 +19,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Bundler.Tests/Bundler.Tests.csproj" />
+    <Project Path="tests/Bundler.ApiTests/Bundler.ApiTests.csproj" />
   </Folder>
 </Solution>

@@ -9,7 +9,7 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 integration_root="$repo_root/artifacts/macos-dmg-integration"
 package_dir="$repo_root/artifacts/packages"
 fixture_project="$script_dir/Fixture/BundlerMacDmgIntegrationFixture.csproj"
-api_fixture_project="$repo_root/tests/MacDmg.Api.PackageFixture/MacDmg.Api.PackageFixture.csproj"
+api_fixture_project="$repo_root/tests/Bundler.ApiTests/Bundler.ApiTests.csproj"
 api_output="$integration_root/api"
 package_cache="$integration_root/nuget-cache"
 mount_root="$integration_root/mount"
@@ -228,9 +228,9 @@ if printf '%s' "$hdiutil_info" | grep -qF "$integration_root"; then
 fi
 
 log "== exercising the standalone package API =="
-dotnet run --project "$api_fixture_project" -c Release \
-    -p:RestorePackagesPath="$package_cache" \
-    -- "$api_output"
+MACDMG_API_FIXTURE_OUTPUT="$api_output" \
+    dotnet test "$api_fixture_project" -c Release \
+    -- --filter-class "MacDmgApiTests"
 api_dmg="$api_output/artifacts/osx-arm64/dmg/DMG API Package Fixture.dmg"
 [[ -f "$api_dmg" ]] || fail "The standalone API package did not create a .dmg."
 hdiutil attach "$api_dmg" -nobrowse -mountpoint "$integration_root/api-mount" >/dev/null \

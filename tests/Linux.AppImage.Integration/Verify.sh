@@ -13,7 +13,7 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 integration_root="$repo_root/artifacts/linux-appimage-integration"
 package_dir="$repo_root/artifacts/packages"
 fixture_project="$script_dir/Fixture/BundlerAppImageIntegrationFixture.csproj"
-api_fixture_project="$repo_root/tests/AppImage.Api.PackageFixture/AppImage.Api.PackageFixture.csproj"
+api_fixture_project="$repo_root/tests/Bundler.ApiTests/Bundler.ApiTests.csproj"
 package_cache="$integration_root/nuget-cache"
 extract_root="$integration_root/extract"
 identity="BundlerLinuxAppImageIntegration"
@@ -272,9 +272,10 @@ fi
 if [[ "$(uname -m)" == "x86_64" ]]; then
     log "== direct API consumption (DotNet.Bundler.AppImage nupkg) =="
     APPIMAGE_API_FIXTURE_OUTPUT="$integration_root/api" \
-    dotnet run --project "$api_fixture_project" -c Release \
-        --packages "$package_cache" | tee "$integration_root/api.log"
-    grep -q "OK: " "$integration_root/api.log" || fail "API fixture did not produce an .AppImage."
+    dotnet test "$api_fixture_project" -c Release \
+        -- --filter-class "AppImageApiTests" >"$integration_root/api.log"
+    [[ -n "$(find "$integration_root/api/artifacts" -name '*.AppImage' -print -quit)" ]] \
+        || fail "API fixture did not produce an .AppImage."
 fi
 
 log "== optional GPG signing variant (--sign via appimagetool) =="

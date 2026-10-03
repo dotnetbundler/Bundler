@@ -63,7 +63,7 @@ try {
         if (-not (Test-Path -LiteralPath $case.MsiPath)) { throw "Missing MSI: $($case.MsiPath)" }
     }
 
-    $apiSource = Join-Path $repository 'tests\Msi.Api.PackageFixture'
+    $apiSource = Join-Path $PSScriptRoot 'Standalone'
     $apiDir = Join-Path $root 'api-fixture'
     New-Item -ItemType Directory -Path $apiDir | Out-Null
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Standalone\Msi.Api.PackageFixture.csproj') `

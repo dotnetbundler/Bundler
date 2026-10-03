@@ -1977,16 +1977,16 @@ public static class ProgramTests
                 "BundlerNsisIntegrationFixture.csproj"))
             .Descendants("AssemblyName").Single().Value == "BundlerIntegrationFixture",
             "Renaming the NSIS test project must preserve its fixture executable name.");
-        foreach (var pair in new[] { ("Nsis", "Bundler.Nsis"), ("Msi", "Bundler.Wix"), ("Deb", "Bundler.Deb"), ("Rpm", "Bundler.Rpm") })
+        var apiTests = XDocument.Load(Path.Combine(root, "tests", "Bundler.ApiTests", "Bundler.ApiTests.csproj"));
+        Assert.True(!apiTests.Descendants("BundlerPackageVersion").Any() &&
+               !apiTests.Descendants("PackageReference").Any(item =>
+                   ((string?)item.Attribute("Include"))?.StartsWith("DotNet.Bundler", StringComparison.Ordinal) == true),
+            "The API test project must not consume any DotNet.Bundler package.");
+        foreach (var backend in new[] { "Bundler.Nsis", "Bundler.Wix", "Bundler.Deb", "Bundler.Rpm", "Bundler.AppImage", "Bundler.Archive", "Bundler.AlpineApk", "Bundler.MacApp", "Bundler.MacDmg", "Bundler.MacPkg" })
         {
-            var project = XDocument.Load(Path.Combine(root, "tests", pair.Item1 + ".Api.PackageFixture",
-                pair.Item1 + ".Api.PackageFixture.csproj"));
-            Assert.True(project.Descendants("ProjectReference").Any(item =>
-                       ((string?)item.Attribute("Include"))?.Contains("src\\" + pair.Item2 + "\\" + pair.Item2 + ".csproj", StringComparison.Ordinal) == true) &&
-                   !project.Descendants("BundlerPackageVersion").Any() &&
-                   !project.Descendants("PackageReference").Any(item =>
-                       ((string?)item.Attribute("Include"))?.StartsWith("DotNet.Bundler", StringComparison.Ordinal) == true),
-                "The API fixture must reference its backend project, not the package: " + pair.Item1);
+            Assert.True(apiTests.Descendants("ProjectReference").Any(item =>
+                   ((string?)item.Attribute("Include"))?.Contains("src\\" + backend + "\\" + backend + ".csproj", StringComparison.Ordinal) == true),
+                "The API test project must reference its backend project: " + backend);
         }
         foreach (var path in new[]
         {

@@ -10,7 +10,7 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 integration_root="$repo_root/artifacts/linux-deb-integration"
 package_dir="$repo_root/artifacts/packages"
 fixture_project="$script_dir/Fixture/BundlerDebIntegrationFixture.csproj"
-api_fixture_project="$repo_root/tests/Deb.Api.PackageFixture/Deb.Api.PackageFixture.csproj"
+api_fixture_project="$repo_root/tests/Bundler.ApiTests/Bundler.ApiTests.csproj"
 api_output="$integration_root/api"
 package_cache="$integration_root/nuget-cache"
 extract_root="$integration_root/extract"
@@ -262,8 +262,8 @@ grep -q "InstallRoot" "$integration_root/failure.log" || fail "The failure did n
 
 log "== API fixture (direct DebBundler via NuGet) =="
 DEB_API_FIXTURE_OUTPUT="$api_output" \
-    dotnet run --project "$api_fixture_project" -c Release \
-    --packages "$package_cache" >/dev/null
+    dotnet test "$api_fixture_project" -c Release \
+    -- --filter-class "DebApiTests" >/dev/null
 api_deb="$api_output/artifacts/linux-x64/deb/api-fixture_1.0.0-1_amd64.deb"
 [[ -f "$api_deb" ]] || fail "The direct-API fixture produced no .deb."
 dpkg-deb -I "$api_deb" >/dev/null || fail "dpkg-deb rejects the API-fixture .deb."

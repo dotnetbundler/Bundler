@@ -33,7 +33,7 @@
 | `src/Bundler.Cli` | CLI 适配层（dotnet tool nupkg + `PublishAot` 原生二进制双分发） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
 | `tests/Bundler.Tests` | 唯一快速测试入口（xUnit v3，`dotnet test`；用例全注册、宿主门控经 `Assert.Skip` 跳过，以每次实跑输出为准） | `net10.0` |
-| `tests/Msi.Api.PackageFixture` / `tests/Nsis.Api.PackageFixture` / `tests/MacApp.Api.PackageFixture` / `tests/MacDmg.Api.PackageFixture` / `tests/MacPkg.Api.PackageFixture` / `tests/Deb.Api.PackageFixture` / `tests/Rpm.Api.PackageFixture` / `tests/AppImage.Api.PackageFixture` / `tests/Archive.Api.PackageFixture` / `tests/AlpineApk.Api.PackageFixture` | 直引对应后端项目的 API 消费 fixture（仓内项目引用） | `net10.0` |
+| `tests/Bundler.ApiTests` | API 消费测试入口（xUnit v3，`dotnet test`；十格式 `<Format>ApiTests` 测试类直调后端 API 产真实产物再断言，宿主门控经 `Assert.Skip`，集成脚本经 `--filter-class` + `*_API_FIXTURE_OUTPUT` 环境变量复用） | `net10.0` |
 | `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
 | `tests/MacOS.App.Integration` | 真实 macOS `.app` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
 | `tests/MacOS.Dmg.Integration` | 真实 macOS `.dmg` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |

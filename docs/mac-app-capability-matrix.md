@@ -61,7 +61,7 @@
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
 | 独立后端包与直接 API | 已实现 | MAC-APP-1 | `DotNet.Bundler.MacApp`（netstandard2.0） |
-| 仓库外 NuGet 包消费 | 已实现 | MAC-APP-1 | `tests/MacApp.Api.PackageFixture` |
+| 仓库外 NuGet 包消费 | 已实现 | MAC-APP-1 | `tests/Bundler.ApiTests`（`MacAppApiTests`） |
 | MSBuild 集成映射 | 已实现 | MAC-APP-1 | 与直接 API 同 Core 一致 |
 | 离线构建 | 已实现 | MAC-APP-1 起 | 公证外全部离线；无第三方工具内嵌 |
 | 宿主工具探测与版本门槛 | 已实现 | MAC-APP-1 | 缺必需工具明确报错；可选工具降级警告 |

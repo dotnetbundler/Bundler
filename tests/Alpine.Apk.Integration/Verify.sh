@@ -12,7 +12,7 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 integration_root="$repo_root/artifacts/alpine-apk-integration"
 package_dir="$repo_root/artifacts/packages"
 fixture_project="$script_dir/Fixture/BundlerAlpineApkIntegrationFixture.csproj"
-api_fixture_project="$repo_root/tests/AlpineApk.Api.PackageFixture/AlpineApk.Api.PackageFixture.csproj"
+api_fixture_project="$repo_root/tests/Bundler.ApiTests/Bundler.ApiTests.csproj"
 api_output="$integration_root/api"
 package_cache="$integration_root/nuget-cache"
 extract_root="$integration_root/extract"
@@ -241,8 +241,8 @@ sha3="$(sha256sum "$integration_root/det3/linux-musl-x64/apk/bundler-apk-fixture
 
 log "== API fixture (direct AlpineApkBundler via NuGet) =="
 APK_API_FIXTURE_OUTPUT="$api_output" \
-    dotnet run --project "$api_fixture_project" -c Release \
-    --packages "$package_cache" >/dev/null
+    dotnet test "$api_fixture_project" -c Release \
+    -- --filter-class "AlpineApkApiTests" >/dev/null
 api_apk="$api_output/artifacts/linux-musl-x64/apk/api-fixture-1.0.0-r0.apk"
 [[ -f "$api_apk" ]] || fail "The direct-API fixture produced no .apk."
 [[ "$(od -An -tx1 -N3 "$api_apk" | tr -d ' ')" == "1f8b08" ]] \

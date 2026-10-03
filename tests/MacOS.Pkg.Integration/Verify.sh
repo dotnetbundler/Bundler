@@ -9,7 +9,7 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 integration_root="$repo_root/artifacts/macos-pkg-integration"
 package_dir="$repo_root/artifacts/packages"
 fixture_project="$script_dir/Fixture/BundlerMacPkgIntegrationFixture.csproj"
-api_fixture_project="$repo_root/tests/MacPkg.Api.PackageFixture/MacPkg.Api.PackageFixture.csproj"
+api_fixture_project="$repo_root/tests/Bundler.ApiTests/Bundler.ApiTests.csproj"
 api_output="$integration_root/api"
 package_cache="$integration_root/nuget-cache"
 expand_root="$integration_root/expand"
@@ -294,9 +294,9 @@ if [[ -n "$(find "$integration_root/bundle-bad" -name '*.pkg' -print -quit 2>/de
 fi
 
 log "== exercising the standalone package API =="
-dotnet run --project "$api_fixture_project" -c Release \
-    -p:RestorePackagesPath="$package_cache" \
-    -- "$api_output"
+MACPKG_API_FIXTURE_OUTPUT="$api_output" \
+    dotnet test "$api_fixture_project" -c Release \
+    -- --filter-class "MacPkgApiTests"
 api_pkg="$api_output/artifacts/osx-arm64/pkg/PKG API Package Fixture.pkg"
 [[ -f "$api_pkg" ]] || fail "The standalone API package did not create a .pkg."
 pkgutil --expand-full "$api_pkg" "$expand_root/api" >/dev/null \

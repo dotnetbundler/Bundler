@@ -8,7 +8,7 @@ WIN-MSI-1..3 的阶段证据见 `docs/msi-roadmap.md` 第 6..8 节，WIN-MSI-4 �
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| 独立后端包与直接 API | 已实现并本机自动验证 | 适用，MSI-1；WIN-MSI-2 补齐包消费验证 | 仓库外普通项目只引用打出的 `DotNet.Bundler.Wix` NuGet 包，使用包内 WiX 工具直接生成真实 MSI；不能靠本仓库 `ProjectReference` 或 MSBuild 元包。`tests/Msi.Api.PackageFixture` 已在本机通过，其他构建宿主仍按支持矩阵验收。 |
+| 独立后端包与直接 API | 已实现并本机自动验证 | 适用，MSI-1；WIN-MSI-2 补齐包消费验证 | 仓库外普通项目只引用打出的 `DotNet.Bundler.Wix` NuGet 包，使用包内 WiX 工具直接生成真实 MSI；不能靠本仓库 `ProjectReference` 或 MSBuild 元包。仓外复制消费腿（`tests/Windows.Msi.Integration/Standalone`）已在本机通过，其他构建宿主仍按支持矩阵验收。 |
 | 最小安装/卸载 | 已实现并本机自动验证 | 适用，MSI-1；本机 x64 fixture 已验证 | 独立 current-user fixture 静默安装、检查载荷和产品注册，再卸载并检查残留/用户文件；不能仅生成 MSI。其他 Windows/架构及干净宿主待外部验收。 |
 | 名称、发布者、描述、`.ico` 图标、默认安装目录 | 已实现并本机自动验证 | 适用，MSI-1 | API/MSBuild 同义映射、数据库和系统显示正确；默认目录按 scope 固定，可选择目录见下表。其他图标输入尚未实现。 |
 | 产品身份、版本、组件 | 已实现并本机自动验证 | 适用，MSI-1；MSI-3 增加语言产品线，MSI-4 修正 PackageCode 生成 | 英文历史身份稳定；简体中文使用隔离的 UpgradeCode、ProductCode、组件、安装目录和输出名。PackageCode 由 WiX 每次构建生成，独立构建已验证不同；同一产品版本只发布一份同语言内容，显式 UpgradeCode 由发行方负责跨语言唯一性。 |

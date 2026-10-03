@@ -11,7 +11,7 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 integration_root="$repo_root/artifacts/macos-app-integration"
 package_dir="$repo_root/artifacts/packages"
 fixture_project="$script_dir/Fixture/BundlerMacAppIntegrationFixture.csproj"
-api_fixture_project="$repo_root/tests/MacApp.Api.PackageFixture/MacApp.Api.PackageFixture.csproj"
+api_fixture_project="$repo_root/tests/Bundler.ApiTests/Bundler.ApiTests.csproj"
 bundle_output="$integration_root/bundle"
 api_output="$integration_root/api"
 package_cache="$integration_root/nuget-cache"
@@ -431,9 +431,9 @@ rm -rf "$app"
 log "uninstall = delete the .app directory; no uninstaller or receipt involved."
 
 log "== exercising the standalone package API =="
-dotnet run --project "$api_fixture_project" -c Release \
-    -p:RestorePackagesPath="$package_cache" \
-    -- "$api_output"
+MACAPP_API_FIXTURE_OUTPUT="$api_output" \
+    dotnet test "$api_fixture_project" -c Release \
+    -- --filter-class "MacAppApiTests"
 api_app="$api_output/artifacts/osx-arm64/app/Mac API Package Fixture.app"
 [[ -f "$api_app/Contents/Info.plist" ]] || fail "The standalone API package did not create an .app."
 plutil -lint "$api_app/Contents/Info.plist" >/dev/null || fail "API fixture Info.plist failed lint."

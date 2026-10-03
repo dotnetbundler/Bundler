@@ -54,7 +54,7 @@ try {
         '-p:BundlerWixStartMenuShortcut=true'
     if ($LASTEXITCODE -ne 0) { throw 'WIN-MSI-7 fixture publish failed' }
 
-    $apiSource = Join-Path $repository 'tests\Msi.Api.PackageFixture'
+    $apiSource = Join-Path $PSScriptRoot 'Standalone'
     $apiDir = Join-Path $root 'api-fixture'
     New-Item -ItemType Directory -Path $apiDir | Out-Null
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Standalone\Msi.Api.PackageFixture.csproj') `
