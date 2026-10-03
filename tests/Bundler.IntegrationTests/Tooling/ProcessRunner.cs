@@ -103,7 +103,16 @@ internal static class ProcessRunner
                 $"Process timed out after {options.Timeout}: {filePath} {argumentLine ?? string.Join(' ', arguments ?? [])}\n" +
                 $"stdout so far:\n{stdout}\nstderr so far:\n{stderr}");
         }
-        process.WaitForExit();
+        // 无参 WaitForExit 会等异步读取遇到管道 EOF；孙进程（VBCSCompiler 等构建守护）
+        // 继承重定向管道写端且不退出时永不 EOF——musl 上实测挂满 10m 超时。
+        // 给 EOF 一个限时窗，过期取消异步读收尾（仅丢弃该管道缓冲尾量）。
+        var eofWait = Task.Run(() => process.WaitForExit());
+        if (!eofWait.Wait(TimeSpan.FromSeconds(10)))
+        {
+            try { process.CancelOutputRead(); } catch { /* 读已结束 */ }
+            try { process.CancelErrorRead(); } catch { /* 读已结束 */ }
+            process.WaitForExit();
+        }
         return new Result(process.ExitCode, stdout.ToString(), stderr.ToString());
     }
 
