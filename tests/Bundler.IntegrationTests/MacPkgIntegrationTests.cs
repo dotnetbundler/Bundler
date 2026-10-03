@@ -115,9 +115,13 @@ public sealed class MacPkgFixture : IDisposable
     // 装完 RestoreIntermediateApps 还原：安装期无诱饵可寻，也不破坏共享夹具状态。
     private readonly List<(string From, string Hidden)> _hiddenApps = [];
 
+    private const string LsRegister =
+        "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
+
     public void HideIntermediateApps()
     {
         _hiddenApps.Clear();
+        UnregisterFixtureApps();
         foreach (var app in Directory.EnumerateDirectories(Ws.Root, "*.app", SearchOption.AllDirectories).ToArray())
         {
             if (!Directory.Exists(app))
@@ -127,6 +131,40 @@ public sealed class MacPkgFixture : IDisposable
             var hidden = app + ".hidden";
             Directory.Move(app, hidden);
             _hiddenApps.Add((app, hidden));
+        }
+    }
+
+    // <relocate> 按 LaunchServices 注册记录寻同 id .app——记录不核路径失存，
+    // 指向已删/已改名 .app 的陈旧记录同样触发重定位；改名隐藏前必须先注销。
+    private void UnregisterFixtureApps()
+    {
+        var dump = ProcessRunner.Run(LsRegister, ["-dump"],
+            new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(60) });
+        if (dump.ExitCode != 0)
+        {
+            return; // LaunchServices 缺席的宿主没有注册表，改名隐藏已足够
+        }
+        foreach (var line in dump.StdOut.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (!trimmed.StartsWith("path:", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            var path = trimmed["path:".Length..].Trim();
+            var appEnd = path.IndexOf(".app", StringComparison.Ordinal);
+            if (appEnd < 0)
+            {
+                continue;
+            }
+            path = path[..(appEnd + ".app".Length)];
+            if (!path.Contains("Bundler Mac PKG Fixture.app", StringComparison.Ordinal)
+                && !path.StartsWith(Ws.Root, StringComparison.Ordinal))
+            {
+                continue;
+            }
+            ProcessRunner.Run(LsRegister, ["-u", path],
+                new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(30) });
         }
     }
 
