@@ -110,23 +110,36 @@ public sealed class MacPkgFixture : IDisposable
         return true;
     }
 
-    // installer 对 <relocate> bundle 会重定位到已存在的同 id .app——真安装前清中间态 .app（脚本同款）。
-    // 装腿前置：清掉其余变体 publish 的中间态 .app，让 installer 只能吃 pkg 载荷。
-    // 共享夹具产物本体（App）与展开目录必须豁免——装腿与结构腿无序执行，
-    // 删掉它们会让后跑的断言读空路径。
-    public void RemoveIntermediateApps()
+    // installer 对 <relocate> bundle 会重定位到盘上已存在的同 id .app——
+    // 真安装期间把全部中间态 .app（含夹具产物与 expand 载荷）移走隐藏，
+    // 装完 RestoreIntermediateApps 还原：安装期无诱饵可寻，也不破坏共享夹具状态。
+    private readonly List<(string From, string Hidden)> _hiddenApps = [];
+
+    public void HideIntermediateApps()
     {
-        var keep = Path.GetFullPath(App);
-        var expand = Path.GetFullPath(ExpandRoot);
-        foreach (var app in Directory.EnumerateDirectories(Ws.Root, "*.app", SearchOption.AllDirectories))
+        _hiddenApps.Clear();
+        foreach (var app in Directory.EnumerateDirectories(Ws.Root, "*.app", SearchOption.AllDirectories).ToArray())
         {
-            var full = Path.GetFullPath(app);
-            if (full == keep || full.StartsWith(expand + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            if (!Directory.Exists(app))
             {
-                continue;
+                continue; // 父级 .app 先被移走，嵌套条目已随之隐藏
             }
-            Directory.Delete(app, recursive: true);
+            var hidden = app + ".hidden";
+            Directory.Move(app, hidden);
+            _hiddenApps.Add((app, hidden));
         }
+    }
+
+    public void RestoreIntermediateApps()
+    {
+        foreach (var (from, hidden) in _hiddenApps)
+        {
+            if (Directory.Exists(hidden) && !Directory.Exists(from))
+            {
+                Directory.Move(hidden, from);
+            }
+        }
+        _hiddenApps.Clear();
     }
 
     public void Dispose() => Ws.Dispose();
@@ -293,7 +306,7 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
     public void PerUserInstallReceiptAndForget()
     {
         _f.Ensure();
-        _f.RemoveIntermediateApps();
+        _f.HideIntermediateApps();
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var marker = Path.Combine(home, ".bundler-pkg-postinstall-ran");
         File.Delete(marker);
@@ -329,6 +342,17 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
         {
             ProcessRunner.Run("pkgutil", ["--forget", FixtureIdentifier, "--volume", home]);
             File.Delete(marker);
+            var homeApp = Path.Combine(home, "Applications", "Bundler Mac PKG Fixture.app");
+            if (Directory.Exists(homeApp))
+            {
+                Directory.Delete(homeApp, recursive: true);
+            }
+            var support = Path.Combine(home, "Applications", "support");
+            if (Directory.Exists(support))
+            {
+                Directory.Delete(support, recursive: true);
+            }
+            _f.RestoreIntermediateApps();
         }
     }
 
@@ -336,7 +360,7 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
     public void OverwriteInstallUpgradesReceipt()
     {
         _f.Ensure();
-        _f.RemoveIntermediateApps();
+        _f.HideIntermediateApps();
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         // 先装 v1（scripts 变体同 identifier）再覆盖 v2，收据版本必须到 2.0.0。
         foreach (var pkg in new[] { _f.ScriptsPkg, _f.V2Pkg })
@@ -367,6 +391,7 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
             {
                 Directory.Delete(support, recursive: true);
             }
+            _f.RestoreIntermediateApps();
         }
     }
 
