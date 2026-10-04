@@ -113,6 +113,9 @@ public sealed class MacPkgFixture : IDisposable
     // installer 对 <relocate> bundle 会重定位到盘上已存在的同 id .app——
     // 真安装期间把全部中间态 .app（含夹具产物与 expand 载荷）移走隐藏，
     // 装完 RestoreIntermediateApps 还原：安装期无诱饵可寻，也不破坏共享夹具状态。
+    // 隐藏做成双层：lsregister -u 清陈旧记录 + 内部 Contents 改名使其不再是合法
+    // bundle——.app.hidden 目录仍带完整 Contents，lsd 扫描可把整条目录再注册回
+    // LSDB（relocate 复现的机制）；摘掉 Contents 让再注册无从下手，无时间窗口。
     private readonly List<(string From, string Hidden)> _hiddenApps = [];
 
     private const string LsRegister =
@@ -130,6 +133,11 @@ public sealed class MacPkgFixture : IDisposable
             }
             var hidden = app + ".hidden";
             Directory.Move(app, hidden);
+            var contents = Path.Combine(hidden, "Contents");
+            if (Directory.Exists(contents))
+            {
+                Directory.Move(contents, contents + ".hidden");
+            }
             _hiddenApps.Add((app, hidden));
         }
     }
@@ -172,6 +180,11 @@ public sealed class MacPkgFixture : IDisposable
     {
         foreach (var (from, hidden) in _hiddenApps)
         {
+            var hiddenContents = Path.Combine(hidden, "Contents.hidden");
+            if (Directory.Exists(hiddenContents))
+            {
+                Directory.Move(hiddenContents, Path.Combine(hidden, "Contents"));
+            }
             if (Directory.Exists(hidden) && !Directory.Exists(from))
             {
                 Directory.Move(hidden, from);
@@ -380,6 +393,9 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
         }
         finally
         {
+            // 先查收据再 forget——顺序反了 --files 恒空、装上去的文件一件不删。
+            var installed = ProcessRunner.Run("pkgutil",
+                ["--files", FixtureIdentifier, "--volume", home]);
             ProcessRunner.Run("pkgutil", ["--forget", FixtureIdentifier, "--volume", home]);
             File.Delete(marker);
             var homeApp = Path.Combine(home, "Applications", "Bundler Mac PKG Fixture.app");
@@ -390,8 +406,6 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
             // support 是通用目录名——只删收据登记的我们装的文件，目录仅空时才修剪，
             // 不碰用户可能既有的同名目录内容。
             var support = Path.Combine(home, "Applications", "support");
-            var installed = ProcessRunner.Run("pkgutil",
-                ["--files", FixtureIdentifier, "--volume", home]);
             foreach (var line in installed.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
                 var rel = line.Trim();
@@ -415,16 +429,17 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
         _f.HideIntermediateApps();
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         // 先装 v1（scripts 变体同 identifier）再覆盖 v2，收据版本必须到 2.0.0。
-        foreach (var pkg in new[] { _f.ScriptsPkg, _f.V2Pkg })
-        {
-            ProcessRunner.AssertSuccess(
-                ProcessRunner.Run("installer",
-                    ["-pkg", pkg, "-target", "CurrentUserHomeDirectory", "-dumplog"],
-                    new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(10) }),
-                $"installer failed on {Path.GetFileName(pkg)}.");
-        }
+        // installer 移进 try——失败时 finally 仍要恢复被隐藏的中间态 .app。
         try
         {
+            foreach (var pkg in new[] { _f.ScriptsPkg, _f.V2Pkg })
+            {
+                ProcessRunner.AssertSuccess(
+                    ProcessRunner.Run("installer",
+                        ["-pkg", pkg, "-target", "CurrentUserHomeDirectory", "-dumplog"],
+                        new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(10) }),
+                    $"installer failed on {Path.GetFileName(pkg)}.");
+            }
             var info = ProcessRunner.Run("pkgutil",
                 ["--pkg-info-plist", FixtureIdentifier, "--volume", home]);
             ProcessRunner.AssertSuccess(info, "pkgutil --pkg-info-plist failed after upgrade.");
@@ -432,6 +447,9 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
         }
         finally
         {
+            // 先查收据再 forget——顺序反了 --files 恒空、装上去的文件一件不删。
+            var installed = ProcessRunner.Run("pkgutil",
+                ["--files", FixtureIdentifier, "--volume", home]);
             ProcessRunner.Run("pkgutil", ["--forget", FixtureIdentifier, "--volume", home]);
             var homeApp = Path.Combine(home, "Applications", "Bundler Mac PKG Fixture.app");
             if (Directory.Exists(homeApp))
@@ -441,8 +459,6 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
             // support 是通用目录名——只删收据登记的我们装的文件，目录仅空时才修剪，
             // 不碰用户可能既有的同名目录内容。
             var support = Path.Combine(home, "Applications", "support");
-            var installed = ProcessRunner.Run("pkgutil",
-                ["--files", FixtureIdentifier, "--volume", home]);
             foreach (var line in installed.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
                 var rel = line.Trim();
