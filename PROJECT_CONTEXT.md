@@ -88,7 +88,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
-### 2026-10-03 dotnet/skills 规范整改（分支 `devin/1791102459-dotnet-skills-rework`，进行中未合并）
+### 2026-10-03 dotnet/skills 规范整改（PR #18 已并入 `main`，merge `258fad6`）
 
 - 依据 `dotnet/skills` 官方仓 5 族审计（msbuild 9 条 / csharp-refactoring / pinvoke / aot-compat / 测试质量 6 条）出的修复项全部落位：
   `src/Directory.Build.props` 新建收编 15 个 csproj 重复元数据（`Authors`/`PackageVersion`/`PackageReadmeFile`/`netstandard2.0` TFM/README+THIRD-PARTY-NOTICES，链式导入根 props，Cli/Core 按名豁免）；
@@ -97,7 +97,9 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - 测试侧：`Bundler.Tests/TestPlatform.cs` 旧薄拷贝删除改链 `tests/Shared/TestPlatform.cs` 并补 musl 门禁；catch-and-assert 全部转 `Assert.ThrowsAny*`（catch 匹配子类，不等价 `Assert.Throws*` 的精确类型），`when` 过滤的 catch 转 ThrowsAny+显式断言；`Assert.True(a==b)` 转 `Assert.Equal`；
   IntegrationTests 按资源打 `[Trait("Requires", docker/elevation/localinstall)]`（docker 9 处/elevation 3 处/localinstall 方法级 7 处 + NSIS 类级；MSI `PublicSampleMsiTableContract` 走 `EnsurePackages` 免同意闸故豁免），`--filter-trait` 实测可用。
 - 覆盖率采集一轮（dotnet-coverage cobertura，本机 linux）：宿主无关后端 81–95%（Deb 92.0/AlpineApk 92.6/Rpm 94.6/Nsis 89.9/Archive 89.3/Core 87.7），低分项均为宿主门控（Wix 7.2、Signing.Windows 26.9 全 win 门禁，MacApp 67.6 mac 门禁），`AppImageProcessRunner` 0% 由 IntegrationTests 腿覆盖；`BundleConfigurationLoader` 57.1% 记契约项。
-- 验证：本机 build 0W/0E、`Bundler.Tests` 270/231P/0F/39S 基线吻合；四宿主回归待跑。
+- 验证（四宿主 @ `4022dc7` 全绿零失败）：win 254P/16S+49P/133S+9 薄入口、linux 231P/39S+111P/71S+6 薄入口、mac 231P/39S+51P/131S+6 薄入口、alpine 226P/44S+97P/85S+17P/1S（Bundler.Tests/IntegrationTests 计数）；
+  pack 四宿主逐包核验内容不变（netstandard2.0 lib+README+THIRD-PARTY-NOTICES+Authors+alpha.68）；alpine 的 5 个 makensis 边界败随 T1 转 SKIP——四宿主首次全 0F。
+- Devin Review 1 条 flag 属实已修（MSI `localinstall` 类级→方法级，`b19ca95`）；0 bug/0 security/0 code_quality。
 
 ### 2026-10-03 集成测试体全量收编 `Bundler.IntegrationTests`（PR #17 已并入 `main`）
 
