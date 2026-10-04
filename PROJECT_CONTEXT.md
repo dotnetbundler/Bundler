@@ -93,8 +93,9 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - 文档瘦身：`docs/project-history.md`、3 个 `*-tauri-capability-audit.md`、12 个 `tests/*-integration.md` 删除；
   审计/历史指针全部去链接化或固化进路线与能力矩阵；dated 验收记录保留原文；新建 `tests/README.md` 统揽入口/门禁/fixture 地图。
 - 权威标准件：新增 `.gitattributes`（eol 规范化 + `bad-crlf.sh` 载荷豁免）与 `.editorconfig`；本地包消费验收腿保留（权威项目对标：MSBuild-targets/工具包必须验证 nupkg 契约）。
-- Bundler.IntegrationTests.csproj 排除 `Fixtures/**` 编译 glob；测试代码 `templates/`、`buildTransitive/` 源树路径改指新位置。
-- 本机验证（linux）：build 0W/0E、pack 16 nupkg 内容不变、`Bundler.Tests` 281/242P/0F/39S、`ApiTests` 7P/3S、`IntegrationTests` 182/111P/0F/71S——与基线逐位吻合。
+- Bundler.IntegrationTests.csproj 与 Bundler.LocalPackagesTests.csproj 均排除各自 `Fixtures/**` 编译 glob；测试代码 `templates/`、`buildTransitive/` 源树路径改指新位置。
+- 四宿主回归 `af07c19`（win/linux/mac/alpine）：build 全 0W/0E、pack 16@alpha.69；`LocalPackagesTests` win 8P/0F 真装真卸（其余宿主 8S 门禁）；`IntegrationTests` 174（182−8 MSI 腿迁出）win 41P/133S、linux 111P/63S、mac 51P/123S、alpine 97P/77S 全 0F——win 上 41+8=49 真装腿与拆分前等效；
+  `Bundler.Tests` win 265P/16S、linux|mac 242P/39S、alpine 237P/44S；`ApiTests` win|linux 7P/3S、mac 8P/2S、alpine 6P/4S。Devin Review 零发现。
 
 ### 2026-10-04 API 面收窄 + 死代码清除 + 覆盖率盲点测试（PR #19 已并入 `main`，merge `ad36261`）
 
