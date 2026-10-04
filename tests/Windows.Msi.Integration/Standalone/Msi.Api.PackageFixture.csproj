@@ -10,6 +10,6 @@
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler.Wix" Version="$(BundlerPackageVersion)" />
+    <PackageReference Include="DotNet.Bundler.Wix" VersionOverride="$(BundlerPackageVersion)" />
   </ItemGroup>
 </Project>

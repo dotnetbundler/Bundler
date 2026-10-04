@@ -332,6 +332,7 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
     }
 
     [Fact]
+    [Trait("Requires", "docker")]
     public void DockerExtractAndRunMatrix()
     {
         var ranAny = false;

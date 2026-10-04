@@ -5,13 +5,9 @@
     <AssemblyName>DotNet.Bundler.Core</AssemblyName>
     <RootNamespace>DotNet.Bundler.Core</RootNamespace>
     <PackageId>DotNet.Bundler.Core</PackageId>
-    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
-    <Authors>Bundler contributors</Authors>
     <Description>Format-neutral validation, planning, orchestration, and tool caching for desktop packages.</Description>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <Compile Remove="Configuration\BundleConfigurationLoader.cs" />

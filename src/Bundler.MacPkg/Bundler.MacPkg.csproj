@@ -1,20 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>DotNet.Bundler.MacPkg</AssemblyName>
     <RootNamespace>DotNet.Bundler.MacPkg</RootNamespace>
     <PackageId>DotNet.Bundler.MacPkg</PackageId>
-    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
-    <Authors>Bundler contributors</Authors>
     <Description>Reusable macOS .pkg installer packaging API for desktop applications.</Description>
     <PackageTags>dotnet;bundler;macos;pkg;installer;desktop</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Bundler.Tests" />
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
     <ProjectReference Include="..\Bundler.MacApp\Bundler.MacApp.csproj" />
-    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
-    <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

@@ -126,6 +126,10 @@
   一个未提交阶段使用同一新版本。
   工具包版本与被打包应用版本独立；
   公开示例应用版本保持稳定，升级/降级由独立 fixture 测试。
+- 外部依赖版本集中在 `Directory.Packages.props`（中央包管理）声明，`PackageReference` 不带 `Version=`（否则 NU1008）；
+  引用仓内 `DotNet.Bundler*` 包时用 `VersionOverride="$(BundlerPackageVersion)"` 覆盖中央版本。
+  src/ 各工程共享元数据（`Authors`、`PackageVersion`、`PackageReadmeFile`、`netstandard2.0` TFM、README 与 THIRD-PARTY-NOTICES 打包项）统一在 `src/Directory.Build.props`（链式导入根 props），
+  个别工程按项目名条件豁免；不在单 csproj 里重复这些值。
 - 仓内示例与 fixture 一律以项目引用消费打包系统：共享接线在 `Bundler.ProjectReference.targets` 维护，
   它引用 `src/Bundler.MSBuild`（`ReferenceOutputAssembly=false`）、把 `_BundlerTaskAssembly` 指向源树构建输出并导入 `buildTransitive` 的 props/targets；
   `BuildReference=false` 使消费方不重建任务工程——任务程序集由 `dotnet build Bundler.slnx` 预建，
@@ -155,8 +159,12 @@
 **统一测试风格和组织，不统一各格式的用例清单。
 ** 新后端参考现有目录、命名、fixture、包源、脚本入口、断言、日志和清理；有实际格式原因可采用专用方式，并在格式测试说明写明。
 不要模拟另一格式不存在的行为。
+断言用惯用形式：异常断言用 `Assert.ThrowsAny*`/`ThrowsAnyAsync*`（catch 匹配子类，语义与 `Assert.Throws*` 的精确类型要求不同），
+接返回值断言字段或消息；相等断言用 `Assert.Equal` 而非 `Assert.True(a==b)`；不用 try/catch 再断言。
 
 单格式 API fixture 收编为 `tests/Bundler.ApiTests` 的 `<Format>ApiTests` 测试类，系统集成测试体收编为 `tests/Bundler.IntegrationTests` 的 `<Format>IntegrationTests` 测试类，均为 `dotnet test` 入口、`--filter-class`/`-method` 选择、宿主门控经 `Assert.Skip`；
+资源需求用 `[Trait("Requires", ...)]` 标注——`docker`（DockerRunner 容器矩阵腿）、`elevation`（ElevatedRunner/SudoRunner 真装腿）、`localinstall`（需 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL` 同意的真装腿）；标在方法级，仅当全类都需同意时升类级（如 NSIS）；
+按资源裁剪用 `--filter-trait "Requires=<值>"`/`--filter-not-trait "Requires=<值>"`；
 `tests/<Platform>.<Format>.Integration` 目录保留 fixture、资产与同名 `Verify.ps1`/`Verify.sh` 薄入口（仅转发 `dotnet test`），其他脚本名写明用途；
 跨格式快速测试保留 `tests/Bundler.Tests`。
 格式专用测试与示例项目名称显式带格式名，只有真正跨格式的项目使用泛名。

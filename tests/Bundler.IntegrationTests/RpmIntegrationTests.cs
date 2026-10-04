@@ -407,6 +407,7 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
     }
 
     [Fact]
+    [Trait("Requires", "docker")]
     public void DockerMatrixInstallQueryRunRemove()
     {
         const string containerScript = """
@@ -451,6 +452,7 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
     }
 
     [Fact]
+    [Trait("Requires", "docker")]
     public void DockerScriptletConfigAndUpgradeSemantics()
     {
         DockerRunner.RequireImage("fedora:latest");

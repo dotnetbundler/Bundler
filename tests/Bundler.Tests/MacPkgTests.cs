@@ -10,18 +10,11 @@ public static class MacPkgTests
         var input = CreateInputDirectory();
         try
         {
-            var thrown = false;
-            try
-            {
-                new MacPkgBundler()
+            var wrongTarget = Assert.ThrowsAny<NotSupportedException>(
+                () => new MacPkgBundler()
                     .BuildAsync(PkgConfiguration(input, formats: [PackageFormat.App]))
-                    .GetAwaiter().GetResult();
-            }
-            catch (NotSupportedException exception)
-            {
-                thrown = exception.Message.Contains("Pkg targets only");
-            }
-            Assert.True(thrown, "A non-PKG target must be rejected with NotSupportedException.");
+                    .GetAwaiter().GetResult());
+            Assert.Contains("Pkg targets only", wrongTarget.Message);
         }
         finally
         {
@@ -37,18 +30,11 @@ public static class MacPkgTests
         MacPkgBundleBackend.HostCheck = () => false;
         try
         {
-            var thrown = false;
-            try
-            {
-                new MacPkgBundler()
+            var wrongHost = Assert.ThrowsAny<NotSupportedException>(
+                () => new MacPkgBundler()
                     .BuildAsync(PkgConfiguration(input))
-                    .GetAwaiter().GetResult();
-            }
-            catch (NotSupportedException exception)
-            {
-                thrown = exception.Message.Contains("macOS host");
-            }
-            Assert.True(thrown, "PKG builds must be rejected off macOS hosts.");
+                    .GetAwaiter().GetResult());
+            Assert.Contains("macOS host", wrongHost.Message);
         }
         finally
         {
@@ -65,21 +51,14 @@ public static class MacPkgTests
         MacPkgBundleBackend.HostCheck = () => true;
         try
         {
-            var thrown = false;
-            try
-            {
-                new MacPkgBundler(new MacPkgBundleConfiguration
+            var relativeLocation = Assert.ThrowsAny<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
                     {
                         InstallLocation = "usr/local"
                     })
                     .BuildAsync(PkgConfiguration(input))
-                    .GetAwaiter().GetResult();
-            }
-            catch (ArgumentException exception)
-            {
-                thrown = exception.Message.Contains("absolute path");
-            }
-            Assert.True(thrown, "A relative install location must be rejected.");
+                    .GetAwaiter().GetResult());
+            Assert.Contains("absolute path", relativeLocation.Message);
         }
         finally
         {
@@ -125,12 +104,9 @@ public static class MacPkgTests
             Assert.True(args.Contains("--install-location") && args.Contains("--identifier") &&
                    args.Contains("--version") && args.Contains("--ownership"),
                 $"pkgbuild arguments must carry install-location/identifier/version/ownership: {string.Join(' ', args)}");
-            Assert.True(args[args.IndexOf("--install-location") + 1] == "/Applications",
-                "The default install location must be /Applications.");
-            Assert.True(args[args.IndexOf("--identifier") + 1] == "com.example.app",
-                "The default identifier must come from the bundle Identifier.");
-            Assert.True(args[args.IndexOf("--version") + 1] == "1.0.0",
-                "The default version must come from the bundle Version.");
+            Assert.Equal("/Applications", args[args.IndexOf("--install-location") + 1]);
+            Assert.Equal("com.example.app", args[args.IndexOf("--identifier") + 1]);
+            Assert.Equal("1.0.0", args[args.IndexOf("--version") + 1]);
             Assert.Equal("recommended", args[args.IndexOf("--ownership") + 1]);
             Assert.Equal(pkg.Path, args[args.Count - 1]);
             Assert.Contains("ExampleApp.app", staged);
@@ -304,10 +280,8 @@ public static class MacPkgTests
             Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
         try
         {
-            var thrown = false;
-            try
-            {
-                new MacPkgBundler(new MacPkgBundleConfiguration
+            Assert.ThrowsAny<FileNotFoundException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
                     {
                         PayloadItems =
                         [
@@ -315,13 +289,7 @@ public static class MacPkgTests
                         ]
                     })
                     .BuildAsync(PkgConfiguration(input, output))
-                    .GetAwaiter().GetResult();
-            }
-            catch (FileNotFoundException)
-            {
-                thrown = true;
-            }
-            Assert.True(thrown, "A missing payload source must fail the build.");
+                    .GetAwaiter().GetResult());
         }
         finally
         {
@@ -343,28 +311,23 @@ public static class MacPkgTests
         MacPkgBundleBackend.HostCheck = () => true;
         try
         {
-            var thrown = false;
-            try
-            {
-                var configuration = PkgConfiguration(input, output);
-                var item = new BundlePlanItem(
-                    new BundleTarget("osx-arm64", DesktopOperatingSystem.MacOS, CpuArchitecture.Arm64),
-                    PackageFormat.Pkg,
-                    input,
-                    "ExampleApp",
-                    Path.Combine(output, "osx-arm64", "pkg"),
-                    Intermediate: false);
-                new MacPkgBundleBackend(new MacPkgBundleConfiguration())
-                    .BuildAsync(new BundleBuildContext(
-                        configuration, item, Path.Combine(output, "work"), new SilentLogger()),
-                        CancellationToken.None)
-                    .GetAwaiter().GetResult();
-            }
-            catch (DirectoryNotFoundException)
-            {
-                thrown = true;
-            }
-            Assert.True(thrown, "A pkg build with no .app and no payload must fail.");
+            Assert.ThrowsAny<DirectoryNotFoundException>(
+                () =>
+                {
+                    var configuration = PkgConfiguration(input, output);
+                    var item = new BundlePlanItem(
+                        new BundleTarget("osx-arm64", DesktopOperatingSystem.MacOS, CpuArchitecture.Arm64),
+                        PackageFormat.Pkg,
+                        input,
+                        "ExampleApp",
+                        Path.Combine(output, "osx-arm64", "pkg"),
+                        Intermediate: false);
+                    new MacPkgBundleBackend(new MacPkgBundleConfiguration())
+                        .BuildAsync(new BundleBuildContext(
+                            configuration, item, Path.Combine(output, "work"), new SilentLogger()),
+                            CancellationToken.None)
+                        .GetAwaiter().GetResult();
+                });
         }
         finally
         {
@@ -391,16 +354,9 @@ public static class MacPkgTests
                 request.Executable == "pkgbuild" ? 2 : 0, "", "pkgbuild failed"));
         try
         {
-            var thrown = false;
-            try
-            {
-                await new MacPkgBundler().BuildAsync(PkgConfiguration(input, output));
-            }
-            catch (InvalidOperationException exception)
-            {
-                thrown = exception.Message.Contains("pkgbuild");
-            }
-            Assert.True(thrown, "A pkgbuild failure must fail the build.");
+            var pkgbuildFailure = await Assert.ThrowsAnyAsync<InvalidOperationException>(
+                () => new MacPkgBundler().BuildAsync(PkgConfiguration(input, output)));
+            Assert.Contains("pkgbuild", pkgbuildFailure.Message);
             var pkgDirectory = Path.Combine(output, "osx-arm64", "pkg");
             Assert.True(!Directory.Exists(pkgDirectory) ||
                    !Directory.EnumerateFiles(pkgDirectory, "*.pkg").Any(),
@@ -652,21 +608,13 @@ public static class MacPkgTests
         };
         try
         {
-            var thrown = false;
-            try
-            {
-                new MacPkgBundler(new MacPkgBundleConfiguration
+            Assert.ThrowsAny<FileNotFoundException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
                     {
                         WelcomeFile = Path.Combine(input, "absent.html")
                     })
                     .BuildAsync(PkgConfiguration(input, output))
-                    .GetAwaiter().GetResult();
-            }
-            catch (FileNotFoundException)
-            {
-                thrown = true;
-            }
-            Assert.True(thrown, "A missing welcome page file must fail the build.");
+                    .GetAwaiter().GetResult());
         }
         finally
         {
@@ -784,21 +732,13 @@ public static class MacPkgTests
         MacPkgBundleBackend.HostCheck = () => true;
         try
         {
-            var thrown = false;
-            try
-            {
-                new MacPkgBundler(new MacPkgBundleConfiguration
+            Assert.ThrowsAny<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
                     {
                         Signing = new MacPkgSigningConfiguration { Identity = "-" }
                     })
                     .BuildAsync(PkgConfiguration(input))
-                    .GetAwaiter().GetResult();
-            }
-            catch (ArgumentException)
-            {
-                thrown = true;
-            }
-            Assert.True(thrown, "\"-\" must be rejected: .pkg has no ad-hoc signature equivalent.");
+                    .GetAwaiter().GetResult());
         }
         finally
         {
@@ -816,10 +756,8 @@ public static class MacPkgTests
         MacPkgBundleBackend.HostCheck = () => true;
         try
         {
-            var thrown = false;
-            try
-            {
-                new MacPkgBundler(new MacPkgBundleConfiguration
+            Assert.ThrowsAny<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
                     {
                         Signing = new MacPkgSigningConfiguration
                         {
@@ -828,13 +766,7 @@ public static class MacPkgTests
                         }
                     })
                     .BuildAsync(PkgConfiguration(input))
-                    .GetAwaiter().GetResult();
-            }
-            catch (ArgumentException)
-            {
-                thrown = true;
-            }
-            Assert.True(thrown, "SignIdentity and TemporaryCertificatePath are mutually exclusive.");
+                    .GetAwaiter().GetResult());
         }
         finally
         {
@@ -851,21 +783,13 @@ public static class MacPkgTests
         MacPkgBundleBackend.HostCheck = () => true;
         try
         {
-            var thrown = false;
-            try
-            {
-                new MacPkgBundler(new MacPkgBundleConfiguration
+            Assert.ThrowsAny<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
                     {
                         Signing = new MacPkgSigningConfiguration { Notarize = true }
                     })
                     .BuildAsync(PkgConfiguration(input))
-                    .GetAwaiter().GetResult();
-            }
-            catch (ArgumentException)
-            {
-                thrown = true;
-            }
-            Assert.True(thrown, "Notarization without a signing identity must fail.");
+                    .GetAwaiter().GetResult());
         }
         finally
         {
@@ -923,21 +847,13 @@ public static class MacPkgTests
         MacPkgBundleBackend.HostCheck = () => true;
         try
         {
-            var thrown = false;
-            try
-            {
-                new MacPkgBundler(new MacPkgBundleConfiguration
+            Assert.ThrowsAny<DirectoryNotFoundException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
                     {
                         ScriptsDirectory = Path.Combine(input, "absent-scripts")
                     })
                     .BuildAsync(PkgConfiguration(input))
-                    .GetAwaiter().GetResult();
-            }
-            catch (DirectoryNotFoundException)
-            {
-                thrown = true;
-            }
-            Assert.True(thrown, "A missing scripts directory must fail the build.");
+                    .GetAwaiter().GetResult());
         }
         finally
         {

@@ -1,22 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>DotNet.Bundler.Rpm</AssemblyName>
     <RootNamespace>DotNet.Bundler.Rpm</RootNamespace>
     <PackageId>DotNet.Bundler.Rpm</PackageId>
-    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
-    <Authors>Bundler contributors</Authors>
     <Description>Reusable RPM package writer for desktop applications (pure managed, no host tools).</Description>
     <PackageTags>dotnet;bundler;linux;rpm;redhat;fedora;installer;desktop</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Bundler.Tests" />
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
-    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
-    <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
+    <PackageReference Include="BouncyCastle.Cryptography" />
   </ItemGroup>
 </Project>

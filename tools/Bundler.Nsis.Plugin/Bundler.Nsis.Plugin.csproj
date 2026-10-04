@@ -16,6 +16,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\src\Bundler.Nsis\SemanticVersion.cs" Link="SemanticVersion.cs" />
-    <PackageReference Include="NsisPlugin" Version="1.0.2" />
+    <PackageReference Include="NsisPlugin" />
   </ItemGroup>
 </Project>

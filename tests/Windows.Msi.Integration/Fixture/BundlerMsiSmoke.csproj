@@ -15,7 +15,7 @@
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="$(BundlerPackageVersion)" />
+    <PackageReference Include="DotNet.Bundler" VersionOverride="$(BundlerPackageVersion)" />
     <BundlerResource Include="Assets\marker.txt" TargetPath="docs\marker.txt" />
     <BundlerResource Include="Assets\v1-only.txt" TargetPath="docs\v1-only.txt"
                      Condition="'$(MsiLifecycleTest)' == 'true' and '$(BundlerVersion)' == '1.0.0'" />

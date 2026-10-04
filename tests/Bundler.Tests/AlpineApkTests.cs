@@ -15,18 +15,11 @@ public static class AlpineApkTests
         var input = CreateInputDirectory();
         try
         {
-            var thrown = false;
-            try
-            {
-                new AlpineApkBundler()
+            var wrongTarget = Assert.ThrowsAny<NotSupportedException>(
+                () => new AlpineApkBundler()
                     .BuildAsync(ApkConfiguration(input, formats: [PackageFormat.Deb]))
-                    .GetAwaiter().GetResult();
-            }
-            catch (NotSupportedException exception)
-            {
-                thrown = exception.Message.Contains("AlpineApk targets only");
-            }
-            Assert.True(thrown, "A non-apk target must be rejected with NotSupportedException.");
+                    .GetAwaiter().GetResult());
+            Assert.Contains("AlpineApk targets only", wrongTarget.Message);
         }
         finally
         {
@@ -77,11 +70,9 @@ public static class AlpineApkTests
             Assert.Contains("usr/lib/example-app/ExampleApp", names);
             Assert.Contains("usr/lib/example-app/ExampleApp.dll", names);
             var exe = data.Single(e => e.Name == "usr/lib/example-app/ExampleApp");
-            Assert.True(exe.Mode == 493,
-                $"The main executable must have mode 0755, got {Convert.ToString(exe.Mode, 8)}.");
+            Assert.Equal(493, exe.Mode);
             var dll = data.Single(e => e.Name == "usr/lib/example-app/ExampleApp.dll");
-            Assert.True(dll.Mode == 420,
-                $"Data files must have mode 0644, got {Convert.ToString(dll.Mode, 8)}.");
+            Assert.Equal(420, dll.Mode);
             Assert.True(data.Where(e => e.TypeFlag == '5').All(e => e.Mode == 493),
                 "Directories must have mode 0755.");
             Assert.True(data.Where(e => e.TypeFlag == '5').All(e => e.Name.EndsWith('/')),
@@ -190,17 +181,9 @@ public static class AlpineApkTests
                 (new AlpineApkBundleConfiguration { BinLink = "a/b" }, "bin link")
             })
             {
-                var thrown = false;
-                try
-                {
-                    new AlpineApkBundler(settings)
-                        .BuildAsync(ApkConfiguration(input)).GetAwaiter().GetResult();
-                }
-                catch (ArgumentException)
-                {
-                    thrown = true;
-                }
-                Assert.True(thrown, $"Invalid {label} must be rejected: {settings}");
+                Assert.ThrowsAny<ArgumentException>(
+                    () => new AlpineApkBundler(settings)
+                        .BuildAsync(ApkConfiguration(input)).GetAwaiter().GetResult());
             }
         }
         finally
@@ -259,25 +242,14 @@ public static class AlpineApkTests
         {
             foreach (var rid in new[] { "linux-x64", "win-x64", "osx-arm64" })
             {
-                var thrown = false;
-                try
-                {
-                    new AlpineApkBundler()
-                        .BuildAsync(ApkConfiguration(input, rid: rid)).GetAwaiter().GetResult();
-                }
-                catch (NotSupportedException exception)
-                {
-                    thrown = exception.Message.Contains("No backend is registered");
-                }
-                catch (ArgumentException exception)
-                {
-                    thrown = exception.Message.Contains("validation error");
-                }
-                catch (BundleValidationException)
-                {
-                    thrown = true;
-                }
-                Assert.True(thrown, $"apk must be refused on non-musl rid {rid}.");
+                var refused = Assert.ThrowsAny<Exception>(
+                    () => new AlpineApkBundler()
+                        .BuildAsync(ApkConfiguration(input, rid: rid)).GetAwaiter().GetResult());
+                Assert.True(
+                    (refused is NotSupportedException && refused.Message.Contains("No backend is registered")) ||
+                    (refused is ArgumentException && refused.Message.Contains("validation error")) ||
+                    refused is BundleValidationException,
+                    $"apk must be refused on non-musl rid {rid}: {refused.GetType().Name}: {refused.Message}");
             }
 
             // The matrix keeps the validator symmetric: apk on a glibc Linux
@@ -584,17 +556,9 @@ public static class AlpineApkTests
                 }, "extra pkginfo")
             })
             {
-                var thrown = false;
-                try
-                {
-                    new AlpineApkBundler(settings)
-                        .BuildAsync(ApkConfiguration(input)).GetAwaiter().GetResult();
-                }
-                catch (ArgumentException)
-                {
-                    thrown = true;
-                }
-                Assert.True(thrown, $"Invalid {label} must be rejected.");
+                Assert.ThrowsAny<ArgumentException>(
+                    () => new AlpineApkBundler(settings)
+                        .BuildAsync(ApkConfiguration(input)).GetAwaiter().GetResult());
             }
         }
         finally
@@ -614,42 +578,27 @@ public static class AlpineApkTests
             Directory.CreateDirectory(output);
             var script = Path.Combine(output, "post.sh");
             File.WriteAllText(script, "#!/bin/sh\r\necho hi\r\n");
-            var thrown = false;
-            try
-            {
-                new AlpineApkBundler(new AlpineApkBundleConfiguration { PostInstallScript = script })
-                    .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
-            }
-            catch (ArgumentException) { thrown = true; }
-            Assert.True(thrown, "A CRLF script must be rejected.");
+            Assert.ThrowsAny<ArgumentException>(
+                () => new AlpineApkBundler(new AlpineApkBundleConfiguration { PostInstallScript = script })
+                    .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
 
             // Missing script file is rejected.
-            thrown = false;
-            try
-            {
-                new AlpineApkBundler(new AlpineApkBundleConfiguration
+            Assert.ThrowsAny<FileNotFoundException>(
+                () => new AlpineApkBundler(new AlpineApkBundleConfiguration
                 {
                     PreInstallScript = Path.Combine(output, "missing.sh")
-                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
-            }
-            catch (FileNotFoundException) { thrown = true; }
-            Assert.True(thrown, "A missing script file must be rejected.");
+                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
 
             // Relative destination and '..' segments are rejected.
             var extra = Path.Combine(output, "conf.txt");
             File.WriteAllText(extra, "x");
             foreach (var destination in new[] { "etc/x.conf", "/etc/../x.conf", "/etc/" })
             {
-                thrown = false;
-                try
-                {
-                    new AlpineApkBundler(new AlpineApkBundleConfiguration
+                Assert.ThrowsAny<ArgumentException>(
+                    () => new AlpineApkBundler(new AlpineApkBundleConfiguration
                     {
                         Files = [new AlpineApkFileEntry { Source = extra, Destination = destination }]
-                    }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
-                }
-                catch (ArgumentException) { thrown = true; }
-                Assert.True(thrown, $"Destination '{destination}' must be rejected.");
+                    }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
             }
         }
         finally
@@ -739,55 +688,35 @@ public static class AlpineApkTests
         try
         {
             // Passphrase without a key file is a half configuration.
-            var thrown = false;
-            try
-            {
-                new AlpineApkBundler(new AlpineApkBundleConfiguration
+            Assert.ThrowsAny<ArgumentException>(
+                () => new AlpineApkBundler(new AlpineApkBundleConfiguration
                 {
                     SigningKeyPassphrase = "x"
-                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
-            }
-            catch (ArgumentException) { thrown = true; }
-            Assert.True(thrown, "A passphrase without a key must be rejected.");
+                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
 
             // Missing key file.
-            thrown = false;
-            try
-            {
-                new AlpineApkBundler(new AlpineApkBundleConfiguration
+            Assert.ThrowsAny<FileNotFoundException>(
+                () => new AlpineApkBundler(new AlpineApkBundleConfiguration
                 {
                     SigningKeyFile = Path.Combine(output, "missing.rsa")
-                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
-            }
-            catch (FileNotFoundException) { thrown = true; }
-            Assert.True(thrown, "A missing key file must be rejected.");
+                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
 
             // Non-PEM key content.
             var garbage = WriteKey(output, "garbage.rsa", "definitely not a pem");
-            thrown = false;
-            try
-            {
-                new AlpineApkBundler(new AlpineApkBundleConfiguration
+            Assert.ThrowsAny<ArgumentException>(
+                () => new AlpineApkBundler(new AlpineApkBundleConfiguration
                 {
                     SigningKeyFile = garbage
-                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
-            }
-            catch (ArgumentException) { thrown = true; }
-            Assert.True(thrown, "A non-PEM key must be rejected.");
+                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
 
             // Wrong passphrase on an encrypted key fails (crypto layer, any exception).
             var enc = WriteKey(output, "enckey.rsa", EncryptedPrivateKeyPem);
-            thrown = false;
-            try
-            {
-                new AlpineApkBundler(new AlpineApkBundleConfiguration
+            Assert.ThrowsAny<Exception>(
+                () => new AlpineApkBundler(new AlpineApkBundleConfiguration
                 {
                     SigningKeyFile = enc,
                     SigningKeyPassphrase = "wrong"
-                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
-            }
-            catch (Exception) { thrown = true; }
-            Assert.True(thrown, "A wrong passphrase must fail.");
+                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
         }
         finally
         {

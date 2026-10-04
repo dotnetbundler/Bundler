@@ -80,13 +80,9 @@ public static class RpmTests
                     new RpmBundleConfiguration { SigningKeyFile = Path.Combine(input, "missing.asc") }),
             })
             {
-                try
-                {
-                    new RpmBundler(settings).BuildAsync(RpmConfiguration(input, output))
-                        .GetAwaiter().GetResult();
-                    throw new InvalidOperationException(caseName + " should have been rejected.");
-                }
-                catch (ArgumentException) { }
+                Assert.ThrowsAny<ArgumentException>(
+                    () => new RpmBundler(settings).BuildAsync(RpmConfiguration(input, output))
+                        .GetAwaiter().GetResult());
             }
         }
         finally
@@ -104,16 +100,13 @@ public static class RpmTests
         GenerateTestKey(keyFile, "right-passphrase");
         try
         {
-            try
-            {
-                new RpmBundler(new RpmBundleConfiguration
+            var wrongPassphrase = Assert.ThrowsAny<InvalidOperationException>(
+                () => new RpmBundler(new RpmBundleConfiguration
                 {
                     SigningKeyFile = keyFile,
                     SigningKeyPassphrase = "wrong-passphrase"
-                }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult();
-                throw new InvalidOperationException("Wrong passphrase should have been rejected.");
-            }
-            catch (InvalidOperationException error) when (error.Message.Contains("passphrase", StringComparison.OrdinalIgnoreCase)) { }
+                }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult());
+            Assert.Contains("passphrase", wrongPassphrase.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -182,8 +175,7 @@ public static class RpmTests
             Assert.Equal("/bin/bash", package.Main.Text(1085));
             // No shebang and no program -> /bin/sh default.
             Assert.Equal("echo post\n", package.Main.Text(1024));
-            Assert.True(package.Main.Text(1086) == "/usr/bin/python3",
-                "Explicit *Program overrides the default interpreter.");
+            Assert.Equal("/usr/bin/python3", package.Main.Text(1086));
             // Unset scriptlets stay absent.
             Assert.True(!package.Main.Tags.ContainsKey(1025) && !package.Main.Tags.ContainsKey(1087),
                 "No PREUN/PREUNPROG when unset.");
@@ -215,8 +207,7 @@ public static class RpmTests
             var post = package.Main.Text(1024);
             Assert.True(post.Contains("echo custom") && post.Contains("daemon-reload"),
                 "POSTIN must merge the caller body with the daemon-reload epilogue.");
-            Assert.True(package.Main.Text(1086) == "/bin/sh",
-                "Synthesized POSTIN defaults to /bin/sh.");
+            Assert.Equal("/bin/sh", package.Main.Text(1086));
             var postun = package.Main.Text(1026);
             Assert.True(postun.Contains("daemon-reload") && package.Main.Text(1088) == "/bin/sh",
                 "POSTUN must be synthesized for daemon-reload too.");
@@ -271,7 +262,7 @@ public static class RpmTests
             Assert.True((opt & 1) != 0 && (opt & 16) != 0,
                 "Explicit ConfigFiles entries must be %config(noreplace) too.");
             var bin = Flag("/usr/lib/example-app/ExampleApp");
-            Assert.True((bin & 17) == 0, "Non-config files must not get config flags.");
+            Assert.Equal(0, bin & 17);
         }
         finally
         {
@@ -303,17 +294,11 @@ public static class RpmTests
                     "ConfigFiles must reference a real payload file")
             })
             {
-                var thrown = false;
-                try
-                {
-                    new RpmBundler(cfg).BuildAsync(RpmConfiguration(input, output))
-                        .GetAwaiter().GetResult();
-                }
-                catch (Exception e) when (e is ArgumentException or FileNotFoundException)
-                {
-                    thrown = true;
-                }
-                Assert.True(thrown, label);
+                var rejected = Assert.ThrowsAny<Exception>(
+                    () => new RpmBundler(cfg).BuildAsync(RpmConfiguration(input, output))
+                        .GetAwaiter().GetResult());
+                Assert.True(rejected is ArgumentException or FileNotFoundException,
+                    $"{label}: {rejected.GetType().Name}: {rejected.Message}");
             }
         }
         finally
@@ -328,18 +313,11 @@ public static class RpmTests
         var input = CreateInputDirectory();
         try
         {
-            var thrown = false;
-            try
-            {
-                new RpmBundler()
+            var wrongTarget = Assert.ThrowsAny<NotSupportedException>(
+                () => new RpmBundler()
                     .BuildAsync(RpmConfiguration(input, formats: [PackageFormat.Deb]))
-                    .GetAwaiter().GetResult();
-            }
-            catch (NotSupportedException exception)
-            {
-                thrown = exception.Message.Contains("Rpm targets only");
-            }
-            Assert.True(thrown, "A non-rpm target must be rejected with NotSupportedException.");
+                    .GetAwaiter().GetResult());
+            Assert.Contains("Rpm targets only", wrongTarget.Message);
         }
         finally
         {
@@ -389,8 +367,7 @@ public static class RpmTests
             Assert.Contains("/usr/bin/example-app", paths);
             var link = package.Payload.Single(e => e.Path == "/usr/bin/example-app");
             Assert.Equal(0xA000, (link.Mode & 0xF000));
-            Assert.True(Encoding.UTF8.GetString(link.Data) == "../lib/example-app/ExampleApp",
-                "The bin symlink must target the install root.");
+            Assert.Equal("../lib/example-app/ExampleApp", Encoding.UTF8.GetString(link.Data));
             var exe = package.Payload.Single(e => e.Path == "/usr/lib/example-app/ExampleApp");
             Assert.Equal(493 /* 0755 */, (exe.Mode & 511));
             Assert.Equal("fake executable", Encoding.UTF8.GetString(exe.Data));
@@ -519,15 +496,10 @@ public static class RpmTests
             };
             foreach (var (name, settings, version) in cases)
             {
-                var thrown = false;
-                try
-                {
-                    new RpmBundler(settings)
+                Assert.ThrowsAny<Exception>(
+                    () => new RpmBundler(settings)
                         .BuildAsync(RpmConfiguration(input, output, version: version))
-                        .GetAwaiter().GetResult();
-                }
-                catch (Exception) { thrown = true; }
-                Assert.True(thrown, $"Invalid setting must be rejected: {name}.");
+                        .GetAwaiter().GetResult());
             }
         }
         finally
@@ -787,17 +759,16 @@ public static class RpmTests
                 Url = "https://example.com/rpm-override"
             }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
             var package = RpmPackageReader.Read(artifact.Path);
-            Assert.True(package.Main.Text(1014) == "MIT OR Apache-2.0", "LICENSE must take the SPDX string.");
+            Assert.Equal("MIT OR Apache-2.0", package.Main.Text(1014));
             Assert.Equal("Applications/Engineering", package.Main.Text(1016));
-            Assert.True(package.Main.Text(1020) == "https://example.com/rpm-override",
-                "URL must prefer the explicit knob over Homepage.");
+            Assert.Equal("https://example.com/rpm-override", package.Main.Text(1020));
 
             // Defaults: License 'Unspecified', Group 'Unspecified', URL = Homepage.
             var defaults = RpmPackageReader.Read(new RpmBundler()
                 .BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single().Path);
-            Assert.True(defaults.Main.Text(1014) == "Unspecified", "Default LICENSE.");
-            Assert.True(defaults.Main.Text(1016) == "Unspecified", "Default GROUP.");
-            Assert.True(defaults.Main.Text(1020) == "https://example.com/app", "Default URL = Homepage.");
+            Assert.Equal("Unspecified", defaults.Main.Text(1014));
+            Assert.Equal("Unspecified", defaults.Main.Text(1016));
+            Assert.Equal("https://example.com/app", defaults.Main.Text(1020));
 
             // Explicit empty Url/Group omit the tags entirely.
             var omitted = RpmPackageReader.Read(new RpmBundler(
@@ -875,7 +846,7 @@ public static class RpmTests
                 var path = FullPath(i);
                 if (path == "/usr/share/licenses/example-app/LICENSE.txt")
                 {
-                    Assert.True(flags[i] == 128, "License files must carry RPMFILE_LICENSE (128).");
+                    Assert.Equal(128, flags[i]);
                 }
                 else if (path == "/usr/share/doc/example-app/changelog.gz")
                 {
@@ -957,17 +928,9 @@ public static class RpmTests
         {
             foreach (var clause in new[] { "foo != 1.0", "foo bar", "", "foo =" })
             {
-                var thrown = false;
-                try
-                {
-                    new RpmBundler(new RpmBundleConfiguration { Requires = [clause] })
-                        .BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult();
-                }
-                catch (ArgumentException)
-                {
-                    thrown = true;
-                }
-                Assert.True(thrown, $"The clause '{clause}' must be rejected.");
+                Assert.ThrowsAny<ArgumentException>(
+                    () => new RpmBundler(new RpmBundleConfiguration { Requires = [clause] })
+                        .BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult());
             }
         }
         finally

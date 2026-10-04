@@ -1,22 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>DotNet.Bundler.Archive</AssemblyName>
     <RootNamespace>DotNet.Bundler.Archive</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <PackageId>DotNet.Bundler.Archive</PackageId>
-    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
-    <Authors>DotNet.Bundler</Authors>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <Description>Managed .zip/.tar.gz archive bundling backend for DotNet.Bundler.</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Bundler.Tests" />
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
-    <None Include="..\..\README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
 </Project>

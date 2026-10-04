@@ -1,17 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>DotNet.Bundler.MSBuild</AssemblyName>
     <RootNamespace>DotNet.Bundler.MSBuild</RootNamespace>
     <GenerateDependencyFile>true</GenerateDependencyFile>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <IsPackable>true</IsPackable>
     <PackageId>DotNet.Bundler.MSBuild</PackageId>
-    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
-    <Authors>Bundler contributors</Authors>
     <Description>MSBuild adapter for reusable DotNet.Bundler backend packages.</Description>
     <PackageTags>dotnet;msbuild;bundler;installer;nsis;desktop</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <DevelopmentDependency>true</DevelopmentDependency>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
@@ -30,7 +26,6 @@
     <ProjectReference Include="..\Bundler.Signing.Windows\Bundler.Signing.Windows.csproj" />
     <ProjectReference Include="..\Bundler.AlpineApk\Bundler.AlpineApk.csproj" />
     <PackageReference Include="Microsoft.Build.Utilities.Core"
-                      Version="17.8.43"
                       PrivateAssets="all"
                       ExcludeAssets="runtime" />
   </ItemGroup>
@@ -53,8 +48,6 @@
     <None Include="$(TargetDir)BouncyCastle.Cryptography.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="..\..\buildTransitive\DotNet.Bundler.MSBuild.props" Pack="true" PackagePath="buildTransitive/" />
     <None Include="..\..\buildTransitive\DotNet.Bundler.MSBuild.targets" Pack="true" PackagePath="buildTransitive/" />
-    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
-    <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
     <None Include="..\..\third_party\nsis\COPYING" Pack="true" PackagePath="licenses/nsis/" />
     <None Include="..\..\third_party\nsis-plugin\LICENSE" Pack="true" PackagePath="licenses/nsis-plugin/" />
     <None Include="..\..\third_party\wix\LICENSE.TXT" Pack="true" PackagePath="licenses/wix/" />
