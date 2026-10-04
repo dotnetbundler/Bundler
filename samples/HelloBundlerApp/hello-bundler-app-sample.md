@@ -42,7 +42,7 @@ appimage 仅 Linux 宿主；nsis/deb/rpm/zip/targz/alpineapk 为纯托管实现�
   含 msi 的 publish 如需中文演示，请用不含 msi 的轮次。其余后端（nsis/deb/rpm/mac 系/apk/归档）不约束字符集。
 - **MSI 许可只收 RTF**：formats 集含 `msi` 时 `formats/Msi.props` 自动把全局许可切到 `Assets/msi/license.rtf`
   （nsis/dmg/pkg 同样接受 RTF；archive 不内嵌许可，deb/rpm 以文件载荷携带扩展名无影响）。
-  `HelloBundlerMsiLicenseFile` 传透可整体接管。
+  `HelloBundlerMsiLicenseFile` 传透可整体接管；`app` 共存时许可仍缺席（独立 app 无许可载荷契约优先）。
 - **universal 合并要求非 Mach-O 载荷逐字节一致**：`-r osx -p:BundlerUniversalRuntimeIdentifiers=osx-x64;osx-arm64`
   做双 RID 内层 publish + 托管合并；framework-dependent 应用的 `*.deps.json` 逐 RID 不同会按契约拒绝合并
   （`Universal merge conflict ... is not a Mach-O file`），非样本缺陷，需自包含/同构载荷场景适用。
