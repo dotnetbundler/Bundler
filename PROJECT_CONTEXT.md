@@ -40,7 +40,7 @@
 | `tests/Shared/` | 四测试工程链接共享：`TestPlatform.cs` 宿主探测门面 + `Tooling/` 集成基建（`ProcessRunner`/`DockerRunner`/`ElevatedRunner`/`IntegrationWorkspace`/`MsiSupport`/`ShellLink` 等） | `net10.0` |
 | `tests/README.md` | 测试入口、trait 门禁与 fixture 地图 | — |
 | `tools/Windows.Nsis.Reboot` | 可抛弃 VM 重启验证入口（`Verify.ps1` 两阶段：锁定文件卸载 `3010` → 重启 → pending rename/目录/注册表/journal 清理断言） | PowerShell |
-| `samples/HelloNsisApp` / `samples/HelloMsiApp` / `samples/HelloMacApp` / `samples/HelloMacDmg` / `samples/HelloMacPkg` / `samples/HelloDebApp` / `samples/HelloRpmApp` / `samples/HelloAppImageApp` / `samples/HelloArchiveApp` / `samples/HelloAlpineApkApp` | 公开可运行示例（应用版本 `1.0.0`） | `net10.0` |
+| `samples/HelloBundlerApp` | 全后端统一公开示例（应用版本 `1.0.0`，主工程公共旋钮 + `formats/*.props` 各后端专属旋钮，100% 旋钮覆盖） | `net10.0` |
 | `tools/Bundler.Nsis.Plugin` | NSIS 原生插件源码（有意在 slnx 之外，重建需 .NET 10 + Windows 原生链） | `net10.0` |
 | `third_party/` | 第三方归档、许可证、逐文件 SHA-256 与 provenance 文档 | — |
 

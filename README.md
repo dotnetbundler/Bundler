@@ -17,7 +17,7 @@ Linux `.rpm` 已冻结并入 `main`（`0.1.0-alpha.55`，`LINUX-RPM-1..5`）：�
 Linux `.AppImage` 已冻结并入 `main`（`LINUX-APPIMAGE-1..4` 完成，冻结基线 `0.1.0-alpha.58`）：`DotNet.Bundler.AppImage` 内嵌固定版本 `appimagetool`+type2 runtime（SHA-256 provenance、不联网下载），AppDir 组装复用共享 freedesktop 件 + 脚本式 `AppRun` + 根 `.desktop` 符号链接/`.DirIcon`/`@(BundlerAppImageFile)` 任意映射，仅 Linux 宿主构建、x86_64 宿主可交叉产 aarch64；`--appimage-extract` 结构断言、解出程序真实运行、docker 三容器 extract-and-run 冒烟、`deb;rpm;appimage` 扇出全绿；可选 GPG 签名（供 OpenPGP 私钥即走 `appimagetool --sign`，`gpgv` 实测验签通过）。
 通用 `.zip`/`.tar.gz` 归档已冻结并入 `main`（`ARCHIVE-1..3` 完成，冻结基线 `0.1.0-alpha.59`）：`DotNet.Bundler.Archive` 纯托管写入器（zip 自实现 unix mode/symlink，tar.gz 复用共享 ustar 写入器），单顶层目录 `<pkg>-<ver>-<rid>/` 布局，执行位与符号链接双保留，`.sha256` 侧车，`BundlerFormats=zip;targz` 与 `deb;rpm;appimage;zip;targz` 扇出；`unzip`/`zipinfo -l`/`tar` 真实解包逐路径断言、解出载荷运行、mode/symlink 还原断言全绿。
 Alpine `.apk` 已冻结并入 `main`（`0.1.0-alpha.63`，`APK-1..5` 完成、PR #13 终审合并）：`DotNet.Bundler.AlpineApk` 纯托管三段 gzip 写入器（签名段+控制段 `.PKGINFO`/六脚本+数据段），`linux-musl-x64/arm64` → `x86_64`/`aarch64`，逐文件 pax `APK-TOOLS.checksum.SHA1`、`depend`/`provides`/`triggers`/`license`/`release`/`builddate` 与 `@(BundlerAlpineApkFile)` 任意绝对路径映射，可选 RSA 签名（`.SIGN.RSA.<密钥名>.rsa.pub`，公钥入 `/etc/apk/keys/` 后免 `--allow-untrusted`）；`alpine:latest` 容器 x86_64 直跑 + aarch64 qemu binfmt 真实 `apk add`/`apk del` 全绿。
-各格式可运行示例见 `samples/`：[`HelloNsisApp`](samples/HelloNsisApp/nsis-sample.md)、[`HelloMsiApp`](samples/HelloMsiApp/msi-sample.md)、[`HelloMacApp`](samples/HelloMacApp/mac-app-sample.md)、[`HelloMacDmg`](samples/HelloMacDmg/mac-dmg-sample.md)、[`HelloMacPkg`](samples/HelloMacPkg/mac-pkg-sample.md)、[`HelloDebApp`](samples/HelloDebApp/linux-deb-sample.md)、[`HelloRpmApp`](samples/HelloRpmApp/linux-rpm-sample.md)、[`HelloAppImageApp`](samples/HelloAppImageApp/linux-appimage-sample.md)、[`HelloArchiveApp`](samples/HelloArchiveApp/archive-sample.md) 与 [`HelloAlpineApkApp`](samples/HelloAlpineApkApp/alpine-apk-sample.md)。
+全后端统一示例见 [`samples/HelloBundlerApp`](samples/HelloBundlerApp/hello-bundler-app-sample.md)：单个工程覆盖全部 11 种格式的全部公开旋钮——公共旋钮在主工程，各后端专属旋钮按 `formats/<Format>.props` 导入（用户项目可直接复制该组织方式）。
 各格式打包/消费的平台支持范围汇总见 [`docs/platform-support-matrix.md`](docs/platform-support-matrix.md)。
 
 实现已经拆分为可复用的 NuGet 包。
@@ -58,7 +58,7 @@ WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..9` 的当前主机范围验证：curr
 MSI 编译把 WiX 警告视为失败，PackageCode 由 WiX 每次构建生成。
 per-machine 包仅生成并检查数据库；原生 x86/ARM64 宿主、生产证书、交互 UI、提权安装、干净 Windows 和真实重启尚未验收。
 **冻结的是 alpha 格式配置及已验证语义；2026-09-29/30 已完成四宿主跨环境联合验收（win/linux/mac/qemu 互产互装、四轮全绿），其余环境类能力按各格式 OI 清单如实保留外部待验收。**
-可操作的当前能力示例见 [`samples/HelloMsiApp/msi-sample.md`](samples/HelloMsiApp/msi-sample.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
+可操作的当前能力示例见 [`samples/HelloBundlerApp/hello-bundler-app-sample.md`](samples/HelloBundlerApp/hello-bundler-app-sample.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
 
 `DotNet.Bundler.Wix` 是可独立引用的 MSI 后端包和直接 API；MSBuild 调用同一后端。
 跨格式的开发与包消费规则见 [`docs/development-rules.md`](docs/development-rules.md)。
@@ -590,24 +590,25 @@ provider 输出和参数不会被写入普通错误消息。
 
 ### 本地自签名测试
 
-下面的命令会在当前用户的 `My` 证书存储区创建一个有效期一天的一次性代码签名证书，用它构建 `HelloNsisApp` 项目（安装后的应用仍叫 Hello Bundled App），并检查主程序、安装器和安装后的卸载器。
+下面的命令会在当前用户的 `My` 证书存储区创建一个有效期一天的一次性代码签名证书，用它构建 `HelloBundlerApp` 项目（安装后的应用叫 Hello Bundler App），并检查主程序、安装器和安装后的卸载器。
 它只用于验证签名流程；自签名证书没有受信任 CA 的证书链，因此 `Get-AuthenticodeSignature` 通常会报告 `UnknownError` 或“不受信任的根证书”，也不会让真实用户看到可信发布者。
 
 ```powershell
 # 在仓库根目录创建一次性测试证书。
 $certificate = New-SelfSignedCertificate `
   -Type CodeSigningCert `
-  -Subject "CN=Hello Bundled App Test Publisher" `
+  -Subject "CN=Hello Bundler App Test Publisher" `
   -CertStoreLocation "Cert:\CurrentUser\My" `
   -NotAfter ([DateTime]::Now.AddDays(1))
 $thumbprint = $certificate.Thumbprint
 
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release `
-  -p:HelloNsisAppSigningCertificateThumbprint=$thumbprint
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64 `
+  -p:BundlerFormats=nsis `
+  -p:HelloBundlerSigningCertificateThumbprint=$thumbprint
 
 $installer = Resolve-Path `
-  "samples/HelloNsisApp/artifacts/win-x64/nsis/Hello Bundled App-1.0.0-setup.exe"
+  "samples/HelloBundlerApp/artifacts/win-x64/nsis/Hello Bundler App-1.0.0-setup.exe"
 $installerSignature = Get-AuthenticodeSignature -LiteralPath $installer
 $installerSignature | Select-Object Status, StatusMessage
 $installerSignature.SignerCertificate | Select-Object Subject, Thumbprint
@@ -620,13 +621,13 @@ if ($installerSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
 运行安装器并完成安装后，继续验证卸载器；如果安装时修改了目录，请替换下面的路径：
 
 ```powershell
-$mainExecutable = "$env:LOCALAPPDATA\Programs\Hello Bundled App\HelloBundledApp.exe"
+$mainExecutable = "$env:LOCALAPPDATA\Programs\Hello Bundler App\HelloBundlerApp.exe"
 $mainSignature = Get-AuthenticodeSignature -LiteralPath $mainExecutable
 if ($mainSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
   throw "主程序没有使用预期证书签名。"
 }
 
-$uninstaller = "$env:LOCALAPPDATA\Programs\Hello Bundled App\Uninstall.exe"
+$uninstaller = "$env:LOCALAPPDATA\Programs\Hello Bundler App\Uninstall.exe"
 $uninstallerSignature = Get-AuthenticodeSignature -LiteralPath $uninstaller
 if ($uninstallerSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
   throw "卸载器没有使用预期证书签名。"
@@ -636,7 +637,7 @@ if ($uninstallerSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
 Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 ```
 
-若要观察 UAC 发布者页面，可在构建时同时传入 `-p:HelloNsisAppInstallMode=perMachine`。
+若要观察 UAC 发布者页面，可在构建时同时传入 `-p:HelloBundlerNsisInstallMode=perMachine`。
 自签名证书仍会显示为未知或不受信任的发布者；正式发布必须换成受信任 CA 签发的代码签名证书，并配置 RFC 3161 时间戳。
 
 内置签名器直接调用 Windows 的 Authenticode API，因此启用它时构建宿主必须是 Windows；外部命令 provider 和自定义 `IBundleSigner` 可在 provider 支持的其他宿主运行。
@@ -658,8 +659,8 @@ dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet test tests/Bundler.ApiTests/Bundler.ApiTests.csproj -c Release
 dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
-dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64
+# 只产某一格式：-p:BundlerFormats=nsis 或 =msi（msi 需 Windows 宿主）
 # 集成测试按格式类选择（`--filter-class` 单名过滤，各宿主只跑宿主可用腿）
 dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*NsisIntegrationTests*"
 dotnet test tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj -c Release --filter-class "*MsiLocalPackagesTests*"

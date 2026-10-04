@@ -1,0 +1,35 @@
+<Project>
+  <!-- MacDmg（.dmg）后端全套公开旋钮。变体由 HelloBundlerDmg* 传透；
+       打包 dmg 会先经 .app 中间产物，.app 旋钮见 MacApp.props。 -->
+  <PropertyGroup>
+    <!-- 压缩格式（Udzo/Ulmo/Udbz，默认 Ulmo）与卷名（默认=产品名）。 -->
+    <BundlerMacDmgCompression Condition="'$(HelloBundlerDmgCompression)' != ''">$(HelloBundlerDmgCompression)</BundlerMacDmgCompression>
+    <BundlerMacDmgVolumeName Condition="'$(HelloBundlerDmgVolumeName)' != ''">$(HelloBundlerDmgVolumeName)</BundlerMacDmgVolumeName>
+
+    <!-- Finder 布局与品牌：默认演示背景图+卷图标；HelloBundlerDmgSkipWindowLayout 可整体跳过。 -->
+    <BundlerMacDmgSkipWindowLayout Condition="'$(HelloBundlerDmgSkipWindowLayout)' != ''">$(HelloBundlerDmgSkipWindowLayout)</BundlerMacDmgSkipWindowLayout>
+    <BundlerMacDmgWindowX Condition="'$(HelloBundlerDmgWindowX)' != ''">$(HelloBundlerDmgWindowX)</BundlerMacDmgWindowX>
+    <BundlerMacDmgWindowY Condition="'$(HelloBundlerDmgWindowY)' != ''">$(HelloBundlerDmgWindowY)</BundlerMacDmgWindowY>
+    <BundlerMacDmgWindowWidth Condition="'$(HelloBundlerDmgWindowWidth)' != ''">$(HelloBundlerDmgWindowWidth)</BundlerMacDmgWindowWidth>
+    <BundlerMacDmgWindowHeight Condition="'$(HelloBundlerDmgWindowHeight)' != ''">$(HelloBundlerDmgWindowHeight)</BundlerMacDmgWindowHeight>
+    <BundlerMacDmgAppIconX Condition="'$(HelloBundlerDmgAppIconX)' != ''">$(HelloBundlerDmgAppIconX)</BundlerMacDmgAppIconX>
+    <BundlerMacDmgAppIconY Condition="'$(HelloBundlerDmgAppIconY)' != ''">$(HelloBundlerDmgAppIconY)</BundlerMacDmgAppIconY>
+    <BundlerMacDmgApplicationsIconX Condition="'$(HelloBundlerDmgApplicationsIconX)' != ''">$(HelloBundlerDmgApplicationsIconX)</BundlerMacDmgApplicationsIconX>
+    <BundlerMacDmgApplicationsIconY Condition="'$(HelloBundlerDmgApplicationsIconY)' != ''">$(HelloBundlerDmgApplicationsIconY)</BundlerMacDmgApplicationsIconY>
+    <BundlerMacDmgIconSize Condition="'$(HelloBundlerDmgIconSize)' != ''">$(HelloBundlerDmgIconSize)</BundlerMacDmgIconSize>
+    <BundlerMacDmgBackgroundFile Condition="'$(HelloBundlerDmgBackgroundFile)' != ''">$(HelloBundlerDmgBackgroundFile)</BundlerMacDmgBackgroundFile>
+    <BundlerMacDmgBackgroundFile Condition="'$(HelloBundlerDmgBackgroundFile)' == ''">$(HelloBundlerAppAssets)dmg\bg.png</BundlerMacDmgBackgroundFile>
+    <BundlerMacDmgVolumeIconFile Condition="'$(HelloBundlerDmgVolumeIconFile)' != ''">$(HelloBundlerDmgVolumeIconFile)</BundlerMacDmgVolumeIconFile>
+    <BundlerMacDmgVolumeIconFile Condition="'$(HelloBundlerDmgVolumeIconFile)' == ''">$(HelloBundlerAppAssets)dmg\volume.icns</BundlerMacDmgVolumeIconFile>
+
+    <!-- EULA：默认用公共 BundlerLicenseFile（Assets/common/LICENSE.txt），挂载时弹许可面板；
+         -p:HelloBundlerDmgLicenseFile=none 不注入 SLA，也可改指自有许可文件。 -->
+    <BundlerLicenseFile Condition="'$(HelloBundlerDmgLicenseFile)' == 'none'"></BundlerLicenseFile>
+    <BundlerLicenseFile Condition="'$(HelloBundlerDmgLicenseFile)' != '' and '$(HelloBundlerDmgLicenseFile)' != 'none'">$(HelloBundlerDmgLicenseFile)</BundlerLicenseFile>
+
+    <!-- DMG 本体签名：identity（"-"=ad-hoc）与临时钥匙串证书互斥。 -->
+    <BundlerMacDmgSignIdentity Condition="'$(HelloBundlerDmgSignIdentity)' != ''">$(HelloBundlerDmgSignIdentity)</BundlerMacDmgSignIdentity>
+    <BundlerMacDmgSignCertificatePath Condition="'$(HelloBundlerDmgSignCertificatePath)' != ''">$(HelloBundlerDmgSignCertificatePath)</BundlerMacDmgSignCertificatePath>
+    <BundlerMacDmgSignCertificatePassword Condition="'$(HelloBundlerDmgSignCertificatePassword)' != ''">$(HelloBundlerDmgSignCertificatePassword)</BundlerMacDmgSignCertificatePassword>
+  </PropertyGroup>
+</Project>

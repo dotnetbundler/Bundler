@@ -1,0 +1,56 @@
+<Project>
+  <!-- Deb 后端全套公开旋钮。变体由 HelloBundlerDeb* 传透。 -->
+  <PropertyGroup>
+    <!-- 包名默认取产品名 kebab-case；version 覆盖走完整 Debian 版本
+         （可用 epoch:upstream-revision）；revision 默认 1；epoch 独立数字前缀；
+         architecture 默认按 RID 映射（x64→amd64、arm64→arm64）；
+         maintainer 默认 Publisher→Identifier 回退；
+         install-root 默认 /usr/lib/<包名>；bin-link 默认包名，"none" 关闭。 -->
+    <BundlerDebPackageName Condition="'$(HelloBundlerDebPackageName)' != ''">$(HelloBundlerDebPackageName)</BundlerDebPackageName>
+    <BundlerDebVersion Condition="'$(HelloBundlerDebVersion)' != ''">$(HelloBundlerDebVersion)</BundlerDebVersion>
+    <BundlerDebRevision Condition="'$(HelloBundlerDebRevision)' != ''">$(HelloBundlerDebRevision)</BundlerDebRevision>
+    <BundlerDebEpoch Condition="'$(HelloBundlerDebEpoch)' != ''">$(HelloBundlerDebEpoch)</BundlerDebEpoch>
+    <BundlerDebArchitecture Condition="'$(HelloBundlerDebArchitecture)' != ''">$(HelloBundlerDebArchitecture)</BundlerDebArchitecture>
+    <BundlerDebMaintainer Condition="'$(HelloBundlerDebMaintainer)' != ''">$(HelloBundlerDebMaintainer)</BundlerDebMaintainer>
+    <BundlerDebInstallRoot Condition="'$(HelloBundlerDebInstallRoot)' != ''">$(HelloBundlerDebInstallRoot)</BundlerDebInstallRoot>
+    <BundlerDebBinLink Condition="'$(HelloBundlerDebBinLink)' != ''">$(HelloBundlerDebBinLink)</BundlerDebBinLink>
+
+    <!-- 关系字段纯透传（分号=子句分隔，逗号是 Debian 语法）；
+         Section/Priority 覆盖（required/important/standard/optional/extra）；
+         Categories 为 freedesktop 分号列表；
+         DesktopFile/MetainfoFile/ChangelogFile 指向本地文件，DesktopFile 整文件覆盖。 -->
+    <BundlerDebDepends Condition="'$(HelloBundlerDebDepends)' != ''">$(HelloBundlerDebDepends)</BundlerDebDepends>
+    <BundlerDebRecommends Condition="'$(HelloBundlerDebRecommends)' != ''">$(HelloBundlerDebRecommends)</BundlerDebRecommends>
+    <BundlerDebProvides Condition="'$(HelloBundlerDebProvides)' != ''">$(HelloBundlerDebProvides)</BundlerDebProvides>
+    <BundlerDebConflicts Condition="'$(HelloBundlerDebConflicts)' != ''">$(HelloBundlerDebConflicts)</BundlerDebConflicts>
+    <BundlerDebReplaces Condition="'$(HelloBundlerDebReplaces)' != ''">$(HelloBundlerDebReplaces)</BundlerDebReplaces>
+    <BundlerDebSection Condition="'$(HelloBundlerDebSection)' != ''">$(HelloBundlerDebSection)</BundlerDebSection>
+    <BundlerDebPriority Condition="'$(HelloBundlerDebPriority)' != ''">$(HelloBundlerDebPriority)</BundlerDebPriority>
+    <BundlerDebCategories>Utility;Development</BundlerDebCategories>
+    <BundlerDebCategories Condition="'$(HelloBundlerDebCategories)' != ''">$(HelloBundlerDebCategories)</BundlerDebCategories>
+    <BundlerDebDesktopFile Condition="'$(HelloBundlerDebDesktopFile)' != ''">$(HelloBundlerDebDesktopFile)</BundlerDebDesktopFile>
+    <BundlerDebMetainfoFile>$(HelloBundlerAppAssets)deb\app.metainfo.xml</BundlerDebMetainfoFile>
+    <BundlerDebMetainfoFile Condition="'$(HelloBundlerDebMetainfoFile)' != ''">$(HelloBundlerDebMetainfoFile)</BundlerDebMetainfoFile>
+    <BundlerDebChangelogFile>$(HelloBundlerAppAssets)deb\CHANGELOG.md</BundlerDebChangelogFile>
+    <BundlerDebChangelogFile Condition="'$(HelloBundlerDebChangelogFile)' != ''">$(HelloBundlerDebChangelogFile)</BundlerDebChangelogFile>
+
+    <!-- 维护者脚本（shebang+LF 必备，入 control 归档 0755）；
+         SystemdServiceFile 托管 unit（postinst 自动合成 daemon-reload 尾段）；
+         Conffiles 显式登记（/etc 下 BundlerDebFile 自动登记）；Compression 仅 gzip。 -->
+    <BundlerDebPostinstFile>$(HelloBundlerAppAssets)deb\postinst.sh</BundlerDebPostinstFile>
+    <BundlerDebPostinstFile Condition="'$(HelloBundlerDebPostinstFile)' != ''">$(HelloBundlerDebPostinstFile)</BundlerDebPostinstFile>
+    <BundlerDebPrermFile>$(HelloBundlerAppAssets)deb\prerm.sh</BundlerDebPrermFile>
+    <BundlerDebPrermFile Condition="'$(HelloBundlerDebPrermFile)' != ''">$(HelloBundlerDebPrermFile)</BundlerDebPrermFile>
+    <BundlerDebPostrmFile>$(HelloBundlerAppAssets)deb\postrm.sh</BundlerDebPostrmFile>
+    <BundlerDebPostrmFile Condition="'$(HelloBundlerDebPostrmFile)' != ''">$(HelloBundlerDebPostrmFile)</BundlerDebPostrmFile>
+    <BundlerDebPreinstFile Condition="'$(HelloBundlerDebPreinstFile)' != ''">$(HelloBundlerDebPreinstFile)</BundlerDebPreinstFile>
+    <BundlerDebSystemdServiceFile Condition="'$(HelloBundlerDebSystemdServiceFile)' != ''">$(HelloBundlerDebSystemdServiceFile)</BundlerDebSystemdServiceFile>
+    <BundlerDebConffiles Condition="'$(HelloBundlerDebConffiles)' != ''">$(HelloBundlerDebConffiles)</BundlerDebConffiles>
+    <BundlerDebCompression Condition="'$(HelloBundlerDebCompression)' != ''">$(HelloBundlerDebCompression)</BundlerDebCompression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 任意绝对路径映射演示：/etc/hello-deb-app/defaults.conf。 -->
+    <BundlerDebFile Include="$(HelloBundlerAppAssets)deb\defaults.conf" Destination="/etc/hello-deb-app/defaults.conf" />
+  </ItemGroup>
+</Project>

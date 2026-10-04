@@ -1,0 +1,57 @@
+<Project>
+  <!-- Msi 后端全套公开旋钮。变体由 HelloBundlerMsi* 传透（如 -p:HelloBundlerMsiLanguage=zh-CN）。 -->
+  <PropertyGroup>
+    <HelloBundlerMsiInstallScope Condition="'$(HelloBundlerMsiInstallScope)' == ''">currentUser</HelloBundlerMsiInstallScope>
+    <HelloBundlerMsiLanguage Condition="'$(HelloBundlerMsiLanguage)' == ''">en-US</HelloBundlerMsiLanguage>
+    <HelloBundlerMsiBannerBitmap Condition="'$(HelloBundlerMsiBannerBitmap)' == ''">$(HelloBundlerAppAssets)msi\banner.bmp</HelloBundlerMsiBannerBitmap>
+    <HelloBundlerMsiDialogBitmap Condition="'$(HelloBundlerMsiDialogBitmap)' == ''">$(HelloBundlerAppAssets)msi\dialog.bmp</HelloBundlerMsiDialogBitmap>
+    <HelloBundlerMsiInstallDirectorySelection Condition="'$(HelloBundlerMsiInstallDirectorySelection)' == ''">true</HelloBundlerMsiInstallDirectorySelection>
+    <HelloBundlerMsiAddToPath Condition="'$(HelloBundlerMsiAddToPath)' == ''">true</HelloBundlerMsiAddToPath>
+    <HelloBundlerMsiUninstallShortcut Condition="'$(HelloBundlerMsiUninstallShortcut)' == ''">true</HelloBundlerMsiUninstallShortcut>
+    <HelloBundlerMsiLaunchAfterInstall Condition="'$(HelloBundlerMsiLaunchAfterInstall)' == ''">true</HelloBundlerMsiLaunchAfterInstall>
+
+    <!-- 身份/版本旋钮：UpgradeCode 固定示例 GUID（真实产品应保持升级码稳定）。 -->
+    <BundlerWixInstallScope>$(HelloBundlerMsiInstallScope)</BundlerWixInstallScope>
+    <BundlerWixLanguage>$(HelloBundlerMsiLanguage)</BundlerWixLanguage>
+    <BundlerWixLanguages Condition="'$(HelloBundlerMsiLanguages)' != ''">$(HelloBundlerMsiLanguages)</BundlerWixLanguages>
+    <BundlerWixUpgradeCode Condition="'$(HelloBundlerMsiUpgradeCode)' != ''">$(HelloBundlerMsiUpgradeCode)</BundlerWixUpgradeCode>
+    <BundlerWixFipsCompliant Condition="'$(HelloBundlerMsiFipsCompliant)' != ''">$(HelloBundlerMsiFipsCompliant)</BundlerWixFipsCompliant>
+    <BundlerWixMsiVersion Condition="'$(HelloBundlerMsiMsiVersion)' != ''">$(HelloBundlerMsiMsiVersion)</BundlerWixMsiVersion>
+    <BundlerWixAllowDowngrades Condition="'$(HelloBundlerMsiAllowDowngrades)' != ''">$(HelloBundlerMsiAllowDowngrades)</BundlerWixAllowDowngrades>
+    <BundlerWixCodepage>0</BundlerWixCodepage>
+
+    <!-- 交互/快捷方式旋钮。 -->
+    <BundlerWixStartMenuShortcut>true</BundlerWixStartMenuShortcut>
+    <BundlerWixDesktopShortcut>true</BundlerWixDesktopShortcut>
+    <BundlerWixInstallDirectorySelection>$(HelloBundlerMsiInstallDirectorySelection)</BundlerWixInstallDirectorySelection>
+    <BundlerWixBannerBitmap>$(HelloBundlerMsiBannerBitmap)</BundlerWixBannerBitmap>
+    <BundlerWixDialogBitmap>$(HelloBundlerMsiDialogBitmap)</BundlerWixDialogBitmap>
+    <BundlerWixAddToPath>$(HelloBundlerMsiAddToPath)</BundlerWixAddToPath>
+    <BundlerWixUninstallShortcut>$(HelloBundlerMsiUninstallShortcut)</BundlerWixUninstallShortcut>
+    <BundlerWixLaunchAfterInstall>$(HelloBundlerMsiLaunchAfterInstall)</BundlerWixLaunchAfterInstall>
+
+    <!-- WiX 专家扩展旋钮：ExtensionIdPrefix 统一扩展元素 Id 前缀；
+         ExtensionFragment/ComponentRef/ComponentGroupRef/FeatureRef/ExpertMergeModule
+         走项（下方 ItemGroup，条件示例）注入自定义 WiX 片段；
+         ExpertTemplate 整体替换生成的 .wxs 骨架（专家模式）。 -->
+    <BundlerWixExtensionIdPrefix Condition="'$(HelloBundlerMsiExtensionIdPrefix)' != ''">$(HelloBundlerMsiExtensionIdPrefix)</BundlerWixExtensionIdPrefix>
+    <BundlerWixExpertTemplate Condition="'$(HelloBundlerMsiExpertTemplate)' != ''">$(HelloBundlerMsiExpertTemplate)</BundlerWixExpertTemplate>
+    <BundlerWixToolsetArchivePath Condition="'$(HelloBundlerMsiToolsetArchivePath)' != ''">$(HelloBundlerMsiToolsetArchivePath)</BundlerWixToolsetArchivePath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <BundlerWixLanguageFile Include="$(HelloBundlerAppAssets)msi\locale-zh-cn.wxl" Language="zh-CN"
+        Condition="$(HelloBundlerMsiLanguages.Contains('zh-CN')) or $(HelloBundlerMsiLanguage.Contains('zh-CN'))" />
+    <!-- 专家扩展项演示（默认空不生效；传 -p:HelloBundlerMsiExpert*=... 注入）。 -->
+    <BundlerWixExtensionFragment Include="$(HelloBundlerMsiExtensionFragment)"
+        Condition="'$(HelloBundlerMsiExtensionFragment)' != ''" />
+    <BundlerWixExtensionComponentRef Include="$(HelloBundlerMsiExtensionComponentRef)"
+        Condition="'$(HelloBundlerMsiExtensionComponentRef)' != ''" />
+    <BundlerWixExtensionComponentGroupRef Include="$(HelloBundlerMsiExtensionComponentGroupRef)"
+        Condition="'$(HelloBundlerMsiExtensionComponentGroupRef)' != ''" />
+    <BundlerWixExtensionFeatureRef Include="$(HelloBundlerMsiExtensionFeatureRef)"
+        Condition="'$(HelloBundlerMsiExtensionFeatureRef)' != ''" />
+    <BundlerWixExpertMergeModule Include="$(HelloBundlerMsiExpertMergeModule)"
+        Condition="'$(HelloBundlerMsiExpertMergeModule)' != ''" />
+  </ItemGroup>
+</Project>

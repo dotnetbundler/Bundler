@@ -1,1 +1,0 @@
-HelloRpmApp sample resource.

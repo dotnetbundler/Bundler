@@ -1,0 +1,110 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    HelloBundlerApp：DotNet.Bundler 全后端统一演示示例。
+    公共旋钮在本文件；每个后端的全套公开旋钮在 formats/<Format>.props，由下方 Import 导入。
+    默认产物集由 $(RuntimeIdentifier)×宿主 OS 决定（见 _HelloBundlerFormatsDefault）；
+    可用 -p:BundlerFormats=... 覆盖，命令见 hello-bundler-app-sample.md。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AssemblyName>HelloBundlerApp</AssemblyName>
+    <SelfContained>true</SelfContained>
+    <Version>1.0.0</Version>
+    <HelloBundlerAppAssets>$(MSBuildThisFileDirectory)Assets\</HelloBundlerAppAssets>
+
+    <BundlerEnabled>true</BundlerEnabled>
+    <!-- 默认产物集：按目标 RID 定可用格式，再按宿主裁剪需本机工具链的格式
+         （msi 仅 Windows 宿主、dmg/pkg 仅 macOS 宿主、appimage 仅 Linux 宿主；
+         nsis/deb/rpm/zip/targz/alpineapk 为托管实现，任意宿主可构建）。 -->
+    <_HelloBundlerFormatsDefault Condition="'$(RuntimeIdentifier)' == 'win-x64' or '$(RuntimeIdentifier)' == 'win-arm64'">nsis;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="('$(RuntimeIdentifier)' == 'win-x64' or '$(RuntimeIdentifier)' == 'win-arm64') and '$(OS)' == 'Windows_NT'">nsis;msi;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="'$(RuntimeIdentifier)' == 'osx-x64' or '$(RuntimeIdentifier)' == 'osx-arm64' or '$(RuntimeIdentifier)' == 'osx' or '$(BundlerUniversalRuntimeIdentifiers)' != ''">app;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="('$(RuntimeIdentifier)' == 'osx-x64' or '$(RuntimeIdentifier)' == 'osx-arm64' or '$(RuntimeIdentifier)' == 'osx' or '$(BundlerUniversalRuntimeIdentifiers)' != '') and $([MSBuild]::IsOsPlatform('OSX'))">app;dmg;pkg;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="'$(RuntimeIdentifier)' == 'linux-x64' or '$(RuntimeIdentifier)' == 'linux-arm64' or '$(RuntimeIdentifier)' == 'linux-riscv64'">deb;rpm;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="('$(RuntimeIdentifier)' == 'linux-x64' or '$(RuntimeIdentifier)' == 'linux-arm64' or '$(RuntimeIdentifier)' == 'linux-riscv64') and $([MSBuild]::IsOsPlatform('Linux'))">deb;rpm;appimage;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="'$(RuntimeIdentifier)' == 'linux-musl-x64' or '$(RuntimeIdentifier)' == 'linux-musl-arm64'">alpineapk;zip;targz</_HelloBundlerFormatsDefault>
+    <BundlerFormats Condition="'$(BundlerFormats)' == ''">$(_HelloBundlerFormatsDefault)</BundlerFormats>
+
+    <!-- 公共旋钮：产品身份与元数据；各格式专属旋钮见 formats/ 下同名 props。 -->
+    <BundlerIdentifier>com.example.hellobundlerapp</BundlerIdentifier>
+    <BundlerProductName>Hello Bundler App</BundlerProductName>
+    <BundlerPublisher>Bundler Contributors</BundlerPublisher>
+    <BundlerDescription>演示 DotNet.Bundler 全部后端公开旋钮的统一样品。</BundlerDescription>
+    <BundlerHomepage>https://github.com/dotnetbundler</BundlerHomepage>
+    <BundlerCopyright>Copyright © DotNet.Bundler contributors</BundlerCopyright>
+    <BundlerLicenseFile>$(HelloBundlerAppAssets)common\LICENSE.txt</BundlerLicenseFile>
+    <BundlerVersion Condition="'$(HelloBundlerVersion)' != ''">$(HelloBundlerVersion)</BundlerVersion>
+    <BundlerOutputPath Condition="'$(HelloBundlerOutputPath)' != ''">$(HelloBundlerOutputPath)</BundlerOutputPath>
+    <!-- 主可执行文件名与 macOS universal 合并（osx-x64;osx-arm64 双 RID 输入合并为单 .app 载荷）。 -->
+    <BundlerMainExecutable Condition="'$(HelloBundlerMainExecutable)' != ''">$(HelloBundlerMainExecutable)</BundlerMainExecutable>
+    <BundlerToolCachePath Condition="'$(HelloBundlerToolCachePath)' != ''">$(HelloBundlerToolCachePath)</BundlerToolCachePath>
+    <BundlerUniversalRuntimeIdentifiers Condition="'$(HelloBundlerUniversalRuntimeIdentifiers)' != ''">$(HelloBundlerUniversalRuntimeIdentifiers)</BundlerUniversalRuntimeIdentifiers>
+
+    <!-- Windows 签名共享旋钮（nsis/msi 共用；PFX/证书与命令类均为空即不签）。 -->
+    <BundlerWindowsSigningPfxFile Condition="'$(HelloBundlerSigningPfxFile)' != ''">$(HelloBundlerSigningPfxFile)</BundlerWindowsSigningPfxFile>
+    <BundlerWindowsSigningPfxPasswordEnvironmentVariable Condition="'$(HelloBundlerSigningPfxPasswordEnvironmentVariable)' != ''">$(HelloBundlerSigningPfxPasswordEnvironmentVariable)</BundlerWindowsSigningPfxPasswordEnvironmentVariable>
+    <BundlerWindowsSigningCertificateThumbprint Condition="'$(HelloBundlerSigningCertificateThumbprint)' != ''">$(HelloBundlerSigningCertificateThumbprint)</BundlerWindowsSigningCertificateThumbprint>
+    <BundlerWindowsSigningCertificateStoreLocation Condition="'$(HelloBundlerSigningCertificateStoreLocation)' != ''">$(HelloBundlerSigningCertificateStoreLocation)</BundlerWindowsSigningCertificateStoreLocation>
+    <BundlerWindowsSigningTimestampUrl Condition="'$(HelloBundlerSigningTimestampUrl)' != ''">$(HelloBundlerSigningTimestampUrl)</BundlerWindowsSigningTimestampUrl>
+    <BundlerWindowsSigningCommand Condition="'$(HelloBundlerSigningCommand)' != ''">$(HelloBundlerSigningCommand)</BundlerWindowsSigningCommand>
+  </PropertyGroup>
+
+  <Import Project="formats\Nsis.props" />
+  <Import Project="formats\Msi.props" />
+  <Import Project="formats\MacApp.props" />
+  <Import Project="formats\MacDmg.props" />
+  <Import Project="formats\MacPkg.props" />
+  <Import Project="formats\Deb.props" />
+  <Import Project="formats\Rpm.props" />
+  <Import Project="formats\AppImage.props" />
+  <Import Project="formats\Archive.props" />
+  <Import Project="formats\AlpineApk.props" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
+
+  <ItemGroup>
+    <!-- 公共载荷项：图标按 RID 条件化——linux 后端只接受 PNG（hicolor），
+         windows 用 .ico；mac 图标见 formats/MacApp.props（png/car/icon 三模式）。 -->
+    <BundlerIcon Include="$(HelloBundlerAppAssets)msi\app.ico"
+        Condition="'$(RuntimeIdentifier)' == 'win-x64' or '$(RuntimeIdentifier)' == 'win-arm64'" />
+    <BundlerIcon Include="$(HelloBundlerAppAssets)deb\icon48.png"
+        Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-'))" />
+    <BundlerIcon Include="$(HelloBundlerAppAssets)deb\icon@2x.png"
+        Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-'))" />
+    <!-- 资源项演示：每个格式原始样品的资源原样保留，随载荷进入安装根。 -->
+    <BundlerResource Include="$(HelloBundlerAppAssets)common\readme.txt" TargetPath="docs/readme.txt" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\demo-resource.txt" TargetPath="演示资源\说明.txt" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\demo.hello" TargetPath="demo.hello" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\运行深链接.cmd" TargetPath="运行深链接.cmd" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)msi\demo-resource.txt" TargetPath="DemoResources\Readme.txt" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)msi\demo.hellomsi" TargetPath="demo.hellomsi" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)msi\open-link.cmd" TargetPath="open-link.cmd" />
+    <!-- 文件关联与 URL 协议：全部样品原型扩展一次集齐（windows 注册表 /
+         freedesktop MimeType / macOS CFBundleDocumentTypes+URL schemes 各自落位）。 -->
+    <BundlerFileAssociation Include="hello" Name="Hello Bundler App 文档"
+        Description="Hello Bundler App 演示文档" MimeType="application/x-hello-bundler-app" />
+    <BundlerFileAssociation Include=".hellomsi" Name="Hello MSI document"
+        Description="Hello Bundler App sample document" MimeType="application/x-hellomsi" />
+    <BundlerFileAssociation Include="hellomac" Name="Hello Mac Document"
+        Description="HelloBundlerApp 演示文档" MimeType="application/x-hellomac" />
+    <BundlerFileAssociation Include=".hellodeb" Name="Hello Deb document"
+        Description="Hello Bundler App sample document" MimeType="application/x-hellodeb" />
+    <BundlerFileAssociation Include=".hello-rpm" Name="Hello rpm document"
+        MimeType="application/x-hello-rpm" />
+    <BundlerFileAssociation Include=".hello-appimage" Name="Hello AppImage document"
+        MimeType="application/x-hello-appimage" />
+    <BundlerUrlProtocol Include="hello-bundler" Name="Hello Bundler App 深链接" />
+    <BundlerUrlProtocol Include="hello-msi" Name="Hello MSI link" />
+    <BundlerUrlProtocol Include="hellomac" Name="Hello Mac Link" />
+    <BundlerUrlProtocol Include="hellodeb" Name="Hello Deb" />
+    <BundlerUrlProtocol Include="hello-rpm" Name="Hello rpm" />
+    <BundlerUrlProtocol Include="hello-appimage" Name="Hello AppImage" />
+    <!-- 签名追加载荷（仅 Windows 签名管线消费）：默认签主程序；
+         -p:HelloBundlerSigningFile=<相对载荷路径> 追加对附带可执行载荷签名。 -->
+    <BundlerWindowsSigningFile Include="$(HelloBundlerSigningFile)"
+        Condition="'$(HelloBundlerSigningFile)' != ''" />
+    <BundlerWindowsSigningCommandArgument Include="$(HelloBundlerSigningCommandArguments)"
+        Condition="'$(HelloBundlerSigningCommandArguments)' != ''" />
+  </ItemGroup>
+</Project>
