@@ -2,7 +2,7 @@
 
 > 状态：**SIGN-1、SIGN-2 全部完成**（2026-09-27/28，分支 `signing-development` 并入 `main`）——rpm 与 AppImage 可选签名齐备，deb 维持不签裁决。
 > 范围依据：用户裁决——`deb` 不提供签名（维持拒绝）；`rpm` 与 `AppImage` 提供**可选**签名能力（开发者供密钥才签，不供不签）。
-> 上游参照：`docs/linux-tauri-capability-audit.md` + 定点复核——rpm 侧 Tauri `build_and_sign` 走 `rpm` crate `pgp::Signer`：`RPMSIGTAG_PGP`(1002) 写 OpenPGP 签名包（覆盖 header+payload，SHA256 系），密钥为 armor 私钥 env + passphrase env（`TAURI_SIGNING_RPM_KEY`/`…_PASSPHRASE`）；AppImage 侧上游未实现 `--sign`。
+> 上游参照：Tauri 审计（快照 `447fa9f`）+ 定点复核——rpm 侧 Tauri `build_and_sign` 走 `rpm` crate `pgp::Signer`：`RPMSIGTAG_PGP`(1002) 写 OpenPGP 签名包（覆盖 header+payload，SHA256 系），密钥为 armor 私钥 env + passphrase env（`TAURI_SIGNING_RPM_KEY`/`…_PASSPHRASE`）；AppImage 侧上游未实现 `--sign`。
 
 ## 1. 决策清单
 

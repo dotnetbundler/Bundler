@@ -2,8 +2,8 @@
 
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
 外部待验收行绑定到 `docs/linux-deb-open-items.md`、`docs/linux-deb-manual-testing.md` 中的明确 ID。
-上游参照见 `docs/linux-tauri-capability-audit.md`；决策与阶段见 `docs/linux-deb-roadmap.md`。
-本矩阵于 2026-09-27 规划轮建立，已于 LINUX-DEB-5 定稿（冻结基线 `0.1.0-alpha.51`）；"已实现"行以 `tests/Linux.Deb.Integration/Verify.sh` 与 `tests/Bundler.Tests` DebTests 为证据。
+上游参照：Tauri 审计（快照 `447fa9f`）；决策与阶段见 `docs/linux-deb-roadmap.md`。
+本矩阵于 2026-09-27 规划轮建立，已于 LINUX-DEB-5 定稿（冻结基线 `0.1.0-alpha.51`）；"已实现"行以 `DebIntegrationTests` 与 `tests/Bundler.Tests` DebTests 为证据。
 
 ## 产物与载荷
 
@@ -16,7 +16,7 @@
 | 版本映射 SemVer→deb（`~` 预发布、`-revision`、`+` 保留） | 已实现 | LINUX-DEB-1 | 默认映射表；`BundlerDebVersion`/`BundlerDebRevision`/`BundlerDebEpoch` 覆盖 |
 | 架构映射 `linux-x64→amd64`、`linux-arm64→arm64` | 已实现 | LINUX-DEB-1 | 其他 deb 架构名经 `BundlerDebArchitecture` 覆盖 |
 | control 核心字段（Package/Version/Architecture/Installed-Size/Maintainer/Priority/Homepage/Description） | 已实现 | LINUX-DEB-1 | `Package` 默认 ProductName kebab 化，`Maintainer` 默认 Publisher→Identifier 回退 |
-| `md5sums` 清单 | 已实现 | LINUX-DEB-1 | 逐文件 MD5；Verify.sh 用 `md5sum -c` 对解包载荷真实核对 |
+| `md5sums` 清单 | 已实现 | LINUX-DEB-1 | 逐文件 MD5；`DebIntegrationTests` 用 `md5sum -c` 对解包载荷真实核对 |
 | 确定性构建（tar 条目排序、uid/gid 0、归一化时间戳策略） | 已实现 | LINUX-DEB-1 | uid/gid 0、固定 mtime 1980-01-01 UTC、排序条目；DebTests 断言同输入字节级一致（1980 取值规避 lintian ancient-file） |
 | 失败清理 | 已实现 | LINUX-DEB-1 | 构建失败删除半成品 `.deb` 与侧车；验证测试断言无残留 |
 
@@ -24,7 +24,7 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `Depends`/`Recommends`/`Provides`/`Conflicts`/`Replaces` 显式透传 | 已实现 | LINUX-DEB-2 | `BundlerDeb*` 分号列表 → control 逗号子句，原样透传、拒换行；Verify.sh metadata 变体逐字段断言 |
+| `Depends`/`Recommends`/`Provides`/`Conflicts`/`Replaces` 显式透传 | 已实现 | LINUX-DEB-2 | `BundlerDeb*` 分号列表 → control 逗号子句，原样透传、拒换行；`DebIntegrationTests` metadata 变体逐字段断言 |
 | `Section`/`Priority`/`Maintainer`/`Homepage`/`Installed-Size` 覆盖 | 已实现 | LINUX-DEB-2 | `Section`/`Priority` 校验（Priority 限定五值，默认 optional）；`Maintainer`/`Homepage`/`Installed-Size` 为 DEB-1 既有面 |
 | `.desktop` 生成与 `usr/share/applications/` 落位 | 已实现 | LINUX-DEB-2 | 决策 5 全字段（Type/Name/Comment/Exec 占位符/Icon/Terminal/Categories/MimeType 并集）；`desktop-file-validate` 对生成与安装后文件双重断言 |
 | 自定义 `.desktop` 整文件覆盖 | 已实现 | LINUX-DEB-2 | `BundlerDebDesktopFile` 原样打包到 applications 路径；内容合法性属调用方责任 |
@@ -50,7 +50,7 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `.sha256` 侧车校验和 | 已实现 | LINUX-DEB-1 | 每产物一份；Verify.sh `sha256sum -c` 断言 |
+| `.sha256` 侧车校验和 | 已实现 | LINUX-DEB-1 | 每产物一份；`DebIntegrationTests` `sha256sum -c` 断言 |
 | `.deb` 包级签名（dpkg-sig/debsigs） | 明确拒绝 | — | deb 签名惯例在 apt 仓库侧（`Release`/`InRelease`）；包级签名工具覆盖率极低；有真实需求再评估 |
 | apt 仓库生成/签名（`Release`/`InRelease`/`Packages`） | 明确拒绝 | — | 仓库管理属分发管线而非打包器；登记为独立产品候选 |
 
@@ -58,7 +58,7 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `dpkg -i` 真实安装（本机 sudo） | 已实现 | LINUX-DEB-1 | Verify.sh 装卸烟雾 + `dpkg -s`/`dpkg -L`/链接启动断言 |
+| `dpkg -i` 真实安装（本机 sudo） | 已实现 | LINUX-DEB-1 | `DebIntegrationTests` 装卸腿 + `dpkg -s`/`dpkg -L`/链接启动断言 |
 | `dpkg -r`/`dpkg -P` 卸载语义 | 已实现 | LINUX-DEB-1/3 | `-r` 删普通文件留 conffile、`-P` 全清——真实断言 |
 | 同包升级覆盖安装 | 已实现 | LINUX-DEB-3 | `dpkg -i` 1.0.0→1.0.1 后 `dpkg -s` 版本断言 + conffile 本地修改保留 |
 | `linux-arm64` 产物 | 已实现（结构）/外部待验收（运行） | LINUX-DEB-4 | `linux-arm64` publish → `_arm64.deb`、`Architecture: arm64`、载荷结构断言全绿；arm64 真实安装属 LINUX-DEB-OI-01 |

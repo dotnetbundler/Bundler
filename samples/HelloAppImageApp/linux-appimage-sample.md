@@ -81,10 +81,10 @@ dotnet publish samples/HelloAppImageApp/HelloAppImageApp.csproj -c Release
   ```
 
   可选 `HelloAppImageSigningKeyPassphrase` 配加密私钥；测试密钥即弃不入库。
-  验签口径：取 `.sha256_sig` 段内分离签名，对"两段置零"镜像的 sha256 裸 hex 做 `gpgv` 断言（`tests/Linux.AppImage.Integration/Verify.sh` 已封此链路）。
+  验签口径：取 `.sha256_sig` 段内分离签名，对"两段置零"镜像的 sha256 裸 hex 做 `gpgv` 断言（`AppImageIntegrationTests` 已封此链路）。
 
 ## 说明
 
 - 压缩固定 zstd：所钉 appimagetool 构建的 mksquashfs 仅支持 zstd（决策 10 按实测收口）。
 - 脚本/systemd/依赖字段不适用：AppImage 无包管理器（见 `docs/linux-appimage-roadmap.md` 语义对应表）。
-- 集成验证见 `tests/Linux.AppImage.Integration/linux-appimage-integration.md`。
+- 集成验证见 `AppImageIntegrationTests`（`tests/README.md`）。

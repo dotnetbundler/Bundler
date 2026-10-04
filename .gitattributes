@@ -1,0 +1,20 @@
+# 换行符规范：仓内统一 LF，检出按脚本宿主约定还原。
+* text=auto
+
+*.sh   text eol=lf
+*.nsi  text eol=lf
+*.nsh  text eol=lf
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+# 故意携带 CRLF 的负路径载荷（校验 rpm 对 CRLF 维护者脚本的拒绝路径），按原样存取不得规整。
+tests/Bundler.IntegrationTests/Fixtures/Rpm/Assets/bad-crlf.sh -text
+
+*.png  binary
+*.icns binary
+*.ico  binary
+*.bmp  binary
+*.zip  binary
+*.dll  binary
+*.msi  binary

@@ -106,8 +106,8 @@ public static class WixTests
     static void MapsMsiSettingsThroughMsBuild()
     {
         var root = RepositoryRoot();
-        var props = File.ReadAllText(Path.Combine(root, "buildTransitive", "DotNet.Bundler.MSBuild.props"));
-        var targets = File.ReadAllText(Path.Combine(root, "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
+        var props = File.ReadAllText(Path.Combine(root, "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.props"));
+        var targets = File.ReadAllText(Path.Combine(root, "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
         var task = File.ReadAllText(Path.Combine(root, "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
         foreach (var property in new[] { "WixInstallScope", "WixUpgradeCode", "WixMsiVersion", "WixAllowDowngrades",
                      "WixCodepage", "WixLanguage", "WixLanguages", "WixFipsCompliant", "WixToolsetArchivePath",

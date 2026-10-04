@@ -2,7 +2,7 @@
 
 > 状态：**`.pkg` 已冻结**（`MAC-PKG-5` 于 2026-09-27 完成，分支 `mac-pkg-development`）。
 > 冻结基线：`MacPkgBundleConfiguration`+`MacPkgSigningConfiguration` 配置面与本文档 §3 语义契约在 `0.1.0-alpha.47` 冻结；此后变更走变更控制（能力矩阵改行 + 新测试 + 文档同步）。
-> 冻结测试向量：`Bundler.Tests` 122/122 全绿 + `tests/MacOS.Pkg.Integration/Verify.sh` 全绿（组件包/分发包/页面/域名/per-user 真实安装+收据/签名拒绝路径/scripts 归档与执行/覆盖升级/osx-x64 产物/失败清理）。
+> 冻结测试向量：`Bundler.Tests` 122/122 全绿 + `MacPkgIntegrationTests` 全绿（组件包/分发包/页面/域名/per-user 真实安装+收据/签名拒绝路径/scripts 归档与执行/覆盖升级/osx-x64 产物/失败清理）。
 > `.pkg` 无上游参照：tauri 无 `.pkg` 输出（`PackageType` 仅 `MacOsBundle`/`IosBundle`/`Dmg`/`Updater` + Linux/Windows 各项），决策依据为原生 macOS 工具链语义与 [`docs/mac-format-decision.md`](mac-format-decision.md) 已确认边界。
 > `.app`/`.dmg` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)、[`docs/mac-dmg-roadmap.md`](mac-dmg-roadmap.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。

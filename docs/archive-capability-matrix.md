@@ -19,4 +19,4 @@
 | 全目标 RID（win-x86/x64/arm64、osx、osx-x64/arm64、linux-x64/arm64、linux-musl-x64/arm64） | 已实现 | PR #12、`02b2521` | 目标 OS 分发无架构门禁；win-x86 于联合测试批次开放并实产；musl 目标挂本格式与 `alpineapk`/`appimage`；`osx` 通用载荷契约（预合并 universal 目录、可跑配方）见 `docs/mac-app-capability-matrix.md` |
 | 同条件产物逐字节确定 | 已实现 | 联合测试 | 纯托管写入器同输入同条件 sha256 一致（同宿主跨轮 + linux↔qemu 同型跨宿主 16/16 对）；跨 OS 差异归因载荷 publish 元数据与宿主 mode 表达，非写入器缺陷 |
 | 跨 OS 互读实测（跨宿主互产互解） | 已实现 | ARCHIVE-3 + 联合测试 | 2026-09-29/30 四宿主：win/linux/mac/qemu 互产互装——解压、exec 位/symlink 还原、载荷运行全过（ARCHIVE-OI-04 消解） |
-| 第三方实现互读（python3 `zipfile`/`tarfile` 读产物） | 已实现 | ARCHIVE-3 | Verify.sh 断言：条目/执行位/symlink |
+| 第三方实现互读（python3 `zipfile`/`tarfile` 读产物） | 已实现 | ARCHIVE-3 | `ArchiveIntegrationTests` 断言：条目/执行位/symlink |

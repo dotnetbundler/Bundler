@@ -27,8 +27,8 @@ public sealed class CliFixture : IDisposable
 
         PublishDir = Ws.Combine("publish");
         OutDir = Ws.Combine("out");
-        var fixtureProject = Path.Combine(RepositoryLayout.TestsDirectory,
-            "Cli.Integration", "Fixture", "BundlerCliIntegrationFixture.csproj");
+        var fixtureProject = Path.Combine(RepositoryLayout.FixturesDirectory,
+            "Cli", "BundlerCliIntegrationFixture.csproj");
         ProcessRunner.AssertSuccess(
             Dotnet.Run(["publish", fixtureProject, "-c", "Release", "-o", PublishDir]),
             "fixture publish failed");

@@ -43,7 +43,7 @@ public sealed class RpmFixture : IDisposable
         Ws = IntegrationWorkspace.Create("linux-rpm-integration", "BundlerLinuxRpmIntegration");
         CacheDir = Ws.Combine("nuget-cache");
         ExtractRoot = Ws.Combine("extract");
-        FixtureDir = Path.Combine(RepositoryLayout.TestsDirectory, "Linux.Rpm.Integration", "Fixture");
+        FixtureDir = Path.Combine(RepositoryLayout.FixturesDirectory, "Rpm");
         FixtureProject = Path.Combine(FixtureDir, "BundlerRpmIntegrationFixture.csproj");
         _ = RepositoryPackages.DirectoryPath;
 
@@ -551,7 +551,7 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
     {
         ExternalTools.Require("rpmlint");
         var exemptionsFile = Path.Combine(
-            RepositoryLayout.TestsDirectory, "Linux.Rpm.Integration", "rpmlint-exemptions.txt");
+            RepositoryLayout.FixturesDirectory, "Rpm", "rpmlint-exemptions.txt");
         var exemptions = File.ReadAllLines(exemptionsFile)
             .Where(l => !string.IsNullOrWhiteSpace(l)).ToHashSet();
         var result = ProcessRunner.Run("rpmlint", [_f.DefaultRpm]);

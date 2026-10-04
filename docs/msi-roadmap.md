@@ -6,8 +6,7 @@
 > 原阶段证据见第 6..9 节，扩展路线及 WIN-MSI-5/6 证据见第 10 节。
 > 原开发分支 `msi-development`（已并入 `main`）；历史记录中的 `codex/msi-development` 是改名前的名称。
 > 规范入口：`docs/roadmap.md`；
-> Tauri 对照见 `docs/msi-tauri-capability-audit.md`，逐项能力见 `docs/msi-capability-matrix.md`，外部条件见 `docs/msi-open-items.md`，人工步骤见 `docs/msi-manual-testing.md`；
-> 更早的分轮记录见 `docs/project-history.md`。
+> 上游 Tauri 审计已完成并固化进本文件与能力矩阵，逐项能力见 `docs/msi-capability-matrix.md`，外部条件见 `docs/msi-open-items.md`，人工步骤见 `docs/msi-manual-testing.md`；
 
 ## 1. 已核实事实、选择及风险
 
@@ -301,13 +300,13 @@ MSI smoke 脚本把 fixture 复制到仓库外临时目录，从本轮本地包�
 Smoke 的独立 API/MSBuild MSI SHA-256 依次为 `91071954ED7CBB7FA90B62EBC775A4176382FA65A53ABFF1B16E3A679F38EE06`、`DD7BAE8709DCA5B5299A39A7A77792E426DACBDC244F37745220A02D0ADECBDD`，ProductCode `{1BAE73D8-BE20-5B82-8064-149E01BCBDE8}`，包、隔离缓存和安装/卸载日志在 `%TEMP%\Bundler-Msi-Smoke-e286c715a3d04cb1afaf89807337ba2a`。
 Lifecycle 的 v1/v2/异包 SHA-256 为 `953C7CF84C42865C3404D08D63B3482156DD8D5FDD40932EBEE080B75EF928C1`、`A88EDF3C168B10C4B2D705877A69961DF10984A3F02EB19310C92AF0AE19B582`、`0B31B9232989AD69F5B489E664ABF6ACDC2AE9CC049B3B614CB13B2081EE0D27`，日志在 `%TEMP%\Bundler-Msi-Lifecycle-f1203328eac740ffbd099e7201142927`。
 快速测试现为 51 项，含版本同步回归。
-NSIS 全量回归第二次复跑通过；第一次在原有 rollback journal 清理断言失败，原因尚未确认，见 `docs/project-history.md`。
+NSIS 全量回归第二次复跑通过；第一次在原有 rollback journal 清理断言失败，原因尚未确认。
 以上本机证据不扩展为其他 Windows 宿主或 per-machine 安装验收。
 
 **包源约定一致性**：MSI MSBuild fixture 曾仅由集成脚本的 `dotnet restore --source` 传入本地包源，与 NSIS fixture 的 `RestoreSources=$(BundlerPackageSource)` 不一致且没有格式上的理由。
 现已统一：NSIS/MSI 的 API 与 MSBuild fixture 均在项目文件声明该属性，脚本传入本轮本地包目录，继续以隔离缓存和 assets 断言核对。
 新增快速回归断言保护四个 fixture 的这一配置；修改后本机 smoke 和 lifecycle 完整通过。
-最新命令、哈希和日志记录见 `docs/project-history.md` 的包源约定补正段。
+最新命令、哈希和日志记录于当阶段验收记录。
 此次是测试入口修正，不改变 MSI 产品语义，也不扩展 WIN-MSI-2 的外部验收范围。
 
 **WIN-MSI-2 结构与测试整理（2026-09-24）**：本次仅重组已有 WiX 后端与测试，未提前实施 WIN-MSI-3。
@@ -318,7 +317,7 @@ MSI 集成仍以 `Verify.ps1` 为烟雾入口、`VerifyLifecycle.ps1` 为阶段�
 独立后端 API fixture 仍只引用 `DotNet.Bundler.Wix` NuGet 包。
 两类后端保持相同测试入口、包源核对、日志和清理习惯，测试内容按 MSI 语义决定。
 包版本随 WiX 包内容升至 alpha.35，示例应用版本不变。
-实际命令、56 项快速测试结果、真实安装与升级的哈希及日志见 `docs/project-history.md`；外部平台和 UAC 验收状态不变。
+外部平台和 UAC 验收状态不变。
 
 本阶段语义依据：[WiX 3 MajorUpgrade](https://docs.firegiant.com/wix3/xsd/wix/majorupgrade/)、[WiX 3 Shortcut](https://docs.firegiant.com/wix3/xsd/wix/shortcut/)、[Microsoft Default Programs 注册规则](https://learn.microsoft.com/en-us/windows/win32/shell/default-programs)。
 本机测试是对这些规格在当前环境的实现核查，不代替其他 Windows 版本的真实验收。
@@ -352,7 +351,7 @@ MSI 包不嵌入 Bundler 私有运行时代码或自定义故障动作，`/qn`�
 锁定文件、缺失修复源、UAC、真实重启及 3010 在可抛弃 VM 验证，不通过本机测试推断。
 
 **本机证据**：Windows 11 Pro build 26200 x64；
-`dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release --no-restore` 的 MSI 新测试覆盖两语言数据库及 UI、签名顺序/失败清理、真实测试证书签 PE 与 MSI，最终总数和结果见 `docs/project-history.md` 的对应分轮记录。
+`dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release --no-restore` 的 MSI 新测试覆盖两语言数据库及 UI、签名顺序/失败清理、真实测试证书签 PE 与 MSI。
 `tests/Windows.Msi.Integration/Verify.ps1 -ConfirmLocalInstall` 通过，独立 API MSI SHA-256 `845DC3424DE66E33B7EE0830CE1AFB00D07C945BCE2CC66ABB01556DDE2CE9C0`，真实安装的 MSBuild MSI SHA-256 `31E20D9181E9B29357D6479E201E290BF23831348271A43C907B68FEB966A399`，ProductCode `{F4380809-F773-50F3-8AD0-AAE85FDFB878}`，日志在 `%TEMP%\Bundler-Msi-Smoke-2652c69c944c4da98faf0084d7a0af5e`。
 `VerifyLifecycle.ps1 -ConfirmLocalInstall` 通过，v1/v2/同版本异包 SHA-256 分别为 `92D298276B487260EC27D47C99516BC9314398D2D157A43655ABF4B3EAE13CA2`、`8DF670271284E2E0A9E8D1948418FEC29E09FEBD2CC6E73559BC98582285CBD4`、`821896880D72FBAE23B5EC45B980E81C2A01E6283E0F2511ED22D3298FFCF15C`，日志在 `%TEMP%\Bundler-Msi-Lifecycle-95a3db36aa934c5aa470fba5b9b72ff0`。
 
@@ -418,7 +417,7 @@ CLI 仍在全部计划格式完成之后。
 **后续产品决定，非第 9 节历史结论的改写**：用户确认忽略当前无环境可测的兼容性项目作为开发阻塞，先补齐 Tauri 中适用于通用 MSI 打包器的用户能力，应用运行时依赖自动部署仍不做；
 受控 WiX fragments 为常规能力，完整模板/原始 merge module 仅作为显式专家模式。
 `WIN-MSI-4` 的 `alpha.37` 本机结果与身份测试向量继续有效；新能力未实施前不得在 README 或能力矩阵标为已支持。
-固定上游快照、逐项分类及专家模式风险见 [`docs/msi-tauri-capability-audit.md`](msi-tauri-capability-audit.md)。
+固定上游快照、逐项分类及专家模式风险已固化进本文件与能力矩阵。
 该轮只落规划文档，没有新增 MSI 代码、NuGet 包版本或测试结果；当时默认**下一实施阶段**为 `WIN-MSI-5`（现已完成，见下），`MAC-APP` 排在 WIN-MSI-9 之后。
 
 ### 跨阶段不可变约束
@@ -440,7 +439,7 @@ CLI 仍在全部计划格式完成之后。
 ### WIN-MSI-5：目标架构与版本生命周期（已实现，`0.1.0-alpha.40`）
 
 - **前置**：核对 `adce4f0` 后实际 Git、当前包版本、目标模型与固定身份向量；以 MSI 三段版本和 major upgrade 官方规则复核新配置。
-  `docs/msi-tauri-capability-audit.md` 为已确认范围。
+  上游审计结论为已确认范围。
 - **目标/交付**：公共目标模型增加 `win-x86`，MSI 包使用正确的 x86 目录/注册表视图、组件属性和独立产品线；NSIS 不因共享模型扩展而自动接受 x86。
   允许显式传入**三段有效 MSI 版本**以映射应用自身版本，拒绝第四字段、回退/碰撞及无定义的预发布自动映射。
   `AllowDowngrades` 默认 false、仅显式选择时为 true；同版本不同内容仍拒绝。
@@ -636,7 +635,7 @@ WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方
 ### WIN-MSI-9：完整通用能力审计与再冻结（已实现，`0.1.0-alpha.43`）
 
 - **前置**：WIN-MSI-5..8 的可本机自动执行门槛均通过，冻结前逐条核对新旧配置、产物身份和版本迭代记录。
-- **目标/交付**：以固定 Tauri 快照更新 `docs/msi-tauri-capability-audit.md`，每个通用用户能力明确为“等价已实现”“有意采用更安全语义”“另立跨格式产品路线”或“明确不适用”；
+- **目标/交付**：以固定 Tauri 快照完成上游能力审计，每个通用用户能力明确为“等价已实现”“有意采用更安全语义”“另立跨格式产品路线”或“明确不适用”；
   整理 API、MSBuild、公开示例、README、MSI 矩阵、人工清单与外部待办。
   重新审计 WiX 来源/许可、最终包内容/体积、严格警告和无付费/运行时下载边界。
   冻结扩展后的 MSI alpha 配置与本机支持基线。
@@ -650,7 +649,7 @@ WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方
 **实施记录（2026-09-26，`0.1.0-alpha.43`）**：
 
 - **上游快照复核**：`dev` 已移至 `15468de79772c442a424c6e02658b872c0a24b38`；`main.wxs`、`WixSettings`、`msi/mod.rs` 与 `7dbfc1f` 逐文件比对无实质差异（仅 `HashMap→BTreeMap`），审计结论不受漂移影响，维持固定快照基线。
-- **逐项审计**：`docs/msi-tauri-capability-audit.md` 全部行已归入四类——等价已实现（身份/版本/范围/38 语言/图标/位图/PATH/ARP/签名/退出码/受控扩展）、有意更安全语义（每语言隔离身份、常规模式白名单、专家模式构建后身份回读、默认拒绝降级/同版本异包）、明确不支持（自动运行时部署、受管模式任意脚本与全目录删除）、另立跨格式路线（updater/提升计划任务、CLI-C1）。
+- **逐项审计**：上游审计全部行已归入四类——等价已实现（身份/版本/范围/38 语言/图标/位图/PATH/ARP/签名/退出码/受控扩展）、有意更安全语义（每语言隔离身份、常规模式白名单、专家模式构建后身份回读、默认拒绝降级/同版本异包）、明确不支持（自动运行时部署、受管模式任意脚本与全目录删除）、另立跨格式路线（updater/提升计划任务、CLI-C1）。
 - **包供应复核**：`dotnet pack` 产出 7 包 `0.1.0-alpha.43`；`DotNet.Bundler.Wix` 14,417,031 字节、11 个文件（dll + README + THIRD-PARTY-NOTICES + licenses/wix 四项），`wix3141-source.zip` SHA-256 `A56184E7…FE9F`、`LICENSE.TXT` `40043709…0000` 与随包 `SHA256SUMS`/`third_party/wix` 一致；工具随包与逐文件哈希仍由 `Verifies WiX binary and source redistribution` 测试守护；无付费组件、无运行时下载。
 - **本机回归证据（Windows 11 Pro build 26200 x64）**：`dotnet build` 0 警告/0 错误；`tests/Bundler.Tests` 78/78 PASS；
   `Verify.ps1`、`VerifyLifecycle.ps1`、`VerifyMaintenance.ps1`、`VerifyWinMsi5.ps1`、`VerifyWinMsi6.ps1`、`VerifyWinMsi7.ps1`、`VerifyWinMsi8.ps1`、`VerifyPublicSample.ps1` 全部 PASS（各自临时目录保留 MSI 与 verbose log）；NSIS `Verify.ps1` 回归见 `PROJECT_CONTEXT.md` 最近验证节。

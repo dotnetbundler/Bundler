@@ -42,8 +42,8 @@ public sealed class AlpineApkFixture : IDisposable
         CacheDir = Ws.Combine("nuget-cache");
         ExtractRoot = Ws.Combine("extract");
         KeysDir = Ws.Combine("keys");
-        FixtureProject = Path.Combine(RepositoryLayout.TestsDirectory,
-            "Alpine.Apk.Integration", "Fixture", "BundlerAlpineApkIntegrationFixture.csproj");
+        FixtureProject = Path.Combine(RepositoryLayout.FixturesDirectory,
+            "AlpineApk", "BundlerAlpineApkIntegrationFixture.csproj");
         _ = RepositoryPackages.DirectoryPath;
 
         var fixtureDir = Path.GetDirectoryName(FixtureProject)!;

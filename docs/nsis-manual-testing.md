@@ -48,8 +48,8 @@ Get-FileHash -Algorithm SHA256 -LiteralPath "<待验收安装器>"
 
 ```powershell
 dotnet run --project tests\Bundler.Tests\Bundler.Tests.csproj -c Release
+dotnet test tests\Bundler.IntegrationTests\Bundler.IntegrationTests.csproj -c Release --filter-class "*NsisIntegrationTests*"
 dotnet pack Bundler.slnx -c Release -o artifacts\packages
-tests\Windows.Nsis.Integration\Verify.ps1
 git diff --check
 ```
 
@@ -109,7 +109,7 @@ git diff --check
 
    ```powershell
    $installer = (Resolve-Path "artifacts\windows-nsis-integration\bundle-per-machine\win-x64\nsis\Bundler Integration Fixture-1.0.0-setup.exe").Path
-   tests\Windows.Nsis.Reboot\Verify.ps1 -Phase Prepare -InstallerPath $installer -ConfirmDisposableMachine
+   tools\Windows.Nsis.Reboot\Verify.ps1 -Phase Prepare -InstallerPath $installer -ConfirmDisposableMachine
    ```
 
 3. 只在看到 `PASS prepare` 后正常重启虚拟机。
@@ -117,7 +117,7 @@ git diff --check
 4. 重启后以提权 PowerShell 执行：
 
    ```powershell
-   tests\Windows.Nsis.Reboot\Verify.ps1 -Phase Verify -ConfirmDisposableMachine
+   tools\Windows.Nsis.Reboot\Verify.ps1 -Phase Verify -ConfirmDisposableMachine
    ```
 
 **PASS**：Prepare 通过临时副本和 `_?=` 直接等待实际卸载进程，确认真实返回 `3010` 且存在本产品 pending delete；

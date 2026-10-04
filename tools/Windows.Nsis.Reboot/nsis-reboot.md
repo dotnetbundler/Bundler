@@ -1,4 +1,4 @@
-# Windows NSIS 重启验证（tests/Windows.Nsis.Reboot）
+# Windows NSIS 重启验证（tools/Windows.Nsis.Reboot）
 
 `Verify.ps1` 是 NSIS 真实重启链路的人工/外部验证入口：对锁定文件执行卸载，验证卸载器 `3010` 退出码、`PendingFileRenameOperations` 排队与重启后清理语义。
 本脚本**有意修改机器级待重命名队列**，只允许在可抛弃的 Windows VM 中运行。
@@ -7,13 +7,13 @@
 
 ```powershell
 # 阶段一：准备——安装 perMachine 集成 fixture，对锁定文件卸载制造 3010
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Reboot/Verify.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/Windows.Nsis.Reboot/Verify.ps1 `
     -Phase Prepare -InstallerPath <fixture 安装器路径> -ConfirmDisposableMachine
 
 # 重启机器
 
 # 阶段二：复核——断言重启后队列执行、目录/注册表/事务状态符合预期
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Nsis.Reboot/Verify.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/Windows.Nsis.Reboot/Verify.ps1 `
     -Phase Verify -ConfirmDisposableMachine
 ```
 

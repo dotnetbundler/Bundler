@@ -1,7 +1,7 @@
 # Linux `.rpm` 后端实施路线（LINUX-RPM）
 
 > 状态：**`.rpm` 冻结基线 `0.1.0-alpha.55`**（2026-09-27 LINUX-RPM-5 收口，`linux-rpm-development` 分支）。冻结后仅接受带回归测试的缺陷修复。
-> 上游审计见 [`docs/linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `tauri-apps/tauri@447fa9f`，DEB-5 复核确认零漂移）。
+> 上游审计已完成（Tauri 固定快照 `447fa9f`，DEB-5 复核确认零漂移）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 > 逐项能力状态见 [`docs/linux-rpm-capability-matrix.md`](linux-rpm-capability-matrix.md)；外部条件见 [`docs/linux-rpm-open-items.md`](linux-rpm-open-items.md)；人工步骤见 [`docs/linux-rpm-manual-testing.md`](linux-rpm-manual-testing.md)。
 
@@ -33,7 +33,7 @@
 12. **压缩**：载荷压缩默认 gzip（`Compression=gzip`）；xz/zstd 同 deb 立场登记拒绝（netstandard2.0 无托管编码器），`PAYLOADCOMPRESSOR`/`PAYLOADFLAGS` 如实填写。
 13. **确定性**：`BUILDTIME`/`FILEMTIMES`/`header` 条目排序全部固定（沿用 deb mtime=1980-01-01 策略）；同输入字节级一致断言。
 14. **阶段骨架**：沿用五段——`LINUX-RPM-1`（托管写入器最小可用 + 容器真实装卸）、`LINUX-RPM-2`（元数据与桌面集成）、`LINUX-RPM-3`（脚本/systemd/config/压缩）、`LINUX-RPM-4`（矩阵与冻结前收口：arm64、多发行版容器矩阵、rpmlint 基线）、`LINUX-RPM-5`（审计复核与冻结）。
-15. **命名**：示例 `samples/HelloRpmApp`；fixture `tests/Bundler.ApiTests`（`RpmApiTests`）；集成 `tests/Linux.Rpm.Integration/Verify.sh`（薄入口，转发 `Bundler.IntegrationTests` 的 `RpmIntegrationTests`）；文档 ID 前缀 `LINUX-RPM-OI-xx`/`LINUX-RPM-MT-xx`。
+15. **命名**：示例 `samples/HelloRpmApp`；fixture `tests/Bundler.ApiTests`（`RpmApiTests`）；集成 `tests/Bundler.IntegrationTests` 的 `RpmIntegrationTests`（fixture `Fixtures/Rpm/`）；文档 ID 前缀 `LINUX-RPM-OI-xx`/`LINUX-RPM-MT-xx`。
 
 ## 2. 打包工具下限（三层口径）
 

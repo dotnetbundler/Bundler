@@ -3,12 +3,12 @@
 本表仅描述通用桌面工具的 MSI 用户能力。
 “已实现并本机自动验证”只覆盖写明的当前主机和操作；“已实现但外部待验收”表示实现存在，但该能力的某些环境或发布条件尚无实际证据。
 WIN-MSI-1..3 的阶段证据见 `docs/msi-roadmap.md` 第 6..8 节，WIN-MSI-4 的复核记录见第 9 节，WIN-MSI-5..9 的 x86/版本/目录/UI/语言/扩展与审计证据见第 10 节。
-**WIN-MSI-1..9 全部完成，`0.1.0-alpha.43` 为冻结基线**；来源和选择见 `docs/msi-tauri-capability-audit.md`。
+**WIN-MSI-1..9 全部完成，`0.1.0-alpha.43` 为冻结基线**；来源和选择已固化进本矩阵与 `docs/msi-roadmap.md`。
 生产证书、交互 UI、真实重启/锁定文件、干净 Windows/ARM64 宿主及提权安装不能由本机测试推断为通过。
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| 独立后端包与直接 API | 已实现并本机自动验证 | 适用，MSI-1；WIN-MSI-2 补齐包消费验证 | 仓库外普通项目只引用打出的 `DotNet.Bundler.Wix` NuGet 包，使用包内 WiX 工具直接生成真实 MSI；不能靠本仓库 `ProjectReference` 或 MSBuild 元包。仓外复制消费腿（`tests/Windows.Msi.Integration/Standalone`）已在本机通过，其他构建宿主仍按支持矩阵验收。 |
+| 独立后端包与直接 API | 已实现并本机自动验证 | 适用，MSI-1；WIN-MSI-2 补齐包消费验证 | 仓库外普通项目只引用打出的 `DotNet.Bundler.Wix` NuGet 包，使用包内 WiX 工具直接生成真实 MSI；不能靠本仓库 `ProjectReference` 或 MSBuild 元包。仓外复制消费腿（`tests/Bundler.IntegrationTests/Fixtures/Msi/Standalone`）已在本机通过，其他构建宿主仍按支持矩阵验收。 |
 | 最小安装/卸载 | 已实现并本机自动验证 | 适用，MSI-1；本机 x64 fixture 已验证 | 独立 current-user fixture 静默安装、检查载荷和产品注册，再卸载并检查残留/用户文件；不能仅生成 MSI。其他 Windows/架构及干净宿主待外部验收。 |
 | 名称、发布者、描述、`.ico` 图标、默认安装目录 | 已实现并本机自动验证 | 适用，MSI-1 | API/MSBuild 同义映射、数据库和系统显示正确；默认目录按 scope 固定，可选择目录见下表。其他图标输入尚未实现。 |
 | 产品身份、版本、组件 | 已实现并本机自动验证 | 适用，MSI-1；MSI-3 增加语言产品线，MSI-4 修正 PackageCode 生成 | 英文历史身份稳定；简体中文使用隔离的 UpgradeCode、ProductCode、组件、安装目录和输出名。PackageCode 由 WiX 每次构建生成，独立构建已验证不同；同一产品版本只发布一份同语言内容，显式 UpgradeCode 由发行方负责跨语言唯一性。 |
@@ -39,7 +39,7 @@ WIN-MSI-1..3 的阶段证据见 `docs/msi-roadmap.md` 第 6..8 节，WIN-MSI-4 �
 
 ## Tauri 通用能力补齐状态
 
-WIN-MSI-5..9 的通用能力补齐已全部完成并经 `docs/msi-tauri-capability-audit.md` 逐项分类（等价已实现/有意更安全语义/明确不适用/另立产品路线）。
+WIN-MSI-5..9 的通用能力补齐已全部完成并经上游审计逐项分类（等价已实现/有意更安全语义/明确不适用/另立产品路线）。
 `0.1.0-alpha.43` 为 MSI 冻结基线；无现成环境的人工/外部验收项继续保留在 `docs/msi-manual-testing.md` 与 `docs/msi-open-items.md`，不构成已通过声明。
 
 ## 已验证的平台范围

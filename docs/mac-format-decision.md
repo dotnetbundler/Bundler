@@ -4,7 +4,7 @@
 > 实施顺序：`MAC-APP` → `MAC-DMG` → `MAC-PKG` → Linux；`Pkg` 枚举值与矩阵放行在 `MAC-APP-1` 起手时进入公共模型（本会话不写实现）。
 > 本文保留决策依据与边界，作为 MAC-PKG 阶段的输入。
 > 背景：`docs/roadmap.md` MAC 节要求在 `MAC-APP` 开始前用格式决策记录决定 PKG 是否加入公共 `PackageFormat`；若加入，顺序固定为 `MAC-DMG` 之后、Linux 之前。
-> 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)；`.app` 阶段分解见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)。
+> 上游审计已完成（Tauri 固定快照 `7dbfc1f`，结论固化进路线）；`.app` 阶段分解见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)。
 
 ## 1. 已核实事实
 

@@ -21,7 +21,7 @@ public sealed class MsiFixture : IAsyncLifetime
     {
         Packages = Ws.Combine("packages");
         Cache = Ws.Combine("nuget");
-        var scriptDir = Path.Combine(RepositoryLayout.Root, "tests", "Windows.Msi.Integration");
+        var scriptDir = Path.Combine(RepositoryLayout.FixturesDirectory, "Msi");
         FixtureSource = Path.Combine(scriptDir, "Fixture");
         StandaloneSource = Path.Combine(scriptDir, "Standalone");
         _init = new Lazy<bool>(Initialize);

@@ -26,8 +26,8 @@ public sealed class MacDmgFixture : IDisposable
         Ws = IntegrationWorkspace.Create("macos-dmg-integration", "BundlerMacOSDmgIntegration");
         CacheDir = Ws.Combine("nuget-cache");
         MountRoot = Ws.Combine("mount");
-        FixtureProject = Path.Combine(RepositoryLayout.TestsDirectory,
-            "MacOS.Dmg.Integration", "Fixture", "BundlerMacDmgIntegrationFixture.csproj");
+        FixtureProject = Path.Combine(RepositoryLayout.FixturesDirectory,
+            "MacDmg", "BundlerMacDmgIntegrationFixture.csproj");
         _init = new Lazy<bool>(Initialize);
     }
 

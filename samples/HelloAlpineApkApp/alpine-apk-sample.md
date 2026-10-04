@@ -62,4 +62,4 @@ apk del hello-alpine-apk-app
 
 ## 确定性
 
-相同输入与条件下产物逐字节确定（mtime=0、pax atime/ctime=0、条目排序、RSA-PKCS1 确定性签名）；`tests/Alpine.Apk.Integration/Verify.sh` 连产三次核对 sha256。
+相同输入与条件下产物逐字节确定（mtime=0、pax atime/ctime=0、条目排序、RSA-PKCS1 确定性签名）；`AlpineApkIntegrationTests` 确定性腿连产三次核对 sha256。

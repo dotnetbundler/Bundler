@@ -281,9 +281,9 @@ public static class ArchiveTests
     static void MapsArchiveSettingsThroughMsBuild()
     {
         var targets = File.ReadAllText(Path.Combine(
-            RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
+            RepositoryRoot(), "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
         var props = File.ReadAllText(Path.Combine(
-            RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.props"));
+            RepositoryRoot(), "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.props"));
         var task = File.ReadAllText(Path.Combine(
             RepositoryRoot(), "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
         Assert.True(targets.Contains("ArchivePackageName=\"$(BundlerArchivePackageName)\"", StringComparison.Ordinal) &&

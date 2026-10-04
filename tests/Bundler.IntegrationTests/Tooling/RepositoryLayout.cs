@@ -18,6 +18,7 @@ internal static class RepositoryLayout
     public static string ArtifactsRoot => Path.Combine(Root, "artifacts");
     public static string PackageDirectory => Path.Combine(ArtifactsRoot, "packages");
     public static string TestsDirectory => Path.Combine(Root, "tests");
+    public static string FixturesDirectory => Path.Combine(TestsDirectory, "Bundler.IntegrationTests", "Fixtures");
 
     private static string? _packageVersion;
 

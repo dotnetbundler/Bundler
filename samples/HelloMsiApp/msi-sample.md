@@ -22,11 +22,11 @@ dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
 与 NSIS 示例一样，项目经 `Bundler.ProjectReference.targets` 以项目引用接入仓内 `src/Bundler.MSBuild`；
 `publish` 会先编译 `src/` 再执行打包任务，源码改动直接反映到示例产物。
 
-只验证示例构建契约而**不安装** MSI 时，运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1`。
+只验证示例构建契约而**不安装** MSI 时，运行 `MsiIntegrationTests` 的 `PublicSample*` 腿：`dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*MsiIntegrationTests*" --filter-method "*PublicSample*"`。
 脚本用隔离 NuGet 缓存从本地包源还原，分别生成英语 current-user、中文 current-user 和英语 per-machine 包，检查数据库中的资源、图标、自定义 UI 对话框（含许可与目录选择路由）、快捷方式、Environment/Feature、关联/协议、品牌位图及独立身份；
 输出保留在本轮 `%TEMP%` 目录。
 此检查不代替真实安装测试；
-真实安装/升级/修复/卸载的新能力断言由独立 fixture 的 `VerifyWinMsi6.ps1` 执行。
+真实安装/升级/修复/卸载的新能力断言由 `MsiIntegrationTests`（需 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 同意闸）执行。
 
 MSI 后端拒绝在同一路径以相同应用版本覆盖不同内容。
 修改本示例后若已有旧 MSI，可通过 `-p:BundlerOutputPath=新的绝对目录` 指定新输出目录。
@@ -176,7 +176,7 @@ dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release `
 这个开关会让旧 MSI 版本移除较新版本后安装自身；
 默认仍拒绝降级。
 正式发行应避免复用同一 MSI 版本，先在随机身份测试产品上验证升级和回退。
-可运行 `tests/Windows.Msi.Integration/VerifyWinMsi5.ps1 -ConfirmLocalInstall`，它使用独立产品身份真实检查 x86 安装、显式版本升级、降级拒绝与允许、同版本碰撞和卸载。
+可运行 `MsiIntegrationTests` 的版本/降级腿（同上同意闸），它使用独立产品身份真实检查 x86 安装、显式版本升级、降级拒绝与允许、同版本碰撞和卸载。
 
 ## 签名
 

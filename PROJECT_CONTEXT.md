@@ -6,10 +6,10 @@
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
-> 逐阶段实施证据已归档到各格式 `<format>-roadmap.md` 与 `docs/project-history.md`，本文不重复记录
+> 逐阶段实施证据以带日期条目归档在各格式 `<format>-roadmap.md`，本文不重复记录
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
-> 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；历史记录在 `docs/project-history.md`；各格式细节在各 `docs/<format>-*.md`。
+> 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；各格式细节在各 `docs/<format>-*.md`。
 > 本文内容须与 Git、代码和测试一致；不一致时以后三者为准并先修正本文。
 
 ## 1. 项目结构（现况）
@@ -35,17 +35,10 @@
 | `tests/Bundler.Tests` | 唯一快速测试入口（xUnit v3，`dotnet test`；用例全注册、宿主门控经 `Assert.Skip` 跳过，以每次实跑输出为准） | `net10.0` |
 | `tests/Bundler.ApiTests` | API 消费测试入口（xUnit v3，`dotnet test`；十格式 `<Format>ApiTests` 测试类直调后端 API 产真实产物再断言，宿主门控经 `Assert.Skip`，集成脚本经 `--filter-class` + `*_API_FIXTURE_OUTPUT` 环境变量复用） | `net10.0` |
 | `tests/Bundler.IntegrationTests` | 系统集成测试体（xUnit v3，`dotnet test --filter-class/-method`；每格式一个 `<Format>IntegrationTests` 测试类，全部脚本测试点逐腿收编；`Tooling/` 含 `ProcessRunner`/`DockerRunner`/`ElevatedRunner`/`IntegrationWorkspace`/`MsiSupport`/`ShellLink`；Windows 真装腿用 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 门禁） | `net10.0` |
-| `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | NSIS/MSI 集成目录：fixture（`Fixture/`、`Standalone/`、`LegacyMsiFixture*/`）+ `Verify*.ps1` 薄入口（转发 `dotnet test`，`-ConfirmLocalInstall` 置同意闸） | PowerShell / `net10.0` |
-| `tests/MacOS.App.Integration` | `.app` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
-| `tests/MacOS.Dmg.Integration` | `.dmg` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
-| `tests/MacOS.Pkg.Integration` | `.pkg` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
-| `tests/Linux.Deb.Integration` | `.deb` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
-| `tests/Linux.Rpm.Integration` | `.rpm` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
-| `tests/Linux.AppImage.Integration` | `.AppImage` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
-| `tests/Archive.Integration` | `.zip`/`.tar.gz` 集成目录：`Verify.sh` 薄入口 | bash |
-| `tests/Alpine.Apk.Integration` | `.apk` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
-| `tests/Cli.Integration` | CLI 端到端集成目录：`Verify.sh` 薄入口 | bash |
-| `tests/Windows.Nsis.Reboot` | 可抛弃 VM 重启验证入口（`Verify.ps1` 两阶段：锁定文件卸载 `3010` → 重启 → pending rename/目录/注册表/journal 清理断言） | PowerShell |
+| `tests/Bundler.IntegrationTests/Fixtures/` | 集成 fixture 集中地：各格式被发布成包的 fixture 工程与载荷 `Assets/`（`Msi/` 含包消费契约腿 `Fixture`+`Standalone`，`Nsis/` 含 `LegacyMsiFixture*/`） | `net10.0` |
+| `tests/Shared/TestPlatform.cs` | 三测试工程链接共享的宿主探测门面 | `net10.0` |
+| `tests/README.md` | 测试入口、trait 门禁与 fixture 地图 | — |
+| `tools/Windows.Nsis.Reboot` | 可抛弃 VM 重启验证入口（`Verify.ps1` 两阶段：锁定文件卸载 `3010` → 重启 → pending rename/目录/注册表/journal 清理断言） | PowerShell |
 | `samples/HelloNsisApp` / `samples/HelloMsiApp` / `samples/HelloMacApp` / `samples/HelloMacDmg` / `samples/HelloMacPkg` / `samples/HelloDebApp` / `samples/HelloRpmApp` / `samples/HelloAppImageApp` / `samples/HelloArchiveApp` / `samples/HelloAlpineApkApp` | 公开可运行示例（应用版本 `1.0.0`） | `net10.0` |
 | `tools/Bundler.Nsis.Plugin` | NSIS 原生插件源码（有意在 slnx 之外，重建需 .NET 10 + Windows 原生链） | `net10.0` |
 | `third_party/` | 第三方归档、许可证、逐文件 SHA-256 与 provenance 文档 | — |
@@ -87,6 +80,18 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-04 仓库结构清理（分支 `devin/1791122636-repo-cleanup`）
+
+- tests/ 收敛：12 个 `tests/<格式>.Integration/` 散目录的 fixture 与载荷全部并入 `tests/Bundler.IntegrationTests/Fixtures/<格式>/`（`Msi/` 含包消费契约腿 `Fixture`+`Standalone`，`Nsis/` 含 `LegacyMsiFixture*/`）；
+  定位经 `RepositoryLayout.FixturesDirectory` + fixture 自身 `GetPathOfFileAbove` 导入，深度无关。
+- 资源归位：`templates/nsis` → `src/Bundler.Nsis/templates/`（EmbeddedResource LogicalName 不变）、`buildTransitive/*` → `src/Bundler.MSBuild/buildTransitive/`（nupkg 内 `buildTransitive/` 布局不变）、`tests/Windows.Nsis.Reboot` → `tools/Windows.Nsis.Reboot`。
+- 脚本清零：17 个 `Verify.ps1`/`Verify.sh` 薄入口删除，统一为 `dotnet test --filter-class/-method`；保留 `tools/Bundler.Nsis.Plugin/Build.ps1`（真实构建脚本）。
+- 文档瘦身：`docs/project-history.md`、3 个 `*-tauri-capability-audit.md`、12 个 `tests/*-integration.md` 删除；
+  审计/历史指针全部去链接化或固化进路线与能力矩阵；dated 验收记录保留原文；新建 `tests/README.md` 统揽入口/门禁/fixture 地图。
+- 权威标准件：新增 `.gitattributes`（eol 规范化 + `bad-crlf.sh` 载荷豁免）与 `.editorconfig`；本地包消费验收腿保留（权威项目对标：MSBuild-targets/工具包必须验证 nupkg 契约）。
+- Bundler.IntegrationTests.csproj 排除 `Fixtures/**` 编译 glob；测试代码 `templates/`、`buildTransitive/` 源树路径改指新位置。
+- 本机验证（linux）：build 0W/0E、pack 16 nupkg 内容不变、`Bundler.Tests` 281/242P/0F/39S、`ApiTests` 7P/3S、`IntegrationTests` 182/111P/0F/71S——与基线逐位吻合。
 
 ### 2026-10-04 API 面收窄 + 死代码清除 + 覆盖率盲点测试（PR #19 已并入 `main`，merge `ad36261`）
 
@@ -209,7 +214,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - 本仓库开源许可证尚未确定。
 - WiX v3 已退出免费社区服务；大范围公开分发前须重新评估维护风险（见 `third_party/wix/msi-wix-provenance.md`）。
 - 各格式外部事项按 OI 清单等待对应环境输入：`docs/<format>-open-items.md` 全套（生产证书/公证凭证、UAC 提权、真实重启、干净宿主矩阵、ARM64 真机、语言审校等；MSI 签名已裁决不补集成腿——`Bundler.Tests/WixTests` 三断言已覆盖，外部仅余 MSI-OI-06 生产证书/时间戳）。
-- 仓外独立包消费 fixture（`tests/Windows.Msi.Integration/Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`，
+- 仓外独立包消费 fixture（`tests/Bundler.IntegrationTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`,
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
   是否换处理方式（如公开发布后改验公网源、或移入独立验收仓）留待后续裁决。
 
@@ -220,7 +225,3 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 无未启动的后端立项项；新立项按 `docs/roadmap.md` §7.2 准入与新后端完整路线规则。
 剩余工作：外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（tar 流式条目、Zip64 等按 `docs/archive-open-items.md` 评估）。
 
-## 7. 历史记录
-
-按时间排序的过往工作、当时证据、已知历史问题与任务衔接标识见 [`docs/project-history.md`](docs/project-history.md)。
-该文件是档案，不代表当前状态。

@@ -20,7 +20,7 @@ public sealed class NsisFixture : IAsyncLifetime
     private X509Certificate2? _certificate;
 
     private static readonly string ScriptDir =
-        Path.Combine(RepositoryLayout.Root, "tests", "Windows.Nsis.Integration");
+        Path.Combine(RepositoryLayout.FixturesDirectory, "Nsis");
     public string FixtureProject { get; } =
         Path.Combine(ScriptDir, "Fixture", "BundlerNsisIntegrationFixture.csproj");
     private static string Assets(string name) =>

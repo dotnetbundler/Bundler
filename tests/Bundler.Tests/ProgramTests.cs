@@ -205,7 +205,7 @@ public static class ProgramTests
                 "output",
                 false);
 
-            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var script = NsisBundleBackend.CreateScript(template, configuration, new NsisBundleConfiguration(), item, "setup.exe", "ExampleApp");
             Assert.Contains("\"UninstallString\" '\"$INSTDIR\\Uninstall.exe\"'", script);
             Assert.DoesNotContain("'$\"$INSTDIR", script);
@@ -227,7 +227,7 @@ public static class ProgramTests
     [Fact]
     static void LetsUsersChooseInstallDirectory()
     {
-        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
         Assert.Contains("!insertmacro MUI_PAGE_DIRECTORY", template);
         Assert.True(template.Contains("ReadRegStr $0 SHCTX \"${UNINSTALL_KEY}\" \"InstallLocation\"", StringComparison.Ordinal) &&
                template.Contains("MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_VALUENAME \"InstallLocation\"", StringComparison.Ordinal) &&
@@ -394,7 +394,7 @@ public static class ProgramTests
                 "ExampleApp.exe",
                 Path.Combine(root, "output"),
                 false);
-            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var reparsePoint = Assert.ThrowsAny<InvalidDataException>(() => NsisBundleBackend.CreateScript(
                 template,
                 configuration,
@@ -764,7 +764,7 @@ public static class ProgramTests
         Directory.CreateDirectory(input);
         await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp.exe"), "custom-language-test");
         var english = await File.ReadAllTextAsync(
-            Path.Combine(RepositoryRoot(), "templates", "nsis", "languages", "English.nsh"));
+            Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "languages", "English.nsh"));
         try
         {
             var cases = new Dictionary<string, string>
@@ -1105,7 +1105,7 @@ public static class ProgramTests
                 "ExampleApp.exe",
                 "output",
                 false);
-            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var script = NsisBundleBackend.CreateScript(template, configuration, new NsisBundleConfiguration(), item, "setup.exe", "ExampleApp");
 
             Assert.Contains("Delete /REBOOTOK \"$INSTDIR\\ExampleApp.exe\"", script);
@@ -1126,7 +1126,7 @@ public static class ProgramTests
     [Fact]
     static void ProvidesInteractiveNsisSafetyOptions()
     {
-        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
         Assert.Contains("Page custom ShortcutOptionsPage", template);
         Assert.True(template.Contains("Function ValidateInstallDirectory", StringComparison.Ordinal) &&
                template.Contains("${INSTALL_MARKER}", StringComparison.Ordinal),
@@ -1185,7 +1185,7 @@ public static class ProgramTests
                 "ExampleApp.exe",
                 "output",
                 false);
-            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var script = NsisBundleBackend.CreateScript(
                 template,
                 configuration,
@@ -1234,7 +1234,7 @@ public static class ProgramTests
     [Fact]
     static void RendersNsisAutomationProtocol()
     {
-        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
         foreach (var option in new[] { "/P", "/UPDATE", "/NS", "/R", "/ARGS" })
         {
             Assert.Contains($"$CMDLINE \"{option}\"", template);
@@ -1267,7 +1267,7 @@ public static class ProgramTests
             "Payload extraction should explain interactive write failures and then fail transactionally.");
         foreach (var language in new[] { "English.nsh", "SimpChinese.nsh" })
         {
-            var strings = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "languages", language));
+            var strings = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "languages", language));
             Assert.True(strings.Contains("LangString PayloadWriteFailed", StringComparison.Ordinal),
                 $"{language} should define the payload-write failure message.");
         }
@@ -1306,7 +1306,7 @@ public static class ProgramTests
                 "ExampleApp.exe",
                 "output",
                 false);
-            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var script = NsisBundleBackend.CreateScript(
                 template,
                 configuration,
@@ -1399,7 +1399,7 @@ public static class ProgramTests
                 "ExampleApp.exe",
                 "output",
                 false);
-            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var script = NsisBundleBackend.CreateScript(
                 template,
                 configuration,
@@ -1436,7 +1436,7 @@ public static class ProgramTests
 
         try
         {
-            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var item = new BundlePlanItem(
                 new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
@@ -1507,7 +1507,7 @@ public static class ProgramTests
         File.WriteAllText(Path.Combine(root, "ExampleApp.exe"), "test");
         try
         {
-            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var configuration = ValidConfiguration(new BundleTargetConfiguration
             {
                 RuntimeIdentifier = "win-x64",
@@ -1611,7 +1611,7 @@ public static class ProgramTests
                 "ExampleApp.exe",
                 "output",
                 false);
-            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var nsisConfiguration = new NsisBundleConfiguration
             {
                 InstallerIcon = icon,
@@ -1768,7 +1768,7 @@ public static class ProgramTests
                     StartMenuFolder = "Example Publisher", LegacyProductNames = ["Old App"], LegacyMainExecutables = ["OldApp.exe"]
                 }
             };
-            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
+            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var script = NsisBundleBackend.CreateScript(template, configuration, settings, item, "setup.exe", "New App");
 
             Assert.True(script.Contains("StrCpy $CreateDesktopShortcut 0", StringComparison.Ordinal) && script.Contains("StrCpy $CreateStartMenuShortcut 1", StringComparison.Ordinal), "Configured shortcut defaults were not rendered.");
@@ -1803,8 +1803,8 @@ public static class ProgramTests
     [Fact]
     static void MapsNsisSettingsThroughMsBuild()
     {
-        var props = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.props"));
-        var targets = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
+        var props = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.props"));
+        var targets = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
         var task = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
         foreach (var property in new[]
                  {
@@ -1861,9 +1861,9 @@ public static class ProgramTests
             Path.Combine(root, "samples", "HelloNsisApp", "HelloNsisApp.csproj"),
             Path.Combine(root, "samples", "HelloMsiApp", "HelloMsiApp.csproj"),
             Path.Combine(root, "samples", "HelloDebApp", "HelloDebApp.csproj"),
-            Path.Combine(root, "tests", "Windows.Nsis.Integration", "Fixture", "BundlerNsisIntegrationFixture.csproj"),
-            Path.Combine(root, "tests", "Linux.Deb.Integration", "Fixture", "BundlerDebIntegrationFixture.csproj"),
-            Path.Combine(root, "tests", "Linux.Rpm.Integration", "Fixture", "BundlerRpmIntegrationFixture.csproj")
+            Path.Combine(root, "tests", "Bundler.IntegrationTests", "Fixtures", "Nsis", "Fixture", "BundlerNsisIntegrationFixture.csproj"),
+            Path.Combine(root, "tests", "Bundler.IntegrationTests", "Fixtures", "Deb", "BundlerDebIntegrationFixture.csproj"),
+            Path.Combine(root, "tests", "Bundler.IntegrationTests", "Fixtures", "Rpm", "BundlerRpmIntegrationFixture.csproj")
         })
         {
             var project = XDocument.Load(path);
@@ -1879,7 +1879,7 @@ public static class ProgramTests
                !nsisSample.Descendants().Any(item => item.Name.LocalName.StartsWith("HelloBundledApp", StringComparison.Ordinal)),
             "The NSIS sample must use format-specific build properties while preserving its executable name.");
         Assert.Equal("BundlerIntegrationFixture",
-            XDocument.Load(Path.Combine(root, "tests", "Windows.Nsis.Integration", "Fixture",
+            XDocument.Load(Path.Combine(root, "tests", "Bundler.IntegrationTests", "Fixtures", "Nsis", "Fixture",
                 "BundlerNsisIntegrationFixture.csproj"))
             .Descendants("AssemblyName").Single().Value);
         var apiTests = XDocument.Load(Path.Combine(root, "tests", "Bundler.ApiTests", "Bundler.ApiTests.csproj"));
@@ -1895,8 +1895,8 @@ public static class ProgramTests
         }
         foreach (var path in new[]
         {
-            Path.Combine(root, "tests", "Windows.Msi.Integration", "Fixture", "BundlerMsiSmoke.csproj"),
-            Path.Combine(root, "tests", "Windows.Msi.Integration", "Standalone", "Msi.Api.PackageFixture.csproj")
+            Path.Combine(root, "tests", "Bundler.IntegrationTests", "Fixtures", "Msi", "Fixture", "BundlerMsiSmoke.csproj"),
+            Path.Combine(root, "tests", "Bundler.IntegrationTests", "Fixtures", "Msi", "Standalone", "Msi.Api.PackageFixture.csproj")
         })
         {
             var project = XDocument.Load(path);
@@ -1906,20 +1906,6 @@ public static class ProgramTests
                    project.Descendants("Import").Any(item =>
                        ((string?)item.Attribute("Project"))?.Contains("Bundler.LocalPackages.props", StringComparison.Ordinal) == true),
                 "The standalone package-consumption fixture must keep its package reference: " + path);
-        }
-        foreach (var path in new[]
-        {
-            Path.Combine(root, "tests", "Windows.Nsis.Integration", "Verify.ps1"),
-            Path.Combine(root, "tests", "Windows.Msi.Integration", "Verify.ps1"),
-            Path.Combine(root, "tests", "Windows.Msi.Integration", "VerifyLifecycle.ps1"),
-            Path.Combine(root, "tests", "Windows.Msi.Integration", "VerifyMaintenance.ps1"),
-            Path.Combine(root, "tests", "Windows.Msi.Integration", "VerifyPublicSample.ps1")
-        })
-        {
-            var script = File.ReadAllText(path);
-            Assert.True(script.Contains("Bundler.IntegrationTests.csproj", StringComparison.Ordinal) &&
-                   !script.Contains(version, StringComparison.Ordinal),
-                "The thin integration entry must forward to Bundler.IntegrationTests without hardcoding the package version: " + path);
         }
         var layout = File.ReadAllText(Path.Combine(
             root, "tests", "Bundler.IntegrationTests", "Tooling", "RepositoryLayout.cs"));
