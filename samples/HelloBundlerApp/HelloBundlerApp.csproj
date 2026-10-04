@@ -34,7 +34,10 @@
     <BundlerIdentifier>com.example.hellobundlerapp</BundlerIdentifier>
     <BundlerProductName>Hello Bundler App</BundlerProductName>
     <BundlerPublisher>Bundler Contributors</BundlerPublisher>
-    <BundlerDescription>演示 DotNet.Bundler 全部后端公开旋钮的统一样品。</BundlerDescription>
+    <!-- MSI 各语言 DB codepage 无法保证 CJK 可编码（en-US=CP1252 必拒）：
+         formats 集含 msi 时中文文案/文件名自动回退 ASCII，其余后端不受限。 -->
+    <BundlerDescription Condition="!$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))">演示 DotNet.Bundler 全部后端公开旋钮的统一样品。</BundlerDescription>
+    <BundlerDescription Condition="$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))">Unified DotNet.Bundler sample covering every backend's public knobs.</BundlerDescription>
     <BundlerHomepage>https://github.com/dotnetbundler</BundlerHomepage>
     <BundlerCopyright>Copyright © DotNet.Bundler contributors</BundlerCopyright>
     <!-- 许可文件是全局旋钮：独立 .app 后端无许可载荷契约会硬拒——formats 集含独立 app 时自动缺席，
@@ -79,27 +82,40 @@
         Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-'))" />
     <!-- 资源项演示：每个格式原始样品的资源原样保留，随载荷进入安装根。 -->
     <BundlerResource Include="$(HelloBundlerAppAssets)common\readme.txt" TargetPath="docs/readme.txt" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\demo-resource.txt" TargetPath="演示资源\说明.txt" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\demo-resource.txt" TargetPath="演示资源\说明.txt"
+        Condition="!$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))" />
     <BundlerResource Include="$(HelloBundlerAppAssets)nsis\demo.hello" TargetPath="demo.hello" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\运行深链接.cmd" TargetPath="运行深链接.cmd" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\运行深链接.cmd" TargetPath="运行深链接.cmd"
+        Condition="!$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))" />
     <BundlerResource Include="$(HelloBundlerAppAssets)msi\demo-resource.txt" TargetPath="DemoResources\Readme.txt" />
     <BundlerResource Include="$(HelloBundlerAppAssets)msi\demo.hellomsi" TargetPath="demo.hellomsi" />
     <BundlerResource Include="$(HelloBundlerAppAssets)msi\open-link.cmd" TargetPath="open-link.cmd" />
     <!-- 文件关联与 URL 协议：全部样品原型扩展一次集齐（windows 注册表 /
          freedesktop MimeType / macOS CFBundleDocumentTypes+URL schemes 各自落位）。 -->
     <BundlerFileAssociation Include="hello" Name="Hello Bundler App 文档"
-        Description="Hello Bundler App 演示文档" MimeType="application/x-hello-bundler-app" />
+        Description="Hello Bundler App 演示文档" MimeType="application/x-hello-bundler-app"
+        Condition="!$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))" />
+    <BundlerFileAssociation Include="hello" Name="Hello Bundler App Document"
+        Description="Hello Bundler App sample document" MimeType="application/x-hello-bundler-app"
+        Condition="$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))" />
     <BundlerFileAssociation Include=".hellomsi" Name="Hello MSI document"
         Description="Hello Bundler App sample document" MimeType="application/x-hellomsi" />
     <BundlerFileAssociation Include="hellomac" Name="Hello Mac Document"
-        Description="HelloBundlerApp 演示文档" MimeType="application/x-hellomac" />
+        Description="HelloBundlerApp 演示文档" MimeType="application/x-hellomac"
+        Condition="!$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))" />
+    <BundlerFileAssociation Include="hellomac" Name="Hello Mac Document"
+        Description="HelloBundlerApp sample document" MimeType="application/x-hellomac"
+        Condition="$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))" />
     <BundlerFileAssociation Include=".hellodeb" Name="Hello Deb document"
         Description="Hello Bundler App sample document" MimeType="application/x-hellodeb" />
     <BundlerFileAssociation Include=".hello-rpm" Name="Hello rpm document"
         MimeType="application/x-hello-rpm" />
     <BundlerFileAssociation Include=".hello-appimage" Name="Hello AppImage document"
         MimeType="application/x-hello-appimage" />
-    <BundlerUrlProtocol Include="hello-bundler" Name="Hello Bundler App 深链接" />
+    <BundlerUrlProtocol Include="hello-bundler" Name="Hello Bundler App 深链接"
+        Condition="!$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))" />
+    <BundlerUrlProtocol Include="hello-bundler" Name="Hello Bundler App link"
+        Condition="$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))" />
     <BundlerUrlProtocol Include="hello-msi" Name="Hello MSI link" />
     <BundlerUrlProtocol Include="hellomac" Name="Hello Mac Link" />
     <BundlerUrlProtocol Include="hellodeb" Name="Hello Deb" />

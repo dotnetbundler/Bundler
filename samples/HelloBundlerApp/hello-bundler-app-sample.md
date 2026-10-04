@@ -37,6 +37,9 @@ appimage 仅 Linux 宿主；nsis/deb/rpm/zip/targz/alpineapk 为纯托管实现�
   macOS 宿主默认集因此不含独立 `app`（dmg 内层照样产出 .app，`BundlerMacApp*` 旋钮全部生效）；
   显式 `-p:BundlerFormats=app`（或含 app 的子集）时许可自动缺席该轮 publish，
   跨宿主 `osx-*` 默认 `app;zip;targz` 同理不带许可。
+- **MSI 数据库 codepage 无法承载 CJK**：en-US 变体为 CP1252，中文描述/中文文件名/中文关联名会触发 light LGHT0311。
+  formats 集含 `msi` 时样品自动回退 ASCII（描述改英文、中文 TargetPath 资源与中文关联/协议名缺席或换 ASCII）；
+  含 msi 的 publish 如需中文演示，请用不含 msi 的轮次。其余后端（nsis/deb/rpm/mac 系/apk/归档）不约束字符集。
 - **MSI 许可只收 RTF**：formats 集含 `msi` 时 `formats/Msi.props` 自动把全局许可切到 `Assets/msi/license.rtf`
   （nsis/dmg/pkg 同样接受 RTF；archive 不内嵌许可，deb/rpm 以文件载荷携带扩展名无影响）。
   `HelloBundlerMsiLicenseFile` 传透可整体接管。
