@@ -82,7 +82,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
-### 2026-10-04 仓库结构清理（分支 `devin/1791122636-repo-cleanup`）
+### 2026-10-04 仓库结构清理（PR #20 已并入 `main`，squash `33f37b9`）
 
 - tests/ 收敛：12 个 `tests/<格式>.Integration/` 散目录的 fixture 与载荷全部并入 `tests/Bundler.IntegrationTests/Fixtures/<格式>/`（`Nsis/` 含 `LegacyMsiFixture*/`）；
   定位经 `RepositoryLayout.FixturesDirectory`（工程自身目录自定位）+ fixture 自身 `GetPathOfFileAbove` 导入，深度无关。
@@ -225,7 +225,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 ## 6. 默认下一步
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
-集成测试收编分支 `devin/1791047844-integration-tests-csharp` 已经 PR #17 并入 `main`（§3 首条），本轮工作在途项清零。
+集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
 无未启动的后端立项项；新立项按 `docs/roadmap.md` §7.2 准入与新后端完整路线规则。
 剩余工作：外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（tar 流式条目、Zip64 等按 `docs/archive-open-items.md` 评估）。
 
