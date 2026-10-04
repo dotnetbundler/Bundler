@@ -206,7 +206,7 @@ MSBuild 使用既有的 `BundlerWindowsSigning*` 属性和 `BundlerWindowsSignin
 
 WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 当前开发版本尚未公开到默认 NuGet 源时，先从本仓库 pack 并指定本地包源。
-上述包引用与实际编译由复制到仓库外目录的 `tests/Bundler.IntegrationTests/Fixtures/Msi/Standalone` fixture 自动验证；MSI 产品身份和安装行为以 MSI 专用文档为准。
+上述包引用与实际编译由复制到仓库外目录的 `tests/Bundler.LocalPackagesTests/Fixtures/Msi/Standalone` fixture 自动验证；MSI 产品身份和安装行为以 MSI 专用文档为准。
 
 ## MSBuild 属性
 
@@ -662,7 +662,7 @@ dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
 # 集成测试按格式类选择（`--filter-class` 单名过滤，各宿主只跑宿主可用腿）
 dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*NsisIntegrationTests*"
-dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*MsiIntegrationTests*"
+dotnet test tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj -c Release --filter-class "*MsiLocalPackagesTests*"
 dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*CliIntegrationTests*"
 ```
 

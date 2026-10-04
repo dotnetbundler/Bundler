@@ -165,7 +165,7 @@
 单格式 API fixture 收编为 `tests/Bundler.ApiTests` 的 `<Format>ApiTests` 测试类，系统集成测试体收编为 `tests/Bundler.IntegrationTests` 的 `<Format>IntegrationTests` 测试类，均为 `dotnet test` 入口、`--filter-class`/`-method` 选择、宿主门控经 `Assert.Skip`；
 资源需求用 `[Trait("Requires", ...)]` 标注——`docker`（DockerRunner 容器矩阵腿）、`elevation`（ElevatedRunner/SudoRunner 真装腿）、`localinstall`（需 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL` 同意的真装腿）；标在方法级，仅当全类都需同意时升类级（如 NSIS）；
 按资源裁剪用 `--filter-trait "Requires=<值>"`/`--filter-not-trait "Requires=<值>"`；
-集成 fixture 与载荷资产集中在 `tests/Bundler.IntegrationTests/Fixtures/<格式>/`，不再保留转发脚本；机器级人工验证脚本放 `tools/`（当前仅 `tools/Windows.Nsis.Reboot`），格式人工步骤在 `docs/<format>-manual-testing.md`；
+集成 fixture 与载荷资产集中在 `tests/Bundler.IntegrationTests/Fixtures/<格式>/`，本地包消费契约腿的独立 fixture 集中在 `tests/Bundler.LocalPackagesTests/Fixtures/<格式>/`，不再保留转发脚本；机器级人工验证脚本放 `tools/`（当前仅 `tools/Windows.Nsis.Reboot`），格式人工步骤在 `docs/<format>-manual-testing.md`；
 跨格式快速测试保留 `tests/Bundler.Tests`。
 格式专用测试与示例项目名称显式带格式名，只有真正跨格式的项目使用泛名。
 
@@ -174,8 +174,8 @@
 | 快速单元/契约 | `tests/Bundler.Tests` | `tests/Bundler.Tests` | `tests/Bundler.Tests` |
 | 后端 API fixture（仓内项目引用） | `tests/Bundler.ApiTests/NsisApiTests.cs` | `tests/Bundler.ApiTests/MsiApiTests.cs` | `tests/Bundler.ApiTests/MacAppApiTests.cs` |
 | MSBuild fixture（仓内项目引用） | `tests/Bundler.IntegrationTests/Fixtures/Nsis/Fixture` | — | `tests/Bundler.IntegrationTests/Fixtures/MacApp` |
-| 仓外独立包消费 fixture | — | `tests/Bundler.IntegrationTests/Fixtures/Msi/Fixture` + `Standalone/` | — |
-| 真实集成 | `NsisIntegrationTests` | `MsiIntegrationTests` | `MacAppIntegrationTests` |
+| 仓外独立包消费 fixture | — | `tests/Bundler.LocalPackagesTests/Fixtures/Msi/Fixture` + `Standalone/` | — |
+| 真实集成 | `NsisIntegrationTests` | `MsiLocalPackagesTests` | `MacAppIntegrationTests` |
 | 专用环境与人工 | `tools/Windows.Nsis.Reboot`、NSIS 人工清单 | MSI 人工清单 | `docs/mac-app-manual-testing.md` |
 
 1. 每项新增或修改功能必须**新增或更新对应自动化测试**；缺陷修复断言要区分修复前后。
@@ -183,11 +183,11 @@
    只运行旧测试、只查模板/数据库或只发布公开示例，不证明新系统行为。
 2. API fixture 以项目引用直引对应后端项目；
    MSBuild fixture 经 `Bundler.ProjectReference.targets` 接入 `src/Bundler.MSbuild`。
-   仓库外复制的独立包消费 fixture（`tests/Bundler.IntegrationTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/` 模板）保留 `PackageReference` 与 props 垫片，
+   仓库外复制的独立包消费 fixture（`tests/Bundler.LocalPackagesTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/` 模板）保留 `PackageReference` 与 props 垫片，
    测试代码传本轮 `BundlerPackageSource`、`BundlerPackageVersion` 和独立缓存，并用 `MsiSupport.AssertLocalBundlerRestore` 核验实际还原的包 ID、版本、源与缓存。
    仓库外复制项目连同 props 复制；
    项目自身声明必要 SDK 属性，不靠根 props、旧 `obj` 或隐藏的 `--source` 才工作。
-3. 集成测试按 Pack、隔离还原、生成产物、执行系统行为、断言最终状态组织，经 `tests/Bundler.IntegrationTests/Tooling`（`ProcessRunner`、`DockerRunner`、`ElevatedRunner`、`IntegrationWorkspace`、`MsiSupport`、`ShellLink`）实现；
+3. 集成测试按 Pack、隔离还原、生成产物、执行系统行为、断言最终状态组织，经 `tests/Shared/Tooling`（`ProcessRunner`、`DockerRunner`、`ElevatedRunner`、`IntegrationWorkspace`、`MsiSupport`、`ShellLink`）实现；
    真装腿用 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 门禁（等价于旧脚本的 `-ConfirmLocalInstall`）。
    每轮使用独立输出和产品身份，预检无碰撞。
    记录命令、宿主/架构、包与应用版本、哈希、退出码、日志、清理及未验证范围。
@@ -266,7 +266,7 @@ dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
 
 # 按格式类选择集成测试；MSI 真装腿另需同意闸 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1
 dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*NsisIntegrationTests*"
-dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*MsiIntegrationTests*"
+dotnet test tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj -c Release --filter-class "*MsiLocalPackagesTests*"
 dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-trait "Requires=localinstall"
 
 # NSIS 真实重启人工腿（仅可抛弃 Windows VM）：tools/Windows.Nsis.Reboot/Verify.ps1 -Phase Prepare|Verify

@@ -18,8 +18,8 @@ WIN-MSI-9 已完成 Tauri 通用能力审计与再冻结，见 `docs/msi-roadmap
 | MSI-OI-08 | MSI-4 | Windows 10/11 x64、ARM64 支持矩阵 | 每组合的构建、安装、升级、修复、卸载记录；未测组合限定支持声明 |
 | MSI-OI-09 | MSI-4 | 本地化审校和辅助功能使用者 | 支持语言集的 UI、缩放和可访问性记录 |
 | MSI-OI-10 | MSI-4 记录，公开发布前复核 | WiX v3 已结束免费社区维护且本项目不使用付费支持 | 每次公开发布前复核上游安全/兼容公告与风险处置；若无法接受无补丁风险，先提出免费且许可可履行的替代工具链，不默默扩大支持声明。依据：[WiX v3 官方状态](https://docs.firegiant.com/wix/wix3/) |
-| MSI-OI-11 | MSI-5 本机已通过，外部待验收 | 干净 Windows x86/x64、原生 x86/ARM64 用户端及 per-machine UAC | x86/映射版本/降级/卸载逐组合 verbose log、注册表视图、OS build 和清理证据；本机 x64 宿主证据见 `MsiIntegrationTests` 的 x86/版本/降级腿 |
-| MSI-OI-12 | WIN-MSI-6 本机自动范围已通过，外部待验收 | 真实交互 UI 环境（含辅助功能检查者）、per-machine UAC 交互安装 | 许可/无许可两序列的对话框流转、InstallDir/Browse/InvalidDir 行为、勾选与取消启动勾选的实际效果、位图显示与缩放、`ADDLOCAL` Feature 选择的实际交互、junction 安装目标的观察记录；本机自动证据见 `MsiIntegrationTests` 与 MSI-MT-11 |
+| MSI-OI-11 | MSI-5 本机已通过，外部待验收 | 干净 Windows x86/x64、原生 x86/ARM64 用户端及 per-machine UAC | x86/映射版本/降级/卸载逐组合 verbose log、注册表视图、OS build 和清理证据；本机 x64 宿主证据见 `MsiLocalPackagesTests` 的 x86/版本/降级腿 |
+| MSI-OI-12 | WIN-MSI-6 本机自动范围已通过，外部待验收 | 真实交互 UI 环境（含辅助功能检查者）、per-machine UAC 交互安装 | 许可/无许可两序列的对话框流转、InstallDir/Browse/InvalidDir 行为、勾选与取消启动勾选的实际效果、位图显示与缩放、`ADDLOCAL` Feature 选择的实际交互、junction 安装目标的观察记录；本机自动证据见 `MsiLocalPackagesTests` 与 MSI-MT-11 |
 | MSI-OI-13 | WIN-MSI-7 参数透传已断言，外部待验收 | 启用 Windows FIPS 策略的可抛弃宿主或 VM | `BundlerWixFipsCompliant`/`FipsCompliant` 构建在策略启用宿主的完整 `candle`/`light` 日志、产物哈希与安装结果；本机仅验证 `-fips` 参数透传，不构成认证声明 |
 
 没有相应环境时保留待验收，不把预测写成通过；
@@ -33,4 +33,4 @@ MSI-OI-01 已通过本机工程核查，阶段二约 13.8 MB 的体积已获用�
 MSI-OI-02 已静态检查 `candle.exe`、`light.exe` 和 `wix.dll` 均目标 `.NET Framework 4.5`，两个 EXE 要求 32 位进程；
 当前只取得非干净 Windows 11 x64 主机编译证据，干净 Windows 10/11 与 ARM64 宿主未测，依用户说明暂不执行。
 Windows 7 SP1 未预装 4.5，故不符合 WiX 自身的严格零额外安装。
-MSI-OI-03 的本机自动烟雾测试已通过，独立 VM/CI 复跑尚未执行；测试为 `MsiIntegrationTests`。
+MSI-OI-03 的本机自动烟雾测试已通过，独立 VM/CI 复跑尚未执行；测试为 `MsiLocalPackagesTests`。

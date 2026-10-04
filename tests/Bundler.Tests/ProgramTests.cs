@@ -1895,8 +1895,8 @@ public static class ProgramTests
         }
         foreach (var path in new[]
         {
-            Path.Combine(root, "tests", "Bundler.IntegrationTests", "Fixtures", "Msi", "Fixture", "BundlerMsiSmoke.csproj"),
-            Path.Combine(root, "tests", "Bundler.IntegrationTests", "Fixtures", "Msi", "Standalone", "Msi.Api.PackageFixture.csproj")
+            Path.Combine(root, "tests", "Bundler.LocalPackagesTests", "Fixtures", "Msi", "Fixture", "BundlerMsiSmoke.csproj"),
+            Path.Combine(root, "tests", "Bundler.LocalPackagesTests", "Fixtures", "Msi", "Standalone", "Msi.Api.PackageFixture.csproj")
         })
         {
             var project = XDocument.Load(path);
@@ -1908,7 +1908,7 @@ public static class ProgramTests
                 "The standalone package-consumption fixture must keep its package reference: " + path);
         }
         var layout = File.ReadAllText(Path.Combine(
-            root, "tests", "Bundler.IntegrationTests", "Tooling", "RepositoryLayout.cs"));
+            root, "tests", "Shared", "Tooling", "RepositoryLayout.cs"));
         Assert.Contains("Directory.Build.props", layout, StringComparison.Ordinal);
         Assert.Contains("BundlerPackageVersion", layout, StringComparison.Ordinal);
     }

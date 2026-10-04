@@ -2,19 +2,18 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
-    <!-- 集成腿大量使用子进程同步等待与共享安装状态；禁止集合内并行，保持串行模型 -->
+    <!-- 本地包消费契约腿：fixture 经 Bundler.LocalPackages.props 消费本地 nupkg；
+         真装腿同样串行（共享安装状态与 msiexec 单例） -->
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="WixToolset.Dtf.WindowsInstaller" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\Shared\TestPlatform.cs" />
+    <Compile Include="..\Shared\Tooling\*.cs" />
     <!-- Fixtures 是独立发布/还原的工程与载荷资产，不属于本测试程序集 -->
     <Compile Remove="Fixtures/**/*.cs" />
     <None Remove="Fixtures/**/*" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="..\Shared\TestPlatform.cs" />
-    <Compile Include="..\Shared\Tooling\*.cs" />
   </ItemGroup>
 </Project>

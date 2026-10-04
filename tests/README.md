@@ -10,13 +10,14 @@
 | `Bundler.Tests` | 纯托管单元/契约测试（xUnit v3 + Microsoft.Testing.Platform） | `dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release` |
 | `Bundler.ApiTests` | 直接调后端公共 API 产包并断言内容（宿主无关） | `dotnet test tests/Bundler.ApiTests/Bundler.ApiTests.csproj -c Release` |
 | `Bundler.IntegrationTests` | 端到端集成：发布 fixture、产包、真装真卸、docker 矩阵 | `dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release` |
+| `Bundler.LocalPackagesTests` | 本地包消费契约：fixture 经 `Bundler.LocalPackages.props` 消费仓根本地 nupkg，验证发货包在真实消费方构建中可用（当前为 MSI 腿，仅 Windows） | `dotnet test tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj -c Release` |
 
 先 `dotnet build Bundler.slnx -c Release` 再跑测试；集成测试的打包接线经 `Bundler.ProjectReference.targets` 走项目引用，不依赖已发布的 nupkg。
-MSI 包消费契约腿（`Fixtures/Msi/`）例外：它有意经 `Bundler.LocalPackages.props` 消费本地构建的 nupkg，验证发货契约，运行前需要 `dotnet pack Bundler.slnx -c Release -o artifacts/packages`。
+`Bundler.LocalPackagesTests` 例外：它有意经 `Bundler.LocalPackages.props` 消费本地构建的 nupkg，运行前需要 `dotnet pack Bundler.slnx -c Release -o artifacts/packages`。
 
 ## 按格式/类过滤
 
-测试类即格式：`NsisIntegrationTests`/`MsiIntegrationTests`/`MacAppIntegrationTests`/`MacDmgIntegrationTests`/`MacPkgIntegrationTests`/`DebIntegrationTests`/`RpmIntegrationTests`/`AppImageIntegrationTests`/`ArchiveIntegrationTests`/`AlpineApkIntegrationTests`/`CliIntegrationTests`。
+测试类即格式：`NsisIntegrationTests`/`MacAppIntegrationTests`/`MacDmgIntegrationTests`/`MacPkgIntegrationTests`/`DebIntegrationTests`/`RpmIntegrationTests`/`AppImageIntegrationTests`/`ArchiveIntegrationTests`/`AlpineApkIntegrationTests`/`CliIntegrationTests`；本地包消费腿为 `MsiLocalPackagesTests`（在 `Bundler.LocalPackagesTests` 工程）。
 
 ```powershell
 dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*DebIntegrationTests*"
@@ -43,7 +44,7 @@ dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Re
 
 ## 宿主条件速查
 
-- Windows 真跑：`NsisIntegrationTests`（NSIS 工具链内嵌，任意宿主可产包，真装仅 Windows）、`MsiIntegrationTests`（仅 Windows + `localinstall`）。
+- Windows 真跑：`NsisIntegrationTests`（NSIS 工具链内嵌，任意宿主可产包，真装仅 Windows）、`MsiLocalPackagesTests`（`tests/Bundler.LocalPackagesTests`，仅 Windows + `localinstall`）。
 - Linux 真跑：`Deb`/`Rpm`/`AppImage`/`Archive` 全部宿主腿 + docker 矩阵 + FUSE 挂载腿。
 - macOS 真跑：`MacApp`/`MacDmg`/`MacPkg` 全部腿（per-user 安装、relocate、LSDB 断言）。
 - `AlpineApk`：x86_64 `alpine` docker 直跑；arm64 宿主走 qemu binfmt；musl 宿主原生。
@@ -51,8 +52,9 @@ dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Re
 
 ## 目录
 
-- `Bundler.IntegrationTests/Fixtures/<格式>/`：各格式被发布成包的 fixture 工程与载荷 `Assets/`；`Msi/` 下另有包消费契约腿 `Fixture`/`Standalone`，`Nsis/` 下另有 `LegacyMsiFixture*/`（旧 MSI 升级场景）。
-- `Shared/TestPlatform.cs`：三工程链接共享的宿主探测门面（OS/架构/musl/root/docker）。
+- `Bundler.IntegrationTests/Fixtures/<格式>/`：各格式被发布成包的 fixture 工程与载荷 `Assets/`；`Nsis/` 下另有 `LegacyMsiFixture*/`（旧 MSI 升级场景）。
+- `Bundler.LocalPackagesTests/Fixtures/Msi/`：本地包消费契约腿的 `Fixture`/`Standalone` 工程。
+- `Shared/TestPlatform.cs`：四工程链接共享的宿主探测门面（OS/架构/musl/root/docker）；`Shared/Tooling/`：链接共享的集成基建（进程/提权/工作区/包定位/`MsiSupport`）。
 
 ## 人工/外部验证
 

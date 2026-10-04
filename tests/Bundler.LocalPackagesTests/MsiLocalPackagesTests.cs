@@ -1,12 +1,13 @@
-// Windows.Msi.Integration 全部 8 个脚本的 C# 收编：smoke/lifecycle/maintenance/win5-8/public-sample。
-// 门控：Windows + BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1（对应脚本的 -ConfirmLocalInstall/-ConfirmDisposableVm
+// 本地包消费契约腿：fixture 经 Bundler.LocalPackages.props 从仓根 artifacts/packages 本地源
+// 消费 DotNet.Bundler.* nupkg（不引用项目），验证打包产物在真实消费方构建中可用。
+// 门控：Windows + BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1（对应原脚本的 -ConfirmLocalInstall
 // 人工同意闸）——会在真实用户配置里装卸 MSI，未经同意一律 Skip。
 // 对外仍走 msiexec/真实安装；MSI 数据库读取改走 WixToolset.Dtf（替代原 WindowsInstaller.Installer COM）。
 using Microsoft.Win32;
 using WixToolset.Dtf.WindowsInstaller;
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-public sealed class MsiFixture : IAsyncLifetime
+public sealed class MsiLocalPackagesFixture : IAsyncLifetime
 {
     public IntegrationWorkspace Ws { get; } = IntegrationWorkspace.Create("windows-msi-integration", "windows.msi");
     public string Packages { get; }
@@ -17,7 +18,7 @@ public sealed class MsiFixture : IAsyncLifetime
 
     private readonly Lazy<bool> _init;
 
-    public MsiFixture()
+    public MsiLocalPackagesFixture()
     {
         Packages = Ws.Combine("packages");
         Cache = Ws.Combine("nuget");
@@ -72,9 +73,9 @@ public sealed class MsiFixture : IAsyncLifetime
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-public sealed class MsiIntegrationTests(MsiFixture fixture) : IClassFixture<MsiFixture>
+public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : IClassFixture<MsiLocalPackagesFixture>
 {
-    private readonly MsiFixture _f = fixture;
+    private readonly MsiLocalPackagesFixture _f = fixture;
     private const string MsiName = "Bundler MSI Smoke";
 
     private string NewIdentifier(string leg)

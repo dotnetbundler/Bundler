@@ -34,9 +34,10 @@
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
 | `tests/Bundler.Tests` | 唯一快速测试入口（xUnit v3，`dotnet test`；用例全注册、宿主门控经 `Assert.Skip` 跳过，以每次实跑输出为准） | `net10.0` |
 | `tests/Bundler.ApiTests` | API 消费测试入口（xUnit v3，`dotnet test`；十格式 `<Format>ApiTests` 测试类直调后端 API 产真实产物再断言，宿主门控经 `Assert.Skip`，集成脚本经 `--filter-class` + `*_API_FIXTURE_OUTPUT` 环境变量复用） | `net10.0` |
-| `tests/Bundler.IntegrationTests` | 系统集成测试体（xUnit v3，`dotnet test --filter-class/-method`；每格式一个 `<Format>IntegrationTests` 测试类，全部脚本测试点逐腿收编；`Tooling/` 含 `ProcessRunner`/`DockerRunner`/`ElevatedRunner`/`IntegrationWorkspace`/`MsiSupport`/`ShellLink`；Windows 真装腿用 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 门禁） | `net10.0` |
-| `tests/Bundler.IntegrationTests/Fixtures/` | 集成 fixture 集中地：各格式被发布成包的 fixture 工程与载荷 `Assets/`（`Msi/` 含包消费契约腿 `Fixture`+`Standalone`，`Nsis/` 含 `LegacyMsiFixture*/`） | `net10.0` |
-| `tests/Shared/TestPlatform.cs` | 三测试工程链接共享的宿主探测门面 | `net10.0` |
+| `tests/Bundler.IntegrationTests` | 系统集成测试体（xUnit v3，`dotnet test --filter-class/-method`；每格式一个 `<Format>IntegrationTests` 测试类，全部脚本测试点逐腿收编；共享基建在 `tests/Shared/Tooling/`；Windows 真装腿用 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 门禁） | `net10.0` |
+| `tests/Bundler.LocalPackagesTests/` | 本地包消费契约工程：`MsiLocalPackagesTests` + `Fixtures/Msi/`（经 `Bundler.LocalPackages.props` 消费本地 nupkg 的 `Fixture`+`Standalone`，仅 Windows 真跑） | `net10.0` |
+| `tests/Bundler.IntegrationTests/Fixtures/` | 集成 fixture 集中地：各格式被发布成包的 fixture 工程与载荷 `Assets/`（`Nsis/` 含 `LegacyMsiFixture*/`） | `net10.0` |
+| `tests/Shared/` | 四测试工程链接共享：`TestPlatform.cs` 宿主探测门面 + `Tooling/` 集成基建（`ProcessRunner`/`DockerRunner`/`ElevatedRunner`/`IntegrationWorkspace`/`MsiSupport`/`ShellLink` 等） | `net10.0` |
 | `tests/README.md` | 测试入口、trait 门禁与 fixture 地图 | — |
 | `tools/Windows.Nsis.Reboot` | 可抛弃 VM 重启验证入口（`Verify.ps1` 两阶段：锁定文件卸载 `3010` → 重启 → pending rename/目录/注册表/journal 清理断言） | PowerShell |
 | `samples/HelloNsisApp` / `samples/HelloMsiApp` / `samples/HelloMacApp` / `samples/HelloMacDmg` / `samples/HelloMacPkg` / `samples/HelloDebApp` / `samples/HelloRpmApp` / `samples/HelloAppImageApp` / `samples/HelloArchiveApp` / `samples/HelloAlpineApkApp` | 公开可运行示例（应用版本 `1.0.0`） | `net10.0` |
@@ -83,8 +84,10 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ### 2026-10-04 仓库结构清理（分支 `devin/1791122636-repo-cleanup`）
 
-- tests/ 收敛：12 个 `tests/<格式>.Integration/` 散目录的 fixture 与载荷全部并入 `tests/Bundler.IntegrationTests/Fixtures/<格式>/`（`Msi/` 含包消费契约腿 `Fixture`+`Standalone`，`Nsis/` 含 `LegacyMsiFixture*/`）；
-  定位经 `RepositoryLayout.FixturesDirectory` + fixture 自身 `GetPathOfFileAbove` 导入，深度无关。
+- tests/ 收敛：12 个 `tests/<格式>.Integration/` 散目录的 fixture 与载荷全部并入 `tests/Bundler.IntegrationTests/Fixtures/<格式>/`（`Nsis/` 含 `LegacyMsiFixture*/`）；
+  定位经 `RepositoryLayout.FixturesDirectory`（工程自身目录自定位）+ fixture 自身 `GetPathOfFileAbove` 导入，深度无关。
+- 本地包消费独立成工程：`tests/Bundler.LocalPackagesTests/`（`MsiLocalPackagesTests` 类 + `Fixtures/Msi/` 的 `Fixture`/`Standalone`）——仓外经 `Bundler.LocalPackages.props` 消费本地 nupkg 的契约腿与其他测试工程分离；
+  `MsiIntegrationTests`→`MsiLocalPackagesTests`、`MsiFixture`→`MsiLocalPackagesFixture`；集成基建下沉 `tests/Shared/Tooling/`（两测试工程链接共享），`MsiSupport` 同时被 NSIS 连续性腿使用故留在共享位。
 - 资源归位：`templates/nsis` → `src/Bundler.Nsis/templates/`（EmbeddedResource LogicalName 不变）、`buildTransitive/*` → `src/Bundler.MSBuild/buildTransitive/`（nupkg 内 `buildTransitive/` 布局不变）、`tests/Windows.Nsis.Reboot` → `tools/Windows.Nsis.Reboot`。
 - 脚本清零：17 个 `Verify.ps1`/`Verify.sh` 薄入口删除，统一为 `dotnet test --filter-class/-method`；保留 `tools/Bundler.Nsis.Plugin/Build.ps1`（真实构建脚本）。
 - 文档瘦身：`docs/project-history.md`、3 个 `*-tauri-capability-audit.md`、12 个 `tests/*-integration.md` 删除；
@@ -214,7 +217,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - 本仓库开源许可证尚未确定。
 - WiX v3 已退出免费社区服务；大范围公开分发前须重新评估维护风险（见 `third_party/wix/msi-wix-provenance.md`）。
 - 各格式外部事项按 OI 清单等待对应环境输入：`docs/<format>-open-items.md` 全套（生产证书/公证凭证、UAC 提权、真实重启、干净宿主矩阵、ARM64 真机、语言审校等；MSI 签名已裁决不补集成腿——`Bundler.Tests/WixTests` 三断言已覆盖，外部仅余 MSI-OI-06 生产证书/时间戳）。
-- 仓外独立包消费 fixture（`tests/Bundler.IntegrationTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`,
+- 仓外独立包消费 fixture（`tests/Bundler.LocalPackagesTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`,
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
   是否换处理方式（如公开发布后改验公网源、或移入独立验收仓）留待后续裁决。
 
