@@ -1,8 +1,8 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-03
+> 最后更新：2026-10-04
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.68`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.69`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -87,6 +87,16 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-04 API 面收窄 + 死代码清除 + 覆盖率盲点测试（PR #19 已并入 `main`，merge `ad36261`）
+
+- `BundleConfigurationLoader`（Core，net10 TFM 专有）`public`→`internal`：反射式 STJ 公共面是 AOT 裁剪雷区，全仓仅 `ProgramTests` 一处调用（IVT 已覆盖）。
+- 删两处双宿主覆盖率证实的零调用死代码：`BundleOrchestrator`（`BundlePipeline` 的无人使用 facade）、`AppImageProcessRunner.CaptureAsync`。
+- Bundler.Tests +11 用例全部无宿主门禁：`ApkIdentity`/`ApkSigner`（非 RSA 键拒绝）、`DebName`/`DebVersion`（epoch 守卫）、`AppImageIdentity`（RID 架构映射）、MacApp 纯托管 helper（`InfoPlist` 全类型回环+非法形状、`MachO` thin/fat、`MacAppAssetsCar.IconImageName`）。
+- 覆盖率（linux cobertura）：AppImage 81.0→87.0、MacApp 67.4→70.6、Core 86.9→87.5、AlpineApk 92.8→94.1、Deb 92.1→92.5；mac 宿主采集（coverlet 静态插桩，dotnet-coverage 在 macOS MTP 不可用）：Core 87.9/MacDmg 83.5/MacPkg 83.3/MacApp 80.6，残余缺口=签名/公证腿（宿主 0 签名身份，外部项）。
+- 验证：linux 本机 281/242P/0F/39S + ApiTests 7P/3S + AppImage 集成 16/17；win 281/265P/0F/16S；mac 281/242P/0F/39S；alpine(musl) 281/237P/0F/44S——四宿主全绿。
+- Devin Review 1 条 bug 属实已修（包内容变更未推进版本→`alpha.69`）。
+- 版本：`BundlerPackageVersion` 推进 `alpha.69`。
 
 ### 2026-10-03 dotnet/skills 规范整改（PR #18 已并入 `main`，merge `258fad6`）
 
