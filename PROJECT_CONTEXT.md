@@ -95,7 +95,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
   `Directory.Packages.props` 新建中央包管理（5 个外部版本集中），`PackageReference` 去 `Version=`，自仓包引用改 `VersionOverride`；`DotNet.Bundler.nuspec` 补 THIRD-PARTY-NOTICES 文件项。
 - 小问题：Archive fixture `ln -sf` 加 OS 门禁；`Bundler.ProjectReference.targets` 路径分隔符统一 `/`；`NsisToolResolver` 的 `chmod` 补 `CharSet.Ansi`；`ProgramTests` 平台判断改走 `TestPlatform`。
 - 测试侧：`Bundler.Tests/TestPlatform.cs` 旧薄拷贝删除改链 `tests/Shared/TestPlatform.cs` 并补 musl 门禁；catch-and-assert 全部转 `Assert.ThrowsAny*`（catch 匹配子类，不等价 `Assert.Throws*` 的精确类型），`when` 过滤的 catch 转 ThrowsAny+显式断言；`Assert.True(a==b)` 转 `Assert.Equal`；
-  IntegrationTests 按资源打 `[Trait("Requires", docker/elevation)]`（方法级 12 处）与 `[Trait("Requires", localinstall)]`（类级 2 处），`--filter-trait` 实测可用。
+  IntegrationTests 按资源打 `[Trait("Requires", docker/elevation/localinstall)]`（docker 9 处/elevation 3 处/localinstall 方法级 7 处 + NSIS 类级；MSI `PublicSampleMsiTableContract` 走 `EnsurePackages` 免同意闸故豁免），`--filter-trait` 实测可用。
 - 覆盖率采集一轮（dotnet-coverage cobertura，本机 linux）：宿主无关后端 81–95%（Deb 92.0/AlpineApk 92.6/Rpm 94.6/Nsis 89.9/Archive 89.3/Core 87.7），低分项均为宿主门控（Wix 7.2、Signing.Windows 26.9 全 win 门禁，MacApp 67.6 mac 门禁），`AppImageProcessRunner` 0% 由 IntegrationTests 腿覆盖；`BundleConfigurationLoader` 57.1% 记契约项。
 - 验证：本机 build 0W/0E、`Bundler.Tests` 270/231P/0F/39S 基线吻合；四宿主回归待跑。
 

@@ -72,8 +72,6 @@ public sealed class MsiFixture : IAsyncLifetime
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-[Trait("Requires", "localinstall")]
-
 public sealed class MsiIntegrationTests(MsiFixture fixture) : IClassFixture<MsiFixture>
 {
     private readonly MsiFixture _f = fixture;
@@ -133,6 +131,7 @@ public sealed class MsiIntegrationTests(MsiFixture fixture) : IClassFixture<MsiF
 
     // Verify.ps1：产 → 真装 → ProductState/名称/版本 → 未知用户文件 → 卸 → 文件保留。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void SmokeInstallUninstallPreservesUserData()
     {
         _f.Ensure();
@@ -177,6 +176,7 @@ public sealed class MsiIntegrationTests(MsiFixture fixture) : IClassFixture<MsiF
 
     // VerifyLifecycle.ps1：major upgrade / same-version 变体 1638 / 降级 1603 / 快捷方式与注册全生命周期。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void MajorUpgradeVariantCollisionAndDowngradeRejected()
     {
         _f.Ensure();
@@ -338,6 +338,7 @@ public sealed class MsiIntegrationTests(MsiFixture fixture) : IClassFixture<MsiF
 
     // VerifyMaintenance.ps1：损坏 MSI 拒绝、注入失败回滚、passive 装卸、静默修复、zh-CN 独立身份。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void DamageInjectionRepairAndLocalizedIdentity()
     {
         _f.Ensure();
@@ -489,6 +490,7 @@ public sealed class MsiIntegrationTests(MsiFixture fixture) : IClassFixture<MsiF
 
     // VerifyWinMsi5.ps1：win-x86 四变体版本映射 + 允许/拒绝降级 + 同版碰撞 1638。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void X86VersionMappingAndDowngradePolicy()
     {
         _f.Ensure();
@@ -614,6 +616,7 @@ public sealed class MsiIntegrationTests(MsiFixture fixture) : IClassFixture<MsiF
     // VerifyWinMsi6.ps1：对话框/环境表/快捷方式/品牌图/属性契约 + INSTALLFOLDER 范围闸
     // + 自选目录安装 + PATH 追加与还原 + ARP 元数据 + 升级保目录 + 修复 + 干净卸载。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void FeatureSetScopePathAndCustomDirectory()
     {
         _f.Ensure();
@@ -776,6 +779,7 @@ public sealed class MsiIntegrationTests(MsiFixture fixture) : IClassFixture<MsiF
 
     // VerifyWinMsi7.ps1：一次 publish 产 en-US+ja-JP 两个 MSI，身份/目录/菜单相互隔离。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void PerLanguageMsisInstallCoexistAndUninstallIndependently()
     {
         _f.Ensure();
@@ -854,6 +858,7 @@ public sealed class MsiIntegrationTests(MsiFixture fixture) : IClassFixture<MsiF
 
     // VerifyWinMsi8.ps1：regular 扩展片段 + expert 自定义 .wxs 模板（Bundler.* 变量）两条模式。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void ExtensionFragmentAndExpertTemplateInstallAndUninstall()
     {
         _f.Ensure();
