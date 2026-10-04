@@ -467,6 +467,24 @@ public static class AppImageTests
         Assert.Contains("DotNet.Bundler.AppImage.dll", msbuildProject);
     }
 
+    [Fact]
+    static void MapsRuntimeIdentifierArchitectures()
+    {
+        Assert.Equal("amd64", AppImageIdentity.FileArchitecture("linux-x64"));
+        Assert.Equal("aarch64", AppImageIdentity.FileArchitecture("linux-arm64"));
+        Assert.Equal("i686", AppImageIdentity.FileArchitecture("linux-x86"));
+        Assert.Equal("x86_64", AppImageIdentity.EnvironmentArchitecture("linux-x64"));
+        Assert.Equal("aarch64", AppImageIdentity.EnvironmentArchitecture("linux-arm64"));
+    }
+
+    [Fact]
+    static void RejectsUnmappableRuntimeIdentifier()
+    {
+        var ex = Assert.ThrowsAny<ArgumentException>(
+            () => AppImageIdentity.EnvironmentArchitecture("linux-ppc64le"));
+        Assert.Contains("Cannot map runtime identifier", ex.Message);
+    }
+
     static BundleConfiguration BundleWith(string? icon)
     {
         return new BundleConfiguration

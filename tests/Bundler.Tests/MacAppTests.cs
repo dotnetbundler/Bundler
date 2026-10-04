@@ -1291,6 +1291,115 @@ public static class MacAppTests
         }
     }
 
+    [Fact]
+    static void ReadsMachOArchitectures()
+    {
+        var dir = CreateInputDirectory();
+        try
+        {
+            var thin = Path.Combine(dir, "thin");
+            File.WriteAllBytes(thin, FakeMachO(0x0100000C));
+            Assert.Equal(new[] { "arm64" }, MachO.ReadArchitectures(thin));
+            File.WriteAllBytes(thin, FakeMachO(0x01000007));
+            Assert.Equal(new[] { "x86_64" }, MachO.ReadArchitectures(thin));
+            Assert.True(MachO.IsMachO(thin));
+
+            var fat = Path.Combine(dir, "fat");
+            File.WriteAllBytes(fat, FakeFatMachO(0x0100000C, 0x01000007));
+            Assert.Equal(new[] { "arm64", "x86_64" }, MachO.ReadArchitectures(fat));
+
+            var alien = Path.Combine(dir, "elf");
+            File.WriteAllBytes(alien, [0x7F, 0x45, 0x4C, 0x46, 0x02, 0x01, 0x01, 0x00]);
+            Assert.Empty(MachO.ReadArchitectures(alien));
+            Assert.False(MachO.IsMachO(alien));
+
+            var truncated = Path.Combine(dir, "short");
+            File.WriteAllBytes(truncated, [0xCF, 0xFA]);
+            Assert.Empty(MachO.ReadArchitectures(truncated));
+        }
+        finally
+        {
+            Cleanup(dir);
+        }
+    }
+
+    [Fact]
+    static void RoundTripsInfoPlistValues()
+    {
+        var dir = CreateInputDirectory();
+        var path = Path.Combine(dir, "Info.plist");
+        var when = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var values = new Dictionary<string, object>
+        {
+            ["Name"] = "Example App",
+            ["Enabled"] = true,
+            ["Disabled"] = false,
+            ["Count"] = 42L,
+            ["Small"] = 7,
+            ["Ratio"] = 1.5,
+            ["Blob"] = new byte[] { 1, 2, 3 },
+            ["Stamp"] = when,
+            ["Tags"] = new List<object> { "a", "b" },
+            ["Nested"] = new Dictionary<string, object> { ["K"] = "v" }
+        };
+        try
+        {
+            InfoPlist.Write(path, values);
+            var parsed = InfoPlist.ReadDictionary(path);
+            Assert.Equal("Example App", parsed["Name"]);
+            Assert.Equal(true, parsed["Enabled"]);
+            Assert.Equal(false, parsed["Disabled"]);
+            Assert.Equal(42L, parsed["Count"]);
+            Assert.Equal(7L, parsed["Small"]);
+            Assert.Equal(1.5, parsed["Ratio"]);
+            Assert.Equal(new byte[] { 1, 2, 3 }, (byte[])parsed["Blob"]);
+            Assert.Equal(when, parsed["Stamp"]);
+            Assert.Equal(new List<object> { "a", "b" }, (List<object>)parsed["Tags"]);
+            Assert.Equal("v", ((Dictionary<string, object>)parsed["Nested"])["K"]);
+
+            var strings = InfoPlist.ReadStringValues(path);
+            Assert.Equal("true", strings["Enabled"]);
+            Assert.Equal("42", strings["Count"]);
+            Assert.Equal("1.5", strings["Ratio"]);
+            Assert.False(strings.ContainsKey("Nested"));
+        }
+        finally
+        {
+            Cleanup(dir);
+        }
+    }
+
+    [Fact]
+    static void RejectsInvalidPlistShapes()
+    {
+        var dict = InfoPlist.ParseXml("<dict><key>A</key><string>1</string></dict>", "test");
+        Assert.Equal("1", dict["A"]);
+        Assert.ThrowsAny<InvalidDataException>(() => InfoPlist.ParseXml("<plist><array/></plist>", "test"));
+        Assert.ThrowsAny<InvalidDataException>(() => InfoPlist.ParseXml("not xml <", "test"));
+        Assert.ThrowsAny<InvalidDataException>(
+            () => InfoPlist.ParseXml("<dict><key>A</key><wat/></dict>", "test"));
+        Assert.ThrowsAny<InvalidDataException>(
+            () => InfoPlist.ParseXml("<dict><key>A</key><integer>NaN</integer></dict>", "test"));
+    }
+
+    [Fact]
+    static void RendersPlistScalars()
+    {
+        Assert.True(InfoPlist.TryToString("x", out var text) && text == "x");
+        Assert.True(InfoPlist.TryToString(true, out var flag) && flag == "true");
+        Assert.True(InfoPlist.TryToString(42L, out var integer) && integer == "42");
+        Assert.False(InfoPlist.TryToString(new List<object>(), out _));
+    }
+
+    [Fact]
+    static void FindsIconImageNameInAssetutilJson()
+    {
+        Assert.Equal("AppIcon", MacAppAssetsCar.IconImageName(
+            """[{"AssetType":"MultiSized Image","Name":"Other"},{"AssetType":"Icon Image","Name":"AppIcon"}]"""));
+        Assert.Null(MacAppAssetsCar.IconImageName("""[{"AssetType":"MultiSized Image"}]"""));
+        Assert.Null(MacAppAssetsCar.IconImageName("{}"));
+    }
+
     static BundleConfiguration MacConfiguration(
         string input,
         string output = "",

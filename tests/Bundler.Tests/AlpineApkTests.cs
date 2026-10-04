@@ -4,6 +4,7 @@ using DotNet.Bundler.Cli;
 using DotNet.Bundler.Core;
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 public static class AlpineApkTests
@@ -742,6 +743,40 @@ public static class AlpineApkTests
         finally
         {
             Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    static void CollapsesNameSeparatorsAndRejectsUnmappedArchitecture()
+    {
+        Assert.Equal("my-app", ApkIdentity.SanitizeName("My  App"));
+        Assert.Equal("my-app", ApkIdentity.SanitizeName("my__app"));
+        var arch = Assert.ThrowsAny<NotSupportedException>(
+            () => ApkIdentity.MapArchitecture(CpuArchitecture.Universal));
+        Assert.Contains("No Alpine architecture mapping", arch.Message);
+    }
+
+    [Fact]
+    static void RejectsNonRsaSigningKeys()
+    {
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var ec = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            var ecPath = WriteKey(output, "eckey.rsa", ec.ExportPkcs8PrivateKeyPem());
+            var ecError = Assert.ThrowsAny<ArgumentException>(() => ApkSigner.Sign([1], ecPath, null));
+            Assert.Contains("not an RSA private key", ecError.Message);
+
+            var request = new CertificateRequest("CN=not-a-key", ec, HashAlgorithmName.SHA256);
+            var certPem = request.CreateSelfSigned(
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1)).ExportCertificatePem();
+            var certPath = WriteKey(output, "cert.rsa", certPem);
+            var certError = Assert.ThrowsAny<ArgumentException>(() => ApkSigner.Sign([1], certPath, null));
+            Assert.Contains("not an RSA private key", certError.Message);
+        }
+        finally
+        {
+            Cleanup(output);
         }
     }
 
