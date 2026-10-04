@@ -37,7 +37,7 @@
 11. **MSBuild 多格式**：放开适配层单格式限制，`BundlerFormats=deb;rpm` 同次 publish 由管线扇出（管线本身支持多后端，仅 Task 分发改动）；LINUX-DEB-1 先落地 `deb` 单格式，多格式扇出随 LINUX-RPM-1 一并验证。
 12. **分支**：`linux-deb-development`（逐格式分支，沿用 mac 先例），rpm/appimage 各自 `linux-rpm-development`/`linux-appimage-development`。
 13. **阶段骨架**：每格式"最小可用→元数据与桌面集成→脚本/systemd/压缩→原生 E2E 矩阵→审计冻结"五段；对应文档集在各自规划轮补齐。
-14. **命名**：示例 `samples/HelloDebApp`；fixture `tests/Deb.Api.PackageFixture`；集成 `tests/Linux.Deb.Integration/Verify.sh`；文档 ID 前缀 `LINUX-DEB-OI-xx`/`LINUX-DEB-MT-xx`。
+14. **命名**：示例 `samples/HelloDebApp`；fixture `tests/Bundler.ApiTests`（`DebApiTests`）；集成 `tests/Linux.Deb.Integration/Verify.sh`（薄入口，转发 `Bundler.IntegrationTests` 的 `DebIntegrationTests`）；文档 ID 前缀 `LINUX-DEB-OI-xx`/`LINUX-DEB-MT-xx`。
 
 ## 2. 打包工具下限（三层口径）
 

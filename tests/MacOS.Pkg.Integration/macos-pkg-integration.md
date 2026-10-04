@@ -1,16 +1,19 @@
 # macOS .pkg 集成测试
 
-MAC-PKG-1..4 的本机真实验证入口：真实 .NET payload → `BundlerFormats=pkg`（自动产出 `.app` 中间产物）→ `pkgutil --expand-full` 断言 payload/PackageInfo → `xar -tf` 结构 → `installer -dominfo` 域名信息；另覆盖 per-user 域免提权真实安装（`~/Applications` 落位+收据断言）、分发包页面、`--scripts` 专家脚本真实执行、覆盖升级、osx-x64 产物、签名拒绝路径。
+测试体已收编进 `tests/Bundler.IntegrationTests`（`MacPkgIntegrationTests`，xUnit v3）；
+`Verify.sh` 只是薄入口，按 `--filter-class` 转发到对应测试类。覆盖 MAC-PKG-1..4 的本机真实验证：真实 .NET payload → `BundlerFormats=pkg`（自动产出 `.app` 中间产物）→ `pkgutil --expand-full` 断言 payload/PackageInfo → `xar -tf` 结构 → `installer -dominfo` 域名信息；另覆盖 per-user 域免提权真实安装（`~/Applications` 落位+收据断言）、分发包页面、`--scripts` 专家脚本真实执行、覆盖升级、osx-x64 产物、签名拒绝路径。
 
 ## 运行
 
 ```bash
 bash tests/MacOS.Pkg.Integration/Verify.sh
+# 直接入口
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release -- --filter-class MacPkgIntegrationTests
 ```
 
 ## 前置条件
 
-- macOS 宿主（脚本自带 `uname` 检查，非 macOS 直接拒绝）；
+- macOS 宿主（非 macOS 宿主类级门禁全部记 SKIP）；
 - dotnet SDK（打包 `DotNet.Bundler*` 包供 fixture 消费）；
 - `pkgutil`/`xar`/`installer`/`plutil`/`unzip`（macOS 自带）。
 
@@ -25,6 +28,6 @@ bash tests/MacOS.Pkg.Integration/Verify.sh
 - 覆盖变体（`BundlerTestPkgIdentifier`/`BundlerTestPkgVersion`/`BundlerTestPkgInstallLocation`）逐项回读断言；
 - 失败路径：相对 install-location 使 publish 失败且无 `.pkg` 产物。
 
-产物仅落在 `artifacts/macos-pkg-integration`（脚本用 `.bundler-identity` 标记自建目录，退出时整体清理）。
+产物仅落在 `artifacts/macos-pkg-integration`（测试工作区用 `.bundler-identity` 标记自建目录，退出时整体清理）。
 
 `system` 域真实安装（需管理员授权）与 Installer.app GUI 观感属外部待验收（`docs/mac-pkg-open-items.md` OI-01/OI-05）。

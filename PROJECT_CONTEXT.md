@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-03
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.67`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.68`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -34,16 +34,17 @@
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
 | `tests/Bundler.Tests` | 唯一快速测试入口（xUnit v3，`dotnet test`；用例全注册、宿主门控经 `Assert.Skip` 跳过，以每次实跑输出为准） | `net10.0` |
 | `tests/Bundler.ApiTests` | API 消费测试入口（xUnit v3，`dotnet test`；十格式 `<Format>ApiTests` 测试类直调后端 API 产真实产物再断言，宿主门控经 `Assert.Skip`，集成脚本经 `--filter-class` + `*_API_FIXTURE_OUTPUT` 环境变量复用） | `net10.0` |
-| `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | 真实 Windows 集成入口；`Fixture/` 为 MSBuild 消费 fixture；NSIS 侧含 `LegacyMsiFixture`（旧 MSI 迁移源） | PowerShell / `net10.0` |
-| `tests/MacOS.App.Integration` | 真实 macOS `.app` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
-| `tests/MacOS.Dmg.Integration` | 真实 macOS `.dmg` 集成入口（`Verify.sh`，bash）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
-| `tests/MacOS.Pkg.Integration` | 真实 macOS `.pkg` 集成入口（`Verify.sh`，bash，含 per-user 域真实安装）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
-| `tests/Linux.Deb.Integration` | 真实 `.deb` 集成入口（`Verify.sh`，bash，含免密 `sudo dpkg -i/-r` 烟雾）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
-| `tests/Linux.Rpm.Integration` | 真实 `.rpm` 集成入口（`Verify.sh`，bash，含 docker `fedora:latest` 容器 `rpm -i/-e` 烟雾）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
-| `tests/Linux.AppImage.Integration` | 真实 `.AppImage` 集成入口（`Verify.sh`，bash，含 docker 三容器 extract-and-run 冒烟）+ `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
-| `tests/Archive.Integration` | 真实 `.zip`/`.tar.gz` 集成入口（`Verify.sh`，bash，跨实现互读断言） | bash |
-| `tests/Alpine.Apk.Integration` | 真实 `.apk` 集成入口（`Verify.sh`，bash，docker `alpine` 实装/卸载/可信签名/aarch64 binfmt/确定性） | bash |
-| `tests/Cli.Integration` | CLI 端到端集成入口（`Verify.sh`，bash，含 AOT 段） | bash |
+| `tests/Bundler.IntegrationTests` | 系统集成测试体（xUnit v3，`dotnet test --filter-class/-method`；每格式一个 `<Format>IntegrationTests` 测试类，全部脚本测试点逐腿收编；`Tooling/` 含 `ProcessRunner`/`DockerRunner`/`ElevatedRunner`/`IntegrationWorkspace`/`MsiSupport`/`ShellLink`；Windows 真装腿用 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 门禁） | `net10.0` |
+| `tests/Windows.Nsis.Integration` / `tests/Windows.Msi.Integration` | NSIS/MSI 集成目录：fixture（`Fixture/`、`Standalone/`、`LegacyMsiFixture*/`）+ `Verify*.ps1` 薄入口（转发 `dotnet test`，`-ConfirmLocalInstall` 置同意闸） | PowerShell / `net10.0` |
+| `tests/MacOS.App.Integration` | `.app` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
+| `tests/MacOS.Dmg.Integration` | `.dmg` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
+| `tests/MacOS.Pkg.Integration` | `.pkg` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
+| `tests/Linux.Deb.Integration` | `.deb` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
+| `tests/Linux.Rpm.Integration` | `.rpm` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
+| `tests/Linux.AppImage.Integration` | `.AppImage` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
+| `tests/Archive.Integration` | `.zip`/`.tar.gz` 集成目录：`Verify.sh` 薄入口 | bash |
+| `tests/Alpine.Apk.Integration` | `.apk` 集成目录：`Verify.sh` 薄入口 + `Fixture/` MSBuild 消费 fixture | bash / `net10.0` |
+| `tests/Cli.Integration` | CLI 端到端集成目录：`Verify.sh` 薄入口 | bash |
 | `tests/Windows.Nsis.Reboot` | 可抛弃 VM 重启验证入口（`Verify.ps1` 两阶段：锁定文件卸载 `3010` → 重启 → pending rename/目录/注册表/journal 清理断言） | PowerShell |
 | `samples/HelloNsisApp` / `samples/HelloMsiApp` / `samples/HelloMacApp` / `samples/HelloMacDmg` / `samples/HelloMacPkg` / `samples/HelloDebApp` / `samples/HelloRpmApp` / `samples/HelloAppImageApp` / `samples/HelloArchiveApp` / `samples/HelloAlpineApkApp` | 公开可运行示例（应用版本 `1.0.0`） | `net10.0` |
 | `tools/Bundler.Nsis.Plugin` | NSIS 原生插件源码（有意在 slnx 之外，重建需 .NET 10 + Windows 原生链） | `net10.0` |
@@ -84,6 +85,26 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-03 集成测试体全量收编 `Bundler.IntegrationTests`（PR #17 已并入 `main`）
+
+- 改造内容：全部集成脚本的测试点逐腿收编进 `tests/Bundler.IntegrationTests`（xUnit v3，--filter-class/-method 选择），
+  覆盖 Archive/AlpineApk/Deb/Rpm/AppImage/Cli/MacApp/MacDmg/MacPkg 九脚本 + Windows.Nsis.Integration/Verify.ps1（~30 变体、事务故障注入、旧 MSI 迁移、junction/篡改拒绝、签名链）
+  + Windows.Msi.Integration 八脚本（DTF 表级断言 + msiexec 真装卸）。
+- 脚本归宿：`Verify.sh`/`Verify.ps1` 全部降为薄入口转发 `dotnet test`；`tests/AssertLocalRestore.ps1`、`MsiTestSupport.ps1` 删除（能力并入 Tooling）；`Windows.Nsis.Reboot/Verify.ps1` 保留（真实重启属外部待验收）。
+- 同意闸统一为 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1`（薄入口按其原开关语义置位）；NSIS 原脚本无开关，跑脚本即同意。
+- 验证（同 HEAD `7a7fcc8` 四宿主 `dotnet test` 全量，0 败）：win 182/49P/133S（Nsis 27+Msi 8+Cli 13 真装真卸）、linux 182/111P/71S（docker 矩阵真装+FUSE 真挂载）、
+  mac 182/51P/131S（MacApp/Dmg/Pkg 含 per-user 真装+relocate 语义）、alpine(musl 容器) 182/97P/85S（含 `linux-musl-x64` 真 AOT 实跑）；本机 linux 计数与宿主逐位吻合。
+- 迭代修复链（全部测试侧）：夹具门禁惰性化（ctor 内 SkipWhen 记 fail）与陈旧工作区自愈、dotnet 子命令进程内串行（并发还原撞 `project.assets.json`）、
+  msiexec 1618 整机单例闸+重试、pkg 装腿 relocate 诱饵改隐藏-恢复、进程退出 EOF 等待限时（`build-server shutdown` 挂死根因）、musl 边界腿改真跑/门禁（AOT 宿主 RID、root/dpkg 架构 SKIP）、
+  `build-server shutdown` 限 Windows（musl `VBCSCompiler -shutdown` 间歇挂死）。
+- 残留审计与再加固：四宿主清扫后新发现两类测试基建缺陷并修复——并发 `dotnet test` 会整删对方活工作区致 docker 缺失挂载源被 daemon 建成 root 空目录级联 EACCES
+  （`IntegrationWorkspace` 每 slug 进程级文件锁 + `DockerRunner` 挂载源存在性断言，linux 并发复现实证按设计诚实失败）；
+  pkg 装腿 relocate 竞态（`.app.hidden` 仍是合法 bundle 可被 lsd 再注册——隐藏双层化，内部 `Contents` 一并摘帽，窗口归零，mac 连跑 2×12/12 实证）。
+- Devin Review 四项修复并入：NSIS 清理不再递归删 `transactions/` 父目录（跨产品共享，仅空时修剪）；`~/Applications/support` 按 `pkgutil --files` 收据外科删除；
+  pkg 装腿 `installer` 移入 `try`（失败也恢复隐藏 `.app`）；签名口令改 env 通道 + gpg `--passphrase-file`（不再进 argv/失败日志，RPM 同型）。
+- 最终验证（HEAD `facf0b4`）：linux 182/111P/0F/71S、alpine 182/97P/0F/85S 全量基线不变；win NSIS 27/27 与 MSI 8/8、mac MacPkg 连跑 2×12/12、各宿主锁路径实证；四宿主零残留复核通过。
+- 版本：`BundlerPackageVersion` 推进 `alpha.68`。
 
 ### 2026-10-03 四宿主完整测试（测试正规化验证，PR #16 并入 `main`）
 
@@ -170,6 +191,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 ## 6. 默认下一步
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
+集成测试收编分支 `devin/1791047844-integration-tests-csharp` 已经 PR #17 并入 `main`（§3 首条），本轮工作在途项清零。
 无未启动的后端立项项；新立项按 `docs/roadmap.md` §7.2 准入与新后端完整路线规则。
 剩余工作：外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（tar 流式条目、Zip64 等按 `docs/archive-open-items.md` 评估）。
 

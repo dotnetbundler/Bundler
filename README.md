@@ -654,9 +654,12 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 ```powershell
 dotnet build Bundler.slnx
 dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release
+dotnet test tests/Bundler.ApiTests/Bundler.ApiTests.csproj -c Release
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
+# 各 Verify.* 均为薄入口，转发到 Bundler.IntegrationTests 对应测试类
 powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -ConfirmLocalInstall
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -ConfirmLocalInstall
