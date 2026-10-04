@@ -72,6 +72,8 @@ public sealed class MsiFixture : IAsyncLifetime
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+[Trait("Requires", "localinstall")]
+
 public sealed class MsiIntegrationTests(MsiFixture fixture) : IClassFixture<MsiFixture>
 {
     private readonly MsiFixture _f = fixture;

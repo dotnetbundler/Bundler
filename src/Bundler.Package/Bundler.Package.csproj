@@ -1,12 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <PackageId>DotNet.Bundler</PackageId>
-    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
-    <Authors>Bundler contributors</Authors>
     <Description>Convenience package for automatic desktop installer generation during dotnet publish.</Description>
     <PackageTags>dotnet;msbuild;bundler;installer;desktop</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <DevelopmentDependency>true</DevelopmentDependency>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <NuspecFile>DotNet.Bundler.nuspec</NuspecFile>

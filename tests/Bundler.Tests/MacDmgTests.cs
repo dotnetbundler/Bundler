@@ -12,18 +12,11 @@ public static class MacDmgTests
         var input = CreateInputDirectory();
         try
         {
-            var thrown = false;
-            try
-            {
-                new MacDmgBundler()
+            var wrongTarget = Assert.ThrowsAny<NotSupportedException>(
+                () => new MacDmgBundler()
                     .BuildAsync(DmgConfiguration(input, formats: [PackageFormat.App]))
-                    .GetAwaiter().GetResult();
-            }
-            catch (NotSupportedException exception)
-            {
-                thrown = exception.Message.Contains("Dmg targets only");
-            }
-            Assert.True(thrown, "A non-DMG target must be rejected with NotSupportedException.");
+                    .GetAwaiter().GetResult());
+            Assert.Contains("Dmg targets only", wrongTarget.Message);
         }
         finally
         {
@@ -39,18 +32,11 @@ public static class MacDmgTests
         MacDmgBundleBackend.HostCheck = () => false;
         try
         {
-            var thrown = false;
-            try
-            {
-                new MacDmgBundler()
+            var wrongHost = Assert.ThrowsAny<NotSupportedException>(
+                () => new MacDmgBundler()
                     .BuildAsync(DmgConfiguration(input))
-                    .GetAwaiter().GetResult();
-            }
-            catch (NotSupportedException exception)
-            {
-                thrown = exception.Message.Contains("macOS host");
-            }
-            Assert.True(thrown, "DMG builds must be rejected off macOS hosts.");
+                    .GetAwaiter().GetResult());
+            Assert.Contains("macOS host", wrongHost.Message);
         }
         finally
         {
@@ -67,18 +53,11 @@ public static class MacDmgTests
         MacDmgBundleBackend.HostCheck = () => true;
         try
         {
-            var thrown = false;
-            try
-            {
-                new MacDmgBundler(new MacDmgBundleConfiguration { VolumeName = "  " })
+            var emptyVolumeName = Assert.ThrowsAny<ArgumentException>(
+                () => new MacDmgBundler(new MacDmgBundleConfiguration { VolumeName = "  " })
                     .BuildAsync(DmgConfiguration(input))
-                    .GetAwaiter().GetResult();
-            }
-            catch (ArgumentException exception)
-            {
-                thrown = exception.Message.Contains("volume name");
-            }
-            Assert.True(thrown, "An empty DMG volume name must be rejected.");
+                    .GetAwaiter().GetResult());
+            Assert.Contains("volume name", emptyVolumeName.Message);
         }
         finally
         {
@@ -271,16 +250,9 @@ public static class MacDmgTests
         };
         try
         {
-            var thrown = false;
-            try
-            {
-                await new MacDmgBundler().BuildAsync(DmgConfiguration(input, output));
-            }
-            catch (InvalidOperationException exception)
-            {
-                thrown = exception.Message.Contains("detach");
-            }
-            Assert.True(thrown, "Detach retries must give up after the backoff budget.");
+            var detachFailure = await Assert.ThrowsAnyAsync<InvalidOperationException>(
+                () => new MacDmgBundler().BuildAsync(DmgConfiguration(input, output)));
+            Assert.Contains("detach", detachFailure.Message);
             Assert.True(forcedDetach, "A leftover mounted volume must be force-detached on failure.");
             Assert.Empty(Directory.EnumerateFiles( Path.Combine(output, "osx-arm64", "dmg"), "*", SearchOption.AllDirectories));
         }
@@ -308,16 +280,8 @@ public static class MacDmgTests
         };
         try
         {
-            var thrown = false;
-            try
-            {
-                await new MacDmgBundler().BuildAsync(DmgConfiguration(input, output));
-            }
-            catch (InvalidOperationException)
-            {
-                thrown = true;
-            }
-            Assert.True(thrown, "A failed hdiutil convert must surface as an error.");
+            await Assert.ThrowsAnyAsync<InvalidOperationException>(
+                () => new MacDmgBundler().BuildAsync(DmgConfiguration(input, output)));
             var dmgDirectory = Path.Combine(output, "osx-arm64", "dmg");
             Assert.True(!Directory.Exists(dmgDirectory) ||
                    !Directory.EnumerateFiles(dmgDirectory, "*.dmg").Any(),
@@ -532,20 +496,12 @@ public static class MacDmgTests
         };
         try
         {
-            var thrown = false;
-            try
-            {
-                await new MacDmgBundler(new MacDmgBundleConfiguration
+            await Assert.ThrowsAnyAsync<FileNotFoundException>(
+                () => new MacDmgBundler(new MacDmgBundleConfiguration
                     {
                         BackgroundFile = Path.Combine(input, "missing.png")
                     })
-                    .BuildAsync(DmgConfiguration(input, output));
-            }
-            catch (FileNotFoundException)
-            {
-                thrown = true;
-            }
-            Assert.True(thrown, "A missing background image must fail the build.");
+                    .BuildAsync(DmgConfiguration(input, output)));
         }
         finally
         {
@@ -632,10 +588,8 @@ public static class MacDmgTests
         MacDmgBundleBackend.HostCheck = () => true;
         try
         {
-            var thrown = false;
-            try
-            {
-                await new MacDmgBundler(new MacDmgBundleConfiguration
+            var exclusive = await Assert.ThrowsAnyAsync<ArgumentException>(
+                () => new MacDmgBundler(new MacDmgBundleConfiguration
                     {
                         Signing = new MacDmgSigningConfiguration
                         {
@@ -643,13 +597,8 @@ public static class MacDmgTests
                             TemporaryCertificatePath = certificate
                         }
                     })
-                    .BuildAsync(DmgConfiguration(input, output));
-            }
-            catch (ArgumentException exception)
-            {
-                thrown = exception.Message.Contains("mutually exclusive");
-            }
-            Assert.True(thrown, "Identity and TemporaryCertificatePath must be mutually exclusive.");
+                    .BuildAsync(DmgConfiguration(input, output)));
+            Assert.Contains("mutually exclusive", exclusive.Message);
         }
         finally
         {
@@ -675,18 +624,10 @@ public static class MacDmgTests
         };
         try
         {
-            var thrown = false;
-            try
-            {
-                await new MacDmgBundler(new MacDmgBundleConfiguration { SkipWindowLayout = true })
+            await Assert.ThrowsAnyAsync<BundleValidationException>(
+                () => new MacDmgBundler(new MacDmgBundleConfiguration { SkipWindowLayout = true })
                     .BuildAsync(DmgConfiguration(
-                        input, output, licenseFile: Path.Combine(input, "missing.txt")));
-            }
-            catch (BundleValidationException)
-            {
-                thrown = true;
-            }
-            Assert.True(thrown, "A missing license file must fail the build.");
+                        input, output, licenseFile: Path.Combine(input, "missing.txt"))));
         }
         finally
         {

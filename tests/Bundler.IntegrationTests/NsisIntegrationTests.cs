@@ -303,6 +303,8 @@ public sealed class NsisFixture : IAsyncLifetime
 // ── 测试类：脚本主 try 块里的全部测试腿，逐条映射为独立 [Fact] ──
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+[Trait("Requires", "localinstall")]
+
 public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<NsisFixture>
 {
     private readonly NsisFixture _f = fixture;

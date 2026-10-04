@@ -1,14 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>DotNet.Bundler.Wix</AssemblyName>
     <RootNamespace>DotNet.Bundler.Wix</RootNamespace>
     <PackageId>DotNet.Bundler.Wix</PackageId>
-    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
-    <Authors>Bundler contributors</Authors>
     <Description>Reusable WiX 3.14.1 MSI packaging API for Windows desktop applications.</Description>
     <PackageTags>dotnet;bundler;installer;msi;wix;desktop</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Bundler.Tests" />
@@ -19,7 +15,5 @@
     <None Include="..\..\third_party\wix\LICENSE.TXT" Pack="true" PackagePath="licenses/wix/" />
     <None Include="..\..\third_party\wix\msi-wix-provenance.md" Pack="true" PackagePath="licenses/wix/" />
     <None Include="..\..\third_party\wix\SHA256SUMS" Pack="true" PackagePath="licenses/wix/" />
-    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
-    <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

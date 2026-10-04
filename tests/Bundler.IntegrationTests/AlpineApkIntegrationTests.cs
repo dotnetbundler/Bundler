@@ -218,8 +218,7 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
         var fileCount = listing.Split('\n').Count(l => l.StartsWith('-') || l.StartsWith('l'));
         var raw = File.ReadAllBytes(member1);
         var paxCount = CountOccurrences(raw, "APK-TOOLS.checksum.SHA1"u8.ToArray());
-        Assert.True(paxCount == fileCount,
-            $"Every payload file and symlink needs an APK-TOOLS.checksum.SHA1 pax record ({paxCount} != {fileCount}).");
+        Assert.Equal(fileCount, paxCount);
         var paxMatch = Regex.Match(
             System.Text.Encoding.Latin1.GetString(raw),
             @"APK-TOOLS\.checksum\.SHA1=[0-9a-f]{40}");
@@ -344,6 +343,7 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
     }
 
     [Fact]
+    [Trait("Requires", "docker")]
     public void DockerAlpineInstallRunRemove()
     {
         DockerRunner.RequireImage("alpine:latest");
@@ -366,6 +366,7 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
     }
 
     [Fact]
+    [Trait("Requires", "docker")]
     public void DockerV1ToV2UpgradeRunsUpgradeScripts()
     {
         DockerRunner.RequireImage("alpine:latest");
@@ -386,6 +387,7 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
     }
 
     [Fact]
+    [Trait("Requires", "docker")]
     public void DockerRejectsUnsignedPackageWithoutAllowUntrusted()
     {
         DockerRunner.RequireImage("alpine:latest");
@@ -396,6 +398,7 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
     }
 
     [Fact]
+    [Trait("Requires", "docker")]
     public void DockerSignedPackageInstallsViaTrustedKey()
     {
         DockerRunner.RequireImage("alpine:latest");
@@ -413,6 +416,7 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
     }
 
     [Fact]
+    [Trait("Requires", "docker")]
     public void DockerArm64InstallRunRemoveUnderBinfmt()
     {
         DockerRunner.RequireImage("alpine:latest");

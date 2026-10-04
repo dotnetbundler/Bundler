@@ -551,14 +551,11 @@ public static class MacAppTests
             Assert.Equal(2, urlTypes.Count);
             var merged = (Dictionary<string, object>)urlTypes[0];
             Assert.Equal(((List<object>)merged["CFBundleURLSchemes"]), ["myapp"]);
-            Assert.True((string)merged["CFBundleURLName"] == "MyApp Link",
-                "The shared URL name must be preserved.");
+            Assert.Equal("MyApp Link", (string)merged["CFBundleURLName"]);
             Assert.Equal("Viewer", (string)merged["CFBundleTypeRole"]);
             var standalone = (Dictionary<string, object>)urlTypes[1];
-            Assert.True((string)standalone["CFBundleURLName"] == "com.example.app helper",
-                "CFBundleURLName defaults to '<bundle-id> <first-scheme>'.");
-            Assert.True((string)standalone["CFBundleTypeRole"] == "Editor",
-                "URL types default to the Editor role.");
+            Assert.Equal("com.example.app helper", (string)standalone["CFBundleURLName"]);
+            Assert.Equal("Editor", (string)standalone["CFBundleTypeRole"]);
             await AssertThrows<ArgumentException>(
                 () => new MacAppBundler(new MacAppBundleConfiguration
                 {
@@ -990,45 +987,23 @@ public static class MacAppTests
     {
         var profile = MacAppSigning.ResolveCredentials(
             new MacAppSigningConfiguration { KeychainProfile = "my-profile" });
-        Assert.True(string.Join(' ', profile) == "--keychain-profile my-profile",
-            "A keychain profile wins over every other credential mode.");
+        Assert.Equal("--keychain-profile my-profile", string.Join(' ', profile));
         var apiKey = MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration
         {
             ApiKeyPath = "/keys/AuthKey_ABC.p8", ApiKeyId = "ABC", ApiIssuer = "ISSUER"
         });
-        Assert.True(string.Join(' ', apiKey) == "--key /keys/AuthKey_ABC.p8 --key-id ABC --issuer ISSUER",
-            "API-key credentials assemble the notarytool key arguments.");
+        Assert.Equal("--key /keys/AuthKey_ABC.p8 --key-id ABC --issuer ISSUER", string.Join(' ', apiKey));
         var appleId = MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration
         {
             AppleId = "dev@example.com", ApplePassword = "app-pw", AppleTeamId = "TEAM"
         });
-        Assert.True(string.Join(' ', appleId) ==
-               "--apple-id dev@example.com --password app-pw --team-id TEAM",
-            "Apple-ID credentials assemble id/password/team.");
-        try
-        {
-            MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration { ApiKeyId = "ABC" });
-            throw new InvalidOperationException("A partial API-key credential set must be rejected.");
-        }
-        catch (ArgumentException)
-        {
-        }
-        try
-        {
-            MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration { AppleId = "dev@example.com" });
-            throw new InvalidOperationException("A partial Apple-ID credential set must be rejected.");
-        }
-        catch (ArgumentException)
-        {
-        }
-        try
-        {
-            MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration());
-            throw new InvalidOperationException("Notarization without credentials must be rejected.");
-        }
-        catch (ArgumentException)
-        {
-        }
+        Assert.Equal("--apple-id dev@example.com --password app-pw --team-id TEAM", string.Join(' ', appleId));
+        Assert.ThrowsAny<ArgumentException>(
+            () => MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration { ApiKeyId = "ABC" }));
+        Assert.ThrowsAny<ArgumentException>(
+            () => MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration { AppleId = "dev@example.com" }));
+        Assert.ThrowsAny<ArgumentException>(
+            () => MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration()));
         await Task.CompletedTask;
     }
 
@@ -1251,8 +1226,7 @@ public static class MacAppTests
             var mode = File.GetUnixFileMode(executable);
             Assert.Equal(UnixFileMode.UserExecute, (mode & UnixFileMode.UserExecute));
             var payload = Path.Combine(artifacts[0].Path, "Contents", "MacOS", "ExampleApp.dll");
-            Assert.True((File.GetUnixFileMode(payload) & UnixFileMode.UserExecute) == 0,
-                "Non-Mach-O payload files must not gain the executable bit.");
+            Assert.Equal((UnixFileMode)0, File.GetUnixFileMode(payload) & UnixFileMode.UserExecute);
         }
         finally
         {

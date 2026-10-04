@@ -16,5 +16,6 @@
   </metadata>
   <files>
     <file src="..\..\README.md" target="" />
+    <file src="..\..\THIRD-PARTY-NOTICES.md" target="" />
   </files>
 </package>

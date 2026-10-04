@@ -40,15 +40,12 @@ public static class WixTests
             "An explicit historical UpgradeCode did not establish a separate product family.");
         foreach (var version in new[] { "1.0.0-beta.1", "1.0.0+meta", "1.0.0.1", "256.0.0", "1.256.0", "1.0.65536", "01.0.0" })
         {
-            try
-            {
-                WixIdentity.Create("com.example.app", version, "win-x64", WixInstallScope.CurrentUser);
-                throw new InvalidOperationException("MSI accepted an unmappable version: " + version);
-            }
-            catch (ArgumentException exception) when (exception.ParamName == "version") { }
+            var rejected = Assert.ThrowsAny<ArgumentException>(
+                () => WixIdentity.Create("com.example.app", version, "win-x64", WixInstallScope.CurrentUser));
+            Assert.Equal("version", rejected.ParamName);
         }
-        Assert.True(WixIdentity.Create("com.example.app", "255.255.65535", "win-x64", WixInstallScope.CurrentUser)
-            .ProductVersion == "255.255.65535", "MSI maximum version was rejected.");
+        Assert.Equal("255.255.65535",
+            WixIdentity.Create("com.example.app", "255.255.65535", "win-x64", WixInstallScope.CurrentUser).ProductVersion);
         var machine = WixIdentity.Create("com.example.app", "1.0.0", "win-x64", WixInstallScope.PerMachine);
         var user = WixIdentity.Create("com.example.app", "1.0.0", "win-x64", WixInstallScope.CurrentUser);
         Assert.True(machine.UpgradeCode != user.UpgradeCode && machine.ProductCode != user.ProductCode,
@@ -78,13 +75,10 @@ public static class WixTests
                preview.ProductCode != baseline.ProductCode, "Explicit MSI version did not retain the product family.");
         foreach (var version in new[] { "", "1.2.3.4", "1.2.3-beta", "01.2.3", "256.0.0", "1.256.0", "1.2.65536" })
         {
-            try
-            {
-                WixIdentity.Create("com.example.app", "2.0.0-beta.1", "win-x64",
-                    WixInstallScope.CurrentUser, msiVersion: version);
-                throw new InvalidOperationException("An invalid explicit MSI version was accepted: " + version);
-            }
-            catch (ArgumentException exception) when (exception.ParamName == "msiVersion") { }
+            var rejected = Assert.ThrowsAny<ArgumentException>(
+                () => WixIdentity.Create("com.example.app", "2.0.0-beta.1", "win-x64",
+                    WixInstallScope.CurrentUser, msiVersion: version));
+            Assert.Equal("msiVersion", rejected.ParamName);
         }
     }
 
@@ -95,13 +89,9 @@ public static class WixTests
         using var fixture = new WixTestFixture();
         foreach (var path in new[] { "../escape", "docs/../escape", "C:\\Windows\\file" })
         {
-            try
-            {
-                await fixture.Bundler().BuildAsync(fixture.Request(path));
-                throw new InvalidOperationException("Core accepted an escaped MSI resource path: " + path);
-            }
-            catch (BundleValidationException exception) when
-                (exception.Issues.Any(issue => issue.Path == "resources[0].targetPath")) { }
+            var rejected = await Assert.ThrowsAnyAsync<BundleValidationException>(
+                () => fixture.Bundler().BuildAsync(fixture.Request(path)));
+            Assert.Contains(rejected.Issues, issue => issue.Path == "resources[0].targetPath");
         }
         foreach (var path in new[] { "docs//file", "file. " })
         {
@@ -180,8 +170,7 @@ public static class WixTests
         using var license = licenseEntry.Open();
         var archiveLicense = new StreamReader(license).ReadToEnd().Replace("\r\n", "\n");
         var packagedLicense = File.ReadAllText(Path.Combine(root, "LICENSE.TXT")).Replace("\r\n", "\n");
-        Assert.True(archiveLicense == packagedLicense,
-            "The distributed WiX license differs from the original binary archive.");
+        Assert.Equal(packagedLicense, archiveLicense);
     }
 
     [Fact]
@@ -200,12 +189,9 @@ public static class WixTests
                 Formats = [PackageFormat.Msi]
             }]
         };
-        try
-        {
-            await new WixBundler().BuildAsync(configuration);
-            throw new InvalidOperationException("An unsupported MSI license format was accepted.");
-        }
-        catch (ArgumentException exception) when (exception.Message.Contains("RTF", StringComparison.Ordinal)) { }
+        var licenseFormat = await Assert.ThrowsAnyAsync<ArgumentException>(
+            () => new WixBundler().BuildAsync(configuration));
+        Assert.Contains("RTF", licenseFormat.Message, StringComparison.Ordinal);
         using var fixture = new WixTestFixture();
         await ExpectAsync<ArgumentException>(() => new WixBundler(new WixBundleConfiguration
         {
@@ -272,23 +258,21 @@ public static class WixTests
             {
                 var expected = WixIdentity.Create(configuration.Identifier, configuration.Version,
                     "win-x64", WixInstallScope.CurrentUser);
-                Assert.True(database.Property("ProductCode") == expected.ProductCode.ToString("B").ToUpperInvariant(),
-                    "MSI ProductCode differs from the stable identity policy.");
-                Assert.True(database.Property("UpgradeCode") == expected.UpgradeCode.ToString("B").ToUpperInvariant(),
-                    "MSI UpgradeCode differs from the stable identity policy.");
+                Assert.Equal(expected.ProductCode.ToString("B").ToUpperInvariant(), database.Property("ProductCode"));
+                Assert.Equal(expected.UpgradeCode.ToString("B").ToUpperInvariant(), database.Property("UpgradeCode"));
                 Assert.Equal("1.2.3", database.Property("ProductVersion"));
-                Assert.True(database.Property("ProductName") == "Msi 测试", "MSI database did not preserve the selected Chinese codepage.");
+                Assert.Equal("Msi 测试", database.Property("ProductName"));
                 Assert.Equal("Bundler Tests", database.Property("Manufacturer"));
                 Assert.Equal("Test MSI database", database.Property("ARPCOMMENTS"));
-                Assert.True(database.Property("ARPURLINFOABOUT") == "https://example.com/msi", "MSI homepage is missing.");
+                Assert.Equal("https://example.com/msi", database.Property("ARPURLINFOABOUT"));
                 Assert.Equal("ProductIcon", database.Property("ARPPRODUCTICON"));
                 Assert.Equal(1, database.RowCount("Icon", "Name"));
                 Assert.Equal(3, database.RowCount("File", "File"));
-                Assert.True(database.RowCount("Component", "Component") == 7, "MSI must give every file, cleanup, registration, and shortcut a component.");
+                Assert.Equal(7, database.RowCount("Component", "Component"));
                 Assert.True(database.RowCount("Registry", "Registry") > 4, "MSI desktop capabilities and HKCU key paths are missing.");
                 Assert.True(database.Contains("Registry", "Name", "application/x-abc"),
                     "MSI silently ignored the configured MIME candidate registration.");
-                Assert.True(database.RowCount("Shortcut", "Shortcut") == 2, "MSI desktop and Start Menu shortcuts are missing.");
+                Assert.Equal(2, database.RowCount("Shortcut", "Shortcut"));
                 Assert.True(database.RowCount("RemoveFile", "FileKey") >= 4, "Per-user directories need uninstall cleanup rows.");
                 Assert.True(database.RowCount("Upgrade", "UpgradeCode") >= 1,
                     "The MSI major-upgrade table is missing.");
@@ -336,8 +320,7 @@ public static class WixTests
         var originalHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(first.Path)));
         await File.WriteAllTextAsync(Path.Combine(fixture.Input, "fixture.exe"), "different payload");
         await ExpectAsync<IOException>(() => bundler.BuildAsync(request), "same product version");
-        Assert.True(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(first.Path))) == originalHash,
-            "The rejected rebuild changed the existing MSI.");
+        Assert.Equal(originalHash, Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(first.Path))));
     }
 
     [Fact]
@@ -352,7 +335,7 @@ public static class WixTests
         var linked = Path.Combine(fixture.Input, "linked-outside");
         Directory.CreateSymbolicLink(linked, outside);
         await ExpectAsync<InvalidDataException>(() => fixture.Bundler().BuildAsync(fixture.Request()), "reparse point");
-        Assert.True(File.ReadAllText(sentinel) == "preserve", "The rejected input modified the symlink target.");
+        Assert.Equal("preserve", File.ReadAllText(sentinel));
     }
 
     [Fact]
@@ -368,8 +351,7 @@ public static class WixTests
         var originalHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(compiler)));
         await File.WriteAllTextAsync(compiler, "tampered");
         await bundler.BuildAsync(request);
-        Assert.True(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(compiler))) == originalHash,
-            "The WiX tool cache did not restore the pinned compiler after tampering.");
+        Assert.Equal(originalHash, Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(compiler))));
     }
 
     [Fact]
@@ -395,16 +377,12 @@ public static class WixTests
                 RuntimeIdentifier = "win-x64", InputDirectory = input,
                 MainExecutable = "test.exe", Formats = [PackageFormat.Msi]
             });
-            try
-            {
-                await new WixBundler(options: new WixBundlerOptions
+            await Assert.ThrowsAnyAsync<InvalidDataException>(
+                () => new WixBundler(options: new WixBundlerOptions
                 {
                     ToolCacheDirectory = Path.Combine(root, "cache"),
                     ToolsetArchivePath = archive
-                }).BuildAsync(configuration);
-                throw new InvalidOperationException("A modified WiX archive was accepted.");
-            }
-            catch (InvalidDataException) { }
+                }).BuildAsync(configuration));
         }
         finally { DeleteOwnedTestDirectory(root); }
     }
@@ -473,8 +451,7 @@ public static class WixTests
                 new WixBundlerOptions { ToolCacheDirectory = Path.Combine(root, "cache") }).BuildAsync(configuration)).Single();
             using var database = new MsiDatabaseReader(artifact.Path);
             var expected = WixIdentity.Create(configuration.Identifier, configuration.Version, "win-x64", WixInstallScope.PerMachine);
-            Assert.True(database.Property("ProductCode") == expected.ProductCode.ToString("B").ToUpperInvariant(),
-                "Per-machine MSI identity differs from the scope-specific contract.");
+            Assert.Equal(expected.ProductCode.ToString("B").ToUpperInvariant(), database.Property("ProductCode"));
             Assert.True(database.Contains("Directory", "Directory", "ProgramFiles64Folder"),
                 "Per-machine MSI does not target Program Files.");
             var registryRoots = database.Pairs("Registry", "Name", "Root");
@@ -806,8 +783,7 @@ public static class WixTests
         Assert.True(database.Contains("Feature", "Feature", "Complete") && database.Contains("Feature", "Feature", "Shortcuts") &&
                database.Contains("Feature", "Feature", "PathEnvironment") && database.Contains("Feature", "Feature", "UninstallShortcut"),
             "Optional MSI features must be declared as selectable features.");
-        Assert.True(database.RowCount("Component", "Component") == 6,
-            "One payload file, cleanup, and each optional feature need separate components.");
+        Assert.Equal(6, database.RowCount("Component", "Component"));
         Assert.True(database.RowCount("Shortcut", "Shortcut") == 3 &&
                database.ContainsSubstring("Shortcut", "Arguments", "[ProductCode]"),
             "MSI shortcuts or the managed uninstall entry are incorrect.");
@@ -1001,8 +977,7 @@ public static class WixTests
         }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(
             fixture.Request(outputDirectory: Path.Combine(fixture.Root, "en")))).Single();
         using var englishDatabase = new MsiDatabaseReader(english.Path);
-        Assert.True(englishDatabase.Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT") == "Launch [ProductName]",
-            "Caller overrides for one language must not leak into another language MSI.");
+        Assert.Equal("Launch [ProductName]", englishDatabase.Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT"));
     }
 
     [Fact]
@@ -1115,8 +1090,7 @@ public static class WixTests
         using var database = new MsiDatabaseReader(artifact.Path);
         Assert.True(database.Contains("Registry", "Key", "Software\\Acme\\Extras"),
             "The caller fragment registry row did not reach the MSI.");
-        Assert.True(database.RowCount("Component", "Component") == 3,
-            "The caller component must join the payload and cleanup components.");
+        Assert.Equal(3, database.RowCount("Component", "Component"));
         // A same-version rebuild with changed fragment content must be rejected.
         await File.AppendAllTextAsync(fragment, "<!-- changed -->");
         await ExpectAsync<IOException>(() => new WixBundler(new WixBundleConfiguration

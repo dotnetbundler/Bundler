@@ -28,7 +28,7 @@
   <!-- dotnet publish 载荷本身不含符号链接，但真实 .NET 载荷常见 lib*.so 链接；
        在 Bundler 目标读取 PublishDir 之前注入一条入口链接，供 mode/symlink 还原断言。 -->
   <Target Name="StageArchiveSymlink" BeforeTargets="BundleDesktopApplication"
-          Condition="$(BundlerFormats.Contains('zip')) Or $(BundlerFormats.Contains('targz'))">
+          Condition="!$([MSBuild]::IsOSPlatform('Windows')) and ($(BundlerFormats.Contains('zip')) Or $(BundlerFormats.Contains('targz')))">
     <Exec Command="ln -sf ./BundlerArchiveIntegrationFixture &quot;$(PublishDir)BundlerArchiveIntegrationFixture.link&quot;" />
   </Target>
 </Project>

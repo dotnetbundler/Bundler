@@ -9,7 +9,10 @@
     <NoWarn>$(NoWarn);xUnit1031;xUnit1051</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="xunit.v3" Version="4.0.1" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\TestPlatform.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Bundler.Core\Bundler.Core.csproj" />

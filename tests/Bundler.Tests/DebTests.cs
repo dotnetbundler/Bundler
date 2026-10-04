@@ -12,18 +12,11 @@ public static class DebTests
         var input = CreateInputDirectory();
         try
         {
-            var thrown = false;
-            try
-            {
-                new DebBundler()
+            var wrongTarget = Assert.ThrowsAny<NotSupportedException>(
+                () => new DebBundler()
                     .BuildAsync(DebConfiguration(input, formats: [PackageFormat.Rpm]))
-                    .GetAwaiter().GetResult();
-            }
-            catch (NotSupportedException exception)
-            {
-                thrown = exception.Message.Contains("Deb targets only");
-            }
-            Assert.True(thrown, "A non-deb target must be rejected with NotSupportedException.");
+                    .GetAwaiter().GetResult());
+            Assert.Contains("Deb targets only", wrongTarget.Message);
         }
         finally
         {
@@ -73,8 +66,7 @@ public static class DebTests
                    names.Contains("./usr/bin/example-app"),
                 $"data.tar is missing payload entries: {string.Join(',', names)}");
             var executable = data.Single(e => e.Name == "./usr/lib/example-app/ExampleApp");
-            Assert.True(executable.Mode == 493 /* 0755 */,
-                $"The main executable must be 0755, got {Convert.ToString(executable.Mode, 8)}.");
+            Assert.Equal(493 /* 0755 */, executable.Mode);
             var lib = data.Single(e => e.Name == "./usr/lib/example-app/ExampleApp.dll");
             Assert.Equal(420 /* 0644 */, lib.Mode);
             var link = data.Single(e => e.Name == "./usr/bin/example-app");
@@ -208,18 +200,12 @@ public static class DebTests
             };
             foreach (var (name, settings) in cases)
             {
-                var thrown = false;
-                try
-                {
-                    new DebBundler(settings)
+                var rejected = Assert.ThrowsAny<Exception>(
+                    () => new DebBundler(settings)
                         .BuildAsync(DebConfiguration(input, output))
-                        .GetAwaiter().GetResult();
-                }
-                catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
-                {
-                    thrown = true;
-                }
-                Assert.True(thrown, $"The '{name}' case must fail validation.");
+                        .GetAwaiter().GetResult());
+                Assert.True(rejected is ArgumentException or InvalidOperationException,
+                    $"The '{name}' case must fail validation: {rejected.GetType().Name}: {rejected.Message}");
                 var debDir = Path.Combine(output, "linux-x64", "deb");
                 Assert.True(!Directory.Exists(debDir) || !Directory.EnumerateFiles(debDir, "*.deb").Any(),
                     $"The '{name}' case left a .deb artifact behind.");
@@ -472,11 +458,9 @@ public static class DebTests
             };
             foreach (var (name, settings, icons) in cases)
             {
-                var thrown = false;
-                try
-                {
-                    var configuration = DebConfiguration(input, output);
-                    new DebBundler(settings).BuildAsync(new BundleConfiguration
+                var configuration = DebConfiguration(input, output);
+                var rejected = Assert.ThrowsAny<Exception>(
+                    () => new DebBundler(settings).BuildAsync(new BundleConfiguration
                         {
                             ProductName = configuration.ProductName,
                             Identifier = configuration.Identifier,
@@ -486,13 +470,9 @@ public static class DebTests
                             OutputDirectory = configuration.OutputDirectory,
                             Icons = icons,
                             Targets = configuration.Targets
-                        }).GetAwaiter().GetResult();
-                }
-                catch (Exception exception) when (exception is ArgumentException or FileNotFoundException or InvalidOperationException)
-                {
-                    thrown = true;
-                }
-                Assert.True(thrown, $"The '{name}' case must fail validation.");
+                        }).GetAwaiter().GetResult());
+                Assert.True(rejected is ArgumentException or FileNotFoundException or InvalidOperationException,
+                    $"The '{name}' case must fail validation: {rejected.GetType().Name}: {rejected.Message}");
             }
         }
         finally
@@ -671,17 +651,11 @@ public static class DebTests
             };
             foreach (var (name, settings) in cases)
             {
-                var thrown = false;
-                try
-                {
-                    new DebBundler(settings).BuildAsync(DebConfiguration(input, output))
-                        .GetAwaiter().GetResult();
-                }
-                catch (Exception exception) when (exception is ArgumentException or FileNotFoundException)
-                {
-                    thrown = true;
-                }
-                Assert.True(thrown, $"The '{name}' case must fail validation.");
+                var rejected = Assert.ThrowsAny<Exception>(
+                    () => new DebBundler(settings).BuildAsync(DebConfiguration(input, output))
+                        .GetAwaiter().GetResult());
+                Assert.True(rejected is ArgumentException or FileNotFoundException,
+                    $"The '{name}' case must fail validation: {rejected.GetType().Name}: {rejected.Message}");
             }
         }
         finally

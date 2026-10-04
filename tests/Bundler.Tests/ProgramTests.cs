@@ -157,8 +157,7 @@ public static class ProgramTests
                 var packagedLicense = File.ReadAllText(
                         Path.Combine(repositoryRoot, "third_party", "nsis", "COPYING"))
                     .Replace("\r\n", "\n");
-                Assert.True(archiveLicense == packagedLicense,
-                    "The separately packaged NSIS license must match common/COPYING in NsisToolset.");
+                Assert.Equal(packagedLicense, archiveLicense);
             }
 
 
@@ -166,9 +165,8 @@ public static class ProgramTests
                 repositoryRoot,
                 "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
             Assert.True(File.Exists(pluginPath), "The bundled NSIS plug-in is missing.");
-            Assert.True(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))) ==
-                   "F0F5B0E81317B8600CE4D5B2BEAC3A08A51DD808FD7596FE5190F3B861455D54",
-                "The bundled NSIS plug-in checksum changed; rebuild and update its provenance.");
+            Assert.Equal("F0F5B0E81317B8600CE4D5B2BEAC3A08A51DD808FD7596FE5190F3B861455D54",
+                Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))));
 
             var toolset = await NsisToolResolver.ResolveAsync(archive, cache);
             Assert.True(File.Exists(toolset.CompilerPath), "The verified NSIS toolset did not produce the host compiler.");
@@ -221,15 +219,9 @@ public static class ProgramTests
     [Fact]
     static void RejectsUnknownTemplateVariables()
     {
-        try
-        {
-            TemplateRenderer.Render("{{known}} {{missing}}", new Dictionary<string, string> { ["known"] = "value" });
-            throw new InvalidOperationException("An unknown template variable should have failed rendering.");
-        }
-        catch (InvalidDataException exception)
-        {
-            Assert.Contains("missing", exception.Message);
-        }
+        var exception = Assert.ThrowsAny<InvalidDataException>(
+            () => TemplateRenderer.Render("{{known}} {{missing}}", new Dictionary<string, string> { ["known"] = "value" }));
+        Assert.Contains("missing", exception.Message);
     }
 
     [Fact]
@@ -278,8 +270,7 @@ public static class ProgramTests
             await File.WriteAllTextAsync(executable, "corrupted");
             await File.WriteAllTextAsync(Path.Combine(results[0].DirectoryPath, "unexpected.txt"), "corrupted");
             var repaired = await ZipToolCache.ResolveToolAsync(archivePath, cache, archive);
-            Assert.True(await File.ReadAllTextAsync(repaired.ExecutablePath) == "trusted executable",
-                "A modified cached executable was not restored from the trusted archive.");
+            Assert.Equal("trusted executable", await File.ReadAllTextAsync(repaired.ExecutablePath));
             Assert.False(File.Exists(Path.Combine(repaired.DirectoryPath, "unexpected.txt")), "Unexpected cache content was not removed during recovery.");
 
             var outside = Path.Combine(root, "outside");
@@ -299,14 +290,8 @@ public static class ProgramTests
 
             var linkedCache = Path.Combine(root, "linked-cache");
             Directory.CreateSymbolicLink(linkedCache, outside);
-            try
-            {
-                await ZipToolCache.ResolveToolAsync(archivePath, linkedCache, archive);
-                throw new InvalidOperationException("A reparse-point tool cache root was accepted.");
-            }
-            catch (InvalidDataException)
-            {
-            }
+            await Assert.ThrowsAnyAsync<InvalidDataException>(
+                () => ZipToolCache.ResolveToolAsync(archivePath, linkedCache, archive));
             Directory.Delete(linkedCache);
             Assert.True(File.Exists(sentinel), "Tool cache root validation followed a reparse point.");
             Assert.True(File.Exists(Path.Combine(repaired.DirectoryPath, ".bundler-tool-manifest")),
@@ -347,14 +332,8 @@ public static class ProgramTests
                 }
                 var descriptor = new ZipToolArchive(name, "1", HashFile(archivePath),
                     name == "traversal" ? "escaped.exe" : "tool-link");
-                try
-                {
-                    await ZipToolCache.ResolveToolAsync(archivePath, Path.Combine(root, "cache"), descriptor);
-                    throw new InvalidOperationException($"Unsafe {name} archive was accepted.");
-                }
-                catch (InvalidDataException)
-                {
-                }
+                await Assert.ThrowsAnyAsync<InvalidDataException>(
+                    () => ZipToolCache.ResolveToolAsync(archivePath, Path.Combine(root, "cache"), descriptor));
             }
             Assert.False(File.Exists(Path.Combine(root, "escaped.exe")), "Archive traversal wrote outside the cache staging directory.");
         }
@@ -416,21 +395,14 @@ public static class ProgramTests
                 Path.Combine(root, "output"),
                 false);
             var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "templates", "nsis", "installer.nsi"));
-            try
-            {
-                NsisBundleBackend.CreateScript(
-                    template,
-                    configuration,
-                    new NsisBundleConfiguration(),
-                    item,
-                    Path.Combine(root, "setup.exe"),
-                    "ExampleApp");
-                throw new InvalidOperationException("An NSIS payload directory reparse point was accepted.");
-            }
-            catch (InvalidDataException exception) when (
-                exception.Message.Contains("reparse point", StringComparison.OrdinalIgnoreCase))
-            {
-            }
+            var reparsePoint = Assert.ThrowsAny<InvalidDataException>(() => NsisBundleBackend.CreateScript(
+                template,
+                configuration,
+                new NsisBundleConfiguration(),
+                item,
+                Path.Combine(root, "setup.exe"),
+                "ExampleApp"));
+            Assert.Contains("reparse point", reparsePoint.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -454,7 +426,7 @@ public static class ProgramTests
     [Fact]
     static async Task SignsPeFileWithoutWindowsSdk()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "requires a Windows host");
+        Assert.SkipUnless(TestPlatform.IsWindows, "requires a Windows host");
 
         var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -503,21 +475,16 @@ public static class ProgramTests
     [Fact]
     static void SelectsEveryBundledNsisHostCompiler()
     {
-        Assert.True(NsisToolResolver.GetCompilerRelativePath(OSPlatform.Windows, Architecture.X64)
-                .Replace('\\', '/') == "hosts/win-x86/makensis.exe",
-            "Windows hosts should use the portable x86 NSIS compiler.");
-        Assert.True(NsisToolResolver.GetCompilerRelativePath(OSPlatform.Linux, Architecture.X64)
-                .Replace('\\', '/') == "hosts/linux-x64/makensis",
-            "Linux x64 host compiler selection failed.");
-        Assert.True(NsisToolResolver.GetCompilerRelativePath(OSPlatform.Linux, Architecture.Arm64)
-                .Replace('\\', '/') == "hosts/linux-arm64/makensis",
-            "Linux arm64 host compiler selection failed.");
-        Assert.True(NsisToolResolver.GetCompilerRelativePath(OSPlatform.OSX, Architecture.X64)
-                .Replace('\\', '/') == "hosts/osx-x64/makensis",
-            "macOS x64 host compiler selection failed.");
-        Assert.True(NsisToolResolver.GetCompilerRelativePath(OSPlatform.OSX, Architecture.Arm64)
-                .Replace('\\', '/') == "hosts/osx-arm64/makensis",
-            "macOS arm64 host compiler selection failed.");
+        Assert.Equal("hosts/win-x86/makensis.exe",
+            NsisToolResolver.GetCompilerRelativePath(OSPlatform.Windows, Architecture.X64).Replace('\\', '/'));
+        Assert.Equal("hosts/linux-x64/makensis",
+            NsisToolResolver.GetCompilerRelativePath(OSPlatform.Linux, Architecture.X64).Replace('\\', '/'));
+        Assert.Equal("hosts/linux-arm64/makensis",
+            NsisToolResolver.GetCompilerRelativePath(OSPlatform.Linux, Architecture.Arm64).Replace('\\', '/'));
+        Assert.Equal("hosts/osx-x64/makensis",
+            NsisToolResolver.GetCompilerRelativePath(OSPlatform.OSX, Architecture.X64).Replace('\\', '/'));
+        Assert.Equal("hosts/osx-arm64/makensis",
+            NsisToolResolver.GetCompilerRelativePath(OSPlatform.OSX, Architecture.Arm64).Replace('\\', '/'));
     }
 
     [Fact]
@@ -531,8 +498,7 @@ public static class ProgramTests
         }
 
         Assert.Equal(0, Compare("1.0.0", "1.0.0"));
-        Assert.True(Compare("1.0.0+build.2", "1.0.0+build.1") == 0,
-            "Build metadata must not affect precedence.");
+        Assert.Equal(0, Compare("1.0.0+build.2", "1.0.0+build.1"));
         Assert.True(Compare("1.0.0", "1.0.0-rc.1") > 0, "A release must be newer than its prerelease.");
         Assert.True(Compare("1.0.0-beta.11", "1.0.0-beta.2") > 0,
             "Numeric prerelease identifiers must compare numerically.");
@@ -550,16 +516,10 @@ public static class ProgramTests
     {
         foreach (var version in new[] { "1.0", "1.0.0-01", "65536.0.0" })
         {
-            try
-            {
-                new NsisBundler().BuildAsync(new BundleConfiguration { Version = version })
-                    .GetAwaiter().GetResult();
-                throw new InvalidOperationException($"Invalid NSIS version '{version}' was accepted.");
-            }
-            catch (ArgumentException exception)
-            {
-                Assert.Contains(version, exception.Message);
-            }
+            var exception = Assert.ThrowsAny<ArgumentException>(
+                () => new NsisBundler().BuildAsync(new BundleConfiguration { Version = version })
+                    .GetAwaiter().GetResult());
+            Assert.Contains(version, exception.Message);
         }
 
         return Task.CompletedTask;
@@ -572,29 +532,17 @@ public static class ProgramTests
         {
             LegacyMsiProductCodes = ["not-a-guid"]
         });
-        try
-        {
-            await bundler.BuildAsync(new BundleConfiguration { Version = "1.0.0" });
-            throw new InvalidOperationException("An invalid legacy MSI product code was accepted.");
-        }
-        catch (ArgumentException exception)
-        {
-            Assert.Contains("not-a-guid", exception.Message);
-        }
+        var exception = await Assert.ThrowsAnyAsync<ArgumentException>(
+            () => bundler.BuildAsync(new BundleConfiguration { Version = "1.0.0" }));
+        Assert.Contains("not-a-guid", exception.Message);
 
         bundler = new NsisBundler(new NsisBundleConfiguration
         {
             LegacyMsiUpgradeCodes = Enumerable.Range(0, 30).Select(_ => Guid.NewGuid().ToString()).ToArray()
         });
-        try
-        {
-            await bundler.BuildAsync(new BundleConfiguration { Version = "1.0.0" });
-            throw new InvalidOperationException("An oversized legacy MSI identifier list was accepted.");
-        }
-        catch (ArgumentException exception)
-        {
-            Assert.Contains("string limit", exception.Message);
-        }
+        var exception2 = await Assert.ThrowsAnyAsync<ArgumentException>(
+            () => bundler.BuildAsync(new BundleConfiguration { Version = "1.0.0" }));
+        Assert.Contains("string limit", exception2.Message);
     }
 
     [Fact]
@@ -701,6 +649,8 @@ public static class ProgramTests
     [Fact]
     static async Task BuildsThroughStandaloneNsisApi()
     {
+        // 内嵌 makensis 是 glibc 链接产物，musl 宿主上无法执行
+        Assert.SkipWhen(TestPlatform.IsMusl, "bundled makensis is glibc-linked and cannot run on musl hosts");
         var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Api.Tests", Guid.NewGuid().ToString("N"));
         var input = Path.Combine(root, "publish");
         Directory.CreateDirectory(input);
@@ -744,6 +694,7 @@ public static class ProgramTests
     [Fact]
     static async Task BuildsEveryBuiltInNsisLanguage()
     {
+        Assert.SkipWhen(TestPlatform.IsMusl, "bundled makensis is glibc-linked and cannot run on musl hosts");
         string[] expectedLanguages =
         [
             "Arabic", "Bulgarian", "Dutch", "English", "French", "German", "Italian", "Japanese",
@@ -785,25 +736,15 @@ public static class ProgramTests
             Assert.True(artifacts.Count == 1 && File.Exists(artifacts[0].Path),
                 "NSIS did not compile one installer containing every built-in language.");
 
-            try
-            {
-                await new NsisBundler(new NsisBundleConfiguration { Languages = ["English", "english"] })
-                    .BuildAsync(new BundleConfiguration { Version = "1.0.0" });
-                throw new InvalidOperationException("A duplicate NSIS language was accepted.");
-            }
-            catch (ArgumentException exception) when (exception.Message.Contains("more than once", StringComparison.Ordinal))
-            {
-            }
+            var duplicateLanguage = await Assert.ThrowsAnyAsync<ArgumentException>(
+                () => new NsisBundler(new NsisBundleConfiguration { Languages = ["English", "english"] })
+                    .BuildAsync(new BundleConfiguration { Version = "1.0.0" }));
+            Assert.Contains("more than once", duplicateLanguage.Message, StringComparison.Ordinal);
 
-            try
-            {
-                await new NsisBundler(new NsisBundleConfiguration { Languages = ["Klingon"] })
-                    .BuildAsync(new BundleConfiguration { Version = "1.0.0" });
-                throw new InvalidOperationException("An unsupported NSIS language was accepted.");
-            }
-            catch (InvalidOperationException exception) when (exception.Message.Contains("Unsupported NSIS language", StringComparison.Ordinal))
-            {
-            }
+            var unsupportedLanguage = await Assert.ThrowsAnyAsync<InvalidOperationException>(
+                () => new NsisBundler(new NsisBundleConfiguration { Languages = ["Klingon"] })
+                    .BuildAsync(new BundleConfiguration { Version = "1.0.0" }));
+            Assert.Contains("Unsupported NSIS language", unsupportedLanguage.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -817,6 +758,7 @@ public static class ProgramTests
     [Fact]
     static async Task ValidatesCustomNsisLanguageFiles()
     {
+        Assert.SkipWhen(TestPlatform.IsMusl, "bundled makensis is glibc-linked and cannot run on musl hosts");
         var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.CustomLanguage.Tests", Guid.NewGuid().ToString("N"));
         var input = Path.Combine(root, "publish");
         Directory.CreateDirectory(input);
@@ -843,14 +785,8 @@ public static class ProgramTests
                         CustomLanguageFiles = new Dictionary<string, string> { ["english"] = customFile }
                     },
                     new NsisBundlerOptions { ToolCacheDirectory = Path.Combine(root, "shared-tools") });
-                try
-                {
-                    await bundler.BuildAsync(LanguageTestConfiguration(input, Path.Combine(root, "artifacts", name)));
-                    throw new InvalidOperationException($"The invalid custom language case '{name}' was accepted.");
-                }
-                catch (InvalidDataException)
-                {
-                }
+                await Assert.ThrowsAnyAsync<InvalidDataException>(
+                    () => bundler.BuildAsync(LanguageTestConfiguration(input, Path.Combine(root, "artifacts", name))));
             }
 
             var validCustomFile = Path.Combine(root, "complete.nsh");
@@ -898,6 +834,7 @@ public static class ProgramTests
     [Fact]
     static async Task BuildsEveryNsisCompressionMode()
     {
+        Assert.SkipWhen(TestPlatform.IsMusl, "bundled makensis is glibc-linked and cannot run on musl hosts");
         var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Compression.Tests", Guid.NewGuid().ToString("N"));
         var input = Path.Combine(root, "publish");
         Directory.CreateDirectory(input);
@@ -930,16 +867,10 @@ public static class ProgramTests
                     $"NSIS failed to compile an installer with {compression} compression.");
             }
 
-            try
-            {
-                await new NsisBundler(new NsisBundleConfiguration { Compression = (NsisCompression)999 })
-                    .BuildAsync(new BundleConfiguration { Version = "1.0.0" });
-                throw new InvalidOperationException("An unknown NSIS compression mode was accepted.");
-            }
-            catch (ArgumentOutOfRangeException exception) when (
-                exception.Message.Contains("compression", StringComparison.OrdinalIgnoreCase))
-            {
-            }
+            var unknownCompression = await Assert.ThrowsAnyAsync<ArgumentOutOfRangeException>(
+                () => new NsisBundler(new NsisBundleConfiguration { Compression = (NsisCompression)999 })
+                    .BuildAsync(new BundleConfiguration { Version = "1.0.0" }));
+            Assert.Contains("compression", unknownCompression.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -950,7 +881,7 @@ public static class ProgramTests
     [Fact]
     static async Task SignsBothNsisInstallerArtifacts()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "requires a Windows host");
+        Assert.SkipUnless(TestPlatform.IsWindows, "requires a Windows host");
 
         var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.NsisSigning.Tests", Guid.NewGuid().ToString("N"));
         var input = Path.Combine(root, "publish");
@@ -1067,20 +998,14 @@ public static class ProgramTests
                 Command = processPath,
                 Arguments = failingArguments
             });
-            try
-            {
-                await failingSigner.SignAsync(new BundleSigningRequest(
+            var signingFailure = await Assert.ThrowsAnyAsync<InvalidOperationException>(
+                () => failingSigner.SignAsync(new BundleSigningRequest(
                     payload,
                     BundleSigningArtifactKind.Installer,
                     "External signing fixture",
-                    "win-x64"));
-                throw new InvalidOperationException("A failing external signing provider was accepted.");
-            }
-            catch (InvalidOperationException exception) when (
-                exception.Message.Contains("exit code 17", StringComparison.Ordinal) &&
-                !exception.Message.Contains(secret, StringComparison.Ordinal))
-            {
-            }
+                    "win-x64")));
+            Assert.Contains("exit code 17", signingFailure.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(secret, signingFailure.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -1091,6 +1016,7 @@ public static class ProgramTests
     [Fact]
     static async Task RemovesFailedSignedInstaller()
     {
+        Assert.SkipWhen(TestPlatform.IsMusl, "bundled makensis is glibc-linked and cannot run on musl hosts");
         var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.SigningFailure.Tests", Guid.NewGuid().ToString("N"));
         var input = Path.Combine(root, "publish");
         Directory.CreateDirectory(input);
@@ -1103,9 +1029,8 @@ public static class ProgramTests
                 ToolCacheDirectory = Path.Combine(root, "tools"),
                 Signer = new FailingInstallerSigner()
             });
-            try
-            {
-                await bundler.BuildAsync(new BundleConfiguration
+            var finalSigningFailure = await Assert.ThrowsAnyAsync<InvalidOperationException>(
+                () => bundler.BuildAsync(new BundleConfiguration
                 {
                     ProductName = "Failed Signing App",
                     Identifier = "com.example.failed-signing",
@@ -1121,12 +1046,8 @@ public static class ProgramTests
                             Formats = [PackageFormat.Nsis]
                         }
                     ]
-                });
-                throw new InvalidOperationException("A final signing failure was accepted.");
-            }
-            catch (InvalidOperationException exception) when (exception.Message == "fixture signing failure")
-            {
-            }
+                }));
+            Assert.Equal("fixture signing failure", finalSigningFailure.Message);
             var installer = Path.Combine(output, "win-x64", "nsis", "Failed Signing App-1.0.0-setup.exe");
             Assert.False(File.Exists(installer), "A signing failure left a final installer that could be mistaken for success.");
         }
@@ -1139,9 +1060,8 @@ public static class ProgramTests
     [Fact]
     static async Task RejectsPayloadSigningFilesWithoutSigner()
     {
-        try
-        {
-            await new NsisBundler().BuildAsync(new BundleConfiguration
+        var unsignedSigner = await Assert.ThrowsAnyAsync<ArgumentException>(
+            () => new NsisBundler().BuildAsync(new BundleConfiguration
             {
                 ProductName = "Unsigned App",
                 Identifier = "com.example.unsigned",
@@ -1156,12 +1076,8 @@ public static class ProgramTests
                         Formats = [PackageFormat.Nsis]
                     }
                 ]
-            });
-            throw new InvalidOperationException("Signing files without a signer were silently ignored.");
-        }
-        catch (ArgumentException exception) when (exception.Message.Contains("no bundle signer", StringComparison.Ordinal))
-        {
-        }
+            }));
+        Assert.Contains("no bundle signer", unsignedSigner.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1815,16 +1731,10 @@ public static class ProgramTests
                 ]
             };
 
-            try
-            {
-                await new BundlePipeline([backend]).BuildAsync(configuration);
-                throw new InvalidOperationException("A missing MSI backend should have failed preflight.");
-            }
-            catch (NotSupportedException exception)
-            {
-                Assert.Contains("Msi", exception.Message);
-                Assert.Equal(0, backend.InvocationCount);
-            }
+            var missingBackend = await Assert.ThrowsAnyAsync<NotSupportedException>(
+                () => new BundlePipeline([backend]).BuildAsync(configuration));
+            Assert.Contains("Msi", missingBackend.Message);
+            Assert.Equal(0, backend.InvocationCount);
         }
         finally
         {
@@ -1885,14 +1795,9 @@ public static class ProgramTests
     static async Task RejectsUnsafeShortcutConfiguration()
     {
         var bundler = new NsisBundler(new NsisBundleConfiguration { Shortcuts = new NsisShortcutConfiguration { WorkingDirectory = "..\\outside" } });
-        try
-        {
-            await bundler.BuildAsync(new BundleConfiguration { Version = "1.0.0" });
-            throw new InvalidOperationException("A shortcut path outside the installation directory was accepted.");
-        }
-        catch (ArgumentException exception) when (exception.Message.Contains("relative", StringComparison.OrdinalIgnoreCase))
-        {
-        }
+        var unsafeShortcut = await Assert.ThrowsAnyAsync<ArgumentException>(
+            () => bundler.BuildAsync(new BundleConfiguration { Version = "1.0.0" }));
+        Assert.Contains("relative", unsafeShortcut.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -1973,10 +1878,10 @@ public static class ProgramTests
                nsisSample.Descendants("HelloNsisAppInstallMode").Any() &&
                !nsisSample.Descendants().Any(item => item.Name.LocalName.StartsWith("HelloBundledApp", StringComparison.Ordinal)),
             "The NSIS sample must use format-specific build properties while preserving its executable name.");
-        Assert.True(XDocument.Load(Path.Combine(root, "tests", "Windows.Nsis.Integration", "Fixture",
+        Assert.Equal("BundlerIntegrationFixture",
+            XDocument.Load(Path.Combine(root, "tests", "Windows.Nsis.Integration", "Fixture",
                 "BundlerNsisIntegrationFixture.csproj"))
-            .Descendants("AssemblyName").Single().Value == "BundlerIntegrationFixture",
-            "Renaming the NSIS test project must preserve its fixture executable name.");
+            .Descendants("AssemblyName").Single().Value);
         var apiTests = XDocument.Load(Path.Combine(root, "tests", "Bundler.ApiTests", "Bundler.ApiTests.csproj"));
         Assert.True(!apiTests.Descendants("BundlerPackageVersion").Any() &&
                !apiTests.Descendants("PackageReference").Any(item =>
@@ -1997,7 +1902,7 @@ public static class ProgramTests
             var project = XDocument.Load(path);
             Assert.True(project.Descendants("PackageReference").Any(item =>
                        ((string?)item.Attribute("Include"))?.StartsWith("DotNet.Bundler", StringComparison.Ordinal) == true &&
-                       (string?)item.Attribute("Version") == "$(BundlerPackageVersion)") &&
+                       (string?)item.Attribute("VersionOverride") == "$(BundlerPackageVersion)") &&
                    project.Descendants("Import").Any(item =>
                        ((string?)item.Attribute("Project"))?.Contains("Bundler.LocalPackages.props", StringComparison.Ordinal) == true),
                 "The standalone package-consumption fixture must keep its package reference: " + path);

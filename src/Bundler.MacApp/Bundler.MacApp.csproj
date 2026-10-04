@@ -1,21 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>DotNet.Bundler.MacApp</AssemblyName>
     <RootNamespace>DotNet.Bundler.MacApp</RootNamespace>
     <PackageId>DotNet.Bundler.MacApp</PackageId>
-    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
-    <Authors>Bundler contributors</Authors>
     <Description>Reusable macOS .app bundle packaging API for desktop applications.</Description>
     <PackageTags>dotnet;bundler;macos;app;bundle;desktop</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Bundler.Tests" />
     <InternalsVisibleTo Include="DotNet.Bundler.MacDmg" />
     <InternalsVisibleTo Include="DotNet.Bundler.MacPkg" />
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
-    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
-    <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

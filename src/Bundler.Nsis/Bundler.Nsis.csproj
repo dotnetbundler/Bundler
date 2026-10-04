@@ -1,14 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>DotNet.Bundler.Nsis</AssemblyName>
     <RootNamespace>DotNet.Bundler.Nsis</RootNamespace>
     <PackageId>DotNet.Bundler.Nsis</PackageId>
-    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
-    <Authors>Bundler contributors</Authors>
     <Description>Reusable NSIS packaging API for desktop .NET applications.</Description>
     <PackageTags>dotnet;bundler;installer;nsis;desktop</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
@@ -24,7 +20,5 @@
                       LogicalName="DotNet.Bundler.Nsis.Resources.plugins.DotNetBundlerNsis.dll" />
     <None Include="..\..\third_party\nsis\COPYING" Pack="true" PackagePath="licenses/nsis/" />
     <None Include="..\..\third_party\nsis-plugin\LICENSE" Pack="true" PackagePath="licenses/nsis-plugin/" />
-    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
-    <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

@@ -457,6 +457,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     }
 
     [Fact]
+    [Trait("Requires", "elevation")]
     public void RealDpkgInstallRemoveAndConffileSemantics()
     {
         SkipWhenHostDpkgNotAmd64();
@@ -529,6 +530,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     }
 
     [Fact]
+    [Trait("Requires", "elevation")]
     public void MaintainerScriptsRunUnderRealDpkg()
     {
         SkipWhenHostDpkgNotAmd64();
@@ -560,6 +562,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     }
 
     [Fact]
+    [Trait("Requires", "elevation")]
     public void UpgradePreservesModifiedConffile()
     {
         SkipWhenHostDpkgNotAmd64();
@@ -615,6 +618,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     }
 
     [Fact]
+    [Trait("Requires", "docker")]
     public void DockerMatrixInstallRunRemove()
     {
         const string containerScript = """

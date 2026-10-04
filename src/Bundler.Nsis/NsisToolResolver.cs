@@ -104,6 +104,6 @@ internal static class NsisToolResolver
         }
     }
 
-    [DllImport("libc", SetLastError = true)]
+    [DllImport("libc", SetLastError = true, CharSet = CharSet.Ansi)]
     private static extern int chmod(string path, uint mode);
 }

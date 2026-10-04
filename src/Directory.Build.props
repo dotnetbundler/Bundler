@@ -1,0 +1,20 @@
+<Project>
+  <!-- MSBuild 向上搜索只取最近一份 Directory.Build.props：先显式链入根目录那份，本文件只做 src 级增补。 -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)..\'))" />
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' != 'Bundler.Cli'">
+    <!-- 库后端统一包元数据；Cli 是 PackAsTool 可执行项目，不打包 README/声明 -->
+    <Authors>Bundler contributors</Authors>
+    <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' != 'Bundler.Cli' and '$(MSBuildProjectName)' != 'Bundler.Core'">
+    <!-- 库后端统一 netstandard2.0；Core 自行 netstandard2.0;net10.0 双目标 -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'Bundler.Cli'">
+    <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="/" />
+    <None Include="$(MSBuildThisFileDirectory)..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>
