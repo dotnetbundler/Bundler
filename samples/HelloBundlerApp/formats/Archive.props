@@ -1,11 +1,9 @@
 <Project>
   <!-- Archive（.zip/.tar.gz）后端全套公开旋钮。变体由 HelloBundlerArchive* 传透。 -->
   <PropertyGroup>
-    <!-- 归档名默认取产品名 kebab-case；version 覆盖归档元数据版本；
-         两旋钮默认空走后端推导，显式设置即演示覆盖。 -->
+    <!-- 三旋钮默认空走后端推导（文件名契约 <pkg>-<ver>-<rid>），显式设置即演示覆盖。 -->
     <BundlerArchivePackageName Condition="'$(HelloBundlerArchivePackageName)' != ''">$(HelloBundlerArchivePackageName)</BundlerArchivePackageName>
     <BundlerArchiveName Condition="'$(HelloBundlerArchiveName)' != ''">$(HelloBundlerArchiveName)</BundlerArchiveName>
-    <BundlerArchiveName Condition="'$(HelloBundlerArchiveName)' == ''">hello-bundler-app</BundlerArchiveName>
     <BundlerArchiveVersion Condition="'$(HelloBundlerArchiveVersion)' != ''">$(HelloBundlerArchiveVersion)</BundlerArchiveVersion>
   </PropertyGroup>
 

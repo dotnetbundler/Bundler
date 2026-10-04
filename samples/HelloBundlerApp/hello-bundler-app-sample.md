@@ -37,6 +37,9 @@ appimage 仅 Linux 宿主；nsis/deb/rpm/zip/targz/alpineapk 为纯托管实现�
   macOS 宿主默认集因此不含独立 `app`（dmg 内层照样产出 .app，`BundlerMacApp*` 旋钮全部生效）；
   显式 `-p:BundlerFormats=app`（或含 app 的子集）时许可自动缺席该轮 publish，
   跨宿主 `osx-*` 默认 `app;zip;targz` 同理不带许可。
+- **MSI 许可只收 RTF**：formats 集含 `msi` 时 `formats/Msi.props` 自动把全局许可切到 `Assets/msi/license.rtf`
+  （nsis/dmg/pkg 同样接受 RTF；archive 不内嵌许可，deb/rpm 以文件载荷携带扩展名无影响）。
+  `HelloBundlerMsiLicenseFile` 传透可整体接管。
 - **universal 合并要求非 Mach-O 载荷逐字节一致**：`-r osx -p:BundlerUniversalRuntimeIdentifiers=osx-x64;osx-arm64`
   做双 RID 内层 publish + 托管合并；framework-dependent 应用的 `*.deps.json` 逐 RID 不同会按契约拒绝合并
   （`Universal merge conflict ... is not a Mach-O file`），非样本缺陷，需自包含/同构载荷场景适用。

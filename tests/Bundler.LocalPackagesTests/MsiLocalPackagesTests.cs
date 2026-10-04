@@ -984,6 +984,8 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
             var output = Path.Combine(root, variant.Name);
             var props = new List<string>
             {
+                "-r", "win-x64",
+                "-p:BundlerFormats=msi",
                 $"-p:RestorePackagesPath={cache}",
                 $"-p:HelloBundlerMsiLanguage={variant.Language}",
                 $"-p:HelloBundlerMsiInstallScope={variant.Scope}",

@@ -37,6 +37,10 @@
     <BundlerWixExtensionIdPrefix Condition="'$(HelloBundlerMsiExtensionIdPrefix)' != ''">$(HelloBundlerMsiExtensionIdPrefix)</BundlerWixExtensionIdPrefix>
     <BundlerWixExpertTemplate Condition="'$(HelloBundlerMsiExpertTemplate)' != ''">$(HelloBundlerMsiExpertTemplate)</BundlerWixExpertTemplate>
     <BundlerWixToolsetArchivePath Condition="'$(HelloBundlerMsiToolsetArchivePath)' != ''">$(HelloBundlerMsiToolsetArchivePath)</BundlerWixToolsetArchivePath>
+    <!-- MSI 交互许可界面只收 RTF——formats 集含 msi 时全局许可改为 RTF（nsis/dmg/pkg 同样接受 RTF，
+         其余后端只是载荷携带不受扩展名影响）。 -->
+    <BundlerLicenseFile Condition="'$(HelloBundlerMsiLicenseFile)' != ''">$(HelloBundlerMsiLicenseFile)</BundlerLicenseFile>
+    <BundlerLicenseFile Condition="'$(HelloBundlerMsiLicenseFile)' == '' and $([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))">$(HelloBundlerAppAssets)msi\license.rtf</BundlerLicenseFile>
   </PropertyGroup>
 
   <ItemGroup>
