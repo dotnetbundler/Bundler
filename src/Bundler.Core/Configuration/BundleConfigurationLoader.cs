@@ -5,7 +5,7 @@ using DotNet.Bundler;
 
 namespace DotNet.Bundler.Core;
 
-public static class BundleConfigurationLoader
+internal static class BundleConfigurationLoader
 {
     private static readonly JsonSerializerOptions Options = new()
     {

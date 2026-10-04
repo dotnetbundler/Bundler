@@ -869,6 +869,21 @@ public static class DebTests
         }
     }
 
+    [Fact]
+    static void RejectsUnderivablePackageName()
+    {
+        var ex = Assert.ThrowsAny<ArgumentException>(() => DebName.Sanitize("中文应用"));
+        Assert.Contains("Cannot derive a Debian package name", ex.Message);
+    }
+
+    [Fact]
+    static void RejectsNonDigitEpoch()
+    {
+        var ex = Assert.ThrowsAny<ArgumentException>(
+            () => DebVersion.Map("1.0.0", new DebBundleConfiguration { Epoch = "abc" }));
+        Assert.Contains("not a valid Debian epoch", ex.Message);
+    }
+
     static BundleConfiguration DebConfiguration(
         string input,
         string output = "",
