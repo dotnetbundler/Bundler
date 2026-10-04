@@ -638,8 +638,8 @@ public static class RpmTests
     [Fact]
     static void MapsRpmSettingsThroughMsBuild()
     {
-        var targets = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
-        var props = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.props"));
+        var targets = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
+        var props = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.props"));
         var task = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
         Assert.True(targets.Contains("RpmPackageName=\"$(BundlerRpmPackageName)\"", StringComparison.Ordinal) &&
                targets.Contains("RpmVersion=\"$(BundlerRpmVersion)\"", StringComparison.Ordinal) &&

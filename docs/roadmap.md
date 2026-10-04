@@ -70,7 +70,7 @@ Tauri 的 WebView2 等选项服务于 Tauri 自身运行时；直接复制会把
 
 Tauri 等产品只作为通用桌面打包能力的参照，不决定本项目的内部架构、配置字段或应用运行时部署范围。
 固定上游快照、比较用户结果、记录适用/拒绝理由和状态证据的统一方法见 [开发规则](development-rules.md) 第 2、6 节。
-NSIS 的取舍见 [NSIS 上游参考](nsis-upstream-reference.md)，MSI 的当前对照见 [MSI Tauri 审计](msi-tauri-capability-audit.md)；
+NSIS 的取舍见 [NSIS 上游参考](nsis-upstream-reference.md)，MSI 的当前对照见 [MSI 能力矩阵](msi-capability-matrix.md)；
 具体状态以各格式能力矩阵和代码测试为准。
 
 ## 4. 阶段执行协议
@@ -118,7 +118,7 @@ per-machine 只验证构建产物和数据库，原生 x86/ARM64 宿主、生产
 9. `WIN-MSI-9`（已完成）：逐项 Tauri 通用能力审计（快照漂移复核无 MSI 实质变化）、全部本机适用回归、工具许可/体积复核和再冻结，无新增功能。
 
 前置条件、交付物、不做事项、自动化/真实安装测试及退出条件见 [`docs/msi-roadmap.md`](msi-roadmap.md) 第 10 节；
-[MSI Tauri 能力审计](msi-tauri-capability-audit.md)区分已实现、计划、明确排除及另立产品路线，[MSI 能力矩阵](msi-capability-matrix.md)保存逐项状态。
+上游审计分类（已实现/计划/明确排除/另立产品路线）与逐项状态记入 [MSI 能力矩阵](msi-capability-matrix.md)。
 原 WIN-MSI-4 的实际证据继续有效，不能借新路线宣称计划能力已完成。
 MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 未经用户明确要求不开始代码。
@@ -130,7 +130,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 `MAC-DMG-1`..`MAC-DMG-5` 已完成（2026-09-26，分支 `mac-dmg-development`），macOS `.dmg` 格式已冻结（冻结基线 `0.1.0-alpha.45`）：`DotNet.Bundler.MacDmg` 后端 + MSBuild/直接 API 交付 `.dmg`（hdiutil 全链、拖放卷、`Udzo`/`Ulmo`/`Udbz`、Finder 布局与品牌、DMG 签名、EULA SLA、原生 E2E 矩阵），云 macOS VM 全链实测通过；默认下一阶段为 `MAC-PKG`，待启动指令。
 2026-09-26 规划轮已产出该格式要求的完整前置文档（分支 `mac-app-development`）：
 
-- 上游审计 [`mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)：固定快照 `7dbfc1f`（复核 `dev` `9f8922a` 无实质漂移），逐项登记 `.app`/`DMG` 用户可观察能力与选择阶段；
+- 上游审计：固定快照 `7dbfc1f`（复核 `dev` `9f8922a` 无实质漂移），逐项登记 `.app`/`DMG` 用户可观察能力与选择阶段；
 - 格式决策 [`mac-format-decision.md`](mac-format-decision.md)：PKG 已确认纳入公共 `PackageFormat`；
 - 阶段分解 [`mac-app-roadmap.md`](mac-app-roadmap.md)：`MAC-APP-1..5`（结构/元数据 → 分发与桌面集成 → codesign/notarization → 原生 E2E → 冻结），含宿主工具供应策略与 `.app` 语义契约，全部决策已确认；
 - 能力矩阵 [`mac-app-capability-matrix.md`](mac-app-capability-matrix.md)、人工清单 [`mac-app-manual-testing.md`](mac-app-manual-testing.md)、外部待办 [`mac-app-open-items.md`](mac-app-open-items.md)。
@@ -146,7 +146,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 每个格式分别完成元数据、文件布局、桌面集成、升级/卸载语义、签名或仓库验证边界、原生发行版 E2E，再进入下一个格式。
 若真实用户需求或可用原生验证环境要求调整，必须先在本文档写明依据和新顺序。
 
-2026-09-27 `LINUX-DEB` 规划轮完成（分支 `linux-deb-development`）：上游审计 [`linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `447fa9f`）、阶段分解与决策 [`linux-deb-roadmap.md`](linux-deb-roadmap.md)、能力矩阵/人工清单/外部待办均已就位，全部决策已确认。
+2026-09-27 `LINUX-DEB` 规划轮完成（分支 `linux-deb-development`）：上游审计（固定快照 `447fa9f`）、阶段分解与决策 [`linux-deb-roadmap.md`](linux-deb-roadmap.md)、能力矩阵/人工清单/外部待办均已就位，全部决策已确认。
 核心决策：deb/rpm 用纯托管写入器（无原生工具、任意构建宿主），AppImage 内嵌固定版本 `appimagetool`（构建限 Linux 宿主）。
 2026-09-27 `LINUX-DEB-1` 已完成（分支 `linux-deb-development`，`0.1.0-alpha.48`）：`DotNet.Bundler.Deb` 纯托管 ar/tar/gzip 写入器落地——最小 control 字段、`md5sums`、`usr/lib`+`usr/bin` 布局、SemVer→deb 版本映射、`.sha256` 侧车；MSBuild `BundlerDeb*` 接线、`Deb.Api.PackageFixture`、`tests/Linux.Deb.Integration/Verify.sh`（含真实 `sudo dpkg -i/-r`）、示例 `samples/HelloDebApp` 全部就位且验证全绿。
 2026-09-27 `LINUX-DEB-2` 已完成（同分支，`0.1.0-alpha.49`）：`Depends`/`Recommends`/`Provides`/`Conflicts`/`Replaces` 透传、`Section`/`Priority` 覆盖、`.desktop` 生成（决策 5 全字段含 `x-scheme-handler/` 并集）与 `BundlerDebDesktopFile` 整文件覆盖、hicolor PNG 图标（尺寸探测 + `@2x`）、AppStream metainfo、`changelog.gz`/`copyright`、`@(BundlerDebFile)` 绝对路径映射；`desktop-file-validate` 与装后 `dpkg -L` 回读断言全绿，lintian 信息级残余登记 LINUX-DEB-OI-07。

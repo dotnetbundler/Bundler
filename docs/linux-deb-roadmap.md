@@ -1,8 +1,8 @@
 # Linux `.deb` 后端实施路线（LINUX-DEB）
 
 > 状态：**LINUX-DEB-1..5 全部完成，`.deb` 冻结并已并入 `main`**（2026-09-27，`412d3bb`）。
-> 冻结基线：`DebBundleConfiguration` 配置面与行为契约冻结于 `0.1.0-alpha.51`；冻结测试向量 = `Bundler.Tests` 141/141 + `tests/Linux.Deb.Integration/Verify.sh` 全绿；冻结后仅缺陷修复附回归测试。
-> 上游审计见 [`docs/linux-tauri-capability-audit.md`](linux-tauri-capability-audit.md)（固定快照 `tauri-apps/tauri@447fa9f`）。
+> 冻结基线：`DebBundleConfiguration` 配置面与行为契约冻结于 `0.1.0-alpha.51`；冻结测试向量 = `Bundler.Tests` 141/141 + `DebIntegrationTests` 全绿；冻结后仅缺陷修复附回归测试。
+> 上游审计已完成（Tauri 固定快照 `447fa9f`）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 > 逐项能力状态见 [`docs/linux-deb-capability-matrix.md`](linux-deb-capability-matrix.md)；外部条件见 [`docs/linux-deb-open-items.md`](linux-deb-open-items.md)；人工步骤见 [`docs/linux-deb-manual-testing.md`](linux-deb-manual-testing.md)。
 
@@ -37,7 +37,7 @@
 11. **MSBuild 多格式**：放开适配层单格式限制，`BundlerFormats=deb;rpm` 同次 publish 由管线扇出（管线本身支持多后端，仅 Task 分发改动）；LINUX-DEB-1 先落地 `deb` 单格式，多格式扇出随 LINUX-RPM-1 一并验证。
 12. **分支**：`linux-deb-development`（逐格式分支，沿用 mac 先例），rpm/appimage 各自 `linux-rpm-development`/`linux-appimage-development`。
 13. **阶段骨架**：每格式"最小可用→元数据与桌面集成→脚本/systemd/压缩→原生 E2E 矩阵→审计冻结"五段；对应文档集在各自规划轮补齐。
-14. **命名**：示例 `samples/HelloDebApp`；fixture `tests/Bundler.ApiTests`（`DebApiTests`）；集成 `tests/Linux.Deb.Integration/Verify.sh`（薄入口，转发 `Bundler.IntegrationTests` 的 `DebIntegrationTests`）；文档 ID 前缀 `LINUX-DEB-OI-xx`/`LINUX-DEB-MT-xx`。
+14. **命名**：示例 `samples/HelloDebApp`；fixture `tests/Bundler.ApiTests`（`DebApiTests`）；集成 `tests/Bundler.IntegrationTests` 的 `DebIntegrationTests`（fixture `Fixtures/Deb/`）；文档 ID 前缀 `LINUX-DEB-OI-xx`/`LINUX-DEB-MT-xx`。
 
 ## 2. 打包工具下限（三层口径）
 
@@ -102,7 +102,7 @@
 - **前置**：LINUX-DEB-1..3 完成。
 - **目标/交付**：`lintian` 接入 Verify.sh（基线断言+豁免清单显式登记）；`linux-arm64` 产物结构断言（arm64 运行态装测属外部）；docker `debian:stable`/`ubuntu:latest` 容器真实装卸矩阵；干净宿主复核（构建侧零系统依赖复核）；示例全旋钮收口；矩阵/文档/未验证格如实限缩。
 - **退出**：矩阵实测格子有证据；未测格子进 OI/MT 清单。
-- **状态**：已完成（2026-09-27）。lintian 由信息级升级为硬断言——`tests/Linux.Deb.Integration/lintian-exemptions.txt` 登记豁免，新 tag 即失败；自动补发 `changelog.Debian.gz`（打包侧 changelog，固定日期保确定性）+ 扩展描述默认行 + fixture Maintainer 邮箱格式/Section 默认值消解了 DEB-2/3 的全部可修发现；`linux-arm64` 产物结构与 `Architecture: arm64` 断言（装测仍属 OI-01）；docker `debian:stable`/`ubuntu:latest` 真实装卸+运行+conffile `-r` 保留/`-P` 清除矩阵全绿；构建侧零系统依赖复核（`src/Bundler.Deb` 无任何外部进程调用）。
+- **状态**：已完成（2026-09-27）。lintian 由信息级升级为硬断言——`tests/Bundler.IntegrationTests/Fixtures/Deb/lintian-exemptions.txt` 登记豁免，新 tag 即失败；自动补发 `changelog.Debian.gz`（打包侧 changelog，固定日期保确定性）+ 扩展描述默认行 + fixture Maintainer 邮箱格式/Section 默认值消解了 DEB-2/3 的全部可修发现；`linux-arm64` 产物结构与 `Architecture: arm64` 断言（装测仍属 OI-01）；docker `debian:stable`/`ubuntu:latest` 真实装卸+运行+conffile `-r` 保留/`-P` 清除矩阵全绿；构建侧零系统依赖复核（`src/Bundler.Deb` 无任何外部进程调用）。
 - **证据**：`Bundler.Tests` 141 全绿（新增 changelog.Debian.gz/扩展描述用例）；`Verify.sh` 全绿含 arm64 变体与 docker 矩阵；lintian 输出仅剩 5 个已登记豁免 tag。
 
 ### LINUX-DEB-5：审计与格式冻结

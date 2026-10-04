@@ -3,7 +3,7 @@
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
 外部待验收行绑定到 `docs/alpine-apk-open-items.md`、`docs/alpine-apk-manual-testing.md` 中的明确 ID。
 决策与阶段见 `docs/alpine-apk-roadmap.md`。
-本矩阵于 2026-09-30 随 `APK-1..5` 实施建立；全部行以 `tests/Alpine.Apk.Integration/Verify.sh` 与 `tests/Bundler.Tests` `AlpineApkTests` 为证据（验证宿主为 Ubuntu x86_64 + docker `alpine:latest`，aarch64 经 qemu binfmt 仿真）。
+本矩阵于 2026-09-30 随 `APK-1..5` 实施建立；全部行以 `AlpineApkIntegrationTests` 与 `tests/Bundler.Tests` `AlpineApkTests` 为证据（验证宿主为 Ubuntu x86_64 + docker `alpine:latest`，aarch64 经 qemu binfmt 仿真）。
 
 ## 产物与载荷
 
@@ -14,7 +14,7 @@
 | 目录载荷 → `/usr/lib/<package-name>/` | 已实现 | APK-1 | 固定安装根；数据段真实 `apk add` 后 `apk info -L` 逐路径断言 |
 | `/usr/bin/<command>` 相对符号链接 | 已实现 | APK-1 | `usr/bin/<name>` → `../lib/<package>/<main>`；`BundlerAlpineApkBinLink` 可改名或 `none` 关闭 |
 | pax 扩展头 `APK-TOOLS.checksum.SHA1`（十六进制 sha1） | 已实现 | APK-4 | 逐常规文件 + 逐符号链接（按链接目标字符串哈希）；对照真实 `musl` apk 解剖校验，缺此被 `apk add` 报 missing embedded checksum 拒绝 |
-| 确定性构建（条目排序、uid/gid 0、mtime/atime/ctime 归一） | 已实现 | APK-1 | tar mtime 0 + 逐条目 pax `ctime=0`/`atime=0`；连产三次逐字节一致（Verify.sh 断言） |
+| 确定性构建（条目排序、uid/gid 0、mtime/atime/ctime 归一） | 已实现 | APK-1 | tar mtime 0 + 逐条目 pax `ctime=0`/`atime=0`；连产三次逐字节一致（`AlpineApkIntegrationTests` 断言） |
 | 失败清理 | 已实现 | APK-1 | 构建失败删除半成品 `.apk` 与侧车；非法 release 变体断言无残留 |
 
 ## 元数据（`.PKGINFO`）

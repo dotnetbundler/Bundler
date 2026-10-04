@@ -35,7 +35,7 @@ public sealed class MacAppFixture : IDisposable
     {
         Ws = IntegrationWorkspace.Create("macos-app-integration", "BundlerMacOSAppIntegration");
         CacheDir = Ws.Combine("nuget-cache");
-        FixtureDir = Path.Combine(RepositoryLayout.TestsDirectory, "MacOS.App.Integration", "Fixture");
+        FixtureDir = Path.Combine(RepositoryLayout.FixturesDirectory, "MacApp");
         FixtureProject = Path.Combine(FixtureDir, "BundlerMacAppIntegrationFixture.csproj");
         _init = new Lazy<bool>(Initialize);
     }

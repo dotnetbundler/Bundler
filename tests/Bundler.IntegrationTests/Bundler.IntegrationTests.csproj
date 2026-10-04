@@ -9,6 +9,12 @@
     <PackageReference Include="WixToolset.Dtf.WindowsInstaller" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Fixtures 是独立发布/还原的工程与载荷资产，不属于本测试程序集 -->
+    <Compile Remove="Fixtures/**/*.cs" />
+    <None Remove="Fixtures/**/*" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="..\Shared\TestPlatform.cs" />
+    <Compile Include="..\Shared\Tooling\*.cs" />
   </ItemGroup>
 </Project>

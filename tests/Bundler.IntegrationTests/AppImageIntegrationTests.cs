@@ -39,7 +39,7 @@ public sealed class AppImageFixture : IDisposable
         Ws = IntegrationWorkspace.Create("linux-appimage-integration", "BundlerLinuxAppImageIntegration");
         CacheDir = Ws.Combine("nuget-cache");
         ExtractRoot = Ws.Combine("extract");
-        FixtureDir = Path.Combine(RepositoryLayout.TestsDirectory, "Linux.AppImage.Integration", "Fixture");
+        FixtureDir = Path.Combine(RepositoryLayout.FixturesDirectory, "AppImage");
         FixtureProject = Path.Combine(FixtureDir, "BundlerAppImageIntegrationFixture.csproj");
         _ = RepositoryPackages.DirectoryPath;
 

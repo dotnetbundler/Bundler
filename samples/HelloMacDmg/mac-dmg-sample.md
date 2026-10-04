@@ -65,4 +65,4 @@ hdiutil attach artifacts/samples/HelloMacDmg/osx-arm64/dmg/Hello\ Mac\ DMG.dmg -
 hdiutil verify artifacts/samples/HelloMacDmg/osx-arm64/dmg/Hello\ Mac\ DMG.dmg
 ```
 
-自动化等价入口：`tests/MacOS.Dmg.Integration`（真实 attach/断言/detach/verify + SLA 回读 + ad-hoc 验签）。
+自动化等价入口：`MacDmgIntegrationTests`（真实 attach/断言/detach/verify + SLA 回读 + ad-hoc 验签）。

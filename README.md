@@ -18,6 +18,7 @@ Linux `.AppImage` 已冻结并入 `main`（`LINUX-APPIMAGE-1..4` 完成，冻结
 通用 `.zip`/`.tar.gz` 归档已冻结并入 `main`（`ARCHIVE-1..3` 完成，冻结基线 `0.1.0-alpha.59`）：`DotNet.Bundler.Archive` 纯托管写入器（zip 自实现 unix mode/symlink，tar.gz 复用共享 ustar 写入器），单顶层目录 `<pkg>-<ver>-<rid>/` 布局，执行位与符号链接双保留，`.sha256` 侧车，`BundlerFormats=zip;targz` 与 `deb;rpm;appimage;zip;targz` 扇出；`unzip`/`zipinfo -l`/`tar` 真实解包逐路径断言、解出载荷运行、mode/symlink 还原断言全绿。
 Alpine `.apk` 已冻结并入 `main`（`0.1.0-alpha.63`，`APK-1..5` 完成、PR #13 终审合并）：`DotNet.Bundler.AlpineApk` 纯托管三段 gzip 写入器（签名段+控制段 `.PKGINFO`/六脚本+数据段），`linux-musl-x64/arm64` → `x86_64`/`aarch64`，逐文件 pax `APK-TOOLS.checksum.SHA1`、`depend`/`provides`/`triggers`/`license`/`release`/`builddate` 与 `@(BundlerAlpineApkFile)` 任意绝对路径映射，可选 RSA 签名（`.SIGN.RSA.<密钥名>.rsa.pub`，公钥入 `/etc/apk/keys/` 后免 `--allow-untrusted`）；`alpine:latest` 容器 x86_64 直跑 + aarch64 qemu binfmt 真实 `apk add`/`apk del` 全绿。
 各格式可运行示例见 `samples/`：[`HelloNsisApp`](samples/HelloNsisApp/nsis-sample.md)、[`HelloMsiApp`](samples/HelloMsiApp/msi-sample.md)、[`HelloMacApp`](samples/HelloMacApp/mac-app-sample.md)、[`HelloMacDmg`](samples/HelloMacDmg/mac-dmg-sample.md)、[`HelloMacPkg`](samples/HelloMacPkg/mac-pkg-sample.md)、[`HelloDebApp`](samples/HelloDebApp/linux-deb-sample.md)、[`HelloRpmApp`](samples/HelloRpmApp/linux-rpm-sample.md)、[`HelloAppImageApp`](samples/HelloAppImageApp/linux-appimage-sample.md)、[`HelloArchiveApp`](samples/HelloArchiveApp/archive-sample.md) 与 [`HelloAlpineApkApp`](samples/HelloAlpineApkApp/alpine-apk-sample.md)。
+各格式打包/消费的平台支持范围汇总见 [`docs/platform-support-matrix.md`](docs/platform-support-matrix.md)。
 
 实现已经拆分为可复用的 NuGet 包。
 `DotNet.Bundler` 只是便利元包，实际打包代码位于以下各层。
@@ -205,7 +206,7 @@ MSBuild 使用既有的 `BundlerWindowsSigning*` 属性和 `BundlerWindowsSignin
 
 WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 当前开发版本尚未公开到默认 NuGet 源时，先从本仓库 pack 并指定本地包源。
-上述包引用与实际编译由复制到仓库外目录的 `tests/Windows.Msi.Integration/Standalone` fixture 自动验证；MSI 产品身份和安装行为以 MSI 专用文档为准。
+上述包引用与实际编译由复制到仓库外目录的 `tests/Bundler.LocalPackagesTests/Fixtures/Msi/Standalone` fixture 自动验证；MSI 产品身份和安装行为以 MSI 专用文档为准。
 
 ## MSBuild 属性
 
@@ -424,7 +425,7 @@ Header 图片建议为 150×57 BMP，Sidebar 图片建议为 164×314 BMP。
 
 产物确定性边界：`.deb`/`.rpm`/`.zip`/`.tar.gz`/`.apk` 为纯托管写入器，相同输入与条件下产物逐字节确定（联合测试实测：同宿主跨轮与 linux↔qemu 同型跨宿主一致；`.apk` 含可选 RSA 签名段亦逐字节确定——RSA PKCS#1 v1.5 为确定性签名）；`.nsis` 与 `.AppImage` 不承诺逐字节一致——makensis 将源文件时间戳编入输出、appimagetool 的 squashfs 元数据与内嵌 runtime 摘要随构建环境变化，属上游工具性质而非写入器缺陷。
 
-可编辑的 NSIS 源模板存放在 `templates/nsis/installer.nsi`。
+可编辑的 NSIS 源模板存放在 `src/Bundler.Nsis/templates/installer.nsi`。
 发布包时，该模板、语言文件和完整的多宿主 NsisToolset 压缩包会嵌入 `DotNet.Bundler.Nsis`，因此独立 API 和 MSBuild 使用者得到完全相同的资源，也不会把工具复制到项目输出目录。
 安装器语言按 Tauri 的能力范围配置：`BundlerNsisLanguages` 是分号分隔的语言列表，第一项是系统语言不匹配时的回退语言；
 只有启用多个语言并把 `BundlerNsisDisplayLanguageSelector` 设为 `true` 时才显示语言选择器。
@@ -520,7 +521,7 @@ journal 与当时选择的安装目录绑定，恢复时目录不一致会安全
 安装器会检测这种跳过并返回 `2`；交互模式会提示关闭可能占用安装目录文件的应用后重试。
 若文件锁也阻止即时回滚，则保留 active journal，待释放锁后的下一次启动先恢复旧状态，绝不把新旧文件混合状态报告为成功。
 因此上述契约不能扩写为“已经支持锁定文件原位升级”：当前可验证的重启来源是旧 MSI 返回值、生命周期 Hook，以及提权卸载的 `/REBOOTOK` 删除。
-真实系统队列验收必须在可丢弃并允许重启的管理员 Windows 环境执行 `tests/Windows.Nsis.Reboot/Verify.ps1`；脚本不会编辑或清空共享的 `PendingFileRenameOperations`。
+真实系统队列验收必须在可丢弃并允许重启的管理员 Windows 环境执行 `tools/Windows.Nsis.Reboot/Verify.ps1`；脚本不会编辑或清空共享的 `PendingFileRenameOperations`。
 
 如果产品以前使用 MSI 发布，应配置历史安装包的准确标识，不按产品名猜测：
 
@@ -659,36 +660,23 @@ dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Re
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
 dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
-# 各 Verify.* 均为薄入口，转发到 Bundler.IntegrationTests 对应测试类
-powershell -File tests/Windows.Nsis.Integration/Verify.ps1 -Configuration Release
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/Verify.ps1 -ConfirmLocalInstall
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyLifecycle.ps1 -ConfirmLocalInstall
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyMaintenance.ps1 -ConfirmLocalInstall
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/Windows.Msi.Integration/VerifyPublicSample.ps1
+# 集成测试按格式类选择（`--filter-class` 单名过滤，各宿主只跑宿主可用腿）
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*NsisIntegrationTests*"
+dotnet test tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj -c Release --filter-class "*MsiLocalPackagesTests*"
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*CliIntegrationTests*"
 ```
 
-Linux/macOS 宿主对应的真实集成入口（bash）：
-
-```bash
-bash tests/Linux.Deb.Integration/Verify.sh
-bash tests/Linux.Rpm.Integration/Verify.sh
-bash tests/Linux.AppImage.Integration/Verify.sh
-bash tests/Archive.Integration/Verify.sh
-bash tests/Alpine.Apk.Integration/Verify.sh
-bash tests/Cli.Integration/Verify.sh
-bash tests/MacOS.App.Integration/Verify.sh    # 仅 macOS 宿主
-bash tests/MacOS.Dmg.Integration/Verify.sh    # 仅 macOS 宿主
-bash tests/MacOS.Pkg.Integration/Verify.sh    # 仅 macOS 宿主
-```
+Linux/macOS 宿主对应的真实集成按同规则选类（`DebIntegrationTests`/`RpmIntegrationTests`/`AppImageIntegrationTests`/`ArchiveIntegrationTests`/`AlpineApkIntegrationTests`/`MacAppIntegrationTests`/`MacDmgIntegrationTests`/`MacPkgIntegrationTests`）；
+真装腿另需同意闸与资源 trait 过滤，完整选择方式见 [`tests/README.md`](tests/README.md)。
 
 NSIS Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。
 
 MSI 集成测试每轮从本地包源还原，并核对隔离缓存中的实际包版本。
-基础脚本先把独立 API fixture 放在仓库外，只引用 `DotNet.Bundler.Wix` 生成真实 MSI；再用便利元包的 MSBuild fixture 执行真实安装/卸载。
-生命周期脚本生成两版本和同版本异内容包，检查升级、降级/异包拒绝、桌面注册、快捷方式及用户文件保留。
-维护脚本验证被动安装/卸载、静默修复、测试专用包的延迟故障回滚。
-公开示例脚本只构建三种 MSI 变体并检查数据库，不安装示例产品。
-`-ConfirmLocalInstall` 只允许受限安装测试。
+基础腿先把独立 API fixture 放在仓库外，只引用 `DotNet.Bundler.Wix` 生成真实 MSI；再用便利元包的 MSBuild fixture 执行真实安装/卸载。
+生命周期腿生成两版本和同版本异内容包，检查升级、降级/异包拒绝、桌面注册、快捷方式及用户文件保留。
+维护腿验证被动安装/卸载、静默修复、测试专用包的延迟故障回滚。
+公开示例腿只构建三种 MSI 变体并检查数据库，不安装示例产品。
+真装腿需 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 同意闸。
 干净宿主、ARM64、UAC、真实重启与生产证书仍按 MSI 人工验收文档执行。
 
 人工验收入口见 [`docs/manual-testing-index.md`](docs/manual-testing-index.md)；

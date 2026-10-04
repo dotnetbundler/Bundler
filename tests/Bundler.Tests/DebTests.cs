@@ -786,8 +786,8 @@ public static class DebTests
     [Fact]
     static void MapsDebSettingsThroughMsBuild()
     {
-        var targets = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
-        var props = File.ReadAllText(Path.Combine(RepositoryRoot(), "buildTransitive", "DotNet.Bundler.MSBuild.props"));
+        var targets = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
+        var props = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.props"));
         var task = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
         Assert.True(targets.Contains("DebPackageName=\"$(BundlerDebPackageName)\"", StringComparison.Ordinal) &&
                targets.Contains("DebVersion=\"$(BundlerDebVersion)\"", StringComparison.Ordinal) &&

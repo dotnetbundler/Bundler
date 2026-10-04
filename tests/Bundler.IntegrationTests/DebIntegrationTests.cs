@@ -40,7 +40,7 @@ public sealed class DebFixture : IDisposable
         Ws = IntegrationWorkspace.Create("linux-deb-integration", "BundlerLinuxDebIntegration");
         CacheDir = Ws.Combine("nuget-cache");
         ExtractRoot = Ws.Combine("extract");
-        FixtureDir = Path.Combine(RepositoryLayout.TestsDirectory, "Linux.Deb.Integration", "Fixture");
+        FixtureDir = Path.Combine(RepositoryLayout.FixturesDirectory, "Deb");
         FixtureProject = Path.Combine(FixtureDir, "BundlerDebIntegrationFixture.csproj");
         _ = RepositoryPackages.DirectoryPath;
 
@@ -603,7 +603,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     {
         ExternalTools.Require("lintian");
         var exemptionsFile = Path.Combine(
-            RepositoryLayout.TestsDirectory, "Linux.Deb.Integration", "lintian-exemptions.txt");
+            RepositoryLayout.FixturesDirectory, "Deb", "lintian-exemptions.txt");
         var exemptions = File.ReadAllLines(exemptionsFile)
             .Where(l => !string.IsNullOrWhiteSpace(l)).ToHashSet();
         var result = ProcessRunner.Run("lintian", [_f.DefaultDeb]); // 退出码非零也照常解析

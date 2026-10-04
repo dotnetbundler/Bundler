@@ -40,8 +40,8 @@ public sealed class ArchiveFixture : IDisposable
         Ws = IntegrationWorkspace.Create("archive-integration", "BundlerArchiveIntegration");
         CacheDir = Ws.Combine("nuget-cache");
         ExtractRoot = Ws.Combine("extract");
-        FixtureProject = Path.Combine(RepositoryLayout.TestsDirectory,
-            "Archive.Integration", "Fixture", "BundlerArchiveIntegrationFixture.csproj");
+        FixtureProject = Path.Combine(RepositoryLayout.FixturesDirectory,
+            "Archive", "BundlerArchiveIntegrationFixture.csproj");
         _ = RepositoryPackages.DirectoryPath;
         Publish("default");
         DefaultZip = SingleFile(Ws.Combine("default", "linux-x64", "zip"), "*.zip");

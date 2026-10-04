@@ -12,9 +12,9 @@
   <ItemGroup>
     <EmbeddedResource Include="..\..\third_party\nsis\nsis-toolset-3.12-r1.zip"
                       LogicalName="DotNet.Bundler.Nsis.Resources.nsis-toolset-3.12-r1.zip" />
-    <EmbeddedResource Include="..\..\templates\nsis\installer.nsi"
+    <EmbeddedResource Include="templates\installer.nsi"
                       LogicalName="DotNet.Bundler.Nsis.Resources.installer.nsi" />
-    <EmbeddedResource Include="..\..\templates\nsis\languages\*.nsh"
+    <EmbeddedResource Include="templates\languages\*.nsh"
                       LogicalName="DotNet.Bundler.Nsis.Resources.languages.%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\..\third_party\nsis\plugins\x86-unicode\DotNetBundlerNsis.dll"
                       LogicalName="DotNet.Bundler.Nsis.Resources.plugins.DotNetBundlerNsis.dll" />

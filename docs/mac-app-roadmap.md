@@ -1,7 +1,7 @@
 # macOS `.app` 后端实施路线（MAC-APP）
 
 > 状态：**路线已确认，`MAC-APP-1`..`MAC-APP-5` 全部完成，`.app` 格式已冻结**（冻结基线：`mac-app-development` 分支 `BundlerPackageVersion=0.1.0-alpha.45`，行为契约=`mac-app-capability-matrix.md` 定稿表+本文件各节验收记录；冻结后仅缺陷修复附回归测试）。
-> 上游审计见 [`docs/mac-tauri-capability-audit.md`](mac-tauri-capability-audit.md)；PKG 取舍见 [`docs/mac-format-decision.md`](mac-format-decision.md)；逐项能力状态见 [`docs/mac-app-capability-matrix.md`](mac-app-capability-matrix.md)；外部条件见 [`docs/mac-app-open-items.md`](mac-app-open-items.md)；人工步骤见 [`docs/mac-app-manual-testing.md`](mac-app-manual-testing.md)。
+> 上游审计已完成（Tauri 固定快照 `7dbfc1f`）；PKG 取舍见 [`docs/mac-format-decision.md`](mac-format-decision.md)；逐项能力状态见 [`docs/mac-app-capability-matrix.md`](mac-app-capability-matrix.md)；外部条件见 [`docs/mac-app-open-items.md`](mac-app-open-items.md)；人工步骤见 [`docs/mac-app-manual-testing.md`](mac-app-manual-testing.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 
 ## 1. 已核实事实、选择及风险
@@ -100,7 +100,7 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 8. **秘密处理**：证书/密码/API key 只允许经密钥提供器或约定环境变量；临时钥匙串用完即删；
    本机只允许 ad-hoc 签名断言，Developer ID/公证一律外部待验收。
 
-依据：[Apple Bundle 结构](https://developer.apple.com/go/?id=bundle-structure)、[Info.plist 键](https://developer.apple.com/documentation/bundleresources/information-property-list)、[codesign](https://developer.apple.com/library/archive/technotes/tn2206/)、[Notarization](https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution)、[QA1940 扩展属性](https://developer.apple.com/library/archive/qa/qa1940/_index.html)、上游快照 `docs/mac-tauri-capability-audit.md`。
+依据：[Apple Bundle 结构](https://developer.apple.com/go/?id=bundle-structure)、[Info.plist 键](https://developer.apple.com/documentation/bundleresources/information-property-list)、[codesign](https://developer.apple.com/library/archive/technotes/tn2206/)、[Notarization](https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution)、[QA1940 扩展属性](https://developer.apple.com/library/archive/qa/qa1940/_index.html)、上游 Tauri 快照审计（`7dbfc1f`）。
 
 ## 4. 阶段计划
 
@@ -115,8 +115,8 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 | --- | --- |
 | 快速单元/契约 | `tests/Bundler.Tests` |
 | 仓库外直接后端 API 包消费 | `tests/Bundler.ApiTests`（`MacAppApiTests`） |
-| MSBuild 包消费 fixture | `tests/MacOS.App.Integration/Fixture` |
-| 真实 macOS 集成 | `tests/MacOS.App.Integration/Verify.sh`（薄入口，转发 `Bundler.IntegrationTests` 的 `MacAppIntegrationTests`；独立身份、预检无碰撞、只清理本轮产物） |
+| MSBuild 包消费 fixture | `tests/Bundler.IntegrationTests/Fixtures/MacApp` |
+| 真实 macOS 集成 | `MacAppIntegrationTests`（`tests/Bundler.IntegrationTests`；独立身份、预检无碰撞、只清理本轮产物） |
 | 专用环境与人工 | `docs/mac-app-manual-testing.md`、`docs/mac-app-open-items.md` |
 
 ### MAC-APP-1：可用的最小 `.app`（结构/元数据）
@@ -198,7 +198,7 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 - **不做**：新增功能；冻结后仅缺陷修复附回归测试。
 - **退出**：矩阵与文档一致；冻结基线写入本文件与 `PROJECT_CONTEXT.md`；`docs/roadmap.md` 默认下一阶段推进到 `MAC-DMG`。
 - **验收记录（2026-09-26）**：
-  - 上游漂移复核：`tauri dev` 自 `9f8922a` 移至 `447fa9f`，`app.rs`/`sign.rs`/`icon.rs`/`dmg/mod.rs`/`settings.rs`/`config.rs`/`tauri-macos-sign` 共 8 个 macOS 相关文件字节一致，无新能力缺口，审计基线 `7dbfc1f` 结论继续有效（记于 `mac-tauri-capability-audit.md`）；
+  - 上游漂移复核：`tauri dev` 自 `9f8922a` 移至 `447fa9f`，`app.rs`/`sign.rs`/`icon.rs`/`dmg/mod.rs`/`settings.rs`/`config.rs`/`tauri-macos-sign` 共 8 个 macOS 相关文件字节一致，无新能力缺口，审计基线 `7dbfc1f` 结论继续有效；
   - 能力矩阵定稿：逐项状态与 MAC-APP-1..4 验收证据对齐，无悬空"计划实现"行；
   - 许可/供应链复核：本格式无第三方内嵌工具，全部打包步骤走宿主系统工具（`plutil`/`codesign`/`security`/`xattr`/`ditto`/`spctl`）或 Xcode 桥接工具（`xcrun notarytool`/`stapler`、`actool` 可降级），复核点=宿主工具版本下限（已记录 §2 三层下限口径）与凭证边界（`APPLE_*` 环境变量/显式配置，秘密不入库）；
   - 外部待办收口：OI-01..07 逐条复核登记口径不变，仍属外部待验收，未宣称已通过；
@@ -212,5 +212,5 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 | 专用 macOS 环境 | 干净宿主、Intel/Rosetta、不同 macOS 版本、下载-quarantine-首启、per-user 之外需提权的位置试验（可抛弃 VM） |
 | 外部待验收 | Developer ID 证书签名、真实公证/上钉/撤销、Gatekeeper 信任链评估、生产分发 |
 
-接班者先读 `AGENTS.md`、`docs/development-rules.md`、`PROJECT_CONTEXT.md`、`docs/roadmap.md`、本文、`mac-tauri-capability-audit.md`、矩阵/待办/人工文档，再核 Git、代码与测试。
+接班者先读 `AGENTS.md`、`docs/development-rules.md`、`PROJECT_CONTEXT.md`、`docs/roadmap.md`、本文、矩阵/待办/人工文档，再核 Git、代码与测试。
 每阶段完成新增自动化和适用的真实 macOS 测试后报告结果；未经用户明确要求不开始后续阶段代码、不提交或推送（本路线文档轮次的提交推送已由用户明确授权）。

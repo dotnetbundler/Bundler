@@ -9,7 +9,7 @@
 | --- | --- | --- | --- |
 | `BundlerRpmSigningKeyFile`/`Passphrase` 旋钮 | 已实现 | SIGN-1 | 供密钥才签；半配置拒绝 |
 | OpenPGP 签名写 rpm signature header（RPMSIGTAG_RSA） | 已实现 | SIGN-1 | 纯托管 BouncyCastle；无外部进程；双标签：RSA(268，仅签 header——zypper 所验）+PGP(1002，签 header+payload——`rpm -K` 所验），v3 签名包 |
-| 容器内 `rpm --import` + `rpm -K` 验签 | 已实现 | SIGN-1 | Verify.sh docker 段；2026-10-01 fedora:41 `dnf install`（`localpkg_gpgcheck=1`）装已签 rpm 通过、未导公钥验签拒绝 |
+| 容器内 `rpm --import` + `rpm -K` 验签 | 已实现 | SIGN-1 | `RpmIntegrationTests` docker 段；2026-10-01 fedora:41 `dnf install`（`localpkg_gpgcheck=1`）装已签 rpm 通过、未导公钥验签拒绝 |
 | 无密钥产物与现状一致 | 已实现 | SIGN-1 | sha256 对比断言 |
 
 ## AppImage 签名
@@ -18,7 +18,7 @@
 | --- | --- | --- | --- |
 | `BundlerAppImageSigningKeyFile`/`Passphrase` 旋钮 | 已实现 | SIGN-2 | 同 rpm 口径；MSBuild/CLI 自动透传 |
 | appimagetool `--sign`（隔离 GNUPGHOME） | 已实现 | SIGN-2 | 唯一外部进程出口，仅供密钥时触发；口令经 `APPIMAGETOOL_SIGN_PASSPHRASE` 注入不上命令行 |
-| `gpgv`/`--validate` 验签断言 | 已实现 | SIGN-2 | Verify.sh：两段置零→sha256 裸 hex→`gpgv` Good signature |
+| `gpgv`/`--validate` 验签断言 | 已实现 | SIGN-2 | `AppImageIntegrationTests`：两段置零→sha256 裸 hex→`gpgv` Good signature |
 | 无密钥产物与现状一致 | 已实现 | SIGN-2 | 未签构建 `.sha256_sig` 保持全零断言 |
 
 ## apk 签名

@@ -1,7 +1,7 @@
 # Linux `.deb` 人工验收清单（LINUX-DEB-MT）
 
 以下项目本机无法自动化（需 GUI 桌面环境/专用宿主/真实发行版矩阵），逐项人工记录：OS 版本、架构、Git SHA、产物 SHA-256、日志、清理方式。
-本机已可自动化的真实断言（`dpkg -i/-r/-P`、`lintian`、`desktop-file-validate`、docker 容器装卸）进 `tests/Linux.Deb.Integration/Verify.sh`，不在本清单重复。
+本机已可自动化的真实断言（`dpkg -i/-r/-P`、`lintian`、`desktop-file-validate`、docker 容器装卸）进 `DebIntegrationTests`，不在本清单重复。
 
 ## 验收步骤（草拟，随阶段推进落实）
 

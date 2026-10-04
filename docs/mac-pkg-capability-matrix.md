@@ -1,7 +1,7 @@
 # macOS `.pkg` 能力矩阵
 
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
-已实现行验收证据：`Bundler.Tests` 122 项 + `tests/MacOS.Pkg.Integration/Verify.sh`（macOS 26.5.2 arm64 全绿）；外部待验收行绑定到 `docs/mac-pkg-open-items.md`、`docs/mac-pkg-manual-testing.md` 中的明确 ID。
+已实现行验收证据：`Bundler.Tests` 122 项 + `MacPkgIntegrationTests`（macOS 26.5.2 arm64 全绿）；外部待验收行绑定到 `docs/mac-pkg-open-items.md`、`docs/mac-pkg-manual-testing.md` 中的明确 ID。
 `.pkg` 无上游参照（tauri 无 `.pkg` 输出），能力集由原生工具链语义与 `docs/mac-format-decision.md` 边界决定。
 决策已于 `2026-09-26` 全部确认；`MAC-PKG-1..5` 全部完成，本矩阵已于 MAC-PKG-5 定稿（冻结基线 `0.1.0-alpha.47`），状态列如实反映当前实现。
 

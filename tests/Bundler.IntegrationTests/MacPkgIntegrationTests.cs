@@ -28,8 +28,8 @@ public sealed class MacPkgFixture : IDisposable
         Ws = IntegrationWorkspace.Create("macos-pkg-integration", "BundlerMacOSPkgIntegration");
         CacheDir = Ws.Combine("nuget-cache");
         ExpandRoot = Ws.Combine("expand");
-        FixtureProject = Path.Combine(RepositoryLayout.TestsDirectory,
-            "MacOS.Pkg.Integration", "Fixture", "BundlerMacPkgIntegrationFixture.csproj");
+        FixtureProject = Path.Combine(RepositoryLayout.FixturesDirectory,
+            "MacPkg", "BundlerMacPkgIntegrationFixture.csproj");
         _init = new Lazy<bool>(Initialize);
     }
 

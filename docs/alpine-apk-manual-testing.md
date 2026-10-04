@@ -1,7 +1,7 @@
 # Alpine `.apk` 人工验收清单（APK-MT）
 
 以下项目本机无法自动化（需真机 ARM64、跨宿主产出矩阵、真实升级工作流等），逐项人工记录：OS 版本、架构、Git SHA、产物 SHA-256、日志、清理方式。
-本机已可自动化的真实断言（`apk add --allow-untrusted`、可信公钥安装、`apk del`、结构与确定性检查）进 `tests/Alpine.Apk.Integration/Verify.sh`，不在本清单重复。
+本机已可自动化的真实断言（`apk add --allow-untrusted`、可信公钥安装、`apk del`、结构与确定性检查）进 `AlpineApkIntegrationTests`，不在本清单重复。
 
 ## 验收步骤（草拟，随阶段推进落实）
 
