@@ -33,7 +33,10 @@
     <BundlerNsisShortcutDesktop>true</BundlerNsisShortcutDesktop>
     <BundlerNsisShortcutStartMenu>true</BundlerNsisShortcutStartMenu>
     <BundlerNsisShortcutArguments>--from-shortcut &quot;你好 world&quot;</BundlerNsisShortcutArguments>
-    <BundlerNsisShortcutWorkingDirectory>演示资源</BundlerNsisShortcutWorkingDirectory>
+    <!-- 工作目录必须指向最终载荷内存在的目录：中文目录在含 msi 的 publish 被 CJK 回退摘除，
+         届时回退到常驻载荷的 docs。 -->
+    <BundlerNsisShortcutWorkingDirectory Condition="!$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))">演示资源</BundlerNsisShortcutWorkingDirectory>
+    <BundlerNsisShortcutWorkingDirectory Condition="$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))">docs</BundlerNsisShortcutWorkingDirectory>
     <BundlerNsisShortcutIcon>HelloBundlerApp.exe</BundlerNsisShortcutIcon>
     <BundlerNsisShortcutAppUserModelId>com.example.hellobundlerapp.desktop</BundlerNsisShortcutAppUserModelId>
     <BundlerNsisShortcutStartMenuFolder>Bundler Examples</BundlerNsisShortcutStartMenuFolder>
