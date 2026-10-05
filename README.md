@@ -693,4 +693,4 @@ MSBuild 与开发用 CLI 都只是这些包的适配层，不实现 NSIS 打包�
 
 NsisToolset 发布包的校验值已经固定在源码中。
 NuGet 包会同时携带第三方声明和 NSIS 上游许可证。
-本仓库自身采用何种开源许可证尚未确定。
+本仓库采用 MIT 许可证（见根目录 `LICENSE`），NuGet 包同步携带 `MIT` license expression 与许可证文件。

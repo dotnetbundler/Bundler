@@ -7,6 +7,7 @@
     <Authors>Bundler contributors</Authors>
     <PackageVersion>$(BundlerPackageVersion)</PackageVersion>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
   <PropertyGroup Condition="'$(MSBuildProjectName)' != 'Bundler.Cli' and '$(MSBuildProjectName)' != 'Bundler.Core'">
     <!-- 库后端统一 netstandard2.0；Core 自行 netstandard2.0;net10.0 双目标 -->
@@ -15,6 +16,7 @@
 
   <ItemGroup Condition="'$(MSBuildProjectName)' != 'Bundler.Cli'">
     <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="/" />
+    <None Include="$(MSBuildThisFileDirectory)..\LICENSE" Pack="true" PackagePath="/" />
     <None Include="$(MSBuildThisFileDirectory)..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

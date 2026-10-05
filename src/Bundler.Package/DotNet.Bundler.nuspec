@@ -6,6 +6,7 @@
     <authors>Bundler contributors</authors>
     <developmentDependency>true</developmentDependency>
     <readme>README.md</readme>
+    <license type="expression">MIT</license>
     <description>Convenience package for automatic desktop installer generation during dotnet publish.</description>
     <tags>dotnet msbuild bundler installer desktop</tags>
     <dependencies>
@@ -16,6 +17,7 @@
   </metadata>
   <files>
     <file src="..\..\README.md" target="" />
+    <file src="..\..\LICENSE" target="LICENSE" />
     <file src="..\..\THIRD-PARTY-NOTICES.md" target="" />
   </files>
 </package>
