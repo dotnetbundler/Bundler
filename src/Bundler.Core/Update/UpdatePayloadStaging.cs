@@ -38,7 +38,11 @@ public static class UpdatePayloadStaging
     {
         var rid = item.Target.RuntimeIdentifier;
         UpdateIdentitySidecar.WriteIfEnabled(payloadRoot, update, item.Format, rid);
-        UpdateBootstrapper.Inject(payloadRoot, update, rid);
+        if (UpdateBootstrapper.Inject(payloadRoot, update, rid) is null)
+        {
+            throw new InvalidOperationException(
+                $"BundlerUpdate enabled but no bootstrapper found for '{rid}' — expected updater/<rid>/ or updater/posix/ beside the task assembly or BundlerUpdateBootstrapperDirectory.");
+        }
     }
 
     private static void CopyDirectory(string source, string destination)

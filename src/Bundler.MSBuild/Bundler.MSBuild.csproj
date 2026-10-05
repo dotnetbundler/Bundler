@@ -56,4 +56,17 @@
     <None Include="..\..\third_party\wix\LICENSE.TXT" Pack="true" PackagePath="licenses/wix/" />
     <None Include="..\..\third_party\wix\msi-wix-provenance.md" Pack="true" PackagePath="licenses/wix/" />
   </ItemGroup>
+
+  <!-- 引导件落到任务程序集输出旁 updater/（项目引用模式下 UpdateBootstrapper 按程序集目录约定
+       解析；包模式下读 nupkg tasks/ 下同一布局）。AfterBuild Copy 不经 None CopyTo* 元数据，
+       避免经项目引用流进消费方输出。 -->
+  <Target Name="_BundlerCopyUpdaterTools" AfterTargets="Build">
+    <ItemGroup>
+      <_BundlerUpdaterTool Include="..\Bundler.Updater.Bootstrap\tools\**" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_BundlerUpdaterTool)"
+          DestinationFiles="@(_BundlerUpdaterTool->'$(TargetDir)updater\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

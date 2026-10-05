@@ -49,6 +49,10 @@
 
 ## 4. 阶段实施证据
 
+### 2026-10-05 整模块真实端到端功能测试
+MSBuild 真消费链全通：`update-keygen` 产钥→`HelloBundlerApp` 经 `BundlerUpdate*` 真旋钮 publish 出 zip+清单+`.sig`+`.blockmap`（zip 载荷内含侧车+本 RID 引导件）→解包装 v1→feed 发 v1.1.0→`UpdateClient` 全量下载+验签+引导换包→`--rollback` 逐字节还原 v1（备份保留）→feed 发 v1.2.0→**差分实腿 83% 复用**（38.2M 件：31.5M 本地复用/6.7M Range 拉取）→换包后安装目录与 v3 zip 逐文件 sha256 一致。
+功能测试暴露两缺陷并当场修复：MSBuild 项目引用模式下任务程序集旁缺 `updater/` 工具树（改 AfterBuild Copy 落 `updater/`，None CopyTo* 会经项目引用流进消费方载荷故弃用）；`UpdateBootstrapper` 的约定目录探测误用 `AppContext.BaseDirectory`（MSBuild 节点里它是 SDK 宿主目录）改 `Assembly.Location`；`UpdateClient` 对相对 `installDirectory` 入库即 `GetFullPath` 绝对化（引导件以自身目录为 cwd）。
+
 ### 2026-10-05 UPDATE-6 文档族收口+冻结
 文档族齐套：`update-capability-matrix.md`（逐项能力×验收状态）、`update-open-items.md`（UPDATE-OI-01..06：arm64 AOT 件/Apple 凭证腿/桌面会话观察/真实发布链狗食/公网 Range/per-machine UAC）、`update-manual-testing.md`（UPDATE-MT-01..06 一一对应 OI），`manual-testing-index.md` 登记 UPDATE 行（`UPDATE-MT-xx`/`UPDATE-OI-xx` 前缀）；README 增"应用自更新（UPDATE）"节（旋钮表+keygen+UpdateClient 用法+格式边界）；`docs/roadmap.md` §7.2 需求项改"已实现"；AGENTS 一句话现状与 CONTEXT 同步冻结基线 `0.1.0-alpha.74`。同轮补强：HTTP 差分真腿——回环微型服务器实证 feed/块表/Range-206 全走 http 通道。
 

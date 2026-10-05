@@ -86,6 +86,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 - UPDATE-5 block-map 差分落地：`UpdateBlockMap` v1（64KiB 固定块+有序 sha256 b64）单源双栖；发射器每制品产 `.blockmap` 并写清单 `blockMap` 字段；`EnableDelta` 默认开——命中块本地复制+缺失块合并连续区间（http 硬要求 206、本地定位读）→产物 size+sha256 全验→任一环节失败回退全量；`<install>.bundler-cache/artifact.bin` 为差分源件缓存并随成功下载刷新。
 - 双路实证全绿：本地差分命中腿（日志断言 `delta applied`/`B reused`）、脏缓存回退腿、**回环 HTTP 真腿**（微型服务器，feed/块表/Range-206 全走 http）；本机 Bundler.Tests 315/276P/0F/39S。
+- 整模块真实 E2E：MSBuild 旋钮全链（keygen→publish→侧车/引导件入 zip→v1→v2 全量换包→回滚逐字节还原→v3 差分 83% 复用→逐文件一致）；顺手修三处真缺陷（MSBuild 旁 updater/ 缺失、Assembly.Location 探测、相对安装目录绝对化）。
 - UPDATE-6 文档族收口：`update-capability-matrix.md`+`update-open-items.md`（OI-01..06）+`update-manual-testing.md`（MT-01..06）+`manual-testing-index.md` 登记+README"应用自更新"节+roadmap §7.2 改已实现；UPDATE 模块冻结基线 `0.1.0-alpha.74`。
 - 外部待验收：arm64 AOT 引导件（qemu ilc 边界）、Apple 凭证同身份腿、真实发布链狗食、per-machine UAC、公网 CDN Range（UPDATE-OI-01..06）。
 
@@ -312,6 +313,6 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新路线已于 2026-10-05 立项（`docs/update-roadmap.md`，13 项决策经用户裁决，六阶段 `UPDATE-1..6` 至全功能），UPDATE-1..6 已实现并冻结（分支 `devin/1791228441-update-module`，基线 `0.1.0-alpha.74`），下一步：整模块完整功能测试后单 PR 走 review/合并流程。
+UPDATE 自更新路线已于 2026-10-05 立项（`docs/update-roadmap.md`，13 项决策经用户裁决，六阶段 `UPDATE-1..6` 至全功能），UPDATE-1..6 已实现并冻结+整模块真实 E2E 全通（分支 `devin/1791228441-update-module`，基线 `0.1.0-alpha.74`），下一步：单 PR→Devin Review→等合并授权。
 剩余工作：UPDATE-1 启动、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 

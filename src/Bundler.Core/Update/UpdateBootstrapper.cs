@@ -44,13 +44,16 @@ public static class UpdateBootstrapper
     public static bool TryResolve(UpdateBundleConfiguration update, string runtimeIdentifier,
         out string source)
     {
-        // 约定目录：显式配置优先，否则探测宿主程序集旁的 updater/（MSBuild tasks 目录与 CLI 根同型）。
+        // 约定目录：显式配置优先，否则探测本程序集旁的 updater/（MSBuild tasks 目录与 CLI 根同型；
+        // 不能用 AppContext.BaseDirectory——MSBuild 任务进程里它是 SDK 宿主目录而非程序集目录）。
         var directory = update.BootstrapperDirectory;
-        if (directory is not { Length: > 0 } &&
-            AppContext.BaseDirectory is { Length: > 0 } baseDirectory &&
-            Directory.Exists(Path.Combine(baseDirectory, "updater")))
+        if (directory is not { Length: > 0 })
         {
-            directory = Path.Combine(baseDirectory, "updater");
+            var probe = Path.GetDirectoryName(typeof(UpdateBootstrapper).Assembly.Location);
+            if (probe is { Length: > 0 } && Directory.Exists(Path.Combine(probe, "updater")))
+            {
+                directory = Path.Combine(probe, "updater");
+            }
         }
         if (directory is { Length: > 0 })
         {

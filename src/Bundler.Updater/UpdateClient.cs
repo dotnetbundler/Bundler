@@ -22,7 +22,8 @@ public sealed class UpdateClient
         string currentVersion, UpdateClientOptions options)
     {
         _identity = identity;
-        _installDirectory = installDirectory;
+        // 绝对化：引导件以自身目录为工作目录，相对路径会在它那边解析失败。
+        _installDirectory = Path.GetFullPath(installDirectory);
         _currentVersion = currentVersion;
         _options = options;
     }
