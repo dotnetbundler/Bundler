@@ -17,7 +17,7 @@
 | 6 | 应用语义 | 原位覆盖 / 重跑安装器 / 多版本目录 | **两式精确分工**：安装器格式走「重跑」——nsis `setup.exe /S /UPDATE`（已有原位覆盖语义）、msi `msiexec` major upgrade（UpgradeCode 链已有）；非安装器格式走「Sparkle 三段式」——stage 解压→验签→mv 旧件备份→替换→重启。不学 Velopack 多版本目录（与安装器语义太重） |
 | 7 | 同格式约束 | 允许跨格式更新 / 同格式 | **同格式**——nsis→nsis、msi→msi；zip 覆盖安装器装的程序会使 ARP 清单/注册表/快捷方式/卸载所有权全线失联；跨格式迁移是既有独立产品面（NSIS→MSI legacy 链），不混进更新 |
 | 8 | 引导程序形态 | 无外置 / 外置二进制 / 脚本 | **外置 Native AOT per-RID 二进制**——运行中应用无法自换文件后重启（win 文件锁死、posix 侧虽可换但"退出后谁拉起新版"仍需外置）；权威全用外置（Sparkle `Autoupdate.app`/Velopack `Update.exe`/Onova 临时 updater）。极老宿主降级 POSIX shell 脚本（清单 `bootstrap` 字段声明类型）；linux 用 musl 静态 AOT 一件通吃 |
-| 9 | 差分 | 不做 / block-map | **block-map**（electron-updater 式无状态方案）——打包期产 `.blockmap`（块哈希表），客户端对新旧两份 blockmap 比对后对产物发 HTTP Range 只拉变化块；服务端零配对产物、静态托管兼容，全量兜底天然存在；排最后阶段实现 |
+| 9 | 差分 | 不做 / block-map | **block-map**（electron-updater 式无状态方案）——打包期产 `.blockmap`（块哈希表），客户端对新旧两份 blockmap 比对后对产物发 HTTP Range 只拉变化块；服务端零配对产物、静态托管兼容，全量兜底天然存在；排最后阶段实现。协议定死：固定块大小默认 64KiB（实际值写入 blockmap 头）、块以 sha256 标识并按序记录偏移表、比对按哈希匹配不依赖位置（移动块天然支持）、缺失块经 HTTP Range 拉取后按偏移重组 |
 | 10 | 通道模型 | 清单分通道名 / 动态分流 | **清单 URL=通道**——`latest.json`/`beta.json` 文件名即通道（electron `latest-beta.yml`/Velopack channel 同型）；服务端零语义，灰度/遥测不做 |
 | 11 | 回滚 | 无 / 备份自动还原 | **file-swap 天然免费**——mv 旧件到备份位，新版启动失败自动还原（Sparkle 式）；安装器式由安装器自身回滚语义承接（nsis journal/msi rollback 已有） |
 | 12 | 交付边界 | 仅打包侧 / 打包侧+应用内更新库 | **全做，分两阶段**：先打包侧（清单/签名/旁车/引导模板），后应用内 `Bundler.Updater` 库（检查→下载→验签→调引导→回滚）——库是路线内正式阶段而非另立产品 |
