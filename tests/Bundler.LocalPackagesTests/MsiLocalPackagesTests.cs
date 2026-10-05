@@ -1137,6 +1137,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
             // 维护流序证据：点击只落在 {Next,Remove,Finish,Close}，含 Remove 且以收尾键收束。
             var rclicks = removeDrive.Actions;
             Assert.True(rclicks.Count >= 3
+                && rclicks.Any(a => a.Contains("Remove"))
                 && rclicks.All(a => a.Contains("Next") || a.Contains("Remove")
                     || a.Contains("Finish") || a.Contains("Close"))
                 && (rclicks.Last().Contains("Finish") || rclicks.Last().Contains("Close")),
