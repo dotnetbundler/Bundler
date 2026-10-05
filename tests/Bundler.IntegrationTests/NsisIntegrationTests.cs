@@ -826,7 +826,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             using var process = ProcessRunner.StartDetached(
                 Installer("bundle"), $"/D={InstallDir}");
             var installDrive = WindowsDesktop.DriveWizard(
-                () => WindowsDesktop.TopWindowByProcess(process.Id),
+                () => WindowsDesktop.TopWindowsByProcess(process.Id),
                 () => process.HasExited, TimeSpan.FromMinutes(5));
             Assert.True(installDrive.Finished,
                 $"安装向导未走完（已点：{string.Join(" → ", installDrive.Actions)}）");
@@ -844,7 +844,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             using var uninstaller = StartDirectUninstallerAsync(
                 Uninstaller, InstallDir, "");
             var removeDrive = WindowsDesktop.DriveWizard(
-                () => WindowsDesktop.TopWindowByProcess(uninstaller.Id),
+                () => WindowsDesktop.TopWindowsByProcess(uninstaller.Id),
                 () => uninstaller.HasExited, TimeSpan.FromMinutes(3));
             Assert.True(removeDrive.Finished,
                 $"卸载向导未走完（已点：{string.Join(" → ", removeDrive.Actions)}）");

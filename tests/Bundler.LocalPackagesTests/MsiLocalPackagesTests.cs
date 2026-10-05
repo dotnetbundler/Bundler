@@ -1100,8 +1100,12 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
             using var install = ProcessRunner.StartDetached("msiexec",
                 $"/i \"{msi}\" /log \"{log}\"");
             var installDrive = WindowsDesktop.DriveWizard(
-                () => WindowsDesktop.TopWindowByProcess(install.Id)
-                      ?? WindowsDesktop.TopWindowByClass("MsiDialogCloseClass"),
+                () =>
+                {
+                    var wins = WindowsDesktop.TopWindowsByProcess(install.Id);
+                    return wins.Length > 0 ? wins
+                        : WindowsDesktop.TopWindowsByClass("MsiDialogCloseClass");
+                },
                 () => install.HasExited, TimeSpan.FromMinutes(5), autoCheck: true);
             Assert.True(installDrive.Finished,
                 $"安装向导未走完（已点：{string.Join(" → ", installDrive.Actions)}）");
@@ -1115,8 +1119,12 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
             // 维护流 Remove：对已装产品再 /i 进维护模式。
             using var remove = ProcessRunner.StartDetached("msiexec", $"/i \"{msi}\"");
             var removeDrive = WindowsDesktop.DriveWizard(
-                () => WindowsDesktop.TopWindowByProcess(remove.Id)
-                      ?? WindowsDesktop.TopWindowByClass("MsiDialogCloseClass"),
+                () =>
+                {
+                    var wins = WindowsDesktop.TopWindowsByProcess(remove.Id);
+                    return wins.Length > 0 ? wins
+                        : WindowsDesktop.TopWindowsByClass("MsiDialogCloseClass");
+                },
                 () => remove.HasExited, TimeSpan.FromMinutes(5), autoCheck: true);
             Assert.True(removeDrive.Finished,
                 $"卸载向导未走完（已点：{string.Join(" → ", removeDrive.Actions)}）");

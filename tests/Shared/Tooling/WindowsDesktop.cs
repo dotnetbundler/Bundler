@@ -27,53 +27,75 @@ internal static class WindowsDesktop
         }
     }
 
-    // 按进程号找顶层窗口（NSIS 安装器/卸载器、msiexec 客户端的向导帧）。
-    public static IUIAutomationElement? TopWindowByProcess(int processId)
+    // 进程的全部顶层窗口（NSIS 安装器/卸载器、msiexec 客户端可能同时持有
+    // 模态预选页与向导帧——语言预选页在向导创建前弹出）。
+    public static IUIAutomationElement[] TopWindowsByProcess(int processId)
+        => TopWindows(UIA_PropertyIds.UIA_ProcessIdPropertyId, processId);
+
+    // 窗口类名兜底（MSI 向导帧类名 MsiDialogCloseClass，UI 宿主进程不一定等于启动 pid）。
+    public static IUIAutomationElement[] TopWindowsByClass(string className)
+        => TopWindows(UIA_PropertyIds.UIA_ClassNamePropertyId, className);
+
+    private static IUIAutomationElement[] TopWindows(int propertyId, object value)
     {
         try
         {
-            return Automation.GetRootElement().FindFirst(TreeScope.TreeScope_Children,
-                Automation.CreatePropertyCondition(
-                    UIA_PropertyIds.UIA_ProcessIdPropertyId, processId));
+            var found = Automation.GetRootElement().FindAll(TreeScope.TreeScope_Children,
+                Automation.CreatePropertyCondition(propertyId, value));
+            return Elements(found);
         }
         catch
         {
-            return null;
+            return [];
         }
     }
 
-    // 按窗口类名兜底（MSI 向导帧类名 MsiDialogCloseClass，UI 宿主进程不一定等于启动 pid）。
-    public static IUIAutomationElement? TopWindowByClass(string className)
+    private static IUIAutomationElement[] Elements(IUIAutomationElementArray? found)
     {
-        try
+        if (found is null)
         {
-            return Automation.GetRootElement().FindFirst(TreeScope.TreeScope_Children,
-                Automation.CreatePropertyCondition(
-                    UIA_PropertyIds.UIA_ClassNamePropertyId, className));
+            return [];
         }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static IEnumerable<IUIAutomationElement> Descendants(
-        IUIAutomationElement scope, int controlTypeId)
-    {
-        var found = scope.FindAll(TreeScope.TreeScope_Descendants,
-            Automation.CreatePropertyCondition(
-                UIA_PropertyIds.UIA_ControlTypePropertyId, controlTypeId));
+        var list = new List<IUIAutomationElement>(found.Length);
         for (var i = 0; i < found.Length; i++)
         {
-            yield return found.GetElement(i);
+            try
+            {
+                list.Add(found.GetElement(i));
+            }
+            catch
+            {
+                // 元素在枚举瞬间消失（翻页竞态）：跳过。
+            }
+        }
+        return [.. list];
+    }
+
+    // 翻页瞬间 FindAll 可能返回 null 或抛 COM 异常：一律视为空。
+    private static IUIAutomationElement[] Descendants(
+        IUIAutomationElement scope, int controlTypeId)
+    {
+        try
+        {
+            return Elements(scope.FindAll(TreeScope.TreeScope_Descendants,
+                Automation.CreatePropertyCondition(
+                    UIA_PropertyIds.UIA_ControlTypePropertyId, controlTypeId)));
+        }
+        catch
+        {
+            return [];
         }
     }
 
-    private static IEnumerable<IUIAutomationElement> Buttons(IUIAutomationElement scope)
+    private static IUIAutomationElement[] Buttons(IUIAutomationElement scope)
         => Descendants(scope, UIA_ControlTypeIds.UIA_ButtonControlTypeId);
 
-    private static IEnumerable<IUIAutomationElement> CheckBoxes(IUIAutomationElement scope)
+    private static IUIAutomationElement[] CheckBoxes(IUIAutomationElement scope)
         => Descendants(scope, UIA_ControlTypeIds.UIA_CheckBoxControlTypeId);
+
+    // NSIS 自绘控件（语言预选页 OK/Cancel）在 UIA 下暴露为 Pane 而非 Button。
+    private static IUIAutomationElement[] Panes(IUIAutomationElement scope)
+        => Descendants(scope, UIA_ControlTypeIds.UIA_PaneControlTypeId);
 
     private static void Press(IUIAutomationElement button)
     {
@@ -115,11 +137,13 @@ internal static class WindowsDesktop
     public sealed record Drive(IReadOnlyList<string> Actions, bool Finished);
 
     // 逐页驱动标准向导直至点中 Finish 或目标进程退出；返回按序点击过的按钮名供断言。
-    // 候选取每页第一个存在的主按钮：Finish→Install→Remove→Uninstall→Agree→Next→Repair。
+    // 每轮重枚举进程全部顶层窗口，取第一个含候选按钮的窗口（模态预选页优先被驱动）。
+    // 候选取每页第一个存在的主按钮：Finish→Install→Remove→Uninstall→Agree→Next→Repair→OK。
+    // "OK" 只在 Pane 层匹配（NSIS 语言预选页的 OK 是自绘 Pane，普通页无 Pane 名 "OK"）。
     // autoCheck（MSI 流）：点推进类按钮前补齐未勾复选框（LicenseAgreement 的 Next 需先勾
     // "I accept"）；点 Finish 前清空复选框（ExitDialog 的"启动应用"不带出测试外进程）。
-    public static Drive DriveWizard(Func<IUIAutomationElement?> getWindow, Func<bool> done,
-        TimeSpan timeout, bool autoCheck = false)
+    public static Drive DriveWizard(Func<IUIAutomationElement[]> getWindows,
+        Func<bool> done, TimeSpan timeout, bool autoCheck = false)
     {
         var actions = new List<string>();
         var deadline = DateTime.UtcNow + timeout;
@@ -128,33 +152,44 @@ internal static class WindowsDesktop
             ["Finish", "Install", "Remove", "Uninstall", "Agree", "Next", "Repair"];
         while (DateTime.UtcNow < deadline && !done())
         {
-            var window = getWindow();
-            if (window is null)
-            {
-                Thread.Sleep(250);
-                continue;
-            }
             IUIAutomationElement? pick = null;
-            foreach (var name in order)
+            IUIAutomationElement? host = null;
+            foreach (var window in getWindows())
             {
-                pick = Buttons(window).FirstOrDefault(b =>
-                    b.CurrentName.Contains(name, StringComparison.OrdinalIgnoreCase));
+                try
+                {
+                    foreach (var name in order)
+                    {
+                        pick = Buttons(window).FirstOrDefault(b =>
+                            NameContains(b, name));
+                        if (pick is not null)
+                        {
+                            break;
+                        }
+                    }
+                    pick ??= Panes(window).FirstOrDefault(p => NameContains(p, "OK"));
+                }
+                catch
+                {
+                    pick = null;
+                }
                 if (pick is not null)
                 {
+                    host = window;
                     break;
                 }
             }
-            if (pick is null)
+            if (pick is null || host is null)
             {
                 Thread.Sleep(250);
                 continue;
             }
-            var label = pick.CurrentName;
+            var label = SafeName(pick) ?? "?";
             if (label.Contains("Finish", StringComparison.OrdinalIgnoreCase))
             {
                 if (autoCheck)
                 {
-                    foreach (var box in CheckBoxes(window))
+                    foreach (var box in CheckBoxes(host))
                     {
                         SetChecked(box, false);
                     }
@@ -166,7 +201,7 @@ internal static class WindowsDesktop
             }
             if (autoCheck)
             {
-                foreach (var box in CheckBoxes(window))
+                foreach (var box in CheckBoxes(host))
                 {
                     SetChecked(box, true);
                 }
@@ -183,5 +218,20 @@ internal static class WindowsDesktop
             Thread.Sleep(500);
         }
         return new Drive(actions, finished || done());
+    }
+
+    private static bool NameContains(IUIAutomationElement el, string name)
+        => SafeName(el)?.Contains(name, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static string? SafeName(IUIAutomationElement el)
+    {
+        try
+        {
+            return el.CurrentName;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
