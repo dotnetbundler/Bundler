@@ -20,6 +20,13 @@ internal sealed class TarEntry
     internal TarEntryKind Kind;
     internal int Mode;
     internal byte[] Content = [];
+    /// <summary>
+    /// Optional streamed payload for file entries; when set it takes precedence
+    /// over <see cref="Content"/>. The factory must return a stream reporting
+    /// <see cref="Stream.Length"/>; the writer opens it per entry, writes
+    /// exactly that many bytes and disposes it.
+    /// </summary>
+    internal Func<Stream>? OpenContent;
     internal string LinkTarget = "";
 
     /// <summary>
@@ -53,13 +60,14 @@ internal static class TarWriter
     {
         var header = new byte[512];
         var zeroBlock = new byte[512];
+        var copyBuffer = new byte[81920];
         foreach (var entry in entries)
         {
             if (entry.PaxRecords is { Count: > 0 } paxRecords)
             {
-                WriteEntry(output, header, zeroBlock, PaxEntry(entry.Name, paxRecords));
+                WriteEntry(output, header, zeroBlock, copyBuffer, PaxEntry(entry.Name, paxRecords));
             }
-            WriteEntry(output, header, zeroBlock, entry);
+            WriteEntry(output, header, zeroBlock, copyBuffer, entry);
         }
         if (!omitEndOfArchive)
         {
@@ -68,9 +76,25 @@ internal static class TarWriter
         }
     }
 
-    private static void WriteEntry(Stream output, byte[] header, byte[] zeroBlock, TarEntry entry)
+    private static void WriteEntry(Stream output, byte[] header, byte[] zeroBlock, byte[] copyBuffer, TarEntry entry)
     {
+        Stream? contentStream = null;
+        try
         {
+            var contentLength = 0L;
+            if (entry.Kind is TarEntryKind.File or TarEntryKind.PaxHeader)
+            {
+                if (entry.OpenContent is { } openContent)
+                {
+                    contentStream = openContent();
+                    contentLength = contentStream.Length;
+                }
+                else
+                {
+                    contentLength = entry.Content.Length;
+                }
+            }
+
             Array.Clear(header, 0, header.Length);
             var name = entry.Name;
             if (entry.Kind == TarEntryKind.Directory && !name.EndsWith("/", StringComparison.Ordinal))
@@ -88,7 +112,7 @@ internal static class TarWriter
             WriteOctal(header, 100, 8, entry.Mode);
             WriteOctal(header, 108, 8, 0);               // uid
             WriteOctal(header, 116, 8, 0);               // gid
-            WriteOctal(header, 124, 12, entry.Kind is TarEntryKind.File or TarEntryKind.PaxHeader ? entry.Content.Length : 0);
+            WriteOctal(header, 124, 12, contentLength);
             WriteOctal(header, 136, 12, EntryMtime);     // mtime
             for (var i = 148; i < 156; i++)
             {
@@ -119,15 +143,38 @@ internal static class TarWriter
             var checksum = header.Sum(b => (int)b);
             WriteChecksum(header, checksum);
             output.Write(header, 0, header.Length);
-            if (entry.Kind is TarEntryKind.File or TarEntryKind.PaxHeader && entry.Content.Length > 0)
+            if (contentLength > 0)
             {
-                output.Write(entry.Content, 0, entry.Content.Length);
-                var remainder = entry.Content.Length % 512;
+                if (contentStream != null)
+                {
+                    var remaining = contentLength;
+                    while (remaining > 0)
+                    {
+                        var read = contentStream.Read(
+                            copyBuffer, 0, (int)Math.Min(copyBuffer.Length, remaining));
+                        if (read == 0)
+                        {
+                            throw new EndOfStreamException(
+                                $"Tar entry '{entry.Name}' stream ended after {contentLength - remaining} of {contentLength} bytes.");
+                        }
+                        output.Write(copyBuffer, 0, read);
+                        remaining -= read;
+                    }
+                }
+                else
+                {
+                    output.Write(entry.Content, 0, entry.Content.Length);
+                }
+                var remainder = contentLength % 512;
                 if (remainder != 0)
                 {
-                    output.Write(zeroBlock, 0, 512 - remainder);
+                    output.Write(zeroBlock, 0, (int)(512 - remainder));
                 }
             }
+        }
+        finally
+        {
+            contentStream?.Dispose();
         }
     }
 
