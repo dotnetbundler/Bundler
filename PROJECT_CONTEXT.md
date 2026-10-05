@@ -305,6 +305,6 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新路线已于 2026-10-05 立项（`docs/update-roadmap.md`，13 项决策经用户裁决，六阶段 `UPDATE-1..6` 至全功能），UPDATE-1..4 已实现（分支 `devin/1791228441-update-module` 待整模块完成后单 PR），下一步 UPDATE-5（block-map 差分）。
+UPDATE 自更新路线已于 2026-10-05 立项（`docs/update-roadmap.md`，13 项决策经用户裁决，六阶段 `UPDATE-1..6` 至全功能），UPDATE-1..5 已实现（分支 `devin/1791228441-update-module` 待整模块完成后单 PR），下一步 UPDATE-6（文档收口+冻结基线）。
 剩余工作：UPDATE-1 启动、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 

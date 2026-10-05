@@ -1,6 +1,6 @@
 # UPDATE 路线（应用自更新）
 
-> 状态：**UPDATE-4 已实现**（2026-10-05；`Bundler.Updater` 应用内库+四宿主 UPDATE-3 实证全绿），UPDATE-5 block-map 差分为下一阶。
+> 状态：**UPDATE-5 已实现**（2026-10-05；block-map 差分+全量回退双路实证全绿），UPDATE-6 文档收口为下一阶。
 > 范围依据：`docs/roadmap.md` §7.2「应用自更新/升级包」登记项——为打包产物增加升级/更新能力。
 > 上游参照：Tauri updater（清单形态）、Sparkle（appcast/EdDSA/三段式换包/quarantine）、Velopack（外置引导/通道）、electron-updater（latest.yml/block-map）、Omaha（安装器重跑语义）、Onova（便携件原位覆盖）、AppImageUpdate（zsync 参照）；调研报告《更新模块全面调研报告》2026-10-05。
 > 本路线是**跨格式产品面**而非新安装格式：产出物随既有格式旁车而生，应用语义分两式复用既有安装器能力。
@@ -44,10 +44,17 @@
 | `UPDATE-2` | 引导程序：`bundler-updater` Native AOT per-RID 模板（win-x64/arm64、osx-x64/arm64、linux-x64/arm64、musl）+ shell 降级件 + 引导协议（等退出/备份/原子换/重启/回报） | 各宿主引导件产出、自测干跑通过；脚本降级件在裸 posix 环境可跑 |
 | `UPDATE-3` | file-swap 三段式执行 + mac 三项（codesign 身份一致/quarantine 剥离/失败还原）+ installer-replay 接线（nsis `/UPDATE`、msiexec major upgrade） | win/mac/linux/musl 真机：zip/targz/appimage/.app 全链换包+回滚实证；nsis/msi 更新链实证；断电/验签失败无砖化 |
 | `UPDATE-4` | `src/Bundler.Updater` 应用内库：`UpdateChecker`（拉清单/比版本/选件）→ `UpdateDownloader`（http(s) 下载/本地路径解析/sha256 校验/断点续传）→ `SigVerifier`（ECDSA）→ `UpdateApplier`（两式分派调引导）→ 回滚钩子；开放协议文档 | 库 API 面冻结级评审；端到端 demo（打包→发清单→应用检查更新→换包成功）五宿主实证；离线腿（`file://`/本地目录 feed→同目录产物解析→更新成功）纳入验收 |
-| `UPDATE-5` | block-map 差分：打包期 `.blockmap` 产物 + 下载器 Range 栈（新旧 blockmap 比对→变化块请求→本地重组）+ 全量回落 | 差分与全量双路实证；清单 `blockmap` 字段启用 |
+| `UPDATE-5` ✅ | block-map 差分：打包期 `.blockmap` 产物 + 下载器 Range 栈（新旧 blockmap 比对→变化块请求→本地重组）+ 全量回落 | 差分与全量双路实证；清单 `blockmap` 字段启用 |
 | `UPDATE-6` | 收口：能力矩阵/open-items/manual-testing 文档族 + 冻结基线写入 + 主文档同步 | 冻结文档齐备；外部待验收项如实挂账 |
 
 ## 4. 阶段实施证据
+
+### 2026-10-05 UPDATE-5 block-map 差分
+块表模型 `UpdateBlockMap`（v1：64KiB 固定块+有序 sha256 base64 列表）落 `Core/Update` 并经 `BUNDLER_UPDATER_LINK` 链接进 `Bundler.Updater`，单源双栖。
+发射器为每个制品多产 `<file>.blockmap` 并把 `blockmap` 字段写入清单（`url` 仍为裸文件名，块表随制品同目录解析）。
+客户端 `UpdateClientOptions.EnableDelta`（默认开）接 `TryDownloadDeltaAsync`：块表合法→对 `<install>.bundler-cache/artifact.bin` 算块表→按哈希不依赖位置比对→命中块本地复制、缺失块合并为连续区间（http 走 `Range` 且硬性要求 206、本地/UNC 走定位读）→产物 size+sha256 全量校验；块表缺失/过期/非法、Range 被拒、校验不过等任一环节失败都回退全量下载。缓存随每次成功下载刷新，供下次差分。
+测试 +3：块表确定性（块数/尺寸/有序哈希/分块敏感度）、差分命中腿（三块中两块哈希命中→日志断言 `delta applied`/`B reused`）、脏缓存回退腿（全不匹配仍经拉取重组出正确产物并通过验签）。
+本机 Bundler.Tests 314/275P/0F/39S。
 
 ### 2026-10-05 UPDATE-4 应用内更新库
 
