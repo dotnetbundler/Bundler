@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-05
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.71`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.72`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -81,6 +81,13 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-05 Zip64 动态升级（PR 在途）
+
+- `ZipWriter` 按 BCL `ZipArchive` 式动态 Zip64：尺寸/压缩长/本地偏移顶 0xFFFFFFFF 或条目数顶 0xFFFF 的字段写哨兵+真值进 Zip64 extra/EOCD64+locator，version needed 升 45；未顶限归档字节与经典布局完全一致；流式条目按声明长 2MiB 安全带预升级（覆盖 deflate 最坏膨胀）。
+- 原"Zip64 确定性拒绝"语义废止；`RejectsZip64` 用例替换为 EOCD64/头形态/4.3GiB 端到端三断言。
+- 验证：本机 `ArchiveTests` 21/21（含 4.3GiB 稀疏实写+ZipArchive 全量读回 CRC、65536 条目 EOCD64）；CLI 实产 4.3GiB zip64 包经 `unzip -t` 全量解压 CRC、Python `zipfile`、win 宿主 `Expand-Archive`/`tar.exe` 三方读端实证。
+- 版本推进 `alpha.72`；归档线尺寸天花板完全解除（zip 无上限、tar ~8GiB ustar 顶）。
 
 ### 2026-10-05 zip 载荷流式写出（已压缩合并 `03a070b`，PR #24）
 

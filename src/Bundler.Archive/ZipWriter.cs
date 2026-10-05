@@ -21,9 +21,9 @@ internal sealed class ZipEntry
     /// <summary>
     /// 文件条目的可选流式载荷；设置后优先于 <see cref="Content"/>。
     /// 工厂必须返回报告 <see cref="Stream.Length"/> 的流：写出端逐条打开、
-    /// 按声明长度经 Deflate 分块写入并释放，随后回填本地头的 CRC 与两个尺寸字段——
+    /// 按声明长度经 Deflate 分块写入并释放，随后回填本地头的 CRC 与尺寸字段——
     /// 因此要求输出流可寻址。流式条目恒用 Deflate，stored 回退只适用缓冲的
-    /// <see cref="Content"/>。
+    /// <see cref="Content"/>。尺寸顶到经典 zip 上限时自动升级 Zip64。
     /// </summary>
     internal Func<Stream>? OpenContent;
     internal string LinkTarget = "";
@@ -35,11 +35,24 @@ internal sealed class ZipEntry
 /// attributes field (version made by = Unix), so exec bits and symlinks
 /// survive Info-ZIP-style extraction. Deterministic: a fixed DOS date-time
 /// (1980-01-01 00:00) and caller-controlled entry order; names are UTF-8
-/// (general purpose flag 11).
+/// (general purpose flag 11). Fields that exceed the classic 32-bit/16-bit
+/// limits are upgraded to Zip64 the way <see cref="ZipArchive"/> does:
+/// sentinel values in the small field plus the real value in a Zip64
+/// extra field / EOCD64 record — archives under the limits stay
+/// byte-identical to the classic layout.
 /// </summary>
 internal static class ZipWriter
 {
     private const int DosEpochDate = (1 << 5) | 1; // 1980-01-01
+    private const ushort Zip64Version = 45;
+    private const ushort Zip64ExtraId = 0x0001;
+    private const uint Zip64EocdSignature = 0x06064b50;
+    private const uint Zip64LocatorSignature = 0x07064b50;
+
+    // deflate 的最坏膨胀率远低于 0.1%：声明长度距哨兵不足 2MiB 安全带的流式
+    // 条目预写 Zip64 本地头——压缩后真超限时 extra 已就位；未超限时哨兵+extra
+    // 存的也是真值，结构依然合法。
+    private const long Zip64SafetyMargin = 2L * 1024 * 1024;
 
     internal static void Write(Stream output, IEnumerable<ZipEntry> entries)
     {
@@ -90,11 +103,6 @@ internal static class ZipWriter
             }
             var crc = Crc32(data);
             var localOffset = output.Position;
-            if (localOffset >= uint.MaxValue)
-            {
-                throw new InvalidOperationException(
-                    $"Zip entry '{entry.Name}' starts beyond the classic zip offset limit; Zip64 archives are not supported by this writer.");
-            }
             WriteLocalHeader(output, nameBytes, entry, stored, crc, data.Length, compressed.Length);
             output.Write(compressed, 0, compressed.Length);
             central.Add((name, entry, crc, compressed.Length, data.Length, localOffset, stored));
@@ -106,36 +114,48 @@ internal static class ZipWriter
             WriteCentralHeader(output, Encoding.UTF8.GetBytes(name), entry, crc, compressedLength, size, localOffset, stored);
         }
         var centralSize = output.Position - centralOffset;
-        // 0xFFFF/0xFFFFFFFF 在 zip 里是 Zip64 哨兵：任何字段顶到该值都会被读成
-        // "真值在 extra field"，因此按 >= 拒绝。
-        if (central.Count >= ushort.MaxValue || centralOffset >= uint.MaxValue || centralSize >= uint.MaxValue)
+
+        // 条目数顶 0xFFFF 或中央目录字段顶 0xFFFFFFFF 时升级为 Zip64 EOCD；
+        // 经典 EOCD 里受影响字段写哨兵值，真值在 Zip64 记录中（与 ZipArchive 同）。
+        var needsZip64Eocd = central.Count >= ushort.MaxValue
+            || centralOffset >= uint.MaxValue
+            || centralSize >= uint.MaxValue;
+        if (needsZip64Eocd)
         {
-            throw new InvalidOperationException(
-                "Zip64 archives are not supported by this writer; the payload exceeds the classic zip limits.");
+            var eocd64Offset = output.Position;
+            WriteZip64EndOfCentralDirectory(output, central.Count, centralSize, centralOffset);
+            WriteZip64EndOfCentralDirectoryLocator(output, eocd64Offset);
         }
         WriteEndOfCentralDirectory(output, central.Count, centralSize, centralOffset);
     }
 
     private static void WriteLocalHeader(
-        Stream output, byte[] nameBytes, ZipEntry entry, bool stored, uint crc, int size, int compressedSize)
+        Stream output, byte[] nameBytes, ZipEntry entry, bool stored, uint crc,
+        long size, long compressedSize, byte[]? zip64Extra = null)
     {
+        var zip64 = zip64Extra != null;
         using var buffer = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true);
         buffer.Write(0x04034b50u);            // local file header signature
-        buffer.Write((ushort)20);             // version needed to extract
+        buffer.Write((ushort)(zip64 ? Zip64Version : 20)); // version needed to extract
         buffer.Write((ushort)0x0800);         // flags: UTF-8 names
         buffer.Write((ushort)(stored ? 0 : 8)); // method: stored / deflate
         buffer.Write((ushort)0);              // mod time (00:00)
         buffer.Write((ushort)DosEpochDate);   // mod date (1980-01-01)
         buffer.Write(crc);
-        buffer.Write((uint)compressedSize);
-        buffer.Write((uint)size);
+        buffer.Write(zip64 ? uint.MaxValue : (uint)compressedSize);
+        buffer.Write(zip64 ? uint.MaxValue : (uint)size);
         buffer.Write((ushort)nameBytes.Length);
-        buffer.Write((ushort)0);              // extra field length
+        buffer.Write((ushort)(zip64Extra?.Length ?? 0));
         buffer.Write(nameBytes);
+        if (zip64Extra != null)
+        {
+            buffer.Write(zip64Extra);
+        }
     }
 
     // 本地头要求 CRC 与两个尺寸先于载荷写入；流式条目先写占位头、量出真值后回填——
-    // 输出字节与预先已知长度的写法完全同构。
+    // 输出字节与预先已知长度的写法完全同构。Zip64 形态下 32 位字段保持哨兵，
+    // 只回填 CRC 与 extra 内的压缩长槽位。
     private static void WriteStreamedFile(
         Stream output, byte[] copyBuffer,
         List<(string Name, ZipEntry Entry, uint Crc, long Compressed, long Size, long LocalOffset, bool Stored)> central,
@@ -143,23 +163,18 @@ internal static class ZipWriter
     {
         using var content = openContent();
         var contentLength = content.Length;
-        if (contentLength >= uint.MaxValue)
-        {
-            throw new InvalidOperationException(
-                $"Zip entry '{entry.Name}' exceeds the classic zip per-entry limit; Zip64 archives are not supported by this writer.");
-        }
         if (!output.CanSeek)
         {
             throw new InvalidOperationException(
                 "Streamed zip entries require a seekable output stream so the local header can be patched.");
         }
+        var zip64 = contentLength >= (long)uint.MaxValue - Zip64SafetyMargin;
         var localOffset = output.Position;
-        if (localOffset >= uint.MaxValue)
-        {
-            throw new InvalidOperationException(
-                $"Zip entry '{entry.Name}' starts beyond the classic zip offset limit; Zip64 archives are not supported by this writer.");
-        }
-        WriteLocalHeader(output, nameBytes, entry, stored: false, crc: 0, size: 0, compressedSize: 0);
+        WriteLocalHeader(
+            output, nameBytes, entry, stored: false, crc: 0,
+            size: zip64 ? contentLength : 0,
+            compressedSize: 0,
+            zip64Extra: zip64 ? Zip64LocalExtra(contentLength, 0) : null);
         var dataStart = output.Position;
         var crc = new Crc32Computer();
         var remaining = contentLength;
@@ -179,27 +194,46 @@ internal static class ZipWriter
             }
         }
         var compressedLength = output.Position - dataStart;
-        if (compressedLength >= uint.MaxValue)
-        {
-            throw new InvalidOperationException(
-                $"Zip entry '{entry.Name}' compressed payload exceeds the classic zip limit; Zip64 archives are not supported by this writer.");
-        }
-        PatchLocalHeader(output, localOffset, crc.Value, compressedLength, contentLength);
+        PatchLocalHeader(output, localOffset, nameBytes.Length, crc.Value, compressedLength, contentLength, zip64);
         central.Add((name, entry, crc.Value, compressedLength, contentLength, localOffset, false));
     }
 
-    // 回到刚写的本地头 CRC 字段处，回填三个实测字段（crc/压缩长/原始长）。
-    private static void PatchLocalHeader(Stream output, long localOffset, uint crc, long compressedSize, long size)
+    // 回到刚写的本地头 CRC 字段处，回填实测字段。
+    // 经典形态：crc+压缩长+原始长三个 u32；Zip64 形态：crc + extra 内压缩长 u64
+    // （extra 里的原始长占位时已写真值，不必再补）。
+    private static void PatchLocalHeader(
+        Stream output, long localOffset, int nameBytesLength,
+        uint crc, long compressedSize, long size, bool zip64)
     {
         var end = output.Position;
-        output.Position = localOffset + 14;
-        using (var patch = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true))
+        using var patch = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true);
+        if (zip64)
         {
+            output.Position = localOffset + 14;
+            patch.Write(crc);
+            output.Position = localOffset + 30 + nameBytesLength + 12;
+            patch.Write(compressedSize);
+        }
+        else
+        {
+            output.Position = localOffset + 14;
             patch.Write(crc);
             patch.Write((uint)compressedSize);
             patch.Write((uint)size);
         }
         output.Position = end;
+    }
+
+    // Zip64 本地 extra 字段：header id 0x0001 + 数据长度 16 + u64 原始长 + u64 压缩长。
+    private static byte[] Zip64LocalExtra(long size, long compressedSize)
+    {
+        var extra = new byte[20];
+        using var buffer = new BinaryWriter(new MemoryStream(extra));
+        buffer.Write(Zip64ExtraId);
+        buffer.Write((ushort)16);
+        buffer.Write(size);
+        buffer.Write(compressedSize);
+        return extra;
     }
 
     private static void WriteCentralHeader(
@@ -214,25 +248,83 @@ internal static class ZipWriter
             ZipEntryKind.Symlink => 41471 /* 0120777 */,
             _ => 32768 /* 0100000 S_IFREG */ | (entry.Mode & 0xFFF)
         };
+        // 中央目录的 Zip64 extra 只装溢出的字段，顺序固定：原始长/压缩长/本地偏移。
+        var sizeOverflow = size >= uint.MaxValue;
+        var compressedOverflow = compressedSize >= uint.MaxValue;
+        var offsetOverflow = localOffset >= uint.MaxValue;
+        var zip64 = sizeOverflow || compressedOverflow || offsetOverflow;
+        byte[]? extra = null;
+        if (zip64)
+        {
+            var extraCount = (sizeOverflow ? 1 : 0) + (compressedOverflow ? 1 : 0) + (offsetOverflow ? 1 : 0);
+            using var extraStream = new MemoryStream(4 + extraCount * 8);
+            using (var extraWriter = new BinaryWriter(extraStream))
+            {
+                extraWriter.Write(Zip64ExtraId);
+                extraWriter.Write((ushort)(extraCount * 8));
+                if (sizeOverflow)
+                {
+                    extraWriter.Write(size);
+                }
+                if (compressedOverflow)
+                {
+                    extraWriter.Write(compressedSize);
+                }
+                if (offsetOverflow)
+                {
+                    extraWriter.Write(localOffset);
+                }
+            }
+            extra = extraStream.ToArray();
+        }
         using var buffer = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true);
         buffer.Write(0x02014b50u);            // central file header signature
-        buffer.Write((ushort)((3 << 8) | 20)); // version made by: Unix, 2.0
-        buffer.Write((ushort)20);             // version needed to extract
+        buffer.Write((ushort)((3 << 8) | (zip64 ? Zip64Version : 20))); // version made by: Unix
+        buffer.Write((ushort)(zip64 ? Zip64Version : 20)); // version needed to extract
         buffer.Write((ushort)0x0800);         // flags: UTF-8 names
         buffer.Write((ushort)(stored ? 0 : 8)); // method mirrors the local header
         buffer.Write((ushort)0);
         buffer.Write((ushort)DosEpochDate);
         buffer.Write(crc);
-        buffer.Write((uint)compressedSize);
-        buffer.Write((uint)size);
+        buffer.Write(compressedOverflow ? uint.MaxValue : (uint)compressedSize);
+        buffer.Write(sizeOverflow ? uint.MaxValue : (uint)size);
         buffer.Write((ushort)nameBytes.Length);
-        buffer.Write((ushort)0);              // extra
+        buffer.Write((ushort)(extra?.Length ?? 0)); // extra
         buffer.Write((ushort)0);              // comment
         buffer.Write((ushort)0);              // disk number
         buffer.Write((ushort)0);              // internal attrs
         buffer.Write((uint)(unixMode << 16)); // external attrs: unix mode
-        buffer.Write((uint)localOffset);
+        buffer.Write(offsetOverflow ? uint.MaxValue : (uint)localOffset);
         buffer.Write(nameBytes);
+        if (extra != null)
+        {
+            buffer.Write(extra);
+        }
+    }
+
+    private static void WriteZip64EndOfCentralDirectory(
+        Stream output, int count, long centralSize, long centralOffset)
+    {
+        using var buffer = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true);
+        buffer.Write(Zip64EocdSignature);
+        buffer.Write((ulong)44);            // 本字段之后的记录长度
+        buffer.Write((ushort)Zip64Version); // version made by
+        buffer.Write((ushort)Zip64Version); // version needed to extract
+        buffer.Write(0u);                   // 本盘号
+        buffer.Write(0u);                   // 中央目录起始盘号
+        buffer.Write((ulong)count);         // 本盘条目数
+        buffer.Write((ulong)count);         // 条目总数
+        buffer.Write((ulong)centralSize);
+        buffer.Write((ulong)centralOffset);
+    }
+
+    private static void WriteZip64EndOfCentralDirectoryLocator(Stream output, long eocd64Offset)
+    {
+        using var buffer = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true);
+        buffer.Write(Zip64LocatorSignature);
+        buffer.Write(0u);                   // EOCD64 所在盘号
+        buffer.Write((ulong)eocd64Offset);
+        buffer.Write(1u);                   // 总盘数
     }
 
     private static void WriteEndOfCentralDirectory(
@@ -242,10 +334,10 @@ internal static class ZipWriter
         buffer.Write(0x06054b50u);
         buffer.Write((ushort)0);
         buffer.Write((ushort)0);
-        buffer.Write((ushort)count);
-        buffer.Write((ushort)count);
-        buffer.Write((uint)centralSize);
-        buffer.Write((uint)centralOffset);
+        buffer.Write((ushort)Math.Min(count, ushort.MaxValue));
+        buffer.Write((ushort)Math.Min(count, ushort.MaxValue));
+        buffer.Write((uint)Math.Min(centralSize, uint.MaxValue));
+        buffer.Write((uint)Math.Min(centralOffset, uint.MaxValue));
         buffer.Write((ushort)0);
     }
 
