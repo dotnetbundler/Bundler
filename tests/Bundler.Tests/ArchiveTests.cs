@@ -348,8 +348,101 @@ public static class ArchiveTests
             "a content stream ending before its declared Length must fail, not write a corrupt tar");
     }
 
+    // zip 载荷走流式写出：>2GiB 单文件不再触发 byte[] 尺寸上限；完整解压读回
+    // 顺带验证回填头里的 CRC 与长度字段（ZipArchive 读到底时校验 CRC）。
+    [Fact]
+    static void StreamsZipFilePayloadsAboveTwoGiB()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "big-zip-out");
+        var bigPath = Path.Combine(input, "big.bin");
+        const long bigSize = 2_200_000_000L; // > Int32.MaxValue：内联 byte[] 装不下
+        try
+        {
+            using (var file = new FileStream(bigPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                file.Write(Encoding.ASCII.GetBytes("BUNDLER_BIG"));
+                file.SetLength(bigSize); // 稀疏文件：仅头 11 字节是真实数据
+            }
+            var artifact = new ArchiveBundler(new ArchiveBundleConfiguration { ArchiveName = "big-app" })
+                .BuildAsync(Configuration(input, output, formats: [PackageFormat.Zip]))
+                .GetAwaiter().GetResult().Single();
+            Assert.EndsWith(".zip", artifact.Path);
+            Assert.True(File.Exists(artifact.Path + ".sha256"), "sha256 sidecar must exist");
+            Assert.True(new FileInfo(artifact.Path).Length < bigSize,
+                "a sparse payload must compress far below its logical size");
+            using var archive = ZipFile.OpenRead(artifact.Path);
+            var big = archive.Entries.Single(e => e.FullName.EndsWith("/big.bin", StringComparison.Ordinal));
+            Assert.Equal(bigSize, big.Length);
+            using var entryStream = big.Open();
+            var head = new byte[16];
+            var got = entryStream.Read(head, 0, head.Length);
+            Assert.StartsWith("BUNDLER_BIG", Encoding.ASCII.GetString(head, 0, got));
+            // 读到底触发 ZipArchive 的 CRC 校验——回填的 crc 值必须与真实内容一致。
+            entryStream.CopyTo(Stream.Null);
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
+    [Fact]
+    static void StreamsZipEntryContentIdenticalToInline()
+    {
+        // 可压缩载荷让两条路径都选 deflate——同输入字节序在两条路径下应逐字节一致。
+        var payload = Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat("streamed-payload-bytes;", 2000)));
+        using var viaInline = new MemoryStream();
+        ZipWriter.Write(viaInline,
+        [
+            new ZipEntry { Name = "a/f.bin", Kind = ZipEntryKind.File, Mode = 420, Content = payload }
+        ]);
+        using var viaStream = new MemoryStream();
+        ZipWriter.Write(viaStream,
+        [
+            new ZipEntry
+            {
+                Name = "a/f.bin", Kind = ZipEntryKind.File, Mode = 420,
+                OpenContent = () => new MemoryStream(payload, writable: false)
+            }
+        ]);
+        Assert.Equal(viaInline.ToArray(), viaStream.ToArray());
+    }
+
+    [Fact]
+    static void StreamedZipEntryEndingEarlyFails()
+    {
+        using var output = new MemoryStream();
+        AssertThrows<EndOfStreamException>(
+            () => ZipWriter.Write(output,
+            [
+                new ZipEntry
+                {
+                    Name = "f.bin", Kind = ZipEntryKind.File, Mode = 420,
+                    OpenContent = () => new ShortStream(declaredLength: 100, actualBytes: 10)
+                }
+            ]),
+            "a content stream ending before its declared Length must fail, not write a corrupt zip");
+    }
+
+    [Fact]
+    static void StreamedZipEntryBeyondFourGiBIsRejected()
+    {
+        using var output = new MemoryStream();
+        AssertThrows<InvalidOperationException>(
+            () => ZipWriter.Write(output,
+            [
+                new ZipEntry
+                {
+                    Name = "f.bin", Kind = ZipEntryKind.File, Mode = 420,
+                    OpenContent = () => new ShortStream(declaredLength: (long)uint.MaxValue + 1, actualBytes: 0)
+                }
+            ]),
+            "a single entry above the classic zip per-entry limit must be rejected");
+    }
+
     // Reports Length = declaredLength but only yields actualBytes of content.
-    sealed class ShortStream(int declaredLength, int actualBytes) : Stream
+    sealed class ShortStream(long declaredLength, int actualBytes) : Stream
     {
         private int _produced;
         public override bool CanRead => true;

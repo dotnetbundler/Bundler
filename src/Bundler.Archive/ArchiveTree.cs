@@ -186,8 +186,11 @@ internal static class ArchiveTree
         },
         Mode = entry.Mode,
         Content = entry.Kind == TarEntryKind.File
-            ? entry.InlineContent ?? File.ReadAllBytes(entry.SourcePath!)
+            ? entry.InlineContent ?? []
             : [],
+        OpenContent = entry.Kind == TarEntryKind.File && entry.InlineContent is null
+            ? () => new FileStream(entry.SourcePath!, FileMode.Open, FileAccess.Read, FileShare.Read)
+            : null,
         LinkTarget = entry.LinkTarget
     };
 

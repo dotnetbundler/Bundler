@@ -18,6 +18,16 @@ internal sealed class ZipEntry
     internal ZipEntryKind Kind;
     internal int Mode;
     internal byte[] Content = [];
+    /// <summary>
+    /// Optional streamed payload for file entries; when set it takes precedence
+    /// over <see cref="Content"/>. The factory must return a stream reporting
+    /// <see cref="Stream.Length"/>; the writer opens it per entry, streams
+    /// exactly that many bytes through Deflate and disposes it, patching the
+    /// local header with the measured CRC and sizes afterwards — a seekable
+    /// output stream is required. Streamed entries always use Deflate; the
+    /// stored fallback only applies to buffered <see cref="Content"/>.
+    /// </summary>
+    internal Func<Stream>? OpenContent;
     internal string LinkTarget = "";
 }
 
@@ -35,7 +45,8 @@ internal static class ZipWriter
 
     internal static void Write(Stream output, IEnumerable<ZipEntry> entries)
     {
-        var central = new List<(string Name, ZipEntry Entry, uint Crc, int Compressed, long LocalOffset, bool Stored)>();
+        var central = new List<(string Name, ZipEntry Entry, uint Crc, long Compressed, long Size, long LocalOffset, bool Stored)>();
+        var copyBuffer = new byte[81920];
         foreach (var entry in entries)
         {
             var name = entry.Name;
@@ -47,6 +58,11 @@ internal static class ZipWriter
             if (nameBytes.Length > ushort.MaxValue)
             {
                 throw new ArgumentException($"Zip entry name exceeds the limit: '{name}'.");
+            }
+            if (entry.Kind == ZipEntryKind.File && entry.OpenContent is { } openContent)
+            {
+                WriteStreamedFile(output, copyBuffer, central, entry, name, nameBytes, openContent);
+                continue;
             }
             var data = entry.Kind switch
             {
@@ -78,13 +94,13 @@ internal static class ZipWriter
             var localOffset = output.Position;
             WriteLocalHeader(output, nameBytes, entry, stored, crc, data.Length, compressed.Length);
             output.Write(compressed, 0, compressed.Length);
-            central.Add((name, entry, crc, compressed.Length, localOffset, stored));
+            central.Add((name, entry, crc, compressed.Length, data.Length, localOffset, stored));
         }
 
         var centralOffset = output.Position;
-        foreach (var (name, entry, crc, compressedLength, localOffset, stored) in central)
+        foreach (var (name, entry, crc, compressedLength, size, localOffset, stored) in central)
         {
-            WriteCentralHeader(output, Encoding.UTF8.GetBytes(name), entry, crc, compressedLength, localOffset, stored);
+            WriteCentralHeader(output, Encoding.UTF8.GetBytes(name), entry, crc, compressedLength, size, localOffset, stored);
         }
         var centralSize = output.Position - centralOffset;
         if (central.Count > ushort.MaxValue || centralOffset > uint.MaxValue || centralSize > uint.MaxValue)
@@ -113,16 +129,75 @@ internal static class ZipWriter
         buffer.Write(nameBytes);
     }
 
+    // The local header needs CRC and both sizes before the payload; streamed
+    // entries write a placeholder first and patch it once the measured values
+    // are known — output bytes stay identical to an upfront-known header.
+    private static void WriteStreamedFile(
+        Stream output, byte[] copyBuffer,
+        List<(string Name, ZipEntry Entry, uint Crc, long Compressed, long Size, long LocalOffset, bool Stored)> central,
+        ZipEntry entry, string name, byte[] nameBytes, Func<Stream> openContent)
+    {
+        using var content = openContent();
+        var contentLength = content.Length;
+        if (contentLength > uint.MaxValue)
+        {
+            throw new InvalidOperationException(
+                $"Zip entry '{entry.Name}' exceeds the classic zip per-entry limit; Zip64 archives are not supported by this writer.");
+        }
+        if (!output.CanSeek)
+        {
+            throw new InvalidOperationException(
+                "Streamed zip entries require a seekable output stream so the local header can be patched.");
+        }
+        var localOffset = output.Position;
+        WriteLocalHeader(output, nameBytes, entry, stored: false, crc: 0, size: 0, compressedSize: 0);
+        var dataStart = output.Position;
+        var crc = new Crc32Computer();
+        var remaining = contentLength;
+        using (var deflate = new DeflateStream(output, CompressionLevel.Optimal, leaveOpen: true))
+        {
+            while (remaining > 0)
+            {
+                var read = content.Read(copyBuffer, 0, (int)Math.Min(copyBuffer.Length, remaining));
+                if (read == 0)
+                {
+                    throw new EndOfStreamException(
+                        $"Zip entry '{entry.Name}' stream ended after {contentLength - remaining} of {contentLength} bytes.");
+                }
+                crc.Update(copyBuffer, 0, read);
+                deflate.Write(copyBuffer, 0, read);
+                remaining -= read;
+            }
+        }
+        var compressedLength = output.Position - dataStart;
+        if (compressedLength > uint.MaxValue)
+        {
+            throw new InvalidOperationException(
+                $"Zip entry '{entry.Name}' compressed payload exceeds the classic zip limit; Zip64 archives are not supported by this writer.");
+        }
+        PatchLocalHeader(output, localOffset, crc.Value, compressedLength, contentLength);
+        central.Add((name, entry, crc.Value, compressedLength, contentLength, localOffset, false));
+    }
+
+    // Rewinds to the CRC field of the just-written local header and fills in
+    // the three measured fields (crc / compressed size / uncompressed size).
+    private static void PatchLocalHeader(Stream output, long localOffset, uint crc, long compressedSize, long size)
+    {
+        var end = output.Position;
+        output.Position = localOffset + 14;
+        using (var patch = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true))
+        {
+            patch.Write(crc);
+            patch.Write((uint)compressedSize);
+            patch.Write((uint)size);
+        }
+        output.Position = end;
+    }
+
     private static void WriteCentralHeader(
-        Stream output, byte[] nameBytes, ZipEntry entry, uint crc, long compressedSize, long localOffset,
+        Stream output, byte[] nameBytes, ZipEntry entry, uint crc, long compressedSize, long size, long localOffset,
         bool stored)
     {
-        var size = entry.Kind switch
-        {
-            ZipEntryKind.File => entry.Content.Length,
-            ZipEntryKind.Symlink => Encoding.UTF8.GetByteCount(entry.LinkTarget),
-            _ => 0
-        };
         // Unix mode (S_IF* | perms) in the high word of external attributes;
         // low word stays zero so DOS-attribute tools see a plain file.
         var unixMode = entry.Kind switch
@@ -168,15 +243,44 @@ internal static class ZipWriter
 
     private static uint Crc32(byte[] data)
     {
-        var crc = 0xFFFFFFFFu;
-        foreach (var b in data)
+        var crc = new Crc32Computer();
+        crc.Update(data, 0, data.Length);
+        return crc.Value;
+    }
+
+    // Incremental table-driven CRC-32 (IEEE 802.3) shared by the buffered and
+    // streamed paths — identical results to the classic bit loop.
+    private sealed class Crc32Computer
+    {
+        private static readonly uint[] Table = BuildTable();
+        private uint _crc = 0xFFFFFFFFu;
+
+        internal void Update(byte[] buffer, int offset, int count)
         {
-            crc ^= b;
-            for (var i = 0; i < 8; i++)
+            var crc = _crc;
+            var end = offset + count;
+            for (var i = offset; i < end; i++)
             {
-                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
+                crc = (crc >> 8) ^ Table[(crc ^ buffer[i]) & 0xFF];
             }
+            _crc = crc;
         }
-        return ~crc;
+
+        internal uint Value => ~_crc;
+
+        private static uint[] BuildTable()
+        {
+            var table = new uint[256];
+            for (var i = 0u; i < 256; i++)
+            {
+                var c = i;
+                for (var k = 0; k < 8; k++)
+                {
+                    c = (c & 1) != 0 ? (c >> 1) ^ 0xEDB88320u : c >> 1;
+                }
+                table[i] = c;
+            }
+            return table;
+        }
     }
 }
