@@ -284,15 +284,18 @@ public sealed class MacDmgIntegrationTests : IClassFixture<MacDmgFixture>
             Assert.False(string.IsNullOrWhiteSpace(click.StdOut),
                 "SLA 对话框 90s 内未出现 Agree 按钮（或点击未生效）。");
 
+            // 挂载竞态：卷目录先于内容就绪出现（并行负载下实测）——
+            // 等"新卷内 .app 目录就位"，而非仅卷目录出现。
+            const string appName = "Bundler Mac DMG Fixture.app";
             WaitFor.Until(() =>
             {
                 var found = Directory.GetDirectories("/Volumes")
                     .FirstOrDefault(d => !before.Contains(d));
                 if (found is null) return false;
                 volume = found;
-                return true;
-            }, "SLA 应答后卷未挂载。", 30);
-            var app = Path.Combine(volume!, "Bundler Mac DMG Fixture.app");
+                return Directory.Exists(Path.Combine(found, appName));
+            }, "SLA 应答后卷未挂载或 .app 未就位。", 30);
+            var app = Path.Combine(volume!, appName);
             Assert.True(Directory.Exists(app),
                 $"SLA 挂载卷缺少 .app：{volume}");
             var run = ProcessRunner.Run(Path.Combine(app,
