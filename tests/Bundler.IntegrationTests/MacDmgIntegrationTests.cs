@@ -256,13 +256,14 @@ public sealed class MacDmgIntegrationTests : IClassFixture<MacDmgFixture>
         {
             ProcessRunner.Run("open", [_f.EulaDmg],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(30) });
-            // 轮询所有前台进程的窗口找 Agree 按钮并点击（SLA 对话框宿主进程不限定）。
+            // 轮询前台进程 + SLA 实际宿主 DiskImages UI Agent/DiskImageMounter
+            // （background only 进程，whose 过滤枚举不到）的窗口找 Agree 按钮并点击。
             const string clickScript = """
                 set deadline to (current date) + 90
                 set clicked to ""
                 tell application "System Events"
                     repeat while (current date) < deadline and clicked is ""
-                        repeat with proc in (every process whose background only is false)
+                        repeat with proc in (every process whose background only is false or name is "DiskImages UI Agent" or name is "DiskImageMounter")
                             try
                                 repeat with w in (windows of proc)
                                     if exists (button "Agree" of w) then
