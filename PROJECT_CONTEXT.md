@@ -82,6 +82,24 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-05 十样品合一（PR #21 已并入 `main`，squash `695ec2b`）
+
+- `samples/` 收敛为单一 `samples/HelloBundlerApp/`：公共旋钮（身份/元数据/许可/签名共享/归档版本）在主 csproj，
+  每后端全套公开旋钮在 `formats/{Nsis,Msi,MacApp,MacDmg,MacPkg,Deb,Rpm,AppImage,Archive,AlpineApk}.props` 经 `<Import>` 导入，
+  `HelloBundler<Format>*` 传透覆盖；`Assets/<format>/` 归位格式专属素材；10 份样品文档合为 `hello-bundler-app-sample.md`。
+- `BundlerFormats` 默认按 `$(RuntimeIdentifier)`×宿主 OS 推导：win→nsis[;msi 仅 Windows 宿主];zip;targz、osx→app;dmg;pkg 按宿主/显式分化、
+  linux→deb;rpm[;appimage 仅 Linux];zip;targz、musl→alpineapk;zip;targz；`-p:BundlerFormats=` 任意子集可覆盖。
+- buildTransitive 全部 224 个公开 `Bundler*` 旋钮逐一比对——0 缺口；旧样品遗漏的 18 个旋钮已补齐
+  （`BundlerWixUpgradeCode`、WiX 专家扩展 5 件、`BundlerNsisLegacyMsiAutoDetect`、rpm Program 脚本、apk 五元数据等）。
+- 合并暴露的五连环样品缺陷逐条修复复验：无 RID 时 formats 坍缩（测试腿补 `-r`）、msi 许可须 RTF（含 msi 自动切换，`!app` 卫句）、
+  mac `BundlerIcon` 缺 RID 门禁污染 win 图标集、CJK 字符进不了 MSI 各语言 DB codepage（含 msi 时中文文案/文件名自动回退 ASCII）、
+  NSIS 快捷方式工作目录随 CJK 回退改指 `docs`；三条产品契约约束已写入样品文档。
+- 耦合更新：`MsiLocalPackagesTests` 三变体改跑 `HelloBundlerMsi*`（补 `-r win-x64`+`BundlerFormats=msi`）；
+  `ProgramTests` 断言十 props 导入与前缀覆盖；当前用法文档同步（dated 验收记录保留原文）。
+- 四宿主回归 `a10ff79` 全绿：win 默认发布四格式全产 + LocalPackages 8/8 真装；linux `deb;rpm;appimage;zip;targz` + 跨宿主 `nsis;zip;targz`；
+  mac `dmg;pkg;zip;targz` 图标照常；alpine `alpineapk;zip;targz`。Devin Review 两轮 6 条全属实已修，复审零发现。
+- 版本：`BundlerPackageVersion` 维持 `alpha.69`。
+
 ### 2026-10-04 仓库结构清理（PR #20 已并入 `main`，squash `33f37b9`）
 
 - tests/ 收敛：12 个 `tests/<格式>.Integration/` 散目录的 fixture 与载荷全部并入 `tests/Bundler.IntegrationTests/Fixtures/<格式>/`（`Nsis/` 含 `LegacyMsiFixture*/`）；
