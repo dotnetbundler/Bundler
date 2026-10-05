@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-05
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.69`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.70`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -93,7 +93,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - Windows 驱动基建：`tests/Shared/Tooling/WindowsDesktop.cs`——`Interop.UIAutomationClient`（netstandard2.0 纯 COM interop，弃用 FlaUI：4.0.0 拖入带漏洞 System.Drawing.Common 触发 NU1904、5.0.0 仅 net48 触发 NU1701/NETSDK1136）；
   宿主迭代六轮实测坐实的驱动规则：候选按钮按实体类名过滤（标题栏伪按钮类名空）、同指纹连击 ≥3 升级物理鼠标注入（nsDialogs 自绘页与 Finish 免疫 `Invoke`）、终态件含 `Finish`/`Close`、Finish 前一律清复选框。
 - mac SLA 应答经 osascript：`DiskImages UI Agent` 为 background-only 进程，whose 子句须显式含其名；前置 TCC 探针失败即 Skip。
-- 验证：本机 build 0W/0E、三腿在对应宿主实测 PASS、宿主零残留；四宿主完整回归待跑。
+- 验证：本机 build 0W/0E、四宿主完整回归全绿（win 交互双腿/mac SLA 腿实测 PASS，SLA 挂载竞态已修复验）；Devin Review 版本推进裁决→`alpha.70`。
 
 ### 2026-10-05 十样品合一（PR #21 已并入 `main`，squash `695ec2b`）
 
