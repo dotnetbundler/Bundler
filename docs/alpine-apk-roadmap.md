@@ -88,3 +88,7 @@
 - `.PKGINFO` 无官方完整键清单（权威来源是 abuild 源码）——写字段集保守收敛在常见子集，escape hatch 覆盖遗漏。
 - musl 目标的真实载荷（`dotnet publish -r linux-musl-*`）属调用方前提；验证腿用 self-contained fixture。
 - 桌面集成（.desktop/图标）在 Alpine 桌面场景价值弱——默认不做，若真实需求出现再加阶段。
+
+## 7. 外部待验收实证回填（2026-10-05，`0.1.0-alpha.70`，alpine-docker 宿主）
+
+- **qemu-aarch64 binfmt 激活**（APK-OI-02 补强）：`docker run --rm --privileged tonistiigi/binfmt --install arm64` 注册后，`AlpineApkIntegrationTests.DockerArm64InstallRunRemoveUnderBinfmt` 由 SKIP 转真跑通过 1/1/0·76s——arm64 alpine 容器内 `apk add`→运行→`apk del` 全链路；该腿随宿主 binfmt 注册态自动转 PASS。真机 ARM64 宿主仍待验。

@@ -2,7 +2,7 @@
 
 > WIN-MSI-1..9 全部完成（`.msi` 冻结基线 `0.1.0-alpha.43`）；
 > alpha.40 已验证 x86 目标、显式 MSI 版本映射、同版碰撞、默认降级拒绝、显式降级和用户文件所有权，alpha.41 已验证范围内安装目录、自定义 UI 表结构、可选 Feature、PATH 精确追加/还原与仅交互启动勾选的产物和静默行为。
-> 以下人工/外部环境用例均未执行——对应各阶段未覆盖的外部条件，未执行项不得宣称已完成。
+> 以下人工/外部环境用例除各行已标注的已实证子项外均未执行——对应各阶段未覆盖的外部条件，未执行项不得宣称已完成。
 > 用户目前没有干净 Windows 10/11、ARM64 原生用户端或提权测试 VM，不将本机结果扩写为这些平台通过。
 > 路线见 `docs/msi-roadmap.md` 第 10 节。
 
@@ -23,7 +23,7 @@
 `MSI-MT-11` 的本机自动前置为 `MsiLocalPackagesTests`（同上同意闸）与 `tests/Bundler.Tests/WixTests.cs`。
 前者以随机身份真实验证静默 `INSTALLFOLDER` 范围拒绝（根目录本身与 per-machine 根均 1603）、自定义目录安装、PATH 精确追加/卸载还原、开始菜单（含卸载入口）与桌面快捷方式、ARP `InstallLocation`/`Contact`、升级恢复已选目录、静默修复与未知用户文件保留。
 后者断言自定义 UI 表结构与校验动作。
-该脚本不进入真实交互 UI：对话框流转（部分已由交互腿自动覆盖）、`InvalidDirDlg` 显示、勾选启动行为、位图显示、缩放/辅助功能仍需人工执行；junction 路径行为已于 2026-10-05 实证（MSI-OI-12），见下表。
+该脚本不进入真实交互 UI：`InvalidDirDlg` 显示、勾选启动行为、位图显示、缩放/辅助功能仍需人工执行；junction 路径行为已于 2026-10-05 实证（MSI-OI-12），许可/InstallDir/Install/Finish 流转已由交互腿 `MsiLocalPackagesTests.InteractiveWizardInstallsAndRemoves` 自动覆盖，见下表。
 
 下列人工用例只在可抛弃 VM/专用测试机运行。
 每轮记录 Git SHA、包版本、MSI/WiX 工具 SHA-256、OS build/架构、账户权限、MSI SHA-256、verbose log 路径、开始/结束快照和清理结果。

@@ -88,3 +88,7 @@
 - 收口：能力矩阵定稿无悬空"计划实现"行（GPG 签名按 rpm 口径标冻结外后置评估 `LINUX-APPIMAGE-SIGN`）；OI-01..05 维持登记，OI-06 消解；MT-01..05 全量保留。
 - 冻结基线：`AppImageBundleConfiguration` 配置面与行为契约冻结于 `0.1.0-alpha.58`；冻结测试向量 = `Bundler.Tests` 173/173 + `Verify.sh` 全绿（extract/AppRun 真实运行、三容器矩阵、arm64 载荷深读、appimagelint 信息级段）。
 - 冻结后仅接受带回归测试的缺陷修复。
+
+**外部待验收实证回填（2026-10-05，`0.1.0-alpha.70`，alpine-docker 宿主）**：
+
+- **musl 消费侧 FUSE 路径**（LINUX-APPIMAGE-OI-04 补证）：特权容器（`--device /dev/fuse --cap-add SYS_ADMIN`+`apk add fuse`）内 musl AppImage `./app.AppImage hi` 真挂载 `/tmp/.mount_*` 执行 rc=0、`--appimage-extract-and-run` rc=0——musl 下 FUSE 挂载运行实测可用。
