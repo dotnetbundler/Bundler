@@ -414,21 +414,20 @@ public static class ArchiveTests
     }
 
     // 流式条目不预压压缩比：声明长距哨兵不足安全带时本地头直接按 Zip64 形态写
-    // （哨兵+extra 占位），即使最终没真超限产物依然合法。
+    // （哨兵+extra 占位），即使最终没真超限产物依然合法；中央目录与本地头同构。
     [Fact]
-    static void StreamedZipEntryNearLimitWritesZip64LocalHeader()
+    static void StreamedZipEntryNearLimitWritesZip64Headers()
     {
+        const long declared = uint.MaxValue - 1L; // 安全带内：压缩后仍不足哨兵
         using var output = new MemoryStream();
-        AssertThrows<EndOfStreamException>(
-            () => ZipWriter.Write(output,
-            [
-                new ZipEntry
-                {
-                    Name = "f.bin", Kind = ZipEntryKind.File, Mode = 420,
-                    OpenContent = () => new ShortStream(declaredLength: uint.MaxValue - 1, actualBytes: 0)
-                }
-            ]),
-            "the declared length still bounds the read loop even under the zip64 path");
+        ZipWriter.Write(output,
+        [
+            new ZipEntry
+            {
+                Name = "f.bin", Kind = ZipEntryKind.File, Mode = 420,
+                OpenContent = () => new ZeroStream(declared)
+            }
+        ]);
         var bytes = output.ToArray();
         Assert.Equal(0x04034b50u, BitConverter.ToUInt32(bytes, 0));            // local signature
         Assert.Equal(45, BitConverter.ToUInt16(bytes, 4));                     // version needed = zip64
@@ -436,14 +435,31 @@ public static class ArchiveTests
         Assert.Equal(uint.MaxValue, BitConverter.ToUInt32(bytes, 22));         // uncompressed size sentinel
         Assert.Equal(20, BitConverter.ToUInt16(bytes, 28));                    // extra field length
         Assert.Equal(0x0001, BitConverter.ToUInt16(bytes, 30 + bytes[26]));    // zip64 extra id
+        Assert.Equal((ulong)declared, BitConverter.ToUInt64(bytes, 30 + bytes[26] + 4)); // 本地 extra 原始长
+        // 中央目录必须与本地头同构：预升级条目的哨兵+extra 不能只在本地头出现。
+        // 零数据压完仅数 MiB，布局为单条中央记录后直跟 22B 经典 EOCD。
+        var central = bytes.Length - 22 - 46 - 5 - 20;
+        Assert.Equal(0x02014b50u, BitConverter.ToUInt32(bytes, central));
+        Assert.Equal(45, BitConverter.ToUInt16(bytes, central + 6));           // version needed = zip64
+        Assert.Equal(uint.MaxValue, BitConverter.ToUInt32(bytes, central + 20)); // compressed size sentinel
+        Assert.Equal(uint.MaxValue, BitConverter.ToUInt32(bytes, central + 24)); // uncompressed size sentinel
+        Assert.Equal(20, BitConverter.ToUInt16(bytes, central + 30));          // extra field length
+        var centralExtra = central + 46 + BitConverter.ToUInt16(bytes, central + 28); // 定长段+文件名后
+        Assert.Equal(0x0001, BitConverter.ToUInt16(bytes, centralExtra));      // zip64 extra id
+        Assert.Equal((ulong)declared, BitConverter.ToUInt64(bytes, centralExtra + 4)); // 中央 extra 原始长
+        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        Assert.Equal(declared, archive.Entries[0].Length);                     // BCL 读回一致
     }
 
     // 大于 4GiB 的真实条目：本地头/中央目录写哨兵+Zip64 extra，BCL 读回全程验证 CRC。
     [Fact]
     static void WritesZip64EntryBeyondFourGiB()
     {
-        var input = CreateInputDirectory();
-        var zipPath = Path.Combine(input, "..", "big-zip64-out", "out.zip");
+        // 独立临时根：输入与产物都在其中，清理只删本用例的目录（不同用例共享根互不影响）。
+        var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "in");
+        Directory.CreateDirectory(input);
+        var zipPath = Path.Combine(root, "out", "out.zip");
         Directory.CreateDirectory(Path.GetDirectoryName(zipPath)!);
         var bigPath = Path.Combine(input, "big.bin");
         const long bigSize = 4_300_000_000L; // > uint.MaxValue：必须走 zip64
@@ -488,7 +504,7 @@ public static class ArchiveTests
         }
         finally
         {
-            Cleanup(input);
+            try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
         }
     }
 
@@ -516,6 +532,32 @@ public static class ArchiveTests
         Assert.True(hasEocd64, "entry count at the classic limit must emit a Zip64 EOCD record");
         using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
         Assert.Equal(count, archive.Entries.Count);
+    }
+
+    // Reports Length = declaredLength and yields exactly that many zero bytes
+    // — lets zip64-band tests pump a near-sentinel payload without 4GiB of disk.
+    sealed class ZeroStream(long declaredLength) : Stream
+    {
+        private long _produced;
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => declaredLength;
+        public override long Position { get => _produced; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var n = (int)Math.Min(count, declaredLength - _produced);
+            if (n > 0)
+            {
+                Array.Clear(buffer, offset, n);
+                _produced += n;
+            }
+            return n;
+        }
     }
 
     // Reports Length = declaredLength but only yields actualBytes of content.

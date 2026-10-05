@@ -56,7 +56,7 @@ internal static class ZipWriter
 
     internal static void Write(Stream output, IEnumerable<ZipEntry> entries)
     {
-        var central = new List<(string Name, ZipEntry Entry, uint Crc, long Compressed, long Size, long LocalOffset, bool Stored)>();
+        var central = new List<(string Name, ZipEntry Entry, uint Crc, long Compressed, long Size, long LocalOffset, bool Stored, bool LocalZip64)>();
         var copyBuffer = new byte[81920];
         foreach (var entry in entries)
         {
@@ -105,13 +105,13 @@ internal static class ZipWriter
             var localOffset = output.Position;
             WriteLocalHeader(output, nameBytes, entry, stored, crc, data.Length, compressed.Length);
             output.Write(compressed, 0, compressed.Length);
-            central.Add((name, entry, crc, compressed.Length, data.Length, localOffset, stored));
+            central.Add((name, entry, crc, compressed.Length, data.Length, localOffset, stored, false));
         }
 
         var centralOffset = output.Position;
-        foreach (var (name, entry, crc, compressedLength, size, localOffset, stored) in central)
+        foreach (var (name, entry, crc, compressedLength, size, localOffset, stored, localZip64) in central)
         {
-            WriteCentralHeader(output, Encoding.UTF8.GetBytes(name), entry, crc, compressedLength, size, localOffset, stored);
+            WriteCentralHeader(output, Encoding.UTF8.GetBytes(name), entry, crc, compressedLength, size, localOffset, stored, localZip64);
         }
         var centralSize = output.Position - centralOffset;
 
@@ -158,7 +158,7 @@ internal static class ZipWriter
     // 只回填 CRC 与 extra 内的压缩长槽位。
     private static void WriteStreamedFile(
         Stream output, byte[] copyBuffer,
-        List<(string Name, ZipEntry Entry, uint Crc, long Compressed, long Size, long LocalOffset, bool Stored)> central,
+        List<(string Name, ZipEntry Entry, uint Crc, long Compressed, long Size, long LocalOffset, bool Stored, bool LocalZip64)> central,
         ZipEntry entry, string name, byte[] nameBytes, Func<Stream> openContent)
     {
         using var content = openContent();
@@ -195,7 +195,7 @@ internal static class ZipWriter
         }
         var compressedLength = output.Position - dataStart;
         PatchLocalHeader(output, localOffset, nameBytes.Length, crc.Value, compressedLength, contentLength, zip64);
-        central.Add((name, entry, crc.Value, compressedLength, contentLength, localOffset, false));
+        central.Add((name, entry, crc.Value, compressedLength, contentLength, localOffset, false, zip64));
     }
 
     // 回到刚写的本地头 CRC 字段处，回填实测字段。
@@ -238,7 +238,7 @@ internal static class ZipWriter
 
     private static void WriteCentralHeader(
         Stream output, byte[] nameBytes, ZipEntry entry, uint crc, long compressedSize, long size, long localOffset,
-        bool stored)
+        bool stored, bool localHeaderZip64)
     {
         // Unix mode (S_IF* | perms) in the high word of external attributes;
         // low word stays zero so DOS-attribute tools see a plain file.
@@ -249,8 +249,10 @@ internal static class ZipWriter
             _ => 32768 /* 0100000 S_IFREG */ | (entry.Mode & 0xFFF)
         };
         // 中央目录的 Zip64 extra 只装溢出的字段，顺序固定：原始长/压缩长/本地偏移。
-        var sizeOverflow = size >= uint.MaxValue;
-        var compressedOverflow = compressedSize >= uint.MaxValue;
+        // 本地头已按 Zip64 写的条目（流式预升级）在此强制同构——哨兵+extra，
+        // 与本地头逐字段一致，按版本判格式的读端不会误判。
+        var sizeOverflow = localHeaderZip64 || size >= uint.MaxValue;
+        var compressedOverflow = localHeaderZip64 || compressedSize >= uint.MaxValue;
         var offsetOverflow = localOffset >= uint.MaxValue;
         var zip64 = sizeOverflow || compressedOverflow || offsetOverflow;
         byte[]? extra = null;
