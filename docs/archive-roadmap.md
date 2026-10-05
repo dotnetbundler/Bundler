@@ -67,6 +67,13 @@
 - 宿主矩阵收口：本机 Linux 宿主实测到面；跨 OS 互读（Linux 产归档在 Windows/macOS 解出）本机无宿主，登记 ARCHIVE-MT-01..04/ARCHIVE-OI-01..04，未冒充。
 - 跨实现互读补强：`Verify.sh` 新增 python3 `zipfile`/`tarfile` 段——第三方实现（非 .NET/Info-ZIP/GNU tar）读 zip（条目存在、external attrs 执行位、symlink 内容）与 tar.gz（条目、symlink 类型与目标）断言全绿。
 - 干净宿主审计：`grep` 全量复核 `src/Bundler.Archive`——零 `System.Diagnostics.Process` 出口，外部调用面仅 `UnixLinks.cs` 两处 libc P/Invoke（`readlink`/`access`）；与决策 2"纯托管写入器、零外部进程"一致。
+
 - 能力矩阵定稿：十二行定稿——十行已实现/明确拒绝，"跨 OS 互读实测"维持外部待验收（对应 OI-01..04），新增"第三方实现互读"已实现行；矩阵内无悬空"计划实现"行。
 - OI/MT 收口：ARCHIVE-OI-01..05 逐条复核维持登记；ARCHIVE-MT-01..05 人工验收清单全量保留。
 - 冻结基线：`ArchiveBundleConfiguration`/`ArchiveBundler` 公共配置面与行为契约冻结于 `0.1.0-alpha.59`；冻结测试向量 = `Bundler.Tests` 184/184 全绿 + `tests/Archive.Integration/Verify.sh` 全绿（unzip/zipinfo/tar 解包断言、载荷运行、mode/symlink 还原、python3 互读、映射与失败变体、五格式扇出、win/mac 交叉 zip）。冻结后仅接受带回归测试的缺陷修复。
+
+### 2026-10-05 zip 流式写出 + Zip64 动态升级（`0.1.0-alpha.72`，分支 `devin/*-zip-streaming`/`devin/*-zip64`）
+
+- 流式 zip：`ZipEntry.OpenContent`（`Func<Stream>`，契约同 `TarEntry`）——占位本地头、Deflate 分块写、增量 CRC-32、写后回填三字段（可寻址输出流前提），产物字节与预知长度写法同构；stored 回落仅留缓冲路径；`ToZipEntry` 文件来源改 `FileStream` 工厂。
+- Zip64：按 BCL `ZipArchive` 式动态升级——单条尺寸/压缩长/本地偏移顶 0xFFFFFFFF 或条目数顶 0xFFFF 的字段写哨兵、真值进 Zip64 extra/EOCD64+locator，version needed 升 45；未顶限归档字节与经典布局完全一致；流式条目按声明长 2MiB 安全带预升级兜底（覆盖 deflate 最坏膨胀）。
+- 验证：`ArchiveTests` +4 用例——4.3GiB 稀疏文件实写+`ZipArchive` 全量读回 CRC、流式与内联逐字节一致、安全带预升级头形态、65536 条目 EOCD64；CLI 实产 4.3GiB zip64 包经 Info-ZIP `unzip -t` 全量解压 CRC 与 Python `zipfile` 通过，win 宿主 `Expand-Archive`/`tar.exe` 实证见会话记录。

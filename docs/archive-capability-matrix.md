@@ -20,3 +20,5 @@
 | 同条件产物逐字节确定 | 已实现 | 联合测试 | 纯托管写入器同输入同条件 sha256 一致（同宿主跨轮 + linux↔qemu 同型跨宿主 16/16 对）；跨 OS 差异归因载荷 publish 元数据与宿主 mode 表达，非写入器缺陷 |
 | 跨 OS 互读实测（跨宿主互产互解） | 已实现 | ARCHIVE-3 + 联合测试 | 2026-09-29/30 四宿主：win/linux/mac/qemu 互产互装——解压、exec 位/symlink 还原、载荷运行全过（ARCHIVE-OI-04 消解） |
 | 第三方实现互读（python3 `zipfile`/`tarfile` 读产物） | 已实现 | ARCHIVE-3 | `ArchiveIntegrationTests` 断言：条目/执行位/symlink |
+| zip 流式载荷（`ZipEntry.OpenContent`） | 已实现 | 2026-10-05（PR #24） | 占位本地头+回填+增量 CRC-32；单条目超 ~2GiB 内存顶；流式恒 deflate、stored 留缓冲路径 |
+| Zip64 动态升级（>4GiB 条目/≥65535 条目/超 4GiB 偏移） | 已实现 | 2026-10-05（alpha.72） | BCL 式哨兵+extra+EOCD64/locator；未顶限归档字节不变；`unzip -t`/`ZipArchive`/`Expand-Archive` 实证 |

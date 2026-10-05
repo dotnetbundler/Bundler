@@ -265,18 +265,6 @@ public static class ArchiveTests
         }
     }
 
-    [Fact]
-    static void RejectsZip64()
-    {
-        var entries = Enumerable.Range(0, 65536)
-            .Select(i => new ZipEntry { Name = $"e{i}", Kind = ZipEntryKind.File, Mode = 420 })
-            .ToArray();
-        using var stream = new MemoryStream();
-        AssertThrows<InvalidOperationException>(
-            () => ZipWriter.Write(stream, entries),
-            "more than 65535 entries must hit the Zip64 guard");
-    }
-
     // tar.gz 载荷走流式写出：>2GiB 单文件不再触发 byte[] 尺寸上限。
     [Fact]
     static void StreamsFilePayloadsAboveTwoGiB()
@@ -425,20 +413,155 @@ public static class ArchiveTests
             "a content stream ending before its declared Length must fail, not write a corrupt zip");
     }
 
+    // 流式条目不预压压缩比：声明长距哨兵不足安全带时本地头直接按 Zip64 形态写
+    // （哨兵+extra 占位），即使最终没真超限产物依然合法；中央目录与本地头同构。
     [Fact]
-    static void StreamedZipEntryAtOrBeyondFourGiBIsRejected()
+    static void StreamedZipEntryNearLimitWritesZip64Headers()
     {
+        const long declared = uint.MaxValue - 1L; // 安全带内：压缩后仍不足哨兵
         using var output = new MemoryStream();
-        AssertThrows<InvalidOperationException>(
-            () => ZipWriter.Write(output,
-            [
-                new ZipEntry
-                {
-                    Name = "f.bin", Kind = ZipEntryKind.File, Mode = 420,
-                    OpenContent = () => new ShortStream(declaredLength: uint.MaxValue, actualBytes: 0)
-                }
-            ]),
-            "an entry whose size hits the Zip64 sentinel value must be rejected, not written as a corrupt header");
+        ZipWriter.Write(output,
+        [
+            new ZipEntry
+            {
+                Name = "f.bin", Kind = ZipEntryKind.File, Mode = 420,
+                OpenContent = () => new ZeroStream(declared)
+            }
+        ]);
+        var bytes = output.ToArray();
+        Assert.Equal(0x04034b50u, BitConverter.ToUInt32(bytes, 0));            // local signature
+        Assert.Equal(45, BitConverter.ToUInt16(bytes, 4));                     // version needed = zip64
+        Assert.Equal(uint.MaxValue, BitConverter.ToUInt32(bytes, 18));         // compressed size sentinel
+        Assert.Equal(uint.MaxValue, BitConverter.ToUInt32(bytes, 22));         // uncompressed size sentinel
+        Assert.Equal(20, BitConverter.ToUInt16(bytes, 28));                    // extra field length
+        Assert.Equal(0x0001, BitConverter.ToUInt16(bytes, 30 + bytes[26]));    // zip64 extra id
+        Assert.Equal((ulong)declared, BitConverter.ToUInt64(bytes, 30 + bytes[26] + 4)); // 本地 extra 原始长
+        // 中央目录必须与本地头同构：预升级条目的哨兵+extra 不能只在本地头出现。
+        // 零数据压完仅数 MiB，布局为单条中央记录后直跟 22B 经典 EOCD。
+        var central = bytes.Length - 22 - 46 - 5 - 20;
+        Assert.Equal(0x02014b50u, BitConverter.ToUInt32(bytes, central));
+        Assert.Equal(45, BitConverter.ToUInt16(bytes, central + 6));           // version needed = zip64
+        Assert.Equal(uint.MaxValue, BitConverter.ToUInt32(bytes, central + 20)); // compressed size sentinel
+        Assert.Equal(uint.MaxValue, BitConverter.ToUInt32(bytes, central + 24)); // uncompressed size sentinel
+        Assert.Equal(20, BitConverter.ToUInt16(bytes, central + 30));          // extra field length
+        var centralExtra = central + 46 + BitConverter.ToUInt16(bytes, central + 28); // 定长段+文件名后
+        Assert.Equal(0x0001, BitConverter.ToUInt16(bytes, centralExtra));      // zip64 extra id
+        Assert.Equal((ulong)declared, BitConverter.ToUInt64(bytes, centralExtra + 4)); // 中央 extra 原始长
+        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        Assert.Equal(declared, archive.Entries[0].Length);                     // BCL 读回一致
+    }
+
+    // 大于 4GiB 的真实条目：本地头/中央目录写哨兵+Zip64 extra，BCL 读回全程验证 CRC。
+    [Fact]
+    static void WritesZip64EntryBeyondFourGiB()
+    {
+        // 独立临时根：输入与产物都在其中，清理只删本用例的目录（不同用例共享根互不影响）。
+        var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "in");
+        Directory.CreateDirectory(input);
+        var zipPath = Path.Combine(root, "out", "out.zip");
+        Directory.CreateDirectory(Path.GetDirectoryName(zipPath)!);
+        var bigPath = Path.Combine(input, "big.bin");
+        const long bigSize = 4_300_000_000L; // > uint.MaxValue：必须走 zip64
+        try
+        {
+            using (var file = new FileStream(bigPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                file.Write(Encoding.ASCII.GetBytes("BUNDLER_BIG64"));
+                file.SetLength(bigSize); // 稀疏文件：仅头几字节是真实数据
+            }
+            var tailContent = Encoding.UTF8.GetBytes("tail-after-4gib");
+            using (var zip = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                ZipWriter.Write(zip,
+                [
+                    new ZipEntry
+                    {
+                        Name = "a/big.bin", Kind = ZipEntryKind.File, Mode = 420,
+                        OpenContent = () => new FileStream(bigPath, FileMode.Open, FileAccess.Read, FileShare.Read)
+                    },
+                    // 该条目的本地偏移必然 >4GiB：同时验证中央目录 offset 的 Zip64 extra。
+                    new ZipEntry { Name = "a/tail.bin", Kind = ZipEntryKind.File, Mode = 420, Content = tailContent }
+                ]);
+            }
+            VerifyZip64Archive(zipPath, bigSize);
+        }
+        finally
+        {
+            try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    // BCL 读回 4GiB+ 条目：句柄随本方法结束即释放，调用方的目录清理不受占用影响。
+    static void VerifyZip64Archive(string zipPath, long bigSize)
+    {
+        using var archive = ZipFile.OpenRead(zipPath);
+        Assert.Equal(2, archive.Entries.Count);
+        var big = archive.Entries.Single(e => e.FullName.EndsWith("/big.bin", StringComparison.Ordinal));
+        Assert.Equal(bigSize, big.Length);
+        using (var entryStream = big.Open())
+        {
+            var head = new byte[16];
+            var got = entryStream.Read(head, 0, head.Length);
+            Assert.StartsWith("BUNDLER_BIG64", Encoding.ASCII.GetString(head, 0, got));
+            // 读到底触发 ZipArchive 的 CRC 校验——验证回填与 zip64 字段的一致性。
+            entryStream.CopyTo(Stream.Null);
+        }
+        var tail = archive.Entries.Single(e => e.FullName.EndsWith("/tail.bin", StringComparison.Ordinal));
+        using var reader = new StreamReader(tail.Open());
+        Assert.Equal("tail-after-4gib", reader.ReadToEnd());
+    }
+
+    // 条目数顶 0xFFFF 哨兵时写 Zip64 EOCD+locator，BCL 读回条目数一致。
+    [Fact]
+    static void WritesZip64EocdForHugeEntryCounts()
+    {
+        const int count = 65536;
+        using var output = new MemoryStream();
+        ZipWriter.Write(output, Enumerable.Range(0, count).Select(i => new ZipEntry
+        {
+            Name = $"d/e{i}.txt", Kind = ZipEntryKind.File, Mode = 420, Content = [(byte)(i % 251)]
+        }));
+        var bytes = output.ToArray();
+        var hasEocd64 = false;
+        for (var i = bytes.Length - 22; i >= Math.Max(0, bytes.Length - 22 - 76); i--)
+        {
+            if (BitConverter.ToUInt32(bytes, i) == 0x06064b50u)
+            {
+                hasEocd64 = true;
+                Assert.Equal((ulong)count, BitConverter.ToUInt64(bytes, i + 32)); // 条目总数
+                break;
+            }
+        }
+        Assert.True(hasEocd64, "entry count at the classic limit must emit a Zip64 EOCD record");
+        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        Assert.Equal(count, archive.Entries.Count);
+    }
+
+    // 报告 Length = declaredLength 并产出恰好那么多的零字节——让安全带用例
+    // 不落盘 4GiB 真文件也能把近哨兵载荷完整泵过 deflate。
+    sealed class ZeroStream(long declaredLength) : Stream
+    {
+        private long _produced;
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => declaredLength;
+        public override long Position { get => _produced; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var n = (int)Math.Min(count, declaredLength - _produced);
+            if (n > 0)
+            {
+                Array.Clear(buffer, offset, n);
+                _produced += n;
+            }
+            return n;
+        }
     }
 
     // Reports Length = declaredLength but only yields actualBytes of content.

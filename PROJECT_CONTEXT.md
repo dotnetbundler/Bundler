@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-05
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.71`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.72`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -74,13 +74,20 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - `.deb`（已冻结，`alpha.51`）：纯托管 ar/tar/gzip 写入器；control/`md5sums`、SemVer→deb 版本映射、关系字段、Section/Priority、maintainer 脚本、systemd unit、conffiles、`.desktop`/hicolor/metainfo/changelog/copyright、`BundlerDebFile` 映射；压缩仅 gzip（xz/zstd 登记拒绝）。
 - `.rpm`（已冻结，`alpha.55`）：纯托管 lead/header/cpio/gzip 写入器；六族关系字段、License/Group/Url、scriptlet/systemd unit/`%config(noreplace)`、gzip-only；可选 GPG 签名（`RPMSIGTAG_RSA`+`RPMSIGTAG_PGP`，`rpm -K`/zypper/dnf 可验）。
 - `.AppImage`（已冻结，`alpha.58`）：内嵌 appimagetool×2 + type2 runtime×2（SHA-256 provenance），AppDir 共享 freedesktop 件 + 脚本 AppRun，压缩固定 zstd；可选 GPG 签名（`.sha256_sig` 段，`gpgv` 已验）。
-- `.zip`/`.tar.gz`（已冻结，`alpha.59`）：纯托管写入器，单顶层目录布局、执行位与符号链接保留、`.sha256` 侧车、确定性构建；zip 无 Zip64（>4GB 拒绝），tar 单条目 ~2GiB（内存模型）。
+- `.zip`/`.tar.gz`（已冻结，`alpha.59`）：纯托管写入器，单顶层目录布局、执行位与符号链接保留、`.sha256` 侧车、确定性构建；zip/tar 均流式写出：zip 经 Zip64 动态升级无尺寸上限，tar 单条目至 ustar ~8GiB 顶。
 - `.apk`（已冻结，`alpha.63`）：纯托管三段 gzip 写入器，`.PKGINFO`+六脚本+`BundlerAlpineApkFile` 映射+pax SHA1 校验和，可选 RSA 签名段；`linux-musl-x64/arm64` 目标。
 - CLI（已冻结，`alpha.62`）：`validate`/`plan`/`bundle` 三命令共用 Core/后端、`bundler.json` 层叠、`--bundles`/`--input-dir`、稳定退出码与 `--json`；dotnet tool nupkg + `PublishAot` 原生二进制双分发。
 
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-05 Zip64 动态升级（PR 在途）
+
+- `ZipWriter` 按 BCL `ZipArchive` 式动态 Zip64：尺寸/压缩长/本地偏移顶 0xFFFFFFFF 或条目数顶 0xFFFF 的字段写哨兵+真值进 Zip64 extra/EOCD64+locator，version needed 升 45；未顶限归档字节与经典布局完全一致；流式条目按声明长 2MiB 安全带预升级（覆盖 deflate 最坏膨胀）。
+- 原"Zip64 确定性拒绝"语义废止；`RejectsZip64` 用例替换为 EOCD64/头形态/4.3GiB 端到端三断言。
+- 验证：本机 `ArchiveTests` 21/21（含 4.3GiB 稀疏实写+ZipArchive 全量读回 CRC、65536 条目 EOCD64）；CLI 实产 4.3GiB zip64 包经 `unzip -t` 全量解压 CRC、Python `zipfile`、win 宿主 `Expand-Archive`/`tar.exe` 三方读端实证。
+- 版本推进 `alpha.72`；归档线尺寸天花板完全解除（zip 无上限、tar ~8GiB ustar 顶）。
 
 ### 2026-10-05 zip 载荷流式写出（已压缩合并 `03a070b`，PR #24）
 
@@ -277,5 +284,5 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
 无未启动的后端立项项；新立项按 `docs/roadmap.md` §7.2 准入与新后端完整路线规则。
-剩余工作：外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（Zip64 等按 `docs/archive-open-items.md` 评估）。
+剩余工作：外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 
