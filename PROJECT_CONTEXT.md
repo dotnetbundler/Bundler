@@ -82,7 +82,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
-### 2026-10-05 外部待验收实证清收（分支 `devin/<ts>-oi-evidence`，PR 待建）
+### 2026-10-05 外部待验收实证清收（已压缩合并 `108041a`，PR #23）
 
 - win-x64 r31 实机证据（main `90128b1` 工作区零改动）：
   - **junction 安装目标**（MSI-OI-12 子项消解）：MSI 不规范化重解析点——INSTALLFOLDER/Dir target/ARPINSTALLLOCATION 记 junction 路径原样；20 文件透写真实目标双侧可见；/x 清目标+ARP 注销但保留 reparse point；ARP 落 HKLM（currentUser 亦然）；孤立情形（junction+目标删而注册残留）下同 ProductCode /i 变 no-op resume、/x 仅清注册。
