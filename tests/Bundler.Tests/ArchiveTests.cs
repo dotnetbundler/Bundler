@@ -534,8 +534,8 @@ public static class ArchiveTests
         Assert.Equal(count, archive.Entries.Count);
     }
 
-    // Reports Length = declaredLength and yields exactly that many zero bytes
-    // — lets zip64-band tests pump a near-sentinel payload without 4GiB of disk.
+    // 报告 Length = declaredLength 并产出恰好那么多的零字节——让安全带用例
+    // 不落盘 4GiB 真文件也能把近哨兵载荷完整泵过 deflate。
     sealed class ZeroStream(long declaredLength) : Stream
     {
         private long _produced;
