@@ -141,6 +141,106 @@ public static class UpdaterClientTests
     }
 
     [Fact]
+    static void BlockMap_ComputesOrderedBlockHashes()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var path = Path.Combine(directory, "blob.bin");
+            var blockSize = Protocol.UpdateBlockMap.DefaultBlockSize;
+            var content = new byte[blockSize + 100]; // 一整块+尾块
+            new Random(42).NextBytes(content);
+            File.WriteAllBytes(path, content);
+
+            var map = Protocol.UpdateBlockMap.ComputeFile(path);
+            Assert.Equal(2, map.Hashes.Count);
+            Assert.Equal(blockSize, map.BlockSize);
+            Assert.Equal(content.Length, map.FileSize);
+            Assert.Equal(
+                Convert.ToBase64String(
+                    System.Security.Cryptography.SHA256.HashData(
+                        content.AsSpan(0, blockSize).ToArray())),
+                map.Hashes[0]);
+            // 同内容不同分块大小 → 不同表（blockSize 进契约）。
+            var finer = Protocol.UpdateBlockMap.ComputeFile(path, 1024);
+            Assert.True(finer.Hashes.Count > 2);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_DownloadAsync_UsesDelta_WhenCacheMatches()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var downloadDir = Path.Combine(directory, "dl");
+            var log = new List<string>();
+
+            // v1：先全量下载一次，使 .bundler-cache 有旧件。
+            var v1 = WriteDeltaArtifact(feedDir, "app-1.0.0.bin", block =>
+                block switch { 0 => "head-v1", 1 => "body-same", 2 => "tail-v1", _ => "?" });
+            WriteFeedWithDelta(feedDir, "1.0.0", v1, material);
+            var client1 = UpdateClient.FromInstallDirectory(install, "0.9.0",
+                new UpdateClientOptions { Log = log.Add });
+            var info1 = (await client1.CheckForUpdateAsync())!;
+            var path1 = await client1.DownloadAsync(info1, downloadDir);
+            Assert.Contains(log, l => l.Contains("full download") || l.Contains("no delta source"));
+
+            // v2：块 0/1 不变（哈希命中）、块 2 变化——差分应只拉一块。
+            var v2 = WriteDeltaArtifact(feedDir, "app-2.0.0.bin", block =>
+                block switch { 0 => "head-v1", 1 => "body-same", 2 => "tail-v2", _ => "?" });
+            WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
+            var client2 = UpdateClient.FromInstallDirectory(install, "1.0.0",
+                new UpdateClientOptions { Log = log.Add });
+            var info2 = (await client2.CheckForUpdateAsync())!;
+            var path2 = await client2.DownloadAsync(info2, downloadDir);
+            Assert.True(File.ReadAllBytes(path2).SequenceEqual(File.ReadAllBytes(v2)));
+            Assert.Contains(log, l => l.Contains("delta applied"));
+            // 复用率成立：旧件有 2 块命中（64KiB 块表，块内容按 64KiB 填充）。
+            Assert.Contains(log, l => l.Contains("B reused"));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_DownloadAsync_FallsBack_WhenCacheCorrupt()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var v2 = WriteDeltaArtifact(feedDir, "app-2.0.0.bin", _ => "same");
+            WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
+            // 缓存里放一份与 feed 无关的脏件——块哈希全不匹配，差分正常执行但全走拉取，
+            // 最终 sha256 兜底仍应产出正确文件。
+            var cacheDir = install.TrimEnd('/', '\\') + ".bundler-cache";
+            Directory.CreateDirectory(cacheDir);
+            File.WriteAllBytes(Path.Combine(cacheDir, "artifact.bin"),
+                new byte[Protocol.UpdateBlockMap.DefaultBlockSize]);
+
+            var log = new List<string>();
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0",
+                new UpdateClientOptions { Log = log.Add });
+            var info = (await client.CheckForUpdateAsync())!;
+            var path = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+            Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
+            client.Verify(info, path);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     static async Task Client_UpdateAsync_EndToEnd_Linux()
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
@@ -244,6 +344,49 @@ public static class UpdaterClientTests
     }
 
     // ---- helpers ----
+
+    // 按块标签填充内容写 3×64KiB 差分测试件——同标签块哈希相等。
+    static string WriteDeltaArtifact(string dir, string name, Func<int, string> blockLabel)
+    {
+        var blockSize = Protocol.UpdateBlockMap.DefaultBlockSize;
+        var path = Path.Combine(dir, name);
+        using var stream = File.Create(path);
+        for (var i = 0; i < 3; i++)
+        {
+            var label = Encoding.ASCII.GetBytes(blockLabel(i));
+            var block = new byte[blockSize];
+            for (var j = 0; j < blockSize; j += label.Length)
+            {
+                Buffer.BlockCopy(label, 0, block, j, Math.Min(label.Length, blockSize - j));
+            }
+            stream.Write(block, 0, blockSize);
+        }
+        return path;
+    }
+
+    // 清单+`.sig`+`.blockmap` 三件齐写（delta 腿需要 blockmap 在场）。
+    static void WriteFeedWithDelta(
+        string dir, string version, string artifactPath,
+        DotNet.Bundler.Core.Update.UpdateKeyMaterial material)
+    {
+        var fileName = Path.GetFileName(artifactPath);
+        var map = Protocol.UpdateBlockMap.ComputeFile(artifactPath);
+        var mapPath = artifactPath + Protocol.UpdateBlockMap.FileSuffix;
+        var mapSerializer = new DataContractJsonSerializer(typeof(Protocol.UpdateBlockMap));
+        using (var mapStream = File.Create(mapPath))
+        {
+            mapSerializer.WriteObject(mapStream, map);
+        }
+        WriteFeed(dir, "stable", version, new Protocol.UpdateFeedArtifact
+        {
+            RuntimeIdentifier = "linux-x64", Format = "zip",
+            Url = fileName, File = fileName,
+            Sha256 = Sha256Hex(artifactPath), Size = new FileInfo(artifactPath).Length,
+            Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifactPath, material)),
+            BlockMap = fileName + Protocol.UpdateBlockMap.FileSuffix,
+        });
+    }
+
 
     static string InstallWithSidecar(
         string root, out DotNet.Bundler.Core.Update.UpdateKeyMaterial material, out string feedDir)

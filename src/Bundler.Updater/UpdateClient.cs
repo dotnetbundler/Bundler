@@ -85,16 +85,52 @@ public sealed class UpdateClient
         return new UpdateInfo(feed, artifact, ResolveArtifactUrl(feed, artifact));
     }
 
-    /// <summary>下载产物到 destinationDirectory 并验 sha256；返回本地文件路径。</summary>
+    /// <summary>
+    /// 下载产物到 destinationDirectory 并验 sha256；返回本地文件路径。
+    /// 清单带 blockmap 且本地有上次下载缓存时走差分（哈希匹配块复用+Range 拉缺失），
+    /// 差分任一步异常自动回落全量；成功下载后把产物进 <install>.bundler-cache 供下次差分。
+    /// </summary>
     public async Task<string> DownloadAsync(
         UpdateInfo info, string destinationDirectory,
         CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(destinationDirectory);
         var destination = Path.Combine(destinationDirectory, info.Artifact.File);
-        await _downloader.DownloadAsync(
-            info.DownloadUrl, info.Artifact, destination, _options.Log, cancellationToken);
+        var downloaded = false;
+        if (_options.EnableDelta && info.Artifact.BlockMap is { Length: > 0 } blockMapFile)
+        {
+            var blockMapLocation =
+                UpdateDownloader.ResolveArtifactLocation(_identity.FeedUrl, blockMapFile);
+            downloaded = await _downloader.TryDownloadDeltaAsync(
+                info.DownloadUrl, blockMapLocation, info.Artifact,
+                DeltaCachePath(), destination, _options.Log, cancellationToken);
+        }
+        if (!downloaded)
+        {
+            await _downloader.DownloadAsync(
+                info.DownloadUrl, info.Artifact, destination, _options.Log, cancellationToken);
+        }
+        UpdateDeltaCache(destination);
         return destination;
+    }
+
+    // 差分缓存：安装目录的兄弟目录（换包不影响），单槽存最近一次下载的产物。
+    private string DeltaCachePath() =>
+        Path.Combine(_installDirectory.TrimEnd('/', '\\') + ".bundler-cache", "artifact.bin");
+
+    private void UpdateDeltaCache(string downloadedPath)
+    {
+        try
+        {
+            var cache = DeltaCachePath();
+            Directory.CreateDirectory(Path.GetDirectoryName(cache)!);
+            File.Copy(downloadedPath, cache, overwrite: true);
+        }
+        catch (Exception exception)
+        {
+            // 缓存失败只损失下次差分收益，不影响本轮更新。
+            _options.Log?.Invoke($"update: delta cache update skipped ({exception.Message})");
+        }
     }
 
     /// <summary>ECDSA 验签（公钥来自安装身份旁车）——不通过即抛，绝不放行。</summary>
@@ -189,4 +225,6 @@ public sealed class UpdateClientOptions
     /// <summary><see cref="UpdateClient.UpdateAsync"/> 一步法的下载落点目录。</summary>
     public string DownloadDirectory { get; init; } =
         Path.Combine(Path.GetTempPath(), "bundler-update", "downloads");
+    /// <summary>block-map 差分开关（默认开；清单无块表或本地无缓存时自动全量）。</summary>
+    public bool EnableDelta { get; init; } = true;
 }

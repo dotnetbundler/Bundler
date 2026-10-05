@@ -63,6 +63,17 @@ public static class UpdateManifestEmitter
             File.WriteAllBytes(sigPath, signature);
             produced.Add(sigPath);
 
+            // block-map 差分块表：定宽 64KiB + sha256 序列表，客户端按哈希匹配复用未变块。
+            var blockMapPath = artifact.Path + UpdateBlockMap.FileSuffix;
+            var blockMap = await Task.Run(
+                () => UpdateBlockMap.ComputeFile(artifact.Path), cancellationToken);
+            var serializer = new DataContractJsonSerializer(typeof(UpdateBlockMap));
+            using (var stream = File.Create(blockMapPath))
+            {
+                serializer.WriteObject(stream, blockMap);
+            }
+            produced.Add(blockMapPath);
+
             var fileName = Path.GetFileName(artifact.Path);
             feed.Artifacts.Add(new UpdateFeedArtifact
             {
@@ -73,6 +84,7 @@ public static class UpdateManifestEmitter
                 Size = new FileInfo(artifact.Path).Length,
                 Sha256 = await Task.Run(() => Sha256Hex(artifact.Path), cancellationToken),
                 Signature = Convert.ToBase64String(signature),
+                BlockMap = fileName + UpdateBlockMap.FileSuffix,
             });
         }
 

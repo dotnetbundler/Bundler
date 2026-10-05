@@ -89,6 +89,210 @@ internal sealed class UpdateDownloader
         log?.Invoke($"update: sha256 verified ({actual.Substring(0, 12)}…)");
     }
 
+    /// <summary>
+    /// block-map 差分下载：新清单块表 vs 本地缓存旧件块表按哈希匹配——
+    /// 命中块从旧件按偏移复制，缺失块合并为连续段走 HTTP Range（本地 feed 直接 seek 读）。
+    /// 任一步异常返回 false，调用方回落全量下载；产出仍经 size+sha256 终验。
+    /// </summary>
+    internal async Task<bool> TryDownloadDeltaAsync(
+        string artifactLocation, string blockMapLocation, UpdateFeedArtifact artifact,
+        string sourcePath, string destinationPath,
+        Action<string>? log, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var blockMap = await FetchBlockMapAsync(blockMapLocation, cancellationToken);
+            if (blockMap.Version != 1 || blockMap.BlockSize <= 0 || blockMap.Hashes.Count == 0)
+            {
+                log?.Invoke("update: block-map malformed — falling back to full download");
+                return false;
+            }
+            if (!File.Exists(sourcePath))
+            {
+                log?.Invoke("update: no delta source cached — full download");
+                return false;
+            }
+
+            var oldMap = UpdateBlockMap.ComputeFile(sourcePath, blockMap.BlockSize);
+            // 哈希→旧件偏移（首次出现）——按哈希匹配不依赖位置。
+            var oldOffsets = new Dictionary<string, long>();
+            for (var i = 0; i < oldMap.Hashes.Count; i++)
+            {
+                if (!oldOffsets.ContainsKey(oldMap.Hashes[i]))
+                {
+                    oldOffsets[oldMap.Hashes[i]] = (long)i * blockMap.BlockSize;
+                }
+            }
+
+            // 计划：复制段与下载段顺序写出；同类相邻段合并（同文件的连续旧块合成一次拷贝，
+            // 连续缺失块合成一次 Range）。
+            var ops = new List<(bool copy, long srcOffset, long dstOffset, int length)>();
+            for (var i = 0; i < blockMap.Hashes.Count; i++)
+            {
+                var dstOffset = (long)i * blockMap.BlockSize;
+                var length = (int)Math.Min(blockMap.BlockSize, blockMap.FileSize - dstOffset);
+                if (oldOffsets.TryGetValue(blockMap.Hashes[i], out var srcOffset))
+                {
+                    if (ops.Count > 0 && ops[ops.Count - 1].copy &&
+                        ops[ops.Count - 1].srcOffset + ops[ops.Count - 1].length == srcOffset &&
+                        ops[ops.Count - 1].dstOffset + ops[ops.Count - 1].length == dstOffset)
+                    {
+                        ops[ops.Count - 1] = (true, ops[ops.Count - 1].srcOffset, ops[ops.Count - 1].dstOffset,
+                            ops[ops.Count - 1].length + length);
+                    }
+                    else
+                    {
+                        ops.Add((true, srcOffset, dstOffset, length));
+                    }
+                }
+                else
+                {
+                    if (ops.Count > 0 && !ops[ops.Count - 1].copy &&
+                        ops[ops.Count - 1].dstOffset + ops[ops.Count - 1].length == dstOffset)
+                    {
+                        ops[ops.Count - 1] = (false, 0, ops[ops.Count - 1].dstOffset, ops[ops.Count - 1].length + length);
+                    }
+                    else
+                    {
+                        ops.Add((false, 0, dstOffset, length));
+                    }
+                }
+            }
+
+            var downloaded = 0L;
+            var copied = 0L;
+            using (var source = new FileStream(
+                       sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var output = new FileStream(
+                       destinationPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                output.SetLength(blockMap.FileSize);
+                foreach (var op in ops)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    output.Seek(op.dstOffset, SeekOrigin.Begin);
+                    if (op.copy)
+                    {
+                        source.Seek(op.srcOffset, SeekOrigin.Begin);
+                        await CopyExactlyAsync(source, output, op.length, cancellationToken);
+                        copied += op.length;
+                    }
+                    else
+                    {
+                        await FetchRangeAsync(
+                            artifactLocation, op.dstOffset, op.length, output, cancellationToken);
+                        downloaded += op.length;
+                    }
+                }
+            }
+            log?.Invoke(
+                $"update: delta applied — {copied} B reused, {downloaded} B fetched " +
+                $"({blockMap.Hashes.Count} blocks)");
+
+            if (new FileInfo(destinationPath).Length != blockMap.FileSize ||
+                (artifact.Size > 0 && new FileInfo(destinationPath).Length != artifact.Size))
+            {
+                File.Delete(destinationPath);
+                return false;
+            }
+            if (artifact.Sha256.Length == 0)
+            {
+                File.Delete(destinationPath);
+                throw new UpdateException(
+                    "manifest artifact carries no sha256 — refusing unverifiable payload.");
+            }
+            if (!string.Equals(Sha256Hex(destinationPath), artifact.Sha256,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                log?.Invoke("update: delta result sha256 mismatch — full download");
+                File.Delete(destinationPath);
+                return false;
+            }
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not UpdateException)
+        {
+            log?.Invoke($"update: delta failed ({exception.Message}) — full download");
+            TryDelete(destinationPath);
+            return false;
+        }
+    }
+
+    private async Task<UpdateBlockMap> FetchBlockMapAsync(
+        string location, CancellationToken cancellationToken)
+    {
+        var bytes = await GetBytesAsync(location, cancellationToken);
+        using var stream = new MemoryStream(bytes);
+        var serializer = new DataContractJsonSerializer(typeof(UpdateBlockMap));
+        return serializer.ReadObject(stream) as UpdateBlockMap
+            ?? throw new UpdateException($"block-map '{location}' is not valid.");
+    }
+
+    private async Task FetchRangeAsync(
+        string location, long offset, int length,
+        Stream output, CancellationToken cancellationToken)
+    {
+        if (IsHttp(location))
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, location);
+            request.Headers.TryAddWithoutValidation(
+                "Range", $"bytes={offset}-{offset + length - 1}");
+            using var response = await SharedHttp.SendAsync(
+                request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            // 服务端不认 Range 返回 200 整档——继续走会重复拉全量，直接抛回落全量路径。
+            if (response.StatusCode != System.Net.HttpStatusCode.PartialContent)
+            {
+                throw new UpdateException(
+                    $"server does not honor Range on '{location}' (HTTP {(int)response.StatusCode}).");
+            }
+            using var stream = await response.Content.ReadAsStreamAsync();
+            await CopyExactlyAsync(stream, output, length, cancellationToken);
+            return;
+        }
+        var path = location.StartsWith("file://", StringComparison.Ordinal)
+            ? new Uri(location).LocalPath
+            : location;
+        using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        input.Seek(offset, SeekOrigin.Begin);
+        await CopyExactlyAsync(input, output, length, cancellationToken);
+    }
+
+    private static async Task CopyExactlyAsync(
+        Stream input, Stream output, long length, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[81920];
+        var remaining = length;
+        while (remaining > 0)
+        {
+            var read = await input.ReadAsync(
+                buffer, 0, (int)Math.Min(buffer.Length, remaining), cancellationToken);
+            if (read == 0)
+            {
+                throw new UpdateException("delta source/range read ended early.");
+            }
+            await output.WriteAsync(buffer, 0, read, cancellationToken);
+            remaining -= read;
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception)
+        {
+        }
+    }
+
     private static bool IsHttp(string location) =>
         location.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
         location.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
