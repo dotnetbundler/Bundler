@@ -1,12 +1,26 @@
 // Windows GUI 验收基建：UI Automation（UIA3 COM）薄封装驱动标准向导
 // （NSIS #32770 向导帧、MSI MsiDialog* 对话框）。
 // 只在交互式桌面会话可用（explorer 在跑、UIA 可达顶层窗口）；各腿以 Assert.SkipWhen 自行门禁。
+using System.Runtime.InteropServices;
 using Interop.UIAutomationClient;
 
 internal static class WindowsDesktop
 {
     private static IUIAutomation? _automation;
     private static IUIAutomation Automation => _automation ??= new CUIAutomation();
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll")]
+    private static extern void mouse_event(uint dwFlags, uint dx, uint dy,
+        uint dwData, nuint dwExtraInfo);
+
+    private const uint MouseLeftDown = 0x0002;
+    private const uint MouseLeftUp = 0x0004;
 
     // 桌面会话存在性探针：UserInteractive 之外再确认 UIA 真能枚举到顶层窗口。
     public static bool IsInteractive()
@@ -114,6 +128,28 @@ internal static class WindowsDesktop
         throw new InvalidOperationException($"按钮无可用激活模式：{button.CurrentName}");
     }
 
+    // nsDialogs 等自绘页的按钮对 UIA Invoke 免疫（返回成功但零响应）——
+    // 升级路径：真实鼠标注入点击控件中心点（等价人手点击，任何页都生效）。
+    private static void PhysicalPress(IUIAutomationElement host, IUIAutomationElement button)
+    {
+        var rect = button.CurrentBoundingRectangle;
+        var x = (rect.left + rect.right) / 2;
+        var y = (rect.top + rect.bottom) / 2;
+        try
+        {
+            SetForegroundWindow(new IntPtr(host.CurrentNativeWindowHandle));
+            Thread.Sleep(200);
+        }
+        catch
+        {
+            // 置前台失败仍点击——坐标命中即可。
+        }
+        SetCursorPos(x, y);
+        Thread.Sleep(100);
+        mouse_event(MouseLeftDown, 0, 0, 0, 0);
+        mouse_event(MouseLeftUp, 0, 0, 0, 0);
+    }
+
     private static void SetChecked(IUIAutomationElement box, bool wanted)
     {
         if (box.GetCurrentPattern(UIA_PatternIds.UIA_TogglePatternId)
@@ -148,6 +184,8 @@ internal static class WindowsDesktop
         var actions = new List<string>();
         var deadline = DateTime.UtcNow + timeout;
         var finished = false;
+        var samePagePresses = 0;
+        string? lastSig = null;
         string[] order =
             ["Finish", "Install", "Remove", "Uninstall", "Agree", "Next", "Repair", "OK"];
         while (DateTime.UtcNow < deadline && !done())
@@ -212,7 +250,26 @@ internal static class WindowsDesktop
                 Thread.Sleep(250);
                 continue;
             }
-            Press(pick);
+            // 页面指纹：同一窗口句柄+同名按钮连击说明 Invoke 未生效——
+            // 升级到物理鼠标注入（nsDialogs 自绘页免疫 Invoke）。
+            var sig = $"{host.CurrentNativeWindowHandle}|{label}";
+            if (sig == lastSig)
+            {
+                samePagePresses++;
+            }
+            else
+            {
+                samePagePresses = 0;
+                lastSig = sig;
+            }
+            if (samePagePresses >= 2)
+            {
+                PhysicalPress(host, pick);
+            }
+            else
+            {
+                Press(pick);
+            }
             actions.Add(label);
             // 页面切换与 InstFiles 段需要窗口一点时间刷新。
             Thread.Sleep(500);
