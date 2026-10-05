@@ -811,6 +811,50 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
         finally { Cleanup(); }
     }
 
+    // GUI 级验收：不带 /S /P 真弹向导，UIA 逐页驱动
+    // 欢迎→许可(I Agree)→目录→快捷方式选项→INSTFILES→Finish，再驱动交互卸载器
+    // 确认→AppData 选项→INSTFILES。断言产物、双快捷方式与 DisplayName。
+    [Fact]
+    [Trait("Requires", "interactive")]
+    public void InteractiveWizardInstallsAndUninstalls()
+    {
+        _f.Ensure();
+        Assert.SkipWhen(!WindowsDesktop.IsInteractive(),
+            "GUI 验收腿需要交互式桌面会话（UIA 可达顶层窗口）。");
+        try
+        {
+            using var process = ProcessRunner.StartDetached(
+                Installer("bundle"), $"/D={InstallDir}");
+            var installDrive = WindowsDesktop.DriveWizard(
+                () => WindowsDesktop.TopWindowByProcess(process.Id),
+                () => process.HasExited, TimeSpan.FromMinutes(5));
+            Assert.True(installDrive.Finished,
+                $"安装向导未走完（已点：{string.Join(" → ", installDrive.Actions)}）");
+            Assert.Contains(installDrive.Actions, a => a.Contains("Agree"));
+            Assert.True(installDrive.Actions.Count(a => a.Contains("Next")) >= 2,
+                "向导页数不足：未见到 Directory/ShortcutOptions 的 Next。");
+            WaitFor(() => process.HasExited, "Installer did not exit after Finish.", 30);
+            Assert.Equal(0, process.ExitCode);
+            WaitFor(() => File.Exists(Exe), "Interactive install did not write the payload.");
+            WaitFor(() => File.Exists(Uninstaller), "Uninstaller is missing.");
+            Assert.True(File.Exists(DesktopShortcut) && File.Exists(StartMenuShortcut),
+                "向导默认勾选项未产出双快捷方式。");
+            Assert.Equal(ProductName, RegGetRequired(RegistryPath, "DisplayName"));
+
+            using var uninstaller = StartDirectUninstallerAsync(
+                Uninstaller, InstallDir, "");
+            var removeDrive = WindowsDesktop.DriveWizard(
+                () => WindowsDesktop.TopWindowByProcess(uninstaller.Id),
+                () => uninstaller.HasExited, TimeSpan.FromMinutes(3));
+            Assert.True(removeDrive.Finished,
+                $"卸载向导未走完（已点：{string.Join(" → ", removeDrive.Actions)}）");
+            Assert.Contains(removeDrive.Actions, a => a.Contains("Uninstall"));
+            Assert.Equal(0, uninstaller.ExitCode);
+            WaitFor(() => !File.Exists(Exe), "Interactive uninstall left the payload.", 30);
+        }
+        finally { Cleanup(); }
+    }
+
     // Legacy MSI 迁移：ProductCode 与 UpgradeCode 两条精确标识路径。
     [Fact]
     public void LegacyMsiProductCodeAndUpgradeCodeMigration()

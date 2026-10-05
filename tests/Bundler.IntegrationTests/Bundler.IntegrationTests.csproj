@@ -7,6 +7,7 @@
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="WixToolset.Dtf.WindowsInstaller" />
+    <PackageReference Include="Interop.UIAutomationClient" />
   </ItemGroup>
   <ItemGroup>
     <!-- Fixtures 是独立发布/还原的工程与载荷资产，不属于本测试程序集 -->
