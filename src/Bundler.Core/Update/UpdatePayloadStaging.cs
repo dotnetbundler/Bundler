@@ -20,18 +20,25 @@ public static class UpdatePayloadStaging
         // 已在工作目录内（例如 signed-payload staging）→ 直接写旁车。
         if (input.StartsWith(workRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
         {
-            UpdateIdentitySidecar.WriteIfEnabled(
-                input, update, item.Format, item.Target.RuntimeIdentifier);
+            InjectPayloadFiles(input, update, item);
             return item;
         }
 
         var staged = Path.Combine(context.WorkDirectory, "update-payload");
         CopyDirectory(input, staged);
-        UpdateIdentitySidecar.WriteIfEnabled(
-            staged, update, item.Format, item.Target.RuntimeIdentifier);
+        InjectPayloadFiles(staged, update, item);
         context.Logger.Log(BundleLogLevel.Information,
             $"Staged update payload with bundler-update.json sidecar → {staged}");
         return item with { InputDirectory = staged };
+    }
+
+    // 旁车+引导件都写进“最终进包的载荷目录”：旁车记录身份，引导件是换包执行体。
+    private static void InjectPayloadFiles(
+        string payloadRoot, UpdateBundleConfiguration update, BundlePlanItem item)
+    {
+        var rid = item.Target.RuntimeIdentifier;
+        UpdateIdentitySidecar.WriteIfEnabled(payloadRoot, update, item.Format, rid);
+        UpdateBootstrapper.Inject(payloadRoot, update, rid);
     }
 
     private static void CopyDirectory(string source, string destination)

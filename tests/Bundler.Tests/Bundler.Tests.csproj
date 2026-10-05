@@ -29,5 +29,6 @@
     <ProjectReference Include="..\..\src\Bundler.AlpineApk\Bundler.AlpineApk.csproj" />
     <ProjectReference Include="..\..\src\Bundler.Cli\Bundler.Cli.csproj" />
     <ProjectReference Include="..\..\src\Bundler.Update\Bundler.Update.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Updater.Bootstrap\Bundler.Updater.Bootstrap.csproj" />
   </ItemGroup>
 </Project>

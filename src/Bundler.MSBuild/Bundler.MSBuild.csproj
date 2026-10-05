@@ -47,6 +47,7 @@
     <None Include="$(TargetDir)DotNet.Bundler.Signing.Windows.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.AlpineApk.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.Update.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
+    <None Include="..\Bundler.Updater.Bootstrap\tools\**" Pack="true" PackagePath="tasks/netstandard2.0/updater/%(RecursiveDir)%(FileName)%(Extension)" />
     <None Include="$(TargetDir)BouncyCastle.Cryptography.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="buildTransitive\DotNet.Bundler.MSBuild.props" Pack="true" PackagePath="buildTransitive/" />
     <None Include="buildTransitive\DotNet.Bundler.MSBuild.targets" Pack="true" PackagePath="buildTransitive/" />

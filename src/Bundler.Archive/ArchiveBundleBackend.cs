@@ -39,6 +39,17 @@ internal sealed class ArchiveBundleBackend(
                 Mode = 420 /* 0644 */,
                 SourcePath = Path.Combine(context.WorkDirectory, UpdateIdentitySidecar.FileName),
             });
+            var rid = context.Item.Target.RuntimeIdentifier;
+            if (UpdateBootstrapper.TryResolve(update, rid, out var bootstrapper))
+            {
+                entries.Add(new ArchiveTree.Entry
+                {
+                    ArchivePath = stem + "/" + UpdateBootstrapper.FileNameFor(rid),
+                    Kind = TarEntryKind.File,
+                    Mode = 493 /* 0755 */,
+                    SourcePath = bootstrapper,
+                });
+            }
         }
         var extension = format == PackageFormat.Zip ? ".zip" : ".tar.gz";
         Directory.CreateDirectory(context.Item.OutputDirectory);

@@ -1,6 +1,6 @@
 # UPDATE 路线（应用自更新）
 
-> 状态：**UPDATE-1 已实现**（2026-10-05；`src/Bundler.Update`+Core/Update+五后端注入+双入口旋钮），UPDATE-2 引导程序为下一阶。
+> 状态：**UPDATE-2 已实现**（2026-10-05；`Bundler.Updater.Bootstrap` AOT 引导件+posix 脚本降级+五后端引导件注入），UPDATE-3 file-swap 语义为下一阶。
 > 范围依据：`docs/roadmap.md` §7.2「应用自更新/升级包」登记项——为打包产物增加升级/更新能力。
 > 上游参照：Tauri updater（清单形态）、Sparkle（appcast/EdDSA/三段式换包/quarantine）、Velopack（外置引导/通道）、electron-updater（latest.yml/block-map）、Omaha（安装器重跑语义）、Onova（便携件原位覆盖）、AppImageUpdate（zsync 参照）；调研报告《更新模块全面调研报告》2026-10-05。
 > 本路线是**跨格式产品面**而非新安装格式：产出物随既有格式旁车而生，应用语义分两式复用既有安装器能力。
@@ -48,6 +48,15 @@
 | `UPDATE-6` | 收口：能力矩阵/open-items/manual-testing 文档族 + 冻结基线写入 + 主文档同步 | 冻结文档齐备；外部待验收项如实挂账 |
 
 ## 4. 阶段实施证据
+
+### 2026-10-05 UPDATE-2 引导程序
+
+- 交付：`src/Bundler.Updater.Bootstrap`（net10.0 `PublishAot`，程序集名 `bundler-updater`）：`BootstrapPlan` 等退出→备份→原子换→重启→回报，rc 0/2/3/4 契约；`tools/posix/bundler-updater.sh` 同协议 shell 降级件；`tools/<rid>/` 构建产物随包目录。
+- `UpdateBootstrapper.Inject/TryResolve`：`BootstrapperDirectory` 旋钮+`AppContext.BaseDirectory/updater` 约定目录；per-RID 件优先、缺件降级 posix 脚本、目录缺位安全跳过。
+- 五后端引导件注入：nsis/wix 经 `UpdatePayloadStaging`、macapp→Contents/MacOS（随 codesign）、appimage→payloadRoot、archive→0755 归档条目；MSBuild 包 tasks/updater/ 与 CLI 输出 updater/ 双侧随包。
+- 证据：`UpdateTests` 13/13（TryResolve 选件序、Apply 换包+备份+keep-payload、嵌套/缺目录拒绝）；linux-x64 AOT 实件（2.3MB）真跑换包 rc=0；posix 脚本 wait/超时 rc=3/用法 rc=2；CLI zip 冒烟包内含 `bundler-updater`（0755）且解出后可执行换包。
+- 修复：`--keep-payload` 原语义死（MoveTree 后判存恒假）→ 改复制换入；`CopyTree` 不建目标根（跨盘 fallback 同缺陷）→ 补 `CreateDirectory`。
+- 边界：win/osx/arm64/musl per-RID 件不在本机交叉产出（Native AOT 不跨编译）——UPDATE-3 各宿主子会话本地产件+实证。
 
 ### 2026-10-05 UPDATE-1 打包侧
 

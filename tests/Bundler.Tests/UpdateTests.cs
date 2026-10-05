@@ -226,6 +226,100 @@ public static class UpdateTests
     }
 
     [Fact]
+    static void Bootstrapper_ResolvesPerRidThenPosix()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var tools = Path.Combine(directory, "tools");
+            Directory.CreateDirectory(Path.Combine(tools, "linux-x64"));
+            Directory.CreateDirectory(Path.Combine(tools, "posix"));
+            File.WriteAllText(Path.Combine(tools, "linux-x64", "bundler-updater"), "elf-binary");
+            File.WriteAllText(Path.Combine(tools, "posix", "bundler-updater.sh"), "#!/bin/sh\n");
+
+            var update = new UpdateBundleConfiguration { BootstrapperDirectory = tools };
+            // per-RID 件命中优先。
+            Assert.True(UpdateBootstrapper.TryResolve(update, "linux-x64", out var resolved));
+            Assert.EndsWith(Path.Combine("linux-x64", "bundler-updater"), resolved);
+            // 无 per-RID 件（osx-arm64 未构建）→ 降级 posix 脚本。
+            Assert.True(UpdateBootstrapper.TryResolve(update, "osx-arm64", out resolved));
+            Assert.EndsWith("bundler-updater.sh", resolved);
+            // 工具目录缺位→不注入（安全降级，非错误）。
+            var empty = new UpdateBundleConfiguration { BootstrapperDirectory = Path.Combine(tools, "none") };
+            Assert.False(UpdateBootstrapper.TryResolve(empty, "linux-x64", out _));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void BootstrapPlan_SwapsAndBacksUp()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "install");
+            var payload = Path.Combine(directory, "payload");
+            Directory.CreateDirectory(install);
+            Directory.CreateDirectory(payload);
+            File.WriteAllText(Path.Combine(install, "app"), "v1");
+            File.WriteAllText(Path.Combine(payload, "app"), "v2");
+
+            var lines = new List<string>();
+            var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload,
+                    KeepPayload = true
+                }, lines.Add);
+
+            Assert.Equal(0, rc);
+            Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
+            Assert.Equal("v1", File.ReadAllText(
+                Path.Combine(install + ".bundler-backup", "app")));
+            // --keep-payload 下暂存目录保留（调试与组合器用法）。
+            Assert.True(Directory.Exists(payload));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void BootstrapPlan_RejectsMissingAndNestedDirs()
+    {
+        var directory = CreateTempDirectory();
+        var install = Path.Combine(directory, "install");
+        var payload = Path.Combine(directory, "payload");
+        Directory.CreateDirectory(install);
+        Directory.CreateDirectory(payload);
+        var lines = new List<string>();
+
+        // 缺失目录 → 用法错误。
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = Path.Combine(directory, "missing"),
+                    PayloadDirectory = payload
+                }, lines.Add));
+
+        // 备份目录嵌进安装目录 → 拒绝（会把自身也备份进去）。
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload,
+                    BackupDirectory = Path.Combine(install, "backup")
+                }, lines.Add));
+    }
+
+    [Fact]
     static void Sidecar_WritesIdentityJson()
     {
         var directory = CreateTempDirectory();

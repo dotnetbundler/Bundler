@@ -73,6 +73,10 @@ internal static class AppDirBuilder
         CopyTree(input, payloadRoot, logger);
         UpdateIdentitySidecar.WriteIfEnabled(
             payloadRoot, bundle.Update, PackageFormat.AppImage, item.Target.RuntimeIdentifier);
+        if (bundle.Update is { } update)
+        {
+            UpdateBootstrapper.Inject(payloadRoot, update, item.Target.RuntimeIdentifier);
+        }
         var mainHostPath = Path.Combine(payloadRoot, mainPosixName);
         if (!File.Exists(mainHostPath))
         {
