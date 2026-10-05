@@ -484,28 +484,32 @@ public static class ArchiveTests
                     new ZipEntry { Name = "a/tail.bin", Kind = ZipEntryKind.File, Mode = 420, Content = tailContent }
                 ]);
             }
-            using var archive = ZipFile.OpenRead(zipPath);
-            Assert.Equal(2, archive.Entries.Count);
-            var big = archive.Entries.Single(e => e.FullName.EndsWith("/big.bin", StringComparison.Ordinal));
-            Assert.Equal(bigSize, big.Length);
-            using (var entryStream = big.Open())
-            {
-                var head = new byte[16];
-                var got = entryStream.Read(head, 0, head.Length);
-                Assert.StartsWith("BUNDLER_BIG64", Encoding.ASCII.GetString(head, 0, got));
-                // 读到底触发 ZipArchive 的 CRC 校验——验证回填与 zip64 字段的一致性。
-                entryStream.CopyTo(Stream.Null);
-            }
-            var tail = archive.Entries.Single(e => e.FullName.EndsWith("/tail.bin", StringComparison.Ordinal));
-            using (var reader = new StreamReader(tail.Open()))
-            {
-                Assert.Equal("tail-after-4gib", reader.ReadToEnd());
-            }
+            VerifyZip64Archive(zipPath, bigSize);
         }
         finally
         {
             try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
         }
+    }
+
+    // BCL 读回 4GiB+ 条目：句柄随本方法结束即释放，调用方的目录清理不受占用影响。
+    static void VerifyZip64Archive(string zipPath, long bigSize)
+    {
+        using var archive = ZipFile.OpenRead(zipPath);
+        Assert.Equal(2, archive.Entries.Count);
+        var big = archive.Entries.Single(e => e.FullName.EndsWith("/big.bin", StringComparison.Ordinal));
+        Assert.Equal(bigSize, big.Length);
+        using (var entryStream = big.Open())
+        {
+            var head = new byte[16];
+            var got = entryStream.Read(head, 0, head.Length);
+            Assert.StartsWith("BUNDLER_BIG64", Encoding.ASCII.GetString(head, 0, got));
+            // 读到底触发 ZipArchive 的 CRC 校验——验证回填与 zip64 字段的一致性。
+            entryStream.CopyTo(Stream.Null);
+        }
+        var tail = archive.Entries.Single(e => e.FullName.EndsWith("/tail.bin", StringComparison.Ordinal));
+        using var reader = new StreamReader(tail.Open());
+        Assert.Equal("tail-after-4gib", reader.ReadToEnd());
     }
 
     // 条目数顶 0xFFFF 哨兵时写 Zip64 EOCD+locator，BCL 读回条目数一致。
