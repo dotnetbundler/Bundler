@@ -82,7 +82,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
-### 2026-10-05 Zip64 动态升级（PR 在途）
+### 2026-10-05 Zip64 动态升级（已压缩合并 `ef448b3`，PR #25）
 
 - `ZipWriter` 按 BCL `ZipArchive` 式动态 Zip64：尺寸/压缩长/本地偏移顶 0xFFFFFFFF 或条目数顶 0xFFFF 的字段写哨兵+真值进 Zip64 extra/EOCD64+locator，version needed 升 45；未顶限归档字节与经典布局完全一致；流式条目按声明长 2MiB 安全带预升级（覆盖 deflate 最坏膨胀）。
 - 原"Zip64 确定性拒绝"语义废止；`RejectsZip64` 用例替换为 EOCD64/头形态/4.3GiB 端到端三断言。
