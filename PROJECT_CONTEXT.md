@@ -1,6 +1,6 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-04
+> 最后更新：2026-10-05
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
 > 当前包版本：`0.1.0-alpha.69`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
@@ -37,7 +37,7 @@
 | `tests/Bundler.IntegrationTests` | 系统集成测试体（xUnit v3，`dotnet test --filter-class/-method`；每格式一个 `<Format>IntegrationTests` 测试类，全部脚本测试点逐腿收编；共享基建在 `tests/Shared/Tooling/`；Windows 真装腿用 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 门禁） | `net10.0` |
 | `tests/Bundler.LocalPackagesTests/` | 本地包消费契约工程：`MsiLocalPackagesTests` + `Fixtures/Msi/`（经 `Bundler.LocalPackages.props` 消费本地 nupkg 的 `Fixture`+`Standalone`，仅 Windows 真跑） | `net10.0` |
 | `tests/Bundler.IntegrationTests/Fixtures/` | 集成 fixture 集中地：各格式被发布成包的 fixture 工程与载荷 `Assets/`（`Nsis/` 含 `LegacyMsiFixture*/`） | `net10.0` |
-| `tests/Shared/` | 四测试工程链接共享：`TestPlatform.cs` 宿主探测门面 + `Tooling/` 集成基建（`ProcessRunner`/`DockerRunner`/`ElevatedRunner`/`IntegrationWorkspace`/`MsiSupport`/`ShellLink` 等） | `net10.0` |
+| `tests/Shared/` | 四测试工程链接共享：`TestPlatform.cs` 宿主探测门面 + `Tooling/` 集成基建（`ProcessRunner`/`DockerRunner`/`ElevatedRunner`/`IntegrationWorkspace`/`MsiSupport`/`WindowsDesktop` UIA3 向导驱动/`ShellLink` 等） | `net10.0` |
 | `tests/README.md` | 测试入口、trait 门禁与 fixture 地图 | — |
 | `tools/Windows.Nsis.Reboot` | 可抛弃 VM 重启验证入口（`Verify.ps1` 两阶段：锁定文件卸载 `3010` → 重启 → pending rename/目录/注册表/journal 清理断言） | PowerShell |
 | `samples/HelloBundlerApp` | 全后端统一公开示例（应用版本 `1.0.0`，主工程公共旋钮 + `formats/*.props` 各后端专属旋钮，100% 旋钮覆盖） | `net10.0` |
@@ -81,6 +81,19 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-05 MIT 许可 + 流式 tar + GUI 级验收（分支 `devin/1791190775-mit-tar-gui`，PR 待建）
+
+- MIT 许可证落定：`LICENSE`（Copyright (c) 2026 Bundler contributors）+ `src/Directory.Build.props` 补 `PackageLicenseExpression=MIT` 与 Pack 项 + nuspec `<license type="expression">` 与打包文件项；README 许可节同步。
+- `ARCHIVE-OI-06` 消解：`TarEntry` 增 `OpenContent` 流式载荷（`Func<Stream>`），`TarWriter.WriteEntry` 逐条流式写出——2.2 GiB 稀疏文件用例实测通过；约 8 GiB ustar 上限为 `WriteOctal` 确定性 `ArgumentException`；deb/apk 内部整 tar 暂存为已知残余（文档已登记）。
+- GUI 级验收新增三腿（trait `Requires=interactive`）：
+  `NsisIntegrationTests.InteractiveWizardInstallsAndUninstalls`（win 宿主 PASS·3m17s）、
+  `MsiLocalPackagesTests.InteractiveWizardInstallsAndRemoves`（win 宿主 PASS·2m18s）、
+  `MacDmgIntegrationTests.FinderSlaAcceptanceMountsVolume`（mac 宿主 PASS·69s）。
+- Windows 驱动基建：`tests/Shared/Tooling/WindowsDesktop.cs`——`Interop.UIAutomationClient`（netstandard2.0 纯 COM interop，弃用 FlaUI：4.0.0 拖入带漏洞 System.Drawing.Common 触发 NU1904、5.0.0 仅 net48 触发 NU1701/NETSDK1136）；
+  宿主迭代六轮实测坐实的驱动规则：候选按钮按实体类名过滤（标题栏伪按钮类名空）、同指纹连击 ≥3 升级物理鼠标注入（nsDialogs 自绘页与 Finish 免疫 `Invoke`）、终态件含 `Finish`/`Close`、Finish 前一律清复选框。
+- mac SLA 应答经 osascript：`DiskImages UI Agent` 为 background-only 进程，whose 子句须显式含其名；前置 TCC 探针失败即 Skip。
+- 验证：本机 build 0W/0E、三腿在对应宿主实测 PASS、宿主零残留；四宿主完整回归待跑。
 
 ### 2026-10-05 十样品合一（PR #21 已并入 `main`，squash `695ec2b`）
 
