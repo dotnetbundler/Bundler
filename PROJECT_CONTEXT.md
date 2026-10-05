@@ -82,6 +82,12 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-05 UPDATE 自更新路线立项（PR #26 已并入 `main`，squash `7617ff5`）
+
+- 全面调研七家权威实现（Tauri/Sparkle/Velopack/electron-updater/Omaha/NetSparkle-Onova/AppImageUpdate）后定稿 `docs/update-roadmap.md`：13 项决策经用户裁决——六格式覆盖（nsis/msi/app/appimage/zip/targz；deb/rpm/apk 包管边界排除、dmg/pkg 非载体排除）、静态 JSON 清单/通道（支持 `file://`/UNC 离线 feed）、ECDSA P-256 `.sig` 分离签名（.NET 10 BCL 无公开 Ed25519 实测）、`bundler-update.json` 安装身份旁车、两式应用语义（安装器重跑/Sparkle 三段式换包）、同格式约束、外置 Native AOT 引导+shell 降级、block-map 差分（UPDATE-5，定宽 64KiB 块+CDC 备选登记）、备份回滚、mac 签名构建期归属+验身份剥 quarantine。
+- 阶段表 `UPDATE-1..6` 至全功能：打包侧 → 引导程序 → file-swap+installer-replay 宿主实证 → `Bundler.Updater` 应用内库 → 差分 → 文档族冻结。
+- Review 四轮清零（差分阶段表述统一/blockmap 协议定死/复用范围限定/离线验收腿入 UPDATE-4）。
+
 ### 2026-10-05 Zip64 动态升级（已压缩合并 `ef448b3`，PR #25）
 
 - `ZipWriter` 按 BCL `ZipArchive` 式动态 Zip64：尺寸/压缩长/本地偏移顶 0xFFFFFFFF 或条目数顶 0xFFFF 的字段写哨兵+真值进 Zip64 extra/EOCD64+locator，version needed 升 45；未顶限归档字节与经典布局完全一致；流式条目按声明长 2MiB 安全带预升级（覆盖 deflate 最坏膨胀）。
