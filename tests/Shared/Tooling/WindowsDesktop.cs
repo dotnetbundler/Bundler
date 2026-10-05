@@ -187,7 +187,7 @@ internal static class WindowsDesktop
         var samePagePresses = 0;
         string? lastSig = null;
         string[] order =
-            ["Finish", "Install", "Remove", "Uninstall", "Agree", "Next", "Repair", "OK"];
+            ["Finish", "Close", "Install", "Remove", "Uninstall", "Agree", "Next", "Repair", "OK"];
         while (DateTime.UtcNow < deadline && !done())
         {
             IUIAutomationElement? pick = null;
@@ -223,8 +223,10 @@ internal static class WindowsDesktop
                 continue;
             }
             var label = SafeName(pick) ?? "?";
-            var isFinish = label.Contains("Finish", StringComparison.OrdinalIgnoreCase);
-            if (isFinish)
+            // 终态按钮：Finish（安装器完成页）与 Close（卸载器完成页等价收尾件）。
+            var isTerminal = label.Contains("Finish", StringComparison.OrdinalIgnoreCase)
+                || label.Contains("Close", StringComparison.OrdinalIgnoreCase);
+            if (isTerminal)
             {
                 // 一律清空复选框：NSIS/MSI Finish 页"运行应用"默认勾选会带出测试外进程。
                 try
@@ -290,7 +292,7 @@ internal static class WindowsDesktop
             }
             actions.Add(label);
             // 终态按钮不 break：靠 done() 收敛；Invoke 免疫时同指纹重试会升级物理点击。
-            finished |= isFinish;
+            finished |= isTerminal;
             // 页面切换与 InstFiles 段需要窗口一点时间刷新。
             Thread.Sleep(500);
         }
