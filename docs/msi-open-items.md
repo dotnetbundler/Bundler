@@ -19,8 +19,8 @@ WIN-MSI-9 已完成 Tauri 通用能力审计与再冻结，见 `docs/msi-roadmap
 | MSI-OI-09 | MSI-4 | 本地化审校和辅助功能使用者 | 支持语言集的 UI、缩放和可访问性记录 |
 | MSI-OI-10 | MSI-4 记录，公开发布前复核 | WiX v3 已结束免费社区维护且本项目不使用付费支持 | 每次公开发布前复核上游安全/兼容公告与风险处置；若无法接受无补丁风险，先提出免费且许可可履行的替代工具链，不默默扩大支持声明。依据：[WiX v3 官方状态](https://docs.firegiant.com/wix/wix3/) |
 | MSI-OI-11 | MSI-5 本机已通过，外部待验收 | 干净 Windows x86/x64、原生 x86/ARM64 用户端及 per-machine UAC | x86/映射版本/降级/卸载逐组合 verbose log、注册表视图、OS build 和清理证据；本机 x64 宿主证据见 `MsiLocalPackagesTests` 的 x86/版本/降级腿 |
-| MSI-OI-12 | WIN-MSI-6 本机自动范围已通过，外部待验收 | 真实交互 UI 环境（含辅助功能检查者）、per-machine UAC 交互安装 | 许可/无许可两序列的对话框流转、InstallDir/Browse/InvalidDir 行为、勾选与取消启动勾选的实际效果、位图显示与缩放、`ADDLOCAL` Feature 选择的实际交互、junction 安装目标的观察记录；本机自动证据见 `MsiLocalPackagesTests` 与 MSI-MT-11 |
-| MSI-OI-13 | WIN-MSI-7 参数透传已断言，外部待验收 | 启用 Windows FIPS 策略的可抛弃宿主或 VM | `BundlerWixFipsCompliant`/`FipsCompliant` 构建在策略启用宿主的完整 `candle`/`light` 日志、产物哈希与安装结果；本机仅验证 `-fips` 参数透传，不构成认证声明 |
+| MSI-OI-12 | WIN-MSI-6 本机自动范围已通过，junction 子项 2026-10-05 实证，其余外部待验收 | 真实交互 UI 环境（含辅助功能检查者）、per-machine UAC 交互安装 | junction 子项已消解：2026-10-05 win-x64 实证（r31）——MSI 不规范化重解析点（INSTALLFOLDER/Dir target/ARPINSTALLLOCATION 记 junction 路径原样），写入透到真实目标（20 文件双侧可见），junction 完好时 /x 清真实目标+ARP 注销但保留 reparse point 本身，ARP 落 HKLM（currentUser 亦然），孤立情形（junction+目标删而注册残留）下同 ProductCode /i 变 no-op resume（InstallFiles 过但 0 文件重铺）/x 仅清注册；交互腿 `MsiLocalPackagesTests.InteractiveWizardInstallsAndRemoves` 已覆盖许可/InstallDir/Install/Finish 流转；**仍待验收**：Browse 对话框、范围外路径触发 `InvalidDirDlg`、`ADDLOCAL` Feature 选择的实际交互、勾选与取消启动勾选效果、位图显示、缩放/辅助功能检查者、per-machine UAC |
+| MSI-OI-13 | WIN-MSI-7 | ~~启用 Windows FIPS 策略的可抛弃宿主或 VM~~ 已验证 | **已消解**：2026-10-05 win-x64 r31——`FipsAlgorithmPolicy.Enabled` 0→1 读回确认；Security 4688 进程审计捕获 candle.exe 真实命令行含 `-fips`（light 无此开关）；`=false` 对照在策略下 candle exit 308 + **CNDL0308**（明确要求 -fips 或禁用策略）证实旋钮必要性；FIPS 产物在策略下 /i exit=0+载荷+ARP→/x exit=0 零残留。仍不构成 FIPS 认证声明，仅证参数透传与策略下可构建可安装。 |
 
 没有相应环境时保留待验收，不把预测写成通过；
 MSI-OI-01 已通过本机工程核查，阶段二约 13.8 MB 的体积已获用户接受；

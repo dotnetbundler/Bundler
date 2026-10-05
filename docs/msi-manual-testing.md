@@ -2,7 +2,7 @@
 
 > WIN-MSI-1..9 全部完成（`.msi` 冻结基线 `0.1.0-alpha.43`）；
 > alpha.40 已验证 x86 目标、显式 MSI 版本映射、同版碰撞、默认降级拒绝、显式降级和用户文件所有权，alpha.41 已验证范围内安装目录、自定义 UI 表结构、可选 Feature、PATH 精确追加/还原与仅交互启动勾选的产物和静默行为。
-> 以下人工/外部环境用例均未执行——对应各阶段未覆盖的外部条件，未执行项不得宣称已完成。
+> 以下人工/外部环境用例除各行已标注的已实证子项外均未执行——对应各阶段未覆盖的外部条件，未执行项不得宣称已完成。
 > 用户目前没有干净 Windows 10/11、ARM64 原生用户端或提权测试 VM，不将本机结果扩写为这些平台通过。
 > 路线见 `docs/msi-roadmap.md` 第 10 节。
 
@@ -23,7 +23,7 @@
 `MSI-MT-11` 的本机自动前置为 `MsiLocalPackagesTests`（同上同意闸）与 `tests/Bundler.Tests/WixTests.cs`。
 前者以随机身份真实验证静默 `INSTALLFOLDER` 范围拒绝（根目录本身与 per-machine 根均 1603）、自定义目录安装、PATH 精确追加/卸载还原、开始菜单（含卸载入口）与桌面快捷方式、ARP `InstallLocation`/`Contact`、升级恢复已选目录、静默修复与未知用户文件保留。
 后者断言自定义 UI 表结构与校验动作。
-该脚本不进入真实交互 UI：对话框流转、`InvalidDirDlg` 显示、勾选启动行为、位图显示、缩放/辅助功能和 junction 路径仍需人工执行，见下表。
+该脚本不进入真实交互 UI：`InvalidDirDlg` 显示、勾选启动行为、位图显示、缩放/辅助功能仍需人工执行；junction 路径行为已于 2026-10-05 实证（MSI-OI-12），Welcome→LicenseAgreement→InstallDir→VerifyReady→Exit 序列已由交互腿 `MsiLocalPackagesTests.InteractiveWizardInstallsAndRemoves` 驱动并断言点击序（Next×3+Install+Finish），见下表。
 
 下列人工用例只在可抛弃 VM/专用测试机运行。
 每轮记录 Git SHA、包版本、MSI/WiX 工具 SHA-256、OS build/架构、账户权限、MSI SHA-256、verbose log 路径、开始/结束快照和清理结果。
@@ -41,8 +41,8 @@
 | MSI-MT-08 | MSI-4 | 在 Windows 10/11 x64、ARM64 目标与构建宿主逐格重复安装、升级、修复、卸载；核对缺失组合是否从支持声明移除。 | 每格 OS build、架构、结果、失败原因 |
 | MSI-MT-09 | MSI-4 | 对支持语言进行母语/专业审校和辅助功能检查，包括缩放、键盘、屏幕阅读器；只报告实际审过的语言。 | 审校人、locale、截图、缺陷与修复记录 |
 | MSI-MT-10 | MSI-5 外部待验收；本机自动前置已通过 | 在干净 Windows x86/x64 构建宿主和原生 x86/ARM64 用户端，运行 x86 包的安装、升级、显式版本映射、默认降级拒绝、显式允许降级、同版碰撞、修复和卸载；观察 per-machine UAC、32 位注册表视图及用户文件保留。 | 每组合的 OS build/架构、ProductCode/UpgradeCode、MSI 哈希、verbose log、注册表视图、退出码和清理结果 |
-| MSI-MT-11 | WIN-MSI-6 外部待验收；本机自动前置已通过 | 双击 MSI 走完整交互流程：许可页（有/无两种包）、InstallDir 页选允许根内子目录、Browse 对话框、范围外路径触发 InvalidDirDlg；勾选与取消"启动应用"各验一次，确认 `/qn`/`/passive`/修复均不启动；位图、缩放、键盘/屏幕阅读器；在允许根内以 junction 作安装目标观察行为并记录（安装时 junction 检测未实现，当前语义以能力矩阵为准）；per-machine UI 提权场景一并记录。 | 截图/录屏、各流程退出码、是否启动应用的观察记录、verbose log、junction 目标的行为结论 |
-| MSI-MT-12 | WIN-MSI-7 外部待验收；本机自动前置已通过 | 对支持语言表中抽选的非拉丁语言（至少一种东亚与一种 RTL，如 `ja-JP`/`ar-SA`）双击交互安装：核对 WiX 内嵌译文显示、Bundler 自有串默认/覆盖渲染、快捷方式图标显示、卸载快捷方式名本地化；在启用 Windows FIPS 策略的可抛弃宿主上分别以 `FipsCompliant` 开/关构建并安装，记录真实策略行为。 | 每语言截图/录屏、verbose log、FIPS 宿主的策略状态与构建/安装日志、退出码 |
+| MSI-MT-11 | WIN-MSI-6 外部待验收；junction 子项 2026-10-05 已实证 | 双击 MSI 走完整交互流程：许可页（有/无两种包）、InstallDir 页选允许根内子目录、Browse 对话框、范围外路径触发 InvalidDirDlg；勾选与取消"启动应用"各验一次，确认 `/qn`/`/passive`/修复均不启动；位图、缩放、键盘/屏幕阅读器；per-machine UI 提权场景一并记录。~~junction 目标观察~~已实证（MSI 不解引用、透写真实目标、卸载保留 reparse point，详见 MSI-OI-12）。 | 截图/录屏、各流程退出码、是否启动应用的观察记录、verbose log |
+| MSI-MT-12 | WIN-MSI-7 外部待验收；FIPS 子项 2026-10-05 已实证 | 对支持语言表中抽选的非拉丁语言（至少一种东亚与一种 RTL，如 `ja-JP`/`ar-SA`）双击交互安装：核对 WiX 内嵌译文显示、Bundler 自有串默认/覆盖渲染、快捷方式图标显示、卸载快捷方式名本地化。~~FIPS 策略宿主开/关构建~~已实证（`-fips` 透传捕获、关闭时 CNDL0308、产物 /i→/x 零残留，详见 MSI-OI-13）。 | 每语言截图/录屏、verbose log |
 | MSI-MT-13 | WIN-MSI-8 外部待验收；本机自动前置已通过 | 专家模式接入真实第三方 WiX 内容（含自定义动作/扩展命名空间/merge module 的实际项目模板）时逐项人工核对：调用方逻辑的回滚/所有权语义、第三方二进制许可归属、安装失败时行为；常规模式白名单拒绝清单抽验确认无误放行。 | 模板/fragment 清单与来源、许可核对记录、构建/安装/失败场景日志与退出码 |
 
 人工命令基线（产品代码、路径和参数从对应测试产物记录中替换；普通本机自动化使用上文脚本）：

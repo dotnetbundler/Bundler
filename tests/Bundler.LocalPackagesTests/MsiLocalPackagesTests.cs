@@ -1109,7 +1109,17 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                 () => install.HasExited, TimeSpan.FromMinutes(5), autoCheck: true);
             Assert.True(installDrive.Finished,
                 $"安装向导未走完（已点：{string.Join(" → ", installDrive.Actions)}）");
-            Assert.Contains(installDrive.Actions, a => a.Contains("Install"));
+            // 页面顺序证据：wxs 静态链（WixTests 断言 Welcome→LicenseAgreement→InstallDir→
+            // VerifyReady→Exit，msiexec 不可跳页）+ 点击记录要求 Install 前全是 Next 且 ≥3、
+            // 其后只剩收尾按钮——重试灌水只会多记 Next，不破坏该序。
+            var clicks = installDrive.Actions;
+            var installAt = clicks.Select((a, i) => (a, i)).First(x => x.a.Contains("Install")).i;
+            Assert.True(clicks.Count >= 5
+                && installAt >= 3
+                && clicks.Take(installAt).All(a => a.Contains("Next"))
+                && clicks.Skip(installAt + 1).All(a =>
+                    a.Contains("Finish") || a.Contains("Close")),
+                $"许可/目录/就绪/完成页未按序走过（已点：{string.Join(" → ", clicks)}）");
             WaitFor.Until(() => install.HasExited,
                 "msiexec did not exit after Finish.", 30);
             Assert.Equal(0, install.ExitCode);
@@ -1124,7 +1134,14 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                 () => remove.HasExited, TimeSpan.FromMinutes(5), autoCheck: true);
             Assert.True(removeDrive.Finished,
                 $"卸载向导未走完（已点：{string.Join(" → ", removeDrive.Actions)}）");
-            Assert.Contains(removeDrive.Actions, a => a.Contains("Remove"));
+            // 维护流序证据：点击只落在 {Next,Remove,Finish,Close}，含 Remove 且以收尾键收束。
+            var rclicks = removeDrive.Actions;
+            Assert.True(rclicks.Count >= 3
+                && rclicks.Any(a => a.Contains("Remove"))
+                && rclicks.All(a => a.Contains("Next") || a.Contains("Remove")
+                    || a.Contains("Finish") || a.Contains("Close"))
+                && (rclicks.Last().Contains("Finish") || rclicks.Last().Contains("Close")),
+                $"维护流未按序走过移除与完成页（已点：{string.Join(" → ", rclicks)}）");
             WaitFor.Until(() => remove.HasExited, "msiexec remove did not exit.", 30);
             Assert.Equal(0, remove.ExitCode);
             Assert.False(File.Exists(installedExe),

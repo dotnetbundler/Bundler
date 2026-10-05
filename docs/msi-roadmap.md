@@ -666,3 +666,9 @@ WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方
 - **事务清理竞态修复**：`SafeDeleteTree` 对瞬态文件占用有限重试，修复集成中两次复现的"committed journal 未清理"断言抖动。
 - **测试**：`Bundler.Tests` 更新（自动检测渲染/默认关闭断言、1602 分支、MSBuild 映射与默认值）；`Verify.ps1` 新增自动检测命中/双负例、多版本取最高并全清、目录延续三腿。per-machine 提权枚举与真实历史产品迁移仍在 NSIS MT-05 外列。
 - **包**：版本升至 `0.1.0-alpha.44`；嵌入原生插件重建（SHA-256 见 `third_party/nsis-plugin/nsis-plugin-provenance.md`）。
+
+**外部待验收实证回填（2026-10-05，`0.1.0-alpha.70`，win-x64 r31 实机）**：
+
+- **junction 安装目标**（MSI-OI-12 子项消解）：MSI 不规范化重解析点——INSTALLFOLDER/Dir target/ARPINSTALLLOCATION 记 junction 路径原样；20 文件透写真实目标双侧可见；junction 完好时 /x 清真实目标+ARP 注销但保留 reparse point 本身；ARP 落 HKLM（currentUser scope 亦然）；孤立情形（junction+目标先删而注册残留）下同 ProductCode /i 变 no-op resume（InstallFiles 过但 0 文件重铺）、/x 仅清注册。
+- **FIPS**（MSI-OI-13 消解）：`FipsAlgorithmPolicy.Enabled=1` 读回确认；Security 4688 进程审计捕获 candle.exe 真实命令行含 `-fips`（light 无此开关）；`=false` 对照在策略下 candle exit 308 + CNDL0308 拒构；FIPS 产物 /i→/x 零残留。
+  不构成 FIPS 认证声明。

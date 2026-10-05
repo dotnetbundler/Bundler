@@ -82,6 +82,18 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-05 外部待验收实证清收（分支 `devin/<ts>-oi-evidence`，PR 待建）
+
+- win-x64 r31 实机证据（main `90128b1` 工作区零改动）：
+  - **junction 安装目标**（MSI-OI-12 子项消解）：MSI 不规范化重解析点——INSTALLFOLDER/Dir target/ARPINSTALLLOCATION 记 junction 路径原样；20 文件透写真实目标双侧可见；/x 清目标+ARP 注销但保留 reparse point；ARP 落 HKLM（currentUser 亦然）；孤立情形（junction+目标删而注册残留）下同 ProductCode /i 变 no-op resume、/x 仅清注册。
+  - **FIPS**（MSI-OI-13 消解）：策略 Enabled=1 读回确认；Security 4688 审计捕获 candle.exe 实含 `-fips`（light 无此开关）；`=false` 对照在策略下 candle exit 308+CNDL0308 拒构（证实旋钮必要性非摆设）；FIPS 产物 /i→/x 零残留。
+- alpine-docker 实证（同 HEAD）：
+  - **qemu-aarch64 binfmt**（APK-OI-02 补强）：`tonistiigi/binfmt --install arm64` 注册后 `DockerArm64InstallRunRemoveUnderBinfmt` 真跑通过 1/1/0·76s（原 SKIP 腿激活）。
+  - **musl AppImage FUSE**（LINUX-APPIMAGE-OI-04 补证）：特权容器（`--device /dev/fuse --cap-add SYS_ADMIN`+apk fuse）内 `./app.AppImage hi` 真挂载 `/tmp/.mount_*` 执行 rc=0、extract-and-run rc=0——musl 消费侧 FUSE 路径实测可用。
+- 22 语言机械审校（本机）：22 `.nsh` 各 26 条 LangString 键集逐位一致、`LANG_*` 常量与目录映射全对（Persian→FARSI 设计内）、占位符集合跨语言一致、零条译文与英文原文相同——机械层无可消项，剩余仅母语审校/RTL 视觉/DPI 截断。
+- 文档回填：`msi-open-items`（OI-12 子项/OI-13 消解）、`msi-capability-matrix`（junction 定性/FIPS 策略宿主验证）、`msi-manual-testing`（MT-11/12 子项标注）、`alpine-apk-open-items`（APK-OI-02）、`linux-appimage-open-items`（OI-04 musl 补证）、`nsis-open-items`（语言机械层复审）。
+- 剩余真外部项不变：真实重启+锁定文件、per-machine UAC（EnableLUA=0）、干净宿主/真机矩阵、生产签名/公证凭证、RTL 母语审校、真机 ARM64。
+
 ### 2026-10-05 MIT 许可 + 流式 tar + GUI 级验收（PR #22 已并入 `main`，squash `243313b`）
 
 - MIT 许可证落定：`LICENSE`（Copyright (c) 2026 Bundler contributors）+ `src/Directory.Build.props` 补 `PackageLicenseExpression=MIT` 与 Pack 项 + nuspec `<license type="expression">` 与打包文件项；README 许可节同步。
