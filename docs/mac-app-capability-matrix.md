@@ -65,7 +65,7 @@
 | MSBuild 集成映射 | 已实现 | MAC-APP-1 | 与直接 API 同 Core 一致 |
 | 离线构建 | 已实现 | MAC-APP-1 起 | 公证外全部离线；无第三方工具内嵌 |
 | 宿主工具探测与版本门槛 | 已实现 | MAC-APP-1 | 缺必需工具明确报错；可选工具降级警告 |
-| 示例项目 `samples/HelloMacApp` | 已实现 | MAC-APP-1 | 真实 .NET 载荷 |
+| 示例项目 `samples/HelloBundlerApp`（`formats/MacApp.props`） | 已实现 | MAC-APP-1 | 真实 .NET 载荷 |
 | Gatekeeper 首启/信任评估 | 已实现+外部待验收 | MAC-APP-4 / MT-01、02 | 未签名隔离包被拦截已实测（`com.apple.quarantine` + `open` 阻断断言）；已公证场景需真实证书，外部待验收 |
 | 真实公证+上钉+撤销场景 | 外部待验收 | MAC-APP-MT-02、08 / OI-01 | 需 Apple Developer 凭证 |
 

@@ -1,0 +1,30 @@
+<Project>
+  <!-- AppImage 后端全套公开旋钮。变体由 HelloBundlerAppImage* 传透；
+       仅 Linux 宿主可构建（内嵌 appimagetool + type2 runtime）。 -->
+  <PropertyGroup>
+    <!-- 包名默认取产品名 kebab-case；version 原样进文件名；architecture 默认按 RID 映射；
+         install-root 默认 usr/lib/<包名>；bin-link 默认包名，"none" 关闭；
+         icon-file 覆盖根图标；desktop-file 整文件覆盖；categories 缺省 Utility；
+         metainfo-file 落 usr/share/metainfo/；压缩固定 zstd。 -->
+    <BundlerAppImagePackageName Condition="'$(HelloBundlerAppImagePackageName)' != ''">$(HelloBundlerAppImagePackageName)</BundlerAppImagePackageName>
+    <BundlerAppImageVersion Condition="'$(HelloBundlerAppImageVersion)' != ''">$(HelloBundlerAppImageVersion)</BundlerAppImageVersion>
+    <BundlerAppImageArchitecture Condition="'$(HelloBundlerAppImageArchitecture)' != ''">$(HelloBundlerAppImageArchitecture)</BundlerAppImageArchitecture>
+    <BundlerAppImageInstallRoot Condition="'$(HelloBundlerAppImageInstallRoot)' != ''">$(HelloBundlerAppImageInstallRoot)</BundlerAppImageInstallRoot>
+    <BundlerAppImageBinLink Condition="'$(HelloBundlerAppImageBinLink)' != ''">$(HelloBundlerAppImageBinLink)</BundlerAppImageBinLink>
+    <BundlerAppImageIconFile Condition="'$(HelloBundlerAppImageIconFile)' != ''">$(HelloBundlerAppImageIconFile)</BundlerAppImageIconFile>
+    <BundlerAppImageDesktopFile Condition="'$(HelloBundlerAppImageDesktopFile)' != ''">$(HelloBundlerAppImageDesktopFile)</BundlerAppImageDesktopFile>
+    <BundlerAppImageCategories>Utility;Development</BundlerAppImageCategories>
+    <BundlerAppImageCategories Condition="'$(HelloBundlerAppImageCategories)' != ''">$(HelloBundlerAppImageCategories)</BundlerAppImageCategories>
+    <BundlerAppImageMetainfoFile>$(HelloBundlerAppAssets)appimage\app.metainfo.xml</BundlerAppImageMetainfoFile>
+    <BundlerAppImageMetainfoFile Condition="'$(HelloBundlerAppImageMetainfoFile)' != ''">$(HelloBundlerAppImageMetainfoFile)</BundlerAppImageMetainfoFile>
+    <!-- GPG 签名：供私钥文件才签，走内嵌 appimagetool（隔离 GNUPGHOME + 口令注入）。 -->
+    <BundlerAppImageSigningKeyFile Condition="'$(HelloBundlerAppImageSigningKeyFile)' != ''">$(HelloBundlerAppImageSigningKeyFile)</BundlerAppImageSigningKeyFile>
+    <BundlerAppImageSigningKeyPassphrase Condition="'$(HelloBundlerAppImageSigningKeyPassphrase)' != ''">$(HelloBundlerAppImageSigningKeyPassphrase)</BundlerAppImageSigningKeyPassphrase>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 任意 AppDir 相对路径映射演示：opt/hello-bundler-app/defaults.conf。 -->
+    <BundlerAppImageFile Condition="'$(HelloBundlerAppImageFiles)' == '1'"
+        Include="$(HelloBundlerAppAssets)appimage\defaults.conf" Destination="opt/hello-bundler-app/defaults.conf" />
+  </ItemGroup>
+</Project>

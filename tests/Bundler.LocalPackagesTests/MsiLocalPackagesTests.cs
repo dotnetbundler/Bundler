@@ -953,13 +953,13 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         }
     }
 
-    // VerifyPublicSample.ps1：HelloMsiApp 三变体（en user / zh user / en machine）的表级契约，不安装。
+    // VerifyPublicSample.ps1：HelloBundlerApp 三变体（en user / zh user / en machine）的表级契约，不安装。
     [Fact]
     public void PublicSampleMsiTableContract()
     {
         _f.EnsurePackages();
         var root = _f.Ws.Combine("public-sample");
-        var sample = Path.Combine(RepositoryLayout.Root, "samples", "HelloMsiApp", "HelloMsiApp.csproj");
+        var sample = Path.Combine(RepositoryLayout.Root, "samples", "HelloBundlerApp", "HelloBundlerApp.csproj");
         Assert.True(File.Exists(sample), $"Public sample is missing: {sample}");
         // 公共样例消费的是 artifacts/packages 中的已 pack 产物（脚本同样要求先 pack）。
         var source = Path.Combine(RepositoryLayout.Root, "artifacts", "packages");
@@ -972,9 +972,9 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         var variants = new (string Name, string Language, string Scope, string ProductLanguage,
             string AllUsers, string FileName)[]
         {
-            ("english-user", "en-US", "currentUser", "1033", "", "Hello MSI App-1.0.0.msi"),
-            ("chinese-user", "zh-CN", "currentUser", "2052", "", "Hello MSI App-1.0.0-zh-cn.msi"),
-            ("english-machine", "en-US", "perMachine", "1033", "1", "Hello MSI App-1.0.0.msi"),
+            ("english-user", "en-US", "currentUser", "1033", "", "Hello Bundler App-1.0.0.msi"),
+            ("chinese-user", "zh-CN", "currentUser", "2052", "", "Hello Bundler App-1.0.0-zh-cn.msi"),
+            ("english-machine", "en-US", "perMachine", "1033", "1", "Hello Bundler App-1.0.0.msi"),
         };
         var productCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var upgradeCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -984,9 +984,11 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
             var output = Path.Combine(root, variant.Name);
             var props = new List<string>
             {
+                "-r", "win-x64",
+                "-p:BundlerFormats=msi",
                 $"-p:RestorePackagesPath={cache}",
-                $"-p:HelloMsiAppLanguage={variant.Language}",
-                $"-p:HelloMsiAppInstallScope={variant.Scope}",
+                $"-p:HelloBundlerMsiLanguage={variant.Language}",
+                $"-p:HelloBundlerMsiInstallScope={variant.Scope}",
                 $"-p:BundlerOutputPath={output}",
             };
             ProcessRunner.AssertSuccess(
@@ -1002,7 +1004,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
             var msi = Path.Combine(output, "win-x64", "msi", variant.FileName);
             Assert.True(File.Exists(msi), $"Sample MSI is missing: {msi}");
             var properties = ReadProperties(msi);
-            Assert.Equal("Hello MSI App", properties["ProductName"]);
+            Assert.Equal("Hello Bundler App", properties["ProductName"]);
             Assert.Equal("1.0.0", properties["ProductVersion"]);
             Assert.Equal(variant.ProductLanguage, properties["ProductLanguage"]);
             Assert.Equal(variant.AllUsers, properties.TryGetValue("ALLUSERS", out var au) ? au : "");
@@ -1012,7 +1014,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                 && upgradeCodes.Add(properties["UpgradeCode"]),
                 "MSI language and scope variants must have separate identities.");
             var files = MsiSupport.QueryColumn(msi, "SELECT `FileName` FROM `File`");
-            foreach (var expected in new[] { "demo.hellomsi", "Readme.txt", "open-link.cmd", "HelloMsiApp.exe" })
+            foreach (var expected in new[] { "demo.hellomsi", "Readme.txt", "open-link.cmd", "HelloBundlerApp.exe" })
             {
                 Assert.Contains(files, f => f != null
                     && System.Text.RegularExpressions.Regex.IsMatch(f,

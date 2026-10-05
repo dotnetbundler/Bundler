@@ -1,0 +1,14 @@
+<Project>
+  <!-- Archive（.zip/.tar.gz）后端全套公开旋钮。变体由 HelloBundlerArchive* 传透。 -->
+  <PropertyGroup>
+    <!-- 三旋钮默认空走后端推导（文件名契约 <pkg>-<ver>-<rid>），显式设置即演示覆盖。 -->
+    <BundlerArchivePackageName Condition="'$(HelloBundlerArchivePackageName)' != ''">$(HelloBundlerArchivePackageName)</BundlerArchivePackageName>
+    <BundlerArchiveName Condition="'$(HelloBundlerArchiveName)' != ''">$(HelloBundlerArchiveName)</BundlerArchiveName>
+    <BundlerArchiveVersion Condition="'$(HelloBundlerArchiveVersion)' != ''">$(HelloBundlerArchiveVersion)</BundlerArchiveVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 任意归档相对路径映射演示：docs/readme.txt。 -->
+    <BundlerArchiveFile Include="$(HelloBundlerAppAssets)archive\readme.txt" Destination="docs/readme.txt" />
+  </ItemGroup>
+</Project>

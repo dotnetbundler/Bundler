@@ -142,9 +142,10 @@
   缺包先 Pack，不假定未发布版本在公网源，也不用项目引用掩盖包消费问题。
 - MSBuild 默认值须按 RID 族推导：`BundlerMainExecutable` 对 `osx-*`/`linux-*` 取 `$(TargetName)`（无 `.exe` 后缀），其余取 `$(TargetName).exe`；
   新增 RID 族或新宿主后缀规则时同步检查该默认（2026-09-27 LINUX-DEB-1 修正 linux 漏项）。
-- **每个后端有完整、可操作的专用示例项目**，可参考 `samples/HelloNsisApp` 的演示形式，不用测试 fixture 冒充示例。
+- **统一公开示例 `samples/HelloBundlerApp` 必须覆盖全部后端与全部公开旋钮**：公共旋钮在主工程，各后端专属旋钮按 `formats/<Format>.props` 导入，用户可直接复制该组织方式；不用测试 fixture 冒充示例。
   默认命令应直接构建并生成安装包；
   该格式当前公开且适用的**所有用户能力**都要在示例中有实际配置、可复现的变体命令或明确的操作演示，不能只列名称。
+  新增格式/旋钮时同步把对应 `formats/<Format>.props` 演示与传透旋钮补齐。
   互斥配置分开演示；
   包含可检查的资源、元数据、桌面集成、语言、安装范围、签名配置等适用内容，以及安装/卸载、验证和清理说明。
   真实证书、提权或专用环境写明前提和未验收边界，不放私钥。
@@ -261,8 +262,8 @@ dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet test tests/Bundler.ApiTests/Bundler.ApiTests.csproj -c Release
 dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-dotnet publish samples/HelloNsisApp/HelloNsisApp.csproj -c Release
-dotnet publish samples/HelloMsiApp/HelloMsiApp.csproj -c Release
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64
+# 只产某格式：-p:BundlerFormats=nsis（等）；某格式旋钮变体：-p:HelloBundler<Format><Knob>=...
 
 # 按格式类选择集成测试；MSI 真装腿另需同意闸 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1
 dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*NsisIntegrationTests*"

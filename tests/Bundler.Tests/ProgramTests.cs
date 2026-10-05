@@ -1858,9 +1858,7 @@ public static class ProgramTests
             "The shared wiring must reference Bundler.MSbuild, locate its task assembly, and import its targets.");
         foreach (var path in new[]
         {
-            Path.Combine(root, "samples", "HelloNsisApp", "HelloNsisApp.csproj"),
-            Path.Combine(root, "samples", "HelloMsiApp", "HelloMsiApp.csproj"),
-            Path.Combine(root, "samples", "HelloDebApp", "HelloDebApp.csproj"),
+            Path.Combine(root, "samples", "HelloBundlerApp", "HelloBundlerApp.csproj"),
             Path.Combine(root, "tests", "Bundler.IntegrationTests", "Fixtures", "Nsis", "Fixture", "BundlerNsisIntegrationFixture.csproj"),
             Path.Combine(root, "tests", "Bundler.IntegrationTests", "Fixtures", "Deb", "BundlerDebIntegrationFixture.csproj"),
             Path.Combine(root, "tests", "Bundler.IntegrationTests", "Fixtures", "Rpm", "BundlerRpmIntegrationFixture.csproj")
@@ -1873,11 +1871,32 @@ public static class ProgramTests
                        ((string?)item.Attribute("Project"))?.Contains("Bundler.ProjectReference.targets", StringComparison.Ordinal) == true),
                 "The internal consumer must use the shared project-reference wiring, not a package: " + path);
         }
-        var nsisSample = XDocument.Load(Path.Combine(root, "samples", "HelloNsisApp", "HelloNsisApp.csproj"));
-        Assert.True(nsisSample.Descendants("AssemblyName").Single().Value == "HelloBundledApp" &&
-               nsisSample.Descendants("HelloNsisAppInstallMode").Any() &&
-               !nsisSample.Descendants().Any(item => item.Name.LocalName.StartsWith("HelloBundledApp", StringComparison.Ordinal)),
-            "The NSIS sample must use format-specific build properties while preserving its executable name.");
+        var mergedSample = XDocument.Load(Path.Combine(root, "samples", "HelloBundlerApp", "HelloBundlerApp.csproj"));
+        Assert.True(mergedSample.Descendants("AssemblyName").Single().Value == "HelloBundlerApp" &&
+               mergedSample.Descendants().Any(item => item.Name.LocalName == "BundlerFormats") &&
+               !mergedSample.Descendants().Any(item => item.Name.LocalName.StartsWith("HelloBundledApp", StringComparison.Ordinal)),
+            "The merged sample must expose the executable name and per-RID format selection without legacy pass-throughs.");
+        var formatPrefixes = new Dictionary<string, string>
+        {
+            ["Nsis"] = "HelloBundlerNsis",
+            ["Msi"] = "HelloBundlerMsi",
+            ["MacApp"] = "HelloBundlerMacApp",
+            ["MacDmg"] = "HelloBundlerDmg",
+            ["MacPkg"] = "HelloBundlerPkg",
+            ["Deb"] = "HelloBundlerDeb",
+            ["Rpm"] = "HelloBundlerRpm",
+            ["AppImage"] = "HelloBundlerAppImage",
+            ["Archive"] = "HelloBundlerArchive",
+            ["AlpineApk"] = "HelloBundlerApk",
+        };
+        foreach (var (format, prefix) in formatPrefixes)
+        {
+            var propsPath = Path.Combine(root, "samples", "HelloBundlerApp", "formats", format + ".props");
+            Assert.Contains(prefix, File.ReadAllText(propsPath));
+            Assert.True(mergedSample.Descendants("Import").Any(item =>
+                   ((string?)item.Attribute("Project"))?.Contains("formats\\" + format + ".props", StringComparison.Ordinal) == true),
+                "The merged sample must import formats/" + format + ".props.");
+        }
         Assert.Equal("BundlerIntegrationFixture",
             XDocument.Load(Path.Combine(root, "tests", "Bundler.IntegrationTests", "Fixtures", "Nsis", "Fixture",
                 "BundlerNsisIntegrationFixture.csproj"))

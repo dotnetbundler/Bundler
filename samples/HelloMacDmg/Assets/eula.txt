@@ -1,7 +1,0 @@
-Hello Mac DMG - Sample License Agreement
-
-This sample demonstrates the SLA (Software License Agreement) panel that macOS
-shows when the .dmg is mounted. Mounting this image presents the dialog; choosing
-"Agree" mounts the volume, "Disagree" ejects it.
-
-This text grants nothing and is only a packaging demonstration.

@@ -1,0 +1,61 @@
+<Project>
+  <!-- Rpm 后端全套公开旋钮。变体由 HelloBundlerRpm* 传透。 -->
+  <PropertyGroup>
+    <!-- 包名默认取产品名 kebab-case；version 覆盖 rpm Version（禁含 '-'）；
+         release 默认 1，预发布版自动映射 0.<n>.<label>；epoch 独立数字（EPOCH tag）；
+         architecture 默认按 RID 映射（x64→x86_64、arm64→aarch64）；
+         vendor 默认 Publisher→Identifier 回退；
+         install-root 默认 /usr/lib/<包名>；bin-link 默认包名，"none" 关闭。 -->
+    <BundlerRpmPackageName Condition="'$(HelloBundlerRpmPackageName)' != ''">$(HelloBundlerRpmPackageName)</BundlerRpmPackageName>
+    <BundlerRpmVersion Condition="'$(HelloBundlerRpmVersion)' != ''">$(HelloBundlerRpmVersion)</BundlerRpmVersion>
+    <BundlerRpmRelease Condition="'$(HelloBundlerRpmRelease)' != ''">$(HelloBundlerRpmRelease)</BundlerRpmRelease>
+    <BundlerRpmEpoch Condition="'$(HelloBundlerRpmEpoch)' != ''">$(HelloBundlerRpmEpoch)</BundlerRpmEpoch>
+    <BundlerRpmArchitecture Condition="'$(HelloBundlerRpmArchitecture)' != ''">$(HelloBundlerRpmArchitecture)</BundlerRpmArchitecture>
+    <BundlerRpmVendor Condition="'$(HelloBundlerRpmVendor)' != ''">$(HelloBundlerRpmVendor)</BundlerRpmVendor>
+    <BundlerRpmInstallRoot Condition="'$(HelloBundlerRpmInstallRoot)' != ''">$(HelloBundlerRpmInstallRoot)</BundlerRpmInstallRoot>
+    <BundlerRpmBinLink Condition="'$(HelloBundlerRpmBinLink)' != ''">$(HelloBundlerRpmBinLink)</BundlerRpmBinLink>
+
+    <!-- 元数据旋钮：关系字段分号列表透传（命令行传参用 %3B 转义分号）；
+         License 惯例写 SPDX 表达式；Group 现代包可留空；Url 默认取 BundlerHomepage。 -->
+    <BundlerRpmRequires Condition="'$(HelloBundlerRpmRequires)' != ''">$(HelloBundlerRpmRequires)</BundlerRpmRequires>
+    <BundlerRpmProvides Condition="'$(HelloBundlerRpmProvides)' != ''">$(HelloBundlerRpmProvides)</BundlerRpmProvides>
+    <BundlerRpmConflicts Condition="'$(HelloBundlerRpmConflicts)' != ''">$(HelloBundlerRpmConflicts)</BundlerRpmConflicts>
+    <BundlerRpmObsoletes Condition="'$(HelloBundlerRpmObsoletes)' != ''">$(HelloBundlerRpmObsoletes)</BundlerRpmObsoletes>
+    <BundlerRpmRecommends Condition="'$(HelloBundlerRpmRecommends)' != ''">$(HelloBundlerRpmRecommends)</BundlerRpmRecommends>
+    <BundlerRpmSuggests Condition="'$(HelloBundlerRpmSuggests)' != ''">$(HelloBundlerRpmSuggests)</BundlerRpmSuggests>
+    <BundlerRpmLicense>MIT</BundlerRpmLicense>
+    <BundlerRpmLicense Condition="'$(HelloBundlerRpmLicense)' != ''">$(HelloBundlerRpmLicense)</BundlerRpmLicense>
+    <BundlerRpmGroup Condition="'$(HelloBundlerRpmGroup)' != ''">$(HelloBundlerRpmGroup)</BundlerRpmGroup>
+    <BundlerRpmUrl Condition="'$(HelloBundlerRpmUrl)' != ''">$(HelloBundlerRpmUrl)</BundlerRpmUrl>
+    <BundlerRpmCategories>Utility;Development</BundlerRpmCategories>
+    <BundlerRpmCategories Condition="'$(HelloBundlerRpmCategories)' != ''">$(HelloBundlerRpmCategories)</BundlerRpmCategories>
+    <BundlerRpmDesktopFile Condition="'$(HelloBundlerRpmDesktopFile)' != ''">$(HelloBundlerRpmDesktopFile)</BundlerRpmDesktopFile>
+    <BundlerRpmMetainfoFile>$(HelloBundlerAppAssets)rpm\app.metainfo.xml</BundlerRpmMetainfoFile>
+    <BundlerRpmMetainfoFile Condition="'$(HelloBundlerRpmMetainfoFile)' != ''">$(HelloBundlerRpmMetainfoFile)</BundlerRpmMetainfoFile>
+    <BundlerRpmChangelogFile>$(HelloBundlerAppAssets)rpm\CHANGELOG.md</BundlerRpmChangelogFile>
+    <BundlerRpmChangelogFile Condition="'$(HelloBundlerRpmChangelogFile)' != ''">$(HelloBundlerRpmChangelogFile)</BundlerRpmChangelogFile>
+    <BundlerRpmConfigFiles Condition="'$(HelloBundlerRpmConfigFiles)' != ''">$(HelloBundlerRpmConfigFiles)</BundlerRpmConfigFiles>
+    <BundlerRpmSystemdServiceFile Condition="'$(HelloBundlerRpmSystemdServiceFile)' != ''">$(HelloBundlerRpmSystemdServiceFile)</BundlerRpmSystemdServiceFile>
+
+    <!-- 安装脚本：File=脚本文件（入 scriptlet）、Program=替代解释程序（如 /bin/sh -e）。 -->
+    <BundlerRpmPostInstallFile Condition="'$(HelloBundlerRpmPostInstallFile)' != ''">$(HelloBundlerRpmPostInstallFile)</BundlerRpmPostInstallFile>
+    <BundlerRpmPreInstallFile Condition="'$(HelloBundlerRpmPreInstallFile)' != ''">$(HelloBundlerRpmPreInstallFile)</BundlerRpmPreInstallFile>
+    <BundlerRpmPreUninstallFile Condition="'$(HelloBundlerRpmPreUninstallFile)' != ''">$(HelloBundlerRpmPreUninstallFile)</BundlerRpmPreUninstallFile>
+    <BundlerRpmPostUninstallFile Condition="'$(HelloBundlerRpmPostUninstallFile)' != ''">$(HelloBundlerRpmPostUninstallFile)</BundlerRpmPostUninstallFile>
+    <BundlerRpmPreInstallProgram Condition="'$(HelloBundlerRpmPreInstallProgram)' != ''">$(HelloBundlerRpmPreInstallProgram)</BundlerRpmPreInstallProgram>
+    <BundlerRpmPostInstallProgram Condition="'$(HelloBundlerRpmPostInstallProgram)' != ''">$(HelloBundlerRpmPostInstallProgram)</BundlerRpmPostInstallProgram>
+    <BundlerRpmPreUninstallProgram Condition="'$(HelloBundlerRpmPreUninstallProgram)' != ''">$(HelloBundlerRpmPreUninstallProgram)</BundlerRpmPreUninstallProgram>
+    <BundlerRpmPostUninstallProgram Condition="'$(HelloBundlerRpmPostUninstallProgram)' != ''">$(HelloBundlerRpmPostUninstallProgram)</BundlerRpmPostUninstallProgram>
+    <BundlerRpmCompression Condition="'$(HelloBundlerRpmCompression)' != ''">$(HelloBundlerRpmCompression)</BundlerRpmCompression>
+
+    <!-- GPG 签名：供 OpenPGP 私钥文件才签，纯托管 BouncyCastle；
+         产出 RPMSIGTAG_RSA+PGP 双标签 v3 签名包。 -->
+    <BundlerRpmSigningKeyFile Condition="'$(HelloBundlerRpmSigningKeyFile)' != ''">$(HelloBundlerRpmSigningKeyFile)</BundlerRpmSigningKeyFile>
+    <BundlerRpmSigningKeyPassphrase Condition="'$(HelloBundlerRpmSigningKeyPassphrase)' != ''">$(HelloBundlerRpmSigningKeyPassphrase)</BundlerRpmSigningKeyPassphrase>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 任意绝对路径映射演示：/etc/hello-rpm-app/defaults.conf。 -->
+    <BundlerRpmFile Include="$(HelloBundlerAppAssets)rpm\defaults.conf" Destination="/etc/hello-rpm-app/defaults.conf" />
+  </ItemGroup>
+</Project>
