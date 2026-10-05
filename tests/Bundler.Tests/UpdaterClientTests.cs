@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization.Json;
 using System.Text;
@@ -238,6 +240,151 @@ public static class UpdaterClientTests
         {
             Cleanup(directory);
         }
+    }
+
+    [Fact]
+    static async Task Client_DownloadAsync_UsesDelta_OverHttp()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            // v1 全量建立缓存。
+            var v1 = WriteDeltaArtifact(feedDir, "app-1.0.0.bin", block =>
+                block switch { 0 => "head", 1 => "body-same", 2 => "tail-v1", _ => "?" });
+            WriteFeedWithDelta(feedDir, "1.0.0", v1, material);
+            var v2 = WriteDeltaArtifact(feedDir, "app-2.0.0.bin", block =>
+                block switch { 0 => "head", 1 => "body-same", 2 => "tail-v2", _ => "?" });
+            WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
+
+            // 侧车 feedUrl 指向回环 http——feed/制品/块表全走 http 通道。
+            var server = new LoopbackFeedServer(feedDir);
+            var identity = new Protocol.UpdateInstallIdentity
+            {
+                FeedUrl = server.FeedUrl, Channel = "stable",
+                RuntimeIdentifier = "linux-x64", Format = "zip",
+                PublicKey = material.PublicPointBase64(),
+            };
+            var sidecarSerializer = new DataContractJsonSerializer(
+                typeof(Protocol.UpdateInstallIdentity),
+                new DataContractJsonSerializerSettings { UseSimpleDictionaryFormat = true });
+            using (var stream = File.Create(Path.Combine(install, "bundler-update.json")))
+            {
+                sidecarSerializer.WriteObject(stream, identity);
+            }
+
+            // 铺 v1 缓存（等价于上一轮全量下载后的 .bundler-cache）。
+            var cacheDir = install.TrimEnd('/', '\\') + ".bundler-cache";
+            Directory.CreateDirectory(cacheDir);
+            File.Copy(v1, Path.Combine(cacheDir, "artifact.bin"));
+
+            var log = new List<string>();
+            var ranged = 0;
+            server.OnRange = () => ranged++;
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0",
+                new UpdateClientOptions { Log = log.Add });
+            var info = (await client.CheckForUpdateAsync())!;
+            var path = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+            Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
+            Assert.Contains(log, l => l.Contains("delta applied"));
+            Assert.True(ranged > 0); // 缺失块确实走了 HTTP Range
+            server.Dispose();
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    // 回环微型静态服务器：GET /<name> 返文件、Range 返 206 分片——专测 http 差分腿。
+    sealed class LoopbackFeedServer : IDisposable
+    {
+        readonly TcpListener _listener;
+        readonly string _dir;
+        readonly CancellationTokenSource _cts = new();
+        public string FeedUrl { get; }
+        public Action? OnRange;
+
+        public LoopbackFeedServer(string dir)
+        {
+            _dir = dir;
+            _listener = new TcpListener(IPAddress.Loopback, 0);
+            _listener.Start();
+            var port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            FeedUrl = $"http://127.0.0.1:{port}/{Protocol.UpdateFeed.FeedFileName("stable")}";
+            _ = Task.Run(ServeLoop);
+        }
+
+        async Task ServeLoop()
+        {
+            while (!_cts.IsCancellationRequested)
+            {
+                TcpClient client;
+                try { client = await _listener.AcceptTcpClientAsync(_cts.Token); }
+                catch { return; }
+                _ = Task.Run(() => Handle(client));
+            }
+        }
+
+        async Task Handle(TcpClient client)
+        {
+            using (client)
+            {
+                var stream = client.GetStream();
+                var header = new List<byte>();
+                var buf = new byte[4096];
+                string request;
+                while (true)
+                {
+                    var read = await stream.ReadAsync(buf, 0, buf.Length);
+                    if (read == 0) { return; }
+                    header.AddRange(buf.AsSpan(0, read).ToArray());
+                    var text = Encoding.ASCII.GetString(header.ToArray());
+                    var end = text.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+                    if (end < 0) { continue; }
+                    request = text.Substring(0, end);
+                    break;
+                }
+                var lines = request.Split("\r\n");
+                var parts = lines[0].Split(' ');
+                var name = parts[1].TrimStart('/');
+                var file = Path.Combine(_dir, name);
+                long? rangeStart = null, rangeEnd = null;
+                foreach (var line in lines)
+                {
+                    if (line.StartsWith("Range: bytes=", StringComparison.Ordinal))
+                    {
+                        var bounds = line.Substring("Range: bytes=".Length).Split('-');
+                        rangeStart = long.Parse(bounds[0]);
+                        rangeEnd = bounds[1].Length > 0 ? long.Parse(bounds[1]) : (long?)null;
+                        OnRange?.Invoke();
+                    }
+                }
+                if (!File.Exists(file))
+                {
+                    await Write(stream, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n", null);
+                    return;
+                }
+                var body = File.ReadAllBytes(file);
+                if (rangeStart is { } start)
+                {
+                    var end = Math.Min(rangeEnd ?? body.Length - 1, body.Length - 1);
+                    var slice = body.AsSpan((int)start, (int)(end - start + 1)).ToArray();
+                    await Write(stream,
+                        $"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {start}-{end}/{body.Length}\r\nContent-Length: {slice.Length}\r\n\r\n",
+                        slice);
+                    return;
+                }
+                await Write(stream, $"HTTP/1.1 200 OK\r\nContent-Length: {body.Length}\r\n\r\n", body);
+            }
+        }
+
+        static Task Write(Stream stream, string head, byte[]? body)
+        {
+            return stream.WriteAsync(Encoding.ASCII.GetBytes(head).Concat(body ?? Array.Empty<byte>()).ToArray()).AsTask();
+        }
+
+        public void Dispose() { _cts.Cancel(); _listener.Stop(); }
     }
 
     [Fact]

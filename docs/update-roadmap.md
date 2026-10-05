@@ -1,6 +1,6 @@
 # UPDATE 路线（应用自更新）
 
-> 状态：**UPDATE-5 已实现**（2026-10-05；block-map 差分+全量回退双路实证全绿），UPDATE-6 文档收口为下一阶。
+> 状态：**已冻结**（2026-10-05；UPDATE-1..6 全阶段实现并实证，文档族收口完成），冻结基线 `0.1.0-alpha.74`。
 > 范围依据：`docs/roadmap.md` §7.2「应用自更新/升级包」登记项——为打包产物增加升级/更新能力。
 > 上游参照：Tauri updater（清单形态）、Sparkle（appcast/EdDSA/三段式换包/quarantine）、Velopack（外置引导/通道）、electron-updater（latest.yml/block-map）、Omaha（安装器重跑语义）、Onova（便携件原位覆盖）、AppImageUpdate（zsync 参照）；调研报告《更新模块全面调研报告》2026-10-05。
 > 本路线是**跨格式产品面**而非新安装格式：产出物随既有格式旁车而生，应用语义分两式复用既有安装器能力。
@@ -48,6 +48,9 @@
 | `UPDATE-6` | 收口：能力矩阵/open-items/manual-testing 文档族 + 冻结基线写入 + 主文档同步 | 冻结文档齐备；外部待验收项如实挂账 |
 
 ## 4. 阶段实施证据
+
+### 2026-10-05 UPDATE-6 文档族收口+冻结
+文档族齐套：`update-capability-matrix.md`（逐项能力×验收状态）、`update-open-items.md`（UPDATE-OI-01..06：arm64 AOT 件/Apple 凭证腿/桌面会话观察/真实发布链狗食/公网 Range/per-machine UAC）、`update-manual-testing.md`（UPDATE-MT-01..06 一一对应 OI），`manual-testing-index.md` 登记 UPDATE 行（`UPDATE-MT-xx`/`UPDATE-OI-xx` 前缀）；README 增"应用自更新（UPDATE）"节（旋钮表+keygen+UpdateClient 用法+格式边界）；`docs/roadmap.md` §7.2 需求项改"已实现"；AGENTS 一句话现状与 CONTEXT 同步冻结基线 `0.1.0-alpha.74`。同轮补强：HTTP 差分真腿——回环微型服务器实证 feed/块表/Range-206 全走 http 通道。
 
 ### 2026-10-05 UPDATE-5 block-map 差分
 块表模型 `UpdateBlockMap`（v1：64KiB 固定块+有序 sha256 base64 列表）落 `Core/Update` 并经 `BUNDLER_UPDATER_LINK` 链接进 `Bundler.Updater`，单源双栖。

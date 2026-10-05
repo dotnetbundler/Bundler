@@ -17,6 +17,7 @@
 | Alpine `.apk` | [alpine-apk-roadmap.md](alpine-apk-roadmap.md) | [alpine-apk-manual-testing.md](alpine-apk-manual-testing.md) | [能力矩阵](alpine-apk-capability-matrix.md) | [alpine-apk-open-items.md](alpine-apk-open-items.md) | `APK-MT-xx` / `APK-OI-xx` |
 | CLI | [cli-roadmap.md](cli-roadmap.md) | [cli-manual-testing.md](cli-manual-testing.md) | [能力矩阵](cli-capability-matrix.md) | [cli-open-items.md](cli-open-items.md) | `CLI-MT-xx` / `CLI-OI-xx` |
 | 签名（rpm/AppImage） | [signing-roadmap.md](signing-roadmap.md) | [signing-manual-testing.md](signing-manual-testing.md) | [能力矩阵](signing-capability-matrix.md) | [signing-open-items.md](signing-open-items.md) | `SIGN-*` |
+| 自更新（UPDATE） | [update-roadmap.md](update-roadmap.md) | [update-manual-testing.md](update-manual-testing.md) | [能力矩阵](update-capability-matrix.md) | [update-open-items.md](update-open-items.md) | `UPDATE-MT-xx` / `UPDATE-OI-xx` |
 
 Linux RPM/AppImage 在各自规划轮建立自己的 `<format>-roadmap.md`、`<format>-manual-testing.md`、`<format>-capability-matrix.md`、`<format>-open-items.md`，各用独立格式前缀；
 总索引只列入口，不混合测试步骤或结论。
