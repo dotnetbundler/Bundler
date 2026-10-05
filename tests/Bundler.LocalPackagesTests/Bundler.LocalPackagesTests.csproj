@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="WixToolset.Dtf.WindowsInstaller" />
+    <PackageReference Include="Interop.UIAutomationClient" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\TestPlatform.cs" />

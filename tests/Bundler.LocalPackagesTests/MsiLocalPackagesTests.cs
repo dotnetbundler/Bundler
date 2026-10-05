@@ -1053,6 +1053,89 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         }
     }
 
+    // GUI 级验收：msiexec /i 真弹向导——Welcome→LicenseAgreement（自动勾 I accept）→
+    // InstallDir→VerifyReady(Install)→Exit(Finish，取消"启动应用"勾选）；
+    // 再 /i 走维护流 MaintenanceWelcome→MaintenanceType(Remove)→VerifyReady→Exit。
+    // per-user 范围无 UAC，UIA 可全通。
+    [Fact]
+    [Trait("Requires", "localinstall")]
+    [Trait("Requires", "interactive")]
+    public void InteractiveWizardInstallsAndRemoves()
+    {
+        _f.Ensure();
+        Assert.SkipWhen(!WindowsDesktop.IsInteractive(),
+            "GUI 验收腿需要交互式桌面会话（UIA 可达顶层窗口）。");
+        var root = _f.Ws.Combine("interactive-sample");
+        var sample = Path.Combine(RepositoryLayout.Root, "samples", "HelloBundlerApp",
+            "HelloBundlerApp.csproj");
+        var output = Path.Combine(root, "en-user");
+        var props = new List<string>
+        {
+            "-r", "win-x64",
+            "-p:BundlerFormats=msi",
+            $"-p:RestorePackagesPath={Path.Combine(root, "packages")}",
+            "-p:HelloBundlerMsiLanguage=en-US",
+            "-p:HelloBundlerMsiInstallScope=currentUser",
+            $"-p:BundlerOutputPath={output}",
+        };
+        ProcessRunner.AssertSuccess(
+            Dotnet.Run(["restore", sample, .. props, "--force", "-v:minimal"],
+                new ProcessRunner.Options { WorkingDirectory = RepositoryLayout.Root }),
+            "Sample restore failed (interactive leg)");
+        ProcessRunner.AssertSuccess(
+            Dotnet.Run(["publish", sample, "-c", "Release", "--no-restore", .. props,
+                "-v:minimal"],
+                new ProcessRunner.Options
+                { WorkingDirectory = RepositoryLayout.Root, Timeout = TimeSpan.FromMinutes(10) }),
+            "Sample publish failed (interactive leg)");
+        var msi = Path.Combine(output, "win-x64", "msi", "Hello Bundler App-1.0.0.msi");
+        Assert.True(File.Exists(msi), $"Sample MSI is missing: {msi}");
+        var productCode = MsiSupport.GetProperty(msi, "ProductCode");
+        // per-user INSTALLFOLDER = LocalAppData\Programs\{BundlerIdentifier}-x64
+        // （与其余腿 :151/:190/:350 的目录惯例一致；样品的 BundlerIdentifier
+        // = com.example.hellobundlerapp）。
+        var installedExe = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs", "com.example.hellobundlerapp-x64", "HelloBundlerApp.exe");
+        var log = _f.Ws.Combine("interactive-install.log");
+        try
+        {
+            using var install = ProcessRunner.StartDetached("msiexec",
+                $"/i \"{msi}\" /log \"{log}\"");
+            // msiexec 的 UI 可能宿在另一进程——pid 查询与类名查询并集扫描。
+            var installDrive = WindowsDesktop.DriveWizard(
+                () => [.. WindowsDesktop.TopWindowsByProcess(install.Id),
+                       .. WindowsDesktop.TopWindowsByClass("MsiDialogCloseClass")],
+                () => install.HasExited, TimeSpan.FromMinutes(5), autoCheck: true);
+            Assert.True(installDrive.Finished,
+                $"安装向导未走完（已点：{string.Join(" → ", installDrive.Actions)}）");
+            Assert.Contains(installDrive.Actions, a => a.Contains("Install"));
+            WaitFor.Until(() => install.HasExited,
+                "msiexec did not exit after Finish.", 30);
+            Assert.Equal(0, install.ExitCode);
+            Assert.True(File.Exists(installedExe),
+                $"Interactive install did not write {installedExe}");
+
+            // 维护流 Remove：对已装产品再 /i 进维护模式。
+            using var remove = ProcessRunner.StartDetached("msiexec", $"/i \"{msi}\"");
+            var removeDrive = WindowsDesktop.DriveWizard(
+                () => [.. WindowsDesktop.TopWindowsByProcess(remove.Id),
+                       .. WindowsDesktop.TopWindowsByClass("MsiDialogCloseClass")],
+                () => remove.HasExited, TimeSpan.FromMinutes(5), autoCheck: true);
+            Assert.True(removeDrive.Finished,
+                $"卸载向导未走完（已点：{string.Join(" → ", removeDrive.Actions)}）");
+            Assert.Contains(removeDrive.Actions, a => a.Contains("Remove"));
+            WaitFor.Until(() => remove.HasExited, "msiexec remove did not exit.", 30);
+            Assert.Equal(0, remove.ExitCode);
+            Assert.False(File.Exists(installedExe),
+                "Interactive remove left the payload behind.");
+        }
+        finally
+        {
+            MsiSupport.Msiexec($"/x {productCode} /qn /norestart");
+        }
+    }
+
     private static Dictionary<string, string> ReadProperties(string msiPath)
     {
         using var database = new Database(msiPath, DatabaseOpenMode.ReadOnly);

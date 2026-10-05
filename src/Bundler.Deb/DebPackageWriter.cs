@@ -395,7 +395,9 @@ internal static class DebPackageWriter
         var md5sums = new StringBuilder();
         foreach (var entry in payload.Where(e => e.Kind == TarEntryKind.File))
         {
-            var hash = Md5Hex(entry.ReadBytes());
+            var hash = entry.Content is { } inline
+                ? Md5Hex(inline)
+                : Md5HexFile(entry.SourcePath!);
             md5sums.Append(hash).Append("  ").Append(entry.ArchivePath).Append('\n');
         }
 
@@ -563,8 +565,11 @@ internal static class DebPackageWriter
                 Kind = entry.Kind,
                 Mode = entry.Mode,
                 Content = entry.Kind == TarEntryKind.File
-                    ? entry.ReadBytes()
+                    ? entry.Content ?? []
                     : [],
+                OpenContent = entry.Kind == TarEntryKind.File && entry.Content is null
+                    ? () => new FileStream(entry.SourcePath!, FileMode.Open, FileAccess.Read, FileShare.Read)
+                    : null,
                 LinkTarget = entry.LinkTarget
             }));
         return buffer.ToArray();
@@ -659,6 +664,13 @@ internal static class DebPackageWriter
     {
         using var md5 = MD5.Create();
         return Hex(md5.ComputeHash(content));
+    }
+
+    private static string Md5HexFile(string path)
+    {
+        using var md5 = MD5.Create();
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return Hex(md5.ComputeHash(stream));
     }
 
     internal static string Sha256Hex(byte[] content)

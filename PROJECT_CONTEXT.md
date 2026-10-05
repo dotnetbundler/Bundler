@@ -1,8 +1,8 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-04
+> 最后更新：2026-10-05
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.69`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.70`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -37,7 +37,7 @@
 | `tests/Bundler.IntegrationTests` | 系统集成测试体（xUnit v3，`dotnet test --filter-class/-method`；每格式一个 `<Format>IntegrationTests` 测试类，全部脚本测试点逐腿收编；共享基建在 `tests/Shared/Tooling/`；Windows 真装腿用 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 门禁） | `net10.0` |
 | `tests/Bundler.LocalPackagesTests/` | 本地包消费契约工程：`MsiLocalPackagesTests` + `Fixtures/Msi/`（经 `Bundler.LocalPackages.props` 消费本地 nupkg 的 `Fixture`+`Standalone`，仅 Windows 真跑） | `net10.0` |
 | `tests/Bundler.IntegrationTests/Fixtures/` | 集成 fixture 集中地：各格式被发布成包的 fixture 工程与载荷 `Assets/`（`Nsis/` 含 `LegacyMsiFixture*/`） | `net10.0` |
-| `tests/Shared/` | 四测试工程链接共享：`TestPlatform.cs` 宿主探测门面 + `Tooling/` 集成基建（`ProcessRunner`/`DockerRunner`/`ElevatedRunner`/`IntegrationWorkspace`/`MsiSupport`/`ShellLink` 等） | `net10.0` |
+| `tests/Shared/` | 四测试工程链接共享：`TestPlatform.cs` 宿主探测门面 + `Tooling/` 集成基建（`ProcessRunner`/`DockerRunner`/`ElevatedRunner`/`IntegrationWorkspace`/`MsiSupport`/`WindowsDesktop` UIA3 向导驱动/`ShellLink` 等） | `net10.0` |
 | `tests/README.md` | 测试入口、trait 门禁与 fixture 地图 | — |
 | `tools/Windows.Nsis.Reboot` | 可抛弃 VM 重启验证入口（`Verify.ps1` 两阶段：锁定文件卸载 `3010` → 重启 → pending rename/目录/注册表/journal 清理断言） | PowerShell |
 | `samples/HelloBundlerApp` | 全后端统一公开示例（应用版本 `1.0.0`，主工程公共旋钮 + `formats/*.props` 各后端专属旋钮，100% 旋钮覆盖） | `net10.0` |
@@ -81,6 +81,19 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-05 MIT 许可 + 流式 tar + GUI 级验收（分支 `devin/1791190775-mit-tar-gui`，PR 待建）
+
+- MIT 许可证落定：`LICENSE`（Copyright (c) 2026 Bundler contributors）+ `src/Directory.Build.props` 补 `PackageLicenseExpression=MIT` 与 Pack 项 + nuspec `<license type="expression">` 与打包文件项；README 许可节同步。
+- `ARCHIVE-OI-06` 消解：`TarEntry` 增 `OpenContent` 流式载荷（`Func<Stream>`），`TarWriter.WriteEntry` 逐条流式写出——2.2 GiB 稀疏文件用例实测通过；约 8 GiB ustar 上限为 `WriteOctal` 确定性 `ArgumentException`；deb/apk 内部整 tar 暂存为已知残余（文档已登记）。
+- GUI 级验收新增三腿（trait `Requires=interactive`）：
+  `NsisIntegrationTests.InteractiveWizardInstallsAndUninstalls`（win 宿主 PASS·3m17s）、
+  `MsiLocalPackagesTests.InteractiveWizardInstallsAndRemoves`（win 宿主 PASS·2m18s）、
+  `MacDmgIntegrationTests.FinderSlaAcceptanceMountsVolume`（mac 宿主 PASS·69s）。
+- Windows 驱动基建：`tests/Shared/Tooling/WindowsDesktop.cs`——`Interop.UIAutomationClient`（netstandard2.0 纯 COM interop，弃用 FlaUI：4.0.0 拖入带漏洞 System.Drawing.Common 触发 NU1904、5.0.0 仅 net48 触发 NU1701/NETSDK1136）；
+  宿主迭代六轮实测坐实的驱动规则：候选按钮按实体类名过滤（标题栏伪按钮类名空）、同指纹连击 ≥3 升级物理鼠标注入（nsDialogs 自绘页与 Finish 免疫 `Invoke`）、终态件含 `Finish`/`Close`、Finish 前一律清复选框。
+- mac SLA 应答经 osascript：`DiskImages UI Agent` 为 background-only 进程，whose 子句须显式含其名；前置 TCC 探针失败即 Skip。
+- 验证：本机 build 0W/0E、四宿主完整回归全绿（win 交互双腿/mac SLA 腿实测 PASS，SLA 挂载竞态已修复验）；Devin Review 版本推进裁决→`alpha.70`。
 
 ### 2026-10-05 十样品合一（PR #21 已并入 `main`，squash `695ec2b`）
 
@@ -233,7 +246,6 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 ## 5. 未决问题（等待用户或外部输入）
 
-- 本仓库开源许可证尚未确定。
 - WiX v3 已退出免费社区服务；大范围公开分发前须重新评估维护风险（见 `third_party/wix/msi-wix-provenance.md`）。
 - 各格式外部事项按 OI 清单等待对应环境输入：`docs/<format>-open-items.md` 全套（生产证书/公证凭证、UAC 提权、真实重启、干净宿主矩阵、ARM64 真机、语言审校等；MSI 签名已裁决不补集成腿——`Bundler.Tests/WixTests` 三断言已覆盖，外部仅余 MSI-OI-06 生产证书/时间戳）。
 - 仓外独立包消费 fixture（`tests/Bundler.LocalPackagesTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`,
@@ -245,5 +257,5 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
 无未启动的后端立项项；新立项按 `docs/roadmap.md` §7.2 准入与新后端完整路线规则。
-剩余工作：外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（tar 流式条目、Zip64 等按 `docs/archive-open-items.md` 评估）。
+剩余工作：外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（Zip64 等按 `docs/archive-open-items.md` 评估）。
 

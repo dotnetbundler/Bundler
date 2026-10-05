@@ -437,9 +437,10 @@ internal static class ApkPackageWriter
                 Name = entry.ArchivePath,
                 Kind = entry.Kind,
                 Mode = entry.Mode,
-                Content = entry.Kind == TarEntryKind.File
-                    ? entry.ReadBytes()
-                    : [],
+                Content = [],
+                OpenContent = entry.Kind == TarEntryKind.File
+                    ? () => new FileStream(entry.SourcePath!, FileMode.Open, FileAccess.Read, FileShare.Read)
+                    : null,
                 LinkTarget = entry.LinkTarget,
                 PaxRecords = PayloadPaxRecords(entry)
             }), omitEndOfArchive);
@@ -469,14 +470,22 @@ internal static class ApkPackageWriter
             return TimestampRecords;
         }
         using var sha1 = SHA1.Create();
-        var content = entry.Kind == TarEntryKind.Symlink
-            ? new UTF8Encoding(false).GetBytes(entry.LinkTarget)
-            : entry.ReadBytes();
+        byte[] hash;
+        if (entry.Kind == TarEntryKind.Symlink)
+        {
+            hash = sha1.ComputeHash(new UTF8Encoding(false).GetBytes(entry.LinkTarget));
+        }
+        else
+        {
+            using var stream = new FileStream(
+                entry.SourcePath!, FileMode.Open, FileAccess.Read, FileShare.Read);
+            hash = sha1.ComputeHash(stream);
+        }
         return
         [
             new("ctime", "0"),
             new("atime", "0"),
-            new("APK-TOOLS.checksum.SHA1", Hex(sha1.ComputeHash(content)))
+            new("APK-TOOLS.checksum.SHA1", Hex(hash))
         ];
     }
 

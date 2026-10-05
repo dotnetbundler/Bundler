@@ -237,6 +237,81 @@ public sealed class MacDmgIntegrationTests : IClassFixture<MacDmgFixture>
         }
     }
 
+    // GUI 级验收：`open` 交给 Finder 挂载 SLA dmg → SLA 对话框弹出 →
+    // System Events（TCC 辅助功能）点 Agree → 卷挂载、.app 可运行。
+    // 门控：macOS + TCC 已授权（未授权探针失败即 Skip，属外部条件）。
+    [Fact]
+    [Trait("Requires", "interactive")]
+    public void FinderSlaAcceptanceMountsVolume()
+    {
+        _f.Ensure();
+        var probe = ProcessRunner.Run("osascript",
+            ["-e", "tell application \"System Events\" to count processes"],
+            new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(15) });
+        Assert.SkipWhen(probe.ExitCode != 0,
+            "GUI 验收腿需要 TCC 辅助功能授权以驱动 SLA 对话框。");
+        var before = Directory.GetDirectories("/Volumes").ToHashSet();
+        string? volume = null;
+        try
+        {
+            ProcessRunner.Run("open", [_f.EulaDmg],
+                new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(30) });
+            // 轮询前台进程 + SLA 实际宿主 DiskImages UI Agent/DiskImageMounter
+            // （background only 进程，whose 过滤枚举不到）的窗口找 Agree 按钮并点击。
+            const string clickScript = """
+                set deadline to (current date) + 90
+                set clicked to ""
+                tell application "System Events"
+                    repeat while (current date) < deadline and clicked is ""
+                        repeat with proc in (every process whose background only is false or name is "DiskImages UI Agent" or name is "DiskImageMounter")
+                            try
+                                repeat with w in (windows of proc)
+                                    if exists (button "Agree" of w) then
+                                        click button "Agree" of w
+                                        set clicked to name of proc
+                                    end if
+                                end repeat
+                            end try
+                        end repeat
+                        if clicked is "" then delay 0.5
+                    end repeat
+                end tell
+                return clicked
+                """;
+            var click = ProcessRunner.Run("osascript", ["-e", clickScript],
+                new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(120) });
+            ProcessRunner.AssertSuccess(click, "SLA Agree polling script failed.");
+            Assert.False(string.IsNullOrWhiteSpace(click.StdOut),
+                "SLA 对话框 90s 内未出现 Agree 按钮（或点击未生效）。");
+
+            // 挂载竞态：卷目录先于内容就绪出现（并行负载下实测）——
+            // 等"新卷内 .app 目录就位"，而非仅卷目录出现。
+            const string appName = "Bundler Mac DMG Fixture.app";
+            WaitFor.Until(() =>
+            {
+                var found = Directory.GetDirectories("/Volumes")
+                    .FirstOrDefault(d => !before.Contains(d));
+                if (found is null) return false;
+                volume = found;
+                return Directory.Exists(Path.Combine(found, appName));
+            }, "SLA 应答后卷未挂载或 .app 未就位。", 30);
+            var app = Path.Combine(volume!, appName);
+            Assert.True(Directory.Exists(app),
+                $"SLA 挂载卷缺少 .app：{volume}");
+            var run = ProcessRunner.Run(Path.Combine(app,
+                "Contents", "MacOS", "BundlerMacDmgIntegrationFixture"), []);
+            ProcessRunner.AssertSuccess(run, "SLA-mounted payload did not run.");
+            Assert.Contains("BundlerMacDmgIntegrationFixture", run.StdOut);
+        }
+        finally
+        {
+            if (volume is not null)
+            {
+                ProcessRunner.Run("hdiutil", ["detach", volume, "-force"]);
+            }
+        }
+    }
+
     [Fact]
     public void QuarantinePropagatesToCopiedApp()
     {

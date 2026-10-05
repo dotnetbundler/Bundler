@@ -277,6 +277,157 @@ public static class ArchiveTests
             "more than 65535 entries must hit the Zip64 guard");
     }
 
+    // tar.gz 载荷走流式写出：>2GiB 单文件不再触发 byte[] 尺寸上限。
+    [Fact]
+    static void StreamsFilePayloadsAboveTwoGiB()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "big-targz-out");
+        var bigPath = Path.Combine(input, "big.bin");
+        const long bigSize = 2_200_000_000L; // > Int32.MaxValue：内联 byte[] 装不下
+        try
+        {
+            using (var file = new FileStream(bigPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                file.Write(Encoding.ASCII.GetBytes("BUNDLER_BIG"));
+                file.SetLength(bigSize); // 稀疏文件：仅头 11 字节是真实数据
+            }
+            var artifact = new ArchiveBundler(new ArchiveBundleConfiguration { ArchiveName = "big-app" })
+                .BuildAsync(Configuration(input, output, formats: [PackageFormat.TarGz]))
+                .GetAwaiter().GetResult().Single();
+            Assert.EndsWith("big-app.tar.gz", artifact.Path);
+            Assert.True(File.Exists(artifact.Path + ".sha256"), "sha256 sidecar must exist");
+            Assert.True(new FileInfo(artifact.Path).Length < bigSize,
+                "a sparse payload must compress far below its logical size");
+            using var gzip = new GZipStream(File.OpenRead(artifact.Path), CompressionMode.Decompress);
+            var members = ReadTarHeaders(gzip);
+            var big = members.Single(m => m.Name.EndsWith("/big.bin", StringComparison.Ordinal));
+            Assert.Equal(bigSize, big.Size);
+            Assert.StartsWith("BUNDLER_BIG", Encoding.ASCII.GetString(big.Head));
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
+    [Fact]
+    static void StreamsEntryContentIdenticalToInline()
+    {
+        var payload = Encoding.UTF8.GetBytes("streamed-payload-bytes");
+        using var viaInline = new MemoryStream();
+        TarWriter.Write(viaInline,
+        [
+            new TarEntry { Name = "a/f.bin", Kind = TarEntryKind.File, Mode = 420, Content = payload }
+        ]);
+        using var viaStream = new MemoryStream();
+        TarWriter.Write(viaStream,
+        [
+            new TarEntry
+            {
+                Name = "a/f.bin", Kind = TarEntryKind.File, Mode = 420,
+                OpenContent = () => new MemoryStream(payload, writable: false)
+            }
+        ]);
+        Assert.Equal(viaInline.ToArray(), viaStream.ToArray());
+    }
+
+    [Fact]
+    static void StreamedEntryEndingEarlyFails()
+    {
+        using var output = new MemoryStream();
+        AssertThrows<EndOfStreamException>(
+            () => TarWriter.Write(output,
+            [
+                new TarEntry
+                {
+                    Name = "f.bin", Kind = TarEntryKind.File, Mode = 420,
+                    OpenContent = () => new ShortStream(declaredLength: 100, actualBytes: 10)
+                }
+            ]),
+            "a content stream ending before its declared Length must fail, not write a corrupt tar");
+    }
+
+    // Reports Length = declaredLength but only yields actualBytes of content.
+    sealed class ShortStream(int declaredLength, int actualBytes) : Stream
+    {
+        private int _produced;
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => declaredLength;
+        public override long Position { get => _produced; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var n = Math.Min(count, actualBytes - _produced);
+            _produced += Math.Max(0, n);
+            return Math.Max(0, n);
+        }
+    }
+
+    // Reads tar member headers without buffering payloads; captures the first
+    // 16 content bytes of each file member for content spot-checks.
+    sealed class TarHeaderRecord
+    {
+        internal string Name = "";
+        internal TarEntryKind Kind;
+        internal int Mode;
+        internal long Size;
+        internal byte[] Head = [];
+    }
+
+    static List<TarHeaderRecord> ReadTarHeaders(Stream stream)
+    {
+        var entries = new List<TarHeaderRecord>();
+        var header = new byte[512];
+        var skipBuffer = new byte[81920];
+        while (true)
+        {
+            if (ReadExact(stream, header) == 0) break;
+            if (header.All(b => b == 0)) break;
+            var entry = new TarHeaderRecord
+            {
+                Name = ReadTarString(header, 0, 100),
+                Mode = Convert.ToInt32(ReadTarString(header, 100, 8).Trim(), 8),
+                Kind = header[156] switch
+                {
+                    (byte)'5' => TarEntryKind.Directory,
+                    (byte)'2' => TarEntryKind.Symlink,
+                    _ => TarEntryKind.File
+                },
+                Size = Convert.ToInt64(ReadTarString(header, 124, 12).Trim(), 8)
+            };
+            var prefix = ReadTarString(header, 345, 155);
+            if (prefix.Length > 0) entry.Name = prefix + "/" + entry.Name;
+            var toSkip = entry.Size;
+            if (entry.Kind == TarEntryKind.File && toSkip > 0)
+            {
+                var head = new byte[(int)Math.Min(16, toSkip)];
+                var got = ReadExact(stream, head);
+                entry.Head = head[..got];
+                toSkip -= got;
+            }
+            while (toSkip > 0)
+            {
+                var read = stream.Read(skipBuffer, 0, (int)Math.Min(skipBuffer.Length, toSkip));
+                if (read == 0) break;
+                toSkip -= read;
+            }
+            var remainder = entry.Size % 512;
+            if (remainder != 0)
+            {
+                var pad = new byte[512 - remainder];
+                ReadExact(stream, pad);
+            }
+            entries.Add(entry);
+        }
+        return entries;
+    }
+
     [Fact]
     static void MapsArchiveSettingsThroughMsBuild()
     {
