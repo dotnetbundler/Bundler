@@ -1091,21 +1091,21 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         var msi = Path.Combine(output, "win-x64", "msi", "Hello Bundler App-1.0.0.msi");
         Assert.True(File.Exists(msi), $"Sample MSI is missing: {msi}");
         var productCode = MsiSupport.GetProperty(msi, "ProductCode");
+        // per-user INSTALLFOLDER = LocalAppData\Programs\{BundlerIdentifier}-x64
+        // （与其余腿 :151/:190/:350 的目录惯例一致；样品的 BundlerIdentifier
+        // = com.example.hellobundlerapp）。
         var installedExe = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Programs", "Hello Bundler App", "HelloBundlerApp.exe");
+            "Programs", "com.example.hellobundlerapp-x64", "HelloBundlerApp.exe");
         var log = _f.Ws.Combine("interactive-install.log");
         try
         {
             using var install = ProcessRunner.StartDetached("msiexec",
                 $"/i \"{msi}\" /log \"{log}\"");
+            // msiexec 的 UI 可能宿在另一进程——pid 查询与类名查询并集扫描。
             var installDrive = WindowsDesktop.DriveWizard(
-                () =>
-                {
-                    var wins = WindowsDesktop.TopWindowsByProcess(install.Id);
-                    return wins.Length > 0 ? wins
-                        : WindowsDesktop.TopWindowsByClass("MsiDialogCloseClass");
-                },
+                () => [.. WindowsDesktop.TopWindowsByProcess(install.Id),
+                       .. WindowsDesktop.TopWindowsByClass("MsiDialogCloseClass")],
                 () => install.HasExited, TimeSpan.FromMinutes(5), autoCheck: true);
             Assert.True(installDrive.Finished,
                 $"安装向导未走完（已点：{string.Join(" → ", installDrive.Actions)}）");
@@ -1119,12 +1119,8 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
             // 维护流 Remove：对已装产品再 /i 进维护模式。
             using var remove = ProcessRunner.StartDetached("msiexec", $"/i \"{msi}\"");
             var removeDrive = WindowsDesktop.DriveWizard(
-                () =>
-                {
-                    var wins = WindowsDesktop.TopWindowsByProcess(remove.Id);
-                    return wins.Length > 0 ? wins
-                        : WindowsDesktop.TopWindowsByClass("MsiDialogCloseClass");
-                },
+                () => [.. WindowsDesktop.TopWindowsByProcess(remove.Id),
+                       .. WindowsDesktop.TopWindowsByClass("MsiDialogCloseClass")],
                 () => remove.HasExited, TimeSpan.FromMinutes(5), autoCheck: true);
             Assert.True(removeDrive.Finished,
                 $"卸载向导未走完（已点：{string.Join(" → ", removeDrive.Actions)}）");

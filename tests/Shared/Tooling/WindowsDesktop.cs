@@ -149,7 +149,7 @@ internal static class WindowsDesktop
         var deadline = DateTime.UtcNow + timeout;
         var finished = false;
         string[] order =
-            ["Finish", "Install", "Remove", "Uninstall", "Agree", "Next", "Repair"];
+            ["Finish", "Install", "Remove", "Uninstall", "Agree", "Next", "Repair", "OK"];
         while (DateTime.UtcNow < deadline && !done())
         {
             IUIAutomationElement? pick = null;
