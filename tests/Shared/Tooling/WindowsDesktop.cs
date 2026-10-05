@@ -223,35 +223,44 @@ internal static class WindowsDesktop
                 continue;
             }
             var label = SafeName(pick) ?? "?";
-            if (label.Contains("Finish", StringComparison.OrdinalIgnoreCase))
+            var isFinish = label.Contains("Finish", StringComparison.OrdinalIgnoreCase);
+            if (isFinish)
             {
-                if (autoCheck)
+                // 一律清空复选框：NSIS/MSI Finish 页"运行应用"默认勾选会带出测试外进程。
+                try
                 {
                     foreach (var box in CheckBoxes(host))
                     {
                         SetChecked(box, false);
                     }
                 }
-                Press(pick);
-                actions.Add(label);
-                finished = true;
-                break;
-            }
-            if (autoCheck)
-            {
-                foreach (var box in CheckBoxes(host))
+                catch
                 {
-                    SetChecked(box, true);
+                    // 元素过期——下轮重取。
                 }
             }
-            if (pick.CurrentIsEnabled == 0)
+            else if (autoCheck)
+            {
+                try
+                {
+                    foreach (var box in CheckBoxes(host))
+                    {
+                        SetChecked(box, true);
+                    }
+                }
+                catch
+                {
+                    // 元素过期——下轮重取。
+                }
+            }
+            if (!IsEnabled(pick))
             {
                 // License 页 Next 未勾前置复选框时禁用：勾完下轮再点。
                 Thread.Sleep(250);
                 continue;
             }
             // 页面指纹：同一窗口句柄+同名按钮连击说明 Invoke 未生效——
-            // 升级到物理鼠标注入（nsDialogs 自绘页免疫 Invoke）。
+            // 升级到物理鼠标注入（nsDialogs 自绘页免疫 Invoke，终态 Finish 同病）。
             var sig = $"{host.CurrentNativeWindowHandle}|{label}";
             if (sig == lastSig)
             {
@@ -262,15 +271,26 @@ internal static class WindowsDesktop
                 samePagePresses = 0;
                 lastSig = sig;
             }
-            if (samePagePresses >= 2)
+            try
             {
-                PhysicalPress(host, pick);
+                if (samePagePresses >= 2)
+                {
+                    PhysicalPress(host, pick);
+                }
+                else
+                {
+                    Press(pick);
+                }
             }
-            else
+            catch
             {
-                Press(pick);
+                // 元素过期/无激活模式——下轮重取。
+                Thread.Sleep(300);
+                continue;
             }
             actions.Add(label);
+            // 终态按钮不 break：靠 done() 收敛；Invoke 免疫时同指纹重试会升级物理点击。
+            finished |= isFinish;
             // 页面切换与 InstFiles 段需要窗口一点时间刷新。
             Thread.Sleep(500);
         }
@@ -279,6 +299,18 @@ internal static class WindowsDesktop
 
     private static bool NameContains(IUIAutomationElement el, string name)
         => SafeName(el)?.Contains(name, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool IsEnabled(IUIAutomationElement el)
+    {
+        try
+        {
+            return el.CurrentIsEnabled != 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     private static string? SafeName(IUIAutomationElement el)
     {
