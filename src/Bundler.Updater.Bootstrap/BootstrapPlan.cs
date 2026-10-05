@@ -44,11 +44,36 @@ internal static class BootstrapPlan
             WaitForExit(pid, options.WaitTimeoutSeconds, log);
         }
 
+        // macOS .app 三项门禁（签名完好/身份连续/剥 quarantine）：动备份前拒绝，零变更安全。
+        if (OperatingSystem.IsMacOS() && MacAppGate.LooksLikeAppBundle(payloadDir))
+        {
+            MacAppGate.CheckAndStrip(installDir, payloadDir, log);
+        }
+
+        // 崩溃恢复：marker 存在即上一轮死在备份与换包之间——安装目录可能是半成品，先从备份还原。
+        var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
+        if (File.Exists(markerPath))
+        {
+            log("bundler-updater: interrupted swap detected, restoring backup first");
+            if (!Directory.Exists(backupDir))
+            {
+                throw new UpdateRejectedException(
+                    $"swap marker '{markerPath}' exists but backup '{backupDir}' is missing — cannot recover safely.");
+            }
+            if (Directory.Exists(installDir))
+            {
+                Directory.Delete(installDir, recursive: true);
+            }
+            MoveTree(backupDir, installDir, log);
+            File.Delete(markerPath);
+        }
+
         log($"bundler-updater: backup '{installDir}' → '{backupDir}'");
         if (Directory.Exists(backupDir))
         {
             Directory.Delete(backupDir, recursive: true);
         }
+        File.WriteAllText(markerPath, "swap in progress");
         MoveTree(installDir, backupDir, log);
 
         try
@@ -73,8 +98,10 @@ internal static class BootstrapPlan
                 Directory.Delete(installDir, recursive: true);
             }
             MoveTree(backupDir, installDir, log);
+            File.Delete(markerPath);
             throw;
         }
+        File.Delete(markerPath);
 
         if (options.AppPath is { Length: > 0 } app)
         {
@@ -114,14 +141,23 @@ internal static class BootstrapPlan
     private static void Restart(string appPath, string workingDirectory, Action<string> log)
     {
         log($"bundler-updater: restart '{appPath}'");
-        // 分离子进程：引导程序退出后新进程继续存活。
-        var startInfo = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo(appPath) { UseShellExecute = true, WorkingDirectory = workingDirectory }
-            : new ProcessStartInfo("/bin/sh", ["-c", $"nohup \"{appPath}\" >/dev/null 2>&1 &"])
-            {
-                UseShellExecute = false,
-                WorkingDirectory = workingDirectory,
-            };
+        // 分离子进程：引导程序退出后新进程继续存活；macOS .app 目录件交给 open 走 LaunchServices。
+        ProcessStartInfo startInfo;
+        if (OperatingSystem.IsWindows())
+        {
+            startInfo = new ProcessStartInfo(appPath)
+            { UseShellExecute = true, WorkingDirectory = workingDirectory };
+        }
+        else if (OperatingSystem.IsMacOS() && MacAppGate.LooksLikeAppBundle(appPath))
+        {
+            startInfo = new ProcessStartInfo("/usr/bin/open", ["-n", appPath])
+            { UseShellExecute = false, WorkingDirectory = workingDirectory };
+        }
+        else
+        {
+            startInfo = new ProcessStartInfo("/bin/sh", ["-c", $"nohup \"{appPath}\" >/dev/null 2>&1 &"])
+            { UseShellExecute = false, WorkingDirectory = workingDirectory };
+        }
         Process.Start(startInfo);
     }
 

@@ -290,6 +290,43 @@ public static class UpdateTests
     }
 
     [Fact]
+    static void BootstrapPlan_RecoversInterruptedSwap()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "install");
+            var payload = Path.Combine(directory, "payload");
+            Directory.CreateDirectory(install);
+            Directory.CreateDirectory(payload);
+            // 模拟崩在换包中途：marker 留痕 + 安装目录是半成品 + 备份完整。
+            File.WriteAllText(Path.Combine(install, "app"), "corrupt-partial");
+            File.WriteAllText(Path.Combine(install + ".bundler-swap"), "swap in progress");
+            Directory.CreateDirectory(install + ".bundler-backup");
+            File.WriteAllText(Path.Combine(install + ".bundler-backup", "app"), "v1-good");
+            File.WriteAllText(Path.Combine(payload, "app"), "v2");
+
+            var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload
+                }, _ => { });
+
+            Assert.Equal(0, rc);
+            Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
+            // marker 清干净；备份目录=本轮应用前的版本（恢复出的 v1）——回滚目标正确。
+            Assert.False(File.Exists(install + ".bundler-swap"));
+            Assert.Equal("v1-good", File.ReadAllText(
+                Path.Combine(install + ".bundler-backup", "app")));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     static void BootstrapPlan_RejectsMissingAndNestedDirs()
     {
         var directory = CreateTempDirectory();
