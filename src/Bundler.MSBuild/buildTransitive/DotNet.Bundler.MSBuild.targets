@@ -300,7 +300,13 @@
       MacContents="@(BundlerMacContent)"
       MacFrameworks="@(BundlerMacFramework)"
       MacDocumentTypes="@(BundlerMacDocumentType)"
-      MacUrlTypes="@(BundlerMacUrlType)">
+      MacUrlTypes="@(BundlerMacUrlType)"
+      UpdateEnabled="$(BundlerUpdateEnabled)"
+      UpdateFeedUrl="$(BundlerUpdateFeedUrl)"
+      UpdateChannel="$(BundlerUpdateChannel)"
+      UpdateSigningKeyFile="$(BundlerUpdateSigningKeyFile)"
+      UpdatePublicKey="$(BundlerUpdatePublicKey)"
+      UpdateNotes="$(BundlerUpdateNotes)">
       <Output TaskParameter="Artifacts" ItemName="BundlerArtifact" />
     </DotNet.Bundler.MSBuild.BundleDesktopApplication>
   </Target>

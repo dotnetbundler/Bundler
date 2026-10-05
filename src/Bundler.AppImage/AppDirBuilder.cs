@@ -1,5 +1,6 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
+using DotNet.Bundler.Core.Update;
 
 namespace DotNet.Bundler.AppImage;
 
@@ -70,6 +71,8 @@ internal static class AppDirBuilder
         var input = item.InputDirectory;
         var payloadRoot = Path.Combine(appDir, installRoot.Replace('/', Path.DirectorySeparatorChar));
         CopyTree(input, payloadRoot, logger);
+        UpdateIdentitySidecar.WriteIfEnabled(
+            payloadRoot, bundle.Update, PackageFormat.AppImage, item.Target.RuntimeIdentifier);
         var mainHostPath = Path.Combine(payloadRoot, mainPosixName);
         if (!File.Exists(mainHostPath))
         {

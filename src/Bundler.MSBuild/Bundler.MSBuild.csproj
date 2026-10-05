@@ -25,6 +25,7 @@
     <ProjectReference Include="..\Bundler.Wix\Bundler.Wix.csproj" />
     <ProjectReference Include="..\Bundler.Signing.Windows\Bundler.Signing.Windows.csproj" />
     <ProjectReference Include="..\Bundler.AlpineApk\Bundler.AlpineApk.csproj" />
+    <ProjectReference Include="..\Bundler.Update\Bundler.Update.csproj" />
     <PackageReference Include="Microsoft.Build.Utilities.Core"
                       PrivateAssets="all"
                       ExcludeAssets="runtime" />
@@ -45,6 +46,7 @@
     <None Include="$(TargetDir)DotNet.Bundler.Wix.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.Signing.Windows.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)DotNet.Bundler.AlpineApk.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
+    <None Include="$(TargetDir)DotNet.Bundler.Update.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="$(TargetDir)BouncyCastle.Cryptography.dll" Pack="true" PackagePath="tasks/netstandard2.0/" />
     <None Include="buildTransitive\DotNet.Bundler.MSBuild.props" Pack="true" PackagePath="buildTransitive/" />
     <None Include="buildTransitive\DotNet.Bundler.MSBuild.targets" Pack="true" PackagePath="buildTransitive/" />

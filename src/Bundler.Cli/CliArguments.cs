@@ -19,7 +19,7 @@ internal sealed class CliArguments
     {
         "input-dir", "output-dir", "rid", "formats", "product-name", "identifier",
         "package-version", "main-executable", "publisher", "description", "homepage",
-        "copyright", "license-file", "config"
+        "copyright", "license-file", "config", "key-file"
     };
 
     private static bool IsKnownValueOption(string name) =>
@@ -31,7 +31,8 @@ internal sealed class CliArguments
 
     private static readonly HashSet<string> FormatSections = new(StringComparer.Ordinal)
     {
-        "nsis", "msi", "app", "dmg", "pkg", "deb", "rpm", "appimage", "archive"
+        "nsis", "msi", "app", "dmg", "pkg", "deb", "rpm", "appimage", "archive",
+        "alpineapk", "update"
     };
 
     private static readonly HashSet<string> FlagOptions = new(StringComparer.Ordinal)

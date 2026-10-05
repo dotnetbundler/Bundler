@@ -1,0 +1,49 @@
+namespace DotNet.Bundler.Core.Update;
+
+/// <summary>
+/// 身份旁车需要写进"最终进包的载荷目录"。后端已做 staging（如 signed-payload）
+/// 时直接复用该目录；未做 staging 时把输入目录复制到工作目录再写旁车，
+/// 绝不在用户的发布目录里落旁车文件。
+/// </summary>
+public static class UpdatePayloadStaging
+{
+    public static BundlePlanItem EnsureStaged(BundleBuildContext context, BundlePlanItem item)
+    {
+        var update = context.Configuration.Update;
+        if (update is null)
+        {
+            return item;
+        }
+
+        var workRoot = Path.GetFullPath(context.WorkDirectory);
+        var input = Path.GetFullPath(item.InputDirectory);
+        // 已在工作目录内（例如 signed-payload staging）→ 直接写旁车。
+        if (input.StartsWith(workRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            UpdateIdentitySidecar.WriteIfEnabled(
+                input, update, item.Format, item.Target.RuntimeIdentifier);
+            return item;
+        }
+
+        var staged = Path.Combine(context.WorkDirectory, "update-payload");
+        CopyDirectory(input, staged);
+        UpdateIdentitySidecar.WriteIfEnabled(
+            staged, update, item.Format, item.Target.RuntimeIdentifier);
+        context.Logger.Log(BundleLogLevel.Information,
+            $"Staged update payload with bundler-update.json sidecar → {staged}");
+        return item with { InputDirectory = staged };
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var file in Directory.GetFiles(source))
+        {
+            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), overwrite: true);
+        }
+        foreach (var directory in Directory.GetDirectories(source))
+        {
+            CopyDirectory(directory, Path.Combine(destination, Path.GetFileName(directory)));
+        }
+    }
+}

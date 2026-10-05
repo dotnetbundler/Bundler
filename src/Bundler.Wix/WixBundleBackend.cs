@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
 using DotNet.Bundler;
+using DotNet.Bundler.Core.Update;
 
 namespace DotNet.Bundler.Wix;
 
@@ -36,6 +37,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         }
         // Validate every source before copying payload into a private staging tree.
         CollectFiles(bundle, item);
+        item = UpdatePayloadStaging.EnsureStaged(context, item);
         var extensionInputs = await PrepareExtensionInputs(context, cancellationToken);
         if (signer is not null)
             item = await PrepareSignedPayloadAsync(context, item, signer, cancellationToken);

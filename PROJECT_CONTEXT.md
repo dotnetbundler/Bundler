@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-05
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.72`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.73`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -81,6 +81,14 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-05 UPDATE-1 打包侧实现（分支 `devin/1791228441-update-module`，版本 `0.1.0-alpha.73`）
+
+- 新工程 `src/Bundler.Update`（netstandard2.0）：`EcdsaSigner`（ECDSA P-256/SHA-256 分离签名，`.sig` 旁车统一 64B P1363 归一、验签 DER/P1363 双试）、`UpdateManifestEmitter`（`.sig` 旁车+`bundler-update-feed.{channel}.json` 清单：version/channel/publishedAt/notes/artifacts[rid,format,url,file,size,sha256,sig]；仅六适配格式进清单）。
+- `src/Bundler.Core/Update/`：`UpdateKeyMaterial`（ec-p256 JSON 密钥材料+`FromPublicPoint` 还原；`ECDsa.Create()` 默认曲线 P-521 已实测须显式 nistP256）、`UpdateIdentitySidecar`（`bundler-update.json`：format/rid/channel/feedUrl/publicKey，公钥由私钥文件派生或显式给定）、`UpdatePayloadStaging`（更新开启时把旁车注入 staging 拷贝，用户发布目录零触碰）。
+- 五后端注入：nsis（InspectDirectoryTree 后，签名 staging 复制带旁车入载荷）、wix（CollectFiles 校验后）、macapp（`Contents/` 根随 bundle 一起 codesign）、appimage（`usr/lib/<pkg>/` 载荷根）、archive（`UnderStem` 条目表追加 stem 级文件条目）。
+- 旋钮：MSBuild `BundlerUpdateEnabled/FeedUrl/Channel/SigningKeyFile/PublicKey/Notes`（任务参数+buildTransitive 透传+样品 `formats/Update.props` 六旋钮全覆盖）；CLI `bundler.json` `update` 分节 + `--update.<knob>` 覆盖（CliArguments/CliConfig 节表登记，顺带修复 `--alpineapk.*` 解析期被拒的既有缺口）+ `bundler update-keygen --key-file <path>` 生成密钥并打印公钥。
+- 验证：`UpdateTests` 10/10（密钥往返/64B P1363/DER 双验/错钥改件拒绝/清单 schema/emit 强要私钥/旁车含公钥/staging 注入不碰源目录/ArchiveBundler 真产 zip 内含旁车）；CLI 冒烟 keygen→zip 打包→`.sig`+feed+zip 内旁车三方闭环；全量 Bundler.Tests 298（259P/0F/39S）、ApiTests 7/0/3S、build 0W/0E。
 
 ### 2026-10-05 UPDATE 自更新路线立项（PR #26 已并入 `main`，squash `7617ff5`）
 
@@ -289,6 +297,6 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新路线已于 2026-10-05 立项（`docs/update-roadmap.md`，13 项决策经用户裁决，六阶段 `UPDATE-1..6` 至全功能），待 `UPDATE-1`（打包侧：清单/ECDSA 签名/身份旁车/旋钮）启动指令。
+UPDATE 自更新路线已于 2026-10-05 立项（`docs/update-roadmap.md`，13 项决策经用户裁决，六阶段 `UPDATE-1..6` 至全功能），UPDATE-1 已实现待 PR 合并，下一步 UPDATE-2（Native AOT 引导程序）。
 剩余工作：UPDATE-1 启动、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 

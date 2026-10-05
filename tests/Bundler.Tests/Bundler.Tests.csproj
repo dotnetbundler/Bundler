@@ -28,5 +28,6 @@
     <ProjectReference Include="..\..\src\Bundler.Signing.Windows\Bundler.Signing.Windows.csproj" />
     <ProjectReference Include="..\..\src\Bundler.AlpineApk\Bundler.AlpineApk.csproj" />
     <ProjectReference Include="..\..\src\Bundler.Cli\Bundler.Cli.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Update\Bundler.Update.csproj" />
   </ItemGroup>
 </Project>

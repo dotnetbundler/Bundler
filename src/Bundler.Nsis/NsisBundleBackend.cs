@@ -1,5 +1,6 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
+using DotNet.Bundler.Core.Update;
 using System.Text;
 
 namespace DotNet.Bundler.Nsis;
@@ -46,6 +47,9 @@ internal sealed class NsisBundleBackend(
         }
 
         InspectDirectoryTree(item.InputDirectory);
+
+        // 更新开启时先落身份旁车——已签名 staging 的复制会把旁车一并带进载荷。
+        item = UpdatePayloadStaging.EnsureStaged(context, item);
 
         var fullTemplatePath = Path.GetFullPath(templatePath);
         if (!File.Exists(fullTemplatePath))

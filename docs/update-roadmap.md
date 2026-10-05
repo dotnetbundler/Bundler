@@ -1,6 +1,6 @@
 # UPDATE 路线（应用自更新）
 
-> 状态：**路线已立，待 `UPDATE-1` 启动指令**（2026-10-05 立项）。
+> 状态：**UPDATE-1 已实现**（2026-10-05；`src/Bundler.Update`+Core/Update+五后端注入+双入口旋钮），UPDATE-2 引导程序为下一阶。
 > 范围依据：`docs/roadmap.md` §7.2「应用自更新/升级包」登记项——为打包产物增加升级/更新能力。
 > 上游参照：Tauri updater（清单形态）、Sparkle（appcast/EdDSA/三段式换包/quarantine）、Velopack（外置引导/通道）、electron-updater（latest.yml/block-map）、Omaha（安装器重跑语义）、Onova（便携件原位覆盖）、AppImageUpdate（zsync 参照）；调研报告《更新模块全面调研报告》2026-10-05。
 > 本路线是**跨格式产品面**而非新安装格式：产出物随既有格式旁车而生，应用语义分两式复用既有安装器能力。
@@ -49,7 +49,12 @@
 
 ## 4. 阶段实施证据
 
-（空——各阶段完成后按日期条目归档于此。）
+### 2026-10-05 UPDATE-1 打包侧
+
+- 交付：`src/Bundler.Update`（`EcdsaSigner`：`.sig` 统一 64B P1363、验签 DER/P1363 双试；`UpdateManifestEmitter`：`.sig` 旁车+`bundler-update-feed.{channel}.json`）+ `src/Bundler.Core/Update/`（`UpdateKeyMaterial`/`UpdateIdentitySidecar`/`UpdatePayloadStaging`）。
+- 五后端身份旁车注入（nsis/wix/macapp/appimage/archive）；用户发布目录零触碰（staging 内就地或复制注入）。
+- 双入口旋钮：MSBuild `BundlerUpdate*` 六项（任务+buildTransitive+样品 props 覆盖）；CLI `update` 分节+`--update.<knob>`+`update-keygen`。
+- 证据：`UpdateTests` 10/10 含 ArchiveBundler 真产 zip 内旁车断言、签名负例（错钥/改件/乱码）拒绝；CLI 冒烟 keygen→zip→`.sig`+feed+包内旁车闭环；全量 298 用例零失败。
 
 ## 5. 边界备忘
 

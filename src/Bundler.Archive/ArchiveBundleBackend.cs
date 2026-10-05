@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using DotNet.Bundler.Core;
+using DotNet.Bundler.Core.Update;
 
 namespace DotNet.Bundler.Archive;
 
@@ -25,7 +26,20 @@ internal sealed class ArchiveBundleBackend(
         var version = settings.Version ?? context.Configuration.Version;
         var stem = ArchiveIdentity.ArchiveStem(settings, packageName, version, context.Item);
         var entries = ArchiveTree.UnderStem(ArchiveTree.Build(
-            context.Configuration, context.Item, settings, context.WorkDirectory, context.Logger), stem);
+            context.Configuration, context.Item, settings, context.WorkDirectory, context.Logger), stem).ToList();
+        if (context.Configuration.Update is { } update)
+        {
+            // 身份旁车写进工作目录后作为额外条目随归档顶层目录进包。
+            UpdateIdentitySidecar.WriteIfEnabled(
+                context.WorkDirectory, update, format, context.Item.Target.RuntimeIdentifier);
+            entries.Add(new ArchiveTree.Entry
+            {
+                ArchivePath = stem + "/" + UpdateIdentitySidecar.FileName,
+                Kind = TarEntryKind.File,
+                Mode = 420 /* 0644 */,
+                SourcePath = Path.Combine(context.WorkDirectory, UpdateIdentitySidecar.FileName),
+            });
+        }
         var extension = format == PackageFormat.Zip ? ".zip" : ".tar.gz";
         Directory.CreateDirectory(context.Item.OutputDirectory);
         var outputPath = Path.Combine(context.Item.OutputDirectory, stem + extension);

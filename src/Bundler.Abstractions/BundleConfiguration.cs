@@ -16,6 +16,16 @@ public sealed class BundleConfiguration
     public IReadOnlyList<BundleFileAssociationConfiguration> FileAssociations { get; init; } = [];
     public IReadOnlyList<BundleUrlProtocolConfiguration> UrlProtocols { get; init; } = [];
     public IReadOnlyList<BundleTargetConfiguration> Targets { get; init; } = [];
+    public UpdateBundleConfiguration? Update { get; init; }
+}
+
+public sealed class UpdateBundleConfiguration
+{
+    public string FeedUrl { get; init; } = "";
+    public string Channel { get; init; } = "latest";
+    public string? SigningKeyFile { get; init; }
+    public string? PublicKey { get; init; }
+    public string? Notes { get; init; }
 }
 
 public sealed class BundleResourceConfiguration
