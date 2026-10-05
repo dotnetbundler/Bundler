@@ -82,7 +82,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
-### 2026-10-05 zip 载荷流式写出（PR #24）
+### 2026-10-05 zip 载荷流式写出（已压缩合并 `03a070b`，PR #24）
 
 - `ZipEntry` 新增 `Func<Stream>? OpenContent`（优先于 `Content`，契约与 `TarEntry` 一致）：
   流式条目恒 Deflate——本地头先写零值占位、增量 CRC-32 随写边算、末尾回填三字段，输出字节与预知长度写法同构，不用 data descriptor。
