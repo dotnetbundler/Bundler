@@ -198,8 +198,10 @@ internal static class WindowsDesktop
                 {
                     foreach (var name in order)
                     {
+                        // 实体控件过滤：标题栏伪按钮（关窗 X 等）同为 Button 控件类型但类名为空，
+                        // 真实按钮类名恒为 "Button"——空类名不误候选（宿主实测 r28）。
                         pick = Buttons(window).FirstOrDefault(b =>
-                            NameContains(b, name));
+                            HasClass(b) && NameContains(b, name));
                         if (pick is not null)
                         {
                             break;
@@ -301,6 +303,18 @@ internal static class WindowsDesktop
 
     private static bool NameContains(IUIAutomationElement el, string name)
         => SafeName(el)?.Contains(name, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool HasClass(IUIAutomationElement el)
+    {
+        try
+        {
+            return el.CurrentClassName is { Length: > 0 };
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     private static bool IsEnabled(IUIAutomationElement el)
     {
