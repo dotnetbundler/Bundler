@@ -131,8 +131,8 @@ public static class UpdateTests
             Assert.Equal("linux-x64", entry.GetProperty("rid").GetString());
             Assert.Equal("zip", entry.GetProperty("format").GetString());
             Assert.Equal("app-1.0.0-linux-x64.zip", entry.GetProperty("file").GetString());
-            Assert.Equal("https://example.test/updates/app-1.0.0-linux-x64.zip",
-                entry.GetProperty("url").GetString());
+            // url 恒为裸文件名——消费端按清单文件所在目录解析。
+            Assert.Equal("app-1.0.0-linux-x64.zip", entry.GetProperty("url").GetString());
             Assert.Equal(Convert.ToBase64String(File.ReadAllBytes(sigPath)),
                 entry.GetProperty("sig").GetString());
             Assert.Equal(new FileInfo(zipArtifact).Length, entry.GetProperty("size").GetInt64());
@@ -319,6 +319,94 @@ public static class UpdateTests
             Assert.False(File.Exists(install + ".bundler-swap"));
             Assert.Equal("v1-good", File.ReadAllText(
                 Path.Combine(install + ".bundler-backup", "app")));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void BootstrapPlan_KeepPayload_PreservesSymlinkAndExecBit()
+    {
+        if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                System.Runtime.InteropServices.OSPlatform.Linux))
+        {
+            return;
+        }
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "install");
+            var payload = Path.Combine(directory, "payload");
+            Directory.CreateDirectory(install);
+            Directory.CreateDirectory(payload);
+            File.WriteAllText(Path.Combine(install, "app"), "v1");
+            var payloadExe = Path.Combine(payload, "hello");
+            File.WriteAllText(payloadExe, "#!/bin/sh\necho hi\n");
+            File.SetUnixFileMode(payloadExe, UnixFileMode.UserRead | UnixFileMode.UserWrite |
+                UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+            File.CreateSymbolicLink(Path.Combine(payload, "AppRun"), "hello");
+
+            var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload,
+                    KeepPayload = true,
+                }, _ => { });
+
+            Assert.Equal(0, rc);
+            // 软链按链接重建而非解引用成普通文件；执行位随文件走。
+            var appRun = new FileInfo(Path.Combine(install, "AppRun"));
+            Assert.Equal("hello", appRun.LinkTarget);
+            Assert.True(
+                (File.GetUnixFileMode(Path.Combine(install, "hello")) &
+                 UnixFileMode.UserExecute) != 0);
+            // keep-payload 保留源载荷。
+            Assert.True(File.Exists(payloadExe));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void BootstrapPlan_Rollback_RestoresBackupAndKeepsIt()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "install");
+            var backup = install + ".bundler-backup";
+            Directory.CreateDirectory(install);
+            Directory.CreateDirectory(backup);
+            File.WriteAllText(Path.Combine(install, "app"), "v2-broken");
+            File.WriteAllText(Path.Combine(backup, "app"), "v1-good");
+
+            var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    Rollback = true,
+                }, _ => { });
+
+            Assert.Equal(0, rc);
+            Assert.Equal("v1-good", File.ReadAllText(Path.Combine(install, "app")));
+            // 备份保留可重试；无 .bundler-swap 残痕。
+            Assert.Equal("v1-good", File.ReadAllText(Path.Combine(backup, "app")));
+            Assert.False(File.Exists(install + ".bundler-swap"));
+
+            // 无备份 → 确定性拒绝而非静默。
+            Directory.Delete(backup, recursive: true);
+            Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UpdateRejectedException>(() =>
+                DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                    new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                    {
+                        InstallDirectory = install,
+                        Rollback = true,
+                    }, _ => { }));
         }
         finally
         {

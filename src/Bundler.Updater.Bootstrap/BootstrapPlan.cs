@@ -21,7 +21,9 @@ internal static class BootstrapPlan
     internal static int Apply(BootstrapOptions options, Action<string> log)
     {
         var installDir = Path.GetFullPath(options.InstallDirectory);
-        var payloadDir = Path.GetFullPath(options.PayloadDirectory);
+        var payloadDir = options.PayloadDirectory.Length > 0
+            ? Path.GetFullPath(options.PayloadDirectory)
+            : null;
         var backupDir = Path.GetFullPath(
             options.BackupDirectory ?? installDir.TrimEnd('/', '\\') + ".bundler-backup");
 
@@ -29,14 +31,20 @@ internal static class BootstrapPlan
         {
             throw new UsageException($"install directory '{installDir}' does not exist.");
         }
-        if (!Directory.Exists(payloadDir))
+        if (!options.Rollback && (payloadDir is null || !Directory.Exists(payloadDir)))
         {
-            throw new UsageException($"payload directory '{payloadDir}' does not exist.");
+            throw new UsageException($"payload directory '{options.PayloadDirectory}' does not exist.");
         }
-        if (IsSubpathOf(backupDir, installDir) || IsSubpathOf(backupDir, payloadDir) ||
-            IsSubpathOf(installDir, backupDir) || IsSubpathOf(payloadDir, backupDir))
+        if (payloadDir is not null &&
+            (IsSubpathOf(backupDir, installDir) || IsSubpathOf(backupDir, payloadDir) ||
+             IsSubpathOf(installDir, backupDir) || IsSubpathOf(payloadDir, backupDir)))
         {
             throw new UsageException("backup/install/payload directories must not nest inside each other.");
+        }
+        // 回滚模式不嵌套校验 payload——它本就不存在。
+        if (options.Rollback && (IsSubpathOf(backupDir, installDir) || IsSubpathOf(installDir, backupDir)))
+        {
+            throw new UsageException("backup and install directories must not nest inside each other.");
         }
 
         if (options.WaitPid is { } pid)
@@ -45,13 +53,16 @@ internal static class BootstrapPlan
         }
 
         // macOS .app 三项门禁（签名完好/身份连续/剥 quarantine）：动备份前拒绝，零变更安全。
-        if (OperatingSystem.IsMacOS() && MacAppGate.LooksLikeAppBundle(payloadDir))
+        // 回滚不验——备份目录是上次换包前的自家产物，非外来载荷。
+        if (!options.Rollback && OperatingSystem.IsMacOS() &&
+            payloadDir is not null && MacAppGate.LooksLikeAppBundle(payloadDir))
         {
             MacAppGate.CheckAndStrip(installDir, payloadDir, log);
         }
 
         // 崩溃恢复：marker 存在即上一轮死在备份与换包之间——安装目录可能是半成品，先从备份还原。
         var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
+        var recovered = false;
         if (File.Exists(markerPath))
         {
             log("bundler-updater: interrupted swap detected, restoring backup first");
@@ -66,6 +77,31 @@ internal static class BootstrapPlan
             }
             MoveTree(backupDir, installDir, log);
             File.Delete(markerPath);
+            recovered = true;
+        }
+
+        // 回滚：备份复制回安装目录（备份保留可重试），不再二次备份——免得用待回滚的版本覆盖备份。
+        if (options.Rollback)
+        {
+            if (!Directory.Exists(backupDir))
+            {
+                // 崩线恢复刚把备份还原回安装目录——备份移入即耗尽，此时安装目录已是目标态。
+                if (recovered)
+                {
+                    log("bundler-updater: crash recovery already restored the backup");
+                    return 0;
+                }
+                throw new UpdateRejectedException($"no rollback backup at '{backupDir}'.");
+            }
+            log($"bundler-updater: rollback '{backupDir}' → '{installDir}'");
+            Directory.Delete(installDir, recursive: true);
+            CopyTree(backupDir, installDir);
+            if (options.AppPath is { Length: > 0 } rollbackApp)
+            {
+                Restart(rollbackApp, installDir, log);
+            }
+            log("bundler-updater: done");
+            return 0;
         }
 
         log($"bundler-updater: backup '{installDir}' → '{backupDir}'");
@@ -82,12 +118,12 @@ internal static class BootstrapPlan
             {
                 // 保留载荷用于调试与组合场景：复制换入而非移动。
                 log($"bundler-updater: copy in '{payloadDir}' → '{installDir}'");
-                CopyTree(payloadDir, installDir);
+                CopyTree(payloadDir!, installDir);
             }
             else
             {
                 log($"bundler-updater: swap in '{payloadDir}' → '{installDir}'");
-                MoveTree(payloadDir, installDir, log);
+                MoveTree(payloadDir!, installDir, log);
             }
         }
         catch
@@ -107,7 +143,7 @@ internal static class BootstrapPlan
         {
             Restart(app, installDir, log);
         }
-        if (!options.KeepPayload && Directory.Exists(payloadDir))
+        if (!options.KeepPayload && payloadDir is not null && Directory.Exists(payloadDir))
         {
             Directory.Delete(payloadDir, recursive: true);
         }
@@ -185,7 +221,24 @@ internal static class BootstrapPlan
         }
         foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
         {
-            File.Copy(file, file.Replace(source, destination), overwrite: true);
+            var target = file.Replace(source, destination);
+            if (File.Exists(target))
+            {
+                File.Delete(target);
+            }
+            var info = new FileInfo(file);
+            // 软链按链接重建而非解引用成普通文件（File.Copy 的默认行为会破坏 AppRun 类链接）。
+            if (info.LinkTarget is { } linkTarget)
+            {
+                File.CreateSymbolicLink(target, linkTarget);
+                continue;
+            }
+            File.Copy(file, target, overwrite: true);
+            // unix 执行位随文件走——exec 载荷跨卷复制后仍可启动。
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(target, File.GetUnixFileMode(file));
+            }
         }
     }
 
@@ -207,6 +260,11 @@ internal static class BootstrapPlan
             if (name is "--keep-payload")
             {
                 options.KeepPayload = true;
+                continue;
+            }
+            if (name is "--rollback")
+            {
+                options.Rollback = true;
                 continue;
             }
             var value = i + 1 < args.Length ? args[++i] :
@@ -235,9 +293,13 @@ internal static class BootstrapPlan
                 default: throw new UsageException($"unknown option '{name}'.");
             }
         }
-        if (options.InstallDirectory.Length == 0 || options.PayloadDirectory.Length == 0)
+        if (options.InstallDirectory.Length == 0)
         {
-            throw new UsageException("--install-dir and --payload are required.");
+            throw new UsageException("--install-dir is required.");
+        }
+        if (!options.Rollback && options.PayloadDirectory.Length == 0)
+        {
+            throw new UsageException("--payload is required unless --rollback.");
         }
         return options;
     }
@@ -252,6 +314,7 @@ internal sealed class BootstrapOptions
     public string? BackupDirectory;
     public string? LogFile;
     public bool KeepPayload;
+    public bool Rollback;
     public int WaitTimeoutSeconds = 120;
 }
 

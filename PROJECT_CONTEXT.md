@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-05
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.73`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.74`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -81,6 +81,14 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-05 UPDATE-3/4 宿主实证+应用内库（分支 `devin/1791228441-update-module`，版本 `0.1.0-alpha.74`）
+
+- UPDATE-3 四宿主真机实证全绿：win（file-swap/断电恢复/NSIS `/UPDATE` 链/MSI major upgrade）、linux（kill -9 跨卷中段恢复 701M、软链+exec 位、posix bash+dash、签名负例）、mac（.app 门禁未签互换/quarantine 剥离/bundle-id 拒 rc4/`open -n` 重启/posix darwin 分支）、musl（static-pie 静态件+sh 三场景）；per-RID 引导件 win-x64/osx-arm64/osx-x64/linux-musl-x64 入库（远端 `2ca2e62`）。
+- UPDATE-4 `src/Bundler.Updater` 应用内库落地：UpdateClient 四动词门面+`.part` 续传+file:// 离线腿+sha256/ECDSA 双验拒放+installer-replay/file-swap 分派+`--rollback` 引导模式；共享源链接+`Protocol` 命名空间隔离；feed 语义定稿为"清单文件地址+裸文件名相对件"。
+- 修复：sh `--keep-payload` mv/copy 语义分叉、跨卷 CopyTree 软链解引用+exec 位丢失、`BootstrapperPath` .sh 误抢二进制分支、无匹配件改返回 null。
+- 证据：UpdateTests 15+UpdaterClientTests 7=22/22（含真 AOT 引导件端到端换包+回滚）；全量 Bundler.Tests 310/271P/0F/39S；build 0W/0E。
+- 遗留：mac 真实签名身份腿需 Apple Developer ID（外部待验收）；linux-arm64 AOT 因 qemu ilc SIGABRT 不可产（环境边界）。
 
 ### 2026-10-05 UPDATE-1 打包侧实现（分支 `devin/1791228441-update-module`，版本 `0.1.0-alpha.73`）
 
@@ -297,6 +305,6 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新路线已于 2026-10-05 立项（`docs/update-roadmap.md`，13 项决策经用户裁决，六阶段 `UPDATE-1..6` 至全功能），UPDATE-1/UPDATE-2 已实现待 PR 合并，下一步 UPDATE-3（file-swap 三段式+mac 三项+installer-replay 宿主实证）。
+UPDATE 自更新路线已于 2026-10-05 立项（`docs/update-roadmap.md`，13 项决策经用户裁决，六阶段 `UPDATE-1..6` 至全功能），UPDATE-1..4 已实现（分支 `devin/1791228441-update-module` 待整模块完成后单 PR），下一步 UPDATE-5（block-map 差分）。
 剩余工作：UPDATE-1 启动、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 

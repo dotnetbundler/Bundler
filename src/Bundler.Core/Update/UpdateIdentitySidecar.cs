@@ -1,27 +1,14 @@
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Json;
-using System.Text;
-
 namespace DotNet.Bundler.Core.Update;
 
 /// <summary>
 /// `bundler-update.json` 安装身份旁车：随载荷进入安装目录/载荷顶层，
 /// 记录应用自身的格式/RID/通道/清单地址与验签公钥（electron `app-update.yml` 同型）。
 /// 只写入已 staged 的载荷目录，绝不动用户的发布目录。
+/// 文档模型见 <see cref="UpdateInstallIdentity"/>。
 /// </summary>
 public static class UpdateIdentitySidecar
 {
-    public const string FileName = "bundler-update.json";
-
-    [DataContract]
-    private sealed class SidecarDocument
-    {
-        [DataMember(Name = "format", EmitDefaultValue = false)] public string Format = "";
-        [DataMember(Name = "rid", EmitDefaultValue = false)] public string RuntimeIdentifier = "";
-        [DataMember(Name = "channel", EmitDefaultValue = false)] public string Channel = "";
-        [DataMember(Name = "feedUrl", EmitDefaultValue = false)] public string FeedUrl = "";
-        [DataMember(Name = "publicKey", EmitDefaultValue = false)] public string? PublicKey;
-    }
+    public const string FileName = UpdateInstallIdentity.FileName;
 
     public static void WriteIfEnabled(
         string payloadRoot,
@@ -33,19 +20,14 @@ public static class UpdateIdentitySidecar
         {
             return;
         }
-        var document = new SidecarDocument
+        UpdateInstallIdentity.Write(payloadRoot, new UpdateInstallIdentity
         {
             Format = FormatName(format),
             RuntimeIdentifier = runtimeIdentifier,
             Channel = update.Channel,
             FeedUrl = update.FeedUrl,
             PublicKey = ResolvePublicKey(update),
-        };
-        var path = Path.Combine(payloadRoot, FileName);
-        using var stream = File.Create(path);
-        var serializer = new DataContractJsonSerializer(typeof(SidecarDocument));
-        serializer.WriteObject(stream, document);
-        stream.Write(Encoding.ASCII.GetBytes("\n"), 0, 1);
+        });
     }
 
     public static string FormatName(PackageFormat format) => format.ToString().ToLowerInvariant();

@@ -30,5 +30,6 @@
     <ProjectReference Include="..\..\src\Bundler.Cli\Bundler.Cli.csproj" />
     <ProjectReference Include="..\..\src\Bundler.Update\Bundler.Update.csproj" />
     <ProjectReference Include="..\..\src\Bundler.Updater.Bootstrap\Bundler.Updater.Bootstrap.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Updater\Bundler.Updater.csproj" />
   </ItemGroup>
 </Project>

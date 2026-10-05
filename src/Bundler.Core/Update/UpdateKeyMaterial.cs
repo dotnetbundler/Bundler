@@ -3,7 +3,11 @@ using System.Runtime.Serialization.Json;
 using System.Security.Cryptography;
 using System.Text;
 
+#if BUNDLER_UPDATER_LINK
+namespace DotNet.Bundler.Updater.Protocol;
+#else
 namespace DotNet.Bundler.Core.Update;
+#endif
 
 /// <summary>
 /// ECDSA P-256 更新密钥材料：私钥文件只留发布方（秘密不入库），

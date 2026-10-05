@@ -12,6 +12,7 @@ APP_PATH=""
 BACKUP_DIR=""
 LOG_FILE=""
 KEEP_PAYLOAD=0
+ROLLBACK=0
 WAIT_TIMEOUT=120
 
 usage() {
@@ -35,6 +36,7 @@ shift
 while [ $# -gt 0 ]; do
     case "$1" in
         --keep-payload) KEEP_PAYLOAD=1; shift ;;
+        --rollback) ROLLBACK=1; shift ;;
         --install-dir|--payload|--wait-pid|--app|--backup-dir|--log|--wait-timeout)
             [ $# -ge 2 ] || { echo "bundler-updater: option '$1' requires a value." >&2; exit 2; }
             case "$1" in
@@ -51,9 +53,10 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-[ -n "$INSTALL_DIR" ] && [ -n "$PAYLOAD_DIR" ] || { echo "bundler-updater: --install-dir and --payload are required." >&2; exit 2; }
+[ -n "$INSTALL_DIR" ] || { echo "bundler-updater: --install-dir is required." >&2; exit 2; }
+[ "$ROLLBACK" = 1 ] || [ -n "$PAYLOAD_DIR" ] || { echo "bundler-updater: --payload is required unless --rollback." >&2; exit 2; }
 [ -d "$INSTALL_DIR" ] || { echo "bundler-updater: install directory '$INSTALL_DIR' does not exist." >&2; exit 2; }
-[ -d "$PAYLOAD_DIR" ] || { echo "bundler-updater: payload directory '$PAYLOAD_DIR' does not exist." >&2; exit 2; }
+[ "$ROLLBACK" = 1 ] || [ -d "$PAYLOAD_DIR" ] || { echo "bundler-updater: payload directory '$PAYLOAD_DIR' does not exist." >&2; exit 2; }
 [ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
 
 if [ -n "$WAIT_PID" ]; then
@@ -71,7 +74,7 @@ case "$PAYLOAD_DIR" in
     *.app) IS_APP=1 ;;
     *) if [ -f "$PAYLOAD_DIR/Contents/Info.plist" ]; then IS_APP=1; else IS_APP=0; fi ;;
 esac
-if [ "$IS_APP" = 1 ] && [ "$(uname -s)" = "Darwin" ]; then
+if [ "$IS_APP" = 1 ] && [ "$ROLLBACK" != 1 ] && [ "$(uname -s)" = "Darwin" ]; then
     OLD_TEAM=$(codesign -dv --verbose=4 "$INSTALL_DIR" 2>&1 | sed -n 's/^TeamIdentifier=//p' | head -1)
     NEW_TEAM=$(codesign -dv --verbose=4 "$PAYLOAD_DIR" 2>&1 | sed -n 's/^TeamIdentifier=//p' | head -1)
     [ "$NEW_TEAM" = "not set" ] && NEW_TEAM=""
@@ -97,12 +100,40 @@ fi
 
 # 崩溃恢复：marker 存在即上一轮死在备份与换包之间——安装目录可能是半成品，先还原。
 MARKER="${INSTALL_DIR%/}.bundler-swap"
+RECOVERED=0
 if [ -f "$MARKER" ]; then
     log "bundler-updater: interrupted swap detected, restoring backup first"
     [ -d "$BACKUP_DIR" ] || { echo "bundler-updater: swap marker exists but backup missing — cannot recover." >&2; exit 4; }
     rm -rf "$INSTALL_DIR"
     mv "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
     rm -f "$MARKER"
+    RECOVERED=1
+fi
+
+# 回滚：备份复制回安装目录（备份保留可重试），不再二次备份。
+if [ "$ROLLBACK" = 1 ]; then
+    if [ ! -d "$BACKUP_DIR" ]; then
+        # 崩线恢复刚把备份还原回安装目录——备份移入即耗尽，安装目录已是目标态。
+        [ "$RECOVERED" = 1 ] && { log "bundler-updater: crash recovery already restored the backup"; exit 0; }
+        echo "bundler-updater: no rollback backup at '$BACKUP_DIR'." >&2; exit 4
+    fi
+    log "bundler-updater: rollback '$BACKUP_DIR' → '$INSTALL_DIR'"
+    rm -rf "$INSTALL_DIR" || exit 4
+    mkdir -p "$INSTALL_DIR" || exit 4
+    cp -a "$BACKUP_DIR"/. "$INSTALL_DIR"/ || { echo "bundler-updater: rollback copy failed." >&2; exit 4; }
+    if [ -n "$APP_PATH" ]; then
+        log "bundler-updater: restart '$APP_PATH'"
+        case "$APP_PATH" in
+            *.app) if [ "$(uname -s)" = "Darwin" ]; then
+                /usr/bin/open -n "$APP_PATH" || true
+            else
+                (cd "$INSTALL_DIR" && nohup "$APP_PATH" >/dev/null 2>&1 &)
+            fi ;;
+            *) (cd "$INSTALL_DIR" && nohup "$APP_PATH" >/dev/null 2>&1 &) ;;
+        esac
+    fi
+    log "bundler-updater: done"
+    exit 0
 fi
 
 log "bundler-updater: backup '$INSTALL_DIR' → '$BACKUP_DIR'"
@@ -110,8 +141,17 @@ rm -rf "$BACKUP_DIR" || exit 4
 printf 'swap in progress' >"$MARKER" || exit 4
 mv "$INSTALL_DIR" "$BACKUP_DIR" || { rm -f "$MARKER"; exit 4; }
 
-log "bundler-updater: swap in '$PAYLOAD_DIR' → '$INSTALL_DIR'"
-if ! mv "$PAYLOAD_DIR" "$INSTALL_DIR"; then
+# --keep-payload 用复制换入（与 AOT copy 语义一致），否则 mv 就位。
+SWAP_FAILED=0
+if [ "$KEEP_PAYLOAD" = 1 ]; then
+    log "bundler-updater: copy in '$PAYLOAD_DIR' → '$INSTALL_DIR'"
+    mkdir -p "$INSTALL_DIR" || exit 4
+    cp -a "$PAYLOAD_DIR"/. "$INSTALL_DIR"/ || SWAP_FAILED=1
+else
+    log "bundler-updater: swap in '$PAYLOAD_DIR' → '$INSTALL_DIR'"
+    mv "$PAYLOAD_DIR" "$INSTALL_DIR" || SWAP_FAILED=1
+fi
+if [ "$SWAP_FAILED" = 1 ]; then
     log "bundler-updater: swap failed, restoring backup"
     rm -rf "$INSTALL_DIR"
     mv "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }

@@ -1,6 +1,6 @@
 # UPDATE 路线（应用自更新）
 
-> 状态：**UPDATE-2 已实现**（2026-10-05；`Bundler.Updater.Bootstrap` AOT 引导件+posix 脚本降级+五后端引导件注入），UPDATE-3 file-swap 语义为下一阶。
+> 状态：**UPDATE-4 已实现**（2026-10-05；`Bundler.Updater` 应用内库+四宿主 UPDATE-3 实证全绿），UPDATE-5 block-map 差分为下一阶。
 > 范围依据：`docs/roadmap.md` §7.2「应用自更新/升级包」登记项——为打包产物增加升级/更新能力。
 > 上游参照：Tauri updater（清单形态）、Sparkle（appcast/EdDSA/三段式换包/quarantine）、Velopack（外置引导/通道）、electron-updater（latest.yml/block-map）、Omaha（安装器重跑语义）、Onova（便携件原位覆盖）、AppImageUpdate（zsync 参照）；调研报告《更新模块全面调研报告》2026-10-05。
 > 本路线是**跨格式产品面**而非新安装格式：产出物随既有格式旁车而生，应用语义分两式复用既有安装器能力。
@@ -48,6 +48,25 @@
 | `UPDATE-6` | 收口：能力矩阵/open-items/manual-testing 文档族 + 冻结基线写入 + 主文档同步 | 冻结文档齐备；外部待验收项如实挂账 |
 
 ## 4. 阶段实施证据
+
+### 2026-10-05 UPDATE-4 应用内更新库
+
+- 交付：`src/Bundler.Updater`（netstandard2.0+net10.0，程序集 `DotNet.Bundler.Updater`，零外部依赖）：`UpdateClient` 门面（`FromInstallDirectory`/`FromIdentity`→`CheckForUpdateAsync`→`DownloadAsync`→`Verify`→`Apply`/`Rollback`/`UpdateAsync`）；`UpdateDownloader`（http(s) `.part` Range 断点续传+`file://`/本地/UNC 解析+size/sha256 必验拒放）；`UpdateApplier`（nsis `/UPDATE`、msiexec major upgrade、zip/app/targz 解包换包、appimage 单件）；`UstarReader`（ustar+pax+GNU 长名+软链+逃逸防护）；`UpdateVersion`（数字段+预发布比较）。
+- 共享源链接编译（`<Compile Include>` 复用 Core Update 四个文件），`BUNDLER_UPDATER_LINK` 条件把协议类型落 `DotNet.Bundler.Updater.Protocol` 命名空间——同仓双装不撞名。
+- feed 语义定稿：`feedUrl`=清单文件地址（http/file/本地路径均可），产物 `url` 恒裸文件名按清单同目录解析（Tauri latest.json 同型）；emitter 相应改裸文件名。
+- 回滚协议：`--rollback` 引导模式——备份**复制**回安装目录且保留可重试（原"备份当载荷重走 swap"会先被备份步骤覆盖，属协议缺陷已修）；sh/AOT 双侧同步。
+- 修复：sh `--keep-payload` 原用 mv 消耗载荷与 AOT copy 分叉 → 改 `cp -a`；`CopyTree` 跨卷把软链解引用+丢 exec 位 → 软链重建+unix mode 复制（alpine/linux 子会话实证上报）；`BootstrapperPath` 指向 `.sh` 时被二进制分支错抢 → 加扩展名判流。
+- 证据：`UpdateTests` 15 + `UpdaterClientTests` 7 = 22/22 全绿；linux 真机端到端（真 AOT 引导件：装 v1→查→下→验→换 v2→回滚）与 posix 降级件换包均 rc=0；全量 Bundler.Tests 310 用例零失败。
+- API 语义：无匹配件（远端新版不含本 RID/格式）返回 null 而非抛错——增量滚动发布下是常态。
+
+### 2026-10-05 UPDATE-3 宿主实证
+
+- 四宿主子会话真机全链实证，per-RID 引导件全部入库（分支 `devin/1791228441-update-module` 远端头 `2ca2e62`）：
+  - **win-x64**：`bundler-updater.exe` 1.67MB 构建入包；file-swap rc=0 换包+备份；marker 断电恢复（半成品 install+backup→还原再换）；NSIS `v1 /S /D` → `v2 /UPDATE /S` 更新链（FileVersion 2.0.0.0、ARP 恰一条 v2、InstallLocation 复用）；MSI major upgrade（`WIX_UPGRADE_DETECTED`+`MIGRATE`、新 ProductCode、ARP 单条）。
+  - **linux-x64**：kill -9 于跨卷 CopyTree 中段（701MB 实载荷 tmpfs→ext4）复跑日志 `interrupted swap detected`→还原→换包完成不砖；软链/可执行位载荷同卷 rename 全保留；posix 脚本 bash+dash 双壳 swap/恢复同协议；签名负例链（真 feed+`.sig`，篡改一字节 `VERIFY_REJECT`）。
+  - **macOS-arm64**：osx-arm64 引导件 2.9MB 实证全腿——未签→未签换包 rc=0、quarantine 剥离后全树 xattr=0、bundle-id 不符 rc=4 零变更拒、`open -n` 经 LaunchServices 真重启、posix 脚本 darwin 分支同协议、file-swap+marker 恢复；osx-x64 件构建级验证（宿主无 Rosetta）。
+  - **alpine/musl**：linux-musl-x64 static-pie 静态件 2.4MB 入库实证（busybox sh + AOT 三场景协议一致）；linux-arm64 AOT 因 qemu 仿真 ilc SIGABRT 不可产（环境边界非产品问题）。
+- 遗留边界：mac 真实签名身份腿需 Apple Developer ID（外部待验收——无证书宿主 adhoc/self-signed 的 TeamIdentifier='not set' 归入 unsigned 分支已验证）；跨卷 CopyTree 软链/执行位丢失已修（UPDATE-4 内）。
 
 ### 2026-10-05 UPDATE-2 引导程序
 

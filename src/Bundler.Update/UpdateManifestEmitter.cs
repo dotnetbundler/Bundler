@@ -1,4 +1,3 @@
-using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -12,7 +11,7 @@ namespace DotNet.Bundler.Update;
 /// </summary>
 public static class UpdateManifestEmitter
 {
-    public const string FeedNamePrefix = "bundler-update-feed";
+    public const string FeedNamePrefix = UpdateFeed.FeedNamePrefix;
 
     // 自更新适配格式：deb/rpm/apk 属包管理器领地，dmg/pkg 非更新载体——逐字决策见 update-roadmap §1.1。
     private static readonly HashSet<PackageFormat> CoveredFormats =
@@ -21,30 +20,7 @@ public static class UpdateManifestEmitter
         PackageFormat.AppImage, PackageFormat.Zip, PackageFormat.TarGz,
     ];
 
-    [DataContract]
-    private sealed class FeedDocument
-    {
-        [DataMember(Name = "version")] public string Version = "";
-        [DataMember(Name = "notes", EmitDefaultValue = false)] public string? Notes;
-        [DataMember(Name = "publishedAt")] public string PublishedAt = "";
-        [DataMember(Name = "channel")] public string Channel = "";
-        [DataMember(Name = "artifacts")] public List<FeedArtifact> Artifacts = [];
-    }
-
-    [DataContract]
-    private sealed class FeedArtifact
-    {
-        [DataMember(Name = "rid")] public string RuntimeIdentifier = "";
-        [DataMember(Name = "format")] public string Format = "";
-        [DataMember(Name = "url")] public string Url = "";
-        [DataMember(Name = "file")] public string File = "";
-        [DataMember(Name = "size")] public long Size;
-        [DataMember(Name = "sha256")] public string Sha256 = "";
-        [DataMember(Name = "sig")] public string Signature = "";
-    }
-
-    public static string FeedFileName(string channel) =>
-        $"{FeedNamePrefix}.{channel}.json";
+    public static string FeedFileName(string channel) => UpdateFeed.FeedFileName(channel);
 
     /// <summary>
     /// 对已产出的构件发射更新面：`.sig` 旁车 + 通道清单。返回新增产物路径（sig 与清单）。
@@ -64,7 +40,7 @@ public static class UpdateManifestEmitter
         }
         var key = UpdateKeyMaterial.Load(keyFile);
         var channel = string.IsNullOrWhiteSpace(update.Channel) ? "latest" : update.Channel;
-        var feed = new FeedDocument
+        var feed = new UpdateFeed
         {
             Version = configuration.Version,
             Notes = string.IsNullOrWhiteSpace(update.Notes) ? null : update.Notes,
@@ -72,7 +48,7 @@ public static class UpdateManifestEmitter
             Channel = channel,
         };
         var produced = new List<string>();
-        var feedBase = update.FeedUrl.TrimEnd('/');
+        // 产物 url 一律裸文件名——消费端按清单文件所在目录解析（Tauri latest.json 同型）。
 
         foreach (var artifact in artifacts)
         {
@@ -88,11 +64,11 @@ public static class UpdateManifestEmitter
             produced.Add(sigPath);
 
             var fileName = Path.GetFileName(artifact.Path);
-            feed.Artifacts.Add(new FeedArtifact
+            feed.Artifacts.Add(new UpdateFeedArtifact
             {
                 RuntimeIdentifier = artifact.RuntimeIdentifier,
                 Format = artifact.Format.ToString().ToLowerInvariant(),
-                Url = feedBase.Length == 0 ? fileName : feedBase + "/" + fileName,
+                Url = fileName,
                 File = fileName,
                 Size = new FileInfo(artifact.Path).Length,
                 Sha256 = await Task.Run(() => Sha256Hex(artifact.Path), cancellationToken),
@@ -107,7 +83,7 @@ public static class UpdateManifestEmitter
         var feedPath = Path.Combine(configuration.OutputDirectory, FeedFileName(channel));
         using (var stream = File.Create(feedPath))
         {
-            var serializer = new DataContractJsonSerializer(typeof(FeedDocument));
+            var serializer = new DataContractJsonSerializer(typeof(UpdateFeed));
             serializer.WriteObject(stream, feed);
             stream.Write(Encoding.ASCII.GetBytes("\n"), 0, 1);
         }

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <AssemblyName>DotNet.Bundler.Updater</AssemblyName>
+    <RootNamespace>DotNet.Bundler.Updater</RootNamespace>
+    <PackageId>DotNet.Bundler.Updater</PackageId>
+    <LangVersion>latest</LangVersion>
+    <DefineConstants>$(DefineConstants);BUNDLER_UPDATER_LINK</DefineConstants>
+    <Nullable>enable</Nullable>
+    <Description>Application-side self-update client for DotNet.Bundler packages: feed check, verified download, signature gate and staged apply.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Bundler.Tests" />
+    <!-- 协议件与打包侧同源链接编译——单源事实，零程序集蔓延。 -->
+    <Compile Include="..\Bundler.Core\Update\UpdateKeyMaterial.cs" />
+    <Compile Include="..\Bundler.Core\Update\UpdateFeedModel.cs" />
+    <Compile Include="..\Bundler.Core\Update\UpdateInstallIdentity.cs" />
+    <Compile Include="..\Bundler.Core\Update\UpdateSignatureVerifier.cs" />
+  </ItemGroup>
+
+</Project>
