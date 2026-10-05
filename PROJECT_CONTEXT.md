@@ -82,7 +82,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
-### 2026-10-05 MIT 许可 + 流式 tar + GUI 级验收（分支 `devin/1791190775-mit-tar-gui`，PR 待建）
+### 2026-10-05 MIT 许可 + 流式 tar + GUI 级验收（PR #22 已并入 `main`，squash `243313b`）
 
 - MIT 许可证落定：`LICENSE`（Copyright (c) 2026 Bundler contributors）+ `src/Directory.Build.props` 补 `PackageLicenseExpression=MIT` 与 Pack 项 + nuspec `<license type="expression">` 与打包文件项；README 许可节同步。
 - `ARCHIVE-OI-06` 消解：`TarEntry` 增 `OpenContent` 流式载荷（`Func<Stream>`），`TarWriter.WriteEntry` 逐条流式写出——2.2 GiB 稀疏文件用例实测通过；约 8 GiB ustar 上限为 `WriteOctal` 确定性 `ArgumentException`；deb/apk 内部整 tar 暂存为已知残余（文档已登记）。
