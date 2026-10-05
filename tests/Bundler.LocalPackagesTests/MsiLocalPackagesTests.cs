@@ -1109,7 +1109,12 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                 () => install.HasExited, TimeSpan.FromMinutes(5), autoCheck: true);
             Assert.True(installDrive.Finished,
                 $"安装向导未走完（已点：{string.Join(" → ", installDrive.Actions)}）");
-            Assert.Contains(installDrive.Actions, a => a.Contains("Install"));
+            // Welcome→LicenseAgreement→InstallDir→VerifyReady→Exit 固定序列：
+            // 三次 Next 页推进 + Install + Finish 各自留痕。
+            Assert.True(installDrive.Actions.Count(a => a.Contains("Next")) >= 3
+                && installDrive.Actions.Any(a => a.Contains("Install"))
+                && installDrive.Actions.Any(a => a.Contains("Finish")),
+                $"许可/目录/就绪/完成页未按序走过（已点：{string.Join(" → ", installDrive.Actions)}）");
             WaitFor.Until(() => install.HasExited,
                 "msiexec did not exit after Finish.", 30);
             Assert.Equal(0, install.ExitCode);
@@ -1124,7 +1129,11 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                 () => remove.HasExited, TimeSpan.FromMinutes(5), autoCheck: true);
             Assert.True(removeDrive.Finished,
                 $"卸载向导未走完（已点：{string.Join(" → ", removeDrive.Actions)}）");
-            Assert.Contains(removeDrive.Actions, a => a.Contains("Remove"));
+            // MaintenanceWelcome→MaintenanceType→VerifyReady→Exit：Remove 与收尾页留痕。
+            Assert.True(removeDrive.Actions.Any(a => a.Contains("Remove"))
+                && removeDrive.Actions.Any(a =>
+                    a.Contains("Finish") || a.Contains("Close")),
+                $"维护流未按序走过移除与完成页（已点：{string.Join(" → ", removeDrive.Actions)}）");
             WaitFor.Until(() => remove.HasExited, "msiexec remove did not exit.", 30);
             Assert.Equal(0, remove.ExitCode);
             Assert.False(File.Exists(installedExe),

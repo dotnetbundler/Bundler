@@ -23,7 +23,7 @@
 `MSI-MT-11` 的本机自动前置为 `MsiLocalPackagesTests`（同上同意闸）与 `tests/Bundler.Tests/WixTests.cs`。
 前者以随机身份真实验证静默 `INSTALLFOLDER` 范围拒绝（根目录本身与 per-machine 根均 1603）、自定义目录安装、PATH 精确追加/卸载还原、开始菜单（含卸载入口）与桌面快捷方式、ARP `InstallLocation`/`Contact`、升级恢复已选目录、静默修复与未知用户文件保留。
 后者断言自定义 UI 表结构与校验动作。
-该脚本不进入真实交互 UI：`InvalidDirDlg` 显示、勾选启动行为、位图显示、缩放/辅助功能仍需人工执行；junction 路径行为已于 2026-10-05 实证（MSI-OI-12），许可/InstallDir/Install/Finish 流转已由交互腿 `MsiLocalPackagesTests.InteractiveWizardInstallsAndRemoves` 自动覆盖，见下表。
+该脚本不进入真实交互 UI：`InvalidDirDlg` 显示、勾选启动行为、位图显示、缩放/辅助功能仍需人工执行；junction 路径行为已于 2026-10-05 实证（MSI-OI-12），Welcome→LicenseAgreement→InstallDir→VerifyReady→Exit 序列已由交互腿 `MsiLocalPackagesTests.InteractiveWizardInstallsAndRemoves` 驱动并断言点击序（Next×3+Install+Finish），见下表。
 
 下列人工用例只在可抛弃 VM/专用测试机运行。
 每轮记录 Git SHA、包版本、MSI/WiX 工具 SHA-256、OS build/架构、账户权限、MSI SHA-256、verbose log 路径、开始/结束快照和清理结果。

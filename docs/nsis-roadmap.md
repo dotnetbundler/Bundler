@@ -486,4 +486,5 @@ NSIS 冻结后的格式顺序与当前进度见 `docs/roadmap.md`。
 
 **外部待验收实证回填（2026-10-05，`0.1.0-alpha.70`，本机机械审校）**：
 
-- **22 内置语言机械层复审**：22 个 `templates/languages/*.nsh` 各 26 条 `LangString` 键集逐位一致、`LANG_*` 常量与 `NsisLanguageCatalog` 映射全对（Persian→`LANG_FARSI` 为设计映射）、占位符集合（`${PRODUCT_NAME}`/`$InstalledVersion` 等）跨语言一致、零条译文与英文原文相同。剩余仅母语/专业审校、RTL 视觉与 DPI 截断（MT-11 真人工项）。
+- **22 内置语言机械层复审**：22 个 `templates/languages/*.nsh` 各 26 条 `LangString` 键集逐位一致、`LANG_*` 常量与 `NsisLanguageCatalog` 映射全对（Persian→`LANG_FARSI` 为设计映射）、占位符集合（`${PRODUCT_NAME}`/`$InstalledVersion` 等）跨语言一致、零条译文与英文原文相同。
+  剩余仅母语/专业审校、RTL 视觉与 DPI 截断（MT-11 真人工项）。
