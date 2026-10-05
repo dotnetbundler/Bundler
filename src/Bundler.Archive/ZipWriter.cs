@@ -19,13 +19,11 @@ internal sealed class ZipEntry
     internal int Mode;
     internal byte[] Content = [];
     /// <summary>
-    /// Optional streamed payload for file entries; when set it takes precedence
-    /// over <see cref="Content"/>. The factory must return a stream reporting
-    /// <see cref="Stream.Length"/>; the writer opens it per entry, streams
-    /// exactly that many bytes through Deflate and disposes it, patching the
-    /// local header with the measured CRC and sizes afterwards — a seekable
-    /// output stream is required. Streamed entries always use Deflate; the
-    /// stored fallback only applies to buffered <see cref="Content"/>.
+    /// 文件条目的可选流式载荷；设置后优先于 <see cref="Content"/>。
+    /// 工厂必须返回报告 <see cref="Stream.Length"/> 的流：写出端逐条打开、
+    /// 按声明长度经 Deflate 分块写入并释放，随后回填本地头的 CRC 与两个尺寸字段——
+    /// 因此要求输出流可寻址。流式条目恒用 Deflate，stored 回退只适用缓冲的
+    /// <see cref="Content"/>。
     /// </summary>
     internal Func<Stream>? OpenContent;
     internal string LinkTarget = "";
@@ -92,6 +90,11 @@ internal static class ZipWriter
             }
             var crc = Crc32(data);
             var localOffset = output.Position;
+            if (localOffset >= uint.MaxValue)
+            {
+                throw new InvalidOperationException(
+                    $"Zip entry '{entry.Name}' starts beyond the classic zip offset limit; Zip64 archives are not supported by this writer.");
+            }
             WriteLocalHeader(output, nameBytes, entry, stored, crc, data.Length, compressed.Length);
             output.Write(compressed, 0, compressed.Length);
             central.Add((name, entry, crc, compressed.Length, data.Length, localOffset, stored));
@@ -103,7 +106,9 @@ internal static class ZipWriter
             WriteCentralHeader(output, Encoding.UTF8.GetBytes(name), entry, crc, compressedLength, size, localOffset, stored);
         }
         var centralSize = output.Position - centralOffset;
-        if (central.Count > ushort.MaxValue || centralOffset > uint.MaxValue || centralSize > uint.MaxValue)
+        // 0xFFFF/0xFFFFFFFF 在 zip 里是 Zip64 哨兵：任何字段顶到该值都会被读成
+        // "真值在 extra field"，因此按 >= 拒绝。
+        if (central.Count >= ushort.MaxValue || centralOffset >= uint.MaxValue || centralSize >= uint.MaxValue)
         {
             throw new InvalidOperationException(
                 "Zip64 archives are not supported by this writer; the payload exceeds the classic zip limits.");
@@ -129,9 +134,8 @@ internal static class ZipWriter
         buffer.Write(nameBytes);
     }
 
-    // The local header needs CRC and both sizes before the payload; streamed
-    // entries write a placeholder first and patch it once the measured values
-    // are known — output bytes stay identical to an upfront-known header.
+    // 本地头要求 CRC 与两个尺寸先于载荷写入；流式条目先写占位头、量出真值后回填——
+    // 输出字节与预先已知长度的写法完全同构。
     private static void WriteStreamedFile(
         Stream output, byte[] copyBuffer,
         List<(string Name, ZipEntry Entry, uint Crc, long Compressed, long Size, long LocalOffset, bool Stored)> central,
@@ -139,7 +143,7 @@ internal static class ZipWriter
     {
         using var content = openContent();
         var contentLength = content.Length;
-        if (contentLength > uint.MaxValue)
+        if (contentLength >= uint.MaxValue)
         {
             throw new InvalidOperationException(
                 $"Zip entry '{entry.Name}' exceeds the classic zip per-entry limit; Zip64 archives are not supported by this writer.");
@@ -150,6 +154,11 @@ internal static class ZipWriter
                 "Streamed zip entries require a seekable output stream so the local header can be patched.");
         }
         var localOffset = output.Position;
+        if (localOffset >= uint.MaxValue)
+        {
+            throw new InvalidOperationException(
+                $"Zip entry '{entry.Name}' starts beyond the classic zip offset limit; Zip64 archives are not supported by this writer.");
+        }
         WriteLocalHeader(output, nameBytes, entry, stored: false, crc: 0, size: 0, compressedSize: 0);
         var dataStart = output.Position;
         var crc = new Crc32Computer();
@@ -170,7 +179,7 @@ internal static class ZipWriter
             }
         }
         var compressedLength = output.Position - dataStart;
-        if (compressedLength > uint.MaxValue)
+        if (compressedLength >= uint.MaxValue)
         {
             throw new InvalidOperationException(
                 $"Zip entry '{entry.Name}' compressed payload exceeds the classic zip limit; Zip64 archives are not supported by this writer.");
@@ -179,8 +188,7 @@ internal static class ZipWriter
         central.Add((name, entry, crc.Value, compressedLength, contentLength, localOffset, false));
     }
 
-    // Rewinds to the CRC field of the just-written local header and fills in
-    // the three measured fields (crc / compressed size / uncompressed size).
+    // 回到刚写的本地头 CRC 字段处，回填三个实测字段（crc/压缩长/原始长）。
     private static void PatchLocalHeader(Stream output, long localOffset, uint crc, long compressedSize, long size)
     {
         var end = output.Position;
@@ -248,8 +256,8 @@ internal static class ZipWriter
         return crc.Value;
     }
 
-    // Incremental table-driven CRC-32 (IEEE 802.3) shared by the buffered and
-    // streamed paths — identical results to the classic bit loop.
+    // 增量式表驱动 CRC-32（IEEE 802.3），缓冲与流式路径共用，
+    // 结果与经典逐位循环完全一致。
     private sealed class Crc32Computer
     {
         private static readonly uint[] Table = BuildTable();

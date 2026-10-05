@@ -426,7 +426,7 @@ public static class ArchiveTests
     }
 
     [Fact]
-    static void StreamedZipEntryBeyondFourGiBIsRejected()
+    static void StreamedZipEntryAtOrBeyondFourGiBIsRejected()
     {
         using var output = new MemoryStream();
         AssertThrows<InvalidOperationException>(
@@ -435,10 +435,10 @@ public static class ArchiveTests
                 new ZipEntry
                 {
                     Name = "f.bin", Kind = ZipEntryKind.File, Mode = 420,
-                    OpenContent = () => new ShortStream(declaredLength: (long)uint.MaxValue + 1, actualBytes: 0)
+                    OpenContent = () => new ShortStream(declaredLength: uint.MaxValue, actualBytes: 0)
                 }
             ]),
-            "a single entry above the classic zip per-entry limit must be rejected");
+            "an entry whose size hits the Zip64 sentinel value must be rejected, not written as a corrupt header");
     }
 
     // Reports Length = declaredLength but only yields actualBytes of content.
