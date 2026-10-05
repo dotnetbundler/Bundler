@@ -18,6 +18,14 @@ internal sealed class ZipEntry
     internal ZipEntryKind Kind;
     internal int Mode;
     internal byte[] Content = [];
+    /// <summary>
+    /// 文件条目的可选流式载荷；设置后优先于 <see cref="Content"/>。
+    /// 工厂必须返回报告 <see cref="Stream.Length"/> 的流：写出端逐条打开、
+    /// 按声明长度经 Deflate 分块写入并释放，随后回填本地头的 CRC 与两个尺寸字段——
+    /// 因此要求输出流可寻址。流式条目恒用 Deflate，stored 回退只适用缓冲的
+    /// <see cref="Content"/>。
+    /// </summary>
+    internal Func<Stream>? OpenContent;
     internal string LinkTarget = "";
 }
 
@@ -35,7 +43,8 @@ internal static class ZipWriter
 
     internal static void Write(Stream output, IEnumerable<ZipEntry> entries)
     {
-        var central = new List<(string Name, ZipEntry Entry, uint Crc, int Compressed, long LocalOffset, bool Stored)>();
+        var central = new List<(string Name, ZipEntry Entry, uint Crc, long Compressed, long Size, long LocalOffset, bool Stored)>();
+        var copyBuffer = new byte[81920];
         foreach (var entry in entries)
         {
             var name = entry.Name;
@@ -47,6 +56,11 @@ internal static class ZipWriter
             if (nameBytes.Length > ushort.MaxValue)
             {
                 throw new ArgumentException($"Zip entry name exceeds the limit: '{name}'.");
+            }
+            if (entry.Kind == ZipEntryKind.File && entry.OpenContent is { } openContent)
+            {
+                WriteStreamedFile(output, copyBuffer, central, entry, name, nameBytes, openContent);
+                continue;
             }
             var data = entry.Kind switch
             {
@@ -76,18 +90,25 @@ internal static class ZipWriter
             }
             var crc = Crc32(data);
             var localOffset = output.Position;
+            if (localOffset >= uint.MaxValue)
+            {
+                throw new InvalidOperationException(
+                    $"Zip entry '{entry.Name}' starts beyond the classic zip offset limit; Zip64 archives are not supported by this writer.");
+            }
             WriteLocalHeader(output, nameBytes, entry, stored, crc, data.Length, compressed.Length);
             output.Write(compressed, 0, compressed.Length);
-            central.Add((name, entry, crc, compressed.Length, localOffset, stored));
+            central.Add((name, entry, crc, compressed.Length, data.Length, localOffset, stored));
         }
 
         var centralOffset = output.Position;
-        foreach (var (name, entry, crc, compressedLength, localOffset, stored) in central)
+        foreach (var (name, entry, crc, compressedLength, size, localOffset, stored) in central)
         {
-            WriteCentralHeader(output, Encoding.UTF8.GetBytes(name), entry, crc, compressedLength, localOffset, stored);
+            WriteCentralHeader(output, Encoding.UTF8.GetBytes(name), entry, crc, compressedLength, size, localOffset, stored);
         }
         var centralSize = output.Position - centralOffset;
-        if (central.Count > ushort.MaxValue || centralOffset > uint.MaxValue || centralSize > uint.MaxValue)
+        // 0xFFFF/0xFFFFFFFF 在 zip 里是 Zip64 哨兵：任何字段顶到该值都会被读成
+        // "真值在 extra field"，因此按 >= 拒绝。
+        if (central.Count >= ushort.MaxValue || centralOffset >= uint.MaxValue || centralSize >= uint.MaxValue)
         {
             throw new InvalidOperationException(
                 "Zip64 archives are not supported by this writer; the payload exceeds the classic zip limits.");
@@ -113,16 +134,78 @@ internal static class ZipWriter
         buffer.Write(nameBytes);
     }
 
+    // 本地头要求 CRC 与两个尺寸先于载荷写入；流式条目先写占位头、量出真值后回填——
+    // 输出字节与预先已知长度的写法完全同构。
+    private static void WriteStreamedFile(
+        Stream output, byte[] copyBuffer,
+        List<(string Name, ZipEntry Entry, uint Crc, long Compressed, long Size, long LocalOffset, bool Stored)> central,
+        ZipEntry entry, string name, byte[] nameBytes, Func<Stream> openContent)
+    {
+        using var content = openContent();
+        var contentLength = content.Length;
+        if (contentLength >= uint.MaxValue)
+        {
+            throw new InvalidOperationException(
+                $"Zip entry '{entry.Name}' exceeds the classic zip per-entry limit; Zip64 archives are not supported by this writer.");
+        }
+        if (!output.CanSeek)
+        {
+            throw new InvalidOperationException(
+                "Streamed zip entries require a seekable output stream so the local header can be patched.");
+        }
+        var localOffset = output.Position;
+        if (localOffset >= uint.MaxValue)
+        {
+            throw new InvalidOperationException(
+                $"Zip entry '{entry.Name}' starts beyond the classic zip offset limit; Zip64 archives are not supported by this writer.");
+        }
+        WriteLocalHeader(output, nameBytes, entry, stored: false, crc: 0, size: 0, compressedSize: 0);
+        var dataStart = output.Position;
+        var crc = new Crc32Computer();
+        var remaining = contentLength;
+        using (var deflate = new DeflateStream(output, CompressionLevel.Optimal, leaveOpen: true))
+        {
+            while (remaining > 0)
+            {
+                var read = content.Read(copyBuffer, 0, (int)Math.Min(copyBuffer.Length, remaining));
+                if (read == 0)
+                {
+                    throw new EndOfStreamException(
+                        $"Zip entry '{entry.Name}' stream ended after {contentLength - remaining} of {contentLength} bytes.");
+                }
+                crc.Update(copyBuffer, 0, read);
+                deflate.Write(copyBuffer, 0, read);
+                remaining -= read;
+            }
+        }
+        var compressedLength = output.Position - dataStart;
+        if (compressedLength >= uint.MaxValue)
+        {
+            throw new InvalidOperationException(
+                $"Zip entry '{entry.Name}' compressed payload exceeds the classic zip limit; Zip64 archives are not supported by this writer.");
+        }
+        PatchLocalHeader(output, localOffset, crc.Value, compressedLength, contentLength);
+        central.Add((name, entry, crc.Value, compressedLength, contentLength, localOffset, false));
+    }
+
+    // 回到刚写的本地头 CRC 字段处，回填三个实测字段（crc/压缩长/原始长）。
+    private static void PatchLocalHeader(Stream output, long localOffset, uint crc, long compressedSize, long size)
+    {
+        var end = output.Position;
+        output.Position = localOffset + 14;
+        using (var patch = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true))
+        {
+            patch.Write(crc);
+            patch.Write((uint)compressedSize);
+            patch.Write((uint)size);
+        }
+        output.Position = end;
+    }
+
     private static void WriteCentralHeader(
-        Stream output, byte[] nameBytes, ZipEntry entry, uint crc, long compressedSize, long localOffset,
+        Stream output, byte[] nameBytes, ZipEntry entry, uint crc, long compressedSize, long size, long localOffset,
         bool stored)
     {
-        var size = entry.Kind switch
-        {
-            ZipEntryKind.File => entry.Content.Length,
-            ZipEntryKind.Symlink => Encoding.UTF8.GetByteCount(entry.LinkTarget),
-            _ => 0
-        };
         // Unix mode (S_IF* | perms) in the high word of external attributes;
         // low word stays zero so DOS-attribute tools see a plain file.
         var unixMode = entry.Kind switch
@@ -168,15 +251,44 @@ internal static class ZipWriter
 
     private static uint Crc32(byte[] data)
     {
-        var crc = 0xFFFFFFFFu;
-        foreach (var b in data)
+        var crc = new Crc32Computer();
+        crc.Update(data, 0, data.Length);
+        return crc.Value;
+    }
+
+    // 增量式表驱动 CRC-32（IEEE 802.3），缓冲与流式路径共用，
+    // 结果与经典逐位循环完全一致。
+    private sealed class Crc32Computer
+    {
+        private static readonly uint[] Table = BuildTable();
+        private uint _crc = 0xFFFFFFFFu;
+
+        internal void Update(byte[] buffer, int offset, int count)
         {
-            crc ^= b;
-            for (var i = 0; i < 8; i++)
+            var crc = _crc;
+            var end = offset + count;
+            for (var i = offset; i < end; i++)
             {
-                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
+                crc = (crc >> 8) ^ Table[(crc ^ buffer[i]) & 0xFF];
             }
+            _crc = crc;
         }
-        return ~crc;
+
+        internal uint Value => ~_crc;
+
+        private static uint[] BuildTable()
+        {
+            var table = new uint[256];
+            for (var i = 0u; i < 256; i++)
+            {
+                var c = i;
+                for (var k = 0; k < 8; k++)
+                {
+                    c = (c & 1) != 0 ? (c >> 1) ^ 0xEDB88320u : c >> 1;
+                }
+                table[i] = c;
+            }
+            return table;
+        }
     }
 }

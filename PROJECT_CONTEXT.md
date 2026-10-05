@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-05
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.70`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.71`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -81,6 +81,14 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-05 zip 载荷流式写出（PR #24）
+
+- `ZipEntry` 新增 `Func<Stream>? OpenContent`（优先于 `Content`，契约与 `TarEntry` 一致）：
+  流式条目恒 Deflate——本地头先写零值占位、增量 CRC-32 随写边算、末尾回填三字段，输出字节与预知长度写法同构，不用 data descriptor。
+- `ArchiveTree.ToZipEntry` 文件来源改 `FileStream` 工厂；stored 优化仅留缓冲路径。
+- 单条目上限由 ~2GiB 内存顶升至经典 zip 4GiB 格式顶；Review 修复：顶到 Zip64 哨兵值（0xFFFFFFFF/0xFFFF）的字段按 `>=` 统一确定性拒绝（尺寸/压缩长/本地偏移/中央目录三项/条目数），新注释全中文。
+- 验证：本机 build 0W/0E、`Bundler.Tests` 288/249P/0F/39S（+4 新用例，含 2.2GiB 稀疏文件实产 zip 经 ZipArchive 全量读回验回填 CRC）、`ArchiveIntegrationTests` 14/14、pack 16 包 `alpha.71`。
 
 ### 2026-10-05 外部待验收实证清收（已压缩合并 `108041a`，PR #23）
 
