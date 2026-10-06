@@ -86,6 +86,13 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-06 main 回归轮 + PR #28 压缩合并（squash `8b1e02a`）
+
+- main `dbbbf91` 四宿主子会话回归：全量（build 0W/0E + pack 19 nupkg + Tests/ApiTests/IT 全绿 0F）+ 样品（全格式产出 + UPDATE 旁车齐）+ 更新（签验负例/引导件换包回滚/差分/installer-replay/file:// feed）+ 联合交叉矩阵（互产互装）全过。
+- 联合实证面：linux 产 nsis 在 win `/S` 真装真卸；linux/win 产 musl apk 在 alpine 实装跑通；win 产 deb/rpm 在 debian/fedora 装跑；跨 RID 载荷按 PT_INTERP 边界结构断言；同宿主重产 byte-identical 实证（跨宿主差异全归因 SDK 构建非确定面/ECDSA 随机 k/时间戳，非写入器缺陷）。
+- 唯一真缺陷修复（PR #28）：样品 deb/rpm/apk 未声明 .NET 运行时依赖（裸容器装后探针 rc=134 缺 libicu）→ `formats/*.props` 默认声明 Depends/Requires（deb 含 `libicu76|74|72|70|67|66` 候选子句、rpm glibc 组、apk 补 `icu-libs`），实证 apt/dnf 自动解析后探针 rc=0；Review 一轮发现（libicu66/67 未覆盖）已修。
+- 版本不变：`alpha.74`（样品 props 不进 nupkg，无包内容变化）。
+
 ### 2026-10-06 PR #27 压缩合并并入 main（squash `4345670`）
 
 - UPDATE 自更新模块全量落地：UPDATE-1..6 全部实现并四宿主实证，冻结基线 `0.1.0-alpha.74`。
