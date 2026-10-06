@@ -319,13 +319,13 @@ public static class UpdaterClientTests
         try
         {
             var install = InstallWithSidecar(directory, out var material, out var feedDir);
-            // 清单 url 字段按 URL 转义存储——本地解析须还原真实文件名（format=app 件名含空格）。
+            // 清单 url 字段按 URL 转义存储——本地解析须还原真实文件名（真实触发面=app 运输件名含空格；机制与 format 无关）。
             var artifactFile = WriteZipArtifact(feedDir, "Hello Bundler App.app.zip", "v2-content");
             var sha = Sha256Hex(artifactFile);
             var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifactFile, material));
             WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64", Format = "app",
+                RuntimeIdentifier = "linux-x64", Format = "zip",
                 Url = "Hello%20Bundler%20App.app.zip", File = "Hello Bundler App.app.zip",
                 Sha256 = sha, Size = new FileInfo(artifactFile).Length, Signature = sig,
             });
