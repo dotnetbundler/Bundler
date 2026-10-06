@@ -86,6 +86,13 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-06 main `2bec10e` R3 四宿主回归 + PR #29 压缩合并（squash `be58d94`）
+
+- 四段全项复跑：全量（四宿主 build 0W/0E + pack 19 nupkg + Tests/ApiTests/LocalPackages/IT 全 0F：linux/alpine 333(294P/39S)+10+9S+176、win 333(317P/16S)+7+9P 真装+176、mac 294P/39S+8+9S+176）+ 样品（全格式 + UPDATE 侧车齐）+ 更新（引导件 apply/rollback rc=0、签验负例、file-swap E2E、差分 mac 81.7%/linux 缓存腿 100% 复用、nsis `/UPDATE`+msi major upgrade）+ 联合互产互装全实证（deb/rpm 三产方×debian/fedora 解析安装 6/6、apk 三产方 alpine 实装 7/7、nsis 两产方 win `/S` 2/2、osx-arm64 .app mac 实机直跑 rc=0；musl/osx apphost 跨产方字节一致）。
+- 真缺陷二修（PR #29）：Range 拒供差分不落全量（`TryDownloadDeltaAsync` 逐段 `catch(UpdateException)`→删残件→`return false` 回落，违反 update-roadmap.md:104 契约）+ 本地 feed 转义件名 `%20` 字面拼接 Abort 134（`ResolveArtifactLocation` 本地分支 `Uri.UnescapeDataString`）；各配回归测试；mac 实机无绕行 E2E 复验全通，linux/mac 双侧单测 335(296P/39S)+IT 0F。
+- 版本推进 `alpha.75`（`Bundler.Updater` 库改动需新包号触达——Devin Review 发现成立后修）。
+- 已裁决不做：`.bundler-backup` 挪位+孤儿清理（备份固定一份不累积、清理无法完备）；`apk` 别名保留给未来 Android，CLI `apk` 别名待删统名 `alpineapk`（未动工）。
+
 ### 2026-10-06 main `53303ae` 第二轮四宿主回归（全绿零缺陷）
 
 - 四段全项复跑：全量（四宿主 build 0W/0E + pack 19 nupkg + Tests/ApiTests/LocalPackages/IT 基线持平 0F：linux 333/176、alpine 333/176、mac 333/176、win 333/176+LocalPackages 9P 真装真卸）+ 样品（全格式 + UPDATE 旋钮组侧车齐）+ 更新（引导件 apply/rollback rc=0、nsis `/UPDATE` 静默语义 + msi major upgrade 实跑）+ 联合互产互装交叉矩阵全过。
