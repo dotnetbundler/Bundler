@@ -84,9 +84,12 @@ internal static class BootstrapPlan
         {
             throw new UsageException($"payload directory '{options.PayloadDirectory}' does not exist.");
         }
+        // install↔payload 同址/互嵌同样是抹数据的形状：备份移走后 swap 会以空载荷覆盖再删源，
+        // 等值或载荷为安装祖先时连备份一并清掉——必须在动备份前拒绝。
         if (payloadDir is not null &&
             (SameOrInside(backupDir, installDir) || SameOrInside(backupDir, payloadDir) ||
-             SameOrInside(installDir, backupDir) || SameOrInside(payloadDir, backupDir)))
+             SameOrInside(installDir, backupDir) || SameOrInside(payloadDir, backupDir) ||
+             SameOrInside(installDir, payloadDir) || SameOrInside(payloadDir, installDir)))
         {
             throw new UsageException("backup/install/payload directories must not nest inside each other.");
         }
@@ -260,6 +263,10 @@ internal static class BootstrapPlan
         if (payloadPath is null || !File.Exists(payloadPath))
         {
             throw new UsageException("file-swap payload must be a file.");
+        }
+        if (SameOrInside(payloadPath, installPath))
+        {
+            throw new UsageException("install and payload must not be the same file.");
         }
         log($"bundler-updater: backup '{installPath}' → '{backupPath}'");
         if (File.Exists(backupPath))

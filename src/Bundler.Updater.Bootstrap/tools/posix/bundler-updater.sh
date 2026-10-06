@@ -127,6 +127,16 @@ for _p in "$INSTALL_DIR" "$PAYLOAD_DIR"; do
     esac
 done
 
+# 载荷与安装同址或互嵌同样是抹数据的形状（备份移走后 swap 会以空载荷覆盖再删源）——与 AOT 侧同拒。
+if [ -n "$PAYLOAD_DIR" ]; then
+    case "$INSTALL_DIR" in
+        "$PAYLOAD_DIR"|"$PAYLOAD_DIR"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+    esac
+    case "$PAYLOAD_DIR" in
+        "$INSTALL_DIR"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+    esac
+fi
+
 # 保留目录与安装/载荷/备份目录同址或互嵌同样是抹数据的形状——与 AOT 侧 SameOrInside 同拒。
 if [ -n "$RETAIN_DIR" ]; then
     _r="$RETAIN_DIR"

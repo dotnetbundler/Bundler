@@ -500,6 +500,50 @@ public static class UpdateTests
                     PayloadDirectory = payload,
                     RetainBackupDirectory = install + Path.DirectorySeparatorChar
                 }, lines.Add));
+
+        // 载荷与安装同址 → 拒绝（备份移走后 swap 以空载荷覆盖再删源，静默抹掉全部）。
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = install + Path.DirectorySeparatorChar
+                }, lines.Add));
+
+        // 载荷是安装的祖先目录 → 拒绝（MoveTree 退化复制后删源父级，连备份一起抹）。
+        var outer = Path.Combine(directory, "outer");
+        var nestedInstall = Path.Combine(outer, "install");
+        Directory.CreateDirectory(nestedInstall);
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = nestedInstall,
+                    PayloadDirectory = outer
+                }, lines.Add));
+
+        // 安装目录嵌进载荷 → 拒绝（反向同形）。
+        var holder = Path.Combine(directory, "holder");
+        var nestedPayload = Path.Combine(holder, "payload");
+        Directory.CreateDirectory(nestedPayload);
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = holder,
+                    PayloadDirectory = nestedPayload
+                }, lines.Add));
+
+        // 文件级换包：载荷与安装同件 → 拒绝。
+        var installFile = Path.Combine(directory, "app.bin");
+        File.WriteAllText(installFile, "x");
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = installFile,
+                    PayloadDirectory = installFile
+                }, lines.Add));
     }
 
     [Fact]
