@@ -49,6 +49,18 @@
 
 ## 4. 阶段实施证据
 
+### 2026-10-06 复审修复轮（Devin Review 8 bug+5 flag 全部属实处置）
+
+- `.app` 目录件修复：清单发射前经自家 `ZipWriter` 产 `<name>.app.zip` 运输件（exec 位/软链/确定性全保），签名/块表/尺寸/哈希全对运输件，清单记 `format=app`——此前目录件不进清单致更新完全不可达。
+- 清单 `url` 改相对清单所在目录路径（`file` 恒为裸名）：制品按 `<rid>/<format>/` 分目录落盘时裸名解析已错。
+- 引导件工具改 Bundler.Core 内嵌资源供应：`updater/<rid>/` 与 `updater/posix/` 清单资源解出兜底，`BootstrapperDirectory` 旋钮保留开发覆盖——MSBuild 包/CLI/项目直引/NuGet 全形态可达，删 tasks/updater 打包与 CLI updater/ 复制双侧通道。
+- Windows 宿主禁降级 POSIX 脚本：per-RID 二进制缺件时确定性拒绝，不再把 `.sh` 改名 `.exe` 注入。
+- `nsis`/`msi` installer-replay 格式载荷免引导件（旁车照写）；归档注入前先剔除输入树自带同名 `bundler-update.json`/引导件条目（同构去重）。
+- `BootstrapPlan` 崩溃恢复先于安装存在性检查（上轮死在备份与换包之间时 install 缺失也可自愈）；新增文件级语义——安装目标为文件（AppImage 单件）时走 `<file>.bundler-{swap,backup}` 单件备份/换入/回滚，宿主目录无关文件原样保留；`tools/posix/bundler-updater.sh` 同构改造并删除根 `tools/` 陈旧副本。
+- 身份旁车 `TryRead` 增 `.app/Contents/` 探测；`UpdateVersion` 整串剥离 `+` 元数据并改 semver 数值段比较（`beta.10>beta.2`）；下载 `.part`→已存在目标先删再移。
+- 测试 +11 全绿：win 禁降级/内嵌兜底/.app zip+相对 url/marker 缺 install 恢复/文件级换包+回滚/归档去重/semver 段比较/Contents 探测/重复下载/AppImage 文件级真 E2E（linux 宿主真 AOT 引导件）。
+- per-RID 引导件随新 `BootstrapPlan` 重建：linux-x64/linux-musl-x64 本机已产入库；win-x64/osx-x64/osx-arm64 待宿主子会话重建（UPDATE-3 同法）。
+
 ### 2026-10-05 整模块真实端到端功能测试
 MSBuild 真消费链全通：`update-keygen` 产钥→`HelloBundlerApp` 经 `BundlerUpdate*` 真旋钮 publish 出 zip+清单+`.sig`+`.blockmap`（zip 载荷内含侧车+本 RID 引导件）→解包装 v1→feed 发 v1.1.0→`UpdateClient` 全量下载+验签+引导换包→`--rollback` 逐字节还原 v1（备份保留）→feed 发 v1.2.0→**差分实腿 83% 复用**（38.2M 件：31.5M 本地复用/6.7M Range 拉取）→换包后安装目录与 v3 zip 逐文件 sha256 一致。
 功能测试暴露两缺陷并当场修复：MSBuild 项目引用模式下任务程序集旁缺 `updater/` 工具树（改 AfterBuild Copy 落 `updater/`，None CopyTo* 会经项目引用流进消费方载荷故弃用）；`UpdateBootstrapper` 的约定目录探测误用 `AppContext.BaseDirectory`（MSBuild 节点里它是 SDK 宿主目录）改 `Assembly.Location`；`UpdateClient` 对相对 `installDirectory` 入库即 `GetFullPath` 绝对化（引导件以自身目录为 cwd）。

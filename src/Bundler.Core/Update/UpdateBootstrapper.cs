@@ -3,8 +3,9 @@ using System.Runtime.InteropServices;
 namespace DotNet.Bundler.Core.Update;
 
 /// <summary>
-/// 更新引导件的随包注入：按 RID 在工具目录里选 per-RID Native AOT 件，
-/// 找不到时降级 POSIX shell 实现——老宿主（裸 POSIX）天然走脚本件。
+/// 更新引导件的随包注入：按 RID 选 per-RID Native AOT 件，非 Windows 宿主可降级 POSIX shell 件——
+/// 老宿主（裸 POSIX）天然走脚本件。工具源二选一：显式 <see cref="UpdateBundleConfiguration.BootstrapperDirectory"/>
+/// 工具目录（开发覆盖），或 Bundler.Core 程序集内嵌资源（打包/直引/NuGet 全形态可达）。
 /// </summary>
 public static class UpdateBootstrapper
 {
@@ -16,7 +17,7 @@ public static class UpdateBootstrapper
 
     /// <summary>
     /// 把引导件复制进 <paramref name="targetDirectory"/>；返回目标文件名，未找到任何件时返回 null。
-    /// 选取顺序：<c>&lt;dir&gt;/&lt;rid&gt;/bundler-updater[.exe]</c> → <c>&lt;dir&gt;/posix/bundler-updater.sh</c>。
+    /// 选取顺序：<c>&lt;dir&gt;/&lt;rid&gt;/bundler-updater[.exe]</c> →（非 win）<c>&lt;dir&gt;/posix/bundler-updater.sh</c>。
     /// </summary>
     public static string? Inject(string targetDirectory, UpdateBundleConfiguration update,
         string runtimeIdentifier)
@@ -26,53 +27,72 @@ public static class UpdateBootstrapper
         {
             var destination = Path.Combine(targetDirectory, fileName);
             File.Copy(source, destination, overwrite: true);
-            if (source.EndsWith(".sh", StringComparison.Ordinal))
-            {
-                // POSIX 脚本件：改名进包时保留执行位。
-                Chmod755(destination);
-            }
-            else
-            {
-                Chmod755(destination);
-            }
+            Chmod755(destination);
             return fileName;
         }
         return null;
     }
 
-    /// <summary>仅解析选件路径，不落盘——供校验与测试。</summary>
+    /// <summary>仅解析选件路径，不落盘——供校验与测试（内嵌件解析为临时解出路径）。</summary>
     public static bool TryResolve(UpdateBundleConfiguration update, string runtimeIdentifier,
         out string source)
     {
-        // 约定目录：显式配置优先，否则探测本程序集旁的 updater/（MSBuild tasks 目录与 CLI 根同型；
-        // 不能用 AppContext.BaseDirectory——MSBuild 任务进程里它是 SDK 宿主目录而非程序集目录）。
-        var directory = update.BootstrapperDirectory;
-        if (directory is not { Length: > 0 })
+        var fileName = FileNameFor(runtimeIdentifier);
+        var isWindows = runtimeIdentifier.StartsWith("win", StringComparison.OrdinalIgnoreCase);
+        // Windows 宿主绝不能拿到 POSIX 脚本（.sh 改名 .exe 无法执行）——只认 per-RID 二进制。
+        if (update.BootstrapperDirectory is { Length: > 0 } directory)
         {
-            var probe = Path.GetDirectoryName(typeof(UpdateBootstrapper).Assembly.Location);
-            if (probe is { Length: > 0 } && Directory.Exists(Path.Combine(probe, "updater")))
-            {
-                directory = Path.Combine(probe, "updater");
-            }
-        }
-        if (directory is { Length: > 0 })
-        {
-            var perRid = Path.Combine(directory, runtimeIdentifier,
-                FileNameFor(runtimeIdentifier));
+            var perRid = Path.Combine(directory, runtimeIdentifier, fileName);
             if (File.Exists(perRid))
             {
                 source = perRid;
                 return true;
             }
             var script = Path.Combine(directory, "posix", "bundler-updater.sh");
-            if (File.Exists(script))
+            if (!isWindows && File.Exists(script))
             {
                 source = script;
                 return true;
             }
+            source = "";
+            return false;
+        }
+        // 内嵌资源兜底：updater/<rid>/<name> → updater/posix/bundler-updater.sh，
+        // 解到临时缓存目录供 File.Copy/归档条目引用。
+        if (TryExtractEmbedded($"updater/{runtimeIdentifier}/{fileName}", out source))
+        {
+            return true;
+        }
+        if (!isWindows &&
+            TryExtractEmbedded("updater/posix/bundler-updater.sh", out source))
+        {
+            return true;
         }
         source = "";
         return false;
+    }
+
+    // 引导件工具已内嵌进本程序集（Core csproj EmbeddedResource）——任何消费形态都不依赖盘符约定。
+    private static bool TryExtractEmbedded(string resourceName, out string path)
+    {
+        using (var stream = typeof(UpdateBootstrapper).Assembly
+                   .GetManifestResourceStream(resourceName))
+        {
+            if (stream is null)
+            {
+                path = "";
+                return false;
+            }
+            var destination = Path.Combine(
+                Path.GetTempPath(), "bundler-updater", resourceName.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            using (var output = File.Create(destination))
+            {
+                stream.CopyTo(output);
+            }
+            path = destination;
+            return true;
+        }
     }
 
     // netstandard2.0 无 Unix mode API；Windows 上权限位由文件系统无关化、跳过。

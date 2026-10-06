@@ -32,16 +32,21 @@ public static class UpdatePayloadStaging
         return item with { InputDirectory = staged };
     }
 
-    // 旁车+引导件都写进“最终进包的载荷目录”：旁车记录身份，引导件是换包执行体。
+    // 旁车+引导件写进“最终进包的载荷目录”：旁车记录身份，引导件是换包执行体。
+    // installer-replay 格式（nsis/msi）更新=重跑安装器，载荷不需要换包执行体。
     private static void InjectPayloadFiles(
         string payloadRoot, UpdateBundleConfiguration update, BundlePlanItem item)
     {
         var rid = item.Target.RuntimeIdentifier;
         UpdateIdentitySidecar.WriteIfEnabled(payloadRoot, update, item.Format, rid);
+        if (item.Format is PackageFormat.Nsis or PackageFormat.Msi)
+        {
+            return;
+        }
         if (UpdateBootstrapper.Inject(payloadRoot, update, rid) is null)
         {
             throw new InvalidOperationException(
-                $"BundlerUpdate enabled but no bootstrapper found for '{rid}' — expected updater/<rid>/ or updater/posix/ beside the task assembly or BundlerUpdateBootstrapperDirectory.");
+                $"BundlerUpdate enabled but no bootstrapper found for '{rid}' — no updater/{rid}/ binary is embedded in Bundler.Core and BundlerUpdateBootstrapperDirectory was not set.");
         }
     }
 

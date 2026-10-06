@@ -40,10 +40,6 @@
     <ProjectReference Include="..\Bundler.AppImage\Bundler.AppImage.csproj" Condition="'$(BundlerHostLinux)' == 'true'" />
     <ProjectReference Include="..\Bundler.AlpineApk\Bundler.AlpineApk.csproj" />
     <ProjectReference Include="..\Bundler.Update\Bundler.Update.csproj" />
-    <!-- 引导件随包：updater/<rid>/ 与 updater/posix/ 落到 CLI 根，供包内注入时按 RID 选件。 -->
-    <Content Include="..\Bundler.Updater.Bootstrap\tools\**"
-             CopyToOutputDirectory="PreserveNewest"
-             Link="updater\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Bundler.Tests" />

@@ -1,6 +1,7 @@
 using System.Runtime.Serialization.Json;
 using System.Security.Cryptography;
 using System.Text;
+using DotNet.Bundler.Archive;
 using DotNet.Bundler.Core.Update;
 
 namespace DotNet.Bundler.Update;
@@ -48,25 +49,45 @@ public static class UpdateManifestEmitter
             Channel = channel,
         };
         var produced = new List<string>();
-        // 产物 url 一律裸文件名——消费端按清单文件所在目录解析（Tauri latest.json 同型）。
+        // 产物 url = 相对清单所在目录（输出根）的路径——制品按 <rid>/<format>/ 分目录落盘；
+        // file 恒为裸文件名，仅作下载落点文件名。
 
         foreach (var artifact in artifacts)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!CoveredFormats.Contains(artifact.Format) || !File.Exists(artifact.Path))
+            if (!CoveredFormats.Contains(artifact.Format))
+            {
+                continue;
+            }
+            // .app 是目录件：用自家 ZipWriter 打成 <name>.app.zip 运输件（保 exec 位与软链），
+            // 签名/块表/尺寸/哈希全部对运输件——客户端 format=app → 解包 → 单顶层 .app 换包。
+            var artifactFile = artifact.Path;
+            if (artifact.Format == PackageFormat.App && Directory.Exists(artifact.Path))
+            {
+                artifactFile = artifact.Path + ".zip";
+                var entries = ArchiveTree.CollectDirectory(
+                    artifact.Path, Path.GetFileName(artifact.Path), NullBundleLogger.Instance);
+                using (var stream = new FileStream(
+                           artifactFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    ZipWriter.Write(stream, entries.Select(ArchiveTree.ToZipEntry));
+                }
+                produced.Add(artifactFile);
+            }
+            if (!File.Exists(artifactFile))
             {
                 continue;
             }
             var signature = await Task.Run(
-                () => EcdsaSigner.SignFile(artifact.Path, key), cancellationToken);
-            var sigPath = artifact.Path + ".sig";
+                () => EcdsaSigner.SignFile(artifactFile, key), cancellationToken);
+            var sigPath = artifactFile + ".sig";
             File.WriteAllBytes(sigPath, signature);
             produced.Add(sigPath);
 
             // block-map 差分块表：定宽 64KiB + sha256 序列表，客户端按哈希匹配复用未变块。
-            var blockMapPath = artifact.Path + UpdateBlockMap.FileSuffix;
+            var blockMapPath = artifactFile + UpdateBlockMap.FileSuffix;
             var blockMap = await Task.Run(
-                () => UpdateBlockMap.ComputeFile(artifact.Path), cancellationToken);
+                () => UpdateBlockMap.ComputeFile(artifactFile), cancellationToken);
             var serializer = new DataContractJsonSerializer(typeof(UpdateBlockMap));
             using (var stream = File.Create(blockMapPath))
             {
@@ -74,17 +95,18 @@ public static class UpdateManifestEmitter
             }
             produced.Add(blockMapPath);
 
-            var fileName = Path.GetFileName(artifact.Path);
+            var relativeUrl = RelativeUrl(configuration.OutputDirectory, artifactFile);
+            var fileName = Path.GetFileName(artifactFile);
             feed.Artifacts.Add(new UpdateFeedArtifact
             {
                 RuntimeIdentifier = artifact.RuntimeIdentifier,
                 Format = artifact.Format.ToString().ToLowerInvariant(),
-                Url = fileName,
+                Url = relativeUrl,
                 File = fileName,
-                Size = new FileInfo(artifact.Path).Length,
-                Sha256 = await Task.Run(() => Sha256Hex(artifact.Path), cancellationToken),
+                Size = new FileInfo(artifactFile).Length,
+                Sha256 = await Task.Run(() => Sha256Hex(artifactFile), cancellationToken),
                 Signature = Convert.ToBase64String(signature),
-                BlockMap = fileName + UpdateBlockMap.FileSuffix,
+                BlockMap = relativeUrl + UpdateBlockMap.FileSuffix,
             });
         }
 
@@ -101,6 +123,16 @@ public static class UpdateManifestEmitter
         }
         produced.Add(feedPath);
         return produced;
+    }
+
+    // netstandard2.0 无 Path.GetRelativePath——URI 相对化产出 '/' 分隔的 url。
+    private static string RelativeUrl(string feedDirectory, string artifactFile)
+    {
+        var feedUri = new Uri(
+            Path.GetFullPath(feedDirectory).TrimEnd(Path.DirectorySeparatorChar) +
+            Path.DirectorySeparatorChar);
+        return Uri.UnescapeDataString(
+            feedUri.MakeRelativeUri(new Uri(Path.GetFullPath(artifactFile))).ToString());
     }
 
     private static string Sha256Hex(string path)

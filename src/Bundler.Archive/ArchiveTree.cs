@@ -55,6 +55,21 @@ internal static class ArchiveTree
         return entries;
     }
 
+    /// <summary>
+    /// 把任意已成型目录收进 &lt;stem&gt;/ 条目集（模式与软链规则同 <see cref="Build"/>）——
+    /// 供更新清单把 .app 目录件打成可分发 zip 运输件。
+    /// </summary>
+    internal static List<Entry> CollectDirectory(string root, string stem, IBundleLogger log)
+    {
+        var entries = new List<Entry>
+        {
+            new() { ArchivePath = stem, Kind = TarEntryKind.Directory, Mode = 493 /* 0755 */ }
+        };
+        Collect(root, stem + "/", entries, log);
+        entries.Sort((a, b) => StringComparer.Ordinal.Compare(a.ArchivePath, b.ArchivePath));
+        return entries;
+    }
+
     private static void Collect(string directory, string relativePrefix, List<Entry> entries, IBundleLogger log)
     {
         foreach (var dir in Directory.GetDirectories(directory).OrderBy(d => d, StringComparer.Ordinal))

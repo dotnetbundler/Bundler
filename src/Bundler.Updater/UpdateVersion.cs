@@ -24,17 +24,19 @@ internal readonly struct UpdateVersion : IComparable<UpdateVersion>
             return false;
         }
         var core = text!.Trim();
+        // build metadata（+之后全部）不参与比较——先整串截掉再拆预发布，
+        // 否则 1.2.3-beta+build2 会把 +build 留在预发布段里当差异。
+        var plus = core.IndexOf('+');
+        if (plus >= 0)
+        {
+            core = core.Substring(0, plus);
+        }
         var prerelease = "";
         var dash = core.IndexOf('-');
         if (dash >= 0)
         {
             prerelease = core.Substring(dash + 1);
             core = core.Substring(0, dash);
-        }
-        var plus = core.IndexOf('+'); // build metadata 不参与比较
-        if (plus >= 0)
-        {
-            core = core.Substring(0, plus);
         }
         var parts = core.Split('.');
         if (parts.Length < 2 || parts.Length > 3 ||
@@ -60,9 +62,42 @@ internal readonly struct UpdateVersion : IComparable<UpdateVersion>
         if (core != 0) return core;
         core = Patch.CompareTo(other.Patch);
         if (core != 0) return core;
-        // 正式版高于同核预发布；都是预发布按字符串序（够用粒度）。
+        // semver 优先级：正式版高于同核预发布；都是预发布按段比——
+        // 数值段比数值、数值段低于字母段、前缀相同短列更低（beta.10 > beta.2）。
         if (Prerelease.Length == 0) return other.Prerelease.Length == 0 ? 0 : 1;
         if (other.Prerelease.Length == 0) return -1;
-        return string.CompareOrdinal(Prerelease, other.Prerelease);
+        return ComparePrerelease(Prerelease, other.Prerelease);
+    }
+
+    private static int ComparePrerelease(string left, string right)
+    {
+        var a = left.Split('.');
+        var b = right.Split('.');
+        for (var i = 0; i < a.Length || i < b.Length; i++)
+        {
+            if (i >= a.Length) return -1;
+            if (i >= b.Length) return 1;
+            var numericA = int.TryParse(a[i], out var numberA);
+            var numericB = int.TryParse(b[i], out var numberB);
+            if (numericA && numericB)
+            {
+                var numeric = numberA.CompareTo(numberB);
+                if (numeric != 0) return numeric;
+            }
+            else if (numericA)
+            {
+                return -1;
+            }
+            else if (numericB)
+            {
+                return 1;
+            }
+            else
+            {
+                var ordinal = string.CompareOrdinal(a[i], b[i]);
+                if (ordinal != 0) return ordinal;
+            }
+        }
+        return 0;
     }
 }

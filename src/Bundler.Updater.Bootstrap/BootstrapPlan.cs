@@ -26,12 +26,61 @@ internal static class BootstrapPlan
             : null;
         var backupDir = Path.GetFullPath(
             options.BackupDirectory ?? installDir.TrimEnd('/', '\\') + ".bundler-backup");
+        var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
+
+        if (!options.Rollback && payloadDir is null)
+        {
+            throw new UsageException("--payload is required unless --rollback.");
+        }
+
+        if (options.WaitPid is { } pid)
+        {
+            WaitForExit(pid, options.WaitTimeoutSeconds, log);
+        }
+
+        // 崩溃恢复先于存在性检查：上轮死在备份与换包之间时安装目标可能缺失/半成品，
+        // 先按 marker 还原再谈 install 在不在。
+        var recovered = false;
+        if (File.Exists(markerPath))
+        {
+            log("bundler-updater: interrupted swap detected, restoring backup first");
+            if (File.Exists(backupDir))
+            {
+                if (File.Exists(installDir))
+                {
+                    File.Delete(installDir);
+                }
+                File.Move(backupDir, installDir);
+            }
+            else if (Directory.Exists(backupDir))
+            {
+                if (Directory.Exists(installDir))
+                {
+                    Directory.Delete(installDir, recursive: true);
+                }
+                MoveTree(backupDir, installDir, log);
+            }
+            else
+            {
+                throw new UpdateRejectedException(
+                    $"swap marker '{markerPath}' exists but backup '{backupDir}' is missing — cannot recover safely.");
+            }
+            File.Delete(markerPath);
+            recovered = true;
+        }
+
+        // 文件级语义：安装目标是单文件（AppImage 单件）或回滚备份是文件——
+        // 同协议、粒度换成文件：marker/备份为 <file>.bundler-{swap,backup}。
+        if (File.Exists(installDir) || (options.Rollback && File.Exists(backupDir)))
+        {
+            return ApplyFile(options, log, installDir, payloadDir, backupDir, markerPath, recovered);
+        }
 
         if (!Directory.Exists(installDir))
         {
             throw new UsageException($"install directory '{installDir}' does not exist.");
         }
-        if (!options.Rollback && (payloadDir is null || !Directory.Exists(payloadDir)))
+        if (!options.Rollback && !Directory.Exists(payloadDir!))
         {
             throw new UsageException($"payload directory '{options.PayloadDirectory}' does not exist.");
         }
@@ -47,37 +96,12 @@ internal static class BootstrapPlan
             throw new UsageException("backup and install directories must not nest inside each other.");
         }
 
-        if (options.WaitPid is { } pid)
-        {
-            WaitForExit(pid, options.WaitTimeoutSeconds, log);
-        }
-
         // macOS .app 三项门禁（签名完好/身份连续/剥 quarantine）：动备份前拒绝，零变更安全。
         // 回滚不验——备份目录是上次换包前的自家产物，非外来载荷。
         if (!options.Rollback && OperatingSystem.IsMacOS() &&
             payloadDir is not null && MacAppGate.LooksLikeAppBundle(payloadDir))
         {
             MacAppGate.CheckAndStrip(installDir, payloadDir, log);
-        }
-
-        // 崩溃恢复：marker 存在即上一轮死在备份与换包之间——安装目录可能是半成品，先从备份还原。
-        var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
-        var recovered = false;
-        if (File.Exists(markerPath))
-        {
-            log("bundler-updater: interrupted swap detected, restoring backup first");
-            if (!Directory.Exists(backupDir))
-            {
-                throw new UpdateRejectedException(
-                    $"swap marker '{markerPath}' exists but backup '{backupDir}' is missing — cannot recover safely.");
-            }
-            if (Directory.Exists(installDir))
-            {
-                Directory.Delete(installDir, recursive: true);
-            }
-            MoveTree(backupDir, installDir, log);
-            File.Delete(markerPath);
-            recovered = true;
         }
 
         // 回滚：备份复制回安装目录（备份保留可重试），不再二次备份——免得用待回滚的版本覆盖备份。
@@ -146,6 +170,84 @@ internal static class BootstrapPlan
         if (!options.KeepPayload && payloadDir is not null && Directory.Exists(payloadDir))
         {
             Directory.Delete(payloadDir, recursive: true);
+        }
+        log("bundler-updater: done");
+        return 0;
+    }
+
+    // 文件级换包：AppImage 等单文件安装单元——安装目标与载荷都是文件，
+    // 目录级语义会把宿主目录里无关文件一起清掉，故必须单件替换。
+    private static int ApplyFile(BootstrapOptions options, Action<string> log,
+        string installPath, string? payloadPath, string backupPath, string markerPath,
+        bool recovered)
+    {
+        if (options.Rollback)
+        {
+            if (recovered)
+            {
+                log("bundler-updater: crash recovery already restored the backup");
+                return 0;
+            }
+            if (!File.Exists(backupPath))
+            {
+                throw new UpdateRejectedException($"no rollback backup at '{backupPath}'.");
+            }
+            log($"bundler-updater: rollback '{backupPath}' → '{installPath}'");
+            File.Copy(backupPath, installPath, overwrite: true);
+            if (options.AppPath is { Length: > 0 } rollbackApp)
+            {
+                Restart(rollbackApp, Path.GetDirectoryName(installPath) ?? ".", log);
+            }
+            log("bundler-updater: done");
+            return 0;
+        }
+
+        if (payloadPath is null || !File.Exists(payloadPath))
+        {
+            throw new UsageException("file-swap payload must be a file.");
+        }
+        log($"bundler-updater: backup '{installPath}' → '{backupPath}'");
+        if (File.Exists(backupPath))
+        {
+            File.Delete(backupPath);
+        }
+        File.WriteAllText(markerPath, "swap in progress");
+        File.Move(installPath, backupPath);
+
+        try
+        {
+            if (options.KeepPayload)
+            {
+                log($"bundler-updater: copy in '{payloadPath}' → '{installPath}'");
+                File.Copy(payloadPath, installPath, overwrite: true);
+            }
+            else
+            {
+                log($"bundler-updater: swap in '{payloadPath}' → '{installPath}'");
+                File.Move(payloadPath, installPath);
+            }
+        }
+        catch
+        {
+            log("bundler-updater: swap failed, restoring backup");
+            if (File.Exists(installPath))
+            {
+                File.Delete(installPath);
+            }
+            File.Move(backupPath, installPath);
+            File.Delete(markerPath);
+            throw;
+        }
+        File.Delete(markerPath);
+
+        var workingDirectory = Path.GetDirectoryName(installPath) ?? ".";
+        if (options.AppPath is { Length: > 0 } app)
+        {
+            Restart(app, workingDirectory, log);
+        }
+        if (!options.KeepPayload && File.Exists(payloadPath))
+        {
+            File.Delete(payloadPath);
         }
         log("bundler-updater: done");
         return 0;

@@ -32,13 +32,21 @@ public sealed class UpdateInstallIdentity
         stream.Write(Encoding.ASCII.GetBytes("\n"), 0, 1);
     }
 
-    /// <summary>读安装目录内的身份旁车；缺失或损坏返回 null（不猜不补）。</summary>
+    /// <summary>
+    /// 读安装目录内的身份旁车；缺失或损坏返回 null（不猜不补）。
+    /// `.app` 传入 bundle 根时落到 Contents/——打包侧把旁车写在 Contents 顶层。
+    /// </summary>
     public static UpdateInstallIdentity? TryRead(string payloadRoot)
     {
         var path = Path.Combine(payloadRoot, FileName);
         if (!File.Exists(path))
         {
-            return null;
+            var contents = Path.Combine(payloadRoot, "Contents", FileName);
+            if (!File.Exists(contents))
+            {
+                return null;
+            }
+            path = contents;
         }
         try
         {

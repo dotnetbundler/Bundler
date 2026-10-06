@@ -28,6 +28,169 @@ public static class UpdaterClientTests
     }
 
     [Fact]
+    static void Version_BuildMetadataOnPrerelease_AndNumericSegments()
+    {
+        // +build 粘到预发布段也须剥离：1.2.3-beta+build2 == 1.2.3-beta+build1。
+        Assert.True(UpdateVersion.TryParse("1.2.3-beta+build2", out var e));
+        Assert.True(UpdateVersion.TryParse("1.2.3-beta+build1", out var f));
+        Assert.Equal(0, e.CompareTo(f));
+        Assert.True(UpdateVersion.TryParse("1.2.3+meta-beta", out var g));
+        Assert.True(UpdateVersion.TryParse("1.2.3", out var plain));
+        Assert.Equal(0, g.CompareTo(plain)); // 1.2.3 与 1.2.3+meta-beta 等同
+
+        // semver 数值段比较：beta.10 > beta.2；短列低于长列；数值段低于字母段。
+        Assert.True(UpdateVersion.TryParse("1.0.0-beta.10", out var b10));
+        Assert.True(UpdateVersion.TryParse("1.0.0-beta.2", out var b2));
+        Assert.True(b10.CompareTo(b2) > 0);
+        Assert.True(UpdateVersion.TryParse("1.0.0-alpha", out var alpha));
+        Assert.True(UpdateVersion.TryParse("1.0.0-alpha.1", out var alpha1));
+        Assert.True(alpha.CompareTo(alpha1) < 0);
+        Assert.True(UpdateVersion.TryParse("1.0.0-1", out var numeric));
+        Assert.True(numeric.CompareTo(alpha) < 0);
+    }
+
+    [Fact]
+    static void Client_FromInstallDirectory_ReadsAppContentsSidecar()
+    {
+        // .app bundle：打包侧把旁车写在 Contents/——传入 .app 根也必须读到。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var appDir = Path.Combine(directory, "MyApp.app");
+            var contents = Path.Combine(appDir, "Contents");
+            Directory.CreateDirectory(contents);
+            Protocol.UpdateInstallIdentity.Write(contents, new Protocol.UpdateInstallIdentity
+            {
+                Format = "app",
+                RuntimeIdentifier = "osx-arm64",
+                FeedUrl = "feed-placeholder",
+                PublicKey = "cHVibGljLWtleQ==",
+            });
+
+            var client = UpdateClient.FromInstallDirectory(appDir, "1.0.0");
+            Assert.NotNull(client);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_DownloadAsync_SecondDownload_OverwritesDestination()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var artifact = WriteDeltaArtifact(feedDir, "app-2.0.0.bin", _ => "same");
+            WriteFeedWithDelta(feedDir, "2.0.0", artifact, material);
+            // http 通道下 .part→目标已有文件时 File.Move 曾失败——重复下载必须能落。
+            var server = new LoopbackFeedServer(feedDir);
+            var identity = new Protocol.UpdateInstallIdentity
+            {
+                FeedUrl = server.FeedUrl, Channel = "stable",
+                RuntimeIdentifier = "linux-x64", Format = "zip",
+                PublicKey = material.PublicPointBase64(),
+            };
+            var sidecarSerializer = new DataContractJsonSerializer(
+                typeof(Protocol.UpdateInstallIdentity),
+                new DataContractJsonSerializerSettings { UseSimpleDictionaryFormat = true });
+            using (var stream = File.Create(Path.Combine(install, "bundler-update.json")))
+            {
+                sidecarSerializer.WriteObject(stream, identity);
+            }
+
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0",
+                new UpdateClientOptions { EnableDelta = false });
+            var info = (await client.CheckForUpdateAsync())!;
+            var downloadDir = Path.Combine(directory, "dl");
+            var first = await client.DownloadAsync(info, downloadDir);
+            var second = await client.DownloadAsync(info, downloadDir);
+            Assert.Equal(first, second);
+            Assert.True(File.ReadAllBytes(second).SequenceEqual(File.ReadAllBytes(artifact)));
+            server.Dispose();
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_UpdateAsync_AppImage_FileSwap_Linux()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            return; // 引导二进制是 linux-x64 件——本腿只在 linux 宿主跑
+        }
+        var directory = CreateTempDirectory();
+        try
+        {
+            // AppImage 安装单元=文件：安装目录是宿主目录（可含无关文件），install 参数是文件路径。
+            var installDir = Path.Combine(directory, "host-apps");
+            Directory.CreateDirectory(installDir);
+            var install = Path.Combine(installDir, "MyApp.AppImage");
+            File.WriteAllText(install, "v1-image");
+            File.WriteAllText(Path.Combine(installDir, "sibling.txt"), "keep-me");
+            var feedDir = Path.Combine(directory, "feed");
+            Directory.CreateDirectory(feedDir);
+            var material = DotNet.Bundler.Core.Update.UpdateKeyMaterial.Generate();
+
+            var artifact = Path.Combine(feedDir, "MyApp-2.0.0.AppImage");
+            File.WriteAllText(artifact, "v2-image");
+            WriteFeed(feedDir, "stable", "2.0.0", new Protocol.UpdateFeedArtifact
+            {
+                RuntimeIdentifier = "linux-x64", Format = "appimage",
+                Url = "MyApp-2.0.0.AppImage", File = "MyApp-2.0.0.AppImage",
+                Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+                Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+            });
+
+            // 旁车在镜像内部（挂载内可读）→ 消费侧走 FromIdentity + install=文件路径。
+            var client = UpdateClient.FromIdentity(new Protocol.UpdateInstallIdentity
+            {
+                Format = "appimage",
+                RuntimeIdentifier = "linux-x64",
+                Channel = "stable",
+                FeedUrl = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
+                PublicKey = material.PublicPointBase64(),
+            }, install, "1.0.0");
+
+            var info = (await client.CheckForUpdateAsync())!;
+            var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+            client.Verify(info, downloaded);
+            var process = client.Apply(info, downloaded, new ApplyOptions
+            {
+                StagingRoot = Path.Combine(directory, "staging"),
+                BootstrapperPath = RepoPath(
+                    "src/Bundler.Updater.Bootstrap/tools/linux-x64/bundler-updater"),
+            });
+            Assert.True(process.WaitForExit(90_000), "bootstrapper did not exit in 90s");
+            Assert.Equal(0, process.ExitCode);
+            Assert.Equal("v2-image", File.ReadAllText(install));
+            Assert.Equal("v1-image", File.ReadAllText(install + ".bundler-backup"));
+            // 宿主目录里的无关文件原样保留——文件级换包的防误清面。
+            Assert.Equal("keep-me", File.ReadAllText(Path.Combine(installDir, "sibling.txt")));
+            Assert.False(File.Exists(install + ".bundler-swap"));
+
+            var rollback = client.Rollback(new ApplyOptions
+            {
+                StagingRoot = Path.Combine(directory, "staging-rb"),
+                BootstrapperPath = RepoPath(
+                    "src/Bundler.Updater.Bootstrap/tools/linux-x64/bundler-updater"),
+            });
+            Assert.True(rollback.WaitForExit(60_000));
+            Assert.Equal(0, rollback.ExitCode);
+            Assert.Equal("v1-image", File.ReadAllText(install));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     static void Client_FromInstallDirectory_RequiresSidecar()
     {
         var directory = CreateTempDirectory();

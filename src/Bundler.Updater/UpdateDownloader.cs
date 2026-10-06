@@ -324,6 +324,11 @@ internal sealed class UpdateDownloader
             await (await response.Content.ReadAsStreamAsync())
                 .CopyToAsync(output, 81920, cancellationToken);
         }
+        // 目标已存在（同一更新重下/复用下载目录）也要能落——netstandard2.0 无 Move 覆写重载。
+        if (File.Exists(destinationPath))
+        {
+            File.Delete(destinationPath);
+        }
         File.Move(partPath, destinationPath);
         log?.Invoke($"update: downloaded '{url}' → '{destinationPath}'");
     }

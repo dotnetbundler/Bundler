@@ -1,6 +1,7 @@
 #!/bin/sh
 # bundler-updater POSIX 降级实现：与 bundler-updater apply 同协议。
 # 覆盖无 Native AOT 引导件的宿主（老 macOS/裸 POSIX 便携件场景）。
+# 安装目标是目录或单文件（AppImage 单件走文件级换包）。
 # 退出码：0 成功；2 用法错误；3 等待宿主退出超时；4 备份/换包失败（已尽力回滚）。
 
 set -u
@@ -17,9 +18,9 @@ WAIT_TIMEOUT=120
 
 usage() {
     echo "Usage:" >&2
-    echo "  bundler-updater.sh apply --install-dir <dir> --payload <dir>" >&2
-    echo "      [--wait-pid <pid>] [--app <path>] [--backup-dir <dir>]" >&2
-    echo "      [--keep-payload] [--log <file>] [--wait-timeout <seconds>]" >&2
+    echo "  bundler-updater.sh apply --install-dir <dir|file> --payload <dir|file>" >&2
+    echo "      [--wait-pid <pid>] [--app <path>] [--backup-dir <dir|file>]" >&2
+    echo "      [--keep-payload] [--rollback] [--log <file>] [--wait-timeout <seconds>]" >&2
 }
 
 log() {
@@ -28,6 +29,18 @@ log() {
     else
         printf '%s\n' "$1"
     fi
+}
+
+restart_app() {
+    # macOS .app 目录件走 LaunchServices open，其余 nohup 分离。
+    case "$APP_PATH" in
+        *.app) if [ "$(uname -s)" = "Darwin" ]; then
+            /usr/bin/open -n "$APP_PATH" || true
+        else
+            (cd "$(dirname "$INSTALL_DIR")" && nohup "$APP_PATH" >/dev/null 2>&1 &)
+        fi ;;
+        *) (cd "$(dirname "$INSTALL_DIR")" && nohup "$APP_PATH" >/dev/null 2>&1 &) ;;
+    esac
 }
 
 [ "${1:-}" = "apply" ] || { usage; exit 2; }
@@ -55,9 +68,8 @@ done
 
 [ -n "$INSTALL_DIR" ] || { echo "bundler-updater: --install-dir is required." >&2; exit 2; }
 [ "$ROLLBACK" = 1 ] || [ -n "$PAYLOAD_DIR" ] || { echo "bundler-updater: --payload is required unless --rollback." >&2; exit 2; }
-[ -d "$INSTALL_DIR" ] || { echo "bundler-updater: install directory '$INSTALL_DIR' does not exist." >&2; exit 2; }
-[ "$ROLLBACK" = 1 ] || [ -d "$PAYLOAD_DIR" ] || { echo "bundler-updater: payload directory '$PAYLOAD_DIR' does not exist." >&2; exit 2; }
 [ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
+MARKER="${INSTALL_DIR%/}.bundler-swap"
 
 if [ -n "$WAIT_PID" ]; then
     log "bundler-updater: waiting for pid $WAIT_PID to exit"
@@ -68,6 +80,65 @@ if [ -n "$WAIT_PID" ]; then
         sleep 1
     done
 fi
+
+# 崩溃恢复先于存在性检查：上轮死在备份与换包之间时安装目标可能缺失/半成品，先还原。
+RECOVERED=0
+if [ -f "$MARKER" ]; then
+    log "bundler-updater: interrupted swap detected, restoring backup first"
+    if [ -f "$BACKUP_DIR" ]; then
+        rm -f "$INSTALL_DIR"
+        mv "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+    elif [ -d "$BACKUP_DIR" ]; then
+        rm -rf "$INSTALL_DIR"
+        mv "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+    else
+        { echo "bundler-updater: swap marker exists but backup missing — cannot recover." >&2; exit 4; }
+    fi
+    rm -f "$MARKER"
+    RECOVERED=1
+fi
+
+# 文件级语义：安装目标是单文件（AppImage 单件）或回滚备份是文件——
+# 目录级换包会清掉宿主目录里的无关文件，故单件替换。
+if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; then
+    if [ "$ROLLBACK" = 1 ]; then
+        [ "$RECOVERED" = 1 ] && { log "bundler-updater: crash recovery already restored the backup"; exit 0; }
+        [ -f "$BACKUP_DIR" ] || { echo "bundler-updater: no rollback backup at '$BACKUP_DIR'." >&2; exit 4; }
+        log "bundler-updater: rollback '$BACKUP_DIR' → '$INSTALL_DIR'"
+        cp -f "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback copy failed." >&2; exit 4; }
+        [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
+        log "bundler-updater: done"
+        exit 0
+    fi
+    [ -f "$PAYLOAD_DIR" ] || { echo "bundler-updater: file-swap payload must be a file." >&2; exit 2; }
+    log "bundler-updater: backup '$INSTALL_DIR' → '$BACKUP_DIR'"
+    rm -f "$BACKUP_DIR" || exit 4
+    printf 'swap in progress' >"$MARKER" || exit 4
+    mv "$INSTALL_DIR" "$BACKUP_DIR" || { rm -f "$MARKER"; exit 4; }
+    SWAP_FAILED=0
+    if [ "$KEEP_PAYLOAD" = 1 ]; then
+        log "bundler-updater: copy in '$PAYLOAD_DIR' → '$INSTALL_DIR'"
+        cp -f "$PAYLOAD_DIR" "$INSTALL_DIR" || SWAP_FAILED=1
+    else
+        log "bundler-updater: swap in '$PAYLOAD_DIR' → '$INSTALL_DIR'"
+        mv "$PAYLOAD_DIR" "$INSTALL_DIR" || SWAP_FAILED=1
+    fi
+    if [ "$SWAP_FAILED" = 1 ]; then
+        log "bundler-updater: swap failed, restoring backup"
+        rm -f "$INSTALL_DIR"
+        mv "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+        rm -f "$MARKER"
+        exit 4
+    fi
+    rm -f "$MARKER"
+    [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
+    [ "$KEEP_PAYLOAD" = 1 ] || rm -f "$PAYLOAD_DIR" 2>/dev/null || true
+    log "bundler-updater: done"
+    exit 0
+fi
+
+[ -d "$INSTALL_DIR" ] || { echo "bundler-updater: install directory '$INSTALL_DIR' does not exist." >&2; exit 2; }
+[ "$ROLLBACK" = 1 ] || [ -d "$PAYLOAD_DIR" ] || { echo "bundler-updater: payload directory '$PAYLOAD_DIR' does not exist." >&2; exit 2; }
 
 # macOS .app 三项门禁：签名完好/身份连续/剥 quarantine——动备份前拒绝，安装目录零变更。
 case "$PAYLOAD_DIR" in
@@ -98,18 +169,6 @@ if [ "$IS_APP" = 1 ] && [ "$ROLLBACK" != 1 ] && [ "$(uname -s)" = "Darwin" ]; th
     xattr -dr com.apple.quarantine "$PAYLOAD_DIR" 2>/dev/null && log "bundler-updater: quarantine stripped" || true
 fi
 
-# 崩溃恢复：marker 存在即上一轮死在备份与换包之间——安装目录可能是半成品，先还原。
-MARKER="${INSTALL_DIR%/}.bundler-swap"
-RECOVERED=0
-if [ -f "$MARKER" ]; then
-    log "bundler-updater: interrupted swap detected, restoring backup first"
-    [ -d "$BACKUP_DIR" ] || { echo "bundler-updater: swap marker exists but backup missing — cannot recover." >&2; exit 4; }
-    rm -rf "$INSTALL_DIR"
-    mv "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
-    rm -f "$MARKER"
-    RECOVERED=1
-fi
-
 # 回滚：备份复制回安装目录（备份保留可重试），不再二次备份。
 if [ "$ROLLBACK" = 1 ]; then
     if [ ! -d "$BACKUP_DIR" ]; then
@@ -121,17 +180,7 @@ if [ "$ROLLBACK" = 1 ]; then
     rm -rf "$INSTALL_DIR" || exit 4
     mkdir -p "$INSTALL_DIR" || exit 4
     cp -a "$BACKUP_DIR"/. "$INSTALL_DIR"/ || { echo "bundler-updater: rollback copy failed." >&2; exit 4; }
-    if [ -n "$APP_PATH" ]; then
-        log "bundler-updater: restart '$APP_PATH'"
-        case "$APP_PATH" in
-            *.app) if [ "$(uname -s)" = "Darwin" ]; then
-                /usr/bin/open -n "$APP_PATH" || true
-            else
-                (cd "$INSTALL_DIR" && nohup "$APP_PATH" >/dev/null 2>&1 &)
-            fi ;;
-            *) (cd "$INSTALL_DIR" && nohup "$APP_PATH" >/dev/null 2>&1 &) ;;
-        esac
-    fi
+    [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
     log "bundler-updater: done"
     exit 0
 fi
@@ -160,18 +209,7 @@ if [ "$SWAP_FAILED" = 1 ]; then
 fi
 rm -f "$MARKER"
 
-if [ -n "$APP_PATH" ]; then
-    log "bundler-updater: restart '$APP_PATH'"
-    # macOS .app 目录件走 LaunchServices open，其余 nohup 分离。
-    case "$APP_PATH" in
-        *.app) if [ "$(uname -s)" = "Darwin" ]; then
-            /usr/bin/open -n "$APP_PATH" || true
-        else
-            (cd "$INSTALL_DIR" && nohup "$APP_PATH" >/dev/null 2>&1 &)
-        fi ;;
-        *) (cd "$INSTALL_DIR" && nohup "$APP_PATH" >/dev/null 2>&1 &) ;;
-    esac
-fi
+[ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
 [ "$KEEP_PAYLOAD" = 1 ] || rm -rf "$PAYLOAD_DIR" 2>/dev/null || true
 log "bundler-updater: done"
 exit 0

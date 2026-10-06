@@ -12,6 +12,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Bundler.Tests" />
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
+    <ProjectReference Include="..\Bundler.Archive\Bundler.Archive.csproj" />
   </ItemGroup>
 
 </Project>

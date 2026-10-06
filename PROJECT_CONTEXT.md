@@ -82,6 +82,12 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-06 UPDATE 复审修复轮（分支 `devin/1791228441-update-module`，PR #27）
+
+- Devin Review 8 bug+5 flag 全部属实处置：`.app` 目录件改产 `.app.zip` 运输件进清单；清单 `url` 改相对清单目录路径；引导件工具内嵌 Bundler.Core 资源（删 tasks/updater 与 CLI 复制通道）；win 禁降级 .sh；nsis/msi 免引导件；崩溃恢复先于 install 存在性检查；新增文件级换包（AppImage 单件，sh 同构）；`TryRead` 增 `Contents/` 探测；semver 数值段比较+`+` 整串剥离；`.part` 重复下载先删再移；归档同名条目去重；删根 `tools/` 陈旧脚本。
+- 证据：`UpdateTests`+`UpdaterClientTests` 新增 11 用例全绿（含 linux 真 AOT 件文件级换包+回滚）；build 0W/0E；linux-x64/linux-musl-x64 AOT 件重建入库。
+- 待办：win-x64/osx-x64/osx-arm64 AOT 件待宿主子会话重建（UPDATE-3 同法）。
+
 ### 2026-10-05 UPDATE-5/6 差分+模块冻结（分支 `devin/1791228441-update-module`，版本 `0.1.0-alpha.74`）
 
 - UPDATE-5 block-map 差分落地：`UpdateBlockMap` v1（64KiB 固定块+有序 sha256 b64）单源双栖；发射器每制品产 `.blockmap` 并写清单 `blockMap` 字段；`EnableDelta` 默认开——命中块本地复制+缺失块合并连续区间（http 硬要求 206、本地定位读）→产物 size+sha256 全验→任一环节失败回退全量；`<install>.bundler-cache/artifact.bin` 为差分源件缓存并随成功下载刷新。

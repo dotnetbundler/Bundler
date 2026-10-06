@@ -41,12 +41,13 @@ internal sealed class UpdateApplier
             }
             case "appimage":
             {
-                // 单文件载荷：暂存为 {file} 目录 → 与目录换包同一通道。
+                // 单文件载荷：AppImage 的安装单元就是文件本身——install 目标是 .AppImage 文件路径，
+                // 引导件走文件级换包（目录级会把宿主目录里无关文件一起清掉）。
                 var staging = PrepareStaging(options);
                 var staged = Path.Combine(staging, Path.GetFileName(artifactPath));
                 File.Copy(artifactPath, staged, overwrite: true);
                 MakeExecutable(staged);
-                return RunBootstrapper(staging, installDirectory, options, log);
+                return RunBootstrapper(staged, installDirectory, options, log);
             }
             default:
                 throw new UpdateException($"format '{artifact.Format}' has no apply semantics.");

@@ -539,6 +539,307 @@ public static class UpdateTests
         }
     }
 
+    [Fact]
+    static void Bootstrapper_WinRid_NeverFallsBackToScript()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var tools = Path.Combine(directory, "tools");
+            Directory.CreateDirectory(Path.Combine(tools, "posix"));
+            File.WriteAllText(Path.Combine(tools, "posix", "bundler-updater.sh"), "#!/bin/sh\n");
+            var update = new UpdateBundleConfiguration { BootstrapperDirectory = tools };
+
+            // win 宿主绝不拿 POSIX 脚本——无 per-RID 二进制即不可用（确定性拒绝而非注入不可执行件）。
+            Assert.False(UpdateBootstrapper.TryResolve(update, "win-arm64", out _));
+            Assert.False(UpdateBootstrapper.TryResolve(update, "win-x64", out _));
+            // 非 win 宿主照常降级脚本件。
+            Assert.True(UpdateBootstrapper.TryResolve(update, "osx-arm64", out var resolved));
+            Assert.EndsWith("bundler-updater.sh", resolved);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void Bootstrapper_ResolvesEmbedded_WhenNoDirectory()
+    {
+        // 无显式工具目录 → Bundler.Core 内嵌资源兜底（MSBuild 包/CLI/直引/NuGet 全形态可达）。
+        var update = new UpdateBundleConfiguration();
+        Assert.True(UpdateBootstrapper.TryResolve(update, "linux-x64", out var linux));
+        Assert.True(File.Exists(linux));
+        Assert.True(new FileInfo(linux).Length > 1_000_000); // 真 AOT 件非桩
+        Assert.True(UpdateBootstrapper.TryResolve(update, "win-x64", out var win));
+        Assert.EndsWith(".exe", win);
+        Assert.True(File.Exists(win));
+        // win-arm64 无内嵌二进制且 win 不降级脚本 → 确定性不可用。
+        Assert.False(UpdateBootstrapper.TryResolve(update, "win-arm64", out _));
+    }
+
+    [Fact]
+    static void Emitter_AppDirectory_ProducesZipTransport()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var keyPath = Path.Combine(directory, "key.json");
+            UpdateKeyMaterial.Generate().Save(keyPath);
+            // .app 是目录件：打进 <rid>/<format>/ 分目录（planner 真实布局）。
+            var appDir = Path.Combine(directory, "osx-arm64", "app", "MyApp.app");
+            Directory.CreateDirectory(Path.Combine(appDir, "Contents", "MacOS"));
+            File.WriteAllText(Path.Combine(appDir, "Contents", "Info.plist"), "<plist/>");
+            File.WriteAllText(Path.Combine(appDir, "Contents", "MacOS", "app"), "#!/bin/sh\necho hi\n");
+
+            var configuration = new BundleConfiguration
+            {
+                ProductName = "App",
+                Identifier = "com.example.app",
+                Version = "2.0.0",
+                OutputDirectory = directory,
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://example.test/updates",
+                    Channel = "stable",
+                    SigningKeyFile = keyPath,
+                }
+            };
+            var artifacts = new[]
+            {
+                new BundleArtifact(PackageFormat.App, "osx-arm64", appDir)
+            };
+
+            var produced = UpdateManifestEmitter.EmitAsync(configuration, artifacts)
+                .GetAwaiter().GetResult();
+
+            var zipPath = appDir + ".zip";
+            Assert.Contains(zipPath, produced);
+            Assert.True(File.Exists(zipPath + ".sig"));
+            Assert.True(File.Exists(zipPath + ".blockmap"));
+            // 运输件解出即单顶层 MyApp.app（客户端 format=app 走解包→换包）。
+            using (var archive = System.IO.Compression.ZipFile.OpenRead(zipPath))
+            {
+                Assert.Contains(archive.Entries,
+                    e => e.FullName == "MyApp.app/Contents/MacOS/app");
+            }
+            var feedPath = Path.Combine(directory, "bundler-update-feed.stable.json");
+            using var document = JsonDocument.Parse(File.ReadAllText(feedPath));
+            var entry = document.RootElement.GetProperty("artifacts").EnumerateArray().Single();
+            Assert.Equal("app", entry.GetProperty("format").GetString());
+            // url 是相对清单目录的路径（制品分目录落盘），file 恒为裸名。
+            Assert.Equal("osx-arm64/app/MyApp.app.zip", entry.GetProperty("url").GetString());
+            Assert.Equal("MyApp.app.zip", entry.GetProperty("file").GetString());
+            Assert.Equal("osx-arm64/app/MyApp.app.zip.blockmap",
+                entry.GetProperty("blockmap").GetString());
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void Emitter_UsesRelativeUrl_ForSubdirectoryArtifacts()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var keyPath = Path.Combine(directory, "key.json");
+            UpdateKeyMaterial.Generate().Save(keyPath);
+            var nested = Path.Combine(directory, "linux-x64", "zip");
+            Directory.CreateDirectory(nested);
+            var artifact = WriteDummyArtifact(nested, "app-1.0.0.zip");
+            var configuration = new BundleConfiguration
+            {
+                ProductName = "App",
+                Identifier = "com.example.app",
+                Version = "1.0.0",
+                OutputDirectory = directory,
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://example.test/updates",
+                    Channel = "latest",
+                    SigningKeyFile = keyPath,
+                }
+            };
+
+            UpdateManifestEmitter.EmitAsync(configuration,
+                    [new BundleArtifact(PackageFormat.Zip, "linux-x64", artifact)])
+                .GetAwaiter().GetResult();
+
+            var feedPath = Path.Combine(directory, "bundler-update-feed.latest.json");
+            using var document = JsonDocument.Parse(File.ReadAllText(feedPath));
+            var entry = document.RootElement.GetProperty("artifacts").EnumerateArray().Single();
+            Assert.Equal("linux-x64/zip/app-1.0.0.zip", entry.GetProperty("url").GetString());
+            Assert.Equal("app-1.0.0.zip", entry.GetProperty("file").GetString());
+            // sig 与 blockmap 随制品落在同一分目录。
+            Assert.True(File.Exists(artifact + ".sig"));
+            Assert.True(File.Exists(artifact + ".blockmap"));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void BootstrapPlan_RecoversMissingInstallDir()
+    {
+        // 断电发生在"备份已移走、新载荷未换入"之间：安装目录缺失 + marker + 备份完整，
+        // 恢复必须先于 install 存在性检查运行，否则死在拒绝上无法自愈。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "install");
+            var backup = install + ".bundler-backup";
+            var payload = Path.Combine(directory, "payload");
+            Directory.CreateDirectory(backup);
+            Directory.CreateDirectory(payload);
+            File.WriteAllText(Path.Combine(backup, "app"), "v1-good");
+            File.WriteAllText(Path.Combine(payload, "app"), "v2");
+            File.WriteAllText(install + ".bundler-swap", "swap in progress");
+
+            var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload
+                }, _ => { });
+
+            Assert.Equal(0, rc);
+            Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
+            Assert.Equal("v1-good", File.ReadAllText(Path.Combine(backup, "app")));
+            Assert.False(File.Exists(install + ".bundler-swap"));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void BootstrapPlan_FileSwap_AppImageStyle()
+    {
+        // AppImage 单件：安装目标是文件——宿主目录里的无关文件必须原样保留。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "MyApp.AppImage");
+            var payloadDir = Path.Combine(directory, "payload");
+            var payload = Path.Combine(payloadDir, "MyApp-2.0.0.AppImage");
+            Directory.CreateDirectory(payloadDir);
+            File.WriteAllText(install, "v1-image");
+            File.WriteAllText(payload, "v2-image");
+            File.WriteAllText(Path.Combine(directory, "sibling.txt"), "keep-me");
+
+            var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload,
+                }, _ => { });
+
+            Assert.Equal(0, rc);
+            Assert.Equal("v2-image", File.ReadAllText(install));
+            Assert.Equal("v1-image", File.ReadAllText(install + ".bundler-backup"));
+            Assert.False(File.Exists(install + ".bundler-swap"));
+            // 目录语义会清掉 sibling——文件级换包必须留下它。
+            Assert.Equal("keep-me", File.ReadAllText(Path.Combine(directory, "sibling.txt")));
+            Assert.False(Directory.Exists(payloadDir) && File.Exists(payload));
+
+            // 回滚：备份文件倒回，且备份保留可重试。
+            rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    Rollback = true,
+                }, _ => { });
+            Assert.Equal(0, rc);
+            Assert.Equal("v1-image", File.ReadAllText(install));
+            Assert.True(File.Exists(install + ".bundler-backup"));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void BootstrapPlan_FileSwap_RecoversMissingInstall()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "MyApp.AppImage");
+            File.WriteAllText(install + ".bundler-backup", "v1-image");
+            File.WriteAllText(install + ".bundler-swap", "swap in progress");
+            var payload = Path.Combine(directory, "new.AppImage");
+            File.WriteAllText(payload, "v2-image");
+
+            var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload,
+                }, _ => { });
+
+            Assert.Equal(0, rc);
+            Assert.Equal("v2-image", File.ReadAllText(install));
+            Assert.False(File.Exists(install + ".bundler-swap"));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void ArchiveBackend_DedupesSidecarEntries()
+    {
+        // 输入树自带 bundler-update.json 时，归档里只能有一份——本构建注入的身份为准。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var input = Path.Combine(directory, "input");
+            Directory.CreateDirectory(input);
+            File.WriteAllText(Path.Combine(input, "app.bin"), "payload");
+            File.WriteAllText(Path.Combine(input, UpdateIdentitySidecar.FileName),
+                "{\"format\":\"stale\"}");
+            var output = Path.Combine(directory, "out");
+
+            var artifacts = new DotNet.Bundler.Archive.ArchiveBundler(
+                new DotNet.Bundler.Archive.ArchiveBundleConfiguration())
+                .BuildAsync(new BundleConfiguration
+                {
+                    ProductName = "App",
+                    Identifier = "com.example.app",
+                    Version = "1.0.0",
+                    OutputDirectory = output,
+                    Update = new UpdateBundleConfiguration { PublicKey = "cHVibGljLWtleQ==" },
+                    Targets = [new BundleTargetConfiguration
+                    {
+                        RuntimeIdentifier = "linux-x64",
+                        InputDirectory = input,
+                        MainExecutable = "app.bin",
+                        Formats = [PackageFormat.Zip]
+                    }]
+                }).GetAwaiter().GetResult();
+
+            using var archive = System.IO.Compression.ZipFile.OpenRead(artifacts.Single().Path);
+            var sidecars = archive.Entries.Where(
+                e => e.FullName.EndsWith("/" + UpdateIdentitySidecar.FileName)).ToArray();
+            Assert.Single(sidecars);
+            using var reader = new StreamReader(sidecars[0].Open());
+            using var document = JsonDocument.Parse(reader.ReadToEnd());
+            Assert.Equal("zip", document.RootElement.GetProperty("format").GetString());
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
     private sealed class SilentLogger : IBundleLogger
     {
         public void Log(BundleLogLevel level, string message)

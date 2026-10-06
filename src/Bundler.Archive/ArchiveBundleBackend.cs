@@ -29,9 +29,21 @@ internal sealed class ArchiveBundleBackend(
             context.Configuration, context.Item, settings, context.WorkDirectory, context.Logger), stem).ToList();
         if (context.Configuration.Update is { } update)
         {
-            // 身份旁车写进工作目录后作为额外条目随归档顶层目录进包。
+            // 身份旁车写进工作目录后作为额外条目随归档顶层目录进包；
+            // 输入树若自带同名条目一律剔除——打包期身份以本构建为准，重复名进包会导致解包歧义。
             UpdateIdentitySidecar.WriteIfEnabled(
                 context.WorkDirectory, update, format, context.Item.Target.RuntimeIdentifier);
+            var rid = context.Item.Target.RuntimeIdentifier;
+            UpdateBootstrapper.TryResolve(update, rid, out var bootstrapper);
+            var injected = new HashSet<string>(StringComparer.Ordinal)
+            {
+                stem + "/" + UpdateIdentitySidecar.FileName,
+            };
+            if (bootstrapper is { Length: > 0 })
+            {
+                injected.Add(stem + "/" + UpdateBootstrapper.FileNameFor(rid));
+            }
+            entries.RemoveAll(e => injected.Contains(e.ArchivePath));
             entries.Add(new ArchiveTree.Entry
             {
                 ArchivePath = stem + "/" + UpdateIdentitySidecar.FileName,
@@ -39,8 +51,7 @@ internal sealed class ArchiveBundleBackend(
                 Mode = 420 /* 0644 */,
                 SourcePath = Path.Combine(context.WorkDirectory, UpdateIdentitySidecar.FileName),
             });
-            var rid = context.Item.Target.RuntimeIdentifier;
-            if (UpdateBootstrapper.TryResolve(update, rid, out var bootstrapper))
+            if (bootstrapper is { Length: > 0 })
             {
                 entries.Add(new ArchiveTree.Entry
                 {
