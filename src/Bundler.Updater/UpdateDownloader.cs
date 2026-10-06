@@ -80,12 +80,12 @@ internal sealed class UpdateDownloader
         {
             return new Uri(new Uri(feedUrl), artifactUrl).ToString();
         }
-        // 本地清单：产物按清单目录相对路径解析。
+        // 本地清单：产物按清单目录相对路径解析；url 字段以 URL 转义形式存储，还原真实文件名。
         var feedPath = feedUrl.StartsWith("file://", StringComparison.Ordinal)
             ? new Uri(feedUrl).LocalPath
             : feedUrl;
         return Path.GetFullPath(Path.Combine(
-            Path.GetDirectoryName(feedPath) ?? ".", artifactUrl));
+            Path.GetDirectoryName(feedPath) ?? ".", Uri.UnescapeDataString(artifactUrl)));
     }
 
     /// <summary>
@@ -201,6 +201,7 @@ internal sealed class UpdateDownloader
 
             var downloaded = 0L;
             var copied = 0L;
+            var fetchFailed = false;
             using (var source = new FileStream(
                        sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (var output = new FileStream(
@@ -211,19 +212,34 @@ internal sealed class UpdateDownloader
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     output.Seek(op.dstOffset, SeekOrigin.Begin);
-                    if (op.copy)
+                    try
                     {
-                        source.Seek(op.srcOffset, SeekOrigin.Begin);
-                        await CopyExactlyAsync(source, output, op.length, cancellationToken);
-                        copied += op.length;
+                        if (op.copy)
+                        {
+                            source.Seek(op.srcOffset, SeekOrigin.Begin);
+                            await CopyExactlyAsync(source, output, op.length, cancellationToken);
+                            copied += op.length;
+                        }
+                        else
+                        {
+                            await FetchRangeAsync(
+                                artifactLocation, op.dstOffset, op.length, output, cancellationToken);
+                            downloaded += op.length;
+                        }
                     }
-                    else
+                    catch (UpdateException exception)
                     {
-                        await FetchRangeAsync(
-                            artifactLocation, op.dstOffset, op.length, output, cancellationToken);
-                        downloaded += op.length;
+                        log?.Invoke(
+                            $"update: delta fetch failed ({exception.Message}) — full download");
+                        fetchFailed = true;
+                        break;
                     }
                 }
+            }
+            if (fetchFailed)
+            {
+                TryDelete(destinationPath);
+                return false;
             }
             log?.Invoke(
                 $"update: delta applied — {copied} B reused, {downloaded} B fetched " +
