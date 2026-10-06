@@ -11,6 +11,7 @@ PAYLOAD_DIR=""
 WAIT_PID=""
 APP_PATH=""
 BACKUP_DIR=""
+RETAIN_DIR=""
 LOG_FILE=""
 KEEP_PAYLOAD=0
 ROLLBACK=0
@@ -20,7 +21,7 @@ usage() {
     echo "Usage:" >&2
     echo "  bundler-updater.sh apply --install-dir <dir|file> --payload <dir|file>" >&2
     echo "      [--wait-pid <pid>] [--app <path>] [--backup-dir <dir|file>]" >&2
-    echo "      [--keep-payload] [--rollback] [--log <file>] [--wait-timeout <seconds>]" >&2
+    echo "      [--keep-payload] [--rollback] [--retain-backup-to <dir>] [--log <file>] [--wait-timeout <seconds>]" >&2
 }
 
 log() {
@@ -50,7 +51,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --keep-payload) KEEP_PAYLOAD=1; shift ;;
         --rollback) ROLLBACK=1; shift ;;
-        --install-dir|--payload|--wait-pid|--app|--backup-dir|--log|--wait-timeout)
+        --install-dir|--payload|--wait-pid|--app|--backup-dir|--retain-backup-to|--log|--wait-timeout)
             [ $# -ge 2 ] || { echo "bundler-updater: option '$1' requires a value." >&2; exit 2; }
             case "$1" in
                 --install-dir) INSTALL_DIR=$2 ;;
@@ -58,6 +59,7 @@ while [ $# -gt 0 ]; do
                 --wait-pid) WAIT_PID=$2 ;;
                 --app) APP_PATH=$2 ;;
                 --backup-dir) BACKUP_DIR=$2 ;;
+                --retain-backup-to) RETAIN_DIR=$2 ;;
                 --log) LOG_FILE=$2 ;;
                 --wait-timeout) WAIT_TIMEOUT=$2 ;;
             esac
@@ -70,6 +72,25 @@ done
 [ "$ROLLBACK" = 1 ] || [ -n "$PAYLOAD_DIR" ] || { echo "bundler-updater: --payload is required unless --rollback." >&2; exit 2; }
 [ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
 MARKER="${INSTALL_DIR%/}.bundler-swap"
+
+# 备份的最终去向：--retain-backup-to 给了目录就迁过去当回滚点，不给就删——默认不保留；
+# 换包期备份无论如何都建（崩溃恢复与原子性的载体）。$1=备份路径，$2=保留目录内文件名（文件级换包用）。
+retain_or_remove_backup() {
+    if [ -n "$RETAIN_DIR" ]; then
+        if [ -n "${2:-}" ]; then
+            target="$RETAIN_DIR/$2"
+        else
+            target="$RETAIN_DIR"
+        fi
+        mkdir -p "$(dirname "$target")" || return 4
+        rm -rf "$target" || return 4
+        log "bundler-updater: retain backup '$1' → '$target'"
+        mv "$1" "$target" || return 4
+        return 0
+    fi
+    rm -rf "$1" 2>/dev/null || true
+    return 0
+}
 
 if [ -n "$WAIT_PID" ]; then
     log "bundler-updater: waiting for pid $WAIT_PID to exit"
@@ -131,6 +152,8 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
         exit 4
     fi
     rm -f "$MARKER"
+    # 文件级备份保留时按安装文件真名落在保留目录里。
+    retain_or_remove_backup "$BACKUP_DIR" "$(basename "$INSTALL_DIR")" || exit 4
     [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
     [ "$KEEP_PAYLOAD" = 1 ] || rm -f "$PAYLOAD_DIR" 2>/dev/null || true
     log "bundler-updater: done"
@@ -208,6 +231,8 @@ if [ "$SWAP_FAILED" = 1 ]; then
     exit 4
 fi
 rm -f "$MARKER"
+
+retain_or_remove_backup "$BACKUP_DIR" "" || exit 4
 
 [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
 [ "$KEEP_PAYLOAD" = 1 ] || rm -rf "$PAYLOAD_DIR" 2>/dev/null || true

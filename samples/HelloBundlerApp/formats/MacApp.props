@@ -16,7 +16,7 @@
     <BundlerMacAppBundleName Condition="'$(HelloBundlerMacAppBundleName)' != ''">$(HelloBundlerMacAppBundleName)</BundlerMacAppBundleName>
     <BundlerMacAppDisplayName>Hello Bundler App</BundlerMacAppDisplayName>
     <BundlerMacAppBuildVersion>1</BundlerMacAppBuildVersion>
-    <BundlerMacAppShortVersion>1.0</BundlerMacAppShortVersion>
+    <BundlerMacAppShortVersion Condition="'$(BundlerMacAppShortVersion)' == ''">$(BundlerVersion)</BundlerMacAppShortVersion>
     <BundlerMacAppMinimumSystemVersion Condition="'$(HelloBundlerMacAppMinimumSystemVersion)' != ''">$(HelloBundlerMacAppMinimumSystemVersion)</BundlerMacAppMinimumSystemVersion>
     <BundlerMacAppMinimumSystemVersion Condition="'$(HelloBundlerMacAppMinimumSystemVersion)' == ''">12.0</BundlerMacAppMinimumSystemVersion>
     <BundlerMacAppCategory>public.app-category.developer-tools</BundlerMacAppCategory>

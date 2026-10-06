@@ -182,7 +182,7 @@ public static class CliProgram
         "appimage" => PackageFormat.AppImage,
         "zip" => PackageFormat.Zip,
         "targz" or "tar.gz" => PackageFormat.TarGz,
-        "alpineapk" or "apk" => PackageFormat.AlpineApk,
+        "alpineapk" => PackageFormat.AlpineApk,
         "all" => AllFormatsSentinel,
         _ => throw new CliUsageException(
             $"Unknown format '{name}'. Supported: nsis, msi, app, dmg, pkg, deb, rpm, appimage, zip, targz, alpineapk, all.")

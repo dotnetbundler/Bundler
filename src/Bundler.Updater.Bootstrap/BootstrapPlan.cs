@@ -90,6 +90,15 @@ internal static class BootstrapPlan
         {
             throw new UsageException("backup/install/payload directories must not nest inside each other.");
         }
+        if (options.RetainBackupDirectory is { Length: > 0 } retainPath)
+        {
+            var retain = Path.GetFullPath(retainPath);
+            if (IsSubpathOf(retain, installDir) || (payloadDir is not null && IsSubpathOf(retain, payloadDir)) ||
+                IsSubpathOf(installDir, retain) || IsSubpathOf(backupDir, retain) || IsSubpathOf(retain, backupDir))
+            {
+                throw new UsageException("retained-backup directory must not nest inside install/payload/backup directories.");
+            }
+        }
         // 回滚模式不嵌套校验 payload——它本就不存在。
         if (options.Rollback && (IsSubpathOf(backupDir, installDir) || IsSubpathOf(installDir, backupDir)))
         {
@@ -163,6 +172,8 @@ internal static class BootstrapPlan
         }
         File.Delete(markerPath);
 
+        RetainOrRemoveBackup(options, log, backupDir, retainedName: null);
+
         if (options.AppPath is { Length: > 0 } app)
         {
             Restart(app, installDir, log);
@@ -173,6 +184,50 @@ internal static class BootstrapPlan
         }
         log("bundler-updater: done");
         return 0;
+    }
+
+    // 备份的最终去向：--retain-backup-to 给了目录就迁过去当回滚点，不给就删——
+    // 默认不保留回滚点；换包期备份无论如何都建（崩溃恢复与原子性的载体）。
+    private static void RetainOrRemoveBackup(
+        BootstrapOptions options, Action<string> log, string backupPath, string? retainedName)
+    {
+        if (options.RetainBackupDirectory is { Length: > 0 } retain)
+        {
+            var target = retainedName is null
+                ? Path.GetFullPath(retain)
+                : Path.Combine(Path.GetFullPath(retain), retainedName);
+            var parent = Path.GetDirectoryName(target);
+            if (parent is { Length: > 0 })
+            {
+                Directory.CreateDirectory(parent);
+            }
+            if (Directory.Exists(target))
+            {
+                Directory.Delete(target, recursive: true);
+            }
+            else if (File.Exists(target))
+            {
+                File.Delete(target);
+            }
+            log($"bundler-updater: retain backup '{backupPath}' → '{target}'");
+            if (Directory.Exists(backupPath))
+            {
+                MoveTree(backupPath, target, log);
+            }
+            else
+            {
+                File.Move(backupPath, target);
+            }
+            return;
+        }
+        if (Directory.Exists(backupPath))
+        {
+            Directory.Delete(backupPath, recursive: true);
+        }
+        else if (File.Exists(backupPath))
+        {
+            File.Delete(backupPath);
+        }
     }
 
     // 文件级换包：AppImage 等单文件安装单元——安装目标与载荷都是文件，
@@ -239,6 +294,9 @@ internal static class BootstrapPlan
             throw;
         }
         File.Delete(markerPath);
+
+        // 文件级备份保留时按安装文件真名落在保留目录里。
+        RetainOrRemoveBackup(options, log, backupPath, Path.GetFileName(installPath));
 
         var workingDirectory = Path.GetDirectoryName(installPath) ?? ".";
         if (options.AppPath is { Length: > 0 } app)
@@ -385,6 +443,7 @@ internal static class BootstrapPlan
                     break;
                 case "--app": options.AppPath = value; break;
                 case "--backup-dir": options.BackupDirectory = value; break;
+                case "--retain-backup-to": options.RetainBackupDirectory = value; break;
                 case "--log": options.LogFile = value; break;
                 case "--wait-timeout":
                     if (!int.TryParse(value, out var seconds) || seconds <= 0)
@@ -415,6 +474,7 @@ internal sealed class BootstrapOptions
     public int? WaitPid;
     public string? AppPath;
     public string? BackupDirectory;
+    public string? RetainBackupDirectory;
     public string? LogFile;
     public bool KeepPayload;
     public bool Rollback;

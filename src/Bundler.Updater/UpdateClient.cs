@@ -178,7 +178,7 @@ public sealed class UpdateClient
             options ?? new ApplyOptions(), _options.Log);
     }
 
-    /// <summary>回滚钩子：上次换包留下的 .bundler-backup 倒回安装目录。</summary>
+    /// <summary>回滚钩子：换包留下的备份倒回安装目录（默认不保留回滚点——ApplyOptions.KeepRollbackBackup 开启后才有可回滚目标）。</summary>
     public Process Rollback(ApplyOptions? options = null) =>
         UpdateApplier.Rollback(_installDirectory, options ?? new ApplyOptions(), _options.Log);
 

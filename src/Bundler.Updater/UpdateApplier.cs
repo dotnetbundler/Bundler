@@ -54,19 +54,21 @@ internal sealed class UpdateApplier
         }
     }
 
-    /// <summary>回滚钩子：引导程序 `--rollback` 模式——备份复制回安装目录且不二次备份。</summary>
+    /// <summary>回滚钩子：引导程序 `--rollback` 模式——备份复制回安装目录且不二次备份。
+    /// 备份位置与换包时的保留决策一致：开启保留指数据区目录，未开启指兄弟位瞬备（多半已删→拒绝）。</summary>
     internal static Process Rollback(
         string installDirectory, ApplyOptions options, Action<string>? log)
     {
-        var backup = installDirectory.TrimEnd('/', '\\') + ".bundler-backup";
+        var backup = BackupLocationForRollback(installDirectory, options);
         log?.Invoke("update: rolling back to '" + backup + "'");
-        return RunBootstrapper(null, installDirectory, options, log, rollback: true);
+        return RunBootstrapper(null, installDirectory, options, log, rollback: true, backupDirectory: backup);
     }
 
     // 引导程序 = 换包执行体；从安装目录/包内取件复制到临时目录执行，防自锁。
     private static Process RunBootstrapper(
         string? payloadDirectory, string installDirectory,
-        ApplyOptions options, Action<string>? log, bool rollback = false)
+        ApplyOptions options, Action<string>? log, bool rollback = false,
+        string? backupDirectory = null)
     {
         var runDir = Path.Combine(options.StagingRoot, "bootstrap");
         Directory.CreateDirectory(runDir);
@@ -74,6 +76,9 @@ internal sealed class UpdateApplier
             "apply --install-dir \"" + installDirectory + "\"" +
             (payloadDirectory is { Length: > 0 } payload ? " --payload \"" + payload + "\"" : "") +
             (rollback ? " --rollback" : "") +
+            (backupDirectory is { Length: > 0 } bd ? " --backup-dir \"" + bd + "\"" : "") +
+            (!rollback && options.KeepRollbackBackup
+                ? " --retain-backup-to \"" + ResolveRetentionDirectory(installDirectory, options) + "\"" : "") +
             (options.WaitPid is { } pid ? " --wait-pid " + pid : "") +
             (options.AppPath is { Length: > 0 } app ? " --app \"" + app + "\"" : "") +
             (options.KeepPayload ? " --keep-payload" : "") +
@@ -194,6 +199,83 @@ internal sealed class UpdateApplier
     private static string ResolveMsiexec() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "msiexec.exe");
 
+    // 回滚时的备份位置：开启保留 → 数据区目录（文件级换包备份=保留目录内的同名文件）；
+    // 未开启 → 兄弟位瞬备路径（正常已被换包成功清掉，到不了这）。
+    // 兄弟位瞬备仍在时优先它——那是换包中途崩溃的现场，回滚顺带完成恢复。
+    private static string BackupLocationForRollback(string installDirectory, ApplyOptions options)
+    {
+        var trimmed = installDirectory.TrimEnd('/', '\\');
+        var sibling = trimmed + ".bundler-backup";
+        if (Directory.Exists(sibling) || File.Exists(sibling))
+        {
+            return sibling;
+        }
+        if (!options.KeepRollbackBackup)
+        {
+            return sibling;
+        }
+        var retain = ResolveRetentionDirectory(installDirectory, options);
+        return File.Exists(installDirectory)
+            ? Path.Combine(retain, Path.GetFileName(trimmed))
+            : retain;
+    }
+
+    // 回滚点集中存放区：per-machine 安装（Program Files//Applications//opt//usr//Library）落机器数据目录，
+    // 其余落用户数据目录；目录名=安装目录名+路径哈希缀（同名应用多装位不撞）。
+    internal static string ResolveRetentionDirectory(string installDirectory, ApplyOptions options)
+    {
+        if (options.RollbackBackupDirectory is { Length: > 0 } explicitDir)
+        {
+            return Path.GetFullPath(explicitDir);
+        }
+        var full = Path.GetFullPath(installDirectory);
+        var name = Path.GetFileName(full.TrimEnd('\\', '/'));
+        var hashBytes = System.Security.Cryptography.SHA256.Create()
+            .ComputeHash(System.Text.Encoding.UTF8.GetBytes(full));
+        var hex = new System.Text.StringBuilder(8);
+        for (var i = 0; i < 4; i++)
+        {
+            hex.Append(hashBytes[i].ToString("x2", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        return Path.Combine(RetentionRoot(full), name + "-" + hex);
+    }
+
+    private static string RetentionRoot(string installPath)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            var machine = installPath.StartsWith(programFiles, StringComparison.OrdinalIgnoreCase);
+            return Path.Combine(
+                Environment.GetFolderPath(machine
+                    ? Environment.SpecialFolder.CommonApplicationData
+                    : Environment.SpecialFolder.LocalApplicationData),
+                "DotNet.Bundler", "backups");
+        }
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            var machine = installPath.StartsWith("/Applications", StringComparison.Ordinal) ||
+                          installPath.StartsWith("/Library", StringComparison.Ordinal);
+            var root = machine
+                ? "/Library/Application Support"
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "Library", "Application Support");
+            return Path.Combine(root, "DotNet.Bundler", "backups");
+        }
+        var machineLinux = installPath.StartsWith("/opt", StringComparison.Ordinal) ||
+                           installPath.StartsWith("/usr", StringComparison.Ordinal) ||
+                           installPath.StartsWith("/snap", StringComparison.Ordinal);
+        if (machineLinux)
+        {
+            return Path.Combine("/var/lib", "dotnet-bundler", "backups");
+        }
+        var xdg = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        return Path.Combine(
+            xdg is { Length: > 0 } ? xdg
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share"),
+            "dotnet-bundler", "backups");
+    }
+
     private static Process StartReplay(string file, string arguments, Action<string>? log)
     {
         log?.Invoke($"update: replay '{file}' {arguments}");
@@ -242,6 +324,10 @@ public sealed class ApplyOptions
     public bool SilentInstaller { get; init; }
     /// <summary>保留暂存载荷（默认换包后清掉）。</summary>
     public bool KeepPayload { get; init; }
+    /// <summary>换包成功后保留回滚备份（默认 false 不保留——备份仅作换包期崩溃恢复载体）。</summary>
+    public bool KeepRollbackBackup { get; init; }
+    /// <summary>回滚备份显式目录——默认按安装层级解析到用户/机器数据目录下的 DotNet.Bundler/backups。</summary>
+    public string? RollbackBackupDirectory { get; init; }
     /// <summary>引导件显式路径——默认探测安装目录内注入件。</summary>
     public string? BootstrapperPath { get; init; }
     /// <summary>暂存根——默认系统临时目录下的 bundler-update。</summary>
