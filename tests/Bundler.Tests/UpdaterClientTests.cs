@@ -165,11 +165,16 @@ public static class UpdaterClientTests
                 StagingRoot = Path.Combine(directory, "staging"),
                 BootstrapperPath = RepoPath(
                     "src/Bundler.Updater.Bootstrap/tools/linux-x64/bundler-updater"),
+                KeepRollbackBackup = true,
+                RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
             });
             Assert.True(process.WaitForExit(90_000), "bootstrapper did not exit in 90s");
             Assert.Equal(0, process.ExitCode);
             Assert.Equal("v2-image", File.ReadAllText(install));
-            Assert.Equal("v1-image", File.ReadAllText(install + ".bundler-backup"));
+            // 保留语义：文件级备份按安装文件真名落保留目录；兄弟位瞬备清走。
+            Assert.False(File.Exists(install + ".bundler-backup"));
+            Assert.Equal("v1-image", File.ReadAllText(
+                Path.Combine(directory, "backups", "myapp", "MyApp.AppImage")));
             // 宿主目录里的无关文件原样保留——文件级换包的防误清面。
             Assert.Equal("keep-me", File.ReadAllText(Path.Combine(installDir, "sibling.txt")));
             Assert.False(File.Exists(install + ".bundler-swap"));
@@ -186,6 +191,8 @@ public static class UpdaterClientTests
                 StagingRoot = Path.Combine(directory, "staging-rb"),
                 BootstrapperPath = RepoPath(
                     "src/Bundler.Updater.Bootstrap/tools/linux-x64/bundler-updater"),
+                KeepRollbackBackup = true,
+                RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
             });
             Assert.True(rollback.WaitForExit(60_000));
             Assert.Equal(0, rollback.ExitCode);
@@ -675,18 +682,24 @@ public static class UpdaterClientTests
             var process = client.Apply(info, downloaded, new ApplyOptions
             {
                 StagingRoot = Path.Combine(directory, "staging"),
+                KeepRollbackBackup = true,
+                RollbackBackupDirectory = Path.Combine(directory, "backups", "install-x"),
             });
             Assert.True(process.WaitForExit(90_000), "bootstrapper did not exit in 90s");
             Assert.Equal(0, process.ExitCode);
             Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
+            // 保留语义：备份迁到保留目录当回滚点；兄弟位瞬备清走。
+            Assert.False(Directory.Exists(install + ".bundler-backup"));
             Assert.Equal("v1", File.ReadAllText(
-                Path.Combine(install + ".bundler-backup", "app")));
+                Path.Combine(directory, "backups", "install-x", "app")));
             Assert.False(File.Exists(install + ".bundler-swap"));
 
-            // 回滚钩子：备份倒回 → 安装目录回到 v1。
+            // 回滚钩子：保留位备份倒回 → 安装目录回到 v1。
             var rollback = client.Rollback(new ApplyOptions
             {
                 StagingRoot = Path.Combine(directory, "staging-rb"),
+                KeepRollbackBackup = true,
+                RollbackBackupDirectory = Path.Combine(directory, "backups", "install-x"),
             });
             Assert.True(rollback.WaitForExit(60_000));
             Assert.Equal(0, rollback.ExitCode);

@@ -11,6 +11,7 @@ PAYLOAD_DIR=""
 WAIT_PID=""
 APP_PATH=""
 BACKUP_DIR=""
+RETAIN_DIR=""
 LOG_FILE=""
 KEEP_PAYLOAD=0
 ROLLBACK=0
@@ -20,7 +21,7 @@ usage() {
     echo "Usage:" >&2
     echo "  bundler-updater.sh apply --install-dir <dir|file> --payload <dir|file>" >&2
     echo "      [--wait-pid <pid>] [--app <path>] [--backup-dir <dir|file>]" >&2
-    echo "      [--keep-payload] [--rollback] [--log <file>] [--wait-timeout <seconds>]" >&2
+    echo "      [--keep-payload] [--rollback] [--retain-backup-to <dir>] [--log <file>] [--wait-timeout <seconds>]" >&2
 }
 
 log() {
@@ -50,7 +51,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --keep-payload) KEEP_PAYLOAD=1; shift ;;
         --rollback) ROLLBACK=1; shift ;;
-        --install-dir|--payload|--wait-pid|--app|--backup-dir|--log|--wait-timeout)
+        --install-dir|--payload|--wait-pid|--app|--backup-dir|--retain-backup-to|--log|--wait-timeout)
             [ $# -ge 2 ] || { echo "bundler-updater: option '$1' requires a value." >&2; exit 2; }
             case "$1" in
                 --install-dir) INSTALL_DIR=$2 ;;
@@ -58,6 +59,7 @@ while [ $# -gt 0 ]; do
                 --wait-pid) WAIT_PID=$2 ;;
                 --app) APP_PATH=$2 ;;
                 --backup-dir) BACKUP_DIR=$2 ;;
+                --retain-backup-to) RETAIN_DIR=$2 ;;
                 --log) LOG_FILE=$2 ;;
                 --wait-timeout) WAIT_TIMEOUT=$2 ;;
             esac
@@ -66,10 +68,97 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# 字面前缀判与派生路径都会被 ../.// 等拼写骗过：规范化只做在嵌套判里时，
+# ${INSTALL_DIR}.bundler-backup 字面仍含 ..——retain 删掉中间目录后 mv 失解析。
+# 故入参先按物理路径统一规范化（存在的目录直接解析，不存在的解析父目录再接回末段），
+# 之后的派生、比较、文件操作全程只用规范化值，与 AOT 侧 GetFullPath 同义。
+norm_path() {
+    _np="${1%/}"
+    if [ -d "$_np" ]; then
+        (cd "$_np" && pwd -P)
+    else
+        _nd=$(dirname "$_np")
+        _nb=$(basename "$_np")
+        _nr=$( (cd "$_nd" 2>/dev/null && pwd -P) || norm_lexical "$_nd")
+        printf '%s/%s\n' "${_nr%/}" "$_nb"
+    fi
+}
+
+# 父目录缺席时物理解析走不通——退回词法折叠消掉 ./.. 段，
+# 否则 .. 留字面会绕开嵌套判，而 retain 的 mkdir -p 又恰好把逃逸路径做实。
+norm_lexical() {
+    _nl=$1
+    case "$_nl" in /*) ;; *) _nl="$PWD/$_nl" ;; esac
+    _saved_ifs=$IFS
+    IFS='/'
+    set -f
+    # 故意不带引号：按 / 拆段
+    set -- $_nl
+    set +f
+    IFS=$_saved_ifs
+    _out=
+    for _s do
+        case "$_s" in
+            ""|.) ;;
+            ..) _out=${_out%/*} ;;
+            *) _out="$_out/$_s" ;;
+        esac
+    done
+    printf '%s\n' "${_out:-/}"
+}
+
 [ -n "$INSTALL_DIR" ] || { echo "bundler-updater: --install-dir is required." >&2; exit 2; }
 [ "$ROLLBACK" = 1 ] || [ -n "$PAYLOAD_DIR" ] || { echo "bundler-updater: --payload is required unless --rollback." >&2; exit 2; }
+INSTALL_DIR="$(norm_path "$INSTALL_DIR")"
+[ -z "$PAYLOAD_DIR" ] || PAYLOAD_DIR="$(norm_path "$PAYLOAD_DIR")"
+[ -z "$BACKUP_DIR" ] || BACKUP_DIR="$(norm_path "$BACKUP_DIR")"
+[ -z "$RETAIN_DIR" ] || RETAIN_DIR="$(norm_path "$RETAIN_DIR")"
 [ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
 MARKER="${INSTALL_DIR%/}.bundler-swap"
+
+# 备份目录与安装/载荷同址或互嵌同样是抹数据的形状（换包前会 rm 旧备份）——与 AOT 侧同拒。
+for _p in "$INSTALL_DIR" "$PAYLOAD_DIR"; do
+    [ -n "$_p" ] || continue
+    case "$BACKUP_DIR" in
+        "$_p"|"$_p"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+    esac
+    case "$_p" in
+        "$BACKUP_DIR"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+    esac
+done
+
+# 保留目录与安装/载荷/备份目录同址或互嵌同样是抹数据的形状——与 AOT 侧 SameOrInside 同拒。
+if [ -n "$RETAIN_DIR" ]; then
+    _r="$RETAIN_DIR"
+    for _p in "$INSTALL_DIR" "$BACKUP_DIR" "$PAYLOAD_DIR"; do
+        [ -n "$_p" ] || continue
+        case "$_r" in
+            "$_p"|"$_p"/*) { echo "bundler-updater: retained-backup directory must not nest inside install/payload/backup directories." >&2; exit 2; } ;;
+        esac
+        case "$_p" in
+            "$_r"/*) { echo "bundler-updater: retained-backup directory must not nest inside install/payload/backup directories." >&2; exit 2; } ;;
+        esac
+    done
+fi
+
+# 备份的最终去向：--retain-backup-to 给了目录就迁过去当回滚点，不给就删——默认不保留；
+# 换包期备份无论如何都建（崩溃恢复与原子性的载体）。$1=备份路径，$2=保留目录内文件名（文件级换包用）。
+retain_or_remove_backup() {
+    if [ -n "$RETAIN_DIR" ]; then
+        if [ -n "${2:-}" ]; then
+            target="$RETAIN_DIR/$2"
+        else
+            target="$RETAIN_DIR"
+        fi
+        mkdir -p "$(dirname "$target")" || return 4
+        rm -rf "$target" || return 4
+        log "bundler-updater: retain backup '$1' → '$target'"
+        mv "$1" "$target" || return 4
+        return 0
+    fi
+    rm -rf "$1" 2>/dev/null || true
+    return 0
+}
 
 if [ -n "$WAIT_PID" ]; then
     log "bundler-updater: waiting for pid $WAIT_PID to exit"
@@ -131,6 +220,9 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
         exit 4
     fi
     rm -f "$MARKER"
+    # 文件级备份保留时按安装文件真名落在保留目录里；迁移失败降级留瞬备不阻断换包。
+    retain_or_remove_backup "$BACKUP_DIR" "$(basename "$INSTALL_DIR")" || \
+        log "bundler-updater: WARN retain/remove backup failed; transient backup left at '$BACKUP_DIR'."
     [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
     [ "$KEEP_PAYLOAD" = 1 ] || rm -f "$PAYLOAD_DIR" 2>/dev/null || true
     log "bundler-updater: done"
@@ -208,6 +300,9 @@ if [ "$SWAP_FAILED" = 1 ]; then
     exit 4
 fi
 rm -f "$MARKER"
+
+retain_or_remove_backup "$BACKUP_DIR" "" || \
+    log "bundler-updater: WARN retain/remove backup failed; transient backup left at '$BACKUP_DIR'."
 
 [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
 [ "$KEEP_PAYLOAD" = 1 ] || rm -rf "$PAYLOAD_DIR" 2>/dev/null || true

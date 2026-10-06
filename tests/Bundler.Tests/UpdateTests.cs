@@ -282,8 +282,8 @@ public static class UpdateTests
 
             Assert.Equal(0, rc);
             Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
-            Assert.Equal("v1", File.ReadAllText(
-                Path.Combine(install + ".bundler-backup", "app")));
+            // 默认不保留回滚点：换包成功后兄弟位瞬备被清掉。
+            Assert.False(Directory.Exists(install + ".bundler-backup"));
             // --keep-payload 下暂存目录保留（调试与组合器用法）。
             Assert.True(Directory.Exists(payload));
         }
@@ -319,10 +319,54 @@ public static class UpdateTests
 
             Assert.Equal(0, rc);
             Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
-            // marker 清干净；备份目录=本轮应用前的版本（恢复出的 v1）——回滚目标正确。
+            // marker 清干净；默认不保留回滚点——恢复+v2 就位后瞬备删除。
             Assert.False(File.Exists(install + ".bundler-swap"));
-            Assert.Equal("v1-good", File.ReadAllText(
-                Path.Combine(install + ".bundler-backup", "app")));
+            Assert.False(Directory.Exists(install + ".bundler-backup"));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void BootstrapPlan_RetainBackupTo_RetainsAndRollbackRestores()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "install");
+            var payload = Path.Combine(directory, "payload");
+            var retain = Path.Combine(directory, "backups", "install-abc");
+            Directory.CreateDirectory(install);
+            Directory.CreateDirectory(payload);
+            File.WriteAllText(Path.Combine(install, "app"), "v1");
+            File.WriteAllText(Path.Combine(payload, "app"), "v2");
+
+            var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload,
+                    RetainBackupDirectory = retain,
+                }, _ => { });
+
+            Assert.Equal(0, rc);
+            Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
+            // 兄弟位瞬备清走，备份迁到保留目录当回滚点。
+            Assert.False(Directory.Exists(install + ".bundler-backup"));
+            Assert.Equal("v1", File.ReadAllText(Path.Combine(retain, "app")));
+
+            rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    BackupDirectory = retain,
+                    Rollback = true,
+                }, _ => { });
+            Assert.Equal(0, rc);
+            Assert.Equal("v1", File.ReadAllText(Path.Combine(install, "app")));
+            Assert.Equal("v1", File.ReadAllText(Path.Combine(retain, "app")));
         }
         finally
         {
@@ -445,6 +489,16 @@ public static class UpdateTests
                     InstallDirectory = install,
                     PayloadDirectory = payload,
                     BackupDirectory = Path.Combine(install, "backup")
+                }, lines.Add));
+
+        // 保留目录与安装目录同址 → 拒绝（等值路径逃逸严格子路径检查，会抹掉新装）。
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload,
+                    RetainBackupDirectory = install + Path.DirectorySeparatorChar
                 }, lines.Add));
     }
 
@@ -755,7 +809,8 @@ public static class UpdateTests
 
             Assert.Equal(0, rc);
             Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
-            Assert.Equal("v1-good", File.ReadAllText(Path.Combine(backup, "app")));
+            // 默认不保留回滚点：恢复+v2 就位后瞬备删除。
+            Assert.False(Directory.Exists(backup));
             Assert.False(File.Exists(install + ".bundler-swap"));
         }
         finally
@@ -788,22 +843,48 @@ public static class UpdateTests
 
             Assert.Equal(0, rc);
             Assert.Equal("v2-image", File.ReadAllText(install));
-            Assert.Equal("v1-image", File.ReadAllText(install + ".bundler-backup"));
+            // 默认不保留回滚点：文件级瞬备同样换完即删。
+            Assert.False(File.Exists(install + ".bundler-backup"));
             Assert.False(File.Exists(install + ".bundler-swap"));
             // 目录语义会清掉 sibling——文件级换包必须留下它。
             Assert.Equal("keep-me", File.ReadAllText(Path.Combine(directory, "sibling.txt")));
             Assert.False(Directory.Exists(payloadDir) && File.Exists(payload));
 
-            // 回滚：备份文件倒回，且备份保留可重试。
+            // 未保留 → 回滚确定性拒绝。
+            Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UpdateRejectedException>(() =>
+                DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                    new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                    {
+                        InstallDirectory = install,
+                        Rollback = true,
+                    }, _ => { }));
+
+            // 保留语义：备份按安装文件真名落保留目录，回滚从保留位倒回。
+            File.WriteAllText(install + ".bundler-backup", "v1-image");
+            File.WriteAllText(payload, "v3-image");
+            var retain = Path.Combine(directory, "backups", "myapp-abc");
             rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
                 new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
                 {
                     InstallDirectory = install,
+                    PayloadDirectory = payload,
+                    RetainBackupDirectory = retain,
+                }, _ => { });
+            Assert.Equal(0, rc);
+            Assert.Equal("v3-image", File.ReadAllText(install));
+            Assert.Equal("v2-image", File.ReadAllText(
+                Path.Combine(retain, "MyApp.AppImage")));
+
+            rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    BackupDirectory = Path.Combine(retain, "MyApp.AppImage"),
                     Rollback = true,
                 }, _ => { });
             Assert.Equal(0, rc);
-            Assert.Equal("v1-image", File.ReadAllText(install));
-            Assert.True(File.Exists(install + ".bundler-backup"));
+            Assert.Equal("v2-image", File.ReadAllText(install));
+            Assert.True(File.Exists(Path.Combine(retain, "MyApp.AppImage")));
         }
         finally
         {
