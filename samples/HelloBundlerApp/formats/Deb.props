@@ -20,8 +20,8 @@
          Categories 为 freedesktop 分号列表；
          DesktopFile/MetainfoFile/ChangelogFile 指向本地文件，DesktopFile 整文件覆盖。 -->
     <!-- .NET 自含载荷运行所需系统依赖（与 AlpineApk 的 libstdc++;libgcc 同口径）；
-         libicu 包名随发行版版本变化，用 Debian 候选子句覆盖 20.04+ 主流版本。 -->
-    <BundlerDebDepends>libc6;libgcc-s1;libstdc++6;zlib1g;libicu76 | libicu74 | libicu72 | libicu70</BundlerDebDepends>
+         libicu 包名随发行版版本变化，用 Debian 候选子句覆盖 Ubuntu 20.04+/Debian 11+。 -->
+    <BundlerDebDepends>libc6;libgcc-s1;libstdc++6;zlib1g;libicu76 | libicu74 | libicu72 | libicu70 | libicu67 | libicu66</BundlerDebDepends>
     <BundlerDebDepends Condition="'$(HelloBundlerDebDepends)' != ''">$(HelloBundlerDebDepends)</BundlerDebDepends>
     <BundlerDebRecommends Condition="'$(HelloBundlerDebRecommends)' != ''">$(HelloBundlerDebRecommends)</BundlerDebRecommends>
     <BundlerDebProvides Condition="'$(HelloBundlerDebProvides)' != ''">$(HelloBundlerDebProvides)</BundlerDebProvides>
