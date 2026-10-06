@@ -30,4 +30,5 @@
 RFC 3161 时间戳副签名协议不需要付费凭证。
 用自签名证书 + 公共时间戳服务器（如 `http://timestamp.digicert.com`）即可真实跑通签名→取时间戳→嵌入副签名全链。
 该腿证明的是时间戳管线与嵌入正确性，不证明 CA 信任链——信任链证据仍归付费凭证项。
-对应 NSIS"时间戳接受度"与 MSI-OI-06 的时间戳子项可在零成本下先行消解。
+
+**2026-10-06 已实证消解（win-x64 宿主 `b7dd840`）**：自签代码签名证书 + `signtool sign /fd sha256 /tr http://timestamp.digicert.com /td sha256` exit 0；`Get-AuthenticodeSignature.TimeStamperCertificate` 非空（Issuer=DigiCert Trusted G4 TimeStamping RSA4096 SHA256 2025 CA1，有效期至 2037-11-04）；不带 `/tr` 对照组 TimeStamperCertificate 为空，证明时间戳确来自 RFC 3161 服务器而非残留；`timestamp.invalid.example` 负例 exit 1。教训：对已签名 PE 做此验证会读旧签名造成假阳性，须用无签名 PE。剩余归付费凭证的仅是 CA 信任链与 SmartScreen 声誉子项。

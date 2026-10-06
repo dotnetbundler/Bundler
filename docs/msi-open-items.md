@@ -13,7 +13,7 @@ WIN-MSI-9 已完成 Tauri 通用能力审计与再冻结，见 `docs/msi-roadmap
 | MSI-OI-03 | MSI-1 本机已通过，MSI-4 扩展矩阵 | 独立 Windows VM/CI 复跑最小安装/卸载 | 其他宿主的 verbose log、状态/清理断言；本机烟雾结果见 `docs/msi-roadmap.md` 第 6 节 |
 | MSI-OI-04 | MSI-2，外部待验收 | 标准用户和管理员账户，Windows UAC/策略差异 | current user/per machine 的权限与目录/注册表证据；本机仅已验证 per-machine 数据库表 |
 | MSI-OI-05 | MSI-2，本机已通过；外部仍待复测 | 真实旧发行包或受控两版本发行包 | major upgrade、同版本异包/降级拒绝、资源归属、用户数据及默认应用实际选择/唤起证据；本机结果见 MSI 路线第 7 节 |
-| MSI-OI-06 | MSI-3 本机测试签名通过；外部待验收 | 生产证书与时间戳设施 | 链、时间戳、签名验证；私钥不入库。测试证书不构成生产信任证据 |
+| MSI-OI-06 | MSI-3 本机测试签名通过；外部待验收 | 生产证书与时间戳设施 | 链、时间戳、签名验证；私钥不入库。测试证书不构成生产信任证据。**时间戳子项已消解**：2026-10-06 win-x64 宿主自签证书+`signtool /tr http://timestamp.digicert.com /td sha256` 真实嵌入 RFC 3161 副签名（TimeStamperCertificate=DigiCert 颁发，对照/负例正确，证据见 `docs/paid-credentials-open-items.md` §二）；剩余仅生产 CA 信任链子项 |
 | MSI-OI-07 | MSI-3 本机安全故障通过；外部待验收 | 可抛弃的重启/锁定文件/磁盘故障/缺源 VM | 3010 或明确失败码、重启后状态、回滚日志；本机已验证损坏包与测试包的延迟失败回滚 |
 | MSI-OI-08 | MSI-4 | Windows 10/11 x64、ARM64 支持矩阵 | 每组合的构建、安装、升级、修复、卸载记录；未测组合限定支持声明 |
 | MSI-OI-09 | MSI-4 | 本地化审校和辅助功能使用者 | 支持语言集的 UI、缩放和可访问性记录 |
