@@ -490,6 +490,16 @@ public static class UpdateTests
                     PayloadDirectory = payload,
                     BackupDirectory = Path.Combine(install, "backup")
                 }, lines.Add));
+
+        // 保留目录与安装目录同址 → 拒绝（等值路径逃逸严格子路径检查，会抹掉新装）。
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload,
+                    RetainBackupDirectory = install + Path.DirectorySeparatorChar
+                }, lines.Add));
     }
 
     [Fact]

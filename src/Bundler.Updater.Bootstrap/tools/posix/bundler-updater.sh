@@ -73,6 +73,20 @@ done
 [ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
 MARKER="${INSTALL_DIR%/}.bundler-swap"
 
+# 保留目录与安装/载荷/备份目录同址或互嵌同样是抹数据的形状——与 AOT 侧 SameOrInside 同拒。
+if [ -n "$RETAIN_DIR" ]; then
+    _r="${RETAIN_DIR%/}"
+    for _p in "${INSTALL_DIR%/}" "${BACKUP_DIR%/}" "${PAYLOAD_DIR%/}"; do
+        [ -n "$_p" ] || continue
+        case "$_r" in
+            "$_p"|"$_p"/*) { echo "bundler-updater: retained-backup directory must not nest inside install/payload/backup directories." >&2; exit 2; } ;;
+        esac
+        case "$_p" in
+            "$_r"/*) { echo "bundler-updater: retained-backup directory must not nest inside install/payload/backup directories." >&2; exit 2; } ;;
+        esac
+    done
+fi
+
 # 备份的最终去向：--retain-backup-to 给了目录就迁过去当回滚点，不给就删——默认不保留；
 # 换包期备份无论如何都建（崩溃恢复与原子性的载体）。$1=备份路径，$2=保留目录内文件名（文件级换包用）。
 retain_or_remove_backup() {
@@ -152,8 +166,9 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
         exit 4
     fi
     rm -f "$MARKER"
-    # 文件级备份保留时按安装文件真名落在保留目录里。
-    retain_or_remove_backup "$BACKUP_DIR" "$(basename "$INSTALL_DIR")" || exit 4
+    # 文件级备份保留时按安装文件真名落在保留目录里；迁移失败降级留瞬备不阻断换包。
+    retain_or_remove_backup "$BACKUP_DIR" "$(basename "$INSTALL_DIR")" || \
+        log "bundler-updater: WARN retain/remove backup failed; transient backup left at '$BACKUP_DIR'."
     [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
     [ "$KEEP_PAYLOAD" = 1 ] || rm -f "$PAYLOAD_DIR" 2>/dev/null || true
     log "bundler-updater: done"
@@ -232,7 +247,8 @@ if [ "$SWAP_FAILED" = 1 ]; then
 fi
 rm -f "$MARKER"
 
-retain_or_remove_backup "$BACKUP_DIR" "" || exit 4
+retain_or_remove_backup "$BACKUP_DIR" "" || \
+    log "bundler-updater: WARN retain/remove backup failed; transient backup left at '$BACKUP_DIR'."
 
 [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
 [ "$KEEP_PAYLOAD" = 1 ] || rm -rf "$PAYLOAD_DIR" 2>/dev/null || true
