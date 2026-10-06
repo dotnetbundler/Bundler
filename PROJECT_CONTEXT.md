@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-06
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.75`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.76`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -85,6 +85,14 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-06 PR #30 压缩合并（squash `45842ff`，main `45842ff`，版本推进 `alpha.76`）
+
+- 四项整改合一批：CLI 删 `apk` 别名（`alpineapk` 唯一合法名，`apk` 留 Android）；`BundlerMacAppShortVersion` 默认继承 `$(BundlerVersion)`（样品输出不变）；`ApplyOptions.KeepRollbackBackup` 默认 false——换包期瞬备 `.bundler-backup` 必建（原子性+marker 崩溃恢复不可关），成功后默认删，开启才迁保留位当回滚点；保留位分层数据区 `DotNet.Bundler/backups/<名>-<路径哈希>`（per-user→LOCALAPPDATA/~/Library/XDG，per-machine→ProgramData//Library//var/lib）；POSIX `bundler-updater.sh` 同协议。
+- Devin Review 四轮共 6 发现全实证修复：retain==install 等值逃逸（`SameOrInside`）、迁移失败阻断（`TryRetainOrRemoveBackup` 降级留瞬备）、`..` 字面误拒（`norm_path` 物理规范化+前移入参）、缺席父目录 `..` 逃逸（`norm_lexical` 词法折叠）、`--backup-dir` 无嵌套判抹安装位（补双向嵌套拒）、跨 RID 入包件过期（五 RID 全重产回填）。第四轮 0 发现。
+- 宿主腿实证：win-x64（Server 2022）Update 47/47 + 自产件六腿全绿；macOS arm64 真机（26.5.2）等值拒/降级/.app/sh 全绿 + osx-x64 交叉产件；alpine busybox sh 嵌套拒/降级/回归 3/3 + musl 件容器实跑 3/3；本机全量 336/297P/0F/39S。
+- 产件来源记录：win-x64/osx-arm64/osx-x64 由对应宿主子会话产件回传；linux-musl-x64 由 alpine 容器 `dotnet10-sdk`+musl 工具链真产（glibc 宿主交叉产出系 PT_INTERP/NEEDED 混血残件，不可用——musl 件只能在 musl 工具链宿主产）；linux-x64 本机产。
+- 已知边界：POSIX 不存在路径的 `..` 为词法折叠近似（兜底降级不抹数据）；osx-x64 件未在 Intel Mac 实跑（挂 `docs/special-acceptance.md` 借机组既有项）。
 
 ### 2026-10-06 main `2bec10e` R3 四宿主回归 + PR #29 压缩合并（squash `be58d94`）
 
