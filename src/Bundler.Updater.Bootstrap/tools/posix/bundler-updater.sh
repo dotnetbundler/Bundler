@@ -116,6 +116,17 @@ INSTALL_DIR="$(norm_path "$INSTALL_DIR")"
 [ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
 MARKER="${INSTALL_DIR%/}.bundler-swap"
 
+# 备份目录与安装/载荷同址或互嵌同样是抹数据的形状（换包前会 rm 旧备份）——与 AOT 侧同拒。
+for _p in "$INSTALL_DIR" "$PAYLOAD_DIR"; do
+    [ -n "$_p" ] || continue
+    case "$BACKUP_DIR" in
+        "$_p"|"$_p"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+    esac
+    case "$_p" in
+        "$BACKUP_DIR"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+    esac
+done
+
 # 保留目录与安装/载荷/备份目录同址或互嵌同样是抹数据的形状——与 AOT 侧 SameOrInside 同拒。
 if [ -n "$RETAIN_DIR" ]; then
     _r="$RETAIN_DIR"
