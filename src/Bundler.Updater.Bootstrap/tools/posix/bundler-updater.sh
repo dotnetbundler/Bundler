@@ -73,11 +73,26 @@ done
 [ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
 MARKER="${INSTALL_DIR%/}.bundler-swap"
 
+# 字面前缀判会被 .././/~ 等拼写骗过——先按物理路径规范化（存在的目录直接解析，
+# 不存在的解析父目录再接回末段）再比较，与 AOT 侧 GetFullPath 同义。
+norm_path() {
+    _np="${1%/}"
+    if [ -d "$_np" ]; then
+        (cd "$_np" && pwd -P)
+    else
+        _nd=$(dirname "$_np")
+        _nb=$(basename "$_np")
+        _nr=$( (cd "$_nd" 2>/dev/null && pwd -P) || printf '%s' "$_nd")
+        printf '%s/%s\n' "$_nr" "$_nb"
+    fi
+}
+
 # 保留目录与安装/载荷/备份目录同址或互嵌同样是抹数据的形状——与 AOT 侧 SameOrInside 同拒。
 if [ -n "$RETAIN_DIR" ]; then
-    _r="${RETAIN_DIR%/}"
-    for _p in "${INSTALL_DIR%/}" "${BACKUP_DIR%/}" "${PAYLOAD_DIR%/}"; do
+    _r="$(norm_path "$RETAIN_DIR")"
+    for _p in "$INSTALL_DIR" "$BACKUP_DIR" "$PAYLOAD_DIR"; do
         [ -n "$_p" ] || continue
+        _p="$(norm_path "$_p")"
         case "$_r" in
             "$_p"|"$_p"/*) { echo "bundler-updater: retained-backup directory must not nest inside install/payload/backup directories." >&2; exit 2; } ;;
         esac
