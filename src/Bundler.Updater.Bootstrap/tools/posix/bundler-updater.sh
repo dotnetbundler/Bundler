@@ -68,13 +68,10 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-[ -n "$INSTALL_DIR" ] || { echo "bundler-updater: --install-dir is required." >&2; exit 2; }
-[ "$ROLLBACK" = 1 ] || [ -n "$PAYLOAD_DIR" ] || { echo "bundler-updater: --payload is required unless --rollback." >&2; exit 2; }
-[ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
-MARKER="${INSTALL_DIR%/}.bundler-swap"
-
-# 字面前缀判会被 .././/~ 等拼写骗过——先按物理路径规范化（存在的目录直接解析，
-# 不存在的解析父目录再接回末段）再比较，与 AOT 侧 GetFullPath 同义。
+# 字面前缀判与派生路径都会被 ../.// 等拼写骗过：规范化只做在嵌套判里时，
+# ${INSTALL_DIR}.bundler-backup 字面仍含 ..——retain 删掉中间目录后 mv 失解析。
+# 故入参先按物理路径统一规范化（存在的目录直接解析，不存在的解析父目录再接回末段），
+# 之后的派生、比较、文件操作全程只用规范化值，与 AOT 侧 GetFullPath 同义。
 norm_path() {
     _np="${1%/}"
     if [ -d "$_np" ]; then
@@ -87,12 +84,20 @@ norm_path() {
     fi
 }
 
+[ -n "$INSTALL_DIR" ] || { echo "bundler-updater: --install-dir is required." >&2; exit 2; }
+[ "$ROLLBACK" = 1 ] || [ -n "$PAYLOAD_DIR" ] || { echo "bundler-updater: --payload is required unless --rollback." >&2; exit 2; }
+INSTALL_DIR="$(norm_path "$INSTALL_DIR")"
+[ -z "$PAYLOAD_DIR" ] || PAYLOAD_DIR="$(norm_path "$PAYLOAD_DIR")"
+[ -z "$BACKUP_DIR" ] || BACKUP_DIR="$(norm_path "$BACKUP_DIR")"
+[ -z "$RETAIN_DIR" ] || RETAIN_DIR="$(norm_path "$RETAIN_DIR")"
+[ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
+MARKER="${INSTALL_DIR%/}.bundler-swap"
+
 # 保留目录与安装/载荷/备份目录同址或互嵌同样是抹数据的形状——与 AOT 侧 SameOrInside 同拒。
 if [ -n "$RETAIN_DIR" ]; then
-    _r="$(norm_path "$RETAIN_DIR")"
+    _r="$RETAIN_DIR"
     for _p in "$INSTALL_DIR" "$BACKUP_DIR" "$PAYLOAD_DIR"; do
         [ -n "$_p" ] || continue
-        _p="$(norm_path "$_p")"
         case "$_r" in
             "$_p"|"$_p"/*) { echo "bundler-updater: retained-backup directory must not nest inside install/payload/backup directories." >&2; exit 2; } ;;
         esac
