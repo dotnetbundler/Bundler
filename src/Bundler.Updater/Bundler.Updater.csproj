@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <TargetFramework></TargetFramework>
     <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
     <AssemblyName>DotNet.Bundler.Updater</AssemblyName>
     <RootNamespace>DotNet.Bundler.Updater</RootNamespace>
@@ -18,6 +19,7 @@
     <Compile Include="..\Bundler.Core\Update\UpdateFeedModel.cs" />
     <Compile Include="..\Bundler.Core\Update\UpdateInstallIdentity.cs" />
     <Compile Include="..\Bundler.Core\Update\UpdateSignatureVerifier.cs" />
+    <Compile Include="..\Bundler.Core\Update\UpdateJson.cs" />
     <Compile Include="..\Bundler.Core\Update\UpdateBlockMapModel.cs" />
   </ItemGroup>
 

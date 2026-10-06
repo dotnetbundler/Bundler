@@ -1,5 +1,4 @@
 using System.Net.Http;
-using System.Runtime.Serialization.Json;
 using System.Security.Cryptography;
 using System.Text;
 using DotNet.Bundler.Updater.Protocol;
@@ -41,8 +40,7 @@ internal sealed class UpdateDownloader
                 $"update feed '{feedUrl}' failed signature verification — refused.");
         }
         using var stream = new MemoryStream(bytes);
-        var serializer = new DataContractJsonSerializer(typeof(UpdateFeed));
-        return serializer.ReadObject(stream) as UpdateFeed
+        return UpdateJson.ReadFeed(stream)
             ?? throw new UpdateException($"update feed '{feedUrl}' is not a valid manifest.");
     }
 
@@ -269,8 +267,7 @@ internal sealed class UpdateDownloader
     {
         var bytes = await GetBytesAsync(location, cancellationToken);
         using var stream = new MemoryStream(bytes);
-        var serializer = new DataContractJsonSerializer(typeof(UpdateBlockMap));
-        return serializer.ReadObject(stream) as UpdateBlockMap
+        return UpdateJson.ReadBlockMap(stream)
             ?? throw new UpdateException($"block-map '{location}' is not valid.");
     }
 

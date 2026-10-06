@@ -1,5 +1,4 @@
 using System.Runtime.Serialization;
-using System.Runtime.Serialization.Json;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -37,8 +36,7 @@ public sealed class UpdateKeyMaterial
     public static UpdateKeyMaterial Load(string path)
     {
         using var stream = File.OpenRead(path);
-        var serializer = new DataContractJsonSerializer(typeof(UpdateKeyMaterial));
-        var material = (UpdateKeyMaterial?)serializer.ReadObject(stream);
+        var material = UpdateJson.ReadKeyMaterial(stream);
         if (material is null || material.Kty != "ec-p256" ||
             material.X.Length == 0 || material.Y.Length == 0)
         {
@@ -67,10 +65,7 @@ public sealed class UpdateKeyMaterial
     public void Save(string path)
     {
         using var stream = File.Create(path);
-        var serializer = new DataContractJsonSerializer(
-            typeof(UpdateKeyMaterial),
-            new DataContractJsonSerializerSettings { UseSimpleDictionaryFormat = true });
-        serializer.WriteObject(stream, this);
+        UpdateJson.WriteKeyMaterial(stream, this);
         stream.Write(Encoding.ASCII.GetBytes("\n"), 0, 1);
     }
 

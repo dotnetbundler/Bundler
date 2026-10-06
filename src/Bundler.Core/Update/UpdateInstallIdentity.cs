@@ -1,6 +1,8 @@
 using System.Runtime.Serialization;
-using System.Runtime.Serialization.Json;
 using System.Text;
+#if !NETSTANDARD2_0
+using System.Text.Json;
+#endif
 
 #if BUNDLER_UPDATER_LINK
 namespace DotNet.Bundler.Updater.Protocol;
@@ -27,8 +29,7 @@ public sealed class UpdateInstallIdentity
     {
         var path = Path.Combine(payloadRoot, FileName);
         using var stream = File.Create(path);
-        var serializer = new DataContractJsonSerializer(typeof(UpdateInstallIdentity));
-        serializer.WriteObject(stream, identity);
+        UpdateJson.WriteIdentity(stream, identity);
         stream.Write(Encoding.ASCII.GetBytes("\n"), 0, 1);
     }
 
@@ -40,8 +41,7 @@ public sealed class UpdateInstallIdentity
     {
         var path = SidecarPath(installFilePath);
         using var stream = File.Create(path);
-        var serializer = new DataContractJsonSerializer(typeof(UpdateInstallIdentity));
-        serializer.WriteObject(stream, identity);
+        UpdateJson.WriteIdentity(stream, identity);
         stream.Write(Encoding.ASCII.GetBytes("\n"), 0, 1);
     }
 
@@ -80,12 +80,17 @@ public sealed class UpdateInstallIdentity
         try
         {
             using var stream = File.OpenRead(path);
-            var serializer = new DataContractJsonSerializer(typeof(UpdateInstallIdentity));
-            return serializer.ReadObject(stream) as UpdateInstallIdentity;
+            return UpdateJson.ReadIdentity(stream);
         }
         catch (SerializationException)
         {
             return null;
         }
+#if !NETSTANDARD2_0
+        catch (JsonException)
+        {
+            return null;
+        }
+#endif
     }
 }

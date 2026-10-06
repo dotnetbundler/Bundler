@@ -1,4 +1,3 @@
-using System.Runtime.Serialization.Json;
 using System.Security.Cryptography;
 using System.Text;
 using DotNet.Bundler.Archive;
@@ -88,10 +87,9 @@ public static class UpdateManifestEmitter
             var blockMapPath = artifactFile + UpdateBlockMap.FileSuffix;
             var blockMap = await Task.Run(
                 () => UpdateBlockMap.ComputeFile(artifactFile), cancellationToken);
-            var serializer = new DataContractJsonSerializer(typeof(UpdateBlockMap));
             using (var stream = File.Create(blockMapPath))
             {
-                serializer.WriteObject(stream, blockMap);
+                UpdateJson.WriteBlockMap(stream, blockMap);
             }
             produced.Add(blockMapPath);
 
@@ -117,8 +115,7 @@ public static class UpdateManifestEmitter
         var feedPath = Path.Combine(configuration.OutputDirectory, FeedFileName(channel));
         using (var stream = File.Create(feedPath))
         {
-            var serializer = new DataContractJsonSerializer(typeof(UpdateFeed));
-            serializer.WriteObject(stream, feed);
+            UpdateJson.WriteFeed(stream, feed);
             stream.Write(Encoding.ASCII.GetBytes("\n"), 0, 1);
         }
         produced.Add(feedPath);
