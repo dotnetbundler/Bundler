@@ -82,6 +82,13 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-06 UPDATE 完整测试轮修复（分支 `devin/1791228441-update-module`，PR #27）
+
+- 四宿主全量测试暴露两族缺陷均已修：Bundler.Updater 双目标被 src 级 props 单数 TFM 压制（补空复位行 → pack NU5026 清零，原 98 腿级联）；UPDATE 序列化迁 STJ 源生成（新 `UpdateJson`，netstandard2.0 仍 DCS → CLI AOT IL2026/IL3050 清零）。
+- usage 补 `--rollback`；载荷根级引导件/身份旁车定为设计契约。
+- 证据：pack rc=0、CLI AOT publish rc=0；本机 333/294P/0F/39S + IntegrationTests 176/111P/0F/65S；四宿主子会话增量复测在途。
+- 待办：宿主复测回报 + win/osx 引导件重建入库后复审。
+
 ### 2026-10-06 UPDATE 复审修复第三轮（分支 `devin/1791228441-update-module`，PR #27）
 
 - 复审 5 发现：2 属实已修（`SignatureUrl`——feed 带 query/fragment 时 `.sig` 插路径段；`Apply` 文件级侧车移到派生引导件前防半态），3 旧案重报回线（url 转义/Apply 门禁/提取根隔离均已在前轮修复）。
