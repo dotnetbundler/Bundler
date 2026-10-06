@@ -49,6 +49,19 @@
 
 ## 4. 阶段实施证据
 
+### 2026-10-06 复审修复第二轮（Devin Review 7 属实处置 + 2 误报回线）
+
+- 清单 URL 转义保留：`RelativeUrl` 改 `MakeRelativeUri().OriginalString`（取转义形态），制品名含 `#`/`?`/空格不再把产物地址截断成 fragment/query。
+- 清单本体签名：发射器写 feed JSON 后随即 `feed.sig` 旁车签名；`FetchFeedAsync` 先取 `<feed>.sig` 并 ECDSA 验签（取不到/验不过确定性拒绝），堵住"换源降级喂未签清单"面。
+- 文件级安装身份旁车：`WriteSidecar` 写 `<file>.bundler-update.json`，`TryRead` 在目录/`Contents/` 分支前先探文件路径——AppImage 单件安装换包后身份不丢（Apply 成功后对文件级安装目录落旁车）。
+- 差分缓存收紧：`UpdateDeltaCache` 由 `DownloadAsync` 后移到 `Verify` 成功后才刷新——未过签验的字节永不进缓存。
+- `Apply` 门禁：`Verify` 成功记录 `_verifiedArtifact` 绝对路径，未验件（含重命名的他件）Apply 确定性拒绝。
+- 引导件提取根按用户隔离：`Path.GetTempPath()/bundler-updater-<uid|UserName>` 且 POSIX chmod 0700——多用户同机不再共享可写提取目录。
+- POSIX 重启去 `/bin/sh -c`：`ProcessStartInfo(appPath, UseShellExecute=false)` 直接 exec，消掉路径经 shell 展开面；`.sh` 降级脚本 `nohup "$APP_PATH"` 属变量值非再展开，保持原样。
+- 误报回线两条：`.app` 清单条目已实现（`Emitter_AppDirectory_ProducesZipTransport` 证）；`+build` 元数据上轮已整串剥离（`UpdateVersion` 测试证）。
+- 测试 +6 全绿：feed 缺签拒/feed 篡改拒/未验 Apply 拒+缓存未沉/文件旁车往返/AppImage 侧车持久断言/清单 url 转义断言；feed.sig 产出断言挂进既有发射器用例；本机 332/293P/0F/39S。
+- linux-x64/linux-musl-x64 AOT 件随本轮 `BootstrapPlan` 变更重建入库；win-x64/osx-x64/osx-arm64 由宿主子会话第三轮重建（同法）。
+
 ### 2026-10-06 复审修复轮（Devin Review 8 bug+5 flag 全部属实处置）
 
 - `.app` 目录件修复：清单发射前经自家 `ZipWriter` 产 `<name>.app.zip` 运输件（exec 位/软链/确定性全保），签名/块表/尺寸/哈希全对运输件，清单记 `format=app`——此前目录件不进清单致更新完全不可达。

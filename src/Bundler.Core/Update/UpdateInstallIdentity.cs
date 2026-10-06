@@ -33,20 +33,49 @@ public sealed class UpdateInstallIdentity
     }
 
     /// <summary>
+    /// 把身份写成文件级安装的旁车 `<installFile>.bundler-update.json`——
+    /// AppImage 等单文件安装单元的身份放不进镜像内可读位置，由客户端应用时烙在旁边。
+    /// </summary>
+    public static void WriteSidecar(string installFilePath, UpdateInstallIdentity identity)
+    {
+        var path = SidecarPath(installFilePath);
+        using var stream = File.Create(path);
+        var serializer = new DataContractJsonSerializer(typeof(UpdateInstallIdentity));
+        serializer.WriteObject(stream, identity);
+        stream.Write(Encoding.ASCII.GetBytes("\n"), 0, 1);
+    }
+
+    /// <summary>文件级安装单元的身份旁车路径：`<installFile>.bundler-update.json`。</summary>
+    public static string SidecarPath(string installFilePath) => installFilePath + ".bundler-update.json";
+
+    /// <summary>
     /// 读安装目录内的身份旁车；缺失或损坏返回 null（不猜不补）。
+    /// 传入现存文件路径（AppImage 类单件安装单元）时读 `<file>.bundler-update.json` 旁车；
     /// `.app` 传入 bundle 根时落到 Contents/——打包侧把旁车写在 Contents 顶层。
     /// </summary>
     public static UpdateInstallIdentity? TryRead(string payloadRoot)
     {
-        var path = Path.Combine(payloadRoot, FileName);
-        if (!File.Exists(path))
+        string path;
+        if (File.Exists(payloadRoot))
         {
-            var contents = Path.Combine(payloadRoot, "Contents", FileName);
-            if (!File.Exists(contents))
+            path = SidecarPath(payloadRoot);
+            if (!File.Exists(path))
             {
                 return null;
             }
-            path = contents;
+        }
+        else
+        {
+            path = Path.Combine(payloadRoot, FileName);
+            if (!File.Exists(path))
+            {
+                var contents = Path.Combine(payloadRoot, "Contents", FileName);
+                if (!File.Exists(contents))
+                {
+                    return null;
+                }
+                path = contents;
+            }
         }
         try
         {

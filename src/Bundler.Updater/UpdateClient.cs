@@ -16,6 +16,7 @@ public sealed class UpdateClient
     private readonly string _currentVersion;
     private readonly UpdateDownloader _downloader = new();
     private readonly UpdateClientOptions _options;
+    private string? _verifiedArtifact;
 
     private UpdateClient(
         UpdateInstallIdentity identity, string installDirectory,
@@ -61,7 +62,8 @@ public sealed class UpdateClient
     public async Task<UpdateInfo?> CheckForUpdateAsync(
         CancellationToken cancellationToken = default)
     {
-        var feed = await _downloader.FetchFeedAsync(FeedUrl(), cancellationToken);
+        var feed = await _downloader.FetchFeedAsync(
+            FeedUrl(), _identity.PublicKey!, cancellationToken);
         if (!UpdateVersion.TryParse(feed.Version, out var remote) ||
             !UpdateVersion.TryParse(_currentVersion, out var local))
         {
@@ -88,8 +90,8 @@ public sealed class UpdateClient
 
     /// <summary>
     /// 下载产物到 destinationDirectory 并验 sha256；返回本地文件路径。
-    /// 清单带 blockmap 且本地有上次下载缓存时走差分（哈希匹配块复用+Range 拉缺失），
-    /// 差分任一步异常自动回落全量；成功下载后把产物进 <install>.bundler-cache 供下次差分。
+    /// 清单带 blockmap 且本地有上次验过签的缓存时走差分（哈希匹配块复用+Range 拉缺失），
+    /// 差分任一步异常自动回落全量；缓存沉淀在 <see cref="Verify"/> 成功后进行。
     /// </summary>
     public async Task<string> DownloadAsync(
         UpdateInfo info, string destinationDirectory,
@@ -111,7 +113,6 @@ public sealed class UpdateClient
             await _downloader.DownloadAsync(
                 info.DownloadUrl, info.Artifact, destination, _options.Log, cancellationToken);
         }
-        UpdateDeltaCache(destination);
         return destination;
     }
 
@@ -134,7 +135,10 @@ public sealed class UpdateClient
         }
     }
 
-    /// <summary>ECDSA 验签（公钥来自安装身份旁车）——不通过即抛，绝不放行。</summary>
+    /// <summary>
+    /// ECDSA 验签（公钥来自安装身份旁车）——不通过即抛，绝不放行。
+    /// 验过才把产物记为已验件并进差分缓存：被拒下载绝不沉淀为下轮差分源。
+    /// </summary>
     public void Verify(UpdateInfo info, string artifactPath)
     {
         if (!UpdateSignatureVerifier.VerifyFile(
@@ -142,6 +146,8 @@ public sealed class UpdateClient
         {
             throw new UpdateException("artifact signature verification failed — refused.");
         }
+        _verifiedArtifact = Path.GetFullPath(artifactPath);
+        UpdateDeltaCache(artifactPath);
         _options.Log?.Invoke("update: signature verified");
     }
 
@@ -152,10 +158,23 @@ public sealed class UpdateClient
     /// </summary>
     public Process Apply(UpdateInfo info, string artifactPath, ApplyOptions? options = null)
     {
+        // 未验签产物永不进入应用面——Verify 是唯一置位入口。
+        if (!string.Equals(Path.GetFullPath(artifactPath), _verifiedArtifact,
+                StringComparison.Ordinal))
+        {
+            throw new UpdateException(
+                "artifact has not passed Verify — refusing unauthenticated install.");
+        }
         // WaitPid=null 即不等任何进程（调用方自行安排退出时机）；真实流程恒传当前进程。
-        return UpdateApplier.Apply(
+        var process = UpdateApplier.Apply(
             info.Artifact, artifactPath, _installDirectory,
             options ?? new ApplyOptions(), _options.Log);
+        // 文件级安装单元（AppImage 类）：身份烙不到镜像内可读位置，写在安装件旁车。
+        if (File.Exists(_installDirectory))
+        {
+            UpdateInstallIdentity.WriteSidecar(_installDirectory, _identity);
+        }
+        return process;
     }
 
     /// <summary>回滚钩子：上次换包留下的 .bundler-backup 倒回安装目录。</summary>

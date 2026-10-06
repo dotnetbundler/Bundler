@@ -141,6 +141,10 @@ public static class UpdateTests
             // 清单内嵌签名与 .sig 旁车对同一内容可验——交叉验证闭环。
             var signature = File.ReadAllBytes(sigPath);
             Assert.True(EcdsaSigner.VerifyFile(zipArtifact, signature, material));
+            // 清单本身也带 .sig 签名——客户端先验清单再信里面的版本号。
+            var feedSig = feedPath + ".sig";
+            Assert.Contains(feedSig, produced);
+            Assert.True(EcdsaSigner.VerifyFile(feedPath, File.ReadAllBytes(feedSig), material));
         }
         finally
         {
@@ -632,6 +636,48 @@ public static class UpdateTests
             Assert.Equal("MyApp.app.zip", entry.GetProperty("file").GetString());
             Assert.Equal("osx-arm64/app/MyApp.app.zip.blockmap",
                 entry.GetProperty("blockmap").GetString());
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void Emitter_KeepsEscapedChars_InArtifactUrl()
+    {
+        // 制品文件名含 '#'/'?'/空格：url 必须保留 %XX 转义——未转义字符会被 http
+        // 当成 fragment/query 分隔符，产物地址直接解析错。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var keyPath = Path.Combine(directory, "key.json");
+            UpdateKeyMaterial.Generate().Save(keyPath);
+            var artifact = WriteDummyArtifact(directory, "app 1.0#frag.zip");
+            var configuration = new BundleConfiguration
+            {
+                ProductName = "App",
+                Identifier = "com.example.app",
+                Version = "1.0.0",
+                OutputDirectory = directory,
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://example.test/updates",
+                    Channel = "stable",
+                    SigningKeyFile = keyPath,
+                }
+            };
+
+            UpdateManifestEmitter.EmitAsync(configuration,
+                    [new BundleArtifact(PackageFormat.Zip, "linux-x64", artifact)])
+                .GetAwaiter().GetResult();
+
+            var feedPath = Path.Combine(directory, "bundler-update-feed.stable.json");
+            using var document = JsonDocument.Parse(File.ReadAllText(feedPath));
+            var entry = document.RootElement.GetProperty("artifacts").EnumerateArray().Single();
+            Assert.Equal("app%201.0%23frag.zip", entry.GetProperty("url").GetString());
+            // file 字段保持原始名（仅作下载落点文件名，不进 URL）。
+            Assert.Equal("app 1.0#frag.zip", entry.GetProperty("file").GetString());
         }
         finally
         {

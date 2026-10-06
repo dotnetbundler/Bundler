@@ -83,8 +83,10 @@ public static class UpdateBootstrapper
                 path = "";
                 return false;
             }
+            // 按宿主用户隔离提取根：共享 /tmp 下同名路径会被别的本地用户预置/替换，
+            // 解出的可执行体随后会被打进应用——目录 0700 且恒定覆盖写。
             var destination = Path.Combine(
-                Path.GetTempPath(), "bundler-updater", resourceName.Replace('/', Path.DirectorySeparatorChar));
+                ExtractionRoot(), resourceName.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             using (var output = File.Create(destination))
             {
@@ -94,6 +96,31 @@ public static class UpdateBootstrapper
             return true;
         }
     }
+
+    private static string ExtractionRoot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"bundler-updater-{UserScope()}");
+        Directory.CreateDirectory(root);
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            chmod(root, 0x1C0 /* 0700 */);
+        }
+        return root;
+    }
+
+    // Windows 临时目录本就按用户隔离；POSIX /tmp 共享——用 uid 划清属主。
+    private static string UserScope()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            var name = Environment.UserName;
+            return string.IsNullOrEmpty(name) ? "user" : name;
+        }
+        return getuid().ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    [DllImport("libc", EntryPoint = "getuid", SetLastError = true)]
+    private static extern uint getuid();
 
     // netstandard2.0 无 Unix mode API；Windows 上权限位由文件系统无关化、跳过。
     internal static void Chmod755(string path)

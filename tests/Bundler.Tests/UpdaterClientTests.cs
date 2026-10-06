@@ -139,7 +139,7 @@ public static class UpdaterClientTests
 
             var artifact = Path.Combine(feedDir, "MyApp-2.0.0.AppImage");
             File.WriteAllText(artifact, "v2-image");
-            WriteFeed(feedDir, "stable", "2.0.0", new Protocol.UpdateFeedArtifact
+            WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
                 RuntimeIdentifier = "linux-x64", Format = "appimage",
                 Url = "MyApp-2.0.0.AppImage", File = "MyApp-2.0.0.AppImage",
@@ -173,6 +173,13 @@ public static class UpdaterClientTests
             // 宿主目录里的无关文件原样保留——文件级换包的防误清面。
             Assert.Equal("keep-me", File.ReadAllText(Path.Combine(installDir, "sibling.txt")));
             Assert.False(File.Exists(install + ".bundler-swap"));
+            // 文件级安装单元的身份落在 <file>.bundler-update.json 旁车——
+            // 下轮 FromInstallDirectory(文件路径) 直读，更新身份不随镜像内嵌而失联。
+            var persisted = Protocol.UpdateInstallIdentity.TryRead(install);
+            Assert.NotNull(persisted);
+            Assert.Equal("appimage", persisted!.Format);
+            Assert.Equal(Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
+                persisted.FeedUrl);
 
             var rollback = client.Rollback(new ApplyOptions
             {
@@ -216,7 +223,7 @@ public static class UpdaterClientTests
             Directory.CreateDirectory(install);
             var feedDir = Path.Combine(directory, "feed");
             Directory.CreateDirectory(feedDir);
-            var material = Protocol.UpdateKeyMaterial.Generate();
+            var material = DotNet.Bundler.Core.Update.UpdateKeyMaterial.Generate();
 
             Protocol.UpdateInstallIdentity.Write(install, new Protocol.UpdateInstallIdentity
             {
@@ -228,7 +235,7 @@ public static class UpdaterClientTests
             });
 
             // feed：win-x64 不相关件 + linux-x64 zip 匹配件（v2.0.0）
-            WriteFeed(feedDir, "stable", "2.0.0",
+            WriteFeed(feedDir, "stable", "2.0.0", material,
                 new Protocol.UpdateFeedArtifact
                 {
                     RuntimeIdentifier = "win-x64", Format = "zip",
@@ -251,7 +258,7 @@ public static class UpdaterClientTests
             Assert.Null(await current.CheckForUpdateAsync());
 
             // 更高版本但 rid 不匹配 → null（feed v3 只发 win）
-            WriteFeed(feedDir, "stable", "3.0.0",
+            WriteFeed(feedDir, "stable", "3.0.0", material,
                 new Protocol.UpdateFeedArtifact
                 {
                     RuntimeIdentifier = "win-x64", Format = "msi",
@@ -276,7 +283,7 @@ public static class UpdaterClientTests
             var artifactFile = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2-content");
             var sha = Sha256Hex(artifactFile);
             var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifactFile, material));
-            WriteFeed(feedDir, "stable", "2.0.0", new Protocol.UpdateFeedArtifact
+            WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
                 RuntimeIdentifier = "linux-x64", Format = "zip",
                 Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
@@ -355,6 +362,7 @@ public static class UpdaterClientTests
             var info1 = (await client1.CheckForUpdateAsync())!;
             var path1 = await client1.DownloadAsync(info1, downloadDir);
             Assert.Contains(log, l => l.Contains("full download") || l.Contains("no delta source"));
+            client1.Verify(info1, path1); // 差分缓存只收验过签的件
 
             // v2：块 0/1 不变（哈希命中）、块 2 变化——差分应只拉一块。
             var v2 = WriteDeltaArtifact(feedDir, "app-2.0.0.bin", block =>
@@ -572,7 +580,7 @@ public static class UpdaterClientTests
                 extraEntry: ("bundler-updater", File.ReadAllBytes(bootstrapper)));
             var sha = Sha256Hex(artifact);
             var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material));
-            WriteFeed(feedDir, "stable", "2.0.0", new Protocol.UpdateFeedArtifact
+            WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
                 RuntimeIdentifier = "linux-x64", Format = "zip",
                 Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
@@ -627,7 +635,7 @@ public static class UpdaterClientTests
 
             var artifact = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2");
             var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material));
-            WriteFeed(feedDir, "stable", "2.0.0", new Protocol.UpdateFeedArtifact
+            WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
                 RuntimeIdentifier = "linux-x64", Format = "zip",
                 Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
@@ -646,6 +654,132 @@ public static class UpdaterClientTests
             Assert.True(process.WaitForExit(90_000));
             Assert.Equal(0, process.ExitCode);
             Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    // ---- 复审修复轮回归 ----
+
+    [Fact]
+    static async Task Client_Check_RejectsMissingFeedSignature()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var artifact = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2");
+            WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+            {
+                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
+                Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+                Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+            });
+            // 清单签名被挪走——降级面：无签清单绝不能被信任。
+            File.Delete(Path.Combine(
+                feedDir, Protocol.UpdateFeed.FeedFileName("stable")) + ".sig");
+
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            var exception = await Assert.ThrowsAsync<UpdateException>(
+                () => client.CheckForUpdateAsync());
+            Assert.Contains("unsigned manifest", exception.Message);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_Check_RejectsTamperedFeed()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var artifact = WriteZipArtifact(feedDir, "app-1.0.0.zip", "v1");
+            WriteFeed(feedDir, "stable", "1.0.0", material, new Protocol.UpdateFeedArtifact
+            {
+                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Url = "app-1.0.0.zip", File = "app-1.0.0.zip",
+                Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+                Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+            });
+            // 换源攻击：清单文件被改（版本号抬高指回旧签名件）→ 验签必拒。
+            var feedPath = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable"));
+            File.WriteAllText(feedPath,
+                File.ReadAllText(feedPath).Replace("\"1.0.0\"", "\"9.9.9\""));
+
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            var exception = await Assert.ThrowsAsync<UpdateException>(
+                () => client.CheckForUpdateAsync());
+            Assert.Contains("failed signature verification", exception.Message);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_Apply_RefusesUnverifiedArtifact()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var artifact = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2");
+            WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+            {
+                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
+                Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+                Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+            });
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            var info = (await client.CheckForUpdateAsync())!;
+            var downloaded = await client.DownloadAsync(
+                info, Path.Combine(directory, "dl"));
+            // 未走 Verify 直接 Apply——未认证产物永不进入应用面。
+            var exception = Assert.Throws<UpdateException>(
+                () => client.Apply(info, downloaded));
+            Assert.Contains("has not passed Verify", exception.Message);
+            // 下载件也不应已沉进差分缓存（缓存只收验过签的字节）。
+            Assert.False(File.Exists(Path.Combine(
+                install.TrimEnd('/', '\\') + ".bundler-cache", "artifact.bin")));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void Identity_FileInstall_SidecarRoundtrip()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "MyApp.AppImage");
+            File.WriteAllText(install, "v1-image");
+            // 无旁车 → null（不猜不补）
+            Assert.Null(Protocol.UpdateInstallIdentity.TryRead(install));
+
+            var identity = new Protocol.UpdateInstallIdentity
+            {
+                Format = "appimage", RuntimeIdentifier = "linux-x64",
+                Channel = "stable", FeedUrl = "/feed/latest.json",
+                PublicKey = "cHVia2V5",
+            };
+            Protocol.UpdateInstallIdentity.WriteSidecar(install, identity);
+            var back = Protocol.UpdateInstallIdentity.TryRead(install);
+            Assert.NotNull(back);
+            Assert.Equal("appimage", back!.Format);
+            Assert.Equal("/feed/latest.json", back.FeedUrl);
+            Assert.Equal("cHVia2V5", back.PublicKey);
         }
         finally
         {
@@ -687,7 +821,7 @@ public static class UpdaterClientTests
         {
             mapSerializer.WriteObject(mapStream, map);
         }
-        WriteFeed(dir, "stable", version, new Protocol.UpdateFeedArtifact
+        WriteFeed(dir, "stable", version, material, new Protocol.UpdateFeedArtifact
         {
             RuntimeIdentifier = "linux-x64", Format = "zip",
             Url = fileName, File = fileName,
@@ -718,8 +852,11 @@ public static class UpdaterClientTests
         return install;
     }
 
+    // 清单按发布侧口径签名——客户端验不过就拒读，测试 fixture 必须同形态。
     static void WriteFeed(
-        string dir, string channel, string version, params Protocol.UpdateFeedArtifact[] artifacts)
+        string dir, string channel, string version,
+        DotNet.Bundler.Core.Update.UpdateKeyMaterial material,
+        params Protocol.UpdateFeedArtifact[] artifacts)
     {
         var feed = new Protocol.UpdateFeed
         {
@@ -734,6 +871,7 @@ public static class UpdaterClientTests
         {
             serializer.WriteObject(stream, feed);
         }
+        File.WriteAllBytes(path + ".sig", EcdsaSigner.SignFile(path, material));
     }
 
     static string WriteZipArtifact(

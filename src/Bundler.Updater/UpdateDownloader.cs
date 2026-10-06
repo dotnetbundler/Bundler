@@ -14,9 +14,32 @@ internal sealed class UpdateDownloader
 {
     private static readonly HttpClient SharedHttp = new();
 
-    internal async Task<UpdateFeed> FetchFeedAsync(string feedUrl, CancellationToken cancellationToken)
+    /// <summary>
+    /// 拉取并验签清单：`<feedUrl>.sig` 与清单同源，用安装身份公钥验过才解析——
+    /// 清单本身不可信：签名只绑产物字节，不验清单则换源可把旧签名件标成新版本降级安装。
+    /// 缺签名或验签失败一律拒绝。
+    /// </summary>
+    internal async Task<UpdateFeed> FetchFeedAsync(
+        string feedUrl, string publicPointBase64, CancellationToken cancellationToken)
     {
         var bytes = await GetBytesAsync(feedUrl, cancellationToken);
+        byte[] signature;
+        try
+        {
+            signature = await GetBytesAsync(feedUrl + ".sig", cancellationToken);
+        }
+        catch (Exception exception) when (exception is not UpdateException)
+        {
+            throw new UpdateException(
+                $"update feed signature '{feedUrl}.sig' is unreachable — refusing unsigned manifest.",
+                exception);
+        }
+        if (!UpdateSignatureVerifier.Verify(
+                bytes, signature, UpdateKeyMaterial.FromPublicPoint(publicPointBase64)))
+        {
+            throw new UpdateException(
+                $"update feed '{feedUrl}' failed signature verification — refused.");
+        }
         using var stream = new MemoryStream(bytes);
         var serializer = new DataContractJsonSerializer(typeof(UpdateFeed));
         return serializer.ReadObject(stream) as UpdateFeed
@@ -359,4 +382,13 @@ internal sealed class UpdateDownloader
 }
 
 /// <summary>更新链任一环节的确定性失败（协议/校验/拒绝——不是环境异常）。</summary>
-public sealed class UpdateException(string message) : Exception(message);
+public sealed class UpdateException : Exception
+{
+    public UpdateException(string message) : base(message)
+    {
+    }
+
+    public UpdateException(string message, Exception inner) : base(message, inner)
+    {
+    }
+}

@@ -122,17 +122,24 @@ public static class UpdateManifestEmitter
             stream.Write(Encoding.ASCII.GetBytes("\n"), 0, 1);
         }
         produced.Add(feedPath);
+        // 清单同样签名：产物签名只绑字节，清单不签则换源可把旧签名件标成新版本（降级攻击）。
+        var feedSignature = await Task.Run(
+            () => EcdsaSigner.SignFile(feedPath, key), cancellationToken);
+        var feedSigPath = feedPath + ".sig";
+        File.WriteAllBytes(feedSigPath, feedSignature);
+        produced.Add(feedSigPath);
         return produced;
     }
 
     // netstandard2.0 无 Path.GetRelativePath——URI 相对化产出 '/' 分隔的 url。
+    // 必须保留转义形态：文件名含 '#'/'?'/空格时未转义字符会被 http 解析为
+    // fragment/query 分隔符，产物地址直接解析错——OriginalString 即转义原文。
     private static string RelativeUrl(string feedDirectory, string artifactFile)
     {
         var feedUri = new Uri(
             Path.GetFullPath(feedDirectory).TrimEnd(Path.DirectorySeparatorChar) +
             Path.DirectorySeparatorChar);
-        return Uri.UnescapeDataString(
-            feedUri.MakeRelativeUri(new Uri(Path.GetFullPath(artifactFile))).ToString());
+        return feedUri.MakeRelativeUri(new Uri(Path.GetFullPath(artifactFile))).OriginalString;
     }
 
     private static string Sha256Hex(string path)

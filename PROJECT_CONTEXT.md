@@ -82,6 +82,12 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-06 UPDATE 复审修复第二轮（分支 `devin/1791228441-update-module`，PR #27）
+
+- Devin Review 二轮 9 发现：7 属实已修（清单 url 转义、feed 本体 `.sig` 验签堵降级、文件级身份旁车、差分缓存改 Verify 后刷新、Apply 门禁未验件、引导件提取根按 uid 隔离 0700、POSIX 重启直 exec 去 `sh -c`），2 误报回线（.app 清单条目、+build 剥离均已实现）。
+- 证据：+6 用例全绿；本机 Bundler.Tests 332/293P/0F/39S；build 0W/0E；linux-x64/linux-musl-x64 AOT 件重建入库。
+- 待办：win-x64/osx-x64/osx-arm64 AOT 件宿主子会话第三轮重建；复审。
+
 ### 2026-10-06 UPDATE 复审修复轮（分支 `devin/1791228441-update-module`，PR #27）
 
 - Devin Review 8 bug+5 flag 全部属实处置：`.app` 目录件改产 `.app.zip` 运输件进清单；清单 `url` 改相对清单目录路径；引导件工具内嵌 Bundler.Core 资源（删 tasks/updater 与 CLI 复制通道）；win 禁降级 .sh；nsis/msi 免引导件；崩溃恢复先于 install 存在性检查；新增文件级换包（AppImage 单件，sh 同构）；`TryRead` 增 `Contents/` 探测；semver 数值段比较+`+` 整串剥离；`.part` 重复下载先删再移；归档同名条目去重；删根 `tools/` 陈旧脚本。

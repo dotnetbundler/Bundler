@@ -293,7 +293,8 @@ internal static class BootstrapPlan
         }
         else
         {
-            startInfo = new ProcessStartInfo("/bin/sh", ["-c", $"nohup \"{appPath}\" >/dev/null 2>&1 &"])
+            // 直启不经 shell：appPath 只作 argv 传递，路径里的 shell 替换元字符不构成注入面。
+            startInfo = new ProcessStartInfo(appPath)
             { UseShellExecute = false, WorkingDirectory = workingDirectory };
         }
         Process.Start(startInfo);
