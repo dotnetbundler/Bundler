@@ -20,12 +20,13 @@ internal static class BootstrapPlan
 
     internal static int Apply(BootstrapOptions options, Action<string> log)
     {
-        var installDir = Path.GetFullPath(options.InstallDirectory);
+        var installDir = CanonicalPath(options.InstallDirectory);
         var payloadDir = options.PayloadDirectory.Length > 0
-            ? Path.GetFullPath(options.PayloadDirectory)
+            ? CanonicalPath(options.PayloadDirectory)
             : null;
-        var backupDir = Path.GetFullPath(
-            options.BackupDirectory ?? installDir.TrimEnd('/', '\\') + ".bundler-backup");
+        var backupDir = options.BackupDirectory is { Length: > 0 }
+            ? CanonicalPath(options.BackupDirectory)
+            : installDir.TrimEnd('/', '\\') + ".bundler-backup";
         var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
         // 重启目标与日志路径都按本进程 cwd 绝对化——相对路径会在换包后的临时工作目录里静默错位。
         if (options.AppPath is { Length: > 0 })
@@ -40,6 +41,32 @@ internal static class BootstrapPlan
         if (!options.Rollback && payloadDir is null)
         {
             throw new UsageException("--payload is required unless --rollback.");
+        }
+
+        // install↔payload↔backup 同址/互嵌是抹数据的形状：备份移走后 swap 以空载荷覆盖再删源，
+        // 等值或载荷为安装祖先时连备份一并清掉。
+        // 这组判断只做路径关系运算、不依赖文件系统，必须先于 marker 恢复与等待——
+        // 恢复会删半成品的安装目录，载荷嵌在其中时会把本轮输入先抹掉再拒绝（为时已晚）。
+        if (payloadDir is not null &&
+            (SameOrInside(backupDir, installDir) || SameOrInside(backupDir, payloadDir) ||
+             SameOrInside(installDir, backupDir) || SameOrInside(payloadDir, backupDir) ||
+             SameOrInside(installDir, payloadDir) || SameOrInside(payloadDir, installDir)))
+        {
+            throw new UsageException("backup/install/payload directories must not nest inside each other.");
+        }
+        if (options.RetainBackupDirectory is { Length: > 0 } retainPath)
+        {
+            var retain = CanonicalPath(retainPath);
+            if (SameOrInside(retain, installDir) || (payloadDir is not null && SameOrInside(retain, payloadDir)) ||
+                SameOrInside(installDir, retain) || SameOrInside(backupDir, retain) || SameOrInside(retain, backupDir))
+            {
+                throw new UsageException("retained-backup directory must not nest inside install/payload/backup directories.");
+            }
+        }
+        // 回滚模式不嵌套校验 payload——它本就不存在。
+        if (options.Rollback && (SameOrInside(backupDir, installDir) || SameOrInside(installDir, backupDir)))
+        {
+            throw new UsageException("backup and install directories must not nest inside each other.");
         }
 
         if (options.WaitPid is { } pid)
@@ -92,29 +119,6 @@ internal static class BootstrapPlan
         if (!options.Rollback && !Directory.Exists(payloadDir!))
         {
             throw new UsageException($"payload directory '{options.PayloadDirectory}' does not exist.");
-        }
-        // install↔payload 同址/互嵌同样是抹数据的形状：备份移走后 swap 会以空载荷覆盖再删源，
-        // 等值或载荷为安装祖先时连备份一并清掉——必须在动备份前拒绝。
-        if (payloadDir is not null &&
-            (SameOrInside(backupDir, installDir) || SameOrInside(backupDir, payloadDir) ||
-             SameOrInside(installDir, backupDir) || SameOrInside(payloadDir, backupDir) ||
-             SameOrInside(installDir, payloadDir) || SameOrInside(payloadDir, installDir)))
-        {
-            throw new UsageException("backup/install/payload directories must not nest inside each other.");
-        }
-        if (options.RetainBackupDirectory is { Length: > 0 } retainPath)
-        {
-            var retain = Path.GetFullPath(retainPath);
-            if (SameOrInside(retain, installDir) || (payloadDir is not null && SameOrInside(retain, payloadDir)) ||
-                SameOrInside(installDir, retain) || SameOrInside(backupDir, retain) || SameOrInside(retain, backupDir))
-            {
-                throw new UsageException("retained-backup directory must not nest inside install/payload/backup directories.");
-            }
-        }
-        // 回滚模式不嵌套校验 payload——它本就不存在。
-        if (options.Rollback && (SameOrInside(backupDir, installDir) || SameOrInside(installDir, backupDir)))
-        {
-            throw new UsageException("backup and install directories must not nest inside each other.");
         }
 
         // macOS .app 三项门禁（签名完好/身份连续/剥 quarantine）：动备份前拒绝，零变更安全。
@@ -431,6 +435,37 @@ internal static class BootstrapPlan
         candidate.StartsWith(
             parent.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    // 物理规范化：逐级解析已存在的符号链接段——路径关系判断必须比对物理位置而非拼写
+    //（POSIX 侧 norm_path 的 cd -P 语义；`Path.GetFullPath` 只归一拼写不解链接）。
+    // 不存在的段保持字面，链接解析失败退化为当前拼写。
+    private static string CanonicalPath(string path)
+    {
+        var full = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(full) ?? string.Empty;
+        var canonical = root;
+        foreach (var segment in full[root.Length..]
+            .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            canonical = Path.Combine(canonical, segment);
+            try
+            {
+                var resolved = Directory.Exists(canonical)
+                    ? Directory.ResolveLinkTarget(canonical, returnFinalTarget: true)
+                    : File.Exists(canonical)
+                        ? File.ResolveLinkTarget(canonical, returnFinalTarget: true)
+                        : null;
+                if (resolved is not null)
+                {
+                    canonical = resolved.FullName;
+                }
+            }
+            catch (IOException)
+            {
+            }
+        }
+        return canonical;
+    }
 
     // 严格子路径判不出等值路径——备份/保留目录与安装目录同址同样是抹数据的形状。
     private static bool SameOrInside(string candidate, string parent) =>

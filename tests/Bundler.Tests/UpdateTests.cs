@@ -544,6 +544,52 @@ public static class UpdateTests
                     InstallDirectory = installFile,
                     PayloadDirectory = installFile
                 }, lines.Add));
+
+        // 载荷经符号链接指向安装件 → 按物理位置拒绝（拼写不同但同一文件）。
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows 建链需权限，POSIX 腿已实测覆盖。");
+        var linkPayload = Path.Combine(directory, "linked.bin");
+        File.CreateSymbolicLink(linkPayload, installFile);
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = installFile,
+                    PayloadDirectory = linkPayload
+                }, lines.Add));
+        // 链接被搬入原位会把安装文件变成自指链接——拒绝后源件必须完好。
+        Assert.Equal("x", File.ReadAllText(installFile));
+        Assert.True(File.Exists(linkPayload));
+    }
+
+    [Fact]
+    static void BootstrapPlan_RecoveryDoesNotDeleteNestedPayload()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "install");
+            var nestedPayload = Path.Combine(install, "payload");
+            Directory.CreateDirectory(nestedPayload);
+            File.WriteAllText(Path.Combine(nestedPayload, "app"), "v2");
+            // 上轮崩线残痕：marker+半成品安装+完整备份——恢复会删安装目录。
+            File.WriteAllText(install + ".bundler-swap", "swap in progress");
+            Directory.CreateDirectory(install + ".bundler-backup");
+            File.WriteAllText(Path.Combine(install + ".bundler-backup", "app"), "v1");
+
+            // 互嵌拒绝必须先于崩溃恢复——恢复删安装目录会把本轮载荷一并抹掉。
+            Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+                DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                    new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                    {
+                        InstallDirectory = install,
+                        PayloadDirectory = nestedPayload
+                    }, _ => { }));
+            Assert.True(File.Exists(Path.Combine(nestedPayload, "app")));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
     }
 
     [Fact]
