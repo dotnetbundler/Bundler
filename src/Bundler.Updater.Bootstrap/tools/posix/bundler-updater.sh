@@ -113,8 +113,9 @@ INSTALL_DIR="$(norm_path "$INSTALL_DIR")"
 [ -z "$PAYLOAD_DIR" ] || PAYLOAD_DIR="$(norm_path "$PAYLOAD_DIR")"
 [ -z "$BACKUP_DIR" ] || BACKUP_DIR="$(norm_path "$BACKUP_DIR")"
 [ -z "$RETAIN_DIR" ] || RETAIN_DIR="$(norm_path "$RETAIN_DIR")"
-# 重启目标同样按调用方 cwd 规范化成绝对路径——脚本的工作目录不是用户的 cwd。
+# 重启目标与日志同样按调用方 cwd 规范化成绝对路径——脚本的工作目录不是用户的 cwd。
 [ -z "$APP_PATH" ] || APP_PATH="$(norm_path "$APP_PATH")"
+[ -z "$LOG_FILE" ] || LOG_FILE="$(norm_path "$LOG_FILE")"
 [ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
 MARKER="${INSTALL_DIR%/}.bundler-swap"
 
