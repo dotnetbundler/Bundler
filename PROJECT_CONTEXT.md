@@ -86,6 +86,14 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-06 main `53303ae` 第二轮四宿主回归（全绿零缺陷）
+
+- 四段全项复跑：全量（四宿主 build 0W/0E + pack 19 nupkg + Tests/ApiTests/LocalPackages/IT 基线持平 0F：linux 333/176、alpine 333/176、mac 333/176、win 333/176+LocalPackages 9P 真装真卸）+ 样品（全格式 + UPDATE 旋钮组侧车齐）+ 更新（引导件 apply/rollback rc=0、nsis `/UPDATE` 静默语义 + msi major upgrade 实跑）+ 联合互产互装交叉矩阵全过。
+- PR #28 依赖声明端到端实证：deb `Depends`/rpm `Requires`/apk `depend` 逐位吻合；三路产方 deb/rpm 经 `apt-get`/`dnf` 解析安装自动拉入 libicu 链+探针 rc=0；三路产方 musl apk 干净 alpine 实装依赖自动解析+钩子+卸载全 rc=0。
+- 跨宿主确定性升级实证：**osx-arm64 apphost 四宿主四方字节一致**（sha256 64af4bd5）、musl apphost 三产方同 BuildID；win/linux/mac 产 nsis 在 win `/S` 真装真卸；跨产 mac 件 mac 真机直跑 rc=0。差异仅剩已归因项（dll/pdb MVID、文本 CRLF、fileVersion 占位）。
+- 基建事故处置：win 会话 VM 两次 dead_box 报废重开（替补 6f4d2053 完成腿）。
+- 非缺陷观察：linux 产 manifest 自含自身一行；win 联合 zip 混入 `.bundler-work/` 残件；mac 产 osx 件带 update 侧车（产方启用旋钮，覆盖正向）；均为产方打包卫生项非产品缺陷。
+
 ### 2026-10-06 main 回归轮 + PR #28 压缩合并（squash `8b1e02a`）
 
 - main `dbbbf91` 四宿主子会话回归：全量（build 0W/0E + pack 19 nupkg + Tests/ApiTests/IT 全绿 0F）+ 样品（全格式产出 + UPDATE 旁车齐）+ 更新（签验负例/引导件换包回滚/差分/installer-replay/file:// feed）+ 联合交叉矩阵（互产互装）全过。
