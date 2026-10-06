@@ -117,3 +117,9 @@
 | --- | --- |
 | 本机自动 | `dpkg-deb -I/-c` 结构、`sudo dpkg -i`/`dpkg -r`/`dpkg -P` 真实装卸、`dpkg -L` 清单、`lintian`、`desktop-file-validate`、systemd 单元落位、脚本执行标记、容器内装卸（docker debian/ubuntu） |
 | 人工/外部 | GUI 桌面观感（菜单项/图标/文件关联双击）、linux-arm64 真实宿主、更多发行版矩阵（Debian oldstable、非 systemd 发行版）、apt 仓库工作流、生产签名流程（若后续阶段引入） |
+
+### 2026-10-06 回归修复：样品声明运行时依赖
+
+- **发现**：main `dbbbf91` 联合测试——产物在裸 `debian:stable` 容器装后探针 rc=134（缺 libicu）；`Depends:` 空段，样品未用 `BundlerDebDepends` 旋钮（写入器纯透传，非后端缺陷）。
+- **处置**：`samples/HelloBundlerApp/formats/Deb.props` 默认声明 `libc6;libgcc-s1;libstdc++6;zlib1g;libicu76 | libicu74 | libicu72 | libicu70`（与 AlpineApk `libstdc++;libgcc` 同口径，`HelloBundlerDebDepends` 仍可覆盖）。
+- **实证**：裸 `debian:stable` 容器 `apt-get install ./pkg.deb` 自动解析拉入 `libicu76`，探针 rc=0。
