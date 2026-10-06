@@ -313,6 +313,37 @@ public static class UpdaterClientTests
     }
 
     [Fact]
+    static async Task Client_DownloadsLocalFeed_DecodesEscapedArtifactUrl()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            // 清单 url 字段按 URL 转义存储——本地解析须还原真实文件名（format=app 件名含空格）。
+            var artifactFile = WriteZipArtifact(feedDir, "Hello Bundler App.app.zip", "v2-content");
+            var sha = Sha256Hex(artifactFile);
+            var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifactFile, material));
+            WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+            {
+                RuntimeIdentifier = "linux-x64", Format = "app",
+                Url = "Hello%20Bundler%20App.app.zip", File = "Hello Bundler App.app.zip",
+                Sha256 = sha, Size = new FileInfo(artifactFile).Length, Signature = sig,
+            });
+
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            var info = (await client.CheckForUpdateAsync())!;
+            var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+            Assert.Equal("Hello Bundler App.app.zip", Path.GetFileName(downloaded));
+            Assert.Equal(new FileInfo(artifactFile).Length, new FileInfo(downloaded).Length);
+            client.Verify(info, downloaded);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     static void BlockMap_ComputesOrderedBlockHashes()
     {
         var directory = CreateTempDirectory();

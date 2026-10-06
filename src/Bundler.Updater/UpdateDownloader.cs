@@ -80,12 +80,12 @@ internal sealed class UpdateDownloader
         {
             return new Uri(new Uri(feedUrl), artifactUrl).ToString();
         }
-        // 本地清单：产物按清单目录相对路径解析。
+        // 本地清单：产物按清单目录相对路径解析；url 字段以 URL 转义形式存储，还原真实文件名。
         var feedPath = feedUrl.StartsWith("file://", StringComparison.Ordinal)
             ? new Uri(feedUrl).LocalPath
             : feedUrl;
         return Path.GetFullPath(Path.Combine(
-            Path.GetDirectoryName(feedPath) ?? ".", artifactUrl));
+            Path.GetDirectoryName(feedPath) ?? ".", Uri.UnescapeDataString(artifactUrl)));
     }
 
     /// <summary>
