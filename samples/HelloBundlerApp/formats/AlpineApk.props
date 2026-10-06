@@ -17,8 +17,8 @@
     <BundlerAlpineApkLicense>MIT</BundlerAlpineApkLicense>
     <BundlerAlpineApkLicense Condition="'$(HelloBundlerApkLicense)' != ''">$(HelloBundlerApkLicense)</BundlerAlpineApkLicense>
     <BundlerAlpineApkBuildDate Condition="'$(HelloBundlerApkBuildDate)' != ''">$(HelloBundlerApkBuildDate)</BundlerAlpineApkBuildDate>
-    <!-- musl 自包含 .NET 运行时需要 libstdc++/libgcc；声明为依赖让 apk 自动解析。 -->
-    <BundlerAlpineApkDepends>libstdc++;libgcc</BundlerAlpineApkDepends>
+    <!-- musl 自包含 .NET 运行时需要 libstdc++/libgcc/icu-libs；声明为依赖让 apk 自动解析。 -->
+    <BundlerAlpineApkDepends>libstdc++;libgcc;icu-libs</BundlerAlpineApkDepends>
     <BundlerAlpineApkDepends Condition="'$(HelloBundlerApkDepends)' != ''">$(HelloBundlerApkDepends)</BundlerAlpineApkDepends>
     <BundlerAlpineApkProvides Condition="'$(HelloBundlerApkProvides)' != ''">$(HelloBundlerApkProvides)</BundlerAlpineApkProvides>
     <BundlerAlpineApkTriggers Condition="'$(HelloBundlerApkTriggers)' != ''">$(HelloBundlerApkTriggers)</BundlerAlpineApkTriggers>
