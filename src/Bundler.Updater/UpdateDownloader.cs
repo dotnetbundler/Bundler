@@ -47,23 +47,20 @@ internal sealed class UpdateDownloader
     }
 
     /// <summary>
-    /// 签名地址在 feed 的路径部分追加 ".sig"——query/fragment 留在尾部，
-    /// "feed.json?v=1#x" → "feed.json.sig?v=1#x"，末位追加会被 http 解析错。
+    /// 签名地址在 feed 的路径部分追加 ".sig"。http(s) 里 query/fragment 留尾
+    /// （"feed.json?v=1" → "feed.json.sig?v=1"）；本地路径/file URI 的 '#'/'?'
+    /// 是合法文件名字符而非分隔符，恒定末位追加。
     /// </summary>
     internal static string SignatureUrl(string feedUrl)
     {
-        var cut = feedUrl.Length;
-        var query = feedUrl.IndexOf('?');
-        var fragment = feedUrl.IndexOf('#');
-        if (query >= 0)
+        if (Uri.TryCreate(feedUrl, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
         {
-            cut = Math.Min(cut, query);
+            var builder = new UriBuilder(uri);
+            builder.Path += ".sig";
+            return builder.Uri.ToString();
         }
-        if (fragment >= 0)
-        {
-            cut = Math.Min(cut, fragment);
-        }
-        return string.Concat(feedUrl.Substring(0, cut), ".sig", feedUrl.Substring(cut));
+        return feedUrl + ".sig";
     }
 
     /// <summary>

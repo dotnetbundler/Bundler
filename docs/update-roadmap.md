@@ -55,6 +55,7 @@
 - `Apply` 侧车前移：文件级安装身份旁车 `WriteSidecar` 移到派生引导件之前——侧车写失败停在换包之前，不再留"换包在跑而身份未持久"的半态（侧车内容不含版本，先写语义不变）。
 - 三条旧案重报回线：清单 url 转义（`OriginalString`+转义断言用例）、Apply 未验门禁（`_verifiedArtifact`+拒装用例）、提取根预测性（per-uid 0700 已隔异用户，同 uid 属同主体威胁模型外）。
 - 本机 Bundler.Tests update 腿 44/44。
+- 复审第四轮 1 属实补修：`SignatureUrl` 本地路径分支——目录名含 `#`/`?` 的本地 feed 是合法文件名字符不是分隔符，改按 scheme 分派（http(s)→UriBuilder 插路径段；本地/file URI→末位追加），补 2 断言；1 旧案（提取根预测性）维持前轮处置回线。
 
 ### 2026-10-06 复审修复第二轮（Devin Review 7 属实处置 + 2 误报回线）
 

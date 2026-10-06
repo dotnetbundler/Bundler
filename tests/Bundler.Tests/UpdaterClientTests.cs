@@ -770,6 +770,11 @@ public static class UpdaterClientTests
             UpdateDownloader.SignatureUrl("https://cdn.test/feed.json#top"));
         Assert.Equal("https://cdn.test/feed.json.sig?a=1#x",
             UpdateDownloader.SignatureUrl("https://cdn.test/feed.json?a=1#x"));
+        // 本地路径的 '#''?' 是文件名字符不是分隔符——恒定末位追加。
+        Assert.Equal("/tmp/feed#dir/latest.json.sig",
+            UpdateDownloader.SignatureUrl("/tmp/feed#dir/latest.json"));
+        Assert.Equal("file:///tmp/feed.json.sig",
+            UpdateDownloader.SignatureUrl("file:///tmp/feed.json"));
     }
 
     [Fact]
