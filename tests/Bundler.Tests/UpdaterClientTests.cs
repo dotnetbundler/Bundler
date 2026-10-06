@@ -467,6 +467,55 @@ public static class UpdaterClientTests
         }
     }
 
+    [Fact]
+    static async Task Client_DownloadAsync_FallsBack_WhenServerRefusesRange()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var v1 = WriteDeltaArtifact(feedDir, "app-1.0.0.bin", block =>
+                block switch { 0 => "head", 1 => "body-same", 2 => "tail-v1", _ => "?" });
+            WriteFeedWithDelta(feedDir, "1.0.0", v1, material);
+            var v2 = WriteDeltaArtifact(feedDir, "app-2.0.0.bin", block =>
+                block switch { 0 => "head", 1 => "body-same", 2 => "tail-v2", _ => "?" });
+            WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
+
+            // 服务端不认 Range 恒回 200 整档——差分应放弃回落全量，不得抛错留坏件。
+            var server = new LoopbackFeedServer(feedDir) { HonorRange = false };
+            var identity = new Protocol.UpdateInstallIdentity
+            {
+                FeedUrl = server.FeedUrl, Channel = "stable",
+                RuntimeIdentifier = "linux-x64", Format = "zip",
+                PublicKey = material.PublicPointBase64(),
+            };
+            var sidecarSerializer = new DataContractJsonSerializer(
+                typeof(Protocol.UpdateInstallIdentity),
+                new DataContractJsonSerializerSettings { UseSimpleDictionaryFormat = true });
+            using (var stream = File.Create(Path.Combine(install, "bundler-update.json")))
+            {
+                sidecarSerializer.WriteObject(stream, identity);
+            }
+
+            var cacheDir = install.TrimEnd('/', '\\') + ".bundler-cache";
+            Directory.CreateDirectory(cacheDir);
+            File.Copy(v1, Path.Combine(cacheDir, "artifact.bin"));
+
+            var log = new List<string>();
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0",
+                new UpdateClientOptions { Log = log.Add });
+            var info = (await client.CheckForUpdateAsync())!;
+            var path = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+            Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
+            Assert.DoesNotContain(log, l => l.Contains("delta applied"));
+            server.Dispose();
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
     // 回环微型静态服务器：GET /<name> 返文件、Range 返 206 分片——专测 http 差分腿。
     sealed class LoopbackFeedServer : IDisposable
     {
@@ -475,6 +524,7 @@ public static class UpdaterClientTests
         readonly CancellationTokenSource _cts = new();
         public string FeedUrl { get; }
         public Action? OnRange;
+        public bool HonorRange = true;
 
         public LoopbackFeedServer(string dir)
         {
@@ -537,7 +587,7 @@ public static class UpdaterClientTests
                     return;
                 }
                 var body = File.ReadAllBytes(file);
-                if (rangeStart is { } start)
+                if (HonorRange && rangeStart is { } start)
                 {
                     var end = Math.Min(rangeEnd ?? body.Length - 1, body.Length - 1);
                     var slice = body.AsSpan((int)start, (int)(end - start + 1)).ToArray();
