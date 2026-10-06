@@ -113,6 +113,8 @@ INSTALL_DIR="$(norm_path "$INSTALL_DIR")"
 [ -z "$PAYLOAD_DIR" ] || PAYLOAD_DIR="$(norm_path "$PAYLOAD_DIR")"
 [ -z "$BACKUP_DIR" ] || BACKUP_DIR="$(norm_path "$BACKUP_DIR")"
 [ -z "$RETAIN_DIR" ] || RETAIN_DIR="$(norm_path "$RETAIN_DIR")"
+# 重启目标同样按调用方 cwd 规范化成绝对路径——脚本的工作目录不是用户的 cwd。
+[ -z "$APP_PATH" ] || APP_PATH="$(norm_path "$APP_PATH")"
 [ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
 MARKER="${INSTALL_DIR%/}.bundler-swap"
 
@@ -211,6 +213,8 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
     fi
     [ -f "$PAYLOAD_DIR" ] || { echo "bundler-updater: file-swap payload must be a file." >&2; exit 2; }
     log "bundler-updater: backup '$INSTALL_DIR' → '$BACKUP_DIR'"
+    # 备份父目录缺席时自建——与 AOT 侧 CopyTree 的隐式补链同义（POSIX mv 不会补）。
+    mkdir -p "$(dirname "$BACKUP_DIR")" || exit 4
     rm -f "$BACKUP_DIR" || exit 4
     printf 'swap in progress' >"$MARKER" || exit 4
     mv "$INSTALL_DIR" "$BACKUP_DIR" || { rm -f "$MARKER"; exit 4; }
@@ -288,6 +292,8 @@ if [ "$ROLLBACK" = 1 ]; then
 fi
 
 log "bundler-updater: backup '$INSTALL_DIR' → '$BACKUP_DIR'"
+# 备份父目录缺席时自建——与 AOT 侧 CopyTree 的隐式补链同义。
+mkdir -p "$(dirname "$BACKUP_DIR")" || exit 4
 rm -rf "$BACKUP_DIR" || exit 4
 printf 'swap in progress' >"$MARKER" || exit 4
 mv "$INSTALL_DIR" "$BACKUP_DIR" || { rm -f "$MARKER"; exit 4; }

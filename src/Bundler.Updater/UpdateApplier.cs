@@ -80,7 +80,8 @@ internal sealed class UpdateApplier
             (!rollback && options.KeepRollbackBackup
                 ? " --retain-backup-to \"" + ResolveRetentionDirectory(installDirectory, options) + "\"" : "") +
             (options.WaitPid is { } pid ? " --wait-pid " + pid : "") +
-            (options.AppPath is { Length: > 0 } app ? " --app \"" + app + "\"" : "") +
+            // --app 必须在客户端 cwd 绝对化——引导件以临时目录为工作目录，相对路径会静默解析失败。
+            (options.AppPath is { Length: > 0 } app ? " --app \"" + Path.GetFullPath(app) + "\"" : "") +
             (options.KeepPayload ? " --keep-payload" : "") +
             (options.LogFile is { Length: > 0 } lf ? " --log \"" + lf + "\"" : "");
 

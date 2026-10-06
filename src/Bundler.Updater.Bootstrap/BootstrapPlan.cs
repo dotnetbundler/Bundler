@@ -27,6 +27,11 @@ internal static class BootstrapPlan
         var backupDir = Path.GetFullPath(
             options.BackupDirectory ?? installDir.TrimEnd('/', '\\') + ".bundler-backup");
         var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
+        // 重启目标按本进程 cwd 绝对化——相对路径会在换包后的临时工作目录里静默解析失败。
+        if (options.AppPath is { Length: > 0 })
+        {
+            options.AppPath = Path.GetFullPath(options.AppPath);
+        }
 
         if (!options.Rollback && payloadDir is null)
         {

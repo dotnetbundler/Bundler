@@ -51,7 +51,7 @@ public sealed class UpdateInstallIdentity
     /// <summary>
     /// 读安装目录内的身份旁车；缺失或损坏返回 null（不猜不补）。
     /// 传入现存文件路径（AppImage 类单件安装单元）时读 `<file>.bundler-update.json` 旁车；
-    /// `.app` 传入 bundle 根时落到 Contents/——打包侧把旁车写在 Contents 顶层。
+    /// `.app` 传入 bundle 根时落到 Contents/Resources/（资源密封位；Contents 根旧位仅作兜底）。
     /// </summary>
     public static UpdateInstallIdentity? TryRead(string payloadRoot)
     {
@@ -69,12 +69,20 @@ public sealed class UpdateInstallIdentity
             path = Path.Combine(payloadRoot, FileName);
             if (!File.Exists(path))
             {
-                var contents = Path.Combine(payloadRoot, "Contents", FileName);
-                if (!File.Exists(contents))
+                var resources = Path.Combine(payloadRoot, "Contents", "Resources", FileName);
+                var legacy = Path.Combine(payloadRoot, "Contents", FileName);
+                if (File.Exists(resources))
+                {
+                    path = resources;
+                }
+                else if (File.Exists(legacy))
+                {
+                    path = legacy;
+                }
+                else
                 {
                     return null;
                 }
-                path = contents;
             }
         }
         try
