@@ -651,6 +651,41 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 
 这是面向 Windows 的可用基线，并不等于 Tauri 功能对等。
 
+## 应用自更新（UPDATE）
+
+打包产物可选接入自更新模块（决策与证据见 `docs/update-roadmap.md`、能力清单见 `docs/update-capability-matrix.md`）。
+启用后打包额外产出：`bundler-update-feed.{channel}.json` 静态清单、每制品的 `.sig`（ECDSA P-256）与 `.blockmap` 差分块表，并在安装载荷内烙 `bundler-update.json` 身份旁车。
+
+| MSBuild 属性 | 用途 |
+| --- | --- |
+| `BundlerUpdateEnabled` | 开总闸（默认关） |
+| `BundlerUpdateFeedUrl` | 清单发布位置——http(s)/file:// 本地路径/UNC 均可；制品按清单同目录解析 |
+| `BundlerUpdateChannel` | 通道名（默认 `latest`），进清单文件名 |
+| `BundlerUpdateSigningKeyFile` | PKCS#8 私钥路径（签名强制；私钥不入库） |
+| `BundlerUpdatePublicKey` | 烙进身份的验签公钥（base64） |
+| `BundlerUpdateNotes` | 版本说明写入清单 `notes` |
+
+签名密钥用 CLI 生成（BCL ECDSA，无外部依赖）：
+
+```powershell
+bundler update-keygen --key-file <path>   # 产私钥文件并打印公钥
+```
+
+应用侧经 `DotNet.Bundler.Updater` 库接入（netstandard2.0+net10.0、零依赖）：
+
+```csharp
+var client = UpdateClient.FromInstallDirectory(appDir, currentVersion);
+var info = await client.CheckForUpdateAsync();
+if (info is not null)
+{
+    var path = await client.DownloadAsync(info, downloadDir);   // block-map 差分优先，回退全量
+    client.Verify(info, path);
+    var process = client.Apply(info, path);                     // 引导件换包+重启
+}
+```
+
+自更新格式：`nsis`/`msi` 重跑安装器，`.app`/`zip`/`targz`/`appimage` 走三段式换包；`deb`/`rpm`/`apk`/`dmg`/`pkg` 按权威实践不做自更新。
+
 ## 仓库命令
 
 ```powershell

@@ -46,4 +46,5 @@ namespace DotNet.Bundler.Cli;
 #endif
 [JsonSerializable(typeof(ArchiveBundleConfiguration))]
 [JsonSerializable(typeof(AlpineApkBundleConfiguration))]
+[JsonSerializable(typeof(UpdateBundleConfiguration))]
 internal partial class BundlerJsonContext : JsonSerializerContext;

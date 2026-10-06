@@ -16,6 +16,18 @@ public sealed class BundleConfiguration
     public IReadOnlyList<BundleFileAssociationConfiguration> FileAssociations { get; init; } = [];
     public IReadOnlyList<BundleUrlProtocolConfiguration> UrlProtocols { get; init; } = [];
     public IReadOnlyList<BundleTargetConfiguration> Targets { get; init; } = [];
+    public UpdateBundleConfiguration? Update { get; init; }
+}
+
+public sealed class UpdateBundleConfiguration
+{
+    public string FeedUrl { get; init; } = "";
+    public string Channel { get; init; } = "latest";
+    public string? SigningKeyFile { get; init; }
+    public string? PublicKey { get; init; }
+    public string? Notes { get; init; }
+    /// <summary>引导件工具目录（&lt;rid&gt;/ 与 posix/ 子目录结构）；空时入口按程序集旁 conventions 解析。</summary>
+    public string? BootstrapperDirectory { get; init; }
 }
 
 public sealed class BundleResourceConfiguration

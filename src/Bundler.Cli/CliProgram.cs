@@ -4,7 +4,9 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
+using DotNet.Bundler.Core.Update;
 using DotNet.Bundler.MacApp;
+using DotNet.Bundler.Update;
 
 namespace DotNet.Bundler.Cli;
 
@@ -55,6 +57,16 @@ public static class CliProgram
         {
             PrintUsage(parsed.Help ? stdout : stderr);
             return parsed.Help ? 0 : 2;
+        }
+
+        if (parsed.Command is "update-keygen")
+        {
+            var keyPath = parsed.RequiredOption("key-file");
+            var material = UpdateKeyMaterial.Generate();
+            material.Save(keyPath);
+            stdout.WriteLine(keyPath);
+            stdout.WriteLine(material.PublicPointBase64());
+            return 0;
         }
 
         if (parsed.Command is not ("validate" or "plan" or "bundle"))
@@ -125,6 +137,7 @@ public static class CliProgram
             Resources = source.Resources,
             FileAssociations = source.FileAssociations,
             UrlProtocols = source.UrlProtocols,
+            Update = source.Update,
             Targets = targets
         };
     }
@@ -249,6 +262,11 @@ public static class CliProgram
             artifacts.AddRange(produced);
         }
 
+        var updateArtifacts = configuration.Update is null
+            ? Array.Empty<string>()
+            : UpdateManifestEmitter.EmitAsync(configuration, artifacts)
+                .GetAwaiter().GetResult();
+
         if (parsed.Json)
         {
             WriteJson(stdout, new JsonObject
@@ -259,7 +277,8 @@ public static class CliProgram
                     ["format"] = FormatName(artifact.Format),
                     ["runtimeIdentifier"] = artifact.RuntimeIdentifier,
                     ["path"] = artifact.Path
-                }).ToArray())
+                }).ToArray()),
+                ["updateArtifacts"] = new JsonArray(updateArtifacts.Select(path => (JsonNode)JsonValue.Create(path)).ToArray())
             });
         }
         else
@@ -267,6 +286,10 @@ public static class CliProgram
             foreach (var artifact in artifacts)
             {
                 stdout.WriteLine(artifact.Path);
+            }
+            foreach (var path in updateArtifacts)
+            {
+                stdout.WriteLine(path);
             }
         }
         return 0;
@@ -288,6 +311,7 @@ public static class CliProgram
             Resources = source.Resources,
             FileAssociations = source.FileAssociations,
             UrlProtocols = source.UrlProtocols,
+            Update = source.Update,
             Targets = source.Targets.Select(target => new BundleTargetConfiguration
             {
                 RuntimeIdentifier = target.RuntimeIdentifier,
@@ -321,6 +345,7 @@ public static class CliProgram
         writer.WriteLine("      (--input-dir repeated merges the dirs into a universal payload, e.g. osx-x64 + osx-arm64)");
         writer.WriteLine("      --product-name <name> --identifier <id> --package-version <ver>");
         writer.WriteLine("      [--output-dir <dir>] [--main-executable <name>] [--json] [--quiet|--verbose]");
+        writer.WriteLine("  bundler update-keygen --key-file <path>   generate an update signing key; prints key path and public key");
         writer.WriteLine("  bundler --version | --help");
         writer.WriteLine("Formats: nsis"
 #if BUNDLER_HOST_WINDOWS

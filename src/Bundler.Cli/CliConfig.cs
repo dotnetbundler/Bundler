@@ -70,7 +70,7 @@ internal static class CliConfig
 #if BUNDLER_HOST_LINUX
         "appimage",
 #endif
-        "archive", "alpineapk"
+        "archive", "alpineapk", "update"
     };
 
     public static CliResolvedConfiguration Resolve(CliArguments parsed)
@@ -131,7 +131,9 @@ internal static class CliConfig
         ["appimage"] = typeof(AppImageBundleConfiguration),
 #endif
         ["archive"] = typeof(ArchiveBundleConfiguration),
-        ["alpineapk"] = typeof(AlpineApkBundleConfiguration)
+        ["alpineapk"] = typeof(AlpineApkBundleConfiguration),
+        // 更新面不是格式分节，但同样走节解析与 --update.<knob> 覆盖。
+        ["update"] = typeof(UpdateBundleConfiguration)
     };
 
     private static void EnforceSchema(JsonObject document)
@@ -425,6 +427,7 @@ internal static class CliConfig
             Resources = ListOf<BundleResourceConfiguration>(document["resources"]),
             FileAssociations = ListOf<BundleFileAssociationConfiguration>(document["fileAssociations"]),
             UrlProtocols = ListOf<BundleUrlProtocolConfiguration>(document["urlProtocols"]),
+            Update = Section<UpdateBundleConfiguration>(document, "update"),
             Targets = targetsNode.OfType<JsonObject>().Select(node => new BundleTargetConfiguration
             {
                 RuntimeIdentifier = Text(node, "runtimeIdentifier") ?? "",

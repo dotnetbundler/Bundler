@@ -69,6 +69,7 @@
   <Import Project="formats\AppImage.props" />
   <Import Project="formats\Archive.props" />
   <Import Project="formats\AlpineApk.props" />
+  <Import Project="formats\Update.props" />
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
 
   <ItemGroup>

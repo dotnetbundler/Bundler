@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
+using DotNet.Bundler.Core.Update;
 
 namespace DotNet.Bundler.MacApp;
 
@@ -37,6 +38,15 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         // destination -> source bookkeeping catches collisions across every channel.
         var destinations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         CopyTree(item.InputDirectory, executablesDirectory, destinations, context.Logger);
+
+        // 身份旁车落在 Contents 根、引导件落在 MacOS/——两者随 bundle 一起被 codesign 覆盖。
+        UpdateIdentitySidecar.WriteIfEnabled(
+            contentsDirectory, bundle.Update, PackageFormat.App, item.Target.RuntimeIdentifier);
+        if (bundle.Update is { } update)
+        {
+            UpdateBootstrapper.Inject(
+                executablesDirectory, update, item.Target.RuntimeIdentifier);
+        }
 
         var executablePath = Path.Combine(executablesDirectory, item.MainExecutable);
         if (!File.Exists(executablePath))

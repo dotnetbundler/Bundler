@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-05
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.72`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.74`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）与 CLI 均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -81,6 +81,55 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-06 UPDATE 完整测试轮修复（分支 `devin/1791228441-update-module`，PR #27）
+
+- 四宿主全量测试暴露两族缺陷均已修：Bundler.Updater 双目标被 src 级 props 单数 TFM 压制（补空复位行 → pack NU5026 清零，原 98 腿级联）；UPDATE 序列化迁 STJ 源生成（新 `UpdateJson`，netstandard2.0 仍 DCS → CLI AOT IL2026/IL3050 清零）。
+- usage 补 `--rollback`；载荷根级引导件/身份旁车定为设计契约。
+- 证据：pack rc=0、CLI AOT publish rc=0；本机 333/294P/0F/39S + IntegrationTests 176/111P/0F/65S；四宿主子会话增量复测在途。
+- 待办：宿主复测回报 + win/osx 引导件重建入库后复审。
+
+### 2026-10-06 UPDATE 复审修复第三轮（分支 `devin/1791228441-update-module`，PR #27）
+
+- 复审 5 发现：2 属实已修（`SignatureUrl`——feed 带 query/fragment 时 `.sig` 插路径段；`Apply` 文件级侧车移到派生引导件前防半态），3 旧案重报回线（url 转义/Apply 门禁/提取根隔离均已在前轮修复）。
+- 证据：+1 用例（SignatureUrl 四断言）；update 腿 44/44；win/osx/linux/musl 五件 AOT 引导件与 BootstrapPlan 最终态一致（宿主子会话第三轮重建入库）。
+- 待办：复审收敛后等合并授权。
+
+### 2026-10-06 UPDATE 复审修复第二轮（分支 `devin/1791228441-update-module`，PR #27）
+
+- Devin Review 二轮 9 发现：7 属实已修（清单 url 转义、feed 本体 `.sig` 验签堵降级、文件级身份旁车、差分缓存改 Verify 后刷新、Apply 门禁未验件、引导件提取根按 uid 隔离 0700、POSIX 重启直 exec 去 `sh -c`），2 误报回线（.app 清单条目、+build 剥离均已实现）。
+- 证据：+6 用例全绿；本机 Bundler.Tests 332/293P/0F/39S；build 0W/0E；linux-x64/linux-musl-x64 AOT 件重建入库。
+- 待办：win-x64/osx-x64/osx-arm64 AOT 件宿主子会话第三轮重建；复审。
+
+### 2026-10-06 UPDATE 复审修复轮（分支 `devin/1791228441-update-module`，PR #27）
+
+- Devin Review 8 bug+5 flag 全部属实处置：`.app` 目录件改产 `.app.zip` 运输件进清单；清单 `url` 改相对清单目录路径；引导件工具内嵌 Bundler.Core 资源（删 tasks/updater 与 CLI 复制通道）；win 禁降级 .sh；nsis/msi 免引导件；崩溃恢复先于 install 存在性检查；新增文件级换包（AppImage 单件，sh 同构）；`TryRead` 增 `Contents/` 探测；semver 数值段比较+`+` 整串剥离；`.part` 重复下载先删再移；归档同名条目去重；删根 `tools/` 陈旧脚本。
+- 证据：`UpdateTests`+`UpdaterClientTests` 新增 11 用例全绿（含 linux 真 AOT 件文件级换包+回滚）；build 0W/0E；linux-x64/linux-musl-x64 AOT 件重建入库。
+- 待办：win-x64/osx-x64/osx-arm64 AOT 件待宿主子会话重建（UPDATE-3 同法）。
+
+### 2026-10-05 UPDATE-5/6 差分+模块冻结（分支 `devin/1791228441-update-module`，版本 `0.1.0-alpha.74`）
+
+- UPDATE-5 block-map 差分落地：`UpdateBlockMap` v1（64KiB 固定块+有序 sha256 b64）单源双栖；发射器每制品产 `.blockmap` 并写清单 `blockMap` 字段；`EnableDelta` 默认开——命中块本地复制+缺失块合并连续区间（http 硬要求 206、本地定位读）→产物 size+sha256 全验→任一环节失败回退全量；`<install>.bundler-cache/artifact.bin` 为差分源件缓存并随成功下载刷新。
+- 双路实证全绿：本地差分命中腿（日志断言 `delta applied`/`B reused`）、脏缓存回退腿、**回环 HTTP 真腿**（微型服务器，feed/块表/Range-206 全走 http）；本机 Bundler.Tests 315/276P/0F/39S。
+- 整模块真实 E2E：MSBuild 旋钮全链（keygen→publish→侧车/引导件入 zip→v1→v2 全量换包→回滚逐字节还原→v3 差分 83% 复用→逐文件一致）；顺手修三处真缺陷（MSBuild 旁 updater/ 缺失、Assembly.Location 探测、相对安装目录绝对化）。
+- UPDATE-6 文档族收口：`update-capability-matrix.md`+`update-open-items.md`（OI-01..06）+`update-manual-testing.md`（MT-01..06）+`manual-testing-index.md` 登记+README"应用自更新"节+roadmap §7.2 改已实现；UPDATE 模块冻结基线 `0.1.0-alpha.74`。
+- 外部待验收：arm64 AOT 引导件（qemu ilc 边界）、Apple 凭证同身份腿、真实发布链狗食、per-machine UAC、公网 CDN Range（UPDATE-OI-01..06）。
+
+### 2026-10-05 UPDATE-3/4 宿主实证+应用内库（分支 `devin/1791228441-update-module`，版本 `0.1.0-alpha.74`）
+
+- UPDATE-3 四宿主真机实证全绿：win（file-swap/断电恢复/NSIS `/UPDATE` 链/MSI major upgrade）、linux（kill -9 跨卷中段恢复 701M、软链+exec 位、posix bash+dash、签名负例）、mac（.app 门禁未签互换/quarantine 剥离/bundle-id 拒 rc4/`open -n` 重启/posix darwin 分支）、musl（static-pie 静态件+sh 三场景）；per-RID 引导件 win-x64/osx-arm64/osx-x64/linux-musl-x64 入库（远端 `2ca2e62`）。
+- UPDATE-4 `src/Bundler.Updater` 应用内库落地：UpdateClient 四动词门面+`.part` 续传+file:// 离线腿+sha256/ECDSA 双验拒放+installer-replay/file-swap 分派+`--rollback` 引导模式；共享源链接+`Protocol` 命名空间隔离；feed 语义定稿为"清单文件地址+裸文件名相对件"。
+- 修复：sh `--keep-payload` mv/copy 语义分叉、跨卷 CopyTree 软链解引用+exec 位丢失、`BootstrapperPath` .sh 误抢二进制分支、无匹配件改返回 null。
+- 证据：UpdateTests 15+UpdaterClientTests 7=22/22（含真 AOT 引导件端到端换包+回滚）；全量 Bundler.Tests 310/271P/0F/39S；build 0W/0E。
+- 遗留：mac 真实签名身份腿需 Apple Developer ID（外部待验收）；linux-arm64 AOT 因 qemu ilc SIGABRT 不可产（环境边界）。
+
+### 2026-10-05 UPDATE-1 打包侧实现（分支 `devin/1791228441-update-module`，版本 `0.1.0-alpha.73`）
+
+- 新工程 `src/Bundler.Update`（netstandard2.0）：`EcdsaSigner`（ECDSA P-256/SHA-256 分离签名，`.sig` 旁车统一 64B P1363 归一、验签 DER/P1363 双试）、`UpdateManifestEmitter`（`.sig` 旁车+`bundler-update-feed.{channel}.json` 清单：version/channel/publishedAt/notes/artifacts[rid,format,url,file,size,sha256,sig]；仅六适配格式进清单）。
+- `src/Bundler.Core/Update/`：`UpdateKeyMaterial`（ec-p256 JSON 密钥材料+`FromPublicPoint` 还原；`ECDsa.Create()` 默认曲线 P-521 已实测须显式 nistP256）、`UpdateIdentitySidecar`（`bundler-update.json`：format/rid/channel/feedUrl/publicKey，公钥由私钥文件派生或显式给定）、`UpdatePayloadStaging`（更新开启时把旁车注入 staging 拷贝，用户发布目录零触碰）。
+- 五后端注入：nsis（InspectDirectoryTree 后，签名 staging 复制带旁车入载荷）、wix（CollectFiles 校验后）、macapp（`Contents/` 根随 bundle 一起 codesign）、appimage（`usr/lib/<pkg>/` 载荷根）、archive（`UnderStem` 条目表追加 stem 级文件条目）。
+- 旋钮：MSBuild `BundlerUpdateEnabled/FeedUrl/Channel/SigningKeyFile/PublicKey/Notes`（任务参数+buildTransitive 透传+样品 `formats/Update.props` 六旋钮全覆盖）；CLI `bundler.json` `update` 分节 + `--update.<knob>` 覆盖（CliArguments/CliConfig 节表登记，顺带修复 `--alpineapk.*` 解析期被拒的既有缺口）+ `bundler update-keygen --key-file <path>` 生成密钥并打印公钥。
+- 验证：`UpdateTests` 10/10（密钥往返/64B P1363/DER 双验/错钥改件拒绝/清单 schema/emit 强要私钥/旁车含公钥/staging 注入不碰源目录/ArchiveBundler 真产 zip 内含旁车）；CLI 冒烟 keygen→zip 打包→`.sig`+feed+zip 内旁车三方闭环；全量 Bundler.Tests 298（259P/0F/39S）、ApiTests 7/0/3S、build 0W/0E。
 
 ### 2026-10-05 UPDATE 自更新路线立项（PR #26 已并入 `main`，squash `7617ff5`）
 
@@ -289,6 +338,6 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新路线已于 2026-10-05 立项（`docs/update-roadmap.md`，13 项决策经用户裁决，六阶段 `UPDATE-1..6` 至全功能），待 `UPDATE-1`（打包侧：清单/ECDSA 签名/身份旁车/旋钮）启动指令。
+UPDATE 自更新路线已于 2026-10-05 立项（`docs/update-roadmap.md`，13 项决策经用户裁决，六阶段 `UPDATE-1..6` 至全功能），UPDATE-1..6 已实现并冻结+整模块真实 E2E 全通（分支 `devin/1791228441-update-module`，基线 `0.1.0-alpha.74`），下一步：单 PR→Devin Review→等合并授权。
 剩余工作：UPDATE-1 启动、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 

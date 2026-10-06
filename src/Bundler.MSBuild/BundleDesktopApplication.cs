@@ -15,6 +15,7 @@ using DotNet.Bundler.Nsis;
 using DotNet.Bundler.Rpm;
 using DotNet.Bundler.Wix;
 using DotNet.Bundler.Signing.Windows;
+using DotNet.Bundler.Update;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 
@@ -269,6 +270,12 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public ITaskItem[] MacFrameworks { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacUrlTypes { get; set; } = Array.Empty<ITaskItem>();
+    public bool UpdateEnabled { get; set; }
+    public string UpdateFeedUrl { get; set; } = "";
+    public string UpdateChannel { get; set; } = "";
+    public string UpdateSigningKeyFile { get; set; } = "";
+    public string UpdatePublicKey { get; set; } = "";
+    public string UpdateNotes { get; set; } = "";
     [Output] public ITaskItem[] Artifacts { get; private set; } = Array.Empty<ITaskItem>();
 
     public override bool Execute()
@@ -288,6 +295,14 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Copyright = EmptyToNull(Copyright),
                 LicenseFile = OptionalFullPath(LicenseFile),
                 OutputDirectory = Path.GetFullPath(OutputDirectory),
+                Update = UpdateEnabled ? new UpdateBundleConfiguration
+                {
+                    FeedUrl = UpdateFeedUrl,
+                    Channel = UpdateChannel,
+                    SigningKeyFile = OptionalFullPath(UpdateSigningKeyFile),
+                    PublicKey = EmptyToNull(UpdatePublicKey),
+                    Notes = EmptyToNull(UpdateNotes)
+                } : null,
                 Icons = Icons.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
                 Resources = Resources.Select(item => new BundleResourceConfiguration
                 {
@@ -698,6 +713,16 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 throw new NotSupportedException($"Bundler does not support the '{format}' package format.");
             }
                 artifacts.AddRange(produced);
+            }
+
+            if (UpdateEnabled)
+            {
+                var feed = UpdateManifestEmitter.EmitAsync(
+                    Configure(formats), artifacts).GetAwaiter().GetResult();
+                foreach (var path in feed)
+                {
+                    Log.LogMessage(MessageImportance.High, $"Bundler update: {path}");
+                }
             }
 
             Artifacts = artifacts.Select(artifact =>

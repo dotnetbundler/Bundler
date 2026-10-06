@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>DotNet.Bundler.Update</AssemblyName>
+    <RootNamespace>DotNet.Bundler.Update</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <PackageId>DotNet.Bundler.Update</PackageId>
+    <Description>Self-update packaging surface for DotNet.Bundler: update feed manifest, ECDSA .sig sidecars and install-identity sidecars.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Bundler.Tests" />
+    <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
+    <ProjectReference Include="..\Bundler.Archive\Bundler.Archive.csproj" />
+  </ItemGroup>
+
+</Project>

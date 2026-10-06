@@ -1,0 +1,12 @@
+<Project>
+  <!-- 自更新面全套公开旋钮。变体由 HelloBundlerUpdate* 传透；
+       签名私钥文件路径属秘密范畴，样品只演示其余旋钮（私钥经 HelloBundlerUpdateSigningKeyFile 注入）。 -->
+  <PropertyGroup>
+    <BundlerUpdateEnabled Condition="'$(HelloBundlerUpdateEnabled)' != ''">$(HelloBundlerUpdateEnabled)</BundlerUpdateEnabled>
+    <BundlerUpdateFeedUrl Condition="'$(HelloBundlerUpdateFeedUrl)' != ''">$(HelloBundlerUpdateFeedUrl)</BundlerUpdateFeedUrl>
+    <BundlerUpdateChannel Condition="'$(HelloBundlerUpdateChannel)' != ''">$(HelloBundlerUpdateChannel)</BundlerUpdateChannel>
+    <BundlerUpdateSigningKeyFile Condition="'$(HelloBundlerUpdateSigningKeyFile)' != ''">$(HelloBundlerUpdateSigningKeyFile)</BundlerUpdateSigningKeyFile>
+    <BundlerUpdatePublicKey Condition="'$(HelloBundlerUpdatePublicKey)' != ''">$(HelloBundlerUpdatePublicKey)</BundlerUpdatePublicKey>
+    <BundlerUpdateNotes Condition="'$(HelloBundlerUpdateNotes)' != ''">$(HelloBundlerUpdateNotes)</BundlerUpdateNotes>
+  </PropertyGroup>
+</Project>
