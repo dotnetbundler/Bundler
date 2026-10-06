@@ -79,9 +79,32 @@ norm_path() {
     else
         _nd=$(dirname "$_np")
         _nb=$(basename "$_np")
-        _nr=$( (cd "$_nd" 2>/dev/null && pwd -P) || printf '%s' "$_nd")
-        printf '%s/%s\n' "$_nr" "$_nb"
+        _nr=$( (cd "$_nd" 2>/dev/null && pwd -P) || norm_lexical "$_nd")
+        printf '%s/%s\n' "${_nr%/}" "$_nb"
     fi
+}
+
+# 父目录缺席时物理解析走不通——退回词法折叠消掉 ./.. 段，
+# 否则 .. 留字面会绕开嵌套判，而 retain 的 mkdir -p 又恰好把逃逸路径做实。
+norm_lexical() {
+    _nl=$1
+    case "$_nl" in /*) ;; *) _nl="$PWD/$_nl" ;; esac
+    _saved_ifs=$IFS
+    IFS='/'
+    set -f
+    # 故意不带引号：按 / 拆段
+    set -- $_nl
+    set +f
+    IFS=$_saved_ifs
+    _out=
+    for _s do
+        case "$_s" in
+            ""|.) ;;
+            ..) _out=${_out%/*} ;;
+            *) _out="$_out/$_s" ;;
+        esac
+    done
+    printf '%s\n' "${_out:-/}"
 }
 
 [ -n "$INSTALL_DIR" ] || { echo "bundler-updater: --install-dir is required." >&2; exit 2; }
