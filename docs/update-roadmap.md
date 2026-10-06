@@ -49,6 +49,13 @@
 
 ## 4. 阶段实施证据
 
+### 2026-10-06 复审修复第三轮（Devin Review 2 属实处置 + 3 旧案重报回线）
+
+- `SignatureUrl` 修复：feed 带 query/fragment 时 `.sig` 改插路径段（`feed.json.sig?v=3`），末位拼接会被 http 当查询串一部分打到错地址；4 断言单测覆盖。
+- `Apply` 侧车前移：文件级安装身份旁车 `WriteSidecar` 移到派生引导件之前——侧车写失败停在换包之前，不再留"换包在跑而身份未持久"的半态（侧车内容不含版本，先写语义不变）。
+- 三条旧案重报回线：清单 url 转义（`OriginalString`+转义断言用例）、Apply 未验门禁（`_verifiedArtifact`+拒装用例）、提取根预测性（per-uid 0700 已隔异用户，同 uid 属同主体威胁模型外）。
+- 本机 Bundler.Tests update 腿 44/44。
+
 ### 2026-10-06 复审修复第二轮（Devin Review 7 属实处置 + 2 误报回线）
 
 - 清单 URL 转义保留：`RelativeUrl` 改 `MakeRelativeUri().OriginalString`（取转义形态），制品名含 `#`/`?`/空格不再把产物地址截断成 fragment/query。

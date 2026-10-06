@@ -26,12 +26,12 @@ internal sealed class UpdateDownloader
         byte[] signature;
         try
         {
-            signature = await GetBytesAsync(feedUrl + ".sig", cancellationToken);
+            signature = await GetBytesAsync(SignatureUrl(feedUrl), cancellationToken);
         }
         catch (Exception exception) when (exception is not UpdateException)
         {
             throw new UpdateException(
-                $"update feed signature '{feedUrl}.sig' is unreachable — refusing unsigned manifest.",
+                $"update feed signature '{SignatureUrl(feedUrl)}' is unreachable — refusing unsigned manifest.",
                 exception);
         }
         if (!UpdateSignatureVerifier.Verify(
@@ -44,6 +44,26 @@ internal sealed class UpdateDownloader
         var serializer = new DataContractJsonSerializer(typeof(UpdateFeed));
         return serializer.ReadObject(stream) as UpdateFeed
             ?? throw new UpdateException($"update feed '{feedUrl}' is not a valid manifest.");
+    }
+
+    /// <summary>
+    /// 签名地址在 feed 的路径部分追加 ".sig"——query/fragment 留在尾部，
+    /// "feed.json?v=1#x" → "feed.json.sig?v=1#x"，末位追加会被 http 解析错。
+    /// </summary>
+    internal static string SignatureUrl(string feedUrl)
+    {
+        var cut = feedUrl.Length;
+        var query = feedUrl.IndexOf('?');
+        var fragment = feedUrl.IndexOf('#');
+        if (query >= 0)
+        {
+            cut = Math.Min(cut, query);
+        }
+        if (fragment >= 0)
+        {
+            cut = Math.Min(cut, fragment);
+        }
+        return string.Concat(feedUrl.Substring(0, cut), ".sig", feedUrl.Substring(cut));
     }
 
     /// <summary>

@@ -165,16 +165,17 @@ public sealed class UpdateClient
             throw new UpdateException(
                 "artifact has not passed Verify — refusing unauthenticated install.");
         }
-        // WaitPid=null 即不等任何进程（调用方自行安排退出时机）；真实流程恒传当前进程。
-        var process = UpdateApplier.Apply(
-            info.Artifact, artifactPath, _installDirectory,
-            options ?? new ApplyOptions(), _options.Log);
         // 文件级安装单元（AppImage 类）：身份烙不到镜像内可读位置，写在安装件旁车。
+        // 先于派生引导件落盘——侧车内容不含版本，写失败时停在换包之前，
+        // 不留"换包在跑而身份未持久"的半态。
         if (File.Exists(_installDirectory))
         {
             UpdateInstallIdentity.WriteSidecar(_installDirectory, _identity);
         }
-        return process;
+        // WaitPid=null 即不等任何进程（调用方自行安排退出时机）；真实流程恒传当前进程。
+        return UpdateApplier.Apply(
+            info.Artifact, artifactPath, _installDirectory,
+            options ?? new ApplyOptions(), _options.Log);
     }
 
     /// <summary>回滚钩子：上次换包留下的 .bundler-backup 倒回安装目录。</summary>

@@ -758,6 +758,21 @@ public static class UpdaterClientTests
     }
 
     [Fact]
+    static void SignatureUrl_KeepsQueryAndFragmentAfterSig()
+    {
+        // feed 带 query/fragment：.sig 追加在路径段——末位拼接会被 http
+        // 当成查询串一部分，签名请求打到错误地址。
+        Assert.Equal("/feed/latest.json.sig",
+            UpdateDownloader.SignatureUrl("/feed/latest.json"));
+        Assert.Equal("https://cdn.test/feed.json.sig?v=3",
+            UpdateDownloader.SignatureUrl("https://cdn.test/feed.json?v=3"));
+        Assert.Equal("https://cdn.test/feed.json.sig#top",
+            UpdateDownloader.SignatureUrl("https://cdn.test/feed.json#top"));
+        Assert.Equal("https://cdn.test/feed.json.sig?a=1#x",
+            UpdateDownloader.SignatureUrl("https://cdn.test/feed.json?a=1#x"));
+    }
+
+    [Fact]
     static void Identity_FileInstall_SidecarRoundtrip()
     {
         var directory = CreateTempDirectory();

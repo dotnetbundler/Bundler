@@ -82,6 +82,12 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-06 UPDATE 复审修复第三轮（分支 `devin/1791228441-update-module`，PR #27）
+
+- 复审 5 发现：2 属实已修（`SignatureUrl`——feed 带 query/fragment 时 `.sig` 插路径段；`Apply` 文件级侧车移到派生引导件前防半态），3 旧案重报回线（url 转义/Apply 门禁/提取根隔离均已在前轮修复）。
+- 证据：+1 用例（SignatureUrl 四断言）；update 腿 44/44；win/osx/linux/musl 五件 AOT 引导件与 BootstrapPlan 最终态一致（宿主子会话第三轮重建入库）。
+- 待办：复审收敛后等合并授权。
+
 ### 2026-10-06 UPDATE 复审修复第二轮（分支 `devin/1791228441-update-module`，PR #27）
 
 - Devin Review 二轮 9 发现：7 属实已修（清单 url 转义、feed 本体 `.sig` 验签堵降级、文件级身份旁车、差分缓存改 Verify 后刷新、Apply 门禁未验件、引导件提取根按 uid 隔离 0700、POSIX 重启直 exec 去 `sh -c`），2 误报回线（.app 清单条目、+build 剥离均已实现）。
