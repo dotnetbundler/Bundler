@@ -371,7 +371,15 @@ internal static class BootstrapPlan
             startInfo = new ProcessStartInfo(appPath)
             { UseShellExecute = false, WorkingDirectory = workingDirectory };
         }
-        Process.Start(startInfo);
+        // 重启失败不致命：换包/回滚已完成，重启只是便利步骤——与 POSIX `|| true` 对齐为 WARN。
+        try
+        {
+            Process.Start(startInfo);
+        }
+        catch (Exception exception)
+        {
+            log($"bundler-updater: WARN restart failed ({exception.Message})");
+        }
     }
 
     // 同卷 rename(2)/MoveFile 原子就位；跨卷退化为复制+删除。
