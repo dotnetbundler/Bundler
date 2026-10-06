@@ -53,9 +53,10 @@
 
 - `Bundler.Updater.csproj` 补 `<TargetFramework></TargetFramework>` 复位（与 `Bundler.Core.csproj` 同款）——`src/Directory.Build.props` 单数 `netstandard2.0` 压制复数双目标，净树 build 只产 netstandard2.0，`dotnet pack` 按复数求 net10.0 dll 报 NU5026，级联 98 条集成腿（linux/musl/mac 三宿主同样复现）。
 - UPDATE 序列化迁 STJ 源生成：新增 `UpdateJson`（netstandard2.0 保持 `DataContractJsonSerializer`、net10.0 走 `System.Text.Json` 源生成上下文 `UpdateJsonContext`+`UpdateJsonNamingPolicy` 自定义线路名 rid/sig/blockmap），8 处序列化调用点统一收编——CLI AOT 发布 IL2026/IL3050 清零（`DataContractJsonSerializer` 需动态代码，AOT 下不可用）。
-- `bundler-updater` usage 补 `--rollback` 命令行；linux-x64+musl 引导件重建入库（win/osx 由宿主子会话重建）。
+- `bundler-updater` usage 补 `--rollback` 命令行；五件 per-RID 引导件全部重建入库（linux/musl 本机、osx/win 宿主子会话）。
 - 布局判定定案：`bundler-updater`/`bundler-update.json` 落载荷包根目录是设计契约（`updater/<rid>/` 仅 Bundler.Core 内嵌资源路径）。
-- 证据：净树 pack rc=0 全量 nupkg（net10.0+netstandard2.0 双 lib 入包）；CLI AOT publish rc=0；本机 Bundler.Tests 333/294P/0F/39S、IntegrationTests 176/111P/0F/65S（原 101 败清零）。
+- 第三轮缺陷（win 宿主增量复测暴露）：内嵌引导件 `LogicalName` 的 `%(RecursiveDir)` 在 Windows 展开为反斜杠——Windows 构建的 Core.dll 资源名成 `updater/win-x64\bundler-updater.exe`，按正斜杠查询失败 → zip 缺引导件 + 2 用例败；改 `Replace('\','/')` 归一，资源名与构建机无关。
+- 证据：净树 pack rc=0 全量 nupkg（net10.0+netstandard2.0 双 lib 入包）；CLI AOT publish rc=0；本机 Bundler.Tests 333/294P/0F/39S、IntegrationTests 176/111P/0F/65S（原 101 败清零）；linux/musl/mac 三宿主复测全绿、win 宿主 pack+集成 0 败。
 
 ### 2026-10-06 复审修复第三轮（Devin Review 2 属实处置 + 3 旧案重报回线）
 
