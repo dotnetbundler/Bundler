@@ -19,10 +19,10 @@ internal static class ArchiveExtractor
             using (var archive = ZipFile.OpenRead(zipPath))
             {
                 archive.ExtractToDirectory(staging);
-                RemoveAppleDoubleTree(staging, log);
                 RestoreSymlinkEntries(archive, zipPath, staging, log);
             }
         }
+        RemoveAppleDoubleTree(staging, log);
         return staging;
     }
 
@@ -35,8 +35,8 @@ internal static class ArchiveExtractor
             {
                 UstarReader.Extract(gzip, staging);
             }
-            RemoveAppleDoubleTree(staging, log);
         }
+        RemoveAppleDoubleTree(staging, log);
         return staging;
     }
 
@@ -95,8 +95,9 @@ internal static class ArchiveExtractor
         }
     }
 
-    // `__MACOSX/` AppleDouble 目录在 managed 解包下只是垃圾树——ditto 产 zip 在顶层，
-    // 载荷内含预解压过的 macOS 目录树时嵌套在 wrapper 里，全树清。
+    // `__MACOSX/` AppleDouble 目录只是垃圾树——ditto 产 zip 在顶层，载荷内含预解压过的
+    // macOS 目录树时嵌套在 wrapper 里，全树清。ditto/bsdtar 优选路径也会把载荷自带的
+    // 嵌套 `__MACOSX` 落成真目录，故在任一提取成功后统一执行而非只挂 managed 回退。
     private static void RemoveAppleDoubleTree(string staging, Action<string>? log)
     {
         var removed = false;
@@ -114,7 +115,7 @@ internal static class ArchiveExtractor
         }
         if (removed)
         {
-            log?.Invoke("update: dropped __MACOSX AppleDouble entries (managed extraction).");
+            log?.Invoke("update: dropped __MACOSX AppleDouble entries.");
         }
     }
 

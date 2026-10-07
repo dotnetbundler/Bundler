@@ -654,6 +654,138 @@ public static class UpdateTests
     }
 
     [Fact]
+    static void BootstrapPlan_BackupSlotLeafLinkToOutside_IsBenignlyReplaced()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows 建链需权限，POSIX 腿已实测覆盖。");
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "install");
+            var payload = Path.Combine(directory, "payload");
+            Directory.CreateDirectory(install);
+            Directory.CreateDirectory(payload);
+            File.WriteAllText(Path.Combine(install, "app"), "v1");
+            File.WriteAllText(Path.Combine(payload, "app"), "v2");
+            // 备份槽预置叶链指向保护区外的普通文件：mv/rm 语义下应只删链节点换包照常，
+            // 绝不触目标（POSIX `rm -rf "$BACKUP_DIR"` 同义）。缺陷态下 C# 撞
+            // "already exists" rc=4 且 marker 残留楔形。
+            var outsideFile = Path.Combine(directory, "outside.txt");
+            File.WriteAllText(outsideFile, "protected");
+            File.CreateSymbolicLink(install + ".bundler-backup", outsideFile);
+
+            var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload
+                }, _ => { });
+
+            Assert.Equal(0, rc);
+            Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
+            Assert.Equal("protected", File.ReadAllText(outsideFile));
+            Assert.False(File.Exists(install + ".bundler-swap"));
+            // 后续 apply 不再进崩溃恢复——无楔形。
+            Directory.CreateDirectory(payload);
+            File.WriteAllText(Path.Combine(payload, "app"), "v3");
+            rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload
+                }, _ => { });
+            Assert.Equal(0, rc);
+            Assert.Equal("v3", File.ReadAllText(Path.Combine(install, "app")));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void BootstrapPlan_MarkerSlotLeafLink_DoesNotFakeRecoveryOrWriteThrough()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows 建链需权限，POSIX 腿已实测覆盖。");
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "install");
+            var payload = Path.Combine(directory, "payload");
+            Directory.CreateDirectory(install);
+            Directory.CreateDirectory(payload);
+            File.WriteAllText(Path.Combine(install, "app"), "v1");
+            File.WriteAllText(Path.Combine(payload, "app"), "v2");
+            // marker 槽预置叶链：Exists 顺链会假触发崩溃恢复（备份缺席→rc=4 楔形），
+            // 写 marker 顺链会写穿污染保护区外文件——链节点必须先删。
+            var outsideFile = Path.Combine(directory, "outside.txt");
+            File.WriteAllText(outsideFile, "protected");
+            File.CreateSymbolicLink(install + ".bundler-swap", outsideFile);
+
+            var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload
+                }, _ => { });
+
+            Assert.Equal(0, rc);
+            Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
+            Assert.Equal("protected", File.ReadAllText(outsideFile));
+            Assert.False(File.Exists(install + ".bundler-swap"));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void BootstrapPlan_BackupMoveFailure_LeavesNoMarkerWedge()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "install");
+            var payload = Path.Combine(directory, "payload");
+            Directory.CreateDirectory(install);
+            Directory.CreateDirectory(payload);
+            File.WriteAllText(Path.Combine(install, "app"), "v1");
+            File.WriteAllText(Path.Combine(payload, "app"), "v2");
+            // 备份位父段是普通文件 → MoveTree(install→backup) 必失败；
+            // marker 写在备份移位之前，失败不可留 marker——否则后续每次 apply
+            // 都误判崩溃恢复而楔形。
+            var blockerFile = Path.Combine(directory, "blocker");
+            File.WriteAllText(blockerFile, "x");
+            var backupUnderFile = Path.Combine(blockerFile, "b");
+
+            Assert.ThrowsAny<Exception>(() =>
+                DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                    new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                    {
+                        InstallDirectory = install,
+                        PayloadDirectory = payload,
+                        BackupDirectory = backupUnderFile
+                    }, _ => { }));
+
+            Assert.False(File.Exists(install + ".bundler-swap"));
+            Assert.Equal("v1", File.ReadAllText(Path.Combine(install, "app")));
+            // 重试（修正 backup 位后）立即可用——无楔形残留。
+            var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload
+                }, _ => { });
+            Assert.Equal(0, rc);
+            Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     static void Sidecar_WritesIdentityJson()
     {
         var directory = CreateTempDirectory();
