@@ -815,11 +815,12 @@ internal static class BootstrapPlan
                 // Windows 卷挂载点（mountvol）：reparse target 是 `\??\Volume{GUID}`
                 // 或 .NET 剥前缀后的裸名——NT 对象名而非文件系统路径，按普通目录
                 // 透传不跟跳（跟跳会把 `Volume{guid}` 当目录名拼进字面路径，静默写偏
-                // 到别的卷）。名字形态分不清同名相对链接目标，须 MOUNT_POINT tag
-                // 确证——junction 目标为 Win32 拼写天然不命中此判。
+                // 到别的卷）。fail-closed 判据：只要不是确证 SYMLINK 一律透传——
+                // tag 探不出（权限/竞争）时透传靠 NT 物理化层归一，守卫仍覆盖；
+                // 解成路径反而在两个比较层都逃逸。
                 if (OperatingSystem.IsWindows()
                     && IsNtObjectTarget(target)
-                    && IsVolumeMountPoint(current))
+                    && ReparseTagOf(current) != IoReparseTagSymlink)
                 {
                     break;
                 }
@@ -877,20 +878,20 @@ internal static class BootstrapPlan
             && trimmed[43] == '}';
     }
 
-    // reparse tag 判据：FSCTL_GET_REPARSE_POINT 读节点的真实 tag——
-    // 同名 `Volume{GUID}` 目录是合法相对链接目标（SYMLINK tag），只有
-    // MOUNT_POINT tag 节点的 NT 形目标才是卷挂载点不可拼写名。
+    // reparse tag 三态：FSCTL_GET_REPARSE_POINT 读节点真实 tag——
+    // SYMLINK 确证链接可解；MOUNT_POINT（junction/卷挂）的 NT 形目标
+    // 按对象透传；探不出返回 null，调用方 fail-closed 同样透传。
     // OPEN_REPARSE_POINT 开链节点自身（不顺链），BACKUP_SEMANTICS 开目录。
-    private const uint IoReparseTagMountPoint = 0xA0000003;
+    private const uint IoReparseTagSymlink = 0xA000000C;
     private const uint FsctlGetReparsePoint = 0x000900A8;
 
-    private static bool IsVolumeMountPoint(string path)
+    private static uint? ReparseTagOf(string path)
     {
         var handle = CreateFile(path, 0, 0x7 /* READ|WRITE|DELETE share */, IntPtr.Zero,
             3 /* OPEN_EXISTING */, 0x02200000 /* BACKUP_SEMANTICS | OPEN_REPARSE_POINT */, IntPtr.Zero);
         if (handle == new IntPtr(-1))
         {
-            return false;
+            return null;
         }
         try
         {
@@ -900,9 +901,9 @@ internal static class BootstrapPlan
                 if (!DeviceIoControl(handle, FsctlGetReparsePoint, IntPtr.Zero, 0,
                         buffer, 16384, out _, IntPtr.Zero))
                 {
-                    return false;
+                    return null;
                 }
-                return (uint)Marshal.ReadInt32(buffer) == IoReparseTagMountPoint;
+                return (uint)Marshal.ReadInt32(buffer);
             }
             finally
             {
