@@ -118,16 +118,8 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 "hdiutil", attachArgs, workDirectory, cancellationToken);
             mounted = true;
 
-            // Hidden .app extension flag (SetFile ships with Xcode/CLT — degrade to a warning).
-            var setFile = await MacDmgProcessRunner.TryRunAsync(
-                "SetFile", ["-a", "E", Path.Combine(mountDirectory, applicationName)],
-                workDirectory, cancellationToken);
-            if (setFile is null || setFile.ExitCode != 0)
-            {
-                logger.Log(
-                    BundleLogLevel.Warning,
-                    "SetFile is unavailable (Xcode/CLT tool); the .app extension will stay visible.");
-            }
+            // 不设 Finder 扩展隐藏位：SetFile -a E 会把 com.apple.FinderInfo xattr 写到 .app 根，
+            // 随拖放安装跟到用户机，`codesign --verify --deep --strict` 判 detritus 拒绝。
 
             await ApplyBrandingAsync(
                 mountDirectory, applicationName, workDirectory,

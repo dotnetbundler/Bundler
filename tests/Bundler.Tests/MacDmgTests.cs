@@ -121,7 +121,10 @@ public static class MacDmgTests
             var outputFlag = convertArgList.IndexOf("-o");
             Assert.True(outputFlag >= 0 && convertArgList[outputFlag + 1] == dmg.Path,
                 "The convert output must be written via -o <artifact path>.");
-            Assert.Contains(requests, request => request.Executable == "SetFile");
+            // 隐藏扩展位的 SetFile -a E 已移除——它把 com.apple.FinderInfo 写到 .app 根，
+            // 拖放安装后 codesign --verify --deep --strict 判 detritus 拒绝（D2 回归断言）。
+            Assert.DoesNotContain(requests,
+                request => request.Executable == "SetFile" && request.Arguments.Contains("E"));
             Assert.True(order.IndexOf("hdiutil attach") < order.IndexOf("hdiutil detach") &&
                    order.IndexOf("hdiutil detach") < order.LastIndexOf("hdiutil convert"),
                 "attach → detach → convert ordering is required.");

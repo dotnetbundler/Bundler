@@ -849,6 +849,61 @@ public static class UpdateTests
     }
 
     [Fact]
+    static void Emitter_DuplicateAppArtifact_KeepsSingleEntryMatchingFinalFile()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var keyPath = Path.Combine(directory, "key.json");
+            UpdateKeyMaterial.Generate().Save(keyPath);
+            // .app 被构建两次（独立项 + dmg/pkg 内层暂存）覆写同一运输件——
+            // feed 必须只留一条且 sha/sig 对磁盘最终文件，否则客户端首条命中 stale 必拒。
+            var appDir = Path.Combine(directory, "osx-arm64", "app", "MyApp.app");
+            Directory.CreateDirectory(Path.Combine(appDir, "Contents", "MacOS"));
+            File.WriteAllText(Path.Combine(appDir, "Contents", "Info.plist"), "<plist/>");
+            File.WriteAllText(Path.Combine(appDir, "Contents", "MacOS", "app"), "#!/bin/sh\necho hi\n");
+
+            var configuration = new BundleConfiguration
+            {
+                ProductName = "App",
+                Identifier = "com.example.app",
+                Version = "2.0.0",
+                OutputDirectory = directory,
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://example.test/updates",
+                    Channel = "stable",
+                    SigningKeyFile = keyPath,
+                }
+            };
+            var artifacts = new[]
+            {
+                new BundleArtifact(PackageFormat.App, "osx-arm64", appDir),
+                new BundleArtifact(PackageFormat.App, "osx-arm64", appDir),
+            };
+
+            UpdateManifestEmitter.EmitAsync(configuration, artifacts)
+                .GetAwaiter().GetResult();
+
+            var feedPath = Path.Combine(directory, "bundler-update-feed.stable.json");
+            using var document = JsonDocument.Parse(File.ReadAllText(feedPath));
+            var entry = document.RootElement.GetProperty("artifacts").EnumerateArray().Single();
+            var zipPath = appDir + ".zip";
+            var expectedSha = Convert.ToHexString(
+                System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(zipPath)))
+                .ToLowerInvariant();
+            Assert.Equal(expectedSha, entry.GetProperty("sha256").GetString());
+            var material = UpdateKeyMaterial.Load(keyPath);
+            Assert.True(EcdsaSigner.VerifyFile(
+                zipPath, Convert.FromBase64String(entry.GetProperty("sig").GetString()!), material));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     static void Emitter_KeepsEscapedChars_InArtifactUrl()
     {
         // 制品文件名含 '#'/'?'/空格：url 必须保留 %XX 转义——未转义字符会被 http
