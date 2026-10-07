@@ -454,7 +454,9 @@ internal static class BootstrapPlan
         }
     }
 
-    // 同卷 rename(2)/MoveFile 原子就位；跨卷退化为复制+删除。
+    // 同卷 rename(2)/MoveFile 原子就位；跨卷两段式：先 CopyTree 到同级临时名再原子
+    // rename 就位——destination 只呈现"未开始"或"全本"两态，调用方靠 Exists 即可判
+    // 备份是否成立（半成品永远在临时名下清走，不会污染目标槽）。
     private static void MoveTree(string source, string destination, Action<string> log)
     {
         try
@@ -465,7 +467,23 @@ internal static class BootstrapPlan
         catch (IOException)
         {
         }
-        CopyTree(source, destination);
+        var staged = destination + ".partial-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            CopyTree(source, staged);
+            Directory.Move(staged, destination);
+        }
+        catch
+        {
+            try
+            {
+                Directory.Delete(staged, recursive: true);
+            }
+            catch (Exception)
+            {
+            }
+            throw;
+        }
         Directory.Delete(source, recursive: true);
     }
 
