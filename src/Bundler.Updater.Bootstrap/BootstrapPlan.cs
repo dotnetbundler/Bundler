@@ -813,16 +813,22 @@ internal static class BootstrapPlan
                     break;
                 }
                 // Windows 卷挂载点（mountvol）：reparse target 是 `\??\Volume{GUID}`
-                // 或 .NET 剥前缀后的裸名——NT 对象名而非文件系统路径，按普通目录
-                // 透传不跟跳（跟跳会把 `Volume{guid}` 当目录名拼进字面路径，静默写偏
-                // 到别的卷）。fail-closed 判据：只要不是确证 SYMLINK 一律透传——
-                // tag 探不出（权限/竞争）时透传靠 NT 物理化层归一，守卫仍覆盖；
-                // 解成路径反而在两个比较层都逃逸。
-                if (OperatingSystem.IsWindows()
-                    && IsNtObjectTarget(target)
-                    && ReparseTagOf(current) != IoReparseTagSymlink)
+                // 或 .NET 剥前缀后的裸名——NT 对象名而非文件系统路径，MOUNT_POINT
+                // 等 tag 时按普通目录透传不跟跳（跟跳会把 `Volume{guid}` 当目录名
+                // 拼进字面路径，静默写偏到别的卷）。tag 探不出（权限/竞争）不猜方向：
+                // 透传会让 install 叶链按链节点被搬走（真应用孤儿化），解成路径又拼
+                // 假路径逃逸守卫——返回 null 拒绝是最干净的落点。
+                if (OperatingSystem.IsWindows() && IsNtObjectTarget(target))
                 {
-                    break;
+                    var tag = ReparseTagOf(current);
+                    if (tag is null)
+                    {
+                        return null;
+                    }
+                    if (tag != IoReparseTagSymlink)
+                    {
+                        break;
+                    }
                 }
                 var next = Path.GetFullPath(
                     Path.IsPathRooted(target) ? target
