@@ -63,7 +63,13 @@ internal static class ArchiveTree
     {
         var entries = new List<Entry>
         {
-            new() { ArchivePath = stem, Kind = TarEntryKind.Directory, Mode = 493 /* 0755 */ }
+            new()
+            {
+                ArchivePath = stem,
+                Kind = TarEntryKind.Directory,
+                Mode = 493 /* 0755 */,
+                SourcePath = root
+            }
         };
         Collect(root, stem + "/", entries, log);
         entries.Sort((a, b) => StringComparer.Ordinal.Compare(a.ArchivePath, b.ArchivePath));
@@ -75,7 +81,13 @@ internal static class ArchiveTree
         foreach (var dir in Directory.GetDirectories(directory).OrderBy(d => d, StringComparer.Ordinal))
         {
             var rel = relativePrefix + Path.GetFileName(dir);
-            entries.Add(new Entry { ArchivePath = rel, Kind = TarEntryKind.Directory, Mode = 493 /* 0755 */ });
+            entries.Add(new Entry
+            {
+                ArchivePath = rel,
+                Kind = TarEntryKind.Directory,
+                Mode = 493 /* 0755 */,
+                SourcePath = dir
+            });
             Collect(dir, rel + "/", entries, log);
         }
         foreach (var file in Directory.GetFiles(directory).OrderBy(f => f, StringComparer.Ordinal))
@@ -89,6 +101,7 @@ internal static class ArchiveTree
                     ArchivePath = rel,
                     Kind = TarEntryKind.Symlink,
                     Mode = 511 /* 0777 */,
+                    SourcePath = file,
                     LinkTarget = target
                 });
             }
@@ -210,10 +223,17 @@ internal static class ArchiveTree
     };
 
     /// <summary>Prefixes every entry path with the top-level &lt;stem&gt;/ directory.</summary>
-    internal static IEnumerable<Entry> UnderStem(IEnumerable<Entry> entries, string stem) =>
+    internal static IEnumerable<Entry> UnderStem(
+        IEnumerable<Entry> entries, string stem, string? sourceRoot = null) =>
         new[]
         {
-            new Entry { ArchivePath = stem, Kind = TarEntryKind.Directory, Mode = 493 /* 0755 */ }
+            new Entry
+            {
+                ArchivePath = stem,
+                Kind = TarEntryKind.Directory,
+                Mode = 493 /* 0755 */,
+                SourcePath = sourceRoot
+            }
         }.Concat(entries.Select(e => new Entry
         {
             ArchivePath = stem + "/" + e.ArchivePath,

@@ -26,7 +26,8 @@ internal sealed class ArchiveBundleBackend(
         var version = settings.Version ?? context.Configuration.Version;
         var stem = ArchiveIdentity.ArchiveStem(settings, packageName, version, context.Item);
         var entries = ArchiveTree.UnderStem(ArchiveTree.Build(
-            context.Configuration, context.Item, settings, context.WorkDirectory, context.Logger), stem).ToList();
+            context.Configuration, context.Item, settings, context.WorkDirectory, context.Logger),
+            stem, context.Item.InputDirectory).ToList();
         if (context.Configuration.Update is { } update)
         {
             // 身份旁车写进工作目录后作为额外条目随归档顶层目录进包；

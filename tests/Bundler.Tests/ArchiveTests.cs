@@ -838,6 +838,14 @@ public static class ArchiveTests
             var target = Path.Combine(input, "signed.sh");
             File.WriteAllText(target, "#!/bin/sh\n");
             SetXattr(target, "com.bundler.test", "v");
+            // 目录与符号链接自身也带 xattr——不只文件级（D6 断言面）。
+            var sub = Path.Combine(input, "sub");
+            Directory.CreateDirectory(sub);
+            SetXattr(sub, "com.bundler.testdir", "d");
+            var link = Path.Combine(input, "link.sh");
+            File.CreateSymbolicLink(link, "signed.sh");
+            SetXattr(link, "com.bundler.testlink", "l");
+
             var artifact = new ArchiveBundler().BuildAsync(
                 Configuration(input, output, formats: [PackageFormat.Zip]))
                 .GetAwaiter().GetResult().Single();
@@ -852,6 +860,8 @@ public static class ArchiveTests
             var size = getxattr(extracted, "com.bundler.test", buffer, buffer.Length, 0, 1);
             Assert.True(size.ToInt64() == 1 && buffer[0] == (byte)'v',
                 $"xattr must survive produce→update-extract round-trip (size={size})");
+            AssertXattrRoundTrip(staging, "sub", "com.bundler.testdir", (byte)'d', buffer);
+            AssertXattrRoundTrip(staging, "link.sh", "com.bundler.testlink", (byte)'l', buffer);
 
             // targz 同路往返：bsdtar 产件 → ExtractTarGzToDirectory（mac 走 tar -x）→ xattr 存活。
             var tarArtifact = new ArchiveBundler().BuildAsync(
@@ -867,11 +877,25 @@ public static class ArchiveTests
             var tarSize = getxattr(tarExtracted, "com.bundler.test", buffer, buffer.Length, 0, 1);
             Assert.True(tarSize.ToInt64() == 1 && buffer[0] == (byte)'v',
                 $"xattr must survive targz produce→update-extract round-trip (size={tarSize})");
+            AssertXattrRoundTrip(tarStaging, "sub", "com.bundler.testdir", (byte)'d', buffer);
+            AssertXattrRoundTrip(tarStaging, "link.sh", "com.bundler.testlink", (byte)'l', buffer);
         }
         finally
         {
             Cleanup(input);
         }
+    }
+
+    // NOFOLLOW 读节点自身 xattr——目录/软链与文件共用同一断言形状。
+    static void AssertXattrRoundTrip(
+        string staging, string name, string xattrName, byte expected, byte[] buffer)
+    {
+        var node = Directory
+            .GetFileSystemEntries(staging, name, SearchOption.AllDirectories)
+            .Single();
+        var size = getxattr(node, xattrName, buffer, buffer.Length, 0, 1 /* XATTR_NOFOLLOW */);
+        Assert.True(size.ToInt64() == 1 && buffer[0] == expected,
+            $"xattr '{xattrName}' must survive on '{name}' (size={size})");
     }
 
     static void SetXattr(string path, string name, string value)
