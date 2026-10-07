@@ -46,11 +46,14 @@ internal static class ArchiveExtractor
         {
             return false;
         }
-        if (Run("/usr/bin/ditto", "-x -k \"" + zipPath + "\" \"" + staging + "\"") == 0)
+        if (Run("/usr/bin/ditto", "-x -k " + ShellQuote(zipPath) + " " + ShellQuote(staging)) == 0)
         {
             log?.Invoke("update: extracted via ditto (xattrs/symlinks preserved).");
             return true;
         }
+        // ditto 可能已半提取（非法 __MACOSX 中途 File exists）——残渣会让 managed
+        // 回退撞 IOException，先清空暂存再回退。
+        ClearDirectory(staging);
         log?.Invoke("update: ditto extraction failed — managed fallback (xattrs lost).");
         return false;
     }
@@ -62,13 +65,31 @@ internal static class ArchiveExtractor
         {
             return false;
         }
-        if (Run("/usr/bin/tar", "-xzf \"" + tarGzPath + "\" -C \"" + staging + "\"") == 0)
+        if (Run("/usr/bin/tar", "-xzf " + ShellQuote(tarGzPath) + " -C " + ShellQuote(staging)) == 0)
         {
             log?.Invoke("update: extracted via bsdtar (xattrs/symlinks preserved).");
             return true;
         }
+        ClearDirectory(staging);
         log?.Invoke("update: bsdtar extraction failed — managed fallback (xattrs lost).");
         return false;
+    }
+
+    private static void ClearDirectory(string root)
+    {
+        foreach (var entry in Directory.GetFileSystemEntries(root))
+        {
+            var attributes = File.GetAttributes(entry);
+            if (attributes.HasFlag(FileAttributes.Directory) &&
+                !attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                Directory.Delete(entry, recursive: true);
+            }
+            else
+            {
+                File.Delete(entry);
+            }
+        }
     }
 
     // ditto 产的 zip 带 `__MACOSX/` AppleDouble 目录——managed 解包下它只是垃圾树。
@@ -190,6 +211,10 @@ internal static class ArchiveExtractor
         return full;
     }
 
+    private static string ShellQuote(string value) =>
+        "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+
+    // 超时即杀——否则超时的 ditto/tar 会继续写暂存目录，与回退提取器并发改同一载荷。
     private static int Run(string file, string arguments)
     {
         try
@@ -200,8 +225,17 @@ internal static class ArchiveExtractor
                     UseShellExecute = false,
                     RedirectStandardError = true,
                 });
-            process?.WaitForExit(60_000);
-            return process?.ExitCode ?? -1;
+            if (process is null)
+            {
+                return -1;
+            }
+            if (!process.WaitForExit(60_000))
+            {
+                try { process.Kill(); } catch (Exception) { }
+                try { process.WaitForExit(10_000); } catch (Exception) { }
+                return -1;
+            }
+            return process.ExitCode;
         }
         catch (Exception)
         {

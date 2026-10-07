@@ -14,7 +14,8 @@ internal static class MacArchiveTools
 {
     /// <summary>
     /// 载荷树（或任一 SourcePath）含扩展属性时把条目集落盘成暂存树，再用系统工具成包。
-    /// 工具缺席或失败返回 false——调用方回退 managed 写出器并告警（宿主探测降级惯例）。
+    /// 工具缺席、暂存物化或成包失败返回 false——调用方回退 managed 写出器并告警
+    /// （宿主探测降级惯例；中途产物在 finally 清掉）。
     /// </summary>
     internal static bool TryWriteWithHostTools(
         IReadOnlyList<ArchiveTree.Entry> entries, string sourceRoot, PackageFormat format,
@@ -34,11 +35,10 @@ internal static class MacArchiveTools
         {
             Materialize(entries, stagingRoot);
             var ok = format == PackageFormat.Zip
-                ? Run("/usr/bin/ditto",
-                    "-c -k --sequesterRsrc \"" + stagingRoot + "\" \"" + outputPath + "\"") == 0
-                : Run("/usr/bin/tar",
-                    "-czf \"" + outputPath + "\" -C \"" + stagingRoot + "\" \"" +
-                    TopStem(entries) + "\"") == 0;
+                ? Run("/usr/bin/ditto", "-c -k --sequesterRsrc " +
+                    ShellQuote(stagingRoot) + " " + ShellQuote(outputPath)) == 0
+                : Run("/usr/bin/tar", "-czf " + ShellQuote(outputPath) + " -C " +
+                    ShellQuote(stagingRoot) + " " + ShellQuote(TopStem(entries))) == 0;
             if (!ok)
             {
                 logger.Log(BundleLogLevel.Warning,
@@ -88,9 +88,8 @@ internal static class MacArchiveTools
         }
         try
         {
-            var ok = Run("/usr/bin/ditto",
-                "-c -k --sequesterRsrc --keepParent \"" + appDirectory +
-                "\" \"" + outputPath + "\"") == 0;
+            var ok = Run("/usr/bin/ditto", "-c -k --sequesterRsrc --keepParent " +
+                ShellQuote(appDirectory) + " " + ShellQuote(outputPath)) == 0;
             if (!ok && File.Exists(outputPath))
             {
                 File.Delete(outputPath);
@@ -112,7 +111,9 @@ internal static class MacArchiveTools
         }
     }
 
-    // 条目集落成与归档结构一致的暂存树：cp -p 保 xattr/模式，ln -s 立链接。
+    // 条目集落成与归档结构一致的暂存树：cp -p 保 xattr/模式，ln -s 立链接；
+    // 目录与链接自身的 xattr 走 CopyExtendedAttributes 补齐（cp -p 只管文件）。
+    // 任一步失败即抛——调用方整体回退 managed 写出器，绝不留半成品进入归档。
     private static void Materialize(IEnumerable<ArchiveTree.Entry> entries, string root)
     {
         foreach (var entry in entries)
@@ -123,10 +124,14 @@ internal static class MacArchiveTools
             {
                 case TarEntryKind.Directory:
                     Directory.CreateDirectory(destination);
+                    CopySourceXattrs(entry, destination);
                     break;
                 case TarEntryKind.Symlink:
                     Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                    Run("/bin/ln", "-sfn \"" + entry.LinkTarget + "\" \"" + destination + "\"");
+                    Require(Run("/bin/ln", "-sfn " + ShellQuote(entry.LinkTarget) +
+                        " " + ShellQuote(destination)),
+                        $"ln -sfn '{entry.LinkTarget}' '{destination}'");
+                    CopySourceXattrs(entry, destination);
                     break;
                 default:
                     Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
@@ -137,28 +142,58 @@ internal static class MacArchiveTools
                     else
                     {
                         // cp -p 在 macOS 上随模式一并复制扩展属性与资源叉。
-                        Run("/bin/cp", "-p \"" + entry.SourcePath + "\" \"" + destination + "\"");
+                        Require(Run("/bin/cp", "-p " + ShellQuote(entry.SourcePath!) +
+                            " " + ShellQuote(destination)),
+                            $"cp -p '{entry.SourcePath}' '{destination}'");
                     }
-                    Chmod(entry.Mode, destination);
+                    Require(Run("/bin/chmod", Convert.ToString(entry.Mode, 8) +
+                        " " + ShellQuote(destination)),
+                        $"chmod {Convert.ToString(entry.Mode, 8)} '{destination}'");
                     break;
             }
         }
     }
 
-    private static void Chmod(int mode, string path) =>
-        Run("/bin/chmod", Convert.ToString(mode, 8) + " \"" + path + "\"");
+    private static void CopySourceXattrs(ArchiveTree.Entry entry, string destination)
+    {
+        if (entry.SourcePath is { } source && UnixLinks.HasExtendedAttributes(source) &&
+            !UnixLinks.CopyExtendedAttributes(source, destination))
+        {
+            throw new IOException($"failed to copy extended attributes '{source}' → '{destination}'.");
+        }
+    }
+
+    private static void Require(int rc, string what)
+    {
+        if (rc != 0)
+        {
+            throw new IOException($"host tool step failed rc={rc}: {what}");
+        }
+    }
 
     private static string TopStem(IReadOnlyList<ArchiveTree.Entry> entries) =>
         entries[0].ArchivePath.Split('/')[0];
 
+    // 参数整词加引并转义（netstandard2.0 无 ArgumentList）：引号、空格、前导 '-'
+    // 在 .NET Unix 参数解析下均按字面传给工具，不产生参数解析副作用。
+    private static string ShellQuote(string value) =>
+        "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+
+    // 超时即杀——不许半成品工具与回退写出器并发改同一目标。
     private static int Run(string file, string arguments)
     {
-        using var process = Process.Start(new ProcessStartInfo(file, arguments)
+        using var process = Process.Start(
+            new ProcessStartInfo(file, arguments) { UseShellExecute = false });
+        if (process is null)
         {
-            UseShellExecute = false,
-            RedirectStandardError = true,
-        });
-        process?.WaitForExit(60_000);
-        return process?.ExitCode ?? -1;
+            return -1;
+        }
+        if (!process.WaitForExit(60_000))
+        {
+            try { process.Kill(); } catch (Exception) { }
+            try { process.WaitForExit(10_000); } catch (Exception) { }
+            return -1;
+        }
+        return process.ExitCode;
     }
 }

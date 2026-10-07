@@ -824,6 +824,41 @@ public static class ArchiveTests
         }
     }
 
+    [Fact]
+    static void Zip_XattrPayload_RoundTrips_ThroughUpdateExtraction()
+    {
+        // 全链路往返断言（FLAG-1）：ditto 产件 → ArchiveExtractor 解包（mac 走
+        // ditto -x -k）→ xattr 仍挂在提取出的文件上——只靠产件侧断言会漏掉解包侧丢签。
+        Assert.SkipUnless(OperatingSystem.IsMacOS(), "ditto round-trip is macOS-only");
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "xattr-rt-out");
+        var staging = Path.Combine(input, "..", "xattr-rt-staging");
+        try
+        {
+            var target = Path.Combine(input, "signed.sh");
+            File.WriteAllText(target, "#!/bin/sh\n");
+            SetXattr(target, "com.bundler.test", "v");
+            var artifact = new ArchiveBundler().BuildAsync(
+                Configuration(input, output, formats: [PackageFormat.Zip]))
+                .GetAwaiter().GetResult().Single();
+            Directory.CreateDirectory(staging);
+            DotNet.Bundler.Updater.ArchiveExtractor.ExtractZipToDirectory(
+                artifact.Path, staging, _ => { });
+            // ditto 解出的目录里还会带 __MACOSX/——按文件名定位提取件最稳。
+            var extracted = Directory
+                .GetFiles(staging, "signed.sh", SearchOption.AllDirectories)
+                .Single();
+            var buffer = new byte[64];
+            var size = getxattr(extracted, "com.bundler.test", buffer, buffer.Length, 0, 1);
+            Assert.True(size.ToInt64() == 1 && buffer[0] == (byte)'v',
+                $"xattr must survive produce→update-extract round-trip (size={size})");
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
     static void SetXattr(string path, string name, string value)
     {
         var bytes = Encoding.UTF8.GetBytes(value);
@@ -832,6 +867,9 @@ public static class ArchiveTests
             : lsetxattr(path, name, bytes, bytes.Length, 0);
         Assert.True(rc == 0, $"setxattr failed rc={rc} errno={Marshal.GetLastWin32Error()}");
     }
+
+    [DllImport("libc", CharSet = CharSet.Ansi, SetLastError = true)]
+    static extern IntPtr getxattr(string path, string name, byte[] value, int size, int position, int options);
 
     [DllImport("libc", CharSet = CharSet.Ansi, SetLastError = true)]
     static extern int setxattr(string path, string name, byte[] value, int size, int position, int options);

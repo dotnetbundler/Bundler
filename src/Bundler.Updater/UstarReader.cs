@@ -236,7 +236,10 @@ internal static class UstarReader
         }
     }
 
-    internal static void CreateSymlink(string target, string linkPath)
+    private static string ShellQuote(string value) =>
+        "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+
+    internal static bool CreateSymlink(string target, string linkPath)
     {
         try
         {
@@ -253,13 +256,23 @@ internal static class UstarReader
             }
             using var process = System.Diagnostics.Process.Start(
                 new System.Diagnostics.ProcessStartInfo("/bin/ln",
-                    "-sfn \"" + target + "\" \"" + linkPath + "\"")
+                    "-sfn " + ShellQuote(target) + " " + ShellQuote(linkPath))
                 { UseShellExecute = false });
-            process?.WaitForExit(10_000);
+            if (process is null)
+            {
+                return false;
+            }
+            if (!process.WaitForExit(10_000))
+            {
+                try { process.Kill(); } catch (Exception) { }
+                return false;
+            }
+            return process.ExitCode == 0;
         }
         catch (Exception)
         {
             // 宿主无 ln（windows 裸环境）：链接退化为跳过——主要语义不受影响。
+            return false;
         }
     }
 }
