@@ -56,7 +56,7 @@
 - 解包侧：新增 `ArchiveExtractor`——zip 在 macOS 走 `ditto -x -k`、targz 走系统 `tar`（xattr+软链一并还原）；其余宿主 managed 提取并把 `__MACOSX/` 清掉；`ExtractZip` 补 S_IFLNK 还原（读中央目录 external attributes，netstandard2.0 无 `ExternalAttributes` 属性面），顺带补齐 Linux 载荷 zip 更新的断链潜伏洞。
 - 工具链缺席/失败自动回退 managed 写出器并告警（宿主探测降级惯例）；dmg/pkg 通道本零损失不动。
 - 已知限制：`ditto -x` 不还原软链自身的 xattr（Apple 工具语义上限，Sparkle 同款）——zip 通道下链级 xattr 落地即丢；targz 通道文件/目录/链接三态全保真。`.app` 签名不含链级 xattr，主场景不受影响；确需链级 xattr 保真的载荷走 targz。
-- 证据：`ExtractZip_RestoresSymlinkEntries`（自产 zip 符号链接还原）与 `ExtractZip_DropsAppleDoubleTree` 断言；`Detects_ExtendedAttributes_OnPayload` POSIX 探测断言；`Zip_XattrPayload_UsesHostToolPreservingMetadata`（mac 宿主 `__MACOSX/` 条目区分断言）；`Zip_XattrPayload_RoundTrips_ThroughUpdateExtraction`（文件/目录/软链三态 xattr 双路往返断言）；mac 腿签名 .app zip 往返 `codesign --verify --deep` 实证。
+- 证据：`ExtractZip_RestoresSymlinkEntries`（自产 zip 符号链接还原）与 `ExtractZip_DropsAppleDoubleTree` 断言；`Detects_ExtendedAttributes_OnPayload` POSIX 探测断言；`Zip_XattrPayload_UsesHostToolPreservingMetadata`（mac 宿主 `__MACOSX/` 条目区分断言）；`Zip_XattrPayload_RoundTrips_ThroughUpdateExtraction`（targz 路文件/目录/软链三态 xattr + zip 路文件/目录 xattr 与软链本体还原断言）；mac 腿签名 .app zip 往返 `codesign --verify --deep` 实证。
 
 ### 2026-10-06 完整测试轮缺陷修复（四宿主全量测试暴露两族真实缺陷，均已修）
 
