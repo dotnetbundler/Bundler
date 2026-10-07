@@ -31,6 +31,7 @@ internal static class BootstrapPlan
         // 而按字面删除只移除链接本身。与 POSIX 侧 norm_parent 同义。
         var backupDir = options.BackupDirectory is { Length: > 0 }
             ? CanonicalParentPath(options.BackupDirectory)
+                ?? throw new UsageException($"backup path '{options.BackupDirectory}' resolves to a cyclic link.")
             : installDir.TrimEnd('/', '\\') + ".bundler-backup";
         // 关系判一律用全物理名——默认备份位同样可能是预置叶链，
         // 字面拼写与 retainCmp 的物理名对不上号会同址逃逸（换包移链后保留操作删新备份）。
@@ -68,7 +69,8 @@ internal static class BootstrapPlan
         {
             // 操作拼写（父物理化+叶字面）写回 options 供 RetainOrRemoveBackup 使用；
             // 关系判另取全物理名，叶链指向安装/载荷/备份叶都能命中。
-            options.RetainBackupDirectory = CanonicalParentPath(retainPath);
+            options.RetainBackupDirectory = CanonicalParentPath(retainPath)
+                ?? throw new UsageException($"retained-backup path '{retainPath}' resolves to a cyclic link.");
             var retainCmp = CanonicalPath(retainPath)
                 ?? throw new UsageException($"retained-backup path '{retainPath}' resolves to a cyclic link.");
             if (SameOrInside(retainCmp, installDir) || (payloadDir is not null && SameOrInside(retainCmp, payloadDir)) ||
@@ -478,15 +480,19 @@ internal static class BootstrapPlan
 
     // 输出路径（backup/retain）只物理化父目录、叶段留拼写：叶段为符号链接时
     // 解析后递归删除会清掉链接目标——配置路径之外的真实目录。
-    private static string CanonicalParentPath(string path) =>
+    // 父级不可解（环链）时返回 null 让调用方拒绝——字面回退会把 a→a/child 这类
+    // 环链展开成永不存在的假字面链，绕过拒绝拖到写 marker 后才失败。
+    private static string? CanonicalParentPath(string path) =>
         CanonicalParentPath(path, new HashSet<string>(PathStringComparer));
 
-    private static string CanonicalParentPath(string path, HashSet<string> resolving)
+    private static string? CanonicalParentPath(string path, HashSet<string> resolving)
     {
         var full = Path.GetFullPath(path);
         var parent = Path.GetDirectoryName(full);
+        var canonicalParent = parent is null ? null : CanonicalPath(parent, resolving);
         return parent is null ? full
-            : Path.Combine(CanonicalPath(parent, resolving) ?? parent, Path.GetFileName(full));
+            : canonicalParent is null ? null
+            : Path.Combine(canonicalParent, Path.GetFileName(full));
     }
 
     // 逐级解符号链接：纯 LinkTarget 跳走（不依赖 Exists 语义——lstat 口径下环链
@@ -525,12 +531,12 @@ internal static class BootstrapPlan
                 var next = Path.GetFullPath(
                     Path.IsPathRooted(target) ? target
                         : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
-                next = CanonicalParentPath(next, resolving);
-                if (!visited.Add(next))
+                var canonical = CanonicalParentPath(next, resolving);
+                if (canonical is null || !visited.Add(canonical))
                 {
                     return null;
                 }
-                current = next;
+                current = canonical;
             }
             // 跳数耗尽后仍停在链接上才算超限——恰 40 跳收敛的合法链放行。
             if (hops >= 40 && IsLink(current))
