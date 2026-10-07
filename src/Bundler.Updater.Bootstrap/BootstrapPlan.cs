@@ -42,10 +42,11 @@ internal static class BootstrapPlan
             ?? throw new UsageException($"backup path '{backupDir}' resolves to a cyclic link.");
         // Windows 比较面再加 NT 物理化：卷挂载点别名（C:\mnt 挂载 D:\）在
         // CanonicalPath 下仍是两个拼写，同址互嵌会漏判——\Device\… 名在对象层归一。
-        // POSIX 侧由文件系统语义天然归一，恒等透传。
-        var installCmp = ToComparisonPath(installDir);
-        var payloadCmp = payloadDir is null ? null : ToComparisonPath(payloadDir);
-        var backupCmp = ToComparisonPath(backupDirCmp);
+        // POSIX 侧由文件系统语义天然归一，恒等透传。NT 化按"对"降级：
+        // 一侧 NT 一侧字面的混合命名空间必然漏判，任一侧取不到即退回该对的规范字面判。
+        var installCmp = NtCmpPath(installDir);
+        var payloadCmp = payloadDir is null ? null : NtCmpPath(payloadDir);
+        var backupCmp = NtCmpPath(backupDirCmp);
         var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
         // 重启目标与日志路径都按本进程 cwd 绝对化——相对路径会在换包后的临时工作目录里静默错位。
         if (options.AppPath is { Length: > 0 })
@@ -67,9 +68,12 @@ internal static class BootstrapPlan
         // 这组判断只做路径关系运算、不依赖文件系统，必须先于 marker 恢复与等待——
         // 恢复会删半成品的安装目录，载荷嵌在其中时会把本轮输入先抹掉再拒绝（为时已晚）。
         if (payloadCmp is not null &&
-            (SameOrInside(backupCmp, installCmp) || SameOrInside(backupCmp, payloadCmp) ||
-             SameOrInside(installCmp, backupCmp) || SameOrInside(payloadCmp, backupCmp) ||
-             SameOrInside(installCmp, payloadCmp) || SameOrInside(payloadCmp, installCmp)))
+            (SameOrInsideCmp(backupCmp, backupDirCmp, installCmp, installDir) ||
+             SameOrInsideCmp(backupCmp, backupDirCmp, payloadCmp, payloadDir!) ||
+             SameOrInsideCmp(installCmp, installDir, backupCmp, backupDirCmp) ||
+             SameOrInsideCmp(payloadCmp, payloadDir!, backupCmp, backupDirCmp) ||
+             SameOrInsideCmp(installCmp, installDir, payloadCmp, payloadDir!) ||
+             SameOrInsideCmp(payloadCmp, payloadDir!, installCmp, installDir)))
         {
             throw new UsageException("backup/install/payload directories must not nest inside each other.");
         }
@@ -79,17 +83,22 @@ internal static class BootstrapPlan
             // 关系判另取全物理名，叶链指向安装/载荷/备份叶都能命中。
             options.RetainBackupDirectory = CanonicalParentPath(retainPath)
                 ?? throw new UsageException($"retained-backup path '{retainPath}' resolves to a cyclic link.");
-            var retainCmp = ToComparisonPath(CanonicalPath(retainPath)
-                ?? throw new UsageException($"retained-backup path '{retainPath}' resolves to a cyclic link."));
-            if (SameOrInside(retainCmp, installCmp) || (payloadCmp is not null && SameOrInside(retainCmp, payloadCmp)) ||
-                SameOrInside(installCmp, retainCmp) || (payloadCmp is not null && SameOrInside(payloadCmp, retainCmp)) ||
-                SameOrInside(backupCmp, retainCmp) || SameOrInside(retainCmp, backupCmp))
+            var retainCmp = CanonicalPath(retainPath)
+                ?? throw new UsageException($"retained-backup path '{retainPath}' resolves to a cyclic link.");
+            var retainNt = NtCmpPath(retainCmp);
+            if (SameOrInsideCmp(retainNt, retainCmp, installCmp, installDir) ||
+                (payloadCmp is not null && SameOrInsideCmp(retainNt, retainCmp, payloadCmp, payloadDir!)) ||
+                SameOrInsideCmp(installCmp, installDir, retainNt, retainCmp) ||
+                (payloadCmp is not null && SameOrInsideCmp(payloadCmp, payloadDir!, retainNt, retainCmp)) ||
+                SameOrInsideCmp(backupCmp, backupDirCmp, retainNt, retainCmp) ||
+                SameOrInsideCmp(retainNt, retainCmp, backupCmp, backupDirCmp))
             {
                 throw new UsageException("retained-backup directory must not nest inside install/payload/backup directories.");
             }
         }
         // 回滚模式不嵌套校验 payload——它本就不存在。
-        if (options.Rollback && (SameOrInside(backupCmp, installCmp) || SameOrInside(installCmp, backupCmp)))
+        if (options.Rollback && (SameOrInsideCmp(backupCmp, backupDirCmp, installCmp, installDir) ||
+                               SameOrInsideCmp(installCmp, installDir, backupCmp, backupDirCmp)))
         {
             throw new UsageException("backup and install directories must not nest inside each other.");
         }
@@ -516,12 +525,20 @@ internal static class BootstrapPlan
             : null;
     }
 
+    // 比较名成对判定：两侧都有 NT 物理名用对象层判（别名归一）；任一侧 NT 化
+    // 失败退回该对的规范字面判——混合命名空间比较必然漏判（payload 超长在
+    // NT 侧漏嵌判，恢复删活件即此事故形状）。POSIX 侧 nt 即规范名恒走前者。
+    private static bool SameOrInsideCmp(string? ntCandidate, string candidate, string? ntParent, string parent) =>
+        ntCandidate is not null && ntParent is not null
+            ? SameOrInside(ntCandidate, ntParent)
+            : SameOrInside(candidate, parent);
+
     // 比较用物理名：Windows 上 deepest-existing 前缀开句柄取 \Device\… NT 名、
     // 缺失叶段按字面接回——挂载点/junction/subst 别名在对象层归一，
     // install C:\mnt\app 与 backup D:\app（mnt 挂 D:）判同址拒绝。
-    // 取不到（全程不存在/打不开）时回退原拼写——最坏去向仍是原字面判。
-    private static string ToComparisonPath(string path) =>
-        OperatingSystem.IsWindows() ? NtPhysicalPath(path) ?? path : path;
+    // 取不到（全程不存在/打不开/超 32K）返回 null 由成对判退回字面。
+    private static string? NtCmpPath(string path) =>
+        OperatingSystem.IsWindows() ? NtPhysicalPath(path) : path;
 
     private static string? NtPhysicalPath(string path)
     {
@@ -547,14 +564,30 @@ internal static class BootstrapPlan
         }
         try
         {
-            var buffer = new StringBuilder(capacity: 1024);
-            var length = GetFinalPathNameByHandle(
-                handle, buffer, (uint)buffer.Capacity, 0x1 /* VOLUME_NAME_NT */);
-            if (length == 0 || length >= (uint)buffer.Capacity)
+            // 缓冲不足时返回需要的长度——按需扩容重试到内核路径上限 64K，
+            // 超长路径不再静默退回字面（混合命名空间漏判的事故源）。
+            var capacity = 512;
+            string? nt = null;
+            while (capacity <= 64 * 1024)
+            {
+                var buffer = new StringBuilder(capacity: capacity);
+                var length = GetFinalPathNameByHandle(
+                    handle, buffer, (uint)buffer.Capacity, 0x1 /* VOLUME_NAME_NT */);
+                if (length == 0)
+                {
+                    return null;
+                }
+                if (length < (uint)buffer.Capacity)
+                {
+                    nt = buffer.ToString(0, (int)length).TrimEnd('\\');
+                    break;
+                }
+                capacity = (int)Math.Min(length + 1, 64 * 1024 + 1);
+            }
+            if (nt is null)
             {
                 return null;
             }
-            var nt = buffer.ToString(0, (int)length).TrimEnd('\\');
             foreach (var segment in tail)
             {
                 nt += "\\" + segment;
