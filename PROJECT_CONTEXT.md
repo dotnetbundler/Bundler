@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-07
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.77`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.78`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -85,6 +85,13 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-07 PR #33 压缩合并（squash `923ead4`，main `923ead4`，版本推进 `alpha.78`）
+
+- R3 宿主腿抓出的链接解析缺陷族一轮批：环链载荷/装位被放行（`File.Exists`/`Directory.Exists` 对环链报存在+`ResolveLinkTarget` ELOOP 被吞）——`ResolveLinkChain` 改纯 `LinkTarget` 跳走+`resolving`/`visited` 双守卫判环，环链与超 40 跳一律 rc=2；链目标字面拼写逃逸互嵌判（`/var` vs `/private/var`）——每跳经 `CanonicalParentPath` 物理化；补 `payload⊂retain` 第六向守卫。
+- POSIX `bundler-updater.sh` 全语义对齐：`resolve_link`+`norm_seg` 逐段解算替代 `cd+pwd -P` 单段规范化，访问集经位置参数 `$@` 跨 `resolve_link`↔`norm_seg` 互递归帧下传（修跨帧嵌套环栈耗尽、`|` 字符误判），`norm_parent` 环链父级报 rc=2 不再字面回退；41+ 链由软断点改硬限判环。
+- Devin Review 六轮共 8 发现全实证修复；宿主腿复验：linux-x64 aot/bash/dash 39/39、macOS 真机 AOT=sh 114/114、alpine busybox 18/18+36/36、win junction/mklink 环链全 rc=2+34 腿回归；四 RID 引导件按同 RID 宿主重产回填（sha256 逐件核验）。
+- 开放项：`.app` 经 zip 传输丢 `com.apple.cs.*` xattr/符号链接（D3）已立项另行处理。
 
 ### 2026-10-07 PR #32 压缩合并（squash `2eed745`，main `2eed745`，版本推进 `alpha.77`）
 
