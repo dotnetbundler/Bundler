@@ -74,6 +74,15 @@ done
 # 之后的派生、比较、文件操作全程只用规范化值，与 AOT 侧 GetFullPath 同义。
 norm_path() {
     _np="${1%/}"
+    # 非目录叶段若是符号链接要逐级跟随：cd -P 只能解目录，文件级 link 载荷
+    # 指向安装件时字面值不同名会逃逸等值判（mv 把链接搬上原位成自指死链）。
+    while [ -L "$_np" ]; do
+        _nt=$(readlink "$_np") || break
+        case "$_nt" in
+            /*) _np=$_nt ;;
+            *) _np="$(dirname "$_np")/$_nt" ;;
+        esac
+    done
     if [ -d "$_np" ]; then
         (cd "$_np" && pwd -P)
     else
