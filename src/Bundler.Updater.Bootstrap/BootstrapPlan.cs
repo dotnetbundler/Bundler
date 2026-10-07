@@ -837,8 +837,9 @@ internal static class BootstrapPlan
         }
     }
 
-    // `\\?\` / `\??\` 前缀且无 Win32 名的 NT 对象（`\??\Volume{GUID}`、`\Device\…`）
-    // ——卷挂载点或设备链接的 reparse target，不是能用 Path API 拼写的文件系统路径；
+    // NT 对象名的三种表面：`\\?\`/`\??\` 前缀、`\Device\…`、以及 .NET 剥前缀后
+    // 露出的裸 `Volume{GUID}\`（卷挂载点 reparse target 在 LinkTarget 上的实形——
+    // win 腿实证 .NET 去掉 `\??\` 后按裸名返回，跟跳会把它当目录名拼进字面路径）。
     // `\\?\C:\…`/`\\?\UNC\…` 这类扩展长度路径是合法拼写，照常解。
     private static bool IsNtObjectTarget(string target)
     {
@@ -850,10 +851,21 @@ internal static class BootstrapPlan
             || target.StartsWith(@"\??\", StringComparison.Ordinal))
         {
             var body = target[4..];
-            return !(body.Length >= 2 && char.IsLetter(body[0]) && body[1] == ':')
-                && !body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase);
+            return IsVolumeGuidName(body)
+                || (!(body.Length >= 2 && char.IsLetter(body[0]) && body[1] == ':')
+                    && !body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase));
         }
-        return false;
+        return IsVolumeGuidName(target);
+    }
+
+    // `Volume{xxxxxxxx-xxxx-…}` 裸名——卷 GUID 路径的根段，
+    // 允许尾巴一根目录分隔符，不接受它当普通目录名。
+    private static bool IsVolumeGuidName(string name)
+    {
+        var trimmed = name.TrimEnd('\\');
+        return trimmed.Length == 44
+            && trimmed.StartsWith("Volume{", StringComparison.OrdinalIgnoreCase)
+            && trimmed[43] == '}';
     }
 
     private static bool IsLink(string path)
