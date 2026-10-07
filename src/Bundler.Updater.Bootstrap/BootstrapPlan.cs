@@ -67,13 +67,15 @@ internal static class BootstrapPlan
         // 等值或载荷为安装祖先时连备份一并清掉。
         // 这组判断只做路径关系运算、不依赖文件系统，必须先于 marker 恢复与等待——
         // 恢复会删半成品的安装目录，载荷嵌在其中时会把本轮输入先抹掉再拒绝（为时已晚）。
-        if (payloadCmp is not null &&
+        // 门禁挂在字面名上：payloadCmp（NT 名）可空不跳过整组判——
+        // payload 一侧 NT 化失败时 payload 相关对退回字面判，其余对不受影响。
+        if (payloadDir is not null &&
             (SameOrInsideCmp(backupCmp, backupDirCmp, installCmp, installDir) ||
-             SameOrInsideCmp(backupCmp, backupDirCmp, payloadCmp, payloadDir!) ||
+             SameOrInsideCmp(backupCmp, backupDirCmp, payloadCmp, payloadDir) ||
              SameOrInsideCmp(installCmp, installDir, backupCmp, backupDirCmp) ||
-             SameOrInsideCmp(payloadCmp, payloadDir!, backupCmp, backupDirCmp) ||
-             SameOrInsideCmp(installCmp, installDir, payloadCmp, payloadDir!) ||
-             SameOrInsideCmp(payloadCmp, payloadDir!, installCmp, installDir)))
+             SameOrInsideCmp(payloadCmp, payloadDir, backupCmp, backupDirCmp) ||
+             SameOrInsideCmp(installCmp, installDir, payloadCmp, payloadDir) ||
+             SameOrInsideCmp(payloadCmp, payloadDir, installCmp, installDir)))
         {
             throw new UsageException("backup/install/payload directories must not nest inside each other.");
         }
@@ -87,9 +89,9 @@ internal static class BootstrapPlan
                 ?? throw new UsageException($"retained-backup path '{retainPath}' resolves to a cyclic link.");
             var retainNt = NtCmpPath(retainCmp);
             if (SameOrInsideCmp(retainNt, retainCmp, installCmp, installDir) ||
-                (payloadCmp is not null && SameOrInsideCmp(retainNt, retainCmp, payloadCmp, payloadDir!)) ||
+                (payloadDir is not null && SameOrInsideCmp(retainNt, retainCmp, payloadCmp, payloadDir)) ||
                 SameOrInsideCmp(installCmp, installDir, retainNt, retainCmp) ||
-                (payloadCmp is not null && SameOrInsideCmp(payloadCmp, payloadDir!, retainNt, retainCmp)) ||
+                (payloadDir is not null && SameOrInsideCmp(payloadCmp, payloadDir, retainNt, retainCmp)) ||
                 SameOrInsideCmp(backupCmp, backupDirCmp, retainNt, retainCmp) ||
                 SameOrInsideCmp(retainNt, retainCmp, backupCmp, backupDirCmp))
             {
