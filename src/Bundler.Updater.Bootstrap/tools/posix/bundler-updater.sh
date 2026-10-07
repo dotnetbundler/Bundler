@@ -74,39 +74,75 @@ done
 # ${INSTALL_DIR}.bundler-backup 字面仍含 ..——retain 删掉中间目录后 mv 失解析。
 # 故入参先按物理路径统一规范化（存在的目录直接解析，不存在的解析父目录再接回末段），
 # 之后的派生、比较、文件操作全程只用规范化值，与 AOT 侧 GetFullPath 同义。
+# 逐段链接解算（与 AOT 侧 CanonicalPath→ResolveLinkChain 同形）：每个路径段单独链走。
+# readlink 跳走不依赖 stat 语义（lstat 口径下环链也报存在），悬挂链接
+# （目标已搬进备份）照样解——崩溃恢复靠它找回 marker/备份。
+# 每跳目标父链规范化再接回叶名：/var 类中间段自身是链接时，
+# 字面拼写与比较对象的物理名错位会逃逸互嵌/等值判。
+# 环判一律拼写等值重访（同 AOT resolving/visited 的 HashSet 语义）：
+# 链走重访本链拼写（a→b→a），或嵌套 norm_seg 递归时重入栈上在解析的拼写
+#（a→a/child 后代自指走父链规范化重入时命中）；40 跳=SYMLOOP_MAX 硬限——
+# 耗尽后仍是链接即判环。命中即 return 1，调用方按无效输入拒。
+# 已解拼写集用位置参数逐帧下传（resolve_link 与 norm_seg 互递归时栈上祖先可见）：
+# 字符串集靠分隔符会切路径里的 | 等合法字符，位置参数任意拼写都安全。
+# 只在确认是链接后才入栈——普通父级段解析即完不在解析中，入栈会被父链重走误报环。
+_seen() {
+    _c=$1; shift
+    for _e do [ "$_c" = "$_e" ] && return 0; done
+    return 1
+}
+resolve_link() {
+    _rl=$1; shift
+    _rlh=0
+    while [ -L "$_rl" ]; do
+        _seen "$_rl" "$@" && return 1
+        set -- "$@" "$_rl"
+        _rlh=$((_rlh + 1))
+        [ "$_rlh" -gt 40 ] && return 1
+        _rlt=$(readlink "$_rl") || break
+        case "$_rlt" in
+            /*) _rln=$_rlt ;;
+            *) _rln="$(dirname "$_rl")/$_rlt" ;;
+        esac
+        _rln=$(norm_lexical "$_rln")
+        _seen "$_rln" "$@" && return 1
+        _rld=$(dirname "$_rln"); _rlb=$(basename "$_rln")
+        _rlp=$(norm_seg "$_rld" "$@") || return 1
+        _rl="${_rlp%/}/$_rlb"
+    done
+    printf '%s\n' "$_rl"
+}
+
+# 逐段规范化：任一段环链则整条判死（与 AOT CanonicalPath 遇 null 传播同义）。
+norm_seg() {
+    _ns_rest=$(norm_lexical "$1"); shift
+    _ns_rest=${_ns_rest#/}
+    _ns_out=
+    while [ -n "$_ns_rest" ]; do
+        _ns_seg=${_ns_rest%%/*}
+        _ns_rest=${_ns_rest#"$_ns_seg"}
+        _ns_rest=${_ns_rest#/}
+        _ns_cur="$_ns_out/$_ns_seg"
+        _ns_cur=$(resolve_link "$_ns_cur" "$@") || return 1
+        _ns_out=$_ns_cur
+    done
+    printf '%s\n' "${_ns_out:-/}"
+}
+
 norm_path() {
     _np="${1%/}"
-    # 非目录叶段若是符号链接要逐级跟随：cd -P 只能解目录，文件级 link 载荷
-    # 指向安装件时字面值不同名会逃逸等值判（mv 把链接搬上原位成自指死链）。
-    # 悬挂链接（目标已搬进备份）readlink 照样解——崩溃恢复靠它找回 marker/备份。
-    _hops=0
-    while [ -L "$_np" ]; do
-        _hops=$((_hops + 1))
-        # 同内核 SYMLOOP_MAX：环链停在最后拼写交给存在性校验拒，不悬挂。
-        [ "$_hops" -gt 40 ] && break
-        _nt=$(readlink "$_np") || break
-        case "$_nt" in
-            /*) _np=$_nt ;;
-            *) _np="$(dirname "$_np")/$_nt" ;;
-        esac
-    done
-    if [ -d "$_np" ]; then
-        (cd "$_np" && pwd -P)
-    else
-        _nd=$(dirname "$_np")
-        _nb=$(basename "$_np")
-        _nr=$( (cd "$_nd" 2>/dev/null && pwd -P) || norm_lexical "$_nd")
-        printf '%s/%s\n' "${_nr%/}" "$_nb"
-    fi
+    norm_seg "$_np" || { echo "bundler-updater: path '$_np' resolves to a cyclic link." >&2; return 1; }
 }
 
 # 输出路径（backup/retain）只物理化父目录、叶段留拼写：叶段为符号链接时
 # 若按物理名 rm -rf 会清掉链接目标——配置路径之外的真实目录；字面拼写只删链接本身。
+# 父级不可解（环链）即拒——字面回退会把环链展开成永不存在的假字面链，
+# 绕过拒绝拖到写 marker 后才失败（与 AOT CanonicalParentPath 可空化同义）。
 norm_parent() {
     _np="${1%/}"
     _nd=$(dirname "$_np")
     _nb=$(basename "$_np")
-    _nr=$( (cd "$_nd" 2>/dev/null && pwd -P) || norm_lexical "$_nd")
+    _nr=$(norm_seg "$_nd") || { echo "bundler-updater: path '$_nd' resolves to a cyclic link." >&2; return 1; }
     printf '%s/%s\n' "${_nr%/}" "$_nb"
 }
 
@@ -135,19 +171,19 @@ norm_lexical() {
 
 [ -n "$INSTALL_DIR" ] || { echo "bundler-updater: --install-dir is required." >&2; exit 2; }
 [ "$ROLLBACK" = 1 ] || [ -n "$PAYLOAD_DIR" ] || { echo "bundler-updater: --payload is required unless --rollback." >&2; exit 2; }
-INSTALL_DIR="$(norm_path "$INSTALL_DIR")"
-[ -z "$PAYLOAD_DIR" ] || PAYLOAD_DIR="$(norm_path "$PAYLOAD_DIR")"
-[ -z "$BACKUP_DIR" ] || BACKUP_DIR="$(norm_parent "$BACKUP_DIR")"
-[ -z "$RETAIN_DIR" ] || RETAIN_DIR="$(norm_parent "$RETAIN_DIR")"
+INSTALL_DIR="$(norm_path "$INSTALL_DIR")" || exit 2
+[ -z "$PAYLOAD_DIR" ] || PAYLOAD_DIR="$(norm_path "$PAYLOAD_DIR")" || exit 2
+[ -z "$BACKUP_DIR" ] || BACKUP_DIR="$(norm_parent "$BACKUP_DIR")" || exit 2
+[ -z "$RETAIN_DIR" ] || RETAIN_DIR="$(norm_parent "$RETAIN_DIR")" || exit 2
 # 关系判另取全物理名：叶段为符号链接时字面拼写会逃逸同址/互嵌判
 #（叶链指向 install/payload 在字面层面不同名）；文件操作仍走上面的叶字面拼写。
-[ -z "$RETAIN_DIR" ] || RETAIN_CMP="$(norm_path "$RETAIN_DIR")"
+[ -z "$RETAIN_DIR" ] || RETAIN_CMP="$(norm_path "$RETAIN_DIR")" || exit 2
 # 重启目标与日志同样按调用方 cwd 规范化成绝对路径——脚本的工作目录不是用户的 cwd。
-[ -z "$APP_PATH" ] || APP_PATH="$(norm_path "$APP_PATH")"
-[ -z "$LOG_FILE" ] || LOG_FILE="$(norm_path "$LOG_FILE")"
+[ -z "$APP_PATH" ] || APP_PATH="$(norm_path "$APP_PATH")" || exit 2
+[ -z "$LOG_FILE" ] || LOG_FILE="$(norm_path "$LOG_FILE")" || exit 2
 [ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
 # 备份比较名一律全物理化——默认备份位同样可能预置叶链（与 RETAIN_CMP 物理名不同名会同址逃逸）。
-BACKUP_CMP="$(norm_path "$BACKUP_DIR")"
+BACKUP_CMP="$(norm_path "$BACKUP_DIR")" || exit 2
 MARKER="${INSTALL_DIR%/}.bundler-swap"
 
 # 备份目录与安装/载荷同址或互嵌同样是抹数据的形状（换包前会 rm 旧备份）——与 AOT 侧同拒。

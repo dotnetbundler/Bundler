@@ -559,6 +559,67 @@ public static class UpdateTests
         // 链接被搬入原位会把安装文件变成自指链接——拒绝后源件必须完好。
         Assert.Equal("x", File.ReadAllText(installFile));
         Assert.True(File.Exists(linkPayload));
+
+        // 载荷嵌进保留目录 → 拒绝（retain 迁移 rm -rf 会清掉载荷父级全部内容）。
+        var retainHolder = Path.Combine(directory, "retain-holder");
+        var payloadInRetain = Path.Combine(retainHolder, "payload");
+        Directory.CreateDirectory(payloadInRetain);
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payloadInRetain,
+                    RetainBackupDirectory = retainHolder
+                }, lines.Add));
+        Assert.True(Directory.Exists(payloadInRetain));
+
+        // 环链载荷 → 拒绝：Exists 在 lstat 口径下对环链也报存在，
+        // 链接解析必须显式判环，否则换包后装位成指向自身的断链且备份被删无法恢复。
+        var cyclicPayload = Path.Combine(directory, "cyclic-payload");
+        File.CreateSymbolicLink(cyclicPayload, cyclicPayload);
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = cyclicPayload
+                }, lines.Add));
+
+        // 互指环（a↔b）同形。
+        var cycleA = Path.Combine(directory, "cycle-a");
+        var cycleB = Path.Combine(directory, "cycle-b");
+        File.CreateSymbolicLink(cycleA, cycleB);
+        File.CreateSymbolicLink(cycleB, cycleA);
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = cycleA
+                }, lines.Add));
+
+        // 文件级换包同样判环——install 为自环时不可被 File.Exists 恒真放行。
+        var cyclicInstallFile = Path.Combine(directory, "cyclic.bin");
+        File.CreateSymbolicLink(cyclicInstallFile, cyclicInstallFile);
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = cyclicInstallFile,
+                    PayloadDirectory = installFile
+                }, lines.Add));
+
+        // 后代自指（a→a/child）：规范化必须快速判死——重入自身会栈溢出而非拒绝。
+        var descendantLink = Path.Combine(directory, "desc-link");
+        File.CreateSymbolicLink(descendantLink, Path.Combine(descendantLink, "child"));
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = descendantLink
+                }, lines.Add));
     }
 
     [Fact]
