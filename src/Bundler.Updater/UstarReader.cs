@@ -236,7 +236,7 @@ internal static class UstarReader
         }
     }
 
-    private static void CreateSymlink(string target, string linkPath)
+    internal static void CreateSymlink(string target, string linkPath)
     {
         try
         {

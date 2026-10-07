@@ -64,12 +64,17 @@ public static class UpdateManifestEmitter
             if (artifact.Format == PackageFormat.App && Directory.Exists(artifact.Path))
             {
                 artifactFile = artifact.Path + ".zip";
-                var entries = ArchiveTree.CollectDirectory(
-                    artifact.Path, Path.GetFileName(artifact.Path), NullBundleLogger.Instance);
-                using (var stream = new FileStream(
-                           artifactFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                // .app 带扩展属性（签名 xattr）时 managed zip 会丢签名——mac 宿主走 ditto 保真。
+                if (!MacArchiveTools.TryWriteAppZipViaDitto(
+                        artifact.Path, artifactFile, NullBundleLogger.Instance))
                 {
-                    ZipWriter.Write(stream, entries.Select(ArchiveTree.ToZipEntry));
+                    var entries = ArchiveTree.CollectDirectory(
+                        artifact.Path, Path.GetFileName(artifact.Path), NullBundleLogger.Instance);
+                    using (var stream = new FileStream(
+                               artifactFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        ZipWriter.Write(stream, entries.Select(ArchiveTree.ToZipEntry));
+                    }
                 }
                 produced.Add(artifactFile);
             }

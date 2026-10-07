@@ -1118,6 +1118,101 @@ public static class UpdateTests
         }
     }
 
+    [Fact]
+    static void ExtractZip_RestoresSymlinkEntries()
+    {
+        // managed ExtractToDirectory 把 S_IFLNK 条目落成普通文件——提取器必须还原真链接。
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "symlink restore is POSIX-only");
+        var directory = CreateTempDirectory();
+        try
+        {
+            var zipPath = Path.Combine(directory, "payload.zip");
+            using (var stream = new FileStream(zipPath, FileMode.Create, FileAccess.Write))
+            {
+                DotNet.Bundler.Archive.ZipWriter.Write(stream,
+                [
+                    new DotNet.Bundler.Archive.ZipEntry
+                    {
+                        Name = "stem/",
+                        Kind = DotNet.Bundler.Archive.ZipEntryKind.Directory,
+                        Mode = 493,
+                    },
+                    new DotNet.Bundler.Archive.ZipEntry
+                    {
+                        Name = "stem/real.txt",
+                        Kind = DotNet.Bundler.Archive.ZipEntryKind.File,
+                        Mode = 420,
+                        Content = Encoding.UTF8.GetBytes("linked"),
+                    },
+                    new DotNet.Bundler.Archive.ZipEntry
+                    {
+                        Name = "stem/link.txt",
+                        Kind = DotNet.Bundler.Archive.ZipEntryKind.Symlink,
+                        Mode = 511,
+                        LinkTarget = "real.txt",
+                    },
+                ]);
+            }
+            var staging = Path.Combine(directory, "staging");
+            Directory.CreateDirectory(staging);
+
+            DotNet.Bundler.Updater.ArchiveExtractor.ExtractZipToDirectory(
+                zipPath, staging, _ => { });
+
+            var link = new FileInfo(Path.Combine(staging, "stem", "link.txt"));
+            Assert.Equal("real.txt", link.LinkTarget);
+            Assert.Equal("linked", File.ReadAllText(link.FullName));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void ExtractZip_DropsAppleDoubleTree()
+    {
+        // ditto 产 zip 自带 __MACOSX/ 资源叉目录——managed 提取下它是垃圾树，清掉。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var zipPath = Path.Combine(directory, "ditto.zip");
+            using (var stream = new FileStream(zipPath, FileMode.Create, FileAccess.Write))
+            {
+                DotNet.Bundler.Archive.ZipWriter.Write(stream,
+                [
+                    new DotNet.Bundler.Archive.ZipEntry
+                    {
+                        Name = "stem/app",
+                        Kind = DotNet.Bundler.Archive.ZipEntryKind.File,
+                        Mode = 493,
+                        Content = Encoding.UTF8.GetBytes("binary"),
+                    },
+                    new DotNet.Bundler.Archive.ZipEntry
+                    {
+                        Name = "__MACOSX/stem/._app",
+                        Kind = DotNet.Bundler.Archive.ZipEntryKind.File,
+                        Mode = 420,
+                        Content = Encoding.UTF8.GetBytes("appledouble"),
+                    },
+                ]);
+            }
+            var staging = Path.Combine(directory, "staging");
+            Directory.CreateDirectory(staging);
+
+            DotNet.Bundler.Updater.ArchiveExtractor.ExtractZipToDirectory(
+                zipPath, staging, _ => { });
+
+            Assert.False(Directory.Exists(Path.Combine(staging, "__MACOSX")));
+            Assert.Equal("binary",
+                File.ReadAllText(Path.Combine(staging, "stem", "app")));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
     private sealed class SilentLogger : IBundleLogger
     {
         public void Log(BundleLogLevel level, string message)

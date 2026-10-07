@@ -72,19 +72,26 @@ internal sealed class ArchiveBundleBackend(
 
         context.Logger.Log(BundleLogLevel.Information,
             $"Writing {format} archive → {stem + extension}");
+        // macOS 上载荷带扩展属性（签名 xattr 等）时走系统工具保真——managed 写出器丢 xattr。
+        var hostToolWritten = MacArchiveTools.TryWriteWithHostTools(
+            entries, context.Item.InputDirectory, format, outputPath,
+            context.WorkDirectory, context.Logger);
         try
         {
-            using (var stream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            if (!hostToolWritten)
             {
-                if (format == PackageFormat.Zip)
+                using (var stream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
                 {
-                    ZipWriter.Write(stream, entries.Select(ArchiveTree.ToZipEntry));
-                }
-                else
-                {
-                    using var gzip = new System.IO.Compression.GZipStream(
-                        stream, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true);
-                    TarWriter.Write(gzip, entries.Select(ArchiveTree.ToTarEntry));
+                    if (format == PackageFormat.Zip)
+                    {
+                        ZipWriter.Write(stream, entries.Select(ArchiveTree.ToZipEntry));
+                    }
+                    else
+                    {
+                        using var gzip = new System.IO.Compression.GZipStream(
+                            stream, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true);
+                        TarWriter.Write(gzip, entries.Select(ArchiveTree.ToTarEntry));
+                    }
                 }
             }
         }

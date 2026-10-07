@@ -2,6 +2,7 @@ using DotNet.Bundler;
 using DotNet.Bundler.Archive;
 using DotNet.Bundler.Core;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Text;
 
 public static class ArchiveTests
@@ -775,6 +776,68 @@ public static class ArchiveTests
             Cleanup(input);
         }
     }
+
+    [Fact]
+    static void Detects_ExtendedAttributes_OnPayload()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "xattr probing is POSIX-only");
+        var input = CreateInputDirectory();
+        try
+        {
+            Assert.False(UnixLinks.TreeHasExtendedAttributes(input));
+            var target = Path.Combine(input, "signed.sh");
+            File.WriteAllText(target, "#!/bin/sh\n");
+            SetXattr(target, "user.bundler.test", "v");
+            Assert.True(UnixLinks.HasExtendedAttributes(target));
+            Assert.True(UnixLinks.TreeHasExtendedAttributes(input));
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
+    [Fact]
+    static void Zip_XattrPayload_UsesHostToolPreservingMetadata()
+    {
+        // macOS 上载荷带 xattr（签名件）时写端走 ditto——AppleDouble 入 __MACOSX/，
+        // managed 写出器永远不会产这些条目，可区分新旧行为。
+        Assert.SkipUnless(OperatingSystem.IsMacOS(), "ditto production is macOS-only");
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "xattr-out");
+        try
+        {
+            var target = Path.Combine(input, "signed.sh");
+            File.WriteAllText(target, "#!/bin/sh\n");
+            SetXattr(target, "com.bundler.test", "v");
+            var artifact = new ArchiveBundler().BuildAsync(
+                Configuration(input, output, formats: [PackageFormat.Zip]))
+                .GetAwaiter().GetResult().Single();
+            using var archive = ZipFile.OpenRead(artifact.Path);
+            Assert.Contains(archive.Entries.Select(e => e.FullName),
+                name => name.StartsWith("__MACOSX/", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
+    static void SetXattr(string path, string name, string value)
+    {
+        var bytes = Encoding.UTF8.GetBytes(value);
+        var rc = OperatingSystem.IsMacOS()
+            ? setxattr(path, name, bytes, bytes.Length, 0, 1 /* XATTR_NOFOLLOW */)
+            : lsetxattr(path, name, bytes, bytes.Length, 0);
+        Assert.True(rc == 0, $"setxattr failed rc={rc} errno={Marshal.GetLastWin32Error()}");
+    }
+
+    [DllImport("libc", CharSet = CharSet.Ansi, SetLastError = true)]
+    static extern int setxattr(string path, string name, byte[] value, int size, int position, int options);
+
+    [DllImport("libc", CharSet = CharSet.Ansi, SetLastError = true)]
+    static extern int lsetxattr(string path, string name, byte[] value, int size, int flags);
 
     static BundleConfiguration Configuration(string input, string output,
         string rid = "linux-x64", IReadOnlyList<PackageFormat>? formats = null)

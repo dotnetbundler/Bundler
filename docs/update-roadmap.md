@@ -49,6 +49,14 @@
 
 ## 4. 阶段实施证据
 
+### 2026-10-07 归档保真修复（xattr+符号链接全链路，三轮宿主测试 D3 项）
+
+- 病理：macOS 签名驻两处——Mach-O `LC_CODE_SIGNATURE`+`_CodeSignature/` 普通文件（任何归档保得住）与非 Mach-O 件的 `com.apple.cs.*` xattr（普通 zip/tar 丢）；`UpdateApplier` 走 `System.IO.Compression` 解包还把 zip 内 S_IFLNK 条目落成普通文件——`.app` Framework 软链断裂+签名件更新后失效（R3 mac 腿实证 ad-hoc 应用更新后完全未签名）。
+- 产出侧：`ArchiveBundleBackend` 在 macOS 宿主检测到载荷树含扩展属性（`listxattr` 探测）时，`zip` 改走 `ditto -c -k --sequesterRsrc`（Sparkle/electron-updater 同款，AppleDouble 入 `__MACOSX/`）、`targz` 改走系统 bsdtar（xattr 自动编码 `._*` 条目）；`UpdateManifestEmitter` 的 `.app` 运输 zip 同策略（`ditto --keepParent`）。无 xattr 载荷与非 mac 宿主照旧 managed 写出器，格式不变。
+- 解包侧：新增 `ArchiveExtractor`——zip 在 macOS 走 `ditto -x -k`、targz 走系统 `tar`（xattr+软链一并还原）；其余宿主 managed 提取并把 `__MACOSX/` 清掉；`ExtractZip` 补 S_IFLNK 还原（读中央目录 external attributes，netstandard2.0 无 `ExternalAttributes` 属性面），顺带补齐 Linux 载荷 zip 更新的断链潜伏洞。
+- 工具链缺席/失败自动回退 managed 写出器并告警（宿主探测降级惯例）；dmg/pkg 通道本零损失不动。
+- 证据：`ExtractZip_RestoresSymlinkEntries`（自产 zip 符号链接还原）与 `ExtractZip_DropsAppleDoubleTree` 断言；`Detects_ExtendedAttributes_OnPayload` POSIX 探测断言；`Zip_XattrPayload_UsesHostToolPreservingMetadata`（mac 宿主 `__MACOSX/` 条目区分断言）；mac 腿签名 .app zip 往返 `codesign --verify --deep` 实证。
+
 ### 2026-10-06 完整测试轮缺陷修复（四宿主全量测试暴露两族真实缺陷，均已修）
 
 - `Bundler.Updater.csproj` 补 `<TargetFramework></TargetFramework>` 复位（与 `Bundler.Core.csproj` 同款）——`src/Directory.Build.props` 单数 `netstandard2.0` 压制复数双目标，净树 build 只产 netstandard2.0，`dotnet pack` 按复数求 net10.0 dll 报 NU5026，级联 98 条集成腿（linux/musl/mac 三宿主同样复现）。
