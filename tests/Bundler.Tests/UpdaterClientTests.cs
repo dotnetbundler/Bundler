@@ -52,7 +52,35 @@ public static class UpdaterClientTests
     [Fact]
     static void Client_FromInstallDirectory_ReadsAppContentsSidecar()
     {
-        // .app bundle：打包侧把旁车写在 Contents/——传入 .app 根也必须读到。
+        // .app bundle：打包侧把旁车写在 Contents/Resources/（资源密封位——
+        // Contents 根的非代码件会被 codesign 判成未签子件）——传入 .app 根也必须读到。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var appDir = Path.Combine(directory, "MyApp.app");
+            var resources = Path.Combine(appDir, "Contents", "Resources");
+            Directory.CreateDirectory(resources);
+            Protocol.UpdateInstallIdentity.Write(resources, new Protocol.UpdateInstallIdentity
+            {
+                Format = "app",
+                RuntimeIdentifier = "osx-arm64",
+                FeedUrl = "feed-placeholder",
+                PublicKey = "cHVibGljLWtleQ==",
+            });
+
+            var client = UpdateClient.FromInstallDirectory(appDir, "1.0.0");
+            Assert.NotNull(client);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void Client_FromInstallDirectory_ReadsLegacyContentsSidecar()
+    {
+        // alpha.76 及更早产出的 .app 旁车在 Contents/ 顶层——兜底探测仍须读到。
         var directory = CreateTempDirectory();
         try
         {

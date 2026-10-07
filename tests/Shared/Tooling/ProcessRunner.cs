@@ -126,6 +126,9 @@ internal static class ProcessRunner
             Arguments = argumentLine,
             WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory,
             UseShellExecute = false,
+            // 控制台子进程须带自己的控制台：与测试宿主共享控制台时，针对子进程的 console-ctrl
+            // 关闭事件（如 Restart Manager RmShutdown）会广播进宿主并中止测试会话。
+            CreateNoWindow = true,
         };
         if (environment is { } env)
         {

@@ -20,17 +20,63 @@ internal static class BootstrapPlan
 
     internal static int Apply(BootstrapOptions options, Action<string> log)
     {
-        var installDir = Path.GetFullPath(options.InstallDirectory);
+        var installDir = CanonicalPath(options.InstallDirectory);
         var payloadDir = options.PayloadDirectory.Length > 0
-            ? Path.GetFullPath(options.PayloadDirectory)
+            ? CanonicalPath(options.PayloadDirectory)
             : null;
-        var backupDir = Path.GetFullPath(
-            options.BackupDirectory ?? installDir.TrimEnd('/', '\\') + ".bundler-backup");
+        // 备份/保留是输出路径：父链物理化保留中间链接语义，但叶段必须留字面——
+        // 叶段若是符号链接，解析后 rm/Delete 会清掉链接目标（配置路径之外的真实目录），
+        // 而按字面删除只移除链接本身。与 POSIX 侧 norm_parent 同义。
+        var backupDir = options.BackupDirectory is { Length: > 0 }
+            ? CanonicalParentPath(options.BackupDirectory)
+            : installDir.TrimEnd('/', '\\') + ".bundler-backup";
+        // 关系判一律用全物理名——默认备份位同样可能是预置叶链，
+        // 字面拼写与 retainCmp 的物理名对不上号会同址逃逸（换包移链后保留操作删新备份）。
+        // 文件操作仍走上面的叶字面拼写（叶链只被删链本身不触目标）。
+        var backupDirCmp = CanonicalPath(backupDir);
         var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
+        // 重启目标与日志路径都按本进程 cwd 绝对化——相对路径会在换包后的临时工作目录里静默错位。
+        if (options.AppPath is { Length: > 0 })
+        {
+            options.AppPath = Path.GetFullPath(options.AppPath);
+        }
+        if (options.LogFile is { Length: > 0 })
+        {
+            options.LogFile = Path.GetFullPath(options.LogFile);
+        }
 
         if (!options.Rollback && payloadDir is null)
         {
             throw new UsageException("--payload is required unless --rollback.");
+        }
+
+        // install↔payload↔backup 同址/互嵌是抹数据的形状：备份移走后 swap 以空载荷覆盖再删源，
+        // 等值或载荷为安装祖先时连备份一并清掉。
+        // 这组判断只做路径关系运算、不依赖文件系统，必须先于 marker 恢复与等待——
+        // 恢复会删半成品的安装目录，载荷嵌在其中时会把本轮输入先抹掉再拒绝（为时已晚）。
+        if (payloadDir is not null &&
+            (SameOrInside(backupDirCmp, installDir) || SameOrInside(backupDirCmp, payloadDir) ||
+             SameOrInside(installDir, backupDirCmp) || SameOrInside(payloadDir, backupDirCmp) ||
+             SameOrInside(installDir, payloadDir) || SameOrInside(payloadDir, installDir)))
+        {
+            throw new UsageException("backup/install/payload directories must not nest inside each other.");
+        }
+        if (options.RetainBackupDirectory is { Length: > 0 } retainPath)
+        {
+            // 操作拼写（父物理化+叶字面）写回 options 供 RetainOrRemoveBackup 使用；
+            // 关系判另取全物理名，叶链指向安装/载荷/备份叶都能命中。
+            options.RetainBackupDirectory = CanonicalParentPath(retainPath);
+            var retainCmp = CanonicalPath(retainPath);
+            if (SameOrInside(retainCmp, installDir) || (payloadDir is not null && SameOrInside(retainCmp, payloadDir)) ||
+                SameOrInside(installDir, retainCmp) || SameOrInside(backupDirCmp, retainCmp) || SameOrInside(retainCmp, backupDirCmp))
+            {
+                throw new UsageException("retained-backup directory must not nest inside install/payload/backup directories.");
+            }
+        }
+        // 回滚模式不嵌套校验 payload——它本就不存在。
+        if (options.Rollback && (SameOrInside(backupDirCmp, installDir) || SameOrInside(installDir, backupDirCmp)))
+        {
+            throw new UsageException("backup and install directories must not nest inside each other.");
         }
 
         if (options.WaitPid is { } pid)
@@ -83,26 +129,6 @@ internal static class BootstrapPlan
         if (!options.Rollback && !Directory.Exists(payloadDir!))
         {
             throw new UsageException($"payload directory '{options.PayloadDirectory}' does not exist.");
-        }
-        if (payloadDir is not null &&
-            (SameOrInside(backupDir, installDir) || SameOrInside(backupDir, payloadDir) ||
-             SameOrInside(installDir, backupDir) || SameOrInside(payloadDir, backupDir)))
-        {
-            throw new UsageException("backup/install/payload directories must not nest inside each other.");
-        }
-        if (options.RetainBackupDirectory is { Length: > 0 } retainPath)
-        {
-            var retain = Path.GetFullPath(retainPath);
-            if (SameOrInside(retain, installDir) || (payloadDir is not null && SameOrInside(retain, payloadDir)) ||
-                SameOrInside(installDir, retain) || SameOrInside(backupDir, retain) || SameOrInside(retain, backupDir))
-            {
-                throw new UsageException("retained-backup directory must not nest inside install/payload/backup directories.");
-            }
-        }
-        // 回滚模式不嵌套校验 payload——它本就不存在。
-        if (options.Rollback && (SameOrInside(backupDir, installDir) || SameOrInside(installDir, backupDir)))
-        {
-            throw new UsageException("backup and install directories must not nest inside each other.");
         }
 
         // macOS .app 三项门禁（签名完好/身份连续/剥 quarantine）：动备份前拒绝，零变更安全。
@@ -261,6 +287,10 @@ internal static class BootstrapPlan
         {
             throw new UsageException("file-swap payload must be a file.");
         }
+        if (SameOrInside(payloadPath, installPath))
+        {
+            throw new UsageException("install and payload must not be the same file.");
+        }
         log($"bundler-updater: backup '{installPath}' → '{backupPath}'");
         if (File.Exists(backupPath))
         {
@@ -355,7 +385,15 @@ internal static class BootstrapPlan
             startInfo = new ProcessStartInfo(appPath)
             { UseShellExecute = false, WorkingDirectory = workingDirectory };
         }
-        Process.Start(startInfo);
+        // 重启失败不致命：换包/回滚已完成，重启只是便利步骤——与 POSIX `|| true` 对齐为 WARN。
+        try
+        {
+            Process.Start(startInfo);
+        }
+        catch (Exception exception)
+        {
+            log($"bundler-updater: WARN restart failed ({exception.Message})");
+        }
     }
 
     // 同卷 rename(2)/MoveFile 原子就位；跨卷退化为复制+删除。
@@ -407,6 +445,74 @@ internal static class BootstrapPlan
         candidate.StartsWith(
             parent.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    // 物理规范化：逐级解析已存在的符号链接段——路径关系判断必须比对物理位置而非拼写
+    //（POSIX 侧 norm_path 的 cd -P 语义；`Path.GetFullPath` 只归一拼写不解链接）。
+    // 不存在的段保持字面，链接解析失败退化为当前拼写。
+    private static string CanonicalPath(string path)
+    {
+        var full = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(full) ?? string.Empty;
+        var canonical = root;
+        foreach (var segment in full[root.Length..]
+            .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            canonical = Path.Combine(canonical, segment);
+            canonical = ResolveLinkChain(canonical);
+        }
+        return canonical;
+    }
+
+    // 输出路径（backup/retain）只物理化父目录、叶段留拼写：叶段为符号链接时
+    // 解析后递归删除会清掉链接目标——配置路径之外的真实目录。
+    private static string CanonicalParentPath(string path)
+    {
+        var full = Path.GetFullPath(path);
+        var parent = Path.GetDirectoryName(full);
+        return parent is null ? full : Path.Combine(CanonicalPath(parent), Path.GetFileName(full));
+    }
+
+    // 逐级解符号链接：存在目标走 ResolveLinkTarget 全链，悬挂链接（目标已搬走进备份）
+    // 用 LinkTarget 取下一跳拼写——崩溃恢复要靠它找回 marker/备份。
+    // 最多 40 跳（同内核 SYMLOOP_MAX）：环链停在最后拼写交给存在性校验拒，不悬挂。
+    private static string ResolveLinkChain(string path)
+    {
+        var current = path;
+        for (var hops = 0; hops < 40; hops++)
+        {
+            string? next = null;
+            try
+            {
+                if (Directory.Exists(current))
+                {
+                    next = Directory.ResolveLinkTarget(current, returnFinalTarget: true)?.FullName;
+                }
+                else if (File.Exists(current))
+                {
+                    next = File.ResolveLinkTarget(current, returnFinalTarget: true)?.FullName;
+                }
+                else
+                {
+                    var target = new FileInfo(current).LinkTarget ?? new DirectoryInfo(current).LinkTarget;
+                    if (target is not null)
+                    {
+                        next = Path.GetFullPath(
+                            Path.IsPathRooted(target) ? target
+                                : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
+                    }
+                }
+            }
+            catch (IOException)
+            {
+            }
+            if (next is null || string.Equals(next, current, StringComparison.Ordinal))
+            {
+                break;
+            }
+            current = next;
+        }
+        return current;
+    }
 
     // 严格子路径判不出等值路径——备份/保留目录与安装目录同址同样是抹数据的形状。
     private static bool SameOrInside(string candidate, string parent) =>

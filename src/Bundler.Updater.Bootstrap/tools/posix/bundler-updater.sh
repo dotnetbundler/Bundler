@@ -12,6 +12,8 @@ WAIT_PID=""
 APP_PATH=""
 BACKUP_DIR=""
 RETAIN_DIR=""
+BACKUP_CMP=""
+RETAIN_CMP=""
 LOG_FILE=""
 KEEP_PAYLOAD=0
 ROLLBACK=0
@@ -74,6 +76,20 @@ done
 # 之后的派生、比较、文件操作全程只用规范化值，与 AOT 侧 GetFullPath 同义。
 norm_path() {
     _np="${1%/}"
+    # 非目录叶段若是符号链接要逐级跟随：cd -P 只能解目录，文件级 link 载荷
+    # 指向安装件时字面值不同名会逃逸等值判（mv 把链接搬上原位成自指死链）。
+    # 悬挂链接（目标已搬进备份）readlink 照样解——崩溃恢复靠它找回 marker/备份。
+    _hops=0
+    while [ -L "$_np" ]; do
+        _hops=$((_hops + 1))
+        # 同内核 SYMLOOP_MAX：环链停在最后拼写交给存在性校验拒，不悬挂。
+        [ "$_hops" -gt 40 ] && break
+        _nt=$(readlink "$_np") || break
+        case "$_nt" in
+            /*) _np=$_nt ;;
+            *) _np="$(dirname "$_np")/$_nt" ;;
+        esac
+    done
     if [ -d "$_np" ]; then
         (cd "$_np" && pwd -P)
     else
@@ -82,6 +98,16 @@ norm_path() {
         _nr=$( (cd "$_nd" 2>/dev/null && pwd -P) || norm_lexical "$_nd")
         printf '%s/%s\n' "${_nr%/}" "$_nb"
     fi
+}
+
+# 输出路径（backup/retain）只物理化父目录、叶段留拼写：叶段为符号链接时
+# 若按物理名 rm -rf 会清掉链接目标——配置路径之外的真实目录；字面拼写只删链接本身。
+norm_parent() {
+    _np="${1%/}"
+    _nd=$(dirname "$_np")
+    _nb=$(basename "$_np")
+    _nr=$( (cd "$_nd" 2>/dev/null && pwd -P) || norm_lexical "$_nd")
+    printf '%s/%s\n' "${_nr%/}" "$_nb"
 }
 
 # 父目录缺席时物理解析走不通——退回词法折叠消掉 ./.. 段，
@@ -111,26 +137,44 @@ norm_lexical() {
 [ "$ROLLBACK" = 1 ] || [ -n "$PAYLOAD_DIR" ] || { echo "bundler-updater: --payload is required unless --rollback." >&2; exit 2; }
 INSTALL_DIR="$(norm_path "$INSTALL_DIR")"
 [ -z "$PAYLOAD_DIR" ] || PAYLOAD_DIR="$(norm_path "$PAYLOAD_DIR")"
-[ -z "$BACKUP_DIR" ] || BACKUP_DIR="$(norm_path "$BACKUP_DIR")"
-[ -z "$RETAIN_DIR" ] || RETAIN_DIR="$(norm_path "$RETAIN_DIR")"
+[ -z "$BACKUP_DIR" ] || BACKUP_DIR="$(norm_parent "$BACKUP_DIR")"
+[ -z "$RETAIN_DIR" ] || RETAIN_DIR="$(norm_parent "$RETAIN_DIR")"
+# 关系判另取全物理名：叶段为符号链接时字面拼写会逃逸同址/互嵌判
+#（叶链指向 install/payload 在字面层面不同名）；文件操作仍走上面的叶字面拼写。
+[ -z "$RETAIN_DIR" ] || RETAIN_CMP="$(norm_path "$RETAIN_DIR")"
+# 重启目标与日志同样按调用方 cwd 规范化成绝对路径——脚本的工作目录不是用户的 cwd。
+[ -z "$APP_PATH" ] || APP_PATH="$(norm_path "$APP_PATH")"
+[ -z "$LOG_FILE" ] || LOG_FILE="$(norm_path "$LOG_FILE")"
 [ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
+# 备份比较名一律全物理化——默认备份位同样可能预置叶链（与 RETAIN_CMP 物理名不同名会同址逃逸）。
+BACKUP_CMP="$(norm_path "$BACKUP_DIR")"
 MARKER="${INSTALL_DIR%/}.bundler-swap"
 
 # 备份目录与安装/载荷同址或互嵌同样是抹数据的形状（换包前会 rm 旧备份）——与 AOT 侧同拒。
 for _p in "$INSTALL_DIR" "$PAYLOAD_DIR"; do
     [ -n "$_p" ] || continue
-    case "$BACKUP_DIR" in
+    case "$BACKUP_CMP" in
         "$_p"|"$_p"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
     esac
     case "$_p" in
-        "$BACKUP_DIR"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+        "$BACKUP_CMP"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
     esac
 done
 
+# 载荷与安装同址或互嵌同样是抹数据的形状（备份移走后 swap 会以空载荷覆盖再删源）——与 AOT 侧同拒。
+if [ -n "$PAYLOAD_DIR" ]; then
+    case "$INSTALL_DIR" in
+        "$PAYLOAD_DIR"|"$PAYLOAD_DIR"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+    esac
+    case "$PAYLOAD_DIR" in
+        "$INSTALL_DIR"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+    esac
+fi
+
 # 保留目录与安装/载荷/备份目录同址或互嵌同样是抹数据的形状——与 AOT 侧 SameOrInside 同拒。
 if [ -n "$RETAIN_DIR" ]; then
-    _r="$RETAIN_DIR"
-    for _p in "$INSTALL_DIR" "$BACKUP_DIR" "$PAYLOAD_DIR"; do
+    _r="$RETAIN_CMP"
+    for _p in "$INSTALL_DIR" "$BACKUP_CMP" "$PAYLOAD_DIR"; do
         [ -n "$_p" ] || continue
         case "$_r" in
             "$_p"|"$_p"/*) { echo "bundler-updater: retained-backup directory must not nest inside install/payload/backup directories." >&2; exit 2; } ;;
@@ -200,7 +244,10 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
         exit 0
     fi
     [ -f "$PAYLOAD_DIR" ] || { echo "bundler-updater: file-swap payload must be a file." >&2; exit 2; }
+    [ "$PAYLOAD_DIR" = "$INSTALL_DIR" ] && { echo "bundler-updater: install and payload must not be the same file." >&2; exit 2; }
     log "bundler-updater: backup '$INSTALL_DIR' → '$BACKUP_DIR'"
+    # 备份父目录缺席时自建——与 AOT 侧 CopyTree 的隐式补链同义（POSIX mv 不会补）。
+    mkdir -p "$(dirname "$BACKUP_DIR")" || exit 4
     rm -f "$BACKUP_DIR" || exit 4
     printf 'swap in progress' >"$MARKER" || exit 4
     mv "$INSTALL_DIR" "$BACKUP_DIR" || { rm -f "$MARKER"; exit 4; }
@@ -278,6 +325,8 @@ if [ "$ROLLBACK" = 1 ]; then
 fi
 
 log "bundler-updater: backup '$INSTALL_DIR' → '$BACKUP_DIR'"
+# 备份父目录缺席时自建——与 AOT 侧 CopyTree 的隐式补链同义。
+mkdir -p "$(dirname "$BACKUP_DIR")" || exit 4
 rm -rf "$BACKUP_DIR" || exit 4
 printf 'swap in progress' >"$MARKER" || exit 4
 mv "$INSTALL_DIR" "$BACKUP_DIR" || { rm -f "$MARKER"; exit 4; }

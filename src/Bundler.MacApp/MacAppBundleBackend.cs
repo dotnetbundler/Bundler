@@ -39,11 +39,18 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         var destinations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         CopyTree(item.InputDirectory, executablesDirectory, destinations, context.Logger);
 
-        // 身份旁车落在 Contents 根、引导件落在 MacOS/——两者随 bundle 一起被 codesign 覆盖。
-        UpdateIdentitySidecar.WriteIfEnabled(
-            contentsDirectory, bundle.Update, PackageFormat.App, item.Target.RuntimeIdentifier);
         if (bundle.Update is { } update)
         {
+            // 更新件是保留名：先登记碰撞簿，用户资源撞名走标准冲突错误而不是底层 IO 失败。
+            destinations.Add(Path.GetFullPath(
+                Path.Combine(resourcesDirectory, UpdateInstallIdentity.FileName)));
+            destinations.Add(Path.GetFullPath(
+                Path.Combine(executablesDirectory,
+                    UpdateBootstrapper.FileNameFor(item.Target.RuntimeIdentifier))));
+            // 身份旁车落 Resources/（资源密封位：Contents 根的非代码件会被 codesign 判成未签子件）、
+            // 引导件落 MacOS/（代码位正常签名）——两者随 bundle 一起被 codesign 覆盖。
+            UpdateIdentitySidecar.WriteIfEnabled(
+                resourcesDirectory, update, PackageFormat.App, item.Target.RuntimeIdentifier);
             UpdateBootstrapper.Inject(
                 executablesDirectory, update, item.Target.RuntimeIdentifier);
         }
