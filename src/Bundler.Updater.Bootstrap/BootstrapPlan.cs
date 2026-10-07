@@ -20,9 +20,11 @@ internal static class BootstrapPlan
 
     internal static int Apply(BootstrapOptions options, Action<string> log)
     {
-        var installDir = CanonicalPath(options.InstallDirectory);
+        var installDir = CanonicalPath(options.InstallDirectory)
+            ?? throw new UsageException($"install path '{options.InstallDirectory}' resolves to a cyclic link.");
         var payloadDir = options.PayloadDirectory.Length > 0
             ? CanonicalPath(options.PayloadDirectory)
+                ?? throw new UsageException($"payload path '{options.PayloadDirectory}' resolves to a cyclic link.")
             : null;
         // 备份/保留是输出路径：父链物理化保留中间链接语义，但叶段必须留字面——
         // 叶段若是符号链接，解析后 rm/Delete 会清掉链接目标（配置路径之外的真实目录），
@@ -33,7 +35,8 @@ internal static class BootstrapPlan
         // 关系判一律用全物理名——默认备份位同样可能是预置叶链，
         // 字面拼写与 retainCmp 的物理名对不上号会同址逃逸（换包移链后保留操作删新备份）。
         // 文件操作仍走上面的叶字面拼写（叶链只被删链本身不触目标）。
-        var backupDirCmp = CanonicalPath(backupDir);
+        var backupDirCmp = CanonicalPath(backupDir)
+            ?? throw new UsageException($"backup path '{backupDir}' resolves to a cyclic link.");
         var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
         // 重启目标与日志路径都按本进程 cwd 绝对化——相对路径会在换包后的临时工作目录里静默错位。
         if (options.AppPath is { Length: > 0 })
@@ -66,9 +69,11 @@ internal static class BootstrapPlan
             // 操作拼写（父物理化+叶字面）写回 options 供 RetainOrRemoveBackup 使用；
             // 关系判另取全物理名，叶链指向安装/载荷/备份叶都能命中。
             options.RetainBackupDirectory = CanonicalParentPath(retainPath);
-            var retainCmp = CanonicalPath(retainPath);
+            var retainCmp = CanonicalPath(retainPath)
+                ?? throw new UsageException($"retained-backup path '{retainPath}' resolves to a cyclic link.");
             if (SameOrInside(retainCmp, installDir) || (payloadDir is not null && SameOrInside(retainCmp, payloadDir)) ||
-                SameOrInside(installDir, retainCmp) || SameOrInside(backupDirCmp, retainCmp) || SameOrInside(retainCmp, backupDirCmp))
+                SameOrInside(installDir, retainCmp) || (payloadDir is not null && SameOrInside(payloadDir, retainCmp)) ||
+                SameOrInside(backupDirCmp, retainCmp) || SameOrInside(retainCmp, backupDirCmp))
             {
                 throw new UsageException("retained-backup directory must not nest inside install/payload/backup directories.");
             }
@@ -449,7 +454,7 @@ internal static class BootstrapPlan
     // 物理规范化：逐级解析已存在的符号链接段——路径关系判断必须比对物理位置而非拼写
     //（POSIX 侧 norm_path 的 cd -P 语义；`Path.GetFullPath` 只归一拼写不解链接）。
     // 不存在的段保持字面，链接解析失败退化为当前拼写。
-    private static string CanonicalPath(string path)
+    private static string? CanonicalPath(string path)
     {
         var full = Path.GetFullPath(path);
         var root = Path.GetPathRoot(full) ?? string.Empty;
@@ -458,7 +463,12 @@ internal static class BootstrapPlan
             .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
         {
             canonical = Path.Combine(canonical, segment);
-            canonical = ResolveLinkChain(canonical);
+            var resolved = ResolveLinkChain(canonical);
+            if (resolved is null)
+            {
+                return null;
+            }
+            canonical = resolved;
         }
         return canonical;
     }
@@ -469,49 +479,45 @@ internal static class BootstrapPlan
     {
         var full = Path.GetFullPath(path);
         var parent = Path.GetDirectoryName(full);
-        return parent is null ? full : Path.Combine(CanonicalPath(parent), Path.GetFileName(full));
+        return parent is null ? full : Path.Combine(CanonicalPath(parent) ?? parent, Path.GetFileName(full));
     }
 
-    // 逐级解符号链接：存在目标走 ResolveLinkTarget 全链，悬挂链接（目标已搬走进备份）
-    // 用 LinkTarget 取下一跳拼写——崩溃恢复要靠它找回 marker/备份。
-    // 最多 40 跳（同内核 SYMLOOP_MAX）：环链停在最后拼写交给存在性校验拒，不悬挂。
-    private static string ResolveLinkChain(string path)
+    // 逐级解符号链接：纯 LinkTarget 跳走（不依赖 Exists 语义——lstat 口径下环链
+    // 也报存在），悬挂链接（目标已搬走进备份）照样解——崩溃恢复靠它找回 marker/备份。
+    // 每跳目标按父物理化再接回叶名：/var 这类中间段自身是链接时，字面拼写会与
+    // 比较对象的物理名错位逃逸互嵌/等值判。
+    // 环链（自指/互指/链长逾 40 跳=SYMLOOP_MAX）返回 null——调用方按无效输入拒绝。
+    private static string? ResolveLinkChain(string path)
     {
         var current = path;
+        var visited = new HashSet<string>(
+            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal) { current };
         for (var hops = 0; hops < 40; hops++)
         {
-            string? next = null;
+            string? target;
             try
             {
-                if (Directory.Exists(current))
-                {
-                    next = Directory.ResolveLinkTarget(current, returnFinalTarget: true)?.FullName;
-                }
-                else if (File.Exists(current))
-                {
-                    next = File.ResolveLinkTarget(current, returnFinalTarget: true)?.FullName;
-                }
-                else
-                {
-                    var target = new FileInfo(current).LinkTarget ?? new DirectoryInfo(current).LinkTarget;
-                    if (target is not null)
-                    {
-                        next = Path.GetFullPath(
-                            Path.IsPathRooted(target) ? target
-                                : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
-                    }
-                }
+                target = new FileInfo(current).LinkTarget ?? new DirectoryInfo(current).LinkTarget;
             }
             catch (IOException)
             {
+                break;
             }
-            if (next is null || string.Equals(next, current, StringComparison.Ordinal))
+            if (target is null)
             {
                 break;
             }
+            var next = Path.GetFullPath(
+                Path.IsPathRooted(target) ? target
+                    : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
+            next = CanonicalParentPath(next);
+            if (!visited.Add(next))
+            {
+                return null;
+            }
             current = next;
         }
-        return current;
+        return visited.Count > 40 ? null : current;
     }
 
     // 严格子路径判不出等值路径——备份/保留目录与安装目录同址同样是抹数据的形状。
