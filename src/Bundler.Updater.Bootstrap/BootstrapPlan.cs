@@ -703,6 +703,14 @@ internal static class BootstrapPlan
                 {
                     break;
                 }
+                // Windows 卷挂载点（mountvol）：reparse target 是 `\??\Volume{GUID}\`
+                // 这类 NT 对象名而非文件系统路径——按普通目录透传不跟跳（跟跳会把
+                // `Volume{guid}` 当目录名拼进字面路径，静默写偏到别的卷）。
+                // junction/symlink 目标已被 .NET 规范化为 Win32 路径，不受影响。
+                if (OperatingSystem.IsWindows() && IsNtObjectTarget(target))
+                {
+                    break;
+                }
                 var next = Path.GetFullPath(
                     Path.IsPathRooted(target) ? target
                         : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
@@ -724,6 +732,25 @@ internal static class BootstrapPlan
         {
             resolving.Remove(path);
         }
+    }
+
+    // `\\?\` / `\??\` 前缀且无 Win32 名的 NT 对象（`\??\Volume{GUID}`、`\Device\…`）
+    // ——卷挂载点或设备链接的 reparse target，不是能用 Path API 拼写的文件系统路径；
+    // `\\?\C:\…`/`\\?\UNC\…` 这类扩展长度路径是合法拼写，照常解。
+    private static bool IsNtObjectTarget(string target)
+    {
+        if (target.StartsWith(@"\Device\", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (target.StartsWith(@"\\?\", StringComparison.Ordinal)
+            || target.StartsWith(@"\??\", StringComparison.Ordinal))
+        {
+            var body = target[4..];
+            return !(body.Length >= 2 && char.IsLetter(body[0]) && body[1] == ':')
+                && !body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase);
+        }
+        return false;
     }
 
     private static bool IsLink(string path)
