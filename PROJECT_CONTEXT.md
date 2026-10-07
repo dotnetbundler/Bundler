@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-07
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.78`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.79`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -85,6 +85,13 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-07 PR #34 压缩合并（squash `d455190`，main `d455190`，版本推进 `alpha.79`）
+
+- D3 立项的 macOS 归档保真一轮批：macOS 宿主且载荷树带 xattr 时产出侧 zip 走 `ditto -c -k --sequesterRsrc`、targz 走系统 bsdtar、`.app` 运输 zip 走 `ditto --keepParent`（Sparkle/electron-updater 同款，AppleDouble 入 `__MACOSX/`）；解包侧新 `ArchiveExtractor`——Darwin `ditto -x -k`/`tar -x`，其余宿主 managed 提取+`__MACOSX/` 清树+S_IFLNK 符号链接还原（补齐 Linux zip 更新断链潜伏洞）；工具缺席/失败回退 managed+告警。
+- mac 腿实证 D3 闭合：ad-hoc 签名 `.app` 经 zip 更新链换包后 `codesign --verify --deep --strict` 通过、180 条 `__MACOSX/`、xattr 全存活；期间另抓 D5（ditto 半提取残渣污染 managed 回退→`ClearDirectory`）与 D6（目录/软链自身 xattr 丢——`ArchiveTree` 给 Directory/Symlink 条目补 `SourcePath`）均已修。
+- Devin Review 五轮 6 发现全处置，第 4、5 轮连续 0 发现；四腿复验全绿：linux zip S_IFLNK 4/4、alpine busybox 5/5+musl 10/10、win zip 链 195 文件逐字节一致。
+- 已知限制已挂 update-roadmap：`ditto -x` 不还原软链自身 xattr（Apple 工具语义上限，Sparkle 同款）——zip 通道链级 xattr 落地即丢，targz 通道三态全保真；`.app` 签名不含链级 xattr 主场景无碍。
 
 ### 2026-10-07 PR #33 压缩合并（squash `923ead4`，main `923ead4`，版本推进 `alpha.78`）
 
