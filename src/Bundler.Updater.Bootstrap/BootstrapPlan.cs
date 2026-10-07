@@ -617,6 +617,12 @@ internal static class BootstrapPlan
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(IntPtr hObject);
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeviceIoControl(IntPtr hDevice, uint dwIoControlCode,
+        IntPtr lpInBuffer, uint nInBufferSize, IntPtr lpOutBuffer, uint nOutBufferSize,
+        out uint lpBytesReturned, IntPtr lpOverlapped);
+
     [DllImport("libc", EntryPoint = "rename", SetLastError = true, CharSet = CharSet.Ansi)]
     private static extern int PosixRename(string oldPath, string newPath);
 
@@ -806,11 +812,14 @@ internal static class BootstrapPlan
                 {
                     break;
                 }
-                // Windows 卷挂载点（mountvol）：reparse target 是 `\??\Volume{GUID}\`
-                // 这类 NT 对象名而非文件系统路径——按普通目录透传不跟跳（跟跳会把
-                // `Volume{guid}` 当目录名拼进字面路径，静默写偏到别的卷）。
-                // junction/symlink 目标已被 .NET 规范化为 Win32 路径，不受影响。
-                if (OperatingSystem.IsWindows() && IsNtObjectTarget(target))
+                // Windows 卷挂载点（mountvol）：reparse target 是 `\??\Volume{GUID}`
+                // 或 .NET 剥前缀后的裸名——NT 对象名而非文件系统路径，按普通目录
+                // 透传不跟跳（跟跳会把 `Volume{guid}` 当目录名拼进字面路径，静默写偏
+                // 到别的卷）。名字形态分不清同名相对链接目标，须 MOUNT_POINT tag
+                // 确证——junction 目标为 Win32 拼写天然不命中此判。
+                if (OperatingSystem.IsWindows()
+                    && IsNtObjectTarget(target)
+                    && IsVolumeMountPoint(current))
                 {
                     break;
                 }
@@ -866,6 +875,44 @@ internal static class BootstrapPlan
         return trimmed.Length == 44
             && trimmed.StartsWith("Volume{", StringComparison.OrdinalIgnoreCase)
             && trimmed[43] == '}';
+    }
+
+    // reparse tag 判据：FSCTL_GET_REPARSE_POINT 读节点的真实 tag——
+    // 同名 `Volume{GUID}` 目录是合法相对链接目标（SYMLINK tag），只有
+    // MOUNT_POINT tag 节点的 NT 形目标才是卷挂载点不可拼写名。
+    // OPEN_REPARSE_POINT 开链节点自身（不顺链），BACKUP_SEMANTICS 开目录。
+    private const uint IoReparseTagMountPoint = 0xA0000003;
+    private const uint FsctlGetReparsePoint = 0x000900A8;
+
+    private static bool IsVolumeMountPoint(string path)
+    {
+        var handle = CreateFile(path, 0, 0x7 /* READ|WRITE|DELETE share */, IntPtr.Zero,
+            3 /* OPEN_EXISTING */, 0x02200000 /* BACKUP_SEMANTICS | OPEN_REPARSE_POINT */, IntPtr.Zero);
+        if (handle == new IntPtr(-1))
+        {
+            return false;
+        }
+        try
+        {
+            var buffer = Marshal.AllocHGlobal(16384);
+            try
+            {
+                if (!DeviceIoControl(handle, FsctlGetReparsePoint, IntPtr.Zero, 0,
+                        buffer, 16384, out _, IntPtr.Zero))
+                {
+                    return false;
+                }
+                return (uint)Marshal.ReadInt32(buffer) == IoReparseTagMountPoint;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        finally
+        {
+            CloseHandle(handle);
+        }
     }
 
     private static bool IsLink(string path)
