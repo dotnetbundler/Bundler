@@ -454,7 +454,10 @@ internal static class BootstrapPlan
     // 物理规范化：逐级解析已存在的符号链接段——路径关系判断必须比对物理位置而非拼写
     //（POSIX 侧 norm_path 的 cd -P 语义；`Path.GetFullPath` 只归一拼写不解链接）。
     // 不存在的段保持字面，链接解析失败退化为当前拼写。
-    private static string? CanonicalPath(string path)
+    private static string? CanonicalPath(string path) =>
+        CanonicalPath(path, new HashSet<string>(PathStringComparer));
+
+    private static string? CanonicalPath(string path, HashSet<string> resolving)
     {
         var full = Path.GetFullPath(path);
         var root = Path.GetPathRoot(full) ?? string.Empty;
@@ -463,7 +466,7 @@ internal static class BootstrapPlan
             .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
         {
             canonical = Path.Combine(canonical, segment);
-            var resolved = ResolveLinkChain(canonical);
+            var resolved = ResolveLinkChain(canonical, resolving);
             if (resolved is null)
             {
                 return null;
@@ -475,50 +478,87 @@ internal static class BootstrapPlan
 
     // 输出路径（backup/retain）只物理化父目录、叶段留拼写：叶段为符号链接时
     // 解析后递归删除会清掉链接目标——配置路径之外的真实目录。
-    private static string CanonicalParentPath(string path)
+    private static string CanonicalParentPath(string path) =>
+        CanonicalParentPath(path, new HashSet<string>(PathStringComparer));
+
+    private static string CanonicalParentPath(string path, HashSet<string> resolving)
     {
         var full = Path.GetFullPath(path);
         var parent = Path.GetDirectoryName(full);
-        return parent is null ? full : Path.Combine(CanonicalPath(parent) ?? parent, Path.GetFileName(full));
+        return parent is null ? full
+            : Path.Combine(CanonicalPath(parent, resolving) ?? parent, Path.GetFileName(full));
     }
 
     // 逐级解符号链接：纯 LinkTarget 跳走（不依赖 Exists 语义——lstat 口径下环链
     // 也报存在），悬挂链接（目标已搬走进备份）照样解——崩溃恢复靠它找回 marker/备份。
     // 每跳目标按父物理化再接回叶名：/var 这类中间段自身是链接时，字面拼写会与
     // 比较对象的物理名错位逃逸互嵌/等值判。
-    // 环链（自指/互指/链长逾 40 跳=SYMLOOP_MAX）返回 null——调用方按无效输入拒绝。
-    private static string? ResolveLinkChain(string path)
+    // resolving 是整条规范化调用栈共享的解算守卫：a→a/child 这类后代自指会让
+    // CanonicalParentPath 重入同一拼写，visited（链内去环）管不到跨层重入。
+    // 环链（自指/互指/解算链逾 40 跳=SYMLOOP_MAX）返回 null——调用方按无效输入拒绝。
+    private static string? ResolveLinkChain(string path, HashSet<string> resolving)
     {
-        var current = path;
-        var visited = new HashSet<string>(
-            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal) { current };
-        for (var hops = 0; hops < 40; hops++)
+        if (!resolving.Add(path))
         {
-            string? target;
-            try
+            return null;
+        }
+        var current = path;
+        var visited = new HashSet<string>(PathStringComparer) { current };
+        var hops = 0;
+        try
+        {
+            for (; hops < 40; hops++)
             {
-                target = new FileInfo(current).LinkTarget ?? new DirectoryInfo(current).LinkTarget;
+                string? target;
+                try
+                {
+                    target = new FileInfo(current).LinkTarget ?? new DirectoryInfo(current).LinkTarget;
+                }
+                catch (IOException)
+                {
+                    break;
+                }
+                if (target is null)
+                {
+                    break;
+                }
+                var next = Path.GetFullPath(
+                    Path.IsPathRooted(target) ? target
+                        : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
+                next = CanonicalParentPath(next, resolving);
+                if (!visited.Add(next))
+                {
+                    return null;
+                }
+                current = next;
             }
-            catch (IOException)
-            {
-                break;
-            }
-            if (target is null)
-            {
-                break;
-            }
-            var next = Path.GetFullPath(
-                Path.IsPathRooted(target) ? target
-                    : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
-            next = CanonicalParentPath(next);
-            if (!visited.Add(next))
+            // 跳数耗尽后仍停在链接上才算超限——恰 40 跳收敛的合法链放行。
+            if (hops >= 40 && IsLink(current))
             {
                 return null;
             }
-            current = next;
+            return current;
         }
-        return visited.Count > 40 ? null : current;
+        finally
+        {
+            resolving.Remove(path);
+        }
     }
+
+    private static bool IsLink(string path)
+    {
+        try
+        {
+            return (new FileInfo(path).LinkTarget ?? new DirectoryInfo(path).LinkTarget) is not null;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    private static StringComparer PathStringComparer =>
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     // 严格子路径判不出等值路径——备份/保留目录与安装目录同址同样是抹数据的形状。
     private static bool SameOrInside(string candidate, string parent) =>

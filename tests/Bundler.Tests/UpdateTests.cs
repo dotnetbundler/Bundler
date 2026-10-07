@@ -609,6 +609,17 @@ public static class UpdateTests
                     InstallDirectory = cyclicInstallFile,
                     PayloadDirectory = installFile
                 }, lines.Add));
+
+        // 后代自指（a→a/child）：规范化必须快速判死——重入自身会栈溢出而非拒绝。
+        var descendantLink = Path.Combine(directory, "desc-link");
+        File.CreateSymbolicLink(descendantLink, Path.Combine(descendantLink, "child"));
+        Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = descendantLink
+                }, lines.Add));
     }
 
     [Fact]
