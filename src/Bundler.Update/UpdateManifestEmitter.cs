@@ -100,7 +100,7 @@ public static class UpdateManifestEmitter
 
             var relativeUrl = RelativeUrl(configuration.OutputDirectory, artifactFile);
             var fileName = Path.GetFileName(artifactFile);
-            feed.Artifacts.Add(new UpdateFeedArtifact
+            var feedArtifact = new UpdateFeedArtifact
             {
                 RuntimeIdentifier = artifact.RuntimeIdentifier,
                 Format = artifact.Format.ToString().ToLowerInvariant(),
@@ -110,7 +110,22 @@ public static class UpdateManifestEmitter
                 Sha256 = await Task.Run(() => Sha256Hex(artifactFile), cancellationToken),
                 Signature = Convert.ToBase64String(signature),
                 BlockMap = relativeUrl + UpdateBlockMap.FileSuffix,
-            });
+            };
+            // 同一运输路径可被构建多次（.app 独立项 + dmg/pkg 内层暂存各产出一次，
+            // 后写覆盖先写）——feed 必须与磁盘最终字节一致，否则客户端选中 stale 条目必拒下载。
+            // 键含 rid/format：同 url 跨目标的（异常）形状退回双条目，各自仍可选中。
+            var duplicateIndex = feed.Artifacts.FindIndex(existing =>
+                existing.Url == relativeUrl &&
+                existing.RuntimeIdentifier == feedArtifact.RuntimeIdentifier &&
+                existing.Format == feedArtifact.Format);
+            if (duplicateIndex >= 0)
+            {
+                feed.Artifacts[duplicateIndex] = feedArtifact;
+            }
+            else
+            {
+                feed.Artifacts.Add(feedArtifact);
+            }
         }
 
         if (feed.Artifacts.Count == 0)

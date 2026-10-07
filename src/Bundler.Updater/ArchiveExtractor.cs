@@ -35,6 +35,7 @@ internal static class ArchiveExtractor
             {
                 UstarReader.Extract(gzip, staging);
             }
+            RemoveAppleDoubleTree(staging, log);
         }
         return staging;
     }
@@ -94,13 +95,25 @@ internal static class ArchiveExtractor
         }
     }
 
-    // ditto 产的 zip 带 `__MACOSX/` AppleDouble 目录——managed 解包下它只是垃圾树。
+    // `__MACOSX/` AppleDouble 目录在 managed 解包下只是垃圾树——ditto 产 zip 在顶层，
+    // 载荷内含预解压过的 macOS 目录树时嵌套在 wrapper 里，全树清。
     private static void RemoveAppleDoubleTree(string staging, Action<string>? log)
     {
-        var appleDouble = Path.Combine(staging, "__MACOSX");
-        if (Directory.Exists(appleDouble))
+        var removed = false;
+        // 递归枚举不穿越目录链——leaf 的 __MACOSX 链节点按目录删也只删链自身。
+        // Exists 守卫：`__MACOSX` 内再套 `__MACOSX` 时父目录已连同子树删除，
+        // 对已枚举但随之消失的条目跳删，不炸解包。
+        foreach (var appleDouble in Directory.GetDirectories(
+                     staging, "__MACOSX", SearchOption.AllDirectories))
         {
-            Directory.Delete(appleDouble, recursive: true);
+            if (Directory.Exists(appleDouble))
+            {
+                Directory.Delete(appleDouble, recursive: true);
+                removed = true;
+            }
+        }
+        if (removed)
+        {
             log?.Invoke("update: dropped __MACOSX AppleDouble entries (managed extraction).");
         }
     }

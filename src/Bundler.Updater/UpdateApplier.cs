@@ -168,15 +168,18 @@ internal sealed class UpdateApplier
         return SingleTopDirectory(staging, tarGzPath);
     }
 
-    private static string SingleTopDirectory(string staging, string sourcePath)
+    // 仅"顶层恰好一个目录且无根级文件"才算 wrapper——"目录内容直压"形状
+    // （zip -ry <目录>/`tar -C <目录> .`）的单目录+多文件顶层必须整个暂存当载荷，
+    // 误选子目录会把同级文件静默丢掉（换包后应用残缺）。
+    internal static string SingleTopDirectory(string staging, string sourcePath)
     {
         var directories = Directory.GetDirectories(staging);
-        if (directories.Length == 1)
+        var files = Directory.GetFiles(staging);
+        if (directories.Length == 1 && files.Length == 0)
         {
             return directories[0];
         }
-        // 无顶层目录的归档：暂存根本身即载荷。
-        if (Directory.GetFiles(staging).Length > 0)
+        if (files.Length > 0 || directories.Length > 0)
         {
             return staging;
         }
