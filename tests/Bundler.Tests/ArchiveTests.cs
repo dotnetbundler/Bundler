@@ -858,8 +858,8 @@ public static class ArchiveTests
                 .Single();
             var buffer = new byte[64];
             var size = getxattr(extracted, "com.bundler.test", buffer, buffer.Length, 0, 1);
-            Assert.True(size.ToInt64() == 1 && buffer[0] == (byte)'v',
-                $"xattr must survive produce→update-extract round-trip (size={size})");
+            Assert.Equal(1, size.ToInt64());
+            Assert.Equal((byte)'v', buffer[0]);
             AssertXattrRoundTrip(staging, "sub", "com.bundler.testdir", (byte)'d', buffer);
             AssertXattrRoundTrip(staging, "link.sh", "com.bundler.testlink", (byte)'l', buffer);
 
@@ -875,8 +875,8 @@ public static class ArchiveTests
                 .GetFiles(tarStaging, "signed.sh", SearchOption.AllDirectories)
                 .Single();
             var tarSize = getxattr(tarExtracted, "com.bundler.test", buffer, buffer.Length, 0, 1);
-            Assert.True(tarSize.ToInt64() == 1 && buffer[0] == (byte)'v',
-                $"xattr must survive targz produce→update-extract round-trip (size={tarSize})");
+            Assert.Equal(1, tarSize.ToInt64());
+            Assert.Equal((byte)'v', buffer[0]);
             AssertXattrRoundTrip(tarStaging, "sub", "com.bundler.testdir", (byte)'d', buffer);
             AssertXattrRoundTrip(tarStaging, "link.sh", "com.bundler.testlink", (byte)'l', buffer);
         }
@@ -894,8 +894,8 @@ public static class ArchiveTests
             .GetFileSystemEntries(staging, name, SearchOption.AllDirectories)
             .Single();
         var size = getxattr(node, xattrName, buffer, buffer.Length, 0, 1 /* XATTR_NOFOLLOW */);
-        Assert.True(size.ToInt64() == 1 && buffer[0] == expected,
-            $"xattr '{xattrName}' must survive on '{name}' (size={size})");
+        Assert.Equal(1, size.ToInt64());
+        Assert.Equal(expected, buffer[0]);
     }
 
     static void SetXattr(string path, string name, string value)
