@@ -1,8 +1,8 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-06
+> 最后更新：2026-10-07
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.76`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.77`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -86,6 +86,12 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-07 PR #32 压缩合并（squash `2eed745`，main `2eed745`，版本推进 `alpha.77`）
+
+- R3 新腿 linux 实跑抓出的高危缺陷及连环硬化一轮批：`bundler-updater apply` 在 install↔payload 同址/互嵌下静默抹数据（备份移走→空载荷覆盖→备份消失）——修 install↔payload↔backup↔retain **四向同址/互嵌拒绝**，全部先于 marker 恢复与任何文件操作（rc=2）；POSIX `bundler-updater.sh` 同协议双侧对齐。
+- Devin Review 五轮共 9 发现全实证修复：符号链接面系统硬化——**双拼写原则**（关系判一律叶链解析到底的物理名、文件操作一律父物理化+叶字面）：载荷经文件级/目录级符号链接逃逸互嵌判（mv 后自指死链）、悬挂 install 链接 marker 恢复失配、备份/retain 叶链越界删链外目标、环链死循环（解析限 40 跳）、`--backup-dir` 缺省位预置叶链逃逸同址判；附随修侧车挪位（`bundler-update.json` 移入 .app `Contents/Resources` 保 codesign）、`--app`/`--log` 相对路径就地解析、Restart 失败降级 WARN 非 rc=4、Restart Manager console-ctrl 广播误杀测试宿主（`CreateNoWindow`）。第五轮 0 发现。
+- 宿主腿实证：busybox sh 20 腿全绿 + musl 容器真产件 3/3、win-x64 ~Update 49（48P/1S）、本机 49/49；五 RID 引导件全部按 head 重产回填（win/osx-arm64/osx-x64/linux-musl-x64/linux-x64，sha256 逐件核验）。
+
 ### 2026-10-06 PR #30 压缩合并（squash `45842ff`，main `45842ff`，版本推进 `alpha.76`）
 
 - 四项整改合一批：CLI 删 `apk` 别名（`alpineapk` 唯一合法名，`apk` 留 Android）；`BundlerMacAppShortVersion` 默认继承 `$(BundlerVersion)`（样品输出不变）；`ApplyOptions.KeepRollbackBackup` 默认 false——换包期瞬备 `.bundler-backup` 必建（原子性+marker 崩溃恢复不可关），成功后默认删，开启才迁保留位当回滚点；保留位分层数据区 `DotNet.Bundler/backups/<名>-<路径哈希>`（per-user→LOCALAPPDATA/~/Library/XDG，per-machine→ProgramData//Library//var/lib）；POSIX `bundler-updater.sh` 同协议。
@@ -99,7 +105,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - 四段全项复跑：全量（四宿主 build 0W/0E + pack 19 nupkg + Tests/ApiTests/LocalPackages/IT 全 0F：linux/alpine 333(294P/39S)+10+9S+176、win 333(317P/16S)+7+9P 真装+176、mac 294P/39S+8+9S+176）+ 样品（全格式 + UPDATE 侧车齐）+ 更新（引导件 apply/rollback rc=0、签验负例、file-swap E2E、差分 mac 81.7%/linux 缓存腿 100% 复用、nsis `/UPDATE`+msi major upgrade）+ 联合互产互装全实证（deb/rpm 三产方×debian/fedora 解析安装 6/6、apk 三产方 alpine 实装 7/7、nsis 两产方 win `/S` 2/2、osx-arm64 .app mac 实机直跑 rc=0；musl/osx apphost 跨产方字节一致）。
 - 真缺陷二修（PR #29）：Range 拒供差分不落全量（`TryDownloadDeltaAsync` 逐段 `catch(UpdateException)`→删残件→`return false` 回落，违反 update-roadmap.md:104 契约）+ 本地 feed 转义件名 `%20` 字面拼接 Abort 134（`ResolveArtifactLocation` 本地分支 `Uri.UnescapeDataString`）；各配回归测试；mac 实机无绕行 E2E 复验全通，linux/mac 双侧单测 335(296P/39S)+IT 0F。
 - 版本推进 `alpha.75`（`Bundler.Updater` 库改动需新包号触达——Devin Review 发现成立后修）。
-- 已裁决不做：`.bundler-backup` 挪位+孤儿清理（备份固定一份不累积、清理无法完备）；`apk` 别名保留给未来 Android，CLI `apk` 别名待删统名 `alpineapk`（未动工）。
+- 已裁决不做：`.bundler-backup` 挪位+孤儿清理（备份固定一份不累积、清理无法完备）；CLI `apk` 别名已删统名 `alpineapk`（alpha.76 落地，`apk` 名保留给未来 Android）。
 
 ### 2026-10-06 main `53303ae` 第二轮四宿主回归（全绿零缺陷）
 
