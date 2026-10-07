@@ -40,6 +40,12 @@ internal static class BootstrapPlan
         // 文件操作仍走上面的叶字面拼写（叶链只被删链本身不触目标）。
         var backupDirCmp = CanonicalPath(backupDir)
             ?? throw new UsageException($"backup path '{backupDir}' resolves to a cyclic link.");
+        // Windows 比较面再加 NT 物理化：卷挂载点别名（C:\mnt 挂载 D:\）在
+        // CanonicalPath 下仍是两个拼写，同址互嵌会漏判——\Device\… 名在对象层归一。
+        // POSIX 侧由文件系统语义天然归一，恒等透传。
+        var installCmp = ToComparisonPath(installDir);
+        var payloadCmp = payloadDir is null ? null : ToComparisonPath(payloadDir);
+        var backupCmp = ToComparisonPath(backupDirCmp);
         var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
         // 重启目标与日志路径都按本进程 cwd 绝对化——相对路径会在换包后的临时工作目录里静默错位。
         if (options.AppPath is { Length: > 0 })
@@ -60,10 +66,10 @@ internal static class BootstrapPlan
         // 等值或载荷为安装祖先时连备份一并清掉。
         // 这组判断只做路径关系运算、不依赖文件系统，必须先于 marker 恢复与等待——
         // 恢复会删半成品的安装目录，载荷嵌在其中时会把本轮输入先抹掉再拒绝（为时已晚）。
-        if (payloadDir is not null &&
-            (SameOrInside(backupDirCmp, installDir) || SameOrInside(backupDirCmp, payloadDir) ||
-             SameOrInside(installDir, backupDirCmp) || SameOrInside(payloadDir, backupDirCmp) ||
-             SameOrInside(installDir, payloadDir) || SameOrInside(payloadDir, installDir)))
+        if (payloadCmp is not null &&
+            (SameOrInside(backupCmp, installCmp) || SameOrInside(backupCmp, payloadCmp) ||
+             SameOrInside(installCmp, backupCmp) || SameOrInside(payloadCmp, backupCmp) ||
+             SameOrInside(installCmp, payloadCmp) || SameOrInside(payloadCmp, installCmp)))
         {
             throw new UsageException("backup/install/payload directories must not nest inside each other.");
         }
@@ -73,17 +79,17 @@ internal static class BootstrapPlan
             // 关系判另取全物理名，叶链指向安装/载荷/备份叶都能命中。
             options.RetainBackupDirectory = CanonicalParentPath(retainPath)
                 ?? throw new UsageException($"retained-backup path '{retainPath}' resolves to a cyclic link.");
-            var retainCmp = CanonicalPath(retainPath)
-                ?? throw new UsageException($"retained-backup path '{retainPath}' resolves to a cyclic link.");
-            if (SameOrInside(retainCmp, installDir) || (payloadDir is not null && SameOrInside(retainCmp, payloadDir)) ||
-                SameOrInside(installDir, retainCmp) || (payloadDir is not null && SameOrInside(payloadDir, retainCmp)) ||
-                SameOrInside(backupDirCmp, retainCmp) || SameOrInside(retainCmp, backupDirCmp))
+            var retainCmp = ToComparisonPath(CanonicalPath(retainPath)
+                ?? throw new UsageException($"retained-backup path '{retainPath}' resolves to a cyclic link."));
+            if (SameOrInside(retainCmp, installCmp) || (payloadCmp is not null && SameOrInside(retainCmp, payloadCmp)) ||
+                SameOrInside(installCmp, retainCmp) || (payloadCmp is not null && SameOrInside(payloadCmp, retainCmp)) ||
+                SameOrInside(backupCmp, retainCmp) || SameOrInside(retainCmp, backupCmp))
             {
                 throw new UsageException("retained-backup directory must not nest inside install/payload/backup directories.");
             }
         }
         // 回滚模式不嵌套校验 payload——它本就不存在。
-        if (options.Rollback && (SameOrInside(backupDirCmp, installDir) || SameOrInside(installDir, backupDirCmp)))
+        if (options.Rollback && (SameOrInside(backupCmp, installCmp) || SameOrInside(installCmp, backupCmp)))
         {
             throw new UsageException("backup and install directories must not nest inside each other.");
         }
@@ -510,9 +516,71 @@ internal static class BootstrapPlan
             : null;
     }
 
+    // 比较用物理名：Windows 上 deepest-existing 前缀开句柄取 \Device\… NT 名、
+    // 缺失叶段按字面接回——挂载点/junction/subst 别名在对象层归一，
+    // install C:\mnt\app 与 backup D:\app（mnt 挂 D:）判同址拒绝。
+    // 取不到（全程不存在/打不开）时回退原拼写——最坏去向仍是原字面判。
+    private static string ToComparisonPath(string path) =>
+        OperatingSystem.IsWindows() ? NtPhysicalPath(path) ?? path : path;
+
+    private static string? NtPhysicalPath(string path)
+    {
+        var probe = Path.GetFullPath(path);
+        var tail = new List<string>();
+        while (!File.Exists(probe) && !Directory.Exists(probe))
+        {
+            var parent = Path.GetDirectoryName(probe);
+            if (parent is null || parent == probe)
+            {
+                return null;
+            }
+            tail.Insert(0, Path.GetFileName(probe));
+            probe = parent;
+        }
+        // FILE_FLAG_BACKUP_SEMANTICS 才开得了目录句柄——.NET FileOptions 无此项，
+        // 只能 CreateFile 直调；0 访问权限足以查询对象名。
+        var handle = CreateFile(probe, 0, 0x7 /* READ|WRITE|DELETE share */, IntPtr.Zero,
+            3 /* OPEN_EXISTING */, 0x02000000 /* FILE_FLAG_BACKUP_SEMANTICS */, IntPtr.Zero);
+        if (handle == new IntPtr(-1))
+        {
+            return null;
+        }
+        try
+        {
+            var buffer = new StringBuilder(capacity: 1024);
+            var length = GetFinalPathNameByHandle(
+                handle, buffer, (uint)buffer.Capacity, 0x1 /* VOLUME_NAME_NT */);
+            if (length == 0 || length >= (uint)buffer.Capacity)
+            {
+                return null;
+            }
+            var nt = buffer.ToString(0, (int)length).TrimEnd('\\');
+            foreach (var segment in tail)
+            {
+                nt += "\\" + segment;
+            }
+            return nt;
+        }
+        finally
+        {
+            CloseHandle(handle);
+        }
+    }
+
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetVolumePathName(string lpszFileName, StringBuilder lpszVolumePathName, int nBufferLength);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetFinalPathNameByHandle(IntPtr hFile, StringBuilder lpszFilePath, uint cchFilePath, uint dwFlags);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr CreateFile(string lpFileName, uint dwDesiredAccess, uint dwShareMode,
+        IntPtr lpSecurityAttributes, uint dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(IntPtr hObject);
 
     [DllImport("libc", EntryPoint = "rename", SetLastError = true, CharSet = CharSet.Ansi)]
     private static extern int PosixRename(string oldPath, string newPath);
