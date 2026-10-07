@@ -24,8 +24,11 @@ internal static class BootstrapPlan
         var payloadDir = options.PayloadDirectory.Length > 0
             ? CanonicalPath(options.PayloadDirectory)
             : null;
+        // 备份/保留是输出路径：父链物理化保留中间链接语义，但叶段必须留字面——
+        // 叶段若是符号链接，解析后 rm/Delete 会清掉链接目标（配置路径之外的真实目录），
+        // 而按字面删除只移除链接本身。与 POSIX 侧 norm_parent 同义。
         var backupDir = options.BackupDirectory is { Length: > 0 }
-            ? CanonicalPath(options.BackupDirectory)
+            ? CanonicalParentPath(options.BackupDirectory)
             : installDir.TrimEnd('/', '\\') + ".bundler-backup";
         var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
         // 重启目标与日志路径都按本进程 cwd 绝对化——相对路径会在换包后的临时工作目录里静默错位。
@@ -56,7 +59,7 @@ internal static class BootstrapPlan
         }
         if (options.RetainBackupDirectory is { Length: > 0 } retainPath)
         {
-            var retain = CanonicalPath(retainPath);
+            var retain = CanonicalParentPath(retainPath);
             if (SameOrInside(retain, installDir) || (payloadDir is not null && SameOrInside(retain, payloadDir)) ||
                 SameOrInside(installDir, retain) || SameOrInside(backupDir, retain) || SameOrInside(retain, backupDir))
             {
@@ -448,23 +451,60 @@ internal static class BootstrapPlan
             .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
         {
             canonical = Path.Combine(canonical, segment);
+            canonical = ResolveLinkChain(canonical);
+        }
+        return canonical;
+    }
+
+    // 输出路径（backup/retain）只物理化父目录、叶段留拼写：叶段为符号链接时
+    // 解析后递归删除会清掉链接目标——配置路径之外的真实目录。
+    private static string CanonicalParentPath(string path)
+    {
+        var full = Path.GetFullPath(path);
+        var parent = Path.GetDirectoryName(full);
+        return parent is null ? full : Path.Combine(CanonicalPath(parent), Path.GetFileName(full));
+    }
+
+    // 逐级解符号链接：存在目标走 ResolveLinkTarget 全链，悬挂链接（目标已搬走进备份）
+    // 用 LinkTarget 取下一跳拼写——崩溃恢复要靠它找回 marker/备份。
+    // 最多 40 跳（同内核 SYMLOOP_MAX）：环链停在最后拼写交给存在性校验拒，不悬挂。
+    private static string ResolveLinkChain(string path)
+    {
+        var current = path;
+        for (var hops = 0; hops < 40; hops++)
+        {
+            string? next = null;
             try
             {
-                var resolved = Directory.Exists(canonical)
-                    ? Directory.ResolveLinkTarget(canonical, returnFinalTarget: true)
-                    : File.Exists(canonical)
-                        ? File.ResolveLinkTarget(canonical, returnFinalTarget: true)
-                        : null;
-                if (resolved is not null)
+                if (Directory.Exists(current))
                 {
-                    canonical = resolved.FullName;
+                    next = Directory.ResolveLinkTarget(current, returnFinalTarget: true)?.FullName;
+                }
+                else if (File.Exists(current))
+                {
+                    next = File.ResolveLinkTarget(current, returnFinalTarget: true)?.FullName;
+                }
+                else
+                {
+                    var target = new FileInfo(current).LinkTarget ?? new DirectoryInfo(current).LinkTarget;
+                    if (target is not null)
+                    {
+                        next = Path.GetFullPath(
+                            Path.IsPathRooted(target) ? target
+                                : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
+                    }
                 }
             }
             catch (IOException)
             {
             }
+            if (next is null || string.Equals(next, current, StringComparison.Ordinal))
+            {
+                break;
+            }
+            current = next;
         }
-        return canonical;
+        return current;
     }
 
     // 严格子路径判不出等值路径——备份/保留目录与安装目录同址同样是抹数据的形状。

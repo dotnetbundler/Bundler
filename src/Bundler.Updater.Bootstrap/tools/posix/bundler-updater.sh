@@ -76,7 +76,12 @@ norm_path() {
     _np="${1%/}"
     # 非目录叶段若是符号链接要逐级跟随：cd -P 只能解目录，文件级 link 载荷
     # 指向安装件时字面值不同名会逃逸等值判（mv 把链接搬上原位成自指死链）。
+    # 悬挂链接（目标已搬进备份）readlink 照样解——崩溃恢复靠它找回 marker/备份。
+    _hops=0
     while [ -L "$_np" ]; do
+        _hops=$((_hops + 1))
+        # 同内核 SYMLOOP_MAX：环链停在最后拼写交给存在性校验拒，不悬挂。
+        [ "$_hops" -gt 40 ] && break
         _nt=$(readlink "$_np") || break
         case "$_nt" in
             /*) _np=$_nt ;;
@@ -91,6 +96,16 @@ norm_path() {
         _nr=$( (cd "$_nd" 2>/dev/null && pwd -P) || norm_lexical "$_nd")
         printf '%s/%s\n' "${_nr%/}" "$_nb"
     fi
+}
+
+# 输出路径（backup/retain）只物理化父目录、叶段留拼写：叶段为符号链接时
+# 若按物理名 rm -rf 会清掉链接目标——配置路径之外的真实目录；字面拼写只删链接本身。
+norm_parent() {
+    _np="${1%/}"
+    _nd=$(dirname "$_np")
+    _nb=$(basename "$_np")
+    _nr=$( (cd "$_nd" 2>/dev/null && pwd -P) || norm_lexical "$_nd")
+    printf '%s/%s\n' "${_nr%/}" "$_nb"
 }
 
 # 父目录缺席时物理解析走不通——退回词法折叠消掉 ./.. 段，
@@ -120,8 +135,8 @@ norm_lexical() {
 [ "$ROLLBACK" = 1 ] || [ -n "$PAYLOAD_DIR" ] || { echo "bundler-updater: --payload is required unless --rollback." >&2; exit 2; }
 INSTALL_DIR="$(norm_path "$INSTALL_DIR")"
 [ -z "$PAYLOAD_DIR" ] || PAYLOAD_DIR="$(norm_path "$PAYLOAD_DIR")"
-[ -z "$BACKUP_DIR" ] || BACKUP_DIR="$(norm_path "$BACKUP_DIR")"
-[ -z "$RETAIN_DIR" ] || RETAIN_DIR="$(norm_path "$RETAIN_DIR")"
+[ -z "$BACKUP_DIR" ] || BACKUP_DIR="$(norm_parent "$BACKUP_DIR")"
+[ -z "$RETAIN_DIR" ] || RETAIN_DIR="$(norm_parent "$RETAIN_DIR")"
 # 重启目标与日志同样按调用方 cwd 规范化成绝对路径——脚本的工作目录不是用户的 cwd。
 [ -z "$APP_PATH" ] || APP_PATH="$(norm_path "$APP_PATH")"
 [ -z "$LOG_FILE" ] || LOG_FILE="$(norm_path "$LOG_FILE")"
