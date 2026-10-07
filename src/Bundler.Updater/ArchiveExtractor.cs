@@ -101,11 +101,16 @@ internal static class ArchiveExtractor
     {
         var removed = false;
         // 递归枚举不穿越目录链——leaf 的 __MACOSX 链节点按目录删也只删链自身。
+        // Exists 守卫：`__MACOSX` 内再套 `__MACOSX` 时父目录已连同子树删除，
+        // 对已枚举但随之消失的条目跳删，不炸解包。
         foreach (var appleDouble in Directory.GetDirectories(
                      staging, "__MACOSX", SearchOption.AllDirectories))
         {
-            Directory.Delete(appleDouble, recursive: true);
-            removed = true;
+            if (Directory.Exists(appleDouble))
+            {
+                Directory.Delete(appleDouble, recursive: true);
+                removed = true;
+            }
         }
         if (removed)
         {

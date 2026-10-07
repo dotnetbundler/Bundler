@@ -113,7 +113,11 @@ public static class UpdateManifestEmitter
             };
             // 同一运输路径可被构建多次（.app 独立项 + dmg/pkg 内层暂存各产出一次，
             // 后写覆盖先写）——feed 必须与磁盘最终字节一致，否则客户端选中 stale 条目必拒下载。
-            var duplicateIndex = feed.Artifacts.FindIndex(existing => existing.Url == relativeUrl);
+            // 键含 rid/format：同 url 跨目标的（异常）形状退回双条目，各自仍可选中。
+            var duplicateIndex = feed.Artifacts.FindIndex(existing =>
+                existing.Url == relativeUrl &&
+                existing.RuntimeIdentifier == feedArtifact.RuntimeIdentifier &&
+                existing.Format == feedArtifact.Format);
             if (duplicateIndex >= 0)
             {
                 feed.Artifacts[duplicateIndex] = feedArtifact;
