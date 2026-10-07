@@ -861,7 +861,13 @@ public static class ArchiveTests
             Assert.Equal(1, size.ToInt64());
             Assert.Equal((byte)'v', buffer[0]);
             AssertXattrRoundTrip(staging, "sub", "com.bundler.testdir", (byte)'d', buffer);
-            AssertXattrRoundTrip(staging, "link.sh", "com.bundler.testlink", (byte)'l', buffer);
+            // ditto -x 不还原软链自身的 xattr（工具语义上限，Sparkle 同款；
+            // .app 签名不含链级 xattr）——zip 腿只断软链本体还原，xattr 断言归 targz 腿。
+            var zipLink = Directory
+                .GetFileSystemEntries(staging, "link.sh", SearchOption.AllDirectories)
+                .Single();
+            Assert.Equal(FileAttributes.ReparsePoint,
+                File.GetAttributes(zipLink) & FileAttributes.ReparsePoint);
 
             // targz 同路往返：bsdtar 产件 → ExtractTarGzToDirectory（mac 走 tar -x）→ xattr 存活。
             var tarArtifact = new ArchiveBundler().BuildAsync(
