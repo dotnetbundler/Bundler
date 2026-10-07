@@ -30,11 +30,10 @@ internal static class BootstrapPlan
         var backupDir = options.BackupDirectory is { Length: > 0 }
             ? CanonicalParentPath(options.BackupDirectory)
             : installDir.TrimEnd('/', '\\') + ".bundler-backup";
-        // 关系判用全物理名（叶链指向 install/payload 在字面层面不同名会逃逸），
+        // 关系判一律用全物理名——默认备份位同样可能是预置叶链，
+        // 字面拼写与 retainCmp 的物理名对不上号会同址逃逸（换包移链后保留操作删新备份）。
         // 文件操作仍走上面的叶字面拼写（叶链只被删链本身不触目标）。
-        var backupDirCmp = options.BackupDirectory is { Length: > 0 }
-            ? CanonicalPath(options.BackupDirectory)
-            : backupDir;
+        var backupDirCmp = CanonicalPath(backupDir);
         var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
         // 重启目标与日志路径都按本进程 cwd 绝对化——相对路径会在换包后的临时工作目录里静默错位。
         if (options.AppPath is { Length: > 0 })
