@@ -12,6 +12,8 @@ WAIT_PID=""
 APP_PATH=""
 BACKUP_DIR=""
 RETAIN_DIR=""
+BACKUP_CMP=""
+RETAIN_CMP=""
 LOG_FILE=""
 KEEP_PAYLOAD=0
 ROLLBACK=0
@@ -137,20 +139,27 @@ INSTALL_DIR="$(norm_path "$INSTALL_DIR")"
 [ -z "$PAYLOAD_DIR" ] || PAYLOAD_DIR="$(norm_path "$PAYLOAD_DIR")"
 [ -z "$BACKUP_DIR" ] || BACKUP_DIR="$(norm_parent "$BACKUP_DIR")"
 [ -z "$RETAIN_DIR" ] || RETAIN_DIR="$(norm_parent "$RETAIN_DIR")"
+# 关系判另取全物理名：叶段为符号链接时字面拼写会逃逸同址/互嵌判
+#（叶链指向 install/payload 在字面层面不同名）；文件操作仍走上面的叶字面拼写。
+[ -z "$BACKUP_DIR" ] || BACKUP_CMP="$(norm_path "$BACKUP_DIR")"
+[ -z "$RETAIN_DIR" ] || RETAIN_CMP="$(norm_path "$RETAIN_DIR")"
 # 重启目标与日志同样按调用方 cwd 规范化成绝对路径——脚本的工作目录不是用户的 cwd。
 [ -z "$APP_PATH" ] || APP_PATH="$(norm_path "$APP_PATH")"
 [ -z "$LOG_FILE" ] || LOG_FILE="$(norm_path "$LOG_FILE")"
 [ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
+# 派生备份/未给保留时，比较拼写落到操作拼写（无用户叶链可逃逸）。
+[ -n "$BACKUP_CMP" ] || BACKUP_CMP="$BACKUP_DIR"
+[ -n "$RETAIN_CMP" ] || RETAIN_CMP="$RETAIN_DIR"
 MARKER="${INSTALL_DIR%/}.bundler-swap"
 
 # 备份目录与安装/载荷同址或互嵌同样是抹数据的形状（换包前会 rm 旧备份）——与 AOT 侧同拒。
 for _p in "$INSTALL_DIR" "$PAYLOAD_DIR"; do
     [ -n "$_p" ] || continue
-    case "$BACKUP_DIR" in
+    case "$BACKUP_CMP" in
         "$_p"|"$_p"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
     esac
     case "$_p" in
-        "$BACKUP_DIR"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+        "$BACKUP_CMP"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
     esac
 done
 
@@ -166,8 +175,8 @@ fi
 
 # 保留目录与安装/载荷/备份目录同址或互嵌同样是抹数据的形状——与 AOT 侧 SameOrInside 同拒。
 if [ -n "$RETAIN_DIR" ]; then
-    _r="$RETAIN_DIR"
-    for _p in "$INSTALL_DIR" "$BACKUP_DIR" "$PAYLOAD_DIR"; do
+    _r="$RETAIN_CMP"
+    for _p in "$INSTALL_DIR" "$BACKUP_CMP" "$PAYLOAD_DIR"; do
         [ -n "$_p" ] || continue
         case "$_r" in
             "$_p"|"$_p"/*) { echo "bundler-updater: retained-backup directory must not nest inside install/payload/backup directories." >&2; exit 2; } ;;

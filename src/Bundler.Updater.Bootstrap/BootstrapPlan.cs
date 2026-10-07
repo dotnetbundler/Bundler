@@ -30,6 +30,11 @@ internal static class BootstrapPlan
         var backupDir = options.BackupDirectory is { Length: > 0 }
             ? CanonicalParentPath(options.BackupDirectory)
             : installDir.TrimEnd('/', '\\') + ".bundler-backup";
+        // 关系判用全物理名（叶链指向 install/payload 在字面层面不同名会逃逸），
+        // 文件操作仍走上面的叶字面拼写（叶链只被删链本身不触目标）。
+        var backupDirCmp = options.BackupDirectory is { Length: > 0 }
+            ? CanonicalPath(options.BackupDirectory)
+            : backupDir;
         var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
         // 重启目标与日志路径都按本进程 cwd 绝对化——相对路径会在换包后的临时工作目录里静默错位。
         if (options.AppPath is { Length: > 0 })
@@ -51,23 +56,26 @@ internal static class BootstrapPlan
         // 这组判断只做路径关系运算、不依赖文件系统，必须先于 marker 恢复与等待——
         // 恢复会删半成品的安装目录，载荷嵌在其中时会把本轮输入先抹掉再拒绝（为时已晚）。
         if (payloadDir is not null &&
-            (SameOrInside(backupDir, installDir) || SameOrInside(backupDir, payloadDir) ||
-             SameOrInside(installDir, backupDir) || SameOrInside(payloadDir, backupDir) ||
+            (SameOrInside(backupDirCmp, installDir) || SameOrInside(backupDirCmp, payloadDir) ||
+             SameOrInside(installDir, backupDirCmp) || SameOrInside(payloadDir, backupDirCmp) ||
              SameOrInside(installDir, payloadDir) || SameOrInside(payloadDir, installDir)))
         {
             throw new UsageException("backup/install/payload directories must not nest inside each other.");
         }
         if (options.RetainBackupDirectory is { Length: > 0 } retainPath)
         {
-            var retain = CanonicalParentPath(retainPath);
-            if (SameOrInside(retain, installDir) || (payloadDir is not null && SameOrInside(retain, payloadDir)) ||
-                SameOrInside(installDir, retain) || SameOrInside(backupDir, retain) || SameOrInside(retain, backupDir))
+            // 操作拼写（父物理化+叶字面）写回 options 供 RetainOrRemoveBackup 使用；
+            // 关系判另取全物理名，叶链指向安装/载荷/备份叶都能命中。
+            options.RetainBackupDirectory = CanonicalParentPath(retainPath);
+            var retainCmp = CanonicalPath(retainPath);
+            if (SameOrInside(retainCmp, installDir) || (payloadDir is not null && SameOrInside(retainCmp, payloadDir)) ||
+                SameOrInside(installDir, retainCmp) || SameOrInside(backupDirCmp, retainCmp) || SameOrInside(retainCmp, backupDirCmp))
             {
                 throw new UsageException("retained-backup directory must not nest inside install/payload/backup directories.");
             }
         }
         // 回滚模式不嵌套校验 payload——它本就不存在。
-        if (options.Rollback && (SameOrInside(backupDir, installDir) || SameOrInside(installDir, backupDir)))
+        if (options.Rollback && (SameOrInside(backupDirCmp, installDir) || SameOrInside(installDir, backupDirCmp)))
         {
             throw new UsageException("backup and install directories must not nest inside each other.");
         }
