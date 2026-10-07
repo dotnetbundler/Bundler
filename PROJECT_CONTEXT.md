@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-07
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.80`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.81`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -85,6 +85,13 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-07 PR #36 压缩合并（squash `71f0142`，main `71f0142`，版本推进 `alpha.81`）
+
+- R3 重跑 mac 真机腿抓出的 2 缺陷 + 复审/腿复验拦下的 1 个数据丢失级缺陷收口：**D1** `ArchiveExtractor.RemoveAppleDoubleTree` 只挂 managed 回退——Darwin ditto/bsdtar 优选路径成功后载荷自带嵌套 `__MACOSX` 落进安装位（mac 腿 UpdateTests 1F 根因）——改任一提取成功后统一清树；**D2** 输出槽（备份槽/marker 槽/retain 目标）预置指向保护区外的良性叶链——`Directory.Exists` 顺链探测跳过预删 → `Directory.Move` 撞 already exists rc=4 且 `.bundler-swap` marker 残留楔形（后续每次 apply 误判崩溃恢复）——修 AOT 三处：`DeleteNodeIfPresent`/`DeleteLinkNodeIfPresent` lstat 语义删链节点不触目标、marker 槽叶链先删防 `Exists` 假触发与 `WriteAllText` 写穿、POSIX 侧补 `[ -L "$MARKER" ] && rm -f` 对齐。
+- Devin Review BUG 发现（跨卷 `MoveTree` 半途失败留下完整备份却 `backupTaken=false`→catch 清 marker→下次 apply 删孤备致安装文件永失）：`MoveTree` 改两段式——`CopyTree` 到 `<dest>.partial-<rand>` 临时名再原子 rename 就位，备份槽只呈"未开始/全本"两态、恢复判据改 `Directory.Exists`；alpine 腿 ENOSPC 复验另抓到首版两段式未落地（编辑取消），`8926bf9` 修正后 sh/AOT 双侧实证。
+- 腿复验全绿（最终代码 head）：mac 真机 D1 单测转绿+E2E 零残留、D2 三腿 rc=0 良性、hdiutil 小卷 ENOSPC install 逐字节完好；linux 349 测试 0F + sh/AOT 各 140 断言 + docker tmpfs ENOSPC 无残渣；alpine busybox 48/48 + musl 48/48 + 三断言 3/3；win 349 0F + 17/17 + UNC 跨盘符两段式；五 RID 引导件按 8926bf9 源码同宿主重产回填（sha 逐件核验）；复审最终轮 0 发现。
+- 待办照旧：R3 整轮于本基线重跑（四腿全新会话，第三轮须零缺陷直通）；D3 遗留已知限制见 PR #34 条目。
 
 ### 2026-10-07 PR #35 压缩合并（squash `4906e05`，main `4906e05`，版本推进 `alpha.80`）
 
