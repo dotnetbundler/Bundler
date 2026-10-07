@@ -250,6 +250,9 @@ if [ -n "$WAIT_PID" ]; then
     done
 fi
 
+# marker 槽叶链一律删——真 marker 是本脚本写的普通文件；叶链会让 -f 顺链假触发
+# 崩溃恢复、printf> 顺链写穿污染保护区外目标（与 AOT DeleteLinkNodeIfPresent 同义）。
+[ -L "$MARKER" ] && rm -f "$MARKER"
 # 崩溃恢复先于存在性检查：上轮死在备份与换包之间时安装目标可能缺失/半成品，先还原。
 RECOVERED=0
 if [ -f "$MARKER" ]; then

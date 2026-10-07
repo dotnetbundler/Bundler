@@ -91,6 +91,9 @@ internal static class BootstrapPlan
             WaitForExit(pid, options.WaitTimeoutSeconds, log);
         }
 
+        // marker 槽的叶链一律删除：真 marker 只会是本进程写的普通文件。
+        // 预置链会让 Exists 顺链触发假崩溃恢复、写 marker 时顺链写穿污染目标。
+        DeleteLinkNodeIfPresent(markerPath);
         // 崩溃恢复先于存在性检查：上轮死在备份与换包之间时安装目标可能缺失/半成品，
         // 先按 marker 还原再谈 install 在不在。
         var recovered = false;
@@ -171,15 +174,16 @@ internal static class BootstrapPlan
         }
 
         log($"bundler-updater: backup '{installDir}' → '{backupDir}'");
-        if (Directory.Exists(backupDir))
-        {
-            Directory.Delete(backupDir, recursive: true);
-        }
+        // 备份槽既有节点按 lstat 语义清掉：叶链节点删链本身不触目标（POSIX rm 同义）——
+        // 指向保护区外的良性叶链不该让 MoveTree 撞 "already exists" 楔形。
+        DeleteNodeIfPresent(backupDir);
         File.WriteAllText(markerPath, "swap in progress");
-        MoveTree(installDir, backupDir, log);
-
+        // 楔形防线：marker 写在备份移位之前，备份未成立时异常不可留 marker——残留会让
+        // 后续每次 apply 误判崩溃恢复而楔形（POSIX `mv || { rm -f MARKER; exit 4; }` 同义）。
+        // 两段式 MoveTree 保证备份槽只呈现"未开始"或"全本"两态——存在即可安全恢复。
         try
         {
+            MoveTree(installDir, backupDir, log);
             if (options.KeepPayload)
             {
                 // 保留载荷用于调试与组合场景：复制换入而非移动。
@@ -194,12 +198,15 @@ internal static class BootstrapPlan
         }
         catch
         {
-            log("bundler-updater: swap failed, restoring backup");
-            if (Directory.Exists(installDir))
+            if (Directory.Exists(backupDir))
             {
-                Directory.Delete(installDir, recursive: true);
+                log("bundler-updater: swap failed, restoring backup");
+                if (Directory.Exists(installDir))
+                {
+                    Directory.Delete(installDir, recursive: true);
+                }
+                MoveTree(backupDir, installDir, log);
             }
-            MoveTree(backupDir, installDir, log);
             File.Delete(markerPath);
             throw;
         }
@@ -234,14 +241,7 @@ internal static class BootstrapPlan
             {
                 Directory.CreateDirectory(parent);
             }
-            if (Directory.Exists(target))
-            {
-                Directory.Delete(target, recursive: true);
-            }
-            else if (File.Exists(target))
-            {
-                File.Delete(target);
-            }
+            DeleteNodeIfPresent(target);
             log($"bundler-updater: retain backup '{backupPath}' → '{target}'");
             if (Directory.Exists(backupPath))
             {
@@ -299,15 +299,14 @@ internal static class BootstrapPlan
             throw new UsageException("install and payload must not be the same file.");
         }
         log($"bundler-updater: backup '{installPath}' → '{backupPath}'");
-        if (File.Exists(backupPath))
-        {
-            File.Delete(backupPath);
-        }
+        // 同目录级：备份槽叶链节点删链本身（File.Exists 顺链探测会漏挂链）。
+        DeleteNodeIfPresent(backupPath);
         File.WriteAllText(markerPath, "swap in progress");
-        File.Move(installPath, backupPath);
-
+        var backupTaken = false;
         try
         {
+            File.Move(installPath, backupPath);
+            backupTaken = true;
             if (options.KeepPayload)
             {
                 log($"bundler-updater: copy in '{payloadPath}' → '{installPath}'");
@@ -321,12 +320,15 @@ internal static class BootstrapPlan
         }
         catch
         {
-            log("bundler-updater: swap failed, restoring backup");
-            if (File.Exists(installPath))
+            if (backupTaken)
             {
-                File.Delete(installPath);
+                log("bundler-updater: swap failed, restoring backup");
+                if (File.Exists(installPath))
+                {
+                    File.Delete(installPath);
+                }
+                File.Move(backupPath, installPath);
             }
-            File.Move(backupPath, installPath);
             File.Delete(markerPath);
             throw;
         }
@@ -346,6 +348,55 @@ internal static class BootstrapPlan
         }
         log("bundler-updater: done");
         return 0;
+    }
+
+    // 槽位既有节点按 lstat 语义清掉：叶链/联接只删节点本身不触目标（POSIX rm 同义）；
+    // 普通目录递归清、普通文件直删。Exists 系探测顺链解引用，挂链会漏判为缺席——
+    // 那正是"already exists"楔形的成因。
+    private static void DeleteNodeIfPresent(string path)
+    {
+        FileAttributes attributes;
+        try
+        {
+            attributes = File.GetAttributes(path);
+        }
+        catch (FileNotFoundException) { return; }
+        catch (DirectoryNotFoundException) { return; }
+        catch (IOException) { return; }
+
+        if (attributes.HasFlag(FileAttributes.ReparsePoint))
+        {
+            if (attributes.HasFlag(FileAttributes.Directory))
+            {
+                Directory.Delete(path, recursive: false);
+            }
+            else
+            {
+                File.Delete(path);
+            }
+        }
+        else if (attributes.HasFlag(FileAttributes.Directory))
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        else
+        {
+            File.Delete(path);
+        }
+    }
+
+    private static void DeleteLinkNodeIfPresent(string path)
+    {
+        try
+        {
+            if (File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint))
+            {
+                DeleteNodeIfPresent(path);
+            }
+        }
+        catch (FileNotFoundException) { }
+        catch (DirectoryNotFoundException) { }
+        catch (IOException) { }
     }
 
     private static void WaitForExit(int pid, int timeoutSeconds, Action<string> log)
@@ -403,7 +454,9 @@ internal static class BootstrapPlan
         }
     }
 
-    // 同卷 rename(2)/MoveFile 原子就位；跨卷退化为复制+删除。
+    // 同卷 rename(2)/MoveFile 原子就位；跨卷两段式：先 CopyTree 到同级临时名再原子
+    // rename 就位——destination 只呈现"未开始"或"全本"两态，调用方靠 Exists 即可判
+    // 备份是否成立（半成品永远在临时名下清走，不会污染目标槽）。
     private static void MoveTree(string source, string destination, Action<string> log)
     {
         try
@@ -414,7 +467,23 @@ internal static class BootstrapPlan
         catch (IOException)
         {
         }
-        CopyTree(source, destination);
+        var staged = destination + ".partial-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            CopyTree(source, staged);
+            Directory.Move(staged, destination);
+        }
+        catch
+        {
+            try
+            {
+                Directory.Delete(staged, recursive: true);
+            }
+            catch (Exception)
+            {
+            }
+            throw;
+        }
         Directory.Delete(source, recursive: true);
     }
 
