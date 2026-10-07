@@ -46,12 +46,23 @@ restart_app() {
     esac
 }
 
-# 同卷 mv=rename 原子就位；跨卷 mv 退化为 copy+unlink，busybox 半途失败会在
-# 目标名上留下"存在≠完整"的半成品（备份槽的半成品会被恢复路径误当全本还原）。
-# 与 AOT 侧 MoveTree 两段式同义：先复制到同级临时名再原子 mv 就位，
-# 目标槽只呈现"未开始"或"全本"两态，半成品只活在 .partial-* 名下随失败清走。
+# 同卷 mv=rename 原子就位（含进程被杀语义）；跨卷 mv 退化为 copy+unlink，
+# 中途被杀/失败会在目标名上留"存在≠完整"半成品（恢复路径 -d 判存会还原半本）。
+# 故只有同卷才直移，跨卷一律两段式（与 AOT MoveTree/MoveFile 同义）：
+# 先复制到同级临时名再原子 mv 就位，目标槽只呈现"未开始"或"全本"两态。
+_mn_dev() {
+    # 卷设备号：Linux/busybox `stat -c %d`，Darwin/BSD `stat -f %d`；
+    # stat 缺席/失败返回空——按跨卷处理走两段式（保守安全）。
+    if [ "$(uname -s)" = "Darwin" ]; then
+        stat -f %d "$1" 2>/dev/null
+    else
+        stat -c %d "$1" 2>/dev/null
+    fi
+}
 move_node() {
-    if mv "$1" "$2" 2>/dev/null; then
+    _mn_sdev=$(_mn_dev "$1")
+    _mn_ddev=$(_mn_dev "$(dirname "$2")")
+    if [ -n "$_mn_sdev" ] && [ "$_mn_sdev" = "$_mn_ddev" ] && mv "$1" "$2" 2>/dev/null; then
         return 0
     fi
     # 直 mv 半途可能已把部分条目落进目标名——先清槽再两段式。

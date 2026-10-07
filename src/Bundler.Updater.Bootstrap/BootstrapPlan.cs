@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace DotNet.Bundler.Updater.Bootstrap;
 
@@ -454,17 +455,14 @@ internal static class BootstrapPlan
         }
     }
 
-    // 文件级同名语义：File.Move 跨卷退化为 copy+unlink，半途失败会在目标名上留下
-    // 截断半成品（Exists 恢复判据会把它当全本还原）——与 MoveTree 两段式同义。
+    // 文件级同名语义：File.Move 跨卷内部退化为 copy+delete——进程半途被杀会在
+    // 目标名上留下截断半成品（Exists 恢复判据会把它当全本还原）——故只有确证
+    // 同卷（原子 rename）才直移，其余一律两段式（与 MoveTree 同义）。
     private static void MoveFile(string source, string destination)
     {
-        try
+        if (TryAtomicMove(source, destination))
         {
-            File.Move(source, destination);
             return;
-        }
-        catch (IOException)
-        {
         }
         DeleteNodeIfPresent(destination);
         var staged = destination + ".partial-" + Guid.NewGuid().ToString("N")[..8];
@@ -480,6 +478,28 @@ internal static class BootstrapPlan
         }
         File.Delete(source);
     }
+
+    // 原子移动探测：POSIX rename(2) 成功即原子就位（EXDEV 等失败一律走两段式，
+    // File.Copy 会抛出真实错误）；Windows 卷根一致时 MoveFile 才是 rename 语义——
+    // 跨卷根（盘符/UNC share）MoveFile 内部同样 copy+delete 半途留截断件。
+    private static bool TryAtomicMove(string source, string destination)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var sourceRoot = Path.GetPathRoot(Path.GetFullPath(source));
+            var destinationRoot = Path.GetPathRoot(Path.GetFullPath(destination));
+            if (!string.Equals(sourceRoot, destinationRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+            File.Move(source, destination);
+            return true;
+        }
+        return PosixRename(source, destination) == 0;
+    }
+
+    [DllImport("libc", EntryPoint = "rename", SetLastError = true, CharSet = CharSet.Ansi)]
+    private static extern int PosixRename(string oldPath, string newPath);
 
     // 同卷 rename(2)/MoveFile 原子就位；跨卷两段式：先 CopyTree 到同级临时名再原子
     // rename 就位——destination 只呈现"未开始"或"全本"两态，调用方靠 Exists 即可判
@@ -531,13 +551,18 @@ internal static class BootstrapPlan
                     : new ProcessStartInfo("cp", ["-a", source + "/.", destination + "/"]);
                 startInfo.RedirectStandardError = true;
                 using var process = Process.Start(startInfo);
-                process!.WaitForExit();
+                // 必须先排空 stderr——cp/ditto 大量报错写满管道会反压阻塞子进程，
+                // WaitForExit 将永久卡死。ReadToEnd 排水直到子进程退出再取码。
+                var stderr = process!.StandardError.ReadToEnd();
+                process.WaitForExit();
                 if (process.ExitCode == 0)
                 {
                     return;
                 }
                 DeleteNodeIfPresent(destination);
-                log($"bundler-updater: WARN host copy failed (exit {process.ExitCode}) — falling back to managed copy");
+                var detail = stderr.Trim();
+                if (detail.Length > 240) { detail = "…" + detail[^240..]; }
+                log($"bundler-updater: WARN host copy failed (exit {process.ExitCode}){(detail.Length > 0 ? $" — {detail}" : "")} — falling back to managed copy");
             }
             catch (Exception exception)
             {
