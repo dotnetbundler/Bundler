@@ -106,7 +106,7 @@ internal static class BootstrapPlan
                 {
                     File.Delete(installDir);
                 }
-                File.Move(backupDir, installDir);
+                MoveFile(backupDir, installDir);
             }
             else if (Directory.Exists(backupDir))
             {
@@ -249,7 +249,7 @@ internal static class BootstrapPlan
             }
             else
             {
-                File.Move(backupPath, target);
+                MoveFile(backupPath, target);
             }
             return;
         }
@@ -305,7 +305,7 @@ internal static class BootstrapPlan
         var backupTaken = false;
         try
         {
-            File.Move(installPath, backupPath);
+            MoveFile(installPath, backupPath);
             backupTaken = true;
             if (options.KeepPayload)
             {
@@ -315,7 +315,7 @@ internal static class BootstrapPlan
             else
             {
                 log($"bundler-updater: swap in '{payloadPath}' → '{installPath}'");
-                File.Move(payloadPath, installPath);
+                MoveFile(payloadPath, installPath);
             }
         }
         catch
@@ -327,7 +327,7 @@ internal static class BootstrapPlan
                 {
                     File.Delete(installPath);
                 }
-                File.Move(backupPath, installPath);
+                MoveFile(backupPath, installPath);
             }
             File.Delete(markerPath);
             throw;
@@ -452,6 +452,33 @@ internal static class BootstrapPlan
         {
             log($"bundler-updater: WARN restart failed ({exception.Message})");
         }
+    }
+
+    // 文件级同名语义：File.Move 跨卷退化为 copy+unlink，半途失败会在目标名上留下
+    // 截断半成品（Exists 恢复判据会把它当全本还原）——与 MoveTree 两段式同义。
+    private static void MoveFile(string source, string destination)
+    {
+        try
+        {
+            File.Move(source, destination);
+            return;
+        }
+        catch (IOException)
+        {
+        }
+        DeleteNodeIfPresent(destination);
+        var staged = destination + ".partial-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            File.Copy(source, staged);
+            File.Move(staged, destination);
+        }
+        catch
+        {
+            DeleteNodeIfPresent(staged);
+            throw;
+        }
+        File.Delete(source);
     }
 
     // 同卷 rename(2)/MoveFile 原子就位；跨卷两段式：先 CopyTree 到同级临时名再原子
