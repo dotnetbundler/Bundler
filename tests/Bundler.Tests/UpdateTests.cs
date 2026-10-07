@@ -904,6 +904,70 @@ public static class UpdateTests
     }
 
     [Fact]
+    static void Applier_PayloadResolution_RequiresNoRootFilesForUnwrap()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            // "目录内容直压"形状（zip -ry <目录>/tar -C <目录> .）：顶层有文件+恰好一个目录
+            // ——单目录不是 wrapper 是载荷子目录，整个暂存必须当载荷根否则同级文件静默丢。
+            var flat = Path.Combine(directory, "flat");
+            Directory.CreateDirectory(Path.Combine(flat, "docs"));
+            File.WriteAllText(Path.Combine(flat, "readme.txt"), "x");
+            File.WriteAllText(Path.Combine(flat, "docs", "a.md"), "x");
+            Assert.Equal(flat, DotNet.Bundler.Updater.UpdateApplier.SingleTopDirectory(flat, "a.zip"));
+
+            // wrapper 形状：顶层恰一个目录且零根级文件——解包到该目录。
+            var wrapped = Path.Combine(directory, "wrapped");
+            var inner = Path.Combine(wrapped, "myapp");
+            Directory.CreateDirectory(inner);
+            File.WriteAllText(Path.Combine(inner, "app"), "x");
+            Assert.Equal(inner, DotNet.Bundler.Updater.UpdateApplier.SingleTopDirectory(wrapped, "b.zip"));
+
+            // 空归档仍拒绝。
+            var empty = Path.Combine(directory, "empty");
+            Directory.CreateDirectory(empty);
+            Assert.Throws<DotNet.Bundler.Updater.UpdateException>(
+                () => DotNet.Bundler.Updater.UpdateApplier.SingleTopDirectory(empty, "c.zip"));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void Applier_ManagedExtract_RemovesNestedAppleDouble()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            // wrapper 内嵌套 __MACOSX（载荷含预解压 macOS 目录树）——managed 解包必须
+            // 全树清，否则会随换包落进安装目录。
+            var source = Path.Combine(directory, "source");
+            var wrapper = Path.Combine(source, "hello-1.0.0");
+            Directory.CreateDirectory(Path.Combine(wrapper, "bin"));
+            Directory.CreateDirectory(Path.Combine(wrapper, "__MACOSX", "bin"));
+            File.WriteAllText(Path.Combine(wrapper, "bin", "app"), "x");
+            File.WriteAllText(Path.Combine(wrapper, "__MACOSX", "bin", "._app"), "junk");
+            var zipPath = Path.Combine(directory, "payload.zip");
+            System.IO.Compression.ZipFile.CreateFromDirectory(source, zipPath);
+
+            var staging = Path.Combine(directory, "staging");
+            Directory.CreateDirectory(staging);
+            DotNet.Bundler.Updater.ArchiveExtractor.ExtractZipToDirectory(zipPath, staging, null);
+
+            Assert.Empty(Directory.GetDirectories(
+                staging, "__MACOSX", SearchOption.AllDirectories));
+            Assert.True(File.Exists(Path.Combine(staging, "hello-1.0.0", "bin", "app")));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     static void Emitter_KeepsEscapedChars_InArtifactUrl()
     {
         // 制品文件名含 '#'/'?'/空格：url 必须保留 %XX 转义——未转义字符会被 http
