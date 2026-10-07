@@ -180,11 +180,10 @@ internal static class BootstrapPlan
         File.WriteAllText(markerPath, "swap in progress");
         // 楔形防线：marker 写在备份移位之前，备份未成立时异常不可留 marker——残留会让
         // 后续每次 apply 误判崩溃恢复而楔形（POSIX `mv || { rm -f MARKER; exit 4; }` 同义）。
-        var backupTaken = false;
+        // 两段式 MoveTree 保证备份槽只呈现"未开始"或"全本"两态——存在即可安全恢复。
         try
         {
             MoveTree(installDir, backupDir, log);
-            backupTaken = true;
             if (options.KeepPayload)
             {
                 // 保留载荷用于调试与组合场景：复制换入而非移动。
@@ -199,7 +198,7 @@ internal static class BootstrapPlan
         }
         catch
         {
-            if (backupTaken)
+            if (Directory.Exists(backupDir))
             {
                 log("bundler-updater: swap failed, restoring backup");
                 if (Directory.Exists(installDir))
