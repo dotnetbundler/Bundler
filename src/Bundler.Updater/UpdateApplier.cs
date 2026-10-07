@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.IO.Compression;
 using System.Runtime.InteropServices;
 using DotNet.Bundler.Updater.Protocol;
 
@@ -156,10 +155,7 @@ internal sealed class UpdateApplier
     private static string ExtractZip(string zipPath, ApplyOptions options, Action<string>? log)
     {
         var staging = PrepareStaging(options);
-        using (var archive = ZipFile.OpenRead(zipPath))
-        {
-            archive.ExtractToDirectory(staging);
-        }
+        ArchiveExtractor.ExtractZipToDirectory(zipPath, staging, log);
         log?.Invoke($"update: extracted '{zipPath}' → '{staging}'");
         return SingleTopDirectory(staging, zipPath);
     }
@@ -167,11 +163,7 @@ internal sealed class UpdateApplier
     private static string ExtractTarGz(string tarGzPath, ApplyOptions options, Action<string>? log)
     {
         var staging = PrepareStaging(options);
-        using (var input = new FileStream(tarGzPath, FileMode.Open, FileAccess.Read, FileShare.Read))
-        using (var gzip = new GZipStream(input, CompressionMode.Decompress))
-        {
-            UstarReader.Extract(gzip, staging);
-        }
+        ArchiveExtractor.ExtractTarGzToDirectory(tarGzPath, staging, log);
         log?.Invoke($"update: extracted '{tarGzPath}' → '{staging}'");
         return SingleTopDirectory(staging, tarGzPath);
     }
