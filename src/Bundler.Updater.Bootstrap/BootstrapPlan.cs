@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace DotNet.Bundler.Updater.Bootstrap;
 
@@ -480,15 +481,18 @@ internal static class BootstrapPlan
     }
 
     // 原子移动探测：POSIX rename(2) 成功即原子就位（EXDEV 等失败一律走两段式，
-    // File.Copy 会抛出真实错误）；Windows 卷根一致时 MoveFile 才是 rename 语义——
-    // 跨卷根（盘符/UNC share）MoveFile 内部同样 copy+delete 半途留截断件。
+    // File.Copy 会抛出真实错误）；Windows 需确证同卷 MoveFile 才是 rename 语义——
+    // 跨卷（异盘符/异 UNC share/挂载在目录下的卷）MoveFile 内部同样 copy+delete
+    // 半途留截断件。判卷用 GetVolumePathName：盘符比较会漏 NTFS 卷挂载点。
     private static bool TryAtomicMove(string source, string destination)
     {
         if (OperatingSystem.IsWindows())
         {
-            var sourceRoot = Path.GetPathRoot(Path.GetFullPath(source));
-            var destinationRoot = Path.GetPathRoot(Path.GetFullPath(destination));
-            if (!string.Equals(sourceRoot, destinationRoot, StringComparison.OrdinalIgnoreCase))
+            var sourceVolume = WindowsVolumeRoot(source);
+            var destinationVolume = WindowsVolumeRoot(destination);
+            // 判不出卷→保守两段式；卷根不同（含目录挂载卷）→跨卷两段式
+            if (sourceVolume is null
+                || !string.Equals(sourceVolume, destinationVolume, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -497,6 +501,18 @@ internal static class BootstrapPlan
         }
         return PosixRename(source, destination) == 0;
     }
+
+    private static string? WindowsVolumeRoot(string path)
+    {
+        var buffer = new StringBuilder(capacity: 260);
+        return GetVolumePathName(Path.GetFullPath(path), buffer, buffer.Capacity)
+            ? buffer.ToString()
+            : null;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetVolumePathName(string lpszFileName, StringBuilder lpszVolumePathName, int nBufferLength);
 
     [DllImport("libc", EntryPoint = "rename", SetLastError = true, CharSet = CharSet.Ansi)]
     private static extern int PosixRename(string oldPath, string newPath);
