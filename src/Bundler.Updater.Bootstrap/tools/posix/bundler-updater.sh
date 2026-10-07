@@ -79,13 +79,24 @@ done
 # （目标已搬进备份）照样解——崩溃恢复靠它找回 marker/备份。
 # 每跳目标父链规范化再接回叶名：/var 类中间段自身是链接时，
 # 字面拼写与比较对象的物理名错位会逃逸互嵌/等值判。
-# 环判两种：重访已解拼写（a→b→a），或目标落在已访问拼写之下（a→a/child 后代自指）；
-# 40 跳=SYMLOOP_MAX 硬限——耗尽后仍是链接即判环。命中即 return 1，调用方按无效输入拒。
+# 环判一律拼写等值重访（同 AOT resolving/visited 的 HashSet 语义）：
+# 链走重访本链拼写（a→b→a），或嵌套 norm_seg 递归时重入栈上在解析的拼写
+#（a→a/child 后代自指走父链规范化重入时命中）；40 跳=SYMLOOP_MAX 硬限——
+# 耗尽后仍是链接即判环。命中即 return 1，调用方按无效输入拒。
+# 已解拼写集用位置参数逐帧下传（resolve_link 与 norm_seg 互递归时栈上祖先可见）：
+# 字符串集靠分隔符会切路径里的 | 等合法字符，位置参数任意拼写都安全。
+# 只在确认是链接后才入栈——普通父级段解析即完不在解析中，入栈会被父链重走误报环。
+_seen() {
+    _c=$1; shift
+    for _e do [ "$_c" = "$_e" ] && return 0; done
+    return 1
+}
 resolve_link() {
-    _rl=$1
-    _rlv="|$_rl|"
+    _rl=$1; shift
     _rlh=0
     while [ -L "$_rl" ]; do
+        _seen "$_rl" "$@" && return 1
+        set -- "$@" "$_rl"
         _rlh=$((_rlh + 1))
         [ "$_rlh" -gt 40 ] && return 1
         _rlt=$(readlink "$_rl") || break
@@ -94,27 +105,17 @@ resolve_link() {
             *) _rln="$(dirname "$_rl")/$_rlt" ;;
         esac
         _rln=$(norm_lexical "$_rln")
-        _rlrest=${_rlv#|}
-        while [ -n "$_rlrest" ]; do
-            case "$_rlrest" in
-                *\|*) _rle=${_rlrest%%|*}; _rlrest=${_rlrest#*|} ;;
-                *) _rle=$_rlrest; _rlrest= ;;
-            esac
-            case "$_rln" in
-                "$_rle"|"$_rle"/*) return 1 ;;
-            esac
-        done
+        _seen "$_rln" "$@" && return 1
         _rld=$(dirname "$_rln"); _rlb=$(basename "$_rln")
-        _rlp=$(norm_seg "$_rld") || return 1
+        _rlp=$(norm_seg "$_rld" "$@") || return 1
         _rl="${_rlp%/}/$_rlb"
-        _rlv="$_rlv$_rl|"
     done
     printf '%s\n' "$_rl"
 }
 
 # 逐段规范化：任一段环链则整条判死（与 AOT CanonicalPath 遇 null 传播同义）。
 norm_seg() {
-    _ns_rest=$(norm_lexical "$1")
+    _ns_rest=$(norm_lexical "$1"); shift
     _ns_rest=${_ns_rest#/}
     _ns_out=
     while [ -n "$_ns_rest" ]; do
@@ -122,7 +123,7 @@ norm_seg() {
         _ns_rest=${_ns_rest#"$_ns_seg"}
         _ns_rest=${_ns_rest#/}
         _ns_cur="$_ns_out/$_ns_seg"
-        _ns_cur=$(resolve_link "$_ns_cur") || return 1
+        _ns_cur=$(resolve_link "$_ns_cur" "$@") || return 1
         _ns_out=$_ns_cur
     done
     printf '%s\n' "${_ns_out:-/}"
