@@ -164,7 +164,7 @@ internal static class BootstrapPlan
             }
             log($"bundler-updater: rollback '{backupDir}' → '{installDir}'");
             Directory.Delete(installDir, recursive: true);
-            CopyTree(backupDir, installDir);
+            CopyTree(backupDir, installDir, log);
             if (options.AppPath is { Length: > 0 } rollbackApp)
             {
                 Restart(rollbackApp, installDir, log);
@@ -188,7 +188,7 @@ internal static class BootstrapPlan
             {
                 // 保留载荷用于调试与组合场景：复制换入而非移动。
                 log($"bundler-updater: copy in '{payloadDir}' → '{installDir}'");
-                CopyTree(payloadDir!, installDir);
+                CopyTree(payloadDir!, installDir, log);
             }
             else
             {
@@ -470,7 +470,7 @@ internal static class BootstrapPlan
         var staged = destination + ".partial-" + Guid.NewGuid().ToString("N")[..8];
         try
         {
-            CopyTree(source, staged);
+            CopyTree(source, staged, log);
             Directory.Move(staged, destination);
         }
         catch
@@ -487,32 +487,70 @@ internal static class BootstrapPlan
         Directory.Delete(source, recursive: true);
     }
 
-    private static void CopyTree(string source, string destination)
+    // `cp -a` 语义（与 POSIX bundler-updater.sh 平价）：链接按链接重建不解引用实体化、
+    // 权限位/xattr 随文件走。POSIX 一律走宿主工具：macOS `ditto`（xattr/ACL/链接全保真——
+    // managed 复制丢目录级 xattr，签名 .app 经保留/跨卷/回滚路会被洗白；与提取侧
+    // PR #34 同策略用 Apple 系统工具），其余 POSIX `cp -a`（coreutils/busybox 均有）。
+    // Windows 无 xattr 语义，走 managed 复制。
+    private static void CopyTree(string source, string destination, Action<string> log)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            try
+            {
+                Directory.CreateDirectory(destination);
+                ProcessStartInfo startInfo = OperatingSystem.IsMacOS()
+                    ? new ProcessStartInfo("/usr/bin/ditto", [source, destination])
+                    : new ProcessStartInfo("cp", ["-a", source + "/.", destination + "/"]);
+                startInfo.RedirectStandardError = true;
+                using var process = Process.Start(startInfo);
+                process!.WaitForExit();
+                if (process.ExitCode == 0)
+                {
+                    return;
+                }
+                DeleteNodeIfPresent(destination);
+                log($"bundler-updater: WARN host copy failed (exit {process.ExitCode}) — falling back to managed copy");
+            }
+            catch (Exception exception)
+            {
+                log($"bundler-updater: WARN host copy unavailable ({exception.Message}) — falling back to managed copy");
+            }
+        }
+        CopyTreeManaged(source, destination);
+    }
+
+    private static void CopyTreeManaged(string source, string destination)
     {
         Directory.CreateDirectory(destination);
-        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        foreach (var entry in Directory.EnumerateFileSystemEntries(source))
         {
-            Directory.CreateDirectory(directory.Replace(source, destination));
-        }
-        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
-        {
-            var target = file.Replace(source, destination);
-            if (File.Exists(target))
+            var target = Path.Combine(destination, Path.GetFileName(entry));
+            var attributes = File.GetAttributes(entry);
+            // 链接（含目录软链）按链接重建——EnumerateDirectories 会把目录软链遍历成
+            // 实体目录（.app 内 Framework/版本链被洗白、环链死循环），必须 lstat 判链。
+            var linkTarget = new DirectoryInfo(entry).LinkTarget ?? new FileInfo(entry).LinkTarget;
+            if (linkTarget is not null)
             {
-                File.Delete(target);
-            }
-            var info = new FileInfo(file);
-            // 软链按链接重建而非解引用成普通文件（File.Copy 的默认行为会破坏 AppRun 类链接）。
-            if (info.LinkTarget is { } linkTarget)
-            {
-                File.CreateSymbolicLink(target, linkTarget);
+                if (attributes.HasFlag(FileAttributes.Directory))
+                {
+                    Directory.CreateSymbolicLink(target, linkTarget);
+                }
+                else
+                {
+                    File.CreateSymbolicLink(target, linkTarget);
+                }
                 continue;
             }
-            File.Copy(file, target, overwrite: true);
-            // unix 执行位随文件走——exec 载荷跨卷复制后仍可启动。
+            if (attributes.HasFlag(FileAttributes.Directory))
+            {
+                CopyTreeManaged(entry, target);
+                continue;
+            }
+            File.Copy(entry, target);
             if (!OperatingSystem.IsWindows())
             {
-                File.SetUnixFileMode(target, File.GetUnixFileMode(file));
+                File.SetUnixFileMode(target, File.GetUnixFileMode(entry));
             }
         }
     }
