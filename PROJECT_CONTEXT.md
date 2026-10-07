@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-07
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.79`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.80`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -85,6 +85,12 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-07 PR #35 压缩合并（squash `4906e05`，main `4906e05`，版本推进 `alpha.80`）
+
+- R3 宿主腿实跑抓出的四缺陷集中收口：**D1** `dmg;pkg;zip` 多格式发布时 `.app` 构建两次写同一运输件，`UpdateManifestEmitter` 各记一条 feed 条目（同 url/file/size、不同 sha/sig），`SelectArtifact` 首条命中 stale → `sha256 mismatch — payload refused`，osx-arm64 更新链对真实发布件 100% 失败——修按产物 url+rid+format 键去重、后写条目原位替换；**D2** `SetFile -a E` 把 `com.apple.FinderInfo` xattr 写进 dmg 内层 .app 根，拖放安装随应用到用户机 → `codesign --deep --strict` 判 detritus——修法为整体移除该调用；**D4** `SingleTopDirectory` 单目录不判根级文件，"目录内容直压"手工件只装子目录（alpine 实证 196 文件静默丢失）——修仅 `dirs==1 && files==0` 才解包 wrapper；**D5** `RemoveAppleDoubleTree` 只清顶层，`__MACOSX` 嵌套残留落进安装目录——改全树递归清 + `Directory.Exists` 守卫（防父删子链枚举炸）+ targz managed 路同步。
+- Devin Review 2 发现全实证修复（Exists 守卫 + 去重键加 rid+format）；宿主腿复验：mac feed 单条目 sha 对磁盘、codesign strict PASS、48 定向+344 全测绿；alpine 容器 31/31、195 文件全在、嵌套 `__MACOSX` zip+targz 双侧清零；UpdateTests 32/32 + MacDmgTests 18/18。
+- 待办照旧：R3 整轮于本基线重跑（四腿全新会话，第三轮须零缺陷直通）；D3 遗留已知限制见 PR #34 条目。
 
 ### 2026-10-07 PR #34 压缩合并（squash `d455190`，main `d455190`，版本推进 `alpha.79`）
 
