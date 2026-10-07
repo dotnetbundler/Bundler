@@ -79,6 +79,8 @@ internal static class ArchiveExtractor
     {
         foreach (var entry in Directory.GetFileSystemEntries(root))
         {
+            // 目录链/联接只删链节点自身（File.Delete 删链不触目标），
+            // 绝不顺半提取留下的链递归删到载荷之外的位置。
             var attributes = File.GetAttributes(entry);
             if (attributes.HasFlag(FileAttributes.Directory) &&
                 !attributes.HasFlag(FileAttributes.ReparsePoint))

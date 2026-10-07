@@ -852,6 +852,21 @@ public static class ArchiveTests
             var size = getxattr(extracted, "com.bundler.test", buffer, buffer.Length, 0, 1);
             Assert.True(size.ToInt64() == 1 && buffer[0] == (byte)'v',
                 $"xattr must survive produce→update-extract round-trip (size={size})");
+
+            // targz 同路往返：bsdtar 产件 → ExtractTarGzToDirectory（mac 走 tar -x）→ xattr 存活。
+            var tarArtifact = new ArchiveBundler().BuildAsync(
+                Configuration(input, output, formats: [PackageFormat.TarGz]))
+                .GetAwaiter().GetResult().Single();
+            var tarStaging = staging + "-tgz";
+            Directory.CreateDirectory(tarStaging);
+            DotNet.Bundler.Updater.ArchiveExtractor.ExtractTarGzToDirectory(
+                tarArtifact.Path, tarStaging, _ => { });
+            var tarExtracted = Directory
+                .GetFiles(tarStaging, "signed.sh", SearchOption.AllDirectories)
+                .Single();
+            var tarSize = getxattr(tarExtracted, "com.bundler.test", buffer, buffer.Length, 0, 1);
+            Assert.True(tarSize.ToInt64() == 1 && buffer[0] == (byte)'v',
+                $"xattr must survive targz produce→update-extract round-trip (size={tarSize})");
         }
         finally
         {
