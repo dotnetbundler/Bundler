@@ -86,6 +86,12 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-08 PR #41 压缩合并（squash `fafa16f`，main `fafa16f`，版本 `alpha.84` 不变）
+
+- 本地包消费腿**还原源钉死**：fixture 还原改走每轮生成的 `NuGet.Config`+`packageSourceMapping`（`DotNet.Bundler`/`DotNet.Bundler.*`→`bundler-local`、`*`→nuget.org、`--configfile` 替换整个配置链）——`DotNet.Bundler.*` 只许来自本地源，公网发布同名包后也不会静默选错件（缺包即 `NU1101`）。三处还原点位接入（`MsiSupport.RestoreFixture`/`FixturePublisher.RestoreFixture`/`RunApiFixture`）。
+- 新断言 `RestorePinsBundlerPackagesToLocalSource`：空本地源还原必须失败且输出指认 `bundler-local`。
+- 复审 1 个真实问题处置（`DotNet.Bundler.*` 通配不匹配根包 id——补精确模式，负例腿改用引用根包的 Fixture 工程盖住同型坑）。
+
 ### 2026-10-08 PR #40 压缩合并（squash `ad574a4`，main `ad574a4`，版本推进 `alpha.84`）
 
 - 权威更新器（Sparkle/Squirrel/electron-updater/Tauri）测试矩阵对标补齐：**并发换包互斥（真实产品洞修复）**——`<install>.bundler-lock` 锁件串行换包/回滚（pid 存活判死夺锁、`--lock-timeout` 默认 30s 超时拒 rc=3、写后回验+删前复读防夺锁竞态），AOT `CreateNew` 与 sh `noclobber>`+`kill -0` 同形同协议跨实现互斥（Squirrel 命名 mutex 语义）。**磁盘空间预检**——`UpdateClient` 按 feed 精确 size 拒（http `.part` 续传按剩余量、本地源按全量）；引导件按树体积估跨卷暂存/复制/回滚腿（同卷判 sh 用 `stat st_dev`、AOT 用 rename(2)/`GetVolumePathName`），探不到只 WARN。**顺带修**：畸形 feed JSON 的 `JsonException` 泄漏统一包裹 `UpdateException`。
@@ -433,12 +439,13 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 - 各格式外部事项按 OI 清单等待对应环境输入：`docs/<format>-open-items.md` 全套（生产证书/公证凭证、UAC 提权、真实重启、干净宿主矩阵、ARM64 真机、语言审校等；MSI 签名已裁决不补集成腿——`Bundler.Tests/WixTests` 三断言已覆盖，外部仅余 MSI-OI-06 生产证书/时间戳）。
 - 仓外独立包消费 fixture（`tests/Bundler.LocalPackagesTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`,
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
+  还原来源已由 packageSourceMapping 钉死本地源（PR #41，公网同版共存不会选错件）；
   是否换处理方式（如公开发布后改验公网源、或移入独立验收仓）留待后续裁决。
 
 ## 6. 默认下一步
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#40 持续加固至 `alpha.84`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地（§3 最新三轮）。
+UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#41 持续加固至 `alpha.84`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地（§3 最新三轮）。
 剩余工作：CI 发布链测试（产出→安装→可用，触发方式与更新链是否纳入待用户确认）、格式旋钮统一预检（复审挂后续项——把各后端旋钮校验抽到扇出前校验层）、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 
