@@ -335,11 +335,12 @@ existing_ancestor() {  # $1 路径→返回已存在的可写祖先目录（文�
     [ -f "$_ea" ] && _ea=$(dirname "$_ea")
     printf '%s' "$_ea"
 }
-same_volume() {  # $1,$2 路径：已存在祖先间 rename 探针，跨卷 mv 返回非零
+same_volume() {  # $1,$2 路径：已存在祖先间硬链接探针——跨卷 ln 恒 EXDEV 失败，
+    # 不能用 mv：跨卷 mv 会静默复制返回 0，把跨卷误判同卷致暂存量漏计。
     _sv=$(mktemp -u ".bundler-volprobe-XXXXXX" 2>/dev/null || echo ".bundler-volprobe-$$")
     _a="$(existing_ancestor "$1")/$_sv"; _b="$(existing_ancestor "$2")/$_sv"
     : >"$_a" 2>/dev/null || return 1
-    mv -f "$_a" "$_b" 2>/dev/null; _rc=$?
+    ln "$_a" "$_b" 2>/dev/null; _rc=$?
     rm -f "$_a" "$_b" 2>/dev/null
     return $_rc
 }

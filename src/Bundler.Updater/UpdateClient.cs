@@ -100,9 +100,11 @@ public sealed class UpdateClient
         Directory.CreateDirectory(destinationDirectory);
         var destination = Path.Combine(destinationDirectory, info.Artifact.File);
         // 空间预检（Sparkle 式 fail-fast）：feed 工件 size 是精确值——下载前比对目标卷
-        // 剩余，明显不够即拒，不进入半途 IO 失败路径。`.part` 断点续传只需补齐剩余量，
-        // 已下载部分不占新空间；探不到卷则放行交由下载器处理。
-        var already = File.Exists(destination + ".part") ? new FileInfo(destination + ".part").Length : 0L;
+        // 剩余，明显不够即拒，不进入半途 IO 失败路径。`.part` 断点续传只对 http(s) 源
+        // 生效（本地 file:// 复制不续传），续传只需补剩余量；探不到卷则放行交由下载器处理。
+        var isHttp = info.DownloadUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase);
+        var already = isHttp && File.Exists(destination + ".part")
+            ? new FileInfo(destination + ".part").Length : 0L;
         var requiredBytes = Math.Max(0L, info.Artifact.Size - already);
         if (requiredBytes > 0 && VolumeFreeSpace(destinationDirectory) is { } available
             && requiredBytes > available)
