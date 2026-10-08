@@ -8,7 +8,7 @@
 ## 通用约定
 
 - 证据格式见 `shared/evidence-format.md`——记录头（OS/build/版本）+ 逐步骤结果 + 工件哈希。
-- 需要付费凭证的脚本经环境变量读取（证书路径/APPLE_ID/keyfile），绝不内嵌秘密。
+- 需要付费凭证的脚本经环境变量/密钥库引用（证书 thumbprint、notarytool keychain profile、keyfile），密码/私钥绝不进进程命令行或仓库。
 - 非破坏优先：能在本机跑的就本机跑；必须可丢弃环境的脚本开头硬性 `-ConfirmDisposableMachine` 类闸。
 - 清场：脚本 finally/trap 卸载卷、删临时目录、卸装测试件；证据文件是唯一有意外留物。
 

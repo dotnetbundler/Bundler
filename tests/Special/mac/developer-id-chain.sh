@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # SA-P-02..06 Developer ID 全链：codesign .app + notarize + staple + spctl + Gatekeeper。
-# 需: macOS + Xcode CLT + Developer ID 凭证（env DEV_ID_APP / DEV_ID_INSTALLER / APPLE_ID / APPLE_APP_PW / TEAM_ID）。
+# 需: macOS + Xcode CLT + Developer ID 凭证（env DEV_ID_APP）+
+#     公证用 keychain profile（先跑一次：xcrun notarytool store-credentials bundler-notary \
+#         --apple-id <id> --team-id <tid> ——密码在 profile 创建时交互录入，不上命令行）；
+#     env NOTARY_PROFILE 指定 profile 名（默认 bundler-notary）。
 # 用法: developer-id-chain.sh --app <HelloBundlerApp.app> [--dmg <out.dmg>] [--pkg <out.pkg>]
 set -euo pipefail
 EVIDENCE_DIR="$(cd "$(dirname "$0")/../evidence" && pwd)"; mkdir -p "$EVIDENCE_DIR"
@@ -12,7 +15,10 @@ command -v xcrun >/dev/null || die "xcrun 缺"
 command -v spctl >/dev/null || die "spctl 缺"
 command -v hdiutil >/dev/null || die "hdiutil 缺"
 : "${DEV_ID_APP:?设 DEV_ID_APP='Developer ID Application: ...'}"
-: "${APPLE_ID:?设 APPLE_ID}"; : "${APPLE_APP_PW:?设 APPLE_APP_PW}"; : "${TEAM_ID:?设 TEAM_ID}"
+# 公证凭据只走 keychain profile——密码不现于进程命令行/env。
+NOTARY_PROFILE="${NOTARY_PROFILE:-bundler-notary}"
+xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" --output-format json \
+    >/dev/null 2>&1 || die "keychain profile '$NOTARY_PROFILE' 未建——先跑 xcrun notarytool store-credentials"
 
 APP=""; DMG=""; PKG=""
 while [ $# -gt 0 ]; do case "$1" in
@@ -30,8 +36,8 @@ codesign --verify --deep --strict "$WORK/app.app" \
 
 # 公证
 cd "$WORK" && /usr/bin/ditto -c -k --keepParent app.app app.zip
-xcrun notarytool submit app.zip --apple-id "$APPLE_ID" --password "$APPLE_APP_PW" \
-    --team-id "$TEAM_ID" --wait > notary.log 2>&1 \
+xcrun notarytool submit app.zip --keychain-profile "$NOTARY_PROFILE" \
+    --wait > notary.log 2>&1 \
     && note "公证 submit+wait" "PASS" "$(grep -i 'status' notary.log | head -1)" \
     || note "公证 submit+wait" "FAIL" "$(tail -3 notary.log)"
 xcrun stapler staple "$WORK/app.app" && note "staple" "PASS" "" || note "staple" "FAIL" ""

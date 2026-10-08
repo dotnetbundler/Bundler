@@ -23,6 +23,11 @@ if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Forc
 $installDir = "$env:LOCALAPPDATA\Programs\HelloBundlerApp"
 $startMenu = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
 $build = [Environment]::OSVersion.Version.Build
+# 保护既有安装：跑前已存在的 install 一律不动（不卸不删）。
+$preExisting = Test-Path $installDir
+if ($preExisting) {
+    Write-Host "检测到既有安装 $installDir——脚本完成后保留不动" -ForegroundColor Yellow
+}
 try {
     $p = Start-Process $InstallerPath -Wait -PassThru
     Note "per-user 安装" ($p.ExitCode -eq 0) "rc=$($p.ExitCode)"
@@ -40,18 +45,24 @@ try {
         Note "任务栏 pin(人工确认)" $true "build=$build verb=$verb"
     }
 
-    # 卸载后 pin 清理语义：快捷方式移除。
-    Wait-Human "卸载产物——确认开始菜单项与任务栏 pin 已清理"
-    $uninst = Join-Path $installDir "uninstall.exe"
-    if (Test-Path $uninst) {
-        Start-Process $uninst -Wait | Out-Null
-        Note "卸载后快捷方式移除" (-not (Test-Path $lnk?.FullName)) ""
+    if ($preExisting) {
+        Note "卸载" "UNTESTED" "既有安装保留不动，未执行卸载"
     } else {
-        Note "卸载器发现" $false "$installDir\uninstall.exe 不存在"
+        # 卸载后 pin 清理语义：快捷方式移除。
+        Wait-Human "卸载产物——确认开始菜单项与任务栏 pin 已清理"
+        $uninst = Join-Path $installDir "uninstall.exe"
+        if (Test-Path $uninst) {
+            Start-Process $uninst -Wait | Out-Null
+            Note "卸载后快捷方式移除" (-not (Test-Path $lnk?.FullName)) ""
+        } else {
+            Note "卸载器发现" $false "$installDir\uninstall.exe 不存在"
+        }
     }
 } finally {
-    # 残留清场
-    Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
+    # 残留清场：只清本脚本装的目录。
+    if (-not $preExisting) {
+        Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 $out = Join-Path $OutDir ("SA-PIN-{0}-b{1}-{2:yyyyMMdd}.md" -f

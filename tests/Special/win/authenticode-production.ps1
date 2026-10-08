@@ -28,18 +28,34 @@ New-Item -ItemType Directory -Path $work -Force | Out-Null
 $signed = Join-Path $work (Split-Path $InstallerPath -Leaf)
 try {
     Copy-Item $InstallerPath $signed
-    $args = @("sign", "/fd", "SHA256", "/tr", $TimestampUrl, "/td", "SHA256")
-    if ($env:AUTHENTICODE_PFX) {
-        $args += @("/f", $env:AUTHENTICODE_PFX)
-        if ($env:AUTHENTICODE_PFX_PASSWORD) { $args += @("/p", $env:AUTHENTICODE_PFX_PASSWORD) }
-    } elseif ($env:AUTHENTICODE_THUMBPRINT) {
-        $args += @("/sha1", $env:AUTHENTICODE_THUMBPRINT)
-    } else {
-        throw "凭证缺失: 设 AUTHENTICODE_PFX(+PASSWORD) 或 AUTHENTICODE_THUMBPRINT"
+    # 证书先经 PowerShell 入库（密码走 SecureString 参数不进进程命令行），
+    # signtool 一律按 thumbprint 从 store 签——密码永不上进程列表。
+    $thumbprint = $env:AUTHENTICODE_THUMBPRINT
+    $importedCert = $null
+    if (-not $thumbprint -and $env:AUTHENTICODE_PFX) {
+        $pw = if ($env:AUTHENTICODE_PFX_PASSWORD) {
+            ConvertTo-SecureString -String $env:AUTHENTICODE_PFX_PASSWORD -AsPlainText -Force
+        } else {
+            Read-Host "PFX 密码" -AsSecureString
+        }
+        $importedCert = Import-PfxCertificate -FilePath $env:AUTHENTICODE_PFX `
+            -CertStoreLocation Cert:\CurrentUser\My -Password $pw -Exportable
+        $thumbprint = $importedCert.Thumbprint
     }
-    $args += $signed
-    $p = Start-Process $signtool -ArgumentList $args -Wait -PassThru -NoNewWindow
-    Note "生产签名" ($p.ExitCode -eq 0) "rc=$($p.ExitCode)"
+    if (-not $thumbprint) {
+        throw "凭证缺失: 设 AUTHENTICODE_THUMBPRINT（推荐）或 AUTHENTICODE_PFX(+PASSWORD)"
+    }
+    try {
+        $p = Start-Process $signtool -ArgumentList @(
+            "sign", "/fd", "SHA256", "/tr", $TimestampUrl, "/td", "SHA256",
+            "/sha1", $thumbprint, $signed) -Wait -PassThru -NoNewWindow
+        Note "生产签名" ($p.ExitCode -eq 0) "rc=$($p.ExitCode)"
+    } finally {
+        if ($importedCert) {
+            Remove-Item "Cert:\CurrentUser\My\$($importedCert.Thumbprint)" -Force `
+                -ErrorAction SilentlyContinue
+        }
+    }
     $sig = Get-AuthenticodeSignature $signed
     Note "签名有效" ($sig.Status -eq "Valid") "status=$($sig.Status) subject=$($sig.SignerCertificate.Subject)"
     Note "RFC3161 时间戳" ($null -ne $sig.TimeStamperCertificate) "ts=$($sig.TimeStamperCertificate?.Subject)"

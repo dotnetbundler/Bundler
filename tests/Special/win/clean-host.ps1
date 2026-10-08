@@ -19,16 +19,30 @@ $nsis = Get-Command makensis -ErrorAction SilentlyContinue
 Note "宿主干净(无 dotnet)" ($null -eq $sdk) ($sdk?.Source ?? "无")
 Note "宿主干净(无 WiX/NSIS)" (($null -eq $wix) -and ($null -eq $nsis)) ""
 
+function Get-HelloBundlerEntries {
+    Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
+        Where-Object DisplayName -match "HelloBundlerApp" | ForEach-Object PSChildName
+}
+$beforeEntries = @(Get-HelloBundlerEntries)
+if ($beforeEntries.Count -gt 0) {
+    Write-Host "检测到既有 HelloBundlerApp 卸载项 $($beforeEntries -join ',')——只动本脚本新增的" -ForegroundColor Yellow
+}
+
 foreach ($inst in $InstallerPaths) {
     if (-not (Test-Path $inst)) { Note "工件存在" "FAIL" $inst; continue }
     $ext = [IO.Path]::GetExtension($inst).ToLowerInvariant(); $name = Split-Path $inst -Leaf
     try {
         if ($ext -eq ".msi") {
             Start-Process "msiexec.exe" -ArgumentList "/i `"$inst`" /qb /norestart" -Wait
-            $installed = Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" |
-                Where-Object DisplayName -match "HelloBundlerApp" | Select-Object -First 1
-            Note "$name 装" ($null -ne $installed) ""
-            Start-Process "msiexec.exe" -ArgumentList "/x `"$($installed.PSChildName)`" /qb /norestart" -Wait
+            # 只认领装后新增的卸载项——绝不碰既有的。
+            $newEntry = @(Get-HelloBundlerEntries) | Where-Object { $beforeEntries -notcontains $_ } |
+                Select-Object -First 1
+            Note "$name 装" ($null -ne $newEntry) ""
+            if ($newEntry) {
+                Start-Process "msiexec.exe" -ArgumentList "/x `"$newEntry`" /qb /norestart" -Wait
+                $beforeEntries += $newEntry  # 防下轮误配
+            }
         } else {
             Start-Process $inst -ArgumentList "/S" -Wait
             Note "$name 装" $true ""
