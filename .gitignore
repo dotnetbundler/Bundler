@@ -6,3 +6,4 @@ artifacts/
 TestResults/
 *.user
 *.suo
+tests/Special/evidence/

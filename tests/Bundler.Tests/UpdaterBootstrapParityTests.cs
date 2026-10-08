@@ -1088,6 +1088,87 @@ public static class UpdaterBootstrapParityTests
         return File.Exists(path);
     }
 
+    // 宿主文件锁语义腿：Windows 上被独占打开的安装件不可重命名/删除，
+    // apply 必须干净失败且 install 逐字节回到原树；POSIX unlink 不查打开状态，
+    // 同一锁对换包无影响——两腿把平台差异钉成断言而非碰运气。
+    [Fact]
+    static void LockedInstallFile_WindowsCleanFail_PosixSwapSucceeds()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var dir = NewDir(root, "case");
+            var install = InstallV1(dir);
+            var payload = PayloadV2(dir);
+            var expectedInstall = NewDir(dir, "expected-install");
+            CopyTree(install, expectedInstall);
+            var expectedPayload = NewDir(dir, "expected-payload");
+            CopyTree(payload, expectedPayload);
+            var log = Path.Combine(dir, "u.log");
+
+            using var hold = new FileStream(Path.Combine(install, "app.txt"),
+                FileMode.Open, FileAccess.Read, FileShare.None);
+            var rc = Invoke(Impl.Aot, "apply", "--install-dir", install,
+                "--payload", payload, "--log", log);
+            if (TestPlatform.IsWindows)
+            {
+                Assert.Equal(4, rc);
+                AssertTree(expectedInstall, install);
+                Assert.False(File.Exists(Marker(install)));
+                Assert.False(Directory.Exists(Backup(install)));
+            }
+            else
+            {
+                Assert.Equal(0, rc);
+                AssertTree(expectedPayload, install);
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    // 只读位是同一类宿主差异：win 拒绝删改只读件，POSIX 只看父目录权限。
+    [Fact]
+    static void ReadOnlyInstallFile_WindowsCleanFail_PosixSwapSucceeds()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var dir = NewDir(root, "case");
+            var install = InstallV1(dir);
+            var payload = PayloadV2(dir);
+            var expectedInstall = NewDir(dir, "expected-install");
+            CopyTree(install, expectedInstall);
+            var expectedPayload = NewDir(dir, "expected-payload");
+            CopyTree(payload, expectedPayload);
+            var log = Path.Combine(dir, "u.log");
+
+            var target = Path.Combine(install, "app.txt");
+            File.SetAttributes(target, FileAttributes.ReadOnly);
+            try
+            {
+                var rc = Invoke(Impl.Aot, "apply", "--install-dir", install,
+                    "--payload", payload, "--log", log);
+                if (TestPlatform.IsWindows)
+                {
+                    Assert.Equal(4, rc);
+                    Assert.Equal("v1-app", File.ReadAllText(target));
+                    Assert.False(File.Exists(Marker(install)));
+                    Assert.False(Directory.Exists(Backup(install)));
+                }
+                else
+                {
+                    Assert.Equal(0, rc);
+                    AssertTree(expectedPayload, install);
+                }
+            }
+            finally
+            {
+                File.SetAttributes(target, FileAttributes.Normal);
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
     static void CopyTree(string source, string destination)
     {
         Directory.CreateDirectory(destination);
