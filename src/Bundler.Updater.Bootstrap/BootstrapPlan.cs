@@ -298,7 +298,12 @@ internal static class BootstrapPlan
                     var owner = Encoding.ASCII.GetBytes(Environment.ProcessId.ToString());
                     stream.Write(owner, 0, owner.Length);
                 }
-                return lockPath;
+                // 写入后回验 owner——锁文件被并发夺锁者删掉重写时它已非本进程件，
+                // 不验就会与持锁者同时进 swap；回验失败跌入下方等锁路径。
+                if (TryReadLockOwner(lockPath) == Environment.ProcessId)
+                {
+                    return lockPath;
+                }
             }
             catch (IOException)
             {
@@ -314,8 +319,13 @@ internal static class BootstrapPlan
             }
             if (TryReadLockOwner(lockPath) is { } ownerPid && !ProcessAlive(ownerPid))
             {
-                // 持锁进程已死——崩溃残留夺锁（与 sh `kill -0` 判死同义）。
-                DeleteNodeIfPresent(lockPath);
+                // 持锁进程已死——崩溃残留夺锁（与 sh `kill -0` 判死同义）。删前复读
+                // owner 未变且仍死才删：双实例同时撞上死锁时，防一方删掉另一方刚写的
+                // 新锁件致双实例同入 swap。
+                if (TryReadLockOwner(lockPath) == ownerPid && !ProcessAlive(ownerPid))
+                {
+                    DeleteNodeIfPresent(lockPath);
+                }
                 continue;
             }
             if (DateTime.UtcNow >= deadline)

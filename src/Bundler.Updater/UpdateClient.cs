@@ -98,16 +98,19 @@ public sealed class UpdateClient
         CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(destinationDirectory);
+        var destination = Path.Combine(destinationDirectory, info.Artifact.File);
         // 空间预检（Sparkle 式 fail-fast）：feed 工件 size 是精确值——下载前比对目标卷
-        // 剩余，明显不够即拒，不进入半途 IO 失败路径。探不到卷则放行交由下载器处理。
-        if (info.Artifact.Size > 0 && VolumeFreeSpace(destinationDirectory) is { } available
-            && info.Artifact.Size > available)
+        // 剩余，明显不够即拒，不进入半途 IO 失败路径。`.part` 断点续传只需补齐剩余量，
+        // 已下载部分不占新空间；探不到卷则放行交由下载器处理。
+        var already = File.Exists(destination + ".part") ? new FileInfo(destination + ".part").Length : 0L;
+        var requiredBytes = Math.Max(0L, info.Artifact.Size - already);
+        if (requiredBytes > 0 && VolumeFreeSpace(destinationDirectory) is { } available
+            && requiredBytes > available)
         {
             throw new UpdateException(
-                $"insufficient disk space: artifact '{info.Artifact.File}' requires {info.Artifact.Size} bytes, " +
+                $"insufficient disk space: artifact '{info.Artifact.File}' requires {requiredBytes} more bytes, " +
                 $"only {available} available on the volume of '{destinationDirectory}'.");
         }
-        var destination = Path.Combine(destinationDirectory, info.Artifact.File);
         var downloaded = false;
         if (_options.EnableDelta && info.Artifact.BlockMap is { Length: > 0 } blockMapFile)
         {

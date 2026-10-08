@@ -297,14 +297,25 @@ retain_or_remove_backup() {
 [ -L "$LOCK_FILE" ] && rm -f "$LOCK_FILE"
 _lk_deadline=$(( $(date +%s) + LOCK_TIMEOUT ))
 while :; do
+    _lk_owner=""
     if ( set -C; : >"$LOCK_FILE" ) 2>/dev/null; then
         printf '%s' "$$" >"$LOCK_FILE"
-        trap 'rm -f -- "$LOCK_FILE"' EXIT
-        break
+        # 写入后回验 owner——锁被并发夺走时文件已是他人件，不验就会与持锁者
+        # 同入 swap；owner 非本进程即跌入下方等锁/夺锁路径。
+        _lk_owner=$(cat "$LOCK_FILE" 2>/dev/null || true)
+        if [ "$_lk_owner" = "$$" ]; then
+            trap 'rm -f -- "$LOCK_FILE"' EXIT
+            break
+        fi
+    else
+        _lk_owner=$(cat "$LOCK_FILE" 2>/dev/null || true)
     fi
-    _lk_owner=$(cat "$LOCK_FILE" 2>/dev/null || true)
     if [ -n "$_lk_owner" ] && ! kill -0 "$_lk_owner" 2>/dev/null; then
-        rm -f "$LOCK_FILE" 2>/dev/null
+        # 死锁夺锁——删前复读 owner 未变且仍死才删，防双实例互删对方新锁件。
+        _lk_owner2=$(cat "$LOCK_FILE" 2>/dev/null || true)
+        if [ "$_lk_owner2" = "$_lk_owner" ]; then
+            rm -f "$LOCK_FILE" 2>/dev/null
+        fi
         continue
     fi
     if [ "$(date +%s)" -ge "$_lk_deadline" ]; then
@@ -392,6 +403,10 @@ if [ -f "$MARKER" ]; then
     rm -f "$MARKER"
     RECOVERED=1
 fi
+
+# 预检落点在等退出+崩溃恢复之后、换包之前（与 AOT ApplyLocked 同序）——恢复已还原时
+# 备份槽已空，node_bytes=0 自然放行不误拒。
+check_free_space
 
 # 文件级语义：安装目标是单文件（AppImage 单件）或回滚备份是文件——
 # 目录级换包会清掉宿主目录里的无关文件，故单件替换。
