@@ -494,7 +494,16 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                  }.Concat(new[] { "preinstall", "postinstall", "preuninstall", "postuninstall" }
                      .Select(h => Path.Combine(Temp, $"DotNetBundler-{h}.txt"))))
         {
-            if (File.Exists(file)) File.Delete(file);
+            if (File.Exists(file))
+            {
+                // 钩子进程刚退出时对标记文件的占用有短暂滞后，删之前重试几次
+                for (var i = 0; i < 10; i++)
+                {
+                    try { File.Delete(file); break; }
+                    catch (IOException) when (i < 9) { Thread.Sleep(200); }
+                    catch (UnauthorizedAccessException) when (i < 9) { Thread.Sleep(200); }
+                }
+            }
         }
         foreach (var dir in new[]
                  {
