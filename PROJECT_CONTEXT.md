@@ -86,6 +86,13 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-08 PR #42 压缩合并（squash `031ea89`，main `031ea89`，版本 `alpha.84` 不变）
+
+- 更新链**跨版本兼容冻件**落地：`tests/Bundler.Tests/Fixtures/UpdateCompat/v1/` 收编 `alpha.83`（`bb49bba`）真产工件（feed 目录+v1 sh 引导件+PROVENANCE；zip 内嵌 `bundler-updater` 与 tools 二进制 sha 相同即真装机件），语义"兼容成立或干净拒绝"，有意断代改断言另冻 v2。
+- `UpdateCompatTests.cs` 五条对握腿：当前客户端读 v1 清单并下载验签真冻件工件（v1 公钥）、端到端主腿（v1 装树内嵌 v1 AOT 引导件换当前载荷）、当前 BootstrapPlan 换 v1 载荷、v1 sh/AOT 引导件各换当前真实形态载荷。
+- 复审 5 条处置：冻件私钥出库（腿内签名材料运行期生成+侧车 `publicKey` 改指，仓规"秘密不入库"覆盖测试专用密钥）、x64 架构门禁、同版短路改旧版本号验全链、载荷形态真实化。
+- Bundler.Tests 全量 **388 件 0F**（+5）。
+
 ### 2026-10-08 PR #41 压缩合并（squash `fafa16f`，main `fafa16f`，版本 `alpha.84` 不变）
 
 - 本地包消费腿**还原源钉死**：fixture 还原改走每轮生成的 `NuGet.Config`+`packageSourceMapping`（`DotNet.Bundler`/`DotNet.Bundler.*`→`bundler-local`、`*`→nuget.org、`--configfile` 替换整个配置链）——`DotNet.Bundler.*` 只许来自本地源，公网发布同名包后也不会静默选错件（缺包即 `NU1101`）。三处还原点位接入（`MsiSupport.RestoreFixture`/`FixturePublisher.RestoreFixture`/`RunApiFixture`）。
@@ -446,6 +453,6 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#41 持续加固至 `alpha.84`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地（§3 最新三轮）。
+UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#42 持续加固至 `alpha.84`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地，跨版本兼容冻件腿在网（§3 最新三轮）。
 剩余工作：CI 发布链测试（产出→安装→可用，触发方式与更新链是否纳入待用户确认）、格式旋钮统一预检（复审挂后续项——把各后端旋钮校验抽到扇出前校验层）、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 
