@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-08
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.83`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.84`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -85,6 +85,13 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-08 PR #40 压缩合并（squash `ad574a4`，main `ad574a4`，版本推进 `alpha.84`）
+
+- 权威更新器（Sparkle/Squirrel/electron-updater/Tauri）测试矩阵对标补齐：**并发换包互斥（真实产品洞修复）**——`<install>.bundler-lock` 锁件串行换包/回滚（pid 存活判死夺锁、`--lock-timeout` 默认 30s 超时拒 rc=3、写后回验+删前复读防夺锁竞态），AOT `CreateNew` 与 sh `noclobber>`+`kill -0` 同形同协议跨实现互斥（Squirrel 命名 mutex 语义）。**磁盘空间预检**——`UpdateClient` 按 feed 精确 size 拒（http `.part` 续传按剩余量、本地源按全量）；引导件按树体积估跨卷暂存/复制/回滚腿（同卷判 sh 用 `stat st_dev`、AOT 用 rename(2)/`GetVolumePathName`），探不到只 WARN。**顺带修**：畸形 feed JSON 的 `JsonException` 泄漏统一包裹 `UpdateException`。
+- 断言收编 +13（parity +8/UpdaterClient +5）：锁×2、wait-pid×2、非 ASCII 路径、空间拒/放行、畸形清单×2、Range 断流回落、blockmap 版本回落、下载拒写、续传剩余量；Bundler.Tests 全量 **383 件 0F**。
+- 复审四轮 6 个真实问题全处置（入包 5 RID 引导件重产——linux 本机/musl alpine 容器/osx 双件 mac/win 腿回传、夺锁 TOCTOU、sh 预检接线、续传量、st_dev 判定、本地源全量）；1 项裁为设计语义（http 服务端拒 Range 的剩余量窗口）。
+- 密钥轮换边界写入 `update-roadmap.md` §5（换私钥=旧端拒新 feed，现阶段轮换=重发全量包，Tauri 同构）。
 
 ### 2026-10-08 PR #39 压缩合并（squash `f90c956`，main `f90c956`，版本 `alpha.83` 不变）
 
@@ -432,6 +439,6 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#38 持续加固至 `alpha.83`），新一轮三轮四宿主测试全绿、三条待裁项全部落地（§3 最新两轮）。
+UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#40 持续加固至 `alpha.84`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地（§3 最新三轮）。
 剩余工作：CI 发布链测试（产出→安装→可用，触发方式与更新链是否纳入待用户确认）、格式旋钮统一预检（复审挂后续项——把各后端旋钮校验抽到扇出前校验层）、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 
