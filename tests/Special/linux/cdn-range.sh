@@ -4,7 +4,7 @@
 # 需: 公网可访问的 UPDATE feed URL（env UPDATE_FEED_URL 或 --feed）。
 # 用法: cdn-range.sh --feed https://cdn.example.com/app/update-feed.json
 set -euo pipefail
-EVIDENCE_DIR="$(cd "$(dirname "$0")/../evidence" && pwd)"; mkdir -p "$EVIDENCE_DIR"
+EVIDENCE_DIR="$(dirname "$0")/../evidence"; mkdir -p "$EVIDENCE_DIR"; EVIDENCE_DIR="$(cd "$EVIDENCE_DIR" && pwd)"
 EV="$EVIDENCE_DIR/SA-CDNRANGE-$(date +%Y%m%d).md"
 note(){ echo "| $1 | $2 | $3 |" >> "$EV.tmp"; echo "[$2] $1 $3"; [ "$2" = "FAIL" ] && HAD_FAIL=1; return 0; }
 die(){ echo "FAIL: $*" >&2; exit 1; }

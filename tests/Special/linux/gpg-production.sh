@@ -3,7 +3,7 @@
 # 需: 用户已有 GPG 密钥（env GPG_KEYID）或脚本生临时钥自演。
 # 用法: gpg-production.sh [--keyid <GPG_KEYID>] [--self-contained]  (--self-contained=临时钥全链)
 set -euo pipefail
-EVIDENCE_DIR="$(cd "$(dirname "$0")/../evidence" && pwd)"; mkdir -p "$EVIDENCE_DIR"
+EVIDENCE_DIR="$(dirname "$0")/../evidence"; mkdir -p "$EVIDENCE_DIR"; EVIDENCE_DIR="$(cd "$EVIDENCE_DIR" && pwd)"
 EV="$EVIDENCE_DIR/SA-GPG-$(date +%Y%m%d).md"
 note(){ echo "| $1 | $2 | $3 |" >> "$EV.tmp"; echo "[$2] $1 $3"; [ "$2" = "FAIL" ] && HAD_FAIL=1; return 0; }
 die(){ echo "FAIL: $*" >&2; exit 1; }

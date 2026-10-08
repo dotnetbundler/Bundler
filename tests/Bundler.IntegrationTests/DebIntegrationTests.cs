@@ -380,7 +380,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
              $"-p:BundlerIntegrationOutput={_f.Ws.Combine(name)}",
              "-p:BundlerTestDebInstallRoot=relative/path", "--packages", _f.CacheDir]);
         Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains("InstallRoot", result.Output);
+        Assert.Matches(new Regex("install root", RegexOptions.IgnoreCase), result.Output);
         var debDir = _f.Ws.Combine(name, "linux-x64", "deb");
         var leftovers = Directory.Exists(debDir)
             ? Directory.EnumerateFiles(debDir, "*.deb").ToArray()

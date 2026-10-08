@@ -3,7 +3,7 @@
 # 换包后 codesign 验证身份一致性（TeamID 同、签名仍有效）。
 # 需: macOS+Developer ID 凭证+本地 feed（UPDATE feed 目录经 --feed 给出）。
 set -euo pipefail
-EVIDENCE_DIR="$(cd "$(dirname "$0")/../evidence" && pwd)"; mkdir -p "$EVIDENCE_DIR"
+EVIDENCE_DIR="$(dirname "$0")/../evidence"; mkdir -p "$EVIDENCE_DIR"; EVIDENCE_DIR="$(cd "$EVIDENCE_DIR" && pwd)"
 EV="$EVIDENCE_DIR/SA-P-07-$(date +%Y%m%d).md"
 note(){ echo "| $1 | $2 | $3 |" >> "$EV.tmp"; echo "[$2] $1 $3"; [ "$2" = "FAIL" ] && HAD_FAIL=1; return 0; }
 die(){ echo "FAIL: $*" >&2; exit 1; }

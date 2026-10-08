@@ -14,6 +14,10 @@ function Note($step, $ok, $detail = "") {
     if (-not $ok) { $script:hadFail = $true }
 }
 function Wait-Human($prompt) {
+    if (-not [Environment]::UserInteractive -or $env:CI -eq "true") {
+        Write-Host "(无人值守跳过人工动作: $prompt)"
+        return
+    }
     Write-Host "`n=== 人工动作: $prompt ===" -ForegroundColor Yellow
     Read-Host "完成后回车继续"
 }

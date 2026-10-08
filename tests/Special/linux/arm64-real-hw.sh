@@ -2,7 +2,7 @@
 # ARM64 真机矩阵：deb/rpm/appimage/apk 在真 ARM64 硬件装/跑/卸（非 qemu）。
 # 用法: arm64-real-hw.sh --deb <.deb> [--rpm <.rpm>] [--appimage <.AppImage>] [--apk <.apk>]
 set -euo pipefail
-EVIDENCE_DIR="$(cd "$(dirname "$0")/../evidence" && pwd)"; mkdir -p "$EVIDENCE_DIR"
+EVIDENCE_DIR="$(dirname "$0")/../evidence"; mkdir -p "$EVIDENCE_DIR"; EVIDENCE_DIR="$(cd "$EVIDENCE_DIR" && pwd)"
 EV="$EVIDENCE_DIR/SA-ARM64-$(date +%Y%m%d).md"
 note(){ echo "| $1 | $2 | $3 |" >> "$EV.tmp"; echo "[$2] $1 $3"; [ "$2" = "FAIL" ] && HAD_FAIL=1; return 0; }
 die(){ echo "FAIL: $*" >&2; exit 1; }
