@@ -469,8 +469,11 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
             Path.Combine(dir, "Bundler.LocalPackages.props"));
         var project = Path.Combine(dir, "Msi.Api.PackageFixture.csproj");
         var cache = Path.Combine(root, "nuget-cache");
+        var config = PinnedPackageSource.WriteConfig(
+            Path.Combine(root, "nuget-pin"), _f.Packages);
         ProcessRunner.AssertSuccess(
-            Dotnet.Run(["restore", project, $"-p:BundlerPackageSource={_f.Packages}",
+            Dotnet.Run(["restore", project, "--configfile", config,
+                $"-p:BundlerPackageSource={_f.Packages}",
                 $"-p:RestorePackagesPath={cache}", $"-p:BundlerPackageVersion={_f.Version}"],
                 new ProcessRunner.Options()),
             "API fixture restore failed.");
@@ -951,6 +954,38 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                 "Microsoft", "Windows", "Start Menu", "Programs", id);
             if (Directory.Exists(menu)) Directory.Delete(menu, true);
         }
+    }
+
+    // 钉源断言：packageSourceMapping 生效时 DotNet.Bundler.* 只允许来自本地源——
+    // 本地源缺包时还原必须失败且只查过 bundler-local，不回退别源、不静默成功；
+    // 公网发布同名包之后此断言仍成立，正是钉源要挡的"选错件"场景。
+    [Fact]
+    public void RestorePinsBundlerPackagesToLocalSource()
+    {
+        _f.EnsurePackages();
+        var root = _f.Ws.Combine("source-pin");
+        var dir = Path.Combine(root, "api-fixture");
+        Directory.CreateDirectory(dir);
+        File.Copy(Path.Combine(_f.StandaloneSource, "Msi.Api.PackageFixture.csproj"),
+            Path.Combine(dir, "Msi.Api.PackageFixture.csproj"));
+        File.Copy(Path.Combine(_f.StandaloneSource, "Program.cs"),
+            Path.Combine(dir, "Program.cs"));
+        File.Copy(Path.Combine(RepositoryLayout.Root, "Bundler.LocalPackages.props"),
+            Path.Combine(dir, "Bundler.LocalPackages.props"));
+        var emptySource = Path.Combine(root, "empty-feed");
+        Directory.CreateDirectory(emptySource);
+        var config = PinnedPackageSource.WriteConfig(
+            Path.Combine(root, "nuget-pin"), emptySource);
+        var project = Path.Combine(dir, "Msi.Api.PackageFixture.csproj");
+        var result = Dotnet.Run(
+            ["restore", project, "--configfile", config,
+             $"-p:BundlerPackageSource={emptySource}",
+             $"-p:RestorePackagesPath={Path.Combine(root, "nuget-cache")}",
+             $"-p:BundlerPackageVersion={_f.Version}"],
+            new ProcessRunner.Options());
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("bundler-local", result.Output);
+        Assert.Contains("DotNet.Bundler", result.Output);
     }
 
     // VerifyPublicSample.ps1：HelloBundlerApp 三变体（en user / zh user / en machine）的表级契约，不安装。

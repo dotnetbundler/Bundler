@@ -33,8 +33,12 @@ internal static class FixturePublisher
     public static void RestoreFixture(string project, string packageDirectory, string packageCache,
         string packageVersion, string runtimeIdentifier, IReadOnlyList<string> requiredPackages)
     {
+        var config = PinnedPackageSource.WriteConfig(
+            Path.Combine(Path.GetDirectoryName(Path.GetFullPath(packageCache))!, "nuget-pin"),
+            packageDirectory);
         Dotnet.Restore(project,
         [
+            "--configfile", config,
             $"-p:BundlerPackageSource={packageDirectory}",
             $"-p:RestorePackagesPath={packageCache}",
             $"-p:BundlerPackageVersion={packageVersion}",

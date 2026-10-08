@@ -3,8 +3,8 @@
     <!-- 仅供仓外复制的独立包消费 fixture 使用：把脚本显式传入的 BundlerPackageSource
          追加进还原源。仓内项目一律经 Bundler.ProjectReference.targets 走项目引用，不使用本文件。 -->
     <RestoreAdditionalProjectSources Condition="'$(BundlerPackageSource)' != ''">$(BundlerPackageSource)</RestoreAdditionalProjectSources>
-    <!-- DotNet.Bundler.* 未发布到公网且还原锁定确切版本，多源并存不会取错包；
-         包的真实来源仍由 Assert-LocalBundlerRestore 按 .nupkg.metadata 逐包核验。 -->
+    <!-- 还原源已由测试侧 packageSourceMapping 钉死（DotNet.Bundler.* 只走本地源），
+         多源告警无实际歧义；包的真实来源另由 Assert-LocalBundlerRestore 按 .nupkg.metadata 逐包核验。 -->
     <NoWarn>$(NoWarn);NU1507</NoWarn>
   </PropertyGroup>
 </Project>
