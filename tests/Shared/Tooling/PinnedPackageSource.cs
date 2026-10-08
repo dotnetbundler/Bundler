@@ -21,6 +21,7 @@ internal static class PinnedPackageSource
               </packageSources>
               <packageSourceMapping>
                 <packageSource key="bundler-local">
+                  <package pattern="DotNet.Bundler" />
                   <package pattern="DotNet.Bundler.*" />
                 </packageSource>
                 <packageSource key="nuget.org">
