@@ -91,9 +91,12 @@ internal static class MsiSupport
     public static void RestoreFixture(string project, string packageDir, string cache,
         string version, string? rid = null)
     {
+        var config = PinnedPackageSource.WriteConfig(
+            Path.Combine(Path.GetDirectoryName(Path.GetFullPath(cache))!, "nuget-pin"),
+            packageDir);
         var args = new List<string>
         {
-            "restore", project,
+            "restore", project, "--configfile", config,
             $"-p:BundlerPackageSource={packageDir}",
             $"-p:RestorePackagesPath={cache}",
             $"-p:BundlerPackageVersion={version}",
