@@ -39,7 +39,7 @@ try {
             Read-Host "PFX 密码" -AsSecureString
         }
         $importedCert = Import-PfxCertificate -FilePath $env:AUTHENTICODE_PFX `
-            -CertStoreLocation Cert:\CurrentUser\My -Password $pw -Exportable
+            -CertStoreLocation Cert:\CurrentUser\My -Password $pw  # 不加 -Exportable
         $thumbprint = $importedCert.Thumbprint
     }
     if (-not $thumbprint) {

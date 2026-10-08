@@ -24,9 +24,9 @@ function Get-HelloBundlerEntries {
         "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
         Where-Object DisplayName -match "HelloBundlerApp" | ForEach-Object PSChildName
 }
-$beforeEntries = @(Get-HelloBundlerEntries)
-if ($beforeEntries.Count -gt 0) {
-    Write-Host "检测到既有 HelloBundlerApp 卸载项 $($beforeEntries -join ',')——只动本脚本新增的" -ForegroundColor Yellow
+$preExisting = @(Get-HelloBundlerEntries)
+if ($preExisting.Count -gt 0) {
+    Write-Host "检测到既有 HelloBundlerApp 卸载项 $($preExisting -join ',')——只动本脚本新增的" -ForegroundColor Yellow
 }
 
 foreach ($inst in $InstallerPaths) {
@@ -34,14 +34,19 @@ foreach ($inst in $InstallerPaths) {
     $ext = [IO.Path]::GetExtension($inst).ToLowerInvariant(); $name = Split-Path $inst -Leaf
     try {
         if ($ext -eq ".msi") {
+            # 每次安装前重新快照——同 ProductCode 连续两包也能正确认领各自的装。
+            $preInstallEntries = @(Get-HelloBundlerEntries)
             Start-Process "msiexec.exe" -ArgumentList "/i `"$inst`" /qb /norestart" -Wait
-            # 只认领装后新增的卸载项——绝不碰既有的。
-            $newEntry = @(Get-HelloBundlerEntries) | Where-Object { $beforeEntries -notcontains $_ } |
-                Select-Object -First 1
-            Note "$name 装" ($null -ne $newEntry) ""
+            $newEntry = @(Get-HelloBundlerEntries) |
+                Where-Object { $preInstallEntries -notcontains $_ } | Select-Object -First 1
             if ($newEntry) {
+                Note "$name 装" "PASS" ""
                 Start-Process "msiexec.exe" -ArgumentList "/x `"$newEntry`" /qb /norestart" -Wait
-                $beforeEntries += $newEntry  # 防下轮误配
+            } elseif ($preInstallEntries.Count -gt 0) {
+                # 同 ProductCode 对既存项的修复/升级无法区分归属——不动它。
+                Note "$name 装" "UNTESTED" "同 ProductCode 既存项被复用，归属不明故不卸"
+            } else {
+                Note "$name 装" "FAIL" "装后无卸载注册项"
             }
         } else {
             Start-Process $inst -ArgumentList "/S" -Wait
