@@ -3,6 +3,7 @@
 // 断代不是失败：腿断言的是"兼容成立或干净拒绝"，有意断代时改断言并另冻 v2。
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Runtime.Serialization.Json;
 using System.Text.Json.Nodes;
 using DotNet.Bundler.Update;
@@ -105,6 +106,20 @@ public class UpdateCompatTests
         Assert.False(File.Exists(install + ".bundler-swap"));
     }
 
+    // 当前打包产物的载荷树形态：app + 身份侧车 + 引导件二进制 + 子目录件。
+    static string CurrentShapePayload(string root)
+    {
+        var payload = Path.Combine(root, "payload");
+        Directory.CreateDirectory(Path.Combine(payload, "lib"));
+        File.WriteAllText(Path.Combine(payload, "app"), "v2");
+        File.WriteAllText(Path.Combine(payload, "bundler-update.json"),
+            "{\"format\":\"zip\",\"rid\":\"linux-x64\",\"channel\":\"stable\"," +
+            "\"feedUrl\":\"<leg-internal>\",\"publicKey\":\"<leg-internal>\"}");
+        File.WriteAllText(Path.Combine(payload, "lib", "data.txt"), "v2-data");
+        File.Copy(CurrentAot, Path.Combine(payload, "bundler-updater"));
+        return payload;
+    }
+
     [Fact]
     static async Task V1Feed_ReadableAndVerifiable_ByCurrentClient()
     {
@@ -113,9 +128,12 @@ public class UpdateCompatTests
         {
             var install = ExtractV1Install(root);
             RetargetSidecar(install, V1FeedJson);
-            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
-            // v1 清单版本与装机同版 → 无更新；能走到结论即清单+feed.sig 已被当前端解析验过。
-            Assert.Null(await client.CheckForUpdateAsync());
+            // 装机报旧版本号 → 冻件清单被选中，下载+验签真 v1 工件（v1 公钥在侧车内）。
+            var client = UpdateClient.FromInstallDirectory(install, "0.9.0");
+            var info = await client.CheckForUpdateAsync();
+            Assert.NotNull(info);
+            var downloaded = await client.DownloadAsync(info, Path.Combine(root, "dl"));
+            client.Verify(info, downloaded);
         }
         finally { Cleanup(root); }
     }
@@ -123,8 +141,9 @@ public class UpdateCompatTests
     [Fact]
     static async Task V1Install_EndToEndSwap_ByCurrentFeed()
     {
-        Assert.SkipUnless(OperatingSystem.IsLinux(),
-            "v1 冻件的引导件是 linux-x64 AOT——端到端腿只在 linux 宿主跑。");
+        Assert.SkipUnless(OperatingSystem.IsLinux() &&
+            RuntimeInformation.ProcessArchitecture == Architecture.X64,
+            "v1 冻件的引导件是 linux-x64 AOT——端到端腿只在 linux-x64 宿主跑。");
         var root = CreateTempDirectory();
         try
         {
@@ -188,13 +207,14 @@ public class UpdateCompatTests
         {
             var install = Path.Combine(root, "install");
             Directory.CreateDirectory(install);
-            var payload = Path.Combine(root, "payload");
-            Directory.CreateDirectory(payload);
-            File.WriteAllText(Path.Combine(payload, "app"), "v2");
+            // 当前真实载荷形态：app + 侧车 + 引导件 + 子目录。
+            var payload = CurrentShapePayload(root);
             var rc = RunProcess("sh", [V1Sh, "apply", "--install-dir", install,
                 "--payload", payload, "--log", Path.Combine(root, "u.log")]);
             Assert.Equal(0, rc);
             AssertSwapped(install, "v2");
+            Assert.Equal("v2-data", File.ReadAllText(Path.Combine(install, "lib", "data.txt")));
+            Assert.True(File.Exists(Path.Combine(install, "bundler-update.json")));
         }
         finally { Cleanup(root); }
     }
@@ -202,8 +222,9 @@ public class UpdateCompatTests
     [Fact]
     static void V1AotBootstrap_Applies_CurrentPayload()
     {
-        Assert.SkipUnless(OperatingSystem.IsLinux(),
-            "v1 AOT 引导件是 linux-x64——只在 linux 宿主跑。");
+        Assert.SkipUnless(OperatingSystem.IsLinux() &&
+            RuntimeInformation.ProcessArchitecture == Architecture.X64,
+            "v1 AOT 引导件是 linux-x64——只在 linux-x64 宿主跑。");
         var root = CreateTempDirectory();
         try
         {
@@ -221,13 +242,13 @@ public class UpdateCompatTests
             }
             var install = Path.Combine(root, "install");
             Directory.CreateDirectory(install);
-            var payload = Path.Combine(root, "payload");
-            Directory.CreateDirectory(payload);
-            File.WriteAllText(Path.Combine(payload, "app"), "v2");
+            var payload = CurrentShapePayload(root);
             var rc = RunProcess(binary, ["apply", "--install-dir", install,
                 "--payload", payload, "--log", Path.Combine(root, "u.log")]);
             Assert.Equal(0, rc);
             AssertSwapped(install, "v2");
+            Assert.Equal("v2-data", File.ReadAllText(Path.Combine(install, "lib", "data.txt")));
+            Assert.True(File.Exists(Path.Combine(install, "bundler-update.json")));
         }
         finally { Cleanup(root); }
     }
