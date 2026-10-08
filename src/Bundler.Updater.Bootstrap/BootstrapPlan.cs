@@ -823,19 +823,34 @@ internal static class BootstrapPlan
                 // 拼进字面路径，静默写偏到别的卷）。tag 探不出（权限/竞争）不猜方向：
                 // 透传会让 install 叶链按链节点被搬走（真应用孤儿化），解成路径又拼
                 // 假路径逃逸守卫——返回 null 拒绝是最干净的落点。
+                var next = target;
                 if (OperatingSystem.IsWindows() && IsNtObjectTarget(target))
                 {
-                    var tag = ReparseTagOf(current);
-                    if (tag is null)
+                    var info = ReparseInfoOf(current);
+                    if (info is null)
                     {
                         return null;
                     }
-                    if (tag != IoReparseTagSymlink)
+                    if (info.Value.Tag != IoReparseTagSymlink)
                     {
                         break;
                     }
+                    // .NET LinkTarget 对 `\\?\`/` \??\` 前缀目标统一剥前缀返回裸名
+                    //（win 腿探针实证）——`mklink /D link \\?\Volume{GUID}` 的实形是
+                    // 裸名+绝对 reparse flag。裸名根段 Volume{GUID} 且 flag 绝对时按
+                    // 卷真实挂载名解真；flag 相对则是用户真写的相对名，照旧拼父级。
+                    if (!info.Value.Relative && HasVolumeGuidRoot(target))
+                    {
+                        var dos = VolumeDosPath(target[..44]);
+                        var tail = target[44..].TrimStart('\\', '/');
+                        if (dos is null)
+                        {
+                            return null;
+                        }
+                        next = Path.GetFullPath(dos.TrimEnd('\\') + @"\" + tail);
+                    }
                 }
-                var next = AbsoluteLinkTarget(current, target);
+                next = AbsoluteLinkTarget(current, next);
                 if (next is null)
                 {
                     return null;
@@ -865,8 +880,14 @@ internal static class BootstrapPlan
     // 父级（win 腿实证：父级若恰好存在同名目录还会静默解到错目录）。手工规范
     // 三类合法形：`UNC\s\p`→`\\s\p`、`X:\…`→去前缀照常、`Volume{GUID}[\sub]`
     // →查卷真实挂载名替根段；不认识的设备形与无 DOS 名的卷返回 null 拒绝。
+    // `\Device\…` NT 路径无托管拼写可拼，同样拒绝。
     private static string? AbsoluteLinkTarget(string current, string target)
     {
+        if (OperatingSystem.IsWindows()
+            && target.StartsWith(@"\Device\", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
         if (!OperatingSystem.IsWindows()
             || (!target.StartsWith(@"\\?\", StringComparison.Ordinal)
                 && !target.StartsWith(@"\??\", StringComparison.Ordinal)))
@@ -934,11 +955,11 @@ internal static class BootstrapPlan
             || target.StartsWith(@"\??\", StringComparison.Ordinal))
         {
             var body = target[4..];
-            return IsVolumeGuidName(body)
+            return HasVolumeGuidRoot(body)
                 || (!(body.Length >= 2 && char.IsLetter(body[0]) && body[1] == ':')
                     && !body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase));
         }
-        return IsVolumeGuidName(target);
+        return HasVolumeGuidRoot(target);
     }
 
     // `Volume{xxxxxxxx-xxxx-…}` 裸名——卷 GUID 路径的根段，
@@ -958,7 +979,7 @@ internal static class BootstrapPlan
     private const uint IoReparseTagSymlink = 0xA000000C;
     private const uint FsctlGetReparsePoint = 0x000900A8;
 
-    private static uint? ReparseTagOf(string path)
+    private static ReparseInfo? ReparseInfoOf(string path)
     {
         var handle = CreateFile(path, 0, 0x7 /* READ|WRITE|DELETE share */, IntPtr.Zero,
             3 /* OPEN_EXISTING */, 0x02200000 /* BACKUP_SEMANTICS | OPEN_REPARSE_POINT */, IntPtr.Zero);
@@ -976,7 +997,13 @@ internal static class BootstrapPlan
                 {
                     return null;
                 }
-                return (uint)Marshal.ReadInt32(buffer);
+                var tag = (uint)Marshal.ReadInt32(buffer);
+                // SYMLINK 的 Flags 在 reparse 头偏移 16：bit0=SYMLINK_FLAG_RELATIVE，
+                // 区分 `mklink link Volume{GUID}`（相对拼写）与 `mklink link
+                // \\?\Volume{GUID}`（NT 绝对对象）——LinkTarget 两者同显裸名。
+                var relative = tag == IoReparseTagSymlink
+                    && (Marshal.ReadInt32(buffer, 16) & 0x1) != 0;
+                return new ReparseInfo(tag, relative);
             }
             finally
             {
@@ -987,6 +1014,12 @@ internal static class BootstrapPlan
         {
             CloseHandle(handle);
         }
+    }
+
+    private readonly struct ReparseInfo(uint tag, bool relative)
+    {
+        internal uint Tag { get; } = tag;
+        internal bool Relative { get; } = relative;
     }
 
     private static bool IsLink(string path)
