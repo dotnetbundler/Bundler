@@ -310,12 +310,31 @@ public static class ZipToolCache
         return reader.BaseStream.Position == reader.BaseStream.Length;
     }
 
+    private static void DeleteWithRetry(Action delete)
+    {
+        // Windows 上刚退出的工具进程可能短暂持有原生 dll/文件锁——瞬态删除冲突用有限重试吸收
+        const int attempts = 10;
+        for (var i = 0; ; i++)
+        {
+            try
+            {
+                delete();
+                return;
+            }
+            catch (Exception ex) when (i < attempts - 1 &&
+                (ex is IOException || ex is UnauthorizedAccessException))
+            {
+                Thread.Sleep(200);
+            }
+        }
+    }
+
     private static void SafeDeleteTree(string path)
     {
         if (File.Exists(path) && !Directory.Exists(path))
         {
             File.SetAttributes(path, FileAttributes.Normal);
-            File.Delete(path);
+            DeleteWithRetry(() => File.Delete(path));
             return;
         }
         if (!Directory.Exists(path))
@@ -324,7 +343,7 @@ public static class ZipToolCache
         }
         if (IsReparsePoint(path))
         {
-            Directory.Delete(path);
+            DeleteWithRetry(() => Directory.Delete(path));
             return;
         }
         foreach (var entry in Directory.EnumerateFileSystemEntries(path))
@@ -336,10 +355,10 @@ public static class ZipToolCache
             else
             {
                 File.SetAttributes(entry, FileAttributes.Normal);
-                File.Delete(entry);
+                DeleteWithRetry(() => File.Delete(entry));
             }
         }
-        Directory.Delete(path);
+        DeleteWithRetry(() => Directory.Delete(path));
     }
 
     private static string ValidateArchiveEntryPath(string root, string entryName)
