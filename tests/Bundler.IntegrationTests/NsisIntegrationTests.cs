@@ -655,15 +655,24 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
         finally { Cleanup(); }
     }
 
-    // Get-AuthenticodeSignature 走 powershell——WinVerifyTrust 的受管等价没有内建 API，
-    // powershell 是 Windows 宿主固有的签名验证路径，与原脚本同一检查。
+    // 受管的签名证书提取：CreateFromSignedFile 直接读 PE 的 WIN_CERTIFICATE，
+    // 不依赖 powershell 的 Microsoft.PowerShell.Security 模块（部分宿主该模块自动加载会拒）。
     private static string SignerThumbprint(string path)
     {
-        var result = ProcessRunner.Run("powershell.exe",
-            $"-NoProfile -NonInteractive -Command \"(Get-AuthenticodeSignature -LiteralPath '{path}').SignerCertificate.Thumbprint\"",
-            new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(1) });
-        ProcessRunner.AssertSuccess(result, "Get-AuthenticodeSignature");
-        var thumbprint = result.StdOut.Trim();
+        System.Security.Cryptography.X509Certificates.X509Certificate signer;
+        try
+        {
+#pragma warning disable SYSLIB0057 // 读 signed-PE 签名证书仅此 API，X509CertificateLoader 无对应物
+            signer = System.Security.Cryptography.X509Certificates.X509Certificate
+                .CreateFromSignedFile(path);
+#pragma warning restore SYSLIB0057
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"File carries no Authenticode signer certificate: {path}", ex);
+        }
+        var thumbprint = signer.GetCertHashString();
         Assert.True(thumbprint.Length > 0,
             $"File carries no Authenticode signer certificate: {path}");
         return thumbprint;

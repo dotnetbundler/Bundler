@@ -173,6 +173,8 @@ public sealed class ArchiveIntegrationTests : IClassFixture<ArchiveFixture>
     [Fact]
     public void UnzippedPayloadRunsWithExecBitAndSymlink()
     {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
         var root = Path.Combine(_f.ExtractRoot, "zip");
         Directory.CreateDirectory(root);
         var unzip = ProcessRunner.Run("unzip", ["-q", _f.DefaultZip, "-d", root]);
@@ -207,6 +209,8 @@ public sealed class ArchiveIntegrationTests : IClassFixture<ArchiveFixture>
     [Fact]
     public void TarExtractedPayloadRunsWithExecBitAndSymlink()
     {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
         var root = Path.Combine(_f.ExtractRoot, "targz");
         Directory.CreateDirectory(root);
         var tar = ProcessRunner.Run("tar", ["-xzf", _f.DefaultTgz, "-C", root]);

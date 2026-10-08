@@ -82,7 +82,7 @@ public sealed class UpdateIntegrationTests
                 "hdiutil attach failed.");
             var updater = Path.Combine(root, "u");
             File.Copy(Path.Combine(RepositoryLayout.Root,
-                    $"src/Bundler.Updater.Bootstrap/tools/osx-{OsxRid()}/bundler-updater"),
+                    $"src/Bundler.Updater.Bootstrap/tools/{OsxRid()}/bundler-updater"),
                 updater, overwrite: true);
             ProcessRunner.AssertSuccess(ProcessRunner.Run("chmod", ["+x", updater]), "chmod failed.");
             var result = ProcessRunner.Run("/bin/sh", ["-c", SwapAssertScript(
@@ -123,11 +123,10 @@ public sealed class UpdateIntegrationTests
         {
             Directory.CreateDirectory(root);
             var work = StageMaterial(root);
-            var vhdQ = vhd.Replace("\\", "\\\\");
             var letter = FreeDriveLetter();
             Diskpart(
-                $"create vdisk file=\"{vhdQ}\" maximum=8 type=fixed",
-                $"select vdisk file=\"{vhdQ}\"",
+                $"create vdisk file=\"{vhd}\" maximum=8 type=fixed",
+                $"select vdisk file=\"{vhd}\"",
                 "attach vdisk",
                 "create partition primary",
                 "format fs=fat quick label=enospc",  // 8M 卷 fat32 下限不够，fat 自适应
@@ -160,8 +159,7 @@ public sealed class UpdateIntegrationTests
             {
                 try
                 {
-                    var vhdQ = vhd.Replace("\\", "\\\\");
-                    Diskpart($"select vdisk file=\"{vhdQ}\"", "detach vdisk");
+                    Diskpart($"select vdisk file=\"{vhd}\"", "detach vdisk");
                 }
                 catch { /* best-effort */ }
             }

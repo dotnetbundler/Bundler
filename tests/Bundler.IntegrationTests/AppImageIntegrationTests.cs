@@ -205,6 +205,8 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
     [Fact]
     public void AppDirShape()
     {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
         var root = _f.Extract(_f.DefaultImage, "default");
         AssertAppDirShape(root, "bundler-appimage-fixture", "BundlerAppImageIntegrationFixture");
     }
@@ -212,6 +214,8 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
     [Fact]
     public void AppRunScriptContent()
     {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
         var root = _f.Extract(_f.DefaultImage, "apprun");
         var lines = File.ReadAllLines(Path.Combine(root, "AppRun"));
         Assert.Equal("#!/bin/sh", lines[0]);
@@ -231,6 +235,8 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
     [Fact]
     public void ExtractedAppRunAndWholeImageRun()
     {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
         var root = _f.Extract(_f.DefaultImage, "run");
         var appRun = ProcessRunner.Run(Path.Combine(root, "AppRun"), ["hello", "world"],
             new ProcessRunner.Options { WorkingDirectory = root });
@@ -246,6 +252,8 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
     [Fact]
     public void OverrideVariant()
     {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
         var root = _f.Extract(_f.OverridesImage, "overrides");
         Assert.True(File.GetUnixFileMode(
                 Path.Combine(root, "opt/custom/BundlerAppImageIntegrationFixture"))
@@ -262,6 +270,8 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
     [Fact]
     public void DesktopOverrideVariant()
     {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
         var root = _f.Extract(_f.DesktopImage, "desktop");
         var staged = Path.Combine(root, "usr/share/applications/bundler-appimage-fixture.desktop");
         Assert.Contains("Name=Bundler AppImage Fixture Custom", File.ReadAllText(staged));
@@ -272,6 +282,8 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
     [Fact]
     public void FileMappingVariant()
     {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
         var root = _f.Extract(_f.FilesImage, "files");
         var mapped = Path.Combine(root, "opt/extras/defaults.conf");
         Assert.True(File.Exists(mapped), "BundlerAppImageFile payload missing at AppDir-relative destination.");
@@ -335,6 +347,8 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
     [Trait("Requires", "docker")]
     public void DockerExtractAndRunMatrix()
     {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
         var ranAny = false;
         foreach (var image in new[] { "debian:stable", "ubuntu:latest", "fedora:latest" })
         {
@@ -378,6 +392,8 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
     [Fact]
     public void SignedImageCarriesVerifiableSignature()
     {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
         var sigBin = Path.Combine(_f.SignDir, "sig.bin");
         ExtractSection(_f.SignedImage, ".sha256_sig", sigBin);
         Assert.True(new FileInfo(sigBin).Length > 0, ".sha256_sig section missing.");

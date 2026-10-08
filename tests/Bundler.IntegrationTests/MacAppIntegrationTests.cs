@@ -79,7 +79,8 @@ public sealed class MacAppFixture : IDisposable
             Dylib = dylib;
         }
 
-        App = Publish("bundle", "osx-arm64", BundlerAppPath("bundle", "osx-arm64"));
+        var hostRid = TestPlatform.OsxRuntimeIdentifier;
+        App = Publish("bundle", hostRid, BundlerAppPath("bundle", hostRid));
         AssertNoBundledPackageRestore();
 
         var entitlements = Ws.Combine("entitlements.plist");
@@ -97,8 +98,8 @@ public sealed class MacAppFixture : IDisposable
             </dict>
             </plist>
             """ + "\n");
-        SignedApp = Publish("signed-output", "osx-arm64",
-            BundlerAppPath("signed-output", "osx-arm64"),
+        SignedApp = Publish("signed-output", hostRid,
+            BundlerAppPath("signed-output", hostRid),
             "-p:BundlerTestSignIdentity=-",
             "-p:BundlerTestHardenedRuntime=true",
             $"-p:BundlerTestEntitlementsFile={entitlements}");
@@ -109,12 +110,12 @@ public sealed class MacAppFixture : IDisposable
         X64App = PublishWithArgs("x64-output", "osx-x64",
             BundlerAppPath("x64-output", "osx-x64"), x64Args);
 
-        MinVerApp = Publish("minver-output", "osx-arm64",
-            BundlerAppPath("minver-output", "osx-arm64"),
+        MinVerApp = Publish("minver-output", hostRid,
+            BundlerAppPath("minver-output", hostRid),
             "-p:BundlerTestMinSystemVersion=99.0");
 
-        UpgradeApp = Publish("upgrade-output", "osx-arm64",
-            BundlerAppPath("upgrade-output", "osx-arm64"),
+        UpgradeApp = Publish("upgrade-output", hostRid,
+            BundlerAppPath("upgrade-output", hostRid),
             "-p:BundlerTestBuildVersion=2026.9.2");
         return true;
     }
@@ -138,10 +139,9 @@ public sealed class MacAppFixture : IDisposable
 
     private string PublishWithArgs(string name, string rid, string expectedApp, IEnumerable<string> extra)
     {
-        var ridArg = rid == "osx-x64" ? new[] { "-p:RuntimeIdentifier=osx-x64" } : [];
         ProcessRunner.AssertSuccess(
             Dotnet.Run(["publish", FixtureProject, "-c", "Release", "--force",
-                .. ridArg, .. CommonArgs(name), .. extra],
+                $"-p:RuntimeIdentifier={rid}", .. CommonArgs(name), .. extra],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) }),
             $"mac-app fixture publish '{name}' failed");
         Assert.True(Directory.Exists(expectedApp), $"The .app bundle was not produced at {expectedApp}");

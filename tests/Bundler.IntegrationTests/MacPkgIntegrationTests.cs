@@ -33,17 +33,16 @@ public sealed class MacPkgFixture : IDisposable
         _init = new Lazy<bool>(Initialize);
     }
 
-    private string BundlePath(string name, string rid = "osx-arm64")
-        => Ws.Combine(name, rid, "pkg", "Bundler Mac PKG Fixture.pkg");
+    private string BundlePath(string name, string? rid = null)
+        => Ws.Combine(name, rid ?? TestPlatform.OsxRuntimeIdentifier, "pkg", "Bundler Mac PKG Fixture.pkg");
 
     private string PublishPkg(string name, params string[] extra)
-        => PublishPkgForRid(name, "osx-arm64", extra);
+        => PublishPkgForRid(name, TestPlatform.OsxRuntimeIdentifier, extra);
 
     private string PublishPkgForRid(string name, string rid, params string[] extra)
     {
-        var ridArg = rid == "osx-x64" ? new[] { "-r", "osx-x64" } : [];
         ProcessRunner.AssertSuccess(
-            Dotnet.Run(["publish", FixtureProject, "-c", "Release", .. ridArg,
+            Dotnet.Run(["publish", FixtureProject, "-c", "Release", "-r", rid,
                 $"-p:BundlerIntegrationOutput={Ws.Combine(name)}",
                 "--packages", CacheDir, .. extra],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) }),
@@ -79,13 +78,15 @@ public sealed class MacPkgFixture : IDisposable
         }
         _ = RepositoryPackages.DirectoryPath;
 
+        var hostRid = TestPlatform.OsxRuntimeIdentifier;
         ProcessRunner.AssertSuccess(
             Dotnet.Run(["publish", FixtureProject, "-c", "Release",
+                "-r", hostRid,
                 $"-p:BundlerIntegrationOutput={Ws.Combine("bundle")}",
                 "--packages", CacheDir],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) }),
             "pkg fixture publish 'bundle' failed");
-        App = Path.Combine(Ws.Combine("bundle"), "osx-arm64", "app", "Bundler Mac PKG Fixture.app");
+        App = Path.Combine(Ws.Combine("bundle"), hostRid, "app", "Bundler Mac PKG Fixture.app");
         Pkg = BundlePath("bundle");
         Assert.True(Directory.Exists(App), "The planner did not produce the intermediate .app.");
         Assert.True(File.Exists(Pkg), "The .pkg artifact is missing.");
