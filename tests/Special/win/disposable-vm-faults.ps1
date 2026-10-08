@@ -48,12 +48,19 @@ assign letter=V
     try {
         # 等卷挂载生效后断言 filler 真的落盘——塞不满则"盘满被拒"语义不成立
         for ($i = 0; $i -lt 20 -and -not (Test-Path "V:\"); $i++) { Start-Sleep -Milliseconds 500 }
-        # .NET 写实字节比 fsutil 可靠（后者在 FAT 卷静默失败）；写失败把异常直接落证据
+        # 循环写到 ENOSPC——8MB FAT 卷元数据开销不确定，定长塞会留缝或写不下
         $fillErr = $null
-        try { [IO.File]::WriteAllBytes("V:\filler.bin", (New-Object byte[] 7340032)) } catch { $fillErr = $_.Exception.Message }
-        $vol = Get-Volume -DriveLetter V -ErrorAction SilentlyContinue
+        $fs = $null
+        try {
+            $fs = [IO.File]::Create("V:\filler.bin")
+            $buf = New-Object byte[] 65536
+            while ($true) { $fs.Write($buf, 0, $buf.Length) }
+        } catch [System.IO.IOException] { $fillErr = "ENOSPC(预期): $($_.Exception.Message)" }
+        catch { $fillErr = $_.Exception.Message }
+        finally { if ($fs) { $fs.Close() } }
+        $free = (Get-PSDrive V -ErrorAction SilentlyContinue)?.Free
         $filled = (Get-Item "V:\filler.bin" -ErrorAction SilentlyContinue)
-        Note "卷塞满" ($null -ne $filled -and $filled.Length -ge 7340032) "len=$($filled?.Length) free=$($vol?.SizeRemaining) err=$fillErr"
+        Note "卷塞满" ($null -ne $filled -and $free -lt 1048576) "len=$($filled?.Length) free=$free err=$fillErr"
         $p2 = Start-Process $InstallerPath -ArgumentList "/S", "/D=V:\app" -Wait -PassThru
         Note "盘满下安装被拒" ($p2.ExitCode -ne 0) "rc=$($p2.ExitCode)"
         $stray = @(Get-ChildItem "V:\app" -Recurse -Filter *.exe -ErrorAction SilentlyContinue)
