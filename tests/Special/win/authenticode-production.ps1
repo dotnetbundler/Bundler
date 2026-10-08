@@ -75,7 +75,7 @@ $out = Join-Path $OutDir ("SA-P-01-{0:yyyyMMdd}.md" -f (Get-Date))
 @"
 # SA-P-01 Authenticode 生产签名
 - 日期: $(Get-Date -Format "yyyy-MM-dd") UTC | 宿主: $([Environment]::OSVersion.VersionString)
-- 工件: $(Split-Path $InstallerPath -Leaf) sha256=$((Get-FileHash $InstallerPath).SHA256.Substring(0,16))
+- 工件: $(Split-Path $InstallerPath -Leaf) sha256=$((Get-FileHash $InstallerPath).Hash.Substring(0,16))
 - 人工介入点: SmartScreen 观察
 
 ## 步骤与结果

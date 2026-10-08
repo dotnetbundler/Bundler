@@ -34,7 +34,7 @@ if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Forc
 $work = Join-Path $env:TEMP ("bundler-uac-" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
 New-Item -ItemType Directory -Path $work -Force | Out-Null
 try {
-    Note "工件" "PASS" "$InstallerPath sha256=$((Get-FileHash $InstallerPath).SHA256.Substring(0,16))"
+    Note "工件" "PASS" "$InstallerPath sha256=$((Get-FileHash $InstallerPath).Hash.Substring(0,16))"
 
     # 1) per-machine 真装：installer 内部以 UAC 提权（nsis 需非提权发起以走真弹窗）。
     Wait-Human "将以标准用户方式运行安装器——UAC 弹窗出现时请批准"

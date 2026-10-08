@@ -48,7 +48,8 @@ assign letter=V
     try {
         # 等卷挂载生效后断言 filler 真的落盘——塞不满则"盘满被拒"语义不成立
         for ($i = 0; $i -lt 20 -and -not (Test-Path "V:\"); $i++) { Start-Sleep -Milliseconds 500 }
-        fsutil file createnew "V:\filler.bin" 7340032 | Out-Null  # ~7M 塞满
+        # .NET 写实字节比 fsutil 可靠（后者在 FAT 卷静默失败）
+        try { [IO.File]::WriteAllBytes("V:\filler.bin", (New-Object byte[] 7340032)) } catch {}
         $filled = (Get-Item "V:\filler.bin" -ErrorAction SilentlyContinue)
         Note "卷塞满" ($null -ne $filled -and $filled.Length -ge 7340032) "len=$($filled?.Length)"
         $p2 = Start-Process $InstallerPath -ArgumentList "/S", "/D=V:\app" -Wait -PassThru
@@ -70,7 +71,7 @@ $out = Join-Path $OutDir ("SA-VM-FAULT-{0:yyyyMMdd}.md" -f (Get-Date))
 @"
 # SA-VM-FAULT 可丢弃 VM 故障注入
 - 日期: $(Get-Date -Format "yyyy-MM-dd") UTC | 宿主: $([Environment]::OSVersion.VersionString)
-- 工件: $(Split-Path $InstallerPath -Leaf) sha256=$((Get-FileHash $InstallerPath).SHA256.Substring(0,16))
+- 工件: $(Split-Path $InstallerPath -Leaf) sha256=$((Get-FileHash $InstallerPath).Hash.Substring(0,16))
 
 ## 步骤与结果
 | 步骤 | 结果 | 摘录 |
