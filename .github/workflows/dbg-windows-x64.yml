@@ -1,7 +1,5 @@
-# 发布前全量验证：手动触发，覆盖全功能面。
-# 只验不发——nuget 包与 release 资产发布是后期另一步。
-# 每条腿统一四段：构建+全量 dotnet test → 产包 → 真装真卸 → 更新链/Special 可跑腿。
-name: release-verify
+# 调试期单宿主工作流——绿后把 push 触发摘掉（改 workflow_dispatch），全绿后统一进 release-verify.yml
+name: dbg-windows-x64
 
 on:
   push:
@@ -11,26 +9,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: false
+  group: dbg-windows-x64
+  cancel-in-progress: true
 
 jobs:
   verify:
-    name: ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: windows-2025
+    runs-on: windows-2025
     timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-26.04        # linux x64（含 docker 发行版矩阵腿）
-          - ubuntu-26.04-arm    # linux arm64 原生腿
-          - windows-2025        # win x64
-          - windows-11-arm      # win arm64
-          - macos-26-intel      # mac Intel-x64
-          - macos-26            # mac arm64
     env:
-      # 集成真装真卸同意闸——CI runner 是可丢弃环境，装/卸断言即目的
       BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"
@@ -56,7 +43,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evidence-${{ matrix.os }}
+          name: evidence-windows-2025
           path: |
             tests/Special/evidence/
             artifacts/ci/
