@@ -86,6 +86,12 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ## 3. 最近验证
 
+### 2026-10-08 PR #39 压缩合并（squash `f90c956`，main `f90c956`，版本 `alpha.83` 不变）
+
+- ENOSPC 半途断言从宿主腿收编进 `Bundler.Tests`：`BootstrapPlan` 新增通用 IO 注入缝（`IoFaultProbe` 挂移动/复制/链接重建各操作点前——移动点抛 IOException=原子不可用强制两段式、复制点抛=半途失败、写截断字节再抛=半成品形态；`ForceManagedCopy` 让 POSIX 绕过 cp -a/ditto 子进程走可注入 managed 路），生产 `null` 缝零开销。
+- parity 测试 +4 条（`IoFault_*`）：备份复制截断/就位炸/载荷复制炸恢复全本/文件级截断清场——`*.partial-*` 残渣清零、备份槽两态、install 逐字节完好；parity 18/18、Bundler.Tests 全量 **370 件 0F**。复审 2 条 flag（截断形态缺腿、赌枚举顺序）已实证修复后清零。
+- 真盘满 ENOSPC 腿保留为低频宿主腿兜底（注入缝是逻辑契约采样，环境语义不穷尽）。
+
 ### 2026-10-08 PR #38 压缩合并（squash `888a127`，main `888a127`，版本推进 `alpha.83`）
 
 - 三轮测试 §5 三条待裁项按用户裁决（全采推荐项）落地：**sh 重启 cwd 对齐 AOT**（`_restart_nohup` 分目录级 `installDir`/文件级父目录，与 AOT `Restart` 双侧一致）；**junction/符号链接叶链穿透**写入 `update-capability-matrix.md` 契约行（双侧实证一致的解析穿透语义固化为设计承诺）；**多格式扇出改逐格式独立失败**——`RunBundle`/`BundleDesktopApplication` 逐格式 try/catch，单格式失败 WARN+计入失败表继续、末位汇总具名收场（CLI stderr→rc=1、MSBuild `LogError`→task false），校验拒绝（`BundleValidationException`/`CliUsageException`）仍穿透保 rc=2/任务级 catch 语义。
@@ -427,5 +433,5 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
 UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#38 持续加固至 `alpha.83`），新一轮三轮四宿主测试全绿、三条待裁项全部落地（§3 最新两轮）。
-剩余工作：CI 发布链测试（产出→安装→可用，触发方式与更新链是否纳入待用户确认）、格式旋钮统一预检（复审挂后续项——把各后端旋钮校验抽到扇出前校验层）、ENOSPC 断言收编（需 MoveTree/CopyTree 注入点，待裁决）、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
+剩余工作：CI 发布链测试（产出→安装→可用，触发方式与更新链是否纳入待用户确认）、格式旋钮统一预检（复审挂后续项——把各后端旋钮校验抽到扇出前校验层）、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 
