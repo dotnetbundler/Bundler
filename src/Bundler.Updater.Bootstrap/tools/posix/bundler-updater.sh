@@ -335,14 +335,14 @@ existing_ancestor() {  # $1 路径→返回已存在的可写祖先目录（文�
     [ -f "$_ea" ] && _ea=$(dirname "$_ea")
     printf '%s' "$_ea"
 }
-same_volume() {  # $1,$2 路径：已存在祖先间硬链接探针——跨卷 ln 恒 EXDEV 失败，
-    # 不能用 mv：跨卷 mv 会静默复制返回 0，把跨卷误判同卷致暂存量漏计。
-    _sv=$(mktemp -u ".bundler-volprobe-XXXXXX" 2>/dev/null || echo ".bundler-volprobe-$$")
-    _a="$(existing_ancestor "$1")/$_sv"; _b="$(existing_ancestor "$2")/$_sv"
-    : >"$_a" 2>/dev/null || return 1
-    ln "$_a" "$_b" 2>/dev/null; _rc=$?
-    rm -f "$_a" "$_b" 2>/dev/null
-    return $_rc
+_dev_of() {  # $1 已存在路径→st_dev 设备号（GNU stat -c / BSD stat -f 双探测）
+    stat -c %d "$1" 2>/dev/null || stat -f %d "$1" 2>/dev/null
+}
+same_volume() {  # $1,$2 路径：已存在祖先 st_dev 比对——硬链接/改名探针都不行：
+    # 跨卷 mv 静默复制返回 0 误判同卷；exFAT 等无硬链接 FS 把同卷误判跨卷。
+    _da=$(_dev_of "$(existing_ancestor "$1")")
+    _db=$(_dev_of "$(existing_ancestor "$2")")
+    [ -n "$_da" ] && [ -n "$_db" ] && [ "$_da" = "$_db" ]
 }
 node_bytes() {  # 文件/目录树总字节；不存在=0
     if [ -f "$1" ]; then wc -c <"$1" 2>/dev/null || echo 0
