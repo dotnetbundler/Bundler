@@ -166,7 +166,7 @@
 单格式 API fixture 收编为 `tests/Bundler.ApiTests` 的 `<Format>ApiTests` 测试类，系统集成测试体收编为 `tests/Bundler.IntegrationTests` 的 `<Format>IntegrationTests` 测试类，均为 `dotnet test` 入口、`--filter-class`/`-method` 选择、宿主门控经 `Assert.Skip`；
 资源需求用 `[Trait("Requires", ...)]` 标注——`docker`（DockerRunner 容器矩阵腿）、`elevation`（ElevatedRunner/SudoRunner 真装腿）、`localinstall`（需 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL` 同意的真装腿）、`interactive`（GUI 级验收腿：Windows 需交互式桌面会话走 `WindowsDesktop` UIA3 驱动，macOS 需 TCC 辅助功能授权走 osascript）；标在方法级，仅当全类都需同意时升类级（如 NSIS）；
 按资源裁剪用 `--filter-trait "Requires=<值>"`/`--filter-not-trait "Requires=<值>"`；
-集成 fixture 与载荷资产集中在 `tests/Bundler.IntegrationTests/Fixtures/<格式>/`，本地包消费契约腿的独立 fixture 集中在 `tests/Bundler.LocalPackagesTests/Fixtures/<格式>/`，不再保留转发脚本；机器级人工验证脚本放 `tools/`（当前仅 `tools/Windows.Nsis.Reboot`），格式人工步骤在 `docs/<format>-manual-testing.md`；
+集成 fixture 与载荷资产集中在 `tests/Bundler.IntegrationTests/Fixtures/<格式>/`，本地包消费契约腿的独立 fixture 集中在 `tests/Bundler.LocalPackagesTests/Fixtures/<格式>/`，不再保留转发脚本；收不进 dotnet test 的特殊验收脚本（真机/VM/凭证/交互/公网）集中在 `tests/Special/`（索引见其 README），格式人工步骤在 `docs/<format>-manual-testing.md`；
 跨格式快速测试保留 `tests/Bundler.Tests`。
 格式专用测试与示例项目名称显式带格式名，只有真正跨格式的项目使用泛名。
 
@@ -177,7 +177,7 @@
 | MSBuild fixture（仓内项目引用） | `tests/Bundler.IntegrationTests/Fixtures/Nsis/Fixture` | — | `tests/Bundler.IntegrationTests/Fixtures/MacApp` |
 | 仓外独立包消费 fixture | — | `tests/Bundler.LocalPackagesTests/Fixtures/Msi/Fixture` + `Standalone/` | — |
 | 真实集成 | `NsisIntegrationTests` | `MsiLocalPackagesTests` | `MacAppIntegrationTests` |
-| 专用环境与人工 | `tools/Windows.Nsis.Reboot`、NSIS 人工清单 | MSI 人工清单 | `docs/mac-app-manual-testing.md` |
+| 专用环境与人工 | `tests/Special/`（含 `win/nsis-reboot`）、NSIS 人工清单 | MSI 人工清单 | `docs/mac-app-manual-testing.md` |
 
 1. 每项新增或修改功能必须**新增或更新对应自动化测试**；缺陷修复断言要区分修复前后。
    按功能覆盖验证/映射、真实打包、NuGet 包内容、仓库外直接 API 包消费、应用层消费和适用的系统生命周期。
@@ -270,5 +270,5 @@ dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Re
 dotnet test tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj -c Release --filter-class "*MsiLocalPackagesTests*"
 dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-trait "Requires=localinstall"
 
-# NSIS 真实重启人工腿（仅可抛弃 Windows VM）：tools/Windows.Nsis.Reboot/Verify.ps1 -Phase Prepare|Verify
+# NSIS 真实重启人工腿（仅可抛弃 Windows VM）：tests/Special/win/nsis-reboot/Verify.ps1 -Phase Prepare|Verify
 ```

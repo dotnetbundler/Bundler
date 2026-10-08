@@ -1,7 +1,8 @@
 # 测试指南
 
 本目录只放自动化测试工程、共享测试件与集成 fixture。
-人工验证步骤见各格式 `docs/<format>-manual-testing.md`，外部待验收项见 `docs/<format>-open-items.md`。
+`Special/` 存放不能收编成 dotnet test 的特殊验收脚本（真机/VM/凭证/交互/公网）；
+人工验证步骤见各格式 `docs/<format>-manual-testing.md`，外部待验收项见 `docs/<format>-open-items.md` 与 `docs/special-acceptance.md`。
 
 ## 工程
 
@@ -60,4 +61,5 @@ dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Re
 
 ## 人工/外部验证
 
-- `tools/Windows.Nsis.Reboot/Verify.ps1`：NSIS 真实重启链路的两阶段人工验证，只在可抛弃 Windows VM 运行（用法见其 `nsis-reboot.md`）。
+- `tests/Special/`：不能进 dotnet test 的特殊验收脚本——真机/虚拟机/凭证/交互/公网类，按宿主分目录，索引见其 README（用法与各脚本内文文档）。
+- `tests/Special/win/nsis-reboot/Verify.ps1`：NSIS 真实重启链路的两阶段人工验证，只在可抛弃 Windows VM 运行（用法见其 `nsis-reboot.md`）。
