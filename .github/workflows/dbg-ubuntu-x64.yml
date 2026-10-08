@@ -2,8 +2,7 @@
 name: dbg-ubuntu-x64
 
 on:
-  push:
-    branches: [devin/ci-dry-run]
+  workflow_dispatch:  # 已绿——摘除 push 触发，只留手动
 
 permissions:
   contents: read

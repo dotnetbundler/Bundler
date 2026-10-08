@@ -23,7 +23,8 @@ if [ -n "$DEB" ] && [ -f "$DEB" ]; then
     DEBPKG="$(dpkg-deb -f "$DEB" Package 2>/dev/null || true)"
     $SUDO dpkg -i "$DEB" && note "deb 装" "PASS" "$DEBPKG" || note "deb 装" "FAIL" "$DEBPKG"
     # 断言装后 usr/bin 链接真实可执行（bin 链接默认=包名契约）
-    DEBBIN="$($SUDO dpkg -L "$DEBPKG" 2>/dev/null | awk '/\/usr\/bin\/[^/]+$/{print $NF; exit}')"
+    DEBLIST="$($SUDO dpkg -L "$DEBPKG" 2>/dev/null || true)"
+    DEBBIN="$(printf '%s\n' "$DEBLIST" | awk '/\/usr\/bin\/[^/]+$/{print $NF; exit}')"
     if [ -n "$DEBBIN" ] && command -v "$DEBBIN" >/dev/null; then
         note "deb 命令在 PATH" "PASS" "$("$DEBBIN" --version 2>&1 | head -1)"
     else
@@ -36,7 +37,8 @@ fi
 if [ -n "$RPM" ] && [ -f "$RPM" ]; then
     RPMPKG="$(rpm -qp --qf '%{NAME}' "$RPM" 2>/dev/null || true)"
     $SUDO rpm -i "$RPM" && note "rpm 装" "PASS" "$RPMPKG" || note "rpm 装" "FAIL" "$RPMPKG"
-    RPMBIN="$($SUDO rpm -ql "$RPMPKG" 2>/dev/null | awk '/\/usr\/bin\/[^/]+$/{print $NF; exit}')"
+    RPMLIST="$($SUDO rpm -ql "$RPMPKG" 2>/dev/null || true)"
+    RPMBIN="$(printf '%s\n' "$RPMLIST" | awk '/\/usr\/bin\/[^/]+$/{print $NF; exit}')"
     if [ -n "$RPMBIN" ] && command -v "$RPMBIN" >/dev/null; then
         note "rpm 命令在 PATH" "PASS" "$("$RPMBIN" --version 2>&1 | head -1)"
     else
