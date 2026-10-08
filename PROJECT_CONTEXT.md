@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-08
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.82`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.83`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -85,6 +85,11 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-08 PR #38 压缩合并（squash `888a127`，main `888a127`，版本推进 `alpha.83`）
+
+- 三轮测试 §5 三条待裁项按用户裁决（全采推荐项）落地：**sh 重启 cwd 对齐 AOT**（`_restart_nohup` 分目录级 `installDir`/文件级父目录，与 AOT `Restart` 双侧一致）；**junction/符号链接叶链穿透**写入 `update-capability-matrix.md` 契约行（双侧实证一致的解析穿透语义固化为设计承诺）；**多格式扇出改逐格式独立失败**——`RunBundle`/`BundleDesktopApplication` 逐格式 try/catch，单格式失败 WARN+计入失败表继续、末位汇总具名收场（CLI stderr→rc=1、MSBuild `LogError`→task false），校验拒绝（`BundleValidationException`/`CliUsageException`）仍穿透保 rc=2/任务级 catch 语义。
+- 新断言 ×2（cwd 双侧平价 `RestartApp_CwdMatchesAotContract`、独立失败 `BundlePerFormatIndependentFailure`）；Bundler.Tests 全量 **366 件 0F**；复审 2 条发现回帖裁为设计语义（feed 覆盖写如实描述产出、格式旋钮无效=该格式不可产），无代码改动。
 
 ### 2026-10-08 PR #37 压缩合并（squash `9007056`，main `9007056`，版本推进 `alpha.82`）
 
@@ -413,9 +418,6 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 - WiX v3 已退出免费社区服务；大范围公开分发前须重新评估维护风险（见 `third_party/wix/msi-wix-provenance.md`）。
 - 各格式外部事项按 OI 清单等待对应环境输入：`docs/<format>-open-items.md` 全套（生产证书/公证凭证、UAC 提权、真实重启、干净宿主矩阵、ARM64 真机、语言审校等；MSI 签名已裁决不补集成腿——`Bundler.Tests/WixTests` 三断言已覆盖，外部仅余 MSI-OI-06 生产证书/时间戳）。
-- `--app` 子进程 cwd 双实现不一致：sh 继承调用方 cwd，AOT=installDir（目录级）/install 父目录（文件级）——建议对齐 AOT 语义或文档化，待裁决。
-- install 叶段为 junction/符号链接：双实现都解析穿透作用于目标（POSIX norm_path 同语义）——建议文档化为契约，待裁决。
-- 门禁格式中止整批语义：mac 腿实证 msi 腿失败连带 zip 未产——是否符合"逐格式独立失败"设计，待裁决。
 - 仓外独立包消费 fixture（`tests/Bundler.LocalPackagesTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`,
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
   是否换处理方式（如公开发布后改验公网源、或移入独立验收仓）留待后续裁决。
@@ -424,6 +426,6 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#37 持续加固至 `alpha.82`），新一轮三轮四宿主测试全绿（§3 最新一轮）。
-剩余工作：§5 三条待裁项、CI 发布链测试（产出→安装→可用，范围/触发方式待用户确认）、ENOSPC 断言收编（需 MoveTree/CopyTree 注入点，待裁决）、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
+UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#38 持续加固至 `alpha.83`），新一轮三轮四宿主测试全绿、三条待裁项全部落地（§3 最新两轮）。
+剩余工作：CI 发布链测试（产出→安装→可用，触发方式与更新链是否纳入待用户确认）、格式旋钮统一预检（复审挂后续项——把各后端旋钮校验抽到扇出前校验层）、ENOSPC 断言收编（需 MoveTree/CopyTree 注入点，待裁决）、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 
