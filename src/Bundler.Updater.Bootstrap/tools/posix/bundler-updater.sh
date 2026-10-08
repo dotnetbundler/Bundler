@@ -24,6 +24,7 @@ usage() {
     echo "  bundler-updater.sh apply --install-dir <dir|file> --payload <dir|file>" >&2
     echo "      [--wait-pid <pid>] [--app <path>] [--backup-dir <dir|file>]" >&2
     echo "      [--keep-payload] [--rollback] [--retain-backup-to <dir>] [--log <file>] [--wait-timeout <seconds>]" >&2
+    echo "      [--lock-timeout <seconds>]" >&2
 }
 
 log() {
@@ -99,7 +100,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --keep-payload) KEEP_PAYLOAD=1; shift ;;
         --rollback) ROLLBACK=1; shift ;;
-        --install-dir|--payload|--wait-pid|--app|--backup-dir|--retain-backup-to|--log|--wait-timeout)
+        --install-dir|--payload|--wait-pid|--app|--backup-dir|--retain-backup-to|--log|--wait-timeout|--lock-timeout)
             [ $# -ge 2 ] || { echo "bundler-updater: option '$1' requires a value." >&2; exit 2; }
             case "$1" in
                 --install-dir) INSTALL_DIR=$2 ;;
@@ -110,6 +111,7 @@ while [ $# -gt 0 ]; do
                 --retain-backup-to) RETAIN_DIR=$2 ;;
                 --log) LOG_FILE=$2 ;;
                 --wait-timeout) WAIT_TIMEOUT=$2 ;;
+                --lock-timeout) LOCK_TIMEOUT=$2 ;;
             esac
             shift 2 ;;
         *) echo "bundler-updater: unknown option '$1'." >&2; usage; exit 2 ;;
@@ -231,6 +233,8 @@ INSTALL_DIR="$(norm_path "$INSTALL_DIR")" || exit 2
 # 备份比较名一律全物理化——默认备份位同样可能预置叶链（与 RETAIN_CMP 物理名不同名会同址逃逸）。
 BACKUP_CMP="$(norm_path "$BACKUP_DIR")" || exit 2
 MARKER="${INSTALL_DIR%/}.bundler-swap"
+LOCK_FILE="${INSTALL_DIR%/}.bundler-lock"
+LOCK_TIMEOUT=${LOCK_TIMEOUT:-30}
 
 # 备份目录与安装/载荷同址或互嵌同样是抹数据的形状（换包前会 rm 旧备份）——与 AOT 侧同拒。
 for _p in "$INSTALL_DIR" "$PAYLOAD_DIR"; do
@@ -286,6 +290,91 @@ retain_or_remove_backup() {
     return 0
 }
 
+# 并发互斥（与 AOT AcquireLock 同形同协议——同锁件互斥跨实现实例）：锁件
+# <install>.bundler-lock 普通文件含持锁 pid；noclobber `>` 原子创建，撞锁按
+# kill -0 判活等到 --lock-timeout 超时拒 rc=3，持锁者已死即夺锁——防并发第二实例
+# 把在飞 marker 当崩溃恢复拆掉别人换一半的包。
+[ -L "$LOCK_FILE" ] && rm -f "$LOCK_FILE"
+_lk_deadline=$(( $(date +%s) + LOCK_TIMEOUT ))
+while :; do
+    _lk_owner=""
+    if ( set -C; : >"$LOCK_FILE" ) 2>/dev/null; then
+        printf '%s' "$$" >"$LOCK_FILE"
+        # 写入后回验 owner——锁被并发夺走时文件已是他人件，不验就会与持锁者
+        # 同入 swap；owner 非本进程即跌入下方等锁/夺锁路径。
+        _lk_owner=$(cat "$LOCK_FILE" 2>/dev/null || true)
+        if [ "$_lk_owner" = "$$" ]; then
+            trap 'rm -f -- "$LOCK_FILE"' EXIT
+            break
+        fi
+    else
+        _lk_owner=$(cat "$LOCK_FILE" 2>/dev/null || true)
+    fi
+    if [ -n "$_lk_owner" ] && ! kill -0 "$_lk_owner" 2>/dev/null; then
+        # 死锁夺锁——删前复读 owner 未变且仍死才删，防双实例互删对方新锁件。
+        _lk_owner2=$(cat "$LOCK_FILE" 2>/dev/null || true)
+        if [ "$_lk_owner2" = "$_lk_owner" ]; then
+            rm -f "$LOCK_FILE" 2>/dev/null
+        fi
+        continue
+    fi
+    if [ "$(date +%s)" -ge "$_lk_deadline" ]; then
+        echo "bundler-updater: another updater holds the lock — timed out waiting." >&2
+        exit 3
+    fi
+    sleep 0.1 2>/dev/null || sleep 1
+done
+
+# 空间预检（与 AOT CheckFreeSpace 同语义）：同卷原子 rename 不计；跨卷两段式暂存、
+# --keep-payload 复制、回滚复制按树体积估到目标槽所在卷；探测失败只 WARN 放行。
+existing_ancestor() {  # $1 路径→返回已存在的可写祖先目录（文件取父目录）
+    _ea=$1
+    while [ ! -e "$_ea" ]; do
+        _ea=$(dirname "$_ea") || return 1
+    done
+    [ -f "$_ea" ] && _ea=$(dirname "$_ea")
+    printf '%s' "$_ea"
+}
+_dev_of() {  # $1 已存在路径→st_dev 设备号（GNU stat -c / BSD stat -f 双探测）
+    stat -c %d "$1" 2>/dev/null || stat -f %d "$1" 2>/dev/null
+}
+same_volume() {  # $1,$2 路径：已存在祖先 st_dev 比对——硬链接/改名探针都不行：
+    # 跨卷 mv 静默复制返回 0 误判同卷；exFAT 等无硬链接 FS 把同卷误判跨卷。
+    _da=$(_dev_of "$(existing_ancestor "$1")")
+    _db=$(_dev_of "$(existing_ancestor "$2")")
+    [ -n "$_da" ] && [ -n "$_db" ] && [ "$_da" = "$_db" ]
+}
+node_bytes() {  # 文件/目录树总字节；不存在=0
+    if [ -f "$1" ]; then wc -c <"$1" 2>/dev/null || echo 0
+    elif [ -d "$1" ]; then du -sk "$1" 2>/dev/null | awk '{print $1*1024}' || echo 0
+    else echo 0; fi
+}
+volume_check() {  # $1 锚点 $2 需要字节；探测失败放行，明确不够才拒 rc=4
+    [ "$2" -gt 0 ] 2>/dev/null || return 0
+    _free=$(df -kP "$1" 2>/dev/null | awk 'NR==2{print $4*1024}')
+    [ -n "$_free" ] || { log "bundler-updater: WARN free-space probe failed near '$1'"; return 0; }
+    log "bundler-updater: free-space check near '$1' — need ~$2 bytes, $_free available"
+    [ "$_free" -ge "$2" ] || { echo "bundler-updater: insufficient free space near '$1': swap requires ~$2 bytes, only $_free available." >&2; return 1; }
+}
+check_free_space() {
+    if [ "$ROLLBACK" = 1 ]; then
+        volume_check "$INSTALL_DIR" "$(node_bytes "$BACKUP_DIR")" || exit 4
+        return 0
+    fi
+    _need_backup=0; _need_install=0
+    same_volume "$INSTALL_DIR" "$BACKUP_DIR" || _need_backup=$(node_bytes "$INSTALL_DIR")
+    if [ "$KEEP_PAYLOAD" = 1 ] || ! same_volume "$PAYLOAD_DIR" "$INSTALL_DIR"; then
+        _need_install=$(node_bytes "$PAYLOAD_DIR")
+    fi
+    # 备份槽父级与 install 同卷时两腿合并判——同卷需求要加总。
+    if same_volume "$(dirname "$BACKUP_DIR")" "$INSTALL_DIR"; then
+        volume_check "$INSTALL_DIR" "$(( _need_backup + _need_install ))" || exit 4
+    else
+        volume_check "$(dirname "$BACKUP_DIR")" "$_need_backup" || exit 4
+        volume_check "$INSTALL_DIR" "$_need_install" || exit 4
+    fi
+}
+
 if [ -n "$WAIT_PID" ]; then
     log "bundler-updater: waiting for pid $WAIT_PID to exit"
     waited=0
@@ -315,6 +404,10 @@ if [ -f "$MARKER" ]; then
     rm -f "$MARKER"
     RECOVERED=1
 fi
+
+# 预检落点在等退出+崩溃恢复之后、换包之前（与 AOT ApplyLocked 同序）——恢复已还原时
+# 备份槽已空，node_bytes=0 自然放行不误拒。
+check_free_space
 
 # 文件级语义：安装目标是单文件（AppImage 单件）或回滚备份是文件——
 # 目录级换包会清掉宿主目录里的无关文件，故单件替换。

@@ -831,6 +831,254 @@ public static class UpdaterBootstrapParityTests
         }
     }
 
+    // ---- 并发互斥 / wait-pid / 空间预检 / 路径形态（对标 Squirrel/Sparkle 测试矩阵收编）----
+
+    static string LockPath(string install) => install.TrimEnd('/', '\\') + ".bundler-lock";
+
+    [Fact]
+    static void ConcurrentApply_LiveLockHolder_SecondRefusesAfterTimeout()
+    {
+        // 锁件含活 pid → 第二实例等锁超时拒 rc=3、install 零变更、不留 marker；
+        // 释放后同一 apply 成功且锁件随之清除（锁随进程退出释放）。
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var payload = PayloadV2(dir);
+                var expected = NewDir(dir, "expected");
+                CopyTree(payload, expected);
+                var lockPath = LockPath(install);
+                File.WriteAllText(lockPath, Environment.ProcessId.ToString());
+                try
+                {
+                    Assert.Equal(3, Invoke(impl, "apply", "--install-dir", install,
+                        "--payload", payload, "--lock-timeout", "1"));
+                    Assert.Equal("v1-app", File.ReadAllText(Path.Combine(install, "app.txt")));
+                    Assert.False(File.Exists(Marker(install)));
+                }
+                finally
+                {
+                    File.Delete(lockPath);
+                }
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload));
+                AssertTree(expected, install);
+                Assert.False(File.Exists(lockPath), "released lock must be removed");
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void ConcurrentApply_StaleLock_StolenAndSwapCompletes()
+    {
+        // 崩溃残留锁（owner pid 已死）→ 夺锁完成换包，锁件随成功清除——不留死锁。
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var payload = PayloadV2(dir);
+                var expected = NewDir(dir, "expected");
+                CopyTree(payload, expected);
+                var lockPath = LockPath(install);
+                File.WriteAllText(lockPath, int.MaxValue.ToString());
+
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload));
+                AssertTree(expected, install);
+                Assert.False(File.Exists(lockPath));
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void WaitPid_ExitedProcess_SwapProceeds()
+    {
+        // --wait-pid 指已退出/不存在的进程 → 不等直接换包（等候退语义正向面）。
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var payload = PayloadV2(dir);
+                var expected = NewDir(dir, "expected");
+                CopyTree(payload, expected);
+
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--wait-pid", int.MaxValue.ToString(),
+                    "--wait-timeout", "1"));
+                AssertTree(expected, install);
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void WaitPid_AliveProcess_TimesOutAndInstallIntact()
+    {
+        // 活进程等不到退出 → rc=3、install 零变更（等候退语义负向面）。
+        var root = CreateTempDirectory();
+        try
+        {
+            var sleeperStart = new ProcessStartInfo
+            {
+                UseShellExecute = false,
+                FileName = TestPlatform.IsWindows ? "ping" : "sleep",
+            };
+            if (TestPlatform.IsWindows)
+            {
+                sleeperStart.ArgumentList.Add("-n");
+                sleeperStart.ArgumentList.Add("30");
+                sleeperStart.ArgumentList.Add("127.0.0.1");
+            }
+            else
+            {
+                sleeperStart.ArgumentList.Add("30");
+            }
+            using var sleeper = Process.Start(sleeperStart)!;
+            try
+            {
+                foreach (var impl in Impls)
+                {
+                    var dir = NewDir(root, "case-" + impl);
+                    var install = InstallV1(dir);
+                    var payload = PayloadV2(dir);
+
+                    Assert.Equal(3, Invoke(impl, "apply", "--install-dir", install,
+                        "--payload", payload, "--wait-pid", sleeper.Id.ToString(),
+                        "--wait-timeout", "1"));
+                    Assert.Equal("v1-app", File.ReadAllText(Path.Combine(install, "app.txt")));
+                }
+            }
+            finally
+            {
+                sleeper.Kill();
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void NonAsciiInstallPath_SwapCompletes()
+    {
+        // 非 ASCII/含空格 install 路径换包断言——引用方把应用装进
+        // "Program Files\中文目录"类路径时协议不炸（路径均按字面规范化后比较）。
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = NewDir(dir, "安装 应用-ünïcode-アプリ");
+                Write(Path.Combine(install, "app.txt"), "v1-app");
+                var payload = NewDir(dir, "payload 甲");
+                Write(Path.Combine(payload, "app.txt"), "v2-app");
+                Write(Path.Combine(payload, "新增.txt"), "v2-new");
+
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload));
+                Assert.Equal("v2-app", File.ReadAllText(Path.Combine(install, "app.txt")));
+                Assert.Equal("v2-new", File.ReadAllText(Path.Combine(install, "新增.txt")));
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    static void WithFreeSpaceProbe(Func<string, long?>? probe, Action body)
+    {
+        BootstrapPlan.FreeSpaceProbe = probe;
+        try
+        {
+            body();
+        }
+        finally
+        {
+            BootstrapPlan.FreeSpaceProbe = null;
+        }
+    }
+
+    [Fact]
+    static void FreeSpace_Insufficient_RefusesBeforeMutation()
+    {
+        // 目标卷探测剩余 0 → 换包在动备份/marker 之前拒 rc=4：install 原树完好、
+        // marker/backup/staged 一律不落（Sparkle 式 fail-fast 契约）。
+        var root = CreateTempDirectory();
+        try
+        {
+            var dir = NewDir(root, "case");
+            var install = InstallV1(dir);
+            var v1 = Path.Combine(dir, "v1-snapshot");
+            CopyTree(install, v1);
+            var payload = PayloadV2(dir);
+
+            // --keep-payload 强制载荷腿产生体积需求（同卷 temp 树下否则需求为空探针不触）。
+            var rc = 0;
+            WithFreeSpaceProbe(_ => 0, () => rc = RunAot(
+                ["apply", "--install-dir", install, "--payload", payload, "--keep-payload"]));
+
+            Assert.Equal(4, rc);
+            AssertTree(v1, install);
+            Assert.False(File.Exists(Marker(install)));
+            Assert.False(Directory.Exists(Backup(install)));
+            AssertNoStagedResidue(dir);
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void FreeSpace_ProbeFailure_WarnsAndProceeds()
+    {
+        // 探测失败只 WARN 放行不拒（拒错不如不拒）——换包照常完成。
+        var root = CreateTempDirectory();
+        try
+        {
+            var dir = NewDir(root, "case");
+            var install = InstallV1(dir);
+            var payload = PayloadV2(dir);
+            var expected = NewDir(dir, "expected");
+            CopyTree(payload, expected);
+
+            var rc = 0;
+            WithFreeSpaceProbe(_ => throw new IOException("probe unavailable"),
+                () => rc = RunAot(["apply", "--install-dir", install, "--payload", payload,
+                    "--keep-payload"]));
+
+            Assert.Equal(0, rc);
+            AssertTree(expected, install);
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
     static bool WaitForFile(string path)
     {
         for (var i = 0; i < 100 && !File.Exists(path); i++)

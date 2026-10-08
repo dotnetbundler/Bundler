@@ -591,6 +591,7 @@ public static class UpdaterClientTests
         public string FeedUrl { get; }
         public Action? OnRange;
         public bool HonorRange = true;
+        public bool CorruptRange;
 
         public LoopbackFeedServer(string dir)
         {
@@ -657,6 +658,15 @@ public static class UpdaterClientTests
                 {
                     var end = Math.Min(rangeEnd ?? body.Length - 1, body.Length - 1);
                     var slice = body.AsSpan((int)start, (int)(end - start + 1)).ToArray();
+                    if (CorruptRange)
+                    {
+                        // Content-Length 声明全长却只发一半即断流——模拟 206 响应中途损坏。
+                        var truncated = slice[..Math.Max(1, slice.Length / 2)];
+                        await Write(stream,
+                            $"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {start}-{end}/{body.Length}\r\nContent-Length: {slice.Length}\r\n\r\n",
+                            truncated);
+                        return;
+                    }
                     await Write(stream,
                         $"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {start}-{end}/{body.Length}\r\nContent-Length: {slice.Length}\r\n\r\n",
                         slice);
@@ -953,6 +963,231 @@ public static class UpdaterClientTests
             stream.Write(block, 0, blockSize);
         }
         return path;
+    }
+
+    [Fact]
+    static async Task Client_Check_MalformedFeed_ThrowsUpdateException()
+    {
+        // 畸形 JSON 清单（签名有效）：协议拒绝必须统一为 UpdateException——
+        // 不得把 JsonException/SerializationException 漏给调用方。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var feedPath = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable"));
+            File.WriteAllText(feedPath, "not-a-manifest-at-all");
+            File.WriteAllBytes(feedPath + ".sig", EcdsaSigner.SignFile(feedPath, material));
+
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            var exception = await Assert.ThrowsAsync<UpdateException>(
+                () => client.CheckForUpdateAsync());
+            Assert.Contains("manifest", exception.Message);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_Check_FeedMissingFields_ThrowsUpdateException()
+    {
+        // 合法 JSON 但缺版本字段——同样 UpdateException 确定性拒绝，不 NRE 不泄漏。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var feedPath = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable"));
+            File.WriteAllText(feedPath, "{}");
+            File.WriteAllBytes(feedPath + ".sig", EcdsaSigner.SignFile(feedPath, material));
+
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            await Assert.ThrowsAsync<UpdateException>(() => client.CheckForUpdateAsync());
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_DownloadAsync_FallsBack_WhenRangeResponseTruncatedMidStream()
+    {
+        // 206 响应声明全长却只发一半即断流——差分须放弃回落全量，不得留坏件。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var v1 = WriteDeltaArtifact(feedDir, "app-1.0.0.bin", block =>
+                block switch { 0 => "head", 1 => "body-same", 2 => "tail-v1", _ => "?" });
+            WriteFeedWithDelta(feedDir, "1.0.0", v1, material);
+            var v2 = WriteDeltaArtifact(feedDir, "app-2.0.0.bin", block =>
+                block switch { 0 => "head", 1 => "body-same", 2 => "tail-v2", _ => "?" });
+            WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
+
+            var server = new LoopbackFeedServer(feedDir) { CorruptRange = true };
+            var identity = new Protocol.UpdateInstallIdentity
+            {
+                FeedUrl = server.FeedUrl, Channel = "stable",
+                RuntimeIdentifier = "linux-x64", Format = "zip",
+                PublicKey = material.PublicPointBase64(),
+            };
+            Protocol.UpdateInstallIdentity.Write(install, identity);
+
+            var cacheDir = install.TrimEnd('/', '\\') + ".bundler-cache";
+            Directory.CreateDirectory(cacheDir);
+            File.Copy(v1, Path.Combine(cacheDir, "artifact.bin"));
+
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            var info = (await client.CheckForUpdateAsync())!;
+            var path = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+            Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
+            server.Dispose();
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_DownloadAsync_FallsBack_WhenBlockMapVersionUnsupported()
+    {
+        // blockmap 版本不符 → 差分不进场直接回落全量（电子链版本协商负例）。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var v1 = WriteDeltaArtifact(feedDir, "app-1.0.0.bin", block =>
+                block switch { 0 => "head", 1 => "body-same", 2 => "tail-v1", _ => "?" });
+            WriteFeedWithDelta(feedDir, "1.0.0", v1, material);
+            var v2 = WriteDeltaArtifact(feedDir, "app-2.0.0.bin", block =>
+                block switch { 0 => "head", 1 => "body-same", 2 => "tail-v2", _ => "?" });
+            WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
+            // 重写 v2 的 blockmap：Version=2 即本端不识别的未来版本。
+            var map = Protocol.UpdateBlockMap.ComputeFile(v2);
+            map.Version = 2;
+            var mapSerializer = new DataContractJsonSerializer(typeof(Protocol.UpdateBlockMap));
+            using (var mapStream = File.Create(v2 + Protocol.UpdateBlockMap.FileSuffix))
+            {
+                mapSerializer.WriteObject(mapStream, map);
+            }
+
+            var cacheDir = install.TrimEnd('/', '\\') + ".bundler-cache";
+            Directory.CreateDirectory(cacheDir);
+            File.Copy(v1, Path.Combine(cacheDir, "artifact.bin"));
+
+            var log = new List<string>();
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0",
+                new UpdateClientOptions { Log = log.Add });
+            var info = (await client.CheckForUpdateAsync())!;
+            var path = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+            Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
+            Assert.Contains(log, l => l.Contains("block-map"));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_DownloadAsync_InsufficientSpace_RefusesBeforeWriting()
+    {
+        // 下载前预检：探针报剩余小于工件声明 size → 拒绝且目标文件不落盘。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var v2 = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2");
+            WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+            {
+                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
+                Sha256 = Sha256Hex(v2), Size = new FileInfo(v2).Length,
+                Signature = Convert.ToBase64String(EcdsaSigner.SignFile(v2, material)),
+            });
+
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            var info = (await client.CheckForUpdateAsync())!;
+            var destDir = Path.Combine(directory, "dl");
+            UpdateClient.FreeSpaceProbe = _ => 1;
+            try
+            {
+                var exception = await Assert.ThrowsAsync<UpdateException>(
+                    () => client.DownloadAsync(info, destDir));
+                Assert.Contains("insufficient disk space", exception.Message);
+            }
+            finally
+            {
+                UpdateClient.FreeSpaceProbe = null;
+            }
+            Assert.False(File.Exists(Path.Combine(destDir, "app-2.0.0.zip")));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_DownloadAsync_ResumablePart_OnlyNeedsRemainingSpace()
+    {
+        // 断点续传空间量：`.part` 已持有大部分工件时预检只须补齐剩余量——
+        // 探针报的剩余够尾巴不够全件，旧按全件判会误拒合法续传。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var v2 = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2");
+            WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+            {
+                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
+                Sha256 = Sha256Hex(v2), Size = new FileInfo(v2).Length,
+                Signature = Convert.ToBase64String(EcdsaSigner.SignFile(v2, material)),
+            });
+
+            var server = new LoopbackFeedServer(feedDir);
+            var identity = new Protocol.UpdateInstallIdentity
+            {
+                FeedUrl = server.FeedUrl, Channel = "stable",
+                RuntimeIdentifier = "linux-x64", Format = "zip",
+                PublicKey = material.PublicPointBase64(),
+            };
+            var sidecarSerializer = new DataContractJsonSerializer(
+                typeof(Protocol.UpdateInstallIdentity),
+                new DataContractJsonSerializerSettings { UseSimpleDictionaryFormat = true });
+            using (var stream = File.Create(Path.Combine(install, "bundler-update.json")))
+            {
+                sidecarSerializer.WriteObject(stream, identity);
+            }
+
+            var size = new FileInfo(v2).Length;
+            var destDir = Path.Combine(directory, "dl");
+            Directory.CreateDirectory(destDir);
+            // `.part` 已持有前大半——剩余只需 16 字节，全件量判会误拒。
+            var head = File.ReadAllBytes(v2).AsSpan(0, (int)size - 16).ToArray();
+            File.WriteAllBytes(Path.Combine(destDir, "app-2.0.0.zip.part"), head);
+
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            var info = (await client.CheckForUpdateAsync())!;
+            UpdateClient.FreeSpaceProbe = _ => 16;
+            try
+            {
+                var path = await client.DownloadAsync(info, destDir);
+                Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
+            }
+            finally
+            {
+                UpdateClient.FreeSpaceProbe = null;
+            }
+            server.Dispose();
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
     }
 
     // 清单+`.sig`+`.blockmap` 三件齐写（delta 腿需要 blockmap 在场）。

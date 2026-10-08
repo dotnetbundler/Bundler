@@ -99,6 +99,20 @@ public sealed class UpdateClient
     {
         Directory.CreateDirectory(destinationDirectory);
         var destination = Path.Combine(destinationDirectory, info.Artifact.File);
+        // 空间预检（Sparkle 式 fail-fast）：feed 工件 size 是精确值——下载前比对目标卷
+        // 剩余，明显不够即拒，不进入半途 IO 失败路径。`.part` 断点续传只对 http(s) 源
+        // 生效（本地 file:// 复制不续传），续传只需补剩余量；探不到卷则放行交由下载器处理。
+        var isHttp = info.DownloadUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase);
+        var already = isHttp && File.Exists(destination + ".part")
+            ? new FileInfo(destination + ".part").Length : 0L;
+        var requiredBytes = Math.Max(0L, info.Artifact.Size - already);
+        if (requiredBytes > 0 && VolumeFreeSpace(destinationDirectory) is { } available
+            && requiredBytes > available)
+        {
+            throw new UpdateException(
+                $"insufficient disk space: artifact '{info.Artifact.File}' requires {requiredBytes} more bytes, " +
+                $"only {available} available on the volume of '{destinationDirectory}'.");
+        }
         var downloaded = false;
         if (_options.EnableDelta && info.Artifact.BlockMap is { Length: > 0 } blockMapFile)
         {
@@ -194,6 +208,38 @@ public sealed class UpdateClient
         Verify(info, path);
         Apply(info, path, options);
         return true;
+    }
+
+    // 测试缝：覆盖下载前预检的卷剩余探测（生产为 null 走真 DriveInfo）。
+    internal static Func<string, long?>? FreeSpaceProbe;
+
+    // 目标目录所在卷的最长前缀挂载点；探不到返回 null 由调用方跳过预检。
+    private static long? VolumeFreeSpace(string directory)
+    {
+        if (FreeSpaceProbe is { } probe)
+        {
+            return probe(directory);
+        }
+        try
+        {
+            var full = Path.GetFullPath(directory);
+            DriveInfo? best = null;
+            foreach (var drive in DriveInfo.GetDrives())
+            {
+                var root = drive.RootDirectory.FullName;
+                if (full.StartsWith(root, RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                        ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) &&
+                    (best is null || root.Length > best.RootDirectory.FullName.Length))
+                {
+                    best = drive;
+                }
+            }
+            return best?.AvailableFreeSpace;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private string FeedUrl() => _identity.FeedUrl;
