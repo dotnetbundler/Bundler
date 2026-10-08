@@ -48,6 +48,7 @@ run_leg(){ # 腿失败不连锁——逐条收集，末段统一判
 }
 FAILED_LEGS=""
 find1(){ find "$OUT/$1" -type f -name "$2" | head -1; }
+finddir(){ find "$OUT/$1" -type d -name "$2" | head -1; }
 
 if [ "$OS" = "Linux" ]; then
     run_leg "gpg-production(self-contained)" bash "$SP/linux/gpg-production.sh" --self-contained
@@ -59,10 +60,10 @@ if [ "$OS" = "Linux" ]; then
     fi
 elif [ "$OS" = "Darwin" ]; then
     run_leg "clean-host-matrix"            bash "$SP/mac/clean-host-matrix.sh" \
-        --app "$(find1 app '*.app')" --dmg "$(find1 dmg '*.dmg')" --pkg "$(find1 pkg '*.pkg')"
+        --app "$(finddir app '*.app')" --dmg "$(find1 dmg '*.dmg')" --pkg "$(find1 pkg '*.pkg')"
     if [ "$ARCH" = "x86_64" ]; then
         run_leg "intel-x64"                bash "$SP/mac/intel-x64.sh" \
-            --app "$(find1 app '*.app')" --dmg "$(find1 dmg '*.dmg')"
+            --app "$(finddir app '*.app')" --dmg "$(find1 dmg '*.dmg')"
     fi
 fi
 

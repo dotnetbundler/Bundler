@@ -29,7 +29,7 @@ dotnet publish "$FIX/Nsis/Fixture/BundlerNsisIntegrationFixture.csproj" -c Relea
     -p:BundlerIntegrationOutput="$OUT/nsis" --nologo
 # MSI 产包走 LocalPackages fixture（仓内唯一 MSI 生产工程，消费仓根刚打的 nupkg）
 dotnet publish "tests/Bundler.LocalPackagesTests/Fixtures/Msi/Fixture/BundlerMsiSmoke.csproj" -c Release -r $RID `
-    -p:BundlerOutputPath="$OUT/msi" --nologo
+    -p:BundlerOutputPath="$OUT/msi" -p:BundlerPackageSource="$ROOT/artifacts/packages" --nologo
 
 $nsis = Get-ChildItem "$OUT/nsis" -Filter *.exe -Recurse | Select-Object -First 1 -ExpandProperty FullName
 $msi  = Get-ChildItem "$OUT/msi"  -Filter *.msi -Recurse | Select-Object -First 1 -ExpandProperty FullName

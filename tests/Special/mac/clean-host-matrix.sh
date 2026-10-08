@@ -5,7 +5,7 @@ set -euo pipefail
 EVIDENCE_DIR="$(dirname "$0")/../evidence"; mkdir -p "$EVIDENCE_DIR"; EVIDENCE_DIR="$(cd "$EVIDENCE_DIR" && pwd)"
 EV="$EVIDENCE_DIR/SA-CLEANHOST-MAC-$(date +%Y%m%d).md"
 note(){ echo "| $1 | $2 | $3 |" >> "$EV.tmp"; echo "[$2] $1 $3"; [ "$2" = "FAIL" ] && HAD_FAIL=1; return 0; }
-wait_human(){ echo "=== 人工动作: $1 ==="; read -r -p "完成后回车: " _; }
+wait_human(){ [ ! -t 0 ] && { echo "(无人值守跳过人工动作: $1)"; return 0; }; echo "=== 人工动作: $1 ==="; read -r -p "完成后回车: " _; }
 
 xcode=$(xcode-select -p 2>/dev/null || echo "无")
 clt=$(pkgutil --pkg-info=com.apple.pkg.CLTools_Executables 2>/dev/null | head -1 || echo "无")
