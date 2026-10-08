@@ -607,6 +607,11 @@ internal static class BootstrapPlan
     private static extern bool GetVolumePathName(string lpszFileName, StringBuilder lpszVolumePathName, int nBufferLength);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetVolumePathNamesForVolumeName(
+        string lpszVolumeName, char[] lpszVolumePathNames, uint cchBufferLength, ref uint lpcchReturnLength);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern uint GetFinalPathNameByHandle(IntPtr hFile, StringBuilder lpszFilePath, uint cchFilePath, uint dwFlags);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -830,9 +835,11 @@ internal static class BootstrapPlan
                         break;
                     }
                 }
-                var next = Path.GetFullPath(
-                    Path.IsPathRooted(target) ? target
-                        : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
+                var next = AbsoluteLinkTarget(current, target);
+                if (next is null)
+                {
+                    return null;
+                }
                 var canonical = CanonicalParentPath(next, resolving);
                 if (canonical is null || !visited.Add(canonical))
                 {
@@ -851,6 +858,66 @@ internal static class BootstrapPlan
         {
             resolving.Remove(path);
         }
+    }
+
+    // `\\?\`/`\??\` 扩展长度前缀的链接目标不能走 GetFullPath 规范化——.NET 对
+    // 非盘符设备段（`Volume{GUID}`、`GLOBALROOT` 等）会剥前缀后按相对名拼回
+    // 父级（win 腿实证：父级若恰好存在同名目录还会静默解到错目录）。手工规范
+    // 三类合法形：`UNC\s\p`→`\\s\p`、`X:\…`→去前缀照常、`Volume{GUID}[\sub]`
+    // →查卷真实挂载名替根段；不认识的设备形与无 DOS 名的卷返回 null 拒绝。
+    private static string? AbsoluteLinkTarget(string current, string target)
+    {
+        if (!OperatingSystem.IsWindows()
+            || (!target.StartsWith(@"\\?\", StringComparison.Ordinal)
+                && !target.StartsWith(@"\??\", StringComparison.Ordinal)))
+        {
+            return Path.GetFullPath(
+                Path.IsPathRooted(target) ? target
+                    : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
+        }
+        var body = target[4..];
+        if (body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.GetFullPath(@"\\" + body[4..]);
+        }
+        if (body.Length >= 2 && char.IsLetter(body[0]) && body[1] == ':')
+        {
+            return Path.GetFullPath(body);
+        }
+        if (HasVolumeGuidRoot(body))
+        {
+            var dosName = VolumeDosPath(body[..44]);
+            var tail = body[44..].TrimStart('\\', '/');
+            return dosName is null ? null
+                : Path.GetFullPath(
+                    dosName.TrimEnd('\\') + (tail.Length == 0 ? @"\" : @"\" + tail));
+        }
+        return null;
+    }
+
+    // `Volume{GUID}` 是否占据路径根段（整名、尾分隔符或带子路径都算）。
+    private static bool HasVolumeGuidRoot(string path) =>
+        path.Length >= 44 && IsVolumeGuidName(path[..44])
+        && (path.Length == 44 || path[44] == '\\' || path[44] == '/');
+
+    // `Volume{GUID}` → 卷的 DOS 可见挂载名（`D:\`/`C:\mntv\`，多挂载取第一个）；
+    // 卷只按 GUID 可达（无挂载名）返回 null——托管 IO 没有能拼它的拼写。
+    private static string? VolumeDosPath(string volumeGuidName)
+    {
+        var volumeName = $@"\\?\{volumeGuidName}\";
+        var required = 0u;
+        GetVolumePathNamesForVolumeName(volumeName, Array.Empty<char>(), 0, ref required);
+        if (required == 0)
+        {
+            return null;
+        }
+        var buffer = new char[required];
+        if (!GetVolumePathNamesForVolumeName(volumeName, buffer, (uint)buffer.Length, ref required))
+        {
+            return null;
+        }
+        var names = new string(buffer).Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        return names.Length == 0 ? null : names[0];
     }
 
     // NT 对象名的三种表面：`\\?\`/`\??\` 前缀、`\Device\…`、以及 .NET 剥前缀后
