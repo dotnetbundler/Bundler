@@ -337,7 +337,10 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             // Multi-format fanout: each backend runs once per requested format
             // against a configuration whose targets carry only that format.
             var artifacts = new List<BundleArtifact>();
+            var failedFormats = new List<(PackageFormat Format, string Reason)>();
             foreach (var format in formats.Distinct())
+            {
+            try
             {
                 var configuration = Configure([format]);
                 IReadOnlyList<BundleArtifact> produced;
@@ -714,8 +717,16 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             }
                 artifacts.AddRange(produced);
             }
+            catch (Exception exception) when (exception is not BundleValidationException)
+            {
+                // 逐格式独立失败：单格式失败不拖累其余格式，末位汇总失败；
+                // 校验拒绝仍走任务级 catch 打印 issue 列表。
+                failedFormats.Add((format, exception.Message));
+                Log.LogWarning($"Bundler format '{format}' failed and was skipped: {exception.Message}");
+            }
+            }
 
-            if (UpdateEnabled)
+            if (UpdateEnabled && artifacts.Count > 0)
             {
                 var feed = UpdateManifestEmitter.EmitAsync(
                     Configure(formats), artifacts).GetAwaiter().GetResult();
@@ -732,6 +743,13 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 item.SetMetadata("RuntimeIdentifier", artifact.RuntimeIdentifier);
                 return (ITaskItem)item;
             }).ToArray();
+
+            if (failedFormats.Count > 0)
+            {
+                Log.LogError($"Bundler: {failedFormats.Count} package format(s) failed: " +
+                    string.Join("; ", failedFormats.Select(f => $"{f.Format} ({f.Reason})")));
+                return false;
+            }
 
             return true;
         }

@@ -40,10 +40,19 @@ restart_app() {
         *.app) if [ "$(uname -s)" = "Darwin" ]; then
             /usr/bin/open -n "$APP_PATH" || true
         else
-            (cd "$(dirname "$INSTALL_DIR")" && nohup "$APP_PATH" >/dev/null 2>&1 &)
+            _restart_nohup
         fi ;;
-        *) (cd "$(dirname "$INSTALL_DIR")" && nohup "$APP_PATH" >/dev/null 2>&1 &) ;;
+        *) _restart_nohup ;;
     esac
+}
+
+_restart_nohup() {
+    # cwd 对齐 AOT：目录级=INSTALL_DIR 本身，文件级=INSTALL_DIR 的父目录。
+    if [ -d "$INSTALL_DIR" ]; then
+        (cd "$INSTALL_DIR" && nohup "$APP_PATH" >/dev/null 2>&1 &)
+    else
+        (cd "$(dirname "$INSTALL_DIR")" && nohup "$APP_PATH" >/dev/null 2>&1 &)
+    fi
 }
 
 # 同卷 mv=rename 原子就位（含进程被杀语义）；跨卷 mv 退化为 copy+unlink，

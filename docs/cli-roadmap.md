@@ -84,3 +84,10 @@
 - 顺带修复：`JsonNode.Parse` 补 `JsonDocumentOptions`（注释/尾逗号），与 Core `BundleConfigurationLoader` 口径一致。
 - `Verify.sh` 新增 AOT 段：原生二进制 `--version`/bundle zip 实测断言（并证明无 `DOTNET_ROOT` 下运行）。
 - 实测：`bundler bundle --config bundler.json`（zip+targz+deb+文件映射+点号旋钮）原生二进制全绿。
+
+### 2026-10-08 逐格式独立失败语义（三轮测试待裁项落地）
+
+- 多格式扇出改逐格式独立失败：单格式构建期异常（含宿主门禁 `PlatformNotSupportedException`）WARN+跳过、其余格式照常产出，末位 stderr 汇总 `<n> format(s) failed: <fmt> (<原因>)` 并以 rc=1 收场——此前任一格式失败中止整批，可产格式也被饿死（mac 宿主批次因门禁 `msi` 中止连带 zip 零产出的实证根因）。
+- `BundleValidationException`/`CliUsageException` 仍向上穿透保 rc=2 用法层语义（format↔rid 矩阵拒绝、未知格式、非法旋钮不降级）。
+- `bundler.json` 更新清单只在有产物时 emit；MSBuild 任务同语义（`BundleDesktopApplication` 逐格式 try/catch → `LogWarning`+汇总 `LogError` 返 false，校验拒绝仍走任务级 catch）。
+- 断言：`CliTests.BundlePerFormatIndependentFailure`（门禁格式 WARN+zip 照常产出+rc=1+stderr 具名失败格式）。

@@ -159,6 +159,37 @@ public static class CliTests
     }
 
     [Fact]
+    static void BundlePerFormatIndependentFailure()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "gated set differs per host");
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "bundler-cli-perfmt-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            // 宿主门禁格式失败只 WARN+计入失败汇总——可产格式照常产出，末位 rc=1。
+            var gated = TestPlatform.IsMacOS ? "msi" : "dmg";
+            var args = BaseArgs("bundle", input, output)
+                .Select(arg => arg == "zip" ? $"{gated},zip" : arg)
+                .Concat(["--quiet"]).ToArray();
+            var (code, stdout, err) = Run(args);
+            Assert.Equal(1, code);
+            Assert.Contains("1 format(s) failed", err);
+            Assert.Contains(gated, err);
+            var zip = Path.Combine(output, "linux-x64", "zip", "clifixture-1.0.0-linux-x64.zip");
+            Assert.True(File.Exists(zip), $"producible format artifact must still land at {zip}");
+            Assert.Contains(zip, stdout);
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            if (Directory.Exists(output))
+            {
+                Directory.Delete(output, true);
+            }
+        }
+    }
+
+    [Fact]
     static void BundleMatrixViolation()
     {
         var input = CreateInputDirectory();

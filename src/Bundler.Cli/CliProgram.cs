@@ -84,7 +84,7 @@ public static class CliProgram
             {
                 "validate" => RunValidate(configuration, parsed, stdout, stderr),
                 "plan" => RunPlan(configuration, parsed, stdout),
-                "bundle" => RunBundle(configuration, resolved, parsed, stdout, logger),
+                "bundle" => RunBundle(configuration, resolved, parsed, stdout, stderr, logger),
                 _ => 2
             };
         }
@@ -250,19 +250,31 @@ public static class CliProgram
 
     private static int RunBundle(
         BundleConfiguration configuration, CliResolvedConfiguration resolved,
-        CliArguments parsed, TextWriter stdout, IBundleLogger logger)
+        CliArguments parsed, TextWriter stdout, TextWriter stderr, IBundleLogger logger)
     {
         var formats = configuration.Targets.SelectMany(t => t.Formats).Distinct().ToArray();
         var artifacts = new List<BundleArtifact>();
+        var failures = new List<(PackageFormat Format, string Reason)>();
         foreach (var format in formats)
         {
-            var single = SingleFormatConfiguration(configuration, format);
-            var produced = FormatDispatcher.BuildAsync(format, single, resolved, logger)
-                .GetAwaiter().GetResult();
-            artifacts.AddRange(produced);
+            try
+            {
+                var single = SingleFormatConfiguration(configuration, format);
+                var produced = FormatDispatcher.BuildAsync(format, single, resolved, logger)
+                    .GetAwaiter().GetResult();
+                artifacts.AddRange(produced);
+            }
+            catch (Exception exception) when (exception is not BundleValidationException and not CliUsageException)
+            {
+                // 逐格式独立失败：单格式失败不拖累其余格式，末位汇总非零 rc；
+                // 校验拒绝仍是 rc=2 用法层错误，直接向上传播。
+                failures.Add((format, exception.Message));
+                logger.Log(BundleLogLevel.Warning,
+                    $"format '{FormatName(format)}' failed: {exception.Message}");
+            }
         }
 
-        var updateArtifacts = configuration.Update is null
+        var updateArtifacts = configuration.Update is null || artifacts.Count == 0
             ? Array.Empty<string>()
             : UpdateManifestEmitter.EmitAsync(configuration, artifacts)
                 .GetAwaiter().GetResult();
@@ -291,6 +303,13 @@ public static class CliProgram
             {
                 stdout.WriteLine(path);
             }
+        }
+
+        if (failures.Count > 0)
+        {
+            stderr.WriteLine($"bundler: {failures.Count} format(s) failed: " +
+                string.Join("; ", failures.Select(f => $"{FormatName(f.Format)} ({f.Reason})")));
+            return 1;
         }
         return 0;
     }

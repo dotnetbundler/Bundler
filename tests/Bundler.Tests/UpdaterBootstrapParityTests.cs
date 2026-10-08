@@ -594,6 +594,62 @@ public static class UpdaterBootstrapParityTests
         }
     }
 
+    [Fact]
+    static void RestartApp_CwdMatchesAotContract()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "app stub is a POSIX sh script");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var markerFile = Path.Combine(dir, "cwd.txt");
+                var app = Path.Combine(dir, "app-stub.sh");
+                File.WriteAllText(app, "#!/bin/sh\npwd > \"" + markerFile + "\"\n");
+                if (!OperatingSystem.IsWindows())
+                {
+                    File.SetUnixFileMode(app,
+                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                }
+                var log = Path.Combine(dir, "u.log");
+
+                // 目录级：cwd=INSTALL_DIR。
+                var install = InstallV1(dir);
+                var payload = PayloadV2(dir);
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--app", app, "--log", log));
+                Assert.True(WaitForFile(markerFile), "restart stub did not run (dir-level)");
+                Assert.Equal(install, File.ReadAllText(markerFile).Trim());
+                File.Delete(markerFile);
+
+                // 文件级：cwd=install 的父目录。
+                var fileDir = NewDir(dir, "file-level");
+                var installFile = Path.Combine(fileDir, "app.bin");
+                File.WriteAllText(installFile, "v1");
+                var payloadFile = Path.Combine(dir, "payload.bin");
+                File.WriteAllText(payloadFile, "v2");
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", installFile,
+                    "--payload", payloadFile, "--app", app, "--log", log));
+                Assert.True(WaitForFile(markerFile), "restart stub did not run (file-level)");
+                Assert.Equal(fileDir, File.ReadAllText(markerFile).Trim());
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    static bool WaitForFile(string path)
+    {
+        for (var i = 0; i < 100 && !File.Exists(path); i++)
+        {
+            Thread.Sleep(100);
+        }
+        return File.Exists(path);
+    }
+
     static void CopyTree(string source, string destination)
     {
         Directory.CreateDirectory(destination);
