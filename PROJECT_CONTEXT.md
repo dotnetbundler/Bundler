@@ -42,6 +42,7 @@
 | `tests/Bundler.IntegrationTests/Fixtures/` | 集成 fixture 集中地：各格式被发布成包的 fixture 工程与载荷 `Assets/`（`Nsis/` 含 `LegacyMsiFixture*/`） | `net10.0` |
 | `tests/Shared/` | 四测试工程链接共享：`TestPlatform.cs` 宿主探测门面 + `Tooling/` 集成基建（`ProcessRunner`/`DockerRunner`/`ElevatedRunner`/`IntegrationWorkspace`/`MsiSupport`/`WindowsDesktop` UIA3 向导驱动/`ShellLink` 等） | `net10.0` |
 | `tests/README.md` | 测试入口、trait 门禁与 fixture 地图 | — |
+| `tests/Special/` | 特殊验收脚本矩阵（进不了 dotnet test 的验收项按 win/mac/linux 分宿主脚本 + 证据契约 `shared/evidence-format.md`，产出 `evidence/` 已 gitignore） | sh/ps1 |
 | `tests/Special/win/nsis-reboot` | 可抛弃 VM 重启验证入口（`Verify.ps1` 两阶段：锁定文件卸载 `3010` → 重启 → pending rename/目录/注册表/journal 清理断言） | PowerShell |
 | `samples/HelloBundlerApp` | 全后端统一公开示例（应用版本 `1.0.0`，主工程公共旋钮 + `formats/*.props` 各后端专属旋钮，100% 旋钮覆盖） | `net10.0` |
 | `tools/Bundler.Nsis.Plugin` | NSIS 原生插件源码（有意在 slnx 之外，重建需 .NET 10 + Windows 原生链） | `net10.0` |
@@ -85,6 +86,15 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-08 PR #43 压缩合并（squash `d849a38`，main `d849a38`，版本 `alpha.84` 不变）
+
+- `tests/Special/` 特殊验收脚本矩阵落地：进不了 `dotnet test` 的验收项按 win/mac/linux 分宿主 17 脚本（UAC 伴随/可丢弃 VM 故障/干净宿主/ARM64 真机/生产凭证链/CDN Range/公网管线等，映射 `docs/special-acceptance.md` ID）+ `shared/evidence-format.md` 证据契约；统一形态"前置自检→跑→清场→FAIL 记退出码"，凭证只用 thumbprint/keychain-profile 引用；`tools/Windows.Nsis.Reboot` git mv 收编为 `tests/Special/win/nsis-reboot`。
+- 真小卷 ENOSPC 三宿主腿收编（`UpdateIntegrationTests.cs`）：linux 走 `docker --tmpfs /vol:rw,size=8m`（本机实跑 PASS）、mac 走 `hdiutil` 8M dmg、win 走 `diskpart` 8M VHD（elevation+x64 门）；同账同断言（install 2M 上卷+载荷 7M 留宿主，换包被拒→install 逐字节还原→残渣清零）。
+- win 锁文件/只读文件换包腿收编（`UpdaterBootstrapParityTests.cs` +2：win rc=4 干净拒+install 完整 / POSIX 正常换包）。
+- 环境门禁纪律：全按能力探测（docker/elevation/OS/arch），不按 CI-vs-本地分。
+- 复审四轮 10 条处置：bug/security 清零（PFX 密码不上命令行、私钥 -Exportable 移除、既有安装拒绝越界清理、VHD 载荷留宿主盘），2 条 flag 按设计语义帖内结案。
+- Bundler.Tests 全量 **390 件 0F**（+2）。
 
 ### 2026-10-08 PR #42 压缩合并（squash `031ea89`，main `031ea89`，版本 `alpha.84` 不变）
 
@@ -453,6 +463,6 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#42 持续加固至 `alpha.84`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地，跨版本兼容冻件腿在网（§3 最新三轮）。
+UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#43 持续加固至 `alpha.84`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地，跨版本兼容冻件腿与三宿主真小卷 ENOSPC 腿在网，`tests/Special/` 特殊验收脚本矩阵就位（§3 最新三轮）。
 剩余工作：CI 发布链测试（产出→安装→可用，触发方式与更新链是否纳入待用户确认）、格式旋钮统一预检（复审挂后续项——把各后端旋钮校验抽到扇出前校验层）、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 
