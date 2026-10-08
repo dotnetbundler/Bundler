@@ -1,0 +1,627 @@
+// 引导件双腿平价收编：原宿主腿脚本断言库内化——
+// AOT 侧进程内跑 BootstrapPlan.Run（当前源码，覆盖 UpdateTests 未含的平价矩阵），
+// POSIX 侧真实跑 `sh src/.../tools/posix/bundler-updater.sh` 子进程，
+// 同一断言集双侧各跑一遍，断言退出码与落地文件系统状态完全一致。
+// Windows 宿主无 sh，只跑 AOT 侧；符号链接腿在 POSIX 上双侧、Windows 上跳过。
+// 退出码契约与 Program.Main 一致：0 成功；2 用法拒绝；3 等待超时；4 换包失败。
+using System.Diagnostics;
+using System.Text;
+using DotNet.Bundler.Updater.Bootstrap;
+
+public static class UpdaterBootstrapParityTests
+{
+    enum Impl { Aot, Sh }
+
+    // POSIX 上双侧平价；Windows 上仅 AOT（sh 缺席）。
+    static IEnumerable<Impl> Impls =>
+        TestPlatform.IsWindows ? [Impl.Aot] : [Impl.Aot, Impl.Sh];
+
+    static readonly string PosixScript = Path.Combine(
+        RepoRoot(), "src", "Bundler.Updater.Bootstrap", "tools", "posix", "bundler-updater.sh");
+
+    static int Invoke(Impl impl, params string[] args) => impl switch
+    {
+        Impl.Aot => RunAot(args),
+        _ => RunSh(args),
+    };
+
+    static int RunAot(string[] args)
+    {
+        try
+        {
+            return BootstrapPlan.Run(args);
+        }
+        catch (UsageException)
+        {
+            return 2;
+        }
+        catch (WaitTimeoutException)
+        {
+            return 3;
+        }
+        catch
+        {
+            return 4;
+        }
+    }
+
+    static int RunSh(string[] args)
+    {
+        Assert.SkipUnless(File.Exists(PosixScript), $"posix script missing: {PosixScript}");
+        var startInfo = new ProcessStartInfo("sh")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add(PosixScript);
+        foreach (var arg in args)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+        using var process = Process.Start(startInfo)!;
+        process.WaitForExit(60_000);
+        Assert.True(process.HasExited, "bundler-updater.sh did not exit within 60s");
+        return process.ExitCode;
+    }
+
+    static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Bundler.slnx")))
+        {
+            dir = dir.Parent;
+        }
+        Assert.NotNull(dir);
+        return dir.FullName;
+    }
+
+    static string NewDir(string root, string name)
+    {
+        var path = Path.Combine(root, name);
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    static string Write(string path, string contents)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, contents);
+        return path;
+    }
+
+    static string InstallV1(string root)
+    {
+        var install = NewDir(root, "install");
+        Write(Path.Combine(install, "app.txt"), "v1-app");
+        Write(Path.Combine(install, "data", "state.txt"), "v1-state");
+        return install;
+    }
+
+    static string PayloadV2(string root)
+    {
+        var payload = NewDir(root, "payload");
+        Write(Path.Combine(payload, "app.txt"), "v2-app");
+        Write(Path.Combine(payload, "data", "state.txt"), "v2-state");
+        Write(Path.Combine(payload, "new.txt"), "v2-new");
+        return payload;
+    }
+
+    static void AssertTree(string expected, string actual)
+    {
+        var expectedFiles = Directory.EnumerateFiles(expected, "*", SearchOption.AllDirectories)
+            .Select(p => Path.GetRelativePath(expected, p)).Order().ToList();
+        var actualFiles = Directory.EnumerateFiles(actual, "*", SearchOption.AllDirectories)
+            .Select(p => Path.GetRelativePath(actual, p)).Order().ToList();
+        Assert.Equal(expectedFiles, actualFiles);
+        foreach (var rel in expectedFiles)
+        {
+            Assert.Equal(File.ReadAllBytes(Path.Combine(expected, rel)),
+                File.ReadAllBytes(Path.Combine(actual, rel)));
+        }
+    }
+
+    static string Marker(string install) => install.TrimEnd('/', '\\') + ".bundler-swap";
+    static string Backup(string install) => install.TrimEnd('/', '\\') + ".bundler-backup";
+
+    [Fact]
+    static void DefaultSwap_BackupLifecycle_AndRollbackRejects()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var payload = PayloadV2(dir);
+                var expected = NewDir(dir, "expected");
+                CopyTree(payload, expected);
+                var log = Path.Combine(dir, "u.log");
+
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--log", log));
+                AssertTree(expected, install);
+                Assert.False(Directory.Exists(Backup(install)),
+                    "transient backup must be removed after success");
+                Assert.False(File.Exists(Marker(install)));
+
+                Assert.Equal(4, Invoke(impl, "apply", "--install-dir", install,
+                    "--rollback", "--log", log));
+                AssertTree(expected, install);
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void RetainBackupTo_LandsHashed_AndRollbackRestores()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var v1 = NewDir(dir, "v1-snapshot");
+                CopyTree(install, v1);
+                var payload = PayloadV2(dir);
+                var expected = NewDir(dir, "expected");
+                CopyTree(payload, expected);
+                var retain = NewDir(dir, "retain");
+                var log = Path.Combine(dir, "u.log");
+
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--retain-backup-to", retain, "--log", log));
+                AssertTree(expected, install);
+                // `--retain-backup-to` 指到备份本身（<名>-<哈希> 命名是库层 XDG 解析的产物）。
+                AssertTree(v1, retain);
+
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--rollback", "--backup-dir", retain, "--log", log));
+                AssertTree(v1, install);
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void ExplicitBackupDir_IsUsed()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var payload = PayloadV2(dir);
+                var expected = NewDir(dir, "expected");
+                CopyTree(payload, expected);
+                var backup = Path.Combine(dir, "explicit-backup");
+                var log = Path.Combine(dir, "u.log");
+
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--backup-dir", backup, "--log", log));
+                AssertTree(expected, install);
+                Assert.False(Directory.Exists(backup));
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void SameOrNested_Reject_AllDirections()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var payload = PayloadV2(dir);
+                var v1 = NewDir(dir, "v1-snapshot");
+                CopyTree(install, v1);
+                var log = Path.Combine(dir, "u.log");
+
+                // 同址、payload⊂install、install⊂payload 三向全拒，两目录逐字节完好。
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", install, "--log", log));
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", Path.Combine(install, "data"), "--log", log));
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir",
+                    Path.Combine(install, "data"), "--payload", install, "--log", log));
+                // `..` 字面拼写逃逸同样 rc=2。
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", install + Path.DirectorySeparatorChar + ".."
+                        + Path.DirectorySeparatorChar + "install", "--log", log));
+                AssertTree(v1, install);
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void RetainNesting_Reject_IncludingPayloadInsideRetain()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var payload = PayloadV2(dir);
+                var retain = NewDir(dir, "retain");
+                var log = Path.Combine(dir, "u.log");
+
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--retain-backup-to", install, "--log", log));
+                // payload⊂retain（第六向）：retain 包整个 payload 同样拒。
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", Path.Combine(retain, "payload"), "--retain-backup-to",
+                    retain, "--log", log));
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void SymlinkFamily_Reject()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "symlink family legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var payload = PayloadV2(dir);
+                var log = Path.Combine(dir, "u.log");
+
+                // 目录级 install 被符号链接替换成指向 payload 内目录 → 字面逃脱物理判，rc=2。
+                var linkInstall = Path.Combine(dir, "install-link");
+                Directory.CreateSymbolicLink(linkInstall, Path.Combine(payload, "data"));
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", linkInstall,
+                    "--payload", Path.Combine(payload, "data"), "--log", log));
+
+                // 二级链：install→link1→payload/data。
+                var hop = Path.Combine(dir, "hop-link");
+                Directory.CreateSymbolicLink(hop, linkInstall);
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", hop,
+                    "--payload", Path.Combine(payload, "data"), "--log", log));
+
+                // 悬挂载荷链接 → rc=2。
+                var dangling = Path.Combine(dir, "dangling");
+                Directory.CreateSymbolicLink(dangling, Path.Combine(dir, "nonexistent"));
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", dangling, "--log", log));
+
+                // 环链（自指）→ rc=2 秒回不挂起。
+                var self = Path.Combine(dir, "self-link");
+                Directory.CreateSymbolicLink(self, self);
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", self, "--log", log));
+
+                // a↔b 互指环 → rc=2。
+                var a = Path.Combine(dir, "a");
+                var b = Path.Combine(dir, "b");
+                Directory.CreateSymbolicLink(a, b);
+                Directory.CreateSymbolicLink(b, a);
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", a, "--log", log));
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void LongChain_OverLimit_Reject()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "symlink family legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var log = Path.Combine(dir, "u.log");
+
+                // 45 跳链——超过 41 跳硬限，按环拒绝 rc=2。
+                var chain = Path.Combine(dir, "real-target");
+                Directory.CreateDirectory(chain);
+                var current = chain;
+                for (var i = 0; i < 45; i++)
+                {
+                    var link = Path.Combine(dir, $"link-{i:D2}");
+                    Directory.CreateSymbolicLink(link, current);
+                    current = link;
+                }
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", current, "--log", log));
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void BenignLeafLink_AtBackupSlot_ReplacedWithoutTouchingTarget()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var payload = PayloadV2(dir);
+                var expected = NewDir(dir, "expected");
+                CopyTree(payload, expected);
+                var outside = Write(Path.Combine(dir, "outside.txt"), "outside-data");
+                var log = Path.Combine(dir, "u.log");
+
+                // 备份槽预置良性叶链：必须删链节点、不触目标、rc=0。
+                File.CreateSymbolicLink(Backup(install), outside);
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--log", log));
+                Assert.Equal("outside-data", File.ReadAllText(outside));
+                AssertTree(expected, install);
+
+                // 二次 apply 无楔形（首个 payload 已消费，重建一个）。
+                payload = PayloadV2(dir);
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--log", log));
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void MarkerAndBackup_CrashRecovery_RestoresThenSwaps()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var v1 = NewDir(dir, "v1-snapshot");
+                CopyTree(install, v1);
+                var payload = PayloadV2(dir);
+                var expected = NewDir(dir, "expected");
+                CopyTree(payload, expected);
+                var log = Path.Combine(dir, "u.log");
+
+                // 模拟换包中途被杀：install→瞬备、install 缺失、marker 在。
+                Directory.Move(install, Backup(install));
+                File.WriteAllText(Marker(install), "swap-in-progress");
+                Assert.False(Directory.Exists(install));
+
+                // 恢复应先还原旧版、再完成本次换包到 v2——终态 v2 无残渣。
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--log", log));
+                AssertTree(expected, install);
+                Assert.False(File.Exists(Marker(install)));
+                Assert.False(Directory.Exists(Backup(install)));
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void BackupParentIsFile_FailsClean_Rc4()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var v1 = NewDir(dir, "v1-snapshot");
+                CopyTree(install, v1);
+                var payload = PayloadV2(dir);
+                var blocker = Write(Path.Combine(dir, "blocker"), "file-not-dir");
+                var log = Path.Combine(dir, "u.log");
+
+                // --backup-dir 父段是文件 → 备份建不起来，rc=4、install 完好、无 marker。
+                Assert.Equal(4, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--backup-dir",
+                    Path.Combine(blocker, "backup"), "--log", log));
+                AssertTree(v1, install);
+                Assert.False(File.Exists(Marker(install)));
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--log", log));
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void FileLevel_Swap_AndRollback()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = Write(Path.Combine(dir, "install", "app.bin"), "v1-bin");
+                var payload = Write(Path.Combine(dir, "payload", "app.bin"), "v2-bin");
+                var log = Path.Combine(dir, "u.log");
+
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--log", log));
+                Assert.Equal("v2-bin", File.ReadAllText(install));
+                Assert.False(File.Exists(Backup(install)));
+
+                Assert.Equal(4, Invoke(impl, "apply", "--install-dir", install,
+                    "--rollback", "--log", log));
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void RetainFailure_WarnDegrades_TransientLeft()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows || TestPlatform.IsRoot,
+            "permission-based retain failure requires POSIX non-root");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var payload = PayloadV2(dir);
+                var sealedRetain = NewDir(dir, "sealed-retain");
+                File.WriteAllText(Path.Combine(sealedRetain, "filler"), "x");
+                if (!OperatingSystem.IsWindows())
+                {
+                    File.SetUnixFileMode(sealedRetain, UnixFileMode.UserRead);
+                }
+                var log = Path.Combine(dir, "u.log");
+
+                var rc = Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--retain-backup-to", sealedRetain, "--log", log);
+                if (!OperatingSystem.IsWindows())
+                {
+                    File.SetUnixFileMode(sealedRetain,
+                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                }
+
+                // 换包不阻断：rc=0、WARN 降级、瞬备留原位。
+                Assert.Equal(0, rc);
+                Assert.Contains("WARN", File.ReadAllText(log));
+                Assert.True(Directory.Exists(Backup(install)),
+                    "transient backup must stay when retain fails");
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void ShippedBootstrap_SmokeApplies()
+    {
+        // 仓内 tools/<rid> 引导件冒烟：守住"源码修了但发布件没重产"的漂变。
+        var rid = TestPlatform.IsWindows ? "win-x64"
+            : TestPlatform.IsMacOS
+                ? (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture ==
+                    System.Runtime.InteropServices.Architecture.Arm64 ? "osx-arm64" : "osx-x64")
+            : TestPlatform.IsLinux
+                ? TestPlatform.LinuxRuntimeIdentifier
+                : null;
+        Assert.SkipUnless(rid is not null, "no shipped bootstrap RID for this host");
+        var exeName = TestPlatform.IsWindows ? "bundler-updater.exe" : "bundler-updater";
+        var binary = Path.Combine(RepoRoot(), "src", "Bundler.Updater.Bootstrap",
+            "tools", rid!, exeName);
+        Assert.SkipUnless(File.Exists(binary), $"shipped bootstrap missing: {binary}");
+
+        var root = CreateTempDirectory();
+        try
+        {
+            var install = InstallV1(root);
+            var payload = PayloadV2(root);
+            var expected = NewDir(root, "expected");
+            CopyTree(payload, expected);
+            var startInfo = new ProcessStartInfo(binary)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(binary,
+                    File.GetUnixFileMode(binary) |
+                    UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+            }
+            startInfo.ArgumentList.Add("apply");
+            startInfo.ArgumentList.Add("--install-dir");
+            startInfo.ArgumentList.Add(install);
+            startInfo.ArgumentList.Add("--payload");
+            startInfo.ArgumentList.Add(payload);
+            using var process = Process.Start(startInfo)!;
+            Assert.True(process.WaitForExit(60_000));
+            Assert.Equal(0, process.ExitCode);
+                AssertTree(expected, install);
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    static void CopyTree(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var dir in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        {
+            Directory.CreateDirectory(Path.Combine(destination, Path.GetRelativePath(source, dir)));
+        }
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            File.Copy(file, Path.Combine(destination, Path.GetRelativePath(source, file)));
+        }
+    }
+
+    static string CreateTempDirectory()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "bundler-leg-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    static void Cleanup(string path)
+    {
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch
+        {
+        }
+    }
+}
