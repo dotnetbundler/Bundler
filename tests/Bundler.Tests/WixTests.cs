@@ -1356,6 +1356,27 @@ public static class WixTests
                 StringComparison.OrdinalIgnoreCase) ||
             (Directory.Exists(full) && (File.GetAttributes(full) & FileAttributes.ReparsePoint) != 0))
             throw new InvalidOperationException("Refusing to delete an unowned or redirected WiX test path: " + full);
-        if (Directory.Exists(full)) Directory.Delete(full, true);
+        if (Directory.Exists(full))
+        {
+            // 归一属性再重试删：WiX 工具箱落盘的 winterop.dll 等件可能带只读位，
+            // Windows-ARM64 上 x86 仿真的 native 映像句柄也常滞后释放——两者
+            // 都表现为 UnauthorizedAccessException，规范属性+退避重试覆盖。
+            foreach (var file in Directory.EnumerateFiles(full, "*", SearchOption.AllDirectories))
+            {
+                try { File.SetAttributes(file, FileAttributes.Normal); } catch (Exception) { }
+            }
+            for (var attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    Directory.Delete(full, true);
+                    break;
+                }
+                catch (Exception) when (attempt < 4)
+                {
+                    Thread.Sleep(400 * (attempt + 1));
+                }
+            }
+        }
     }
 }

@@ -16,6 +16,13 @@ internal static class UnixFileTypes
     [DllImport("libc", EntryPoint = "stat", SetLastError = true, CharSet = CharSet.Ansi)]
     private static extern int Stat(string path, byte[] buffer);
 
+    // macOS 上裸 "stat" 符号在 x86_64 绑到遗留 non-INODE64 变体（st_dev,st_ino,...
+    // st_mode 在偏移 8），arm64 无遗留变体恰是 inode64——同名符号两架构不同布局。
+    // 显式绑 stat$INODE64 拿到确定的 inode64 布局（st_mode 恒在偏移 4）；
+    // 符号缺失（理论上 arm64 已无二名）退回 "stat" 亦同布局，双保险。
+    [DllImport("libc", EntryPoint = "stat$INODE64", SetLastError = true, CharSet = CharSet.Ansi)]
+    private static extern int StatInode64(string path, byte[] buffer);
+
     /// <summary>
     /// True when <paramref name="path"/> resolves (symlinks followed) to a
     /// regular file — the only entry kind the packagers can read. Also true
@@ -25,12 +32,29 @@ internal static class UnixFileTypes
     internal static bool IsRegularFile(string path)
     {
         var linux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-        if (!linux && !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        var mac = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+        if (!linux && !mac)
         {
             return true;
         }
         var status = new byte[256];
-        if (Stat(path, status) != 0)
+        int rc;
+        if (mac)
+        {
+            try
+            {
+                rc = StatInode64(path, status);
+            }
+            catch (EntryPointNotFoundException)
+            {
+                rc = Stat(path, status);
+            }
+        }
+        else
+        {
+            rc = Stat(path, status);
+        }
+        if (rc != 0)
         {
             return true;
         }
@@ -42,11 +66,11 @@ internal static class UnixFileTypes
 
     // struct stat st_mode offset: 64-bit ABIs that give st_nlink a full
     // machine word (x86_64, s390x, ppc64le) put st_mode at 24; the asm-generic
-    // layout every other Linux arch uses puts it at 16. macOS (u32 st_dev +
-    // u16 st_mode) puts it at 4. An ABI not covered above defaults to the
-    // asm-generic offset on a best-effort basis — a wrong guess misreads
-    // mode bits and just falls back to the pre-skip failure mode (File.Copy
-    // throwing), it cannot copy something unsafe.
+    // layout every other Linux arch uses puts it at 16. macOS inode64 (u32
+    // st_dev + u16 st_mode) puts it at 4. An ABI not covered above defaults
+    // to the asm-generic offset on a best-effort basis — a wrong guess
+    // misreads mode bits and just falls back to the pre-skip failure mode
+    // (File.Copy throwing), it cannot copy something unsafe.
     private static int LinuxModeOffset()
     {
         var architecture = RuntimeInformation.ProcessArchitecture;

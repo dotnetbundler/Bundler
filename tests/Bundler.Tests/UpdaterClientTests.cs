@@ -148,9 +148,10 @@ public static class UpdaterClientTests
     [Fact]
     static async Task Client_UpdateAsync_AppImage_FileSwap_Linux()
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+            RuntimeInformation.ProcessArchitecture != Architecture.X64)
         {
-            return; // 引导二进制是 linux-x64 件——本腿只在 linux 宿主跑
+            return; // 引导二进制是 linux-x64 件——本腿只在 linux-x64 宿主跑
         }
         var directory = CreateTempDirectory();
         try
@@ -687,9 +688,10 @@ public static class UpdaterClientTests
     [Fact]
     static async Task Client_UpdateAsync_EndToEnd_Linux()
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+            RuntimeInformation.ProcessArchitecture != Architecture.X64)
         {
-            return; // 本腿只在 linux 宿主跑（引导二进制为 linux-x64 件）
+            return; // 本腿只在 linux-x64 宿主跑（引导二进制为 linux-x64 件）
         }
 
         var directory = CreateTempDirectory();
