@@ -18,9 +18,25 @@ dotnet pack Bundler.slnx -c Release -o artifacts/packages --nologo
 
 Say "2/4 全量测试（四工程）"
 # MTP+xUnit3 下 `dotnet test` 发现不到用例——直跑测试程序集（tests/README.md 同款）
+# IntegrationTests 逐类跑并落进度文件：超时被砍时 artifacts 能指认在途类；-longRunning 打印挂起用例名
 foreach ($P in "Bundler.Tests", "Bundler.ApiTests", "Bundler.IntegrationTests", "Bundler.LocalPackagesTests") {
-    dotnet "tests/$P/bin/Release/net10.0/$P.dll"
-    if ($LASTEXITCODE -ne 0) { throw "$P 失败 rc=$LASTEXITCODE" }
+    $dll = "tests/$P/bin/Release/net10.0/$P.dll"
+    if ($P -eq "Bundler.IntegrationTests") {
+        $classes = dotnet $dll -list classes | Where-Object { $_ -match '^\w[\w.]*$' }
+        foreach ($c in $classes) {
+            $c = $c.Trim()
+            "[$([datetime]::UtcNow.ToString('o'))] BEGIN $c" | Out-File "$OUT/test-progress.log" -Append
+            Write-Host "[CLASS-BEGIN] $c"
+            dotnet $dll -class $c -longRunning 300
+            $rc = $LASTEXITCODE
+            "[$([datetime]::UtcNow.ToString('o'))] END   $c rc=$rc" | Out-File "$OUT/test-progress.log" -Append
+            Write-Host "[CLASS-END] $c rc=$rc"
+            if ($rc -ne 0) { throw "$P/$c 失败 rc=$rc" }
+        }
+    } else {
+        dotnet $dll -longRunning 300
+        if ($LASTEXITCODE -ne 0) { throw "$P 失败 rc=$LASTEXITCODE" }
+    }
 }
 
 Say "3/4 fixture 产包（喂 Special 腿）"

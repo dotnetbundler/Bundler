@@ -16,7 +16,7 @@ jobs:
   verify:
     name: windows-2025
     runs-on: windows-2025
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
