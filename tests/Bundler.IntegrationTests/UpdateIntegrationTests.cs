@@ -137,8 +137,9 @@ public sealed class UpdateIntegrationTests
             File.Copy(Path.Combine(RepositoryLayout.Root,
                     "src/Bundler.Updater.Bootstrap/tools/win-x64/bundler-updater.exe"),
                 updater, overwrite: true);
+            // install 上卷、载荷留宿主盘——同 docker 腿账算：8M 卷内只放 2M 树。
             var install = Path.Combine(volume, "install");
-            var payload = Path.Combine(volume, "payload");
+            var payload = Path.Combine(work, "payload");
             CopyTree(Path.Combine(work, "material", "install"), install);
             CopyTree(Path.Combine(work, "material", "payload"), payload);
             var swap = ProcessRunner.Run(updater,

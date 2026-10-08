@@ -5,7 +5,7 @@
 set -euo pipefail
 EVIDENCE_DIR="$(cd "$(dirname "$0")/../evidence" && pwd)"; mkdir -p "$EVIDENCE_DIR"
 EV="$EVIDENCE_DIR/SA-P-07-$(date +%Y%m%d).md"
-note(){ echo "| $1 | $2 | $3 |" >> "$EV.tmp"; echo "[$2] $1 $3"; }
+note(){ echo "| $1 | $2 | $3 |" >> "$EV.tmp"; echo "[$2] $1 $3"; [ "$2" = "FAIL" ] && HAD_FAIL=1; return 0; }
 die(){ echo "FAIL: $*" >&2; exit 1; }
 : "${DEV_ID_APP:?设 DEV_ID_APP}"
 FEED=""; APPV1=""; APPV2=""
@@ -25,7 +25,8 @@ note "v1 TeamID" "PASS" "$team1"
 
 # 走 bundler-updater 换包（v2 签名包作为 payload）
 repo="$(cd "$(dirname "$0")/../../.." && pwd)"
-updater="$repo/src/Bundler.Updater.Bootstrap/tools/osx-$(uname -m | sed 's/x86_64/osx-x64/;s/arm64/osx-arm64/')/bundler-updater"
+rid="osx-$(uname -m | sed 's/x86_64/x64/')"   # arm64→osx-arm64、x86_64→osx-x64
+updater="$repo/src/Bundler.Updater.Bootstrap/tools/$rid/bundler-updater"
 [ -x "$updater" ] || die "bundler-updater 缺位: $updater"
 "$updater" apply --install-dir "$WORK/install.app" --payload "$APPV2" \
     --log "$WORK/u.log" && note "换包" "PASS" "" || note "换包" "FAIL" "$(cat "$WORK/u.log")"
@@ -46,4 +47,4 @@ cat > "$EV" <<EOF
 $(cat "$EV.tmp" 2>/dev/null)
 EOF
 rm -f "$EV.tmp"
-echo "证据: $EV"
+echo "证据: $EV"; [ "${HAD_FAIL:-0}" = "1" ] && exit 1; exit 0

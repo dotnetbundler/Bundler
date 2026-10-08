@@ -1,6 +1,7 @@
-#requires -RunAsAdministrator
 # UAC 伴随验收：per-machine NSIS/MSI 真装真卸走真 UAC 弹窗，断言 ProgramFiles 落位、
 # HKLM 卸载项、非管理员工具目录拒写。半自动——脚本暂停等人工点 UAC。
+# 必须从非提权终端跑：安装器内部的 UAC 弹窗才是验收对象；脚本自身若已提权，
+# UAC 不弹、ACL 探针也会以管理员身份直接写入成功。
 # 用法: pwsh uac-assisted.ps1 -InstallerPath <产包路径> [-Format nsis|msi] [-OutDir <证据目录>]
 param(
     [Parameter(Mandatory = $true)][string]$InstallerPath,
@@ -12,15 +13,16 @@ $evidence = @()
 function Note($step, $result, $detail = "") {
     $script:evidence += "| $step | $result | $detail |"
     Write-Host "[$result] $step $detail"
+    if ($result -eq "FAIL") { $script:hadFail = $true }
 }
 function Wait-Human($prompt) {
     Write-Host "`n=== 人工动作: $prompt ===" -ForegroundColor Yellow
     Read-Host "完成后回车继续"
 }
 
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+if (([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
     ).IsInRole("Administrator")) {
-    throw "需从提权终端运行（脚本自身检查程序集工具目录写权限时会降权验证）。"
+    throw "请从非提权（标准用户）终端运行——提权终端下 UAC 不弹、ACL 探针失效。"
 }
 if (-not (Test-Path $InstallerPath)) { throw "InstallerPath 不存在: $InstallerPath" }
 if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
@@ -79,3 +81,4 @@ $out = Join-Path $OutDir ("SA-UAC-{0}-{1:yyyyMMdd}.md" -f $env:PROCESSOR_ARCHITE
 $($evidence -join "`n")
 "@ | Set-Content $out -Encoding UTF8
 Write-Host "证据: $out"
+if ($hadFail) { exit 1 }

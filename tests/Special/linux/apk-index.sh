@@ -5,7 +5,7 @@
 set -euo pipefail
 EVIDENCE_DIR="$(cd "$(dirname "$0")/../evidence" && pwd)"; mkdir -p "$EVIDENCE_DIR"
 EV="$EVIDENCE_DIR/SA-APKIDX-$(date +%Y%m%d).md"
-note(){ echo "| $1 | $2 | $3 |" >> "$EV.tmp"; echo "[$2] $1 $3"; }
+note(){ echo "| $1 | $2 | $3 |" >> "$EV.tmp"; echo "[$2] $1 $3"; [ "$2" = "FAIL" ] && HAD_FAIL=1; return 0; }
 die(){ echo "FAIL: $*" >&2; exit 1; }
 
 APK=""
@@ -48,4 +48,4 @@ cat > "$EV" <<EOF
 $(cat "$EV.tmp" 2>/dev/null)
 EOF
 rm -f "$EV.tmp"
-echo "证据: $EV"
+echo "证据: $EV"; [ "${HAD_FAIL:-0}" = "1" ] && exit 1; exit 0

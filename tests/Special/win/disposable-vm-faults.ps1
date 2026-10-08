@@ -12,6 +12,7 @@ $evidence = @()
 function Note($step, $ok, $detail = "") {
     $script:evidence += "| $step | $(if($ok){'PASS'}else{'FAIL'}) | $detail |"
     Write-Host "[$(if($ok){'PASS'}else{'FAIL'})] $step $detail"
+    if (-not $ok) { $script:hadFail = $true }
 }
 
 if (-not (Test-Path $InstallerPath)) { throw "InstallerPath 不存在: $InstallerPath" }
@@ -71,3 +72,4 @@ $out = Join-Path $OutDir ("SA-VM-FAULT-{0:yyyyMMdd}.md" -f (Get-Date))
 $($evidence -join "`n")
 "@ | Set-Content $out -Encoding UTF8
 Write-Host "证据: $out"
+if ($hadFail) { exit 1 }

@@ -5,7 +5,7 @@
 set -euo pipefail
 EVIDENCE_DIR="$(cd "$(dirname "$0")/../evidence" && pwd)"; mkdir -p "$EVIDENCE_DIR"
 EV="$EVIDENCE_DIR/SA-GPG-$(date +%Y%m%d).md"
-note(){ echo "| $1 | $2 | $3 |" >> "$EV.tmp"; echo "[$2] $1 $3"; }
+note(){ echo "| $1 | $2 | $3 |" >> "$EV.tmp"; echo "[$2] $1 $3"; [ "$2" = "FAIL" ] && HAD_FAIL=1; return 0; }
 die(){ echo "FAIL: $*" >&2; exit 1; }
 command -v gpg >/dev/null || die "gpg 缺"
 
@@ -15,9 +15,10 @@ while [ $# -gt 0 ]; do case "$1" in
 esac; done
 
 WORK="$(mktemp -d /tmp/bundler-gpg-XXXXXX)"; trap 'rm -rf "$WORK"' EXIT
-export GNUPGHOME="$WORK/gnupg"; mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME"
 
 if [ "$SELF" = "yes" ] || [ -z "$KEYID" ]; then
+    # 自演模式才用隔离密钥环；用户密钥模式用默认环否则找不着钥。
+    export GNUPGHOME="$WORK/gnupg"; mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME"
     gpg --batch --gen-key <<CFG
 Key-Type: eddsa
 Key-Curve: ed25519
@@ -61,4 +62,4 @@ cat > "$EV" <<EOF
 $(cat "$EV.tmp" 2>/dev/null)
 EOF
 rm -f "$EV.tmp"
-echo "证据: $EV"
+echo "证据: $EV"; [ "${HAD_FAIL:-0}" = "1" ] && exit 1; exit 0

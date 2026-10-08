@@ -8,6 +8,7 @@ $evidence = @()
 function Note($step, $result, $detail = "") {
     $script:evidence += "| $step | $result | $detail |"
     Write-Host "[$result] $step $detail"
+    if ($result -eq "FAIL") { $script:hadFail = $true }
 }
 if ($env:PROCESSOR_ARCHITECTURE -ne "ARM64") {
     throw "本脚本只在 Windows ARM64 宿主跑（当前: $env:PROCESSOR_ARCHITECTURE）"
@@ -47,3 +48,4 @@ $out = Join-Path $OutDir ("SA-WINARM64-{0:yyyyMMdd}.md" -f (Get-Date))
 $($evidence -join "`n")
 "@ | Set-Content $out -Encoding UTF8
 Write-Host "证据: $out"
+if ($hadFail) { exit 1 }

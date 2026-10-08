@@ -9,6 +9,7 @@ $evidence = @()
 function Note($step, $result, $detail = "") {
     $script:evidence += "| $step | $result | $detail |"
     Write-Host "[$result] $step $detail"
+    if ($result -eq "FAIL") { $script:hadFail = $true }
 }
 function Wait-Human($prompt) {
     Write-Host "`n=== 人工动作: $prompt ===" -ForegroundColor Yellow
@@ -63,3 +64,4 @@ $out = Join-Path $OutDir ("SA-MSI-DLG-{0:yyyyMMdd}.md" -f (Get-Date))
 $($evidence -join "`n")
 "@ | Set-Content $out -Encoding UTF8
 Write-Host "证据: $out"
+if ($hadFail) { exit 1 }
