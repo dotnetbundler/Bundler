@@ -64,7 +64,10 @@ function Run-Leg($name, $script, $argList) {
 Run-Leg "pinned-items"        "$SP/win/pinned-items.ps1"        @("-InstallerPath", $nsis)
 Run-Leg "mountvol-full-volume" "$SP/win/mountvol-full-volume.ps1" @()
 if ($IS_ARM) {
-    Run-Leg "arm64-matrix"    "$SP/win/arm64-matrix.ps1"        @("-InstallerPaths", @($nsis, $msi))
+    # pwsh -File 下 string[] 参数只吃首个 token（其余会位置绑定到下一参数）——改 -Command 真表达式传数组
+    pwsh -NoProfile -ExecutionPolicy Bypass -Command "& '$ROOT/tests/Special/win/arm64-matrix.ps1' -InstallerPaths @('$nsis','$msi')"
+    if ($LASTEXITCODE -eq 0) { Write-Host "[LEG-PASS] arm64-matrix" }
+    else { Write-Host "[LEG-FAIL] arm64-matrix"; $failedLegs += "arm64-matrix" }
 }
 # 留 PendingFileRename 的故障注入腿排最后
 Run-Leg "disposable-vm-faults" "$SP/win/disposable-vm-faults.ps1" @("-InstallerPath", $nsis, "-ConfirmDisposableMachine")
