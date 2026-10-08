@@ -676,7 +676,7 @@ public static class UpdaterBootstrapParityTests
             var backup = Backup(install);
             var log = Path.Combine(dir, "u.log");
 
-            var stagedFiles = 0;
+            var stagedCopies = 0;
             var rc = 0;
             WithIoFault((source, destination) =>
             {
@@ -685,18 +685,22 @@ public static class UpdaterBootstrapParityTests
                 {
                     throw new IOException("simulated ENOSPC at move");
                 }
-                // 备份 staged 复制途中第 2 个文件：写截断半成品再炸。
-                if (destination.Contains(".partial-") && destination.EndsWith("state.txt", StringComparison.Ordinal))
+                // 备份 staged 树内第 2 个复制点炸（枚举顺序不做假设——
+                // 计数保证至少一个文件已复制，半途语义才成立）：写截断半成品再炸。
+                if (destination.Contains(".partial-"))
                 {
-                    stagedFiles++;
-                    File.WriteAllBytes(destination, "v1-sta"u8.ToArray());
-                    throw new IOException("simulated ENOSPC mid-copy");
+                    stagedCopies++;
+                    if (stagedCopies == 2)
+                    {
+                        File.WriteAllBytes(destination, "v1-sta"u8.ToArray());
+                        throw new IOException("simulated ENOSPC mid-copy");
+                    }
                 }
             }, () => rc = RunAot(["apply", "--install-dir", install,
                 "--payload", payload, "--log", log]));
 
             Assert.Equal(4, rc);
-            Assert.Equal(1, stagedFiles);
+            Assert.True(stagedCopies >= 2, "fault must fire mid-copy, not before the first file");
             AssertNoStagedResidue(dir);
             Assert.False(Directory.Exists(backup), "backup slot must stay 'not started' after mid-copy fault");
             AssertTree(v1, install);
@@ -761,10 +765,11 @@ public static class UpdaterBootstrapParityTests
             var rc = 0;
             WithIoFault((source, destination) =>
             {
-                // 载荷 staged 复制途中炸（install.partial-* 名下）：
+                // 载荷 staged 复制途中炸（install.partial-* 名下）：写截断半成品再炸——
                 // 备份已成立 → 恢复路径必须把 v1 全本搬回 install。
                 if (destination.Contains(".partial-") && destination.EndsWith("new.txt", StringComparison.Ordinal))
                 {
+                    File.WriteAllBytes(destination, "v2-n"u8.ToArray());
                     throw new IOException("simulated ENOSPC mid-payload-copy");
                 }
                 if (source == payload && destination == install)
