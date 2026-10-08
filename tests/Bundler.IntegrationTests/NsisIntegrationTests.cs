@@ -40,6 +40,8 @@ public sealed class NsisFixture : IAsyncLifetime
     private bool Initialize()
     {
         Assert.SkipWhen(!OperatingSystem.IsWindows(), "NSIS 集成腿只覆盖 Windows。");
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: NSIS 工件为 win-x64 安装器，仅 x64 宿主验收；arm64 仿真语义另列特殊项。");
         Assert.SkipWhen(
             Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") != "1",
             "真装会写真实用户配置与注册表；置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1 才跑。");
