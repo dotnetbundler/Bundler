@@ -40,8 +40,18 @@ internal sealed class UpdateDownloader
                 $"update feed '{feedUrl}' failed signature verification — refused.");
         }
         using var stream = new MemoryStream(bytes);
-        return UpdateJson.ReadFeed(stream)
-            ?? throw new UpdateException($"update feed '{feedUrl}' is not a valid manifest.");
+        try
+        {
+            return UpdateJson.ReadFeed(stream)
+                ?? throw new UpdateException($"update feed '{feedUrl}' is not a valid manifest.");
+        }
+        catch (Exception exception) when (exception is not UpdateException)
+        {
+            // 畸形 JSON/编码错误统一包成 UpdateException——客户端契约"协议/校验/拒绝
+            // 全部确定性抛 UpdateException"，漏 JsonException 会把调用方推向 catch-all。
+            throw new UpdateException(
+                $"update feed '{feedUrl}' is not a valid manifest.", exception);
+        }
     }
 
     /// <summary>

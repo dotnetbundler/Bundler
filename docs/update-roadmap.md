@@ -49,6 +49,13 @@
 
 ## 4. 阶段实施证据
 
+### 2026-10-08 权威对标补齐（并发互斥+空间预检+负例断言收编）
+
+- 对标：Sparkle/Squirrel/electron-updater/Tauri 测试矩阵逐格对照，挖出四类未测面——并发双 apply 竞态、磁盘空间预检、等候退语义、畸形清单负例；故障注入（ENOSPC）对标结论是我方 `IoFaultProbe` 已是 .NET 形态同型（Rust failpoint/Go mockfs 对应物）。
+- 并发互斥（真实产品洞修复）：引导件原无进程间互斥——第二个 apply 撞见在飞 `.bundler-swap` 会当崩溃标记“恢复”拆掉别人换一半的包。现 `<install>.bundler-lock` 锁件（内含持锁 pid）全程串行换包/回滚：第二实例等锁至 `--lock-timeout`（默认 30s）超时拒 rc=3，持锁进程已死按 pid 存活判夺锁；AOT `CreateNew` 原子位与 sh `noclobber >` + `kill -0` 同形同协议（Squirrel 命名 mutex 串行化语义）。
+- 空间预检（Sparkle fail-fast）：`UpdateClient.DownloadAsync` 按 feed 工件精确 size 对比目标卷剩余即拒；引导件 apply 前把会真写盘的量估到目标槽所在卷（跨卷两段式暂存、`--keep-payload` 复制、回滚复制按树体积；同卷原子 rename 不占空间不计），探测失败只 WARN 放行不误拒。
+- 断言收编：parity +7 腿（锁活持超时/死锁夺锁、wait-pid 死进程直通/活进程超时、非 ASCII 路径、空间拒变前零变更/探测失败放行）；UpdaterClient +5（畸形 JSON 与缺字段清单统一 `UpdateException`——顺带修复 `JsonException` 泄漏、Range 206 中途断流回落全量、blockmap 版本不符回落、下载前空间不足拒写）。
+
 ### 2026-10-07 归档保真修复（xattr+符号链接全链路，三轮宿主测试 D3 项）
 
 - 病理：macOS 签名驻两处——Mach-O `LC_CODE_SIGNATURE`+`_CodeSignature/` 普通文件（任何归档保得住）与非 Mach-O 件的 `com.apple.cs.*` xattr（普通 zip/tar 丢）；`UpdateApplier` 走 `System.IO.Compression` 解包还把 zip 内 S_IFLNK 条目落成普通文件——`.app` Framework 软链断裂+签名件更新后失效（R3 mac 腿实证 ad-hoc 应用更新后完全未签名）。
@@ -154,4 +161,5 @@ MSBuild 真消费链全通：`update-keygen` 产钥→`HelloBundlerApp` 经 `Bun
 - 更新引擎消费的清单/签名是开放协议：不经本仓打包的产物按 schema 产签名件同样可更新；反之本仓产物亦可被第三方更新器消费。
 - `bundler-update.json` 删除降级链：旁车→ARP/Info.plist/receipt 兜底→"更新不可用"确定性错误，永不乱更新。
 - AOT 兼容面：linux=musl 静态一件通吃；win/osx 按 deployment target 编译；老宿主天然走安装器路径不需要引导；无 AOT 覆盖的裸露便携件场景有 shell 降级件。
+- 密钥轮换边界：公钥钉在安装身份旁车——更换私钥即旧客户端永拒新清单，现阶段轮换路径是重发全量安装包（Tauri 同构方案）；多钥 sidecar/逐钥试验属于未来规格，有真实需求再立项。
 - 不做清单：服务端动态协议/遥测/灰度、应用内 UI 更新框架（引擎职责之外）、ClickOnce、Velopack 式多版本目录、包管理器内自更新。

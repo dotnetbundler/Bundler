@@ -18,6 +18,10 @@ internal static class BootstrapPlan
     // 置 true 让 POSIX 也走可注入的 CopyTreeManaged。
     internal static bool ForceManagedCopy;
 
+    // 测试缝：覆盖空间预检的卷剩余探测——返回小值即断言拒换包，抛异常即断言
+    // WARN 放行；生产为 null 走真 DriveInfo。
+    internal static Func<string, long?>? FreeSpaceProbe;
+
     internal static int Run(string[] args)
     {
         var options = Parse(args);
@@ -113,6 +117,24 @@ internal static class BootstrapPlan
             throw new UsageException("backup and install directories must not nest inside each other.");
         }
 
+        // 并发互斥：同一 install 的换包/回滚全程串行——Squirrel 式等锁语义，
+        // 第二实例等到 --lock-timeout 超时即拒（rc=3），绝不双换包（在飞 marker
+        // 被当崩溃标记“恢复”会把别人换一半的包拆掉）。崩溃残留锁按 owner pid 存活夺锁。
+        var lockPath = AcquireLock(installDir, options, log);
+        try
+        {
+            return ApplyLocked(options, log, installDir, payloadDir, backupDir, markerPath);
+        }
+        finally
+        {
+            ReleaseLock(lockPath, log);
+        }
+    }
+
+    // 锁内主体：等宿主退出 → 崩溃恢复 → 空间预检 → 换包/回滚。
+    private static int ApplyLocked(BootstrapOptions options, Action<string> log,
+        string installDir, string? payloadDir, string backupDir, string markerPath)
+    {
         if (options.WaitPid is { } pid)
         {
             WaitForExit(pid, options.WaitTimeoutSeconds, log);
@@ -151,6 +173,10 @@ internal static class BootstrapPlan
             File.Delete(markerPath);
             recovered = true;
         }
+
+        // 空间预检：只挡会真写盘的量——同卷两段式/回滚复制按树体积估，同卷原子
+        // 改名不计（rename 不占额外空间）。估不出卷/大小只 WARN 不拒。
+        CheckFreeSpace(options, log, installDir, payloadDir, backupDir);
 
         // 文件级语义：安装目标是单文件（AppImage 单件）或回滚备份是文件——
         // 同协议、粒度换成文件：marker/备份为 <file>.bundler-{swap,backup}。
@@ -251,6 +277,242 @@ internal static class BootstrapPlan
         }
         log("bundler-updater: done");
         return 0;
+    }
+
+    // 并发锁：同 install 的换包/回滚全程串行。锁件是 <install>.bundler-lock
+    // 普通文件（CreateNew 原子位）内含持锁者 pid——与 bundler-updater.sh 的
+    // noclobber `>` + `kill -0` 锁同形同协议（跨实现互斥：AOT 与 sh 实例互斥）。
+    // 撞锁按 owner 存活轮询：活则等到 --lock-timeout 超时拒（rc=3），死则夺锁。
+    private static string AcquireLock(string installDir, BootstrapOptions options, Action<string> log)
+    {
+        var lockPath = installDir.TrimEnd('/', '\\') + ".bundler-lock";
+        DeleteLinkNodeIfPresent(lockPath);
+        var deadline = DateTime.UtcNow.AddSeconds(options.LockTimeoutSeconds);
+        var announced = false;
+        while (true)
+        {
+            try
+            {
+                using (var stream = new FileStream(lockPath, FileMode.CreateNew, FileAccess.Write))
+                {
+                    var owner = Encoding.ASCII.GetBytes(Environment.ProcessId.ToString());
+                    stream.Write(owner, 0, owner.Length);
+                }
+                return lockPath;
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+
+            if (!announced)
+            {
+                log($"bundler-updater: another update holds '{lockPath}' — waiting up to {options.LockTimeoutSeconds}s");
+                announced = true;
+            }
+            if (TryReadLockOwner(lockPath) is { } ownerPid && !ProcessAlive(ownerPid))
+            {
+                // 持锁进程已死——崩溃残留夺锁（与 sh `kill -0` 判死同义）。
+                DeleteNodeIfPresent(lockPath);
+                continue;
+            }
+            if (DateTime.UtcNow >= deadline)
+            {
+                throw new WaitTimeoutException(
+                    $"another updater holds the lock '{lockPath}' — timed out waiting.");
+            }
+            Thread.Sleep(50);
+        }
+    }
+
+    private static void ReleaseLock(string lockPath, Action<string> log)
+    {
+        try
+        {
+            DeleteNodeIfPresent(lockPath);
+        }
+        catch (Exception exception)
+        {
+            // 放锁失败只留死锁风险不损数据——下次来锁按 owner 存活自然回收。
+            log($"bundler-updater: WARN lock release failed ({exception.Message})");
+        }
+    }
+
+    private static int? TryReadLockOwner(string lockPath)
+    {
+        try
+        {
+            var text = File.ReadAllText(lockPath).Trim();
+            return int.TryParse(text, out var pid) ? pid : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static bool ProcessAlive(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    // 空间预检（Sparkle 式 fail-fast）：只挡会真写盘的量——同卷原子 rename 不占
+    // 额外空间不计入；跨卷两段式暂存、KeepPayload 复制、回滚复制按树体积估到
+    // 目标槽所在卷。探测失败只 WARN 放行（拒错不如不拒），需求明确不够才拒。
+    private static void CheckFreeSpace(BootstrapOptions options, Action<string> log,
+        string installDir, string? payloadDir, string backupDir)
+    {
+        try
+        {
+            var demands = new List<(long Bytes, string Anchor)>();
+            if (options.Rollback)
+            {
+                // 回滚恒为备份→install 的全本复制。
+                demands.Add((NodeBytes(backupDir), installDir));
+            }
+            else
+            {
+                if (!SameVolume(installDir, backupDir))
+                {
+                    demands.Add((NodeBytes(installDir), backupDir));
+                }
+                if (payloadDir is not null &&
+                    (options.KeepPayload || !SameVolume(payloadDir, installDir)))
+                {
+                    demands.Add((NodeBytes(payloadDir), installDir));
+                }
+            }
+            // 同卷多腿需求合并——备份槽与 install 槽可能同卷。
+            var perVolume = new Dictionary<string, (long Required, string Anchor)>(
+                OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            foreach (var (bytes, anchor) in demands)
+            {
+                var volume = FindVolume(anchor);
+                if (volume is null)
+                {
+                    continue;
+                }
+                var key = volume.RootDirectory.FullName;
+                perVolume.TryGetValue(key, out var existing);
+                perVolume[key] = (existing.Required + bytes, anchor);
+            }
+            foreach (var (root, (required, anchor)) in perVolume)
+            {
+                var free = FreeSpaceProbe?.Invoke(anchor) ?? FindVolume(anchor)!.AvailableFreeSpace;
+                log($"bundler-updater: free-space check on '{root}' — need ~{required} bytes, {free} available");
+                if (required > free)
+                {
+                    throw new UpdateRejectedException(
+                        $"insufficient free space on volume '{root}': swap requires ~{required} bytes, only {free} available.");
+                }
+            }
+        }
+        catch (UpdateRejectedException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            log($"bundler-updater: WARN free-space check skipped ({exception.Message})");
+        }
+    }
+
+    private static long NodeBytes(string path)
+    {
+        if (File.Exists(path))
+        {
+            return new FileInfo(path).Length;
+        }
+        if (!Directory.Exists(path))
+        {
+            return 0;
+        }
+        long total = 0;
+        foreach (var entry in Directory.EnumerateFileSystemEntries(path))
+        {
+            var linkTarget = new DirectoryInfo(entry).LinkTarget ?? new FileInfo(entry).LinkTarget;
+            if (linkTarget is not null)
+            {
+                continue; // 链接重建不占目标体积
+            }
+            if (File.GetAttributes(entry).HasFlag(FileAttributes.Directory))
+            {
+                total += NodeBytes(entry);
+            }
+            else
+            {
+                total += new FileInfo(entry).Length;
+            }
+        }
+        return total;
+    }
+
+    // 目标锚点所在的卷：最长前缀匹配的挂载点；取不到返回 null 由调用方跳过。
+    private static DriveInfo? FindVolume(string anchor)
+    {
+        var full = Path.GetFullPath(anchor);
+        DriveInfo? best = null;
+        foreach (var drive in DriveInfo.GetDrives())
+        {
+            var root = drive.RootDirectory.FullName;
+            if (full.StartsWith(root, OperatingSystem.IsWindows()
+                    ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) &&
+                (best is null || root.Length > best.RootDirectory.FullName.Length))
+            {
+                best = drive;
+            }
+        }
+        return best;
+    }
+
+    // 同卷判定：Windows 走 GetVolumePathName（覆盖目录挂载卷）；POSIX 的
+    // Path.GetPathRoot 恒 "/" 无法判——两端已存在祖先间做 rename 探针，EXDEV 即跨卷。
+    // 探测失败抛出让外层 WARN 跳过（宁肯不检也不错拒）。
+    private static bool SameVolume(string a, string b)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var volumeA = WindowsVolumeRoot(a);
+            if (volumeA is null)
+            {
+                throw new IOException($"cannot resolve volume root of '{a}'.");
+            }
+            return string.Equals(volumeA, WindowsVolumeRoot(b), StringComparison.OrdinalIgnoreCase);
+        }
+        var probeName = ".bundler-volprobe-" + Guid.NewGuid().ToString("N")[..8];
+        var probeA = Path.Combine(ExistingAncestor(a), probeName);
+        var probeB = Path.Combine(ExistingAncestor(b), probeName);
+        try
+        {
+            File.WriteAllBytes(probeA, []);
+            return PosixRename(probeA, probeB) == 0;
+        }
+        finally
+        {
+            DeleteNodeIfPresent(probeA);
+            DeleteNodeIfPresent(probeB);
+        }
+    }
+
+    private static string ExistingAncestor(string path)
+    {
+        var probe = Path.GetFullPath(path);
+        while (!Directory.Exists(probe) && !File.Exists(probe))
+        {
+            var parent = Path.GetDirectoryName(probe);
+            probe = parent ?? throw new IOException($"no existing ancestor for '{path}'.");
+        }
+        return File.Exists(probe) ? Path.GetDirectoryName(probe)! : probe;
     }
 
     // 备份的最终去向：--retain-backup-to 给了目录就迁过去当回滚点，不给就删——
@@ -1127,6 +1389,13 @@ internal static class BootstrapPlan
                     }
                     options.WaitTimeoutSeconds = seconds;
                     break;
+                case "--lock-timeout":
+                    if (!int.TryParse(value, out var lockSeconds) || lockSeconds < 0)
+                    {
+                        throw new UsageException($"--lock-timeout expects a non-negative number, got '{value}'.");
+                    }
+                    options.LockTimeoutSeconds = lockSeconds;
+                    break;
                 default: throw new UsageException($"unknown option '{name}'.");
             }
         }
@@ -1154,7 +1423,12 @@ internal sealed class BootstrapOptions
     public bool KeepPayload;
     public bool Rollback;
     public int WaitTimeoutSeconds = 120;
+    public int LockTimeoutSeconds = 30;
 }
 
 internal sealed class UsageException(string message) : Exception(message);
-internal sealed class WaitTimeoutException : Exception;
+internal sealed class WaitTimeoutException : Exception
+{
+    public WaitTimeoutException() { }
+    public WaitTimeoutException(string message) : base(message) { }
+}

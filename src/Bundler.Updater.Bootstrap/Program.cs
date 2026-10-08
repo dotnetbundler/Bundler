@@ -33,6 +33,7 @@ public static class Program
         writer.WriteLine("  bundler-updater apply --install-dir <dir> --payload <dir>");
         writer.WriteLine("      [--wait-pid <pid>] [--app <path>] [--backup-dir <dir>]");
         writer.WriteLine("      [--keep-payload] [--retain-backup-to <dir>] [--log <file>] [--wait-timeout <seconds>]");
+        writer.WriteLine("      [--lock-timeout <seconds>]");
         writer.WriteLine("  bundler-updater apply --install-dir <dir> --rollback");
     }
 }

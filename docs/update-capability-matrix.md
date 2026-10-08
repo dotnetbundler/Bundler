@@ -16,6 +16,8 @@
 | POSIX `bundler-updater.sh` 脚本引导 | 已实现 | UPDATE-2 | AOT 缺失/极老宿主降级；bash/dash 双壳实证；`.app`/`AppImage`/zip/targz 换件+回滚同语义 |
 | 三段式换包（stage→备份→原子替换→重启） | 已实现 | UPDATE-3 | 标记 `<install>.bundler-swap` 崩溃恢复；换包期瞬备 `<install>.bundler-backup` 必建（原子性+崩溃恢复载体），成功后默认删除；`ApplyOptions.KeepRollbackBackup`（显式 `RollbackBackupDirectory` 覆盖）保留回滚点→落数据区 `DotNet.Bundler/backups`（per-user=`%LOCALAPPDATA%`/`~/Library/Application Support`/`$XDG_DATA_HOME`，per-machine=`%ProgramData%`/`/Library`/`/var/lib`）；`--rollback` 显式回滚（保留备份可重试） |
 | 断电/中断无砖化 | 已实现 | UPDATE-3 | linux 宿主 kill -9 于 701MB CopyTree 中途→marker 恢复实证；换包要么完整要么自动还原 |
+| 并发换包互斥 | 已实现 | UPDATE-3 | `<install>.bundler-lock` 锁件（owner pid）；第二实例等锁至 `--lock-timeout`（默认 30s）超时拒 rc=3；崩溃残留按 owner pid 存活判夺锁；AOT 与 `bundler-updater.sh` 同形互斥（跨实现实例互斥） |
+| 磁盘空间预检 | 已实现 | UPDATE-3/4 | UpdateClient 下载前按 feed 工件精确 size 对比目标卷剩余即拒；引导件 apply 前把跨卷两段式暂存/`--keep-payload` 复制/回滚复制按树体积估到目标槽所在卷，估不出只 WARN 不放行拒错——同卷原子 rename 不占空间不计 |
 | symlink/exec 位保留 | 已实现 | UPDATE-3 | `CopyTree` CreateSymbolicLink+GetUnixFileMode 透传；AppRun symlink+exec 位断言 |
 | install 路径叶链解析穿透 | 已实现 | UPDATE-3 | install 叶段为 junction/符号链接时双侧（AOT/`bundler-updater.sh`）解析穿透作用于目标（POSIX `norm_path` 同语义、win mountvol/junction 腿实证）——穿透是设计契约，不做"拒绝叶链"语义 |
 | macOS 三项（codesign 验身份/剥 quarantine/`open -n` 重启） | 部分实现 | UPDATE-3 | quarantine 剥离+`open -n`+posix darwin 腿实证；同签名身份比对腿因无 Apple 证书挂 UPDATE-OI-02 |

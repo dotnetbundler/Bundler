@@ -98,6 +98,15 @@ public sealed class UpdateClient
         CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(destinationDirectory);
+        // 空间预检（Sparkle 式 fail-fast）：feed 工件 size 是精确值——下载前比对目标卷
+        // 剩余，明显不够即拒，不进入半途 IO 失败路径。探不到卷则放行交由下载器处理。
+        if (info.Artifact.Size > 0 && VolumeFreeSpace(destinationDirectory) is { } available
+            && info.Artifact.Size > available)
+        {
+            throw new UpdateException(
+                $"insufficient disk space: artifact '{info.Artifact.File}' requires {info.Artifact.Size} bytes, " +
+                $"only {available} available on the volume of '{destinationDirectory}'.");
+        }
         var destination = Path.Combine(destinationDirectory, info.Artifact.File);
         var downloaded = false;
         if (_options.EnableDelta && info.Artifact.BlockMap is { Length: > 0 } blockMapFile)
@@ -194,6 +203,38 @@ public sealed class UpdateClient
         Verify(info, path);
         Apply(info, path, options);
         return true;
+    }
+
+    // 测试缝：覆盖下载前预检的卷剩余探测（生产为 null 走真 DriveInfo）。
+    internal static Func<string, long?>? FreeSpaceProbe;
+
+    // 目标目录所在卷的最长前缀挂载点；探不到返回 null 由调用方跳过预检。
+    private static long? VolumeFreeSpace(string directory)
+    {
+        if (FreeSpaceProbe is { } probe)
+        {
+            return probe(directory);
+        }
+        try
+        {
+            var full = Path.GetFullPath(directory);
+            DriveInfo? best = null;
+            foreach (var drive in DriveInfo.GetDrives())
+            {
+                var root = drive.RootDirectory.FullName;
+                if (full.StartsWith(root, RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                        ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) &&
+                    (best is null || root.Length > best.RootDirectory.FullName.Length))
+                {
+                    best = drive;
+                }
+            }
+            return best?.AvailableFreeSpace;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private string FeedUrl() => _identity.FeedUrl;
