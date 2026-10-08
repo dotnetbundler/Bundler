@@ -470,7 +470,12 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                      @"Software\Microsoft\Windows\CurrentVersion\Uninstall\com.dotnetbundler.pubmismatch",
                  })
         {
-            Registry.CurrentUser.DeleteSubKeyTree(key, false);
+            // 注册表句柄释放同样有滞后：刚退出的进程持有的键处于 pending-delete 时删会抛 IOException
+            for (var i = 0; i < 10; i++)
+            {
+                try { Registry.CurrentUser.DeleteSubKeyTree(key, false); break; }
+                catch (IOException) when (i < 9) { Thread.Sleep(200); }
+            }
         }
         if (Registry.CurrentUser.OpenSubKey(FileExtensionKey) is { } ext)
         {
