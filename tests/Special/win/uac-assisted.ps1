@@ -11,9 +11,11 @@ param(
 $ErrorActionPreference = "Stop"
 $evidence = @()
 function Note($step, $result, $detail = "") {
-    $script:evidence += "| $step | $result | $detail |"
-    Write-Host "[$result] $step $detail"
-    if ($result -eq "FAIL") { $script:hadFail = $true }
+    # 结果归一化为 PASS/FAIL/UNTESTED——bool 直比 "FAIL" 会因右侧强转 bool 恒真
+    $r = if ($result -is [bool]) { if ($result) { "PASS" } else { "FAIL" } } else { "$result" }
+    $script:evidence += "| $step | $r | $detail |"
+    Write-Host "[$r] $step $detail"
+    if ($r -eq "FAIL") { $script:hadFail = $true }
 }
 function Wait-Human($prompt) {
     if (-not [Environment]::UserInteractive -or $env:CI -eq "true") {
@@ -39,20 +41,20 @@ try {
     # 1) per-machine 真装：installer 内部以 UAC 提权（nsis 需非提权发起以走真弹窗）。
     Wait-Human "将以标准用户方式运行安装器——UAC 弹窗出现时请批准"
     $install = Start-Process $InstallerPath -Wait -PassThru
-    Note "安装器退出码" $([string]($install.ExitCode -eq 0)) "rc=$($install.ExitCode)"
+    Note "安装器退出码" ($install.ExitCode -eq 0) "rc=$($install.ExitCode)"
 
     $installDir = "$env:ProgramFiles\HelloBundlerApp"
-    Note "ProgramFiles 落位" $([string](Test-Path $installDir)) $installDir
+    Note "ProgramFiles 落位" (Test-Path $installDir) $installDir
     $reg = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall"
     $entry = Get-ChildItem $reg | Where-Object {
         (Get-ItemProperty $_.PSPath).DisplayName -match "HelloBundlerApp" }
-    Note "HKLM 卸载注册项" $([string]($null -ne $entry)) ($entry?.PSChildName ?? "")
+    Note "HKLM 卸载注册项" ($null -ne $entry) ($entry?.PSChildName ?? "")
 
     # 2) 非提权写工具目录应被拒（ACL 证据）。
     $probe = Join-Path $installDir "__probe.tmp"
     $denied = $false
     try { [IO.File]::WriteAllText($probe, "x") } catch { $denied = $true }
-    Note "非提权写被拒(ACL)" $([string]$denied) "WriteAllText 抛 UnauthorizedAccess"
+    Note "非提权写被拒(ACL)" $denied "WriteAllText 抛 UnauthorizedAccess"
     if (Test-Path $probe) { Remove-Item $probe -Force }
 
     # 3) 卸载走真 UAC。
@@ -65,8 +67,8 @@ try {
         $uninstPath = Join-Path $installDir "uninstall.exe"
         Start-Process $uninstPath -Wait -PassThru
     }
-    Note "卸载器退出码" $([string]($uninst.ExitCode -eq 0)) "rc=$($uninst.ExitCode)"
-    Note "目录已清" $([string](-not (Test-Path $installDir))) $installDir
+    Note "卸载器退出码" ($uninst.ExitCode -eq 0) "rc=$($uninst.ExitCode)"
+    Note "目录已清" (-not (Test-Path $installDir)) $installDir
 } finally {
     Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 }

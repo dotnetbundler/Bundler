@@ -6,9 +6,11 @@ param(
 $ErrorActionPreference = "Stop"
 $evidence = @()
 function Note($step, $result, $detail = "") {
-    $script:evidence += "| $step | $result | $detail |"
-    Write-Host "[$result] $step $detail"
-    if ($result -eq "FAIL") { $script:hadFail = $true }
+    # 结果归一化为 PASS/FAIL/UNTESTED——bool 直比 "FAIL" 会因右侧强转 bool 恒真
+    $r = if ($result -is [bool]) { if ($result) { "PASS" } else { "FAIL" } } else { "$result" }
+    $script:evidence += "| $step | $r | $detail |"
+    Write-Host "[$r] $step $detail"
+    if ($r -eq "FAIL") { $script:hadFail = $true }
 }
 if ($env:PROCESSOR_ARCHITECTURE -ne "ARM64") {
     throw "本脚本只在 Windows ARM64 宿主跑（当前: $env:PROCESSOR_ARCHITECTURE）"
