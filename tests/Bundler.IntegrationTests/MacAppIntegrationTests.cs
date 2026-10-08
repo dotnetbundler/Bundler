@@ -298,7 +298,8 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
         _f.Ensure();
         var lipo = ProcessRunner.Run("lipo",
             ["-info", Path.Combine(_f.App, "Contents/MacOS/BundlerMacIntegrationFixture")]);
-        Assert.Contains("arm64", lipo.StdOut);
+        Assert.Contains(TestPlatform.OsxRuntimeIdentifier == "osx-arm64" ? "arm64" : "x86_64",
+            lipo.StdOut);
     }
 
     [Fact]
