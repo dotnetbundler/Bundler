@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
 
 namespace DotNet.Bundler.Updater.Bootstrap;
 
@@ -38,6 +40,13 @@ internal static class BootstrapPlan
         // 文件操作仍走上面的叶字面拼写（叶链只被删链本身不触目标）。
         var backupDirCmp = CanonicalPath(backupDir)
             ?? throw new UsageException($"backup path '{backupDir}' resolves to a cyclic link.");
+        // Windows 比较面再加 NT 物理化：卷挂载点别名（C:\mnt 挂载 D:\）在
+        // CanonicalPath 下仍是两个拼写，同址互嵌会漏判——\Device\… 名在对象层归一。
+        // POSIX 侧由文件系统语义天然归一，恒等透传。NT 化按"对"降级：
+        // 一侧 NT 一侧字面的混合命名空间必然漏判，任一侧取不到即退回该对的规范字面判。
+        var installCmp = NtCmpPath(installDir);
+        var payloadCmp = payloadDir is null ? null : NtCmpPath(payloadDir);
+        var backupCmp = NtCmpPath(backupDirCmp);
         var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
         // 重启目标与日志路径都按本进程 cwd 绝对化——相对路径会在换包后的临时工作目录里静默错位。
         if (options.AppPath is { Length: > 0 })
@@ -58,10 +67,15 @@ internal static class BootstrapPlan
         // 等值或载荷为安装祖先时连备份一并清掉。
         // 这组判断只做路径关系运算、不依赖文件系统，必须先于 marker 恢复与等待——
         // 恢复会删半成品的安装目录，载荷嵌在其中时会把本轮输入先抹掉再拒绝（为时已晚）。
+        // 门禁挂在字面名上：payloadCmp（NT 名）可空不跳过整组判——
+        // payload 一侧 NT 化失败时 payload 相关对退回字面判，其余对不受影响。
         if (payloadDir is not null &&
-            (SameOrInside(backupDirCmp, installDir) || SameOrInside(backupDirCmp, payloadDir) ||
-             SameOrInside(installDir, backupDirCmp) || SameOrInside(payloadDir, backupDirCmp) ||
-             SameOrInside(installDir, payloadDir) || SameOrInside(payloadDir, installDir)))
+            (SameOrInsideCmp(backupCmp, backupDirCmp, installCmp, installDir) ||
+             SameOrInsideCmp(backupCmp, backupDirCmp, payloadCmp, payloadDir) ||
+             SameOrInsideCmp(installCmp, installDir, backupCmp, backupDirCmp) ||
+             SameOrInsideCmp(payloadCmp, payloadDir, backupCmp, backupDirCmp) ||
+             SameOrInsideCmp(installCmp, installDir, payloadCmp, payloadDir) ||
+             SameOrInsideCmp(payloadCmp, payloadDir, installCmp, installDir)))
         {
             throw new UsageException("backup/install/payload directories must not nest inside each other.");
         }
@@ -73,15 +87,20 @@ internal static class BootstrapPlan
                 ?? throw new UsageException($"retained-backup path '{retainPath}' resolves to a cyclic link.");
             var retainCmp = CanonicalPath(retainPath)
                 ?? throw new UsageException($"retained-backup path '{retainPath}' resolves to a cyclic link.");
-            if (SameOrInside(retainCmp, installDir) || (payloadDir is not null && SameOrInside(retainCmp, payloadDir)) ||
-                SameOrInside(installDir, retainCmp) || (payloadDir is not null && SameOrInside(payloadDir, retainCmp)) ||
-                SameOrInside(backupDirCmp, retainCmp) || SameOrInside(retainCmp, backupDirCmp))
+            var retainNt = NtCmpPath(retainCmp);
+            if (SameOrInsideCmp(retainNt, retainCmp, installCmp, installDir) ||
+                (payloadDir is not null && SameOrInsideCmp(retainNt, retainCmp, payloadCmp, payloadDir)) ||
+                SameOrInsideCmp(installCmp, installDir, retainNt, retainCmp) ||
+                (payloadDir is not null && SameOrInsideCmp(payloadCmp, payloadDir, retainNt, retainCmp)) ||
+                SameOrInsideCmp(backupCmp, backupDirCmp, retainNt, retainCmp) ||
+                SameOrInsideCmp(retainNt, retainCmp, backupCmp, backupDirCmp))
             {
                 throw new UsageException("retained-backup directory must not nest inside install/payload/backup directories.");
             }
         }
         // 回滚模式不嵌套校验 payload——它本就不存在。
-        if (options.Rollback && (SameOrInside(backupDirCmp, installDir) || SameOrInside(installDir, backupDirCmp)))
+        if (options.Rollback && (SameOrInsideCmp(backupCmp, backupDirCmp, installCmp, installDir) ||
+                               SameOrInsideCmp(installCmp, installDir, backupCmp, backupDirCmp)))
         {
             throw new UsageException("backup and install directories must not nest inside each other.");
         }
@@ -106,7 +125,7 @@ internal static class BootstrapPlan
                 {
                     File.Delete(installDir);
                 }
-                File.Move(backupDir, installDir);
+                MoveFile(backupDir, installDir);
             }
             else if (Directory.Exists(backupDir))
             {
@@ -164,7 +183,7 @@ internal static class BootstrapPlan
             }
             log($"bundler-updater: rollback '{backupDir}' → '{installDir}'");
             Directory.Delete(installDir, recursive: true);
-            CopyTree(backupDir, installDir);
+            CopyTree(backupDir, installDir, log);
             if (options.AppPath is { Length: > 0 } rollbackApp)
             {
                 Restart(rollbackApp, installDir, log);
@@ -188,7 +207,7 @@ internal static class BootstrapPlan
             {
                 // 保留载荷用于调试与组合场景：复制换入而非移动。
                 log($"bundler-updater: copy in '{payloadDir}' → '{installDir}'");
-                CopyTree(payloadDir!, installDir);
+                CopyTree(payloadDir!, installDir, log);
             }
             else
             {
@@ -249,7 +268,7 @@ internal static class BootstrapPlan
             }
             else
             {
-                File.Move(backupPath, target);
+                MoveFile(backupPath, target);
             }
             return;
         }
@@ -305,7 +324,7 @@ internal static class BootstrapPlan
         var backupTaken = false;
         try
         {
-            File.Move(installPath, backupPath);
+            MoveFile(installPath, backupPath);
             backupTaken = true;
             if (options.KeepPayload)
             {
@@ -315,7 +334,7 @@ internal static class BootstrapPlan
             else
             {
                 log($"bundler-updater: swap in '{payloadPath}' → '{installPath}'");
-                File.Move(payloadPath, installPath);
+                MoveFile(payloadPath, installPath);
             }
         }
         catch
@@ -327,7 +346,7 @@ internal static class BootstrapPlan
                 {
                     File.Delete(installPath);
                 }
-                File.Move(backupPath, installPath);
+                MoveFile(backupPath, installPath);
             }
             File.Delete(markerPath);
             throw;
@@ -454,6 +473,164 @@ internal static class BootstrapPlan
         }
     }
 
+    // 文件级同名语义：File.Move 跨卷内部退化为 copy+delete——进程半途被杀会在
+    // 目标名上留下截断半成品（Exists 恢复判据会把它当全本还原）——故只有确证
+    // 同卷（原子 rename）才直移，其余一律两段式（与 MoveTree 同义）。
+    private static void MoveFile(string source, string destination)
+    {
+        if (TryAtomicMove(source, destination))
+        {
+            return;
+        }
+        DeleteNodeIfPresent(destination);
+        var staged = destination + ".partial-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            File.Copy(source, staged);
+            File.Move(staged, destination);
+        }
+        catch
+        {
+            DeleteNodeIfPresent(staged);
+            throw;
+        }
+        File.Delete(source);
+    }
+
+    // 原子移动探测：POSIX rename(2) 成功即原子就位（EXDEV 等失败一律走两段式，
+    // File.Copy 会抛出真实错误）；Windows 需确证同卷 MoveFile 才是 rename 语义——
+    // 跨卷（异盘符/异 UNC share/挂载在目录下的卷）MoveFile 内部同样 copy+delete
+    // 半途留截断件。判卷用 GetVolumePathName：盘符比较会漏 NTFS 卷挂载点。
+    private static bool TryAtomicMove(string source, string destination)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var sourceVolume = WindowsVolumeRoot(source);
+            var destinationVolume = WindowsVolumeRoot(destination);
+            // 判不出卷→保守两段式；卷根不同（含目录挂载卷）→跨卷两段式
+            if (sourceVolume is null
+                || !string.Equals(sourceVolume, destinationVolume, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+            File.Move(source, destination);
+            return true;
+        }
+        return PosixRename(source, destination) == 0;
+    }
+
+    private static string? WindowsVolumeRoot(string path)
+    {
+        var buffer = new StringBuilder(capacity: 260);
+        return GetVolumePathName(Path.GetFullPath(path), buffer, buffer.Capacity)
+            ? buffer.ToString()
+            : null;
+    }
+
+    // 比较名成对判定：两侧都有 NT 物理名用对象层判（别名归一）；任一侧 NT 化
+    // 失败退回该对的规范字面判——混合命名空间比较必然漏判（payload 超长在
+    // NT 侧漏嵌判，恢复删活件即此事故形状）。POSIX 侧 nt 即规范名恒走前者。
+    private static bool SameOrInsideCmp(string? ntCandidate, string candidate, string? ntParent, string parent) =>
+        ntCandidate is not null && ntParent is not null
+            ? SameOrInside(ntCandidate, ntParent)
+            : SameOrInside(candidate, parent);
+
+    // 比较用物理名：Windows 上 deepest-existing 前缀开句柄取 \Device\… NT 名、
+    // 缺失叶段按字面接回——挂载点/junction/subst 别名在对象层归一，
+    // install C:\mnt\app 与 backup D:\app（mnt 挂 D:）判同址拒绝。
+    // 取不到（全程不存在/打不开/超 32K）返回 null 由成对判退回字面。
+    private static string? NtCmpPath(string path) =>
+        OperatingSystem.IsWindows() ? NtPhysicalPath(path) : path;
+
+    private static string? NtPhysicalPath(string path)
+    {
+        var probe = Path.GetFullPath(path);
+        var tail = new List<string>();
+        while (!File.Exists(probe) && !Directory.Exists(probe))
+        {
+            var parent = Path.GetDirectoryName(probe);
+            if (parent is null || parent == probe)
+            {
+                return null;
+            }
+            tail.Insert(0, Path.GetFileName(probe));
+            probe = parent;
+        }
+        // FILE_FLAG_BACKUP_SEMANTICS 才开得了目录句柄——.NET FileOptions 无此项，
+        // 只能 CreateFile 直调；0 访问权限足以查询对象名。
+        var handle = CreateFile(probe, 0, 0x7 /* READ|WRITE|DELETE share */, IntPtr.Zero,
+            3 /* OPEN_EXISTING */, 0x02000000 /* FILE_FLAG_BACKUP_SEMANTICS */, IntPtr.Zero);
+        if (handle == new IntPtr(-1))
+        {
+            return null;
+        }
+        try
+        {
+            // 缓冲不足时返回需要的长度——按需扩容重试到内核路径上限 64K，
+            // 超长路径不再静默退回字面（混合命名空间漏判的事故源）。
+            var capacity = 512;
+            string? nt = null;
+            while (capacity <= 64 * 1024)
+            {
+                var buffer = new StringBuilder(capacity: capacity);
+                var length = GetFinalPathNameByHandle(
+                    handle, buffer, (uint)buffer.Capacity, 0x1 /* VOLUME_NAME_NT */);
+                if (length == 0)
+                {
+                    return null;
+                }
+                if (length < (uint)buffer.Capacity)
+                {
+                    nt = buffer.ToString(0, (int)length).TrimEnd('\\');
+                    break;
+                }
+                capacity = (int)Math.Min(length + 1, 64 * 1024 + 1);
+            }
+            if (nt is null)
+            {
+                return null;
+            }
+            foreach (var segment in tail)
+            {
+                nt += "\\" + segment;
+            }
+            return nt;
+        }
+        finally
+        {
+            CloseHandle(handle);
+        }
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetVolumePathName(string lpszFileName, StringBuilder lpszVolumePathName, int nBufferLength);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetVolumePathNamesForVolumeName(
+        string lpszVolumeName, char[] lpszVolumePathNames, uint cchBufferLength, ref uint lpcchReturnLength);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetFinalPathNameByHandle(IntPtr hFile, StringBuilder lpszFilePath, uint cchFilePath, uint dwFlags);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr CreateFile(string lpFileName, uint dwDesiredAccess, uint dwShareMode,
+        IntPtr lpSecurityAttributes, uint dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeviceIoControl(IntPtr hDevice, uint dwIoControlCode,
+        IntPtr lpInBuffer, uint nInBufferSize, IntPtr lpOutBuffer, uint nOutBufferSize,
+        out uint lpBytesReturned, IntPtr lpOverlapped);
+
+    [DllImport("libc", EntryPoint = "rename", SetLastError = true, CharSet = CharSet.Ansi)]
+    private static extern int PosixRename(string oldPath, string newPath);
+
     // 同卷 rename(2)/MoveFile 原子就位；跨卷两段式：先 CopyTree 到同级临时名再原子
     // rename 就位——destination 只呈现"未开始"或"全本"两态，调用方靠 Exists 即可判
     // 备份是否成立（半成品永远在临时名下清走，不会污染目标槽）。
@@ -470,7 +647,7 @@ internal static class BootstrapPlan
         var staged = destination + ".partial-" + Guid.NewGuid().ToString("N")[..8];
         try
         {
-            CopyTree(source, staged);
+            CopyTree(source, staged, log);
             Directory.Move(staged, destination);
         }
         catch
@@ -487,32 +664,75 @@ internal static class BootstrapPlan
         Directory.Delete(source, recursive: true);
     }
 
-    private static void CopyTree(string source, string destination)
+    // `cp -a` 语义（与 POSIX bundler-updater.sh 平价）：链接按链接重建不解引用实体化、
+    // 权限位/xattr 随文件走。POSIX 一律走宿主工具：macOS `ditto`（xattr/ACL/链接全保真——
+    // managed 复制丢目录级 xattr，签名 .app 经保留/跨卷/回滚路会被洗白；与提取侧
+    // PR #34 同策略用 Apple 系统工具），其余 POSIX `cp -a`（coreutils/busybox 均有）。
+    // Windows 无 xattr 语义，走 managed 复制。
+    private static void CopyTree(string source, string destination, Action<string> log)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            try
+            {
+                Directory.CreateDirectory(destination);
+                ProcessStartInfo startInfo = OperatingSystem.IsMacOS()
+                    ? new ProcessStartInfo("/usr/bin/ditto", [source, destination])
+                    : new ProcessStartInfo("cp", ["-a", source + "/.", destination + "/"]);
+                startInfo.RedirectStandardError = true;
+                using var process = Process.Start(startInfo);
+                // 必须先排空 stderr——cp/ditto 大量报错写满管道会反压阻塞子进程，
+                // WaitForExit 将永久卡死。ReadToEnd 排水直到子进程退出再取码。
+                var stderr = process!.StandardError.ReadToEnd();
+                process.WaitForExit();
+                if (process.ExitCode == 0)
+                {
+                    return;
+                }
+                DeleteNodeIfPresent(destination);
+                var detail = stderr.Trim();
+                if (detail.Length > 240) { detail = "…" + detail[^240..]; }
+                log($"bundler-updater: WARN host copy failed (exit {process.ExitCode}){(detail.Length > 0 ? $" — {detail}" : "")} — falling back to managed copy");
+            }
+            catch (Exception exception)
+            {
+                log($"bundler-updater: WARN host copy unavailable ({exception.Message}) — falling back to managed copy");
+            }
+        }
+        CopyTreeManaged(source, destination);
+    }
+
+    private static void CopyTreeManaged(string source, string destination)
     {
         Directory.CreateDirectory(destination);
-        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        foreach (var entry in Directory.EnumerateFileSystemEntries(source))
         {
-            Directory.CreateDirectory(directory.Replace(source, destination));
-        }
-        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
-        {
-            var target = file.Replace(source, destination);
-            if (File.Exists(target))
+            var target = Path.Combine(destination, Path.GetFileName(entry));
+            var attributes = File.GetAttributes(entry);
+            // 链接（含目录软链）按链接重建——EnumerateDirectories 会把目录软链遍历成
+            // 实体目录（.app 内 Framework/版本链被洗白、环链死循环），必须 lstat 判链。
+            var linkTarget = new DirectoryInfo(entry).LinkTarget ?? new FileInfo(entry).LinkTarget;
+            if (linkTarget is not null)
             {
-                File.Delete(target);
-            }
-            var info = new FileInfo(file);
-            // 软链按链接重建而非解引用成普通文件（File.Copy 的默认行为会破坏 AppRun 类链接）。
-            if (info.LinkTarget is { } linkTarget)
-            {
-                File.CreateSymbolicLink(target, linkTarget);
+                if (attributes.HasFlag(FileAttributes.Directory))
+                {
+                    Directory.CreateSymbolicLink(target, linkTarget);
+                }
+                else
+                {
+                    File.CreateSymbolicLink(target, linkTarget);
+                }
                 continue;
             }
-            File.Copy(file, target, overwrite: true);
-            // unix 执行位随文件走——exec 载荷跨卷复制后仍可启动。
+            if (attributes.HasFlag(FileAttributes.Directory))
+            {
+                CopyTreeManaged(entry, target);
+                continue;
+            }
+            File.Copy(entry, target);
             if (!OperatingSystem.IsWindows())
             {
-                File.SetUnixFileMode(target, File.GetUnixFileMode(file));
+                File.SetUnixFileMode(target, File.GetUnixFileMode(entry));
             }
         }
     }
@@ -597,9 +817,44 @@ internal static class BootstrapPlan
                 {
                     break;
                 }
-                var next = Path.GetFullPath(
-                    Path.IsPathRooted(target) ? target
-                        : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
+                // Windows 卷挂载点（mountvol）：reparse target 是 `\??\Volume{GUID}`
+                // 或 .NET 剥前缀后的裸名——NT 对象名而非文件系统路径，MOUNT_POINT
+                // 等 tag 时按普通目录透传不跟跳（跟跳会把 `Volume{guid}` 当目录名
+                // 拼进字面路径，静默写偏到别的卷）。tag 探不出（权限/竞争）不猜方向：
+                // 透传会让 install 叶链按链节点被搬走（真应用孤儿化），解成路径又拼
+                // 假路径逃逸守卫——返回 null 拒绝是最干净的落点。
+                var next = target;
+                if (OperatingSystem.IsWindows() && IsNtObjectTarget(target))
+                {
+                    var info = ReparseInfoOf(current);
+                    if (info is null)
+                    {
+                        return null;
+                    }
+                    if (info.Value.Tag != IoReparseTagSymlink)
+                    {
+                        break;
+                    }
+                    // .NET LinkTarget 对 `\\?\`/` \??\` 前缀目标统一剥前缀返回裸名
+                    //（win 腿探针实证）——`mklink /D link \\?\Volume{GUID}` 的实形是
+                    // 裸名+绝对 reparse flag。裸名根段 Volume{GUID} 且 flag 绝对时按
+                    // 卷真实挂载名解真；flag 相对则是用户真写的相对名，照旧拼父级。
+                    if (!info.Value.Relative && HasVolumeGuidRoot(target))
+                    {
+                        var dos = VolumeDosPath(target[..44]);
+                        var tail = target[44..].TrimStart('\\', '/');
+                        if (dos is null)
+                        {
+                            return null;
+                        }
+                        next = Path.GetFullPath(dos.TrimEnd('\\') + @"\" + tail);
+                    }
+                }
+                next = AbsoluteLinkTarget(current, next);
+                if (next is null)
+                {
+                    return null;
+                }
                 var canonical = CanonicalParentPath(next, resolving);
                 if (canonical is null || !visited.Add(canonical))
                 {
@@ -618,6 +873,153 @@ internal static class BootstrapPlan
         {
             resolving.Remove(path);
         }
+    }
+
+    // `\\?\`/`\??\` 扩展长度前缀的链接目标不能走 GetFullPath 规范化——.NET 对
+    // 非盘符设备段（`Volume{GUID}`、`GLOBALROOT` 等）会剥前缀后按相对名拼回
+    // 父级（win 腿实证：父级若恰好存在同名目录还会静默解到错目录）。手工规范
+    // 三类合法形：`UNC\s\p`→`\\s\p`、`X:\…`→去前缀照常、`Volume{GUID}[\sub]`
+    // →查卷真实挂载名替根段；不认识的设备形与无 DOS 名的卷返回 null 拒绝。
+    // `\Device\…` NT 路径无托管拼写可拼，同样拒绝。
+    private static string? AbsoluteLinkTarget(string current, string target)
+    {
+        if (OperatingSystem.IsWindows()
+            && target.StartsWith(@"\Device\", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+        if (!OperatingSystem.IsWindows()
+            || (!target.StartsWith(@"\\?\", StringComparison.Ordinal)
+                && !target.StartsWith(@"\??\", StringComparison.Ordinal)))
+        {
+            return Path.GetFullPath(
+                Path.IsPathRooted(target) ? target
+                    : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
+        }
+        var body = target[4..];
+        if (body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.GetFullPath(@"\\" + body[4..]);
+        }
+        if (body.Length >= 2 && char.IsLetter(body[0]) && body[1] == ':')
+        {
+            return Path.GetFullPath(body);
+        }
+        if (HasVolumeGuidRoot(body))
+        {
+            var dosName = VolumeDosPath(body[..44]);
+            var tail = body[44..].TrimStart('\\', '/');
+            return dosName is null ? null
+                : Path.GetFullPath(
+                    dosName.TrimEnd('\\') + (tail.Length == 0 ? @"\" : @"\" + tail));
+        }
+        return null;
+    }
+
+    // `Volume{GUID}` 是否占据路径根段（整名、尾分隔符或带子路径都算）。
+    private static bool HasVolumeGuidRoot(string path) =>
+        path.Length >= 44 && IsVolumeGuidName(path[..44])
+        && (path.Length == 44 || path[44] == '\\' || path[44] == '/');
+
+    // `Volume{GUID}` → 卷的 DOS 可见挂载名（`D:\`/`C:\mntv\`，多挂载取第一个）；
+    // 卷只按 GUID 可达（无挂载名）返回 null——托管 IO 没有能拼它的拼写。
+    private static string? VolumeDosPath(string volumeGuidName)
+    {
+        var volumeName = $@"\\?\{volumeGuidName}\";
+        var required = 0u;
+        GetVolumePathNamesForVolumeName(volumeName, Array.Empty<char>(), 0, ref required);
+        if (required == 0)
+        {
+            return null;
+        }
+        var buffer = new char[required];
+        if (!GetVolumePathNamesForVolumeName(volumeName, buffer, (uint)buffer.Length, ref required))
+        {
+            return null;
+        }
+        var names = new string(buffer).Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        return names.Length == 0 ? null : names[0];
+    }
+
+    // NT 对象名的三种表面：`\\?\`/`\??\` 前缀、`\Device\…`、以及 .NET 剥前缀后
+    // 露出的裸 `Volume{GUID}\`（卷挂载点 reparse target 在 LinkTarget 上的实形——
+    // win 腿实证 .NET 去掉 `\??\` 后按裸名返回，跟跳会把它当目录名拼进字面路径）。
+    // `\\?\C:\…`/`\\?\UNC\…` 这类扩展长度路径是合法拼写，照常解。
+    private static bool IsNtObjectTarget(string target)
+    {
+        if (target.StartsWith(@"\Device\", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (target.StartsWith(@"\\?\", StringComparison.Ordinal)
+            || target.StartsWith(@"\??\", StringComparison.Ordinal))
+        {
+            var body = target[4..];
+            return HasVolumeGuidRoot(body)
+                || (!(body.Length >= 2 && char.IsLetter(body[0]) && body[1] == ':')
+                    && !body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase));
+        }
+        return HasVolumeGuidRoot(target);
+    }
+
+    // `Volume{xxxxxxxx-xxxx-…}` 裸名——卷 GUID 路径的根段，
+    // 允许尾巴一根目录分隔符，不接受它当普通目录名。
+    private static bool IsVolumeGuidName(string name)
+    {
+        var trimmed = name.TrimEnd('\\');
+        return trimmed.Length == 44
+            && trimmed.StartsWith("Volume{", StringComparison.OrdinalIgnoreCase)
+            && trimmed[43] == '}';
+    }
+
+    // reparse tag 三态：FSCTL_GET_REPARSE_POINT 读节点真实 tag——
+    // SYMLINK 确证链接可解；MOUNT_POINT（junction/卷挂）的 NT 形目标
+    // 按对象透传；探不出返回 null，调用方 fail-closed 同样透传。
+    // OPEN_REPARSE_POINT 开链节点自身（不顺链），BACKUP_SEMANTICS 开目录。
+    private const uint IoReparseTagSymlink = 0xA000000C;
+    private const uint FsctlGetReparsePoint = 0x000900A8;
+
+    private static ReparseInfo? ReparseInfoOf(string path)
+    {
+        var handle = CreateFile(path, 0, 0x7 /* READ|WRITE|DELETE share */, IntPtr.Zero,
+            3 /* OPEN_EXISTING */, 0x02200000 /* BACKUP_SEMANTICS | OPEN_REPARSE_POINT */, IntPtr.Zero);
+        if (handle == new IntPtr(-1))
+        {
+            return null;
+        }
+        try
+        {
+            var buffer = Marshal.AllocHGlobal(16384);
+            try
+            {
+                if (!DeviceIoControl(handle, FsctlGetReparsePoint, IntPtr.Zero, 0,
+                        buffer, 16384, out _, IntPtr.Zero))
+                {
+                    return null;
+                }
+                var tag = (uint)Marshal.ReadInt32(buffer);
+                // SYMLINK 的 Flags 在 reparse 头偏移 16：bit0=SYMLINK_FLAG_RELATIVE，
+                // 区分 `mklink link Volume{GUID}`（相对拼写）与 `mklink link
+                // \\?\Volume{GUID}`（NT 绝对对象）——LinkTarget 两者同显裸名。
+                var relative = tag == IoReparseTagSymlink
+                    && (Marshal.ReadInt32(buffer, 16) & 0x1) != 0;
+                return new ReparseInfo(tag, relative);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        finally
+        {
+            CloseHandle(handle);
+        }
+    }
+
+    private readonly struct ReparseInfo(uint tag, bool relative)
+    {
+        internal uint Tag { get; } = tag;
+        internal bool Relative { get; } = relative;
     }
 
     private static bool IsLink(string path)

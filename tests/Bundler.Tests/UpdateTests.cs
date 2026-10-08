@@ -421,6 +421,91 @@ public static class UpdateTests
     }
 
     [Fact]
+    static void BootstrapPlan_KeepPayload_PreservesDirectoryLinks()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows 建链需权限，POSIX 腿已实测覆盖。");
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "install");
+            var payload = Path.Combine(directory, "payload");
+            var outside = Path.Combine(directory, "outside-dir");
+            Directory.CreateDirectory(install);
+            Directory.CreateDirectory(payload);
+            Directory.CreateDirectory(outside);
+            File.WriteAllText(Path.Combine(install, "app"), "v1");
+            File.WriteAllText(Path.Combine(outside, "lib.so"), "lib");
+            File.WriteAllText(Path.Combine(payload, "app"), "v2");
+            // .app/Frameworks 类目录软链：cp -a 语义必须按链接重建——
+            // 被当目录遍历实体化会复制出一份实体目录并丢失目录级属性。
+            Directory.CreateSymbolicLink(Path.Combine(payload, "Frameworks"), outside);
+
+            var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload,
+                    KeepPayload = true,
+                }, _ => { });
+
+            Assert.Equal(0, rc);
+            Assert.Equal(outside, new DirectoryInfo(Path.Combine(install, "Frameworks")).LinkTarget);
+            Assert.Equal("lib", File.ReadAllText(Path.Combine(install, "Frameworks", "lib.so")));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void BootstrapPlan_Rollback_PreservesDirectoryLinks()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows 建链需权限，POSIX 腿已实测覆盖。");
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = Path.Combine(directory, "install");
+            var payload = Path.Combine(directory, "payload");
+            var outside = Path.Combine(directory, "outside-dir");
+            var retain = Path.Combine(directory, "backups", "install-abc");
+            Directory.CreateDirectory(install);
+            Directory.CreateDirectory(payload);
+            Directory.CreateDirectory(outside);
+            File.WriteAllText(Path.Combine(install, "app"), "v1");
+            File.WriteAllText(Path.Combine(outside, "lib.so"), "lib");
+            File.WriteAllText(Path.Combine(payload, "app"), "v2");
+            Directory.CreateSymbolicLink(Path.Combine(install, "Frameworks"), outside);
+
+            var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    PayloadDirectory = payload,
+                    RetainBackupDirectory = retain,
+                }, _ => { });
+            Assert.Equal(0, rc);
+
+            rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = install,
+                    BackupDirectory = retain,
+                    Rollback = true,
+                }, _ => { });
+            Assert.Equal(0, rc);
+            // 回滚经复制路径还原——目录软链必须还是链接而非实体目录。
+            Assert.Equal(outside, new DirectoryInfo(Path.Combine(install, "Frameworks")).LinkTarget);
+            Assert.Equal("lib", File.ReadAllText(Path.Combine(install, "Frameworks", "lib.so")));
+            Assert.Equal("v1", File.ReadAllText(Path.Combine(install, "app")));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     static void BootstrapPlan_Rollback_RestoresBackupAndKeepsIt()
     {
         var directory = CreateTempDirectory();

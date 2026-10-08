@@ -46,6 +46,43 @@ restart_app() {
     esac
 }
 
+# 同卷 mv=rename 原子就位（含进程被杀语义）；跨卷 mv 退化为 copy+unlink，
+# 中途被杀/失败会在目标名上留"存在≠完整"半成品（恢复路径 -d 判存会还原半本）。
+# 故只有同卷才直移，跨卷一律两段式（与 AOT MoveTree/MoveFile 同义）：
+# 先复制到同级临时名再原子 mv 就位，目标槽只呈现"未开始"或"全本"两态。
+_mn_dev() {
+    # 卷设备号：Linux/busybox `stat -c %d`，Darwin/BSD `stat -f %d`；
+    # stat 缺席/失败返回空——按跨卷处理走两段式（保守安全）。
+    if [ "$(uname -s)" = "Darwin" ]; then
+        stat -f %d "$1" 2>/dev/null
+    else
+        stat -c %d "$1" 2>/dev/null
+    fi
+}
+move_node() {
+    _mn_sdev=$(_mn_dev "$1")
+    _mn_ddev=$(_mn_dev "$(dirname "$2")")
+    if [ -n "$_mn_sdev" ] && [ "$_mn_sdev" = "$_mn_ddev" ] && mv "$1" "$2" 2>/dev/null; then
+        return 0
+    fi
+    # 直 mv 半途可能已把部分条目落进目标名——先清槽再两段式。
+    rm -rf "$2"
+    _mn_staged="$2.partial-$$"
+    rm -rf "$_mn_staged"
+    if [ -d "$1" ]; then
+        mkdir -p "$_mn_staged" || { rm -rf "$_mn_staged"; return 1; }
+        cp -a "$1"/. "$_mn_staged"/ || { rm -rf "$_mn_staged"; return 1; }
+    else
+        cp -p "$1" "$_mn_staged" || { rm -rf "$_mn_staged"; return 1; }
+    fi
+    if mv "$_mn_staged" "$2"; then
+        rm -rf "$1"
+        return 0
+    fi
+    rm -rf "$_mn_staged"
+    return 1
+}
+
 [ "${1:-}" = "apply" ] || { usage; exit 2; }
 shift
 
@@ -233,7 +270,7 @@ retain_or_remove_backup() {
         mkdir -p "$(dirname "$target")" || return 4
         rm -rf "$target" || return 4
         log "bundler-updater: retain backup '$1' → '$target'"
-        mv "$1" "$target" || return 4
+        move_node "$1" "$target" || return 4
         return 0
     fi
     rm -rf "$1" 2>/dev/null || true
@@ -259,10 +296,10 @@ if [ -f "$MARKER" ]; then
     log "bundler-updater: interrupted swap detected, restoring backup first"
     if [ -f "$BACKUP_DIR" ]; then
         rm -f "$INSTALL_DIR"
-        mv "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+        move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
     elif [ -d "$BACKUP_DIR" ]; then
         rm -rf "$INSTALL_DIR"
-        mv "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+        move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
     else
         { echo "bundler-updater: swap marker exists but backup missing — cannot recover." >&2; exit 4; }
     fi
@@ -289,19 +326,19 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
     mkdir -p "$(dirname "$BACKUP_DIR")" || exit 4
     rm -f "$BACKUP_DIR" || exit 4
     printf 'swap in progress' >"$MARKER" || exit 4
-    mv "$INSTALL_DIR" "$BACKUP_DIR" || { rm -f "$MARKER"; exit 4; }
+    move_node "$INSTALL_DIR" "$BACKUP_DIR" || { rm -f "$MARKER"; exit 4; }
     SWAP_FAILED=0
     if [ "$KEEP_PAYLOAD" = 1 ]; then
         log "bundler-updater: copy in '$PAYLOAD_DIR' → '$INSTALL_DIR'"
         cp -f "$PAYLOAD_DIR" "$INSTALL_DIR" || SWAP_FAILED=1
     else
         log "bundler-updater: swap in '$PAYLOAD_DIR' → '$INSTALL_DIR'"
-        mv "$PAYLOAD_DIR" "$INSTALL_DIR" || SWAP_FAILED=1
+        move_node "$PAYLOAD_DIR" "$INSTALL_DIR" || SWAP_FAILED=1
     fi
     if [ "$SWAP_FAILED" = 1 ]; then
         log "bundler-updater: swap failed, restoring backup"
         rm -f "$INSTALL_DIR"
-        mv "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+        move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
         rm -f "$MARKER"
         exit 4
     fi
@@ -368,9 +405,9 @@ log "bundler-updater: backup '$INSTALL_DIR' → '$BACKUP_DIR'"
 mkdir -p "$(dirname "$BACKUP_DIR")" || exit 4
 rm -rf "$BACKUP_DIR" || exit 4
 printf 'swap in progress' >"$MARKER" || exit 4
-mv "$INSTALL_DIR" "$BACKUP_DIR" || { rm -f "$MARKER"; exit 4; }
+move_node "$INSTALL_DIR" "$BACKUP_DIR" || { rm -f "$MARKER"; exit 4; }
 
-# --keep-payload 用复制换入（与 AOT copy 语义一致），否则 mv 就位。
+# --keep-payload 用复制换入（与 AOT copy 语义一致），否则 move_node 就位。
 SWAP_FAILED=0
 if [ "$KEEP_PAYLOAD" = 1 ]; then
     log "bundler-updater: copy in '$PAYLOAD_DIR' → '$INSTALL_DIR'"
@@ -378,12 +415,12 @@ if [ "$KEEP_PAYLOAD" = 1 ]; then
     cp -a "$PAYLOAD_DIR"/. "$INSTALL_DIR"/ || SWAP_FAILED=1
 else
     log "bundler-updater: swap in '$PAYLOAD_DIR' → '$INSTALL_DIR'"
-    mv "$PAYLOAD_DIR" "$INSTALL_DIR" || SWAP_FAILED=1
+    move_node "$PAYLOAD_DIR" "$INSTALL_DIR" || SWAP_FAILED=1
 fi
 if [ "$SWAP_FAILED" = 1 ]; then
     log "bundler-updater: swap failed, restoring backup"
     rm -rf "$INSTALL_DIR"
-    mv "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+    move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
     rm -f "$MARKER"
     exit 4
 fi
