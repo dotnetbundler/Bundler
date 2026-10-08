@@ -48,10 +48,12 @@ assign letter=V
     try {
         # 等卷挂载生效后断言 filler 真的落盘——塞不满则"盘满被拒"语义不成立
         for ($i = 0; $i -lt 20 -and -not (Test-Path "V:\"); $i++) { Start-Sleep -Milliseconds 500 }
-        # .NET 写实字节比 fsutil 可靠（后者在 FAT 卷静默失败）
-        try { [IO.File]::WriteAllBytes("V:\filler.bin", (New-Object byte[] 7340032)) } catch {}
+        # .NET 写实字节比 fsutil 可靠（后者在 FAT 卷静默失败）；写失败把异常直接落证据
+        $fillErr = $null
+        try { [IO.File]::WriteAllBytes("V:\filler.bin", (New-Object byte[] 7340032)) } catch { $fillErr = $_.Exception.Message }
+        $vol = Get-Volume -DriveLetter V -ErrorAction SilentlyContinue
         $filled = (Get-Item "V:\filler.bin" -ErrorAction SilentlyContinue)
-        Note "卷塞满" ($null -ne $filled -and $filled.Length -ge 7340032) "len=$($filled?.Length)"
+        Note "卷塞满" ($null -ne $filled -and $filled.Length -ge 7340032) "len=$($filled?.Length) free=$($vol?.SizeRemaining) err=$fillErr"
         $p2 = Start-Process $InstallerPath -ArgumentList "/S", "/D=V:\app" -Wait -PassThru
         Note "盘满下安装被拒" ($p2.ExitCode -ne 0) "rc=$($p2.ExitCode)"
         $stray = @(Get-ChildItem "V:\app" -Recurse -Filter *.exe -ErrorAction SilentlyContinue)
