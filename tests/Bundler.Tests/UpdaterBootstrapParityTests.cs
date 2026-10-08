@@ -641,6 +641,196 @@ public static class UpdaterBootstrapParityTests
         }
     }
 
+    // ENOSPC 注入腿（AOT 单侧）：注入缝只在进程内可达——sh 侧真盘满断言由宿主腿实证。
+    // 通用约定：注入点在移动操作前抛 IOException = 该次原子移动不可用（强制两段式）；
+    // 在复制操作前抛 = 该文件复制半途失败；先写截断字节再抛 = 截断半成品形态。
+    static void WithIoFault(Action<string, string>? probe, Action body)
+    {
+        BootstrapPlan.ForceManagedCopy = true;
+        BootstrapPlan.IoFaultProbe = probe;
+        try
+        {
+            body();
+        }
+        finally
+        {
+            BootstrapPlan.IoFaultProbe = null;
+            BootstrapPlan.ForceManagedCopy = false;
+        }
+    }
+
+    static void AssertNoStagedResidue(string dir) =>
+        Assert.Empty(Directory.EnumerateFileSystemEntries(dir, "*.partial-*", SearchOption.AllDirectories));
+
+    [Fact]
+    static void IoFault_BackupCopy_StagedResidueCleaned_InstallIntact()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var dir = NewDir(root, "case");
+            var install = InstallV1(dir);
+            var v1 = Path.Combine(dir, "v1-snapshot");
+            CopyTree(install, v1);
+            var payload = PayloadV2(dir);
+            var backup = Backup(install);
+            var log = Path.Combine(dir, "u.log");
+
+            var stagedCopies = 0;
+            var rc = 0;
+            WithIoFault((source, destination) =>
+            {
+                // 第一次移动点（install→backup）：抛 IOException 强制两段式。
+                if (source == install && destination == backup)
+                {
+                    throw new IOException("simulated ENOSPC at move");
+                }
+                // 备份 staged 树内第 2 个复制点炸（枚举顺序不做假设——
+                // 计数保证至少一个文件已复制，半途语义才成立）：写截断半成品再炸。
+                if (destination.Contains(".partial-"))
+                {
+                    stagedCopies++;
+                    if (stagedCopies == 2)
+                    {
+                        File.WriteAllBytes(destination, "v1-sta"u8.ToArray());
+                        throw new IOException("simulated ENOSPC mid-copy");
+                    }
+                }
+            }, () => rc = RunAot(["apply", "--install-dir", install,
+                "--payload", payload, "--log", log]));
+
+            Assert.Equal(4, rc);
+            Assert.True(stagedCopies >= 2, "fault must fire mid-copy, not before the first file");
+            AssertNoStagedResidue(dir);
+            Assert.False(Directory.Exists(backup), "backup slot must stay 'not started' after mid-copy fault");
+            AssertTree(v1, install);
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void IoFault_BackupStagedRename_StagedResidueCleaned()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var dir = NewDir(root, "case");
+            var install = InstallV1(dir);
+            var v1 = Path.Combine(dir, "v1-snapshot");
+            CopyTree(install, v1);
+            var payload = PayloadV2(dir);
+            var backup = Backup(install);
+            var log = Path.Combine(dir, "u.log");
+
+            var rc = 0;
+            WithIoFault((source, destination) =>
+            {
+                if (destination == backup)
+                {
+                    // 原子位与 staged 就位两跳都炸：前者强制两段式，后者模拟
+                    // "复制全本完成但就位失败"——staged 残渣必须清走。
+                    throw new IOException("simulated ENOSPC at backup slot");
+                }
+            }, () => rc = RunAot(["apply", "--install-dir", install,
+                "--payload", payload, "--log", log]));
+
+            Assert.Equal(4, rc);
+            AssertNoStagedResidue(dir);
+            Assert.False(Directory.Exists(backup));
+            AssertTree(v1, install);
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void IoFault_PayloadCopy_RollbackRestoresInstall()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var dir = NewDir(root, "case");
+            var install = InstallV1(dir);
+            var v1 = Path.Combine(dir, "v1-snapshot");
+            CopyTree(install, v1);
+            var payload = PayloadV2(dir);
+            var backup = Backup(install);
+            var log = Path.Combine(dir, "u.log");
+
+            var rc = 0;
+            WithIoFault((source, destination) =>
+            {
+                // 载荷 staged 复制途中炸（install.partial-* 名下）：写截断半成品再炸——
+                // 备份已成立 → 恢复路径必须把 v1 全本搬回 install。
+                if (destination.Contains(".partial-") && destination.EndsWith("new.txt", StringComparison.Ordinal))
+                {
+                    File.WriteAllBytes(destination, "v2-n"u8.ToArray());
+                    throw new IOException("simulated ENOSPC mid-payload-copy");
+                }
+                if (source == payload && destination == install)
+                {
+                    throw new IOException("simulated ENOSPC at payload move");
+                }
+            }, () => rc = RunAot(["apply", "--install-dir", install,
+                "--payload", payload, "--log", log]));
+
+            Assert.Equal(4, rc);
+            AssertNoStagedResidue(dir);
+            Assert.False(Directory.Exists(backup), "backup consumed by restore");
+            AssertTree(v1, install);
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void IoFault_FileLevelCopy_StagedFileCleaned()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var dir = NewDir(root, "case");
+            var installFile = Path.Combine(dir, "app.bin");
+            File.WriteAllText(installFile, "v1");
+            var payloadFile = Path.Combine(dir, "payload.bin");
+            File.WriteAllText(payloadFile, "v2");
+            var backup = Backup(installFile);
+            var log = Path.Combine(dir, "u.log");
+
+            var rc = 0;
+            WithIoFault((source, destination) =>
+            {
+                if (source == installFile && destination == backup)
+                {
+                    throw new IOException("simulated ENOSPC at move");
+                }
+                if (destination.Contains(".partial-"))
+                {
+                    File.WriteAllBytes(destination, "v1-t"u8.ToArray());
+                    throw new IOException("simulated ENOSPC mid-file-copy");
+                }
+            }, () => rc = RunAot(["apply", "--install-dir", installFile,
+                "--payload", payloadFile, "--log", log]));
+
+            Assert.Equal(4, rc);
+            AssertNoStagedResidue(dir);
+            Assert.False(File.Exists(backup));
+            Assert.Equal("v1", File.ReadAllText(installFile));
+            Assert.Equal("v2", File.ReadAllText(payloadFile));
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
     static bool WaitForFile(string path)
     {
         for (var i = 0; i < 100 && !File.Exists(path); i++)

@@ -10,6 +10,14 @@ namespace DotNet.Bundler.Updater.Bootstrap;
 /// </summary>
 internal static class BootstrapPlan
 {
+    // 测试缝：每个文件复制/移动操作点前回调（源，目标）——测试内写截断字节再抛异常
+    // 即可等价模拟半途 IO 失败（ENOSPC），验证两段式清场契约；生产为 null 零开销。
+    internal static Action<string, string>? IoFaultProbe;
+
+    // 测试缝：强制 managed 复制——宿主工具（cp -a/ditto）是子进程注不进缝，
+    // 置 true 让 POSIX 也走可注入的 CopyTreeManaged。
+    internal static bool ForceManagedCopy;
+
     internal static int Run(string[] args)
     {
         var options = Parse(args);
@@ -478,7 +486,17 @@ internal static class BootstrapPlan
     // 同卷（原子 rename）才直移，其余一律两段式（与 MoveTree 同义）。
     private static void MoveFile(string source, string destination)
     {
-        if (TryAtomicMove(source, destination))
+        // 注入点抛 IOException 与原子移动失败同义——落两段式（MoveTree 同款约定）。
+        var atomicAvailable = true;
+        try
+        {
+            IoFaultProbe?.Invoke(source, destination);
+        }
+        catch (IOException)
+        {
+            atomicAvailable = false;
+        }
+        if (atomicAvailable && TryAtomicMove(source, destination))
         {
             return;
         }
@@ -486,7 +504,9 @@ internal static class BootstrapPlan
         var staged = destination + ".partial-" + Guid.NewGuid().ToString("N")[..8];
         try
         {
+            IoFaultProbe?.Invoke(source, staged);
             File.Copy(source, staged);
+            IoFaultProbe?.Invoke(staged, destination);
             File.Move(staged, destination);
         }
         catch
@@ -638,6 +658,7 @@ internal static class BootstrapPlan
     {
         try
         {
+            IoFaultProbe?.Invoke(source, destination);
             Directory.Move(source, destination);
             return;
         }
@@ -648,6 +669,7 @@ internal static class BootstrapPlan
         try
         {
             CopyTree(source, staged, log);
+            IoFaultProbe?.Invoke(staged, destination);
             Directory.Move(staged, destination);
         }
         catch
@@ -671,7 +693,7 @@ internal static class BootstrapPlan
     // Windows 无 xattr 语义，走 managed 复制。
     private static void CopyTree(string source, string destination, Action<string> log)
     {
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows() && !ForceManagedCopy)
         {
             try
             {
@@ -714,6 +736,7 @@ internal static class BootstrapPlan
             var linkTarget = new DirectoryInfo(entry).LinkTarget ?? new FileInfo(entry).LinkTarget;
             if (linkTarget is not null)
             {
+                IoFaultProbe?.Invoke(entry, target);
                 if (attributes.HasFlag(FileAttributes.Directory))
                 {
                     Directory.CreateSymbolicLink(target, linkTarget);
@@ -729,6 +752,7 @@ internal static class BootstrapPlan
                 CopyTreeManaged(entry, target);
                 continue;
             }
+            IoFaultProbe?.Invoke(entry, target);
             File.Copy(entry, target);
             if (!OperatingSystem.IsWindows())
             {
