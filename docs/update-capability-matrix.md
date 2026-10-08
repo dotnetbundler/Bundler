@@ -17,6 +17,7 @@
 | 三段式换包（stage→备份→原子替换→重启） | 已实现 | UPDATE-3 | 标记 `<install>.bundler-swap` 崩溃恢复；换包期瞬备 `<install>.bundler-backup` 必建（原子性+崩溃恢复载体），成功后默认删除；`ApplyOptions.KeepRollbackBackup`（显式 `RollbackBackupDirectory` 覆盖）保留回滚点→落数据区 `DotNet.Bundler/backups`（per-user=`%LOCALAPPDATA%`/`~/Library/Application Support`/`$XDG_DATA_HOME`，per-machine=`%ProgramData%`/`/Library`/`/var/lib`）；`--rollback` 显式回滚（保留备份可重试） |
 | 断电/中断无砖化 | 已实现 | UPDATE-3 | linux 宿主 kill -9 于 701MB CopyTree 中途→marker 恢复实证；换包要么完整要么自动还原 |
 | symlink/exec 位保留 | 已实现 | UPDATE-3 | `CopyTree` CreateSymbolicLink+GetUnixFileMode 透传；AppRun symlink+exec 位断言 |
+| install 路径叶链解析穿透 | 已实现 | UPDATE-3 | install 叶段为 junction/符号链接时双侧（AOT/`bundler-updater.sh`）解析穿透作用于目标（POSIX `norm_path` 同语义、win mountvol/junction 腿实证）——穿透是设计契约，不做"拒绝叶链"语义 |
 | macOS 三项（codesign 验身份/剥 quarantine/`open -n` 重启） | 部分实现 | UPDATE-3 | quarantine 剥离+`open -n`+posix darwin 腿实证；同签名身份比对腿因无 Apple 证书挂 UPDATE-OI-02 |
 | 安装器重跑语义（nsis `/UPDATE` / msi major upgrade） | 已实现 | UPDATE-3 | win 宿主实证：NSIS 安装器链 6/6、MSI major upgrade 链路通过；不走换文件语义 |
 | `Bundler.Updater` 应用内库 | 已实现 | UPDATE-4 | `UpdateClient` 四动词：Check（版本比较+rid/format 槽位匹配）→Download→Verify→Apply/Rollback；netstandard2.0+net10.0 双目标，零依赖 |
