@@ -1,8 +1,8 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-07
+> 最后更新：2026-10-08
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.81`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.82`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -85,6 +85,16 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-08 PR #37 压缩合并（squash `9007056`，main `9007056`，版本推进 `alpha.82`）
+
+- 新一轮三轮四宿主测试（R1/R2 复用会话、R3 全新会话）期间腿抓缺陷批量收口，三轮全绿：**CopyTree 保真**——`EnumerateDirectories(AllDirectories)` 把目录软链实体化且 managed 复制丢目录级 xattr（mac 签名 .app 洗白），POSIX 一律走宿主工具（macOS `ditto`、其余 `cp -a src/. dst/`，对齐 sh 语义），工具缺席 WARN 回退 managed，managed 重写为逐条 `EnumerateFileSystemEntries`+`LinkTarget` 判链重建（顺带治 Windows junction 同类实体化）。
+- **移动操作两段式双侧对齐**：sh `mv` 跨卷与 AOT `File.Move`/`MoveTree` 半途留半成品污染备份槽恢复判据——sh 新增 `move_node`（mv→失败则 cp -a 到 `.partial-$$` 再原子换名）换七处调用点；AOT `MoveFile`/`MoveTree` 同构两段式换五处——输出槽"未开始/全本"两态恒成立。
+- **挂载点/NT 目标家族**（win 腿+复审三轮拦截）：卷挂载点 reparse target（NT 对象名/裸 `Volume{GUID}\` 名）被当普通链接跟跳拼假路径——目录级静默写错卷 rc=0；别名同址漏判（`C:\mnt\app`×`D:\app` 物理同址拼写不同）——比较层经 `GetFinalPathNameByHandle(VOLUME_NAME_NT)` 归一到 `\Device\…` 对象层全拒，跨卷判改 `GetVolumePathName`；`LinkTarget` 对 `\\?\` 目标剥前缀返回裸名——判别改走 reparse Flags bit0：绝对 flag 的 `Volume{GUID}[\sub]` 经 `GetVolumePathNamesForVolumeName` 换 DOS 挂载名解真，相对 flag 照旧拼父级，不识设备形 rc=2。
+- **腿断言收编入测试**：新增 `Bundler.Tests/UpdaterBootstrapParityTests` 13 件——POSIX 同一断言矩阵跑 AOT 进程内+真 `sh` 子进程双侧（win 跑 AOT 单侧），覆盖生命周期/回滚/同址互嵌六向拒绝/链接族/崩溃恢复 marker/良性叶链/仓内件冒烟；Bundler.Tests 全量 364 件 0F。
+- 四腿复验全绿（最终 head `38ffe92`）：win mountvol 族+reparse-flag 判别矩阵、junction/链接面回归；mac ditto 保真+签名 .app `codesign --deep --strict`；linux tmpfs ENOSPC 无残渣；alpine busybox+musl 双侧；五 RID 引导件按 `38d857b` 同宿主重产回填（sha 逐件核验）；复审最终轮 0 发现。
+- 三轮测试总账：R1/R2 干净（`edaab74`），R3 重跑零缺陷直通（`38ffe92`）——缺陷台账与三级证据见会话总报告。
+- 待办：待裁项三条见 §5（`--app` 子进程 cwd 双实现分歧、junction/install 叶链穿透契约文档化、门禁格式中止整批语义）。
 
 ### 2026-10-07 PR #36 压缩合并（squash `71f0142`，main `71f0142`，版本推进 `alpha.81`）
 
@@ -403,6 +413,9 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 - WiX v3 已退出免费社区服务；大范围公开分发前须重新评估维护风险（见 `third_party/wix/msi-wix-provenance.md`）。
 - 各格式外部事项按 OI 清单等待对应环境输入：`docs/<format>-open-items.md` 全套（生产证书/公证凭证、UAC 提权、真实重启、干净宿主矩阵、ARM64 真机、语言审校等；MSI 签名已裁决不补集成腿——`Bundler.Tests/WixTests` 三断言已覆盖，外部仅余 MSI-OI-06 生产证书/时间戳）。
+- `--app` 子进程 cwd 双实现不一致：sh 继承调用方 cwd，AOT=installDir（目录级）/install 父目录（文件级）——建议对齐 AOT 语义或文档化，待裁决。
+- install 叶段为 junction/符号链接：双实现都解析穿透作用于目标（POSIX norm_path 同语义）——建议文档化为契约，待裁决。
+- 门禁格式中止整批语义：mac 腿实证 msi 腿失败连带 zip 未产——是否符合"逐格式独立失败"设计，待裁决。
 - 仓外独立包消费 fixture（`tests/Bundler.LocalPackagesTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`,
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
   是否换处理方式（如公开发布后改验公网源、或移入独立验收仓）留待后续裁决。
@@ -411,6 +424,6 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新路线已于 2026-10-05 立项（`docs/update-roadmap.md`，13 项决策经用户裁决，六阶段 `UPDATE-1..6` 至全功能），UPDATE-1..6 已实现并冻结+整模块真实 E2E 全通（分支 `devin/1791228441-update-module`，基线 `0.1.0-alpha.74`），下一步：单 PR→Devin Review→等合并授权。
-剩余工作：UPDATE-1 启动、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
+UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#37 持续加固至 `alpha.82`），新一轮三轮四宿主测试全绿（§3 最新一轮）。
+剩余工作：§5 三条待裁项、CI 发布链测试（产出→安装→可用，范围/触发方式待用户确认）、ENOSPC 断言收编（需 MoveTree/CopyTree 注入点，待裁决）、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 
