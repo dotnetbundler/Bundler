@@ -11,6 +11,7 @@ using DotNet.Bundler.Updater.Bootstrap;
 using Protocol = DotNet.Bundler.Updater.Protocol;
 using UpdateKeyMaterial = DotNet.Bundler.Core.Update.UpdateKeyMaterial;
 
+
 public class UpdateCompatTests
 {
     static string V1Dir => RepoPath("tests/Bundler.Tests/Fixtures/UpdateCompat/v1");
@@ -18,7 +19,6 @@ public class UpdateCompatTests
     static string V1Zip => Path.Combine(V1Dir, "feed", "linux-x64", "zip",
         "hellov1-1.0.0-linux-x64.zip");
     static string V1Sh => Path.Combine(V1Dir, "bootstrap", "bundler-updater.sh");
-    static string V1Key => Path.Combine(V1Dir, "update.key");
     static string CurrentAot => RepoPath(
         "src/Bundler.Updater.Bootstrap/tools/linux-x64/bundler-updater");
 
@@ -33,12 +33,17 @@ public class UpdateCompatTests
         return install;
     }
 
-    // 侧车 feedUrl 指向冻件/腿内 feed 文件——v1 冻件里烙的是生成机路径，须改指。
-    static void RetargetFeedUrl(string installDir, string feedJsonPath)
+    // 侧车 feedUrl/publicKey 指向腿内 feed 与运行期密钥对——冻件里烙的是生成机
+    // 路径与 v1 密钥，须改指（私钥不入库，腿内签名材料用运行期生成的）。
+    static void RetargetSidecar(string installDir, string feedJsonPath, string? publicKey = null)
     {
         var sidecar = Path.Combine(installDir, "bundler-update.json");
         var node = JsonNode.Parse(File.ReadAllText(sidecar))!.AsObject();
         node["feedUrl"] = feedJsonPath;
+        if (publicKey != null)
+        {
+            node["publicKey"] = publicKey;
+        }
         File.WriteAllText(sidecar, node.ToJsonString());
     }
 
@@ -107,7 +112,7 @@ public class UpdateCompatTests
         try
         {
             var install = ExtractV1Install(root);
-            RetargetFeedUrl(install, V1FeedJson);
+            RetargetSidecar(install, V1FeedJson);
             var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
             // v1 清单版本与装机同版 → 无更新；能走到结论即清单+feed.sig 已被当前端解析验过。
             Assert.Null(await client.CheckForUpdateAsync());
@@ -123,7 +128,7 @@ public class UpdateCompatTests
         var root = CreateTempDirectory();
         try
         {
-            var material = UpdateKeyMaterial.Load(V1Key)!;
+            var material = UpdateKeyMaterial.Generate();
             var install = ExtractV1Install(root);
             var feedDir = Path.Combine(root, "feed");
             var feedJson = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable"));
@@ -135,7 +140,7 @@ public class UpdateCompatTests
                     $"\"feedUrl\":\"{feedJson}\",\"publicKey\":\"{material.PublicPointBase64()}\"}}")),
                 ("bundler-updater", File.ReadAllBytes(CurrentAot)));
             SignAndFeed(feedDir, "stable", "2.0.0", material, artifact);
-            RetargetFeedUrl(install, feedJson);
+            RetargetSidecar(install, feedJson, material.PublicPointBase64());
 
             var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
             var info = (await client.CheckForUpdateAsync())!;
