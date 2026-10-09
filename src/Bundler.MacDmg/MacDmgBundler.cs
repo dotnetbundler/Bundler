@@ -5,7 +5,7 @@ using DotNet.Bundler.MacApp;
 
 namespace DotNet.Bundler.MacDmg;
 
-public sealed class MacDmgBundler
+public sealed class MacDmgBundler : IFormatBundler
 {
     private readonly MacDmgBundleConfiguration _dmgConfiguration;
     private readonly MacAppBundleConfiguration _appConfiguration;
@@ -21,9 +21,7 @@ public sealed class MacDmgBundler
         _options = options ?? new MacDmgBundlerOptions();
     }
 
-    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
-        BundleConfiguration bundle,
-        CancellationToken cancellationToken = default)
+    public void Validate(BundleConfiguration bundle)
     {
         if (bundle is null)
         {
@@ -40,13 +38,19 @@ public sealed class MacDmgBundler
         var isMacOs = MacDmgBundleBackend.HostCheck?.Invoke() ?? RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
         if (!isMacOs)
         {
-            throw new NotSupportedException(
+            throw new PlatformNotSupportedException(
                 ".dmg creation requires a macOS host (hdiutil/osascript are not cross-host).");
         }
-        if (_dmgConfiguration.VolumeName is { } volumeName && volumeName.Trim().Length == 0)
-        {
-            throw new ArgumentException("The .dmg volume name must not be empty.");
-        }
+        // 构建管线内嵌 .app 阶段，其旋钮一并预检。
+        MacAppBundler.ValidateConfiguration(_appConfiguration, bundle);
+        MacDmgBundleBackend.ValidateConfiguration(_dmgConfiguration, bundle);
+    }
+
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
+        BundleConfiguration bundle,
+        CancellationToken cancellationToken = default)
+    {
+        Validate(bundle);
         return await new BundlePipeline(
             [
                 new MacAppBundleBackend(_appConfiguration),

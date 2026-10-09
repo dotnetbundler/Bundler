@@ -13,20 +13,14 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
     /// <summary>Test seam: overrides the macOS host check.</summary>
     internal static Func<bool>? HostCheck;
 
-    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
-        BundleBuildContext context, CancellationToken cancellationToken)
+    /// <summary>
+    /// Configuration-time checks the facade also runs during multi-format
+    /// pre-validation; everything past this point needs the build environment.
+    /// Returns the resolved identifier and version.
+    /// </summary>
+    internal static (string Identifier, string Version) ValidateConfiguration(
+        MacPkgBundleConfiguration settings, BundleConfiguration bundle)
     {
-        var isMacOs = HostCheck?.Invoke() ?? RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
-        if (!isMacOs)
-        {
-            throw new NotSupportedException(
-                ".pkg creation requires a macOS host (pkgbuild/productbuild are not cross-host).");
-        }
-
-        var bundle = context.Configuration;
-        var item = context.Item;
-        var logger = context.Logger;
-
         var identifier = settings.Identifier ?? bundle.Identifier;
         if (identifier.Trim().Length == 0)
         {
@@ -52,6 +46,24 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             throw new DirectoryNotFoundException(
                 $"The .pkg scripts directory does not exist: {Path.GetFullPath(scriptsDirectory)}");
         }
+        return (identifier, version);
+    }
+
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
+        BundleBuildContext context, CancellationToken cancellationToken)
+    {
+        var isMacOs = HostCheck?.Invoke() ?? RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+        if (!isMacOs)
+        {
+            throw new PlatformNotSupportedException(
+                ".pkg creation requires a macOS host (pkgbuild/productbuild are not cross-host).");
+        }
+
+        var bundle = context.Configuration;
+        var item = context.Item;
+        var logger = context.Logger;
+
+        var (identifier, version) = ValidateConfiguration(settings, bundle);
 
         var workDirectory = context.WorkDirectory;
         var stageDirectory = Path.Combine(workDirectory, "pkg-root");
@@ -136,15 +148,15 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             var pkgbuildArguments = new List<string>
             {
                 "--root", stageDirectory,
-                "--install-location", installLocation,
+                "--install-location", settings.InstallLocation,
                 "--identifier", identifier,
                 "--version", version,
                 "--ownership", "recommended"
             };
-            if (scriptsDirectory is { Length: > 0 })
+            if (settings.ScriptsDirectory is { Length: > 0 })
             {
                 pkgbuildArguments.Add("--scripts");
-                pkgbuildArguments.Add(Path.GetFullPath(scriptsDirectory));
+                pkgbuildArguments.Add(Path.GetFullPath(settings.ScriptsDirectory));
             }
             // Component packages are signed inside pkgbuild; distribution packages are
             // signed by productsign after productbuild emits the unsigned product archive.
@@ -166,7 +178,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                     bundle,
                     identifier,
                     version,
-                    installLocation,
+                    settings.InstallLocation,
                     Path.GetFileName(packagePath),
                     ArchitectureName(item.Target.Architecture),
                     logger,

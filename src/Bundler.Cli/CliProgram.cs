@@ -82,7 +82,7 @@ public static class CliProgram
             var configuration = ApplyInputDirectories(resolved.Bundle, parsed, out mergedDirectory);
             return parsed.Command switch
             {
-                "validate" => RunValidate(configuration, parsed, stdout, stderr),
+                "validate" => RunValidate(configuration, resolved, parsed, stdout, stderr, logger),
                 "plan" => RunPlan(configuration, parsed, stdout),
                 "bundle" => RunBundle(configuration, resolved, parsed, stdout, stderr, logger),
                 _ => 2
@@ -189,9 +189,26 @@ public static class CliProgram
     };
 
     private static int RunValidate(
-        BundleConfiguration configuration, CliArguments parsed, TextWriter stdout, TextWriter stderr)
+        BundleConfiguration configuration, CliResolvedConfiguration resolved,
+        CliArguments parsed, TextWriter stdout, TextWriter stderr, IBundleLogger logger)
     {
-        var issues = BundleConfigurationValidator.Validate(configuration);
+        var issues = BundleConfigurationValidator.Validate(configuration).ToList();
+        // 各格式旋钮一并验证；宿主门禁格式不是配置错误，跳过。
+        foreach (var format in configuration.Targets.SelectMany(t => t.Formats).Distinct())
+        {
+            try
+            {
+                FormatDispatcher.Create(format, resolved, logger)
+                    .Validate(SingleFormatConfiguration(configuration, format));
+            }
+            catch (PlatformNotSupportedException)
+            {
+            }
+            catch (Exception exception) when (exception is not CliUsageException)
+            {
+                issues.Add(new ValidationIssue(FormatName(format), exception.Message));
+            }
+        }
         if (parsed.Json)
         {
             WriteJson(stdout, new JsonObject
@@ -255,12 +272,55 @@ public static class CliProgram
         var formats = configuration.Targets.SelectMany(t => t.Formats).Distinct().ToArray();
         var artifacts = new List<BundleArtifact>();
         var failures = new List<(PackageFormat Format, string Reason)>();
+
+        // 统一预检：共享配置与各格式旋钮在扇出前一次验全；配置类错误聚合
+        // 报完即 rc=2；宿主门禁格式不进预检，留构建趟按逐格式容错处理。
+        var validationErrors = new List<(string Path, string Message)>();
+        try
+        {
+            BundlePlanner.Create(configuration);
+        }
+        catch (BundleValidationException validation)
+        {
+            foreach (var issue in validation.Issues)
+            {
+                validationErrors.Add((issue.Path, issue.Message));
+            }
+        }
+        var pending = new List<(PackageFormat Format, BundleConfiguration Single, IFormatBundler? Bundler)>();
         foreach (var format in formats)
+        {
+            var single = SingleFormatConfiguration(configuration, format);
+            try
+            {
+                var bundler = FormatDispatcher.Create(format, resolved, logger);
+                bundler.Validate(single);
+                pending.Add((format, single, bundler));
+            }
+            catch (PlatformNotSupportedException)
+            {
+                pending.Add((format, single, null));
+            }
+            catch (Exception exception) when (exception is not CliUsageException)
+            {
+                validationErrors.Add((FormatName(format), exception.Message));
+            }
+        }
+        if (validationErrors.Count > 0)
+        {
+            foreach (var (path, message) in validationErrors)
+            {
+                stderr.WriteLine($"  {path}: {message}");
+            }
+            return 2;
+        }
+
+        foreach (var (format, single, bundler) in pending)
         {
             try
             {
-                var single = SingleFormatConfiguration(configuration, format);
-                var produced = FormatDispatcher.BuildAsync(format, single, resolved, logger)
+                var produced = (bundler ?? FormatDispatcher.Create(format, resolved, logger))
+                    .BuildAsync(single)
                     .GetAwaiter().GetResult();
                 artifacts.AddRange(produced);
             }

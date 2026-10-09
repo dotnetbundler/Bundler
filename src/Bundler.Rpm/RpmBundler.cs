@@ -8,7 +8,7 @@ namespace DotNet.Bundler.Rpm;
 /// lead/header/cpio container itself, so a build works on any host
 /// (Linux, Windows, macOS CI).
 /// </summary>
-public sealed class RpmBundler
+public sealed class RpmBundler : IFormatBundler
 {
     private readonly RpmBundleConfiguration _configuration;
     private readonly RpmBundlerOptions _options;
@@ -21,9 +21,7 @@ public sealed class RpmBundler
         _options = options ?? new RpmBundlerOptions();
     }
 
-    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
-        BundleConfiguration bundle,
-        CancellationToken cancellationToken = default)
+    public void Validate(BundleConfiguration bundle)
     {
         if (bundle is null)
         {
@@ -37,6 +35,13 @@ public sealed class RpmBundler
             throw new NotSupportedException(
                 $"DotNet.Bundler.Rpm accepts Rpm targets only; '{unsupported}' requires another backend package.");
         }
+    }
+
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
+        BundleConfiguration bundle,
+        CancellationToken cancellationToken = default)
+    {
+        Validate(bundle);
         return await new BundlePipeline(
             [new RpmBundleBackend(_configuration)],
             _options.Logger).BuildAsync(bundle, cancellationToken);

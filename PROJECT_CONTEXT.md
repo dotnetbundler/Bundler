@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-09
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.84`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.85`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -86,6 +86,16 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-09 格式旋钮统一预检（版本推进 `alpha.85`）
+
+- 新增 `Bundler.Abstractions` 的 `IFormatBundler` 契约：`Validate(BundleConfiguration)` + `BuildAsync`；10 个格式 facade 全部实现，各 facade 把 `BuildAsync` 开头的旋钮/守卫校验原样前移，`BuildAsync` 首行调 `Validate`。
+- `MacDmg`/`MacPkg`/`AppImage` 三后端把配置态校验抽为 `internal static ValidateConfiguration`（dmg 卷名+签名、pkg identifier/version/InstallLocation/签名/ScriptsDirectory、appimage 密钥-口令配对与密钥文件存在），facade 与后端共用单一来源；dmg/pkg 宿主门禁异常统一为 `PlatformNotSupportedException`。
+- 入口层两趟化：MSBuild `BundleDesktopApplication` 与 CLI `bundle` 先跑共享校验（`BundlePlanner.Create`）+ 逐格式 `Validate`，配置类错误聚合一次报（MSBuild `LogError`+false；CLI stderr+rc=2）——任一格式零产出；宿主门禁（`PlatformNotSupportedException`）不进预检，仍走逐格式独立失败（warn+rc=1）。CLI `validate` 子命令顺带获得各格式旋钮校验。
+- 依赖构建产物/暂存树的检查（载荷签名文件、快捷方式落点、deb/rpm/apk 写入器内校验、dmg `.app` 中间件）不可前移，留原位。
+- `BundlePerFormatIndependentFailure` 组合修正为“rid 合法但宿主不可产”（linux/win 用 osx+dmg、mac 用 win-x64+msi）——原组合 dmg+linux-x64 本身就是矩阵违规（配置错类，现归 rc=2 更对）。
+- 新断言 ×8：CLI 四条（后置格式错→rc=2+前置 zip 零落盘、双格式双错一次报完、validate 子命令跑旋钮校验、签名宿主门不阻塞可产格式）+ dmg/pkg/msi 宿主门禁标记类型断言（`PlatformNotSupportedException`）+ dmg/pkg 预检覆盖内嵌 app 旋钮 + 签名宿主门不遮配置错。
+- 复审挂后续项“格式旋钮统一预检”落地；复审两轮三处处置（签名宿主门归一 PNSE、dmg/pkg 预检覆盖内嵌 app 旋钮、签名挪共享面末尾不遮配置错），Bundler.Tests 全量 **401 件 0F**。
 
 ### 2026-10-09 PR #45 压缩合并（squash `0ea145a`，main `0ea145a`，版本 `alpha.84` 不变）
 
@@ -472,5 +482,5 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
 UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#43 持续加固至 `alpha.84`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地，跨版本兼容冻件腿与三宿主真小卷 ENOSPC 腿在网，`tests/Special/` 特殊验收脚本矩阵就位（§3 最新三轮）。
-剩余工作：CI 发布链测试（产出→安装→可用，触发方式与更新链是否纳入待用户确认）、格式旋钮统一预检（复审挂后续项——把各后端旋钮校验抽到扇出前校验层）、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
+剩余工作：CI 发布链测试（产出→安装→可用，触发方式与更新链是否纳入待用户确认）、外部待验收项（各格式 OI 清单，见 §5）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。
 

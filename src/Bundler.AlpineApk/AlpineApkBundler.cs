@@ -8,7 +8,7 @@ namespace DotNet.Bundler.AlpineApk;
 /// three-segment gzip container itself, so a build works on any host
 /// (Linux, Windows, macOS CI). Only linux-musl-* targets accept the format.
 /// </summary>
-public sealed class AlpineApkBundler
+public sealed class AlpineApkBundler : IFormatBundler
 {
     private readonly AlpineApkBundleConfiguration _configuration;
     private readonly AlpineApkBundlerOptions _options;
@@ -21,9 +21,7 @@ public sealed class AlpineApkBundler
         _options = options ?? new AlpineApkBundlerOptions();
     }
 
-    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
-        BundleConfiguration bundle,
-        CancellationToken cancellationToken = default)
+    public void Validate(BundleConfiguration bundle)
     {
         if (bundle is null)
         {
@@ -37,6 +35,13 @@ public sealed class AlpineApkBundler
             throw new NotSupportedException(
                 $"DotNet.Bundler.AlpineApk accepts AlpineApk targets only; '{unsupported}' requires another backend package.");
         }
+    }
+
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
+        BundleConfiguration bundle,
+        CancellationToken cancellationToken = default)
+    {
+        Validate(bundle);
         return await new BundlePipeline(
             [new AlpineApkBundleBackend(_configuration)],
             _options.Logger).BuildAsync(bundle, cancellationToken);

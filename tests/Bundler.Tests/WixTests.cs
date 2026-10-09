@@ -83,6 +83,19 @@ public static class WixTests
     }
 
     [Fact]
+    static void NonWindowsHostGateIsPlatformNotSupported()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "the host gate only fires off-Windows");
+        // 宿主门禁标记类型：入口层靠它区分“逐格式容错”与“配置错误聚合”。
+        var configuration = ValidConfiguration(new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "win-x64", InputDirectory = ".",
+            MainExecutable = "test.exe", Formats = [PackageFormat.Msi]
+        });
+        Assert.Throws<PlatformNotSupportedException>(() => new WixBundler().Validate(configuration));
+    }
+
+    [Fact]
     static async Task RejectsUnsafeMsiPaths()
     {
         Assert.SkipUnless(TestPlatform.IsWindows, "requires a Windows host");

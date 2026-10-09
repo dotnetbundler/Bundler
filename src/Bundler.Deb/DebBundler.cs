@@ -7,7 +7,7 @@ namespace DotNet.Bundler.Deb;
 /// Public entry point for Linux .deb packaging. The backend writes the ar/tar/gzip
 /// container itself, so a build works on any host (Linux, Windows, macOS CI).
 /// </summary>
-public sealed class DebBundler
+public sealed class DebBundler : IFormatBundler
 {
     private readonly DebBundleConfiguration _configuration;
     private readonly DebBundlerOptions _options;
@@ -20,9 +20,7 @@ public sealed class DebBundler
         _options = options ?? new DebBundlerOptions();
     }
 
-    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
-        BundleConfiguration bundle,
-        CancellationToken cancellationToken = default)
+    public void Validate(BundleConfiguration bundle)
     {
         if (bundle is null)
         {
@@ -36,6 +34,13 @@ public sealed class DebBundler
             throw new NotSupportedException(
                 $"DotNet.Bundler.Deb accepts Deb targets only; '{unsupported}' requires another backend package.");
         }
+    }
+
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
+        BundleConfiguration bundle,
+        CancellationToken cancellationToken = default)
+    {
+        Validate(bundle);
         return await new BundlePipeline(
             [new DebBundleBackend(_configuration)],
             _options.Logger).BuildAsync(bundle, cancellationToken);

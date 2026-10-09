@@ -57,7 +57,7 @@ internal static class MacAppSigning
         }
         if (signingRequested && !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            throw new NotSupportedException(".app signing requires a macOS host (codesign).");
+            throw new PlatformNotSupportedException(".app signing requires a macOS host (codesign).");
         }
     }
 

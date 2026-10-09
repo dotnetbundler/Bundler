@@ -92,24 +92,32 @@ internal sealed class AppImageBundleBackend(
             PackageFormat.AppImage, context.Item.Target.RuntimeIdentifier, outputPath)];
     }
 
-    private static AppImageSigning.SigningContext? PrepareSigning(
-        AppImageBundleConfiguration settings, string workDirectory)
+    /// <summary>
+    /// Configuration-time checks the facade also runs during multi-format
+    /// pre-validation; everything past this point needs the build environment.
+    /// </summary>
+    internal static void ValidateConfiguration(AppImageBundleConfiguration settings)
     {
         var hasKey = settings.SigningKeyFile is { Length: > 0 };
-        var hasPassphrase = settings.SigningKeyPassphrase is { Length: > 0 };
-        if (hasPassphrase && !hasKey)
+        if (settings.SigningKeyPassphrase is { Length: > 0 } && !hasKey)
         {
             throw new ArgumentException(
                 "SigningKeyPassphrase requires SigningKeyFile to point at an OpenPGP secret key.");
         }
-        if (!hasKey)
-        {
-            return null;
-        }
-        if (!File.Exists(settings.SigningKeyFile!))
+        if (hasKey && !File.Exists(settings.SigningKeyFile!))
         {
             throw new ArgumentException(
                 $"SigningKeyFile '{settings.SigningKeyFile}' does not exist.");
+        }
+    }
+
+    private static AppImageSigning.SigningContext? PrepareSigning(
+        AppImageBundleConfiguration settings, string workDirectory)
+    {
+        ValidateConfiguration(settings);
+        if (settings.SigningKeyFile is not { Length: > 0 })
+        {
+            return null;
         }
         return AppImageSigning.Prepare(settings.SigningKeyFile!, workDirectory);
     }

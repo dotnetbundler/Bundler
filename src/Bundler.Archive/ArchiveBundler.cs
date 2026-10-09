@@ -7,7 +7,7 @@ namespace DotNet.Bundler.Archive;
 /// written entirely in managed code — no external tools — so any build host
 /// OS can produce them for any target OS.
 /// </summary>
-public sealed class ArchiveBundler
+public sealed class ArchiveBundler : IFormatBundler
 {
     private readonly ArchiveBundleConfiguration _configuration;
     private readonly ArchiveBundlerOptions _options;
@@ -20,9 +20,7 @@ public sealed class ArchiveBundler
         _options = options ?? new ArchiveBundlerOptions();
     }
 
-    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
-        BundleConfiguration bundle,
-        CancellationToken cancellationToken = default)
+    public void Validate(BundleConfiguration bundle)
     {
         if (bundle is null)
         {
@@ -42,6 +40,13 @@ public sealed class ArchiveBundler
                     $"DotNet.Bundler.Archive accepts Zip/TarGz targets only; '{unsupported}' requires another backend package.");
             }
         }
+    }
+
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
+        BundleConfiguration bundle,
+        CancellationToken cancellationToken = default)
+    {
+        Validate(bundle);
         var backends = new List<IBundleBackend>();
         foreach (var os in new[]
         {
@@ -58,3 +63,4 @@ public sealed class ArchiveBundler
             .BuildAsync(bundle, cancellationToken);
     }
 }
+
