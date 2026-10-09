@@ -12,4 +12,4 @@
 | LINUX-DEB-MT-03 | LINUX-DEB-4 | Debian oldstable / 旧 LTS / 非 systemd 发行版宿主装卸；记录 dpkg 版本差异下的行为 | 各宿主安装日志 |
 | LINUX-DEB-MT-04 | LINUX-DEB-3 | systemd 宿主：unit 安装后 `daemon-reload`、手动 `systemctl enable --now` 启动应用服务、卸载清 unit | **已验证**（2026-09-28，Ubuntu 宿主）：`daemon-reload`/`enable --now` 真实启动记录 |
 | LINUX-DEB-MT-05 | LINUX-DEB-4 | `apt install ./name.deb`（本地文件安装解析依赖路径）与最小 apt 仓库工作流验证 | **已验证**（2026-09-28）：`apt install ./name.deb` 与最小仓库工作流记录 |
-| LINUX-DEB-MT-06 | LINUX-DEB-1 | Windows/macOS 宿主构建 `.deb`，在 Linux 宿主安装验证跨宿主产物可用性 | 双宿主构建/安装记录 |
+| LINUX-DEB-MT-06 | LINUX-DEB-1 | Windows/macOS 宿主构建 `.deb`，在 Linux 宿主安装验证跨宿主产物可用性 | 双宿主构建/安装记录。**已由 CI 收编**（2026-10）：release-verify ubuntu x64/arm + docker `debian/ubuntu` 容器腿真装真卸全绿；Windows/macOS→Linux 的跨宿主真实安装仍登记 |

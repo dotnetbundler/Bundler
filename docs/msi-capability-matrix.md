@@ -46,7 +46,7 @@ WIN-MSI-5..9 的通用能力补齐已全部完成并经上游审计逐项分类�
 
 | 构建宿主/安装目标 | x86 current-user MSI | x86 per-machine MSI | x64 current-user MSI | x64 per-machine MSI | ARM64 MSI |
 | --- | --- | --- | --- | --- | --- |
-| 本机 Windows 11 Pro build 26200 x64，非干净环境 | 独立包 API/MSBuild 构建与真实安装、映射版本升级、降级拒绝/允许、同版碰撞拒绝、卸载通过 | 仅生成并检查 32 位数据库；未执行 UAC/提权安装 | 直接 API 与 MSBuild 构建、安装、升级、修复、失败回滚、卸载通过 | 仅构建并检查数据库；未执行 UAC/提权安装 | 仅在 x64 宿主生成并检查 ARM64 包；未在 ARM64 用户端安装 |
+| 本机 Windows 11 Pro build 26200 x64，非干净环境 | 独立包 API/MSBuild 构建与真实安装、映射版本升级、降级拒绝/允许、同版碰撞拒绝、卸载通过 | 仅生成并检查 32 位数据库；未执行 UAC/提权安装 | 直接 API 与 MSBuild 构建、安装、升级、修复、失败回滚、卸载通过 | 仅构建并检查数据库；未执行 UAC/提权安装 | 已在 windows-11-arm CI 真机安装/覆盖装/修复/卸载（release-verify 绿） |
 | 干净 Windows 10/11 x86、x64 或 ARM64 | 未执行 | 未执行 | 未执行 | 未执行 | 未执行 |
 
 Windows 7 上 WiX 3.14.1 自身的 Framework 零环境边界见 `docs/msi-roadmap.md` 第 2 节。

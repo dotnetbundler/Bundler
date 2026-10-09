@@ -13,3 +13,11 @@ indent_size = 4
 
 [*.{csproj,props,targets,nuspec,slnx,wxs,wixproj,json}]
 indent_size = 2
+
+[*.{nsi,nsh}]
+indent_size = 2
+
+[*.{sh,ps1,yml,yaml,md}]
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = true

@@ -10,13 +10,13 @@ Core 和格式后端本身不依赖 `.csproj` 或 .NET 应用模型，`bundler` 
 MSI 已完成 WIN-MSI-1..9，`alpha.37` 是既有 x64/ARM64 身份基线；
 `alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 翻译覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式，`alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 读取前 NSIS 安装目录延续）。
 WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线；`alpha.44` 在其上只做跨格式收尾。
-现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-tauri-capability-audit.md`](docs/msi-tauri-capability-audit.md)。
+现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-capability-matrix.md`](docs/msi-capability-matrix.md)。
 `bundler` CLI 已完成并入 `main`（CLI-C1 冻结于 `0.1.0-alpha.62`，dotnet tool nupkg 与原生 AOT 二进制双分发，用法见下文）；macOS `.app`/`.dmg`/`.pkg` 均已冻结（MAC-APP-1..5 / MAC-DMG-1..5 冻结基线 `0.1.0-alpha.45`，MAC-PKG-1..5 冻结基线 `0.1.0-alpha.47`）。
 Linux `.deb` 已冻结并入 `main`（`LINUX-DEB-1..5`，冻结基线 `0.1.0-alpha.51`）：纯托管 ar/tar/gzip 写入器（无原生工具依赖、任意构建宿主可产出），control 全字段+维护者脚本+conffiles+systemd unit+桌面集成，`sudo dpkg -i/-r/-P` 真实装卸、lintian 硬断言、docker debian/ubuntu 矩阵全部验证。
 Linux `.rpm` 已冻结并入 `main`（`0.1.0-alpha.55`，`LINUX-RPM-1..5`）：纯托管 lead/header/cpio/gzip 写入器，六族关系字段 + License/Group/Url + freedesktop 桌面集成（.desktop/图标/metainfo）+ 任意路径映射 + 四 scriptlet/systemd unit/%config(noreplace)，`rpm -qip` 逐字段断言、`desktop-file-validate`、docker `fedora/rockylinux/opensuse` 三容器真实 `rpm -i`/`rpm -U`/`rpm -e` 与 `.rpmsave` 语义验证、`rpmlint` 豁免清单硬基线、`deb;rpm` 同次 publish 扇出已放开；可选 OpenPGP 签名（供私钥即嵌 `RPMSIGTAG_RSA`+`PGP` 双标签，`rpm -K`/zypper/dnf 实测验签通过）。
 Linux `.AppImage` 已冻结并入 `main`（`LINUX-APPIMAGE-1..4` 完成，冻结基线 `0.1.0-alpha.58`）：`DotNet.Bundler.AppImage` 内嵌固定版本 `appimagetool`+type2 runtime（SHA-256 provenance、不联网下载），AppDir 组装复用共享 freedesktop 件 + 脚本式 `AppRun` + 根 `.desktop` 符号链接/`.DirIcon`/`@(BundlerAppImageFile)` 任意映射，仅 Linux 宿主构建、x86_64 宿主可交叉产 aarch64；`--appimage-extract` 结构断言、解出程序真实运行、docker 三容器 extract-and-run 冒烟、`deb;rpm;appimage` 扇出全绿；可选 GPG 签名（供 OpenPGP 私钥即走 `appimagetool --sign`，`gpgv` 实测验签通过）。
 通用 `.zip`/`.tar.gz` 归档已冻结并入 `main`（`ARCHIVE-1..3` 完成，冻结基线 `0.1.0-alpha.59`）：`DotNet.Bundler.Archive` 纯托管写入器（zip 自实现 unix mode/symlink，tar.gz 复用共享 ustar 写入器），单顶层目录 `<pkg>-<ver>-<rid>/` 布局，执行位与符号链接双保留，`.sha256` 侧车，`BundlerFormats=zip;targz` 与 `deb;rpm;appimage;zip;targz` 扇出；`unzip`/`zipinfo -l`/`tar` 真实解包逐路径断言、解出载荷运行、mode/symlink 还原断言全绿。
-Alpine `.apk` 已冻结并入 `main`（`0.1.0-alpha.63`，`APK-1..5` 完成、PR #13 终审合并）：`DotNet.Bundler.AlpineApk` 纯托管三段 gzip 写入器（签名段+控制段 `.PKGINFO`/六脚本+数据段），`linux-musl-x64/arm64` → `x86_64`/`aarch64`，逐文件 pax `APK-TOOLS.checksum.SHA1`、`depend`/`provides`/`triggers`/`license`/`release`/`builddate` 与 `@(BundlerAlpineApkFile)` 任意绝对路径映射，可选 RSA 签名（`.SIGN.RSA.<密钥名>.rsa.pub`，公钥入 `/etc/apk/keys/` 后免 `--allow-untrusted`）；`alpine:latest` 容器 x86_64 直跑 + aarch64 qemu binfmt 真实 `apk add`/`apk del` 全绿。
+Alpine `.apk` 已冻结并入 `main`（`0.1.0-alpha.85`，`APK-1..5` 完成、PR #13 终审合并）：`DotNet.Bundler.AlpineApk` 纯托管三段 gzip 写入器（签名段+控制段 `.PKGINFO`/六脚本+数据段），`linux-musl-x64/arm64` → `x86_64`/`aarch64`，逐文件 pax `APK-TOOLS.checksum.SHA1`、`depend`/`provides`/`triggers`/`license`/`release`/`builddate` 与 `@(BundlerAlpineApkFile)` 任意绝对路径映射，可选 RSA 签名（`.SIGN.RSA.<密钥名>.rsa.pub`，公钥入 `/etc/apk/keys/` 后免 `--allow-untrusted`）；`alpine:latest` 容器 x86_64 直跑 + aarch64 qemu binfmt 真实 `apk add`/`apk del` 全绿。
 全后端统一示例见 [`samples/HelloBundlerApp`](samples/HelloBundlerApp/hello-bundler-app-sample.md)：单个工程覆盖全部 11 种格式的全部公开旋钮——公共旋钮在主工程，各后端专属旋钮按 `formats/<Format>.props` 导入（用户项目可直接复制该组织方式）。
 各格式打包/消费的平台支持范围汇总见 [`docs/platform-support-matrix.md`](docs/platform-support-matrix.md)。
 
@@ -89,7 +89,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.63" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.85" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -108,7 +108,7 @@ dotnet publish -c Release
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.63" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.85" />
 ```
 
 ```csharp
@@ -154,7 +154,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.63" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.85" />
 ```
 
 ```csharp
@@ -215,7 +215,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerEnabled` | 是 | `false` |
 | `BundlerIdentifier` | 是 | — |
 | `RuntimeIdentifier` | 是 | —；`BundlerUniversalRuntimeIdentifiers` 设置时可省略 |
-| `BundlerFormats` | 否 | `nsis`；分号分隔多值扇出，可用 `nsis`/`msi`/`app`/`dmg`/`pkg`/`deb`/`rpm`/`appimage`/`zip`/`targz`/`alpineapk`（CLI 另收 `apk`/`all`） |
+| `BundlerFormats` | 否 | `nsis`；分号分隔多值扇出，可用 `nsis`/`msi`/`app`/`dmg`/`pkg`/`deb`/`rpm`/`appimage`/`zip`/`targz`/`alpineapk`（CLI 另收 `all` 全量别名） |
 | `BundlerUniversalRuntimeIdentifiers` | 否 | 无；macOS universal 用——复数 RID（如 `osx-x64;osx-arm64`）对每个 RID 内层 `dotnet publish` 后托管合并成 universal 目录再按 `osx` 打包 |
 | `BundlerProductName` | 否 | `$(AssemblyName)` |
 | `BundlerVersion` | 否 | `$(Version)` |
@@ -339,7 +339,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerRpmVendor` | 否 | `BundlerPublisher` → `BundlerIdentifier` 回退 |
 | `BundlerRpmInstallRoot` | 否 | `/usr/lib/<包名>`；须为绝对路径且无 `..`/空格；非 `/usr` 根下时 `usr/bin` 链接目标转绝对路径 |
 | `BundlerRpmBinLink` | 否 | 包名；`none`（不分大小写）关闭 `usr/bin` 链接 |
-| `BundlerRpmSigningKeyFile` | 否 | OpenPGP 私钥文件（ASCII-armored 或二进制）；供则签 `RPMSIGTAG_PGP`，不供即未签名产物 |
+| `BundlerRpmSigningKeyFile` | 否 | OpenPGP 私钥文件（ASCII-armored 或二进制）；供则签 `RPMSIGTAG_RSA`+`RPMSIGTAG_PGP` 双标签，不供即未签名产物 |
 | `BundlerRpmSigningKeyPassphrase` | 否 | 私钥口令；只给口令不给密钥文件为配置错误，口令属秘密勿入库 |
 | `BundlerAppImagePackageName` | 否 | `BundlerProductName` 的 kebab-case 化；进入文件名与根 `.desktop`/图标名（仅 Linux 宿主可构建） |
 | `BundlerAppImageVersion` | 否 | `BundlerVersion` 原样；AppImage 无 EVR 规则 |
@@ -501,6 +501,8 @@ journal 与当时选择的安装目录绑定，恢复时目录不一致会安全
 | `/P` | 被动安装或卸载，只显示进度并跳过需要输入的页面 |
 | `/UPDATE` | 自动更新模式；未同时指定 `/S` 时隐含 `/P`，原位覆盖并保留现有快捷方式状态和应用数据 |
 | `/NS` | 不创建桌面和开始菜单快捷方式 |
+| `/DELETEAPPDATA` | 卸载时连同应用数据目录一并删除（重卸载后可恢复的 journal 语义下仍生效） |
+| `/REBOOTOK` | 允许卸载把删不掉的锁定文件排入重启后删除队列（返回 3010） |
 | `/RECOVERONLY` | 只用当前安装器清单恢复 active 安装 journal，不安装新版本；应与 `/S` 和原安装目录的 `/D=` 一起使用 |
 | `/R` | 成功后以桌面用户而非安装器管理员令牌启动应用；只允许与 `/S`、`/P` 或 `/UPDATE` 一起使用 |
 | `/ARGS=<参数行>` | 与 `/R` 配合，把参数直接传给应用，不经过 `cmd.exe` 或 PowerShell |
@@ -521,7 +523,7 @@ journal 与当时选择的安装目录绑定，恢复时目录不一致会安全
 安装器会检测这种跳过并返回 `2`；交互模式会提示关闭可能占用安装目录文件的应用后重试。
 若文件锁也阻止即时回滚，则保留 active journal，待释放锁后的下一次启动先恢复旧状态，绝不把新旧文件混合状态报告为成功。
 因此上述契约不能扩写为“已经支持锁定文件原位升级”：当前可验证的重启来源是旧 MSI 返回值、生命周期 Hook，以及提权卸载的 `/REBOOTOK` 删除。
-真实系统队列验收必须在可丢弃并允许重启的管理员 Windows 环境执行 `tools/Windows.Nsis.Reboot/Verify.ps1`；脚本不会编辑或清空共享的 `PendingFileRenameOperations`。
+真实系统队列验收必须在可丢弃并允许重启的管理员 Windows 环境执行 `tests/Special/win/nsis-reboot.ps1`；脚本不会编辑或清空共享的 `PendingFileRenameOperations`。
 
 如果产品以前使用 MSI 发布，应配置历史安装包的准确标识，不按产品名猜测：
 

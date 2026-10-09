@@ -1,7 +1,7 @@
 # DotNet.Bundler 产品边界与实施路线
 
 > 最后整理：2026-09-29
-> 路线状态：全部既有格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`/`.zip`/`.tar.gz`）与 CLI 均已冻结并入 `main`；Alpine `.apk` 已冻结并入 `main`（`APK-1..5`，`0.1.0-alpha.63`）；三平台全量验收与 ARM64 仿真验收完成；当前提交以 Git HEAD 为准
+> 路线状态：全部既有格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`/`.zip`/`.tar.gz`）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；Alpine `.apk` 已冻结并入 `main`（`APK-1..5`，`0.1.0-alpha.63`）；三平台全量验收与 ARM64 仿真验收完成；当前提交以 Git HEAD 为准
 > 无其他待启动的格式阶段；剩余仅为各格式外部待验收项（各 `<format>-open-items.md`）与 §7.2 候选增强队列
 > 既有 per-machine、生产签名、交互 UI、干净宿主及重启等外部验收仍各自记录，不阻塞新增功能开发，也不冒充已通过。
 

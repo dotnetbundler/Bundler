@@ -24,7 +24,7 @@ samples/HelloBundlerApp/
 |---|---|---|---|---|
 | `win-x64`/`win-arm64` | nsis;msi;zip;targz | nsis;zip;targz | nsis;zip;targz | — |
 | `osx-x64`/`osx-arm64`/`osx` | app;zip;targz | dmg;pkg;zip;targz | app;zip;targz | — |
-| `linux-x64`/`linux-arm64`/`linux-riscv64` | deb;rpm;zip;targz | deb;rpm;zip;targz | deb;rpm;appimage;zip;targz | — |
+| `linux-x64`/`linux-arm64` | deb;rpm;zip;targz | deb;rpm;zip;targz | deb;rpm;appimage;zip;targz | — |
 | `linux-musl-x64`/`linux-musl-arm64` | alpineapk;zip;targz | alpineapk;zip;targz | alpineapk;zip;targz | — |
 
 msi/dmg/pkg 需要对应本机工具链宿主（WiX→Windows、hdiutil/pkgbuild→macOS），

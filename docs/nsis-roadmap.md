@@ -263,6 +263,7 @@ Windows 集成测试同时运行安装目录内的程序和另一路径中的同
 | `3`    | 参数或自动安装目录无效       |
 | `4`    | 版本策略阻止                 |
 | `5`    | 无法关闭运行中的应用         |
+| `6`    | 清单不同，需 `/RECOVERONLY` 恢复 |
 | `3010` | 成功，但需要重新启动 Windows |
 
 `/R` 的实现规则：非提权安装使用当前令牌 `CreateProcessW`；提权安装使用桌面 Shell 令牌、`CreateEnvironmentBlock` 和 `CreateProcessWithTokenW`。

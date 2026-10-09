@@ -7,7 +7,7 @@
 ## 0. 一句话现状
 
 `DotNet.Bundler` 是通用桌面打包工具，按"一次一个安装格式"推进。
-全部格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`/`.zip`/`.tar.gz`/Alpine `.apk`）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`（最新冻结基线 `0.1.0-alpha.74`），当前无进行中的格式阶段。
+全部格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`/`.zip`/`.tar.gz`/Alpine `.apk`）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`（冻结指功能面不再扩展；包版本以根 `Directory.Build.props` 的 `BundlerPackageVersion` 为准），当前无进行中的格式阶段。
 准确的当前阶段、包版本和下一步以 `PROJECT_CONTEXT.md` 文首为准——不要凭本文档或对话记忆判断现状。
 
 ## 1. 接管顺序（未完成前不得改代码）
@@ -81,6 +81,7 @@ git status --short
 | `tests/README.md` | 测试入口、门禁与 fixture 地图 | 测试结果记录（写进阶段证据） |
 | `third_party/<tool>/*-provenance.md` | 第三方来源、许可、哈希核查 | 实现规则 |
 | `docs/manual-testing-index.md` | 各格式人工文档入口 | 用例步骤、结论 |
+| `docs/special-acceptance.md` | 只能用户手动处理的特殊验收项登记 | 可自动化腿、脚本实现 |
 
 找不到该放哪的内容时，先停下来想它属于"规则、计划、当前事实、历史、某格式、用户文档、第三方"中的哪一类，再放进对应文件；都不合适时向用户说明再定。
 
