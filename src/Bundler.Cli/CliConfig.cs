@@ -266,17 +266,30 @@ internal static class CliConfig
                 var child = document[section] as JsonObject ?? new JsonObject();
                 // CLI 覆盖值相对当前工作目录解析，不走配置文件的 baseDirectory。
                 child[KnobName(knob)] = ParseValue(
-                    IsPathKnob(section, KnobName(knob)) && !Path.IsPathRooted(value)
-                        ? Path.GetFullPath(value)
+                    IsPathKnob(section, KnobName(knob))
+                        ? ResolveOverridePath(value)
                         : value);
                 document[section] = child;
                 continue;
             }
             document[FieldName(name)] = ParseValue(
-                SharedPathFields.Contains(FieldName(name)) && !Path.IsPathRooted(value)
-                    ? Path.GetFullPath(value)
+                SharedPathFields.Contains(FieldName(name))
+                    ? ResolveOverridePath(value)
                     : value);
         }
+    }
+
+    // 逗号在 ParseValue 里是列表分隔符——路径类覆盖值必须先拆列表再逐项判 rooted，
+    // 否则 `--icons=a.png,b.png` 整体 GetFullPath 只保第一项；`/abs/a.png,b.png`
+    // 又因整串 rooted 早退，`b.png` 会被下游误解析到配置文件目录。
+    private static string ResolveOverridePath(string value)
+    {
+        if (value.Contains(','))
+        {
+            return string.Join(',', value.Split(',', StringSplitOptions.TrimEntries)
+                .Select(entry => Path.IsPathRooted(entry) ? entry : Path.GetFullPath(entry)));
+        }
+        return Path.IsPathRooted(value) ? value : Path.GetFullPath(value);
     }
 
     // --main-executable → targets[0].mainExecutable etc.; scalar target-level
