@@ -179,6 +179,9 @@ internal static class ArchiveExtractor
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             if (!UstarReader.CreateSymlink(target, destination, staging))
             {
+                // 拒物化时占位普通件（ExtractToDirectory 落的正文=目标串）一并清，
+                // 否则逃逸条目残留为同名文件——与 tar 腿的零残留语义对齐。
+                File.Delete(destination);
                 log?.Invoke($"update: warning: failed to restore symlink '{entry.FullName}' → '{target}'.");
             }
         }

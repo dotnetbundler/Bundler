@@ -61,6 +61,24 @@ public sealed class NsisBundler : IFormatBundler
                 "Windows NSIS packaging requires at least one .ico file when icons are configured.",
                 nameof(bundle));
         }
+        // 载荷内 Windows 病态名（NUL、尾随点/空格）预检期拒绝——等 Build 的
+        // InspectDirectoryTree 才查会落逐格式容错 rc=1；预检走聚合配置错 rc=2。
+        foreach (var input in bundle.Targets
+                     .Where(target => target.Formats.Contains(PackageFormat.Nsis))
+                     .Select(target => target.InputDirectory)
+                     .Where(Directory.Exists))
+        {
+            foreach (var entry in Directory.EnumerateFileSystemEntries(
+                         input, "*", SearchOption.AllDirectories))
+            {
+                if (WindowsFileNames.IsInvalidName(Path.GetFileName(entry)))
+                {
+                    throw new ArgumentException(
+                        $"Bundle input contains a name that is not valid on Windows: {entry}",
+                        nameof(bundle));
+                }
+            }
+        }
 
         ValidateConfiguration(_configuration);
     }

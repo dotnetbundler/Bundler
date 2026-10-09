@@ -288,14 +288,18 @@ internal static class UstarReader
             // net10 腿走托管 API，不再拉起 /bin/ln 子进程。Windows 链型分文件/目录
             // 两型且 File.CreateSymbolicLink 恒产文件型——归档里还原出的目录链接
             // 若按文件型落地则无法穿越，按解析后目标实型选型；悬挂目标回退文件型
-            // （归档不记链接的目录位，无从确知）。
+            // （归档不记链接的目录位，无从确知）。归档统一存 POSIX 形态目标，
+            // Windows 需转回 \ 链才可解析（UnixLinks.ReadLink 已把 \\ 归一成 /）。
+            var linkTarget = OperatingSystem.IsWindows()
+                ? target.Replace('/', '\\')
+                : target;
             if (OperatingSystem.IsWindows() && TargetIsDirectory(target, linkPath))
             {
-                Directory.CreateSymbolicLink(linkPath, target);
+                Directory.CreateSymbolicLink(linkPath, linkTarget);
             }
             else
             {
-                File.CreateSymbolicLink(linkPath, target);
+                File.CreateSymbolicLink(linkPath, linkTarget);
             }
             return true;
 #else
