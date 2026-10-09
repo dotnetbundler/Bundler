@@ -29,7 +29,13 @@ internal static class WixProcessRunner
         }
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
+        using (cancellationToken.Register(() =>
+        {
+            try { if (!process.HasExited) process.Kill(); } catch { }
+        }))
+        {
+            process.WaitForExit();
+        }
         await Task.WhenAll(output, error);
         cancellationToken.ThrowIfCancellationRequested();
         if (process.ExitCode != 0)
