@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-09
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.85`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.86`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；无进行中的格式阶段**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -86,6 +86,13 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-09 review 待裁项批次（PR #50 压缩合并，squash `3661aee`；版本推进 `alpha.86` 补覆 #48/#49/#50 三批代码改动）
+
+- 整仓 10 片深 review（174 发现）可直接修复项已全落地：`fix` 批 PR #48（7 组域提交：rpm archnum 架构映射、macOS PlugIns 漏签、WiX .wxl 指纹、CLI signingFiles 绝对化拦截、.desktop Exec 转义、.part 416 续传、pkg `..` 逃逸、ArchiveBundler 枚举 0 盲点等）+ 复审跟进 PR #49（.part 416 内联重下、`--icons` 登记为合法值选项+逗号列表逐项解析）。
+- 批准批待裁项 PR #50：①rid×format 矩阵不兼容升格聚合配置错 rc=2（显式请求不兼容格式=用法错；PNSE 宿主门仍 rc=1 逐格式容错）；②`update` 节进 `BundleConfigurationValidator`（feedUrl/频道名/signingKeyFile 存在性/公钥 P-256 形态/bootstrapperDirectory 扇出前拦）+密钥配对校验（publicKey≠signingKeyFile 公半→issue；keyFile 解析失败亦成 issue）；③`UpdateClient` 身份核验下沉私有构造（`FromIdentity` 兜底路径同享）；④deb/rpm/apk 大段载荷流式化——`data.tar.gz`/`cpio.gz` 直写输出目录旁 `.bundler-*` 临时文件（/tmp 小卷不堵构建）再流式装容器，cpio/tar 条目 `OpenContent` 流源+按 fileSize 封顶写；⑤`IFormatBundler` 契约文档+cli-roadmap 双路径基（CLI 覆盖值相对 cwd、配置值相对 baseDirectory）。
+- 复审两轮处置：cpio 条目流式源+成品 sha256 走文件流+临时件落输出目录+密钥配对校验（均确认修复）；Bundler.Tests 全量绿（含新 `RejectsMismatchedUpdateKeys`），受影响类+CliIntegrationTests 全绿。
+- 遗留：CLI loader 收敛（CLI/ Core 双配置加载路径收一为薄壳复用 Core）单开 PR；review 判级的 hardening 重构项（锁/超时设计）与断言风格迁移经 Lin 裁不做。
 
 ### 2026-10-09 格式旋钮统一预检（版本推进 `alpha.85`）
 
