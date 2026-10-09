@@ -52,6 +52,15 @@ public sealed class NsisBundler : IFormatBundler
                 "Payload signing files were configured, but no bundle signer was provided.",
                 nameof(bundle));
         }
+        // 共享 icons 的形状校验前移：build 期 CreateVisualDirectives 的同款拒绝。
+        if (bundle.Icons.Count > 0 &&
+            !bundle.Icons.Any(icon =>
+                Path.GetExtension(icon).Equals(".ico", StringComparison.OrdinalIgnoreCase) && File.Exists(icon)))
+        {
+            throw new ArgumentException(
+                "Windows NSIS packaging requires at least one .ico file when icons are configured.",
+                nameof(bundle));
+        }
 
         ValidateConfiguration(_configuration);
     }
