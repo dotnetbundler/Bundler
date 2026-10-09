@@ -351,7 +351,10 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
              "--packages", _f.CacheDir],
             new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) });
         Assert.NotEqual(0, result.ExitCode);
-        Assert.Empty(Directory.EnumerateFiles(badDir, "*.pkg", SearchOption.AllDirectories));
+        // 拒产可能发生在创建输出目录之前——目录缺席与空目录同为合法零产出。
+        Assert.False(Directory.Exists(badDir) &&
+            Directory.EnumerateFiles(badDir, "*.pkg", SearchOption.AllDirectories).Any(),
+            "被拒绝的构建不得产出任何 .pkg 产物。");
     }
 
     [Fact]
@@ -506,7 +509,10 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
              "--packages", _f.CacheDir],
             new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) });
         Assert.NotEqual(0, result.ExitCode);
-        Assert.Empty(Directory.EnumerateFiles(badDir, "*.pkg", SearchOption.AllDirectories));
+        // 拒产可能发生在创建输出目录之前——目录缺席与空目录同为合法零产出。
+        Assert.False(Directory.Exists(badDir) &&
+            Directory.EnumerateFiles(badDir, "*.pkg", SearchOption.AllDirectories).Any(),
+            "被拒绝的构建不得产出任何 .pkg 产物。");
     }
 
     [Fact]

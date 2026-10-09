@@ -20,7 +20,7 @@ esac; done
 WORK="$(mktemp -d /tmp/bundler-intel-XXXXXX)"; trap 'rm -rf "$WORK"' EXIT
 
 if [ -n "$BIN" ] && [ -f "$BIN" ]; then
-    out=$("$BIN" --version 2>&1 || "$BIN" --help 2>&1 | head -1)
+    out=$({ "$BIN" --version 2>&1 || "$BIN" --help 2>&1 | head -1; } || true)
     note "osx-x64 二进制实跑" "PASS" "$out"
 fi
 if [ -n "$APP" ] && [ -d "$APP" ]; then

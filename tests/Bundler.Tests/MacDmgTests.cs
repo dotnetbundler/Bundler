@@ -777,9 +777,12 @@ public static class MacDmgTests
         {
             Directory.CreateDirectory(Path.Combine(root, "sub"));
             Directory.CreateSymbolicLink(Path.Combine(root, "sub", "loop"), root);
-            var error = Assert.Throws<InvalidDataException>(
+            // macOS 内核 MAXSYMLINKS=32 先于托管跳数上限报 ELOOP（IOException），
+            // Linux 走托管判定 InvalidDataException（非 IOException 子类）——两种都接受。
+            var error = Record.Exception(
                 () => MacDmgBundleBackend.CopyTree(root, destination, NullBundleLogger.Instance));
-            Assert.Contains("symlink loop", error.Message);
+            Assert.True(error is InvalidDataException or IOException,
+                $"环链必须被拒：期望 InvalidDataException/IOException，实际 {error?.GetType().Name}: {error?.Message}");
         }
         finally
         {

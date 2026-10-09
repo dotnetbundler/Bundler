@@ -1566,9 +1566,12 @@ public static class MacAppTests
                 File.WriteAllBytes(Path.Combine(dir, "ExampleApp"), FakeMachO(cpuType));
                 Directory.CreateSymbolicLink(Path.Combine(dir, "sub", "loop"), dir);
             }
-            var error = Assert.Throws<InvalidDataException>(
+            // macOS 内核 MAXSYMLINKS=32 先于托管跳数上限报 ELOOP（IOException），
+            // Linux 走托管判定 InvalidDataException（非 IOException 子类）——两种都接受。
+            var error = Record.Exception(
                 () => MacUniversalPayloadMerger.Merge([arm64, x64], output));
-            Assert.Contains("symlink loop", error.Message);
+            Assert.True(error is InvalidDataException or IOException,
+                $"环链必须被拒：期望 InvalidDataException/IOException，实际 {error?.GetType().Name}: {error?.Message}");
         }
         finally
         {
@@ -1760,7 +1763,8 @@ public static class MacAppTests
         }
     }
 
-    // R2: p12 口令不走 argv——openssl 可用时经 PEM 导入；缺席/失败退回 `security import -P`。
+    // R2: p12 口令不走 argv——openssl 可用时经 PEM 导入；缺席/失败如实报错，
+    // 不退回 `security import -P`（口令进 argv 可被本机任意进程 ps 读取）。
     [Fact]
     static async Task TemporaryKeychainKeepsPasswordOffArgv()
     {
@@ -1816,19 +1820,21 @@ public static class MacAppTests
             Assert.DoesNotContain(" -P ", " " + import + " ");
             Assert.True(calls.Any(c => c.StartsWith("openssl pkcs12") && c.Contains("-passin")),
                 "openssl 转换路径必须先把 p12 换成无口令 PEM。");
-            // openssl 缺席时退回 `import -P` 兜底路径。
+            // openssl 缺席/失败：如实报错，任何调用面都不得携带口令。
             opensslWorks = false;
             calls.Clear();
-            await new MacAppBundler(new MacAppBundleConfiguration
-                {
-                    Signing = new MacAppSigningConfiguration
+            await AssertThrows<InvalidOperationException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
                     {
-                        TemporaryCertificatePath = certificate,
-                        TemporaryCertificatePassword = "s3cret-pw"
-                    }
-                }).BuildAsync(MacConfiguration(input, Path.Combine(output, "fallback")));
-            Assert.True(calls.Any(c => c.StartsWith("security import") && c.Contains(" -P ") &&
-                c.Contains("s3cret-pw")), "openssl 失败时退回 import -P 兜底。");
+                        Signing = new MacAppSigningConfiguration
+                        {
+                            TemporaryCertificatePath = certificate,
+                            TemporaryCertificatePassword = "s3cret-pw"
+                        }
+                    }).BuildAsync(MacConfiguration(input, Path.Combine(output, "fallback"))),
+                "openssl 失败必须报错而不是退回 -P 兜底。");
+            Assert.False(calls.Any(c => c.Contains("s3cret-pw") || c.Contains(" -P ")),
+                "任何进程参数都不得出现口令或 -P 兜底。");
         }
         finally
         {
