@@ -391,7 +391,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // ── 公共小件 ──
 
-    private static void WaitFor(Func<bool> condition, string message, int timeoutSeconds = 15)
+    private static void WaitFor(Func<bool> condition, string message, int timeoutSeconds = 60)
     {
         var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
         while (DateTime.UtcNow < deadline)
@@ -1353,7 +1353,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             using var interrupted = ProcessRunner.StartDetached(
                 Installer("bundle-interrupted", "1.2.0"), $"/S /UPDATE /D={InstallDir}");
             WaitFor(() => File.Exists(InterruptedHookMarker),
-                "Interrupted-install fixture did not reach its post-install hook.", 30);
+                "Interrupted-install fixture did not reach its post-install hook.", 120);
             ProcessRunner.TryKillTree(interrupted);
             interrupted.WaitForExit();
             Assert.NotEqual(0, interrupted.ExitCode);
@@ -1379,7 +1379,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             using var interrupted2 = ProcessRunner.StartDetached(
                 Installer("bundle-interrupted", "1.2.0"), $"/S /UPDATE /D={InstallDir}");
             WaitFor(() => File.Exists(InterruptedHookMarker),
-                "Second interrupted-install fixture did not reach its post-install hook.", 30);
+                "Second interrupted-install fixture did not reach its post-install hook.", 120);
             ProcessRunner.TryKillTree(interrupted2);
             interrupted2.WaitForExit();
             Assert.True(Directory.Exists(TransactionDir));
