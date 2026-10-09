@@ -61,7 +61,7 @@ function Run-Leg($name, $script, $argList) {
     else { Write-Host "[LEG-FAIL] $name"; $script:failedLegs += $name }
 }
 
-Run-Leg "pinned-items"        "$SP/win/pinned-items.ps1"        @("-InstallerPath", $nsis)
+Run-Leg "pinned-items"        "$SP/win/pinned-items.ps1"        @("-InstallerPath", $nsis, "-InstallDirName", "Bundler Integration Fixture")
 Run-Leg "mountvol-full-volume" "$SP/win/mountvol-full-volume.ps1" @()
 if ($IS_ARM) {
     # pwsh -File 下 string[] 参数只吃首个 token（其余会位置绑定到下一参数）——改 -Command 真表达式传数组

@@ -4,6 +4,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$InstallerPath,
     [switch]$TaskbarPin,
+    [string]$InstallDirName = "",   # 预期装目录名（$LOCALAPPDATA\Programs\<名>）；给了就在装前拒跑既有安装
     [string]$OutDir = "$PSScriptRoot/../evidence"
 )
 $ErrorActionPreference = "Stop"
@@ -26,6 +27,11 @@ if (-not (Test-Path $InstallerPath)) { throw "InstallerPath 不存在: $Installe
 if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
 
 $programs = "$env:LOCALAPPDATA\Programs"
+# 既有安装守卫：装目录已存在时装/卸断言会被既有态污染且会改写用户既有安装——拒跑要求干净宿主。
+if ($InstallDirName -and (Test-Path "$programs\$InstallDirName")) {
+    Write-Host "[FAIL] 拒跑：既有安装 '$programs\$InstallDirName' 已存在，本腿要求干净宿主"
+    exit 1
+}
 $startMenu = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
 $build = [Environment]::OSVersion.Version.Build
 # 自我描述：安装前后快照 diff 认出新装目录与快捷方式（不硬编产品名）
