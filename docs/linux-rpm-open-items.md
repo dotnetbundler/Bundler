@@ -5,7 +5,7 @@
 
 | ID | 关联阶段 | 外部条件 | 待办内容 |
 | --- | --- | --- | --- |
-| LINUX-RPM-OI-01 | LINUX-RPM-4 | ARM64 Linux 宿主（本机 x86_64，无原生 ARM 设备） | **部分已验证**：2026-09-29/30 联合测试——qemu binfmt 仿真 arm64 容器内四产方 `.rpm` 真实装卸+运行输出断言通过；真机 ARM64 宿主仍待验 |
+| LINUX-RPM-OI-01 | LINUX-RPM-4 | ARM64 Linux 宿主（本机 x86_64，无原生 ARM 设备） | **部分已验证**：2026-09-29/30 联合测试——qemu binfmt 仿真 arm64 容器内四产方 `.rpm` 真实装卸+运行输出断言通过；真机 ARM64 宿主已验（2026-10 `ubuntu-24.04-arm` CI 腿 `arm64-real-hw.sh` 真实装卸跑绿） |
 | LINUX-RPM-OI-02 | LINUX-RPM-4 | ~~GUI 桌面环境宿主~~ 已验证 | **已消解**：2026-09-28 KDE 真桌面——菜单项/图标渲染与点击启动观感记录（对应 MT-01）；关联双击唤起未验（fixture 未声明关联对象） |
 | LINUX-RPM-OI-03 | LINUX-RPM-3 | ~~启用 systemd 的真实宿主~~ 已验证 | **已消解**：2026-09-28 Ubuntu 宿主——unit 落位、`systemctl status`/`daemon-reload`/`enable --now` 真实记录（对应 MT-04） |
 | LINUX-RPM-OI-04 | LINUX-RPM-4 | 更广发行版宿主矩阵（RHEL 8/CentOS Stream/Alma/SUSE 旧版；fedora/rockylinux:9/opensuse-leap 已由 docker 矩阵覆盖） | 各宿主 `rpm -i/-e` 行为差异记录（对应 MT-03） |

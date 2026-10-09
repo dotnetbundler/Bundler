@@ -18,7 +18,7 @@
 | ID | 最早阶段 | 所需输入/环境 | 完成证据 |
 | --- | --- | --- | --- |
 | MAC-APP-OI-01 | MAC-APP-3 | Apple Developer Program 成员资格、Developer ID Application 证书、公证凭证（`APPLE_ID`+app-specific password+`APPLE_TEAM_ID`，或 `APPLE_API_KEY`+`APPLE_API_ISSUER`+`AuthKey_*.p8`）、可导入证书的钥匙串 | MAC-APP-MT-02 记录：签名→公证→staple→`spctl` 全通 |
-| MAC-APP-OI-02 | MAC-APP-4 | 已激活 Rosetta 的 arm64 宿主或 Intel 宿主 | MAC-APP-MT-03：`osx-x64` `.app` 启动记录 |
+| MAC-APP-OI-02 | MAC-APP-4 | 已激活 Rosetta 的 arm64 宿主或 Intel 宿主 | **部分已验证**：2026-10 macos-26-intel CI 腿真 Intel 硬件跑绿 + macos-26 Rosetta 腿 `osx-x64` `.app` 启动断言通过；剩启动观感人工（MAC-APP-MT-03） |
 | MAC-APP-OI-03 | MAC-APP-4 | 干净 macOS 宿主矩阵：无 Xcode/CLT 环境、不同 macOS 主版本（含 `LSMinimumSystemVersion` 边界宿主） | MAC-APP-MT-01、05 记录 |
 | MAC-APP-OI-04 | MAC-APP-4 | 真实分发渠道（公网/内网下载路径），产生 quarantine 首启场景 | MAC-APP-MT-02 的下载-首启部分 |
 | MAC-APP-OI-05 | MAC-APP-4 | 证书撤销/到期/时间戳边界试验环境（可抛弃证书与宿主） | MAC-APP-MT-08、10 记录 |

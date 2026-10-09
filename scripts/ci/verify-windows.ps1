@@ -22,7 +22,9 @@ Say "2/4 全量测试（四工程）"
 foreach ($P in "Bundler.Tests", "Bundler.ApiTests", "Bundler.IntegrationTests", "Bundler.LocalPackagesTests") {
     $dll = "tests/$P/bin/Release/net10.0/$P.dll"
     if ($P -eq "Bundler.IntegrationTests") {
-        $classes = dotnet $dll -list classes | Where-Object { $_ -match '^\w[\w.]*$' }
+        $listOut = dotnet $dll -list classes
+        if ($LASTEXITCODE -ne 0) { throw "-list classes 退出码非零（$LASTEXITCODE），判失败" }
+        $classes = $listOut | Where-Object { $_ -match '^\w[\w.]*$' }
         if (-not $classes -or $classes.Count -eq 0) {
             throw "-list classes 无输出：集成测试可能整段蒸发"
         }

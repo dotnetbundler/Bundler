@@ -92,7 +92,8 @@ JSON 配置加载器是 CLI 的共享配置入口。
 | 文件关联和 URL 协议 | 已实现 | 不强抢 Windows 默认应用；协议删除有所有权检查 |
 | 完整内置语言集合 | 已实现，内容质量外部待验收 | 22 种语言均由真实 NSIS 编译；非拉丁 Windows E2E；MT-11 审校译文/RTL/截断 |
 | payload、插件、卸载器、安装器完整签名 | 已实现，生产身份外部待验收 | 临时副本中签主 EXE和显式 payload，再签 Bundler 插件、卸载器和安装器；外部 provider 可替换内置实现 |
-| 真实 UAC、重启、ARM64、生产证书 | 外部待验收 | 统一见 `docs/nsis-manual-testing.md` |
+| 真实 UAC、重启、生产证书 | 外部待验收 | 统一见 `docs/nsis-manual-testing.md` |
+| Windows ARM64 目标安装/卸载、非 Windows 宿主编译 | 部分已验证（2026-10 `windows-11-arm` 腿 + 六宿主 CI 矩阵跑绿） | MT-08/MT-09 |
 | symlink、junction、重解析点 | 已实现，采用安全拒绝 | 构建输入、资源、安装快照/恢复、journal 和工具缓存均不跟随；Windows E2E 验证外部目录不被修改 |
 | ACL、ADS 与任意文件系统元数据 | 明确不承诺完整保真 | 保证失败不越界且不把混合载荷报告为成功；产品专属元数据应由显式 Hook 迁移 |
 | 工具缓存完整性和并发恢复 | 已实现 | 信任锚为固定 ZIP SHA-256 和 ZIP 内逐文件哈希；覆盖篡改、额外文件、manifest、链接、并发、Unicode 与长路径 |

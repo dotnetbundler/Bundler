@@ -47,5 +47,5 @@
 | --- | --- | --- | --- |
 | 容器真实装卸（fedora/rockylinux/opensuse） | 已实现 | LINUX-RPM-1/4 | `fedora:latest`+`rockylinux:9`+`opensuse/leap:latest` 三容器真实 `rpm -i`/`rpm -q`/`rpm -ql`/运行/`rpm -V`/`rpm -e` 零残留全绿；镜像不可拉取记 SKIP |
 | `rpmlint` 基线 | 已实现 | LINUX-RPM-4 | `rpmlint-exemptions.txt` 豁免清单硬断言；7 项豁免入档，新 tag 即失败 |
-| `linux-arm64` 产物 | 已实现（结构）/外部待验收（运行） | LINUX-RPM-4 | `*.aarch64.rpm`+`ARCH=aarch64`+载荷结构断言全绿；真机安装 OI-01 |
+| `linux-arm64` 产物 | 已实现（结构+运行） | LINUX-RPM-4 | `*.aarch64.rpm`+`ARCH=aarch64`+载荷结构断言全绿；2026-10 `ubuntu-24.04-arm` CI 真机装卸跑绿（`arm64-real-hw.sh`，OI-01 剩观感人工） |
 | 多格式扇出（`deb;rpm` 同次 publish） | 已实现 | LINUX-RPM-1 | `BundlerFormats=deb;rpm` 同次 publish 双产物断言；MSBuild `-p:` 分号须 `%3B` 转义 |

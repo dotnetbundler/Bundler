@@ -109,7 +109,7 @@ git diff --check
 
    ```powershell
    $installer = (Resolve-Path "artifacts\windows-nsis-integration\bundle-per-machine\win-x64\nsis\Bundler Integration Fixture-1.0.0-setup.exe").Path
-   tools\Windows.Nsis.Reboot\Verify.ps1 -Phase Prepare -InstallerPath $installer -ConfirmDisposableMachine
+   tests\Special\win\nsis-reboot\Verify.ps1 -Phase Prepare -InstallerPath $installer -ConfirmDisposableMachine
    ```
 
 3. 只在看到 `PASS prepare` 后正常重启虚拟机。
@@ -117,7 +117,7 @@ git diff --check
 4. 重启后以提权 PowerShell 执行：
 
    ```powershell
-   tools\Windows.Nsis.Reboot\Verify.ps1 -Phase Verify -ConfirmDisposableMachine
+   tests\Special\win\nsis-reboot\Verify.ps1 -Phase Verify -ConfirmDisposableMachine
    ```
 
 **PASS**：Prepare 通过临时副本和 `_?=` 直接等待实际卸载进程，确认真实返回 `3010` 且存在本产品 pending delete；
@@ -214,6 +214,7 @@ Verify 确认重启后目录、卸载注册表、安装与卸载 journal 和本�
 
 ### MT-08：非 Windows 宿主编译矩阵
 
+**部分已验证**（2026-10 release-verify 六宿主 CI 矩阵：linux/macos 各架构原生 runner 产包+测试全绿）。
 **需要**：Linux x64、Linux arm64、macOS x64、macOS arm64 的原生 runner。
 不用 QEMU 或 Rosetta 结果代替对应原生宿主证据。
 
@@ -233,6 +234,7 @@ dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-
 
 ### MT-09：Windows x64/ARM64 目标安装矩阵
 
+**部分已验证**（2026-10 release-verify `windows-11-arm` 腿：`arm64-matrix.ps1` NSIS/MSI 装+覆盖装+修复+卸跑绿）。
 **需要**：原生 Windows x64 和 Windows ARM64 机器/虚拟机。
 
 1. 分别生成 `win-x64` 和 `win-arm64` 应用及 NSIS 安装器。
@@ -292,8 +294,8 @@ dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-
 | MT-05 | 真实历史 MSI 迁移 |  |  |  |
 | MT-06 | 固定项矩阵 |  |  |  |
 | MT-07 | 真实 ACL/磁盘耗尽 |  |  |  |
-| MT-08 | 非 Windows 宿主编译 |  |  |  |
-| MT-09 | Windows x64/ARM64 目标矩阵 |  |  |  |
+| MT-08 | 非 Windows 宿主编译 | 部分已验证（2026-10 六宿主 CI） |  |  |
+| MT-09 | Windows x64/ARM64 目标矩阵 | 部分已验证（2026-10 windows-11-arm 腿） |  |  |
 | MT-10 | Restart Manager 关闭失败 |  |  |  |
 | MT-11 | 内置语言内容与界面审校 |  |  |  |
 
