@@ -1144,6 +1144,58 @@ public static class UpdateTests
     }
 
     [Fact]
+    static void Emitter_NoUpdateAdaptedArtifacts_StillEmitsSignedEmptyFeed()
+    {
+        // R2-N9：更新开启但产物全走非适配格式（deb/rpm 包管理器领地）时曾静默
+        // 不发清单——已装应用按旁车 feedUrl 轮询会拉空失败。现须发签名空清单，
+        // 客户端读作"无更新"。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var keyPath = Path.Combine(directory, "key.json");
+            UpdateKeyMaterial.Generate().Save(keyPath);
+            var debPath = Path.Combine(directory, "linux-x64", "deb", "app.deb");
+            Directory.CreateDirectory(Path.GetDirectoryName(debPath)!);
+            File.WriteAllText(debPath, "deb-payload");
+
+            var configuration = new BundleConfiguration
+            {
+                ProductName = "App",
+                Identifier = "com.example.app",
+                Version = "2.0.0",
+                OutputDirectory = directory,
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://example.test/updates",
+                    Channel = "stable",
+                    SigningKeyFile = keyPath,
+                }
+            };
+            var artifacts = new[]
+            {
+                new BundleArtifact(PackageFormat.Deb, "linux-x64", debPath),
+            };
+
+            var produced = UpdateManifestEmitter.EmitAsync(configuration, artifacts)
+                .GetAwaiter().GetResult();
+
+            var feedPath = Path.Combine(directory, "bundler-update-feed.stable.json");
+            Assert.True(File.Exists(feedPath));
+            Assert.True(File.Exists(feedPath + ".sig"));
+            Assert.Contains(feedPath, produced);
+            using var document = JsonDocument.Parse(File.ReadAllText(feedPath));
+            Assert.Empty(document.RootElement.GetProperty("artifacts").EnumerateArray());
+            var material = UpdateKeyMaterial.Load(keyPath);
+            Assert.True(EcdsaSigner.VerifyFile(
+                feedPath, File.ReadAllBytes(feedPath + ".sig"), material));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     static void Applier_PayloadResolution_RequiresNoRootFilesForUnwrap()
     {
         var directory = CreateTempDirectory();
