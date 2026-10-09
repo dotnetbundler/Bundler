@@ -279,30 +279,46 @@ internal static class CliConfig
                 var child = document[section] as JsonObject ?? new JsonObject();
                 var knobName = KnobName(knob);
                 // CLI 覆盖值相对当前工作目录解析，不走配置文件的 baseDirectory。
+                var sectionValue = ParseValue(value);
                 child[knobName] = AsCollectionElement(
-                    ParseValue(IsPathKnob(section, knobName) ? ResolveOverridePath(value) : value),
+                    IsPathKnob(section, knobName) ? ResolveOverridePaths(sectionValue) : sectionValue,
                     SectionTypes[section], knobName);
                 document[section] = child;
                 continue;
             }
             var fieldName = FieldName(name);
+            var overrideValue = ParseValue(value);
             document[fieldName] = AsCollectionElement(
-                ParseValue(SharedPathFields.Contains(fieldName) ? ResolveOverridePath(value) : value),
+                SharedPathFields.Contains(fieldName) ? ResolveOverridePaths(overrideValue) : overrideValue,
                 typeof(BundleConfiguration), fieldName);
         }
     }
 
-    // 逗号在 ParseValue 里是列表分隔符——路径类覆盖值必须先拆列表再逐项判 rooted，
-    // 否则 `--icons=a.png,b.png` 整体 GetFullPath 只保第一项；`/abs/a.png,b.png`
-    // 又因整串 rooted 早退，`b.png` 会被下游误解析到配置文件目录。
-    private static string ResolveOverridePath(string value)
+    // 逗号在 ParseValue 里是列表分隔符——路径类覆盖值先按 JSON 形状解析，
+    // 再对每个叶串逐项判 rooted：`--icons=a.png,b.png` 成数组逐项解析；
+    // `--msi.locale-files={"en":"a.wxl","de":"b.wxl"}` 这类 JSON 字典/数组
+    // 内的路径同样按工作目录解析，逗号不再把 JSON 拆开。
+    private static JsonNode? ResolveOverridePaths(JsonNode? node)
     {
-        if (value.Contains(','))
+        switch (node)
         {
-            return string.Join(',', value.Split(',', StringSplitOptions.TrimEntries)
-                .Select(entry => Path.IsPathRooted(entry) ? entry : Path.GetFullPath(entry)));
+            case JsonValue scalar when scalar.TryGetValue<string>(out var path) && path.Length > 0:
+                return JsonValue.Create(Path.IsPathRooted(path) ? path : Path.GetFullPath(path));
+            case JsonArray list:
+                for (var i = 0; i < list.Count; i++)
+                {
+                    list[i] = ResolveOverridePaths(list[i]);
+                }
+                return list;
+            case JsonObject obj:
+                foreach (var key in obj.Select(pair => pair.Key).ToArray())
+                {
+                    obj[key] = ResolveOverridePaths(obj[key]);
+                }
+                return obj;
+            default:
+                return node;
         }
-        return Path.IsPathRooted(value) ? value : Path.GetFullPath(value);
     }
 
     // --main-executable → targets[0].mainExecutable etc.; scalar target-level

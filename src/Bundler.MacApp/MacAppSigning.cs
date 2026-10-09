@@ -175,8 +175,15 @@ internal static class MacAppSigning
         BundleBuildContext context, MacAppSigningConfiguration signing, string identity,
         string bundlePath, CancellationToken cancellationToken)
     {
-        var contentsDirectory = Path.Combine(bundlePath, "Contents");
-        if (Directory.Exists(contentsDirectory))
+        // .app 的载荷在 Contents/ 下；.framework 无 Contents，载荷在
+        // Versions/Current 下（符号链接，枚举时自然穿透）；扁平嵌套包退回包根。
+        var contentsDirectory = new[]
+            {
+                Path.Combine(bundlePath, "Contents"),
+                Path.Combine(bundlePath, "Versions", "Current"),
+                bundlePath,
+            }
+            .First(Directory.Exists);
         {
             var deeper = FindNestedBundles(contentsDirectory);
             var loose = Directory
@@ -441,17 +448,21 @@ internal static class MacAppSigning
             await MacProcessRunner.RunAsync(
                 "security", ["unlock-keychain", "-p", password, path],
                 workDirectory, cancellationToken);
-            // p12 口令不直接进 argv：先经 openssl 转成无口令 PEM 再导入；
-            // openssl 缺席/失败退回 `import -P`（口令暴露于 ps，业界通行折中）。
+            // p12 口令不进 argv：先经 openssl 转成无口令 PEM 再导入。
             var imported = false;
+            MacProcessRunner.Result? unwrapped = null;
             var pemPath = System.IO.Path.Combine(
                 workDirectory, $"bundler-cert-{Guid.NewGuid():N}.pem");
             var passwordFile = System.IO.Path.Combine(
                 workDirectory, $"bundler-cert-{Guid.NewGuid():N}.pass");
             try
             {
-                File.WriteAllText(passwordFile, certificatePassword);
-                var unwrapped = await MacProcessRunner.TryRunAsync(
+                // 口令文件与解包 PEM 含明文材料：以 0600 创建杜绝宽松 umask 下
+                // 他用户读取；openssl -out 截断既有文件时保留其权限位。
+                await CreateSecretFileAsync(pemPath, null, workDirectory, cancellationToken);
+                await CreateSecretFileAsync(passwordFile, certificatePassword,
+                    workDirectory, cancellationToken);
+                unwrapped = await MacProcessRunner.TryRunAsync(
                     "openssl",
                     ["pkcs12", "-in", certificatePath, "-nodes",
                      "-passin", "file:" + passwordFile, "-out", pemPath],
@@ -478,10 +489,14 @@ internal static class MacAppSigning
             }
             if (!imported)
             {
-                await MacProcessRunner.RunAsync(
-                    "security", ["import", certificatePath, "-k", path, "-P", certificatePassword,
-                        "-T", "/usr/bin/codesign"],
-                    workDirectory, cancellationToken);
+                // 不退回 `security import -P`：口令进 argv 可被本机任意进程读取，
+                // 与仓规"秘密不入普通命令行"冲突——解包失败如实报错。
+                throw new InvalidOperationException(
+                    $"openssl could not convert '{certificatePath}' to PEM for keychain import: " +
+                    (unwrapped is null ? "openssl is unavailable" :
+                        unwrapped.StandardError.Trim() is { Length: > 0 } error ? error :
+                        $"exit code {unwrapped.ExitCode}") +
+                    "; the certificate password must not appear in process arguments.");
             }
             await MacProcessRunner.RunAsync(
                 "security", ["set-key-partition-list", "-S", "apple-tool:,apple:",
@@ -500,6 +515,21 @@ internal static class MacAppSigning
                 // 中途失败也要还原用户钥匙串搜索列表（list-keychains -s 已改过）。
                 await keychain.DisposeAsync(workDirectory, cancellationToken);
                 throw;
+            }
+        }
+
+        // 含明文秘密的临时文件一律 0600 落盘——宽松 umask 下默认可被本机他用户读取。
+        // netstandard2.0 无 UnixCreateMode：先建空文件再 chmod——0600 生效前文件为空，
+        // 无秘密窗口；openssl -out 截断既有文件时保留其权限位。
+        private static async Task CreateSecretFileAsync(
+            string filePath, string? contents, string workDirectory, CancellationToken cancellationToken)
+        {
+            using (new FileStream(filePath, FileMode.CreateNew, FileAccess.Write)) { }
+            await MacProcessRunner.RunAsync(
+                "chmod", ["600", filePath], workDirectory, cancellationToken);
+            if (contents is not null)
+            {
+                File.WriteAllText(filePath, contents);
             }
         }
 

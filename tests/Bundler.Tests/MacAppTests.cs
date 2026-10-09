@@ -488,6 +488,47 @@ public static class MacAppTests
     }
 
     [Fact]
+    static async Task RejectsExtensionClaimedThroughSharedAssociation()
+    {
+        var input = CreateInputDirectory();
+        try
+        {
+            // 共享 {foo,bar} 被首条 docType 吸收后，第二条再显式声明 bar 必拒。
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    DocumentTypes =
+                    [
+                        new MacAppDocumentTypeConfiguration { Extensions = ["foo"] },
+                        new MacAppDocumentTypeConfiguration { Extensions = ["bar"] }
+                    ]
+                }).BuildAsync(MacConfiguration(
+                    input,
+                    fileAssociations:
+                    [new BundleFileAssociationConfiguration { Extensions = ["foo", "bar"] }])),
+                "docType 再声明已被共享关联吸收的扩展名必须拒绝。");
+            // 反序同样拒：先显式声明 bar，首条再经共享吸收 bar。
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    DocumentTypes =
+                    [
+                        new MacAppDocumentTypeConfiguration { Extensions = ["bar"] },
+                        new MacAppDocumentTypeConfiguration { Extensions = ["foo"] }
+                    ]
+                }).BuildAsync(MacConfiguration(
+                    input,
+                    fileAssociations:
+                    [new BundleFileAssociationConfiguration { Extensions = ["foo", "bar"] }])),
+                "先显式声明、后被共享吸收的扩展名同样必须拒绝。");
+        }
+        finally
+        {
+            Cleanup(input, input + ".artifacts");
+        }
+    }
+
+    [Fact]
     static async Task RejectsConflictingOrEmptyDocumentTypes()
     {
         var input = CreateInputDirectory();
@@ -1535,7 +1576,8 @@ public static class MacAppTests
         }
     }
 
-    // R2: 同一共享 FileAssociations 项只归第一个命中的 documentTypes，不重复合并。
+    // R2: 同一共享 FileAssociations 项只归第一个命中的 documentTypes，不重复合并；
+    // 后续 docType 声明被吸收扩展名按重复注册拒绝。
     [Fact]
     static async Task SharedFileAssociationMergesOnce()
     {
@@ -1548,7 +1590,7 @@ public static class MacAppTests
                 DocumentTypes =
                 [
                     new MacAppDocumentTypeConfiguration { Extensions = ["foo"], Name = "First" },
-                    new MacAppDocumentTypeConfiguration { Extensions = ["bar"], Name = "Second" },
+                    new MacAppDocumentTypeConfiguration { Extensions = ["qux"], Name = "Second" },
                 ]
             }).BuildAsync(MacConfiguration(input, output, fileAssociations:
                 [new BundleFileAssociationConfiguration { Extensions = ["foo", "bar"], Name = "Shared" }]));
@@ -1562,16 +1604,28 @@ public static class MacAppTests
                 (List<object>)first["CFBundleTypeExtensions"], ["foo", "bar"]);
             var second = (Dictionary<string, object>)docTypes[1];
             Assert.Equal("Second", (string)second["CFBundleTypeName"]);
-            // "bar" 在共享项里，但共享项已被 First 消费——Second 只留自己声明的扩展名。
-            Assert.Equal((List<object>)second["CFBundleTypeExtensions"], ["bar"]);
+            Assert.Equal((List<object>)second["CFBundleTypeExtensions"], ["qux"]);
+
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    DocumentTypes =
+                    [
+                        new MacAppDocumentTypeConfiguration { Extensions = ["foo"], Name = "First" },
+                        new MacAppDocumentTypeConfiguration { Extensions = ["bar"], Name = "Second" },
+                    ]
+                }).BuildAsync(MacConfiguration(input, output + ".dup", fileAssociations:
+                    [new BundleFileAssociationConfiguration { Extensions = ["foo", "bar"] }])),
+                "已被共享项吸收的扩展名再被 docType 显式声明必须拒绝。");
         }
         finally
         {
-            Cleanup(input, output);
+            Cleanup(input, output, output + ".dup");
         }
     }
 
-    // R2: 同一共享 UrlProtocols 项同样只归第一个命中的 urlTypes。
+    // R2: 同一共享 UrlProtocols 项同样只归第一个命中的 urlTypes；
+    // 后续 urlType 声明被吸收 scheme 按重复注册拒绝。
     [Fact]
     static async Task SharedUrlProtocolMergesOnce()
     {
@@ -1584,7 +1638,7 @@ public static class MacAppTests
                 UrlTypes =
                 [
                     new MacAppUrlTypeConfiguration { Schemes = ["app-a"], Name = "A" },
-                    new MacAppUrlTypeConfiguration { Schemes = ["app-b"], Name = "B" },
+                    new MacAppUrlTypeConfiguration { Schemes = ["app-c"], Name = "C" },
                 ]
             }).BuildAsync(MacConfiguration(input, output, urlProtocols:
                 [new BundleUrlProtocolConfiguration { Schemes = ["app-a", "app-b"], Name = "Shared" }]));
@@ -1597,12 +1651,24 @@ public static class MacAppTests
             Assert.Equal(
                 (List<object>)first["CFBundleURLSchemes"], ["app-a", "app-b"]);
             var second = (Dictionary<string, object>)urlTypes[1];
-            Assert.Equal("B", (string)second["CFBundleURLName"]);
-            Assert.Equal((List<object>)second["CFBundleURLSchemes"], ["app-b"]);
+            Assert.Equal("C", (string)second["CFBundleURLName"]);
+            Assert.Equal((List<object>)second["CFBundleURLSchemes"], ["app-c"]);
+
+            await AssertThrows<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    UrlTypes =
+                    [
+                        new MacAppUrlTypeConfiguration { Schemes = ["app-a"], Name = "A" },
+                        new MacAppUrlTypeConfiguration { Schemes = ["app-b"], Name = "B" },
+                    ]
+                }).BuildAsync(MacConfiguration(input, output + ".dup", urlProtocols:
+                    [new BundleUrlProtocolConfiguration { Schemes = ["app-a", "app-b"] }])),
+                "已被共享项吸收的 scheme 再被 urlType 显式声明必须拒绝。");
         }
         finally
         {
-            Cleanup(input, output);
+            Cleanup(input, output, output + ".dup");
         }
     }
 

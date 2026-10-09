@@ -611,6 +611,37 @@ public static class CliTests
     }
 
     [Fact]
+    static void JsonPathKnobOverridesResolveEachLeaf()
+    {
+        var input = CreateInputDirectory();
+        var config = Path.Combine(Path.GetTempPath(), $"bundler-{Guid.NewGuid():N}.json");
+        File.WriteAllText(config, WriteConfig(input, "/tmp/x"));
+        try
+        {
+            // JSON 字典值带逗号：须按 JSON 解析逐叶判 rooted，逗号不得拆串。
+            var resolved = CliConfig.Resolve(CliArguments.Parse(
+                ["bundle", "--config", config,
+                 "--nsis.custom-language-files={\"en-US\":\"rel/en.nsh\",\"de-DE\":\"rel/de.nsh\"}"]));
+            var langs = resolved.Nsis?.CustomLanguageFiles;
+            Assert.Equal(2, langs?.Count);
+            Assert.Equal(Path.GetFullPath("rel/en.nsh"), langs?["en-US"]);
+            Assert.Equal(Path.GetFullPath("rel/de.nsh"), langs?["de-DE"]);
+
+            // JSON 数组同语义逐元素解析。
+            var array = CliConfig.Resolve(CliArguments.Parse(
+                ["bundle", "--config", config, "--icons=[\"a.png\",\"b.png\"]"]));
+            Assert.Equal(
+                new[] { "a.png", "b.png" }.Select(Path.GetFullPath).ToArray(),
+                array.Bundle.Icons);
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            File.Delete(config);
+        }
+    }
+
+    [Fact]
     static void PrintsVersion()
     {
         var (code, stdout, _) = Run("--version");
