@@ -69,7 +69,8 @@ internal sealed class UpdateApplier
         ApplyOptions options, Action<string>? log, bool rollback = false,
         string? backupDirectory = null)
     {
-        var runDir = Path.Combine(options.StagingRoot, "bootstrap");
+        var runDir = Path.Combine(
+            options.StagingRoot, "bootstrap-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(runDir);
         var arguments =
             "apply --install-dir \"" + installDirectory + "\"" +

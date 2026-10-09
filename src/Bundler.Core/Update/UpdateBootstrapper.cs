@@ -85,8 +85,10 @@ public static class UpdateBootstrapper
             }
             // 按宿主用户隔离提取根：共享 /tmp 下同名路径会被别的本地用户预置/替换，
             // 解出的可执行体随后会被打进应用——目录 0700 且恒定覆盖写。
+            // 并发打包同 uid 同路径恒定覆写会互踩：进程级唯一目录名规避（文件名不变）。
             var destination = Path.Combine(
-                ExtractionRoot(), resourceName.Replace('/', Path.DirectorySeparatorChar));
+                ExtractionRoot(), "." + Guid.NewGuid().ToString("N"),
+                resourceName.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             using (var output = File.Create(destination))
             {

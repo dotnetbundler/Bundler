@@ -113,6 +113,12 @@ while [ $# -gt 0 ]; do
                 --wait-timeout) WAIT_TIMEOUT=$2 ;;
                 --lock-timeout) LOCK_TIMEOUT=$2 ;;
             esac
+            case "$1" in
+                --wait-pid|--wait-timeout|--lock-timeout)
+                    case "$2" in
+                        ''|*[!0-9]*) echo "bundler-updater: option '$1' requires a non-negative integer." >&2; exit 2 ;;
+                    esac ;;
+            esac
             shift 2 ;;
         *) echo "bundler-updater: unknown option '$1'." >&2; usage; exit 2 ;;
     esac
