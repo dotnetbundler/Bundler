@@ -24,3 +24,5 @@ LangString InvalidRestartMode ${LANG_VIETNAMESE} "/R chỉ hợp lệ khi dùng 
 LangString ArgumentsRequireRestart ${LANG_VIETNAMESE} "/ARGS chỉ hợp lệ khi dùng cùng /R."
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_VIETNAMESE} "Cài đặt tự động đã từ chối thư mục không trống không thuộc ${PRODUCT_NAME}."
 LangString ApplicationLaunchFailed ${LANG_VIETNAMESE} "Cài đặt thành công nhưng không thể khởi động ${PRODUCT_NAME}."
+LangString RecoveryManifestMismatch ${LANG_VIETNAMESE} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatchDetail ${LANG_VIETNAMESE} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."

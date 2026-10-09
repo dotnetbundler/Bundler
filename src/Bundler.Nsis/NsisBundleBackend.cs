@@ -21,7 +21,8 @@ internal sealed class NsisBundleBackend(
         "UpgradeDetected", "DowngradeDetected", "DowngradeBlocked", "UnknownVersionDetected",
         "SilentDowngradeBlocked", "SilentUnknownVersionBlocked", "RemovingExistingVersion",
         "ExistingUninstallFailed", "LegacyMsiDetected", "RemovingLegacyMsiVersion", "InvalidRestartMode",
-        "ArgumentsRequireRestart", "AutomatedNonEmptyDirectoryBlocked", "ApplicationLaunchFailed"
+        "ArgumentsRequireRestart", "AutomatedNonEmptyDirectoryBlocked", "ApplicationLaunchFailed",
+        "RecoveryManifestMismatch", "RecoveryManifestMismatchDetail"
     ];
 
     public PackageFormat Format => PackageFormat.Nsis;

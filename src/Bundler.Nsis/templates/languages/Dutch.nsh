@@ -24,3 +24,5 @@ LangString InvalidRestartMode ${LANG_DUTCH} "/R is alleen geldig met /S, /P of /
 LangString ArgumentsRequireRestart ${LANG_DUTCH} "/ARGS is alleen geldig met /R."
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_DUTCH} "De automatische installatie weigerde een niet-lege map die niet bij ${PRODUCT_NAME} hoort."
 LangString ApplicationLaunchFailed ${LANG_DUTCH} "De installatie is voltooid, maar ${PRODUCT_NAME} kon niet worden gestart."
+LangString RecoveryManifestMismatch ${LANG_DUTCH} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatchDetail ${LANG_DUTCH} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."

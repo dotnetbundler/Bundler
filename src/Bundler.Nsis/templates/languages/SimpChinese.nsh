@@ -24,3 +24,5 @@ LangString InvalidRestartMode ${LANG_SIMPCHINESE} "/R 只能与 /S、/P 或 /UPD
 LangString ArgumentsRequireRestart ${LANG_SIMPCHINESE} "/ARGS 只能与 /R 一起使用。"
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_SIMPCHINESE} "自动安装拒绝使用不属于 ${PRODUCT_NAME} 的非空目录。"
 LangString ApplicationLaunchFailed ${LANG_SIMPCHINESE} "安装已经完成，但无法启动 ${PRODUCT_NAME}。"
+LangString RecoveryManifestMismatch ${LANG_SIMPCHINESE} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatchDetail ${LANG_SIMPCHINESE} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."

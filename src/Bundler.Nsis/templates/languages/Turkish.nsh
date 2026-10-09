@@ -24,3 +24,5 @@ LangString InvalidRestartMode ${LANG_TURKISH} "/R yalnızca /S, /P veya /UPDATE 
 LangString ArgumentsRequireRestart ${LANG_TURKISH} "/ARGS yalnızca /R ile birlikte geçerlidir."
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_TURKISH} "Otomatik kurulum ${PRODUCT_NAME} öğesine ait olmayan boş olmayan bir klasörü reddetti."
 LangString ApplicationLaunchFailed ${LANG_TURKISH} "Kurulum tamamlandı ancak ${PRODUCT_NAME} başlatılamadı."
+LangString RecoveryManifestMismatch ${LANG_TURKISH} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatchDetail ${LANG_TURKISH} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
