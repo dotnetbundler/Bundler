@@ -6,8 +6,9 @@ namespace DotNet.Bundler.Archive;
 /// <summary>Minimal libc readlink for symlink preservation on Unix payloads.</summary>
 internal static class UnixLinks
 {
+    // ssize_t 的正确 CLR 型是 IntPtr（指针宽）：long 在 32 位 ABI 上高位寄存器是垃圾。
     [DllImport("libc", SetLastError = true, CharSet = CharSet.Ansi)]
-    private static extern int readlink(string path, byte[] buffer, int bufferSize);
+    private static extern IntPtr readlink(string path, byte[] buffer, int bufferSize);
 
     [DllImport("libc", SetLastError = true, CharSet = CharSet.Ansi)]
     private static extern int access(string path, int mode);
@@ -15,10 +16,10 @@ internal static class UnixLinks
     // macOS 原型是 listxattr(path, buf, size, options)；Linux 是 llistxattr(path, buf, size)。
     // 只问"有没有"——空缓冲取长度即可，>0 即存在扩展属性。
     [DllImport("libc", SetLastError = true, EntryPoint = "listxattr", CharSet = CharSet.Ansi)]
-    private static extern long ListXattrDarwin(string path, IntPtr list, UIntPtr size, int options);
+    private static extern IntPtr ListXattrDarwin(string path, IntPtr list, UIntPtr size, int options);
 
     [DllImport("libc", SetLastError = true, EntryPoint = "llistxattr", CharSet = CharSet.Ansi)]
-    private static extern long ListXattrLinux(string path, IntPtr list, UIntPtr size);
+    private static extern IntPtr ListXattrLinux(string path, IntPtr list, UIntPtr size);
 
     /// <summary>Returns the symlink target, or null when unsupported/failed.</summary>
     internal static string? ReadLink(string path)
@@ -29,8 +30,8 @@ internal static class UnixLinks
             return null;
         }
         var buffer = new byte[4096];
-        var length = readlink(path, buffer, buffer.Length);
-        return length > 0 ? Encoding.UTF8.GetString(buffer, 0, length) : null;
+        var length = readlink(path, buffer, buffer.Length).ToInt64();
+        return length > 0 ? Encoding.UTF8.GetString(buffer, 0, (int)length) : null;
     }
 
     /// <summary>
@@ -59,11 +60,11 @@ internal static class UnixLinks
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                return ListXattrDarwin(path, IntPtr.Zero, UIntPtr.Zero, 1 /* XATTR_NOFOLLOW */) > 0;
+                return ListXattrDarwin(path, IntPtr.Zero, UIntPtr.Zero, 1 /* XATTR_NOFOLLOW */).ToInt64() > 0;
             }
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                return ListXattrLinux(path, IntPtr.Zero, UIntPtr.Zero) > 0;
+                return ListXattrLinux(path, IntPtr.Zero, UIntPtr.Zero).ToInt64() > 0;
             }
         }
         catch (EntryPointNotFoundException) { }
@@ -86,9 +87,9 @@ internal static class UnixLinks
                 return true;
             }
             var nameBuffer = new byte[65536];
-            var nameLength = isOsx
+            var nameLength = (isOsx
                 ? ListXattrBufferDarwin(source, nameBuffer, nameBuffer.Length, 1)
-                : ListXattrBufferLinux(source, nameBuffer, nameBuffer.Length);
+                : ListXattrBufferLinux(source, nameBuffer, nameBuffer.Length)).ToInt64();
             if (nameLength <= 0)
             {
                 return nameLength == 0;
@@ -104,9 +105,9 @@ internal static class UnixLinks
                     break;
                 }
                 var name = Encoding.UTF8.GetString(nameBuffer, offset, end - offset);
-                var valueLength = isOsx
+                var valueLength = (isOsx
                     ? GetXattrDarwin(source, name, value, value.Length, 0, 1)
-                    : GetXattrLinux(source, name, value, value.Length);
+                    : GetXattrLinux(source, name, value, value.Length)).ToInt64();
                 if (valueLength < 0)
                 {
                     return false;
@@ -127,18 +128,18 @@ internal static class UnixLinks
     }
 
     [DllImport("libc", SetLastError = true, EntryPoint = "listxattr", CharSet = CharSet.Ansi)]
-    private static extern long ListXattrBufferDarwin(
+    private static extern IntPtr ListXattrBufferDarwin(
         string path, byte[] list, int size, int options);
 
     [DllImport("libc", SetLastError = true, EntryPoint = "llistxattr", CharSet = CharSet.Ansi)]
-    private static extern long ListXattrBufferLinux(string path, byte[] list, int size);
+    private static extern IntPtr ListXattrBufferLinux(string path, byte[] list, int size);
 
     [DllImport("libc", SetLastError = true, EntryPoint = "getxattr", CharSet = CharSet.Ansi)]
-    private static extern long GetXattrDarwin(
+    private static extern IntPtr GetXattrDarwin(
         string path, string name, byte[] value, int size, uint position, int options);
 
     [DllImport("libc", SetLastError = true, EntryPoint = "lgetxattr", CharSet = CharSet.Ansi)]
-    private static extern long GetXattrLinux(string path, string name, byte[] value, int size);
+    private static extern IntPtr GetXattrLinux(string path, string name, byte[] value, int size);
 
     [DllImport("libc", SetLastError = true, EntryPoint = "setxattr", CharSet = CharSet.Ansi)]
     private static extern int SetXattrDarwin(

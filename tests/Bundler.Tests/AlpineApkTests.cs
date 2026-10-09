@@ -168,6 +168,49 @@ public static class AlpineApkTests
     }
 
     [Fact]
+    static void BinLinkNoneDisables()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var artifacts = new AlpineApkBundler(new AlpineApkBundleConfiguration { BinLink = "none" })
+                .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
+            var data = ApkPackageReader.ReadTar(
+                ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifacts.Single().Path))[1]);
+            Assert.False(data.Any(e => e.Name.StartsWith("usr/bin", StringComparison.Ordinal)),
+                "BinLink=\"none\" must disable the usr/bin link like \"\" does.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    // 文件先占 usr/bin 后，默认 BinLink 仍要认领 usr/bin 目录——
+    // 文件→目录冲突必须显式拒绝而非静默产"父是文件、下有子项"的坏包。
+    [Fact]
+    static void RejectsFileCollidingWithClaimedDirectory()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var extra = Path.Combine(input, "extra.conf");
+        File.WriteAllText(extra, "k=v");
+        try
+        {
+            Assert.ThrowsAny<InvalidOperationException>(
+                () => new AlpineApkBundler(new AlpineApkBundleConfiguration
+                {
+                    Files = [new AlpineApkFileEntry { Source = extra, Destination = "/usr/bin" }]
+                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
     static void RejectsInvalidSettings()
     {
         var input = CreateInputDirectory();

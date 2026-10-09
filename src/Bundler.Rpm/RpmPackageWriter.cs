@@ -359,7 +359,7 @@ internal static class RpmPackageWriter
             fileMtimes[i] = (int)BuildTime;
             // Dirs get an empty digest; symlinks hash the link-target string;
             // regular files hash their bytes — matching rpm's own rules.
-            fileDigests[i] = entry.IsDirectory ? "" : Sha256Hex(entry.ReadBytes());
+            fileDigests[i] = entry.IsDirectory ? "" : FileDigest(entry);
             fileLinkTos[i] = entry.IsSymlink ? entry.LinkTarget : "";
             fileFlags[i] = entry.FileFlags;
             fileUsers[i] = "root";
@@ -614,6 +614,12 @@ internal static class RpmPackageWriter
                     $"Two payload sources map to the same .rpm path: '{path}'.");
             }
             var info = new FileInfo(sourcePath);
+            // rpm FILESIZES 与 cpio newc 都记 int32 尺寸：>2GiB 截断产坏包，显式拒绝。
+            if (info.Length > int.MaxValue)
+            {
+                throw new ArgumentException(
+                    $"The payload file '{sourcePath}' exceeds the 2 GiB per-file limit of the rpm format.");
+            }
             entries.Add(new PayloadEntry
             {
                 ArchivePath = path,
@@ -948,6 +954,22 @@ internal static class RpmPackageWriter
     {
         using var sha256 = SHA256.Create();
         return Hex(sha256.ComputeHash(content));
+    }
+
+    // FILEDIGESTS 逐文件 sha256：源流式喂哈希，整文件不再驻内存。
+    private static string FileDigest(PayloadEntry entry)
+    {
+        using var sha256 = SHA256.Create();
+        if (entry.IsSymlink)
+        {
+            return Hex(sha256.ComputeHash(Encoding.UTF8.GetBytes(entry.LinkTarget)));
+        }
+        if (entry.Content is { } content)
+        {
+            return Hex(sha256.ComputeHash(content));
+        }
+        using var stream = File.OpenRead(entry.SourcePath!);
+        return Hex(sha256.ComputeHash(stream));
     }
 
     private static string Sha256HexFile(string path)

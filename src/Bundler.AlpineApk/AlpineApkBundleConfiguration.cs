@@ -49,7 +49,7 @@ public sealed class AlpineApkBundleConfiguration
     /// <summary>
     /// Name of the symlink created at <c>/usr/bin/&lt;name&gt;</c> pointing at the
     /// main executable under <c>/usr/lib/&lt;package-name&gt;</c>. Defaults to the
-    /// package name; set to "" to disable the link.
+    /// package name; set to "" or "none" to disable the link.
     /// </summary>
     public string? BinLink { get; init; }
 

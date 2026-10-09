@@ -52,8 +52,8 @@ public sealed class ArchiveBundler : IFormatBundler
             DesktopOperatingSystem.LinuxMusl
         })
         {
-            backends.Add(new ArchiveBundleBackend(_configuration, _options, os, PackageFormat.Zip));
-            backends.Add(new ArchiveBundleBackend(_configuration, _options, os, PackageFormat.TarGz));
+            backends.Add(new ArchiveBundleBackend(_configuration, os, PackageFormat.Zip));
+            backends.Add(new ArchiveBundleBackend(_configuration, os, PackageFormat.TarGz));
         }
         return await new BundlePipeline(backends, _options.Logger)
             .BuildAsync(bundle, cancellationToken);

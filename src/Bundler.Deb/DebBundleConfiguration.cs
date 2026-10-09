@@ -58,7 +58,7 @@ public sealed class DebBundleConfiguration
     /// <summary>
     /// Name of the symlink created at <c>/usr/bin/&lt;name&gt;</c> pointing at the main
     /// executable under <see cref="InstallRoot"/>. Defaults to the package name;
-    /// set to "" to disable the link.
+    /// set to "" or "none" to disable the link.
     /// </summary>
     public string? BinLink { get; init; }
 

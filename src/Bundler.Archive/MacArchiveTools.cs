@@ -36,9 +36,11 @@ internal static class MacArchiveTools
             Materialize(entries, stagingRoot);
             var ok = format == PackageFormat.Zip
                 ? Run("/usr/bin/ditto", "-c -k --sequesterRsrc " +
-                    ShellQuote(stagingRoot) + " " + ShellQuote(outputPath)) == 0
+                    ShellQuote(stagingRoot) + " " + ShellQuote(outputPath),
+                    ScaledTimeoutMs(entries)) == 0
                 : Run("/usr/bin/tar", "-czf " + ShellQuote(outputPath) + " -C " +
-                    ShellQuote(stagingRoot) + " " + ShellQuote(TopStem(entries))) == 0;
+                    ShellQuote(stagingRoot) + " " + ShellQuote(TopStem(entries)),
+                    ScaledTimeoutMs(entries)) == 0;
             if (!ok)
             {
                 logger.Log(BundleLogLevel.Warning,
@@ -89,7 +91,8 @@ internal static class MacArchiveTools
         try
         {
             var ok = Run("/usr/bin/ditto", "-c -k --sequesterRsrc --keepParent " +
-                ShellQuote(appDirectory) + " " + ShellQuote(outputPath)) == 0;
+                ShellQuote(appDirectory) + " " + ShellQuote(outputPath),
+                ScaledTimeoutMs(appDirectory)) == 0;
             if (!ok && File.Exists(outputPath))
             {
                 File.Delete(outputPath);
@@ -179,8 +182,35 @@ internal static class MacArchiveTools
     private static string ShellQuote(string value) =>
         "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
+    // 成品命令超时随载荷规模伸缩：固定 60s 会误杀 GB 级载荷（误杀→回退→丢 xattr）。
+    // 按 25 MB/s 保守吞吐给 2 倍冗余，下限 60s；取不到长度按 0 计退回下限。
+    private static int ScaledTimeoutMs(IEnumerable<ArchiveTree.Entry> entries) =>
+        ScaledTimeoutMs(entries
+            .Where(e => e.Kind == TarEntryKind.File && e.SourcePath is not null)
+            .Sum(e => SafeLength(e.SourcePath!)));
+
+    private static int ScaledTimeoutMs(string directory) =>
+        ScaledTimeoutMs(Directory
+            .EnumerateFiles(directory, "*", SearchOption.AllDirectories)
+            .Sum(SafeLength));
+
+    private static int ScaledTimeoutMs(long payloadBytes) =>
+        (int)Math.Max(60_000, payloadBytes / 25_000_000 * 2_000);
+
+    private static long SafeLength(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
+    }
+
     // 超时即杀——不许半成品工具与回退写出器并发改同一目标。
-    private static int Run(string file, string arguments)
+    private static int Run(string file, string arguments, int timeoutMilliseconds = 60_000)
     {
         using var process = Process.Start(
             new ProcessStartInfo(file, arguments) { UseShellExecute = false });
@@ -188,7 +218,7 @@ internal static class MacArchiveTools
         {
             return -1;
         }
-        if (!process.WaitForExit(60_000))
+        if (!process.WaitForExit(timeoutMilliseconds))
         {
             try { process.Kill(); } catch (Exception) { }
             try { process.WaitForExit(10_000); } catch (Exception) { }
