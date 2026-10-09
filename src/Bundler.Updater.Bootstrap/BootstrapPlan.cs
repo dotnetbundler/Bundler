@@ -1146,10 +1146,12 @@ internal static class BootstrapPlan
                     //（win 腿探针实证）——`mklink /D link \\?\Volume{GUID}` 的实形是
                     // 裸名+绝对 reparse flag。裸名根段 Volume{GUID} 且 flag 绝对时按
                     // 卷真实挂载名解真；flag 相对则是用户真写的相对名，照旧拼父级。
-                    if (!info.Value.Relative && HasVolumeGuidRoot(target))
+                    // target 可能带 \?\、\??\、\\?\ 前缀（LinkTarget 原文不归一）——剥壳后按裸名判。
+                    var ntBody = target[NtDevicePrefixLength(target)..];
+                    if (!info.Value.Relative && HasVolumeGuidRoot(ntBody))
                     {
-                        var dos = VolumeDosPath(target[..44]);
-                        var tail = target[44..].TrimStart('\\', '/');
+                        var dos = VolumeDosPath(ntBody[..44]);
+                        var tail = ntBody[44..].TrimStart('\\', '/');
                         if (dos is null)
                         {
                             return null;
@@ -1195,15 +1197,14 @@ internal static class BootstrapPlan
         {
             return null;
         }
-        if (!OperatingSystem.IsWindows()
-            || (!target.StartsWith(@"\\?\", StringComparison.Ordinal)
-                && !target.StartsWith(@"\??\", StringComparison.Ordinal)))
+        var prefixLength = NtDevicePrefixLength(target);
+        if (!OperatingSystem.IsWindows() || prefixLength == 0)
         {
             return Path.GetFullPath(
                 Path.IsPathRooted(target) ? target
                     : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
         }
-        var body = target[4..];
+        var body = target[prefixLength..];
         if (body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase))
         {
             return Path.GetFullPath(@"\\" + body[4..]);
@@ -1252,24 +1253,24 @@ internal static class BootstrapPlan
     // 露出的裸 `Volume{GUID}\`（卷挂载点 reparse target 在 LinkTarget 上的实形——
     // win 腿实证 .NET 去掉 `\??\` 后按裸名返回，跟跳会把它当目录名拼进字面路径）。
     // `\\?\C:\…`/`\\?\UNC\…` 这类扩展长度路径是合法拼写，照常解。
+    // NT 设备名空间前缀长度：\\?\、\??\、\\.\ 四字符；\?\ 三字符
+    //（mklink 卷 GUID 目标的原文形态，.NET LinkTarget 不保前缀归一）。
+    private static int NtDevicePrefixLength(string target) =>
+        target.StartsWith(@"\\?\", StringComparison.Ordinal) ||
+        target.StartsWith(@"\??\", StringComparison.Ordinal) ||
+        target.StartsWith(@"\\.\", StringComparison.Ordinal) ? 4
+        : target.StartsWith(@"\?\", StringComparison.Ordinal) ? 3 : 0;
+
     private static bool IsNtObjectTarget(string target)
     {
         if (target.StartsWith(@"\Device\", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
-        if (target.StartsWith(@"\\?\", StringComparison.Ordinal)
-            || target.StartsWith(@"\??\", StringComparison.Ordinal))
+        var prefixLength = NtDevicePrefixLength(target);
+        if (prefixLength > 0)
         {
-            var body = target[4..];
-            return HasVolumeGuidRoot(body)
-                || (!(body.Length >= 2 && char.IsLetter(body[0]) && body[1] == ':')
-                    && !body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase));
-        }
-        // 单反斜杠 \?\ 是 mklink 卷 GUID 目标的原文形态（.NET LinkTarget 不保前缀归一）。
-        if (target.StartsWith(@"\?\", StringComparison.Ordinal))
-        {
-            var body = target[3..];
+            var body = target[prefixLength..];
             return HasVolumeGuidRoot(body)
                 || (!(body.Length >= 2 && char.IsLetter(body[0]) && body[1] == ':')
                     && !body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase));
@@ -1363,14 +1364,8 @@ internal static class BootstrapPlan
     private static bool IsVolumeRoot(string path)
     {
         var trimmed = path.TrimEnd('/', '\\');
-        // 设备名空间前缀剥壳：\\?\ 与 \??\ 之外，reparse 目标可呈单反斜杠 \?\Volume{GUID}
-        // NT 形态——Path.GetPathRoot 认不出这类，剥前缀后按 Volume{…} 段判定。
-        var core = trimmed.StartsWith(@"\\?\", StringComparison.Ordinal) ||
-                   trimmed.StartsWith(@"\??\", StringComparison.Ordinal) ||
-                   trimmed.StartsWith(@"\\.\", StringComparison.Ordinal)
-            ? trimmed[4..]
-            : trimmed.StartsWith(@"\?\", StringComparison.Ordinal)
-                ? trimmed[3..] : trimmed;
+        // 设备名空间前缀剥壳后按 Volume{…} 段判定——Path.GetPathRoot 认不出 NT 形态。
+        var core = trimmed[NtDevicePrefixLength(trimmed)..];
         if (core.StartsWith("Volume{", StringComparison.OrdinalIgnoreCase))
         {
             return !core.Contains('\\') && !core.Contains('/');
