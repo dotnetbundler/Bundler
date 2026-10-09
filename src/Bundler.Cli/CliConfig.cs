@@ -278,8 +278,9 @@ internal static class CliConfig
                 }
                 var child = document[section] as JsonObject ?? new JsonObject();
                 var knobName = KnobName(knob);
-                // CLI 覆盖值相对当前工作目录解析，不走配置文件的 baseDirectory。
-                var sectionValue = ParseValue(value);
+                // CLI 覆盖值相对当前工作目录解析，不走配置文件的 baseDirectory；
+                // 路径旋钮不过 ParseValue 的数值强转（"00123"/"true" 是合法文件名）。
+                var sectionValue = IsPathKnob(section, knobName) ? ParsePathValue(value) : ParseValue(value);
                 child[knobName] = AsCollectionElement(
                     IsPathKnob(section, knobName) ? ResolveOverridePaths(sectionValue) : sectionValue,
                     SectionTypes[section], knobName);
@@ -287,7 +288,7 @@ internal static class CliConfig
                 continue;
             }
             var fieldName = FieldName(name);
-            var overrideValue = ParseValue(value);
+            var overrideValue = SharedPathFields.Contains(fieldName) ? ParsePathValue(value) : ParseValue(value);
             document[fieldName] = AsCollectionElement(
                 SharedPathFields.Contains(fieldName) ? ResolveOverridePaths(overrideValue) : overrideValue,
                 typeof(BundleConfiguration), fieldName);
@@ -298,6 +299,29 @@ internal static class CliConfig
     // 再对每个叶串逐项判 rooted：`--icons=a.png,b.png` 成数组逐项解析；
     // `--msi.locale-files={"en":"a.wxl","de":"b.wxl"}` 这类 JSON 字典/数组
     // 内的路径同样按工作目录解析，逗号不再把 JSON 拆开。
+    // 路径旋钮专用：不做数字/布尔强转——"00123"/"true" 是合法文件名；
+    // JSON 容器仍按形状解析（叶串原样），逗号列表按原文逐项拆。
+    private static JsonNode? ParsePathValue(string value)
+    {
+        if (value.StartsWith('[') || value.StartsWith('{'))
+        {
+            try
+            {
+                return JsonNode.Parse(value);
+            }
+            catch (JsonException)
+            {
+                // fall through: treat as a plain string
+            }
+        }
+        if (value.Contains(','))
+        {
+            return new JsonArray(value.Split(',', StringSplitOptions.TrimEntries)
+                .Select<string, JsonNode?>(entry => entry).ToArray());
+        }
+        return JsonValue.Create(value);
+    }
+
     private static JsonNode? ResolveOverridePaths(JsonNode? node)
     {
         switch (node)

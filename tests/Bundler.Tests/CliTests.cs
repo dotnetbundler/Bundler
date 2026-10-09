@@ -634,11 +634,11 @@ public static class CliTests
                 new[] { "a.png", "b.png" }.Select(Path.GetFullPath).ToArray(),
                 array.Bundle.Icons);
 
-            // 文件名恰为数字/布尔字面量（"123"、"true"）：仍按路径解析不得
-            // 被 ParseValue 收成非字符串类型。
+            // 文件名恰为数字/布尔字面量（"00123"、"true"）：仍按路径解析不得
+            // 被 ParseValue 收成非字符串类型，前导零保留。
             var numeric = CliConfig.Resolve(CliArguments.Parse(
-                ["bundle", "--config", config, "--icons=123", "--license-file=true"]));
-            Assert.Equal([Path.GetFullPath("123")], numeric.Bundle.Icons);
+                ["bundle", "--config", config, "--icons=00123", "--license-file=true"]));
+            Assert.Equal([Path.GetFullPath("00123")], numeric.Bundle.Icons);
             Assert.Equal(Path.GetFullPath("true"), numeric.Bundle.LicenseFile);
         }
         finally
