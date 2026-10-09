@@ -109,7 +109,7 @@ internal static class ArchiveExtractor
                     StringComparison.Ordinal))
             {
                 File.Delete(entry);
-                log?.Invoke($"update: dropped escaping symlink '{entry}' → '{target}'.");
+                log?.Invoke($"update: failed to restore symlink '{entry}' → '{target}' — escapes staging root, dropped.");
             }
         }
     }
