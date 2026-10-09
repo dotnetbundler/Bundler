@@ -723,7 +723,8 @@ internal static class BootstrapPlan
             }
             Thread.Sleep(200);
         }
-        throw new WaitTimeoutException();
+        throw new WaitTimeoutException(
+            $"the target process (pid {pid}) did not exit within {timeoutSeconds}s.");
     }
 
     private static void Restart(string appPath, string workingDirectory, Action<string> log)
@@ -1387,9 +1388,12 @@ internal static class BootstrapPlan
                 case "--install-dir": options.InstallDirectory = value; break;
                 case "--payload": options.PayloadDirectory = value; break;
                 case "--wait-pid":
-                    if (!int.TryParse(value, out var pid))
+                    // 非正 pid 同样拒：TryParse 放进来的 "-5"/"0" 会让
+                    // GetProcessById 抛 ArgumentException 被判成"已退出"——
+                    // 宿主仍在跑就换包（sh 侧 ''|*[!0-9]* 与 0 拒同口径）。
+                    if (!int.TryParse(value, out var pid) || pid <= 0)
                     {
-                        throw new UsageException($"--wait-pid expects a numeric pid, got '{value}'.");
+                        throw new UsageException($"--wait-pid expects a positive numeric pid, got '{value}'.");
                     }
                     options.WaitPid = pid;
                     break;

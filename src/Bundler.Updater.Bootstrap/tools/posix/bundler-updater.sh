@@ -119,6 +119,12 @@ while [ $# -gt 0 ]; do
                         ''|*[!0-9]*) echo "bundler-updater: option '$1' requires a non-negative integer." >&2; exit 2 ;;
                     esac ;;
             esac
+            # 与 AOT Parse 同口径：--wait-pid/--wait-timeout 必须为正（0/负数
+            # 两侧统一 rc=2 用法拒绝，不再一侧超时一侧放行）。
+            case "$1" in
+                --wait-pid|--wait-timeout)
+                    [ "$2" -gt 0 ] || { echo "bundler-updater: option '$1' requires a positive integer." >&2; exit 2; } ;;
+            esac
             shift 2 ;;
         *) echo "bundler-updater: unknown option '$1'." >&2; usage; exit 2 ;;
     esac
@@ -296,9 +302,25 @@ retain_or_remove_backup() {
     return 0
 }
 
+# 进程存活探测（kill -0 语义补齐）：kill -0 对存活但异属主的进程返回 EPERM——
+# 直接拿失败判死会把在飞的异属主持锁者误判死锁来偷锁、把异属主宿主当已退出
+# 跳过等待直接换包。失败后复核存在性：/proc/<pid> 在场即活（无 signal 权 ≠
+# 已退出）；无 /proc 的宿主走 `ps -p`；两者皆无时保守按活处理——宁等超时，
+# 也不偷锁/不跳等（两误判方向都退化为超时而非误换包）。
+pid_alive() {
+    kill -0 "$1" 2>/dev/null && return 0
+    if [ -d /proc ]; then
+        [ -d "/proc/$1" ]
+    elif command -v ps >/dev/null 2>&1; then
+        ps -p "$1" >/dev/null 2>&1
+    else
+        return 0
+    fi
+}
+
 # 并发互斥（与 AOT AcquireLock 同形同协议——同锁件互斥跨实现实例）：锁件
 # <install>.bundler-lock 普通文件含持锁 pid；noclobber `>` 原子创建，撞锁按
-# kill -0 判活等到 --lock-timeout 超时拒 rc=3，持锁者已死即夺锁——防并发第二实例
+# pid_alive 判活等到 --lock-timeout 超时拒 rc=3，持锁者已死即夺锁——防并发第二实例
 # 把在飞 marker 当崩溃恢复拆掉别人换一半的包。
 [ -L "$LOCK_FILE" ] && rm -f "$LOCK_FILE"
 _lk_deadline=$(( $(date +%s) + LOCK_TIMEOUT ))
@@ -316,7 +338,7 @@ while :; do
     else
         _lk_owner=$(cat "$LOCK_FILE" 2>/dev/null || true)
     fi
-    if [ -n "$_lk_owner" ] && ! kill -0 "$_lk_owner" 2>/dev/null; then
+    if [ -n "$_lk_owner" ] && ! pid_alive "$_lk_owner"; then
         # 死锁夺锁——删前复读 owner 未变且仍死才删，防双实例互删对方新锁件。
         _lk_owner2=$(cat "$LOCK_FILE" 2>/dev/null || true)
         if [ "$_lk_owner2" = "$_lk_owner" ]; then
@@ -384,7 +406,7 @@ check_free_space() {
 if [ -n "$WAIT_PID" ]; then
     log "bundler-updater: waiting for pid $WAIT_PID to exit"
     waited=0
-    while kill -0 "$WAIT_PID" 2>/dev/null; do
+    while pid_alive "$WAIT_PID"; do
         waited=$((waited + 1))
         [ "$waited" -le "$WAIT_TIMEOUT" ] || { echo "bundler-updater: the target process did not exit in time." >&2; exit 3; }
         sleep 1

@@ -17,8 +17,9 @@ public static class Program
         }
         catch (WaitTimeoutException exception)
         {
-            Console.Error.WriteLine(
-                $"bundler-updater: {exception.Message} (the target process did not exit in time)");
+            // 两种超时（等宿主退出/等锁释放）文案各自随异常就位——统一追加后缀
+            // 会把锁超时污染成"宿主未退出"的误报。
+            Console.Error.WriteLine($"bundler-updater: {exception.Message}");
             return 3;
         }
         catch (Exception exception)

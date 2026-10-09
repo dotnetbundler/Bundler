@@ -19,7 +19,7 @@
 | 并发换包互斥 | 已实现 | UPDATE-3 | `<install>.bundler-lock` 锁件（owner pid）；第二实例等锁至 `--lock-timeout`（默认 30s）超时拒 rc=3；崩溃残留按 owner pid 存活判夺锁；AOT 与 `bundler-updater.sh` 同形互斥（跨实现实例互斥） |
 | 磁盘空间预检 | 已实现 | UPDATE-3/4 | UpdateClient 下载前按 feed 工件精确 size 对比目标卷剩余即拒；引导件 apply 前把跨卷两段式暂存/`--keep-payload` 复制/回滚复制按树体积估到目标槽所在卷，估不出只 WARN 不放行拒错——同卷原子 rename 不占空间不计 |
 | symlink/exec 位保留 | 已实现 | UPDATE-3 | `CopyTree` CreateSymbolicLink+GetUnixFileMode 透传；AppRun symlink+exec 位断言 |
-| install 路径叶链解析穿透 | 已实现 | UPDATE-3 | install 叶段为 junction/符号链接时双侧（AOT/`bundler-updater.sh`）解析穿透作用于目标（POSIX `norm_path` 同语义、win mountvol/junction 腿实证）——穿透是设计契约，不做"拒绝叶链"语义 |
+| install 路径叶链解析穿透 | 已实现 | UPDATE-3 | install 叶段为 junction/符号链接时双侧（AOT/`bundler-updater.sh`）解析穿透作用于目标（POSIX `norm_path` 同语义、win mountvol/junction 腿实证）——穿透是设计契约，不做"拒绝叶链"语义；指称分工：`UpdateClient` 持字面拼写（仅 `GetFullPath` 绝对化不解链，锁/备份/缓存等兄弟位按字面锚定），引导件 apply 时 `CanonicalPath` 逐段物理化再算派生路径——两侧指向同一安装，客户端不代引导件解链、引导件不信任未规范化输入 |
 | macOS 三项（codesign 验身份/剥 quarantine/`open -n` 重启） | 部分实现 | UPDATE-3 | quarantine 剥离+`open -n`+posix darwin 腿实证；同签名身份比对腿因无 Apple 证书挂 UPDATE-OI-02 |
 | 安装器重跑语义（nsis `/UPDATE` / msi major upgrade） | 已实现 | UPDATE-3 | win 宿主实证：NSIS 安装器链 6/6、MSI major upgrade 链路通过；不走换文件语义 |
 | `Bundler.Updater` 应用内库 | 已实现 | UPDATE-4 | `UpdateClient` 四动词：Check（版本比较+rid/format 槽位匹配）→Download→Verify→Apply/Rollback；netstandard2.0+net10.0 双目标，零依赖 |

@@ -761,10 +761,15 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 {
                     Log.LogMessage(MessageImportance.High, $"Bundler update: {path}");
                 }
-                if (feed.Count == 0)
+                if (artifacts.Count == 0)
                 {
-                    Log.LogWarning("Bundler: update is enabled but no format produced an update-adapted artifact; " +
-                        "no update feed was emitted — installed apps' sidecar will point at a non-existent feed.");
+                    Log.LogWarning("Bundler: update is enabled but no artifacts were produced; " +
+                        "no update feed was emitted — installed apps keep polling the last published feed.");
+                }
+                else if (!artifacts.Any(a => UpdateManifestEmitter.IsUpdateAdapted(a.Format)))
+                {
+                    Log.LogWarning("Bundler: update is enabled but no produced format is update-adapted; " +
+                        "the emitted feed carries no artifacts — clients read it as 'no update'.");
                 }
             }
 

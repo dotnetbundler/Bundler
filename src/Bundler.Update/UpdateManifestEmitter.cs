@@ -20,6 +20,9 @@ public static class UpdateManifestEmitter
         PackageFormat.AppImage, PackageFormat.Zip, PackageFormat.TarGz,
     ];
 
+    /// <summary>该格式产物是否进更新链——调用方用它区分"零产物"与"全非适配格式"。</summary>
+    public static bool IsUpdateAdapted(PackageFormat format) => CoveredFormats.Contains(format);
+
     public static string FeedFileName(string channel) => UpdateFeed.FeedFileName(channel);
 
     /// <summary>
@@ -131,10 +134,8 @@ public static class UpdateManifestEmitter
             }
         }
 
-        if (feed.Artifacts.Count == 0)
-        {
-            return produced;
-        }
+        // 零适配产物也照常发空清单+签名：已装应用的旁车按 feedUrl 轮询——
+        // 清单缺席会让客户端把"无适用更新"读成"配置坏了"（拉取/验签失败）。
         var feedPath = Path.Combine(configuration.OutputDirectory, FeedFileName(channel));
         using (var stream = File.Create(feedPath))
         {

@@ -8,7 +8,7 @@ namespace DotNet.Bundler.Updater;
 /// </summary>
 internal static class UstarReader
 {
-    internal static void Extract(Stream stream, string destinationRoot)
+    internal static void Extract(Stream stream, string destinationRoot, Action<string>? log = null)
     {
         var header = new byte[512];
         var longName = (string?)null;   // GNU 'L' 续名
@@ -47,7 +47,12 @@ internal static class UstarReader
                     SkipData(stream, size);
                     var linkPath = SafePath(destinationRoot, fullName);
                     Directory.CreateDirectory(Path.GetDirectoryName(linkPath)!);
-                    CreateSymlink(target, linkPath);
+                    // 与 zip 腿（RestoreSymlinkEntries）同款 WARN——链接还原失败
+                    // 静默降级会把载荷语义丢在看不见的地方。
+                    if (!CreateSymlink(target, linkPath))
+                    {
+                        log?.Invoke($"update: warning: failed to restore symlink '{fullName}' → '{target}'.");
+                    }
                     break;
                 }
                 case '5': // 目录
@@ -254,6 +259,12 @@ internal static class UstarReader
                     File.Delete(linkPath);
                 }
             }
+#if NET10_0_OR_GREATER
+            // net10 腿走托管 API，不再拉起 /bin/ln 子进程——POSIX 下链型
+            // （文件/目录）由目标实际型决定，File.CreateSymbolicLink 已够。
+            File.CreateSymbolicLink(linkPath, target);
+            return true;
+#else
             using var process = System.Diagnostics.Process.Start(
                 new System.Diagnostics.ProcessStartInfo("/bin/ln",
                     "-sfn " + ShellQuote(target) + " " + ShellQuote(linkPath))
@@ -268,10 +279,11 @@ internal static class UstarReader
                 return false;
             }
             return process.ExitCode == 0;
+#endif
         }
         catch (Exception)
         {
-            // 宿主无 ln（windows 裸环境）：链接退化为跳过——主要语义不受影响。
+            // 链接退化路径（无权限/宿主无 ln）：链接退化为跳过——主要语义不受影响。
             return false;
         }
     }

@@ -33,7 +33,7 @@ internal static class ArchiveExtractor
             using (var input = new FileStream(tarGzPath, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (var gzip = new GZipStream(input, CompressionMode.Decompress))
             {
-                UstarReader.Extract(gzip, staging);
+                UstarReader.Extract(gzip, staging, log);
             }
         }
         RemoveAppleDoubleTree(staging, log);
