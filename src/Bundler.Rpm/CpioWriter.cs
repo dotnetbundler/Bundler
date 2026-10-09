@@ -93,7 +93,21 @@ internal static class CpioWriter
         {
             if (dataStream is not null)
             {
-                dataStream.CopyTo(output);
+                // 按头里的 fileSize 封顶写：源文件构建期被改也不致
+                // 头体错位——短读即坏档，宁可当场抛。
+                var remaining = fileSize;
+                var buffer = new byte[81920];
+                while (remaining > 0)
+                {
+                    var read = dataStream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                    if (read == 0)
+                    {
+                        throw new EndOfStreamException(
+                            $"Cpio entry '{name}' stream ended after {fileSize - remaining} of {fileSize} bytes.");
+                    }
+                    output.Write(buffer, 0, read);
+                    remaining -= read;
+                }
             }
             else if (data.Length > 0)
             {

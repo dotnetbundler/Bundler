@@ -150,7 +150,7 @@ public static class BundleConfigurationValidator
             }
             catch (Exception error) when (error is IOException or InvalidOperationException
                 or System.Runtime.Serialization.SerializationException
-                or UnauthorizedAccessException)
+                or UnauthorizedAccessException or FormatException or ArgumentException)
             {
                 issues.Add(new("update.signingKeyFile",
                     $"Cannot be parsed as an ec-p256 key file: {error.Message}"));
