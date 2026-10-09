@@ -56,6 +56,11 @@ internal static class ApkPackageWriter
         ApkIdentity.ValidateNonNegativeInteger(buildDate, "BuildDate");
         var installRoot = "usr/lib/" + packageName;
         var binLink = settings.BinLink ?? packageName;
+        // 与 rpm/appimage 同规："none" 是关闭语义，不产字面 usr/bin/none 链接。
+        if (string.Equals(binLink, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            binLink = "";
+        }
 
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
 
@@ -321,6 +326,7 @@ internal static class ApkPackageWriter
     {
         var entries = new List<PayloadEntry>();
         var claimed = new HashSet<string>(StringComparer.Ordinal);
+        var directories = new HashSet<string>(StringComparer.Ordinal);
         var input = Path.GetFullPath(item.InputDirectory);
 
         void ClaimDirectory(string path)
@@ -331,12 +337,19 @@ internal static class ApkPackageWriter
                 var directory = string.Join("/", segments.Take(i));
                 if (claimed.Add(directory))
                 {
+                    directories.Add(directory);
                     entries.Add(new PayloadEntry
                     {
                         ArchivePath = directory,
                         Kind = TarEntryKind.Directory,
                         Mode = 493 /* 0755 */
                     });
+                }
+                // 前缀已被文件占位时静默跳过会产"父是文件、下有子项"的坏包——显式拒绝。
+                else if (!directories.Contains(directory))
+                {
+                    throw new InvalidOperationException(
+                        $"A payload file and a directory map to the same .apk path: '{directory}'.");
                 }
             }
         }
