@@ -5,8 +5,6 @@ name: release-verify
 
 on:
   workflow_dispatch:
-  push:
-    branches: [devin/ci-dry-run] # 临时：合入前最后一轮全量验证，合并前摘除
 
 permissions:
   contents: read
