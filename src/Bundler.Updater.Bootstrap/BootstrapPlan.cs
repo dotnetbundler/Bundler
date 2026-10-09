@@ -1367,8 +1367,10 @@ internal static class BootstrapPlan
     {
         var trimmed = path.TrimEnd('/', '\\');
         // 设备名空间前缀剥壳后按 Volume{…} 段判定——Path.GetPathRoot 认不出 NT 形态。
-        var core = trimmed[NtDevicePrefixLength(trimmed)..];
-        if (core.StartsWith("Volume{", StringComparison.OrdinalIgnoreCase))
+        // 无前缀的裸名 `Volume{release}` 只是普通相对目录，绝不能误判成卷根。
+        var prefixLength = NtDevicePrefixLength(trimmed);
+        var core = trimmed[prefixLength..];
+        if (prefixLength > 0 && core.StartsWith("Volume{", StringComparison.OrdinalIgnoreCase))
         {
             return !core.Contains('\\') && !core.Contains('/');
         }

@@ -244,6 +244,72 @@ internal static class UstarReader
     private static string ShellQuote(string value) =>
         "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
+    // 链接目标必须留在提取根内：绝对或 ../ 逃逸目标落地后，后续条目
+    // 虽过 SafePath 字面检查，写盘时会顺已物化的链接写出暂存区。
+    // 预扫描（ContainsEscapingLink）与创建期检查共用同一判定。
+    internal static bool LinkEscapesRoot(string target, string linkPath, string containmentRoot)
+    {
+        var resolvedTarget = Path.IsPathRooted(target)
+            ? Path.GetFullPath(target)
+            : Path.GetFullPath(Path.Combine(
+                Path.GetDirectoryName(linkPath) ?? string.Empty, target));
+        var rootPrefix = Path.GetFullPath(containmentRoot)
+            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var comparison = Path.DirectorySeparatorChar == '\\'
+            ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return !resolvedTarget.StartsWith(rootPrefix, comparison) &&
+            !string.Equals(resolvedTarget,
+                rootPrefix.TrimEnd(Path.DirectorySeparatorChar), comparison);
+    }
+
+    // 原生解包预扫：归档内任一符号链接解析出提取根→true。
+    // ditto/bsdtar 自行物化链且后续条目顺链写，只能整档退回 managed 防线。
+    internal static bool ContainsEscapingLink(Stream stream, string destinationRoot)
+    {
+        var header = new byte[512];
+        string? paxPath = null;
+        string? longName = null;
+        while (ReadBlock(stream, header))
+        {
+            if (IsZeroBlock(header))
+            {
+                break;
+            }
+            var name = ReadString(header, 0, 100);
+            var size = ReadOctal(header, 124, 12);
+            var type = (char)header[156];
+            var prefix = ReadString(header, 345, 155);
+            var fullName = paxPath ?? longName ??
+                (prefix.Length > 0 ? prefix + "/" + name : name);
+            paxPath = null;
+            longName = null;
+            switch (type)
+            {
+                case 'x':
+                    paxPath = ReadPaxPath(stream, size);
+                    break;
+                case 'L':
+                    longName = ReadDataString(stream, size);
+                    break;
+                case '2':
+                {
+                    var target = ReadString(header, 157, 100);
+                    SkipData(stream, size);
+                    if (LinkEscapesRoot(target, Path.Combine(destinationRoot, fullName),
+                            destinationRoot))
+                    {
+                        return true;
+                    }
+                    break;
+                }
+                default:
+                    SkipData(stream, size);
+                    break;
+            }
+        }
+        return false;
+    }
+
     private static bool TargetIsDirectory(string target, string linkPath)
     {
         var resolved = Path.IsPathRooted(target)
@@ -257,19 +323,7 @@ internal static class UstarReader
     {
         try
         {
-            // 链接目标必须留在提取根内：绝对或 ../ 逃逸目标落地后，后续条目
-            // 虽过 SafePath 字面检查，写盘时会顺已物化的链接写出暂存区。
-            var resolvedTarget = Path.IsPathRooted(target)
-                ? Path.GetFullPath(target)
-                : Path.GetFullPath(Path.Combine(
-                    Path.GetDirectoryName(linkPath) ?? string.Empty, target));
-            var rootPrefix = Path.GetFullPath(containmentRoot)
-                .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            var comparison = Path.DirectorySeparatorChar == '\\'
-                ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-            if (!resolvedTarget.StartsWith(rootPrefix, comparison) &&
-                !string.Equals(resolvedTarget,
-                    rootPrefix.TrimEnd(Path.DirectorySeparatorChar), comparison))
+            if (LinkEscapesRoot(target, linkPath, containmentRoot))
             {
                 return false;
             }
