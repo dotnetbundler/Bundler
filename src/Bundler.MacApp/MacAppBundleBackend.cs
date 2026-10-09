@@ -355,6 +355,16 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             var architectures = MachO.ReadArchitectures(file);
             if (architectures.Count == 0)
             {
+                // osx 通用载荷：签名表探测拦下非 Mach-O 的按架构散件
+                //（瘦 Mach-O 已在上面的架构校验拒掉；纯 IL 程序集放行）。
+                if (requiredArchitectures.Length > 1 &&
+                    UniversalCodeProbe.ForeignCodeDescription(file) is { } foreign)
+                {
+                    throw new InvalidDataException(
+                        $"Payload '{file}' is {foreign}; every code-bearing file in a universal " +
+                        $"{runtimeIdentifier} payload must be a fat Mach-O or " +
+                        "architecture-neutral content.");
+                }
                 continue;
             }
             var missing = requiredArchitectures.Where(

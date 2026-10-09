@@ -13,7 +13,11 @@ internal static class MacAppSigning
 {
     /// <summary>Bundle directories whose contents codesign treats as nested code.</summary>
     private static readonly string[] CodeDirectoryNames =
-        ["MacOS", "Frameworks", "PlugIns", "Helpers", "XPCServices", "Libraries"];
+        ["MacOS", "Frameworks", "PlugIns", "Helpers", "XPCServices", "Libraries", "SharedFrameworks"];
+
+    /// <summary>Apple 嵌套 bundle 形态：按 bundle 维度签名而不是按散文件签。</summary>
+    private static readonly string[] NestedBundleExtensions =
+        [".app", ".appex", ".bundle", ".framework", ".xpc"];
 
     internal static bool Configured(MacAppSigningConfiguration signing) =>
         signing.Identity is not null || !string.IsNullOrEmpty(signing.TemporaryCertificatePath);
@@ -100,12 +104,16 @@ internal static class MacAppSigning
             // signed before the main executable (which seals the whole bundle). codesign treats
             // anything under MacOS/Frameworks/... as nested code — including managed .dlls, which
             // are not Mach-O but still get rejected as unsigned subcomponents.
+            var nestedBundles = FindNestedBundles(contentsDirectory);
             var nestedFiles = Directory
                 .EnumerateFiles(contentsDirectory, "*", SearchOption.AllDirectories)
                 .Where(file => CodeDirectoryNames.Any(dir =>
                     file.StartsWith(
                         Path.Combine(contentsDirectory, dir) + Path.DirectorySeparatorChar,
                         StringComparison.Ordinal)))
+                // 嵌套 bundle 内的文件归该 bundle 的签名管，不按顶层散文件签。
+                .Where(file => !nestedBundles.Any(bundle =>
+                    file.StartsWith(bundle + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
                 .Where(file => !string.Equals(file, mainExecutablePath, StringComparison.Ordinal))
                 .OrderBy(file => file, StringComparer.Ordinal)
                 .ToList();
@@ -115,6 +123,11 @@ internal static class MacAppSigning
                 await MacProcessRunner.RunAsync("codesign",
                     CodesignArguments(identity, signing, entitlements: false, file),
                     context.WorkDirectory, cancellationToken);
+            }
+            foreach (var nested in nestedBundles)
+            {
+                await SignNestedBundleAsync(
+                    context, signing, identity, nested, cancellationToken);
             }
             await MacProcessRunner.RunAsync("codesign",
                 CodesignArguments(identity, signing, entitlements: true, mainExecutablePath),
@@ -157,6 +170,66 @@ internal static class MacAppSigning
         }
     }
 
+    /// <summary>嵌套 bundle（.app/.framework/…）的 inside-out 递归签名：内部散文件→更深的嵌套→bundle 根。</summary>
+    private static async Task SignNestedBundleAsync(
+        BundleBuildContext context, MacAppSigningConfiguration signing, string identity,
+        string bundlePath, CancellationToken cancellationToken)
+    {
+        var contentsDirectory = Path.Combine(bundlePath, "Contents");
+        if (Directory.Exists(contentsDirectory))
+        {
+            var deeper = FindNestedBundles(contentsDirectory);
+            var loose = Directory
+                .EnumerateFiles(contentsDirectory, "*", SearchOption.AllDirectories)
+                .Where(file => CodeDirectoryNames.Any(dir =>
+                    file.StartsWith(
+                        Path.Combine(contentsDirectory, dir) + Path.DirectorySeparatorChar,
+                        StringComparison.Ordinal)))
+                .Where(file => !deeper.Any(bundle =>
+                    file.StartsWith(bundle + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
+                .OrderBy(file => file, StringComparer.Ordinal)
+                .ToList();
+            foreach (var file in loose)
+            {
+                await MacProcessRunner.RunAsync("codesign",
+                    CodesignArguments(identity, signing, entitlements: false, file),
+                    context.WorkDirectory, cancellationToken);
+            }
+            foreach (var nested in deeper)
+            {
+                await SignNestedBundleAsync(context, signing, identity, nested, cancellationToken);
+            }
+        }
+        // bundle 根签名封住其主可执行与资源——不叠 entitlements（属主 app 的旋钮）。
+        await MacProcessRunner.RunAsync("codesign",
+            CodesignArguments(identity, signing, entitlements: false, bundlePath),
+            context.WorkDirectory, cancellationToken);
+    }
+
+    /// <summary>找出 Contents/ 下的顶层嵌套 bundle；更深一层的由递归自己发现。</summary>
+    private static IReadOnlyList<string> FindNestedBundles(string contentsDirectory)
+    {
+        var bundles = new List<string>();
+        var claimed = new List<string>();
+        foreach (var directory in Directory
+            .EnumerateDirectories(contentsDirectory, "*", SearchOption.AllDirectories)
+            .OrderBy(path => path, StringComparer.Ordinal))
+        {
+            if (claimed.Any(bundle =>
+                    directory.StartsWith(bundle + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+            if (NestedBundleExtensions.Any(extension =>
+                    directory.EndsWith(extension, StringComparison.OrdinalIgnoreCase)))
+            {
+                bundles.Add(directory);
+                claimed.Add(directory);
+            }
+        }
+        return bundles;
+    }
+
     /// <summary>codesign argument list; separated for test assertion.</summary>
     internal static IReadOnlyList<string> CodesignArguments(
         string identity, MacAppSigningConfiguration signing, bool entitlements, string target)
@@ -196,7 +269,7 @@ internal static class MacAppSigning
         {
             return ["--keychain-profile", profile];
         }
-        var keyPath = apiKeyPath ?? Env("APPLE_API_KEY_PATH") ?? Env("APPLE_API_KEY_PATH_UNSET");
+        var keyPath = apiKeyPath ?? Env("APPLE_API_KEY_PATH");
         var keyId = apiKeyId ?? Env("APPLE_API_KEY");
         var issuer = apiIssuer ?? Env("APPLE_API_ISSUER");
         if (keyPath is { Length: > 0 } || keyId is { Length: > 0 } || issuer is { Length: > 0 })
@@ -368,10 +441,48 @@ internal static class MacAppSigning
             await MacProcessRunner.RunAsync(
                 "security", ["unlock-keychain", "-p", password, path],
                 workDirectory, cancellationToken);
-            await MacProcessRunner.RunAsync(
-                "security", ["import", certificatePath, "-k", path, "-P", certificatePassword,
-                    "-T", "/usr/bin/codesign"],
-                workDirectory, cancellationToken);
+            // p12 口令不直接进 argv：先经 openssl 转成无口令 PEM 再导入；
+            // openssl 缺席/失败退回 `import -P`（口令暴露于 ps，业界通行折中）。
+            var imported = false;
+            var pemPath = System.IO.Path.Combine(
+                workDirectory, $"bundler-cert-{Guid.NewGuid():N}.pem");
+            var passwordFile = System.IO.Path.Combine(
+                workDirectory, $"bundler-cert-{Guid.NewGuid():N}.pass");
+            try
+            {
+                File.WriteAllText(passwordFile, certificatePassword);
+                var unwrapped = await MacProcessRunner.TryRunAsync(
+                    "openssl",
+                    ["pkcs12", "-in", certificatePath, "-nodes",
+                     "-passin", "file:" + passwordFile, "-out", pemPath],
+                    workDirectory, cancellationToken);
+                if (unwrapped is { ExitCode: 0 } && File.Exists(pemPath))
+                {
+                    await MacProcessRunner.RunAsync(
+                        "security", ["import", pemPath, "-k", path, "-T", "/usr/bin/codesign"],
+                        workDirectory, cancellationToken);
+                    imported = true;
+                }
+            }
+            finally
+            {
+                // 中间产物含明文私钥与口令文件，立即清除。
+                if (File.Exists(pemPath))
+                {
+                    File.Delete(pemPath);
+                }
+                if (File.Exists(passwordFile))
+                {
+                    File.Delete(passwordFile);
+                }
+            }
+            if (!imported)
+            {
+                await MacProcessRunner.RunAsync(
+                    "security", ["import", certificatePath, "-k", path, "-P", certificatePassword,
+                        "-T", "/usr/bin/codesign"],
+                    workDirectory, cancellationToken);
+            }
             await MacProcessRunner.RunAsync(
                 "security", ["set-key-partition-list", "-S", "apple-tool:,apple:",
                     "-s", "-k", password, path],

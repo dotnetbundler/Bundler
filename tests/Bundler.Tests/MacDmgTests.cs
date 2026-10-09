@@ -712,6 +712,81 @@ public static class MacDmgTests
         }
     }
 
+    // R2: SkipWindowLayout（-nobrowse）下不跑 Finder 布局，背景图不再拷入成孤儿文件。
+    [Fact]
+    static async Task SkipWindowLayoutSkipsBackgroundCopy()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var background = Path.Combine(input, "bg.png");
+        File.WriteAllBytes(background, [137, 80, 78, 71]);
+        var requests = new List<MacDmgProcessRunner.Request>();
+        var warnings = new List<string>();
+        var mounts = new List<string>();
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = MacDmgProcessRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        MacDmgProcessRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            if (request.Executable == "hdiutil" && request.Arguments.Contains("attach"))
+            {
+                CreateMountPoint(request);
+                var args = request.Arguments.ToList();
+                mounts.Add(args[args.IndexOf("-mountpoint") + 1]);
+            }
+            var image = request.Arguments[request.Arguments.Count - 1];
+            if (image.EndsWith(".dmg", StringComparison.Ordinal))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(image)!);
+                File.WriteAllText(image, "dmg");
+            }
+            return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacDmgBundler(
+                    dmgConfiguration: new MacDmgBundleConfiguration
+                    {
+                        SkipWindowLayout = true, BackgroundFile = background
+                    },
+                    appConfiguration: null,
+                    options: new MacDmgBundlerOptions { Logger = new ListLogger(warnings) })
+                .BuildAsync(DmgConfiguration(input, output));
+            Assert.NotEmpty(mounts);
+            Assert.All(mounts, mount =>
+                Assert.False(Directory.Exists(Path.Combine(mount, ".background"))));
+            Assert.Contains(warnings, message => message.Contains("BackgroundFile"));
+        }
+        finally
+        {
+            MacDmgProcessRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    // R2: CopyTree 遇目录符号链接环显式报错，不再递归失控。
+    [Fact]
+    static void CopyTreeRejectsSymlinkLoop()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "requires symlink support");
+        var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var destination = root + ".out";
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "sub"));
+            Directory.CreateSymbolicLink(Path.Combine(root, "sub", "loop"), root);
+            var error = Assert.Throws<InvalidDataException>(
+                () => MacDmgBundleBackend.CopyTree(root, destination, NullBundleLogger.Instance));
+            Assert.Contains("symlink loop", error.Message);
+        }
+        finally
+        {
+            Cleanup(root, destination);
+        }
+    }
+
     static void CreateMountPoint(MacDmgProcessRunner.Request request)
     {
         var index = request.Arguments.ToList().IndexOf("-mountpoint");

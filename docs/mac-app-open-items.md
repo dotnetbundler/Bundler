@@ -24,7 +24,8 @@
 | MAC-APP-OI-05 | MAC-APP-4 | 证书撤销/到期/时间戳边界试验环境（可抛弃证书与宿主） | MAC-APP-MT-08、10 记录 |
 | MAC-APP-OI-06 | MAC-APP-2 | `.icon`/`*.car` 管线验收环境：Xcode≥26 `actool`（本机已具备，列此以覆盖“无 Xcode 宿主”降级分支的反向验证） | MAC-APP-2 降级分支测试记录 + MT-09 访达图标核对 |
 | MAC-APP-OI-07 | MAC-APP-3 | provisioning profile（universal links/受管 entitlement 场景需要 `embedded.provisionprofile`） | 如需启用 universal links 的验收记录；普通 deep link 不受阻 |
-| MAC-APP-OI-08 | 待定 | osx 通用载荷"预合并旁路"防呆评估 | 结论与实现取舍记录；属开发者侧防呆、非环境缺口 |
+| MAC-APP-OI-08 | 已裁决（2026-10-09） | osx 通用载荷"预合并旁路"防呆评估 | 采方案①签名表探测，已实现 |
 > MAC-APP-OI-08 详情：单目录输入走 `bundle --rid osx` 时，`MacAppBundleBackend.InspectPayload` 只查 Mach-O 切片，非 Mach-O 文件不验架构——可手工 lipo 一个 fat apphost 夹带按架构编的散件（如 R2R 程序集）绕过，产出"fat 头可过、实跑 0x8007000B"的坏件（2026-10-01 联合测试实见）。
 > 候选方案：①通用签名表探测（ELF/native PE/thin Mach-O/PE+RTR），Abstractions 放嗅探、Core 管线 rid=osx 统一调用，FDD 纯 IL 放行；②osx 通用只收合并器产出目录、拒收预合并输入（砍掉契约允许的自产 fat+FDD 用法）。
 > 倾向 ①；与使用方契约口径一并后期裁决。
+> 结论（2026-10-09 用户裁决）：采方案①——rid=osx 载荷逐文件嗅探签名，ELF/原生 PE/ReadyToRun 程序集显式拒收，瘦 Mach-O 由既有架构校验拦，FDD 纯 IL 放行；落于 `UniversalCodeProbe` + `MacAppBundleBackend.InspectPayload`。

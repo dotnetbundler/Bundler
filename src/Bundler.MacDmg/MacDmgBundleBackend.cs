@@ -97,9 +97,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             }
 
             // Layout/branding extras need headroom that -srcfolder auto-sizing doesn't leave.
-            if (!settings.SkipWindowLayout ||
-                settings.BackgroundFile is not null ||
-                settings.VolumeIconFile is not null)
+            if (!settings.SkipWindowLayout || settings.VolumeIconFile is not null)
             {
                 // Relative "+64m" is rejected on -srcfolder-sized images; grow via -limits math.
                 var limits = await MacDmgProcessRunner.TryRunAsync(
@@ -225,29 +223,36 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         CancellationToken cancellationToken,
         IBundleLogger logger)
     {
-        // Window background goes into the hidden .background folder on the volume.
         string? backgroundItemName = null;
-        if (settings.BackgroundFile is { Length: > 0 } backgroundFile)
-        {
-            if (!File.Exists(backgroundFile))
-            {
-                throw new FileNotFoundException(
-                    $"The .dmg background image does not exist: {backgroundFile}", backgroundFile);
-            }
-            var backgroundDirectory = Path.Combine(mountDirectory, ".background");
-            Directory.CreateDirectory(backgroundDirectory);
-            backgroundItemName = Path.GetFileName(backgroundFile);
-            File.Copy(backgroundFile, Path.Combine(backgroundDirectory, backgroundItemName), overwrite: true);
-        }
-
         if (!settings.SkipWindowLayout)
         {
+            // Window background goes into the hidden .background folder on the volume.
+            if (settings.BackgroundFile is { Length: > 0 } backgroundFile)
+            {
+                if (!File.Exists(backgroundFile))
+                {
+                    throw new FileNotFoundException(
+                        $"The .dmg background image does not exist: {backgroundFile}", backgroundFile);
+                }
+                var backgroundDirectory = Path.Combine(mountDirectory, ".background");
+                Directory.CreateDirectory(backgroundDirectory);
+                backgroundItemName = Path.GetFileName(backgroundFile);
+                File.Copy(backgroundFile, Path.Combine(backgroundDirectory, backgroundItemName), overwrite: true);
+            }
             await ApplyWindowLayoutAsync(
                 mountDirectory, applicationName, backgroundItemName,
                 workDirectory, cancellationToken, logger);
         }
         else
         {
+            // -nobrowse 挂载不跑 Finder 布局，背景图拷进去只会成无人引用的孤儿文件。
+            if (settings.BackgroundFile is { Length: > 0 })
+            {
+                logger.Log(
+                    BundleLogLevel.Warning,
+                    "BackgroundFile is ignored: SkipWindowLayout attaches the volume -nobrowse " +
+                    "and the Finder layout pass that references .background/ never runs.");
+            }
             logger.Log(
                 BundleLogLevel.Information,
                 "Skipping the Finder window layout (SkipWindowLayout).");
@@ -345,10 +350,10 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         if (backgroundItemName is not null)
         {
             script.AppendLine(
-                $"    set background picture of theViewOptions to file \".background:{backgroundItemName}\"");
+                $"    set background picture of theViewOptions to file \".background:{EscapeAppleScript(backgroundItemName)}\"");
         }
         script.AppendLine(
-            $"    set position of item \"{applicationName}\" of container window to " +
+            $"    set position of item \"{EscapeAppleScript(applicationName)}\" of container window to " +
             $"{{{settings.AppIconX}, {settings.AppIconY}}}");
         script.AppendLine(
             "    set position of item \"Applications\" of container window to " +
@@ -468,8 +473,14 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         }
     }
 
-    private static void CopyTree(string source, string destination, IBundleLogger log)
+    internal static void CopyTree(string source, string destination, IBundleLogger log, int depth = 0)
     {
+        // 目录符号链接环会让递归失控——深度封顶显式报错。
+        if (depth > 64)
+        {
+            throw new InvalidDataException(
+                "Directory nesting too deep inside the .dmg payload (possible symlink loop): " + source);
+        }
         Directory.CreateDirectory(destination);
         foreach (var file in Directory.GetFiles(source))
         {
@@ -483,7 +494,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         }
         foreach (var directory in Directory.GetDirectories(source))
         {
-            CopyTree(directory, Path.Combine(destination, Path.GetFileName(directory)), log);
+            CopyTree(directory, Path.Combine(destination, Path.GetFileName(directory)), log, depth + 1);
         }
     }
 }

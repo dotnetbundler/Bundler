@@ -49,7 +49,10 @@ internal static class MacAppDesktopIntegration
             var entry = settings.DocumentTypes[index];
             var display = $"documentTypes[{index}]";
             var extensions = NormalizeExtensions(entry.Extensions, display, claimed);
-            var matches = MatchingSharedIndexes(bundle.FileAssociations, extensions, association => association.Extensions);
+            // 同一 shared 项只归第一个命中的 docType——多份合并会让扩展名重复进多个
+            // CFBundleDocumentTypes，LaunchServices 归属变模糊。
+            var matches = MatchingSharedIndexes(bundle.FileAssociations, extensions,
+                association => association.Extensions).Where(index => !consumed[index]);
             if (entry.ContentTypes.Count == 0 && extensions.Length == 0 &&
                 entry.ExportedTypeIdentifier is null)
             {
@@ -120,7 +123,8 @@ internal static class MacAppDesktopIntegration
             {
                 throw new ArgumentException($"{display}: at least one URL scheme is required.");
             }
-            var matches = MatchingSharedIndexes(bundle.UrlProtocols, schemes, protocol => protocol.Schemes);
+            var matches = MatchingSharedIndexes(bundle.UrlProtocols, schemes,
+                protocol => protocol.Schemes).Where(index => !consumed[index]);
             string? name = entry.Name;
             foreach (var sharedIndex in matches)
             {

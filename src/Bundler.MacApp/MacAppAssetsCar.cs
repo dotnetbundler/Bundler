@@ -227,16 +227,22 @@ internal static class MacAppAssetsCar
         return end < 0 ? null : jsonObject.Substring(position + 1, end - position - 1);
     }
 
-    private static void CopyDirectory(string source, string destination)
+    private static void CopyDirectory(string source, string destination, int depth = 0)
     {
-        Directory.CreateDirectory(destination);
-        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        // 目录符号链接环会让递归失控——深度封顶显式报错。
+        if (depth > 64)
         {
-            Directory.CreateDirectory(Path.Combine(destination, directory.Substring(source.Length).TrimStart('/')));
+            throw new InvalidDataException(
+                "Directory nesting too deep inside the .icon input (possible symlink loop): " + source);
         }
-        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        Directory.CreateDirectory(destination);
+        foreach (var directory in Directory.EnumerateDirectories(source))
         {
-            File.Copy(file, Path.Combine(destination, file.Substring(source.Length).TrimStart('/')));
+            CopyDirectory(directory, Path.Combine(destination, Path.GetFileName(directory)), depth + 1);
+        }
+        foreach (var file in Directory.EnumerateFiles(source))
+        {
+            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
         }
     }
 }
