@@ -79,7 +79,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                     break;
                 }
                 catch (InvalidOperationException ex)
-                    when (attempt < 5 && ex.Message.Contains("Resource busy", StringComparison.OrdinalIgnoreCase))
+                    when (attempt < 5 && ex.Message.IndexOf("Resource busy", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     await Task.Delay(1000 * attempt, cancellationToken);
                 }
