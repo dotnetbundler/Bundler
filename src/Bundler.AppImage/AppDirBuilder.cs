@@ -40,10 +40,15 @@ internal static class AppDirBuilder
             ? AppImageIdentity.NormalizeArchitecture(override_)
             : AppImageIdentity.EnvironmentArchitecture(item.Target.RuntimeIdentifier);
 
+        // installRoot/mainExecutable 都会插值进 AppRun 的双引号 shell 行——
+        // 与 binLink 同规净化：空白、引号、$、`、\ 一律拒（$( )/反引号在运行时仍展开）。
+        static bool HasUnsafeShellChar(string segment) =>
+            segment.Any(c => char.IsWhiteSpace(c) || c is '"' or '\'' or '$' or '`' or '\\');
         var installRoot = (settings.InstallRoot ?? "usr/lib/" + packageName)
             .Replace('\\', '/').Trim('/');
         if (installRoot.Length == 0 ||
-            installRoot.Split('/').Any(segment => segment is "" or "." or "..") ||
+            installRoot.Split('/').Any(segment =>
+                segment is "" or "." or ".." || HasUnsafeShellChar(segment)) ||
             (settings.InstallRoot is { } explicit_ && explicit_.TrimStart().StartsWith("/")))
         {
             throw new ArgumentException(
@@ -56,9 +61,13 @@ internal static class AppDirBuilder
             binLink = "";
         }
         var mainExecutable = item.MainExecutable.Replace('\\', '/');
-        var mainPosixName = mainExecutable.Contains('/')
-            ? mainExecutable.Substring(mainExecutable.LastIndexOf('/') + 1)
-            : mainExecutable;
+        if (mainExecutable.Length == 0 ||
+            mainExecutable.Split('/').Any(segment =>
+                segment is "" or "." or ".." || HasUnsafeShellChar(segment)))
+        {
+            throw new ArgumentException(
+                $"The main executable must be a relative path without shell metacharacters, got '{item.MainExecutable}'.");
+        }
         // MainExecutable 可以嵌套子目录：存在性/chmod/Exec 都用完整相对路径。
 
         var appDir = Path.Combine(workDirectory, packageName + ".AppDir");
@@ -71,12 +80,19 @@ internal static class AppDirBuilder
         // usr/lib/<pkg>/ payload, then usr/bin/<link> → ../lib/<pkg>/<main>.
         var input = item.InputDirectory;
         var payloadRoot = Path.Combine(appDir, installRoot.Replace('/', Path.DirectorySeparatorChar));
-        CopyTree(input, payloadRoot, logger);
-        UpdateIdentitySidecar.WriteIfEnabled(
-            payloadRoot, bundle.Update, PackageFormat.AppImage, item.Target.RuntimeIdentifier);
+        // 已落载荷的宿主路径登记册：Resources 撞名一律显式拒绝，不静默覆盖。
+        var claimed = new HashSet<string>(StringComparer.Ordinal);
+        CopyTree(input, payloadRoot, logger, claimed);
         if (bundle.Update is { } update)
         {
-            UpdateBootstrapper.Inject(payloadRoot, update, item.Target.RuntimeIdentifier);
+            UpdateIdentitySidecar.WriteIfEnabled(
+                payloadRoot, update, PackageFormat.AppImage, item.Target.RuntimeIdentifier);
+            claimed.Add(Path.GetFullPath(
+                Path.Combine(payloadRoot, UpdateIdentitySidecar.FileName)));
+            if (UpdateBootstrapper.Inject(payloadRoot, update, item.Target.RuntimeIdentifier) is { } injected)
+            {
+                claimed.Add(Path.GetFullPath(Path.Combine(payloadRoot, injected)));
+            }
         }
         var mainHostPath = Path.Combine(
             payloadRoot, mainExecutable.Replace('/', Path.DirectorySeparatorChar));
@@ -99,10 +115,16 @@ internal static class AppDirBuilder
             var destinationDir = Path.Combine(payloadRoot, target.Replace('/', Path.DirectorySeparatorChar));
             if (Directory.Exists(source))
             {
-                CopyTree(source, destinationDir, logger);
+                CopyTree(source, destinationDir, logger, claimed);
             }
             else if (File.Exists(source))
             {
+                if (Directory.Exists(destinationDir) ||
+                    !claimed.Add(Path.GetFullPath(destinationDir)))
+                {
+                    throw new InvalidOperationException(
+                        $"The resource target '{resource.TargetPath}' collides with an existing payload entry.");
+                }
                 Directory.CreateDirectory(Path.GetDirectoryName(destinationDir)!);
                 File.Copy(source, destinationDir, overwrite: true);
             }
@@ -131,7 +153,7 @@ internal static class AppDirBuilder
         // AppImage always emits Icon= because an icon is guaranteed (default
         // fallback below); AlwaysEmitIcon keeps deb/rpm behavior unchanged.
         var staged = FreedesktopFiles.Collect(
-            bundle, packageName, "/" + installRoot, mainPosixName, binLink,
+            bundle, packageName, "/" + installRoot, mainExecutable, binLink,
             new FreedesktopFiles.Options
             {
                 DesktopFile = settings.DesktopFile,
@@ -246,7 +268,9 @@ internal static class AppDirBuilder
         };
     }
 
-    private static void CopyTree(string source, string destination, IBundleLogger log)
+    private static void CopyTree(
+        string source, string destination, IBundleLogger log,
+        HashSet<string>? claimed = null)
     {
         Directory.CreateDirectory(destination);
         // 手工递归：AllDirectories 枚举会穿透目录链接，祖先链接导致重复展开。
@@ -261,7 +285,7 @@ internal static class AppDirBuilder
                     $"Skipping directory symlink: {directory}");
                 continue;
             }
-            CopyTree(directory, dirTarget, log);
+            CopyTree(directory, dirTarget, log, claimed);
         }
         foreach (var file in Directory.GetFiles(source).OrderBy(f => f, StringComparer.Ordinal))
         {
@@ -274,6 +298,11 @@ internal static class AppDirBuilder
             }
             var target = Path.Combine(
                 destination, PathRelative(source, file));
+            if (claimed is not null && !claimed.Add(Path.GetFullPath(target)))
+            {
+                throw new InvalidOperationException(
+                    $"A resource file collides with an existing payload entry: '{Path.GetFullPath(target)}'.");
+            }
             File.Copy(file, target, overwrite: true);
         }
     }
