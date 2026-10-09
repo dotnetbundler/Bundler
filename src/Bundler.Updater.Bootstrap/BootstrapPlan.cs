@@ -48,9 +48,11 @@ internal static class BootstrapPlan
         var backupDir = options.BackupDirectory is { Length: > 0 }
             ? CanonicalParentPath(options.BackupDirectory)
                 ?? throw new UsageException($"backup path '{options.BackupDirectory}' resolves to a cyclic link.")
-            : IsVolumeRoot(installDir)
+            // 原文先验一次：`\?\Volume{GUID}\` 这类三字符 NT 前缀经 GetFullPath
+            // 折成 `C:\?\…` 后已失真，规范化拼写再也认不出卷根，须两级各验。
+            : IsVolumeRoot(options.InstallDirectory) || IsVolumeRoot(installDir)
                 ? throw new UsageException(
-                    $"install directory '{installDir}' is a volume root — no sibling location exists for the default backup slot; pass --backup-dir explicitly.")
+                    $"install directory '{options.InstallDirectory}' is a volume root — no sibling location exists for the default backup slot; pass --backup-dir explicitly.")
                 : installDir.TrimEnd('/', '\\') + ".bundler-backup";
         // 关系判一律用全物理名——默认备份位同样可能是预置叶链，
         // 字面拼写与 retainCmp 的物理名对不上号会同址逃逸（换包移链后保留操作删新备份）。

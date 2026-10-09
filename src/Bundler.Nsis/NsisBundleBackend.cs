@@ -1115,11 +1115,13 @@ internal sealed class NsisBundleBackend(
             var directory = pending.Pop();
             foreach (var path in Directory.EnumerateFileSystemEntries(directory))
             {
-                RejectReparsePoint(path, "Bundle input");
+                // 纯字符串名校验先于 GetAttributes——NUL/尾随点这类病态名上
+                // GetAttributes 直接抛原生 Win32 错，干净拒绝必须先执行。
                 if (WindowsFileNames.IsInvalidName(Path.GetFileName(path)))
                 {
                     throw new InvalidDataException($"Bundle input contains a name that is not valid on Windows: {path}");
                 }
+                RejectReparsePoint(path, "Bundle input");
                 if (Directory.Exists(path))
                 {
                     directories.Add(path);
