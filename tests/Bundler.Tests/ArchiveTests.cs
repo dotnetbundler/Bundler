@@ -25,6 +25,28 @@ public static class ArchiveTests
         }
     }
 
+    // ArchiveName 与 PackageName 同字符集：':'与空白同样破坏归档顶层目录名。
+    [Fact]
+    static void RejectsUnsafeArchiveName()
+    {
+        var input = CreateInputDirectory();
+        try
+        {
+            foreach (var bad in new[] { "a:b", "a b", "tail\tname" })
+            {
+                AssertThrows<ArgumentException>(
+                    () => new ArchiveBundler(new ArchiveBundleConfiguration { ArchiveName = bad })
+                        .BuildAsync(Configuration(input, "", formats: [PackageFormat.Zip]))
+                        .GetAwaiter().GetResult(),
+                    $"unsafe archive stem '{bad}' must be rejected");
+            }
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
     [Fact]
     static void WritesZip()
     {

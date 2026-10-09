@@ -25,8 +25,9 @@ internal static class ArchiveIdentity
         ArchiveBundleConfiguration settings, string packageName, string version, BundlePlanItem item)
     {
         var stem = settings.ArchiveName ?? $"{packageName}-{version}-{item.Target.RuntimeIdentifier}";
-        if (stem.Length == 0 || stem.Contains('/') || stem.Contains('\\') ||
-            stem is "." or ".." || stem.Contains(".."))
+        // 与 PackageName 同字符集：':'与空白同样会破坏归档顶层目录名。
+        if (stem.Length == 0 || stem is "." or ".." || stem.Contains("..") ||
+            stem.Any(c => c is '/' or '\\' or ':' || char.IsWhiteSpace(c)))
         {
             throw new ArgumentException(
                 $"ArchiveName must be a single safe path segment; got '{stem}'.");

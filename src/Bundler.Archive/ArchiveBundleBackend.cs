@@ -12,7 +12,6 @@ namespace DotNet.Bundler.Archive;
 /// </summary>
 internal sealed class ArchiveBundleBackend(
     ArchiveBundleConfiguration settings,
-    ArchiveBundlerOptions options,
     DesktopOperatingSystem operatingSystem,
     PackageFormat format) : IBundleBackend
 {
@@ -106,7 +105,6 @@ internal sealed class ArchiveBundleBackend(
             throw;
         }
         WriteSha256Sidecar(outputPath);
-        _ = options;
         return Task.FromResult<IReadOnlyList<BundleArtifact>>(
             [new BundleArtifact(format, context.Item.Target.RuntimeIdentifier, outputPath)]);
     }

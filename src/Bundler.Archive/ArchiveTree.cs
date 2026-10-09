@@ -82,17 +82,25 @@ internal static class ArchiveTree
         {
             var rel = relativePrefix + Path.GetFileName(dir);
             // 目录符号链接按链接本体归档：物化会复制两遍，指向祖先的链接会无界递归。
-            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0 &&
-                UnixLinks.ReadLink(dir) is { Length: > 0 } dirTarget)
+            // readlink 取不到目标的 reparse 点（Windows junction 等）同样不可展开——跳过。
+            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0)
             {
-                entries.Add(new Entry
+                if (UnixLinks.ReadLink(dir) is { Length: > 0 } dirTarget)
                 {
-                    ArchivePath = rel,
-                    Kind = TarEntryKind.Symlink,
-                    Mode = 511 /* 0777 */,
-                    SourcePath = dir,
-                    LinkTarget = dirTarget
-                });
+                    entries.Add(new Entry
+                    {
+                        ArchivePath = rel,
+                        Kind = TarEntryKind.Symlink,
+                        Mode = 511 /* 0777 */,
+                        SourcePath = dir,
+                        LinkTarget = dirTarget
+                    });
+                }
+                else
+                {
+                    log.Log(BundleLogLevel.Warning,
+                        $"Skipping directory reparse point with an unreadable target: {dir}");
+                }
                 continue;
             }
             entries.Add(new Entry
