@@ -56,8 +56,16 @@ try {
         $shell = New-Object -ComObject Shell.Application
         $shell.Namespace($lnk.DirectoryName).ParseName($lnk.Name).Verbs() |
             Where-Object Name -match "pin|固定" | ForEach-Object { $_.DoIt() }
+        # 落点断言（无人值守也能判）：User Pinned\TaskBar 快捷方式出现
+        $pinDir = "$env:APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"
+        $pinHit = $false
+        foreach ($i in 1..15) {
+            Start-Sleep -Seconds 1
+            if (Get-ChildItem $pinDir -Filter *.lnk -ErrorAction SilentlyContinue |
+                Where-Object Name -match "Bundler") { $pinHit = $true; break }
+        }
         Wait-Human "检查任务栏是否出现 HelloBundlerApp 图标"
-        Note "任务栏 pin(人工确认)" $true "build=$build verb=$verb"
+        Note "任务栏 pin 落点" $pinHit "build=$build verb=$verb dir=$pinDir"
     }
 
     # 卸载后 pin 清理语义：快捷方式移除。
