@@ -284,13 +284,8 @@ public static class CliProgram
         {
             foreach (var issue in validation.Issues)
             {
-                // rid×format 矩阵不兼容（"X is not supported for Y"）不进聚合配置错：
-                // 该格式在逐格式趟仍会被宿主门（PNSE→rc=1）或后端 Validate 拦下，
-                // 保持"宿主不可用=逐格式容错"的既定退出码契约。
-                if (issue.Message.Contains(" is not supported for ", StringComparison.Ordinal))
-                {
-                    continue;
-                }
+                // rid×format 矩阵不兼容（"X is not supported for Y"）属显式请求的
+                // 用法错——归聚合配置错 rc=2；宿主门禁（PNSE）才走逐格式容错 rc=1。
                 validationErrors.Add((issue.Path, issue.Message));
             }
         }
@@ -431,6 +426,7 @@ public static class CliProgram
         writer.WriteLine("      (--input-dir repeated merges the dirs into a universal payload, e.g. osx-x64 + osx-arm64)");
         writer.WriteLine("      --product-name <name> --identifier <id> --package-version <ver>");
         writer.WriteLine("      [--output-dir <dir>] [--main-executable <name>] [--json] [--quiet|--verbose]");
+        writer.WriteLine("  Paths in --config resolve relative to the config file; paths given on the command line resolve relative to the working directory.");
         writer.WriteLine("  bundler update-keygen --key-file <path>   generate an update signing key; prints key path and public key");
         writer.WriteLine("  bundler --version | --help");
         writer.WriteLine("Formats: nsis"

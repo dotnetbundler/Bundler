@@ -380,9 +380,10 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
             var result = ProcessRunner.Run(native,
                 ["bundle", .. _f.BaseArgs(_f.Ws.Combine($"aot-{fmt}")), "--formats", fmt],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(5) });
-            Assert.Equal(1, result.ExitCode);
+            // 显式请求矩阵不兼容格式 = 用法错 rc=2（宿主门禁 PNSE 才走 rc=1）。
+            Assert.Equal(2, result.ExitCode);
             Assert.Matches(
-                new System.Text.RegularExpressions.Regex(@"requires a (Windows|macOS) host"),
+                new System.Text.RegularExpressions.Regex("not supported for linux-x64"),
                 result.StdErr);
         }
     }
