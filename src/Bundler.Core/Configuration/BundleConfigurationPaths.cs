@@ -25,32 +25,32 @@ internal static class BundleConfigurationPaths
             Copyright = source.Copyright,
             LicenseFile = source.LicenseFile is null ? null : Resolve(baseDirectory, source.LicenseFile),
             OutputDirectory = Resolve(baseDirectory, source.OutputDirectory),
-            Icons = source.Icons.Select(path => Resolve(baseDirectory, path)).ToArray(),
-            Resources = source.Resources.Select(resource => new BundleResourceConfiguration
+            Icons = source.Icons?.Select(path => Resolve(baseDirectory, path)).ToArray() ?? [],
+            Resources = source.Resources?.Select(resource => new BundleResourceConfiguration
             {
                 Source = Resolve(baseDirectory, resource.Source),
                 TargetPath = resource.TargetPath
-            }).ToArray(),
-            FileAssociations = source.FileAssociations.Select(association => new BundleFileAssociationConfiguration
+            }).ToArray() ?? [],
+            FileAssociations = source.FileAssociations?.Select(association => new BundleFileAssociationConfiguration
             {
-                Extensions = association.Extensions.ToArray(),
+                Extensions = association.Extensions?.ToArray() ?? [],
                 Name = association.Name,
                 Description = association.Description,
                 MimeType = association.MimeType
-            }).ToArray(),
-            UrlProtocols = source.UrlProtocols.Select(protocol => new BundleUrlProtocolConfiguration
+            }).ToArray() ?? [],
+            UrlProtocols = source.UrlProtocols?.Select(protocol => new BundleUrlProtocolConfiguration
             {
-                Schemes = protocol.Schemes.ToArray(),
+                Schemes = protocol.Schemes?.ToArray() ?? [],
                 Name = protocol.Name
-            }).ToArray(),
-            Targets = source.Targets.Select(target => new BundleTargetConfiguration
+            }).ToArray() ?? [],
+            Targets = source.Targets?.Select(target => new BundleTargetConfiguration
             {
                 RuntimeIdentifier = target.RuntimeIdentifier,
                 InputDirectory = Resolve(baseDirectory, target.InputDirectory),
                 MainExecutable = target.MainExecutable,
-                SigningFiles = target.SigningFiles.ToArray(),
-                Formats = target.Formats
-            }).ToArray(),
+                SigningFiles = target.SigningFiles?.ToArray() ?? [],
+                Formats = target.Formats ?? []
+            }).ToArray() ?? [],
             // update 节必须随加载走：签名密钥与引导件目录同样按配置目录解析。
             Update = source.Update is null ? null : new UpdateBundleConfiguration
             {

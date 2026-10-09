@@ -457,6 +457,13 @@ internal static class CliConfig
                     .Select(f => (JsonNode?)JsonValue.Create(FormatName(f))).ToArray());
         }
 
+        // 显式 null 视为未写：剥掉后让 defaults 基线生效——与原手写物化语义一致
+        // （"icons": null 曾等于 []，"outputDirectory": null 曾等于 "bundler-out"）。
+        foreach (var key in document.Where(pair => pair.Value is null).Select(pair => pair.Key).ToArray())
+        {
+            document.Remove(key);
+        }
+
         // 共享字段与 Core 的加载管线同一来源：反序列化模型 + 共用
         // BundleConfigurationPaths.Resolve，新增共享字段只改模型一侧。
         var bundle = BundleConfigurationPaths.Resolve(
