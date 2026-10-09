@@ -474,6 +474,28 @@ public static class RpmTests
         }
     }
 
+    // rpm FILESIZES 与 cpio newc 都是 int32 尺寸字段：超 2GiB 截断产坏包，显式拒绝。
+    [Fact]
+    static void RejectsPayloadFileOverTwoGiB()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            using (var stream = new FileStream(Path.Combine(input, "big.bin"), FileMode.Create))
+            {
+                stream.SetLength((long)int.MaxValue + 1);
+            }
+            Assert.ThrowsAny<ArgumentException>(
+                () => new RpmBundler()
+                    .BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult());
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
     [Fact]
     static void RejectsInvalidSettings()
     {

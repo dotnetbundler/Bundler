@@ -50,7 +50,7 @@ internal static class RpmName
             throw new ArgumentException(
                 $"'{packageName}' is not a valid RPM package name: " +
                 "use letters, digits, '+', '-', '.', '_' with no whitespace, " +
-                "start with an alphanumeric and be at least two characters long.");
+                "and start with an alphanumeric.");
         }
     }
 }
