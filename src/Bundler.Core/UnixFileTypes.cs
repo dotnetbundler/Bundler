@@ -52,7 +52,20 @@ internal static class UnixFileTypes
         }
         else
         {
-            rc = Stat(path, status);
+            // 老 glibc（<2.33）不导出裸 stat 符号（只有 __xstat 系）——
+            // 与 mac 兜底同规：stat 缺席按"无法判定"放行，拷贝路径自己报错。
+            try
+            {
+                rc = Stat(path, status);
+            }
+            catch (EntryPointNotFoundException)
+            {
+                return true;
+            }
+            catch (DllNotFoundException)
+            {
+                return true;
+            }
         }
         if (rc != 0)
         {
