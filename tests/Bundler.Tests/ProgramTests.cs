@@ -921,6 +921,45 @@ public static class ProgramTests
         }
     }
 
+    // 自定义语言文件整份替换内置语言，必须覆盖内置模板声明的全部 LangString 键——
+    // 新增必填键时样品的 Assets/nsis/*.nsh 忘同步会让样品 nsis 腿直接拒产。
+    [Fact]
+    static void SampleCustomNsisLanguageFilesCoverBuiltInKeys()
+    {
+        var requiredKeys = File.ReadLines(Path.Combine(
+                RepositoryRoot(), "src", "Bundler.Nsis", "templates", "languages", "English.nsh"))
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("LangString ", StringComparison.Ordinal))
+            .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1])
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.NotEmpty(requiredKeys);
+
+        // 只校验样品声明为 BundlerNsisLanguageFile 的文件——同目录的
+        // installer-hooks.nsh 是钩入文件不是语言文件。
+        var props = XDocument.Load(Path.Combine(
+            RepositoryRoot(), "samples", "HelloBundlerApp", "formats", "Nsis.props"));
+        var customFiles = props.Descendants("BundlerNsisLanguageFile")
+            .Select(item => (string?)item.Attribute("Include"))
+            .Where(include => include is not null)
+            .Select(include => Path.GetFullPath(include!
+                .Replace("$(HelloBundlerAppAssets)",
+                    Path.Combine(RepositoryRoot(), "samples", "HelloBundlerApp", "Assets") + Path.DirectorySeparatorChar)
+                .Replace('\\', Path.DirectorySeparatorChar)))
+            .ToArray();
+        Assert.NotEmpty(customFiles);
+        foreach (var file in customFiles)
+        {
+            var defined = File.ReadLines(file)
+                .Select(line => line.Trim())
+                .Where(line => line.StartsWith("LangString ", StringComparison.Ordinal))
+                .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1])
+                .ToHashSet(StringComparer.Ordinal);
+            var missing = requiredKeys.Where(key => !defined.Contains(key)).ToArray();
+            Assert.True(missing.Length == 0,
+                $"{Path.GetFileName(file)} is missing required LangString keys: {string.Join(", ", missing)}");
+        }
+    }
+
     [Fact]
     static async Task ValidatesCustomNsisLanguageFiles()
     {

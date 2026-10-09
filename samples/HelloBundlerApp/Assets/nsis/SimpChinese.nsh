@@ -25,3 +25,5 @@ LangString InvalidRestartMode ${LANG_SIMPCHINESE} "/R 只能与 /S、/P 或 /UPD
 LangString ArgumentsRequireRestart ${LANG_SIMPCHINESE} "/ARGS 只能与 /R 一起使用。"
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_SIMPCHINESE} "自动安装拒绝使用不属于 ${PRODUCT_NAME} 的非空目录。"
 LangString ApplicationLaunchFailed ${LANG_SIMPCHINESE} "安装已经完成，但无法启动 ${PRODUCT_NAME}。"
+LangString RecoveryManifestMismatch ${LANG_SIMPCHINESE} "被中断的安装使用了不同的恢复清单。请先以 /S /RECOVERONLY 与相同的 /D= 目录运行原始安装程序完成恢复，然后重试。"
+LangString RecoveryManifestMismatchDetail ${LANG_SIMPCHINESE} "被中断的安装配置不同，无法由本安装程序恢复。请先以 /S /RECOVERONLY 与相同的 /D= 目录运行原始安装程序，然后重试。"
