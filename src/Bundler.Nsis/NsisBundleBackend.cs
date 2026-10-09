@@ -347,11 +347,17 @@ internal sealed class NsisBundleBackend(
         });
     }
 
-    private static string CreateUninstallerFinalizeCommand(string destinationPath)
+    internal static string CreateUninstallerFinalizeCommand(string destinationPath)
     {
         if (destinationPath.Contains('\''))
         {
             throw new InvalidOperationException("The NSIS signing work directory cannot contain an apostrophe.");
+        }
+        // finalize 命令经 system() 进入 cmd 命令行模式：该模式下 % 无转义（%% 仅在批处理中折叠），
+        // 引号内的 %VAR% 仍会展开，含 % 的路径只能拒绝。
+        if (destinationPath.Contains('%'))
+        {
+            throw new InvalidOperationException("The NSIS signing work directory cannot contain a percent sign.");
         }
 
         var destination = Escape(destinationPath);
