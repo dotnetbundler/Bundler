@@ -30,16 +30,6 @@ public sealed class MacAppBundler : IFormatBundler
             throw new NotSupportedException(
                 $"DotNet.Bundler.MacApp accepts App targets only; '{unsupported}' requires another backend package.");
         }
-        foreach (var target in bundle.Targets)
-        {
-            if (!string.IsNullOrWhiteSpace(target.MainExecutable) &&
-                (target.MainExecutable!.Contains('/') || target.MainExecutable.Contains('\\')))
-            {
-                throw new ArgumentException(
-                    "The .app main executable must be a file directly inside the input directory; " +
-                    $"got '{target.MainExecutable}'.");
-            }
-        }
         if (bundle.LicenseFile is not null)
         {
             throw new NotSupportedException(
@@ -51,27 +41,46 @@ public sealed class MacAppBundler : IFormatBundler
                 ".app signing covers every Mach-O inside the bundle automatically; " +
                 "per-file SigningFiles has no macOS meaning. Use MacAppBundleConfiguration.Signing.");
         }
-        MacAppSigning.Validate(_configuration.Signing);
+        ValidateConfiguration(_configuration, bundle);
+    }
+
+    // dmg/pkg 的构建管线内嵌 .app 阶段，入口统一预检经此方法覆盖同一套
+    // 旋钮校验；LicenseFile 与 per-file SigningFiles 的拒绝是 .app 格式独有
+    // 契约（dmg/pkg 合法消费 license），不在共享面内。
+    internal static void ValidateConfiguration(
+        MacAppBundleConfiguration configuration, BundleConfiguration bundle)
+    {
+        foreach (var target in bundle.Targets)
+        {
+            if (!string.IsNullOrWhiteSpace(target.MainExecutable) &&
+                (target.MainExecutable!.Contains('/') || target.MainExecutable.Contains('\\')))
+            {
+                throw new ArgumentException(
+                    "The .app main executable must be a file directly inside the input directory; " +
+                    $"got '{target.MainExecutable}'.");
+            }
+        }
+        MacAppSigning.Validate(configuration.Signing);
 
         // Fail on invalid metadata, mappings, integration config, and icons before touching
         // the file system.
-        MacAppMetadata.Resolve(bundle, _configuration);
-        MacAppBundleBackend.ResolveContentsMappings(_configuration);
-        MacAppDesktopIntegration.ResolveDocumentTypes(bundle, _configuration);
-        MacAppDesktopIntegration.ResolveUrlTypes(bundle, _configuration);
-        if (_configuration.ExceptionDomain is { } domain && domain.Trim().Length == 0)
+        MacAppMetadata.Resolve(bundle, configuration);
+        MacAppBundleBackend.ResolveContentsMappings(configuration);
+        MacAppDesktopIntegration.ResolveDocumentTypes(bundle, configuration);
+        MacAppDesktopIntegration.ResolveUrlTypes(bundle, configuration);
+        if (configuration.ExceptionDomain is { } domain && domain.Trim().Length == 0)
         {
             throw new ArgumentException("ExceptionDomain must not be empty.");
         }
-        if (_configuration.InfoPlistFile is not null && _configuration.InfoPlistXml is not null)
+        if (configuration.InfoPlistFile is not null && configuration.InfoPlistXml is not null)
         {
             throw new ArgumentException("InfoPlistFile and InfoPlistXml are mutually exclusive.");
         }
-        if (_configuration.InfoPlistFile is { } plistFile && !File.Exists(Path.GetFullPath(plistFile)))
+        if (configuration.InfoPlistFile is { } plistFile && !File.Exists(Path.GetFullPath(plistFile)))
         {
             throw new FileNotFoundException("The caller Info.plist does not exist.", plistFile);
         }
-        foreach (var framework in _configuration.Frameworks)
+        foreach (var framework in configuration.Frameworks)
         {
             var name = Path.GetFileName(framework);
             if (!name.EndsWith(".framework", StringComparison.OrdinalIgnoreCase) &&

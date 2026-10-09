@@ -41,6 +41,8 @@ public sealed class MacDmgBundler : IFormatBundler
             throw new PlatformNotSupportedException(
                 ".dmg creation requires a macOS host (hdiutil/osascript are not cross-host).");
         }
+        // 构建管线内嵌 .app 阶段，其旋钮一并预检。
+        MacAppBundler.ValidateConfiguration(_appConfiguration, bundle);
         MacDmgBundleBackend.ValidateConfiguration(_dmgConfiguration, bundle);
     }
 

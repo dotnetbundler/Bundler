@@ -41,6 +41,8 @@ public sealed class MacPkgBundler : IFormatBundler
             throw new PlatformNotSupportedException(
                 ".pkg creation requires a macOS host (pkgbuild/productbuild are not cross-host).");
         }
+        // 构建管线内嵌 .app 阶段，其旋钮一并预检。
+        MacAppBundler.ValidateConfiguration(_appConfiguration, bundle);
         MacPkgBundleBackend.ValidateConfiguration(_pkgConfiguration, bundle);
     }
 

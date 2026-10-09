@@ -947,6 +947,26 @@ public static class MacAppTests
     }
 
     [Fact]
+    static void SigningHostGateIsPlatformNotSupported()
+    {
+        // 签名宿主门禁标记类型：入口统一预检靠它区分“逐格式容错”与“配置错误”。
+        Assert.SkipWhen(RuntimeInformation.IsOSPlatform(OSPlatform.OSX), "仅非 macOS 宿主。");
+        var input = CreateInputDirectory();
+        try
+        {
+            Assert.Throws<PlatformNotSupportedException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    Signing = new MacAppSigningConfiguration { Identity = "-" }
+                }).Validate(MacConfiguration(input)));
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
+    [Fact]
     static async Task AssemblesCodesignArguments()
     {
         var entitlements = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests",

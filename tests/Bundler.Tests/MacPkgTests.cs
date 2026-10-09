@@ -1,4 +1,5 @@
 using DotNet.Bundler;
+using DotNet.Bundler.MacApp;
 using DotNet.Bundler.MacPkg;
 
 public static class MacPkgTests
@@ -54,6 +55,27 @@ public static class MacPkgTests
         {
             Assert.Throws<PlatformNotSupportedException>(
                 () => new MacPkgBundler().Validate(PkgConfiguration(input)));
+        }
+        finally
+        {
+            MacPkgBundleBackend.HostCheck = previous;
+            Cleanup(input);
+        }
+    }
+
+    [Fact]
+    static void ValidateCoversEmbeddedAppKnobs()
+    {
+        // pkg 的构建管线内嵌 .app 阶段——其旋钮错也必须在预检趟报出。
+        var input = CreateInputDirectory();
+        var previous = MacPkgBundleBackend.HostCheck;
+        MacPkgBundleBackend.HostCheck = () => true;
+        try
+        {
+            Assert.Throws<ArgumentException>(
+                () => new MacPkgBundler(
+                    appConfiguration: new MacAppBundleConfiguration { ExceptionDomain = " " })
+                    .Validate(PkgConfiguration(input)));
         }
         finally
         {

@@ -1,5 +1,6 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
+using DotNet.Bundler.MacApp;
 using DotNet.Bundler.MacDmg;
 using System.Runtime.InteropServices;
 
@@ -56,6 +57,27 @@ public static class MacDmgTests
         {
             Assert.Throws<PlatformNotSupportedException>(
                 () => new MacDmgBundler().Validate(DmgConfiguration(input)));
+        }
+        finally
+        {
+            MacDmgBundleBackend.HostCheck = previous;
+        }
+    }
+
+    [Fact]
+    static void ValidateCoversEmbeddedAppKnobs()
+    {
+        // dmg 的构建管线内嵌 .app 阶段——其旋钮错也必须在预检趟报出，
+        // 而不是构建途中才炸（后面已落盘的前置格式就白跑了）。
+        var input = CreateInputDirectory();
+        var previous = MacDmgBundleBackend.HostCheck;
+        MacDmgBundleBackend.HostCheck = () => true;
+        try
+        {
+            Assert.Throws<ArgumentException>(
+                () => new MacDmgBundler(
+                    appConfiguration: new MacAppBundleConfiguration { ExceptionDomain = " " })
+                    .Validate(DmgConfiguration(input)));
         }
         finally
         {

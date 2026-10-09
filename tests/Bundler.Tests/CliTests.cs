@@ -192,6 +192,51 @@ public static class CliTests
     }
 
     [Fact]
+    static void BundleSigningHostGateDoesNotBlockOtherFormats()
+    {
+        // 签名要求 macOS 宿主——属宿主门禁不是配置错：同请求的 zip 照常产出。
+        Assert.SkipWhen(TestPlatform.IsMacOS, "仅非 macOS 宿主上签名走宿主门禁。");
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "bundler-cli-signhost-" + Guid.NewGuid().ToString("N"));
+        var config = Path.Combine(Path.GetTempPath(), $"bundler-{Guid.NewGuid():N}.json");
+        File.WriteAllText(config, System.Text.Json.JsonSerializer.Serialize(new
+        {
+            productName = "CfgApp",
+            identifier = "dev.example.cfg",
+            version = "2.0.0",
+            outputDirectory = output,
+            targets = new[]
+            {
+                new
+                {
+                    runtimeIdentifier = "osx", inputDirectory = input,
+                    mainExecutable = "cli-fixture", formats = new[] { "zip", "app" }
+                }
+            },
+            app = new { signing = new { identity = "-" } }
+        }));
+        try
+        {
+            var (code, _, err) = Run("bundle", "--config", config, "--quiet");
+            Assert.Equal(1, code);
+            Assert.Contains("1 format(s) failed", err);
+            Assert.Contains("app", err);
+            var zip = Path.Combine(output, "osx", "zip", "cfgapp-2.0.0-osx.zip");
+            Assert.True(File.Exists(zip),
+                $"producible format artifact must still land at {zip}");
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            File.Delete(config);
+            if (Directory.Exists(output))
+            {
+                Directory.Delete(output, true);
+            }
+        }
+    }
+
+    [Fact]
     static void BundlePreValidationRejectsBeforeAnyArtifact()
     {
         // 后置格式旋钮错：统一预检聚合拒绝（rc=2），排在前面可产的 zip 不得先落盘。
