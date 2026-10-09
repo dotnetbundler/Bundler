@@ -1000,8 +1000,9 @@ public static class UpdateTests
         Assert.True(UpdateBootstrapper.TryResolve(update, "win-x64", out var win));
         Assert.EndsWith(".exe", win);
         Assert.True(File.Exists(win));
-        // win-arm64 无内嵌二进制且 win 不降级脚本 → 确定性不可用。
-        Assert.False(UpdateBootstrapper.TryResolve(update, "win-arm64", out _));
+        // win-arm64 有内嵌真件（arm64 宿主产出随包）；win-x86 仍无件且不降级脚本 → 确定性不可用。
+        Assert.True(UpdateBootstrapper.TryResolve(update, "win-arm64", out _));
+        Assert.False(UpdateBootstrapper.TryResolve(update, "win-x86", out _));
     }
 
     [Fact]

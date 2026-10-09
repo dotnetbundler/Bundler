@@ -1,10 +1,8 @@
-# 调试期产件工作流：在真 arm64 宿主上编 arm64 AOT 引导件并上传工件——
-# 产物下载后入 src/Bundler.Updater.Bootstrap/tools/<rid>/ 随包，之后本文件删除。
+# 产件工作流（手动）：在真 arm64 宿主上编 arm64 AOT 引导件并上传工件——
+# 产物下载后入 src/Bundler.Updater.Bootstrap/tools/<rid>/ 随包（ BootstrapPlan 变更需重产冻件时重跑）。
 name: dbg-aot
 
 on:
-  push:
-    branches: [devin/ci-dry-run]
   workflow_dispatch:
 
 concurrency:

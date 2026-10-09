@@ -546,15 +546,12 @@ public static class UpdaterBootstrapParityTests
     static void ShippedBootstrap_SmokeApplies()
     {
         // 仓内 tools/<rid> 引导件冒烟：守住"源码修了但发布件没重产"的漂变。
-        var rid = TestPlatform.IsWindows ? "win-x64"
-            : TestPlatform.IsMacOS
-                ? (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture ==
-                    System.Runtime.InteropServices.Architecture.Arm64 ? "osx-arm64" : "osx-x64")
-            : TestPlatform.IsLinux &&
-                System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
-                    System.Runtime.InteropServices.Architecture.X64
-                ? TestPlatform.LinuxRuntimeIdentifier // 随包引导件只有 linux-x64/linux-musl-x64——arm64 宿主无件可跑
-                : null;
+        var arm64 = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
+            System.Runtime.InteropServices.Architecture.Arm64;
+        var rid = TestPlatform.IsWindows ? (arm64 ? "win-arm64" : "win-x64")
+            : TestPlatform.IsMacOS ? (arm64 ? "osx-arm64" : "osx-x64")
+            : TestPlatform.IsLinux ? TestPlatform.LinuxRuntimeIdentifier
+            : null;
         Assert.SkipUnless(rid is not null, "no shipped bootstrap RID for this host");
         var exeName = TestPlatform.IsWindows ? "bundler-updater.exe" : "bundler-updater";
         var binary = Path.Combine(RepoRoot(), "src", "Bundler.Updater.Bootstrap",

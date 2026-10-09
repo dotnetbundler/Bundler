@@ -76,9 +76,9 @@
 
 | 项 | 要做什么 | 完成证据 | 当前卡点/已有覆盖 |
 | --- | --- | --- | --- |
-| ARM64 真机组（deb/rpm/AppImage/apk） | 真机 ARM64 宿主装卸+运行各格式件 | 真机装卸与运行记录 | qemu binfmt 仿真 arm64 容器已实证装卸+运行通过，缺真机 |
-| UPDATE arm64 AOT 引导件 | linux-arm64/win-arm64 构建宿主产 arm64 引导件并入包，重跑 arm64 换包腿 | arm64 引导件构建+换包记录 | osx-arm64 件已由 mac 宿主真实产出入库；qemu 下 ilc SIGABRT 属环境边界；GitHub ARM runner/云 ARM 实例可租 |
-| Windows ARM64 矩阵 | MSI/NSIS 在 Windows ARM64 的构建、安装、升级、修复、卸载逐组合 | 各组合 verbose log/注册表/OS build/清理证据 | 单台 x64 开发机不能代表；Azure Windows ARM64 VM/Parallels 可租 |
+| ~~ARM64 真机组（deb/rpm/AppImage/apk）~~ | ~~真机 ARM64 宿主装卸+运行各格式件~~ | **已完成**（2026-10-09） | `arm64-real-hw.sh` 收编进 `release-verify`，在 GitHub `ubuntu-26.04-arm` 真 arm64 硬件腿跑绿（deb/rpm/apk/AppImage 装卸+运行）；Windows 侧 `arm64-matrix.ps1` 在 `windows-11-arm` 跑绿 |
+| ~~UPDATE arm64 AOT 引导件~~ | ~~linux-arm64/win-arm64 构建宿主产 arm64 引导件并入包，重跑 arm64 换包腿~~ | **已完成**（2026-10-09） | linux-arm64/linux-musl-arm64 由 GitHub `ubuntu-26.04-arm` runner、win-arm64 由 `windows-11-arm` runner 真宿主产出入库（`tools/<rid>/`），冒烟 `apply` 过；arm64 换包腿收编进 `release-verify`（docker tmpfs/VHD 小卷） |
+| ~~Windows ARM64 矩阵~~ | ~~MSI/NSIS 在 Windows ARM64 的构建、安装、升级、修复、卸载逐组合~~ | **部分收编**（2026-10-09） | `arm64-matrix.ps1` 收编进 `release-verify` 的 `windows-11-arm` 腿跑绿（NSIS/MSI 装+卸）；升级/修复组合仍挂本表 |
 | Intel Mac / Rosetta | osx-x64 `.app`/`.dmg`/`.pkg` 实跑、挂载、安装、启动 | osx-x64 各格式启动记录 | arm64 宿主 `arch -x86_64` Bad CPU type；装 Rosetta（免费需人工授权）或租 Intel Mac |
 | 干净 macOS 宿主��阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg` | 挂载/EULA 弹窗/拖放安装首启记录 | 现宿主有开发工具链；云 mac 实例按天可租 |
 | 干净 Windows 10/11 | WiX 自身依赖边界（无 .NET SDK 仅 candle/light 编译）、独立 VM 复跑安装/卸载、Win7 记 Framework 缺失边界 | 各宿主构建/安装/卸载记录 | 非干净 Windows 11 x64 已有证据；干净宿主未测 |

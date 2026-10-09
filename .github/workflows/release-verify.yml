@@ -4,6 +4,9 @@
 name: release-verify
 
 on:
+  # arm64 引导件收编验证期临时 push 触发——跑绿后摘掉只留手动
+  push:
+    branches: [devin/ci-dry-run]
   workflow_dispatch:
 
 permissions:

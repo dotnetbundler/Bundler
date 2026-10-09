@@ -6,7 +6,8 @@ public sealed class UpdateIntegrationTests
     // 真小卷 ENOSPC：docker --tmpfs 8M 挂 /vol，install 置于卷内，
     // backup 暂存与载荷写入都在同卷竞争空间——换包半途必炸 ENOSPC，
     // 断言 install 逐字节回原树、marker/瞬备/残渣全清。
-    // 引导件用 linux-musl-x64 入包件——alpine 内可直跑（glibc 件不能）。
+    // 引导件用 linux-musl-<arch> 入包件——alpine 内可直跑（glibc 件不能），
+    // 架构随宿主（arm64 宿主跑 arm64 容器需 musl-arm64 件）。
     [Fact]
     [Trait("Requires", "docker")]
     public void DockerTmpfsEnospc_HalfSwapRestoresInstall()
@@ -22,7 +23,7 @@ public sealed class UpdateIntegrationTests
             Directory.CreateDirectory(materialInstall);
             Directory.CreateDirectory(materialPayload);
             File.Copy(Path.Combine(RepositoryLayout.Root,
-                    "src/Bundler.Updater.Bootstrap/tools/linux-musl-x64/bundler-updater"),
+                    $"src/Bundler.Updater.Bootstrap/tools/{MuslRid()}/bundler-updater"),
                 Path.Combine(work, "bundler-updater"));
             File.WriteAllText(Path.Combine(materialInstall, "app.txt"), "v1-app");
             // 空间账：vol 8M，install 2M → 瞬备占 2M 后余 ~6M；载荷 7M 写 install 半途炸。
@@ -111,10 +112,7 @@ public sealed class UpdateIntegrationTests
     [Trait("Requires", "elevation")]
     public void WinVhdEnospc_HalfSwapRestoresInstall()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows() &&
-            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
-                System.Runtime.InteropServices.Architecture.X64,
-            "VHD 小卷腿只在 Windows x64 宿主跑。");
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "VHD 小卷腿只在 Windows 宿主跑。");
         ElevatedRunner.RequireWindowsAdministrator("VHD 挂/卸需要管理员权限。");
         var root = Path.Combine(Path.GetTempPath(),
             "bundler-enospc-" + Guid.NewGuid().ToString("N")[..10]);
@@ -134,7 +132,7 @@ public sealed class UpdateIntegrationTests
             var volume = letter + ":\\";
             var updater = Path.Combine(root, "u.exe");
             File.Copy(Path.Combine(RepositoryLayout.Root,
-                    "src/Bundler.Updater.Bootstrap/tools/win-x64/bundler-updater.exe"),
+                    $"src/Bundler.Updater.Bootstrap/tools/{WinRid()}/bundler-updater.exe"),
                 updater, overwrite: true);
             // install 上卷、载荷留宿主盘——同 docker 腿账算：8M 卷内只放 2M 树。
             var install = Path.Combine(volume, "install");
@@ -170,6 +168,14 @@ public sealed class UpdateIntegrationTests
     static string OsxRid() =>
         System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
             System.Runtime.InteropServices.Architecture.Arm64 ? "osx-arm64" : "osx-x64";
+
+    static string MuslRid() =>
+        System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
+            System.Runtime.InteropServices.Architecture.Arm64 ? "linux-musl-arm64" : "linux-musl-x64";
+
+    static string WinRid() =>
+        System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
+            System.Runtime.InteropServices.Architecture.Arm64 ? "win-arm64" : "win-x64";
 
     // 材料：install 2M + 载荷 7M 小文件树（与 docker 腿同账）。
     static string StageMaterial(string root)
