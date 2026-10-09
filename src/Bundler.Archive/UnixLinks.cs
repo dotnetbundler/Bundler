@@ -24,6 +24,10 @@ internal static class UnixLinks
     /// <summary>Returns the symlink target, or null when unsupported/failed.</summary>
     internal static string? ReadLink(string path)
     {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return WindowsLinks.ReadReparseTarget(path);
+        }
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) &&
             !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {

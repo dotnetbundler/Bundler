@@ -1,3 +1,4 @@
+#requires -Version 7
 # SA-P-01 Authenticode 生产签名验收：真证书 signtool 签名+RFC3161 时间戳+SmartScreen 观察。
 # 需: Windows+生产证书（env AUTHENTICODE_PFX / AUTHENTICODE_THUMBPRINT 二选一）+ 公网(SmartScreen 观察)。
 param(

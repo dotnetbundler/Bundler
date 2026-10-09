@@ -1,3 +1,4 @@
+#requires -Version 7
 # 干净宿主验收：无 .NET SDK/VS 的 Windows 上，产包能装能卸（不依赖构建工具链）。
 # 用法: 在无 SDK 的干净 Windows VM 跑——pwsh clean-host.ps1 -InstallerPaths <产包...>
 param(

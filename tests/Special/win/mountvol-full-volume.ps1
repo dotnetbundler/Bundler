@@ -1,3 +1,4 @@
+#requires -Version 7
 #requires -RunAsAdministrator
 # mountvol 全卷挂载语义实证：junction 等价腿已覆盖逻辑面，
 # 本腿验整卷经 mountvol 挂到空目录后，bundler-updater 换包对卷内 install 语义正确。

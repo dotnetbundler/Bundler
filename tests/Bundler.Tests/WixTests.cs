@@ -1159,6 +1159,9 @@ public static class WixTests
             "<Component Id=\"Acme.ExtraFile\" Guid=\"{11111111-2222-3333-4444-555555555555}\" " +
             "Directory=\"INSTALLFOLDER\">" +
             "<File Id=\"Acme.ExtraPayload\" Source=\"fragment-payload.bin\"/>" +
+            // 落 user profile 的组件必须有 HKCU 注册表 KeyPath，否则真 WiX ICE38 先于指纹断言炸。
+            "<RegistryValue Root=\"HKCU\" Key=\"Software\\Acme\\Extras\" Name=\"Flag\" " +
+            " Type=\"string\" Value=\"yes\" KeyPath=\"yes\"/>" +
             "</Component></ComponentGroup></Fragment></Wix>");
         var bundler = new WixBundler(new WixBundleConfiguration
         {

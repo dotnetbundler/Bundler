@@ -606,6 +606,17 @@ public static class UpdateTests
                     PayloadDirectory = install + Path.DirectorySeparatorChar
                 }, lines.Add));
 
+        // 卷根装位没有同级位置放默认备份槽（拼出的 install.bundler-backup 病态）→
+        // 明确拒绝并提示显式 --backup-dir。
+        var rootError = Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = Path.GetPathRoot(directory)!,
+                    PayloadDirectory = payload
+                }, lines.Add));
+        Assert.Contains("volume root", rootError.Message);
+
         // 载荷是安装的祖先目录 → 拒绝（MoveTree 退化复制后删源父级，连备份一起抹）。
         var outer = Path.Combine(directory, "outer");
         var nestedInstall = Path.Combine(outer, "install");

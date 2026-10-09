@@ -1,3 +1,4 @@
+#requires -Version 7
 # Windows ARM64 真机矩阵：装/升/修/卸各格式腿。仅 ARM64 Windows 宿主可跑。
 param(
     [Parameter(Mandatory = $true)][string[]]$InstallerPaths,  # 各格式产包

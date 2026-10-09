@@ -43,10 +43,15 @@ internal static class BootstrapPlan
         // 备份/保留是输出路径：父链物理化保留中间链接语义，但叶段必须留字面——
         // 叶段若是符号链接，解析后 rm/Delete 会清掉链接目标（配置路径之外的真实目录），
         // 而按字面删除只移除链接本身。与 POSIX 侧 norm_parent 同义。
+        // 卷根装位（E:\、\\?\Volume{GUID}\、/）没有同级位置放默认备份槽——
+        // 拼出的 install.bundler-backup 是病态路径，须显式给 --backup-dir。
         var backupDir = options.BackupDirectory is { Length: > 0 }
             ? CanonicalParentPath(options.BackupDirectory)
                 ?? throw new UsageException($"backup path '{options.BackupDirectory}' resolves to a cyclic link.")
-            : installDir.TrimEnd('/', '\\') + ".bundler-backup";
+            : IsVolumeRoot(installDir)
+                ? throw new UsageException(
+                    $"install directory '{installDir}' is a volume root — no sibling location exists for the default backup slot; pass --backup-dir explicitly.")
+                : installDir.TrimEnd('/', '\\') + ".bundler-backup";
         // 关系判一律用全物理名——默认备份位同样可能是预置叶链，
         // 字面拼写与 retainCmp 的物理名对不上号会同址逃逸（换包移链后保留操作删新备份）。
         // 文件操作仍走上面的叶字面拼写（叶链只被删链本身不触目标）。
@@ -1346,6 +1351,13 @@ internal static class BootstrapPlan
             candidate.TrimEnd(Path.DirectorySeparatorChar),
             parent.TrimEnd(Path.DirectorySeparatorChar),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    private static bool IsVolumeRoot(string path)
+    {
+        var root = Path.GetPathRoot(path);
+        return root is { Length: > 0 } &&
+            string.Equals(path.TrimEnd('/', '\\'), root.TrimEnd('/', '\\'), StringComparison.OrdinalIgnoreCase);
+    }
 
     // 保留迁移失败不该让换包白做：瞬备留在原处仍能回滚（Rollback 定位兄弟位优先），降级不阻断。
     private static void TryRetainOrRemoveBackup(
