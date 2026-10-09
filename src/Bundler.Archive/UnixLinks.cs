@@ -26,7 +26,9 @@ internal static class UnixLinks
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            return WindowsLinks.ReadReparseTarget(path);
+            // Windows 相对 reparse 目标带反斜杠——归一成 / 再进归档，否则 POSIX
+            // 侧把 `lib\current.so` 当字面文件名，链接指到不存在的名字。
+            return WindowsLinks.ReadReparseTarget(path)?.Replace('\\', '/');
         }
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) &&
             !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))

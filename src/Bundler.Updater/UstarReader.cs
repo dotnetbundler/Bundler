@@ -244,6 +244,15 @@ internal static class UstarReader
     private static string ShellQuote(string value) =>
         "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
+    private static bool TargetIsDirectory(string target, string linkPath)
+    {
+        var resolved = Path.IsPathRooted(target)
+            ? target
+            : Path.GetFullPath(Path.Combine(
+                Path.GetDirectoryName(linkPath) ?? string.Empty, target));
+        return Directory.Exists(resolved);
+    }
+
     internal static bool CreateSymlink(string target, string linkPath)
     {
         try
@@ -260,9 +269,18 @@ internal static class UstarReader
                 }
             }
 #if NET10_0_OR_GREATER
-            // net10 腿走托管 API，不再拉起 /bin/ln 子进程——POSIX 下链型
-            // （文件/目录）由目标实际型决定，File.CreateSymbolicLink 已够。
-            File.CreateSymbolicLink(linkPath, target);
+            // net10 腿走托管 API，不再拉起 /bin/ln 子进程。Windows 链型分文件/目录
+            // 两型且 File.CreateSymbolicLink 恒产文件型——归档里还原出的目录链接
+            // 若按文件型落地则无法穿越，按解析后目标实型选型；悬挂目标回退文件型
+            // （归档不记链接的目录位，无从确知）。
+            if (OperatingSystem.IsWindows() && TargetIsDirectory(target, linkPath))
+            {
+                Directory.CreateSymbolicLink(linkPath, target);
+            }
+            else
+            {
+                File.CreateSymbolicLink(linkPath, target);
+            }
             return true;
 #else
             using var process = System.Diagnostics.Process.Start(
