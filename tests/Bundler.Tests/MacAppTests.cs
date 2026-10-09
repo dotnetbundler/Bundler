@@ -967,6 +967,27 @@ public static class MacAppTests
     }
 
     [Fact]
+    static void SigningHostGateDoesNotMaskConfigErrors()
+    {
+        // 签名宿主门不得遮住其后的配置错——非法旋钮仍按配置错误聚合。
+        Assert.SkipWhen(RuntimeInformation.IsOSPlatform(OSPlatform.OSX), "仅非 macOS 宿主。");
+        var input = CreateInputDirectory();
+        try
+        {
+            Assert.Throws<ArgumentException>(
+                () => new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    Signing = new MacAppSigningConfiguration { Identity = "-" },
+                    ExceptionDomain = " "
+                }).Validate(MacConfiguration(input)));
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
+    [Fact]
     static async Task AssemblesCodesignArguments()
     {
         var entitlements = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests",

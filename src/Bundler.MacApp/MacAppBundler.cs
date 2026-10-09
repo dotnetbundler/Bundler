@@ -60,8 +60,6 @@ public sealed class MacAppBundler : IFormatBundler
                     $"got '{target.MainExecutable}'.");
             }
         }
-        MacAppSigning.Validate(configuration.Signing);
-
         // Fail on invalid metadata, mappings, integration config, and icons before touching
         // the file system.
         MacAppMetadata.Resolve(bundle, configuration);
@@ -104,6 +102,9 @@ public sealed class MacAppBundler : IFormatBundler
         {
             throw new ArgumentException(".app icons accept a single .car or .icon input.");
         }
+        // 签名放最后：它含宿主门禁（PNSE），先验完所有配置类旋钮才不会
+        // 被宿主门遮住——非 mac 宿主上配置错仍应按配置错误聚合而非逐格式容错。
+        MacAppSigning.Validate(configuration.Signing);
     }
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
