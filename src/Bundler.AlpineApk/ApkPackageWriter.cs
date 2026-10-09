@@ -28,8 +28,6 @@ internal static class ApkPackageWriter
         internal int Mode;
         internal string LinkTarget = "";        // for Kind=Symlink
         internal long Size;                     // file size for the PKGINFO 'size' field
-
-        internal byte[] ReadBytes() => File.ReadAllBytes(SourcePath!);
     }
 
     internal static Result Build(
@@ -333,6 +331,12 @@ internal static class ApkPackageWriter
         }
 
         var mainExecutable = item.MainExecutable.Replace('\\', '/');
+        // 空目录也要落条目：仅按文件路径反推会丢无文件目录。
+        foreach (var directory in Directory.GetDirectories(input, "*", SearchOption.AllDirectories)
+                     .OrderBy(path => path, StringComparer.Ordinal))
+        {
+            ClaimDirectory(installRoot + "/" + ToPosixPath(RelativePath(input, directory)));
+        }
         foreach (var file in Directory.GetFiles(input, "*", SearchOption.AllDirectories)
                      .OrderBy(path => path, StringComparer.Ordinal))
         {
@@ -360,6 +364,12 @@ internal static class ApkPackageWriter
             var source = Path.GetFullPath(resource.Source);
             if (Directory.Exists(source))
             {
+                foreach (var directory in Directory.GetDirectories(source, "*", SearchOption.AllDirectories)
+                             .OrderBy(path => path, StringComparer.Ordinal))
+                {
+                    ClaimDirectory(installRoot + "/" + target + "/" +
+                                   ToPosixPath(RelativePath(source, directory)));
+                }
                 foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories)
                              .OrderBy(path => path, StringComparer.Ordinal))
                 {
@@ -404,7 +414,8 @@ internal static class ApkPackageWriter
         if (binLink.Length > 0)
         {
             var linkPath = "usr/bin/" + binLink;
-            if (binLink.Contains('/'))
+            if (binLink is "." or ".." ||
+                binLink.IndexOfAny(['/', '\\', ' ', '\t', '"', '\'', '$']) >= 0)
             {
                 throw new ArgumentException(
                     $"The bin-link name must be a plain file name: '{binLink}'.");

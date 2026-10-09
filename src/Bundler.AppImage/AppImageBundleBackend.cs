@@ -17,6 +17,8 @@ internal sealed class AppImageBundleBackend(
         BundleBuildContext context, CancellationToken cancellationToken)
     {
         // glibc 与 musl 目标共用同一后端：runtime 为静态 ELF，两族皆可运行。
+        // 宿主门先于 AppDirBuilder：Windows 宿主应在任何 chmod/ln 尝试之前报 PNSE。
+        AppImageToolset.RequireLinuxHost();
         var built = AppDirBuilder.Build(
             context.Configuration, context.Item, settings, context.WorkDirectory, context.Logger);
         var toolset = AppImageToolset.Resolve(

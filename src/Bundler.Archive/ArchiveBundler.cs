@@ -26,19 +26,15 @@ public sealed class ArchiveBundler : IFormatBundler
         {
             throw new ArgumentNullException(nameof(bundle));
         }
-        var unsupported = bundle.Targets
-            .SelectMany(target => target.Formats)
-            .FirstOrDefault(format => format is not (PackageFormat.Zip or PackageFormat.TarGz));
-        if (unsupported != default || bundle.Targets.SelectMany(t => t.Formats).All(
-            f => f is not (PackageFormat.Zip or PackageFormat.TarGz)) &&
-            bundle.Targets.SelectMany(t => t.Formats).Any())
+        // PackageFormat.Nsis == 0：不能用 FirstOrDefault(...)+ != default 判定。
+        if (bundle.Targets.SelectMany(target => target.Formats).Any(
+            format => format is not (PackageFormat.Zip or PackageFormat.TarGz)))
         {
-            if (bundle.Targets.SelectMany(t => t.Formats).Any(
-                f => f is not (PackageFormat.Zip or PackageFormat.TarGz)))
-            {
-                throw new NotSupportedException(
-                    $"DotNet.Bundler.Archive accepts Zip/TarGz targets only; '{unsupported}' requires another backend package.");
-            }
+            var unsupported = bundle.Targets
+                .SelectMany(target => target.Formats)
+                .First(format => format is not (PackageFormat.Zip or PackageFormat.TarGz));
+            throw new NotSupportedException(
+                $"DotNet.Bundler.Archive accepts Zip/TarGz targets only; '{unsupported}' requires another backend package.");
         }
     }
 

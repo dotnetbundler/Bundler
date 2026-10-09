@@ -37,16 +37,21 @@ internal sealed class AppImageToolset
     /// Resolves the tool for the current Linux host and the requested target
     /// architecture (appimagetool names: x86_64/aarch64/i686/...).
     /// </summary>
-    internal static AppImageToolset Resolve(
-        string targetArchitecture,
-        string? cacheDirectory,
-        CancellationToken cancellationToken)
+    internal static void RequireLinuxHost()
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             throw new PlatformNotSupportedException(
                 "DotNet.Bundler.AppImage requires a Linux build host: it invokes the bundled appimagetool binary.");
         }
+    }
+
+    internal static AppImageToolset Resolve(
+        string targetArchitecture,
+        string? cacheDirectory,
+        CancellationToken cancellationToken)
+    {
+        RequireLinuxHost();
 
         var hostArch = RuntimeInformation.ProcessArchitecture switch
         {
@@ -115,7 +120,21 @@ internal sealed class AppImageToolset
         {
             var temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
             File.WriteAllBytes(temporary, memory.ToArray());
-            File.Move(temporary, destination);
+            try
+            {
+                File.Move(temporary, destination);
+            }
+            catch (IOException) when (File.Exists(destination))
+            {
+                // 并发构建同物化同一缓存件：另一进程先落位，丢弃副本再核哈希。
+                File.Delete(temporary);
+            }
+            if (!string.Equals(Sha256(File.ReadAllBytes(destination)), expectedSha256,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Embedded tool '{fileName}' failed its pinned SHA-256 check after materialization.");
+            }
         }
         if (executable)
         {
