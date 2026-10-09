@@ -8,7 +8,7 @@ namespace DotNet.Bundler.AppImage;
 /// build requires a Linux host (any x86_64/aarch64 Linux works; container and
 /// CI hosts without FUSE are supported via the extract-and-run path).
 /// </summary>
-public sealed class AppImageBundler
+public sealed class AppImageBundler : IFormatBundler
 {
     private readonly AppImageBundleConfiguration _configuration;
     private readonly AppImageBundlerOptions _options;
@@ -21,9 +21,7 @@ public sealed class AppImageBundler
         _options = options ?? new AppImageBundlerOptions();
     }
 
-    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
-        BundleConfiguration bundle,
-        CancellationToken cancellationToken = default)
+    public void Validate(BundleConfiguration bundle)
     {
         if (bundle is null)
         {
@@ -37,6 +35,14 @@ public sealed class AppImageBundler
             throw new NotSupportedException(
                 $"DotNet.Bundler.AppImage accepts AppImage targets only; '{unsupported}' requires another backend package.");
         }
+        AppImageBundleBackend.ValidateConfiguration(_configuration);
+    }
+
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
+        BundleConfiguration bundle,
+        CancellationToken cancellationToken = default)
+    {
+        Validate(bundle);
         return await new BundlePipeline(
             [
                 new AppImageBundleBackend(_configuration, _options, DesktopOperatingSystem.Linux),

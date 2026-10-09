@@ -5,7 +5,7 @@ using DotNet.Bundler.MacApp;
 
 namespace DotNet.Bundler.MacPkg;
 
-public sealed class MacPkgBundler
+public sealed class MacPkgBundler : IFormatBundler
 {
     private readonly MacPkgBundleConfiguration _pkgConfiguration;
     private readonly MacAppBundleConfiguration _appConfiguration;
@@ -21,9 +21,7 @@ public sealed class MacPkgBundler
         _options = options ?? new MacPkgBundlerOptions();
     }
 
-    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
-        BundleConfiguration bundle,
-        CancellationToken cancellationToken = default)
+    public void Validate(BundleConfiguration bundle)
     {
         if (bundle is null)
         {
@@ -40,9 +38,17 @@ public sealed class MacPkgBundler
         var isMacOs = MacPkgBundleBackend.HostCheck?.Invoke() ?? RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
         if (!isMacOs)
         {
-            throw new NotSupportedException(
+            throw new PlatformNotSupportedException(
                 ".pkg creation requires a macOS host (pkgbuild/productbuild are not cross-host).");
         }
+        MacPkgBundleBackend.ValidateConfiguration(_pkgConfiguration, bundle);
+    }
+
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
+        BundleConfiguration bundle,
+        CancellationToken cancellationToken = default)
+    {
+        Validate(bundle);
         return await new BundlePipeline(
             [
                 new MacAppBundleBackend(_appConfiguration),

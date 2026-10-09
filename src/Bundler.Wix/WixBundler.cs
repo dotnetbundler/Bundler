@@ -4,7 +4,7 @@ using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Wix;
 
-public sealed class WixBundler
+public sealed class WixBundler : IFormatBundler
 {
     private readonly WixBundleConfiguration _settings;
     private readonly WixBundlerOptions _options;
@@ -15,9 +15,7 @@ public sealed class WixBundler
         _options = options ?? new WixBundlerOptions();
     }
 
-    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
-        BundleConfiguration bundle,
-        CancellationToken cancellationToken = default)
+    public void Validate(BundleConfiguration bundle)
     {
         if (bundle is null)
         {
@@ -62,6 +60,13 @@ public sealed class WixBundler
             WixIdentity.Create(bundle.Identifier, bundle.Version, target.RuntimeIdentifier,
                 _settings.InstallScope, _settings.UpgradeCode, language, _settings.MsiVersion);
         }
+    }
+
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
+        BundleConfiguration bundle,
+        CancellationToken cancellationToken = default)
+    {
+        Validate(bundle);
         var toolset = await WixToolsetResolver.ResolveAsync(
             _options.ResolveToolCacheDirectory(), _options.ToolsetArchivePath, cancellationToken);
         return await new BundlePipeline(

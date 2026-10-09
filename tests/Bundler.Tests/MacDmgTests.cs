@@ -46,6 +46,25 @@ public static class MacDmgTests
     }
 
     [Fact]
+    static void HostGateIsPlatformNotSupported()
+    {
+        // 宿主门禁标记类型：入口层靠它区分“逐格式容错”与“配置错误聚合”。
+        var input = CreateInputDirectory();
+        var previous = MacDmgBundleBackend.HostCheck;
+        MacDmgBundleBackend.HostCheck = () => false;
+        try
+        {
+            Assert.Throws<PlatformNotSupportedException>(
+                () => new MacDmgBundler().Validate(DmgConfiguration(input)));
+        }
+        finally
+        {
+            MacDmgBundleBackend.HostCheck = previous;
+            Cleanup(input);
+        }
+    }
+
+    [Fact]
     static void RejectsEmptyVolumeName()
     {
         var input = CreateInputDirectory();

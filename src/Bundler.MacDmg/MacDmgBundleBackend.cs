@@ -16,19 +16,37 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
     /// <summary>Test seam: overrides the macOS host check.</summary>
     internal static Func<bool>? HostCheck;
 
+    /// <summary>
+    /// Configuration-time checks the facade also runs during multi-format
+    /// pre-validation; everything past this point needs the build environment.
+    /// Returns the resolved volume name.
+    /// </summary>
+    internal static string ValidateConfiguration(MacDmgBundleConfiguration settings, BundleConfiguration bundle)
+    {
+        var volumeName = settings.VolumeName ?? MacAppBundleBackend.SanitizeFileName(bundle.ProductName);
+        if (volumeName.Trim().Length == 0)
+        {
+            throw new ArgumentException("The .dmg volume name must not be empty.");
+        }
+        ValidateSigning(settings.Signing);
+        return volumeName;
+    }
+
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleBuildContext context, CancellationToken cancellationToken)
     {
         var isMacOs = HostCheck?.Invoke() ?? RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
         if (!isMacOs)
         {
-            throw new NotSupportedException(
+            throw new PlatformNotSupportedException(
                 ".dmg creation requires a macOS host (hdiutil/osascript are not cross-host).");
         }
 
         var bundle = context.Configuration;
         var item = context.Item;
         var logger = context.Logger;
+        var volumeName = ValidateConfiguration(settings, bundle);
+
         var applicationName = MacAppBundleBackend.SanitizeFileName(bundle.ProductName) + ".app";
         var appPath = Path.Combine(
             bundle.OutputDirectory, item.Target.RuntimeIdentifier, "app", applicationName);
@@ -38,13 +56,6 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 "The .dmg backend expects the intermediate .app at " + appPath +
                 " (the planner adds it automatically when 'dmg' is requested).");
         }
-
-        var volumeName = settings.VolumeName ?? MacAppBundleBackend.SanitizeFileName(bundle.ProductName);
-        if (volumeName.Trim().Length == 0)
-        {
-            throw new ArgumentException("The .dmg volume name must not be empty.");
-        }
-        ValidateSigning(settings.Signing);
 
         var workDirectory = context.WorkDirectory;
         var stageDirectory = Path.Combine(workDirectory, "dmg-root");

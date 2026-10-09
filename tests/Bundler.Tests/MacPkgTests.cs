@@ -44,6 +44,25 @@ public static class MacPkgTests
     }
 
     [Fact]
+    static void HostGateIsPlatformNotSupported()
+    {
+        // 宿主门禁标记类型：入口层靠它区分“逐格式容错”与“配置错误聚合”。
+        var input = CreateInputDirectory();
+        var previous = MacPkgBundleBackend.HostCheck;
+        MacPkgBundleBackend.HostCheck = () => false;
+        try
+        {
+            Assert.Throws<PlatformNotSupportedException>(
+                () => new MacPkgBundler().Validate(PkgConfiguration(input)));
+        }
+        finally
+        {
+            MacPkgBundleBackend.HostCheck = previous;
+            Cleanup(input);
+        }
+    }
+
+    [Fact]
     static void RejectsRelativeInstallLocation()
     {
         var input = CreateInputDirectory();

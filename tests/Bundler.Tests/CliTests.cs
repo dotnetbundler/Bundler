@@ -167,15 +167,17 @@ public static class CliTests
         try
         {
             // 宿主门禁格式失败只 WARN+计入失败汇总——可产格式照常产出，末位 rc=1。
-            var gated = TestPlatform.IsMacOS ? "msi" : "dmg";
+            // 组合须是“rid 合法但宿主不可产”（rid 不匹配属配置错，统一预检 rc=2）。
+            var (gatedRid, gated) = TestPlatform.IsMacOS ? ("win-x64", "msi") : ("osx", "dmg");
             var args = BaseArgs("bundle", input, output)
+                .Select(arg => arg == "linux-x64" ? gatedRid : arg)
                 .Select(arg => arg == "zip" ? $"{gated},zip" : arg)
                 .Concat(["--quiet"]).ToArray();
             var (code, stdout, err) = Run(args);
             Assert.Equal(1, code);
             Assert.Contains("1 format(s) failed", err);
             Assert.Contains(gated, err);
-            var zip = Path.Combine(output, "linux-x64", "zip", "clifixture-1.0.0-linux-x64.zip");
+            var zip = Path.Combine(output, gatedRid, "zip", $"clifixture-1.0.0-{gatedRid}.zip");
             Assert.True(File.Exists(zip), $"producible format artifact must still land at {zip}");
             Assert.Contains(zip, stdout);
         }
@@ -186,6 +188,102 @@ public static class CliTests
             {
                 Directory.Delete(output, true);
             }
+        }
+    }
+
+    [Fact]
+    static void BundlePreValidationRejectsBeforeAnyArtifact()
+    {
+        // 后置格式旋钮错：统一预检聚合拒绝（rc=2），排在前面可产的 zip 不得先落盘。
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "bundler-cli-prev-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var (code, _, err) = Run(
+                "bundle", "--input-dir", input, "--rid", "osx", "--formats", "zip,app",
+                "--product-name", "CliFixture", "--identifier", "dev.example.cli",
+                "--package-version", "1.0.0", "--main-executable", "sub/dir/cli-fixture",
+                "--output-dir", output, "--quiet");
+            Assert.Equal(2, code);
+            Assert.Contains("directly inside the input directory", err);
+            Assert.False(Directory.Exists(output),
+                "pre-fanout validation must fail before any format builds; artifacts landed at " + output);
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            if (Directory.Exists(output))
+            {
+                Directory.Delete(output, true);
+            }
+        }
+    }
+
+    [Fact]
+    static void BundlePreValidationAggregatesAllFormatErrors()
+    {
+        // 不同 target 上两种格式各自的旋钮错要一次报完——不是撞见第一个就停。
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "bundler-cli-prevagg-" + Guid.NewGuid().ToString("N"));
+        var config = Path.Combine(Path.GetTempPath(), $"bundler-{Guid.NewGuid():N}.json");
+        File.WriteAllText(config, System.Text.Json.JsonSerializer.Serialize(new
+        {
+            productName = "CfgApp",
+            identifier = "dev.example.cfg",
+            version = "2.0.0",
+            outputDirectory = output,
+            targets = new[]
+            {
+                new
+                {
+                    runtimeIdentifier = "osx", inputDirectory = input,
+                    mainExecutable = "sub/dir/cli-fixture", formats = new[] { "app" }
+                },
+                new
+                {
+                    runtimeIdentifier = "win-x64", inputDirectory = input,
+                    mainExecutable = "cli-fixture", formats = new[] { "nsis" }
+                }
+            },
+            nsis = new { languages = new[] { "English", "english" } }
+        }));
+        try
+        {
+            var (code, _, err) = Run("bundle", "--config", config, "--quiet");
+            Assert.Equal(2, code);
+            Assert.Contains("directly inside the input directory", err);
+            Assert.Contains("selected more than once", err);
+            Assert.False(Directory.Exists(output),
+                "pre-fanout validation must fail before any format builds; artifacts landed at " + output);
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            File.Delete(config);
+            if (Directory.Exists(output))
+            {
+                Directory.Delete(output, true);
+            }
+        }
+    }
+
+    [Fact]
+    static void ValidateReportsFormatKnobErrors()
+    {
+        // bundler validate 也跑各格式旋钮——不是只验共享配置。
+        var input = CreateInputDirectory();
+        try
+        {
+            var (code, _, err) = Run(
+                "validate", "--input-dir", input, "--rid", "osx", "--formats", "app",
+                "--product-name", "CliFixture", "--identifier", "dev.example.cli",
+                "--package-version", "1.0.0", "--main-executable", "sub/dir/cli-fixture");
+            Assert.Equal(2, code);
+            Assert.Contains("directly inside the input directory", err);
+        }
+        finally
+        {
+            Directory.Delete(input, true);
         }
     }
 

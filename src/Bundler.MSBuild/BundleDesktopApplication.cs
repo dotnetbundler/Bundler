@@ -334,16 +334,61 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 }
             };
 
+            // 统一预检：共享配置与各格式旋钮在扇出前一次验全；配置类错误
+            // 一次报完即失败；宿主门禁格式不进预检，留构建趟逐格式容错。
+            BundlePlanner.Create(Configure(formats.Distinct().ToArray()));
+            var pending = new List<(PackageFormat Format, BundleConfiguration Configuration, IFormatBundler? Bundler)>();
+            var validationErrors = new List<string>();
+            foreach (var format in formats.Distinct())
+            {
+                var configuration = Configure([format]);
+                try
+                {
+                    var bundler = CreateBundler(format);
+                    bundler.Validate(configuration);
+                    pending.Add((format, configuration, bundler));
+                }
+                catch (PlatformNotSupportedException)
+                {
+                    pending.Add((format, configuration, null));
+                }
+                catch (Exception exception) when (exception is not BundleValidationException)
+                {
+                    validationErrors.Add($"{format}: {exception.Message}");
+                }
+            }
+            if (validationErrors.Count > 0)
+            {
+                Log.LogError("Bundler: package configuration is invalid: " +
+                    string.Join("; ", validationErrors));
+                return false;
+            }
+
             // Multi-format fanout: each backend runs once per requested format
             // against a configuration whose targets carry only that format.
             var artifacts = new List<BundleArtifact>();
             var failedFormats = new List<(PackageFormat Format, string Reason)>();
-            foreach (var format in formats.Distinct())
+            foreach (var (format, configuration, bundler) in pending)
             {
             try
             {
-                var configuration = Configure([format]);
-                IReadOnlyList<BundleArtifact> produced;
+                var produced = (bundler ?? CreateBundler(format))
+                    .BuildAsync(configuration)
+                    .GetAwaiter()
+                    .GetResult();
+                artifacts.AddRange(produced);
+            }
+            catch (Exception exception) when (exception is not BundleValidationException)
+            {
+                // 逐格式独立失败：单格式失败不拖累其余格式，末位汇总失败；
+                // 校验拒绝仍走任务级 catch 打印 issue 列表。
+                failedFormats.Add((format, exception.Message));
+                Log.LogWarning($"Bundler format '{format}' failed and was skipped: {exception.Message}");
+            }
+            }
+
+            IFormatBundler CreateBundler(PackageFormat format)
+            {
                 if (format == PackageFormat.Msi)
             {
                 if (!Enum.TryParse<DotNet.Bundler.Wix.WixInstallScope>(WixInstallScope, true, out var scope) ||
@@ -354,7 +399,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 var languages = (string.IsNullOrWhiteSpace(WixLanguages) ? WixLanguage : WixLanguages)
                     .Split(';').Select(entry => entry.Trim())
                     .Where(entry => entry.Length > 0).ToArray();
-                produced = new WixBundler(
+                return new WixBundler(
                     new WixBundleConfiguration
                     {
                         InstallScope = scope,
@@ -392,7 +437,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         ToolCacheDirectory = EmptyToNull(ToolCacheDirectory),
                         Signer = CreateWindowsSigner(),
                         Logger = new MsBuildBundleLogger(Log)
-                    }).BuildAsync(configuration).GetAwaiter().GetResult();
+                    });
             }
             else if (format == PackageFormat.Nsis)
             {
@@ -436,23 +481,18 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Signer = CreateWindowsSigner(),
                 Logger = new MsBuildBundleLogger(Log)
             };
-            produced = new NsisBundler(nsisConfiguration, nsisOptions)
-                .BuildAsync(configuration)
-                .GetAwaiter()
-                .GetResult();
+            return new NsisBundler(nsisConfiguration, nsisOptions);
             }
             else if (format == PackageFormat.App)
             {
-                produced = new MacAppBundler(
+                return new MacAppBundler(
                     BuildMacAppConfiguration(),
                     new MacAppBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
-                    .BuildAsync(configuration)
-                    .GetAwaiter()
-                    .GetResult();
+                    ;
             }
             else if (format == PackageFormat.Pkg)
             {
-                produced = new MacPkgBundler(
+                return new MacPkgBundler(
                     new MacPkgBundleConfiguration
                     {
                         Identifier = EmptyToNull(MacPkgIdentifier),
@@ -492,13 +532,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                     },
                     BuildMacAppConfiguration(),
                     new MacPkgBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
-                    .BuildAsync(configuration)
-                    .GetAwaiter()
-                    .GetResult();
+                    ;
             }
             else if (format == PackageFormat.Dmg)
             {
-                produced = new MacDmgBundler(
+                return new MacDmgBundler(
                     new MacDmgBundleConfiguration
                     {
                         Compression = MacEnumValue<DotNet.Bundler.MacDmg.MacDmgCompression>(
@@ -524,13 +562,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                     },
                     BuildMacAppConfiguration(),
                     new MacDmgBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
-                    .BuildAsync(configuration)
-                    .GetAwaiter()
-                    .GetResult();
+                    ;
             }
             else if (format == PackageFormat.Deb)
             {
-                produced = new DebBundler(
+                return new DebBundler(
                     new DebBundleConfiguration
                     {
                         PackageName = EmptyToNull(DebPackageName),
@@ -568,13 +604,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         }).ToArray()
                     },
                     new DebBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
-                    .BuildAsync(configuration)
-                    .GetAwaiter()
-                    .GetResult();
+                    ;
             }
             else if (format == PackageFormat.Rpm)
             {
-                produced = new RpmBundler(
+                return new RpmBundler(
                     new RpmBundleConfiguration
                     {
                         PackageName = EmptyToNull(RpmPackageName),
@@ -620,13 +654,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         }).ToArray()
                     },
                     new RpmBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
-                    .BuildAsync(configuration)
-                    .GetAwaiter()
-                    .GetResult();
+                    ;
             }
             else if (format is PackageFormat.Zip or PackageFormat.TarGz)
             {
-                produced = new ArchiveBundler(
+                return new ArchiveBundler(
                     new ArchiveBundleConfiguration
                     {
                         PackageName = EmptyToNull(ArchivePackageName),
@@ -639,13 +671,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         }).ToArray()
                     },
                     new ArchiveBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
-                    .BuildAsync(configuration)
-                    .GetAwaiter()
-                    .GetResult();
+                    ;
             }
             else if (format == PackageFormat.AlpineApk)
             {
-                produced = new AlpineApkBundler(
+                return new AlpineApkBundler(
                     new AlpineApkBundleConfiguration
                     {
                         PackageName = EmptyToNull(AlpineApkPackageName),
@@ -678,13 +708,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         SigningKeyPassphrase = EmptyToNull(AlpineApkSigningKeyPassphrase)
                     },
                     new AlpineApkBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
-                    .BuildAsync(configuration)
-                    .GetAwaiter()
-                    .GetResult();
+                    ;
             }
             else if (format == PackageFormat.AppImage)
             {
-                produced = new AppImageBundler(
+                return new AppImageBundler(
                     new AppImageBundleConfiguration
                     {
                         PackageName = EmptyToNull(AppImagePackageName),
@@ -707,22 +735,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         }).ToArray()
                     },
                     new AppImageBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
-                    .BuildAsync(configuration)
-                    .GetAwaiter()
-                    .GetResult();
+                    ;
             }
             else
             {
                 throw new NotSupportedException($"Bundler does not support the '{format}' package format.");
-            }
-                artifacts.AddRange(produced);
-            }
-            catch (Exception exception) when (exception is not BundleValidationException)
-            {
-                // 逐格式独立失败：单格式失败不拖累其余格式，末位汇总失败；
-                // 校验拒绝仍走任务级 catch 打印 issue 列表。
-                failedFormats.Add((format, exception.Message));
-                Log.LogWarning($"Bundler format '{format}' failed and was skipped: {exception.Message}");
             }
             }
 

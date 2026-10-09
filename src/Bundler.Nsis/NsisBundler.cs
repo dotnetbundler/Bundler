@@ -3,7 +3,7 @@ using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Nsis;
 
-public sealed class NsisBundler
+public sealed class NsisBundler : IFormatBundler
 {
     public static IReadOnlyList<string> SupportedLanguages { get; } =
         NsisLanguageCatalog.Definitions.Select(language => language.Name).ToArray();
@@ -19,9 +19,7 @@ public sealed class NsisBundler
         _options = options ?? new NsisBundlerOptions();
     }
 
-    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
-        BundleConfiguration bundle,
-        CancellationToken cancellationToken = default)
+    public void Validate(BundleConfiguration bundle)
     {
         if (bundle is null)
         {
@@ -55,6 +53,13 @@ public sealed class NsisBundler
         }
 
         ValidateConfiguration(_configuration);
+    }
+
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
+        BundleConfiguration bundle,
+        CancellationToken cancellationToken = default)
+    {
+        Validate(bundle);
         var cache = _options.ResolveToolCacheDirectory();
         var embedded = await NsisEmbeddedResources.MaterializeAsync(cache, cancellationToken);
         var toolset = !string.IsNullOrWhiteSpace(_options.CompilerPath)

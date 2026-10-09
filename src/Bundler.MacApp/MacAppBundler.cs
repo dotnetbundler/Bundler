@@ -3,7 +3,7 @@ using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.MacApp;
 
-public sealed class MacAppBundler
+public sealed class MacAppBundler : IFormatBundler
 {
     private readonly MacAppBundleConfiguration _configuration;
     private readonly MacAppBundlerOptions _options;
@@ -16,9 +16,7 @@ public sealed class MacAppBundler
         _options = options ?? new MacAppBundlerOptions();
     }
 
-    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
-        BundleConfiguration bundle,
-        CancellationToken cancellationToken = default)
+    public void Validate(BundleConfiguration bundle)
     {
         if (bundle is null)
         {
@@ -97,6 +95,13 @@ public sealed class MacAppBundler
         {
             throw new ArgumentException(".app icons accept a single .car or .icon input.");
         }
+    }
+
+    public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
+        BundleConfiguration bundle,
+        CancellationToken cancellationToken = default)
+    {
+        Validate(bundle);
         return await new BundlePipeline(
             [new MacAppBundleBackend(_configuration)], _options.Logger).BuildAsync(bundle, cancellationToken);
     }
