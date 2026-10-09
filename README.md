@@ -293,6 +293,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerMacAppNotaryProfile` | 否 | 无；keychain profile 名（公证凭证三模式之一） |
 | `BundlerMacAppAppleId`/`…ApplePassword`/`…AppleTeamId` | 否 | 无；Apple ID 凭证三元组（密码属秘密勿入库） |
 | `BundlerMacAppNotaryApiKeyPath`/`…KeyId`/`…Issuer` | 否 | 无；App Store Connect API key 凭证三元组 |
+| —— 公证凭证环境变量回退 | —— | 全部凭证属性缺省时依次回退 `APPLE_PROFILE`（profile）/`APPLE_API_KEY_PATH`+`APPLE_API_KEY`+`APPLE_API_ISSUER`（API key 三元组）/`APPLE_ID`+`APPLE_PASSWORD`+`APPLE_TEAM_ID`（Apple ID 三元组），三者按该顺序取第一组完整组 |
 | `BundlerMacDmgCompression` | 否 | `Ulmo`；也支持 `Udzo`/`Udbz` |
 | `BundlerMacDmgVolumeName` | 否 | `BundlerProductName`；挂载显示卷名 |
 | `BundlerMacDmgSkipWindowLayout` | 否 | `false`；显式跳过 `.DS_Store` 布局（无 GUI 宿主自动降级+警告仍产可挂载 DMG） |

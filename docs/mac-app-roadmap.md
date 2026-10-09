@@ -158,7 +158,7 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 ### MAC-APP-3：codesign 与 notarization
 
 - **前置**：MAC-APP-2 通过；本阶段全部签名代码路径可在无真实证书下完成开发。
-- **目标/交付**：签名提供器（identity/临时钥匙串证书导入/`codesign -s -` ad-hoc）、hardened runtime 开关（仅可执行目标）、entitlements、inside-out 嵌套签名顺序（`MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries` 约定）、`xattr -crs`、签后 `codesign --verify --deep --strict` 与 `spctl` 断言、显式公证（ditto zip→签→`xcrun notarytool submit`--wait/异步→`xcrun stapler staple`）、`skipStapling`、凭证环境变量与密钥提供器、失败清理不留伪成功产物。
+- **目标/交付**：签名提供器（identity/临时钥匙串证书导入/`codesign -s -` ad-hoc）、hardened runtime 开关（仅可执行目标）、entitlements、inside-out 嵌套签名顺序（`MacOS`/`Frameworks`/`PlugIns`/`Helpers`/`XPCServices`/`Libraries`/`SharedFrameworks` 约定）、`xattr -crs`、签后 `codesign --verify --deep --strict` 与 `spctl` 断言、显式公证（ditto zip→签→`xcrun notarytool submit`--wait/异步→`xcrun stapler staple`）、`skipStapling`、凭证环境变量与密钥提供器、失败清理不留伪成功产物。
 - **新增自动化**：签名顺序、entitlements 传递、hardened runtime 目标筛选、临时钥匙串创建/销毁、失败路径无伪产物、公证参数组装（不上传的桩断言）；
   本机真实测试：全链 `codesign -s -` ad-hoc 签名 + `--verify` + 启动 + 证书缺失路径；公证参数组装与失败路径用桩断言（真实提交外部待验收）。
 - **人工边界**：Developer ID Application 证书、真实公证提交/上钉/撤销、Gatekeeper 离线验票、`APPLE_*` 凭证链路——全部外部待验收（MAC-APP-OI-01 起）。
@@ -166,7 +166,7 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 - **退出**：本机 ad-hoc 签名链可复现、失败清理断言通过；所有需凭证项登记外部待办。
 - **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）**：
   - `MacAppSigningConfiguration`（挂在 `MacAppBundleConfiguration.Signing`）：`Identity`（`-`=ad-hoc）与 `TemporaryCertificatePath`+`Password`（临时钥匙串导入）互斥，`HardenedRuntime`、`EntitlementsFile`、`Notarize`/`NotaryWait`（默认 true）/`SkipStapling`、公证凭证键（keychain profile / Apple ID 三元组 / API key 三元组，显式配置优先、回退 `APPLE_PROFILE`/`APPLE_ID`/`APPLE_PASSWORD`/`APPLE_TEAM_ID`/`APPLE_API_KEY_PATH`/`APPLE_API_KEY`/`APPLE_API_ISSUER` 环境变量）；
-  - `MacAppSigning`：签名在非 macOS 宿主预检即 `NotSupportedException`；`xattr -crs` 清扩展属性→按 `MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries` 约定目录内全部常规文件先签（修正：嵌套代码不只 Mach-O，托管 .dll 也需签名——真实构建暴露出"未签名子组件"错误后按此修正）→主可执行（带 entitlements）→整包（带 entitlements）；签后 `codesign --verify --deep --strict --verbose=4` 硬断言；非 ad-hoc 再跑 `spctl -a -t execute -vv`（拒绝记警告不失败）；签名在 staging 内完成，失败不留伪成功产物；
+  - `MacAppSigning`：签名在非 macOS 宿主预检即 `NotSupportedException`；`xattr -crs` 清扩展属性→按 `MacOS`/`Frameworks`/`PlugIns`/`Helpers`/`XPCServices`/`Libraries`/`SharedFrameworks` 约定目录内全部常规文件先签（嵌套 .app/.appex/.bundle/.framework/.xpc 按其自身 Contents 递归 inside-out 后以 bundle 维度签）（修正：嵌套代码不只 Mach-O，托管 .dll 也需签名——真实构建暴露出"未签名子组件"错误后按此修正）→主可执行（带 entitlements）→整包（带 entitlements）；签后 `codesign --verify --deep --strict --verbose=4` 硬断言；非 ad-hoc 再跑 `spctl -a -t execute -vv`（拒绝记警告不失败）；签名在 staging 内完成，失败不留伪成功产物；
   - 临时钥匙串：`security create-keychain`（随机口令）→ 读出并前置插入 `list-keychains -s` 搜索表 → unlock → `import -P`（`-T /usr/bin/codesign`）→ `set-key-partition-list` → `find-identity -v -p codesigning` 反推 identity；dispose 恢复搜索表+delete-keychain+删文件，失败路径同样执行；
   - 公证管线（显式 opt-in）：`ditto -c -k --keepParent`→`xcrun notarytool submit <zip> <凭证> --output-format json [--wait]`→成功且 wait 且未 skipStapling 时 `xcrun stapler staple`；zip finally 清理；ad-hoc/无凭证/不完整凭证组预检拒绝；`NotaryWait=false`/`SkipStapling` 未开公证也拒绝；
   - MSBuild：`BundlerMacAppSignIdentity`/`BundlerMacAppSigningCertificatePath`/`...Password`/`BundlerMacAppHardenedRuntime`/`BundlerMacAppEntitlementsFile`/`BundlerMacAppNotarize`/`BundlerMacAppNotaryWait`/`BundlerMacAppSkipStapling`/`BundlerMacAppNotaryProfile`/`BundlerMacAppAppleId`/`...Password`/`...TeamId`/`BundlerMacAppNotaryApiKeyPath`/`...KeyId`/`...Issuer` 共 15 个新属性；
