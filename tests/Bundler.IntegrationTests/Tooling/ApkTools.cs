@@ -36,7 +36,6 @@ internal static class ApkTools
         return int.Parse(result.StdOut.Trim());
     }
 
-    // tar -xOf <tar> <member>：取出成员内容（stdout）。
     public static string TarMemberText(string tarPath, string member)
     {
         var result = ProcessRunner.Run("tar", ["-xOf", tarPath, member]);
@@ -47,7 +46,8 @@ internal static class ApkTools
     public static string TarMemberBytesToFile(string tarPath, string member, string destination)
     {
         var result = ProcessRunner.Run("/bin/sh",
-            ["-c", $"tar -xOf '{tarPath}' '{member}' > '{destination}'"]);
+            ["-c", "tar -xOf \"$1\" \"$2\" > \"$3\"",
+             "sh", tarPath, member, destination]);
         ProcessRunner.AssertSuccess(result, $"tar member '{member}' missing from {tarPath}");
         return destination;
     }

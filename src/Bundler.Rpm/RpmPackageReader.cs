@@ -7,7 +7,7 @@ namespace DotNet.Bundler.Rpm;
 /// and payload entries. Used by tests to prove the writer produces a structure
 /// rpm itself reads.
 /// </summary>
-public sealed class RpmPackageReader
+internal sealed class RpmPackageReader
 {
     public sealed class Header
     {

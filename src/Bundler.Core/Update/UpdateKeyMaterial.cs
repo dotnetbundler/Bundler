@@ -64,7 +64,20 @@ public sealed class UpdateKeyMaterial
 
     public void Save(string path)
     {
-        using var stream = File.Create(path);
+        SaveCore(path);
+#if NET10_0_OR_GREATER
+        if (!OperatingSystem.IsWindows())
+        {
+            // 私钥文件权限收窄到属主，不随 umask。
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+#endif
+    }
+
+    private void SaveCore(string path)
+    {
+        // 私钥不可静默覆盖：已存在即拒，防误丢既有发布身份。
+        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write);
         UpdateJson.WriteKeyMaterial(stream, this);
         stream.Write(Encoding.ASCII.GetBytes("\n"), 0, 1);
     }

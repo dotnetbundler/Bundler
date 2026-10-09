@@ -1,4 +1,3 @@
-// .rpm 工具：rpm 查询字段、rpm2cpio|cpio 载荷解包。
 // 宿主 rpm/rpm2cpio/cpio 缺一即对应腿 Skip（脚本可选工具口径）。
 internal static class RpmTools
 {
@@ -53,7 +52,8 @@ internal static class RpmTools
             }
         }
         var extract = ProcessRunner.Run("/bin/sh",
-            ["-c", $"cd '{destinationDir}' && rpm2cpio '{rpmPath}' | cpio -idm --quiet --no-absolute-filenames"]);
+            ["-c", "cd \"$1\" && rpm2cpio \"$2\" | cpio -idm --quiet --no-absolute-filenames",
+             "sh", destinationDir, rpmPath]);
         ProcessRunner.AssertSuccess(extract, $"rpm payload extraction failed on {rpmPath}");
     }
 }

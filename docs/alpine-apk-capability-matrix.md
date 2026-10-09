@@ -10,7 +10,7 @@
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
 | `.apk` 产物（托管三段 gzip 流串联写入器，零原生工具） | 已实现 | APK-1 | `OutputDirectory/<rid>/apk/<package>-<version>-r<release>.apk` + `.sha256` 侧车；gzip 魔数/段数/零块规则逐一断言 |
-| 任意构建宿主（含 Windows/macOS CI） | 已实现（Linux 宿主验证）/外部待验收（跨宿主矩阵） | APK-1 | 纯托管写出，无宿主 OS 门控；跨宿主构建矩阵属 APK-OI-01 |
+| 任意构建宿主（含 Windows/macOS CI） | 已实现（Linux 宿主验证）/已由 CI 收编（release-verify alpine-docker + ubuntu-arm 腿） | APK-1 | 纯托管写出，无宿主 OS 门控；跨宿主构建矩阵属 APK-OI-01 |
 | 目录载荷 → `/usr/lib/<package-name>/` | 已实现 | APK-1 | 固定安装根；数据段真实 `apk add` 后 `apk info -L` 逐路径断言 |
 | `/usr/bin/<command>` 相对符号链接 | 已实现 | APK-1 | `usr/bin/<name>` → `../lib/<package>/<main>`；`BundlerAlpineApkBinLink` 可改名或 `none` 关闭 |
 | pax 扩展头 `APK-TOOLS.checksum.SHA1`（十六进制 sha1） | 已实现 | APK-4 | 逐常规文件 + 逐符号链接（按链接目标字符串哈希）；对照真实 `musl` apk 解剖校验，缺此被 `apk add` 报 missing embedded checksum 拒绝 |
@@ -55,7 +55,7 @@
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
 | `BundlerFormats=alpineapk`（MSBuild） | 已实现 | APK-1 | `linux-musl-*` RID 上扇出；与其他格式混排（`zip;targz;alpineapk`）支持 |
-| `bundler --formats alpineapk`（唯一合法名；`apk` 别名已移除——留给未来 Android 格式） | 已实现 | APK-1 | `Bundling for linux-musl-x64: apk` 等实录可见；`--version` 内嵌真实包版本 |
+| `bundler --formats alpineapk`（唯一合法名；`alpineapk` 格式名已移除——留给未来 Android 格式） | 已实现 | APK-1 | `Bundling for linux-musl-x64: apk` 等实录可见；`--version` 内嵌真实包版本 |
 | `bundler.json` `"alpineapk"` 段 + `apk` 别名 | 已实现 | APK-1 | `BundlerJsonContext` 覆盖全部格式旋钮 |
 | `DotNet.Bundler.AlpineApk` NuGet 直接消费 | 已实现 | APK-4 | `AlpineApkBundler().BuildAsync(BundleConfiguration)` 契约测试 + `tests/Bundler.ApiTests`（`AlpineApkApiTests`，`alpineapk` API 用法） |
 | `DotNet.Bundler` 便利元包传递 AlpineApk | 已实现 | APK-1 | `BundleDesktopApplication` Task 接线 + `buildTransitive` 传递 |

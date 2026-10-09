@@ -300,7 +300,6 @@ internal sealed class NsisBundleBackend(
             ["copyright"] = Escape(copyright),
             ["identifier"] = Escape(configuration.Identifier),
             ["main_executable"] = Escape(item.MainExecutable),
-            ["process_name"] = Escape(Path.GetFileName(item.MainExecutable)),
             ["install_folder"] = Escape(safeProductName),
             ["install_mode"] = InstallModeName(settings.InstallMode),
             ["compression_directive"] = CompressionDirective(settings.Compression),

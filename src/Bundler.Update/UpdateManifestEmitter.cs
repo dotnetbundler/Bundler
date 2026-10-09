@@ -80,7 +80,10 @@ public static class UpdateManifestEmitter
             }
             if (!File.Exists(artifactFile))
             {
-                continue;
+                // 声明了更新的产物必须进 feed：缺失即打包不一致，静默跳过会产出死更新。
+                throw new FileNotFoundException(
+                    $"The artifact declared for updates does not exist: '{artifactFile}'.",
+                    artifactFile);
             }
             var signature = await Task.Run(
                 () => EcdsaSigner.SignFile(artifactFile, key), cancellationToken);

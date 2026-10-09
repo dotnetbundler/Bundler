@@ -475,8 +475,13 @@ internal static class BootstrapPlan
         foreach (var drive in DriveInfo.GetDrives())
         {
             var root = drive.RootDirectory.FullName;
-            if (full.StartsWith(root, OperatingSystem.IsWindows()
-                    ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) &&
+            var comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            if (full.StartsWith(root, comparison) &&
+                // 前缀命中还要过路径段边界：/a/bb 不能算挂到 /a/b。
+                (full.Length == root.Length ||
+                 full[root.Length] is '/' or '\\' ||
+                 root.EndsWith("/") || root.EndsWith("\\")) &&
                 (best is null || root.Length > best.RootDirectory.FullName.Length))
             {
                 best = drive;

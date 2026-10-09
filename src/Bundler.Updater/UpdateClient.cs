@@ -174,7 +174,9 @@ public sealed class UpdateClient
     {
         // 未验签产物永不进入应用面——Verify 是唯一置位入口。
         if (!string.Equals(Path.GetFullPath(artifactPath), _verifiedArtifact,
-                StringComparison.Ordinal))
+                System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                    System.Runtime.InteropServices.OSPlatform.Linux)
+                    ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase))
         {
             throw new UpdateException(
                 "artifact has not passed Verify — refusing unauthenticated install.");
@@ -227,8 +229,13 @@ public sealed class UpdateClient
             foreach (var drive in DriveInfo.GetDrives())
             {
                 var root = drive.RootDirectory.FullName;
-                if (full.StartsWith(root, RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-                        ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) &&
+                var comparison = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                    ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                if (full.StartsWith(root, comparison) &&
+                    // 前缀命中还要过路径段边界：/a/bb 不能算挂到 /a/b。
+                    (full.Length == root.Length ||
+                     full[root.Length] is '/' or '\\' ||
+                     root.EndsWith("/") || root.EndsWith("\\")) &&
                     (best is null || root.Length > best.RootDirectory.FullName.Length))
                 {
                     best = drive;

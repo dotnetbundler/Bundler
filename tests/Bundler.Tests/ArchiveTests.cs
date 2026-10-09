@@ -68,7 +68,10 @@ public static class ArchiveTests
         try
         {
             File.WriteAllText(Path.Combine(input, "real.so"), "lib");
-            CreateSymlink(link, "real.so");
+            if (!TryCreateSymlink(link, "real.so"))
+            {
+                Assert.Skip("The host cannot create symlinks; symlink leg unverifiable.");
+            }
             var artifacts = new ArchiveBundler().BuildAsync(
                 Configuration(input, output, formats: [PackageFormat.TarGz]))
                 .GetAwaiter().GetResult();
@@ -735,10 +738,14 @@ public static class ArchiveTests
         return Encoding.UTF8.GetString(header, offset, end - offset);
     }
 
-    static void CreateSymlink(string path, string target)
+    static bool TryCreateSymlink(string path, string target)
     {
-        try { File.CreateSymbolicLink(path, target); }
-        catch { /* filesystem/permission does not allow links — the assertion tolerates it */ }
+        try { File.CreateSymbolicLink(path, target); return true; }
+        catch
+        {
+            // 文件系统/权限不支持建链——调用方显式 Skip 而不是当断言通过。
+            return false;
+        }
     }
 
     // A unix socket (or any other non-regular file) inside the input must be

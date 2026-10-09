@@ -15,9 +15,10 @@ public static class Program
             PrintUsage(Console.Error);
             return 2;
         }
-        catch (WaitTimeoutException)
+        catch (WaitTimeoutException exception)
         {
-            Console.Error.WriteLine("bundler-updater: the target process did not exit in time.");
+            Console.Error.WriteLine(
+                $"bundler-updater: {exception.Message} (the target process did not exit in time)");
             return 3;
         }
         catch (Exception exception)

@@ -36,8 +36,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
                 ? new XAttribute("AllowDowngrades", "yes")
                 : new XAttribute("DowngradeErrorMessage", Loc("DowngradeErrorMessage"))));
         var registrationRoot = settings.InstallScope == WixInstallScope.CurrentUser ? "HKCU" : "HKLM";
-        var definitionKey = "Software\\DotNetBundler\\Products\\" + bundle.Identifier.ToLowerInvariant() +
-            "\\" + item.Target.RuntimeIdentifier + language.Suffix + "\\Components";
+        var definitionKey = ComponentsRegistryKey(bundle, item, language);
         product.Add(new XElement(Wix + "Property", new XAttribute("Id", "BUNDLER_INSTALLED_DEFINITION"),
             new XElement(Wix + "RegistrySearch", new XAttribute("Id", "FindBundlerDefinition"),
                 new XAttribute("Root", registrationRoot), new XAttribute("Key", definitionKey),
@@ -71,15 +70,17 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
         // 跨安装器目录延续（Tauri 对齐）：先读旧 NSIS 安装器写入的卸载键 InstallLocation，
         // 再到 Bundler 自家注册；Bundler 注册的目录优先（后写者胜）。
         var nsisUninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\" + bundle.Identifier;
+        // NSIS 在 x64/arm64 下写 64 位注册表视图（installer.nsi SetRegView 64），MSI 检索须同视图。
+        var nsisRegistryView = item.Target.Architecture == CpuArchitecture.X86 ? "no" : "yes";
         var nsisSearches = new XElement(Wix + "Property", new XAttribute("Id", "PREVIOUS_NSIS_INSTALLDIR"),
             new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerNsisDirSearchMachine"),
                 new XAttribute("Root", "HKLM"), new XAttribute("Key", nsisUninstallKey),
                 new XAttribute("Name", "InstallLocation"), new XAttribute("Type", "directory"),
-                new XAttribute("Win64", "no")),
+                new XAttribute("Win64", nsisRegistryView)),
             new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerNsisDirSearchUser"),
                 new XAttribute("Root", "HKCU"), new XAttribute("Key", nsisUninstallKey),
                 new XAttribute("Name", "InstallLocation"), new XAttribute("Type", "directory"),
-                new XAttribute("Win64", "no")));
+                new XAttribute("Win64", nsisRegistryView)));
         product.Add(nsisSearches);
         product.Add(new XElement(Wix + "Property", new XAttribute("Id", "INSTALLFOLDER"),
             new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerInstallDirSearch"),
@@ -145,8 +146,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
         var feature = new XElement(Wix + "Feature", new XAttribute("Id", "Complete"),
             new XAttribute("Title", bundle.ProductName), new XAttribute("Level", "1"));
         var registryRoot = settings.InstallScope == WixInstallScope.CurrentUser ? "HKCU" : "HKLM";
-        var registryKey = "Software\\DotNetBundler\\Products\\" + bundle.Identifier.ToLowerInvariant() +
-            "\\" + item.Target.RuntimeIdentifier + language.Suffix + "\\Components";
+        var registryKey = ComponentsRegistryKey(bundle, item, language);
         var mainExecutable = WixPackagePaths.NormalizeTarget(item.MainExecutable!);
 
         foreach (var file in files)
@@ -538,6 +538,11 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
     // WiX localization reference resolved from the merged per-language .wxl
     // at link time; Bundler default texts live in WixLocale.
     private static string Loc(string id) => "!(loc.Bundler" + id + ")";
+
+    private static string ComponentsRegistryKey(BundleConfiguration bundle, BundlePlanItem item,
+        WixLanguageInfo language) =>
+        "Software\\DotNetBundler\\Products\\" + bundle.Identifier.ToLowerInvariant() +
+        "\\" + item.Target.RuntimeIdentifier + language.Suffix + "\\Components";
 
     private static string ParentPath(string path)
     {

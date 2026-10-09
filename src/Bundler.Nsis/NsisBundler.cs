@@ -37,11 +37,12 @@ public sealed class NsisBundler : IFormatBundler
                 $"NSIS package version '{bundle.Version}' has a numeric component outside the Windows range 0-65535.",
                 nameof(bundle));
         }
-        var unsupported = bundle.Targets
-            .SelectMany(target => target.Formats)
-            .FirstOrDefault(format => format != PackageFormat.Nsis);
-        if (bundle.Targets.SelectMany(target => target.Formats).Any(format => format != PackageFormat.Nsis))
+        if (bundle.Targets.SelectMany(target => target.Formats)
+                .Any(format => format != PackageFormat.Nsis))
         {
+            // Nsis=0 是枚举默认值：FirstOrDefault 空集时恰落 0，必须用 Any 判存在。
+            var unsupported = bundle.Targets.SelectMany(target => target.Formats)
+                .First(format => format != PackageFormat.Nsis);
             throw new NotSupportedException(
                 $"DotNet.Bundler.Nsis accepts NSIS targets only; '{unsupported}' requires another backend package.");
         }

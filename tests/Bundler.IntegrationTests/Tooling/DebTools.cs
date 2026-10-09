@@ -28,8 +28,10 @@ internal static class DebTools
             Directory.Delete(destinationDir, recursive: true);
         }
         Directory.CreateDirectory(destinationDir);
+        // 路径走位置参数而非单引号插值：含引号/空格的路径不会被命令行拼接吞掉。
         var result = ProcessRunner.Run("/bin/sh",
-            ["-c", $"dpkg-deb --fsys-tarfile '{debPath}' | tar -xf - -C '{destinationDir}'"]);
+            ["-c", "dpkg-deb --fsys-tarfile \"$1\" | tar -xf - -C \"$2\"",
+             "sh", debPath, destinationDir]);
         ProcessRunner.AssertSuccess(result, $"dpkg-deb data extraction failed on {debPath}");
     }
 

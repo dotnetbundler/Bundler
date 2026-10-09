@@ -66,6 +66,20 @@ public static class UpdateSignatureVerifier
         {
             yield return ToDer(signature);
         }
+        else if (signature.Length >= 8 && signature[0] == 0x30)
+        {
+            // 输入是 DER 时反向兜底 P1363——netstandard2.0 的 ECDsa 实现认哪边依平台而异。
+            byte[] p1363;
+            try
+            {
+                p1363 = ToP1363(signature);
+            }
+            catch (InvalidOperationException)
+            {
+                yield break;
+            }
+            yield return p1363;
+        }
     }
 
     // IEEE-P1363（r||s 定长拼接）↔ DER（SEQUENCE{INTEGER r, INTEGER s}）双向归一。

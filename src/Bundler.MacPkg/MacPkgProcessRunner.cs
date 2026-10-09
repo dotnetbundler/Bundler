@@ -1,3 +1,4 @@
+using System.Text;
 using System.Diagnostics;
 
 namespace DotNet.Bundler.MacPkg;
@@ -93,6 +94,33 @@ internal static class MacPkgProcessRunner
         }
     }
 
-    private static string QuoteArgument(string argument) =>
-        "\"" + argument.Replace("\"", "\\\"") + "\"";
+    // MSVCRT 规则：引号内 '"' 与收尾反斜杠需成对，否则吞并收尾引号。
+    private static string QuoteArgument(string argument)
+    {
+        if (argument.Length > 0 && !argument.Any(character => char.IsWhiteSpace(character) || character == '"'))
+        {
+            return argument;
+        }
+        var builder = new StringBuilder("\"");
+        var backslashes = 0;
+        foreach (var character in argument)
+        {
+            if (character == '\\')
+            {
+                backslashes++;
+                continue;
+            }
+            if (character == '"')
+            {
+                builder.Append('\\', backslashes * 2 + 1).Append('"');
+            }
+            else
+            {
+                builder.Append('\\', backslashes).Append(character);
+            }
+            backslashes = 0;
+        }
+        builder.Append('\\', backslashes * 2).Append('"');
+        return builder.ToString();
+    }
 }

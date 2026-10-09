@@ -109,10 +109,44 @@ internal static class CliConfig
         "fileAssociations", "urlProtocols", "targets"
     };
 
+    private static readonly HashSet<string> TargetFields_Exact = new(StringComparer.Ordinal)
+    {
+        "runtimeIdentifier", "inputDirectory", "mainExecutable", "signingFiles", "formats"
+    };
+
     private static readonly HashSet<string> TargetFields_Allowed = new(StringComparer.OrdinalIgnoreCase)
     {
         "runtimeIdentifier", "inputDirectory", "mainExecutable", "signingFiles", "formats"
     };
+
+    // *File/*Path/*Directory 后缀之外仍指宿主路径的旋钮：显式清单，随配置面扩充维护。
+    private static readonly Dictionary<string, HashSet<string>> PathKnobs = new(StringComparer.Ordinal)
+    {
+        ["nsis"] = new(StringComparer.OrdinalIgnoreCase)
+            { "installerIcon", "uninstallerIcon", "headerImage", "sidebarImage", "uninstallerHeaderImage", "license" },
+        ["msi"] = new(StringComparer.OrdinalIgnoreCase)
+            { "license" },
+        ["app"] = new(StringComparer.OrdinalIgnoreCase)
+            { "icon", "entitlements", "provisioningProfile" },
+        ["dmg"] = new(StringComparer.OrdinalIgnoreCase)
+            { "icon", "backgroundImage", "volumeIcon", "license" },
+        ["pkg"] = new(StringComparer.OrdinalIgnoreCase)
+            { "icon", "license", "welcome", "readme", "conclusion", "title" },
+        ["deb"] = new(StringComparer.OrdinalIgnoreCase)
+            { "icon", "desktopFile", "metainfoFile", "changelog", "systemdService" },
+        ["rpm"] = new(StringComparer.OrdinalIgnoreCase)
+            { "icon", "desktopFile", "metainfoFile", "changelog", "triggerIn", "triggerUn",
+              "triggerPostUn", "preInstallScript", "postInstallScript",
+              "preDeinstallScript", "postDeinstallScript", "preUpgradeScript", "postUpgradeScript",
+              "signingKey" },
+        ["appimage"] = new(StringComparer.OrdinalIgnoreCase)
+            { "icon", "desktopFile", "metainfoFile" },
+        ["alpineapk"] = new(StringComparer.OrdinalIgnoreCase)
+            { "icon", "desktopFile", "metainfoFile" },
+        ["update"] = new(StringComparer.OrdinalIgnoreCase)
+            { "signingKey", "bootstrapperDirectory" },
+    };
+
 
     private static readonly Dictionary<string, Type> SectionTypes = new(StringComparer.Ordinal)
     {
@@ -159,8 +193,15 @@ internal static class CliConfig
                 }
                 foreach (var key in target.Select(pair => pair.Key).ToArray())
                 {
-                    if (!TargetFields_Allowed.Contains(key))
+                    if (!TargetFields_Exact.Contains(key))
                     {
+                        var canonical = TargetFields_Exact.FirstOrDefault(k =>
+                            string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+                        if (canonical is not null)
+                        {
+                            throw new CliUsageException(
+                                $"Unknown target key 'targets[{i}].{key}'; did you mean '{canonical}'?");
+                        }
                         throw new CliUsageException(
                             $"Unknown target key 'targets[{i}].{key}'. Known: " +
                             string.Join(", ", TargetFields_Allowed.Order()) + ".");
@@ -175,18 +216,27 @@ internal static class CliConfig
             {
                 continue;
             }
-            var known = (BundlerJsonContext.Default.GetTypeInfo(type)?.Properties
+            var knownExact = (BundlerJsonContext.Default.GetTypeInfo(type)?.Properties
                     ?? throw new InvalidOperationException(
                         $"No JSON metadata for {type.Name}."))
                 .Select(p => p.Name)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                .ToHashSet(StringComparer.Ordinal);
+            var knownFolded = new HashSet<string>(knownExact, StringComparer.OrdinalIgnoreCase);
             foreach (var key in child.Select(pair => pair.Key).ToArray())
             {
-                if (!known.Contains(key))
+                // 大小写变体会被后续大小写敏感取值静默丢弃：门禁直接点破正确写法。
+                if (!knownExact.Contains(key))
                 {
+                    var canonical = knownExact.FirstOrDefault(k =>
+                        string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+                    if (canonical is not null)
+                    {
+                        throw new CliUsageException(
+                            $"Unknown key '{section}.{key}'; did you mean '{canonical}'?");
+                    }
                     throw new CliUsageException(
                         $"Unknown key '{section}.{key}'. Known {section} knobs: " +
-                        string.Join(", ", known.Order()) + ".");
+                        string.Join(", ", knownFolded.Order()) + ".");
                 }
             }
         }
@@ -214,11 +264,18 @@ internal static class CliConfig
                         $"Unknown format section '--{section}'. Supported: {string.Join(", ", FormatSections.Order())}.");
                 }
                 var child = document[section] as JsonObject ?? new JsonObject();
-                child[KnobName(knob)] = ParseValue(value);
+                // CLI 覆盖值相对当前工作目录解析，不走配置文件的 baseDirectory。
+                child[KnobName(knob)] = ParseValue(
+                    IsPathKnob(section, KnobName(knob)) && !Path.IsPathRooted(value)
+                        ? Path.GetFullPath(value)
+                        : value);
                 document[section] = child;
                 continue;
             }
-            document[FieldName(name)] = ParseValue(value);
+            document[FieldName(name)] = ParseValue(
+                SharedPathFields.Contains(FieldName(name)) && !Path.IsPathRooted(value)
+                    ? Path.GetFullPath(value)
+                    : value);
         }
     }
 
@@ -230,6 +287,18 @@ internal static class CliConfig
         ["input-dir"] = "inputDirectory",
         ["main-executable"] = "mainExecutable"
     };
+
+    // 顶层共享字段里指宿主路径的旋钮；targets 级 inputDirectory 在 Materialize 单列。
+    private static readonly HashSet<string> SharedPathFields = new(StringComparer.Ordinal)
+    {
+        "licenseFile", "outputDirectory", "icons"
+    };
+
+    private static bool IsPathKnob(string section, string knob) =>
+        knob.EndsWith("File", StringComparison.OrdinalIgnoreCase) ||
+        knob.EndsWith("Path", StringComparison.OrdinalIgnoreCase) ||
+        knob.EndsWith("Directory", StringComparison.OrdinalIgnoreCase) ||
+        PathKnobs.TryGetValue(section, out var knobs) && knobs.Contains(knob);
 
     private static string FieldName(string option) => option switch
     {
@@ -325,16 +394,7 @@ internal static class CliConfig
                         node[name] = Resolve(baseDirectory, p);
                     }
                 }
-                if (node["signingFiles"] is JsonArray signing)
-                {
-                    for (var i = 0; i < signing.Count; i++)
-                    {
-                        if (signing[i] is JsonValue v && v.TryGetValue<string>(out var p) && p.Length > 0)
-                        {
-                            signing[i] = Resolve(baseDirectory, p);
-                        }
-                    }
-                }
+                // signingFiles 是载荷相对路径（相对 inputDirectory），不做宿主路径解析。
             }
         }
 
@@ -351,7 +411,9 @@ internal static class CliConfig
                 if (node is JsonValue v && v.TryGetValue<string>(out var path) &&
                     path.Length > 0 &&
                     (key.EndsWith("File", StringComparison.OrdinalIgnoreCase) ||
-                     key.EndsWith("Path", StringComparison.OrdinalIgnoreCase)))
+                     key.EndsWith("Path", StringComparison.OrdinalIgnoreCase) ||
+                     key.EndsWith("Directory", StringComparison.OrdinalIgnoreCase) ||
+                     PathKnobs.TryGetValue(section, out var knobs) && knobs.Contains(key)))
                 {
                     child[key] = Resolve(baseDirectory, path);
                 }

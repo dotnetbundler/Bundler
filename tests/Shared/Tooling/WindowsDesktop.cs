@@ -161,12 +161,16 @@ internal static class WindowsDesktop
             }
             return;
         }
-        // Win32 复选框退化为 LegacyIAccessible 默认动作翻转。
-        if (wanted &&
-            box.GetCurrentPattern(UIA_PatternIds.UIA_LegacyIAccessiblePatternId)
+        // Win32 复选框退化为 LegacyIAccessible 默认动作翻转：STATE_SYSTEM_CHECKED(0x10)
+        // 读出当前态，只在与目标不符时才翻转——勾选/取消两侧都生效。
+        if (box.GetCurrentPattern(UIA_PatternIds.UIA_LegacyIAccessiblePatternId)
                 is IUIAutomationLegacyIAccessiblePattern legacy)
         {
-            legacy.DoDefaultAction();
+            var isChecked = (legacy.CurrentState & 0x10) != 0;
+            if (isChecked != wanted)
+            {
+                legacy.DoDefaultAction();
+            }
         }
     }
 

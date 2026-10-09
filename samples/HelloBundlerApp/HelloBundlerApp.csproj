@@ -25,8 +25,8 @@
          同轮 publish 的 dmg/pkg 又需要它做 SLA/许可页——dmg 内层本来就会产出 .app（BundlerMacApp* 旋钮全部生效），
          因此独立 app 腿改为显式选择（-p:BundlerFormats=app，届时许可自动缺席）。 -->
     <_HelloBundlerFormatsDefault Condition="('$(RuntimeIdentifier)' == 'osx-x64' or '$(RuntimeIdentifier)' == 'osx-arm64' or '$(RuntimeIdentifier)' == 'osx' or '$(BundlerUniversalRuntimeIdentifiers)' != '') and $([MSBuild]::IsOsPlatform('OSX'))">dmg;pkg;zip;targz</_HelloBundlerFormatsDefault>
-    <_HelloBundlerFormatsDefault Condition="'$(RuntimeIdentifier)' == 'linux-x64' or '$(RuntimeIdentifier)' == 'linux-arm64' or '$(RuntimeIdentifier)' == 'linux-riscv64'">deb;rpm;zip;targz</_HelloBundlerFormatsDefault>
-    <_HelloBundlerFormatsDefault Condition="('$(RuntimeIdentifier)' == 'linux-x64' or '$(RuntimeIdentifier)' == 'linux-arm64' or '$(RuntimeIdentifier)' == 'linux-riscv64') and $([MSBuild]::IsOsPlatform('Linux'))">deb;rpm;appimage;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="'$(RuntimeIdentifier)' == 'linux-x64' or '$(RuntimeIdentifier)' == 'linux-arm64'">deb;rpm;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="('$(RuntimeIdentifier)' == 'linux-x64' or '$(RuntimeIdentifier)' == 'linux-arm64') and $([MSBuild]::IsOsPlatform('Linux'))">deb;rpm;appimage;zip;targz</_HelloBundlerFormatsDefault>
     <_HelloBundlerFormatsDefault Condition="'$(RuntimeIdentifier)' == 'linux-musl-x64' or '$(RuntimeIdentifier)' == 'linux-musl-arm64'">alpineapk;zip;targz</_HelloBundlerFormatsDefault>
     <BundlerFormats Condition="'$(BundlerFormats)' == ''">$(_HelloBundlerFormatsDefault)</BundlerFormats>
 

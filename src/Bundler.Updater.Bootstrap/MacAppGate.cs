@@ -134,8 +134,23 @@ internal static class MacAppGate
             startInfo.RedirectStandardOutput = true;
             startInfo.RedirectStandardError = true;
             using var process = Process.Start(startInfo)!;
-            process.WaitForExit(30_000);
-            return (process.ExitCode, process.StandardError.ReadToEnd());
+            // 并行消费：stderr 写满管道会让子进程卡住，等满 30s 造成假超时。
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            if (!process.WaitForExit(30_000))
+            {
+                try
+                {
+                    process.Kill();
+                }
+                catch (InvalidOperationException)
+                {
+                }
+                process.WaitForExit();
+                return (-1, "timeout");
+            }
+            Task.WaitAll(stdout, stderr);
+            return (process.ExitCode, stderr.Result);
         }
         catch (Exception)
         {

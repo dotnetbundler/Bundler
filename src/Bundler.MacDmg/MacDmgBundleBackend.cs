@@ -370,7 +370,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         {
             return;
         }
-        if (signing.Identity is not null && signing.TemporaryCertificatePath is not null)
+        if (signing.Identity is not null && !string.IsNullOrEmpty(signing.TemporaryCertificatePath))
         {
             throw new ArgumentException(
                 "DMG SignIdentity and TemporaryCertificatePath are mutually exclusive.");
@@ -395,7 +395,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
     {
         var signing = settings.Signing;
         if (signing is null ||
-            (signing.Identity is null && signing.TemporaryCertificatePath is null))
+            (signing.Identity is null && string.IsNullOrEmpty(signing.TemporaryCertificatePath)))
         {
             return;
         }

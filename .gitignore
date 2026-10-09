@@ -7,3 +7,6 @@ TestResults/
 *.user
 *.suo
 tests/Special/evidence/
+.DS_Store
+Thumbs.db
+desktop.ini

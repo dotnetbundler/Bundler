@@ -52,7 +52,7 @@ internal static class DebPackageWriter
             ValidateBinLinkName(binLink);
         }
         var maintainer = settings.Maintainer ?? bundle.Publisher ?? bundle.Identifier;
-        if (string.IsNullOrWhiteSpace(maintainer) || maintainer.IndexOf('\n') >= 0)
+        if (string.IsNullOrWhiteSpace(maintainer) || maintainer.IndexOfAny(['\r', '\n']) >= 0)
         {
             throw new ArgumentException(
                 "The .deb maintainer must be a non-empty single line; set Publisher or Maintainer.");
@@ -133,6 +133,11 @@ internal static class DebPackageWriter
             for (var i = 1; i <= segments.Length; i++)
             {
                 var prefix = string.Join("/", segments.Take(i));
+                if (claimed.Contains(prefix))
+                {
+                    throw new InvalidOperationException(
+                        $"A payload file and a directory map to the same .deb path: '{prefix}'.");
+                }
                 if (directories.Add(prefix))
                 {
                     entries.Add(new PayloadEntry
@@ -312,7 +317,7 @@ internal static class DebPackageWriter
                 Gzip(File.ReadAllBytes(FreedesktopFiles.RequireExisting(changelogSource, "ChangelogFile"))),
                 420 /* 0644 */);
         }
-        if (bundle.LicenseFile is { Length: > 0 } license && license is not null)
+        if (bundle.LicenseFile is { Length: > 0 } license)
         {
             AddFile(docRoot + "/copyright", FreedesktopFiles.RequireExisting(license, "LicenseFile"), 420 /* 0644 */);
         }
@@ -373,7 +378,7 @@ internal static class DebPackageWriter
         AppendRelation(control, "Replaces", settings.Replaces);
         if (!string.IsNullOrWhiteSpace(bundle.Homepage))
         {
-            if (bundle.Homepage!.IndexOf('\n') >= 0)
+            if (bundle.Homepage!.IndexOfAny(['\r', '\n']) >= 0)
             {
                 throw new ArgumentException("The homepage must be a single line.");
             }
@@ -422,7 +427,7 @@ internal static class DebPackageWriter
         // Maintainer scripts land in the control archive with mode 0755. A
         // systemd unit auto-appends a daemon-reload epilogue to postinst.
         var daemonReload = settings.SystemdServiceFile is { Length: > 0 };
-        AddScript(entries, "preinst", settings.PreinstFile, needsShebang: true);
+        AddScript(entries, "preinst", settings.PreinstFile);
         var postinst = settings.PostinstFile is { Length: > 0 }
             ? ReadScript(settings.PostinstFile, "PostinstFile")
             : null;
@@ -443,8 +448,8 @@ internal static class DebPackageWriter
                 Content = new UTF8Encoding(false).GetBytes(postinst)
             });
         }
-        AddScript(entries, "prerm", settings.PrermFile, needsShebang: true);
-        AddScript(entries, "postrm", settings.PostrmFile, needsShebang: true);
+        AddScript(entries, "prerm", settings.PrermFile);
+        AddScript(entries, "postrm", settings.PostrmFile);
 
         return entries;
     }
@@ -491,7 +496,7 @@ internal static class DebPackageWriter
         return conffiles.ToArray();
     }
 
-    private static void AddScript(List<TarEntry> entries, string name, string? file, bool needsShebang)
+    private static void AddScript(List<TarEntry> entries, string name, string? file)
     {
         if (file is not { Length: > 0 })
         {

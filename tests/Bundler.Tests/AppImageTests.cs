@@ -320,7 +320,8 @@ public static class AppImageTests
     [Fact]
     static void SignsAppImage()
     {
-        Assert.SkipUnless(OperatingSystem.IsLinux(), "requires a Linux host");
+        Assert.SkipUnless(OperatingSystem.IsLinux() && HasTool("gpg"),
+            "requires a Linux host with gpg on PATH");
         var input = CreateInputDirectory();
         var output = input + ".artifacts";
         // The throwaway keyring must stay out of the packaged input: a live
@@ -363,7 +364,12 @@ public static class AppImageTests
         finally
         {
             try { Run("gpgconf", gnupg, ["--kill", "gpg-agent"]); }
-            catch (InvalidOperationException) { }
+            catch (Exception exception)
+                when (exception is InvalidOperationException or IOException
+                    or System.ComponentModel.Win32Exception)
+            {
+                // 清场尽力而为：gpgconf 缺失/进程已退都不应遮蔽测试结果。
+            }
             Cleanup(input, output, gnupg);
         }
     }
@@ -413,6 +419,16 @@ public static class AppImageTests
         return Array.Empty<byte>();
     }
 
+    static bool HasTool(string name)
+    {
+        foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? "")
+                     .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (File.Exists(Path.Combine(dir, name))) return true;
+        }
+        return false;
+    }
+
     private static void Run(string tool, string? gnupgHome, string[] arguments,
         string? stdoutTo = null)
     {
@@ -429,13 +445,18 @@ public static class AppImageTests
             info.EnvironmentVariables["GNUPGHOME"] = gnupgHome;
         }
         using var process = System.Diagnostics.Process.Start(info)!;
-        var stdOut = process.StandardOutput.ReadToEnd();
-        var stdErr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, tool + " failed: " + stdErr);
+        var stdOut = process.StandardOutput.ReadToEndAsync();
+        var stdErr = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(120_000))
+        {
+            try { process.Kill(); } catch (InvalidOperationException) { }
+            Assert.Fail(tool + " did not exit in 120s");
+        }
+        Task.WaitAll(stdOut, stdErr);
+        Assert.True(process.ExitCode == 0, tool + " failed: " + stdErr.Result);
         if (stdoutTo is not null)
         {
-            File.WriteAllText(stdoutTo, stdOut);
+            File.WriteAllText(stdoutTo, stdOut.Result);
         }
     }
 

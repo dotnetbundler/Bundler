@@ -53,10 +53,11 @@ internal static class AppImageIdentity
     internal static string NormalizeArchitecture(string value)
     {
         var arch = value.Trim() == "amd64" ? "x86_64" : value.Trim();
-        if (arch is not ("x86_64" or "aarch64" or "i686"))
+        // i686 无 runtime 随包：收窄到随包供应的两架构，避免配置面承诺兑现不了。
+        if (arch is not ("x86_64" or "aarch64"))
         {
             throw new ArgumentException(
-                $"BundlerAppImageArchitecture must be one of x86_64/aarch64/i686 (or amd64), got '{value}'.");
+                $"BundlerAppImageArchitecture must be one of x86_64/aarch64 (or amd64), got '{value}'.");
         }
         return arch;
     }

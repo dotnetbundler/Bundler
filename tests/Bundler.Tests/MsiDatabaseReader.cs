@@ -100,7 +100,15 @@ internal sealed class MsiDatabaseReader : IDisposable
             {
                 var text = new System.Text.StringBuilder(1024);
                 uint length = (uint)text.Capacity;
-                Check(MsiRecordGetString(record, 1, text, ref length));
+                var rc = MsiRecordGetString(record, 1, text, ref length);
+                // 234 = ERROR_MORE_DATA：字段超缓冲，按报告长度扩容重取。
+                while (rc == 234)
+                {
+                    text.Capacity = (int)(length + 1);
+                    length = (uint)text.Capacity;
+                    rc = MsiRecordGetString(record, 1, text, ref length);
+                }
+                Check(rc);
                 return text.ToString();
             }
             finally { MsiCloseHandle(record); }

@@ -105,16 +105,25 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
 
             foreach (var payload in payloadItems)
             {
+                if (string.IsNullOrWhiteSpace(payload.Source))
+                {
+                    throw new ArgumentException("The .pkg payload source must not be empty.");
+                }
+                var destinationName = payload.Destination
+                    ?? Path.GetFileName(payload.Source.TrimEnd('/', '\\'));
+                if (string.IsNullOrEmpty(destinationName) ||
+                    destinationName.Split('/', '\\').Any(segment => segment is "" or "." or ".."))
+                {
+                    throw new ArgumentException(
+                        $"The .pkg payload destination must be a relative path inside the package root: '{payload.Destination}'.");
+                }
                 var source = Path.GetFullPath(payload.Source);
                 if (!File.Exists(source) && !Directory.Exists(source))
                 {
                     throw new FileNotFoundException(
                         $"The .pkg payload source does not exist: {source}", source);
                 }
-                var destination = Path.Combine(
-                    stageDirectory,
-                    (payload.Destination ?? Path.GetFileName(source.TrimEnd('/', '\\')))
-                        .TrimStart('/'));
+                var destination = Path.Combine(stageDirectory, destinationName.TrimStart('/'));
                 if (Directory.Exists(source))
                 {
                     CopyTree(source, destination, logger);
@@ -172,6 +181,8 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             {
                 var distributionPath = Path.Combine(workDirectory, "distribution.xml");
                 var resourcesDirectory = Path.Combine(workDirectory, "pkg-resources");
+                // --resources 总是传入：空资源集也要建目录，否则 productbuild 报路径不存在。
+                Directory.CreateDirectory(resourcesDirectory);
                 WriteDistributionXml(
                     distributionPath,
                     resourcesDirectory,
@@ -312,7 +323,9 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
     {
         CpuArchitecture.Arm64 => "arm64",
         CpuArchitecture.X64 => "x86_64",
-        _ => "i386",
+        CpuArchitecture.X86 => "i386",
+        CpuArchitecture.Universal => "x86_64 arm64",
+        _ => throw new NotSupportedException("Unknown .pkg target architecture: " + architecture),
     };
 
     private static void CopyTree(string source, string destination, IBundleLogger log)

@@ -38,7 +38,13 @@ internal static class AppImageProcessRunner
 
         var standardOutput = process.StandardOutput.ReadToEndAsync();
         var standardError = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
+        using (cancellationToken.Register(() =>
+               {
+                   try { process.Kill(); } catch (InvalidOperationException) { }
+               }))
+        {
+            process.WaitForExit();
+        }
         await Task.WhenAll(standardOutput, standardError);
         cancellationToken.ThrowIfCancellationRequested();
         var output = standardOutput.Result;

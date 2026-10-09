@@ -284,6 +284,13 @@ public static class CliProgram
         {
             foreach (var issue in validation.Issues)
             {
+                // rid×format 矩阵不兼容（"X is not supported for Y"）不进聚合配置错：
+                // 该格式在逐格式趟仍会被宿主门（PNSE→rc=1）或后端 Validate 拦下，
+                // 保持"宿主不可用=逐格式容错"的既定退出码契约。
+                if (issue.Message.Contains(" is not supported for ", StringComparison.Ordinal))
+                {
+                    continue;
+                }
                 validationErrors.Add((issue.Path, issue.Message));
             }
         }

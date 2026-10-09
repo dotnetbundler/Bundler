@@ -132,9 +132,14 @@ internal static class ProcessRunner
         };
         if (environment is { } env)
         {
+            // 与 Run 同一契约：value 为 null 表示从继承环境里移除该变量。
             foreach (var pair in env)
             {
-                if (pair.Value is not null)
+                if (pair.Value is null)
+                {
+                    startInfo.Environment.Remove(pair.Key);
+                }
+                else
                 {
                     startInfo.Environment[pair.Key] = pair.Value;
                 }

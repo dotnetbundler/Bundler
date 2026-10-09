@@ -14,9 +14,27 @@ dotnet build Bundler.slnx -c Release --nologo
 dotnet pack Bundler.slnx -c Release -o artifacts/packages --nologo
 
 say "2/4 全量测试（四工程）"
-# MTP+xUnit3 下 `dotnet test` 发现不到用例——直跑测试程序集（tests/README.md 同款）
+# 测试程序集自宿主运行（MTP+xUnit3）：直跑 dll，输出即进度。
+# IntegrationTests 逐类跑并落进度文件：挂起/被砍时 artifacts 能指认在途类；
+# -longRunning 超时打印挂起用例名。
 for P in Bundler.Tests Bundler.ApiTests Bundler.IntegrationTests Bundler.LocalPackagesTests; do
-    dotnet "tests/$P/bin/Release/net10.0/$P.dll"
+    DLL="tests/$P/bin/Release/net10.0/$P.dll"
+    if [ "$P" = "Bundler.IntegrationTests" ]; then
+        mapfile -t CLASSES < <(dotnet "$DLL" -list classes | grep -E '^\w[\w.]*$' || true)
+        if [ ${#CLASSES[@]} -eq 0 ]; then
+            echo "-list classes 无输出：集成测试可能整段蒸发，判失败" >&2; exit 1
+        fi
+        for C in "${CLASSES[@]}"; do
+            echo "[$(date -u +%FT%TZ)] BEGIN $C" >> "$OUT/test-progress.log"
+            echo "[CLASS-BEGIN] $C"
+            if ! dotnet "$DLL" -class "$C" -longRunning 300; then
+                echo "[CLASS-FAIL] $C"; exit 1
+            fi
+            echo "[$(date -u +%FT%TZ)] END   $C rc=0" >> "$OUT/test-progress.log"
+        done
+    else
+        dotnet "$DLL" -longRunning 300
+    fi
 done
 
 say "3/4 fixture 产包（喂 Special 腿）"

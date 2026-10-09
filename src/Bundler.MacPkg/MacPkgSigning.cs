@@ -12,12 +12,12 @@ namespace DotNet.Bundler.MacPkg;
 internal static class MacPkgSigning
 {
     internal static bool Configured(MacPkgSigningConfiguration signing) =>
-        signing.Identity is not null || signing.TemporaryCertificatePath is not null;
+        signing.Identity is not null || !string.IsNullOrEmpty(signing.TemporaryCertificatePath);
 
     /// <summary>Preflight checks; the bundler calls this before any payload work.</summary>
     internal static void Validate(MacPkgSigningConfiguration signing)
     {
-        if (signing.Identity is not null && signing.TemporaryCertificatePath is not null)
+        if (signing.Identity is not null && !string.IsNullOrEmpty(signing.TemporaryCertificatePath))
         {
             throw new ArgumentException(
                 "MacPkg Signing.Identity and TemporaryCertificatePath are mutually exclusive.");

@@ -23,6 +23,9 @@ foreach ($P in "Bundler.Tests", "Bundler.ApiTests", "Bundler.IntegrationTests", 
     $dll = "tests/$P/bin/Release/net10.0/$P.dll"
     if ($P -eq "Bundler.IntegrationTests") {
         $classes = dotnet $dll -list classes | Where-Object { $_ -match '^\w[\w.]*$' }
+        if (-not $classes -or $classes.Count -eq 0) {
+            throw "-list classes 无输出：集成测试可能整段蒸发"
+        }
         foreach ($c in $classes) {
             $c = $c.Trim()
             "[$([datetime]::UtcNow.ToString('o'))] BEGIN $c" | Out-File "$OUT/test-progress.log" -Append

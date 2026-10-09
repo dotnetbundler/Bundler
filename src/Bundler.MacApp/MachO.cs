@@ -121,8 +121,13 @@ internal static class MachO
             long size;
             if (wideOffsets)
             {
-                offset = ((long)Read32(8) << 32) | Read32(12);
-                size = ((long)Read32(16) << 32) | Read32(20);
+                // FAT_CIGAM_64 的 64 位字段连字序也反转：低字在前。
+                offset = bigEndian
+                    ? ((long)Read32(8) << 32) | Read32(12)
+                    : ((long)Read32(12) << 32) | Read32(8);
+                size = bigEndian
+                    ? ((long)Read32(16) << 32) | Read32(20)
+                    : ((long)Read32(20) << 32) | Read32(16);
             }
             else
             {
@@ -187,8 +192,10 @@ internal static class MachO
     {
         0x00000007 => "i386",
         0x01000007 => "x86_64",
-        0x0000000B => "ppc",
-        0x0100000B => "ppc64",
+        0x0000000B => "hppa",
+        0x0100000B => "hppa64",
+        0x00000012 => "ppc",
+        0x01000012 => "ppc64",
         0x0000000C => "arm",
         0x0100000C => "arm64",
         0x0200000C => "arm64_32",

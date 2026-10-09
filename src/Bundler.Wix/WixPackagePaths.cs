@@ -11,10 +11,25 @@ internal static class WixPackagePaths
         }
         var parts = target.Replace('\\', '/').Split('/');
         if (parts.Any(part => part.Length == 0 || part == "." || part == ".." ||
-                              part.EndsWith(" ", StringComparison.Ordinal) || part.EndsWith(".", StringComparison.Ordinal)))
+                              part.EndsWith(" ", StringComparison.Ordinal) || part.EndsWith(".", StringComparison.Ordinal) ||
+                              IsReservedDeviceName(part)))
         {
             throw new ArgumentException("MSI target path contains an unsafe segment: " + target);
         }
         return string.Join("/", parts);
     }
+
+    // Windows 设备保留名按"去扩展名的基名"判定（con.txt 同样被拒绝）。
+    private static bool IsReservedDeviceName(string part)
+    {
+        var name = part.Split('.')[0];
+        return name is { Length: >= 3 } && ReservedDeviceNames.Contains(
+            name, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static readonly string[] ReservedDeviceNames =
+        ["con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5",
+         "com6", "com7", "com8", "com9", "lpt1", "lpt2", "lpt3", "lpt4",
+         "lpt5", "lpt6", "lpt7", "lpt8", "lpt9"];
+
 }

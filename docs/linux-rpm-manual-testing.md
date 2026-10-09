@@ -11,5 +11,5 @@
 | LINUX-RPM-MT-03 | LINUX-RPM-4 | 更广发行版宿主（RHEL 8/CentOS Stream/Alma/SUSE 旧版）装卸；记录 rpm 版本差异下的行为 | 各宿主安装日志 |
 | LINUX-RPM-MT-04 | LINUX-RPM-3 | systemd 宿主：unit 安装后 `daemon-reload`、`systemctl enable --now` 启动应用服务、卸载清 unit | **已验证**（2026-09-28，Ubuntu 宿主）：`enable --now` 真实启动记录 |
 | LINUX-RPM-MT-05 | LINUX-RPM-4 | `dnf install ./name.rpm` 本地文件安装解析依赖路径与最小仓库工作流 | **已验证**（2026-09-28，fedora/opensuse 容器）：本地安装 + createrepo_c 仓库工作流 |
-| LINUX-RPM-MT-06 | LINUX-RPM-4 | Windows/macOS 宿主构建 `.rpm`，在 rpm 宿主安装验证跨宿主产物可用性 | 双宿主构建/安装记录 |
-| LINUX-RPM-MT-07 | 后置（若引入签名） | `rpm --import` 公钥 + `rpm -K`/`rpm -v --checksig` 签名验证 | 验证输出 |
+| LINUX-RPM-MT-06 | LINUX-RPM-4 | Windows/macOS 宿主构建 `.rpm`，在 rpm 宿主安装验证跨宿主产物可用性 | 双宿主构建/安装记录。**已由 CI 收编**（2026-10）：release-verify ubuntu + docker `fedora/rockylinux/opensuse` 容器腿真装真卸全绿；Windows/macOS→rpm 宿主的跨宿主真实安装仍登记 |
+| LINUX-RPM-MT-07 | 后置（若引入签名） | `rpm --import` 公钥 + `rpm -K`/`rpm -v --checksig` 签名验证 | 验证输出。**已由 CI 收编**（2026-10）：release-verify `gpg-production(self-contained)` 腿一次性密钥全链签验通过；生产密钥分发/吊销仍为外部项 |

@@ -18,12 +18,12 @@ internal static class MsiIdentityProbe
                 $"Expert MSI ProductCode '{productCode}' does not match the Bundler identity " +
                 $"'{identity.ProductCode:B}'; the template must use the Bundler.* candle variables.");
         }
-        var upgradeCode = ReadUpgradeCode(path);
-        if (!upgradeCode.Equals(identity.UpgradeCode.ToString("B").ToUpperInvariant(),
-                StringComparison.OrdinalIgnoreCase))
+        var upgradeCode = identity.UpgradeCode.ToString("B").ToUpperInvariant();
+        if (!ReadUpgradeCodes(path).Any(code =>
+                code.Equals(upgradeCode, StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException(
-                $"Expert MSI UpgradeCode '{upgradeCode}' does not match the Bundler identity " +
+                $"Expert MSI Upgrade table does not contain the Bundler identity " +
                 $"'{identity.UpgradeCode:B}'; upgrade continuity would break.");
         }
         var productLanguage = ReadProperty(path, "ProductLanguage");
@@ -45,16 +45,16 @@ internal static class MsiIdentityProbe
 
     private static string ReadProperty(string path, string name)
     {
-        return ReadValue(path,
-            "SELECT `Value` FROM `Property` WHERE `Property`='" + name + "'") ?? "";
+        return ReadValues(path,
+            "SELECT `Value` FROM `Property` WHERE `Property`='" + name + "'").FirstOrDefault() ?? "";
     }
 
-    private static string ReadUpgradeCode(string path)
+    private static string[] ReadUpgradeCodes(string path)
     {
-        return ReadValue(path, "SELECT `UpgradeCode` FROM `Upgrade`") ?? "";
+        return ReadValues(path, "SELECT `UpgradeCode` FROM `Upgrade`");
     }
 
-    private static string? ReadValue(string path, string sql)
+    private static string[] ReadValues(string path, string sql)
     {
         Check(MsiOpenDatabase(path, IntPtr.Zero, out var database));
         try
@@ -62,19 +62,23 @@ internal static class MsiIdentityProbe
             Check(MsiDatabaseOpenView(database, sql, out var view));
             try
             {
-                var result = MsiViewExecute(view, IntPtr.Zero);
-                Check(result);
-                result = MsiViewFetch(view, out var record);
-                if (result == 259) return null;
-                Check(result);
-                try
+                Check(MsiViewExecute(view, IntPtr.Zero));
+                var values = new List<string>();
+                while (true)
                 {
-                    var text = new StringBuilder(1024);
-                    var length = (uint)text.Capacity;
-                    Check(MsiRecordGetString(record, 1, text, ref length));
-                    return text.ToString();
+                    var result = MsiViewFetch(view, out var record);
+                    if (result == 259) break;
+                    Check(result);
+                    try
+                    {
+                        var text = new StringBuilder(1024);
+                        var length = (uint)text.Capacity;
+                        Check(MsiRecordGetString(record, 1, text, ref length));
+                        values.Add(text.ToString());
+                    }
+                    finally { MsiCloseHandle(record); }
                 }
-                finally { MsiCloseHandle(record); }
+                return values.ToArray();
             }
             finally
             {

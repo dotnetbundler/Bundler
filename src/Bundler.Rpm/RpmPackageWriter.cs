@@ -119,7 +119,7 @@ internal static class RpmPackageWriter
             Directory.CreateDirectory(item.OutputDirectory);
             using (var stream = File.Create(outputPath))
             {
-                WriteLead(stream, packageName + "-" + mapped.Version + "-" + mapped.Release);
+                WriteLead(stream, packageName + "-" + mapped.Version + "-" + mapped.Release, architecture);
                 stream.Write(signatureHeader, 0, signatureHeader.Length);
                 stream.Write(mainHeader, 0, mainHeader.Length);
                 stream.Write(compressedPayload, 0, compressedPayload.Length);
@@ -147,20 +147,30 @@ internal static class RpmPackageWriter
 
     // ---- lead ---------------------------------------------------------------
 
-    private static void WriteLead(Stream stream, string nameVersionRelease)
+    private static void WriteLead(Stream stream, string nameVersionRelease, string architecture)
     {
         var lead = new byte[96];
         lead[0] = 0xED; lead[1] = 0xAB; lead[2] = 0xEE; lead[3] = 0xDB;
         lead[4] = 3;  // major version
         lead[5] = 0;  // minor
-        // type 0 (binary), archnum 0, osnum 1 (linux) at 8..9
-        lead[9] = 1;
+        // type 0 (binary) at 6..7；archnum 按架构映射写 8..9（rpmrc arch_canon）。
+        lead[9] = (byte)ArchNumber(architecture);
+        // osnum 1 = linux at 76..77（此前从未写入恒为 0）。
+        lead[77] = 1;
         var nameBytes = Encoding.ASCII.GetBytes(nameVersionRelease);
         Array.Copy(nameBytes, 0, lead, 10, Math.Min(nameBytes.Length, 65));
         // signature type 5 = RPMSIG_HEADERSIG at 78..79
         lead[79] = 5;
         stream.Write(lead, 0, lead.Length);
     }
+
+    // rpmrc arch_canon 编号：x86_64/i686 同族为 1，aarch64 为 19。
+    private static int ArchNumber(string architecture) => architecture switch
+    {
+        "x86_64" or "i686" or "i586" or "i486" or "i386" => 1,
+        "aarch64" => 19,
+        _ => 0,
+    };
 
     // ---- headers ------------------------------------------------------------
 
@@ -648,7 +658,7 @@ internal static class RpmPackageWriter
                     FreedesktopFiles.RequireExisting(changelogSource, "ChangelogFile"))),
                 420 /* 0644 */);
         }
-        if (bundle.LicenseFile is { Length: > 0 } license && license is not null)
+        if (bundle.LicenseFile is { Length: > 0 } license)
         {
             var source = FreedesktopFiles.RequireExisting(license, "LicenseFile");
             AddFile("/usr/share/licenses/" + packageName + "/" + Path.GetFileName(source),
@@ -785,15 +795,25 @@ internal static class RpmPackageWriter
 
     private static string NormalizeInstallRoot(string? installRoot, string packageName)
     {
-        var root = installRoot ?? "/usr/lib/" + packageName;
-        if (!root.StartsWith("/", StringComparison.Ordinal) ||
-            root.EndsWith("/", StringComparison.Ordinal) ||
-            root.Split('/').Contains("..") || root.Contains(' '))
+        var root = string.IsNullOrWhiteSpace(installRoot)
+            ? "/usr/lib/" + packageName
+            : installRoot!.Trim();
+        // 与 deb 同规：绝对路径 + 每段非空、非 . / ..、不含空白。
+        if (!root.StartsWith("/", StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                $"'{root}' is not a valid install root (absolute, no trailing '/', no '..' or spaces).");
+                $"The .rpm install root must be an absolute path: '{root}'.");
         }
-        return root;
+        var normalized = root.Trim('/');
+        if (normalized.Length == 0 ||
+            normalized.Split('/').Any(segment =>
+                segment is "" or "." or ".." || segment.Any(char.IsWhiteSpace)))
+        {
+            throw new ArgumentException(
+                $"The .rpm install root contains an invalid segment: '{root}'.");
+        }
+        // 调用方按 installRoot + "/" + relative 拼绝对路径——前导斜杠必须保留。
+        return "/" + normalized;
     }
 
     private static void ValidateBinLinkName(string name)

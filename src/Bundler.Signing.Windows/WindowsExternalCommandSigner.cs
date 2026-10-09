@@ -69,15 +69,19 @@ public sealed class WindowsExternalCommandSigner : IBundleSigner
         }
     }
 
-    private static bool ContainsPathPlaceholder(string value) =>
-        value.IndexOf("{path}", StringComparison.Ordinal) >= 0 || value.IndexOf("%1", StringComparison.Ordinal) >= 0;
+    // %1 只在 token 边界匹配：%10/%100 等更长数字占位不被误伤。
+    private static readonly System.Text.RegularExpressions.Regex LegacyPathPlaceholder =
+        new("%1(?![0-9])");
 
-    private static string Expand(string value, BundleSigningRequest request, string path) => value
-        .Replace("{path}", path)
-        .Replace("%1", path)
-        .Replace("{artifactKind}", request.ArtifactKind.ToString())
-        .Replace("{target}", request.TargetRuntimeIdentifier)
-        .Replace("{productName}", request.ProductName);
+    private static bool ContainsPathPlaceholder(string value) =>
+        value.IndexOf("{path}", StringComparison.Ordinal) >= 0 || LegacyPathPlaceholder.IsMatch(value);
+
+    private static string Expand(string value, BundleSigningRequest request, string path) =>
+        LegacyPathPlaceholder.Replace(value
+            .Replace("{path}", path), path)
+            .Replace("{artifactKind}", request.ArtifactKind.ToString())
+            .Replace("{target}", request.TargetRuntimeIdentifier)
+            .Replace("{productName}", request.ProductName);
 
     private static string Quote(string value)
     {

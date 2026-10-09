@@ -5,8 +5,22 @@ using System.Runtime.InteropServices;
 internal static class ElevatedRunner
 {
     private static readonly Lazy<bool> _sudo = new(() =>
-        TestPlatform.IsLinux &&
-        ProcessRunner.Run("sudo", ["-n", "true"]).ExitCode == 0);
+    {
+        if (!TestPlatform.IsLinux) return false;
+        try
+        {
+            return ProcessRunner.Run("sudo", ["-n", "true"]).ExitCode == 0;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // 宿主没有 sudo 二进制：探测失败即不可用，不向外抛。
+            return false;
+        }
+        catch (System.IO.FileNotFoundException)
+        {
+            return false;
+        }
+    });
 
     // 无密 sudo 可用（用于写 /etc、装包等宿主级操作）。
     public static bool CanSudo => _sudo.Value;

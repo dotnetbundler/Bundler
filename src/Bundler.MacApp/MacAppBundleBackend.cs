@@ -37,9 +37,8 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
 
         // destination -> source bookkeeping catches collisions across every channel.
         var destinations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        CopyTree(item.InputDirectory, executablesDirectory, destinations, context.Logger);
-
-        if (bundle.Update is { } update)
+        var update = bundle.Update;
+        if (update is not null)
         {
             // 更新件是保留名：先登记碰撞簿，用户资源撞名走标准冲突错误而不是底层 IO 失败。
             destinations.Add(Path.GetFullPath(
@@ -47,6 +46,11 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             destinations.Add(Path.GetFullPath(
                 Path.Combine(executablesDirectory,
                     UpdateBootstrapper.FileNameFor(item.Target.RuntimeIdentifier))));
+        }
+        CopyTree(item.InputDirectory, executablesDirectory, destinations, context.Logger);
+
+        if (update is not null)
+        {
             // 身份旁车落 Resources/（资源密封位：Contents 根的非代码件会被 codesign 判成未签子件）、
             // 引导件落 MacOS/（代码位正常签名）——两者随 bundle 一起被 codesign 覆盖。
             UpdateIdentitySidecar.WriteIfEnabled(
@@ -378,13 +382,16 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             _ => []
         };
 
+    // .app 是跨宿主产物：按最严的 Windows 字符规则清洗，保证各宿主产物名一致。
     internal static string SanitizeFileName(string name)
     {
-        var sanitized = name.Replace(':', '-').Replace('/', '-');
-        foreach (var invalid in Path.GetInvalidFileNameChars())
+        var sanitized = name;
+        foreach (var invalid in "<>:\"/\\|?*")
         {
             sanitized = sanitized.Replace(invalid, '-');
         }
-        return sanitized.Trim();
+        return new string(sanitized
+                .Select(character => char.IsControl(character) ? '-' : character).ToArray())
+            .Trim();
     }
 }

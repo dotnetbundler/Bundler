@@ -59,6 +59,7 @@ internal static class AppDirBuilder
         var mainPosixName = mainExecutable.Contains('/')
             ? mainExecutable.Substring(mainExecutable.LastIndexOf('/') + 1)
             : mainExecutable;
+        // MainExecutable 可以嵌套子目录：存在性/chmod/Exec 都用完整相对路径。
 
         var appDir = Path.Combine(workDirectory, packageName + ".AppDir");
         if (Directory.Exists(appDir))
@@ -77,7 +78,8 @@ internal static class AppDirBuilder
         {
             UpdateBootstrapper.Inject(payloadRoot, update, item.Target.RuntimeIdentifier);
         }
-        var mainHostPath = Path.Combine(payloadRoot, mainPosixName);
+        var mainHostPath = Path.Combine(
+            payloadRoot, mainExecutable.Replace('/', Path.DirectorySeparatorChar));
         if (!File.Exists(mainHostPath))
         {
             throw new FileNotFoundException(
@@ -115,6 +117,12 @@ internal static class AppDirBuilder
         Directory.CreateDirectory(binDir);
         if (binLink.Length > 0)
         {
+            if (binLink is "." or ".." ||
+                binLink.IndexOfAny(['/', '\\', ' ', '\t', '"', '\'', '$']) >= 0)
+            {
+                throw new ArgumentException(
+                    $"The AppImage bin-link must be a plain file name: '{binLink}'.");
+            }
             var linkTarget = RelativePath("usr/bin", installRoot + "/" + mainExecutable);
             AppImageToolset.Symlink(linkTarget, Path.Combine(binDir, binLink));
         }
@@ -141,10 +149,6 @@ internal static class AppDirBuilder
             var destination = Path.Combine(appDir, entry.ArchivePath.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             File.WriteAllBytes(destination, entry.ReadBytes());
-            if (entry.Mode != 420 && !entry.ArchivePath.EndsWith(".desktop", StringComparison.Ordinal))
-            {
-                AppImageToolset.Chmod(destination, entry.Mode.ToString("0"));
-            }
             int squareSize;
             if (entry.ArchivePath.StartsWith("usr/share/icons/hicolor/", StringComparison.Ordinal) &&
                 TrySquareSize(entry.ArchivePath, out squareSize) && squareSize > largestSquareSize)
@@ -245,12 +249,21 @@ internal static class AppDirBuilder
     private static void CopyTree(string source, string destination, IBundleLogger log)
     {
         Directory.CreateDirectory(destination);
-        foreach (var directory in Directory.GetDirectories(source, "*", SearchOption.AllDirectories))
+        // 手工递归：AllDirectories 枚举会穿透目录链接，祖先链接导致重复展开。
+        foreach (var directory in Directory.GetDirectories(source).OrderBy(d => d, StringComparer.Ordinal))
         {
-            Directory.CreateDirectory(Path.Combine(
-                destination, PathRelative(source, directory)));
+            var dirTarget = Path.Combine(destination, Path.GetFileName(directory));
+            if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+            {
+                // 目录链接不展开：穿透会把目标树复制两遍，祖先链接会无界递归。
+                // netstandard2.0 无 LinkTarget/CreateSymbolicLink API，按跳过处理。
+                log.Log(BundleLogLevel.Warning,
+                    $"Skipping directory symlink: {directory}");
+                continue;
+            }
+            CopyTree(directory, dirTarget, log);
         }
-        foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
+        foreach (var file in Directory.GetFiles(source).OrderBy(f => f, StringComparer.Ordinal))
         {
             // Sockets, FIFOs and device nodes cannot be copied; skip them like
             // the archive formats do.
@@ -293,8 +306,10 @@ internal static class AppDirBuilder
     {
         size = 0;
         var segments = hicolorPath.Split('/');
-        if (segments.Length < 5) return false;
-        var dir = segments[3]; // e.g. 256x256 or 48x48@2
+        // usr/share/icons/hicolor/<size>/apps/<name>.<ext> —— 尺寸段在 hicolor 之后。
+        var hicolor = Array.IndexOf(segments, "hicolor");
+        if (hicolor < 0 || hicolor + 1 >= segments.Length) return false;
+        var dir = segments[hicolor + 1]; // e.g. 256x256 or 48x48@2
         var parts = dir.Split('@')[0].Split('x');
         if (parts.Length == 2 &&
             int.TryParse(parts[0], out var w) && int.TryParse(parts[1], out var h) &&

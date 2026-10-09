@@ -8,7 +8,7 @@ internal static class RpmName
 {
     // RPM names: no whitespace; allowed letters, digits, '+', '-', '.', '_'.
     private static readonly Regex ValidName = new(
-        "^[A-Za-z0-9][A-Za-z0-9+._-]+$", RegexOptions.Compiled);
+        "^[A-Za-z0-9][A-Za-z0-9+._-]*$", RegexOptions.Compiled);
 
     internal static string Sanitize(string productName)
     {

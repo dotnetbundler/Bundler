@@ -311,7 +311,7 @@ public static class MacAppTests
             catch (Exception exception)
                 when (exception is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
             {
-                return; // The host cannot create symlinks; nothing to verify here.
+                Assert.Skip("The host cannot create symlinks; nothing to verify here.");
             }
             await AssertThrows<InvalidDataException>(
                 () => new MacAppBundler().BuildAsync(MacConfiguration(input)),

@@ -7,7 +7,6 @@
 > 路线见 `docs/msi-roadmap.md` 第 10 节。
 
 `MSI-MT-02` 的自动化前置为 `MsiLocalPackagesTests`（`dotnet test tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj -c Release --filter-class "*MsiLocalPackagesTests*"`）。
-普通本机 current-user fixture 需显式传入 `-ConfirmLocalInstall`；VM 可传 `-ConfirmDisposableVm`，脚本会核查虚拟机标识。
 2026-09-24 本机运行通过，日志与哈希见 `docs/msi-roadmap.md` 第 6 节；这不代替干净 VM 的兼容性复测。
 
 `MSI-MT-04` 的本机自动前置为 `MsiLocalPackagesTests` 生命周期腿（`Requires=localinstall` trait + `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 同意闸）。

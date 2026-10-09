@@ -378,8 +378,16 @@ internal sealed class UpdateDownloader
             request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (offset > 0 && response.StatusCode != System.Net.HttpStatusCode.PartialContent)
         {
-            // 服务端不支持 Range 或文件已变（ETag/Last-Modified 失效）→ 重来。
+            // 服务端不支持 Range、文件已变，或 416（.part 大于服务端文件）——
+            // 丢弃 .part 重来；不删则 416 会在外层重试里永久循环。
             offset = 0;
+            try
+            {
+                File.Delete(partPath);
+            }
+            catch (IOException)
+            {
+            }
         }
         response.EnsureSuccessStatusCode();
 
@@ -402,7 +410,11 @@ internal sealed class UpdateDownloader
     {
         if (IsHttp(location))
         {
-            return await SharedHttp.GetByteArrayAsync(location);
+            // netstandard2.0 的 GetByteArrayAsync 无 ct 重载：走 SendAsync 消化取消。
+            using var response = await SharedHttp.GetAsync(
+                location, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsByteArrayAsync();
         }
         var path = location.StartsWith("file://", StringComparison.Ordinal)
             ? new Uri(location).LocalPath

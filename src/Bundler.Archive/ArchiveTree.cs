@@ -81,6 +81,20 @@ internal static class ArchiveTree
         foreach (var dir in Directory.GetDirectories(directory).OrderBy(d => d, StringComparer.Ordinal))
         {
             var rel = relativePrefix + Path.GetFileName(dir);
+            // 目录符号链接按链接本体归档：物化会复制两遍，指向祖先的链接会无界递归。
+            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0 &&
+                UnixLinks.ReadLink(dir) is { Length: > 0 } dirTarget)
+            {
+                entries.Add(new Entry
+                {
+                    ArchivePath = rel,
+                    Kind = TarEntryKind.Symlink,
+                    Mode = 511 /* 0777 */,
+                    SourcePath = dir,
+                    LinkTarget = dirTarget
+                });
+                continue;
+            }
             entries.Add(new Entry
             {
                 ArchivePath = rel,

@@ -3,14 +3,14 @@
 MSI 后端已完成 **WIN-MSI-1..9 当前 Windows 11 x64 本机范围**（`0.1.0-alpha.43` 为冻结基线），`alpha.37` 为既有 x64/ARM64 身份基线，`alpha.40` 增加 x86、显式 MSI 版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI 序列、可选 Feature、PATH 精确追加与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式。
 当前开发机上的独立 fixture 已通过真实 current-user 安装/卸载、两版本生命周期、x86 版本映射/降级、修复、被动运行、中文包并存、受限故障回滚，自定义目录安装、静默范围拒绝、PATH 保留与升级恢复目录，以及 en-US/ja-JP 双语并存安装与独立卸载；per-machine 仍仅静态检查产物。
 WIN-MSI-9 已完成 Tauri 通用能力审计与再冻结，见 `docs/msi-roadmap.md` 第 10 节；下表仍只记录外部环境和证据。
-当前没有干净 Windows 10/11、ARM64 原生用户端或提权测试 VM；这些缺口不阻塞本机可执行开发，不扩大支持声明。
+当前没有干净 Windows 10/11 或提权测试 VM；ARM64 原生腿已由 release-verify windows-11-arm 收编（2026-10：nsis/msi 装/覆盖装/修复/卸全绿）。这些缺口不阻塞本机可执行开发，不扩大支持声明。
 人工步骤见 `docs/msi-manual-testing.md`。
 
 | ID | 最早阶段 | 所需输入/环境 | 完成证据 |
 | --- | --- | --- | --- |
 | MSI-OI-01 | MSI-1 已完成本机核查 | 官方 WiX 3.14.1 归档、实际 SHA-256、全部捆绑文件许可证、体积测量 | 来源、哈希、逐文件源码归属、包内容与大小、本地无还原编译结果见 `docs/msi-roadmap.md` 第 6 节及 `third_party/wix/msi-wix-provenance.md` |
 | MSI-OI-02 | MSI-1 记录，MSI-4 支持矩阵 | 干净 Windows 10/11 x86、x64 与 ARM64 宿主的 WiX 3.14.1 自身依赖；Windows 7 记录 Framework 缺失边界 | 仅用 WiX 二进制与准备好的 `.wxs`/载荷完成 `candle`/`light` 编译，记录 OS build、预装 Framework、架构、日志及失败边界；不把调用方 MSBuild/.NET SDK 算作 WiX 依赖 |
-| MSI-OI-03 | MSI-1 本机已通过，MSI-4 扩展矩阵 | 独立 Windows VM/CI 复跑最小安装/卸载 | 其他宿主的 verbose log、状态/清理断言；本机烟雾结果见 `docs/msi-roadmap.md` 第 6 节 |
+| MSI-OI-03 | MSI-1 本机已通过，MSI-4 扩展矩阵 | 独立 Windows VM/CI 复跑最小安装/卸载 | 其他宿主的 verbose log、状态/清理断言；本机烟雾结果见 `docs/msi-roadmap.md` 第 6 节。**CI 收编**（2026-10）：release-verify windows-2025/windows-11-arm 腿真装真卸+覆盖装+修复全绿 |
 | MSI-OI-04 | MSI-2，外部待验收 | 标准用户和管理员账户，Windows UAC/策略差异 | current user/per machine 的权限与目录/注册表证据；本机仅已验证 per-machine 数据库表 |
 | MSI-OI-05 | MSI-2，本机已通过；外部仍待复测 | 真实旧发行包或受控两版本发行包 | major upgrade、同版本异包/降级拒绝、资源归属、用户数据及默认应用实际选择/唤起证据；本机结果见 MSI 路线第 7 节 |
 | MSI-OI-06 | MSI-3 本机测试签名通过；外部待验收 | 生产证书与时间戳设施 | 链、时间戳、签名验证；私钥不入库。测试证书不构成生产信任证据。**时间戳子项已消解**：2026-10-06 win-x64 宿主自签证书+`signtool /tr http://timestamp.digicert.com /td sha256` 真实嵌入 RFC 3161 副签名（TimeStamperCertificate=DigiCert 颁发，对照/负例正确，证据见 `docs/special-acceptance.md` §三）；剩余仅生产 CA 信任链子项 |
