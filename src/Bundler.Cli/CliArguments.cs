@@ -101,6 +101,12 @@ internal sealed class CliArguments
             {
                 throw CliUsageException($"Unknown option '--{name}'.");
             }
+            // --key-file 只服务 update-keygen；放进其他命令会在加载层报成误导性的
+            // Unknown configuration key。
+            if (name is "key-file" && command is not "update-keygen")
+            {
+                throw CliUsageException($"Option '--key-file' is only valid with 'update-keygen'.");
+            }
             var value = inlineValue;
             if (value is null)
             {

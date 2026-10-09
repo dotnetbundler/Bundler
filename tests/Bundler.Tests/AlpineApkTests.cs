@@ -40,7 +40,7 @@ public static class AlpineApkTests
                 .GetAwaiter().GetResult();
             var artifact = artifacts.Single();
             var expectedName = "example-app-1.0.0-r0.apk";
-            Assert.EndsWith(Path.Combine("linux-musl-x64", "apk", expectedName), artifact.Path);
+            Assert.EndsWith(Path.Combine("linux-musl-x64", "alpineapk", expectedName), artifact.Path);
 
             var apk = File.ReadAllBytes(artifact.Path);
             var starts = ApkPackageReader.GzipMemberOffsets(apk);
@@ -363,7 +363,7 @@ public static class AlpineApkTests
                  "--output-dir", output],
                 stdout, stderr);
             Assert.True(code == 0, $"cli bundle must exit 0, got {code}: {stderr}");
-            Assert.True(File.Exists(Path.Combine(output, "linux-musl-x64", "apk", "clifixture-1.0.0-r0.apk")),
+            Assert.True(File.Exists(Path.Combine(output, "linux-musl-x64", "alpineapk", "clifixture-1.0.0-r0.apk")),
                 $"CLI-produced .apk missing: {stdout}");
         }
         finally

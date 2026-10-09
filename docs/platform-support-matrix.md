@@ -76,5 +76,5 @@
 | `deb` | — | — | — |
 | `rpm` | ✓  | 纯托管 BouncyCastle v3 OpenPGP<br>`RPMSIGTAG_RSA`+`RPMSIGTAG_PGP` 双 tag<br>可过 `rpm -K`、`rpm --checksig`、`dnf`、`zypper` 验签 | 任意宿主 |
 | `AppImage` | ✓  | `appimagetool --sign`（`.sha256_sig` ELF 段）<br>需宿主 `gpg`（隔离 GNUPGHOME 导钥） | Linux |
-| `apk` | ✓  | 纯托管 BouncyCastle RSA PKCS1v1.5/SHA1（`.SIGN.RSA.<密钥>.rsa.pub` 前置段；PEM/PKCS8/加密私钥）<br>验签需公钥预置目标机 `/etc/apk/keys/`，未签名或密钥未分发装时需 `apk add --allow-untrusted` | 任意宿主 |
+| `alpineapk` | ✓  | 纯托管 BouncyCastle RSA PKCS1v1.5/SHA1（`.SIGN.RSA.<密钥>.rsa.pub` 前置段；PEM/PKCS8/加密私钥）<br>验签需公钥预置目标机 `/etc/apk/keys/`，未签名或密钥未分发装时需 `apk add --allow-untrusted` | 任意宿主 |
 | `zip`/`tar.gz` | — | — | — |

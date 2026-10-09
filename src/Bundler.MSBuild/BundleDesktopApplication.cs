@@ -751,13 +751,20 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             }
             }
 
-            if (UpdateEnabled && artifacts.Count > 0)
+            if (UpdateEnabled)
             {
-                var feed = UpdateManifestEmitter.EmitAsync(
-                    Configure(formats), artifacts).GetAwaiter().GetResult();
+                var feed = artifacts.Count == 0
+                    ? Array.Empty<string>()
+                    : UpdateManifestEmitter.EmitAsync(
+                        Configure(formats), artifacts).GetAwaiter().GetResult();
                 foreach (var path in feed)
                 {
                     Log.LogMessage(MessageImportance.High, $"Bundler update: {path}");
+                }
+                if (feed.Count == 0)
+                {
+                    Log.LogWarning("Bundler: update is enabled but no format produced an update-adapted artifact; " +
+                        "no update feed was emitted — installed apps' sidecar will point at a non-existent feed.");
                 }
             }
 
@@ -1114,7 +1121,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         if (!Enum.TryParse(
                 WindowsSigningCertificateStoreLocation,
                 true,
-                out System.Security.Cryptography.X509Certificates.StoreLocation storeLocation))
+                out System.Security.Cryptography.X509Certificates.StoreLocation storeLocation) ||
+            !Enum.IsDefined(
+                typeof(System.Security.Cryptography.X509Certificates.StoreLocation), storeLocation))
         {
             throw new ArgumentException(
                 "BundlerWindowsSigningCertificateStoreLocation must be CurrentUser or LocalMachine.");

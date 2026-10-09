@@ -96,9 +96,11 @@ public static class ZipToolCache
         IReadOnlyList<ManifestEntry> expectedFiles,
         CancellationToken cancellationToken)
     {
-        // 崩溃遗留的同名暂存目录先清扫：.{name}-{version}-* 只由本函数创建。
+        // 崩溃遗留的同名暂存目录先清扫：.{name}-{version}-{sha12}-* 只由本函数创建；
+        // glob 带 sha12——同 (name,version) 不同 sha 的并发 Resolve 互不清扫在跑暂存。
+        var sha12 = archive.Sha256.Substring(0, 12).ToLowerInvariant();
         foreach (var stale in Directory.GetDirectories(
-                         cacheDirectory, $".{archive.Name}-{archive.Version}-*"))
+                         cacheDirectory, $".{archive.Name}-{archive.Version}-{sha12}-*"))
         {
             try
             {
@@ -108,7 +110,7 @@ public static class ZipToolCache
             {
             }
         }
-        var stagingDirectory = Path.Combine(cacheDirectory, $".{archive.Name}-{archive.Version}-{Guid.NewGuid():N}");
+        var stagingDirectory = Path.Combine(cacheDirectory, $".{archive.Name}-{archive.Version}-{sha12}-{Guid.NewGuid():N}");
         try
         {
             Directory.CreateDirectory(stagingDirectory);
