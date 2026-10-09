@@ -1,6 +1,6 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-08
+> 最后更新：2026-10-09
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
 > 当前包版本：`0.1.0-alpha.84`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；无进行中的格式阶段**
@@ -86,6 +86,14 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-09 PR #45 压缩合并（squash `0ea145a`，main `0ea145a`，版本 `alpha.84` 不变）
+
+- `.github/workflows/release-verify.yml` 发布前全量验证落地：仅 `workflow_dispatch` 触发，六宿主矩阵（`ubuntu-26.04`、`ubuntu-26.04-arm`、`windows-2025`、`windows-11-arm`、`macos-26-intel`、`macos-26`；docker 发行版腿挂 ubuntu job 内）——每腿四段：构建+四工程全量 → fixture 产包 → 真装真卸 → Special 自动腿；`fail-fast:false`、`cancel-in-progress:true`、证据工件（`tests/Special/evidence/`+`artifacts/ci/test-progress.log`）保留 1 天；action 全最新稳定（checkout v7/setup-dotnet v6/upload-artifact v7）。最终六腿合并 run 全绿。`dbg-aot.yml` 保留为手动触发的 arm64 引导件再生产工作流。
+- arm64 AOT 引导件入库（UPDATE-OI-01 arm64 段实证收口）：`tools/` 新增 `linux-arm64`/`linux-musl-arm64`/`win-arm64` 三件，全部由 GitHub arm64 runner 真机产出+冒烟 `apply`（musl-arm64 经 alpine SDK 容器）；测试 RID 自适应（`TestPlatform.LinuxRuntimeIdentifier`/`OsxRuntimeIdentifier`、`MuslRid()`/`WinRid()`）——win-arm64 UpdateIntegrationTests 3 腿、musl-arm64 docker tmpfs ENOSPC、win-arm64 VHD 小卷、arm64 `ShippedBootstrap_SmokeApplies` 全部落地实跑。
+- runner 实证修复一批：`MacDmgBundleBackend` hdiutil "Resource busy" 定向重试；`ZipToolCache.SafeDeleteTree` 删除重试全覆盖；NSIS 清理与安装等待重试/超时放宽（共享 runner 负载 flake）；Special 脚本四真 bug（`Note` 归一化 PASS/FAIL、真 ENOSPC 循环写、`pinned-items` `/S`+快照 diff+`-InstallDirName` 拒跑守卫、`arm64-matrix` NSIS 腿卸载清场）；`arm64-real-hw.sh` 包名改包元数据自描述；工件执行腿 x64 门禁、MachO 按宿主 RID、验读改受管 API。
+- `docs/special-acceptance.md` B 表三行更新：ARM64 真机组✓、UPDATE arm64 引导件✓（均 2026-10-09 完成）、Windows ARM64 矩阵部分收编（装/卸已绿，升/修组合仍挂）。
+- 遗留不属本 PR：nuget 包+release 资产发布为后期另一步；升级/修复组合与凭证/公网/真重启/UAC 真人/干净宿主类仍挂 `docs/special-acceptance.md`。
 
 ### 2026-10-08 PR #43 压缩合并（squash `d849a38`，main `d849a38`，版本 `alpha.84` 不变）
 
