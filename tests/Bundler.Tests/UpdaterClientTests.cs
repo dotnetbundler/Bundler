@@ -233,6 +233,28 @@ public static class UpdaterClientTests
     }
 
     [Fact]
+    static void Client_FromIdentity_RequiresFeedIdentity()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var ex = Assert.Throws<UpdateException>(() =>
+                UpdateClient.FromIdentity(new Protocol.UpdateInstallIdentity
+                {
+                    Format = "appimage",
+                    RuntimeIdentifier = "linux-x64",
+                    FeedUrl = "",
+                    PublicKey = null,
+                }, directory, "1.0.0"));
+            Assert.Contains("feed url or public key", ex.Message);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     static void Client_FromInstallDirectory_RequiresSidecar()
     {
         var directory = CreateTempDirectory();

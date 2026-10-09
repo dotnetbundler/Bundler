@@ -17,12 +17,21 @@ internal static class CpioWriter
         internal string Name = "";          // absolute path, e.g. "/usr/lib/pkg/app"
         internal int Mode;                  // st_mode including type bits
         internal byte[] Data = [];          // regular file contents; link target for symlinks
+        /// 常规文件可给流式源：设置后优先于 Data——按流 Length 写头、分块拷贝正文，不驻内存。
+        internal Func<Stream>? OpenContent;
         internal int Inode;
     }
 
     internal static byte[] Write(IReadOnlyList<Entry> entries)
     {
         var output = new MemoryStream();
+        Write(output, entries);
+        return output.ToArray();
+    }
+
+    /// <summary>流式写出：载荷大时直接写目标流（如 gzip→文件），不经内存整档。</summary>
+    internal static void Write(Stream output, IReadOnlyList<Entry> entries)
+    {
         foreach (var entry in entries)
         {
             WriteEntry(output, entry);
@@ -31,21 +40,37 @@ internal static class CpioWriter
         WriteRecord(output, "TRAILER!!!", 0, 0, 1, 0, [], writeData: false);
         var pad = (int)((512 - output.Length % 512) % 512);
         output.Write(new byte[pad], 0, pad);
-        return output.ToArray();
     }
 
     private static void WriteEntry(Stream output, Entry entry)
     {
         var isSymlink = (entry.Mode & 0xF000) == 0xA000;
         var isDir = (entry.Mode & 0xF000) == 0x4000;
-        var fileSize = isDir ? 0 : entry.Data.Length;
-        WriteRecord(output, entry.Name, entry.Mode, entry.Inode, isDir ? 2 : 1,
-            fileSize, entry.Data, isSymlink || !isDir);
+        Stream? contentStream = null;
+        try
+        {
+            var fileSize = entry.Data.Length;
+            if (!isDir && entry.OpenContent is { } openContent)
+            {
+                contentStream = openContent();
+                fileSize = (int)contentStream.Length;
+            }
+            else if (isDir)
+            {
+                fileSize = 0;
+            }
+            WriteRecord(output, entry.Name, entry.Mode, entry.Inode, isDir ? 2 : 1,
+                fileSize, entry.Data, contentStream, isSymlink || !isDir);
+        }
+        finally
+        {
+            contentStream?.Dispose();
+        }
     }
 
     private static void WriteRecord(
         Stream output, string name, int mode, int inode, int nlink,
-        int fileSize, byte[] data, bool writeData = true)
+        int fileSize, byte[] data, Stream? dataStream = null, bool writeData = true)
     {
         var nameBytes = Encoding.UTF8.GetBytes(name);
         var header = new StringBuilder();
@@ -64,9 +89,30 @@ internal static class CpioWriter
         output.Write(nameBytes, 0, nameBytes.Length);
         output.WriteByte(0);
         Pad4(output);
-        if (writeData && data.Length > 0)
+        if (writeData)
         {
-            output.Write(data, 0, data.Length);
+            if (dataStream is not null)
+            {
+                // 按头里的 fileSize 封顶写：源文件构建期被改也不致
+                // 头体错位——短读即坏档，宁可当场抛。
+                var remaining = fileSize;
+                var buffer = new byte[81920];
+                while (remaining > 0)
+                {
+                    var read = dataStream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                    if (read == 0)
+                    {
+                        throw new EndOfStreamException(
+                            $"Cpio entry '{name}' stream ended after {fileSize - remaining} of {fileSize} bytes.");
+                    }
+                    output.Write(buffer, 0, read);
+                    remaining -= read;
+                }
+            }
+            else if (data.Length > 0)
+            {
+                output.Write(data, 0, data.Length);
+            }
         }
         Pad4(output);
     }

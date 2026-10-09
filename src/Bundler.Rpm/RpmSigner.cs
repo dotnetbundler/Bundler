@@ -15,6 +15,27 @@ internal static class RpmSigner
 {
     internal static byte[] Sign(byte[] signedData, string keyFile, string? passphrase)
     {
+        var generator = CreateGenerator(keyFile, passphrase);
+        generator.Update(signedData);
+        return generator.Generate().GetEncoded();
+    }
+
+    /// <summary>前缀+流两段喂入：RPMSIGTAG_PGP 签 主头+压缩载荷——载荷文件不驻内存。</summary>
+    internal static byte[] Sign(byte[] prefix, Stream rest, string keyFile, string? passphrase)
+    {
+        var generator = CreateGenerator(keyFile, passphrase);
+        generator.Update(prefix);
+        var buffer = new byte[81920];
+        int read;
+        while ((read = rest.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            generator.Update(buffer, 0, read);
+        }
+        return generator.Generate().GetEncoded();
+    }
+
+    private static PgpV3SignatureGenerator CreateGenerator(string keyFile, string? passphrase)
+    {
         var secretKey = LoadSigningKey(keyFile);
         PgpPrivateKey privateKey;
         try
@@ -30,8 +51,7 @@ internal static class RpmSigner
         var generator = new PgpV3SignatureGenerator(
             PublicKeyAlgorithmTag.RsaGeneral, HashAlgorithmTag.Sha256);
         generator.InitSign(PgpSignature.BinaryDocument, privateKey);
-        generator.Update(signedData);
-        return generator.Generate().GetEncoded();
+        return generator;
     }
 
     private static PgpSecretKey LoadSigningKey(string keyFile)

@@ -191,6 +191,9 @@ public static class UpdateTests
             Directory.CreateDirectory(input);
             File.WriteAllText(Path.Combine(input, "app.bin"), "payload");
             var output = Path.Combine(directory, "out");
+            var keyPath = Path.Combine(directory, "key.json");
+            var material = UpdateKeyMaterial.Generate();
+            material.Save(keyPath);
 
             var artifacts = new DotNet.Bundler.Archive.ArchiveBundler(
                 new DotNet.Bundler.Archive.ArchiveBundleConfiguration())
@@ -200,7 +203,12 @@ public static class UpdateTests
                     Identifier = "com.example.app",
                     Version = "1.0.0",
                     OutputDirectory = output,
-                    Update = new UpdateBundleConfiguration { PublicKey = "cHVibGljLWtleQ==" },
+                    Update = new UpdateBundleConfiguration
+                    {
+                        FeedUrl = "https://example.test/updates",
+                        SigningKeyFile = keyPath,
+                        PublicKey = material.PublicPointBase64(),
+                    },
                     Targets = [new BundleTargetConfiguration
                     {
                         RuntimeIdentifier = "linux-x64",
@@ -219,7 +227,7 @@ public static class UpdateTests
             using var document = JsonDocument.Parse(reader.ReadToEnd());
             Assert.Equal("zip", document.RootElement.GetProperty("format").GetString());
             Assert.Equal("linux-x64", document.RootElement.GetProperty("rid").GetString());
-            Assert.Equal("cHVibGljLWtleQ==",
+            Assert.Equal(material.PublicPointBase64(),
                 document.RootElement.GetProperty("publicKey").GetString());
             Assert.False(File.Exists(Path.Combine(input, UpdateIdentitySidecar.FileName)));
         }
@@ -938,6 +946,9 @@ public static class UpdateTests
             var item = new BundlePlanItem(
                 BundleTarget.TryParse("linux-x64", out var target) ? target! : throw new InvalidOperationException(),
                 PackageFormat.Zip, input, "app.bin", directory, false);
+            var keyPath = Path.Combine(directory, "key.json");
+            var material = UpdateKeyMaterial.Generate();
+            material.Save(keyPath);
             var context = new BundleBuildContext(
                 new BundleConfiguration
                 {
@@ -945,7 +956,12 @@ public static class UpdateTests
                     Identifier = "com.example.app",
                     Version = "1.0.0",
                     OutputDirectory = directory,
-                    Update = new UpdateBundleConfiguration { PublicKey = "cHVibGljLWtleQ==" }
+                    Update = new UpdateBundleConfiguration
+                    {
+                        FeedUrl = "https://example.test/updates",
+                        SigningKeyFile = keyPath,
+                        PublicKey = material.PublicPointBase64(),
+                    }
                 },
                 item, work, new SilentLogger());
 
@@ -1428,6 +1444,9 @@ public static class UpdateTests
             File.WriteAllText(Path.Combine(input, UpdateIdentitySidecar.FileName),
                 "{\"format\":\"stale\"}");
             var output = Path.Combine(directory, "out");
+            var keyPath = Path.Combine(directory, "key.json");
+            var material = UpdateKeyMaterial.Generate();
+            material.Save(keyPath);
 
             var artifacts = new DotNet.Bundler.Archive.ArchiveBundler(
                 new DotNet.Bundler.Archive.ArchiveBundleConfiguration())
@@ -1437,7 +1456,12 @@ public static class UpdateTests
                     Identifier = "com.example.app",
                     Version = "1.0.0",
                     OutputDirectory = output,
-                    Update = new UpdateBundleConfiguration { PublicKey = "cHVibGljLWtleQ==" },
+                    Update = new UpdateBundleConfiguration
+                    {
+                        FeedUrl = "https://example.test/updates",
+                        SigningKeyFile = keyPath,
+                        PublicKey = material.PublicPointBase64(),
+                    },
                     Targets = [new BundleTargetConfiguration
                     {
                         RuntimeIdentifier = "linux-x64",

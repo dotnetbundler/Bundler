@@ -16,6 +16,12 @@ public interface IFormatBundler
     /// </summary>
     void Validate(BundleConfiguration bundle);
 
+    /// <summary>
+    /// 构建本格式产物。实现自身须先跑 <see cref="Validate"/> 的同一套校验
+    /// （不经聚合入口直接调用时也保持配置错即 <see cref="ArgumentException"/> 族、
+    /// 宿主门即 <see cref="PlatformNotSupportedException"/> 的异常契约），
+    /// 其后才执行构建；构建期 IO/工具失败不属于这两类，逐格式冒泡。
+    /// </summary>
     Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleConfiguration bundle,
         CancellationToken cancellationToken = default);

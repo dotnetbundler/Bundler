@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using DotNet.Bundler;
+using DotNet.Bundler.Core.Update;
 
 namespace DotNet.Bundler.Core;
 
@@ -85,8 +86,96 @@ public static class BundleConfigurationValidator
         }
         ValidateFileAssociations(configuration.FileAssociations, issues);
         ValidateUrlProtocols(configuration.UrlProtocols, issues);
+        ValidateUpdateSection(configuration.Update, checkFileSystem, issues);
         ValidateDuplicateOutputs(configuration, issues);
         return issues;
+    }
+
+    // update 节与格式节同级：开启后 feed/通道/签名旋钮在扇出前一次验全，
+    // 不留到发射期才 InvalidOperationException。
+    private static readonly Regex UpdateChannelPattern = new(
+        "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", RegexOptions.Compiled);
+
+    private static void ValidateUpdateSection(
+        UpdateBundleConfiguration? update,
+        bool checkFileSystem,
+        List<ValidationIssue> issues)
+    {
+        if (update is null)
+        {
+            return;
+        }
+
+        // feed 空 = 装出来的身份旁车带空 feed——更新链静默断。
+        if (string.IsNullOrWhiteSpace(update.FeedUrl))
+        {
+            issues.Add(new("update.feedUrl", "Value is required when update is enabled."));
+        }
+
+        if (!string.IsNullOrWhiteSpace(update.Channel) &&
+            !UpdateChannelPattern.IsMatch(update.Channel))
+        {
+            // 通道名直接进清单文件名 bundler-update-feed.<channel>.json。
+            issues.Add(new("update.channel", "Must be a filename-safe token (letters, digits, '.', '_', '-')."));
+        }
+
+        var signingKeyFile = update.SigningKeyFile is { Length: > 0 } keyPath ? keyPath : null;
+        if (signingKeyFile is null)
+        {
+            issues.Add(new("update.signingKeyFile", "Value is required — update signatures are mandatory."));
+        }
+        else if (checkFileSystem && !File.Exists(signingKeyFile))
+        {
+            issues.Add(new("update.signingKeyFile", $"File does not exist: {signingKeyFile}"));
+        }
+
+        var publicKey = update.PublicKey is { Length: > 0 } point ? point : null;
+        if (publicKey is not null && !IsEcP256Point(publicKey))
+        {
+            issues.Add(new("update.publicKey", "Must be a base64 uncompressed P-256 point (65 bytes, 0x04 prefix)."));
+        }
+        else if (publicKey is not null && signingKeyFile is not null &&
+            checkFileSystem && File.Exists(signingKeyFile))
+        {
+            // 旁车嵌 publicKey、清单用 signingKeyFile 私钥签——两钥不符时装出来的
+            // 客户端会拿错的公钥验签：合法更新被拒、他钥签名反被信。扇出前拦下。
+            try
+            {
+                var derived = UpdateKeyMaterial.Load(signingKeyFile).PublicPointBase64();
+                if (!string.Equals(derived, publicKey.Trim(), StringComparison.Ordinal))
+                {
+                    issues.Add(new("update.publicKey",
+                        "Must match the public half of update.signingKeyFile."));
+                }
+            }
+            catch (Exception error) when (error is IOException or InvalidOperationException
+                or System.Runtime.Serialization.SerializationException
+                or UnauthorizedAccessException or FormatException or ArgumentException)
+            {
+                issues.Add(new("update.signingKeyFile",
+                    $"Cannot be parsed as an ec-p256 key file: {error.Message}"));
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(update.BootstrapperDirectory) &&
+            checkFileSystem && !Directory.Exists(update.BootstrapperDirectory))
+        {
+            issues.Add(new("update.bootstrapperDirectory", $"Directory does not exist: {update.BootstrapperDirectory}"));
+        }
+    }
+
+    private static bool IsEcP256Point(string base64)
+    {
+        // netstandard2.0 无 TryFromBase64String——异常即非法输入。
+        try
+        {
+            var bytes = Convert.FromBase64String(base64);
+            return bytes.Length == 65 && bytes[0] == 0x04;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     private static void ValidateTarget(

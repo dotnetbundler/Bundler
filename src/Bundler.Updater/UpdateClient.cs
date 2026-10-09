@@ -22,6 +22,12 @@ public sealed class UpdateClient
         UpdateInstallIdentity identity, string installDirectory,
         string currentVersion, UpdateClientOptions options)
     {
+        // 身份核验下沉到构造：FromIdentity（注册表/plist 重建兜底）同样可能
+        // 缺 feed/公钥，不能只靠 FromInstallDirectory 一条入口拦。
+        if (identity.FeedUrl.Length == 0 || identity.PublicKey is not { Length: > 0 })
+        {
+            throw new UpdateException("install identity carries no feed url or public key.");
+        }
         _identity = identity;
         // 绝对化：引导件以自身目录为工作目录，相对路径会在它那边解析失败。
         _installDirectory = Path.GetFullPath(installDirectory);
@@ -41,10 +47,6 @@ public sealed class UpdateClient
             ?? throw new UpdateException(
                 $"no '{UpdateInstallIdentity.FileName}' under '{installDirectory}' — " +
                 "this installation does not participate in updates.");
-        if (identity.FeedUrl.Length == 0 || identity.PublicKey is not { Length: > 0 })
-        {
-            throw new UpdateException("install identity carries no feed url or public key.");
-        }
         return new UpdateClient(identity, installDirectory, currentVersion,
             options ?? new UpdateClientOptions());
     }

@@ -52,6 +52,7 @@
 
 - 删除旧 `src/Bundler.Cli` 原型（164 行 NSIS-only、`IsPackable=false`），按决策面重建。
 - `src/Bundler.Cli`（`bundler` exe）：手写参数解析器（`--name value`/`--name=value`/旗标/拒未知项与重复项）；`validate`/`plan`/`bundle` 三命令；`--input-dir`/`--rid`/`--formats`/`--product-name`/`--identifier`/`--package-version`/`--output-dir`/`--main-executable`/`--publisher`/`--description`/`--homepage`/`--copyright`/`--license-file`/`--icons` 参数面。
+- 路径解析基准：`bundler.json` 内的相对路径按配置文件所在目录解析；命令行覆盖值（`--input-dir`/`--output-dir`/`--license-file`/`--icons`/`--<格式>.<旋钮>`）按当前工作目录解析——两套基准刻意不同（命令行直觉 vs 配置文件自洽），`--help` 有明示。
 - 三级退出码：0 成功 / 1 后端或 IO 失败 / 2 用法或配置校验失败；`BundleValidationException` 归 2。
 - `--json`：`validate`/`plan`/`bundle` stdout 只出 JSON（`valid`+`issues` / `items[]` / `artifacts[]`），日志走 stderr。
 - 日志三档：默认 Information 起；`--quiet` 只留 Error；`--verbose` 加 Trace；`DOTNET_BUNDLER_VERBOSE` 环境变量同效。
