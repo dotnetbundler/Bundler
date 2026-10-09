@@ -11,8 +11,8 @@ dotnet pack Bundler.slnx -c Release -o artifacts/packages --nologo
 
 "=== fixture 产包（win-arm64）"
 $FIX = "tests/Bundler.IntegrationTests/Fixtures"
-dotnet publish "$FIX/Nsis/BundlerNsisIntegrationFixture.csproj" -c Release -r win-arm64 -p:BundlerIntegrationOutput="$OUT/nsis" --nologo
-dotnet publish "$FIX/Msi/BundlerMsiIntegrationFixture.csproj"  -c Release -r win-arm64 -p:BundlerIntegrationOutput="$OUT/msi"  --nologo
+dotnet publish "$FIX/Nsis/Fixture/BundlerNsisIntegrationFixture.csproj" -c Release -r win-arm64 -p:BundlerIntegrationOutput="$OUT/nsis" --nologo
+dotnet publish "tests/Bundler.LocalPackagesTests/Fixtures/Msi/Fixture/BundlerMsiSmoke.csproj" -c Release -r win-arm64 -p:BundlerIntegrationOutput="$OUT/msi" --nologo
 $nsis = Get-ChildItem "$OUT/nsis" -Filter *.exe -Recurse | Select-Object -First 1 -ExpandProperty FullName
 $msi  = Get-ChildItem "$OUT/msi"  -Filter *.msi -Recurse | Select-Object -First 1 -ExpandProperty FullName
 
