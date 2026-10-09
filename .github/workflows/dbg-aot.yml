@@ -4,6 +4,9 @@ name: dbg-aot
 
 on:
   workflow_dispatch:
+  # 临时：CI 三连稳定验证用，验完摘除。
+  push:
+    branches: [devin/1791558636-r2-fix]
 
 concurrency:
   group: dbg-aot
