@@ -1266,6 +1266,14 @@ internal static class BootstrapPlan
                 || (!(body.Length >= 2 && char.IsLetter(body[0]) && body[1] == ':')
                     && !body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase));
         }
+        // 单反斜杠 \?\ 是 mklink 卷 GUID 目标的原文形态（.NET LinkTarget 不保前缀归一）。
+        if (target.StartsWith(@"\?\", StringComparison.Ordinal))
+        {
+            var body = target[3..];
+            return HasVolumeGuidRoot(body)
+                || (!(body.Length >= 2 && char.IsLetter(body[0]) && body[1] == ':')
+                    && !body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase));
+        }
         return HasVolumeGuidRoot(target);
     }
 
@@ -1355,12 +1363,14 @@ internal static class BootstrapPlan
     private static bool IsVolumeRoot(string path)
     {
         var trimmed = path.TrimEnd('/', '\\');
-        // 设备名空间前缀剥壳：\\?\Volume{GUID}\ 经 reparse 解析可能呈 \??\Volume{GUID} NT 形态，
-        // Path.GetPathRoot 认不出后者——剥前缀后按 Volume{…} 段判定。
+        // 设备名空间前缀剥壳：\\?\ 与 \??\ 之外，reparse 目标可呈单反斜杠 \?\Volume{GUID}
+        // NT 形态——Path.GetPathRoot 认不出这类，剥前缀后按 Volume{…} 段判定。
         var core = trimmed.StartsWith(@"\\?\", StringComparison.Ordinal) ||
                    trimmed.StartsWith(@"\??\", StringComparison.Ordinal) ||
                    trimmed.StartsWith(@"\\.\", StringComparison.Ordinal)
-            ? trimmed[4..] : trimmed;
+            ? trimmed[4..]
+            : trimmed.StartsWith(@"\?\", StringComparison.Ordinal)
+                ? trimmed[3..] : trimmed;
         if (core.StartsWith("Volume{", StringComparison.OrdinalIgnoreCase))
         {
             return !core.Contains('\\') && !core.Contains('/');
