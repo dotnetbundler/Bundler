@@ -94,8 +94,8 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - 入口层两趟化：MSBuild `BundleDesktopApplication` 与 CLI `bundle` 先跑共享校验（`BundlePlanner.Create`）+ 逐格式 `Validate`，配置类错误聚合一次报（MSBuild `LogError`+false；CLI stderr+rc=2）——任一格式零产出；宿主门禁（`PlatformNotSupportedException`）不进预检，仍走逐格式独立失败（warn+rc=1）。CLI `validate` 子命令顺带获得各格式旋钮校验。
 - 依赖构建产物/暂存树的检查（载荷签名文件、快捷方式落点、deb/rpm/apk 写入器内校验、dmg `.app` 中间件）不可前移，留原位。
 - `BundlePerFormatIndependentFailure` 组合修正为“rid 合法但宿主不可产”（linux/win 用 osx+dmg、mac 用 win-x64+msi）——原组合 dmg+linux-x64 本身就是矩阵违规（配置错类，现归 rc=2 更对）。
-- 新断言 ×6：CLI 预检三条（后置格式错→rc=2+前置 zip 零落盘、双格式双错一次报完、validate 子命令跑旋钮校验）+ dmg/pkg/msi 宿主门禁标记类型断言（`PlatformNotSupportedException`）。
-- 复审挂后续项“格式旋钮统一预检”落地，Bundler.Tests 全量 **399 件 0F**。
+- 新断言 ×8：CLI 四条（后置格式错→rc=2+前置 zip 零落盘、双格式双错一次报完、validate 子命令跑旋钮校验、签名宿主门不阻塞可产格式）+ dmg/pkg/msi 宿主门禁标记类型断言（`PlatformNotSupportedException`）+ dmg/pkg 预检覆盖内嵌 app 旋钮 + 签名宿主门不遮配置错。
+- 复审挂后续项“格式旋钮统一预检”落地；复审两轮三处处置（签名宿主门归一 PNSE、dmg/pkg 预检覆盖内嵌 app 旋钮、签名挪共享面末尾不遮配置错），Bundler.Tests 全量 **401 件 0F**。
 
 ### 2026-10-09 PR #45 压缩合并（squash `0ea145a`，main `0ea145a`，版本 `alpha.84` 不变）
 
