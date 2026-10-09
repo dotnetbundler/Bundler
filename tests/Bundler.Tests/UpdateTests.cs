@@ -380,7 +380,7 @@ public static class UpdateTests
         if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
                 System.Runtime.InteropServices.OSPlatform.Linux))
         {
-            return;
+            Assert.Skip("Linux-only leg.");
         }
         var directory = CreateTempDirectory();
         try
@@ -392,8 +392,11 @@ public static class UpdateTests
             File.WriteAllText(Path.Combine(install, "app"), "v1");
             var payloadExe = Path.Combine(payload, "hello");
             File.WriteAllText(payloadExe, "#!/bin/sh\necho hi\n");
-            File.SetUnixFileMode(payloadExe, UnixFileMode.UserRead | UnixFileMode.UserWrite |
-                UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+            if (OperatingSystem.IsLinux())
+            {
+                File.SetUnixFileMode(payloadExe, UnixFileMode.UserRead | UnixFileMode.UserWrite |
+                    UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+            }
             File.CreateSymbolicLink(Path.Combine(payload, "AppRun"), "hello");
 
             var rc = DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
@@ -408,9 +411,12 @@ public static class UpdateTests
             // 软链按链接重建而非解引用成普通文件；执行位随文件走。
             var appRun = new FileInfo(Path.Combine(install, "AppRun"));
             Assert.Equal("hello", appRun.LinkTarget);
-            Assert.True(
-                (File.GetUnixFileMode(Path.Combine(install, "hello")) &
-                 UnixFileMode.UserExecute) != 0);
+            if (OperatingSystem.IsLinux())
+            {
+                Assert.True(
+                    (File.GetUnixFileMode(Path.Combine(install, "hello")) &
+                     UnixFileMode.UserExecute) != 0);
+            }
             // keep-payload 保留源载荷。
             Assert.True(File.Exists(payloadExe));
         }

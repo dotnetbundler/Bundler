@@ -111,50 +111,10 @@ internal static class MsiSupport
             ["DotNet.Bundler", "DotNet.Bundler.MSBuild", "DotNet.Bundler.Wix"]);
     }
 
-    // 对应 Assert-LocalBundlerRestore：本地源+独立缓存+版本+来源元数据逐项核验。
+    // 契约实现统一收在 LocalRestoreAssert.Verify——这里只做签名转发。
     public static void AssertLocalBundlerRestore(string project, string version,
         string source, string cache, string[] requiredPackages)
-    {
-        var assetsPath = Path.Combine(Path.GetDirectoryName(project)!, "obj", "project.assets.json");
-        Assert.True(File.Exists(assetsPath), $"Restore assets are missing: {assetsPath}");
-        using var doc = JsonDocument.Parse(File.ReadAllText(assetsPath));
-        var expectedSource = Path.GetFullPath(source).TrimEnd('\\', '/');
-        var expectedCache = Path.GetFullPath(cache).TrimEnd('\\', '/');
-        var sources = doc.RootElement.GetProperty("project").GetProperty("restore")
-            .GetProperty("sources").EnumerateObject()
-            .Select(p => p.Name)
-            .Where(n => !System.Text.RegularExpressions.Regex.IsMatch(n, @"^[a-zA-Z][a-zA-Z0-9+.-]*://"))
-            .Select(n => Path.GetFullPath(n).TrimEnd('\\', '/'))
-            .ToArray();
-        Assert.Contains(sources, s => s == expectedSource);
-        var folders = doc.RootElement.GetProperty("packageFolders").EnumerateObject()
-            .Select(p => Path.GetFullPath(p.Name).TrimEnd('\\', '/')).ToArray();
-        Assert.Contains(folders, f => f == expectedCache);
-        var libraries = doc.RootElement.GetProperty("libraries").EnumerateObject()
-            .Select(p => p.Name).ToArray();
-        foreach (var name in requiredPackages)
-        {
-            Assert.Contains(libraries, l => l == $"{name}/{version}");
-            var packageDir = Path.Combine(expectedCache,
-                name.ToLowerInvariant(), version);
-            Assert.True(File.Exists(Path.Combine(packageDir, $"{name.ToLowerInvariant()}.{version}.nupkg")),
-                $"Restored package is missing from the isolated cache: {packageDir}");
-            var metadataPath = Path.Combine(packageDir, ".nupkg.metadata");
-            Assert.True(File.Exists(metadataPath),
-                $"Restored package is missing provenance metadata: {metadataPath}");
-            using var meta = JsonDocument.Parse(File.ReadAllText(metadataPath));
-            var origin = meta.RootElement.GetProperty("source").GetString() ?? "";
-            Assert.False(string.IsNullOrWhiteSpace(origin)
-                || System.Text.RegularExpressions.Regex.IsMatch(origin, @"^[a-zA-Z][a-zA-Z0-9+.-]*://")
-                || Path.GetFullPath(origin).TrimEnd('\\', '/') != expectedSource,
-                $"Restored package did not come from the local source: {name}/{version} (source: {origin})");
-        }
-        var wrong = libraries.Where(l =>
-            (l.StartsWith("DotNet.Bundler/", StringComparison.Ordinal)
-             || l.StartsWith("DotNet.Bundler.", StringComparison.Ordinal))
-            && !l.EndsWith($"/{version}", StringComparison.Ordinal)).ToArray();
-        Assert.Empty(wrong);
-    }
+        => LocalRestoreAssert.Verify(project, version, source, cache, requiredPackages);
 
     // Windows Installer 是整机单例服务：并行测试类并发调用或外部安装会撞 1618。
     // 进程内串行覆盖本类竞态，1618 有界重试覆盖仓外安装占用。

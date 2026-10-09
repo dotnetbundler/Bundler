@@ -119,8 +119,7 @@ public static class CliTests
         var output = Path.Combine(Path.GetTempPath(), "bundler-cli-plan-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var args = BaseArgs("plan", input, output)
-                .Where(a => a != "zip" || true).ToArray();
+            var args = BaseArgs("plan", input, output);
             var rewritten = args.Select(a => a == "zip" ? "all" : a).ToArray();
             var (code, stdout, err) = Run(rewritten);
             Assert.True(code == 0, $"plan --formats all must exit 0, got {code}: {err}");
@@ -380,16 +379,22 @@ public static class CliTests
             Assert.NotNull(exeEntry);
             var extracted = Path.GetTempFileName();
             using (var stream = exeEntry!.Open())
-            using (var file = File.Create(extracted))
+            try
             {
-                stream.CopyTo(file);
+                using (var file = File.Create(extracted))
+                {
+                    stream.CopyTo(file);
+                }
+                var cpus = DotNet.Bundler.MacApp.MachO.ReadSliceInfos(extracted)
+                    .Select(s => s.CpuType).OrderBy(c => c).ToArray();
+                Assert.True(cpus.Length == 2 && cpus[0] == 0x01000007 && cpus[1] == 0x0100000C,
+                    "merged executable must be a fat Mach-O with x86_64 + arm64 slices, got "
+                    + string.Join(",", cpus.Select(c => c.ToString("X8"))));
             }
-            var cpus = DotNet.Bundler.MacApp.MachO.ReadSliceInfos(extracted)
-                .Select(s => s.CpuType).OrderBy(c => c).ToArray();
-            File.Delete(extracted);
-            Assert.True(cpus.Length == 2 && cpus[0] == 0x01000007 && cpus[1] == 0x0100000C,
-                "merged executable must be a fat Mach-O with x86_64 + arm64 slices, got "
-                + string.Join(",", cpus.Select(c => c.ToString("X8"))));
+            finally
+            {
+                File.Delete(extracted);
+            }
             Assert.NotNull(archive.GetEntry("clifixture-1.0.0-osx/shared.txt"));
         }
         finally

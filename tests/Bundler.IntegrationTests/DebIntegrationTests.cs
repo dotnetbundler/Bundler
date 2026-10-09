@@ -458,10 +458,13 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     }
 
     [Fact]
-    [Trait("Requires", "elevation")]
+    [Trait("Requires", "localinstall")]
     public void RealDpkgInstallRemoveAndConffileSemantics()
     {
         SkipWhenHostDpkgNotAmd64();
+        Assert.SkipWhen(
+            Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") != "1",
+            "真装会写系统包库；置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1 才跑。");
         ElevatedRunner.RequireSudo("real dpkg -i/-r not exercised.");
         try
         {
@@ -531,10 +534,13 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     }
 
     [Fact]
-    [Trait("Requires", "elevation")]
+    [Trait("Requires", "localinstall")]
     public void MaintainerScriptsRunUnderRealDpkg()
     {
         SkipWhenHostDpkgNotAmd64();
+        Assert.SkipWhen(
+            Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") != "1",
+            "真装会写系统包库；置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1 才跑。");
         ElevatedRunner.RequireSudo("maintainer-script leg not exercised.");
         var markers = new[]
         {
@@ -563,10 +569,13 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     }
 
     [Fact]
-    [Trait("Requires", "elevation")]
+    [Trait("Requires", "localinstall")]
     public void UpgradePreservesModifiedConffile()
     {
         SkipWhenHostDpkgNotAmd64();
+        Assert.SkipWhen(
+            Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") != "1",
+            "真装会写系统包库；置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1 才跑。");
         ElevatedRunner.RequireSudo("upgrade leg not exercised.");
         try
         {
@@ -622,7 +631,11 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     [Trait("Requires", "docker")]
     public void DockerMatrixInstallRunRemove()
     {
-        SkipWhenHostDpkgNotAmd64();
+        // 容器内跑 dpkg 与宿主是否有 dpkg 无关；只要求宿主是 amd64（镜像是 amd64 包）。
+        Assert.SkipWhen(
+            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture !=
+                System.Runtime.InteropServices.Architecture.X64,
+            "SKIP: docker matrix leg installs amd64 packages; non-x64 host cannot run them.");
         const string containerScript = """
             set -e
             dpkg -i /tmp/pkg.deb >/dev/null

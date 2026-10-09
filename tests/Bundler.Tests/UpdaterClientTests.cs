@@ -150,7 +150,7 @@ public static class UpdaterClientTests
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            return; // 本腿只在 linux 宿主跑（引导件随宿主架构：linux-x64/linux-arm64）
+            Assert.Skip("Linux-only leg (bootstrapper rides host arch).");
         }
         var directory = CreateTempDirectory();
         try
@@ -689,7 +689,7 @@ public static class UpdaterClientTests
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            return; // 本腿只在 linux 宿主跑（引导件随宿主架构：linux-x64/linux-arm64）
+            Assert.Skip("Linux-only leg (bootstrapper rides host arch).");
         }
 
         var directory = CreateTempDirectory();
@@ -755,7 +755,7 @@ public static class UpdaterClientTests
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            return;
+            Assert.Skip("Linux-only leg.");
         }
         var directory = CreateTempDirectory();
         try

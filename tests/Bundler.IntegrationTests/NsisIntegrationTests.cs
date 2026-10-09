@@ -42,9 +42,6 @@ public sealed class NsisFixture : IAsyncLifetime
         Assert.SkipWhen(!OperatingSystem.IsWindows(), "NSIS 集成腿只覆盖 Windows。");
         Assert.SkipWhen(!TestPlatform.IsX64,
             "SKIP: NSIS 工件为 win-x64 安装器，仅 x64 宿主验收；arm64 仿真语义另列特殊项。");
-        Assert.SkipWhen(
-            Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") != "1",
-            "真装会写真实用户配置与注册表；置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1 才跑。");
         Assert.SkipWhen(!File.Exists(FixtureProject), "NSIS integration fixture 缺失。");
         // 仓库包一次 pack（含 nodeReuse 文件锁前导）；NSIS 脚本的包装配检查放
         // RepositoryPackagesCarryNsisBackendAndAssets 一条无门禁事实。
@@ -81,6 +78,9 @@ public sealed class NsisFixture : IAsyncLifetime
         TestSidebarImage = Ws.Combine("test-sidebar.bmp");
         var archivePath = Path.Combine(RepositoryLayout.Root,
             "third_party", "nsis", "nsis-toolset-3.12-r1.zip");
+        // provenance 钉死的工具集哈希：取件前先核，防仓内资产被污染。
+        Assert.Equal("41F15B7F7E3A0349185606EDE939C7B2E5B31FF76F0EB479143D6659EF1EDDBC",
+            Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(archivePath))));
         using var archive = ZipFile.OpenRead(archivePath);
         foreach (var (entryName, destination) in new (string, string)[]
         {
@@ -305,7 +305,6 @@ public sealed class NsisFixture : IAsyncLifetime
 // ── 测试类：脚本主 try 块里的全部测试腿，逐条映射为独立 [Fact] ──
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-[Trait("Requires", "localinstall")]
 
 public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<NsisFixture>
 {
@@ -391,16 +390,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // ── 公共小件 ──
 
-    private static void WaitFor(Func<bool> condition, string message, int timeoutSeconds = 60)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (condition()) return;
-            Thread.Sleep(200);
-        }
-        Assert.Fail(message);
-    }
+
+    private static void RequireConsent() =>
+        Assert.SkipWhen(
+            Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") != "1",
+            "真装会写真实用户配置与注册表；置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1 才跑。");
 
     private static string Sha256(string path) =>
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
@@ -542,14 +536,14 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
     private void InstallDefault()
     {
         RunOk(Installer("bundle"), $"/S /D={InstallDir}");
-        WaitFor(() => File.Exists(Exe), "Installed executable is missing.");
-        WaitFor(() => File.Exists(Uninstaller), "Uninstaller is missing.");
+        WaitFor.Until(() => File.Exists(Exe), "Installed executable is missing.");
+        WaitFor.Until(() => File.Exists(Uninstaller), "Uninstaller is missing.");
     }
 
     private void UninstallDefault(string args = "/S /DELETEAPPDATA")
     {
         RunOk(Uninstaller, args);
-        WaitFor(() => !Directory.Exists(InstallDir) || !File.Exists(Exe),
+        WaitFor.Until(() => !Directory.Exists(InstallDir) || !File.Exists(Exe),
             "Uninstall cleanup did not finish.", 30);
     }
 
@@ -638,14 +632,13 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // Unicode 腿：非本机语言包+非 ASCII 全程保持（注册表/快捷方式/卸载）。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void UnicodeInstallRegistersMetadataAndCleansUp()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
-            var fallback = System.Globalization.CultureInfo.CurrentUICulture.Name
-                .StartsWith("ja", StringComparison.OrdinalIgnoreCase) ? "Korean" : "Japanese";
-            _ = fallback;
             RunOk(Installer("bundle-unicode", name: UnicodeName),
                 $"/S /D={UnicodeInstallDir}");
             var unicodeExe = Path.Combine(UnicodeInstallDir, "BundlerIntegrationFixture.exe");
@@ -663,7 +656,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.Equal(unicodeExe, shortcut.TargetPath);
             Assert.Equal("--表示モード \"你好 世界\"", shortcut.Arguments);
             RunOk(unicodeUninstaller, "/S /DELETEAPPDATA");
-            WaitFor(() => !Directory.Exists(UnicodeInstallDir),
+            WaitFor.Until(() => !Directory.Exists(UnicodeInstallDir),
                 "Unicode fixture cleanup did not finish.", 30);
             Assert.Null(Registry.CurrentUser.OpenSubKey(UnicodeRegistryPath));
             Assert.False(File.Exists(UnicodeStartMenuShortcut));
@@ -696,9 +689,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // 签名链：安装器/载荷/卸载器逐层带测试证书的 Authenticode。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void SignedInstallerChain()
     {
         _f.Ensure();
+        RequireConsent();
         var signed = Installer("bundle-signed");
         Assert.Equal(_f.CertificateThumbprint, SignerThumbprint(signed));
         try
@@ -707,7 +702,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.Equal(_f.CertificateThumbprint, SignerThumbprint(Exe));
             Assert.Equal(_f.CertificateThumbprint, SignerThumbprint(Uninstaller));
             RunOk(Uninstaller, "/S /DELETEAPPDATA");
-            WaitFor(() => !Directory.Exists(InstallDir),
+            WaitFor.Until(() => !Directory.Exists(InstallDir),
                 "Signed installer cleanup did not finish.", 30);
         }
         finally { Cleanup(); }
@@ -716,9 +711,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
     // post-uninstall 失败：保留卸载 journal+恢复卸载器+注册表锚点，篡改恢复卸载器被拒，
     // 修复后下次安装先完成旧卸载再装新载荷。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void FailedUninstallKeepsJournalAndNextInstallRecovers()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             RunOk(Installer("bundle-failing-uninstall-forward"), $"/S /D={InstallDir}");
@@ -749,15 +746,17 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // post-uninstall 中断：taskkill 杀掉整个卸载进程树，下次安装幂等完成旧卸载。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void InterruptedUninstallKeepsJournalAndNextInstallRecovers()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             RunOk(Installer("bundle-interrupted-uninstall-forward"), $"/S /D={InstallDir}");
             using var interrupted =
                 StartDirectUninstallerAsync(Uninstaller, InstallDir, "/S /DELETEAPPDATA");
-            WaitFor(() => File.Exists(InterruptedUninstallMarker),
+            WaitFor.Until(() => File.Exists(InterruptedUninstallMarker),
                 "Interrupted-uninstall fixture did not reach its post-uninstall hook.");
             ProcessRunner.TryKillTree(interrupted);
             interrupted.WaitForExit();
@@ -776,9 +775,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // SetRebootFlag：事务提交后返回 3010，/R 也不得在重启前启动应用。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void RebootRequiredCommitsAndReturns3010WithoutLaunching()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             var reboot = Run(Installer("bundle-reboot-required"),
@@ -798,9 +799,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // /ARGS 不带 /R 是调用错误：返回 3 且不写载荷。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void ArgsWithoutRunReturns3AndDoesNotInstall()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             var invalid = Run(Installer("bundle"), $"/S /ARGS orphaned /D={InstallDir}");
@@ -813,9 +816,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // /P 静默进度 + /NS 不建快捷方式；包级 Shortcut*=false 默认同样不建。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void PassiveModeAndDisabledShortcutDefaults()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             RunOk(Installer("bundle"), $"/P /NS /D={InstallDir}");
@@ -824,7 +829,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.False(File.Exists(DesktopShortcut), "/NS created a desktop shortcut.");
             Assert.False(File.Exists(StartMenuShortcut), "/NS created a Start Menu shortcut.");
             RunOk(Uninstaller, "/P /DELETEAPPDATA");
-            WaitFor(() => !Directory.Exists(InstallDir), "Passive cleanup did not finish.", 30);
+            WaitFor.Until(() => !Directory.Exists(InstallDir), "Passive cleanup did not finish.", 30);
 
             RunOk(Installer("bundle-no-shortcut-defaults"), $"/S /D={InstallDir}");
             Assert.False(File.Exists(DesktopShortcut),
@@ -840,10 +845,12 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
     // 欢迎→许可(I Agree)→目录→快捷方式选项→INSTFILES→Finish，再驱动交互卸载器
     // 确认→AppData 选项→INSTFILES。断言产物、双快捷方式与 DisplayName。
     [Fact]
+    [Trait("Requires", "localinstall")]
     [Trait("Requires", "interactive")]
     public void InteractiveWizardInstallsAndUninstalls()
     {
         _f.Ensure();
+        RequireConsent();
         Assert.SkipWhen(!WindowsDesktop.IsInteractive(),
             "GUI 验收腿需要交互式桌面会话（UIA 可达顶层窗口）。");
         try
@@ -858,10 +865,10 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.Contains(installDrive.Actions, a => a.Contains("Agree"));
             Assert.True(installDrive.Actions.Count(a => a.Contains("Next")) >= 2,
                 "向导页数不足：未见到 Directory/ShortcutOptions 的 Next。");
-            WaitFor(() => process.HasExited, "Installer did not exit after Finish.", 30);
+            WaitFor.Until(() => process.HasExited, "Installer did not exit after Finish.", 30);
             Assert.Equal(0, process.ExitCode);
-            WaitFor(() => File.Exists(Exe), "Interactive install did not write the payload.");
-            WaitFor(() => File.Exists(Uninstaller), "Uninstaller is missing.");
+            WaitFor.Until(() => File.Exists(Exe), "Interactive install did not write the payload.");
+            WaitFor.Until(() => File.Exists(Uninstaller), "Uninstaller is missing.");
             Assert.True(File.Exists(DesktopShortcut) && File.Exists(StartMenuShortcut),
                 "向导默认勾选项未产出双快捷方式。");
             Assert.Equal(ProductName, RegGetRequired(RegistryPath, "DisplayName"));
@@ -875,16 +882,18 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                 $"卸载向导未走完（已点：{string.Join(" → ", removeDrive.Actions)}）");
             Assert.Contains(removeDrive.Actions, a => a.Contains("Uninstall"));
             Assert.Equal(0, uninstaller.ExitCode);
-            WaitFor(() => !File.Exists(Exe), "Interactive uninstall left the payload.", 30);
+            WaitFor.Until(() => !File.Exists(Exe), "Interactive uninstall left the payload.", 30);
         }
         finally { Cleanup(); }
     }
 
     // Legacy MSI 迁移：ProductCode 与 UpgradeCode 两条精确标识路径。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void LegacyMsiProductCodeAndUpgradeCodeMigration()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallLegacyMsi(_f.LegacyMsiPath);
@@ -906,9 +915,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // 自动检测三腿：匹配移除、名称不匹配保留、发布者不匹配保留。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void LegacyMsiAutoDetectRequiresNameAndPublisherMatch()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallLegacyMsi(_f.LegacyMsiPath);
@@ -937,9 +948,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // 同一 UpgradeCode 并存 0.9.0 与 0.8.0：0.8.5 探针被最高版本拦下（4），迁移移除两者。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void LegacyMsiMultiVersionUsesHighestVersionForDowngradeCheck()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallLegacyMsi(_f.LegacyMsiV2Path);
@@ -963,23 +976,25 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
     // NSIS→MSI 目录延续：MSI 读 NSIS InstallLocation；Bundler 自家 InstallDir 优先；
     // 范围外目录被忽略回落 MSI 默认。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void MsiContinuityReadsNsisInstallLocation()
     {
         _f.Ensure();
+        RequireConsent();
         var continuityMsi = Path.Combine(_f.BundleDir("bundle-msi-continuity"),
             "win-x64", "msi", $"{ProductName}-1.0.0.msi");
         var productCode = MsiSupport.GetProperty(continuityMsi, "ProductCode");
         try
         {
             RunOk(Installer("bundle"), $"/S /D={NsisContinuityDir}");
-            WaitFor(() => File.Exists(Path.Combine(NsisContinuityDir, "Uninstall.exe")),
+            WaitFor.Until(() => File.Exists(Path.Combine(NsisContinuityDir, "Uninstall.exe")),
                 "NSIS install for MSI continuity did not finish.");
             Msiexec($"/i \"{continuityMsi}\" /qn /norestart", 0, 3010);
             Assert.True(File.Exists(Path.Combine(NsisContinuityDir, "BundlerIntegrationFixture.exe")),
                 "MSI did not continue into the previous NSIS install directory.");
             Msiexec($"/x {productCode} /qn /norestart", 0, 1605, 3010);
             RunOk(Path.Combine(NsisContinuityDir, "Uninstall.exe"), "/S /DELETEAPPDATA");
-            WaitFor(() => !Directory.Exists(NsisContinuityDir),
+            WaitFor.Until(() => !Directory.Exists(NsisContinuityDir),
                 "NSIS continuity directory cleanup did not finish.", 30);
 
             using (Registry.CurrentUser.CreateSubKey(BundlerDefinitionKey))
@@ -988,19 +1003,19 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                 .SetValue("InstallDir", MsiPrecedenceDir);
             Directory.CreateDirectory(MsiPrecedenceDir);
             RunOk(Installer("bundle"), $"/S /D={NsisContinuityDir}");
-            WaitFor(() => File.Exists(Path.Combine(NsisContinuityDir, "Uninstall.exe")),
+            WaitFor.Until(() => File.Exists(Path.Combine(NsisContinuityDir, "Uninstall.exe")),
                 "NSIS reinstall for precedence test did not finish.");
             Msiexec($"/i \"{continuityMsi}\" /qn /norestart", 0, 3010);
             Assert.True(File.Exists(Path.Combine(MsiPrecedenceDir, "BundlerIntegrationFixture.exe")),
                 "Bundler's own InstallDir registration did not take precedence over the NSIS InstallLocation.");
             Msiexec($"/x {productCode} /qn /norestart", 0, 1605, 3010);
             RunOk(Path.Combine(NsisContinuityDir, "Uninstall.exe"), "/S /DELETEAPPDATA");
-            WaitFor(() => !Directory.Exists(NsisContinuityDir),
+            WaitFor.Until(() => !Directory.Exists(NsisContinuityDir),
                 "Precedence test NSIS cleanup did not finish.", 30);
             Registry.CurrentUser.DeleteSubKeyTree(BundlerDefinitionKey, false);
 
             RunOk(Installer("bundle"), $"/S /D={NsisOutOfScopeDir}");
-            WaitFor(() => File.Exists(Path.Combine(NsisOutOfScopeDir, "Uninstall.exe")),
+            WaitFor.Until(() => File.Exists(Path.Combine(NsisOutOfScopeDir, "Uninstall.exe")),
                 "NSIS out-of-scope install did not finish.");
             Msiexec($"/i \"{continuityMsi}\" /qn /norestart", 0, 3010);
             Assert.True(File.Exists(Path.Combine(MsiContinuityDefaultDir,
@@ -1008,7 +1023,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                 "MSI used an out-of-scope NSIS directory instead of its own default.");
             Msiexec($"/x {productCode} /qn /norestart", 0, 1605, 3010);
             RunOk(Path.Combine(NsisOutOfScopeDir, "Uninstall.exe"), "/S /DELETEAPPDATA");
-            WaitFor(() => !Directory.Exists(NsisOutOfScopeDir),
+            WaitFor.Until(() => !Directory.Exists(NsisOutOfScopeDir),
                 "Out-of-scope NSIS cleanup did not finish.", 30);
         }
         finally { Cleanup(); }
@@ -1016,9 +1031,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // 安装主断言腿：载荷/卸载器/外部资源/注册表/关联/能力/深链/快捷方式/钩子全覆盖。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void MainInstallLifecycleAssertions()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallDefault();
@@ -1042,7 +1059,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             using (Process.Start(new ProcessStartInfo
                    { FileName = "bundlerfixture:integration-value", UseShellExecute = true }))
             { }
-            WaitFor(() => File.Exists(DeepLinkMarker),
+            WaitFor.Until(() => File.Exists(DeepLinkMarker),
                 "Registered deep link did not launch the installed application.");
             Assert.Equal("bundlerfixture:integration-value",
                 File.ReadAllText(DeepLinkMarker).Trim());
@@ -1068,9 +1085,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // 重安装只关闭安装目录内的同名进程，不碰目录外同文件名进程。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void ReinstallClosesOwnedProcessOnly()
     {
         _f.Ensure();
+        RequireConsent();
         Process? external = null;
         Process? owned = null;
         try
@@ -1124,9 +1143,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // 安装快照与 journal 都拒绝重解析点；junction 失败不得跟随修改外部目录。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void JournalAndPayloadJunctionsAreRejected()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallDefault();
@@ -1158,9 +1179,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
     // /UPDATE /R /ARGS：原位升级保留数据与删除快捷方式的选择、迁移旧快捷方式并刷新、
     // 成功后以桌面用户身份带参数启动应用。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void UpdatePreservesDataMigratesShortcutsAndForwardsArguments()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallDefault();
@@ -1187,7 +1210,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.Equal(Exe, migrated.TargetPath);
             Assert.Equal("--shortcut-mode \"hello world\"", migrated.Arguments);
             Assert.Equal("com.dotnetbundler.integrationfixture.desktop", migrated.AppUserModelId);
-            WaitFor(() => File.Exists(CommandLineMarker),
+            WaitFor.Until(() => File.Exists(CommandLineMarker),
                 "/R did not start the installed application.", 30);
             var forwarded = File.ReadAllLines(CommandLineMarker);
             Assert.Equal(2, forwarded.Length);
@@ -1201,9 +1224,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
     // 载荷文件被外部锁定时静默升级必须返回 2 + 保留 active journal + 不替换文件；
     // 释放锁后下一安装先恢复事务，随后按版本策略拦下旧安装器（4）。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void LockedPayloadFailsSafelyAndRecoveryContinuesToDowngradePolicy()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallDefault();
@@ -1231,9 +1256,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // 快捷方式/注册表持久化边界的注入失败：恢复相同的旧载荷、版本、快捷方式、journal。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void PersistenceFailuresRestorePriorState()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallDefault();
@@ -1264,9 +1291,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // 快照写入失败与激活失败都发生在修改旧状态之前：删除未激活 journal，不动旧态。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void TransactionSnapshotAndActivationFailuresLeavePriorState()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallDefault();
@@ -1295,9 +1324,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // 激活后三段恢复点失败：保留 active journal；下次启动重入完成恢复（回到 1.1.0）。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void RecoveryFailuresByPhaseKeepActiveJournalAndResume()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallDefault();
@@ -1339,9 +1370,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
     // 中断安装 + manifest 不匹配（6）+ RECOVERONLY + 第二次中断 + 四类篡改拒绝
     // （快照载荷/注册表内容、文件恢复目标、注册表恢复目标）+ 最终启动恢复。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void InterruptedInstallManifestMismatchAndTamperRejections()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallDefault();
@@ -1352,7 +1385,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
             using var interrupted = ProcessRunner.StartDetached(
                 Installer("bundle-interrupted", "1.2.0"), $"/S /UPDATE /D={InstallDir}");
-            WaitFor(() => File.Exists(InterruptedHookMarker),
+            WaitFor.Until(() => File.Exists(InterruptedHookMarker),
                 "Interrupted-install fixture did not reach its post-install hook.", 120);
             ProcessRunner.TryKillTree(interrupted);
             interrupted.WaitForExit();
@@ -1378,7 +1411,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             if (File.Exists(InterruptedHookMarker)) File.Delete(InterruptedHookMarker);
             using var interrupted2 = ProcessRunner.StartDetached(
                 Installer("bundle-interrupted", "1.2.0"), $"/S /UPDATE /D={InstallDir}");
-            WaitFor(() => File.Exists(InterruptedHookMarker),
+            WaitFor.Until(() => File.Exists(InterruptedHookMarker),
                 "Second interrupted-install fixture did not reach its post-install hook.", 120);
             ProcessRunner.TryKillTree(interrupted2);
             interrupted2.WaitForExit();
@@ -1473,9 +1506,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // post-install 失败：恢复 1.1.0 全量可观察态并清理 journal。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void PostInstallFailureRollsBackCompletely()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallDefault();
@@ -1501,9 +1536,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // commit 先原子改名再尽力清理：清理失败不判败、.committed 残留、下次启动只清理不回滚。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void CommitCleanupFailureKeepsCommittedState()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallDefault();
@@ -1530,9 +1567,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // 默认拦降级（4）→ 明确允许的降级走卸载-替换并保留运行时数据。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void DowngradeBlockedThenAllowedPreservesRuntimeData()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallDefault();
@@ -1554,9 +1593,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // 默认卸载：拒绝载荷 junction（2 且不跟随）、保留运行时数据与 appdata、清注册表与快捷方式。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void UninstallPreservesRuntimeDataAndRejectsPayloadJunction()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallDefault();
@@ -1578,7 +1619,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.False(Directory.Exists(UninstallTransactionDir));
             Directory.Delete(payloadJunction);
             RunOk(Uninstaller, "/S");
-            WaitFor(() => !File.Exists(Exe), "Packaged executable survived uninstall.", 30);
+            WaitFor.Until(() => !File.Exists(Exe), "Packaged executable survived uninstall.", 30);
             Assert.True(File.Exists(runtimeData),
                 "Default uninstall should preserve runtime-created program data.");
             Assert.False(File.Exists(Path.Combine(InstallDir, "docs", "license.txt")));
@@ -1605,9 +1646,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
     // /DELETEAPPDATA：拒绝 appdata junction（2）、外属协议与同文件名快捷方式不删、
     // 目录/roaming/local 全清。
     [Fact]
+    [Trait("Requires", "localinstall")]
     public void DeleteAppDataRejectsJunctionAndPreservesForeignOwnership()
     {
         _f.Ensure();
+        RequireConsent();
         try
         {
             InstallDefault();
@@ -1643,7 +1686,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             ShellLink.Write(StartMenuShortcut, foreignTarget,
                 Path.GetDirectoryName(foreignTarget)!);
             RunOk(Uninstaller, "/S /DELETEAPPDATA");
-            WaitFor(() => !Directory.Exists(InstallDir),
+            WaitFor.Until(() => !Directory.Exists(InstallDir),
                 "DELETEAPPDATA did not remove the complete program directory.", 30);
             Assert.False(Directory.Exists(RoamingData));
             Assert.False(Directory.Exists(LocalData));

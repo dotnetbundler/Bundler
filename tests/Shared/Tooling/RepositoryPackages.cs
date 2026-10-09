@@ -6,6 +6,11 @@ internal static class RepositoryPackages
     {
         var dir = RepositoryLayout.PackageDirectory;
         System.IO.Directory.CreateDirectory(dir);
+        // 并行测试进程共用同一包目录：跨进程文件锁包住 build+pack 全程，
+        // 先来的进程产包，后来的等锁后直接用产物。
+        var lockPath = Path.Combine(dir, ".pack.lock");
+        using var lockStream = new FileStream(lockPath, FileMode.OpenOrCreate,
+            FileAccess.ReadWrite, FileShare.None);
         Dotnet.ShutdownBuildServers();
         Dotnet.BuildSolution();
         Dotnet.Checked(

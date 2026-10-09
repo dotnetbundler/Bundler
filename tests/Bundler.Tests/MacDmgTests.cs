@@ -61,6 +61,7 @@ public static class MacDmgTests
         finally
         {
             MacDmgBundleBackend.HostCheck = previous;
+            Cleanup(input);
         }
     }
 

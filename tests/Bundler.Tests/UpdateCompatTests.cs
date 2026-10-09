@@ -262,11 +262,16 @@ public class UpdateCompatTests
         };
         foreach (var arg in args) start.ArgumentList.Add(arg);
         var process = Process.Start(start)!;
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        Assert.True(process.WaitForExit(90_000), $"{file} did not exit in 90s");
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(90_000))
+        {
+            try { process.Kill(); } catch (InvalidOperationException) { }
+            Assert.Fail($"{file} did not exit in 90s");
+        }
+        Task.WaitAll(stdout, stderr);
         Assert.True(process.ExitCode == 0,
-            $"{file} rc={process.ExitCode}\nstdout:{stdout}\nstderr:{stderr}");
+            $"{file} rc={process.ExitCode}\nstdout:{stdout.Result}\nstderr:{stderr.Result}");
         return process.ExitCode;
     }
 
