@@ -22,6 +22,9 @@ internal static class ArchiveExtractor
                 RestoreSymlinkEntries(archive, zipPath, staging, log);
             }
         }
+#if NET10_0_OR_GREATER
+        SweepEscapedLinks(staging, log);
+#endif
         RemoveAppleDoubleTree(staging, log);
         return staging;
     }
@@ -36,6 +39,9 @@ internal static class ArchiveExtractor
                 UstarReader.Extract(gzip, staging, log);
             }
         }
+#if NET10_0_OR_GREATER
+        SweepEscapedLinks(staging, log);
+#endif
         RemoveAppleDoubleTree(staging, log);
         return staging;
     }
@@ -75,6 +81,39 @@ internal static class ArchiveExtractor
         log?.Invoke("update: bsdtar extraction failed — managed fallback (xattrs lost).");
         return false;
     }
+
+#if NET10_0_OR_GREATER
+    // ditto/bsdtar 原生解包自行物化符号链接，绕过 CreateSymlink 的暂存圈定——
+    // 事后扫一遍：解析目标越出 staging 的链删节点自身+WARN，合法链不动。
+    // 枚举不下钻目录链（ReparsePoint 不进 SearchOption 递归），删链不触目标。
+    private static void SweepEscapedLinks(string staging, Action<string>? log)
+    {
+        var root = Path.GetFullPath(staging).TrimEnd(Path.DirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        foreach (var entry in Directory.EnumerateFileSystemEntries(
+                     staging, "*", SearchOption.AllDirectories))
+        {
+            var info = Directory.Exists(entry)
+                ? (FileSystemInfo)new DirectoryInfo(entry)
+                : new FileInfo(entry);
+            if (info.LinkTarget is not { Length: > 0 } target)
+            {
+                continue;
+            }
+            var resolved = Path.IsPathRooted(target)
+                ? Path.GetFullPath(target)
+                : Path.GetFullPath(Path.Combine(
+                    Path.GetDirectoryName(entry) ?? string.Empty, target));
+            if (!resolved.StartsWith(root, StringComparison.Ordinal) &&
+                !string.Equals(resolved, root.TrimEnd(Path.DirectorySeparatorChar),
+                    StringComparison.Ordinal))
+            {
+                File.Delete(entry);
+                log?.Invoke($"update: dropped escaping symlink '{entry}' → '{target}'.");
+            }
+        }
+    }
+#endif
 
     private static void ClearDirectory(string root)
     {
