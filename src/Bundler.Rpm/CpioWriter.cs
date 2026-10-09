@@ -23,6 +23,13 @@ internal static class CpioWriter
     internal static byte[] Write(IReadOnlyList<Entry> entries)
     {
         var output = new MemoryStream();
+        Write(output, entries);
+        return output.ToArray();
+    }
+
+    /// <summary>流式写出：载荷大时直接写目标流（如 gzip→文件），不经内存整档。</summary>
+    internal static void Write(Stream output, IReadOnlyList<Entry> entries)
+    {
         foreach (var entry in entries)
         {
             WriteEntry(output, entry);
@@ -31,7 +38,6 @@ internal static class CpioWriter
         WriteRecord(output, "TRAILER!!!", 0, 0, 1, 0, [], writeData: false);
         var pad = (int)((512 - output.Length % 512) % 512);
         output.Write(new byte[pad], 0, pad);
-        return output.ToArray();
     }
 
     private static void WriteEntry(Stream output, Entry entry)

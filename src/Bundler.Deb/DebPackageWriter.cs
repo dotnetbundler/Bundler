@@ -66,49 +66,60 @@ internal static class DebPackageWriter
         }
 
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, version, maintainer, settings, logger);
-        var dataTarGz = Gzip(TarData(payload));
-        var controlTarGz = Gzip(TarBytes(ControlEntries(bundle, payload, packageName, version,
-            architecture, maintainer, settings)));
-
-        var fileName = packageName + "_" + DebVersion.FileNameVersion(version) + "_" +
-            architecture + ".deb";
-        var outputPath = Path.Combine(item.OutputDirectory, fileName);
-        var sidecarPath = outputPath + ".sha256";
+        // data.tar.gz 是大件：tar 直写 gzip→临时文件，ar 装配时流式拷贝——全程不驻内存。
+        // control.tar.gz 只有维护脚本与元数据（KB 级），留内存路径。
+        var dataTarGzPath = Path.Combine(Path.GetTempPath(),
+            "bundler-deb-" + Guid.NewGuid().ToString("N") + ".tar.gz");
         try
         {
-            Directory.CreateDirectory(item.OutputDirectory);
-            using (var stream = File.Create(outputPath))
+            GzipTarToFile(payload, dataTarGzPath);
+            var controlTarGz = Gzip(TarBytes(ControlEntries(bundle, payload, packageName, version,
+                architecture, maintainer, settings)));
+
+            var fileName = packageName + "_" + DebVersion.FileNameVersion(version) + "_" +
+                architecture + ".deb";
+            var outputPath = Path.Combine(item.OutputDirectory, fileName);
+            var sidecarPath = outputPath + ".sha256";
+            try
             {
-                ArWriter.Write(stream,
-                [
-                    new ArMember("debian-binary", Encoding.ASCII.GetBytes("2.0\n")),
-                    new ArMember("control.tar.gz", controlTarGz),
-                    new ArMember("data.tar.gz", dataTarGz)
-                ]);
+                Directory.CreateDirectory(item.OutputDirectory);
+                using (var stream = File.Create(outputPath))
+                {
+                    ArWriter.Write(stream,
+                    [
+                        new ArMember("debian-binary", Encoding.ASCII.GetBytes("2.0\n")),
+                        new ArMember("control.tar.gz", controlTarGz),
+                        ArMember.FromFile("data.tar.gz", dataTarGzPath)
+                    ]);
+                }
+                var hash = Sha256Hex(File.ReadAllBytes(outputPath));
+                File.WriteAllText(sidecarPath,
+                    hash + "  " + fileName + "\n", new UTF8Encoding(false));
+                logger.Log(BundleLogLevel.Information, $"Wrote {fileName} (sha256 {hash}).");
+                return new Result
+                {
+                    OutputPath = outputPath,
+                    PackageName = packageName,
+                    Version = version,
+                    Architecture = architecture
+                };
             }
-            var hash = Sha256Hex(File.ReadAllBytes(outputPath));
-            File.WriteAllText(sidecarPath,
-                hash + "  " + fileName + "\n", new UTF8Encoding(false));
-            logger.Log(BundleLogLevel.Information, $"Wrote {fileName} (sha256 {hash}).");
-            return new Result
+            catch
             {
-                OutputPath = outputPath,
-                PackageName = packageName,
-                Version = version,
-                Architecture = architecture
-            };
+                if (File.Exists(outputPath))
+                {
+                    File.Delete(outputPath);
+                }
+                if (File.Exists(sidecarPath))
+                {
+                    File.Delete(sidecarPath);
+                }
+                throw;
+            }
         }
-        catch
+        finally
         {
-            if (File.Exists(outputPath))
-            {
-                File.Delete(outputPath);
-            }
-            if (File.Exists(sidecarPath))
-            {
-                File.Delete(sidecarPath);
-            }
-            throw;
+            TryDelete(dataTarGzPath);
         }
     }
 
@@ -559,25 +570,44 @@ internal static class DebPackageWriter
         return (int)Math.Max(total, 1);
     }
 
-    private static byte[] TarData(IEnumerable<PayloadEntry> entries)
+    // data tar 直写 gzip→文件：TarWriter 的 OpenContent 已惰性流源文件，
+    // 这一层再把 tar/gzip 字节驻内存才是唯一的整量缓冲点。
+    private static void GzipTarToFile(IEnumerable<PayloadEntry> entries, string path)
     {
-        using var buffer = new MemoryStream();
-        TarWriter.Write(buffer, entries
-            .OrderBy(entry => entry.ArchivePath, StringComparer.Ordinal)
-            .Select(entry => new TarEntry
+        using var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        using (var gzip = new GZipStream(file, CompressionLevel.Optimal, leaveOpen: true))
+        {
+            TarWriter.Write(gzip, entries
+                .OrderBy(entry => entry.ArchivePath, StringComparer.Ordinal)
+                .Select(entry => new TarEntry
+                {
+                    Name = "./" + entry.ArchivePath,
+                    Kind = entry.Kind,
+                    Mode = entry.Mode,
+                    Content = entry.Kind == TarEntryKind.File
+                        ? entry.Content ?? []
+                        : [],
+                    OpenContent = entry.Kind == TarEntryKind.File && entry.Content is null
+                        ? () => new FileStream(entry.SourcePath!, FileMode.Open, FileAccess.Read, FileShare.Read)
+                        : null,
+                    LinkTarget = entry.LinkTarget
+                }));
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
             {
-                Name = "./" + entry.ArchivePath,
-                Kind = entry.Kind,
-                Mode = entry.Mode,
-                Content = entry.Kind == TarEntryKind.File
-                    ? entry.Content ?? []
-                    : [],
-                OpenContent = entry.Kind == TarEntryKind.File && entry.Content is null
-                    ? () => new FileStream(entry.SourcePath!, FileMode.Open, FileAccess.Read, FileShare.Read)
-                    : null,
-                LinkTarget = entry.LinkTarget
-            }));
-        return buffer.ToArray();
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+            // 临时件清扫失败不遮主流程。
+        }
     }
 
     private static byte[] TarBytes(IEnumerable<TarEntry> entries)

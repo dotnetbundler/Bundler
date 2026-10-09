@@ -88,60 +88,132 @@ internal static class RpmPackageWriter
 
         ValidateSigning(settings);
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
-        var cpio = CpioWriter.Write(payload.Select(ToCpioEntry).ToList());
-        var compressedPayload = Gzip(cpio);
-
-        var mainHeader = RpmHeaderWriter.Write(MainHeaderEntries(
-            bundle, item, payload, packageName, mapped, architecture, installRoot, vendor,
-            settings, cpio, compressedPayload), 63);
-        byte[]? pgpSignature = null;
-        byte[]? rsaSignature = null;
-        if (settings.SigningKeyFile is { Length: > 0 } keyFile)
-        {
-            rsaSignature = RpmSigner.Sign(
-                mainHeader, keyFile, settings.SigningKeyPassphrase);
-            pgpSignature = RpmSigner.Sign(
-                ConcatBytes(mainHeader, compressedPayload), keyFile,
-                settings.SigningKeyPassphrase);
-            logger.Log(BundleLogLevel.Information,
-                "Signing package (RPMSIGTAG_RSA + RPMSIGTAG_PGP).");
-        }
-        var signatureHeader = RpmHeaderWriter.Write(SignatureEntries(
-            mainHeader, compressedPayload, cpio, rsaSignature, pgpSignature), 62);
-        signatureHeader = Align8(signatureHeader);
-
-        var fileName = packageName + "-" + mapped.Version + "-" + mapped.Release +
-            "." + architecture + ".rpm";
-        var outputPath = Path.Combine(item.OutputDirectory, fileName);
-        var sidecarPath = outputPath + ".sha256";
+        // cpio 直写 gzip→临时文件，全程不驻内存；未压缩 cpio 的
+        // 尺寸与 sha256（PAYLOADSIZE / PAYLOADDIGESTALT）由穿透流边写边算。
+        var payloadPath = Path.Combine(Path.GetTempPath(),
+            "bundler-rpm-" + Guid.NewGuid().ToString("N") + ".cpio.gz");
         try
         {
-            Directory.CreateDirectory(item.OutputDirectory);
-            using (var stream = File.Create(outputPath))
+            long cpioSize;
+            string cpioSha256;
+            using (var raw = File.Create(payloadPath))
             {
-                WriteLead(stream, packageName + "-" + mapped.Version + "-" + mapped.Release, architecture);
-                stream.Write(signatureHeader, 0, signatureHeader.Length);
-                stream.Write(mainHeader, 0, mainHeader.Length);
-                stream.Write(compressedPayload, 0, compressedPayload.Length);
+                var cpioHash = SHA256.Create();
+                using (var gzip = new GZipStream(raw, CompressionLevel.Optimal, leaveOpen: true))
+                {
+                    var digest = new DigestWriteStream(gzip, cpioHash);
+                    CpioWriter.Write(digest, payload.Select(ToCpioEntry).ToList());
+                    cpioSize = digest.BytesWritten;
+                    digest.FinishHash();
+                }
+                cpioSha256 = Hex(cpioHash.Hash!);
             }
-            var hash = Sha256Hex(File.ReadAllBytes(outputPath));
-            File.WriteAllText(sidecarPath,
-                hash + "  " + fileName + "\n", new UTF8Encoding(false));
-            logger.Log(BundleLogLevel.Information, $"Wrote {fileName} (sha256 {hash}).");
-            return new Result
+            var compressedSize = new FileInfo(payloadPath).Length;
+            var payloadSha256 = Sha256HexFile(payloadPath);
+
+            var mainHeader = RpmHeaderWriter.Write(MainHeaderEntries(
+                bundle, item, payload, packageName, mapped, architecture, installRoot, vendor,
+                settings, payloadSha256, cpioSha256), 63);
+            byte[]? pgpSignature = null;
+            byte[]? rsaSignature = null;
+            if (settings.SigningKeyFile is { Length: > 0 } keyFile)
             {
-                OutputPath = outputPath,
-                PackageName = packageName,
-                Version = mapped.Version,
-                Release = mapped.Release,
-                Architecture = architecture
-            };
+                rsaSignature = RpmSigner.Sign(
+                    mainHeader, keyFile, settings.SigningKeyPassphrase);
+                using (var payloadStream = File.OpenRead(payloadPath))
+                {
+                    pgpSignature = RpmSigner.Sign(
+                        mainHeader, payloadStream, keyFile,
+                        settings.SigningKeyPassphrase);
+                }
+                logger.Log(BundleLogLevel.Information,
+                    "Signing package (RPMSIGTAG_RSA + RPMSIGTAG_PGP).");
+            }
+            var signatureHeader = RpmHeaderWriter.Write(SignatureEntries(
+                mainHeader, compressedSize, cpioSize, payloadPath, rsaSignature, pgpSignature), 62);
+            signatureHeader = Align8(signatureHeader);
+
+            var fileName = packageName + "-" + mapped.Version + "-" + mapped.Release +
+                "." + architecture + ".rpm";
+            var outputPath = Path.Combine(item.OutputDirectory, fileName);
+            var sidecarPath = outputPath + ".sha256";
+            try
+            {
+                Directory.CreateDirectory(item.OutputDirectory);
+                using (var stream = File.Create(outputPath))
+                {
+                    WriteLead(stream, packageName + "-" + mapped.Version + "-" + mapped.Release, architecture);
+                    stream.Write(signatureHeader, 0, signatureHeader.Length);
+                    stream.Write(mainHeader, 0, mainHeader.Length);
+                    using (var payloadStream = File.OpenRead(payloadPath))
+                    {
+                        payloadStream.CopyTo(stream);
+                    }
+                }
+                var hash = Sha256Hex(File.ReadAllBytes(outputPath));
+                File.WriteAllText(sidecarPath,
+                    hash + "  " + fileName + "\n", new UTF8Encoding(false));
+                logger.Log(BundleLogLevel.Information, $"Wrote {fileName} (sha256 {hash}).");
+                return new Result
+                {
+                    OutputPath = outputPath,
+                    PackageName = packageName,
+                    Version = mapped.Version,
+                    Release = mapped.Release,
+                    Architecture = architecture
+                };
+            }
+            catch
+            {
+                TryDelete(outputPath);
+                TryDelete(sidecarPath);
+                throw;
+            }
         }
-        catch
+        finally
         {
-            TryDelete(outputPath);
-            TryDelete(sidecarPath);
-            throw;
+            TryDelete(payloadPath);
+        }
+    }
+
+    // 把写进下游流的字节同步喂给哈希并计数——cpio 的未压缩
+    // 摘要与长度不需要再物化一份。
+    private sealed class DigestWriteStream : Stream
+    {
+        private readonly Stream _inner;
+        private readonly HashAlgorithm _hash;
+        private long _bytes;
+
+        internal DigestWriteStream(Stream inner, HashAlgorithm hash)
+        {
+            _inner = inner;
+            _hash = hash;
+        }
+
+        internal long BytesWritten => _bytes;
+
+        internal void FinishHash() =>
+            _hash.TransformFinalBlock([], 0, 0);
+
+        public override bool CanWrite => true;
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        // CpioWriter 的 Pad4/Pad512 按 output.Length 对齐——Length 即已写字节数。
+        public override long Length => _bytes;
+        public override long Position
+        {
+            get => _bytes;
+            set => throw new NotSupportedException();
+        }
+        public override void Flush() => _inner.Flush();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            _hash.TransformBlock(buffer, offset, count, null, 0);
+            _inner.Write(buffer, offset, count);
+            _bytes += count;
         }
     }
 
@@ -190,29 +262,30 @@ internal static class RpmPackageWriter
         }
     }
 
-    private static byte[] ConcatBytes(byte[] first, byte[] second)
-    {
-        var both = new byte[first.Length + second.Length];
-        Buffer.BlockCopy(first, 0, both, 0, first.Length);
-        Buffer.BlockCopy(second, 0, both, first.Length, second.Length);
-        return both;
-    }
-
     private static List<RpmHeaderWriter.Entry> SignatureEntries(
-        byte[] mainHeader, byte[] compressedPayload, byte[] cpio,
+        byte[] mainHeader, long compressedSize, long cpioSize, string payloadPath,
         byte[]? rsaSignature, byte[]? pgpSignature)
     {
         // RPMSIGTAG_SIZE = main header bytes + compressed payload bytes
-        var packageSize = mainHeader.Length + compressedPayload.Length;
+        var packageSize = checked((int)(mainHeader.Length + compressedSize));
+        // RPMSIGTAG_MD5 覆盖主头+压缩载荷——载荷分块流喂，不整档物化。
         var md5 = MD5.Create();
-        var md5Bytes = new byte[mainHeader.Length + compressedPayload.Length];
-        Buffer.BlockCopy(mainHeader, 0, md5Bytes, 0, mainHeader.Length);
-        Buffer.BlockCopy(compressedPayload, 0, md5Bytes, mainHeader.Length, compressedPayload.Length);
+        md5.TransformBlock(mainHeader, 0, mainHeader.Length, null, 0);
+        using (var payloadStream = File.OpenRead(payloadPath))
+        {
+            var chunk = new byte[81920];
+            int read;
+            while ((read = payloadStream.Read(chunk, 0, chunk.Length)) > 0)
+            {
+                md5.TransformBlock(chunk, 0, read, null, 0);
+            }
+        }
+        md5.TransformFinalBlock([], 0, 0);
         var entries = new List<RpmHeaderWriter.Entry>
         {
             RpmHeaderWriter.Int32s(1000, packageSize),                    // RPMSIGTAG_SIZE
-            RpmHeaderWriter.Bin(1004, md5.ComputeHash(md5Bytes)),         // RPMSIGTAG_MD5
-            RpmHeaderWriter.Int32s(1007, cpio.Length),                    // RPMSIGTAG_PAYLOADSIZE
+            RpmHeaderWriter.Bin(1004, md5.Hash!),                         // RPMSIGTAG_MD5
+            RpmHeaderWriter.Int32s(1007, checked((int)cpioSize)),         // RPMSIGTAG_PAYLOADSIZE
             RpmHeaderWriter.Str(269, Hex(SHA1.Create().ComputeHash(mainHeader))),   // SHA1HEADER
             RpmHeaderWriter.Str(273, Hex(SHA256.Create().ComputeHash(mainHeader))), // SHA256HEADER
         };
@@ -242,8 +315,8 @@ internal static class RpmPackageWriter
         string installRoot,
         string vendor,
         RpmBundleConfiguration settings,
-        byte[] cpio,
-        byte[] compressedPayload)
+        string payloadSha256,
+        string cpioSha256)
     {
         var fileCount = payload.Count;
         var baseNames = new List<string>(fileCount);
@@ -318,9 +391,9 @@ internal static class RpmPackageWriter
             RpmHeaderWriter.Str(1126, "9"),                                // PAYLOADFLAGS
             // PAYLOADDIGEST = sha256 of the compressed payload stream;
             // PAYLOADDIGESTALT = sha256 of the uncompressed cpio archive.
-            RpmHeaderWriter.Strings(5092, [Sha256Hex(compressedPayload)]), // PAYLOADDIGEST
+            RpmHeaderWriter.Strings(5092, [payloadSha256]),                // PAYLOADDIGEST
             RpmHeaderWriter.Int32s(5093, 8),                               // PAYLOADDIGESTALGO
-            RpmHeaderWriter.Strings(5097, [Sha256Hex(cpio)]),              // PAYLOADDIGESTALT
+            RpmHeaderWriter.Strings(5097, [cpioSha256]),                   // PAYLOADDIGESTALT
             // File manifest.
             RpmHeaderWriter.Int32s(1028, fileSizes),                       // FILESIZES
             RpmHeaderWriter.Int16s(1030, fileModes),                       // FILEMODES
@@ -867,6 +940,13 @@ internal static class RpmPackageWriter
     {
         using var sha256 = SHA256.Create();
         return Hex(sha256.ComputeHash(content));
+    }
+
+    private static string Sha256HexFile(string path)
+    {
+        using var sha256 = SHA256.Create();
+        using var stream = File.OpenRead(path);
+        return Hex(sha256.ComputeHash(stream));
     }
 
     private static string Hex(byte[] hash)

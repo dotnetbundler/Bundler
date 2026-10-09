@@ -60,9 +60,13 @@ internal static class ApkPackageWriter
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
 
         // Data segment first: .PKGINFO carries the sha256 of its gzip stream.
-        var dataTar = TarData(payload, omitEndOfArchive: false);
-        var dataGzip = Gzip(dataTar);
-        var dataHash = Sha256Hex(dataGzip);
+        // data tar.gz 是大件——直写临时文件不驻内存；control/签名段 KB 级留内存。
+        var dataGzipPath = Path.Combine(Path.GetTempPath(),
+            "bundler-apk-" + Guid.NewGuid().ToString("N") + ".tar.gz");
+        try
+        {
+            GzipTarToFile(payload, dataGzipPath, omitEndOfArchive: false);
+            var dataHash = Sha256HexFile(dataGzipPath);
         var installedSize = payload
             .Where(entry => entry.Kind == TarEntryKind.File)
             .Sum(entry => entry.Size);
@@ -133,7 +137,10 @@ internal static class ApkPackageWriter
                     stream.Write(signatureGzip, 0, signatureGzip.Length);
                 }
                 stream.Write(controlGzip, 0, controlGzip.Length);
-                stream.Write(dataGzip, 0, dataGzip.Length);
+                using (var dataStream = File.OpenRead(dataGzipPath))
+                {
+                    dataStream.CopyTo(stream);
+                }
             }
         }
         catch
@@ -147,6 +154,26 @@ internal static class ApkPackageWriter
         }
         WriteSha256Sidecar(outputPath);
         return new Result { Path = outputPath };
+        }
+        finally
+        {
+            TryDelete(dataGzipPath);
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+            // 临时件清扫失败不遮主流程。
+        }
     }
 
     private static readonly string[] BuiltInFields =
@@ -438,24 +465,29 @@ internal static class ApkPackageWriter
         return entries;
     }
 
-    private static byte[] TarData(IEnumerable<PayloadEntry> entries, bool omitEndOfArchive)
+    // data tar 直写 gzip→文件：TarWriter 的 OpenContent 已惰性流源文件，
+    // 这一层再把 tar/gzip 字节驻内存才是唯一的整量缓冲点。
+    private static void GzipTarToFile(
+        IEnumerable<PayloadEntry> entries, string path, bool omitEndOfArchive)
     {
-        using var buffer = new MemoryStream();
-        TarWriter.Write(buffer, entries
-            .OrderBy(entry => entry.ArchivePath, StringComparer.Ordinal)
-            .Select(entry => new TarEntry
-            {
-                Name = entry.ArchivePath,
-                Kind = entry.Kind,
-                Mode = entry.Mode,
-                Content = [],
-                OpenContent = entry.Kind == TarEntryKind.File
-                    ? () => new FileStream(entry.SourcePath!, FileMode.Open, FileAccess.Read, FileShare.Read)
-                    : null,
-                LinkTarget = entry.LinkTarget,
-                PaxRecords = PayloadPaxRecords(entry)
-            }), omitEndOfArchive);
-        return buffer.ToArray();
+        using var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        using (var gzip = new GZipStream(file, CompressionLevel.Optimal, leaveOpen: true))
+        {
+            TarWriter.Write(gzip, entries
+                .OrderBy(entry => entry.ArchivePath, StringComparer.Ordinal)
+                .Select(entry => new TarEntry
+                {
+                    Name = entry.ArchivePath,
+                    Kind = entry.Kind,
+                    Mode = entry.Mode,
+                    Content = [],
+                    OpenContent = entry.Kind == TarEntryKind.File
+                        ? () => new FileStream(entry.SourcePath!, FileMode.Open, FileAccess.Read, FileShare.Read)
+                        : null,
+                    LinkTarget = entry.LinkTarget,
+                    PaxRecords = PayloadPaxRecords(entry)
+                }), omitEndOfArchive);
+        }
     }
 
     private static byte[] TarData(IEnumerable<TarEntry> entries, bool omitEndOfArchive)
@@ -521,6 +553,13 @@ internal static class ApkPackageWriter
     {
         using var sha256 = SHA256.Create();
         return Hex(sha256.ComputeHash(content));
+    }
+
+    private static string Sha256HexFile(string path)
+    {
+        using var sha256 = SHA256.Create();
+        using var stream = File.OpenRead(path);
+        return Hex(sha256.ComputeHash(stream));
     }
 
     private static string Hex(byte[] bytes)
