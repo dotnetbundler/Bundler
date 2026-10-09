@@ -19,7 +19,7 @@ internal sealed class CliArguments
     {
         "input-dir", "output-dir", "rid", "formats", "product-name", "identifier",
         "package-version", "main-executable", "publisher", "description", "homepage",
-        "copyright", "license-file", "config", "key-file"
+        "copyright", "license-file", "icons", "config", "key-file"
     };
 
     private static bool IsKnownValueOption(string name) =>

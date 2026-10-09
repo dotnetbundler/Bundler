@@ -580,6 +580,29 @@ public static class CliTests
     }
 
     [Fact]
+    static void IconsOverrideResolvesEachEntry()
+    {
+        var input = CreateInputDirectory();
+        var config = Path.Combine(Path.GetTempPath(), $"bundler-{Guid.NewGuid():N}.json");
+        File.WriteAllText(config, WriteConfig(input, "/tmp/x"));
+        try
+        {
+            var resolved = CliConfig.Resolve(CliArguments.Parse(
+                ["bundle", "--config", config, "--icons=icon-a.png,icon-b.png"]));
+
+            Assert.Equal(
+                new[] { "icon-a.png", "icon-b.png" }
+                    .Select(name => Path.GetFullPath(name)).ToArray(),
+                resolved.Icons);
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            File.Delete(config);
+        }
+    }
+
+    [Fact]
     static void PrintsVersion()
     {
         var (code, stdout, _) = Run("--version");
