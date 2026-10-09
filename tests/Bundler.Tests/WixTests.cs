@@ -116,6 +116,36 @@ public static class WixTests
     }
 
     [Fact]
+    static void RejectsInvalidWindowsMsiTargetNames()
+    {
+        foreach (var path in new[] { "con.tar.gz", "docs/aux.dll", "deep/lpt9.dat",
+                                     "a|b.txt", "docs/q?.txt", "star*.exe" })
+        {
+            var rejected = Assert.ThrowsAny<ArgumentException>(() => WixPackagePaths.NormalizeTarget(path));
+            Assert.Contains("unsafe segment", rejected.Message);
+        }
+        Assert.Equal("docs/console/file.txt", WixPackagePaths.NormalizeTarget("docs/console/file.txt"));
+    }
+
+    [Fact]
+    static async Task CancelsHangingWixToolProcess()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "the hanging stub is a POSIX shell script");
+        using var fixture = new WixTestFixture();
+        var stub = Path.Combine(fixture.Root, "hang.sh");
+        await File.WriteAllTextAsync(stub, "#!/bin/sh\nexec sleep 60\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(stub,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            WixProcessRunner.RunAsync(stub, [], fixture.Root, cancellation.Token)
+                .WaitAsync(TimeSpan.FromSeconds(30)));
+    }
+
+    [Fact]
     static void MapsMsiSettingsThroughMsBuild()
     {
         var root = RepositoryRoot();
@@ -1113,6 +1143,33 @@ public static class WixTests
             ExtensionComponentGroupRefs = ["Acme.Extras"]
         }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache })
             .BuildAsync(fixture.Request()), "same product version");
+    }
+
+    [Fact]
+    static async Task RejectsChangedFragmentReferencedFile()
+    {
+        Assert.SkipUnless(TestPlatform.IsWindows, "requires a Windows host");
+        using var fixture = new WixTestFixture();
+        var payload = Path.Combine(fixture.Root, "fragment-payload.bin");
+        var fragment = Path.Combine(fixture.Root, "extras.wxs");
+        await File.WriteAllTextAsync(payload, "referenced payload v1");
+        await File.WriteAllTextAsync(fragment,
+            "<Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\"><Fragment>" +
+            "<ComponentGroup Id=\"Acme.Extras\">" +
+            "<Component Id=\"Acme.ExtraFile\" Guid=\"{11111111-2222-3333-4444-555555555555}\" " +
+            "Directory=\"INSTALLFOLDER\">" +
+            "<File Id=\"Acme.ExtraPayload\" Source=\"fragment-payload.bin\"/>" +
+            "</Component></ComponentGroup></Fragment></Wix>");
+        var bundler = new WixBundler(new WixBundleConfiguration
+        {
+            ExtensionFragments = [fragment],
+            ExtensionIdPrefix = "Acme.",
+            ExtensionComponentGroupRefs = ["Acme.Extras"]
+        }, new WixBundlerOptions { ToolCacheDirectory = fixture.Cache });
+        await bundler.BuildAsync(fixture.Request());
+        // 片段文本不动、仅改其 <File Source> 引用的文件：指纹变化后同版本 MSI 必须拒绝复用。
+        await File.WriteAllTextAsync(payload, "referenced payload v2");
+        await ExpectAsync<IOException>(() => bundler.BuildAsync(fixture.Request()), "same product version");
     }
 
     [Fact]
