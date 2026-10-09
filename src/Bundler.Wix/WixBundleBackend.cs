@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using DotNet.Bundler;
 using DotNet.Bundler.Core.Update;
@@ -425,12 +426,35 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
     private void AppendExtensionFingerprint(StringBuilder text)
     {
         if (settings.ExtensionIdPrefix is not null) text.AppendLine(settings.ExtensionIdPrefix);
-        foreach (var fragment in settings.ExtensionFragments) text.AppendLine(HashFile(fragment));
+        foreach (var fragment in settings.ExtensionFragments)
+        {
+            text.AppendLine(HashFile(fragment));
+            AppendReferencedSourceHashes(text, fragment);
+        }
         foreach (var id in settings.ExtensionComponentRefs
                      .Concat(settings.ExtensionComponentGroupRefs)
                      .Concat(settings.ExtensionFeatureRefs)) text.AppendLine(id);
-        if (settings.ExpertTemplate is not null) text.AppendLine(HashFile(settings.ExpertTemplate));
+        if (settings.ExpertTemplate is not null)
+        {
+            text.AppendLine(HashFile(settings.ExpertTemplate));
+            AppendReferencedSourceHashes(text, settings.ExpertTemplate);
+        }
         foreach (var module in settings.ExpertMergeModules) text.AppendLine(HashFile(module));
+    }
+
+    private static readonly Regex SourceReferencePattern =
+        new("\\bSource(?:File)?\\s*=\\s*[\"'](?<source>[^\"']+)[\"']", RegexOptions.Compiled);
+
+    // 片段/专家模板经 Source/SourceFile 引用的文件不在载荷清单内，逐一把磁盘上存在的
+    // 被引用文件哈希进指纹；相对路径以该 .wxs 所在目录解析，预处理器变量引用自然跳过。
+    private static void AppendReferencedSourceHashes(StringBuilder text, string wixSource)
+    {
+        var baseDirectory = Path.GetDirectoryName(Path.GetFullPath(wixSource))!;
+        foreach (Match match in SourceReferencePattern.Matches(File.ReadAllText(wixSource)))
+        {
+            var fullPath = Path.GetFullPath(Path.Combine(baseDirectory, match.Groups["source"].Value));
+            if (File.Exists(fullPath)) text.AppendLine(fullPath).AppendLine(HashFile(fullPath));
+        }
     }
 
     private string DefinitionHash(BundleConfiguration bundle, BundlePlanItem item,
