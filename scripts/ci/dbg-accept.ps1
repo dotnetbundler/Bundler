@@ -12,7 +12,8 @@ dotnet pack Bundler.slnx -c Release -o artifacts/packages --nologo
 "=== fixture 产包（win-arm64）"
 $FIX = "tests/Bundler.IntegrationTests/Fixtures"
 dotnet publish "$FIX/Nsis/Fixture/BundlerNsisIntegrationFixture.csproj" -c Release -r win-arm64 -p:BundlerIntegrationOutput="$OUT/nsis" --nologo
-dotnet publish "tests/Bundler.LocalPackagesTests/Fixtures/Msi/Fixture/BundlerMsiSmoke.csproj" -c Release -r win-arm64 -p:BundlerIntegrationOutput="$OUT/msi" --nologo
+# MSI 产包走 LocalPackages fixture（仓内唯一 MSI 生产工程，消费仓根刚打的 nupkg）
+dotnet publish "tests/Bundler.LocalPackagesTests/Fixtures/Msi/Fixture/BundlerMsiSmoke.csproj" -c Release -r win-arm64 -p:BundlerOutputPath="$OUT/msi" -p:BundlerPackageSource="$ROOT/artifacts/packages" --nologo
 $nsis = Get-ChildItem "$OUT/nsis" -Filter *.exe -Recurse | Select-Object -First 1 -ExpandProperty FullName
 $msi  = Get-ChildItem "$OUT/msi"  -Filter *.msi -Recurse | Select-Object -First 1 -ExpandProperty FullName
 
