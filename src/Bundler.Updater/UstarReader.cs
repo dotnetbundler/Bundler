@@ -152,7 +152,7 @@ internal static class UstarReader
         }
     }
 
-    private static string ReadPaxPath(Stream stream, long size)
+    private static string? ReadPaxPath(Stream stream, long size)
     {
         var data = new byte[size];
         var read = 0;
@@ -163,30 +163,45 @@ internal static class UstarReader
             read += n;
         }
         SkipPadding(stream, size);
-        // "len key=value\n" 记录流——只认 path=。
-        var text = Encoding.UTF8.GetString(data);
-        foreach (var record in ParsePaxRecords(text))
+        // "len key=value\n" 记录流——len 计的是字节数，多字节名按字符切会越界。
+        // 无 path= 的纯元数据记录返回 null，调用侧的 ?? 回落到 ustar 名段。
+        foreach (var record in ParsePaxRecords(data))
         {
             if (record.StartsWith("path=", StringComparison.Ordinal))
             {
                 return record.Substring(5);
             }
         }
-        return "";
+        return null;
     }
 
-    private static IEnumerable<string> ParsePaxRecords(string text)
+    private static IEnumerable<string> ParsePaxRecords(byte[] data)
     {
         var index = 0;
-        while (index < text.Length)
+        while (index < data.Length)
         {
-            var space = text.IndexOf(' ', index);
-            if (space < 0) yield break;
-            if (!int.TryParse(text.Substring(index, space - index), out var length) || length <= 0)
+            var space = -1;
+            for (var i = index; i < data.Length && i < index + 21; i++)
+            {
+                if (data[i] == (byte)' ')
+                {
+                    space = i;
+                    break;
+                }
+            }
+            if (space < 0 ||
+                !int.TryParse(Encoding.ASCII.GetString(data, index, space - index),
+                    out var length) || length <= 0)
             {
                 yield break;
             }
-            yield return text.Substring(space + 1, length - (space - index) - 2);
+            var valueStart = space + 1;
+            var valueLength = length - (space - index) - 2; // 去 "len " 与尾 '\n'
+            if (valueLength < 0 || valueStart + valueLength > data.Length)
+            {
+                yield break;
+            }
+            yield return Encoding.UTF8.GetString(data, valueStart, valueLength);
             index += length;
         }
     }

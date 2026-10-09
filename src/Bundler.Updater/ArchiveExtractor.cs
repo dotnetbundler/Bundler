@@ -130,10 +130,11 @@ internal static class ArchiveExtractor
                 return UstarReader.ContainsEscapingLink(gzip, staging);
             }
         }
-        catch (Exception exception) when (exception is IOException or InvalidDataException)
+        catch (Exception)
         {
-            // 预扫失败（畸形归档）→ 让原生/受管路径照常报它自己的错。
-            return false;
+            // 预扫失败按“有逃逸”处理退 managed——畸形档受管路径同样会报错，
+            // 而 fail-open 放原生跑可能让未扫到的逃逸链接顺链写出暂存区。
+            return true;
         }
     }
 
@@ -167,9 +168,9 @@ internal static class ArchiveExtractor
             }
             return false;
         }
-        catch (Exception exception) when (exception is IOException or InvalidDataException)
+        catch (Exception)
         {
-            return false;
+            return true;
         }
     }
 
