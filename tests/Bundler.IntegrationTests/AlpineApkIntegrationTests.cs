@@ -48,7 +48,7 @@ public sealed class AlpineApkFixture : IDisposable
 
         var fixtureDir = Path.GetDirectoryName(FixtureProject)!;
         Publish("bundle");
-        DefaultApk = Ws.Combine("bundle", "linux-musl-x64", "apk", "bundler-apk-fixture-1.0.0-r0.apk");
+        DefaultApk = Ws.Combine("bundle", "linux-musl-x64", "alpineapk", "bundler-apk-fixture-1.0.0-r0.apk");
         Assert.True(File.Exists(DefaultApk), $"The .apk artifact is missing: {DefaultApk}");
 
         Publish("override",
@@ -58,18 +58,18 @@ public sealed class AlpineApkFixture : IDisposable
             "-p:BundlerTestAlpineApkDepends=musl%3Bso:libc.musl-x86_64.so.1>=1.2",
             "-p:BundlerTestAlpineApkProvides=virtual-apk-fixture",
             "-p:BundlerTestAlpineApkTriggers=/usr/lib/bundler-apk-fixture");
-        OverrideApk = Ws.Combine("override", "linux-musl-x64", "apk", "custom-apk-1.0.0-r7.apk");
+        OverrideApk = Ws.Combine("override", "linux-musl-x64", "alpineapk", "custom-apk-1.0.0-r7.apk");
         Assert.True(File.Exists(OverrideApk), "Override variant produced no .apk.");
 
         Publish("scripts",
             $"-p:BundlerTestAlpineApkPostInstallScript={fixtureDir}/Assets/post-install.sh",
             $"-p:BundlerTestAlpineApkPreDeinstallScript={fixtureDir}/Assets/pre-deinstall.sh");
-        ScriptsApk = Ws.Combine("scripts", "linux-musl-x64", "apk", "bundler-apk-fixture-1.0.0-r0.apk");
+        ScriptsApk = Ws.Combine("scripts", "linux-musl-x64", "alpineapk", "bundler-apk-fixture-1.0.0-r0.apk");
         Assert.True(File.Exists(ScriptsApk), "Scripts variant produced no .apk.");
 
         Publish("upgrade-v1",
             $"-p:BundlerTestAlpineApkPostInstallScript={fixtureDir}/Assets/post-install.sh");
-        UpgradeV1Apk = Ws.Combine("upgrade-v1", "linux-musl-x64", "apk", "bundler-apk-fixture-1.0.0-r0.apk");
+        UpgradeV1Apk = Ws.Combine("upgrade-v1", "linux-musl-x64", "alpineapk", "bundler-apk-fixture-1.0.0-r0.apk");
         Assert.True(File.Exists(UpgradeV1Apk), "Upgrade v1 variant produced no .apk.");
 
         Publish("upgrade-v2",
@@ -77,7 +77,7 @@ public sealed class AlpineApkFixture : IDisposable
             $"-p:BundlerTestAlpineApkPreUpgradeScript={fixtureDir}/Assets/pre-upgrade.sh",
             $"-p:BundlerTestAlpineApkPostUpgradeScript={fixtureDir}/Assets/post-upgrade.sh",
             $"-p:BundlerTestAlpineApkPostInstallScript={fixtureDir}/Assets/post-install-v2.sh");
-        UpgradeV2Apk = Ws.Combine("upgrade-v2", "linux-musl-x64", "apk", "bundler-apk-fixture-1.0.0-r1.apk");
+        UpgradeV2Apk = Ws.Combine("upgrade-v2", "linux-musl-x64", "alpineapk", "bundler-apk-fixture-1.0.0-r1.apk");
         Assert.True(File.Exists(UpgradeV2Apk), "Upgrade v2 variant produced no .apk.");
 
         Directory.CreateDirectory(KeysDir);
@@ -90,22 +90,22 @@ public sealed class AlpineApkFixture : IDisposable
                 "-pubout", "-out", privateKey + ".rsa.pub"]),
             "openssl pubkey export failed.");
         Publish("signed", $"-p:BundlerTestAlpineApkSigningKeyFile={privateKey}");
-        SignedApk = Ws.Combine("signed", "linux-musl-x64", "apk", "bundler-apk-fixture-1.0.0-r0.apk");
+        SignedApk = Ws.Combine("signed", "linux-musl-x64", "alpineapk", "bundler-apk-fixture-1.0.0-r0.apk");
         Assert.True(File.Exists(SignedApk), "Signed variant produced no .apk.");
 
         foreach (var name in new[] { "det1", "det2", "det3" })
         {
             Publish(name);
         }
-        Det1Apk = Ws.Combine("det1", "linux-musl-x64", "apk", "bundler-apk-fixture-1.0.0-r0.apk");
-        Det2Apk = Ws.Combine("det2", "linux-musl-x64", "apk", "bundler-apk-fixture-1.0.0-r0.apk");
-        Det3Apk = Ws.Combine("det3", "linux-musl-x64", "apk", "bundler-apk-fixture-1.0.0-r0.apk");
+        Det1Apk = Ws.Combine("det1", "linux-musl-x64", "alpineapk", "bundler-apk-fixture-1.0.0-r0.apk");
+        Det2Apk = Ws.Combine("det2", "linux-musl-x64", "alpineapk", "bundler-apk-fixture-1.0.0-r0.apk");
+        Det3Apk = Ws.Combine("det3", "linux-musl-x64", "alpineapk", "bundler-apk-fixture-1.0.0-r0.apk");
 
         Dotnet.Publish(FixtureProject, "Release",
             [$"-p:BundlerIntegrationOutput={Ws.Combine("arm64")}",
              "--packages", CacheDir, "-r", "linux-musl-arm64"],
             "linux-musl-arm64 publish failed", noRestore: false);
-        Arm64Apk = Ws.Combine("arm64", "linux-musl-arm64", "apk", "bundler-apk-fixture-1.0.0-r0.apk");
+        Arm64Apk = Ws.Combine("arm64", "linux-musl-arm64", "alpineapk", "bundler-apk-fixture-1.0.0-r0.apk");
         Assert.True(File.Exists(Arm64Apk), "No .apk produced for linux-musl-arm64.");
     }
 
@@ -311,7 +311,7 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
                 Timeout = TimeSpan.FromMinutes(10),
             });
         ProcessRunner.AssertSuccess(result, "AlpineApkApiTests failed");
-        var apiApk = Path.Combine(output, "artifacts", "linux-musl-x64", "apk", "api-fixture-1.0.0-r0.apk");
+        var apiApk = Path.Combine(output, "artifacts", "linux-musl-x64", "alpineapk", "api-fixture-1.0.0-r0.apk");
         Assert.True(File.Exists(apiApk), "The direct-API fixture produced no .apk.");
         var head = new byte[3];
         using (var stream = File.OpenRead(apiApk))

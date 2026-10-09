@@ -438,7 +438,7 @@ internal static class ApkPackageWriter
         foreach (var file in settings.Files ?? [])
         {
             var destination = FreedesktopFiles.NormalizeAbsoluteDestination(
-                file.Destination, "apk");
+                file.Destination, "alpineapk");
             var source = Path.GetFullPath(file.Source);
             if (!File.Exists(source))
             {
