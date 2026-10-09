@@ -46,7 +46,7 @@ public static class UpdatePayloadStaging
         if (UpdateBootstrapper.Inject(payloadRoot, update, rid) is null)
         {
             throw new InvalidOperationException(
-                $"BundlerUpdate enabled but no bootstrapper found for '{rid}' — no updater/{rid}/ binary is embedded in Bundler.Core and no update bootstrapper directory was configured (update.bootstrapperDirectory / BundlerUpdateBootstrapperDirectory).");
+                $"BundlerUpdate enabled but no bootstrapper found for '{rid}' — no updater/{rid}/ binary is embedded in Bundler.Core and no update bootstrapper directory was configured (update.bootstrapperDirectory).");
         }
     }
 

@@ -69,6 +69,7 @@ internal sealed class UpdateApplier
         ApplyOptions options, Action<string>? log, bool rollback = false,
         string? backupDirectory = null)
     {
+        SweepStaleStaging(options.StagingRoot);
         var runDir = Path.Combine(
             options.StagingRoot, "bootstrap-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(runDir);
@@ -194,6 +195,44 @@ internal sealed class UpdateApplier
         return staging;
     }
 
+    // `bootstrap-<guid>`/`payload-<guid>` 暂存目录按进程唯一命名——发起方死在
+    // 半路时无清理方，残件在 StagingRoot 下无限积累。新建暂存前按 mtime 清扫
+    // 24h 前的同类目录；仍在用的目录（在飞引导件的 runDir）删除会失败自然跳过，
+    // 全路径 best-effort 不挡主流程。
+    internal static void SweepStaleStaging(string stagingRoot)
+    {
+        try
+        {
+            if (!Directory.Exists(stagingRoot))
+            {
+                return;
+            }
+            var cutoff = DateTime.UtcNow.AddHours(-24);
+            foreach (var directory in Directory.GetDirectories(stagingRoot))
+            {
+                var name = Path.GetFileName(directory);
+                if (!name.StartsWith("bootstrap-", StringComparison.Ordinal) &&
+                    !name.StartsWith("payload-", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                try
+                {
+                    if (Directory.GetLastWriteTimeUtc(directory) < cutoff)
+                    {
+                        Directory.Delete(directory, recursive: true);
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
+        catch (Exception)
+        {
+        }
+    }
+
     private static string ResolveMsiexec() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "msiexec.exe");
 
@@ -243,7 +282,8 @@ internal sealed class UpdateApplier
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            var machine = installPath.StartsWith(programFiles, StringComparison.OrdinalIgnoreCase);
+            var machine = PathStartsWithSegment(installPath, programFiles,
+                StringComparison.OrdinalIgnoreCase);
             return Path.Combine(
                 Environment.GetFolderPath(machine
                     ? Environment.SpecialFolder.CommonApplicationData
@@ -252,17 +292,17 @@ internal sealed class UpdateApplier
         }
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            var machine = installPath.StartsWith("/Applications", StringComparison.Ordinal) ||
-                          installPath.StartsWith("/Library", StringComparison.Ordinal);
+            var machine = PathStartsWithSegment(installPath, "/Applications", StringComparison.Ordinal) ||
+                          PathStartsWithSegment(installPath, "/Library", StringComparison.Ordinal);
             var root = machine
                 ? "/Library/Application Support"
                 : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                     "Library", "Application Support");
             return Path.Combine(root, "DotNet.Bundler", "backups");
         }
-        var machineLinux = installPath.StartsWith("/opt", StringComparison.Ordinal) ||
-                           installPath.StartsWith("/usr", StringComparison.Ordinal) ||
-                           installPath.StartsWith("/snap", StringComparison.Ordinal);
+        var machineLinux = PathStartsWithSegment(installPath, "/opt", StringComparison.Ordinal) ||
+                           PathStartsWithSegment(installPath, "/usr", StringComparison.Ordinal) ||
+                           PathStartsWithSegment(installPath, "/snap", StringComparison.Ordinal);
         if (machineLinux)
         {
             return Path.Combine("/var/lib", "dotnet-bundler", "backups");
@@ -273,6 +313,12 @@ internal sealed class UpdateApplier
                 : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share"),
             "dotnet-bundler", "backups");
     }
+
+    // 前缀命中还要过路径段边界："/optimal" 不能算落在 "/opt"——
+    // 与 VolumeFreeSpace/FindVolume 同款断言，防字面前缀误认 per-machine 安装。
+    private static bool PathStartsWithSegment(string path, string prefix, StringComparison comparison) =>
+        path.StartsWith(prefix, comparison) &&
+        (path.Length == prefix.Length || path[prefix.Length] is '/' or '\\');
 
     private static Process StartReplay(string file, string arguments, Action<string>? log)
     {
