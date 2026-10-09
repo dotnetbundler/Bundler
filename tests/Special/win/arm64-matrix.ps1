@@ -26,6 +26,12 @@ foreach ($inst in $InstallerPaths) {
             ".msi" {
                 $p = Start-Process "msiexec.exe" -ArgumentList "/i `"$inst`" /qb /norestart" -Wait -PassThru
                 Note "$name 装" ($p.ExitCode -eq 0) "rc=$($p.ExitCode)"
+                # 覆盖装：同包对已装产品走 reinstall 路径（版本不变的升级等价段）
+                $p1 = Start-Process "msiexec.exe" -ArgumentList "/i `"$inst`" /qb /norestart" -Wait -PassThru
+                Note "$name 覆盖装" ($p1.ExitCode -eq 0) "rc=$($p1.ExitCode)"
+                # 修复腿
+                $p3 = Start-Process "msiexec.exe" -ArgumentList "/fa `"$inst`" /qb /norestart" -Wait -PassThru
+                Note "$name 修复" ($p3.ExitCode -eq 0) "rc=$($p3.ExitCode)"
                 $p2 = Start-Process "msiexec.exe" -ArgumentList "/x `"$inst`" /qb /norestart" -Wait -PassThru
                 Note "$name 卸" ($p2.ExitCode -eq 0) "rc=$($p2.ExitCode)"
             }
@@ -34,6 +40,9 @@ foreach ($inst in $InstallerPaths) {
                 $before = @(Get-ChildItem $programs -Directory -ErrorAction SilentlyContinue | ForEach-Object FullName)
                 $p = Start-Process $inst -ArgumentList "/S" -Wait -PassThru
                 Note "$name 装" ($p.ExitCode -eq 0) "rc=$($p.ExitCode)"
+                # 覆盖装：NSIS /S 对已装目录重跑一遍
+                $p3 = Start-Process $inst -ArgumentList "/S" -Wait -PassThru
+                Note "$name 覆盖装" ($p3.ExitCode -eq 0) "rc=$($p3.ExitCode)"
                 $dir = Get-ChildItem $programs -Directory -ErrorAction SilentlyContinue |
                     Where-Object { $before -notcontains $_.FullName } | Select-Object -First 1 -ExpandProperty FullName
                 $uninst = if ($dir) { Join-Path $dir "uninstall.exe" } else { $null }

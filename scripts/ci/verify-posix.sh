@@ -64,6 +64,14 @@ elif [ "$OS" = "Darwin" ]; then
     if [ "$ARCH" = "x86_64" ]; then
         run_leg "intel-x64"                bash "$SP/mac/intel-x64.sh" \
             --app "$(finddir app '*.app')" --dmg "$(find1 dmg '*.dmg')"
+    else
+        # Rosetta 腿：osx-x64 件在 arm64+Rosetta 下实跑（Intel Mac 行的另一半）
+        produce "MacApp/BundlerMacAppIntegrationFixture.csproj"       "osx-x64" "app-x64"
+        produce "MacDmg/BundlerMacDmgIntegrationFixture.csproj"       "osx-x64" "dmg-x64"
+        /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null \
+            || softwareupdate --install-rosetta --agree-to-license
+        run_leg "intel-x64(rosetta)" bash "$SP/mac/intel-x64.sh" \
+            --app "$(finddir app-x64 '*.app')" --dmg "$(find1 dmg-x64 '*.dmg')"
     fi
 fi
 

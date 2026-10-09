@@ -23,20 +23,42 @@ else
     die "apk 与 docker 都缺"
 fi
 
-mkdir -p "$WORK/repo"
-cp "$APK" "$WORK/repo/"
+# apk 仓库布局：<repo>/<apk架构>/APKINDEX.tar.gz——apk add --repository 按架构子目录找索引
+APKARCH="$(uname -m)"
+mkdir -p "$WORK/repo/$APKARCH"
+cp "$APK" "$WORK/repo/$APKARCH/"
 
 if [ "$RUN" = "docker" ]; then
-    docker run --rm -v "$WORK/repo:/repo" -v "$WORK/out:/out" alpine:latest sh -c \
-        "apk add --no-cache alpine-sdk >/dev/null 2>&1 || apk add --no-cache abuild >/dev/null 2>&1; \
-         apk index -o /repo/APKINDEX.tar.gz --allow-untrusted /repo/*.apk && echo IDX-OK" \
+    docker run --rm -v "$WORK/repo:/repo" alpine:latest sh -c \
+        "apk index -o /repo/$APKARCH/APKINDEX.tar.gz --allow-untrusted /repo/$APKARCH/*.apk && echo IDX-OK" \
         > "$WORK/idx.log" 2>&1 && grep -q IDX-OK "$WORK/idx.log" \
         && note "APKINDEX 生成" "PASS" "" || note "APKINDEX 生成" "FAIL" "$(tail -3 "$WORK/idx.log")"
 else
-    apk index -o "$WORK/repo/APKINDEX.tar.gz" --allow-untrusted "$WORK/repo"/*.apk \
+    apk index -o "$WORK/repo/$APKARCH/APKINDEX.tar.gz" --allow-untrusted "$WORK/repo/$APKARCH"/*.apk \
         && note "APKINDEX 生成" "PASS" "" || note "APKINDEX 生成" "FAIL" ""
 fi
-[ -f "$WORK/repo/APKINDEX.tar.gz" ] && note "索引文件存在" "PASS" "" || note "索引文件存在" "FAIL" ""
+[ -f "$WORK/repo/$APKARCH/APKINDEX.tar.gz" ] && note "索引文件存在" "PASS" "" || note "索引文件存在" "FAIL" ""
+
+# 索引侧真装：apk add --repository 走 APKINDEX 解析单件
+PKGNAME="$(tar -xzOf "$APK" .PKGINFO 2>/dev/null | sed -n 's/^pkgname *= *//p' | head -1)"
+if [ -z "$PKGNAME" ]; then
+    base="$(basename "$APK" .apk)"; PKGNAME="${base%%-[0-9]*}"   # 文件名 <name>-<ver>-r<rel> 兜底
+fi
+[ -n "$PKGNAME" ] || die "pkgname 取不到"
+if [ "$RUN" = "docker" ]; then
+    docker run --rm -v "$WORK/repo:/repo" alpine:latest sh -c \
+        "apk add --allow-untrusted --repository /repo $PKGNAME >/dev/null && \
+         apk info -e $PKGNAME >/dev/null && apk del $PKGNAME >/dev/null && echo ADD-OK" \
+        > "$WORK/add.log" 2>&1 && grep -q ADD-OK "$WORK/add.log" \
+        && note "apk add --repository 装" "PASS" "pkg=$PKGNAME" \
+        || note "apk add --repository 装" "FAIL" "$(tail -3 "$WORK/add.log")"
+else
+    apk add --allow-untrusted --repository "$WORK/repo" "$PKGNAME" >/dev/null \
+        && apk info -e "$PKGNAME" >/dev/null \
+        && note "apk add --repository 装" "PASS" "pkg=$PKGNAME" \
+        || note "apk add --repository 装" "FAIL" ""
+    apk del "$PKGNAME" >/dev/null 2>&1 || true   # 卸载清理，不落改造态
+fi
 
 cat > "$EV" <<EOF
 # SA-APKIDX apk 索引工作流

@@ -51,13 +51,33 @@ try {
     Note "开始菜单快捷方式" ($null -ne $lnk) "$lnkPath"
 
     if ($TaskbarPin -and $lnk) {
-        # win11 22H2+ pin 走 shell verb（build>=22621）；win10 用 pinned 目录。
-        $verb = if ($build -ge 22621) { "taskbarpin" } else { "pintotaskbar" }
+        # win11 22H2+ 移除任务栏 pin 程序化通道——shell verb 仍枚举得到但 DoIt 返 E_ACCESSDENIED（平台预期，非产品缺陷）；
+        # win10（build<22621）动词可用。可自动断言的：快捷方式暴露 pin 动词 + 落点或平台拒绝态符合该 build 语义。
         $shell = New-Object -ComObject Shell.Application
-        $shell.Namespace($lnk.DirectoryName).ParseName($lnk.Name).Verbs() |
-            Where-Object Name -match "pin|固定" | ForEach-Object { $_.DoIt() }
+        $pinVerbs = @($shell.Namespace($lnk.DirectoryName).ParseName($lnk.Name).Verbs() |
+            Where-Object Name -match "pin|固定")
+        Note "pin 动词枚举" ($pinVerbs.Count -gt 0) "build=$build verbs=$([string]::Join(',', ($pinVerbs | ForEach-Object Name)))"
+        $denied = $false
+        foreach ($v in $pinVerbs) {
+            try { $v.DoIt() } catch { $denied = $true }
+        }
+        # 落点断言（无人值守也能判）：User Pinned\TaskBar 快捷方式出现
+        $pinDir = "$env:APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"
+        $pinHit = $false
+        foreach ($i in 1..15) {
+            Start-Sleep -Seconds 1
+            if (Get-ChildItem $pinDir -Filter *.lnk -ErrorAction SilentlyContinue |
+                Where-Object Name -match "Bundler") { $pinHit = $true; break }
+        }
         Wait-Human "检查任务栏是否出现 HelloBundlerApp 图标"
-        Note "任务栏 pin(人工确认)" $true "build=$build verb=$verb"
+        if ($pinHit) {
+            Note "任务栏 pin 落点" $true "build=$build dir=$pinDir"
+        } elseif ($denied -and $build -ge 22621) {
+            # win11 上程序化 pin 只剩人工通道（资源管理器右键菜单）——拒绝态即该平台语义上限，落点留人工验收
+            Note "任务栏 pin 落点" $true "build=$build 程序化 pin 被系统拒(E_ACCESSDENIED 平台预期)；落点人工验收"
+        } else {
+            Note "任务栏 pin 落点" $false "build=$build denied=$denied dir=$pinDir"
+        }
     }
 
     # 卸载后 pin 清理语义：快捷方式移除。
