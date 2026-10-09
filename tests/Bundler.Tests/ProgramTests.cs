@@ -467,6 +467,115 @@ public static class ProgramTests
         }
     }
 
+    [Fact]
+    static void RejectsInvalidWindowsPayloadNames()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "Windows hosts cannot materialize these payload names");
+        foreach (var badName in new[] { "con.dll", "a|b.txt", "ends." })
+        {
+            var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+            var input = Path.Combine(root, "input");
+            Directory.CreateDirectory(input);
+            try
+            {
+                File.WriteAllText(Path.Combine(input, "ExampleApp.exe"), "fixture");
+                File.WriteAllText(Path.Combine(input, badName), "payload");
+                var configuration = ValidConfiguration(new BundleTargetConfiguration
+                {
+                    RuntimeIdentifier = "win-x64",
+                    InputDirectory = input,
+                    MainExecutable = "ExampleApp.exe",
+                    Formats = [PackageFormat.Nsis]
+                });
+                var item = new BundlePlanItem(
+                    new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                    PackageFormat.Nsis,
+                    input,
+                    "ExampleApp.exe",
+                    Path.Combine(root, "output"),
+                    false);
+                var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
+                var rejected = Assert.ThrowsAny<InvalidDataException>(() => NsisBundleBackend.CreateScript(
+                    template,
+                    configuration,
+                    new NsisBundleConfiguration(),
+                    item,
+                    Path.Combine(root, "setup.exe"),
+                    "ExampleApp"));
+                Assert.Contains("not valid on Windows", rejected.Message);
+            }
+            finally
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    static void RejectsInvalidWindowsResourceTargets()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "input");
+        Directory.CreateDirectory(input);
+        try
+        {
+            File.WriteAllText(Path.Combine(input, "ExampleApp.exe"), "fixture");
+            var resource = Path.Combine(root, "resource.txt");
+            File.WriteAllText(resource, "resource");
+            var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
+            var item = new BundlePlanItem(
+                new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                PackageFormat.Nsis,
+                input,
+                "ExampleApp.exe",
+                Path.Combine(root, "output"),
+                false);
+            foreach (var targetPath in new[] { "docs/con.txt", "docs/a|b.txt", "docs/trail. " })
+            {
+                var configuration = new BundleConfiguration
+                {
+                    ProductName = "ExampleApp",
+                    Identifier = "com.example.app",
+                    Version = "1.0.0",
+                    OutputDirectory = "artifacts",
+                    Resources = [new BundleResourceConfiguration { Source = resource, TargetPath = targetPath }],
+                    Targets =
+                    [
+                        new BundleTargetConfiguration
+                        {
+                            RuntimeIdentifier = "win-x64",
+                            InputDirectory = input,
+                            MainExecutable = "ExampleApp.exe",
+                            Formats = [PackageFormat.Nsis]
+                        }
+                    ]
+                };
+                var rejected = Assert.ThrowsAny<InvalidOperationException>(() => NsisBundleBackend.CreateScript(
+                    template,
+                    configuration,
+                    new NsisBundleConfiguration(),
+                    item,
+                    Path.Combine(root, "setup.exe"),
+                    "ExampleApp"));
+                Assert.Contains("not valid on Windows", rejected.Message);
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    static void RejectsPercentInUninstallerFinalizeDestination()
+    {
+        var rejected = Assert.ThrowsAny<InvalidOperationException>(
+            () => NsisBundleBackend.CreateUninstallerFinalizeCommand("C:\\work%NAME%dir\\uninstaller.exe"));
+        Assert.Contains("percent", rejected.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("uninstaller.exe",
+            NsisBundleBackend.CreateUninstallerFinalizeCommand(Path.Combine("work", "uninstaller.exe")));
+    }
+
     static void WriteZipEntry(ZipArchive archive, string path, string contents)
     {
         var entry = archive.CreateEntry(path);

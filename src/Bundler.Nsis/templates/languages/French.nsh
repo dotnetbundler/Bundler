@@ -24,3 +24,5 @@ LangString InvalidRestartMode ${LANG_FRENCH} "/R est valide uniquement avec /S, 
 LangString ArgumentsRequireRestart ${LANG_FRENCH} "/ARGS est valide uniquement avec /R."
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_FRENCH} "L'installation automatisée a refusé un dossier non vide qui n'appartient pas à ${PRODUCT_NAME}."
 LangString ApplicationLaunchFailed ${LANG_FRENCH} "L'installation a réussi, mais ${PRODUCT_NAME} n'a pas pu démarrer."
+LangString RecoveryManifestMismatch ${LANG_FRENCH} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatchDetail ${LANG_FRENCH} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."

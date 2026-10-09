@@ -24,3 +24,5 @@ LangString InvalidRestartMode ${LANG_FARSI} "/R فقط همراه /S، /P یا /
 LangString ArgumentsRequireRestart ${LANG_FARSI} "/ARGS فقط همراه /R معتبر است."
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_FARSI} "نصب خودکار یک پوشه غیرخالی را که متعلق به ${PRODUCT_NAME} نیست نپذیرفت."
 LangString ApplicationLaunchFailed ${LANG_FARSI} "نصب با موفقیت انجام شد، اما اجرای ${PRODUCT_NAME} ممکن نشد."
+LangString RecoveryManifestMismatch ${LANG_FARSI} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatchDetail ${LANG_FARSI} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."

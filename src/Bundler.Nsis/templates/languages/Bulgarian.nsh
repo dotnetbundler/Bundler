@@ -24,3 +24,5 @@ LangString InvalidRestartMode ${LANG_BULGARIAN} "/R е валиден само �
 LangString ArgumentsRequireRestart ${LANG_BULGARIAN} "/ARGS е валиден само с /R."
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_BULGARIAN} "Автоматичната инсталация отказа непразна папка, която не принадлежи на ${PRODUCT_NAME}."
 LangString ApplicationLaunchFailed ${LANG_BULGARIAN} "Инсталацията завърши, но ${PRODUCT_NAME} не можа да бъде стартирано."
+LangString RecoveryManifestMismatch ${LANG_BULGARIAN} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatchDetail ${LANG_BULGARIAN} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."

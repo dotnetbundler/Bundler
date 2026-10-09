@@ -21,7 +21,8 @@ internal sealed class NsisBundleBackend(
         "UpgradeDetected", "DowngradeDetected", "DowngradeBlocked", "UnknownVersionDetected",
         "SilentDowngradeBlocked", "SilentUnknownVersionBlocked", "RemovingExistingVersion",
         "ExistingUninstallFailed", "LegacyMsiDetected", "RemovingLegacyMsiVersion", "InvalidRestartMode",
-        "ArgumentsRequireRestart", "AutomatedNonEmptyDirectoryBlocked", "ApplicationLaunchFailed"
+        "ArgumentsRequireRestart", "AutomatedNonEmptyDirectoryBlocked", "ApplicationLaunchFailed",
+        "RecoveryManifestMismatch", "RecoveryManifestMismatchDetail"
     ];
 
     public PackageFormat Format => PackageFormat.Nsis;
@@ -347,11 +348,17 @@ internal sealed class NsisBundleBackend(
         });
     }
 
-    private static string CreateUninstallerFinalizeCommand(string destinationPath)
+    internal static string CreateUninstallerFinalizeCommand(string destinationPath)
     {
         if (destinationPath.Contains('\''))
         {
             throw new InvalidOperationException("The NSIS signing work directory cannot contain an apostrophe.");
+        }
+        // finalize 命令经 system() 进入 cmd 命令行模式：该模式下 % 无转义（%% 仅在批处理中折叠），
+        // 引号内的 %VAR% 仍会展开，含 % 的路径只能拒绝。
+        if (destinationPath.Contains('%'))
+        {
+            throw new InvalidOperationException("The NSIS signing work directory cannot contain a percent sign.");
         }
 
         var destination = Escape(destinationPath);
@@ -849,9 +856,14 @@ internal sealed class NsisBundleBackend(
         }
 
         var normalized = ToInstallerPath(targetPath).Trim('\\');
-        if (normalized.Split('\\').Any(component => component is "" or "." or ".."))
+        var components = normalized.Split('\\');
+        if (components.Any(component => component is "" or "." or ".."))
         {
             throw new InvalidOperationException($"Resource target path must stay inside the installation directory: '{targetPath}'.");
+        }
+        if (components.Any(component => WindowsFileNames.IsInvalidName(component)))
+        {
+            throw new InvalidOperationException($"Resource target path contains a name that is not valid on Windows: '{targetPath}'.");
         }
 
         return normalized;
@@ -1104,6 +1116,10 @@ internal sealed class NsisBundleBackend(
             foreach (var path in Directory.EnumerateFileSystemEntries(directory))
             {
                 RejectReparsePoint(path, "Bundle input");
+                if (WindowsFileNames.IsInvalidName(Path.GetFileName(path)))
+                {
+                    throw new InvalidDataException($"Bundle input contains a name that is not valid on Windows: {path}");
+                }
                 if (Directory.Exists(path))
                 {
                     directories.Add(path);

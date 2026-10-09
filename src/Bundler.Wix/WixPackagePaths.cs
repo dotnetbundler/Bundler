@@ -12,6 +12,7 @@ internal static class WixPackagePaths
         var parts = target.Replace('\\', '/').Split('/');
         if (parts.Any(part => part.Length == 0 || part == "." || part == ".." ||
                               part.EndsWith(" ", StringComparison.Ordinal) || part.EndsWith(".", StringComparison.Ordinal) ||
+                              part.IndexOfAny(InvalidCharacters) >= 0 || part.Any(char.IsControl) ||
                               IsReservedDeviceName(part)))
         {
             throw new ArgumentException("MSI target path contains an unsafe segment: " + target);
@@ -19,7 +20,9 @@ internal static class WixPackagePaths
         return string.Join("/", parts);
     }
 
-    // Windows 设备保留名按"去扩展名的基名"判定（con.txt 同样被拒绝）。
+    private static readonly char[] InvalidCharacters = "<>:\"/\\|?*".ToCharArray();
+
+    // Windows 设备保留名按首个 '.' 前的基名判定（con.tar.gz 同样被拒绝）。
     private static bool IsReservedDeviceName(string part)
     {
         var name = part.Split('.')[0];
