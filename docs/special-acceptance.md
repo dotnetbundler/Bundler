@@ -79,12 +79,12 @@
 | ~~ARM64 真机组（deb/rpm/AppImage/apk）~~ | ~~真机 ARM64 宿主装卸+运行各格式件~~ | **已完成**（2026-10-09） | `arm64-real-hw.sh` 收编进 `release-verify`，在 GitHub `ubuntu-26.04-arm` 真 arm64 硬件腿跑绿（deb/rpm/apk/AppImage 装卸+运行）；Windows 侧 `arm64-matrix.ps1` 在 `windows-11-arm` 跑绿 |
 | ~~UPDATE arm64 AOT 引导件~~ | ~~linux-arm64/win-arm64 构建宿主产 arm64 引导件并入包，重跑 arm64 换包腿~~ | **已完成**（2026-10-09） | linux-arm64/linux-musl-arm64 由 GitHub `ubuntu-26.04-arm` runner、win-arm64 由 `windows-11-arm` runner 真宿主产出入库（`tools/<rid>/`），冒烟 `apply` 过；arm64 换包腿收编进 `release-verify`（docker tmpfs/VHD 小卷） |
 | ~~Windows ARM64 矩阵~~ | ~~MSI/NSIS 在 Windows ARM64 的构建、安装、升级、修复、卸载逐组合~~ | **部分收编**（2026-10-09） | `arm64-matrix.ps1` 收编进 `release-verify` 的 `windows-11-arm` 腿跑绿（NSIS/MSI 装+卸）；升级/修复组合仍挂本表 |
-| Intel Mac / Rosetta | osx-x64 `.app`/`.dmg`/`.pkg` 实跑、挂载、安装、启动 | osx-x64 各格式启动记录 | arm64 宿主 `arch -x86_64` Bad CPU type；装 Rosetta（免费需人工授权）或租 Intel Mac |
-| 干净 macOS 宿主��阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg` | 挂载/EULA 弹窗/拖放安装首启记录 | 现宿主有开发工具链；云 mac 实例按天可租 |
+| ~~Intel Mac / Rosetta~~ | ~~osx-x64 `.app`/`.dmg`/`.pkg` 实跑、挂载、安装、启动~~ | **部分收编**（2026-10-09） | `macos-26-intel` CI 腿在真 Intel 硬件跑绿（osx-x64 `.app`/`.dmg`/`.pkg` 产包+挂载+装卸+全量单测）；剩 Rosetta-on-arm64 装件运行与启动观感仍挂本表 |
+| 干净 macOS 宿主矩阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg` | 挂载/EULA 弹窗/拖放安装首启记录 | 现宿主有开发工具链；云 mac 实例按天可租 |
 | 干净 Windows 10/11 | WiX 自身依赖边界（无 .NET SDK 仅 candle/light 编译）、独立 VM 复跑安装/卸载、Win7 记 Framework 缺失边界 | 各宿主构建/安装/卸载记录 | 非干净 Windows 11 x64 已有证据；干净宿主未测 |
 | 提权/UAC Windows | NSIS per-machine 安装/卸载与 journal ACL 取证、预建父目录所有权/继承；MSI current-user/per-machine 权限差异；UPDATE 引导件在 `Program Files` 提权目录的写权限与 UAC 交互 | `icacls`/HKLM 权限/提权边界记录 | 普通本机不得静默触发 UAC；当前实证均 per-user 目录 |
-| 可丢弃故障 VM | NSIS 真实重启+锁定文件删除（重启后复核）、真实 ACL 拒绝+物理磁盘/配额耗尽；MSI 重启/锁定/磁盘故障/缺源 | 重启后状态、回滚日志、`icacls` 记录 | 确定性故障注入已覆盖事务检查点；真实系统故障只能可丢弃 VM 注入 |
-| 跨 Windows 版本固定项 | Win10/11 各 build 上升级前/卸载前已固定开始菜单/任务栏项检查 | 固定项清理行为记录 | 固定项存储与接口随系统版本/策略变化 |
+| 可丢弃故障 VM | NSIS 真实重启+锁定文件删除（重启后复核）、真实 ACL 拒绝+物理磁盘/配额耗尽；MSI 重启/锁定/磁盘故障/缺源 | **部分收编**（2026-10-09） | `disposable-vm-faults.ps1` 收编进 `release-verify`（windows-2025 与 windows-11-arm 跑绿：真 ACL 拒装 rc=2+真 VHD 盘满 ENOSPC rc=2+无半途树）；真实重启+锁定文件删除与 MSI 故障仍挂本表 |
+| 跨 Windows 版本固定项 | Win10/11 各 build 上升级前/卸载前已固定开始菜单/任务栏项检查 | **部分收编**（2026-10-09） | `pinned-items.ps1` 收编进 `release-verify`（windows-2025 即 b26100 x64 与 windows-11-arm 跑绿：装→`.lnk` 发现→卸→lnk 消；另 Devin VM b20348 实证）；Win10 桌面 SKU 与任务栏 pin（`-TaskbarPin`）仍挂本表 |
 | appimaged 类桌面集成 | appimaged/gear lever 工具对 AppImage 的识别与观感 | 集成工具识别观感记录 | 双击启动=FUSE 同路径已验；工具识别段待桌面环境+工具 |
 | apk 仓库/索引工作流（可选扩展） | `abuild-index`/`apk add --repository` 真实索引服务验证 | 索引服务验证记录 | 后端仅产单包，仓库级能力属格式边界外可选扩展 |
 
