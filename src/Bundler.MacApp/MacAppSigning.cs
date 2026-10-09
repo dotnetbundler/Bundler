@@ -13,16 +13,16 @@ internal static class MacAppSigning
 {
     /// <summary>Bundle directories whose contents codesign treats as nested code.</summary>
     private static readonly string[] CodeDirectoryNames =
-        ["MacOS", "Frameworks", "Plugins", "Helpers", "XPCServices", "Libraries"];
+        ["MacOS", "Frameworks", "PlugIns", "Helpers", "XPCServices", "Libraries"];
 
     internal static bool Configured(MacAppSigningConfiguration signing) =>
-        signing.Identity is not null || signing.TemporaryCertificatePath is not null;
+        signing.Identity is not null || !string.IsNullOrEmpty(signing.TemporaryCertificatePath);
 
     /// <summary>Preflight checks; the bundler calls this before any payload work.</summary>
     internal static void Validate(MacAppSigningConfiguration signing)
     {
         var signingRequested = Configured(signing);
-        if (signing.Identity is not null && signing.TemporaryCertificatePath is not null)
+        if (signing.Identity is not null && !string.IsNullOrEmpty(signing.TemporaryCertificatePath))
         {
             throw new ArgumentException(
                 "SignIdentity and TemporaryCertificatePath are mutually exclusive.");
@@ -355,6 +355,9 @@ internal static class MacAppSigning
             string workDirectory, IBundleLogger logger, CancellationToken cancellationToken)
         {
             var existing = await ListUserKeychains(workDirectory, cancellationToken);
+            var keychain = new TemporaryKeychain(path, password, "", existing);
+            try
+            {
             await MacProcessRunner.RunAsync(
                 "security", ["create-keychain", "-p", password, path],
                 workDirectory, cancellationToken);
@@ -380,6 +383,13 @@ internal static class MacAppSigning
             logger.Log(BundleLogLevel.Information,
                 $"Imported the signing certificate into a temporary keychain (identity '{identity}').");
             return new TemporaryKeychain(path, password, identity, existing);
+            }
+            catch
+            {
+                // 中途失败也要还原用户钥匙串搜索列表（list-keychains -s 已改过）。
+                await keychain.DisposeAsync(workDirectory, cancellationToken);
+                throw;
+            }
         }
 
         internal async Task DisposeAsync(string workDirectory, CancellationToken cancellationToken)

@@ -10,7 +10,7 @@ namespace DotNet.Bundler.MacApp;
 /// - present on all sides, differs, not Mach-O → hard error (no generic arch-subdir fallback:
 ///   a standard .NET apphost does not probe RID subdirectories, unlike MAUI's runtime);
 /// - present on one side only → copied verbatim.
-/// Symlinks are copied as links; other special files are rejected.
+/// Symlinks are dereferenced into their target contents; other special files are rejected.
 /// </summary>
 public static class MacUniversalPayloadMerger
 {
@@ -48,6 +48,11 @@ public static class MacUniversalPayloadMerger
                 .Select(dir => Path.Combine(dir, relative))
                 .Where(File.Exists)
                 .ToArray();
+            if (sources.Length == 0)
+            {
+                // 枚举与合并之间条目消失（悬垂链接被删除等）——按缺席处理，不崩。
+                continue;
+            }
             var destination = Path.Combine(outputDirectory, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
 
