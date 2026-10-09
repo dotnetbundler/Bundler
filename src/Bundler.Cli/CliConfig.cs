@@ -279,20 +279,17 @@ internal static class CliConfig
         }
     }
 
-    // 逗号在 ParseValue 里是列表分隔符——路径类覆盖值必须逐项解析，
-    // 否则 `--icons=a.png,b.png` 会被整体 GetFullPath 后只有第一项得到前缀。
+    // 逗号在 ParseValue 里是列表分隔符——路径类覆盖值必须先拆列表再逐项判 rooted，
+    // 否则 `--icons=a.png,b.png` 整体 GetFullPath 只保第一项；`/abs/a.png,b.png`
+    // 又因整串 rooted 早退，`b.png` 会被下游误解析到配置文件目录。
     private static string ResolveOverridePath(string value)
     {
-        if (Path.IsPathRooted(value))
-        {
-            return value;
-        }
         if (value.Contains(','))
         {
             return string.Join(',', value.Split(',', StringSplitOptions.TrimEntries)
                 .Select(entry => Path.IsPathRooted(entry) ? entry : Path.GetFullPath(entry)));
         }
-        return Path.GetFullPath(value);
+        return Path.IsPathRooted(value) ? value : Path.GetFullPath(value);
     }
 
     // --main-executable → targets[0].mainExecutable etc.; scalar target-level

@@ -594,6 +594,14 @@ public static class CliTests
                 new[] { "icon-a.png", "icon-b.png" }
                     .Select(name => Path.GetFullPath(name)).ToArray(),
                 resolved.Icons);
+
+            // 首项为绝对路径时整串 rooted——相对项仍须按工作目录逐项解析。
+            var anchored = Path.Combine(Path.GetTempPath(), "anchor.png");
+            var mixed = CliConfig.Resolve(CliArguments.Parse(
+                ["bundle", "--config", config, $"--icons={anchored},icon-c.png"]));
+            Assert.Equal(
+                new[] { anchored, Path.GetFullPath("icon-c.png") },
+                mixed.Icons);
         }
         finally
         {
