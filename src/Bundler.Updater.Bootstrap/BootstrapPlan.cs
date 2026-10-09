@@ -1354,9 +1354,20 @@ internal static class BootstrapPlan
 
     private static bool IsVolumeRoot(string path)
     {
+        var trimmed = path.TrimEnd('/', '\\');
+        // 设备名空间前缀剥壳：\\?\Volume{GUID}\ 经 reparse 解析可能呈 \??\Volume{GUID} NT 形态，
+        // Path.GetPathRoot 认不出后者——剥前缀后按 Volume{…} 段判定。
+        var core = trimmed.StartsWith(@"\\?\", StringComparison.Ordinal) ||
+                   trimmed.StartsWith(@"\??\", StringComparison.Ordinal) ||
+                   trimmed.StartsWith(@"\\.\", StringComparison.Ordinal)
+            ? trimmed[4..] : trimmed;
+        if (core.StartsWith("Volume{", StringComparison.OrdinalIgnoreCase))
+        {
+            return !core.Contains('\\') && !core.Contains('/');
+        }
         var root = Path.GetPathRoot(path);
         return root is { Length: > 0 } &&
-            string.Equals(path.TrimEnd('/', '\\'), root.TrimEnd('/', '\\'), StringComparison.OrdinalIgnoreCase);
+            string.Equals(trimmed, root.TrimEnd('/', '\\'), StringComparison.OrdinalIgnoreCase);
     }
 
     // 保留迁移失败不该让换包白做：瞬备留在原处仍能回滚（Rollback 定位兄弟位优先），降级不阻断。
