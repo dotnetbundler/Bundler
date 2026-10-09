@@ -64,10 +64,10 @@
 | 项 | 要做什么 | 完成证据 | 当前卡点/说明 |
 | --- | --- | --- | --- |
 | 真实旧 WiX/MSI 产品迁移 | 用真实历史 ProductCode/UpgradeCode 或已发布 MSI 验证迁移与 `LegacyMsiAutoDetect` 自动检测 | 真实已发布产品的识别、per-machine 提权枚举、迁移行为记录 | 通用机制与自动检测已由一次性 fixture 验证；需用户侧真实旧标识/已发布包 |
-| 生产 GPG 密钥流程 | 真实开发者 GPG 密钥给 rpm/AppImage 签名 + 公钥分发/吊销流程演练 | 生产密钥签名+分发/吊销记录 | 签名实现与 `rpm --import`+`rpm -K`/`gpgv` 验签已自动化；密钥生成免费，流程属发布者自身 |
+| 生产 GPG 密钥流程 | 真实开发者 GPG 密钥给 rpm/AppImage 签名 + 公钥分发/吊销流程演练 | 生产密钥签名+分发/吊销记录 | `gpg-production.sh --self-contained`（临时密钥全链签名+验签）收编进 `release-verify` ubuntu 腿跑绿；真实开发者密钥分发/吊销仍挂本表 |
 | UPDATE 真实发布管线 | 真实通道 `BundlerUpdateFeed` 指向公网静态托管，HelloBundlerApp 走 pack→安装→Check/Download/Apply 全链 | 端到端狗食记录 | 静态托管免费（GitHub Pages 等）；需用户决定托管并保管 ECDSA 私钥 |
 | UPDATE 公网/CDN Range 行为 | 差分在真实公网/CDN 上的 HTTP Range 行为记录 | 公网腿 Range 响应与复用率记录 | 回环 206 已实证；部分 CDN 对 Range 有缓存语义差异 |
-| mac quarantine 首启 | `.app` 经真实分发渠道（公网/内网下载）产生 quarantine 首启场景 | 下载-首启观察记录 | 需真实下载路径；更新期剥 quarantine 逻辑已实现 |
+| mac quarantine 首启 | `.app` 经真实分发渠道（公网/内网下载）产生 quarantine 首启场景 | 下载-首启观察记录 | quarantine xattr 标记落位模拟腿已一次性 CI 跑绿（run 37892544275）；真实下载首启弹窗观察仍挂本表 |
 | NSIS 22 语言母语审校 | 内置 22 语言文案母语/专业审校，阿拉伯语/波斯语重点 RTL 布局，代表性缩放下截图 | 母语审校意见+RTL/DPI 截图 | 机械层已全净（键集逐位一致、零条与英文同）；语言准确性、地区术语、截断只能真人 |
 | MSI 本地化审校+辅助功能 | 支持语言集 UI、缩放和可访问性检查 | 审校与可访问性记录 | 同上需真人 |
 | MSI 对话框交互腿 | Browse 对话框、范围外路径触发 `InvalidDirDlg`、`ADDLOCAL` Feature 选择交互、启动勾选生效、位图显示、缩放/辅助功能、per-machine UAC 交互安装 | 真实交互 UI 环境记录 | 需真实 Windows 桌面交互；许可/InstallDir/Install/Finish 流转已自动化 |
@@ -78,15 +78,15 @@
 | --- | --- | --- | --- |
 | ~~ARM64 真机组（deb/rpm/AppImage/apk）~~ | ~~真机 ARM64 宿主装卸+运行各格式件~~ | **已完成**（2026-10-09） | `arm64-real-hw.sh` 收编进 `release-verify`，在 GitHub `ubuntu-26.04-arm` 真 arm64 硬件腿跑绿（deb/rpm/apk/AppImage 装卸+运行）；Windows 侧 `arm64-matrix.ps1` 在 `windows-11-arm` 跑绿 |
 | ~~UPDATE arm64 AOT 引导件~~ | ~~linux-arm64/win-arm64 构建宿主产 arm64 引导件并入包，重跑 arm64 换包腿~~ | **已完成**（2026-10-09） | linux-arm64/linux-musl-arm64 由 GitHub `ubuntu-26.04-arm` runner、win-arm64 由 `windows-11-arm` runner 真宿主产出入库（`tools/<rid>/`），冒烟 `apply` 过；arm64 换包腿收编进 `release-verify`（docker tmpfs/VHD 小卷） |
-| ~~Windows ARM64 矩阵~~ | ~~MSI/NSIS 在 Windows ARM64 的构建、安装、升级、修复、卸载逐组合~~ | **部分收编**（2026-10-09） | `arm64-matrix.ps1` 收编进 `release-verify` 的 `windows-11-arm` 腿跑绿（NSIS/MSI 装+卸）；升级/修复组合仍挂本表 |
-| ~~Intel Mac / Rosetta~~ | ~~osx-x64 `.app`/`.dmg`/`.pkg` 实跑、挂载、安装、启动~~ | **部分收编**（2026-10-09） | `macos-26-intel` CI 腿在真 Intel 硬件跑绿（osx-x64 `.app`/`.dmg`/`.pkg` 产包+挂载+装卸+全量单测）；剩 Rosetta-on-arm64 装件运行与启动观感仍挂本表 |
+| ~~Windows ARM64 矩阵~~ | ~~MSI/NSIS 在 Windows ARM64 的构建、安装、升级、修复、卸载逐组合~~ | **已完成**（2026-10-09） | `arm64-matrix.ps1` 收编进 `release-verify` 的 `windows-11-arm` 腿跑绿（装+NSIS/MSI 覆盖装+MSI 修复+卸逐组合，rc=0） |
+| ~~Intel Mac / Rosetta~~ | ~~osx-x64 `.app`/`.dmg`/`.pkg` 实跑、挂载、安装、启动~~ | **部分收编**（2026-10-09） | `macos-26-intel` CI 腿在真 Intel 硬件跑绿（osx-x64 `.app`/`.dmg`/`.pkg` 产包+挂载+装卸+全量单测）；`macos-26` arm64+Rosetta 腿跑绿（osx-x64 `.app`/`.dmg` 实跑）；剩启动观感仍挂本表 |
 | 干净 macOS 宿主矩阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg` | 挂载/EULA 弹窗/拖放安装首启记录 | 现宿主有开发工具链；云 mac 实例按天可租 |
 | 干净 Windows 10/11 | WiX 自身依赖边界（无 .NET SDK 仅 candle/light 编译）、独立 VM 复跑安装/卸载、Win7 记 Framework 缺失边界 | 各宿主构建/安装/卸载记录 | 非干净 Windows 11 x64 已有证据；干净宿主未测 |
 | 提权/UAC Windows | NSIS per-machine 安装/卸载与 journal ACL 取证、预建父目录所有权/继承；MSI current-user/per-machine 权限差异；UPDATE 引导件在 `Program Files` 提权目录的写权限与 UAC 交互 | `icacls`/HKLM 权限/提权边界记录 | 普通本机不得静默触发 UAC；当前实证均 per-user 目录 |
 | 可丢弃故障 VM | NSIS 真实重启+锁定文件删除（重启后复核）、真实 ACL 拒绝+物理磁盘/配额耗尽；MSI 重启/锁定/磁盘故障/缺源 | **部分收编**（2026-10-09） | `disposable-vm-faults.ps1` 收编进 `release-verify`（windows-2025 与 windows-11-arm 跑绿：真 ACL 拒装 rc=2+真 VHD 盘满 ENOSPC rc=2+无半途树）；真实重启+锁定文件删除与 MSI 故障仍挂本表 |
-| 跨 Windows 版本固定项 | Win10/11 各 build 上升级前/卸载前已固定开始菜单/任务栏项检查 | **部分收编**（2026-10-09） | `pinned-items.ps1` 收编进 `release-verify`（windows-2025 即 b26100 x64 与 windows-11-arm 跑绿：装→`.lnk` 发现→卸→lnk 消；另 Devin VM b20348 实证）；Win10 桌面 SKU 与任务栏 pin（`-TaskbarPin`）仍挂本表 |
-| appimaged 类桌面集成 | appimaged/gear lever 工具对 AppImage 的识别与观感 | 集成工具识别观感记录 | 双击启动=FUSE 同路径已验；工具识别段待桌面环境+工具 |
-| apk 仓库/索引工作流（可选扩展） | `abuild-index`/`apk add --repository` 真实索引服务验证 | 索引服务验证记录 | 后端仅产单包，仓库级能力属格式边界外可选扩展 |
+| 跨 Windows 版本固定项 | Win10/11 各 build 上升级前/卸载前已固定开始菜单/任务栏项检查 | **部分收编**（2026-10-09） | `pinned-items.ps1` 收编进 `release-verify`（windows-2025 b26100 x64 与 windows-11-arm b26200 跑绿：装→`.lnk` 发现→pin 动词枚举→卸→lnk 消；另 Devin VM b20348 实证）；Win10 桌面 SKU 与任务栏 pin 落点仍挂本表——win11 已移除程序化 pin 通道（shell verb 枚举得到但 DoIt 返 E_ACCESSDENIED），落点只能人工 |
+| appimaged 类桌面集成 | appimaged/gear lever 工具对 AppImage 的识别与观感 | **部分收编**（2026-10-09） | `.desktop`/图标产出与 `desktop-file-validate` 校验收编为一次性 CI 腿跑绿（run 37892544275）；双击启动=FUSE 同路径已验；工具识别观感仍挂本表 |
+| ~~apk 仓库/索引工作流（可选扩展）~~ | ~~`abuild-index`/`apk add --repository` 真实索引服务验证~~ | **已完成**（2026-10-09） | `apk-index.sh` 收编进 `release-verify` ubuntu 腿跑绿——`apk index` 生成架构子目录索引 + `apk add --repository` 真装+卸（含 run 37892544275 实证） |
 
 ## 三、已消解样板：RFC 3161 时间戳链路（免费项实证记录）
 
