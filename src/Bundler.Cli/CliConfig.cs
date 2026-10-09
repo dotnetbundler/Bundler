@@ -304,6 +304,11 @@ internal static class CliConfig
         {
             case JsonValue scalar when scalar.TryGetValue<string>(out var path) && path.Length > 0:
                 return JsonValue.Create(Path.IsPathRooted(path) ? path : Path.GetFullPath(path));
+            // 路径串恰为数字/布尔字面量（文件 "123"、"true"）时被 ParseValue
+            // 收成了非字符串 JsonValue——还原成串再按 cwd 解析，否则反序列化失败。
+            case JsonValue scalar when scalar.GetValueKind() is
+                JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False:
+                return JsonValue.Create(Path.GetFullPath(scalar.ToJsonString()));
             case JsonArray list:
                 for (var i = 0; i < list.Count; i++)
                 {
