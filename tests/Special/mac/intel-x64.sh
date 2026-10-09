@@ -25,7 +25,11 @@ if [ -n "$BIN" ] && [ -f "$BIN" ]; then
 fi
 if [ -n "$APP" ] && [ -d "$APP" ]; then
     cp -a "$APP" "$WORK/app.app"
-    "$WORK/app.app/Contents/MacOS/"* --version >/dev/null 2>&1 \
+    # MacOS/ 内按字母序首件常是 createdump 等辅助件——按 CFBundleExecutable 取主程序。
+    exe="$(defaults read "$WORK/app.app/Contents/Info" CFBundleExecutable 2>/dev/null || true)"
+    [ -n "$exe" ] && [ -x "$WORK/app.app/Contents/MacOS/$exe" ] \
+        || die "CFBundleExecutable 不存在或不可执行: $exe"
+    "$WORK/app.app/Contents/MacOS/$exe" --version >/dev/null 2>&1 \
         && note ".app x64 进程起" "PASS" "" || note ".app x64 进程起" "FAIL" ""
 fi
 if [ -n "$DMG" ] && [ -f "$DMG" ]; then
