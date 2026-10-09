@@ -336,9 +336,18 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
 
             // 统一预检：共享配置与各格式旋钮在扇出前一次验全；配置类错误
             // 一次报完即失败；宿主门禁格式不进预检，留构建趟逐格式容错。
-            BundlePlanner.Create(Configure(formats.Distinct().ToArray()));
             var pending = new List<(PackageFormat Format, BundleConfiguration Configuration, IFormatBundler? Bundler)>();
             var validationErrors = new List<string>();
+            try
+            {
+                BundlePlanner.Create(Configure(formats.Distinct().ToArray()));
+            }
+            catch (BundleValidationException exception)
+            {
+                // 共享层错误收集后继续跑各格式预检，与 CLI 一样一次报完。
+                validationErrors.AddRange(exception.Issues.Select(
+                    issue => $"{issue.Path}: {issue.Message}"));
+            }
             foreach (var format in formats.Distinct())
             {
                 var configuration = Configure([format]);
@@ -510,8 +519,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         ConclusionFile = OptionalFullPath(MacPkgConclusionFile),
                         Domain = string.IsNullOrWhiteSpace(MacPkgDomain)
                             ? MacPkgInstallDomain.System
-                            : (MacPkgInstallDomain)Enum.Parse(
-                                typeof(MacPkgInstallDomain), MacPkgDomain.Trim(), true),
+                            : ParseMacPkgDomain(),
                         ScriptsDirectory = OptionalFullPath(MacPkgScriptsDirectory),
                         Signing = new MacPkgSigningConfiguration
                         {
@@ -864,7 +872,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         foreach (var value in Formats.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries))
         {
             PackageFormat format;
-            if (!Enum.TryParse(value.Trim(), true, out format))
+            // IsDefined 必查：Enum.TryParse 会放行 "3" 这类数值串。
+            if (!Enum.TryParse(value.Trim(), true, out format) ||
+                !Enum.IsDefined(typeof(PackageFormat), format))
             {
                 throw new ArgumentException("Unknown bundle format '" + value.Trim() + "'.", nameof(Formats));
             }
@@ -980,9 +990,23 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToArray();
 
+    private MacPkgInstallDomain ParseMacPkgDomain()
+    {
+        // Enum.Parse 放行未定义数值；数字型域串与未知名一并拒绝。
+        if (Enum.TryParse<MacPkgInstallDomain>(MacPkgDomain.Trim(), true, out var domain) &&
+            Enum.IsDefined(typeof(MacPkgInstallDomain), domain))
+        {
+            return domain;
+        }
+        throw new ArgumentException(
+            "BundlerMacPkgDomain must be system, user, or a defined install domain.",
+            nameof(MacPkgDomain));
+    }
+
     private NsisInstallMode ParseInstallMode()
     {
-        if (Enum.TryParse<NsisInstallMode>(NsisInstallMode, true, out var mode))
+        if (Enum.TryParse<NsisInstallMode>(NsisInstallMode, true, out var mode) &&
+            Enum.IsDefined(typeof(NsisInstallMode), mode))
         {
             return mode;
         }

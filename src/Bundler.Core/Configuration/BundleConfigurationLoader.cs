@@ -77,7 +77,19 @@ internal static class BundleConfigurationLoader
                 MainExecutable = target.MainExecutable,
                 SigningFiles = target.SigningFiles.ToArray(),
                 Formats = target.Formats
-            }).ToArray()
+            }).ToArray(),
+            // update 节必须随加载走：签名密钥与引导件目录同样按配置目录解析。
+            Update = source.Update is null ? null : new UpdateBundleConfiguration
+            {
+                FeedUrl = source.Update.FeedUrl,
+                Channel = source.Update.Channel,
+                SigningKeyFile = source.Update.SigningKeyFile is null
+                    ? null : Resolve(baseDirectory, source.Update.SigningKeyFile),
+                PublicKey = source.Update.PublicKey,
+                Notes = source.Update.Notes,
+                BootstrapperDirectory = source.Update.BootstrapperDirectory is null
+                    ? null : Resolve(baseDirectory, source.Update.BootstrapperDirectory),
+            }
         };
     }
 }

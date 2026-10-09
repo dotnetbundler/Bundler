@@ -68,9 +68,10 @@ internal static class UnixFileTypes
     // machine word (x86_64, s390x, ppc64le) put st_mode at 24; the asm-generic
     // layout every other Linux arch uses puts it at 16. macOS inode64 (u32
     // st_dev + u16 st_mode) puts it at 4. An ABI not covered above defaults
-    // to the asm-generic offset on a best-effort basis — a wrong guess
-    // misreads mode bits and just falls back to the pre-skip failure mode
-    // (File.Copy throwing), it cannot copy something unsafe.
+    // to the asm-generic offset on a best-effort basis — a wrong guess reads
+    // garbage mode bits and can either pass a special file through the filter
+    // or wrongly skip a regular file; neither outcome is verified safe, the
+    // caller must tolerate both.
     private static int LinuxModeOffset()
     {
         var architecture = RuntimeInformation.ProcessArchitecture;

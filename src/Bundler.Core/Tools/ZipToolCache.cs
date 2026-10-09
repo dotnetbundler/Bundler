@@ -96,6 +96,18 @@ public static class ZipToolCache
         IReadOnlyList<ManifestEntry> expectedFiles,
         CancellationToken cancellationToken)
     {
+        // 崩溃遗留的同名暂存目录先清扫：.{name}-{version}-* 只由本函数创建。
+        foreach (var stale in Directory.GetDirectories(
+                         cacheDirectory, $".{archive.Name}-{archive.Version}-*"))
+        {
+            try
+            {
+                Directory.Delete(stale, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
         var stagingDirectory = Path.Combine(cacheDirectory, $".{archive.Name}-{archive.Version}-{Guid.NewGuid():N}");
         try
         {
@@ -404,6 +416,8 @@ public static class ZipToolCache
         return unixType == 0xA000 ||
             (((FileAttributes)entry.ExternalAttributes) & FileAttributes.ReparsePoint) != 0;
 #else
+        // netstandard2.0 的 ZipArchiveEntry 没有 ExternalAttributes API——
+        // 归档链接检测在该资产下不可用，属 API 面差异而非选择。
         return false;
 #endif
     }

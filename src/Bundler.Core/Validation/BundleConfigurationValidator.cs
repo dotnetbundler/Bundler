@@ -62,7 +62,7 @@ public static class BundleConfigurationValidator
             ValidateTarget(configuration, configuration.Targets[index], index, checkFileSystem, issues);
         }
 
-        ValidatePaths(configuration.Icons, "icons", checkFileSystem, issues);
+        ValidateIcons(configuration.Icons, checkFileSystem, issues);
         ValidateOptionalFile(configuration.LicenseFile, "licenseFile", [".txt", ".rtf"], checkFileSystem, issues);
         for (var index = 0; index < configuration.Resources.Count; index++)
         {
@@ -118,6 +118,12 @@ public static class BundleConfigurationValidator
         }
 
         var configuredExecutable = targetConfiguration.MainExecutable;
+        if (configuredExecutable is { } && configuredExecutable.Trim().Length == 0 &&
+            configuredExecutable.Length > 0)
+        {
+            issues.Add(new($"{path}.mainExecutable",
+                "Must not be blank; omit the knob to use the default executable."));
+        }
         if (!string.IsNullOrWhiteSpace(configuredExecutable) &&
             (Path.IsPathRooted(configuredExecutable) ||
              configuredExecutable!.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
@@ -132,8 +138,12 @@ public static class BundleConfigurationValidator
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var outputDirectory = Path.GetFullPath(configuration.OutputDirectory)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            if (outputDirectory.StartsWith(inputDirectory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(outputDirectory, inputDirectory, StringComparison.OrdinalIgnoreCase))
+            // 宿主 FS 语义：Windows/macOS 不敏感、Linux 敏感（与 ZipToolCache.PathComparer 同规）。
+            var comparison = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                System.Runtime.InteropServices.OSPlatform.Linux)
+                ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+            if (outputDirectory.StartsWith(inputDirectory + Path.DirectorySeparatorChar, comparison) ||
+                string.Equals(outputDirectory, inputDirectory, comparison))
             {
                 issues.Add(new("outputDirectory", "Must not be inside a target inputDirectory."));
             }
@@ -219,6 +229,22 @@ public static class BundleConfigurationValidator
             if (!File.Exists(paths[index]) && !Directory.Exists(paths[index]))
             {
                 issues.Add(new($"{propertyName}[{index}]", $"Path does not exist: {paths[index]}"));
+            }
+        }
+    }
+
+    private static void ValidateIcons(
+        IReadOnlyList<string> icons,
+        bool checkFileSystem,
+        List<ValidationIssue> issues)
+    {
+        for (var index = 0; index < icons.Count; index++)
+        {
+            // 图标类型因格式而异（nsis .ico / mac .png/.icns/.car 或 Icon.icon 目录集）——
+            // 共享层只验存在；文件/目录形态与类型校验在各格式的 Validate 里。
+            if (checkFileSystem && !File.Exists(icons[index]) && !Directory.Exists(icons[index]))
+            {
+                issues.Add(new($"icons[{index}]", $"Path does not exist: {icons[index]}"));
             }
         }
     }

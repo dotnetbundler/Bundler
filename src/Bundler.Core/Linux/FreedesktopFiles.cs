@@ -108,7 +108,8 @@ internal static class FreedesktopFiles
         if (destination.Trim().Length == 0 ||
             !destination.TrimStart().StartsWith("/", StringComparison.Ordinal) ||
             normalized.Length == 0 ||
-            normalized.Split('/').Any(segment => segment is "" or "." or "..") ||
+            normalized.Split('/').Any(segment =>
+                segment is "" or "." or ".." || segment.All(char.IsWhiteSpace)) ||
             normalized.EndsWith("/", StringComparison.Ordinal) ||
             destination.Replace('\\', '/').EndsWith("/", StringComparison.Ordinal))
         {
@@ -139,6 +140,24 @@ internal static class FreedesktopFiles
             return trimmed;
         }
 
+        // Desktop Entry 规范：引号内 '"' '`' '$' '\' 要反斜杠转义；保留字符 '%' 要成对。
+        static string QuoteExecArgument(string argument)
+    {
+        var escaped = argument.Replace("%", "%%");
+        if (escaped.Length > 0 &&
+            !escaped.Any(character => char.IsWhiteSpace(character) ||
+                                      character is '"' or '\'' or '\\' or ';' or '&' or '|' or
+                                      '<' or '>' or '(' or ')' or '$' or '`' or '~' or '*' or '?' or '#'))
+        {
+            return escaped;
+        }
+        return "\"" + escaped
+            .Replace("\\", "\\\\")
+            .Replace("\"", "\\\"")
+            .Replace("`", "\\`")
+            .Replace("$", "\\$") + "\"";
+        }
+
         var builder = new StringBuilder();
         builder.Append("[Desktop Entry]\n");
         builder.Append("Type=Application\n");
@@ -151,7 +170,8 @@ internal static class FreedesktopFiles
             builder.Append("Comment=").Append(comment).Append('\n');
         }
         // Exec prefers the usr/bin link; without it the absolute install-root path is used.
-        var exec = binLink.Length > 0 ? binLink : installRoot + "/" + mainExecutable;
+        // 桌面规范：Exec 参数要引号/百分号转义，否则含空格或 '%' 的路径产出非法行。
+        var exec = QuoteExecArgument(binLink.Length > 0 ? binLink : installRoot + "/" + mainExecutable);
         var hasUrls = bundle.UrlProtocols.Any(p => p.Schemes.Count > 0);
         var hasFiles = bundle.FileAssociations.Any(a => a.Extensions.Count > 0);
         builder.Append("Exec=").Append(exec)

@@ -8,7 +8,11 @@ public sealed class BundlePipeline(
 {
     private readonly IBundleLogger _logger = logger ?? NullBundleLogger.Instance;
     private readonly IReadOnlyDictionary<(DesktopOperatingSystem, PackageFormat), IBundleBackend> _backends =
-        backends.ToDictionary(backend => (backend.OperatingSystem, backend.Format));
+        backends.GroupBy(backend => (backend.OperatingSystem, backend.Format))
+            .ToDictionary(group => group.Key, group =>
+                group.Count() == 1 ? group.Single()
+                    : throw new ArgumentException(
+                        $"Duplicate backend registered for {group.Key.Item1}/{group.Key.Item2}."));
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleConfiguration configuration,
@@ -46,6 +50,11 @@ public sealed class BundlePipeline(
                 var produced = await backend.BuildAsync(
                     new BundleBuildContext(configuration, item, workDirectory, _logger),
                     cancellationToken);
+                if (produced is null)
+                {
+                    throw new InvalidOperationException(
+                        $"The {backend.Format} backend violated its contract: BuildAsync returned null.");
+                }
                 foreach (var artifact in produced)
                 {
                     if (!File.Exists(artifact.Path) && !Directory.Exists(artifact.Path))
@@ -60,9 +69,18 @@ public sealed class BundlePipeline(
             }
             finally
             {
-                if (Directory.Exists(workDirectory))
+                try
                 {
-                    Directory.Delete(workDirectory, recursive: true);
+                    if (Directory.Exists(workDirectory))
+                    {
+                        Directory.Delete(workDirectory, recursive: true);
+                    }
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // 清理失败只能告警：遮蔽原构建异常反而丢掉真正的失败原因。
+                    _logger.Log(BundleLogLevel.Warning,
+                        $"Failed to clean up work directory '{workDirectory}': {exception.Message}");
                 }
             }
         }
