@@ -35,6 +35,18 @@ internal static class MachOFat
             offset += slices[index].Size;
         }
 
+        // 32 位 fat 头的 offset/size 字段是 u32——写入前先拒超宽条目，不静默截断。
+        foreach (var entry in entries)
+        {
+            if (entry.Offset > uint.MaxValue || entry.Size < 0 || entry.Size > uint.MaxValue)
+            {
+                throw new InvalidDataException(
+                    $"Fat Mach-O slice for cpuType 0x{entry.CpuType:X8} does not fit the 32-bit fat " +
+                    $"format (offset {entry.Offset}, size {entry.Size}); FAT_MAGIC supports at most " +
+                    "4 GiB per field.");
+            }
+        }
+
         using (var output = new FileStream(outputPath, FileMode.Create, FileAccess.Write))
         {
             var header = new byte[8 + (20 * slices.Count)];

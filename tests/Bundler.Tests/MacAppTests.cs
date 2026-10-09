@@ -817,6 +817,8 @@ public static class MacAppTests
             Assert.True(hasCar || logger.Messages.Any(m => m.Contains("Skipping Assets.car")),
                 "A rejected .icon input must degrade with an Assets.car warning.");
             Assert.Equal(hasCar, degradedPlist.ContainsKey("CFBundleIconName"));
+            Assert.False(degradedPlist.ContainsKey("CFBundleIconFile"),
+                ".icon 降级路径永不写 CFBundleIconFile（散位图不可用）。");
             var notADir = Path.Combine(assets, "NotADir.icon");
             File.WriteAllBytes(notADir, [1]);
             await AssertThrows<ArgumentException>(
@@ -1441,6 +1443,328 @@ public static class MacAppTests
         Assert.Null(MacAppAssetsCar.IconImageName("{}"));
     }
 
+    // R2 MAC-APP-OI-08：osx 通用载荷按签名表探测拒收非 Mach-O 的按架构散件。
+    [Fact]
+    static async Task RejectsForeignCodeInUniversalPayload()
+    {
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var cases = new (string name, byte[] bytes, string needle)[]
+        {
+            ("tool.elf", [0x7F, (byte)'E', (byte)'L', (byte)'F', 2, 1, 1, 0], "ELF"),
+            ("win.exe", FakePortableExecutable(managed: false, readyToRun: false), "native Windows"),
+            ("lib.dll", FakePortableExecutable(managed: true, readyToRun: true), "ReadyToRun"),
+        };
+        foreach (var (name, bytes, needle) in cases)
+        {
+            var input = CreateInputDirectory();
+            File.WriteAllBytes(Path.Combine(input, "ExampleApp"), FakeFatMachO(0x01000007, 0x0100000C));
+            File.WriteAllBytes(Path.Combine(input, name), bytes);
+            try
+            {
+                var error = await Assert.ThrowsAsync<InvalidDataException>(
+                    () => new MacAppBundler().BuildAsync(
+                        MacConfiguration(input, Path.Combine(output, name), rid: "osx")));
+                Assert.Contains(needle, error.Message, StringComparison.Ordinal);
+            }
+            finally
+            {
+                Cleanup(input);
+            }
+        }
+        // 纯 IL 托管程序集（无 ReadyToRun 段）属架构中立内容，放行。
+        var clean = CreateInputDirectory();
+        File.WriteAllBytes(Path.Combine(clean, "ExampleApp"), FakeFatMachO(0x01000007, 0x0100000C));
+        File.WriteAllBytes(Path.Combine(clean, "ExampleApp.managed.dll"),
+            FakePortableExecutable(managed: true, readyToRun: false));
+        try
+        {
+            var artifacts = await new MacAppBundler().BuildAsync(
+                MacConfiguration(clean, Path.Combine(output, "clean"), rid: "osx"));
+            Assert.True(File.Exists(
+                Path.Combine(artifacts[0].Path, "Contents", "MacOS", "ExampleApp.managed.dll")));
+        }
+        finally
+        {
+            Cleanup(clean, output);
+        }
+    }
+
+    // R2: fat 头的 32 位 offset/size 字段写不下就显式拒写，不产出静默截断的坏件。
+    [Fact]
+    static void RejectsOversizedFatSlice()
+    {
+        var output = Path.Combine(
+            Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"), "fat.bin");
+        var slices = new List<FatSlice>
+        {
+            new(0x0100000C, 0, uint.MaxValue + 1L, stream => stream.WriteByte(0))
+        };
+        Assert.Throws<InvalidDataException>(() => MachOFat.Create(output, slices));
+        Assert.False(File.Exists(output), "被拒绝的超宽切片不得写出文件。");
+    }
+
+    // R2: 合并输入目录里的目录符号链接环显式报错，不再枚举失控。
+    [Fact]
+    static void RejectsSymlinkLoopInMergeInput()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "requires symlink support");
+        var arm64 = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var x64 = arm64 + ".x64";
+        var output = arm64 + ".out";
+        try
+        {
+            foreach (var (dir, cpuType) in new[] { (arm64, 0x0100000Cu), (x64, 0x01000007u) })
+            {
+                Directory.CreateDirectory(Path.Combine(dir, "sub"));
+                File.WriteAllBytes(Path.Combine(dir, "ExampleApp"), FakeMachO(cpuType));
+                Directory.CreateSymbolicLink(Path.Combine(dir, "sub", "loop"), dir);
+            }
+            var error = Assert.Throws<InvalidDataException>(
+                () => MacUniversalPayloadMerger.Merge([arm64, x64], output));
+            Assert.Contains("symlink loop", error.Message);
+        }
+        finally
+        {
+            Cleanup(arm64, x64, output);
+        }
+    }
+
+    // R2: 同一共享 FileAssociations 项只归第一个命中的 documentTypes，不重复合并。
+    [Fact]
+    static async Task SharedFileAssociationMergesOnce()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var artifacts = await new MacAppBundler(new MacAppBundleConfiguration
+            {
+                DocumentTypes =
+                [
+                    new MacAppDocumentTypeConfiguration { Extensions = ["foo"], Name = "First" },
+                    new MacAppDocumentTypeConfiguration { Extensions = ["bar"], Name = "Second" },
+                ]
+            }).BuildAsync(MacConfiguration(input, output, fileAssociations:
+                [new BundleFileAssociationConfiguration { Extensions = ["foo", "bar"], Name = "Shared" }]));
+            var plist = InfoPlist.ReadDictionary(
+                Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
+            var docTypes = (List<object>)plist["CFBundleDocumentTypes"];
+            Assert.Equal(2, docTypes.Count);
+            var first = (Dictionary<string, object>)docTypes[0];
+            Assert.Equal("First", (string)first["CFBundleTypeName"]);
+            Assert.Equal(
+                (List<object>)first["CFBundleTypeExtensions"], ["foo", "bar"]);
+            var second = (Dictionary<string, object>)docTypes[1];
+            Assert.Equal("Second", (string)second["CFBundleTypeName"]);
+            // "bar" 在共享项里，但共享项已被 First 消费——Second 只留自己声明的扩展名。
+            Assert.Equal((List<object>)second["CFBundleTypeExtensions"], ["bar"]);
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    // R2: 同一共享 UrlProtocols 项同样只归第一个命中的 urlTypes。
+    [Fact]
+    static async Task SharedUrlProtocolMergesOnce()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var artifacts = await new MacAppBundler(new MacAppBundleConfiguration
+            {
+                UrlTypes =
+                [
+                    new MacAppUrlTypeConfiguration { Schemes = ["app-a"], Name = "A" },
+                    new MacAppUrlTypeConfiguration { Schemes = ["app-b"], Name = "B" },
+                ]
+            }).BuildAsync(MacConfiguration(input, output, urlProtocols:
+                [new BundleUrlProtocolConfiguration { Schemes = ["app-a", "app-b"], Name = "Shared" }]));
+            var plist = InfoPlist.ReadDictionary(
+                Path.Combine(artifacts[0].Path, "Contents", "Info.plist"));
+            var urlTypes = (List<object>)plist["CFBundleURLTypes"];
+            Assert.Equal(2, urlTypes.Count);
+            var first = (Dictionary<string, object>)urlTypes[0];
+            Assert.Equal("A", (string)first["CFBundleURLName"]);
+            Assert.Equal(
+                (List<object>)first["CFBundleURLSchemes"], ["app-a", "app-b"]);
+            var second = (Dictionary<string, object>)urlTypes[1];
+            Assert.Equal("B", (string)second["CFBundleURLName"]);
+            Assert.Equal((List<object>)second["CFBundleURLSchemes"], ["app-b"]);
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    // R2: APPLE_API_KEY_PATH_UNSET 兜底已移除——只设它不得当作凭证来源。
+    [Fact]
+    static void IgnoresUnsetApiKeyPathEnv()
+    {
+        var keys = new[]
+        {
+            "APPLE_PROFILE", "APPLE_API_KEY_PATH", "APPLE_API_KEY", "APPLE_API_ISSUER",
+            "APPLE_ID", "APPLE_PASSWORD", "APPLE_TEAM_ID"
+        };
+        var saved = keys.ToDictionary(key => key, key => Environment.GetEnvironmentVariable(key));
+        try
+        {
+            foreach (var key in keys)
+            {
+                Environment.SetEnvironmentVariable(key, null);
+            }
+            Environment.SetEnvironmentVariable("APPLE_API_KEY_PATH_UNSET", "/tmp/fake-key.p8");
+            Assert.Throws<ArgumentException>(
+                () => MacAppSigning.ResolveCredentials(
+                    new MacAppSigningConfiguration { Notarize = true }));
+        }
+        finally
+        {
+            foreach (var key in keys)
+            {
+                Environment.SetEnvironmentVariable(key, saved[key]);
+            }
+            Environment.SetEnvironmentVariable("APPLE_API_KEY_PATH_UNSET", null);
+        }
+    }
+
+    // R2: SharedFrameworks 文件按嵌套代码签；嵌套 .appex 先签内部再以 bundle 维度签。
+    [Fact]
+    static async Task SignsNestedBundlesInsideOut()
+    {
+        Assert.SkipUnless(TestPlatform.IsMacOS, "requires a macOS host");
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var calls = new List<string>();
+        var previous = MacProcessRunner.Handler;
+        MacProcessRunner.Handler = (request, _) =>
+        {
+            calls.Add(request.Executable + " " + string.Join(' ', request.Arguments));
+            return Task.FromResult(new MacProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    Signing = new MacAppSigningConfiguration { Identity = "-" }
+                }).BuildAsync(MacConfiguration(input, output));
+            // 手搭的 app 骨架走直接 RunAsync：把文件放到 Contents/ 根的 SharedFrameworks 与嵌套 .appex。
+            var appPath = Path.Combine(output, "manual.app");
+            var contents = Path.Combine(appPath, "Contents");
+            Directory.CreateDirectory(Path.Combine(contents, "MacOS"));
+            Directory.CreateDirectory(Path.Combine(contents, "SharedFrameworks"));
+            Directory.CreateDirectory(
+                Path.Combine(contents, "PlugIns", "Widget.appex", "Contents", "MacOS"));
+            File.WriteAllBytes(Path.Combine(contents, "MacOS", "ExampleApp"), FakeMachO());
+            File.WriteAllText(Path.Combine(contents, "SharedFrameworks", "libshared.dylib"), "lib");
+            File.WriteAllText(
+                Path.Combine(contents, "PlugIns", "Widget.appex", "Contents", "MacOS", "Widget"), "w");
+            calls.Clear();
+            var context = new BundleBuildContext(
+                MacConfiguration(input, output),
+                new BundlePlanItem(
+                    BundleTarget.TryParse("osx-arm64", out var target) ? target! : throw new InvalidOperationException(),
+                    PackageFormat.App, input, "ExampleApp", output, Intermediate: false),
+                output, NullBundleLogger.Instance);
+            await MacAppSigning.RunAsync(context, appPath, "ExampleApp",
+                new MacAppSigningConfiguration { Identity = "-" }, CancellationToken.None);
+            var signs = calls.Where(c => c.StartsWith("codesign") && !c.Contains("--verify")).ToList();
+            var targets = signs.Select(c => c.Split(' ').Last()).ToList();
+            Assert.Contains(targets, t => t.EndsWith("/Contents/SharedFrameworks/libshared.dylib", StringComparison.Ordinal));
+            var appex = targets.FindIndex(t => t.EndsWith("Widget.appex", StringComparison.Ordinal));
+            var appexInner = targets.FindIndex(t => t.Contains("Widget.appex/Contents/", StringComparison.Ordinal));
+            Assert.True(appexInner >= 0 && appex > appexInner,
+                "嵌套 .appex 必须先签内部文件再签 bundle 根。");
+            Assert.True(targets.FindIndex(t => t.EndsWith("/Contents/MacOS/ExampleApp", StringComparison.Ordinal)) > appex,
+                "主可执行在嵌套 bundle 之后签名。");
+        }
+        finally
+        {
+            MacProcessRunner.Handler = previous;
+            Cleanup(input, output);
+        }
+    }
+
+    // R2: p12 口令不走 argv——openssl 可用时经 PEM 导入；缺席/失败退回 `security import -P`。
+    [Fact]
+    static async Task TemporaryKeychainKeepsPasswordOffArgv()
+    {
+        Assert.SkipUnless(TestPlatform.IsMacOS, "requires a macOS host");
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var temp = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var certificate = Path.Combine(temp, "cert.p12");
+        File.WriteAllBytes(certificate, [1, 2, 3]);
+        var calls = new List<string>();
+        var previous = MacProcessRunner.Handler;
+        var opensslWorks = true;
+        MacProcessRunner.Handler = (request, _) =>
+        {
+            var joined = string.Join(' ', request.Arguments);
+            calls.Add(request.Executable + " " + joined);
+            if (request.Executable == "openssl")
+            {
+                if (!opensslWorks)
+                {
+                    return Task.FromResult(new MacProcessRunner.Result(1, "", "no openssl"));
+                }
+                var outIndex = request.Arguments.ToList().IndexOf("-out") + 1;
+                File.WriteAllText(request.Arguments[outIndex], "PEM");
+                return Task.FromResult(new MacProcessRunner.Result(0, "", ""));
+            }
+            if (request.Executable == "security" && joined.StartsWith("list-keychains") &&
+                !joined.Contains("-s", StringComparison.Ordinal))
+            {
+                return Task.FromResult(new MacProcessRunner.Result(0,
+                    "\"/Users/x/Library/Keychains/login.keychain-db\"\n", ""));
+            }
+            if (request.Executable == "security" && joined.StartsWith("find-identity"))
+            {
+                return Task.FromResult(new MacProcessRunner.Result(0,
+                    "  1) AA11BB22CC33DD44EE55FF6600112233AABBCCDD \"Bundler Test\"\n     1 valid identities found\n", ""));
+            }
+            return Task.FromResult(new MacProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    Signing = new MacAppSigningConfiguration
+                    {
+                        TemporaryCertificatePath = certificate,
+                        TemporaryCertificatePassword = "s3cret-pw"
+                    }
+                }).BuildAsync(MacConfiguration(input, output));
+            var import = calls.Single(c => c.StartsWith("security import"));
+            Assert.DoesNotContain("s3cret-pw", import);
+            Assert.DoesNotContain(" -P ", " " + import + " ");
+            Assert.True(calls.Any(c => c.StartsWith("openssl pkcs12") && c.Contains("-passin")),
+                "openssl 转换路径必须先把 p12 换成无口令 PEM。");
+            // openssl 缺席时退回 `import -P` 兜底路径。
+            opensslWorks = false;
+            calls.Clear();
+            await new MacAppBundler(new MacAppBundleConfiguration
+                {
+                    Signing = new MacAppSigningConfiguration
+                    {
+                        TemporaryCertificatePath = certificate,
+                        TemporaryCertificatePassword = "s3cret-pw"
+                    }
+                }).BuildAsync(MacConfiguration(input, Path.Combine(output, "fallback")));
+            Assert.True(calls.Any(c => c.StartsWith("security import") && c.Contains(" -P ") &&
+                c.Contains("s3cret-pw")), "openssl 失败时退回 import -P 兜底。");
+        }
+        finally
+        {
+            MacProcessRunner.Handler = previous;
+            Cleanup(input, output, temp);
+        }
+    }
+
     static BundleConfiguration MacConfiguration(
         string input,
         string output = "",
@@ -1526,6 +1850,53 @@ public static class MacAppTests
         bytes[4] = (byte)cpuType; bytes[5] = (byte)(cpuType >> 8);
         bytes[6] = (byte)(cpuType >> 16); bytes[7] = (byte)(cpuType >> 24);
         return bytes;
+    }
+
+    // 最小 PE32 捏件：DOS 头 + PE 签名 + COFF + 可选头 + 一个 .text 段放 COR20。
+    static byte[] FakePortableExecutable(bool managed, bool readyToRun)
+    {
+        var bytes = new byte[0x400];
+        bytes[0] = (byte)'M'; bytes[1] = (byte)'Z';
+        WriteLe32(bytes, 0x3C, 0x80);
+        bytes[0x80] = (byte)'P'; bytes[0x81] = (byte)'E';
+        WriteLe16(bytes, 0x86, 1);      // NumberOfSections
+        WriteLe16(bytes, 0x94, 0xE0);   // SizeOfOptionalHeader
+        WriteLe16(bytes, 0x98, 0x10B);  // PE32 magic
+        // CLI（COM descriptor）是第 15 个数据目录项；数据目录基址 = 0x98 + 96。
+        var cliDirectory = 0x98 + 96 + 14 * 8;
+        if (managed)
+        {
+            WriteLe32(bytes, cliDirectory, 0x2000);   // CLI rva
+            WriteLe32(bytes, cliDirectory + 4, 72);   // CLI size
+        }
+        // .text 段头 @0x98+0xE0：rva 0x2000 ↔ file offset 0x200。
+        var section = 0x98 + 0xE0;
+        bytes[section] = (byte)'.'; bytes[section + 1] = (byte)'t'; bytes[section + 2] = (byte)'e';
+        bytes[section + 3] = (byte)'x'; bytes[section + 4] = (byte)'t';
+        WriteLe32(bytes, section + 8, 0x200);   // VirtualSize
+        WriteLe32(bytes, section + 12, 0x2000); // VirtualAddress
+        WriteLe32(bytes, section + 16, 0x200);  // SizeOfRawData
+        WriteLe32(bytes, section + 20, 0x200);  // PointerToRawData
+        if (managed && readyToRun)
+        {
+            // COR20 头的 ManagedNativeHeader 目录（偏移 64）非空 = ReadyToRun。
+            WriteLe32(bytes, 0x200 + 64 + 4, 0x20);
+        }
+        return bytes;
+    }
+
+    static void WriteLe16(byte[] buffer, int offset, ushort value)
+    {
+        buffer[offset] = (byte)value;
+        buffer[offset + 1] = (byte)(value >> 8);
+    }
+
+    static void WriteLe32(byte[] buffer, int offset, uint value)
+    {
+        buffer[offset] = (byte)value;
+        buffer[offset + 1] = (byte)(value >> 8);
+        buffer[offset + 2] = (byte)(value >> 16);
+        buffer[offset + 3] = (byte)(value >> 24);
     }
 
     static byte[] FakeFatMachO(params uint[] cpuTypes)

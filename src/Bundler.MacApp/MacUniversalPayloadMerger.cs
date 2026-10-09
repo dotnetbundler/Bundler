@@ -132,9 +132,30 @@ public static class MacUniversalPayloadMerger
     private static IEnumerable<string> EnumerateRelativeFiles(string root)
     {
         var prefix = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        foreach (var file in Directory.EnumerateFiles(prefix, "*", SearchOption.AllDirectories))
+        foreach (var file in Walk(prefix, depth: 0))
         {
             yield return file.Substring(prefix.Length).Replace(Path.DirectorySeparatorChar, '/');
+        }
+    }
+
+    private static IEnumerable<string> Walk(string directory, int depth)
+    {
+        // 目录符号链接环会让枚举失控——深度封顶显式报错。
+        if (depth > 64)
+        {
+            throw new InvalidDataException(
+                "Directory nesting too deep inside a universal payload (possible symlink loop): " + directory);
+        }
+        foreach (var file in Directory.EnumerateFiles(directory))
+        {
+            yield return file;
+        }
+        foreach (var child in Directory.EnumerateDirectories(directory))
+        {
+            foreach (var file in Walk(child, depth + 1))
+            {
+                yield return file;
+            }
         }
     }
 
