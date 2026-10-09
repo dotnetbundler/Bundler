@@ -369,41 +369,49 @@ internal sealed class UpdateDownloader
         var partPath = destinationPath + ".part";
         var offset = File.Exists(partPath) ? new FileInfo(partPath).Length : 0L;
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
         if (offset > 0)
         {
             request.Headers.TryAddWithoutValidation("Range", $"bytes={offset}-");
         }
-        using var response = await SharedHttp.SendAsync(
+        var response = await SharedHttp.SendAsync(
             request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (offset > 0 && response.StatusCode != System.Net.HttpStatusCode.PartialContent)
         {
             // 服务端不支持 Range、文件已变，或 416（.part 大于服务端文件）——
-            // 丢弃 .part 重来；不删则 416 会在外层重试里永久循环。
+            // 丢弃 .part 从 0 重下；不删则 416 会让下载永久失败。
+            // 成功响应（服务端忽略 Range 给了全档）直接取用；失败响应（如 416）
+            // 没有可用体，须重发不带 Range 的请求。
             offset = 0;
-            try
+            TryDelete(partPath);
+            if (!response.IsSuccessStatusCode)
             {
-                File.Delete(partPath);
-            }
-            catch (IOException)
-            {
+                request.Dispose();
+                response.Dispose();
+                request = new HttpRequestMessage(HttpMethod.Get, url);
+                response = await SharedHttp.SendAsync(
+                    request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             }
         }
-        response.EnsureSuccessStatusCode();
+        using (request)
+        using (response)
+        {
+            response.EnsureSuccessStatusCode();
 
-        var mode = offset > 0 ? FileMode.Append : FileMode.Create;
-        using (var output = new FileStream(partPath, mode, FileAccess.Write, FileShare.None))
-        {
-            await (await response.Content.ReadAsStreamAsync())
-                .CopyToAsync(output, 81920, cancellationToken);
+            var mode = offset > 0 ? FileMode.Append : FileMode.Create;
+            using (var output = new FileStream(partPath, mode, FileAccess.Write, FileShare.None))
+            {
+                await (await response.Content.ReadAsStreamAsync())
+                    .CopyToAsync(output, 81920, cancellationToken);
+            }
+            // 目标已存在（同一更新重下/复用下载目录）也要能落——netstandard2.0 无 Move 覆写重载。
+            if (File.Exists(destinationPath))
+            {
+                File.Delete(destinationPath);
+            }
+            File.Move(partPath, destinationPath);
+            log?.Invoke($"update: downloaded '{url}' → '{destinationPath}'");
         }
-        // 目标已存在（同一更新重下/复用下载目录）也要能落——netstandard2.0 无 Move 覆写重载。
-        if (File.Exists(destinationPath))
-        {
-            File.Delete(destinationPath);
-        }
-        File.Move(partPath, destinationPath);
-        log?.Invoke($"update: downloaded '{url}' → '{destinationPath}'");
     }
 
     private async Task<byte[]> GetBytesAsync(string location, CancellationToken cancellationToken)
