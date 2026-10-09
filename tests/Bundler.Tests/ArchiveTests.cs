@@ -88,8 +88,7 @@ public static class ArchiveTests
             Assert.Equal(493, executable.Mode);
             var macho = entries.First(e => e.Name.EndsWith("/ExampleMacApp", StringComparison.Ordinal));
             Assert.Equal(493, macho.Mode);
-            if (!File.Exists(link) ||
-                !(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()))
+            if (!File.Exists(link))
             { /* symlink fixture skipped on this fs/host */ }
             else
             {

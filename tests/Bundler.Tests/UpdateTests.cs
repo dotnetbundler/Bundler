@@ -385,11 +385,7 @@ public static class UpdateTests
     [Fact]
     static void BootstrapPlan_KeepPayload_PreservesSymlinkAndExecBit()
     {
-        if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
-                System.Runtime.InteropServices.OSPlatform.Linux))
-        {
-            Assert.Skip("Linux-only leg.");
-        }
+        Assert.SkipWhen(!OperatingSystem.IsLinux(), "Linux-only leg.");
         var directory = CreateTempDirectory();
         try
         {
@@ -400,6 +396,7 @@ public static class UpdateTests
             File.WriteAllText(Path.Combine(install, "app"), "v1");
             var payloadExe = Path.Combine(payload, "hello");
             File.WriteAllText(payloadExe, "#!/bin/sh\necho hi\n");
+            // CA1416 分析器不认 SkipWhen——守卫保留给编译期平台判断。
             if (OperatingSystem.IsLinux())
             {
                 File.SetUnixFileMode(payloadExe, UnixFileMode.UserRead | UnixFileMode.UserWrite |

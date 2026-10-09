@@ -525,12 +525,15 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
         var secretAsc = Path.Combine(signDir, "signing-key.asc");
         var passFile = Path.Combine(signDir, "sign.pass");
         File.WriteAllText(passFile, "bundler-test-pass");
+        // 路径走位置参数不经插值：含引号/空格的路径不会破串或注入。
         var exportSecret = ProcessRunner.Run("/bin/sh",
-            ["-c", $"gpg --batch --yes --pinentry-mode loopback --passphrase-file '{passFile}' --export-secret-keys --armor bundler-test@example.com > '{secretAsc}'"], env);
+            ["-c", "gpg --batch --yes --pinentry-mode loopback --passphrase-file \"$1\" --export-secret-keys --armor bundler-test@example.com > \"$2\"",
+             "bundler-sh", passFile, secretAsc], env);
         ProcessRunner.AssertSuccess(exportSecret, "gpg secret key export failed.");
         var pubAsc = Path.Combine(signDir, "signing-key.pub.asc");
         var exportPub = ProcessRunner.Run("/bin/sh",
-            ["-c", $"gpg --batch --export --armor bundler-test@example.com > '{pubAsc}'"], env);
+            ["-c", "gpg --batch --export --armor bundler-test@example.com > \"$1\"",
+             "bundler-sh", pubAsc], env);
         ProcessRunner.AssertSuccess(exportPub, "gpg public key export failed.");
 
         _f.Publish("signed",

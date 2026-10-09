@@ -358,6 +358,9 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
     public void PerUserInstallReceiptAndForget()
     {
         _f.Ensure();
+        Assert.SkipWhen(
+            Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") != "1",
+            "真装会写本地安装域与收据库；置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1 才跑。");
         _f.HideIntermediateApps();
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var marker = Path.Combine(home, ".bundler-pkg-postinstall-ran");
@@ -427,6 +430,9 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
     public void OverwriteInstallUpgradesReceipt()
     {
         _f.Ensure();
+        Assert.SkipWhen(
+            Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") != "1",
+            "真装会写本地安装域与收据库；置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1 才跑。");
         _f.HideIntermediateApps();
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         // 先装 v1（scripts 变体同 identifier）再覆盖 v2，收据版本必须到 2.0.0。

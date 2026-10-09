@@ -261,7 +261,7 @@ public class UpdateCompatTests
             UseShellExecute = false,
         };
         foreach (var arg in args) start.ArgumentList.Add(arg);
-        var process = Process.Start(start)!;
+        using var process = Process.Start(start)!;
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit(90_000))

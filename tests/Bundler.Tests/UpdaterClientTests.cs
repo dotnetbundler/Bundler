@@ -114,7 +114,7 @@ public static class UpdaterClientTests
             var artifact = WriteDeltaArtifact(feedDir, "app-2.0.0.bin", _ => "same");
             WriteFeedWithDelta(feedDir, "2.0.0", artifact, material);
             // http 通道下 .part→目标已有文件时 File.Move 曾失败——重复下载必须能落。
-            var server = new LoopbackFeedServer(feedDir);
+            using var server = new LoopbackFeedServer(feedDir);
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
@@ -137,7 +137,6 @@ public static class UpdaterClientTests
             var second = await client.DownloadAsync(info, downloadDir);
             Assert.Equal(first, second);
             Assert.True(File.ReadAllBytes(second).SequenceEqual(File.ReadAllBytes(artifact)));
-            server.Dispose();
         }
         finally
         {
@@ -517,7 +516,7 @@ public static class UpdaterClientTests
             WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
 
             // 侧车 feedUrl 指向回环 http——feed/制品/块表全走 http 通道。
-            var server = new LoopbackFeedServer(feedDir);
+            using var server = new LoopbackFeedServer(feedDir);
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
@@ -547,7 +546,6 @@ public static class UpdaterClientTests
             Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
             Assert.Contains(log, l => l.Contains("delta applied"));
             Assert.True(ranged > 0); // 缺失块确实走了 HTTP Range
-            server.Dispose();
         }
         finally
         {
@@ -570,7 +568,7 @@ public static class UpdaterClientTests
             WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
 
             // 服务端不认 Range 恒回 200 整档——差分应放弃回落全量，不得抛错留坏件。
-            var server = new LoopbackFeedServer(feedDir) { HonorRange = false };
+            using var server = new LoopbackFeedServer(feedDir) { HonorRange = false };
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
@@ -596,7 +594,6 @@ public static class UpdaterClientTests
             var path = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
             Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
             Assert.DoesNotContain(log, l => l.Contains("delta applied"));
-            server.Dispose();
         }
         finally
         {
@@ -1048,7 +1045,7 @@ public static class UpdaterClientTests
                 block switch { 0 => "head", 1 => "body-same", 2 => "tail-v2", _ => "?" });
             WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
 
-            var server = new LoopbackFeedServer(feedDir) { CorruptRange = true };
+            using var server = new LoopbackFeedServer(feedDir) { CorruptRange = true };
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
@@ -1065,7 +1062,6 @@ public static class UpdaterClientTests
             var info = (await client.CheckForUpdateAsync())!;
             var path = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
             Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
-            server.Dispose();
         }
         finally
         {
@@ -1171,7 +1167,7 @@ public static class UpdaterClientTests
                 Signature = Convert.ToBase64String(EcdsaSigner.SignFile(v2, material)),
             });
 
-            var server = new LoopbackFeedServer(feedDir);
+            using var server = new LoopbackFeedServer(feedDir);
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
@@ -1205,7 +1201,6 @@ public static class UpdaterClientTests
             {
                 UpdateClient.FreeSpaceProbe = null;
             }
-            server.Dispose();
         }
         finally
         {

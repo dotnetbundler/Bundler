@@ -32,7 +32,7 @@ public sealed class AppImageFixture : IDisposable
     private void Initialize()
     {
         Assert.SkipWhen(!TestPlatform.IsLinux, "SKIP: AppImage integration test requires a Linux host.");
-        foreach (var tool in new[] { "sha256sum", "unzip", "od", "objcopy", "readelf" })
+        foreach (var tool in new[] { "sha256sum", "unzip", "od", "objcopy", "readelf", "gpg", "gpgv" })
         {
             ExternalTools.Require(tool);
         }
@@ -95,12 +95,15 @@ public sealed class AppImageFixture : IDisposable
         var secAsc = Path.Combine(SignDir, "sec.asc");
         var passFile = Path.Combine(SignDir, "sign.pass");
         File.WriteAllText(passFile, "bundler-sign-pass");
+        // 路径走位置参数不经插值：含引号/空格的路径不会破串或注入。
         ProcessRunner.AssertSuccess(ProcessRunner.Run("/bin/sh",
-            ["-c", $"gpg --batch --yes --pinentry-mode loopback --passphrase-file '{passFile}' --export-secret-keys --armor bundler-appimage-test@example.com > '{secAsc}'"], env),
+            ["-c", "gpg --batch --yes --pinentry-mode loopback --passphrase-file \"$1\" --export-secret-keys --armor bundler-appimage-test@example.com > \"$2\"",
+             "bundler-sh", passFile, secAsc], env),
             "secret key export failed.");
         var pubAsc = Path.Combine(SignDir, "pub.asc");
         ProcessRunner.AssertSuccess(ProcessRunner.Run("/bin/sh",
-            ["-c", $"gpg --batch --export --armor bundler-appimage-test@example.com > '{pubAsc}'"], env),
+            ["-c", "gpg --batch --export --armor bundler-appimage-test@example.com > \"$1\"",
+             "bundler-sh", pubAsc], env),
             "public key export failed.");
         ProcessRunner.AssertSuccess(ProcessRunner.Run("gpg",
             ["--batch", "--no-default-keyring", "--keyring", Path.Combine(SignDir, "verify.gpg"),

@@ -296,6 +296,55 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     }
 
     [Fact]
+    public void BundlerJsonUpdateSectionEmitsFeedAndSidecar()
+    {
+        var cfgDir = _f.Ws.Combine("cfg-update");
+        Directory.CreateDirectory(cfgDir);
+        var keyPath = Path.Combine(cfgDir, "update.key");
+        var keygen = _f.Cli("update-keygen", "--key-file", keyPath, "--quiet");
+        ProcessRunner.AssertSuccess(keygen, "update-keygen must exit 0");
+        var cfgPath = Path.Combine(cfgDir, "bundler.json");
+        File.WriteAllText(cfgPath, $$"""
+            {
+              "productName": "CfgApp",
+              "identifier": "dev.example.cfg",
+              "version": "2.0.0",
+              "outputDirectory": "{{cfgDir.Replace("\\", "\\\\")}}/out",
+              "targets": [{
+                "runtimeIdentifier": "linux-x64",
+                "inputDirectory": "{{_f.PublishDir.Replace("\\", "\\\\")}}",
+                "mainExecutable": "{{_f.MainExe}}",
+                "formats": ["zip"]
+              }],
+              "update": {
+                "feedUrl": "https://updates.example.com/feed",
+                "channel": "stable",
+                "signingKeyFile": "{{keyPath.Replace("\\", "\\\\")}}",
+                "notes": "e2e update section"
+              }
+            }
+            """);
+        var bundle = _f.Cli("bundle", "--config", cfgPath, "--quiet");
+        ProcessRunner.AssertSuccess(bundle, "update-enabled bundle must exit 0");
+        var outRoot = Path.Combine(cfgDir, "out");
+        Assert.True(File.Exists(Path.Combine(outRoot, "bundler-update-feed.stable.json")),
+            "update section must emit the channel feed at output root");
+        var zip = Directory.EnumerateFiles(outRoot, "*.zip", SearchOption.AllDirectories).Single();
+        Assert.True(File.Exists(zip + ".sig"), "update-adapted artifact must carry a .sig sidecar");
+        using (var archive = System.IO.Compression.ZipFile.OpenRead(zip))
+        {
+            var sidecar = archive.Entries.FirstOrDefault(e =>
+                e.FullName.EndsWith("bundler-update.json", StringComparison.Ordinal));
+            Assert.NotNull(sidecar);
+            using var reader = new StreamReader(sidecar.Open());
+            using var doc = JsonDocument.Parse(reader.ReadToEnd());
+            Assert.Equal("https://updates.example.com/feed",
+                doc.RootElement.GetProperty("feedUrl").GetString());
+            Assert.Equal("stable", doc.RootElement.GetProperty("channel").GetString());
+        }
+    }
+
+    [Fact]
     public void UnknownConfigKeysAndMissingFileRejected()
     {
         var cfgDir = _f.Ws.Combine("cfg-reject");

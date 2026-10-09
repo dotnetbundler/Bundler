@@ -18,6 +18,7 @@ public static class RpmTests
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var keyFile = Path.Combine(input, "test-signing-key.asc");
         var publicKey = GenerateTestKey(keyFile, "test-passphrase");
+        var unsignedOutput = output + "-unsigned";
         try
         {
             var signed = new RpmBundler(new RpmBundleConfiguration
@@ -52,16 +53,14 @@ public static class RpmTests
             Assert.True(rsaSignature.Verify(),
                 "The RPMSIGTAG_RSA signature must verify over the main header bytes.");
 
-            var unsignedOutput = output + "-unsigned";
             var unsigned = new RpmBundler(new RpmBundleConfiguration())
                 .BuildAsync(RpmConfiguration(input, unsignedOutput)).GetAwaiter().GetResult().Single();
             Assert.False(RpmPackageReader.Read(unsigned.Path).Signature.Tags.ContainsKey(1002), "No RPMSIGTAG_PGP when signing is not configured.");
             Assert.False(RpmPackageReader.Read(unsigned.Path).Signature.Tags.ContainsKey(268), "No RPMSIGTAG_RSA when signing is not configured.");
-            Cleanup(unsignedOutput);
         }
         finally
         {
-            Cleanup(input, output);
+            Cleanup(input, output, unsignedOutput);
         }
     }
 

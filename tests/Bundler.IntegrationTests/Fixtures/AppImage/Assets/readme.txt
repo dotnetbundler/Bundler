@@ -1,1 +1,1 @@
-RPM integration fixture resource file.
+AppImage integration fixture resource file.

@@ -62,7 +62,11 @@ public sealed class NsisFixture : IAsyncLifetime
         Assert.True(File.Exists(Path.Combine(ApiOutput, "artifacts", "win-x64", "nsis",
                 "NSIS API Package Fixture-1.0.0-setup.exe")),
             "Standalone NSIS API package did not create its installer.");
-        CreateTestCertificate();
+        // 写 CurrentUser 证书库与真装同一信任级别——只在 localinstall 同意闸内创建。
+        if (Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") == "1")
+        {
+            CreateTestCertificate();
+        }
         BuildAllVariants();
         return true;
     }

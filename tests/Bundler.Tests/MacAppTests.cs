@@ -297,6 +297,11 @@ public static class MacAppTests
     static async Task RejectsReparsePointsInAppPayload()
     {
         Assert.SkipWhen(TestPlatform.IsWindows, "requires a non-Windows host");
+        // CA1416 分析器不认 SkipWhen——守卫保留给编译期平台判断。
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
         var input = CreateInputDirectory();
         var outside = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         try
@@ -1254,6 +1259,7 @@ public static class MacAppTests
     static async Task MarksMachOFilesExecutable()
     {
         Assert.SkipWhen(TestPlatform.IsWindows, "requires a non-Windows host");
+        // CA1416 分析器不认 SkipWhen——守卫保留给编译期平台判断。
         if (OperatingSystem.IsWindows())
         {
             return;
