@@ -849,9 +849,14 @@ internal sealed class NsisBundleBackend(
         }
 
         var normalized = ToInstallerPath(targetPath).Trim('\\');
-        if (normalized.Split('\\').Any(component => component is "" or "." or ".."))
+        var components = normalized.Split('\\');
+        if (components.Any(component => component is "" or "." or ".."))
         {
             throw new InvalidOperationException($"Resource target path must stay inside the installation directory: '{targetPath}'.");
+        }
+        if (components.Any(component => WindowsFileNames.IsInvalidName(component)))
+        {
+            throw new InvalidOperationException($"Resource target path contains a name that is not valid on Windows: '{targetPath}'.");
         }
 
         return normalized;
@@ -1104,6 +1109,10 @@ internal sealed class NsisBundleBackend(
             foreach (var path in Directory.EnumerateFileSystemEntries(directory))
             {
                 RejectReparsePoint(path, "Bundle input");
+                if (WindowsFileNames.IsInvalidName(Path.GetFileName(path)))
+                {
+                    throw new InvalidDataException($"Bundle input contains a name that is not valid on Windows: {path}");
+                }
                 if (Directory.Exists(path))
                 {
                     directories.Add(path);
