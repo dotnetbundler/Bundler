@@ -16,18 +16,14 @@ public static class UpdateSignatureVerifier
     {
         using var ecdsa = ECDsa.Create();
         ecdsa.ImportParameters(publicKey.ToPublicParameters());
-        return TryVerify(ecdsa, signature, stream => stream.Write(data, 0, data.Length));
+        return TryVerify(ecdsa, signature, () => new MemoryStream(data, writable: false));
     }
 
     public static bool VerifyFile(string path, byte[] signature, UpdateKeyMaterial publicKey)
     {
         using var ecdsa = ECDsa.Create();
         ecdsa.ImportParameters(publicKey.ToPublicParameters());
-        return TryVerify(ecdsa, signature, stream =>
-        {
-            using var input = File.OpenRead(path);
-            input.CopyTo(stream);
-        });
+        return TryVerify(ecdsa, signature, () => File.OpenRead(path));
     }
 
     /// <summary>便捷面：清单里的 base64 签名 + 旁车里的 base64 公钥直接验文件。</summary>
@@ -38,16 +34,21 @@ public static class UpdateSignatureVerifier
         return VerifyFile(path, signature, publicKey);
     }
 
-    private static bool TryVerify(ECDsa ecdsa, byte[] signature, Action<Stream> writeData)
+    // 数据只过一次：流式算 SHA-256 后对每个编码候选 VerifyHash——
+    // 旧实现按候选把整件复制进 MemoryStream，大工件内存翻倍且重复哈希。
+    private static bool TryVerify(ECDsa ecdsa, byte[] signature, Func<Stream> openData)
     {
+        byte[] hash;
+        using (var sha = SHA256.Create())
+        using (var input = openData())
+        {
+            hash = sha.ComputeHash(input);
+        }
         foreach (var candidate in Candidates(signature))
         {
             try
             {
-                using var buffer = new MemoryStream();
-                writeData(buffer);
-                buffer.Position = 0;
-                if (ecdsa.VerifyData(buffer, candidate, HashAlgorithmName.SHA256))
+                if (ecdsa.VerifyHash(hash, candidate))
                 {
                     return true;
                 }
@@ -95,19 +96,30 @@ public static class UpdateSignatureVerifier
             throw new InvalidOperationException("Unexpected ECDSA signature encoding.");
         }
         var offset = signature[1] == 0x81 ? 3 : 2; // 长/短长度前缀
-        if (signature[offset] != 0x02)
+        // 逐段取前先做边界断言：本函数吃远端可控的 .sig 输入，越界索引/
+        // BlockCopy 会漏出 ArgumentException/IndexOutOfRangeException 穿透
+        // Candidates 的 InvalidOperationException 过滤器——统一按畸形拒。
+        if (offset + 2 > signature.Length || signature[offset] != 0x02)
         {
             throw new InvalidOperationException("Malformed ECDSA DER signature.");
         }
         var rLen = signature[offset + 1];
+        if (offset + 2 + rLen > signature.Length)
+        {
+            throw new InvalidOperationException("Malformed ECDSA DER signature.");
+        }
         var r = new byte[rLen];
         Buffer.BlockCopy(signature, offset + 2, r, 0, rLen);
         var sOffset = offset + 2 + rLen;
-        if (signature[sOffset] != 0x02)
+        if (sOffset + 2 > signature.Length || signature[sOffset] != 0x02)
         {
             throw new InvalidOperationException("Malformed ECDSA DER signature.");
         }
         var sLen = signature[sOffset + 1];
+        if (sOffset + 2 + sLen > signature.Length)
+        {
+            throw new InvalidOperationException("Malformed ECDSA DER signature.");
+        }
         var s = new byte[sLen];
         Buffer.BlockCopy(signature, sOffset + 2, s, 0, sLen);
         var result = new byte[64];
