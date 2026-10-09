@@ -127,6 +127,29 @@ public static class ProgramTests
     }
 
     [Fact]
+    static void RejectsMalformedUpdateSection()
+    {
+        var configuration = ValidConfiguration(new BundleTargetConfiguration
+        {
+            RuntimeIdentifier = "linux-x64",
+            InputDirectory = "unused",
+            Formats = [PackageFormat.Zip]
+        }, update: new UpdateBundleConfiguration
+        {
+            FeedUrl = "",
+            Channel = "../escape",
+            PublicKey = "not-a-point",
+            SigningKeyFile = null,
+        });
+
+        var issues = BundleConfigurationValidator.Validate(configuration, checkFileSystem: false);
+        Assert.Contains(issues, issue => issue.Path == "update.feedUrl");
+        Assert.Contains(issues, issue => issue.Path == "update.channel");
+        Assert.Contains(issues, issue => issue.Path == "update.signingKeyFile");
+        Assert.Contains(issues, issue => issue.Path == "update.publicKey");
+    }
+
+    [Fact]
     static async Task VerifiesAndExtractsBundledNsis()
     {
         var repositoryRoot = RepositoryRoot();
@@ -1935,13 +1958,15 @@ public static class ProgramTests
     static string RepositoryRoot() => Path.GetFullPath("../../../../../", AppContext.BaseDirectory);
 
 
-    static BundleConfiguration ValidConfiguration(BundleTargetConfiguration target) => new()
+    static BundleConfiguration ValidConfiguration(
+        BundleTargetConfiguration target, UpdateBundleConfiguration? update = null) => new()
     {
         ProductName = "ExampleApp",
         Identifier = "com.example.app",
         Version = "1.0.0",
         OutputDirectory = "artifacts",
-        Targets = [target]
+        Targets = [target],
+        Update = update
     };
 
 
