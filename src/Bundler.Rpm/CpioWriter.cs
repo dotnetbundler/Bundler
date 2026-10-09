@@ -17,6 +17,8 @@ internal static class CpioWriter
         internal string Name = "";          // absolute path, e.g. "/usr/lib/pkg/app"
         internal int Mode;                  // st_mode including type bits
         internal byte[] Data = [];          // regular file contents; link target for symlinks
+        /// 常规文件可给流式源：设置后优先于 Data——按流 Length 写头、分块拷贝正文，不驻内存。
+        internal Func<Stream>? OpenContent;
         internal int Inode;
     }
 
@@ -44,14 +46,31 @@ internal static class CpioWriter
     {
         var isSymlink = (entry.Mode & 0xF000) == 0xA000;
         var isDir = (entry.Mode & 0xF000) == 0x4000;
-        var fileSize = isDir ? 0 : entry.Data.Length;
-        WriteRecord(output, entry.Name, entry.Mode, entry.Inode, isDir ? 2 : 1,
-            fileSize, entry.Data, isSymlink || !isDir);
+        Stream? contentStream = null;
+        try
+        {
+            var fileSize = entry.Data.Length;
+            if (!isDir && entry.OpenContent is { } openContent)
+            {
+                contentStream = openContent();
+                fileSize = (int)contentStream.Length;
+            }
+            else if (isDir)
+            {
+                fileSize = 0;
+            }
+            WriteRecord(output, entry.Name, entry.Mode, entry.Inode, isDir ? 2 : 1,
+                fileSize, entry.Data, contentStream, isSymlink || !isDir);
+        }
+        finally
+        {
+            contentStream?.Dispose();
+        }
     }
 
     private static void WriteRecord(
         Stream output, string name, int mode, int inode, int nlink,
-        int fileSize, byte[] data, bool writeData = true)
+        int fileSize, byte[] data, Stream? dataStream = null, bool writeData = true)
     {
         var nameBytes = Encoding.UTF8.GetBytes(name);
         var header = new StringBuilder();
@@ -70,9 +89,16 @@ internal static class CpioWriter
         output.Write(nameBytes, 0, nameBytes.Length);
         output.WriteByte(0);
         Pad4(output);
-        if (writeData && data.Length > 0)
+        if (writeData)
         {
-            output.Write(data, 0, data.Length);
+            if (dataStream is not null)
+            {
+                dataStream.CopyTo(output);
+            }
+            else if (data.Length > 0)
+            {
+                output.Write(data, 0, data.Length);
+            }
         }
         Pad4(output);
     }

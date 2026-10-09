@@ -88,10 +88,12 @@ internal static class RpmPackageWriter
 
         ValidateSigning(settings);
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
-        // cpio 直写 gzip→临时文件，全程不驻内存；未压缩 cpio 的
-        // 尺寸与 sha256（PAYLOADSIZE / PAYLOADDIGESTALT）由穿透流边写边算。
-        var payloadPath = Path.Combine(Path.GetTempPath(),
-            "bundler-rpm-" + Guid.NewGuid().ToString("N") + ".cpio.gz");
+        // cpio 直写 gzip→输出目录旁的临时文件（/tmp 小卷不堵构建——目标目录
+        // 反正得装下成品），全程不驻内存；未压缩 cpio 的尺寸与 sha256
+        // （PAYLOADSIZE / PAYLOADDIGESTALT）由穿透流边写边算。
+        Directory.CreateDirectory(item.OutputDirectory);
+        var payloadPath = Path.Combine(item.OutputDirectory,
+            ".bundler-rpm-" + Guid.NewGuid().ToString("N") + ".cpio.gz");
         try
         {
             long cpioSize;
@@ -150,7 +152,7 @@ internal static class RpmPackageWriter
                         payloadStream.CopyTo(stream);
                     }
                 }
-                var hash = Sha256Hex(File.ReadAllBytes(outputPath));
+                var hash = Sha256HexFile(outputPath);
                 File.WriteAllText(sidecarPath,
                     hash + "  " + fileName + "\n", new UTF8Encoding(false));
                 logger.Log(BundleLogLevel.Information, $"Wrote {fileName} (sha256 {hash}).");
@@ -820,7 +822,13 @@ internal static class RpmPackageWriter
             // names break tools that extract the payload verbatim (rpmlint).
             Name = "." + entry.ArchivePath,
             Mode = entry.Mode,
-            Data = entry.IsDirectory ? [] : entry.ReadBytes(),
+            Data = entry.IsDirectory || entry.SourcePath is not null
+                ? []
+                : entry.ReadBytes(),
+            // 常规宿主文件按流写——大载荷不再整档驻内存。
+            OpenContent = entry.IsDirectory || entry.SourcePath is null
+                ? null
+                : () => File.OpenRead(entry.SourcePath),
             Inode = 0
         };
     }

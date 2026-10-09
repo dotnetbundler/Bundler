@@ -1,5 +1,6 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
+using DotNet.Bundler.Core.Update;
 using DotNet.Bundler.Nsis;
 using DotNet.Bundler.Signing.Windows;
 using System.IO.Compression;
@@ -147,6 +148,39 @@ public static class ProgramTests
         Assert.Contains(issues, issue => issue.Path == "update.channel");
         Assert.Contains(issues, issue => issue.Path == "update.signingKeyFile");
         Assert.Contains(issues, issue => issue.Path == "update.publicKey");
+    }
+
+    [Fact]
+    static void RejectsMismatchedUpdateKeys()
+    {
+        // 旁车嵌的 publicKey 与 signingKeyFile 私钥不配对 = 装出来的客户端验签全拒。
+        var directory = Path.Combine(Path.GetTempPath(), "bundler-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var keyPath = Path.Combine(directory, "key.json");
+            UpdateKeyMaterial.Generate().Save(keyPath);
+            var configuration = ValidConfiguration(new BundleTargetConfiguration
+            {
+                RuntimeIdentifier = "linux-x64",
+                InputDirectory = "unused",
+                Formats = [PackageFormat.Zip]
+            }, update: new UpdateBundleConfiguration
+            {
+                FeedUrl = "https://example.test/updates",
+                SigningKeyFile = keyPath,
+                // 另一把密钥的公点——各自合法但不配对。
+                PublicKey = UpdateKeyMaterial.Generate().PublicPointBase64(),
+            });
+
+            var issues = BundleConfigurationValidator.Validate(configuration, checkFileSystem: true);
+            Assert.Contains(issues, issue =>
+                issue.Path == "update.publicKey" && issue.Message.Contains("signingKeyFile"));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     [Fact]

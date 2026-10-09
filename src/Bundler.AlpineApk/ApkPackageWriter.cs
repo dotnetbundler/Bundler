@@ -60,9 +60,11 @@ internal static class ApkPackageWriter
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
 
         // Data segment first: .PKGINFO carries the sha256 of its gzip stream.
-        // data tar.gz 是大件——直写临时文件不驻内存；control/签名段 KB 级留内存。
-        var dataGzipPath = Path.Combine(Path.GetTempPath(),
-            "bundler-apk-" + Guid.NewGuid().ToString("N") + ".tar.gz");
+        // data tar.gz 是大件——直写输出目录旁的临时文件不驻内存（/tmp 小卷不堵
+        // 构建——目标目录反正得装下成品）；control/签名段 KB 级留内存。
+        Directory.CreateDirectory(item.OutputDirectory);
+        var dataGzipPath = Path.Combine(item.OutputDirectory,
+            ".bundler-apk-" + Guid.NewGuid().ToString("N") + ".tar.gz");
         try
         {
             GzipTarToFile(payload, dataGzipPath, omitEndOfArchive: false);
@@ -544,7 +546,7 @@ internal static class ApkPackageWriter
 
     private static void WriteSha256Sidecar(string path)
     {
-        var hash = Sha256Hex(File.ReadAllBytes(path));
+        var hash = Sha256HexFile(path);
         File.WriteAllText(path + ".sha256",
             hash + "  " + Path.GetFileName(path) + "\n", new UTF8Encoding(false));
     }

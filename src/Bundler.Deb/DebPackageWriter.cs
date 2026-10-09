@@ -66,10 +66,12 @@ internal static class DebPackageWriter
         }
 
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, version, maintainer, settings, logger);
-        // data.tar.gz 是大件：tar 直写 gzip→临时文件，ar 装配时流式拷贝——全程不驻内存。
+        // data.tar.gz 是大件：tar 直写 gzip→输出目录旁的临时文件（/tmp 小卷不堵
+        // 构建——目标目录反正得装下成品），ar 装配时流式拷贝——全程不驻内存。
         // control.tar.gz 只有维护脚本与元数据（KB 级），留内存路径。
-        var dataTarGzPath = Path.Combine(Path.GetTempPath(),
-            "bundler-deb-" + Guid.NewGuid().ToString("N") + ".tar.gz");
+        Directory.CreateDirectory(item.OutputDirectory);
+        var dataTarGzPath = Path.Combine(item.OutputDirectory,
+            ".bundler-deb-" + Guid.NewGuid().ToString("N") + ".tar.gz");
         try
         {
             GzipTarToFile(payload, dataTarGzPath);
@@ -92,7 +94,7 @@ internal static class DebPackageWriter
                         ArMember.FromFile("data.tar.gz", dataTarGzPath)
                     ]);
                 }
-                var hash = Sha256Hex(File.ReadAllBytes(outputPath));
+                var hash = Sha256HexFile(outputPath);
                 File.WriteAllText(sidecarPath,
                     hash + "  " + fileName + "\n", new UTF8Encoding(false));
                 logger.Log(BundleLogLevel.Information, $"Wrote {fileName} (sha256 {hash}).");
@@ -706,6 +708,13 @@ internal static class DebPackageWriter
         using var md5 = MD5.Create();
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         return Hex(md5.ComputeHash(stream));
+    }
+
+    private static string Sha256HexFile(string path)
+    {
+        using var sha256 = SHA256.Create();
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return Hex(sha256.ComputeHash(stream));
     }
 
     internal static string Sha256Hex(byte[] content)

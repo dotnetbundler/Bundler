@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using DotNet.Bundler;
+using DotNet.Bundler.Core.Update;
 
 namespace DotNet.Bundler.Core;
 
@@ -118,7 +119,8 @@ public static class BundleConfigurationValidator
             issues.Add(new("update.channel", "Must be a filename-safe token (letters, digits, '.', '_', '-')."));
         }
 
-        if (update.SigningKeyFile is not { Length: > 0 } signingKeyFile)
+        var signingKeyFile = update.SigningKeyFile is { Length: > 0 } keyPath ? keyPath : null;
+        if (signingKeyFile is null)
         {
             issues.Add(new("update.signingKeyFile", "Value is required — update signatures are mandatory."));
         }
@@ -127,10 +129,32 @@ public static class BundleConfigurationValidator
             issues.Add(new("update.signingKeyFile", $"File does not exist: {signingKeyFile}"));
         }
 
-        if (update.PublicKey is { Length: > 0 } publicKey &&
-            !IsEcP256Point(publicKey))
+        var publicKey = update.PublicKey is { Length: > 0 } point ? point : null;
+        if (publicKey is not null && !IsEcP256Point(publicKey))
         {
             issues.Add(new("update.publicKey", "Must be a base64 uncompressed P-256 point (65 bytes, 0x04 prefix)."));
+        }
+        else if (publicKey is not null && signingKeyFile is not null &&
+            checkFileSystem && File.Exists(signingKeyFile))
+        {
+            // 旁车嵌 publicKey、清单用 signingKeyFile 私钥签——两钥不符时装出来的
+            // 客户端会拿错的公钥验签：合法更新被拒、他钥签名反被信。扇出前拦下。
+            try
+            {
+                var derived = UpdateKeyMaterial.Load(signingKeyFile).PublicPointBase64();
+                if (!string.Equals(derived, publicKey.Trim(), StringComparison.Ordinal))
+                {
+                    issues.Add(new("update.publicKey",
+                        "Must match the public half of update.signingKeyFile."));
+                }
+            }
+            catch (Exception error) when (error is IOException or InvalidOperationException
+                or System.Runtime.Serialization.SerializationException
+                or UnauthorizedAccessException)
+            {
+                issues.Add(new("update.signingKeyFile",
+                    $"Cannot be parsed as an ec-p256 key file: {error.Message}"));
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(update.BootstrapperDirectory) &&
