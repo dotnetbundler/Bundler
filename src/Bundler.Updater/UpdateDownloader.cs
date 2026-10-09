@@ -33,8 +33,19 @@ internal sealed class UpdateDownloader
                 $"update feed signature '{SignatureUrl(feedUrl)}' is unreachable — refusing unsigned manifest.",
                 exception);
         }
-        if (!UpdateSignatureVerifier.Verify(
-                bytes, signature, UpdateKeyMaterial.FromPublicPoint(publicPointBase64)))
+        UpdateKeyMaterial publicKey;
+        try
+        {
+            publicKey = UpdateKeyMaterial.FromPublicPoint(publicPointBase64);
+        }
+        catch (Exception exception) when (exception is not UpdateException)
+        {
+            // 侧车公钥是协议输入——畸形 base64/非法点的 FormatException/
+            // InvalidOperationException 也统一成 UpdateException，不破调用方契约。
+            throw new UpdateException(
+                "install identity public key is not a valid base64 P-256 point.", exception);
+        }
+        if (!UpdateSignatureVerifier.Verify(bytes, signature, publicKey))
         {
             throw new UpdateException(
                 $"update feed '{feedUrl}' failed signature verification — refused.");
@@ -119,21 +130,27 @@ internal sealed class UpdateDownloader
             File.Copy(source, destinationPath, overwrite: true);
         }
 
+        // 校验失败连同 `.part` 一并清——陈旧残件留存会让下轮按同偏移续传，
+        // 服务端仍回 206 就再拼出同样的坏文件，永久循环。
+        var partPath = destinationPath + ".part";
         if (artifact.Size > 0 && new FileInfo(destinationPath).Length != artifact.Size)
         {
             File.Delete(destinationPath);
+            TryDelete(partPath);
             throw new UpdateException(
                 $"downloaded artifact size mismatch: expected {artifact.Size} bytes.");
         }
         if (artifact.Sha256.Length == 0)
         {
             File.Delete(destinationPath);
+            TryDelete(partPath);
             throw new UpdateException("manifest artifact carries no sha256 — refusing unverifiable payload.");
         }
         var actual = Sha256Hex(destinationPath);
         if (!string.Equals(actual, artifact.Sha256, StringComparison.OrdinalIgnoreCase))
         {
             File.Delete(destinationPath);
+            TryDelete(partPath);
             throw new UpdateException("downloaded artifact sha256 mismatch — payload refused.");
         }
         log?.Invoke($"update: sha256 verified ({actual.Substring(0, 12)}…)");
@@ -151,8 +168,11 @@ internal sealed class UpdateDownloader
     {
         try
         {
+            // 块表只是优化件——取不到/解析不了与块表畸形同待：回落全量
+            // （成品 sha 由签名清单背书，块表不可信不升级成硬失败）。
             var blockMap = await FetchBlockMapAsync(blockMapLocation, cancellationToken);
-            if (blockMap.Version != 1 || blockMap.BlockSize <= 0 || blockMap.Hashes.Count == 0)
+            if (blockMap is null || blockMap.Version != 1 ||
+                blockMap.BlockSize <= 0 || blockMap.Hashes.Count == 0)
             {
                 log?.Invoke("update: block-map malformed — falling back to full download");
                 return false;
@@ -274,6 +294,8 @@ internal sealed class UpdateDownloader
                 File.Delete(destinationPath);
                 return false;
             }
+            // 差分不消费 .part——成功落件后清掉陈旧残件，防它种子下轮坏续传。
+            TryDelete(destinationPath + ".part");
             return true;
         }
         catch (OperationCanceledException)
@@ -288,13 +310,14 @@ internal sealed class UpdateDownloader
         }
     }
 
-    private async Task<UpdateBlockMap> FetchBlockMapAsync(
+    // 解析失败返回 null 走回落分支——不再以 UpdateException 穿透调用方的
+    // "非 UpdateException 才回落"过滤器（差分链任一 UpdateException 本就该回落）。
+    private async Task<UpdateBlockMap?> FetchBlockMapAsync(
         string location, CancellationToken cancellationToken)
     {
         var bytes = await GetBytesAsync(location, cancellationToken);
         using var stream = new MemoryStream(bytes);
-        return UpdateJson.ReadBlockMap(stream)
-            ?? throw new UpdateException($"block-map '{location}' is not valid.");
+        return UpdateJson.ReadBlockMap(stream);
     }
 
     private async Task FetchRangeAsync(
@@ -376,15 +399,17 @@ internal sealed class UpdateDownloader
         }
         var response = await SharedHttp.SendAsync(
             request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        if (offset > 0 && response.StatusCode != System.Net.HttpStatusCode.PartialContent)
+        if (offset > 0 && !ResumeUsable(response, offset))
         {
-            // 服务端不支持 Range、文件已变，或 416（.part 大于服务端文件）——
-            // 丢弃 .part 从 0 重下；不删则 416 会让下载永久失败。
-            // 成功响应（服务端忽略 Range 给了全档）直接取用；失败响应（如 416）
-            // 没有可用体，须重发不带 Range 的请求。
+            // 续传无效：服务端不支持 Range、文件已变、416（.part 大于服务端文件），
+            // 或 206 的 Content-Range 起点与 .part 偏移不符（起点错位的分片续写
+            // 会在偏移界拼出坏文件）——丢弃 .part 从 0 重下；不删则 416/错位续写
+            // 会永久循环。成功全档响应（忽略 Range 给了整件）直接取用；其余响应
+            // （失败态或起点不符的 206）体不可用，须重发不带 Range 的请求。
             offset = 0;
             TryDelete(partPath);
-            if (!response.IsSuccessStatusCode)
+            if (!response.IsSuccessStatusCode ||
+                response.StatusCode == System.Net.HttpStatusCode.PartialContent)
             {
                 request.Dispose();
                 response.Dispose();
@@ -413,6 +438,14 @@ internal sealed class UpdateDownloader
             log?.Invoke($"update: downloaded '{url}' → '{destinationPath}'");
         }
     }
+
+    // 206 续写前提：Content-Range 起点必须等于 .part 已持偏移——头缺失
+    // 或起点不符即续传无效（服务端回错分片/陈旧残件不能盲续）。
+    private static bool ResumeUsable(HttpResponseMessage response, long offset) =>
+        response.StatusCode == System.Net.HttpStatusCode.PartialContent &&
+        response.Content.Headers.ContentRange is { } range &&
+        string.Equals(range.Unit, "bytes", StringComparison.OrdinalIgnoreCase) &&
+        range.From == offset;
 
     private async Task<byte[]> GetBytesAsync(string location, CancellationToken cancellationToken)
     {
