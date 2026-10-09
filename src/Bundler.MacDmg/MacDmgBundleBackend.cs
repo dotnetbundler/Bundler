@@ -65,11 +65,25 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 workDirectory, cancellationToken);
 
             // Read-write master image, sized automatically from -srcfolder contents.
-            await MacDmgProcessRunner.RunAsync(
-                "hdiutil",
-                ["create", "-srcfolder", stageDirectory, "-volname", volumeName,
-                 "-format", "UDRW", "-ov", readWriteImage],
-                workDirectory, cancellationToken);
+            // hdiutil create 偶发 "Resource busy"（diskimages-helper/mds 抢新镜像）——定向短重试；
+            // 其他错误立即抛出，-ov 使重试幂等
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await MacDmgProcessRunner.RunAsync(
+                        "hdiutil",
+                        ["create", "-srcfolder", stageDirectory, "-volname", volumeName,
+                         "-format", "UDRW", "-ov", readWriteImage],
+                        workDirectory, cancellationToken);
+                    break;
+                }
+                catch (InvalidOperationException ex)
+                    when (attempt < 5 && ex.Message.Contains("Resource busy", StringComparison.OrdinalIgnoreCase))
+                {
+                    await Task.Delay(1000 * attempt, cancellationToken);
+                }
+            }
 
             // Layout/branding extras need headroom that -srcfolder auto-sizing doesn't leave.
             if (!settings.SkipWindowLayout ||
