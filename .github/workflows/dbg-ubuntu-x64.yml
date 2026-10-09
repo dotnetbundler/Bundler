@@ -45,6 +45,6 @@ jobs:
           name: evidence-ubuntu-26.04
           path: |
             tests/Special/evidence/
-            artifacts/ci/
+            artifacts/ci/test-progress.log
           if-no-files-found: ignore
           retention-days: 14

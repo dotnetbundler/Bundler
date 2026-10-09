@@ -2,8 +2,7 @@
 name: dbg-windows-x64
 
 on:
-  push:
-    branches: [devin/ci-dry-run]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -46,6 +45,6 @@ jobs:
           name: evidence-windows-2025
           path: |
             tests/Special/evidence/
-            artifacts/ci/
+            artifacts/ci/test-progress.log
           if-no-files-found: ignore
           retention-days: 14

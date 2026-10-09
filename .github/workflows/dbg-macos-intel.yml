@@ -45,6 +45,6 @@ jobs:
           name: evidence-macos-26-intel
           path: |
             tests/Special/evidence/
-            artifacts/ci/
+            artifacts/ci/test-progress.log
           if-no-files-found: ignore
           retention-days: 14
