@@ -1,0 +1,82 @@
+# 调试期产件工作流：在真 arm64 宿主上编 arm64 AOT 引导件并上传工件——
+# 产物下载后入 src/Bundler.Updater.Bootstrap/tools/<rid>/ 随包，之后本文件删除。
+name: dbg-aot
+
+on:
+  push:
+    branches: [devin/ci-dry-run]
+  workflow_dispatch:
+
+concurrency:
+  group: dbg-aot
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux-arm:
+    runs-on: ubuntu-26.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x'
+      - name: NativeAOT 工具链（clang/lld/zlib）
+        run: sudo apt-get update && sudo apt-get install -y clang lld zlib1g-dev
+      - name: 产 linux-arm64 引导件
+        run: dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-arm64 -o /tmp/aot/linux-arm64
+      - name: 产 linux-musl-arm64 引导件（alpine 容器内 NativeAOT）
+        run: |
+          mkdir -p /tmp/aot/linux-musl-arm64
+          docker run --rm -v "$PWD:/src" -v /tmp/aot:/aot -w /src \
+            mcr.microsoft.com/dotnet/sdk:10.0-alpine \
+            sh -c "apk add --no-cache clang lld zlib-dev zlib-static build-base >/dev/null && \
+                   dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-musl-arm64 -o /aot/linux-musl-arm64"
+      - name: 冒烟——宿主编译件真跑 apply 换包
+        run: |
+          set -eux
+          file /tmp/aot/linux-arm64/bundler-updater /tmp/aot/linux-musl-arm64/bundler-updater || true
+          mkdir -p /tmp/smoke/install /tmp/smoke/payload
+          echo v1 > /tmp/smoke/install/app.txt
+          echo v2 > /tmp/smoke/payload/app.txt
+          /tmp/aot/linux-arm64/bundler-updater apply --install-dir /tmp/smoke/install --payload /tmp/smoke/payload --log /tmp/smoke/u.log
+          grep -q v2 /tmp/smoke/install/app.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: aot-linux
+          path: /tmp/aot/*/bundler-updater
+          retention-days: 1
+
+  win-arm:
+    runs-on: windows-11-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x'
+      - name: MSVC ARM64 工具链探测（NativeAOT 需要链接器）
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          & $vswhere -latest -products * -property installationPath
+          & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath
+      - name: 产 win-arm64 引导件
+        shell: pwsh
+        run: dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r win-arm64 -o C:\aot\win-arm64
+      - name: 冒烟——宿主真跑 apply 换包
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force C:\smoke\install, C:\smoke\payload | Out-Null
+          "v1" | Set-Content C:\smoke\install\app.txt -NoNewline
+          "v2" | Set-Content C:\smoke\payload\app.txt -NoNewline
+          & C:\aot\win-arm64\bundler-updater.exe apply --install-dir C:\smoke\install --payload C:\smoke\payload --log C:\smoke\u.log
+          if ($LASTEXITCODE -ne 0) { throw "apply rc=$LASTEXITCODE" }
+          if ((Get-Content C:\smoke\install\app.txt -Raw) -ne "v2") { throw "swap 未生效" }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: aot-win
+          path: C:\aot\win-arm64\bundler-updater.exe
+          retention-days: 1
