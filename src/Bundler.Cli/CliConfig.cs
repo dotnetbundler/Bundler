@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 using DotNet.Bundler;
 using DotNet.Bundler.AlpineApk;
+using DotNet.Bundler.Core;
 using DotNet.Bundler.Archive;
 using DotNet.Bundler.Deb;
 using DotNet.Bundler.MacApp;
@@ -98,7 +99,7 @@ internal static class CliConfig
         ApplyCliOverrides(document, parsed);
         ResolveRelativePaths(document, baseDirectory);
         EnforceSchema(document);
-        return Materialize(document, parsed);
+        return Materialize(document, parsed, baseDirectory);
     }
 
     // Schema is fixed: unknown keys (typos) are rejected rather than ignored.
@@ -360,59 +361,15 @@ internal static class CliConfig
         return JsonValue.Create(value);
     }
 
+    // 共享字段的路径解析在反序列化后由 BundleConfigurationLoader.ResolvePaths 统一完成，
+    // 这里只剩各格式分节（update 也走共享面，跳过）。
     private static void ResolveRelativePaths(JsonObject document, string baseDirectory)
     {
         static string Resolve(string baseDir, string path) =>
             Path.IsPathRooted(path) ? path : Path.GetFullPath(path, baseDir);
 
-        foreach (var name in new[] { "licenseFile", "outputDirectory" })
-        {
-            if (document[name] is JsonValue scalar &&
-                scalar.TryGetValue<string>(out var path) && !string.IsNullOrWhiteSpace(path))
-            {
-                document[name] = Resolve(baseDirectory, path);
-            }
-        }
-
-        if (document["icons"] is JsonArray icons)
-        {
-            for (var i = 0; i < icons.Count; i++)
-            {
-                if (icons[i] is JsonValue v && v.TryGetValue<string>(out var p) && p.Length > 0)
-                {
-                    icons[i] = Resolve(baseDirectory, p);
-                }
-            }
-        }
-
-        if (document["resources"] is JsonArray resources)
-        {
-            foreach (var node in resources.OfType<JsonObject>())
-            {
-                if (node["source"] is JsonValue v && v.TryGetValue<string>(out var p) && p.Length > 0)
-                {
-                    node["source"] = Resolve(baseDirectory, p);
-                }
-            }
-        }
-
-        if (document["targets"] is JsonArray targets)
-        {
-            foreach (var node in targets.OfType<JsonObject>())
-            {
-                foreach (var name in new[] { "inputDirectory" })
-                {
-                    if (node[name] is JsonValue v && v.TryGetValue<string>(out var p) && p.Length > 0)
-                    {
-                        node[name] = Resolve(baseDirectory, p);
-                    }
-                }
-                // signingFiles 是载荷相对路径（相对 inputDirectory），不做宿主路径解析。
-            }
-        }
-
         // Format sections: resolve *File scalar knobs and files[].source entries.
-        foreach (var section in FormatSections)
+        foreach (var section in FormatSections.Where(name => name != "update"))
         {
             if (document[section] is not JsonObject child)
             {
@@ -448,9 +405,14 @@ internal static class CliConfig
         }
     }
 
-    private static CliResolvedConfiguration Materialize(JsonObject document, CliArguments parsed)
+    private static CliResolvedConfiguration Materialize(
+        JsonObject document,
+        CliArguments parsed,
+        string baseDirectory)
     {
         var targetsNode = document["targets"] as JsonArray ?? new JsonArray();
+        // 合成数组必须挂回文档——共享反序列化只看 document["targets"]。
+        document["targets"] ??= targetsNode;
         // CLI single-target options write into targets[0]; with no file targets
         // they must still yield one target entry.
         JsonObject target;
@@ -468,8 +430,7 @@ internal static class CliConfig
             var value = parsed.Options.TryGetValue(option, out var v) ? v : null;
             if (value is not null)
             {
-                // CLI 输入相对当前工作目录解析；此处在 ResolveRelativePaths 之后，
-                // target 级 CLI 字段需要自己绝对化（后端在独立工作目录执行）。
+                // CLI 输入相对当前工作目录解析，不走配置文件的 baseDirectory。
                 target[field] = field == "inputDirectory" && !Path.IsPathRooted(value)
                     ? Path.GetFullPath(value)
                     : value;
@@ -487,31 +448,30 @@ internal static class CliConfig
                 "Formats are required: pass --formats or set targets[].formats in bundler.json.");
         }
 
-        var bundle = new BundleConfiguration
+        // targets[].formats 归一成枚举名数组再走共享反序列化：ParseFormats 顺带
+        // 做 rid×format 矩阵校验并吃 "a,b"/"a;b" 串形，source-gen 侧不再另写规则。
+        foreach (var node in targetsNode.OfType<JsonObject>())
         {
-            ProductName = Text(document, "productName") ?? "",
-            Identifier = Text(document, "identifier") ?? "",
-            Version = Text(document, "version") ?? "",
-            Publisher = Text(document, "publisher"),
-            Description = Text(document, "description"),
-            Homepage = Text(document, "homepage"),
-            Copyright = Text(document, "copyright"),
-            LicenseFile = Text(document, "licenseFile"),
-            OutputDirectory = Text(document, "outputDirectory") ?? "bundler-out",
-            Icons = StringList(document["icons"]),
-            Resources = ListOf<BundleResourceConfiguration>(document["resources"]),
-            FileAssociations = ListOf<BundleFileAssociationConfiguration>(document["fileAssociations"]),
-            UrlProtocols = ListOf<BundleUrlProtocolConfiguration>(document["urlProtocols"]),
-            Update = Section<UpdateBundleConfiguration>(document, "update"),
-            Targets = targetsNode.OfType<JsonObject>().Select(node => new BundleTargetConfiguration
-            {
-                RuntimeIdentifier = Text(node, "runtimeIdentifier") ?? "",
-                InputDirectory = Text(node, "inputDirectory") ?? "",
-                MainExecutable = Text(node, "mainExecutable"),
-                SigningFiles = StringList(node["signingFiles"]),
-                Formats = FormatList(node["formats"], Text(node, "runtimeIdentifier") ?? "")
-            }).ToArray()
-        };
+            node["formats"] = new JsonArray(
+                FormatList(node["formats"], TargetRid(node, parsed))
+                    .Select(f => (JsonNode?)JsonValue.Create(FormatName(f))).ToArray());
+        }
+
+        // 显式 null 视为未写：剥掉后让 defaults 基线生效——与原手写物化语义一致
+        // （"icons": null 曾等于 []，"outputDirectory": null 曾等于 "bundler-out"）。
+        foreach (var key in document.Where(pair => pair.Value is null).Select(pair => pair.Key).ToArray())
+        {
+            document.Remove(key);
+        }
+
+        // 共享字段与 Core 的加载管线同一来源：反序列化模型 + 共用
+        // BundleConfigurationPaths.Resolve，新增共享字段只改模型一侧。
+        var bundle = BundleConfigurationPaths.Resolve(
+            DeserializeWithDefaults(
+                document,
+                TypeInfoFor<BundleConfiguration>(),
+                new BundleConfiguration { OutputDirectory = "bundler-out" }),
+            baseDirectory);
 
         return new CliResolvedConfiguration
         {
@@ -542,19 +502,6 @@ internal static class CliConfig
 
     private static string? Text(JsonObject node, string field) =>
         node[field] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
-
-    private static string[] StringList(JsonNode? node) =>
-        node is JsonArray arr
-            ? arr.OfType<JsonValue>().Select(v => v.TryGetValue<string>(out var s) ? s! : "")
-                .Where(s => s.Length > 0).ToArray()
-            : [];
-
-    private static IReadOnlyList<T> ListOf<T>(JsonNode? node) where T : class, new() =>
-        node is JsonArray arr
-            ? arr.Select(entry => entry is JsonObject element
-                    ? DeserializeWithDefaults(element, TypeInfoFor<T>(), new T())
-                    : (T)entry!.Deserialize(TypeInfoFor<T>())!).ToArray()
-            : [];
 
     // The source-generated deserializer routes every init-only member through an
     // object-initializer factory, so keys absent from the user's JSON are assigned
@@ -618,6 +565,12 @@ internal static class CliConfig
     // runtime Type carries no DynamicallyAccessedMembers annotation.
     private static readonly Dictionary<Type, Func<object>> DefaultFactories = new()
     {
+        // 共享 BundleConfiguration 的嵌套负载型——DeserializeWithDefaults 走全文档合并时会到。
+        [typeof(BundleTargetConfiguration)] = static () => new BundleTargetConfiguration(),
+        [typeof(BundleResourceConfiguration)] = static () => new BundleResourceConfiguration(),
+        [typeof(BundleFileAssociationConfiguration)] = static () => new BundleFileAssociationConfiguration(),
+        [typeof(BundleUrlProtocolConfiguration)] = static () => new BundleUrlProtocolConfiguration(),
+        [typeof(UpdateBundleConfiguration)] = static () => new UpdateBundleConfiguration(),
 #if BUNDLER_HOST_LINUX
         [typeof(AppImageFileEntry)] = static () => new AppImageFileEntry(),
 #endif

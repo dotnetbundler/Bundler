@@ -26,7 +26,9 @@ namespace DotNet.Bundler.Cli;
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     PropertyNameCaseInsensitive = true,
     ReadCommentHandling = JsonCommentHandling.Skip,
-    AllowTrailingCommas = true)]
+    AllowTrailingCommas = true,
+    Converters = [typeof(JsonStringEnumConverter<PackageFormat>)])]
+[JsonSerializable(typeof(BundleConfiguration))]
 [JsonSerializable(typeof(BundleResourceConfiguration))]
 [JsonSerializable(typeof(BundleFileAssociationConfiguration))]
 [JsonSerializable(typeof(BundleUrlProtocolConfiguration))]
