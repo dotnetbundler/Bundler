@@ -10,12 +10,8 @@ ManifestDPIAwareness PerMonitorV2
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "nsDialogs.nsh"
-!include "StrFunc.nsh"
 !include "FileFunc.nsh"
 !include "x64.nsh"
-${StrStr}
-${UnStrStr}
-
 !define PRODUCT_NAME "{{product_name}}"
 !define PRODUCT_VERSION "{{version}}"
 !define PRODUCT_NUMERIC_VERSION "{{numeric_version}}"
@@ -25,7 +21,6 @@ ${UnStrStr}
 !define PRODUCT_COPYRIGHT "{{copyright}}"
 !define PRODUCT_ID "{{identifier}}"
 !define MAIN_EXECUTABLE "{{main_executable}}"
-!define PROCESS_NAME "{{process_name}}"
 !define INSTALL_FOLDER "{{install_folder}}"
 !define INSTALL_MODE "{{install_mode}}"
 !define TARGET_ARCHITECTURE "{{target_architecture}}"

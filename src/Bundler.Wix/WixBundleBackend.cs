@@ -258,6 +258,12 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             if (File.Exists(manifestPath)) File.Delete(manifestPath);
             throw;
         }
+        finally
+        {
+            // 锁文件随构建清理；Dispose 后再删才能在 Windows 下生效。
+            outputLock.Dispose();
+            try { File.Delete(lockPath); } catch (IOException) { }
+        }
     }
 
     private string? FindLocaleFile(WixLanguageInfo language) =>
@@ -401,6 +407,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             .AppendLine(bundle.Description).AppendLine(bundle.Homepage)
             .Append(language.Codepage).AppendLine().AppendLine(language.Culture)
             .AppendLine(item.Target.RuntimeIdentifier).AppendLine(identity.UpgradeCode.ToString("D"));
+        if (FindLocaleFile(language) is { } localeFilePath) text.AppendLine(HashFile(localeFilePath));
         foreach (var file in files)
         {
             text.AppendLine(file.RelativePath.ToLowerInvariant()).AppendLine(HashFile(file.SourcePath));
@@ -438,6 +445,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             .AppendLine(settings.UninstallShortcut.ToString()).AppendLine(settings.LaunchAfterInstall.ToString())
             .AppendLine(language.Codepage.ToString(System.Globalization.CultureInfo.InvariantCulture))
             .AppendLine(language.Culture);
+        if (FindLocaleFile(language) is { } localeFilePath) text.AppendLine(HashFile(localeFilePath));
         if (settings.AllowDowngrades) text.AppendLine("allow-downgrades=true");
         foreach (var association in bundle.FileAssociations)
         {
