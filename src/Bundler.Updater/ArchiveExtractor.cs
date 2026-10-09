@@ -138,7 +138,7 @@ internal static class ArchiveExtractor
                 target = reader.ReadToEnd();
             }
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            if (!UstarReader.CreateSymlink(target, destination))
+            if (!UstarReader.CreateSymlink(target, destination, staging))
             {
                 log?.Invoke($"update: warning: failed to restore symlink '{entry.FullName}' → '{target}'.");
             }

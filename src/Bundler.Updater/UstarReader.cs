@@ -49,7 +49,7 @@ internal static class UstarReader
                     Directory.CreateDirectory(Path.GetDirectoryName(linkPath)!);
                     // 与 zip 腿（RestoreSymlinkEntries）同款 WARN——链接还原失败
                     // 静默降级会把载荷语义丢在看不见的地方。
-                    if (!CreateSymlink(target, linkPath))
+                    if (!CreateSymlink(target, linkPath, destinationRoot))
                     {
                         log?.Invoke($"update: warning: failed to restore symlink '{fullName}' → '{target}'.");
                     }
@@ -253,10 +253,26 @@ internal static class UstarReader
         return Directory.Exists(resolved);
     }
 
-    internal static bool CreateSymlink(string target, string linkPath)
+    internal static bool CreateSymlink(string target, string linkPath, string containmentRoot)
     {
         try
         {
+            // 链接目标必须留在提取根内：绝对或 ../ 逃逸目标落地后，后续条目
+            // 虽过 SafePath 字面检查，写盘时会顺已物化的链接写出暂存区。
+            var resolvedTarget = Path.IsPathRooted(target)
+                ? Path.GetFullPath(target)
+                : Path.GetFullPath(Path.Combine(
+                    Path.GetDirectoryName(linkPath) ?? string.Empty, target));
+            var rootPrefix = Path.GetFullPath(containmentRoot)
+                .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var comparison = Path.DirectorySeparatorChar == '\\'
+                ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            if (!resolvedTarget.StartsWith(rootPrefix, comparison) &&
+                !string.Equals(resolvedTarget,
+                    rootPrefix.TrimEnd(Path.DirectorySeparatorChar), comparison))
+            {
+                return false;
+            }
             if (File.Exists(linkPath) || Directory.Exists(linkPath))
             {
                 if (File.GetAttributes(linkPath).HasFlag(FileAttributes.Directory))

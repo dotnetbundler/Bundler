@@ -1597,6 +1597,47 @@ public static class UpdateTests
     }
 
     [Fact]
+    static void ExtractZip_RejectsSymlinkEscapingStaging()
+    {
+        // 链接目标解出暂存根外（../ 或绝对）时还原必须拒——否则后续条目
+        // 虽过 SafePath 字面检查，写盘会顺已物化的链接写出暂存区。
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "symlink restore is POSIX-only");
+        var directory = CreateTempDirectory();
+        try
+        {
+            var zipPath = Path.Combine(directory, "payload.zip");
+            using (var stream = new FileStream(zipPath, FileMode.Create, FileAccess.Write))
+            {
+                DotNet.Bundler.Archive.ZipWriter.Write(stream,
+                [
+                    new DotNet.Bundler.Archive.ZipEntry
+                    {
+                        Name = "stem/link",
+                        Kind = DotNet.Bundler.Archive.ZipEntryKind.Symlink,
+                        Mode = 511,
+                        LinkTarget = "../../outside",
+                    },
+                ]);
+            }
+            var staging = Path.Combine(directory, "staging");
+            Directory.CreateDirectory(staging);
+            var warnings = new List<string>();
+
+            DotNet.Bundler.Updater.ArchiveExtractor.ExtractZipToDirectory(
+                zipPath, staging, warnings.Add);
+
+            var linkPath = Path.Combine(staging, "stem", "link");
+            Assert.True(new FileInfo(linkPath).LinkTarget is null,
+                "escaping symlink target must not be materialized");
+            Assert.Contains(warnings, w => w.Contains("failed to restore symlink", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     static void ExtractZip_DropsAppleDoubleTree()
     {
         // ditto 产 zip 自带 __MACOSX/ 资源叉目录——managed 提取下它是垃圾树，清掉。
