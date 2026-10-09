@@ -1041,7 +1041,7 @@ internal static class BootstrapPlan
     // 物理规范化：逐级解析已存在的符号链接段——路径关系判断必须比对物理位置而非拼写
     //（POSIX 侧 norm_path 的 cd -P 语义；`Path.GetFullPath` 只归一拼写不解链接）。
     // 不存在的段保持字面，链接解析失败退化为当前拼写。
-    private static string? CanonicalPath(string path) =>
+    internal static string? CanonicalPath(string path) =>
         CanonicalPath(path, new HashSet<string>(PathStringComparer));
 
     private static string? CanonicalPath(string path, HashSet<string> resolving)

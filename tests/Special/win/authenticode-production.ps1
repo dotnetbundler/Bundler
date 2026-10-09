@@ -8,9 +8,11 @@ param(
 $ErrorActionPreference = "Stop"
 $evidence = @()
 function Note($step, $result, $detail = "") {
-    $script:evidence += "| $step | $result | $detail |"
-    Write-Host "[$result] $step $detail"
-    if ($result -eq "FAIL") { $script:hadFail = $true }
+    # 结果归一化为 PASS/FAIL/UNTESTED——bool 直比 "FAIL" 会因右侧强转 bool 恒真
+    $r = if ($result -is [bool]) { if ($result) { "PASS" } else { "FAIL" } } else { "$result" }
+    $script:evidence += "| $step | $r | $detail |"
+    Write-Host "[$r] $step $detail"
+    if ($r -eq "FAIL") { $script:hadFail = $true }
 }
 function Wait-Human($prompt) {
     if (-not [Environment]::UserInteractive -or $env:CI -eq "true") {
@@ -75,7 +77,7 @@ $out = Join-Path $OutDir ("SA-P-01-{0:yyyyMMdd}.md" -f (Get-Date))
 @"
 # SA-P-01 Authenticode 生产签名
 - 日期: $(Get-Date -Format "yyyy-MM-dd") UTC | 宿主: $([Environment]::OSVersion.VersionString)
-- 工件: $(Split-Path $InstallerPath -Leaf) sha256=$((Get-FileHash $InstallerPath).SHA256.Substring(0,16))
+- 工件: $(Split-Path $InstallerPath -Leaf) sha256=$((Get-FileHash $InstallerPath).Hash.Substring(0,16))
 - 人工介入点: SmartScreen 观察
 
 ## 步骤与结果

@@ -4,6 +4,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$InstallerPath,
     [switch]$TaskbarPin,
+    [string]$InstallDirName = "",   # 预期装目录名（$LOCALAPPDATA\Programs\<名>）；给了就在装前拒跑既有安装
     [string]$OutDir = "$PSScriptRoot/../evidence"
 )
 $ErrorActionPreference = "Stop"
@@ -25,19 +26,29 @@ function Wait-Human($prompt) {
 if (-not (Test-Path $InstallerPath)) { throw "InstallerPath 不存在: $InstallerPath" }
 if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
 
-$installDir = "$env:LOCALAPPDATA\Programs\HelloBundlerApp"
+$programs = "$env:LOCALAPPDATA\Programs"
+# 既有安装守卫：装目录已存在时装/卸断言会被既有态污染且会改写用户既有安装——拒跑要求干净宿主。
+if ($InstallDirName -and (Test-Path "$programs\$InstallDirName")) {
+    Write-Host "[FAIL] 拒跑：既有安装 '$programs\$InstallDirName' 已存在，本腿要求干净宿主"
+    exit 1
+}
 $startMenu = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
 $build = [Environment]::OSVersion.Version.Build
-# 保护既有安装：跑前已存在的 install 直接拒跑——安装腿会改写它。
-if (Test-Path $installDir) {
-    throw "检测到既有安装 $installDir——pin 腿会先卸载它或换干净宿主再跑"
-}
+# 自我描述：安装前后快照 diff 认出新装目录与快捷方式（不硬编产品名）
+$beforeDirs = @(Get-ChildItem $programs -Directory -ErrorAction SilentlyContinue | ForEach-Object FullName)
+$beforeLnks = @(Get-ChildItem $startMenu -Recurse -Filter *.lnk -ErrorAction SilentlyContinue | ForEach-Object FullName)
+$installDir = $null
 try {
-    $p = Start-Process $InstallerPath -Wait -PassThru
+    # NSIS 静默装：无 /S 会开 GUI 向导在无人值守环境挂死
+    $p = Start-Process $InstallerPath -ArgumentList "/S" -Wait -PassThru
     Note "per-user 安装" ($p.ExitCode -eq 0) "rc=$($p.ExitCode)"
-    $lnk = Get-ChildItem $startMenu -Recurse -Filter "*HelloBundler*" |
-        Select-Object -First 1
-    Note "开始菜单快捷方式" ($null -ne $lnk) $lnk?.FullName
+    $installDir = Get-ChildItem $programs -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $beforeDirs -notcontains $_.FullName } | Select-Object -First 1 -ExpandProperty FullName
+    Note "装目录发现" ($null -ne $installDir) "$installDir"
+    $lnkPath = Get-ChildItem $startMenu -Recurse -Filter *.lnk -ErrorAction SilentlyContinue |
+        Where-Object { $beforeLnks -notcontains $_.FullName } | Select-Object -First 1 -ExpandProperty FullName
+    $lnk = if ($lnkPath) { Get-Item $lnkPath } else { $null }
+    Note "开始菜单快捷方式" ($null -ne $lnk) "$lnkPath"
 
     if ($TaskbarPin -and $lnk) {
         # win11 22H2+ pin 走 shell verb（build>=22621）；win10 用 pinned 目录。
@@ -51,16 +62,16 @@ try {
 
     # 卸载后 pin 清理语义：快捷方式移除。
     Wait-Human "卸载产物——确认开始菜单项与任务栏 pin 已清理"
-    $uninst = Join-Path $installDir "uninstall.exe"
-    if (Test-Path $uninst) {
-        Start-Process $uninst -Wait | Out-Null
-        Note "卸载后快捷方式移除" (-not (Test-Path $lnk?.FullName)) ""
+    $uninst = if ($installDir) { Join-Path $installDir "uninstall.exe" } else { $null }
+    if ($uninst -and (Test-Path $uninst)) {
+        Start-Process $uninst -ArgumentList "/S" -Wait | Out-Null
+        Note "卸载后快捷方式移除" (-not (Test-Path "$lnkPath")) ""
     } else {
         Note "卸载器发现" $false "$installDir\uninstall.exe 不存在"
     }
 } finally {
-    # 残留清场（只到这一步说明本脚本装的目录）。
-    Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
+    # 残留清场（只清本脚本认出的新装目录）。
+    if ($installDir) { Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
 $out = Join-Path $OutDir ("SA-PIN-{0}-b{1}-{2:yyyyMMdd}.md" -f

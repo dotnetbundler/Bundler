@@ -4,7 +4,7 @@
 
 | ID | 用例 | 所需外部条件 | 验证记录 |
 | --- | --- | --- | --- |
-| UPDATE-MT-01 | arm64 AOT 引导件在 osx-arm64/linux-arm64/win-arm64 宿主演 `apply`/`--rollback` 全流程 | arm64 宿主+工具链（UPDATE-OI-01） | 未执行——qemu ilc 环境边界 |
+| UPDATE-MT-01 | ~~arm64 AOT 引导件在 osx-arm64/linux-arm64/win-arm64 宿主演 `apply`/`--rollback` 全流程~~ | ~~arm64 宿主+工具链~~ | **已收编**（2026-10-09）：osx-arm64 件换包腿此前已实证；linux-arm64 件 docker tmpfs ENOSPC 腿、win-arm64 件 VHD ENOSPC 腿随件入库进 CI（`release-verify` 六宿主矩阵）；三件产出均带宿主 `apply` 冒烟记录 |
 | UPDATE-MT-02 | 生产签名 `.app` 的更新链：新版同身份验过放行、异身份拒绝 | Apple 凭证（UPDATE-OI-02） | 未执行——无生产证书 |
 | UPDATE-MT-03 | 真实 macOS 桌面会话下 `open -n` 重启语义观察（Dock 图标/聚焦/路径） | 桌面会话宿主（UPDATE-OI-03） | 未执行——子会话为无头环境，断言止于进程存活 |
 | UPDATE-MT-04 | 真实发布链狗食：公网静态托管 feed，HelloBundlerApp 装 v1→检出 v2→重启后新版在位 | 发布管线（UPDATE-OI-04） | 未执行 |

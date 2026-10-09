@@ -268,6 +268,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     [Fact]
     public void ExtractedExecutableRuns()
     {
+        SkipWhenHostDpkgNotAmd64();
         var dataDir = _f.DataDir("run");
         DebTools.ExtractData(_f.DefaultDeb, dataDir);
         var app = Path.Combine(dataDir, "usr/lib/bundler-deb-fixture/BundlerDebIntegrationFixture");
@@ -621,6 +622,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     [Trait("Requires", "docker")]
     public void DockerMatrixInstallRunRemove()
     {
+        SkipWhenHostDpkgNotAmd64();
         const string containerScript = """
             set -e
             dpkg -i /tmp/pkg.deb >/dev/null

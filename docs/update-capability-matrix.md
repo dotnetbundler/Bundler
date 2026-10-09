@@ -12,7 +12,7 @@
 | 身份烙记旁车 `bundler-update.json` | 已实现 | UPDATE-1 | `{format,rid,channel,feedUrl,publicKey}` 写进安装目录/载荷；权威同款旁车模式，不改应用本体 |
 | feedUrl 多形态（http(s) / file:// / 本地路径 / UNC） | 已实现 | UPDATE-4 | `ResolveArtifactLocation`：http feed→URI 相对解析；本地→目录拼接；Onova `LocalPackageResolver` 同型 |
 | `BundlerUpdate*` MSBuild 旋钮 | 已实现 | UPDATE-1 | `BundlerUpdateFeed`/`BundlerUpdateChannel`/`BundlerUpdatePublicKey`/`BundlerUpdateFormats`/`BundlerUpdateNotes` 等（见 README） |
-| Native AOT 引导件 `bundler-updater[.exe]` | 已实现 | UPDATE-2 | per-RID 内嵌包内：win-x64、linux-x64、linux-musl-x64（静态 pie）、osx-x64；arm64 件见 UPDATE-OI-01 |
+| Native AOT 引导件 `bundler-updater[.exe]` | 已实现 | UPDATE-2 | per-RID 内嵌包内：win-x64、win-arm64、linux-x64、linux-arm64、linux-musl-x64、linux-musl-arm64、osx-x64、osx-arm64（arm64 件由 GitHub arm64 runner 真宿主产出，见 UPDATE-OI-01）；win-x86 仍无件 |
 | POSIX `bundler-updater.sh` 脚本引导 | 已实现 | UPDATE-2 | AOT 缺失/极老宿主降级；bash/dash 双壳实证；`.app`/`AppImage`/zip/targz 换件+回滚同语义 |
 | 三段式换包（stage→备份→原子替换→重启） | 已实现 | UPDATE-3 | 标记 `<install>.bundler-swap` 崩溃恢复；换包期瞬备 `<install>.bundler-backup` 必建（原子性+崩溃恢复载体），成功后默认删除；`ApplyOptions.KeepRollbackBackup`（显式 `RollbackBackupDirectory` 覆盖）保留回滚点→落数据区 `DotNet.Bundler/backups`（per-user=`%LOCALAPPDATA%`/`~/Library/Application Support`/`$XDG_DATA_HOME`，per-machine=`%ProgramData%`/`/Library`/`/var/lib`）；`--rollback` 显式回滚（保留备份可重试） |
 | 断电/中断无砖化 | 已实现 | UPDATE-3 | linux 宿主 kill -9 于 701MB CopyTree 中途→marker 恢复实证；换包要么完整要么自动还原 |

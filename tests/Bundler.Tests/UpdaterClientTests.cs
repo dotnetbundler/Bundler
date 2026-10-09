@@ -150,7 +150,7 @@ public static class UpdaterClientTests
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            return; // 引导二进制是 linux-x64 件——本腿只在 linux 宿主跑
+            return; // 本腿只在 linux 宿主跑（引导件随宿主架构：linux-x64/linux-arm64）
         }
         var directory = CreateTempDirectory();
         try
@@ -192,7 +192,7 @@ public static class UpdaterClientTests
             {
                 StagingRoot = Path.Combine(directory, "staging"),
                 BootstrapperPath = RepoPath(
-                    "src/Bundler.Updater.Bootstrap/tools/linux-x64/bundler-updater"),
+                    $"src/Bundler.Updater.Bootstrap/tools/{TestPlatform.LinuxRuntimeIdentifier}/bundler-updater"),
                 KeepRollbackBackup = true,
                 RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
             });
@@ -218,7 +218,7 @@ public static class UpdaterClientTests
             {
                 StagingRoot = Path.Combine(directory, "staging-rb"),
                 BootstrapperPath = RepoPath(
-                    "src/Bundler.Updater.Bootstrap/tools/linux-x64/bundler-updater"),
+                    $"src/Bundler.Updater.Bootstrap/tools/{TestPlatform.LinuxRuntimeIdentifier}/bundler-updater"),
                 KeepRollbackBackup = true,
                 RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
             });
@@ -689,7 +689,7 @@ public static class UpdaterClientTests
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            return; // 本腿只在 linux 宿主跑（引导二进制为 linux-x64 件）
+            return; // 本腿只在 linux 宿主跑（引导件随宿主架构：linux-x64/linux-arm64）
         }
 
         var directory = CreateTempDirectory();
@@ -698,7 +698,8 @@ public static class UpdaterClientTests
             var install = InstallWithSidecar(directory, out var material, out var feedDir);
             File.WriteAllText(Path.Combine(install, "app"), "v1");
             // 引导件：安装目录内注入真实 linux-x64 AOT 二进制。
-            var bootstrapper = RepoPath("src/Bundler.Updater.Bootstrap/tools/linux-x64/bundler-updater");
+            var bootstrapper = RepoPath(
+                $"src/Bundler.Updater.Bootstrap/tools/{TestPlatform.LinuxRuntimeIdentifier}/bundler-updater");
             File.Copy(bootstrapper, Path.Combine(install, "bundler-updater"));
 
             // v2 载荷 zip：单顶层目录 app-v2/app="v2" + 引导件也随包（真实发布形态）。

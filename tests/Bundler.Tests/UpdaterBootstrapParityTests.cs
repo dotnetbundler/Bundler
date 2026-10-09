@@ -546,13 +546,12 @@ public static class UpdaterBootstrapParityTests
     static void ShippedBootstrap_SmokeApplies()
     {
         // 仓内 tools/<rid> 引导件冒烟：守住"源码修了但发布件没重产"的漂变。
-        var rid = TestPlatform.IsWindows ? "win-x64"
-            : TestPlatform.IsMacOS
-                ? (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture ==
-                    System.Runtime.InteropServices.Architecture.Arm64 ? "osx-arm64" : "osx-x64")
-            : TestPlatform.IsLinux
-                ? TestPlatform.LinuxRuntimeIdentifier
-                : null;
+        var arm64 = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
+            System.Runtime.InteropServices.Architecture.Arm64;
+        var rid = TestPlatform.IsWindows ? (arm64 ? "win-arm64" : "win-x64")
+            : TestPlatform.IsMacOS ? (arm64 ? "osx-arm64" : "osx-x64")
+            : TestPlatform.IsLinux ? TestPlatform.LinuxRuntimeIdentifier
+            : null;
         Assert.SkipUnless(rid is not null, "no shipped bootstrap RID for this host");
         var exeName = TestPlatform.IsWindows ? "bundler-updater.exe" : "bundler-updater";
         var binary = Path.Combine(RepoRoot(), "src", "Bundler.Updater.Bootstrap",
@@ -1106,10 +1105,15 @@ public static class UpdaterBootstrapParityTests
             CopyTree(payload, expectedPayload);
             var log = Path.Combine(dir, "u.log");
 
-            using var hold = new FileStream(Path.Combine(install, "app.txt"),
-                FileMode.Open, FileAccess.Read, FileShare.None);
-            var rc = Invoke(Impl.Aot, "apply", "--install-dir", install,
-                "--payload", payload, "--log", log);
+            int rc;
+            // 锁只挂到 apply 返回即放——断言树要重读同件，独占持有会把 AssertTree
+            // 自己的 ReadAllBytes 拒在 Windows 共享语义之外。
+            using (var hold = new FileStream(Path.Combine(install, "app.txt"),
+                FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                rc = Invoke(Impl.Aot, "apply", "--install-dir", install,
+                    "--payload", payload, "--log", log);
+            }
             if (TestPlatform.IsWindows)
             {
                 Assert.Equal(4, rc);
@@ -1126,9 +1130,10 @@ public static class UpdaterBootstrapParityTests
         finally { Cleanup(root); }
     }
 
-    // 只读位是同一类宿主差异：win 拒绝删改只读件，POSIX 只看父目录权限。
+    // 只读位拦的是就地改写/删除件本身，拦不住父目录级 rename——apply 在两侧宿主
+    // 都能把含只读件的整树换走（真机 Windows 实证 rc=0），换后内容即载荷。
     [Fact]
-    static void ReadOnlyInstallFile_WindowsCleanFail_PosixSwapSucceeds()
+    static void ReadOnlyInstallFile_SwapSucceeds()
     {
         var root = CreateTempDirectory();
         try
@@ -1136,8 +1141,6 @@ public static class UpdaterBootstrapParityTests
             var dir = NewDir(root, "case");
             var install = InstallV1(dir);
             var payload = PayloadV2(dir);
-            var expectedInstall = NewDir(dir, "expected-install");
-            CopyTree(install, expectedInstall);
             var expectedPayload = NewDir(dir, "expected-payload");
             CopyTree(payload, expectedPayload);
             var log = Path.Combine(dir, "u.log");
@@ -1148,22 +1151,15 @@ public static class UpdaterBootstrapParityTests
             {
                 var rc = Invoke(Impl.Aot, "apply", "--install-dir", install,
                     "--payload", payload, "--log", log);
-                if (TestPlatform.IsWindows)
-                {
-                    Assert.Equal(4, rc);
-                    Assert.Equal("v1-app", File.ReadAllText(target));
-                    Assert.False(File.Exists(Marker(install)));
-                    Assert.False(Directory.Exists(Backup(install)));
-                }
-                else
-                {
-                    Assert.Equal(0, rc);
-                    AssertTree(expectedPayload, install);
-                }
+                Assert.Equal(0, rc);
+                AssertTree(expectedPayload, install);
             }
             finally
             {
-                File.SetAttributes(target, FileAttributes.Normal);
+                if (File.Exists(target))
+                {
+                    File.SetAttributes(target, FileAttributes.Normal);
+                }
             }
         }
         finally { Cleanup(root); }
@@ -1186,7 +1182,9 @@ public static class UpdaterBootstrapParityTests
     {
         var path = Path.Combine(Path.GetTempPath(), "bundler-leg-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(path);
-        return path;
+        // 测试断言按字面拼写与引导件侧规范化结果比较——先把根目录物理化到同一口径
+        //（macOS /var→/private/var 这类祖先软链不物理化会让注入探针等值判全部失配）。
+        return BootstrapPlan.CanonicalPath(path) ?? path;
     }
 
     static void Cleanup(string path)

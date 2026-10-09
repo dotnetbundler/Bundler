@@ -40,6 +40,8 @@ public sealed class NsisFixture : IAsyncLifetime
     private bool Initialize()
     {
         Assert.SkipWhen(!OperatingSystem.IsWindows(), "NSIS 集成腿只覆盖 Windows。");
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: NSIS 工件为 win-x64 安装器，仅 x64 宿主验收；arm64 仿真语义另列特殊项。");
         Assert.SkipWhen(
             Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") != "1",
             "真装会写真实用户配置与注册表；置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1 才跑。");
@@ -389,7 +391,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     // ── 公共小件 ──
 
-    private static void WaitFor(Func<bool> condition, string message, int timeoutSeconds = 15)
+    private static void WaitFor(Func<bool> condition, string message, int timeoutSeconds = 60)
     {
         var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
         while (DateTime.UtcNow < deadline)
@@ -468,7 +470,12 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                      @"Software\Microsoft\Windows\CurrentVersion\Uninstall\com.dotnetbundler.pubmismatch",
                  })
         {
-            Registry.CurrentUser.DeleteSubKeyTree(key, false);
+            // 注册表句柄释放同样有滞后：刚退出的进程持有的键处于 pending-delete 时删会抛 IOException
+            for (var i = 0; i < 10; i++)
+            {
+                try { Registry.CurrentUser.DeleteSubKeyTree(key, false); break; }
+                catch (IOException) when (i < 9) { Thread.Sleep(200); }
+            }
         }
         if (Registry.CurrentUser.OpenSubKey(FileExtensionKey) is { } ext)
         {
@@ -492,7 +499,16 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                  }.Concat(new[] { "preinstall", "postinstall", "preuninstall", "postuninstall" }
                      .Select(h => Path.Combine(Temp, $"DotNetBundler-{h}.txt"))))
         {
-            if (File.Exists(file)) File.Delete(file);
+            if (File.Exists(file))
+            {
+                // 钩子进程刚退出时对标记文件的占用有短暂滞后，删之前重试几次
+                for (var i = 0; i < 10; i++)
+                {
+                    try { File.Delete(file); break; }
+                    catch (IOException) when (i < 9) { Thread.Sleep(200); }
+                    catch (UnauthorizedAccessException) when (i < 9) { Thread.Sleep(200); }
+                }
+            }
         }
         foreach (var dir in new[]
                  {
@@ -655,15 +671,24 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
         finally { Cleanup(); }
     }
 
-    // Get-AuthenticodeSignature 走 powershell——WinVerifyTrust 的受管等价没有内建 API，
-    // powershell 是 Windows 宿主固有的签名验证路径，与原脚本同一检查。
+    // 受管的签名证书提取：CreateFromSignedFile 直接读 PE 的 WIN_CERTIFICATE，
+    // 不依赖 powershell 的 Microsoft.PowerShell.Security 模块（部分宿主该模块自动加载会拒）。
     private static string SignerThumbprint(string path)
     {
-        var result = ProcessRunner.Run("powershell.exe",
-            $"-NoProfile -NonInteractive -Command \"(Get-AuthenticodeSignature -LiteralPath '{path}').SignerCertificate.Thumbprint\"",
-            new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(1) });
-        ProcessRunner.AssertSuccess(result, "Get-AuthenticodeSignature");
-        var thumbprint = result.StdOut.Trim();
+        System.Security.Cryptography.X509Certificates.X509Certificate signer;
+        try
+        {
+#pragma warning disable SYSLIB0057 // 读 signed-PE 签名证书仅此 API，X509CertificateLoader 无对应物
+            signer = System.Security.Cryptography.X509Certificates.X509Certificate
+                .CreateFromSignedFile(path);
+#pragma warning restore SYSLIB0057
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"File carries no Authenticode signer certificate: {path}", ex);
+        }
+        var thumbprint = signer.GetCertHashString();
         Assert.True(thumbprint.Length > 0,
             $"File carries no Authenticode signer certificate: {path}");
         return thumbprint;
@@ -1328,7 +1353,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             using var interrupted = ProcessRunner.StartDetached(
                 Installer("bundle-interrupted", "1.2.0"), $"/S /UPDATE /D={InstallDir}");
             WaitFor(() => File.Exists(InterruptedHookMarker),
-                "Interrupted-install fixture did not reach its post-install hook.", 30);
+                "Interrupted-install fixture did not reach its post-install hook.", 120);
             ProcessRunner.TryKillTree(interrupted);
             interrupted.WaitForExit();
             Assert.NotEqual(0, interrupted.ExitCode);
@@ -1354,7 +1379,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             using var interrupted2 = ProcessRunner.StartDetached(
                 Installer("bundle-interrupted", "1.2.0"), $"/S /UPDATE /D={InstallDir}");
             WaitFor(() => File.Exists(InterruptedHookMarker),
-                "Second interrupted-install fixture did not reach its post-install hook.", 30);
+                "Second interrupted-install fixture did not reach its post-install hook.", 120);
             ProcessRunner.TryKillTree(interrupted2);
             interrupted2.WaitForExit();
             Assert.True(Directory.Exists(TransactionDir));

@@ -6,9 +6,11 @@ param(
 $ErrorActionPreference = "Stop"
 $evidence = @()
 function Note($step, $result, $detail = "") {
-    $script:evidence += "| $step | $result | $detail |"
-    Write-Host "[$result] $step $detail"
-    if ($result -eq "FAIL") { $script:hadFail = $true }
+    # 结果归一化为 PASS/FAIL/UNTESTED——bool 直比 "FAIL" 会因右侧强转 bool 恒真
+    $r = if ($result -is [bool]) { if ($result) { "PASS" } else { "FAIL" } } else { "$result" }
+    $script:evidence += "| $step | $r | $detail |"
+    Write-Host "[$r] $step $detail"
+    if ($r -eq "FAIL") { $script:hadFail = $true }
 }
 if ($env:PROCESSOR_ARCHITECTURE -ne "ARM64") {
     throw "本脚本只在 Windows ARM64 宿主跑（当前: $env:PROCESSOR_ARCHITECTURE）"
@@ -27,9 +29,21 @@ foreach ($inst in $InstallerPaths) {
                 $p2 = Start-Process "msiexec.exe" -ArgumentList "/x `"$inst`" /qb /norestart" -Wait -PassThru
                 Note "$name 卸" ($p2.ExitCode -eq 0) "rc=$($p2.ExitCode)"
             }
-            ".exe" {  # nsis
+            ".exe" {  # nsis：装+卸+清场（不留改造后的宿主）
+                $programs = "$env:LOCALAPPDATA\Programs"
+                $before = @(Get-ChildItem $programs -Directory -ErrorAction SilentlyContinue | ForEach-Object FullName)
                 $p = Start-Process $inst -ArgumentList "/S" -Wait -PassThru
                 Note "$name 装" ($p.ExitCode -eq 0) "rc=$($p.ExitCode)"
+                $dir = Get-ChildItem $programs -Directory -ErrorAction SilentlyContinue |
+                    Where-Object { $before -notcontains $_.FullName } | Select-Object -First 1 -ExpandProperty FullName
+                $uninst = if ($dir) { Join-Path $dir "uninstall.exe" } else { $null }
+                if ($uninst -and (Test-Path $uninst)) {
+                    $p2 = Start-Process $uninst -ArgumentList "/S" -Wait -PassThru
+                    Note "$name 卸" ($p2.ExitCode -eq 0) "rc=$($p2.ExitCode)"
+                } else {
+                    Note "$name 卸" "FAIL" "uninstall.exe 未找到（装目录: $dir）"
+                }
+                if ($dir) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue }
             }
             ".zip" { Note "$name 解压即用" $true "ARM64 zip 腿免装" }
             default { Note "$name" "UNTESTED" "未识别扩展名 $ext" }

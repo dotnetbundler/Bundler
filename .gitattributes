@@ -18,3 +18,7 @@ tests/Bundler.IntegrationTests/Fixtures/Rpm/Assets/bad-crlf.sh -text
 *.zip  binary
 *.dll  binary
 *.msi  binary
+
+# 跨版本兼容冻件是字节级工件（feed 签名覆盖逐字节内容）——按原样存取，
+# 任何平台不做换行规整，否则 Windows CRLF 检出直接破签。
+tests/Bundler.Tests/Fixtures/UpdateCompat/** -text

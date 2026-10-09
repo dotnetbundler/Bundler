@@ -346,6 +346,8 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
     [Trait("Requires", "docker")]
     public void DockerAlpineInstallRunRemove()
     {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
         DockerRunner.RequireImage("alpine:latest");
         var result = DockerRunner.RunScript("alpine:latest",
             """
@@ -369,6 +371,8 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
     [Trait("Requires", "docker")]
     public void DockerV1ToV2UpgradeRunsUpgradeScripts()
     {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
         DockerRunner.RequireImage("alpine:latest");
         var result = DockerRunner.RunScript("alpine:latest",
             """
@@ -401,6 +405,8 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
     [Trait("Requires", "docker")]
     public void DockerSignedPackageInstallsViaTrustedKey()
     {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
         DockerRunner.RequireImage("alpine:latest");
         var result = DockerRunner.RunScript("alpine:latest",
             """
