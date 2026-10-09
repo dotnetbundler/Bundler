@@ -331,11 +331,18 @@ public static class CliProgram
             ? Array.Empty<string>()
             : UpdateManifestEmitter.EmitAsync(configuration, artifacts)
                 .GetAwaiter().GetResult();
-        if (configuration.Update is not null && updateArtifacts.Count == 0)
+        if (configuration.Update is not null && artifacts.Count == 0)
         {
             logger.Log(BundleLogLevel.Warning,
-                "update is enabled but no format produced an update-adapted artifact; " +
-                "no update feed was emitted — installed apps' sidecar will point at a non-existent feed.");
+                "update is enabled but no artifacts were produced; " +
+                "no update feed was emitted — installed apps keep polling the last published feed.");
+        }
+        else if (configuration.Update is not null &&
+                 !artifacts.Any(a => UpdateManifestEmitter.IsUpdateAdapted(a.Format)))
+        {
+            logger.Log(BundleLogLevel.Warning,
+                "update is enabled but no produced format is update-adapted; " +
+                "the emitted feed carries no artifacts — clients read it as 'no update'.");
         }
 
         if (parsed.Json)
