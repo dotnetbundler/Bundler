@@ -1948,6 +1948,52 @@ public static class ProgramTests
     }
 
     [Fact]
+    static async Task RejectsArtifactPathCollisionAcrossTargets()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "publish");
+        Directory.CreateDirectory(input);
+        await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp.exe"), "test");
+
+        try
+        {
+            var configuration = new BundleConfiguration
+            {
+                ProductName = "ExampleApp",
+                Identifier = "com.example.app",
+                Version = "1.0.0",
+                OutputDirectory = Path.Combine(root, "artifacts"),
+                Targets =
+                [
+                    new BundleTargetConfiguration
+                    {
+                        Target = "windows-x86_64",
+                        InputDirectory = input,
+                        MainExecutable = "ExampleApp.exe",
+                        Formats = [PackageFormat.Nsis]
+                    },
+                    new BundleTargetConfiguration
+                    {
+                        Target = "windows-i686",
+                        InputDirectory = input,
+                        MainExecutable = "ExampleApp.exe",
+                        Formats = [PackageFormat.Nsis]
+                    }
+                ]
+            };
+
+            var backend = new RecordingBackend();
+            var collision = await Assert.ThrowsAnyAsync<ArgumentException>(
+                () => new BundlePipeline([backend]).BuildAsync(configuration));
+            Assert.Contains("collision", collision.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     static void RendersCompleteShortcutConfiguration()
     {
         var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Shortcut.Tests", Guid.NewGuid().ToString("N"));

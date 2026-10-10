@@ -24,14 +24,14 @@ jobs:
       - name: NativeAOT 工具链（clang/lld/zlib）
         run: sudo apt-get update && sudo apt-get install -y clang lld zlib1g-dev
       - name: 产 linux-aarch64 引导件
-        run: dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-aarch64 -o /tmp/aot/linux-aarch64
+        run: dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-arm64 -o /tmp/aot/linux-aarch64
       - name: 产 linux-musl-aarch64 引导件（alpine 容器内 NativeAOT）
         run: |
           mkdir -p /tmp/aot/linux-musl-aarch64
           docker run --rm -v "$PWD:/src" -v /tmp/aot:/aot -w /src \
             mcr.microsoft.com/dotnet/sdk:10.0-alpine \
             sh -c "apk add --no-cache clang lld zlib-dev zlib-static build-base >/dev/null && \
-                   dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-musl-aarch64 -o /aot/linux-musl-aarch64"
+                   dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-musl-arm64 -o /aot/linux-musl-aarch64"
       - name: 冒烟——宿主编译件真跑 apply 换包
         run: |
           set -eux
@@ -63,7 +63,7 @@ jobs:
           & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath
       - name: 产 windows-arm64 引导件
         shell: pwsh
-        run: dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r windows-arm64 -o C:\aot\windows-arm64
+        run: dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r win-arm64 -o C:\aot\windows-arm64
       - name: 冒烟——宿主真跑 apply 换包
         shell: pwsh
         run: |
