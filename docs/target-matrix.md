@@ -22,7 +22,7 @@
 | `aarch64` | `arm64` | `arm64` | `aarch64` | `aarch64` | `arm64` | `arm64` | `aarch64` |
 | `universal` | — | — | — | — | — | `universal` | — |
 | `armv7hf` | `armhf`、`armv7` | `armhf` | `armv7hl` | `armv7` | — | — | — |
-| `armv7sf` | `armel` | `armel` | `armv5tel` | `armhf` | — | — | — |
+| `armv7sf` | `armel` | `armel` | — | — | — | — | — |
 | `riscv64` | — | `riscv64` | `riscv64` | `riscv64` | — | — | — |
 | `loongarch64` | — | — | `loongarch64` | `loongarch64` | — | — | — |
 | `ppc64le` | — | `ppc64el` | `ppc64le` | `ppc64le` | — | — | — |

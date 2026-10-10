@@ -65,12 +65,18 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
     }
 
     internal static Guid ComponentCode(string identifier, string target, WixInstallScope scope, string relativePath,
-        WixLanguageInfo? language = null) =>
-        Uuid5(NamespaceId, "component|" + identifier.ToLowerInvariant() + "|" + scope + "|" +
+        WixLanguageInfo? language = null)
+    {
+        var parsed = BundleTarget.Parse(target);
+        var archToken = ArtifactNaming.ArchToken(parsed, PackageFormat.Msi)
+            ?? throw new ArgumentException(
+                $"Architecture '{parsed.Architecture}' is not supported for {PackageFormat.Msi}.");
+        return Uuid5(NamespaceId, "component|" + identifier.ToLowerInvariant() + "|" + scope + "|" +
               target + "|Programs|" + identifier.ToLowerInvariant() + "-" +
-              target.Substring(4) + "|" +
+              archToken + "|" +
               relativePath.Replace('\\', '/').ToLowerInvariant() +
               (language ?? WixLanguageInfo.Resolve("en-US")).FamilyToken);
+    }
 
     internal static string StableId(string prefix, string name)
     {
