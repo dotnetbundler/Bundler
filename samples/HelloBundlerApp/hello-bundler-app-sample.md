@@ -50,19 +50,24 @@ appimage 仅 Linux 宿主；nsis/deb/rpm/zip/targz/alpineapk 为纯托管实现�
 ## 运行
 
 ```bash
-# 产出该目标下全部可构建格式
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r <publish-rid> -p:BundlerTarget=<target>
+# 产出该目标下全部可构建格式（BundlerTarget 按 $(RuntimeIdentifier) 推导，也可显式 -p:BundlerTarget=<target>）
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r <publish-rid>
 
 # 只产指定格式子集
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r linux-x64 -p:BundlerTarget=linux-x86_64 -p:BundlerFormats=deb;rpm
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r linux-x64 -p:BundlerFormats=deb;rpm
 
 # 变体旋钮：全部按 HelloBundler<Format><Knob> 传透
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64 -p:BundlerTarget=windows-x86_64 \
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64 \
     -p:HelloBundlerNsisInstallScope=perMachine \
     -p:HelloBundlerMsiLanguage=zh-CN -p:HelloBundlerMsiInstallScope=perMachine
+
+# 不经 publish：显式 BundlerBundle 入口（自动内层发布+打包 / 只打包）
+dotnet msbuild samples/HelloBundlerApp/HelloBundlerApp.csproj -t:BundlerBundle -p:BundlerTarget=linux-x86_64 -p:Configuration=Release
+dotnet msbuild samples/HelloBundlerApp/HelloBundlerApp.csproj -t:BundlerBundle -p:BundlerInputDir=<已发布目录> -p:BundlerTarget=linux-x86_64
 ```
 
 产物统一落 `samples/HelloBundlerApp/artifacts/`（由 `BundlerOutputPath` 可调）。
+`BundlerBundle` 三模式：`BundlerInputDir` 非空只打包、缺省按 `BundlerTarget→canonical RID` 内层发布再打包（`-p:BundlerPublishRid=` 覆盖表外 RID）、`BundlerUniversalTargets` 走 universal 合并。
 
 ## 变体旋钮前缀约定
 

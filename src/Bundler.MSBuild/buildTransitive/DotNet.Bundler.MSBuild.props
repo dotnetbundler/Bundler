@@ -12,6 +12,8 @@
     <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''"></BundlerMainExecutable>
     <BundlerOutputPath Condition="'$(BundlerOutputPath)' == ''">$(MSBuildProjectDirectory)\artifacts</BundlerOutputPath>
     <BundlerOutputLayout Condition="'$(BundlerOutputLayout)' == ''">flat</BundlerOutputLayout>
+    <BundlerInputDir Condition="'$(BundlerInputDir)' == ''"></BundlerInputDir>
+    <BundlerPublishRid Condition="'$(BundlerPublishRid)' == ''"></BundlerPublishRid>
     <BundlerToolCachePath Condition="'$(BundlerToolCachePath)' == ''"></BundlerToolCachePath>
     <BundlerWixToolsetArchivePath Condition="'$(BundlerWixToolsetArchivePath)' == ''"></BundlerWixToolsetArchivePath>
     <BundlerWixInstallScope Condition="'$(BundlerWixInstallScope)' == ''">currentUser</BundlerWixInstallScope>

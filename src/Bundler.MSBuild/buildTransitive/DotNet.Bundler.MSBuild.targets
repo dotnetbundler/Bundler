@@ -9,26 +9,71 @@
   <UsingTask TaskName="DotNet.Bundler.MSBuild.MergeUniversalPayload"
              AssemblyFile="$(_BundlerTaskAssembly)" />
 
+  <!-- bundler target ↔ canonical publish RID 双向映射表：
+       BundlerBundle 自动发布按 BundlerTarget→Rid 查 canonical RID；
+       BundlerTarget 缺省时按 Rid→target 从 $(RuntimeIdentifier) 便捷推导（显式 BundlerTarget 恒覆盖）。
+       macos-universal 无单一 canonical RID——走 BundlerUniversalTargets 双 RID 内层发布+合并路。 -->
+  <ItemGroup>
+    <_BundlerRidMap Include="windows-x86_64"><Rid>win-x64</Rid></_BundlerRidMap>
+    <_BundlerRidMap Include="windows-i686"><Rid>win-x86</Rid></_BundlerRidMap>
+    <_BundlerRidMap Include="windows-aarch64"><Rid>win-arm64</Rid></_BundlerRidMap>
+    <_BundlerRidMap Include="macos-x86_64"><Rid>osx-x64</Rid></_BundlerRidMap>
+    <_BundlerRidMap Include="macos-aarch64"><Rid>osx-arm64</Rid></_BundlerRidMap>
+    <_BundlerRidMap Include="linux-x86_64"><Rid>linux-x64</Rid></_BundlerRidMap>
+    <_BundlerRidMap Include="linux-i686"><Rid>linux-x86</Rid></_BundlerRidMap>
+    <_BundlerRidMap Include="linux-aarch64"><Rid>linux-arm64</Rid></_BundlerRidMap>
+    <_BundlerRidMap Include="linux-musl-x86_64"><Rid>linux-musl-x64</Rid></_BundlerRidMap>
+    <_BundlerRidMap Include="linux-musl-aarch64"><Rid>linux-musl-arm64</Rid></_BundlerRidMap>
+  </ItemGroup>
+
+  <!-- 两入口依赖链（依赖 target 的属性改动对后续依赖和被依赖方可见；不能用 CallTarget——
+       被调方拿不到调用方体内设置的属性）。
+       $(PublishDir) 是计算属性永远非空，不能当“本次跑过 Publish”的信号——
+       所以钩子链没有 _BundlerAutoPublish：钩子入口天然跟在真实 Publish 后，输入即 $(PublishDir)。 -->
+  <PropertyGroup>
+    <_BundlerStages>_BundlerDerive;_BundlerUniversalMerge;_BundlerBundleCore</_BundlerStages>
+    <_BundlerBundleStages>_BundlerDerive;_BundlerUniversalMerge;_BundlerAutoPublish;_BundlerBundleCore</_BundlerBundleStages>
+  </PropertyGroup>
+
+  <!-- Publish 钩子入口：dotnet publish 时顺带打包（BundlerEnabled=true 才挂） -->
   <Target Name="BundleDesktopApplication"
           AfterTargets="Publish"
-          Condition="'$(BundlerEnabled)' == 'true' and '$(DesignTimeBuild)' != 'true'">
+          DependsOnTargets="$(_BundlerStages)"
+          Condition="'$(BundlerEnabled)' == 'true' and '$(DesignTimeBuild)' != 'true'" />
+
+  <!-- 显式入口（不经 Publish 钩子也可调用）：
+       -p:BundlerInputDir=<dir> → 拿已发布目录直接打包，不触发发布
+       无 BundlerInputDir       → 按 BundlerTarget→canonical RID（可用 -p:BundlerPublishRid 覆盖）内部 dotnet publish 到 obj/BundlerPublish/<target>/ 再打包
+       BundlerUniversalTargets  → macOS universal 双 RID 内层发布+合并 -->
+  <Target Name="BundlerBundle"
+          DependsOnTargets="$(_BundlerBundleStages)"
+          Condition="'$(DesignTimeBuild)' != 'true'" />
+
+  <!-- 阶段1：BundlerTarget 推导（Rid→target 便捷推导，显式 BundlerTarget 恒覆盖）+ 入口参数校验 -->
+  <Target Name="_BundlerDerive">
+    <ItemGroup>
+      <_BundlerTargetFromRid Include="@(_BundlerRidMap->'%(Identity)')"
+          Condition="'$(BundlerTarget)' == '' and '%(_BundlerRidMap.Rid)' == '$(RuntimeIdentifier)'" />
+    </ItemGroup>
     <PropertyGroup>
-      <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
-      <BundlerVersion Condition="'$(BundlerVersion)' == ''">$(Version)</BundlerVersion>
-      <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == '' and ($([System.String]::Copy('$(BundlerTarget)').StartsWith('macos-')) == 'true' or $([System.String]::Copy('$(BundlerTarget)').StartsWith('linux-')) == 'true' or '$(BundlerTarget)' == 'macos-universal' or '$(BundlerUniversalTargets)' != '')">$(TargetName)</BundlerMainExecutable>
-      <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''">$(TargetName).exe</BundlerMainExecutable>
-      <BundlerNsisShortcutStartMenuFolder Condition="'$(BundlerNsisShortcutStartMenuFolder)' == ''">$(BundlerProductName)</BundlerNsisShortcutStartMenuFolder>
-      <_BundlerUniversalDir Condition="'$(BundlerUniversalTargets)' != ''">$(IntermediateOutputPath)BundlerUniversal\</_BundlerUniversalDir>
-      <_BundlerEffectiveInput Condition="'$(BundlerUniversalTargets)' != ''">$(_BundlerUniversalDir)merged</_BundlerEffectiveInput>
-      <_BundlerEffectiveInput Condition="'$(BundlerUniversalTargets)' == ''">$(PublishDir)</_BundlerEffectiveInput>
-      <_BundlerEffectiveTarget Condition="'$(BundlerUniversalTargets)' != ''">macos-universal</_BundlerEffectiveTarget>
-      <_BundlerEffectiveTarget Condition="'$(BundlerUniversalTargets)' == ''">$(BundlerTarget)</_BundlerEffectiveTarget>
+      <BundlerTarget Condition="'$(BundlerTarget)' == ''">@(_BundlerTargetFromRid)</BundlerTarget>
+      <_BundlerPublishOutDir>$(IntermediateOutputPath)BundlerPublish\$(BundlerTarget)\</_BundlerPublishOutDir>
     </PropertyGroup>
     <Error Condition="'$(BundlerIdentifier)' == ''"
-           Text="BundlerIdentifier is required when BundlerEnabled is true." />
+           Text="BundlerIdentifier is required to bundle." />
     <Error Condition="'$(BundlerTarget)' == '' and '$(BundlerUniversalTargets)' == ''"
-           Text="BundlerTarget is required when BundlerEnabled is true." />
-    <ItemGroup Condition="'$(BundlerUniversalTargets)' != ''">
+           Text="BundlerTarget is required to bundle (pass -p:BundlerTarget=&lt;target&gt;, or -p:RuntimeIdentifier=&lt;rid&gt; for table derivation)." />
+    <Error Condition="'$(BundlerInputDir)' != '' and '$(BundlerUniversalTargets)' != ''"
+           Text="BundlerInputDir cannot be combined with BundlerUniversalTargets." />
+  </Target>
+
+  <!-- macOS universal 输入解析：per-RID 内层发布 + 托管合并（两入口共用；BundlerUniversalTargets 未设时跳过） -->
+  <Target Name="_BundlerUniversalMerge" Condition="'$(BundlerUniversalTargets)' != ''">
+    <PropertyGroup>
+      <_BundlerUniversalDir>$(IntermediateOutputPath)BundlerUniversal\</_BundlerUniversalDir>
+      <_BundlerEffectiveTarget>macos-universal</_BundlerEffectiveTarget>
+    </PropertyGroup>
+    <ItemGroup>
       <_BundlerUniversalRid Include="$(BundlerUniversalTargets)" />
       <!-- Flag any RID that is not an osx-* identifier or carries path/shell content; identities are
            interpolated into the inner publish -o path and the shell command line. -->
@@ -42,16 +87,49 @@
     <Error Condition="'@(_BundlerUniversalRidBad)' != ''"
            Text="BundlerUniversalTargets only accepts plain osx-* runtime identifiers (got '@(_BundlerUniversalRidBad)')." />
     <!-- Clean stale per-RID and merged outputs: publish -o does not remove files deleted since a previous run. -->
-    <RemoveDir Condition="'$(BundlerUniversalTargets)' != ''"
-               Directories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)');$(_BundlerUniversalDir)merged" />
-    <Exec Condition="'$(BundlerUniversalTargets)' != ''"
-          Command="dotnet publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) -f $(TargetFramework) -r %(_BundlerUniversalRid.Identity) -o &quot;$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity)&quot; -p:BundlerEnabled=false" />
+    <RemoveDir Directories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)');$(_BundlerUniversalDir)merged" />
+    <Exec Command="dotnet publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) -f $(TargetFramework) -r %(_BundlerUniversalRid.Identity) -o &quot;$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity)&quot; -p:BundlerEnabled=false" />
     <DotNet.Bundler.MSBuild.MergeUniversalPayload
       SourceDirectories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)')"
-      OutputDirectory="$(_BundlerUniversalDir)merged"
-      Condition="'$(BundlerUniversalTargets)' != ''">
+      OutputDirectory="$(_BundlerUniversalDir)merged">
       <Output TaskParameter="MergedDirectory" PropertyName="_BundlerEffectiveInput" />
     </DotNet.Bundler.MSBuild.MergeUniversalPayload>
+  </Target>
+
+  <!-- 阶段3：显式 BundlerBundle 的自动发布腿（只在显���链）——无输入目录且非 universal 时按 canonical RID 内层发布 -->
+  <Target Name="_BundlerAutoPublish"
+          Condition="'$(BundlerInputDir)' == '' and '$(BundlerUniversalTargets)' == ''">
+    <ItemGroup>
+      <_BundlerPublishRidFromMap Include="@(_BundlerRidMap->'%(Rid)')"
+          Condition="'%(_BundlerRidMap.Identity)' == '$(BundlerTarget)'" />
+    </ItemGroup>
+    <PropertyGroup>
+      <BundlerPublishRid Condition="'$(BundlerPublishRid)' == ''">@(_BundlerPublishRidFromMap)</BundlerPublishRid>
+      <_BundlerPublishTfmArg Condition="'$(TargetFramework)' != ''">-f $(TargetFramework)</_BundlerPublishTfmArg>
+      <_BundlerEffectiveInput>$(_BundlerPublishOutDir)</_BundlerEffectiveInput>
+    </PropertyGroup>
+    <Error Condition="'$(BundlerPublishRid)' == ''"
+           Text="BundlerTarget '$(BundlerTarget)' has no canonical publish RID mapping — pass -p:BundlerPublishRid=&lt;rid&gt; or -p:BundlerInputDir=&lt;dir&gt;." />
+    <!-- publish -o 不清理上次构建已删的文件——先清中间发布目录防滞留 -->
+    <RemoveDir Directories="$(_BundlerPublishOutDir)" />
+    <Exec Command="dotnet publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) $(_BundlerPublishTfmArg) -r $(BundlerPublishRid) -o &quot;$(_BundlerPublishOutDir)&quot; -p:BundlerEnabled=false" />
+  </Target>
+
+  <!-- 共享打包体：effective 输入/目标归一 → 默认值推导 → 任务调用 -->
+  <Target Name="_BundlerBundleCore">
+    <PropertyGroup>
+      <!-- universal 腿在 _BundlerUniversalMerge 已设两个 effective；其余优先级：BundlerInputDir > $(PublishDir)（本次已发布）> 内层发布目录 -->
+      <_BundlerEffectiveInput Condition="'$(_BundlerEffectiveInput)' == '' and '$(BundlerInputDir)' != ''">$(BundlerInputDir)</_BundlerEffectiveInput>
+      <_BundlerEffectiveInput Condition="'$(_BundlerEffectiveInput)' == '' and '$(PublishDir)' != ''">$(PublishDir)</_BundlerEffectiveInput>
+      <_BundlerEffectiveInput Condition="'$(_BundlerEffectiveInput)' == ''">$(_BundlerPublishOutDir)</_BundlerEffectiveInput>
+      <_BundlerEffectiveTarget Condition="'$(_BundlerEffectiveTarget)' == ''">$(BundlerTarget)</_BundlerEffectiveTarget>
+      <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
+      <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
+      <BundlerVersion Condition="'$(BundlerVersion)' == ''">$(Version)</BundlerVersion>
+      <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == '' and ($([System.String]::Copy('$(BundlerTarget)').StartsWith('macos-')) == 'true' or $([System.String]::Copy('$(BundlerTarget)').StartsWith('linux-')) == 'true' or '$(BundlerTarget)' == 'macos-universal' or '$(BundlerUniversalTargets)' != '')">$(TargetName)</BundlerMainExecutable>
+      <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''">$(TargetName).exe</BundlerMainExecutable>
+      <BundlerNsisShortcutStartMenuFolder Condition="'$(BundlerNsisShortcutStartMenuFolder)' == ''">$(BundlerProductName)</BundlerNsisShortcutStartMenuFolder>
+    </PropertyGroup>
     <Message Importance="high" Text="Bundling $(BundlerProductName) for $(_BundlerEffectiveTarget): $(BundlerFormats)..." />
     <DotNet.Bundler.MSBuild.BundleDesktopApplication
       ProductName="$(BundlerProductName)"

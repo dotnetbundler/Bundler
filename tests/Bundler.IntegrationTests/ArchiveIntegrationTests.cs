@@ -23,6 +23,9 @@ public sealed class ArchiveFixture : IDisposable
     public string FanoutDir { get; private set; } = null!;
     public string CrossWinDir { get; private set; } = null!;
     public string CrossOsxDir { get; private set; } = null!;
+    public string PackOnlyZip { get; private set; } = null!;
+    public string AutoPublishZip { get; private set; } = null!;
+    public string DeriveZip { get; private set; } = null!;
 
     private readonly Lazy<bool> _init;
 
@@ -75,6 +78,28 @@ public sealed class ArchiveFixture : IDisposable
         }
         CrossWinDir = Ws.Combine("cross-windows-x86_64");
         CrossOsxDir = Ws.Combine("cross-macos-arm64");
+
+        // BundlerBundle 显式入口三腿：只打包（BundlerInputDir）、自动内层发布、钩子路 RID→target 推导。
+        var publishDir = Path.Combine(Path.GetDirectoryName(FixtureProject)!,
+            "bin", "Release", "net10.0", "linux-x64", "publish");
+        Dotnet.Checked(["msbuild", FixtureProject, "-t:BundlerBundle",
+            "-p:Configuration=Release", $"-p:BundlerInputDir={publishDir}",
+            "-p:BundlerTestFormats=zip", $"-p:BundlerIntegrationOutput={Ws.Combine("packonly")}"],
+            "BundlerBundle pack-only failed");
+        PackOnlyZip = SingleFile(Ws.Combine("packonly"), "*.zip");
+
+        Dotnet.Checked(["msbuild", FixtureProject, "-t:BundlerBundle",
+            "-p:Configuration=Release", "-p:BundlerTestFormats=zip",
+            $"-p:BundlerIntegrationOutput={Ws.Combine("autopublish")}"],
+            "BundlerBundle auto-publish failed");
+        AutoPublishZip = SingleFile(Ws.Combine("autopublish"), "*.zip");
+
+        // -p:BundlerTarget= 显式置空：钩子路应改从 $(RuntimeIdentifier) 推导 linux-x86_64
+        Dotnet.Publish(FixtureProject, "Release",
+            ["--packages", CacheDir, "-r", "linux-x64", "-p:BundlerTarget=",
+             "-p:BundlerTestFormats=zip", $"-p:BundlerIntegrationOutput={Ws.Combine("derive")}"],
+            "derive publish failed", noRestore: false);
+        DeriveZip = SingleFile(Ws.Combine("derive"), "*.zip");
     }
 
     public void Publish(string name, params string[] extraProperties)
@@ -105,6 +130,18 @@ public sealed class ArchiveIntegrationTests : IClassFixture<ArchiveFixture>
         _f = fixture;
         _f.Ensure();
     }
+
+    [Fact]
+    public void BundlerBundlePackOnly_PackagesExistingPublishDir()
+        => Assert.True(File.Exists(_f.PackOnlyZip), $"pack-only artifact missing: {_f.PackOnlyZip}");
+
+    [Fact]
+    public void BundlerBundleAutoPublish_PublishesThenPackages()
+        => Assert.True(File.Exists(_f.AutoPublishZip), $"auto-publish artifact missing: {_f.AutoPublishZip}");
+
+    [Fact]
+    public void PublishHook_DerivesBundlerTargetFromRuntimeIdentifier()
+        => Assert.Equal($"{ArchiveFixture.Stem}.zip", Path.GetFileName(_f.DeriveZip));
 
     [Fact]
     public void RepositoryPackagesCarryArchiveBackend()
