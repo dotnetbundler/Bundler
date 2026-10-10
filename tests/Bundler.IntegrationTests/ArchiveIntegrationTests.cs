@@ -11,7 +11,7 @@ public sealed class ArchiveFixture : IDisposable
     public string ExtractRoot { get; private set; } = null!;
     public string FixtureProject { get; private set; } = null!;
 
-    public const string Stem = "bundler-archive-fixture-1.0.0-linux-x64";
+    public const string Stem = "bundler-archive-fixture-1.0.0-linux-x86_64";
     public const string Exe = "BundlerArchiveIntegrationFixture";
 
     public string DefaultZip { get; private set; } = null!;
@@ -44,37 +44,37 @@ public sealed class ArchiveFixture : IDisposable
             "Archive", "BundlerArchiveIntegrationFixture.csproj");
         _ = RepositoryPackages.DirectoryPath;
         Publish("default");
-        DefaultZip = SingleFile(Ws.Combine("default", "linux-x64", "zip"), "*.zip");
-        DefaultTgz = SingleFile(Ws.Combine("default", "linux-x64", "targz"), "*.tar.gz");
+        DefaultZip = SingleFile(Ws.Combine("default"), "*.zip");
+        DefaultTgz = SingleFile(Ws.Combine("default"), "*.tar.gz");
 
         Publish("override",
             "-p:BundlerTestArchivePackageName=acme-tool",
             "-p:BundlerTestArchiveVersion=2.3.4",
             "-p:BundlerTestFormats=zip");
-        OverrideZip = SingleFile(Ws.Combine("override", "linux-x64", "zip"), "*.zip");
+        OverrideZip = SingleFile(Ws.Combine("override"), "*.zip");
 
         Publish("named", "-p:BundlerTestArchiveName=custom-stem", "-p:BundlerTestFormats=zip");
-        NamedZip = SingleFile(Ws.Combine("named", "linux-x64", "zip"), "custom-stem.zip");
+        NamedZip = SingleFile(Ws.Combine("named"), "custom-stem.zip");
 
         Publish("files", "-p:BundlerTestArchiveFiles=1", "-p:BundlerTestFormats=zip%3Btargz");
-        FilesZip = SingleFile(Ws.Combine("files", "linux-x64", "zip"), "*.zip");
-        FilesTgz = SingleFile(Ws.Combine("files", "linux-x64", "targz"), "*.tar.gz");
+        FilesZip = SingleFile(Ws.Combine("files"), "*.zip");
+        FilesTgz = SingleFile(Ws.Combine("files"), "*.tar.gz");
 
         Publish("fanout", "-p:BundlerTestFormats=deb%3Brpm%3Bappimage%3Bzip%3Btargz");
-        FanoutDir = Ws.Combine("fanout", "linux-x64");
+        FanoutDir = Ws.Combine("fanout");
 
-        foreach (var rid in new[] { "win-x64", "osx-arm64" })
+        foreach (var rid in new[] { "windows-x86_64", "macos-arm64" })
         {
             Dotnet.Publish(FixtureProject, "Release",
             [
                 $"-p:BundlerIntegrationOutput={Ws.Combine("cross-" + rid)}",
                 "-p:BundlerTestFormats=zip",
                 "--packages", CacheDir,
-                "-r", rid,
+                "-r", TestPlatform.ToPublishRid(rid), $"-p:BundlerTarget={rid}",
             ], $"cross publish for {rid} failed", noRestore: false);
         }
-        CrossWinDir = Ws.Combine("cross-win-x64", "win-x64", "zip");
-        CrossOsxDir = Ws.Combine("cross-osx-arm64", "osx-arm64", "zip");
+        CrossWinDir = Ws.Combine("cross-windows-x86_64");
+        CrossOsxDir = Ws.Combine("cross-macos-arm64");
     }
 
     public void Publish(string name, params string[] extraProperties)
@@ -222,10 +222,10 @@ public sealed class ArchiveIntegrationTests : IClassFixture<ArchiveFixture>
     public void OverrideVariantUsesCustomPackageNameVersion()
     {
         var zip = _f.OverrideZip;
-        Assert.Equal("acme-tool-2.3.4-linux-x64.zip", Path.GetFileName(zip));
+        Assert.Equal("acme-tool-2.3.4-linux-x86_64.zip", Path.GetFileName(zip));
         var listing = ProcessRunner.Run("unzip", ["-l", zip]);
         ProcessRunner.AssertSuccess(listing, "override: unzip -l failed.");
-        Assert.Matches(new System.Text.RegularExpressions.Regex($" acme-tool-2\\.3\\.4-linux-x64/{ArchiveFixture.Exe}$", System.Text.RegularExpressions.RegexOptions.Multiline), listing.StdOut);
+        Assert.Matches(new System.Text.RegularExpressions.Regex($" acme-tool-2\\.3\\.4-linux-x86_64/{ArchiveFixture.Exe}$", System.Text.RegularExpressions.RegexOptions.Multiline), listing.StdOut);
     }
 
     [Fact]
@@ -290,9 +290,9 @@ public sealed class ArchiveIntegrationTests : IClassFixture<ArchiveFixture>
     public void CrossOsPublishProducesZipForWindowsAndMac()
     {
         Assert.True(Directory.EnumerateFiles(_f.CrossWinDir, "*.zip").Any(),
-            "cross: no zip produced for win-x64.");
+            "cross: no zip produced for windows-x86_64.");
         Assert.True(Directory.EnumerateFiles(_f.CrossOsxDir, "*.zip").Any(),
-            "cross: no zip produced for osx-arm64.");
+            "cross: no zip produced for macos-arm64.");
     }
 
     [Fact]

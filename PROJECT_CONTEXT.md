@@ -1,9 +1,9 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-09
+> 最后更新：2026-10-11
 > 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.88`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
-> 当前阶段：**全部 11 个格式（nsis/msi/app/dmg/pkg/deb/rpm/appimage/zip/targz/alpineapk）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`；无进行中的格式阶段**
+> 当前包版本：`0.1.0-alpha.89`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结；进行中=打包输出模型重构（rid 概念废除 → `target={os}[-{libc}]-{arch}` 语法 + 各后端生态惯用架构词 + 输出扁平化/`outputLayout` 旋钮 + 规划期重名断言），契约见 `docs/target-matrix.md`**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
 > 逐阶段实施证据以带日期条目归档在各格式 `<format>-roadmap.md`，本文不重复记录
@@ -79,7 +79,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - `.rpm`（已冻结，`alpha.55`）：纯托管 lead/header/cpio/gzip 写入器；六族关系字段、License/Group/Url、scriptlet/systemd unit/`%config(noreplace)`、gzip-only；可选 GPG 签名（`RPMSIGTAG_RSA`+`RPMSIGTAG_PGP`，`rpm -K`/zypper/dnf 可验）。
 - `.AppImage`（已冻结，`alpha.58`）：内嵌 appimagetool×2 + type2 runtime×2（SHA-256 provenance），AppDir 共享 freedesktop 件 + 脚本 AppRun，压缩固定 zstd；可选 GPG 签名（`.sha256_sig` 段，`gpgv` 已验）。
 - `.zip`/`.tar.gz`（已冻结，`alpha.59`）：纯托管写入器，单顶层目录布局、执行位与符号链接保留、`.sha256` 侧车、确定性构建；zip/tar 均流式写出：zip 经 Zip64 动态升级无尺寸上限，tar 单条目至 ustar ~8GiB 顶。
-- `.apk`（已冻结，`alpha.63`）：纯托管三段 gzip 写入器，`.PKGINFO`+六脚本+`BundlerAlpineApkFile` 映射+pax SHA1 校验和，可选 RSA 签名段；`linux-musl-x64/arm64` 目标。
+- `.apk`（已冻结，`alpha.63`）：纯托管三段 gzip 写入器，`.PKGINFO`+六脚本+`BundlerAlpineApkFile` 映射+pax SHA1 校验和，可选 RSA 签名段；`linux-musl-x86_64/arm64` 目标。
 - CLI（已冻结，`alpha.62`）：`validate`/`plan`/`bundle` 三命令共用 Core/后端、`bundler.json` 层叠、`--bundles`/`--input-dir`、稳定退出码与 `--json`；dotnet tool nupkg + `PublishAot` 原生二进制双分发。
 - UPDATE（已冻结，`alpha.74`，PR #27）：静态 JSON 清单 feed + ECDSA P-256 分离签名（`.sig`+`feed.sig` 防降级）+ `bundler-update.json` 身份旁车 + 外置 AOT 引导件（shell 降级）；nsis/msi 重跑安装器、zip/targz/app/appimage 三段式换包（备份/崩溃恢复/`--rollback`）；block-map 64KiB 差分默认开（实测 83% 复用，失败回落全量）；本地/UNC feed 离线可更新；deb/rpm/apk/dmg/pkg 按权威实践排除；外部待验收见 `docs/update-open-items.md`。
 
@@ -118,7 +118,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 ### 2026-10-09 PR #45 压缩合并（squash `0ea145a`，main `0ea145a`，版本 `alpha.84` 不变）
 
 - `.github/workflows/release-verify.yml` 发布前全量验证落地：仅 `workflow_dispatch` 触发，六宿主矩阵（`ubuntu-26.04`、`ubuntu-26.04-arm`、`windows-2025`、`windows-11-arm`、`macos-26-intel`、`macos-26`；docker 发行版腿挂 ubuntu job 内）——每腿四段：构建+四工程全量 → fixture 产包 → 真装真卸 → Special 自动腿；`fail-fast:false`、`cancel-in-progress:true`、证据工件（`tests/Special/evidence/`+`artifacts/ci/test-progress.log`）保留 1 天；action 全最新稳定（checkout v7/setup-dotnet v6/upload-artifact v7）。最终六腿合并 run 全绿。`dbg-aot.yml` 保留为手动触发的 arm64 引导件再生产工作流。
-- arm64 AOT 引导件入库（UPDATE-OI-01 arm64 段实证收口）：`tools/` 新增 `linux-arm64`/`linux-musl-arm64`/`win-arm64` 三件，全部由 GitHub arm64 runner 真机产出+冒烟 `apply`（musl-arm64 经 alpine SDK 容器）；测试 RID 自适应（`TestPlatform.LinuxRuntimeIdentifier`/`OsxRuntimeIdentifier`、`MuslRid()`/`WinRid()`）——win-arm64 UpdateIntegrationTests 3 腿、musl-arm64 docker tmpfs ENOSPC、win-arm64 VHD 小卷、arm64 `ShippedBootstrap_SmokeApplies` 全部落地实跑。
+- arm64 AOT 引导件入库（UPDATE-OI-01 arm64 段实证收口）：`tools/` 新增 `linux-aarch64`/`linux-musl-aarch64`/`win-arm64` 三件，全部由 GitHub arm64 runner 真机产出+冒烟 `apply`（musl-arm64 经 alpine SDK 容器）；测试 RID 自适应（`TestPlatform.LinuxRuntimeIdentifier`/`OsxRuntimeIdentifier`、`MuslRid()`/`WinRid()`）——win-arm64 UpdateIntegrationTests 3 腿、musl-arm64 docker tmpfs ENOSPC、win-arm64 VHD 小卷、arm64 `ShippedBootstrap_SmokeApplies` 全部落地实跑。
 - runner 实证修复一批：`MacDmgBundleBackend` hdiutil "Resource busy" 定向重试；`ZipToolCache.SafeDeleteTree` 删除重试全覆盖；NSIS 清理与安装等待重试/超时放宽（共享 runner 负载 flake）；Special 脚本四真 bug（`Note` 归一化 PASS/FAIL、真 ENOSPC 循环写、`pinned-items` `/S`+快照 diff+`-InstallDirName` 拒跑守卫、`arm64-matrix` NSIS 腿卸载清场）；`arm64-real-hw.sh` 包名改包元数据自描述；工件执行腿 x64 门禁、MachO 按宿主 RID、验读改受管 API。
 - `docs/special-acceptance.md` B 表三行更新：ARM64 真机组✓、UPDATE arm64 引导件✓（均 2026-10-09 完成）、Windows ARM64 矩阵部分收编（装/卸已绿，升/修组合仍挂）。
 - 遗留不属本 PR：nuget 包+release 资产发布为后期另一步；升级/修复组合与凭证/公网/真重启/UAC 真人/干净宿主类仍挂 `docs/special-acceptance.md`。
@@ -204,14 +204,14 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 - R3 新腿 linux 实跑抓出的高危缺陷及连环硬化一轮批：`bundler-updater apply` 在 install↔payload 同址/互嵌下静默抹数据（备份移走→空载荷覆盖→备份消失）——修 install↔payload↔backup↔retain **四向同址/互嵌拒绝**，全部先于 marker 恢复与任何文件操作（rc=2）；POSIX `bundler-updater.sh` 同协议双侧对齐。
 - Devin Review 五轮共 9 发现全实证修复：符号链接面系统硬化——**双拼写原则**（关系判一律叶链解析到底的物理名、文件操作一律父物理化+叶字面）：载荷经文件级/目录级符号链接逃逸互嵌判（mv 后自指死链）、悬挂 install 链接 marker 恢复失配、备份/retain 叶链越界删链外目标、环链死循环（解析限 40 跳）、`--backup-dir` 缺省位预置叶链逃逸同址判；附随修侧车挪位（`bundler-update.json` 移入 .app `Contents/Resources` 保 codesign）、`--app`/`--log` 相对路径就地解析、Restart 失败降级 WARN 非 rc=4、Restart Manager console-ctrl 广播误杀测试宿主（`CreateNoWindow`）。第五轮 0 发现。
-- 宿主腿实证：busybox sh 20 腿全绿 + musl 容器真产件 3/3、win-x64 ~Update 49（48P/1S）、本机 49/49；五 RID 引导件全部按 head 重产回填（win/osx-arm64/osx-x64/linux-musl-x64/linux-x64，sha256 逐件核验）。
+- 宿主腿实证：busybox sh 20 腿全绿 + musl 容器真产件 3/3、win-x64 ~Update 49（48P/1S）、本机 49/49；五 RID 引导件全部按 head 重产回填（win/osx-arm64/osx-x64/linux-musl-x86_64/linux-x64，sha256 逐件核验）。
 
 ### 2026-10-06 PR #30 压缩合并（squash `45842ff`，main `45842ff`，版本推进 `alpha.76`）
 
 - 四项整改合一批：CLI 删 `apk` 别名（`alpineapk` 唯一合法名，`apk` 留 Android）；`BundlerMacAppShortVersion` 默认继承 `$(BundlerVersion)`（样品输出不变）；`ApplyOptions.KeepRollbackBackup` 默认 false——换包期瞬备 `.bundler-backup` 必建（原子性+marker 崩溃恢复不可关），成功后默认删，开启才迁保留位当回滚点；保留位分层数据区 `DotNet.Bundler/backups/<名>-<路径哈希>`（per-user→LOCALAPPDATA/~/Library/XDG，per-machine→ProgramData//Library//var/lib）；POSIX `bundler-updater.sh` 同协议。
 - Devin Review 四轮共 6 发现全实证修复：retain==install 等值逃逸（`SameOrInside`）、迁移失败阻断（`TryRetainOrRemoveBackup` 降级留瞬备）、`..` 字面误拒（`norm_path` 物理规范化+前移入参）、缺席父目录 `..` 逃逸（`norm_lexical` 词法折叠）、`--backup-dir` 无嵌套判抹安装位（补双向嵌套拒）、跨 RID 入包件过期（五 RID 全重产回填）。第四轮 0 发现。
 - 宿主腿实证：win-x64（Server 2022）Update 47/47 + 自产件六腿全绿；macOS arm64 真机（26.5.2）等值拒/降级/.app/sh 全绿 + osx-x64 交叉产件；alpine busybox sh 嵌套拒/降级/回归 3/3 + musl 件容器实跑 3/3；本机全量 336/297P/0F/39S。
-- 产件来源记录：win-x64/osx-arm64/osx-x64 由对应宿主子会话产件回传；linux-musl-x64 由 alpine 容器 `dotnet10-sdk`+musl 工具链真产（glibc 宿主交叉产出系 PT_INTERP/NEEDED 混血残件，不可用——musl 件只能在 musl 工具链宿主产）；linux-x64 本机产。
+- 产件来源记录：win-x64/osx-arm64/osx-x64 由对应宿主子会话产件回传；linux-musl-x86_64 由 alpine 容器 `dotnet10-sdk`+musl 工具链真产（glibc 宿主交叉产出系 PT_INTERP/NEEDED 混血残件，不可用——musl 件只能在 musl 工具链宿主产）；linux-x64 本机产。
 - 已知边界：POSIX 不存在路径的 `..` 为词法折叠近似（兜底降级不抹数据）；osx-x64 件未在 Intel Mac 实跑（挂 `docs/special-acceptance.md` 借机组既有项）。
 
 ### 2026-10-06 main `2bec10e` R3 四宿主回归 + PR #29 压缩合并（squash `be58d94`）
@@ -258,13 +258,13 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 ### 2026-10-06 UPDATE 复审修复第二轮（分支 `devin/1791228441-update-module`，PR #27）
 
 - Devin Review 二轮 9 发现：7 属实已修（清单 url 转义、feed 本体 `.sig` 验签堵降级、文件级身份旁车、差分缓存改 Verify 后刷新、Apply 门禁未验件、引导件提取根按 uid 隔离 0700、POSIX 重启直 exec 去 `sh -c`），2 误报回线（.app 清单条目、+build 剥离均已实现）。
-- 证据：+6 用例全绿；本机 Bundler.Tests 332/293P/0F/39S；build 0W/0E；linux-x64/linux-musl-x64 AOT 件重建入库。
+- 证据：+6 用例全绿；本机 Bundler.Tests 332/293P/0F/39S；build 0W/0E；linux-x64/linux-musl-x86_64 AOT 件重建入库。
 - 待办：win-x64/osx-x64/osx-arm64 AOT 件宿主子会话第三轮重建；复审。
 
 ### 2026-10-06 UPDATE 复审修复轮（分支 `devin/1791228441-update-module`，PR #27）
 
 - Devin Review 8 bug+5 flag 全部属实处置：`.app` 目录件改产 `.app.zip` 运输件进清单；清单 `url` 改相对清单目录路径；引导件工具内嵌 Bundler.Core 资源（删 tasks/updater 与 CLI 复制通道）；win 禁降级 .sh；nsis/msi 免引导件；崩溃恢复先于 install 存在性检查；新增文件级换包（AppImage 单件，sh 同构）；`TryRead` 增 `Contents/` 探测；semver 数值段比较+`+` 整串剥离；`.part` 重复下载先删再移；归档同名条目去重；删根 `tools/` 陈旧脚本。
-- 证据：`UpdateTests`+`UpdaterClientTests` 新增 11 用例全绿（含 linux 真 AOT 件文件级换包+回滚）；build 0W/0E；linux-x64/linux-musl-x64 AOT 件重建入库。
+- 证据：`UpdateTests`+`UpdaterClientTests` 新增 11 用例全绿（含 linux 真 AOT 件文件级换包+回滚）；build 0W/0E；linux-x64/linux-musl-x86_64 AOT 件重建入库。
 - 待办：win-x64/osx-x64/osx-arm64 AOT 件待宿主子会话重建（UPDATE-3 同法）。
 
 ### 2026-10-05 UPDATE-5/6 差分+模块冻结（分支 `devin/1791228441-update-module`，版本 `0.1.0-alpha.74`）
@@ -277,11 +277,11 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 
 ### 2026-10-05 UPDATE-3/4 宿主实证+应用内库（分支 `devin/1791228441-update-module`，版本 `0.1.0-alpha.74`）
 
-- UPDATE-3 四宿主真机实证全绿：win（file-swap/断电恢复/NSIS `/UPDATE` 链/MSI major upgrade）、linux（kill -9 跨卷中段恢复 701M、软链+exec 位、posix bash+dash、签名负例）、mac（.app 门禁未签互换/quarantine 剥离/bundle-id 拒 rc4/`open -n` 重启/posix darwin 分支）、musl（static-pie 静态件+sh 三场景）；per-RID 引导件 win-x64/osx-arm64/osx-x64/linux-musl-x64 入库（远端 `2ca2e62`）。
+- UPDATE-3 四宿主真机实证全绿：win（file-swap/断电恢复/NSIS `/UPDATE` 链/MSI major upgrade）、linux（kill -9 跨卷中段恢复 701M、软链+exec 位、posix bash+dash、签名负例）、mac（.app 门禁未签互换/quarantine 剥离/bundle-id 拒 rc4/`open -n` 重启/posix darwin 分支）、musl（static-pie 静态件+sh 三场景）；per-RID 引导件 win-x64/osx-arm64/osx-x64/linux-musl-x86_64 入库（远端 `2ca2e62`）。
 - UPDATE-4 `src/Bundler.Updater` 应用内库落地：UpdateClient 四动词门面+`.part` 续传+file:// 离线腿+sha256/ECDSA 双验拒放+installer-replay/file-swap 分派+`--rollback` 引导模式；共享源链接+`Protocol` 命名空间隔离；feed 语义定稿为"清单文件地址+裸文件名相对件"。
 - 修复：sh `--keep-payload` mv/copy 语义分叉、跨卷 CopyTree 软链解引用+exec 位丢失、`BootstrapperPath` .sh 误抢二进制分支、无匹配件改返回 null。
 - 证据：UpdateTests 15+UpdaterClientTests 7=22/22（含真 AOT 引导件端到端换包+回滚）；全量 Bundler.Tests 310/271P/0F/39S；build 0W/0E。
-- 遗留：mac 真实签名身份腿需 Apple Developer ID（外部待验收）；linux-arm64 AOT 因 qemu ilc SIGABRT 不可产（环境边界）。
+- 遗留：mac 真实签名身份腿需 Apple Developer ID（外部待验收）；linux-aarch64 AOT 因 qemu ilc SIGABRT 不可产（环境边界）。
 
 ### 2026-10-05 UPDATE-1 打包侧实现（分支 `devin/1791228441-update-module`，版本 `0.1.0-alpha.73`）
 
@@ -401,7 +401,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - 脚本归宿：`Verify.sh`/`Verify.ps1` 全部降为薄入口转发 `dotnet test`；`tests/AssertLocalRestore.ps1`、`MsiTestSupport.ps1` 删除（能力并入 Tooling）；`Windows.Nsis.Reboot/Verify.ps1` 保留（真实重启属外部待验收）。
 - 同意闸统一为 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1`（薄入口按其原开关语义置位）；NSIS 原脚本无开关，跑脚本即同意。
 - 验证（同 HEAD `7a7fcc8` 四宿主 `dotnet test` 全量，0 败）：win 182/49P/133S（Nsis 27+Msi 8+Cli 13 真装真卸）、linux 182/111P/71S（docker 矩阵真装+FUSE 真挂载）、
-  mac 182/51P/131S（MacApp/Dmg/Pkg 含 per-user 真装+relocate 语义）、alpine(musl 容器) 182/97P/85S（含 `linux-musl-x64` 真 AOT 实跑）；本机 linux 计数与宿主逐位吻合。
+  mac 182/51P/131S（MacApp/Dmg/Pkg 含 per-user 真装+relocate 语义）、alpine(musl 容器) 182/97P/85S（含 `linux-musl-x86_64` 真 AOT 实跑）；本机 linux 计数与宿主逐位吻合。
 - 迭代修复链（全部测试侧）：夹具门禁惰性化（ctor 内 SkipWhen 记 fail）与陈旧工作区自愈、dotnet 子命令进程内串行（并发还原撞 `project.assets.json`）、
   msiexec 1618 整机单例闸+重试、pkg 装腿 relocate 诱饵改隐藏-恢复、进程退出 EOF 等待限时（`build-server shutdown` 挂死根因）、musl 边界腿改真跑/门禁（AOT 宿主 RID、root/dpkg 架构 SKIP）、
   `build-server shutdown` 限 Windows（musl `VBCSCompiler -shutdown` 间歇挂死）。

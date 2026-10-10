@@ -14,7 +14,7 @@ internal sealed class RpmBundleBackend(RpmBundleConfiguration settings) : IBundl
         var result = RpmPackageWriter.Build(
             context.Configuration, context.Item, settings, context.Logger);
         return Task.FromResult<IReadOnlyList<BundleArtifact>>(
-            [new BundleArtifact(PackageFormat.Rpm, context.Item.Target.RuntimeIdentifier,
+            [new BundleArtifact(PackageFormat.Rpm, context.Item.Target.Target,
                 result.OutputPath)]);
     }
 }

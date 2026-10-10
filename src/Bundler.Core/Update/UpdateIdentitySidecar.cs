@@ -14,7 +14,7 @@ public static class UpdateIdentitySidecar
         string payloadRoot,
         UpdateBundleConfiguration? update,
         PackageFormat format,
-        string runtimeIdentifier)
+        string target)
     {
         if (update is null)
         {
@@ -23,7 +23,7 @@ public static class UpdateIdentitySidecar
         UpdateInstallIdentity.Write(payloadRoot, new UpdateInstallIdentity
         {
             Format = FormatName(format),
-            RuntimeIdentifier = runtimeIdentifier,
+            Target = target,
             Channel = update.Channel,
             FeedUrl = update.FeedUrl,
             PublicKey = ResolvePublicKey(update),

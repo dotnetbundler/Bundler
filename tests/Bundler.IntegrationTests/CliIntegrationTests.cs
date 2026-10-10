@@ -41,7 +41,7 @@ public sealed class CliFixture : IDisposable
             var publish = Dotnet.Run(
                 ["publish",
                  Path.Combine(RepositoryLayout.Root, "src", "Bundler.Cli", "Bundler.Cli.csproj"),
-                 "-c", "Release", "-r", TestPlatform.LinuxRuntimeIdentifier, "-o", aotDir, "-v", "q"],
+                 "-c", "Release", "-r", TestPlatform.LinuxPublishRid, "-o", aotDir, "-v", "q"],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) });
             ProcessRunner.AssertSuccess(publish, $"AOT publish failed:\n{publish.Output}");
             return Path.Combine(aotDir, "bundler");
@@ -58,7 +58,7 @@ public sealed class CliFixture : IDisposable
 
     public IEnumerable<string> BaseArgs(string? outputDir = null) =>
     [
-        "--input-dir", PublishDir, "--rid", "linux-x64",
+        "--input-dir", PublishDir, "--target", "linux-x86_64",
         "--product-name", "CliFixture", "--identifier", "dev.example.cli",
         "--package-version", "1.0.0", "--main-executable", MainExe,
         "--output-dir", outputDir ?? OutDir,
@@ -140,7 +140,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
         ProcessRunner.AssertSuccess(plan, "plan must exit 0");
         foreach (var fmt in formats.Split(','))
         {
-            Assert.Contains($"linux-x64 {fmt} ->", plan.StdOut);
+            Assert.Contains($"linux-x86_64 {fmt} ->", plan.StdOut);
         }
         var json = _f.Cli(["plan", .. BasePlus(_f, "--formats", "deb", "--json")]);
         ProcessRunner.AssertSuccess(json, "plan --json must exit 0");
@@ -148,7 +148,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
         var items = doc.RootElement.GetProperty("items").EnumerateArray().ToArray();
         Assert.Single(items);
         Assert.Equal("deb", items[0].GetProperty("format").GetString());
-        Assert.Equal("linux-x64", items[0].GetProperty("runtimeIdentifier").GetString());
+        Assert.Equal("linux-x86_64", items[0].GetProperty("target").GetString());
     }
 
     [Fact]
@@ -170,20 +170,20 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
         ProcessRunner.AssertSuccess(result, $"bundle must exit 0 (stderr: {result.StdErr})");
         var expected = new[]
         {
-            "deb/clifixture_1.0.0-1_amd64.deb",
-            "rpm/clifixture-1.0.0-1.x86_64.rpm",
-            "zip/clifixture-1.0.0-linux-x64.zip",
-            "targz/clifixture-1.0.0-linux-x64.tar.gz",
+            "clifixture_1.0.0-1_amd64.deb",
+            "clifixture-1.0.0-1.x86_64.rpm",
+            "clifixture-1.0.0-linux-x86_64.zip",
+            "clifixture-1.0.0-linux-x86_64.tar.gz",
         };
         foreach (var rel in expected)
         {
-            var abs = Path.Combine(_f.OutDir, "linux-x64", rel.Replace('/', Path.DirectorySeparatorChar));
-            Assert.True(File.Exists(abs), $"artifact missing: linux-x64/{rel}");
+            var abs = Path.Combine(_f.OutDir, rel);
+            Assert.True(File.Exists(abs), $"artifact missing: {rel}");
             Assert.Contains(abs, result.StdOut);
         }
         if (TestPlatform.IsLinux)
         {
-            var appDir = Path.Combine(_f.OutDir, "linux-x64", "appimage");
+            var appDir = Path.Combine(_f.OutDir);
             var appImage = Directory.EnumerateFiles(appDir, "*.AppImage").FirstOrDefault();
             Assert.NotNull(appImage);
             Assert.True(File.Exists(appImage + ".sha256"), "appimage sha256 sidecar missing");
@@ -233,7 +233,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
         try
         {
             var result = _f.Cli("bundle",
-                "--input-dir", emptyDir, "--rid", "linux-x64", "--formats", "zip",
+                "--input-dir", emptyDir, "--target", "linux-x86_64", "--formats", "zip",
                 "--product-name", "CliFixture", "--identifier", "dev.example.cli",
                 "--package-version", "1.0.0", "--main-executable", _f.MainExe,
                 "--output-dir", _f.Ws.Combine("out-fail"));
@@ -260,7 +260,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
               "version": "2.0.0",
               "outputDirectory": "{{cfgDir.Replace("\\", "\\\\")}}/out",
               "targets": [{
-                "runtimeIdentifier": "linux-x64",
+                "target": "linux-x86_64",
                 "inputDirectory": "{{_f.PublishDir.Replace("\\", "\\\\")}}",
                 "mainExecutable": "{{_f.MainExe}}",
                 "formats": ["zip"]
@@ -274,7 +274,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
             """);
         var bundle = _f.Cli("bundle", "--config", cfgPath, "--quiet");
         ProcessRunner.AssertSuccess(bundle, "config-driven bundle must exit 0");
-        var cfgZip = Path.Combine(cfgDir, "out", "linux-x64", "zip", "from-config.zip");
+        var cfgZip = Path.Combine(cfgDir, "out", "from-config.zip");
         Assert.True(File.Exists(cfgZip), "config archiveName must produce from-config.zip");
         using (var zip = System.IO.Compression.ZipFile.OpenRead(cfgZip))
         {
@@ -291,7 +291,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
         var dotted = _f.Cli("bundle", "--config", cfgPath,
             "--archive.archive-name=dotted", "--quiet");
         ProcessRunner.AssertSuccess(dotted, "dotted-knob bundle must exit 0");
-        Assert.True(File.Exists(Path.Combine(cfgDir, "out", "linux-x64", "zip", "dotted.zip")),
+        Assert.True(File.Exists(Path.Combine(cfgDir, "out", "dotted.zip")),
             "--archive.archive-name must override the config file");
     }
 
@@ -311,7 +311,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
               "version": "2.0.0",
               "outputDirectory": "{{cfgDir.Replace("\\", "\\\\")}}/out",
               "targets": [{
-                "runtimeIdentifier": "linux-x64",
+                "target": "linux-x86_64",
                 "inputDirectory": "{{_f.PublishDir.Replace("\\", "\\\\")}}",
                 "mainExecutable": "{{_f.MainExe}}",
                 "formats": ["zip"]
@@ -357,7 +357,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
               "version": "2.0.0",
               "outputDirectory": "{{cfgDir.Replace("\\", "\\\\")}}/out",
               "targets": [{
-                "runtimeIdentifier": "linux-x64",
+                "target": "linux-x86_64",
                 "inputDirectory": "{{_f.PublishDir.Replace("\\", "\\\\")}}",
                 "mainExecutable": "{{_f.MainExe}}",
                 "formats": ["zip"]
@@ -432,7 +432,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
             // 显式请求矩阵不兼容格式 = 用法错 rc=2（宿主门禁 PNSE 才走 rc=1）。
             Assert.Equal(2, result.ExitCode);
             Assert.Matches(
-                new System.Text.RegularExpressions.Regex("not supported for linux-x64"),
+                new System.Text.RegularExpressions.Regex("not supported for linux-x86_64"),
                 result.StdErr);
         }
     }

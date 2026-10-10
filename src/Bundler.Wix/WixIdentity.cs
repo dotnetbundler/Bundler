@@ -14,7 +14,7 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
     public static WixIdentity Create(
         string identifier,
         string version,
-        string runtimeIdentifier,
+        string target,
         WixInstallScope scope,
         string? upgradeCode = null,
         WixLanguageInfo? language = null,
@@ -29,9 +29,9 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
             throw new ArgumentOutOfRangeException(nameof(scope));
         }
         language ??= WixLanguageInfo.Resolve("en-US");
-        if (runtimeIdentifier != "win-x86" && runtimeIdentifier != "win-x64" && runtimeIdentifier != "win-arm64")
+        if (target != "windows-i686" && target != "windows-x86_64" && target != "windows-arm64")
         {
-            throw new NotSupportedException($"MSI target '{runtimeIdentifier}' is not supported.");
+            throw new NotSupportedException($"MSI target '{target}' is not supported.");
         }
 
         var versionToMap = packageVersion ?? version;
@@ -47,7 +47,7 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         }
 
         var normalizedIdentifier = identifier.ToLowerInvariant();
-        var family = $"{normalizedIdentifier}|{scope}|{runtimeIdentifier}" + language.FamilyToken;
+        var family = $"{normalizedIdentifier}|{scope}|{target}" + language.FamilyToken;
         Guid familyCode;
         if (upgradeCode is null)
         {
@@ -64,11 +64,11 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         return new WixIdentity(familyCode, productCode, productVersion);
     }
 
-    internal static Guid ComponentCode(string identifier, string runtimeIdentifier, WixInstallScope scope, string relativePath,
+    internal static Guid ComponentCode(string identifier, string target, WixInstallScope scope, string relativePath,
         WixLanguageInfo? language = null) =>
         Uuid5(NamespaceId, "component|" + identifier.ToLowerInvariant() + "|" + scope + "|" +
-              runtimeIdentifier + "|Programs|" + identifier.ToLowerInvariant() + "-" +
-              runtimeIdentifier.Substring(4) + "|" +
+              target + "|Programs|" + identifier.ToLowerInvariant() + "-" +
+              target.Substring(4) + "|" +
               relativePath.Replace('\\', '/').ToLowerInvariant() +
               (language ?? WixLanguageInfo.Resolve("en-US")).FamilyToken);
 

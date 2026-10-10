@@ -24,7 +24,7 @@ public static class ArchiveApiTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = "linux-x64",
+                    Target = "linux-x86_64",
                     InputDirectory = input,
                     MainExecutable = "FixtureApp",
                     Formats = [PackageFormat.Zip, PackageFormat.TarGz]
@@ -32,7 +32,7 @@ public static class ArchiveApiTests
             ]
         }, TestContext.Current.CancellationToken);
 
-        var stem = "api-fixture-1.0.0-linux-x64";
+        var stem = "api-fixture-1.0.0-linux-x86_64";
         var zip = Assert.Single(artifacts, a => a.Path.EndsWith(".zip", StringComparison.Ordinal)).Path;
         var tarGz = Assert.Single(artifacts, a => a.Path.EndsWith(".tar.gz", StringComparison.Ordinal)).Path;
         Assert.Contains(stem, zip);

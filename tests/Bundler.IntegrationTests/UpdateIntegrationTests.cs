@@ -167,15 +167,15 @@ public sealed class UpdateIntegrationTests
 
     static string OsxRid() =>
         System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
-            System.Runtime.InteropServices.Architecture.Arm64 ? "osx-arm64" : "osx-x64";
+            System.Runtime.InteropServices.Architecture.Arm64 ? "macos-arm64" : "macos-x86_64";
 
     static string MuslRid() =>
         System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
-            System.Runtime.InteropServices.Architecture.Arm64 ? "linux-musl-arm64" : "linux-musl-x64";
+            System.Runtime.InteropServices.Architecture.Arm64 ? "linux-musl-aarch64" : "linux-musl-x86_64";
 
     static string WinRid() =>
         System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
-            System.Runtime.InteropServices.Architecture.Arm64 ? "win-arm64" : "win-x64";
+            System.Runtime.InteropServices.Architecture.Arm64 ? "windows-arm64" : "windows-x86_64";
 
     // 材料：install 2M + 载荷 7M 小文件树（与 docker 腿同账）。
     static string StageMaterial(string root)

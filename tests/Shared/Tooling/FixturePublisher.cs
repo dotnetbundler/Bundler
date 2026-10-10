@@ -31,7 +31,7 @@ internal static class FixturePublisher
 
     // Restore-MsiTestFixture：包源 + 隔离缓存还原，附带 LocalRestoreAssert 契约核验。
     public static void RestoreFixture(string project, string packageDirectory, string packageCache,
-        string packageVersion, string runtimeIdentifier, IReadOnlyList<string> requiredPackages)
+        string packageVersion, string target, IReadOnlyList<string> requiredPackages)
     {
         var config = PinnedPackageSource.WriteConfig(
             Path.Combine(Path.GetDirectoryName(Path.GetFullPath(packageCache))!, "nuget-pin"),
@@ -42,7 +42,7 @@ internal static class FixturePublisher
             $"-p:BundlerPackageSource={packageDirectory}",
             $"-p:RestorePackagesPath={packageCache}",
             $"-p:BundlerPackageVersion={packageVersion}",
-            $"-p:RuntimeIdentifier={runtimeIdentifier}",
+            $"-p:BundlerTarget={target}",
         ], $"fixture restore failed for {project}");
         LocalRestoreAssert.Verify(project, packageVersion, packageDirectory, packageCache,
             requiredPackages);
@@ -50,14 +50,14 @@ internal static class FixturePublisher
 
     public static ProcessRunner.Result PublishFixture(string project, string output,
         string packageDirectory, string packageCache, string packageVersion,
-        string runtimeIdentifier, IEnumerable<string> extraProperties, string what,
+        string target, IEnumerable<string> extraProperties, string what,
         string configuration = "Release")
         => Dotnet.Publish(project, configuration,
         [
             $"-p:BundlerPackageSource={packageDirectory}",
             $"-p:RestorePackagesPath={packageCache}",
             $"-p:BundlerPackageVersion={packageVersion}",
-            $"-p:RuntimeIdentifier={runtimeIdentifier}",
+            $"-p:BundlerTarget={target}",
             $"-p:BundlerOutputPath={output}",
             .. extraProperties,
         ], what);

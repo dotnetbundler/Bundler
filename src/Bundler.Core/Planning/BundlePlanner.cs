@@ -15,7 +15,7 @@ public static class BundlePlanner
         var items = new List<BundlePlanItem>();
         foreach (var configuredTarget in configuration.Targets)
         {
-            BundleTarget.TryParse(configuredTarget.RuntimeIdentifier, out var target);
+            BundleTarget.TryParse(configuredTarget.Target, out var target);
             var executable = configuredTarget.MainExecutable ??
                 (target!.OperatingSystem == DesktopOperatingSystem.Windows
                     ? $"{configuration.ProductName}.exe"
@@ -40,11 +40,27 @@ public static class BundlePlanner
                     format,
                     configuredTarget.InputDirectory,
                     executable,
-                    Path.Combine(configuration.OutputDirectory, target!.RuntimeIdentifier, FormatName(format)),
+                    configuration.OutputLayout == OutputLayout.ByFormat
+                        ? Path.Combine(configuration.OutputDirectory, FormatName(format))
+                        : configuration.OutputDirectory,
                     intermediate)
                 {
                     SigningFiles = configuredTarget.SigningFiles.ToArray()
                 });
+            }
+        }
+
+        // 规划期重名断言：同输出目录下产物名必须互异（新后端接入自动罩住）。
+        var artifactNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in items.Where(i => !i.Intermediate))
+        {
+            var name = ArtifactNaming.FileName(
+                configuration.ProductName, configuration.Version, item.Target, item.Format, "1");
+            if (!artifactNames.Add(Path.Combine(item.OutputDirectory, name)))
+            {
+                throw new BundleValidationException([new ValidationIssue(
+                    "outputDirectory",
+                    $"Artifact name collision: '{name}' is produced more than once into '{item.OutputDirectory}'.")]);
             }
         }
 

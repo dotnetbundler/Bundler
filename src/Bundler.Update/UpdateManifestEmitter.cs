@@ -108,7 +108,7 @@ public static class UpdateManifestEmitter
             var fileName = Path.GetFileName(artifactFile);
             var feedArtifact = new UpdateFeedArtifact
             {
-                RuntimeIdentifier = artifact.RuntimeIdentifier,
+                Target = artifact.Target,
                 Format = artifact.Format.ToString().ToLowerInvariant(),
                 Url = relativeUrl,
                 File = fileName,
@@ -122,7 +122,7 @@ public static class UpdateManifestEmitter
             // 键含 rid/format：同 url 跨目标的（异常）形状退回双条目，各自仍可选中。
             var duplicateIndex = feed.Artifacts.FindIndex(existing =>
                 existing.Url == relativeUrl &&
-                existing.RuntimeIdentifier == feedArtifact.RuntimeIdentifier &&
+                existing.Target == feedArtifact.Target &&
                 existing.Format == feedArtifact.Format);
             if (duplicateIndex >= 0)
             {

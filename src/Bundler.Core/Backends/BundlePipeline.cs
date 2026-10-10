@@ -39,11 +39,11 @@ public sealed class BundlePipeline(
             var workDirectory = Path.Combine(
                 configuration.OutputDirectory,
                 ".bundler-work",
-                item.Target.RuntimeIdentifier,
+                item.Target.Target,
                 item.Format.ToString().ToLowerInvariant(),
                 Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(workDirectory);
-            _logger.Log(BundleLogLevel.Information, $"Building {item.Format} package for {item.Target.RuntimeIdentifier}.");
+            _logger.Log(BundleLogLevel.Information, $"Building {item.Format} package for {item.Target.Target}.");
 
             try
             {

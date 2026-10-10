@@ -33,7 +33,7 @@
    上游原样透传 `version_string` 不映射（`1.0.0-alpha` 会被 dpkg 读成比 `1.0.0` 新），本仓库显式收紧。
 9. **签名**：`.deb` 包签名不做（deb 生态签名在 apt 仓库侧 `Release`/`InRelease`，`dpkg-sig` 包级签名覆盖率极低）；每个产物附带 `<file>.sha256` 侧车校验和。
    rpm 的 GPG 签名是真实生态惯例，排 LINUX-RPM 后续阶段；AppImage `--sign` 与 updateinfo 同理登记。
-10. **命名与输出契约**：文件名用 deb 原生约定 `<package>_<deb-version>_<arch>.deb`（arch：`amd64`/`arm64`）；目录契约不变 `OutputDirectory/<rid>/deb/`。
+10. **命名与输出契约**：文件名用 deb 原生约定 `<package>_<deb-version>_<arch>.deb`（arch：`amd64`/`arm64`）；目录契约不变 `OutputDirectory/deb/（byFormat 布局；flat 为 OutputDirectory/）`。
 11. **MSBuild 多格式**：放开适配层单格式限制，`BundlerFormats=deb;rpm` 同次 publish 由管线扇出（管线本身支持多后端，仅 Task 分发改动）；LINUX-DEB-1 先落地 `deb` 单格式，多格式扇出随 LINUX-RPM-1 一并验证。
 12. **分支**：`linux-deb-development`（逐格式分支，沿用 mac 先例），rpm/appimage 各自 `linux-rpm-development`/`linux-appimage-development`。
 13. **阶段骨架**：每格式"最小可用→元数据与桌面集成→脚本/systemd/压缩→原生 E2E 矩阵→审计冻结"五段；对应文档集在各自规划轮补齐。
@@ -58,7 +58,7 @@
 - **安装语义**：`dpkg -i` 全量替换；升级=安装更高 `Version`；降级需 `--force-downgrade` 或 apt 允许（文档写实，不做防护承诺）；`dpkg -r` 保留 conffiles，`dpkg -P` 全清。
 - **所有权**：全部 `data.tar` 载荷归包所有；卸载按 dpkg 清单删除；conffiles 语义见决策 7。
 - **失败语义**：构建任一步失败→清理工作目录与半成品 `.deb`，不留伪产物（沿用 `BundlePipeline` 契约）。
-- **输出**：`OutputDirectory/<rid>/deb/<package>_<version>_<arch>.deb` + `<file>.sha256` 侧车。
+- **输出**：`OutputDirectory/deb/（byFormat 布局；flat 为 OutputDirectory/）<package>_<version>_<arch>.deb` + `<file>.sha256` 侧车。
 - **诚实边界**：deb 不承诺"双击 GUI 安装观感"、"apt 仓库工作流"（那是仓库职责）；这些进能力矩阵"明确拒绝/不适用"行而非夸大。
 
 ## 4. 阶段分解
@@ -100,9 +100,9 @@
 ### LINUX-DEB-4：原生 E2E 与支持矩阵
 
 - **前置**：LINUX-DEB-1..3 完成。
-- **目标/交付**：`lintian` 接入 Verify.sh（基线断言+豁免清单显式登记）；`linux-arm64` 产物结构断言（arm64 运行态装测属外部）；docker `debian:stable`/`ubuntu:latest` 容器真实装卸矩阵；干净宿主复核（构建侧零系统依赖复核）；示例全旋钮收口；矩阵/文档/未验证格如实限缩。
+- **目标/交付**：`lintian` 接入 Verify.sh（基线断言+豁免清单显式登记）；`linux-aarch64` 产物结构断言（arm64 运行态装测属外部）；docker `debian:stable`/`ubuntu:latest` 容器真实装卸矩阵；干净宿主复核（构建侧零系统依赖复核）；示例全旋钮收口；矩阵/文档/未验证格如实限缩。
 - **退出**：矩阵实测格子有证据；未测格子进 OI/MT 清单。
-- **状态**：已完成（2026-09-27）。lintian 由信息级升级为硬断言——`tests/Bundler.IntegrationTests/Fixtures/Deb/lintian-exemptions.txt` 登记豁免，新 tag 即失败；自动补发 `changelog.Debian.gz`（打包侧 changelog，固定日期保确定性）+ 扩展描述默认行 + fixture Maintainer 邮箱格式/Section 默认值消解了 DEB-2/3 的全部可修发现；`linux-arm64` 产物结构与 `Architecture: arm64` 断言（装测仍属 OI-01）；docker `debian:stable`/`ubuntu:latest` 真实装卸+运行+conffile `-r` 保留/`-P` 清除矩阵全绿；构建侧零系统依赖复核（`src/Bundler.Deb` 无任何外部进程调用）。
+- **状态**：已完成（2026-09-27）。lintian 由信息级升级为硬断言——`tests/Bundler.IntegrationTests/Fixtures/Deb/lintian-exemptions.txt` 登记豁免，新 tag 即失败；自动补发 `changelog.Debian.gz`（打包侧 changelog，固定日期保确定性）+ 扩展描述默认行 + fixture Maintainer 邮箱格式/Section 默认值消解了 DEB-2/3 的全部可修发现；`linux-aarch64` 产物结构与 `Architecture: arm64` 断言（装测仍属 OI-01）；docker `debian:stable`/`ubuntu:latest` 真实装卸+运行+conffile `-r` 保留/`-P` 清除矩阵全绿；构建侧零系统依赖复核（`src/Bundler.Deb` 无任何外部进程调用）。
 - **证据**：`Bundler.Tests` 141 全绿（新增 changelog.Debian.gz/扩展描述用例）；`Verify.sh` 全绿含 arm64 变体与 docker 矩阵；lintian 输出仅剩 5 个已登记豁免 tag。
 
 ### LINUX-DEB-5：审计与格式冻结
@@ -116,7 +116,7 @@
 | 验证层 | 内容 |
 | --- | --- |
 | 本机自动 | `dpkg-deb -I/-c` 结构、`sudo dpkg -i`/`dpkg -r`/`dpkg -P` 真实装卸、`dpkg -L` 清单、`lintian`、`desktop-file-validate`、systemd 单元落位、脚本执行标记、容器内装卸（docker debian/ubuntu） |
-| 人工/外部 | GUI 桌面观感（菜单项/图标/文件关联双击）、linux-arm64 真实宿主、更多发行版矩阵（Debian oldstable、非 systemd 发行版）、apt 仓库工作流、生产签名流程（若后续阶段引入） |
+| 人工/外部 | GUI 桌面观感（菜单项/图标/文件关联双击）、linux-aarch64 真实宿主、更多发行版矩阵（Debian oldstable、非 systemd 发行版）、apt 仓库工作流、生产签名流程（若后续阶段引入） |
 
 ### 2026-10-06 回归修复：样品声明运行时依赖
 

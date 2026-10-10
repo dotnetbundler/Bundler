@@ -24,7 +24,7 @@ internal static class ArchiveIdentity
     internal static string ArchiveStem(
         ArchiveBundleConfiguration settings, string packageName, string version, BundlePlanItem item)
     {
-        var stem = settings.ArchiveName ?? $"{packageName}-{version}-{item.Target.RuntimeIdentifier}";
+        var stem = settings.ArchiveName ?? $"{packageName}-{version}-{item.Target.Target}";
         // 与 PackageName 同字符集：':'与空白同样会破坏归档顶层目录名。
         if (stem.Length == 0 || stem is "." or ".." || stem.Contains("..") ||
             stem.Any(c => c is '/' or '\\' or ':' || char.IsWhiteSpace(c)))

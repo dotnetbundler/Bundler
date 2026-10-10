@@ -42,7 +42,7 @@ internal static class ApkPackageWriter
         var release = settings.Release ?? "0";
         ApkIdentity.ValidateNonNegativeInteger(release, "Release");
         var pkgver = upstream + "-r" + release;
-        var architecture = settings.Architecture ?? ApkIdentity.MapArchitecture(item.Target.Architecture);
+        var architecture = settings.Architecture ?? ApkIdentity.MapArchitecture(item.Target);
         ApkIdentity.ValidateArchitecture(architecture);
         var origin = settings.Origin ?? packageName;
         var description = settings.Description ?? bundle.Description ?? "";
@@ -127,7 +127,7 @@ internal static class ApkPackageWriter
         }
 
         Directory.CreateDirectory(item.OutputDirectory);
-        var fileName = packageName + "-" + pkgver + ".apk";
+        var fileName = packageName + "-" + pkgver + "." + architecture + ".apk";
         var outputPath = Path.Combine(item.OutputDirectory, fileName);
         if (File.Exists(outputPath))
         {

@@ -11,6 +11,8 @@ public sealed class BundleConfiguration
     public string? Copyright { get; init; }
     public string? LicenseFile { get; init; }
     public string OutputDirectory { get; init; } = "artifacts";
+    /// <summary>输出布局：flat（默认，产物全落根目录）| byFormat（按格式分一层子目录）。</summary>
+    public OutputLayout OutputLayout { get; init; } = OutputLayout.Flat;
     public IReadOnlyList<string> Icons { get; init; } = [];
     public IReadOnlyList<BundleResourceConfiguration> Resources { get; init; } = [];
     public IReadOnlyList<BundleFileAssociationConfiguration> FileAssociations { get; init; } = [];
@@ -70,9 +72,19 @@ public sealed class BundleUrlProtocolConfiguration
     public string? Name { get; init; }
 }
 
+/// <summary>输出布局模式。</summary>
+public enum OutputLayout
+{
+    /// <summary>扁平——全部产物直落输出根目录，靠文件名里的平台/架构段区分。</summary>
+    Flat,
+    /// <summary>按格式分子目录 out/&lt;format&gt;/。</summary>
+    ByFormat
+}
+
 public sealed class BundleTargetConfiguration
 {
-    public string RuntimeIdentifier { get; init; } = "";
+    /// <summary>canonical 目标 <c>{os}[-{libc}]-{arch}</c>，如 linux-musl-aarch64。</summary>
+    public string Target { get; init; } = "";
     public string InputDirectory { get; init; } = "";
     public string? MainExecutable { get; init; }
     public IReadOnlyList<string> SigningFiles { get; init; } = [];

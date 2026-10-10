@@ -18,14 +18,14 @@ samples/HelloBundlerApp/
 └── Program.cs                # 启动方式/打包资源/Hook 标记自检的演示入口
 ```
 
-`BundlerFormats` 默认按 `$(RuntimeIdentifier)` × 宿主 OS 推导——产出全部当前环境可构建的格式：
+`BundlerFormats` 默认按 `$(Target)` × 宿主 OS 推导——产出全部当前环境可构建的格式：
 
-| RuntimeIdentifier | Windows 宿主 | macOS 宿主 | Linux 宿主 | 其他宿主 |
+| Target | Windows 宿主 | macOS 宿主 | Linux 宿主 | 其他宿主 |
 |---|---|---|---|---|
-| `win-x64`/`win-arm64` | nsis;msi;zip;targz | nsis;zip;targz | nsis;zip;targz | — |
-| `osx-x64`/`osx-arm64`/`osx` | app;zip;targz | dmg;pkg;zip;targz | app;zip;targz | — |
-| `linux-x64`/`linux-arm64` | deb;rpm;zip;targz | deb;rpm;zip;targz | deb;rpm;appimage;zip;targz | — |
-| `linux-musl-x64`/`linux-musl-arm64` | alpineapk;zip;targz | alpineapk;zip;targz | alpineapk;zip;targz | — |
+| `windows-x86_64`/`windows-arm64` | nsis;msi;zip;targz | nsis;zip;targz | nsis;zip;targz | — |
+| `macos-x86_64`/`macos-arm64`/`macos-universal` | app;zip;targz | dmg;pkg;zip;targz | app;zip;targz | — |
+| `linux-x86_64`/`linux-aarch64` | deb;rpm;zip;targz | deb;rpm;zip;targz | deb;rpm;appimage;zip;targz | — |
+| `linux-musl-x86_64`/`linux-musl-aarch64` | alpineapk;zip;targz | alpineapk;zip;targz | alpineapk;zip;targz | — |
 
 msi/dmg/pkg 需要对应本机工具链宿主（WiX→Windows、hdiutil/pkgbuild→macOS），
 appimage 仅 Linux 宿主；nsis/deb/rpm/zip/targz/alpineapk 为纯托管实现任意宿主可产。
@@ -36,14 +36,14 @@ appimage 仅 Linux 宿主；nsis/deb/rpm/zip/targz/alpineapk 为纯托管实现�
 - **独立 `.app` 与许可文件互斥**：`BundlerLicenseFile` 是全局旋钮，独立 `.app` 后端无许可载荷契约会硬拒。
   macOS 宿主默认集因此不含独立 `app`（dmg 内层照样产出 .app，`BundlerMacApp*` 旋钮全部生效）；
   显式 `-p:BundlerFormats=app`（或含 app 的子集）时许可自动缺席该轮 publish，
-  跨宿主 `osx-*` 默认 `app;zip;targz` 同理不带许可。
+  跨宿主 `macos-universal-*` 默认 `app;zip;targz` 同理不带许可。
 - **MSI 数据库 codepage 无法承载 CJK**：en-US 变体为 CP1252，中文描述/中文文件名/中文关联名会触发 light LGHT0311。
   formats 集含 `msi` 时样品自动回退 ASCII（描述改英文、中文 TargetPath 资源与中文关联/协议名缺席或换 ASCII）；
   含 msi 的 publish 如需中文演示，请用不含 msi 的轮次。其余后端（nsis/deb/rpm/mac 系/apk/归档）不约束字符集。
 - **MSI 许可只收 RTF**：formats 集含 `msi` 时 `formats/Msi.props` 自动把全局许可切到 `Assets/msi/license.rtf`
   （nsis/dmg/pkg 同样接受 RTF；archive 不内嵌许可，deb/rpm 以文件载荷携带扩展名无影响）。
   `HelloBundlerMsiLicenseFile` 传透可整体接管；`app` 共存时许可仍缺席（独立 app 无许可载荷契约优先）。
-- **universal 合并要求非 Mach-O 载荷逐字节一致**：`-r osx -p:BundlerUniversalRuntimeIdentifiers=osx-x64;osx-arm64`
+- **universal 合并要求非 Mach-O 载荷逐字节一致**：`-r macos-universal -p:BundlerUniversalTargets=macos-x86_64;macos-arm64`
   做双 RID 内层 publish + 托管合并；framework-dependent 应用的 `*.deps.json` 逐 RID 不同会按契约拒绝合并
   （`Universal merge conflict ... is not a Mach-O file`），非样本缺陷，需自包含/同构载荷场景适用。
 
@@ -54,10 +54,10 @@ appimage 仅 Linux 宿主；nsis/deb/rpm/zip/targz/alpineapk 为纯托管实现�
 dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r <RID>
 
 # 只产指定格式子集
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r linux-x64 -p:BundlerFormats=deb;rpm
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r linux-x86_64 -p:BundlerFormats=deb;rpm
 
 # 变体旋钮：全部按 HelloBundler<Format><Knob> 传透
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64 \
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r windows-x86_64 \
     -p:HelloBundlerNsisInstallScope=perMachine \
     -p:HelloBundlerMsiLanguage=zh-CN -p:HelloBundlerMsiInstallScope=perMachine
 ```
@@ -76,7 +76,7 @@ dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-
 - `HelloBundlerAppImage*`：包名/版本/架构/install-root/bin-link/icon/desktop/categories/metainfo、`HelloBundlerAppImageFiles=1` 任意载荷、GPG 签名。
 - `HelloBundlerApk*`：包名/版本/release/架构/origin/description/url/license/builddate、depends/provides/triggers/bin-link、六段安装脚本、RSA 签名。
 - `HelloBundlerArchive*`：归档名/版本覆盖。
-- `HelloBundler*`（无格式段）：Version、OutputPath、MainExecutable、UniversalRuntimeIdentifiers、Signing*（Windows 签名共享 7 旋钮）。
+- `HelloBundler*`（无格式段）：Version、OutputPath、MainExecutable、UniversalTargets、Signing*（Windows 签名共享 7 旋钮）。
 
 ## 演示的能力
 

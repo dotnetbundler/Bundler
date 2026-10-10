@@ -41,7 +41,7 @@ internal static class DebPackageWriter
         var packageName = settings.PackageName ?? DebName.Sanitize(bundle.ProductName);
         DebName.Validate(packageName);
         var version = DebVersion.Map(bundle.Version, settings);
-        var architecture = settings.Architecture ?? MapArchitecture(item.Target.Architecture);
+        var architecture = settings.Architecture ?? MapArchitecture(item.Target);
         ValidateArchitecture(architecture);
         var installRoot = NormalizeInstallRoot(settings.InstallRoot, packageName);
         var binLink = settings.BinLink ?? packageName;
@@ -626,14 +626,10 @@ internal static class DebPackageWriter
         return buffer.ToArray();
     }
 
-    private static string MapArchitecture(CpuArchitecture architecture) => architecture switch
-    {
-        CpuArchitecture.X64 => "amd64",
-        CpuArchitecture.Arm64 => "arm64",
-        CpuArchitecture.X86 => "i386",
-        _ => throw new NotSupportedException(
-            $"No Debian architecture mapping for {architecture}; set Architecture explicitly.")
-    };
+    private static string MapArchitecture(BundleTarget target) =>
+        ArtifactNaming.ArchToken(target, PackageFormat.Deb)
+        ?? throw new NotSupportedException(
+            $"No Debian architecture mapping for {target.Architecture}; set Architecture explicitly.");
 
     private static void ValidateArchitecture(string architecture)
     {

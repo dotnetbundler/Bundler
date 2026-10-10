@@ -116,7 +116,7 @@ public static class CliProgram
         var targets = source.Targets.ToArray();
         targets[0] = new BundleTargetConfiguration
         {
-            RuntimeIdentifier = first.RuntimeIdentifier,
+            Target = first.Target,
             InputDirectory = input,
             MainExecutable = first.MainExecutable,
             SigningFiles = first.SigningFiles,
@@ -141,7 +141,7 @@ public static class CliProgram
             if (!BundleTarget.TryParse(rid, out var target) || target is null)
             {
                 throw new CliUsageException(
-                    $"Unknown rid '{rid}'. Supported: win-x86, win-x64, win-arm64, osx, osx-x64, osx-arm64, linux-x64, linux-arm64, linux-musl-x64, linux-musl-arm64.");
+                    $"Unknown target '{rid}'. Supported: windows-i686, windows-x86_64, windows-arm64, macos-universal, macos-x86_64, macos-arm64, linux-x86_64, linux-aarch64, linux-musl-x86_64, linux-musl-aarch64.");
             }
             return Enum.GetValues<PackageFormat>()
                 .Where(format => DesktopTargetMatrix.Supports(target, format))
@@ -231,7 +231,7 @@ public static class CliProgram
             {
                 ["items"] = new JsonArray(plan.Items.Select(item => (JsonNode)new JsonObject
                 {
-                    ["runtimeIdentifier"] = item.Target.RuntimeIdentifier,
+                    ["target"] = item.Target.Target,
                     ["format"] = FormatName(item.Format),
                     ["inputDirectory"] = item.InputDirectory,
                     ["outputDirectory"] = item.OutputDirectory,
@@ -246,7 +246,7 @@ public static class CliProgram
             {
                 var suffix = item.Intermediate ? " (intermediate)" : "";
                 stdout.WriteLine(
-                    $"{item.Target.RuntimeIdentifier} {FormatName(item.Format)} -> {item.OutputDirectory}{suffix}");
+                    $"{item.Target.Target} {FormatName(item.Format)} -> {item.OutputDirectory}{suffix}");
             }
         }
         return 0;
@@ -353,7 +353,7 @@ public static class CliProgram
                 ["artifacts"] = new JsonArray(artifacts.Select(artifact => (JsonNode)new JsonObject
                 {
                     ["format"] = FormatName(artifact.Format),
-                    ["runtimeIdentifier"] = artifact.RuntimeIdentifier,
+                    ["target"] = artifact.Target,
                     ["path"] = artifact.Path
                 }).ToArray()),
                 ["updateArtifacts"] = new JsonArray(updateArtifacts.Select(path => (JsonNode)JsonValue.Create(path)).ToArray())
@@ -385,7 +385,7 @@ public static class CliProgram
         BundleConfigurationPaths.WithTargets(source,
             source.Targets.Select(target => new BundleTargetConfiguration
             {
-                RuntimeIdentifier = target.RuntimeIdentifier,
+                Target = target.Target,
                 InputDirectory = target.InputDirectory,
                 MainExecutable = target.MainExecutable,
                 SigningFiles = target.SigningFiles,
@@ -410,10 +410,10 @@ public static class CliProgram
     private static void PrintUsage(TextWriter writer)
     {
         writer.WriteLine("Usage:");
-        writer.WriteLine("  bundler validate|plan|bundle --input-dir <dir> [--input-dir <dir>...] --rid <rid> --formats <csv>");
-        writer.WriteLine("      (--input-dir repeated merges the dirs into a universal payload, e.g. osx-x64 + osx-arm64)");
+        writer.WriteLine("  bundler validate|plan|bundle --input-dir <dir> [--input-dir <dir>...] --target <target> --formats <csv>");
+        writer.WriteLine("      (--input-dir repeated merges the dirs into a universal payload, e.g. macos-x86_64 + macos-arm64)");
         writer.WriteLine("      --product-name <name> --identifier <id> --package-version <ver>");
-        writer.WriteLine("      [--output-dir <dir>] [--main-executable <name>] [--json] [--quiet|--verbose]");
+        writer.WriteLine("      [--output-dir <dir>] [--output-layout <flat|byFormat>] [--main-executable <name>] [--json] [--quiet|--verbose]");
         writer.WriteLine("  Paths in --config resolve relative to the config file; paths given on the command line resolve relative to the working directory.");
         writer.WriteLine("  bundler update-keygen --key-file <path>   generate an update signing key; prints key path and public key");
         writer.WriteLine("  bundler --version | --help");
@@ -430,7 +430,7 @@ public static class CliProgram
             + " appimage"
 #endif
             + " zip targz alpineapk all");
-        writer.WriteLine("RIDs:    win-x86 win-x64 win-arm64 osx osx-x64 osx-arm64 linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64");
+        writer.WriteLine("Targets: windows-i686 windows-x86_64 windows-arm64 macos-universal macos-x86_64 macos-arm64 linux-x86_64 linux-aarch64 linux-musl-x86_64 linux-musl-aarch64");
         writer.WriteLine("Exit codes: 0 success, 1 packaging/IO failure, 2 usage or validation failure");
     }
 }

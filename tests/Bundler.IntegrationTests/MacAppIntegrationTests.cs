@@ -1,7 +1,7 @@
 // MAC-APP-1/2/3 集成腿的 C# 移植：对应原 tests/MacOS.App.Integration/Verify.sh。
 // 覆盖点：nupkg → bundle 结构 → plutil 全键 → 桌面集成键（doc type/UTI/URL scheme/ATS/
 // 调用方合并键）→ lipo → 启动 → LaunchServices 注册/文件关联/scheme 唤起/~/Applications
-// 拷入拷出 → 重建确定性 → ad-hoc 签名链 → 缺证书失败 → osx-x64 结构 → 隔离首启
+// 拷入拷出 → 重建确定性 → ad-hoc 签名链 → 缺证书失败 → macos-x86_64 结构 → 隔离首启
 // → LSMinimumSystemVersion → v1→v2 原地升级 → 卸载=删目录 → API fixture。
 using System.Text.Json;
 
@@ -79,7 +79,7 @@ public sealed class MacAppFixture : IDisposable
             Dylib = dylib;
         }
 
-        var hostRid = TestPlatform.OsxRuntimeIdentifier;
+        var hostRid = TestPlatform.OsxTarget;
         App = Publish("bundle", hostRid, BundlerAppPath("bundle", hostRid));
         AssertNoBundledPackageRestore();
 
@@ -107,8 +107,8 @@ public sealed class MacAppFixture : IDisposable
         var x64Args = Dylib is null || !DylibIsFat
             ? []
             : new[] { $"-p:BundlerTestDylib={Dylib}" };
-        X64App = PublishWithArgs("x64-output", "osx-x64",
-            BundlerAppPath("x64-output", "osx-x64"), x64Args);
+        X64App = PublishWithArgs("x64-output", "macos-x86_64",
+            BundlerAppPath("x64-output", "macos-x86_64"), x64Args);
 
         MinVerApp = Publish("minver-output", hostRid,
             BundlerAppPath("minver-output", hostRid),
@@ -121,7 +121,11 @@ public sealed class MacAppFixture : IDisposable
     }
 
     private string BundlerAppPath(string output, string rid)
-        => Ws.Combine(output, rid, "app", "Bundler Mac Integration Fixture.app");
+        => Ws.Combine(output, $"Bundler Mac Integration Fixture-1.0.0-{MacArch(rid)}.app");
+
+    internal static string MacArch(string rid) =>
+        rid.EndsWith("x86_64", StringComparison.Ordinal) ? "x86_64"
+        : rid.EndsWith("arm64", StringComparison.Ordinal) ? "arm64" : "universal";
 
     private IEnumerable<string> CommonArgs(string name)
     {
@@ -141,7 +145,8 @@ public sealed class MacAppFixture : IDisposable
     {
         ProcessRunner.AssertSuccess(
             Dotnet.Run(["publish", FixtureProject, "-c", "Release", "--force",
-                $"-p:RuntimeIdentifier={rid}", .. CommonArgs(name), .. extra],
+                "-r", TestPlatform.ToPublishRid(rid),
+                $"-p:BundlerTarget={rid}", .. CommonArgs(name), .. extra],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) }),
             $"mac-app fixture publish '{name}' failed");
         Assert.True(Directory.Exists(expectedApp), $"The .app bundle was not produced at {expectedApp}");
@@ -298,7 +303,7 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
         _f.Ensure();
         var lipo = ProcessRunner.Run("lipo",
             ["-info", Path.Combine(_f.App, "Contents/MacOS/BundlerMacIntegrationFixture")]);
-        Assert.Contains(TestPlatform.OsxRuntimeIdentifier == "osx-arm64" ? "arm64" : "x86_64",
+        Assert.Contains(TestPlatform.OsxTarget == "macos-arm64" ? "arm64" : "x86_64",
             lipo.StdOut);
     }
 
@@ -445,7 +450,7 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
             new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) });
         Assert.NotEqual(0, result.ExitCode);
         Assert.False(Directory.Exists(
-            Path.Combine(output, "osx-arm64", "app", "Bundler Mac Integration Fixture.app")),
+            Path.Combine(output, $"Bundler Mac Integration Fixture-1.0.0-{MacAppFixture.MacArch(TestPlatform.OsxTarget)}.app")),
             "A failed signing run left a pseudo-success .app.");
         Assert.Matches(
             new System.Text.RegularExpressions.Regex("TemporaryCertificateFile|temporary certificate",
@@ -462,7 +467,7 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
         Assert.Contains("x86_64", lipo.StdOut);
         ProcessRunner.AssertSuccess(
             ProcessRunner.Run("plutil", ["-lint", Path.Combine(_f.X64App, "Contents/Info.plist")]),
-            "osx-x64 Info.plist failed lint.");
+            "macos-x86_64 Info.plist failed lint.");
         // Rosetta 启动是环境项：能跑更好，跑不了不失败（脚本同款口径）。
         _ = ProcessRunner.Run("/usr/bin/arch", ["-x86_64", exe],
             new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(30) });
@@ -592,8 +597,8 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
                 Timeout = TimeSpan.FromMinutes(10),
             });
         ProcessRunner.AssertSuccess(result, "MacAppApiTests failed");
-        var plist = Path.Combine(output, "artifacts", "osx-arm64", "app",
-            "Mac API Package Fixture.app", "Contents", "Info.plist");
+        var plist = Path.Combine(output, "artifacts",
+            $"Mac API Package Fixture-1.0.0-{MacAppFixture.MacArch(TestPlatform.OsxTarget)}.app", "Contents", "Info.plist");
         Assert.True(File.Exists(plist), "The standalone API package did not create an .app.");
         ProcessRunner.AssertSuccess(ProcessRunner.Run("plutil", ["-lint", plist]),
             "API fixture Info.plist failed lint.");

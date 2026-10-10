@@ -137,7 +137,7 @@ public static class MacDmgTests
                 .BuildAsync(DmgConfiguration(input, output));
             Assert.Equal(2, artifacts.Count);
             var dmg = artifacts.Single(artifact => artifact.Format == PackageFormat.Dmg);
-            Assert.EndsWith(Path.Combine("osx-arm64", "dmg", "ExampleApp.dmg"), dmg.Path);
+            Assert.EndsWith("ExampleApp-1.0.0-arm64.dmg", dmg.Path);
 
             var joined = string.Join("\n", requests.Select(request =>
                 request.Executable + " " + string.Join(' ', request.Arguments)));
@@ -299,7 +299,7 @@ public static class MacDmgTests
                 () => new MacDmgBundler().BuildAsync(DmgConfiguration(input, output)));
             Assert.Contains("detach", detachFailure.Message);
             Assert.True(forcedDetach, "A leftover mounted volume must be force-detached on failure.");
-            Assert.Empty(Directory.EnumerateFiles( Path.Combine(output, "osx-arm64", "dmg"), "*", SearchOption.AllDirectories));
+            Assert.Empty(Directory.EnumerateFiles(output, "*.dmg", SearchOption.AllDirectories));
         }
         finally
         {
@@ -327,7 +327,7 @@ public static class MacDmgTests
         {
             await Assert.ThrowsAnyAsync<InvalidOperationException>(
                 () => new MacDmgBundler().BuildAsync(DmgConfiguration(input, output)));
-            var dmgDirectory = Path.Combine(output, "osx-arm64", "dmg");
+            var dmgDirectory = output;
             Assert.True(!Directory.Exists(dmgDirectory) ||
                    !Directory.EnumerateFiles(dmgDirectory, "*.dmg").Any(),
                 "A failed convert must not leave a .dmg artifact.");
@@ -855,7 +855,7 @@ public static class MacDmgTests
     static BundleConfiguration DmgConfiguration(
         string input,
         string output = "",
-        string rid = "osx-arm64",
+        string rid = "macos-arm64",
         IReadOnlyList<PackageFormat>? formats = null,
         string? licenseFile = null) => new()
         {
@@ -868,7 +868,7 @@ public static class MacDmgTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = rid,
+                    Target = rid,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.Dmg]

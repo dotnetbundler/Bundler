@@ -21,6 +21,7 @@ internal static class BundleConfigurationPaths
         Copyright = source.Copyright,
         LicenseFile = source.LicenseFile,
         OutputDirectory = source.OutputDirectory,
+        OutputLayout = source.OutputLayout,
         Icons = source.Icons,
         Resources = source.Resources,
         FileAssociations = source.FileAssociations,
@@ -48,6 +49,7 @@ internal static class BundleConfigurationPaths
             Copyright = source.Copyright,
             LicenseFile = source.LicenseFile is null ? null : Resolve(baseDirectory, source.LicenseFile),
             OutputDirectory = Resolve(baseDirectory, source.OutputDirectory),
+            OutputLayout = source.OutputLayout,
             // 显式 null 元素按"未写"剥掉——与顶层 null 键同语义，防 [null] 数组 NRE。
             Icons = source.Icons?.Where(path => path is not null)
                 .Select(path => Resolve(baseDirectory, path)).ToArray() ?? [],
@@ -74,7 +76,7 @@ internal static class BundleConfigurationPaths
             Targets = source.Targets?.Where(target => target is not null)
                 .Select(target => new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = target.RuntimeIdentifier,
+                    Target = target.Target,
                     InputDirectory = Resolve(baseDirectory, target.InputDirectory),
                     MainExecutable = target.MainExecutable,
                     SigningFiles = target.SigningFiles?.Where(s => s is not null).ToArray() ?? [],

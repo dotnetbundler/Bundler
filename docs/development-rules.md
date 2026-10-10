@@ -99,8 +99,8 @@
 - **目标与格式门禁只按实际情况限制**（2026-09-30 用户确认原则）：
   允许的限制依据仅两类——①工具链真实能力（打包工具或宿主确实做不到，如 WiX 需 Windows 宿主、`dmg`/`pkg` 需 macOS）；②产物语义真实性（能产出文件但安装/运行语义不成立的组合——如 musl 载荷打进 `.deb`/`.rpm`（musl 生态无对应发行版消费面）——默认拒绝，显式豁免须用户明确要求）。
   除上述两类外不替工具预判：目标 RID 不做组合白名单——`BundleTarget.TryParse` 按 `<os>-<arch>` 语法解析（`DesktopOperatingSystem`/`CpuArchitecture` 枚举即 OS 与架构全集，枚举外值解析失败，出现需求时按行补枚举与后端映射）；
-  工具能力由后端自报，不用与后端脱节的静态表替后端说不——防止矩阵与后端口径漂移（`win-x86` 门禁即此类人造围栏，2026-09-30 已拆除）。
-  已落地（`7feea33`/`e7dfeae`/`02b2521`）：语法化解析 + 裸 `osx` 通用目标 + `linux-musl-x64/arm64`（仅 archive）。
+  工具能力由后端自报，不用与后端脱节的静态表替后端说不——防止矩阵与后端口径漂移（`windows-i686` 门禁即此类人造围栏，2026-09-30 已拆除）。
+  已落地（`7feea33`/`e7dfeae`/`02b2521`）：语法化解析 + 裸 `macos-universal` 通用目标 + `linux-musl-x86_64/arm64`（仅 archive）。
 - **构建宿主下限的三层口径**（格式路线文档按此分层记录，互不混淆）：
   1. **打包工具（能力）下限**：该格式所需打包工具本身支持的最低宿主——是否绑定宿主 OS、必需工具的最早可用宿主版本；声明时不得并入 Bundler 自身约束；
   2. **后端下限**：后端程序集（`netstandard2.0`）能被宿主上哪些 .NET 运行时加载并执行——只看后端，不含 MSBuild/CLI 应用层；
@@ -143,7 +143,7 @@
   还原垫片只保留在 `Bundler.LocalPackages.props`，由测试代码连同项目复制并传入本轮包源、版本与隔离缓存，
   真实还原来源由 `MsiSupport.AssertLocalBundlerRestore` 逐包核验。
   缺包先 Pack，不假定未发布版本在公网源，也不用项目引用掩盖包消费问题。
-- MSBuild 默认值须按 RID 族推导：`BundlerMainExecutable` 对 `osx-*`/`linux-*` 取 `$(TargetName)`（无 `.exe` 后缀），其余取 `$(TargetName).exe`；
+- MSBuild 默认值须按 RID 族推导：`BundlerMainExecutable` 对 `macos-universal-*`/`linux-*` 取 `$(TargetName)`（无 `.exe` 后缀），其余取 `$(TargetName).exe`；
   新增 RID 族或新宿主后缀规则时同步检查该默认（2026-09-27 LINUX-DEB-1 修正 linux 漏项）。
 - **统一公开示例 `samples/HelloBundlerApp` 必须覆盖全部后端与全部公开旋钮**：公共旋钮在主工程，各后端专属旋钮按 `formats/<Format>.props` 导入，用户可直接复制该组织方式；不用测试 fixture 冒充示例。
   默认命令应直接构建并生成安装包；
@@ -266,7 +266,7 @@ dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet test tests/Bundler.ApiTests/Bundler.ApiTests.csproj -c Release
 dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r windows-x86_64
 # 只产某格式：-p:BundlerFormats=nsis（等）；某格式旋钮变体：-p:HelloBundler<Format><Knob>=...
 
 # 按格式类选择集成测试；MSI 真装腿另需同意闸 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1

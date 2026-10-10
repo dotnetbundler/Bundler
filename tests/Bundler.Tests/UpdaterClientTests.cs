@@ -63,7 +63,7 @@ public static class UpdaterClientTests
             Protocol.UpdateInstallIdentity.Write(resources, new Protocol.UpdateInstallIdentity
             {
                 Format = "app",
-                RuntimeIdentifier = "osx-arm64",
+                Target = "macos-arm64",
                 FeedUrl = "feed-placeholder",
                 PublicKey = "cHVibGljLWtleQ==",
             });
@@ -90,7 +90,7 @@ public static class UpdaterClientTests
             Protocol.UpdateInstallIdentity.Write(contents, new Protocol.UpdateInstallIdentity
             {
                 Format = "app",
-                RuntimeIdentifier = "osx-arm64",
+                Target = "macos-arm64",
                 FeedUrl = "feed-placeholder",
                 PublicKey = "cHVibGljLWtleQ==",
             });
@@ -118,7 +118,7 @@ public static class UpdaterClientTests
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 PublicKey = material.PublicPointBase64(),
             };
             var sidecarSerializer = new DataContractJsonSerializer(
@@ -168,7 +168,7 @@ public static class UpdaterClientTests
             File.WriteAllText(artifact, "v2-image");
             WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64", Format = "appimage",
+                Target = "linux-x86_64", Format = "appimage",
                 Url = "MyApp-2.0.0.AppImage", File = "MyApp-2.0.0.AppImage",
                 Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
                 Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
@@ -178,7 +178,7 @@ public static class UpdaterClientTests
             var client = UpdateClient.FromIdentity(new Protocol.UpdateInstallIdentity
             {
                 Format = "appimage",
-                RuntimeIdentifier = "linux-x64",
+                Target = "linux-x86_64",
                 Channel = "stable",
                 FeedUrl = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
                 PublicKey = material.PublicPointBase64(),
@@ -191,7 +191,7 @@ public static class UpdaterClientTests
             {
                 StagingRoot = Path.Combine(directory, "staging"),
                 BootstrapperPath = RepoPath(
-                    $"src/Bundler.Updater.Bootstrap/tools/{TestPlatform.LinuxRuntimeIdentifier}/bundler-updater"),
+                    $"src/Bundler.Updater.Bootstrap/tools/{TestPlatform.LinuxTarget}/bundler-updater"),
                 KeepRollbackBackup = true,
                 RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
             });
@@ -217,7 +217,7 @@ public static class UpdaterClientTests
             {
                 StagingRoot = Path.Combine(directory, "staging-rb"),
                 BootstrapperPath = RepoPath(
-                    $"src/Bundler.Updater.Bootstrap/tools/{TestPlatform.LinuxRuntimeIdentifier}/bundler-updater"),
+                    $"src/Bundler.Updater.Bootstrap/tools/{TestPlatform.LinuxTarget}/bundler-updater"),
                 KeepRollbackBackup = true,
                 RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
             });
@@ -241,7 +241,7 @@ public static class UpdaterClientTests
                 UpdateClient.FromIdentity(new Protocol.UpdateInstallIdentity
                 {
                     Format = "appimage",
-                    RuntimeIdentifier = "linux-x64",
+                    Target = "linux-x86_64",
                     FeedUrl = "",
                     PublicKey = null,
                 }, directory, "1.0.0"));
@@ -284,30 +284,30 @@ public static class UpdaterClientTests
             Protocol.UpdateInstallIdentity.Write(install, new Protocol.UpdateInstallIdentity
             {
                 Format = "zip",
-                RuntimeIdentifier = "linux-x64",
+                Target = "linux-x86_64",
                 Channel = "stable",
                 FeedUrl = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
                 PublicKey = material.PublicPointBase64(),
             });
 
-            // feed：win-x64 不相关件 + linux-x64 zip 匹配件（v2.0.0）
+            // feed：windows-x86_64 不相关件 + linux-x86_64 zip 匹配件（v2.0.0）
             WriteFeed(feedDir, "stable", "2.0.0", material,
                 new Protocol.UpdateFeedArtifact
                 {
-                    RuntimeIdentifier = "win-x64", Format = "zip",
+                    Target = "windows-x86_64", Format = "zip",
                     Url = "other.zip", Sha256 = "0", Size = 1, Signature = "AA=="
                 },
                 new Protocol.UpdateFeedArtifact
                 {
-                    RuntimeIdentifier = "linux-x64", Format = "zip",
-                    Url = "app-2.0.0-linux-x64.zip", Sha256 = "0", Size = 1, Signature = "AA=="
+                    Target = "linux-x86_64", Format = "zip",
+                    Url = "app-2.0.0-linux-x86_64.zip", Sha256 = "0", Size = 1, Signature = "AA=="
                 });
 
             var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
             var info = await client.CheckForUpdateAsync();
             Assert.NotNull(info);
             Assert.Equal("2.0.0", info!.Feed.Version);
-            Assert.Equal("app-2.0.0-linux-x64.zip", info.Artifact.Url);
+            Assert.Equal("app-2.0.0-linux-x86_64.zip", info.Artifact.Url);
 
             // 当前版本已最新 → null
             var current = UpdateClient.FromInstallDirectory(install, "2.0.0");
@@ -317,7 +317,7 @@ public static class UpdaterClientTests
             WriteFeed(feedDir, "stable", "3.0.0", material,
                 new Protocol.UpdateFeedArtifact
                 {
-                    RuntimeIdentifier = "win-x64", Format = "msi",
+                    Target = "windows-x86_64", Format = "msi",
                     Url = "x.msi", Sha256 = "0", Size = 1, Signature = "AA=="
                 });
             var client2 = UpdateClient.FromInstallDirectory(install, "1.0.0");
@@ -341,7 +341,7 @@ public static class UpdaterClientTests
             var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifactFile, material));
             WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
                 Sha256 = sha, Size = new FileInfo(artifactFile).Length, Signature = sig,
             });
@@ -381,7 +381,7 @@ public static class UpdaterClientTests
             var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifactFile, material));
             WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 Url = "Hello%20Bundler%20App.app.zip", File = "Hello Bundler App.app.zip",
                 Sha256 = sha, Size = new FileInfo(artifactFile).Length, Signature = sig,
             });
@@ -520,7 +520,7 @@ public static class UpdaterClientTests
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 PublicKey = material.PublicPointBase64(),
             };
             var sidecarSerializer = new DataContractJsonSerializer(
@@ -572,7 +572,7 @@ public static class UpdaterClientTests
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 PublicKey = material.PublicPointBase64(),
             };
             var sidecarSerializer = new DataContractJsonSerializer(
@@ -610,7 +610,7 @@ public static class UpdaterClientTests
             UpdateClient.FromIdentity(new Protocol.UpdateInstallIdentity
             {
                 Format = "zip",
-                RuntimeIdentifier = "linux-x64",
+                Target = "linux-x86_64",
                 Channel = "stable",
                 FeedUrl = null!,
                 PublicKey = material.PublicPointBase64(),
@@ -631,7 +631,7 @@ public static class UpdaterClientTests
             Protocol.UpdateInstallIdentity.Write(install, new Protocol.UpdateInstallIdentity
             {
                 Format = "zip",
-                RuntimeIdentifier = "linux-x64",
+                Target = "linux-x86_64",
                 Channel = "stable",
                 FeedUrl = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
                 PublicKey = "%%%not-a-key",
@@ -662,7 +662,7 @@ public static class UpdaterClientTests
                     new Protocol.UpdateFeed { Version = "2.0.0", Channel = "stable" },
                     new Protocol.UpdateFeedArtifact
                     {
-                        RuntimeIdentifier = "linux-x64",
+                        Target = "linux-x86_64",
                         Format = "zip",
                         Url = "app.bin",
                         File = "app.bin",
@@ -687,7 +687,7 @@ public static class UpdaterClientTests
             var v2 = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2");
             WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64",
+                Target = "linux-x86_64",
                 Format = "zip",
                 Url = "app-2.0.0.zip",
                 File = "app-2.0.0.zip",
@@ -700,7 +700,7 @@ public static class UpdaterClientTests
             Protocol.UpdateInstallIdentity.Write(install, new Protocol.UpdateInstallIdentity
             {
                 Format = "zip",
-                RuntimeIdentifier = "linux-x64",
+                Target = "linux-x86_64",
                 Channel = "stable",
                 FeedUrl = server.FeedUrl,
                 PublicKey = material.PublicPointBase64(),
@@ -735,7 +735,7 @@ public static class UpdaterClientTests
             var v2 = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2");
             WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64",
+                Target = "linux-x86_64",
                 Format = "zip",
                 Url = "app-2.0.0.zip",
                 File = "app-2.0.0.zip",
@@ -750,7 +750,7 @@ public static class UpdaterClientTests
             Protocol.UpdateInstallIdentity.Write(install, new Protocol.UpdateInstallIdentity
             {
                 Format = "zip",
-                RuntimeIdentifier = "linux-x64",
+                Target = "linux-x86_64",
                 Channel = "stable",
                 FeedUrl = server.FeedUrl,
                 PublicKey = material.PublicPointBase64(),
@@ -1010,7 +1010,7 @@ public static class UpdaterClientTests
         {
             var update = new DotNet.Bundler.UpdateBundleConfiguration();
             Assert.True(DotNet.Bundler.Core.Update.UpdateBootstrapper.TryResolve(
-                update, "linux-x64", out var first));
+                update, "linux-x86_64", out var first));
             var root = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(
                 Path.GetDirectoryName(first)!)!)!)!;
             var stale = Path.Combine(root, ".stale-" + Guid.NewGuid().ToString("N"));
@@ -1020,7 +1020,7 @@ public static class UpdaterClientTests
             Directory.CreateDirectory(fresh);
 
             Assert.True(DotNet.Bundler.Core.Update.UpdateBootstrapper.TryResolve(
-                update, "linux-x64", out _));
+                update, "linux-x86_64", out _));
             Assert.False(Directory.Exists(stale), "stale extraction dir must be swept");
             Assert.True(Directory.Exists(fresh), "fresh extraction dir must be kept");
         }
@@ -1156,9 +1156,9 @@ public static class UpdaterClientTests
         {
             var install = InstallWithSidecar(directory, out var material, out var feedDir);
             File.WriteAllText(Path.Combine(install, "app"), "v1");
-            // 引导件：安装目录内注入真实 linux-x64 AOT 二进制。
+            // 引导件：安装目录内注入真实 linux-x86_64 AOT 二进制。
             var bootstrapper = RepoPath(
-                $"src/Bundler.Updater.Bootstrap/tools/{TestPlatform.LinuxRuntimeIdentifier}/bundler-updater");
+                $"src/Bundler.Updater.Bootstrap/tools/{TestPlatform.LinuxTarget}/bundler-updater");
             File.Copy(bootstrapper, Path.Combine(install, "bundler-updater"));
 
             // v2 载荷 zip：单顶层目录 app-v2/app="v2" + 引导件也随包（真实发布形态）。
@@ -1168,7 +1168,7 @@ public static class UpdaterClientTests
             var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material));
             WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
                 Sha256 = sha, Size = new FileInfo(artifact).Length, Signature = sig,
             });
@@ -1229,7 +1229,7 @@ public static class UpdaterClientTests
             var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material));
             WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
                 Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
                 Signature = sig,
@@ -1265,7 +1265,7 @@ public static class UpdaterClientTests
             var artifact = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2");
             WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
                 Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
                 Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
@@ -1295,7 +1295,7 @@ public static class UpdaterClientTests
             var artifact = WriteZipArtifact(feedDir, "app-1.0.0.zip", "v1");
             WriteFeed(feedDir, "stable", "1.0.0", material, new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 Url = "app-1.0.0.zip", File = "app-1.0.0.zip",
                 Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
                 Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
@@ -1326,7 +1326,7 @@ public static class UpdaterClientTests
             var artifact = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2");
             WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
                 Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
                 Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
@@ -1387,7 +1387,7 @@ public static class UpdaterClientTests
 
             var identity = new Protocol.UpdateInstallIdentity
             {
-                Format = "appimage", RuntimeIdentifier = "linux-x64",
+                Format = "appimage", Target = "linux-x86_64",
                 Channel = "stable", FeedUrl = "/feed/latest.json",
                 PublicKey = "cHVia2V5",
             };
@@ -1489,7 +1489,7 @@ public static class UpdaterClientTests
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 PublicKey = material.PublicPointBase64(),
             };
             Protocol.UpdateInstallIdentity.Write(install, identity);
@@ -1561,7 +1561,7 @@ public static class UpdaterClientTests
             var v2 = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2");
             WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
                 Sha256 = Sha256Hex(v2), Size = new FileInfo(v2).Length,
                 Signature = Convert.ToBase64String(EcdsaSigner.SignFile(v2, material)),
@@ -1601,7 +1601,7 @@ public static class UpdaterClientTests
             var v2 = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2");
             WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
                 Sha256 = Sha256Hex(v2), Size = new FileInfo(v2).Length,
                 Signature = Convert.ToBase64String(EcdsaSigner.SignFile(v2, material)),
@@ -1611,7 +1611,7 @@ public static class UpdaterClientTests
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x86_64", Format = "zip",
                 PublicKey = material.PublicPointBase64(),
             };
             var sidecarSerializer = new DataContractJsonSerializer(
@@ -1663,7 +1663,7 @@ public static class UpdaterClientTests
         }
         WriteFeed(dir, "stable", version, material, new Protocol.UpdateFeedArtifact
         {
-            RuntimeIdentifier = "linux-x64", Format = "zip",
+            Target = "linux-x86_64", Format = "zip",
             Url = fileName, File = fileName,
             Sha256 = Sha256Hex(artifactPath), Size = new FileInfo(artifactPath).Length,
             Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifactPath, material)),
@@ -1684,7 +1684,7 @@ public static class UpdaterClientTests
         Protocol.UpdateInstallIdentity.Write(install, new Protocol.UpdateInstallIdentity
         {
             Format = "zip",
-            RuntimeIdentifier = "linux-x64",
+            Target = "linux-x86_64",
             Channel = "stable",
             FeedUrl = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
             PublicKey = material.PublicPointBase64(),

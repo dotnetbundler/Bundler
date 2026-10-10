@@ -62,10 +62,10 @@ nsis/<版本>/
 ├─ common/
 ├─ hosts/
 │  ├─ win/
-│  ├─ linux-x64/
-│  ├─ linux-arm64/
-│  ├─ osx-x64/
-│  └─ osx-arm64/
+│  ├─ linux-x86_64/
+│  ├─ linux-aarch64/
+│  ├─ macos-x86_64/
+│  └─ macos-arm64/
 ├─ toolset-manifest.json
 ├─ COPYING
 └─ README.md
@@ -114,7 +114,7 @@ tools/Bundler.Nsis.Plugin/
 third_party/nsis/plugins/x86-unicode/DotNetBundlerNsis.dll
 ```
 
-插件使用 `win-x86` Native AOT 构建，因为 NSIS 插件宿主采用 x86 Unicode ABI。
+插件使用 `windows-i686` Native AOT 构建，因为 NSIS 插件宿主采用 x86 Unicode ABI。
 当前插件承担（`installer.nsi` 调用面 24 个导出函数）：
 
 - 安装/卸载事务日志：事务开启、激活、提交、崩溃恢复、注册表回滚与快照完整性校验；

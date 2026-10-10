@@ -2,7 +2,7 @@
 
 > 状态：**`.pkg` 已冻结**（`MAC-PKG-5` 于 2026-09-27 完成，分支 `mac-pkg-development`）。
 > 冻结基线：`MacPkgBundleConfiguration`+`MacPkgSigningConfiguration` 配置面与本文档 §3 语义契约在 `0.1.0-alpha.47` 冻结；此后变更走变更控制（能力矩阵改行 + 新测试 + 文档同步）。
-> 冻结测试向量：`Bundler.Tests` 122/122 全绿 + `MacPkgIntegrationTests` 全绿（组件包/分发包/页面/域名/per-user 真实安装+收据/签名拒绝路径/scripts 归档与执行/覆盖升级/osx-x64 产物/失败清理）。
+> 冻结测试向量：`Bundler.Tests` 122/122 全绿 + `MacPkgIntegrationTests` 全绿（组件包/分发包/页面/域名/per-user 真实安装+收据/签名拒绝路径/scripts 归档与执行/覆盖升级/macos-x86_64 产物/失败清理）。
 > `.pkg` 无上游参照：tauri 无 `.pkg` 输出（`PackageType` 仅 `MacOsBundle`/`IosBundle`/`Dmg`/`Updater` + Linux/Windows 各项），决策依据为原生 macOS 工具链语义与 [`docs/mac-format-decision.md`](mac-format-decision.md) 已确认边界。
 > `.app`/`.dmg` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)、[`docs/mac-dmg-roadmap.md`](mac-dmg-roadmap.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
@@ -28,7 +28,7 @@
 - **宿主边界**：`.pkg` 制作必须 macOS 宿主（无跨宿主替代）；非 macOS 宿主请求明确 `NotSupportedException`。
 - **安装宿主边界**：`system` 域安装需管理员授权；`current-user-home` 域不需提权（本机 uid 501 无 sudo，系统域真实安装属外部待验收）。
 - **后端下限**：netstandard2.0 库，同 `.app`/`.dmg` 口径。
-- **入口下限**：MSBuild=macOS 14（.NET 10 SDK）；CLI=macOS 宿主（`pkgbuild`/`productbuild` 依赖；dotnet tool 需 .NET 10 运行时，或 osx AOT 二进制）。
+- **入口下限**：MSBuild=macOS 14（.NET 10 SDK）；CLI=macOS 宿主（`pkgbuild`/`productbuild` 依赖；dotnet tool 需 .NET 10 运行时，或 macos-universal AOT 二进制）。
 
 ## 3. 语义契约
 
@@ -46,7 +46,7 @@
 - **目标/交付**：`Bundler.MacDmg` 同构的 `Bundler.MacPkg` 后端（netstandard2.0，`DotNet.Bundler.MacPkg` 包）；`pkgbuild --root`/`--component` 全链（identifier 默认规则、version、install-location、`--ownership`）；非 macOS 宿主明确拒绝；MSBuild 映射（`BundlerMacPkg*`）与直接 API；`Bundler.Tests` 新用例 + `tests/MacOS.Pkg.Integration` bash 实测（`pkgutil --expand-full` 断言 payload/`PackageInfo`、`xar -tf` 结构、`installer -dominfo` 域名信息）+ 示例 `samples/HelloMacPkg`。
 - **不做**：分发包、签名、公证、脚本。
 - **退出**：本机真实产出结构可验 `.pkg`；失败路径无残留。
-- **验收记录（2026-09-26，macOS 26.5.2 arm64）**：`Bundler.Tests` 109 项全绿（新增 10 条）；`Verify.sh` 全绿——fixture 产出 `osx-arm64/pkg/<产品名>.pkg`（规划器自动先产 `.app`），`pkgutil --expand-full` 断言 payload 含 `.app`+`BundlerPkgPayload` 显式项、`PackageInfo` identifier/version/install-location 默认值与覆盖值回读，`xar -tf` 断言 PackageInfo/Payload/Bom，`installer -dominfo -plist`/`-pkginfo` 解析通过，非法 install-location 使 publish 失败且无 `.pkg` 残留；`samples/HelloMacPkg` 全旋钮演示实测产出。踩坑修正：组件包无 domains 声明，`installer -dominfo` 断言口径改为"解析通过"（域名属 MAC-PKG-2 分发包）。
+- **验收记录（2026-09-26，macOS 26.5.2 arm64）**：`Bundler.Tests` 109 项全绿（新增 10 条）；`Verify.sh` 全绿——fixture 产出 `macos-arm64/pkg/<产品名>.pkg`（规划器自动先产 `.app`），`pkgutil --expand-full` 断言 payload 含 `.app`+`BundlerPkgPayload` 显式项、`PackageInfo` identifier/version/install-location 默认值与覆盖值回读，`xar -tf` 断言 PackageInfo/Payload/Bom，`installer -dominfo -plist`/`-pkginfo` 解析通过，非法 install-location 使 publish 失败且无 `.pkg` 残留；`samples/HelloMacPkg` 全旋钮演示实测产出。踩坑修正：组件包无 domains 声明，`installer -dominfo` 断言口径改为"解析通过"（域名属 MAC-PKG-2 分发包）。
 
 ### MAC-PKG-2：分发包与页面
 
@@ -65,7 +65,7 @@
 ### MAC-PKG-4：原生 E2E 与支持矩阵
 
 - **前置**：MAC-PKG-1..3 完成。
-- **目标/交付**：osx-x64/osx-arm64 产物矩阵、升级覆盖安装实测、收据/BOM 断言、错误路径清理、文档示例收口。
+- **目标/交付**：macos-x86_64/macos-arm64 产物矩阵、升级覆盖安装实测、收据/BOM 断言、错误路径清理、文档示例收口。
 - **退出**：矩阵实测格子有证据；未测格子限缩声明。
 
 ### MAC-PKG-5：审计与格式冻结

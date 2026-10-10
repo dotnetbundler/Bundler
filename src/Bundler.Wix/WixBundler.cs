@@ -57,7 +57,7 @@ public sealed class WixBundler : IFormatBundler
         foreach (var target in bundle.Targets)
         foreach (var language in languages)
         {
-            WixIdentity.Create(bundle.Identifier, bundle.Version, target.RuntimeIdentifier,
+            WixIdentity.Create(bundle.Identifier, bundle.Version, target.Target,
                 _settings.InstallScope, _settings.UpgradeCode, language, _settings.Version);
         }
     }

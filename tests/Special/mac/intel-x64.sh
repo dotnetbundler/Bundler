@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Intel Mac (osx-x64) 实跑/挂载/安装验收——Rosetta 也行但注明。
-# 用法: intel-x64.sh --app <osx-x64产 .app> [--dmg <x64.dmg>] [--binary <osx-x64 CLI>]
+# Intel Mac (macos-x86_64) 实跑/挂载/安装验收——Rosetta 也行但注明。
+# 用法: intel-x64.sh --app <macos-x86_64产 .app> [--dmg <x64.dmg>] [--binary <macos-x86_64 CLI>]
 set -euo pipefail
 EVIDENCE_DIR="$(dirname "$0")/../evidence"; mkdir -p "$EVIDENCE_DIR"; EVIDENCE_DIR="$(cd "$EVIDENCE_DIR" && pwd)"
 EV="$EVIDENCE_DIR/SA-INTELMAC-$(date +%Y%m%d).md"
@@ -10,7 +10,7 @@ die(){ echo "FAIL: $*" >&2; exit 1; }
 arch=$(uname -m)
 rosetta="无"; /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null && rosetta="可用"
 note "宿主" "PASS" "arch=$arch rosetta=$rosetta"
-{ [ "$arch" = "x86_64" ] || [ "$rosetta" = "可用" ]; } || die "非 x64 且无 Rosetta，osx-x64 件跑不了"
+{ [ "$arch" = "x86_64" ] || [ "$rosetta" = "可用" ]; } || die "非 x64 且无 Rosetta，macos-x86_64 件跑不了"
 
 APP=""; DMG=""; BIN=""
 while [ $# -gt 0 ]; do case "$1" in
@@ -21,7 +21,7 @@ WORK="$(mktemp -d /tmp/bundler-intel-XXXXXX)"; trap 'rm -rf "$WORK"' EXIT
 
 if [ -n "$BIN" ] && [ -f "$BIN" ]; then
     out=$({ "$BIN" --version 2>&1 || "$BIN" --help 2>&1 | head -1; } || true)
-    note "osx-x64 二进制实跑" "PASS" "$out"
+    note "macos-x86_64 二进制实跑" "PASS" "$out"
 fi
 if [ -n "$APP" ] && [ -d "$APP" ]; then
     cp -a "$APP" "$WORK/app.app"
@@ -39,7 +39,7 @@ if [ -n "$DMG" ] && [ -f "$DMG" ]; then
 fi
 
 cat > "$EV" <<EOF
-# SA-INTELMAC osx-x64 验收
+# SA-INTELMAC macos-x86_64 验收
 - 日期: $(date -u +%Y-%m-%d) UTC | 宿主: $(sw_vers -productName) $(sw_vers -productVersion) $(uname -m)
 - 模式: $([ "$arch" = "x86_64" ] && echo "Intel 真机" || echo "ARM64+Rosetta")
 

@@ -4,7 +4,7 @@ ManifestDPIAwareness PerMonitorV2
 {{compression_directive}}
 
 ; 在解析任何插件命令之前，先注册随包提供的 Unicode 插件目录。
-; NSIS 插件 ABI 为 32 位，因此该插件编译为 win-x86。
+; NSIS 插件 ABI 为 32 位，因此该插件编译为 windows-i686。
 !addplugindir "{{plugin_directory}}"
 
 !include "MUI2.nsh"

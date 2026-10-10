@@ -10,8 +10,8 @@ namespace DotNet.Bundler.Core.Update;
 public static class UpdateBootstrapper
 {
     /// <summary>注入到载荷里的引导件文件名（Windows 宿主追加 .exe）。</summary>
-    public static string FileNameFor(string runtimeIdentifier) =>
-        runtimeIdentifier.StartsWith("win", StringComparison.OrdinalIgnoreCase)
+    public static string FileNameFor(string target) =>
+        target.StartsWith("win", StringComparison.OrdinalIgnoreCase)
             ? "bundler-updater.exe"
             : "bundler-updater";
 
@@ -20,10 +20,10 @@ public static class UpdateBootstrapper
     /// 选取顺序：<c>&lt;dir&gt;/&lt;rid&gt;/bundler-updater[.exe]</c> →（非 win）<c>&lt;dir&gt;/posix/bundler-updater.sh</c>。
     /// </summary>
     public static string? Inject(string targetDirectory, UpdateBundleConfiguration update,
-        string runtimeIdentifier)
+        string target)
     {
-        var fileName = FileNameFor(runtimeIdentifier);
-        if (TryResolve(update, runtimeIdentifier, out var source))
+        var fileName = FileNameFor(target);
+        if (TryResolve(update, target, out var source))
         {
             var destination = Path.Combine(targetDirectory, fileName);
             File.Copy(source, destination, overwrite: true);
@@ -34,15 +34,15 @@ public static class UpdateBootstrapper
     }
 
     /// <summary>仅解析选件路径，不落盘——供校验与测试（内嵌件解析为临时解出路径）。</summary>
-    public static bool TryResolve(UpdateBundleConfiguration update, string runtimeIdentifier,
+    public static bool TryResolve(UpdateBundleConfiguration update, string target,
         out string source)
     {
-        var fileName = FileNameFor(runtimeIdentifier);
-        var isWindows = runtimeIdentifier.StartsWith("win", StringComparison.OrdinalIgnoreCase);
+        var fileName = FileNameFor(target);
+        var isWindows = target.StartsWith("win", StringComparison.OrdinalIgnoreCase);
         // Windows 宿主绝不能拿到 POSIX 脚本（.sh 改名 .exe 无法执行）——只认 per-RID 二进制。
         if (update.BootstrapperDirectory is { Length: > 0 } directory)
         {
-            var perRid = Path.Combine(directory, runtimeIdentifier, fileName);
+            var perRid = Path.Combine(directory, target, fileName);
             if (File.Exists(perRid))
             {
                 source = perRid;
@@ -59,7 +59,7 @@ public static class UpdateBootstrapper
         }
         // 内嵌资源兜底：updater/<rid>/<name> → updater/posix/bundler-updater.sh，
         // 解到临时缓存目录供 File.Copy/归档条目引用。
-        if (TryExtractEmbedded($"updater/{runtimeIdentifier}/{fileName}", out source))
+        if (TryExtractEmbedded($"updater/{target}/{fileName}", out source))
         {
             return true;
         }

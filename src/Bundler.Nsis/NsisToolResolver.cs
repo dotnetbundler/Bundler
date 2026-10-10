@@ -25,7 +25,7 @@ internal static class NsisToolResolver
         };
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            requiredPaths.Add(Path.Combine("hosts", "win-x86", "zlib1.dll"));
+            requiredPaths.Add(Path.Combine("hosts", "windows-i686", "zlib1.dll"));
         }
 
         var resolved = await ZipToolCache.ResolveToolAsync(

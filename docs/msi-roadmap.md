@@ -440,7 +440,7 @@ CLI 仍在全部计划格式完成之后。
 
 - **前置**：核对 `adce4f0` 后实际 Git、当前包版本、目标模型与固定身份向量；以 MSI 三段版本和 major upgrade 官方规则复核新配置。
   上游审计结论为已确认范围。
-- **目标/交付**：公共目标模型增加 `win-x86`，MSI 包使用正确的 x86 目录/注册表视图、组件属性和独立产品线；NSIS 不因共享模型扩展而自动接受 x86。
+- **目标/交付**：公共目标模型增加 `windows-i686`，MSI 包使用正确的 x86 目录/注册表视图、组件属性和独立产品线；NSIS 不因共享模型扩展而自动接受 x86。
   允许显式传入**三段有效 MSI 版本**以映射应用自身版本，拒绝第四字段、回退/碰撞及无定义的预发布自动映射。
   `AllowDowngrades` 默认 false、仅显式选择时为 true；同版本不同内容仍拒绝。
   既有身份与默认安装行为不变。
@@ -451,7 +451,7 @@ CLI 仍在全部计划格式完成之后。
 - **不做/退出**：不支持自动跨 x86/x64/ARM64 或 current-user/per-machine 迁移，不把 MSI 第四版本字段当升级版本。
   上述自动化及本机安全的真实生命周期通过、无既有身份漂移、独立包可消费、文档与版本同步后退出；其他宿主继续只保留准确验收状态。
 
-**实施记录（2026-09-25，`0.1.0-alpha.40`）**：公共目标模型新增 `win-x86`，Core 只允许它用于 MSI；NSIS 不接受。
+**实施记录（2026-09-25，`0.1.0-alpha.40`）**：公共目标模型新增 `windows-i686`，Core 只允许它用于 MSI；NSIS 不接受。
 MSI 使用 WiX `-arch x86`、`ProgramFilesFolder`（per-machine）或既有用户目录（current-user）、独立 `-x86` 安装目录和原身份算法中的新 RID，因此原 x64/ARM64 身份未变。
 API 的 `WixBundleConfiguration.MsiVersion` 与 MSBuild 的 `BundlerWixMsiVersion` 只接受有效三段数值；不指定时保持旧映射并拒绝预发布版本。
 不同应用版本映射到同一 MSI 版本时，已安装产品的同版异包保护继续拒绝覆盖；发行方仍需保证跨发布版本分配单调且唯一。
@@ -667,7 +667,7 @@ WiX 文件来源/许可/哈希未变（仍是 3.14.1 归档，无新增第三方
 - **测试**：`Bundler.Tests` 更新（自动检测渲染/默认关闭断言、1602 分支、MSBuild 映射与默认值）；`Verify.ps1` 新增自动检测命中/双负例、多版本取最高并全清、目录延续三腿。per-machine 提权枚举与真实历史产品迁移仍在 NSIS MT-05 外列。
 - **包**：版本升至 `0.1.0-alpha.44`；嵌入原生插件重建（SHA-256 见 `third_party/nsis-plugin/nsis-plugin-provenance.md`）。
 
-**外部待验收实证回填（2026-10-05，`0.1.0-alpha.70`，win-x64 r31 实机）**：
+**外部待验收实证回填（2026-10-05，`0.1.0-alpha.70`，windows-x86_64 r31 实机）**：
 
 - **junction 安装目标**（MSI-OI-12 子项消解）：MSI 不规范化重解析点——INSTALLFOLDER/Dir target/ARPINSTALLLOCATION 记 junction 路径原样；20 文件透写真实目标双侧可见；junction 完好时 /x 清真实目标+ARP 注销但保留 reparse point 本身；ARP 落 HKLM（currentUser scope 亦然）；孤立情形（junction+目标先删而注册残留）下同 ProductCode /i 变 no-op resume（InstallFiles 过但 0 文件重铺）、/x 仅清注册。
 - **FIPS**（MSI-OI-13 消解）：`FipsAlgorithmPolicy.Enabled=1` 读回确认；Security 4688 进程审计捕获 candle.exe 真实命令行含 `-fips`（light 无此开关）；`=false` 对照在策略下 candle exit 308 + CNDL0308 拒构；FIPS 产物 /i→/x 零残留。

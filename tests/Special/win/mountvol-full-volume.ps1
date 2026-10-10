@@ -16,7 +16,7 @@ function Note($step, $ok, $detail = "") {
 }
 
 $repo = Resolve-Path "$PSScriptRoot/../../.."
-$rid = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'win-arm64' } else { 'win-x64' }
+$rid = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'windows-arm64' } else { 'windows-x86_64' }
 $updater = "$repo/src/Bundler.Updater.Bootstrap/tools/$rid/bundler-updater.exe"
 if (-not (Test-Path $updater)) { throw "bundler-updater.exe 缺位: $updater" }
 if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }

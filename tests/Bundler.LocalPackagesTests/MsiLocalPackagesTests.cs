@@ -83,13 +83,14 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
 
     // 对应 dotnet publish --no-restore + Bundler 属性串（fixture 已还原）。
     private string Publish(string project, string output, string identifier,
-        string version, string rid = "win-x64", params string[] extra)
+        string version, string rid = "windows-x86_64", params string[] extra)
     {
         var args = new List<string>
         {
             "publish", project, "-c", "Release", "--no-restore",
+            "-r", TestPlatform.ToPublishRid(rid),
             $"-p:BundlerPackageSource={_f.Packages}", $"-p:RestorePackagesPath={_f.Cache}",
-            $"-p:BundlerPackageVersion={_f.Version}", $"-p:RuntimeIdentifier={rid}",
+            $"-p:BundlerPackageVersion={_f.Version}", $"-p:BundlerTarget={rid}",
             $"-p:BundlerOutputPath={output}", $"-p:BundlerIdentifier={identifier}",
             $"-p:BundlerVersion={version}",
         };
@@ -97,7 +98,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         ProcessRunner.AssertSuccess(
             Dotnet.Run(args, new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(10) }),
             $"MSI fixture publish failed: {project}");
-        return Path.Combine(output, rid, "msi");
+        return output;
     }
 
     private void MsiexecLogged(string name, string root, string[] arguments, params int[] allowed)
@@ -141,7 +142,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         var project = MsiSupport.CopyFixture(Path.Combine(root, "fixture"), _f.FixtureSource);
         MsiSupport.RestoreFixture(project, _f.Packages, _f.Cache, _f.Version);
         var msiDir = Publish(project, Path.Combine(root, "output"), id, "1.0.0");
-        var msi = Path.Combine(msiDir, $"{MsiName}-1.0.0.msi");
+        var msi = Path.Combine(msiDir, $"{MsiName}-1.0.0-x64.msi");
         Assert.True(File.Exists(msi), $"MSI was not produced: {msi}");
 
         var productCode = MsiSupport.GetProperty(msi, "ProductCode");
@@ -188,9 +189,9 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         var install = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Programs", $"{id}-x64");
-        var progId = $"{id}.win-x64.file.{extension}";
-        var urlProgId = $"{id}.win-x64.url.{scheme}";
-        var capabilities = $@"Software\DotNetBundler\Products\{id}\win-x64\Capabilities";
+        var progId = $"{id}.windows-x86_64.file.{extension}";
+        var urlProgId = $"{id}.windows-x86_64.url.{scheme}";
+        var capabilities = $@"Software\DotNetBundler\Products\{id}\windows-x86_64\Capabilities";
         var fileKey = $@"Software\Classes\." + extension;
         var schemeKey = $@"Software\Classes\{scheme}";
         var startMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
@@ -226,15 +227,15 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
             var project1 = MsiSupport.CopyFixture(Path.Combine(root, "fixture-1.0.0"), _f.FixtureSource);
             MsiSupport.RestoreFixture(project1, _f.Packages, _f.Cache, _f.Version);
             var v1 = Path.Combine(Publish(project1, Path.Combine(root, "output-1.0.0"), id, "1.0.0",
-                    "win-x64", extra), $"{MsiName}-1.0.0.msi");
+                    "windows-x86_64", extra), $"{MsiName}-1.0.0-x64.msi");
             var project2 = MsiSupport.CopyFixture(Path.Combine(root, "fixture-1.1.0"), _f.FixtureSource);
             MsiSupport.RestoreFixture(project2, _f.Packages, _f.Cache, _f.Version);
             var v2 = Path.Combine(Publish(project2, Path.Combine(root, "output-1.1.0"), id, "1.1.0",
-                    "win-x64", extra), $"{MsiName}-1.1.0.msi");
+                    "windows-x86_64", extra), $"{MsiName}-1.1.0-x64.msi");
             var projectV = MsiSupport.CopyFixture(Path.Combine(root, "fixture-variant"), _f.FixtureSource);
             MsiSupport.RestoreFixture(projectV, _f.Packages, _f.Cache, _f.Version);
             var variant = Path.Combine(Publish(projectV, Path.Combine(root, "output-variant"), id,
-                    "1.1.0", "win-x64", [.. extra, "-p:MsiVariantTest=true"]), $"{MsiName}-1.1.0.msi");
+                    "1.1.0", "windows-x86_64", [.. extra, "-p:MsiVariantTest=true"]), $"{MsiName}-1.1.0-x64.msi");
             foreach (var path in new[] { v1, v2, variant })
             {
                 Assert.True(File.Exists(path), $"Missing MSI: {path}");
@@ -262,9 +263,9 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                         ?.GetValue("application/x-bundler-msi-lifecycle"));
                 Assert.Equal(urlProgId,
                     Registry.CurrentUser.OpenSubKey($@"{capabilities}\UrlAssociations")?.GetValue(scheme));
-                Assert.Equal($@"Software\DotNetBundler\Products\{id}\win-x64\Capabilities",
+                Assert.Equal($@"Software\DotNetBundler\Products\{id}\windows-x86_64\Capabilities",
                     Registry.CurrentUser.OpenSubKey(@"Software\RegisteredApplications")
-                        ?.GetValue($"{id}.win-x64"));
+                        ?.GetValue($"{id}.windows-x86_64"));
                 Assert.Equal("Other.Test.Owner",
                     Registry.CurrentUser.OpenSubKey(fileKey)?.GetValue(""));
                 Assert.Equal("Other URL owner",
@@ -356,7 +357,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         var project = MsiSupport.CopyFixture(Path.Combine(root, "fixture"), _f.FixtureSource);
         MsiSupport.RestoreFixture(project, _f.Packages, _f.Cache, _f.Version);
         var msi = Path.Combine(Publish(project, Path.Combine(root, "output"), id, "1.0.0"),
-            $"{MsiName}-1.0.0.msi");
+            $"{MsiName}-1.0.0-x64.msi");
         Assert.True(File.Exists(msi));
         var productCode = MsiSupport.GetProperty(msi, "ProductCode");
         AssertInstalled(productCode, false);
@@ -422,7 +423,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
             File.WriteAllText(license, "{\\rtf1\\ansi Test-only application license.}");
             var zhMsiDir = Publish(project, Path.Combine(root, "output-zh"), id, "1.0.0",
                 extra: [$"-p:BundlerWixLanguage=zh-CN", $"-p:BundlerLicenseFile={license}"]);
-            var chineseMsi = Path.Combine(zhMsiDir, $"{MsiName}-1.0.0-zh-cn.msi");
+            var chineseMsi = Path.Combine(zhMsiDir, $"{MsiName}-1.0.0-x64-zh-cn.msi");
             Assert.True(File.Exists(chineseMsi));
             Assert.False(Directory.Exists(chineseInstall));
             chineseCode = MsiSupport.GetProperty(chineseMsi, "ProductCode");
@@ -492,7 +493,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         return Path.Combine(appArgs[0], "artifacts");
     }
 
-    // VerifyWinMsi5.ps1：win-x86 四变体版本映射 + 允许/拒绝降级 + 同版碰撞 1638。
+    // VerifyWinMsi5.ps1：windows-i686 四变体版本映射 + 允许/拒绝降级 + 同版碰撞 1638。
     [Fact]
     [Trait("Requires", "localinstall")]
     public void X86VersionMappingAndDowngradePolicy()
@@ -521,21 +522,21 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                 var project = MsiSupport.CopyFixture(Path.Combine(root, $"fixture-{c.Name}"),
                     _f.FixtureSource);
                 MsiSupport.RestoreFixture(project, _f.Packages,
-                    Path.Combine(root, "nuget"), _f.Version, "win-x86");
+                    Path.Combine(root, "nuget"), _f.Version, "windows-i686");
                 var msiDir = Publish(project, Path.Combine(root, $"output-{c.Name}"), id,
-                    c.AppVersion, "win-x86",
+                    c.AppVersion, "windows-i686",
                     $"-p:BundlerWixVersion={c.Version}",
                     $"-p:BundlerWixAllowDowngrades={c.Allow.ToString().ToLowerInvariant()}",
                     "-p:MsiLifecycleTest=true");
-                var msi = Path.Combine(msiDir, $"{MsiName}-{c.Version}.msi");
+                var msi = Path.Combine(msiDir, $"{MsiName}-{c.Version}-x64.msi");
                 Assert.True(File.Exists(msi), $"Missing MSI: {msi}");
                 msiPaths[c.Name] = msi;
             }
             var apiArtifacts = RunApiFixture(root,
                 Path.Combine(root, "api-output"), Path.Combine(root, "api-tools"),
-                "win-x86", "2.0.0-beta.1", "1.8.4", "false");
-            var apiMsi = Path.Combine(apiArtifacts, "win-x86", "msi",
-                "MSI API Package Fixture-1.8.4.msi");
+                "windows-i686", "2.0.0-beta.1", "1.8.4", "false");
+            var apiMsi = Path.Combine(apiArtifacts,
+                "MSI API Package Fixture-1.8.4-x64.msi");
             Assert.True(File.Exists(apiMsi), "Standalone API did not produce the mapped x86 MSI.");
             Assert.Equal("1.8.4", MsiSupport.GetProperty(apiMsi, "ProductVersion"));
             foreach (var c in cases)
@@ -565,7 +566,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                 using (var reg32 = RegistryKey.OpenBaseKey(
                     RegistryHive.CurrentUser, RegistryView.Registry32))
                 using (var componentKey = reg32.OpenSubKey(
-                    $@"Software\DotNetBundler\Products\{id}\win-x86\Components"))
+                    $@"Software\DotNetBundler\Products\{id}\windows-i686\Components"))
                 {
                     Assert.NotNull(componentKey);
                     Assert.NotNull(componentKey!.GetValue("DefinitionHash"));
@@ -646,9 +647,9 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                 var fixtureDir = Path.Combine(root, $"fixture-{version}");
                 var project = MsiSupport.CopyFixture(fixtureDir, _f.FixtureSource);
                 MsiSupport.RestoreFixture(project, _f.Packages,
-                    Path.Combine(root, "nuget"), _f.Version, "win-x64");
+                    Path.Combine(root, "nuget"), _f.Version, "windows-x86_64");
                 msis.Add(Path.Combine(
-                    Publish(project, Path.Combine(root, $"output-{version}"), id, version, "win-x64",
+                    Publish(project, Path.Combine(root, $"output-{version}"), id, version, "windows-x86_64",
                         "-p:MsiLifecycleTest=true", "-p:BundlerWixInstallDirectorySelection=true",
                         "-p:BundlerWixStartMenuShortcut=true", "-p:BundlerWixDesktopShortcut=true",
                         "-p:BundlerWixAddToPath=true", "-p:BundlerWixUninstallShortcut=true",
@@ -799,20 +800,20 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         {
             var project = MsiSupport.CopyFixture(Path.Combine(root, "fixture"), _f.FixtureSource);
             MsiSupport.RestoreFixture(project, _f.Packages,
-                Path.Combine(root, "nuget"), _f.Version, "win-x64");
-            var msiDir = Publish(project, Path.Combine(root, "output"), id, "1.0.0", "win-x64",
+                Path.Combine(root, "nuget"), _f.Version, "windows-x86_64");
+            var msiDir = Publish(project, Path.Combine(root, "output"), id, "1.0.0", "windows-x86_64",
                 "-p:BundlerWixLanguages=en-US%3Bja-JP", "-p:BundlerWixStartMenuShortcut=true");
-            var msiEn = Path.Combine(msiDir, $"{MsiName}-1.0.0.msi");
-            var msiJa = Path.Combine(msiDir, $"{MsiName}-1.0.0-ja-jp.msi");
+            var msiEn = Path.Combine(msiDir, $"{MsiName}-1.0.0-x64.msi");
+            var msiJa = Path.Combine(msiDir, $"{MsiName}-1.0.0-x64-ja-jp.msi");
             Assert.True(File.Exists(msiEn) && File.Exists(msiJa), "Missing localized MSIs.");
 
             var apiArtifacts = RunApiFixture(root,
                 Path.Combine(root, "api-output"), Path.Combine(root, "api-tools"),
-                "win-x64", "1.0.0", "1.0.0", "false", "en-US;de-DE");
-            Assert.True(File.Exists(Path.Combine(apiArtifacts, "win-x64", "msi",
-                "MSI API Package Fixture-1.0.0.msi")));
-            Assert.True(File.Exists(Path.Combine(apiArtifacts, "win-x64", "msi",
-                "MSI API Package Fixture-1.0.0-de-de.msi")));
+                "windows-x86_64", "1.0.0", "1.0.0", "false", "en-US;de-DE");
+            Assert.True(File.Exists(Path.Combine(apiArtifacts,
+                "MSI API Package Fixture-1.0.0-x64.msi")));
+            Assert.True(File.Exists(Path.Combine(apiArtifacts,
+                "MSI API Package Fixture-1.0.0-x64-de-de.msi")));
 
             codeEn = MsiSupport.GetProperty(msiEn, "ProductCode");
             codeJa = MsiSupport.GetProperty(msiJa, "ProductCode");
@@ -882,11 +883,11 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         {
             var project = MsiSupport.CopyFixture(Path.Combine(root, "fixture"), _f.FixtureSource);
             MsiSupport.RestoreFixture(project, _f.Packages,
-                Path.Combine(root, "nuget"), _f.Version, "win-x64");
+                Path.Combine(root, "nuget"), _f.Version, "windows-x86_64");
             var msi = Path.Combine(
-                Publish(project, Path.Combine(root, "output"), id, "1.0.0", "win-x64",
+                Publish(project, Path.Combine(root, "output"), id, "1.0.0", "windows-x86_64",
                     "-p:MsiExtensionTest=true", "-p:BundlerWixExtensionIdPrefix=Ext."),
-                $"{MsiName}-1.0.0.msi");
+                $"{MsiName}-1.0.0-x64.msi");
             Assert.True(File.Exists(msi));
             code = MsiSupport.GetProperty(msi, "ProductCode");
             AssertInstalled(code, false);
@@ -928,9 +929,9 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                 "<ComponentRef Id=\"Expert.App\"/></Feature>" +
                 "</Product></Wix>");
             RunApiFixture(root, Path.Combine(root, "api-output"), Path.Combine(root, "api-tools"),
-                "win-x64", "1.0.0", "1.0.0", "false", "en-US", template);
-            var expertMsi = Path.Combine(apiArtifacts, "win-x64", "msi",
-                "MSI API Package Fixture-1.0.0.msi");
+                "windows-x86_64", "1.0.0", "1.0.0", "false", "en-US", template);
+            var expertMsi = Path.Combine(apiArtifacts,
+                "MSI API Package Fixture-1.0.0-x64.msi");
             Assert.True(File.Exists(expertMsi), $"Missing expert MSI: {expertMsi}");
             expertCode = MsiSupport.GetProperty(expertMsi, "ProductCode");
             AssertInstalled(expertCode, false);
@@ -1009,9 +1010,9 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         var variants = new (string Name, string Language, string Scope, string ProductLanguage,
             string AllUsers, string FileName)[]
         {
-            ("english-user", "en-US", "currentUser", "1033", "", "Hello Bundler App-1.0.0.msi"),
-            ("chinese-user", "zh-CN", "currentUser", "2052", "", "Hello Bundler App-1.0.0-zh-cn.msi"),
-            ("english-machine", "en-US", "perMachine", "1033", "1", "Hello Bundler App-1.0.0.msi"),
+            ("english-user", "en-US", "currentUser", "1033", "", "Hello Bundler App-1.0.0-x64.msi"),
+            ("chinese-user", "zh-CN", "currentUser", "2052", "", "Hello Bundler App-1.0.0-x64-zh-cn.msi"),
+            ("english-machine", "en-US", "perMachine", "1033", "1", "Hello Bundler App-1.0.0-x64.msi"),
         };
         var productCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var upgradeCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1021,7 +1022,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
             var output = Path.Combine(root, variant.Name);
             var props = new List<string>
             {
-                "-r", "win-x64",
+                "-r", "win-x64", "-p:BundlerTarget=windows-x86_64",
                 "-p:BundlerFormats=msi",
                 $"-p:RestorePackagesPath={cache}",
                 $"-p:HelloBundlerMsiLanguage={variant.Language}",
@@ -1038,7 +1039,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                     new ProcessRunner.Options
                     { WorkingDirectory = RepositoryLayout.Root, Timeout = TimeSpan.FromMinutes(10) }),
                 $"Sample publish failed: {variant.Name}");
-            var msi = Path.Combine(output, "win-x64", "msi", variant.FileName);
+            var msi = Path.Combine(output, variant.FileName);
             Assert.True(File.Exists(msi), $"Sample MSI is missing: {msi}");
             var properties = ReadProperties(msi);
             Assert.Equal("Hello Bundler App", properties["ProductName"]);
@@ -1108,7 +1109,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         var output = Path.Combine(root, "en-user");
         var props = new List<string>
         {
-            "-r", "win-x64",
+            "-r", "win-x64", "-p:BundlerTarget=windows-x86_64",
             "-p:BundlerFormats=msi",
             $"-p:RestorePackagesPath={Path.Combine(root, "packages")}",
             "-p:HelloBundlerMsiLanguage=en-US",
@@ -1125,7 +1126,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                 new ProcessRunner.Options
                 { WorkingDirectory = RepositoryLayout.Root, Timeout = TimeSpan.FromMinutes(10) }),
             "Sample publish failed (interactive leg)");
-        var msi = Path.Combine(output, "win-x64", "msi", "Hello Bundler App-1.0.0.msi");
+        var msi = Path.Combine(output, "Hello Bundler App-1.0.0-x64.msi");
         Assert.True(File.Exists(msi), $"Sample MSI is missing: {msi}");
         var productCode = MsiSupport.GetProperty(msi, "ProductCode");
         // per-user INSTALLFOLDER = LocalAppData\Programs\{BundlerIdentifier}-x64

@@ -24,7 +24,7 @@ public static class AppImageApiTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = "linux-x64",
+                    Target = "linux-x86_64",
                     InputDirectory = input,
                     MainExecutable = "FixtureApp",
                     Formats = [PackageFormat.AppImage]
@@ -33,8 +33,8 @@ public static class AppImageApiTests
         }, TestContext.Current.CancellationToken);
 
         var appImage = Assert.Single(artifacts).Path;
-        var expected = Path.Combine(root, "artifacts", "linux-x64", "appimage",
-            "api-fixture_1.0.0_amd64.AppImage");
+        var expected = Path.Combine(root, "artifacts",
+            "api-fixture-1.0.0-x86_64.AppImage");
         Assert.Equal(expected, appImage);
         Assert.True(File.Exists(appImage));
 

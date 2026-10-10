@@ -15,8 +15,8 @@ WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线；`alpha.44
 Linux `.deb` 已冻结并入 `main`（`LINUX-DEB-1..5`，冻结基线 `0.1.0-alpha.51`）：纯托管 ar/tar/gzip 写入器（无原生工具依赖、任意构建宿主可产出），control 全字段+维护者脚本+conffiles+systemd unit+桌面集成，`sudo dpkg -i/-r/-P` 真实装卸、lintian 硬断言、docker debian/ubuntu 矩阵全部验证。
 Linux `.rpm` 已冻结并入 `main`（`0.1.0-alpha.55`，`LINUX-RPM-1..5`）：纯托管 lead/header/cpio/gzip 写入器，六族关系字段 + License/Group/Url + freedesktop 桌面集成（.desktop/图标/metainfo）+ 任意路径映射 + 四 scriptlet/systemd unit/%config(noreplace)，`rpm -qip` 逐字段断言、`desktop-file-validate`、docker `fedora/rockylinux/opensuse` 三容器真实 `rpm -i`/`rpm -U`/`rpm -e` 与 `.rpmsave` 语义验证、`rpmlint` 豁免清单硬基线、`deb;rpm` 同次 publish 扇出已放开；可选 OpenPGP 签名（供私钥即嵌 `RPMSIGTAG_RSA`+`PGP` 双标签，`rpm -K`/zypper/dnf 实测验签通过）。
 Linux `.AppImage` 已冻结并入 `main`（`LINUX-APPIMAGE-1..4` 完成，冻结基线 `0.1.0-alpha.58`）：`DotNet.Bundler.AppImage` 内嵌固定版本 `appimagetool`+type2 runtime（SHA-256 provenance、不联网下载），AppDir 组装复用共享 freedesktop 件 + 脚本式 `AppRun` + 根 `.desktop` 符号链接/`.DirIcon`/`@(BundlerAppImageFile)` 任意映射，仅 Linux 宿主构建、x86_64 宿主可交叉产 aarch64；`--appimage-extract` 结构断言、解出程序真实运行、docker 三容器 extract-and-run 冒烟、`deb;rpm;appimage` 扇出全绿；可选 GPG 签名（供 OpenPGP 私钥即走 `appimagetool --sign`，`gpgv` 实测验签通过）。
-通用 `.zip`/`.tar.gz` 归档已冻结并入 `main`（`ARCHIVE-1..3` 完成，冻结基线 `0.1.0-alpha.59`）：`DotNet.Bundler.Archive` 纯托管写入器（zip 自实现 unix mode/symlink，tar.gz 复用共享 ustar 写入器），单顶层目录 `<pkg>-<ver>-<rid>/` 布局，执行位与符号链接双保留，`.sha256` 侧车，`BundlerFormats=zip;targz` 与 `deb;rpm;appimage;zip;targz` 扇出；`unzip`/`zipinfo -l`/`tar` 真实解包逐路径断言、解出载荷运行、mode/symlink 还原断言全绿。
-Alpine `.apk` 已冻结并入 `main`（`0.1.0-alpha.63`，`APK-1..5` 完成、PR #13 终审合并）：`DotNet.Bundler.AlpineApk` 纯托管三段 gzip 写入器（签名段+控制段 `.PKGINFO`/六脚本+数据段），`linux-musl-x64/arm64` → `x86_64`/`aarch64`，逐文件 pax `APK-TOOLS.checksum.SHA1`、`depend`/`provides`/`triggers`/`license`/`release`/`builddate` 与 `@(BundlerAlpineApkFile)` 任意绝对路径映射，可选 RSA 签名（`.SIGN.RSA.<密钥名>.rsa.pub`，公钥入 `/etc/apk/keys/` 后免 `--allow-untrusted`）；`alpine:latest` 容器 x86_64 直跑 + aarch64 qemu binfmt 真实 `apk add`/`apk del` 全绿。
+通用 `.zip`/`.tar.gz` 归档已冻结并入 `main`（`ARCHIVE-1..3` 完成，冻结基线 `0.1.0-alpha.59`）：`DotNet.Bundler.Archive` 纯托管写入器（zip 自实现 unix mode/symlink，tar.gz 复用共享 ustar 写入器），单顶层目录 `<pkg>-<ver>-<target>/` 布局，执行位与符号链接双保留，`.sha256` 侧车，`BundlerFormats=zip;targz` 与 `deb;rpm;appimage;zip;targz` 扇出；`unzip`/`zipinfo -l`/`tar` 真实解包逐路径断言、解出载荷运行、mode/symlink 还原断言全绿。
+Alpine `.apk` 已冻结并入 `main`（`0.1.0-alpha.63`，`APK-1..5` 完成、PR #13 终审合并）：`DotNet.Bundler.AlpineApk` 纯托管三段 gzip 写入器（签名段+控制段 `.PKGINFO`/六脚本+数据段），`linux-musl-x86_64`/`linux-musl-aarch64` → `x86_64`/`aarch64`,逐文件 pax `APK-TOOLS.checksum.SHA1`、`depend`/`provides`/`triggers`/`license`/`release`/`builddate` 与 `@(BundlerAlpineApkFile)` 任意绝对路径映射，可选 RSA 签名（`.SIGN.RSA.<密钥名>.rsa.pub`，公钥入 `/etc/apk/keys/` 后免 `--allow-untrusted`）；`alpine:latest` 容器 x86_64 直跑 + aarch64 qemu binfmt 真实 `apk add`/`apk del` 全绿。
 全后端统一示例见 [`samples/HelloBundlerApp`](samples/HelloBundlerApp/hello-bundler-app-sample.md)：单个工程覆盖全部 11 种格式的全部公开旋钮——公共旋钮在主工程，各后端专属旋钮按 `formats/<Format>.props` 导入（用户项目可直接复制该组织方式）。
 各格式打包/消费的平台支持范围汇总见 [`docs/platform-support-matrix.md`](docs/platform-support-matrix.md)。
 
@@ -45,11 +45,11 @@ Alpine `.apk` 已冻结并入 `main`（`0.1.0-alpha.63`，`APK-1..5` 完成、PR
 
 ```powershell
 dotnet tool install --global DotNet.Bundler.Cli
-bundler bundle --input-dir <publish目录> --rid linux-x64 --formats zip,deb \
+bundler bundle --input-dir <publish目录> --target linux-x86_64 --formats zip,deb \
   --product-name MyApp --identifier com.example.myapp --package-version 1.0.0 \
   --main-executable myapp --output-dir dist
 # 多目录 universal 合并：--input-dir 可重复，≥2 个目录先合并再打包
-bundler bundle --input-dir bin/osx-x64 --input-dir bin/osx-arm64 --rid osx --formats zip
+bundler bundle --input-dir bin/osx-x64 --input-dir bin/osx-arm64 --target macos-universal --formats zip
 ```
 
 也可用 `bundler.json` 承载配置（CLI 参数覆盖文件值，`--<fmt>.<knob>=` 透传格式旋钮），schema 与 MSBuild `Bundler*` 属性一一对应，映射表与退出码/`--json` 契约见 [`docs/cli-roadmap.md`](docs/cli-roadmap.md)。
@@ -100,7 +100,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
 dotnet publish -c Release
 ```
 
-安装程序默认输出到 `artifacts/<rid>/nsis/`。
+安装程序默认输出到 `artifacts/`（扁平布局；`BundlerOutputLayout=byFormat` 时按 `artifacts/<format>/` 分格）。
 自动打包发生在 `Publish` 之后，普通的 `Build` 不会生成安装包。
 
 ## 独立 NSIS API
@@ -125,7 +125,7 @@ var request = new BundleConfiguration
     [
         new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "win-x64",
+            Target = "windows-x86_64",
             InputDirectory = "publish/win-x64",
             MainExecutable = "MyApp.exe",
             Formats = [PackageFormat.Nsis]
@@ -138,7 +138,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 `NsisBundleConfiguration` 控制 NSIS 专属行为，包括安装范围、压缩、Artwork、语言、Hook、降级和快捷方式。
 `Compression` 支持 `Lzma`（默认）、`Zlib`、`Bzip2` 和 `None`。
-`win-x86`、`win-x64`、`win-arm64` 目标均可产出 NSIS 安装器；x86 载荷需在装有 32 位 .NET 运行时的宿主上运行（仅 x64 运行时的宿主启动报 `0x800700C1`），属目标环境前置而非打包限制。
+`windows-i686`、`windows-x86_64`、`windows-arm64` 目标均可产出 NSIS 安装器；x86 载荷需在装有 32 位 .NET 运行时的宿主上运行（仅 x64 运行时的宿主启动报 `0x800700C1`），属目标环境前置而非打包限制。
 高级调用和测试场景可以通过 `NsisBundlerOptions` 覆盖共享缓存、编译器、工具集压缩包、NSIS 数据目录、模板或语言目录；普通调用者不需要提供这些路径。
 提供自定义编译器时，如果编译器需要显式的 `NSISDIR`，还应设置 `DataDirectory`。
 
@@ -171,7 +171,7 @@ var request = new BundleConfiguration
     [
         new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "win-x64",
+            Target = "windows-x86_64",
             InputDirectory = "publish/win-x64",
             MainExecutable = "MyApp.exe",
             Formats = [PackageFormat.Msi]
@@ -188,7 +188,7 @@ var artifacts = await new WixBundler(new WixBundleConfiguration
 `WixBundleConfiguration` 配置 MSI 安装范围、`Languages`（culture 列表，每语言一个独立 MSI）、`LocaleFiles`（culture→`.wxl` 覆盖文件）、`FipsCompliant`、代码页、快捷方式、`MsiVersion`、`AllowDowngrades`、`InstallDirectorySelection`、`BannerBitmap`、`DialogBitmap`、`AddToPath`、`UninstallShortcut` 和 `LaunchAfterInstall`。
 范围内安装目录限定 current-user 在 `%LOCALAPPDATA%` 子目录、per-machine 在 Program Files 子目录，静默 `INSTALLFOLDER=` 走同一校验；
 启动勾选只在交互安装勾选时以用户会话执行，静默/被动/修复/升级不触发。
-`win-x86`、`win-x64`、`win-arm64` 是独立产品线；x86 可在当前 x64 Windows 构建并安装。
+`windows-i686`、`windows-x86_64`、`windows-arm64` 是独立产品线；x86 可在当前 x64 Windows 构建并安装。
 默认用三段稳定应用版本作 MSI 版本；预发布应用须显式提供有效的三段 `MsiVersion`，第四段与越界版本被拒绝。
 不同应用版本不得复用同一 MSI 版本，已安装的同版异包会被拒绝。
 降级默认禁止，只有调用方显式设置 `AllowDowngrades=true` 才允许。
@@ -214,9 +214,9 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | --- | --- | --- |
 | `BundlerEnabled` | 是 | `false` |
 | `BundlerIdentifier` | 是 | — |
-| `RuntimeIdentifier` | 是 | —；`BundlerUniversalRuntimeIdentifiers` 设置时可省略 |
+| `RuntimeIdentifier` | 是 | —；`BundlerUniversalTargets` 设置时可省略 |
 | `BundlerFormats` | 否 | `nsis`；分号分隔多值扇出，可用 `nsis`/`msi`/`app`/`dmg`/`pkg`/`deb`/`rpm`/`appimage`/`zip`/`targz`/`alpineapk`（CLI 另收 `all` 全量别名） |
-| `BundlerUniversalRuntimeIdentifiers` | 否 | 无；macOS universal 用——复数 RID（如 `osx-x64;osx-arm64`）对每个 RID 内层 `dotnet publish` 后托管合并成 universal 目录再按 `osx` 打包 |
+| `BundlerUniversalTargets` | 否 | 无；macOS universal 用——复数 .NET RID（如 `osx-x64;osx-arm64`）对每个 RID 内层 `dotnet publish` 后托管合并成 universal 目录再按 `macos-universal` 打包 |
 | `BundlerProductName` | 否 | `$(AssemblyName)` |
 | `BundlerVersion` | 否 | `$(Version)` |
 | `BundlerMainExecutable` | 否 | `$(TargetName).exe` |
@@ -355,12 +355,12 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerAppImageSigningKeyPassphrase` | 否 | 私钥口令（经 `APPIMAGETOOL_SIGN_PASSPHRASE` 注入）；只给口令不给密钥文件为配置错误，口令属秘密勿入库 |
 | `BundlerArchivePackageName` | 否 | `BundlerProductName` 的 kebab-case 化；进入归档名与顶层目录 |
 | `BundlerArchiveVersion` | 否 | `BundlerVersion` 原样 |
-| `BundlerArchiveName` | 否 | `<包名>-<版本>-<rid>`；整名覆盖，须为单一路径段 |
+| `BundlerArchiveName` | 否 | `<包名>-<版本>-<target>`；整名覆盖，须为单一路径段 |
 | `@(BundlerArchiveFile)`（`Destination`） | 否 | 无；任意文件 → 顶层目录内相对 POSIX 路径（拒绝对路径/`..`/`.`/空段/反斜杠/载荷碰撞） |
 | `BundlerAlpineApkPackageName` | 否 | `BundlerProductName` 的 kebab-case 化；进 `pkgname` 与文件名 |
 | `BundlerAlpineApkVersion` | 否 | 空时由 `BundlerVersion` 按 SemVer→apk 映射；显式值须为 apk 版本串 |
 | `BundlerAlpineApkRelease` | 否 | `0`（SemVer 预发布映射值优先）；非负整数，`pkgver=<version>-r<release>` |
-| `BundlerAlpineApkArchitecture` | 否 | 按 RID 映射（x64→`x86_64`、arm64→`aarch64`）；仅 `linux-musl-*` RID 适用 |
+| `BundlerAlpineApkArchitecture` | 否 | 按目标映射（x86_64→`x86_64`、aarch64→`aarch64`）；仅 `linux-musl-*` 目标适用 |
 | `BundlerAlpineApkLicense` | 否 | 无；SPDX 表达式写入 `license` 键 |
 | `BundlerAlpineApkBuildDate` | 否 | `0`；Unix 秒，确定性构建不建议覆盖 |
 | `BundlerAlpineApkDepends`/`Provides` | 否 | 无；分号列表逐行写入 `.PKGINFO` |
@@ -610,7 +610,7 @@ dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-
   -p:HelloBundlerSigningCertificateThumbprint=$thumbprint
 
 $installer = Resolve-Path `
-  "samples/HelloBundlerApp/artifacts/win-x64/nsis/Hello Bundler App-1.0.0-setup.exe"
+  "samples/HelloBundlerApp/artifacts/Hello Bundler App-1.0.0-x64-setup.exe"
 $installerSignature = Get-AuthenticodeSignature -LiteralPath $installer
 $installerSignature | Select-Object Status, StatusMessage
 $installerSignature.SignerCertificate | Select-Object Subject, Thumbprint

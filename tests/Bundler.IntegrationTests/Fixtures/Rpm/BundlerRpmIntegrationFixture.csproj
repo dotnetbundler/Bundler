@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-x64</RuntimeIdentifier>
+    <BundlerTarget Condition="'$(Target)' == ''">linux-x86_64</BundlerTarget>
     <SelfContained>true</SelfContained>
     <AssemblyName>BundlerRpmIntegrationFixture</AssemblyName>
     <Version>1.0.0</Version>
@@ -46,7 +47,7 @@
     <BundlerRpmPreInstallFile Condition="'$(BundlerTestRpmCrlfScript)' == '1'">$(MSBuildThisFileDirectory)Assets/bad-crlf.sh</BundlerRpmPreInstallFile>
     <BundlerRpmPreInstallProgram Condition="'$(BundlerTestRpmProg)' != ''">$(BundlerTestRpmProg)</BundlerRpmPreInstallProgram>
     <BundlerRpmSystemdServiceFile Condition="'$(BundlerTestRpmSystemd)' == '1'">$(MSBuildThisFileDirectory)Assets/fixture.service</BundlerRpmSystemdServiceFile>
-    <BundlerRpmConfigFiles Condition="'$(BundlerTestRpmConfigFiles)' != ''">$(BundlerTestRpmConfigFiles)</BundlerRpmConfigFiles>
+    <BundlerRpmConfigLocations Condition="'$(BundlerTestRpmConfigLocations)' != ''">$(BundlerTestRpmConfigLocations)</BundlerRpmConfigLocations>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>

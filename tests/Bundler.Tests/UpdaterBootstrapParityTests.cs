@@ -548,9 +548,9 @@ public static class UpdaterBootstrapParityTests
         // 仓内 tools/<rid> 引导件冒烟：守住"源码修了但发布件没重产"的漂变。
         var arm64 = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
             System.Runtime.InteropServices.Architecture.Arm64;
-        var rid = TestPlatform.IsWindows ? (arm64 ? "win-arm64" : "win-x64")
-            : TestPlatform.IsMacOS ? (arm64 ? "osx-arm64" : "osx-x64")
-            : TestPlatform.IsLinux ? TestPlatform.LinuxRuntimeIdentifier
+        var rid = TestPlatform.IsWindows ? (arm64 ? "windows-arm64" : "windows-x86_64")
+            : TestPlatform.IsMacOS ? (arm64 ? "macos-arm64" : "macos-x86_64")
+            : TestPlatform.IsLinux ? TestPlatform.LinuxTarget
             : null;
         Assert.SkipUnless(rid is not null, "no shipped bootstrap RID for this host");
         var exeName = TestPlatform.IsWindows ? "bundler-updater.exe" : "bundler-updater";

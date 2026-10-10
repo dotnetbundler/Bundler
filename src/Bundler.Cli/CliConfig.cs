@@ -106,7 +106,7 @@ internal static class CliConfig
     private static readonly HashSet<string> TopLevelFields = new(StringComparer.Ordinal)
     {
         "productName", "identifier", "version", "publisher", "description", "homepage",
-        "copyright", "licenseFile", "outputDirectory", "icons", "resources",
+        "copyright", "licenseFile", "outputDirectory", "outputLayout", "icons", "resources",
         "fileAssociations", "urlProtocols", "targets"
     };
 
@@ -119,12 +119,12 @@ internal static class CliConfig
 
     private static readonly HashSet<string> TargetFields_Exact = new(StringComparer.Ordinal)
     {
-        "runtimeIdentifier", "inputDirectory", "mainExecutable", "signingFiles", "formats"
+        "target", "inputDirectory", "mainExecutable", "signingFiles", "formats"
     };
 
     private static readonly HashSet<string> TargetFields_Allowed = new(StringComparer.OrdinalIgnoreCase)
     {
-        "runtimeIdentifier", "inputDirectory", "mainExecutable", "signingFiles", "formats"
+        "target", "inputDirectory", "mainExecutable", "signingFiles", "formats"
     };
 
     private static readonly Dictionary<string, Type> SectionTypes = new(StringComparer.Ordinal)
@@ -461,7 +461,7 @@ internal static class CliConfig
     // options write into targets[0] (creating it if absent).
     private static readonly Dictionary<string, string> TargetFields = new(StringComparer.Ordinal)
     {
-        ["rid"] = "runtimeIdentifier",
+        ["target"] = "target",
         ["input-dir"] = "inputDirectory",
         ["main-executable"] = "mainExecutable"
     };
@@ -483,6 +483,7 @@ internal static class CliConfig
         "product-name" => "productName",
         "package-version" => "version",
         "output-dir" => "outputDirectory",
+        "output-layout" => "outputLayout",
         "license-file" => "licenseFile",
         var name when TargetFields.ContainsKey(name) => name,
         var other => other
@@ -709,9 +710,9 @@ internal static class CliConfig
     }
 
     private static string TargetRid(JsonObject target, CliArguments parsed) =>
-        Text(target, "runtimeIdentifier")
-        ?? (parsed.Options.TryGetValue("rid", out var rid) ? rid : null)
-        ?? "linux-x64";
+        Text(target, "target")
+        ?? (parsed.Options.TryGetValue("target", out var optionTarget) ? optionTarget : null)
+        ?? "linux-x86_64";
 
     private static string? Text(JsonObject node, string field) =>
         node[field] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;

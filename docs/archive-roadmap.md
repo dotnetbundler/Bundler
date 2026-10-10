@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | 1 | 归档类型范围 | zip only / zip+tar.gz / zip+tar.gz+tar.zst | **zip + tar.gz**——覆盖 Windows（zip 惯例）与 Unix（tar.gz 惯例）两个主流分发形态；tar.xz/tar.zst/7z 登记明确拒绝（编码器依赖/普及度），需要时另起决策 |
 | 2 | 工具供应 | 系统 `zip`/`tar` / 托管写入器 | **纯托管写入器**，同 deb/rpm 立场——任意宿主可产、零外部进程；`tar` 复用 Bundler.Deb 已验证的 tar/gzip 写法（提取共享件到 Bundler.Core），`zip` 自实现 local header + central directory（`System.IO.Compression` 的 ZipArchive 不支持 unix mode/符号链接写出，不够用） |
-| 3 | 归档内布局 | 载荷平铺根目录 / 单顶层目录 / usr 树 | **单顶层目录** `<pkg>-<ver>-<rid>/` 内含完整 publish 载荷——归档分发惯例（解压不成"散弹"）；不引入 usr/lib 语义（归档不走路径约定） |
+| 3 | 归档内布局 | 载荷平铺根目录 / 单顶层目录 / usr 树 | **单顶层目录** `<pkg>-<ver>-<target>/` 内含完整 publish 载荷——归档分发惯例（解压不成"散弹"）；不引入 usr/lib 语义（归档不走路径约定） |
 | 4 | 可执行位保留 | 不保留 / tar mode+zip unix attrs | **保留**——tar 条目写 mode；zip 写 `version made by=Unix` + external attrs（Info-ZIP 惯例，`unzip`/`zipinfo` 可还原）；Windows 载荷无 exec 位需求但写入无害 |
 | 5 | 符号链接 | 展平复制 / tar 保留、zip 展平 / 双保留 | **双保留**——tar 原生 symlink 条目；zip 按 Info-ZIP 惯例（mode 0100777 + 数据为 link target）。publish 载荷常见 `lib*.so` 链接，展平会膨胀且改语义 |
 | 6 | 校验和 | 无 / .sha256 侧车 | **`.sha256` 侧车**——与 deb/rpm/appimage 一致 |
@@ -18,7 +18,7 @@
 | 8 | 旋钮面 | 最小（名称/版本）/ 对齐 freedesktop 族 | **最小集**：`PackageName`/`Version`/`ArchiveName` 模板、`@(BundlerArchiveFile)` 归档相对路径映射（与 `BundlerAppImageFile` 同口径校验）；freedesktop/desktop 件不属于归档职责，不引 |
 | 9 | 矩阵归属 | 每 OS 各开 / 全 OS 通用 | **全 OS 通用**——`PackageFormat.Zip`/`TarGz` 对 Windows/macOS/Linux 目标均可用（DesktopTargetMatrix 放开）；典型用法 win→zip、linux/mac→tar.gz（用户自选） |
 | 10 | 压缩级别 | 固定 / 可选 | **固定**（tar.gz 用 gzip level 6 同 deb 口径；zip 用 deflate level 6）——压缩级别旋钮无用户价值，登记拒绝 |
-| 11 | 真实验证 | unzip/tar 断言 / 仅结构 | **真实解包**——`unzip`/`zipinfo`/`tar -xzf` 逐路径断言 + 解出载荷真实运行 + mode/symlink 还原断言（`zipinfo -l`、`tar -tvf`、`test -x`）；win-x64 归档在 Windows 宿主无本机断言环境 → 记 MT |
+| 11 | 真实验证 | unzip/tar 断言 / 仅结构 | **真实解包**——`unzip`/`zipinfo`/`tar -xzf` 逐路径断言 + 解出载荷真实运行 + mode/symlink 还原断言（`zipinfo -l`、`tar -tvf`、`test -x`）；windows-x86_64 归档在 Windows 宿主无本机断言环境 → 记 MT |
 | 12 | 阶段骨架 | — | `ARCHIVE-1` 双写入器+最小可用+扇出 → `ARCHIVE-2` 旋钮面收口（文件映射等） → `ARCHIVE-3` 矩阵/审计/冻结 |
 
 ## 2. 语义对应表（供实现期对照）
@@ -26,7 +26,7 @@
 | deb/rpm/appimage 概念 | 归档对应 | 说明 |
 | --- | --- | --- |
 | `PackageFormat.Deb` 等 | `PackageFormat.Zip`/`TarGz` | 枚举新增两值 |
-| AppDir | 归档顶层目录 `<pkg>-<ver>-<rid>/` | 单一根，不进 usr 语义 |
+| AppDir | 归档顶层目录 `<pkg>-<ver>-<target>/` | 单一根，不进 usr 语义 |
 | `BundlerAppImageFile` | `@(BundlerArchiveFile)` | 归档相对 POSIX 目标，校验口径一致 |
 | scriptlet/conffile/关系字段 | 不适用 | 无包管理器 |
 | `.sha256` 侧车 | 同名 `.zip.sha256`/`.tar.gz.sha256` | 一致 |
@@ -51,7 +51,7 @@
 - MSBuild：`BundlerFormats=zip;targz`、`BundlerArchivePackageName`/`Version`/`ArchiveName` 三旋钮、`@(BundlerArchiveFile)` 归档相对映射（拒绝对路径/`..`/`.`/空段/反斜杠/碰撞）；MSBuild 包装载 `DotNet.Bundler.Archive.dll`。
 - `PackageFormat` 增 `Zip`/`TarGz`；`DesktopTargetMatrix` 三 OS 全放开；`BundlePlanner` 输出 `zip/`、`targz/` 目录。
 - 单元测试：`Bundler.Tests` 新增 8 项（结构/mode/symlink/映射/拒绝/扇出/MSBuild 接线），合计 181/181 全绿。
-- `tests/Archive.Integration/Verify.sh` 全绿：`unzip -l`/`zipinfo -l`/`tar -tvf` 清单与 mode 断言、真实解包逐路径+载荷运行+执行位+符号链接还原断言、覆盖变体、映射与非法目标失败变体（不留半成品）、`deb;rpm;appimage;zip;targz` 单 publish 扇出、`win-x64`/`osx-arm64` 交叉目标 zip。
+- `tests/Archive.Integration/Verify.sh` 全绿：`unzip -l`/`zipinfo -l`/`tar -tvf` 清单与 mode 断言、真实解包逐路径+载荷运行+执行位+符号链接还原断言、覆盖变体、映射与非法目标失败变体（不留半成品）、`deb;rpm;appimage;zip;targz` 单 publish 扇出、`windows-x86_64`/`macos-arm64` 交叉目标 zip。
 - `samples/HelloArchiveApp`：publish 产出 zip+tar.gz 并解出运行实测通过。
 
 ### ARCHIVE-2（`0.1.0-alpha.59`，分支 `archive-development`）

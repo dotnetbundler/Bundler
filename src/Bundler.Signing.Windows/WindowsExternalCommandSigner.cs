@@ -80,7 +80,7 @@ public sealed class WindowsExternalCommandSigner : IBundleSigner
         LegacyPathPlaceholder.Replace(value
             .Replace("{path}", path), path)
             .Replace("{artifactKind}", request.ArtifactKind.ToString())
-            .Replace("{target}", request.TargetRuntimeIdentifier)
+            .Replace("{target}", request.TargetTarget)
             .Replace("{productName}", request.ProductName);
 
     private static string Quote(string value)

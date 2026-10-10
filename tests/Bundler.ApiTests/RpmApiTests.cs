@@ -22,7 +22,7 @@ public static class RpmApiTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = "linux-x64",
+                    Target = "linux-x86_64",
                     InputDirectory = input,
                     MainExecutable = "FixtureApp",
                     Formats = [PackageFormat.Rpm]
@@ -31,7 +31,7 @@ public static class RpmApiTests
         }, TestContext.Current.CancellationToken);
 
         var rpm = Assert.Single(artifacts).Path;
-        var expected = Path.Combine(root, "artifacts", "linux-x64", "rpm",
+        var expected = Path.Combine(root, "artifacts",
             "api-fixture-1.0.0-1.x86_64.rpm");
         Assert.Equal(expected, rpm);
         Assert.True(File.Exists(rpm));

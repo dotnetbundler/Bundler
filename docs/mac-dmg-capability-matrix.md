@@ -42,7 +42,7 @@
 | MSBuild 集成映射 | 已实现 | MAC-DMG-1 | `BundlerMacDmg*` 属性 |
 | 离线构建 | 已实现 | MAC-DMG-1 起 | 全链离线，无第三方内嵌工具 |
 | 宿主工具探测与版本门槛 | 已实现 | MAC-DMG-1 | 缺必需工具明确报错；可选工具降级警告 |
-| osx-x64/osx-arm64/osx 产物 | 已实现 | MAC-DMG-4、`e7dfeae` | 双产物+裸 `osx` 通用目标（fat 载荷前置）；结构+挂载实测；x64 运行态启动 2026-10 CI 两腿实跑通过；观感仍人工（MAC-DMG-OI-03） |
+| macos-x86_64/macos-arm64/macos-universal 产物 | 已实现 | MAC-DMG-4、`e7dfeae` | 双产物+裸 `macos-universal` 通用目标（fat 载荷前置）；结构+挂载实测；x64 运行态启动 2026-10 CI 两腿实跑通过；观感仍人工（MAC-DMG-OI-03） |
 | quarantine/首挂载行为 | 已实现 | MAC-DMG-4 | 带 `com.apple.quarantine` 挂载+拷出传播断言实测；GUI 观感属 MAC-DMG-OI-01 |
 
 ## 有意排除

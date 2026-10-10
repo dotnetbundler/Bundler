@@ -25,7 +25,7 @@
 | `datahash`（数据 gzip 流 SHA-256） | 已实现 | APK-1 | `sha256(member<N>.gz)` 逐字节核对断言 |
 | `license`/`builddate`/`depend`/`provides`/`triggers` | 已实现 | APK-2 | `depend`/`provides` 分号列表逐行；`triggers` 空格串联绝对路径；`builddate` 默认 0（建议确定性构建别覆盖）；全部旋钮 .PKGINFO 行断言 |
 | 版本映射 SemVer→apk（`~`/`+` 拒绝、`builder` 回退） | 已实现 | APK-1 | 预发布映射 `r<previous>.<label>`；显式 `BundlerAlpineApkVersion`/`Release` 规则校验（release 须非负整数） |
-| 架构映射 `linux-musl-x64→x86_64`、`linux-musl-arm64→aarch64` | 已实现 | APK-1 | 其他 apk 架构名经 `BundlerAlpineApkArchitecture` 覆盖 |
+| 架构映射 `linux-musl-x86_64→x86_64`、`linux-musl-aarch64→aarch64` | 已实现 | APK-1 | 其他 apk 架构名经 `BundlerAlpineApkArchitecture` 覆盖 |
 | 任意绝对路径映射（`/etc` 等载荷外路径） | 已实现 | APK-2 | `@(BundlerAlpineApkFile)` `Destination` 元数据（绝对路径含文件名，拒相对/`..`/`.`/尾斜杠/重复目标）；API 面 `AlpineApkFileEntry` |
 
 ## 脚本与安装语义
@@ -55,7 +55,7 @@
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
 | `BundlerFormats=alpineapk`（MSBuild） | 已实现 | APK-1 | `linux-musl-*` RID 上扇出；与其他格式混排（`zip;targz;alpineapk`）支持 |
-| `bundler --formats alpineapk`（唯一合法名；`apk` 别名已移除——apk 名留给未来 Android 格式） | 已实现 | APK-1 | `Bundling for linux-musl-x64: alpineapk` 等实录可见；`--version` 内嵌真实包版本 |
+| `bundler --formats alpineapk`（唯一合法名；`apk` 别名已移除——apk 名留给未来 Android 格式） | 已实现 | APK-1 | `Bundling for linux-musl-x86_64: alpineapk` 等实录可见；`--version` 内嵌真实包版本 |
 | `bundler.json` `"alpineapk"` 段（唯一合法节名；`apk` 段名已移除） | 已实现 | APK-1 | `BundlerJsonContext` 覆盖全部格式旋钮 |
 | `DotNet.Bundler.AlpineApk` NuGet 直接消费 | 已实现 | APK-4 | `AlpineApkBundler().BuildAsync(BundleConfiguration)` 契约测试 + `tests/Bundler.ApiTests`（`AlpineApkApiTests`，`alpineapk` API 用法） |
 | `DotNet.Bundler` 便利元包传递 AlpineApk | 已实现 | APK-1 | `BundleDesktopApplication` Task 接线 + `buildTransitive` 传递 |

@@ -13,15 +13,15 @@ public static class WixTests
     [Fact]
     static void KeepsMsiIdentityStable()
     {
-        var first = WixIdentity.Create("com.Example.App", "1.2.3", "win-x64", WixInstallScope.CurrentUser);
-        var repeated = WixIdentity.Create("com.example.app", "1.2.3", "win-x64", WixInstallScope.CurrentUser);
-        var next = WixIdentity.Create("com.example.app", "1.2.4", "win-x64", WixInstallScope.CurrentUser);
-        var arm = WixIdentity.Create("com.example.app", "1.2.3", "win-arm64", WixInstallScope.CurrentUser);
-        var x86 = WixIdentity.Create("com.example.app", "1.2.3", "win-x86", WixInstallScope.CurrentUser);
+        var first = WixIdentity.Create("com.Example.App", "1.2.3", "windows-x86_64", WixInstallScope.CurrentUser);
+        var repeated = WixIdentity.Create("com.example.app", "1.2.3", "windows-x86_64", WixInstallScope.CurrentUser);
+        var next = WixIdentity.Create("com.example.app", "1.2.4", "windows-x86_64", WixInstallScope.CurrentUser);
+        var arm = WixIdentity.Create("com.example.app", "1.2.3", "windows-arm64", WixInstallScope.CurrentUser);
+        var x86 = WixIdentity.Create("com.example.app", "1.2.3", "windows-i686", WixInstallScope.CurrentUser);
         Assert.True(first.UpgradeCode == repeated.UpgradeCode && first.ProductCode == repeated.ProductCode,
             "MSI identity must be stable across builds and identifier casing.");
-        Assert.True(first.UpgradeCode == Guid.Parse("a4544d5a-7d38-54b0-bfef-2f43efedb406") &&
-               first.ProductCode == Guid.Parse("d182fb03-d132-5fe3-8098-5f008419f688"),
+        Assert.True(first.UpgradeCode == Guid.Parse("38ed3cdb-48c9-5d95-b583-fe49d4d7523a") &&
+               first.ProductCode == Guid.Parse("6c6d7711-3725-534f-9129-7f4532b38429"),
             "MSI UUIDv5 identity differs from the RFC 4122 test vector for the frozen namespace and input.");
         Assert.True(first.UpgradeCode == next.UpgradeCode && first.ProductCode != next.ProductCode,
             "A new product version must change ProductCode and preserve UpgradeCode.");
@@ -30,10 +30,10 @@ public static class WixTests
         Assert.True(first.UpgradeCode != x86.UpgradeCode && arm.UpgradeCode != x86.UpgradeCode &&
                first.ProductCode != x86.ProductCode,
             "The x86 product line must be isolated from x64 and ARM64.");
-        Assert.True(x86.UpgradeCode == Guid.Parse("f9d236f1-6d33-5a1e-940d-00257ce2a020") &&
-               x86.ProductCode == Guid.Parse("4b6c833e-0645-5d4c-83b9-1ba094b77eed"),
+        Assert.True(x86.UpgradeCode == Guid.Parse("59093a91-b3e8-5f25-80e1-374ad0716810") &&
+               x86.ProductCode == Guid.Parse("327a5767-ecab-5080-b5ce-1f95ed824181"),
             "The new x86 English identity differs from its fixed test vector.");
-        var migrated = WixIdentity.Create("com.example.app", "1.2.3", "win-x64",
+        var migrated = WixIdentity.Create("com.example.app", "1.2.3", "windows-x86_64",
             WixInstallScope.CurrentUser, "{11111111-2222-3333-4444-555555555555}");
         Assert.True(migrated.UpgradeCode == Guid.Parse("11111111-2222-3333-4444-555555555555") &&
                migrated.ProductCode != first.ProductCode,
@@ -41,23 +41,23 @@ public static class WixTests
         foreach (var version in new[] { "1.0.0-beta.1", "1.0.0+meta", "1.0.0.1", "256.0.0", "1.256.0", "1.0.65536", "01.0.0" })
         {
             var rejected = Assert.ThrowsAny<ArgumentException>(
-                () => WixIdentity.Create("com.example.app", version, "win-x64", WixInstallScope.CurrentUser));
+                () => WixIdentity.Create("com.example.app", version, "windows-x86_64", WixInstallScope.CurrentUser));
             Assert.Equal("version", rejected.ParamName);
         }
         Assert.Equal("255.255.65535",
-            WixIdentity.Create("com.example.app", "255.255.65535", "win-x64", WixInstallScope.CurrentUser).ProductVersion);
-        var machine = WixIdentity.Create("com.example.app", "1.0.0", "win-x64", WixInstallScope.PerMachine);
-        var user = WixIdentity.Create("com.example.app", "1.0.0", "win-x64", WixInstallScope.CurrentUser);
+            WixIdentity.Create("com.example.app", "255.255.65535", "windows-x86_64", WixInstallScope.CurrentUser).ProductVersion);
+        var machine = WixIdentity.Create("com.example.app", "1.0.0", "windows-x86_64", WixInstallScope.PerMachine);
+        var user = WixIdentity.Create("com.example.app", "1.0.0", "windows-x86_64", WixInstallScope.CurrentUser);
         Assert.True(machine.UpgradeCode != user.UpgradeCode && machine.ProductCode != user.ProductCode,
             "Per-machine and current-user products must have separate identity families.");
-        var chinese = WixIdentity.Create("com.example.app", "1.2.3", "win-x64", WixInstallScope.CurrentUser,
+        var chinese = WixIdentity.Create("com.example.app", "1.2.3", "windows-x86_64", WixInstallScope.CurrentUser,
             language: WixLanguageInfo.Resolve("zh-CN"));
         Assert.True(chinese.UpgradeCode != first.UpgradeCode && chinese.ProductCode != first.ProductCode,
             "Localized MSI products need separate language identity families.");
-        var x86Chinese = WixIdentity.Create("com.example.app", "1.2.3", "win-x86", WixInstallScope.CurrentUser,
+        var x86Chinese = WixIdentity.Create("com.example.app", "1.2.3", "windows-i686", WixInstallScope.CurrentUser,
             language: WixLanguageInfo.Resolve("zh-CN"));
-        Assert.True(x86Chinese.UpgradeCode == Guid.Parse("c4985894-4b1c-5e49-941b-a120850e0667") &&
-               x86Chinese.ProductCode == Guid.Parse("eeeead45-80e4-57a2-ad45-faa3f2cc2be1") &&
+        Assert.True(x86Chinese.UpgradeCode == Guid.Parse("f2da6c18-929f-527d-b974-f64977d47a20") &&
+               x86Chinese.ProductCode == Guid.Parse("5f92da76-88d9-516b-9791-9f9b2277eadc") &&
                x86Chinese.UpgradeCode != x86.UpgradeCode,
             "The new x86 Chinese identity differs from its fixed test vector.");
     }
@@ -65,18 +65,18 @@ public static class WixTests
     [Fact]
     static void MapsExplicitMsiVersions()
     {
-        var baseline = WixIdentity.Create("com.example.app", "1.2.3", "win-x64", WixInstallScope.CurrentUser);
-        var explicitSame = WixIdentity.Create("com.example.app", "1.2.3", "win-x64", WixInstallScope.CurrentUser,
+        var baseline = WixIdentity.Create("com.example.app", "1.2.3", "windows-x86_64", WixInstallScope.CurrentUser);
+        var explicitSame = WixIdentity.Create("com.example.app", "1.2.3", "windows-x86_64", WixInstallScope.CurrentUser,
             packageVersion: "1.2.3");
         Assert.Equal(explicitSame, baseline);
-        var preview = WixIdentity.Create("com.example.app", "2.0.0-beta.1", "win-x64",
+        var preview = WixIdentity.Create("com.example.app", "2.0.0-beta.1", "windows-x86_64",
             WixInstallScope.CurrentUser, packageVersion: "1.9.7");
         Assert.True(preview.ProductVersion == "1.9.7" && preview.UpgradeCode == baseline.UpgradeCode &&
                preview.ProductCode != baseline.ProductCode, "Explicit MSI version did not retain the product family.");
         foreach (var version in new[] { "", "1.2.3.4", "1.2.3-beta", "01.2.3", "256.0.0", "1.256.0", "1.2.65536" })
         {
             var rejected = Assert.ThrowsAny<ArgumentException>(
-                () => WixIdentity.Create("com.example.app", "2.0.0-beta.1", "win-x64",
+                () => WixIdentity.Create("com.example.app", "2.0.0-beta.1", "windows-x86_64",
                     WixInstallScope.CurrentUser, packageVersion: version));
             Assert.Equal("packageVersion", rejected.ParamName);
         }
@@ -89,7 +89,7 @@ public static class WixTests
         // 宿主门禁标记类型：入口层靠它区分“逐格式容错”与“配置错误聚合”。
         var configuration = ValidConfiguration(new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "win-x64", InputDirectory = ".",
+            Target = "windows-x86_64", InputDirectory = ".",
             MainExecutable = "test.exe", Formats = [PackageFormat.Msi]
         });
         Assert.Throws<PlatformNotSupportedException>(() => new WixBundler().Validate(configuration));
@@ -228,7 +228,7 @@ public static class WixTests
             LicenseFile = "future-license.txt",
             Targets = [new BundleTargetConfiguration
             {
-                RuntimeIdentifier = "win-x64", InputDirectory = "unused", MainExecutable = "test.exe",
+                Target = "windows-x86_64", InputDirectory = "unused", MainExecutable = "test.exe",
                 Formats = [PackageFormat.Msi]
             }]
         };
@@ -288,7 +288,7 @@ public static class WixTests
                 OutputDirectory = output,
                 Targets = [new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = "win-x64", InputDirectory = input,
+                    Target = "windows-x86_64", InputDirectory = input,
                     MainExecutable = "Msi Test.exe", Formats = [PackageFormat.Msi]
                 }]
             };
@@ -300,7 +300,7 @@ public static class WixTests
             using (var database = new MsiDatabaseReader(artifact.Path))
             {
                 var expected = WixIdentity.Create(configuration.Identifier, configuration.Version,
-                    "win-x64", WixInstallScope.CurrentUser);
+                    "windows-x86_64", WixInstallScope.CurrentUser);
                 Assert.Equal(expected.ProductCode.ToString("B").ToUpperInvariant(), database.Property("ProductCode"));
                 Assert.Equal(expected.UpgradeCode.ToString("B").ToUpperInvariant(), database.Property("UpgradeCode"));
                 Assert.Equal("1.2.3", database.Property("ProductVersion"));
@@ -417,7 +417,7 @@ public static class WixTests
             await File.WriteAllTextAsync(Path.Combine(input, "test.exe"), "fixture");
             var configuration = ValidConfiguration(new BundleTargetConfiguration
             {
-                RuntimeIdentifier = "win-x64", InputDirectory = input,
+                Target = "windows-x86_64", InputDirectory = input,
                 MainExecutable = "test.exe", Formats = [PackageFormat.Msi]
             });
             await Assert.ThrowsAnyAsync<InvalidDataException>(
@@ -450,7 +450,7 @@ public static class WixTests
                     OutputDirectory = Path.Combine(root, "output-" + index),
                     Targets = [new BundleTargetConfiguration
                     {
-                        RuntimeIdentifier = "win-x64", InputDirectory = input,
+                        Target = "windows-x86_64", InputDirectory = input,
                         MainExecutable = "test.exe", Formats = [PackageFormat.Msi]
                     }]
                 };
@@ -486,14 +486,14 @@ public static class WixTests
                 FileAssociations = [new BundleFileAssociationConfiguration { Extensions = [".machinetest"] }],
                 UrlProtocols = [new BundleUrlProtocolConfiguration { Schemes = ["machine-test"] }],
                 OutputDirectory = Path.Combine(root, "output"),
-                Targets = [new BundleTargetConfiguration { RuntimeIdentifier = "win-x64", InputDirectory = input,
+                Targets = [new BundleTargetConfiguration { Target = "windows-x86_64", InputDirectory = input,
                     MainExecutable = "machine.exe", Formats = [PackageFormat.Msi] }]
             };
             var artifact = (await new WixBundler(new WixBundleConfiguration { InstallScope = WixInstallScope.PerMachine,
                 StartMenuShortcut = true, DesktopShortcut = true },
                 new WixBundlerOptions { ToolCacheDirectory = Path.Combine(root, "cache") }).BuildAsync(configuration)).Single();
             using var database = new MsiDatabaseReader(artifact.Path);
-            var expected = WixIdentity.Create(configuration.Identifier, configuration.Version, "win-x64", WixInstallScope.PerMachine);
+            var expected = WixIdentity.Create(configuration.Identifier, configuration.Version, "windows-x86_64", WixInstallScope.PerMachine);
             Assert.Equal(expected.ProductCode.ToString("B").ToUpperInvariant(), database.Property("ProductCode"));
             Assert.True(database.Contains("Directory", "Directory", "ProgramFiles64Folder"),
                 "Per-machine MSI does not target Program Files.");
@@ -527,7 +527,7 @@ public static class WixTests
                 OutputDirectory = Path.Combine(root, "output"),
                 Targets = [new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = "win-arm64", InputDirectory = input,
+                    Target = "windows-arm64", InputDirectory = input,
                     MainExecutable = "test.exe", Formats = [PackageFormat.Msi]
                 }]
             };
@@ -538,7 +538,7 @@ public static class WixTests
             using var database = new MsiDatabaseReader(artifact.Path);
             Assert.StartsWith("Arm64;", database.Template);
             Assert.True(database.Property("UpgradeCode") != WixIdentity.Create(configuration.Identifier, configuration.Version,
-                "win-x64", WixInstallScope.CurrentUser).UpgradeCode.ToString("B").ToUpperInvariant(),
+                "windows-x86_64", WixInstallScope.CurrentUser).UpgradeCode.ToString("B").ToUpperInvariant(),
                 "ARM64 and x64 MSI products share an UpgradeCode.");
         }
         finally { DeleteOwnedTestDirectory(root); }
@@ -557,14 +557,14 @@ public static class WixTests
                 OutputDirectory = Path.Combine(fixture.Root, "x86-" + scope),
                 Targets = [new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = "win-x86", InputDirectory = fixture.Input,
+                    Target = "windows-i686", InputDirectory = fixture.Input,
                     MainExecutable = "fixture.exe", Formats = [PackageFormat.Msi]
                 }]
             };
             var artifact = (await new WixBundler(new WixBundleConfiguration { InstallScope = scope },
                 new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(request)).Single();
             using var database = new MsiDatabaseReader(artifact.Path);
-            var expected = WixIdentity.Create(request.Identifier, request.Version, "win-x86", scope);
+            var expected = WixIdentity.Create(request.Identifier, request.Version, "windows-i686", scope);
             Assert.StartsWith("Intel;", database.Template);
             Assert.True(database.Property("UpgradeCode") == expected.UpgradeCode.ToString("B").ToUpperInvariant() &&
                    database.Property("ProductCode") == expected.ProductCode.ToString("B").ToUpperInvariant(),
@@ -594,7 +594,7 @@ public static class WixTests
             OutputDirectory = Path.Combine(fixture.Root, "mapped"),
             Targets = [new BundleTargetConfiguration
             {
-                RuntimeIdentifier = "win-x64", InputDirectory = fixture.Input,
+                Target = "windows-x86_64", InputDirectory = fixture.Input,
                 MainExecutable = "fixture.exe", Formats = [PackageFormat.Msi]
             }]
         };
@@ -606,7 +606,7 @@ public static class WixTests
         Assert.True(database.Property("ProductVersion") == "1.9.7" &&
                Path.GetFileName(artifact.Path).Contains("-1.9.7.msi", StringComparison.Ordinal),
             "Explicit MSI version did not reach the compiled product and output name.");
-        Assert.Equal(WixIdentity.Create(request.Identifier, request.Version, "win-x64", WixInstallScope.CurrentUser, packageVersion: "1.9.7").ProductCode.ToString("B").ToUpperInvariant(), database.Property("ProductCode"));
+        Assert.Equal(WixIdentity.Create(request.Identifier, request.Version, "windows-x86_64", WixInstallScope.CurrentUser, packageVersion: "1.9.7").ProductCode.ToString("B").ToUpperInvariant(), database.Property("ProductCode"));
         Assert.True(database.Values("Upgrade", "Attributes").Count > 0,
             "Explicit downgrade policy did not compile an Upgrade table.");
     }
@@ -906,13 +906,13 @@ public static class WixTests
         using var fixture = new WixTestFixture();
         foreach (var (scope, architecture, expectedRoot) in new[]
         {
-            (WixInstallScope.CurrentUser, "win-x64", "LocalAppDataFolder"),
-            (WixInstallScope.CurrentUser, "win-x86", "LocalAppDataFolder"),
-            (WixInstallScope.PerMachine, "win-x64", "ProgramFiles64Folder"),
-            (WixInstallScope.PerMachine, "win-x86", "ProgramFilesFolder")
+            (WixInstallScope.CurrentUser, "windows-x86_64", "LocalAppDataFolder"),
+            (WixInstallScope.CurrentUser, "windows-i686", "LocalAppDataFolder"),
+            (WixInstallScope.PerMachine, "windows-x86_64", "ProgramFiles64Folder"),
+            (WixInstallScope.PerMachine, "windows-i686", "ProgramFilesFolder")
         })
         {
-            var scoped = fixture.Request(runtimeIdentifier: architecture,
+            var scoped = fixture.Request(target: architecture,
                 outputDirectory: Path.Combine(fixture.Root, "scope-" + scope + "-" + architecture));
             var artifact = (await new WixBundler(new WixBundleConfiguration { InstallScope = scope },
                 new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(scoped)).Single();
@@ -1287,7 +1287,7 @@ public static class WixTests
         using (var database = new MsiDatabaseReader(artifact.Path))
         {
             var identity = WixIdentity.Create("com.example.wixtestfixture", "1.0.0",
-                "win-x64", WixInstallScope.CurrentUser);
+                "windows-x86_64", WixInstallScope.CurrentUser);
             Assert.Equal(identity.ProductCode.ToString("B").ToUpperInvariant(), database.Property("ProductCode"));
             Assert.True(database.Contains("Registry", "Key", "Software\\Expert\\Fixture"),
                 "The expert template's own rows did not reach the MSI.");
@@ -1395,7 +1395,7 @@ public static class WixTests
 
         public BundleConfiguration Request(string? resourceTarget = null, string? licenseFile = null,
             IReadOnlyList<string>? signingFiles = null, string? outputDirectory = null,
-            string? runtimeIdentifier = null) => new()
+            string? target = null) => new()
         {
             ProductName = "WiX test fixture",
             Identifier = "com.example.wixtestfixture",
@@ -1406,7 +1406,7 @@ public static class WixTests
                 [new BundleResourceConfiguration { Source = Path.Combine(Root, "resource.txt"), Destination = resourceTarget }],
             Targets = [new BundleTargetConfiguration
             {
-                RuntimeIdentifier = runtimeIdentifier ?? "win-x64", InputDirectory = Input,
+                Target = target ?? "windows-x86_64", InputDirectory = Input,
                 MainExecutable = "fixture.exe", Formats = [PackageFormat.Msi],
                 SigningFiles = signingFiles ?? []
             }]

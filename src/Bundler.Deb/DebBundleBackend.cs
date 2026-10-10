@@ -14,7 +14,7 @@ internal sealed class DebBundleBackend(DebBundleConfiguration settings) : IBundl
         var result = DebPackageWriter.Build(
             context.Configuration, context.Item, settings, context.Logger);
         return Task.FromResult<IReadOnlyList<BundleArtifact>>(
-            [new BundleArtifact(PackageFormat.Deb, context.Item.Target.RuntimeIdentifier,
+            [new BundleArtifact(PackageFormat.Deb, context.Item.Target.Target,
                 result.OutputPath)]);
     }
 }

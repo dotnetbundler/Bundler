@@ -1,7 +1,7 @@
 // MAC-DMG-1/2/3/4 集成腿的 C# 移植：对应原 tests/MacOS.Dmg.Integration/Verify.sh。
 // 覆盖点：nupkg → 中间 .app + .dmg → hdiutil attach/卷内容/detach → UDZO 变体 →
 // LayoutSkip → EULA(udifrez 资源回读)+ad-hoc 签名+SLA 挂载门控 →
-// quarantine 传播 → osx-x64 → 失败路径无残留 → API fixture。
+// quarantine 传播 → macos-x86_64 → 失败路径无残留 → API fixture。
 [System.Runtime.Versioning.SupportedOSPlatform("macos")]
 public sealed class MacDmgFixture : IDisposable
 {
@@ -32,16 +32,21 @@ public sealed class MacDmgFixture : IDisposable
     }
 
     private string BundlePath(string name, string? rid = null)
-        => Ws.Combine(name, rid ?? TestPlatform.OsxRuntimeIdentifier, "dmg", "Bundler Mac DMG Fixture.dmg");
+        => Ws.Combine(name, $"Bundler Mac DMG Fixture-1.0.0-{MacArch(rid ?? TestPlatform.OsxTarget)}.dmg");
+
+    internal static string MacArch(string rid) =>
+        rid.EndsWith("x86_64", StringComparison.Ordinal) ? "x86_64"
+        : rid.EndsWith("arm64", StringComparison.Ordinal) ? "arm64" : "universal";
 
     private string PublishDmg(string name, params string[] extra)
-        => PublishDmgForRid(name, TestPlatform.OsxRuntimeIdentifier, extra);
+        => PublishDmgForRid(name, TestPlatform.OsxTarget, extra);
 
     private string PublishDmgForRid(string name, string rid, params string[] extra)
     {
         ProcessRunner.AssertSuccess(
             Dotnet.Run(["publish", FixtureProject, "-c", "Release",
-                $"-p:RuntimeIdentifier={rid}",
+                "-r", TestPlatform.ToPublishRid(rid),
+                $"-p:BundlerTarget={rid}",
                 $"-p:BundlerIntegrationOutput={Ws.Combine(name)}",
                 "--packages", CacheDir, .. extra],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) }),
@@ -60,16 +65,17 @@ public sealed class MacDmgFixture : IDisposable
         }
         _ = RepositoryPackages.DirectoryPath;
 
-        var hostRid = TestPlatform.OsxRuntimeIdentifier;
+        var hostRid = TestPlatform.OsxTarget;
         var bundleDir = Ws.Combine("bundle");
         ProcessRunner.AssertSuccess(
             Dotnet.Run(["publish", FixtureProject, "-c", "Release",
-                $"-p:RuntimeIdentifier={hostRid}",
+                "-r", TestPlatform.OsxPublishRid,
+                $"-p:BundlerTarget={hostRid}",
                 $"-p:BundlerIntegrationOutput={bundleDir}", "--packages", CacheDir],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) }),
             "dmg fixture publish 'bundle' failed");
-        App = Path.Combine(bundleDir, hostRid, "app", "Bundler Mac DMG Fixture.app");
-        Dmg = Path.Combine(bundleDir, hostRid, "dmg", "Bundler Mac DMG Fixture.dmg");
+        App = Path.Combine(bundleDir, $"Bundler Mac DMG Fixture-1.0.0-{MacArch(hostRid)}.app");
+        Dmg = BundlePath("bundle");
         Assert.True(Directory.Exists(App), "The planner did not produce the intermediate .app.");
         Assert.True(File.Exists(Dmg), "The .dmg artifact is missing.");
 
@@ -79,7 +85,7 @@ public sealed class MacDmgFixture : IDisposable
             "-p:BundlerTestDmgLayoutSkip=true",
             "-p:BundlerTestDmgLicense=true",
             "-p:BundlerTestDmgSignIdentity=-");
-        X64Dmg = PublishDmgForRid("bundle-x64", "osx-x64",
+        X64Dmg = PublishDmgForRid("bundle-x64", "macos-x86_64",
             "-p:BundlerTestDmgLayoutSkip=true");
         return true;
     }
@@ -382,7 +388,7 @@ public sealed class MacDmgIntegrationTests : IClassFixture<MacDmgFixture>
                 Timeout = TimeSpan.FromMinutes(10),
             });
         ProcessRunner.AssertSuccess(result, "MacDmgApiTests failed");
-        var apiDmg = Path.Combine(output, "artifacts", "osx-arm64", "dmg", "DMG API Package Fixture.dmg");
+        var apiDmg = Path.Combine(output, "artifacts", $"DMG API Package Fixture-1.0.0-{MacDmgFixture.MacArch(TestPlatform.OsxTarget)}.dmg");
         Assert.True(File.Exists(apiDmg), "The standalone API package did not create a .dmg.");
         var apiMount = _f.Ws.Combine("api-mount");
         ProcessRunner.AssertSuccess(

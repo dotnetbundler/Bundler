@@ -37,7 +37,7 @@ public static class UpdatePayloadStaging
     private static void InjectPayloadFiles(
         string payloadRoot, UpdateBundleConfiguration update, BundlePlanItem item)
     {
-        var rid = item.Target.RuntimeIdentifier;
+        var rid = item.Target.Target;
         UpdateIdentitySidecar.WriteIfEnabled(payloadRoot, update, item.Format, rid);
         if (item.Format is PackageFormat.Nsis or PackageFormat.Msi)
         {

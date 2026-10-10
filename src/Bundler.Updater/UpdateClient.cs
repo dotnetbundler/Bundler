@@ -85,7 +85,7 @@ public sealed class UpdateClient
         {
             _options.Log?.Invoke(
                 $"update: '{feed.Version}' has no artifact for " +
-                $"{_identity.RuntimeIdentifier}/{_identity.Format}");
+                $"{_identity.Target}/{_identity.Format}");
             return null;
         }
         _options.Log?.Invoke($"update: '{feed.Version}' available via {artifact.Format}");
@@ -283,12 +283,12 @@ public sealed class UpdateClient
             {
                 continue;
             }
-            if (string.Equals(artifact.RuntimeIdentifier, _identity.RuntimeIdentifier,
+            if (string.Equals(artifact.Target, _identity.Target,
                     StringComparison.OrdinalIgnoreCase))
             {
                 return artifact;
             }
-            if (artifact.RuntimeIdentifier is "portable" or "any")
+            if (artifact.Target is "portable" or "any")
             {
                 wildcard ??= artifact;
             }

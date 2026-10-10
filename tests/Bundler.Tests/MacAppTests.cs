@@ -22,7 +22,7 @@ public static class MacAppTests
     [Fact]
     static void RejectsPkgOutsideMac()
     {
-        var configuration = MacConfiguration(CreateInputDirectory(), rid: "win-x64", formats: [PackageFormat.Pkg]);
+        var configuration = MacConfiguration(CreateInputDirectory(), rid: "windows-x86_64", formats: [PackageFormat.Pkg]);
         var issues = BundleConfigurationValidator.Validate(configuration, checkFileSystem: false);
         Assert.Contains(issues, issue => issue.Path.EndsWith("formats", StringComparison.Ordinal));
     }
@@ -38,8 +38,8 @@ public static class MacAppTests
                 .BuildAsync(MacConfiguration(input, output));
             var appPath = Assert.Single(artifacts).Path;
             Assert.Equal(PackageFormat.App, artifacts[0].Format);
-            Assert.Equal("ExampleApp.app", Path.GetFileName(appPath));
-            Assert.EndsWith(Path.Combine("osx-arm64", "app", "ExampleApp.app"), appPath);
+            Assert.Equal("ExampleApp-1.0.0-arm64.app", Path.GetFileName(appPath));
+            Assert.EndsWith("ExampleApp-1.0.0-arm64.app", appPath);
             foreach (var required in new[]
                      {
                          "Contents/Info.plist", "Contents/PkgInfo",
@@ -730,21 +730,21 @@ public static class MacAppTests
             await AssertThrows<InvalidDataException>(
                 () => new MacAppBundler().BuildAsync(MacConfiguration(
                     wrongArchInput, Path.Combine(output, "wrong"))),
-                "An x86_64 executable must not pass in an osx-arm64 target.");
+                "An x86_64 executable must not pass in an macos-arm64 target.");
             var fat = await new MacAppBundler().BuildAsync(MacConfiguration(
-                fatInput, Path.Combine(output, "fat"), rid: "osx-x64"));
+                fatInput, Path.Combine(output, "fat"), rid: "macos-x86_64"));
             Assert.True(File.Exists(Path.Combine(fat[0].Path, "Contents", "MacOS", "ExampleApp")),
-                "Fat binaries satisfy both osx targets.");
+                "Fat binaries satisfy both macos-universal targets.");
             var thin = await new MacAppBundler().BuildAsync(MacConfiguration(
-                arm64Input, Path.Combine(output, "thin"), rid: "osx-arm64"));
+                arm64Input, Path.Combine(output, "thin"), rid: "macos-arm64"));
             Assert.Single(thin);
             var universal = await new MacAppBundler().BuildAsync(MacConfiguration(
-                fatInput, Path.Combine(output, "universal"), rid: "osx"));
+                fatInput, Path.Combine(output, "universal"), rid: "macos-universal"));
             Assert.Single(universal);
             await AssertThrows<InvalidDataException>(
                 () => new MacAppBundler().BuildAsync(MacConfiguration(
-                    arm64Input, Path.Combine(output, "osx-thin"), rid: "osx")),
-                "The osx target must reject a payload missing the x86_64 slice.");
+                    arm64Input, Path.Combine(output, "macos-universal-thin"), rid: "macos-universal")),
+                "The macos-universal target must reject a payload missing the x86_64 slice.");
             var mismatchedHelper = CreateInputDirectory();
             File.WriteAllBytes(Path.Combine(mismatchedHelper, "helper"), FakeMachO(0x01000007));
             try
@@ -1233,7 +1233,7 @@ public static class MacAppTests
                     Signing = new MacAppSigningConfiguration { Identity = "-" }
                 }).BuildAsync(MacConfiguration(input, output)),
                 "A failed --verify must fail the build.");
-            Assert.False(Directory.Exists(Path.Combine(output, "ExampleApp.app")), "A failed signing run must not leave a pseudo-success .app at the output path.");
+            Assert.False(Directory.Exists(Path.Combine(output, "ExampleApp-1.0.0-arm64.app")), "A failed signing run must not leave a pseudo-success .app at the output path.");
         }
         finally
         {
@@ -1292,6 +1292,7 @@ public static class MacAppTests
                targets.Contains("MacDocumentTypes=\"@(BundlerMacDocumentType)\"", StringComparison.Ordinal) &&
                targets.Contains("MacUrlTypes=\"@(BundlerMacUrlType)\"", StringComparison.Ordinal),
             "MSBuild does not map the BundlerMac* item groups.");
+        Assert.Contains("StartsWith('macos-')", targets);
         Assert.Contains("StartsWith('osx-')", targets);
         Assert.True(task.Contains("new MacAppBundler(", StringComparison.Ordinal) &&
                task.Contains("MacAppFileEntry", StringComparison.Ordinal),
@@ -1490,7 +1491,7 @@ public static class MacAppTests
         Assert.Null(MacAppAssetsCar.IconImageName("{}"));
     }
 
-    // R2 MAC-APP-OI-08：osx 通用载荷按签名表探测拒收非 Mach-O 的按架构散件。
+    // R2 MAC-APP-OI-08：macos-universal 通用载荷按签名表探测拒收非 Mach-O 的按架构散件。
     [Fact]
     static async Task RejectsForeignCodeInUniversalPayload()
     {
@@ -1510,7 +1511,7 @@ public static class MacAppTests
             {
                 var error = await Assert.ThrowsAsync<InvalidDataException>(
                     () => new MacAppBundler().BuildAsync(
-                        MacConfiguration(input, Path.Combine(output, name), rid: "osx")));
+                        MacConfiguration(input, Path.Combine(output, name), rid: "macos-universal")));
                 Assert.Contains(needle, error.Message, StringComparison.Ordinal);
             }
             finally
@@ -1526,7 +1527,7 @@ public static class MacAppTests
         try
         {
             var artifacts = await new MacAppBundler().BuildAsync(
-                MacConfiguration(clean, Path.Combine(output, "clean"), rid: "osx"));
+                MacConfiguration(clean, Path.Combine(output, "clean"), rid: "macos-universal"));
             Assert.True(File.Exists(
                 Path.Combine(artifacts[0].Path, "Contents", "MacOS", "ExampleApp.managed.dll")));
         }
@@ -1741,7 +1742,7 @@ public static class MacAppTests
             var context = new BundleBuildContext(
                 MacConfiguration(input, output),
                 new BundlePlanItem(
-                    BundleTarget.TryParse("osx-arm64", out var target) ? target! : throw new InvalidOperationException(),
+                    BundleTarget.TryParse("macos-arm64", out var target) ? target! : throw new InvalidOperationException(),
                     PackageFormat.App, input, "ExampleApp", output, Intermediate: false),
                 output, NullBundleLogger.Instance);
             await MacAppSigning.RunAsync(context, appPath, "ExampleApp",
@@ -1846,7 +1847,7 @@ public static class MacAppTests
     static BundleConfiguration MacConfiguration(
         string input,
         string output = "",
-        string rid = "osx-arm64",
+        string rid = "macos-arm64",
         string mainExecutable = "ExampleApp",
         IReadOnlyList<PackageFormat>? formats = null,
         string version = "1.0.0",
@@ -1870,7 +1871,7 @@ public static class MacAppTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = rid,
+                    Target = rid,
                     InputDirectory = input,
                     MainExecutable = mainExecutable,
                     SigningFiles = signingFiles ?? [],

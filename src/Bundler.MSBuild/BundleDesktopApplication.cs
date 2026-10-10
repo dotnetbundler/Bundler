@@ -31,9 +31,10 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string Homepage { get; set; } = "";
     public string Copyright { get; set; } = "";
     public string LicenseFile { get; set; } = "";
-    [Required] public string RuntimeIdentifier { get; set; } = "";
+    [Required] public string BundlerTarget { get; set; } = "";
     [Required] public string InputDirectory { get; set; } = "";
     [Required] public string OutputDirectory { get; set; } = "";
+    public string OutputLayout { get; set; } = "";
     [Required] public string MainExecutable { get; set; } = "";
     [Required] public string Formats { get; set; } = "";
     public ITaskItem[] Icons { get; set; } = Array.Empty<ITaskItem>();
@@ -293,6 +294,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Copyright = EmptyToNull(Copyright),
                 LicenseFile = OptionalFullPath(LicenseFile),
                 OutputDirectory = Path.GetFullPath(OutputDirectory),
+                OutputLayout = ParseOutputLayout(),
                 Update = UpdateEnabled ? new UpdateBundleConfiguration
                 {
                     FeedUrl = UpdateFeedUrl,
@@ -323,7 +325,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 {
                     new BundleTargetConfiguration
                     {
-                        RuntimeIdentifier = RuntimeIdentifier,
+                        Target = BundlerTarget,
                         InputDirectory = Path.GetFullPath(InputDirectory),
                         MainExecutable = MainExecutable,
                         SigningFiles = WindowsSigningFiles.Select(item => item.ItemSpec).ToArray(),
@@ -788,7 +790,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             {
                 var item = new TaskItem(artifact.Path);
                 item.SetMetadata("Format", artifact.Format.ToString());
-                item.SetMetadata("RuntimeIdentifier", artifact.RuntimeIdentifier);
+                item.SetMetadata("BundlerTarget", artifact.Target);
                 return (ITaskItem)item;
             }).ToArray();
 
@@ -888,6 +890,21 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             TemporaryCertificateFile = certificatePath,
             TemporaryCertificatePassword = EmptyToNull(MacDmgTemporaryCertificatePassword)
         };
+    }
+
+    private DotNet.Bundler.OutputLayout ParseOutputLayout()
+    {
+        if (OutputLayout.Length == 0)
+        {
+            return DotNet.Bundler.OutputLayout.Flat;
+        }
+        if (!Enum.TryParse(OutputLayout, true, out DotNet.Bundler.OutputLayout layout) ||
+            !Enum.IsDefined(typeof(DotNet.Bundler.OutputLayout), layout))
+        {
+            throw new ArgumentException(
+                "Unknown BundlerOutputLayout '" + OutputLayout + "' (flat|byFormat).", nameof(OutputLayout));
+        }
+        return layout;
     }
 
     private IReadOnlyList<PackageFormat> ParseFormats()

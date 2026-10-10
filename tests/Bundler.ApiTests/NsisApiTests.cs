@@ -27,7 +27,7 @@ public static class NsisApiTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = "win-x64",
+                    Target = "windows-x86_64",
                     InputDirectory = input,
                     MainExecutable = "ApiFixture.exe",
                     Formats = [PackageFormat.Nsis]

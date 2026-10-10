@@ -45,7 +45,7 @@ public sealed class DebFixture : IDisposable
         _ = RepositoryPackages.DirectoryPath;
 
         Publish("bundle");
-        DefaultDeb = RequireDeb(Ws.Combine("bundle", "linux-x64", "deb", "bundler-deb-fixture_1.0.0-1_amd64.deb"));
+        DefaultDeb = RequireDeb(Ws.Combine("bundle", "bundler-deb-fixture_1.0.0-1_amd64.deb"));
 
         Publish("override",
             "-p:BundlerTestDebPackageName=custom-fixture",
@@ -53,10 +53,10 @@ public sealed class DebFixture : IDisposable
             "-p:BundlerTestDebVendor=Custom Maintainer <m@example.com>",
             "-p:BundlerTestDebInstallRoot=/opt/custom-fixture",
             "-p:BundlerTestDebBinLink=custom-fixture-cli");
-        OverrideDeb = RequireDeb(Ws.Combine("override", "linux-x64", "deb", "custom-fixture_9.9.9-5_amd64.deb"));
+        OverrideDeb = RequireDeb(Ws.Combine("override", "custom-fixture_9.9.9-5_amd64.deb"));
 
         Publish("semver", "-p:BundlerVersion=2.5.0-beta.3+build.1");
-        SemverDeb = RequireDeb(Ws.Combine("semver", "linux-x64", "deb",
+        SemverDeb = RequireDeb(Ws.Combine("semver",
             "bundler-deb-fixture_2.5.0~beta.3+build.1-1_amd64.deb"));
 
         Publish("metadata",
@@ -67,35 +67,35 @@ public sealed class DebFixture : IDisposable
             "-p:BundlerTestDebReplaces=legacy-fixture",
             "-p:BundlerTestDebSection=utils",
             "-p:BundlerTestDebPriority=extra");
-        MetadataDeb = RequireDeb(Ws.Combine("metadata", "linux-x64", "deb",
+        MetadataDeb = RequireDeb(Ws.Combine("metadata",
             "bundler-deb-fixture_1.0.0-1_amd64.deb"));
 
         Publish("desktop-override",
             $"-p:BundlerTestDebDesktopFile={FixtureDir}/Assets/custom.desktop");
-        DesktopOverrideDeb = RequireDeb(Ws.Combine("desktop-override", "linux-x64", "deb",
+        DesktopOverrideDeb = RequireDeb(Ws.Combine("desktop-override",
             "bundler-deb-fixture_1.0.0-1_amd64.deb"));
 
         Publish("scripts",
             $"-p:BundlerTestDebPostinstFile={FixtureDir}/Assets/postinst.sh",
             $"-p:BundlerTestDebPrermFile={FixtureDir}/Assets/prerm.sh",
             $"-p:BundlerTestDebPostrmFile={FixtureDir}/Assets/postrm.sh");
-        ScriptsDeb = RequireDeb(Ws.Combine("scripts", "linux-x64", "deb",
+        ScriptsDeb = RequireDeb(Ws.Combine("scripts",
             "bundler-deb-fixture_1.0.0-1_amd64.deb"));
 
         Publish("systemd",
             $"-p:BundlerTestDebSystemdServiceFile={FixtureDir}/Assets/fixture.service",
             $"-p:BundlerTestDebPostinstFile={FixtureDir}/Assets/postinst.sh");
-        SystemdDeb = RequireDeb(Ws.Combine("systemd", "linux-x64", "deb",
+        SystemdDeb = RequireDeb(Ws.Combine("systemd",
             "bundler-deb-fixture_1.0.0-1_amd64.deb"));
 
         Publish("upgrade", "-p:BundlerVersion=1.0.1");
-        UpgradeDeb = RequireDeb(Ws.Combine("upgrade", "linux-x64", "deb",
+        UpgradeDeb = RequireDeb(Ws.Combine("upgrade",
             "bundler-deb-fixture_1.0.1-1_amd64.deb"));
 
         Dotnet.Publish(FixtureProject, "Release",
             [$"-p:BundlerIntegrationOutput={Ws.Combine("arm64")}",
-             "--packages", CacheDir, "-r", "linux-arm64"],
-            "linux-arm64 publish failed", noRestore: false);
+             "--packages", CacheDir, "-r", "linux-arm64", "-p:BundlerTarget=linux-aarch64"],
+            "linux-aarch64 publish failed", noRestore: false);
         var arm64 = Directory.EnumerateFiles(Ws.Combine("arm64"), "*_arm64.deb",
                 SearchOption.AllDirectories).FirstOrDefault();
         Assert.NotNull(arm64);
@@ -392,7 +392,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
              "-p:BundlerTestDebInstallRoot=relative/path", "--packages", _f.CacheDir]);
         Assert.NotEqual(0, result.ExitCode);
         Assert.Matches(new Regex("install root", RegexOptions.IgnoreCase), result.Output);
-        var debDir = _f.Ws.Combine(name, "linux-x64", "deb");
+        var debDir = _f.Ws.Combine(name);
         var leftovers = Directory.Exists(debDir)
             ? Directory.EnumerateFiles(debDir, "*.deb").ToArray()
             : [];
@@ -413,7 +413,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
                 Timeout = TimeSpan.FromMinutes(10),
             });
         ProcessRunner.AssertSuccess(result, "DebApiTests failed");
-        var apiDeb = Path.Combine(output, "artifacts", "linux-x64", "deb", "api-fixture_1.0.0-1_amd64.deb");
+        var apiDeb = Path.Combine(output, "artifacts", "api-fixture_1.0.0-1_amd64.deb");
         Assert.True(File.Exists(apiDeb), "The direct-API fixture produced no .deb.");
         DebTools.Info(apiDeb);
     }

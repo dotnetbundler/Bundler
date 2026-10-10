@@ -29,7 +29,7 @@ public sealed class UpdateFeed
 [DataContract]
 public sealed class UpdateFeedArtifact
 {
-    [DataMember(Name = "rid")] public string RuntimeIdentifier = "";
+    [DataMember(Name = "rid")] public string Target = "";
     [DataMember(Name = "format")] public string Format = "";
     [DataMember(Name = "url")] public string Url = "";
     [DataMember(Name = "file")] public string File = "";

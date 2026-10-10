@@ -67,7 +67,8 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
 
         var workDirectory = context.WorkDirectory;
         var stageDirectory = Path.Combine(workDirectory, "pkg-root");
-        var packageName = MacAppBundleBackend.SanitizeFileName(bundle.ProductName) + ".pkg";
+        var packageName = ArtifactNaming.FileName(
+            MacAppBundleBackend.SanitizeFileName(bundle.ProductName), bundle.Version, item.Target, PackageFormat.Pkg);
         var outputPath = Path.Combine(item.OutputDirectory, packageName);
         MacAppSigning.TemporaryKeychain? keychain = null;
         var identity = "";
@@ -82,9 +83,13 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             Directory.CreateDirectory(stageDirectory);
 
             var files = settings.Files ?? Array.Empty<MacPkgFileEntry>();
-            var applicationName = MacAppBundleBackend.SanitizeFileName(bundle.ProductName) + ".app";
+            var applicationName = ArtifactNaming.FileName(
+                MacAppBundleBackend.SanitizeFileName(bundle.ProductName), bundle.Version, item.Target, PackageFormat.App);
             var appPath = Path.Combine(
-                bundle.OutputDirectory, item.Target.RuntimeIdentifier, "app", applicationName);
+                bundle.OutputLayout == OutputLayout.ByFormat
+                    ? Path.Combine(bundle.OutputDirectory, "app")
+                    : bundle.OutputDirectory,
+                applicationName);
             if (!Directory.Exists(appPath))
             {
                 throw new DirectoryNotFoundException(
@@ -208,7 +213,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                 await keychain.DisposeAsync(workDirectory, cancellationToken);
             }
 
-            return [new BundleArtifact(PackageFormat.Pkg, item.Target.RuntimeIdentifier, outputPath)];
+            return [new BundleArtifact(PackageFormat.Pkg, item.Target.Target, outputPath)];
         }
         catch
         {

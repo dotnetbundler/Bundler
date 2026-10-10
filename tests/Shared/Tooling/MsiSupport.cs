@@ -103,7 +103,7 @@ internal static class MsiSupport
         };
         if (rid is not null)
         {
-            args.Add($"-p:RuntimeIdentifier={rid}");
+            args.Add($"-p:BundlerTarget={rid}");
         }
         ProcessRunner.AssertSuccess(Dotnet.Run(args, new ProcessRunner.Options()),
             $"MSI fixture restore failed: {project}");

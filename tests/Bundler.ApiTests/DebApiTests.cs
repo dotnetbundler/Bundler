@@ -23,7 +23,7 @@ public static class DebApiTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = "linux-x64",
+                    Target = "linux-x86_64",
                     InputDirectory = input,
                     MainExecutable = "FixtureApp",
                     Formats = [PackageFormat.Deb]
@@ -32,7 +32,7 @@ public static class DebApiTests
         }, TestContext.Current.CancellationToken);
 
         var deb = Assert.Single(artifacts).Path;
-        var expected = Path.Combine(root, "artifacts", "linux-x64", "deb",
+        var expected = Path.Combine(root, "artifacts",
             "api-fixture_1.0.0-1_amd64.deb");
         Assert.Equal(expected, deb);
         Assert.True(File.Exists(deb));

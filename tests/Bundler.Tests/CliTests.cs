@@ -1,3 +1,4 @@
+using DotNet.Bundler;
 using DotNet.Bundler.Cli;
 
 public static class CliTests
@@ -24,7 +25,7 @@ public static class CliTests
 
     static string[] BaseArgs(string command, string input, string output = "/tmp/bundler-cli-tests-out") =>
     [
-        command, "--input-dir", input, "--rid", "linux-x64", "--formats", "zip",
+        command, "--input-dir", input, "--target", "linux-x86_64", "--formats", "zip",
         "--product-name", "CliFixture", "--identifier", "dev.example.cli",
         "--package-version", "1.0.0", "--main-executable", "cli-fixture",
         "--output-dir", output
@@ -53,7 +54,7 @@ public static class CliTests
         try
         {
             var (code, _, err) = Run(
-                "bundle", "--input-dir", input, "--rid", "linux-x64", "--formats", "bogus",
+                "bundle", "--input-dir", input, "--target", "linux-x86_64", "--formats", "bogus",
                 "--product-name", "CliFixture", "--identifier", "dev.example.cli",
                 "--package-version", "1.0.0");
             Assert.Equal(2, code);
@@ -103,7 +104,7 @@ public static class CliTests
             Assert.Equal(0, code);
             Assert.Contains("\"format\":\"zip\"", stdout);
             Assert.Contains("\"format\":\"targz\"", stdout);
-            var expectedOutputDir = Path.Combine(output, "linux-x64", "zip").Replace("\\", "\\\\");
+            var expectedOutputDir = output.Replace("\\", "\\\\");
             Assert.Contains($"\"outputDirectory\":\"{expectedOutputDir}\"", stdout);
         }
         finally
@@ -142,7 +143,7 @@ public static class CliTests
         {
             var (code, stdout, _) = Run(BaseArgs("bundle", input, output).Concat(["--quiet"]).ToArray());
             Assert.Equal(0, code);
-            var zip = Path.Combine(output, "linux-x64", "zip", "clifixture-1.0.0-linux-x64.zip");
+            var zip = Path.Combine(output, "clifixture-1.0.0-linux-x86_64.zip");
             Assert.True(File.Exists(zip), $"zip artifact must exist at {zip}");
             Assert.True(File.Exists(zip + ".sha256"), "sha256 sidecar must exist");
             Assert.Contains(zip, stdout);
@@ -167,16 +168,16 @@ public static class CliTests
         {
             // 宿主门禁格式失败只 WARN+计入失败汇总——可产格式照常产出，末位 rc=1。
             // 组合须是“rid 合法但宿主不可产”（rid 不匹配属配置错，统一预检 rc=2）。
-            var (gatedRid, gated) = TestPlatform.IsMacOS ? ("win-x64", "msi") : ("osx", "dmg");
+            var (gatedRid, gated) = TestPlatform.IsMacOS ? ("windows-x86_64", "msi") : ("macos-universal", "dmg");
             var args = BaseArgs("bundle", input, output)
-                .Select(arg => arg == "linux-x64" ? gatedRid : arg)
+                .Select(arg => arg == "linux-x86_64" ? gatedRid : arg)
                 .Select(arg => arg == "zip" ? $"{gated},zip" : arg)
                 .Concat(["--quiet"]).ToArray();
             var (code, stdout, err) = Run(args);
             Assert.Equal(1, code);
             Assert.Contains("1 format(s) failed", err);
             Assert.Contains(gated, err);
-            var zip = Path.Combine(output, gatedRid, "zip", $"clifixture-1.0.0-{gatedRid}.zip");
+            var zip = Path.Combine(output, $"clifixture-1.0.0-{gatedRid}.zip");
             Assert.True(File.Exists(zip), $"producible format artifact must still land at {zip}");
             Assert.Contains(zip, stdout);
         }
@@ -208,7 +209,7 @@ public static class CliTests
             {
                 new
                 {
-                    runtimeIdentifier = "osx", inputDirectory = input,
+                    target = "macos-universal", inputDirectory = input,
                     mainExecutable = "cli-fixture", formats = new[] { "zip", "app" }
                 }
             },
@@ -220,7 +221,7 @@ public static class CliTests
             Assert.Equal(1, code);
             Assert.Contains("1 format(s) failed", err);
             Assert.Contains("app", err);
-            var zip = Path.Combine(output, "osx", "zip", "cfgapp-2.0.0-osx.zip");
+            var zip = Path.Combine(output, "cfgapp-2.0.0-macos-universal.zip");
             Assert.True(File.Exists(zip),
                 $"producible format artifact must still land at {zip}");
         }
@@ -244,7 +245,7 @@ public static class CliTests
         try
         {
             var (code, _, err) = Run(
-                "bundle", "--input-dir", input, "--rid", "osx", "--formats", "zip,app",
+                "bundle", "--input-dir", input, "--target", "macos-universal", "--formats", "zip,app",
                 "--product-name", "CliFixture", "--identifier", "dev.example.cli",
                 "--package-version", "1.0.0", "--main-executable", "sub/dir/cli-fixture",
                 "--output-dir", output, "--quiet");
@@ -280,12 +281,12 @@ public static class CliTests
             {
                 new
                 {
-                    runtimeIdentifier = "osx", inputDirectory = input,
+                    target = "macos-universal", inputDirectory = input,
                     mainExecutable = "sub/dir/cli-fixture", formats = new[] { "app" }
                 },
                 new
                 {
-                    runtimeIdentifier = "win-x64", inputDirectory = input,
+                    target = "windows-x86_64", inputDirectory = input,
                     mainExecutable = "cli-fixture", formats = new[] { "nsis" }
                 }
             },
@@ -319,7 +320,7 @@ public static class CliTests
         try
         {
             var (code, _, err) = Run(
-                "validate", "--input-dir", input, "--rid", "osx", "--formats", "app",
+                "validate", "--input-dir", input, "--target", "macos-universal", "--formats", "app",
                 "--product-name", "CliFixture", "--identifier", "dev.example.cli",
                 "--package-version", "1.0.0", "--main-executable", "sub/dir/cli-fixture");
             Assert.Equal(2, code);
@@ -338,7 +339,7 @@ public static class CliTests
         try
         {
             var (code, _, err) = Run(
-                "bundle", "--input-dir", input, "--rid", "linux-x64", "--formats", "nsis",
+                "bundle", "--input-dir", input, "--target", "linux-x86_64", "--formats", "nsis",
                 "--product-name", "CliFixture", "--identifier", "dev.example.cli",
                 "--package-version", "1.0.0", "--main-executable", "cli-fixture");
             Assert.Equal(2, code);
@@ -366,16 +367,16 @@ public static class CliTests
             File.WriteAllText(Path.Combine(arm64, "shared.txt"), "portable payload\n");
             var (code, _, err) = Run(
                 "bundle", "--input-dir", x64, "--input-dir", arm64,
-                "--rid", "osx", "--formats", "zip",
+                "--target", "macos-universal", "--formats", "zip",
                 "--product-name", "CliFixture", "--identifier", "dev.example.cli",
                 "--package-version", "1.0.0", "--main-executable", "cli-fixture",
                 "--output-dir", output);
             Assert.True(code == 0, $"merged bundle must exit 0, got {code}: {err}");
-            var zip = Path.Combine(output, "osx", "zip", "clifixture-1.0.0-osx.zip");
+            var zip = Path.Combine(output, "clifixture-1.0.0-macos-universal.zip");
             Assert.True(File.Exists(zip), $"merged archive missing at {zip}");
             using var archive = new System.IO.Compression.ZipArchive(
                 File.OpenRead(zip), System.IO.Compression.ZipArchiveMode.Read);
-            var exeEntry = archive.GetEntry("clifixture-1.0.0-osx/cli-fixture");
+            var exeEntry = archive.GetEntry("clifixture-1.0.0-macos-universal/cli-fixture");
             Assert.NotNull(exeEntry);
             var extracted = Path.GetTempFileName();
             using (var stream = exeEntry!.Open())
@@ -395,7 +396,7 @@ public static class CliTests
             {
                 File.Delete(extracted);
             }
-            Assert.NotNull(archive.GetEntry("clifixture-1.0.0-osx/shared.txt"));
+            Assert.NotNull(archive.GetEntry("clifixture-1.0.0-macos-universal/shared.txt"));
         }
         finally
         {
@@ -429,7 +430,7 @@ public static class CliTests
             {
                 new
                 {
-                    runtimeIdentifier = "linux-x64",
+                    target = "linux-x86_64",
                     inputDirectory = input,
                     mainExecutable = "cli-fixture",
                     formats = new[] { "zip" }
@@ -452,7 +453,7 @@ public static class CliTests
         {
             var (code, stdout, err) = Run("bundle", "--config", config, "--quiet");
             Assert.True(code == 0, $"config-driven bundle must exit 0, got {code}: {err}");
-            var zip = Path.Combine(output, "linux-x64", "zip", "from-config.zip");
+            var zip = Path.Combine(output, "from-config.zip");
             Assert.True(File.Exists(zip), $"config archiveName must land at {zip}");
         }
         finally
@@ -517,7 +518,7 @@ public static class CliTests
             var (code, stdout, err) = Run(
                 "bundle", "--config", config, "--archive.archive-name=dotted-override", "--quiet");
             Assert.True(code == 0, $"dotted-knob bundle must exit 0, got {code}: {err}");
-            Assert.True(File.Exists(Path.Combine(output, "linux-x64", "zip", "dotted-override.zip")),
+            Assert.True(File.Exists(Path.Combine(output, "dotted-override.zip")),
                 "--archive.archive-name must override the config file");
             var (badCode, _, badErr) = Run("plan", "--config", config, "--deb.bogus=1");
             Assert.Equal(2, badCode);
@@ -543,7 +544,7 @@ public static class CliTests
               "version": "1.0.0",
               "targets": [
                 {
-                  "runtimeIdentifier": "linux-x64",
+                  "target": "linux-x86_64",
                   "inputDirectory": "<input>",
                   "mainExecutable": "cli-fixture",
                   "formats": [ "zip" ]
@@ -602,6 +603,29 @@ public static class CliTests
             Assert.Equal(
                 new[] { anchored, Path.GetFullPath("icon-c.png") },
                 mixed.Bundle.Icons);
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            File.Delete(config);
+        }
+    }
+
+    [Fact]
+    static void OutputLayoutSurvivesConfigAndCliOverride()
+    {
+        var input = CreateInputDirectory();
+        var config = Path.Combine(Path.GetTempPath(), $"bundler-{Guid.NewGuid():N}.json");
+        File.WriteAllText(config, WriteConfig(input, "/tmp/x")
+            .Replace("\"productName\"", "\"outputLayout\": \"byFormat\", \"productName\""));
+        try
+        {
+            var resolved = CliConfig.Resolve(CliArguments.Parse(["bundle", "--config", config]));
+            Assert.Equal(OutputLayout.ByFormat, resolved.Bundle.OutputLayout);
+
+            var cliOverride = CliConfig.Resolve(CliArguments.Parse(
+                ["bundle", "--config", config, "--output-layout=flat"]));
+            Assert.Equal(OutputLayout.Flat, cliOverride.Bundle.OutputLayout);
         }
         finally
         {
@@ -694,7 +718,7 @@ public static class CliTests
                 "identifier": "dev.example.cfg",
                 "version": "2.0.0",
                 "outputDirectory": "/tmp/x",
-                "targets": [{ "runtimeIdentifier": "linux-x64", "inputDirectory": "<input>",
+                "targets": [{ "target": "linux-x86_64", "inputDirectory": "<input>",
                               "mainExecutable": "cli-fixture", "formats": ["zip"] }],
                 "nsis": { "shortcuts": { "icon": "app.ico" } },
                 "app": { "frameworkDirectories": ["rel-fw"] },
