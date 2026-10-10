@@ -117,7 +117,7 @@ dotnet msbuild -t:BundlerBundle -p:BundlerTarget=linux-x86_64 -p:BundlerPublishR
 自动打包发生在 `Publish` 之后，普通的 `Build` 不会生成安装包。
 `BundlerEnabled` 只控 Publish 钩子路；显式 `-t:BundlerBundle` 不需要它（除 `BundlerIdentifier` 仍必填外无开关依赖）。
 两入口同样支持 `BundlerUniversalTargets`（macOS universal 内层双 RID 发布+合并）。
-canonical RID 映射表：`windows-x86_64→win-x64`、`windows-i686→win-x86`、`windows-aarch64→win-arm64`、`macos-x86_64→osx-x64`、`macos-aarch64→osx-arm64`、`linux-x86_64→linux-x64`、`linux-i686→linux-x86`、`linux-aarch64→linux-arm64`、`linux-musl-x86_64→linux-musl-x64`、`linux-musl-aarch64→linux-musl-arm64`；`macos-universal` 无单一 RID 映射，走 `BundlerUniversalTargets`。
+canonical RID 映射表：`windows-x86_64→win-x64`、`windows-i686→win-x86`、`windows-arm64→win-arm64`、`macos-x86_64→osx-x64`、`macos-arm64→osx-arm64`、`linux-x86_64→linux-x64`、`linux-i686→linux-x86`、`linux-aarch64→linux-arm64`、`linux-musl-x86_64→linux-musl-x64`、`linux-musl-aarch64→linux-musl-arm64`；`macos-universal` 无单一 RID 映射，走 `BundlerUniversalTargets`。
 
 ## 独立 NSIS API
 

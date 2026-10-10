@@ -16,9 +16,9 @@
   <ItemGroup>
     <_BundlerRidMap Include="windows-x86_64"><Rid>win-x64</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="windows-i686"><Rid>win-x86</Rid></_BundlerRidMap>
-    <_BundlerRidMap Include="windows-aarch64"><Rid>win-arm64</Rid></_BundlerRidMap>
+    <_BundlerRidMap Include="windows-arm64"><Rid>win-arm64</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="macos-x86_64"><Rid>osx-x64</Rid></_BundlerRidMap>
-    <_BundlerRidMap Include="macos-aarch64"><Rid>osx-arm64</Rid></_BundlerRidMap>
+    <_BundlerRidMap Include="macos-arm64"><Rid>osx-arm64</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="linux-x86_64"><Rid>linux-x64</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="linux-i686"><Rid>linux-x86</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="linux-aarch64"><Rid>linux-arm64</Rid></_BundlerRidMap>
@@ -53,10 +53,13 @@
   <Target Name="_BundlerDerive">
     <ItemGroup>
       <_BundlerTargetFromRid Include="@(_BundlerRidMap->'%(Identity)')"
-          Condition="'$(BundlerTarget)' == '' and '%(_BundlerRidMap.Rid)' == '$(RuntimeIdentifier)'" />
+          Condition="'%(_BundlerRidMap.Rid)' == '$(RuntimeIdentifier)'" />
     </ItemGroup>
     <PropertyGroup>
       <BundlerTarget Condition="'$(BundlerTarget)' == ''">@(_BundlerTargetFromRid)</BundlerTarget>
+      <!-- RID 在 eval 后变更时刷新我们自己的推导（判据：props 前显式为空且当前值==eval 推导值）；
+           显式 BundlerTarget 恒不动 -->
+      <BundlerTarget Condition="'$(BundlerTarget)' == '$(_BundlerEvalTarget)' and '$(_BundlerEvalTarget)' != '' and '@(_BundlerTargetFromRid)' != '' and '$(BundlerTarget)' != '@(_BundlerTargetFromRid)'">@(_BundlerTargetFromRid)</BundlerTarget>
       <BundlerFormats Condition="'$(BundlerFormats)' == ''">nsis</BundlerFormats>
       <_BundlerPublishOutDir>$(IntermediateOutputPath)BundlerPublish\$(BundlerTarget)\</_BundlerPublishOutDir>
     </PropertyGroup>
