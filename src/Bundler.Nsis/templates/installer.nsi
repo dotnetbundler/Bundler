@@ -494,6 +494,9 @@ Function SetDefaultInstallDirectory
       ${EndIf}
     !endif
     ReadRegStr $0 SHCTX "${UNINSTALL_KEY}" "InstallRoot"
+    ${If} $0 == ""
+      ReadRegStr $0 SHCTX "${UNINSTALL_KEY}" "InstallLocation"
+    ${EndIf}
     ${If} $0 != ""
       StrCpy $INSTDIR $0
     ${EndIf}
@@ -505,6 +508,9 @@ Function DetectExistingInstall
   ; 必须存在 UninstallString，避免将残缺的注册表项误判为已安装。
   ReadRegStr $InstalledUninstaller SHCTX "${UNINSTALL_KEY}" "UninstallString"
   ReadRegStr $InstalledDirectory SHCTX "${UNINSTALL_KEY}" "InstallRoot"
+  ${If} $InstalledDirectory == ""
+    ReadRegStr $InstalledDirectory SHCTX "${UNINSTALL_KEY}" "InstallLocation"
+  ${EndIf}
   ReadRegStr $InstalledVersion SHCTX "${UNINSTALL_KEY}" "DisplayVersion"
   StrCpy $VersionComparison ${VERSION_UNKNOWN}
   StrCpy $ExistingInstallType 0

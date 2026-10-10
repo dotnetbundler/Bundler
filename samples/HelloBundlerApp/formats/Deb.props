@@ -41,12 +41,12 @@
          SystemdServiceFile 托管 unit（postinst 自动合成 daemon-reload 尾段）；
          ConfigFiles 显式登记（/etc 下 BundlerDebFile 自动登记）。 -->
     <BundlerDebPostInstallFile>$(HelloBundlerAppAssets)deb\postinst.sh</BundlerDebPostInstallFile>
-    <BundlerDebPostInstallFile Condition="'$(HelloBundlerDebPostinstFile)' != ''">$(HelloBundlerDebPostinstFile)</BundlerDebPostInstallFile>
+    <BundlerDebPostInstallFile Condition="'$(HelloBundlerDebPostInstallFile)' != ''">$(HelloBundlerDebPostInstallFile)</BundlerDebPostInstallFile>
     <BundlerDebPreUninstallFile>$(HelloBundlerAppAssets)deb\prerm.sh</BundlerDebPreUninstallFile>
-    <BundlerDebPreUninstallFile Condition="'$(HelloBundlerDebPrermFile)' != ''">$(HelloBundlerDebPrermFile)</BundlerDebPreUninstallFile>
+    <BundlerDebPreUninstallFile Condition="'$(HelloBundlerDebPreUninstallFile)' != ''">$(HelloBundlerDebPreUninstallFile)</BundlerDebPreUninstallFile>
     <BundlerDebPostUninstallFile>$(HelloBundlerAppAssets)deb\postrm.sh</BundlerDebPostUninstallFile>
-    <BundlerDebPostUninstallFile Condition="'$(HelloBundlerDebPostrmFile)' != ''">$(HelloBundlerDebPostrmFile)</BundlerDebPostUninstallFile>
-    <BundlerDebPreInstallFile Condition="'$(HelloBundlerDebPreinstFile)' != ''">$(HelloBundlerDebPreinstFile)</BundlerDebPreInstallFile>
+    <BundlerDebPostUninstallFile Condition="'$(HelloBundlerDebPostUninstallFile)' != ''">$(HelloBundlerDebPostUninstallFile)</BundlerDebPostUninstallFile>
+    <BundlerDebPreInstallFile Condition="'$(HelloBundlerDebPreInstallFile)' != ''">$(HelloBundlerDebPreInstallFile)</BundlerDebPreInstallFile>
     <BundlerDebSystemdServiceFile Condition="'$(HelloBundlerDebSystemdServiceFile)' != ''">$(HelloBundlerDebSystemdServiceFile)</BundlerDebSystemdServiceFile>
     <BundlerDebConfigFiles Condition="'$(HelloBundlerDebConfigFiles)' != ''">$(HelloBundlerDebConfigFiles)</BundlerDebConfigFiles>
   </PropertyGroup>

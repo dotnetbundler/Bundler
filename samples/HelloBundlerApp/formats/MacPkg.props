@@ -22,8 +22,8 @@
          ScriptsDirectory 专家旋钮：目录原样交给 pkgbuild，脚本以安装器权限运行。 -->
     <BundlerMacPkgScriptsDirectory Condition="'$(HelloBundlerPkgScripts)' == 'true'">$(HelloBundlerAppAssets)pkg\scripts</BundlerMacPkgScriptsDirectory>
     <BundlerMacPkgSignIdentity Condition="'$(HelloBundlerPkgSignIdentity)' != ''">$(HelloBundlerPkgSignIdentity)</BundlerMacPkgSignIdentity>
-    <BundlerMacPkgTemporaryCertificateFile Condition="'$(HelloBundlerPkgSignCertificatePath)' != ''">$(HelloBundlerPkgSignCertificatePath)</BundlerMacPkgTemporaryCertificateFile>
-    <BundlerMacPkgTemporaryCertificatePassword Condition="'$(HelloBundlerPkgSignCertificatePassword)' != ''">$(HelloBundlerPkgSignCertificatePassword)</BundlerMacPkgTemporaryCertificatePassword>
+    <BundlerMacPkgTemporaryCertificateFile Condition="'$(HelloBundlerPkgTemporaryCertificateFile)' != ''">$(HelloBundlerPkgTemporaryCertificateFile)</BundlerMacPkgTemporaryCertificateFile>
+    <BundlerMacPkgTemporaryCertificatePassword Condition="'$(HelloBundlerPkgTemporaryCertificatePassword)' != ''">$(HelloBundlerPkgTemporaryCertificatePassword)</BundlerMacPkgTemporaryCertificatePassword>
     <BundlerMacPkgNotarize Condition="'$(HelloBundlerPkgNotarize)' == 'true'">true</BundlerMacPkgNotarize>
     <BundlerMacPkgNotaryWait Condition="'$(HelloBundlerPkgNotaryWait)' != ''">$(HelloBundlerPkgNotaryWait)</BundlerMacPkgNotaryWait>
     <BundlerMacPkgSkipStapling Condition="'$(HelloBundlerPkgSkipStapling)' == 'true'">true</BundlerMacPkgSkipStapling>
@@ -31,7 +31,7 @@
     <BundlerMacPkgAppleId Condition="'$(HelloBundlerPkgAppleId)' != ''">$(HelloBundlerPkgAppleId)</BundlerMacPkgAppleId>
     <BundlerMacPkgApplePassword Condition="'$(HelloBundlerPkgApplePassword)' != ''">$(HelloBundlerPkgApplePassword)</BundlerMacPkgApplePassword>
     <BundlerMacPkgAppleTeamId Condition="'$(HelloBundlerPkgAppleTeamId)' != ''">$(HelloBundlerPkgAppleTeamId)</BundlerMacPkgAppleTeamId>
-    <BundlerMacPkgApiKeyFile Condition="'$(HelloBundlerPkgNotaryApiKeyPath)' != ''">$(HelloBundlerPkgNotaryApiKeyPath)</BundlerMacPkgApiKeyFile>
+    <BundlerMacPkgApiKeyFile Condition="'$(HelloBundlerPkgApiKeyFile)' != ''">$(HelloBundlerPkgApiKeyFile)</BundlerMacPkgApiKeyFile>
     <BundlerMacPkgNotaryApiKeyId Condition="'$(HelloBundlerPkgNotaryApiKeyId)' != ''">$(HelloBundlerPkgNotaryApiKeyId)</BundlerMacPkgNotaryApiKeyId>
     <BundlerMacPkgNotaryApiIssuer Condition="'$(HelloBundlerPkgNotaryApiIssuer)' != ''">$(HelloBundlerPkgNotaryApiIssuer)</BundlerMacPkgNotaryApiIssuer>
   </PropertyGroup>

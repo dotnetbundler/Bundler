@@ -7,8 +7,8 @@
     <!-- file=extra.plist 文件合并；xml=BundlerMacAppInfoPlistXml 内联合并 -->
     <HelloBundlerMacAppInfoPlistMode Condition="'$(HelloBundlerMacAppInfoPlistMode)' == ''">file</HelloBundlerMacAppInfoPlistMode>
     <HelloBundlerMacAppSignIdentity Condition="'$(HelloBundlerMacAppSignIdentity)' == ''"></HelloBundlerMacAppSignIdentity>
-    <HelloBundlerMacAppSigningCertificatePath Condition="'$(HelloBundlerMacAppSigningCertificatePath)' == ''"></HelloBundlerMacAppSigningCertificatePath>
-    <HelloBundlerMacAppSigningCertificatePassword Condition="'$(HelloBundlerMacAppSigningCertificatePassword)' == ''"></HelloBundlerMacAppSigningCertificatePassword>
+    <HelloBundlerMacAppTemporaryCertificateFile Condition="'$(HelloBundlerMacAppTemporaryCertificateFile)' == ''"></HelloBundlerMacAppTemporaryCertificateFile>
+    <HelloBundlerMacAppTemporaryCertificatePassword Condition="'$(HelloBundlerMacAppTemporaryCertificatePassword)' == ''"></HelloBundlerMacAppTemporaryCertificatePassword>
     <HelloBundlerMacAppHardenedRuntime Condition="'$(HelloBundlerMacAppHardenedRuntime)' == ''">true</HelloBundlerMacAppHardenedRuntime>
     <HelloBundlerMacAppEntitlementsFile Condition="'$(HelloBundlerMacAppEntitlementsFile)' == ''">$(HelloBundlerAppAssets)mac\entitlements.plist</HelloBundlerMacAppEntitlementsFile>
     <HelloBundlerMacAppNotarize Condition="'$(HelloBundlerMacAppNotarize)' == ''">false</HelloBundlerMacAppNotarize>
@@ -28,8 +28,8 @@
 
     <!-- .app 签名/加固运行时/entitlements（identity 空即仅 ad-hoc）。 -->
     <BundlerMacAppSignIdentity Condition="'$(HelloBundlerMacAppSignIdentity)' != ''">$(HelloBundlerMacAppSignIdentity)</BundlerMacAppSignIdentity>
-    <BundlerMacAppTemporaryCertificateFile Condition="'$(HelloBundlerMacAppSigningCertificatePath)' != ''">$(HelloBundlerMacAppSigningCertificatePath)</BundlerMacAppTemporaryCertificateFile>
-    <BundlerMacAppTemporaryCertificatePassword Condition="'$(HelloBundlerMacAppSigningCertificatePassword)' != ''">$(HelloBundlerMacAppSigningCertificatePassword)</BundlerMacAppTemporaryCertificatePassword>
+    <BundlerMacAppTemporaryCertificateFile Condition="'$(HelloBundlerMacAppTemporaryCertificateFile)' != ''">$(HelloBundlerMacAppTemporaryCertificateFile)</BundlerMacAppTemporaryCertificateFile>
+    <BundlerMacAppTemporaryCertificatePassword Condition="'$(HelloBundlerMacAppTemporaryCertificatePassword)' != ''">$(HelloBundlerMacAppTemporaryCertificatePassword)</BundlerMacAppTemporaryCertificatePassword>
     <BundlerMacAppHardenedRuntime Condition="'$(HelloBundlerMacAppSignIdentity)' != ''">$(HelloBundlerMacAppHardenedRuntime)</BundlerMacAppHardenedRuntime>
     <BundlerMacAppEntitlementsFile Condition="'$(HelloBundlerMacAppSignIdentity)' != ''">$(HelloBundlerMacAppEntitlementsFile)</BundlerMacAppEntitlementsFile>
 
@@ -41,7 +41,7 @@
     <BundlerMacAppAppleId Condition="'$(HelloBundlerMacAppAppleId)' != ''">$(HelloBundlerMacAppAppleId)</BundlerMacAppAppleId>
     <BundlerMacAppApplePassword Condition="'$(HelloBundlerMacAppApplePassword)' != ''">$(HelloBundlerMacAppApplePassword)</BundlerMacAppApplePassword>
     <BundlerMacAppAppleTeamId Condition="'$(HelloBundlerMacAppAppleTeamId)' != ''">$(HelloBundlerMacAppAppleTeamId)</BundlerMacAppAppleTeamId>
-    <BundlerMacAppApiKeyFile Condition="'$(HelloBundlerMacAppNotaryApiKeyPath)' != ''">$(HelloBundlerMacAppNotaryApiKeyPath)</BundlerMacAppApiKeyFile>
+    <BundlerMacAppApiKeyFile Condition="'$(HelloBundlerMacAppApiKeyFile)' != ''">$(HelloBundlerMacAppApiKeyFile)</BundlerMacAppApiKeyFile>
     <BundlerMacAppNotaryApiKeyId Condition="'$(HelloBundlerMacAppNotaryApiKeyId)' != ''">$(HelloBundlerMacAppNotaryApiKeyId)</BundlerMacAppNotaryApiKeyId>
     <BundlerMacAppNotaryApiIssuer Condition="'$(HelloBundlerMacAppNotaryApiIssuer)' != ''">$(HelloBundlerMacAppNotaryApiIssuer)</BundlerMacAppNotaryApiIssuer>
   </PropertyGroup>

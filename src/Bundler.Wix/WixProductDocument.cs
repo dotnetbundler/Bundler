@@ -72,7 +72,16 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
         var nsisUninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\" + bundle.Identifier;
         // NSIS 在 x64/arm64 下写 64 位注册表视图（installer.nsi SetRegView 64），MSI 检索须同视图。
         var nsisRegistryView = item.Target.Architecture == CpuArchitecture.X86 ? "no" : "yes";
+        // alpha.89 前 NSIS 写 InstallLocation；同名搜索后写者胜，先查旧键再查新键 InstallRoot。
         var nsisSearches = new XElement(Wix + "Property", new XAttribute("Id", "PREVIOUS_NSIS_INSTALLDIR"),
+            new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerNsisDirSearchMachineLegacy"),
+                new XAttribute("Root", "HKLM"), new XAttribute("Key", nsisUninstallKey),
+                new XAttribute("Name", "InstallLocation"), new XAttribute("Type", "directory"),
+                new XAttribute("Win64", nsisRegistryView)),
+            new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerNsisDirSearchUserLegacy"),
+                new XAttribute("Root", "HKCU"), new XAttribute("Key", nsisUninstallKey),
+                new XAttribute("Name", "InstallLocation"), new XAttribute("Type", "directory"),
+                new XAttribute("Win64", nsisRegistryView)),
             new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerNsisDirSearchMachine"),
                 new XAttribute("Root", "HKLM"), new XAttribute("Key", nsisUninstallKey),
                 new XAttribute("Name", "InstallRoot"), new XAttribute("Type", "directory"),
