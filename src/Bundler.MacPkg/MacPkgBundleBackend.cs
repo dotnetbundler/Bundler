@@ -83,13 +83,13 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             Directory.CreateDirectory(stageDirectory);
 
             var files = settings.Files ?? Array.Empty<MacPkgFileEntry>();
-            var applicationName = ArtifactNaming.FileName(
-                MacAppBundleBackend.SanitizeFileName(bundle.ProductName), bundle.Version, item.Target, PackageFormat.App);
+            var applicationName = MacAppBundleBackend.SanitizeFileName(bundle.ProductName) + ".app";
             var appPath = Path.Combine(
                 bundle.OutputLayout == OutputLayout.ByFormat
                     ? Path.Combine(bundle.OutputDirectory, "app")
                     : bundle.OutputDirectory,
-                applicationName);
+                ArtifactNaming.FileName(
+                    MacAppBundleBackend.SanitizeFileName(bundle.ProductName), bundle.Version, item.Target, PackageFormat.App));
             if (!Directory.Exists(appPath))
             {
                 throw new DirectoryNotFoundException(

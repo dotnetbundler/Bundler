@@ -302,6 +302,11 @@ public static class AlpineApkTests
             Assert.Contains(BundleConfigurationValidator.Validate(glibc, checkFileSystem: false), issue => issue.Path == "targets[0].formats");
             var musl = ApkConfiguration(input, rid: "linux-musl-aarch64");
             Assert.False(BundleConfigurationValidator.Validate(musl, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "The validator must accept AlpineApk on linux-musl-aarch64.");
+
+            // 矩阵同时按 arch 词表裁剪：windows-riscv64 在 nsis/msi 词表外，校验期就必须拒，
+            // 不能漏到规划期由 ArtifactNaming 抛裸 ArgumentException。
+            var riscv = ApkConfiguration(input, rid: "windows-riscv64", formats: [PackageFormat.Nsis]);
+            Assert.Contains(BundleConfigurationValidator.Validate(riscv, checkFileSystem: false), issue => issue.Path == "targets[0].formats");
         }
         finally
         {

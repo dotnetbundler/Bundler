@@ -150,7 +150,7 @@ public static class MacPkgTests
             Assert.Equal("1.0.0", args[args.IndexOf("--version") + 1]);
             Assert.Equal("recommended", args[args.IndexOf("--ownership") + 1]);
             Assert.Equal(pkg.Path, args[args.Count - 1]);
-            Assert.Contains("ExampleApp-1.0.0-arm64.app", staged);
+            Assert.Contains("ExampleApp.app", staged);
         }
         finally
         {
@@ -239,7 +239,7 @@ public static class MacPkgTests
                 .BuildAsync(PkgConfiguration(input, output));
             Assert.True(staged.Any(path => path.Replace('\\', '/') == "support/helper.txt"),
                 $"The payload item must be staged at its destination, got: {string.Join(',', staged)}");
-            Assert.Contains(staged, path => path.Contains("ExampleApp-1.0.0-arm64.app"));
+            Assert.Contains(staged, path => path.Contains("ExampleApp.app"));
         }
         finally
         {
