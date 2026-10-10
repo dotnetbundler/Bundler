@@ -5,9 +5,6 @@ name: release-verify
 
 on:
   workflow_dispatch:
-  # 临时：CI 三连稳定验证用，验完摘除。
-  push:
-    branches: [devin/1791558636-r2-fix]
 
 permissions:
   contents: read
