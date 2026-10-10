@@ -4,6 +4,9 @@ name: dbg-aot
 
 on:
   workflow_dispatch:
+  # 临时：arm64 引导件重产，产完摘除。
+  push:
+    branches: [devin/1791558636-r2-fix]
 
 concurrency:
   group: dbg-aot
