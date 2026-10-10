@@ -2,6 +2,8 @@
   <PropertyGroup>
     <_BundlerPackageRoot Condition="'$(_BundlerPackageRoot)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\'))</_BundlerPackageRoot>
     <_BundlerTaskAssembly Condition="'$(_BundlerTaskAssembly)' == ''">$(_BundlerPackageRoot)tasks\netstandard2.0\DotNet.Bundler.MSBuild.dll</_BundlerTaskAssembly>
+    <!-- 内层发布子进程的 dotnet 入口；universal/自动发布腿用 Exec 调它（原因见 _BundlerUniversalMerge 注释） -->
+    <BundlingDotnetExe Condition="'$(BundlingDotnetExe)' == ''">dotnet</BundlingDotnetExe>
   </PropertyGroup>
 
   <UsingTask TaskName="DotNet.Bundler.MSBuild.BundleDesktopApplication"
@@ -114,24 +116,27 @@
          SelfContained/AOT/单文件强绑 RID，在此提前给出明确报错而不是怪异的 SDK 失败。 -->
     <Error Condition="'$(BundlerUniversalTargets)' != '' and ('$(SelfContained)' == 'true' or '$(PublishAot)' == 'true' or '$(PublishSingleFile)' == 'true')"
            Text="BundlerUniversalTargets requires a framework-dependent, non-single-file publish; SelfContained/PublishAot/PublishSingleFile cannot be merged into a universal payload." />
-    <!-- MSBuild 子构建内层发布：子构建自动继承调用方全部全局属性（PublishSingleFile/SelfContained/
-         PublishAot 等发布选项不丢），Properties 只覆盖 RID/输出目录/BundlerEnabled 防钩子递归；
-         子构建无 CLI 隐式 restore——每个 RID 在单个子构建里 Restore;Publish 连跑：assets 重写
-         只留当前 RID 也不怕（即刻消费），而 RuntimeIdentifiers 多 RID 合图会被
-         _GenerateRestoreGraphProjectEntry 当单个 RID 校验（NETSDK1083），走不通。
-         还原与发布连跑在单个子构建内——assets 被下一 RID 的 restore 重写时上一 RID 的
-         publish 已消费完毕，顺序执行下不存在错位读（P2P 恢复链全局属性传染，任何
-         per-RID assets 隔离都会把 netstandard2.0 引用的还原写进同目录互踩）。
-         TargetFramework 不入 Properties：子构建评的是同一个工程自己解 TFM；全局传入会沿
-         ProjectReference 恢复链污染异 TFM 引用（如 netstandard2.0 任务工程的 assets）。 -->
-    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Restore;Publish"
-             Properties="RuntimeIdentifier=%(_BundlerUniversalRid.Identity);PublishDir=$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity);BundlerEnabled=false;RestoreForceEvaluate=true" />
+    <!-- 内层发布走独立 dotnet 子进程：共享 obj/project.assets.json 的场景下，同进程内
+         MSBuild 子构建的 Restore;Publish 连跑仍有约 1/4 概率读到上一 RID 写前的旧 assets
+         （NETSDK1047，binlog 实证 restore 正常写盘而 publish 读到缺 RID 内容——NuGet/SDK
+         侧读路径存在进程内陈旧读）。per-RID assets 隔离又不可行：Restore/Publish 的
+         ProjectAssetsFile/MSBuildProjectExtensionsPath 都会作为全局属性传染 P2P 子构建，
+         netstandard2.0 任务工程与主工程 assets 互踩（NETSDK1005/1006）。子进程串行执行
+         天然消除一切进程内状态：每腿 restore 写完即被同进程 publish 消费，确定性成立。
+         子进程不继承外层全局属性——BundlerEnabled=false 防钩子递归必须显式转发；
+         RestorePackagesPath/RestoreSources 为还原定位所需也一并转发；universal 腿已被
+         上方校验限定 framework-dependent，无需转发发布选项。 -->
+    <PropertyGroup>
+      <_BundlerInnerPublishProps>-p:BundlerEnabled=false</_BundlerInnerPublishProps>
+      <_BundlerInnerPublishProps Condition="'$(RestorePackagesPath)' != ''">$(_BundlerInnerPublishProps) -p:RestorePackagesPath=&quot;$(RestorePackagesPath)&quot;</_BundlerInnerPublishProps>
+      <_BundlerInnerPublishProps Condition="'$(RestoreSources)' != ''">$(_BundlerInnerPublishProps) -p:RestoreSources=&quot;$(RestoreSources)&quot;</_BundlerInnerPublishProps>
+    </PropertyGroup>
+    <Exec Command='&quot;$(BundlingDotnetExe)&quot; publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) -r %(_BundlerUniversalRid.Identity) -o &quot;$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity)&quot; $(_BundlerInnerPublishProps)' />
     <!-- 无 RID 参考发布：非 Mach-O 文件的权威源。RID 专属构建给托管件打架构印记（PE machine
          及派生 MVID/时间戳），两 arch 的 test.dll 天然逐字节相异、无法靠比对合并；参考发布
          以中性构建提供同源 managed 载荷。要求工程可无 RID 发布——SelfContained/AOT 等强绑
          RID 的配置在此自然报错（universal 也无法表达逐 arch 运行时差异）。 -->
-    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Restore;Publish"
-             Properties="RuntimeIdentifier=;PublishDir=$(_BundlerUniversalDir)reference;BundlerEnabled=false;RestoreForceEvaluate=true" />
+    <Exec Command='&quot;$(BundlingDotnetExe)&quot; publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) -o &quot;$(_BundlerUniversalDir)reference&quot; $(_BundlerInnerPublishProps)' />
     <DotNet.Bundler.MSBuild.MergeUniversalPayload
       SourceDirectories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)')"
       ReferenceDirectory="$(_BundlerUniversalDir)reference"
@@ -155,11 +160,19 @@
            Text="BundlerTarget '$(BundlerTarget)' has no canonical publish RID mapping — pass -p:BundlerPublishRid=&lt;rid&gt; or -p:BundlerInputDir=&lt;dir&gt;." />
     <!-- publish -o 不清理上次构建已删的文件——先清中间发布目录防滞留 -->
     <RemoveDir Directories="$(_BundlerPublishOutDir)" />
-    <!-- 子构建无 CLI 隐式 restore——先跑 Restore 腿下载该 RID 运行时包（TFM 不传，见 universal 段注释）。 -->
-    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Restore"
-             Properties="RuntimeIdentifier=$(BundlerPublishRid);RestoreForceEvaluate=true" />
-    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Publish"
-             Properties="RuntimeIdentifier=$(BundlerPublishRid);PublishDir=$(_BundlerPublishOutDir);BundlerEnabled=false" />
+    <!-- 与 universal 段同理走子进程（见上注释）；发布选项需显式转发——SelfContained/AOT/
+         单文件/裁剪/R2R 影响内层 publish 产物形状。 -->
+    <PropertyGroup>
+      <_BundlerAutoPublishProps>-p:BundlerEnabled=false</_BundlerAutoPublishProps>
+      <_BundlerAutoPublishProps Condition="'$(SelfContained)' != ''">$(_BundlerAutoPublishProps) -p:SelfContained=$(SelfContained)</_BundlerAutoPublishProps>
+      <_BundlerAutoPublishProps Condition="'$(PublishAot)' != ''">$(_BundlerAutoPublishProps) -p:PublishAot=$(PublishAot)</_BundlerAutoPublishProps>
+      <_BundlerAutoPublishProps Condition="'$(PublishSingleFile)' != ''">$(_BundlerAutoPublishProps) -p:PublishSingleFile=$(PublishSingleFile)</_BundlerAutoPublishProps>
+      <_BundlerAutoPublishProps Condition="'$(PublishTrimmed)' != ''">$(_BundlerAutoPublishProps) -p:PublishTrimmed=$(PublishTrimmed)</_BundlerAutoPublishProps>
+      <_BundlerAutoPublishProps Condition="'$(PublishReadyToRun)' != ''">$(_BundlerAutoPublishProps) -p:PublishReadyToRun=$(PublishReadyToRun)</_BundlerAutoPublishProps>
+      <_BundlerAutoPublishProps Condition="'$(RestorePackagesPath)' != ''">$(_BundlerAutoPublishProps) -p:RestorePackagesPath=&quot;$(RestorePackagesPath)&quot;</_BundlerAutoPublishProps>
+      <_BundlerAutoPublishProps Condition="'$(RestoreSources)' != ''">$(_BundlerAutoPublishProps) -p:RestoreSources=&quot;$(RestoreSources)&quot;</_BundlerAutoPublishProps>
+    </PropertyGroup>
+    <Exec Command='&quot;$(BundlingDotnetExe)&quot; publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) -r $(BundlerPublishRid) -o &quot;$(_BundlerPublishOutDir)&quot; $(_BundlerAutoPublishProps)' />
   </Target>
 
   <!-- 共享打包体：effective 输入/目标归一 → 默认值推导 → 任务调用 -->

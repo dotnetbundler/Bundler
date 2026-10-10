@@ -193,6 +193,12 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
                 new XAttribute("Type", "string"), new XAttribute("Value", definitionHash)),
             new XElement(Wix + "RegistryValue", new XAttribute("Root", registryRoot),
                 new XAttribute("Key", registryKey), new XAttribute("Name", "InstallDir"),
+                new XAttribute("Type", "string"), new XAttribute("Value", "[INSTALLFOLDER]")),
+            // ARP 卸载键 InstallRoot（NSIS alpha.89 契约对齐）——跨安装器目录延续与
+            // 卸载探查统一读这个值；Key 列是 Formatted，[ProductCode] 安装期展开。
+            new XElement(Wix + "RegistryValue", new XAttribute("Root", registryRoot),
+                new XAttribute("Key", @"Software\Microsoft\Windows\CurrentVersion\Uninstall\[ProductCode]"),
+                new XAttribute("Name", "InstallRoot"),
                 new XAttribute("Type", "string"), new XAttribute("Value", "[INSTALLFOLDER]")));
         foreach (var path in directoryIds.Keys.Where(path => path.Length > 0)
                      .OrderByDescending(path => path.Count(character => character == '/'))

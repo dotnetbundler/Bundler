@@ -1222,13 +1222,18 @@ internal static class BootstrapPlan
         }
         if (HasVolumeGuidRoot(body))
         {
-            var dosName = VolumeDosPath(body[..44]);
             var tail = body[44..].TrimStart('\\', '/');
+            var dosName = VolumeDosPath(body[..44]);
+            if (dosName is not null)
+            {
+                return Path.GetFullPath(
+                    dosName.TrimEnd('\\') + (tail.Length == 0 ? @"\" : @"\" + tail));
+            }
             // 无 DOS 挂载名的卷用 `\\?\Volume{GUID}\` 稳定拼写——托管 IO 可拼可达，
-            // 且不依赖挂载别名节点（别名底座搬动后拼写不失效）。
-            return Path.GetFullPath(
-                (dosName?.TrimEnd('\\') ?? @"\\?\" + body[..44])
-                + (tail.Length == 0 ? @"\" : @"\" + tail));
+            // 且不依赖挂载别名节点。绝不能过 GetFullPath：.NET 认不出 `\\?\Volume{GUID}`
+            // 的根形，会剥 `\\?\` 前缀把裸名当相对目录拼回父级（win 腿实证
+            // `g4x\Volume{GUID}\…` 伪路径）。拼写本身即规范化形，原样返回。
+            return @"\\?\" + body[..44] + (tail.Length == 0 ? @"\" : @"\" + tail);
         }
         return null;
     }
