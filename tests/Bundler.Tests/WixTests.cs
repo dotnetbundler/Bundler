@@ -76,11 +76,10 @@ public static class WixTests
         Assert.Equal(x64, x64Again);
         Assert.True(x64 != x86 && x64 != arm && x86 != arm,
             "Component GUIDs must diverge per architecture token.");
-        Assert.True(x64 == Guid.Parse("3ee79d14-2037-573b-b314-6167cb6d60ed") &&
-               x86 == Guid.Parse("6e8439a3-609a-5fff-9135-77a52c375b4f") &&
-               arm == Guid.Parse("b8c560d8-aa7a-58c3-a215-8f2b5fb9d7b4"),
-            "Component identity must seed from the MSI arch token (x64/x86/arm64), matching INSTALLFOLDER.");
-        Assert.Throws<ArgumentException>(() => WixIdentity.ComponentCode(
+        Assert.Equal(Guid.Parse("3ee79d14-2037-573b-b314-6167cb6d60ed"), x64);
+        Assert.Equal(Guid.Parse("6e8439a3-609a-5fff-9135-77a52c375b4f"), x86);
+        Assert.Equal(Guid.Parse("b8c560d8-aa7a-58c3-a215-8f2b5fb9d7b4"), arm);
+        Assert.ThrowsAny<ArgumentException>(() => WixIdentity.ComponentCode(
             "com.example.app", "windows-riscv64", WixInstallScope.PerMachine, "app.exe"));
     }
 
