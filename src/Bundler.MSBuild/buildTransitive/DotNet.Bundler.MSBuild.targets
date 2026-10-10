@@ -71,7 +71,9 @@
              Text="BundlerTarget was derived from a stale RuntimeIdentifier and was refreshed to '@(_BundlerTargetFromRid)'. Pass -p:BundlerTarget=&lt;target&gt; to pin it explicitly." />
     <PropertyGroup>
       <BundlerFormats Condition="'$(BundlerFormats)' == ''">nsis</BundlerFormats>
-      <_BundlerPublishOutDir>$(MSBuildProjectExtensionsPath)BundlerPublish\$(BundlerTarget)\</_BundlerPublishOutDir>
+      <!-- 尾分隔符不能留——内层子进程 `-o "...\windows-x86_64\"` 的闭引号会被
+           反斜杠转义，后续 -p: 参数全并迸输出目录名（win 腿 MSB3073 实证） -->
+      <_BundlerPublishOutDir>$(MSBuildProjectExtensionsPath)BundlerPublish\$(BundlerTarget)</_BundlerPublishOutDir>
     </PropertyGroup>
     <Error Condition="'$(BundlerIdentifier)' == ''"
            Text="BundlerIdentifier is required to bundle." />

@@ -1156,10 +1156,7 @@ internal static class BootstrapPlan
                     else if (info.Value.Tag == IoReparseTagSymlink
                              && !info.Value.Relative && HasVolumeGuidRoot(ntBody))
                     {
-                        var dos = VolumeDosPath(ntBody[..44]);
-                        var tail = ntBody[44..].TrimStart('\\', '/');
-                        next = Path.GetFullPath(
-                            (dos?.TrimEnd('\\') ?? @"\\?\" + ntBody[..44]) + @"\" + tail);
+                        next = ResolveVolumeGuidRoot(ntBody);
                     }
                     // MOUNT_POINT 的 Volume{GUID} 目标（junction NT 形/卷挂载点）
                     // 不做特殊处理——随 AbsoluteLinkTarget 与 SYMLINK 同解真身：
@@ -1205,6 +1202,12 @@ internal static class BootstrapPlan
             return null;
         }
         var prefixLength = NtDevicePrefixLength(target);
+        // 裸名 `Volume{GUID}[\sub]` 也是 NT 根（.NET LinkTarget 剥 `\?\`/`\??\`
+        // 前缀的实形，mountvol 挂载点目标即此形）——不能进相对拼父级分支，按卷真身解。
+        if (prefixLength == 0 && OperatingSystem.IsWindows() && HasVolumeGuidRoot(target))
+        {
+            return ResolveVolumeGuidRoot(target);
+        }
         if (!OperatingSystem.IsWindows() || prefixLength == 0)
         {
             return Path.GetFullPath(
@@ -1222,20 +1225,26 @@ internal static class BootstrapPlan
         }
         if (HasVolumeGuidRoot(body))
         {
-            var tail = body[44..].TrimStart('\\', '/');
-            var dosName = VolumeDosPath(body[..44]);
-            if (dosName is not null)
-            {
-                return Path.GetFullPath(
-                    dosName.TrimEnd('\\') + (tail.Length == 0 ? @"\" : @"\" + tail));
-            }
-            // 无 DOS 挂载名的卷用 `\\?\Volume{GUID}\` 稳定拼写——托管 IO 可拼可达，
-            // 且不依赖挂载别名节点。绝不能过 GetFullPath：.NET 认不出 `\\?\Volume{GUID}`
-            // 的根形，会剥 `\\?\` 前缀把裸名当相对目录拼回父级（win 腿实证
-            // `g4x\Volume{GUID}\…` 伪路径）。拼写本身即规范化形，原样返回。
-            return @"\\?\" + body[..44] + (tail.Length == 0 ? @"\" : @"\" + tail);
+            return ResolveVolumeGuidRoot(body);
         }
         return null;
+    }
+
+    // `Volume{GUID}[\sub]` 根段解真：有 DOS 挂载名换成挂载名拼回子路径（过
+    // GetFullPath 归一）；无 DOS 名用 `\\?\Volume{GUID}\` 稳定拼写——托管 IO
+    // 可拼可达且不依赖挂载别名节点。后者绝不能过 GetFullPath：.NET 认不出
+    // `\\?\Volume{GUID}` 的根形，会剥 `\\?\` 前缀把裸名当相对目录拼回父级
+    //（win 腿实证 `g4x\Volume{GUID}\…` 伪路径）。拼写本身即规范化形，原样返回。
+    private static string ResolveVolumeGuidRoot(string ntBody)
+    {
+        var tail = ntBody[44..].TrimStart('\\', '/');
+        var dosName = VolumeDosPath(ntBody[..44]);
+        if (dosName is not null)
+        {
+            return Path.GetFullPath(
+                dosName.TrimEnd('\\') + (tail.Length == 0 ? @"\" : @"\" + tail));
+        }
+        return @"\\?\" + ntBody[..44] + (tail.Length == 0 ? @"\" : @"\" + tail);
     }
 
     // `Volume{GUID}` 是否占据路径根段（整名、尾分隔符或带子路径都算）。
