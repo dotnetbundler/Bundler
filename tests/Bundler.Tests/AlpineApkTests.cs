@@ -803,6 +803,30 @@ public static class AlpineApkTests
         Assert.Contains("No Alpine architecture mapping", arch.Message);
     }
 
+    // armv7sf（软浮点）在 apk-package(5) 官方词表中是 armel——产物名与 .PKGINFO arch 须一致。
+    [Fact]
+    static void MapsArmv7SfTargetToArmelApkWord()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "armel-out");
+        try
+        {
+            var artifacts = new AlpineApkBundler().BuildAsync(
+                ApkConfiguration(input, output, target: "linux-musl-armv7sf")).GetAwaiter().GetResult();
+            var artifact = artifacts.Single();
+            Assert.EndsWith("-1.0.0-r0.armel.apk", artifact.Path);
+
+            var segments = ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifact.Path));
+            var fields = PkgInfoFields(
+                ApkPackageReader.ReadTar(segments[0]).Single(e => e.Name == ".PKGINFO").Content);
+            Assert.Equal("armel", fields["arch"]);
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
     [Fact]
     static void RejectsNonRsaSigningKeys()
     {
