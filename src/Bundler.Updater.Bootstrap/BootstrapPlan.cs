@@ -1126,12 +1126,13 @@ internal static class BootstrapPlan
                 {
                     break;
                 }
-                // Windows 卷挂载点（mountvol）：reparse target 是 `\??\Volume{GUID}`
-                // 或 .NET 剥前缀后的裸名——NT 对象名而非文件系统路径，MOUNT_POINT
-                // 等 tag 时按普通目录透传不跟跳（跟跳会把 `Volume{guid}` 当目录名
-                // 拼进字面路径，静默写偏到别的卷）。tag 探不出（权限/竞争）不猜方向：
-                // 透传会让 install 叶链按链节点被搬走（真应用孤儿化），解成路径又拼
-                // 假路径逃逸守卫——返回 null 拒绝是最干净的落点。
+                // Windows reparse 的 NT 形目标（`\??\Volume{GUID}` 或 .NET 剥前缀
+                // 后的裸名）：Volume{GUID} 按卷真实位置解真，不透传——透传会把
+                // 别名拼写留在 canonical 里，install 内别名底座随 install 搬动
+                // 失效后 swap 拿悬空拼写找载荷（mntd 挂载点被毁的 mountvol 事故）。
+                // 卷无 DOS 挂载名时用 `\\?\Volume{GUID}\` 稳定拼写——独立于别名
+                // 节点仍可达。tag 探不出（权限/竞争）或非 Volume{GUID} 根的其他
+                // NT 设备形无解真身之路——返回 null 拒绝，不猜方向。
                 var next = target;
                 if (OperatingSystem.IsWindows() && IsNtObjectTarget(target))
                 {
@@ -1140,26 +1141,30 @@ internal static class BootstrapPlan
                     {
                         return null;
                     }
-                    if (info.Value.Tag != IoReparseTagSymlink)
+                    var ntBody = target[NtDevicePrefixLength(target)..];
+                    if (info.Value.Tag != IoReparseTagSymlink && !HasVolumeGuidRoot(ntBody))
                     {
-                        break;
+                        // MOUNT_POINT 的非 Volume{GUID} NT 形（\Device\ 等）无解
+                        // 真身之路——返回 null 拒绝，不猜方向。
+                        return null;
                     }
                     // .NET LinkTarget 对 `\\?\`/` \??\` 前缀目标统一剥前缀返回裸名
                     //（win 腿探针实证）——`mklink /D link \\?\Volume{GUID}` 的实形是
                     // 裸名+绝对 reparse flag。裸名根段 Volume{GUID} 且 flag 绝对时按
                     // 卷真实挂载名解真；flag 相对则是用户真写的相对名，照旧拼父级。
                     // target 可能带 \?\、\??\、\\?\ 前缀（LinkTarget 原文不归一）——剥壳后按裸名判。
-                    var ntBody = target[NtDevicePrefixLength(target)..];
-                    if (!info.Value.Relative && HasVolumeGuidRoot(ntBody))
+                    else if (info.Value.Tag == IoReparseTagSymlink
+                             && !info.Value.Relative && HasVolumeGuidRoot(ntBody))
                     {
                         var dos = VolumeDosPath(ntBody[..44]);
                         var tail = ntBody[44..].TrimStart('\\', '/');
-                        if (dos is null)
-                        {
-                            return null;
-                        }
-                        next = Path.GetFullPath(dos.TrimEnd('\\') + @"\" + tail);
+                        next = Path.GetFullPath(
+                            (dos?.TrimEnd('\\') ?? @"\\?\" + ntBody[..44]) + @"\" + tail);
                     }
+                    // MOUNT_POINT 的 Volume{GUID} 目标（junction NT 形/卷挂载点）
+                    // 不做特殊处理——随 AbsoluteLinkTarget 与 SYMLINK 同解真身：
+                    // 透传会把别名拼写留在 canonical 里，install 内别名底座随
+                    // install 搬动失效后 swap 拿悬空拼写找载荷（mountvol 事故）。
                 }
                 next = AbsoluteLinkTarget(current, next);
                 if (next is null)
@@ -1219,9 +1224,11 @@ internal static class BootstrapPlan
         {
             var dosName = VolumeDosPath(body[..44]);
             var tail = body[44..].TrimStart('\\', '/');
-            return dosName is null ? null
-                : Path.GetFullPath(
-                    dosName.TrimEnd('\\') + (tail.Length == 0 ? @"\" : @"\" + tail));
+            // 无 DOS 挂载名的卷用 `\\?\Volume{GUID}\` 稳定拼写——托管 IO 可拼可达，
+            // 且不依赖挂载别名节点（别名底座搬动后拼写不失效）。
+            return Path.GetFullPath(
+                (dosName?.TrimEnd('\\') ?? @"\\?\" + body[..44])
+                + (tail.Length == 0 ? @"\" : @"\" + tail));
         }
         return null;
     }
