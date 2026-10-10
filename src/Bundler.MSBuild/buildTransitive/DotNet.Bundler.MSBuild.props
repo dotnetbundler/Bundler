@@ -85,7 +85,7 @@
     <BundlerMacAppAppleTeamId Condition="'$(BundlerMacAppAppleTeamId)' == ''"></BundlerMacAppAppleTeamId>
     <BundlerMacAppNotaryApiKeyFile Condition="'$(BundlerMacAppNotaryApiKeyFile)' == ''"></BundlerMacAppNotaryApiKeyFile>
     <BundlerMacAppNotaryApiKeyId Condition="'$(BundlerMacAppNotaryApiKeyId)' == ''"></BundlerMacAppNotaryApiKeyId>
-    <BundlerMacAppNotaryApiIssuer Condition="'$(BundlerMacAppNotaryApiIssuer)' == ''"></BundlerMacAppNotaryApiIssuer>
+    <BundlerMacAppNotaryApiKeyIssuer Condition="'$(BundlerMacAppNotaryApiKeyIssuer)' == ''"></BundlerMacAppNotaryApiKeyIssuer>
     <BundlerMacDmgCompression Condition="'$(BundlerMacDmgCompression)' == ''">Ulmo</BundlerMacDmgCompression>
     <BundlerMacDmgVolumeName Condition="'$(BundlerMacDmgVolumeName)' == ''"></BundlerMacDmgVolumeName>
     <BundlerMacDmgLayoutSkip Condition="'$(BundlerMacDmgLayoutSkip)' == ''">false</BundlerMacDmgLayoutSkip>
@@ -123,7 +123,7 @@
     <BundlerMacPkgAppleTeamId Condition="'$(BundlerMacPkgAppleTeamId)' == ''"></BundlerMacPkgAppleTeamId>
     <BundlerMacPkgNotaryApiKeyFile Condition="'$(BundlerMacPkgNotaryApiKeyFile)' == ''"></BundlerMacPkgNotaryApiKeyFile>
     <BundlerMacPkgNotaryApiKeyId Condition="'$(BundlerMacPkgNotaryApiKeyId)' == ''"></BundlerMacPkgNotaryApiKeyId>
-    <BundlerMacPkgNotaryApiIssuer Condition="'$(BundlerMacPkgNotaryApiIssuer)' == ''"></BundlerMacPkgNotaryApiIssuer>
+    <BundlerMacPkgNotaryApiKeyIssuer Condition="'$(BundlerMacPkgNotaryApiKeyIssuer)' == ''"></BundlerMacPkgNotaryApiKeyIssuer>
     <BundlerDebPackageName Condition="'$(BundlerDebPackageName)' == ''"></BundlerDebPackageName>
     <BundlerDebVersion Condition="'$(BundlerDebVersion)' == ''"></BundlerDebVersion>
     <BundlerDebRelease Condition="'$(BundlerDebRelease)' == ''"></BundlerDebRelease>

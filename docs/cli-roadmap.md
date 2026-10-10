@@ -55,7 +55,7 @@ alpha.88 之后各后端配置字段统一为同一套命名契约：JSON 键（
 | msi | `msiVersion`→`version`、`bannerBitmap`→`bannerFile`、`dialogBitmap`→`dialogFile`、`expertTemplate`→`expertTemplateFile`、`extensionFragments`→`extensionFragmentFiles`、`expertMergeModules`→`expertMergeModuleFiles` |
 | nsis | `installMode`→`installScope`、`installerIcon`→`installerIconFile`、`uninstallerIcon`→`uninstallerIconFile`、`headerImage`→`headerFile`、`sidebarImage`→`sidebarFile`、`uninstallerHeaderImage`→`uninstallerHeaderFile`、`installerHooks`→`installerHooksFile` |
 
-MSBuild 属性同步：`Bundler<Format><Old>` 全部按上表改名（mac 公证 API key 三元组统一 `Bundler<App|Pkg>NotaryApiKeyFile`/`NotaryApiKeyId`/`NotaryApiKeyIssuer`，config 侧对应 `ApiKeyFile`/`ApiKeyId`/`ApiKeyIssuer`）；`shortcuts.icon` 为载荷相对路径不入宿主路径解析（PathKnobs 不收）。（如 `BundlerDebRevision`→`BundlerDebRelease`、`BundlerMacDmgWindowX`→`BundlerMacDmgLayoutWindowX`、`BundlerMacPkgIdentifier`→`BundlerMacPkgPackageName`）；`BundlerDebCompression`/`BundlerRpmCompression` 删除；`BundlerMacFramework` 项组改名 `BundlerMacAppFrameworkDirectory`；`BundlerMacAppFile`/`BundlerMacPkgFile`/`BundlerResource` 等项的元数据 `TargetPath`→`Destination`。
+MSBuild 属性同步：`Bundler<Format><Old>` 全部按上表改名（如 `BundlerDebRevision`→`BundlerDebRelease`、`BundlerMacDmgWindowX`→`BundlerMacDmgLayoutWindowX`、`BundlerMacPkgIdentifier`→`BundlerMacPkgPackageName`）；mac 公证 API key 三元组统一 `Bundler<App|Pkg>NotaryApiKeyFile`/`NotaryApiKeyId`/`NotaryApiKeyIssuer`（config 侧对应 `ApiKeyFile`/`ApiKeyId`/`ApiKeyIssuer`）；`shortcuts.icon` 为载荷相对路径不入宿主路径解析（PathKnobs 不收）；`BundlerDebCompression`/`BundlerRpmCompression` 删除；`BundlerMacFramework` 项组改名 `BundlerMacAppFrameworkDirectory`；`BundlerMacAppFile`/`BundlerMacPkgFile`/`BundlerResource` 等项的元数据 `TargetPath`→`Destination`。
 
 ## 3. 阶段表
 

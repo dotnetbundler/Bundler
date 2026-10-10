@@ -33,7 +33,7 @@
     <BundlerMacPkgAppleTeamId Condition="'$(HelloBundlerPkgAppleTeamId)' != ''">$(HelloBundlerPkgAppleTeamId)</BundlerMacPkgAppleTeamId>
     <BundlerMacPkgNotaryApiKeyFile Condition="'$(HelloBundlerPkgNotaryApiKeyFile)' != ''">$(HelloBundlerPkgNotaryApiKeyFile)</BundlerMacPkgNotaryApiKeyFile>
     <BundlerMacPkgNotaryApiKeyId Condition="'$(HelloBundlerPkgNotaryApiKeyId)' != ''">$(HelloBundlerPkgNotaryApiKeyId)</BundlerMacPkgNotaryApiKeyId>
-    <BundlerMacPkgNotaryApiIssuer Condition="'$(HelloBundlerPkgNotaryApiKeyIssuer)' != ''">$(HelloBundlerPkgNotaryApiKeyIssuer)</BundlerMacPkgNotaryApiIssuer>
+    <BundlerMacPkgNotaryApiKeyIssuer Condition="'$(HelloBundlerPkgNotaryApiKeyIssuer)' != ''">$(HelloBundlerPkgNotaryApiKeyIssuer)</BundlerMacPkgNotaryApiKeyIssuer>
   </PropertyGroup>
 
   <ItemGroup>
