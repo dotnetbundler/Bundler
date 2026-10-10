@@ -15,7 +15,7 @@ public static class ProgramTests
     [Fact]
     static void ParsesSupportedDesktopTargets()
     {
-        string[] targets = ["windows-i686", "windows-x86_64", "windows-arm64", "macos-universal", "macos-x86_64", "macos-arm64", "linux-x86_64", "linux-aarch64", "linux-musl-x86_64", "linux-musl-aarch64"];
+        string[] targets = ["windows-i686", "windows-x86_64", "windows-aarch64", "macos-universal", "macos-x86_64", "macos-arm64", "linux-x86_64", "linux-aarch64", "linux-musl-x86_64", "linux-musl-aarch64"];
         Assert.True(targets.All(target => BundleTarget.TryParse(target, out _)), "One or more supported targets failed to parse.");
         Assert.True(BundleTarget.TryParse("windows-i686", out var x86) && x86!.Architecture == CpuArchitecture.X86,
             "Windows x86 must be a distinct public target architecture.");

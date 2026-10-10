@@ -191,7 +191,7 @@ public static class BundleConfigurationValidator
         Required(targetConfiguration.InputDirectory, $"{path}.inputDirectory", issues);
         if (!BundleTarget.TryParse(targetConfiguration.Target, out var target))
         {
-            issues.Add(new($"{path}.target", "Supported targets: windows-i686, windows-x86_64, windows-arm64, macos-universal, macos-x86_64, macos-arm64, linux-x86_64, linux-aarch64, linux-musl-x86_64, linux-musl-aarch64."));
+            issues.Add(new($"{path}.target", "Supported targets: {os}-{arch} where os is windows|macos|linux|linux-musl and arch is x86_64|i686|aarch64|armv7hf|armv7sf|riscv64|loongarch64|ppc64le|s390x, plus macos-universal."));
             return;
         }
 

@@ -22,8 +22,8 @@
     <!-- 默认产物集：按目标 RID 定可用格式，再按宿主裁剪需本机工具链的格式
          （msi 仅 Windows 宿主、dmg/pkg 仅 macOS 宿主、appimage 仅 Linux 宿主；
          nsis/deb/rpm/zip/targz/alpineapk 为托管实现，任意宿主可构建）。 -->
-    <_HelloBundlerFormatsDefault Condition="'$(BundlerTarget)' == 'windows-x86_64' or '$(BundlerTarget)' == 'windows-arm64'">nsis;zip;targz</_HelloBundlerFormatsDefault>
-    <_HelloBundlerFormatsDefault Condition="('$(BundlerTarget)' == 'windows-x86_64' or '$(BundlerTarget)' == 'windows-arm64') and '$(OS)' == 'Windows_NT'">nsis;msi;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="'$(BundlerTarget)' == 'windows-x86_64' or '$(BundlerTarget)' == 'windows-aarch64'">nsis;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="('$(BundlerTarget)' == 'windows-x86_64' or '$(BundlerTarget)' == 'windows-aarch64') and '$(OS)' == 'Windows_NT'">nsis;msi;zip;targz</_HelloBundlerFormatsDefault>
     <_HelloBundlerFormatsDefault Condition="'$(BundlerTarget)' == 'macos-x86_64' or '$(BundlerTarget)' == 'macos-arm64' or '$(BundlerTarget)' == 'macos-universal' or '$(BundlerUniversalTargets)' != ''">app;zip;targz</_HelloBundlerFormatsDefault>
     <!-- mac 宿主默认不含独立 app：BundlerLicenseFile 是全局旋钮，独立 .app 后端按契约硬拒许可文件，
          同轮 publish 的 dmg/pkg 又需要它做 SLA/许可页——dmg 内层本来就会产出 .app（BundlerMacApp* 旋钮全部生效），
@@ -79,7 +79,7 @@
     <!-- 公共载荷项：图标按 RID 条件化——linux 后端只接受 PNG（hicolor），
          windows 用 .ico；mac 图标见 formats/MacApp.props（png/car/icon 三模式）。 -->
     <BundlerIcon Include="$(HelloBundlerAppAssets)msi\app.ico"
-        Condition="'$(BundlerTarget)' == 'windows-x86_64' or '$(BundlerTarget)' == 'windows-arm64'" />
+        Condition="'$(BundlerTarget)' == 'windows-x86_64' or '$(BundlerTarget)' == 'windows-aarch64'" />
     <BundlerIcon Include="$(HelloBundlerAppAssets)deb\icon48.png"
         Condition="$([System.String]::Copy('$(BundlerTarget)').StartsWith('linux-'))" />
     <BundlerIcon Include="$(HelloBundlerAppAssets)deb\icon@2x.png"

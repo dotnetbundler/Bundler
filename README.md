@@ -117,7 +117,7 @@ dotnet msbuild -t:BundlerBundle -p:BundlerTarget=linux-x86_64 -p:BundlerPublishR
 自动打包发生在 `Publish` 之后，普通的 `Build` 不会生成安装包。
 `BundlerEnabled` 只控 Publish 钩子路；显式 `-t:BundlerBundle` 不需要它（除 `BundlerIdentifier` 仍必填外无开关依赖）。
 两入口同样支持 `BundlerUniversalTargets`（macOS universal 内层双 RID 发布+合并）。
-canonical RID 映射表：`windows-x86_64→win-x64`、`windows-i686→win-x86`、`windows-arm64→win-arm64`、`macos-x86_64→osx-x64`、`macos-arm64→osx-arm64`、`linux-x86_64→linux-x64`、`linux-i686→linux-x86`、`linux-aarch64→linux-arm64`、`linux-musl-x86_64→linux-musl-x64`、`linux-musl-aarch64→linux-musl-arm64`；`macos-universal` 无单一 RID 映射，走 `BundlerUniversalTargets`。
+canonical RID 映射表：`windows-x86_64→win-x64`、`windows-i686→win-x86`、`windows-aarch64→win-arm64`、`macos-x86_64→osx-x64`、`macos-arm64→osx-arm64`、`linux-x86_64→linux-x64`、`linux-i686→linux-x86`、`linux-aarch64→linux-arm64`、`linux-musl-x86_64→linux-musl-x64`、`linux-musl-aarch64→linux-musl-arm64`；`macos-universal` 无单一 RID 映射，走 `BundlerUniversalTargets`。
 
 ## 独立 NSIS API
 
@@ -154,7 +154,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 
 `NsisBundleConfiguration` 控制 NSIS 专属行为，包括安装范围、压缩、Artwork、语言、Hook、降级和快捷方式。
 `Compression` 支持 `Lzma`（默认）、`Zlib`、`Bzip2` 和 `None`。
-`windows-i686`、`windows-x86_64`、`windows-arm64` 目标均可产出 NSIS 安装器；x86 载荷需在装有 32 位 .NET 运行时的宿主上运行（仅 x64 运行时的宿主启动报 `0x800700C1`），属目标环境前置而非打包限制。
+`windows-i686`、`windows-x86_64`、`windows-aarch64` 目标均可产出 NSIS 安装器；x86 载荷需在装有 32 位 .NET 运行时的宿主上运行（仅 x64 运行时的宿主启动报 `0x800700C1`），属目标环境前置而非打包限制。
 高级调用和测试场景可以通过 `NsisBundlerOptions` 覆盖共享缓存、编译器、工具集压缩包、NSIS 数据目录、模板或语言目录；普通调用者不需要提供这些路径。
 提供自定义编译器时，如果编译器需要显式的 `NSISDIR`，还应设置 `DataDirectory`。
 
@@ -204,7 +204,7 @@ var artifacts = await new WixBundler(new WixBundleConfiguration
 `WixBundleConfiguration` 配置 MSI 安装范围、`Languages`（culture 列表，每语言一个独立 MSI）、`LocaleFiles`（culture→`.wxl` 覆盖文件）、`FipsCompliant`、代码页、快捷方式、`MsiVersion`、`AllowDowngrades`、`InstallDirectorySelection`、`BannerBitmap`、`DialogBitmap`、`AddToPath`、`UninstallShortcut` 和 `LaunchAfterInstall`。
 范围内安装目录限定 current-user 在 `%LOCALAPPDATA%` 子目录、per-machine 在 Program Files 子目录，静默 `INSTALLFOLDER=` 走同一校验；
 启动勾选只在交互安装勾选时以用户会话执行，静默/被动/修复/升级不触发。
-`windows-i686`、`windows-x86_64`、`windows-arm64` 是独立产品线；x86 可在当前 x64 Windows 构建并安装。
+`windows-i686`、`windows-x86_64`、`windows-aarch64` 是独立产品线；x86 可在当前 x64 Windows 构建并安装。
 默认用三段稳定应用版本作 MSI 版本；预发布应用须显式提供有效的三段 `MsiVersion`，第四段与越界版本被拒绝。
 不同应用版本不得复用同一 MSI 版本，已安装的同版异包会被拒绝。
 降级默认禁止，只有调用方显式设置 `AllowDowngrades=true` 才允许。

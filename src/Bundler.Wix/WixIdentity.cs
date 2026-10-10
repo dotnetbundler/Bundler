@@ -29,7 +29,12 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
             throw new ArgumentOutOfRangeException(nameof(scope));
         }
         language ??= WixLanguageInfo.Resolve("en-US");
-        if (target != "windows-i686" && target != "windows-x86_64" && target != "windows-arm64")
+        // 按 canonical 模型判：alias 输入（windows-arm64）与 canonical（windows-aarch64）同过，
+        // 非 Windows 目标与 MSI 无词的 arch（armv7* 等）一样拒。
+        if (!BundleTarget.TryParse(target, out var parsedTarget) ||
+            parsedTarget is null ||
+            parsedTarget.OperatingSystem != TargetOperatingSystem.Windows ||
+            parsedTarget.Architecture is not (CpuArchitecture.X86 or CpuArchitecture.X64 or CpuArchitecture.Arm64))
         {
             throw new NotSupportedException($"MSI target '{target}' is not supported.");
         }
@@ -47,7 +52,8 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         }
 
         var normalizedIdentifier = identifier.ToLowerInvariant();
-        var family = $"{normalizedIdentifier}|{scope}|{target}" + language.FamilyToken;
+        // family 用 canonical 词——alias 与 canonical 拼写必须产出同一个 UpgradeCode 族。
+        var family = $"{normalizedIdentifier}|{scope}|{parsedTarget.Target}" + language.FamilyToken;
         Guid familyCode;
         if (upgradeCode is null)
         {

@@ -237,7 +237,7 @@ dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-
 **部分已验证**（2026-10 release-verify `windows-11-arm` 腿：`arm64-matrix.ps1` NSIS/MSI 装+覆盖装+修复+卸跑绿）。
 **需要**：原生 Windows x64 和 Windows ARM64 机器/虚拟机。
 
-1. 分别生成 `windows-x86_64` 和 `windows-arm64` 应用及 NSIS 安装器。
+1. 分别生成 `windows-x86_64` 和 `windows-aarch64` 应用及 NSIS 安装器。
 2. 在匹配架构的干净 Windows 上执行安装、启动、升级、卸载。
 3. 检查主程序架构、安装路径、64 位注册表视图、快捷方式和文件关联。
 4. ARM64 项必须记录硬件/虚拟化架构；只在 x64 Windows 上看到文件生成不算 ARM64 运行验收。

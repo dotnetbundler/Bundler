@@ -33,7 +33,7 @@ internal static class TestPlatform
     {
         "windows-x86_64" => "win-x64",
         "windows-i686" => "win-x86",
-        "windows-arm64" => "win-arm64",
+        "windows-aarch64" => "win-arm64",
         "macos-x86_64" => "osx-x64",
         "macos-arm64" => "osx-arm64",
         "linux-x86_64" => "linux-x64",

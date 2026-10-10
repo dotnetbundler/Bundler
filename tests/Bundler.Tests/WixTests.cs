@@ -16,7 +16,7 @@ public static class WixTests
         var first = WixIdentity.Create("com.Example.App", "1.2.3", "windows-x86_64", WixInstallScope.CurrentUser);
         var repeated = WixIdentity.Create("com.example.app", "1.2.3", "windows-x86_64", WixInstallScope.CurrentUser);
         var next = WixIdentity.Create("com.example.app", "1.2.4", "windows-x86_64", WixInstallScope.CurrentUser);
-        var arm = WixIdentity.Create("com.example.app", "1.2.3", "windows-arm64", WixInstallScope.CurrentUser);
+        var arm = WixIdentity.Create("com.example.app", "1.2.3", "windows-aarch64", WixInstallScope.CurrentUser);
         var x86 = WixIdentity.Create("com.example.app", "1.2.3", "windows-i686", WixInstallScope.CurrentUser);
         Assert.True(first.UpgradeCode == repeated.UpgradeCode && first.ProductCode == repeated.ProductCode,
             "MSI identity must be stable across builds and identifier casing.");
@@ -71,14 +71,14 @@ public static class WixTests
             WixInstallScope.PerMachine, "app.exe");
         var x86 = WixIdentity.ComponentCode("com.example.app", "windows-i686",
             WixInstallScope.PerMachine, "app.exe");
-        var arm = WixIdentity.ComponentCode("com.example.app", "windows-arm64",
+        var arm = WixIdentity.ComponentCode("com.example.app", "windows-aarch64",
             WixInstallScope.PerMachine, "app.exe");
         Assert.Equal(x64, x64Again);
         Assert.True(x64 != x86 && x64 != arm && x86 != arm,
             "Component GUIDs must diverge per architecture token.");
         Assert.Equal(Guid.Parse("3ee79d14-2037-573b-b314-6167cb6d60ed"), x64);
         Assert.Equal(Guid.Parse("6e8439a3-609a-5fff-9135-77a52c375b4f"), x86);
-        Assert.Equal(Guid.Parse("b8c560d8-aa7a-58c3-a215-8f2b5fb9d7b4"), arm);
+        Assert.Equal(Guid.Parse("e3eb3b5c-ff03-55ae-8437-41d456328d6e"), arm);
         Assert.ThrowsAny<ArgumentException>(() => WixIdentity.ComponentCode(
             "com.example.app", "windows-riscv64", WixInstallScope.PerMachine, "app.exe"));
     }
@@ -548,7 +548,7 @@ public static class WixTests
                 OutputDirectory = Path.Combine(root, "output"),
                 Targets = [new BundleTargetConfiguration
                 {
-                    Target = "windows-arm64", InputDirectory = input,
+                    Target = "windows-aarch64", InputDirectory = input,
                     MainExecutable = "test.exe", Formats = [PackageFormat.Msi]
                 }]
             };
@@ -625,7 +625,7 @@ public static class WixTests
             new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(request)).Single();
         using var database = new MsiDatabaseReader(artifact.Path);
         Assert.True(database.Property("ProductVersion") == "1.9.7" &&
-               Path.GetFileName(artifact.Path).Contains("-1.9.7.msi", StringComparison.Ordinal),
+               Path.GetFileName(artifact.Path).Contains("-1.9.7-x64.msi", StringComparison.Ordinal),
             "Explicit MSI version did not reach the compiled product and output name.");
         Assert.Equal(WixIdentity.Create(request.Identifier, request.Version, "windows-x86_64", WixInstallScope.CurrentUser, packageVersion: "1.9.7").ProductCode.ToString("B").ToUpperInvariant(), database.Property("ProductCode"));
         Assert.True(database.Values("Upgrade", "Attributes").Count > 0,
