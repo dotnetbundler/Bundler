@@ -235,7 +235,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerInputDir` | 否 | 无；`-t:BundlerBundle` 下非空即“只打包不发布”——拿已有发布目录直接打，跳过内层 publish |
 | `BundlerPublishRid` | 否 | 按 `BundlerTarget`→canonical publish RID 表默认；表外 RID 显式覆盖内层发布 |
 | `BundlerFormats` | 否 | `nsis`；分号分隔多值扇出，可用 `nsis`/`msi`/`app`/`dmg`/`pkg`/`deb`/`rpm`/`appimage`/`zip`/`targz`/`alpineapk`（CLI 另收 `all` 全量别名） |
-| `BundlerUniversalTargets` | 否 | 无；macOS universal 用——复数 .NET RID（如 `osx-x64;osx-arm64`）对每个 RID 内层 `dotnet publish` 后托管合并成 universal 目录再按 `macos-universal` 打包 |
+| `BundlerUniversalTargets` | 否 | 无；macOS universal 用——复数 .NET RID（如 `osx-x64;osx-arm64`，命令行 `-p:` 须写 `%3B`）对每个 RID 内层 `dotnet publish` 后托管合并成 universal 目录再按 `macos-universal` 打包 |
 | `BundlerProductName` | 否 | `$(AssemblyName)` |
 | `BundlerVersion` | 否 | `$(Version)` |
 | `BundlerMainExecutable` | 否 | `$(TargetName).exe` |

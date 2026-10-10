@@ -12,7 +12,9 @@
   <!-- bundler target ↔ canonical publish RID 双向映射表：
        BundlerBundle 自动发布按 BundlerTarget→Rid 查 canonical RID；
        BundlerTarget 缺省时按 Rid→target 从 $(RuntimeIdentifier) 便捷推导（显式 BundlerTarget 恒覆盖）。
-       macos-universal 无单一 canonical RID——走 BundlerUniversalTargets 双 RID 内层发布+合并路。 -->
+       macos-universal 无单一 canonical RID——走 BundlerUniversalTargets 双 RID 内层发布+合并路。
+       边界：映射只解决“该用哪个 RID 发布载荷”，可发布≠可打包——target 对某格式是否受
+       支持仍由 Core 的格式×平台矩阵裁决（如 linux-i686 可发布但只有部分格式支持）。 -->
   <ItemGroup>
     <_BundlerRidMap Include="windows-x86_64"><Rid>win-x64</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="windows-i686"><Rid>win-x86</Rid></_BundlerRidMap>
@@ -92,7 +94,9 @@
       <_BundlerEffectiveTarget>macos-universal</_BundlerEffectiveTarget>
     </PropertyGroup>
     <ItemGroup>
-      <_BundlerUniversalRid Include="$(BundlerUniversalTargets)" />
+      <!-- 命令行只能传 %3B 形式：-p: 的 ; 和 , 都是 CLI 级分隔符（直接炸 MSB1006），
+           %3B 在属性里保留字面量——[MSBuild]::Unescape 解码后建项；csproj 里的真 ; 不受影响。 -->
+      <_BundlerUniversalRid Include="$([MSBuild]::Unescape('$(BundlerUniversalTargets)'))" />
       <!-- Flag any RID that is not an osx-* identifier or carries path/shell content; identities are
            interpolated into the inner publish -o path and the shell command line. -->
       <_BundlerUniversalRidBad Include="@(_BundlerUniversalRid)"

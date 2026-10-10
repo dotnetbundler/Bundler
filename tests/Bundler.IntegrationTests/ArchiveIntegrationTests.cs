@@ -26,6 +26,7 @@ public sealed class ArchiveFixture : IDisposable
     public string PackOnlyZip { get; private set; } = null!;
     public string AutoPublishZip { get; private set; } = null!;
     public string DeriveZip { get; private set; } = null!;
+    public string UniversalZip { get; private set; } = null!;
 
     private readonly Lazy<bool> _init;
 
@@ -100,6 +101,19 @@ public sealed class ArchiveFixture : IDisposable
              "-p:BundlerTestFormats=zip", $"-p:BundlerIntegrationOutput={Ws.Combine("derive")}"],
             "derive publish failed", noRestore: false);
         DeriveZip = SingleFile(Ws.Combine("derive"), "*.zip");
+
+        // universal 回归腿：双 RID 内层 Restore;Publish 连跑 + 参考发布 + 合并。回归点是 assets
+        // 逐 RID 重写不互相踩（NETSDK1047）——osx-x64 腿发布成功后 osx-arm64 的 Restore 重写
+        // assets，osx-x64 的 Publish 已在本腿消费完毕不受影响。fixture 有 SelfContained=true，
+        // universal 要求 framework-dependent——-p:SelfContained=false 全局覆盖。
+        Dotnet.Publish(FixtureProject, "Release",
+            ["--packages", CacheDir,
+             "-p:BundlerUniversalTargets=osx-x64%3Bosx-arm64",
+             "-p:SelfContained=false",
+             "-p:BundlerTestFormats=zip",
+             $"-p:BundlerIntegrationOutput={Ws.Combine("universal")}"],
+            "universal publish failed", noRestore: false);
+        UniversalZip = SingleFile(Ws.Combine("universal"), "*.zip");
     }
 
     public void Publish(string name, params string[] extraProperties)
@@ -142,6 +156,22 @@ public sealed class ArchiveIntegrationTests : IClassFixture<ArchiveFixture>
     [Fact]
     public void PublishHook_DerivesBundlerTargetFromRuntimeIdentifier()
         => Assert.Equal($"{ArchiveFixture.Stem}.zip", Path.GetFileName(_f.DeriveZip));
+
+    [Fact]
+    public void UniversalPublishMergesBothArchPayloads()
+    {
+        Assert.Equal("bundler-archive-fixture-1.0.0-macos-universal.zip",
+            Path.GetFileName(_f.UniversalZip));
+        // 两 RID 载荷都走到合并：apphost 是双切片胖 Mach-O（cafebabe + nfat_arch=2）。
+        using var zip = System.IO.Compression.ZipFile.OpenRead(_f.UniversalZip);
+        var entry = zip.Entries.Single(e => e.FullName.EndsWith("/" + ArchiveFixture.Exe, StringComparison.Ordinal));
+        var header = new byte[8];
+        using (var stream = entry.Open())
+        {
+            Assert.Equal(header.Length, stream.Read(header, 0, header.Length));
+        }
+        Assert.Equal(new byte[] { 0xCA, 0xFE, 0xBA, 0xBE, 0x00, 0x00, 0x00, 0x02 }, header);
+    }
 
     [Fact]
     public void RepositoryPackagesCarryArchiveBackend()

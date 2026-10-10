@@ -43,9 +43,11 @@ appimage 仅 Linux 宿主；nsis/deb/rpm/zip/targz/alpineapk 为纯托管实现�
 - **MSI 许可只收 RTF**：formats 集含 `msi` 时 `formats/Msi.props` 自动把全局许可切到 `Assets/msi/license.rtf`
   （nsis/dmg/pkg 同样接受 RTF；archive 不内嵌许可，deb/rpm 以文件载荷携带扩展名无影响）。
   `HelloBundlerMsiLicenseFile` 传透可整体接管；`app` 共存时许可仍缺席（独立 app 无许可载荷契约优先）。
-- **universal 合并要求非 Mach-O 载荷逐字节一致**：`-r osx -p:BundlerUniversalTargets=osx-x64;osx-arm64`
-  做双 RID 内层 publish + 托管合并；framework-dependent 应用的 `*.deps.json` 逐 publish-RID 不同会按契约拒绝合并
-  （`Universal merge conflict ... is not a Mach-O file`），非样本缺陷，需自包含/同构载荷场景适用。
+- **universal 只支持 framework-dependent 发布**：`-p:BundlerUniversalTargets=osx-x64%3Bosx-arm64`
+  做双 RID 内层 publish + 无 RID 参考发布 + 托管合并；非 Mach-O 文件以参考发布为权威源，
+  Mach-O 胖合并。`SelfContained`/`PublishAot`/`PublishSingleFile` 同设会提前报错，
+  universal 无法表达逐架构运行时差异。
+  （`-p:` 的 `;` 是 CLI 属性分隔符，RID 列表在命令行必须写成 `%3B`；csproj 里写 `;` 即可。）
 
 ## 运行
 

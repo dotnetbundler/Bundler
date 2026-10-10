@@ -8,10 +8,9 @@ using Microsoft.Build.Utilities;
 namespace DotNet.Bundler.MSBuild;
 
 /// <summary>
-/// Merges per-architecture publish directories into one universal payload directory for the
-/// `osx` bundle target: Mach-O files are fat-merged in managed code; non-Mach-O files come
-/// from the RID-less reference publish when <see cref="ReferenceDirectory"/> is set, else
-/// must be byte-identical between inputs; differing files without a reference copy fail.
+/// 把逐架构 publish 目录合并成 `osx` 目标的 universal 载荷目录：Mach-O 由托管代码胖合并；
+/// 非 Mach-O 文件在给了 <see cref="ReferenceDirectory"/>（无 RID 参考发布）时以参考件为准，
+/// 否则要求逐字节一致；既不一致又无参考的文件报错。
 /// </summary>
 public sealed class MergeUniversalPayload : Microsoft.Build.Utilities.Task
 {
