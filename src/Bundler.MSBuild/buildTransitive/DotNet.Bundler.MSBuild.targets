@@ -57,6 +57,7 @@
     </ItemGroup>
     <PropertyGroup>
       <BundlerTarget Condition="'$(BundlerTarget)' == ''">@(_BundlerTargetFromRid)</BundlerTarget>
+      <BundlerFormats Condition="'$(BundlerFormats)' == ''">nsis</BundlerFormats>
       <_BundlerPublishOutDir>$(IntermediateOutputPath)BundlerPublish\$(BundlerTarget)\</_BundlerPublishOutDir>
     </PropertyGroup>
     <Error Condition="'$(BundlerIdentifier)' == ''"
@@ -88,7 +89,15 @@
            Text="BundlerUniversalTargets only accepts plain osx-* runtime identifiers (got '@(_BundlerUniversalRidBad)')." />
     <!-- Clean stale per-RID and merged outputs: publish -o does not remove files deleted since a previous run. -->
     <RemoveDir Directories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)');$(_BundlerUniversalDir)merged" />
-    <Exec Command="dotnet publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) -f $(TargetFramework) -r %(_BundlerUniversalRid.Identity) -o &quot;$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity)&quot; -p:BundlerEnabled=false" />
+    <!-- MSBuild 子构建内层发布：子构建自动继承调用方全部全局属性（PublishSingleFile/SelfContained/
+         PublishAot 等发布选项不丢），Properties 只覆盖 RID/输出目录/BundlerEnabled 防钩子递归；
+         子构建无 CLI 隐式 restore——先跑 Restore 腿下载该 RID 运行时包。
+         TargetFramework 不入 Properties：子构建评的是同一个工程自己解 TFM；全局传入会沿
+         ProjectReference 恢复链污染异 TFM 引用（如 netstandard2.0 任务工程的 assets）。 -->
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Restore"
+             Properties="RuntimeIdentifier=%(_BundlerUniversalRid.Identity)" />
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Publish"
+             Properties="RuntimeIdentifier=%(_BundlerUniversalRid.Identity);PublishDir=$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity);BundlerEnabled=false" />
     <DotNet.Bundler.MSBuild.MergeUniversalPayload
       SourceDirectories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)')"
       OutputDirectory="$(_BundlerUniversalDir)merged">
@@ -105,14 +114,17 @@
     </ItemGroup>
     <PropertyGroup>
       <BundlerPublishRid Condition="'$(BundlerPublishRid)' == ''">@(_BundlerPublishRidFromMap)</BundlerPublishRid>
-      <_BundlerPublishTfmArg Condition="'$(TargetFramework)' != ''">-f $(TargetFramework)</_BundlerPublishTfmArg>
       <_BundlerEffectiveInput>$(_BundlerPublishOutDir)</_BundlerEffectiveInput>
     </PropertyGroup>
     <Error Condition="'$(BundlerPublishRid)' == ''"
            Text="BundlerTarget '$(BundlerTarget)' has no canonical publish RID mapping — pass -p:BundlerPublishRid=&lt;rid&gt; or -p:BundlerInputDir=&lt;dir&gt;." />
     <!-- publish -o 不清理上次构建已删的文件——先清中间发布目录防滞留 -->
     <RemoveDir Directories="$(_BundlerPublishOutDir)" />
-    <Exec Command="dotnet publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) $(_BundlerPublishTfmArg) -r $(BundlerPublishRid) -o &quot;$(_BundlerPublishOutDir)&quot; -p:BundlerEnabled=false" />
+    <!-- 子构建无 CLI 隐式 restore——先跑 Restore 腿下载该 RID 运行时包（TFM 不传，见 universal 段注释） -->
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Restore"
+             Properties="RuntimeIdentifier=$(BundlerPublishRid)" />
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Publish"
+             Properties="RuntimeIdentifier=$(BundlerPublishRid);PublishDir=$(_BundlerPublishOutDir);BundlerEnabled=false" />
   </Target>
 
   <!-- 共享打包体：effective 输入/目标归一 → 默认值推导 → 任务调用 -->

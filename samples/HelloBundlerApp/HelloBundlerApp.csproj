@@ -5,6 +5,10 @@
     默认产物集由 $(BundlerTarget)×宿主 OS 决定（见 _HelloBundlerFormatsDefault）；
     可用 -p:BundlerFormats=... 覆盖，命令见 hello-bundler-app-sample.md。
   -->
+  <!-- bundler 引用先于本文件属性组导入：eval 期 $(RuntimeIdentifier)→BundlerTarget 推导要让
+       下方 _HelloBundlerFormatsDefault 等按 $(BundlerTarget) 选型的逻辑拿到推导结果。 -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -70,7 +74,6 @@
   <Import Project="formats\Archive.props" />
   <Import Project="formats\AlpineApk.props" />
   <Import Project="formats\Update.props" />
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
 
   <ItemGroup>
     <!-- 公共载荷项：图标按 RID 条件化——linux 后端只接受 PNG（hicolor），
