@@ -9,13 +9,15 @@ namespace DotNet.Bundler.MSBuild;
 
 /// <summary>
 /// Merges per-architecture publish directories into one universal payload directory for the
-/// `osx` bundle target: Mach-O files are fat-merged in managed code, byte-identical files are
-/// copied once, differing non-Mach-O files fail the build.
+/// `osx` bundle target: Mach-O files are fat-merged in managed code; non-Mach-O files come
+/// from the RID-less reference publish when <see cref="ReferenceDirectory"/> is set, else
+/// must be byte-identical between inputs; differing files without a reference copy fail.
 /// </summary>
 public sealed class MergeUniversalPayload : Microsoft.Build.Utilities.Task
 {
     [Required] public ITaskItem[] SourceDirectories { get; set; } = Array.Empty<ITaskItem>();
     [Required] public string OutputDirectory { get; set; } = "";
+    public string ReferenceDirectory { get; set; } = "";
     [Output] public string MergedDirectory { get; private set; } = "";
 
     public override bool Execute()
@@ -24,7 +26,8 @@ public sealed class MergeUniversalPayload : Microsoft.Build.Utilities.Task
         {
             var sources = SourceDirectories.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray();
             var output = Path.GetFullPath(OutputDirectory);
-            MacUniversalPayloadMerger.Merge(sources, output);
+            var reference = string.IsNullOrEmpty(ReferenceDirectory) ? null : Path.GetFullPath(ReferenceDirectory);
+            MacUniversalPayloadMerger.Merge(sources, output, reference);
             MergedDirectory = output;
             Log.LogMessage(MessageImportance.High,
                 "Merged universal payload: {0} inputs -> {1}", sources.Length, output);

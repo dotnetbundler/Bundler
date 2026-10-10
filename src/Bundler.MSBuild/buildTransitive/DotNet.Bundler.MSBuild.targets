@@ -105,18 +105,26 @@
     <Error Condition="'@(_BundlerUniversalRidBad)' != ''"
            Text="BundlerUniversalTargets only accepts plain osx-* runtime identifiers (got '@(_BundlerUniversalRidBad)')." />
     <!-- Clean stale per-RID and merged outputs: publish -o does not remove files deleted since a previous run. -->
-    <RemoveDir Directories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)');$(_BundlerUniversalDir)merged" />
+    <RemoveDir Directories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)');$(_BundlerUniversalDir)merged;$(_BundlerUniversalDir)reference" />
     <!-- MSBuild 子构建内层发布：子构建自动继承调用方全部全局属性（PublishSingleFile/SelfContained/
          PublishAot 等发布选项不丢），Properties 只覆盖 RID/输出目录/BundlerEnabled 防钩子递归；
-         子构建无 CLI 隐式 restore——先跑 Restore 腿下载该 RID 运行时包。
+         子构建无 CLI 隐式 restore——一次 Restore 传 RuntimeIdentifiers 全列表：逐 RID restore 会重写
+         project.assets.json 只留当前 RID，前腿的目标随即被后腿清掉（NETSDK1047）。
          TargetFramework 不入 Properties：子构建评的是同一个工程自己解 TFM；全局传入会沿
          ProjectReference 恢复链污染异 TFM 引用（如 netstandard2.0 任务工程的 assets）。 -->
     <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Restore"
-             Properties="RuntimeIdentifier=%(_BundlerUniversalRid.Identity)" />
+             Properties="RuntimeIdentifiers=$(BundlerUniversalTargets)" />
     <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Publish"
              Properties="RuntimeIdentifier=%(_BundlerUniversalRid.Identity);PublishDir=$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity);BundlerEnabled=false" />
+    <!-- 无 RID 参考发布：非 Mach-O 文件的权威源。RID 专属构建给托管件打架构印记（PE machine
+         及派生 MVID/时间戳），两 arch 的 test.dll 天然逐字节相异、无法靠比对合并；参考发布
+         以中性构建提供同源 managed 载荷。要求工程可无 RID 发布——SelfContained/AOT 等强绑
+         RID 的配置在此自然报错（universal 也无法表达逐 arch 运行时差异）。 -->
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Restore;Publish"
+             Properties="RuntimeIdentifier=;PublishDir=$(_BundlerUniversalDir)reference;BundlerEnabled=false" />
     <DotNet.Bundler.MSBuild.MergeUniversalPayload
       SourceDirectories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)')"
+      ReferenceDirectory="$(_BundlerUniversalDir)reference"
       OutputDirectory="$(_BundlerUniversalDir)merged">
       <Output TaskParameter="MergedDirectory" PropertyName="_BundlerEffectiveInput" />
     </DotNet.Bundler.MSBuild.MergeUniversalPayload>
