@@ -144,7 +144,7 @@ public static class CliProgram
                     $"Unknown target '{targetText}'. Supported: windows-i686, windows-x86_64, windows-arm64, macos-universal, macos-x86_64, macos-arm64, linux-x86_64, linux-aarch64, linux-musl-x86_64, linux-musl-aarch64.");
             }
             return Enum.GetValues<PackageFormat>()
-                .Where(format => DesktopTargetMatrix.Supports(target, format))
+                .Where(format => TargetMatrix.Supports(target, format))
                 .ToArray();
         }
         return parsed;

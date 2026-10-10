@@ -45,8 +45,7 @@ public sealed class AppImageBundler : IFormatBundler
         Validate(bundle);
         return await new BundlePipeline(
             [
-                new AppImageBundleBackend(_configuration, _options, DesktopOperatingSystem.Linux),
-                new AppImageBundleBackend(_configuration, _options, DesktopOperatingSystem.LinuxMusl)
+                new AppImageBundleBackend(_configuration, _options, TargetOperatingSystem.Linux)
             ],
             _options.Logger).BuildAsync(bundle, cancellationToken);
     }

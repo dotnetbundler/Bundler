@@ -283,7 +283,30 @@ public static class ArchiveTests
             var artifacts = new ArchiveBundler().BuildAsync(
                 Configuration(input, output, "windows-i686", [PackageFormat.Zip]))
                 .GetAwaiter().GetResult();
-            Assert.EndsWith("-windows-i686.zip", artifacts.Single().Path);
+            Assert.EndsWith("-windows-x86.zip", artifacts.Single().Path);
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
+    // 生态词表外的可解析架构回退规范 GNU 词，归档不造新围栏。
+    [Fact]
+    static void ArchiveNamesFallBackToCanonicalArchWordForExoticTargets()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "exotic-out");
+        try
+        {
+            var artifacts = new ArchiveBundler().BuildAsync(
+                Configuration(input, output, "windows-armv7hf", [PackageFormat.Zip]))
+                .GetAwaiter().GetResult();
+            Assert.EndsWith("-windows-armv7hf.zip", artifacts.Single().Path);
+            artifacts = new ArchiveBundler().BuildAsync(
+                Configuration(input, output, "macos-i686", [PackageFormat.Zip]))
+                .GetAwaiter().GetResult();
+            Assert.EndsWith("-macos-i686.zip", artifacts.Single().Path);
         }
         finally
         {

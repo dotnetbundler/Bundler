@@ -8,15 +8,16 @@ namespace DotNet.Bundler.AppImage;
 internal sealed class AppImageBundleBackend(
     AppImageBundleConfiguration settings,
     AppImageBundlerOptions options,
-    DesktopOperatingSystem operatingSystem) : IBundleBackend
+    TargetOperatingSystem operatingSystem) : IBundleBackend
 {
     public PackageFormat Format => PackageFormat.AppImage;
-    public DesktopOperatingSystem OperatingSystem => operatingSystem;
+    public TargetOperatingSystem OperatingSystem => operatingSystem;
+    // glibc 与 musl 目标共用同一后端（runtime 为静态 ELF 两族皆可跑），不挑 libc。
+    public LibC? RequiredLibC => null;
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleBuildContext context, CancellationToken cancellationToken)
     {
-        // glibc 与 musl 目标共用同一后端：runtime 为静态 ELF，两族皆可运行。
         // 宿主门先于 AppDirBuilder：Windows 宿主应在任何 chmod/ln 尝试之前报 PNSE。
         AppImageToolset.RequireLinuxHost();
         var built = AppDirBuilder.Build(

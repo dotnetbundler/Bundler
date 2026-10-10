@@ -584,7 +584,7 @@ public static class AppImageTests
     {
         var ex = Assert.ThrowsAny<ArgumentException>(
             () => AppImageIdentity.EnvironmentArchitecture(
-                new BundleTarget("linux-ppc64le", DesktopOperatingSystem.Linux, CpuArchitecture.Ppc64le)));
+                new BundleTarget("linux-ppc64le", TargetOperatingSystem.Linux, CpuArchitecture.Ppc64le)));
         Assert.Contains("Cannot map target", ex.Message);
     }
 

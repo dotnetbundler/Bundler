@@ -8,7 +8,8 @@ namespace DotNet.Bundler.MacPkg;
 internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : IBundleBackend
 {
     public PackageFormat Format => PackageFormat.Pkg;
-    public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.MacOS;
+    public TargetOperatingSystem OperatingSystem => TargetOperatingSystem.MacOS;
+    public LibC? RequiredLibC => null;
 
     /// <summary>Test seam: overrides the macOS host check.</summary>
     internal static Func<bool>? HostCheck;

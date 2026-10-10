@@ -8,8 +8,9 @@ namespace DotNet.Bundler;
 /// </summary>
 public sealed record BundleTarget(
     string Target,
-    DesktopOperatingSystem OperatingSystem,
-    CpuArchitecture Architecture)
+    TargetOperatingSystem OperatingSystem,
+    CpuArchitecture Architecture,
+    LibC LibC = LibC.Glibc)
 {
     // 输入别名 → canonical arch；canonical 词本身直接命中 switch。
     private static readonly IReadOnlyDictionary<string, CpuArchitecture> ArchAliases =
@@ -82,16 +83,16 @@ public sealed record BundleTarget(
         var osText = text.Substring(0, separator);
         if (archText == "universal" && osText == "macos")
         {
-            return new("macos-universal", DesktopOperatingSystem.MacOS, CpuArchitecture.Universal);
+            return new("macos-universal", TargetOperatingSystem.MacOS, CpuArchitecture.Universal);
         }
 
-        var operatingSystem = osText switch
+        var (operatingSystem, libc) = osText switch
         {
-            "windows" => DesktopOperatingSystem.Windows,
-            "macos" => DesktopOperatingSystem.MacOS,
-            "linux" => DesktopOperatingSystem.Linux,
-            "linux-musl" => DesktopOperatingSystem.LinuxMusl,
-            _ => (DesktopOperatingSystem?)null
+            "windows" => (TargetOperatingSystem.Windows, LibC.Glibc),
+            "macos" => (TargetOperatingSystem.MacOS, LibC.Glibc),
+            "linux" => (TargetOperatingSystem.Linux, LibC.Glibc),
+            "linux-musl" => (TargetOperatingSystem.Linux, LibC.Musl),
+            _ => ((TargetOperatingSystem?)null, LibC.Glibc)
         };
         if (operatingSystem is null ||
             !ArchAliases.TryGetValue(archText, out var architecture) ||
@@ -101,9 +102,9 @@ public sealed record BundleTarget(
         }
 
         var canonical = $"{osText}-{ArchName(architecture)}";
-        return new(canonical, operatingSystem.Value, architecture);
+        return new(canonical, operatingSystem.Value, architecture, libc);
     }
 
     /// <summary>musl 变体标记——用户显式打 musl 目标才挂。</summary>
-    public bool IsMusl => OperatingSystem == DesktopOperatingSystem.LinuxMusl;
+    public bool IsMusl => LibC == LibC.Musl;
 }

@@ -20,14 +20,18 @@ public static class ProgramTests
         Assert.True(BundleTarget.TryParse("windows-i686", out var x86) && x86!.Architecture == CpuArchitecture.X86,
             "Windows x86 must be a distinct public target architecture.");
         Assert.True(BundleTarget.TryParse("macos-universal", out var macosUniversal) &&
-                macosUniversal!.OperatingSystem == DesktopOperatingSystem.MacOS && macosUniversal.Architecture == CpuArchitecture.Universal,
+                macosUniversal!.OperatingSystem == TargetOperatingSystem.MacOS && macosUniversal.Architecture == CpuArchitecture.Universal,
             "The bare macos-universal target must map to a universal macOS target.");
         Assert.True(BundleTarget.TryParse("linux-musl-x86_64", out var musl) &&
-                musl!.OperatingSystem == DesktopOperatingSystem.LinuxMusl && musl.Architecture == CpuArchitecture.X64,
-            "linux-musl-x86_64 must parse as a distinct musl target.");
+                musl!.OperatingSystem == TargetOperatingSystem.Linux && musl.LibC == LibC.Musl &&
+                musl.Architecture == CpuArchitecture.X64 && musl.IsMusl,
+            "linux-musl-x86_64 must parse as Linux+Musl.");
         Assert.True(BundleTarget.TryParse("linux-musl-aarch64", out var muslArm) &&
-                muslArm!.OperatingSystem == DesktopOperatingSystem.LinuxMusl,
-            "linux-musl-aarch64 must parse as a distinct musl target.");
+                muslArm!.OperatingSystem == TargetOperatingSystem.Linux && muslArm.LibC == LibC.Musl,
+            "linux-musl-aarch64 must parse as Linux+Musl.");
+        Assert.True(BundleTarget.TryParse("linux-x86_64", out var glibc) &&
+                glibc!.OperatingSystem == TargetOperatingSystem.Linux && glibc.LibC == LibC.Glibc && !glibc.IsMusl,
+            "linux-x86_64 must parse as Linux+Glibc.");
         Assert.False(BundleTarget.TryParse("android-arm64", out _), "A mobile target was accepted.");
         Assert.False(BundleTarget.TryParse("linux-musl", out _), "A musl target without an architecture was accepted.");
         Assert.False(BundleTarget.TryParse("win", out _), "An OS target without an architecture was accepted.");
@@ -255,7 +259,7 @@ public static class ProgramTests
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 input,
                 "ExampleApp.exe",
@@ -445,7 +449,7 @@ public static class ProgramTests
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 input,
                 "ExampleApp.exe",
@@ -488,7 +492,7 @@ public static class ProgramTests
                     Formats = [PackageFormat.Nsis]
                 });
                 var item = new BundlePlanItem(
-                    new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                    new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                     PackageFormat.Nsis,
                     input,
                     "ExampleApp.exe",
@@ -524,7 +528,7 @@ public static class ProgramTests
             File.WriteAllText(resource, "resource");
             var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 input,
                 "ExampleApp.exe",
@@ -1304,7 +1308,7 @@ public static class ProgramTests
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1384,7 +1388,7 @@ public static class ProgramTests
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1505,7 +1509,7 @@ public static class ProgramTests
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1598,7 +1602,7 @@ public static class ProgramTests
                 ]
             };
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1643,7 +1647,7 @@ public static class ProgramTests
         {
             var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1721,7 +1725,7 @@ public static class ProgramTests
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1810,7 +1814,7 @@ public static class ProgramTests
                 ]
             };
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 input,
                 "ExampleApp.exe",
@@ -1994,6 +1998,70 @@ public static class ProgramTests
     }
 
     [Fact]
+    static async Task ResolvesLibCSpecificBackendVariants()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "publish");
+        var output = Path.Combine(root, "artifacts");
+        Directory.CreateDirectory(input);
+        await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp"), "test");
+        try
+        {
+            var glibcBackend = new RecordingBackend(PackageFormat.Zip, TargetOperatingSystem.Linux, LibC.Glibc, "glibc.zip");
+            var muslBackend = new RecordingBackend(PackageFormat.Zip, TargetOperatingSystem.Linux, LibC.Musl, "musl.zip");
+            var genericZipBackend = new RecordingBackend(PackageFormat.Zip, TargetOperatingSystem.Linux, null, "generic.zip");
+            var anyBackend = new RecordingBackend(PackageFormat.TarGz, TargetOperatingSystem.Linux, null, "any-{0}.tar.gz");
+            var configuration = new BundleConfiguration
+            {
+                ProductName = "ExampleApp",
+                Identifier = "com.example.app",
+                Version = "1.0.0",
+                OutputDirectory = output,
+                Targets =
+                [
+                    new BundleTargetConfiguration
+                    {
+                        Target = "linux-x86_64", InputDirectory = input,
+                        MainExecutable = "ExampleApp", Formats = [PackageFormat.Zip, PackageFormat.TarGz]
+                    },
+                    new BundleTargetConfiguration
+                    {
+                        Target = "linux-musl-x86_64", InputDirectory = input,
+                        MainExecutable = "ExampleApp", Formats = [PackageFormat.Zip, PackageFormat.TarGz]
+                    }
+                ]
+            };
+
+            var artifacts = await new BundlePipeline([genericZipBackend, glibcBackend, muslBackend, anyBackend])
+                .BuildAsync(configuration);
+            Assert.Equal(4, artifacts.Count);
+            Assert.Equal(1, glibcBackend.InvocationCount);
+            Assert.Equal(1, muslBackend.InvocationCount);
+            // 特定 libc 后端优先于通用后端——通用 zip 在两个目标下都不该被命中。
+            Assert.Equal(0, genericZipBackend.InvocationCount);
+            Assert.Equal(2, anyBackend.InvocationCount);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    static void RejectsDuplicateBackendForSameLibC()
+    {
+        var duplicate = Assert.Throws<ArgumentException>(() => new BundlePipeline(
+        [
+            new RecordingBackend(PackageFormat.Zip, TargetOperatingSystem.Linux, LibC.Musl),
+            new RecordingBackend(PackageFormat.Zip, TargetOperatingSystem.Linux, LibC.Musl)
+        ]));
+        Assert.Contains("Duplicate backend", duplicate.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     static void RendersCompleteShortcutConfiguration()
     {
         var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Shortcut.Tests", Guid.NewGuid().ToString("N"));
@@ -2009,7 +2077,7 @@ public static class ProgramTests
                 ProductName = "New App", Identifier = "com.example.newapp", Version = "1.0.0", OutputDirectory = "artifacts",
                 Targets = [new BundleTargetConfiguration { Target = "windows-x86_64", InputDirectory = input, MainExecutable = "NewApp.exe", Formats = [PackageFormat.Nsis] }]
             };
-            var item = new BundlePlanItem(new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64), PackageFormat.Nsis, input, "NewApp.exe", "output", false);
+            var item = new BundlePlanItem(new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64), PackageFormat.Nsis, input, "NewApp.exe", "output", false);
             var settings = new NsisBundleConfiguration
             {
                 Shortcuts = new NsisShortcutConfiguration
@@ -2200,10 +2268,15 @@ public static class ProgramTests
 
 }
 
-file sealed class RecordingBackend : IBundleBackend
+file sealed class RecordingBackend(
+    PackageFormat format = PackageFormat.Nsis,
+    TargetOperatingSystem operatingSystem = TargetOperatingSystem.Windows,
+    LibC? requiredLibC = null,
+    string artifactName = "recording-installer.exe") : IBundleBackend
 {
-    public PackageFormat Format => PackageFormat.Nsis;
-    public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
+    public PackageFormat Format => format;
+    public TargetOperatingSystem OperatingSystem => operatingSystem;
+    public LibC? RequiredLibC => requiredLibC;
     public string? WorkDirectory { get; private set; }
     public int InvocationCount { get; private set; }
 
@@ -2213,7 +2286,7 @@ file sealed class RecordingBackend : IBundleBackend
     {
         InvocationCount++;
         WorkDirectory = context.WorkDirectory;
-        var path = Path.Combine(context.Item.OutputDirectory, "recording-installer.exe");
+        var path = Path.Combine(context.Item.OutputDirectory, string.Format(artifactName, context.Item.Target.Target));
         await File.WriteAllTextAsync(path, "artifact", cancellationToken);
         return [new BundleArtifact(Format, context.Item.Target.Target, path)];
     }

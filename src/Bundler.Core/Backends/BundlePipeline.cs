@@ -7,12 +7,29 @@ public sealed class BundlePipeline(
     IBundleLogger? logger = null)
 {
     private readonly IBundleLogger _logger = logger ?? NullBundleLogger.Instance;
-    private readonly IReadOnlyDictionary<(DesktopOperatingSystem, PackageFormat), IBundleBackend> _backends =
+    // (os, format) 下可挂多个按 libc 区分的后端（如将来 musl 专属 zip 变体）；
+    // RequiredLibC 相同的才算重复注册。
+    private readonly IReadOnlyDictionary<(TargetOperatingSystem, PackageFormat), IReadOnlyList<IBundleBackend>> _backends =
         backends.GroupBy(backend => (backend.OperatingSystem, backend.Format))
             .ToDictionary(group => group.Key, group =>
-                group.Count() == 1 ? group.Single()
+            {
+                var list = (IReadOnlyList<IBundleBackend>)group.ToList();
+                var duplicate = list.GroupBy(backend => backend.RequiredLibC)
+                    .FirstOrDefault(candidates => candidates.Count() > 1);
+                return duplicate is null ? list
                     : throw new ArgumentException(
-                        $"Duplicate backend registered for {group.Key.Item1}/{group.Key.Item2}."));
+                        $"Duplicate backend registered for {group.Key.Item1}/{group.Key.Item2} (libc={duplicate.Key}).");
+            });
+
+    private IBundleBackend? ResolveBackend(BundleTarget target, PackageFormat format)
+    {
+        if (!_backends.TryGetValue((target.OperatingSystem, format), out var candidates))
+        {
+            return null;
+        }
+        return candidates.FirstOrDefault(b => b.RequiredLibC == target.LibC)
+            ?? candidates.FirstOrDefault(b => b.RequiredLibC is null);
+    }
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleConfiguration configuration,
@@ -24,17 +41,17 @@ public sealed class BundlePipeline(
 
         foreach (var item in plan.Items)
         {
-            if (!_backends.ContainsKey((item.Target.OperatingSystem, item.Format)))
+            if (ResolveBackend(item.Target, item.Format) is null)
             {
                 throw new NotSupportedException(
-                    $"No backend is registered for {item.Target.OperatingSystem}/{item.Format}.");
+                    $"No backend is registered for {item.Target.Target}/{item.Format}.");
             }
         }
 
         foreach (var item in plan.Items)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var backend = _backends[(item.Target.OperatingSystem, item.Format)];
+            var backend = ResolveBackend(item.Target, item.Format)!;
 
             Directory.CreateDirectory(item.OutputDirectory);
             var workDirectory = Path.Combine(

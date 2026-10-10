@@ -202,7 +202,7 @@ public static class BundleConfigurationValidator
 
         foreach (var format in targetConfiguration.Formats.Distinct())
         {
-            if (!DesktopTargetMatrix.Supports(target!, format))
+            if (!TargetMatrix.Supports(target!, format))
             {
                 issues.Add(new($"{path}.formats", $"{format} is not supported for {target!.Target}."));
             }
@@ -263,7 +263,7 @@ public static class BundleConfigurationValidator
         }
 
         var executableName = targetConfiguration.MainExecutable ??
-            (target!.OperatingSystem == DesktopOperatingSystem.Windows
+            (target!.OperatingSystem == TargetOperatingSystem.Windows
                 ? $"{configuration.ProductName}.exe"
                 : configuration.ProductName);
         var executablePath = Path.Combine(targetConfiguration.InputDirectory, executableName);

@@ -12,7 +12,8 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
     private const string GeneratorRevision = "win-msi-8-2026-10-02-1";
 
     public PackageFormat Format => PackageFormat.Msi;
-    public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
+    public TargetOperatingSystem OperatingSystem => TargetOperatingSystem.Windows;
+    public LibC? RequiredLibC => null;
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleBuildContext context, CancellationToken cancellationToken = default)

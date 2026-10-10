@@ -17,7 +17,7 @@ public static class BundlePlanner
         {
             BundleTarget.TryParse(configuredTarget.Target, out var target);
             var executable = configuredTarget.MainExecutable ??
-                (target!.OperatingSystem == DesktopOperatingSystem.Windows
+                (target!.OperatingSystem == TargetOperatingSystem.Windows
                     ? $"{configuration.ProductName}.exe"
                     : configuration.ProductName);
 

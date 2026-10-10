@@ -5,7 +5,8 @@ namespace DotNet.Bundler.Deb;
 internal sealed class DebBundleBackend(DebBundleConfiguration settings) : IBundleBackend
 {
     public PackageFormat Format => PackageFormat.Deb;
-    public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Linux;
+    public TargetOperatingSystem OperatingSystem => TargetOperatingSystem.Linux;
+    public LibC? RequiredLibC => null;
 
     public Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleBuildContext context, CancellationToken cancellationToken)

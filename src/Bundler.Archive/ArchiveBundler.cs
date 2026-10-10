@@ -46,10 +46,9 @@ public sealed class ArchiveBundler : IFormatBundler
         var backends = new List<IBundleBackend>();
         foreach (var os in new[]
         {
-            DesktopOperatingSystem.Windows,
-            DesktopOperatingSystem.MacOS,
-            DesktopOperatingSystem.Linux,
-            DesktopOperatingSystem.LinuxMusl
+            TargetOperatingSystem.Windows,
+            TargetOperatingSystem.MacOS,
+            TargetOperatingSystem.Linux
         })
         {
             backends.Add(new ArchiveBundleBackend(_configuration, os, PackageFormat.Zip));

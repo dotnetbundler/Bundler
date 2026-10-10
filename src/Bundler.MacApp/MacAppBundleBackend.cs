@@ -14,7 +14,8 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
     };
 
     public PackageFormat Format => PackageFormat.App;
-    public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.MacOS;
+    public TargetOperatingSystem OperatingSystem => TargetOperatingSystem.MacOS;
+    public LibC? RequiredLibC => null;
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleBuildContext context, CancellationToken cancellationToken = default)

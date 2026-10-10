@@ -26,7 +26,8 @@ internal sealed class NsisBundleBackend(
     ];
 
     public PackageFormat Format => PackageFormat.Nsis;
-    public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
+    public TargetOperatingSystem OperatingSystem => TargetOperatingSystem.Windows;
+    public LibC? RequiredLibC => null;
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleBuildContext context,
