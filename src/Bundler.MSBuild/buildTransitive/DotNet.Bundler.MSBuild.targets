@@ -65,6 +65,10 @@
     </PropertyGroup>
     <Warning Condition="'$(_BundlerTargetStale)' == 'true'"
              Text="BundlerTarget was derived from a stale RuntimeIdentifier and was refreshed to '@(_BundlerTargetFromRid)'. Pass -p:BundlerTarget=&lt;target&gt; to pin it explicitly." />
+    <!-- 显式 BundlerTarget 与当前 RID 推导值冲突：只警告不改值——显式恒胜；
+         InputDir/universal 模式下 target 与 RID 不符是预期（打的是既有目录/合并载荷），豁免 -->
+    <Warning Condition="'$(_BundlerTargetStale)' != 'true' and '$(BundlerTarget)' != '' and '@(_BundlerTargetFromRid)' != '' and '$(BundlerTarget)' != '@(_BundlerTargetFromRid)' and '$(BundlerInputDir)' == '' and '$(BundlerUniversalTargets)' == ''"
+             Text="BundlerTarget '$(BundlerTarget)' does not match the target '@(_BundlerTargetFromRid)' mapped from RuntimeIdentifier '$(RuntimeIdentifier)'. The explicit target wins; remove BundlerTarget to derive from the RID." />
     <PropertyGroup>
       <BundlerFormats Condition="'$(BundlerFormats)' == ''">nsis</BundlerFormats>
       <_BundlerPublishOutDir>$(IntermediateOutputPath)BundlerPublish\$(BundlerTarget)\</_BundlerPublishOutDir>
