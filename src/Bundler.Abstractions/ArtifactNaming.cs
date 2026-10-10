@@ -70,12 +70,26 @@ public static class ArtifactNaming
                 CpuArchitecture.S390x => "s390x",
                 _ => null
             },
+            // 归档词用各系统自己生态的架构词（真实案例：Node `win-x64`/`darwin-arm64`、
+            // .NET `osx-arm64`；macOS `uname -m` 输出 `arm64` 不是 aarch64）——
+            // windows 与安装器同词、macos 与 app/dmg/pkg 同词、linux 用 GNU 词。
             PackageFormat.Zip or PackageFormat.TarGz => target.OperatingSystem switch
             {
-                DesktopOperatingSystem.Windows => $"windows-{BundleTarget.ArchName(arch)}",
-                DesktopOperatingSystem.MacOS => $"macos-{BundleTarget.ArchName(arch)}",
-                DesktopOperatingSystem.Linux or DesktopOperatingSystem.LinuxMusl =>
-                    $"linux-{BundleTarget.ArchName(arch)}",
+                TargetOperatingSystem.Windows => arch switch
+                {
+                    CpuArchitecture.X64 => "windows-x64",
+                    CpuArchitecture.X86 => "windows-x86",
+                    CpuArchitecture.Arm64 => "windows-arm64",
+                    _ => null
+                },
+                TargetOperatingSystem.MacOS => arch switch
+                {
+                    CpuArchitecture.X64 => "macos-x86_64",
+                    CpuArchitecture.Arm64 => "macos-arm64",
+                    CpuArchitecture.Universal => "macos-universal",
+                    _ => null
+                },
+                TargetOperatingSystem.Linux => $"linux-{BundleTarget.ArchName(arch)}",
                 _ => null
             },
             _ => null

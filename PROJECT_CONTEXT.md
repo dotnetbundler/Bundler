@@ -1,9 +1,9 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-11
-> 当前分支：`main`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.89`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
-> 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结；进行中=打包输出模型重构（rid 概念废除 → `target={os}[-{libc}]-{arch}` 语法 + 各后端生态惯用架构词 + 输出扁平化/`outputLayout` 旋钮 + 规划期重名断言），契约见 `docs/target-matrix.md`**
+> 最后更新：2026-10-02
+> 当前分支：`devin/1791652154-libc-split`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
+> 当前包版本：`0.1.0-alpha.91`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结；进行中=基础目标模型重构——`DesktopOperatingSystem`→`TargetOperatingSystem{Windows,MacOS,Linux}`（去 Desktop 前缀留移动端扩展）、libc 拆出 OS 枚举成 `LibC` 旁维度（AlpineApk 经后端 `RequiredLibC=Musl` 声明）、`CpuArchitecture` 按族序重排、归档产物词按各系统生态修正（`windows-x64|x86|arm64`、`macos-x86_64|arm64|universal`、linux GNU 词），契约与全产物名目录见 `docs/target-matrix.md`**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
 > 逐阶段实施证据以带日期条目归档在各格式 `<format>-roadmap.md`，本文不重复记录

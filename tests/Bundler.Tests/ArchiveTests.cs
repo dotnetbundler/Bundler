@@ -283,7 +283,7 @@ public static class ArchiveTests
             var artifacts = new ArchiveBundler().BuildAsync(
                 Configuration(input, output, "windows-i686", [PackageFormat.Zip]))
                 .GetAwaiter().GetResult();
-            Assert.EndsWith("-windows-i686.zip", artifacts.Single().Path);
+            Assert.EndsWith("-windows-x86.zip", artifacts.Single().Path);
         }
         finally
         {

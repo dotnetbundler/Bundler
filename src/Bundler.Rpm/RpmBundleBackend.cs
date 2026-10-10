@@ -5,7 +5,8 @@ namespace DotNet.Bundler.Rpm;
 internal sealed class RpmBundleBackend(RpmBundleConfiguration settings) : IBundleBackend
 {
     public PackageFormat Format => PackageFormat.Rpm;
-    public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Linux;
+    public TargetOperatingSystem OperatingSystem => TargetOperatingSystem.Linux;
+    public LibC? RequiredLibC => null;
 
     public Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleBuildContext context, CancellationToken cancellationToken)

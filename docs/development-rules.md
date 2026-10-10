@@ -98,7 +98,7 @@
   实际支持范围以原生验证为准。
 - **目标与格式门禁只按实际情况限制**（2026-09-30 用户确认原则）：
   允许的限制依据仅两类——①工具链真实能力（打包工具或宿主确实做不到，如 WiX 需 Windows 宿主、`dmg`/`pkg` 需 macOS）；②产物语义真实性（能产出文件但安装/运行语义不成立的组合——如 musl 载荷打进 `.deb`/`.rpm`（musl 生态无对应发行版消费面）——默认拒绝，显式豁免须用户明确要求）。
-  除上述两类外不替工具预判：目标不做组合白名单——`BundleTarget.TryParse` 按 `<os>-<arch>` 语法解析（`DesktopOperatingSystem`/`CpuArchitecture` 枚举即 OS 与架构全集，枚举外值解析失败，出现需求时按行补枚举与后端映射）；
+  除上述两类外不替工具预判：目标不做组合白名单——`BundleTarget.TryParse` 按 `<os>[-<libc>]-<arch>` 语法解析（`TargetOperatingSystem`/`LibC`/`CpuArchitecture` 枚举即 OS、libc 与架构全集，枚举外值解析失败，出现需求时按行补枚举与后端映射）；
   工具能力由后端自报，不用与后端脱节的静态表替后端说不——防止矩阵与后端口径漂移（`windows-i686` 门禁即此类人造围栏，2026-09-30 已拆除）。
   已落地（`7feea33`/`e7dfeae`/`02b2521`）：语法化解析 + 裸 `macos-universal` 通用目标 + `linux-musl-x86_64/arm64`（仅 archive）。
 - **构建宿主下限的三层口径**（格式路线文档按此分层记录，互不混淆）：

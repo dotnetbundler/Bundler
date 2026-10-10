@@ -6,17 +6,18 @@ using DotNet.Bundler.Core.Update;
 namespace DotNet.Bundler.Archive;
 
 /// <summary>
-/// Backend for one (OS, format) pair — archives are OS-agnostic so the facade
-/// registers one instance per DesktopOperatingSystem for each of
+/// Backend for one (OS, format) pair — archives are OS- and libc-agnostic so the facade
+/// registers one instance per TargetOperatingSystem for each of
 /// <see cref="PackageFormat.Zip"/> and <see cref="PackageFormat.TarGz"/>.
 /// </summary>
 internal sealed class ArchiveBundleBackend(
     ArchiveBundleConfiguration settings,
-    DesktopOperatingSystem operatingSystem,
+    TargetOperatingSystem operatingSystem,
     PackageFormat format) : IBundleBackend
 {
     public PackageFormat Format => format;
-    public DesktopOperatingSystem OperatingSystem => operatingSystem;
+    public TargetOperatingSystem OperatingSystem => operatingSystem;
+    public LibC? RequiredLibC => null;
 
     public Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleBuildContext context, CancellationToken cancellationToken)

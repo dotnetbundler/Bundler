@@ -20,14 +20,18 @@ public static class ProgramTests
         Assert.True(BundleTarget.TryParse("windows-i686", out var x86) && x86!.Architecture == CpuArchitecture.X86,
             "Windows x86 must be a distinct public target architecture.");
         Assert.True(BundleTarget.TryParse("macos-universal", out var macosUniversal) &&
-                macosUniversal!.OperatingSystem == DesktopOperatingSystem.MacOS && macosUniversal.Architecture == CpuArchitecture.Universal,
+                macosUniversal!.OperatingSystem == TargetOperatingSystem.MacOS && macosUniversal.Architecture == CpuArchitecture.Universal,
             "The bare macos-universal target must map to a universal macOS target.");
         Assert.True(BundleTarget.TryParse("linux-musl-x86_64", out var musl) &&
-                musl!.OperatingSystem == DesktopOperatingSystem.LinuxMusl && musl.Architecture == CpuArchitecture.X64,
-            "linux-musl-x86_64 must parse as a distinct musl target.");
+                musl!.OperatingSystem == TargetOperatingSystem.Linux && musl.LibC == LibC.Musl &&
+                musl.Architecture == CpuArchitecture.X64 && musl.IsMusl,
+            "linux-musl-x86_64 must parse as Linux+Musl.");
         Assert.True(BundleTarget.TryParse("linux-musl-aarch64", out var muslArm) &&
-                muslArm!.OperatingSystem == DesktopOperatingSystem.LinuxMusl,
-            "linux-musl-aarch64 must parse as a distinct musl target.");
+                muslArm!.OperatingSystem == TargetOperatingSystem.Linux && muslArm.LibC == LibC.Musl,
+            "linux-musl-aarch64 must parse as Linux+Musl.");
+        Assert.True(BundleTarget.TryParse("linux-x86_64", out var glibc) &&
+                glibc!.OperatingSystem == TargetOperatingSystem.Linux && glibc.LibC == LibC.Glibc && !glibc.IsMusl,
+            "linux-x86_64 must parse as Linux+Glibc.");
         Assert.False(BundleTarget.TryParse("android-arm64", out _), "A mobile target was accepted.");
         Assert.False(BundleTarget.TryParse("linux-musl", out _), "A musl target without an architecture was accepted.");
         Assert.False(BundleTarget.TryParse("win", out _), "An OS target without an architecture was accepted.");
@@ -255,7 +259,7 @@ public static class ProgramTests
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 input,
                 "ExampleApp.exe",
@@ -445,7 +449,7 @@ public static class ProgramTests
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 input,
                 "ExampleApp.exe",
@@ -488,7 +492,7 @@ public static class ProgramTests
                     Formats = [PackageFormat.Nsis]
                 });
                 var item = new BundlePlanItem(
-                    new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                    new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                     PackageFormat.Nsis,
                     input,
                     "ExampleApp.exe",
@@ -524,7 +528,7 @@ public static class ProgramTests
             File.WriteAllText(resource, "resource");
             var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 input,
                 "ExampleApp.exe",
@@ -1304,7 +1308,7 @@ public static class ProgramTests
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1384,7 +1388,7 @@ public static class ProgramTests
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1505,7 +1509,7 @@ public static class ProgramTests
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1598,7 +1602,7 @@ public static class ProgramTests
                 ]
             };
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1643,7 +1647,7 @@ public static class ProgramTests
         {
             var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1721,7 +1725,7 @@ public static class ProgramTests
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1810,7 +1814,7 @@ public static class ProgramTests
                 ]
             };
             var item = new BundlePlanItem(
-                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 input,
                 "ExampleApp.exe",
@@ -2009,7 +2013,7 @@ public static class ProgramTests
                 ProductName = "New App", Identifier = "com.example.newapp", Version = "1.0.0", OutputDirectory = "artifacts",
                 Targets = [new BundleTargetConfiguration { Target = "windows-x86_64", InputDirectory = input, MainExecutable = "NewApp.exe", Formats = [PackageFormat.Nsis] }]
             };
-            var item = new BundlePlanItem(new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64), PackageFormat.Nsis, input, "NewApp.exe", "output", false);
+            var item = new BundlePlanItem(new BundleTarget("windows-x86_64", TargetOperatingSystem.Windows, CpuArchitecture.X64), PackageFormat.Nsis, input, "NewApp.exe", "output", false);
             var settings = new NsisBundleConfiguration
             {
                 Shortcuts = new NsisShortcutConfiguration
@@ -2203,7 +2207,8 @@ public static class ProgramTests
 file sealed class RecordingBackend : IBundleBackend
 {
     public PackageFormat Format => PackageFormat.Nsis;
-    public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.Windows;
+    public TargetOperatingSystem OperatingSystem => TargetOperatingSystem.Windows;
+    public LibC? RequiredLibC => null;
     public string? WorkDirectory { get; private set; }
     public int InvocationCount { get; private set; }
 

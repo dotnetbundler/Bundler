@@ -11,7 +11,8 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
     private static readonly int[] DetachBackoffMilliseconds = { 250, 500, 1000, 2000 };
 
     public PackageFormat Format => PackageFormat.Dmg;
-    public DesktopOperatingSystem OperatingSystem => DesktopOperatingSystem.MacOS;
+    public TargetOperatingSystem OperatingSystem => TargetOperatingSystem.MacOS;
+    public LibC? RequiredLibC => null;
 
     /// <summary>Test seam: overrides the macOS host check.</summary>
     internal static Func<bool>? HostCheck;

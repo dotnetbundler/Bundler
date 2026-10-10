@@ -799,7 +799,7 @@ public static class AlpineApkTests
         Assert.Equal("my-app", ApkIdentity.SanitizeName("my__app"));
         var arch = Assert.ThrowsAny<NotSupportedException>(
             () => ApkIdentity.MapArchitecture(
-                new BundleTarget("linux-musl-x86_64", DesktopOperatingSystem.LinuxMusl, CpuArchitecture.Universal)));
+                new BundleTarget("linux-musl-x86_64", TargetOperatingSystem.Linux, CpuArchitecture.Universal, LibC.Musl)));
         Assert.Contains("No Alpine architecture mapping", arch.Message);
     }
 

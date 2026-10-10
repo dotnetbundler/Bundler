@@ -7,7 +7,7 @@ public sealed class BundlePipeline(
     IBundleLogger? logger = null)
 {
     private readonly IBundleLogger _logger = logger ?? NullBundleLogger.Instance;
-    private readonly IReadOnlyDictionary<(DesktopOperatingSystem, PackageFormat), IBundleBackend> _backends =
+    private readonly IReadOnlyDictionary<(TargetOperatingSystem, PackageFormat), IBundleBackend> _backends =
         backends.GroupBy(backend => (backend.OperatingSystem, backend.Format))
             .ToDictionary(group => group.Key, group =>
                 group.Count() == 1 ? group.Single()
@@ -24,10 +24,11 @@ public sealed class BundlePipeline(
 
         foreach (var item in plan.Items)
         {
-            if (!_backends.ContainsKey((item.Target.OperatingSystem, item.Format)))
+            if (!_backends.TryGetValue((item.Target.OperatingSystem, item.Format), out var backend) ||
+                (backend.RequiredLibC is { } required && required != item.Target.LibC))
             {
                 throw new NotSupportedException(
-                    $"No backend is registered for {item.Target.OperatingSystem}/{item.Format}.");
+                    $"No backend is registered for {item.Target.Target}/{item.Format}.");
             }
         }
 
