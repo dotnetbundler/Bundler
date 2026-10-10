@@ -91,6 +91,9 @@
   缓存污染、损坏和并发有安全处理。
   显式本地工具覆盖可作为受控高级入口。
   NuGet 包获取和调用方 SDK/MSBuild 环境属于另一层，不能由“包内工具离线”推断整台零环境机器无需其他依赖。
+- 预编译冻件（如 `Bundler.Updater.Bootstrap` 的 per-RID `bundler-updater` 引导件）按目标宿主工具链产件：
+  musl RID 必须在 musl 工具链宿主内产（`mcr.microsoft.com/dotnet/sdk:10.0-alpine` 容器或 musl 发行版）——glibc 宿主直接 `dotnet publish -r linux-musl-*` 产出"解释器标 musl、NEEDED 仍挂 glibc `ld-linux`"的混血件，musl 宿主上 rc=127 起不来；
+  验收看 `readelf -d` NEEDED 仅 `libc.musl-*` 加目标宿主实跑。
 - 选择工具以**合法免费、无付费必需服务、尽量覆盖更多构建宿主和安装设备**为目标；
   实际支持范围以原生验证为准。
 - **目标与格式门禁只按实际情况限制**（2026-09-30 用户确认原则）：
@@ -162,6 +165,7 @@
 不要模拟另一格式不存在的行为。
 断言用惯用形式：异常断言用 `Assert.ThrowsAny*`/`ThrowsAnyAsync*`（catch 匹配子类，语义与 `Assert.Throws*` 的精确类型要求不同），
 接返回值断言字段或消息；相等断言用 `Assert.Equal` 而非 `Assert.True(a==b)`；不用 try/catch 再断言。
+需要核对异常消息内容时可用测试内的断言包装（如 `ExpectAsync`/`AssertThrows`），包装内部仍走上述官方断言原语。
 
 单格式 API fixture 收编为 `tests/Bundler.ApiTests` 的 `<Format>ApiTests` 测试类，系统集成测试体收编为 `tests/Bundler.IntegrationTests` 的 `<Format>IntegrationTests` 测试类，均为 `dotnet test` 入口、`--filter-class`/`-method` 选择、宿主门控经 `Assert.Skip`；
 资源需求用 `[Trait("Requires", ...)]` 标注——`docker`（DockerRunner 容器矩阵腿）、`elevation`（ElevatedRunner/SudoRunner 真装腿）、`localinstall`（需 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL` 同意的真装腿）、`interactive`（GUI 级验收腿：Windows 需交互式桌面会话走 `WindowsDesktop` UIA3 驱动，macOS 需 TCC 辅助功能授权走 osascript）；标在方法级，仅当全类都需同意时升类级（如 NSIS）；
