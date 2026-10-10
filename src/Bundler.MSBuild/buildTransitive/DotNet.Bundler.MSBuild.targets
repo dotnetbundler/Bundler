@@ -58,8 +58,14 @@
     <PropertyGroup>
       <BundlerTarget Condition="'$(BundlerTarget)' == ''">@(_BundlerTargetFromRid)</BundlerTarget>
       <!-- RID 在 eval 后变更时刷新我们自己的推导（判据：props 前显式为空且当前值==eval 推导值）；
-           显式 BundlerTarget 恒不动 -->
-      <BundlerTarget Condition="'$(BundlerTarget)' == '$(_BundlerEvalTarget)' and '$(_BundlerEvalTarget)' != '' and '@(_BundlerTargetFromRid)' != '' and '$(BundlerTarget)' != '@(_BundlerTargetFromRid)'">@(_BundlerTargetFromRid)</BundlerTarget>
+           显式 BundlerTarget 恒不动；刷新动作警告可见——若该值其实是 csproj 体内的显式设置且恰与
+           旧推导值相同（无法区分），-p:BundlerTarget= 全局钉死即可不误伤 -->
+      <_BundlerTargetStale Condition="'$(BundlerTarget)' == '$(_BundlerEvalTarget)' and '$(_BundlerEvalTarget)' != '' and '@(_BundlerTargetFromRid)' != '' and '$(BundlerTarget)' != '@(_BundlerTargetFromRid)'">true</_BundlerTargetStale>
+      <BundlerTarget Condition="'$(_BundlerTargetStale)' == 'true'">@(_BundlerTargetFromRid)</BundlerTarget>
+    </PropertyGroup>
+    <Warning Condition="'$(_BundlerTargetStale)' == 'true'"
+             Text="BundlerTarget was derived from a stale RuntimeIdentifier and was refreshed to '@(_BundlerTargetFromRid)'. Pass -p:BundlerTarget=&lt;target&gt; to pin it explicitly." />
+    <PropertyGroup>
       <BundlerFormats Condition="'$(BundlerFormats)' == ''">nsis</BundlerFormats>
       <_BundlerPublishOutDir>$(IntermediateOutputPath)BundlerPublish\$(BundlerTarget)\</_BundlerPublishOutDir>
     </PropertyGroup>
