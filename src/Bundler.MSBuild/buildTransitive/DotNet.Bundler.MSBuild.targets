@@ -18,7 +18,7 @@
   <ItemGroup>
     <_BundlerRidMap Include="windows-x86_64"><Rid>win-x64</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="windows-i686"><Rid>win-x86</Rid></_BundlerRidMap>
-    <_BundlerRidMap Include="windows-arm64"><Rid>win-arm64</Rid></_BundlerRidMap>
+    <_BundlerRidMap Include="windows-aarch64"><Rid>win-arm64</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="macos-x86_64"><Rid>osx-x64</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="macos-arm64"><Rid>osx-arm64</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="linux-x86_64"><Rid>linux-x64</Rid></_BundlerRidMap>
@@ -119,16 +119,18 @@
          子构建无 CLI 隐式 restore——每个 RID 在单个子构建里 Restore;Publish 连跑：assets 重写
          只留当前 RID 也不怕（即刻消费），而 RuntimeIdentifiers 多 RID 合图会被
          _GenerateRestoreGraphProjectEntry 当单个 RID 校验（NETSDK1083），走不通。
+         每个 RID 一份独立 ProjectAssetsFile——共享 obj\project.assets.json 会被
+         逐 RID restore 互相踩踏，脏 obj 态下发布读到错位 RID 的 assets（NETSDK1047）。
          TargetFramework 不入 Properties：子构建评的是同一个工程自己解 TFM；全局传入会沿
          ProjectReference 恢复链污染异 TFM 引用（如 netstandard2.0 任务工程的 assets）。 -->
     <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Restore;Publish"
-             Properties="RuntimeIdentifier=%(_BundlerUniversalRid.Identity);PublishDir=$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity);BundlerEnabled=false" />
+             Properties="RuntimeIdentifier=%(_BundlerUniversalRid.Identity);PublishDir=$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity);BundlerEnabled=false;ProjectAssetsFile=$(_BundlerUniversalDir)assets-%(_BundlerUniversalRid.Identity)\project.assets.json" />
     <!-- 无 RID 参考发布：非 Mach-O 文件的权威源。RID 专属构建给托管件打架构印记（PE machine
          及派生 MVID/时间戳），两 arch 的 test.dll 天然逐字节相异、无法靠比对合并；参考发布
          以中性构建提供同源 managed 载荷。要求工程可无 RID 发布——SelfContained/AOT 等强绑
          RID 的配置在此自然报错（universal 也无法表达逐 arch 运行时差异）。 -->
     <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Restore;Publish"
-             Properties="RuntimeIdentifier=;PublishDir=$(_BundlerUniversalDir)reference;BundlerEnabled=false" />
+             Properties="RuntimeIdentifier=;PublishDir=$(_BundlerUniversalDir)reference;BundlerEnabled=false;ProjectAssetsFile=$(_BundlerUniversalDir)assets-reference\project.assets.json" />
     <DotNet.Bundler.MSBuild.MergeUniversalPayload
       SourceDirectories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)')"
       ReferenceDirectory="$(_BundlerUniversalDir)reference"
@@ -152,11 +154,12 @@
            Text="BundlerTarget '$(BundlerTarget)' has no canonical publish RID mapping — pass -p:BundlerPublishRid=&lt;rid&gt; or -p:BundlerInputDir=&lt;dir&gt;." />
     <!-- publish -o 不清理上次构建已删的文件——先清中间发布目录防滞留 -->
     <RemoveDir Directories="$(_BundlerPublishOutDir)" />
-    <!-- 子构建无 CLI 隐式 restore——先跑 Restore 腿下载该 RID 运行时包（TFM 不传，见 universal 段注释） -->
+    <!-- 子构建无 CLI 隐式 restore——先跑 Restore 腿下载该 RID 运行时包（TFM 不传，见 universal 段注释）。
+         独立 ProjectAssetsFile 与外层/他 RID 的 restore 互不踩踏（同 universal 段理由）。 -->
     <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Restore"
-             Properties="RuntimeIdentifier=$(BundlerPublishRid)" />
+             Properties="RuntimeIdentifier=$(BundlerPublishRid);ProjectAssetsFile=$(IntermediateOutputPath)BundlerPublish\project.assets.json" />
     <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Publish"
-             Properties="RuntimeIdentifier=$(BundlerPublishRid);PublishDir=$(_BundlerPublishOutDir);BundlerEnabled=false" />
+             Properties="RuntimeIdentifier=$(BundlerPublishRid);PublishDir=$(_BundlerPublishOutDir);BundlerEnabled=false;ProjectAssetsFile=$(IntermediateOutputPath)BundlerPublish\project.assets.json" />
   </Target>
 
   <!-- 共享打包体：effective 输入/目标归一 → 默认值推导 → 任务调用 -->
