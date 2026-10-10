@@ -23,10 +23,21 @@ public sealed class ArchiveFixture : IDisposable
     public string FanoutDir { get; private set; } = null!;
     public string CrossWinDir { get; private set; } = null!;
     public string CrossOsxDir { get; private set; } = null!;
+    public string PackOnlyZip { get; private set; } = null!;
+    public string AutoPublishZip { get; private set; } = null!;
+    public string DeriveZip { get; private set; } = null!;
+    // universal 腿独立惰性初始化：osx 运行时包不可得的宿主上只影响 universal 用例，
+    // 不拖垮其余 archive 测试（Initialize 不触碰它）。
+    public string UniversalZip => _universalZip.Value;
 
     private readonly Lazy<bool> _init;
+    private readonly Lazy<string> _universalZip;
 
-    public ArchiveFixture() => _init = new Lazy<bool>(() => { Initialize(); return true; });
+    public ArchiveFixture()
+    {
+        _init = new Lazy<bool>(() => { Initialize(); return true; });
+        _universalZip = new Lazy<string>(InitializeUniversal);
+    }
 
     public bool Ensure() => _init.Value;
 
@@ -75,6 +86,46 @@ public sealed class ArchiveFixture : IDisposable
         }
         CrossWinDir = Ws.Combine("cross-windows-x86_64");
         CrossOsxDir = Ws.Combine("cross-macos-arm64");
+
+        // BundlerBundle 显式入口三腿：只打包（BundlerInputDir）、自动内层发布、钩子路 RID→target 推导。
+        var publishDir = Path.Combine(Path.GetDirectoryName(FixtureProject)!,
+            "bin", "Release", "net10.0", "linux-x64", "publish");
+        Dotnet.Checked(["msbuild", FixtureProject, "-t:BundlerBundle",
+            "-p:Configuration=Release", $"-p:BundlerInputDir={publishDir}",
+            "-p:BundlerTestFormats=zip", $"-p:BundlerIntegrationOutput={Ws.Combine("packonly")}"],
+            "BundlerBundle pack-only failed");
+        PackOnlyZip = SingleFile(Ws.Combine("packonly"), "*.zip");
+
+        Dotnet.Checked(["msbuild", FixtureProject, "-t:BundlerBundle",
+            "-p:Configuration=Release", "-p:BundlerTestFormats=zip",
+            $"-p:BundlerIntegrationOutput={Ws.Combine("autopublish")}"],
+            "BundlerBundle auto-publish failed");
+        AutoPublishZip = SingleFile(Ws.Combine("autopublish"), "*.zip");
+
+        // -p:BundlerTarget= 显式置空：钩子路应改从 $(RuntimeIdentifier) 推导 linux-x86_64
+        Dotnet.Publish(FixtureProject, "Release",
+            ["--packages", CacheDir, "-r", "linux-x64", "-p:BundlerTarget=",
+             "-p:BundlerTestFormats=zip", $"-p:BundlerIntegrationOutput={Ws.Combine("derive")}"],
+            "derive publish failed", noRestore: false);
+        DeriveZip = SingleFile(Ws.Combine("derive"), "*.zip");
+
+        DeriveZip = SingleFile(Ws.Combine("derive"), "*.zip");
+    }
+
+    private string InitializeUniversal()
+    {
+        // universal 回归腿：双 RID 内层 Restore;Publish 连跑 + 参考发布 + 合并。回归点是 assets
+        // 逐 RID 重写不互相踩（NETSDK1047）——osx-x64 腿发布成功后 osx-arm64 的 Restore 重写
+        // assets，osx-x64 的 Publish 已在本腿消费完毕不受影响。fixture 有 SelfContained=true，
+        // universal 要求 framework-dependent——-p:SelfContained=false 全局覆盖。
+        Dotnet.Publish(FixtureProject, "Release",
+            ["--packages", CacheDir,
+             "-p:BundlerUniversalTargets=osx-x64%3Bosx-arm64",
+             "-p:SelfContained=false",
+             "-p:BundlerTestFormats=zip",
+             $"-p:BundlerIntegrationOutput={Ws.Combine("universal")}"],
+            "universal publish failed", noRestore: false);
+        return SingleFile(Ws.Combine("universal"), "*.zip");
     }
 
     public void Publish(string name, params string[] extraProperties)
@@ -104,6 +155,34 @@ public sealed class ArchiveIntegrationTests : IClassFixture<ArchiveFixture>
     {
         _f = fixture;
         _f.Ensure();
+    }
+
+    [Fact]
+    public void BundlerBundlePackOnly_PackagesExistingPublishDir()
+        => Assert.True(File.Exists(_f.PackOnlyZip), $"pack-only artifact missing: {_f.PackOnlyZip}");
+
+    [Fact]
+    public void BundlerBundleAutoPublish_PublishesThenPackages()
+        => Assert.True(File.Exists(_f.AutoPublishZip), $"auto-publish artifact missing: {_f.AutoPublishZip}");
+
+    [Fact]
+    public void PublishHook_DerivesBundlerTargetFromRuntimeIdentifier()
+        => Assert.Equal($"{ArchiveFixture.Stem}.zip", Path.GetFileName(_f.DeriveZip));
+
+    [Fact]
+    public void UniversalPublishMergesBothArchPayloads()
+    {
+        Assert.Equal("bundler-archive-fixture-1.0.0-macos-universal.zip",
+            Path.GetFileName(_f.UniversalZip));
+        // 两 RID 载荷都走到合并：apphost 是双切片胖 Mach-O（cafebabe + nfat_arch=2）。
+        using var zip = System.IO.Compression.ZipFile.OpenRead(_f.UniversalZip);
+        var entry = zip.Entries.Single(e => e.FullName.EndsWith("/" + ArchiveFixture.Exe, StringComparison.Ordinal));
+        var header = new byte[8];
+        using (var stream = entry.Open())
+        {
+            Assert.Equal(header.Length, stream.Read(header, 0, header.Length));
+        }
+        Assert.Equal(new byte[] { 0xCA, 0xFE, 0xBA, 0xBE, 0x00, 0x00, 0x00, 0x02 }, header);
     }
 
     [Fact]

@@ -822,6 +822,22 @@ public static class MacAppTests
                 () => Task.Run(() => MacUniversalPayloadMerger.Merge([x64, thinOnly], thinOut)),
                 "A one-sided thin Mach-O must fail the universal merge.").GetAwaiter().GetResult();
             Cleanup(thinOnly, thinOut);
+
+            // RID builds stamp the arch into managed assemblies, so they always differ: the
+            // RID-less reference build supplies them instead of failing.
+            var refSrc = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+            var refOut = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+            var armRef = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(refSrc);
+            Directory.CreateDirectory(armRef);
+            File.WriteAllBytes(Path.Combine(x64, "Managed.dll"), [1, 1, 1]);
+            File.WriteAllBytes(Path.Combine(armRef, "Managed.dll"), [2, 2, 2]);
+            var neutral = new byte[] { 7, 7, 7 };
+            File.WriteAllBytes(Path.Combine(refSrc, "Managed.dll"), neutral);
+            File.WriteAllBytes(Path.Combine(armRef, "ExampleApp"), FakeMachO(0x0100000C));
+            MacUniversalPayloadMerger.Merge([x64, armRef], refOut, refSrc);
+            Assert.Equal(neutral, File.ReadAllBytes(Path.Combine(refOut, "Managed.dll")));
+            Cleanup(refSrc, refOut, armRef);
         }
         finally
         {

@@ -31,7 +31,7 @@
 | `BundlerFormats` | `formats: string[]` | `--formats` |
 | `BundlerPackageName`/`BundlerVersion` | `packageName`/`version` | `--package-name`/`--package-version` |
 | `BundlerTarget` | `target` | `--target` |
-| `PublishDir` → `InputDirectory` | `inputDir` | `--input-dir` |
+| `BundlerInputDir`/钩子路 `$(PublishDir)` → `InputDirectory` | `inputDir` | `--input-dir` |
 | `BundlerOutputDirectory` | `outputDir` | `--output-dir` |
 | `Bundler<Format>*` 各格式旋钮 | `<format>.*` 子对象 | `--<format>.<knob>=<value>` 通用键值透传 |
 | `@(Bundler<Format>File)` | `<format>.files: [{source,destination}]` | 仅配置文件承载（命令行不映射文件列表） |

@@ -7,15 +7,25 @@ namespace DotNet.Bundler.MacApp;
 /// `osx` bundle target. Rules per relative file:
 /// - present on all sides and byte-identical → one copy;
 /// - present on all sides and Mach-O → fat-merge all unique architecture slices;
-/// - present on all sides, differs, not Mach-O → hard error (no generic arch-subdir fallback:
-///   a standard .NET apphost does not probe RID subdirectories, unlike MAUI's runtime);
+/// - present in the RID-less reference build → that copy wins (managed payload is identical
+///   by construction there; RID-specific builds stamp the PE machine type and derived MVID
+///   into managed assemblies, so byte-identity between arch builds is unreachable);
+/// - present on all sides, differs, not Mach-O, no reference copy → hard error (no generic
+///   arch-subdir fallback: a standard .NET apphost does not probe RID subdirectories, unlike
+///   MAUI's runtime);
 /// - present on one side only → copied verbatim.
 /// Symlinks are dereferenced into their target contents; other special files are rejected.
 /// </summary>
 public static class MacUniversalPayloadMerger
 {
-    /// <summary>Merge <paramref name="sourceDirectories"/> (one per architecture) into <paramref name="outputDirectory"/>.</summary>
-    public static void Merge(IReadOnlyList<string> sourceDirectories, string outputDirectory)
+    /// <summary>
+    /// Merge <paramref name="sourceDirectories"/> (one per architecture) into <paramref name="outputDirectory"/>.
+    /// <paramref name="referenceDirectory"/> is an optional RID-less publish of the same project:
+    /// when given, it supplies every non-Mach-O file instead of requiring byte-identity
+    /// between architecture builds.
+    /// </summary>
+    public static void Merge(IReadOnlyList<string> sourceDirectories, string outputDirectory,
+        string? referenceDirectory = null)
     {
         if (sourceDirectories.Count < 2)
         {
@@ -33,10 +43,19 @@ public static class MacUniversalPayloadMerger
             throw new IOException($"Universal merge output '{outputDirectory}' is not empty.");
         }
 
+        var referenceRoot = referenceDirectory == null ? null : Path.GetFullPath(referenceDirectory);
         var relativePaths = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var source in sourceDirectories)
         {
             foreach (var file in EnumerateRelativeFiles(source))
+            {
+                relativePaths.Add(file);
+            }
+        }
+        // 只在参考发布里出现的文件也得进 union——否则被静默丢掉。
+        if (referenceRoot != null && Directory.Exists(referenceRoot))
+        {
+            foreach (var file in EnumerateRelativeFiles(referenceRoot))
             {
                 relativePaths.Add(file);
             }
@@ -50,11 +69,22 @@ public static class MacUniversalPayloadMerger
                 .ToArray();
             if (sources.Length == 0)
             {
-                // 枚举与合并之间条目消失（悬垂链接被删除等）——按缺席处理，不崩。
+                // 参考发布独有的文件直接按参考拷贝；sources 侧缺席但有参考
+                // （枚举与合并之间条目消失等）也走这条路，不崩。
+                var refOnly = referenceRoot == null ? null : Path.Combine(referenceRoot, relative);
+                if (refOnly != null && File.Exists(refOnly))
+                {
+                    var destOnly = Path.Combine(outputDirectory, relative);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destOnly)!);
+                    Copy(refOnly, destOnly);
+                }
                 continue;
             }
             var destination = Path.Combine(outputDirectory, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+
+            var referencePath = referenceRoot == null ? null : Path.Combine(referenceRoot, relative);
+            var referenceExists = referencePath != null && File.Exists(referencePath);
 
             if (sources.Length == 1)
             {
@@ -67,7 +97,7 @@ public static class MacUniversalPayloadMerger
                         $"only one input ({sources[0]}). Every Mach-O in a universal payload must carry " +
                         "at least two architecture slices or appear in every input directory.");
                 }
-                Copy(sources[0], destination);
+                Copy(referenceExists ? referencePath! : sources[0], destination);
                 continue;
             }
 
@@ -76,6 +106,10 @@ public static class MacUniversalPayloadMerger
             if (allMachO)
             {
                 MergeMachO(sources, destination);
+            }
+            else if (referenceExists)
+            {
+                Copy(referencePath!, destination);
             }
             else if (sources.Skip(1).All(other => BytesEqual(first, other)))
             {
@@ -97,11 +131,16 @@ public static class MacUniversalPayloadMerger
         }
     }
 
-    /// <summary>Files allowed to differ per-RID: debug symbols and AOT debug bundles.</summary>
+    /// <summary>
+    /// Files allowed to differ per-RID: debug symbols, AOT debug bundles, and deps.json —
+    /// its runtimeTarget name embeds the RID while the resolvable asset paths are identical
+    /// once the payload is merged; keeping one side's copy resolves the same files for both.
+    /// </summary>
     private static bool IsPerArchMetadata(string relative) =>
         relative.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase) ||
         relative.EndsWith(".dSYM", StringComparison.OrdinalIgnoreCase) ||
-        relative.IndexOf(".dSYM/", StringComparison.OrdinalIgnoreCase) >= 0;
+        relative.IndexOf(".dSYM/", StringComparison.OrdinalIgnoreCase) >= 0 ||
+        relative.EndsWith(".deps.json", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Fat-merge Mach-O files: union of architecture slices across all inputs.</summary>
     private static void MergeMachO(string[] sources, string destination)

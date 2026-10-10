@@ -266,7 +266,10 @@ dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet test tests/Bundler.ApiTests/Bundler.ApiTests.csproj -c Release
 dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64 -p:BundlerTarget=windows-x86_64
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64
+# BundlerTarget 按 $(RuntimeIdentifier) 推导，可显式 -p:BundlerTarget=<target> 覆盖；
+# 不经 publish：dotnet msbuild -t:BundlerBundle -p:BundlerTarget=<target>（自动内层发布+打包）
+# 或 -p:BundlerInputDir=<已发布目录> 只打包；-p:BundlerPublishRid=<rid> 覆盖 canonical 内层发布 RID
 # 只产某格式：-p:BundlerFormats=nsis（等）；某格式旋钮变体：-p:HelloBundler<Format><Knob>=...
 
 # 按格式类选择集成测试；MSI 真装腿另需同意闸 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1

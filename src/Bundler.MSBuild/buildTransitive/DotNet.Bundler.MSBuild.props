@@ -1,7 +1,26 @@
 <Project>
   <PropertyGroup>
     <BundlerEnabled Condition="'$(BundlerEnabled)' == ''">false</BundlerEnabled>
-    <BundlerFormats Condition="'$(BundlerFormats)' == ''">nsis</BundlerFormats>
+    <!-- BundlerFormats 不设 eval 期默认：设了会抢占消费方 csproj 按 $(BundlerTarget) 选的格式集——
+         兜底 nsis 在 _BundlerDerive 的 target 期生效。 -->
+    <!-- BundlerTarget 便捷推导：$(RuntimeIdentifier) 命中 canonical publish RID 时 eval 期即填
+         （显式 BundlerTarget 恒覆盖），让 csproj 里依赖 $(BundlerTarget) 的 eval 期逻辑
+         （如按目标选默认格式集）拿到推导结果；与 _BundlerRidMap/_BundlerDerive 的 target 期兜底
+         （RID 在 csproj 体内才设置的场景）同源——eval 期无 item 元数据批处理，只能写显式条件。
+         _BundlerExplicitTarget/_BundlerEvalTarget 记录推导归属：RID 在 eval 后变更时，
+         _BundlerDerive 只刷新“我们导的”值，显式 BundlerTarget 恒不动。 -->
+    <_BundlerExplicitTarget>$(BundlerTarget)</_BundlerExplicitTarget>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'win-x64'">windows-x86_64</BundlerTarget>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'win-x86'">windows-i686</BundlerTarget>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'win-arm64'">windows-arm64</BundlerTarget>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'osx-x64'">macos-x86_64</BundlerTarget>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'osx-arm64'">macos-arm64</BundlerTarget>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-x64'">linux-x86_64</BundlerTarget>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-x86'">linux-i686</BundlerTarget>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-arm64'">linux-aarch64</BundlerTarget>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-musl-x64'">linux-musl-x86_64</BundlerTarget>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-musl-arm64'">linux-musl-aarch64</BundlerTarget>
+    <_BundlerEvalTarget Condition="'$(_BundlerExplicitTarget)' == ''">$(BundlerTarget)</_BundlerEvalTarget>
     <BundlerProductName Condition="'$(BundlerProductName)' == ''"></BundlerProductName>
     <BundlerVersion Condition="'$(BundlerVersion)' == ''"></BundlerVersion>
     <BundlerPublisher Condition="'$(BundlerPublisher)' == ''">$(Company)</BundlerPublisher>
@@ -12,6 +31,8 @@
     <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''"></BundlerMainExecutable>
     <BundlerOutputPath Condition="'$(BundlerOutputPath)' == ''">$(MSBuildProjectDirectory)\artifacts</BundlerOutputPath>
     <BundlerOutputLayout Condition="'$(BundlerOutputLayout)' == ''">flat</BundlerOutputLayout>
+    <BundlerInputDir Condition="'$(BundlerInputDir)' == ''"></BundlerInputDir>
+    <BundlerPublishRid Condition="'$(BundlerPublishRid)' == ''"></BundlerPublishRid>
     <BundlerToolCachePath Condition="'$(BundlerToolCachePath)' == ''"></BundlerToolCachePath>
     <BundlerWixToolsetArchivePath Condition="'$(BundlerWixToolsetArchivePath)' == ''"></BundlerWixToolsetArchivePath>
     <BundlerWixInstallScope Condition="'$(BundlerWixInstallScope)' == ''">currentUser</BundlerWixInstallScope>

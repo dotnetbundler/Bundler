@@ -98,11 +98,26 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
 然后正常执行发布：
 
 ```powershell
-dotnet publish -c Release
+dotnet publish -c Release -r win-x64
+```
+
+`dotnet publish` 后自动打包；`BundlerTarget` 可按 `$(RuntimeIdentifier)` 从 canonical RID 表推导省略——上例 `win-x64` 即推导为 `windows-x86_64`，显式 `-p:BundlerTarget=` 恒覆盖。
+不经 Publish 钩子也可以显式调用 `BundlerBundle` target，三种模式：
+
+```powershell
+# 自动发布+打包：按 BundlerTarget 查 canonical publish RID 内层发布到 obj/BundlerPublish/ 再打包
+dotnet msbuild -t:BundlerBundle -p:BundlerTarget=windows-x86_64 -p:Configuration=Release
+# 只打包不发布：拿已有发布目录直接打
+dotnet msbuild -t:BundlerBundle -p:BundlerInputDir=bin\Release\net10.0\win-x64\publish -p:BundlerTarget=windows-x86_64
+# canonical 映射外 RID：显式指定内层发布 RID
+dotnet msbuild -t:BundlerBundle -p:BundlerTarget=linux-x86_64 -p:BundlerPublishRid=ubuntu.24.04-x64
 ```
 
 安装程序默认输出到 `artifacts/`（扁平布局；`BundlerOutputLayout=byFormat` 时按 `artifacts/<format>/` 分格）。
 自动打包发生在 `Publish` 之后，普通的 `Build` 不会生成安装包。
+`BundlerEnabled` 只控 Publish 钩子路；显式 `-t:BundlerBundle` 不需要它（除 `BundlerIdentifier` 仍必填外无开关依赖）。
+两入口同样支持 `BundlerUniversalTargets`（macOS universal 内层双 RID 发布+合并）。
+canonical RID 映射表：`windows-x86_64→win-x64`、`windows-i686→win-x86`、`windows-arm64→win-arm64`、`macos-x86_64→osx-x64`、`macos-arm64→osx-arm64`、`linux-x86_64→linux-x64`、`linux-i686→linux-x86`、`linux-aarch64→linux-arm64`、`linux-musl-x86_64→linux-musl-x64`、`linux-musl-aarch64→linux-musl-arm64`；`macos-universal` 无单一 RID 映射，走 `BundlerUniversalTargets`。
 
 ## 独立 NSIS API
 
@@ -213,12 +228,14 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 
 | 属性 | 是否必填 | 默认值 |
 | --- | --- | --- |
-| `BundlerEnabled` | 是 | `false` |
+| `BundlerEnabled` | Publish 钩子路必填 | `false`；显式 `-t:BundlerBundle` 不检查 |
 | `BundlerIdentifier` | 是 | — |
-| `BundlerTarget` | 是 | —；`BundlerUniversalTargets` 设置时可省略 |
-| `RuntimeIdentifier` | 是 | —；`dotnet publish` 侧标准属性，产目标平台载荷仍按 .NET RID 指定 |
+| `BundlerTarget` | 条件必填 | —；缺省时按 `$(RuntimeIdentifier)` 查 canonical RID 表推导，显式指定恒覆盖；`BundlerUniversalTargets` 设置时也可省略 |
+| `RuntimeIdentifier` | 否 | `dotnet publish` 侧标准属性（.NET RID）；`BundlerTarget` 缺省时兼作推导来源 |
+| `BundlerInputDir` | 否 | 无；`-t:BundlerBundle` 下非空即“只打包不发布”——拿已有发布目录直接打，跳过内层 publish |
+| `BundlerPublishRid` | 否 | 按 `BundlerTarget`→canonical publish RID 表默认；表外 RID 显式覆盖内层发布 |
 | `BundlerFormats` | 否 | `nsis`；分号分隔多值扇出，可用 `nsis`/`msi`/`app`/`dmg`/`pkg`/`deb`/`rpm`/`appimage`/`zip`/`targz`/`alpineapk`（CLI 另收 `all` 全量别名） |
-| `BundlerUniversalTargets` | 否 | 无；macOS universal 用——复数 .NET RID（如 `osx-x64;osx-arm64`）对每个 RID 内层 `dotnet publish` 后托管合并成 universal 目录再按 `macos-universal` 打包 |
+| `BundlerUniversalTargets` | 否 | 无；macOS universal 用——复数 .NET RID（如 `osx-x64;osx-arm64`，命令行 `-p:` 须写 `%3B`）对每个 RID 内层 `dotnet publish` 后托管合并成 universal 目录再按 `macos-universal` 打包 |
 | `BundlerProductName` | 否 | `$(AssemblyName)` |
 | `BundlerVersion` | 否 | `$(Version)` |
 | `BundlerMainExecutable` | 否 | `$(TargetName).exe` |

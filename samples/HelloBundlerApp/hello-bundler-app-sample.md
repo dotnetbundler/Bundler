@@ -43,26 +43,33 @@ appimage 仅 Linux 宿主；nsis/deb/rpm/zip/targz/alpineapk 为纯托管实现�
 - **MSI 许可只收 RTF**：formats 集含 `msi` 时 `formats/Msi.props` 自动把全局许可切到 `Assets/msi/license.rtf`
   （nsis/dmg/pkg 同样接受 RTF；archive 不内嵌许可，deb/rpm 以文件载荷携带扩展名无影响）。
   `HelloBundlerMsiLicenseFile` 传透可整体接管；`app` 共存时许可仍缺席（独立 app 无许可载荷契约优先）。
-- **universal 合并要求非 Mach-O 载荷逐字节一致**：`-r osx -p:BundlerUniversalTargets=osx-x64;osx-arm64`
-  做双 RID 内层 publish + 托管合并；framework-dependent 应用的 `*.deps.json` 逐 publish-RID 不同会按契约拒绝合并
-  （`Universal merge conflict ... is not a Mach-O file`），非样本缺陷，需自包含/同构载荷场景适用。
+- **universal 只支持 framework-dependent 发布**：`-p:BundlerUniversalTargets=osx-x64%3Bosx-arm64`
+  做双 RID 内层 publish + 无 RID 参考发布 + 托管合并；非 Mach-O 文件以参考发布为权威源，
+  Mach-O 胖合并。`SelfContained`/`PublishAot`/`PublishSingleFile` 同设会提前报错，
+  universal 无法表达逐架构运行时差异。
+  （`-p:` 的 `;` 是 CLI 属性分隔符，RID 列表在命令行必须写成 `%3B`；csproj 里写 `;` 即可。）
 
 ## 运行
 
 ```bash
-# 产出该目标下全部可构建格式
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r <publish-rid> -p:BundlerTarget=<target>
+# 产出该目标下全部可构建格式（BundlerTarget 按 $(RuntimeIdentifier) 推导，也可显式 -p:BundlerTarget=<target>）
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r <publish-rid>
 
 # 只产指定格式子集
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r linux-x64 -p:BundlerTarget=linux-x86_64 -p:BundlerFormats=deb;rpm
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r linux-x64 -p:BundlerFormats=deb;rpm
 
 # 变体旋钮：全部按 HelloBundler<Format><Knob> 传透
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64 -p:BundlerTarget=windows-x86_64 \
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64 \
     -p:HelloBundlerNsisInstallScope=perMachine \
     -p:HelloBundlerMsiLanguage=zh-CN -p:HelloBundlerMsiInstallScope=perMachine
+
+# 不经 publish：显式 BundlerBundle 入口（自动内层发布+打包 / 只打包）
+dotnet msbuild samples/HelloBundlerApp/HelloBundlerApp.csproj -t:BundlerBundle -p:BundlerTarget=linux-x86_64 -p:Configuration=Release
+dotnet msbuild samples/HelloBundlerApp/HelloBundlerApp.csproj -t:BundlerBundle -p:BundlerInputDir=<已发布目录> -p:BundlerTarget=linux-x86_64
 ```
 
 产物统一落 `samples/HelloBundlerApp/artifacts/`（由 `BundlerOutputPath` 可调）。
+`BundlerBundle` 三模式：`BundlerInputDir` 非空只打包、缺省按 `BundlerTarget→canonical RID` 内层发布再打包（`-p:BundlerPublishRid=` 覆盖表外 RID）、`BundlerUniversalTargets` 走 universal 合并。
 
 ## 变体旋钮前缀约定
 
