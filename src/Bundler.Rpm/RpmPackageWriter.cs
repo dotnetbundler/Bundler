@@ -79,12 +79,6 @@ internal static class RpmPackageWriter
             }
         }
 
-        if (settings.Compression is { Length: > 0 } compression &&
-            !string.Equals(compression, "gzip", StringComparison.Ordinal))
-        {
-            throw new ArgumentException(
-                $"The .rpm payload compression '{compression}' is not supported; only 'gzip' is available.");
-        }
 
         ValidateSigning(settings);
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
@@ -118,15 +112,15 @@ internal static class RpmPackageWriter
                 settings, payloadSha256, cpioSha256), 63);
             byte[]? pgpSignature = null;
             byte[]? rsaSignature = null;
-            if (settings.SigningKeyFile is { Length: > 0 } keyFile)
+            if (settings.Signing.KeyFile is { Length: > 0 } keyFile)
             {
                 rsaSignature = RpmSigner.Sign(
-                    mainHeader, keyFile, settings.SigningKeyPassphrase);
+                    mainHeader, keyFile, settings.Signing.Passphrase);
                 using (var payloadStream = File.OpenRead(payloadPath))
                 {
                     pgpSignature = RpmSigner.Sign(
                         mainHeader, payloadStream, keyFile,
-                        settings.SigningKeyPassphrase);
+                        settings.Signing.Passphrase);
                 }
                 logger.Log(BundleLogLevel.Information,
                     "Signing package (RPMSIGTAG_RSA + RPMSIGTAG_PGP).");
@@ -250,17 +244,17 @@ internal static class RpmPackageWriter
 
     private static void ValidateSigning(RpmBundleConfiguration settings)
     {
-        var hasKey = settings.SigningKeyFile is { Length: > 0 };
-        var hasPassphrase = settings.SigningKeyPassphrase is { Length: > 0 };
+        var hasKey = settings.Signing.KeyFile is { Length: > 0 };
+        var hasPassphrase = settings.Signing.Passphrase is { Length: > 0 };
         if (hasPassphrase && !hasKey)
         {
             throw new ArgumentException(
                 "SigningKeyPassphrase requires SigningKeyFile to point at an OpenPGP secret key.");
         }
-        if (hasKey && !File.Exists(settings.SigningKeyFile!))
+        if (hasKey && !File.Exists(settings.Signing.KeyFile!))
         {
             throw new ArgumentException(
-                $"SigningKeyFile '{settings.SigningKeyFile}' does not exist.");
+                $"SigningKeyFile '{settings.Signing.KeyFile}' does not exist.");
         }
     }
 
@@ -458,7 +452,7 @@ internal static class RpmPackageWriter
             RpmDependency.Rpmlib | RpmDependency.Less | RpmDependency.Equal
         };
         var requireVersions = new List<string> { "3.0.4-1", "4.6.0-1", "4.0-1" };
-        foreach (var clause in settings.Requires ?? [])
+        foreach (var clause in settings.Depends ?? [])
         {
             var parsed = RpmDependency.Parse(clause);
             requireNames.Add(parsed.Name);
@@ -676,11 +670,11 @@ internal static class RpmPackageWriter
 
         foreach (var resource in bundle.Resources)
         {
-            var target = resource.TargetPath.Replace('\\', '/').Trim('/');
+            var target = resource.Destination.Replace('\\', '/').Trim('/');
             if (target.Length == 0 || target.Split('/').Contains(".."))
             {
                 throw new ArgumentException(
-                    $"The resource target must stay inside the payload: '{resource.TargetPath}'.");
+                    $"The resource target must stay inside the payload: '{resource.Destination}'.");
             }
             var source = Path.GetFullPath(resource.Source);
             if (Directory.Exists(source))
@@ -716,7 +710,7 @@ internal static class RpmPackageWriter
             {
                 DesktopFile = settings.DesktopFile,
                 MetainfoFile = settings.MetainfoFile,
-                Categories = settings.Categories,
+                Categories = settings.Categories is { Count: > 0 } categories ? string.Join(";", categories) : null,
                 Format = "rpm"
             }))
         {

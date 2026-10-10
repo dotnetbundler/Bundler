@@ -60,7 +60,7 @@ internal sealed class AppImageBundleBackend(
             if (signing is not null)
             {
                 environment["GNUPGHOME"] = signing.GnupgHome;
-                if (settings.SigningKeyPassphrase is { Length: > 0 } passphrase)
+                if (settings.Signing.Passphrase is { Length: > 0 } passphrase)
                 {
                     environment["APPIMAGETOOL_SIGN_PASSPHRASE"] = passphrase;
                 }
@@ -100,16 +100,16 @@ internal sealed class AppImageBundleBackend(
     /// </summary>
     internal static void ValidateConfiguration(AppImageBundleConfiguration settings)
     {
-        var hasKey = settings.SigningKeyFile is { Length: > 0 };
-        if (settings.SigningKeyPassphrase is { Length: > 0 } && !hasKey)
+        var hasKey = settings.Signing.KeyFile is { Length: > 0 };
+        if (settings.Signing.Passphrase is { Length: > 0 } && !hasKey)
         {
             throw new ArgumentException(
                 "SigningKeyPassphrase requires SigningKeyFile to point at an OpenPGP secret key.");
         }
-        if (hasKey && !File.Exists(settings.SigningKeyFile!))
+        if (hasKey && !File.Exists(settings.Signing.KeyFile!))
         {
             throw new ArgumentException(
-                $"SigningKeyFile '{settings.SigningKeyFile}' does not exist.");
+                $"SigningKeyFile '{settings.Signing.KeyFile}' does not exist.");
         }
     }
 
@@ -117,11 +117,11 @@ internal sealed class AppImageBundleBackend(
         AppImageBundleConfiguration settings, string workDirectory)
     {
         ValidateConfiguration(settings);
-        if (settings.SigningKeyFile is not { Length: > 0 })
+        if (settings.Signing.KeyFile is not { Length: > 0 })
         {
             return null;
         }
-        return AppImageSigning.Prepare(settings.SigningKeyFile!, workDirectory);
+        return AppImageSigning.Prepare(settings.Signing.KeyFile!, workDirectory);
     }
 
     private static void WriteSha256Sidecar(string path)

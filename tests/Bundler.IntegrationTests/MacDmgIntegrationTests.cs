@@ -1,6 +1,6 @@
 // MAC-DMG-1/2/3/4 集成腿的 C# 移植：对应原 tests/MacOS.Dmg.Integration/Verify.sh。
 // 覆盖点：nupkg → 中间 .app + .dmg → hdiutil attach/卷内容/detach → UDZO 变体 →
-// SkipWindowLayout → EULA(udifrez 资源回读)+ad-hoc 签名+SLA 挂载门控 →
+// LayoutSkip → EULA(udifrez 资源回读)+ad-hoc 签名+SLA 挂载门控 →
 // quarantine 传播 → osx-x64 → 失败路径无残留 → API fixture。
 [System.Runtime.Versioning.SupportedOSPlatform("macos")]
 public sealed class MacDmgFixture : IDisposable
@@ -74,13 +74,13 @@ public sealed class MacDmgFixture : IDisposable
         Assert.True(File.Exists(Dmg), "The .dmg artifact is missing.");
 
         UdzoDmg = PublishDmg("bundle-udzo", "-p:BundlerTestDmgCompression=Udzo");
-        SkipDmg = PublishDmg("bundle-skip", "-p:BundlerTestDmgSkipWindowLayout=true");
+        SkipDmg = PublishDmg("bundle-skip", "-p:BundlerTestDmgLayoutSkip=true");
         EulaDmg = PublishDmg("bundle-eula",
-            "-p:BundlerTestDmgSkipWindowLayout=true",
+            "-p:BundlerTestDmgLayoutSkip=true",
             "-p:BundlerTestDmgLicense=true",
             "-p:BundlerTestDmgSignIdentity=-");
         X64Dmg = PublishDmgForRid("bundle-x64", "osx-x64",
-            "-p:BundlerTestDmgSkipWindowLayout=true");
+            "-p:BundlerTestDmgLayoutSkip=true");
         return true;
     }
 
@@ -195,11 +195,11 @@ public sealed class MacDmgIntegrationTests : IClassFixture<MacDmgFixture>
     }
 
     [Fact]
-    public void SkipWindowLayoutVariantVerifies()
+    public void LayoutSkipVariantVerifies()
     {
         _f.Ensure();
         ProcessRunner.AssertSuccess(ProcessRunner.Run("hdiutil", ["verify", _f.SkipDmg]),
-            "hdiutil verify failed on the SkipWindowLayout .dmg.");
+            "hdiutil verify failed on the LayoutSkip .dmg.");
     }
 
     [Fact]

@@ -96,35 +96,29 @@ public sealed class AlpineApkBundleConfiguration
     public IReadOnlyList<AlpineApkFileEntry>? Files { get; init; }
 
     /// <summary>Caller-supplied <c>.pre-install</c> script file.</summary>
-    public string? PreInstallScript { get; init; }
+    public string? PreInstallFile { get; init; }
 
     /// <summary>Caller-supplied <c>.post-install</c> script file.</summary>
-    public string? PostInstallScript { get; init; }
+    public string? PostInstallFile { get; init; }
 
     /// <summary>Caller-supplied <c>.pre-deinstall</c> script file.</summary>
-    public string? PreDeinstallScript { get; init; }
+    public string? PreUninstallFile { get; init; }
 
     /// <summary>Caller-supplied <c>.post-deinstall</c> script file.</summary>
-    public string? PostDeinstallScript { get; init; }
+    public string? PostUninstallFile { get; init; }
 
     /// <summary>Caller-supplied <c>.pre-upgrade</c> script file.</summary>
-    public string? PreUpgradeScript { get; init; }
+    public string? PreUpgradeFile { get; init; }
 
     /// <summary>Caller-supplied <c>.post-upgrade</c> script file.</summary>
-    public string? PostUpgradeScript { get; init; }
+    public string? PostUpgradeFile { get; init; }
 
     /// <summary>
-    /// Optional PEM-encoded RSA private key used to sign the package. When
-    /// set, a signature segment carrying
-    /// <c>.SIGN.RSA.&lt;key-file-name&gt;.rsa.pub</c> is prepended to the package.
+    /// Optional PEM-encoded RSA key signing: when a key file is set, a signature
+    /// segment carrying <c>.SIGN.RSA.&lt;key-file-name&gt;.rsa.pub</c> is prepended
+    /// to the package. An empty <see cref="Signing"/> leaves the package unsigned.
     /// </summary>
-    public string? SigningKeyFile { get; init; }
-
-    /// <summary>
-    /// Passphrase for <see cref="SigningKeyFile"/>. Supplying one without a
-    /// key file is rejected.
-    /// </summary>
-    public string? SigningKeyPassphrase { get; init; }
+    public KeyFileSigningConfiguration Signing { get; init; } = new();
 
     /// <summary>
     /// Escape hatch: extra <c>.PKGINFO</c> key/value pairs appended after the

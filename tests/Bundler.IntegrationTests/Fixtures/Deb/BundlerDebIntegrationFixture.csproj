@@ -11,17 +11,17 @@
     <BundlerIdentifier>com.dotnetbundler.debintegrationfixture</BundlerIdentifier>
     <BundlerProductName>Bundler Deb Fixture</BundlerProductName>
     <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
-    <BundlerDebMaintainer>DotNet.Bundler Tests &lt;tests@example.com&gt;</BundlerDebMaintainer>
+    <BundlerDebVendor>DotNet.Bundler Tests &lt;tests@example.com&gt;</BundlerDebVendor>
     <BundlerDebSection>utils</BundlerDebSection>
     <BundlerDescription>Disposable .deb integration-test fixture.</BundlerDescription>
     <BundlerHomepage>https://example.com/deb-fixture</BundlerHomepage>
     <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
     <BundlerDebPackageName Condition="'$(BundlerTestDebPackageName)' != ''">$(BundlerTestDebPackageName)</BundlerDebPackageName>
     <BundlerDebVersion Condition="'$(BundlerTestDebVersion)' != ''">$(BundlerTestDebVersion)</BundlerDebVersion>
-    <BundlerDebRevision Condition="'$(BundlerTestDebRevision)' != ''">$(BundlerTestDebRevision)</BundlerDebRevision>
+    <BundlerDebRelease Condition="'$(BundlerTestDebRelease)' != ''">$(BundlerTestDebRelease)</BundlerDebRelease>
     <BundlerDebEpoch Condition="'$(BundlerTestDebEpoch)' != ''">$(BundlerTestDebEpoch)</BundlerDebEpoch>
     <BundlerDebArchitecture Condition="'$(BundlerTestDebArchitecture)' != ''">$(BundlerTestDebArchitecture)</BundlerDebArchitecture>
-    <BundlerDebMaintainer Condition="'$(BundlerTestDebMaintainer)' != ''">$(BundlerTestDebMaintainer)</BundlerDebMaintainer>
+    <BundlerDebVendor Condition="'$(BundlerTestDebVendor)' != ''">$(BundlerTestDebVendor)</BundlerDebVendor>
     <BundlerDebInstallRoot Condition="'$(BundlerTestDebInstallRoot)' != ''">$(BundlerTestDebInstallRoot)</BundlerDebInstallRoot>
     <BundlerDebBinLink Condition="'$(BundlerTestDebBinLink)' != ''">$(BundlerTestDebBinLink)</BundlerDebBinLink>
     <BundlerDebDepends Condition="'$(BundlerTestDebDepends)' != ''">$(BundlerTestDebDepends)</BundlerDebDepends>
@@ -38,17 +38,16 @@
     <BundlerDebMetainfoFile Condition="'$(BundlerTestDebMetainfoFile)' != ''">$(BundlerTestDebMetainfoFile)</BundlerDebMetainfoFile>
     <BundlerDebChangelogFile>$(MSBuildThisFileDirectory)Assets/CHANGELOG.md</BundlerDebChangelogFile>
     <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets/LICENSE.txt</BundlerLicenseFile>
-    <BundlerDebPreinstFile Condition="'$(BundlerTestDebPreinstFile)' != ''">$(BundlerTestDebPreinstFile)</BundlerDebPreinstFile>
-    <BundlerDebPostinstFile Condition="'$(BundlerTestDebPostinstFile)' != ''">$(BundlerTestDebPostinstFile)</BundlerDebPostinstFile>
-    <BundlerDebPrermFile Condition="'$(BundlerTestDebPrermFile)' != ''">$(BundlerTestDebPrermFile)</BundlerDebPrermFile>
-    <BundlerDebPostrmFile Condition="'$(BundlerTestDebPostrmFile)' != ''">$(BundlerTestDebPostrmFile)</BundlerDebPostrmFile>
+    <BundlerDebPreInstallFile Condition="'$(BundlerTestDebPreinstFile)' != ''">$(BundlerTestDebPreinstFile)</BundlerDebPreInstallFile>
+    <BundlerDebPostInstallFile Condition="'$(BundlerTestDebPostinstFile)' != ''">$(BundlerTestDebPostinstFile)</BundlerDebPostInstallFile>
+    <BundlerDebPreUninstallFile Condition="'$(BundlerTestDebPrermFile)' != ''">$(BundlerTestDebPrermFile)</BundlerDebPreUninstallFile>
+    <BundlerDebPostUninstallFile Condition="'$(BundlerTestDebPostrmFile)' != ''">$(BundlerTestDebPostrmFile)</BundlerDebPostUninstallFile>
     <BundlerDebSystemdServiceFile Condition="'$(BundlerTestDebSystemdServiceFile)' != ''">$(BundlerTestDebSystemdServiceFile)</BundlerDebSystemdServiceFile>
-    <BundlerDebConffiles Condition="'$(BundlerTestDebConffiles)' != ''">$(BundlerTestDebConffiles)</BundlerDebConffiles>
-    <BundlerDebCompression Condition="'$(BundlerTestDebCompression)' != ''">$(BundlerTestDebCompression)</BundlerDebCompression>
+    <BundlerDebConfigFiles Condition="'$(BundlerTestDebConfigFiles)' != ''">$(BundlerTestDebConfigFiles)</BundlerDebConfigFiles>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <BundlerResource Include="Assets/readme.txt" Destination="docs/readme.txt" />
     <BundlerIcon Include="Assets/icon48.png" />
     <BundlerIcon Include="Assets/icon@2x.png" />
     <BundlerFileAssociation Include=".bdlfixture" Name="Bundler fixture document"

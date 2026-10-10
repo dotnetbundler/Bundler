@@ -25,13 +25,13 @@
     <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
     <BundlerNsisLanguages>$(BundlerIntegrationLanguages)</BundlerNsisLanguages>
     <BundlerNsisDisplayLanguageSelector>$(BundlerIntegrationDisplayLanguageSelector)</BundlerNsisDisplayLanguageSelector>
-    <BundlerNsisInstallMode Condition="'$(BundlerNsisInstallMode)' == ''">currentUser</BundlerNsisInstallMode>
-    <BundlerIntegrationInstallerHooks Condition="'$(BundlerIntegrationInstallerHooks)' == ''">$(MSBuildProjectDirectory)\Assets\installer-hooks.nsh</BundlerIntegrationInstallerHooks>
-    <BundlerNsisInstallerIcon>$(BundlerTestIcon)</BundlerNsisInstallerIcon>
-    <BundlerNsisUninstallerIcon>$(BundlerTestIcon)</BundlerNsisUninstallerIcon>
-    <BundlerNsisHeaderImage>$(BundlerTestHeaderImage)</BundlerNsisHeaderImage>
-    <BundlerNsisSidebarImage>$(BundlerTestSidebarImage)</BundlerNsisSidebarImage>
-    <BundlerNsisInstallerHooks>$(BundlerIntegrationInstallerHooks)</BundlerNsisInstallerHooks>
+    <BundlerNsisInstallScope Condition="'$(BundlerNsisInstallScope)' == ''">currentUser</BundlerNsisInstallScope>
+    <BundlerIntegrationInstallerHooksFile Condition="'$(BundlerIntegrationInstallerHooksFile)' == ''">$(MSBuildProjectDirectory)\Assets\installer-hooks.nsh</BundlerIntegrationInstallerHooksFile>
+    <BundlerNsisInstallerIconFile>$(BundlerTestIconFile)</BundlerNsisInstallerIconFile>
+    <BundlerNsisUninstallerIconFile>$(BundlerTestIconFile)</BundlerNsisUninstallerIconFile>
+    <BundlerNsisHeaderFile>$(BundlerTestHeaderFile)</BundlerNsisHeaderFile>
+    <BundlerNsisSidebarFile>$(BundlerTestSidebarFile)</BundlerNsisSidebarFile>
+    <BundlerNsisInstallerHooksFile>$(BundlerIntegrationInstallerHooksFile)</BundlerNsisInstallerHooksFile>
     <BundlerNsisShortcutDesktop Condition="'$(BundlerNsisShortcutDesktop)' == ''">true</BundlerNsisShortcutDesktop>
     <BundlerNsisShortcutStartMenu Condition="'$(BundlerNsisShortcutStartMenu)' == ''">true</BundlerNsisShortcutStartMenu>
     <BundlerNsisShortcutArguments>$(BundlerIntegrationShortcutArguments)</BundlerNsisShortcutArguments>
@@ -44,8 +44,8 @@
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <BundlerIcon Include="$(BundlerTestIcon)" Condition="'$(BundlerTestIcon)' != ''" />
-    <BundlerResource Include="Assets\license.txt" TargetPath="docs\license.txt" />
+    <BundlerIcon Include="$(BundlerTestIconFile)" Condition="'$(BundlerTestIconFile)' != ''" />
+    <BundlerResource Include="Assets\license.txt" Destination="docs\license.txt" />
     <BundlerFileAssociation Include="dbfixture"
                             Name="DotNet.Bundler fixture document"
                             Description="Disposable DotNet.Bundler integration fixture document"

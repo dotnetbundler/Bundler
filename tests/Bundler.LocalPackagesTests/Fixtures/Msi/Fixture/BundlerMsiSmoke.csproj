@@ -16,12 +16,12 @@
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
     <PackageReference Include="DotNet.Bundler" VersionOverride="$(BundlerPackageVersion)" />
-    <BundlerResource Include="Assets\marker.txt" TargetPath="docs\marker.txt" />
-    <BundlerResource Include="Assets\v1-only.txt" TargetPath="docs\v1-only.txt"
+    <BundlerResource Include="Assets\marker.txt" Destination="docs\marker.txt" />
+    <BundlerResource Include="Assets\v1-only.txt" Destination="docs\v1-only.txt"
                      Condition="'$(MsiLifecycleTest)' == 'true' and '$(BundlerVersion)' == '1.0.0'" />
-    <BundlerResource Include="Assets\v2-only.txt" TargetPath="docs\v2-only.txt"
-                     Condition="'$(MsiLifecycleTest)' == 'true' and ('$(BundlerVersion)' == '1.1.0' or '$(BundlerWixMsiVersion)' == '1.1.0')" />
-    <BundlerResource Include="Assets\variant-only.txt" TargetPath="docs\variant-only.txt"
+    <BundlerResource Include="Assets\v2-only.txt" Destination="docs\v2-only.txt"
+                     Condition="'$(MsiLifecycleTest)' == 'true' and ('$(BundlerVersion)' == '1.1.0' or '$(BundlerWixVersion)' == '1.1.0')" />
+    <BundlerResource Include="Assets\variant-only.txt" Destination="docs\variant-only.txt"
                      Condition="'$(MsiVariantTest)' == 'true'" />
     <BundlerFileAssociation Include="$(BundlerTestExtension)" Condition="'$(MsiLifecycleTest)' == 'true'">
       <Name>Bundler MSI lifecycle file</Name>

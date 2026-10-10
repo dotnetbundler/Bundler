@@ -67,19 +67,28 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
         var perUser = settings.InstallScope == WixInstallScope.CurrentUser;
         var scopeRoot = perUser ? "LocalAppDataFolder" :
             item.Target.Architecture == CpuArchitecture.X86 ? "ProgramFilesFolder" : "ProgramFiles64Folder";
-        // 跨安装器目录延续（Tauri 对齐）：先读旧 NSIS 安装器写入的卸载键 InstallLocation，
+        // 跨安装器目录延续（Tauri 对齐）：先读旧 NSIS 安装器写入的卸载键 InstallRoot，
         // 再到 Bundler 自家注册；Bundler 注册的目录优先（后写者胜）。
         var nsisUninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\" + bundle.Identifier;
         // NSIS 在 x64/arm64 下写 64 位注册表视图（installer.nsi SetRegView 64），MSI 检索须同视图。
         var nsisRegistryView = item.Target.Architecture == CpuArchitecture.X86 ? "no" : "yes";
+        // alpha.89 前 NSIS 写 InstallLocation；同名搜索后写者胜，先查旧键再查新键 InstallRoot。
         var nsisSearches = new XElement(Wix + "Property", new XAttribute("Id", "PREVIOUS_NSIS_INSTALLDIR"),
-            new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerNsisDirSearchMachine"),
+            new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerNsisDirSearchMachineLegacy"),
                 new XAttribute("Root", "HKLM"), new XAttribute("Key", nsisUninstallKey),
                 new XAttribute("Name", "InstallLocation"), new XAttribute("Type", "directory"),
                 new XAttribute("Win64", nsisRegistryView)),
-            new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerNsisDirSearchUser"),
+            new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerNsisDirSearchUserLegacy"),
                 new XAttribute("Root", "HKCU"), new XAttribute("Key", nsisUninstallKey),
                 new XAttribute("Name", "InstallLocation"), new XAttribute("Type", "directory"),
+                new XAttribute("Win64", nsisRegistryView)),
+            new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerNsisDirSearchMachine"),
+                new XAttribute("Root", "HKLM"), new XAttribute("Key", nsisUninstallKey),
+                new XAttribute("Name", "InstallRoot"), new XAttribute("Type", "directory"),
+                new XAttribute("Win64", nsisRegistryView)),
+            new XElement(Wix + "RegistrySearch", new XAttribute("Id", "BundlerNsisDirSearchUser"),
+                new XAttribute("Root", "HKCU"), new XAttribute("Key", nsisUninstallKey),
+                new XAttribute("Name", "InstallRoot"), new XAttribute("Type", "directory"),
                 new XAttribute("Win64", nsisRegistryView)));
         product.Add(nsisSearches);
         product.Add(new XElement(Wix + "Property", new XAttribute("Id", "INSTALLFOLDER"),
@@ -217,15 +226,15 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
         var hasLicense = !string.IsNullOrWhiteSpace(bundle.LicenseFile);
         var usesCustomUi = settings.InstallDirectorySelection ||
             (!hasLicense && (settings.LaunchAfterInstall ||
-                settings.BannerBitmap is not null || settings.DialogBitmap is not null));
+                settings.BannerFile is not null || settings.DialogFile is not null));
         if (hasLicense || usesCustomUi)
             product.Add(new XElement(Wix + "UIRef", new XAttribute("Id", "WixUI_ErrorProgressText")));
-        if (settings.BannerBitmap is not null)
+        if (settings.BannerFile is not null)
             product.Add(new XElement(Wix + "WixVariable", new XAttribute("Id", "WixUIBannerBmp"),
-                new XAttribute("Value", Path.GetFullPath(settings.BannerBitmap))));
-        if (settings.DialogBitmap is not null)
+                new XAttribute("Value", Path.GetFullPath(settings.BannerFile))));
+        if (settings.DialogFile is not null)
             product.Add(new XElement(Wix + "WixVariable", new XAttribute("Id", "WixUIDialogBmp"),
-                new XAttribute("Value", Path.GetFullPath(settings.DialogBitmap))));
+                new XAttribute("Value", Path.GetFullPath(settings.DialogFile))));
         if (hasLicense)
             product.Add(new XElement(Wix + "WixVariable", new XAttribute("Id", "WixUILicenseRtf"),
                 new XAttribute("Value", Path.GetFullPath(bundle.LicenseFile))));

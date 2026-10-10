@@ -38,6 +38,25 @@
 
 > 原则：CLI 参数覆盖高频项；低频/结构化项（文件映射、关系字段列表）仅经配置文件承载——避免命令行参数面无限膨胀。
 
+## 2.1 配置字段统一迁移表（破坏性重构，无兼容别名）
+
+alpha.88 之后各后端配置字段统一为同一套命名契约：JSON 键（camelCase）、CLI `--<fmt>.<knob>` 键与 MSBuild `Bundler*` 属性同步改名，旧键一律按未知键拒绝（rc=2）。
+
+| 后端 | 旧键 → 新键 |
+| --- | --- |
+| 全部 | 附加文件统一 `files: [{source,destination}]`；安装域统一 `installScope`；路径后缀仅 `*File`/`*Directory` |
+| deb | `revision`→`release`、`maintainer`→`vendor`、`conffiles`→`configFiles`、`preinstFile`/`postinstFile`/`prermFile`/`postrmFile`→`preInstallFile`/`postInstallFile`/`preUninstallFile`/`postUninstallFile`、`compression` 删除（恒 gzip）、`categories` 改字符串数组 |
+| rpm | `requires`→`depends`、`compression` 删除、`categories` 改字符串数组、`signingKeyFile`/`signingKeyPassphrase`→`signing.keyFile`/`signing.passphrase` |
+| alpineapk | `preInstallScript`/`postInstallScript`/`preDeinstallScript`/`postDeinstallScript`/`preUpgradeScript`/`postUpgradeScript`→`*File` 同名单、`signing*`→`signing.*` |
+| appimage | `categories` 改字符串数组、`signing*`→`signing.*` |
+| app | `bundleName`→`packageName`、`contents`→`files`（条目 `targetPath`→`destination`）、`frameworks`→`frameworkDirectories`、签名 `temporaryCertificatePath`→`temporaryCertificateFile`、`apiKeyPath`→`apiKeyFile` |
+| dmg | `skipWindowLayout`/`windowX`/`windowY`/`windowWidth`/`windowHeight`/`appIconX`/`appIconY`/`applicationsIconX`/`applicationsIconY`/`iconSize`→`layout` 子对象（`layout=null` 即跳过）、签名 `temporaryCertificatePath`→`temporaryCertificateFile` |
+| pkg | `identifier`→`packageName`、`installLocation`→`installRoot`、`payloadItems`→`files`、`domain`→`installScope`、签名 `temporaryCertificatePath`→`temporaryCertificateFile`、`apiKeyPath`→`apiKeyFile` |
+| msi | `msiVersion`→`version`、`bannerBitmap`→`bannerFile`、`dialogBitmap`→`dialogFile`、`expertTemplate`→`expertTemplateFile`、`extensionFragments`→`extensionFragmentFiles`、`expertMergeModules`→`expertMergeModuleFiles` |
+| nsis | `installMode`→`installScope`、`installerIcon`→`installerIconFile`、`uninstallerIcon`→`uninstallerIconFile`、`headerImage`→`headerFile`、`sidebarImage`→`sidebarFile`、`uninstallerHeaderImage`→`uninstallerHeaderFile`、`installerHooks`→`installerHooksFile` |
+
+MSBuild 属性同步：`Bundler<Format><Old>` 全部按上表改名（如 `BundlerDebRevision`→`BundlerDebRelease`、`BundlerMacDmgWindowX`→`BundlerMacDmgLayoutWindowX`、`BundlerMacPkgIdentifier`→`BundlerMacPkgPackageName`）；`BundlerDebCompression`/`BundlerRpmCompression` 删除；`BundlerMacFramework` 项组改名 `BundlerMacAppFrameworkDirectory`；`BundlerMacAppFile`/`BundlerMacPkgFile`/`BundlerResource` 等项的元数据 `TargetPath`→`Destination`。
+
 ## 3. 阶段表
 
 | 阶段 | 范围 | 退出条件 |
@@ -67,7 +86,7 @@
 - `bundler.json` schema 固化：顶层字段与 `BundleConfiguration` 一一对应（`productName`/`identifier`/`version`/`publisher`/`description`/`homepage`/`copyright`/`licenseFile`/`outputDirectory`/`icons`/`resources`/`fileAssociations`/`urlProtocols`/`targets`），`targets[]` 项为 `runtimeIdentifier`/`inputDirectory`/`mainExecutable`/`signingFiles`/`formats`；格式段 `nsis|msi|app|dmg|pkg|deb|rpm|appimage|archive` 直接反序列化进各 `XxxBundleConfiguration`。
 - 层叠：`--config` 载入文件 → CLI 共享参数覆盖顶层字段 → 目标参数（`--rid`/`--input-dir`/`--main-executable`/`--formats`）写 `targets[0]` → `--<fmt>.<knob>=<v>` 并入格式段；值自动判型（true/false/整数/`[`/`{` 字面量/逗号列表/字符串）。
 - 严格 schema：未知顶层键、`targets[]` 键、格式段旋钮一律拒绝并列出合法键名（退出码 2）；`--config` 缺失/非对象同 2。
-- 相对路径按配置文件目录解析（`licenseFile`/`outputDirectory`/`icons`/`resources[].source`/`targets[].inputDirectory`/`signingFiles` + 格式段 `*File`/`*Path` 标量与 `files`/`payloadItems`/`contents`/`frameworks` 数组的 `source`）。
+- 相对路径按配置文件目录解析（`licenseFile`/`outputDirectory`/`icons`/`resources[].source`/`targets[].inputDirectory`/`signingFiles` + 格式段 `*File` 标量与 `files` 数组（各后端统一）/`app.frameworkDirectories` 的 `source`）。
 - 单元测试：`Bundler.Tests` 新增 4 项（config 驱动 bundle、CLI 覆盖文件值、未知键拒绝、点号旋钮并入），合计 198/198 全绿。
 - `tests/Cli.Integration/Verify.sh` 扩展全绿：config 驱动 zip+文件映射断言、`--formats` 覆盖、`--archive.archive-name` 点号覆盖、未知顶层键/未知点号旋钮/缺失文件三拒绝路径。
 ### CLI-3（`0.1.0-alpha.61`，分支 `cli-development`）

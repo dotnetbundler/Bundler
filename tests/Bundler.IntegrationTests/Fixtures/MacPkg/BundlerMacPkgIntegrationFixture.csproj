@@ -16,16 +16,16 @@
     <BundlerDescription>Disposable macOS .pkg integration-test fixture.</BundlerDescription>
     <BundlerCopyright>Copyright DotNet.Bundler Tests</BundlerCopyright>
     <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
-    <BundlerMacAppBundleName>PkgFixture</BundlerMacAppBundleName>
+    <BundlerMacAppPackageName>PkgFixture</BundlerMacAppPackageName>
     <BundlerMacAppDisplayName>Bundler Mac PKG Fixture</BundlerMacAppDisplayName>
     <BundlerMacAppBuildVersion>2026.9.1</BundlerMacAppBuildVersion>
-    <BundlerMacPkgIdentifier Condition="'$(BundlerTestPkgIdentifier)' != ''">$(BundlerTestPkgIdentifier)</BundlerMacPkgIdentifier>
+    <BundlerMacPkgPackageName Condition="'$(BundlerTestPkgPackageName)' != ''">$(BundlerTestPkgPackageName)</BundlerMacPkgPackageName>
     <BundlerMacPkgVersion Condition="'$(BundlerTestPkgVersion)' != ''">$(BundlerTestPkgVersion)</BundlerMacPkgVersion>
-    <BundlerMacPkgInstallLocation Condition="'$(BundlerTestPkgInstallLocation)' != ''">$(BundlerTestPkgInstallLocation)</BundlerMacPkgInstallLocation>
+    <BundlerMacPkgInstallRoot Condition="'$(BundlerTestPkgInstallRoot)' != ''">$(BundlerTestPkgInstallRoot)</BundlerMacPkgInstallRoot>
     <BundlerMacPkgTitle Condition="'$(BundlerTestPkgTitle)' != ''">$(BundlerTestPkgTitle)</BundlerMacPkgTitle>
     <BundlerMacPkgWelcomeFile Condition="'$(BundlerTestPkgWelcome)' == 'true'">Assets/welcome.txt</BundlerMacPkgWelcomeFile>
     <BundlerMacPkgConclusionFile Condition="'$(BundlerTestPkgConclusion)' == 'true'">Assets/conclusion.rtf</BundlerMacPkgConclusionFile>
-    <BundlerMacPkgDomain Condition="'$(BundlerTestPkgDomain)' != ''">$(BundlerTestPkgDomain)</BundlerMacPkgDomain>
+    <BundlerMacPkgInstallScope Condition="'$(BundlerTestPkgInstallScope)' != ''">$(BundlerTestPkgInstallScope)</BundlerMacPkgInstallScope>
     <BundlerLicenseFile Condition="'$(BundlerTestPkgLicense)' == 'true'">Assets/license.txt</BundlerLicenseFile>
     <BundlerMacPkgScriptsDirectory Condition="'$(BundlerTestPkgScripts)' == 'true'">Scripts</BundlerMacPkgScriptsDirectory>
     <BundlerMacPkgSignIdentity Condition="'$(BundlerTestPkgSignIdentity)' != ''">$(BundlerTestPkgSignIdentity)</BundlerMacPkgSignIdentity>
@@ -33,7 +33,7 @@
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
-    <BundlerPkgPayload Include="Assets/helper.txt" Destination="support/helper.txt" />
+    <BundlerResource Include="Assets/readme.txt" Destination="docs/readme.txt" />
+    <BundlerMacPkgFile Include="Assets/helper.txt" Destination="support/helper.txt" />
   </ItemGroup>
 </Project>

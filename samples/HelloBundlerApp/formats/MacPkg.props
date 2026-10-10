@@ -3,10 +3,10 @@
        打包 pkg 会先经 .app 中间产物，.app 旋钮见 MacApp.props。 -->
   <PropertyGroup>
     <!-- 组件包旋钮：identifier（默认=BundlerIdentifier）、version（默认=Version）、
-         install-location（默认 /Applications）、BundlerPkgPayload 任意载荷项。 -->
-    <BundlerMacPkgIdentifier Condition="'$(HelloBundlerPkgIdentifier)' != ''">$(HelloBundlerPkgIdentifier)</BundlerMacPkgIdentifier>
+         install-location（默认 /Applications）、BundlerMacPkgFile 任意载荷项。 -->
+    <BundlerMacPkgPackageName Condition="'$(HelloBundlerPkgPackageName)' != ''">$(HelloBundlerPkgPackageName)</BundlerMacPkgPackageName>
     <BundlerMacPkgVersion Condition="'$(HelloBundlerPkgVersion)' != ''">$(HelloBundlerPkgVersion)</BundlerMacPkgVersion>
-    <BundlerMacPkgInstallLocation Condition="'$(HelloBundlerPkgInstallLocation)' != ''">$(HelloBundlerPkgInstallLocation)</BundlerMacPkgInstallLocation>
+    <BundlerMacPkgInstallRoot Condition="'$(HelloBundlerPkgInstallRoot)' != ''">$(HelloBundlerPkgInstallRoot)</BundlerMacPkgInstallRoot>
 
     <!-- 分发包旋钮（任一配置即升级为 productbuild 分发包）：
          title（默认=产品名）、welcome/conclusion 富文本页、许可页复用 BundlerLicenseFile、
@@ -15,15 +15,15 @@
     <BundlerMacPkgWelcomeFile Condition="'$(HelloBundlerPkgWelcome)' == 'true'">$(HelloBundlerAppAssets)pkg\welcome.txt</BundlerMacPkgWelcomeFile>
     <BundlerMacPkgConclusionFile Condition="'$(HelloBundlerPkgConclusion)' == 'true'">$(HelloBundlerAppAssets)pkg\conclusion.rtf</BundlerMacPkgConclusionFile>
     <BundlerLicenseFile Condition="'$(HelloBundlerPkgLicenseFile)' != ''">$(HelloBundlerPkgLicenseFile)</BundlerLicenseFile>
-    <BundlerMacPkgDomain Condition="'$(HelloBundlerPkgDomain)' != ''">$(HelloBundlerPkgDomain)</BundlerMacPkgDomain>
+    <BundlerMacPkgInstallScope Condition="'$(HelloBundlerPkgInstallScope)' != ''">$(HelloBundlerPkgInstallScope)</BundlerMacPkgInstallScope>
 
     <!-- 签名/公证/脚本旋钮：.pkg 只有真实 Developer ID Installer 签名，无 ad-hoc；
          Notarize 走 notarytool+stapler（凭证取显式属性或 APPLE_* 环境变量）；
          ScriptsDirectory 专家旋钮：目录原样交给 pkgbuild，脚本以安装器权限运行。 -->
     <BundlerMacPkgScriptsDirectory Condition="'$(HelloBundlerPkgScripts)' == 'true'">$(HelloBundlerAppAssets)pkg\scripts</BundlerMacPkgScriptsDirectory>
     <BundlerMacPkgSignIdentity Condition="'$(HelloBundlerPkgSignIdentity)' != ''">$(HelloBundlerPkgSignIdentity)</BundlerMacPkgSignIdentity>
-    <BundlerMacPkgSignCertificatePath Condition="'$(HelloBundlerPkgSignCertificatePath)' != ''">$(HelloBundlerPkgSignCertificatePath)</BundlerMacPkgSignCertificatePath>
-    <BundlerMacPkgSignCertificatePassword Condition="'$(HelloBundlerPkgSignCertificatePassword)' != ''">$(HelloBundlerPkgSignCertificatePassword)</BundlerMacPkgSignCertificatePassword>
+    <BundlerMacPkgTemporaryCertificateFile Condition="'$(HelloBundlerPkgTemporaryCertificateFile)' != ''">$(HelloBundlerPkgTemporaryCertificateFile)</BundlerMacPkgTemporaryCertificateFile>
+    <BundlerMacPkgTemporaryCertificatePassword Condition="'$(HelloBundlerPkgTemporaryCertificatePassword)' != ''">$(HelloBundlerPkgTemporaryCertificatePassword)</BundlerMacPkgTemporaryCertificatePassword>
     <BundlerMacPkgNotarize Condition="'$(HelloBundlerPkgNotarize)' == 'true'">true</BundlerMacPkgNotarize>
     <BundlerMacPkgNotaryWait Condition="'$(HelloBundlerPkgNotaryWait)' != ''">$(HelloBundlerPkgNotaryWait)</BundlerMacPkgNotaryWait>
     <BundlerMacPkgSkipStapling Condition="'$(HelloBundlerPkgSkipStapling)' == 'true'">true</BundlerMacPkgSkipStapling>
@@ -31,13 +31,13 @@
     <BundlerMacPkgAppleId Condition="'$(HelloBundlerPkgAppleId)' != ''">$(HelloBundlerPkgAppleId)</BundlerMacPkgAppleId>
     <BundlerMacPkgApplePassword Condition="'$(HelloBundlerPkgApplePassword)' != ''">$(HelloBundlerPkgApplePassword)</BundlerMacPkgApplePassword>
     <BundlerMacPkgAppleTeamId Condition="'$(HelloBundlerPkgAppleTeamId)' != ''">$(HelloBundlerPkgAppleTeamId)</BundlerMacPkgAppleTeamId>
-    <BundlerMacPkgNotaryApiKeyPath Condition="'$(HelloBundlerPkgNotaryApiKeyPath)' != ''">$(HelloBundlerPkgNotaryApiKeyPath)</BundlerMacPkgNotaryApiKeyPath>
+    <BundlerMacPkgApiKeyFile Condition="'$(HelloBundlerPkgApiKeyFile)' != ''">$(HelloBundlerPkgApiKeyFile)</BundlerMacPkgApiKeyFile>
     <BundlerMacPkgNotaryApiKeyId Condition="'$(HelloBundlerPkgNotaryApiKeyId)' != ''">$(HelloBundlerPkgNotaryApiKeyId)</BundlerMacPkgNotaryApiKeyId>
     <BundlerMacPkgNotaryApiIssuer Condition="'$(HelloBundlerPkgNotaryApiIssuer)' != ''">$(HelloBundlerPkgNotaryApiIssuer)</BundlerMacPkgNotaryApiIssuer>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- 任意文件树载荷演示：该文件随 .app 一起进入 payload，落到 install-location 下的 support/ 目录。 -->
-    <BundlerPkgPayload Include="$(HelloBundlerAppAssets)pkg\readme.txt" Destination="support/readme.txt" />
+    <BundlerMacPkgFile Include="$(HelloBundlerAppAssets)pkg\readme.txt" Destination="support/readme.txt" />
   </ItemGroup>
 </Project>

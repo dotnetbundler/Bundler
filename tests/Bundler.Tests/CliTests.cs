@@ -560,9 +560,9 @@ public static class CliTests
 
             var app = resolved.App;
             Assert.NotNull(app);
-            Assert.True(app!.Contents is { Count: 0 } &&
+            Assert.True(app!.Files is { Count: 0 } &&
                 app.DocumentTypes is { Count: 0 } && app.UrlTypes is { Count: 0 } &&
-                app.Frameworks is { Count: 0 },
+                app.FrameworkDirectories is { Count: 0 },
                 "absent app collection keys must keep their empty initializers");
             Assert.True(app.Signing is { Identity: "-", NotaryWait: true },
                 "app.signing must merge onto defaults: identity set, NotaryWait stays true");

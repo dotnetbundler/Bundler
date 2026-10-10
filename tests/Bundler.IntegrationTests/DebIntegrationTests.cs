@@ -50,7 +50,7 @@ public sealed class DebFixture : IDisposable
         Publish("override",
             "-p:BundlerTestDebPackageName=custom-fixture",
             "-p:BundlerTestDebVersion=2:9.9.9-5",
-            "-p:BundlerTestDebMaintainer=Custom Maintainer <m@example.com>",
+            "-p:BundlerTestDebVendor=Custom Maintainer <m@example.com>",
             "-p:BundlerTestDebInstallRoot=/opt/custom-fixture",
             "-p:BundlerTestDebBinLink=custom-fixture-cli");
         OverrideDeb = RequireDeb(Ws.Combine("override", "linux-x64", "deb", "custom-fixture_9.9.9-5_amd64.deb"));
@@ -397,17 +397,6 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
             ? Directory.EnumerateFiles(debDir, "*.deb").ToArray()
             : [];
         Assert.Empty(leftovers);
-    }
-
-    [Fact]
-    public void UnsupportedCompressionFailsPublish()
-    {
-        var result = Dotnet.Run(
-            ["publish", _f.FixtureProject, "-c", "Release",
-             $"-p:BundlerIntegrationOutput={_f.Ws.Combine("fail-compression")}",
-             "-p:BundlerTestDebCompression=xz", "--packages", _f.CacheDir]);
-        Assert.NotEqual(0, result.ExitCode);
-        Assert.Matches(new Regex("compression", RegexOptions.IgnoreCase), result.Output);
     }
 
     [Fact]

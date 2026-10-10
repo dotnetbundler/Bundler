@@ -10,12 +10,12 @@ var output = Path.GetFullPath(args[0]);
 var cache = Path.GetFullPath(args[1]);
 var target = args.Length >= 6 ? args[2] : "win-x64";
 var appVersion = args.Length >= 6 ? args[3] : "1.0.0";
-var msiVersion = args.Length >= 6 ? args[4] : null;
+var version = args.Length >= 6 ? args[4] : null;
 var allowDowngrades = args.Length >= 6 && bool.Parse(args[5]);
 var languages = args.Length >= 7
     ? args[6].Split(';').Select(entry => entry.Trim()).Where(entry => entry.Length > 0).ToArray()
     : ["en-US"];
-var expertTemplate = args.Length == 8 ? Path.GetFullPath(args[7]) : null;
+var expertTemplateFile = args.Length == 8 ? Path.GetFullPath(args[7]) : null;
 var input = Path.Combine(output, "publish");
 Directory.CreateDirectory(input);
 await File.WriteAllTextAsync(Path.Combine(input, "ApiFixture.exe"), "package-api-fixture");
@@ -45,8 +45,8 @@ var request = new BundleConfiguration
 var artifacts = await new WixBundler(
     new WixBundleConfiguration { StartMenuShortcut = true, DesktopShortcut = true,
         InstallDirectorySelection = true, AddToPath = true, UninstallShortcut = true,
-        Languages = languages, MsiVersion = msiVersion, AllowDowngrades = allowDowngrades,
-        ExpertTemplate = expertTemplate },
+        Languages = languages, Version = version, AllowDowngrades = allowDowngrades,
+        ExpertTemplateFile = expertTemplateFile },
     new WixBundlerOptions { ToolCacheDirectory = cache })
     .BuildAsync(request);
 if (artifacts.Count != languages.Length || artifacts.Any(a => a.Format != PackageFormat.Msi) ||

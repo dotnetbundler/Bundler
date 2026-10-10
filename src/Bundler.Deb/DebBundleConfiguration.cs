@@ -18,7 +18,7 @@ public sealed class DebBundleConfiguration
     /// Complete Debian version override (optionally with <c>epoch:</c> prefix and
     /// <c>-revision</c> suffix). When unset, the bundle's SemVer <c>Version</c> is
     /// mapped: a prerelease suffix becomes <c>~</c>-separated so prereleases sort
-    /// before their release, and <see cref="Revision"/> supplies the debian revision.
+    /// before their release, and <see cref="Release"/> supplies the debian revision.
     /// </summary>
     public string? Version { get; init; }
 
@@ -27,7 +27,7 @@ public sealed class DebBundleConfiguration
     /// Ignored when <see cref="Version"/> is set. Set to "" to emit a native-style
     /// version without a revision component.
     /// </summary>
-    public string? Revision { get; init; }
+    public string? Release { get; init; }
 
     /// <summary>
     /// Optional numeric epoch prefixed to the mapped version (e.g. "2" produces
@@ -46,7 +46,7 @@ public sealed class DebBundleConfiguration
     /// <c>Maintainer:</c> field; defaults to the bundle's <c>Publisher</c>, then its
     /// <c>Identifier</c> when no publisher is set.
     /// </summary>
-    public string? Maintainer { get; init; }
+    public string? Vendor { get; init; }
 
     /// <summary>
     /// Absolute payload root inside the package; defaults to
@@ -94,10 +94,10 @@ public sealed class DebBundleConfiguration
     public string? Priority { get; init; }
 
     /// <summary>
-    /// Semicolon-separated freedesktop categories for the generated
-    /// <c>.desktop</c> file (e.g. "Utility;Development").
+    /// Freedesktop categories for the generated <c>.desktop</c> file
+    /// (e.g. ["Utility", "Development"]).
     /// </summary>
-    public string? Categories { get; init; }
+    public IReadOnlyList<string>? Categories { get; init; }
 
     /// <summary>
     /// Expert knob: path to a caller-supplied <c>.desktop</c> file that replaces the
@@ -132,26 +132,26 @@ public sealed class DebBundleConfiguration
     /// packed into the control archive with mode 0755. Must start with a shebang
     /// and use LF line endings.
     /// </summary>
-    public string? PreinstFile { get; init; }
+    public string? PreInstallFile { get; init; }
 
     /// <summary>
     /// Expert knob: caller-supplied <c>postinst</c> script (0755). When
     /// <see cref="SystemdServiceFile"/> is also set, a
     /// <c>systemctl daemon-reload</c> epilogue is appended automatically.
     /// </summary>
-    public string? PostinstFile { get; init; }
+    public string? PostInstallFile { get; init; }
 
     /// <summary>Expert knob: caller-supplied <c>prerm</c> script (0755).</summary>
-    public string? PrermFile { get; init; }
+    public string? PreUninstallFile { get; init; }
 
     /// <summary>Expert knob: caller-supplied <c>postrm</c> script (0755).</summary>
-    public string? PostrmFile { get; init; }
+    public string? PostUninstallFile { get; init; }
 
     /// <summary>
     /// Managed systemd unit: path to a <c>.service</c> file installed at
     /// <c>usr/lib/systemd/system/&lt;package&gt;.service</c> (0644). A
     /// <c>systemctl daemon-reload</c> epilogue is synthesized into
-    /// <c>postinst</c> (appended to a caller-supplied <see cref="PostinstFile"/>
+    /// <c>postinst</c> (appended to a caller-supplied <see cref="PostInstallFile"/>
     /// when present). The unit is installed but not enabled or started —
     /// enabling policy stays with the caller's scripts.
     /// </summary>
@@ -162,15 +162,9 @@ public sealed class DebBundleConfiguration
     /// payload), written to the <c>conffiles</c> control member. Destinations of
     /// <see cref="Files"/> under <c>/etc</c> are registered automatically.
     /// </summary>
-    public IReadOnlyList<string>? Conffiles { get; init; }
+    public IReadOnlyList<string>? ConfigFiles { get; init; }
 
-    /// <summary>
-    /// Payload/control compression: only <c>"gzip"</c> is supported — the
-    /// writer is pure managed code and netstandard2.0 ships no xz/zstd encoder
-    /// without a third-party dependency; zstd additionally needs dpkg ≥ 1.21.18
-    /// on the install host. Any other value is rejected.
-    /// </summary>
-    public string? Compression { get; init; }
+
 }
 
 /// <summary>A file planted at an absolute path inside the .deb payload.</summary>

@@ -130,7 +130,7 @@ public static class DebTests
                     PackageName = "custom-name",
                     Version = "2:9.9.9-5",
                     Architecture = "armhf",
-                    Maintainer = "Custom Maintainer <m@example.com>",
+                    Vendor = "Custom Maintainer <m@example.com>",
                     InstallRoot = "/opt/custom-name",
                     BinLink = "custom-cli"
                 })
@@ -258,10 +258,10 @@ public static class DebTests
                 ("traversal install root", new DebBundleConfiguration { InstallRoot = "/usr/../etc" }),
                 ("invalid package name", new DebBundleConfiguration { PackageName = "Bad_Name" }),
                 ("invalid version", new DebBundleConfiguration { Version = "v1.0" }),
-                ("invalid revision", new DebBundleConfiguration { Revision = "1-2" }),
+                ("invalid revision", new DebBundleConfiguration { Release = "1-2" }),
                 ("non-numeric epoch", new DebBundleConfiguration { Epoch = "x" }),
                 ("invalid bin link", new DebBundleConfiguration { BinLink = "a/b" }),
-                ("empty maintainer", new DebBundleConfiguration { Maintainer = " " })
+                ("empty maintainer", new DebBundleConfiguration { Vendor = " " })
             };
             foreach (var (name, settings) in cases)
             {
@@ -364,7 +364,7 @@ public static class DebTests
             var configuration = DebConfiguration(input, output);
             var deb = new DebBundler(new DebBundleConfiguration
                 {
-                    Categories = "Utility;Development"
+                    Categories = ["Utility", "Development"]
                 })
                 .BuildAsync(new BundleConfiguration
                 {
@@ -519,7 +519,7 @@ public static class DebTests
                     new DebBundleConfiguration { Files = [new DebFileEntry { Source = anyFile, Destination = "/etc/../x.conf" }] }, []),
                 ("non-PNG icon", new DebBundleConfiguration(), [notPng]),
                 ("missing DesktopFile", new DebBundleConfiguration { DesktopFile = Path.Combine(filesDir, "nope.desktop") }, []),
-                ("bad categories", new DebBundleConfiguration { Categories = "Not A Category!" }, [])
+                ("bad categories", new DebBundleConfiguration { Categories = ["Not A Category!"] }, [])
             };
             foreach (var (name, settings, icons) in cases)
             {
@@ -590,9 +590,9 @@ public static class DebTests
             var configuration = DebConfiguration(input, output);
             var deb = new DebBundler(new DebBundleConfiguration
                 {
-                    PostinstFile = postinst,
-                    PrermFile = prerm,
-                    Conffiles = ["/usr/lib/example-app/libplaceholder.conf"],
+                    PostInstallFile = postinst,
+                    PreUninstallFile = prerm,
+                    ConfigFiles = ["/usr/lib/example-app/libplaceholder.conf"],
                     Files = [new DebFileEntry { Source = conf, Destination = "/etc/example-app/defaults.conf" },
                              new DebFileEntry { Source = conf, Destination = "/usr/lib/example-app/libplaceholder.conf" }]
                 })
@@ -645,7 +645,7 @@ public static class DebTests
             var deb = new DebBundler(new DebBundleConfiguration
                 {
                     SystemdServiceFile = unit,
-                    PostinstFile = postinst
+                    PostInstallFile = postinst
                 })
                 .BuildAsync(new BundleConfiguration
                 {
@@ -706,13 +706,11 @@ public static class DebTests
         {
             var cases = new (string Name, DebBundleConfiguration Settings)[]
             {
-                ("xz compression", new DebBundleConfiguration { Compression = "xz" }),
-                ("zstd compression", new DebBundleConfiguration { Compression = "zstd" }),
-                ("script without shebang", new DebBundleConfiguration { PostinstFile = noShebang }),
-                ("script with CRLF", new DebBundleConfiguration { PrermFile = crlf }),
-                ("conffile not in payload", new DebBundleConfiguration { Conffiles = ["/etc/absent.conf"] }),
-                ("conffile relative path", new DebBundleConfiguration { Conffiles = ["etc/x.conf"] }),
-                ("conffile traversal", new DebBundleConfiguration { Conffiles = ["/etc/../x.conf"] })
+                ("script without shebang", new DebBundleConfiguration { PostInstallFile = noShebang }),
+                ("script with CRLF", new DebBundleConfiguration { PreUninstallFile = crlf }),
+                ("conffile not in payload", new DebBundleConfiguration { ConfigFiles = ["/etc/absent.conf"] }),
+                ("conffile relative path", new DebBundleConfiguration { ConfigFiles = ["etc/x.conf"] }),
+                ("conffile traversal", new DebBundleConfiguration { ConfigFiles = ["/etc/../x.conf"] })
             };
             foreach (var (name, settings) in cases)
             {
@@ -762,7 +760,7 @@ public static class DebTests
                     OutputDirectory = configuration.OutputDirectory,
                     Resources =
                     [
-                        new BundleResourceConfiguration { Source = extra, TargetPath = "docs/note.txt" }
+                        new BundleResourceConfiguration { Source = extra, Destination = "docs/note.txt" }
                     ],
                     Targets = configuration.Targets
                 }).GetAwaiter().GetResult().Single();
@@ -856,10 +854,10 @@ public static class DebTests
         var task = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
         Assert.True(targets.Contains("DebPackageName=\"$(BundlerDebPackageName)\"", StringComparison.Ordinal) &&
                targets.Contains("DebVersion=\"$(BundlerDebVersion)\"", StringComparison.Ordinal) &&
-               targets.Contains("DebRevision=\"$(BundlerDebRevision)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebRelease=\"$(BundlerDebRelease)\"", StringComparison.Ordinal) &&
                targets.Contains("DebEpoch=\"$(BundlerDebEpoch)\"", StringComparison.Ordinal) &&
                targets.Contains("DebArchitecture=\"$(BundlerDebArchitecture)\"", StringComparison.Ordinal) &&
-               targets.Contains("DebMaintainer=\"$(BundlerDebMaintainer)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebVendor=\"$(BundlerDebVendor)\"", StringComparison.Ordinal) &&
                targets.Contains("DebInstallRoot=\"$(BundlerDebInstallRoot)\"", StringComparison.Ordinal) &&
                targets.Contains("DebBinLink=\"$(BundlerDebBinLink)\"", StringComparison.Ordinal) &&
                targets.Contains("DebDepends=\"$(BundlerDebDepends)\"", StringComparison.Ordinal) &&
@@ -873,13 +871,12 @@ public static class DebTests
                targets.Contains("DebDesktopFile=\"$(BundlerDebDesktopFile)\"", StringComparison.Ordinal) &&
                targets.Contains("DebMetainfoFile=\"$(BundlerDebMetainfoFile)\"", StringComparison.Ordinal) &&
                targets.Contains("DebChangelogFile=\"$(BundlerDebChangelogFile)\"", StringComparison.Ordinal) &&
-               targets.Contains("DebPreinstFile=\"$(BundlerDebPreinstFile)\"", StringComparison.Ordinal) &&
-               targets.Contains("DebPostinstFile=\"$(BundlerDebPostinstFile)\"", StringComparison.Ordinal) &&
-               targets.Contains("DebPrermFile=\"$(BundlerDebPrermFile)\"", StringComparison.Ordinal) &&
-               targets.Contains("DebPostrmFile=\"$(BundlerDebPostrmFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebPreInstallFile=\"$(BundlerDebPreInstallFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebPostInstallFile=\"$(BundlerDebPostInstallFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebPreUninstallFile=\"$(BundlerDebPreUninstallFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebPostUninstallFile=\"$(BundlerDebPostUninstallFile)\"", StringComparison.Ordinal) &&
                targets.Contains("DebSystemdServiceFile=\"$(BundlerDebSystemdServiceFile)\"", StringComparison.Ordinal) &&
-               targets.Contains("DebConffiles=\"$(BundlerDebConffiles)\"", StringComparison.Ordinal) &&
-               targets.Contains("DebCompression=\"$(BundlerDebCompression)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebConfigFiles=\"$(BundlerDebConfigFiles)\"", StringComparison.Ordinal) &&
                targets.Contains("DebFiles=\"@(BundlerDebFile)\"", StringComparison.Ordinal) &&
                task.Contains("DebFiles.Select(item => new DebFileEntry", StringComparison.Ordinal),
             "MSBuild does not map the BundlerDeb* properties to the task.");
@@ -888,10 +885,9 @@ public static class DebTests
                props.Contains("<BundlerDebDepends", StringComparison.Ordinal) &&
                props.Contains("<BundlerDebCategories", StringComparison.Ordinal) &&
                props.Contains("<BundlerDebChangelogFile", StringComparison.Ordinal) &&
-               props.Contains("<BundlerDebPostinstFile", StringComparison.Ordinal) &&
+               props.Contains("<BundlerDebPostInstallFile", StringComparison.Ordinal) &&
                props.Contains("<BundlerDebSystemdServiceFile", StringComparison.Ordinal) &&
-               props.Contains("<BundlerDebConffiles", StringComparison.Ordinal) &&
-               props.Contains("<BundlerDebCompression", StringComparison.Ordinal),
+               props.Contains("<BundlerDebConfigFiles", StringComparison.Ordinal),
             "The BundlerDeb* properties lack defaults in the .props file.");
         Assert.True(task.Contains("new DebBundler(", StringComparison.Ordinal) &&
                task.Contains("PackageFormat.Deb", StringComparison.Ordinal),

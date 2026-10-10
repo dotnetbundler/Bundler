@@ -16,7 +16,7 @@
     <BundlerWixLanguages Condition="'$(HelloBundlerMsiLanguages)' != ''">$(HelloBundlerMsiLanguages)</BundlerWixLanguages>
     <BundlerWixUpgradeCode Condition="'$(HelloBundlerMsiUpgradeCode)' != ''">$(HelloBundlerMsiUpgradeCode)</BundlerWixUpgradeCode>
     <BundlerWixFipsCompliant Condition="'$(HelloBundlerMsiFipsCompliant)' != ''">$(HelloBundlerMsiFipsCompliant)</BundlerWixFipsCompliant>
-    <BundlerWixMsiVersion Condition="'$(HelloBundlerMsiMsiVersion)' != ''">$(HelloBundlerMsiMsiVersion)</BundlerWixMsiVersion>
+    <BundlerWixVersion Condition="'$(HelloBundlerMsiVersion)' != ''">$(HelloBundlerMsiVersion)</BundlerWixVersion>
     <BundlerWixAllowDowngrades Condition="'$(HelloBundlerMsiAllowDowngrades)' != ''">$(HelloBundlerMsiAllowDowngrades)</BundlerWixAllowDowngrades>
     <BundlerWixCodepage>0</BundlerWixCodepage>
 
@@ -24,8 +24,8 @@
     <BundlerWixStartMenuShortcut>true</BundlerWixStartMenuShortcut>
     <BundlerWixDesktopShortcut>true</BundlerWixDesktopShortcut>
     <BundlerWixInstallDirectorySelection>$(HelloBundlerMsiInstallDirectorySelection)</BundlerWixInstallDirectorySelection>
-    <BundlerWixBannerBitmap>$(HelloBundlerMsiBannerBitmap)</BundlerWixBannerBitmap>
-    <BundlerWixDialogBitmap>$(HelloBundlerMsiDialogBitmap)</BundlerWixDialogBitmap>
+    <BundlerWixBannerFile>$(HelloBundlerMsiBannerBitmap)</BundlerWixBannerFile>
+    <BundlerWixDialogFile>$(HelloBundlerMsiDialogBitmap)</BundlerWixDialogFile>
     <BundlerWixAddToPath>$(HelloBundlerMsiAddToPath)</BundlerWixAddToPath>
     <BundlerWixUninstallShortcut>$(HelloBundlerMsiUninstallShortcut)</BundlerWixUninstallShortcut>
     <BundlerWixLaunchAfterInstall>$(HelloBundlerMsiLaunchAfterInstall)</BundlerWixLaunchAfterInstall>
@@ -33,9 +33,9 @@
     <!-- WiX 专家扩展旋钮：ExtensionIdPrefix 统一扩展元素 Id 前缀；
          ExtensionFragment/ComponentRef/ComponentGroupRef/FeatureRef/ExpertMergeModule
          走项（下方 ItemGroup，条件示例）注入自定义 WiX 片段；
-         ExpertTemplate 整体替换生成的 .wxs 骨架（专家模式）。 -->
+         ExpertTemplateFile 整体替换生成的 .wxs 骨架（专家模式）。 -->
     <BundlerWixExtensionIdPrefix Condition="'$(HelloBundlerMsiExtensionIdPrefix)' != ''">$(HelloBundlerMsiExtensionIdPrefix)</BundlerWixExtensionIdPrefix>
-    <BundlerWixExpertTemplate Condition="'$(HelloBundlerMsiExpertTemplate)' != ''">$(HelloBundlerMsiExpertTemplate)</BundlerWixExpertTemplate>
+    <BundlerWixExpertTemplateFile Condition="'$(HelloBundlerMsiExpertTemplate)' != ''">$(HelloBundlerMsiExpertTemplate)</BundlerWixExpertTemplateFile>
     <BundlerWixToolsetArchivePath Condition="'$(HelloBundlerMsiToolsetArchivePath)' != ''">$(HelloBundlerMsiToolsetArchivePath)</BundlerWixToolsetArchivePath>
     <!-- MSI 交互许可界面只收 RTF——formats 集含 msi 时全局许可改为 RTF（nsis/dmg/pkg 同样接受 RTF，
          其余后端只是载荷携带不受扩展名影响）。 -->

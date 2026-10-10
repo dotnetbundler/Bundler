@@ -275,7 +275,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
             {
                 Assert.True(File.Exists(path), $"Shortcut is missing: {path}");
                 Assert.Equal(Path.Combine(install, "BundlerMsiSmoke.exe"),
-                    ShellLink.Read(path).TargetPath);
+                    ShellLink.Read(path).Destination);
             }
 
             MsiexecLogged("install-v1", root, ["/i", $"\"{v1}\""], 0);
@@ -506,7 +506,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
         var unknown = Path.Combine(install, "user-created.txt");
         Assert.False(Directory.Exists(install), $"Test installation already exists: {install}");
 
-        var cases = new (string Name, string AppVersion, string MsiVersion, bool Allow)[]
+        var cases = new (string Name, string AppVersion, string Version, bool Allow)[]
         {
             ("v1-reject", "1.0.0", "1.0.0", false),
             ("v2-mapped", "1.1.0-beta.1", "1.1.0", false),
@@ -524,10 +524,10 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                     Path.Combine(root, "nuget"), _f.Version, "win-x86");
                 var msiDir = Publish(project, Path.Combine(root, $"output-{c.Name}"), id,
                     c.AppVersion, "win-x86",
-                    $"-p:BundlerWixMsiVersion={c.MsiVersion}",
+                    $"-p:BundlerWixVersion={c.Version}",
                     $"-p:BundlerWixAllowDowngrades={c.Allow.ToString().ToLowerInvariant()}",
                     "-p:MsiLifecycleTest=true");
-                var msi = Path.Combine(msiDir, $"{MsiName}-{c.MsiVersion}.msi");
+                var msi = Path.Combine(msiDir, $"{MsiName}-{c.Version}.msi");
                 Assert.True(File.Exists(msi), $"Missing MSI: {msi}");
                 msiPaths[c.Name] = msi;
             }
@@ -540,7 +540,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
             Assert.Equal("1.8.4", MsiSupport.GetProperty(apiMsi, "ProductVersion"));
             foreach (var c in cases)
             {
-                Assert.Equal(c.MsiVersion,
+                Assert.Equal(c.Version,
                     MsiSupport.GetProperty(msiPaths[c.Name], "ProductVersion"));
             }
             var v1 = msiPaths["v1-reject"];
@@ -653,8 +653,8 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                         "-p:BundlerWixStartMenuShortcut=true", "-p:BundlerWixDesktopShortcut=true",
                         "-p:BundlerWixAddToPath=true", "-p:BundlerWixUninstallShortcut=true",
                         "-p:BundlerWixLaunchAfterInstall=true",
-                        $"-p:BundlerWixBannerBitmap={Path.Combine(fixtureDir, "Assets", "banner.bmp")}",
-                        $"-p:BundlerWixDialogBitmap={Path.Combine(fixtureDir, "Assets", "dialog.bmp")}"),
+                        $"-p:BundlerWixBannerFile={Path.Combine(fixtureDir, "Assets", "banner.bmp")}",
+                        $"-p:BundlerWixDialogFile={Path.Combine(fixtureDir, "Assets", "dialog.bmp")}"),
                     $"{MsiName}-{version}.msi"));
             }
             foreach (var msi in msis) Assert.True(File.Exists(msi), $"Missing MSI: {msi}");
@@ -728,9 +728,9 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                 if (arp is not null) break;
             }
             Assert.NotNull(arp);
-            var installLocation = arp!.GetValue("InstallLocation") as string;
-            Assert.True(installLocation == install + "\\" || installLocation == install,
-                "ARP InstallLocation is missing the install directory.");
+            var installRoot = arp!.GetValue("InstallRoot") as string;
+            Assert.True(installRoot == install + "\\" || installRoot == install,
+                "ARP InstallRoot is missing the install directory.");
             Assert.NotNull(arp.GetValue("Contact"));
             File.WriteAllText(unknown, "preserve user data");
             unknownCreated = true;

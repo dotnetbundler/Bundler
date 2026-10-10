@@ -18,7 +18,7 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         WixInstallScope scope,
         string? upgradeCode = null,
         WixLanguageInfo? language = null,
-        string? msiVersion = null)
+        string? packageVersion = null)
     {
         if (string.IsNullOrWhiteSpace(identifier))
         {
@@ -34,7 +34,7 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
             throw new NotSupportedException($"MSI target '{runtimeIdentifier}' is not supported.");
         }
 
-        var versionToMap = msiVersion ?? version;
+        var versionToMap = packageVersion ?? version;
         var match = VersionPattern.Match(versionToMap ?? "");
         if (!match.Success ||
             !uint.TryParse(match.Groups[1].Value, out var major) || major > 255 ||
@@ -43,7 +43,7 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         {
             throw new ArgumentException(
                 "MSI requires a stable major.minor.patch version (major/minor 0-255, patch 0-65535); pre-release and build metadata are not supported.",
-                msiVersion is null ? nameof(version) : nameof(msiVersion));
+                packageVersion is null ? nameof(version) : nameof(packageVersion));
         }
 
         var normalizedIdentifier = identifier.ToLowerInvariant();

@@ -1,8 +1,8 @@
 <Project>
   <!-- Nsis 后端全套公开旋钮。所有 HelloBundlerNsis* 属性均为变体演示传透。 -->
   <PropertyGroup>
-    <HelloBundlerNsisInstallMode Condition="'$(HelloBundlerNsisInstallMode)' == ''">currentUser</HelloBundlerNsisInstallMode>
-    <BundlerNsisInstallMode>$(HelloBundlerNsisInstallMode)</BundlerNsisInstallMode>
+    <HelloBundlerNsisInstallScope Condition="'$(HelloBundlerNsisInstallScope)' == ''">currentUser</HelloBundlerNsisInstallScope>
+    <BundlerNsisInstallScope>$(HelloBundlerNsisInstallScope)</BundlerNsisInstallScope>
     <BundlerNsisCompression>zlib</BundlerNsisCompression>
     <BundlerNsisLanguages>English;SimpChinese;Japanese</BundlerNsisLanguages>
     <BundlerNsisDisplayLanguageSelector>true</BundlerNsisDisplayLanguageSelector>
@@ -16,12 +16,12 @@
     <_HelloBundlerNsisArtworkDirectory>$(BaseIntermediateOutputPath)sample-nsis-artwork\</_HelloBundlerNsisArtworkDirectory>
     <_HelloBundlerNsisArtworkRoot>$(_HelloBundlerNsisArtworkDirectory)common\Contrib\Graphics</_HelloBundlerNsisArtworkRoot>
     <_HelloBundlerNsisArtworkMarker>$(_HelloBundlerNsisArtworkDirectory).complete</_HelloBundlerNsisArtworkMarker>
-    <BundlerNsisInstallerIcon>$(_HelloBundlerNsisArtworkRoot)\Icons\modern-install-colorful.ico</BundlerNsisInstallerIcon>
-    <BundlerNsisUninstallerIcon>$(_HelloBundlerNsisArtworkRoot)\Icons\modern-uninstall-colorful.ico</BundlerNsisUninstallerIcon>
-    <BundlerNsisHeaderImage>$(_HelloBundlerNsisArtworkRoot)\Header\nsis3-grey.bmp</BundlerNsisHeaderImage>
-    <BundlerNsisUninstallerHeaderImage>$(_HelloBundlerNsisArtworkRoot)\Header\orange-uninstall.bmp</BundlerNsisUninstallerHeaderImage>
-    <BundlerNsisSidebarImage>$(_HelloBundlerNsisArtworkRoot)\Wizard\nsis3-grey.bmp</BundlerNsisSidebarImage>
-    <BundlerNsisInstallerHooks>$(HelloBundlerAppAssets)nsis\installer-hooks.nsh</BundlerNsisInstallerHooks>
+    <BundlerNsisInstallerIconFile>$(_HelloBundlerNsisArtworkRoot)\Icons\modern-install-colorful.ico</BundlerNsisInstallerIconFile>
+    <BundlerNsisUninstallerIconFile>$(_HelloBundlerNsisArtworkRoot)\Icons\modern-uninstall-colorful.ico</BundlerNsisUninstallerIconFile>
+    <BundlerNsisHeaderFile>$(_HelloBundlerNsisArtworkRoot)\Header\nsis3-grey.bmp</BundlerNsisHeaderFile>
+    <BundlerNsisUninstallerHeaderFile>$(_HelloBundlerNsisArtworkRoot)\Header\orange-uninstall.bmp</BundlerNsisUninstallerHeaderFile>
+    <BundlerNsisSidebarFile>$(_HelloBundlerNsisArtworkRoot)\Wizard\nsis3-grey.bmp</BundlerNsisSidebarFile>
+    <BundlerNsisInstallerHooksFile>$(HelloBundlerAppAssets)nsis\installer-hooks.nsh</BundlerNsisInstallerHooksFile>
     <!-- 升级/旧版迁移旋钮。 -->
     <BundlerNsisAllowDowngrades Condition="'$(HelloBundlerNsisAllowDowngrades)' != ''">$(HelloBundlerNsisAllowDowngrades)</BundlerNsisAllowDowngrades>
     <BundlerNsisLegacyMsiProductCodes Condition="'$(HelloBundlerNsisLegacyMsiProductCodes)' != ''">$(HelloBundlerNsisLegacyMsiProductCodes)</BundlerNsisLegacyMsiProductCodes>

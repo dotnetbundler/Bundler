@@ -32,7 +32,7 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| 六段安装脚本（pre/post-install、pre/post-deinstall、pre/post-upgrade） | 已实现 | APK-2 | `BundlerAlpineApk*Script` 整文件注入控制段（0755，须非空+LF）；真实 `apk add`/`apk del`/`apk add` 升级 标记断言（install/deinstall/upgrade 三段均实测；upgrade 腿验证 v2 的 `.pre-upgrade`/`.post-upgrade` 执行且 `.post-install` 不触发） |
+| 六段安装脚本（pre/post-install、pre/post-deinstall、pre/post-upgrade） | 已实现 | APK-2 | `BundlerAlpineApk*File` 整文件注入控制段（0755，须非空+LF）；真实 `apk add`/`apk del`/`apk add` 升级 标记断言（install/deinstall/upgrade 三段均实测；upgrade 腿验证 v2 的 `.pre-upgrade`/`.post-upgrade` 执行且 `.post-install` 不触发） |
 | `apk add --allow-untrusted` 真实安装/运行/删除 | 已实现 | APK-4 | docker `alpine:latest` 容器内实装 → 脚本标记 → `/usr/bin` 运行 → `apk del` 清理断言 |
 | 未签名包拒绝验证（无 `--allow-untrusted`） | 已实现 | APK-4 | `apk add` 报错拒绝断言 |
 | 可信公钥安装（`/etc/apk/keys/`） | 已实现 | APK-4 | 自签包 + 公钥入 keys 后免 `--allow-untrusted` 实装通过 |

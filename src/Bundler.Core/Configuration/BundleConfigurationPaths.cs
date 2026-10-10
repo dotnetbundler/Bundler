@@ -55,7 +55,7 @@ internal static class BundleConfigurationPaths
                 .Select(resource => new BundleResourceConfiguration
                 {
                     Source = Resolve(baseDirectory, resource.Source),
-                    TargetPath = resource.TargetPath
+                    Destination = resource.Destination
                 }).ToArray() ?? [],
             FileAssociations = source.FileAssociations?.Where(association => association is not null)
                 .Select(association => new BundleFileAssociationConfiguration

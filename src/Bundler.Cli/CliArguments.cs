@@ -24,7 +24,7 @@ internal sealed class CliArguments
 
     private static bool IsKnownValueOption(string name) =>
         ValueOptions.Contains(name) ||
-        // --<format>.<knob> overrides (e.g. --deb.maintainer=…) merge into the
+        // --<format>.<knob> overrides (e.g. --deb.vendor=…) merge into the
         // matching bundler.json section; validated against real sections there.
         (name.Contains('.') && FormatSections.Contains(
             name[..name.IndexOf('.')].ToLowerInvariant()));

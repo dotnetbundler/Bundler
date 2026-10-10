@@ -58,7 +58,7 @@ dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r linu
 
 # 变体旋钮：全部按 HelloBundler<Format><Knob> 传透
 dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64 \
-    -p:HelloBundlerNsisInstallMode=perMachine \
+    -p:HelloBundlerNsisInstallScope=perMachine \
     -p:HelloBundlerMsiLanguage=zh-CN -p:HelloBundlerMsiInstallScope=perMachine
 ```
 
@@ -67,8 +67,8 @@ dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-
 ## 变体旋钮前缀约定
 
 - `HelloBundlerNsis*`：安装模式、压缩、语言集、外观图、安装钩子、快捷方式、旧 MSI 迁移、工具链覆盖（CompilerPath/DataDirectory/ToolsetArchivePath/Template）、降级策略。
-- `HelloBundlerMsi*`：InstallScope、Language(s)、UpgradeCode、FipsCompliant、MsiVersion、AllowDowngrades、安装目录选择/AddToPath/卸载快捷方式/装后启动、位图、专家扩展（ExtensionIdPrefix、ExtensionFragment、ExtensionComponentRef、ExtensionComponentGroupRef、ExtensionFeatureRef、ExpertMergeModule、ExpertTemplate）。
-- `HelloBundlerMacApp*`：图标三模式（png/car/icon）、InfoPlist 合并双模式（file/xml）、BundleName、MinimumSystemVersion、签名/硬化运行时/entitlements、公证 12 旋钮。
+- `HelloBundlerMsi*`：InstallScope、Language(s)、UpgradeCode、FipsCompliant、Version、AllowDowngrades、安装目录选择/AddToPath/卸载快捷方式/装后启动、位图、专家扩展（ExtensionIdPrefix、ExtensionFragment、ExtensionComponentRef、ExtensionComponentGroupRef、ExtensionFeatureRef、ExpertMergeModule、ExpertTemplate）。
+- `HelloBundlerMacApp*`：图标三模式（png/car/icon）、InfoPlist 合并双模式（file/xml）、PackageName、MinimumSystemVersion、签名/硬化运行时/entitlements、公证 12 旋钮。
 - `HelloBundlerDmg*`：压缩/卷名、Finder 布局 9 项、背景图/卷图标、EULA（`none` 关闭）、DMG 签名。
 - `HelloBundlerPkg*`：identifier/version/install-location、title/welcome/conclusion/license、安装域名、脚本目录、签名/公证 12 旋钮。
 - `HelloBundlerDeb*`：包名/版本/revision/epoch/架构/维护者/install-root/bin-link、关系字段 5 项、Section/Priority/Categories、DesktopFile/MetainfoFile/ChangelogFile、维护者脚本 4+systemd+conffiles、Compression。
@@ -83,5 +83,5 @@ dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-
 - **单工程全后端**：一次 `publish` 按 RID 产出全部格式，公共旋钮一处定义、格式旋钮按文件分离；
   互斥旋钮（独立 app × 许可文件）有明确的条件化取舍演示。
 - **旋钮 100% 覆盖**：`buildTransitive/DotNet.Bundler.MSBuild.props` 中全部公开 `Bundler<Format>*` 旋钮均有对应默认演示或 `HelloBundler*` 传透——包括专家级项（WiX ExtensionFragment/MergeModule、NSIS 工具链覆盖、pkg ScriptsDirectory）与签名/公证链路（空即不启用）。
-- **载荷项全类型**：`BundlerIcon`（RID 条件化）、`BundlerResource`、`BundlerFileAssociation`、`BundlerUrlProtocol`、`BundlerDebFile`/`BundlerRpmFile`/`BundlerAppImageFile`/`BundlerArchiveFile`/`BundlerAlpineApkFile`（任意路径映射）、`BundlerNsisLanguageFile`、`BundlerWixLanguageFile`、`BundlerMacContent`/`BundlerMacFramework`/`BundlerMacDocumentType`/`BundlerMacUrlType`、`BundlerPkgPayload`、`BundlerWindowsSigningFile`/`BundlerWindowsSigningCommandArgument`。
+- **载荷项全类型**：`BundlerIcon`（RID 条件化）、`BundlerResource`、`BundlerFileAssociation`、`BundlerUrlProtocol`、`BundlerDebFile`/`BundlerRpmFile`/`BundlerAppImageFile`/`BundlerArchiveFile`/`BundlerAlpineApkFile`（任意路径映射）、`BundlerNsisLanguageFile`、`BundlerWixLanguageFile`、`BundlerMacAppFile`/`BundlerMacAppFrameworkDirectory`/`BundlerMacDocumentType`/`BundlerMacUrlType`、`BundlerMacPkgFile`、`BundlerWindowsSigningFile`/`BundlerWindowsSigningCommandArgument`。
 - **启动自检**：`Program.cs` 区分普通启动/深链接/关联文件，落 `last-launch.txt` 日志，检查各格式载荷资源与 NSIS 生命周期 Hook 标记，便于安装后人工核验。

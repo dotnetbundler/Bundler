@@ -73,16 +73,16 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
 
         foreach (var resource in bundle.Resources)
         {
-            var target = Path.Combine(resourcesDirectory, NormalizeNestedPath(resource.TargetPath, "resources"));
+            var target = Path.Combine(resourcesDirectory, NormalizeNestedPath(resource.Destination, "resources"));
             CopyPayloadEntry(resource.Source, target, destinations, context.Logger);
         }
         foreach (var mapping in contents)
         {
             CopyPayloadEntry(mapping.Source,
-                Path.Combine(contentsDirectory, mapping.TargetPath.Replace('/', Path.DirectorySeparatorChar)),
+                Path.Combine(contentsDirectory, mapping.Destination.Replace('/', Path.DirectorySeparatorChar)),
                 destinations, context.Logger);
         }
-        foreach (var framework in settings.Frameworks)
+        foreach (var framework in settings.FrameworkDirectories)
         {
             var name = Path.GetFileName(framework);
             CopyPayloadEntry(framework, Path.Combine(frameworksDirectory, name), destinations, context.Logger);
@@ -179,18 +179,18 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         return [new BundleArtifact(Format, item.Target.RuntimeIdentifier, outputPath)];
     }
 
-    internal static IReadOnlyList<MacAppContentConfiguration> ResolveContentsMappings(
+    internal static IReadOnlyList<MacAppFileEntry> ResolveContentsMappings(
         MacAppBundleConfiguration settings)
     {
-        var resolved = new List<MacAppContentConfiguration>();
-        for (var index = 0; index < settings.Contents.Count; index++)
+        var resolved = new List<MacAppFileEntry>();
+        for (var index = 0; index < settings.Files.Count; index++)
         {
-            var mapping = settings.Contents[index];
-            var target = NormalizeContentsPath(mapping.TargetPath, $"contents[{index}]");
-            resolved.Add(new MacAppContentConfiguration
+            var mapping = settings.Files[index];
+            var target = NormalizeContentsPath(mapping.Destination, $"contents[{index}]");
+            resolved.Add(new MacAppFileEntry
             {
                 Source = Path.GetFullPath(mapping.Source),
-                TargetPath = target
+                Destination = target
             });
         }
         return resolved;

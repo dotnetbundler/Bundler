@@ -21,18 +21,18 @@
 | Tauri 能力 | DotNet.Bundler 等价入口 | 状态 | 决策与验证 |
 | --- | --- | --- | --- |
 | `template` | `NsisBundlerOptions.TemplatePath` / `BundlerNsisTemplate` | 已实现 | 直接 API 与 MSBuild 共用同一模板渲染器；未知模板变量会失败 |
-| `headerImage` | `HeaderImage` / `BundlerNsisHeaderImage` | 已实现 | `.bmp` 校验和渲染契约测试 |
-| `sidebarImage` | `SidebarImage` / `BundlerNsisSidebarImage` | 已实现 | 同时用于安装/卸载欢迎与完成页 |
-| `installerIcon` | `InstallerIcon` / `BundlerNsisInstallerIcon` | 已实现 | 可回退到通用图标列表中的首个 `.ico` |
-| `uninstallerIcon` | `UninstallerIcon` / `BundlerNsisUninstallerIcon` | 已实现 | 可独立设置；默认回退到安装器图标 |
-| `uninstallerHeaderImage` | `UninstallerHeaderImage` / `BundlerNsisUninstallerHeaderImage` | 已实现 | 默认回退到安装器 Header |
-| `installMode` | `InstallMode` / `BundlerNsisInstallMode` | 已实现，外部待验收 | `currentUser`、`perMachine`、`both`；真实 UAC 见 MT-01/02 |
+| `headerFile` | `HeaderFile` / `BundlerNsisHeaderFile` | 已实现 | `.bmp` 校验和渲染契约测试 |
+| `sidebarFile` | `SidebarFile` / `BundlerNsisSidebarFile` | 已实现 | 同时用于安装/卸载欢迎与完成页 |
+| `installerIconFile` | `InstallerIconFile` / `BundlerNsisInstallerIconFile` | 已实现 | 可回退到通用图标列表中的首个 `.ico` |
+| `uninstallerIconFile` | `UninstallerIconFile` / `BundlerNsisUninstallerIconFile` | 已实现 | 可独立设置；默认回退到安装器图标 |
+| `uninstallerHeaderFile` | `UninstallerHeaderFile` / `BundlerNsisUninstallerHeaderFile` | 已实现 | 默认回退到安装器 Header |
+| `installScope` | `InstallScope` / `BundlerNsisInstallScope` | 已实现，外部待验收 | `currentUser`、`perMachine`、`both`；真实 UAC 见 MT-01/02 |
 | `languages` | `Languages` / `BundlerNsisLanguages` | 已实现 | 内置固定快照中的 22 种语言；第一项在系统语言不匹配时回退；`Persian` 内部映射 NSIS `Farsi` |
 | `customLanguageFiles` | `CustomLanguageFiles` / `BundlerNsisLanguageFile` | 已实现 | 自定义文件完整替换同一已选语言；严格拒绝缺失、重复、未知键和错误语言常量 |
 | `displayLanguageSelector` | `DisplayLanguageSelector` / `BundlerNsisDisplayLanguageSelector` | 已实现 | 仅在多语言且显式启用时显示；单语言非系统语言已完成 Windows 静默安装回归 |
 | `compression` | `Compression` / `BundlerNsisCompression` | 已实现 | `lzma`、`zlib`、`bzip2`、`none`；脚本渲染和四种实际编译均有自动化测试 |
 | `startMenuFolder` | `Shortcuts.StartMenuFolder` / `BundlerNsisShortcutStartMenuFolder` | 已实现 | 本项目还提供所有权安全的创建、更新、迁移与删除 |
-| `installerHooks` | `InstallerHooks` / `BundlerNsisInstallerHooks` | 已实现 | 四个 `NSIS_HOOK_*` 生命周期点；Hook 失败接入事务/前向恢复 |
+| `installerHooksFile` | `InstallerHooksFile` / `BundlerNsisInstallerHooksFile` | 已实现 | 四个 `NSIS_HOOK_*` 生命周期点；Hook 失败接入事务/前向恢复 |
 | `minimumWebview2Version` | 无 | 不适用 | Tauri runtime 专属；本项目不安装或升级任意应用运行时 |
 
 结论：适用于通用 NSIS 后端的小型配置、签名和本地化能力均已收口。

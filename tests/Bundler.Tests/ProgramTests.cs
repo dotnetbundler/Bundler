@@ -286,8 +286,8 @@ public static class ProgramTests
     {
         var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
         Assert.Contains("!insertmacro MUI_PAGE_DIRECTORY", template);
-        Assert.True(template.Contains("ReadRegStr $0 SHCTX \"${UNINSTALL_KEY}\" \"InstallLocation\"", StringComparison.Ordinal) &&
-               template.Contains("MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_VALUENAME \"InstallLocation\"", StringComparison.Ordinal) &&
+        Assert.True(template.Contains("ReadRegStr $0 SHCTX \"${UNINSTALL_KEY}\" \"InstallRoot\"", StringComparison.Ordinal) &&
+               template.Contains("MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_VALUENAME \"InstallRoot\"", StringComparison.Ordinal) &&
                template.Contains("${If} $INSTDIR == \"placeholder\\${INSTALL_FOLDER}\"", StringComparison.Ordinal),
             "Fixed and selectable install scopes should restore their previously selected install directories.");
     }
@@ -538,7 +538,7 @@ public static class ProgramTests
                     Identifier = "com.example.app",
                     Version = "1.0.0",
                     OutputDirectory = "artifacts",
-                    Resources = [new BundleResourceConfiguration { Source = resource, TargetPath = targetPath }],
+                    Resources = [new BundleResourceConfiguration { Source = resource, Destination = targetPath }],
                     Targets =
                     [
                         new BundleTargetConfiguration
@@ -1650,7 +1650,7 @@ public static class ProgramTests
                 "output",
                 false);
 
-            string Render(NsisInstallMode mode)
+            string Render(NsisInstallScope mode)
             {
                 var configuration = ValidConfiguration(new BundleTargetConfiguration
                 {
@@ -1670,27 +1670,27 @@ public static class ProgramTests
                 return NsisBundleBackend.CreateScript(
                     template,
                     configuration,
-                    new NsisBundleConfiguration { InstallMode = mode },
+                    new NsisBundleConfiguration { InstallScope = mode },
                     item,
                     "setup.exe",
                     "ExampleApp");
             }
 
-            var currentUser = Render(NsisInstallMode.CurrentUser);
+            var currentUser = Render(NsisInstallScope.CurrentUser);
             Assert.True(currentUser.Contains("!define INSTALL_MODE \"currentUser\"", StringComparison.Ordinal) &&
                    currentUser.Contains("RequestExecutionLevel user", StringComparison.Ordinal) &&
                    currentUser.Contains("SetShellVarContext current", StringComparison.Ordinal) &&
                    currentUser.Contains("$LOCALAPPDATA\\Programs\\${INSTALL_FOLDER}", StringComparison.Ordinal),
                 "Current-user mode must use user execution, HKCU shell context, and a per-user directory.");
 
-            var perMachine = Render(NsisInstallMode.PerMachine);
+            var perMachine = Render(NsisInstallScope.PerMachine);
             Assert.True(perMachine.Contains("!define INSTALL_MODE \"perMachine\"", StringComparison.Ordinal) &&
                    perMachine.Contains("RequestExecutionLevel admin", StringComparison.Ordinal) &&
                    perMachine.Contains("SetShellVarContext all", StringComparison.Ordinal) &&
                    perMachine.Contains("$PROGRAMFILES64\\${INSTALL_FOLDER}", StringComparison.Ordinal),
                 "Per-machine mode must elevate and use the all-users shell context and Program Files.");
 
-            var both = Render(NsisInstallMode.Both);
+            var both = Render(NsisInstallScope.Both);
             Assert.True(both.Contains("!define INSTALL_MODE \"both\"", StringComparison.Ordinal) &&
                    both.Contains("!define MULTIUSER_MUI", StringComparison.Ordinal) &&
                    both.Contains("!insertmacro MULTIUSER_PAGE_INSTALLMODE", StringComparison.Ordinal) &&
@@ -1762,16 +1762,16 @@ public static class ProgramTests
         Directory.CreateDirectory(input);
         File.WriteAllText(Path.Combine(input, "ExampleApp.exe"), "test");
         var icon = Path.Combine(root, "app.ico");
-        var uninstallerIcon = Path.Combine(root, "uninstall.ico");
-        var headerImage = Path.Combine(root, "header.bmp");
-        var sidebarImage = Path.Combine(root, "sidebar.bmp");
+        var uninstallerIconFile = Path.Combine(root, "uninstall.ico");
+        var headerFile = Path.Combine(root, "header.bmp");
+        var sidebarFile = Path.Combine(root, "sidebar.bmp");
         var licenseFile = Path.Combine(root, "license.rtf");
         var hooksFile = Path.Combine(root, "hooks.nsh");
         var resource = Path.Combine(root, "license.txt");
         File.WriteAllText(icon, "icon");
-        File.WriteAllText(uninstallerIcon, "icon");
-        File.WriteAllText(headerImage, "bitmap");
-        File.WriteAllText(sidebarImage, "bitmap");
+        File.WriteAllText(uninstallerIconFile, "icon");
+        File.WriteAllText(headerFile, "bitmap");
+        File.WriteAllText(sidebarFile, "bitmap");
         File.WriteAllText(licenseFile, "license");
         File.WriteAllText(hooksFile, "!macro NSIS_HOOK_PREINSTALL$\n!macroend");
         File.WriteAllText(resource, "license");
@@ -1795,7 +1795,7 @@ public static class ProgramTests
                     new BundleResourceConfiguration
                     {
                         Source = resource,
-                        TargetPath = "docs/license.txt"
+                        Destination = "docs/license.txt"
                     }
                 ],
                 Targets =
@@ -1819,11 +1819,11 @@ public static class ProgramTests
             var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var nsisConfiguration = new NsisBundleConfiguration
             {
-                InstallerIcon = icon,
-                UninstallerIcon = uninstallerIcon,
-                HeaderImage = headerImage,
-                SidebarImage = sidebarImage,
-                InstallerHooks = hooksFile
+                InstallerIconFile = icon,
+                UninstallerIconFile = uninstallerIconFile,
+                HeaderFile = headerFile,
+                SidebarFile = sidebarFile,
+                InstallerHooksFile = hooksFile
             };
             var script = NsisBundleBackend.CreateScript(
                 template,
@@ -1837,7 +1837,7 @@ public static class ProgramTests
             Assert.True(script.Contains("!define MUI_ICON", StringComparison.Ordinal) &&
                    script.Contains("!define MUI_UNICON", StringComparison.Ordinal),
                 "The configured .ico should apply to the installer and uninstaller.");
-            Assert.True(script.Contains(uninstallerIcon.Replace("$", "$$"), StringComparison.Ordinal) &&
+            Assert.True(script.Contains(uninstallerIconFile.Replace("$", "$$"), StringComparison.Ordinal) &&
                    script.Contains("!define MUI_HEADERIMAGE_BITMAP", StringComparison.Ordinal) &&
                    script.Contains("!define MUI_WELCOMEFINISHPAGE_BITMAP", StringComparison.Ordinal),
                 "NSIS-specific installer, uninstaller, header, and sidebar artwork should be rendered.");

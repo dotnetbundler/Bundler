@@ -51,14 +51,14 @@ public sealed class WixBundler : IFormatBundler
         if (!string.IsNullOrWhiteSpace(bundle.LicenseFile) &&
             !Path.GetExtension(bundle.LicenseFile).Equals(".rtf", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("MSI interactive license UI requires an RTF license file.");
-        CheckBitmap(_settings.BannerBitmap, "MSI banner bitmap requires a 493x58 .bmp file.", 493, 58);
-        CheckBitmap(_settings.DialogBitmap, "MSI dialog bitmap requires a 503x314 .bmp file.", 503, 314);
+        CheckBitmap(_settings.BannerFile, "MSI banner bitmap requires a 493x58 .bmp file.", 493, 58);
+        CheckBitmap(_settings.DialogFile, "MSI dialog bitmap requires a 503x314 .bmp file.", 503, 314);
 
         foreach (var target in bundle.Targets)
         foreach (var language in languages)
         {
             WixIdentity.Create(bundle.Identifier, bundle.Version, target.RuntimeIdentifier,
-                _settings.InstallScope, _settings.UpgradeCode, language, _settings.MsiVersion);
+                _settings.InstallScope, _settings.UpgradeCode, language, _settings.Version);
         }
     }
 

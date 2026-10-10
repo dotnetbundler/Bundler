@@ -12,15 +12,15 @@ namespace DotNet.Bundler.MacPkg;
 internal static class MacPkgSigning
 {
     internal static bool Configured(MacPkgSigningConfiguration signing) =>
-        signing.Identity is not null || !string.IsNullOrEmpty(signing.TemporaryCertificatePath);
+        signing.Identity is not null || !string.IsNullOrEmpty(signing.TemporaryCertificateFile);
 
     /// <summary>Preflight checks; the bundler calls this before any payload work.</summary>
     internal static void Validate(MacPkgSigningConfiguration signing)
     {
-        if (signing.Identity is not null && !string.IsNullOrEmpty(signing.TemporaryCertificatePath))
+        if (signing.Identity is not null && !string.IsNullOrEmpty(signing.TemporaryCertificateFile))
         {
             throw new ArgumentException(
-                "MacPkg Signing.Identity and TemporaryCertificatePath are mutually exclusive.");
+                "MacPkg Signing.Identity and TemporaryCertificateFile are mutually exclusive.");
         }
         if (signing.Identity is { Length: 0 } or "-")
         {
@@ -28,11 +28,11 @@ internal static class MacPkgSigning
                 "MacPkg Signing.Identity must be a real Developer ID Installer identity; " +
                 ".pkg has no ad-hoc signature equivalent.");
         }
-        if (signing.TemporaryCertificatePath is { Length: > 0 } certificatePath &&
+        if (signing.TemporaryCertificateFile is { Length: > 0 } certificatePath &&
             !File.Exists(Path.GetFullPath(certificatePath)))
         {
             throw new FileNotFoundException(
-                "MacPkg Signing.TemporaryCertificatePath does not exist.", certificatePath);
+                "MacPkg Signing.TemporaryCertificateFile does not exist.", certificatePath);
         }
         if (signing.Notarize)
         {
@@ -43,7 +43,7 @@ internal static class MacPkgSigning
                     "is what notarytool and Gatekeeper evaluate.");
             }
             MacAppSigning.ResolveCredentials(
-                signing.KeychainProfile, signing.ApiKeyPath, signing.ApiKeyId, signing.ApiIssuer,
+                signing.KeychainProfile, signing.ApiKeyFile, signing.ApiKeyId, signing.ApiIssuer,
                 signing.AppleId, signing.ApplePassword, signing.AppleTeamId);
         }
         else if (signing.SkipStapling || !signing.NotaryWait)
@@ -61,7 +61,7 @@ internal static class MacPkgSigning
             BundleBuildContext context, MacPkgSigningConfiguration signing,
             CancellationToken cancellationToken)
     {
-        if (signing.TemporaryCertificatePath is { Length: > 0 } certificatePath)
+        if (signing.TemporaryCertificateFile is { Length: > 0 } certificatePath)
         {
             var keychain = await MacAppSigning.TemporaryKeychain.CreateAsync(
                 context.WorkDirectory, Path.GetFullPath(certificatePath),
@@ -110,7 +110,7 @@ internal static class MacPkgSigning
         CancellationToken cancellationToken)
     {
         var credentials = MacAppSigning.ResolveCredentials(
-            signing.KeychainProfile, signing.ApiKeyPath, signing.ApiKeyId, signing.ApiIssuer,
+            signing.KeychainProfile, signing.ApiKeyFile, signing.ApiKeyId, signing.ApiIssuer,
             signing.AppleId, signing.ApplePassword, signing.AppleTeamId);
         var submitArguments = new List<string> { "notarytool", "submit", packagePath };
         submitArguments.AddRange(credentials);

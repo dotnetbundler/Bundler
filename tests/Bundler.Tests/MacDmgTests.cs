@@ -425,7 +425,7 @@ public static class MacDmgTests
     }
 
     [Fact]
-    static async Task SkipWindowLayoutSkipsOsascript()
+    static async Task LayoutSkipSkipsOsascript()
     {
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
@@ -443,9 +443,9 @@ public static class MacDmgTests
         };
         try
         {
-            await new MacDmgBundler(new MacDmgBundleConfiguration { SkipWindowLayout = true })
+            await new MacDmgBundler(new MacDmgBundleConfiguration { Layout = null })
                 .BuildAsync(DmgConfiguration(input, output));
-            Assert.False(requests.Any(request => request.Executable == "osascript"), "SkipWindowLayout must not invoke osascript.");
+            Assert.False(requests.Any(request => request.Executable == "osascript"), "LayoutSkip must not invoke osascript.");
             var attach = requests.First(request =>
                 request.Executable == "hdiutil" && request.Arguments.Contains("attach"));
             Assert.Contains("-nobrowse", attach.Arguments);
@@ -587,7 +587,7 @@ public static class MacDmgTests
         {
             await new MacDmgBundler(new MacDmgBundleConfiguration
                 {
-                    SkipWindowLayout = true,
+                    Layout = null,
                     Signing = new MacDmgSigningConfiguration { Identity = "-" }
                 })
                 .BuildAsync(DmgConfiguration(input, output, licenseFile: license));
@@ -639,7 +639,7 @@ public static class MacDmgTests
                         Signing = new MacDmgSigningConfiguration
                         {
                             Identity = "-",
-                            TemporaryCertificatePath = certificate
+                            TemporaryCertificateFile = certificate
                         }
                     })
                     .BuildAsync(DmgConfiguration(input, output)));
@@ -670,7 +670,7 @@ public static class MacDmgTests
         try
         {
             await Assert.ThrowsAnyAsync<BundleValidationException>(
-                () => new MacDmgBundler(new MacDmgBundleConfiguration { SkipWindowLayout = true })
+                () => new MacDmgBundler(new MacDmgBundleConfiguration { Layout = null })
                     .BuildAsync(DmgConfiguration(
                         input, output, licenseFile: Path.Combine(input, "missing.txt"))));
         }
@@ -712,9 +712,9 @@ public static class MacDmgTests
         }
     }
 
-    // R2: SkipWindowLayout（-nobrowse）下不跑 Finder 布局，背景图不再拷入成孤儿文件。
+    // R2: Layout=null（-nobrowse）下不跑 Finder 布局，背景图不再拷入成孤儿文件。
     [Fact]
-    static async Task SkipWindowLayoutSkipsBackgroundCopy()
+    static async Task LayoutSkipSkipsBackgroundCopy()
     {
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
@@ -748,7 +748,7 @@ public static class MacDmgTests
             await new MacDmgBundler(
                     dmgConfiguration: new MacDmgBundleConfiguration
                     {
-                        SkipWindowLayout = true, BackgroundFile = background
+                        Layout = null, BackgroundFile = background
                     },
                     appConfiguration: null,
                     options: new MacDmgBundlerOptions { Logger = new ListLogger(warnings) })
@@ -847,7 +847,7 @@ public static class MacDmgTests
                task.Contains("PackageFormat.Dmg", StringComparison.Ordinal),
             "The MSBuild task does not construct the .dmg backend.");
         Assert.True(targets.Contains("MacDmgSignIdentity=\"$(BundlerMacDmgSignIdentity)\"", StringComparison.Ordinal) &&
-               targets.Contains("MacDmgSignCertificatePath=\"$(BundlerMacDmgSignCertificatePath)\"", StringComparison.Ordinal) &&
+               targets.Contains("MacDmgTemporaryCertificateFile=\"$(BundlerMacDmgTemporaryCertificateFile)\"", StringComparison.Ordinal) &&
                targets.Contains("LicenseFile=\"$(BundlerLicenseFile)\"", StringComparison.Ordinal),
             "MSBuild does not map the .dmg signing/license properties to the task.");
     }

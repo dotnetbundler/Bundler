@@ -69,10 +69,10 @@ public static class BundleConfigurationValidator
         {
             var resource = configuration.Resources[index];
             Required(resource.Source, $"resources[{index}].source", issues);
-            Required(resource.TargetPath, $"resources[{index}].targetPath", issues);
-            if (!string.IsNullOrWhiteSpace(resource.TargetPath) &&
-                (IsRootedInstallerPath(resource.TargetPath) ||
-                 resource.TargetPath.Split(new[] { '/', '\\' }, StringSplitOptions.None)
+            Required(resource.Destination, $"resources[{index}].targetPath", issues);
+            if (!string.IsNullOrWhiteSpace(resource.Destination) &&
+                (IsRootedInstallerPath(resource.Destination) ||
+                 resource.Destination.Split(new[] { '/', '\\' }, StringSplitOptions.None)
                       .Contains("..", StringComparer.Ordinal)))
             {
                 issues.Add(new($"resources[{index}].targetPath", "Must stay inside the installation directory."));

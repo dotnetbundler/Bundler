@@ -29,7 +29,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
                 var existing = Path.Combine(item.OutputDirectory,
                     WixProductDocument.SafeFileName(bundle.ProductName) + "-" +
                     WixIdentity.Create(bundle.Identifier, bundle.Version, item.Target.RuntimeIdentifier,
-                        settings.InstallScope, settings.UpgradeCode, language, settings.MsiVersion)
+                        settings.InstallScope, settings.UpgradeCode, language, settings.Version)
                         .ProductVersion + language.Suffix + ".msi");
                 if (File.Exists(existing) || File.Exists(existing + ".bundler-manifest"))
                     throw new IOException(
@@ -71,7 +71,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         var fragmentObjects = new List<string>();
         if (settings.IsExpertMode)
         {
-            var template = settings.ExpertTemplate!;
+            var template = settings.ExpertTemplateFile!;
             if (!File.Exists(template) ||
                 (File.GetAttributes(template) & FileAttributes.ReparsePoint) != 0)
             {
@@ -83,7 +83,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             {
                 extensionDlls.Add(dll);
             }
-            foreach (var module in settings.ExpertMergeModules)
+            foreach (var module in settings.ExpertMergeModuleFiles)
             {
                 if (!File.Exists(module) ||
                     (File.GetAttributes(module) & FileAttributes.ReparsePoint) != 0 ||
@@ -95,12 +95,12 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             }
             return new ExtensionInputs(fragmentObjects,
                 [Path.GetDirectoryName(Path.GetFullPath(template))!], [.. extensionDlls],
-                Path.GetFullPath(template), settings.ExpertMergeModules.Select(Path.GetFullPath).ToArray());
+                Path.GetFullPath(template), settings.ExpertMergeModuleFiles.Select(Path.GetFullPath).ToArray());
         }
         var prefix = settings.ExtensionIdPrefix ?? "";
-        for (var index = 0; index < settings.ExtensionFragments.Count; index++)
+        for (var index = 0; index < settings.ExtensionFragmentFiles.Count; index++)
         {
-            var fragment = settings.ExtensionFragments[index];
+            var fragment = settings.ExtensionFragmentFiles[index];
             var content = WixExtensionValidator.ValidateFragment(fragment, prefix);
             foreach (var dll in WixExtensionValidator.DetectExtensionDlls(content, toolsetDirectory))
             {
@@ -112,7 +112,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             fragmentObjects.Add(obj);
         }
         return new ExtensionInputs(fragmentObjects,
-            settings.ExtensionFragments
+            settings.ExtensionFragmentFiles
                 .Select(fragment => Path.GetDirectoryName(Path.GetFullPath(fragment))!)
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             [.. extensionDlls], null, []);
@@ -125,7 +125,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
     {
         var language = requested with { Codepage = settings.EffectiveCodepage(requested) };
         var identity = WixIdentity.Create(bundle.Identifier, bundle.Version, item.Target.RuntimeIdentifier,
-            settings.InstallScope, settings.UpgradeCode, language, settings.MsiVersion);
+            settings.InstallScope, settings.UpgradeCode, language, settings.Version);
         var outputName = WixProductDocument.SafeFileName(bundle.ProductName) + "-" + identity.ProductVersion +
             language.Suffix + ".msi";
         var outputPath = Path.Combine(item.OutputDirectory, outputName);
@@ -213,7 +213,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
                 context.WorkDirectory, cancellationToken);
             var lightArguments = new List<string> { "-nologo" };
             if (!string.IsNullOrWhiteSpace(bundle.LicenseFile) || settings.InstallDirectorySelection ||
-                settings.LaunchAfterInstall || settings.BannerBitmap is not null || settings.DialogBitmap is not null)
+                settings.LaunchAfterInstall || settings.BannerFile is not null || settings.DialogFile is not null)
             {
                 // Non-English MSIs fall back to en-US for strings the language
                 // resources do not override, mirroring the reference bundlers.
@@ -307,7 +307,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         AddTree(item.InputDirectory, "");
         foreach (var resource in bundle.Resources)
         {
-            var target = WixPackagePaths.NormalizeTarget(resource.TargetPath);
+            var target = WixPackagePaths.NormalizeTarget(resource.Destination);
             if (File.Exists(resource.Source))
             {
                 AddFile(resource.Source, target);
@@ -415,8 +415,8 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         }
         if (icon is not null) text.AppendLine(HashFile(icon));
         if (bundle.LicenseFile is not null) text.AppendLine(HashFile(bundle.LicenseFile));
-        if (settings.BannerBitmap is not null) text.AppendLine(HashFile(settings.BannerBitmap));
-        if (settings.DialogBitmap is not null) text.AppendLine(HashFile(settings.DialogBitmap));
+        if (settings.BannerFile is not null) text.AppendLine(HashFile(settings.BannerFile));
+        if (settings.DialogFile is not null) text.AppendLine(HashFile(settings.DialogFile));
         AppendExtensionFingerprint(text);
         text.AppendLine(canonical.ToString(SaveOptions.DisableFormatting));
         using var sha = SHA256.Create();
@@ -426,7 +426,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
     private void AppendExtensionFingerprint(StringBuilder text)
     {
         if (settings.ExtensionIdPrefix is not null) text.AppendLine(settings.ExtensionIdPrefix);
-        foreach (var fragment in settings.ExtensionFragments)
+        foreach (var fragment in settings.ExtensionFragmentFiles)
         {
             text.AppendLine(HashFile(fragment));
             AppendReferencedSourceHashes(text, fragment);
@@ -434,12 +434,12 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         foreach (var id in settings.ExtensionComponentRefs
                      .Concat(settings.ExtensionComponentGroupRefs)
                      .Concat(settings.ExtensionFeatureRefs)) text.AppendLine(id);
-        if (settings.ExpertTemplate is not null)
+        if (settings.ExpertTemplateFile is not null)
         {
-            text.AppendLine(HashFile(settings.ExpertTemplate));
-            AppendReferencedSourceHashes(text, settings.ExpertTemplate);
+            text.AppendLine(HashFile(settings.ExpertTemplateFile));
+            AppendReferencedSourceHashes(text, settings.ExpertTemplateFile);
         }
-        foreach (var module in settings.ExpertMergeModules) text.AppendLine(HashFile(module));
+        foreach (var module in settings.ExpertMergeModuleFiles) text.AppendLine(HashFile(module));
     }
 
     private static readonly Regex SourceReferencePattern =
@@ -482,8 +482,8 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             text.AppendLine(file.RelativePath.ToLowerInvariant()).AppendLine(HashFile(file.SourcePath));
         if (icon is not null) text.AppendLine(HashFile(icon));
         if (bundle.LicenseFile is not null) text.AppendLine(HashFile(bundle.LicenseFile));
-        if (settings.BannerBitmap is not null) text.AppendLine(HashFile(settings.BannerBitmap));
-        if (settings.DialogBitmap is not null) text.AppendLine(HashFile(settings.DialogBitmap));
+        if (settings.BannerFile is not null) text.AppendLine(HashFile(settings.BannerFile));
+        if (settings.DialogFile is not null) text.AppendLine(HashFile(settings.DialogFile));
         AppendExtensionFingerprint(text);
         using var sha = SHA256.Create();
         return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(text.ToString()))).Replace("-", "");
