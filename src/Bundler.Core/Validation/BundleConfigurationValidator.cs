@@ -189,9 +189,9 @@ public static class BundleConfigurationValidator
     {
         var path = $"targets[{index}]";
         Required(targetConfiguration.InputDirectory, $"{path}.inputDirectory", issues);
-        if (!BundleTarget.TryParse(targetConfiguration.RuntimeIdentifier, out var target))
+        if (!BundleTarget.TryParse(targetConfiguration.Target, out var target))
         {
-            issues.Add(new($"{path}.runtimeIdentifier", "Supported RIDs: win-x86, win-x64, win-arm64, osx, osx-x64, osx-arm64, linux-x64, linux-arm64, linux-musl-x64, linux-musl-arm64."));
+            issues.Add(new($"{path}.target", "Supported targets: windows-i686, windows-x86_64, windows-arm64, macos-universal, macos-x86_64, macos-arm64, linux-x86_64, linux-aarch64, linux-musl-x86_64, linux-musl-aarch64."));
             return;
         }
 
@@ -204,7 +204,7 @@ public static class BundleConfigurationValidator
         {
             if (!DesktopTargetMatrix.Supports(target!, format))
             {
-                issues.Add(new($"{path}.formats", $"{format} is not supported for {target!.RuntimeIdentifier}."));
+                issues.Add(new($"{path}.formats", $"{format} is not supported for {target!.Target}."));
             }
         }
 
@@ -294,7 +294,7 @@ public static class BundleConfigurationValidator
         {
             var target = configuration.Targets[targetIndex];
             // 注入的中间 App 项同样占输出槽：dmg/pkg 未显式带 app 时 planner 会
-            // 补一个中间 app——同 rid 双 target 判定不能漏它。
+            // 补一个中间 app——同 target 双格式判定不能漏它。
             var formats = target.Formats.Concat(
                 target.Formats.Any(format => format is PackageFormat.Dmg or PackageFormat.Pkg) &&
                 !target.Formats.Contains(PackageFormat.App)
@@ -302,7 +302,7 @@ public static class BundleConfigurationValidator
                     : []);
             foreach (var format in formats)
             {
-                var key = $"{target.RuntimeIdentifier}:{format}";
+                var key = $"{target.Target}:{format}";
                 if (!outputs.Add(key))
                 {
                     issues.Add(new($"targets[{targetIndex}].formats", $"Duplicate output requested: {key}."));

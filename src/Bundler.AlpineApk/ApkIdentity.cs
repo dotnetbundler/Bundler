@@ -57,14 +57,10 @@ internal static class ApkIdentity
         return mapped;
     }
 
-    internal static string MapArchitecture(CpuArchitecture architecture) => architecture switch
-    {
-        CpuArchitecture.X64 => "x86_64",
-        CpuArchitecture.Arm64 => "aarch64",
-        CpuArchitecture.X86 => "x86",
-        _ => throw new NotSupportedException(
-            $"No Alpine architecture mapping for {architecture}; set Architecture explicitly.")
-    };
+    internal static string MapArchitecture(BundleTarget target) =>
+        ArtifactNaming.ArchToken(target, PackageFormat.AlpineApk)
+        ?? throw new NotSupportedException(
+            $"No Alpine architecture mapping for {target.Architecture}; set Architecture explicitly.");
 
     internal static void ValidateArchitecture(string architecture)
     {

@@ -12,7 +12,7 @@
   apk v3（apk-tools 3.x，zstd/新索引）尚未发布稳定版，不预支。
 - **APK-D3 实现方式**：纯托管写入器、零宿主工具依赖——与 `Bundler.Deb`/`Bundler.Rpm` 同模式，任意构建宿主可产。
   复用 `Bundler.Core` 的 `TarWriter`（需加"tar 段模式"：signature/control 段不写末尾两个空记录，data 段保留）+ `System.IO.Compression.GZipStream`（mtime=0、确定性字节）。
-- **APK-D4 目标 RID**：仅 `linux-musl-x64`、`linux-musl-arm64`——apk 是 musl/Alpine 生态包管理器，向 glibc 目标产 apk 属语义不成立（门禁原则同 musl 拒绝 deb/rpm 的对称面）。
+- **APK-D4 目标 RID**：仅 `linux-musl-x86_64`、`linux-musl-aarch64`——apk 是 musl/Alpine 生态包管理器，向 glibc 目标产 apk 属语义不成立（门禁原则同 musl 拒绝 deb/rpm 的对称面）。
   架构名映射：`musl-x64`→`x86_64`、`musl-arm64`→`aarch64`（apk 架构命名，`BundlerAlpineApkArchitecture` 可显式覆盖，须为 apk 架构名）。
 - **APK-D5 数据段布局**：载荷按文件系统路径落在数据 tar 内——默认 `/usr/lib/<pkgname>/` 承载全部载荷 + `/usr/bin/<binname>` 符号链接（链接名默认包名，`BundlerAlpineApkBinLink`，可关）；任意映射 `BundlerAlpineApkFile` 直接进数据段；符号链接/执行位如实写入。
   取舍：`/opt/` 是发行版自有包惯例的反例（Alpine 官方包用 `/usr/`），跟随 deb/rpm 的 `/usr/lib` 惯例。
@@ -21,7 +21,7 @@
 - **APK-D8 签名**：可选 RSA——`.SIGN.RSA.<密钥文件名>.rsa.pub` 存 DER PKCS1v15(RSA+SHA1) 签名、签在控制段 gzip 流上；`BundlerAlpineApkSigningKeyFile`（PEM RSA 私钥）+ `BundlerAlpineApkSigningKeyPassphrase`；复用 SIGN 阶段的 BouncyCastle 依赖模式。
   未签名 apk 安装需 `apk add --allow-untrusted`，文档如实标注；签名公钥须已分发到目标 `/etc/apk/keys/` 才有验签意义。
 - **APK-D9 不做的项（v1 明确排除）**：`replaces`/`provides_priority`/`install_if`/`datahashes` 之外的冷门 `.PKGINFO` 键（留 `BundlerAlpineApk*` 覆盖旋钮的 escape hatch）、apk v3、`apk` 仓库索引（`.apk.index` 属仓库运维非单包产出）、abuild 的 ELF `so:` 依赖自动扫描（依赖由调用方显式声明）。
-- **APK-D10 产物命名与路径**：`OutputDirectory/<rid>/alpineapk/<pkgname>-<pkgver>-r<rel>.apk`；同格式附带 `.sha256` 侧车（对齐 deb/rpm）。
+- **APK-D10 产物命名与路径**：`OutputDirectory/alpineapk/（byFormat 布局）<pkgname>-<pkgver>-r<rel>.apk`；同格式附带 `.sha256` 侧车（对齐 deb/rpm）。
 
 ## 2. 打包工具下限（三层口径）
 
@@ -46,7 +46,7 @@
 范围：`Bundler.AlpineApk` 程序集骨架（`AlpineApkBundleBackend : IBundleBackend`、`AlpineApkBundler` 直接 API、`AlpineApkBundleConfiguration`）、gzip×3 写入器（TarWriter 段模式）、`.PKGINFO` 核心字段（pkgname/pkgver/pkgdesc/url/arch/origin/size/datahash）、数据段载荷+binlink、pax `APK-TOOLS.checksum.SHA1`、矩阵 `LinuxMusl`+`AlpineApk`、流水线注册、CLI/MSBuild 接线。
 验证：写出→自读回解析三段结构断言；`.PKGINFO` 字段断言；matrix 放通 musl+apk、其余目标拒绝断言；构建零警告。
 出口：`Bundler.Tests` 新增断言全绿。
-实施证据（2026-09-30，commit `074c203`，`0.1.0-alpha.63`）：`src/Bundler.AlpineApk` 落地，`Bundler.Tests` 225/225（新增 14 项），`dotnet build Bundler.slnx -c Release` 零警告；产物 `OutputDirectory/<rid>/alpineapk/<pkgname>-<ver>-r<rel>.apk` + `.sha256`。
+实施证据（2026-09-30，commit `074c203`，`0.1.0-alpha.63`）：`src/Bundler.AlpineApk` 落地，`Bundler.Tests` 225/225（新增 14 项），`dotnet build Bundler.slnx -c Release` 零警告；产物 `OutputDirectory/alpineapk/（byFormat 布局）<pkgname>-<ver>-r<rel>.apk` + `.sha256`。
 
 ### APK-2：元数据、依赖与脚本
 

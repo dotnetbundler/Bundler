@@ -62,7 +62,7 @@ internal sealed class NsisBundleBackend(
         var safeProductName = SafeFileName(configuration.ProductName);
         var installerPath = Path.Combine(
             item.OutputDirectory,
-            $"{safeProductName}-{configuration.Version}-setup.exe");
+            ArtifactNaming.FileName(safeProductName, configuration.Version, item.Target, PackageFormat.Nsis));
         var scriptPath = Path.Combine(context.WorkDirectory, "installer.nsi");
         cancellationToken.ThrowIfCancellationRequested();
         var template = File.ReadAllText(fullTemplatePath);
@@ -84,7 +84,7 @@ internal sealed class NsisBundleBackend(
                     pluginDirectory,
                     signer,
                     configuration.ProductName,
-                    item.Target.RuntimeIdentifier,
+                    item.Target.Target,
                     cancellationToken);
                 var uninstallerPath = Path.Combine(context.WorkDirectory, "signed-uninstaller.exe");
                 WriteScript(new UninstallerMode(
@@ -99,7 +99,7 @@ internal sealed class NsisBundleBackend(
 
                 context.Logger.Log(BundleLogLevel.Information, "Signing the NSIS uninstaller.");
                 await signer.SignAsync(
-                    new BundleSigningRequest(uninstallerPath, BundleSigningArtifactKind.Uninstaller, configuration.ProductName, item.Target.RuntimeIdentifier),
+                    new BundleSigningRequest(uninstallerPath, BundleSigningArtifactKind.Uninstaller, configuration.ProductName, item.Target.Target),
                     cancellationToken);
 
                 WriteScript(new UninstallerMode(
@@ -109,7 +109,7 @@ internal sealed class NsisBundleBackend(
                 await CompileAsync();
                 context.Logger.Log(BundleLogLevel.Information, "Signing the NSIS installer.");
                 await signer.SignAsync(
-                    new BundleSigningRequest(installerPath, BundleSigningArtifactKind.Installer, configuration.ProductName, item.Target.RuntimeIdentifier),
+                    new BundleSigningRequest(installerPath, BundleSigningArtifactKind.Installer, configuration.ProductName, item.Target.Target),
                     cancellationToken);
             }
 
@@ -118,7 +118,7 @@ internal sealed class NsisBundleBackend(
                 throw new InvalidOperationException("NSIS reported success but did not create the installer.");
             }
 
-            return [new BundleArtifact(Format, item.Target.RuntimeIdentifier, installerPath)];
+            return [new BundleArtifact(Format, item.Target.Target, installerPath)];
         }
         catch
         {
@@ -183,7 +183,7 @@ internal sealed class NsisBundleBackend(
             }
             context.Logger.Log(BundleLogLevel.Information, $"Signing staged payload file '{relativePath}'.");
             await signer.SignAsync(
-                new BundleSigningRequest(path, kind, productName, item.Target.RuntimeIdentifier),
+                new BundleSigningRequest(path, kind, productName, item.Target.Target),
                 cancellationToken);
         }
         return item with { InputDirectory = destination };
@@ -194,7 +194,7 @@ internal sealed class NsisBundleBackend(
         string sourceDirectory,
         IBundleSigner signer,
         string productName,
-        string targetRuntimeIdentifier,
+        string targetTarget,
         CancellationToken cancellationToken)
     {
         var destination = Path.Combine(context.WorkDirectory, "signed-plugins");
@@ -205,7 +205,7 @@ internal sealed class NsisBundleBackend(
         {
             context.Logger.Log(BundleLogLevel.Information, $"Signing Bundler native component '{Path.GetFileName(path)}'.");
             await signer.SignAsync(
-                new BundleSigningRequest(path, BundleSigningArtifactKind.NativeComponent, productName, targetRuntimeIdentifier),
+                new BundleSigningRequest(path, BundleSigningArtifactKind.NativeComponent, productName, targetTarget),
                 cancellationToken);
         }
         return destination;

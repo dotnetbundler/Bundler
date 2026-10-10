@@ -38,7 +38,7 @@ public sealed class RpmBundleConfiguration
 
     /// <summary>
     /// RPM architecture written to the <c>ARCH</c> tag and used in the file name.
-    /// Defaults to the RID mapping: linux-x64 → x86_64, linux-arm64 → aarch64.
+    /// Defaults to the target mapping: linux-x86_64 → x86_64, linux-aarch64 → aarch64.
     /// </summary>
     public string? Architecture { get; init; }
 

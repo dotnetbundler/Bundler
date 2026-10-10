@@ -9,12 +9,12 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `.deb` 产物（托管 ar/tar.gz 写入器，零原生工具） | 已实现 | LINUX-DEB-1 | `OutputDirectory/<rid>/deb/<package>_<version>_<arch>.deb` + `.sha256` 侧车；`dpkg-deb -I`/`ar t`/`tar` 结构断言已通过 |
+| `.deb` 产物（托管 ar/tar.gz 写入器，零原生工具） | 已实现 | LINUX-DEB-1 | `OutputDirectory/<package>_<version>-<rel>_<arch>.deb`（默认 flat；`outputLayout=byFormat` 时 `deb/` 分目录） + `.sha256` 侧车；`dpkg-deb -I`/`ar t`/`tar` 结构断言已通过 |
 | 任意构建宿主（含 Windows/macOS CI） | 已实现（Linux 宿主验证）；Linux 侧已由 CI 收编（release-verify ubuntu-arm 真机 + qemu/docker 发行版腿） | LINUX-DEB-1 | 纯托管写出，无宿主 OS 门控；Windows/macOS 宿主构建腿属 LINUX-DEB-OI-05 |
 | 目录载荷 → `usr/lib/<package-name>/` | 已实现 | LINUX-DEB-1 | 默认安装根；`BundlerDebInstallRoot` 可改 `/opt/<name>` 等绝对路径 |
 | `usr/bin/<command>` 符号链接 | 已实现 | LINUX-DEB-1 | `/usr` 根下指向 `../lib/<package>/<main>`，其他根用绝对目标；`BundlerDebBinLink` 可改名或 `none` 关闭 |
 | 版本映射 SemVer→deb（`~` 预发布、`-revision`、`+` 保留） | 已实现 | LINUX-DEB-1 | 默认映射表；`BundlerDebVersion`/`BundlerDebRelease`/`BundlerDebEpoch` 覆盖 |
-| 架构映射 `linux-x64→amd64`、`linux-arm64→arm64` | 已实现 | LINUX-DEB-1 | 其他 deb 架构名经 `BundlerDebArchitecture` 覆盖 |
+| 架构映射 `linux-x86_64→amd64`、`linux-aarch64→arm64` | 已实现 | LINUX-DEB-1 | 其他 deb 架构名经 `BundlerDebArchitecture` 覆盖 |
 | control 核心字段（Package/Version/Architecture/Installed-Size/Maintainer/Priority/Homepage/Description） | 已实现 | LINUX-DEB-1 | `Package` 默认 ProductName kebab 化，`Maintainer` 默认 Publisher→Identifier 回退 |
 | `md5sums` 清单 | 已实现 | LINUX-DEB-1 | 逐文件 MD5；`DebIntegrationTests` 用 `md5sum -c` 对解包载荷真实核对 |
 | 确定性构建（tar 条目排序、uid/gid 0、归一化时间戳策略） | 已实现 | LINUX-DEB-1 | uid/gid 0、固定 mtime 1980-01-01 UTC、排序条目；DebTests 断言同输入字节级一致（1980 取值规避 lintian ancient-file） |
@@ -61,5 +61,5 @@
 | `dpkg -i` 真实安装（本机 sudo） | 已实现 | LINUX-DEB-1 | `DebIntegrationTests` 装卸腿 + `dpkg -s`/`dpkg -L`/链接启动断言 |
 | `dpkg -r`/`dpkg -P` 卸载语义 | 已实现 | LINUX-DEB-1/3 | `-r` 删普通文件留 conffile、`-P` 全清——真实断言 |
 | 同包升级覆盖安装 | 已实现 | LINUX-DEB-3 | `dpkg -i` 1.0.0→1.0.1 后 `dpkg -s` 版本断言 + conffile 本地修改保留 |
-| `linux-arm64` 产物 | 已实现（结构+运行） | LINUX-DEB-4 | `linux-arm64` publish → `_arm64.deb`、`Architecture: arm64`、载荷结构断言全绿；2026-10 `ubuntu-24.04-arm` CI 真机装卸跑绿（`arm64-real-hw.sh`，OI-01 剩观感人工） |
+| `linux-aarch64` 产物 | 已实现（结构+运行） | LINUX-DEB-4 | `linux-aarch64` publish → `_arm64.deb`、`Architecture: arm64`、载荷结构断言全绿；2026-10 `ubuntu-24.04-arm` CI 真机装卸跑绿（`arm64-real-hw.sh`，OI-01 剩观感人工） |
 | 多发行版安装矩阵 | 已实现（debian:stable + ubuntu:latest 容器）/外部待验收（更广矩阵） | LINUX-DEB-4 | docker 容器内真实 `dpkg -i`/运行/`-r`/`-P` 断言全绿；GUI/更多发行版属 LINUX-DEB-OI-02 |

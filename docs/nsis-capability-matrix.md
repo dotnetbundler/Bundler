@@ -82,7 +82,7 @@ JSON 配置加载器是 CLI 的共享配置入口。
 | --- | --- | --- |
 | 内嵌 NSIS 工具、无需系统预装 | 已实现 | 本项目使用独立 NsisToolset 和内容寻址共享缓存 |
 | Windows/Linux/macOS 宿主生成 Windows NSIS | 已实现，外部待验收 | 解析和工具资源已实现；2026-09-29/30 联合测试已实测 Linux/macOS 产 nsis.exe 在 Windows 实装卸+运行；原生 runner 见 MT-08 |
-| win-x86 目标产物 | 已实现 | `DesktopTargetMatrix` 的 x86 门禁已移除（PR #12）+ `TargetArchitectureName` 补 `X86=>"x86"`（模板 32 位分支既有）；x64 宿主产 x86 nsis.exe 经 WoW64 实装卸过，载荷运行需宿主有 32 位 .NET 运行时 |
+| windows-i686 目标产物 | 已实现 | `DesktopTargetMatrix` 的 x86 门禁已移除（PR #12）+ `TargetArchitectureName` 补 `X86=>"x86"`（模板 32 位分支既有）；x64 宿主产 x86 nsis.exe 经 WoW64 实装卸过，载荷运行需宿主有 32 位 .NET 运行时 |
 | SemVer 重装、升级、降级策略 | 已实现 | 本项目默认禁止降级 |
 | 旧 MSI 迁移 | 已实现，生产包外部待验收 | 本项目要求准确 ProductCode/UpgradeCode，不按显示名猜测 |
 | 运行程序协调 | 已实现 | Restart Manager 按完整程序路径关闭，不影响其他目录同名进程 |

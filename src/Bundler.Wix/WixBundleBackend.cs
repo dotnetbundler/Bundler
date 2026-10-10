@@ -27,10 +27,12 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             foreach (var language in languages)
             {
                 var existing = Path.Combine(item.OutputDirectory,
-                    WixProductDocument.SafeFileName(bundle.ProductName) + "-" +
-                    WixIdentity.Create(bundle.Identifier, bundle.Version, item.Target.RuntimeIdentifier,
-                        settings.InstallScope, settings.UpgradeCode, language, settings.Version)
-                        .ProductVersion + language.Suffix + ".msi");
+                    ArtifactNaming.FileName(
+                        WixProductDocument.SafeFileName(bundle.ProductName),
+                        WixIdentity.Create(bundle.Identifier, bundle.Version, item.Target.Target,
+                            settings.InstallScope, settings.UpgradeCode, language, settings.Version)
+                            .ProductVersion,
+                        item.Target, PackageFormat.Msi, languageSuffix: language.Suffix));
                 if (File.Exists(existing) || File.Exists(existing + ".bundler-manifest"))
                     throw new IOException(
                         "An MSI with the same product version already exists with signed or unverified contents: " + existing);
@@ -124,10 +126,11 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         ExtensionInputs extensionInputs, CancellationToken cancellationToken)
     {
         var language = requested with { Codepage = settings.EffectiveCodepage(requested) };
-        var identity = WixIdentity.Create(bundle.Identifier, bundle.Version, item.Target.RuntimeIdentifier,
+        var identity = WixIdentity.Create(bundle.Identifier, bundle.Version, item.Target.Target,
             settings.InstallScope, settings.UpgradeCode, language, settings.Version);
-        var outputName = WixProductDocument.SafeFileName(bundle.ProductName) + "-" + identity.ProductVersion +
-            language.Suffix + ".msi";
+        var outputName = ArtifactNaming.FileName(
+            WixProductDocument.SafeFileName(bundle.ProductName), identity.ProductVersion,
+            item.Target, PackageFormat.Msi, languageSuffix: language.Suffix);
         var outputPath = Path.Combine(item.OutputDirectory, outputName);
         var manifestPath = outputPath + ".bundler-manifest";
         Directory.CreateDirectory(item.OutputDirectory);
@@ -149,7 +152,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
                 File.ReadAllText(manifestPath).Equals(
                     fingerprint + "\n" + HashFile(outputPath) + "\n", StringComparison.Ordinal))
                 {
-                    return new BundleArtifact(Format, item.Target.RuntimeIdentifier, outputPath);
+                    return new BundleArtifact(Format, item.Target.Target, outputPath);
                 }
             throw new IOException("An MSI with the same product version already exists with different, signed, or unverified contents: " + outputPath);
         }
@@ -248,10 +251,10 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             {
                 context.Logger.Log(BundleLogLevel.Information, "Signing the MSI installer.");
                 await signer.SignAsync(new BundleSigningRequest(outputPath, BundleSigningArtifactKind.Installer,
-                    bundle.ProductName, item.Target.RuntimeIdentifier), cancellationToken);
+                    bundle.ProductName, item.Target.Target), cancellationToken);
             }
             File.WriteAllText(manifestPath, fingerprint + "\n" + HashFile(outputPath) + "\n", Encoding.ASCII);
-            return new BundleArtifact(Format, item.Target.RuntimeIdentifier, outputPath);
+            return new BundleArtifact(Format, item.Target.Target, outputPath);
         }
         catch
         {
@@ -296,7 +299,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
                 ? BundleSigningArtifactKind.PayloadExecutable : BundleSigningArtifactKind.PayloadFile;
             context.Logger.Log(BundleLogLevel.Information, "Signing staged MSI payload file '" + normalized + "'.");
             await signer.SignAsync(new BundleSigningRequest(path, kind, context.Configuration.ProductName,
-                item.Target.RuntimeIdentifier), cancellationToken);
+                item.Target.Target), cancellationToken);
         }
         return item with { InputDirectory = destination };
     }
@@ -407,7 +410,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
             .AppendLine(identity.ProductVersion).AppendLine(bundle.Publisher)
             .AppendLine(bundle.Description).AppendLine(bundle.Homepage)
             .Append(language.Codepage).AppendLine().AppendLine(language.Culture)
-            .AppendLine(item.Target.RuntimeIdentifier).AppendLine(identity.UpgradeCode.ToString("D"));
+            .AppendLine(item.Target.Target).AppendLine(identity.UpgradeCode.ToString("D"));
         if (FindLocaleFile(language) is { } localeFilePath) text.AppendLine(HashFile(localeFilePath));
         foreach (var file in files)
         {
@@ -463,7 +466,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         var text = new StringBuilder().AppendLine(GeneratorRevision).AppendLine(bundle.ProductName)
             .AppendLine(bundle.Identifier.ToLowerInvariant()).AppendLine(bundle.Version)
             .AppendLine(bundle.Publisher).AppendLine(bundle.Description).AppendLine(bundle.Homepage)
-            .AppendLine(item.Target.RuntimeIdentifier).AppendLine(settings.InstallScope.ToString())
+            .AppendLine(item.Target.Target).AppendLine(settings.InstallScope.ToString())
             .AppendLine(settings.StartMenuShortcut.ToString()).AppendLine(settings.DesktopShortcut.ToString())
             .AppendLine(settings.InstallDirectorySelection.ToString()).AppendLine(settings.AddToPath.ToString())
             .AppendLine(settings.UninstallShortcut.ToString()).AppendLine(settings.LaunchAfterInstall.ToString())

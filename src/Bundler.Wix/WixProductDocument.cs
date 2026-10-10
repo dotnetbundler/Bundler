@@ -130,7 +130,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
             : installRoot;
         var app = new XElement(Wix + "Directory", new XAttribute("Id", "INSTALLFOLDER"),
             new XAttribute("Name", bundle.Identifier.ToLowerInvariant() + "-" +
-                item.Target.RuntimeIdentifier.Substring(4) + language.Suffix));
+                ArtifactNaming.ArchToken(item.Target, PackageFormat.Msi) + language.Suffix));
         programs.Add(app);
         if (perUser) installRoot.Add(programs);
         targetDir.Add(installRoot);
@@ -171,7 +171,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
             directory.Add(new XElement(Wix + "Component",
                 new XAttribute("Id", componentId),
                 new XAttribute("Guid", WixIdentity.ComponentCode(bundle.Identifier,
-                    item.Target.RuntimeIdentifier, settings.InstallScope, file.RelativePath, language).ToString("B").ToUpperInvariant()),
+                    item.Target.Target, settings.InstallScope, file.RelativePath, language).ToString("B").ToUpperInvariant()),
                 fileElement,
                 new XElement(Wix + "RegistryValue", new XAttribute("Root", registryRoot),
                     new XAttribute("Key", registryKey), new XAttribute("Name", componentId),
@@ -183,7 +183,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
 
         var cleanup = new XElement(Wix + "Component", new XAttribute("Id", "Cleanup"),
             new XAttribute("Guid", WixIdentity.ComponentCode(bundle.Identifier,
-                item.Target.RuntimeIdentifier, settings.InstallScope, "!cleanup", language).ToString("B").ToUpperInvariant()),
+                item.Target.Target, settings.InstallScope, "!cleanup", language).ToString("B").ToUpperInvariant()),
             new XElement(Wix + "RegistryValue", new XAttribute("Root", registryRoot),
                 new XAttribute("Key", registryKey), new XAttribute("Name", "Cleanup"),
                 new XAttribute("Type", "integer"), new XAttribute("Value", "1"),
@@ -398,9 +398,9 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
         void AddDesktopRegistrations()
         {
             if (bundle.FileAssociations.Count == 0 && bundle.UrlProtocols.Count == 0) return;
-            var applicationId = bundle.Identifier.ToLowerInvariant() + "." + item.Target.RuntimeIdentifier + language.Suffix;
+            var applicationId = bundle.Identifier.ToLowerInvariant() + "." + item.Target.Target + language.Suffix;
             var capabilities = "Software\\DotNetBundler\\Products\\" + bundle.Identifier.ToLowerInvariant() +
-                "\\" + item.Target.RuntimeIdentifier + language.Suffix + "\\Capabilities";
+                "\\" + item.Target.Target + language.Suffix + "\\Capabilities";
             var command = "\"[INSTALLFOLDER]" + mainExecutable.Replace('/', '\\') + "\" \"%1\"";
             var entries = new List<(string Key, string? Name, string Value)> {
                 (capabilities, "ApplicationName", bundle.ProductName),
@@ -432,7 +432,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
             }
             var registration = new XElement(Wix + "Component", new XAttribute("Id", "DesktopRegistration"),
                 new XAttribute("Guid", WixIdentity.ComponentCode(bundle.Identifier,
-                    item.Target.RuntimeIdentifier, settings.InstallScope, "!desktop-registration", language).ToString("B").ToUpperInvariant()));
+                    item.Target.Target, settings.InstallScope, "!desktop-registration", language).ToString("B").ToUpperInvariant()));
             for (var index = 0; index < entries.Count; index++)
             {
                 var entry = entries[index];
@@ -530,7 +530,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
         XElement ComponentElement(string id, string marker) => new(Wix + "Component",
             new XAttribute("Id", id),
             new XAttribute("Guid", WixIdentity.ComponentCode(bundle.Identifier,
-                item.Target.RuntimeIdentifier, settings.InstallScope, marker, language).ToString("B").ToUpperInvariant()));
+                item.Target.Target, settings.InstallScope, marker, language).ToString("B").ToUpperInvariant()));
 
         XElement RegistryKeyPath(string name) => new(Wix + "RegistryValue",
             new XAttribute("Root", registryRoot), new XAttribute("Key", registryKey),
@@ -551,7 +551,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
     private static string ComponentsRegistryKey(BundleConfiguration bundle, BundlePlanItem item,
         WixLanguageInfo language) =>
         "Software\\DotNetBundler\\Products\\" + bundle.Identifier.ToLowerInvariant() +
-        "\\" + item.Target.RuntimeIdentifier + language.Suffix + "\\Components";
+        "\\" + item.Target.Target + language.Suffix + "\\Components";
 
     private static string ParentPath(string path)
     {

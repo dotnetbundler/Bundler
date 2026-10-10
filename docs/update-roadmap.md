@@ -41,7 +41,7 @@
 | 阶段 | 范围 | 退出条件 |
 | --- | --- | --- |
 | `UPDATE-1` | `src/Bundler.Update` 打包侧：`bundler-update-feed.json` schema + 清单生成器 + `EcdsaSigner`（`.sig` 旁车） + `bundler-update.json` 身份旁车 + `BundlerUpdate*` MSBuild/CLI 旋钮 + 单元测试 + 集成断言 | 打包产出清单+sig+身份旁车可互验；签名负例（错钥/改件）拒绝；旋钮面覆盖审计 |
-| `UPDATE-2` | 引导程序：`bundler-updater` Native AOT per-RID 模板（win-x64/arm64、osx-x64/arm64、linux-x64/arm64、musl）+ shell 降级件 + 引导协议（等退出/备份/原子换/重启/回报） | 各宿主引导件产出、自测干跑通过；脚本降级件在裸 posix 环境可跑 |
+| `UPDATE-2` | 引导程序：`bundler-updater` Native AOT per-RID 模板（windows-x86_64/arm64、macos-x86_64/arm64、linux-x86_64/arm64、musl）+ shell 降级件 + 引导协议（等退出/备份/原子换/重启/回报） | 各宿主引导件产出、自测干跑通过；脚本降级件在裸 posix 环境可跑 |
 | `UPDATE-3` | file-swap 三段式执行 + mac 三项（codesign 身份一致/quarantine 剥离/失败还原）+ installer-replay 接线（nsis `/UPDATE`、msiexec major upgrade） | win/mac/linux/musl 真机：zip/targz/appimage/.app 全链换包+回滚实证；nsis/msi 更新链实证；断电/验签失败无砖化 |
 | `UPDATE-4` | `src/Bundler.Updater` 应用内库：`UpdateChecker`（拉清单/比版本/选件）→ `UpdateDownloader`（http(s) 下载/本地路径解析/sha256 校验/断点续传）→ `SigVerifier`（ECDSA）→ `UpdateApplier`（两式分派调引导）→ 回滚钩子；开放协议文档 | 库 API 面冻结级评审；端到端 demo（打包→发清单→应用检查更新→换包成功）五宿主实证；离线腿（`file://`/本地目录 feed→同目录产物解析→更新成功）纳入验收 |
 | `UPDATE-5` ✅ | block-map 差分：打包期 `.blockmap` 产物 + 下载器 Range 栈（新旧 blockmap 比对→变化块请求→本地重组）+ 全量回落 | 差分与全量双路实证；清单 `blockmap` 字段启用 |
@@ -71,7 +71,7 @@
 - UPDATE 序列化迁 STJ 源生成：新增 `UpdateJson`（netstandard2.0 保持 `DataContractJsonSerializer`、net10.0 走 `System.Text.Json` 源生成上下文 `UpdateJsonContext`+`UpdateJsonNamingPolicy` 自定义线路名 rid/sig/blockmap），8 处序列化调用点统一收编——CLI AOT 发布 IL2026/IL3050 清零（`DataContractJsonSerializer` 需动态代码，AOT 下不可用）。
 - `bundler-updater` usage 补 `--rollback` 命令行；五件 per-RID 引导件全部重建入库（linux/musl 本机、osx/win 宿主子会话）。
 - 布局判定定案：`bundler-updater`/`bundler-update.json` 落载荷包根目录是设计契约（`updater/<rid>/` 仅 Bundler.Core 内嵌资源路径）。
-- 第三轮缺陷（win 宿主增量复测暴露）：内嵌引导件 `LogicalName` 的 `%(RecursiveDir)` 在 Windows 展开为反斜杠——Windows 构建的 Core.dll 资源名成 `updater/win-x64\bundler-updater.exe`，按正斜杠查询失败 → zip 缺引导件 + 2 用例败；改 `Replace('\','/')` 归一，资源名与构建机无关。
+- 第三轮缺陷（win 宿主增量复测暴露）：内嵌引导件 `LogicalName` 的 `%(RecursiveDir)` 在 Windows 展开为反斜杠——Windows 构建的 Core.dll 资源名成 `updater/windows-x86_64\bundler-updater.exe`，按正斜杠查询失败 → zip 缺引导件 + 2 用例败；改 `Replace('\','/')` 归一，资源名与构建机无关。
 - 证据：净树 pack rc=0 全量 nupkg（net10.0+netstandard2.0 双 lib 入包）；CLI AOT publish rc=0；本机 Bundler.Tests 333/294P/0F/39S、IntegrationTests 176/111P/0F/65S（原 101 败清零）；linux/musl/mac 三宿主复测全绿、win 宿主 pack+集成 0 败。
 
 ### 2026-10-06 复审修复第三轮（Devin Review 2 属实处置 + 3 旧案重报回线）
@@ -93,7 +93,7 @@
 - POSIX 重启去 `/bin/sh -c`：`ProcessStartInfo(appPath, UseShellExecute=false)` 直接 exec，消掉路径经 shell 展开面；`.sh` 降级脚本 `nohup "$APP_PATH"` 属变量值非再展开，保持原样。
 - 误报回线两条：`.app` 清单条目已实现（`Emitter_AppDirectory_ProducesZipTransport` 证）；`+build` 元数据上轮已整串剥离（`UpdateVersion` 测试证）。
 - 测试 +6 全绿：feed 缺签拒/feed 篡改拒/未验 Apply 拒+缓存未沉/文件旁车往返/AppImage 侧车持久断言/清单 url 转义断言；feed.sig 产出断言挂进既有发射器用例；本机 332/293P/0F/39S。
-- linux-x64/linux-musl-x64 AOT 件随本轮 `BootstrapPlan` 变更重建入库；win-x64/osx-x64/osx-arm64 由宿主子会话第三轮重建（同法）。
+- linux-x86_64/linux-musl-x86_64 AOT 件随本轮 `BootstrapPlan` 变更重建入库；windows-x86_64/macos-x86_64/macos-arm64 由宿主子会话第三轮重建（同法）。
 
 ### 2026-10-06 复审修复轮（Devin Review 8 bug+5 flag 全部属实处置）
 
@@ -105,7 +105,7 @@
 - `BootstrapPlan` 崩溃恢复先于安装存在性检查（上轮死在备份与换包之间时 install 缺失也可自愈）；新增文件级语义——安装目标为文件（AppImage 单件）时走 `<file>.bundler-{swap,backup}` 单件备份/换入/回滚，宿主目录无关文件原样保留；`tools/posix/bundler-updater.sh` 同构改造并删除根 `tools/` 陈旧副本。
 - 身份旁车 `TryRead` 增 `.app/Contents/` 探测；`UpdateVersion` 整串剥离 `+` 元数据并改 semver 数值段比较（`beta.10>beta.2`）；下载 `.part`→已存在目标先删再移。
 - 测试 +11 全绿：win 禁降级/内嵌兜底/.app zip+相对 url/marker 缺 install 恢复/文件级换包+回滚/归档去重/semver 段比较/Contents 探测/重复下载/AppImage 文件级真 E2E（linux 宿主真 AOT 引导件）。
-- per-RID 引导件随新 `BootstrapPlan` 重建：linux-x64/linux-musl-x64 本机已产入库；win-x64/osx-x64/osx-arm64 待宿主子会话重建（UPDATE-3 同法）。
+- per-RID 引导件随新 `BootstrapPlan` 重建：linux-x86_64/linux-musl-x86_64 本机已产入库；windows-x86_64/macos-x86_64/macos-arm64 待宿主子会话重建（UPDATE-3 同法）。
 
 ### 2026-10-05 整模块真实端到端功能测试
 MSBuild 真消费链全通：`update-keygen` 产钥→`HelloBundlerApp` 经 `BundlerUpdate*` 真旋钮 publish 出 zip+清单+`.sig`+`.blockmap`（zip 载荷内含侧车+本 RID 引导件）→解包装 v1→feed 发 v1.1.0→`UpdateClient` 全量下载+验签+引导换包→`--rollback` 逐字节还原 v1（备份保留）→feed 发 v1.2.0→**差分实腿 83% 复用**（38.2M 件：31.5M 本地复用/6.7M Range 拉取）→换包后安装目录与 v3 zip 逐文件 sha256 一致。
@@ -134,10 +134,10 @@ MSBuild 真消费链全通：`update-keygen` 产钥→`HelloBundlerApp` 经 `Bun
 ### 2026-10-05 UPDATE-3 宿主实证
 
 - 四宿主子会话真机全链实证，per-RID 引导件全部入库（分支 `devin/1791228441-update-module` 远端头 `2ca2e62`）：
-  - **win-x64**：`bundler-updater.exe` 1.67MB 构建入包；file-swap rc=0 换包+备份；marker 断电恢复（半成品 install+backup→还原再换）；NSIS `v1 /S /D` → `v2 /UPDATE /S` 更新链（FileVersion 2.0.0.0、ARP 恰一条 v2、InstallLocation 复用）；MSI major upgrade（`WIX_UPGRADE_DETECTED`+`MIGRATE`、新 ProductCode、ARP 单条）。
-  - **linux-x64**：kill -9 于跨卷 CopyTree 中段（701MB 实载荷 tmpfs→ext4）复跑日志 `interrupted swap detected`→还原→换包完成不砖；软链/可执行位载荷同卷 rename 全保留；posix 脚本 bash+dash 双壳 swap/恢复同协议；签名负例链（真 feed+`.sig`，篡改一字节 `VERIFY_REJECT`）。
-  - **macOS-arm64**：osx-arm64 引导件 2.9MB 实证全腿——未签→未签换包 rc=0、quarantine 剥离后全树 xattr=0、bundle-id 不符 rc=4 零变更拒、`open -n` 经 LaunchServices 真重启、posix 脚本 darwin 分支同协议、file-swap+marker 恢复；osx-x64 件构建级验证（宿主无 Rosetta）。
-  - **alpine/musl**：linux-musl-x64 static-pie 静态件 2.4MB 入库实证（busybox sh + AOT 三场景协议一致）；linux-arm64 AOT 因 qemu 仿真 ilc SIGABRT 不可产（环境边界非产品问题）。
+  - **windows-x86_64**：`bundler-updater.exe` 1.67MB 构建入包；file-swap rc=0 换包+备份；marker 断电恢复（半成品 install+backup→还原再换）；NSIS `v1 /S /D` → `v2 /UPDATE /S` 更新链（FileVersion 2.0.0.0、ARP 恰一条 v2、InstallLocation 复用）；MSI major upgrade（`WIX_UPGRADE_DETECTED`+`MIGRATE`、新 ProductCode、ARP 单条）。
+  - **linux-x86_64**：kill -9 于跨卷 CopyTree 中段（701MB 实载荷 tmpfs→ext4）复跑日志 `interrupted swap detected`→还原→换包完成不砖；软链/可执行位载荷同卷 rename 全保留；posix 脚本 bash+dash 双壳 swap/恢复同协议；签名负例链（真 feed+`.sig`，篡改一字节 `VERIFY_REJECT`）。
+  - **macOS-arm64**：macos-arm64 引导件 2.9MB 实证全腿——未签→未签换包 rc=0、quarantine 剥离后全树 xattr=0、bundle-id 不符 rc=4 零变更拒、`open -n` 经 LaunchServices 真重启、posix 脚本 darwin 分支同协议、file-swap+marker 恢复；macos-x86_64 件构建级验证（宿主无 Rosetta）。
+  - **alpine/musl**：linux-musl-x86_64 static-pie 静态件 2.4MB 入库实证（busybox sh + AOT 三场景协议一致）；linux-aarch64 AOT 因 qemu 仿真 ilc SIGABRT 不可产（环境边界非产品问题）。
 - 遗留边界：mac 真实签名身份腿需 Apple Developer ID（外部待验收——无证书宿主 adhoc/self-signed 的 TeamIdentifier='not set' 归入 unsigned 分支已验证）；跨卷 CopyTree 软链/执行位丢失已修（UPDATE-4 内）。
 
 ### 2026-10-05 UPDATE-2 引导程序
@@ -145,7 +145,7 @@ MSBuild 真消费链全通：`update-keygen` 产钥→`HelloBundlerApp` 经 `Bun
 - 交付：`src/Bundler.Updater.Bootstrap`（net10.0 `PublishAot`，程序集名 `bundler-updater`）：`BootstrapPlan` 等退出→备份→原子换→重启→回报，rc 0/2/3/4 契约；`tools/posix/bundler-updater.sh` 同协议 shell 降级件；`tools/<rid>/` 构建产物随包目录。
 - `UpdateBootstrapper.Inject/TryResolve`：`BootstrapperDirectory` 旋钮+`AppContext.BaseDirectory/updater` 约定目录；per-RID 件优先、缺件降级 posix 脚本、目录缺位安全跳过。
 - 五后端引导件注入：nsis/wix 经 `UpdatePayloadStaging`、macapp→Contents/MacOS（随 codesign）、appimage→payloadRoot、archive→0755 归档条目；MSBuild 包 tasks/updater/ 与 CLI 输出 updater/ 双侧随包。
-- 证据：`UpdateTests` 13/13（TryResolve 选件序、Apply 换包+备份+keep-payload、嵌套/缺目录拒绝）；linux-x64 AOT 实件（2.3MB）真跑换包 rc=0；posix 脚本 wait/超时 rc=3/用法 rc=2；CLI zip 冒烟包内含 `bundler-updater`（0755）且解出后可执行换包。
+- 证据：`UpdateTests` 13/13（TryResolve 选件序、Apply 换包+备份+keep-payload、嵌套/缺目录拒绝）；linux-x86_64 AOT 实件（2.3MB）真跑换包 rc=0；posix 脚本 wait/超时 rc=3/用法 rc=2；CLI zip 冒烟包内含 `bundler-updater`（0755）且解出后可执行换包。
 - 修复：`--keep-payload` 原语义死（MoveTree 后判存恒假）→ 改复制换入；`CopyTree` 不建目标根（跨盘 fallback 同缺陷）→ 补 `CreateDirectory`。
 - 边界：win/osx/arm64/musl per-RID 件不在本机交叉产出（Native AOT 不跨编译）——UPDATE-3 各宿主子会话本地产件+实证。
 

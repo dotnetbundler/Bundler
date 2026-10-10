@@ -22,7 +22,7 @@
 - **产物可挂载下限**（产出物侧，由调用方压缩选型决定）：默认 `Ulmo` 要求挂载宿主 macOS 10.12+；选 `Udzo` 可到 OS X 10.1。
 - **宿主边界**：DMG 制作必须 macOS 宿主（`hdiutil`/`osascript` 不可跨宿主）——与未签名 `.app` 跨宿主构建不同；非 macOS 宿主请求 DMG 明确拒绝。
 - **后端下限**：netstandard2.0 库，同 `.app` 口径（官方 macOS 14+）。
-- **入口下限**：MSBuild=macOS 14（.NET 10 SDK）；CLI=macOS 宿主（`hdiutil` 依赖；dotnet tool 需 .NET 10 运行时，或 osx AOT 二进制）。
+- **入口下限**：MSBuild=macOS 14（.NET 10 SDK）；CLI=macOS 宿主（`hdiutil` 依赖；dotnet tool 需 .NET 10 运行时，或 macos-universal AOT 二进制）。
 
 ## 3. 语义契约
 
@@ -59,9 +59,9 @@
 ### MAC-DMG-4：原生 E2E 与支持矩阵
 
 - **前置**：MAC-DMG-1..3 完成。
-- **目标/交付**：osx-x64/osx-arm64 产物、quarantine/首次挂载行为、错误路径清理断言、文档与示例收口。
+- **目标/交付**：macos-x86_64/macos-arm64 产物、quarantine/首次挂载行为、错误路径清理断言、文档与示例收口。
 - **退出**：矩阵实测格子有证据；未测格子限缩声明。
-- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64）**：`Verify.sh` 全绿扩展——(a) SLA 真实挂载门控：`hdiutil attach` stdin 关闭时被 EULA 取消（"attach canceled"），回 `Y` 即挂载且卷内容齐全；(b) quarantine 传播：对 DMG 写 `com.apple.quarantine` 后挂载，拷出的 `.app` 携带隔离属性（Gatekeeper 分发语义成立）；(c) `osx-x64` 变体：产物存在、可挂载、内部载荷 `file` 断言 x86_64 Mach-O（本机无 Rosetta，运行态启动属 MAC-DMG-OI-03）；(d) 失败路径：非法 `BundlerMacDmgCompression` 值 publish 失败、无 `.dmg` 产物、无残留挂载。`Bundler.Tests` 99/99 仍全绿。干净宿主复核：后端必需工具仅 `hdiutil`/`osascript`（品牌/布局可选 `SetFile`，签名可选 `codesign`/`security`），均无 Xcode/CLT 必需依赖；GUI 观感、Intel/Rosetta 宿主、干净宿主首启仍登记外部待验收（MAC-DMG-OI-01/03/04）。
+- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64）**：`Verify.sh` 全绿扩展——(a) SLA 真实挂载门控：`hdiutil attach` stdin 关闭时被 EULA 取消（"attach canceled"），回 `Y` 即挂载且卷内容齐全；(b) quarantine 传播：对 DMG 写 `com.apple.quarantine` 后挂载，拷出的 `.app` 携带隔离属性（Gatekeeper 分发语义成立）；(c) `macos-x86_64` 变体：产物存在、可挂载、内部载荷 `file` 断言 x86_64 Mach-O（本机无 Rosetta，运行态启动属 MAC-DMG-OI-03）；(d) 失败路径：非法 `BundlerMacDmgCompression` 值 publish 失败、无 `.dmg` 产物、无残留挂载。`Bundler.Tests` 99/99 仍全绿。干净宿主复核：后端必需工具仅 `hdiutil`/`osascript`（品牌/布局可选 `SetFile`，签名可选 `codesign`/`security`），均无 Xcode/CLT 必需依赖；GUI 观感、Intel/Rosetta 宿主、干净宿主首启仍登记外部待验收（MAC-DMG-OI-01/03/04）。
 
 ### MAC-DMG-5：审计与格式冻结
 

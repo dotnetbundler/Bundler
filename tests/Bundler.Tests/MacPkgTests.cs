@@ -138,7 +138,7 @@ public static class MacPkgTests
                 .BuildAsync(PkgConfiguration(input, output));
             Assert.Equal(2, artifacts.Count);
             var pkg = artifacts.Single(artifact => artifact.Format == PackageFormat.Pkg);
-            Assert.EndsWith(Path.Combine("osx-arm64", "pkg", "ExampleApp.pkg"), pkg.Path);
+            Assert.EndsWith("ExampleApp-1.0.0-arm64.pkg", pkg.Path);
 
             var pkgbuild = requests.Single(request => request.Executable == "pkgbuild");
             var args = pkgbuild.Arguments.ToList();
@@ -357,11 +357,11 @@ public static class MacPkgTests
                 {
                     var configuration = PkgConfiguration(input, output);
                     var item = new BundlePlanItem(
-                        new BundleTarget("osx-arm64", DesktopOperatingSystem.MacOS, CpuArchitecture.Arm64),
+                        new BundleTarget("macos-arm64", DesktopOperatingSystem.MacOS, CpuArchitecture.Arm64),
                         PackageFormat.Pkg,
                         input,
                         "ExampleApp",
-                        Path.Combine(output, "osx-arm64", "pkg"),
+                        output,
                         Intermediate: false);
                     new MacPkgBundleBackend(new MacPkgBundleConfiguration())
                         .BuildAsync(new BundleBuildContext(
@@ -398,7 +398,7 @@ public static class MacPkgTests
             var pkgbuildFailure = await Assert.ThrowsAnyAsync<InvalidOperationException>(
                 () => new MacPkgBundler().BuildAsync(PkgConfiguration(input, output)));
             Assert.Contains("pkgbuild", pkgbuildFailure.Message);
-            var pkgDirectory = Path.Combine(output, "osx-arm64", "pkg");
+            var pkgDirectory = output;
             Assert.True(!Directory.Exists(pkgDirectory) ||
                    !Directory.EnumerateFiles(pkgDirectory, "*.pkg").Any(),
                 "A failed pkg build must not leave an output artifact.");
@@ -428,12 +428,12 @@ public static class MacPkgTests
             "The MSBuild task does not construct the .pkg backend.");
     }
 
-    // R2 N1: rid=osx 分发包的 hostArchitectures 必须是逗号分隔（Apple 约定）。
+    // R2 N1: target=macos-universal 分发包的 hostArchitectures 必须是逗号分隔（Apple 约定）。
     [Fact]
     static async Task HostArchitecturesCommaSeparated()
     {
         var input = CreateInputDirectory();
-        // osx 通用载荷要求 fat Mach-O（x86_64+arm64）。
+        // macos-universal 通用载荷要求 fat Mach-O（x86_64+arm64）。
         File.WriteAllBytes(Path.Combine(input, "ExampleApp"), FakeFatMachO(0x01000007, 0x0100000C));
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var distribution = "";
@@ -455,7 +455,7 @@ public static class MacPkgTests
         try
         {
             await new MacPkgBundler(new MacPkgBundleConfiguration { Title = "T" })
-                .BuildAsync(PkgConfiguration(input, output, rid: "osx"));
+                .BuildAsync(PkgConfiguration(input, output, target: "macos-universal"));
             Assert.Contains("hostArchitectures=\"x86_64,arm64\"", distribution);
         }
         finally
@@ -611,7 +611,7 @@ public static class MacPkgTests
     static BundleConfiguration PkgConfiguration(
         string input,
         string output = "",
-        string rid = "osx-arm64",
+        string target = "macos-arm64",
         IReadOnlyList<PackageFormat>? formats = null,
         string? license = null) => new()
         {
@@ -624,7 +624,7 @@ public static class MacPkgTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.Pkg]
@@ -718,7 +718,7 @@ public static class MacPkgTests
             Assert.True(requests.All(request => request.Executable != "productbuild"),
                 "Without distribution settings the backend must not invoke productbuild.");
             var pkgbuild = requests.Single(request => request.Executable == "pkgbuild");
-            Assert.EndsWith(Path.Combine("pkg", "ExampleApp.pkg"), pkgbuild.Arguments[pkgbuild.Arguments.Count - 1]);
+            Assert.EndsWith("ExampleApp-1.0.0-arm64.pkg", pkgbuild.Arguments[pkgbuild.Arguments.Count - 1]);
         }
         finally
         {

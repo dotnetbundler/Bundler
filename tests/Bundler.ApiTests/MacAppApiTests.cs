@@ -20,7 +20,7 @@ public static class MacAppApiTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = "osx-arm64",
+                    Target = "macos-arm64",
                     InputDirectory = input,
                     MainExecutable = "ApiFixture",
                     Formats = [PackageFormat.App]

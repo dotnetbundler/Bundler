@@ -20,6 +20,7 @@ public sealed class BundlePipeline(
     {
         var plan = BundlePlanner.Create(configuration);
         var artifacts = new List<BundleArtifact>();
+        var producedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var item in plan.Items)
         {
@@ -39,11 +40,11 @@ public sealed class BundlePipeline(
             var workDirectory = Path.Combine(
                 configuration.OutputDirectory,
                 ".bundler-work",
-                item.Target.RuntimeIdentifier,
+                item.Target.Target,
                 item.Format.ToString().ToLowerInvariant(),
                 Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(workDirectory);
-            _logger.Log(BundleLogLevel.Information, $"Building {item.Format} package for {item.Target.RuntimeIdentifier}.");
+            _logger.Log(BundleLogLevel.Information, $"Building {item.Format} package for {item.Target.Target}.");
 
             try
             {
@@ -61,6 +62,12 @@ public sealed class BundlePipeline(
                     {
                         throw new InvalidOperationException(
                             $"The {backend.Format} backend returned a missing artifact: {artifact.Path}");
+                    }
+                    if (!producedPaths.Add(artifact.Path))
+                    {
+                        throw new ArgumentException(
+                            $"Artifact path collision: '{artifact.Path}' was already produced in this run" +
+                            " (a custom name override such as archiveName can bypass the default per-target naming).");
                     }
 
                     artifacts.Add(artifact);

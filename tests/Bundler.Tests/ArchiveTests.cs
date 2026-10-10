@@ -56,23 +56,23 @@ public static class ArchiveTests
         {
             var artifacts = new ArchiveBundler(new ArchiveBundleConfiguration
             {
-                ArchiveName = "my-app-1.0.0-linux-x64"
+                ArchiveName = "my-app-1.0.0-linux-x86_64"
             }).BuildAsync(Configuration(input, output, formats: [PackageFormat.Zip]))
                 .GetAwaiter().GetResult();
             var zip = artifacts.Single().Path;
-            Assert.EndsWith("my-app-1.0.0-linux-x64.zip", zip);
+            Assert.EndsWith("my-app-1.0.0-linux-x86_64.zip", zip);
             Assert.True(File.Exists(zip + ".sha256"), "sha256 sidecar must exist");
             using var archive = ZipFile.OpenRead(zip);
             var names = archive.Entries.Select(e => e.FullName).ToArray();
-            Assert.Contains(names, n => n == "my-app-1.0.0-linux-x64/");
-            Assert.True(names.Any(n => n == "my-app-1.0.0-linux-x64/ExampleApp") &&
-                   names.Any(n => n == "my-app-1.0.0-linux-x64/ExampleApp.dll"),
+            Assert.Contains(names, n => n == "my-app-1.0.0-linux-x86_64/");
+            Assert.True(names.Any(n => n == "my-app-1.0.0-linux-x86_64/ExampleApp") &&
+                   names.Any(n => n == "my-app-1.0.0-linux-x86_64/ExampleApp.dll"),
                 "payload files must land under the top-level directory");
-            var executable = archive.GetEntry("my-app-1.0.0-linux-x64/ExampleApp")!;
+            var executable = archive.GetEntry("my-app-1.0.0-linux-x86_64/ExampleApp")!;
             Assert.Equal(33261 /* 0100755 */, ((executable.ExternalAttributes >> 16) & 0xFFFF));
-            var regular = archive.GetEntry("my-app-1.0.0-linux-x64/ExampleApp.dll")!;
+            var regular = archive.GetEntry("my-app-1.0.0-linux-x86_64/ExampleApp.dll")!;
             Assert.Equal(33188 /* 0100644 */, ((regular.ExternalAttributes >> 16) & 0xFFFF));
-            var macho = archive.GetEntry("my-app-1.0.0-linux-x64/ExampleMacApp")!;
+            var macho = archive.GetEntry("my-app-1.0.0-linux-x86_64/ExampleMacApp")!;
             Assert.Equal(33261 /* 0100755 */, ((macho.ExternalAttributes >> 16) & 0xFFFF));
         }
         finally
@@ -98,12 +98,12 @@ public static class ArchiveTests
                 Configuration(input, output, formats: [PackageFormat.TarGz]))
                 .GetAwaiter().GetResult();
             var tgz = artifacts.Single().Path;
-            Assert.EndsWith("-linux-x64.tar.gz", tgz);
+            Assert.EndsWith("-linux-x86_64.tar.gz", tgz);
             using var gzip = new GZipStream(File.OpenRead(tgz), CompressionMode.Decompress);
             var entries = ReadTar(gzip);
             var names = entries.Select(e => e.Name).ToArray();
             Assert.Contains(names, n => n.EndsWith("/ExampleApp", StringComparison.Ordinal));
-            var dir = entries.First(e => e.Name.EndsWith("linux-x64/", StringComparison.Ordinal));
+            var dir = entries.First(e => e.Name.EndsWith("linux-x86_64/", StringComparison.Ordinal));
             Assert.True(dir.Kind == TarEntryKind.Directory && dir.Mode == 493,
                 "top-level directory must be a tar dir entry mode 0755");
             var executable = entries.First(e => e.Name.EndsWith("/ExampleApp", StringComparison.Ordinal));
@@ -238,15 +238,16 @@ public static class ArchiveTests
             new ArchiveBundler().BuildAsync(Configuration(
                 input, output, formats: [PackageFormat.Zip, PackageFormat.TarGz]))
                 .GetAwaiter().GetResult();
-            var dir = Path.Combine(output, "linux-x64");
-            var zipHash1 = File.ReadAllText(Path.Combine(dir, "zip", "example-app-1.0.0-linux-x64.zip.sha256"));
-            var tgzHash1 = File.ReadAllText(Path.Combine(dir, "targz", "example-app-1.0.0-linux-x64.tar.gz.sha256"));
-            foreach (var leftover in Directory.GetFiles(dir, "*", SearchOption.AllDirectories)) File.Delete(leftover);
+            var zipPath = Path.Combine(output, "example-app-1.0.0-linux-x86_64.zip.sha256");
+            var tgzPath = Path.Combine(output, "example-app-1.0.0-linux-x86_64.tar.gz.sha256");
+            var zipHash1 = File.ReadAllText(zipPath);
+            var tgzHash1 = File.ReadAllText(tgzPath);
+            foreach (var leftover in Directory.GetFiles(output, "*", SearchOption.AllDirectories)) File.Delete(leftover);
             new ArchiveBundler().BuildAsync(Configuration(
                 input, output, formats: [PackageFormat.Zip, PackageFormat.TarGz]))
                 .GetAwaiter().GetResult();
-            Assert.Equal(zipHash1, File.ReadAllText(Path.Combine(dir, "zip", "example-app-1.0.0-linux-x64.zip.sha256")));
-            Assert.Equal(tgzHash1, File.ReadAllText(Path.Combine(dir, "targz", "example-app-1.0.0-linux-x64.tar.gz.sha256")));
+            Assert.Equal(zipHash1, File.ReadAllText(zipPath));
+            Assert.Equal(tgzHash1, File.ReadAllText(tgzPath));
         }
         finally
         {
@@ -280,9 +281,9 @@ public static class ArchiveTests
         try
         {
             var artifacts = new ArchiveBundler().BuildAsync(
-                Configuration(input, output, "win-x86", [PackageFormat.Zip]))
+                Configuration(input, output, "windows-i686", [PackageFormat.Zip]))
                 .GetAwaiter().GetResult();
-            Assert.EndsWith("-win-x86.zip", artifacts.Single().Path);
+            Assert.EndsWith("-windows-i686.zip", artifacts.Single().Path);
         }
         finally
         {
@@ -951,7 +952,7 @@ public static class ArchiveTests
     static extern int lsetxattr(string path, string name, byte[] value, int size, int flags);
 
     static BundleConfiguration Configuration(string input, string output,
-        string rid = "linux-x64", IReadOnlyList<PackageFormat>? formats = null)
+        string target = "linux-x86_64", IReadOnlyList<PackageFormat>? formats = null)
     {
         return new BundleConfiguration
         {
@@ -965,7 +966,7 @@ public static class ArchiveTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.Zip]

@@ -18,7 +18,7 @@ namespace DotNet.Bundler.Core.Update;
 public sealed class UpdateInstallIdentity
 {
     [DataMember(Name = "format", EmitDefaultValue = false)] public string Format = "";
-    [DataMember(Name = "rid", EmitDefaultValue = false)] public string RuntimeIdentifier = "";
+    [DataMember(Name = "rid", EmitDefaultValue = false)] public string Target = "";
     [DataMember(Name = "channel", EmitDefaultValue = false)] public string Channel = "";
     [DataMember(Name = "feedUrl", EmitDefaultValue = false)] public string FeedUrl = "";
     [DataMember(Name = "publicKey", EmitDefaultValue = false)] public string? PublicKey;

@@ -20,5 +20,5 @@ public sealed record BundleBuildContext(
 
 public sealed record BundleArtifact(
     PackageFormat Format,
-    string RuntimeIdentifier,
+    string Target,
     string Path);

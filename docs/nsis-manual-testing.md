@@ -69,10 +69,10 @@ git diff --check
 1. 分别以 `perMachine` 和 `both` 生成安装器：
 
    ```powershell
-   dotnet publish samples\HelloBundlerApp\HelloBundlerApp.csproj -c Release -r win-x64 `
+   dotnet publish samples\HelloBundlerApp\HelloBundlerApp.csproj -c Release -r win-x64 -p:BundlerTarget=windows-x86_64 `
      -p:HelloBundlerNsisInstallMode=perMachine `
      -p:BundlerOutputPath="$PWD\artifacts\manual\per-machine"
-   dotnet publish samples\HelloBundlerApp\HelloBundlerApp.csproj -c Release -r win-x64 `
+   dotnet publish samples\HelloBundlerApp\HelloBundlerApp.csproj -c Release -r win-x64 -p:BundlerTarget=windows-x86_64 `
      -p:HelloBundlerNsisInstallMode=both `
      -p:BundlerOutputPath="$PWD\artifacts\manual\both"
    ```
@@ -108,7 +108,7 @@ git diff --check
 2. 在提权 PowerShell 中执行：
 
    ```powershell
-   $installer = (Resolve-Path "artifacts\windows-nsis-integration\bundle-per-machine\win-x64\nsis\Bundler Integration Fixture-1.0.0-setup.exe").Path
+   $installer = (Resolve-Path "artifacts\windows-nsis-integration\bundle-per-machine\windows-x86_64\nsis\Bundler Integration Fixture-1.0.0-setup.exe").Path
    tests\Special\win\nsis-reboot\Verify.ps1 -Phase Prepare -InstallerPath $installer -ConfirmDisposableMachine
    ```
 
@@ -132,7 +132,7 @@ Verify 确认重启后目录、卸载注册表、安装与卸载 journal 和本�
 
    ```powershell
    $env:BUNDLER_SIGNING_PASSWORD = Read-Host "PFX 密码" -MaskInput
-   dotnet publish samples\HelloBundlerApp\HelloBundlerApp.csproj -c Release -r win-x64 `
+   dotnet publish samples\HelloBundlerApp\HelloBundlerApp.csproj -c Release -r win-x64 -p:BundlerTarget=windows-x86_64 `
      -p:HelloBundlerSigningPfxFile="<certificate.pfx>" `
      -p:HelloBundlerSigningPfxPasswordEnvironmentVariable=BUNDLER_SIGNING_PASSWORD `
      -p:HelloBundlerSigningTimestampUrl="<RFC3161 URL>"
@@ -160,7 +160,7 @@ Verify 确认重启后目录、卸载注册表、安装与卸载 journal 和本�
 3. 用真实标识构建 NSIS 安装器：
 
    ```powershell
-   dotnet publish samples\HelloBundlerApp\HelloBundlerApp.csproj -c Release -r win-x64 `
+   dotnet publish samples\HelloBundlerApp\HelloBundlerApp.csproj -c Release -r win-x64 -p:BundlerTarget=windows-x86_64 `
      -p:HelloBundlerNsisLegacyMsiProductCodes="<ProductCode>" `
      -p:HelloBundlerNsisLegacyMsiUpgradeCodes="<UpgradeCode>"
    ```
@@ -224,7 +224,7 @@ Verify 确认重启后目录、卸载注册表、安装与卸载 journal 和本�
 dotnet --info
 dotnet run --project tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64 -p:BundlerTarget=windows-x86_64
 ```
 
 记录内嵌 `makensis` 的实际宿主文件类型、退出码、生成的 Windows NSIS 安装器 SHA-256 和工具缓存位置。
@@ -237,7 +237,7 @@ dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-
 **部分已验证**（2026-10 release-verify `windows-11-arm` 腿：`arm64-matrix.ps1` NSIS/MSI 装+覆盖装+修复+卸跑绿）。
 **需要**：原生 Windows x64 和 Windows ARM64 机器/虚拟机。
 
-1. 分别生成 `win-x64` 和 `win-arm64` 应用及 NSIS 安装器。
+1. 分别生成 `windows-x86_64` 和 `windows-arm64` 应用及 NSIS 安装器。
 2. 在匹配架构的干净 Windows 上执行安装、启动、升级、卸载。
 3. 检查主程序架构、安装路径、64 位注册表视图、快捷方式和文件关联。
 4. ARM64 项必须记录硬件/虚拟化架构；只在 x64 Windows 上看到文件生成不算 ARM64 运行验收。

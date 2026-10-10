@@ -107,7 +107,7 @@ internal sealed class UpdateApplier
             "package was not built with update support.");
     }
 
-    // per-RID 二进制优先；次 posix 脚本降级件。
+    // per-target 二进制优先；次 posix 脚本降级件。
     private static string? ResolveBootstrapper(string? overridePath, string installDirectory)
     {
         if (overridePath is { Length: > 0 } over && File.Exists(over) &&

@@ -332,7 +332,7 @@ public static class RpmTests
                 .BuildAsync(RpmConfiguration(input, output))
                 .GetAwaiter().GetResult().Single();
             var expectedName = "example-app-1.0.0-1.x86_64.rpm";
-            Assert.EndsWith(Path.Combine("linux-x64", "rpm", expectedName), artifact.Path);
+            Assert.EndsWith(expectedName, artifact.Path);
 
             var package = RpmPackageReader.Read(artifact.Path);
             Assert.Equal("example-app", package.Main.Text(1000));
@@ -1004,7 +1004,7 @@ public static class RpmTests
     static BundleConfiguration RpmConfiguration(
         string input,
         string output = "",
-        string rid = "linux-x64",
+        string target = "linux-x86_64",
         string? productName = null,
         string version = "1.0.0",
         IReadOnlyList<PackageFormat>? formats = null) => new()
@@ -1020,7 +1020,7 @@ public static class RpmTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.Rpm]

@@ -21,7 +21,7 @@ public class UpdateCompatTests
         "hellov1-1.0.0-linux-x64.zip");
     static string V1Sh => Path.Combine(V1Dir, "bootstrap", "bundler-updater.sh");
     static string CurrentAot => RepoPath(
-        "src/Bundler.Updater.Bootstrap/tools/linux-x64/bundler-updater");
+        "src/Bundler.Updater.Bootstrap/tools/linux-x86_64/bundler-updater");
 
     // 解出 v1 zip 载荷当"旧装"（侧车+内嵌 v1 引导件都在树里）。
     static string ExtractV1Install(string root)
@@ -90,7 +90,7 @@ public class UpdateCompatTests
         return WriteFeed(feedDir, channel, version, material,
             new Protocol.UpdateFeedArtifact
             {
-                RuntimeIdentifier = "linux-x64", Format = "zip",
+                Target = "linux-x64", Format = "zip",
                 Url = name, File = name,
                 Sha256 = Convert.ToHexStringLower(
                     System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(artifact))),
@@ -113,7 +113,7 @@ public class UpdateCompatTests
         Directory.CreateDirectory(Path.Combine(payload, "lib"));
         File.WriteAllText(Path.Combine(payload, "app"), "v2");
         File.WriteAllText(Path.Combine(payload, "bundler-update.json"),
-            "{\"format\":\"zip\",\"rid\":\"linux-x64\",\"channel\":\"stable\"," +
+            "{\"format\":\"zip\",\"rid\":\"linux-x86_64\",\"channel\":\"stable\"," +
             "\"feedUrl\":\"<leg-internal>\",\"publicKey\":\"<leg-internal>\"}");
         File.WriteAllText(Path.Combine(payload, "lib", "data.txt"), "v2-data");
         File.Copy(CurrentAot, Path.Combine(payload, "bundler-updater"));
@@ -143,7 +143,7 @@ public class UpdateCompatTests
     {
         Assert.SkipUnless(OperatingSystem.IsLinux() &&
             RuntimeInformation.ProcessArchitecture == Architecture.X64,
-            "v1 冻件的引导件是 linux-x64 AOT——端到端腿只在 linux-x64 宿主跑。");
+            "v1 冻件的引导件是 linux-x86_64 AOT——端到端腿只在 linux-x86_64 宿主跑。");
         var root = CreateTempDirectory();
         try
         {
@@ -155,7 +155,7 @@ public class UpdateCompatTests
             var artifact = WriteArtifact(Path.Combine(feedDir, "app-2.0.0.zip"), "app-v2",
                 ("app", "v2"u8.ToArray()),
                 ("bundler-update.json", System.Text.Encoding.UTF8.GetBytes(
-                    "{\"format\":\"zip\",\"rid\":\"linux-x64\",\"channel\":\"stable\"," +
+                    "{\"format\":\"zip\",\"rid\":\"linux-x86_64\",\"channel\":\"stable\"," +
                     $"\"feedUrl\":\"{feedJson}\",\"publicKey\":\"{material.PublicPointBase64()}\"}}")),
                 ("bundler-updater", File.ReadAllBytes(CurrentAot)));
             SignAndFeed(feedDir, "stable", "2.0.0", material, artifact);
@@ -224,7 +224,7 @@ public class UpdateCompatTests
     {
         Assert.SkipUnless(OperatingSystem.IsLinux() &&
             RuntimeInformation.ProcessArchitecture == Architecture.X64,
-            "v1 AOT 引导件是 linux-x64——只在 linux-x64 宿主跑。");
+            "v1 AOT 引导件是 linux-x86_64——只在 linux-x86_64 宿主跑。");
         var root = CreateTempDirectory();
         try
         {

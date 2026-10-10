@@ -5,7 +5,8 @@ namespace DotNet.Bundler.Core;
 public static class DesktopTargetMatrix
 {
     public static bool Supports(BundleTarget target, PackageFormat format) =>
-        Supports(target.OperatingSystem, format);
+        Supports(target.OperatingSystem, format) &&
+        ArtifactNaming.ArchToken(target, format) is not null;
 
     public static bool Supports(DesktopOperatingSystem operatingSystem, PackageFormat format) =>
         operatingSystem switch

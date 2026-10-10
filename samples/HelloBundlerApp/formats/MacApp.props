@@ -48,10 +48,10 @@
 
   <ItemGroup>
     <!-- BundlerIcon 是跨后端全局项——mac 图标必须 RID 门控，否则 PNG 漏进 win（MSI 只收 .ico）/linux 图标集。 -->
-    <BundlerIcon Include="$(HelloBundlerAppAssets)mac\icon-256.png" Condition="'$(HelloBundlerMacAppIconMode)' == 'png' and $(RuntimeIdentifier.Contains('osx'))" />
-    <BundlerIcon Include="$(HelloBundlerAppAssets)mac\icon-512.png" Condition="'$(HelloBundlerMacAppIconMode)' == 'png' and $(RuntimeIdentifier.Contains('osx'))" />
-    <BundlerIcon Include="$(HelloBundlerAppAssets)mac\hello.car" Condition="'$(HelloBundlerMacAppIconMode)' == 'car' and $(RuntimeIdentifier.Contains('osx'))" />
-    <BundlerIcon Include="$(HelloBundlerMacAppIconSource)" Condition="'$(HelloBundlerMacAppIconMode)' == 'icon' and '$(HelloBundlerMacAppIconSource)' != '' and $(RuntimeIdentifier.Contains('osx'))" />
+    <BundlerIcon Include="$(HelloBundlerAppAssets)mac\icon-256.png" Condition="'$(HelloBundlerMacAppIconMode)' == 'png' and $(Target.Contains('macos'))" />
+    <BundlerIcon Include="$(HelloBundlerAppAssets)mac\icon-512.png" Condition="'$(HelloBundlerMacAppIconMode)' == 'png' and $(Target.Contains('macos'))" />
+    <BundlerIcon Include="$(HelloBundlerAppAssets)mac\hello.car" Condition="'$(HelloBundlerMacAppIconMode)' == 'car' and $(Target.Contains('macos'))" />
+    <BundlerIcon Include="$(HelloBundlerMacAppIconSource)" Condition="'$(HelloBundlerMacAppIconMode)' == 'icon' and '$(HelloBundlerMacAppIconSource)' != '' and $(Target.Contains('macos'))" />
     <BundlerMacAppFrameworkDirectory Include="$(HelloBundlerAppAssets)mac\libhello.dylib" />
     <BundlerMacDocumentType Include="hellomac" Role="Editor" Rank="Owner" ExportedTypeIdentifier="com.example.hellobundlerapp.hellomac" ExportedTypeConformsTo="public.data" />
     <BundlerMacUrlType Include="hellomac" Role="Viewer" />

@@ -106,7 +106,7 @@ internal static class CliConfig
     private static readonly HashSet<string> TopLevelFields = new(StringComparer.Ordinal)
     {
         "productName", "identifier", "version", "publisher", "description", "homepage",
-        "copyright", "licenseFile", "outputDirectory", "icons", "resources",
+        "copyright", "licenseFile", "outputDirectory", "outputLayout", "icons", "resources",
         "fileAssociations", "urlProtocols", "targets"
     };
 
@@ -119,12 +119,12 @@ internal static class CliConfig
 
     private static readonly HashSet<string> TargetFields_Exact = new(StringComparer.Ordinal)
     {
-        "runtimeIdentifier", "inputDirectory", "mainExecutable", "signingFiles", "formats"
+        "target", "inputDirectory", "mainExecutable", "signingFiles", "formats"
     };
 
     private static readonly HashSet<string> TargetFields_Allowed = new(StringComparer.OrdinalIgnoreCase)
     {
-        "runtimeIdentifier", "inputDirectory", "mainExecutable", "signingFiles", "formats"
+        "target", "inputDirectory", "mainExecutable", "signingFiles", "formats"
     };
 
     private static readonly Dictionary<string, Type> SectionTypes = new(StringComparer.Ordinal)
@@ -461,7 +461,7 @@ internal static class CliConfig
     // options write into targets[0] (creating it if absent).
     private static readonly Dictionary<string, string> TargetFields = new(StringComparer.Ordinal)
     {
-        ["rid"] = "runtimeIdentifier",
+        ["target"] = "target",
         ["input-dir"] = "inputDirectory",
         ["main-executable"] = "mainExecutable"
     };
@@ -483,6 +483,7 @@ internal static class CliConfig
         "product-name" => "productName",
         "package-version" => "version",
         "output-dir" => "outputDirectory",
+        "output-layout" => "outputLayout",
         "license-file" => "licenseFile",
         var name when TargetFields.ContainsKey(name) => name,
         var other => other
@@ -652,7 +653,7 @@ internal static class CliConfig
         if (parsed.Options.TryGetValue("formats", out var formats))
         {
             target["formats"] = new JsonArray(
-                CliProgram.ParseFormats(formats, TargetRid(target, parsed))
+                CliProgram.ParseFormats(formats, TargetText(target, parsed))
                     .Select(f => (JsonNode?)JsonValue.Create(FormatName(f))).ToArray());
         }
         if (target["formats"] is null)
@@ -662,11 +663,11 @@ internal static class CliConfig
         }
 
         // targets[].formats 归一成枚举名数组再走共享反序列化：ParseFormats 顺带
-        // 做 rid×format 矩阵校验并吃 "a,b"/"a;b" 串形，source-gen 侧不再另写规则。
+        // 做 target×format 矩阵校验并吃 "a,b"/"a;b" 串形，source-gen 侧不再另写规则。
         foreach (var node in targetsNode.OfType<JsonObject>())
         {
             node["formats"] = new JsonArray(
-                FormatList(node["formats"], TargetRid(node, parsed))
+                FormatList(node["formats"], TargetText(node, parsed))
                     .Select(f => (JsonNode?)JsonValue.Create(FormatName(f))).ToArray());
         }
 
@@ -708,10 +709,10 @@ internal static class CliConfig
         };
     }
 
-    private static string TargetRid(JsonObject target, CliArguments parsed) =>
-        Text(target, "runtimeIdentifier")
-        ?? (parsed.Options.TryGetValue("rid", out var rid) ? rid : null)
-        ?? "linux-x64";
+    private static string TargetText(JsonObject target, CliArguments parsed) =>
+        Text(target, "target")
+        ?? (parsed.Options.TryGetValue("target", out var optionTarget) ? optionTarget : null)
+        ?? "linux-x86_64";
 
     private static string? Text(JsonObject node, string field) =>
         node[field] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
@@ -820,18 +821,18 @@ internal static class CliConfig
         BundlerJsonContext.Default.GetTypeInfo(typeof(T))
         ?? throw new InvalidOperationException($"No JSON metadata for {typeof(T).Name}.");
 
-    private static IReadOnlyList<PackageFormat> FormatList(JsonNode? node, string rid)
+    private static IReadOnlyList<PackageFormat> FormatList(JsonNode? node, string target)
     {
         if (node is JsonValue single && single.TryGetValue<string>(out var s))
         {
-            return CliProgram.ParseFormats(s, rid);
+            return CliProgram.ParseFormats(s, target);
         }
         if (node is JsonArray arr)
         {
             var names = arr.OfType<JsonValue>()
                 .Select(v => v.TryGetValue<string>(out var s) ? s! : "")
                 .Where(s => s.Length > 0).ToArray();
-            return CliProgram.ParseFormats(string.Join(",", names), rid);
+            return CliProgram.ParseFormats(string.Join(",", names), target);
         }
         return [];
     }

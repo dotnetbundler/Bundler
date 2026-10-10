@@ -86,7 +86,7 @@ public static class UpdateTests
             var material = UpdateKeyMaterial.Generate();
             material.Save(keyPath);
 
-            var zipArtifact = WriteDummyArtifact(directory, "app-1.0.0-linux-x64.zip");
+            var zipArtifact = WriteDummyArtifact(directory, "app-1.0.0-linux-x86_64.zip");
             var debArtifact = WriteDummyArtifact(directory, "app_1.0.0_amd64.deb");
             var configuration = new BundleConfiguration
             {
@@ -104,9 +104,9 @@ public static class UpdateTests
             };
             var artifacts = new[]
             {
-                new BundleArtifact(PackageFormat.Zip, "linux-x64", zipArtifact),
+                new BundleArtifact(PackageFormat.Zip, "linux-x86_64", zipArtifact),
                 // deb 不在自更新适配清单里——不产生 .sig、不进 feed。
-                new BundleArtifact(PackageFormat.Deb, "linux-x64", debArtifact)
+                new BundleArtifact(PackageFormat.Deb, "linux-x86_64", debArtifact)
             };
 
             var produced = UpdateManifestEmitter.EmitAsync(configuration, artifacts)
@@ -128,11 +128,11 @@ public static class UpdateTests
             var entries = root.GetProperty("artifacts").EnumerateArray().ToArray();
             Assert.Single(entries);
             var entry = entries[0];
-            Assert.Equal("linux-x64", entry.GetProperty("rid").GetString());
+            Assert.Equal("linux-x86_64", entry.GetProperty("rid").GetString());
             Assert.Equal("zip", entry.GetProperty("format").GetString());
-            Assert.Equal("app-1.0.0-linux-x64.zip", entry.GetProperty("file").GetString());
+            Assert.Equal("app-1.0.0-linux-x86_64.zip", entry.GetProperty("file").GetString());
             // url 恒为裸文件名——消费端按清单文件所在目录解析。
-            Assert.Equal("app-1.0.0-linux-x64.zip", entry.GetProperty("url").GetString());
+            Assert.Equal("app-1.0.0-linux-x86_64.zip", entry.GetProperty("url").GetString());
             Assert.Equal(Convert.ToBase64String(File.ReadAllBytes(sigPath)),
                 entry.GetProperty("sig").GetString());
             Assert.Equal(new FileInfo(zipArtifact).Length, entry.GetProperty("size").GetInt64());
@@ -168,7 +168,7 @@ public static class UpdateTests
             };
             var artifacts = new[]
             {
-                new BundleArtifact(PackageFormat.Zip, "linux-x64",
+                new BundleArtifact(PackageFormat.Zip, "linux-x86_64",
                     WriteDummyArtifact(directory, "app.zip"))
             };
             Assert.Throws<InvalidOperationException>(() =>
@@ -211,7 +211,7 @@ public static class UpdateTests
                     },
                     Targets = [new BundleTargetConfiguration
                     {
-                        RuntimeIdentifier = "linux-x64",
+                        Target = "linux-x86_64",
                         InputDirectory = input,
                         MainExecutable = "app.bin",
                         Formats = [PackageFormat.Zip]
@@ -226,7 +226,7 @@ public static class UpdateTests
             using var reader = new StreamReader(sidecar!.Open());
             using var document = JsonDocument.Parse(reader.ReadToEnd());
             Assert.Equal("zip", document.RootElement.GetProperty("format").GetString());
-            Assert.Equal("linux-x64", document.RootElement.GetProperty("rid").GetString());
+            Assert.Equal("linux-x86_64", document.RootElement.GetProperty("rid").GetString());
             Assert.Equal(material.PublicPointBase64(),
                 document.RootElement.GetProperty("publicKey").GetString());
             Assert.False(File.Exists(Path.Combine(input, UpdateIdentitySidecar.FileName)));
@@ -244,21 +244,21 @@ public static class UpdateTests
         try
         {
             var tools = Path.Combine(directory, "tools");
-            Directory.CreateDirectory(Path.Combine(tools, "linux-x64"));
+            Directory.CreateDirectory(Path.Combine(tools, "linux-x86_64"));
             Directory.CreateDirectory(Path.Combine(tools, "posix"));
-            File.WriteAllText(Path.Combine(tools, "linux-x64", "bundler-updater"), "elf-binary");
+            File.WriteAllText(Path.Combine(tools, "linux-x86_64", "bundler-updater"), "elf-binary");
             File.WriteAllText(Path.Combine(tools, "posix", "bundler-updater.sh"), "#!/bin/sh\n");
 
             var update = new UpdateBundleConfiguration { BootstrapperDirectory = tools };
-            // per-RID 件命中优先。
-            Assert.True(UpdateBootstrapper.TryResolve(update, "linux-x64", out var resolved));
-            Assert.EndsWith(Path.Combine("linux-x64", "bundler-updater"), resolved);
-            // 无 per-RID 件（osx-arm64 未构建）→ 降级 posix 脚本。
-            Assert.True(UpdateBootstrapper.TryResolve(update, "osx-arm64", out resolved));
+            // per-target 件命中优先。
+            Assert.True(UpdateBootstrapper.TryResolve(update, "linux-x86_64", out var resolved));
+            Assert.EndsWith(Path.Combine("linux-x86_64", "bundler-updater"), resolved);
+            // 无 per-target 件（macos-arm64 未构建）→ 降级 posix 脚本。
+            Assert.True(UpdateBootstrapper.TryResolve(update, "macos-arm64", out resolved));
             Assert.EndsWith("bundler-updater.sh", resolved);
             // 工具目录缺位→不注入（安全降级，非错误）。
             var empty = new UpdateBundleConfiguration { BootstrapperDirectory = Path.Combine(tools, "none") };
-            Assert.False(UpdateBootstrapper.TryResolve(empty, "linux-x64", out _));
+            Assert.False(UpdateBootstrapper.TryResolve(empty, "linux-x86_64", out _));
         }
         finally
         {
@@ -905,14 +905,14 @@ public static class UpdateTests
                 FeedUrl = "https://example.test/feed.json",
                 Channel = "beta",
                 PublicKey = "cHVibGljLWtleQ=="
-            }, PackageFormat.AppImage, "linux-x64");
+            }, PackageFormat.AppImage, "linux-x86_64");
 
             var sidecar = Path.Combine(payload, UpdateIdentitySidecar.FileName);
             Assert.True(File.Exists(sidecar));
             using var document = JsonDocument.Parse(File.ReadAllText(sidecar));
             var root = document.RootElement;
             Assert.Equal("appimage", root.GetProperty("format").GetString());
-            Assert.Equal("linux-x64", root.GetProperty("rid").GetString());
+            Assert.Equal("linux-x86_64", root.GetProperty("rid").GetString());
             Assert.Equal("beta", root.GetProperty("channel").GetString());
             Assert.Equal("https://example.test/feed.json", root.GetProperty("feedUrl").GetString());
             Assert.Equal("cHVibGljLWtleQ==", root.GetProperty("publicKey").GetString());
@@ -930,7 +930,7 @@ public static class UpdateTests
         try
         {
             UpdateIdentitySidecar.WriteIfEnabled(
-                directory, null, PackageFormat.Zip, "linux-x64");
+                directory, null, PackageFormat.Zip, "linux-x86_64");
             Assert.False(File.Exists(Path.Combine(directory, UpdateIdentitySidecar.FileName)));
         }
         finally
@@ -952,7 +952,7 @@ public static class UpdateTests
             Directory.CreateDirectory(work);
 
             var item = new BundlePlanItem(
-                BundleTarget.TryParse("linux-x64", out var target) ? target! : throw new InvalidOperationException(),
+                BundleTarget.TryParse("linux-x86_64", out var target) ? target! : throw new InvalidOperationException(),
                 PackageFormat.Zip, input, "app.bin", directory, false);
             var keyPath = Path.Combine(directory, "key.json");
             var material = UpdateKeyMaterial.Generate();
@@ -1006,11 +1006,11 @@ public static class UpdateTests
             File.WriteAllText(Path.Combine(tools, "posix", "bundler-updater.sh"), "#!/bin/sh\n");
             var update = new UpdateBundleConfiguration { BootstrapperDirectory = tools };
 
-            // win 宿主绝不拿 POSIX 脚本——无 per-RID 二进制即不可用（确定性拒绝而非注入不可执行件）。
-            Assert.False(UpdateBootstrapper.TryResolve(update, "win-arm64", out _));
-            Assert.False(UpdateBootstrapper.TryResolve(update, "win-x64", out _));
+            // win 宿主绝不拿 POSIX 脚本——无 per-target 二进制即不可用（确定性拒绝而非注入不可执行件）。
+            Assert.False(UpdateBootstrapper.TryResolve(update, "windows-arm64", out _));
+            Assert.False(UpdateBootstrapper.TryResolve(update, "windows-x86_64", out _));
             // 非 win 宿主照常降级脚本件。
-            Assert.True(UpdateBootstrapper.TryResolve(update, "osx-arm64", out var resolved));
+            Assert.True(UpdateBootstrapper.TryResolve(update, "macos-arm64", out var resolved));
             Assert.EndsWith("bundler-updater.sh", resolved);
         }
         finally
@@ -1024,15 +1024,15 @@ public static class UpdateTests
     {
         // 无显式工具目录 → Bundler.Core 内嵌资源兜底（MSBuild 包/CLI/直引/NuGet 全形态可达）。
         var update = new UpdateBundleConfiguration();
-        Assert.True(UpdateBootstrapper.TryResolve(update, "linux-x64", out var linux));
+        Assert.True(UpdateBootstrapper.TryResolve(update, "linux-x86_64", out var linux));
         Assert.True(File.Exists(linux));
         Assert.True(new FileInfo(linux).Length > 1_000_000); // 真 AOT 件非桩
-        Assert.True(UpdateBootstrapper.TryResolve(update, "win-x64", out var win));
+        Assert.True(UpdateBootstrapper.TryResolve(update, "windows-x86_64", out var win));
         Assert.EndsWith(".exe", win);
         Assert.True(File.Exists(win));
-        // win-arm64 有内嵌真件（arm64 宿主产出随包）；win-x86 仍无件且不降级脚本 → 确定性不可用。
-        Assert.True(UpdateBootstrapper.TryResolve(update, "win-arm64", out _));
-        Assert.False(UpdateBootstrapper.TryResolve(update, "win-x86", out _));
+        // windows-arm64 有内嵌真件（arm64 宿主产出随包）；windows-i686 仍无件且不降级脚本 → 确定性不可用。
+        Assert.True(UpdateBootstrapper.TryResolve(update, "windows-arm64", out _));
+        Assert.False(UpdateBootstrapper.TryResolve(update, "windows-i686", out _));
     }
 
     [Fact]
@@ -1043,8 +1043,8 @@ public static class UpdateTests
         {
             var keyPath = Path.Combine(directory, "key.json");
             UpdateKeyMaterial.Generate().Save(keyPath);
-            // .app 是目录件：打进 <rid>/<format>/ 分目录（planner 真实布局）。
-            var appDir = Path.Combine(directory, "osx-arm64", "app", "MyApp.app");
+            // .app 是目录件：emitter 落 `<name>.app.zip` 运输件。
+            var appDir = Path.Combine(directory, "MyApp.app");
             Directory.CreateDirectory(Path.Combine(appDir, "Contents", "MacOS"));
             File.WriteAllText(Path.Combine(appDir, "Contents", "Info.plist"), "<plist/>");
             File.WriteAllText(Path.Combine(appDir, "Contents", "MacOS", "app"), "#!/bin/sh\necho hi\n");
@@ -1064,7 +1064,7 @@ public static class UpdateTests
             };
             var artifacts = new[]
             {
-                new BundleArtifact(PackageFormat.App, "osx-arm64", appDir)
+                new BundleArtifact(PackageFormat.App, "macos-arm64", appDir)
             };
 
             var produced = UpdateManifestEmitter.EmitAsync(configuration, artifacts)
@@ -1085,9 +1085,9 @@ public static class UpdateTests
             var entry = document.RootElement.GetProperty("artifacts").EnumerateArray().Single();
             Assert.Equal("app", entry.GetProperty("format").GetString());
             // url 是相对清单目录的路径（制品分目录落盘），file 恒为裸名。
-            Assert.Equal("osx-arm64/app/MyApp.app.zip", entry.GetProperty("url").GetString());
+            Assert.Equal("MyApp.app.zip", entry.GetProperty("url").GetString());
             Assert.Equal("MyApp.app.zip", entry.GetProperty("file").GetString());
-            Assert.Equal("osx-arm64/app/MyApp.app.zip.blockmap",
+            Assert.Equal("MyApp.app.zip.blockmap",
                 entry.GetProperty("blockmap").GetString());
         }
         finally
@@ -1106,7 +1106,7 @@ public static class UpdateTests
             UpdateKeyMaterial.Generate().Save(keyPath);
             // .app 被构建两次（独立项 + dmg/pkg 内层暂存）覆写同一运输件——
             // feed 必须只留一条且 sha/sig 对磁盘最终文件，否则客户端首条命中 stale 必拒。
-            var appDir = Path.Combine(directory, "osx-arm64", "app", "MyApp.app");
+            var appDir = Path.Combine(directory, "MyApp.app");
             Directory.CreateDirectory(Path.Combine(appDir, "Contents", "MacOS"));
             File.WriteAllText(Path.Combine(appDir, "Contents", "Info.plist"), "<plist/>");
             File.WriteAllText(Path.Combine(appDir, "Contents", "MacOS", "app"), "#!/bin/sh\necho hi\n");
@@ -1126,8 +1126,8 @@ public static class UpdateTests
             };
             var artifacts = new[]
             {
-                new BundleArtifact(PackageFormat.App, "osx-arm64", appDir),
-                new BundleArtifact(PackageFormat.App, "osx-arm64", appDir),
+                new BundleArtifact(PackageFormat.App, "macos-arm64", appDir),
+                new BundleArtifact(PackageFormat.App, "macos-arm64", appDir),
             };
 
             UpdateManifestEmitter.EmitAsync(configuration, artifacts)
@@ -1162,7 +1162,7 @@ public static class UpdateTests
         {
             var keyPath = Path.Combine(directory, "key.json");
             UpdateKeyMaterial.Generate().Save(keyPath);
-            var debPath = Path.Combine(directory, "linux-x64", "deb", "app.deb");
+            var debPath = Path.Combine(directory, "app.deb");
             Directory.CreateDirectory(Path.GetDirectoryName(debPath)!);
             File.WriteAllText(debPath, "deb-payload");
 
@@ -1181,7 +1181,7 @@ public static class UpdateTests
             };
             var artifacts = new[]
             {
-                new BundleArtifact(PackageFormat.Deb, "linux-x64", debPath),
+                new BundleArtifact(PackageFormat.Deb, "linux-x86_64", debPath),
             };
 
             var produced = UpdateManifestEmitter.EmitAsync(configuration, artifacts)
@@ -1293,7 +1293,7 @@ public static class UpdateTests
             };
 
             UpdateManifestEmitter.EmitAsync(configuration,
-                    [new BundleArtifact(PackageFormat.Zip, "linux-x64", artifact)])
+                    [new BundleArtifact(PackageFormat.Zip, "linux-x86_64", artifact)])
                 .GetAwaiter().GetResult();
 
             var feedPath = Path.Combine(directory, "bundler-update-feed.stable.json");
@@ -1317,7 +1317,7 @@ public static class UpdateTests
         {
             var keyPath = Path.Combine(directory, "key.json");
             UpdateKeyMaterial.Generate().Save(keyPath);
-            var nested = Path.Combine(directory, "linux-x64", "zip");
+            var nested = directory;
             Directory.CreateDirectory(nested);
             var artifact = WriteDummyArtifact(nested, "app-1.0.0.zip");
             var configuration = new BundleConfiguration
@@ -1335,13 +1335,13 @@ public static class UpdateTests
             };
 
             UpdateManifestEmitter.EmitAsync(configuration,
-                    [new BundleArtifact(PackageFormat.Zip, "linux-x64", artifact)])
+                    [new BundleArtifact(PackageFormat.Zip, "linux-x86_64", artifact)])
                 .GetAwaiter().GetResult();
 
             var feedPath = Path.Combine(directory, "bundler-update-feed.latest.json");
             using var document = JsonDocument.Parse(File.ReadAllText(feedPath));
             var entry = document.RootElement.GetProperty("artifacts").EnumerateArray().Single();
-            Assert.Equal("linux-x64/zip/app-1.0.0.zip", entry.GetProperty("url").GetString());
+            Assert.Equal("app-1.0.0.zip", entry.GetProperty("url").GetString());
             Assert.Equal("app-1.0.0.zip", entry.GetProperty("file").GetString());
             // sig 与 blockmap 随制品落在同一分目录。
             Assert.True(File.Exists(artifact + ".sig"));
@@ -1524,7 +1524,7 @@ public static class UpdateTests
                     },
                     Targets = [new BundleTargetConfiguration
                     {
-                        RuntimeIdentifier = "linux-x64",
+                        Target = "linux-x86_64",
                         InputDirectory = input,
                         MainExecutable = "app.bin",
                         Formats = [PackageFormat.Zip]

@@ -89,7 +89,7 @@ internal static class MsiSupport
     }
 
     public static void RestoreFixture(string project, string packageDir, string cache,
-        string version, string? rid = null)
+        string version, string? target = null)
     {
         var config = PinnedPackageSource.WriteConfig(
             Path.Combine(Path.GetDirectoryName(Path.GetFullPath(cache))!, "nuget-pin"),
@@ -101,9 +101,9 @@ internal static class MsiSupport
             $"-p:RestorePackagesPath={cache}",
             $"-p:BundlerPackageVersion={version}",
         };
-        if (rid is not null)
+        if (target is not null)
         {
-            args.Add($"-p:RuntimeIdentifier={rid}");
+            args.Add($"-p:BundlerTarget={target}");
         }
         ProcessRunner.AssertSuccess(Dotnet.Run(args, new ProcessRunner.Options()),
             $"MSI fixture restore failed: {project}");

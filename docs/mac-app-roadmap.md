@@ -8,7 +8,7 @@
 
 2026-09-26 核对：分支 `mac-app-development`（基于 `main` `993b0ad`），包版本 `0.1.0-alpha.45`，工作区干净。
 
-公共模型现状：`PackageFormat` 已含 `App`/`Dmg`；`BundlePlanner` 在请求 `Dmg` 时自动补 `App` 中间产物；`DesktopTargetMatrix` 对 `MacOS` 放行 `App`/`Dmg`；RID 校验支持 `osx-x64`/`osx-arm64`，无 universal 表达。
+公共模型现状：`PackageFormat` 已含 `App`/`Dmg`；`BundlePlanner` 在请求 `Dmg` 时自动补 `App` 中间产物；`DesktopTargetMatrix` 对 `MacOS` 放行 `App`/`Dmg`；RID 校验支持 `macos-x86_64`/`macos-arm64`，无 universal 表达。
 无任何 macOS 后端、MSBuild 映射或 macOS 集成测试入口。
 Windows 侧 NSIS（冻结 `71a5c90`）与 MSI（冻结基线 `0.1.0-alpha.43`）的路径不直接复用：`.app` 没有安装事务、收据、卸载器概念，语义见第 3 节。
 
@@ -23,7 +23,7 @@ Windows 侧 NSIS（冻结 `71a5c90`）与 MSI（冻结基线 `0.1.0-alpha.43`）
 | 缺口 | 无任何 codesigning 身份（`security find-identity -v -p codesigning` 为 0）；Rosetta 未激活（`arch -x86_64` 报 Bad CPU type）；无 `pwsh` |
 
 含义：本机足以完成 `.app` 结构生成、`plutil` 校验、ad-hoc 签名、`codesign --verify`、真实启动/文件关联/URL 唤起等自动化验证；
-Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`docs/mac-app-open-items.md`）。
+Developer ID 签名、真实公证、macos-x86_64 原生运行属外部待验收（`docs/mac-app-open-items.md`）。
 集成脚本用例用 POSIX shell 书写（无 pwsh），测试组织细节见第 4 节。
 
 ## 2. 工具供应与宿主门槛
@@ -85,9 +85,9 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 4. **安装/卸载语义**：`.app` 无安装事务、无收据、无卸载器。
    产物是可整体移动/拷贝的目录；“安装”=用户放入 `/Applications`（或任意位置），“卸载”=删除 `.app`，“升级”=整体替换。
    Bundler 不伪造 MSI 式事务/回滚/注册语义；损坏 zip 式交付、部分拷贝等用户侧情形不属于后端承诺。
-5. **架构**：`osx-x64`/`osx-arm64` 各为独立产物；`osx-x64` 产物在 Apple Silicon 依赖 Rosetta 属系统行为，非后端能力。
+5. **架构**：`macos-x86_64`/`macos-arm64` 各为独立产物；`macos-x86_64` 产物在 Apple Silicon 依赖 Rosetta 属系统行为，非后端能力。
    请求 universal 语义时要求调用方提供已合成的 fat Mach-O（构建期 `lipo -info` 校验）；
-   Bundler 不做 `lipo` 合成。已确认（2026-09-26）：不在公共模型增加 `osx-universal` 目标，用 `osx-x64`/`osx-arm64` 双产物覆盖；fat 输入校验保留为 MAC-APP-2 能力。
+   Bundler 不做 `lipo` 合成。已确认（2026-09-26）：不在公共模型增加 `macos-universal-universal` 目标，用 `macos-x86_64`/`macos-arm64` 双产物覆盖；fat 输入校验保留为 MAC-APP-2 能力。
 6. **签名语义**：默认产物不签名，载荷既有签名（如 .NET apphost 的 linker ad-hoc 签名）原样保留；
    显式配置后才执行 `codesign`：identity 字符串、`"-"` ad-hoc、临时钥匙串证书导入三种提供器；
    hardened runtime 默认开启且只作用于可执行目标；entitlements 显式给定（文件路径或 plist 内容）；
@@ -130,7 +130,7 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 - **退出**：新增测试与受影响回归通过；本机 `.app` 生成→校验→启动烟雾测试通过；未支持项明确报错；外部项逐条登记。
 - **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）**：
   - 交付 `src/Bundler.MacApp`（netstandard2.0，`MacAppBundler`/`MacAppBundleConfiguration`/`MacAppBundleBackend`），MSBuild 经 `BundlerFormats=app` + `BundlerMacApp*` 属性/`BundlerMacContent`/`BundlerMacFramework` 项映射，直接 API 与 MSBuild 同 Core；
-  - `PackageFormat.Pkg` 进公共枚举（osx 目标矩阵放行，win/linux 拒绝；`Pkg` 计划自动插入中间 `.app` 步骤）；`BundlerMainExecutable` 对 osx RID 默认 `$(TargetName)` 无 `.exe`；
+  - `PackageFormat.Pkg` 进公共枚举（macos-universal 目标矩阵放行，win/linux 拒绝；`Pkg` 计划自动插入中间 `.app` 步骤）；`BundlerMainExecutable` 对 macos-universal RID 默认 `$(TargetName)` 无 `.exe`；
   - 载荷语义：输入树整体保留相对结构进 `Contents/MacOS/`、`BundlerResource`→`Contents/Resources/`、`BundlerMacFramework`（仅 `.framework`/`.dylib`）→`Contents/Frameworks/`、`BundlerMacContent`→`Contents/` 任意非保留位置；顶层保留名（`MacOS`/`Resources`/`Frameworks`/`Info.plist`/`PkgInfo`）与 `..`/绝对路径拒绝；跨通道目标路径冲突拒绝；符号链接/reparse 拒绝；主可执行 Mach-O 魔数校验；POSIX 宿主对 Mach-O 赋 `+x`（Windows 宿主告警降级）；
   - Info.plist 核心键全写入（含 `NSHighResolutionCapable`），`plutil -lint` 内联校验（macOS 宿主），`LSMinimumSystemVersion` 未配置不写入；`.icns` 透传或 PNG 位图合成（iconutil 不依赖）；
   - 新增 22 条单测全过；顺带修复了 macOS 宿主上暴露的既有移植性缺陷：`NsisBundler` 安装路径校验此前用宿主分隔符/非法字符集（POSIX 上 `..` 与 `<>"|?*` 逃逸）、`EnsurePayloadFile/Directory` 用 `\` 规范化路径查 POSIX 文件系统、资源冲突集合分隔符不一致、`SafeFileName` 宿主相关；两处 license 断言改为换行规范化文本比对（zip 内 CRLF vs 检出 LF）；`ValidatesMsiPublishingInputs` 移入 Windows-only 区块（`WixBundler` 刻意宿主门控最先）；修复后全套件 66 项全绿；`tests/MacOS.App.Integration/Verify.sh` 真实跑通 打包→nupkg 断言→发布→结构/plist 回读→`+x`→直接启动输出标记→`open -W`→重建指纹→删除即卸载→独立 API fixture 再产 `.app`；示例 `samples/HelloMacApp`；
@@ -151,7 +151,7 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
   - `NSAppTransportSecurity` 例外域：单域 `NSExceptionAllowsInsecureHTTPLoads`+`NSIncludesSubdomains`，不配置不放宽；
   - 调用方 Info.plist 合并：`BundlerMacAppInfoPlistFile`（文件）/`BundlerMacAppInfoPlistXml`（内联）二选一，合并后 `CFBundleIdentifier`/`CFBundleExecutable`/`CFBundlePackageType`/`CFBundleName`/`CFBundleShortVersionString` 身份键回读校验，冲突即拒绝；
   - `Assets.car` 管线：`BundlerIcon` 接受 `.car`（直接拷贝优先）与 `.icon` 目录（`actool --version` 探测≥26 才编译，缺失/失败记警告不阻塞），`assetutil` 回读图标名写 `CFBundleIconName`；本机已用 Xcode 26.6 自带模板 `.icon` 真实编译出 `Assets.car` 并提取图标名；
-  - universal/fat 校验：托管实现解析 thin/fat 全端序 Mach-O 头（不依赖 `lipo`），osx-arm64/osx-x64 各校验载荷含对应架构，`Verify.sh` 用真实 `lipo -info` 交叉断言；
+  - universal/fat 校验：托管实现解析 thin/fat 全端序 Mach-O 头（不依赖 `lipo`），macos-arm64/macos-x86_64 各校验载荷含对应架构，`Verify.sh` 用真实 `lipo -info` 交叉断言；
   - 新增 9 条单测（macOS 宿主全套件 75 项全绿）；`Verify.sh` 真实跑通 `lsregister -f` 注册+dump 可见、`open <文件>`/`open <scheme>://` 唤起（`.launch-marker` 落盘为证）、`~/Applications` 拷入-启动-移出、独立 API fixture 同样输出 MAC-APP-2 键组；
   - 刻意偏离说明：架构校验用托管 Mach-O 解析替代 `lipo -info`（语义等价、无工具依赖、跨宿主一致），`Verify.sh` 保留真 `lipo` 交叉断言作为证据。
 
@@ -176,14 +176,14 @@ Developer ID 签名、真实公证、osx-x64 原生运行属外部待验收（`d
 ### MAC-APP-4：原生 macOS E2E 与支持矩阵
 
 - **前置**：MAC-APP-1..3 完成；可用专用/可抛弃宿主计划。
-- **目标/交付**：干净宿主（无 Xcode/CLT）构建-启动链路复核、`osx-x64`（Rosetta 或 Intel 原生）与 `osx-arm64` 运行矩阵、`LSMinimumSystemVersion` 宿主实测、下载-quarantine-首启 E2E（Gatekeeper 实际行为）、版本替换升级语义（v1→v2 `.app` 替换后关联/LaunchServices/用户数据）、卸载残留检查、文档与示例收口。
+- **目标/交付**：干净宿主（无 Xcode/CLT）构建-启动链路复核、`macos-x86_64`（Rosetta 或 Intel 原生）与 `macos-arm64` 运行矩阵、`LSMinimumSystemVersion` 宿主实测、下载-quarantine-首启 E2E（Gatekeeper 实际行为）、版本替换升级语义（v1→v2 `.app` 替换后关联/LaunchServices/用户数据）、卸载残留检查、文档与示例收口。
 - **新增自动化**：可自动化的矩阵格子转自动化；不可自动化的逐项人工记录（OS 版本、架构、Git SHA、产物 SHA-256、日志、清理）。
 - **人工边界**：凡需真实 Apple 凭证、物理多样性宿主或破坏性场景的格子保持外部待验收。
 - **不做**：MAC-DMG/MAC-PKG 功能、伪造支持声明。
 - **退出**：矩阵实测格子有证据、未测格子限缩支持声明；示例与文档完整。
 - **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）**：
   - `Verify.sh` 全绿，新增 MAC-APP-4 段落全部实测通过；
-  - `osx-x64` 产物：fixture 以 `RuntimeIdentifier=osx-x64` 真实发布产 `.app`，`lipo -info` 断言主可执行为 x86_64、`plutil -lint` 通过；本机无 Rosetta，运行态启动属外部待验收（MAC-APP-MT-03 / OI-02）；顺带实测架构校验拒绝把 arm64-only dylib 带进 osx-x64 产物；
+  - `macos-x86_64` 产物：fixture 以 `Target=macos-x86_64` 真实发布产 `.app`，`lipo -info` 断言主可执行为 x86_64、`plutil -lint` 通过；本机无 Rosetta，运行态启动属外部待验收（MAC-APP-MT-03 / OI-02）；顺带实测架构校验拒绝把 arm64-only dylib 带进 macos-x86_64 产物；
   - quarantine 首启：对 `.app` 副本写入 `com.apple.quarantine` 后 `open` 被 LaunchServices/Gatekeeper 拦截（未签名隔离包不放行，符合预期）；`xattr -d` 可移除隔离属性；
   - `LSMinimumSystemVersion` 宿主实测：`BundlerMacAppMinimumSystemVersion=99.0` 产出的包被 LaunchServices 拒绝打开（超出版本下限即拒），断言通过；
   - 版本替换升级：v1（`CFBundleVersion=2026.9.1`）拷入 `~/Applications` 注册+启动 → 原地删除换 v2（`2026.9.2`）→ 重新注册+启动成功，`lsregister -dump` 确认 bundle identifier 注册保持——`.app` 升级语义=整包替换，断言通过；

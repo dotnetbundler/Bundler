@@ -50,7 +50,7 @@ internal static class RpmPackageWriter
         var packageName = settings.PackageName ?? RpmName.Sanitize(bundle.ProductName);
         RpmName.Validate(packageName);
         var mapped = RpmVersion.Map(bundle.Version, settings);
-        var architecture = settings.Architecture ?? MapArchitecture(item.Target.Architecture);
+        var architecture = settings.Architecture ?? MapArchitecture(item.Target);
         ValidateArchitecture(architecture);
         var installRoot = NormalizeInstallRoot(settings.InstallRoot, packageName);
         var binLink = settings.BinLink ?? packageName;
@@ -857,13 +857,9 @@ internal static class RpmPackageWriter
         return flags;
     }
 
-    internal static string MapArchitecture(CpuArchitecture architecture) => architecture switch
-    {
-        CpuArchitecture.X64 => "x86_64",
-        CpuArchitecture.Arm64 => "aarch64",
-        CpuArchitecture.X86 => "i686",
-        _ => throw new NotSupportedException($"No rpm architecture mapping for '{architecture}'.")
-    };
+    internal static string MapArchitecture(BundleTarget target) =>
+        ArtifactNaming.ArchToken(target, PackageFormat.Rpm)
+        ?? throw new NotSupportedException($"No rpm architecture mapping for '{target.Architecture}'.") ;
 
     private static void ValidateArchitecture(string architecture)
     {

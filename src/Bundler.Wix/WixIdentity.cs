@@ -14,7 +14,7 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
     public static WixIdentity Create(
         string identifier,
         string version,
-        string runtimeIdentifier,
+        string target,
         WixInstallScope scope,
         string? upgradeCode = null,
         WixLanguageInfo? language = null,
@@ -29,9 +29,9 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
             throw new ArgumentOutOfRangeException(nameof(scope));
         }
         language ??= WixLanguageInfo.Resolve("en-US");
-        if (runtimeIdentifier != "win-x86" && runtimeIdentifier != "win-x64" && runtimeIdentifier != "win-arm64")
+        if (target != "windows-i686" && target != "windows-x86_64" && target != "windows-arm64")
         {
-            throw new NotSupportedException($"MSI target '{runtimeIdentifier}' is not supported.");
+            throw new NotSupportedException($"MSI target '{target}' is not supported.");
         }
 
         var versionToMap = packageVersion ?? version;
@@ -47,7 +47,7 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         }
 
         var normalizedIdentifier = identifier.ToLowerInvariant();
-        var family = $"{normalizedIdentifier}|{scope}|{runtimeIdentifier}" + language.FamilyToken;
+        var family = $"{normalizedIdentifier}|{scope}|{target}" + language.FamilyToken;
         Guid familyCode;
         if (upgradeCode is null)
         {
@@ -64,13 +64,19 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
         return new WixIdentity(familyCode, productCode, productVersion);
     }
 
-    internal static Guid ComponentCode(string identifier, string runtimeIdentifier, WixInstallScope scope, string relativePath,
-        WixLanguageInfo? language = null) =>
-        Uuid5(NamespaceId, "component|" + identifier.ToLowerInvariant() + "|" + scope + "|" +
-              runtimeIdentifier + "|Programs|" + identifier.ToLowerInvariant() + "-" +
-              runtimeIdentifier.Substring(4) + "|" +
+    internal static Guid ComponentCode(string identifier, string target, WixInstallScope scope, string relativePath,
+        WixLanguageInfo? language = null)
+    {
+        var parsed = BundleTarget.Parse(target);
+        var archToken = ArtifactNaming.ArchToken(parsed, PackageFormat.Msi)
+            ?? throw new ArgumentException(
+                $"Architecture '{parsed.Architecture}' is not supported for {PackageFormat.Msi}.");
+        return Uuid5(NamespaceId, "component|" + identifier.ToLowerInvariant() + "|" + scope + "|" +
+              target + "|Programs|" + identifier.ToLowerInvariant() + "-" +
+              archToken + "|" +
               relativePath.Replace('\\', '/').ToLowerInvariant() +
               (language ?? WixLanguageInfo.Resolve("en-US")).FamilyToken);
+    }
 
     internal static string StableId(string prefix, string name)
     {

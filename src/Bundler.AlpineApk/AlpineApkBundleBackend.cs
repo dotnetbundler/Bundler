@@ -17,6 +17,6 @@ internal sealed class AlpineApkBundleBackend(AlpineApkBundleConfiguration settin
     {
         var result = ApkPackageWriter.Build(context.Configuration, context.Item, settings, context.Logger);
         return Task.FromResult<IReadOnlyList<BundleArtifact>>(
-            [new BundleArtifact(Format, context.Item.Target.RuntimeIdentifier, result.Path)]);
+            [new BundleArtifact(Format, context.Item.Target.Target, result.Path)]);
     }
 }

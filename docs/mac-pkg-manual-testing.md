@@ -10,5 +10,5 @@
 | MAC-PKG-MT-02 | MAC-PKG-2 | GUI 双击分发包：Installer.app 欢迎/许可/结语页观感，许可拒绝中止安装 | **已验证**（2026-09-28，GUI 会话）：Installer.app 欢迎/许可页截图 |
 | MAC-PKG-MT-03 | MAC-PKG-3 | Developer ID Installer 签名 `.pkg`：`pkgutil --check-signature`、`spctl -a -v -t install`；Gatekeeper 隔离场景首装 | 验签输出 |
 | MAC-PKG-MT-04 | MAC-PKG-3 | 公证 `.pkg`：`stapler validate`、quarantine 场景 Gatekeeper 放行记录 | 公证票据与放行日志 |
-| MAC-PKG-MT-05 | MAC-PKG-4 | `osx-x64` `.pkg` 在 Intel/Rosetta 宿主安装并启动 | **部分已验证**（2026-10 CI 两腿安装/启动断言通过）；观感证据仍人工 |
+| MAC-PKG-MT-05 | MAC-PKG-4 | `macos-x86_64` `.pkg` 在 Intel/Rosetta 宿主安装并启动 | **部分已验证**（2026-10 CI 两腿安装/启动断言通过）；观感证据仍人工 |
 | MAC-PKG-MT-06 | MAC-PKG-4 | 干净宿主（无 Xcode/CLT）安装与首启；升级覆盖安装收据版本递增 | 宿主环境记录、收据对比 |

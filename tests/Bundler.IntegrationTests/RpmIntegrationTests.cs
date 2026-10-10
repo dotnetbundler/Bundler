@@ -48,7 +48,7 @@ public sealed class RpmFixture : IDisposable
         _ = RepositoryPackages.DirectoryPath;
 
         Publish("default");
-        DefaultRpm = RequireRpm(Ws.Combine("default", "linux-x64", "rpm"), "bundler-rpm-fixture-1.0.0-1.x86_64.rpm");
+        DefaultRpm = RequireRpm(Ws.Combine("default"), "bundler-rpm-fixture-1.0.0-1.x86_64.rpm");
 
         Publish("overrides",
             "-p:BundlerTestRpmPackageName=my-rpm-app",
@@ -58,10 +58,10 @@ public sealed class RpmFixture : IDisposable
             "-p:BundlerTestRpmArchitecture=noarch",
             "-p:BundlerTestRpmInstallRoot=/opt/myapp",
             "-p:BundlerTestRpmBinLink=none");
-        OverridesRpm = RequireRpm(Ws.Combine("overrides", "linux-x64", "rpm"), "my-rpm-app-9.9-7.el9.noarch.rpm");
+        OverridesRpm = RequireRpm(Ws.Combine("overrides"), "my-rpm-app-9.9-7.el9.noarch.rpm");
 
         Publish("prerelease", "-p:BundlerVersion=1.0.0-alpha.2");
-        PrereleaseRpm = RequireRpm(Ws.Combine("prerelease", "linux-x64", "rpm"),
+        PrereleaseRpm = RequireRpm(Ws.Combine("prerelease"),
             "bundler-rpm-fixture-1.0.0-0.1.alpha.2.x86_64.rpm");
 
         Publish("metadata",
@@ -74,32 +74,32 @@ public sealed class RpmFixture : IDisposable
             "-p:BundlerTestRpmLicense=MIT OR Apache-2.0",
             "-p:BundlerTestRpmGroup=Applications/Engineering",
             "-p:BundlerTestRpmUrl=https://example.com/rpm-override");
-        MetadataRpm = RequireRpm(Ws.Combine("metadata", "linux-x64", "rpm"));
+        MetadataRpm = RequireRpm(Ws.Combine("metadata"));
 
         Publish("desktop-override", $"-p:BundlerTestRpmDesktopFile={FixtureDir}/Assets/custom.desktop");
-        DesktopOverrideRpm = RequireRpm(Ws.Combine("desktop-override", "linux-x64", "rpm"));
+        DesktopOverrideRpm = RequireRpm(Ws.Combine("desktop-override"));
 
         Publish("scripts", "-p:BundlerTestRpmScripts=1", "-p:BundlerTestRpmSystemd=1");
-        ScriptsRpm = RequireRpm(Ws.Combine("scripts", "linux-x64", "rpm"));
+        ScriptsRpm = RequireRpm(Ws.Combine("scripts"));
 
         Publish("configx", "-p:BundlerTestRpmConfigLocations=/usr/lib/bundler-rpm-fixture/docs/readme.txt");
-        ConfigRpm = RequireRpm(Ws.Combine("configx", "linux-x64", "rpm"));
+        ConfigRpm = RequireRpm(Ws.Combine("configx"));
         Publish("configx-v2",
             "-p:BundlerTestRpmConfigLocations=/usr/lib/bundler-rpm-fixture/docs/readme.txt",
             "-p:BundlerTestRpmRelease=2");
-        ConfigV2Rpm = RequireRpm(Ws.Combine("configx-v2", "linux-x64", "rpm"));
+        ConfigV2Rpm = RequireRpm(Ws.Combine("configx-v2"));
 
         Dotnet.Publish(FixtureProject, "Release",
             [$"-p:BundlerIntegrationOutput={Ws.Combine("arm64")}",
-             "--packages", CacheDir, "-r", "linux-arm64"],
-            "linux-arm64 publish failed", noRestore: false);
+             "--packages", CacheDir, "-r", "linux-arm64", "-p:BundlerTarget=linux-aarch64"],
+            "linux-aarch64 publish failed", noRestore: false);
         Arm64Rpm = Directory.EnumerateFiles(Ws.Combine("arm64"), "*.aarch64.rpm",
             SearchOption.AllDirectories).FirstOrDefault()
-            ?? throw new InvalidOperationException("No *.aarch64.rpm produced for linux-arm64.");
+            ?? throw new InvalidOperationException("No *.aarch64.rpm produced for linux-aarch64.");
 
         Publish("fanout", "-p:BundlerTestFormats=deb%3Brpm");
-        FanoutRpm = RequireRpm(Ws.Combine("fanout", "linux-x64", "rpm"), "*.rpm");
-        FanoutDeb = RequireRpm(Ws.Combine("fanout", "linux-x64", "deb"), "*.deb");
+        FanoutRpm = RequireRpm(Ws.Combine("fanout"), "*.rpm");
+        FanoutDeb = RequireRpm(Ws.Combine("fanout"), "*.deb");
     }
 
     public void Publish(string name, params string[] extraProperties)

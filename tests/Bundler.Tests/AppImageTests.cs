@@ -53,8 +53,8 @@ public static class AppImageTests
                    File.Exists(Path.Combine(dir, "example-app.png")) &&
                    File.Exists(Path.Combine(dir, ".DirIcon")),
                 "root desktop/icon/.DirIcon entries must exist");
-            Assert.True(result.FileArchitecture == "amd64" && result.EnvironmentArchitecture == "x86_64",
-                "linux-x64 must map to file arch amd64 / env arch x86_64");
+            Assert.True(result.FileArchitecture == "x86_64" && result.EnvironmentArchitecture == "x86_64",
+                "linux-x86_64 must map to file/env arch x86_64");
         }
         finally
         {
@@ -94,7 +94,7 @@ public static class AppImageTests
         try
         {
             var result = AppDirBuilder.Build(
-                BundleWith(null), PlanItem(input, work, rid: "linux-arm64"),
+                BundleWith(null), PlanItem(input, work, target: "linux-aarch64"),
                 new AppImageBundleConfiguration
                 {
                     PackageName = "My App",
@@ -103,7 +103,7 @@ public static class AppImageTests
             Assert.Equal("my-app", result.PackageName);
             Assert.Equal("2.0.0-beta.1", result.Version);
             Assert.True(result.FileArchitecture == "aarch64" && result.EnvironmentArchitecture == "aarch64",
-                "linux-arm64 must map to aarch64");
+                "linux-aarch64 must map to aarch64");
             var normalized = AppImageIdentity.NormalizeArchitecture("amd64");
             Assert.Equal("x86_64", normalized);
         }
@@ -362,7 +362,7 @@ public static class AppImageTests
         {
             var artifact = new AppImageBundler().BuildAsync(
                 Configuration(input, output)).GetAwaiter().GetResult().Single();
-            Assert.Equal("example-app_1.0.0_amd64.AppImage", Path.GetFileName(artifact.Path));
+            Assert.Equal("example-app-1.0.0-x86_64.AppImage", Path.GetFileName(artifact.Path));
             var magic = File.ReadAllBytes(artifact.Path).Take(4).ToArray();
             Assert.True(magic[0] == 0x7F && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F',
                 "an .AppImage is an ELF");
@@ -389,7 +389,7 @@ public static class AppImageTests
             var artifact = new AppImageBundler(
                 new AppImageBundleConfiguration { Architecture = "aarch64" }).BuildAsync(
                 Configuration(input, output)).GetAwaiter().GetResult().Single();
-            Assert.Equal("example-app_1.0.0_aarch64.AppImage", Path.GetFileName(artifact.Path));
+            Assert.Equal("example-app-1.0.0-aarch64.AppImage", Path.GetFileName(artifact.Path));
             // ELF e_machine at bytes 18-19: 0xB7 0x00 = EM_AARCH64.
             var header = File.ReadAllBytes(artifact.Path);
             Assert.True(header[18] == 0xB7 && header[19] == 0x00,
@@ -572,21 +572,20 @@ public static class AppImageTests
     }
 
     [Fact]
-    static void MapsRuntimeIdentifierArchitectures()
+    static void MapsTargetArchitectures()
     {
-        Assert.Equal("amd64", AppImageIdentity.FileArchitecture("linux-x64"));
-        Assert.Equal("aarch64", AppImageIdentity.FileArchitecture("linux-arm64"));
-        Assert.Equal("i686", AppImageIdentity.FileArchitecture("linux-x86"));
-        Assert.Equal("x86_64", AppImageIdentity.EnvironmentArchitecture("linux-x64"));
-        Assert.Equal("aarch64", AppImageIdentity.EnvironmentArchitecture("linux-arm64"));
+        Assert.Equal("x86_64", AppImageIdentity.EnvironmentArchitecture(BundleTarget.Parse("linux-x86_64")));
+        Assert.Equal("aarch64", AppImageIdentity.EnvironmentArchitecture(BundleTarget.Parse("linux-aarch64")));
+        Assert.Equal("i686", AppImageIdentity.EnvironmentArchitecture(BundleTarget.Parse("linux-i686")));
     }
 
     [Fact]
-    static void RejectsUnmappableRuntimeIdentifier()
+    static void RejectsUnmappableTarget()
     {
         var ex = Assert.ThrowsAny<ArgumentException>(
-            () => AppImageIdentity.EnvironmentArchitecture("linux-ppc64le"));
-        Assert.Contains("Cannot map runtime identifier", ex.Message);
+            () => AppImageIdentity.EnvironmentArchitecture(
+                new BundleTarget("linux-ppc64le", DesktopOperatingSystem.Linux, CpuArchitecture.Ppc64le)));
+        Assert.Contains("Cannot map target", ex.Message);
     }
 
     static BundleConfiguration BundleWith(string? icon,
@@ -605,12 +604,11 @@ public static class AppImageTests
         };
     }
 
-    static BundlePlanItem PlanItem(string input, string work, string rid = "linux-x64",
+    static BundlePlanItem PlanItem(string input, string work, string target = "linux-x86_64",
         string mainExecutable = "ExampleApp")
     {
         return new BundlePlanItem(
-            new BundleTarget(rid, DesktopOperatingSystem.Linux,
-                rid.EndsWith("arm64", StringComparison.Ordinal) ? CpuArchitecture.Arm64 : CpuArchitecture.X64),
+            BundleTarget.Parse(target),
             PackageFormat.AppImage,
             input,
             mainExecutable,
@@ -619,7 +617,7 @@ public static class AppImageTests
     }
 
     static BundleConfiguration Configuration(string input, string output,
-        string rid = "linux-x64", IReadOnlyList<PackageFormat>? formats = null)
+        string target = "linux-x86_64", IReadOnlyList<PackageFormat>? formats = null)
     {
         var bundle = BundleWith(null);
         return new BundleConfiguration
@@ -634,7 +632,7 @@ public static class AppImageTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.AppImage]

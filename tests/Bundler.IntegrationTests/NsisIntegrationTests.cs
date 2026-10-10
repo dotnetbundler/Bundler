@@ -41,7 +41,7 @@ public sealed class NsisFixture : IAsyncLifetime
     {
         Assert.SkipWhen(!OperatingSystem.IsWindows(), "NSIS 集成腿只覆盖 Windows。");
         Assert.SkipWhen(!TestPlatform.IsX64,
-            "SKIP: NSIS 工件为 win-x64 安装器，仅 x64 宿主验收；arm64 仿真语义另列特殊项。");
+            "SKIP: NSIS 工件为 windows-x86_64 安装器，仅 x64 宿主验收；arm64 仿真语义另列特殊项。");
         Assert.SkipWhen(!File.Exists(FixtureProject), "NSIS integration fixture 缺失。");
         // 仓库包一次 pack（含 nodeReuse 文件锁前导）；NSIS 脚本的包装配检查放
         // RepositoryPackagesCarryNsisBackendAndAssets 一条无门禁事实。
@@ -59,8 +59,8 @@ public sealed class NsisFixture : IAsyncLifetime
                 ["NSIS_API_FIXTURE_OUTPUT"] = ApiOutput,
                 ["NSIS_API_FIXTURE_CACHE"] = ApiTools,
             }), "NSIS ApiTests");
-        Assert.True(File.Exists(Path.Combine(ApiOutput, "artifacts", "win-x64", "nsis",
-                "NSIS API Package Fixture-1.0.0-setup.exe")),
+        Assert.True(File.Exists(Path.Combine(ApiOutput, "artifacts",
+                "NSIS API Package Fixture-1.0.0-x64-setup.exe")),
             "Standalone NSIS API package did not create its installer.");
         // 写 CurrentUser 证书库与真装同一信任级别——只在 localinstall 同意闸内创建。
         if (Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") == "1")
@@ -205,7 +205,7 @@ public sealed class NsisFixture : IAsyncLifetime
     // ~30 个变体的定义（与脚本 Build-FixtureBundle 调用逐一对应）。
     public const string ProductNameConst = "Bundler Integration Fixture";
     public static string InstallerPath(string bundleDir, string productName, string version) =>
-        Path.Combine(bundleDir, "win-x64", "nsis", $"{productName}-{version}-setup.exe");
+        Path.Combine(bundleDir, $"{productName}-{version}-x64-setup.exe");
 
     private void BuildAllVariants()
     {
@@ -372,7 +372,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
     private string JournalTamperFile => _f.Ws.Combine("journal-tamper-sentinel.txt");
     private const string JournalTamperKey = @"Software\DotNetBundler\JournalTamperSentinel";
     private string BundlerDefinitionKey =>
-        $@"Software\DotNetBundler\Products\{Identifier}\win-x64\Components";
+        $@"Software\DotNetBundler\Products\{Identifier}\windows-x86_64\Components";
     private string LegacyMsiInstallDir =>
         Path.Combine(LocalAppData, "Bundler Legacy MSI Fixture");
     private string LegacyMsiV2InstallDir =>
@@ -389,7 +389,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
     private string ReparseOutsideDir => _f.Ws.Combine("reparse-outside");
 
     private string Installer(string bundle, string version = "1.0.0", string? name = null)
-        => Path.Combine(_f.BundleDir(bundle), "win-x64", "nsis",
+        => Path.Combine(_f.BundleDir(bundle),
             $"{name ?? ProductName}-{version}-setup.exe");
 
     // ── 公共小件 ──
@@ -595,42 +595,42 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
         _f.Ensure();
         var expected = new (string Bundle, string File)[]
         {
-            ("bundle", $"{ProductName}-1.0.0-setup.exe"),
-            ("bundle-per-machine", $"{ProductName}-1.0.0-setup.exe"),
-            ("bundle-both", $"{ProductName}-1.0.0-setup.exe"),
+            ("bundle", $"{ProductName}-1.0.0-x64-setup.exe"),
+            ("bundle-per-machine", $"{ProductName}-1.0.0-x64-setup.exe"),
+            ("bundle-both", $"{ProductName}-1.0.0-x64-setup.exe"),
             ("bundle-upgrade", $"{ProductName}-1.1.0-setup.exe"),
-            ("bundle-rollback-failure", $"{ProductName}-1.2.0-setup.exe"),
-            ("bundle-transaction-snapshot-failure", $"{ProductName}-1.2.0-setup.exe"),
-            ("bundle-transaction-activation-failure", $"{ProductName}-1.2.0-setup.exe"),
-            ("bundle-payload-restore-failure", $"{ProductName}-1.2.0-setup.exe"),
-            ("bundle-registry-restore-failure", $"{ProductName}-1.2.0-setup.exe"),
-            ("bundle-journal-cleanup-failure", $"{ProductName}-1.2.0-setup.exe"),
-            ("bundle-shortcut-persistence-failure", $"{ProductName}-1.2.0-setup.exe"),
-            ("bundle-registry-persistence-failure", $"{ProductName}-1.2.0-setup.exe"),
-            ("bundle-commit-cleanup-failure", $"{ProductName}-1.2.0-setup.exe"),
-            ("bundle-interrupted", $"{ProductName}-1.2.0-setup.exe"),
-            ("bundle-different-manifest", $"{ProductName}-1.3.0-setup.exe"),
-            ("bundle-reboot-required", $"{ProductName}-1.0.0-setup.exe"),
-            ("bundle-allowed-downgrade", $"{ProductName}-1.0.0-setup.exe"),
-            ("bundle-legacy-msi-product-migration", $"{ProductName}-1.0.0-setup.exe"),
-            ("bundle-legacy-msi-upgrade-migration", $"{ProductName}-1.0.0-setup.exe"),
-            ("bundle-legacy-msi-autodetect", $"{ProductName}-1.0.0-setup.exe"),
-            ("bundle-legacy-msi-name-mismatch", "Bundler Other Fixture-1.0.0-setup.exe"),
-            ("bundle-legacy-msi-publisher-mismatch", $"{ProductName}-1.0.0-setup.exe"),
-            ("bundle-legacy-msi-downgrade-probe", $"{ProductName}-0.8.5-setup.exe"),
-            ("bundle-signed", $"{ProductName}-1.0.0-setup.exe"),
-            ("bundle-no-shortcut-defaults", $"{ProductName}-1.0.0-setup.exe"),
-            ("bundle-failing-uninstall-forward", $"{ProductName}-1.0.0-setup.exe"),
-            ("bundle-interrupted-uninstall-forward", $"{ProductName}-1.0.0-setup.exe"),
-            ("bundle-unicode", $"{UnicodeName}-1.0.0-setup.exe"),
+            ("bundle-rollback-failure", $"{ProductName}-1.2.0-x64-setup.exe"),
+            ("bundle-transaction-snapshot-failure", $"{ProductName}-1.2.0-x64-setup.exe"),
+            ("bundle-transaction-activation-failure", $"{ProductName}-1.2.0-x64-setup.exe"),
+            ("bundle-payload-restore-failure", $"{ProductName}-1.2.0-x64-setup.exe"),
+            ("bundle-registry-restore-failure", $"{ProductName}-1.2.0-x64-setup.exe"),
+            ("bundle-journal-cleanup-failure", $"{ProductName}-1.2.0-x64-setup.exe"),
+            ("bundle-shortcut-persistence-failure", $"{ProductName}-1.2.0-x64-setup.exe"),
+            ("bundle-registry-persistence-failure", $"{ProductName}-1.2.0-x64-setup.exe"),
+            ("bundle-commit-cleanup-failure", $"{ProductName}-1.2.0-x64-setup.exe"),
+            ("bundle-interrupted", $"{ProductName}-1.2.0-x64-setup.exe"),
+            ("bundle-different-manifest", $"{ProductName}-1.3.0-x64-setup.exe"),
+            ("bundle-reboot-required", $"{ProductName}-1.0.0-x64-setup.exe"),
+            ("bundle-allowed-downgrade", $"{ProductName}-1.0.0-x64-setup.exe"),
+            ("bundle-legacy-msi-product-migration", $"{ProductName}-1.0.0-x64-setup.exe"),
+            ("bundle-legacy-msi-upgrade-migration", $"{ProductName}-1.0.0-x64-setup.exe"),
+            ("bundle-legacy-msi-autodetect", $"{ProductName}-1.0.0-x64-setup.exe"),
+            ("bundle-legacy-msi-name-mismatch", "Bundler Other Fixture-1.0.0-x64-setup.exe"),
+            ("bundle-legacy-msi-publisher-mismatch", $"{ProductName}-1.0.0-x64-setup.exe"),
+            ("bundle-legacy-msi-downgrade-probe", $"{ProductName}-0.8.5-x64-setup.exe"),
+            ("bundle-signed", $"{ProductName}-1.0.0-x64-setup.exe"),
+            ("bundle-no-shortcut-defaults", $"{ProductName}-1.0.0-x64-setup.exe"),
+            ("bundle-failing-uninstall-forward", $"{ProductName}-1.0.0-x64-setup.exe"),
+            ("bundle-interrupted-uninstall-forward", $"{ProductName}-1.0.0-x64-setup.exe"),
+            ("bundle-unicode", $"{UnicodeName}-1.0.0-x64-setup.exe"),
         };
         foreach (var (bundle, file) in expected)
         {
-            Assert.True(File.Exists(Path.Combine(_f.BundleDir(bundle), "win-x64", "nsis", file)),
+            Assert.True(File.Exists(Path.Combine(_f.BundleDir(bundle), file)),
                 $"Installer variant was not created: {bundle}/{file}");
         }
         Assert.True(File.Exists(Path.Combine(_f.BundleDir("bundle-msi-continuity"),
-            "win-x64", "msi", $"{ProductName}-1.0.0.msi")),
+            $"{ProductName}-1.0.0-x64.msi")),
             "MSI continuity installer was not created.");
     }
 
@@ -986,7 +986,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
         _f.Ensure();
         RequireConsent();
         var continuityMsi = Path.Combine(_f.BundleDir("bundle-msi-continuity"),
-            "win-x64", "msi", $"{ProductName}-1.0.0.msi");
+            $"{ProductName}-1.0.0-x64.msi");
         var productCode = MsiSupport.GetProperty(continuityMsi, "ProductCode");
         try
         {

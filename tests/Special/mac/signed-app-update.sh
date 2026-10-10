@@ -25,8 +25,8 @@ note "v1 TeamID" "PASS" "$team1"
 
 # 走 bundler-updater 换包（v2 签名包作为 payload）
 repo="$(cd "$(dirname "$0")/../../.." && pwd)"
-rid="osx-$(uname -m | sed 's/x86_64/x64/')"   # arm64→osx-arm64、x86_64→osx-x64
-updater="$repo/src/Bundler.Updater.Bootstrap/tools/$rid/bundler-updater"
+target="macos-$(uname -m)"   # arm64→macos-arm64、x86_64→macos-x86_64
+updater="$repo/src/Bundler.Updater.Bootstrap/tools/$target/bundler-updater"
 [ -x "$updater" ] || die "bundler-updater 缺位: $updater"
 "$updater" apply --install-dir "$WORK/install.app" --payload "$APPV2" \
     --log "$WORK/u.log" && note "换包" "PASS" "" || note "换包" "FAIL" "$(cat "$WORK/u.log")"

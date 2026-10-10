@@ -13,24 +13,24 @@ public static class ProgramTests
 {
 
     [Fact]
-    static void ParsesSupportedDesktopRids()
+    static void ParsesSupportedDesktopTargets()
     {
-        string[] rids = ["win-x86", "win-x64", "win-arm64", "osx", "osx-x64", "osx-arm64", "linux-x64", "linux-arm64", "linux-musl-x64", "linux-musl-arm64"];
-        Assert.True(rids.All(rid => BundleTarget.TryParse(rid, out _)), "One or more supported RIDs failed to parse.");
-        Assert.True(BundleTarget.TryParse("win-x86", out var x86) && x86!.Architecture == CpuArchitecture.X86,
+        string[] targets = ["windows-i686", "windows-x86_64", "windows-arm64", "macos-universal", "macos-x86_64", "macos-arm64", "linux-x86_64", "linux-aarch64", "linux-musl-x86_64", "linux-musl-aarch64"];
+        Assert.True(targets.All(target => BundleTarget.TryParse(target, out _)), "One or more supported targets failed to parse.");
+        Assert.True(BundleTarget.TryParse("windows-i686", out var x86) && x86!.Architecture == CpuArchitecture.X86,
             "Windows x86 must be a distinct public target architecture.");
-        Assert.True(BundleTarget.TryParse("osx", out var osx) &&
-                osx!.OperatingSystem == DesktopOperatingSystem.MacOS && osx.Architecture == CpuArchitecture.Universal,
-            "The bare osx RID must map to a universal macOS target.");
-        Assert.True(BundleTarget.TryParse("linux-musl-x64", out var musl) &&
+        Assert.True(BundleTarget.TryParse("macos-universal", out var macosUniversal) &&
+                macosUniversal!.OperatingSystem == DesktopOperatingSystem.MacOS && macosUniversal.Architecture == CpuArchitecture.Universal,
+            "The bare macos-universal target must map to a universal macOS target.");
+        Assert.True(BundleTarget.TryParse("linux-musl-x86_64", out var musl) &&
                 musl!.OperatingSystem == DesktopOperatingSystem.LinuxMusl && musl.Architecture == CpuArchitecture.X64,
-            "linux-musl-x64 must parse as a distinct musl target.");
-        Assert.True(BundleTarget.TryParse("linux-musl-arm64", out var muslArm) &&
+            "linux-musl-x86_64 must parse as a distinct musl target.");
+        Assert.True(BundleTarget.TryParse("linux-musl-aarch64", out var muslArm) &&
                 muslArm!.OperatingSystem == DesktopOperatingSystem.LinuxMusl,
-            "linux-musl-arm64 must parse as a distinct musl target.");
-        Assert.False(BundleTarget.TryParse("android-arm64", out _), "A mobile RID was accepted.");
-        Assert.False(BundleTarget.TryParse("linux-musl", out _), "A musl RID without an architecture was accepted.");
-        Assert.False(BundleTarget.TryParse("win", out _), "An OS RID without an architecture was accepted.");
+            "linux-musl-aarch64 must parse as a distinct musl target.");
+        Assert.False(BundleTarget.TryParse("android-arm64", out _), "A mobile target was accepted.");
+        Assert.False(BundleTarget.TryParse("linux-musl", out _), "A musl target without an architecture was accepted.");
+        Assert.False(BundleTarget.TryParse("win", out _), "An OS target without an architecture was accepted.");
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public static class ProgramTests
     {
         var configuration = ValidConfiguration(new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "linux-x64",
+            Target = "linux-x86_64",
             InputDirectory = "unused",
             Formats = [PackageFormat.Msi]
         });
@@ -47,48 +47,48 @@ public static class ProgramTests
         Assert.Contains(issues, issue => issue.Message.Contains("not supported", StringComparison.Ordinal));
         var x86Nsis = ValidConfiguration(new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "win-x86", InputDirectory = "unused", Formats = [PackageFormat.Nsis]
+            Target = "windows-i686", InputDirectory = "unused", Formats = [PackageFormat.Nsis]
         });
         Assert.False(BundleConfigurationValidator.Validate(x86Nsis, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "The NSIS backend must accept the Windows x86 target.");
         var x86Archive = ValidConfiguration(new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "win-x86", InputDirectory = "unused",
+            Target = "windows-i686", InputDirectory = "unused",
             Formats = [PackageFormat.Zip, PackageFormat.TarGz]
         });
         Assert.False(BundleConfigurationValidator.Validate(x86Archive, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "Zip/TarGz must accept the Windows x86 target.");
         var x86Msi = ValidConfiguration(new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "win-x86", InputDirectory = "unused", Formats = [PackageFormat.Msi]
+            Target = "windows-i686", InputDirectory = "unused", Formats = [PackageFormat.Msi]
         });
         Assert.False(BundleConfigurationValidator.Validate(x86Msi, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "The MSI backend must accept the Windows x86 target.");
         var osxFormats = ValidConfiguration(new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "osx", InputDirectory = "unused",
+            Target = "macos-universal", InputDirectory = "unused",
             Formats = [PackageFormat.App, PackageFormat.Dmg, PackageFormat.Pkg, PackageFormat.Zip, PackageFormat.TarGz]
         });
-        Assert.False(BundleConfigurationValidator.Validate(osxFormats, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "The universal osx target must accept the macOS format set.");
+        Assert.False(BundleConfigurationValidator.Validate(osxFormats, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "The universal macos-universal target must accept the macOS format set.");
         var osxNsis = ValidConfiguration(new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "osx", InputDirectory = "unused", Formats = [PackageFormat.Nsis]
+            Target = "macos-universal", InputDirectory = "unused", Formats = [PackageFormat.Nsis]
         });
         Assert.Contains(BundleConfigurationValidator.Validate(osxNsis, checkFileSystem: false), issue => issue.Message.Contains("not supported", StringComparison.Ordinal));
-        foreach (var rid in new[] { "linux-musl-x64", "linux-musl-arm64" })
+        foreach (var target in new[] { "linux-musl-x86_64", "linux-musl-aarch64" })
         {
             var muslArchive = ValidConfiguration(new BundleTargetConfiguration
             {
-                RuntimeIdentifier = rid, InputDirectory = "unused",
+                Target = target, InputDirectory = "unused",
                 Formats = [PackageFormat.Zip, PackageFormat.TarGz, PackageFormat.AlpineApk, PackageFormat.AppImage]
             });
-            Assert.False(BundleConfigurationValidator.Validate(muslArchive, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), $"Zip/TarGz/AlpineApk/AppImage must accept the musl target {rid}.");
+            Assert.False(BundleConfigurationValidator.Validate(muslArchive, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), $"Zip/TarGz/AlpineApk/AppImage must accept the musl target {target}.");
             var muslGlibc = ValidConfiguration(new BundleTargetConfiguration
             {
-                RuntimeIdentifier = rid, InputDirectory = "unused",
+                Target = target, InputDirectory = "unused",
                 Formats = [PackageFormat.Deb, PackageFormat.Rpm]
             });
             var muslIssues = BundleConfigurationValidator.Validate(muslGlibc, checkFileSystem: false)
                 .Where(issue => issue.Path == "targets[0].formats").ToArray();
             Assert.True(muslIssues.Length == 2,
-                $"Deb/Rpm must each be rejected for the musl target {rid} (glibc-distro semantics).");
+                $"Deb/Rpm must each be rejected for the musl target {target} (glibc-distro semantics).");
         }
     }
 
@@ -97,7 +97,7 @@ public static class ProgramTests
     {
         var configuration = ValidConfiguration(new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "osx-arm64",
+            Target = "macos-arm64",
             InputDirectory = "unused",
             Formats = [PackageFormat.Dmg]
         });
@@ -115,7 +115,7 @@ public static class ProgramTests
     {
         var configuration = ValidConfiguration(new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "win-x64",
+            Target = "windows-x86_64",
             InputDirectory = "unused",
             MainExecutable = "../Other.exe",
             SigningFiles = ["../Other.dll"],
@@ -132,7 +132,7 @@ public static class ProgramTests
     {
         var configuration = ValidConfiguration(new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "linux-x64",
+            Target = "linux-x86_64",
             InputDirectory = "unused",
             Formats = [PackageFormat.Zip]
         }, update: new UpdateBundleConfiguration
@@ -162,7 +162,7 @@ public static class ProgramTests
             UpdateKeyMaterial.Generate().Save(keyPath);
             var configuration = ValidConfiguration(new BundleTargetConfiguration
             {
-                RuntimeIdentifier = "linux-x64",
+                Target = "linux-x86_64",
                 InputDirectory = "unused",
                 Formats = [PackageFormat.Zip]
             }, update: new UpdateBundleConfiguration
@@ -249,13 +249,13 @@ public static class ProgramTests
             File.WriteAllText(Path.Combine(input, "ExampleApp.exe"), "test");
             var configuration = ValidConfiguration(new BundleTargetConfiguration
             {
-                RuntimeIdentifier = "win-x64",
+                Target = "windows-x86_64",
                 InputDirectory = input,
                 MainExecutable = "ExampleApp.exe",
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 input,
                 "ExampleApp.exe",
@@ -439,13 +439,13 @@ public static class ProgramTests
             Directory.CreateSymbolicLink(Path.Combine(input, "linked-outside"), outside);
             var configuration = ValidConfiguration(new BundleTargetConfiguration
             {
-                RuntimeIdentifier = "win-x64",
+                Target = "windows-x86_64",
                 InputDirectory = input,
                 MainExecutable = "ExampleApp.exe",
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 input,
                 "ExampleApp.exe",
@@ -482,13 +482,13 @@ public static class ProgramTests
                 File.WriteAllText(Path.Combine(input, badName), "payload");
                 var configuration = ValidConfiguration(new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = "win-x64",
+                    Target = "windows-x86_64",
                     InputDirectory = input,
                     MainExecutable = "ExampleApp.exe",
                     Formats = [PackageFormat.Nsis]
                 });
                 var item = new BundlePlanItem(
-                    new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                    new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
                     PackageFormat.Nsis,
                     input,
                     "ExampleApp.exe",
@@ -524,7 +524,7 @@ public static class ProgramTests
             File.WriteAllText(resource, "resource");
             var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var item = new BundlePlanItem(
-                new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 input,
                 "ExampleApp.exe",
@@ -543,7 +543,7 @@ public static class ProgramTests
                     [
                         new BundleTargetConfiguration
                         {
-                            RuntimeIdentifier = "win-x64",
+                            Target = "windows-x86_64",
                             InputDirectory = input,
                             MainExecutable = "ExampleApp.exe",
                             Formats = [PackageFormat.Nsis]
@@ -627,7 +627,7 @@ public static class ProgramTests
                 target,
                 BundleSigningArtifactKind.Installer,
                 "Signing test",
-                "win-x64"));
+                "windows-x86_64"));
 
             Assert.True(SignedFileCertificates.EmbeddedSignatureContains(target, certificate),
                 "The signed PE file did not contain the expected test certificate.");
@@ -716,7 +716,7 @@ public static class ProgramTests
     {
         var target = new BundleTargetConfiguration
         {
-            RuntimeIdentifier = "win-x64",
+            Target = "windows-x86_64",
             InputDirectory = "unused",
             Formats = [PackageFormat.Nsis]
         };
@@ -784,7 +784,7 @@ public static class ProgramTests
                   ],
                   "targets": [
                     {
-                      "runtimeIdentifier": "win-x64",
+                      "target": "windows-x86_64",
                       "inputDirectory": "publish",
                       "mainExecutable": "Configured.exe",
                       "signingFiles": ["Helper.dll"],
@@ -833,7 +833,7 @@ public static class ProgramTests
                 [
                     new BundleTargetConfiguration
                     {
-                        RuntimeIdentifier = "win-x64",
+                        Target = "windows-x86_64",
                         InputDirectory = input + Path.DirectorySeparatorChar,
                         MainExecutable = "ExampleApp.exe",
                         Formats = [PackageFormat.Nsis]
@@ -892,7 +892,7 @@ public static class ProgramTests
                 [
                     new BundleTargetConfiguration
                     {
-                        RuntimeIdentifier = "win-x64",
+                        Target = "windows-x86_64",
                         InputDirectory = input,
                         MainExecutable = "示例应用.exe",
                         Formats = [PackageFormat.Nsis]
@@ -1028,7 +1028,7 @@ public static class ProgramTests
         [
             new BundleTargetConfiguration
             {
-                RuntimeIdentifier = "win-x64",
+                Target = "windows-x86_64",
                 InputDirectory = input,
                 MainExecutable = "ExampleApp.exe",
                 Formats = [PackageFormat.Nsis]
@@ -1061,7 +1061,7 @@ public static class ProgramTests
                     [
                         new BundleTargetConfiguration
                         {
-                            RuntimeIdentifier = "win-x64",
+                            Target = "windows-x86_64",
                             InputDirectory = input,
                             MainExecutable = "ExampleApp.exe",
                             Formats = [PackageFormat.Nsis]
@@ -1135,7 +1135,7 @@ public static class ProgramTests
                 [
                     new BundleTargetConfiguration
                     {
-                        RuntimeIdentifier = "win-x64",
+                        Target = "windows-x86_64",
                         InputDirectory = input + Path.DirectorySeparatorChar,
                         MainExecutable = "ExampleApp.exe",
                         SigningFiles = ["Sidecar.dll"],
@@ -1192,9 +1192,9 @@ public static class ProgramTests
                 payload,
                 BundleSigningArtifactKind.PayloadExecutable,
                 "External signing fixture",
-                "win-x64"));
+                "windows-x86_64"));
             var record = await File.ReadAllTextAsync(log);
-            Assert.Equal($"{payload}|PayloadExecutable|win-x64", record.Trim());
+            Assert.Equal($"{payload}|PayloadExecutable|windows-x86_64", record.Trim());
 
             const string secret = "must-not-leak-provider-secret";
             var failingArguments = arguments.Concat([secret]).ToArray();
@@ -1208,7 +1208,7 @@ public static class ProgramTests
                     payload,
                     BundleSigningArtifactKind.Installer,
                     "External signing fixture",
-                    "win-x64")));
+                    "windows-x86_64")));
             Assert.Contains("exit code 17", signingFailure.Message, StringComparison.Ordinal);
             Assert.DoesNotContain(secret, signingFailure.Message, StringComparison.Ordinal);
         }
@@ -1245,7 +1245,7 @@ public static class ProgramTests
                     [
                         new BundleTargetConfiguration
                         {
-                            RuntimeIdentifier = "win-x64",
+                            Target = "windows-x86_64",
                             InputDirectory = input,
                             MainExecutable = "ExampleApp.exe",
                             Formats = [PackageFormat.Nsis]
@@ -1253,7 +1253,7 @@ public static class ProgramTests
                     ]
                 }));
             Assert.Equal("fixture signing failure", finalSigningFailure.Message);
-            var installer = Path.Combine(output, "win-x64", "nsis", "Failed Signing App-1.0.0-setup.exe");
+            var installer = Path.Combine(output, "Failed Signing App-1.0.0-setup.exe");
             Assert.False(File.Exists(installer), "A signing failure left a final installer that could be mistaken for success.");
         }
         finally
@@ -1275,7 +1275,7 @@ public static class ProgramTests
                 [
                     new BundleTargetConfiguration
                     {
-                        RuntimeIdentifier = "win-x64",
+                        Target = "windows-x86_64",
                         InputDirectory = "unused",
                         SigningFiles = ["Helper.dll"],
                         Formats = [PackageFormat.Nsis]
@@ -1298,13 +1298,13 @@ public static class ProgramTests
         {
             var configuration = ValidConfiguration(new BundleTargetConfiguration
             {
-                RuntimeIdentifier = "win-x64",
+                Target = "windows-x86_64",
                 InputDirectory = root,
                 MainExecutable = "ExampleApp.exe",
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1378,13 +1378,13 @@ public static class ProgramTests
         {
             var configuration = ValidConfiguration(new BundleTargetConfiguration
             {
-                RuntimeIdentifier = "win-x64",
+                Target = "windows-x86_64",
                 InputDirectory = root,
                 MainExecutable = "ExampleApp.exe",
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1499,13 +1499,13 @@ public static class ProgramTests
         {
             var configuration = ValidConfiguration(new BundleTargetConfiguration
             {
-                RuntimeIdentifier = "win-x64",
+                Target = "windows-x86_64",
                 InputDirectory = root,
                 MainExecutable = "ExampleApp.exe",
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1590,7 +1590,7 @@ public static class ProgramTests
                 [
                     new BundleTargetConfiguration
                     {
-                        RuntimeIdentifier = "win-x64",
+                        Target = "windows-x86_64",
                         InputDirectory = root,
                         MainExecutable = "ExampleApp.exe",
                         Formats = [PackageFormat.Nsis]
@@ -1598,7 +1598,7 @@ public static class ProgramTests
                 ]
             };
             var item = new BundlePlanItem(
-                new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1643,7 +1643,7 @@ public static class ProgramTests
         {
             var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var item = new BundlePlanItem(
-                new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1654,7 +1654,7 @@ public static class ProgramTests
             {
                 var configuration = ValidConfiguration(new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = "win-x64",
+                    Target = "windows-x86_64",
                     InputDirectory = root,
                     MainExecutable = "ExampleApp.exe",
                     Formats = [PackageFormat.Nsis]
@@ -1715,13 +1715,13 @@ public static class ProgramTests
             var template = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.Nsis", "templates", "installer.nsi"));
             var configuration = ValidConfiguration(new BundleTargetConfiguration
             {
-                RuntimeIdentifier = "win-x64",
+                Target = "windows-x86_64",
                 InputDirectory = root,
                 MainExecutable = "ExampleApp.exe",
                 Formats = [PackageFormat.Nsis]
             });
             var item = new BundlePlanItem(
-                new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 root,
                 "ExampleApp.exe",
@@ -1802,7 +1802,7 @@ public static class ProgramTests
                 [
                     new BundleTargetConfiguration
                     {
-                        RuntimeIdentifier = "win-x64",
+                        Target = "windows-x86_64",
                         InputDirectory = input,
                         MainExecutable = "ExampleApp.exe",
                         Formats = [PackageFormat.Nsis]
@@ -1810,7 +1810,7 @@ public static class ProgramTests
                 ]
             };
             var item = new BundlePlanItem(
-                new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
+                new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64),
                 PackageFormat.Nsis,
                 input,
                 "ExampleApp.exe",
@@ -1883,7 +1883,7 @@ public static class ProgramTests
                 [
                     new BundleTargetConfiguration
                     {
-                        RuntimeIdentifier = "win-x64",
+                        Target = "windows-x86_64",
                         InputDirectory = input,
                         MainExecutable = "ExampleApp.exe",
                         Formats = [PackageFormat.Nsis]
@@ -1928,7 +1928,7 @@ public static class ProgramTests
                 [
                     new BundleTargetConfiguration
                     {
-                        RuntimeIdentifier = "win-x64",
+                        Target = "windows-x86_64",
                         InputDirectory = input,
                         MainExecutable = "ExampleApp.exe",
                         Formats = [PackageFormat.Nsis, PackageFormat.Msi]
@@ -1940,6 +1940,52 @@ public static class ProgramTests
                 () => new BundlePipeline([backend]).BuildAsync(configuration));
             Assert.Contains("Msi", missingBackend.Message);
             Assert.Equal(0, backend.InvocationCount);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    static async Task RejectsArtifactPathCollisionAcrossTargets()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "publish");
+        Directory.CreateDirectory(input);
+        await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp.exe"), "test");
+
+        try
+        {
+            var configuration = new BundleConfiguration
+            {
+                ProductName = "ExampleApp",
+                Identifier = "com.example.app",
+                Version = "1.0.0",
+                OutputDirectory = Path.Combine(root, "artifacts"),
+                Targets =
+                [
+                    new BundleTargetConfiguration
+                    {
+                        Target = "windows-x86_64",
+                        InputDirectory = input,
+                        MainExecutable = "ExampleApp.exe",
+                        Formats = [PackageFormat.Nsis]
+                    },
+                    new BundleTargetConfiguration
+                    {
+                        Target = "windows-i686",
+                        InputDirectory = input,
+                        MainExecutable = "ExampleApp.exe",
+                        Formats = [PackageFormat.Nsis]
+                    }
+                ]
+            };
+
+            var backend = new RecordingBackend();
+            var collision = await Assert.ThrowsAnyAsync<ArgumentException>(
+                () => new BundlePipeline([backend]).BuildAsync(configuration));
+            Assert.Contains("collision", collision.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -1961,9 +2007,9 @@ public static class ProgramTests
             var configuration = new BundleConfiguration
             {
                 ProductName = "New App", Identifier = "com.example.newapp", Version = "1.0.0", OutputDirectory = "artifacts",
-                Targets = [new BundleTargetConfiguration { RuntimeIdentifier = "win-x64", InputDirectory = input, MainExecutable = "NewApp.exe", Formats = [PackageFormat.Nsis] }]
+                Targets = [new BundleTargetConfiguration { Target = "windows-x86_64", InputDirectory = input, MainExecutable = "NewApp.exe", Formats = [PackageFormat.Nsis] }]
             };
-            var item = new BundlePlanItem(new BundleTarget("win-x64", DesktopOperatingSystem.Windows, CpuArchitecture.X64), PackageFormat.Nsis, input, "NewApp.exe", "output", false);
+            var item = new BundlePlanItem(new BundleTarget("windows-x86_64", DesktopOperatingSystem.Windows, CpuArchitecture.X64), PackageFormat.Nsis, input, "NewApp.exe", "output", false);
             var settings = new NsisBundleConfiguration
             {
                 Shortcuts = new NsisShortcutConfiguration
@@ -2080,7 +2126,7 @@ public static class ProgramTests
         Assert.True(mergedSample.Descendants("AssemblyName").Single().Value == "HelloBundlerApp" &&
                mergedSample.Descendants().Any(item => item.Name.LocalName == "BundlerFormats") &&
                !mergedSample.Descendants().Any(item => item.Name.LocalName.StartsWith("HelloBundledApp", StringComparison.Ordinal)),
-            "The merged sample must expose the executable name and per-RID format selection without legacy pass-throughs.");
+            "The merged sample must expose the executable name and per-target format selection without legacy pass-throughs.");
         var formatPrefixes = new Dictionary<string, string>
         {
             ["Nsis"] = "HelloBundlerNsis",
@@ -2169,7 +2215,7 @@ file sealed class RecordingBackend : IBundleBackend
         WorkDirectory = context.WorkDirectory;
         var path = Path.Combine(context.Item.OutputDirectory, "recording-installer.exe");
         await File.WriteAllTextAsync(path, "artifact", cancellationToken);
-        return [new BundleArtifact(Format, context.Item.Target.RuntimeIdentifier, path)];
+        return [new BundleArtifact(Format, context.Item.Target.Target, path)];
     }
 }
 

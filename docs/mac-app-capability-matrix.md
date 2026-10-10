@@ -9,16 +9,16 @@
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `.app` 目录骨架与 `<产品名>.app` 产物 | 已实现 | MAC-APP-1 | `Contents/{Info.plist,MacOS,Resources,Frameworks}` 标准布局；输出目录约定 `artifacts/<rid>/app` |
+| `.app` 目录骨架与 `<产品名>.app` 产物 | 已实现 | MAC-APP-1 | `Contents/{Info.plist,MacOS,Resources,Frameworks}` 标准布局；输出目录约定 `artifacts/`（默认 flat；`.app` 名含架构，`outputLayout=byFormat` 时 `app/` 分目录） |
 | `CFBundleIdentifier`/`CFBundleName`/`CFBundleDisplayName`/`CFBundleExecutable` | 已实现 | MAC-APP-1 | identifier 按 Apple 规则校验；`CFBundleName` 可独立配置 |
 | `CFBundleShortVersionString`/`CFBundleVersion` | 已实现 | MAC-APP-1 | 格式校验，不静默截断；`CFBundleVersion` 默认取版本可独立覆盖 |
 | `LSMinimumSystemVersion`、`LSApplicationCategoryType`、`NSHumanReadableCopyright` | 已实现 | MAC-APP-1 | 类别受限枚举；最低系统版本由调用方显式配置、未配置不写入 |
 | `Info.plist` 固定键（`CFBundleInfoDictionaryVersion`/`CFBundlePackageType`/`NSHighResolutionCapable` 等） | 已实现 | MAC-APP-1 | 上游 `LSRequiresCarbon` 死键不复制 |
 | 主可执行/资源/framework/任意 `Contents` 映射 | 已实现 | MAC-APP-1 | framework 仅显式路径；不做宿主标准目录隐式查找 |
-| `osx-x64`/`osx-arm64`/`osx` 产物 | 已实现 | MAC-APP-1、4、`e7dfeae` | 独立产物+裸 `osx` 通用目标；osx-x64 结构与架构断言已实测；x64 启动 2026-10 CI 两腿（macos-26-intel 真 Intel + macos-26 Rosetta）实跑通过；观感仍人工（MT-03） |
-| universal/fat Mach-O 输入 | 已实现 | MAC-APP-2、`e7dfeae` | 后端托管解析 Mach-O 头（等价 `lipo -info`），按目标 RID 校验必需切片集——`osx` 要求**每个** Mach-O 同时含 x86_64+arm64；Bundler 不合成 fat binary |
-| `osx` 通用载荷契约 | 已实现（契约） | `e7dfeae`、main@`3811005` 三配方实测 | `osx` 仅接收**已合并 universal 目录**——①每个 Mach-O 双切片（强制校验）；②非 Mach-O 资产须架构便携（契约声明，不可通用判定）；已实测可跑配方：`PublishSingleFile`×2+lipo、`PublishAot`×2+lipo、FDD（托管集**不带 `-r`** 发布保持中立+双 apphost lipo）；松散目录式自包含物理不可跑（运行时散件无中立形态），契约不承诺 |
-| MSBuild `osx` universal 编排 | 已实现 | OSX-UNIV | MSBuild 入口 `.NET` 专属旋钮 `BundlerUniversalRuntimeIdentifiers`（复数 RID 如 `osx-x64;osx-arm64`）：targets 对每个 RID 内层 `dotnet publish` 至 `obj/.../BundlerUniversal/<rid>`，再由纯托管合并器产出 universal 目录喂 `osx` 打包；托管 lipo 等价合并（fat 头+切片拼接，宿主无关）；合并规则=Mach-O 逐件并片/非 Mach-O 全同取一/dSYM+pdb 取首份/其余不同即拒 |
+| `macos-x86_64`/`macos-arm64`/`macos-universal` 产物 | 已实现 | MAC-APP-1、4、`e7dfeae` | 独立产物+裸 `macos-universal` 通用目标；macos-x86_64 结构与架构断言已实测；x64 启动 2026-10 CI 两腿（macos-26-intel 真 Intel + macos-26 Rosetta）实跑通过；观感仍人工（MT-03） |
+| universal/fat Mach-O 输入 | 已实现 | MAC-APP-2、`e7dfeae` | 后端托管解析 Mach-O 头（等价 `lipo -info`），按目标校验必需切片集——`macos-universal` 要求**每个** Mach-O 同时含 x86_64+arm64；Bundler 不合成 fat binary |
+| `macos-universal` 通用载荷契约 | 已实现（契约） | `e7dfeae`、main@`3811005` 三配方实测 | `macos-universal` 仅接收**已合并 universal 目录**——①每个 Mach-O 双切片（强制校验）；②非 Mach-O 资产须架构便携（契约声明，不可通用判定）；已实测可跑配方：`PublishSingleFile`×2+lipo、`PublishAot`×2+lipo、FDD（托管集**不带 `-r`** 发布保持中立+双 apphost lipo）；松散目录式自包含物理不可跑（运行时散件无中立形态），契约不承诺 |
+| MSBuild `osx` universal 编排 | 已实现 | OSX-UNIV | MSBuild 入口 `.NET` 专属旋钮 `BundlerUniversalTargets`（复数 publish RID 如 `osx-x64;osx-arm64`）：targets 对每个 RID 内层 `dotnet publish` 至 `obj/.../BundlerUniversal/<publish-rid>`，再由纯托管合并器产出 universal 目录喂 `macos-universal` 打包；托管 lipo 等价合并（fat 头+切片拼接，宿主无关）；合并规则=Mach-O 逐件并片/非 Mach-O 全同取一/dSYM+pdb 取首份/其余不同即拒 |
 | CLI 多目录合并 | 已实现 | OSX-UNIV-CLI | `--input-dir` 可重复指定多个目录：≥2 个时先以同一纯托管合并器合并成 universal 目录（临时目录，命令结束即清理）再喂打包；单目录行为不变；合并规则与 MSBuild 编排同源 |
 
 ## 图标与资源

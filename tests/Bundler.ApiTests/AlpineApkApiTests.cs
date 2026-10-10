@@ -22,7 +22,7 @@ public static class AlpineApkApiTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = "linux-musl-x64",
+                    Target = "linux-musl-x86_64",
                     InputDirectory = input,
                     MainExecutable = "FixtureApp",
                     Formats = [PackageFormat.AlpineApk]
@@ -31,8 +31,8 @@ public static class AlpineApkApiTests
         }, TestContext.Current.CancellationToken);
 
         var apk = Assert.Single(artifacts).Path;
-        var expected = Path.Combine(root, "artifacts", "linux-musl-x64", "alpineapk",
-            "api-fixture-1.0.0-r0.apk");
+        var expected = Path.Combine(root, "artifacts",
+            "api-fixture-1.0.0-r0.x86_64.apk");
         Assert.Equal(expected, apk);
         Assert.True(File.Exists(apk));
 

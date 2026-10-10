@@ -8,7 +8,7 @@ public sealed class ArchiveBundleConfiguration
 {
     /// <summary>
     /// Package name used for the archive file name and its single top-level
-    /// directory (<c>&lt;name&gt;-&lt;version&gt;-&lt;rid&gt;/</c>). Defaults to
+    /// directory (<c>&lt;name&gt;-&lt;version&gt;-&lt;target&gt;/</c>). Defaults to
     /// <c>ProductName</c> normalized to kebab-case.
     /// </summary>
     public string? PackageName { get; init; }
@@ -21,7 +21,7 @@ public sealed class ArchiveBundleConfiguration
 
     /// <summary>
     /// Overrides the archive file base name
-    /// (<c>&lt;name&gt;-&lt;version&gt;-&lt;rid&gt;</c> by default) and the
+    /// (<c>&lt;name&gt;-&lt;version&gt;-&lt;target&gt;</c> by default) and the
     /// top-level directory name. Must be a single relative path segment.
     /// </summary>
     public string? ArchiveName { get; init; }

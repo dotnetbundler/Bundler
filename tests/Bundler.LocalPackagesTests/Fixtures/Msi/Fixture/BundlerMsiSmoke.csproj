@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <BundlerTarget>windows-x86_64</BundlerTarget>
     <BundlerEnabled>true</BundlerEnabled>
     <BundlerFormats>msi</BundlerFormats>
     <BundlerIdentifier>com.example.bundler.msi.smoke</BundlerIdentifier>

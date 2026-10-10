@@ -8,7 +8,7 @@ if (args.Length is not (2 or 6 or 7 or 8))
 
 var output = Path.GetFullPath(args[0]);
 var cache = Path.GetFullPath(args[1]);
-var target = args.Length >= 6 ? args[2] : "win-x64";
+var target = args.Length >= 6 ? args[2] : "windows-x86_64";
 var appVersion = args.Length >= 6 ? args[3] : "1.0.0";
 var version = args.Length >= 6 ? args[4] : null;
 var allowDowngrades = args.Length >= 6 && bool.Parse(args[5]);
@@ -34,7 +34,7 @@ var request = new BundleConfiguration
     [
         new BundleTargetConfiguration
         {
-            RuntimeIdentifier = target,
+            Target = target,
             InputDirectory = input,
             MainExecutable = "ApiFixture.exe",
             Formats = [PackageFormat.Msi]

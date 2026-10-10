@@ -26,7 +26,8 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         var documentTypes = MacAppDesktopIntegration.ResolveDocumentTypes(bundle, settings);
         var urlTypes = MacAppDesktopIntegration.ResolveUrlTypes(bundle, settings);
 
-        var applicationName = SanitizeFileName(bundle.ProductName) + ".app";
+        var applicationName = ArtifactNaming.FileName(
+            SanitizeFileName(bundle.ProductName), bundle.Version, context.Item.Target, PackageFormat.App);
         var staging = Path.Combine(context.WorkDirectory, applicationName);
         var contentsDirectory = Path.Combine(staging, "Contents");
         var executablesDirectory = Path.Combine(contentsDirectory, "MacOS");
@@ -45,7 +46,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
                 Path.Combine(resourcesDirectory, UpdateInstallIdentity.FileName)));
             destinations.Add(Path.GetFullPath(
                 Path.Combine(executablesDirectory,
-                    UpdateBootstrapper.FileNameFor(item.Target.RuntimeIdentifier))));
+                    UpdateBootstrapper.FileNameFor(item.Target.Target))));
         }
         CopyTree(item.InputDirectory, executablesDirectory, destinations, context.Logger);
 
@@ -54,9 +55,9 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             // 身份旁车落 Resources/（资源密封位：Contents 根的非代码件会被 codesign 判成未签子件）、
             // 引导件落 MacOS/（代码位正常签名）——两者随 bundle 一起被 codesign 覆盖。
             UpdateIdentitySidecar.WriteIfEnabled(
-                resourcesDirectory, update, PackageFormat.App, item.Target.RuntimeIdentifier);
+                resourcesDirectory, update, PackageFormat.App, item.Target.Target);
             UpdateBootstrapper.Inject(
-                executablesDirectory, update, item.Target.RuntimeIdentifier);
+                executablesDirectory, update, item.Target.Target);
         }
 
         var executablePath = Path.Combine(executablesDirectory, item.MainExecutable);
@@ -149,7 +150,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         InfoPlist.Write(plistPath, plistValues);
         File.WriteAllText(Path.Combine(contentsDirectory, "PkgInfo"), "APPL????", Encoding.ASCII);
 
-        await InspectPayload(context, contentsDirectory, item.Target.RuntimeIdentifier, cancellationToken);
+        await InspectPayload(context, contentsDirectory, item.Target, cancellationToken);
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             await MacProcessRunner.RunAsync(
@@ -176,7 +177,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             File.Delete(outputPath);
         }
         Directory.Move(staging, outputPath);
-        return [new BundleArtifact(Format, item.Target.RuntimeIdentifier, outputPath)];
+        return [new BundleArtifact(Format, item.Target.Target, outputPath)];
     }
 
     internal static IReadOnlyList<MacAppFileEntry> ResolveContentsMappings(
@@ -333,15 +334,15 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
     }
 
     /// <summary>
-    /// Single payload pass: Mach-O architecture check against the target RID (managed header
+    /// Single payload pass: Mach-O architecture check against the bundler target (managed header
     /// parse — the equivalent of `lipo -info`, available on every build host) plus executable-bit
     /// chmod on POSIX hosts.
     /// </summary>
     private async Task InspectPayload(
-        BundleBuildContext context, string contentsDirectory, string runtimeIdentifier,
+        BundleBuildContext context, string contentsDirectory, BundleTarget target,
         CancellationToken cancellationToken)
     {
-        var requiredArchitectures = RequiredArchitectures(runtimeIdentifier);
+        var requiredArchitectures = RequiredArchitectures(target);
         var windows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         if (windows)
         {
@@ -362,7 +363,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
                 {
                     throw new InvalidDataException(
                         $"Payload '{file}' is {foreign}; every code-bearing file in a universal " +
-                        $"{runtimeIdentifier} payload must be a fat Mach-O or " +
+                        $"{target.Target} payload must be a fat Mach-O or " +
                         "architecture-neutral content.");
                 }
                 continue;
@@ -373,8 +374,8 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             {
                 throw new InvalidDataException(
                     $"Mach-O payload '{file}' does not contain '{string.Join(", ", missing)}' required by " +
-                    $"{runtimeIdentifier} (architectures: {string.Join(", ", architectures)}). " +
-                    "Provide a universal (fat) binary or per-RID input.");
+                    $"{target.Target} (architectures: {string.Join(", ", architectures)}). " +
+                    "Provide a universal (fat) binary or per-target input.");
             }
             if (!windows)
             {
@@ -383,12 +384,12 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         }
     }
 
-    internal static string[] RequiredArchitectures(string runtimeIdentifier) =>
-        runtimeIdentifier switch
+    internal static string[] RequiredArchitectures(BundleTarget target) =>
+        target.Architecture switch
         {
-            "osx" => ["x86_64", "arm64"],
-            "osx-arm64" => ["arm64"],
-            "osx-x64" => ["x86_64"],
+            CpuArchitecture.Universal => ["x86_64", "arm64"],
+            CpuArchitecture.Arm64 => ["arm64"],
+            CpuArchitecture.X64 => ["x86_64"],
             _ => []
         };
 

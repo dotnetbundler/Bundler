@@ -39,8 +39,8 @@ public static class AlpineApkTests
                 .BuildAsync(ApkConfiguration(input, output))
                 .GetAwaiter().GetResult();
             var artifact = artifacts.Single();
-            var expectedName = "example-app-1.0.0-r0.apk";
-            Assert.EndsWith(Path.Combine("linux-musl-x64", "alpineapk", expectedName), artifact.Path);
+            var expectedName = "example-app-1.0.0-r0.x86_64.apk";
+            Assert.EndsWith(expectedName, artifact.Path);
 
             var apk = File.ReadAllBytes(artifact.Path);
             var starts = ApkPackageReader.GzipMemberOffsets(apk);
@@ -128,7 +128,7 @@ public static class AlpineApkTests
                 BinLink = "custom-cli"
             }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
             var artifact = artifacts.Single();
-            Assert.EndsWith("custom-pkg-2.5.0-r0.apk", artifact.Path);
+            Assert.EndsWith("custom-pkg-2.5.0-r0.aarch64.apk", artifact.Path);
 
             var segments = ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifact.Path));
             var fields = PkgInfoFields(
@@ -245,7 +245,7 @@ public static class AlpineApkTests
         {
             var configuration = ApkConfiguration(input, output, productName: "My Fancy App!");
             var artifacts = new AlpineApkBundler().BuildAsync(configuration).GetAwaiter().GetResult();
-            Assert.EndsWith("my-fancy-app-1.0.0-r0.apk", artifacts.Single().Path);
+            Assert.EndsWith("my-fancy-app-1.0.0-r0.x86_64.apk", artifacts.Single().Path);
         }
         finally
         {
@@ -256,20 +256,20 @@ public static class AlpineApkTests
     [Fact]
     static void MapsMuslArchitectures()
     {
-        foreach (var (rid, arch) in new[] { ("linux-musl-x64", "x86_64"), ("linux-musl-arm64", "aarch64") })
+        foreach (var (target, arch) in new[] { ("linux-musl-x86_64", "x86_64"), ("linux-musl-aarch64", "aarch64") })
         {
             var input = CreateInputDirectory();
             var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
             try
             {
                 var artifacts = new AlpineApkBundler()
-                    .BuildAsync(ApkConfiguration(input, output, rid)).GetAwaiter().GetResult();
+                    .BuildAsync(ApkConfiguration(input, output, target)).GetAwaiter().GetResult();
                 var segments = ApkPackageReader.SplitGzipStreams(
                     File.ReadAllBytes(artifacts.Single().Path));
                 var fields = PkgInfoFields(
                     ApkPackageReader.ReadTar(segments[0]).Single(e => e.Name == ".PKGINFO").Content);
                 Assert.True(fields["arch"] == arch,
-                    $"RID {rid} must map to arch {arch}, got {fields["arch"]}");
+                    $"target {target} must map to arch {arch}, got {fields["arch"]}");
             }
             finally
             {
@@ -284,24 +284,29 @@ public static class AlpineApkTests
         var input = CreateInputDirectory();
         try
         {
-            foreach (var rid in new[] { "linux-x64", "win-x64", "osx-arm64" })
+            foreach (var target in new[] { "linux-x86_64", "windows-x86_64", "macos-arm64" })
             {
                 var refused = Assert.ThrowsAny<Exception>(
                     () => new AlpineApkBundler()
-                        .BuildAsync(ApkConfiguration(input, rid: rid)).GetAwaiter().GetResult());
+                        .BuildAsync(ApkConfiguration(input, target: target)).GetAwaiter().GetResult());
                 Assert.True(
                     (refused is NotSupportedException && refused.Message.Contains("No backend is registered")) ||
                     (refused is ArgumentException && refused.Message.Contains("validation error")) ||
                     refused is BundleValidationException,
-                    $"apk must be refused on non-musl rid {rid}: {refused.GetType().Name}: {refused.Message}");
+                    $"apk must be refused on non-musl target {target}: {refused.GetType().Name}: {refused.Message}");
             }
 
             // The matrix keeps the validator symmetric: apk on a glibc Linux
             // target is a configuration issue, not just a missing backend.
-            var glibc = ApkConfiguration(input, rid: "linux-x64");
+            var glibc = ApkConfiguration(input, target: "linux-x86_64");
             Assert.Contains(BundleConfigurationValidator.Validate(glibc, checkFileSystem: false), issue => issue.Path == "targets[0].formats");
-            var musl = ApkConfiguration(input, rid: "linux-musl-arm64");
-            Assert.False(BundleConfigurationValidator.Validate(musl, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "The validator must accept AlpineApk on linux-musl-arm64.");
+            var musl = ApkConfiguration(input, target: "linux-musl-aarch64");
+            Assert.False(BundleConfigurationValidator.Validate(musl, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "The validator must accept AlpineApk on linux-musl-aarch64.");
+
+            // 矩阵同时按 arch 词表裁剪：windows-riscv64 在 nsis/msi 词表外，校验期就必须拒，
+            // 不能漏到规划期由 ArtifactNaming 抛裸 ArgumentException。
+            var riscv = ApkConfiguration(input, target: "windows-riscv64", formats: [PackageFormat.Nsis]);
+            Assert.Contains(BundleConfigurationValidator.Validate(riscv, checkFileSystem: false), issue => issue.Path == "targets[0].formats");
         }
         finally
         {
@@ -382,14 +387,14 @@ public static class AlpineApkTests
     [Fact]
     static void ParsesAlpineApkThroughCli()
     {
-        var formats = CliProgram.ParseFormats("alpineapk,zip", "linux-musl-x64");
+        var formats = CliProgram.ParseFormats("alpineapk,zip", "linux-musl-x86_64");
         Assert.Equal(new[] { PackageFormat.AlpineApk, PackageFormat.Zip }, formats);
 
-        var all = CliProgram.ParseFormats("all", "linux-musl-x64");
+        var all = CliProgram.ParseFormats("all", "linux-musl-x86_64");
         Assert.True(all.Contains(PackageFormat.AlpineApk) && all.Contains(PackageFormat.Zip) &&
             all.Contains(PackageFormat.TarGz) && all.Contains(PackageFormat.AppImage) && all.Count == 4,
             $"musl 'all' must expand to zip/targz/alpineapk/appimage: {string.Join(',', all)}");
-        var glibcAll = CliProgram.ParseFormats("all", "linux-x64");
+        var glibcAll = CliProgram.ParseFormats("all", "linux-x86_64");
         Assert.DoesNotContain(PackageFormat.AlpineApk, glibcAll);
 
         // plan output uses the 'apk' subdirectory name.
@@ -400,13 +405,13 @@ public static class AlpineApkTests
             var stdout = new StringWriter();
             var stderr = new StringWriter();
             var code = CliProgram.Run(
-                ["bundle", "--input-dir", input, "--rid", "linux-musl-x64", "--formats", "alpineapk",
+                ["bundle", "--input-dir", input, "--target", "linux-musl-x86_64", "--formats", "alpineapk",
                  "--product-name", "CliFixture", "--identifier", "dev.example.cli",
                  "--package-version", "1.0.0", "--main-executable", "ExampleApp",
                  "--output-dir", output],
                 stdout, stderr);
             Assert.True(code == 0, $"cli bundle must exit 0, got {code}: {stderr}");
-            Assert.True(File.Exists(Path.Combine(output, "linux-musl-x64", "alpineapk", "clifixture-1.0.0-r0.apk")),
+            Assert.True(File.Exists(Path.Combine(output, "clifixture-1.0.0-r0.x86_64.apk")),
                 $"CLI-produced .apk missing: {stdout}");
         }
         finally
@@ -469,7 +474,7 @@ public static class AlpineApkTests
                 Triggers = ["/usr/share/example", "/usr/lib/example-triggers"],
                 ExtraPkgInfo = new Dictionary<string, string> { ["install_if"] = "example-gui" }
             }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single();
-            Assert.Equal("example-app-1.0.0-r3.apk", Path.GetFileName(artifact.Path));
+            Assert.Equal("example-app-1.0.0-r3.x86_64.apk", Path.GetFileName(artifact.Path));
 
             var control = ApkPackageReader.ReadTar(
                 ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifact.Path))[0]);
@@ -793,7 +798,8 @@ public static class AlpineApkTests
         Assert.Equal("my-app", ApkIdentity.SanitizeName("My  App"));
         Assert.Equal("my-app", ApkIdentity.SanitizeName("my__app"));
         var arch = Assert.ThrowsAny<NotSupportedException>(
-            () => ApkIdentity.MapArchitecture(CpuArchitecture.Universal));
+            () => ApkIdentity.MapArchitecture(
+                new BundleTarget("linux-musl-x86_64", DesktopOperatingSystem.LinuxMusl, CpuArchitecture.Universal)));
         Assert.Contains("No Alpine architecture mapping", arch.Message);
     }
 
@@ -959,7 +965,7 @@ public static class AlpineApkTests
     static BundleConfiguration ApkConfiguration(
         string input,
         string output = "",
-        string rid = "linux-musl-x64",
+        string target = "linux-musl-x86_64",
         IReadOnlyList<PackageFormat>? formats = null,
         string productName = "Example App",
         IReadOnlyList<BundleResourceConfiguration>? resources = null) => new()
@@ -976,7 +982,7 @@ public static class AlpineApkTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.AlpineApk]

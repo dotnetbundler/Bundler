@@ -79,13 +79,13 @@
 
 ### LINUX-RPM-4：原生 E2E 与支持矩阵（已实现 2026-09-27）
 
-- 交付：`rpmlint` 硬断言门控（`rpmlint-exemptions.txt` 豁免清单入档，7 项豁免——no-signature/no-packager-tag/no-group-tag/no-changelogname-tag/invalid-license/binary-or-shlib-defines-rpath/no-manual-page-for-binary；`summary-ended-with-dot` 以修 fixture 描述消解而非豁免）；`linux-arm64` 产物结构断言（`*.aarch64.rpm`+`ARCH=aarch64`+载荷结构）；docker 发行版装卸矩阵扩为 `fedora:latest`+`rockylinux:9`+`opensuse/leap:latest` 三容器真实 `rpm -i/-e`（镜像不可拉取记 SKIP）；干净宿主复核：`src/Bundler.Rpm` 零外部进程调用。
+- 交付：`rpmlint` 硬断言门控（`rpmlint-exemptions.txt` 豁免清单入档，7 项豁免——no-signature/no-packager-tag/no-group-tag/no-changelogname-tag/invalid-license/binary-or-shlib-defines-rpath/no-manual-page-for-binary；`summary-ended-with-dot` 以修 fixture 描述消解而非豁免）；`linux-aarch64` 产物结构断言（`*.aarch64.rpm`+`ARCH=aarch64`+载荷结构）；docker 发行版装卸矩阵扩为 `fedora:latest`+`rockylinux:9`+`opensuse/leap:latest` 三容器真实 `rpm -i/-e`（镜像不可拉取记 SKIP）；干净宿主复核：`src/Bundler.Rpm` 零外部进程调用。
 - 证据：`Verify.sh` 全绿含三容器矩阵 + `rpm -U`/`%config` 语义段 + rpmlint 门控；`Bundler.Tests` 163 全绿无新增用例（纯测试基建与断言强化）。
 - 边界：arm64 真机安装（OI-01）、更广发行版宿主（OI-04）、dnf/zypper 仓库（OI-06）、GUI 桌面（OI-02）、systemd 真机（OI-03）、GPG 签名（后置评估）——均登记未冒充。
 
 ### LINUX-RPM-4 原始范围（存档）
 
-- **目标/交付**：`rpmlint` 硬断言基线（豁免清单入档）；`linux-arm64` 产物结构断言；docker 发行版矩阵（`fedora:latest`+`rockylinux:9`+`opensuse/leap`）；干净宿主复核；示例全旋钮收口。
+- **目标/交付**：`rpmlint` 硬断言基线（豁免清单入档）；`linux-aarch64` 产物结构断言；docker 发行版矩阵（`fedora:latest`+`rockylinux:9`+`opensuse/leap`）；干净宿主复核；示例全旋钮收口。
 - **退出**：矩阵实测格子有证据；未测格子进 OI/MT 清单。
 
 ### LINUX-RPM-5：审计复核与冻结（已实现 2026-09-27）

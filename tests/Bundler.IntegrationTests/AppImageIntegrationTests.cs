@@ -44,8 +44,8 @@ public sealed class AppImageFixture : IDisposable
         _ = RepositoryPackages.DirectoryPath;
 
         Publish("default");
-        DefaultImage = RequireImage(Ws.Combine("default", "linux-x64", "appimage"),
-            "bundler-appimage-fixture_1.0.0_amd64.AppImage");
+        DefaultImage = RequireImage(Ws.Combine("default"),
+            "bundler-appimage-fixture-1.0.0-x86_64.AppImage");
 
         Publish("overrides",
             "-p:BundlerTestAppImagePackageName=Custom AppImage",
@@ -53,23 +53,23 @@ public sealed class AppImageFixture : IDisposable
             "-p:BundlerTestAppImageBinLink=custom-link",
             "-p:BundlerTestAppImageInstallRoot=opt/custom",
             $"-p:BundlerTestAppImageIconFile={FixtureDir}/Assets/icon48.png");
-        OverridesImage = RequireImage(Ws.Combine("overrides", "linux-x64", "appimage"),
-            "custom-appimage_9.9.9-rc.1_amd64.AppImage");
+        OverridesImage = RequireImage(Ws.Combine("overrides"),
+            "custom-appimage-9.9.9-rc.1-x86_64.AppImage");
 
         Publish("desktop", $"-p:BundlerTestAppImageDesktopFile={FixtureDir}/Assets/custom.desktop");
-        DesktopImage = RequireImage(Ws.Combine("desktop", "linux-x64", "appimage"));
+        DesktopImage = RequireImage(Ws.Combine("desktop"));
 
         Publish("files", "-p:BundlerTestAppImageFiles=1");
-        FilesImage = RequireImage(Ws.Combine("files", "linux-x64", "appimage"));
+        FilesImage = RequireImage(Ws.Combine("files"));
 
         Dotnet.Publish(FixtureProject, "Release",
             [$"-p:BundlerIntegrationOutput={Ws.Combine("arm64")}",
-             "--packages", CacheDir, "-r", "linux-arm64"],
-            "linux-arm64 publish failed", noRestore: false);
-        Arm64Image = RequireImage(Ws.Combine("arm64", "linux-arm64", "appimage"), "*_aarch64.AppImage");
+             "--packages", CacheDir, "-r", "linux-arm64", "-p:BundlerTarget=linux-aarch64"],
+            "linux-aarch64 publish failed", noRestore: false);
+        Arm64Image = RequireImage(Ws.Combine("arm64"), "*-aarch64.AppImage");
 
         Publish("fanout", "-p:BundlerTestFormats=deb%3Brpm%3Bappimage");
-        FanoutDir = Ws.Combine("fanout", "linux-x64");
+        FanoutDir = Ws.Combine("fanout");
 
         SignDir = Ws.Combine("signing");
         Directory.CreateDirectory(Path.Combine(SignDir, "gnupg"));
@@ -112,7 +112,7 @@ public sealed class AppImageFixture : IDisposable
         Publish("signed",
             new Dictionary<string, string?> { ["BundlerTestAppImageSigningKeyPassphrase"] = "bundler-sign-pass" },
             $"-p:BundlerTestAppImageSigningKeyFile={secAsc}");
-        SignedImage = RequireImage(Ws.Combine("signed", "linux-x64", "appimage"));
+        SignedImage = RequireImage(Ws.Combine("signed"));
     }
 
     public void Publish(string name, params string[] extraProperties)
@@ -314,7 +314,7 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
     [Fact]
     public void Arm64StructureAndSquashfsPayload()
     {
-        Assert.EndsWith("_aarch64.AppImage", _f.Arm64Image);
+        Assert.EndsWith("-aarch64.AppImage", _f.Arm64Image);
         Assert.Equal("7f454c46", HexAt(_f.Arm64Image, 0, 4));
         Assert.Equal("b700", HexAt(_f.Arm64Image, 18, 2));
 
@@ -341,9 +341,9 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
     [Fact]
     public void MultiFormatFanout()
     {
-        Assert.NotEmpty(Directory.EnumerateFiles(Path.Combine(_f.FanoutDir, "deb"), "*.deb"));
-        Assert.NotEmpty(Directory.EnumerateFiles(Path.Combine(_f.FanoutDir, "rpm"), "*.rpm"));
-        Assert.NotEmpty(Directory.EnumerateFiles(Path.Combine(_f.FanoutDir, "appimage"), "*.AppImage"));
+        Assert.NotEmpty(Directory.EnumerateFiles(_f.FanoutDir, "*.deb"));
+        Assert.NotEmpty(Directory.EnumerateFiles(_f.FanoutDir, "*.rpm"));
+        Assert.NotEmpty(Directory.EnumerateFiles(_f.FanoutDir, "*.AppImage"));
     }
 
     [Fact]

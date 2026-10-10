@@ -36,7 +36,7 @@ public static class DebTests
                 .GetAwaiter().GetResult();
             var artifact = artifacts.Single();
             var expectedName = "example-app_1.0.0-1_amd64.deb";
-            Assert.EndsWith(Path.Combine("linux-x64", "deb", expectedName), artifact.Path);
+            Assert.EndsWith(expectedName, artifact.Path);
 
             var members = DebPackageReader.ReadAr(artifact.Path);
             Assert.True(members.Select(m => m.Name).SequenceEqual(
@@ -89,7 +89,7 @@ public static class DebTests
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         try
         {
-            var configuration = DebConfiguration(input, output, rid: "linux-arm64");
+            var configuration = DebConfiguration(input, output, target: "linux-aarch64");
             configuration = new BundleConfiguration
             {
                 ProductName = configuration.ProductName,
@@ -271,7 +271,7 @@ public static class DebTests
                         .GetAwaiter().GetResult());
                 Assert.True(rejected is ArgumentException or InvalidOperationException,
                     $"The '{name}' case must fail validation: {rejected.GetType().Name}: {rejected.Message}");
-                var debDir = Path.Combine(output, "linux-x64", "deb");
+                var debDir = output;
                 Assert.True(!Directory.Exists(debDir) || !Directory.EnumerateFiles(debDir, "*.deb").Any(),
                     $"The '{name}' case left a .deb artifact behind.");
             }
@@ -948,7 +948,7 @@ public static class DebTests
     static BundleConfiguration DebConfiguration(
         string input,
         string output = "",
-        string rid = "linux-x64",
+        string target = "linux-x86_64",
         IReadOnlyList<PackageFormat>? formats = null) => new()
         {
             ProductName = "Example App",
@@ -962,7 +962,7 @@ public static class DebTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.Deb]

@@ -30,7 +30,7 @@ public static class MsiApiTests
             [
                 new BundleTargetConfiguration
                 {
-                    RuntimeIdentifier = "win-x64",
+                    Target = "windows-x86_64",
                     InputDirectory = input,
                     MainExecutable = "ApiFixture.exe",
                     Formats = [PackageFormat.Msi]

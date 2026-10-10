@@ -25,7 +25,9 @@ internal sealed class AppImageBundleBackend(
             built.EnvironmentArchitecture, options.ToolsetCacheDirectory, cancellationToken);
         var signing = PrepareSigning(settings, context.WorkDirectory);
 
-        var fileName = $"{built.PackageName}_{built.Version}_{built.FileArchitecture}.AppImage";
+        var fileName = ArtifactNaming.FileName(
+            built.PackageName, built.Version, context.Item.Target, PackageFormat.AppImage,
+            archToken: built.FileArchitecture);
         Directory.CreateDirectory(context.Item.OutputDirectory);
         var outputPath = Path.Combine(context.Item.OutputDirectory, fileName);
         if (File.Exists(outputPath))
@@ -91,7 +93,7 @@ internal sealed class AppImageBundleBackend(
         WriteSha256Sidecar(outputPath);
 
         return [new BundleArtifact(
-            PackageFormat.AppImage, context.Item.Target.RuntimeIdentifier, outputPath)];
+            PackageFormat.AppImage, context.Item.Target.Target, outputPath)];
     }
 
     /// <summary>

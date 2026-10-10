@@ -32,16 +32,16 @@ internal sealed class ArchiveBundleBackend(
             // 身份旁车写进工作目录后作为额外条目随归档顶层目录进包；
             // 输入树若自带同名条目一律剔除——打包期身份以本构建为准，重复名进包会导致解包歧义。
             UpdateIdentitySidecar.WriteIfEnabled(
-                context.WorkDirectory, update, format, context.Item.Target.RuntimeIdentifier);
-            var rid = context.Item.Target.RuntimeIdentifier;
-            UpdateBootstrapper.TryResolve(update, rid, out var bootstrapper);
+                context.WorkDirectory, update, format, context.Item.Target.Target);
+            var target = context.Item.Target.Target;
+            UpdateBootstrapper.TryResolve(update, target, out var bootstrapper);
             var injected = new HashSet<string>(StringComparer.Ordinal)
             {
                 stem + "/" + UpdateIdentitySidecar.FileName,
             };
             if (bootstrapper is { Length: > 0 })
             {
-                injected.Add(stem + "/" + UpdateBootstrapper.FileNameFor(rid));
+                injected.Add(stem + "/" + UpdateBootstrapper.FileNameFor(target));
             }
             entries.RemoveAll(e => injected.Contains(e.ArchivePath));
             entries.Add(new ArchiveTree.Entry
@@ -55,7 +55,7 @@ internal sealed class ArchiveBundleBackend(
             {
                 entries.Add(new ArchiveTree.Entry
                 {
-                    ArchivePath = stem + "/" + UpdateBootstrapper.FileNameFor(rid),
+                    ArchivePath = stem + "/" + UpdateBootstrapper.FileNameFor(target),
                     Kind = TarEntryKind.File,
                     Mode = 493 /* 0755 */,
                     SourcePath = bootstrapper,
@@ -106,7 +106,7 @@ internal sealed class ArchiveBundleBackend(
         }
         WriteSha256Sidecar(outputPath);
         return Task.FromResult<IReadOnlyList<BundleArtifact>>(
-            [new BundleArtifact(format, context.Item.Target.RuntimeIdentifier, outputPath)]);
+            [new BundleArtifact(format, context.Item.Target.Target, outputPath)]);
     }
 
     private static void WriteSha256Sidecar(string path)

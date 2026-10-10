@@ -13,7 +13,13 @@ public enum CpuArchitecture
     X64,
     Arm64,
     X86,
-    Universal
+    Universal,
+    Armv7Hf,
+    Armv7Sf,
+    Riscv64,
+    Loongarch64,
+    Ppc64le,
+    S390x
 }
 
 public enum PackageFormat

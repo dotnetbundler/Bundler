@@ -19,12 +19,16 @@ internal static class ArchiveIdentity
 
     /// <summary>
     /// The archive base name and its single top-level directory
-    /// (<c>&lt;name&gt;-&lt;version&gt;-&lt;rid&gt;</c> by default).
+    /// (<c>&lt;name&gt;-&lt;version&gt;-&lt;os&gt;-&lt;arch&gt;[-musl]</c> by default).
     /// </summary>
     internal static string ArchiveStem(
         ArchiveBundleConfiguration settings, string packageName, string version, BundlePlanItem item)
     {
-        var stem = settings.ArchiveName ?? $"{packageName}-{version}-{item.Target.RuntimeIdentifier}";
+        var stem = settings.ArchiveName ?? $"{packageName}-{version}-" +
+            (ArtifactNaming.ArchToken(item.Target, PackageFormat.Zip)
+                ?? throw new ArgumentException(
+                    $"Architecture '{item.Target.Architecture}' is not supported for archives.")) +
+            (item.Target.IsMusl ? "-musl" : "");
         // 与 PackageName 同字符集：':'与空白同样会破坏归档顶层目录名。
         if (stem.Length == 0 || stem is "." or ".." || stem.Contains("..") ||
             stem.Any(c => c is '/' or '\\' or ':' || char.IsWhiteSpace(c)))

@@ -3,27 +3,27 @@ using System.Runtime.InteropServices;
 namespace DotNet.Bundler.Core.Update;
 
 /// <summary>
-/// 更新引导件的随包注入：按 RID 选 per-RID Native AOT 件，非 Windows 宿主可降级 POSIX shell 件——
+/// 更新引导件的随包注入：按 target 选 per-target Native AOT 件，非 Windows 宿主可降级 POSIX shell 件——
 /// 老宿主（裸 POSIX）天然走脚本件。工具源二选一：显式 <see cref="UpdateBundleConfiguration.BootstrapperDirectory"/>
 /// 工具目录（开发覆盖），或 Bundler.Core 程序集内嵌资源（打包/直引/NuGet 全形态可达）。
 /// </summary>
 public static class UpdateBootstrapper
 {
     /// <summary>注入到载荷里的引导件文件名（Windows 宿主追加 .exe）。</summary>
-    public static string FileNameFor(string runtimeIdentifier) =>
-        runtimeIdentifier.StartsWith("win", StringComparison.OrdinalIgnoreCase)
+    public static string FileNameFor(string target) =>
+        target.StartsWith("win", StringComparison.OrdinalIgnoreCase)
             ? "bundler-updater.exe"
             : "bundler-updater";
 
     /// <summary>
     /// 把引导件复制进 <paramref name="targetDirectory"/>；返回目标文件名，未找到任何件时返回 null。
-    /// 选取顺序：<c>&lt;dir&gt;/&lt;rid&gt;/bundler-updater[.exe]</c> →（非 win）<c>&lt;dir&gt;/posix/bundler-updater.sh</c>。
+    /// 选取顺序：<c>&lt;dir&gt;/&lt;target&gt;/bundler-updater[.exe]</c> →（非 win）<c>&lt;dir&gt;/posix/bundler-updater.sh</c>。
     /// </summary>
     public static string? Inject(string targetDirectory, UpdateBundleConfiguration update,
-        string runtimeIdentifier)
+        string target)
     {
-        var fileName = FileNameFor(runtimeIdentifier);
-        if (TryResolve(update, runtimeIdentifier, out var source))
+        var fileName = FileNameFor(target);
+        if (TryResolve(update, target, out var source))
         {
             var destination = Path.Combine(targetDirectory, fileName);
             File.Copy(source, destination, overwrite: true);
@@ -34,18 +34,18 @@ public static class UpdateBootstrapper
     }
 
     /// <summary>仅解析选件路径，不落盘——供校验与测试（内嵌件解析为临时解出路径）。</summary>
-    public static bool TryResolve(UpdateBundleConfiguration update, string runtimeIdentifier,
+    public static bool TryResolve(UpdateBundleConfiguration update, string target,
         out string source)
     {
-        var fileName = FileNameFor(runtimeIdentifier);
-        var isWindows = runtimeIdentifier.StartsWith("win", StringComparison.OrdinalIgnoreCase);
-        // Windows 宿主绝不能拿到 POSIX 脚本（.sh 改名 .exe 无法执行）——只认 per-RID 二进制。
+        var fileName = FileNameFor(target);
+        var isWindows = target.StartsWith("win", StringComparison.OrdinalIgnoreCase);
+        // Windows 宿主绝不能拿到 POSIX 脚本（.sh 改名 .exe 无法执行）——只认 per-target 二进制。
         if (update.BootstrapperDirectory is { Length: > 0 } directory)
         {
-            var perRid = Path.Combine(directory, runtimeIdentifier, fileName);
-            if (File.Exists(perRid))
+            var perTarget = Path.Combine(directory, target, fileName);
+            if (File.Exists(perTarget))
             {
-                source = perRid;
+                source = perTarget;
                 return true;
             }
             var script = Path.Combine(directory, "posix", "bundler-updater.sh");
@@ -57,9 +57,9 @@ public static class UpdateBootstrapper
             source = "";
             return false;
         }
-        // 内嵌资源兜底：updater/<rid>/<name> → updater/posix/bundler-updater.sh，
+        // 内嵌资源兜底：updater/<target>/<name> → updater/posix/bundler-updater.sh，
         // 解到临时缓存目录供 File.Copy/归档条目引用。
-        if (TryExtractEmbedded($"updater/{runtimeIdentifier}/{fileName}", out source))
+        if (TryExtractEmbedded($"updater/{target}/{fileName}", out source))
         {
             return true;
         }

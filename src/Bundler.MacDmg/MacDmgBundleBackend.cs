@@ -49,7 +49,11 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
 
         var applicationName = MacAppBundleBackend.SanitizeFileName(bundle.ProductName) + ".app";
         var appPath = Path.Combine(
-            bundle.OutputDirectory, item.Target.RuntimeIdentifier, "app", applicationName);
+            bundle.OutputLayout == OutputLayout.ByFormat
+                ? Path.Combine(bundle.OutputDirectory, "app")
+                : bundle.OutputDirectory,
+            ArtifactNaming.FileName(
+                MacAppBundleBackend.SanitizeFileName(bundle.ProductName), bundle.Version, item.Target, PackageFormat.App));
         if (!Directory.Exists(appPath))
         {
             throw new DirectoryNotFoundException(
@@ -61,7 +65,8 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         var stageDirectory = Path.Combine(workDirectory, "dmg-root");
         var mountDirectory = Path.Combine(workDirectory, "dmg-mount");
         var readWriteImage = Path.Combine(workDirectory, "image-rw.dmg");
-        var imageName = MacAppBundleBackend.SanitizeFileName(bundle.ProductName) + ".dmg";
+        var imageName = ArtifactNaming.FileName(
+            MacAppBundleBackend.SanitizeFileName(bundle.ProductName), bundle.Version, item.Target, PackageFormat.Dmg);
         var outputPath = Path.Combine(item.OutputDirectory, imageName);
         var mounted = false;
 
@@ -184,7 +189,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
 
             await SignImageAsync(outputPath, workDirectory, cancellationToken, logger);
 
-            return [new BundleArtifact(PackageFormat.Dmg, item.Target.RuntimeIdentifier, outputPath)];
+            return [new BundleArtifact(PackageFormat.Dmg, item.Target.Target, outputPath)];
         }
         catch
         {

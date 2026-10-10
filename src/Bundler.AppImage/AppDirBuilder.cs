@@ -38,7 +38,7 @@ internal static class AppDirBuilder
         }
         var envArch = settings.Architecture is { Length: > 0 } override_
             ? AppImageIdentity.NormalizeArchitecture(override_)
-            : AppImageIdentity.EnvironmentArchitecture(item.Target.RuntimeIdentifier);
+            : AppImageIdentity.EnvironmentArchitecture(item.Target);
 
         // installRoot/mainExecutable 都会插值进 AppRun 的双引号 shell 行——
         // 与 binLink 同规净化：空白、引号、$、`、\ 一律拒（$( )/反引号在运行时仍展开）。
@@ -86,10 +86,10 @@ internal static class AppDirBuilder
         if (bundle.Update is { } update)
         {
             UpdateIdentitySidecar.WriteIfEnabled(
-                payloadRoot, update, PackageFormat.AppImage, item.Target.RuntimeIdentifier);
+                payloadRoot, update, PackageFormat.AppImage, item.Target.Target);
             claimed.Add(Path.GetFullPath(
                 Path.Combine(payloadRoot, UpdateIdentitySidecar.FileName)));
-            if (UpdateBootstrapper.Inject(payloadRoot, update, item.Target.RuntimeIdentifier) is { } injected)
+            if (UpdateBootstrapper.Inject(payloadRoot, update, item.Target.Target) is { } injected)
             {
                 claimed.Add(Path.GetFullPath(Path.Combine(payloadRoot, injected)));
             }
@@ -264,7 +264,7 @@ internal static class AppDirBuilder
             PackageName = packageName,
             Version = version,
             EnvironmentArchitecture = envArch,
-            FileArchitecture = AppImageIdentity.FileArchitectureForEnv(envArch)
+            FileArchitecture = envArch
         };
     }
 

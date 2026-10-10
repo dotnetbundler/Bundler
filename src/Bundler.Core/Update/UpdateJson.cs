@@ -111,7 +111,7 @@ internal sealed class UpdateJsonNamingPolicy : JsonNamingPolicy
 
     public override string ConvertName(string name) => name switch
     {
-        "RuntimeIdentifier" => "rid",
+        "Target" => "rid",
         "Signature" => "sig",
         "BlockMap" => "blockmap",
         _ => JsonNamingPolicy.CamelCase.ConvertName(name),

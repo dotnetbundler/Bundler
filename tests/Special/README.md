@@ -33,7 +33,7 @@
 | `developer-id-chain.sh` | SA-P-02..06 签名+公证+staple+spctl 全链 | macOS+Developer ID 凭证 | — |
 | `signed-app-update.sh` | SA-P-07 签名 .app 更新链身份一致性 | macOS+Developer ID 凭证 | — |
 | `clean-host-matrix.sh` | 干净 macOS 首装 .app/.dmg | 无 Xcode 干净宿主 | 首启弹窗观察 |
-| `intel-x64.sh` | osx-x64 实跑/挂载/安装 | Intel Mac 或 Rosetta | — |
+| `intel-x64.sh` | macos-x86_64 实跑/挂载/安装 | Intel Mac 或 Rosetta | — |
 | `quarantine.sh` | quarantine 首启场景 | macOS+真实下载路径 | 首启观察 |
 
 ## linux/
