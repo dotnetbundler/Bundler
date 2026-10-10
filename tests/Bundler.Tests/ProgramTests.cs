@@ -2009,6 +2009,7 @@ public static class ProgramTests
         {
             var glibcBackend = new RecordingBackend(PackageFormat.Zip, TargetOperatingSystem.Linux, LibC.Glibc, "glibc.zip");
             var muslBackend = new RecordingBackend(PackageFormat.Zip, TargetOperatingSystem.Linux, LibC.Musl, "musl.zip");
+            var genericZipBackend = new RecordingBackend(PackageFormat.Zip, TargetOperatingSystem.Linux, null, "generic.zip");
             var anyBackend = new RecordingBackend(PackageFormat.TarGz, TargetOperatingSystem.Linux, null, "any-{0}.tar.gz");
             var configuration = new BundleConfiguration
             {
@@ -2031,11 +2032,13 @@ public static class ProgramTests
                 ]
             };
 
-            var artifacts = await new BundlePipeline([glibcBackend, muslBackend, anyBackend])
+            var artifacts = await new BundlePipeline([genericZipBackend, glibcBackend, muslBackend, anyBackend])
                 .BuildAsync(configuration);
             Assert.Equal(4, artifacts.Count);
             Assert.Equal(1, glibcBackend.InvocationCount);
             Assert.Equal(1, muslBackend.InvocationCount);
+            // 特定 libc 后端优先于通用后端——通用 zip 在两个目标下都不该被命中。
+            Assert.Equal(0, genericZipBackend.InvocationCount);
             Assert.Equal(2, anyBackend.InvocationCount);
         }
         finally

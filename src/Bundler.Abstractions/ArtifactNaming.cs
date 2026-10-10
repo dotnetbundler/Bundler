@@ -64,6 +64,7 @@ public static class ArtifactNaming
                 CpuArchitecture.X86 => "x86",
                 CpuArchitecture.Arm64 => "aarch64",
                 CpuArchitecture.Armv7Hf => "armv7",
+                CpuArchitecture.Armv7Sf => "armel",
                 CpuArchitecture.Riscv64 => "riscv64",
                 CpuArchitecture.Loongarch64 => "loongarch64",
                 CpuArchitecture.Ppc64le => "ppc64le",

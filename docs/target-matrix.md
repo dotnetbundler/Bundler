@@ -24,7 +24,7 @@ OS 枚举（`TargetOperatingSystem`）只有 `Windows`/`MacOS`/`Linux` 三个值
 | `aarch64` | `arm64` | `arm64` | `aarch64` | `aarch64` | `arm64` | `arm64` | `aarch64` |
 | `universal` | — | — | — | — | — | `universal` | — |
 | `armv7hf` | `armhf`、`armv7` | `armhf` | `armv7hl` | `armv7` | — | — | — |
-| `armv7sf` | `armel` | `armel` | — | `armv7` | — | — | — |
+| `armv7sf` | `armel` | `armel` | — | `armel` | — | — | — |
 | `riscv64` | — | `riscv64` | `riscv64` | `riscv64` | — | — | — |
 | `loongarch64` | — | — | `loongarch64` | `loongarch64` | — | — | — |
 | `ppc64le` | — | `ppc64el` | `ppc64le` | `ppc64le` | — | — | — |
@@ -94,11 +94,11 @@ musl：`myapp-1.0.0-x86_64-musl.AppImage`。
 
 - 依据：rpm 官方 `rpmrc.in` arch_canon 表（`armv7sf` 软浮点无 canonical 词，未开通）。
 
-### alpineapk（Linux musl，8 架构词）
+### alpineapk（Linux musl，9 架构词）
 
-`myapp-1.0.0-r0.{x86_64|x86|aarch64|armv7|riscv64|loongarch64|ppc64le|s390x}.apk`
+`myapp-1.0.0-r0.{x86_64|x86|aarch64|armv7|armel|riscv64|loongarch64|ppc64le|s390x}.apk`
 
-- 依据：`apk-package(5)` 官方架构列表（`armv7` 硬浮点/软浮点同词归一、`armhf`/`armel` 亦在表）。
+- 依据：`apk-package(5)` 官方架构列表——`armv7hf→armv7`、`armv7sf→armel`（硬/软浮点分词，`armhf`/`armel` 亦在表）。
 
 ### zip / targz（全 OS，按系统生态词）
 
