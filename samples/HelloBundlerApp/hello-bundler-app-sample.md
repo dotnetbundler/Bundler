@@ -18,7 +18,7 @@ samples/HelloBundlerApp/
 └── Program.cs                # 启动方式/打包资源/Hook 标记自检的演示入口
 ```
 
-`BundlerFormats` 默认按 `$(Target)` × 宿主 OS 推导——产出全部当前环境可构建的格式：
+`BundlerFormats` 默认按 `$(BundlerTarget)` × 宿主 OS 推导——产出全部当前环境可构建的格式：
 
 | Target | Windows 宿主 | macOS 宿主 | Linux 宿主 | 其他宿主 |
 |---|---|---|---|---|

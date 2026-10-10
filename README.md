@@ -83,6 +83,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
 
     <BundlerEnabled>true</BundlerEnabled>
+    <BundlerTarget>windows-x86_64</BundlerTarget>
     <BundlerIdentifier>com.example.myapp</BundlerIdentifier>
     <BundlerProductName>我的应用</BundlerProductName>
     <BundlerPublisher>示例公司</BundlerPublisher>
@@ -214,7 +215,8 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | --- | --- | --- |
 | `BundlerEnabled` | 是 | `false` |
 | `BundlerIdentifier` | 是 | — |
-| `RuntimeIdentifier` | 是 | —；`BundlerUniversalTargets` 设置时可省略 |
+| `BundlerTarget` | 是 | —；`BundlerUniversalTargets` 设置时可省略 |
+| `RuntimeIdentifier` | 是 | —；`dotnet publish` 侧标准属性，产目标平台载荷仍按 .NET RID 指定 |
 | `BundlerFormats` | 否 | `nsis`；分号分隔多值扇出，可用 `nsis`/`msi`/`app`/`dmg`/`pkg`/`deb`/`rpm`/`appimage`/`zip`/`targz`/`alpineapk`（CLI 另收 `all` 全量别名） |
 | `BundlerUniversalTargets` | 否 | 无；macOS universal 用——复数 .NET RID（如 `osx-x64;osx-arm64`）对每个 RID 内层 `dotnet publish` 后托管合并成 universal 目录再按 `macos-universal` 打包 |
 | `BundlerProductName` | 否 | `$(AssemblyName)` |
