@@ -31,7 +31,7 @@
        $(PublishDir) 是计算属性永远非空，不能当“本次跑过 Publish”的信号——
        所以钩子链没有 _BundlerAutoPublish：钩子入口天然跟在真实 Publish 后，输入即 $(PublishDir)。 -->
   <PropertyGroup>
-    <_BundlerStages>_BundlerDerive;_BundlerUniversalMerge;_BundlerBundleCore</_BundlerStages>
+    <_BundlerStages>_BundlerDerive;_BundlerPublishMismatchWarn;_BundlerUniversalMerge;_BundlerBundleCore</_BundlerStages>
     <_BundlerBundleStages>_BundlerDerive;_BundlerUniversalMerge;_BundlerAutoPublish;_BundlerBundleCore</_BundlerBundleStages>
   </PropertyGroup>
 
@@ -65,10 +65,6 @@
     </PropertyGroup>
     <Warning Condition="'$(_BundlerTargetStale)' == 'true'"
              Text="BundlerTarget was derived from a stale RuntimeIdentifier and was refreshed to '@(_BundlerTargetFromRid)'. Pass -p:BundlerTarget=&lt;target&gt; to pin it explicitly." />
-    <!-- 显式 BundlerTarget 与当前 RID 推导值冲突：只警告不改值——显式恒胜；
-         InputDir/universal 模式下 target 与 RID 不符是预期（打的是既有目录/合并载荷），豁免 -->
-    <Warning Condition="'$(_BundlerTargetStale)' != 'true' and '$(BundlerTarget)' != '' and '@(_BundlerTargetFromRid)' != '' and '$(BundlerTarget)' != '@(_BundlerTargetFromRid)' and '$(BundlerInputDir)' == '' and '$(BundlerUniversalTargets)' == ''"
-             Text="BundlerTarget '$(BundlerTarget)' does not match the target '@(_BundlerTargetFromRid)' mapped from RuntimeIdentifier '$(RuntimeIdentifier)'. The explicit target wins; remove BundlerTarget to derive from the RID." />
     <PropertyGroup>
       <BundlerFormats Condition="'$(BundlerFormats)' == ''">nsis</BundlerFormats>
       <_BundlerPublishOutDir>$(IntermediateOutputPath)BundlerPublish\$(BundlerTarget)\</_BundlerPublishOutDir>
@@ -79,6 +75,14 @@
            Text="BundlerTarget is required to bundle (pass -p:BundlerTarget=&lt;target&gt;, or -p:RuntimeIdentifier=&lt;rid&gt; for table derivation)." />
     <Error Condition="'$(BundlerInputDir)' != '' and '$(BundlerUniversalTargets)' != ''"
            Text="BundlerInputDir cannot be combined with BundlerUniversalTargets." />
+  </Target>
+
+  <!-- 钩子链专属警告：显式 BundlerTarget 与发布 RID 推导值冲突（payload 平台≠包标签）。
+       只警告不改值——显式恒胜。只在钩子链：显式 BundlerBundle 路的 inner publish 用
+       BundlerPublishRid 覆盖项目 RID，target 与项目 RID 不符是预期；universal/InputDir 同。 -->
+  <Target Name="_BundlerPublishMismatchWarn">
+    <Warning Condition="'$(_BundlerTargetStale)' != 'true' and '$(BundlerTarget)' != '' and '@(_BundlerTargetFromRid)' != '' and '$(BundlerTarget)' != '@(_BundlerTargetFromRid)' and '$(BundlerInputDir)' == '' and '$(BundlerUniversalTargets)' == ''"
+             Text="BundlerTarget '$(BundlerTarget)' does not match the target '@(_BundlerTargetFromRid)' mapped from RuntimeIdentifier '$(RuntimeIdentifier)'. The explicit target wins; remove BundlerTarget to derive from the RID." />
   </Target>
 
   <!-- macOS universal 输入解析：per-RID 内层发布 + 托管合并（两入口共用；BundlerUniversalTargets 未设时跳过） -->
