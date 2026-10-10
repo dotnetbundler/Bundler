@@ -106,15 +106,18 @@
            Text="BundlerUniversalTargets only accepts plain osx-* runtime identifiers (got '@(_BundlerUniversalRidBad)')." />
     <!-- Clean stale per-RID and merged outputs: publish -o does not remove files deleted since a previous run. -->
     <RemoveDir Directories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)');$(_BundlerUniversalDir)merged;$(_BundlerUniversalDir)reference" />
+    <!-- universal 需要 framework-dependent 发布：RID-less 参考构建产非 Mach-O 权威源，
+         SelfContained/AOT/单文件强绑 RID，在此提前给出明确报错而不是怪异的 SDK 失败。 -->
+    <Error Condition="'$(BundlerUniversalTargets)' != '' and ('$(SelfContained)' == 'true' or '$(PublishAot)' == 'true' or '$(PublishSingleFile)' == 'true')"
+           Text="BundlerUniversalTargets requires a framework-dependent, non-single-file publish; SelfContained/PublishAot/PublishSingleFile cannot be merged into a universal payload." />
     <!-- MSBuild 子构建内层发布：子构建自动继承调用方全部全局属性（PublishSingleFile/SelfContained/
          PublishAot 等发布选项不丢），Properties 只覆盖 RID/输出目录/BundlerEnabled 防钩子递归；
-         子构建无 CLI 隐式 restore——一次 Restore 传 RuntimeIdentifiers 全列表：逐 RID restore 会重写
-         project.assets.json 只留当前 RID，前腿的目标随即被后腿清掉（NETSDK1047）。
+         子构建无 CLI 隐式 restore——每个 RID 在单个子构建里 Restore;Publish 连跑：assets 重写
+         只留当前 RID 也不怕（即刻消费），而 RuntimeIdentifiers 多 RID 合图会被
+         _GenerateRestoreGraphProjectEntry 当单个 RID 校验（NETSDK1083），走不通。
          TargetFramework 不入 Properties：子构建评的是同一个工程自己解 TFM；全局传入会沿
          ProjectReference 恢复链污染异 TFM 引用（如 netstandard2.0 任务工程的 assets）。 -->
-    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Restore"
-             Properties="RuntimeIdentifiers=$(BundlerUniversalTargets)" />
-    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Publish"
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Restore;Publish"
              Properties="RuntimeIdentifier=%(_BundlerUniversalRid.Identity);PublishDir=$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity);BundlerEnabled=false" />
     <!-- 无 RID 参考发布：非 Mach-O 文件的权威源。RID 专属构建给托管件打架构印记（PE machine
          及派生 MVID/时间戳），两 arch 的 test.dll 天然逐字节相异、无法靠比对合并；参考发布

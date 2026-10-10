@@ -52,6 +52,14 @@ public static class MacUniversalPayloadMerger
                 relativePaths.Add(file);
             }
         }
+        // 只在参考发布里出现的文件也得进 union——否则被静默丢掉。
+        if (referenceRoot != null && Directory.Exists(referenceRoot))
+        {
+            foreach (var file in EnumerateRelativeFiles(referenceRoot))
+            {
+                relativePaths.Add(file);
+            }
+        }
 
         foreach (var relative in relativePaths)
         {
@@ -61,7 +69,15 @@ public static class MacUniversalPayloadMerger
                 .ToArray();
             if (sources.Length == 0)
             {
-                // 枚举与合并之间条目消失（悬垂链接被删除等）——按缺席处理，不崩。
+                // 参考发布独有的文件直接按参考拷贝；sources 侧缺席但有参考
+                // （枚举与合并之间条目消失等）也走这条路，不崩。
+                var refOnly = referenceRoot == null ? null : Path.Combine(referenceRoot, relative);
+                if (refOnly != null && File.Exists(refOnly))
+                {
+                    var destOnly = Path.Combine(outputDirectory, relative);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destOnly)!);
+                    Copy(refOnly, destOnly);
+                }
                 continue;
             }
             var destination = Path.Combine(outputDirectory, relative);
