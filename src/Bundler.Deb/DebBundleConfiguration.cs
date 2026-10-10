@@ -162,7 +162,7 @@ public sealed class DebBundleConfiguration
     /// payload), written to the <c>conffiles</c> control member. Destinations of
     /// <see cref="Files"/> under <c>/etc</c> are registered automatically.
     /// </summary>
-    public IReadOnlyList<string>? ConfigFiles { get; init; }
+    public IReadOnlyList<string>? ConfigLocations { get; init; }
 
 
 }

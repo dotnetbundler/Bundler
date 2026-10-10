@@ -235,7 +235,7 @@ public static class RpmTests
                     new RpmFileEntry { Source = config, Destination = "/etc/example/defaults.conf" },
                     new RpmFileEntry { Source = extra, Destination = "/opt/example/extra.conf" }
                 ],
-                ConfigFiles = ["/opt/example/extra.conf"]
+                ConfigLocations = ["/opt/example/extra.conf"]
             }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
             var package = RpmPackageReader.Read(artifact.Path);
             var dirnames = package.Main.Strings(1118);
@@ -257,7 +257,7 @@ public static class RpmTests
                 "/etc files must be %config(noreplace) (flags 1|16).");
             var opt = Flag("/opt/example/extra.conf");
             Assert.True((opt & 1) != 0 && (opt & 16) != 0,
-                "Explicit ConfigFiles entries must be %config(noreplace) too.");
+                "Explicit ConfigLocations entries must be %config(noreplace) too.");
             var bin = Flag("/usr/lib/example-app/ExampleApp");
             Assert.Equal(0, bin & 17);
         }
@@ -286,8 +286,8 @@ public static class RpmTests
                 (new RpmBundleConfiguration { PreInstallFile = lonelyCr }, "lone CR must be rejected"),
                 (new RpmBundleConfiguration { PreInstallFile = emptyShebang }, "empty shebang must be rejected"),
                 (new RpmBundleConfiguration { PreInstallFile = input + "/missing.sh" }, "missing file must be rejected"),
-                (new RpmBundleConfiguration { ConfigFiles = ["/usr/lib/example-app/nowhere.conf"] },
-                    "ConfigFiles must reference a real payload file")
+                (new RpmBundleConfiguration { ConfigLocations = ["/usr/lib/example-app/nowhere.conf"] },
+                    "ConfigLocations must reference a real payload file")
             })
             {
                 var rejected = Assert.ThrowsAny<Exception>(

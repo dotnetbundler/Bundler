@@ -42,7 +42,7 @@
 | --- | --- | --- | --- |
 | maintainer 脚本（preinst/postinst/prerm/postrm） | 已实现 | LINUX-DEB-3 | `BundlerDeb{PreInstall,PostInstall,PreUninstall,PostUninstall}File` 整文件注入 control 归档 0755（shebang+LF 校验）；真实 `dpkg -i/-r` 标记断言 |
 | systemd unit（`usr/lib/systemd/system/`） | 已实现（落位+合成）/外部待验收（真实 enable/start） | LINUX-DEB-3 | `BundlerDebSystemdServiceFile` → `usr/lib/systemd/system/<包名>.service`；postinst `daemon-reload` 自动合成（与调用方脚本合并）；OI-04 保留真实 systemd 宿主验收 |
-| conffiles 声明 | 已实现 | LINUX-DEB-3 | `BundlerDebConfigFiles` 显式列表 + `/etc` 下 `BundlerDebFile` 自动登记（均校验载荷存在）；真实 `-r` 保留/`-P` 清除与升级 `--force-confold` 断言 |
+| conffiles 声明 | 已实现 | LINUX-DEB-3 | `BundlerDebConfigLocations` 显式列表 + `/etc` 下 `BundlerDebFile` 自动登记（均校验载荷存在）；真实 `-r` 保留/`-P` 清除与升级 `--force-confold` 断言 |
 | 压缩选项（gzip 默认；xz/zstd 候选） | 已实现（gzip）/登记拒绝（xz/zstd） | LINUX-DEB-3 | `BundlerDebCompression` 仅接受 `gzip`；xz/zstd 拒绝并说明（netstandard2.0 无托管编码器；zstd 另需 dpkg≥1.21.18） |
 | 升级/降级语义实测 | 已实现（升级）/写实登记（降级） | LINUX-DEB-3 | 同包 `dpkg -i` 1.0.0→1.0.1 + conffile 修改保留断言；降级需 `--force-downgrade` 属 dpkg 语义写实 |
 

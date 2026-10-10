@@ -499,7 +499,7 @@ internal static class DebPackageWriter
                 Add(destination, "DebFile(/etc)");
             }
         }
-        foreach (var path in settings.ConfigFiles ?? [])
+        foreach (var path in settings.ConfigLocations ?? [])
         {
             Add(path, "Conffiles");
         }

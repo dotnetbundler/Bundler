@@ -148,7 +148,7 @@
     <BundlerDebPreUninstallFile Condition="'$(BundlerDebPreUninstallFile)' == ''"></BundlerDebPreUninstallFile>
     <BundlerDebPostUninstallFile Condition="'$(BundlerDebPostUninstallFile)' == ''"></BundlerDebPostUninstallFile>
     <BundlerDebSystemdServiceFile Condition="'$(BundlerDebSystemdServiceFile)' == ''"></BundlerDebSystemdServiceFile>
-    <BundlerDebConfigFiles Condition="'$(BundlerDebConfigFiles)' == ''"></BundlerDebConfigFiles>
+    <BundlerDebConfigLocations Condition="'$(BundlerDebConfigLocations)' == ''"></BundlerDebConfigLocations>
     <BundlerRpmPackageName Condition="'$(BundlerRpmPackageName)' == ''"></BundlerRpmPackageName>
     <BundlerRpmVersion Condition="'$(BundlerRpmVersion)' == ''"></BundlerRpmVersion>
     <BundlerRpmRelease Condition="'$(BundlerRpmRelease)' == ''"></BundlerRpmRelease>
@@ -170,7 +170,7 @@
     <BundlerRpmDesktopFile Condition="'$(BundlerRpmDesktopFile)' == ''"></BundlerRpmDesktopFile>
     <BundlerRpmMetainfoFile Condition="'$(BundlerRpmMetainfoFile)' == ''"></BundlerRpmMetainfoFile>
     <BundlerRpmChangelogFile Condition="'$(BundlerRpmChangelogFile)' == ''"></BundlerRpmChangelogFile>
-    <BundlerRpmConfigFiles Condition="'$(BundlerRpmConfigFiles)' == ''"></BundlerRpmConfigFiles>
+    <BundlerRpmConfigLocations Condition="'$(BundlerRpmConfigLocations)' == ''"></BundlerRpmConfigLocations>
     <BundlerRpmSystemdServiceFile Condition="'$(BundlerRpmSystemdServiceFile)' == ''"></BundlerRpmSystemdServiceFile>
     <BundlerRpmPreInstallFile Condition="'$(BundlerRpmPreInstallFile)' == ''"></BundlerRpmPreInstallFile>
     <BundlerRpmPostInstallFile Condition="'$(BundlerRpmPostInstallFile)' == ''"></BundlerRpmPostInstallFile>

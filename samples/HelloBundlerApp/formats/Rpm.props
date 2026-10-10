@@ -36,7 +36,7 @@
     <BundlerRpmMetainfoFile Condition="'$(HelloBundlerRpmMetainfoFile)' != ''">$(HelloBundlerRpmMetainfoFile)</BundlerRpmMetainfoFile>
     <BundlerRpmChangelogFile>$(HelloBundlerAppAssets)rpm\CHANGELOG.md</BundlerRpmChangelogFile>
     <BundlerRpmChangelogFile Condition="'$(HelloBundlerRpmChangelogFile)' != ''">$(HelloBundlerRpmChangelogFile)</BundlerRpmChangelogFile>
-    <BundlerRpmConfigFiles Condition="'$(HelloBundlerRpmConfigFiles)' != ''">$(HelloBundlerRpmConfigFiles)</BundlerRpmConfigFiles>
+    <BundlerRpmConfigLocations Condition="'$(HelloBundlerRpmConfigLocations)' != ''">$(HelloBundlerRpmConfigLocations)</BundlerRpmConfigLocations>
     <BundlerRpmSystemdServiceFile Condition="'$(HelloBundlerRpmSystemdServiceFile)' != ''">$(HelloBundlerRpmSystemdServiceFile)</BundlerRpmSystemdServiceFile>
 
     <!-- 安装脚本：File=脚本文件（入 scriptlet）、Program=替代解释程序（如 /bin/sh -e）。 -->

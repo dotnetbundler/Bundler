@@ -82,10 +82,10 @@ public sealed class RpmFixture : IDisposable
         Publish("scripts", "-p:BundlerTestRpmScripts=1", "-p:BundlerTestRpmSystemd=1");
         ScriptsRpm = RequireRpm(Ws.Combine("scripts", "linux-x64", "rpm"));
 
-        Publish("configx", "-p:BundlerTestRpmConfigFiles=/usr/lib/bundler-rpm-fixture/docs/readme.txt");
+        Publish("configx", "-p:BundlerTestRpmConfigLocations=/usr/lib/bundler-rpm-fixture/docs/readme.txt");
         ConfigRpm = RequireRpm(Ws.Combine("configx", "linux-x64", "rpm"));
         Publish("configx-v2",
-            "-p:BundlerTestRpmConfigFiles=/usr/lib/bundler-rpm-fixture/docs/readme.txt",
+            "-p:BundlerTestRpmConfigLocations=/usr/lib/bundler-rpm-fixture/docs/readme.txt",
             "-p:BundlerTestRpmRelease=2");
         ConfigV2Rpm = RequireRpm(Ws.Combine("configx-v2", "linux-x64", "rpm"));
 
@@ -361,7 +361,7 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
         var badCfg = Dotnet.Run(
             ["publish", _f.FixtureProject, "-c", "Release",
              $"-p:BundlerIntegrationOutput={_f.Ws.Combine("badcfg")}",
-             "-p:BundlerTestRpmConfigFiles=/usr/lib/bundler-rpm-fixture/missing.conf",
+             "-p:BundlerTestRpmConfigLocations=/usr/lib/bundler-rpm-fixture/missing.conf",
              "--packages", _f.CacheDir]);
         Assert.NotEqual(0, badCfg.ExitCode);
     }

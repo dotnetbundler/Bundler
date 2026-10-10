@@ -330,7 +330,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `@(BundlerDebFile)`（`Destination`） | 否 | 无；任意文件 → 包内绝对路径（含文件名，拒相对/`..`/空段；`/etc` 下自动登记 conffile） |
 | `BundlerDebPreinstFile`/`PostinstFile`/`PrermFile`/`PostrmFile` | 否 | 无；维护者脚本整文件注入 control 归档（0755，须 shebang+LF） |
 | `BundlerDebSystemdServiceFile` | 否 | 无；unit → `usr/lib/systemd/system/<包名>.service`，postinst 自动合成 `daemon-reload`（装而不启） |
-| `BundlerDebConfigFiles` | 否 | 无；显式 conffile 绝对路径列表（须存在于载荷） |
+| `BundlerDebConfigLocations` | 否 | 无；显式 conffile 绝对路径列表（须存在于载荷） |
 | `BundlerRpmPackageName` | 否 | `BundlerProductName` 的 kebab-case 化；须匹配 rpm 包名规则 `[A-Za-z0-9][A-Za-z0-9+._-]+` 且≥2 字符 |
 | `BundlerRpmVersion` | 否 | 空时由 `BundlerVersion` 按 SemVer→rpm 映射（预发布段→Release `0.<n>.<label>`、`+build`→Release 后缀）；显式值禁含 `-`、须匹配 `[0-9A-Za-z.+_]+` |
 | `BundlerRpmRelease` | 否 | `1`（或 SemVer 预发布映射值）；rpm Release 字符串 |

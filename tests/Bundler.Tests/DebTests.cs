@@ -592,7 +592,7 @@ public static class DebTests
                 {
                     PostInstallFile = postinst,
                     PreUninstallFile = prerm,
-                    ConfigFiles = ["/usr/lib/example-app/libplaceholder.conf"],
+                    ConfigLocations = ["/usr/lib/example-app/libplaceholder.conf"],
                     Files = [new DebFileEntry { Source = conf, Destination = "/etc/example-app/defaults.conf" },
                              new DebFileEntry { Source = conf, Destination = "/usr/lib/example-app/libplaceholder.conf" }]
                 })
@@ -708,9 +708,9 @@ public static class DebTests
             {
                 ("script without shebang", new DebBundleConfiguration { PostInstallFile = noShebang }),
                 ("script with CRLF", new DebBundleConfiguration { PreUninstallFile = crlf }),
-                ("conffile not in payload", new DebBundleConfiguration { ConfigFiles = ["/etc/absent.conf"] }),
-                ("conffile relative path", new DebBundleConfiguration { ConfigFiles = ["etc/x.conf"] }),
-                ("conffile traversal", new DebBundleConfiguration { ConfigFiles = ["/etc/../x.conf"] })
+                ("conffile not in payload", new DebBundleConfiguration { ConfigLocations = ["/etc/absent.conf"] }),
+                ("conffile relative path", new DebBundleConfiguration { ConfigLocations = ["etc/x.conf"] }),
+                ("conffile traversal", new DebBundleConfiguration { ConfigLocations = ["/etc/../x.conf"] })
             };
             foreach (var (name, settings) in cases)
             {
@@ -876,7 +876,7 @@ public static class DebTests
                targets.Contains("DebPreUninstallFile=\"$(BundlerDebPreUninstallFile)\"", StringComparison.Ordinal) &&
                targets.Contains("DebPostUninstallFile=\"$(BundlerDebPostUninstallFile)\"", StringComparison.Ordinal) &&
                targets.Contains("DebSystemdServiceFile=\"$(BundlerDebSystemdServiceFile)\"", StringComparison.Ordinal) &&
-               targets.Contains("DebConfigFiles=\"$(BundlerDebConfigFiles)\"", StringComparison.Ordinal) &&
+               targets.Contains("DebConfigLocations=\"$(BundlerDebConfigLocations)\"", StringComparison.Ordinal) &&
                targets.Contains("DebFiles=\"@(BundlerDebFile)\"", StringComparison.Ordinal) &&
                task.Contains("DebFiles.Select(item => new DebFileEntry", StringComparison.Ordinal),
             "MSBuild does not map the BundlerDeb* properties to the task.");
@@ -887,7 +887,7 @@ public static class DebTests
                props.Contains("<BundlerDebChangelogFile", StringComparison.Ordinal) &&
                props.Contains("<BundlerDebPostInstallFile", StringComparison.Ordinal) &&
                props.Contains("<BundlerDebSystemdServiceFile", StringComparison.Ordinal) &&
-               props.Contains("<BundlerDebConfigFiles", StringComparison.Ordinal),
+               props.Contains("<BundlerDebConfigLocations", StringComparison.Ordinal),
             "The BundlerDeb* properties lack defaults in the .props file.");
         Assert.True(task.Contains("new DebBundler(", StringComparison.Ordinal) &&
                task.Contains("PackageFormat.Deb", StringComparison.Ordinal),

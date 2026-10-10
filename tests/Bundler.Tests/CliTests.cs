@@ -649,6 +649,46 @@ public static class CliTests
     }
 
     [Fact]
+    static void PayloadRelativeKnobsStayUnresolved()
+    {
+        // PathKnobs 由配置类型 JSON 元数据按 *Files/*Directories 复数后缀导出；
+        // 载荷相对键（shortcuts.icon、configLocations）无宿主路径后缀，不得按
+        // 配置文件目录解析——钉住 shortcuts.icon 误收 PathKnobs 的回归。
+        var input = CreateInputDirectory();
+        var configDir = Path.Combine(Path.GetTempPath(), "bundler-cli-pathknob-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(configDir);
+        var config = Path.Combine(configDir, "bundler.json");
+        File.WriteAllText(config, """
+            {
+                "productName": "CfgApp",
+                "identifier": "dev.example.cfg",
+                "version": "2.0.0",
+                "outputDirectory": "/tmp/x",
+                "targets": [{ "runtimeIdentifier": "linux-x64", "inputDirectory": "<input>",
+                              "mainExecutable": "cli-fixture", "formats": ["zip"] }],
+                "nsis": { "shortcuts": { "icon": "app.ico" } },
+                "app": { "frameworkDirectories": ["rel-fw"] },
+                "deb": { "configLocations": ["/etc/cfgapp.conf"] }
+            }
+            """.Replace("<input>", input.Replace("\\", "\\\\")));
+        try
+        {
+            var resolved = CliConfig.Resolve(CliArguments.Parse(["bundle", "--config", config]));
+
+            Assert.Equal("app.ico", resolved.Nsis?.Shortcuts.Icon);
+            Assert.Equal(["/etc/cfgapp.conf"], resolved.Deb?.ConfigLocations);
+            // 生成表仍须收宿主路径目录：相对项按配置文件目录解析。
+            Assert.Equal([Path.GetFullPath(Path.Combine(configDir, "rel-fw"))],
+                resolved.App?.FrameworkDirectories);
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            Directory.Delete(configDir, true);
+        }
+    }
+
+    [Fact]
     static void PrintsVersion()
     {
         var (code, stdout, _) = Run("--version");

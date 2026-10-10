@@ -190,7 +190,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string DebPreUninstallFile { get; set; } = "";
     public string DebPostUninstallFile { get; set; } = "";
     public string DebSystemdServiceFile { get; set; } = "";
-    public string DebConfigFiles { get; set; } = "";
+    public string DebConfigLocations { get; set; } = "";
     public ITaskItem[] DebFiles { get; set; } = Array.Empty<ITaskItem>();
     public string RpmPackageName { get; set; } = "";
     public string RpmVersion { get; set; } = "";
@@ -214,7 +214,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string RpmMetainfoFile { get; set; } = "";
     public string RpmChangelogFile { get; set; } = "";
     public ITaskItem[] RpmFiles { get; set; } = Array.Empty<ITaskItem>();
-    public string RpmConfigFiles { get; set; } = "";
+    public string RpmConfigLocations { get; set; } = "";
     public string RpmSystemdServiceFile { get; set; } = "";
     public string RpmPreInstallFile { get; set; } = "";
     public string RpmPostInstallFile { get; set; } = "";
@@ -607,7 +607,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         PreUninstallFile = OptionalFullPath(DebPreUninstallFile),
                         PostUninstallFile = OptionalFullPath(DebPostUninstallFile),
                         SystemdServiceFile = OptionalFullPath(DebSystemdServiceFile),
-                        ConfigFiles = SplitList(DebConfigFiles),
+                        ConfigLocations = SplitList(DebConfigLocations),
                         Files = DebFiles.Select(item => new DebFileEntry
                         {
                             Source = Path.GetFullPath(item.ItemSpec),
@@ -645,7 +645,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                         DesktopFile = OptionalFullPath(RpmDesktopFile),
                         MetainfoFile = OptionalFullPath(RpmMetainfoFile),
                         ChangelogFile = OptionalFullPath(RpmChangelogFile),
-                        ConfigFiles = SplitList(RpmConfigFiles),
+                        ConfigLocations = SplitList(RpmConfigLocations),
                         SystemdServiceFile = OptionalFullPath(RpmSystemdServiceFile),
                         PreInstallFile = OptionalFullPath(RpmPreInstallFile),
                         PostInstallFile = OptionalFullPath(RpmPostInstallFile),

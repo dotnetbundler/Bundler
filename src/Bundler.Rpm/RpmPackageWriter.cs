@@ -755,21 +755,21 @@ internal static class RpmPackageWriter
         }
 
         // %config(noreplace): /etc destinations of RpmFile entries are marked
-        // via FileFlagsFor; explicit ConfigFiles paths are resolved here and
+        // via FileFlagsFor; explicit ConfigLocations paths are resolved here and
         // must already exist as regular files in the payload.
         var byPath = new Dictionary<string, PayloadEntry>(StringComparer.Ordinal);
         foreach (var entry in entries)
         {
             byPath[entry.ArchivePath] = entry;
         }
-        foreach (var path in settings.ConfigFiles ?? [])
+        foreach (var path in settings.ConfigLocations ?? [])
         {
             var destination = FreedesktopFiles.NormalizeAbsoluteDestination(path, "rpm");
             if (!byPath.TryGetValue(destination, out var entry) ||
                 entry.IsDirectory || entry.IsSymlink)
             {
                 throw new ArgumentException(
-                    $"The ConfigFiles entry '{path}' has no regular file in the payload.");
+                    $"The ConfigLocations entry '{path}' has no regular file in the payload.");
             }
             entry.FileFlags |= 17; // RPMFILE_CONFIG | RPMFILE_NOREPLACE
         }

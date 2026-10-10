@@ -30,7 +30,7 @@
 | --- | --- | --- | --- |
 | scriptlet（PREIN/POSTIN/PREUN/POSTUN） | 已实现 | LINUX-RPM-3 | `BundlerRpm*InstallFile`/`*UninstallFile` 四旋钮 + `*Program` 解释器覆盖；LF 强制、`#!` 剥离为 PROG、缺省 `/bin/sh`；容器 `rpm -i/-e` 标记断言全绿 |
 | systemd unit | 已实现 | LINUX-RPM-3 | `usr/lib/systemd/system/<pkg>.service` 落位 + `%post`/`%postun` `daemon-reload` 自动合成（并入调用方 scriptlet），装而不启 |
-| conffile（`%config(noreplace)`） | 已实现 | LINUX-RPM-3 | `/etc` 下 `RpmFile` 目标自动 FILEFLAGS 17 + `BundlerRpmConfigFiles` 显式列表（须命中载荷文件）；`rpm -e` `.rpmsave` + `rpm -U` 原地保留断言 |
+| conffile（`%config(noreplace)`） | 已实现 | LINUX-RPM-3 | `/etc` 下 `RpmFile` 目标自动 FILEFLAGS 17 + `BundlerRpmConfigLocations` 显式列表（须命中载荷文件）；`rpm -e` `.rpmsave` + `rpm -U` 原地保留断言 |
 | 压缩 | 恒 gzip（无旋钮） | LINUX-RPM-3 | 同 deb 立场：netstandard2.0 无托管编码器，`Compression` 旋钮移除 |
 | 升级/卸载语义实测 | 已实现 | LINUX-RPM-3 | 容器内 `rpm -U` Release 1→2 升级 + 修改后 %config 原地保留（无 .rpmnew）+ `rpm -e` `.rpmsave` 断言全绿 |
 

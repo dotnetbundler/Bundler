@@ -146,7 +146,7 @@ public sealed class RpmBundleConfiguration
     /// <c>%config(noreplace)</c>. Destinations of <see cref="Files"/> under
     /// <c>/etc</c> are marked automatically.
     /// </summary>
-    public IReadOnlyList<string>? ConfigFiles { get; init; }
+    public IReadOnlyList<string>? ConfigLocations { get; init; }
 
     /// <summary>
     /// Managed systemd unit: path to a <c>.service</c> file installed at

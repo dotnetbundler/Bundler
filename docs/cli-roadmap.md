@@ -45,7 +45,7 @@ alpha.88 之后各后端配置字段统一为同一套命名契约：JSON 键（
 | 后端 | 旧键 → 新键 |
 | --- | --- |
 | 全部 | 附加文件统一 `files: [{source,destination}]`；安装域统一 `installScope`；路径后缀仅 `*File`/`*Directory` |
-| deb | `revision`→`release`、`maintainer`→`vendor`、`conffiles`→`configFiles`、`preinstFile`/`postinstFile`/`prermFile`/`postrmFile`→`preInstallFile`/`postInstallFile`/`preUninstallFile`/`postUninstallFile`、`compression` 删除（恒 gzip）、`categories` 改字符串数组 |
+| deb | `revision`→`release`、`maintainer`→`vendor`、`conffiles`→`configLocations`、`preinstFile`/`postinstFile`/`prermFile`/`postrmFile`→`preInstallFile`/`postInstallFile`/`preUninstallFile`/`postUninstallFile`、`compression` 删除（恒 gzip）、`categories` 改字符串数组 |
 | rpm | `requires`→`depends`、`compression` 删除、`categories` 改字符串数组、`signingKeyFile`/`signingKeyPassphrase`→`signing.keyFile`/`signing.passphrase` |
 | alpineapk | `preInstallScript`/`postInstallScript`/`preDeinstallScript`/`postDeinstallScript`/`preUpgradeScript`/`postUpgradeScript`→`*File` 同名单、`signing*`→`signing.*` |
 | appimage | `categories` 改字符串数组、`signing*`→`signing.*` |
@@ -55,7 +55,7 @@ alpha.88 之后各后端配置字段统一为同一套命名契约：JSON 键（
 | msi | `msiVersion`→`version`、`bannerBitmap`→`bannerFile`、`dialogBitmap`→`dialogFile`、`expertTemplate`→`expertTemplateFile`、`extensionFragments`→`extensionFragmentFiles`、`expertMergeModules`→`expertMergeModuleFiles` |
 | nsis | `installMode`→`installScope`、`installerIcon`→`installerIconFile`、`uninstallerIcon`→`uninstallerIconFile`、`headerImage`→`headerFile`、`sidebarImage`→`sidebarFile`、`uninstallerHeaderImage`→`uninstallerHeaderFile`、`installerHooks`→`installerHooksFile` |
 
-MSBuild 属性同步：`Bundler<Format><Old>` 全部按上表改名（如 `BundlerDebRevision`→`BundlerDebRelease`、`BundlerMacDmgWindowX`→`BundlerMacDmgLayoutWindowX`、`BundlerMacPkgIdentifier`→`BundlerMacPkgPackageName`）；mac 公证 API key 三元组统一 `Bundler<App|Pkg>NotaryApiKeyFile`/`NotaryApiKeyId`/`NotaryApiKeyIssuer`（config 侧对应 `ApiKeyFile`/`ApiKeyId`/`ApiKeyIssuer`）；`shortcuts.icon` 为载荷相对路径不入宿主路径解析（PathKnobs 不收）；`BundlerDebCompression`/`BundlerRpmCompression` 删除；`BundlerMacFramework` 项组改名 `BundlerMacAppFrameworkDirectory`；`BundlerMacAppFile`/`BundlerMacPkgFile`/`BundlerResource` 等项的元数据 `TargetPath`→`Destination`。
+MSBuild 属性同步：`Bundler<Format><Old>` 全部按上表改名（如 `BundlerDebRevision`→`BundlerDebRelease`、`BundlerMacDmgWindowX`→`BundlerMacDmgLayoutWindowX`、`BundlerMacPkgIdentifier`→`BundlerMacPkgPackageName`）；mac 公证 API key 三元组统一 `Bundler<App|Pkg>NotaryApiKeyFile`/`NotaryApiKeyId`/`NotaryApiKeyIssuer`（config 侧对应 `ApiKeyFile`/`ApiKeyId`/`ApiKeyIssuer`）；约定：载荷相对路径（`shortcuts.icon`、`configLocations` 等）永不带 File/Path/Directory/Files/Directories 后缀；宿主路径旋钮由 `BundlerJsonContext` 元数据按复数后缀自动导出（PathKnobs 不再手维护）；`BundlerDebCompression`/`BundlerRpmCompression` 删除；`BundlerMacFramework` 项组改名 `BundlerMacAppFrameworkDirectory`；`BundlerMacAppFile`/`BundlerMacPkgFile`/`BundlerResource` 等项的元数据 `TargetPath`→`Destination`。
 
 ## 3. 阶段表
 

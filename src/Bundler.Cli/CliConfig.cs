@@ -127,25 +127,6 @@ internal static class CliConfig
         "runtimeIdentifier", "inputDirectory", "mainExecutable", "signingFiles", "formats"
     };
 
-    // *File/*Path/*Directory 后缀之外仍指宿主路径的旋钮：显式清单，与各
-    // *BundleConfiguration 的真实属性名对齐，随配置面扩充维护。值可为标量、
-    // 字符串数组（extensionFragmentFiles/frameworkDirectories）或字符串字典（localeFiles）。
-    private static readonly Dictionary<string, HashSet<string>> PathKnobs = new(StringComparer.Ordinal)
-    {
-        ["nsis"] = new(StringComparer.OrdinalIgnoreCase)
-            { "installerIconFile", "uninstallerIconFile", "headerFile", "sidebarFile",
-              "uninstallerHeaderFile", "installerHooksFile", "customLanguageFiles" },
-        ["msi"] = new(StringComparer.OrdinalIgnoreCase)
-            { "bannerFile", "dialogFile", "expertTemplateFile", "extensionFragmentFiles",
-              "expertMergeModuleFiles", "localeFiles" },
-        ["app"] = new(StringComparer.OrdinalIgnoreCase)
-            { "frameworkDirectories" },
-        ["alpineapk"] = new(StringComparer.OrdinalIgnoreCase)
-            { "preInstallFile", "postInstallFile", "preUninstallFile",
-              "postUninstallFile", "preUpgradeFile", "postUpgradeFile" },
-    };
-
-
     private static readonly Dictionary<string, Type> SectionTypes = new(StringComparer.Ordinal)
     {
         ["nsis"] = typeof(NsisBundleConfiguration),
@@ -167,6 +148,87 @@ internal static class CliConfig
         // 更新面不是格式分节，但同样走节解析与 --update.<knob> 覆盖。
         ["update"] = typeof(UpdateBundleConfiguration)
     };
+
+    // *File/*Path/*Directory 后缀之外仍指宿主路径的旋钮。不手维护清单：由各
+    // 分节配置类型的 BundlerJsonContext 源生成元数据递归导出（AOT 安全、无运
+    // 行时反射）——JSON 键名以 *Files/*Directories 复数结尾、类型为字符串标
+    // 量/字符串集合/字符串字典的属性自动收录；shortcuts.icon、configLocations
+    // 这类载荷相对路径不带后缀天然排除。规则前提：载荷相对路径永不带
+    // File/Path/Directory/Files/Directories 后缀。
+    private static readonly Dictionary<string, HashSet<string>> PathKnobs = BuildPathKnobs();
+
+    private static Dictionary<string, HashSet<string>> BuildPathKnobs()
+    {
+        var result = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var (section, type) in SectionTypes)
+        {
+            var knobs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (BundlerJsonContext.Default.GetTypeInfo(type) is { Kind: JsonTypeInfoKind.Object } info)
+            {
+                Collect(info, knobs, []);
+            }
+            if (knobs.Count > 0)
+            {
+                result[section] = knobs;
+            }
+        }
+        return result;
+
+        static void Collect(JsonTypeInfo info, HashSet<string> knobs, HashSet<Type> seen)
+        {
+            if (!seen.Add(info.Type))
+            {
+                return;
+            }
+            foreach (var property in info.Properties)
+            {
+                var propertyType = property.PropertyType;
+                var name = property.Name;
+                if (IsHostPathKnob(name, propertyType))
+                {
+                    knobs.Add(name);
+                }
+                if (NestedConfigType(propertyType) is { } nested &&
+                    BundlerJsonContext.Default.GetTypeInfo(nested) is { Kind: JsonTypeInfoKind.Object } nestedInfo)
+                {
+                    Collect(nestedInfo, knobs, seen);
+                }
+            }
+        }
+
+        // 单数后缀已走后缀规则；这里只补复数形式。
+        static bool IsHostPathKnob(string name, Type type) =>
+            (name.EndsWith("Files", StringComparison.OrdinalIgnoreCase) ||
+             name.EndsWith("Directories", StringComparison.OrdinalIgnoreCase)) &&
+            (type == typeof(string) || IsStringCollection(type) || IsStringDictionary(type));
+
+        // IsAssignableFrom 走运行时类型句柄不依赖接口元数据——AOT 下安全；
+        // GetInterfaces() 会触发 IL2070 裁剪告警故不可用。
+        static bool IsStringCollection(Type type) =>
+            type != typeof(string) && typeof(IEnumerable<string>).IsAssignableFrom(type);
+
+        static bool IsStringDictionary(Type type) =>
+            typeof(IDictionary<string, string>).IsAssignableFrom(type) ||
+            typeof(IReadOnlyDictionary<string, string>).IsAssignableFrom(type);
+
+        // 递归目标：嵌套配置对象的类型，或集合的元素类型。字符串/字符串集合/
+        // 字典自身不进递归。
+        static Type? NestedConfigType(Type type)
+        {
+            if (type == typeof(string) || IsStringCollection(type) || IsStringDictionary(type))
+            {
+                return null;
+            }
+            if (type.IsArray)
+            {
+                return type.GetElementType();
+            }
+            var args = type.GetGenericArguments();
+            return args.Length == 1 && typeof(System.Collections.IEnumerable).IsAssignableFrom(type)
+                ? args[0]
+                : type;
+        }
+    }
 
     private static void EnforceSchema(JsonObject document)
     {
