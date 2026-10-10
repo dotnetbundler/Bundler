@@ -73,6 +73,8 @@ public static class ArtifactNaming
             // 归档词用各系统自己生态的架构词（真实案例：Node `win-x64`/`darwin-arm64`、
             // .NET `osx-arm64`；macOS `uname -m` 输出 `arm64` 不是 aarch64）——
             // windows 与安装器同词、macos 与 app/dmg/pkg 同词、linux 用 GNU 词。
+            // 生态词表只覆盖主流架构；其余可解析架构回退规范 GNU 词（如 windows-armv7hf、
+            // macos-i686），归档是通用容器，不为边缘组合造新围栏。
             PackageFormat.Zip or PackageFormat.TarGz => target.OperatingSystem switch
             {
                 TargetOperatingSystem.Windows => arch switch
@@ -80,14 +82,14 @@ public static class ArtifactNaming
                     CpuArchitecture.X64 => "windows-x64",
                     CpuArchitecture.X86 => "windows-x86",
                     CpuArchitecture.Arm64 => "windows-arm64",
-                    _ => null
+                    _ => $"windows-{BundleTarget.ArchName(arch)}"
                 },
                 TargetOperatingSystem.MacOS => arch switch
                 {
                     CpuArchitecture.X64 => "macos-x86_64",
                     CpuArchitecture.Arm64 => "macos-arm64",
                     CpuArchitecture.Universal => "macos-universal",
-                    _ => null
+                    _ => $"macos-{BundleTarget.ArchName(arch)}"
                 },
                 TargetOperatingSystem.Linux => $"linux-{BundleTarget.ArchName(arch)}",
                 _ => null

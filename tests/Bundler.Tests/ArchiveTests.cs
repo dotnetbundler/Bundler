@@ -291,6 +291,29 @@ public static class ArchiveTests
         }
     }
 
+    // 生态词表外的可解析架构回退规范 GNU 词，归档不造新围栏。
+    [Fact]
+    static void ArchiveNamesFallBackToCanonicalArchWordForExoticTargets()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "exotic-out");
+        try
+        {
+            var artifacts = new ArchiveBundler().BuildAsync(
+                Configuration(input, output, "windows-armv7hf", [PackageFormat.Zip]))
+                .GetAwaiter().GetResult();
+            Assert.EndsWith("-windows-armv7hf.zip", artifacts.Single().Path);
+            artifacts = new ArchiveBundler().BuildAsync(
+                Configuration(input, output, "macos-i686", [PackageFormat.Zip]))
+                .GetAwaiter().GetResult();
+            Assert.EndsWith("-macos-i686.zip", artifacts.Single().Path);
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
     // tar.gz 载荷走流式写出：>2GiB 单文件不再触发 byte[] 尺寸上限。
     [Fact]
     static void StreamsFilePayloadsAboveTwoGiB()

@@ -1998,6 +1998,67 @@ public static class ProgramTests
     }
 
     [Fact]
+    static async Task ResolvesLibCSpecificBackendVariants()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "publish");
+        var output = Path.Combine(root, "artifacts");
+        Directory.CreateDirectory(input);
+        await File.WriteAllTextAsync(Path.Combine(input, "ExampleApp"), "test");
+        try
+        {
+            var glibcBackend = new RecordingBackend(PackageFormat.Zip, TargetOperatingSystem.Linux, LibC.Glibc, "glibc.zip");
+            var muslBackend = new RecordingBackend(PackageFormat.Zip, TargetOperatingSystem.Linux, LibC.Musl, "musl.zip");
+            var anyBackend = new RecordingBackend(PackageFormat.TarGz, TargetOperatingSystem.Linux, null, "any-{0}.tar.gz");
+            var configuration = new BundleConfiguration
+            {
+                ProductName = "ExampleApp",
+                Identifier = "com.example.app",
+                Version = "1.0.0",
+                OutputDirectory = output,
+                Targets =
+                [
+                    new BundleTargetConfiguration
+                    {
+                        Target = "linux-x86_64", InputDirectory = input,
+                        MainExecutable = "ExampleApp", Formats = [PackageFormat.Zip, PackageFormat.TarGz]
+                    },
+                    new BundleTargetConfiguration
+                    {
+                        Target = "linux-musl-x86_64", InputDirectory = input,
+                        MainExecutable = "ExampleApp", Formats = [PackageFormat.Zip, PackageFormat.TarGz]
+                    }
+                ]
+            };
+
+            var artifacts = await new BundlePipeline([glibcBackend, muslBackend, anyBackend])
+                .BuildAsync(configuration);
+            Assert.Equal(4, artifacts.Count);
+            Assert.Equal(1, glibcBackend.InvocationCount);
+            Assert.Equal(1, muslBackend.InvocationCount);
+            Assert.Equal(2, anyBackend.InvocationCount);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    static void RejectsDuplicateBackendForSameLibC()
+    {
+        var duplicate = Assert.Throws<ArgumentException>(() => new BundlePipeline(
+        [
+            new RecordingBackend(PackageFormat.Zip, TargetOperatingSystem.Linux, LibC.Musl),
+            new RecordingBackend(PackageFormat.Zip, TargetOperatingSystem.Linux, LibC.Musl)
+        ]));
+        Assert.Contains("Duplicate backend", duplicate.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     static void RendersCompleteShortcutConfiguration()
     {
         var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Shortcut.Tests", Guid.NewGuid().ToString("N"));
@@ -2204,11 +2265,15 @@ public static class ProgramTests
 
 }
 
-file sealed class RecordingBackend : IBundleBackend
+file sealed class RecordingBackend(
+    PackageFormat format = PackageFormat.Nsis,
+    TargetOperatingSystem operatingSystem = TargetOperatingSystem.Windows,
+    LibC? requiredLibC = null,
+    string artifactName = "recording-installer.exe") : IBundleBackend
 {
-    public PackageFormat Format => PackageFormat.Nsis;
-    public TargetOperatingSystem OperatingSystem => TargetOperatingSystem.Windows;
-    public LibC? RequiredLibC => null;
+    public PackageFormat Format => format;
+    public TargetOperatingSystem OperatingSystem => operatingSystem;
+    public LibC? RequiredLibC => requiredLibC;
     public string? WorkDirectory { get; private set; }
     public int InvocationCount { get; private set; }
 
@@ -2218,7 +2283,7 @@ file sealed class RecordingBackend : IBundleBackend
     {
         InvocationCount++;
         WorkDirectory = context.WorkDirectory;
-        var path = Path.Combine(context.Item.OutputDirectory, "recording-installer.exe");
+        var path = Path.Combine(context.Item.OutputDirectory, string.Format(artifactName, context.Item.Target.Target));
         await File.WriteAllTextAsync(path, "artifact", cancellationToken);
         return [new BundleArtifact(Format, context.Item.Target.Target, path)];
     }
