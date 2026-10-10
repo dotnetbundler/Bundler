@@ -649,6 +649,36 @@ public static class CliTests
     }
 
     [Fact]
+    static void RejectsUnknownNestedSectionKeys()
+    {
+        // 嵌套对象键同样过门禁：旧名 apiIssuer 与笔误都必须报 unknown key 而非
+        // 静默丢弃（mac 验证抓到的下钻缺口）。
+        var input = CreateInputDirectory();
+        var config = Path.Combine(Path.GetTempPath(), $"bundler-{Guid.NewGuid():N}.json");
+        File.WriteAllText(config, WriteConfig(input, "/tmp/x").Replace(
+            "\"deb\":{\"section\":\"utils\"}",
+            "\"deb\":{\"section\":\"utils\",\"files\":[{\"soruce\":\"a\",\"destination\":\"b\"}]}"));
+        try
+        {
+            var (code, _, err) = Run("plan", "--config", config);
+            Assert.Equal(2, code);
+            Assert.Contains("deb.files[0].soruce", err);
+
+            File.WriteAllText(config, WriteConfig(input, "/tmp/x").Replace(
+                "\"archive\"", "\"app\":{\"signing\":{\"apiIssuer\":\"old\"}},\"archive\""));
+            var (oldKeyCode, _, oldKeyErr) = Run("plan", "--config", config);
+            Assert.Equal(2, oldKeyCode);
+            Assert.Contains("app.signing.apiIssuer", oldKeyErr);
+            Assert.Contains("apiKeyIssuer", oldKeyErr);
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+            File.Delete(config);
+        }
+    }
+
+    [Fact]
     static void PayloadRelativeKnobsStayUnresolved()
     {
         // PathKnobs 由配置类型 JSON 元数据按 *Files/*Directories 复数后缀导出；

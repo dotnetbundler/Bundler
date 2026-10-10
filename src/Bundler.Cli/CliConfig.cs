@@ -286,17 +286,24 @@ internal static class CliConfig
 
         foreach (var (section, type) in SectionTypes)
         {
-            if (document[section] is not JsonObject child)
+            if (document[section] is JsonObject child)
             {
-                continue;
+                ValidateKeys(child, type, section);
             }
-            var knownExact = (BundlerJsonContext.Default.GetTypeInfo(type)?.Properties
-                    ?? throw new InvalidOperationException(
-                        $"No JSON metadata for {type.Name}."))
-                .Select(p => p.Name)
-                .ToHashSet(StringComparer.Ordinal);
-            var knownFolded = new HashSet<string>(knownExact, StringComparer.OrdinalIgnoreCase);
-            foreach (var key in child.Select(pair => pair.Key).ToArray())
+        }
+
+        // 嵌套对象（signing/shortcuts/layout）与条目数组（files[]）逐层对照 JSON
+        // 元数据下钻；字符串字典（localeFiles/customLanguageFiles）键自由不校验。
+        static void ValidateKeys(JsonObject node, Type type, string path)
+        {
+            if (BundlerJsonContext.Default.GetTypeInfo(type) is not
+                { Kind: JsonTypeInfoKind.Object } info)
+            {
+                return;
+            }
+            var byName = info.Properties.ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
+            var knownExact = info.Properties.Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
+            foreach (var key in node.Select(pair => pair.Key).ToArray())
             {
                 // 大小写变体会被后续大小写敏感取值静默丢弃：门禁直接点破正确写法。
                 if (!knownExact.Contains(key))
@@ -306,13 +313,51 @@ internal static class CliConfig
                     if (canonical is not null)
                     {
                         throw new CliUsageException(
-                            $"Unknown key '{section}.{key}'; did you mean '{canonical}'?");
+                            $"Unknown key '{path}.{key}'; did you mean '{canonical}'?");
                     }
                     throw new CliUsageException(
-                        $"Unknown key '{section}.{key}'. Known {section} knobs: " +
-                        string.Join(", ", knownFolded.Order()) + ".");
+                        $"Unknown key '{path}.{key}'. Known {path} knobs: " +
+                        string.Join(", ", knownExact.Order()) + ".");
+                }
+                if (NestedValueType(byName[key].PropertyType) is not { } nestedType)
+                {
+                    continue;
+                }
+                switch (node[key])
+                {
+                    case JsonObject nestedObject:
+                        ValidateKeys(nestedObject, nestedType, path + "." + key);
+                        break;
+                    case JsonArray list:
+                        for (var i = 0; i < list.Count; i++)
+                        {
+                            if (list[i] is JsonObject element)
+                            {
+                                ValidateKeys(element, nestedType, $"{path}.{key}[{i}]");
+                            }
+                        }
+                        break;
                 }
             }
+        }
+
+        // 下钻目标：对象属性类型或集合元素类型；字符串字典与标量不下钻。
+        static Type? NestedValueType(Type type)
+        {
+            if (type == typeof(string) ||
+                typeof(IDictionary<string, string>).IsAssignableFrom(type) ||
+                typeof(IReadOnlyDictionary<string, string>).IsAssignableFrom(type))
+            {
+                return null;
+            }
+            if (type.IsArray)
+            {
+                return type.GetElementType();
+            }
+            var args = type.GetGenericArguments();
+            return args.Length == 1 && typeof(System.Collections.IEnumerable).IsAssignableFrom(type)
+                ? args[0]
+                : type;
         }
     }
 
