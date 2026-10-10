@@ -40,6 +40,16 @@ internal static class BootstrapPlan
             ? CanonicalPath(options.PayloadDirectory)
                 ?? throw new UsageException($"payload path '{options.PayloadDirectory}' resolves to a cyclic link.")
             : null;
+        // 拼写级互嵌先于物理判：载荷经 install 内别名节点（mountvol 挂载点/junction）
+        // 进入时拼写落在 install 之内，解真后物理位置虽在外，但访问路径依赖随换包
+        // 搬走的别名节点——放行会在 swap 中段先毁路径再取载荷（win 腿 G3 mountvol
+        // 实证）。字面嵌套一律拒，与 junction 同义。
+        if (payloadDir is not null
+            && IsSubpathOf(Path.GetFullPath(options.PayloadDirectory),
+                           Path.GetFullPath(options.InstallDirectory)))
+        {
+            throw new UsageException("backup/install/payload directories must not nest inside each other.");
+        }
         // 备份/保留是输出路径：父链物理化保留中间链接语义，但叶段必须留字面——
         // 叶段若是符号链接，解析后 rm/Delete 会清掉链接目标（配置路径之外的真实目录），
         // 而按字面删除只移除链接本身。与 POSIX 侧 norm_parent 同义。
