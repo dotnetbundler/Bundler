@@ -122,24 +122,7 @@ public static class CliProgram
             SigningFiles = first.SigningFiles,
             Formats = first.Formats
         };
-        return new BundleConfiguration
-        {
-            ProductName = source.ProductName,
-            Identifier = source.Identifier,
-            Version = source.Version,
-            Publisher = source.Publisher,
-            Description = source.Description,
-            Homepage = source.Homepage,
-            Copyright = source.Copyright,
-            LicenseFile = source.LicenseFile,
-            OutputDirectory = source.OutputDirectory,
-            Icons = source.Icons,
-            Resources = source.Resources,
-            FileAssociations = source.FileAssociations,
-            UrlProtocols = source.UrlProtocols,
-            Update = source.Update,
-            Targets = targets
-        };
+        return BundleConfigurationPaths.WithTargets(source, targets);
     }
 
 
@@ -203,6 +186,10 @@ public static class CliProgram
             }
             catch (PlatformNotSupportedException)
             {
+            }
+            catch (BundleValidationException validation)
+            {
+                issues.AddRange(validation.Issues);
             }
             catch (Exception exception) when (exception is not CliUsageException)
             {
@@ -303,6 +290,10 @@ public static class CliProgram
             {
                 pending.Add((format, single, null));
             }
+            catch (BundleValidationException validation)
+            {
+                validationErrors.AddRange(validation.Issues.Select(issue => (issue.Path, issue.Message)));
+            }
             catch (Exception exception) when (exception is not CliUsageException)
             {
                 validationErrors.Add((FormatName(format), exception.Message));
@@ -340,6 +331,19 @@ public static class CliProgram
             ? Array.Empty<string>()
             : UpdateManifestEmitter.EmitAsync(configuration, artifacts)
                 .GetAwaiter().GetResult();
+        if (configuration.Update is not null && artifacts.Count == 0)
+        {
+            logger.Log(BundleLogLevel.Warning,
+                "update is enabled but no artifacts were produced; " +
+                "no update feed was emitted — installed apps keep polling the last published feed.");
+        }
+        else if (configuration.Update is not null &&
+                 !artifacts.Any(a => UpdateManifestEmitter.IsUpdateAdapted(a.Format)))
+        {
+            logger.Log(BundleLogLevel.Warning,
+                "update is enabled but no produced format is update-adapted; " +
+                "the emitted feed carries no artifacts — clients read it as 'no update'.");
+        }
 
         if (parsed.Json)
         {
@@ -377,36 +381,20 @@ public static class CliProgram
     }
 
     private static BundleConfiguration SingleFormatConfiguration(
-        BundleConfiguration source, PackageFormat format) => new()
-        {
-            ProductName = source.ProductName,
-            Identifier = source.Identifier,
-            Version = source.Version,
-            Publisher = source.Publisher,
-            Description = source.Description,
-            Homepage = source.Homepage,
-            Copyright = source.Copyright,
-            LicenseFile = source.LicenseFile,
-            OutputDirectory = source.OutputDirectory,
-            Icons = source.Icons,
-            Resources = source.Resources,
-            FileAssociations = source.FileAssociations,
-            UrlProtocols = source.UrlProtocols,
-            Update = source.Update,
-            Targets = source.Targets.Select(target => new BundleTargetConfiguration
+        BundleConfiguration source, PackageFormat format) =>
+        BundleConfigurationPaths.WithTargets(source,
+            source.Targets.Select(target => new BundleTargetConfiguration
             {
                 RuntimeIdentifier = target.RuntimeIdentifier,
                 InputDirectory = target.InputDirectory,
                 MainExecutable = target.MainExecutable,
                 SigningFiles = target.SigningFiles,
                 Formats = [format]
-            }).ToArray()
-        };
+            }).ToArray());
 
     private static string FormatName(PackageFormat format) => format switch
     {
         PackageFormat.TarGz => "targz",
-        PackageFormat.AlpineApk => "apk",
         _ => format.ToString().ToLowerInvariant()
     };
 

@@ -85,23 +85,13 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             var applicationName = MacAppBundleBackend.SanitizeFileName(bundle.ProductName) + ".app";
             var appPath = Path.Combine(
                 bundle.OutputDirectory, item.Target.RuntimeIdentifier, "app", applicationName);
-            if (Directory.Exists(appPath))
-            {
-                CopyTree(appPath, Path.Combine(stageDirectory, applicationName), logger);
-            }
-            else if (payloadItems.Count == 0)
+            if (!Directory.Exists(appPath))
             {
                 throw new DirectoryNotFoundException(
                     "The .pkg backend expects the intermediate .app at " + appPath +
-                    " or an explicit payload (the planner adds the .app automatically " +
-                    "when 'pkg' is requested).");
+                    " (the planner adds it automatically when 'pkg' is requested).");
             }
-            else
-            {
-                logger.Log(
-                    BundleLogLevel.Information,
-                    "Intermediate .app not found; packaging the explicit payload only.");
-            }
+            CopyTree(appPath, Path.Combine(stageDirectory, applicationName), logger);
 
             foreach (var payload in payloadItems)
             {
@@ -111,7 +101,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                 }
                 var destinationName = payload.Destination
                     ?? Path.GetFileName(payload.Source.TrimEnd('/', '\\'));
-                if (string.IsNullOrEmpty(destinationName) ||
+                if (string.IsNullOrWhiteSpace(destinationName) ||
                     destinationName.Split('/', '\\').Any(segment => segment is "" or "." or ".."))
                 {
                     throw new ArgumentException(
@@ -136,10 +126,10 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             }
 
             var licenseFile = bundle.LicenseFile;
-            var useDistribution = settings.Title != null
-                || settings.WelcomeFile != null
-                || settings.ConclusionFile != null
-                || licenseFile != null
+            var useDistribution = !string.IsNullOrEmpty(settings.Title)
+                || !string.IsNullOrEmpty(settings.WelcomeFile)
+                || !string.IsNullOrEmpty(settings.ConclusionFile)
+                || !string.IsNullOrEmpty(licenseFile)
                 || settings.Domain != MacPkgInstallDomain.System;
 
             var packagePath = useDistribution
@@ -252,7 +242,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
         sb.AppendLine("<installer-gui-script minSpecVersion=\"1\">");
-        sb.AppendLine($"    <title>{XmlEscape(settings.Title ?? bundle.ProductName)}</title>");
+        sb.AppendLine($"    <title>{XmlEscape(settings.Title is { Length: > 0 } ? settings.Title : bundle.ProductName)}</title>");
 
         var resources = new List<(string element, string file)>();
         AddPage(resources, "welcome", settings.WelcomeFile);
@@ -301,7 +291,8 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
 
     private static void AddPage(List<(string element, string file)> pages, string element, string? file)
     {
-        if (file != null)
+        // 空串按未配置处理：直引 API 可注入 ""，走 GetFullPath("") 只换来裸异常。
+        if (file is { Length: > 0 })
         {
             pages.Add((element, file));
         }
@@ -324,12 +315,18 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
         CpuArchitecture.Arm64 => "arm64",
         CpuArchitecture.X64 => "x86_64",
         CpuArchitecture.X86 => "i386",
-        CpuArchitecture.Universal => "x86_64 arm64",
+        CpuArchitecture.Universal => "x86_64,arm64",
         _ => throw new NotSupportedException("Unknown .pkg target architecture: " + architecture),
     };
 
-    private static void CopyTree(string source, string destination, IBundleLogger log)
+    internal static void CopyTree(string source, string destination, IBundleLogger log, int depth = 0)
     {
+        // 目录符号链接环会让递归失控——深度封顶显式报错。
+        if (depth > 64)
+        {
+            throw new InvalidDataException(
+                "Directory nesting too deep inside the .pkg payload (possible symlink loop): " + source);
+        }
         Directory.CreateDirectory(destination);
         foreach (var file in Directory.GetFiles(source))
         {
@@ -343,7 +340,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
         }
         foreach (var directory in Directory.GetDirectories(source))
         {
-            CopyTree(directory, Path.Combine(destination, Path.GetFileName(directory)), log);
+            CopyTree(directory, Path.Combine(destination, Path.GetFileName(directory)), log, depth + 1);
         }
     }
 }

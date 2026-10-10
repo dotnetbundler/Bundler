@@ -49,7 +49,10 @@ internal static class MacAppDesktopIntegration
             var entry = settings.DocumentTypes[index];
             var display = $"documentTypes[{index}]";
             var extensions = NormalizeExtensions(entry.Extensions, display, claimed);
-            var matches = MatchingSharedIndexes(bundle.FileAssociations, extensions, association => association.Extensions);
+            // 同一 shared 项只归第一个命中的 docType——多份合并会让扩展名重复进多个
+            // CFBundleDocumentTypes，LaunchServices 归属变模糊。
+            var matches = MatchingSharedIndexes(bundle.FileAssociations, extensions,
+                association => association.Extensions).Where(index => !consumed[index]);
             if (entry.ContentTypes.Count == 0 && extensions.Length == 0 &&
                 entry.ExportedTypeIdentifier is null)
             {
@@ -68,10 +71,24 @@ internal static class MacAppDesktopIntegration
             string? name = entry.Name;
             string? description = entry.Description;
             string? mimeType = entry.MimeType;
+            var own = new HashSet<string>(
+                entry.Extensions.Select(NormalizeExtension), StringComparer.OrdinalIgnoreCase);
             foreach (var sharedIndex in matches)
             {
                 consumed[sharedIndex] = true;
                 var shared = bundle.FileAssociations[sharedIndex];
+                // 共享项合并进来的扩展名同样占位：本条自己声明的豁免，被其他
+                // docType 先占位的拒绝——否则同一扩展名进多个 CFBundleDocumentTypes。
+                foreach (var raw in shared.Extensions)
+                {
+                    var extension = NormalizeExtension(raw);
+                    if (!own.Contains(extension) && !claimed.Add(extension))
+                    {
+                        throw new ArgumentException(
+                            $"{display}: extension '{extension}' absorbed from fileAssociations[{sharedIndex}] " +
+                            "is already declared by another document type.");
+                    }
+                }
                 extensions = extensions
                     .Concat(shared.Extensions.Select(NormalizeExtension))
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -120,12 +137,25 @@ internal static class MacAppDesktopIntegration
             {
                 throw new ArgumentException($"{display}: at least one URL scheme is required.");
             }
-            var matches = MatchingSharedIndexes(bundle.UrlProtocols, schemes, protocol => protocol.Schemes);
+            var matches = MatchingSharedIndexes(bundle.UrlProtocols, schemes,
+                protocol => protocol.Schemes).Where(index => !consumed[index]);
             string? name = entry.Name;
+            var own = new HashSet<string>(
+                entry.Schemes.Select(s => (s ?? "").Trim()), StringComparer.OrdinalIgnoreCase);
             foreach (var sharedIndex in matches)
             {
                 consumed[sharedIndex] = true;
                 var shared = bundle.UrlProtocols[sharedIndex];
+                // 同 docType：共享 scheme 本条自有豁免、他占即拒。
+                foreach (var scheme in shared.Schemes)
+                {
+                    if (!own.Contains(scheme) && !claimed.Add(scheme))
+                    {
+                        throw new ArgumentException(
+                            $"{display}: scheme '{scheme}' absorbed from urlProtocols[{sharedIndex}] " +
+                            "is already declared by another URL type.");
+                    }
+                }
                 schemes = schemes.Concat(shared.Schemes)
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                 name ??= shared.Name;

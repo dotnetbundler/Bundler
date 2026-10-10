@@ -135,7 +135,17 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
     // amd64 .deb 装不上且载荷为 glibc 链接也跑不了——真装覆盖由 docker 发行版矩阵腿承担。
     private static void SkipWhenHostDpkgNotAmd64()
     {
-        var arch = ProcessRunner.Run("dpkg", ["--print-architecture"]);
+        // 非 dpkg 系宿主连进程都起不来——缺失同样算不可装，Skip 而非 ERROR。
+        ProcessRunner.Result arch;
+        try
+        {
+            arch = ProcessRunner.Run("dpkg", ["--print-architecture"]);
+        }
+        catch (Exception)
+        {
+            Assert.Skip("SKIP: host has no dpkg; amd64 packages cannot be installed here.");
+            return;
+        }
         Assert.SkipWhen(arch.ExitCode != 0 || arch.StdOut.Trim() != "amd64",
             $"SKIP: host dpkg architecture is '{(arch.ExitCode == 0 ? arch.StdOut.Trim() : "unavailable")}', " +
             "amd64 packages cannot be installed here.");

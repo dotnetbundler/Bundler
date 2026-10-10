@@ -21,6 +21,7 @@ public interface IFormatBundler
     /// （不经聚合入口直接调用时也保持配置错即 <see cref="ArgumentException"/> 族、
     /// 宿主门即 <see cref="PlatformNotSupportedException"/> 的异常契约），
     /// 其后才执行构建；构建期 IO/工具失败不属于这两类，逐格式冒泡。
+    /// 经共享校验入口调用时，共享校验失败可抛 <see cref="BundleValidationException"/>。
     /// </summary>
     Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleConfiguration bundle,

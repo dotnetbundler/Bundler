@@ -21,7 +21,7 @@ public sealed class AppImageBundleConfiguration
     public string? Version { get; init; }
 
     /// <summary>
-    /// Target architecture token (<c>x86_64</c>/<c>aarch64</c>/<c>i686</c>)
+    /// Target architecture token (<c>x86_64</c>/<c>aarch64</c>)
     /// passed to appimagetool via <c>ARCH</c>. Defaults to the RID mapping
     /// (linux-x64 → x86_64, linux-arm64 → aarch64). Cross-arch output uses the
     /// bundled runtime file when one is embedded for the target arch.

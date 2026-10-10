@@ -84,9 +84,3 @@ public sealed record WixLanguageInfo(
         return match;
     }
 }
-
-// Caller-provided localization overrides for one language. Strings replace the
-// corresponding WiX UI and Bundler string ids for that language's MSI.
-public sealed record WixLocaleOverride(
-    string Culture,
-    string LocaleFile);

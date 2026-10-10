@@ -24,3 +24,5 @@ LangString InvalidRestartMode ${LANG_JAPANESE} "/R は /S、/P、または /UPDA
 LangString ArgumentsRequireRestart ${LANG_JAPANESE} "/ARGS は /R と共に使用する場合のみ有効です。"
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_JAPANESE} "自動インストールは ${PRODUCT_NAME} に属さない空でないフォルダーを拒否しました。"
 LangString ApplicationLaunchFailed ${LANG_JAPANESE} "インストールは完了しましたが、${PRODUCT_NAME} を起動できませんでした。"
+LangString RecoveryManifestMismatch ${LANG_JAPANESE} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatchDetail ${LANG_JAPANESE} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."

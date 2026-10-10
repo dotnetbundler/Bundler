@@ -53,6 +53,12 @@ internal static class CpioWriter
             if (!isDir && entry.OpenContent is { } openContent)
             {
                 contentStream = openContent();
+                // newc 文件尺寸是 int32：>2GiB 截断产坏包，显式拒绝。
+                if (contentStream.Length > int.MaxValue)
+                {
+                    throw new ArgumentException(
+                        $"Cpio entry '{entry.Name}' exceeds the 2 GiB per-member limit of the rpm format.");
+                }
                 fileSize = (int)contentStream.Length;
             }
             else if (isDir)

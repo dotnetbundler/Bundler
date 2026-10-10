@@ -8,7 +8,7 @@ namespace DotNet.Bundler.Updater;
 /// </summary>
 internal static class UstarReader
 {
-    internal static void Extract(Stream stream, string destinationRoot)
+    internal static void Extract(Stream stream, string destinationRoot, Action<string>? log = null)
     {
         var header = new byte[512];
         var longName = (string?)null;   // GNU 'L' 续名
@@ -47,7 +47,12 @@ internal static class UstarReader
                     SkipData(stream, size);
                     var linkPath = SafePath(destinationRoot, fullName);
                     Directory.CreateDirectory(Path.GetDirectoryName(linkPath)!);
-                    CreateSymlink(target, linkPath);
+                    // 与 zip 腿（RestoreSymlinkEntries）同款 WARN——链接还原失败
+                    // 静默降级会把载荷语义丢在看不见的地方。
+                    if (!CreateSymlink(target, linkPath, destinationRoot))
+                    {
+                        log?.Invoke($"update: warning: failed to restore symlink '{fullName}' → '{target}'.");
+                    }
                     break;
                 }
                 case '5': // 目录
@@ -147,7 +152,7 @@ internal static class UstarReader
         }
     }
 
-    private static string ReadPaxPath(Stream stream, long size)
+    private static string? ReadPaxPath(Stream stream, long size)
     {
         var data = new byte[size];
         var read = 0;
@@ -158,30 +163,45 @@ internal static class UstarReader
             read += n;
         }
         SkipPadding(stream, size);
-        // "len key=value\n" 记录流——只认 path=。
-        var text = Encoding.UTF8.GetString(data);
-        foreach (var record in ParsePaxRecords(text))
+        // "len key=value\n" 记录流——len 计的是字节数，多字节名按字符切会越界。
+        // 无 path= 的纯元数据记录返回 null，调用侧的 ?? 回落到 ustar 名段。
+        foreach (var record in ParsePaxRecords(data))
         {
             if (record.StartsWith("path=", StringComparison.Ordinal))
             {
                 return record.Substring(5);
             }
         }
-        return "";
+        return null;
     }
 
-    private static IEnumerable<string> ParsePaxRecords(string text)
+    private static IEnumerable<string> ParsePaxRecords(byte[] data)
     {
         var index = 0;
-        while (index < text.Length)
+        while (index < data.Length)
         {
-            var space = text.IndexOf(' ', index);
-            if (space < 0) yield break;
-            if (!int.TryParse(text.Substring(index, space - index), out var length) || length <= 0)
+            var space = -1;
+            for (var i = index; i < data.Length && i < index + 21; i++)
+            {
+                if (data[i] == (byte)' ')
+                {
+                    space = i;
+                    break;
+                }
+            }
+            if (space < 0 ||
+                !int.TryParse(Encoding.ASCII.GetString(data, index, space - index),
+                    out var length) || length <= 0)
             {
                 yield break;
             }
-            yield return text.Substring(space + 1, length - (space - index) - 2);
+            var valueStart = space + 1;
+            var valueLength = length - (space - index) - 2; // 去 "len " 与尾 '\n'
+            if (valueLength < 0 || valueStart + valueLength > data.Length)
+            {
+                yield break;
+            }
+            yield return Encoding.UTF8.GetString(data, valueStart, valueLength);
             index += length;
         }
     }
@@ -239,10 +259,89 @@ internal static class UstarReader
     private static string ShellQuote(string value) =>
         "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
-    internal static bool CreateSymlink(string target, string linkPath)
+    // 链接目标必须留在提取根内：绝对或 ../ 逃逸目标落地后，后续条目
+    // 虽过 SafePath 字面检查，写盘时会顺已物化的链接写出暂存区。
+    // 预扫描（ContainsEscapingLink）与创建期检查共用同一判定。
+    internal static bool LinkEscapesRoot(string target, string linkPath, string containmentRoot)
+    {
+        var resolvedTarget = Path.IsPathRooted(target)
+            ? Path.GetFullPath(target)
+            : Path.GetFullPath(Path.Combine(
+                Path.GetDirectoryName(linkPath) ?? string.Empty, target));
+        var rootPrefix = Path.GetFullPath(containmentRoot)
+            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var comparison = Path.DirectorySeparatorChar == '\\'
+            ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return !resolvedTarget.StartsWith(rootPrefix, comparison) &&
+            !string.Equals(resolvedTarget,
+                rootPrefix.TrimEnd(Path.DirectorySeparatorChar), comparison);
+    }
+
+    // 原生解包预扫：归档内任一符号链接解析出提取根→true。
+    // ditto/bsdtar 自行物化链且后续条目顺链写，只能整档退回 managed 防线。
+    internal static bool ContainsEscapingLink(Stream stream, string destinationRoot)
+    {
+        var header = new byte[512];
+        string? paxPath = null;
+        string? longName = null;
+        while (ReadBlock(stream, header))
+        {
+            if (IsZeroBlock(header))
+            {
+                break;
+            }
+            var name = ReadString(header, 0, 100);
+            var size = ReadOctal(header, 124, 12);
+            var type = (char)header[156];
+            var prefix = ReadString(header, 345, 155);
+            var fullName = paxPath ?? longName ??
+                (prefix.Length > 0 ? prefix + "/" + name : name);
+            paxPath = null;
+            longName = null;
+            switch (type)
+            {
+                case 'x':
+                    paxPath = ReadPaxPath(stream, size);
+                    break;
+                case 'L':
+                    longName = ReadDataString(stream, size);
+                    break;
+                case '2':
+                {
+                    var target = ReadString(header, 157, 100);
+                    SkipData(stream, size);
+                    if (LinkEscapesRoot(target, Path.Combine(destinationRoot, fullName),
+                            destinationRoot))
+                    {
+                        return true;
+                    }
+                    break;
+                }
+                default:
+                    SkipData(stream, size);
+                    break;
+            }
+        }
+        return false;
+    }
+
+    private static bool TargetIsDirectory(string target, string linkPath)
+    {
+        var resolved = Path.IsPathRooted(target)
+            ? target
+            : Path.GetFullPath(Path.Combine(
+                Path.GetDirectoryName(linkPath) ?? string.Empty, target));
+        return Directory.Exists(resolved);
+    }
+
+    internal static bool CreateSymlink(string target, string linkPath, string containmentRoot)
     {
         try
         {
+            if (LinkEscapesRoot(target, linkPath, containmentRoot))
+            {
+                return false;
+            }
             if (File.Exists(linkPath) || Directory.Exists(linkPath))
             {
                 if (File.GetAttributes(linkPath).HasFlag(FileAttributes.Directory))
@@ -254,6 +353,25 @@ internal static class UstarReader
                     File.Delete(linkPath);
                 }
             }
+#if NET10_0_OR_GREATER
+            // net10 腿走托管 API，不再拉起 /bin/ln 子进程。Windows 链型分文件/目录
+            // 两型且 File.CreateSymbolicLink 恒产文件型——归档里还原出的目录链接
+            // 若按文件型落地则无法穿越，按解析后目标实型选型；悬挂目标回退文件型
+            // （归档不记链接的目录位，无从确知）。归档统一存 POSIX 形态目标，
+            // Windows 需转回 \ 链才可解析（UnixLinks.ReadLink 已把 \\ 归一成 /）。
+            var linkTarget = OperatingSystem.IsWindows()
+                ? target.Replace('/', '\\')
+                : target;
+            if (OperatingSystem.IsWindows() && TargetIsDirectory(target, linkPath))
+            {
+                Directory.CreateSymbolicLink(linkPath, linkTarget);
+            }
+            else
+            {
+                File.CreateSymbolicLink(linkPath, linkTarget);
+            }
+            return true;
+#else
             using var process = System.Diagnostics.Process.Start(
                 new System.Diagnostics.ProcessStartInfo("/bin/ln",
                     "-sfn " + ShellQuote(target) + " " + ShellQuote(linkPath))
@@ -268,10 +386,11 @@ internal static class UstarReader
                 return false;
             }
             return process.ExitCode == 0;
+#endif
         }
         catch (Exception)
         {
-            // 宿主无 ln（windows 裸环境）：链接退化为跳过——主要语义不受影响。
+            // 链接退化路径（无权限/宿主无 ln）：链接退化为跳过——主要语义不受影响。
             return false;
         }
     }

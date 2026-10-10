@@ -24,3 +24,5 @@ LangString InvalidRestartMode ${LANG_ITALIAN} "/R è valido solo insieme a /S, /
 LangString ArgumentsRequireRestart ${LANG_ITALIAN} "/ARGS è valido solo insieme a /R."
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_ITALIAN} "L'installazione automatica ha rifiutato una cartella non vuota che non appartiene a ${PRODUCT_NAME}."
 LangString ApplicationLaunchFailed ${LANG_ITALIAN} "Installazione completata, ma non è stato possibile avviare ${PRODUCT_NAME}."
+LangString RecoveryManifestMismatch ${LANG_ITALIAN} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatchDetail ${LANG_ITALIAN} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."

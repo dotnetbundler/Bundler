@@ -103,11 +103,18 @@ internal static class CliConfig
     }
 
     // Schema is fixed: unknown keys (typos) are rejected rather than ignored.
-    private static readonly HashSet<string> TopLevelFields = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> TopLevelFields = new(StringComparer.Ordinal)
     {
         "productName", "identifier", "version", "publisher", "description", "homepage",
         "copyright", "licenseFile", "outputDirectory", "icons", "resources",
         "fileAssociations", "urlProtocols", "targets"
+    };
+
+    // 全平台格式分节名（不分宿主）：写错宿主的节给"本宿主不支持"而不是 Unknown-key。
+    private static readonly HashSet<string> AllFormatSections = new(StringComparer.Ordinal)
+    {
+        "nsis", "msi", "app", "dmg", "pkg", "deb", "rpm", "appimage",
+        "archive", "alpineapk"
     };
 
     private static readonly HashSet<string> TargetFields_Exact = new(StringComparer.Ordinal)
@@ -120,32 +127,22 @@ internal static class CliConfig
         "runtimeIdentifier", "inputDirectory", "mainExecutable", "signingFiles", "formats"
     };
 
-    // *File/*Path/*Directory 后缀之外仍指宿主路径的旋钮：显式清单，随配置面扩充维护。
+    // *File/*Path/*Directory 后缀之外仍指宿主路径的旋钮：显式清单，与各
+    // *BundleConfiguration 的真实属性名对齐，随配置面扩充维护。值可为标量、
+    // 字符串数组（extensionFragments/frameworks）或字符串字典（localeFiles）。
     private static readonly Dictionary<string, HashSet<string>> PathKnobs = new(StringComparer.Ordinal)
     {
         ["nsis"] = new(StringComparer.OrdinalIgnoreCase)
-            { "installerIcon", "uninstallerIcon", "headerImage", "sidebarImage", "uninstallerHeaderImage", "license" },
+            { "installerIcon", "uninstallerIcon", "headerImage", "sidebarImage",
+              "uninstallerHeaderImage", "installerHooks", "customLanguageFiles", "icon" },
         ["msi"] = new(StringComparer.OrdinalIgnoreCase)
-            { "license" },
+            { "bannerBitmap", "dialogBitmap", "expertTemplate", "extensionFragments",
+              "expertMergeModules", "localeFiles" },
         ["app"] = new(StringComparer.OrdinalIgnoreCase)
-            { "icon", "entitlements", "provisioningProfile" },
-        ["dmg"] = new(StringComparer.OrdinalIgnoreCase)
-            { "icon", "backgroundImage", "volumeIcon", "license" },
-        ["pkg"] = new(StringComparer.OrdinalIgnoreCase)
-            { "icon", "license", "welcome", "readme", "conclusion", "title" },
-        ["deb"] = new(StringComparer.OrdinalIgnoreCase)
-            { "icon", "desktopFile", "metainfoFile", "changelog", "systemdService" },
-        ["rpm"] = new(StringComparer.OrdinalIgnoreCase)
-            { "icon", "desktopFile", "metainfoFile", "changelog", "triggerIn", "triggerUn",
-              "triggerPostUn", "preInstallScript", "postInstallScript",
-              "preDeinstallScript", "postDeinstallScript", "preUpgradeScript", "postUpgradeScript",
-              "signingKey" },
-        ["appimage"] = new(StringComparer.OrdinalIgnoreCase)
-            { "icon", "desktopFile", "metainfoFile" },
+            { "frameworks" },
         ["alpineapk"] = new(StringComparer.OrdinalIgnoreCase)
-            { "icon", "desktopFile", "metainfoFile" },
-        ["update"] = new(StringComparer.OrdinalIgnoreCase)
-            { "signingKey", "bootstrapperDirectory" },
+            { "preInstallScript", "postInstallScript", "preDeinstallScript",
+              "postDeinstallScript", "preUpgradeScript", "postUpgradeScript" },
     };
 
 
@@ -175,13 +172,27 @@ internal static class CliConfig
     {
         foreach (var key in document.Select(pair => pair.Key).ToArray())
         {
-            if (!TopLevelFields.Contains(key) && !SectionTypes.ContainsKey(key.ToLowerInvariant()))
+            if (TopLevelFields.Contains(key) || SectionTypes.ContainsKey(key))
+            {
+                continue;
+            }
+            var canonical = TopLevelFields.Concat(SectionTypes.Keys)
+                .FirstOrDefault(known => string.Equals(known, key, StringComparison.OrdinalIgnoreCase));
+            if (canonical is not null)
+            {
+                // 大小写变体过门禁后会被大小写敏感的取值静默丢弃：直接点破正确写法。
+                throw new CliUsageException(
+                    $"Unknown configuration key '{key}'; did you mean '{canonical}'?");
+            }
+            if (AllFormatSections.Contains(key.ToLowerInvariant()))
             {
                 throw new CliUsageException(
-                    $"Unknown configuration key '{key}'. Known top-level fields: " +
-                    string.Join(", ", TopLevelFields.Order()) +
-                    "; format sections: " + string.Join(", ", SectionTypes.Keys.Order()) + ".");
+                    $"The '{key}' format section is not supported on this host.");
             }
+            throw new CliUsageException(
+                $"Unknown configuration key '{key}'. Known top-level fields: " +
+                string.Join(", ", TopLevelFields.Order()) +
+                "; format sections: " + string.Join(", ", SectionTypes.Keys.Order()) + ".");
         }
 
         if (document["targets"] is JsonArray targets)
@@ -261,36 +272,82 @@ internal static class CliConfig
                 var knob = name[(dot + 1)..];
                 if (!FormatSections.Contains(section))
                 {
-                    throw new CliUsageException(
-                        $"Unknown format section '--{section}'. Supported: {string.Join(", ", FormatSections.Order())}.");
+                    throw new CliUsageException(AllFormatSections.Contains(section)
+                        ? $"The '--{section}' format section is not supported on this host."
+                        : $"Unknown format section '--{section}'. Supported: {string.Join(", ", FormatSections.Order())}.");
                 }
                 var child = document[section] as JsonObject ?? new JsonObject();
-                // CLI 覆盖值相对当前工作目录解析，不走配置文件的 baseDirectory。
-                child[KnobName(knob)] = ParseValue(
-                    IsPathKnob(section, KnobName(knob))
-                        ? ResolveOverridePath(value)
-                        : value);
+                var knobName = KnobName(knob);
+                // CLI 覆盖值相对当前工作目录解析，不走配置文件的 baseDirectory；
+                // 路径旋钮不过 ParseValue 的数值强转（"00123"/"true" 是合法文件名）。
+                var sectionValue = IsPathKnob(section, knobName) ? ParsePathValue(value) : ParseValue(value);
+                child[knobName] = AsCollectionElement(
+                    IsPathKnob(section, knobName) ? ResolveOverridePaths(sectionValue) : sectionValue,
+                    SectionTypes[section], knobName);
                 document[section] = child;
                 continue;
             }
-            document[FieldName(name)] = ParseValue(
-                SharedPathFields.Contains(FieldName(name))
-                    ? ResolveOverridePath(value)
-                    : value);
+            var fieldName = FieldName(name);
+            var overrideValue = SharedPathFields.Contains(fieldName) ? ParsePathValue(value) : ParseValue(value);
+            document[fieldName] = AsCollectionElement(
+                SharedPathFields.Contains(fieldName) ? ResolveOverridePaths(overrideValue) : overrideValue,
+                typeof(BundleConfiguration), fieldName);
         }
     }
 
-    // 逗号在 ParseValue 里是列表分隔符——路径类覆盖值必须先拆列表再逐项判 rooted，
-    // 否则 `--icons=a.png,b.png` 整体 GetFullPath 只保第一项；`/abs/a.png,b.png`
-    // 又因整串 rooted 早退，`b.png` 会被下游误解析到配置文件目录。
-    private static string ResolveOverridePath(string value)
+    // 逗号在 ParseValue 里是列表分隔符——路径类覆盖值先按 JSON 形状解析，
+    // 再对每个叶串逐项判 rooted：`--icons=a.png,b.png` 成数组逐项解析；
+    // `--msi.locale-files={"en":"a.wxl","de":"b.wxl"}` 这类 JSON 字典/数组
+    // 内的路径同样按工作目录解析，逗号不再把 JSON 拆开。
+    // 路径旋钮专用：不做数字/布尔强转——"00123"/"true" 是合法文件名；
+    // JSON 容器仍按形状解析（叶串原样），逗号列表按原文逐项拆。
+    private static JsonNode? ParsePathValue(string value)
     {
+        if (value.StartsWith('[') || value.StartsWith('{'))
+        {
+            try
+            {
+                return JsonNode.Parse(value);
+            }
+            catch (JsonException)
+            {
+                // fall through: treat as a plain string
+            }
+        }
         if (value.Contains(','))
         {
-            return string.Join(',', value.Split(',', StringSplitOptions.TrimEntries)
-                .Select(entry => Path.IsPathRooted(entry) ? entry : Path.GetFullPath(entry)));
+            return new JsonArray(value.Split(',', StringSplitOptions.TrimEntries)
+                .Select<string, JsonNode?>(entry => entry).ToArray());
         }
-        return Path.IsPathRooted(value) ? value : Path.GetFullPath(value);
+        return JsonValue.Create(value);
+    }
+
+    private static JsonNode? ResolveOverridePaths(JsonNode? node)
+    {
+        switch (node)
+        {
+            case JsonValue scalar when scalar.TryGetValue<string>(out var path) && path.Length > 0:
+                return JsonValue.Create(Path.IsPathRooted(path) ? path : Path.GetFullPath(path));
+            // 路径串恰为数字/布尔字面量（文件 "123"、"true"）时被 ParseValue
+            // 收成了非字符串 JsonValue——还原成串再按 cwd 解析，否则反序列化失败。
+            case JsonValue scalar when scalar.GetValueKind() is
+                JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False:
+                return JsonValue.Create(Path.GetFullPath(scalar.ToJsonString()));
+            case JsonArray list:
+                for (var i = 0; i < list.Count; i++)
+                {
+                    list[i] = ResolveOverridePaths(list[i]);
+                }
+                return list;
+            case JsonObject obj:
+                foreach (var key in obj.Select(pair => pair.Key).ToArray())
+                {
+                    obj[key] = ResolveOverridePaths(obj[key]);
+                }
+                return obj;
+            default:
+                return node;
+        }
     }
 
     // --main-executable → targets[0].mainExecutable etc.; scalar target-level
@@ -361,45 +418,94 @@ internal static class CliConfig
         return JsonValue.Create(value);
     }
 
-    // 共享字段的路径解析在反序列化后由 BundleConfigurationLoader.ResolvePaths 统一完成，
-    // 这里只剩各格式分节（update 也走共享面，跳过）。
+    // 列表型旋钮的单值覆盖（--icons=a.png、--deb.depends=libc6）先包一层 JsonArray，
+    // 否则标量进 IReadOnlyList 字段在反序列化时以 JsonException 炸成 rc=1。
+    private static JsonNode? AsCollectionElement(JsonNode? node, Type owner, string propertyName)
+    {
+        if (node is null or JsonArray)
+        {
+            return node;
+        }
+        var propertyType = BundlerJsonContext.Default.GetTypeInfo(owner)?.Properties
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.Name, propertyName, StringComparison.Ordinal))
+            ?.PropertyType;
+        return propertyType is not null && IsJsonCollection(propertyType)
+            ? new JsonArray(node)
+            : node;
+    }
+
+    private static bool IsJsonCollection(Type type) =>
+        type != typeof(string) &&
+        !typeof(System.Collections.IDictionary).IsAssignableFrom(type) &&
+        !(type.IsGenericType &&
+            type.GetGenericTypeDefinition() is { } generic &&
+            (generic == typeof(IReadOnlyDictionary<,>) || generic == typeof(IDictionary<,>))) &&
+        typeof(System.Collections.IEnumerable).IsAssignableFrom(type);
+
+    // 共享字段的路径解析在反序列化后由 BundleConfigurationPaths.Resolve 统一完成，
+    // 这里只剩各格式分节（update 也走共享面，跳过）。递归走查：标量按 *File/
+    // *Path/*Directory 后缀、PathKnobs 显式表或 source 键判定；路径型数组/字典逐
+    // 元素解析；嵌套对象（signing/shortcuts）与条目数组（files/payloadItems/
+    // contents）递归——同一套判定在每个层级生效。
     private static void ResolveRelativePaths(JsonObject document, string baseDirectory)
     {
         static string Resolve(string baseDir, string path) =>
             Path.IsPathRooted(path) ? path : Path.GetFullPath(path, baseDir);
 
-        // Format sections: resolve *File scalar knobs and files[].source entries.
         foreach (var section in FormatSections.Where(name => name != "update"))
         {
-            if (document[section] is not JsonObject child)
+            if (document[section] is JsonObject child)
             {
-                continue;
+                ResolveSection(child, section);
             }
-            foreach (var key in child.Select(pair => pair.Key).ToArray())
+        }
+
+        void ResolveSection(JsonObject node, string section)
+        {
+            foreach (var key in node.Select(pair => pair.Key).ToArray())
             {
-                var node = child[key];
-                if (node is JsonValue v && v.TryGetValue<string>(out var path) &&
-                    path.Length > 0 &&
-                    (key.EndsWith("File", StringComparison.OrdinalIgnoreCase) ||
-                     key.EndsWith("Path", StringComparison.OrdinalIgnoreCase) ||
-                     key.EndsWith("Directory", StringComparison.OrdinalIgnoreCase) ||
-                     PathKnobs.TryGetValue(section, out var knobs) && knobs.Contains(key)))
+                var value = node[key];
+                var isPath = key.EndsWith("File", StringComparison.OrdinalIgnoreCase) ||
+                    key.EndsWith("Path", StringComparison.OrdinalIgnoreCase) ||
+                    key.EndsWith("Directory", StringComparison.OrdinalIgnoreCase) ||
+                    key.Equals("source", StringComparison.OrdinalIgnoreCase) ||
+                    PathKnobs.TryGetValue(section, out var knobs) && knobs.Contains(key);
+                switch (value)
                 {
-                    child[key] = Resolve(baseDirectory, path);
-                }
-            }
-            foreach (var listName in new[] { "files", "payloadItems", "contents", "frameworks" })
-            {
-                if (child[listName] is JsonArray entries)
-                {
-                    foreach (var entry in entries.OfType<JsonObject>())
-                    {
-                        if (entry["source"] is JsonValue v &&
-                            v.TryGetValue<string>(out var p) && p.Length > 0)
+                    case JsonValue scalar when isPath &&
+                        scalar.TryGetValue<string>(out var path) && path.Length > 0:
+                        node[key] = Resolve(baseDirectory, path);
+                        break;
+                    case JsonArray list when isPath:
+                        for (var i = 0; i < list.Count; i++)
                         {
-                            entry["source"] = Resolve(baseDirectory, p);
+                            if (list[i] is JsonValue element &&
+                                element.TryGetValue<string>(out var p) && p.Length > 0)
+                            {
+                                list[i] = Resolve(baseDirectory, p);
+                            }
                         }
-                    }
+                        break;
+                    case JsonObject dictionary when isPath:
+                        foreach (var dictKey in dictionary.Select(pair => pair.Key).ToArray())
+                        {
+                            if (dictionary[dictKey] is JsonValue element &&
+                                element.TryGetValue<string>(out var p) && p.Length > 0)
+                            {
+                                dictionary[dictKey] = Resolve(baseDirectory, p);
+                            }
+                        }
+                        break;
+                    case JsonObject nested:
+                        ResolveSection(nested, section);
+                        break;
+                    case JsonArray entries:
+                        foreach (var entry in entries.OfType<JsonObject>())
+                        {
+                            ResolveSection(entry, section);
+                        }
+                        break;
                 }
             }
         }

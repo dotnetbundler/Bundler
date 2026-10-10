@@ -20,7 +20,13 @@ say "2/4 全量测试（四工程）"
 for P in Bundler.Tests Bundler.ApiTests Bundler.IntegrationTests Bundler.LocalPackagesTests; do
     DLL="tests/$P/bin/Release/net10.0/$P.dll"
     if [ "$P" = "Bundler.IntegrationTests" ]; then
-        mapfile -t CLASSES < <(dotnet "$DLL" -list classes | grep -E '^\w[\w.]*$' || true)
+        # mapfile 是 bash>=4 内建（macOS runner 自带 bash 3.2.57）——while 读行代替。
+        # -list classes 本身失败也要判败：进程替换会丢退出码，先落变量再查。
+        LIST_OUT="$(dotnet "$DLL" -list classes)" || { echo "-list classes 退出码非零，判失败" >&2; exit 1; }
+        CLASSES=()
+        while IFS= read -r line; do
+            [[ "$line" =~ ^[[:alnum:]_][[:alnum:]_.]*$ ]] && CLASSES+=("$line")
+        done <<< "$LIST_OUT"
         if [ ${#CLASSES[@]} -eq 0 ]; then
             echo "-list classes 无输出：集成测试可能整段蒸发，判失败" >&2; exit 1
         fi
@@ -86,8 +92,10 @@ elif [ "$OS" = "Darwin" ]; then
         # Rosetta 腿：osx-x64 件在 arm64+Rosetta 下实跑（Intel Mac 行的另一半）
         produce "MacApp/BundlerMacAppIntegrationFixture.csproj"       "osx-x64" "app-x64"
         produce "MacDmg/BundlerMacDmgIntegrationFixture.csproj"       "osx-x64" "dmg-x64"
+        # runner 未预置 Rosetta 时需管理员权限安装；失败要进失败统计而不是裸挂。
         /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null \
-            || softwareupdate --install-rosetta --agree-to-license
+            || sudo softwareupdate --install-rosetta --agree-to-license \
+            || { echo "Rosetta 安装失败" >&2; FAILED_LEGS="$FAILED_LEGS rosetta-install"; exit 1; }
         run_leg "intel-x64(rosetta)" bash "$SP/mac/intel-x64.sh" \
             --app "$(finddir app-x64 '*.app')" --dmg "$(find1 dmg-x64 '*.dmg')"
     fi

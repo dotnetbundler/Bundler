@@ -20,12 +20,16 @@ esac; done
 WORK="$(mktemp -d /tmp/bundler-intel-XXXXXX)"; trap 'rm -rf "$WORK"' EXIT
 
 if [ -n "$BIN" ] && [ -f "$BIN" ]; then
-    out=$("$BIN" --version 2>&1 || "$BIN" --help 2>&1 | head -1)
+    out=$({ "$BIN" --version 2>&1 || "$BIN" --help 2>&1 | head -1; } || true)
     note "osx-x64 二进制实跑" "PASS" "$out"
 fi
 if [ -n "$APP" ] && [ -d "$APP" ]; then
     cp -a "$APP" "$WORK/app.app"
-    "$WORK/app.app/Contents/MacOS/"* --version >/dev/null 2>&1 \
+    # MacOS/ 内按字母序首件常是 createdump 等辅助件——按 CFBundleExecutable 取主程序。
+    exe="$(defaults read "$WORK/app.app/Contents/Info" CFBundleExecutable 2>/dev/null || true)"
+    [ -n "$exe" ] && [ -x "$WORK/app.app/Contents/MacOS/$exe" ] \
+        || die "CFBundleExecutable 不存在或不可执行: $exe"
+    "$WORK/app.app/Contents/MacOS/$exe" --version >/dev/null 2>&1 \
         && note ".app x64 进程起" "PASS" "" || note ".app x64 进程起" "FAIL" ""
 fi
 if [ -n "$DMG" ] && [ -f "$DMG" ]; then

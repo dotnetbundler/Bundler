@@ -1,3 +1,4 @@
+#requires -Version 7
 # UAC 伴随验收：per-machine NSIS/MSI 真装真卸走真 UAC 弹窗，断言 ProgramFiles 落位、
 # HKLM 卸载项、非管理员工具目录拒写。半自动——脚本暂停等人工点 UAC。
 # 必须从非提权终端跑：安装器内部的 UAC 弹窗才是验收对象；脚本自身若已提权，

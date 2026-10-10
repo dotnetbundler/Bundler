@@ -18,7 +18,9 @@ cp -a "$APP" "$WORK/app.app"
 
 # 加 quarantine xattr（模拟浏览器下载）
 xattr -w com.apple.quarantine "0083;00000000;Safari;" -r "$WORK/app.app"
-xattr -r "$WORK/app.app" | grep -q com.apple.quarantine \
+# xattr 直管 grep -q 会被 SIGPIPE 撞成假败（pipefail）——先落盘再查。
+xattrout="$(xattr -r "$WORK/app.app" 2>/dev/null || true)"
+grep -q com.apple.quarantine <<<"$xattrout" \
     && note "quarantine 标记落位" "PASS" "" || note "quarantine 标记落位" "FAIL" ""
 
 wait_human "双击 $WORK/app.app——Gatekeeper 弹窗文案记下（未签名=阻止/公证=放行）"

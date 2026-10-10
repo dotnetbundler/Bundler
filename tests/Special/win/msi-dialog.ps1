@@ -1,3 +1,4 @@
+#requires -Version 7
 # MSI 交互对话验收：Browse 换目录/InvalidDir/Feature 页/装完启动勾选/位图缩放——
 # 每条都是半自动：脚本起 msiexec 安装，人走 UI，脚本断言落位。
 param(

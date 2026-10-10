@@ -10,7 +10,7 @@ public static class BundleConfigurationValidator
         "^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$",
         RegexOptions.Compiled);
     private static readonly Regex VersionPattern = new(
-        "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+        "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$",
         RegexOptions.Compiled);
     private static readonly Regex FileExtensionPattern = new(
         "^[A-Za-z0-9][A-Za-z0-9_+-]{0,63}$",
@@ -148,9 +148,11 @@ public static class BundleConfigurationValidator
                         "Must match the public half of update.signingKeyFile."));
                 }
             }
+            // netstandard2.0 腿无 System.Text.Json 引用——按全名匹配其 JsonException。
             catch (Exception error) when (error is IOException or InvalidOperationException
                 or System.Runtime.Serialization.SerializationException
-                or UnauthorizedAccessException or FormatException or ArgumentException)
+                or UnauthorizedAccessException or FormatException or ArgumentException
+                || error.GetType().FullName == "System.Text.Json.JsonException")
             {
                 issues.Add(new("update.signingKeyFile",
                     $"Cannot be parsed as an ec-p256 key file: {error.Message}"));
@@ -291,33 +293,20 @@ public static class BundleConfigurationValidator
         for (var targetIndex = 0; targetIndex < configuration.Targets.Count; targetIndex++)
         {
             var target = configuration.Targets[targetIndex];
-            foreach (var format in target.Formats)
+            // 注入的中间 App 项同样占输出槽：dmg/pkg 未显式带 app 时 planner 会
+            // 补一个中间 app——同 rid 双 target 判定不能漏它。
+            var formats = target.Formats.Concat(
+                target.Formats.Any(format => format is PackageFormat.Dmg or PackageFormat.Pkg) &&
+                !target.Formats.Contains(PackageFormat.App)
+                    ? new[] { PackageFormat.App }
+                    : []);
+            foreach (var format in formats)
             {
                 var key = $"{target.RuntimeIdentifier}:{format}";
                 if (!outputs.Add(key))
                 {
                     issues.Add(new($"targets[{targetIndex}].formats", $"Duplicate output requested: {key}."));
                 }
-            }
-        }
-    }
-
-    private static void ValidatePaths(
-        IReadOnlyList<string> paths,
-        string propertyName,
-        bool checkFileSystem,
-        List<ValidationIssue> issues)
-    {
-        if (!checkFileSystem)
-        {
-            return;
-        }
-
-        for (var index = 0; index < paths.Count; index++)
-        {
-            if (!File.Exists(paths[index]) && !Directory.Exists(paths[index]))
-            {
-                issues.Add(new($"{propertyName}[{index}]", $"Path does not exist: {paths[index]}"));
             }
         }
     }

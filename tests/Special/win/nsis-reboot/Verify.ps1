@@ -1,4 +1,5 @@
-﻿param(
+#requires -Version 7
+param(
     [Parameter(Mandatory = $true)]
     [ValidateSet("Prepare", "Verify")]
     [string]$Phase,

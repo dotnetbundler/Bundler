@@ -385,11 +385,7 @@ public static class UpdateTests
     [Fact]
     static void BootstrapPlan_KeepPayload_PreservesSymlinkAndExecBit()
     {
-        if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
-                System.Runtime.InteropServices.OSPlatform.Linux))
-        {
-            Assert.Skip("Linux-only leg.");
-        }
+        Assert.SkipWhen(!OperatingSystem.IsLinux(), "Linux-only leg.");
         var directory = CreateTempDirectory();
         try
         {
@@ -400,6 +396,7 @@ public static class UpdateTests
             File.WriteAllText(Path.Combine(install, "app"), "v1");
             var payloadExe = Path.Combine(payload, "hello");
             File.WriteAllText(payloadExe, "#!/bin/sh\necho hi\n");
+            // CA1416 分析器不认 SkipWhen——守卫保留给编译期平台判断。
             if (OperatingSystem.IsLinux())
             {
                 File.SetUnixFileMode(payloadExe, UnixFileMode.UserRead | UnixFileMode.UserWrite |
@@ -608,6 +605,17 @@ public static class UpdateTests
                     InstallDirectory = install,
                     PayloadDirectory = install + Path.DirectorySeparatorChar
                 }, lines.Add));
+
+        // 卷根装位没有同级位置放默认备份槽（拼出的 install.bundler-backup 病态）→
+        // 明确拒绝并提示显式 --backup-dir。
+        var rootError = Assert.Throws<DotNet.Bundler.Updater.Bootstrap.UsageException>(() =>
+            DotNet.Bundler.Updater.Bootstrap.BootstrapPlan.Apply(
+                new DotNet.Bundler.Updater.Bootstrap.BootstrapOptions
+                {
+                    InstallDirectory = Path.GetPathRoot(directory)!,
+                    PayloadDirectory = payload
+                }, lines.Add));
+        Assert.Contains("volume root", rootError.Message);
 
         // 载荷是安装的祖先目录 → 拒绝（MoveTree 退化复制后删源父级，连备份一起抹）。
         var outer = Path.Combine(directory, "outer");
@@ -1144,6 +1152,58 @@ public static class UpdateTests
     }
 
     [Fact]
+    static void Emitter_NoUpdateAdaptedArtifacts_StillEmitsSignedEmptyFeed()
+    {
+        // R2-N9：更新开启但产物全走非适配格式（deb/rpm 包管理器领地）时曾静默
+        // 不发清单——已装应用按旁车 feedUrl 轮询会拉空失败。现须发签名空清单，
+        // 客户端读作"无更新"。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var keyPath = Path.Combine(directory, "key.json");
+            UpdateKeyMaterial.Generate().Save(keyPath);
+            var debPath = Path.Combine(directory, "linux-x64", "deb", "app.deb");
+            Directory.CreateDirectory(Path.GetDirectoryName(debPath)!);
+            File.WriteAllText(debPath, "deb-payload");
+
+            var configuration = new BundleConfiguration
+            {
+                ProductName = "App",
+                Identifier = "com.example.app",
+                Version = "2.0.0",
+                OutputDirectory = directory,
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://example.test/updates",
+                    Channel = "stable",
+                    SigningKeyFile = keyPath,
+                }
+            };
+            var artifacts = new[]
+            {
+                new BundleArtifact(PackageFormat.Deb, "linux-x64", debPath),
+            };
+
+            var produced = UpdateManifestEmitter.EmitAsync(configuration, artifacts)
+                .GetAwaiter().GetResult();
+
+            var feedPath = Path.Combine(directory, "bundler-update-feed.stable.json");
+            Assert.True(File.Exists(feedPath));
+            Assert.True(File.Exists(feedPath + ".sig"));
+            Assert.Contains(feedPath, produced);
+            using var document = JsonDocument.Parse(File.ReadAllText(feedPath));
+            Assert.Empty(document.RootElement.GetProperty("artifacts").EnumerateArray());
+            var material = UpdateKeyMaterial.Load(keyPath);
+            Assert.True(EcdsaSigner.VerifyFile(
+                feedPath, File.ReadAllBytes(feedPath + ".sig"), material));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     static void Applier_PayloadResolution_RequiresNoRootFilesForUnwrap()
     {
         var directory = CreateTempDirectory();
@@ -1529,6 +1589,47 @@ public static class UpdateTests
             var link = new FileInfo(Path.Combine(staging, "stem", "link.txt"));
             Assert.Equal("real.txt", link.LinkTarget);
             Assert.Equal("linked", File.ReadAllText(link.FullName));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void ExtractZip_RejectsSymlinkEscapingStaging()
+    {
+        // 链接目标解出暂存根外（../ 或绝对）时还原必须拒——否则后续条目
+        // 虽过 SafePath 字面检查，写盘会顺已物化的链接写出暂存区。
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "symlink restore is POSIX-only");
+        var directory = CreateTempDirectory();
+        try
+        {
+            var zipPath = Path.Combine(directory, "payload.zip");
+            using (var stream = new FileStream(zipPath, FileMode.Create, FileAccess.Write))
+            {
+                DotNet.Bundler.Archive.ZipWriter.Write(stream,
+                [
+                    new DotNet.Bundler.Archive.ZipEntry
+                    {
+                        Name = "stem/link",
+                        Kind = DotNet.Bundler.Archive.ZipEntryKind.Symlink,
+                        Mode = 511,
+                        LinkTarget = "../../outside",
+                    },
+                ]);
+            }
+            var staging = Path.Combine(directory, "staging");
+            Directory.CreateDirectory(staging);
+            var warnings = new List<string>();
+
+            DotNet.Bundler.Updater.ArchiveExtractor.ExtractZipToDirectory(
+                zipPath, staging, warnings.Add);
+
+            var linkPath = Path.Combine(staging, "stem", "link");
+            Assert.True(new FileInfo(linkPath).LinkTarget is null,
+                "escaping symlink target must not be materialized");
+            Assert.Contains(warnings, w => w.Contains("failed to restore symlink", StringComparison.Ordinal));
         }
         finally
         {

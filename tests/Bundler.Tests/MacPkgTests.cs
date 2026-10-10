@@ -428,6 +428,186 @@ public static class MacPkgTests
             "The MSBuild task does not construct the .pkg backend.");
     }
 
+    // R2 N1: rid=osx 分发包的 hostArchitectures 必须是逗号分隔（Apple 约定）。
+    [Fact]
+    static async Task HostArchitecturesCommaSeparated()
+    {
+        var input = CreateInputDirectory();
+        // osx 通用载荷要求 fat Mach-O（x86_64+arm64）。
+        File.WriteAllBytes(Path.Combine(input, "ExampleApp"), FakeFatMachO(0x01000007, 0x0100000C));
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var distribution = "";
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            if (request.Executable == "productbuild")
+            {
+                var args = request.Arguments.ToList();
+                distribution = File.ReadAllText(args[args.IndexOf("--distribution") + 1]);
+            }
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacPkgBundler(new MacPkgBundleConfiguration { Title = "T" })
+                .BuildAsync(PkgConfiguration(input, output, rid: "osx"));
+            Assert.Contains("hostArchitectures=\"x86_64,arm64\"", distribution);
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    // R2 N5: 空字符串页文件/标题按未配置处理——不炸 GetFullPath("")，也不误升分发包。
+    [Fact]
+    static async Task EmptyPageFilesStayComponentPkg()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var requests = new List<MacPkgProcessRunner.Request>();
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            var artifacts = await new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Title = "", WelcomeFile = "", ConclusionFile = ""
+                })
+                .BuildAsync(PkgConfiguration(input, output));
+            Assert.True(File.Exists(artifacts.Single(a => a.Format == PackageFormat.Pkg).Path));
+            Assert.DoesNotContain(requests, r => r.Executable == "productbuild");
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    // R2 N5: 空 WelcomeFile 混真实 ConclusionFile 时——分发包照出、welcome 元素缺席、title 回退产品名。
+    [Fact]
+    static async Task EmptyPageFileSkippedInDistribution()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var distribution = "";
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            if (request.Executable == "productbuild")
+            {
+                var args = request.Arguments.ToList();
+                distribution = File.ReadAllText(args[args.IndexOf("--distribution") + 1]);
+            }
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Title = "", WelcomeFile = "",
+                    ConclusionFile = CreateTextFile(input, "conclusion.rtf", "done")
+                })
+                .BuildAsync(PkgConfiguration(input, output));
+            Assert.Contains("<title>ExampleApp</title>", distribution);
+            Assert.DoesNotContain("<welcome", distribution);
+            Assert.Contains("<conclusion file=\"conclusion.rtf\" mime-type=\"text/richtext\"/>", distribution);
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    // R2 残留尾巴：纯空白 payload.Destination 同样拒绝。
+    [Fact]
+    static async Task RejectsWhitespacePayloadDestination()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = MacPkgProcessRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        MacPkgProcessRunner.Handler = (request, _) =>
+        {
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        };
+        try
+        {
+            var error = await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    PayloadItems =
+                    [
+                        new MacPkgPayloadItem
+                        {
+                            Source = Path.Combine(input, "ExampleApp.dll"),
+                            Destination = "   "
+                        }
+                    ]
+                }).BuildAsync(PkgConfiguration(input, output)));
+            Assert.Contains("destination", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            MacPkgProcessRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    // R2: CopyTree 遇目录符号链接环显式报错，不再递归失控。
+    [Fact]
+    static void CopyTreeRejectsSymlinkLoop()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "requires symlink support");
+        var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var destination = root + ".out";
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "sub"));
+            Directory.CreateSymbolicLink(Path.Combine(root, "sub", "loop"), root);
+            // macOS 内核 MAXSYMLINKS=32 先于托管跳数上限报 ELOOP（IOException），
+            // Linux 走托管判定 InvalidDataException（非 IOException 子类）——两种都接受。
+            var error = Record.Exception(
+                () => MacPkgBundleBackend.CopyTree(root, destination, NullBundleLogger.Instance));
+            Assert.True(error is InvalidDataException or IOException,
+                $"环链必须被拒：期望 InvalidDataException/IOException，实际 {error?.GetType().Name}: {error?.Message}");
+        }
+        finally
+        {
+            Cleanup(root, destination);
+        }
+    }
+
     static BundleConfiguration PkgConfiguration(
         string input,
         string output = "",
@@ -972,6 +1152,22 @@ public static class MacPkgTests
         File.WriteAllBytes(Path.Combine(input, "ExampleApp"), FakeMachO());
         File.WriteAllText(Path.Combine(input, "ExampleApp.dll"), "payload");
         return input;
+    }
+
+    static byte[] FakeFatMachO(params uint[] cpuTypes)
+    {
+        var bytes = new byte[8 + 20 * cpuTypes.Length];
+        bytes[0] = 0xCA; bytes[1] = 0xFE; bytes[2] = 0xBA; bytes[3] = 0xBE;
+        bytes[7] = (byte)cpuTypes.Length;
+        for (var index = 0; index < cpuTypes.Length; index++)
+        {
+            var offset = 8 + index * 20;
+            bytes[offset] = (byte)(cpuTypes[index] >> 24);
+            bytes[offset + 1] = (byte)(cpuTypes[index] >> 16);
+            bytes[offset + 2] = (byte)(cpuTypes[index] >> 8);
+            bytes[offset + 3] = (byte)cpuTypes[index];
+        }
+        return bytes;
     }
 
     static byte[] FakeMachO(uint cpuType = 0x0100000C)

@@ -1,3 +1,4 @@
+#requires -Version 7
 #requires -RunAsAdministrator
 # 可丢弃 VM 故障注入验收：真实 ACL 拒绝、锁文件卸载(经 nsis-reboot 腿)、物理盘满。
 # 只在可丢弃 VM 跑——会留 PendingFileRenameOperations 到下次重启。

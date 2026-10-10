@@ -37,3 +37,14 @@ NSIS 及随附的压缩模块适用多种许可证。准确条款以随包保留
 
 `DotNet.Bundler.Rpm` 用它以纯托管方式生成嵌入 rpm signature header 的
 OpenPGP 签名包（`RPMSIGTAG_PGP`）；`DotNet.Bundler.MSBuild` 包内随带其程序集。
+
+## appimagetool（continuous build 295）与 type2-runtime
+
+- 项目：https://github.com/AppImage/appimagetool 与 https://github.com/AppImage/type2-runtime
+- 发布版本：上游 `continuous` tag 滚动构建（所钉构建 `--version` 报 git 8c8c91f / build 295 / 2025-12-04）
+- 许可证：MIT（`LICENSE-appimagetool`、`LICENSE-runtime` 随 `DotNet.Bundler.AppImage` 包分发）
+
+`DotNet.Bundler.AppImage` 内嵌 `appimagetool-x86_64/aarch64.AppImage` 与
+`runtime-x86_64/aarch64` 四个固定文件，运行时按 SHA-256 校验后落临时目录执行，
+type2 runtime 始终经 `--runtime-file` 供应（所钉构建不内嵌 runtime）。
+来源 URL、逐文件 SHA-256 与复核方式见 `third_party/appimagetool/appimagetool-provenance.md`。

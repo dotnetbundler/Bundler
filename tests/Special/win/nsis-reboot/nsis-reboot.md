@@ -7,13 +7,13 @@
 
 ```powershell
 # 阶段一：准备——安装 perMachine 集成 fixture，对锁定文件卸载制造 3010
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/Windows.Nsis.Reboot/Verify.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Special/win/nsis-reboot/Verify.ps1 `
     -Phase Prepare -InstallerPath <fixture 安装器路径> -ConfirmDisposableMachine
 
 # 重启机器
 
 # 阶段二：复核——断言重启后队列执行、目录/注册表/事务状态符合预期
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/Windows.Nsis.Reboot/Verify.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/Special/win/nsis-reboot/Verify.ps1 `
     -Phase Verify -ConfirmDisposableMachine
 ```
 

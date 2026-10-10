@@ -7,7 +7,7 @@
 
 | ID | 最早阶段 | 所需输入/环境 | 完成证据 |
 | --- | --- | --- | --- |
-| LINUX-DEB-OI-01 | LINUX-DEB-4 | ARM64 Linux 宿主（本机 x86_64，无原生 ARM 设备） | **部分已验证**：2026-09-29/30 联合测试——qemu binfmt 仿真 arm64 容器内四产方 `.deb` 真实装卸+运行输出断言通过；真机 ARM64 宿主仍待验 |
+| LINUX-DEB-OI-01 | LINUX-DEB-4 | ARM64 Linux 宿主（本机 x86_64，无原生 ARM 设备） | **部分已验证**：2026-09-29/30 联合测试——qemu binfmt 仿真 arm64 容器内四产方 `.deb` 真实装卸+运行输出断言通过；真机 ARM64 宿主已验（2026-10 `ubuntu-24.04-arm` CI 腿 `arm64-real-hw.sh` 真实装卸跑绿） |
 | LINUX-DEB-OI-02 | LINUX-DEB-4 | 更多发行版宿主/容器（Debian oldstable、非 systemd 发行版、旧 dpkg 版本宿主） | 各发行版 `dpkg -i`/`dpkg -r` 记录与 `lintian` 差异核对 |
 | LINUX-DEB-OI-03 | LINUX-DEB-2 | 有桌面环境的 Linux 宿主（GNOME/KDE 任一） | **部分已验证**（2026-09-28，KDE 真桌面）：菜单项、图标、点击启动观感截图已记录；文件关联/URL scheme 双击唤起未验——验收 fixture 未声明任何关联对象，无唤起目标可测 |
 | LINUX-DEB-OI-04 | LINUX-DEB-3 | ~~启用 systemd 的真实宿主~~ 已验证 | **已消解**：2026-09-28 Ubuntu 宿主 unit 落位、`systemctl daemon-reload`/`enable --now` 真实启动记录 |

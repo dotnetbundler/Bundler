@@ -351,13 +351,19 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
              "--packages", _f.CacheDir],
             new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) });
         Assert.NotEqual(0, result.ExitCode);
-        Assert.Empty(Directory.EnumerateFiles(badDir, "*.pkg", SearchOption.AllDirectories));
+        // 拒产可能发生在创建输出目录之前——目录缺席与空目录同为合法零产出。
+        Assert.False(Directory.Exists(badDir) &&
+            Directory.EnumerateFiles(badDir, "*.pkg", SearchOption.AllDirectories).Any(),
+            "被拒绝的构建不得产出任何 .pkg 产物。");
     }
 
     [Fact]
     public void PerUserInstallReceiptAndForget()
     {
         _f.Ensure();
+        Assert.SkipWhen(
+            Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") != "1",
+            "真装会写本地安装域与收据库；置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1 才跑。");
         _f.HideIntermediateApps();
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var marker = Path.Combine(home, ".bundler-pkg-postinstall-ran");
@@ -427,6 +433,9 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
     public void OverwriteInstallUpgradesReceipt()
     {
         _f.Ensure();
+        Assert.SkipWhen(
+            Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") != "1",
+            "真装会写本地安装域与收据库；置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1 才跑。");
         _f.HideIntermediateApps();
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         // 先装 v1（scripts 变体同 identifier）再覆盖 v2，收据版本必须到 2.0.0。
@@ -500,7 +509,10 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
              "--packages", _f.CacheDir],
             new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) });
         Assert.NotEqual(0, result.ExitCode);
-        Assert.Empty(Directory.EnumerateFiles(badDir, "*.pkg", SearchOption.AllDirectories));
+        // 拒产可能发生在创建输出目录之前——目录缺席与空目录同为合法零产出。
+        Assert.False(Directory.Exists(badDir) &&
+            Directory.EnumerateFiles(badDir, "*.pkg", SearchOption.AllDirectories).Any(),
+            "被拒绝的构建不得产出任何 .pkg 产物。");
     }
 
     [Fact]

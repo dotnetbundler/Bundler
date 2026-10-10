@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using DotNet.Bundler.Updater.Protocol;
 
 namespace DotNet.Bundler.Updater;
@@ -24,7 +25,8 @@ public sealed class UpdateClient
     {
         // 身份核验下沉到构造：FromIdentity（注册表/plist 重建兜底）同样可能
         // 缺 feed/公钥，不能只靠 FromInstallDirectory 一条入口拦。
-        if (identity.FeedUrl.Length == 0 || identity.PublicKey is not { Length: > 0 })
+        // 侧车 JSON 可写 null——两字段同构判空，缺了 FeedUrl 不能 NRE。
+        if (identity.FeedUrl is not { Length: > 0 } || identity.PublicKey is not { Length: > 0 })
         {
             throw new UpdateException("install identity carries no feed url or public key.");
         }
@@ -157,8 +159,22 @@ public sealed class UpdateClient
     /// </summary>
     public void Verify(UpdateInfo info, string artifactPath)
     {
-        if (!UpdateSignatureVerifier.VerifyFile(
-                artifactPath, info.Artifact.Signature, _identity.PublicKey!))
+        // base64 签名/公钥属协议输入——畸形材料（FormatException/非 P-256 点
+        // InvalidOperationException/ImportParameters 的 CryptographicException）
+        // 统一包 UpdateException，契约面只见确定性拒绝。
+        bool verified;
+        try
+        {
+            verified = UpdateSignatureVerifier.VerifyFile(
+                artifactPath, info.Artifact.Signature, _identity.PublicKey!);
+        }
+        catch (Exception exception) when (exception is FormatException or
+            InvalidOperationException or CryptographicException or ArgumentException)
+        {
+            throw new UpdateException(
+                "artifact signature/key material is not valid — refused.", exception);
+        }
+        if (!verified)
         {
             throw new UpdateException("artifact signature verification failed — refused.");
         }

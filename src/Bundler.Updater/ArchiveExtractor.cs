@@ -14,7 +14,9 @@ internal static class ArchiveExtractor
 {
     internal static string ExtractZipToDirectory(string zipPath, string staging, Action<string>? log)
     {
-        if (!TryDittoExtractZip(zipPath, staging, log))
+        // ditto 自行物化符号链接——归档含越根链接时必须走 managed 逐条防线，
+        // 否则原生工具先把链落成、后续条目顺链写穿出暂存区，事后扫不回写。
+        if (ZipHasEscapingLink(zipPath, staging) || !TryDittoExtractZip(zipPath, staging, log))
         {
             using (var archive = ZipFile.OpenRead(zipPath))
             {
@@ -22,20 +24,26 @@ internal static class ArchiveExtractor
                 RestoreSymlinkEntries(archive, zipPath, staging, log);
             }
         }
+#if NET10_0_OR_GREATER
+        SweepEscapedLinks(staging, log);
+#endif
         RemoveAppleDoubleTree(staging, log);
         return staging;
     }
 
     internal static string ExtractTarGzToDirectory(string tarGzPath, string staging, Action<string>? log)
     {
-        if (!TryBsdTarExtract(tarGzPath, staging, log))
+        if (TarHasEscapingLink(tarGzPath, staging) || !TryBsdTarExtract(tarGzPath, staging, log))
         {
             using (var input = new FileStream(tarGzPath, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (var gzip = new GZipStream(input, CompressionMode.Decompress))
             {
-                UstarReader.Extract(gzip, staging);
+                UstarReader.Extract(gzip, staging, log);
             }
         }
+#if NET10_0_OR_GREATER
+        SweepEscapedLinks(staging, log);
+#endif
         RemoveAppleDoubleTree(staging, log);
         return staging;
     }
@@ -74,6 +82,96 @@ internal static class ArchiveExtractor
         ClearDirectory(staging);
         log?.Invoke("update: bsdtar extraction failed — managed fallback (xattrs lost).");
         return false;
+    }
+
+#if NET10_0_OR_GREATER
+    // ditto/bsdtar 原生解包自行物化符号链接，绕过 CreateSymlink 的暂存圈定——
+    // 事后扫一遍兜底（预扫漏网、提取中途半残等）：解析目标越出 staging 的链
+    // 删节点自身+WARN，合法链不动。枚举不下钻目录链，删链不触目标。
+    private static void SweepEscapedLinks(string staging, Action<string>? log)
+    {
+        var root = Path.GetFullPath(staging).TrimEnd(Path.DirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        var comparison = Path.DirectorySeparatorChar == '\\'
+            ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        foreach (var entry in Directory.EnumerateFileSystemEntries(
+                     staging, "*", SearchOption.AllDirectories))
+        {
+            var info = Directory.Exists(entry)
+                ? (FileSystemInfo)new DirectoryInfo(entry)
+                : new FileInfo(entry);
+            if (info.LinkTarget is not { Length: > 0 } target)
+            {
+                continue;
+            }
+            var resolved = Path.IsPathRooted(target)
+                ? Path.GetFullPath(target)
+                : Path.GetFullPath(Path.Combine(
+                    Path.GetDirectoryName(entry) ?? string.Empty, target));
+            if (!resolved.StartsWith(root, comparison) &&
+                !string.Equals(resolved, root.TrimEnd(Path.DirectorySeparatorChar),
+                    comparison))
+            {
+                File.Delete(entry);
+                log?.Invoke($"update: failed to restore symlink '{entry}' → '{target}' — escapes staging root, dropped.");
+            }
+        }
+    }
+#endif
+
+    // 原生解包预扫：归档内任一符号链接目标解析出提取根→true，整档退回 managed。
+    private static bool TarHasEscapingLink(string tarGzPath, string staging)
+    {
+        try
+        {
+            using (var input = new FileStream(tarGzPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var gzip = new GZipStream(input, CompressionMode.Decompress))
+            {
+                return UstarReader.ContainsEscapingLink(gzip, staging);
+            }
+        }
+        catch (Exception)
+        {
+            // 预扫失败按“有逃逸”处理退 managed——畸形档受管路径同样会报错，
+            // 而 fail-open 放原生跑可能让未扫到的逃逸链接顺链写出暂存区。
+            return true;
+        }
+    }
+
+    private static bool ZipHasEscapingLink(string zipPath, string staging)
+    {
+        try
+        {
+            var linkNames = ScanSymlinkEntries(zipPath);
+            if (linkNames.Count == 0)
+            {
+                return false;
+            }
+            using var archive = ZipFile.OpenRead(zipPath);
+            foreach (var linkName in linkNames)
+            {
+                var entry = archive.GetEntry(linkName);
+                if (entry is null)
+                {
+                    continue;
+                }
+                string target;
+                using (var reader = new StreamReader(entry.Open(), Encoding.UTF8))
+                {
+                    target = reader.ReadToEnd();
+                }
+                if (UstarReader.LinkEscapesRoot(target,
+                        Path.Combine(staging, entry.FullName), staging))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        catch (Exception)
+        {
+            return true;
+        }
     }
 
     private static void ClearDirectory(string root)
@@ -138,8 +236,11 @@ internal static class ArchiveExtractor
                 target = reader.ReadToEnd();
             }
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            if (!UstarReader.CreateSymlink(target, destination))
+            if (!UstarReader.CreateSymlink(target, destination, staging))
             {
+                // 拒物化时占位普通件（ExtractToDirectory 落的正文=目标串）一并清，
+                // 否则逃逸条目残留为同名文件——与 tar 腿的零残留语义对齐。
+                File.Delete(destination);
                 log?.Invoke($"update: warning: failed to restore symlink '{entry.FullName}' → '{target}'.");
             }
         }

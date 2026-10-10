@@ -40,7 +40,7 @@ public static class AlpineApkTests
                 .GetAwaiter().GetResult();
             var artifact = artifacts.Single();
             var expectedName = "example-app-1.0.0-r0.apk";
-            Assert.EndsWith(Path.Combine("linux-musl-x64", "apk", expectedName), artifact.Path);
+            Assert.EndsWith(Path.Combine("linux-musl-x64", "alpineapk", expectedName), artifact.Path);
 
             var apk = File.ReadAllBytes(artifact.Path);
             var starts = ApkPackageReader.GzipMemberOffsets(apk);
@@ -160,6 +160,49 @@ public static class AlpineApkTests
             var data = ApkPackageReader.ReadTar(
                 ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifacts.Single().Path))[1]);
             Assert.False(data.Any(e => e.Name.StartsWith("usr/bin", StringComparison.Ordinal)), "An empty BinLink must not create a usr/bin entry.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    static void BinLinkNoneDisables()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var artifacts = new AlpineApkBundler(new AlpineApkBundleConfiguration { BinLink = "none" })
+                .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult();
+            var data = ApkPackageReader.ReadTar(
+                ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifacts.Single().Path))[1]);
+            Assert.False(data.Any(e => e.Name.StartsWith("usr/bin", StringComparison.Ordinal)),
+                "BinLink=\"none\" must disable the usr/bin link like \"\" does.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    // 文件先占 usr/bin 后，默认 BinLink 仍要认领 usr/bin 目录——
+    // 文件→目录冲突必须显式拒绝而非静默产"父是文件、下有子项"的坏包。
+    [Fact]
+    static void RejectsFileCollidingWithClaimedDirectory()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var extra = Path.Combine(input, "extra.conf");
+        File.WriteAllText(extra, "k=v");
+        try
+        {
+            Assert.ThrowsAny<InvalidOperationException>(
+                () => new AlpineApkBundler(new AlpineApkBundleConfiguration
+                {
+                    Files = [new AlpineApkFileEntry { Source = extra, Destination = "/usr/bin" }]
+                }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
         }
         finally
         {
@@ -363,7 +406,7 @@ public static class AlpineApkTests
                  "--output-dir", output],
                 stdout, stderr);
             Assert.True(code == 0, $"cli bundle must exit 0, got {code}: {stderr}");
-            Assert.True(File.Exists(Path.Combine(output, "linux-musl-x64", "apk", "clifixture-1.0.0-r0.apk")),
+            Assert.True(File.Exists(Path.Combine(output, "linux-musl-x64", "alpineapk", "clifixture-1.0.0-r0.apk")),
                 $"CLI-produced .apk missing: {stdout}");
         }
         finally

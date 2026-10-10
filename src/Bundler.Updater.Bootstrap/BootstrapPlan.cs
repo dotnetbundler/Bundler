@@ -43,10 +43,17 @@ internal static class BootstrapPlan
         // 备份/保留是输出路径：父链物理化保留中间链接语义，但叶段必须留字面——
         // 叶段若是符号链接，解析后 rm/Delete 会清掉链接目标（配置路径之外的真实目录），
         // 而按字面删除只移除链接本身。与 POSIX 侧 norm_parent 同义。
+        // 卷根装位（E:\、\\?\Volume{GUID}\、/）没有同级位置放默认备份槽——
+        // 拼出的 install.bundler-backup 是病态路径，须显式给 --backup-dir。
         var backupDir = options.BackupDirectory is { Length: > 0 }
             ? CanonicalParentPath(options.BackupDirectory)
                 ?? throw new UsageException($"backup path '{options.BackupDirectory}' resolves to a cyclic link.")
-            : installDir.TrimEnd('/', '\\') + ".bundler-backup";
+            // 原文先验一次：`\?\Volume{GUID}\` 这类三字符 NT 前缀经 GetFullPath
+            // 折成 `C:\?\…` 后已失真，规范化拼写再也认不出卷根，须两级各验。
+            : IsVolumeRoot(options.InstallDirectory) || IsVolumeRoot(installDir)
+                ? throw new UsageException(
+                    $"install directory '{options.InstallDirectory}' is a volume root — no sibling location exists for the default backup slot; pass --backup-dir explicitly.")
+                : installDir.TrimEnd('/', '\\') + ".bundler-backup";
         // 关系判一律用全物理名——默认备份位同样可能是预置叶链，
         // 字面拼写与 retainCmp 的物理名对不上号会同址逃逸（换包移链后保留操作删新备份）。
         // 文件操作仍走上面的叶字面拼写（叶链只被删链本身不触目标）。
@@ -723,7 +730,8 @@ internal static class BootstrapPlan
             }
             Thread.Sleep(200);
         }
-        throw new WaitTimeoutException();
+        throw new WaitTimeoutException(
+            $"the target process (pid {pid}) did not exit within {timeoutSeconds}s.");
     }
 
     private static void Restart(string appPath, string workingDirectory, Action<string> log)
@@ -1140,10 +1148,12 @@ internal static class BootstrapPlan
                     //（win 腿探针实证）——`mklink /D link \\?\Volume{GUID}` 的实形是
                     // 裸名+绝对 reparse flag。裸名根段 Volume{GUID} 且 flag 绝对时按
                     // 卷真实挂载名解真；flag 相对则是用户真写的相对名，照旧拼父级。
-                    if (!info.Value.Relative && HasVolumeGuidRoot(target))
+                    // target 可能带 \?\、\??\、\\?\ 前缀（LinkTarget 原文不归一）——剥壳后按裸名判。
+                    var ntBody = target[NtDevicePrefixLength(target)..];
+                    if (!info.Value.Relative && HasVolumeGuidRoot(ntBody))
                     {
-                        var dos = VolumeDosPath(target[..44]);
-                        var tail = target[44..].TrimStart('\\', '/');
+                        var dos = VolumeDosPath(ntBody[..44]);
+                        var tail = ntBody[44..].TrimStart('\\', '/');
                         if (dos is null)
                         {
                             return null;
@@ -1189,15 +1199,14 @@ internal static class BootstrapPlan
         {
             return null;
         }
-        if (!OperatingSystem.IsWindows()
-            || (!target.StartsWith(@"\\?\", StringComparison.Ordinal)
-                && !target.StartsWith(@"\??\", StringComparison.Ordinal)))
+        var prefixLength = NtDevicePrefixLength(target);
+        if (!OperatingSystem.IsWindows() || prefixLength == 0)
         {
             return Path.GetFullPath(
                 Path.IsPathRooted(target) ? target
                     : Path.Combine(Path.GetDirectoryName(current) ?? string.Empty, target));
         }
-        var body = target[4..];
+        var body = target[prefixLength..];
         if (body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase))
         {
             return Path.GetFullPath(@"\\" + body[4..]);
@@ -1246,16 +1255,24 @@ internal static class BootstrapPlan
     // 露出的裸 `Volume{GUID}\`（卷挂载点 reparse target 在 LinkTarget 上的实形——
     // win 腿实证 .NET 去掉 `\??\` 后按裸名返回，跟跳会把它当目录名拼进字面路径）。
     // `\\?\C:\…`/`\\?\UNC\…` 这类扩展长度路径是合法拼写，照常解。
+    // NT 设备名空间前缀长度：\\?\、\??\、\\.\ 四字符；\?\ 三字符
+    //（mklink 卷 GUID 目标的原文形态，.NET LinkTarget 不保前缀归一）。
+    private static int NtDevicePrefixLength(string target) =>
+        target.StartsWith(@"\\?\", StringComparison.Ordinal) ||
+        target.StartsWith(@"\??\", StringComparison.Ordinal) ||
+        target.StartsWith(@"\\.\", StringComparison.Ordinal) ? 4
+        : target.StartsWith(@"\?\", StringComparison.Ordinal) ? 3 : 0;
+
     private static bool IsNtObjectTarget(string target)
     {
         if (target.StartsWith(@"\Device\", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
-        if (target.StartsWith(@"\\?\", StringComparison.Ordinal)
-            || target.StartsWith(@"\??\", StringComparison.Ordinal))
+        var prefixLength = NtDevicePrefixLength(target);
+        if (prefixLength > 0)
         {
-            var body = target[4..];
+            var body = target[prefixLength..];
             return HasVolumeGuidRoot(body)
                 || (!(body.Length >= 2 && char.IsLetter(body[0]) && body[1] == ':')
                     && !body.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase));
@@ -1346,6 +1363,22 @@ internal static class BootstrapPlan
             parent.TrimEnd(Path.DirectorySeparatorChar),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
+    private static bool IsVolumeRoot(string path)
+    {
+        var trimmed = path.TrimEnd('/', '\\');
+        // 设备名空间前缀剥壳后按 Volume{…} 段判定——Path.GetPathRoot 认不出 NT 形态。
+        // 无前缀的裸名 `Volume{release}` 只是普通相对目录，绝不能误判成卷根。
+        var prefixLength = NtDevicePrefixLength(trimmed);
+        var core = trimmed[prefixLength..];
+        if (prefixLength > 0 && core.StartsWith("Volume{", StringComparison.OrdinalIgnoreCase))
+        {
+            return !core.Contains('\\') && !core.Contains('/');
+        }
+        var root = Path.GetPathRoot(path);
+        return root is { Length: > 0 } &&
+            string.Equals(trimmed, root.TrimEnd('/', '\\'), StringComparison.OrdinalIgnoreCase);
+    }
+
     // 保留迁移失败不该让换包白做：瞬备留在原处仍能回滚（Rollback 定位兄弟位优先），降级不阻断。
     private static void TryRetainOrRemoveBackup(
         BootstrapOptions options, Action<string> log, string backupPath, string? retainedName)
@@ -1387,9 +1420,12 @@ internal static class BootstrapPlan
                 case "--install-dir": options.InstallDirectory = value; break;
                 case "--payload": options.PayloadDirectory = value; break;
                 case "--wait-pid":
-                    if (!int.TryParse(value, out var pid))
+                    // 非正 pid 同样拒：TryParse 放进来的 "-5"/"0" 会让
+                    // GetProcessById 抛 ArgumentException 被判成"已退出"——
+                    // 宿主仍在跑就换包（sh 侧 ''|*[!0-9]* 与 0 拒同口径）。
+                    if (!int.TryParse(value, out var pid) || pid <= 0)
                     {
-                        throw new UsageException($"--wait-pid expects a numeric pid, got '{value}'.");
+                        throw new UsageException($"--wait-pid expects a positive numeric pid, got '{value}'.");
                     }
                     options.WaitPid = pid;
                     break;

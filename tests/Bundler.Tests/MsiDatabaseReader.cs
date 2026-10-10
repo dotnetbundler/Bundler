@@ -69,7 +69,15 @@ internal sealed class MsiDatabaseReader : IDisposable
         {
             var text = new System.Text.StringBuilder(256);
             uint length = (uint)text.Capacity;
-            Check(MsiSummaryInfoGetProperty(summary, property, out _, out _, out _, text, ref length));
+            var rc = MsiSummaryInfoGetProperty(summary, property, out _, out _, out _, text, ref length);
+            // 234 = ERROR_MORE_DATA：属性超缓冲，按报告长度扩容重取。
+            while (rc == 234)
+            {
+                text.Capacity = (int)(length + 1);
+                length = (uint)text.Capacity;
+                rc = MsiSummaryInfoGetProperty(summary, property, out _, out _, out _, text, ref length);
+            }
+            Check(rc);
             return text.ToString();
         }
         finally { MsiCloseHandle(summary); }
@@ -98,20 +106,25 @@ internal sealed class MsiDatabaseReader : IDisposable
             Check(result);
             try
             {
-                var text = new System.Text.StringBuilder(1024);
-                uint length = (uint)text.Capacity;
-                var rc = MsiRecordGetString(record, 1, text, ref length);
-                // 234 = ERROR_MORE_DATA：字段超缓冲，按报告长度扩容重取。
-                while (rc == 234)
-                {
-                    text.Capacity = (int)(length + 1);
-                    length = (uint)text.Capacity;
-                    rc = MsiRecordGetString(record, 1, text, ref length);
-                }
-                Check(rc);
-                return text.ToString();
+                return GetRecordString(record, 1);
             }
             finally { MsiCloseHandle(record); }
+        }
+
+        private static string GetRecordString(IntPtr record, uint field)
+        {
+            var text = new System.Text.StringBuilder(1024);
+            uint length = (uint)text.Capacity;
+            var rc = MsiRecordGetString(record, field, text, ref length);
+            // 234 = ERROR_MORE_DATA：字段超缓冲，按报告长度扩容重取。
+            while (rc == 234)
+            {
+                text.Capacity = (int)(length + 1);
+                length = (uint)text.Capacity;
+                rc = MsiRecordGetString(record, field, text, ref length);
+            }
+            Check(rc);
+            return text.ToString();
         }
 
         public (string, string)? FetchPair()
@@ -121,13 +134,7 @@ internal sealed class MsiDatabaseReader : IDisposable
             Check(result);
             try
             {
-                var first = new System.Text.StringBuilder(1024);
-                var second = new System.Text.StringBuilder(1024);
-                uint firstLength = (uint)first.Capacity;
-                uint secondLength = (uint)second.Capacity;
-                Check(MsiRecordGetString(record, 1, first, ref firstLength));
-                Check(MsiRecordGetString(record, 2, second, ref secondLength));
-                return (first.ToString(), second.ToString());
+                return (GetRecordString(record, 1), GetRecordString(record, 2));
             }
             finally { MsiCloseHandle(record); }
         }

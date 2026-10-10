@@ -751,13 +751,25 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             }
             }
 
-            if (UpdateEnabled && artifacts.Count > 0)
+            if (UpdateEnabled)
             {
-                var feed = UpdateManifestEmitter.EmitAsync(
-                    Configure(formats), artifacts).GetAwaiter().GetResult();
+                var feed = artifacts.Count == 0
+                    ? Array.Empty<string>()
+                    : UpdateManifestEmitter.EmitAsync(
+                        Configure(formats), artifacts).GetAwaiter().GetResult();
                 foreach (var path in feed)
                 {
                     Log.LogMessage(MessageImportance.High, $"Bundler update: {path}");
+                }
+                if (artifacts.Count == 0)
+                {
+                    Log.LogWarning("Bundler: update is enabled but no artifacts were produced; " +
+                        "no update feed was emitted — installed apps keep polling the last published feed.");
+                }
+                else if (!artifacts.Any(a => UpdateManifestEmitter.IsUpdateAdapted(a.Format)))
+                {
+                    Log.LogWarning("Bundler: update is enabled but no produced format is update-adapted; " +
+                        "the emitted feed carries no artifacts — clients read it as 'no update'.");
                 }
             }
 
@@ -1114,7 +1126,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         if (!Enum.TryParse(
                 WindowsSigningCertificateStoreLocation,
                 true,
-                out System.Security.Cryptography.X509Certificates.StoreLocation storeLocation))
+                out System.Security.Cryptography.X509Certificates.StoreLocation storeLocation) ||
+            !Enum.IsDefined(
+                typeof(System.Security.Cryptography.X509Certificates.StoreLocation), storeLocation))
         {
             throw new ArgumentException(
                 "BundlerWindowsSigningCertificateStoreLocation must be CurrentUser or LocalMachine.");

@@ -904,6 +904,116 @@ public static class UpdaterBootstrapParityTests
     }
 
     [Fact]
+    static void WaitArgs_NonPositive_RejectedByBothLegs()
+    {
+        // R2-N8：wait-timeout/wait-pid 的零/负/非数参数双侧统一拒绝 rc=2——
+        // AOT 曾放行 wait-timeout 0（立即超时被当成"等 0 秒"），sh 曾收下非整数。
+        var root = CreateTempDirectory();
+        try
+        {
+            var install = InstallV1(NewDir(root, "install"));
+            var payload = PayloadV2(root);
+            foreach (var impl in Impls)
+            {
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--wait-timeout", "0"));
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--wait-timeout", "abc"));
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--wait-pid", "0"));
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--wait-pid", "-5"));
+                Assert.Equal(2, Invoke(impl, "apply", "--install-dir", install,
+                    "--payload", payload, "--wait-pid", "abc"));
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
+    static void LockTimeout_Message_RefersToLock_NotProcessWait()
+    {
+        // R1-#3 收尾：等锁超时的报错曾串 wait-pid 措辞（"did not exit in time"）——
+        // 双侧锁定超时消息必须说锁，不串等进程话术。
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var install = InstallV1(dir);
+                var payload = PayloadV2(dir);
+                var lockPath = LockPath(install);
+                File.WriteAllText(lockPath, Environment.ProcessId.ToString());
+                try
+                {
+                    var (rc, message) = impl == Impl.Aot
+                        ? RunAotCapturingMessage("apply", "--install-dir", install,
+                            "--payload", payload, "--lock-timeout", "1")
+                        : RunShCapturingStderr("apply", "--install-dir", install,
+                            "--payload", payload, "--lock-timeout", "1");
+                    Assert.Equal(3, rc);
+                    Assert.Contains("lock", message);
+                    Assert.DoesNotContain("did not exit", message);
+                }
+                finally
+                {
+                    File.Delete(lockPath);
+                }
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    // AOT 腿取异常消息（WaitTimeoutException.Message），sh 腿取 stderr——同断言口径。
+    static (int rc, string message) RunAotCapturingMessage(params string[] args)
+    {
+        try
+        {
+            return (BootstrapPlan.Run(args), "");
+        }
+        catch (UsageException)
+        {
+            return (2, "");
+        }
+        catch (WaitTimeoutException exception)
+        {
+            return (3, exception.Message);
+        }
+        catch
+        {
+            return (4, "");
+        }
+    }
+
+    static (int rc, string stderr) RunShCapturingStderr(params string[] args)
+    {
+        Assert.SkipUnless(File.Exists(PosixScript), $"posix script missing: {PosixScript}");
+        var startInfo = new ProcessStartInfo("sh")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add(PosixScript);
+        foreach (var arg in args)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+        using var process = Process.Start(startInfo)!;
+        var stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit(60_000);
+        Assert.True(process.HasExited, "bundler-updater.sh did not exit within 60s");
+        return (process.ExitCode, stderr);
+    }
+
+    [Fact]
     static void WaitPid_ExitedProcess_SwapProceeds()
     {
         // --wait-pid 指已退出/不存在的进程 → 不等直接换包（等候退语义正向面）。

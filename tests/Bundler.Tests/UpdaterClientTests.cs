@@ -114,7 +114,7 @@ public static class UpdaterClientTests
             var artifact = WriteDeltaArtifact(feedDir, "app-2.0.0.bin", _ => "same");
             WriteFeedWithDelta(feedDir, "2.0.0", artifact, material);
             // http 通道下 .part→目标已有文件时 File.Move 曾失败——重复下载必须能落。
-            var server = new LoopbackFeedServer(feedDir);
+            using var server = new LoopbackFeedServer(feedDir);
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
@@ -137,7 +137,6 @@ public static class UpdaterClientTests
             var second = await client.DownloadAsync(info, downloadDir);
             Assert.Equal(first, second);
             Assert.True(File.ReadAllBytes(second).SequenceEqual(File.ReadAllBytes(artifact)));
-            server.Dispose();
         }
         finally
         {
@@ -517,7 +516,7 @@ public static class UpdaterClientTests
             WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
 
             // 侧车 feedUrl 指向回环 http——feed/制品/块表全走 http 通道。
-            var server = new LoopbackFeedServer(feedDir);
+            using var server = new LoopbackFeedServer(feedDir);
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
@@ -547,7 +546,6 @@ public static class UpdaterClientTests
             Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
             Assert.Contains(log, l => l.Contains("delta applied"));
             Assert.True(ranged > 0); // 缺失块确实走了 HTTP Range
-            server.Dispose();
         }
         finally
         {
@@ -570,7 +568,7 @@ public static class UpdaterClientTests
             WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
 
             // 服务端不认 Range 恒回 200 整档——差分应放弃回落全量，不得抛错留坏件。
-            var server = new LoopbackFeedServer(feedDir) { HonorRange = false };
+            using var server = new LoopbackFeedServer(feedDir) { HonorRange = false };
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
@@ -596,7 +594,435 @@ public static class UpdaterClientTests
             var path = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
             Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
             Assert.DoesNotContain(log, l => l.Contains("delta applied"));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void Client_FromIdentity_NullFeedUrl_ThrowsUpdateException()
+    {
+        // R2-N5：旁车 feedUrl 缺位曾沿 FeedUrl.Length 走空引用——必须裹成 UpdateException。
+        var material = DotNet.Bundler.Core.Update.UpdateKeyMaterial.Generate();
+        var exception = Assert.Throws<UpdateException>(() =>
+            UpdateClient.FromIdentity(new Protocol.UpdateInstallIdentity
+            {
+                Format = "zip",
+                RuntimeIdentifier = "linux-x64",
+                Channel = "stable",
+                FeedUrl = null!,
+                PublicKey = material.PublicPointBase64(),
+            }, Path.GetTempPath(), "1.0.0"));
+        Assert.Contains("feed url", exception.Message);
+    }
+
+    [Fact]
+    static async Task Client_Check_BadPublicKey_ThrowsUpdateException()
+    {
+        // R2-N5：旁车公钥非 base64 曾让 FromPublicPoint 的 FormatException 逃逸——
+        // feed 拉取腿须裹成 UpdateException。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            WriteFeed(feedDir, "stable", "2.0.0", material);
+            Protocol.UpdateInstallIdentity.Write(install, new Protocol.UpdateInstallIdentity
+            {
+                Format = "zip",
+                RuntimeIdentifier = "linux-x64",
+                Channel = "stable",
+                FeedUrl = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
+                PublicKey = "%%%not-a-key",
+            });
+
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            await Assert.ThrowsAsync<UpdateException>(() => client.CheckForUpdateAsync());
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void Client_Verify_NonBase64Signature_ThrowsUpdateException()
+    {
+        // R2-N5：工件签名非 base64 曾让 FormatException 逃逸契约——Verify 须裹成 UpdateException。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out _, out _);
+            var artifactPath = Path.Combine(directory, "app.bin");
+            File.WriteAllText(artifactPath, "payload");
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            var exception = Assert.Throws<UpdateException>(() =>
+                client.Verify(new UpdateInfo(
+                    new Protocol.UpdateFeed { Version = "2.0.0", Channel = "stable" },
+                    new Protocol.UpdateFeedArtifact
+                    {
+                        RuntimeIdentifier = "linux-x64",
+                        Format = "zip",
+                        Url = "app.bin",
+                        File = "app.bin",
+                        Signature = "!!!not-base64!!!",
+                    }, "app.bin"), artifactPath));
+            Assert.Contains("signature", exception.Message);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_DownloadAsync_ShaMismatch_DeletesPartResidue()
+    {
+        // R2-N2：sha 校验拒件时 `.part` 残留会让下次下载从脏起点续传——拒件清理须连同抹掉。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var v2 = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2");
+            WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+            {
+                RuntimeIdentifier = "linux-x64",
+                Format = "zip",
+                Url = "app-2.0.0.zip",
+                File = "app-2.0.0.zip",
+                Sha256 = new string('0', 64),
+                Size = new FileInfo(v2).Length,
+                Signature = Convert.ToBase64String(EcdsaSigner.SignFile(v2, material)),
+            });
+
+            var server = new LoopbackFeedServer(feedDir);
+            Protocol.UpdateInstallIdentity.Write(install, new Protocol.UpdateInstallIdentity
+            {
+                Format = "zip",
+                RuntimeIdentifier = "linux-x64",
+                Channel = "stable",
+                FeedUrl = server.FeedUrl,
+                PublicKey = material.PublicPointBase64(),
+            });
+            var destDir = Path.Combine(directory, "dl");
+            Directory.CreateDirectory(destDir);
+            var partPath = Path.Combine(destDir, "app-2.0.0.zip.part");
+            File.WriteAllBytes(partPath, File.ReadAllBytes(v2).AsSpan(0, 8).ToArray());
+
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            var info = (await client.CheckForUpdateAsync())!;
+            await Assert.ThrowsAsync<UpdateException>(() => client.DownloadAsync(info, destDir));
+            Assert.False(File.Exists(Path.Combine(destDir, "app-2.0.0.zip")), "destination must be deleted");
+            Assert.False(File.Exists(partPath), "stale .part must be deleted");
             server.Dispose();
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_DownloadAsync_RangeStartMismatch_RestartsFullDownload()
+    {
+        // R2-N2：206 的 Content-Range 起点若不等于请求偏移，`.part` 前缀错位——
+        // 客户端须弃 `.part` 并以无 Range 全档重取，结果须是全件字节。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var v2 = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2");
+            WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+            {
+                RuntimeIdentifier = "linux-x64",
+                Format = "zip",
+                Url = "app-2.0.0.zip",
+                File = "app-2.0.0.zip",
+                Sha256 = Sha256Hex(v2),
+                Size = new FileInfo(v2).Length,
+                Signature = Convert.ToBase64String(EcdsaSigner.SignFile(v2, material)),
+            });
+
+            var server = new LoopbackFeedServer(feedDir) { WrongRangeStart = true };
+            var fullGets = 0;
+            server.OnFullGet = () => fullGets++;
+            Protocol.UpdateInstallIdentity.Write(install, new Protocol.UpdateInstallIdentity
+            {
+                Format = "zip",
+                RuntimeIdentifier = "linux-x64",
+                Channel = "stable",
+                FeedUrl = server.FeedUrl,
+                PublicKey = material.PublicPointBase64(),
+            });
+            var destDir = Path.Combine(directory, "dl");
+            Directory.CreateDirectory(destDir);
+            var head = File.ReadAllBytes(v2).AsSpan(0, 32).ToArray();
+            File.WriteAllBytes(Path.Combine(destDir, "app-2.0.0.zip.part"), head);
+
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            var info = (await client.CheckForUpdateAsync())!;
+            var path = await client.DownloadAsync(info, destDir);
+            Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
+            Assert.True(fullGets > 0, "mismatched Content-Range must fall back to a full GET");
+            client.Verify(info, path);
+            server.Dispose();
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_DownloadAsync_DeltaSuccess_ClearsStalePart()
+    {
+        // R2-N2 另半边：增量腿成功时 `.part` 残留曾留着——与拒件清理对称抹除。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var v1 = WriteDeltaArtifact(feedDir, "app-1.0.0.bin", _ => "v1");
+            WriteFeedWithDelta(feedDir, "1.0.0", v1, material);
+            var v2 = WriteDeltaArtifact(feedDir, "app-2.0.0.bin", _ => "v2");
+            WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
+
+            var cacheDir = install.TrimEnd('/', '\\') + ".bundler-cache";
+            Directory.CreateDirectory(cacheDir);
+            File.Copy(v1, Path.Combine(cacheDir, "artifact.bin"));
+            var destDir = Path.Combine(directory, "dl");
+            Directory.CreateDirectory(destDir);
+            var partPath = Path.Combine(destDir, "app-2.0.0.bin.part");
+            File.WriteAllText(partPath, "stale-resume");
+
+            var log = new List<string>();
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0",
+                new UpdateClientOptions { Log = log.Add });
+            var info = (await client.CheckForUpdateAsync())!;
+            var path = await client.DownloadAsync(info, destDir);
+            Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
+            Assert.False(File.Exists(partPath), "stale .part must be swept on delta success");
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static async Task Client_DownloadAsync_CorruptBlockMap_FallsBackToFull()
+    {
+        // R2-N4：blockmap 拉取/解析失败曾是逃逸差分回落的硬 UpdateException——
+        // 现须与 Range 失败同型回落全量，不得坏整体下载。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            var v1 = WriteDeltaArtifact(feedDir, "app-1.0.0.bin", _ => "v1");
+            WriteFeedWithDelta(feedDir, "1.0.0", v1, material);
+            var v2 = WriteDeltaArtifact(feedDir, "app-2.0.0.bin", _ => "v2");
+            WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
+            // 把 blockmap 写成合法的 JSON null——解析落空即无法建块表。
+            File.WriteAllText(v2 + ".blockmap", "null");
+
+            var cacheDir = install.TrimEnd('/', '\\') + ".bundler-cache";
+            Directory.CreateDirectory(cacheDir);
+            File.Copy(v1, Path.Combine(cacheDir, "artifact.bin"));
+
+            var log = new List<string>();
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0",
+                new UpdateClientOptions { Log = log.Add });
+            var info = (await client.CheckForUpdateAsync())!;
+            var path = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+            Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
+            Assert.DoesNotContain(log, l => l.Contains("delta applied"));
+            client.Verify(info, path);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void SignatureVerifier_ToP1363_MalformedDer_ThrowsInvalidOperation()
+    {
+        // R2-N3：畸形 DER 远端输入曾抛 IndexOutOfRange/ArgumentException 逃逸契约——
+        // 现须统一 InvalidOperationException，不得越界。
+        Assert.Throws<InvalidOperationException>(() =>
+            Protocol.UpdateSignatureVerifier.ToP1363(new byte[] { 0x30, 0x06, 0x02, 0xFF, 0x01 }));
+        Assert.Throws<InvalidOperationException>(() =>
+            Protocol.UpdateSignatureVerifier.ToP1363(
+                new byte[] { 0x30, 0x07, 0x02, 0x02, 0xAA, 0xBB, 0x02 }));
+        Assert.Throws<InvalidOperationException>(() =>
+            Protocol.UpdateSignatureVerifier.ToP1363(new byte[] { 0x30, 0x81, 0x40, 0x02, 0x21 }));
+    }
+
+    [Fact]
+    static void SignatureVerifier_MalformedDer_VerifyReturnsFalse()
+    {
+        // R2-N3 兜底：畸形签名喂给 Verify 只能判拒（false），不得把协议外异常漏给调用方。
+        var material = DotNet.Bundler.Core.Update.UpdateKeyMaterial.Generate();
+        var key = Protocol.UpdateKeyMaterial.FromPublicPoint(material.PublicPointBase64());
+        Assert.False(Protocol.UpdateSignatureVerifier.Verify(
+            Encoding.ASCII.GetBytes("payload"), new byte[] { 0x30, 0x06, 0x02, 0xFF, 0x01 }, key));
+    }
+
+    [Fact]
+    static void Ustar_Symlink_RestoresLink_OnSuccess()
+    {
+        // #18：tar 腿符号链接走托管 API 还原——链接对端可读、无 WARN。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var staging = Path.Combine(directory, "staging");
+            Directory.CreateDirectory(staging);
+            var log = new List<string>();
+            UstarReader.Extract(new MemoryStream(BuildTarWithSymlink("app/link", "target")),
+                staging, log.Add);
+            var link = Path.Combine(staging, "app", "link");
+            Assert.Equal("target", new FileInfo(link).LinkTarget);
+            Assert.DoesNotContain(log, l => l.Contains("failed to restore symlink"));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void Ustar_Symlink_Warns_WhenLinkCannotBeCreated()
+    {
+        // #18：链接还原失败曾静默跳过——现须与 zip 腿同型 WARN。
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return; // 只读目录驱动 EACCES 失败腿为 POSIX 语义。
+        }
+        var directory = CreateTempDirectory();
+        try
+        {
+            var staging = Path.Combine(directory, "staging");
+            // 链接父目录只读——symlink() 必败，驱动 WARN 腿。
+            var appDir = Path.Combine(staging, "app");
+            Directory.CreateDirectory(appDir);
+            File.SetUnixFileMode(appDir,
+                UnixFileMode.UserRead | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute);
+            try
+            {
+                var log = new List<string>();
+                UstarReader.Extract(new MemoryStream(BuildTarWithSymlink("app/link", "target")),
+                    staging, log.Add);
+                Assert.Contains(log, l => l.Contains("failed to restore symlink"));
+            }
+            finally
+            {
+                File.SetUnixFileMode(appDir,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    // 手工构造最小 ustar 档案：一个 '2' 符号链接项 + 零块收尾。
+    static byte[] BuildTarWithSymlink(string name, string target)
+    {
+        var header = new byte[512];
+        WriteField(header, 0, name, 100);
+        WriteField(header, 100, "0000755", 8);
+        WriteField(header, 124, "00000000000", 12);
+        WriteField(header, 136, "00000000000", 12);
+        header[156] = (byte)'2';
+        WriteField(header, 157, target, 100);
+        WriteField(header, 257, "ustar", 6);
+        return header.Concat(new byte[1024]).ToArray();
+    }
+
+    static void WriteField(byte[] block, int offset, string text, int width)
+    {
+        var bytes = Encoding.ASCII.GetBytes(text);
+        Buffer.BlockCopy(bytes, 0, block, offset, Math.Min(bytes.Length, width));
+    }
+
+    [Fact]
+    static void UpdateApplier_RetentionRoot_RequiresSegmentBoundary()
+    {
+        // R2-N6：最长前缀匹配曾把 "/optimal" 吃进 "/opt" 段——必须按整段边界判。
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            return; // mac/win 腿根名集合不同——断言口径按 linux 根表。
+        }
+        var retention = UpdateApplier.ResolveRetentionDirectory("/optimal/app", new ApplyOptions());
+        Assert.False(retention.StartsWith("/var/lib", StringComparison.Ordinal),
+            "non-segment prefix '/optimal' must not count as '/opt'");
+        Assert.StartsWith("/var/lib",
+            UpdateApplier.ResolveRetentionDirectory("/opt/app", new ApplyOptions()));
+    }
+
+    [Fact]
+    static void UpdateApplier_SweepStaleStaging_RemovesOnlyOldGuidDirs()
+    {
+        // R2-N7：暂存根下崩溃残留的 bootstrap-/payload-<guid> 目录按 mtime>24h 清扫，
+        // 新目录与异名目录不得误删。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var root = Path.Combine(directory, "staging-root");
+            var oldA = Path.Combine(root, "bootstrap-" + Guid.NewGuid().ToString("N"));
+            var oldB = Path.Combine(root, "payload-" + Guid.NewGuid().ToString("N"));
+            var fresh = Path.Combine(root, "bootstrap-" + Guid.NewGuid().ToString("N"));
+            var other = Path.Combine(root, "keepme");
+            Directory.CreateDirectory(oldA);
+            Directory.CreateDirectory(oldB);
+            Directory.CreateDirectory(fresh);
+            Directory.CreateDirectory(other);
+            var stale = DateTime.UtcNow.AddHours(-25);
+            Directory.SetLastWriteTimeUtc(oldA, stale);
+            Directory.SetLastWriteTimeUtc(oldB, stale);
+
+            UpdateApplier.SweepStaleStaging(root);
+            Assert.False(Directory.Exists(oldA));
+            Assert.False(Directory.Exists(oldB));
+            Assert.True(Directory.Exists(fresh));
+            Assert.True(Directory.Exists(other));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    static void UpdateBootstrapper_ExtractionRoot_SweepsStaleDirectories()
+    {
+        // R2-N7 抽取侧：bundler-updater 抽取根下 `.` 前缀残留目录按 mtime 清扫。
+        // 走公开入口：两次 TryResolve——第一次建根，铺陈旧目录后第二次触发清扫。
+        // 解析结果是 <root>/.<guid>/updater/<rid>/<file>——root 取四级上级。
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return; // 抽取根清扫只发生在 POSIX 路径腿。
+        }
+        var directory = CreateTempDirectory();
+        try
+        {
+            var update = new DotNet.Bundler.UpdateBundleConfiguration();
+            Assert.True(DotNet.Bundler.Core.Update.UpdateBootstrapper.TryResolve(
+                update, "linux-x64", out var first));
+            var root = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(
+                Path.GetDirectoryName(first)!)!)!)!;
+            var stale = Path.Combine(root, ".stale-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(stale);
+            Directory.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddHours(-25));
+            var fresh = Path.Combine(root, ".fresh-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(fresh);
+
+            Assert.True(DotNet.Bundler.Core.Update.UpdateBootstrapper.TryResolve(
+                update, "linux-x64", out _));
+            Assert.False(Directory.Exists(stale), "stale extraction dir must be swept");
+            Assert.True(Directory.Exists(fresh), "fresh extraction dir must be kept");
         }
         finally
         {
@@ -612,8 +1038,10 @@ public static class UpdaterClientTests
         readonly CancellationTokenSource _cts = new();
         public string FeedUrl { get; }
         public Action? OnRange;
+        public Action? OnFullGet;
         public bool HonorRange = true;
         public bool CorruptRange;
+        public bool WrongRangeStart;
 
         public LoopbackFeedServer(string dir)
         {
@@ -689,11 +1117,20 @@ public static class UpdaterClientTests
                             truncated);
                         return;
                     }
+                    if (WrongRangeStart)
+                    {
+                        // 206 但 Content-Range 起点与请求偏移不符——客户端须弃 .part 重下全档。
+                        await Write(stream,
+                            $"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {start + 1}-{end}/{body.Length}\r\nContent-Length: {slice.Length}\r\n\r\n",
+                            slice);
+                        return;
+                    }
                     await Write(stream,
                         $"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {start}-{end}/{body.Length}\r\nContent-Length: {slice.Length}\r\n\r\n",
                         slice);
                     return;
                 }
+                OnFullGet?.Invoke();
                 await Write(stream, $"HTTP/1.1 200 OK\r\nContent-Length: {body.Length}\r\n\r\n", body);
             }
         }
@@ -1048,7 +1485,7 @@ public static class UpdaterClientTests
                 block switch { 0 => "head", 1 => "body-same", 2 => "tail-v2", _ => "?" });
             WriteFeedWithDelta(feedDir, "2.0.0", v2, material);
 
-            var server = new LoopbackFeedServer(feedDir) { CorruptRange = true };
+            using var server = new LoopbackFeedServer(feedDir) { CorruptRange = true };
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
@@ -1065,7 +1502,6 @@ public static class UpdaterClientTests
             var info = (await client.CheckForUpdateAsync())!;
             var path = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
             Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
-            server.Dispose();
         }
         finally
         {
@@ -1171,7 +1607,7 @@ public static class UpdaterClientTests
                 Signature = Convert.ToBase64String(EcdsaSigner.SignFile(v2, material)),
             });
 
-            var server = new LoopbackFeedServer(feedDir);
+            using var server = new LoopbackFeedServer(feedDir);
             var identity = new Protocol.UpdateInstallIdentity
             {
                 FeedUrl = server.FeedUrl, Channel = "stable",
@@ -1205,7 +1641,6 @@ public static class UpdaterClientTests
             {
                 UpdateClient.FreeSpaceProbe = null;
             }
-            server.Dispose();
         }
         finally
         {

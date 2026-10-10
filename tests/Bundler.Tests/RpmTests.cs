@@ -18,6 +18,7 @@ public static class RpmTests
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var keyFile = Path.Combine(input, "test-signing-key.asc");
         var publicKey = GenerateTestKey(keyFile, "test-passphrase");
+        var unsignedOutput = output + "-unsigned";
         try
         {
             var signed = new RpmBundler(new RpmBundleConfiguration
@@ -52,16 +53,14 @@ public static class RpmTests
             Assert.True(rsaSignature.Verify(),
                 "The RPMSIGTAG_RSA signature must verify over the main header bytes.");
 
-            var unsignedOutput = output + "-unsigned";
             var unsigned = new RpmBundler(new RpmBundleConfiguration())
                 .BuildAsync(RpmConfiguration(input, unsignedOutput)).GetAwaiter().GetResult().Single();
             Assert.False(RpmPackageReader.Read(unsigned.Path).Signature.Tags.ContainsKey(1002), "No RPMSIGTAG_PGP when signing is not configured.");
             Assert.False(RpmPackageReader.Read(unsigned.Path).Signature.Tags.ContainsKey(268), "No RPMSIGTAG_RSA when signing is not configured.");
-            Cleanup(unsignedOutput);
         }
         finally
         {
-            Cleanup(input, output);
+            Cleanup(input, output, unsignedOutput);
         }
     }
 
@@ -467,6 +466,28 @@ public static class RpmTests
                 "BinLink='none' must emit no symlink.");
             Assert.True(package.Payload.All(e => !e.Path.StartsWith("/usr/bin", StringComparison.Ordinal)),
                 "BinLink='none' must emit nothing under /usr/bin.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    // rpm FILESIZES 与 cpio newc 都是 int32 尺寸字段：超 2GiB 截断产坏包，显式拒绝。
+    [Fact]
+    static void RejectsPayloadFileOverTwoGiB()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            using (var stream = new FileStream(Path.Combine(input, "big.bin"), FileMode.Create))
+            {
+                stream.SetLength((long)int.MaxValue + 1);
+            }
+            Assert.ThrowsAny<ArgumentException>(
+                () => new RpmBundler()
+                    .BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult());
         }
         finally
         {

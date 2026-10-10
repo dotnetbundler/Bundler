@@ -25,8 +25,8 @@ public sealed class RpmBundleConfiguration
     /// <summary>
     /// rpm <c>Release</c> override; defaults to "1" for releases and
     /// <c>0.&lt;n&gt;.&lt;prerelease&gt;</c> for prereleases. Must not contain '-'.
-    /// Ignored when <see cref="Version"/> is set together with an explicit release
-    /// is not applicable — set Version for a full EVR override.
+    /// An explicit value is used verbatim whether <see cref="Version"/> is mapped
+    /// or set explicitly.
     /// </summary>
     public string? Release { get; init; }
 

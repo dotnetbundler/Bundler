@@ -21,7 +21,7 @@
 - **APK-D8 签名**：可选 RSA——`.SIGN.RSA.<密钥文件名>.rsa.pub` 存 DER PKCS1v15(RSA+SHA1) 签名、签在控制段 gzip 流上；`BundlerAlpineApkSigningKeyFile`（PEM RSA 私钥）+ `BundlerAlpineApkSigningKeyPassphrase`；复用 SIGN 阶段的 BouncyCastle 依赖模式。
   未签名 apk 安装需 `apk add --allow-untrusted`，文档如实标注；签名公钥须已分发到目标 `/etc/apk/keys/` 才有验签意义。
 - **APK-D9 不做的项（v1 明确排除）**：`replaces`/`provides_priority`/`install_if`/`datahashes` 之外的冷门 `.PKGINFO` 键（留 `BundlerAlpineApk*` 覆盖旋钮的 escape hatch）、apk v3、`apk` 仓库索引（`.apk.index` 属仓库运维非单包产出）、abuild 的 ELF `so:` 依赖自动扫描（依赖由调用方显式声明）。
-- **APK-D10 产物命名与路径**：`OutputDirectory/<rid>/apk/<pkgname>-<pkgver>-r<rel>.apk`；同格式附带 `.sha256` 侧车（对齐 deb/rpm）。
+- **APK-D10 产物命名与路径**：`OutputDirectory/<rid>/alpineapk/<pkgname>-<pkgver>-r<rel>.apk`；同格式附带 `.sha256` 侧车（对齐 deb/rpm）。
 
 ## 2. 打包工具下限（三层口径）
 
@@ -46,7 +46,7 @@
 范围：`Bundler.AlpineApk` 程序集骨架（`AlpineApkBundleBackend : IBundleBackend`、`AlpineApkBundler` 直接 API、`AlpineApkBundleConfiguration`）、gzip×3 写入器（TarWriter 段模式）、`.PKGINFO` 核心字段（pkgname/pkgver/pkgdesc/url/arch/origin/size/datahash）、数据段载荷+binlink、pax `APK-TOOLS.checksum.SHA1`、矩阵 `LinuxMusl`+`AlpineApk`、流水线注册、CLI/MSBuild 接线。
 验证：写出→自读回解析三段结构断言；`.PKGINFO` 字段断言；matrix 放通 musl+apk、其余目标拒绝断言；构建零警告。
 出口：`Bundler.Tests` 新增断言全绿。
-实施证据（2026-09-30，commit `074c203`，`0.1.0-alpha.63`）：`src/Bundler.AlpineApk` 落地，`Bundler.Tests` 225/225（新增 14 项），`dotnet build Bundler.slnx -c Release` 零警告；产物 `OutputDirectory/<rid>/apk/<pkgname>-<ver>-r<rel>.apk` + `.sha256`。
+实施证据（2026-09-30，commit `074c203`，`0.1.0-alpha.63`）：`src/Bundler.AlpineApk` 落地，`Bundler.Tests` 225/225（新增 14 项），`dotnet build Bundler.slnx -c Release` 零警告；产物 `OutputDirectory/<rid>/alpineapk/<pkgname>-<ver>-r<rel>.apk` + `.sha256`。
 
 ### APK-2：元数据、依赖与脚本
 
@@ -80,7 +80,7 @@
 | 写入器单测 | 三流结构、字段、pax 头、datahash、签名字节、确定性 | `Bundler.Tests`（任意宿主） |
 | 读出器/拆包 | 自产 apk 回读字段；tar/gzsplit 等价拆解 | `Bundler.Tests` + alpine 容器 |
 | 真实装卸 | `apk add`/`apk info`/`apk remove`、装后运行、签名免开关 | alpine docker（x86_64 + aarch64 qemu） |
-| 门禁回归 | musl 放通 zip/targz/apk/appimage、deb/rpm 拒绝、glibc 目标拒绝 apk | `Bundler.Tests` 矩阵断言 |
+| 门禁回归 | musl 放通 zip/targz/alpineapk/appimage、deb/rpm 拒绝、glibc 目标拒绝 alpineapk | `Bundler.Tests` 矩阵断言 |
 
 ## 6. 已知风险与留待裁决
 

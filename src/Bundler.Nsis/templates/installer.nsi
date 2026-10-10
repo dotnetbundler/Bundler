@@ -213,9 +213,9 @@ UninstPage custom un.AppDataOptionsPage un.AppDataOptionsLeave
   ${If} $0 != 0
     ${If} $0 == ${EXIT_RECOVERY_MANIFEST_MISMATCH}
       StrCpy $ExitCode ${EXIT_RECOVERY_MANIFEST_MISMATCH}
-      DetailPrint "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+      DetailPrint "$(RecoveryManifestMismatch)"
       ${IfNot} ${Silent}
-        MessageBox MB_ICONSTOP|MB_OK "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+        MessageBox MB_ICONSTOP|MB_OK "$(RecoveryManifestMismatchDetail)"
       ${EndIf}
     ${Else}
       StrCpy $ExitCode ${EXIT_FAILURE}

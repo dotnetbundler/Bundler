@@ -1,3 +1,4 @@
+#requires -Version 7
 # 固定项矩阵验收：开始菜单/任务栏 pin 在装/卸/换包后的存续语义。
 # 需在目标 Windows build 跑（win10/win11 任务栏 pin API 不同）。
 # 用法: pwsh pinned-items.ps1 -InstallerPath <nsis产包> [-TaskbarPin]

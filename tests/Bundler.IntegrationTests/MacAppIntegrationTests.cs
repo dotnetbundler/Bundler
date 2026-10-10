@@ -318,6 +318,9 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
     public void LaunchServicesDispatchChain()
     {
         _f.Ensure();
+        Assert.SkipWhen(
+            Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") != "1",
+            "真装会写本地安装域与收据库；置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1 才跑。");
         // open -W 可用性探测（无头宿主 LaunchServices 可能缺席）→ 缺席则整腿 Skip。
         var probe = ProcessRunner.Run("open", ["-n", "-W", _f.App],
             new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(60) });
@@ -519,6 +522,9 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
     public void InPlaceUpgradeKeepsRegistration()
     {
         _f.Ensure();
+        Assert.SkipWhen(
+            Environment.GetEnvironmentVariable("BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL") != "1",
+            "真装会写本地安装域与收据库；置 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1 才跑。");
         var probe = ProcessRunner.Run("open", ["-n", "-W", _f.App],
             new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(60) });
         Assert.SkipWhen(probe.ExitCode != 0,

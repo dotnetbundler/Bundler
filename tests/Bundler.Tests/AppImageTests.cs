@@ -147,6 +147,90 @@ public static class AppImageTests
         }
     }
 
+    // installRoot/mainExecutable 插值进 AppRun 的 exec 双引号行——
+    // shell 元字符（空白/引号/$/`）与 BinLink 同规拒绝。
+    [Fact]
+    static void RejectsShellMetacharactersInAppRunPaths()
+    {
+        var input = CreateInputDirectory();
+        var work = input + ".work";
+        try
+        {
+            foreach (var bad in new[] { "usr/lib/$(id)", "usr/lib/a b", "usr/lib/a\"b", "usr/lib/a'b", "usr/lib/`id`" })
+            {
+                AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
+                    BundleWith(null), PlanItem(input, work),
+                    new AppImageBundleConfiguration { InstallRoot = bad }, work, NullBundleLogger.Instance),
+                    $"shell metachars in install root '{bad}' must be rejected");
+            }
+            AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
+                BundleWith(null), PlanItem(input, work, mainExecutable: "bin/$(id)"),
+                new AppImageBundleConfiguration(), work, NullBundleLogger.Instance),
+                "shell metachars in the main executable must be rejected");
+        }
+        finally
+        {
+            Cleanup(input, work);
+        }
+    }
+
+    // Resources 与已落载荷撞名显式拒绝（含载荷文件与 update 注入件同规）。
+    [Fact]
+    static void RejectsResourceTargetCollidingWithPayload()
+    {
+        var input = CreateInputDirectory();
+        var work = input + ".work";
+        var extra = Path.Combine(input, "extra.conf");
+        File.WriteAllText(extra, "k=v");
+        var resourceDir = Path.Combine(input, "resdir");
+        Directory.CreateDirectory(resourceDir);
+        File.WriteAllText(Path.Combine(resourceDir, "ExampleApp.dll"), "shadow");
+        try
+        {
+            AssertThrows<InvalidOperationException>(() => AppDirBuilder.Build(
+                BundleWith(null, resources:
+                [
+                    new BundleResourceConfiguration { Source = extra, TargetPath = "ExampleApp.dll" }
+                ]),
+                PlanItem(input, work), new AppImageBundleConfiguration(), work, NullBundleLogger.Instance),
+                "a file resource overwriting a payload file must be rejected");
+            AssertThrows<InvalidOperationException>(() => AppDirBuilder.Build(
+                BundleWith(null, resources:
+                [
+                    new BundleResourceConfiguration { Source = resourceDir, TargetPath = "." }
+                ]),
+                PlanItem(input, work), new AppImageBundleConfiguration(), work, NullBundleLogger.Instance),
+                "a directory resource colliding with a payload file must be rejected");
+        }
+        finally
+        {
+            Cleanup(input, work);
+        }
+    }
+
+    // BinLink 关闭 + 嵌套主程序时 .desktop Exec 指向完整安装路径而非 basename。
+    [Fact]
+    static void DesktopExecUsesFullMainPathWhenBinLinkDisabled()
+    {
+        var input = CreateInputDirectory();
+        var work = input + ".work";
+        Directory.CreateDirectory(Path.Combine(input, "bin"));
+        File.WriteAllText(Path.Combine(input, "bin", "ExampleApp"), "#!/bin/sh\necho ok\n");
+        try
+        {
+            var result = AppDirBuilder.Build(
+                BundleWith(null), PlanItem(input, work, mainExecutable: "bin/ExampleApp"),
+                new AppImageBundleConfiguration { BinLink = "none" }, work, NullBundleLogger.Instance);
+            var desktop = File.ReadAllText(
+                Path.Combine(result.AppDirPath, "example-app.desktop"));
+            Assert.Contains("Exec=/usr/lib/example-app/bin/ExampleApp", desktop);
+        }
+        finally
+        {
+            Cleanup(input, work);
+        }
+    }
+
     [Fact]
     static void StagesArbitraryFiles()
     {
@@ -506,7 +590,8 @@ public static class AppImageTests
         Assert.Contains("Cannot map runtime identifier", ex.Message);
     }
 
-    static BundleConfiguration BundleWith(string? icon)
+    static BundleConfiguration BundleWith(string? icon,
+        IReadOnlyList<BundleResourceConfiguration>? resources = null)
     {
         return new BundleConfiguration
         {
@@ -516,18 +601,20 @@ public static class AppImageTests
             Publisher = "Example",
             Description = "Fixture",
             Icons = icon is null ? [] : [icon],
+            Resources = resources ?? [],
             Targets = []
         };
     }
 
-    static BundlePlanItem PlanItem(string input, string work, string rid = "linux-x64")
+    static BundlePlanItem PlanItem(string input, string work, string rid = "linux-x64",
+        string mainExecutable = "ExampleApp")
     {
         return new BundlePlanItem(
             new BundleTarget(rid, DesktopOperatingSystem.Linux,
                 rid.EndsWith("arm64", StringComparison.Ordinal) ? CpuArchitecture.Arm64 : CpuArchitecture.X64),
             PackageFormat.AppImage,
             input,
-            "ExampleApp",
+            mainExecutable,
             work + "/out",
             Intermediate: true);
     }

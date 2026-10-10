@@ -107,7 +107,35 @@ public static class UpdateBootstrapper
         {
             chmod(root, 0x1C0 /* 0700 */);
         }
+        SweepStaleExtractions(root);
         return root;
+    }
+
+    // `.<guid>` 提取目录按进程唯一命名——打包进程死在半路时无清理方，残件
+    // 在提取根下无限积累。每次新建前按 mtime 清扫 24h 前的同类目录；删不动
+    // 的（被占用/权限）尽力跳过，全路径 best-effort 不挡打包。
+    private static void SweepStaleExtractions(string root)
+    {
+        try
+        {
+            var cutoff = DateTime.UtcNow.AddHours(-24);
+            foreach (var directory in Directory.GetDirectories(root, ".*"))
+            {
+                try
+                {
+                    if (Directory.GetLastWriteTimeUtc(directory) < cutoff)
+                    {
+                        Directory.Delete(directory, recursive: true);
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
+        catch (Exception)
+        {
+        }
     }
 
     // Windows 临时目录本就按用户隔离；POSIX /tmp 共享——用 uid 划清属主。

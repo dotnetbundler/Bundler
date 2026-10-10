@@ -79,6 +79,12 @@ internal static class ArWriter
     private static void WriteField(Stream output, string value, int width)
     {
         var bytes = Encoding.ASCII.GetBytes(value);
+        // 字段宽度越界静默截断会产偏移全错的坏 ar——显式拒绝。
+        if (bytes.Length > width)
+        {
+            throw new ArgumentException(
+                $"The ar field value '{value}' does not fit in {width} bytes.");
+        }
         output.Write(bytes, 0, bytes.Length);
         WritePadding(output, (byte)' ', width - bytes.Length);
     }

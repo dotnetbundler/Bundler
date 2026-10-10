@@ -24,3 +24,5 @@ LangString InvalidRestartMode ${LANG_PORTUGUESE} "/R só é válido com /S, /P o
 LangString ArgumentsRequireRestart ${LANG_PORTUGUESE} "/ARGS só é válido com /R."
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_PORTUGUESE} "A instalação automática recusou uma pasta não vazia que não pertence a ${PRODUCT_NAME}."
 LangString ApplicationLaunchFailed ${LANG_PORTUGUESE} "A instalação foi concluída, mas não foi possível iniciar ${PRODUCT_NAME}."
+LangString RecoveryManifestMismatch ${LANG_PORTUGUESE} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatchDetail ${LANG_PORTUGUESE} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."

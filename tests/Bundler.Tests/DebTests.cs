@@ -181,6 +181,71 @@ public static class DebTests
     }
 
     [Fact]
+    static void BinLinkNoneDisables()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var artifacts = new DebBundler(new DebBundleConfiguration { BinLink = "none" })
+                .BuildAsync(DebConfiguration(input, output)).GetAwaiter().GetResult();
+            var members = DebPackageReader.ReadAr(artifacts.Single().Path);
+            var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
+            Assert.False(data.Any(e => e.Name.StartsWith("./usr/bin/", StringComparison.Ordinal)),
+                "BinLink=\"none\" must remove the usr/bin symlink like \"\" does.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    // 默认 BinLink 先落 usr/bin 目录条目，Files 再映同名文件——目录→文件冲突显式拒绝。
+    [Fact]
+    static void RejectsFileOverClaimedDirectory()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var extra = Path.Combine(input, "extra.conf");
+        File.WriteAllText(extra, "k=v");
+        try
+        {
+            Assert.ThrowsAny<InvalidOperationException>(
+                () => new DebBundler(new DebBundleConfiguration
+                {
+                    Files = [new DebFileEntry { Source = extra, Destination = "/usr/bin" }]
+                }).BuildAsync(DebConfiguration(input, output)).GetAwaiter().GetResult());
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    // ar 尺寸字段 10 位十进制：超长成员必须显式抛而非静默溢出邻域。
+    [Fact]
+    static void RejectsArMemberOverflowingSizeField()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        var big = Path.Combine(root, "big.bin");
+        try
+        {
+            Directory.CreateDirectory(root);
+            using (var stream = new FileStream(big, FileMode.Create))
+            {
+                stream.SetLength(10_000_000_000L);
+            }
+            using var output = new MemoryStream();
+            Assert.ThrowsAny<ArgumentException>(
+                () => ArWriter.Write(output, [ArMember.FromFile("data.tar.gz", big)]));
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
     static void RejectsInvalidSettings()
     {
         var input = CreateInputDirectory();
