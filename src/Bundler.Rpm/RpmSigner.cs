@@ -46,7 +46,7 @@ internal static class RpmSigner
         {
             throw new InvalidOperationException(
                 $"RPM signing failed: cannot unlock '{keyFile}'. " +
-                "Check SigningKeyPassphrase.", error);
+                "Check Signing.Passphrase.", error);
         }
         var generator = new PgpV3SignatureGenerator(
             PublicKeyAlgorithmTag.RsaGeneral, HashAlgorithmTag.Sha256);
@@ -70,6 +70,6 @@ internal static class RpmSigner
         }
         throw new InvalidOperationException(
             $"RPM signing failed: '{keyFile}' contains no usable signing key. " +
-            "Point SigningKeyFile at an ASCII-armored or binary OpenPGP secret key.");
+            "Point Signing.KeyFile at an ASCII-armored or binary OpenPGP secret key.");
     }
 }

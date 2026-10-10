@@ -31,9 +31,9 @@
     <BundlerMacPkgAppleId Condition="'$(HelloBundlerPkgAppleId)' != ''">$(HelloBundlerPkgAppleId)</BundlerMacPkgAppleId>
     <BundlerMacPkgApplePassword Condition="'$(HelloBundlerPkgApplePassword)' != ''">$(HelloBundlerPkgApplePassword)</BundlerMacPkgApplePassword>
     <BundlerMacPkgAppleTeamId Condition="'$(HelloBundlerPkgAppleTeamId)' != ''">$(HelloBundlerPkgAppleTeamId)</BundlerMacPkgAppleTeamId>
-    <BundlerMacPkgApiKeyFile Condition="'$(HelloBundlerPkgApiKeyFile)' != ''">$(HelloBundlerPkgApiKeyFile)</BundlerMacPkgApiKeyFile>
+    <BundlerMacPkgNotaryApiKeyFile Condition="'$(HelloBundlerPkgNotaryApiKeyFile)' != ''">$(HelloBundlerPkgNotaryApiKeyFile)</BundlerMacPkgNotaryApiKeyFile>
     <BundlerMacPkgNotaryApiKeyId Condition="'$(HelloBundlerPkgNotaryApiKeyId)' != ''">$(HelloBundlerPkgNotaryApiKeyId)</BundlerMacPkgNotaryApiKeyId>
-    <BundlerMacPkgNotaryApiIssuer Condition="'$(HelloBundlerPkgNotaryApiIssuer)' != ''">$(HelloBundlerPkgNotaryApiIssuer)</BundlerMacPkgNotaryApiIssuer>
+    <BundlerMacPkgNotaryApiIssuer Condition="'$(HelloBundlerPkgNotaryApiKeyIssuer)' != ''">$(HelloBundlerPkgNotaryApiKeyIssuer)</BundlerMacPkgNotaryApiIssuer>
   </PropertyGroup>
 
   <ItemGroup>

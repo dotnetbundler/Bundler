@@ -129,12 +129,12 @@ internal static class CliConfig
 
     // *File/*Path/*Directory 后缀之外仍指宿主路径的旋钮：显式清单，与各
     // *BundleConfiguration 的真实属性名对齐，随配置面扩充维护。值可为标量、
-    // 字符串数组（extensionFragmentFiles/frameworks）或字符串字典（localeFiles）。
+    // 字符串数组（extensionFragmentFiles/frameworkDirectories）或字符串字典（localeFiles）。
     private static readonly Dictionary<string, HashSet<string>> PathKnobs = new(StringComparer.Ordinal)
     {
         ["nsis"] = new(StringComparer.OrdinalIgnoreCase)
             { "installerIconFile", "uninstallerIconFile", "headerFile", "sidebarFile",
-              "uninstallerHeaderFile", "installerHooksFile", "customLanguageFiles", "icon" },
+              "uninstallerHeaderFile", "installerHooksFile", "customLanguageFiles" },
         ["msi"] = new(StringComparer.OrdinalIgnoreCase)
             { "bannerFile", "dialogFile", "expertTemplateFile", "extensionFragmentFiles",
               "expertMergeModuleFiles", "localeFiles" },

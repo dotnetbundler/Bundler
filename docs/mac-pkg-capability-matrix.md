@@ -13,7 +13,7 @@
 | `.app` 中间产物输入 | 已实现 | MAC-PKG-1 实测 | `BundlerFormats=pkg` 自动先产 `.app`；payload 根即 `.app` |
 | 任意文件树载荷映射 | 已实现 | MAC-PKG-1 实测 | `BundlerPkgPayload` 项 `Destination` 元数据映射，落到 install-location 相对路径 |
 | 安装位置可配（默认 `/Applications`） | 已实现 | MAC-PKG-1 实测 | `--install-location`；相对路径明确拒绝 |
-| identifier/version 默认规则 | 已实现 | MAC-PKG-1 实测 | 默认取 `BundlerIdentifier`/`Version`，可经 `BundlerMacPkgIdentifier`/`BundlerMacPkgVersion` 覆盖 |
+| identifier/version 默认规则 | 已实现 | MAC-PKG-1 实测 | 默认取 `BundlerIdentifier`/`Version`，可经 `BundlerMacPkgPackageName`/`BundlerMacPkgVersion` 覆盖 |
 | 非 macOS 宿主拒绝 | 已实现 | MAC-PKG-1 单测 | `pkgbuild` 不可跨宿主 |
 | 失败清理（临时产物） | 已实现 | MAC-PKG-1 单测+集成 | 不留伪 `.pkg`；非法 install-location 使 publish 失败且无产物 |
 
@@ -24,7 +24,7 @@
 | 分发包（`productbuild`+`distribution.xml`） | 已实现 | MAC-PKG-2 实测 | 配置分发特性时自动升级包结构 |
 | welcome/license/conclusion 页面 | 已实现 | MAC-PKG-2 实测 | `.txt`/`.html`/`.rtf` 页；`license` 复用公共 `LicenseFile` |
 | 分发标题 | 已实现 | MAC-PKG-2 实测 | `BundlerMacPkgTitle`，默认产品名 |
-| 安装域名 `system`/`current-user-home` | 已实现 | MAC-PKG-2 实测 | `BundlerMacPkgDomain`；per-user 域非管理员真实安装已验（`~/Applications` 落位+收据断言） |
+| 安装域名 `system`/`current-user-home` | 已实现 | MAC-PKG-2 实测 | `BundlerMacPkgInstallScope`；per-user 域非管理员真实安装已验（`~/Applications` 落位+收据断言） |
 | requirements/choices 任意 XML | 明确拒绝 | — | 首个版本不暴露；有真实需求再评估 |
 
 ## 签名、公证与脚本

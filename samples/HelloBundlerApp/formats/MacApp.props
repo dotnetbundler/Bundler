@@ -41,9 +41,9 @@
     <BundlerMacAppAppleId Condition="'$(HelloBundlerMacAppAppleId)' != ''">$(HelloBundlerMacAppAppleId)</BundlerMacAppAppleId>
     <BundlerMacAppApplePassword Condition="'$(HelloBundlerMacAppApplePassword)' != ''">$(HelloBundlerMacAppApplePassword)</BundlerMacAppApplePassword>
     <BundlerMacAppAppleTeamId Condition="'$(HelloBundlerMacAppAppleTeamId)' != ''">$(HelloBundlerMacAppAppleTeamId)</BundlerMacAppAppleTeamId>
-    <BundlerMacAppApiKeyFile Condition="'$(HelloBundlerMacAppApiKeyFile)' != ''">$(HelloBundlerMacAppApiKeyFile)</BundlerMacAppApiKeyFile>
+    <BundlerMacAppNotaryApiKeyFile Condition="'$(HelloBundlerMacAppNotaryApiKeyFile)' != ''">$(HelloBundlerMacAppNotaryApiKeyFile)</BundlerMacAppNotaryApiKeyFile>
     <BundlerMacAppNotaryApiKeyId Condition="'$(HelloBundlerMacAppNotaryApiKeyId)' != ''">$(HelloBundlerMacAppNotaryApiKeyId)</BundlerMacAppNotaryApiKeyId>
-    <BundlerMacAppNotaryApiIssuer Condition="'$(HelloBundlerMacAppNotaryApiIssuer)' != ''">$(HelloBundlerMacAppNotaryApiIssuer)</BundlerMacAppNotaryApiIssuer>
+    <BundlerMacAppNotaryApiIssuer Condition="'$(HelloBundlerMacAppNotaryApiKeyIssuer)' != ''">$(HelloBundlerMacAppNotaryApiKeyIssuer)</BundlerMacAppNotaryApiIssuer>
   </PropertyGroup>
 
   <ItemGroup>

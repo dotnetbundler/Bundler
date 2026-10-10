@@ -83,7 +83,7 @@
     <BundlerMacAppAppleId Condition="'$(BundlerMacAppAppleId)' == ''"></BundlerMacAppAppleId>
     <BundlerMacAppApplePassword Condition="'$(BundlerMacAppApplePassword)' == ''"></BundlerMacAppApplePassword>
     <BundlerMacAppAppleTeamId Condition="'$(BundlerMacAppAppleTeamId)' == ''"></BundlerMacAppAppleTeamId>
-    <BundlerMacAppApiKeyFile Condition="'$(BundlerMacAppApiKeyFile)' == ''"></BundlerMacAppApiKeyFile>
+    <BundlerMacAppNotaryApiKeyFile Condition="'$(BundlerMacAppNotaryApiKeyFile)' == ''"></BundlerMacAppNotaryApiKeyFile>
     <BundlerMacAppNotaryApiKeyId Condition="'$(BundlerMacAppNotaryApiKeyId)' == ''"></BundlerMacAppNotaryApiKeyId>
     <BundlerMacAppNotaryApiIssuer Condition="'$(BundlerMacAppNotaryApiIssuer)' == ''"></BundlerMacAppNotaryApiIssuer>
     <BundlerMacDmgCompression Condition="'$(BundlerMacDmgCompression)' == ''">Ulmo</BundlerMacDmgCompression>
@@ -121,7 +121,7 @@
     <BundlerMacPkgAppleId Condition="'$(BundlerMacPkgAppleId)' == ''"></BundlerMacPkgAppleId>
     <BundlerMacPkgApplePassword Condition="'$(BundlerMacPkgApplePassword)' == ''"></BundlerMacPkgApplePassword>
     <BundlerMacPkgAppleTeamId Condition="'$(BundlerMacPkgAppleTeamId)' == ''"></BundlerMacPkgAppleTeamId>
-    <BundlerMacPkgApiKeyFile Condition="'$(BundlerMacPkgApiKeyFile)' == ''"></BundlerMacPkgApiKeyFile>
+    <BundlerMacPkgNotaryApiKeyFile Condition="'$(BundlerMacPkgNotaryApiKeyFile)' == ''"></BundlerMacPkgNotaryApiKeyFile>
     <BundlerMacPkgNotaryApiKeyId Condition="'$(BundlerMacPkgNotaryApiKeyId)' == ''"></BundlerMacPkgNotaryApiKeyId>
     <BundlerMacPkgNotaryApiIssuer Condition="'$(BundlerMacPkgNotaryApiIssuer)' == ''"></BundlerMacPkgNotaryApiIssuer>
     <BundlerDebPackageName Condition="'$(BundlerDebPackageName)' == ''"></BundlerDebPackageName>

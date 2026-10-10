@@ -24,7 +24,7 @@
 | `osascript` 窗口布局（尺寸/位置/图标位/图标大小） | 已实现 | MAC-DMG-2 | 默认 660×400、app=180,170、Applications=480,170、图标 128；写 `.DS_Store`；无 GUI 宿主实测降级 |
 | 窗口背景图（png/jpg/gif） | 已实现 | MAC-DMG-2 | 拷入卷内 `.background/` 并由 `.DS_Store` 引用 |
 | 卷图标 `.VolumeIcon.icns` + `SetFile -c icnC` | 已实现 | MAC-DMG-2 | `SetFile` 属 Xcode/CLT 附带，缺失降级警告跳过；本机实测落卷 |
-| 无 GUI 会话降级 | 已实现 | MAC-DMG-2 | 跳过布局+警告仍产可挂载 DMG；`BundlerMacDmgSkipWindowLayout` 显式开关 |
+| 无 GUI 会话降级 | 已实现 | MAC-DMG-2 | 跳过布局+警告仍产可挂载 DMG；`BundlerMacDmgLayoutSkip` 显式开关 |
 
 ## 签名与许可
 

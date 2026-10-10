@@ -235,5 +235,5 @@ public sealed class MacAppSigningConfiguration
     public string? ApiKeyId { get; init; }
 
     /// <summary>notarytool --issuer; falls back to APPLE_API_ISSUER.</summary>
-    public string? ApiIssuer { get; init; }
+    public string? ApiKeyIssuer { get; init; }
 }

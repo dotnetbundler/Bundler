@@ -104,12 +104,12 @@ internal sealed class AppImageBundleBackend(
         if (settings.Signing.Passphrase is { Length: > 0 } && !hasKey)
         {
             throw new ArgumentException(
-                "SigningKeyPassphrase requires SigningKeyFile to point at an OpenPGP secret key.");
+                "Signing.Passphrase requires Signing.KeyFile to point at an OpenPGP secret key.");
         }
         if (hasKey && !File.Exists(settings.Signing.KeyFile!))
         {
             throw new ArgumentException(
-                $"SigningKeyFile '{settings.Signing.KeyFile}' does not exist.");
+                $"Signing.KeyFile '{settings.Signing.KeyFile}' does not exist.");
         }
     }
 

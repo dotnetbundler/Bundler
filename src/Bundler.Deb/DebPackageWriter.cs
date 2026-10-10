@@ -58,7 +58,7 @@ internal static class DebPackageWriter
         if (string.IsNullOrWhiteSpace(maintainer) || maintainer.IndexOfAny(['\r', '\n']) >= 0)
         {
             throw new ArgumentException(
-                "The .deb maintainer must be a non-empty single line; set Publisher or Maintainer.");
+                "The .deb maintainer must be a non-empty single line; set Publisher or Vendor.");
         }
 
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, version, maintainer, settings, logger);

@@ -1079,7 +1079,7 @@ public static class MacAppTests
         Assert.Equal("--keychain-profile my-profile", string.Join(' ', profile));
         var apiKey = MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration
         {
-            ApiKeyFile = "/keys/AuthKey_ABC.p8", ApiKeyId = "ABC", ApiIssuer = "ISSUER"
+            ApiKeyFile = "/keys/AuthKey_ABC.p8", ApiKeyId = "ABC", ApiKeyIssuer = "ISSUER"
         });
         Assert.Equal("--key /keys/AuthKey_ABC.p8 --key-id ABC --issuer ISSUER", string.Join(' ', apiKey));
         var appleId = MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration

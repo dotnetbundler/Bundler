@@ -263,7 +263,7 @@ internal static class MacAppSigning
     /// </summary>
     internal static IReadOnlyList<string> ResolveCredentials(MacAppSigningConfiguration signing) =>
         ResolveCredentials(
-            signing.KeychainProfile, signing.ApiKeyFile, signing.ApiKeyId, signing.ApiIssuer,
+            signing.KeychainProfile, signing.ApiKeyFile, signing.ApiKeyId, signing.ApiKeyIssuer,
             signing.AppleId, signing.ApplePassword, signing.AppleTeamId);
 
     /// <summary>Field-level overload shared with the .pkg backend's signing configuration.</summary>
@@ -285,7 +285,7 @@ internal static class MacAppSigning
                 issuer is not { Length: > 0 })
             {
                 throw new ArgumentException(
-                    "Notarization API-key credentials need all of ApiKeyFile/ApiKeyId/ApiIssuer " +
+                    "Notarization API-key credentials need all of ApiKeyFile/ApiKeyId/ApiKeyIssuer " +
                     "(or APPLE_API_KEY_PATH/APPLE_API_KEY/APPLE_API_ISSUER).");
             }
             return ["--key", keyPath, "--key-id", keyId, "--issuer", issuer];
@@ -306,7 +306,7 @@ internal static class MacAppSigning
         }
         throw new ArgumentException(
             "Notarization is enabled but no credentials were provided: set a keychain profile " +
-            "(Signing.KeychainProfile/APPLE_PROFILE), an API key (ApiKeyFile/ApiKeyId/ApiIssuer " +
+            "(Signing.KeychainProfile/APPLE_PROFILE), an API key (ApiKeyFile/ApiKeyId/ApiKeyIssuer " +
             "or APPLE_API_KEY_PATH/APPLE_API_KEY/APPLE_API_ISSUER), or Apple ID credentials " +
             "(AppleId/ApplePassword/AppleTeamId or APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID).");
     }

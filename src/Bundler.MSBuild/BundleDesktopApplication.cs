@@ -124,9 +124,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacAppAppleId { get; set; } = "";
     public string MacAppApplePassword { get; set; } = "";
     public string MacAppAppleTeamId { get; set; } = "";
-    public string MacAppApiKeyFile { get; set; } = "";
+    public string MacAppNotaryApiKeyFile { get; set; } = "";
     public string MacAppNotaryApiKeyId { get; set; } = "";
-    public string MacAppNotaryApiIssuer { get; set; } = "";
+    public string MacAppNotaryApiKeyIssuer { get; set; } = "";
     public string MacDmgCompression { get; set; } = "";
     public string MacDmgVolumeName { get; set; } = "";
     public string MacDmgLayoutSkip { get; set; } = "";
@@ -163,9 +163,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacPkgAppleId { get; set; } = "";
     public string MacPkgApplePassword { get; set; } = "";
     public string MacPkgAppleTeamId { get; set; } = "";
-    public string MacPkgApiKeyFile { get; set; } = "";
+    public string MacPkgNotaryApiKeyFile { get; set; } = "";
     public string MacPkgNotaryApiKeyId { get; set; } = "";
-    public string MacPkgNotaryApiIssuer { get; set; } = "";
+    public string MacPkgNotaryApiKeyIssuer { get; set; } = "";
     public string DebPackageName { get; set; } = "";
     public string DebVersion { get; set; } = "";
     public string DebRelease { get; set; } = "";
@@ -531,9 +531,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                             AppleId = EmptyToNull(MacPkgAppleId),
                             ApplePassword = EmptyToNull(MacPkgApplePassword),
                             AppleTeamId = EmptyToNull(MacPkgAppleTeamId),
-                            ApiKeyFile = OptionalFullPath(MacPkgApiKeyFile),
+                            ApiKeyFile = OptionalFullPath(MacPkgNotaryApiKeyFile),
                             ApiKeyId = EmptyToNull(MacPkgNotaryApiKeyId),
-                            ApiIssuer = EmptyToNull(MacPkgNotaryApiIssuer)
+                            ApiKeyIssuer = EmptyToNull(MacPkgNotaryApiKeyIssuer)
                         }
                     },
                     BuildMacAppConfiguration(),
@@ -868,9 +868,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 AppleId = EmptyToNull(MacAppAppleId),
                 ApplePassword = EmptyToNull(MacAppApplePassword),
                 AppleTeamId = EmptyToNull(MacAppAppleTeamId),
-                ApiKeyFile = OptionalFullPath(MacAppApiKeyFile),
+                ApiKeyFile = OptionalFullPath(MacAppNotaryApiKeyFile),
                 ApiKeyId = EmptyToNull(MacAppNotaryApiKeyId),
-                ApiIssuer = EmptyToNull(MacAppNotaryApiIssuer)
+                ApiKeyIssuer = EmptyToNull(MacAppNotaryApiKeyIssuer)
             }
         };
 

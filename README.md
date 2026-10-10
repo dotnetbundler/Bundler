@@ -281,7 +281,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerMacAppCategory` | 否 | 无；`LSApplicationCategoryType` |
 | `BundlerMacAppIconName` | 否 | `AppIcon`；`CFBundleIconName`（`.car` 直通/`actool` 管线时匹配 Assets 目录件） |
 | `@(BundlerMacDocumentType)`/`@(BundlerMacUrlType)` | 否 | 文件关联 `CFBundleDocumentTypes`+UTI 导出 / `CFBundleURLTypes` 项组 |
-| `@(BundlerMacContent)`/`@(BundlerMacFramework)` | 否 | Contents 下任意相对路径 / `Frameworks` 嵌套项（`Destination` 元数据） |
+| `@(BundlerMacAppFile)`/`@(BundlerMacAppFrameworkDirectory)` | 否 | Contents 下任意相对路径 / `Frameworks` 嵌套项（`Destination` 元数据） |
 | `BundlerMacAppExceptionDomain` | 否 | 无；ATS `NSExceptionDomains` 单一域（允许不安全 HTTP 载荷含子域） |
 | `BundlerMacAppInfoPlistFile`/`…InfoPlistXml` | 否 | 无；调用方 plist 整文件 / 内联 XML 合并（二选一；身份键回读拒绝） |
 | `BundlerMacAppSignIdentity` | 否 | 无；`-`=ad-hoc / 证书 CN，开启 inside-out `codesign` 管线（仅 macOS 宿主） |
@@ -292,7 +292,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerMacAppNotaryWait`/`…SkipStapling` | 否 | `true`/`false`；notarytool 不等待 / 跳过 stapler |
 | `BundlerMacAppNotaryProfile` | 否 | 无；keychain profile 名（公证凭证三模式之一） |
 | `BundlerMacAppAppleId`/`…ApplePassword`/`…AppleTeamId` | 否 | 无；Apple ID 凭证三元组（密码属秘密勿入库） |
-| `BundlerMacAppApiKeyFile`/`…KeyId`/`…Issuer` | 否 | 无；App Store Connect API key 凭证三元组 |
+| `BundlerMacAppNotaryApiKeyFile`/`…KeyId`/`…KeyIssuer` | 否 | 无；App Store Connect API key 凭证三元组 |
 | —— 公证凭证环境变量回退 | —— | 全部凭证属性缺省时依次回退 `APPLE_PROFILE`（profile）/`APPLE_API_KEY_PATH`+`APPLE_API_KEY`+`APPLE_API_ISSUER`（API key 三元组）/`APPLE_ID`+`APPLE_PASSWORD`+`APPLE_TEAM_ID`（Apple ID 三元组），三者按该顺序取第一组完整组 |
 | `BundlerMacDmgCompression` | 否 | `Ulmo`；也支持 `Udzo`/`Udbz` |
 | `BundlerMacDmgVolumeName` | 否 | `BundlerProductName`；挂载显示卷名 |
@@ -312,7 +312,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerMacPkgScriptsDirectory` | 否 | 无；`pkgbuild --scripts` 专家脚本目录 |
 | `@(BundlerPkgPayload)`（`Destination`） | 否 | 无；任意文件树 → install-location 相对路径 |
 | `BundlerMacPkgSignIdentity`/`…SignCertificatePath`/`…SignCertificatePassword` | 否 | 无；`pkgbuild --sign`/`productsign --sign`（Installer 证书，仅 macOS 宿主） |
-| `BundlerMacPkgNotarize`/`…NotaryWait`/`…SkipStapling`/`…NotaryProfile`/`…AppleId`/`…ApplePassword`/`…AppleTeamId`/`…NotaryApiKeyPath`/`…KeyId`/`…Issuer` | 否 | 同 `.app` 公证组（`.pkg` 直接过 notarytool，无 ad-hoc 签名等价物） |
+| `BundlerMacPkgNotarize`/`…NotaryWait`/`…SkipStapling`/`…NotaryProfile`/`…AppleId`/`…ApplePassword`/`…AppleTeamId`/`…NotaryApiKeyFile`/`…KeyId`/`…KeyIssuer` | 否 | 同 `.app` 公证组（`.pkg` 直接过 notarytool，无 ad-hoc 签名等价物） |
 | `BundlerDebPackageName` | 否 | `BundlerProductName` 的 kebab-case 化；须匹配 Debian 包名规则 `[a-z0-9][a-z0-9+.-]+` |
 | `BundlerDebVersion` | 否 | 空时由 `BundlerVersion` 按 SemVer→deb 映射（预发布 `-`→`~`、`+build` 保留）；显式值须为完整 Debian 版本（可含 `epoch:`与`-revision`） |
 | `BundlerDebRelease` | 否 | `1`；空值（MSBuild 传 `none` 以外的字面空不可达，直接 API 用 `""`）省略 `-revision` |

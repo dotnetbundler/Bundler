@@ -123,7 +123,7 @@ internal static class ApkPackageWriter
         else if (settings.Signing.Passphrase is { Length: > 0 })
         {
             throw new ArgumentException(
-                "SigningKeyPassphrase requires SigningKeyFile to point at a PEM RSA private key.");
+                "Signing.Passphrase requires Signing.KeyFile to point at a PEM RSA private key.");
         }
 
         Directory.CreateDirectory(item.OutputDirectory);

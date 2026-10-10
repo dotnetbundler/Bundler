@@ -43,7 +43,7 @@ internal static class MacPkgSigning
                     "is what notarytool and Gatekeeper evaluate.");
             }
             MacAppSigning.ResolveCredentials(
-                signing.KeychainProfile, signing.ApiKeyFile, signing.ApiKeyId, signing.ApiIssuer,
+                signing.KeychainProfile, signing.ApiKeyFile, signing.ApiKeyId, signing.ApiKeyIssuer,
                 signing.AppleId, signing.ApplePassword, signing.AppleTeamId);
         }
         else if (signing.SkipStapling || !signing.NotaryWait)
@@ -110,7 +110,7 @@ internal static class MacPkgSigning
         CancellationToken cancellationToken)
     {
         var credentials = MacAppSigning.ResolveCredentials(
-            signing.KeychainProfile, signing.ApiKeyFile, signing.ApiKeyId, signing.ApiIssuer,
+            signing.KeychainProfile, signing.ApiKeyFile, signing.ApiKeyId, signing.ApiKeyIssuer,
             signing.AppleId, signing.ApplePassword, signing.AppleTeamId);
         var submitArguments = new List<string> { "notarytool", "submit", packagePath };
         submitArguments.AddRange(credentials);
