@@ -9,7 +9,7 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `.deb` 产物（托管 ar/tar.gz 写入器，零原生工具） | 已实现 | LINUX-DEB-1 | `OutputDirectory/<rid>/deb/<package>_<version>_<arch>.deb` + `.sha256` 侧车；`dpkg-deb -I`/`ar t`/`tar` 结构断言已通过 |
+| `.deb` 产物（托管 ar/tar.gz 写入器，零原生工具） | 已实现 | LINUX-DEB-1 | `OutputDirectory/<package>_<version>-<rel>_<arch>.deb`（默认 flat；`outputLayout=byFormat` 时 `deb/` 分目录） + `.sha256` 侧车；`dpkg-deb -I`/`ar t`/`tar` 结构断言已通过 |
 | 任意构建宿主（含 Windows/macOS CI） | 已实现（Linux 宿主验证）；Linux 侧已由 CI 收编（release-verify ubuntu-arm 真机 + qemu/docker 发行版腿） | LINUX-DEB-1 | 纯托管写出，无宿主 OS 门控；Windows/macOS 宿主构建腿属 LINUX-DEB-OI-05 |
 | 目录载荷 → `usr/lib/<package-name>/` | 已实现 | LINUX-DEB-1 | 默认安装根；`BundlerDebInstallRoot` 可改 `/opt/<name>` 等绝对路径 |
 | `usr/bin/<command>` 符号链接 | 已实现 | LINUX-DEB-1 | `/usr` 根下指向 `../lib/<package>/<main>`，其他根用绝对目标；`BundlerDebBinLink` 可改名或 `none` 关闭 |

@@ -30,7 +30,7 @@
 | --- | --- | --- |
 | `BundlerFormats` | `formats: string[]` | `--formats` |
 | `BundlerPackageName`/`BundlerVersion` | `packageName`/`version` | `--package-name`/`--package-version` |
-| `BundlerTarget` | `rid` | `--target` |
+| `BundlerTarget` | `target` | `--target` |
 | `PublishDir` → `InputDirectory` | `inputDir` | `--input-dir` |
 | `BundlerOutputDirectory` | `outputDir` | `--output-dir` |
 | `Bundler<Format>*` 各格式旋钮 | `<format>.*` 子对象 | `--<format>.<knob>=<value>` 通用键值透传 |
@@ -99,7 +99,7 @@ MSBuild 属性同步：`Bundler<Format><Old>` 全部按上表改名（如 `Bundl
 
 ### CLI-AOT（`0.1.0-alpha.62`，分支 `cli-development`）——用户追加需求
 
-- `src/Bundler.Cli` 增 `PublishAot`/`IsAotCompatible`/`InvariantGlobalization`；`dotnet publish -r linux-x86_64` 产出原生 ELF（~49.5MB，stripped，无 dotnet 运行时依赖）。
+- `src/Bundler.Cli` 增 `PublishAot`/`IsAotCompatible`/`InvariantGlobalization`；`dotnet publish -r linux-x64` 产出原生 ELF（~49.5MB，stripped，无 dotnet 运行时依赖）。
 - AOT 化改造：新增 `BundlerJsonContext`（source-gen，camelCase）承载 bundler.json 全部载荷类型；`CliConfig` 反序列化与 `EnforceSchema` 合法键枚举改走 `JsonTypeInfo`（零反射）；`CliProgram` 输出 payload 由匿名类型改为 `JsonObject` DOM 构建。
 - 顺带修复：`JsonNode.Parse` 补 `JsonDocumentOptions`（注释/尾逗号），与 Core `BundleConfigurationLoader` 口径一致。
 - `Verify.sh` 新增 AOT 段：原生二进制 `--version`/bundle zip 实测断言（并证明无 `DOTNET_ROOT` 下运行）。

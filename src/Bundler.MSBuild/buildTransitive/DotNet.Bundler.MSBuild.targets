@@ -21,8 +21,8 @@
       <_BundlerUniversalDir Condition="'$(BundlerUniversalTargets)' != ''">$(IntermediateOutputPath)BundlerUniversal\</_BundlerUniversalDir>
       <_BundlerEffectiveInput Condition="'$(BundlerUniversalTargets)' != ''">$(_BundlerUniversalDir)merged</_BundlerEffectiveInput>
       <_BundlerEffectiveInput Condition="'$(BundlerUniversalTargets)' == ''">$(PublishDir)</_BundlerEffectiveInput>
-      <_BundlerEffectiveRid Condition="'$(BundlerUniversalTargets)' != ''">macos-universal</_BundlerEffectiveRid>
-      <_BundlerEffectiveRid Condition="'$(BundlerUniversalTargets)' == ''">$(BundlerTarget)</_BundlerEffectiveRid>
+      <_BundlerEffectiveTarget Condition="'$(BundlerUniversalTargets)' != ''">macos-universal</_BundlerEffectiveTarget>
+      <_BundlerEffectiveTarget Condition="'$(BundlerUniversalTargets)' == ''">$(BundlerTarget)</_BundlerEffectiveTarget>
     </PropertyGroup>
     <Error Condition="'$(BundlerIdentifier)' == ''"
            Text="BundlerIdentifier is required when BundlerEnabled is true." />
@@ -52,7 +52,7 @@
       Condition="'$(BundlerUniversalTargets)' != ''">
       <Output TaskParameter="MergedDirectory" PropertyName="_BundlerEffectiveInput" />
     </DotNet.Bundler.MSBuild.MergeUniversalPayload>
-    <Message Importance="high" Text="Bundling $(BundlerProductName) for $(_BundlerEffectiveRid): $(BundlerFormats)..." />
+    <Message Importance="high" Text="Bundling $(BundlerProductName) for $(_BundlerEffectiveTarget): $(BundlerFormats)..." />
     <DotNet.Bundler.MSBuild.BundleDesktopApplication
       ProductName="$(BundlerProductName)"
       Identifier="$(BundlerIdentifier)"
@@ -62,7 +62,7 @@
       Homepage="$(BundlerHomepage)"
       Copyright="$(BundlerCopyright)"
       LicenseFile="$(BundlerLicenseFile)"
-      BundlerTarget="$(_BundlerEffectiveRid)"
+      BundlerTarget="$(_BundlerEffectiveTarget)"
       InputDirectory="$(_BundlerEffectiveInput)"
       OutputDirectory="$(BundlerOutputPath)"
       OutputLayout="$(BundlerOutputLayout)"

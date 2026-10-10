@@ -1004,7 +1004,7 @@ public static class RpmTests
     static BundleConfiguration RpmConfiguration(
         string input,
         string output = "",
-        string rid = "linux-x86_64",
+        string target = "linux-x86_64",
         string? productName = null,
         string version = "1.0.0",
         IReadOnlyList<PackageFormat>? formats = null) => new()
@@ -1020,7 +1020,7 @@ public static class RpmTests
             [
                 new BundleTargetConfiguration
                 {
-                    Target = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.Rpm]

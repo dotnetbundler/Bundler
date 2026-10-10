@@ -22,7 +22,7 @@ public static class MacAppTests
     [Fact]
     static void RejectsPkgOutsideMac()
     {
-        var configuration = MacConfiguration(CreateInputDirectory(), rid: "windows-x86_64", formats: [PackageFormat.Pkg]);
+        var configuration = MacConfiguration(CreateInputDirectory(), target: "windows-x86_64", formats: [PackageFormat.Pkg]);
         var issues = BundleConfigurationValidator.Validate(configuration, checkFileSystem: false);
         Assert.Contains(issues, issue => issue.Path.EndsWith("formats", StringComparison.Ordinal));
     }
@@ -716,7 +716,7 @@ public static class MacAppTests
     }
 
     [Fact]
-    static async Task ValidatesMachOArchitecturesPerRid()
+    static async Task ValidatesMachOArchitecturesPerTarget()
     {
         var arm64Input = CreateInputDirectory();
         var wrongArchInput = CreateInputDirectory();
@@ -732,18 +732,18 @@ public static class MacAppTests
                     wrongArchInput, Path.Combine(output, "wrong"))),
                 "An x86_64 executable must not pass in an macos-arm64 target.");
             var fat = await new MacAppBundler().BuildAsync(MacConfiguration(
-                fatInput, Path.Combine(output, "fat"), rid: "macos-x86_64"));
+                fatInput, Path.Combine(output, "fat"), target: "macos-x86_64"));
             Assert.True(File.Exists(Path.Combine(fat[0].Path, "Contents", "MacOS", "ExampleApp")),
                 "Fat binaries satisfy both macos-universal targets.");
             var thin = await new MacAppBundler().BuildAsync(MacConfiguration(
-                arm64Input, Path.Combine(output, "thin"), rid: "macos-arm64"));
+                arm64Input, Path.Combine(output, "thin"), target: "macos-arm64"));
             Assert.Single(thin);
             var universal = await new MacAppBundler().BuildAsync(MacConfiguration(
-                fatInput, Path.Combine(output, "universal"), rid: "macos-universal"));
+                fatInput, Path.Combine(output, "universal"), target: "macos-universal"));
             Assert.Single(universal);
             await AssertThrows<InvalidDataException>(
                 () => new MacAppBundler().BuildAsync(MacConfiguration(
-                    arm64Input, Path.Combine(output, "macos-universal-thin"), rid: "macos-universal")),
+                    arm64Input, Path.Combine(output, "macos-universal-thin"), target: "macos-universal")),
                 "The macos-universal target must reject a payload missing the x86_64 slice.");
             var mismatchedHelper = CreateInputDirectory();
             File.WriteAllBytes(Path.Combine(mismatchedHelper, "helper"), FakeMachO(0x01000007));
@@ -1511,7 +1511,7 @@ public static class MacAppTests
             {
                 var error = await Assert.ThrowsAsync<InvalidDataException>(
                     () => new MacAppBundler().BuildAsync(
-                        MacConfiguration(input, Path.Combine(output, name), rid: "macos-universal")));
+                        MacConfiguration(input, Path.Combine(output, name), target: "macos-universal")));
                 Assert.Contains(needle, error.Message, StringComparison.Ordinal);
             }
             finally
@@ -1527,7 +1527,7 @@ public static class MacAppTests
         try
         {
             var artifacts = await new MacAppBundler().BuildAsync(
-                MacConfiguration(clean, Path.Combine(output, "clean"), rid: "macos-universal"));
+                MacConfiguration(clean, Path.Combine(output, "clean"), target: "macos-universal"));
             Assert.True(File.Exists(
                 Path.Combine(artifacts[0].Path, "Contents", "MacOS", "ExampleApp.managed.dll")));
         }
@@ -1847,7 +1847,7 @@ public static class MacAppTests
     static BundleConfiguration MacConfiguration(
         string input,
         string output = "",
-        string rid = "macos-arm64",
+        string target = "macos-arm64",
         string mainExecutable = "ExampleApp",
         IReadOnlyList<PackageFormat>? formats = null,
         string version = "1.0.0",
@@ -1871,7 +1871,7 @@ public static class MacAppTests
             [
                 new BundleTargetConfiguration
                 {
-                    Target = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = mainExecutable,
                     SigningFiles = signingFiles ?? [],

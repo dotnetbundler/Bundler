@@ -83,14 +83,14 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
 
     // 对应 dotnet publish --no-restore + Bundler 属性串（fixture 已还原）。
     private string Publish(string project, string output, string identifier,
-        string version, string rid = "windows-x86_64", params string[] extra)
+        string version, string target = "windows-x86_64", params string[] extra)
     {
         var args = new List<string>
         {
             "publish", project, "-c", "Release", "--no-restore",
-            "-r", TestPlatform.ToPublishRid(rid),
+            "-r", TestPlatform.ToPublishRid(target),
             $"-p:BundlerPackageSource={_f.Packages}", $"-p:RestorePackagesPath={_f.Cache}",
-            $"-p:BundlerPackageVersion={_f.Version}", $"-p:BundlerTarget={rid}",
+            $"-p:BundlerPackageVersion={_f.Version}", $"-p:BundlerTarget={target}",
             $"-p:BundlerOutputPath={output}", $"-p:BundlerIdentifier={identifier}",
             $"-p:BundlerVersion={version}",
         };

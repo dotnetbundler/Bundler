@@ -31,27 +31,27 @@ public sealed class MacDmgFixture : IDisposable
         _init = new Lazy<bool>(Initialize);
     }
 
-    private string BundlePath(string name, string? rid = null)
-        => Ws.Combine(name, $"Bundler Mac DMG Fixture-1.0.0-{MacArch(rid ?? TestPlatform.OsxTarget)}.dmg");
+    private string BundlePath(string name, string? target = null)
+        => Ws.Combine(name, $"Bundler Mac DMG Fixture-1.0.0-{MacArch(target ?? TestPlatform.OsxTarget)}.dmg");
 
-    internal static string MacArch(string rid) =>
-        rid.EndsWith("x86_64", StringComparison.Ordinal) ? "x86_64"
-        : rid.EndsWith("arm64", StringComparison.Ordinal) ? "arm64" : "universal";
+    internal static string MacArch(string target) =>
+        target.EndsWith("x86_64", StringComparison.Ordinal) ? "x86_64"
+        : target.EndsWith("arm64", StringComparison.Ordinal) ? "arm64" : "universal";
 
     private string PublishDmg(string name, params string[] extra)
-        => PublishDmgForRid(name, TestPlatform.OsxTarget, extra);
+        => PublishDmgForTarget(name, TestPlatform.OsxTarget, extra);
 
-    private string PublishDmgForRid(string name, string rid, params string[] extra)
+    private string PublishDmgForTarget(string name, string target, params string[] extra)
     {
         ProcessRunner.AssertSuccess(
             Dotnet.Run(["publish", FixtureProject, "-c", "Release",
-                "-r", TestPlatform.ToPublishRid(rid),
-                $"-p:BundlerTarget={rid}",
+                "-r", TestPlatform.ToPublishRid(target),
+                $"-p:BundlerTarget={target}",
                 $"-p:BundlerIntegrationOutput={Ws.Combine(name)}",
                 "--packages", CacheDir, .. extra],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) }),
             $"dmg fixture publish '{name}' failed");
-        var dmg = BundlePath(name, rid);
+        var dmg = BundlePath(name, target);
         Assert.True(File.Exists(dmg), $"The .dmg artifact is missing: {dmg}");
         return dmg;
     }
@@ -65,16 +65,16 @@ public sealed class MacDmgFixture : IDisposable
         }
         _ = RepositoryPackages.DirectoryPath;
 
-        var hostRid = TestPlatform.OsxTarget;
+        var hostTarget = TestPlatform.OsxTarget;
         var bundleDir = Ws.Combine("bundle");
         ProcessRunner.AssertSuccess(
             Dotnet.Run(["publish", FixtureProject, "-c", "Release",
                 "-r", TestPlatform.OsxPublishRid,
-                $"-p:BundlerTarget={hostRid}",
+                $"-p:BundlerTarget={hostTarget}",
                 $"-p:BundlerIntegrationOutput={bundleDir}", "--packages", CacheDir],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) }),
             "dmg fixture publish 'bundle' failed");
-        App = Path.Combine(bundleDir, $"Bundler Mac DMG Fixture-1.0.0-{MacArch(hostRid)}.app");
+        App = Path.Combine(bundleDir, $"Bundler Mac DMG Fixture-1.0.0-{MacArch(hostTarget)}.app");
         Dmg = BundlePath("bundle");
         Assert.True(Directory.Exists(App), "The planner did not produce the intermediate .app.");
         Assert.True(File.Exists(Dmg), "The .dmg artifact is missing.");
@@ -85,7 +85,7 @@ public sealed class MacDmgFixture : IDisposable
             "-p:BundlerTestDmgLayoutSkip=true",
             "-p:BundlerTestDmgLicense=true",
             "-p:BundlerTestDmgSignIdentity=-");
-        X64Dmg = PublishDmgForRid("bundle-x64", "macos-x86_64",
+        X64Dmg = PublishDmgForTarget("bundle-x64", "macos-x86_64",
             "-p:BundlerTestDmgLayoutSkip=true");
         return true;
     }

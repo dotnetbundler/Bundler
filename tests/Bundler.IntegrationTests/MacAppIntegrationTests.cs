@@ -79,8 +79,8 @@ public sealed class MacAppFixture : IDisposable
             Dylib = dylib;
         }
 
-        var hostRid = TestPlatform.OsxTarget;
-        App = Publish("bundle", hostRid, BundlerAppPath("bundle", hostRid));
+        var hostTarget = TestPlatform.OsxTarget;
+        App = Publish("bundle", hostTarget, BundlerAppPath("bundle", hostTarget));
         AssertNoBundledPackageRestore();
 
         var entitlements = Ws.Combine("entitlements.plist");
@@ -98,8 +98,8 @@ public sealed class MacAppFixture : IDisposable
             </dict>
             </plist>
             """ + "\n");
-        SignedApp = Publish("signed-output", hostRid,
-            BundlerAppPath("signed-output", hostRid),
+        SignedApp = Publish("signed-output", hostTarget,
+            BundlerAppPath("signed-output", hostTarget),
             "-p:BundlerTestSignIdentity=-",
             "-p:BundlerTestHardenedRuntime=true",
             $"-p:BundlerTestEntitlementsFile={entitlements}");
@@ -110,22 +110,22 @@ public sealed class MacAppFixture : IDisposable
         X64App = PublishWithArgs("x64-output", "macos-x86_64",
             BundlerAppPath("x64-output", "macos-x86_64"), x64Args);
 
-        MinVerApp = Publish("minver-output", hostRid,
-            BundlerAppPath("minver-output", hostRid),
+        MinVerApp = Publish("minver-output", hostTarget,
+            BundlerAppPath("minver-output", hostTarget),
             "-p:BundlerTestMinSystemVersion=99.0");
 
-        UpgradeApp = Publish("upgrade-output", hostRid,
-            BundlerAppPath("upgrade-output", hostRid),
+        UpgradeApp = Publish("upgrade-output", hostTarget,
+            BundlerAppPath("upgrade-output", hostTarget),
             "-p:BundlerTestBuildVersion=2026.9.2");
         return true;
     }
 
-    private string BundlerAppPath(string output, string rid)
-        => Ws.Combine(output, $"Bundler Mac Integration Fixture-1.0.0-{MacArch(rid)}.app");
+    private string BundlerAppPath(string output, string target)
+        => Ws.Combine(output, $"Bundler Mac Integration Fixture-1.0.0-{MacArch(target)}.app");
 
-    internal static string MacArch(string rid) =>
-        rid.EndsWith("x86_64", StringComparison.Ordinal) ? "x86_64"
-        : rid.EndsWith("arm64", StringComparison.Ordinal) ? "arm64" : "universal";
+    internal static string MacArch(string target) =>
+        target.EndsWith("x86_64", StringComparison.Ordinal) ? "x86_64"
+        : target.EndsWith("arm64", StringComparison.Ordinal) ? "arm64" : "universal";
 
     private IEnumerable<string> CommonArgs(string name)
     {
@@ -138,15 +138,15 @@ public sealed class MacAppFixture : IDisposable
         yield return $"-p:RestorePackagesPath={CacheDir}";
     }
 
-    private string Publish(string name, string rid, string expectedApp, params string[] extra)
-        => PublishWithArgs(name, rid, expectedApp, extra);
+    private string Publish(string name, string target, string expectedApp, params string[] extra)
+        => PublishWithArgs(name, target, expectedApp, extra);
 
-    private string PublishWithArgs(string name, string rid, string expectedApp, IEnumerable<string> extra)
+    private string PublishWithArgs(string name, string target, string expectedApp, IEnumerable<string> extra)
     {
         ProcessRunner.AssertSuccess(
             Dotnet.Run(["publish", FixtureProject, "-c", "Release", "--force",
-                "-r", TestPlatform.ToPublishRid(rid),
-                $"-p:BundlerTarget={rid}", .. CommonArgs(name), .. extra],
+                "-r", TestPlatform.ToPublishRid(target),
+                $"-p:BundlerTarget={target}", .. CommonArgs(name), .. extra],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) }),
             $"mac-app fixture publish '{name}' failed");
         Assert.True(Directory.Exists(expectedApp), $"The .app bundle was not produced at {expectedApp}");

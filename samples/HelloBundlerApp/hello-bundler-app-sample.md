@@ -36,33 +36,33 @@ appimage 仅 Linux 宿主；nsis/deb/rpm/zip/targz/alpineapk 为纯托管实现�
 - **独立 `.app` 与许可文件互斥**：`BundlerLicenseFile` 是全局旋钮，独立 `.app` 后端无许可载荷契约会硬拒。
   macOS 宿主默认集因此不含独立 `app`（dmg 内层照样产出 .app，`BundlerMacApp*` 旋钮全部生效）；
   显式 `-p:BundlerFormats=app`（或含 app 的子集）时许可自动缺席该轮 publish，
-  跨宿主 `macos-universal-*` 默认 `app;zip;targz` 同理不带许可。
+  跨宿主 `macos-*` 默认 `app;zip;targz` 同理不带许可。
 - **MSI 数据库 codepage 无法承载 CJK**：en-US 变体为 CP1252，中文描述/中文文件名/中文关联名会触发 light LGHT0311。
   formats 集含 `msi` 时样品自动回退 ASCII（描述改英文、中文 TargetPath 资源与中文关联/协议名缺席或换 ASCII）；
   含 msi 的 publish 如需中文演示，请用不含 msi 的轮次。其余后端（nsis/deb/rpm/mac 系/apk/归档）不约束字符集。
 - **MSI 许可只收 RTF**：formats 集含 `msi` 时 `formats/Msi.props` 自动把全局许可切到 `Assets/msi/license.rtf`
   （nsis/dmg/pkg 同样接受 RTF；archive 不内嵌许可，deb/rpm 以文件载荷携带扩展名无影响）。
   `HelloBundlerMsiLicenseFile` 传透可整体接管；`app` 共存时许可仍缺席（独立 app 无许可载荷契约优先）。
-- **universal 合并要求非 Mach-O 载荷逐字节一致**：`-r macos-universal -p:BundlerUniversalTargets=macos-x86_64;macos-arm64`
-  做双 RID 内层 publish + 托管合并；framework-dependent 应用的 `*.deps.json` 逐 RID 不同会按契约拒绝合并
+- **universal 合并要求非 Mach-O 载荷逐字节一致**：`-r osx -p:BundlerUniversalTargets=osx-x64;osx-arm64`
+  做双 RID 内层 publish + 托管合并；framework-dependent 应用的 `*.deps.json` 逐 publish-RID 不同会按契约拒绝合并
   （`Universal merge conflict ... is not a Mach-O file`），非样本缺陷，需自包含/同构载荷场景适用。
 
 ## 运行
 
 ```bash
-# 产出该 RID 下全部可构建格式
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r <RID>
+# 产出该目标下全部可构建格式
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r <publish-rid> -p:BundlerTarget=<target>
 
 # 只产指定格式子集
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r linux-x86_64 -p:BundlerFormats=deb;rpm
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r linux-x64 -p:BundlerTarget=linux-x86_64 -p:BundlerFormats=deb;rpm
 
 # 变体旋钮：全部按 HelloBundler<Format><Knob> 传透
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r windows-x86_64 \
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64 -p:BundlerTarget=windows-x86_64 \
     -p:HelloBundlerNsisInstallScope=perMachine \
     -p:HelloBundlerMsiLanguage=zh-CN -p:HelloBundlerMsiInstallScope=perMachine
 ```
 
-产物统一落 `samples/HelloBundlerApp/artifacts/<rid>/<format>/`（由 `BundlerOutputPath` 可调）。
+产物统一落 `samples/HelloBundlerApp/artifacts/`（由 `BundlerOutputPath` 可调）。
 
 ## 变体旋钮前缀约定
 
@@ -80,8 +80,8 @@ dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r wind
 
 ## 演示的能力
 
-- **单工程全后端**：一次 `publish` 按 RID 产出全部格式，公共旋钮一处定义、格式旋钮按文件分离；
+- **单工程全后端**：一次 `publish` 按目标产出全部格式，公共旋钮一处定义、格式旋钮按文件分离；
   互斥旋钮（独立 app × 许可文件）有明确的条件化取舍演示。
 - **旋钮 100% 覆盖**：`buildTransitive/DotNet.Bundler.MSBuild.props` 中全部公开 `Bundler<Format>*` 旋钮均有对应默认演示或 `HelloBundler*` 传透——包括专家级项（WiX ExtensionFragment/MergeModule、NSIS 工具链覆盖、pkg ScriptsDirectory）与签名/公证链路（空即不启用）。
-- **载荷项全类型**：`BundlerIcon`（RID 条件化）、`BundlerResource`、`BundlerFileAssociation`、`BundlerUrlProtocol`、`BundlerDebFile`/`BundlerRpmFile`/`BundlerAppImageFile`/`BundlerArchiveFile`/`BundlerAlpineApkFile`（任意路径映射）、`BundlerNsisLanguageFile`、`BundlerWixLanguageFile`、`BundlerMacAppFile`/`BundlerMacAppFrameworkDirectory`/`BundlerMacDocumentType`/`BundlerMacUrlType`、`BundlerMacPkgFile`、`BundlerWindowsSigningFile`/`BundlerWindowsSigningCommandArgument`。
+- **载荷项全类型**：`BundlerIcon`（目标条件化）、`BundlerResource`、`BundlerFileAssociation`、`BundlerUrlProtocol`、`BundlerDebFile`/`BundlerRpmFile`/`BundlerAppImageFile`/`BundlerArchiveFile`/`BundlerAlpineApkFile`（任意路径映射）、`BundlerNsisLanguageFile`、`BundlerWixLanguageFile`、`BundlerMacAppFile`/`BundlerMacAppFrameworkDirectory`/`BundlerMacDocumentType`/`BundlerMacUrlType`、`BundlerMacPkgFile`、`BundlerWindowsSigningFile`/`BundlerWindowsSigningCommandArgument`。
 - **启动自检**：`Program.cs` 区分普通启动/深链接/关联文件，落 `last-launch.txt` 日志，检查各格式载荷资源与 NSIS 生命周期 Hook 标记，便于安装后人工核验。

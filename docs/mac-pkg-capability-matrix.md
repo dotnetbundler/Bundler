@@ -9,7 +9,7 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `.pkg` 组件包产物（`pkgbuild`） | 已实现 | MAC-PKG-1 实测 | `OutputDirectory/<rid>/pkg/<产品名>.pkg`；集成实测 expand-full/xar 结构断言 |
+| `.pkg` 组件包产物（`pkgbuild`） | 已实现 | MAC-PKG-1 实测 | `OutputDirectory/<产品名>-<版本>-<arch>.pkg`（默认 flat；`outputLayout=byFormat` 时 `pkg/` 分目录）；集成实测 expand-full/xar 结构断言 |
 | `.app` 中间产物输入 | 已实现 | MAC-PKG-1 实测 | `BundlerFormats=pkg` 自动先产 `.app`；payload 根即 `.app` |
 | 任意文件树载荷映射 | 已实现 | MAC-PKG-1 实测 | `BundlerPkgPayload` 项 `Destination` 元数据映射，落到 install-location 相对路径 |
 | 安装位置可配（默认 `/Applications`） | 已实现 | MAC-PKG-1 实测 | `--install-location`；相对路径明确拒绝 |

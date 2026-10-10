@@ -94,7 +94,7 @@ public static class AppImageTests
         try
         {
             var result = AppDirBuilder.Build(
-                BundleWith(null), PlanItem(input, work, rid: "linux-aarch64"),
+                BundleWith(null), PlanItem(input, work, target: "linux-aarch64"),
                 new AppImageBundleConfiguration
                 {
                     PackageName = "My App",
@@ -604,11 +604,11 @@ public static class AppImageTests
         };
     }
 
-    static BundlePlanItem PlanItem(string input, string work, string rid = "linux-x86_64",
+    static BundlePlanItem PlanItem(string input, string work, string target = "linux-x86_64",
         string mainExecutable = "ExampleApp")
     {
         return new BundlePlanItem(
-            BundleTarget.Parse(rid),
+            BundleTarget.Parse(target),
             PackageFormat.AppImage,
             input,
             mainExecutable,
@@ -617,7 +617,7 @@ public static class AppImageTests
     }
 
     static BundleConfiguration Configuration(string input, string output,
-        string rid = "linux-x86_64", IReadOnlyList<PackageFormat>? formats = null)
+        string target = "linux-x86_64", IReadOnlyList<PackageFormat>? formats = null)
     {
         var bundle = BundleWith(null);
         return new BundleConfiguration
@@ -632,7 +632,7 @@ public static class AppImageTests
             [
                 new BundleTargetConfiguration
                 {
-                    Target = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.AppImage]

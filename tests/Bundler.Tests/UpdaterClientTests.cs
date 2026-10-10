@@ -313,7 +313,7 @@ public static class UpdaterClientTests
             var current = UpdateClient.FromInstallDirectory(install, "2.0.0");
             Assert.Null(await current.CheckForUpdateAsync());
 
-            // 更高版本但 rid 不匹配 → null（feed v3 只发 win）
+            // 更高版本但 target 不匹配 → null（feed v3 只发 win）
             WriteFeed(feedDir, "stable", "3.0.0", material,
                 new Protocol.UpdateFeedArtifact
                 {
@@ -1000,7 +1000,7 @@ public static class UpdaterClientTests
     {
         // R2-N7 抽取侧：bundler-updater 抽取根下 `.` 前缀残留目录按 mtime 清扫。
         // 走公开入口：两次 TryResolve——第一次建根，铺陈旧目录后第二次触发清扫。
-        // 解析结果是 <root>/.<guid>/updater/<rid>/<file>——root 取四级上级。
+        // 解析结果是 <root>/.<guid>/updater/<target>/<file>——root 取四级上级。
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             return; // 抽取根清扫只发生在 POSIX 路径腿。

@@ -22,7 +22,7 @@ public sealed class AppImageBundleConfiguration
 
     /// <summary>
     /// Target architecture token (<c>x86_64</c>/<c>aarch64</c>)
-    /// passed to appimagetool via <c>ARCH</c>. Defaults to the RID mapping
+    /// passed to appimagetool via <c>ARCH</c>. Defaults to the target arch mapping
     /// (linux-x86_64 → x86_64, linux-aarch64 → aarch64). Cross-arch output uses the
     /// bundled runtime file when one is embedded for the target arch.
     /// </summary>

@@ -952,7 +952,7 @@ public static class ArchiveTests
     static extern int lsetxattr(string path, string name, byte[] value, int size, int flags);
 
     static BundleConfiguration Configuration(string input, string output,
-        string rid = "linux-x86_64", IReadOnlyList<PackageFormat>? formats = null)
+        string target = "linux-x86_64", IReadOnlyList<PackageFormat>? formats = null)
     {
         return new BundleConfiguration
         {
@@ -966,7 +966,7 @@ public static class ArchiveTests
             [
                 new BundleTargetConfiguration
                 {
-                    Target = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.Zip]

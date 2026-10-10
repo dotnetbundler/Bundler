@@ -9,7 +9,7 @@
 
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `.dmg` 产物（只读压缩镜像） | 已实现 | MAC-DMG-1 | `hdiutil create`→挂载→`convert`；产物 `OutputDirectory/<rid>/dmg/<产品名>.dmg` |
+| `.dmg` 产物（只读压缩镜像） | 已实现 | MAC-DMG-1 | `hdiutil create`→挂载→`convert`；产物 `OutputDirectory/<产品名>-<版本>-<arch>.dmg`（默认 flat；`outputLayout=byFormat` 时 `dmg/` 分目录） |
 | `.app` 中间产物输入 | 已实现 | MAC-DMG-1 | 规划器自动补 `App` 步骤；只读输入，不改写 `.app` |
 | `/Applications` 拖放符号链接 | 已实现 | MAC-DMG-1 | 卷内标准拖放安装形态 |
 | 隐藏 `.app` 扩展名 | 已实现 | MAC-DMG-1 | Finder 侧不显示扩展名 |

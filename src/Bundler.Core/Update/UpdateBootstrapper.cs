@@ -39,13 +39,13 @@ public static class UpdateBootstrapper
     {
         var fileName = FileNameFor(target);
         var isWindows = target.StartsWith("win", StringComparison.OrdinalIgnoreCase);
-        // Windows 宿主绝不能拿到 POSIX 脚本（.sh 改名 .exe 无法执行）——只认 per-RID 二进制。
+        // Windows 宿主绝不能拿到 POSIX 脚本（.sh 改名 .exe 无法执行）——只认 per-target 二进制。
         if (update.BootstrapperDirectory is { Length: > 0 } directory)
         {
-            var perRid = Path.Combine(directory, target, fileName);
-            if (File.Exists(perRid))
+            var perTarget = Path.Combine(directory, target, fileName);
+            if (File.Exists(perTarget))
             {
-                source = perRid;
+                source = perTarget;
                 return true;
             }
             var script = Path.Combine(directory, "posix", "bundler-updater.sh");

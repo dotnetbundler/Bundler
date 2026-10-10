@@ -317,7 +317,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerDebVersion` | 否 | 空时由 `BundlerVersion` 按 SemVer→deb 映射（预发布 `-`→`~`、`+build` 保留）；显式值须为完整 Debian 版本（可含 `epoch:`与`-revision`） |
 | `BundlerDebRelease` | 否 | `1`；空值（MSBuild 传 `none` 以外的字面空不可达，直接 API 用 `""`）省略 `-revision` |
 | `BundlerDebEpoch` | 否 | 无；纯数字前缀 `N:`，不进文件名 |
-| `BundlerDebArchitecture` | 否 | 按 RID 映射（x64→`amd64`、arm64→`arm64`）；显式值须为 Debian 架构名 |
+| `BundlerDebArchitecture` | 否 | 按目标架构映射（x86_64→`amd64`、aarch64→`arm64`）；显式值须为 Debian 架构名 |
 | `BundlerDebVendor` | 否 | `BundlerPublisher` → `BundlerIdentifier` 回退 |
 | `BundlerDebInstallRoot` | 否 | `/usr/lib/<包名>`；须为绝对路径且无 `..`；非 `/usr` 根下时 `usr/bin` 链接目标转绝对路径 |
 | `BundlerDebBinLink` | 否 | 包名；`none`（不分大小写）关闭 `usr/bin` 链接 |
@@ -335,7 +335,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerRpmVersion` | 否 | 空时由 `BundlerVersion` 按 SemVer→rpm 映射（预发布段→Release `0.<n>.<label>`、`+build`→Release 后缀）；显式值禁含 `-`、须匹配 `[0-9A-Za-z.+_]+` |
 | `BundlerRpmRelease` | 否 | `1`（或 SemVer 预发布映射值）；rpm Release 字符串 |
 | `BundlerRpmEpoch` | 否 | 无；非负整数写入 EPOCH tag，不进文件名 |
-| `BundlerRpmArchitecture` | 否 | 按 RID 映射（x64→`x86_64`、arm64→`aarch64`、x86→`i686`）；显式值须为 rpm 架构名（如 `noarch`） |
+| `BundlerRpmArchitecture` | 否 | 按目标架构映射（x86_64→`x86_64`、aarch64→`aarch64`、i686→`i686`）；显式值须为 rpm 架构名（如 `noarch`） |
 | `BundlerRpmVendor` | 否 | `BundlerPublisher` → `BundlerIdentifier` 回退 |
 | `BundlerRpmInstallRoot` | 否 | `/usr/lib/<包名>`；须为绝对路径且无 `..`/空格；非 `/usr` 根下时 `usr/bin` 链接目标转绝对路径 |
 | `BundlerRpmBinLink` | 否 | 包名；`none`（不分大小写）关闭 `usr/bin` 链接 |
@@ -343,7 +343,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerRpmSigningKeyPassphrase` | 否 | 私钥口令；只给口令不给密钥文件为配置错误，口令属秘密勿入库 |
 | `BundlerAppImagePackageName` | 否 | `BundlerProductName` 的 kebab-case 化；进入文件名与根 `.desktop`/图标名（仅 Linux 宿主可构建） |
 | `BundlerAppImageVersion` | 否 | `BundlerVersion` 原样；AppImage 无 EVR 规则 |
-| `BundlerAppImageArchitecture` | 否 | 按 RID 映射（x64→`x86_64`、arm64→`aarch64`）；仅 `x86_64`/`aarch64`/`i686`，交叉经内嵌 runtime |
+| `BundlerAppImageArchitecture` | 否 | 按目标架构映射（x86_64→`x86_64`、aarch64→`aarch64`）；仅 `x86_64`/`aarch64`/`i686`，交叉经内嵌 runtime |
 | `BundlerAppImageInstallRoot` | 否 | `usr/lib/<包名>`；AppDir 相对路径，拒绝对路径/`..`/空段 |
 | `BundlerAppImageBinLink` | 否 | 包名；`none` 关闭 `usr/bin` 链接（`AppRun` 直连主程序） |
 | `BundlerAppImageIconFile` | 否 | PNG 拷为根 `<包名>.png`+`.DirIcon`；缺省取 hicolor 最大方图，全无则内置默认 PNG |

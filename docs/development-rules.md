@@ -91,14 +91,14 @@
   缓存污染、损坏和并发有安全处理。
   显式本地工具覆盖可作为受控高级入口。
   NuGet 包获取和调用方 SDK/MSBuild 环境属于另一层，不能由“包内工具离线”推断整台零环境机器无需其他依赖。
-- 预编译冻件（如 `Bundler.Updater.Bootstrap` 的 per-RID `bundler-updater` 引导件）按目标宿主工具链产件：
+- 预编译冻件（如 `Bundler.Updater.Bootstrap` 的 per-target `bundler-updater` 引导件）按目标宿主工具链产件：
   musl RID 必须在 musl 工具链宿主内产（`mcr.microsoft.com/dotnet/sdk:10.0-alpine` 容器或 musl 发行版）——glibc 宿主直接 `dotnet publish -r linux-musl-*` 产出"解释器标 musl、NEEDED 仍挂 glibc `ld-linux`"的混血件，musl 宿主上 rc=127 起不来；
   验收看 `readelf -d` NEEDED 仅 `libc.musl-*`（全静态件无 NEEDED 条目亦合规）加目标宿主实跑。
 - 选择工具以**合法免费、无付费必需服务、尽量覆盖更多构建宿主和安装设备**为目标；
   实际支持范围以原生验证为准。
 - **目标与格式门禁只按实际情况限制**（2026-09-30 用户确认原则）：
   允许的限制依据仅两类——①工具链真实能力（打包工具或宿主确实做不到，如 WiX 需 Windows 宿主、`dmg`/`pkg` 需 macOS）；②产物语义真实性（能产出文件但安装/运行语义不成立的组合——如 musl 载荷打进 `.deb`/`.rpm`（musl 生态无对应发行版消费面）——默认拒绝，显式豁免须用户明确要求）。
-  除上述两类外不替工具预判：目标 RID 不做组合白名单——`BundleTarget.TryParse` 按 `<os>-<arch>` 语法解析（`DesktopOperatingSystem`/`CpuArchitecture` 枚举即 OS 与架构全集，枚举外值解析失败，出现需求时按行补枚举与后端映射）；
+  除上述两类外不替工具预判：目标不做组合白名单——`BundleTarget.TryParse` 按 `<os>-<arch>` 语法解析（`DesktopOperatingSystem`/`CpuArchitecture` 枚举即 OS 与架构全集，枚举外值解析失败，出现需求时按行补枚举与后端映射）；
   工具能力由后端自报，不用与后端脱节的静态表替后端说不——防止矩阵与后端口径漂移（`windows-i686` 门禁即此类人造围栏，2026-09-30 已拆除）。
   已落地（`7feea33`/`e7dfeae`/`02b2521`）：语法化解析 + 裸 `macos-universal` 通用目标 + `linux-musl-x86_64/arm64`（仅 archive）。
 - **构建宿主下限的三层口径**（格式路线文档按此分层记录，互不混淆）：
@@ -143,8 +143,8 @@
   还原垫片只保留在 `Bundler.LocalPackages.props`，由测试代码连同项目复制并传入本轮包源、版本与隔离缓存，
   真实还原来源由 `MsiSupport.AssertLocalBundlerRestore` 逐包核验。
   缺包先 Pack，不假定未发布版本在公网源，也不用项目引用掩盖包消费问题。
-- MSBuild 默认值须按 RID 族推导：`BundlerMainExecutable` 对 `macos-universal-*`/`linux-*` 取 `$(TargetName)`（无 `.exe` 后缀），其余取 `$(TargetName).exe`；
-  新增 RID 族或新宿主后缀规则时同步检查该默认（2026-09-27 LINUX-DEB-1 修正 linux 漏项）。
+- MSBuild 默认值须按目标族推导：`BundlerMainExecutable` 对 `macos-*`/`linux-*` 取 `$(TargetName)`（无 `.exe` 后缀），其余取 `$(TargetName).exe`；
+  新增目标族或新宿主后缀规则时同步检查该默认（2026-09-27 LINUX-DEB-1 修正 linux 漏项）。
 - **统一公开示例 `samples/HelloBundlerApp` 必须覆盖全部后端与全部公开旋钮**：公共旋钮在主工程，各后端专属旋钮按 `formats/<Format>.props` 导入，用户可直接复制该组织方式；不用测试 fixture 冒充示例。
   默认命令应直接构建并生成安装包；
   该格式当前公开且适用的**所有用户能力**都要在示例中有实际配置、可复现的变体命令或明确的操作演示，不能只列名称。
@@ -266,7 +266,7 @@ dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release
 dotnet test tests/Bundler.ApiTests/Bundler.ApiTests.csproj -c Release
 dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
-dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r windows-x86_64
+dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64 -p:BundlerTarget=windows-x86_64
 # 只产某格式：-p:BundlerFormats=nsis（等）；某格式旋钮变体：-p:HelloBundler<Format><Knob>=...
 
 # 按格式类选择集成测试；MSI 真装腿另需同意闸 BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1

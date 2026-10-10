@@ -545,17 +545,17 @@ public static class UpdaterBootstrapParityTests
     [Fact]
     static void ShippedBootstrap_SmokeApplies()
     {
-        // 仓内 tools/<rid> 引导件冒烟：守住"源码修了但发布件没重产"的漂变。
+        // 仓内 tools/<target> 引导件冒烟：守住"源码修了但发布件没重产"的漂变。
         var arm64 = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
             System.Runtime.InteropServices.Architecture.Arm64;
-        var rid = TestPlatform.IsWindows ? (arm64 ? "windows-arm64" : "windows-x86_64")
+        var target = TestPlatform.IsWindows ? (arm64 ? "windows-arm64" : "windows-x86_64")
             : TestPlatform.IsMacOS ? (arm64 ? "macos-arm64" : "macos-x86_64")
             : TestPlatform.IsLinux ? TestPlatform.LinuxTarget
             : null;
-        Assert.SkipUnless(rid is not null, "no shipped bootstrap RID for this host");
+        Assert.SkipUnless(target is not null, "no shipped bootstrap target for this host");
         var exeName = TestPlatform.IsWindows ? "bundler-updater.exe" : "bundler-updater";
         var binary = Path.Combine(RepoRoot(), "src", "Bundler.Updater.Bootstrap",
-            "tools", rid!, exeName);
+            "tools", target!, exeName);
         Assert.SkipUnless(File.Exists(binary), $"shipped bootstrap missing: {binary}");
 
         var root = CreateTempDirectory();

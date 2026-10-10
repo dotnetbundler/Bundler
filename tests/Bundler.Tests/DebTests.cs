@@ -89,7 +89,7 @@ public static class DebTests
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         try
         {
-            var configuration = DebConfiguration(input, output, rid: "linux-aarch64");
+            var configuration = DebConfiguration(input, output, target: "linux-aarch64");
             configuration = new BundleConfiguration
             {
                 ProductName = configuration.ProductName,
@@ -948,7 +948,7 @@ public static class DebTests
     static BundleConfiguration DebConfiguration(
         string input,
         string output = "",
-        string rid = "linux-x86_64",
+        string target = "linux-x86_64",
         IReadOnlyList<PackageFormat>? formats = null) => new()
         {
             ProductName = "Example App",
@@ -962,7 +962,7 @@ public static class DebTests
             [
                 new BundleTargetConfiguration
                 {
-                    Target = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.Deb]

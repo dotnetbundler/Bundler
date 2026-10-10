@@ -256,20 +256,20 @@ public static class AlpineApkTests
     [Fact]
     static void MapsMuslArchitectures()
     {
-        foreach (var (rid, arch) in new[] { ("linux-musl-x86_64", "x86_64"), ("linux-musl-aarch64", "aarch64") })
+        foreach (var (target, arch) in new[] { ("linux-musl-x86_64", "x86_64"), ("linux-musl-aarch64", "aarch64") })
         {
             var input = CreateInputDirectory();
             var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
             try
             {
                 var artifacts = new AlpineApkBundler()
-                    .BuildAsync(ApkConfiguration(input, output, rid)).GetAwaiter().GetResult();
+                    .BuildAsync(ApkConfiguration(input, output, target)).GetAwaiter().GetResult();
                 var segments = ApkPackageReader.SplitGzipStreams(
                     File.ReadAllBytes(artifacts.Single().Path));
                 var fields = PkgInfoFields(
                     ApkPackageReader.ReadTar(segments[0]).Single(e => e.Name == ".PKGINFO").Content);
                 Assert.True(fields["arch"] == arch,
-                    $"RID {rid} must map to arch {arch}, got {fields["arch"]}");
+                    $"target {target} must map to arch {arch}, got {fields["arch"]}");
             }
             finally
             {
@@ -284,28 +284,28 @@ public static class AlpineApkTests
         var input = CreateInputDirectory();
         try
         {
-            foreach (var rid in new[] { "linux-x86_64", "windows-x86_64", "macos-arm64" })
+            foreach (var target in new[] { "linux-x86_64", "windows-x86_64", "macos-arm64" })
             {
                 var refused = Assert.ThrowsAny<Exception>(
                     () => new AlpineApkBundler()
-                        .BuildAsync(ApkConfiguration(input, rid: rid)).GetAwaiter().GetResult());
+                        .BuildAsync(ApkConfiguration(input, target: target)).GetAwaiter().GetResult());
                 Assert.True(
                     (refused is NotSupportedException && refused.Message.Contains("No backend is registered")) ||
                     (refused is ArgumentException && refused.Message.Contains("validation error")) ||
                     refused is BundleValidationException,
-                    $"apk must be refused on non-musl rid {rid}: {refused.GetType().Name}: {refused.Message}");
+                    $"apk must be refused on non-musl target {target}: {refused.GetType().Name}: {refused.Message}");
             }
 
             // The matrix keeps the validator symmetric: apk on a glibc Linux
             // target is a configuration issue, not just a missing backend.
-            var glibc = ApkConfiguration(input, rid: "linux-x86_64");
+            var glibc = ApkConfiguration(input, target: "linux-x86_64");
             Assert.Contains(BundleConfigurationValidator.Validate(glibc, checkFileSystem: false), issue => issue.Path == "targets[0].formats");
-            var musl = ApkConfiguration(input, rid: "linux-musl-aarch64");
+            var musl = ApkConfiguration(input, target: "linux-musl-aarch64");
             Assert.False(BundleConfigurationValidator.Validate(musl, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), "The validator must accept AlpineApk on linux-musl-aarch64.");
 
             // 矩阵同时按 arch 词表裁剪：windows-riscv64 在 nsis/msi 词表外，校验期就必须拒，
             // 不能漏到规划期由 ArtifactNaming 抛裸 ArgumentException。
-            var riscv = ApkConfiguration(input, rid: "windows-riscv64", formats: [PackageFormat.Nsis]);
+            var riscv = ApkConfiguration(input, target: "windows-riscv64", formats: [PackageFormat.Nsis]);
             Assert.Contains(BundleConfigurationValidator.Validate(riscv, checkFileSystem: false), issue => issue.Path == "targets[0].formats");
         }
         finally
@@ -965,7 +965,7 @@ public static class AlpineApkTests
     static BundleConfiguration ApkConfiguration(
         string input,
         string output = "",
-        string rid = "linux-musl-x86_64",
+        string target = "linux-musl-x86_64",
         IReadOnlyList<PackageFormat>? formats = null,
         string productName = "Example App",
         IReadOnlyList<BundleResourceConfiguration>? resources = null) => new()
@@ -982,7 +982,7 @@ public static class AlpineApkTests
             [
                 new BundleTargetConfiguration
                 {
-                    Target = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.AlpineApk]

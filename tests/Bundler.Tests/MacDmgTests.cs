@@ -855,7 +855,7 @@ public static class MacDmgTests
     static BundleConfiguration DmgConfiguration(
         string input,
         string output = "",
-        string rid = "macos-arm64",
+        string target = "macos-arm64",
         IReadOnlyList<PackageFormat>? formats = null,
         string? licenseFile = null) => new()
         {
@@ -868,7 +868,7 @@ public static class MacDmgTests
             [
                 new BundleTargetConfiguration
                 {
-                    Target = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.Dmg]

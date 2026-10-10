@@ -37,16 +37,16 @@ public static class UpdatePayloadStaging
     private static void InjectPayloadFiles(
         string payloadRoot, UpdateBundleConfiguration update, BundlePlanItem item)
     {
-        var rid = item.Target.Target;
-        UpdateIdentitySidecar.WriteIfEnabled(payloadRoot, update, item.Format, rid);
+        var target = item.Target.Target;
+        UpdateIdentitySidecar.WriteIfEnabled(payloadRoot, update, item.Format, target);
         if (item.Format is PackageFormat.Nsis or PackageFormat.Msi)
         {
             return;
         }
-        if (UpdateBootstrapper.Inject(payloadRoot, update, rid) is null)
+        if (UpdateBootstrapper.Inject(payloadRoot, update, target) is null)
         {
             throw new InvalidOperationException(
-                $"BundlerUpdate enabled but no bootstrapper found for '{rid}' — no updater/{rid}/ binary is embedded in Bundler.Core and no update bootstrapper directory was configured (update.bootstrapperDirectory).");
+                $"BundlerUpdate enabled but no bootstrapper found for '{target}' — no updater/{target}/ binary is embedded in Bundler.Core and no update bootstrapper directory was configured (update.bootstrapperDirectory).");
         }
     }
 

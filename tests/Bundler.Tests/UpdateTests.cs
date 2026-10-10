@@ -250,10 +250,10 @@ public static class UpdateTests
             File.WriteAllText(Path.Combine(tools, "posix", "bundler-updater.sh"), "#!/bin/sh\n");
 
             var update = new UpdateBundleConfiguration { BootstrapperDirectory = tools };
-            // per-RID 件命中优先。
+            // per-target 件命中优先。
             Assert.True(UpdateBootstrapper.TryResolve(update, "linux-x86_64", out var resolved));
             Assert.EndsWith(Path.Combine("linux-x86_64", "bundler-updater"), resolved);
-            // 无 per-RID 件（macos-arm64 未构建）→ 降级 posix 脚本。
+            // 无 per-target 件（macos-arm64 未构建）→ 降级 posix 脚本。
             Assert.True(UpdateBootstrapper.TryResolve(update, "macos-arm64", out resolved));
             Assert.EndsWith("bundler-updater.sh", resolved);
             // 工具目录缺位→不注入（安全降级，非错误）。
@@ -1006,7 +1006,7 @@ public static class UpdateTests
             File.WriteAllText(Path.Combine(tools, "posix", "bundler-updater.sh"), "#!/bin/sh\n");
             var update = new UpdateBundleConfiguration { BootstrapperDirectory = tools };
 
-            // win 宿主绝不拿 POSIX 脚本——无 per-RID 二进制即不可用（确定性拒绝而非注入不可执行件）。
+            // win 宿主绝不拿 POSIX 脚本——无 per-target 二进制即不可用（确定性拒绝而非注入不可执行件）。
             Assert.False(UpdateBootstrapper.TryResolve(update, "windows-arm64", out _));
             Assert.False(UpdateBootstrapper.TryResolve(update, "windows-x86_64", out _));
             // 非 win 宿主照常降级脚本件。
@@ -1043,7 +1043,7 @@ public static class UpdateTests
         {
             var keyPath = Path.Combine(directory, "key.json");
             UpdateKeyMaterial.Generate().Save(keyPath);
-            // .app 是目录件：打进 <rid>/<format>/ 分目录（planner 真实布局）。
+            // .app 是目录件：emitter 落 `<name>.app.zip` 运输件。
             var appDir = Path.Combine(directory, "MyApp.app");
             Directory.CreateDirectory(Path.Combine(appDir, "Contents", "MacOS"));
             File.WriteAllText(Path.Combine(appDir, "Contents", "Info.plist"), "<plist/>");

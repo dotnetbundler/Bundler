@@ -428,7 +428,7 @@ public static class MacPkgTests
             "The MSBuild task does not construct the .pkg backend.");
     }
 
-    // R2 N1: rid=macos-universal 分发包的 hostArchitectures 必须是逗号分隔（Apple 约定）。
+    // R2 N1: target=macos-universal 分发包的 hostArchitectures 必须是逗号分隔（Apple 约定）。
     [Fact]
     static async Task HostArchitecturesCommaSeparated()
     {
@@ -455,7 +455,7 @@ public static class MacPkgTests
         try
         {
             await new MacPkgBundler(new MacPkgBundleConfiguration { Title = "T" })
-                .BuildAsync(PkgConfiguration(input, output, rid: "macos-universal"));
+                .BuildAsync(PkgConfiguration(input, output, target: "macos-universal"));
             Assert.Contains("hostArchitectures=\"x86_64,arm64\"", distribution);
         }
         finally
@@ -611,7 +611,7 @@ public static class MacPkgTests
     static BundleConfiguration PkgConfiguration(
         string input,
         string output = "",
-        string rid = "macos-arm64",
+        string target = "macos-arm64",
         IReadOnlyList<PackageFormat>? formats = null,
         string? license = null) => new()
         {
@@ -624,7 +624,7 @@ public static class MacPkgTests
             [
                 new BundleTargetConfiguration
                 {
-                    Target = rid,
+                    Target = target,
                     InputDirectory = input,
                     MainExecutable = "ExampleApp",
                     Formats = formats ?? [PackageFormat.Pkg]

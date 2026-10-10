@@ -63,15 +63,15 @@ public sealed class ArchiveFixture : IDisposable
         Publish("fanout", "-p:BundlerTestFormats=deb%3Brpm%3Bappimage%3Bzip%3Btargz");
         FanoutDir = Ws.Combine("fanout");
 
-        foreach (var rid in new[] { "windows-x86_64", "macos-arm64" })
+        foreach (var target in new[] { "windows-x86_64", "macos-arm64" })
         {
             Dotnet.Publish(FixtureProject, "Release",
             [
-                $"-p:BundlerIntegrationOutput={Ws.Combine("cross-" + rid)}",
+                $"-p:BundlerIntegrationOutput={Ws.Combine("cross-" + target)}",
                 "-p:BundlerTestFormats=zip",
                 "--packages", CacheDir,
-                "-r", TestPlatform.ToPublishRid(rid), $"-p:BundlerTarget={rid}",
-            ], $"cross publish for {rid} failed", noRestore: false);
+                "-r", TestPlatform.ToPublishRid(target), $"-p:BundlerTarget={target}",
+            ], $"cross publish for {target} failed", noRestore: false);
         }
         CrossWinDir = Ws.Combine("cross-windows-x86_64");
         CrossOsxDir = Ws.Combine("cross-macos-arm64");

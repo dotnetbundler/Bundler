@@ -77,7 +77,7 @@
 | 项 | 要做什么 | 完成证据 | 当前卡点/已有覆盖 |
 | --- | --- | --- | --- |
 | ~~ARM64 真机组（deb/rpm/AppImage/apk）~~ | ~~真机 ARM64 宿主装卸+运行各格式件~~ | **已完成**（2026-10-09） | `arm64-real-hw.sh` 收编进 `release-verify`，在 GitHub `ubuntu-26.04-arm` 真 arm64 硬件腿跑绿（deb/rpm/apk/AppImage 装卸+运行）；Windows 侧 `arm64-matrix.ps1` 在 `windows-11-arm` 跑绿 |
-| ~~UPDATE arm64 AOT 引导件~~ | ~~linux-aarch64/windows-arm64 构建宿主产 arm64 引导件并入包，重跑 arm64 换包腿~~ | **已完成**（2026-10-09） | linux-aarch64/linux-musl-aarch64 由 GitHub `ubuntu-26.04-arm` runner、windows-arm64 由 `windows-11-arm` runner 真宿主产出入库（`tools/<rid>/`），冒烟 `apply` 过；arm64 换包腿收编进 `release-verify`（docker tmpfs/VHD 小卷） |
+| ~~UPDATE arm64 AOT 引导件~~ | ~~linux-aarch64/windows-arm64 构建宿主产 arm64 引导件并入包，重跑 arm64 换包腿~~ | **已完成**（2026-10-09） | linux-aarch64/linux-musl-aarch64 由 GitHub `ubuntu-26.04-arm` runner、windows-arm64 由 `windows-11-arm` runner 真宿主产出入库（`tools/<target>/`），冒烟 `apply` 过；arm64 换包腿收编进 `release-verify`（docker tmpfs/VHD 小卷） |
 | ~~Windows ARM64 矩阵~~ | ~~MSI/NSIS 在 Windows ARM64 的构建、安装、升级、修复、卸载逐组合~~ | **已完成**（2026-10-09） | `arm64-matrix.ps1` 收编进 `release-verify` 的 `windows-11-arm` 腿跑绿（装+NSIS/MSI 覆盖装+MSI 修复+卸逐组合，rc=0） |
 | ~~Intel Mac / Rosetta~~ | ~~macos-x86_64 `.app`/`.dmg`/`.pkg` 实跑、挂载、安装、启动~~ | **部分收编**（2026-10-09） | `macos-26-intel` CI 腿在真 Intel 硬件跑绿（macos-x86_64 `.app`/`.dmg`/`.pkg` 产包+挂载+装卸+全量单测）；`macos-26` arm64+Rosetta 腿跑绿（macos-x86_64 `.app`/`.dmg` 实跑）；剩启动观感仍挂本表 |
 | 干净 macOS 宿主矩阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg` | 挂载/EULA 弹窗/拖放安装首启记录 | 现宿主有开发工具链；云 mac 实例按天可租 |

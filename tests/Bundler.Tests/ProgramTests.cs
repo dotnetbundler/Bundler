@@ -13,24 +13,24 @@ public static class ProgramTests
 {
 
     [Fact]
-    static void ParsesSupportedDesktopRids()
+    static void ParsesSupportedDesktopTargets()
     {
-        string[] rids = ["windows-i686", "windows-x86_64", "windows-arm64", "macos-universal", "macos-x86_64", "macos-arm64", "linux-x86_64", "linux-aarch64", "linux-musl-x86_64", "linux-musl-aarch64"];
-        Assert.True(rids.All(rid => BundleTarget.TryParse(rid, out _)), "One or more supported RIDs failed to parse.");
+        string[] targets = ["windows-i686", "windows-x86_64", "windows-arm64", "macos-universal", "macos-x86_64", "macos-arm64", "linux-x86_64", "linux-aarch64", "linux-musl-x86_64", "linux-musl-aarch64"];
+        Assert.True(targets.All(target => BundleTarget.TryParse(target, out _)), "One or more supported targets failed to parse.");
         Assert.True(BundleTarget.TryParse("windows-i686", out var x86) && x86!.Architecture == CpuArchitecture.X86,
             "Windows x86 must be a distinct public target architecture.");
         Assert.True(BundleTarget.TryParse("macos-universal", out var macosUniversal) &&
                 macosUniversal!.OperatingSystem == DesktopOperatingSystem.MacOS && macosUniversal.Architecture == CpuArchitecture.Universal,
-            "The bare macos-universal RID must map to a universal macOS target.");
+            "The bare macos-universal target must map to a universal macOS target.");
         Assert.True(BundleTarget.TryParse("linux-musl-x86_64", out var musl) &&
                 musl!.OperatingSystem == DesktopOperatingSystem.LinuxMusl && musl.Architecture == CpuArchitecture.X64,
             "linux-musl-x86_64 must parse as a distinct musl target.");
         Assert.True(BundleTarget.TryParse("linux-musl-aarch64", out var muslArm) &&
                 muslArm!.OperatingSystem == DesktopOperatingSystem.LinuxMusl,
             "linux-musl-aarch64 must parse as a distinct musl target.");
-        Assert.False(BundleTarget.TryParse("android-arm64", out _), "A mobile RID was accepted.");
-        Assert.False(BundleTarget.TryParse("linux-musl", out _), "A musl RID without an architecture was accepted.");
-        Assert.False(BundleTarget.TryParse("win", out _), "An OS RID without an architecture was accepted.");
+        Assert.False(BundleTarget.TryParse("android-arm64", out _), "A mobile target was accepted.");
+        Assert.False(BundleTarget.TryParse("linux-musl", out _), "A musl target without an architecture was accepted.");
+        Assert.False(BundleTarget.TryParse("win", out _), "An OS target without an architecture was accepted.");
     }
 
     [Fact]
@@ -72,23 +72,23 @@ public static class ProgramTests
             Target = "macos-universal", InputDirectory = "unused", Formats = [PackageFormat.Nsis]
         });
         Assert.Contains(BundleConfigurationValidator.Validate(osxNsis, checkFileSystem: false), issue => issue.Message.Contains("not supported", StringComparison.Ordinal));
-        foreach (var rid in new[] { "linux-musl-x86_64", "linux-musl-aarch64" })
+        foreach (var target in new[] { "linux-musl-x86_64", "linux-musl-aarch64" })
         {
             var muslArchive = ValidConfiguration(new BundleTargetConfiguration
             {
-                Target = rid, InputDirectory = "unused",
+                Target = target, InputDirectory = "unused",
                 Formats = [PackageFormat.Zip, PackageFormat.TarGz, PackageFormat.AlpineApk, PackageFormat.AppImage]
             });
-            Assert.False(BundleConfigurationValidator.Validate(muslArchive, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), $"Zip/TarGz/AlpineApk/AppImage must accept the musl target {rid}.");
+            Assert.False(BundleConfigurationValidator.Validate(muslArchive, checkFileSystem: false) .Any(issue => issue.Path == "targets[0].formats"), $"Zip/TarGz/AlpineApk/AppImage must accept the musl target {target}.");
             var muslGlibc = ValidConfiguration(new BundleTargetConfiguration
             {
-                Target = rid, InputDirectory = "unused",
+                Target = target, InputDirectory = "unused",
                 Formats = [PackageFormat.Deb, PackageFormat.Rpm]
             });
             var muslIssues = BundleConfigurationValidator.Validate(muslGlibc, checkFileSystem: false)
                 .Where(issue => issue.Path == "targets[0].formats").ToArray();
             Assert.True(muslIssues.Length == 2,
-                $"Deb/Rpm must each be rejected for the musl target {rid} (glibc-distro semantics).");
+                $"Deb/Rpm must each be rejected for the musl target {target} (glibc-distro semantics).");
         }
     }
 
@@ -2126,7 +2126,7 @@ public static class ProgramTests
         Assert.True(mergedSample.Descendants("AssemblyName").Single().Value == "HelloBundlerApp" &&
                mergedSample.Descendants().Any(item => item.Name.LocalName == "BundlerFormats") &&
                !mergedSample.Descendants().Any(item => item.Name.LocalName.StartsWith("HelloBundledApp", StringComparison.Ordinal)),
-            "The merged sample must expose the executable name and per-RID format selection without legacy pass-throughs.");
+            "The merged sample must expose the executable name and per-target format selection without legacy pass-throughs.");
         var formatPrefixes = new Dictionary<string, string>
         {
             ["Nsis"] = "HelloBundlerNsis",

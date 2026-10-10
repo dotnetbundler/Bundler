@@ -334,7 +334,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
     }
 
     /// <summary>
-    /// Single payload pass: Mach-O architecture check against the target RID (managed header
+    /// Single payload pass: Mach-O architecture check against the bundler target (managed header
     /// parse — the equivalent of `lipo -info`, available on every build host) plus executable-bit
     /// chmod on POSIX hosts.
     /// </summary>
@@ -375,7 +375,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
                 throw new InvalidDataException(
                     $"Mach-O payload '{file}' does not contain '{string.Join(", ", missing)}' required by " +
                     $"{target.Target} (architectures: {string.Join(", ", architectures)}). " +
-                    "Provide a universal (fat) binary or per-RID input.");
+                    "Provide a universal (fat) binary or per-target input.");
             }
             if (!windows)
             {

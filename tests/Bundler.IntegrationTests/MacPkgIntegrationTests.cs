@@ -33,25 +33,25 @@ public sealed class MacPkgFixture : IDisposable
         _init = new Lazy<bool>(Initialize);
     }
 
-    private string BundlePath(string name, string? rid = null)
-        => Ws.Combine(name, $"Bundler Mac PKG Fixture-1.0.0-{MacArch(rid ?? TestPlatform.OsxTarget)}.pkg");
+    private string BundlePath(string name, string? target = null)
+        => Ws.Combine(name, $"Bundler Mac PKG Fixture-1.0.0-{MacArch(target ?? TestPlatform.OsxTarget)}.pkg");
 
-    internal static string MacArch(string rid) =>
-        rid.EndsWith("x86_64", StringComparison.Ordinal) ? "x86_64"
-        : rid.EndsWith("arm64", StringComparison.Ordinal) ? "arm64" : "universal";
+    internal static string MacArch(string target) =>
+        target.EndsWith("x86_64", StringComparison.Ordinal) ? "x86_64"
+        : target.EndsWith("arm64", StringComparison.Ordinal) ? "arm64" : "universal";
 
     private string PublishPkg(string name, params string[] extra)
-        => PublishPkgForRid(name, TestPlatform.OsxTarget, extra);
+        => PublishPkgForTarget(name, TestPlatform.OsxTarget, extra);
 
-    private string PublishPkgForRid(string name, string rid, params string[] extra)
+    private string PublishPkgForTarget(string name, string target, params string[] extra)
     {
         ProcessRunner.AssertSuccess(
-            Dotnet.Run(["publish", FixtureProject, "-c", "Release", "-r", TestPlatform.ToPublishRid(rid), $"-p:BundlerTarget={rid}",
+            Dotnet.Run(["publish", FixtureProject, "-c", "Release", "-r", TestPlatform.ToPublishRid(target), $"-p:BundlerTarget={target}",
                 $"-p:BundlerIntegrationOutput={Ws.Combine(name)}",
                 "--packages", CacheDir, .. extra],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) }),
             $"pkg fixture publish '{name}' failed");
-        var pkg = BundlePath(name, rid);
+        var pkg = BundlePath(name, target);
         Assert.True(File.Exists(pkg), $"The .pkg artifact is missing: {pkg}");
         return pkg;
     }
@@ -82,15 +82,15 @@ public sealed class MacPkgFixture : IDisposable
         }
         _ = RepositoryPackages.DirectoryPath;
 
-        var hostRid = TestPlatform.OsxTarget;
+        var hostTarget = TestPlatform.OsxTarget;
         ProcessRunner.AssertSuccess(
             Dotnet.Run(["publish", FixtureProject, "-c", "Release",
-                "-r", TestPlatform.OsxPublishRid, $"-p:BundlerTarget={hostRid}",
+                "-r", TestPlatform.OsxPublishRid, $"-p:BundlerTarget={hostTarget}",
                 $"-p:BundlerIntegrationOutput={Ws.Combine("bundle")}",
                 "--packages", CacheDir],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) }),
             "pkg fixture publish 'bundle' failed");
-        App = Path.Combine(Ws.Combine("bundle"), $"Bundler Mac PKG Fixture-1.0.0-{MacArch(hostRid)}.app");
+        App = Path.Combine(Ws.Combine("bundle"), $"Bundler Mac PKG Fixture-1.0.0-{MacArch(hostTarget)}.app");
         Pkg = BundlePath("bundle");
         Assert.True(Directory.Exists(App), "The planner did not produce the intermediate .app.");
         Assert.True(File.Exists(Pkg), "The .pkg artifact is missing.");
@@ -111,7 +111,7 @@ public sealed class MacPkgFixture : IDisposable
         V2Pkg = PublishPkg("bundle-v2",
             "-p:BundlerTestPkgVersion=2.0.0",
             "-p:BundlerTestPkgInstallScope=CurrentUserHome");
-        X64Pkg = PublishPkgForRid("bundle-x64", "macos-x86_64");
+        X64Pkg = PublishPkgForTarget("bundle-x64", "macos-x86_64");
         return true;
     }
 
