@@ -2,14 +2,14 @@ namespace DotNet.Bundler.Nsis;
 
 public sealed class NsisBundleConfiguration
 {
-    public NsisInstallMode InstallMode { get; init; } = NsisInstallMode.CurrentUser;
+    public NsisInstallScope InstallScope { get; init; } = NsisInstallScope.CurrentUser;
     public NsisCompression Compression { get; init; } = NsisCompression.Lzma;
-    public string? InstallerIcon { get; init; }
-    public string? UninstallerIcon { get; init; }
-    public string? HeaderImage { get; init; }
-    public string? SidebarImage { get; init; }
-    public string? UninstallerHeaderImage { get; init; }
-    public string? InstallerHooks { get; init; }
+    public string? InstallerIconFile { get; init; }
+    public string? UninstallerIconFile { get; init; }
+    public string? HeaderFile { get; init; }
+    public string? SidebarFile { get; init; }
+    public string? UninstallerHeaderFile { get; init; }
+    public string? InstallerHooksFile { get; init; }
     public IReadOnlyList<string> Languages { get; init; } = ["English"];
     public IReadOnlyDictionary<string, string> CustomLanguageFiles { get; init; } =
         new Dictionary<string, string>();
@@ -36,7 +36,7 @@ public sealed class NsisShortcutConfiguration
     public IReadOnlyList<string> LegacyMainExecutables { get; init; } = Array.Empty<string>();
 }
 
-public enum NsisInstallMode
+public enum NsisInstallScope
 {
     CurrentUser,
     PerMachine,

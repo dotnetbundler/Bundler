@@ -95,7 +95,7 @@ public static class MacPkgTests
             var relativeLocation = Assert.ThrowsAny<ArgumentException>(
                 () => new MacPkgBundler(new MacPkgBundleConfiguration
                     {
-                        InstallLocation = "usr/local"
+                        InstallRoot = "usr/local"
                     })
                     .BuildAsync(PkgConfiguration(input))
                     .GetAwaiter().GetResult());
@@ -184,9 +184,9 @@ public static class MacPkgTests
         {
             await new MacPkgBundler(new MacPkgBundleConfiguration
                 {
-                    Identifier = "com.example.pkg.override",
+                    PackageName = "com.example.pkg.override",
                     Version = "2.5.1",
-                    InstallLocation = "/usr/local"
+                    InstallRoot = "/usr/local"
                 })
                 .BuildAsync(PkgConfiguration(input, output));
             var args = requests.Single(request => request.Executable == "pkgbuild").Arguments.ToList();
@@ -231,9 +231,9 @@ public static class MacPkgTests
         {
             await new MacPkgBundler(new MacPkgBundleConfiguration
                 {
-                    PayloadItems =
+                    Files =
                     [
-                        new MacPkgPayloadItem { Source = extra, Destination = "support/helper.txt" }
+                        new MacPkgFileEntry { Source = extra, Destination = "support/helper.txt" }
                     ]
                 })
                 .BuildAsync(PkgConfiguration(input, output));
@@ -292,9 +292,9 @@ public static class MacPkgTests
             }
             await new MacPkgBundler(new MacPkgBundleConfiguration
             {
-                PayloadItems =
+                Files =
                 [
-                    new MacPkgPayloadItem { Source = payload, Destination = "support" }
+                    new MacPkgFileEntry { Source = payload, Destination = "support" }
                 ]
             }).BuildAsync(PkgConfiguration(input, output));
             Assert.True(staged.Any(path => path.Replace('\\', '/') == "support/helper.txt"),
@@ -324,9 +324,9 @@ public static class MacPkgTests
             Assert.ThrowsAny<FileNotFoundException>(
                 () => new MacPkgBundler(new MacPkgBundleConfiguration
                     {
-                        PayloadItems =
+                        Files =
                         [
-                            new MacPkgPayloadItem { Source = Path.Combine(input, "missing.bin") }
+                            new MacPkgFileEntry { Source = Path.Combine(input, "missing.bin") }
                         ]
                     })
                     .BuildAsync(PkgConfiguration(input, output))
@@ -417,12 +417,12 @@ public static class MacPkgTests
         var targets = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
         var props = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.props"));
         var task = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
-        Assert.True(targets.Contains("MacPkgIdentifier=\"$(BundlerMacPkgIdentifier)\"", StringComparison.Ordinal) &&
+        Assert.True(targets.Contains("MacPkgPackageName=\"$(BundlerMacPkgPackageName)\"", StringComparison.Ordinal) &&
                targets.Contains("MacPkgVersion=\"$(BundlerMacPkgVersion)\"", StringComparison.Ordinal) &&
-               targets.Contains("MacPkgInstallLocation=\"$(BundlerMacPkgInstallLocation)\"", StringComparison.Ordinal) &&
-               targets.Contains("MacPkgPayloadItems=\"@(BundlerPkgPayload)\"", StringComparison.Ordinal),
+               targets.Contains("MacPkgInstallRoot=\"$(BundlerMacPkgInstallRoot)\"", StringComparison.Ordinal) &&
+               targets.Contains("MacPkgFiles=\"@(BundlerMacPkgFile)\"", StringComparison.Ordinal),
             "MSBuild does not map the BundlerMacPkg* properties to the task.");
-        Assert.Contains("<BundlerMacPkgInstallLocation Condition=\"'$(BundlerMacPkgInstallLocation)' == ''\">/Applications<", props);
+        Assert.Contains("<BundlerMacPkgInstallRoot Condition=\"'$(BundlerMacPkgInstallRoot)' == ''\">/Applications<", props);
         Assert.True(task.Contains("new MacPkgBundler(", StringComparison.Ordinal) &&
                task.Contains("PackageFormat.Pkg", StringComparison.Ordinal),
             "The MSBuild task does not construct the .pkg backend.");
@@ -565,9 +565,9 @@ public static class MacPkgTests
             var error = await Assert.ThrowsAsync<ArgumentException>(
                 () => new MacPkgBundler(new MacPkgBundleConfiguration
                 {
-                    PayloadItems =
+                    Files =
                     [
-                        new MacPkgPayloadItem
+                        new MacPkgFileEntry
                         {
                             Source = Path.Combine(input, "ExampleApp.dll"),
                             Destination = "   "
@@ -756,7 +756,7 @@ public static class MacPkgTests
         {
             await new MacPkgBundler(new MacPkgBundleConfiguration
                 {
-                    Domain = MacPkgInstallDomain.CurrentUserHome
+                    InstallScope = MacPkgInstallScope.CurrentUserHome
                 })
                 .BuildAsync(PkgConfiguration(input, output));
             Assert.Contains(requests, request => request.Executable == "productbuild");
@@ -983,7 +983,7 @@ public static class MacPkgTests
                         Signing = new MacPkgSigningConfiguration
                         {
                             Identity = "Developer ID Installer: Example",
-                            TemporaryCertificatePath = certificate
+                            TemporaryCertificateFile = certificate
                         }
                     })
                     .BuildAsync(PkgConfiguration(input))

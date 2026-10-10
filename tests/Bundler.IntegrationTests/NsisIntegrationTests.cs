@@ -141,13 +141,13 @@ public sealed class NsisFixture : IAsyncLifetime
     }
 
     public sealed record BundleVariant(
-        string Name, string InstallMode = "currentUser", string ApplicationVersion = "1.0.0",
+        string Name, string InstallScope = "currentUser", string ApplicationVersion = "1.0.0",
         bool AllowDowngrades = false, string LegacyMsiProductCodes = "",
         string LegacyMsiUpgradeCodes = "", bool LegacyMsiAutoDetect = false,
         string? Publisher = null, string? Formats = null,
         string? SigningCertificateThumbprint = null,
         bool ShortcutDesktop = true, bool ShortcutStartMenu = true,
-        string? InstallerHooks = null,
+        string? InstallerHooksFile = null,
         string ProductName = "Bundler Integration Fixture",
         string Identifier = "com.dotnetbundler.integrationfixture",
         string Languages = "English;SimpChinese", bool DisplayLanguageSelector = true,
@@ -157,22 +157,22 @@ public sealed class NsisFixture : IAsyncLifetime
 
     private void BuildBundle(BundleVariant v)
     {
-        var hooks = v.InstallerHooks ?? Assets("installer-hooks.nsh");
+        var hooks = v.InstallerHooksFile ?? Assets("installer-hooks.nsh");
         var args = new List<string>
         {
             "publish", FixtureProject, "-c", "Release", "--force",
             $"-p:Version={v.ApplicationVersion}",
             $"-p:BundlerIntegrationOutput={Ws.Combine(v.Name)}",
-            $"-p:BundlerTestIcon={TestIcon}",
-            $"-p:BundlerTestHeaderImage={TestHeaderImage}",
-            $"-p:BundlerTestSidebarImage={TestSidebarImage}",
-            $"-p:BundlerNsisInstallMode={v.InstallMode}",
+            $"-p:BundlerTestIconFile={TestIcon}",
+            $"-p:BundlerTestHeaderFile={TestHeaderImage}",
+            $"-p:BundlerTestSidebarFile={TestSidebarImage}",
+            $"-p:BundlerNsisInstallScope={v.InstallScope}",
             $"-p:BundlerNsisAllowDowngrades={v.AllowDowngrades}",
             $"-p:BundlerNsisLegacyMsiProductCodes={v.LegacyMsiProductCodes}",
             $"-p:BundlerNsisLegacyMsiUpgradeCodes={v.LegacyMsiUpgradeCodes}",
             $"-p:BundlerNsisLegacyMsiAutoDetect={v.LegacyMsiAutoDetect}",
             $"-p:BundlerWindowsSigningCertificateThumbprint={v.SigningCertificateThumbprint ?? ""}",
-            $"-p:BundlerIntegrationInstallerHooks={hooks}",
+            $"-p:BundlerIntegrationInstallerHooksFile={hooks}",
             $"-p:BundlerNsisShortcutDesktop={v.ShortcutDesktop}",
             $"-p:BundlerNsisShortcutStartMenu={v.ShortcutStartMenu}",
             $"-p:BundlerIntegrationProductName={v.ProductName}",
@@ -211,33 +211,33 @@ public sealed class NsisFixture : IAsyncLifetime
     {
         var variants = new List<BundleVariant>
         {
-            new("bundle"), new("bundle-per-machine", InstallMode: "perMachine"),
-            new("bundle-both", InstallMode: "both"),
+            new("bundle"), new("bundle-per-machine", InstallScope: "perMachine"),
+            new("bundle-both", InstallScope: "both"),
             new("bundle-upgrade", ApplicationVersion: "1.1.0"),
             new("bundle-rollback-failure", ApplicationVersion: "1.2.0",
-                InstallerHooks: Assets("failing-postinstall.nsh")),
+                InstallerHooksFile: Assets("failing-postinstall.nsh")),
             new("bundle-transaction-snapshot-failure", ApplicationVersion: "1.2.0",
-                InstallerHooks: Assets("failing-transaction-snapshot.nsh")),
+                InstallerHooksFile: Assets("failing-transaction-snapshot.nsh")),
             new("bundle-transaction-activation-failure", ApplicationVersion: "1.2.0",
-                InstallerHooks: Assets("failing-transaction-activation.nsh")),
+                InstallerHooksFile: Assets("failing-transaction-activation.nsh")),
             new("bundle-payload-restore-failure", ApplicationVersion: "1.2.0",
-                InstallerHooks: Assets("failing-payload-restore.nsh")),
+                InstallerHooksFile: Assets("failing-payload-restore.nsh")),
             new("bundle-registry-restore-failure", ApplicationVersion: "1.2.0",
-                InstallerHooks: Assets("failing-registry-restore.nsh")),
+                InstallerHooksFile: Assets("failing-registry-restore.nsh")),
             new("bundle-journal-cleanup-failure", ApplicationVersion: "1.2.0",
-                InstallerHooks: Assets("failing-journal-cleanup.nsh")),
+                InstallerHooksFile: Assets("failing-journal-cleanup.nsh")),
             new("bundle-shortcut-persistence-failure", ApplicationVersion: "1.2.0",
-                InstallerHooks: Assets("failing-shortcut-persistence.nsh")),
+                InstallerHooksFile: Assets("failing-shortcut-persistence.nsh")),
             new("bundle-registry-persistence-failure", ApplicationVersion: "1.2.0",
-                InstallerHooks: Assets("failing-registry-persistence.nsh")),
+                InstallerHooksFile: Assets("failing-registry-persistence.nsh")),
             new("bundle-commit-cleanup-failure", ApplicationVersion: "1.2.0",
-                InstallerHooks: Assets("failing-commit-cleanup.nsh")),
+                InstallerHooksFile: Assets("failing-commit-cleanup.nsh")),
             new("bundle-interrupted", ApplicationVersion: "1.2.0",
-                InstallerHooks: Assets("aborting-postinstall.nsh")),
+                InstallerHooksFile: Assets("aborting-postinstall.nsh")),
             new("bundle-different-manifest", ApplicationVersion: "1.3.0",
                 ShortcutStartMenuFolder: "Different Manifest Fixture"),
             new("bundle-reboot-required",
-                InstallerHooks: Assets("rebooting-postinstall.nsh")),
+                InstallerHooksFile: Assets("rebooting-postinstall.nsh")),
             new("bundle-allowed-downgrade", AllowDowngrades: true),
             new("bundle-legacy-msi-product-migration",
                 LegacyMsiProductCodes: "{1D1A6B03-2BDA-4D18-B12C-574145D9CFA0}"),
@@ -258,9 +258,9 @@ public sealed class NsisFixture : IAsyncLifetime
             new("bundle-no-shortcut-defaults",
                 ShortcutDesktop: false, ShortcutStartMenu: false),
             new("bundle-failing-uninstall-forward",
-                InstallerHooks: Assets("failing-postuninstall-forward.nsh")),
+                InstallerHooksFile: Assets("failing-postuninstall-forward.nsh")),
             new("bundle-interrupted-uninstall-forward",
-                InstallerHooks: Assets("interrupted-postuninstall-forward.nsh")),
+                InstallerHooksFile: Assets("interrupted-postuninstall-forward.nsh")),
             new("bundle-unicode",
                 ProductName: "多言語テスト应用",
                 Identifier: "com.dotnetbundler.localizationfixture",
@@ -657,7 +657,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.True(File.Exists(UnicodeStartMenuShortcut),
                 "Unicode Start Menu shortcut was not created.");
             var shortcut = ShellLink.Read(UnicodeStartMenuShortcut);
-            Assert.Equal(unicodeExe, shortcut.TargetPath);
+            Assert.Equal(unicodeExe, shortcut.Destination);
             Assert.Equal("--表示モード \"你好 世界\"", shortcut.Arguments);
             RunOk(unicodeUninstaller, "/S /DELETEAPPDATA");
             WaitFor.Until(() => !Directory.Exists(UnicodeInstallDir),
@@ -977,7 +977,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
         finally { Cleanup(); }
     }
 
-    // NSIS→MSI 目录延续：MSI 读 NSIS InstallLocation；Bundler 自家 InstallDir 优先；
+    // NSIS→MSI 目录延续：MSI 读 NSIS InstallRoot；Bundler 自家 InstallDir 优先；
     // 范围外目录被忽略回落 MSI 默认。
     [Fact]
     [Trait("Requires", "localinstall")]
@@ -1011,7 +1011,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                 "NSIS reinstall for precedence test did not finish.");
             Msiexec($"/i \"{continuityMsi}\" /qn /norestart", 0, 3010);
             Assert.True(File.Exists(Path.Combine(MsiPrecedenceDir, "BundlerIntegrationFixture.exe")),
-                "Bundler's own InstallDir registration did not take precedence over the NSIS InstallLocation.");
+                "Bundler's own InstallDir registration did not take precedence over the NSIS InstallRoot.");
             Msiexec($"/x {productCode} /qn /norestart", 0, 1605, 3010);
             RunOk(Path.Combine(NsisContinuityDir, "Uninstall.exe"), "/S /DELETEAPPDATA");
             WaitFor.Until(() => !Directory.Exists(NsisContinuityDir),
@@ -1070,13 +1070,13 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.True(File.Exists(DesktopShortcut), "Desktop shortcut is missing.");
             Assert.True(File.Exists(StartMenuShortcut), "Start Menu shortcut is missing.");
             var desktop = ShellLink.Read(DesktopShortcut);
-            Assert.Equal(Exe, desktop.TargetPath);
+            Assert.Equal(Exe, desktop.Destination);
             Assert.Equal("--shortcut-mode \"hello world\"", desktop.Arguments);
             Assert.Equal(Path.Combine(InstallDir, "docs"), desktop.WorkingDirectory);
             Assert.StartsWith(Exe, desktop.IconLocation, StringComparison.OrdinalIgnoreCase);
             Assert.Equal("com.dotnetbundler.integrationfixture.desktop", desktop.AppUserModelId);
             var startMenu = ShellLink.Read(StartMenuShortcut);
-            Assert.Equal(Exe, startMenu.TargetPath);
+            Assert.Equal(Exe, startMenu.Destination);
             Assert.Equal("com.dotnetbundler.integrationfixture.desktop", startMenu.AppUserModelId);
             Assert.True(File.Exists(Path.Combine(Temp, "DotNetBundler-preinstall.txt")),
                 "Pre-install hook did not run.");
@@ -1211,7 +1211,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.False(File.Exists(LegacyStartMenuShortcut),
                 "/UPDATE left the legacy shortcut behind.");
             var migrated = ShellLink.Read(StartMenuShortcut);
-            Assert.Equal(Exe, migrated.TargetPath);
+            Assert.Equal(Exe, migrated.Destination);
             Assert.Equal("--shortcut-mode \"hello world\"", migrated.Arguments);
             Assert.Equal("com.dotnetbundler.integrationfixture.desktop", migrated.AppUserModelId);
             WaitFor.Until(() => File.Exists(CommandLineMarker),
@@ -1282,7 +1282,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                 Assert.Equal(2, failure.ExitCode);
                 Assert.Equal("1.1.0", RegGetRequired(RegistryPath, "DisplayVersion"));
                 Assert.Equal(hash, Sha256(Exe));
-                Assert.Equal(shortcut.TargetPath, ShellLink.Read(StartMenuShortcut).TargetPath);
+                Assert.Equal(shortcut.Destination, ShellLink.Read(StartMenuShortcut).Destination);
                 Assert.False(File.Exists(DesktopShortcut),
                     $"{bundle} recreated the removed desktop shortcut.");
                 Assert.False(Directory.Exists(TransactionDir),
@@ -1530,7 +1530,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.Equal("1.1.0", RegGetRequired(RegistryPath, "DisplayVersion"));
             Assert.Equal(hash, Sha256(Exe));
             Assert.True(File.Exists(preserved));
-            Assert.Equal(shortcut.TargetPath, ShellLink.Read(StartMenuShortcut).TargetPath);
+            Assert.Equal(shortcut.Destination, ShellLink.Read(StartMenuShortcut).Destination);
             Assert.False(Directory.Exists(TransactionDir),
                 "Committed rollback journal was not cleaned up.");
             UninstallDefault();
@@ -1698,9 +1698,9 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.True(File.Exists(DesktopShortcut),
                 "Uninstall removed a same-name desktop shortcut owned by another application.");
             Assert.True(File.Exists(StartMenuShortcut));
-            Assert.Equal(foreignTarget, ShellLink.Read(DesktopShortcut).TargetPath,
+            Assert.Equal(foreignTarget, ShellLink.Read(DesktopShortcut).Destination,
                 StringComparer.OrdinalIgnoreCase);
-            Assert.Equal(foreignTarget, ShellLink.Read(StartMenuShortcut).TargetPath,
+            Assert.Equal(foreignTarget, ShellLink.Read(StartMenuShortcut).Destination,
                 StringComparer.OrdinalIgnoreCase);
         }
         finally { Cleanup(); }

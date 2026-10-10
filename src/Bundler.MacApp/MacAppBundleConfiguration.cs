@@ -8,7 +8,7 @@ namespace DotNet.Bundler.MacApp;
 public sealed class MacAppBundleConfiguration
 {
     /// <summary>CFBundleName; defaults to <see cref="BundleConfiguration.ProductName"/>.</summary>
-    public string? BundleName { get; init; }
+    public string? PackageName { get; init; }
 
     /// <summary>CFBundleDisplayName; defaults to <see cref="BundleConfiguration.ProductName"/>.</summary>
     public string? BundleDisplayName { get; init; }
@@ -58,7 +58,7 @@ public sealed class MacAppBundleConfiguration
     /// <summary>
     /// codesign/notarization options. Signing is opt-in: an empty instance leaves the bundle
     /// unsigned; set <see cref="MacAppSigningConfiguration.Identity"/> ("-" for ad-hoc) or
-    /// <see cref="MacAppSigningConfiguration.TemporaryCertificatePath"/> to sign.
+    /// <see cref="MacAppSigningConfiguration.TemporaryCertificateFile"/> to sign.
     /// </summary>
     public MacAppSigningConfiguration Signing { get; init; } = new();
 
@@ -81,18 +81,18 @@ public sealed class MacAppBundleConfiguration
     /// Explicit payload mappings into Contents/ (for example PlugIns/, SharedSupport/).
     /// Top-level reserved names (MacOS, Resources, Frameworks, Info.plist, PkgInfo) are rejected.
     /// </summary>
-    public IReadOnlyList<MacAppContentConfiguration> Contents { get; init; } = [];
+    public IReadOnlyList<MacAppFileEntry> Files { get; init; } = [];
 
     /// <summary>Explicit .framework/.dylib sources copied into Contents/Frameworks/.</summary>
-    public IReadOnlyList<string> Frameworks { get; init; } = [];
+    public IReadOnlyList<string> FrameworkDirectories { get; init; } = [];
 }
 
-public sealed class MacAppContentConfiguration
+public sealed class MacAppFileEntry
 {
     public string Source { get; init; } = "";
 
     /// <summary>Destination path relative to Contents/.</summary>
-    public string TargetPath { get; init; } = "";
+    public string Destination { get; init; } = "";
 }
 
 /// <summary>CFBundleTypeRole values.</summary>
@@ -182,7 +182,7 @@ public sealed class MacAppSigningConfiguration
     /// <summary>
     /// codesign identity: "-" for ad-hoc, otherwise a certificate name or SHA-1 already present
     /// in a keychain (for example "Developer ID Application: &lt;team&gt;"). Mutually exclusive
-    /// with <see cref="TemporaryCertificatePath"/>.
+    /// with <see cref="TemporaryCertificateFile"/>.
     /// </summary>
     public string? Identity { get; init; }
 
@@ -192,7 +192,7 @@ public sealed class MacAppSigningConfiguration
     /// the identity is derived from the certificate unless <see cref="Identity"/> is also set
     /// (setting both is rejected to keep the identity unambiguous).
     /// </summary>
-    public string? TemporaryCertificatePath { get; init; }
+    public string? TemporaryCertificateFile { get; init; }
 
     /// <summary>Password of the temporary certificate (may be empty).</summary>
     public string? TemporaryCertificatePassword { get; init; }
@@ -229,7 +229,7 @@ public sealed class MacAppSigningConfiguration
     public string? AppleTeamId { get; init; }
 
     /// <summary>notarytool --key (AuthKey_*.p8 path); falls back to APPLE_API_KEY_PATH.</summary>
-    public string? ApiKeyPath { get; init; }
+    public string? ApiKeyFile { get; init; }
 
     /// <summary>notarytool --key-id; falls back to APPLE_API_KEY.</summary>
     public string? ApiKeyId { get; init; }

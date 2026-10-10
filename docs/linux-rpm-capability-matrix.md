@@ -18,7 +18,7 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| `Requires`/`Provides`/`Conflicts`/`Obsoletes`/`Recommends`/`Suggests` 透传 | 已实现 | LINUX-RPM-2 | `BundlerRpm*` 分号列表 → `name [op evr]` 解析（`< <= = >= >`，拒 `!=`）写入三件套 tag；`rpmlib(...)` 自依赖保留；不探测运行时依赖 |
+| `Requires`/`Provides`/`Conflicts`/`Obsoletes`/`Recommends`/`Suggests` 透传 | 已实现 | LINUX-RPM-2 | `BundlerRpmDepends`/`Provides`/`Conflicts`/`Obsoletes`/`Recommends`/`Suggests` 分号列表 → `name [op evr]` 解析（`< <= = >= >`，拒 `!=`）写入三件套 tag；`rpmlib(...)` 自依赖保留；不探测运行时依赖 |
 | `License`(SPDX)/`Vendor`/`Group`/`URL`/`Summary`/`Description` | 已实现 | LINUX-RPM-2 | `BundlerRpmLicense`/`Group`/`Url` 覆盖（`Group`/`Url` 置空省略 tag）；包级 `BundlerLicenseFile` 按 rpm 原生惯例落 `/usr/share/licenses/<pkg>/` 并标 %license（128） |
 | `.desktop` 生成与 `usr/share/applications/` 落位 | 已实现 | LINUX-RPM-2 | `Bundler.Core` 共享 `FreedesktopFiles` 生成器（deb 行为不变）；`BundlerRpmDesktopFile` 整文件覆盖；`desktop-file-validate` 断言 |
 | hicolor 图标 / AppStream metainfo / `usr/share/doc` | 已实现 | LINUX-RPM-2 | PNG 尺寸探测 + `@2x`→`48x48@2` 目录；metainfo 落 `/usr/share/metainfo/`；`BundlerRpmChangelogFile`→`changelog.gz` 标 %doc；hicolor 子树不占有（发行版惯例） |
@@ -31,7 +31,7 @@
 | scriptlet（PREIN/POSTIN/PREUN/POSTUN） | 已实现 | LINUX-RPM-3 | `BundlerRpm*InstallFile`/`*UninstallFile` 四旋钮 + `*Program` 解释器覆盖；LF 强制、`#!` 剥离为 PROG、缺省 `/bin/sh`；容器 `rpm -i/-e` 标记断言全绿 |
 | systemd unit | 已实现 | LINUX-RPM-3 | `usr/lib/systemd/system/<pkg>.service` 落位 + `%post`/`%postun` `daemon-reload` 自动合成（并入调用方 scriptlet），装而不启 |
 | conffile（`%config(noreplace)`） | 已实现 | LINUX-RPM-3 | `/etc` 下 `RpmFile` 目标自动 FILEFLAGS 17 + `BundlerRpmConfigFiles` 显式列表（须命中载荷文件）；`rpm -e` `.rpmsave` + `rpm -U` 原地保留断言 |
-| 压缩选项 | 已实现（gzip）/登记拒绝（xz/zstd） | LINUX-RPM-3 | `BundlerRpmCompression` 仅收 `gzip`，其余拒绝；同 deb 立场：netstandard2.0 无托管编码器 |
+| 压缩 | 恒 gzip（无旋钮） | LINUX-RPM-3 | 同 deb 立场：netstandard2.0 无托管编码器，`Compression` 旋钮移除 |
 | 升级/卸载语义实测 | 已实现 | LINUX-RPM-3 | 容器内 `rpm -U` Release 1→2 升级 + 修改后 %config 原地保留（无 .rpmnew）+ `rpm -e` `.rpmsave` 断言全绿 |
 
 ## 签名与分发

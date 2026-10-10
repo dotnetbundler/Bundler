@@ -82,15 +82,15 @@
     <BundlerIcon Include="$(HelloBundlerAppAssets)deb\icon@2x.png"
         Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-'))" />
     <!-- 资源项演示：每个格式原始样品的资源原样保留，随载荷进入安装根。 -->
-    <BundlerResource Include="$(HelloBundlerAppAssets)common\readme.txt" TargetPath="docs/readme.txt" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\demo-resource.txt" TargetPath="演示资源\说明.txt"
+    <BundlerResource Include="$(HelloBundlerAppAssets)common\readme.txt" Destination="docs/readme.txt" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\demo-resource.txt" Destination="演示资源\说明.txt"
         Condition="!$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\demo.hello" TargetPath="demo.hello" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\运行深链接.cmd" TargetPath="运行深链接.cmd"
+    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\demo.hello" Destination="demo.hello" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\运行深链接.cmd" Destination="运行深链接.cmd"
         Condition="!$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)msi\demo-resource.txt" TargetPath="DemoResources\Readme.txt" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)msi\demo.hellomsi" TargetPath="demo.hellomsi" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)msi\open-link.cmd" TargetPath="open-link.cmd" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)msi\demo-resource.txt" Destination="DemoResources\Readme.txt" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)msi\demo.hellomsi" Destination="demo.hellomsi" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)msi\open-link.cmd" Destination="open-link.cmd" />
     <!-- 文件关联与 URL 协议：全部样品原型扩展一次集齐（windows 注册表 /
          freedesktop MimeType / macOS CFBundleDocumentTypes+URL schemes 各自落位）。 -->
     <BundlerFileAssociation Include="hello" Name="Hello Bundler App 文档"

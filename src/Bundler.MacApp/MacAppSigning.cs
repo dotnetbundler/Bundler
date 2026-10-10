@@ -20,25 +20,25 @@ internal static class MacAppSigning
         [".app", ".appex", ".bundle", ".framework", ".xpc"];
 
     internal static bool Configured(MacAppSigningConfiguration signing) =>
-        signing.Identity is not null || !string.IsNullOrEmpty(signing.TemporaryCertificatePath);
+        signing.Identity is not null || !string.IsNullOrEmpty(signing.TemporaryCertificateFile);
 
     /// <summary>Preflight checks; the bundler calls this before any payload work.</summary>
     internal static void Validate(MacAppSigningConfiguration signing)
     {
         var signingRequested = Configured(signing);
-        if (signing.Identity is not null && !string.IsNullOrEmpty(signing.TemporaryCertificatePath))
+        if (signing.Identity is not null && !string.IsNullOrEmpty(signing.TemporaryCertificateFile))
         {
             throw new ArgumentException(
-                "SignIdentity and TemporaryCertificatePath are mutually exclusive.");
+                "SignIdentity and TemporaryCertificateFile are mutually exclusive.");
         }
         if (signing.Identity is { Length: 0 })
         {
             throw new ArgumentException("SignIdentity cannot be empty (use \"-\" for ad-hoc).");
         }
-        if (signing.TemporaryCertificatePath is { Length: > 0 } certificatePath &&
+        if (signing.TemporaryCertificateFile is { Length: > 0 } certificatePath &&
             !File.Exists(Path.GetFullPath(certificatePath)))
         {
-            throw new FileNotFoundException("TemporaryCertificatePath does not exist.", certificatePath);
+            throw new FileNotFoundException("TemporaryCertificateFile does not exist.", certificatePath);
         }
         if (signing.EntitlementsFile is { Length: > 0 } entitlements &&
             !File.Exists(Path.GetFullPath(entitlements)))
@@ -79,7 +79,7 @@ internal static class MacAppSigning
         string identity;
         try
         {
-            if (signing.TemporaryCertificatePath is { Length: > 0 } certificatePath)
+            if (signing.TemporaryCertificateFile is { Length: > 0 } certificatePath)
             {
                 keychain = await TemporaryKeychain.CreateAsync(
                     context.WorkDirectory, Path.GetFullPath(certificatePath),
@@ -263,12 +263,12 @@ internal static class MacAppSigning
     /// </summary>
     internal static IReadOnlyList<string> ResolveCredentials(MacAppSigningConfiguration signing) =>
         ResolveCredentials(
-            signing.KeychainProfile, signing.ApiKeyPath, signing.ApiKeyId, signing.ApiIssuer,
+            signing.KeychainProfile, signing.ApiKeyFile, signing.ApiKeyId, signing.ApiIssuer,
             signing.AppleId, signing.ApplePassword, signing.AppleTeamId);
 
     /// <summary>Field-level overload shared with the .pkg backend's signing configuration.</summary>
     internal static IReadOnlyList<string> ResolveCredentials(
-        string? keychainProfile, string? apiKeyPath, string? apiKeyId, string? apiIssuer,
+        string? keychainProfile, string? apiKeyFile, string? apiKeyId, string? apiIssuer,
         string? appleId, string? applePassword, string? appleTeamId)
     {
         var profile = keychainProfile ?? Env("APPLE_PROFILE");
@@ -276,7 +276,7 @@ internal static class MacAppSigning
         {
             return ["--keychain-profile", profile];
         }
-        var keyPath = apiKeyPath ?? Env("APPLE_API_KEY_PATH");
+        var keyPath = apiKeyFile ?? Env("APPLE_API_KEY_PATH");
         var keyId = apiKeyId ?? Env("APPLE_API_KEY");
         var issuer = apiIssuer ?? Env("APPLE_API_ISSUER");
         if (keyPath is { Length: > 0 } || keyId is { Length: > 0 } || issuer is { Length: > 0 })
@@ -285,7 +285,7 @@ internal static class MacAppSigning
                 issuer is not { Length: > 0 })
             {
                 throw new ArgumentException(
-                    "Notarization API-key credentials need all of ApiKeyPath/ApiKeyId/ApiIssuer " +
+                    "Notarization API-key credentials need all of ApiKeyFile/ApiKeyId/ApiIssuer " +
                     "(or APPLE_API_KEY_PATH/APPLE_API_KEY/APPLE_API_ISSUER).");
             }
             return ["--key", keyPath, "--key-id", keyId, "--issuer", issuer];
@@ -306,7 +306,7 @@ internal static class MacAppSigning
         }
         throw new ArgumentException(
             "Notarization is enabled but no credentials were provided: set a keychain profile " +
-            "(Signing.KeychainProfile/APPLE_PROFILE), an API key (ApiKeyPath/ApiKeyId/ApiIssuer " +
+            "(Signing.KeychainProfile/APPLE_PROFILE), an API key (ApiKeyFile/ApiKeyId/ApiIssuer " +
             "or APPLE_API_KEY_PATH/APPLE_API_KEY/APPLE_API_ISSUER), or Apple ID credentials " +
             "(AppleId/ApplePassword/AppleTeamId or APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID).");
     }

@@ -65,7 +65,7 @@ public sealed class RpmFixture : IDisposable
             "bundler-rpm-fixture-1.0.0-0.1.alpha.2.x86_64.rpm");
 
         Publish("metadata",
-            "-p:BundlerTestRpmRequires=libpng%3Bzlib >= 1.2",
+            "-p:BundlerTestRpmDepends=libpng%3Bzlib >= 1.2",
             "-p:BundlerTestRpmProvides=bundler-plugin = 2.0",
             "-p:BundlerTestRpmConflicts=old-bundler",
             "-p:BundlerTestRpmObsoletes=bundler-rpm-legacy < 1.0",
@@ -340,7 +340,7 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
         var badDep = Dotnet.Run(
             ["publish", _f.FixtureProject, "-c", "Release",
              $"-p:BundlerIntegrationOutput={_f.Ws.Combine("baddep")}",
-             "-p:BundlerTestRpmRequires=foo != 1.0", "--packages", _f.CacheDir]);
+             "-p:BundlerTestRpmDepends=foo != 1.0", "--packages", _f.CacheDir]);
         Assert.NotEqual(0, badDep.ExitCode);
 
         var badFile = Dotnet.Run(
@@ -351,7 +351,7 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
     }
 
     [Fact]
-    public void ScriptletAndCompressionFailureVariants()
+    public void ScriptletFailureVariants()
     {
         var badScript = Dotnet.Run(
             ["publish", _f.FixtureProject, "-c", "Release",
@@ -364,11 +364,6 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
              "-p:BundlerTestRpmConfigFiles=/usr/lib/bundler-rpm-fixture/missing.conf",
              "--packages", _f.CacheDir]);
         Assert.NotEqual(0, badCfg.ExitCode);
-        var badComp = Dotnet.Run(
-            ["publish", _f.FixtureProject, "-c", "Release",
-             $"-p:BundlerIntegrationOutput={_f.Ws.Combine("badcomp")}",
-             "-p:BundlerTestRpmCompression=xz", "--packages", _f.CacheDir]);
-        Assert.NotEqual(0, badComp.ExitCode);
     }
 
     [Fact]

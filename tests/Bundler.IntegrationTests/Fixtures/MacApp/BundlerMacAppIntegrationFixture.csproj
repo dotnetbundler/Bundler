@@ -16,7 +16,7 @@
     <BundlerDescription>Disposable macOS .app integration-test fixture.</BundlerDescription>
     <BundlerCopyright>Copyright DotNet.Bundler Tests</BundlerCopyright>
     <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
-    <BundlerMacAppBundleName>MacFixture</BundlerMacAppBundleName>
+    <BundlerMacAppPackageName>MacFixture</BundlerMacAppPackageName>
     <BundlerMacAppDisplayName>Bundler Mac Fixture</BundlerMacAppDisplayName>
     <BundlerMacAppBuildVersion Condition="'$(BundlerTestBuildVersion)' == ''">2026.9.1</BundlerMacAppBuildVersion>
     <BundlerMacAppBuildVersion Condition="'$(BundlerTestBuildVersion)' != ''">$(BundlerTestBuildVersion)</BundlerMacAppBuildVersion>
@@ -30,17 +30,17 @@
     <BundlerMacAppSignIdentity Condition="'$(BundlerTestSignIdentity)' != ''">$(BundlerTestSignIdentity)</BundlerMacAppSignIdentity>
     <BundlerMacAppHardenedRuntime Condition="'$(BundlerTestHardenedRuntime)' != ''">$(BundlerTestHardenedRuntime)</BundlerMacAppHardenedRuntime>
     <BundlerMacAppEntitlementsFile Condition="'$(BundlerTestEntitlementsFile)' != ''">$(BundlerTestEntitlementsFile)</BundlerMacAppEntitlementsFile>
-    <BundlerMacAppSigningCertificatePath Condition="'$(BundlerTestSigningCertificate)' != ''">$(BundlerTestSigningCertificate)</BundlerMacAppSigningCertificatePath>
+    <BundlerMacAppTemporaryCertificateFile Condition="'$(BundlerTestSigningCertificate)' != ''">$(BundlerTestSigningCertificate)</BundlerMacAppTemporaryCertificateFile>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <BundlerIcon Include="$(BundlerTestIcon)" Condition="'$(BundlerTestIcon)' != ''" />
-    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <BundlerIcon Include="$(BundlerTestIconFile)" Condition="'$(BundlerTestIconFile)' != ''" />
+    <BundlerResource Include="Assets/readme.txt" Destination="docs/readme.txt" />
     <BundlerFileAssociation Include="hifix" Name="HiFix Document" Description="Integration fixture document" MimeType="application/x-hifix" />
     <BundlerUrlProtocol Include="hifix" Name="HiFix Link" />
     <BundlerMacDocumentType Include="hifix" Rank="Owner" ExportedTypeIdentifier="com.dotnetbundler.hifix" ExportedTypeConformsTo="public.data" />
     <BundlerMacUrlType Include="hifix" Role="Viewer" />
-    <BundlerMacContent Include="Assets/shared.txt" TargetPath="SharedSupport/shared.txt" />
-    <BundlerMacFramework Include="$(BundlerTestDylib)" Condition="'$(BundlerTestDylib)' != ''" />
+    <BundlerMacAppFile Include="Assets/shared.txt" Destination="SharedSupport/shared.txt" />
+    <BundlerMacAppFrameworkDirectory Include="$(BundlerTestDylib)" Condition="'$(BundlerTestDylib)' != ''" />
   </ItemGroup>
 </Project>

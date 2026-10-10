@@ -18,8 +18,8 @@
     <!-- 元数据旋钮：关系字段分号列表透传（命令行传参用 %3B 转义分号）；
          License 惯例写 SPDX 表达式；Group 现代包可留空；Url 默认取 BundlerHomepage。 -->
     <!-- .NET 自含载荷运行所需系统依赖（Fedora/RHEL 名；与 Deb/Apk 同口径）。 -->
-    <BundlerRpmRequires>glibc;libgcc;libstdc++;zlib;libicu</BundlerRpmRequires>
-    <BundlerRpmRequires Condition="'$(HelloBundlerRpmRequires)' != ''">$(HelloBundlerRpmRequires)</BundlerRpmRequires>
+    <BundlerRpmDepends>glibc;libgcc;libstdc++;zlib;libicu</BundlerRpmDepends>
+    <BundlerRpmDepends Condition="'$(HelloBundlerRpmDepends)' != ''">$(HelloBundlerRpmDepends)</BundlerRpmDepends>
     <BundlerRpmProvides Condition="'$(HelloBundlerRpmProvides)' != ''">$(HelloBundlerRpmProvides)</BundlerRpmProvides>
     <BundlerRpmConflicts Condition="'$(HelloBundlerRpmConflicts)' != ''">$(HelloBundlerRpmConflicts)</BundlerRpmConflicts>
     <BundlerRpmObsoletes Condition="'$(HelloBundlerRpmObsoletes)' != ''">$(HelloBundlerRpmObsoletes)</BundlerRpmObsoletes>
@@ -48,7 +48,6 @@
     <BundlerRpmPostInstallProgram Condition="'$(HelloBundlerRpmPostInstallProgram)' != ''">$(HelloBundlerRpmPostInstallProgram)</BundlerRpmPostInstallProgram>
     <BundlerRpmPreUninstallProgram Condition="'$(HelloBundlerRpmPreUninstallProgram)' != ''">$(HelloBundlerRpmPreUninstallProgram)</BundlerRpmPreUninstallProgram>
     <BundlerRpmPostUninstallProgram Condition="'$(HelloBundlerRpmPostUninstallProgram)' != ''">$(HelloBundlerRpmPostUninstallProgram)</BundlerRpmPostUninstallProgram>
-    <BundlerRpmCompression Condition="'$(HelloBundlerRpmCompression)' != ''">$(HelloBundlerRpmCompression)</BundlerRpmCompression>
 
     <!-- GPG 签名：供 OpenPGP 私钥文件才签，纯托管 BouncyCastle；
          产出 RPMSIGTAG_RSA+PGP 双标签 v3 签名包。 -->

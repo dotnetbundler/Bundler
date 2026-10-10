@@ -34,7 +34,7 @@ public static class MacDmgApiTests
             dmgConfiguration: new MacDmgBundleConfiguration
             {
                 VolumeName = "DMG API Fixture",
-                SkipWindowLayout = true
+                Layout = null
             }).BuildAsync(request, TestContext.Current.CancellationToken);
 
         var dmg = Assert.Single(artifacts, a => a.Format == PackageFormat.Dmg).Path;

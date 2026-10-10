@@ -15,7 +15,7 @@
     <BundlerWixToolsetArchivePath Condition="'$(BundlerWixToolsetArchivePath)' == ''"></BundlerWixToolsetArchivePath>
     <BundlerWixInstallScope Condition="'$(BundlerWixInstallScope)' == ''">currentUser</BundlerWixInstallScope>
     <BundlerWixUpgradeCode Condition="'$(BundlerWixUpgradeCode)' == ''"></BundlerWixUpgradeCode>
-    <BundlerWixMsiVersion Condition="'$(BundlerWixMsiVersion)' == ''"></BundlerWixMsiVersion>
+    <BundlerWixVersion Condition="'$(BundlerWixVersion)' == ''"></BundlerWixVersion>
     <BundlerWixAllowDowngrades Condition="'$(BundlerWixAllowDowngrades)' == ''">false</BundlerWixAllowDowngrades>
     <BundlerWixCodepage Condition="'$(BundlerWixCodepage)' == ''">0</BundlerWixCodepage>
     <BundlerWixLanguage Condition="'$(BundlerWixLanguage)' == ''">en-US</BundlerWixLanguage>
@@ -24,25 +24,25 @@
     <BundlerWixStartMenuShortcut Condition="'$(BundlerWixStartMenuShortcut)' == ''">false</BundlerWixStartMenuShortcut>
     <BundlerWixDesktopShortcut Condition="'$(BundlerWixDesktopShortcut)' == ''">false</BundlerWixDesktopShortcut>
     <BundlerWixInstallDirectorySelection Condition="'$(BundlerWixInstallDirectorySelection)' == ''">false</BundlerWixInstallDirectorySelection>
-    <BundlerWixBannerBitmap Condition="'$(BundlerWixBannerBitmap)' == ''"></BundlerWixBannerBitmap>
-    <BundlerWixDialogBitmap Condition="'$(BundlerWixDialogBitmap)' == ''"></BundlerWixDialogBitmap>
+    <BundlerWixBannerFile Condition="'$(BundlerWixBannerFile)' == ''"></BundlerWixBannerFile>
+    <BundlerWixDialogFile Condition="'$(BundlerWixDialogFile)' == ''"></BundlerWixDialogFile>
     <BundlerWixAddToPath Condition="'$(BundlerWixAddToPath)' == ''">false</BundlerWixAddToPath>
     <BundlerWixUninstallShortcut Condition="'$(BundlerWixUninstallShortcut)' == ''">false</BundlerWixUninstallShortcut>
     <BundlerWixLaunchAfterInstall Condition="'$(BundlerWixLaunchAfterInstall)' == ''">false</BundlerWixLaunchAfterInstall>
     <BundlerWixExtensionIdPrefix Condition="'$(BundlerWixExtensionIdPrefix)' == ''"></BundlerWixExtensionIdPrefix>
-    <BundlerWixExpertTemplate Condition="'$(BundlerWixExpertTemplate)' == ''"></BundlerWixExpertTemplate>
+    <BundlerWixExpertTemplateFile Condition="'$(BundlerWixExpertTemplateFile)' == ''"></BundlerWixExpertTemplateFile>
     <BundlerNsisToolsetArchivePath Condition="'$(BundlerNsisToolsetArchivePath)' == ''"></BundlerNsisToolsetArchivePath>
     <BundlerNsisCompilerPath Condition="'$(BundlerNsisCompilerPath)' == ''"></BundlerNsisCompilerPath>
     <BundlerNsisDataDirectory Condition="'$(BundlerNsisDataDirectory)' == ''"></BundlerNsisDataDirectory>
     <BundlerNsisTemplate Condition="'$(BundlerNsisTemplate)' == ''"></BundlerNsisTemplate>
-    <BundlerNsisInstallMode Condition="'$(BundlerNsisInstallMode)' == ''">currentUser</BundlerNsisInstallMode>
+    <BundlerNsisInstallScope Condition="'$(BundlerNsisInstallScope)' == ''">currentUser</BundlerNsisInstallScope>
     <BundlerNsisCompression Condition="'$(BundlerNsisCompression)' == ''">lzma</BundlerNsisCompression>
-    <BundlerNsisInstallerIcon Condition="'$(BundlerNsisInstallerIcon)' == ''"></BundlerNsisInstallerIcon>
-    <BundlerNsisUninstallerIcon Condition="'$(BundlerNsisUninstallerIcon)' == ''"></BundlerNsisUninstallerIcon>
-    <BundlerNsisHeaderImage Condition="'$(BundlerNsisHeaderImage)' == ''"></BundlerNsisHeaderImage>
-    <BundlerNsisSidebarImage Condition="'$(BundlerNsisSidebarImage)' == ''"></BundlerNsisSidebarImage>
-    <BundlerNsisUninstallerHeaderImage Condition="'$(BundlerNsisUninstallerHeaderImage)' == ''"></BundlerNsisUninstallerHeaderImage>
-    <BundlerNsisInstallerHooks Condition="'$(BundlerNsisInstallerHooks)' == ''"></BundlerNsisInstallerHooks>
+    <BundlerNsisInstallerIconFile Condition="'$(BundlerNsisInstallerIconFile)' == ''"></BundlerNsisInstallerIconFile>
+    <BundlerNsisUninstallerIconFile Condition="'$(BundlerNsisUninstallerIconFile)' == ''"></BundlerNsisUninstallerIconFile>
+    <BundlerNsisHeaderFile Condition="'$(BundlerNsisHeaderFile)' == ''"></BundlerNsisHeaderFile>
+    <BundlerNsisSidebarFile Condition="'$(BundlerNsisSidebarFile)' == ''"></BundlerNsisSidebarFile>
+    <BundlerNsisUninstallerHeaderFile Condition="'$(BundlerNsisUninstallerHeaderFile)' == ''"></BundlerNsisUninstallerHeaderFile>
+    <BundlerNsisInstallerHooksFile Condition="'$(BundlerNsisInstallerHooksFile)' == ''"></BundlerNsisInstallerHooksFile>
     <BundlerNsisLanguages Condition="'$(BundlerNsisLanguages)' == ''">English</BundlerNsisLanguages>
     <BundlerNsisDisplayLanguageSelector Condition="'$(BundlerNsisDisplayLanguageSelector)' == ''">false</BundlerNsisDisplayLanguageSelector>
     <BundlerNsisAllowDowngrades Condition="'$(BundlerNsisAllowDowngrades)' == ''">false</BundlerNsisAllowDowngrades>
@@ -64,7 +64,7 @@
     <BundlerWindowsSigningCertificateStoreLocation Condition="'$(BundlerWindowsSigningCertificateStoreLocation)' == ''">CurrentUser</BundlerWindowsSigningCertificateStoreLocation>
     <BundlerWindowsSigningTimestampUrl Condition="'$(BundlerWindowsSigningTimestampUrl)' == ''"></BundlerWindowsSigningTimestampUrl>
     <BundlerWindowsSigningCommand Condition="'$(BundlerWindowsSigningCommand)' == ''"></BundlerWindowsSigningCommand>
-    <BundlerMacAppBundleName Condition="'$(BundlerMacAppBundleName)' == ''"></BundlerMacAppBundleName>
+    <BundlerMacAppPackageName Condition="'$(BundlerMacAppPackageName)' == ''"></BundlerMacAppPackageName>
     <BundlerMacAppDisplayName Condition="'$(BundlerMacAppDisplayName)' == ''"></BundlerMacAppDisplayName>
     <BundlerMacAppShortVersion Condition="'$(BundlerMacAppShortVersion)' == ''"></BundlerMacAppShortVersion>
     <BundlerMacAppBuildVersion Condition="'$(BundlerMacAppBuildVersion)' == ''"></BundlerMacAppBuildVersion>
@@ -72,8 +72,8 @@
     <BundlerMacAppCategory Condition="'$(BundlerMacAppCategory)' == ''"></BundlerMacAppCategory>
     <BundlerMacAppIconName Condition="'$(BundlerMacAppIconName)' == ''"></BundlerMacAppIconName>
     <BundlerMacAppSignIdentity Condition="'$(BundlerMacAppSignIdentity)' == ''"></BundlerMacAppSignIdentity>
-    <BundlerMacAppSigningCertificatePath Condition="'$(BundlerMacAppSigningCertificatePath)' == ''"></BundlerMacAppSigningCertificatePath>
-    <BundlerMacAppSigningCertificatePassword Condition="'$(BundlerMacAppSigningCertificatePassword)' == ''"></BundlerMacAppSigningCertificatePassword>
+    <BundlerMacAppTemporaryCertificateFile Condition="'$(BundlerMacAppTemporaryCertificateFile)' == ''"></BundlerMacAppTemporaryCertificateFile>
+    <BundlerMacAppTemporaryCertificatePassword Condition="'$(BundlerMacAppTemporaryCertificatePassword)' == ''"></BundlerMacAppTemporaryCertificatePassword>
     <BundlerMacAppHardenedRuntime Condition="'$(BundlerMacAppHardenedRuntime)' == ''">false</BundlerMacAppHardenedRuntime>
     <BundlerMacAppEntitlementsFile Condition="'$(BundlerMacAppEntitlementsFile)' == ''"></BundlerMacAppEntitlementsFile>
     <BundlerMacAppNotarize Condition="'$(BundlerMacAppNotarize)' == ''">false</BundlerMacAppNotarize>
@@ -83,37 +83,37 @@
     <BundlerMacAppAppleId Condition="'$(BundlerMacAppAppleId)' == ''"></BundlerMacAppAppleId>
     <BundlerMacAppApplePassword Condition="'$(BundlerMacAppApplePassword)' == ''"></BundlerMacAppApplePassword>
     <BundlerMacAppAppleTeamId Condition="'$(BundlerMacAppAppleTeamId)' == ''"></BundlerMacAppAppleTeamId>
-    <BundlerMacAppNotaryApiKeyPath Condition="'$(BundlerMacAppNotaryApiKeyPath)' == ''"></BundlerMacAppNotaryApiKeyPath>
+    <BundlerMacAppApiKeyFile Condition="'$(BundlerMacAppApiKeyFile)' == ''"></BundlerMacAppApiKeyFile>
     <BundlerMacAppNotaryApiKeyId Condition="'$(BundlerMacAppNotaryApiKeyId)' == ''"></BundlerMacAppNotaryApiKeyId>
     <BundlerMacAppNotaryApiIssuer Condition="'$(BundlerMacAppNotaryApiIssuer)' == ''"></BundlerMacAppNotaryApiIssuer>
     <BundlerMacDmgCompression Condition="'$(BundlerMacDmgCompression)' == ''">Ulmo</BundlerMacDmgCompression>
     <BundlerMacDmgVolumeName Condition="'$(BundlerMacDmgVolumeName)' == ''"></BundlerMacDmgVolumeName>
-    <BundlerMacDmgSkipWindowLayout Condition="'$(BundlerMacDmgSkipWindowLayout)' == ''">false</BundlerMacDmgSkipWindowLayout>
-    <BundlerMacDmgWindowX Condition="'$(BundlerMacDmgWindowX)' == ''">200</BundlerMacDmgWindowX>
-    <BundlerMacDmgWindowY Condition="'$(BundlerMacDmgWindowY)' == ''">120</BundlerMacDmgWindowY>
-    <BundlerMacDmgWindowWidth Condition="'$(BundlerMacDmgWindowWidth)' == ''">660</BundlerMacDmgWindowWidth>
-    <BundlerMacDmgWindowHeight Condition="'$(BundlerMacDmgWindowHeight)' == ''">400</BundlerMacDmgWindowHeight>
-    <BundlerMacDmgAppIconX Condition="'$(BundlerMacDmgAppIconX)' == ''">180</BundlerMacDmgAppIconX>
-    <BundlerMacDmgAppIconY Condition="'$(BundlerMacDmgAppIconY)' == ''">170</BundlerMacDmgAppIconY>
-    <BundlerMacDmgApplicationsIconX Condition="'$(BundlerMacDmgApplicationsIconX)' == ''">480</BundlerMacDmgApplicationsIconX>
-    <BundlerMacDmgApplicationsIconY Condition="'$(BundlerMacDmgApplicationsIconY)' == ''">170</BundlerMacDmgApplicationsIconY>
-    <BundlerMacDmgIconSize Condition="'$(BundlerMacDmgIconSize)' == ''">128</BundlerMacDmgIconSize>
+    <BundlerMacDmgLayoutSkip Condition="'$(BundlerMacDmgLayoutSkip)' == ''">false</BundlerMacDmgLayoutSkip>
+    <BundlerMacDmgLayoutWindowX Condition="'$(BundlerMacDmgLayoutWindowX)' == ''">200</BundlerMacDmgLayoutWindowX>
+    <BundlerMacDmgLayoutWindowY Condition="'$(BundlerMacDmgLayoutWindowY)' == ''">120</BundlerMacDmgLayoutWindowY>
+    <BundlerMacDmgLayoutWindowWidth Condition="'$(BundlerMacDmgLayoutWindowWidth)' == ''">660</BundlerMacDmgLayoutWindowWidth>
+    <BundlerMacDmgLayoutWindowHeight Condition="'$(BundlerMacDmgLayoutWindowHeight)' == ''">400</BundlerMacDmgLayoutWindowHeight>
+    <BundlerMacDmgLayoutAppIconX Condition="'$(BundlerMacDmgLayoutAppIconX)' == ''">180</BundlerMacDmgLayoutAppIconX>
+    <BundlerMacDmgLayoutAppIconY Condition="'$(BundlerMacDmgLayoutAppIconY)' == ''">170</BundlerMacDmgLayoutAppIconY>
+    <BundlerMacDmgLayoutApplicationsIconX Condition="'$(BundlerMacDmgLayoutApplicationsIconX)' == ''">480</BundlerMacDmgLayoutApplicationsIconX>
+    <BundlerMacDmgLayoutApplicationsIconY Condition="'$(BundlerMacDmgLayoutApplicationsIconY)' == ''">170</BundlerMacDmgLayoutApplicationsIconY>
+    <BundlerMacDmgLayoutIconSize Condition="'$(BundlerMacDmgLayoutIconSize)' == ''">128</BundlerMacDmgLayoutIconSize>
     <BundlerMacDmgBackgroundFile Condition="'$(BundlerMacDmgBackgroundFile)' == ''"></BundlerMacDmgBackgroundFile>
     <BundlerMacDmgVolumeIconFile Condition="'$(BundlerMacDmgVolumeIconFile)' == ''"></BundlerMacDmgVolumeIconFile>
     <BundlerMacDmgSignIdentity Condition="'$(BundlerMacDmgSignIdentity)' == ''"></BundlerMacDmgSignIdentity>
-    <BundlerMacDmgSignCertificatePath Condition="'$(BundlerMacDmgSignCertificatePath)' == ''"></BundlerMacDmgSignCertificatePath>
-    <BundlerMacDmgSignCertificatePassword Condition="'$(BundlerMacDmgSignCertificatePassword)' == ''"></BundlerMacDmgSignCertificatePassword>
-    <BundlerMacPkgIdentifier Condition="'$(BundlerMacPkgIdentifier)' == ''"></BundlerMacPkgIdentifier>
+    <BundlerMacDmgTemporaryCertificateFile Condition="'$(BundlerMacDmgTemporaryCertificateFile)' == ''"></BundlerMacDmgTemporaryCertificateFile>
+    <BundlerMacDmgTemporaryCertificatePassword Condition="'$(BundlerMacDmgTemporaryCertificatePassword)' == ''"></BundlerMacDmgTemporaryCertificatePassword>
+    <BundlerMacPkgPackageName Condition="'$(BundlerMacPkgPackageName)' == ''"></BundlerMacPkgPackageName>
     <BundlerMacPkgVersion Condition="'$(BundlerMacPkgVersion)' == ''"></BundlerMacPkgVersion>
-    <BundlerMacPkgInstallLocation Condition="'$(BundlerMacPkgInstallLocation)' == ''">/Applications</BundlerMacPkgInstallLocation>
+    <BundlerMacPkgInstallRoot Condition="'$(BundlerMacPkgInstallRoot)' == ''">/Applications</BundlerMacPkgInstallRoot>
     <BundlerMacPkgTitle Condition="'$(BundlerMacPkgTitle)' == ''"></BundlerMacPkgTitle>
     <BundlerMacPkgWelcomeFile Condition="'$(BundlerMacPkgWelcomeFile)' == ''"></BundlerMacPkgWelcomeFile>
     <BundlerMacPkgConclusionFile Condition="'$(BundlerMacPkgConclusionFile)' == ''"></BundlerMacPkgConclusionFile>
-    <BundlerMacPkgDomain Condition="'$(BundlerMacPkgDomain)' == ''">System</BundlerMacPkgDomain>
+    <BundlerMacPkgInstallScope Condition="'$(BundlerMacPkgInstallScope)' == ''">System</BundlerMacPkgInstallScope>
     <BundlerMacPkgScriptsDirectory Condition="'$(BundlerMacPkgScriptsDirectory)' == ''"></BundlerMacPkgScriptsDirectory>
     <BundlerMacPkgSignIdentity Condition="'$(BundlerMacPkgSignIdentity)' == ''"></BundlerMacPkgSignIdentity>
-    <BundlerMacPkgSignCertificatePath Condition="'$(BundlerMacPkgSignCertificatePath)' == ''"></BundlerMacPkgSignCertificatePath>
-    <BundlerMacPkgSignCertificatePassword Condition="'$(BundlerMacPkgSignCertificatePassword)' == ''"></BundlerMacPkgSignCertificatePassword>
+    <BundlerMacPkgTemporaryCertificateFile Condition="'$(BundlerMacPkgTemporaryCertificateFile)' == ''"></BundlerMacPkgTemporaryCertificateFile>
+    <BundlerMacPkgTemporaryCertificatePassword Condition="'$(BundlerMacPkgTemporaryCertificatePassword)' == ''"></BundlerMacPkgTemporaryCertificatePassword>
     <BundlerMacPkgNotarize Condition="'$(BundlerMacPkgNotarize)' == ''">false</BundlerMacPkgNotarize>
     <BundlerMacPkgNotaryWait Condition="'$(BundlerMacPkgNotaryWait)' == ''">true</BundlerMacPkgNotaryWait>
     <BundlerMacPkgSkipStapling Condition="'$(BundlerMacPkgSkipStapling)' == ''">false</BundlerMacPkgSkipStapling>
@@ -121,15 +121,15 @@
     <BundlerMacPkgAppleId Condition="'$(BundlerMacPkgAppleId)' == ''"></BundlerMacPkgAppleId>
     <BundlerMacPkgApplePassword Condition="'$(BundlerMacPkgApplePassword)' == ''"></BundlerMacPkgApplePassword>
     <BundlerMacPkgAppleTeamId Condition="'$(BundlerMacPkgAppleTeamId)' == ''"></BundlerMacPkgAppleTeamId>
-    <BundlerMacPkgNotaryApiKeyPath Condition="'$(BundlerMacPkgNotaryApiKeyPath)' == ''"></BundlerMacPkgNotaryApiKeyPath>
+    <BundlerMacPkgApiKeyFile Condition="'$(BundlerMacPkgApiKeyFile)' == ''"></BundlerMacPkgApiKeyFile>
     <BundlerMacPkgNotaryApiKeyId Condition="'$(BundlerMacPkgNotaryApiKeyId)' == ''"></BundlerMacPkgNotaryApiKeyId>
     <BundlerMacPkgNotaryApiIssuer Condition="'$(BundlerMacPkgNotaryApiIssuer)' == ''"></BundlerMacPkgNotaryApiIssuer>
     <BundlerDebPackageName Condition="'$(BundlerDebPackageName)' == ''"></BundlerDebPackageName>
     <BundlerDebVersion Condition="'$(BundlerDebVersion)' == ''"></BundlerDebVersion>
-    <BundlerDebRevision Condition="'$(BundlerDebRevision)' == ''"></BundlerDebRevision>
+    <BundlerDebRelease Condition="'$(BundlerDebRelease)' == ''"></BundlerDebRelease>
     <BundlerDebEpoch Condition="'$(BundlerDebEpoch)' == ''"></BundlerDebEpoch>
     <BundlerDebArchitecture Condition="'$(BundlerDebArchitecture)' == ''"></BundlerDebArchitecture>
-    <BundlerDebMaintainer Condition="'$(BundlerDebMaintainer)' == ''"></BundlerDebMaintainer>
+    <BundlerDebVendor Condition="'$(BundlerDebVendor)' == ''"></BundlerDebVendor>
     <BundlerDebInstallRoot Condition="'$(BundlerDebInstallRoot)' == ''"></BundlerDebInstallRoot>
     <BundlerDebBinLink Condition="'$(BundlerDebBinLink)' == ''"></BundlerDebBinLink>
     <BundlerDebDepends Condition="'$(BundlerDebDepends)' == ''"></BundlerDebDepends>
@@ -143,13 +143,12 @@
     <BundlerDebDesktopFile Condition="'$(BundlerDebDesktopFile)' == ''"></BundlerDebDesktopFile>
     <BundlerDebMetainfoFile Condition="'$(BundlerDebMetainfoFile)' == ''"></BundlerDebMetainfoFile>
     <BundlerDebChangelogFile Condition="'$(BundlerDebChangelogFile)' == ''"></BundlerDebChangelogFile>
-    <BundlerDebPreinstFile Condition="'$(BundlerDebPreinstFile)' == ''"></BundlerDebPreinstFile>
-    <BundlerDebPostinstFile Condition="'$(BundlerDebPostinstFile)' == ''"></BundlerDebPostinstFile>
-    <BundlerDebPrermFile Condition="'$(BundlerDebPrermFile)' == ''"></BundlerDebPrermFile>
-    <BundlerDebPostrmFile Condition="'$(BundlerDebPostrmFile)' == ''"></BundlerDebPostrmFile>
+    <BundlerDebPreInstallFile Condition="'$(BundlerDebPreInstallFile)' == ''"></BundlerDebPreInstallFile>
+    <BundlerDebPostInstallFile Condition="'$(BundlerDebPostInstallFile)' == ''"></BundlerDebPostInstallFile>
+    <BundlerDebPreUninstallFile Condition="'$(BundlerDebPreUninstallFile)' == ''"></BundlerDebPreUninstallFile>
+    <BundlerDebPostUninstallFile Condition="'$(BundlerDebPostUninstallFile)' == ''"></BundlerDebPostUninstallFile>
     <BundlerDebSystemdServiceFile Condition="'$(BundlerDebSystemdServiceFile)' == ''"></BundlerDebSystemdServiceFile>
-    <BundlerDebConffiles Condition="'$(BundlerDebConffiles)' == ''"></BundlerDebConffiles>
-    <BundlerDebCompression Condition="'$(BundlerDebCompression)' == ''"></BundlerDebCompression>
+    <BundlerDebConfigFiles Condition="'$(BundlerDebConfigFiles)' == ''"></BundlerDebConfigFiles>
     <BundlerRpmPackageName Condition="'$(BundlerRpmPackageName)' == ''"></BundlerRpmPackageName>
     <BundlerRpmVersion Condition="'$(BundlerRpmVersion)' == ''"></BundlerRpmVersion>
     <BundlerRpmRelease Condition="'$(BundlerRpmRelease)' == ''"></BundlerRpmRelease>
@@ -158,7 +157,7 @@
     <BundlerRpmVendor Condition="'$(BundlerRpmVendor)' == ''"></BundlerRpmVendor>
     <BundlerRpmInstallRoot Condition="'$(BundlerRpmInstallRoot)' == ''"></BundlerRpmInstallRoot>
     <BundlerRpmBinLink Condition="'$(BundlerRpmBinLink)' == ''"></BundlerRpmBinLink>
-    <BundlerRpmRequires Condition="'$(BundlerRpmRequires)' == ''"></BundlerRpmRequires>
+    <BundlerRpmDepends Condition="'$(BundlerRpmDepends)' == ''"></BundlerRpmDepends>
     <BundlerRpmProvides Condition="'$(BundlerRpmProvides)' == ''"></BundlerRpmProvides>
     <BundlerRpmConflicts Condition="'$(BundlerRpmConflicts)' == ''"></BundlerRpmConflicts>
     <BundlerRpmObsoletes Condition="'$(BundlerRpmObsoletes)' == ''"></BundlerRpmObsoletes>
@@ -181,7 +180,6 @@
     <BundlerRpmPostInstallProgram Condition="'$(BundlerRpmPostInstallProgram)' == ''"></BundlerRpmPostInstallProgram>
     <BundlerRpmPreUninstallProgram Condition="'$(BundlerRpmPreUninstallProgram)' == ''"></BundlerRpmPreUninstallProgram>
     <BundlerRpmPostUninstallProgram Condition="'$(BundlerRpmPostUninstallProgram)' == ''"></BundlerRpmPostUninstallProgram>
-    <BundlerRpmCompression Condition="'$(BundlerRpmCompression)' == ''"></BundlerRpmCompression>
     <BundlerAppImagePackageName Condition="'$(BundlerAppImagePackageName)' == ''"></BundlerAppImagePackageName>
     <BundlerAppImageVersion Condition="'$(BundlerAppImageVersion)' == ''"></BundlerAppImageVersion>
     <BundlerAppImageArchitecture Condition="'$(BundlerAppImageArchitecture)' == ''"></BundlerAppImageArchitecture>
@@ -207,12 +205,12 @@
     <BundlerAlpineApkDepends Condition="'$(BundlerAlpineApkDepends)' == ''"></BundlerAlpineApkDepends>
     <BundlerAlpineApkProvides Condition="'$(BundlerAlpineApkProvides)' == ''"></BundlerAlpineApkProvides>
     <BundlerAlpineApkTriggers Condition="'$(BundlerAlpineApkTriggers)' == ''"></BundlerAlpineApkTriggers>
-    <BundlerAlpineApkPreInstallScript Condition="'$(BundlerAlpineApkPreInstallScript)' == ''"></BundlerAlpineApkPreInstallScript>
-    <BundlerAlpineApkPostInstallScript Condition="'$(BundlerAlpineApkPostInstallScript)' == ''"></BundlerAlpineApkPostInstallScript>
-    <BundlerAlpineApkPreDeinstallScript Condition="'$(BundlerAlpineApkPreDeinstallScript)' == ''"></BundlerAlpineApkPreDeinstallScript>
-    <BundlerAlpineApkPostDeinstallScript Condition="'$(BundlerAlpineApkPostDeinstallScript)' == ''"></BundlerAlpineApkPostDeinstallScript>
-    <BundlerAlpineApkPreUpgradeScript Condition="'$(BundlerAlpineApkPreUpgradeScript)' == ''"></BundlerAlpineApkPreUpgradeScript>
-    <BundlerAlpineApkPostUpgradeScript Condition="'$(BundlerAlpineApkPostUpgradeScript)' == ''"></BundlerAlpineApkPostUpgradeScript>
+    <BundlerAlpineApkPreInstallFile Condition="'$(BundlerAlpineApkPreInstallFile)' == ''"></BundlerAlpineApkPreInstallFile>
+    <BundlerAlpineApkPostInstallFile Condition="'$(BundlerAlpineApkPostInstallFile)' == ''"></BundlerAlpineApkPostInstallFile>
+    <BundlerAlpineApkPreUninstallFile Condition="'$(BundlerAlpineApkPreUninstallFile)' == ''"></BundlerAlpineApkPreUninstallFile>
+    <BundlerAlpineApkPostUninstallFile Condition="'$(BundlerAlpineApkPostUninstallFile)' == ''"></BundlerAlpineApkPostUninstallFile>
+    <BundlerAlpineApkPreUpgradeFile Condition="'$(BundlerAlpineApkPreUpgradeFile)' == ''"></BundlerAlpineApkPreUpgradeFile>
+    <BundlerAlpineApkPostUpgradeFile Condition="'$(BundlerAlpineApkPostUpgradeFile)' == ''"></BundlerAlpineApkPostUpgradeFile>
     <BundlerAlpineApkSigningKeyFile Condition="'$(BundlerAlpineApkSigningKeyFile)' == ''"></BundlerAlpineApkSigningKeyFile>
     <BundlerAlpineApkSigningKeyPassphrase Condition="'$(BundlerAlpineApkSigningKeyPassphrase)' == ''"></BundlerAlpineApkSigningKeyPassphrase>
   </PropertyGroup>

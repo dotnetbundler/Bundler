@@ -57,10 +57,10 @@ public sealed class AppImageBundleConfiguration
     public string? DesktopFile { get; init; }
 
     /// <summary>
-    /// Semicolon-separated freedesktop categories for the generated
-    /// <c>.desktop</c> entry (for example <c>Utility;Development</c>).
+    /// Freedesktop categories for the generated <c>.desktop</c> entry
+    /// (for example ["Utility", "Development"]).
     /// </summary>
-    public string? Categories { get; init; }
+    public IReadOnlyList<string>? Categories { get; init; }
 
     /// <summary>
     /// Optional AppStream metainfo XML file staged under
@@ -79,21 +79,13 @@ public sealed class AppImageBundleConfiguration
     public IReadOnlyList<AppImageFileEntry>? Files { get; init; }
 
     /// <summary>
-    /// Optional OpenPGP secret-key file (ASCII-armored or binary) used to
-    /// sign the AppImage via <c>appimagetool --sign</c>: the key is imported
-    /// into an isolated throwaway GNUPGHOME for the duration of the build and
-    /// the signature is embedded in the produced AppImage. Unset produces an
-    /// unsigned AppImage identical to a build with no signing configured.
-    /// Requires <c>gpg</c> on the host. The file's bytes are never logged.
+    /// Optional OpenPGP signing via <c>appimagetool --sign</c>: the key is
+    /// imported into an isolated throwaway GNUPGHOME for the duration of the
+    /// build and the signature is embedded in the produced AppImage. An empty
+    /// <see cref="Signing"/> leaves the AppImage unsigned. Requires <c>gpg</c>
+    /// on the host.
     /// </summary>
-    public string? SigningKeyFile { get; init; }
-
-    /// <summary>
-    /// Passphrase for <see cref="SigningKeyFile"/>. Supplying one without a
-    /// key file is a configuration error. Prefer feeding the value from a
-    /// secret store — it is a secret, do not commit it.
-    /// </summary>
-    public string? SigningKeyPassphrase { get; init; }
+    public KeyFileSigningConfiguration Signing { get; init; } = new();
 }
 
 /// <summary>A file planted at an AppDir-relative path.</summary>

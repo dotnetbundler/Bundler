@@ -105,11 +105,11 @@ internal static class AppDirBuilder
 
         foreach (var resource in bundle.Resources)
         {
-            var target = resource.TargetPath.Replace('\\', '/').Trim('/');
+            var target = resource.Destination.Replace('\\', '/').Trim('/');
             if (target.Length == 0 || target.Split('/').Contains(".."))
             {
                 throw new ArgumentException(
-                    $"The resource target must stay inside the payload: '{resource.TargetPath}'.");
+                    $"The resource target must stay inside the payload: '{resource.Destination}'.");
             }
             var source = Path.GetFullPath(resource.Source);
             var destinationDir = Path.Combine(payloadRoot, target.Replace('/', Path.DirectorySeparatorChar));
@@ -123,7 +123,7 @@ internal static class AppDirBuilder
                     !claimed.Add(Path.GetFullPath(destinationDir)))
                 {
                     throw new InvalidOperationException(
-                        $"The resource target '{resource.TargetPath}' collides with an existing payload entry.");
+                        $"The resource target '{resource.Destination}' collides with an existing payload entry.");
                 }
                 Directory.CreateDirectory(Path.GetDirectoryName(destinationDir)!);
                 File.Copy(source, destinationDir, overwrite: true);
@@ -160,7 +160,7 @@ internal static class AppDirBuilder
                 MetainfoFile = settings.MetainfoFile,
                 // appimagetool hard-requires a Categories= key; "Utility" is the
                 // conventional default when the caller does not supply one.
-                Categories = settings.Categories ?? "Utility",
+                Categories = settings.Categories is { Count: > 0 } categories ? string.Join(";", categories) : "Utility",
                 Format = "appimage",
                 AlwaysEmitIcon = true
             });

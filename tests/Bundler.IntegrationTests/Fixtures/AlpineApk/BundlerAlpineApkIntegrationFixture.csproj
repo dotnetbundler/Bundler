@@ -25,18 +25,18 @@
     <BundlerAlpineApkProvides Condition="'$(BundlerTestAlpineApkProvides)' != ''">$(BundlerTestAlpineApkProvides)</BundlerAlpineApkProvides>
     <BundlerAlpineApkTriggers Condition="'$(BundlerTestAlpineApkTriggers)' != ''">$(BundlerTestAlpineApkTriggers)</BundlerAlpineApkTriggers>
     <BundlerAlpineApkBinLink Condition="'$(BundlerTestAlpineApkBinLink)' != ''">$(BundlerTestAlpineApkBinLink)</BundlerAlpineApkBinLink>
-    <BundlerAlpineApkPreInstallScript Condition="'$(BundlerTestAlpineApkPreInstallScript)' != ''">$(BundlerTestAlpineApkPreInstallScript)</BundlerAlpineApkPreInstallScript>
-    <BundlerAlpineApkPostInstallScript Condition="'$(BundlerTestAlpineApkPostInstallScript)' != ''">$(BundlerTestAlpineApkPostInstallScript)</BundlerAlpineApkPostInstallScript>
-    <BundlerAlpineApkPreDeinstallScript Condition="'$(BundlerTestAlpineApkPreDeinstallScript)' != ''">$(BundlerTestAlpineApkPreDeinstallScript)</BundlerAlpineApkPreDeinstallScript>
-    <BundlerAlpineApkPostDeinstallScript Condition="'$(BundlerTestAlpineApkPostDeinstallScript)' != ''">$(BundlerTestAlpineApkPostDeinstallScript)</BundlerAlpineApkPostDeinstallScript>
-    <BundlerAlpineApkPreUpgradeScript Condition="'$(BundlerTestAlpineApkPreUpgradeScript)' != ''">$(BundlerTestAlpineApkPreUpgradeScript)</BundlerAlpineApkPreUpgradeScript>
-    <BundlerAlpineApkPostUpgradeScript Condition="'$(BundlerTestAlpineApkPostUpgradeScript)' != ''">$(BundlerTestAlpineApkPostUpgradeScript)</BundlerAlpineApkPostUpgradeScript>
+    <BundlerAlpineApkPreInstallFile Condition="'$(BundlerTestAlpineApkPreInstallScript)' != ''">$(BundlerTestAlpineApkPreInstallScript)</BundlerAlpineApkPreInstallFile>
+    <BundlerAlpineApkPostInstallFile Condition="'$(BundlerTestAlpineApkPostInstallScript)' != ''">$(BundlerTestAlpineApkPostInstallScript)</BundlerAlpineApkPostInstallFile>
+    <BundlerAlpineApkPreUninstallFile Condition="'$(BundlerTestAlpineApkPreDeinstallScript)' != ''">$(BundlerTestAlpineApkPreDeinstallScript)</BundlerAlpineApkPreUninstallFile>
+    <BundlerAlpineApkPostUninstallFile Condition="'$(BundlerTestAlpineApkPostDeinstallScript)' != ''">$(BundlerTestAlpineApkPostDeinstallScript)</BundlerAlpineApkPostUninstallFile>
+    <BundlerAlpineApkPreUpgradeFile Condition="'$(BundlerTestAlpineApkPreUpgradeScript)' != ''">$(BundlerTestAlpineApkPreUpgradeScript)</BundlerAlpineApkPreUpgradeFile>
+    <BundlerAlpineApkPostUpgradeFile Condition="'$(BundlerTestAlpineApkPostUpgradeScript)' != ''">$(BundlerTestAlpineApkPostUpgradeScript)</BundlerAlpineApkPostUpgradeFile>
     <BundlerAlpineApkSigningKeyFile Condition="'$(BundlerTestAlpineApkSigningKeyFile)' != ''">$(BundlerTestAlpineApkSigningKeyFile)</BundlerAlpineApkSigningKeyFile>
     <BundlerAlpineApkSigningKeyPassphrase Condition="'$(BundlerTestAlpineApkSigningKeyPassphrase)' != ''">$(BundlerTestAlpineApkSigningKeyPassphrase)</BundlerAlpineApkSigningKeyPassphrase>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <BundlerResource Include="Assets/readme.txt" Destination="docs/readme.txt" />
     <BundlerAlpineApkFile Include="Assets/defaults.conf" Destination="/etc/bundler-apk-fixture/defaults.conf" />
   </ItemGroup>
 </Project>

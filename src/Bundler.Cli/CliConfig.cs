@@ -129,20 +129,20 @@ internal static class CliConfig
 
     // *File/*Path/*Directory 后缀之外仍指宿主路径的旋钮：显式清单，与各
     // *BundleConfiguration 的真实属性名对齐，随配置面扩充维护。值可为标量、
-    // 字符串数组（extensionFragments/frameworks）或字符串字典（localeFiles）。
+    // 字符串数组（extensionFragmentFiles/frameworks）或字符串字典（localeFiles）。
     private static readonly Dictionary<string, HashSet<string>> PathKnobs = new(StringComparer.Ordinal)
     {
         ["nsis"] = new(StringComparer.OrdinalIgnoreCase)
-            { "installerIcon", "uninstallerIcon", "headerImage", "sidebarImage",
-              "uninstallerHeaderImage", "installerHooks", "customLanguageFiles", "icon" },
+            { "installerIconFile", "uninstallerIconFile", "headerFile", "sidebarFile",
+              "uninstallerHeaderFile", "installerHooksFile", "customLanguageFiles", "icon" },
         ["msi"] = new(StringComparer.OrdinalIgnoreCase)
-            { "bannerBitmap", "dialogBitmap", "expertTemplate", "extensionFragments",
-              "expertMergeModules", "localeFiles" },
+            { "bannerFile", "dialogFile", "expertTemplateFile", "extensionFragmentFiles",
+              "expertMergeModuleFiles", "localeFiles" },
         ["app"] = new(StringComparer.OrdinalIgnoreCase)
-            { "frameworks" },
+            { "frameworkDirectories" },
         ["alpineapk"] = new(StringComparer.OrdinalIgnoreCase)
-            { "preInstallScript", "postInstallScript", "preDeinstallScript",
-              "postDeinstallScript", "preUpgradeScript", "postUpgradeScript" },
+            { "preInstallFile", "postInstallFile", "preUninstallFile",
+              "postUninstallFile", "preUpgradeFile", "postUpgradeFile" },
     };
 
 
@@ -446,7 +446,7 @@ internal static class CliConfig
     // 共享字段的路径解析在反序列化后由 BundleConfigurationPaths.Resolve 统一完成，
     // 这里只剩各格式分节（update 也走共享面，跳过）。递归走查：标量按 *File/
     // *Path/*Directory 后缀、PathKnobs 显式表或 source 键判定；路径型数组/字典逐
-    // 元素解析；嵌套对象（signing/shortcuts）与条目数组（files/payloadItems/
+    // 元素解析；嵌套对象（signing/shortcuts）与条目数组（files/files/
     // contents）递归——同一套判定在每个层级生效。
     private static void ResolveRelativePaths(JsonObject document, string baseDirectory)
     {
@@ -682,13 +682,15 @@ internal static class CliConfig
 #endif
         [typeof(ArchiveFileEntry)] = static () => new ArchiveFileEntry(),
         [typeof(DebFileEntry)] = static () => new DebFileEntry(),
-        [typeof(MacAppContentConfiguration)] = static () => new MacAppContentConfiguration(),
+        [typeof(MacAppFileEntry)] = static () => new MacAppFileEntry(),
         [typeof(MacAppDocumentTypeConfiguration)] = static () => new MacAppDocumentTypeConfiguration(),
         [typeof(MacAppSigningConfiguration)] = static () => new MacAppSigningConfiguration(),
+        [typeof(KeyFileSigningConfiguration)] = static () => new KeyFileSigningConfiguration(),
         [typeof(MacAppUrlTypeConfiguration)] = static () => new MacAppUrlTypeConfiguration(),
 #if BUNDLER_HOST_MACOS
+        [typeof(MacDmgLayoutConfiguration)] = static () => new MacDmgLayoutConfiguration(),
         [typeof(MacDmgSigningConfiguration)] = static () => new MacDmgSigningConfiguration(),
-        [typeof(MacPkgPayloadItem)] = static () => new MacPkgPayloadItem(),
+        [typeof(MacPkgFileEntry)] = static () => new MacPkgFileEntry(),
         [typeof(MacPkgSigningConfiguration)] = static () => new MacPkgSigningConfiguration(),
 #endif
         [typeof(NsisShortcutConfiguration)] = static () => new NsisShortcutConfiguration(),

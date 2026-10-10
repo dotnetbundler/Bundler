@@ -21,7 +21,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
     internal static (string Identifier, string Version) ValidateConfiguration(
         MacPkgBundleConfiguration settings, BundleConfiguration bundle)
     {
-        var identifier = settings.Identifier ?? bundle.Identifier;
+        var identifier = settings.PackageName ?? bundle.Identifier;
         if (identifier.Trim().Length == 0)
         {
             throw new ArgumentException("The .pkg identifier must not be empty.");
@@ -31,11 +31,11 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
         {
             throw new ArgumentException("The .pkg version must not be empty.");
         }
-        var installLocation = settings.InstallLocation;
-        if (!installLocation.StartsWith("/", StringComparison.Ordinal))
+        var installRoot = settings.InstallRoot;
+        if (!installRoot.StartsWith("/", StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                $"The .pkg install location must be an absolute path: '{installLocation}'.");
+                $"The .pkg install location must be an absolute path: '{installRoot}'.");
         }
 
         MacPkgSigning.Validate(settings.Signing);
@@ -81,7 +81,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             }
             Directory.CreateDirectory(stageDirectory);
 
-            var payloadItems = settings.PayloadItems ?? Array.Empty<MacPkgPayloadItem>();
+            var files = settings.Files ?? Array.Empty<MacPkgFileEntry>();
             var applicationName = MacAppBundleBackend.SanitizeFileName(bundle.ProductName) + ".app";
             var appPath = Path.Combine(
                 bundle.OutputDirectory, item.Target.RuntimeIdentifier, "app", applicationName);
@@ -93,7 +93,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             }
             CopyTree(appPath, Path.Combine(stageDirectory, applicationName), logger);
 
-            foreach (var payload in payloadItems)
+            foreach (var payload in files)
             {
                 if (string.IsNullOrWhiteSpace(payload.Source))
                 {
@@ -130,7 +130,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                 || !string.IsNullOrEmpty(settings.WelcomeFile)
                 || !string.IsNullOrEmpty(settings.ConclusionFile)
                 || !string.IsNullOrEmpty(licenseFile)
-                || settings.Domain != MacPkgInstallDomain.System;
+                || settings.InstallScope != MacPkgInstallScope.System;
 
             var packagePath = useDistribution
                 ? Path.Combine(workDirectory, "component.pkg")
@@ -147,7 +147,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             var pkgbuildArguments = new List<string>
             {
                 "--root", stageDirectory,
-                "--install-location", settings.InstallLocation,
+                "--install-location", settings.InstallRoot,
                 "--identifier", identifier,
                 "--version", version,
                 "--ownership", "recommended"
@@ -179,7 +179,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                     bundle,
                     identifier,
                     version,
-                    settings.InstallLocation,
+                    settings.InstallRoot,
                     Path.GetFileName(packagePath),
                     ArchitectureName(item.Target.Architecture),
                     logger,
@@ -232,7 +232,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
         BundleConfiguration bundle,
         string identifier,
         string version,
-        string installLocation,
+        string installRoot,
         string componentFileName,
         string architecture,
         IBundleLogger logger,
@@ -262,7 +262,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             sb.AppendLine($"    <{element} file=\"{XmlEscape(name)}\" mime-type=\"{MimeType(source)}\"/>");
         }
 
-        if (settings.Domain == MacPkgInstallDomain.CurrentUserHome)
+        if (settings.InstallScope == MacPkgInstallScope.CurrentUserHome)
         {
             sb.AppendLine(
                 "    <domains enable_anywhere=\"false\" enable_currentUserHome=\"true\" " +
@@ -284,7 +284,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
         sb.AppendLine("    </choice>");
         sb.AppendLine(
             $"    <pkg-ref id=\"{XmlEscape(identifier)}\" version=\"{XmlEscape(version)}\" " +
-            $"install-location=\"{XmlEscape(installLocation)}\">{XmlEscape(componentFileName)}</pkg-ref>");
+            $"install-location=\"{XmlEscape(installRoot)}\">{XmlEscape(componentFileName)}</pkg-ref>");
         sb.AppendLine("</installer-gui-script>");
         File.WriteAllText(distributionPath, sb.ToString());
     }

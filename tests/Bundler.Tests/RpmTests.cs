@@ -23,8 +23,7 @@ public static class RpmTests
         {
             var signed = new RpmBundler(new RpmBundleConfiguration
             {
-                SigningKeyFile = keyFile,
-                SigningKeyPassphrase = "test-passphrase"
+                Signing = new KeyFileSigningConfiguration { KeyFile = keyFile, Passphrase = "test-passphrase" }
             }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
 
             var package = RpmPackageReader.Read(signed.Path);
@@ -74,9 +73,9 @@ public static class RpmTests
             foreach (var (caseName, settings) in new (string, RpmBundleConfiguration)[]
             {
                 ("passphrase without key file",
-                    new RpmBundleConfiguration { SigningKeyPassphrase = "x" }),
+                    new RpmBundleConfiguration { Signing = new KeyFileSigningConfiguration { Passphrase = "x"  }}),
                 ("missing key file",
-                    new RpmBundleConfiguration { SigningKeyFile = Path.Combine(input, "missing.asc") }),
+                    new RpmBundleConfiguration { Signing = new KeyFileSigningConfiguration { KeyFile = Path.Combine(input, "missing.asc") } }),
             })
             {
                 Assert.ThrowsAny<ArgumentException>(
@@ -102,8 +101,7 @@ public static class RpmTests
             var wrongPassphrase = Assert.ThrowsAny<InvalidOperationException>(
                 () => new RpmBundler(new RpmBundleConfiguration
                 {
-                    SigningKeyFile = keyFile,
-                    SigningKeyPassphrase = "wrong-passphrase"
+                    Signing = new KeyFileSigningConfiguration { KeyFile = keyFile, Passphrase = "wrong-passphrase" }
                 }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult());
             Assert.Contains("passphrase", wrongPassphrase.Message, StringComparison.OrdinalIgnoreCase);
         }
@@ -288,7 +286,6 @@ public static class RpmTests
                 (new RpmBundleConfiguration { PreInstallFile = lonelyCr }, "lone CR must be rejected"),
                 (new RpmBundleConfiguration { PreInstallFile = emptyShebang }, "empty shebang must be rejected"),
                 (new RpmBundleConfiguration { PreInstallFile = input + "/missing.sh" }, "missing file must be rejected"),
-                (new RpmBundleConfiguration { Compression = "xz" }, "xz compression must be rejected"),
                 (new RpmBundleConfiguration { ConfigFiles = ["/usr/lib/example-app/nowhere.conf"] },
                     "ConfigFiles must reference a real payload file")
             })
@@ -571,7 +568,7 @@ public static class RpmTests
                 Resources = [new BundleResourceConfiguration
                 {
                     Source = resourceFile,
-                    TargetPath = "docs/note.txt"
+                    Destination = "docs/note.txt"
                 }]
             };
             var artifact = new RpmBundler().BuildAsync(configuration).GetAwaiter().GetResult().Single();
@@ -670,7 +667,7 @@ public static class RpmTests
                targets.Contains("RpmVendor=\"$(BundlerRpmVendor)\"", StringComparison.Ordinal) &&
                targets.Contains("RpmInstallRoot=\"$(BundlerRpmInstallRoot)\"", StringComparison.Ordinal) &&
                targets.Contains("RpmBinLink=\"$(BundlerRpmBinLink)\"", StringComparison.Ordinal) &&
-               targets.Contains("RpmRequires=\"$(BundlerRpmRequires)\"", StringComparison.Ordinal) &&
+               targets.Contains("RpmDepends=\"$(BundlerRpmDepends)\"", StringComparison.Ordinal) &&
                targets.Contains("RpmProvides=\"$(BundlerRpmProvides)\"", StringComparison.Ordinal) &&
                targets.Contains("RpmConflicts=\"$(BundlerRpmConflicts)\"", StringComparison.Ordinal) &&
                targets.Contains("RpmObsoletes=\"$(BundlerRpmObsoletes)\"", StringComparison.Ordinal) &&
@@ -693,7 +690,7 @@ public static class RpmTests
                props.Contains("<BundlerRpmVendor", StringComparison.Ordinal) &&
                props.Contains("<BundlerRpmInstallRoot", StringComparison.Ordinal) &&
                props.Contains("<BundlerRpmBinLink", StringComparison.Ordinal) &&
-               props.Contains("<BundlerRpmRequires", StringComparison.Ordinal) &&
+               props.Contains("<BundlerRpmDepends", StringComparison.Ordinal) &&
                props.Contains("<BundlerRpmLicense", StringComparison.Ordinal) &&
                props.Contains("<BundlerRpmCategories", StringComparison.Ordinal) &&
                props.Contains("<BundlerRpmDesktopFile", StringComparison.Ordinal) &&
@@ -720,7 +717,7 @@ public static class RpmTests
         {
             var artifact = new RpmBundler(new RpmBundleConfiguration
             {
-                Requires = ["libc.so.6", "libfoo >= 1.2-3"],
+                Depends = ["libc.so.6", "libfoo >= 1.2-3"],
                 Provides = ["example-plugin = 2.0"],
                 Conflicts = ["old-example < 1.0"],
                 Obsoletes = ["example-legacy"],
@@ -836,7 +833,7 @@ public static class RpmTests
             };
             var artifact = new RpmBundler(new RpmBundleConfiguration
             {
-                Categories = "Utility;Development",
+                Categories = ["Utility", "Development"],
                 MetainfoFile = metainfo,
                 ChangelogFile = changelog
             }).BuildAsync(config).GetAwaiter().GetResult().Single();
@@ -950,7 +947,7 @@ public static class RpmTests
             foreach (var clause in new[] { "foo != 1.0", "foo bar", "", "foo =" })
             {
                 Assert.ThrowsAny<ArgumentException>(
-                    () => new RpmBundler(new RpmBundleConfiguration { Requires = [clause] })
+                    () => new RpmBundler(new RpmBundleConfiguration { Depends = [clause] })
                         .BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult());
             }
         }

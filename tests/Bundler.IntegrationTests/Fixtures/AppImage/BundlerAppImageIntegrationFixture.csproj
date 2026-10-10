@@ -31,7 +31,7 @@
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <BundlerResource Include="Assets/readme.txt" Destination="docs/readme.txt" />
     <BundlerIcon Include="Assets/icon48.png" />
     <BundlerIcon Include="Assets/icon@2x.png" />
     <BundlerFileAssociation Include=".bdlfixture" Name="Bundler fixture document"

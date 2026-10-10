@@ -6,17 +6,17 @@
     <BundlerMacDmgCompression Condition="'$(HelloBundlerDmgCompression)' != ''">$(HelloBundlerDmgCompression)</BundlerMacDmgCompression>
     <BundlerMacDmgVolumeName Condition="'$(HelloBundlerDmgVolumeName)' != ''">$(HelloBundlerDmgVolumeName)</BundlerMacDmgVolumeName>
 
-    <!-- Finder 布局与品牌：默认演示背景图+卷图标；HelloBundlerDmgSkipWindowLayout 可整体跳过。 -->
-    <BundlerMacDmgSkipWindowLayout Condition="'$(HelloBundlerDmgSkipWindowLayout)' != ''">$(HelloBundlerDmgSkipWindowLayout)</BundlerMacDmgSkipWindowLayout>
-    <BundlerMacDmgWindowX Condition="'$(HelloBundlerDmgWindowX)' != ''">$(HelloBundlerDmgWindowX)</BundlerMacDmgWindowX>
-    <BundlerMacDmgWindowY Condition="'$(HelloBundlerDmgWindowY)' != ''">$(HelloBundlerDmgWindowY)</BundlerMacDmgWindowY>
-    <BundlerMacDmgWindowWidth Condition="'$(HelloBundlerDmgWindowWidth)' != ''">$(HelloBundlerDmgWindowWidth)</BundlerMacDmgWindowWidth>
-    <BundlerMacDmgWindowHeight Condition="'$(HelloBundlerDmgWindowHeight)' != ''">$(HelloBundlerDmgWindowHeight)</BundlerMacDmgWindowHeight>
-    <BundlerMacDmgAppIconX Condition="'$(HelloBundlerDmgAppIconX)' != ''">$(HelloBundlerDmgAppIconX)</BundlerMacDmgAppIconX>
-    <BundlerMacDmgAppIconY Condition="'$(HelloBundlerDmgAppIconY)' != ''">$(HelloBundlerDmgAppIconY)</BundlerMacDmgAppIconY>
-    <BundlerMacDmgApplicationsIconX Condition="'$(HelloBundlerDmgApplicationsIconX)' != ''">$(HelloBundlerDmgApplicationsIconX)</BundlerMacDmgApplicationsIconX>
-    <BundlerMacDmgApplicationsIconY Condition="'$(HelloBundlerDmgApplicationsIconY)' != ''">$(HelloBundlerDmgApplicationsIconY)</BundlerMacDmgApplicationsIconY>
-    <BundlerMacDmgIconSize Condition="'$(HelloBundlerDmgIconSize)' != ''">$(HelloBundlerDmgIconSize)</BundlerMacDmgIconSize>
+    <!-- Finder 布局与品牌：默认演示背景图+卷图标；HelloBundlerDmgLayoutSkip 可整体跳过。 -->
+    <BundlerMacDmgLayoutSkip Condition="'$(HelloBundlerDmgLayoutSkip)' != ''">$(HelloBundlerDmgLayoutSkip)</BundlerMacDmgLayoutSkip>
+    <BundlerMacDmgLayoutWindowX Condition="'$(HelloBundlerDmgWindowX)' != ''">$(HelloBundlerDmgWindowX)</BundlerMacDmgLayoutWindowX>
+    <BundlerMacDmgLayoutWindowY Condition="'$(HelloBundlerDmgWindowY)' != ''">$(HelloBundlerDmgWindowY)</BundlerMacDmgLayoutWindowY>
+    <BundlerMacDmgLayoutWindowWidth Condition="'$(HelloBundlerDmgWindowWidth)' != ''">$(HelloBundlerDmgWindowWidth)</BundlerMacDmgLayoutWindowWidth>
+    <BundlerMacDmgLayoutWindowHeight Condition="'$(HelloBundlerDmgWindowHeight)' != ''">$(HelloBundlerDmgWindowHeight)</BundlerMacDmgLayoutWindowHeight>
+    <BundlerMacDmgLayoutAppIconX Condition="'$(HelloBundlerDmgAppIconX)' != ''">$(HelloBundlerDmgAppIconX)</BundlerMacDmgLayoutAppIconX>
+    <BundlerMacDmgLayoutAppIconY Condition="'$(HelloBundlerDmgAppIconY)' != ''">$(HelloBundlerDmgAppIconY)</BundlerMacDmgLayoutAppIconY>
+    <BundlerMacDmgLayoutApplicationsIconX Condition="'$(HelloBundlerDmgApplicationsIconX)' != ''">$(HelloBundlerDmgApplicationsIconX)</BundlerMacDmgLayoutApplicationsIconX>
+    <BundlerMacDmgLayoutApplicationsIconY Condition="'$(HelloBundlerDmgApplicationsIconY)' != ''">$(HelloBundlerDmgApplicationsIconY)</BundlerMacDmgLayoutApplicationsIconY>
+    <BundlerMacDmgLayoutIconSize Condition="'$(HelloBundlerDmgIconSize)' != ''">$(HelloBundlerDmgIconSize)</BundlerMacDmgLayoutIconSize>
     <BundlerMacDmgBackgroundFile Condition="'$(HelloBundlerDmgBackgroundFile)' != ''">$(HelloBundlerDmgBackgroundFile)</BundlerMacDmgBackgroundFile>
     <BundlerMacDmgBackgroundFile Condition="'$(HelloBundlerDmgBackgroundFile)' == ''">$(HelloBundlerAppAssets)dmg\bg.png</BundlerMacDmgBackgroundFile>
     <BundlerMacDmgVolumeIconFile Condition="'$(HelloBundlerDmgVolumeIconFile)' != ''">$(HelloBundlerDmgVolumeIconFile)</BundlerMacDmgVolumeIconFile>
@@ -29,7 +29,7 @@
 
     <!-- DMG 本体签名：identity（"-"=ad-hoc）与临时钥匙串证书互斥。 -->
     <BundlerMacDmgSignIdentity Condition="'$(HelloBundlerDmgSignIdentity)' != ''">$(HelloBundlerDmgSignIdentity)</BundlerMacDmgSignIdentity>
-    <BundlerMacDmgSignCertificatePath Condition="'$(HelloBundlerDmgSignCertificatePath)' != ''">$(HelloBundlerDmgSignCertificatePath)</BundlerMacDmgSignCertificatePath>
-    <BundlerMacDmgSignCertificatePassword Condition="'$(HelloBundlerDmgSignCertificatePassword)' != ''">$(HelloBundlerDmgSignCertificatePassword)</BundlerMacDmgSignCertificatePassword>
+    <BundlerMacDmgTemporaryCertificateFile Condition="'$(HelloBundlerDmgSignCertificatePath)' != ''">$(HelloBundlerDmgSignCertificatePath)</BundlerMacDmgTemporaryCertificateFile>
+    <BundlerMacDmgTemporaryCertificatePassword Condition="'$(HelloBundlerDmgSignCertificatePassword)' != ''">$(HelloBundlerDmgSignCertificatePassword)</BundlerMacDmgTemporaryCertificatePassword>
   </PropertyGroup>
 </Project>

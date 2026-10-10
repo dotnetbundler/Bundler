@@ -126,7 +126,7 @@ public sealed class MacAppFixture : IDisposable
     private IEnumerable<string> CommonArgs(string name)
     {
         yield return $"-p:BundlerIntegrationOutput={Ws.Combine(name)}";
-        yield return $"-p:BundlerTestIcon={IconPng}";
+        yield return $"-p:BundlerTestIconFile={IconPng}";
         if (Dylib is not null)
         {
             yield return $"-p:BundlerTestDylib={Dylib}";
@@ -397,7 +397,7 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
         {
             "publish", _f.FixtureProject, "-c", "Release", "--force",
             $"-p:BundlerIntegrationOutput={_f.Ws.Combine("bundle")}",
-            $"-p:BundlerTestIcon={_f.IconPng}",
+            $"-p:BundlerTestIconFile={_f.IconPng}",
             $"-p:RestorePackagesPath={_f.CacheDir}",
         };
         if (_f.Dylib is not null)
@@ -439,7 +439,7 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
         var result = Dotnet.Run(
             ["publish", _f.FixtureProject, "-c", "Release", "--force",
              $"-p:BundlerIntegrationOutput={output}",
-             $"-p:BundlerTestIcon={_f.IconPng}",
+             $"-p:BundlerTestIconFile={_f.IconPng}",
              $"-p:BundlerTestSigningCertificate={_f.Ws.Combine("missing.p12")}",
              $"-p:RestorePackagesPath={_f.CacheDir}"],
             new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) });
@@ -448,7 +448,7 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
             Path.Combine(output, "osx-arm64", "app", "Bundler Mac Integration Fixture.app")),
             "A failed signing run left a pseudo-success .app.");
         Assert.Matches(
-            new System.Text.RegularExpressions.Regex("TemporaryCertificatePath|temporary certificate",
+            new System.Text.RegularExpressions.Regex("TemporaryCertificateFile|temporary certificate",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase),
             result.Output);
     }

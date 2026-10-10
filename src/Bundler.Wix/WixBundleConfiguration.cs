@@ -10,7 +10,7 @@ public sealed class WixBundleConfiguration
 {
     public WixInstallScope InstallScope { get; init; } = WixInstallScope.CurrentUser;
     public string? UpgradeCode { get; init; }
-    public string? MsiVersion { get; init; }
+    public string? Version { get; init; }
     public bool AllowDowngrades { get; init; }
     // Cultures of the Windows Installer UI, e.g. "en-US" or "ja-JP". Each entry
     // produces an isolated single-language MSI with its own identity and
@@ -32,9 +32,9 @@ public sealed class WixBundleConfiguration
     // 交互安装界面允许在允许根内选择安装目录；静默 INSTALLFOLDER 始终可用并经受同一范围校验。
     public bool InstallDirectorySelection { get; init; }
     // WiX UI 横幅位图，必须为 493x58 .bmp。
-    public string? BannerBitmap { get; init; }
+    public string? BannerFile { get; init; }
     // WiX UI 对话框位图，必须为 503x314 .bmp。
-    public string? DialogBitmap { get; init; }
+    public string? DialogFile { get; init; }
     public bool AddToPath { get; init; }
     public bool UninstallShortcut { get; init; }
     // 仅在交互安装完成页提供勾选；静默、被动、升级、修复与提权上下文不启动应用。
@@ -43,7 +43,7 @@ public sealed class WixBundleConfiguration
     // Regular mode: caller .wxs fragments validated against a core-schema
     // whitelist (no custom actions, sequences, UI or extension namespaces).
     // Every id defined inside must start with ExtensionIdPrefix.
-    public IReadOnlyList<string> ExtensionFragments { get; init; } = [];
+    public IReadOnlyList<string> ExtensionFragmentFiles { get; init; } = [];
     // Caller-declared WiX id prefix required by every @Id in fragments and by
     // every ref id below, e.g. "Acme."; mandatory when fragments/refs are set.
     public string? ExtensionIdPrefix { get; init; }
@@ -60,15 +60,15 @@ public sealed class WixBundleConfiguration
     // ProductCode/UpgradeCode/ProductLanguage/scope, exposed to the template as
     // candle -d variables Bundler.ProductCode/.UpgradeCode/.ProductVersion/
     // .ProductName/.ProductLanguage/.Codepage/.InstallScope/.Manufacturer.
-    public string? ExpertTemplate { get; init; }
-    public IReadOnlyList<string> ExpertMergeModules { get; init; } = [];
+    public string? ExpertTemplateFile { get; init; }
+    public IReadOnlyList<string> ExpertMergeModuleFiles { get; init; } = [];
 
-    internal bool IsExpertMode => ExpertTemplate is not null;
+    internal bool IsExpertMode => ExpertTemplateFile is not null;
 
     internal void ValidateExtensionSurface()
     {
         if (IsExpertMode &&
-            (ExtensionFragments.Count > 0 || ExtensionIdPrefix is not null ||
+            (ExtensionFragmentFiles.Count > 0 || ExtensionIdPrefix is not null ||
              ExtensionComponentRefs.Count > 0 || ExtensionComponentGroupRefs.Count > 0 ||
              ExtensionFeatureRefs.Count > 0))
         {
@@ -76,11 +76,11 @@ public sealed class WixBundleConfiguration
                 "Expert mode replaces the whole product document; regular extension " +
                 "fragments/refs cannot be combined with an expert template.");
         }
-        if (ExpertMergeModules.Count > 0 && !IsExpertMode)
+        if (ExpertMergeModuleFiles.Count > 0 && !IsExpertMode)
         {
             throw new ArgumentException("MSI merge modules require expert mode.");
         }
-        var hasRegular = ExtensionFragments.Count > 0 || ExtensionComponentRefs.Count > 0 ||
+        var hasRegular = ExtensionFragmentFiles.Count > 0 || ExtensionComponentRefs.Count > 0 ||
             ExtensionComponentGroupRefs.Count > 0 || ExtensionFeatureRefs.Count > 0;
         if (hasRegular && ExtensionIdPrefix is null)
         {

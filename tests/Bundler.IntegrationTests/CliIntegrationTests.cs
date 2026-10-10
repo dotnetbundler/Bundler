@@ -269,7 +269,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
                 "archiveName": "from-config",
                 "files": [{ "source": "docs/readme.txt", "destination": "docs/readme.txt" }]
               },
-              "deb": { "section": "utils", "maintainer": "Lin <lin@example.com>" }
+              "deb": { "section": "utils", "vendor": "Lin <lin@example.com>" }
             }
             """);
         var bundle = _f.Cli("bundle", "--config", cfgPath, "--quiet");

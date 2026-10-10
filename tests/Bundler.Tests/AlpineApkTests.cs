@@ -324,7 +324,7 @@ public static class AlpineApkTests
                 new BundleResourceConfiguration
                 {
                     Source = resourceDir,
-                    TargetPath = "docs"
+                    Destination = "docs"
                 }
             ]);
             var artifacts = new AlpineApkBundler().BuildAsync(configuration).GetAwaiter().GetResult();
@@ -434,12 +434,12 @@ public static class AlpineApkTests
                targets.Contains("AlpineApkDepends=\"$(BundlerAlpineApkDepends)\"", StringComparison.Ordinal) &&
                targets.Contains("AlpineApkProvides=\"$(BundlerAlpineApkProvides)\"", StringComparison.Ordinal) &&
                targets.Contains("AlpineApkTriggers=\"$(BundlerAlpineApkTriggers)\"", StringComparison.Ordinal) &&
-               targets.Contains("AlpineApkPreInstallScript=\"$(BundlerAlpineApkPreInstallScript)\"", StringComparison.Ordinal) &&
-               targets.Contains("AlpineApkPostInstallScript=\"$(BundlerAlpineApkPostInstallScript)\"", StringComparison.Ordinal) &&
-               targets.Contains("AlpineApkPreDeinstallScript=\"$(BundlerAlpineApkPreDeinstallScript)\"", StringComparison.Ordinal) &&
-               targets.Contains("AlpineApkPostDeinstallScript=\"$(BundlerAlpineApkPostDeinstallScript)\"", StringComparison.Ordinal) &&
-               targets.Contains("AlpineApkPreUpgradeScript=\"$(BundlerAlpineApkPreUpgradeScript)\"", StringComparison.Ordinal) &&
-               targets.Contains("AlpineApkPostUpgradeScript=\"$(BundlerAlpineApkPostUpgradeScript)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkPreInstallFile=\"$(BundlerAlpineApkPreInstallFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkPostInstallFile=\"$(BundlerAlpineApkPostInstallFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkPreUninstallFile=\"$(BundlerAlpineApkPreUninstallFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkPostUninstallFile=\"$(BundlerAlpineApkPostUninstallFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkPreUpgradeFile=\"$(BundlerAlpineApkPreUpgradeFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("AlpineApkPostUpgradeFile=\"$(BundlerAlpineApkPostUpgradeFile)\"", StringComparison.Ordinal) &&
                targets.Contains("AlpineApkFiles=\"@(BundlerAlpineApkFile)\"", StringComparison.Ordinal),
             "MSBuild does not map the BundlerAlpineApk* properties to the task.");
         Assert.True(props.Contains("<BundlerAlpineApkPackageName", StringComparison.Ordinal) &&
@@ -517,12 +517,12 @@ public static class AlpineApkTests
             }
             var all = new AlpineApkBundleConfiguration
             {
-                PreInstallScript = Path.Combine(scripts, "pre-install.sh"),
-                PostInstallScript = Path.Combine(scripts, "post-install.sh"),
-                PreDeinstallScript = Path.Combine(scripts, "pre-deinstall.sh"),
-                PostDeinstallScript = Path.Combine(scripts, "post-deinstall.sh"),
-                PreUpgradeScript = Path.Combine(scripts, "pre-upgrade.sh"),
-                PostUpgradeScript = Path.Combine(scripts, "post-upgrade.sh")
+                PreInstallFile = Path.Combine(scripts, "pre-install.sh"),
+                PostInstallFile = Path.Combine(scripts, "post-install.sh"),
+                PreUninstallFile = Path.Combine(scripts, "pre-deinstall.sh"),
+                PostUninstallFile = Path.Combine(scripts, "post-deinstall.sh"),
+                PreUpgradeFile = Path.Combine(scripts, "pre-upgrade.sh"),
+                PostUpgradeFile = Path.Combine(scripts, "post-upgrade.sh")
             };
             var artifact = new AlpineApkBundler(all)
                 .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single();
@@ -623,14 +623,14 @@ public static class AlpineApkTests
             var script = Path.Combine(output, "post.sh");
             File.WriteAllText(script, "#!/bin/sh\r\necho hi\r\n");
             Assert.ThrowsAny<ArgumentException>(
-                () => new AlpineApkBundler(new AlpineApkBundleConfiguration { PostInstallScript = script })
+                () => new AlpineApkBundler(new AlpineApkBundleConfiguration { PostInstallFile = script })
                     .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
 
             // Missing script file is rejected.
             Assert.ThrowsAny<FileNotFoundException>(
                 () => new AlpineApkBundler(new AlpineApkBundleConfiguration
                 {
-                    PreInstallScript = Path.Combine(output, "missing.sh")
+                    PreInstallFile = Path.Combine(output, "missing.sh")
                 }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
 
             // Relative destination and '..' segments are rejected.
@@ -661,7 +661,7 @@ public static class AlpineApkTests
             var keyPath = WriteKey(output, "testkey.rsa", TestPrivateKeyPem);
             var artifact = new AlpineApkBundler(new AlpineApkBundleConfiguration
             {
-                SigningKeyFile = keyPath
+                Signing = new KeyFileSigningConfiguration { KeyFile = keyPath }
             }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single();
 
             var apk = File.ReadAllBytes(artifact.Path);
@@ -703,8 +703,7 @@ public static class AlpineApkTests
             var keyPath = WriteKey(output, "enckey.rsa", EncryptedPrivateKeyPem);
             var artifact = new AlpineApkBundler(new AlpineApkBundleConfiguration
             {
-                SigningKeyFile = keyPath,
-                SigningKeyPassphrase = "test-pass"
+                Signing = new KeyFileSigningConfiguration { KeyFile = keyPath, Passphrase = "test-pass" }
             }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single();
 
             var apk = File.ReadAllBytes(artifact.Path);
@@ -735,14 +734,14 @@ public static class AlpineApkTests
             Assert.ThrowsAny<ArgumentException>(
                 () => new AlpineApkBundler(new AlpineApkBundleConfiguration
                 {
-                    SigningKeyPassphrase = "x"
+                    Signing = new KeyFileSigningConfiguration { Passphrase = "x" }
                 }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
 
             // Missing key file.
             Assert.ThrowsAny<FileNotFoundException>(
                 () => new AlpineApkBundler(new AlpineApkBundleConfiguration
                 {
-                    SigningKeyFile = Path.Combine(output, "missing.rsa")
+                    Signing = new KeyFileSigningConfiguration { KeyFile = Path.Combine(output, "missing.rsa") }
                 }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
 
             // Non-PEM key content.
@@ -750,7 +749,7 @@ public static class AlpineApkTests
             Assert.ThrowsAny<ArgumentException>(
                 () => new AlpineApkBundler(new AlpineApkBundleConfiguration
                 {
-                    SigningKeyFile = garbage
+                    Signing = new KeyFileSigningConfiguration { KeyFile = garbage }
                 }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
 
             // Wrong passphrase on an encrypted key fails (crypto layer, any exception).
@@ -758,8 +757,7 @@ public static class AlpineApkTests
             Assert.ThrowsAny<Exception>(
                 () => new AlpineApkBundler(new AlpineApkBundleConfiguration
                 {
-                    SigningKeyFile = enc,
-                    SigningKeyPassphrase = "wrong"
+                    Signing = new KeyFileSigningConfiguration { KeyFile = enc, Passphrase = "wrong" }
                 }).BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult());
         }
         finally
@@ -776,7 +774,7 @@ public static class AlpineApkTests
         try
         {
             var keyPath = WriteKey(output, "testkey.rsa", TestPrivateKeyPem);
-            var settings = new AlpineApkBundleConfiguration { SigningKeyFile = keyPath };
+            var settings = new AlpineApkBundleConfiguration { Signing = new KeyFileSigningConfiguration { KeyFile = keyPath  }};
             var first = new AlpineApkBundler(settings)
                 .BuildAsync(ApkConfiguration(input, output)).GetAwaiter().GetResult().Single().Path;
             var second = new AlpineApkBundler(settings)

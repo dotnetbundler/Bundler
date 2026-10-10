@@ -97,7 +97,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             }
 
             // Layout/branding extras need headroom that -srcfolder auto-sizing doesn't leave.
-            if (!settings.SkipWindowLayout || settings.VolumeIconFile is not null)
+            if (settings.Layout is not null || settings.VolumeIconFile is not null)
             {
                 // Relative "+64m" is rejected on -srcfolder-sized images; grow via -limits math.
                 var limits = await MacDmgProcessRunner.TryRunAsync(
@@ -131,7 +131,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             {
                 "attach", readWriteImage, "-readwrite", "-noverify"
             };
-            if (settings.SkipWindowLayout)
+            if (settings.Layout is null)
             {
                 attachArgs.Add("-nobrowse");
             }
@@ -224,7 +224,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         IBundleLogger logger)
     {
         string? backgroundItemName = null;
-        if (!settings.SkipWindowLayout)
+        if (settings.Layout is not null)
         {
             // Window background goes into the hidden .background folder on the volume.
             if (settings.BackgroundFile is { Length: > 0 } backgroundFile)
@@ -250,12 +250,12 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             {
                 logger.Log(
                     BundleLogLevel.Warning,
-                    "BackgroundFile is ignored: SkipWindowLayout attaches the volume -nobrowse " +
+                    "BackgroundFile is ignored: layout is null attaches the volume -nobrowse " +
                     "and the Finder layout pass that references .background/ never runs.");
             }
             logger.Log(
                 BundleLogLevel.Information,
-                "Skipping the Finder window layout (SkipWindowLayout).");
+                "Skipping the Finder window layout (layout is null).");
         }
 
         // Volume icon: .VolumeIcon.icns + custom-icon flag on the volume root.
@@ -332,6 +332,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
     {
         // Finder names a volume mounted at a custom -mountpoint after the mount directory,
         // not the filesystem volume name, so resolve the disk through the mount point itself.
+        var layout = settings.Layout ?? new MacDmgLayoutConfiguration();
         var script = new System.Text.StringBuilder();
         script.AppendLine("tell application \"Finder\"");
         script.AppendLine(
@@ -342,11 +343,11 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         script.AppendLine("    set toolbar visible of container window to false");
         script.AppendLine("    set statusbar visible of container window to false");
         script.AppendLine(
-            $"    set the bounds of container window to {{{settings.WindowX}, {settings.WindowY}, " +
-            $"{settings.WindowX + settings.WindowWidth}, {settings.WindowY + settings.WindowHeight}}}");
+            $"    set the bounds of container window to {{{layout.WindowX}, {layout.WindowY}, " +
+            $"{layout.WindowX + layout.WindowWidth}, {layout.WindowY + layout.WindowHeight}}}");
         script.AppendLine("    set theViewOptions to the icon view options of container window");
         script.AppendLine("    set arrangement of theViewOptions to not arranged");
-        script.AppendLine($"    set icon size of theViewOptions to {settings.IconSize}");
+        script.AppendLine($"    set icon size of theViewOptions to {layout.IconSize}");
         if (backgroundItemName is not null)
         {
             script.AppendLine(
@@ -354,10 +355,10 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         }
         script.AppendLine(
             $"    set position of item \"{EscapeAppleScript(applicationName)}\" of container window to " +
-            $"{{{settings.AppIconX}, {settings.AppIconY}}}");
+            $"{{{layout.AppIconX}, {layout.AppIconY}}}");
         script.AppendLine(
             "    set position of item \"Applications\" of container window to " +
-            $"{{{settings.ApplicationsIconX}, {settings.ApplicationsIconY}}}");
+            $"{{{layout.ApplicationsIconX}, {layout.ApplicationsIconY}}}");
         script.AppendLine("    update without registering applications");
         script.AppendLine("    close");
         script.AppendLine("    open");
@@ -375,20 +376,20 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         {
             return;
         }
-        if (signing.Identity is not null && !string.IsNullOrEmpty(signing.TemporaryCertificatePath))
+        if (signing.Identity is not null && !string.IsNullOrEmpty(signing.TemporaryCertificateFile))
         {
             throw new ArgumentException(
-                "DMG SignIdentity and TemporaryCertificatePath are mutually exclusive.");
+                "DMG SignIdentity and TemporaryCertificateFile are mutually exclusive.");
         }
         if (signing.Identity is { Length: 0 })
         {
             throw new ArgumentException("DMG SignIdentity cannot be empty (use \"-\" for ad-hoc).");
         }
-        if (signing.TemporaryCertificatePath is { Length: > 0 } certificatePath &&
+        if (signing.TemporaryCertificateFile is { Length: > 0 } certificatePath &&
             !File.Exists(Path.GetFullPath(certificatePath)))
         {
             throw new FileNotFoundException(
-                "DMG TemporaryCertificatePath does not exist.", certificatePath);
+                "DMG TemporaryCertificateFile does not exist.", certificatePath);
         }
     }
 
@@ -400,7 +401,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
     {
         var signing = settings.Signing;
         if (signing is null ||
-            (signing.Identity is null && string.IsNullOrEmpty(signing.TemporaryCertificatePath)))
+            (signing.Identity is null && string.IsNullOrEmpty(signing.TemporaryCertificateFile)))
         {
             return;
         }
@@ -409,7 +410,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         string identity;
         try
         {
-            if (signing.TemporaryCertificatePath is { Length: > 0 } certificatePath)
+            if (signing.TemporaryCertificateFile is { Length: > 0 } certificatePath)
             {
                 keychain = await MacAppSigning.TemporaryKeychain.CreateAsync(
                     workDirectory, Path.GetFullPath(certificatePath),

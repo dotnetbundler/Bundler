@@ -8,10 +8,10 @@
          install-root 默认 /usr/lib/<包名>；bin-link 默认包名，"none" 关闭。 -->
     <BundlerDebPackageName Condition="'$(HelloBundlerDebPackageName)' != ''">$(HelloBundlerDebPackageName)</BundlerDebPackageName>
     <BundlerDebVersion Condition="'$(HelloBundlerDebVersion)' != ''">$(HelloBundlerDebVersion)</BundlerDebVersion>
-    <BundlerDebRevision Condition="'$(HelloBundlerDebRevision)' != ''">$(HelloBundlerDebRevision)</BundlerDebRevision>
+    <BundlerDebRelease Condition="'$(HelloBundlerDebRelease)' != ''">$(HelloBundlerDebRelease)</BundlerDebRelease>
     <BundlerDebEpoch Condition="'$(HelloBundlerDebEpoch)' != ''">$(HelloBundlerDebEpoch)</BundlerDebEpoch>
     <BundlerDebArchitecture Condition="'$(HelloBundlerDebArchitecture)' != ''">$(HelloBundlerDebArchitecture)</BundlerDebArchitecture>
-    <BundlerDebMaintainer Condition="'$(HelloBundlerDebMaintainer)' != ''">$(HelloBundlerDebMaintainer)</BundlerDebMaintainer>
+    <BundlerDebVendor Condition="'$(HelloBundlerDebVendor)' != ''">$(HelloBundlerDebVendor)</BundlerDebVendor>
     <BundlerDebInstallRoot Condition="'$(HelloBundlerDebInstallRoot)' != ''">$(HelloBundlerDebInstallRoot)</BundlerDebInstallRoot>
     <BundlerDebBinLink Condition="'$(HelloBundlerDebBinLink)' != ''">$(HelloBundlerDebBinLink)</BundlerDebBinLink>
 
@@ -39,17 +39,16 @@
 
     <!-- 维护者脚本（shebang+LF 必备，入 control 归档 0755）；
          SystemdServiceFile 托管 unit（postinst 自动合成 daemon-reload 尾段）；
-         Conffiles 显式登记（/etc 下 BundlerDebFile 自动登记）；Compression 仅 gzip。 -->
-    <BundlerDebPostinstFile>$(HelloBundlerAppAssets)deb\postinst.sh</BundlerDebPostinstFile>
-    <BundlerDebPostinstFile Condition="'$(HelloBundlerDebPostinstFile)' != ''">$(HelloBundlerDebPostinstFile)</BundlerDebPostinstFile>
-    <BundlerDebPrermFile>$(HelloBundlerAppAssets)deb\prerm.sh</BundlerDebPrermFile>
-    <BundlerDebPrermFile Condition="'$(HelloBundlerDebPrermFile)' != ''">$(HelloBundlerDebPrermFile)</BundlerDebPrermFile>
-    <BundlerDebPostrmFile>$(HelloBundlerAppAssets)deb\postrm.sh</BundlerDebPostrmFile>
-    <BundlerDebPostrmFile Condition="'$(HelloBundlerDebPostrmFile)' != ''">$(HelloBundlerDebPostrmFile)</BundlerDebPostrmFile>
-    <BundlerDebPreinstFile Condition="'$(HelloBundlerDebPreinstFile)' != ''">$(HelloBundlerDebPreinstFile)</BundlerDebPreinstFile>
+         ConfigFiles 显式登记（/etc 下 BundlerDebFile 自动登记）。 -->
+    <BundlerDebPostInstallFile>$(HelloBundlerAppAssets)deb\postinst.sh</BundlerDebPostInstallFile>
+    <BundlerDebPostInstallFile Condition="'$(HelloBundlerDebPostinstFile)' != ''">$(HelloBundlerDebPostinstFile)</BundlerDebPostInstallFile>
+    <BundlerDebPreUninstallFile>$(HelloBundlerAppAssets)deb\prerm.sh</BundlerDebPreUninstallFile>
+    <BundlerDebPreUninstallFile Condition="'$(HelloBundlerDebPrermFile)' != ''">$(HelloBundlerDebPrermFile)</BundlerDebPreUninstallFile>
+    <BundlerDebPostUninstallFile>$(HelloBundlerAppAssets)deb\postrm.sh</BundlerDebPostUninstallFile>
+    <BundlerDebPostUninstallFile Condition="'$(HelloBundlerDebPostrmFile)' != ''">$(HelloBundlerDebPostrmFile)</BundlerDebPostUninstallFile>
+    <BundlerDebPreInstallFile Condition="'$(HelloBundlerDebPreinstFile)' != ''">$(HelloBundlerDebPreinstFile)</BundlerDebPreInstallFile>
     <BundlerDebSystemdServiceFile Condition="'$(HelloBundlerDebSystemdServiceFile)' != ''">$(HelloBundlerDebSystemdServiceFile)</BundlerDebSystemdServiceFile>
-    <BundlerDebConffiles Condition="'$(HelloBundlerDebConffiles)' != ''">$(HelloBundlerDebConffiles)</BundlerDebConffiles>
-    <BundlerDebCompression Condition="'$(HelloBundlerDebCompression)' != ''">$(HelloBundlerDebCompression)</BundlerDebCompression>
+    <BundlerDebConfigFiles Condition="'$(HelloBundlerDebConfigFiles)' != ''">$(HelloBundlerDebConfigFiles)</BundlerDebConfigFiles>
   </PropertyGroup>
 
   <ItemGroup>

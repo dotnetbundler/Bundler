@@ -33,7 +33,7 @@ public static class MacPkgApiTests
         var artifacts = await new MacPkgBundler(
             pkgConfiguration: new MacPkgBundleConfiguration
             {
-                Identifier = "com.dotnetbundler.macpkgapifixture.pkg"
+                PackageName = "com.dotnetbundler.macpkgapifixture.pkg"
             }).BuildAsync(request, TestContext.Current.CancellationToken);
 
         var pkg = Assert.Single(artifacts, a => a.Format == PackageFormat.Pkg).Path;

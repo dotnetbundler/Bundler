@@ -45,7 +45,7 @@ internal class ShellLinkCoClass { }
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
 internal sealed record ShellShortcutInfo(
-    string TargetPath, string Arguments, string WorkingDirectory,
+    string Destination, string Arguments, string WorkingDirectory,
     string IconLocation, string? AppUserModelId);
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]

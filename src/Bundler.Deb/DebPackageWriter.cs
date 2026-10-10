@@ -54,18 +54,11 @@ internal static class DebPackageWriter
         {
             ValidateBinLinkName(binLink);
         }
-        var maintainer = settings.Maintainer ?? bundle.Publisher ?? bundle.Identifier;
+        var maintainer = settings.Vendor ?? bundle.Publisher ?? bundle.Identifier;
         if (string.IsNullOrWhiteSpace(maintainer) || maintainer.IndexOfAny(['\r', '\n']) >= 0)
         {
             throw new ArgumentException(
                 "The .deb maintainer must be a non-empty single line; set Publisher or Maintainer.");
-        }
-        if (settings.Compression is { Length: > 0 } compression &&
-            !string.Equals(compression.Trim(), "gzip", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ArgumentException(
-                $"'{compression}' is not a supported .deb compression; only 'gzip' is supported " +
-                "(the managed writer has no xz/zstd encoder; zstd also needs dpkg >= 1.21.18).");
         }
 
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, version, maintainer, settings, logger);
@@ -240,11 +233,11 @@ internal static class DebPackageWriter
 
         foreach (var resource in bundle.Resources)
         {
-            var target = resource.TargetPath.Replace('\\', '/').Trim('/');
+            var target = resource.Destination.Replace('\\', '/').Trim('/');
             if (target.Length == 0 || target.Split('/').Contains(".."))
             {
                 throw new ArgumentException(
-                    $"The resource target must stay inside the payload: '{resource.TargetPath}'.");
+                    $"The resource target must stay inside the payload: '{resource.Destination}'.");
             }
             var source = Path.GetFullPath(resource.Source);
             if (Directory.Exists(source))
@@ -303,7 +296,7 @@ internal static class DebPackageWriter
             {
                 DesktopFile = settings.DesktopFile,
                 MetainfoFile = settings.MetainfoFile,
-                Categories = settings.Categories,
+                Categories = settings.Categories is { Count: > 0 } categories ? string.Join(";", categories) : null,
                 Format = "deb"
             }))
         {
@@ -444,9 +437,9 @@ internal static class DebPackageWriter
         // Maintainer scripts land in the control archive with mode 0755. A
         // systemd unit auto-appends a daemon-reload epilogue to postinst.
         var daemonReload = settings.SystemdServiceFile is { Length: > 0 };
-        AddScript(entries, "preinst", settings.PreinstFile);
-        var postinst = settings.PostinstFile is { Length: > 0 }
-            ? ReadScript(settings.PostinstFile, "PostinstFile")
+        AddScript(entries, "preinst", settings.PreInstallFile);
+        var postinst = settings.PostInstallFile is { Length: > 0 }
+            ? ReadScript(settings.PostInstallFile, "PostInstallFile")
             : null;
         if (daemonReload)
         {
@@ -465,8 +458,8 @@ internal static class DebPackageWriter
                 Content = new UTF8Encoding(false).GetBytes(postinst)
             });
         }
-        AddScript(entries, "prerm", settings.PrermFile);
-        AddScript(entries, "postrm", settings.PostrmFile);
+        AddScript(entries, "prerm", settings.PreUninstallFile);
+        AddScript(entries, "postrm", settings.PostUninstallFile);
 
         return entries;
     }
@@ -506,7 +499,7 @@ internal static class DebPackageWriter
                 Add(destination, "DebFile(/etc)");
             }
         }
-        foreach (var path in settings.Conffiles ?? [])
+        foreach (var path in settings.ConfigFiles ?? [])
         {
             Add(path, "Conffiles");
         }

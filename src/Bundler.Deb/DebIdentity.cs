@@ -74,7 +74,7 @@ internal static class DebVersion
         }
 
         var upstream = MapUpstream(semver);
-        var revision = settings.Revision ?? "1";
+        var revision = settings.Release ?? "1";
         if (revision.Length > 0 && !ValidRevision.IsMatch(revision))
         {
             throw new ArgumentException(

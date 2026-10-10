@@ -36,7 +36,7 @@ public static class AppImageTests
             var result = AppDirBuilder.Build(
                 BundleWith(icon), PlanItem(input, work), new AppImageBundleConfiguration
                 {
-                    Categories = "Utility;Development",
+                    Categories = ["Utility", "Development"],
                     DesktopFile = desktop
                 }, work, NullBundleLogger.Instance);
             var dir = result.AppDirPath;
@@ -138,7 +138,7 @@ public static class AppImageTests
                 "missing icon file must be rejected");
             AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
                 BundleWith(null), PlanItem(input, work),
-                new AppImageBundleConfiguration { Categories = "Bad;Name!" }, work, NullBundleLogger.Instance),
+                new AppImageBundleConfiguration { Categories = ["Bad", "Name!"] }, work, NullBundleLogger.Instance),
                 "invalid categories must be rejected");
         }
         finally
@@ -190,14 +190,14 @@ public static class AppImageTests
             AssertThrows<InvalidOperationException>(() => AppDirBuilder.Build(
                 BundleWith(null, resources:
                 [
-                    new BundleResourceConfiguration { Source = extra, TargetPath = "ExampleApp.dll" }
+                    new BundleResourceConfiguration { Source = extra, Destination = "ExampleApp.dll" }
                 ]),
                 PlanItem(input, work), new AppImageBundleConfiguration(), work, NullBundleLogger.Instance),
                 "a file resource overwriting a payload file must be rejected");
             AssertThrows<InvalidOperationException>(() => AppDirBuilder.Build(
                 BundleWith(null, resources:
                 [
-                    new BundleResourceConfiguration { Source = resourceDir, TargetPath = "." }
+                    new BundleResourceConfiguration { Source = resourceDir, Destination = "." }
                 ]),
                 PlanItem(input, work), new AppImageBundleConfiguration(), work, NullBundleLogger.Instance),
                 "a directory resource colliding with a payload file must be rejected");
@@ -428,8 +428,7 @@ public static class AppImageTests
 
             var artifact = new AppImageBundler(new AppImageBundleConfiguration
             {
-                SigningKeyFile = keyFile,
-                SigningKeyPassphrase = "test-pass"
+                Signing = new KeyFileSigningConfiguration { KeyFile = keyFile, Passphrase = "test-pass" }
             }).BuildAsync(Configuration(input, output)).GetAwaiter().GetResult().Single();
 
             // The runtime ELF template always carries both signature sections;
@@ -467,11 +466,11 @@ public static class AppImageTests
         try
         {
             AssertThrows<ArgumentException>(() => new AppImageBundler(
-                new AppImageBundleConfiguration { SigningKeyPassphrase = "x" })
+                new AppImageBundleConfiguration { Signing = new KeyFileSigningConfiguration { Passphrase = "x"  }})
                 .BuildAsync(Configuration(input, output)).GetAwaiter().GetResult(),
                 "passphrase without a key file must be rejected");
             AssertThrows<ArgumentException>(() => new AppImageBundler(
-                new AppImageBundleConfiguration { SigningKeyFile = input + "/missing.asc" })
+                new AppImageBundleConfiguration { Signing = new KeyFileSigningConfiguration { KeyFile = input + "/missing.asc"  }})
                 .BuildAsync(Configuration(input, output)).GetAwaiter().GetResult(),
                 "a missing key file must be rejected");
         }

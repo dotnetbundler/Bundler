@@ -33,7 +33,27 @@ public sealed class UpdateBundleConfiguration
 public sealed class BundleResourceConfiguration
 {
     public string Source { get; init; } = "";
-    public string TargetPath { get; init; } = "";
+    public string Destination { get; init; } = "";
+}
+
+/// <summary>
+/// Secret-key-file signing shared by backends that sign with a single key file
+/// (rpm/AppImage/apk). Apple backends carry their own signing shapes.
+/// </summary>
+public sealed class KeyFileSigningConfiguration
+{
+    /// <summary>
+    /// Path to the secret key file read at build time; its bytes are never logged.
+    /// Unset produces an unsigned artifact identical to a build with no signing configured.
+    /// </summary>
+    public string? KeyFile { get; init; }
+
+    /// <summary>
+    /// Passphrase for <see cref="KeyFile"/>. Supplying one without a key file is a
+    /// configuration error. Prefer feeding the value from a secret store — it is a
+    /// secret, do not commit it.
+    /// </summary>
+    public string? Passphrase { get; init; }
 }
 
 public sealed class BundleFileAssociationConfiguration

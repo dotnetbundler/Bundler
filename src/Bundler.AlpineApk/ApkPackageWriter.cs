@@ -99,14 +99,14 @@ internal static class ApkPackageWriter
         // whose content is the raw PKCS1v15 RSA-SHA1 signature over the control
         // gzip stream. It precedes the control segment.
         byte[]? signatureGzip = null;
-        if (settings.SigningKeyFile is { Length: > 0 } keyFile)
+        if (settings.Signing.KeyFile is { Length: > 0 } keyFile)
         {
             if (!File.Exists(keyFile))
             {
                 throw new FileNotFoundException(
                     $"The .apk signing key does not exist: {keyFile}", keyFile);
             }
-            var signature = ApkSigner.Sign(controlGzip, keyFile, settings.SigningKeyPassphrase);
+            var signature = ApkSigner.Sign(controlGzip, keyFile, settings.Signing.Passphrase);
             var memberName = ".SIGN.RSA." + Path.GetFileName(keyFile) + ".rsa.pub";
             signatureGzip = Gzip(TarData(
             [
@@ -120,7 +120,7 @@ internal static class ApkPackageWriter
                 }
             ], omitEndOfArchive: true));
         }
-        else if (settings.SigningKeyPassphrase is { Length: > 0 })
+        else if (settings.Signing.Passphrase is { Length: > 0 })
         {
             throw new ArgumentException(
                 "SigningKeyPassphrase requires SigningKeyFile to point at a PEM RSA private key.");
@@ -278,12 +278,12 @@ internal static class ApkPackageWriter
     {
         (string? path, string name)[] scripts =
         [
-            (settings.PreInstallScript, ".pre-install"),
-            (settings.PostInstallScript, ".post-install"),
-            (settings.PreDeinstallScript, ".pre-deinstall"),
-            (settings.PostDeinstallScript, ".post-deinstall"),
-            (settings.PreUpgradeScript, ".pre-upgrade"),
-            (settings.PostUpgradeScript, ".post-upgrade")
+            (settings.PreInstallFile, ".pre-install"),
+            (settings.PostInstallFile, ".post-install"),
+            (settings.PreUninstallFile, ".pre-deinstall"),
+            (settings.PostUninstallFile, ".post-deinstall"),
+            (settings.PreUpgradeFile, ".pre-upgrade"),
+            (settings.PostUpgradeFile, ".post-upgrade")
         ];
         foreach (var (path, name) in scripts)
         {
@@ -397,11 +397,11 @@ internal static class ApkPackageWriter
 
         foreach (var resource in bundle.Resources)
         {
-            var target = resource.TargetPath.Replace('\\', '/').Trim('/');
+            var target = resource.Destination.Replace('\\', '/').Trim('/');
             if (target.Length == 0 || target.Split('/').Contains(".."))
             {
                 throw new ArgumentException(
-                    $"The resource target must stay inside the payload: '{resource.TargetPath}'.");
+                    $"The resource target must stay inside the payload: '{resource.Destination}'.");
             }
             var source = Path.GetFullPath(resource.Source);
             if (Directory.Exists(source))

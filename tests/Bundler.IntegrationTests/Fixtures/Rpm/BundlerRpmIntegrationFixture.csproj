@@ -23,7 +23,7 @@
     <BundlerRpmVendor Condition="'$(BundlerTestRpmVendor)' != ''">$(BundlerTestRpmVendor)</BundlerRpmVendor>
     <BundlerRpmInstallRoot Condition="'$(BundlerTestRpmInstallRoot)' != ''">$(BundlerTestRpmInstallRoot)</BundlerRpmInstallRoot>
     <BundlerRpmBinLink Condition="'$(BundlerTestRpmBinLink)' != ''">$(BundlerTestRpmBinLink)</BundlerRpmBinLink>
-    <BundlerRpmRequires Condition="'$(BundlerTestRpmRequires)' != ''">$(BundlerTestRpmRequires)</BundlerRpmRequires>
+    <BundlerRpmDepends Condition="'$(BundlerTestRpmDepends)' != ''">$(BundlerTestRpmDepends)</BundlerRpmDepends>
     <BundlerRpmProvides Condition="'$(BundlerTestRpmProvides)' != ''">$(BundlerTestRpmProvides)</BundlerRpmProvides>
     <BundlerRpmConflicts Condition="'$(BundlerTestRpmConflicts)' != ''">$(BundlerTestRpmConflicts)</BundlerRpmConflicts>
     <BundlerRpmObsoletes Condition="'$(BundlerTestRpmObsoletes)' != ''">$(BundlerTestRpmObsoletes)</BundlerRpmObsoletes>
@@ -47,11 +47,10 @@
     <BundlerRpmPreInstallProgram Condition="'$(BundlerTestRpmProg)' != ''">$(BundlerTestRpmProg)</BundlerRpmPreInstallProgram>
     <BundlerRpmSystemdServiceFile Condition="'$(BundlerTestRpmSystemd)' == '1'">$(MSBuildThisFileDirectory)Assets/fixture.service</BundlerRpmSystemdServiceFile>
     <BundlerRpmConfigFiles Condition="'$(BundlerTestRpmConfigFiles)' != ''">$(BundlerTestRpmConfigFiles)</BundlerRpmConfigFiles>
-    <BundlerRpmCompression Condition="'$(BundlerTestRpmCompression)' != ''">$(BundlerTestRpmCompression)</BundlerRpmCompression>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <BundlerResource Include="Assets/readme.txt" Destination="docs/readme.txt" />
     <BundlerIcon Include="Assets/icon48.png" />
     <BundlerIcon Include="Assets/icon@2x.png" />
     <BundlerFileAssociation Include=".bdlfixture" Name="Bundler fixture document"

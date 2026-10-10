@@ -49,7 +49,7 @@
   实测报 `Package header is not signed` 后按 rpm.org 规范补 RSA。
 - 旋钮：`RpmBundleConfiguration.SigningKeyFile`/`SigningKeyPassphrase`；
   MSBuild `BundlerRpmSigningKeyFile`/`BundlerRpmSigningKeyPassphrase`；
-  CLI `bundler.json` 的 `rpm.signingKeyFile`/`signingKeyPassphrase` 与
+  CLI `bundler.json` 的 `rpm.signing.keyFile`/`signing.passphrase` 与
   `--rpm.*=` 透传自动到面。
 - 半配置拒绝：只给口令或无密钥文件 → `ArgumentException`；口令错误 →
   `InvalidOperationException`；无密钥时产物与未配置构建逐字节一致。
@@ -82,7 +82,7 @@
   `Good signature`。
 - 旋钮：`AppImageBundleConfiguration.SigningKeyFile`/`SigningKeyPassphrase`；
   MSBuild `BundlerAppImageSigningKeyFile`/`BundlerAppImageSigningKeyPassphrase`；
-  CLI `appimage.signingKeyFile`/`signingKeyPassphrase` + `--appimage.*=` 自动透传。
+  CLI `appimage.signing.keyFile`/`signing.passphrase` + `--appimage.*=` 自动透传。
 - 半配置拒绝：只给口令/密钥文件不存在 → `ArgumentException`。
 - 测试：`Bundler.Tests` 203/203（新增 `.sha256_sig` ELF 段非零断言 +
   未签构建全零回归 + 半配置拒绝；ELF 段解析器自实现）。

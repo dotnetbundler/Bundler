@@ -13,7 +13,7 @@
     <HelloBundlerMacAppEntitlementsFile Condition="'$(HelloBundlerMacAppEntitlementsFile)' == ''">$(HelloBundlerAppAssets)mac\entitlements.plist</HelloBundlerMacAppEntitlementsFile>
     <HelloBundlerMacAppNotarize Condition="'$(HelloBundlerMacAppNotarize)' == ''">false</HelloBundlerMacAppNotarize>
 
-    <BundlerMacAppBundleName Condition="'$(HelloBundlerMacAppBundleName)' != ''">$(HelloBundlerMacAppBundleName)</BundlerMacAppBundleName>
+    <BundlerMacAppPackageName Condition="'$(HelloBundlerMacAppPackageName)' != ''">$(HelloBundlerMacAppPackageName)</BundlerMacAppPackageName>
     <BundlerMacAppDisplayName>Hello Bundler App</BundlerMacAppDisplayName>
     <BundlerMacAppBuildVersion>1</BundlerMacAppBuildVersion>
     <BundlerMacAppShortVersion Condition="'$(BundlerMacAppShortVersion)' == ''">$(BundlerVersion)</BundlerMacAppShortVersion>
@@ -28,8 +28,8 @@
 
     <!-- .app 签名/加固运行时/entitlements（identity 空即仅 ad-hoc）。 -->
     <BundlerMacAppSignIdentity Condition="'$(HelloBundlerMacAppSignIdentity)' != ''">$(HelloBundlerMacAppSignIdentity)</BundlerMacAppSignIdentity>
-    <BundlerMacAppSigningCertificatePath Condition="'$(HelloBundlerMacAppSigningCertificatePath)' != ''">$(HelloBundlerMacAppSigningCertificatePath)</BundlerMacAppSigningCertificatePath>
-    <BundlerMacAppSigningCertificatePassword Condition="'$(HelloBundlerMacAppSigningCertificatePassword)' != ''">$(HelloBundlerMacAppSigningCertificatePassword)</BundlerMacAppSigningCertificatePassword>
+    <BundlerMacAppTemporaryCertificateFile Condition="'$(HelloBundlerMacAppSigningCertificatePath)' != ''">$(HelloBundlerMacAppSigningCertificatePath)</BundlerMacAppTemporaryCertificateFile>
+    <BundlerMacAppTemporaryCertificatePassword Condition="'$(HelloBundlerMacAppSigningCertificatePassword)' != ''">$(HelloBundlerMacAppSigningCertificatePassword)</BundlerMacAppTemporaryCertificatePassword>
     <BundlerMacAppHardenedRuntime Condition="'$(HelloBundlerMacAppSignIdentity)' != ''">$(HelloBundlerMacAppHardenedRuntime)</BundlerMacAppHardenedRuntime>
     <BundlerMacAppEntitlementsFile Condition="'$(HelloBundlerMacAppSignIdentity)' != ''">$(HelloBundlerMacAppEntitlementsFile)</BundlerMacAppEntitlementsFile>
 
@@ -41,7 +41,7 @@
     <BundlerMacAppAppleId Condition="'$(HelloBundlerMacAppAppleId)' != ''">$(HelloBundlerMacAppAppleId)</BundlerMacAppAppleId>
     <BundlerMacAppApplePassword Condition="'$(HelloBundlerMacAppApplePassword)' != ''">$(HelloBundlerMacAppApplePassword)</BundlerMacAppApplePassword>
     <BundlerMacAppAppleTeamId Condition="'$(HelloBundlerMacAppAppleTeamId)' != ''">$(HelloBundlerMacAppAppleTeamId)</BundlerMacAppAppleTeamId>
-    <BundlerMacAppNotaryApiKeyPath Condition="'$(HelloBundlerMacAppNotaryApiKeyPath)' != ''">$(HelloBundlerMacAppNotaryApiKeyPath)</BundlerMacAppNotaryApiKeyPath>
+    <BundlerMacAppApiKeyFile Condition="'$(HelloBundlerMacAppNotaryApiKeyPath)' != ''">$(HelloBundlerMacAppNotaryApiKeyPath)</BundlerMacAppApiKeyFile>
     <BundlerMacAppNotaryApiKeyId Condition="'$(HelloBundlerMacAppNotaryApiKeyId)' != ''">$(HelloBundlerMacAppNotaryApiKeyId)</BundlerMacAppNotaryApiKeyId>
     <BundlerMacAppNotaryApiIssuer Condition="'$(HelloBundlerMacAppNotaryApiIssuer)' != ''">$(HelloBundlerMacAppNotaryApiIssuer)</BundlerMacAppNotaryApiIssuer>
   </PropertyGroup>
@@ -52,9 +52,9 @@
     <BundlerIcon Include="$(HelloBundlerAppAssets)mac\icon-512.png" Condition="'$(HelloBundlerMacAppIconMode)' == 'png' and $(RuntimeIdentifier.Contains('osx'))" />
     <BundlerIcon Include="$(HelloBundlerAppAssets)mac\hello.car" Condition="'$(HelloBundlerMacAppIconMode)' == 'car' and $(RuntimeIdentifier.Contains('osx'))" />
     <BundlerIcon Include="$(HelloBundlerMacAppIconSource)" Condition="'$(HelloBundlerMacAppIconMode)' == 'icon' and '$(HelloBundlerMacAppIconSource)' != '' and $(RuntimeIdentifier.Contains('osx'))" />
-    <BundlerMacFramework Include="$(HelloBundlerAppAssets)mac\libhello.dylib" />
+    <BundlerMacAppFrameworkDirectory Include="$(HelloBundlerAppAssets)mac\libhello.dylib" />
     <BundlerMacDocumentType Include="hellomac" Role="Editor" Rank="Owner" ExportedTypeIdentifier="com.example.hellobundlerapp.hellomac" ExportedTypeConformsTo="public.data" />
     <BundlerMacUrlType Include="hellomac" Role="Viewer" />
-    <BundlerMacContent Include="$(HelloBundlerAppAssets)mac\shared-note.txt" TargetPath="SharedSupport/shared-note.txt" />
+    <BundlerMacAppFile Include="$(HelloBundlerAppAssets)mac\shared-note.txt" Destination="SharedSupport/shared-note.txt" />
   </ItemGroup>
 </Project>

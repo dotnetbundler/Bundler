@@ -92,21 +92,21 @@ public sealed class MacPkgFixture : IDisposable
         Assert.True(File.Exists(Pkg), "The .pkg artifact is missing.");
 
         OverridePkg = PublishPkg("bundle-override",
-            "-p:BundlerTestPkgIdentifier=com.example.custom.pkg",
+            "-p:BundlerTestPkgPackageName=com.example.custom.pkg",
             "-p:BundlerTestPkgVersion=9.9.9",
-            "-p:BundlerTestPkgInstallLocation=/opt/bundler-test");
+            "-p:BundlerTestPkgInstallRoot=/opt/bundler-test");
         DistPkg = PublishPkg("bundle-dist",
             "-p:BundlerTestPkgTitle=Fixture Installer",
             "-p:BundlerTestPkgWelcome=true",
             "-p:BundlerTestPkgConclusion=true",
             "-p:BundlerTestPkgLicense=true",
-            "-p:BundlerTestPkgDomain=CurrentUserHome");
+            "-p:BundlerTestPkgInstallScope=CurrentUserHome");
         ScriptsPkg = PublishPkg("bundle-scripts",
             "-p:BundlerTestPkgScripts=true",
-            "-p:BundlerTestPkgDomain=CurrentUserHome");
+            "-p:BundlerTestPkgInstallScope=CurrentUserHome");
         V2Pkg = PublishPkg("bundle-v2",
             "-p:BundlerTestPkgVersion=2.0.0",
-            "-p:BundlerTestPkgDomain=CurrentUserHome");
+            "-p:BundlerTestPkgInstallScope=CurrentUserHome");
         X64Pkg = PublishPkgForRid("bundle-x64", "osx-x64");
         return true;
     }
@@ -239,7 +239,7 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
         var payloadApp = Path.Combine(payload, "Bundler Mac PKG Fixture.app");
         Assert.True(Directory.Exists(payloadApp), "The payload lacks the .app at its root.");
         Assert.True(File.Exists(Path.Combine(payload, "support", "helper.txt")),
-            "The payload lacks the explicit BundlerPkgPayload item at support/helper.txt.");
+            "The payload lacks the explicit BundlerMacPkgFile item at support/helper.txt.");
         ProcessRunner.AssertSuccess(
             ProcessRunner.Run("plutil",
                 ["-lint", Path.Combine(payloadApp, "Contents/Info.plist")]),
@@ -505,7 +505,7 @@ public sealed class MacPkgIntegrationTests : IClassFixture<MacPkgFixture>
         var result = Dotnet.Run(
             ["publish", _f.FixtureProject, "-c", "Release",
              $"-p:BundlerIntegrationOutput={badDir}",
-             "-p:BundlerTestPkgInstallLocation=relative/path",
+             "-p:BundlerTestPkgInstallRoot=relative/path",
              "--packages", _f.CacheDir],
             new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) });
         Assert.NotEqual(0, result.ExitCode);

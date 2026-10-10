@@ -302,7 +302,7 @@ internal sealed class NsisBundleBackend(
             ["identifier"] = Escape(configuration.Identifier),
             ["main_executable"] = Escape(item.MainExecutable),
             ["install_folder"] = Escape(safeProductName),
-            ["install_mode"] = InstallModeName(settings.InstallMode),
+            ["install_mode"] = InstallModeName(settings.InstallScope),
             ["compression_directive"] = CompressionDirective(settings.Compression),
             ["target_architecture"] = TargetArchitectureName(item.Target.Architecture),
             ["allow_downgrades"] = settings.AllowDowngrades ? "true" : "false",
@@ -319,7 +319,7 @@ internal sealed class NsisBundleBackend(
             ["homepage_registry"] = CreateHomepageRegistry(configuration.Homepage),
             ["association_install_commands"] = CreateAssociationInstallCommands(configuration),
             ["association_uninstall_commands"] = CreateAssociationUninstallCommands(configuration, item.MainExecutable),
-            ["installer_hooks_include"] = CreateInstallerHooksInclude(settings.InstallerHooks),
+            ["installer_hooks_include"] = CreateInstallerHooksInclude(settings.InstallerHooksFile),
             ["shortcut_desktop_default"] = shortcuts.DesktopDefault ? "1" : "0",
             ["shortcut_start_menu_default"] = shortcuts.StartMenuDefault ? "1" : "0",
             ["shortcut_arguments"] = Escape(shortcuts.Arguments),
@@ -379,34 +379,34 @@ internal sealed class NsisBundleBackend(
             throw new InvalidOperationException("Windows NSIS packaging requires at least one .ico file when icons are configured.");
         }
 
-        var installerIcon = settings.InstallerIcon ?? fallbackIcon;
-        var uninstallerIcon = settings.UninstallerIcon ?? installerIcon;
+        var installerIconFile = settings.InstallerIconFile ?? fallbackIcon;
+        var uninstallerIconFile = settings.UninstallerIconFile ?? installerIconFile;
         var lines = new List<string>();
-        if (installerIcon is not null)
+        if (installerIconFile is not null)
         {
-            var escaped = Escape(Path.GetFullPath(installerIcon));
+            var escaped = Escape(Path.GetFullPath(installerIconFile));
             lines.Add($"!define MUI_ICON \"{escaped}\"");
             lines.Add($"Icon \"{escaped}\"");
         }
-        if (uninstallerIcon is not null)
+        if (uninstallerIconFile is not null)
         {
-            lines.Add($"!define MUI_UNICON \"{Escape(Path.GetFullPath(uninstallerIcon))}\"");
+            lines.Add($"!define MUI_UNICON \"{Escape(Path.GetFullPath(uninstallerIconFile))}\"");
         }
-        if (settings.SidebarImage is not null)
+        if (settings.SidebarFile is not null)
         {
-            var path = Escape(Path.GetFullPath(settings.SidebarImage));
+            var path = Escape(Path.GetFullPath(settings.SidebarFile));
             lines.Add($"!define MUI_WELCOMEFINISHPAGE_BITMAP \"{path}\"");
             lines.Add($"!define MUI_UNWELCOMEFINISHPAGE_BITMAP \"{path}\"");
         }
-        if (settings.HeaderImage is not null || settings.UninstallerHeaderImage is not null)
+        if (settings.HeaderFile is not null || settings.UninstallerHeaderFile is not null)
         {
             lines.Add("!define MUI_HEADERIMAGE");
         }
-        if (settings.HeaderImage is not null)
+        if (settings.HeaderFile is not null)
         {
-            lines.Add($"!define MUI_HEADERIMAGE_BITMAP \"{Escape(Path.GetFullPath(settings.HeaderImage))}\"");
+            lines.Add($"!define MUI_HEADERIMAGE_BITMAP \"{Escape(Path.GetFullPath(settings.HeaderFile))}\"");
         }
-        var uninstallerHeader = settings.UninstallerHeaderImage ?? settings.HeaderImage;
+        var uninstallerHeader = settings.UninstallerHeaderFile ?? settings.HeaderFile;
         if (uninstallerHeader is not null)
         {
             lines.Add($"!define MUI_HEADERIMAGE_UNBITMAP \"{Escape(Path.GetFullPath(uninstallerHeader))}\"");
@@ -631,11 +631,11 @@ internal sealed class NsisBundleBackend(
             fileCount);
     }
 
-    private static string InstallModeName(NsisInstallMode mode) => mode switch
+    private static string InstallModeName(NsisInstallScope mode) => mode switch
     {
-        NsisInstallMode.CurrentUser => "currentUser",
-        NsisInstallMode.PerMachine => "perMachine",
-        NsisInstallMode.Both => "both",
+        NsisInstallScope.CurrentUser => "currentUser",
+        NsisInstallScope.PerMachine => "perMachine",
+        NsisInstallScope.Both => "both",
         _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown NSIS install mode.")
     };
 
@@ -764,7 +764,7 @@ internal sealed class NsisBundleBackend(
     {
         var hostPath = relativePath.Replace('\\', Path.DirectorySeparatorChar);
         if (File.Exists(Path.Combine(inputDirectory, hostPath)) ||
-            resources.Any(resource => resource.TargetPath.Equals(relativePath, StringComparison.OrdinalIgnoreCase)))
+            resources.Any(resource => resource.Destination.Equals(relativePath, StringComparison.OrdinalIgnoreCase)))
         {
             return;
         }
@@ -778,7 +778,7 @@ internal sealed class NsisBundleBackend(
     {
         var hostPath = relativePath.Replace('\\', Path.DirectorySeparatorChar);
         if (Directory.Exists(Path.Combine(inputDirectory, hostPath)) ||
-            resources.Any(resource => resource.TargetPath.StartsWith(relativePath + "\\", StringComparison.OrdinalIgnoreCase)))
+            resources.Any(resource => resource.Destination.StartsWith(relativePath + "\\", StringComparison.OrdinalIgnoreCase)))
         {
             return;
         }
@@ -809,7 +809,7 @@ internal sealed class NsisBundleBackend(
         foreach (var configured in configuredResources)
         {
             var source = Path.GetFullPath(configured.Source);
-            var target = NormalizeTargetPath(configured.TargetPath);
+            var target = NormalizeTargetPath(configured.Destination);
             if (File.Exists(source))
             {
                 RejectReparsePoint(source, "Bundle resource");
@@ -872,14 +872,14 @@ internal sealed class NsisBundleBackend(
     private static string CreateResourceInstallCommands(IReadOnlyList<PayloadResource> resources)
     {
         var lines = new List<string>();
-        foreach (var resource in resources.OrderBy(resource => resource.TargetPath, StringComparer.OrdinalIgnoreCase))
+        foreach (var resource in resources.OrderBy(resource => resource.Destination, StringComparer.OrdinalIgnoreCase))
         {
-            var targetDirectory = InstallerDirectoryName(resource.TargetPath);
+            var targetDirectory = InstallerDirectoryName(resource.Destination);
             var destination = string.IsNullOrEmpty(targetDirectory)
                 ? "$INSTDIR"
                 : "$INSTDIR\\" + Escape(targetDirectory!);
             lines.Add($"  SetOutPath \"{destination}\"");
-            lines.Add($"  File \"/oname={Escape(InstallerFileName(resource.TargetPath))}\" \"{Escape(resource.Source)}\"");
+            lines.Add($"  File \"/oname={Escape(InstallerFileName(resource.Destination))}\" \"{Escape(resource.Source)}\"");
         }
 
         if (resources.Count > 0)
@@ -994,7 +994,7 @@ internal sealed class NsisBundleBackend(
 
         foreach (var resource in resources)
         {
-            lines.Add($"  Delete /REBOOTOK \"$INSTDIR\\{Escape(resource.TargetPath)}\"");
+            lines.Add($"  Delete /REBOOTOK \"$INSTDIR\\{Escape(resource.Destination)}\"");
         }
 
         var directories = new HashSet<string>(
@@ -1003,7 +1003,7 @@ internal sealed class NsisBundleBackend(
             StringComparer.OrdinalIgnoreCase);
         foreach (var resource in resources)
         {
-            var directory = InstallerDirectoryName(resource.TargetPath);
+            var directory = InstallerDirectoryName(resource.Destination);
             while (!string.IsNullOrEmpty(directory))
             {
                 directories.Add(directory!);
@@ -1171,7 +1171,7 @@ internal sealed class NsisBundleBackend(
         string LegacyCleanupCommands,
         IReadOnlyList<string> LegacyPaths);
 
-    private sealed record PayloadResource(string Source, string TargetPath);
+    private sealed record PayloadResource(string Source, string Destination);
 
     private sealed record DirectoryTree(
         string Root,

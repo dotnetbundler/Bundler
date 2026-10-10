@@ -96,7 +96,7 @@ public static class MacAppTests
         {
             var artifacts = await new MacAppBundler(new MacAppBundleConfiguration
             {
-                BundleName = "ShortName",
+                PackageName = "ShortName",
                 BundleDisplayName = "Long Display Name",
                 ShortVersion = "2.0",
                 BuildVersion = "2026.9.1",
@@ -217,14 +217,14 @@ public static class MacAppTests
 
             var artifacts = await new MacAppBundler(new MacAppBundleConfiguration
             {
-                Contents =
+                Files =
                 [
-                    new MacAppContentConfiguration { Source = content, TargetPath = "PlugIns/plugin.bundle" }
+                    new MacAppFileEntry { Source = content, Destination = "PlugIns/plugin.bundle" }
                 ],
-                Frameworks = [framework, dylib]
+                FrameworkDirectories = [framework, dylib]
             }).BuildAsync(MacConfiguration(
                 input, output,
-                resources: [new BundleResourceConfiguration { Source = resource, TargetPath = "docs/readme.txt" }]));
+                resources: [new BundleResourceConfiguration { Source = resource, Destination = "docs/readme.txt" }]));
 
             var root = Path.Combine(artifacts[0].Path, "Contents");
             Assert.True(File.Exists(Path.Combine(root, "MacOS", "nested", "helper.txt")),
@@ -257,7 +257,7 @@ public static class MacAppTests
                 await AssertThrows<ArgumentException>(
                     () => new MacAppBundler(new MacAppBundleConfiguration
                     {
-                        Contents = [new MacAppContentConfiguration { Source = file, TargetPath = target }]
+                        Files = [new MacAppFileEntry { Source = file, Destination = target }]
                     }).BuildAsync(MacConfiguration(input)),
                     $"Contents target '{target}' must be rejected.");
             }
@@ -282,8 +282,8 @@ public static class MacAppTests
                     input, output,
                     resources:
                     [
-                        new BundleResourceConfiguration { Source = file, TargetPath = "shared.txt" },
-                        new BundleResourceConfiguration { Source = file, TargetPath = "shared.txt" }
+                        new BundleResourceConfiguration { Source = file, Destination = "shared.txt" },
+                        new BundleResourceConfiguration { Source = file, Destination = "shared.txt" }
                     ])),
                 "Two payload entries mapping to the same bundle path must be rejected.");
         }
@@ -936,7 +936,7 @@ public static class MacAppTests
                 {
                     Signing = new MacAppSigningConfiguration
                     {
-                        Identity = "Dev ID", TemporaryCertificatePath = certificate
+                        Identity = "Dev ID", TemporaryCertificateFile = certificate
                     }
                 }).BuildAsync(MacConfiguration(input)),
                 "Identity and a temporary certificate are mutually exclusive.");
@@ -945,7 +945,7 @@ public static class MacAppTests
                 {
                     Signing = new MacAppSigningConfiguration
                     {
-                        TemporaryCertificatePath = Path.Combine(temp, "missing.p12")
+                        TemporaryCertificateFile = Path.Combine(temp, "missing.p12")
                     }
                 }).BuildAsync(MacConfiguration(input)),
                 "A missing temporary certificate must be rejected before any tool runs.");
@@ -1079,7 +1079,7 @@ public static class MacAppTests
         Assert.Equal("--keychain-profile my-profile", string.Join(' ', profile));
         var apiKey = MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration
         {
-            ApiKeyPath = "/keys/AuthKey_ABC.p8", ApiKeyId = "ABC", ApiIssuer = "ISSUER"
+            ApiKeyFile = "/keys/AuthKey_ABC.p8", ApiKeyId = "ABC", ApiIssuer = "ISSUER"
         });
         Assert.Equal("--key /keys/AuthKey_ABC.p8 --key-id ABC --issuer ISSUER", string.Join(' ', apiKey));
         var appleId = MacAppSigning.ResolveCredentials(new MacAppSigningConfiguration
@@ -1194,7 +1194,7 @@ public static class MacAppTests
                 {
                     Signing = new MacAppSigningConfiguration
                     {
-                        TemporaryCertificatePath = certificate,
+                        TemporaryCertificateFile = certificate,
                         TemporaryCertificatePassword = "pw"
                     }
                 }).BuildAsync(MacConfiguration(input, output)),
@@ -1280,21 +1280,21 @@ public static class MacAppTests
         var task = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
         foreach (var property in new[]
                  {
-                     "MacAppBundleName", "MacAppDisplayName", "MacAppShortVersion", "MacAppBuildVersion",
+                     "MacAppPackageName", "MacAppDisplayName", "MacAppShortVersion", "MacAppBuildVersion",
                      "MacAppMinimumSystemVersion", "MacAppCategory", "MacAppIconName",
                      "MacAppExceptionDomain", "MacAppInfoPlistFile", "MacAppInfoPlistXml"
                  })
         {
             Assert.Contains(property + "=\"$(Bundler" + property + ")\"", targets);
         }
-        Assert.True(targets.Contains("MacContents=\"@(BundlerMacContent)\"", StringComparison.Ordinal) &&
-               targets.Contains("MacFrameworks=\"@(BundlerMacFramework)\"", StringComparison.Ordinal) &&
+        Assert.True(targets.Contains("MacAppFiles=\"@(BundlerMacAppFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("MacAppFrameworkDirectories=\"@(BundlerMacAppFrameworkDirectory)\"", StringComparison.Ordinal) &&
                targets.Contains("MacDocumentTypes=\"@(BundlerMacDocumentType)\"", StringComparison.Ordinal) &&
                targets.Contains("MacUrlTypes=\"@(BundlerMacUrlType)\"", StringComparison.Ordinal),
             "MSBuild does not map the BundlerMac* item groups.");
         Assert.Contains("StartsWith('osx-')", targets);
         Assert.True(task.Contains("new MacAppBundler(", StringComparison.Ordinal) &&
-               task.Contains("MacAppContentConfiguration", StringComparison.Ordinal),
+               task.Contains("MacAppFileEntry", StringComparison.Ordinal),
             "The MSBuild task does not construct the .app backend.");
     }
 
@@ -1811,7 +1811,7 @@ public static class MacAppTests
                 {
                     Signing = new MacAppSigningConfiguration
                     {
-                        TemporaryCertificatePath = certificate,
+                        TemporaryCertificateFile = certificate,
                         TemporaryCertificatePassword = "s3cret-pw"
                     }
                 }).BuildAsync(MacConfiguration(input, output));
@@ -1828,7 +1828,7 @@ public static class MacAppTests
                     {
                         Signing = new MacAppSigningConfiguration
                         {
-                            TemporaryCertificatePath = certificate,
+                            TemporaryCertificateFile = certificate,
                             TemporaryCertificatePassword = "s3cret-pw"
                         }
                     }).BuildAsync(MacConfiguration(input, Path.Combine(output, "fallback"))),

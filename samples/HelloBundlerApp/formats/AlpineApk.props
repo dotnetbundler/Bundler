@@ -25,14 +25,14 @@
     <BundlerAlpineApkBinLink Condition="'$(HelloBundlerApkBinLink)' != ''">$(HelloBundlerApkBinLink)</BundlerAlpineApkBinLink>
 
     <!-- 六段安装脚本（非空 + LF 必备，入控制段 0755）。 -->
-    <BundlerAlpineApkPostInstallScript>$(HelloBundlerAppAssets)apk\post-install.sh</BundlerAlpineApkPostInstallScript>
-    <BundlerAlpineApkPostInstallScript Condition="'$(HelloBundlerApkPostInstallScript)' != ''">$(HelloBundlerApkPostInstallScript)</BundlerAlpineApkPostInstallScript>
-    <BundlerAlpineApkPreDeinstallScript>$(HelloBundlerAppAssets)apk\pre-deinstall.sh</BundlerAlpineApkPreDeinstallScript>
-    <BundlerAlpineApkPreDeinstallScript Condition="'$(HelloBundlerApkPreDeinstallScript)' != ''">$(HelloBundlerApkPreDeinstallScript)</BundlerAlpineApkPreDeinstallScript>
-    <BundlerAlpineApkPreInstallScript Condition="'$(HelloBundlerApkPreInstallScript)' != ''">$(HelloBundlerApkPreInstallScript)</BundlerAlpineApkPreInstallScript>
-    <BundlerAlpineApkPostDeinstallScript Condition="'$(HelloBundlerApkPostDeinstallScript)' != ''">$(HelloBundlerApkPostDeinstallScript)</BundlerAlpineApkPostDeinstallScript>
-    <BundlerAlpineApkPreUpgradeScript Condition="'$(HelloBundlerApkPreUpgradeScript)' != ''">$(HelloBundlerApkPreUpgradeScript)</BundlerAlpineApkPreUpgradeScript>
-    <BundlerAlpineApkPostUpgradeScript Condition="'$(HelloBundlerApkPostUpgradeScript)' != ''">$(HelloBundlerApkPostUpgradeScript)</BundlerAlpineApkPostUpgradeScript>
+    <BundlerAlpineApkPostInstallFile>$(HelloBundlerAppAssets)apk\post-install.sh</BundlerAlpineApkPostInstallFile>
+    <BundlerAlpineApkPostInstallFile Condition="'$(HelloBundlerApkPostInstallFile)' != ''">$(HelloBundlerApkPostInstallFile)</BundlerAlpineApkPostInstallFile>
+    <BundlerAlpineApkPreUninstallFile>$(HelloBundlerAppAssets)apk\pre-deinstall.sh</BundlerAlpineApkPreUninstallFile>
+    <BundlerAlpineApkPreUninstallFile Condition="'$(HelloBundlerApkPreUninstallFile)' != ''">$(HelloBundlerApkPreUninstallFile)</BundlerAlpineApkPreUninstallFile>
+    <BundlerAlpineApkPreInstallFile Condition="'$(HelloBundlerApkPreInstallFile)' != ''">$(HelloBundlerApkPreInstallFile)</BundlerAlpineApkPreInstallFile>
+    <BundlerAlpineApkPostUninstallFile Condition="'$(HelloBundlerApkPostUninstallFile)' != ''">$(HelloBundlerApkPostUninstallFile)</BundlerAlpineApkPostUninstallFile>
+    <BundlerAlpineApkPreUpgradeFile Condition="'$(HelloBundlerApkPreUpgradeFile)' != ''">$(HelloBundlerApkPreUpgradeFile)</BundlerAlpineApkPreUpgradeFile>
+    <BundlerAlpineApkPostUpgradeFile Condition="'$(HelloBundlerApkPostUpgradeFile)' != ''">$(HelloBundlerApkPostUpgradeFile)</BundlerAlpineApkPostUpgradeFile>
 
     <!-- 可选 RSA 签名：供 PEM 私钥即前置 .SIGN.RSA 签名段；
          公钥按 <私钥文件名>.rsa.pub 落目标机 /etc/apk/keys/ 即视为已信任；

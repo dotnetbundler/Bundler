@@ -78,7 +78,7 @@ public sealed class MacAppBundler : IFormatBundler
         {
             throw new FileNotFoundException("The caller Info.plist does not exist.", plistFile);
         }
-        foreach (var framework in configuration.Frameworks)
+        foreach (var framework in configuration.FrameworkDirectories)
         {
             var name = Path.GetFileName(framework);
             if (!name.EndsWith(".framework", StringComparison.OrdinalIgnoreCase) &&

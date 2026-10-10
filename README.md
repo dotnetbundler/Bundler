@@ -228,14 +228,14 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerOutputPath` | 否 | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerToolCachePath` | 否 | `%LOCALAPPDATA%\DotNetBundler\tools` |
 | `BundlerNsisTemplate` | 否 | 包内自带模板 |
-| `BundlerNsisInstallMode` | 否 | `currentUser`；也支持 `perMachine` 和 `both` |
+| `BundlerNsisInstallScope` | 否 | `currentUser`；也支持 `perMachine` 和 `both` |
 | `BundlerNsisCompression` | 否 | `lzma`；也支持 `zlib`、`bzip2` 和 `none` |
-| `BundlerNsisInstallerIcon` | 否 | 第一个 `BundlerIcon` `.ico` |
-| `BundlerNsisUninstallerIcon` | 否 | 安装器图标 |
-| `BundlerNsisHeaderImage` | 否 | NSIS 默认图片；`.bmp` |
-| `BundlerNsisSidebarImage` | 否 | NSIS 默认图片；`.bmp` |
-| `BundlerNsisUninstallerHeaderImage` | 否 | 安装器 Header 图片；`.bmp` |
-| `BundlerNsisInstallerHooks` | 否 | 可选的 `.nsh` 生命周期宏文件 |
+| `BundlerNsisInstallerIconFile` | 否 | 第一个 `BundlerIcon` `.ico` |
+| `BundlerNsisUninstallerIconFile` | 否 | 安装器图标 |
+| `BundlerNsisHeaderFile` | 否 | NSIS 默认图片；`.bmp` |
+| `BundlerNsisSidebarFile` | 否 | NSIS 默认图片；`.bmp` |
+| `BundlerNsisUninstallerHeaderFile` | 否 | 安装器 Header 图片；`.bmp` |
+| `BundlerNsisInstallerHooksFile` | 否 | 可选的 `.nsh` 生命周期宏文件 |
 | `BundlerNsisLanguages` | 否 | `English` |
 | `BundlerNsisDisplayLanguageSelector` | 否 | `false` |
 | `BundlerNsisAllowDowngrades` | 否 | `false` |
@@ -253,7 +253,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerNsisLegacyMsiAutoDetect` | 否 | `false`；启用后按 DisplayName+Publisher+msiexec 自动匹配旧 MSI |
 | `BundlerWixInstallScope` | 否 | `currentUser`；也支持 `perMachine`，两者是独立产品线 |
 | `BundlerWixUpgradeCode` | 否 | 自动稳定生成；仅在有依据的旧产品迁移中显式指定 |
-| `BundlerWixMsiVersion` | 否 | 空；默认映射稳定三段 `BundlerVersion`，显式值须为有效三段 MSI 版本 |
+| `BundlerWixVersion` | 否 | 空；默认映射稳定三段 `BundlerVersion`，显式值须为有效三段 MSI 版本 |
 | `BundlerWixAllowDowngrades` | 否 | `false`；仅显式选择时允许旧 MSI 版本替换新版 |
 | `BundlerWixLanguages` | 否 | `en-US`；分号分隔的多语言列表（命令行用 `%3B` 转义分号），每语言一个独立 MSI，支持 38 个 WiX 内嵌 culture |
 | `BundlerWixLanguage` | 否 | 旧单语言回退；`BundlerWixLanguages` 为空时生效 |
@@ -263,17 +263,17 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerWixStartMenuShortcut` | 否 | `false` |
 | `BundlerWixDesktopShortcut` | 否 | `false` |
 | `BundlerWixInstallDirectorySelection` | 否 | `false`；开启后交互可选范围内子目录，静默 `INSTALLFOLDER` 走同一校验 |
-| `BundlerWixBannerBitmap` | 否 | WiX 默认横幅；`.bmp` 且必须 493×58 |
-| `BundlerWixDialogBitmap` | 否 | WiX 默认对话框图；`.bmp` 且必须 503×314 |
+| `BundlerWixBannerFile` | 否 | WiX 默认横幅；`.bmp` 且必须 493×58 |
+| `BundlerWixDialogFile` | 否 | WiX 默认对话框图；`.bmp` 且必须 503×314 |
 | `BundlerWixAddToPath` | 否 | `false`；用户/系统 PATH 仅追加安装目录，卸载移除 |
 | `BundlerWixUninstallShortcut` | 否 | `false`；开始菜单生成 `msiexec /x` 卸载入口 |
 | `BundlerWixLaunchAfterInstall` | 否 | `false`；仅交互完成页勾选时启动，静默/被动/修复/升级不触发 |
 | `BundlerWixExtensionFragment`（项） | 否 | 常规模式 `.wxs` fragment；白名单声明式元素，所有 `@Id` 须以 `BundlerWixExtensionIdPrefix` 开头 |
 | `BundlerWixExtensionIdPrefix` | 否 | 常规模式必填自定义 id 前缀（如 `Ext.`）；保留 Bundler/WiX 前缀不可用 |
 | `BundlerWixExtensionComponentRef`/`…ComponentGroupRef`/`…FeatureRef`（项） | 否 | 常规模式显式引用 id，注入 Product Feature |
-| `BundlerWixExpertTemplate` | 否 | 专家模式：整份 `.wxs` 替换生成的产品文档；身份经 `candle -d` 变量与构建后回读强制 |
+| `BundlerWixExpertTemplateFile` | 否 | 专家模式：整份 `.wxs` 替换生成的产品文档；身份经 `candle -d` 变量与构建后回读强制 |
 | `BundlerWixExpertMergeModule`（项） | 否 | 专家模式 `.msm` 直传 light；专家产物为调用方自备逻辑，不受管、不担保可回滚 |
-| `BundlerMacAppBundleName` | 否 | `BundlerProductName`；`CFBundleName` |
+| `BundlerMacAppPackageName` | 否 | `BundlerProductName`；`CFBundleName` |
 | `BundlerMacAppDisplayName` | 否 | `BundlerProductName`；`CFBundleDisplayName` |
 | `BundlerMacAppShortVersion` | 否 | `BundlerVersion`；`CFBundleShortVersionString` |
 | `BundlerMacAppBuildVersion` | 否 | `BundlerVersion`；`CFBundleVersion` |
@@ -285,40 +285,40 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerMacAppExceptionDomain` | 否 | 无；ATS `NSExceptionDomains` 单一域（允许不安全 HTTP 载荷含子域） |
 | `BundlerMacAppInfoPlistFile`/`…InfoPlistXml` | 否 | 无；调用方 plist 整文件 / 内联 XML 合并（二选一；身份键回读拒绝） |
 | `BundlerMacAppSignIdentity` | 否 | 无；`-`=ad-hoc / 证书 CN，开启 inside-out `codesign` 管线（仅 macOS 宿主） |
-| `BundlerMacAppSigningCertificatePath`/`…Password` | 否 | 无；p12 证书导入临时钥匙串签名（与 identity 互斥；密码属秘密勿入库） |
+| `BundlerMacAppTemporaryCertificateFile`/`…Password` | 否 | 无；p12 证书导入临时钥匙串签名（与 identity 互斥；密码属秘密勿入库） |
 | `BundlerMacAppHardenedRuntime` | 否 | `false`；开启后每个可执行签名加 `--options runtime`（公证必需） |
 | `BundlerMacAppEntitlementsFile` | 否 | 无；entitlements plist 文件 |
 | `BundlerMacAppNotarize` | 否 | `false`；显式公证管线（ditto→`notarytool`→`stapler`，需凭证） |
 | `BundlerMacAppNotaryWait`/`…SkipStapling` | 否 | `true`/`false`；notarytool 不等待 / 跳过 stapler |
 | `BundlerMacAppNotaryProfile` | 否 | 无；keychain profile 名（公证凭证三模式之一） |
 | `BundlerMacAppAppleId`/`…ApplePassword`/`…AppleTeamId` | 否 | 无；Apple ID 凭证三元组（密码属秘密勿入库） |
-| `BundlerMacAppNotaryApiKeyPath`/`…KeyId`/`…Issuer` | 否 | 无；App Store Connect API key 凭证三元组 |
+| `BundlerMacAppApiKeyFile`/`…KeyId`/`…Issuer` | 否 | 无；App Store Connect API key 凭证三元组 |
 | —— 公证凭证环境变量回退 | —— | 全部凭证属性缺省时依次回退 `APPLE_PROFILE`（profile）/`APPLE_API_KEY_PATH`+`APPLE_API_KEY`+`APPLE_API_ISSUER`（API key 三元组）/`APPLE_ID`+`APPLE_PASSWORD`+`APPLE_TEAM_ID`（Apple ID 三元组），三者按该顺序取第一组完整组 |
 | `BundlerMacDmgCompression` | 否 | `Ulmo`；也支持 `Udzo`/`Udbz` |
 | `BundlerMacDmgVolumeName` | 否 | `BundlerProductName`；挂载显示卷名 |
-| `BundlerMacDmgSkipWindowLayout` | 否 | `false`；显式跳过 `.DS_Store` 布局（无 GUI 宿主自动降级+警告仍产可挂载 DMG） |
-| `BundlerMacDmgWindowX`/`Y`/`Width`/`Height` | 否 | `200`/`120`/`660`/`400`；Finder 窗口位/尺寸 |
-| `BundlerMacDmgAppIconX`/`Y` | 否 | `180`/`170`；`.app` 图标位 |
-| `BundlerMacDmgApplicationsIconX`/`Y` | 否 | `480`/`170`；`/Applications` 图标位 |
-| `BundlerMacDmgIconSize` | 否 | `128`；图标尺寸 |
+| `BundlerMacDmgLayoutSkip` | 否 | `false`；显式跳过 `.DS_Store` 布局（无 GUI 宿主自动降级+警告仍产可挂载 DMG） |
+| `BundlerMacDmgLayoutWindowX`/`Y`/`Width`/`Height` | 否 | `200`/`120`/`660`/`400`；Finder 窗口位/尺寸 |
+| `BundlerMacDmgLayoutAppIconX`/`Y` | 否 | `180`/`170`；`.app` 图标位 |
+| `BundlerMacDmgLayoutApplicationsIconX`/`Y` | 否 | `480`/`170`；`/Applications` 图标位 |
+| `BundlerMacDmgLayoutIconSize` | 否 | `128`；图标尺寸 |
 | `BundlerMacDmgBackgroundFile` | 否 | 无；拷入卷内 `.background/` 并被 `.DS_Store` 引用 |
 | `BundlerMacDmgVolumeIconFile` | 否 | 无；落盘 `.VolumeIcon.icns` + `SetFile -a C` |
-| `BundlerMacDmgSignIdentity`/`…SignCertificatePath`/`…SignCertificatePassword` | 否 | 无；DMG 本体 `codesign`（同 app 三模式，仅 macOS 宿主） |
-| `BundlerMacPkgIdentifier`/`BundlerMacPkgVersion` | 否 | `BundlerIdentifier`/`BundlerVersion` |
-| `BundlerMacPkgInstallLocation` | 否 | `/Applications` |
+| `BundlerMacDmgSignIdentity`/`BundlerMacDmgTemporaryCertificateFile`/`BundlerMacDmgTemporaryCertificatePassword` | 否 | 无；DMG 本体 `codesign`（同 app 三模式，仅 macOS 宿主） |
+| `BundlerMacPkgPackageName`/`BundlerMacPkgVersion` | 否 | `BundlerIdentifier`/`BundlerVersion` |
+| `BundlerMacPkgInstallRoot` | 否 | `/Applications` |
 | `BundlerMacPkgTitle` | 否 | `BundlerProductName`；分发包 `<title>` |
 | `BundlerMacPkgWelcomeFile`/`…ConclusionFile` | 否 | 无；分发包欢迎/结语页文件 |
-| `BundlerMacPkgDomain` | 否 | `System`；也支持 `CurrentUserHome`（免提权装 `~/Applications`，枚举名不区分大小写） |
+| `BundlerMacPkgInstallScope` | 否 | `System`；也支持 `CurrentUserHome`（免提权装 `~/Applications`，枚举名不区分大小写） |
 | `BundlerMacPkgScriptsDirectory` | 否 | 无；`pkgbuild --scripts` 专家脚本目录 |
 | `@(BundlerPkgPayload)`（`Destination`） | 否 | 无；任意文件树 → install-location 相对路径 |
 | `BundlerMacPkgSignIdentity`/`…SignCertificatePath`/`…SignCertificatePassword` | 否 | 无；`pkgbuild --sign`/`productsign --sign`（Installer 证书，仅 macOS 宿主） |
 | `BundlerMacPkgNotarize`/`…NotaryWait`/`…SkipStapling`/`…NotaryProfile`/`…AppleId`/`…ApplePassword`/`…AppleTeamId`/`…NotaryApiKeyPath`/`…KeyId`/`…Issuer` | 否 | 同 `.app` 公证组（`.pkg` 直接过 notarytool，无 ad-hoc 签名等价物） |
 | `BundlerDebPackageName` | 否 | `BundlerProductName` 的 kebab-case 化；须匹配 Debian 包名规则 `[a-z0-9][a-z0-9+.-]+` |
 | `BundlerDebVersion` | 否 | 空时由 `BundlerVersion` 按 SemVer→deb 映射（预发布 `-`→`~`、`+build` 保留）；显式值须为完整 Debian 版本（可含 `epoch:`与`-revision`） |
-| `BundlerDebRevision` | 否 | `1`；空值（MSBuild 传 `none` 以外的字面空不可达，直接 API 用 `""`）省略 `-revision` |
+| `BundlerDebRelease` | 否 | `1`；空值（MSBuild 传 `none` 以外的字面空不可达，直接 API 用 `""`）省略 `-revision` |
 | `BundlerDebEpoch` | 否 | 无；纯数字前缀 `N:`，不进文件名 |
 | `BundlerDebArchitecture` | 否 | 按 RID 映射（x64→`amd64`、arm64→`arm64`）；显式值须为 Debian 架构名 |
-| `BundlerDebMaintainer` | 否 | `BundlerPublisher` → `BundlerIdentifier` 回退 |
+| `BundlerDebVendor` | 否 | `BundlerPublisher` → `BundlerIdentifier` 回退 |
 | `BundlerDebInstallRoot` | 否 | `/usr/lib/<包名>`；须为绝对路径且无 `..`；非 `/usr` 根下时 `usr/bin` 链接目标转绝对路径 |
 | `BundlerDebBinLink` | 否 | 包名；`none`（不分大小写）关闭 `usr/bin` 链接 |
 | `BundlerDebDepends`/`Recommends`/`Provides`/`Conflicts`/`Replaces` | 否 | 空；分号分隔子句、原样透传 control（`-p:` 含分号需 `%3B` 转义） |
@@ -330,8 +330,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `@(BundlerDebFile)`（`Destination`） | 否 | 无；任意文件 → 包内绝对路径（含文件名，拒相对/`..`/空段；`/etc` 下自动登记 conffile） |
 | `BundlerDebPreinstFile`/`PostinstFile`/`PrermFile`/`PostrmFile` | 否 | 无；维护者脚本整文件注入 control 归档（0755，须 shebang+LF） |
 | `BundlerDebSystemdServiceFile` | 否 | 无；unit → `usr/lib/systemd/system/<包名>.service`，postinst 自动合成 `daemon-reload`（装而不启） |
-| `BundlerDebConffiles` | 否 | 无；显式 conffile 绝对路径列表（须存在于载荷） |
-| `BundlerDebCompression` | 否 | `gzip`；xz/zstd 暂拒绝（无托管编码器，zstd 另需 dpkg≥1.21.18） |
+| `BundlerDebConfigFiles` | 否 | 无；显式 conffile 绝对路径列表（须存在于载荷） |
 | `BundlerRpmPackageName` | 否 | `BundlerProductName` 的 kebab-case 化；须匹配 rpm 包名规则 `[A-Za-z0-9][A-Za-z0-9+._-]+` 且≥2 字符 |
 | `BundlerRpmVersion` | 否 | 空时由 `BundlerVersion` 按 SemVer→rpm 映射（预发布段→Release `0.<n>.<label>`、`+build`→Release 后缀）；显式值禁含 `-`、须匹配 `[0-9A-Za-z.+_]+` |
 | `BundlerRpmRelease` | 否 | `1`（或 SemVer 预发布映射值）；rpm Release 字符串 |
@@ -367,7 +366,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerAlpineApkDepends`/`Provides` | 否 | 无；分号列表逐行写入 `.PKGINFO` |
 | `BundlerAlpineApkTriggers` | 否 | 无；绝对路径分号列表，空格串联写入 `triggers` 键 |
 | `BundlerAlpineApkBinLink` | 否 | 包名；`none`（不分大小写）关闭 `usr/bin` 链接 |
-| `BundlerAlpineApkPreInstallScript`/`PostInstallScript`/`PreDeinstallScript`/`PostDeinstallScript`/`PreUpgradeScript`/`PostUpgradeScript` | 否 | 无；脚本整文件注入控制段（0755，须非空+LF） |
+| `BundlerAlpineApkPreInstallFile`/`PostInstallFile`/`PreUninstallFile`/`PostUninstallFile`/`PreUpgradeFile`/`PostUpgradeFile` | 否 | 无；脚本整文件注入控制段（0755，须非空+LF） |
 | `@(BundlerAlpineApkFile)`（`Destination`） | 否 | 无；任意文件 → 绝对路径（含文件名；拒相对/`..`/`.`/尾斜杠/重复目标） |
 | `BundlerAlpineApkSigningKeyFile` | 否 | PEM RSA 私钥（未加密或密码保护）；供则前置 `.SIGN.RSA.<文件名>.rsa.pub` 签名段，不供即未签名产物 |
 | `BundlerAlpineApkSigningKeyPassphrase` | 否 | 私钥口令；只给口令不给密钥文件为配置错误，口令属秘密勿入库 |
@@ -542,14 +541,14 @@ MSI 迁移到 NSIS 时必须先卸载所有匹配的 MSI，再安装 NSIS 载荷
 这里不会采用产品名和发布者匹配，因为可能误删无关软件。
 真实迁移标识必须从历史 MSI 中取得，仓库内测试夹具不能代替生产标识验证。
 
-`BundlerNsisInstallMode` 控制 Windows 安装范围。
+`BundlerNsisInstallScope` 控制 Windows 安装范围。
 `currentUser` 不提权，卸载信息和快捷方式写入当前用户上下文；
 `perMachine` 请求管理员权限，安装到 Program Files，并使用所有用户 Shell 上下文和 HKLM 注册表；
 `both` 使用 NSIS 自带的 MultiUser 页面让用户选择。
 由于安装器必须具备切换到计算机范围的能力，`both` 启动时会请求最高可用权限。
 x64 和 arm64 包使用 64 位注册表视图。
 
-可选的 `BundlerNsisInstallerHooks` 文件可以把 `NSIS_HOOK_PREINSTALL`、`NSIS_HOOK_POSTINSTALL`、`NSIS_HOOK_PREUNINSTALL`、`NSIS_HOOK_POSTUNINSTALL` 中任意几项定义为 NSIS 宏，安装器会在相应生命周期边界调用。
+可选的 `BundlerNsisInstallerHooksFile` 文件可以把 `NSIS_HOOK_PREINSTALL`、`NSIS_HOOK_POSTINSTALL`、`NSIS_HOOK_PREUNINSTALL`、`NSIS_HOOK_POSTUNINSTALL` 中任意几项定义为 NSIS 宏，安装器会在相应生命周期边界调用。
 Hook 使用安装器当前权限执行。
 安装 Hook 可以用 `SetErrors` 或 `Abort` 报告失败，安装器会回滚已激活的事务；直接使用 `Quit` 或终止进程无法继续执行即时回滚，但 active journal 会由下一次安装启动恢复。
 卸载 Hook 用 `SetErrors` 报告失败时会保留前向恢复 journal；进程被终止时同样由下一次安装启动继续。
@@ -640,7 +639,7 @@ if ($uninstallerSignature.SignerCertificate.Thumbprint -ne $thumbprint) {
 Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 ```
 
-若要观察 UAC 发布者页面，可在构建时同时传入 `-p:HelloBundlerNsisInstallMode=perMachine`。
+若要观察 UAC 发布者页面，可在构建时同时传入 `-p:HelloBundlerNsisInstallScope=perMachine`。
 自签名证书仍会显示为未知或不受信任的发布者；正式发布必须换成受信任 CA 签发的代码签名证书，并配置 RFC 3161 时间戳。
 
 内置签名器直接调用 Windows 的 Authenticode API，因此启用它时构建宿主必须是 Windows；外部命令 provider 和自定义 `IBundleSigner` 可在 provider 支持的其他宿主运行。

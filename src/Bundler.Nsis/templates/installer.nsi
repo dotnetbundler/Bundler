@@ -113,7 +113,7 @@ InstallDir "placeholder\${INSTALL_FOLDER}"
   !define MULTIUSER_INSTALLMODE_INSTDIR "${INSTALL_FOLDER}"
   !define MULTIUSER_INSTALLMODE_COMMANDLINE
   !define MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_KEY "${UNINSTALL_KEY}"
-  !define MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_VALUENAME "InstallLocation"
+  !define MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_VALUENAME "InstallRoot"
   !define MULTIUSER_INSTALLMODEPAGE_SHOWUSERNAME
   !define MULTIUSER_EXECUTIONLEVEL Highest
   !if "${TARGET_ARCHITECTURE}" == "x64"
@@ -493,7 +493,7 @@ Function SetDefaultInstallDirectory
         StrCpy $INSTDIR "$PROGRAMFILES\${INSTALL_FOLDER}"
       ${EndIf}
     !endif
-    ReadRegStr $0 SHCTX "${UNINSTALL_KEY}" "InstallLocation"
+    ReadRegStr $0 SHCTX "${UNINSTALL_KEY}" "InstallRoot"
     ${If} $0 != ""
       StrCpy $INSTDIR $0
     ${EndIf}
@@ -504,7 +504,7 @@ Function DetectExistingInstall
   ; SHCTX 会根据所选安装范围映射到 HKCU 或 HKLM。
   ; 必须存在 UninstallString，避免将残缺的注册表项误判为已安装。
   ReadRegStr $InstalledUninstaller SHCTX "${UNINSTALL_KEY}" "UninstallString"
-  ReadRegStr $InstalledDirectory SHCTX "${UNINSTALL_KEY}" "InstallLocation"
+  ReadRegStr $InstalledDirectory SHCTX "${UNINSTALL_KEY}" "InstallRoot"
   ReadRegStr $InstalledVersion SHCTX "${UNINSTALL_KEY}" "DisplayVersion"
   StrCpy $VersionComparison ${VERSION_UNKNOWN}
   StrCpy $ExistingInstallType 0
@@ -1136,7 +1136,7 @@ Section "Install" MainSection
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "Comments" "${PRODUCT_DESCRIPTION}"
 {{homepage_registry}}
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${MAIN_EXECUTABLE}"
-  WriteRegStr SHCTX "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "InstallRoot" "$INSTDIR"
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegStr SHCTX "${UNINSTALL_KEY}" "QuietUninstallString" '"$INSTDIR\Uninstall.exe" /S'
   DotNetBundlerNsis::GetUninstallRecoveryHash "$INSTDIR\Uninstall.exe"
@@ -1249,7 +1249,7 @@ Section "Uninstall"
   !endif
   Call un.MarkUninstallTransactionFinalizing
   uninstall_finalize:
-  ; 卸载注册项保留到最后，供下次安装器用受保护的 InstallLocation
+  ; 卸载注册项保留到最后，供下次安装器用受保护的 InstallRoot
   ; 校验可修改的 journal 路径。finalizing 阶段不再使用该路径删除文件。
   ClearErrors
   DeleteRegKey SHCTX "${UNINSTALL_KEY}"

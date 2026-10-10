@@ -128,12 +128,12 @@ public sealed class NsisBundler : IFormatBundler
             throw new ArgumentException("At least one NSIS language is required.", nameof(settings));
         }
 
-        ValidateOptionalFile(settings.InstallerIcon, ".ico", nameof(settings.InstallerIcon));
-        ValidateOptionalFile(settings.UninstallerIcon, ".ico", nameof(settings.UninstallerIcon));
-        ValidateOptionalFile(settings.HeaderImage, ".bmp", nameof(settings.HeaderImage));
-        ValidateOptionalFile(settings.SidebarImage, ".bmp", nameof(settings.SidebarImage));
-        ValidateOptionalFile(settings.UninstallerHeaderImage, ".bmp", nameof(settings.UninstallerHeaderImage));
-        ValidateOptionalFile(settings.InstallerHooks, ".nsh", nameof(settings.InstallerHooks));
+        ValidateOptionalFile(settings.InstallerIconFile, ".ico", nameof(settings.InstallerIconFile));
+        ValidateOptionalFile(settings.UninstallerIconFile, ".ico", nameof(settings.UninstallerIconFile));
+        ValidateOptionalFile(settings.HeaderFile, ".bmp", nameof(settings.HeaderFile));
+        ValidateOptionalFile(settings.SidebarFile, ".bmp", nameof(settings.SidebarFile));
+        ValidateOptionalFile(settings.UninstallerHeaderFile, ".bmp", nameof(settings.UninstallerHeaderFile));
+        ValidateOptionalFile(settings.InstallerHooksFile, ".nsh", nameof(settings.InstallerHooksFile));
         foreach (var file in settings.CustomLanguageFiles.Values)
         {
             ValidateOptionalFile(file, ".nsh", nameof(settings.CustomLanguageFiles));

@@ -16,7 +16,7 @@
     <BundlerDescription>Disposable macOS .dmg integration-test fixture.</BundlerDescription>
     <BundlerCopyright>Copyright DotNet.Bundler Tests</BundlerCopyright>
     <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
-    <BundlerMacAppBundleName>DmgFixture</BundlerMacAppBundleName>
+    <BundlerMacAppPackageName>DmgFixture</BundlerMacAppPackageName>
     <BundlerMacAppDisplayName>Bundler Mac DMG Fixture</BundlerMacAppDisplayName>
     <BundlerMacAppBuildVersion>2026.9.1</BundlerMacAppBuildVersion>
     <BundlerMacAppMinimumSystemVersion>11.0</BundlerMacAppMinimumSystemVersion>
@@ -24,7 +24,7 @@
     <BundlerMacDmgCompression Condition="'$(BundlerTestDmgCompression)' == ''">Ulmo</BundlerMacDmgCompression>
     <BundlerMacDmgCompression Condition="'$(BundlerTestDmgCompression)' != ''">$(BundlerTestDmgCompression)</BundlerMacDmgCompression>
     <BundlerMacDmgVolumeName Condition="'$(BundlerTestDmgVolumeName)' != ''">$(BundlerTestDmgVolumeName)</BundlerMacDmgVolumeName>
-    <BundlerMacDmgSkipWindowLayout Condition="'$(BundlerTestDmgSkipWindowLayout)' != ''">$(BundlerTestDmgSkipWindowLayout)</BundlerMacDmgSkipWindowLayout>
+    <BundlerMacDmgLayoutSkip Condition="'$(BundlerTestDmgLayoutSkip)' != ''">$(BundlerTestDmgLayoutSkip)</BundlerMacDmgLayoutSkip>
     <BundlerMacDmgBackgroundFile>$(MSBuildThisFileDirectory)Assets/bg.png</BundlerMacDmgBackgroundFile>
     <BundlerMacDmgVolumeIconFile>$(MSBuildThisFileDirectory)Assets/volume.icns</BundlerMacDmgVolumeIconFile>
     <BundlerLicenseFile Condition="'$(BundlerTestDmgLicense)' == 'true'">$(MSBuildThisFileDirectory)Assets/license.txt</BundlerLicenseFile>
@@ -32,6 +32,6 @@
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
-    <BundlerResource Include="Assets/readme.txt" TargetPath="docs/readme.txt" />
+    <BundlerResource Include="Assets/readme.txt" Destination="docs/readme.txt" />
   </ItemGroup>
 </Project>

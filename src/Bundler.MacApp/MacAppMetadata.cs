@@ -65,7 +65,7 @@ internal sealed record MacAppMetadata(
         }
 
         return new MacAppMetadata(
-            string.IsNullOrWhiteSpace(settings.BundleName) ? bundle.ProductName : settings.BundleName!.Trim(),
+            string.IsNullOrWhiteSpace(settings.PackageName) ? bundle.ProductName : settings.PackageName!.Trim(),
             string.IsNullOrWhiteSpace(settings.BundleDisplayName)
                 ? bundle.ProductName
                 : settings.BundleDisplayName!.Trim(),

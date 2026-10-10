@@ -70,21 +70,21 @@ public sealed class RpmBundleConfiguration
     /// pass-through — no runtime probing is performed; the writer already
     /// registers the <c>rpmlib(...)</c> self-dependencies.
     /// </summary>
-    public IReadOnlyList<string>? Requires { get; init; }
+    public IReadOnlyList<string>? Depends { get; init; }
 
-    /// <summary><c>PROVIDE*</c> clauses, same syntax as <see cref="Requires"/>; the self-provides <c>name = evr</c> and <c>name(arch) = evr</c> are always emitted.</summary>
+    /// <summary><c>PROVIDE*</c> clauses, same syntax as <see cref="Depends"/>; the self-provides <c>name = evr</c> and <c>name(arch) = evr</c> are always emitted.</summary>
     public IReadOnlyList<string>? Provides { get; init; }
 
-    /// <summary><c>CONFLICT*</c> clauses, same syntax as <see cref="Requires"/>.</summary>
+    /// <summary><c>CONFLICT*</c> clauses, same syntax as <see cref="Depends"/>.</summary>
     public IReadOnlyList<string>? Conflicts { get; init; }
 
-    /// <summary><c>OBSOLETE*</c> clauses, same syntax as <see cref="Requires"/>.</summary>
+    /// <summary><c>OBSOLETE*</c> clauses, same syntax as <see cref="Depends"/>.</summary>
     public IReadOnlyList<string>? Obsoletes { get; init; }
 
-    /// <summary>Weak dependency <c>RECOMMEND*</c> clauses, same syntax as <see cref="Requires"/>.</summary>
+    /// <summary>Weak dependency <c>RECOMMEND*</c> clauses, same syntax as <see cref="Depends"/>.</summary>
     public IReadOnlyList<string>? Recommends { get; init; }
 
-    /// <summary>Weak dependency <c>SUGGEST*</c> clauses, same syntax as <see cref="Requires"/>.</summary>
+    /// <summary>Weak dependency <c>SUGGEST*</c> clauses, same syntax as <see cref="Depends"/>.</summary>
     public IReadOnlyList<string>? Suggests { get; init; }
 
     /// <summary>
@@ -106,10 +106,10 @@ public sealed class RpmBundleConfiguration
     public string? Url { get; init; }
 
     /// <summary>
-    /// Semicolon-separated freedesktop categories for the generated
-    /// <c>.desktop</c> file (e.g. "Utility;Development").
+    /// Freedesktop categories for the generated <c>.desktop</c> file
+    /// (e.g. ["Utility", "Development"]).
     /// </summary>
-    public string? Categories { get; init; }
+    public IReadOnlyList<string>? Categories { get; init; }
 
     /// <summary>
     /// Expert knob: path to a caller-supplied <c>.desktop</c> file that replaces the
@@ -188,28 +188,13 @@ public sealed class RpmBundleConfiguration
     public string? PostUninstallProgram { get; init; }
 
     /// <summary>
-    /// Payload compression: only <c>"gzip"</c> is supported — the writer is
-    /// pure managed code and netstandard2.0 ships no xz/zstd encoder without
-    /// a third-party dependency. Any other value is rejected.
+    /// Optional OpenPGP signing: a <c>RPMSIGTAG_PGP</c> signature packet over
+    /// the main header + payload is embedded in the signature header,
+    /// verifiable with <c>rpm --import</c> + <c>rpm -K</c>/<c>--checksig</c>.
+    /// The key file may be ASCII-armored or binary; an empty
+    /// <see cref="Signing"/> leaves the package unsigned.
     /// </summary>
-    public string? Compression { get; init; }
-
-    /// <summary>
-    /// Optional OpenPGP secret-key file (ASCII-armored or binary) used to sign
-    /// the package: a <c>RPMSIGTAG_PGP</c> signature packet over the main
-    /// header + payload is embedded in the signature header, verifiable with
-    /// <c>rpm --import</c> + <c>rpm -K</c>/<c>--checksig</c>. Unset produces an
-    /// unsigned package identical to a build with no signing configured.
-    /// The file is read at build time; its bytes are never logged.
-    /// </summary>
-    public string? SigningKeyFile { get; init; }
-
-    /// <summary>
-    /// Passphrase for <see cref="SigningKeyFile"/>. Supplying one without a
-    /// key file (or vice versa) is a configuration error. Prefer feeding the
-    /// value from a secret store — it is a secret, do not commit it.
-    /// </summary>
-    public string? SigningKeyPassphrase { get; init; }
+    public KeyFileSigningConfiguration Signing { get; init; } = new();
 }
 
 /// <summary>A file planted at an absolute path inside the .rpm payload.</summary>

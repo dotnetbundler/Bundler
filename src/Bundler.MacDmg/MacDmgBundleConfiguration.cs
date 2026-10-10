@@ -22,9 +22,25 @@ public sealed class MacDmgBundleConfiguration
     /// <summary>Volume name shown by the mounted image; defaults to the sanitized product name.</summary>
     public string? VolumeName { get; init; }
 
-    /// <summary>Skips the Finder window-layout pass entirely (still produces a mountable image).</summary>
-    public bool SkipWindowLayout { get; init; }
+    /// <summary>
+    /// Finder window layout written into the image's .DS_Store; set to null to
+    /// skip the layout pass entirely (still produces a mountable image).
+    /// </summary>
+    public MacDmgLayoutConfiguration? Layout { get; init; } = new();
 
+    /// <summary>Optional window background image (png/jpg/gif) copied into the hidden .background folder.</summary>
+    public string? BackgroundFile { get; init; }
+
+    /// <summary>Optional volume icon file (.icns) written to .VolumeIcon.icns with the custom-icon flag.</summary>
+    public string? VolumeIconFile { get; init; }
+
+    /// <summary>Optional .dmg body signing; null leaves the image unsigned.</summary>
+    public MacDmgSigningConfiguration? Signing { get; init; }
+}
+
+/// <summary>Finder window layout for the mounted .dmg volume.</summary>
+public sealed class MacDmgLayoutConfiguration
+{
     /// <summary>Finder window origin X; defaults to the upstream value 200.</summary>
     public int WindowX { get; init; } = 200;
 
@@ -51,15 +67,6 @@ public sealed class MacDmgBundleConfiguration
 
     /// <summary>Icon size shown in the Finder window; upstream default 128.</summary>
     public int IconSize { get; init; } = 128;
-
-    /// <summary>Optional window background image (png/jpg/gif) copied into the hidden .background folder.</summary>
-    public string? BackgroundFile { get; init; }
-
-    /// <summary>Optional volume icon file (.icns) written to .VolumeIcon.icns with the custom-icon flag.</summary>
-    public string? VolumeIconFile { get; init; }
-
-    /// <summary>Optional .dmg body signing; null leaves the image unsigned.</summary>
-    public MacDmgSigningConfiguration? Signing { get; init; }
 }
 
 /// <summary>
@@ -73,8 +80,8 @@ public sealed class MacDmgSigningConfiguration
     public string? Identity { get; init; }
 
     /// <summary>PKCS#12 certificate imported into a throwaway keychain for the build.</summary>
-    public string? TemporaryCertificatePath { get; init; }
+    public string? TemporaryCertificateFile { get; init; }
 
-    /// <summary>Password for <see cref="TemporaryCertificatePath"/>.</summary>
+    /// <summary>Password for <see cref="TemporaryCertificateFile"/>.</summary>
     public string? TemporaryCertificatePassword { get; init; }
 }
