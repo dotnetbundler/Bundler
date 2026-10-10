@@ -38,7 +38,7 @@ public sealed class DebBundleConfiguration
 
     /// <summary>
     /// Debian architecture written to <c>Architecture:</c> and used in the file name.
-    /// Defaults to the RID mapping: linux-x86_64 → amd64, linux-aarch64 → arm64.
+    /// Defaults to the target mapping: linux-x86_64 → amd64, linux-aarch64 → arm64.
     /// </summary>
     public string? Architecture { get; init; }
 

@@ -127,7 +127,7 @@ public static class CliProgram
 
 
 
-    internal static IReadOnlyList<PackageFormat> ParseFormats(string value, string rid)
+    internal static IReadOnlyList<PackageFormat> ParseFormats(string value, string targetText)
     {
         var names = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (names.Length == 0)
@@ -138,10 +138,10 @@ public static class CliProgram
         var parsed = names.Select(ParseFormat).Distinct().ToArray();
         if (parsed.Any(format => format == AllFormatsSentinel))
         {
-            if (!BundleTarget.TryParse(rid, out var target) || target is null)
+            if (!BundleTarget.TryParse(targetText, out var target) || target is null)
             {
                 throw new CliUsageException(
-                    $"Unknown target '{rid}'. Supported: windows-i686, windows-x86_64, windows-arm64, macos-universal, macos-x86_64, macos-arm64, linux-x86_64, linux-aarch64, linux-musl-x86_64, linux-musl-aarch64.");
+                    $"Unknown target '{targetText}'. Supported: windows-i686, windows-x86_64, windows-arm64, macos-universal, macos-x86_64, macos-arm64, linux-x86_64, linux-aarch64, linux-musl-x86_64, linux-musl-aarch64.");
             }
             return Enum.GetValues<PackageFormat>()
                 .Where(format => DesktopTargetMatrix.Supports(target, format))
@@ -271,7 +271,7 @@ public static class CliProgram
         {
             foreach (var issue in validation.Issues)
             {
-                // rid×format 矩阵不兼容（"X is not supported for Y"）属显式请求的
+                // target×format 矩阵不兼容（"X is not supported for Y"）属显式请求的
                 // 用法错——归聚合配置错 rc=2；宿主门禁（PNSE）才走逐格式容错 rc=1。
                 validationErrors.Add((issue.Path, issue.Message));
             }

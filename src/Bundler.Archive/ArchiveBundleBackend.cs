@@ -33,15 +33,15 @@ internal sealed class ArchiveBundleBackend(
             // 输入树若自带同名条目一律剔除——打包期身份以本构建为准，重复名进包会导致解包歧义。
             UpdateIdentitySidecar.WriteIfEnabled(
                 context.WorkDirectory, update, format, context.Item.Target.Target);
-            var rid = context.Item.Target.Target;
-            UpdateBootstrapper.TryResolve(update, rid, out var bootstrapper);
+            var target = context.Item.Target.Target;
+            UpdateBootstrapper.TryResolve(update, target, out var bootstrapper);
             var injected = new HashSet<string>(StringComparer.Ordinal)
             {
                 stem + "/" + UpdateIdentitySidecar.FileName,
             };
             if (bootstrapper is { Length: > 0 })
             {
-                injected.Add(stem + "/" + UpdateBootstrapper.FileNameFor(rid));
+                injected.Add(stem + "/" + UpdateBootstrapper.FileNameFor(target));
             }
             entries.RemoveAll(e => injected.Contains(e.ArchivePath));
             entries.Add(new ArchiveTree.Entry
@@ -55,7 +55,7 @@ internal sealed class ArchiveBundleBackend(
             {
                 entries.Add(new ArchiveTree.Entry
                 {
-                    ArchivePath = stem + "/" + UpdateBootstrapper.FileNameFor(rid),
+                    ArchivePath = stem + "/" + UpdateBootstrapper.FileNameFor(target),
                     Kind = TarEntryKind.File,
                     Mode = 493 /* 0755 */,
                     SourcePath = bootstrapper,

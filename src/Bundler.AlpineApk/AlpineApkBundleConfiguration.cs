@@ -25,7 +25,7 @@ public sealed class AlpineApkBundleConfiguration
 
     /// <summary>
     /// Alpine architecture written to <c>arch</c> and used in the file name.
-    /// Defaults to the RID mapping: linux-musl-x86_64 → x86_64, linux-musl-aarch64 → aarch64.
+    /// Defaults to the target mapping: linux-musl-x86_64 → x86_64, linux-musl-aarch64 → aarch64.
     /// </summary>
     public string? Architecture { get; init; }
 

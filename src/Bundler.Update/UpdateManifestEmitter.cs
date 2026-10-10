@@ -51,7 +51,7 @@ public static class UpdateManifestEmitter
             Channel = channel,
         };
         var produced = new List<string>();
-        // 产物 url = 相对清单所在目录（输出根）的路径——制品按 <rid>/<format>/ 分目录落盘；
+        // 产物 url = 相对清单所在目录（输出根）的路径——产物按 outputLayout 布局（flat 根目录或 <format>/ 子目录）落盘；
         // file 恒为裸文件名，仅作下载落点文件名。
 
         foreach (var artifact in artifacts)
@@ -119,7 +119,7 @@ public static class UpdateManifestEmitter
             };
             // 同一运输路径可被构建多次（.app 独立项 + dmg/pkg 内层暂存各产出一次，
             // 后写覆盖先写）——feed 必须与磁盘最终字节一致，否则客户端选中 stale 条目必拒下载。
-            // 键含 rid/format：同 url 跨目标的（异常）形状退回双条目，各自仍可选中。
+            // 键含 target/format：同 url 跨目标的（异常）形状退回双条目，各自仍可选中。
             var duplicateIndex = feed.Artifacts.FindIndex(existing =>
                 existing.Url == relativeUrl &&
                 existing.Target == feedArtifact.Target &&

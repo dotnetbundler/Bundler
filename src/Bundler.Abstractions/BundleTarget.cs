@@ -52,16 +52,6 @@ public sealed record BundleTarget(
         _ => throw new ArgumentOutOfRangeException(nameof(architecture))
     };
 
-    /// <summary>canonical os 词（归档命名段）。</summary>
-    public static string OsName(DesktopOperatingSystem os) => os switch
-    {
-        DesktopOperatingSystem.Windows => "windows",
-        DesktopOperatingSystem.MacOS => "macos",
-        DesktopOperatingSystem.Linux => "linux",
-        DesktopOperatingSystem.LinuxMusl => "linux-musl",
-        _ => throw new ArgumentOutOfRangeException(nameof(os))
-    };
-
     /// <summary>解析 <c>{os}[-{libc}]-{arch}</c>；不合法返回 false。</summary>
     public static bool TryParse(string? text, out BundleTarget? target)
     {

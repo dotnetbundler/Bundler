@@ -28,7 +28,7 @@ public sealed class UpdateBundleConfiguration
     public string? SigningKeyFile { get; init; }
     public string? PublicKey { get; init; }
     public string? Notes { get; init; }
-    /// <summary>引导件工具目录（&lt;rid&gt;/ 与 posix/ 子目录结构）；空时入口按程序集旁 conventions 解析。</summary>
+    /// <summary>引导件工具目录（&lt;target&gt;/ 与 posix/ 子目录结构）；空时入口按程序集旁 conventions 解析。</summary>
     public string? BootstrapperDirectory { get; init; }
 }
 

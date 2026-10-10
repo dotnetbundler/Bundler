@@ -130,7 +130,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
             : installRoot;
         var app = new XElement(Wix + "Directory", new XAttribute("Id", "INSTALLFOLDER"),
             new XAttribute("Name", bundle.Identifier.ToLowerInvariant() + "-" +
-                item.Target.Target.Substring(4) + language.Suffix));
+                ArtifactNaming.ArchToken(item.Target, PackageFormat.Msi) + language.Suffix));
         programs.Add(app);
         if (perUser) installRoot.Add(programs);
         targetDir.Add(installRoot);

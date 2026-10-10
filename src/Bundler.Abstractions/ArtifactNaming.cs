@@ -52,7 +52,6 @@ public static class ArtifactNaming
                 CpuArchitecture.X86 => "i686",
                 CpuArchitecture.Arm64 => "aarch64",
                 CpuArchitecture.Armv7Hf => "armv7hl",
-                CpuArchitecture.Armv7Sf => "armv5tel",
                 CpuArchitecture.Riscv64 => "riscv64",
                 CpuArchitecture.Loongarch64 => "loongarch64",
                 CpuArchitecture.Ppc64le => "ppc64le",
@@ -65,14 +64,20 @@ public static class ArtifactNaming
                 CpuArchitecture.X86 => "x86",
                 CpuArchitecture.Arm64 => "aarch64",
                 CpuArchitecture.Armv7Hf => "armv7",
-                CpuArchitecture.Armv7Sf => "armhf",
                 CpuArchitecture.Riscv64 => "riscv64",
                 CpuArchitecture.Loongarch64 => "loongarch64",
                 CpuArchitecture.Ppc64le => "ppc64le",
                 CpuArchitecture.S390x => "s390x",
                 _ => null
             },
-            PackageFormat.Zip or PackageFormat.TarGz => target.Target,
+            PackageFormat.Zip or PackageFormat.TarGz => target.OperatingSystem switch
+            {
+                DesktopOperatingSystem.Windows => $"windows-{BundleTarget.ArchName(arch)}",
+                DesktopOperatingSystem.MacOS => $"macos-{BundleTarget.ArchName(arch)}",
+                DesktopOperatingSystem.Linux or DesktopOperatingSystem.LinuxMusl =>
+                    $"linux-{BundleTarget.ArchName(arch)}",
+                _ => null
+            },
             _ => null
         };
     }
@@ -102,8 +107,8 @@ public static class ArtifactNaming
             PackageFormat.Dmg => $"{productName}-{version}-{arch}.dmg",
             PackageFormat.Pkg => $"{productName}-{version}-{arch}.pkg",
             PackageFormat.AppImage => $"{productName}-{version}-{arch}{musl}.AppImage",
-            PackageFormat.Zip => $"{productName}-{version}-{arch}.zip",
-            PackageFormat.TarGz => $"{productName}-{version}-{arch}.tar.gz",
+            PackageFormat.Zip => $"{productName}-{version}-{arch}{musl}.zip",
+            PackageFormat.TarGz => $"{productName}-{version}-{arch}{musl}.tar.gz",
             PackageFormat.Deb => $"{productName}_{version}-{release}_{arch}.deb",
             PackageFormat.Rpm => $"{productName}-{version}-{release}.{arch}.rpm",
             PackageFormat.AlpineApk => $"{productName}-{version}-{release}.{arch}.apk",

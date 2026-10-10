@@ -663,7 +663,7 @@ internal static class CliConfig
         }
 
         // targets[].formats 归一成枚举名数组再走共享反序列化：ParseFormats 顺带
-        // 做 rid×format 矩阵校验并吃 "a,b"/"a;b" 串形，source-gen 侧不再另写规则。
+        // 做 target×format 矩阵校验并吃 "a,b"/"a;b" 串形，source-gen 侧不再另写规则。
         foreach (var node in targetsNode.OfType<JsonObject>())
         {
             node["formats"] = new JsonArray(

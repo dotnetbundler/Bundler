@@ -44,7 +44,7 @@
 - 平台绑定格式：文件名带该平台惯用架构词——`n-v-x64-setup.exe`、`n-v-arm64.msi`、`n-v-universal.dmg`。
 - deb/rpm/apk：各自生态原生命名（`n_v-rel_arch.deb` 等），不另加目标段。
 - AppImage：`n-v-<arch>[-musl].AppImage`——musl 变体只在同格式同架构存在 glibc+musl 双变体时挂 `-musl`。
-- 归档：`{name}-{ver}-{target}.{ext}`，`target` 原样进名（`n-v-linux-musl-x86_64.zip`）。
+- 归档：`{name}-{ver}-{os}-{arch}[-musl].{ext}`（`n-v-linux-x86_64-musl.zip`）。
 - `.app` 是目录产物不是文件；侧车 `.sha256`/`.sig`/`.blockmap` 跟随各产物；
   `bundler-update-feed.{channel}.json` 恒落输出根。
 

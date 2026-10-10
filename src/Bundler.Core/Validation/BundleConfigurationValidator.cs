@@ -294,7 +294,7 @@ public static class BundleConfigurationValidator
         {
             var target = configuration.Targets[targetIndex];
             // 注入的中间 App 项同样占输出槽：dmg/pkg 未显式带 app 时 planner 会
-            // 补一个中间 app——同 rid 双 target 判定不能漏它。
+            // 补一个中间 app——同 target 双格式判定不能漏它。
             var formats = target.Formats.Concat(
                 target.Formats.Any(format => format is PackageFormat.Dmg or PackageFormat.Pkg) &&
                 !target.Formats.Contains(PackageFormat.App)
