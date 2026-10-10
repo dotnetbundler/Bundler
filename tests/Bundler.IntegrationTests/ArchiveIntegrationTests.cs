@@ -26,11 +26,18 @@ public sealed class ArchiveFixture : IDisposable
     public string PackOnlyZip { get; private set; } = null!;
     public string AutoPublishZip { get; private set; } = null!;
     public string DeriveZip { get; private set; } = null!;
-    public string UniversalZip { get; private set; } = null!;
+    // universal 腿独立惰性初始化：osx 运行时包不可得的宿主上只影响 universal 用例，
+    // 不拖垮其余 archive 测试（Initialize 不触碰它）。
+    public string UniversalZip => _universalZip.Value;
 
     private readonly Lazy<bool> _init;
+    private readonly Lazy<string> _universalZip;
 
-    public ArchiveFixture() => _init = new Lazy<bool>(() => { Initialize(); return true; });
+    public ArchiveFixture()
+    {
+        _init = new Lazy<bool>(() => { Initialize(); return true; });
+        _universalZip = new Lazy<string>(InitializeUniversal);
+    }
 
     public bool Ensure() => _init.Value;
 
@@ -102,6 +109,11 @@ public sealed class ArchiveFixture : IDisposable
             "derive publish failed", noRestore: false);
         DeriveZip = SingleFile(Ws.Combine("derive"), "*.zip");
 
+        DeriveZip = SingleFile(Ws.Combine("derive"), "*.zip");
+    }
+
+    private string InitializeUniversal()
+    {
         // universal 回归腿：双 RID 内层 Restore;Publish 连跑 + 参考发布 + 合并。回归点是 assets
         // 逐 RID 重写不互相踩（NETSDK1047）——osx-x64 腿发布成功后 osx-arm64 的 Restore 重写
         // assets，osx-x64 的 Publish 已在本腿消费完毕不受影响。fixture 有 SelfContained=true，
@@ -113,7 +125,7 @@ public sealed class ArchiveFixture : IDisposable
              "-p:BundlerTestFormats=zip",
              $"-p:BundlerIntegrationOutput={Ws.Combine("universal")}"],
             "universal publish failed", noRestore: false);
-        UniversalZip = SingleFile(Ws.Combine("universal"), "*.zip");
+        return SingleFile(Ws.Combine("universal"), "*.zip");
     }
 
     public void Publish(string name, params string[] extraProperties)
