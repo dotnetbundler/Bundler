@@ -253,8 +253,8 @@ public static class UpdateTests
             // per-target 件命中优先。
             Assert.True(UpdateBootstrapper.TryResolve(update, "linux-x86_64", out var resolved));
             Assert.EndsWith(Path.Combine("linux-x86_64", "bundler-updater"), resolved);
-            // 无 per-target 件（macos-arm64 未构建）→ 降级 posix 脚本。
-            Assert.True(UpdateBootstrapper.TryResolve(update, "macos-arm64", out resolved));
+            // 无 per-target 件（macos-aarch64 未构建）→ 降级 posix 脚本。
+            Assert.True(UpdateBootstrapper.TryResolve(update, "macos-aarch64", out resolved));
             Assert.EndsWith("bundler-updater.sh", resolved);
             // 工具目录缺位→不注入（安全降级，非错误）。
             var empty = new UpdateBundleConfiguration { BootstrapperDirectory = Path.Combine(tools, "none") };
@@ -1007,10 +1007,10 @@ public static class UpdateTests
             var update = new UpdateBundleConfiguration { BootstrapperDirectory = tools };
 
             // win 宿主绝不拿 POSIX 脚本——无 per-target 二进制即不可用（确定性拒绝而非注入不可执行件）。
-            Assert.False(UpdateBootstrapper.TryResolve(update, "windows-arm64", out _));
+            Assert.False(UpdateBootstrapper.TryResolve(update, "windows-aarch64", out _));
             Assert.False(UpdateBootstrapper.TryResolve(update, "windows-x86_64", out _));
             // 非 win 宿主照常降级脚本件。
-            Assert.True(UpdateBootstrapper.TryResolve(update, "macos-arm64", out var resolved));
+            Assert.True(UpdateBootstrapper.TryResolve(update, "macos-aarch64", out var resolved));
             Assert.EndsWith("bundler-updater.sh", resolved);
         }
         finally
@@ -1030,8 +1030,8 @@ public static class UpdateTests
         Assert.True(UpdateBootstrapper.TryResolve(update, "windows-x86_64", out var win));
         Assert.EndsWith(".exe", win);
         Assert.True(File.Exists(win));
-        // windows-arm64 有内嵌真件（arm64 宿主产出随包）；windows-i686 仍无件且不降级脚本 → 确定性不可用。
-        Assert.True(UpdateBootstrapper.TryResolve(update, "windows-arm64", out _));
+        // windows-aarch64 有内嵌真件（arm64 宿主产出随包）；windows-i686 仍无件且不降级脚本 → 确定性不可用。
+        Assert.True(UpdateBootstrapper.TryResolve(update, "windows-aarch64", out _));
         Assert.False(UpdateBootstrapper.TryResolve(update, "windows-i686", out _));
     }
 
@@ -1064,7 +1064,7 @@ public static class UpdateTests
             };
             var artifacts = new[]
             {
-                new BundleArtifact(PackageFormat.App, "macos-arm64", appDir)
+                new BundleArtifact(PackageFormat.App, "macos-aarch64", appDir)
             };
 
             var produced = UpdateManifestEmitter.EmitAsync(configuration, artifacts)
@@ -1126,8 +1126,8 @@ public static class UpdateTests
             };
             var artifacts = new[]
             {
-                new BundleArtifact(PackageFormat.App, "macos-arm64", appDir),
-                new BundleArtifact(PackageFormat.App, "macos-arm64", appDir),
+                new BundleArtifact(PackageFormat.App, "macos-aarch64", appDir),
+                new BundleArtifact(PackageFormat.App, "macos-aarch64", appDir),
             };
 
             UpdateManifestEmitter.EmitAsync(configuration, artifacts)

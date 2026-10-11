@@ -104,6 +104,9 @@ internal static class MsiSupport
         if (target is not null)
         {
             args.Add($"-p:BundlerTarget={target}");
+            // publish -r <rid> --no-restore 消费 RID 专属 assets——restore 必须按同一 RID 还原。
+            args.Add("-r");
+            args.Add(TestPlatform.ToPublishRid(target));
         }
         ProcessRunner.AssertSuccess(Dotnet.Run(args, new ProcessRunner.Options()),
             $"MSI fixture restore failed: {project}");

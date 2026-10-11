@@ -63,7 +63,7 @@ public static class UpdaterClientTests
             Protocol.UpdateInstallIdentity.Write(resources, new Protocol.UpdateInstallIdentity
             {
                 Format = "app",
-                Target = "macos-arm64",
+                Target = "macos-aarch64",
                 FeedUrl = "feed-placeholder",
                 PublicKey = "cHVibGljLWtleQ==",
             });
@@ -90,7 +90,7 @@ public static class UpdaterClientTests
             Protocol.UpdateInstallIdentity.Write(contents, new Protocol.UpdateInstallIdentity
             {
                 Format = "app",
-                Target = "macos-arm64",
+                Target = "macos-aarch64",
                 FeedUrl = "feed-placeholder",
                 PublicKey = "cHVibGljLWtleQ==",
             });

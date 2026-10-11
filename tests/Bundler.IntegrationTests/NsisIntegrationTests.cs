@@ -390,7 +390,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
     private string Installer(string bundle, string version = "1.0.0", string? name = null)
         => Path.Combine(_f.BundleDir(bundle),
-            $"{name ?? ProductName}-{version}-setup.exe");
+            $"{name ?? ProductName}-{version}-x64-setup.exe");
 
     // ── 公共小件 ──
 
@@ -598,7 +598,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             ("bundle", $"{ProductName}-1.0.0-x64-setup.exe"),
             ("bundle-per-machine", $"{ProductName}-1.0.0-x64-setup.exe"),
             ("bundle-both", $"{ProductName}-1.0.0-x64-setup.exe"),
-            ("bundle-upgrade", $"{ProductName}-1.1.0-setup.exe"),
+            ("bundle-upgrade", $"{ProductName}-1.1.0-x64-setup.exe"),
             ("bundle-rollback-failure", $"{ProductName}-1.2.0-x64-setup.exe"),
             ("bundle-transaction-snapshot-failure", $"{ProductName}-1.2.0-x64-setup.exe"),
             ("bundle-transaction-activation-failure", $"{ProductName}-1.2.0-x64-setup.exe"),

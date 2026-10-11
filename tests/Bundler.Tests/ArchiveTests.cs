@@ -291,6 +291,31 @@ public static class ArchiveTests
         }
     }
 
+    // 生态词产物名：windows 与安装器同词、macos 与 app/dmg/pkg 同词、musl 恒挂尾缀。
+    [Theory]
+    [InlineData("windows-x86_64", "-windows-x64.zip")]
+    [InlineData("windows-aarch64", "-windows-arm64.zip")]
+    [InlineData("macos-aarch64", "-macos-arm64.zip")]
+    [InlineData("macos-universal", "-macos-universal.zip")]
+    [InlineData("linux-aarch64", "-linux-aarch64.zip")]
+    [InlineData("linux-musl-x86_64", "-linux-x86_64-musl.zip")]
+    static void ProducesPerOsEcosystemArchiveNames(string target, string suffix)
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "names-out");
+        try
+        {
+            var artifacts = new ArchiveBundler().BuildAsync(
+                Configuration(input, output, target, [PackageFormat.Zip]))
+                .GetAwaiter().GetResult();
+            Assert.EndsWith(suffix, artifacts.Single().Path);
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
     // 生态词表外的可解析架构回退规范 GNU 词，归档不造新围栏。
     [Fact]
     static void ArchiveNamesFallBackToCanonicalArchWordForExoticTargets()

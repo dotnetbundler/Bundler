@@ -88,13 +88,20 @@ internal static class BootstrapPlan
         // 恢复会删半成品的安装目录，载荷嵌在其中时会把本轮输入先抹掉再拒绝（为时已晚）。
         // 门禁挂在字面名上：payloadCmp（NT 名）可空不跳过整组判——
         // payload 一侧 NT 化失败时 payload 相关对退回字面判，其余对不受影响。
+        // 拼写级互嵌与物理判并列：载荷经 install 内别名节点（mountvol 挂载点/junction）
+        // 进入时拼写落在 install 之内，解真后物理位置虽在外，但访问路径依赖随换包
+        // 搬走的别名节点——放行会在 swap 中段先毁路径再取载荷（win 腿 G3 mountvol
+        // 实证）。字面嵌套一律拒，与 junction 同义。挂在同一门禁使卷根等更具体的
+        // 拒绝先行（`/` 装位下一切皆“嵌套”，真实病根是无同级备份槽）。
         if (payloadDir is not null &&
             (SameOrInsideCmp(backupCmp, backupDirCmp, installCmp, installDir) ||
              SameOrInsideCmp(backupCmp, backupDirCmp, payloadCmp, payloadDir) ||
              SameOrInsideCmp(installCmp, installDir, backupCmp, backupDirCmp) ||
              SameOrInsideCmp(payloadCmp, payloadDir, backupCmp, backupDirCmp) ||
              SameOrInsideCmp(installCmp, installDir, payloadCmp, payloadDir) ||
-             SameOrInsideCmp(payloadCmp, payloadDir, installCmp, installDir)))
+             SameOrInsideCmp(payloadCmp, payloadDir, installCmp, installDir) ||
+             IsSubpathOf(Path.GetFullPath(options.PayloadDirectory),
+                         Path.GetFullPath(options.InstallDirectory))))
         {
             throw new UsageException("backup/install/payload directories must not nest inside each other.");
         }
@@ -1113,6 +1120,12 @@ internal static class BootstrapPlan
         {
             for (; hops < 40; hops++)
             {
+                // `\\?\Volume{GUID}\` 已是卷真名拼写：NT 对象符号链的自指不是文件
+                // 系统链接，读到即终止（不再跟跳，防解算回环）。
+                if (IsVolumeGuidStableRoot(current))
+                {
+                    break;
+                }
                 string? target;
                 try
                 {
@@ -1126,40 +1139,51 @@ internal static class BootstrapPlan
                 {
                     break;
                 }
-                // Windows 卷挂载点（mountvol）：reparse target 是 `\??\Volume{GUID}`
-                // 或 .NET 剥前缀后的裸名——NT 对象名而非文件系统路径，MOUNT_POINT
-                // 等 tag 时按普通目录透传不跟跳（跟跳会把 `Volume{guid}` 当目录名
-                // 拼进字面路径，静默写偏到别的卷）。tag 探不出（权限/竞争）不猜方向：
-                // 透传会让 install 叶链按链节点被搬走（真应用孤儿化），解成路径又拼
-                // 假路径逃逸守卫——返回 null 拒绝是最干净的落点。
+                // Windows reparse 的 NT 形目标（`\??\Volume{GUID}` 或 .NET 剥前缀
+                // 后的裸名）：Volume{GUID} 按卷真实位置解真，不透传——透传会把
+                // 别名拼写留在 canonical 里，install 内别名底座随 install 搬动
+                // 失效后 swap 拿悬空拼写找载荷（mntd 挂载点被毁的 mountvol 事故）。
+                // 卷无 DOS 挂载名时用 `\\?\Volume{GUID}\` 稳定拼写——独立于别名
+                // 节点仍可达。tag 探不出（权限/竞争）或非 Volume{GUID} 根的其他
+                // NT 设备形无解真身之路——返回 null 拒绝，不猜方向。
                 var next = target;
+                string? volumeGuidStable = null;
                 if (OperatingSystem.IsWindows() && IsNtObjectTarget(target))
                 {
+                    // 卷真名稳定拼写备底：DOS 挂载名解回别名本体（mountvol 文件夹
+                    // 挂载被 GetVolumePathNamesForVolumeName 计入 DOS 名，拼回正
+                    // 在解算的 junction → visited 假环链）时改走 `\\?\Volume{GUID}\`。
+                    var stableBody = target[NtDevicePrefixLength(target)..];
+                    if (HasVolumeGuidRoot(stableBody))
+                    {
+                        volumeGuidStable = VolumeGuidStableForm(stableBody);
+                    }
                     var info = ReparseInfoOf(current);
                     if (info is null)
                     {
                         return null;
                     }
-                    if (info.Value.Tag != IoReparseTagSymlink)
+                    var ntBody = target[NtDevicePrefixLength(target)..];
+                    if (info.Value.Tag != IoReparseTagSymlink && !HasVolumeGuidRoot(ntBody))
                     {
-                        break;
+                        // MOUNT_POINT 的非 Volume{GUID} NT 形（\Device\ 等）无解
+                        // 真身之路——返回 null 拒绝，不猜方向。
+                        return null;
                     }
                     // .NET LinkTarget 对 `\\?\`/` \??\` 前缀目标统一剥前缀返回裸名
                     //（win 腿探针实证）——`mklink /D link \\?\Volume{GUID}` 的实形是
                     // 裸名+绝对 reparse flag。裸名根段 Volume{GUID} 且 flag 绝对时按
                     // 卷真实挂载名解真；flag 相对则是用户真写的相对名，照旧拼父级。
                     // target 可能带 \?\、\??\、\\?\ 前缀（LinkTarget 原文不归一）——剥壳后按裸名判。
-                    var ntBody = target[NtDevicePrefixLength(target)..];
-                    if (!info.Value.Relative && HasVolumeGuidRoot(ntBody))
+                    else if (info.Value.Tag == IoReparseTagSymlink
+                             && !info.Value.Relative && HasVolumeGuidRoot(ntBody))
                     {
-                        var dos = VolumeDosPath(ntBody[..44]);
-                        var tail = ntBody[44..].TrimStart('\\', '/');
-                        if (dos is null)
-                        {
-                            return null;
-                        }
-                        next = Path.GetFullPath(dos.TrimEnd('\\') + @"\" + tail);
+                        next = ResolveVolumeGuidRoot(ntBody);
                     }
+                    // MOUNT_POINT 的 Volume{GUID} 目标（junction NT 形/卷挂载点）
+                    // 不做特殊处理——随 AbsoluteLinkTarget 与 SYMLINK 同解真身：
+                    // 透传会把别名拼写留在 canonical 里，install 内别名底座随
+                    // install 搬动失效后 swap 拿悬空拼写找载荷（mountvol 事故）。
                 }
                 next = AbsoluteLinkTarget(current, next);
                 if (next is null)
@@ -1167,9 +1191,24 @@ internal static class BootstrapPlan
                     return null;
                 }
                 var canonical = CanonicalParentPath(next, resolving);
-                if (canonical is null || !visited.Add(canonical))
+                if (canonical is null)
                 {
                     return null;
+                }
+                if (!visited.Add(canonical))
+                {
+                    // DOS 挂载名把拼写解回链上别名（mountvol 文件夹挂载=解算中的
+                    // junction 本身）→ 改卷真名稳定拼写重试；重试仍撞环才是真环链。
+                    if (volumeGuidStable is null || next == volumeGuidStable)
+                    {
+                        return null;
+                    }
+                    next = volumeGuidStable;
+                    canonical = CanonicalParentPath(next, resolving);
+                    if (canonical is null || !visited.Add(canonical))
+                    {
+                        return null;
+                    }
                 }
                 current = canonical;
             }
@@ -1200,6 +1239,12 @@ internal static class BootstrapPlan
             return null;
         }
         var prefixLength = NtDevicePrefixLength(target);
+        // 裸名 `Volume{GUID}[\sub]` 也是 NT 根（.NET LinkTarget 剥 `\?\`/`\??\`
+        // 前缀的实形，mountvol 挂载点目标即此形）——不能进相对拼父级分支，按卷真身解。
+        if (prefixLength == 0 && OperatingSystem.IsWindows() && HasVolumeGuidRoot(target))
+        {
+            return ResolveVolumeGuidRoot(target);
+        }
         if (!OperatingSystem.IsWindows() || prefixLength == 0)
         {
             return Path.GetFullPath(
@@ -1217,14 +1262,38 @@ internal static class BootstrapPlan
         }
         if (HasVolumeGuidRoot(body))
         {
-            var dosName = VolumeDosPath(body[..44]);
-            var tail = body[44..].TrimStart('\\', '/');
-            return dosName is null ? null
-                : Path.GetFullPath(
-                    dosName.TrimEnd('\\') + (tail.Length == 0 ? @"\" : @"\" + tail));
+            return ResolveVolumeGuidRoot(body);
         }
         return null;
     }
+
+    // `Volume{GUID}[\sub]` 根段解真：有 DOS 挂载名换成挂载名拼回子路径（过
+    // GetFullPath 归一）；无 DOS 名用 `\\?\Volume{GUID}\` 稳定拼写——托管 IO
+    // 可拼可达且不依赖挂载别名节点。后者绝不能过 GetFullPath：.NET 认不出
+    // `\\?\Volume{GUID}` 的根形，会剥 `\\?\` 前缀把裸名当相对目录拼回父级
+    //（win 腿实证 `g4x\Volume{GUID}\…` 伪路径）。拼写本身即规范化形，原样返回。
+    private static string ResolveVolumeGuidRoot(string ntBody)
+    {
+        var tail = ntBody[44..].TrimStart('\\', '/');
+        var dosName = VolumeDosPath(ntBody[..44]);
+        if (dosName is not null)
+        {
+            return Path.GetFullPath(
+                dosName.TrimEnd('\\') + (tail.Length == 0 ? @"\" : @"\" + tail));
+        }
+        return VolumeGuidStableForm(ntBody);
+    }
+
+    // 卷真名稳定拼写 `\\?\Volume{GUID}[\sub]`——不依赖任何挂载别名节点仍可达。
+    private static string VolumeGuidStableForm(string ntBody)
+    {
+        var tail = ntBody[44..].TrimStart('\\', '/');
+        return @"\\?\" + ntBody[..44] + (tail.Length == 0 ? @"\" : @"\" + tail);
+    }
+
+    // 卷真名稳定拼写根（`\\?\Volume{GUID}\` 起头）——已是最真拼写的终止判。
+    private static bool IsVolumeGuidStableRoot(string path) =>
+        path.StartsWith(@"\\?\Volume{", StringComparison.OrdinalIgnoreCase);
 
     // `Volume{GUID}` 是否占据路径根段（整名、尾分隔符或带子路径都算）。
     private static bool HasVolumeGuidRoot(string path) =>

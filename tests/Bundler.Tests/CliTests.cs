@@ -168,7 +168,10 @@ public static class CliTests
         {
             // 宿主门禁格式失败只 WARN+计入失败汇总——可产格式照常产出，末位 rc=1。
             // 组合须是“rid 合法但宿主不可产”（rid 不匹配属配置错，统一预检 rc=2）。
-            var (gatedRid, gated) = TestPlatform.IsMacOS ? ("windows-x86_64", "msi") : ("macos-universal", "dmg");
+            // 产物名用生态词不是 target 字面：windows-x86_64→windows-x64，macos-universal→macos-universal。
+            var (gatedRid, gated, zipWord) = TestPlatform.IsMacOS
+                ? ("windows-x86_64", "msi", "windows-x64")
+                : ("macos-universal", "dmg", "macos-universal");
             var args = BaseArgs("bundle", input, output)
                 .Select(arg => arg == "linux-x86_64" ? gatedRid : arg)
                 .Select(arg => arg == "zip" ? $"{gated},zip" : arg)
@@ -177,7 +180,7 @@ public static class CliTests
             Assert.Equal(1, code);
             Assert.Contains("1 format(s) failed", err);
             Assert.Contains(gated, err);
-            var zip = Path.Combine(output, $"clifixture-1.0.0-{gatedRid}.zip");
+            var zip = Path.Combine(output, $"clifixture-1.0.0-{zipWord}.zip");
             Assert.True(File.Exists(zip), $"producible format artifact must still land at {zip}");
             Assert.Contains(zip, stdout);
         }

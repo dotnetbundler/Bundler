@@ -22,7 +22,7 @@ public static class MacDmgApiTests
             [
                 new BundleTargetConfiguration
                 {
-                    Target = "macos-arm64",
+                    Target = TestPlatform.OsxTarget,
                     InputDirectory = input,
                     MainExecutable = "ApiFixture",
                     Formats = [PackageFormat.Dmg]

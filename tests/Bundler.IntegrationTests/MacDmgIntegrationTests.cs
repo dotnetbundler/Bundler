@@ -36,7 +36,7 @@ public sealed class MacDmgFixture : IDisposable
 
     internal static string MacArch(string target) =>
         target.EndsWith("x86_64", StringComparison.Ordinal) ? "x86_64"
-        : target.EndsWith("arm64", StringComparison.Ordinal) ? "arm64" : "universal";
+        : target.EndsWith("aarch64", StringComparison.Ordinal) || target.EndsWith("arm64", StringComparison.Ordinal) ? "arm64" : "universal";
 
     private string PublishDmg(string name, params string[] extra)
         => PublishDmgForTarget(name, TestPlatform.OsxTarget, extra);

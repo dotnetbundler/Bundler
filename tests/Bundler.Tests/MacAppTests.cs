@@ -730,13 +730,13 @@ public static class MacAppTests
             await AssertThrows<InvalidDataException>(
                 () => new MacAppBundler().BuildAsync(MacConfiguration(
                     wrongArchInput, Path.Combine(output, "wrong"))),
-                "An x86_64 executable must not pass in an macos-arm64 target.");
+                "An x86_64 executable must not pass in an macos-aarch64 target.");
             var fat = await new MacAppBundler().BuildAsync(MacConfiguration(
                 fatInput, Path.Combine(output, "fat"), target: "macos-x86_64"));
             Assert.True(File.Exists(Path.Combine(fat[0].Path, "Contents", "MacOS", "ExampleApp")),
                 "Fat binaries satisfy both macos-universal targets.");
             var thin = await new MacAppBundler().BuildAsync(MacConfiguration(
-                arm64Input, Path.Combine(output, "thin"), target: "macos-arm64"));
+                arm64Input, Path.Combine(output, "thin"), target: "macos-aarch64"));
             Assert.Single(thin);
             var universal = await new MacAppBundler().BuildAsync(MacConfiguration(
                 fatInput, Path.Combine(output, "universal"), target: "macos-universal"));
@@ -1758,7 +1758,7 @@ public static class MacAppTests
             var context = new BundleBuildContext(
                 MacConfiguration(input, output),
                 new BundlePlanItem(
-                    BundleTarget.TryParse("macos-arm64", out var target) ? target! : throw new InvalidOperationException(),
+                    BundleTarget.TryParse("macos-aarch64", out var target) ? target! : throw new InvalidOperationException(),
                     PackageFormat.App, input, "ExampleApp", output, Intermediate: false),
                 output, NullBundleLogger.Instance);
             await MacAppSigning.RunAsync(context, appPath, "ExampleApp",
@@ -1863,7 +1863,7 @@ public static class MacAppTests
     static BundleConfiguration MacConfiguration(
         string input,
         string output = "",
-        string target = "macos-arm64",
+        string target = "macos-aarch64",
         string mainExecutable = "ExampleApp",
         IReadOnlyList<PackageFormat>? formats = null,
         string version = "1.0.0",

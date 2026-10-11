@@ -23,10 +23,15 @@ else
     die "apk 与 docker 都缺"
 fi
 
-# apk 仓库布局：<repo>/<apk架构>/APKINDEX.tar.gz——apk add --repository 按架构子目录找索引
+# apk 仓库布局：<repo>/<apk架构>/APKINDEX.tar.gz——apk add --repository 按架构子目录找索引。
+# 经索引取件时 apk 按 <pkgname>-<pkgver>.apk 拼回文件名：仓内件必须落规范名
+#（产物文件名带 .<arch> 后缀是平面输出消歧；仓库生态约定 arch 在目录不在文件名）。
+PKGNAME="$(tar -xzOf "$APK" .PKGINFO 2>/dev/null | sed -n 's/^pkgname *= *//p' | head -1)"
+PKGVER="$(tar -xzOf "$APK" .PKGINFO 2>/dev/null | sed -n 's/^pkgver *= *//p' | head -1)"
+[ -n "$PKGNAME" ] && [ -n "$PKGVER" ] || die ".PKGINFO 缺 pkgname/pkgver"
 APKARCH="$(uname -m)"
 mkdir -p "$WORK/repo/$APKARCH"
-cp "$APK" "$WORK/repo/$APKARCH/"
+cp "$APK" "$WORK/repo/$APKARCH/${PKGNAME}-${PKGVER}.apk"
 
 if [ "$RUN" = "docker" ]; then
     docker run --rm -v "$WORK/repo:/repo" alpine:latest sh -c \
@@ -40,11 +45,6 @@ fi
 [ -f "$WORK/repo/$APKARCH/APKINDEX.tar.gz" ] && note "索引文件存在" "PASS" "" || note "索引文件存在" "FAIL" ""
 
 # 索引侧真装：apk add --repository 走 APKINDEX 解析单件
-PKGNAME="$(tar -xzOf "$APK" .PKGINFO 2>/dev/null | sed -n 's/^pkgname *= *//p' | head -1)"
-if [ -z "$PKGNAME" ]; then
-    base="$(basename "$APK" .apk)"; PKGNAME="${base%%-[0-9]*}"   # 文件名 <name>-<ver>-r<rel> 兜底
-fi
-[ -n "$PKGNAME" ] || die "pkgname 取不到"
 if [ "$RUN" = "docker" ]; then
     docker run --rm -v "$WORK/repo:/repo" alpine:latest sh -c \
         "apk add --allow-untrusted --repository /repo $PKGNAME >/dev/null && \

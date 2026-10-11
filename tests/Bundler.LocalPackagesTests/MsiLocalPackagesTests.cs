@@ -528,7 +528,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                     $"-p:BundlerWixVersion={c.Version}",
                     $"-p:BundlerWixAllowDowngrades={c.Allow.ToString().ToLowerInvariant()}",
                     "-p:MsiLifecycleTest=true");
-                var msi = Path.Combine(msiDir, $"{MsiName}-{c.Version}-x64.msi");
+                var msi = Path.Combine(msiDir, $"{MsiName}-{c.Version}-x86.msi");
                 Assert.True(File.Exists(msi), $"Missing MSI: {msi}");
                 msiPaths[c.Name] = msi;
             }
@@ -536,7 +536,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                 Path.Combine(root, "api-output"), Path.Combine(root, "api-tools"),
                 "windows-i686", "2.0.0-beta.1", "1.8.4", "false");
             var apiMsi = Path.Combine(apiArtifacts,
-                "MSI API Package Fixture-1.8.4-x64.msi");
+                "MSI API Package Fixture-1.8.4-x86.msi");
             Assert.True(File.Exists(apiMsi), "Standalone API did not produce the mapped x86 MSI.");
             Assert.Equal("1.8.4", MsiSupport.GetProperty(apiMsi, "ProductVersion"));
             foreach (var c in cases)
@@ -656,7 +656,7 @@ public sealed class MsiLocalPackagesTests(MsiLocalPackagesFixture fixture) : ICl
                         "-p:BundlerWixLaunchAfterInstall=true",
                         $"-p:BundlerWixBannerFile={Path.Combine(fixtureDir, "Assets", "banner.bmp")}",
                         $"-p:BundlerWixDialogFile={Path.Combine(fixtureDir, "Assets", "dialog.bmp")}"),
-                    $"{MsiName}-{version}.msi"));
+                    $"{MsiName}-{version}-x64.msi"));
             }
             foreach (var msi in msis) Assert.True(File.Exists(msi), $"Missing MSI: {msi}");
             var v1 = msis[0];

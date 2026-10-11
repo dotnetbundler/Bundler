@@ -22,8 +22,8 @@ samples/HelloBundlerApp/
 
 | Target | Windows 宿主 | macOS 宿主 | Linux 宿主 | 其他宿主 |
 |---|---|---|---|---|
-| `windows-x86_64`/`windows-arm64` | nsis;msi;zip;targz | nsis;zip;targz | nsis;zip;targz | — |
-| `macos-x86_64`/`macos-arm64`/`macos-universal` | app;zip;targz | dmg;pkg;zip;targz | app;zip;targz | — |
+| `windows-x86_64`/`windows-aarch64` | nsis;msi;zip;targz | nsis;zip;targz | nsis;zip;targz | — |
+| `macos-x86_64`/`macos-aarch64`/`macos-universal` | app;zip;targz | dmg;pkg;zip;targz | app;zip;targz | — |
 | `linux-x86_64`/`linux-aarch64` | deb;rpm;zip;targz | deb;rpm;zip;targz | deb;rpm;appimage;zip;targz | — |
 | `linux-musl-x86_64`/`linux-musl-aarch64` | alpineapk;zip;targz | alpineapk;zip;targz | alpineapk;zip;targz | — |
 

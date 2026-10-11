@@ -191,6 +191,9 @@ norm_seg() {
 
 norm_path() {
     _np="${1%/}"
+    # / 的 ${%/} 清成空串会落进 norm_lexical 的相对路径分支退回 $PWD——
+    # install=/ 静默变成调用者 cwd，卷根拒与互嵌判全失准；保 / 原样。
+    [ -n "$_np" ] || _np=/
     norm_seg "$_np" || { echo "bundler-updater: path '$_np' resolves to a cyclic link." >&2; return 1; }
 }
 
@@ -231,8 +234,18 @@ norm_lexical() {
 
 [ -n "$INSTALL_DIR" ] || { echo "bundler-updater: --install-dir is required." >&2; exit 2; }
 [ "$ROLLBACK" = 1 ] || [ -n "$PAYLOAD_DIR" ] || { echo "bundler-updater: --payload is required unless --rollback." >&2; exit 2; }
+INSTALL_RAW=$INSTALL_DIR
+PAYLOAD_RAW=$PAYLOAD_DIR
 INSTALL_DIR="$(norm_path "$INSTALL_DIR")" || exit 2
 [ -z "$PAYLOAD_DIR" ] || PAYLOAD_DIR="$(norm_path "$PAYLOAD_DIR")" || exit 2
+# 卷根装位无同级位置放默认备份槽——与 AOT/managed 侧同拒（须在派生槽名之前）。
+if [ "$INSTALL_DIR" = "/" ] && [ -z "$BACKUP_DIR" ]; then
+    echo "bundler-updater: install directory '/' is a volume root — no sibling location exists for the default backup slot; pass --backup-dir explicitly." >&2
+    exit 2
+fi
+# / 的 ${%/} 清成空会落出相对路径病态槽名——兜底成 / 保持绝对拼写。
+INSTALL_BASE=${INSTALL_DIR%/}
+[ -n "$INSTALL_BASE" ] || INSTALL_BASE=/
 [ -z "$BACKUP_DIR" ] || BACKUP_DIR="$(norm_parent "$BACKUP_DIR")" || exit 2
 [ -z "$RETAIN_DIR" ] || RETAIN_DIR="$(norm_parent "$RETAIN_DIR")" || exit 2
 # 关系判另取全物理名：叶段为符号链接时字面拼写会逃逸同址/互嵌判
@@ -241,31 +254,39 @@ INSTALL_DIR="$(norm_path "$INSTALL_DIR")" || exit 2
 # 重启目标与日志同样按调用方 cwd 规范化成绝对路径——脚本的工作目录不是用户的 cwd。
 [ -z "$APP_PATH" ] || APP_PATH="$(norm_path "$APP_PATH")" || exit 2
 [ -z "$LOG_FILE" ] || LOG_FILE="$(norm_path "$LOG_FILE")" || exit 2
-[ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_DIR%/}.bundler-backup"
+[ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_BASE}.bundler-backup"
 # 备份比较名一律全物理化——默认备份位同样可能预置叶链（与 RETAIN_CMP 物理名不同名会同址逃逸）。
 BACKUP_CMP="$(norm_path "$BACKUP_DIR")" || exit 2
-MARKER="${INSTALL_DIR%/}.bundler-swap"
-LOCK_FILE="${INSTALL_DIR%/}.bundler-lock"
+MARKER="${INSTALL_BASE}.bundler-swap"
+LOCK_FILE="${INSTALL_BASE}.bundler-lock"
 LOCK_TIMEOUT=${LOCK_TIMEOUT:-30}
 
 # 备份目录与安装/载荷同址或互嵌同样是抹数据的形状（换包前会 rm 旧备份）——与 AOT 侧同拒。
 for _p in "$INSTALL_DIR" "$PAYLOAD_DIR"; do
     [ -n "$_p" ] || continue
     case "$BACKUP_CMP" in
-        "$_p"|"$_p"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+        "$_p"|"${_p%/}"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
     esac
     case "$_p" in
-        "$BACKUP_CMP"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+        "${BACKUP_CMP%/}"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
     esac
 done
 
 # 载荷与安装同址或互嵌同样是抹数据的形状（备份移走后 swap 会以空载荷覆盖再删源）——与 AOT 侧同拒。
 if [ -n "$PAYLOAD_DIR" ]; then
     case "$INSTALL_DIR" in
-        "$PAYLOAD_DIR"|"$PAYLOAD_DIR"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+        "$PAYLOAD_DIR"|"${PAYLOAD_DIR%/}"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
     esac
     case "$PAYLOAD_DIR" in
-        "$INSTALL_DIR"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+        "${INSTALL_DIR%/}"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
+    esac
+    # 拼写级互嵌与物理判并列：载荷经 install 内链接别名进入时拼写落在 install
+    # 之内，解真后物理位置虽在外，但访问路径依赖随换包搬走的别名节点——字面
+    # 嵌套一律拒，与 C# 侧 GetFullPath 拼写判同义。
+    INSTALL_SP=$(norm_lexical "$INSTALL_RAW")
+    PAYLOAD_SP=$(norm_lexical "$PAYLOAD_RAW")
+    case "$PAYLOAD_SP" in
+        "$INSTALL_SP"|"${INSTALL_SP%/}"/*) { echo "bundler-updater: backup/install/payload directories must not nest inside each other." >&2; exit 2; } ;;
     esac
 fi
 
@@ -275,10 +296,10 @@ if [ -n "$RETAIN_DIR" ]; then
     for _p in "$INSTALL_DIR" "$BACKUP_CMP" "$PAYLOAD_DIR"; do
         [ -n "$_p" ] || continue
         case "$_r" in
-            "$_p"|"$_p"/*) { echo "bundler-updater: retained-backup directory must not nest inside install/payload/backup directories." >&2; exit 2; } ;;
+            "$_p"|"${_p%/}"/*) { echo "bundler-updater: retained-backup directory must not nest inside install/payload/backup directories." >&2; exit 2; } ;;
         esac
         case "$_p" in
-            "$_r"/*) { echo "bundler-updater: retained-backup directory must not nest inside install/payload/backup directories." >&2; exit 2; } ;;
+            "${_r%/}"/*) { echo "bundler-updater: retained-backup directory must not nest inside install/payload/backup directories." >&2; exit 2; } ;;
         esac
     done
 fi
@@ -506,8 +527,12 @@ if [ "$IS_APP" = 1 ] && [ "$ROLLBACK" != 1 ] && [ "$(uname -s)" = "Darwin" ]; th
         echo "bundler-updater: signed → unsigned downgrade refused." >&2; exit 4
     fi
     # bundle id 一致兜底：未签场景防“拿别的应用来换”。
-    OLD_BID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INSTALL_DIR/Contents/Info.plist" 2>/dev/null || true)
-    NEW_BID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PAYLOAD_DIR/Contents/Info.plist" 2>/dev/null || true)
+    # PlistBuddy 对缺失/损坏 plist 把诊断写 stdout（stderr 拦不住）——先判存在再按无空格过滤，
+    # 失败一律空串跳过比较，与 AOT TryReadBundleId 的 null 语义对齐。
+    OLD_BID=""; [ -f "$INSTALL_DIR/Contents/Info.plist" ] && \
+        OLD_BID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INSTALL_DIR/Contents/Info.plist" 2>/dev/null | grep -v ' ' || true)
+    NEW_BID=""; [ -f "$PAYLOAD_DIR/Contents/Info.plist" ] && \
+        NEW_BID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PAYLOAD_DIR/Contents/Info.plist" 2>/dev/null | grep -v ' ' || true)
     if [ -n "$OLD_BID" ] && [ -n "$NEW_BID" ] && [ "$OLD_BID" != "$NEW_BID" ]; then
         echo "bundler-updater: bundle identifier mismatch ('$OLD_BID' vs '$NEW_BID')." >&2; exit 4
     fi

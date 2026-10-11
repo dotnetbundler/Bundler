@@ -141,7 +141,7 @@ public static class CliProgram
             if (!BundleTarget.TryParse(targetText, out var target) || target is null)
             {
                 throw new CliUsageException(
-                    $"Unknown target '{targetText}'. Supported: windows-i686, windows-x86_64, windows-arm64, macos-universal, macos-x86_64, macos-arm64, linux-x86_64, linux-aarch64, linux-musl-x86_64, linux-musl-aarch64.");
+                    $"Unknown target '{targetText}'. Supported: {{os}}-{{arch}} where os is windows|macos|linux|linux-musl and arch is x86_64|i686|aarch64|armv7hf|armv7sf|riscv64|loongarch64|ppc64le|s390x, plus macos-universal.");
             }
             return Enum.GetValues<PackageFormat>()
                 .Where(format => TargetMatrix.Supports(target, format))
@@ -411,7 +411,7 @@ public static class CliProgram
     {
         writer.WriteLine("Usage:");
         writer.WriteLine("  bundler validate|plan|bundle --input-dir <dir> [--input-dir <dir>...] --target <target> --formats <csv>");
-        writer.WriteLine("      (--input-dir repeated merges the dirs into a universal payload, e.g. macos-x86_64 + macos-arm64)");
+        writer.WriteLine("      (--input-dir repeated merges the dirs into a universal payload, e.g. macos-x86_64 + macos-aarch64)");
         writer.WriteLine("      --product-name <name> --identifier <id> --package-version <ver>");
         writer.WriteLine("      [--output-dir <dir>] [--output-layout <flat|byFormat>] [--main-executable <name>] [--json] [--quiet|--verbose]");
         writer.WriteLine("  Paths in --config resolve relative to the config file; paths given on the command line resolve relative to the working directory.");
@@ -430,7 +430,7 @@ public static class CliProgram
             + " appimage"
 #endif
             + " zip targz alpineapk all");
-        writer.WriteLine("Targets: windows-i686 windows-x86_64 windows-arm64 macos-universal macos-x86_64 macos-arm64 linux-x86_64 linux-aarch64 linux-musl-x86_64 linux-musl-aarch64");
+        writer.WriteLine("Targets: {os}-{arch} — os: windows|macos|linux|linux-musl; arch: x86_64|i686|aarch64|armv7hf|armv7sf|riscv64|loongarch64|ppc64le|s390x; plus macos-universal");
         writer.WriteLine("Exit codes: 0 success, 1 packaging/IO failure, 2 usage or validation failure");
     }
 }

@@ -125,7 +125,7 @@ public sealed class MacAppFixture : IDisposable
 
     internal static string MacArch(string target) =>
         target.EndsWith("x86_64", StringComparison.Ordinal) ? "x86_64"
-        : target.EndsWith("arm64", StringComparison.Ordinal) ? "arm64" : "universal";
+        : target.EndsWith("aarch64", StringComparison.Ordinal) || target.EndsWith("arm64", StringComparison.Ordinal) ? "arm64" : "universal";
 
     private IEnumerable<string> CommonArgs(string name)
     {
@@ -303,7 +303,7 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
         _f.Ensure();
         var lipo = ProcessRunner.Run("lipo",
             ["-info", Path.Combine(_f.App, "Contents/MacOS/BundlerMacIntegrationFixture")]);
-        Assert.Contains(TestPlatform.OsxTarget == "macos-arm64" ? "arm64" : "x86_64",
+        Assert.Contains(TestPlatform.OsxTarget == "macos-aarch64" ? "arm64" : "x86_64",
             lipo.StdOut);
     }
 
