@@ -17,7 +17,7 @@ internal sealed class CliArguments
 
     private static readonly HashSet<string> ValueOptions = new(StringComparer.Ordinal)
     {
-        "input-dir", "output-dir", "target", "formats", "product-name", "identifier",
+        "input-dir", "reference-dir", "output-dir", "target", "formats", "product-name", "identifier",
         "package-version", "main-executable", "publisher", "description", "homepage",
         "copyright", "license-file", "icons", "config", "key-file", "output-layout"
     };

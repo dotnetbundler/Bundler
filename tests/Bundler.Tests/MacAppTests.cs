@@ -839,8 +839,9 @@ public static class MacAppTests
             Assert.Equal(neutral, File.ReadAllBytes(Path.Combine(refOut, "Managed.dll")));
             Cleanup(refSrc, refOut, armRef);
 
-            // No reference build (CLI --input-dir path): real RID publishes carry managed
-            // assemblies differing only in PE stamp/MVID — deterministic first-side copy wins.
+            // No reference build (CLI --input-dir without --reference-dir): real RID publishes
+            // carry managed assemblies stamped per-arch — no side's copy runs on both arches,
+            // so the merge must fail and point at the reference channel rather than pick one.
             var cliArm = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
             var cliOut = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(cliArm);
@@ -850,8 +851,11 @@ public static class MacAppTests
             managedArm[0x300] = 0xAB; // 模拟逐字节相异的托管载荷（MVID 差异）
             File.WriteAllBytes(Path.Combine(x64, "Rid.dll"), managedX64);
             File.WriteAllBytes(Path.Combine(cliArm, "Rid.dll"), managedArm);
-            MacUniversalPayloadMerger.Merge([x64, cliArm], cliOut);
-            Assert.Equal(managedX64, File.ReadAllBytes(Path.Combine(cliOut, "Rid.dll")));
+            var managedConflict = Record.ExceptionAsync(
+                () => Task.Run(() => MacUniversalPayloadMerger.Merge([x64, cliArm], cliOut)))
+                .GetAwaiter().GetResult();
+            Assert.IsType<InvalidDataException>(managedConflict);
+            Assert.Contains("referenceDirectory", managedConflict.Message);
             // 相异的 NATIVE PE 仍硬拒——其 arch 内容永远无法合并。
             var nativeArm = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(nativeArm);

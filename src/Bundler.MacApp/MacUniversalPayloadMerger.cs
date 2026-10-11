@@ -10,11 +10,12 @@ namespace DotNet.Bundler.MacApp;
 /// - present in the RID-less reference build → that copy wins (managed payload is identical
 ///   by construction there; RID-specific builds stamp the PE machine type and derived MVID
 ///   into managed assemblies, so byte-identity between arch builds is unreachable);
-/// - present on all sides, differs, not Mach-O, every side a managed .NET assembly →
-///   first side's copy wins (managed IL is arch-neutral; the per-RID difference is the PE
-///   machine stamp and MVID, both advisory at runtime — same trade-off as .pdb/.deps.json.
-///   This is what lets `bundler bundle --input-dir` repeated merge real RID publishes,
-///   which have no reference build);
+/// - present on all sides, differs, not Mach-O, no reference copy → hard error (no generic
+///   arch-subdir fallback: a standard .NET apphost does not probe RID subdirectories, unlike
+///   MAUI's runtime). When every side is a managed .NET assembly the error points at
+///   `referenceDirectory`: RID publishes stamp the arch into the PE, and the runtime
+///   hard-rejects a mismatched stamp, so picking any single side ships a broken payload —
+///   only the RID-less build's neutral (AnyCPU-stamped) copy is correct;
 /// - present on one side only → copied verbatim.
 /// Symlinks are dereferenced into their target contents; other special files are rejected.
 /// </summary>
@@ -125,12 +126,14 @@ public static class MacUniversalPayloadMerger
             }
             else if (sources.All(PortableExecutable.IsManagedAssembly))
             {
-                // RID publishes stamp PE machine type + MVID into managed assemblies, so real
-                // dual-RID input dirs always differ here. Managed IL is arch-neutral — merge
-                // cannot produce a fat PE anyway, so the first side's copy is the deterministic
-                // pick (a native PE that differs still falls through to the hard error: its
-                // arch-specific content can never merge).
-                File.Copy(first, destination);
+                // Managed assemblies from RID publishes carry arch-stamped PEs (machine type +
+                // MVID) and the runtime hard-rejects a stamp mismatched to the process arch —
+                // no single side's copy can serve both arches. Only the neutral (RID-less,
+                // AnyCPU-stamped) build supplies correct copies, hence referenceDirectory.
+                throw new InvalidDataException(
+                    $"Universal merge conflict: '{relative}' is a managed assembly that differs between inputs; " +
+                    "pass a RID-less publish of the same project as referenceDirectory " +
+                    "(Bundler.Cli: --reference-dir) so its neutral copies can supply managed files.");
             }
             else
             {
