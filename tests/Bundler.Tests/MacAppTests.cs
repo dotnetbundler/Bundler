@@ -838,6 +838,31 @@ public static class MacAppTests
             MacUniversalPayloadMerger.Merge([x64, armRef], refOut, refSrc);
             Assert.Equal(neutral, File.ReadAllBytes(Path.Combine(refOut, "Managed.dll")));
             Cleanup(refSrc, refOut, armRef);
+
+            // No reference build (CLI --input-dir path): real RID publishes carry managed
+            // assemblies differing only in PE stamp/MVID — deterministic first-side copy wins.
+            var cliArm = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+            var cliOut = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(cliArm);
+            File.WriteAllBytes(Path.Combine(cliArm, "ExampleApp"), FakeMachO(0x0100000C));
+            var managedX64 = FakePortableExecutable(managed: true, readyToRun: false);
+            var managedArm = FakePortableExecutable(managed: true, readyToRun: false);
+            managedArm[0x300] = 0xAB; // 模拟逐字节相异的托管载荷（MVID 差异）
+            File.WriteAllBytes(Path.Combine(x64, "Rid.dll"), managedX64);
+            File.WriteAllBytes(Path.Combine(cliArm, "Rid.dll"), managedArm);
+            MacUniversalPayloadMerger.Merge([x64, cliArm], cliOut);
+            Assert.Equal(managedX64, File.ReadAllBytes(Path.Combine(cliOut, "Rid.dll")));
+            // 相异的 NATIVE PE 仍硬拒——其 arch 内容永远无法合并。
+            var nativeArm = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(nativeArm);
+            File.WriteAllBytes(Path.Combine(nativeArm, "ExampleApp"), FakeMachO(0x0100000C));
+            File.WriteAllBytes(Path.Combine(nativeArm, "Rid.dll"),
+                FakePortableExecutable(managed: false, readyToRun: false));
+            AssertThrows<InvalidDataException>(
+                () => Task.Run(() => MacUniversalPayloadMerger.Merge([x64, nativeArm],
+                    Path.Combine(cliOut, "native"))),
+                "Differing native PE files must still fail the universal merge.").GetAwaiter().GetResult();
+            Cleanup(cliArm, cliOut, nativeArm);
         }
         finally
         {

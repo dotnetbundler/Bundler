@@ -10,9 +10,11 @@ namespace DotNet.Bundler.MacApp;
 /// - present in the RID-less reference build → that copy wins (managed payload is identical
 ///   by construction there; RID-specific builds stamp the PE machine type and derived MVID
 ///   into managed assemblies, so byte-identity between arch builds is unreachable);
-/// - present on all sides, differs, not Mach-O, no reference copy → hard error (no generic
-///   arch-subdir fallback: a standard .NET apphost does not probe RID subdirectories, unlike
-///   MAUI's runtime);
+/// - present on all sides, differs, not Mach-O, every side a managed .NET assembly →
+///   first side's copy wins (managed IL is arch-neutral; the per-RID difference is the PE
+///   machine stamp and MVID, both advisory at runtime — same trade-off as .pdb/.deps.json.
+///   This is what lets `bundler bundle --input-dir` repeated merge real RID publishes,
+///   which have no reference build);
 /// - present on one side only → copied verbatim.
 /// Symlinks are dereferenced into their target contents; other special files are rejected.
 /// </summary>
@@ -119,6 +121,15 @@ public static class MacUniversalPayloadMerger
             {
                 // Debug symbols embed per-RID paths so they always differ; keeping one side's copy
                 // is the usual trade-off (managed debugging has no fat-symbol format).
+                File.Copy(first, destination);
+            }
+            else if (sources.All(PortableExecutable.IsManagedAssembly))
+            {
+                // RID publishes stamp PE machine type + MVID into managed assemblies, so real
+                // dual-RID input dirs always differ here. Managed IL is arch-neutral — merge
+                // cannot produce a fat PE anyway, so the first side's copy is the deterministic
+                // pick (a native PE that differs still falls through to the hard error: its
+                // arch-specific content can never merge).
                 File.Copy(first, destination);
             }
             else
