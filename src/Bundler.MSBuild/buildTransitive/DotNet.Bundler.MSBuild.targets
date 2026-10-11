@@ -14,7 +14,6 @@
     <_BundlerForwardProps Condition="'$(AssemblyVersion)' != ''">$(_BundlerForwardProps) -p:AssemblyVersion=&quot;$(AssemblyVersion)&quot;</_BundlerForwardProps>
     <_BundlerForwardProps Condition="'$(FileVersion)' != ''">$(_BundlerForwardProps) -p:FileVersion=&quot;$(FileVersion)&quot;</_BundlerForwardProps>
     <_BundlerForwardProps Condition="'$(InformationalVersion)' != ''">$(_BundlerForwardProps) -p:InformationalVersion=&quot;$(InformationalVersion)&quot;</_BundlerForwardProps>
-    <_BundlerForwardProps Condition="'$(AssemblyName)' != ''">$(_BundlerForwardProps) -p:AssemblyName=&quot;$(AssemblyName)&quot;</_BundlerForwardProps>
     <_BundlerForwardProps Condition="'$(UseAppHost)' != ''">$(_BundlerForwardProps) -p:UseAppHost=&quot;$(UseAppHost)&quot;</_BundlerForwardProps>
     <!-- 发布形态标志也要转发：csproj 体内写死 SelfContained/AOT/单文件/裁剪/R2R 的工程，
          外层 -p: 覆盖若不随子进程走，内层会复活体内值——universal 参考发布清 RID 后
@@ -25,6 +24,8 @@
     <_BundlerForwardProps Condition="'$(PublishSingleFile)' != ''">$(_BundlerForwardProps) -p:PublishSingleFile=&quot;$(PublishSingleFile)&quot;</_BundlerForwardProps>
     <_BundlerForwardProps Condition="'$(PublishTrimmed)' != ''">$(_BundlerForwardProps) -p:PublishTrimmed=&quot;$(PublishTrimmed)&quot;</_BundlerForwardProps>
     <_BundlerForwardProps Condition="'$(PublishReadyToRun)' != ''">$(_BundlerForwardProps) -p:PublishReadyToRun=&quot;$(PublishReadyToRun)&quot;</_BundlerForwardProps>
+    <!-- AssemblyName 特意不转：-p:AssemblyName= 是全局属性会沿 P2P 传染，把引用工程
+         的输出也改名（review BUG-2）——内层 publish 求值同一个 csproj 本来就拿同名。 -->
   </PropertyGroup>
 
   <UsingTask TaskName="DotNet.Bundler.MSBuild.BundleDesktopApplication"
@@ -135,6 +136,33 @@
              Text="BundlerTarget '$(BundlerTarget)' does not match the target '@(_BundlerTargetFromRid)' mapped from RuntimeIdentifier '$(RuntimeIdentifier)'. The explicit target wins; remove BundlerTarget to derive from the RID." />
   </Target>
 
+  <!-- 内层发布转发值的壳层校验：_BundlerForwardProps 把调用方属性拼进 Exec 双引号参数，
+       POSIX sh 在双引号内仍求值 $()/反引号，cmd 还展开 %name%——元字符 = 注入面
+       （review SEC-2）。标量值拒 " \ $ ` 换行 %；路径值（还原源/包路径）额外放行
+       Windows 反斜杠，其余同拒。RID 词各自有独立白名单（见两调用点）。 -->
+  <Target Name="_BundlerValidateInnerPublish">
+    <ItemGroup>
+      <_BundlerFwdScalar Include="Version" Condition="'$(Version)' != ''"><Value>$(Version)</Value></_BundlerFwdScalar>
+      <_BundlerFwdScalar Include="VersionPrefix" Condition="'$(VersionPrefix)' != ''"><Value>$(VersionPrefix)</Value></_BundlerFwdScalar>
+      <_BundlerFwdScalar Include="VersionSuffix" Condition="'$(VersionSuffix)' != ''"><Value>$(VersionSuffix)</Value></_BundlerFwdScalar>
+      <_BundlerFwdScalar Include="AssemblyVersion" Condition="'$(AssemblyVersion)' != ''"><Value>$(AssemblyVersion)</Value></_BundlerFwdScalar>
+      <_BundlerFwdScalar Include="FileVersion" Condition="'$(FileVersion)' != ''"><Value>$(FileVersion)</Value></_BundlerFwdScalar>
+      <_BundlerFwdScalar Include="InformationalVersion" Condition="'$(InformationalVersion)' != ''"><Value>$(InformationalVersion)</Value></_BundlerFwdScalar>
+      <_BundlerFwdScalar Include="UseAppHost" Condition="'$(UseAppHost)' != ''"><Value>$(UseAppHost)</Value></_BundlerFwdScalar>
+      <_BundlerFwdScalar Include="SelfContained" Condition="'$(SelfContained)' != ''"><Value>$(SelfContained)</Value></_BundlerFwdScalar>
+      <_BundlerFwdScalar Include="PublishAot" Condition="'$(PublishAot)' != ''"><Value>$(PublishAot)</Value></_BundlerFwdScalar>
+      <_BundlerFwdScalar Include="PublishSingleFile" Condition="'$(PublishSingleFile)' != ''"><Value>$(PublishSingleFile)</Value></_BundlerFwdScalar>
+      <_BundlerFwdScalar Include="PublishTrimmed" Condition="'$(PublishTrimmed)' != ''"><Value>$(PublishTrimmed)</Value></_BundlerFwdScalar>
+      <_BundlerFwdScalar Include="PublishReadyToRun" Condition="'$(PublishReadyToRun)' != ''"><Value>$(PublishReadyToRun)</Value></_BundlerFwdScalar>
+      <_BundlerFwdPath Include="RestorePackagesPath" Condition="'$(RestorePackagesPath)' != ''"><Value>$(RestorePackagesPath)</Value></_BundlerFwdPath>
+      <_BundlerFwdPath Include="RestoreSources" Condition="'$(RestoreSources)' != ''"><Value>$(RestoreSources)</Value></_BundlerFwdPath>
+    </ItemGroup>
+    <Error Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(_BundlerFwdScalar.Value)', '[\x22\x5c\x24\x60\x0a\x0d\x25]'))"
+           Text="BundlerBundle: property '%(_BundlerFwdScalar.Identity)' contains shell metacharacters and cannot be forwarded to the inner publish." />
+    <Error Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(_BundlerFwdPath.Value)', '[\x22\x24\x60\x0a\x0d\x25]'))"
+           Text="BundlerBundle: property '%(_BundlerFwdPath.Identity)' contains shell metacharacters and cannot be forwarded to the inner publish." />
+  </Target>
+
   <!-- macOS universal 输入解析：per-RID 内层发布 + 托管合并（两入口共用；BundlerUniversalTargets 未设时跳过） -->
   <Target Name="_BundlerUniversalMerge" Condition="'$(BundlerUniversalTargets)' != ''">
     <PropertyGroup>
@@ -186,6 +214,7 @@
          即 [A-Za-z0-9._-]。 -->
     <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(_BundlerUniversalRid.Identity)', '^[A-Za-z0-9._-]+$'))"
            Text="BundlerUniversalTargets item '%(_BundlerUniversalRid.Identity)' contains characters outside [A-Za-z0-9._-]." />
+    <CallTarget Targets="_BundlerValidateInnerPublish" />
     <Exec Command='&quot;$(BundlingDotnetExe)&quot; publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) -r %(_BundlerUniversalRid.Identity) -o &quot;$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity)&quot; $(_BundlerInnerPublishProps)' />
     <!-- 无 RID 参考发布：非 Mach-O 文件的权威源。RID 专属构建给托管件打架构印记（PE machine
          及派生 MVID/时间戳），两 arch 的 test.dll 天然逐字节相异、无法靠比对合并；参考发布
@@ -217,6 +246,7 @@
            Text="BundlerTarget '$(BundlerTarget)' has no canonical publish RID mapping — pass -p:BundlerPublishRid=&lt;rid&gt; or -p:BundlerInputDir=&lt;dir&gt;." />
     <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(BundlerPublishRid)', '^[A-Za-z0-9._-]+$'))"
            Text="BundlerPublishRid '$(BundlerPublishRid)' contains characters outside [A-Za-z0-9._-]." />
+    <CallTarget Targets="_BundlerValidateInnerPublish" />
     <!-- publish -o 不清理上次构建已删的文件——先清中间发布目录防滞留 -->
     <RemoveDir Directories="$(_BundlerPublishOutDir)" />
     <!-- 与 universal 段同理走子进程（见上注释）；发布选项需显式转发——SelfContained/AOT/
