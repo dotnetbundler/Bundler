@@ -24,7 +24,9 @@ public static class UpdateIdentitySidecar
         {
             Format = FormatName(format),
             Target = target,
-            Channel = update.Channel,
+            // 与 UpdateManifestEmitter 同一归一规则：空 channel 按 "latest" 落地，
+            // 否则包内身份与 feed 清单的 channel 字段会不一致。
+            Channel = string.IsNullOrWhiteSpace(update.Channel) ? "latest" : update.Channel,
             FeedUrl = update.FeedUrl,
             PublicKey = ResolvePublicKey(update),
         });

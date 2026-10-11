@@ -924,6 +924,32 @@ public static class UpdateTests
     }
 
     [Fact]
+    static void Sidecar_NormalizesEmptyChannel()
+    {
+        // MSBuild 未设 BundlerUpdateChannel 时 Channel 为空串——身份侧车必须与 feed 一样归一为 latest。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var payload = Path.Combine(directory, "payload");
+            Directory.CreateDirectory(payload);
+            UpdateIdentitySidecar.WriteIfEnabled(payload, new UpdateBundleConfiguration
+            {
+                FeedUrl = "https://example.test/feed.json",
+                Channel = "",
+                PublicKey = "cHVibGljLWtleQ=="
+            }, PackageFormat.Zip, "linux-x86_64");
+
+            using var document = JsonDocument.Parse(
+                File.ReadAllText(Path.Combine(payload, UpdateIdentitySidecar.FileName)));
+            Assert.Equal("latest", document.RootElement.GetProperty("channel").GetString());
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     static void Sidecar_SkipsWhenUpdateDisabled()
     {
         var directory = CreateTempDirectory();
