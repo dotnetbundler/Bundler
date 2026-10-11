@@ -95,7 +95,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.93" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.94" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -129,7 +129,7 @@ canonical RID 映射表：`windows-x86_64→win-x64`、`windows-i686→win-x86`�
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.93" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.94" />
 ```
 
 ```csharp
@@ -175,7 +175,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.93" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.94" />
 ```
 
 ```csharp

@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-11
 > 当前分支：`main`（HEAD `d00189a`；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.93`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.94`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；基础目标模型重构已完成并入 `main`（alpha.90–93）——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `CpuArchitecture` 族序重排 + `BundlerTarget` `{os}[-{libc}]-{arch}` canonical GNU 词（别称仅输入归一，产物文件名层用各生态词），契约与全产物名目录见 `docs/target-matrix.md`**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
@@ -532,7 +532,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#59 持续加固与重构至 `alpha.93`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地，跨版本兼容冻件腿与三宿主真小卷 ENOSPC 腿在网，`tests/Special/` 特殊验收脚本矩阵就位（§3 最新三轮）。
+UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#59 持续加固与重构至 `alpha.94`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地，跨版本兼容冻件腿与三宿主真小卷 ENOSPC 腿在网，`tests/Special/` 特殊验收脚本矩阵就位（§3 最新三轮）。
 目标模型重构（PR #55..#59）已并入 main 并经三轮四宿主轮测（终轮全新会话整轮零缺陷）+ release-verify 同树 3 连绿收口。
 剩余工作：外部待验收项（各格式 OI 清单，见 §5）、发布链资产实际推送（nuget+release 为另一步）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。release-verify 六宿主全量验证已落地并入 main，main 上 dispatch 3 连绿。
 
