@@ -139,8 +139,9 @@ public static class MacUniversalPayloadMerger
             {
                 throw new InvalidDataException(
                     $"Universal merge conflict: '{relative}' differs between inputs and is not a Mach-O file " +
-                    $"(first: {first}). Universal payloads need byte-identical non-Mach-O files or " +
-                    "per-architecture Mach-O files to merge.");
+                    $"(first: {first}). Universal payloads need byte-identical non-Mach-O files, " +
+                    "per-architecture Mach-O files to merge, or a referenceDirectory " +
+                    "(Bundler.Cli: --reference-dir) supplying canonical copies.");
             }
         }
     }

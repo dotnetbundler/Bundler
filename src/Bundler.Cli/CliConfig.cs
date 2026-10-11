@@ -367,9 +367,11 @@ internal static class CliConfig
     {
         foreach (var (name, value) in parsed.Options)
         {
-            if (name == "config" || TargetFields.ContainsKey(name) || name == "formats")
+            if (name == "config" || name == "reference-dir" ||
+                TargetFields.ContainsKey(name) || name == "formats")
             {
-                // target-level options are applied onto targets[] in Materialize
+                // target-level options are applied onto targets[] in Materialize;
+                // --reference-dir is consumed directly by CliProgram's input-dir merge.
                 continue;
             }
             var dot = name.IndexOf('.');

@@ -409,6 +409,51 @@ public static class CliTests
         }
     }
 
+    [Fact]
+    static void RepeatedInputDirsHonorReferenceDir()
+    {
+        // --reference-dir must reach MacUniversalPayloadMerger (regression: the option used to
+        // be rejected as an unknown configuration key before it could feed the merge).
+        var x64 = Path.Combine(Path.GetTempPath(), "bundler-cli-ref-x64-" + Guid.NewGuid().ToString("N"));
+        var arm64 = Path.Combine(Path.GetTempPath(), "bundler-cli-ref-arm64-" + Guid.NewGuid().ToString("N"));
+        var neutral = Path.Combine(Path.GetTempPath(), "bundler-cli-ref-neutral-" + Guid.NewGuid().ToString("N"));
+        var output = Path.Combine(Path.GetTempPath(), "bundler-cli-ref-out-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            foreach (var dir in new[] { x64, arm64, neutral })
+            {
+                Directory.CreateDirectory(dir);
+            }
+            WriteThinMachO(Path.Combine(x64, "cli-fixture"), 0x01000007);
+            WriteThinMachO(Path.Combine(arm64, "cli-fixture"), 0x0100000C);
+            File.WriteAllText(Path.Combine(x64, "managed.txt"), "x64 payload\n");
+            File.WriteAllText(Path.Combine(arm64, "managed.txt"), "arm64 payload\n");
+            File.WriteAllText(Path.Combine(neutral, "managed.txt"), "neutral payload\n");
+            var (code, _, err) = Run(
+                "bundle", "--input-dir", x64, "--input-dir", arm64,
+                "--reference-dir", neutral,
+                "--target", "macos-universal", "--formats", "zip",
+                "--product-name", "CliFixture", "--identifier", "dev.example.cli",
+                "--package-version", "1.0.0", "--main-executable", "cli-fixture",
+                "--output-dir", output);
+            Assert.True(code == 0, $"reference-dir merge must exit 0, got {code}: {err}");
+            var zip = Path.Combine(output, "clifixture-1.0.0-macos-universal.zip");
+            using var archive = new System.IO.Compression.ZipArchive(
+                File.OpenRead(zip), System.IO.Compression.ZipArchiveMode.Read);
+            var entry = archive.GetEntry("clifixture-1.0.0-macos-universal/managed.txt");
+            Assert.NotNull(entry);
+            using var reader = new StreamReader(entry!.Open());
+            Assert.Equal("neutral payload\n", reader.ReadToEnd());
+        }
+        finally
+        {
+            foreach (var dir in new[] { x64, arm64, neutral, output })
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, true);
+            }
+        }
+    }
+
     static void WriteThinMachO(string path, uint cpuType)
     {
         using var writer = new BinaryWriter(File.Create(path));
