@@ -18,14 +18,17 @@ internal static class ApiFixtureRoot
         return input;
     }
 
-    // .app/.dmg/.pkg 假载荷只需 Mach-O 魔数+arm64 cputype 过校验
+    // .app/.dmg/.pkg 假载荷只需 Mach-O 魔数+cputype 过校验——cputype 随宿主架构取
+    // （ApiTests 的 Target 是 OsxTarget 宿主推导；ARM64=0x0100000C、X86_64=0x01000007 小端）
     public static async Task<string> WriteMachOPayloadAsync(string root)
     {
         var input = Path.Combine(root, "publish");
         Directory.CreateDirectory(input);
         var executable = new byte[64];
         executable[0] = 0xCF; executable[1] = 0xFA; executable[2] = 0xED; executable[3] = 0xFE;
-        executable[4] = 0x0C; executable[5] = 0x00; executable[6] = 0x00; executable[7] = 0x01;
+        executable[4] = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
+            System.Runtime.InteropServices.Architecture.Arm64 ? (byte)0x0C : (byte)0x07;
+        executable[5] = 0x00; executable[6] = 0x00; executable[7] = 0x01;
         await File.WriteAllBytesAsync(Path.Combine(input, "ApiFixture"), executable, TestContext.Current.CancellationToken);
         await File.WriteAllTextAsync(Path.Combine(input, "ApiFixture.dll"), "package-api-fixture", TestContext.Current.CancellationToken);
         return input;
