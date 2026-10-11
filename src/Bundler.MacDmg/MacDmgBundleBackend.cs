@@ -171,30 +171,50 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             }
             // hdiutil convert 在高载宿主上偶发 EAGAIN（"Resource temporarily
             // unavailable"）——工具级瞬态，有限重试即可恢复，不是输入错误。
-            for (var attempt = 1; ; attempt++)
+            // 若源镜像的簿记状态在原文件上卡死（macOS 已知痼疾），换用字节相同的
+            // 副本继续 convert 即可绕开（electron-builder #8415 同款处置）。
+            var convertSource = readWriteImage;
+            string? convertSourceCopy = null;
+            try
             {
-                try
+                for (var attempt = 1; ; attempt++)
                 {
-                    await MacDmgProcessRunner.RunAsync(
-                        "hdiutil",
-                        ["convert", readWriteImage, "-format", compressionArgument, "-o", outputPath],
-                        workDirectory, cancellationToken);
-                    break;
-                }
-                catch (InvalidOperationException e)
-                    when (attempt < ConvertTransientMaxAttempts
-                          && e.Message.IndexOf("Resource temporarily unavailable", StringComparison.Ordinal) >= 0)
-                {
-                    var delay = ConvertTransientBackoffMilliseconds[
-                        Math.Min(attempt - 1, ConvertTransientBackoffMilliseconds.Length - 1)];
-                    logger.Log(
-                        BundleLogLevel.Warning,
-                        $"hdiutil convert transient failure (attempt {attempt}/{ConvertTransientMaxAttempts}); retrying in {delay} ms.");
-                    if (File.Exists(outputPath))
+                    try
                     {
-                        File.Delete(outputPath);
+                        await MacDmgProcessRunner.RunAsync(
+                            "hdiutil",
+                            ["convert", convertSource, "-format", compressionArgument, "-o", outputPath],
+                            workDirectory, cancellationToken);
+                        break;
                     }
-                    await Task.Delay(delay, cancellationToken);
+                    catch (InvalidOperationException e)
+                        when (attempt < ConvertTransientMaxAttempts
+                              && e.Message.IndexOf("Resource temporarily unavailable", StringComparison.Ordinal) >= 0)
+                    {
+                        var delay = ConvertTransientBackoffMilliseconds[
+                            Math.Min(attempt - 1, ConvertTransientBackoffMilliseconds.Length - 1)];
+                        logger.Log(
+                            BundleLogLevel.Warning,
+                            $"hdiutil convert transient failure (attempt {attempt}/{ConvertTransientMaxAttempts}); retrying in {delay} ms.");
+                        if (File.Exists(outputPath))
+                        {
+                            File.Delete(outputPath);
+                        }
+                        if (convertSourceCopy is null)
+                        {
+                            convertSourceCopy = readWriteImage + ".convert-copy.dmg";
+                            File.Copy(readWriteImage, convertSourceCopy, overwrite: true);
+                            convertSource = convertSourceCopy;
+                        }
+                        await Task.Delay(delay, cancellationToken);
+                    }
+                }
+            }
+            finally
+            {
+                if (convertSourceCopy is not null && File.Exists(convertSourceCopy))
+                {
+                    File.Delete(convertSourceCopy);
                 }
             }
 
