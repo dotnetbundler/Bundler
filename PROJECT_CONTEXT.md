@@ -1,9 +1,9 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-02
-> 当前分支：`devin/1791652154-libc-split`（HEAD 以 git 为准；最新已实测基线见 §3 最新一轮）
-> 当前包版本：`0.1.0-alpha.91`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
-> 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结；进行中=基础目标模型重构——`DesktopOperatingSystem`→`TargetOperatingSystem{Windows,MacOS,Linux}`（去 Desktop 前缀留移动端扩展）、libc 拆出 OS 枚举成 `LibC` 旁维度（AlpineApk 经后端 `RequiredLibC=Musl` 声明）、`CpuArchitecture` 按族序重排、归档产物词按各系统生态修正（`windows-x64|x86|arm64`、`macos-x86_64|arm64|universal`、linux GNU 词），契约与全产物名目录见 `docs/target-matrix.md`**
+> 最后更新：2026-10-11
+> 当前分支：`main`（HEAD `d00189a`；最新已实测基线见 §3 最新一轮）
+> 当前包版本：`0.1.0-alpha.93`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；基础目标模型重构已完成并入 `main`（alpha.90–93）——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `CpuArchitecture` 族序重排 + `BundlerTarget` `{os}[-{libc}]-{arch}` canonical GNU 词（别称仅输入归一，产物文件名层用各生态词），契约与全产物名目录见 `docs/target-matrix.md`**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——逐格式证据见各 `<format>-roadmap.md` 与 `docs/signing-roadmap.md`
 > 逐阶段实施证据以带日期条目归档在各格式 `<format>-roadmap.md`，本文不重复记录
@@ -86,6 +86,39 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
 
 ## 3. 最近验证
+
+### 2026-10-11 PR #59 压缩合并（squash `d00189a`，版本推进 `alpha.93`）
+
+- 断言补齐（apk `armv7sf→armel` + 归档生态词产出名）+ 三轮四宿主轮测/CI 暴露缺陷修复 + MSBuild `BundlerTarget` 别称归一（`_BundlerCanonicalTarget` canonical 匹配）。
+- 轮测/CI 暴露并修复（八组，测试侧与 MSBuild 层）：`_BundlerBundleCore` 打包次序契约（归档 `.link` 的 `BeforeTargets` 钩晚于打包→移入包装 target 体内 `CallTarget`）；9 个 fixture `'$(Target)'` 恒真条件笔误（csproj 级 `BundlerTarget` 恒覆盖 props 的 RID 推导，改 `'$(BundlerTarget)'`）；API fixture 硬编码 `macos-arm64` 改宿主推导；`mountvol` 脚本 `tools/windows-arm64` 死拼写改 canonical `windows-aarch64`；`.apk` 产物文件名带 arch 后缀破坏仓库索引拼名（索引腿按 `name-ver-rel.apk` 落位）；9 个 fixture `BundlerTarget` 字面默认加 `RuntimeIdentifier` 空条件使 `-r` 推导生效；mac 集成测试 `MacArch` 助手补 `aarch64` 尾识别；`tools/macos-arm64` 死目录改 `macos-aarch64`（TryResolve 按 canonical 拼目录名）。
+- MSBuild 别称归一 + 发布硬化：`_BundlerCanonicalTarget` 在 props 层把 `BundlerTarget` 别称按 Core 同表归一到 canonical，RidMap 反查/警告/格式选型/任务输入只认 canonical；内层 publish 改 Exec 子进程（`BeforeTargets` 钩失效根因根治），`_BundlerForwardProps` 显式转发白名单（`AssemblyName` 有意不转——`-p:` 全局经 P2P 传染会污染被引用项目输出名），`_BundlerValidateInnerPublish` 元字符硬拒（标量 `[\x22\x5c\x24\x60\x0a\x0d\x25]`、路径去 `\x5c`）；`-p:AssemblyName=X` 命令行形改显式失败（csproj 体赋值仍正常）。
+- 验证：三轮四宿主轮测（win-x64/linux-x64/macos-arm64/alpine-docker）按"修复→单点→整轮重跑至零缺陷"规则收口，终轮全新会话 @`45f5db3` 整轮零缺陷；别名修复四腿聚焦复验 @`32418c8` 全绿（`MacArch` 修复后 mac fixture 39/39）；本机 `Bundler.Tests` 428P/0F、各测试工程宿主门控跳过路径全绿。
+- CI：`release-verify` 同一 `45f5db3` 树 3 连绿（runs 38130928863/38133721601/38136339768，六宿主×3）；`dbg-aot` 连绿。
+- Devin Review：4 条 findings 全部属实已修（RID shell 白名单正则、universal 参考发布 `RuntimeIdentifier=` 清空、内层 publish 转发 version/程序集名）；re-list 的 AssemblyName P2P finding 为已修项回吐，线程已回复。
+
+### 2026-10-10 PR #58 并入 main（`9c0cb6c`，版本推进 `alpha.91`）
+
+- 目标模型收尾重构：`libc` 拆出 OS 枚举成 `LibC` 旁维度（AlpineApk 经后端 `RequiredLibC=Musl` 声明）；`DesktopOperatingSystem`→`TargetOperatingSystem` 去前缀（留移动端扩展）；`CpuArchitecture` 族序重排；归档产物词按各系统生态修正（`windows-x64|x86|arm64`、`macos-x86_64|arm64|universal`、linux GNU 词）。
+
+### 2026-10-10 PR #57 并入 main（`0d4711a`）
+
+- MSBuild：`BundlerBundle` 显式公开 target（自动发布/只打包/输入目录三模式）+ `BundlerPublishRid`/`BundlerInputDir`/`BundlerUniversalTargets` 旋钮 + RID↔BundlerTarget 双向推导；`.targets` 重构为 `_BundlerRidMap` 映射表 + `_BundlerUniversalMerge`/`_BundlerBundleCore` 共享 target 抽取。
+
+### 2026-10-10 PR #56 并入 main（`426fdf1`，版本推进 `alpha.90`）
+
+- `BundleTarget{os,arch,libc}` 目标模型重写：字符串解析 + 别称归一 + arch 注册表；输出扁平化 + `outputLayout` 旋钮；产物命名改各系统生态词（`ArtifactNaming.ArchToken` 按格式分发，`docs/target-matrix.md` 收全产物名目录）。
+
+### 2026-10-10 PR #55 并入 main（`394260e` 等 5 提交，版本推进 `alpha.89`）
+
+- 后端配置字段统一典名契约 + CLI/MSBuild/JSON 三层同步改名 + 迁移表；跟进：PathKnobs 改 JSON 元数据生成（`ConfigFiles`→`ConfigLocations` 纯化）、`EnforceSchema` 下钻嵌套对象与条目数组（旧名/笔误键不再静默丢弃）、`NotaryApiKey*` 三层名对齐。
+
+### 2026-10-10 PR #53/#54 并入 main（`2612e25`/`4bca9a5`）
+
+- docs(rules)：musl 冻件须 musl 工具链产件入库 + §5 断言包装补例；复审 flag 修正——静态件 NEEDED 口径 + 断言包装内部措辞。
+
+### 2026-10-10 PR #52 压缩合并（squash `f6c54a0`，版本推进 `alpha.88`）
+
+- R2 整仓 review 修复轮：alpineapk 统一 + 18 confirmed bug + 语义裁决批次。
 
 ### 2026-10-09 PR #51 压缩合并（squash `8829340`，main `8829340`，版本推进 `alpha.87`）
 
@@ -499,6 +532,7 @@ NSIS 回归首轮遇既知事务清理竞态 flake、复跑全绿（本轮已修
 
 全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#52 持续加固至 `alpha.88`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地，跨版本兼容冻件腿与三宿主真小卷 ENOSPC 腿在网，`tests/Special/` 特殊验收脚本矩阵就位（§3 最新三轮）。
-剩余工作：外部待验收项（各格式 OI 清单，见 §5）、发布链资产实际推送（nuget+release 为另一步）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。release-verify 六宿主全量验证已落地并入 main。
+UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#59 持续加固与重构至 `alpha.93`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地，跨版本兼容冻件腿与三宿主真小卷 ENOSPC 腿在网，`tests/Special/` 特殊验收脚本矩阵就位（§3 最新三轮）。
+目标模型重构（PR #55..#59）已并入 main 并经三轮四宿主轮测（终轮全新会话整轮零缺陷）+ release-verify 同树 3 连绿收口。
+剩余工作：外部待验收项（各格式 OI 清单，见 §5）、发布链资产实际推送（nuget+release 为另一步）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。release-verify 六宿主全量验证已落地并入 main，main 上 dispatch 3 连绿。
 
