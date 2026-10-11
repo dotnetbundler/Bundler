@@ -527,8 +527,12 @@ if [ "$IS_APP" = 1 ] && [ "$ROLLBACK" != 1 ] && [ "$(uname -s)" = "Darwin" ]; th
         echo "bundler-updater: signed → unsigned downgrade refused." >&2; exit 4
     fi
     # bundle id 一致兜底：未签场景防“拿别的应用来换”。
-    OLD_BID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INSTALL_DIR/Contents/Info.plist" 2>/dev/null || true)
-    NEW_BID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PAYLOAD_DIR/Contents/Info.plist" 2>/dev/null || true)
+    # PlistBuddy 对缺失/损坏 plist 把诊断写 stdout（stderr 拦不住）——先判存在再按无空格过滤，
+    # 失败一律空串跳过比较，与 AOT TryReadBundleId 的 null 语义对齐。
+    OLD_BID=""; [ -f "$INSTALL_DIR/Contents/Info.plist" ] && \
+        OLD_BID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INSTALL_DIR/Contents/Info.plist" 2>/dev/null | grep -v ' ' || true)
+    NEW_BID=""; [ -f "$PAYLOAD_DIR/Contents/Info.plist" ] && \
+        NEW_BID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PAYLOAD_DIR/Contents/Info.plist" 2>/dev/null | grep -v ' ' || true)
     if [ -n "$OLD_BID" ] && [ -n "$NEW_BID" ] && [ "$OLD_BID" != "$NEW_BID" ]; then
         echo "bundler-updater: bundle identifier mismatch ('$OLD_BID' vs '$NEW_BID')." >&2; exit 4
     fi
