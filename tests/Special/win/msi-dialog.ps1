@@ -52,8 +52,9 @@ Note "位图缩放" "UNTESTED" "DPI=$([System.Windows.Forms.SystemInformation]::
 # 卸载清场
 Wait-Human "最后卸载：msiexec /x 走一遍，确认干净"
 $app = Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+    "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
     "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
-    Where-Object DisplayName -match "HelloBundlerApp" | Select-Object -First 1
+    Where-Object DisplayName -match "Hello\s*Bundler\s*App" | Select-Object -First 1
 if ($app) {
     Start-Process "msiexec.exe" -ArgumentList "/x `"$($app.PSChildName)`" /qb" -Wait
     Note "卸载完成" $true ""
