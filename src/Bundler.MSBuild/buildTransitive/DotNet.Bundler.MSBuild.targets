@@ -16,6 +16,15 @@
     <_BundlerForwardProps Condition="'$(InformationalVersion)' != ''">$(_BundlerForwardProps) -p:InformationalVersion=&quot;$(InformationalVersion)&quot;</_BundlerForwardProps>
     <_BundlerForwardProps Condition="'$(AssemblyName)' != ''">$(_BundlerForwardProps) -p:AssemblyName=&quot;$(AssemblyName)&quot;</_BundlerForwardProps>
     <_BundlerForwardProps Condition="'$(UseAppHost)' != ''">$(_BundlerForwardProps) -p:UseAppHost=&quot;$(UseAppHost)&quot;</_BundlerForwardProps>
+    <!-- 发布形态标志也要转发：csproj 体内写死 SelfContained/AOT/单文件/裁剪/R2R 的工程，
+         外层 -p: 覆盖若不随子进程走，内层会复活体内值——universal 参考发布清 RID 后
+         SelfContained=true 复活即 NETSDK1191（DEF-3 实证）。外层 universal 门禁已先拦
+         非法组合，这里只负责让外层意图如实传到内层。 -->
+    <_BundlerForwardProps Condition="'$(SelfContained)' != ''">$(_BundlerForwardProps) -p:SelfContained=&quot;$(SelfContained)&quot;</_BundlerForwardProps>
+    <_BundlerForwardProps Condition="'$(PublishAot)' != ''">$(_BundlerForwardProps) -p:PublishAot=&quot;$(PublishAot)&quot;</_BundlerForwardProps>
+    <_BundlerForwardProps Condition="'$(PublishSingleFile)' != ''">$(_BundlerForwardProps) -p:PublishSingleFile=&quot;$(PublishSingleFile)&quot;</_BundlerForwardProps>
+    <_BundlerForwardProps Condition="'$(PublishTrimmed)' != ''">$(_BundlerForwardProps) -p:PublishTrimmed=&quot;$(PublishTrimmed)&quot;</_BundlerForwardProps>
+    <_BundlerForwardProps Condition="'$(PublishReadyToRun)' != ''">$(_BundlerForwardProps) -p:PublishReadyToRun=&quot;$(PublishReadyToRun)&quot;</_BundlerForwardProps>
   </PropertyGroup>
 
   <UsingTask TaskName="DotNet.Bundler.MSBuild.BundleDesktopApplication"
@@ -215,11 +224,6 @@
          转发（见 universal 段注释）；BundlerInnerPublishArgs 为原样追加的逃生舱。 -->
     <PropertyGroup>
       <_BundlerAutoPublishProps>-p:BundlerEnabled=false $(_BundlerForwardProps)</_BundlerAutoPublishProps>
-      <_BundlerAutoPublishProps Condition="'$(SelfContained)' != ''">$(_BundlerAutoPublishProps) -p:SelfContained=$(SelfContained)</_BundlerAutoPublishProps>
-      <_BundlerAutoPublishProps Condition="'$(PublishAot)' != ''">$(_BundlerAutoPublishProps) -p:PublishAot=$(PublishAot)</_BundlerAutoPublishProps>
-      <_BundlerAutoPublishProps Condition="'$(PublishSingleFile)' != ''">$(_BundlerAutoPublishProps) -p:PublishSingleFile=$(PublishSingleFile)</_BundlerAutoPublishProps>
-      <_BundlerAutoPublishProps Condition="'$(PublishTrimmed)' != ''">$(_BundlerAutoPublishProps) -p:PublishTrimmed=$(PublishTrimmed)</_BundlerAutoPublishProps>
-      <_BundlerAutoPublishProps Condition="'$(PublishReadyToRun)' != ''">$(_BundlerAutoPublishProps) -p:PublishReadyToRun=$(PublishReadyToRun)</_BundlerAutoPublishProps>
       <_BundlerAutoPublishProps Condition="'$(RestorePackagesPath)' != ''">$(_BundlerAutoPublishProps) -p:RestorePackagesPath=&quot;$(RestorePackagesPath)&quot;</_BundlerAutoPublishProps>
       <_BundlerAutoPublishProps Condition="'$(RestoreSources)' != ''">$(_BundlerAutoPublishProps) -p:RestoreSources=&quot;$(RestoreSources)&quot;</_BundlerAutoPublishProps>
       <_BundlerAutoPublishProps Condition="'$(BundlerInnerPublishArgs)' != ''">$(_BundlerAutoPublishProps) $(BundlerInnerPublishArgs)</_BundlerAutoPublishProps>
