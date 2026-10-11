@@ -28,6 +28,10 @@
          BundlerTarget 赋值；canonical 精确匹配在 .targets 目标期重算兜底）。
          linux-musl- 行必须最后：musl 目标同命中 linux- 前缀，后写覆盖。 -->
     <_HelloBundlerTargetLower>$([System.String]::Copy('$(BundlerTarget)').ToLowerInvariant())</_HelloBundlerTargetLower>
+    <!-- BundlerTarget 为空（含 -p:BundlerTarget= 显式钉空）时回落 canonical——
+         RID 推导结果写在 canonical 上，空 input 无前缀可判，不回落会一路落到
+         targets 的 nsis 兜底然后在非 win 目标上误拒。 -->
+    <_HelloBundlerTargetLower Condition="'$(_HelloBundlerTargetLower)' == ''">$([System.String]::Copy('$(_BundlerCanonicalTarget)').ToLowerInvariant())</_HelloBundlerTargetLower>
     <_HelloBundlerFormatsDefault Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('windows-'))">nsis;zip;targz</_HelloBundlerFormatsDefault>
     <_HelloBundlerFormatsDefault Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('windows-')) and '$(OS)' == 'Windows_NT'">nsis;msi;zip;targz</_HelloBundlerFormatsDefault>
     <_HelloBundlerFormatsDefault Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('macos-')) or '$(BundlerUniversalTargets)' != ''">app;zip;targz</_HelloBundlerFormatsDefault>

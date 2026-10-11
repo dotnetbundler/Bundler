@@ -36,6 +36,19 @@
     <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-arm64'">linux-aarch64</BundlerTarget>
     <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-musl-x64'">linux-musl-x86_64</BundlerTarget>
     <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-musl-arm64'">linux-musl-aarch64</BundlerTarget>
+    <!-- -p:BundlerTarget= 显式钉空时上方赋值被全局属性挡掉，canonical 也拿不到推导
+         结果——RID→target 的同一映射这里再投一份到 canonical，让 eval 期消费方
+         （csproj 格式选型）与目标期消费方拿到同一推导。 -->
+    <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == '' and '$(RuntimeIdentifier)' == 'win-x64'">windows-x86_64</_BundlerCanonicalTarget>
+    <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == '' and '$(RuntimeIdentifier)' == 'win-x86'">windows-i686</_BundlerCanonicalTarget>
+    <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == '' and '$(RuntimeIdentifier)' == 'win-arm64'">windows-aarch64</_BundlerCanonicalTarget>
+    <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == '' and '$(RuntimeIdentifier)' == 'osx-x64'">macos-x86_64</_BundlerCanonicalTarget>
+    <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == '' and '$(RuntimeIdentifier)' == 'osx-arm64'">macos-aarch64</_BundlerCanonicalTarget>
+    <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-x64'">linux-x86_64</_BundlerCanonicalTarget>
+    <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-x86'">linux-i686</_BundlerCanonicalTarget>
+    <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-arm64'">linux-aarch64</_BundlerCanonicalTarget>
+    <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-musl-x64'">linux-musl-x86_64</_BundlerCanonicalTarget>
+    <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-musl-arm64'">linux-musl-aarch64</_BundlerCanonicalTarget>
     <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == ''">$(BundlerTarget)</_BundlerCanonicalTarget>
     <_BundlerEvalTarget Condition="'$(_BundlerExplicitTarget)' == ''">$(BundlerTarget)</_BundlerEvalTarget>
     <BundlerProductName Condition="'$(BundlerProductName)' == ''"></BundlerProductName>
