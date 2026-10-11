@@ -33,17 +33,23 @@
   <!-- 两入口依赖链（依赖 target 的属性改动对后续依赖和被依赖方可见；不能用 CallTarget——
        被调方拿不到调用方体内设置的属性）。
        $(PublishDir) 是计算属性永远非空，不能当“本次跑过 Publish”的信号——
-       所以钩子链没有 _BundlerAutoPublish：钩子入口天然跟在真实 Publish 后，输入即 $(PublishDir)。 -->
+       所以钩子链没有 _BundlerAutoPublish：钩子入口天然跟在真实 Publish 后，输入即 $(PublishDir)。
+       _BundlerBundleCore 不挂进依赖链而在包装 target 体内 CallTarget：
+       MSBuild 的 BeforeTargets 钩晚于 DependsOnTargets 执行，若打包也在依赖链里，
+       用户 BeforeTargets 钩（往输入目录塞文件）会落在打包之后——放体内执行才恢复
+       “依赖段 → BeforeTargets 钩 → 打包”的契约次序。 -->
   <PropertyGroup>
-    <_BundlerStages>_BundlerDerive;_BundlerPublishMismatchWarn;_BundlerUniversalMerge;_BundlerBundleCore</_BundlerStages>
-    <_BundlerBundleStages>_BundlerDerive;_BundlerUniversalMerge;_BundlerAutoPublish;_BundlerBundleCore</_BundlerBundleStages>
+    <_BundlerStages>_BundlerDerive;_BundlerPublishMismatchWarn;_BundlerUniversalMerge</_BundlerStages>
+    <_BundlerBundleStages>_BundlerDerive;_BundlerUniversalMerge;_BundlerAutoPublish</_BundlerBundleStages>
   </PropertyGroup>
 
   <!-- Publish 钩子入口：dotnet publish 时顺带打包（BundlerEnabled=true 才挂） -->
   <Target Name="BundleDesktopApplication"
           AfterTargets="Publish"
           DependsOnTargets="$(_BundlerStages)"
-          Condition="'$(BundlerEnabled)' == 'true' and '$(DesignTimeBuild)' != 'true'" />
+          Condition="'$(BundlerEnabled)' == 'true' and '$(DesignTimeBuild)' != 'true'">
+    <CallTarget Targets="_BundlerBundleCore" />
+  </Target>
 
   <!-- 显式入口（不经 Publish 钩子也可调用）：
        -p:BundlerInputDir=<dir> → 拿已发布目录直接打包，不触发发布
@@ -51,7 +57,9 @@
        BundlerUniversalTargets  → macOS universal 双 RID 内层发布+合并 -->
   <Target Name="BundlerBundle"
           DependsOnTargets="$(_BundlerBundleStages)"
-          Condition="'$(DesignTimeBuild)' != 'true'" />
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <CallTarget Targets="_BundlerBundleCore" />
+  </Target>
 
   <!-- 阶段1：BundlerTarget 推导（Rid→target 便捷推导，显式 BundlerTarget 恒覆盖）+ 入口参数校验 -->
   <Target Name="_BundlerDerive">
