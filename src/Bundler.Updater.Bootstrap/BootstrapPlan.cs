@@ -1120,6 +1120,12 @@ internal static class BootstrapPlan
         {
             for (; hops < 40; hops++)
             {
+                // `\\?\Volume{GUID}\` 已是卷真名拼写：NT 对象符号链的自指不是文件
+                // 系统链接，读到即终止（不再跟跳，防解算回环）。
+                if (IsVolumeGuidStableRoot(current))
+                {
+                    break;
+                }
                 string? target;
                 try
                 {
@@ -1141,8 +1147,17 @@ internal static class BootstrapPlan
                 // 节点仍可达。tag 探不出（权限/竞争）或非 Volume{GUID} 根的其他
                 // NT 设备形无解真身之路——返回 null 拒绝，不猜方向。
                 var next = target;
+                string? volumeGuidStable = null;
                 if (OperatingSystem.IsWindows() && IsNtObjectTarget(target))
                 {
+                    // 卷真名稳定拼写备底：DOS 挂载名解回别名本体（mountvol 文件夹
+                    // 挂载被 GetVolumePathNamesForVolumeName 计入 DOS 名，拼回正
+                    // 在解算的 junction → visited 假环链）时改走 `\\?\Volume{GUID}\`。
+                    var stableBody = target[NtDevicePrefixLength(target)..];
+                    if (HasVolumeGuidRoot(stableBody))
+                    {
+                        volumeGuidStable = VolumeGuidStableForm(stableBody);
+                    }
                     var info = ReparseInfoOf(current);
                     if (info is null)
                     {
@@ -1176,9 +1191,24 @@ internal static class BootstrapPlan
                     return null;
                 }
                 var canonical = CanonicalParentPath(next, resolving);
-                if (canonical is null || !visited.Add(canonical))
+                if (canonical is null)
                 {
                     return null;
+                }
+                if (!visited.Add(canonical))
+                {
+                    // DOS 挂载名把拼写解回链上别名（mountvol 文件夹挂载=解算中的
+                    // junction 本身）→ 改卷真名稳定拼写重试；重试仍撞环才是真环链。
+                    if (volumeGuidStable is null || next == volumeGuidStable)
+                    {
+                        return null;
+                    }
+                    next = volumeGuidStable;
+                    canonical = CanonicalParentPath(next, resolving);
+                    if (canonical is null || !visited.Add(canonical))
+                    {
+                        return null;
+                    }
                 }
                 current = canonical;
             }
@@ -1251,8 +1281,19 @@ internal static class BootstrapPlan
             return Path.GetFullPath(
                 dosName.TrimEnd('\\') + (tail.Length == 0 ? @"\" : @"\" + tail));
         }
+        return VolumeGuidStableForm(ntBody);
+    }
+
+    // 卷真名稳定拼写 `\\?\Volume{GUID}[\sub]`——不依赖任何挂载别名节点仍可达。
+    private static string VolumeGuidStableForm(string ntBody)
+    {
+        var tail = ntBody[44..].TrimStart('\\', '/');
         return @"\\?\" + ntBody[..44] + (tail.Length == 0 ? @"\" : @"\" + tail);
     }
+
+    // 卷真名稳定拼写根（`\\?\Volume{GUID}\` 起头）——已是最真拼写的终止判。
+    private static bool IsVolumeGuidStableRoot(string path) =>
+        path.StartsWith(@"\\?\Volume{", StringComparison.OrdinalIgnoreCase);
 
     // `Volume{GUID}` 是否占据路径根段（整名、尾分隔符或带子路径都算）。
     private static bool HasVolumeGuidRoot(string path) =>
