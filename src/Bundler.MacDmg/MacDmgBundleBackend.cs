@@ -9,8 +9,8 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
 {
     private const int DetachMaxAttempts = 5;
     private static readonly int[] DetachBackoffMilliseconds = { 250, 500, 1000, 2000 };
-    private const int ConvertTransientMaxAttempts = 3;
-    private static readonly int[] ConvertTransientBackoffMilliseconds = { 1000, 2000 };
+    private const int ConvertTransientMaxAttempts = 6;
+    private static readonly int[] ConvertTransientBackoffMilliseconds = { 1000, 2000, 4000, 8000, 16000 };
 
     public PackageFormat Format => PackageFormat.Dmg;
     public TargetOperatingSystem OperatingSystem => TargetOperatingSystem.MacOS;
