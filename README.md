@@ -38,6 +38,11 @@ Alpine `.apk` 已冻结并入 `main`（`0.1.0-alpha.63`，`APK-1..5` 完成、PR
 | `DotNet.Bundler.Deb` | 独立 Debian `.deb` API、纯托管 ar/tar/gzip 写入器（核心 control 字段、md5sums、`usr/lib`+`usr/bin` 链接布局、SemVer→deb 版本映射），无原生工具依赖 |
 | `DotNet.Bundler.Rpm` | 独立 RPM `.rpm` API、纯托管 lead/header/cpio/gzip 写入器（核心 tag 集、六族关系字段、文件清单与 %doc/%license 标记、`usr/lib`+`usr/bin` 链接布局、freedesktop 桌面集成、SemVer→rpm 版本映射、`RpmPackageReader` 回读器），无原生工具依赖 |
 | `DotNet.Bundler.AlpineApk` | 独立 Alpine `.apk` API、纯托管三段 gzip 写入器（`.PKGINFO`、六段安装脚本、`depend`/`provides`/`triggers`、`usr/lib`+`usr/bin` 链接、逐文件 pax 校验和、可选 RSA 签名段、`ApkPackageReader` 回读器），无原生工具依赖 |
+| `DotNet.Bundler.AppImage` | 独立 Linux `.AppImage` API、内嵌固定版本 appimagetool+type2 runtime（SHA-256 provenance）与 AppDir 组装，仅 Linux 宿主构建 |
+| `DotNet.Bundler.Archive` | 独立 `.zip`/`.tar.gz` API、纯托管写入器（unix mode/符号链接保留、`.sha256` 侧车），无原生工具依赖 |
+| `DotNet.Bundler.Update` | UPDATE 打包侧：静态 JSON 清单发射 + ECDSA P-256 `.sig`/`.blockmap` 旁车生成 |
+| `DotNet.Bundler.Updater` | UPDATE 应用内库：`UpdateClient` 查/下/验/换四动词 + block-map 差分 |
+| `DotNet.Bundler.Updater.Bootstrap` | UPDATE 外置引导件：per-target Native AOT `bundler-updater` + posix sh 降级件 |
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
 
@@ -90,7 +95,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.87" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.94" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -124,7 +129,7 @@ canonical RID 映射表：`windows-x86_64→win-x64`、`windows-i686→win-x86`�
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.87" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.94" />
 ```
 
 ```csharp
@@ -170,7 +175,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.87" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.94" />
 ```
 
 ```csharp
