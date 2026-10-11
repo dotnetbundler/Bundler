@@ -4,6 +4,18 @@
     <_BundlerTaskAssembly Condition="'$(_BundlerTaskAssembly)' == ''">$(_BundlerPackageRoot)tasks\netstandard2.0\DotNet.Bundler.MSBuild.dll</_BundlerTaskAssembly>
     <!-- 内层发布子进程的 dotnet 入口；universal/自动发布腿用 Exec 调它（原因见 _BundlerUniversalMerge 注释） -->
     <BundlingDotnetExe Condition="'$(BundlingDotnetExe)' == ''">dotnet</BundlingDotnetExe>
+    <!-- 转发给内层 dotnet publish 的调用方构建配置——子进程不继承外层全局属性，
+         version 族/程序集名/apphost 缺转发会让内层载荷与调用者意图脱节
+         （review BUG-2）。TargetFramework 不转：它会沿 P2P 传染异 TFM 引用。
+         值进 shell 命令行必须带引号。 -->
+    <_BundlerForwardProps Condition="'$(Version)' != ''">-p:Version=&quot;$(Version)&quot;</_BundlerForwardProps>
+    <_BundlerForwardProps Condition="'$(VersionPrefix)' != ''">$(_BundlerForwardProps) -p:VersionPrefix=&quot;$(VersionPrefix)&quot;</_BundlerForwardProps>
+    <_BundlerForwardProps Condition="'$(VersionSuffix)' != ''">$(_BundlerForwardProps) -p:VersionSuffix=&quot;$(VersionSuffix)&quot;</_BundlerForwardProps>
+    <_BundlerForwardProps Condition="'$(AssemblyVersion)' != ''">$(_BundlerForwardProps) -p:AssemblyVersion=&quot;$(AssemblyVersion)&quot;</_BundlerForwardProps>
+    <_BundlerForwardProps Condition="'$(FileVersion)' != ''">$(_BundlerForwardProps) -p:FileVersion=&quot;$(FileVersion)&quot;</_BundlerForwardProps>
+    <_BundlerForwardProps Condition="'$(InformationalVersion)' != ''">$(_BundlerForwardProps) -p:InformationalVersion=&quot;$(InformationalVersion)&quot;</_BundlerForwardProps>
+    <_BundlerForwardProps Condition="'$(AssemblyName)' != ''">$(_BundlerForwardProps) -p:AssemblyName=&quot;$(AssemblyName)&quot;</_BundlerForwardProps>
+    <_BundlerForwardProps Condition="'$(UseAppHost)' != ''">$(_BundlerForwardProps) -p:UseAppHost=&quot;$(UseAppHost)&quot;</_BundlerForwardProps>
   </PropertyGroup>
 
   <UsingTask TaskName="DotNet.Bundler.MSBuild.BundleDesktopApplication"
@@ -150,18 +162,29 @@
          天然消除一切进程内状态：每腿 restore 写完即被同进程 publish 消费，确定性成立。
          子进程不继承外层全局属性——BundlerEnabled=false 防钩子递归必须显式转发；
          RestorePackagesPath/RestoreSources 为还原定位所需也一并转发；universal 腿已被
-         上方校验限定 framework-dependent，无需转发发布选项。 -->
+         上方校验限定 framework-dependent，无需转发发布选项。
+         子进程不继承外层全局属性，调用方的构建配置要显式转发（version 族/程序集名/
+         apphost 等影响载荷内容）——BundlerInnerPublishArgs 是用户的逃生舱，原样追加
+         （不进 RID 白名单判，由调用方自行负责）。 -->
     <PropertyGroup>
-      <_BundlerInnerPublishProps>-p:BundlerEnabled=false</_BundlerInnerPublishProps>
+      <_BundlerInnerPublishProps>-p:BundlerEnabled=false $(_BundlerForwardProps)</_BundlerInnerPublishProps>
       <_BundlerInnerPublishProps Condition="'$(RestorePackagesPath)' != ''">$(_BundlerInnerPublishProps) -p:RestorePackagesPath=&quot;$(RestorePackagesPath)&quot;</_BundlerInnerPublishProps>
       <_BundlerInnerPublishProps Condition="'$(RestoreSources)' != ''">$(_BundlerInnerPublishProps) -p:RestoreSources=&quot;$(RestoreSources)&quot;</_BundlerInnerPublishProps>
+      <_BundlerInnerPublishProps Condition="'$(BundlerInnerPublishArgs)' != ''">$(_BundlerInnerPublishProps) $(BundlerInnerPublishArgs)</_BundlerInnerPublishProps>
     </PropertyGroup>
+    <!-- RID 词过 shell 命令行必须白名单化：BundlerUniversalTargets/BundlerPublishRid 的
+         拼写进 Exec 由 shell 求值，元字符=命令注入面（review SEC）；RID 合法字符域
+         即 [A-Za-z0-9._-]。 -->
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(_BundlerUniversalRid.Identity)', '^[A-Za-z0-9._-]+$'))"
+           Text="BundlerUniversalTargets item '%(_BundlerUniversalRid.Identity)' contains characters outside [A-Za-z0-9._-]." />
     <Exec Command='&quot;$(BundlingDotnetExe)&quot; publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) -r %(_BundlerUniversalRid.Identity) -o &quot;$(_BundlerUniversalDir)%(_BundlerUniversalRid.Identity)&quot; $(_BundlerInnerPublishProps)' />
     <!-- 无 RID 参考发布：非 Mach-O 文件的权威源。RID 专属构建给托管件打架构印记（PE machine
          及派生 MVID/时间戳），两 arch 的 test.dll 天然逐字节相异、无法靠比对合并；参考发布
          以中性构建提供同源 managed 载荷。要求工程可无 RID 发布——SelfContained/AOT 等强绑
-         RID 的配置在此自然报错（universal 也无法表达逐 arch 运行时差异）。 -->
-    <Exec Command='&quot;$(BundlingDotnetExe)&quot; publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) -o &quot;$(_BundlerUniversalDir)reference&quot; $(_BundlerInnerPublishProps)' />
+         RID 的配置在此自然报错（universal 也无法表达逐 arch 运行时差异）。
+         -p:RuntimeIdentifier= 清空工程体内 RID：csproj 里写死 RuntimeIdentifier 的工程
+         不擦除会让“参考发布”带上架构印记（review BUG-1）。 -->
+    <Exec Command='&quot;$(BundlingDotnetExe)&quot; publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) -o &quot;$(_BundlerUniversalDir)reference&quot; -p:RuntimeIdentifier= $(_BundlerInnerPublishProps)' />
     <DotNet.Bundler.MSBuild.MergeUniversalPayload
       SourceDirectories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)')"
       ReferenceDirectory="$(_BundlerUniversalDir)reference"
@@ -183,12 +206,15 @@
     </PropertyGroup>
     <Error Condition="'$(BundlerPublishRid)' == ''"
            Text="BundlerTarget '$(BundlerTarget)' has no canonical publish RID mapping — pass -p:BundlerPublishRid=&lt;rid&gt; or -p:BundlerInputDir=&lt;dir&gt;." />
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(BundlerPublishRid)', '^[A-Za-z0-9._-]+$'))"
+           Text="BundlerPublishRid '$(BundlerPublishRid)' contains characters outside [A-Za-z0-9._-]." />
     <!-- publish -o 不清理上次构建已删的文件——先清中间发布目录防滞留 -->
     <RemoveDir Directories="$(_BundlerPublishOutDir)" />
     <!-- 与 universal 段同理走子进程（见上注释）；发布选项需显式转发——SelfContained/AOT/
-         单文件/裁剪/R2R 影响内层 publish 产物形状。 -->
+         单文件/裁剪/R2R 影响内层 publish 产物形状。调用方构建配置经 _BundlerForwardProps
+         转发（见 universal 段注释）；BundlerInnerPublishArgs 为原样追加的逃生舱。 -->
     <PropertyGroup>
-      <_BundlerAutoPublishProps>-p:BundlerEnabled=false</_BundlerAutoPublishProps>
+      <_BundlerAutoPublishProps>-p:BundlerEnabled=false $(_BundlerForwardProps)</_BundlerAutoPublishProps>
       <_BundlerAutoPublishProps Condition="'$(SelfContained)' != ''">$(_BundlerAutoPublishProps) -p:SelfContained=$(SelfContained)</_BundlerAutoPublishProps>
       <_BundlerAutoPublishProps Condition="'$(PublishAot)' != ''">$(_BundlerAutoPublishProps) -p:PublishAot=$(PublishAot)</_BundlerAutoPublishProps>
       <_BundlerAutoPublishProps Condition="'$(PublishSingleFile)' != ''">$(_BundlerAutoPublishProps) -p:PublishSingleFile=$(PublishSingleFile)</_BundlerAutoPublishProps>
@@ -196,6 +222,7 @@
       <_BundlerAutoPublishProps Condition="'$(PublishReadyToRun)' != ''">$(_BundlerAutoPublishProps) -p:PublishReadyToRun=$(PublishReadyToRun)</_BundlerAutoPublishProps>
       <_BundlerAutoPublishProps Condition="'$(RestorePackagesPath)' != ''">$(_BundlerAutoPublishProps) -p:RestorePackagesPath=&quot;$(RestorePackagesPath)&quot;</_BundlerAutoPublishProps>
       <_BundlerAutoPublishProps Condition="'$(RestoreSources)' != ''">$(_BundlerAutoPublishProps) -p:RestoreSources=&quot;$(RestoreSources)&quot;</_BundlerAutoPublishProps>
+      <_BundlerAutoPublishProps Condition="'$(BundlerInnerPublishArgs)' != ''">$(_BundlerAutoPublishProps) $(BundlerInnerPublishArgs)</_BundlerAutoPublishProps>
     </PropertyGroup>
     <Exec Command='&quot;$(BundlingDotnetExe)&quot; publish &quot;$(MSBuildProjectFullPath)&quot; -c $(Configuration) -r $(BundlerPublishRid) -o &quot;$(_BundlerPublishOutDir)&quot; $(_BundlerAutoPublishProps)' />
   </Target>

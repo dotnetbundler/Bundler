@@ -19,19 +19,25 @@
     <HelloBundlerAppAssets>$(MSBuildThisFileDirectory)Assets\</HelloBundlerAppAssets>
 
     <BundlerEnabled>true</BundlerEnabled>
-    <!-- 默认产物集：按目标 RID 定可用格式，再按宿主裁剪需本机工具链的格式
+    <!-- 默认产物集：按目标 OS 族定可用格式，再按宿主裁剪需本机工具链的格式
          （msi 仅 Windows 宿主、dmg/pkg 仅 macOS 宿主、appimage 仅 Linux 宿主；
-         nsis/deb/rpm/zip/targz/alpineapk 为托管实现，任意宿主可构建）。 -->
-    <_HelloBundlerFormatsDefault Condition="'$(_BundlerCanonicalTarget)' == 'windows-x86_64' or '$(_BundlerCanonicalTarget)' == 'windows-aarch64'">nsis;zip;targz</_HelloBundlerFormatsDefault>
-    <_HelloBundlerFormatsDefault Condition="('$(_BundlerCanonicalTarget)' == 'windows-x86_64' or '$(_BundlerCanonicalTarget)' == 'windows-aarch64') and '$(OS)' == 'Windows_NT'">nsis;msi;zip;targz</_HelloBundlerFormatsDefault>
-    <_HelloBundlerFormatsDefault Condition="'$(_BundlerCanonicalTarget)' == 'macos-x86_64' or '$(_BundlerCanonicalTarget)' == 'macos-aarch64' or '$(_BundlerCanonicalTarget)' == 'macos-universal' or '$(BundlerUniversalTargets)' != ''">app;zip;targz</_HelloBundlerFormatsDefault>
+         nsis/deb/rpm/zip/targz/alpineapk 为托管实现，任意宿主可构建）。
+         条件按本文件的 $(BundlerTarget) 小写副本做 OS 前缀匹配——默认集只分 OS 族，
+         不判 arch，所以别称（amd64/arm64）与大小写变体天然命中，也不需要
+         _BundlerCanonicalTarget（它在包 props 导入点定型，看不到 csproj 体内的
+         BundlerTarget 赋值；canonical 精确匹配在 .targets 目标期重算兜底）。
+         linux-musl- 行必须最后：musl 目标同命中 linux- 前缀，后写覆盖。 -->
+    <_HelloBundlerTargetLower>$([System.String]::Copy('$(BundlerTarget)').ToLowerInvariant())</_HelloBundlerTargetLower>
+    <_HelloBundlerFormatsDefault Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('windows-'))">nsis;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('windows-')) and '$(OS)' == 'Windows_NT'">nsis;msi;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('macos-')) or '$(BundlerUniversalTargets)' != ''">app;zip;targz</_HelloBundlerFormatsDefault>
     <!-- mac 宿主默认不含独立 app：BundlerLicenseFile 是全局旋钮，独立 .app 后端按契约硬拒许可文件，
          同轮 publish 的 dmg/pkg 又需要它做 SLA/许可页——dmg 内层本来就会产出 .app（BundlerMacApp* 旋钮全部生效），
          因此独立 app 腿改为显式选择（-p:BundlerFormats=app，届时许可自动缺席）。 -->
-    <_HelloBundlerFormatsDefault Condition="('$(_BundlerCanonicalTarget)' == 'macos-x86_64' or '$(_BundlerCanonicalTarget)' == 'macos-aarch64' or '$(_BundlerCanonicalTarget)' == 'macos-universal' or '$(BundlerUniversalTargets)' != '') and $([MSBuild]::IsOsPlatform('OSX'))">dmg;pkg;zip;targz</_HelloBundlerFormatsDefault>
-    <_HelloBundlerFormatsDefault Condition="'$(_BundlerCanonicalTarget)' == 'linux-x86_64' or '$(_BundlerCanonicalTarget)' == 'linux-aarch64'">deb;rpm;zip;targz</_HelloBundlerFormatsDefault>
-    <_HelloBundlerFormatsDefault Condition="('$(_BundlerCanonicalTarget)' == 'linux-x86_64' or '$(_BundlerCanonicalTarget)' == 'linux-aarch64') and $([MSBuild]::IsOsPlatform('Linux'))">deb;rpm;appimage;zip;targz</_HelloBundlerFormatsDefault>
-    <_HelloBundlerFormatsDefault Condition="'$(_BundlerCanonicalTarget)' == 'linux-musl-x86_64' or '$(_BundlerCanonicalTarget)' == 'linux-musl-aarch64'">alpineapk;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="($([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('macos-')) or '$(BundlerUniversalTargets)' != '') and $([MSBuild]::IsOsPlatform('OSX'))">dmg;pkg;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('linux-'))">deb;rpm;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('linux-')) and $([MSBuild]::IsOsPlatform('Linux'))">deb;rpm;appimage;zip;targz</_HelloBundlerFormatsDefault>
+    <_HelloBundlerFormatsDefault Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('linux-musl-'))">alpineapk;zip;targz</_HelloBundlerFormatsDefault>
     <BundlerFormats Condition="'$(BundlerFormats)' == ''">$(_HelloBundlerFormatsDefault)</BundlerFormats>
 
     <!-- 公共旋钮：产品身份与元数据；各格式专属旋钮见 formats/ 下同名 props。 -->
@@ -79,11 +85,11 @@
     <!-- 公共载荷项：图标按 RID 条件化——linux 后端只接受 PNG（hicolor），
          windows 用 .ico；mac 图标见 formats/MacApp.props（png/car/icon 三模式）。 -->
     <BundlerIcon Include="$(HelloBundlerAppAssets)msi\app.ico"
-        Condition="'$(_BundlerCanonicalTarget)' == 'windows-x86_64' or '$(_BundlerCanonicalTarget)' == 'windows-aarch64'" />
+        Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('windows-'))" />
     <BundlerIcon Include="$(HelloBundlerAppAssets)deb\icon48.png"
-        Condition="$([System.String]::Copy('$(_BundlerCanonicalTarget)').StartsWith('linux-'))" />
+        Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('linux-'))" />
     <BundlerIcon Include="$(HelloBundlerAppAssets)deb\icon@2x.png"
-        Condition="$([System.String]::Copy('$(_BundlerCanonicalTarget)').StartsWith('linux-'))" />
+        Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('linux-'))" />
     <!-- 资源项演示：每个格式原始样品的资源原样保留，随载荷进入安装根。 -->
     <BundlerResource Include="$(HelloBundlerAppAssets)common\readme.txt" Destination="docs/readme.txt" />
     <BundlerResource Include="$(HelloBundlerAppAssets)nsis\demo-resource.txt" Destination="演示资源\说明.txt"
