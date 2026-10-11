@@ -270,7 +270,6 @@
       <_BundlerEffectiveInput Condition="'$(_BundlerEffectiveInput)' == ''">$(_BundlerPublishOutDir)</_BundlerEffectiveInput>
       <_BundlerEffectiveTarget Condition="'$(_BundlerEffectiveTarget)' == ''">$(_BundlerCanonicalTarget)</_BundlerEffectiveTarget>
       <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
-      <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
       <BundlerVersion Condition="'$(BundlerVersion)' == ''">$(Version)</BundlerVersion>
       <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == '' and ($([System.String]::Copy('$(_BundlerCanonicalTarget)').StartsWith('macos-')) == 'true' or $([System.String]::Copy('$(_BundlerCanonicalTarget)').StartsWith('linux-')) == 'true' or '$(_BundlerCanonicalTarget)' == 'macos-universal' or '$(BundlerUniversalTargets)' != '')">$(TargetName)</BundlerMainExecutable>
       <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''">$(TargetName).exe</BundlerMainExecutable>
