@@ -9,6 +9,8 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
 {
     private const int DetachMaxAttempts = 5;
     private static readonly int[] DetachBackoffMilliseconds = { 250, 500, 1000, 2000 };
+    private const int ConvertTransientMaxAttempts = 3;
+    private static readonly int[] ConvertTransientBackoffMilliseconds = { 1000, 2000 };
 
     public PackageFormat Format => PackageFormat.Dmg;
     public TargetOperatingSystem OperatingSystem => TargetOperatingSystem.MacOS;
@@ -167,10 +169,34 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             {
                 File.Delete(outputPath);
             }
-            await MacDmgProcessRunner.RunAsync(
-                "hdiutil",
-                ["convert", readWriteImage, "-format", compressionArgument, "-o", outputPath],
-                workDirectory, cancellationToken);
+            // hdiutil convert 在高载宿主上偶发 EAGAIN（"Resource temporarily
+            // unavailable"）——工具级瞬态，有限重试即可恢复，不是输入错误。
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await MacDmgProcessRunner.RunAsync(
+                        "hdiutil",
+                        ["convert", readWriteImage, "-format", compressionArgument, "-o", outputPath],
+                        workDirectory, cancellationToken);
+                    break;
+                }
+                catch (InvalidOperationException e)
+                    when (attempt < ConvertTransientMaxAttempts
+                          && e.Message.IndexOf("Resource temporarily unavailable", StringComparison.Ordinal) >= 0)
+                {
+                    var delay = ConvertTransientBackoffMilliseconds[
+                        Math.Min(attempt - 1, ConvertTransientBackoffMilliseconds.Length - 1)];
+                    logger.Log(
+                        BundleLogLevel.Warning,
+                        $"hdiutil convert transient failure (attempt {attempt}/{ConvertTransientMaxAttempts}); retrying in {delay} ms.");
+                    if (File.Exists(outputPath))
+                    {
+                        File.Delete(outputPath);
+                    }
+                    await Task.Delay(delay, cancellationToken);
+                }
+            }
 
             // SLA resources land on the converted UDIF image (udifrez rejects read-write images).
             if (bundle.LicenseFile is { Length: > 0 } licenseFile)
