@@ -9,17 +9,34 @@
          （RID 在 csproj 体内才设置的场景）同源——eval 期无 item 元数据批处理，只能写显式条件。
          _BundlerExplicitTarget/_BundlerEvalTarget 记录推导归属：RID 在 eval 后变更时，
          _BundlerDerive 只刷新“我们导的”值，显式 BundlerTarget 恒不动。 -->
+    <!-- BundlerTarget 别称归一：arch 段接受 Core BundleTarget.Parse 同表别称，归一到
+         canonical 拼写进 _BundlerCanonicalTarget——-p:BundlerTarget= 是全局属性不可改写，
+         故 BundlerTarget 保持用户输入原样，本层全部匹配比较（csproj 格式选型/_BundlerRidMap
+         查表/_BundlerDerive 警告/任务输入）改用 _BundlerCanonicalTarget，层内无第二拼写。 -->
+    <_BundlerTargetSep>$([System.String]::Copy('$(BundlerTarget)').LastIndexOf('-'))</_BundlerTargetSep>
+    <_BundlerTargetOs Condition="'$(_BundlerTargetSep)' != '-1'">$([System.String]::Copy('$(BundlerTarget)').Substring(0, $(_BundlerTargetSep)).ToLowerInvariant())</_BundlerTargetOs>
+    <_BundlerTargetArch Condition="'$(_BundlerTargetSep)' != '-1'">$([System.String]::Copy('$(BundlerTarget)').Substring($([MSBuild]::Add($(_BundlerTargetSep), 1))).ToLowerInvariant())</_BundlerTargetArch>
+    <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'amd64' or '$(_BundlerTargetArch)' == 'x64'">x86_64</_BundlerTargetArchCanonical>
+    <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'i386' or '$(_BundlerTargetArch)' == 'x86' or '$(_BundlerTargetArch)' == '386'">i686</_BundlerTargetArchCanonical>
+    <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'arm64'">aarch64</_BundlerTargetArchCanonical>
+    <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'armhf' or '$(_BundlerTargetArch)' == 'armv7'">armv7hf</_BundlerTargetArchCanonical>
+    <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'armel'">armv7sf</_BundlerTargetArchCanonical>
+    <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'loong64'">loongarch64</_BundlerTargetArchCanonical>
+    <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArchCanonical)' == ''">$(_BundlerTargetArch)</_BundlerTargetArchCanonical>
+    <_BundlerCanonicalTarget Condition="'$(_BundlerTargetSep)' != '-1'">$(_BundlerTargetOs)-$(_BundlerTargetArchCanonical)</_BundlerCanonicalTarget>
+    <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == ''">$(BundlerTarget)</_BundlerCanonicalTarget>
     <_BundlerExplicitTarget>$(BundlerTarget)</_BundlerExplicitTarget>
     <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'win-x64'">windows-x86_64</BundlerTarget>
     <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'win-x86'">windows-i686</BundlerTarget>
-    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'win-arm64'">windows-arm64</BundlerTarget>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'win-arm64'">windows-aarch64</BundlerTarget>
     <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'osx-x64'">macos-x86_64</BundlerTarget>
-    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'osx-arm64'">macos-arm64</BundlerTarget>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'osx-arm64'">macos-aarch64</BundlerTarget>
     <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-x64'">linux-x86_64</BundlerTarget>
     <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-x86'">linux-i686</BundlerTarget>
     <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-arm64'">linux-aarch64</BundlerTarget>
     <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-musl-x64'">linux-musl-x86_64</BundlerTarget>
     <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == 'linux-musl-arm64'">linux-musl-aarch64</BundlerTarget>
+    <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == ''">$(BundlerTarget)</_BundlerCanonicalTarget>
     <_BundlerEvalTarget Condition="'$(_BundlerExplicitTarget)' == ''">$(BundlerTarget)</_BundlerEvalTarget>
     <BundlerProductName Condition="'$(BundlerProductName)' == ''"></BundlerProductName>
     <BundlerVersion Condition="'$(BundlerVersion)' == ''"></BundlerVersion>

@@ -167,7 +167,7 @@ public sealed class UpdateIntegrationTests
 
     static string OsxRid() =>
         System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
-            System.Runtime.InteropServices.Architecture.Arm64 ? "macos-arm64" : "macos-x86_64";
+            System.Runtime.InteropServices.Architecture.Arm64 ? "macos-aarch64" : "macos-x86_64";
 
     static string MuslRid() =>
         System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==

@@ -26,6 +26,7 @@ public sealed class ArchiveFixture : IDisposable
     public string PackOnlyZip { get; private set; } = null!;
     public string AutoPublishZip { get; private set; } = null!;
     public string DeriveZip { get; private set; } = null!;
+    public string AliasZip { get; private set; } = null!;
     // universal 腿独立惰性初始化：osx 运行时包不可得的宿主上只影响 universal 用例，
     // 不拖垮其余 archive 测试（Initialize 不触碰它）。
     public string UniversalZip => _universalZip.Value;
@@ -74,7 +75,7 @@ public sealed class ArchiveFixture : IDisposable
         Publish("fanout", "-p:BundlerTestFormats=deb%3Brpm%3Bappimage%3Bzip%3Btargz");
         FanoutDir = Ws.Combine("fanout");
 
-        foreach (var target in new[] { "windows-x86_64", "macos-arm64" })
+        foreach (var target in new[] { "windows-x86_64", "macos-aarch64" })
         {
             Dotnet.Publish(FixtureProject, "Release",
             [
@@ -85,7 +86,7 @@ public sealed class ArchiveFixture : IDisposable
             ], $"cross publish for {target} failed", noRestore: false);
         }
         CrossWinDir = Ws.Combine("cross-windows-x86_64");
-        CrossOsxDir = Ws.Combine("cross-macos-arm64");
+        CrossOsxDir = Ws.Combine("cross-macos-aarch64");
 
         // BundlerBundle 显式入口三腿：只打包（BundlerInputDir）、自动内层发布、钩子路 RID→target 推导。
         var publishDir = Path.Combine(Path.GetDirectoryName(FixtureProject)!,
@@ -109,7 +110,13 @@ public sealed class ArchiveFixture : IDisposable
             "derive publish failed", noRestore: false);
         DeriveZip = SingleFile(Ws.Combine("derive"), "*.zip");
 
-        DeriveZip = SingleFile(Ws.Combine("derive"), "*.zip");
+        // 别称归一：-p:BundlerTarget=linux-amd64（别称拼写）应归一到 canonical linux-x86_64，
+        // 产物名走 canonical（此前别称在 MSBuild 层裸比较下查不到 RID 映射/格式选型）。
+        Dotnet.Publish(FixtureProject, "Release",
+            ["--packages", CacheDir, "-r", "linux-x64", "-p:BundlerTarget=linux-amd64",
+             "-p:BundlerTestFormats=zip", $"-p:BundlerIntegrationOutput={Ws.Combine("alias")}"],
+            "alias publish failed", noRestore: false);
+        AliasZip = SingleFile(Ws.Combine("alias"), "*-linux-x86_64.zip");
     }
 
     private string InitializeUniversal()
@@ -168,6 +175,10 @@ public sealed class ArchiveIntegrationTests : IClassFixture<ArchiveFixture>
     [Fact]
     public void PublishHook_DerivesBundlerTargetFromRuntimeIdentifier()
         => Assert.Equal($"{ArchiveFixture.Stem}.zip", Path.GetFileName(_f.DeriveZip));
+
+    [Fact]
+    public void PublishHook_NormalizesArchAliasToCanonical()
+        => Assert.Equal($"{ArchiveFixture.Stem}.zip", Path.GetFileName(_f.AliasZip));
 
     [Fact]
     public void UniversalPublishMergesBothArchPayloads()
@@ -371,7 +382,7 @@ public sealed class ArchiveIntegrationTests : IClassFixture<ArchiveFixture>
         Assert.True(Directory.EnumerateFiles(_f.CrossWinDir, "*.zip").Any(),
             "cross: no zip produced for windows-x86_64.");
         Assert.True(Directory.EnumerateFiles(_f.CrossOsxDir, "*.zip").Any(),
-            "cross: no zip produced for macos-arm64.");
+            "cross: no zip produced for macos-aarch64.");
     }
 
     [Fact]

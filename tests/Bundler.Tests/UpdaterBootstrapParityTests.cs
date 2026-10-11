@@ -549,7 +549,7 @@ public static class UpdaterBootstrapParityTests
         var arm64 = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
             System.Runtime.InteropServices.Architecture.Arm64;
         var target = TestPlatform.IsWindows ? (arm64 ? "windows-aarch64" : "windows-x86_64")
-            : TestPlatform.IsMacOS ? (arm64 ? "macos-arm64" : "macos-x86_64")
+            : TestPlatform.IsMacOS ? (arm64 ? "macos-aarch64" : "macos-x86_64")
             : TestPlatform.IsLinux ? TestPlatform.LinuxTarget
             : null;
         Assert.SkipUnless(target is not null, "no shipped bootstrap target for this host");

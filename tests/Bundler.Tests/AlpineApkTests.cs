@@ -284,7 +284,7 @@ public static class AlpineApkTests
         var input = CreateInputDirectory();
         try
         {
-            foreach (var target in new[] { "linux-x86_64", "windows-x86_64", "macos-arm64" })
+            foreach (var target in new[] { "linux-x86_64", "windows-x86_64", "macos-aarch64" })
             {
                 var refused = Assert.ThrowsAny<Exception>(
                     () => new AlpineApkBundler()

@@ -22,7 +22,7 @@
     <_BundlerRidMap Include="windows-i686"><Rid>win-x86</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="windows-aarch64"><Rid>win-arm64</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="macos-x86_64"><Rid>osx-x64</Rid></_BundlerRidMap>
-    <_BundlerRidMap Include="macos-arm64"><Rid>osx-arm64</Rid></_BundlerRidMap>
+    <_BundlerRidMap Include="macos-aarch64"><Rid>osx-arm64</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="linux-x86_64"><Rid>linux-x64</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="linux-i686"><Rid>linux-x86</Rid></_BundlerRidMap>
     <_BundlerRidMap Include="linux-aarch64"><Rid>linux-arm64</Rid></_BundlerRidMap>
@@ -74,6 +74,21 @@
            旧推导值相同（无法区分），-p:BundlerTarget= 全局钉死即可不误伤 -->
       <_BundlerTargetStale Condition="'$(BundlerTarget)' == '$(_BundlerEvalTarget)' and '$(_BundlerEvalTarget)' != '' and '@(_BundlerTargetFromRid)' != '' and '$(BundlerTarget)' != '@(_BundlerTargetFromRid)'">true</_BundlerTargetStale>
       <BundlerTarget Condition="'$(_BundlerTargetStale)' == 'true'">@(_BundlerTargetFromRid)</BundlerTarget>
+      <!-- BundlerTarget 定稿归一：BundlerTarget 保持用户输入原样（-p: 全局属性不可改写，
+           csproj 体内后设值也要吃），这里按最终值重算 _BundlerCanonicalTarget——
+           下游 RidMap 反查/警告/任务输入只认 canonical，props eval 期那份仅供 eval 消费方。 -->
+      <_BundlerTargetSep>$([System.String]::Copy('$(BundlerTarget)').LastIndexOf('-'))</_BundlerTargetSep>
+      <_BundlerTargetOs Condition="'$(_BundlerTargetSep)' != '-1'">$([System.String]::Copy('$(BundlerTarget)').Substring(0, $(_BundlerTargetSep)).ToLowerInvariant())</_BundlerTargetOs>
+      <_BundlerTargetArch Condition="'$(_BundlerTargetSep)' != '-1'">$([System.String]::Copy('$(BundlerTarget)').Substring($([MSBuild]::Add($(_BundlerTargetSep), 1))).ToLowerInvariant())</_BundlerTargetArch>
+      <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'amd64' or '$(_BundlerTargetArch)' == 'x64'">x86_64</_BundlerTargetArchCanonical>
+      <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'i386' or '$(_BundlerTargetArch)' == 'x86' or '$(_BundlerTargetArch)' == '386'">i686</_BundlerTargetArchCanonical>
+      <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'arm64'">aarch64</_BundlerTargetArchCanonical>
+      <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'armhf' or '$(_BundlerTargetArch)' == 'armv7'">armv7hf</_BundlerTargetArchCanonical>
+      <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'armel'">armv7sf</_BundlerTargetArchCanonical>
+      <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'loong64'">loongarch64</_BundlerTargetArchCanonical>
+      <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArchCanonical)' == ''">$(_BundlerTargetArch)</_BundlerTargetArchCanonical>
+      <_BundlerCanonicalTarget Condition="'$(_BundlerTargetSep)' != '-1'">$(_BundlerTargetOs)-$(_BundlerTargetArchCanonical)</_BundlerCanonicalTarget>
+      <_BundlerCanonicalTarget Condition="'$(_BundlerCanonicalTarget)' == ''">$(BundlerTarget)</_BundlerCanonicalTarget>
     </PropertyGroup>
     <Warning Condition="'$(_BundlerTargetStale)' == 'true'"
              Text="BundlerTarget was derived from a stale RuntimeIdentifier and was refreshed to '@(_BundlerTargetFromRid)'. Pass -p:BundlerTarget=&lt;target&gt; to pin it explicitly." />
@@ -81,7 +96,7 @@
       <BundlerFormats Condition="'$(BundlerFormats)' == ''">nsis</BundlerFormats>
       <!-- 尾分隔符不能留——内层子进程 `-o "...\windows-x86_64\"` 的闭引号会被
            反斜杠转义，后续 -p: 参数全并迸输出目录名（win 腿 MSB3073 实证） -->
-      <_BundlerPublishOutDir>$(MSBuildProjectExtensionsPath)BundlerPublish\$(BundlerTarget)</_BundlerPublishOutDir>
+      <_BundlerPublishOutDir>$(MSBuildProjectExtensionsPath)BundlerPublish\$(_BundlerCanonicalTarget)</_BundlerPublishOutDir>
     </PropertyGroup>
     <Error Condition="'$(BundlerIdentifier)' == ''"
            Text="BundlerIdentifier is required to bundle." />
@@ -95,7 +110,7 @@
        只警告不改值——显式恒胜。只在钩子链：显式 BundlerBundle 路的 inner publish 用
        BundlerPublishRid 覆盖项目 RID，target 与项目 RID 不符是预期；universal/InputDir 同。 -->
   <Target Name="_BundlerPublishMismatchWarn">
-    <Warning Condition="'$(_BundlerTargetStale)' != 'true' and '$(BundlerTarget)' != '' and '@(_BundlerTargetFromRid)' != '' and '$(BundlerTarget)' != '@(_BundlerTargetFromRid)' and '$(BundlerInputDir)' == '' and '$(BundlerUniversalTargets)' == ''"
+    <Warning Condition="'$(_BundlerTargetStale)' != 'true' and '$(_BundlerCanonicalTarget)' != '' and '@(_BundlerTargetFromRid)' != '' and '$(_BundlerCanonicalTarget)' != '@(_BundlerTargetFromRid)' and '$(BundlerInputDir)' == '' and '$(BundlerUniversalTargets)' == ''"
              Text="BundlerTarget '$(BundlerTarget)' does not match the target '@(_BundlerTargetFromRid)' mapped from RuntimeIdentifier '$(RuntimeIdentifier)'. The explicit target wins; remove BundlerTarget to derive from the RID." />
   </Target>
 
@@ -160,7 +175,7 @@
           Condition="'$(BundlerInputDir)' == '' and '$(BundlerUniversalTargets)' == ''">
     <ItemGroup>
       <_BundlerPublishRidFromMap Include="@(_BundlerRidMap->'%(Rid)')"
-          Condition="'%(_BundlerRidMap.Identity)' == '$(BundlerTarget)'" />
+          Condition="'%(_BundlerRidMap.Identity)' == '$(_BundlerCanonicalTarget)'" />
     </ItemGroup>
     <PropertyGroup>
       <BundlerPublishRid Condition="'$(BundlerPublishRid)' == ''">@(_BundlerPublishRidFromMap)</BundlerPublishRid>
@@ -192,11 +207,11 @@
       <_BundlerEffectiveInput Condition="'$(_BundlerEffectiveInput)' == '' and '$(BundlerInputDir)' != ''">$(BundlerInputDir)</_BundlerEffectiveInput>
       <_BundlerEffectiveInput Condition="'$(_BundlerEffectiveInput)' == '' and '$(PublishDir)' != ''">$(PublishDir)</_BundlerEffectiveInput>
       <_BundlerEffectiveInput Condition="'$(_BundlerEffectiveInput)' == ''">$(_BundlerPublishOutDir)</_BundlerEffectiveInput>
-      <_BundlerEffectiveTarget Condition="'$(_BundlerEffectiveTarget)' == ''">$(BundlerTarget)</_BundlerEffectiveTarget>
+      <_BundlerEffectiveTarget Condition="'$(_BundlerEffectiveTarget)' == ''">$(_BundlerCanonicalTarget)</_BundlerEffectiveTarget>
       <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
       <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
       <BundlerVersion Condition="'$(BundlerVersion)' == ''">$(Version)</BundlerVersion>
-      <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == '' and ($([System.String]::Copy('$(BundlerTarget)').StartsWith('macos-')) == 'true' or $([System.String]::Copy('$(BundlerTarget)').StartsWith('linux-')) == 'true' or '$(BundlerTarget)' == 'macos-universal' or '$(BundlerUniversalTargets)' != '')">$(TargetName)</BundlerMainExecutable>
+      <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == '' and ($([System.String]::Copy('$(_BundlerCanonicalTarget)').StartsWith('macos-')) == 'true' or $([System.String]::Copy('$(_BundlerCanonicalTarget)').StartsWith('linux-')) == 'true' or '$(_BundlerCanonicalTarget)' == 'macos-universal' or '$(BundlerUniversalTargets)' != '')">$(TargetName)</BundlerMainExecutable>
       <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''">$(TargetName).exe</BundlerMainExecutable>
       <BundlerNsisShortcutStartMenuFolder Condition="'$(BundlerNsisShortcutStartMenuFolder)' == ''">$(BundlerProductName)</BundlerNsisShortcutStartMenuFolder>
     </PropertyGroup>

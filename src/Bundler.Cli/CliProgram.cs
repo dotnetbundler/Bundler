@@ -411,7 +411,7 @@ public static class CliProgram
     {
         writer.WriteLine("Usage:");
         writer.WriteLine("  bundler validate|plan|bundle --input-dir <dir> [--input-dir <dir>...] --target <target> --formats <csv>");
-        writer.WriteLine("      (--input-dir repeated merges the dirs into a universal payload, e.g. macos-x86_64 + macos-arm64)");
+        writer.WriteLine("      (--input-dir repeated merges the dirs into a universal payload, e.g. macos-x86_64 + macos-aarch64)");
         writer.WriteLine("      --product-name <name> --identifier <id> --package-version <ver>");
         writer.WriteLine("      [--output-dir <dir>] [--output-layout <flat|byFormat>] [--main-executable <name>] [--json] [--quiet|--verbose]");
         writer.WriteLine("  Paths in --config resolve relative to the config file; paths given on the command line resolve relative to the working directory.");

@@ -855,7 +855,7 @@ public static class MacDmgTests
     static BundleConfiguration DmgConfiguration(
         string input,
         string output = "",
-        string target = "macos-arm64",
+        string target = "macos-aarch64",
         IReadOnlyList<PackageFormat>? formats = null,
         string? licenseFile = null) => new()
         {

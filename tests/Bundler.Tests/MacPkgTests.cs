@@ -357,7 +357,7 @@ public static class MacPkgTests
                 {
                     var configuration = PkgConfiguration(input, output);
                     var item = new BundlePlanItem(
-                        new BundleTarget("macos-arm64", TargetOperatingSystem.MacOS, CpuArchitecture.Arm64),
+                        new BundleTarget("macos-aarch64", TargetOperatingSystem.MacOS, CpuArchitecture.Arm64),
                         PackageFormat.Pkg,
                         input,
                         "ExampleApp",
@@ -611,7 +611,7 @@ public static class MacPkgTests
     static BundleConfiguration PkgConfiguration(
         string input,
         string output = "",
-        string target = "macos-arm64",
+        string target = "macos-aarch64",
         IReadOnlyList<PackageFormat>? formats = null,
         string? license = null) => new()
         {

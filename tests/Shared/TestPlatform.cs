@@ -21,11 +21,11 @@ internal static class TestPlatform
         (System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
             System.Runtime.InteropServices.Architecture.Arm64 ? "aarch64" : "x86_64");
 
-    // macOS 宿主 RID：集成 fixture 默认 macos-arm64 是历史遗留（首轮宿主全是 arm64 Mac），
-    // 要执行/安装的本机载荷必须匹配宿主 CPU——Intel Mac 上 arm64 件 Bad CPU type。
+    // macOS 宿主 target：要执行/安装的本机载荷必须匹配宿主 CPU——Intel Mac 上
+    // arm64 件 Bad CPU type。arch 用 canonical 词 aarch64。
     public static string OsxTarget =>
         System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
-            System.Runtime.InteropServices.Architecture.Arm64 ? "macos-arm64" : "macos-x86_64";
+            System.Runtime.InteropServices.Architecture.Arm64 ? "macos-aarch64" : "macos-x86_64";
 
     // bundler target → dotnet publish 运行时 RID：`dotnet publish -r` 只认 .NET RID
     // （osx-*/win-*/linux-*），bundler target 词（macos-*/windows-*）喂不进 RID 图。
@@ -35,7 +35,7 @@ internal static class TestPlatform
         "windows-i686" => "win-x86",
         "windows-aarch64" => "win-arm64",
         "macos-x86_64" => "osx-x64",
-        "macos-arm64" => "osx-arm64",
+        "macos-aarch64" => "osx-arm64",
         "linux-x86_64" => "linux-x64",
         "linux-aarch64" => "linux-arm64",
         "linux-musl-x86_64" => "linux-musl-x64",
