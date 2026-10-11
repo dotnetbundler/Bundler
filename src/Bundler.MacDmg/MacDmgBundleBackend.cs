@@ -460,7 +460,10 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         {
             var result = await MacDmgProcessRunner.TryRunAsync(
                 "hdiutil", ["detach", mountDirectory], workingDirectory, cancellationToken);
-            if (result is { ExitCode: 0 })
+            if (result is { ExitCode: 0 }
+                // 卷已被其它仲裁者（Finder/diskarbitration）抢先卸下——ENOENT 即目标态。
+                || (result is not null
+                    && result.StandardError.IndexOf("No such file or directory", StringComparison.Ordinal) >= 0))
             {
                 return;
             }
