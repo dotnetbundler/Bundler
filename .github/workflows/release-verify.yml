@@ -5,6 +5,8 @@ name: release-verify
 
 on:
   workflow_dispatch:
+  push:
+    branches: [devin/1791656255-test-gaps]
 
 permissions:
   contents: read
