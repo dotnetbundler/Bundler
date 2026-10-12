@@ -3,8 +3,10 @@ using DotNet.Bundler.Cli;
 
 public static class CliTests
 {
-
-
+    // 宿主推导目标词：与 CliConfig.HostTarget 同一合同（linux 腿断言用，独立复算防循环遮蔽）。
+    static string LinuxHostTarget =>
+        System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
+            System.Runtime.InteropServices.Architecture.Arm64 ? "linux-aarch64" : "linux-x86_64";
 
     static (int Code, string Out, string Err) Run(params string[] args)
     {
@@ -856,7 +858,7 @@ public static class CliTests
             }
             var (code, _, err) = Run("bundle", "--input-dir", input, "--output-dir", output);
             Assert.Equal(0, code); // err 上下文由后续 Contains 断言给出
-            Assert.Contains("target=linux-x86_64", err);
+            Assert.Contains($"target={LinuxHostTarget}", err);
             Assert.Contains("formats=deb,zip", err);
             Assert.Contains("productName=coolapp", err);
             Assert.Contains("identifier=dev.bundler.coolapp", err);
@@ -1113,7 +1115,7 @@ public static class CliTests
                   <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.props")}}" />
                   <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.targets")}}" />
                   <Target Name="EvalCondHit" BeforeTargets="_BundlerDerive">
-                    <Message Importance="high" Condition="'$(BundlerTarget)' == 'linux-x86_64'" Text="COND-HIT eval BundlerTarget=linux-x86_64" />
+                    <Message Importance="high" Condition="'$(BundlerTarget)' == '{{LinuxHostTarget}}'" Text="COND-HIT eval BundlerTarget={{LinuxHostTarget}}" />
                   </Target>
                 </Project>
                 """);
@@ -1130,7 +1132,7 @@ public static class CliTests
             await proc2.WaitForExitAsync();
             Assert.Equal(0, proc2.ExitCode);
             // normal 级推断消息在默认 minimal 详细度不输出——看 high 级 Bundling 行的推导目标
-            Assert.Contains("for linux-x86_64:", log2);
+            Assert.Contains($"for {LinuxHostTarget}:", log2);
             // eval 期推导：csproj 内按 $(BundlerTarget) 条件化的配置照常命中
             Assert.Contains("COND-HIT", log2);
             Assert.True(Directory.EnumerateFiles(output2, "*.deb").Any(),
