@@ -1136,6 +1136,12 @@ public static class CliTests
             var (code2, _, err2) = Run("update-keygen", "--key-file", keyPath);
             Assert.Equal(2, code2);
             Assert.Contains("already exists", err2);
+            if (OperatingSystem.IsLinux())
+            {
+                // 新父目录必须 700——宽松 umask 下私钥目录不许对本地他用户可读。
+                var mode = File.GetUnixFileMode(Path.GetDirectoryName(keyPath)!);
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, mode);
+            }
         }
         finally
         {
@@ -1153,6 +1159,13 @@ public static class CliTests
         var (code2, _, err2) = Run("update-keygen", "--key-file", "k", "--identifier", "dev.x");
         Assert.Equal(2, code2);
         Assert.Contains("no effect", err2);
+        // 配置相关旗标同拒——--json/--quiet/--verbose 通用旗不在此列。
+        var (code3, _, err3) = Run("init", "--strict");
+        Assert.Equal(2, code3);
+        Assert.Contains("no effect", err3);
+        var (code4, _, err4) = Run("update-keygen", "--key-file", "k", "--no-config");
+        Assert.Equal(2, code4);
+        Assert.Contains("no effect", err4);
     }
 
     [Fact]
