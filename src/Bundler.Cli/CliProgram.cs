@@ -184,7 +184,8 @@ public static class CliProgram
 
     internal static IReadOnlyList<PackageFormat> ParseFormats(string value, string targetText)
     {
-        var names = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        // 逗号与分号都收——bundler.json/MSBuild 列表惯例用 ';'，CLI 从那边抄来不该炸。
+        var names = value.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (names.Length == 0)
         {
             throw new CliUsageException("--formats must list at least one format.");

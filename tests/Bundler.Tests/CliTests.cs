@@ -1010,6 +1010,7 @@ public static class CliTests
         }
     }
 
+
     [Fact]
     static void MultiTargetInferenceLabelsOnlyFirstAsUniversal()
     {
@@ -1093,6 +1094,46 @@ public static class CliTests
             Assert.Contains(": deb", log); // formats 按 linux 目标推导
             Assert.True(Directory.EnumerateFiles(output, "*.deb").Any(),
                 "expected a .deb in output: " + string.Join(",", Directory.EnumerateFiles(output)));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    static void FormatsAcceptSemicolonSeparators()
+    {
+        // bundler.json/MSBuild 列表惯例是 ';'——CLI 同一字段必须同样收。
+        var input = CreateInputDirectory();
+        try
+        {
+            var (code, stdout, _) = Run("plan", "--input-dir", input, "--formats", "zip;tar.gz",
+                "--main-executable", "cli-fixture");
+            Assert.Equal(0, code);
+            Assert.Contains(" zip ", stdout);
+            Assert.Contains("targz", stdout);
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+        }
+    }
+
+    [Fact]
+    static void NoExecutableCandidatesEmitsFallbackNote()
+    {
+        // 目录内零可执行候选时推断层先 note 预警——不等到 validator 才爆炸。
+        var root = Path.Combine(Path.GetTempPath(), "bundler-cli-noexec-" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "plaindir");
+        Directory.CreateDirectory(input);
+        File.WriteAllText(Path.Combine(input, "data.txt"), "x");
+        try
+        {
+            var (code, _, err) = Run("plan", "--input-dir", input, "--formats", "zip");
+            Assert.Equal(2, code);
+            Assert.Contains("no executable candidates", err);
+            Assert.Contains("mainExecutable", err);
         }
         finally
         {

@@ -883,6 +883,13 @@ internal static class CliConfig
             inferred.Add($"mainExecutable not inferred: {candidates.Length} executables " +
                 $"({string.Join(", ", candidates)}) — pass --main-executable");
         }
+        else
+        {
+            // 零候选不猜——先 note 预警回落惯例，下游 validator 再按惯例名验存在性
+            //（Windows 宿主看不透 POSIX 执行位，该 note 对「未检出」与「没有」同话述）。
+            inferred.Add("mainExecutable not inferred: no executable candidates in " +
+                "input directory — defaulting to <productName>[.exe]");
+        }
     }
 
     private static bool IsExecutableCandidate(string path, string name, bool forWindows)
