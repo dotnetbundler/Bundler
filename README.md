@@ -103,7 +103,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.94" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.100" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -114,7 +114,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
 dotnet publish -c Release -r win-x64
 ```
 
-`dotnet publish` 后自动打包；`BundlerTarget` 可按 `$(RuntimeIdentifier)` 从 canonical RID 表推导省略——上例 `win-x64` 即推导为 `windows-x86_64`，显式 `-p:BundlerTarget=` 恒覆盖。
+`dotnet publish` 后自动打包；`BundlerTarget` 可按 `$(RuntimeIdentifier)` 从 canonical RID 表推导省略——上例 `win-x64` 即推导为 `windows-x86_64`，显式 `-p:BundlerTarget=` 恒覆盖；`BundlerTarget` 与 `RuntimeIdentifier` 都未设时回落 SDK 宿主 RID 推导（`-t:BundlerBundle -p:BundlerInputDir=` 免目标即开即用）。
 不经 Publish 钩子也可以显式调用 `BundlerBundle` target，三种模式：
 
 ```powershell
@@ -138,7 +138,7 @@ canonical RID 映射表：`windows-x86_64→win-x64`、`windows-i686→win-x86`�
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.94" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.100" />
 ```
 
 ```csharp
@@ -184,7 +184,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.94" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.100" />
 ```
 
 ```csharp

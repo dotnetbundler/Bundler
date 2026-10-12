@@ -1094,6 +1094,37 @@ public static class CliTests
             Assert.Contains(": deb", log); // formats 按 linux 目标推导
             Assert.True(Directory.EnumerateFiles(output, "*.deb").Any(),
                 "expected a .deb in output: " + string.Join(",", Directory.EnumerateFiles(output)));
+
+            // SDK 项目免 BundlerTarget：NETCoreSdkPortableRuntimeIdentifier → 宿主推导
+            var sdkProject = Path.Combine(root, "sdk.csproj");
+            File.WriteAllText(sdkProject, $$"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net10.0</TargetFramework>
+                    <AssemblyName>TestApp</AssemblyName>
+                    <TargetName>TestApp</TargetName>
+                    <_BundlerTaskAssembly>{{taskDll}}</_BundlerTaskAssembly>
+                  </PropertyGroup>
+                  <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.props")}}" />
+                  <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.targets")}}" />
+                </Project>
+                """);
+            var output2 = Path.Combine(root, "out2");
+            var psi2 = new System.Diagnostics.ProcessStartInfo("dotnet",
+                $"msbuild \"{sdkProject}\" -t:BundlerBundle -p:BundlerInputDir=\"{input}\" " +
+                $"-p:BundlerOutputPath=\"{output2}\"")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            using var proc2 = System.Diagnostics.Process.Start(psi2)!;
+            var log2 = await proc2.StandardOutput.ReadToEndAsync() + proc2.StandardError.ReadToEndAsync();
+            await proc2.WaitForExitAsync();
+            Assert.Equal(0, proc2.ExitCode);
+            // normal 级推断消息在默认 minimal 详细度不输出——看 high 级 Bundling 行的推导目标
+            Assert.Contains("for linux-x86_64:", log2);
+            Assert.True(Directory.EnumerateFiles(output2, "*.deb").Any(),
+                "expected a .deb in output2: " + string.Join(",", Directory.EnumerateFiles(output2)));
         }
         finally
         {

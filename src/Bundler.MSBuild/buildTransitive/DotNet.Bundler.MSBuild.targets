@@ -85,9 +85,16 @@
 
   <!-- 阶段1：BundlerTarget 推导（Rid→target 便捷推导，显式 BundlerTarget 恒覆盖）+ 入口参数校验 -->
   <Target Name="_BundlerDerive">
+    <PropertyGroup>
+      <!-- 宿主推导：RuntimeIdentifier 未设时回落 SDK 宿主 RID（对齐 CLI 'target = 当前宿主' 推断）——
+           -t:BundlerBundle -p:BundlerInputDir=<dir> 免 BundlerTarget 即开即用 -->
+      <_BundlerEffectiveRid Condition="'$(_BundlerEffectiveRid)' == ''">$(RuntimeIdentifier)</_BundlerEffectiveRid>
+      <_BundlerEffectiveRid Condition="'$(_BundlerEffectiveRid)' == ''">$(NETCoreSdkPortableRuntimeIdentifier)</_BundlerEffectiveRid>
+      <_BundlerInferredHostTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == '' and '$(_BundlerEffectiveRid)' != ''">true</_BundlerInferredHostTarget>
+    </PropertyGroup>
     <ItemGroup>
       <_BundlerTargetFromRid Include="@(_BundlerRidMap->'%(Identity)')"
-          Condition="'%(_BundlerRidMap.Rid)' == '$(RuntimeIdentifier)'" />
+          Condition="'%(_BundlerRidMap.Rid)' == '$(_BundlerEffectiveRid)'" />
     </ItemGroup>
     <PropertyGroup>
       <BundlerTarget Condition="'$(BundlerTarget)' == ''">@(_BundlerTargetFromRid)</BundlerTarget>
@@ -114,6 +121,8 @@
     </PropertyGroup>
     <Warning Condition="'$(_BundlerTargetStale)' == 'true'"
              Text="BundlerTarget was derived from a stale RuntimeIdentifier and was refreshed to '@(_BundlerTargetFromRid)'. Pass -p:BundlerTarget=&lt;target&gt; to pin it explicitly." />
+    <Message Importance="normal" Condition="'$(_BundlerInferredHostTarget)' == 'true' and '@(_BundlerTargetFromRid)' != ''"
+             Text="BundlerTarget inferred from host runtime identifier '$(_BundlerEffectiveRid)' → '@(_BundlerTargetFromRid)'." />
     <PropertyGroup>
       <!-- formats 缺省按目标 OS 推导（显式 BundlerFormats 恒胜）：universal 视同 macos，
            未知 OS 兜底 deb——deb 是纯托管后端任何宿主可产 -->
@@ -146,7 +155,7 @@
        只警告不改值——显式恒胜。只在钩子链：显式 BundlerBundle 路的 inner publish 用
        BundlerPublishRid 覆盖项目 RID，target 与项目 RID 不符是预期；universal/InputDir 同。 -->
   <Target Name="_BundlerPublishMismatchWarn">
-    <Warning Condition="'$(_BundlerTargetStale)' != 'true' and '$(_BundlerCanonicalTarget)' != '' and '@(_BundlerTargetFromRid)' != '' and '$(_BundlerCanonicalTarget)' != '@(_BundlerTargetFromRid)' and '$(BundlerInputDir)' == '' and '$(BundlerUniversalTargets)' == ''"
+    <Warning Condition="'$(_BundlerTargetStale)' != 'true' and '$(RuntimeIdentifier)' != '' and '$(_BundlerCanonicalTarget)' != '' and '@(_BundlerTargetFromRid)' != '' and '$(_BundlerCanonicalTarget)' != '@(_BundlerTargetFromRid)' and '$(BundlerInputDir)' == '' and '$(BundlerUniversalTargets)' == ''"
              Text="BundlerTarget '$(BundlerTarget)' does not match the target '@(_BundlerTargetFromRid)' mapped from RuntimeIdentifier '$(RuntimeIdentifier)'. The explicit target wins; remove BundlerTarget to derive from the RID." />
   </Target>
 
