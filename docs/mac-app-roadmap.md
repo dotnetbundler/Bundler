@@ -1,7 +1,7 @@
 # macOS `.app` 后端实施路线（MAC-APP）
 
-> 状态：**路线已确认，`MAC-APP-1`..`MAC-APP-5` 全部完成，`.app` 格式已冻结**（冻结基线：`mac-app-development` 分支 `BundlerPackageVersion=0.1.0-alpha.45`，行为契约=`mac-app-capability-matrix.md` 定稿表+本文件各节验收记录；冻结后仅缺陷修复附回归测试）。
-> 上游审计已完成（Tauri 固定快照 `7dbfc1f`）；PKG 取舍见 [`docs/mac-format-decision.md`](mac-format-decision.md)；逐项能力状态见 [`docs/mac-app-capability-matrix.md`](mac-app-capability-matrix.md)；外部条件见 [`docs/mac-app-open-items.md`](mac-app-open-items.md)；人工步骤见 [`docs/mac-app-manual-testing.md`](mac-app-manual-testing.md)。
+> 状态：**路线已确认，`MAC-APP-1`..`MAC-APP-5` 全部完成，`.app` 格式已冻结**（冻结基线：`mac-app-development` 分支 `BundlerPackageVersion=0.1.0-alpha.45`，行为契约=`mac-app-capability-matrix.md` 定稿表+本文件语义契约；冻结后仅缺陷修复附回归测试）。
+> 上游审计已完成（Tauri 固定快照 `7dbfc1f`）；PKG 已确认纳入公共 `PackageFormat`；逐项能力状态见 [`docs/mac-app-capability-matrix.md`](mac-app-capability-matrix.md)；外部条件见 [`docs/mac-app-open-items.md`](mac-app-open-items.md)；人工步骤见 [`docs/mac-app-manual-testing.md`](mac-app-manual-testing.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 
 ## 1. 已核实事实、选择及风险
@@ -102,109 +102,7 @@ Developer ID 签名、真实公证、macos-x86_64 原生运行属外部待验收
 
 依据：[Apple Bundle 结构](https://developer.apple.com/go/?id=bundle-structure)、[Info.plist 键](https://developer.apple.com/documentation/bundleresources/information-property-list)、[codesign](https://developer.apple.com/library/archive/technotes/tn2206/)、[Notarization](https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution)、[QA1940 扩展属性](https://developer.apple.com/library/archive/qa/qa1940/_index.html)、上游 Tauri 快照审计（`7dbfc1f`）。
 
-## 4. 阶段计划
-
-通用测试与清理规则见 `docs/development-rules.md`；`.app` 专有要求如下。
-所有阶段均需对每项新增/修改功能增加自动化断言；
-本机（云 macOS VM）可安全执行 `.app` 生成、校验、ad-hoc 签名、`codesign --verify`、启动、LaunchServices 注册与文件/URL 唤起等真实测试，当阶段跑完；
-提权（sudo）、系统域写入、真实重启、生产证书与公证不阻塞本机开发，记入外部待办。
-
-测试组织（遵循仓库分层约定；macOS 无 `pwsh`，入口用 bash，脚本名写明用途）：
-
-| 用途 | macOS `.app` 入口 |
-| --- | --- |
-| 快速单元/契约 | `tests/Bundler.Tests` |
-| 仓库外直接后端 API 包消费 | `tests/Bundler.ApiTests`（`MacAppApiTests`） |
-| MSBuild 包消费 fixture | `tests/Bundler.IntegrationTests/Fixtures/MacApp` |
-| 真实 macOS 集成 | `MacAppIntegrationTests`（`tests/Bundler.IntegrationTests`；独立身份、预检无碰撞、只清理本轮产物） |
-| 专用环境与人工 | `docs/mac-app-manual-testing.md`、`docs/mac-app-open-items.md` |
-
-### MAC-APP-1：可用的最小 `.app`（结构/元数据）
-
-- **前置**：本路线第 2、3 节的工具策略与语义决策经用户确认；`MAC-PKG` 决策结论已知（不阻塞本阶段）；核对当前 Git 与公共模型。
-- **目标/交付**：`DotNet.Bundler.MacApp` 后端（或直接 API 等价物）、MSBuild 映射、`.app` 骨架生成、Info.plist 核心键（身份/显示名/bundle name/可执行名/两版本键/最低系统版本/类别/版权/图标名）、`.icns`（透传 + 位图合成）、第 3 节载荷映射、产物命名契约（`<产品名>.app`，输出目录 `artifacts/<rid>/app`）、`plutil -lint` 校验、示例 `samples/HelloMacApp`。
-- **新增自动化**：输入校验（identifier 规则、版本格式、路径拒绝、保留名冲突）、plist 键值断言（`plutil -p` 读回）、目录结构断言、`.icns` 生成断言、MSBuild/API 同 Core 结果、NuGet 包内容、重复构建指纹。
-  本机真实测试：构建含真实 .NET 载荷的 `.app` → `plutil -lint` → `open`/`open -W` 启动退出码与进程断言 → 卸载语义（删除 bundle 后无残留登记）。
-- **人工边界**：干净宿主（未装 Xcode/CLT 的新建用户）构建本机已产出的 `.app` 并首启；Intel 宿主。
-- **不做**：正式签名/公证/entitlements、文件关联与 URL scheme、`Assets.car`、universal 校验、DMG。
-- **退出**：新增测试与受影响回归通过；本机 `.app` 生成→校验→启动烟雾测试通过；未支持项明确报错；外部项逐条登记。
-- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）**：
-  - 交付 `src/Bundler.MacApp`（netstandard2.0，`MacAppBundler`/`MacAppBundleConfiguration`/`MacAppBundleBackend`），MSBuild 经 `BundlerFormats=app` + `BundlerMacApp*` 属性/`BundlerMacContent`/`BundlerMacFramework` 项映射，直接 API 与 MSBuild 同 Core；
-  - `PackageFormat.Pkg` 进公共枚举（macos-universal 目标矩阵放行，win/linux 拒绝；`Pkg` 计划自动插入中间 `.app` 步骤）；`BundlerMainExecutable` 对 macos-universal RID 默认 `$(TargetName)` 无 `.exe`；
-  - 载荷语义：输入树整体保留相对结构进 `Contents/MacOS/`、`BundlerResource`→`Contents/Resources/`、`BundlerMacFramework`（仅 `.framework`/`.dylib`）→`Contents/Frameworks/`、`BundlerMacContent`→`Contents/` 任意非保留位置；顶层保留名（`MacOS`/`Resources`/`Frameworks`/`Info.plist`/`PkgInfo`）与 `..`/绝对路径拒绝；跨通道目标路径冲突拒绝；符号链接/reparse 拒绝；主可执行 Mach-O 魔数校验；POSIX 宿主对 Mach-O 赋 `+x`（Windows 宿主告警降级）；
-  - Info.plist 核心键全写入（含 `NSHighResolutionCapable`），`plutil -lint` 内联校验（macOS 宿主），`LSMinimumSystemVersion` 未配置不写入；`.icns` 透传或 PNG 位图合成（iconutil 不依赖）；
-  - 新增 22 条单测全过；顺带修复了 macOS 宿主上暴露的既有移植性缺陷：`NsisBundler` 安装路径校验此前用宿主分隔符/非法字符集（POSIX 上 `..` 与 `<>"|?*` 逃逸）、`EnsurePayloadFile/Directory` 用 `\` 规范化路径查 POSIX 文件系统、资源冲突集合分隔符不一致、`SafeFileName` 宿主相关；两处 license 断言改为换行规范化文本比对（zip 内 CRLF vs 检出 LF）；`ValidatesMsiPublishingInputs` 移入 Windows-only 区块（`WixBundler` 刻意宿主门控最先）；修复后全套件 66 项全绿；`tests/MacOS.App.Integration/Verify.sh` 真实跑通 打包→nupkg 断言→发布→结构/plist 回读→`+x`→直接启动输出标记→`open -W`→重建指纹→删除即卸载→独立 API fixture 再产 `.app`；示例 `samples/HelloMacApp`；
-  - 未做项按阶段拒绝：`FileAssociations`/`UrlProtocols`/`SigningFiles`/`LicenseFile` 明确 `NotSupportedException`。
-
-### MAC-APP-2：分发与桌面集成行为
-
-- **前置**：MAC-APP-1 通过，`.app` 语义冻结。
-- **目标/交付**：`CFBundleDocumentTypes`+`UTExportedTypeDeclarations`（文件关联：扩展名/名称/role/rank/contentTypes/UTI 推断）、`CFBundleURLTypes`（schemes/name/role）、`NSAppTransportSecurity` 例外域（显式配置才放宽）、调用方 Info.plist 合并（文件或内联，身份键回读强制一致）、`Assets.car` 管线（`.icon`/`*.car` 输入、`actool`≥26 探测降级）、universal/fat 载荷 `lipo -info` 校验。
-- **新增自动化**：plist 合并与身份键冲突拒绝、关联/协议键结构断言、UTI 推断表断言、`actool` 版本门控与降级分支、fat/非 fat 输入判定。
-  本机真实测试：`lsregister` 注册后 `open <文件>`/`open <scheme>://` 实际唤起断言；`.app` 拷入/移出 `/Applications` 的 LaunchServices 行为（仅用户域内操作，不提权）。
-- **人工边界**：Gatekeeper 对未签名/ad-hoc 首启的实际对话框表现；最小系统版本宿主的实际拒绝/允许。
-- **不做**：正式签名/公证、MDM/企业分发、universal links（依赖 provisioning profile，MAC-APP-3 后外部边界）。
-- **退出**：新增测试与回归通过；本机 LaunchServices/唤起链路可复现；外部项保留待验收。
-- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）**：
-  - `CFBundleDocumentTypes`/`CFBundleURLTypes`：共享 `FileAssociations`/`UrlProtocols` 直接产出默认 Editor/Default 条目；`BundlerMacDocumentType`/`BundlerMacUrlType` 专用条目按扩展名/scheme 重叠吸收共享条目（并集 + 名称/描述/MIME 回退），同令牌跨条目冲突拒绝；role/rank/contentTypes 均可覆盖；
-  - `UTExportedTypeDeclarations`：按配置的 `ExportedTypeIdentifier`/`ConformsTo` 输出，`UTTypeTagSpecification` 携带扩展名与 MIME；未导出时 `LSItemContentTypes` 为显式 contentTypes ∪ 扩展名/ MIME 推断（24 条扩展名表、19+前缀 MIME 表）；
-  - `NSAppTransportSecurity` 例外域：单域 `NSExceptionAllowsInsecureHTTPLoads`+`NSIncludesSubdomains`，不配置不放宽；
-  - 调用方 Info.plist 合并：`BundlerMacAppInfoPlistFile`（文件）/`BundlerMacAppInfoPlistXml`（内联）二选一，合并后 `CFBundleIdentifier`/`CFBundleExecutable`/`CFBundlePackageType`/`CFBundleName`/`CFBundleShortVersionString` 身份键回读校验，冲突即拒绝；
-  - `Assets.car` 管线：`BundlerIcon` 接受 `.car`（直接拷贝优先）与 `.icon` 目录（`actool --version` 探测≥26 才编译，缺失/失败记警告不阻塞），`assetutil` 回读图标名写 `CFBundleIconName`；本机已用 Xcode 26.6 自带模板 `.icon` 真实编译出 `Assets.car` 并提取图标名；
-  - universal/fat 校验：托管实现解析 thin/fat 全端序 Mach-O 头（不依赖 `lipo`），macos-arm64/macos-x86_64 各校验载荷含对应架构，`Verify.sh` 用真实 `lipo -info` 交叉断言；
-  - 新增 9 条单测（macOS 宿主全套件 75 项全绿）；`Verify.sh` 真实跑通 `lsregister -f` 注册+dump 可见、`open <文件>`/`open <scheme>://` 唤起（`.launch-marker` 落盘为证）、`~/Applications` 拷入-启动-移出、独立 API fixture 同样输出 MAC-APP-2 键组；
-  - 刻意偏离说明：架构校验用托管 Mach-O 解析替代 `lipo -info`（语义等价、无工具依赖、跨宿主一致），`Verify.sh` 保留真 `lipo` 交叉断言作为证据。
-
-### MAC-APP-3：codesign 与 notarization
-
-- **前置**：MAC-APP-2 通过；本阶段全部签名代码路径可在无真实证书下完成开发。
-- **目标/交付**：签名提供器（identity/临时钥匙串证书导入/`codesign -s -` ad-hoc）、hardened runtime 开关（仅可执行目标）、entitlements、inside-out 嵌套签名顺序（`MacOS`/`Frameworks`/`PlugIns`/`Helpers`/`XPCServices`/`Libraries`/`SharedFrameworks` 约定）、`xattr -crs`、签后 `codesign --verify --deep --strict` 与 `spctl` 断言、显式公证（ditto zip→签→`xcrun notarytool submit`--wait/异步→`xcrun stapler staple`）、`skipStapling`、凭证环境变量与密钥提供器、失败清理不留伪成功产物。
-- **新增自动化**：签名顺序、entitlements 传递、hardened runtime 目标筛选、临时钥匙串创建/销毁、失败路径无伪产物、公证参数组装（不上传的桩断言）；
-  本机真实测试：全链 `codesign -s -` ad-hoc 签名 + `--verify` + 启动 + 证书缺失路径；公证参数组装与失败路径用桩断言（真实提交外部待验收）。
-- **人工边界**：Developer ID Application 证书、真实公证提交/上钉/撤销、Gatekeeper 离线验票、`APPLE_*` 凭证链路——全部外部待验收（MAC-APP-OI-01 起）。
-- **不做**：DMG 签名、Developer ID Installer（属 PKG）、生产证书入库、任何默认自动上传。
-- **退出**：本机 ad-hoc 签名链可复现、失败清理断言通过；所有需凭证项登记外部待办。
-- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）**：
-  - `MacAppSigningConfiguration`（挂在 `MacAppBundleConfiguration.Signing`）：`Identity`（`-`=ad-hoc）与 `TemporaryCertificatePath`+`Password`（临时钥匙串导入）互斥，`HardenedRuntime`、`EntitlementsFile`、`Notarize`/`NotaryWait`（默认 true）/`SkipStapling`、公证凭证键（keychain profile / Apple ID 三元组 / API key 三元组，显式配置优先、回退 `APPLE_PROFILE`/`APPLE_ID`/`APPLE_PASSWORD`/`APPLE_TEAM_ID`/`APPLE_API_KEY_PATH`/`APPLE_API_KEY`/`APPLE_API_ISSUER` 环境变量）；
-  - `MacAppSigning`：签名在非 macOS 宿主预检即 `NotSupportedException`；`xattr -crs` 清扩展属性→按 `MacOS`/`Frameworks`/`PlugIns`/`Helpers`/`XPCServices`/`Libraries`/`SharedFrameworks` 约定目录内全部常规文件先签（嵌套 .app/.appex/.bundle/.framework/.xpc 按其自身 Contents 递归 inside-out 后以 bundle 维度签）（修正：嵌套代码不只 Mach-O，托管 .dll 也需签名——真实构建暴露出"未签名子组件"错误后按此修正）→主可执行（带 entitlements）→整包（带 entitlements）；签后 `codesign --verify --deep --strict --verbose=4` 硬断言；非 ad-hoc 再跑 `spctl -a -t execute -vv`（拒绝记警告不失败）；签名在 staging 内完成，失败不留伪成功产物；
-  - 临时钥匙串：`security create-keychain`（随机口令）→ 读出并前置插入 `list-keychains -s` 搜索表 → unlock → `import -P`（`-T /usr/bin/codesign`）→ `set-key-partition-list` → `find-identity -v -p codesigning` 反推 identity；dispose 恢复搜索表+delete-keychain+删文件，失败路径同样执行；
-  - 公证管线（显式 opt-in）：`ditto -c -k --keepParent`→`xcrun notarytool submit <zip> <凭证> --output-format json [--wait]`→成功且 wait 且未 skipStapling 时 `xcrun stapler staple`；zip finally 清理；ad-hoc/无凭证/不完整凭证组预检拒绝；`NotaryWait=false`/`SkipStapling` 未开公证也拒绝；
-  - MSBuild：`BundlerMacAppSignIdentity`/`BundlerMacAppSigningCertificatePath`/`...Password`/`BundlerMacAppHardenedRuntime`/`BundlerMacAppEntitlementsFile`/`BundlerMacAppNotarize`/`BundlerMacAppNotaryWait`/`BundlerMacAppSkipStapling`/`BundlerMacAppNotaryProfile`/`BundlerMacAppAppleId`/`...Password`/`...TeamId`/`BundlerMacAppNotaryApiKeyPath`/`...KeyId`/`...Issuer` 共 15 个新属性；
-  - 新增 6 条单测（参数组装、凭证解析与残缺组拒绝、桩注入 inside-out 顺序+verify+spctl 跳过断言、临时钥匙串失败清理、无伪产物）全绿，macOS 宿主全套件 81 项全绿；`Verify.sh` 新增真实段：`BundlerMacAppSignIdentity=-`+hardened runtime+entitlements 的 `.app` 经 `codesign --verify --deep --strict`+`Signature=adhoc`+真实启动落盘标记，缺失证书发布路径失败且无产物；
-  - 测试缝：`MacProcessRunner.Handler` 静态委托拦截全部进程调用，供单测断言参数/顺序与注入失败。
-
-### MAC-APP-4：原生 macOS E2E 与支持矩阵
-
-- **前置**：MAC-APP-1..3 完成；可用专用/可抛弃宿主计划。
-- **目标/交付**：干净宿主（无 Xcode/CLT）构建-启动链路复核、`macos-x86_64`（Rosetta 或 Intel 原生）与 `macos-arm64` 运行矩阵、`LSMinimumSystemVersion` 宿主实测、下载-quarantine-首启 E2E（Gatekeeper 实际行为）、版本替换升级语义（v1→v2 `.app` 替换后关联/LaunchServices/用户数据）、卸载残留检查、文档与示例收口。
-- **新增自动化**：可自动化的矩阵格子转自动化；不可自动化的逐项人工记录（OS 版本、架构、Git SHA、产物 SHA-256、日志、清理）。
-- **人工边界**：凡需真实 Apple 凭证、物理多样性宿主或破坏性场景的格子保持外部待验收。
-- **不做**：MAC-DMG/MAC-PKG 功能、伪造支持声明。
-- **退出**：矩阵实测格子有证据、未测格子限缩支持声明；示例与文档完整。
-- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64 + Xcode 26.6 + .NET 10.0.401）**：
-  - `Verify.sh` 全绿，新增 MAC-APP-4 段落全部实测通过；
-  - `macos-x86_64` 产物：fixture 以 `Target=macos-x86_64` 真实发布产 `.app`，`lipo -info` 断言主可执行为 x86_64、`plutil -lint` 通过；本机无 Rosetta，运行态启动属外部待验收（MAC-APP-MT-03 / OI-02）；顺带实测架构校验拒绝把 arm64-only dylib 带进 macos-x86_64 产物；
-  - quarantine 首启：对 `.app` 副本写入 `com.apple.quarantine` 后 `open` 被 LaunchServices/Gatekeeper 拦截（未签名隔离包不放行，符合预期）；`xattr -d` 可移除隔离属性；
-  - `LSMinimumSystemVersion` 宿主实测：`BundlerMacAppMinimumSystemVersion=99.0` 产出的包被 LaunchServices 拒绝打开（超出版本下限即拒），断言通过；
-  - 版本替换升级：v1（`CFBundleVersion=2026.9.1`）拷入 `~/Applications` 注册+启动 → 原地删除换 v2（`2026.9.2`）→ 重新注册+启动成功，`lsregister -dump` 确认 bundle identifier 注册保持——`.app` 升级语义=整包替换，断言通过；
-  - 干净宿主复核：后端无 Xcode/CLT 必需依赖——未签名 `.app` 链路只调用 `plutil`（lint），签名加 `xattr`/`codesign`/`security`/`spctl`，公证才需要 `xcrun notarytool`/`stapler`（Xcode 13+），`actool` 缺失降级 `.icns`；`lipo`/`open`/`lsregister`/`clang` 仅测试脚本使用且均有降级分支；
-  - 卸载语义与重建指纹断言维持全绿。
-
-### MAC-APP-5：审计与格式冻结
-
-- **前置**：MAC-APP-4 完成。
-- **目标/交付**：Tauri macOS `.app` 能力审计复核（上游漂移重核）、`docs/mac-app-capability-matrix.md` 状态定稿、许可/供应链复核（本格式无第三方内嵌工具，复核点为宿主工具版本下限与凭证边界）、外部待办收口、冻结 `.app` 配置与行为基线。
-- **新增自动化**：补齐矩阵缺口；冻结测试向量。
-- **不做**：新增功能；冻结后仅缺陷修复附回归测试。
-- **退出**：矩阵与文档一致；冻结基线写入本文件与 `PROJECT_CONTEXT.md`；`docs/roadmap.md` 默认下一阶段推进到 `MAC-DMG`。
-- **验收记录（2026-09-26）**：
-  - 上游漂移复核：`tauri dev` 自 `9f8922a` 移至 `447fa9f`，`app.rs`/`sign.rs`/`icon.rs`/`dmg/mod.rs`/`settings.rs`/`config.rs`/`tauri-macos-sign` 共 8 个 macOS 相关文件字节一致，无新能力缺口，审计基线 `7dbfc1f` 结论继续有效；
-  - 能力矩阵定稿：逐项状态与 MAC-APP-1..4 验收证据对齐，无悬空"计划实现"行；
-  - 许可/供应链复核：本格式无第三方内嵌工具，全部打包步骤走宿主系统工具（`plutil`/`codesign`/`security`/`xattr`/`ditto`/`spctl`）或 Xcode 桥接工具（`xcrun notarytool`/`stapler`、`actool` 可降级），复核点=宿主工具版本下限（已记录 §2 三层下限口径）与凭证边界（`APPLE_*` 环境变量/显式配置，秘密不入库）；
-  - 外部待办收口：OI-01..07 逐条复核登记口径不变，仍属外部待验收，未宣称已通过；
-  - 冻结基线：`.app` 配置面（`MacAppBundleConfiguration`+`Signing`）与行为（骨架/plist 键/图标/关联/签名公证顺序）冻结于 `0.1.0-alpha.45`；`Bundler.Tests` 81/81 与 `Verify.sh` 全绿为冻结测试向量。
-
-## 5. 验证分层与交接
+## 4. 验证分层与交接
 
 | 验证层 | 内容 |
 | --- | --- |

@@ -20,7 +20,7 @@
 6. 读当前格式的专属文档：`<format>-roadmap.md`、`<format>-capability-matrix.md`、`<format>-manual-testing.md`、`<format>-open-items.md`、上游审计/参考；
    格式清单见 `docs/manual-testing-index.md`。
 7. 读与将做工作直接相关的代码、测试和 fixture。
-8. 需要历史背景时读对应格式路线文档中带日期的验收记录；历史记录不代表当前状态。
+8. 需要历史背景时查 git 提交与 PR 记录；路线文档只留设计决策与当前契约，不逐条留档验收记录。
 
 然后核对真实状态，不把交接快照当事实：
 
@@ -57,7 +57,7 @@ git status --short
 7. **新功能必有新测试**：每项新增/修改功能要有可区分旧行为的自动化断言；本机可安全执行的真实测试当阶段跑完；只运行旧测试不算完成。
 8. **秘密不入库**：签名私钥、PFX 密码、令牌不进入仓库、项目文件、普通命令行或可回显日志。
 9. **文档各司其职**：泛用规则只在 `docs/development-rules.md`；某格式的规则、契约、路线、证据只放该格式的文档；
-   当阶段验收记录随对应格式路线文档带日期保存；当前事实只放 `PROJECT_CONTEXT.md`。
+   实施证据以 git 提交与 PR 记录为准；当前事实只放 `PROJECT_CONTEXT.md`。
    文档用中文，一句一行。
 10. **Git 纪律**：未经用户明确说"提交"不提交；未明确要求不推送；提交消息用 `type(scope): 中文描述`；保留用户已有的无关工作区改动；清理只限本轮明确创建且已核对归属的产物。
 11. **诚实标注状态**：缺环境的验收项（UAC、生产证书、真实重启、干净宿主、ARM64 等）保留为"外部待验收"，不得写成已通过；单台开发机的结果不得推广成平台兼容声明。
@@ -70,15 +70,14 @@ git status --short
 | `docs/development-rules.md` | 全部跨格式泛用规则 | 任何格式专属内容、历史记录 |
 | `docs/roadmap.md` | 产品边界、格式顺序、未来计划 | 协作规则细则、格式实现细节 |
 | `PROJECT_CONTEXT.md` | 当前事实：版本、阶段、最近验证、未决问题、下一步 | 规则、历史分轮记录、格式专属细节 |
-| `docs/<format>-roadmap.md` 带日期条目 | 该格式当阶段的验收记录与证据 | 当前状态结论、规则 |
+| `docs/<format>-roadmap.md` | 该格式的设计决策与语义契约 | 泛用规则、过程记录、其他格式内容 |
 | `README.md` | 面向使用者的能力与用法 | 协作规则、阶段计划 |
-| `docs/<format>-roadmap.md` | 该格式的设计决策、阶段目标与实施证据 | 泛用规则、其他格式内容 |
 | `docs/<format>-capability-matrix.md` | 该格式逐项能力与验收状态 | 规则、路线叙述 |
 | `docs/<format>-manual-testing.md` | 该格式人工验收用例 | 可自动化的内容、外部条件索引 |
 | `docs/<format>-open-items.md` | 该格式外部输入/环境待办索引 | 可本机完成的事项、用例步骤 |
 | `docs/<format>-upstream-*.md` 等 | 该格式上游参照与取舍 | 当前能力承诺 |
 | `samples/<name>/*-sample.md` | 该示例的操作说明 | 后端规则、阶段证据 |
-| `tests/README.md` | 测试入口、门禁与 fixture 地图 | 测试结果记录（写进阶段证据） |
+| `tests/README.md` | 测试入口、门禁与 fixture 地图 | 测试结果记录 |
 | `third_party/<tool>/*-provenance.md` | 第三方来源、许可、哈希核查 | 实现规则 |
 | `docs/manual-testing-index.md` | 各格式人工文档入口 | 用例步骤、结论 |
 | `docs/special-acceptance.md` | 只能用户手动处理的特殊验收项登记 | 可自动化腿、脚本实现 |

@@ -1,7 +1,7 @@
 # 签名能力矩阵（SIGN）
 
 > `已实现`、`计划实现`、`外部待验收`、`明确拒绝` 状态口径见 `docs/development-rules.md`。
-> 行级证据见 `docs/signing-roadmap.md` §4；外部验收项见 `docs/signing-open-items.md`。
+> 行级实施证据以 git/PR 记录为准；外部验收项见 `docs/signing-open-items.md`。
 
 ## rpm 签名
 

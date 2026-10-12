@@ -1,6 +1,6 @@
 # macOS `.pkg` 外部待办索引（MAC-PKG-OI）
 
-本文件只登记**需要外部输入或专用环境**的事项；可本机完成的内容见 `docs/mac-pkg-roadmap.md` 阶段分解。
+本文件只登记**需要外部输入或专用环境**的事项；可本机完成的内容见 `docs/mac-pkg-roadmap.md`。
 逐项用例步骤见 `docs/mac-pkg-manual-testing.md`。
 
 ## 待办清单

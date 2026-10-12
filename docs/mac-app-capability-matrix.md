@@ -2,8 +2,8 @@
 
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
 计划实现与外部待验收行绑定到 `docs/mac-app-roadmap.md`、`docs/mac-app-open-items.md`、`docs/mac-app-manual-testing.md` 中的明确阶段/ID。
-上游参照：Tauri 审计（快照 `7dbfc1f`）；PKG 取舍：`docs/mac-format-decision.md`。
-`MAC-APP-1`..`MAC-APP-5` 已完成（云 macOS VM 已验证，`2026-09-26`），`.app` 格式已冻结；表内“已实现”行为均附本机证据，冻结基线见 `docs/mac-app-roadmap.md` MAC-APP-5 验收记录。
+上游参照：Tauri 审计（快照 `7dbfc1f`）；PKG 已确认另立 `MAC-PKG`。
+`MAC-APP-1`..`MAC-APP-5` 已完成（云 macOS VM 已验证，`2026-09-26`），`.app` 格式已冻结；表内“已实现”行为均附本机证据，冻结基线见 `docs/mac-app-roadmap.md`。
 
 ## 结构与核心元数据
 
@@ -73,7 +73,7 @@
 
 | 项 | 说明 |
 | --- | --- |
-| `.pkg` 系统安装/卸载/收据 | 已确认另立 `MAC-PKG`（`docs/mac-format-decision.md`），不混入 `.app` 语义 |
+| `.pkg` 系统安装/卸载/收据 | 已确认另立 `MAC-PKG`，不混入 `.app` 语义 |
 | `lipo` fat binary 合成、rpath 改写、依赖解析 | 调用方构建职责 |
 | `providerShortName`、`LSRequiresCarbon` 等上游死键 | 上游无人消费/无效果，不复制 |
 | `MACOSX_DEPLOYMENT_TARGET` 环境变量联动 | 调用方编译链职责 |
