@@ -106,6 +106,31 @@ public sealed class BundlePipeline(
                     _logger.Log(BundleLogLevel.Warning,
                         $"Failed to clean up work directory '{workDirectory}': {exception.Message}");
                 }
+                // 逐层回收空脚手架父目录（<fmt>→<target>→.bundler-work）：
+                // 非空目录的删除会抛错即停——只清 .bundler-work 壳层，绝不越界动 output 本体。
+                var scaffoldRoot = Path.Combine(configuration.OutputDirectory, ".bundler-work");
+                var parent = Path.GetDirectoryName(workDirectory);
+                while (parent is not null && parent != scaffoldRoot &&
+                       parent.StartsWith(scaffoldRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                {
+                    try
+                    {
+                        Directory.Delete(parent);
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    {
+                        break;
+                    }
+                    parent = Path.GetDirectoryName(parent);
+                }
+                try
+                {
+                    Directory.Delete(scaffoldRoot);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // .bundler-work 根非空或已消失都不需要告警——空壳而已。
+                }
             }
         }
 

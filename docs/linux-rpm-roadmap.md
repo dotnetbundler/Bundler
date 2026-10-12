@@ -113,5 +113,5 @@
 ### 2026-10-06 回归修复：样品声明运行时依赖
 
 - **发现**：main `dbbbf91` 联合测试——产物在裸 `fedora` 容器装后探针 rc=134（缺 libicu）；`Requires` 仅 rpmlib 自依赖，样品未用 `BundlerRpmRequires` 旋钮（写入器纯透传，非后端缺陷）。
-- **处置**：`samples/HelloBundlerApp/formats/Rpm.props` 默认声明 `glibc;libgcc;libstdc++;zlib;libicu`（`HelloBundlerRpmRequires` 仍可覆盖）。
+- **处置**：`samples/HelloBundlerApp/formats/Rpm.props` 默认声明 `glibc;(libgcc or libgcc_s1);libstdc++;zlib;libicu`（libgcc 跨发行版命名差走 rpm rich deps or 子句，`HelloBundlerRpmRequires` 仍可覆盖）。
 - **实证**：裸 `fedora:latest` 容器 `dnf install ./pkg.rpm` 自动解析拉入 `libicu`，探针 rc=0。

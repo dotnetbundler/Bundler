@@ -54,7 +54,10 @@ internal sealed class AppImageBundleBackend(
         var environment = new Dictionary<string, string>
         {
             ["ARCH"] = built.EnvironmentArchitecture,
-            ["APPIMAGE_EXTRACT_AND_RUN"] = "1"
+            ["APPIMAGE_EXTRACT_AND_RUN"] = "1",
+            // mksquashfs 标准确定性旋钮：文件系统时间戳钉在 epoch，
+            // 同输入两次构建字节一致（sha256 核验/差分更新的字节假设成立）。
+            ["SOURCE_DATE_EPOCH"] = "0"
         };
         context.Logger.Log(BundleLogLevel.Information,
             $"Running appimagetool ({built.EnvironmentArchitecture}) → {fileName}");
