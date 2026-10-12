@@ -70,15 +70,19 @@ public static class CliProgram
                     $"Key file already exists: {Path.GetFullPath(keyPath)} — remove it or pick a new path.");
             }
             // 父目录不存在的 IO 错不如直接建——用户指哪写哪。新目录默认权限在
-            // 宽松 umask 下对本地其他用户可读，私钥目录收 700（review SEC）。
+            // 宽松 umask 下对本地其他用户可读：CreateDirectory(path, mode) 一步把
+            // 链条里全部新建目录收成 700，无「建完未 chmod」窗口（review SEC）。
             var parent = Path.GetDirectoryName(Path.GetFullPath(keyPath));
             if (parent is { Length: > 0 } && !Directory.Exists(parent))
             {
-                Directory.CreateDirectory(parent);
-                if (!OperatingSystem.IsWindows())
+                if (OperatingSystem.IsWindows())
                 {
-                    File.SetUnixFileMode(parent, UnixFileMode.UserRead | UnixFileMode.UserWrite |
-                        UnixFileMode.UserExecute);
+                    Directory.CreateDirectory(parent);
+                }
+                else
+                {
+                    Directory.CreateDirectory(parent, UnixFileMode.UserRead |
+                        UnixFileMode.UserWrite | UnixFileMode.UserExecute);
                 }
             }
             var material = UpdateKeyMaterial.Generate();
