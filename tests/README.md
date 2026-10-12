@@ -58,6 +58,7 @@ dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Re
 - `Bundler.IntegrationTests/Fixtures/<格式>/`：各格式被发布成包的 fixture 工程与载荷 `Assets/`；`Nsis/` 下另有 `LegacyMsiFixture*/`（旧 MSI 升级场景）。
 - `Bundler.LocalPackagesTests/Fixtures/Msi/`：本地包消费契约腿的 `Fixture`/`Standalone` 工程。
 - `Shared/TestPlatform.cs`：四工程链接共享的宿主探测门面（OS/架构/musl/root/docker）；`Shared/Tooling/`：链接共享的集成基建（进程/提权/工作区/包定位/`MsiSupport`/`WindowsDesktop` UIA3 向导驱动）。
+- pack 前一律走 `Dotnet.ShutdownBuildServers()`（`Dotnet.BuildAndPack`/`MsiSupport`/`RepositoryPackages` 已统一收口）：Windows 常驻 MSBuild 节点持任务程序集锁会致 `dotnet pack` MSB3027——任何新增"build→pack"腿都要经该门面而不是裸 `dotnet pack`。
 
 ## 人工/外部验证
 
