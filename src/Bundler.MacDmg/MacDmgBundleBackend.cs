@@ -202,9 +202,18 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                         }
                         if (convertSourceCopy is null)
                         {
-                            convertSourceCopy = readWriteImage + ".convert-copy.dmg";
-                            File.Copy(readWriteImage, convertSourceCopy, overwrite: true);
-                            convertSource = convertSourceCopy;
+                            // 源镜像可能仍被 diskimages-helper / convert 子进程持柄，
+                            // 副本建不起来也属瞬态——留给下一轮重试再建。
+                            try
+                            {
+                                var copy = readWriteImage + ".convert-copy.dmg";
+                                File.Copy(readWriteImage, copy, overwrite: true);
+                                convertSourceCopy = copy;
+                                convertSource = copy;
+                            }
+                            catch (IOException)
+                            {
+                            }
                         }
                         await Task.Delay(delay, cancellationToken);
                     }
