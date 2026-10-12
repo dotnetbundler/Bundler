@@ -930,7 +930,9 @@ public static class CliTests
             var (code4, _, err4) = Run("validate");
             Assert.DoesNotContain("JSON", err4);
             Assert.DoesNotContain("parse", err4);
-            Assert.NotEqual(0, code4); // publish/linux-x64 不存在 → 校验错
+            // 钉死在目录缺失校验：publish/linux-x64 不存在 → 存在性校验错（review flag）
+            Assert.Equal(2, code4);
+            Assert.Contains("does not exist", err4);
         }
         finally
         {
