@@ -111,3 +111,13 @@ MSBuild 属性同步：`Bundler<Format><Old>` 全部按上表改名（如 `Bundl
 - `BundleValidationException`/`CliUsageException` 仍向上穿透保 rc=2 用法层语义（format↔target 矩阵拒绝、未知格式、非法旋钮不降级）。
 - `bundler.json` 更新清单只在有产物时 emit；MSBuild 任务同语义（`BundleDesktopApplication` 逐格式 try/catch → `LogWarning`+汇总 `LogError` 返 false，校验拒绝仍走任务级 catch）。
 - 断言：`CliTests.BundlePerFormatIndependentFailure`（门禁格式 WARN+zip 照常产出+rc=1+stderr 具名失败格式）。
+
+### 2026-10-11 可用性推断链（破坏性重构）
+
+- 必填面收缩：`bundle` 只剩 `--input-dir` 必填；其余走"推断→stderr 逐条明示→显式参数恒胜"链——`target`=宿主映射（取代原 `linux-x86_64` 硬默认）、`formats`=目标 OS 常用集（windows→nsis、macos*/universal→dmg、linux→deb,zip、linux-musl→alpineapk）、`productName`=输入目录名、`version`=`0.1.0-dev`、`identifier`=`dev.bundler.<productName 规范化>`、`mainExecutable`=输入目录顶层唯一可执行文件（windows 目标按 `.exe`、其余按 POSIX 执行位；多候选不猜、notes 提示显式传参）。
+- `--strict` 关闭推断，缺什么报什么（rc=2），给发布脚本用。
+- `bundler.json` 自动发现：cwd 存在即加载（stderr 明示），`--config` 覆盖、`--no-config` 跳过；`--no-config`+`--config` 同传为用法冲突（rc=2）。
+- 新命令 `bundler init`：cwd 写最小 `bundler.json` 模板，已存在拒覆盖（rc=2）。
+- `bundler.json` 顶层收 `packageVersion` 作 `version` 别名（与 CLI `--package-version` 同名）；与 `version` 同写为冲突（rc=2），CLI 覆盖文件值不受影响。
+- MSBuild 同步：`BundlerIdentifier` 缺省合成 `dev.bundler.<AssemblyName 规范化>`+`Warning`（原 Error）；`BundlerFormats` 缺省按目标 OS 推导（原 `nsis` 硬默认）。
+- 断言：`CliTests` 新增 5 件（快速路 e2e / strict / init / 自动发现+--no-config / packageVersion 别名+冲突）。

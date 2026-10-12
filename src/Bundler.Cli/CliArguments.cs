@@ -9,6 +9,8 @@ internal sealed class CliArguments
     public bool Verbose { get; private init; }
     public bool Help { get; private init; }
     public bool ShowVersion { get; private init; }
+    public bool Strict { get; private init; }
+    public bool NoConfig { get; private init; }
     public IReadOnlyDictionary<string, string> Options { get; private init; } =
         new Dictionary<string, string>();
 
@@ -37,7 +39,7 @@ internal sealed class CliArguments
 
     private static readonly HashSet<string> FlagOptions = new(StringComparer.Ordinal)
     {
-        "json", "quiet", "verbose", "help"
+        "json", "quiet", "verbose", "help", "strict", "no-config"
     };
 
     public static CliArguments Parse(string[] args)
@@ -50,6 +52,8 @@ internal sealed class CliArguments
         var verbose = false;
         var help = false;
         var version = false;
+        var strict = false;
+        var noConfig = false;
 
         var index = 0;
         if (index < args.Length && !args[index].StartsWith("-", StringComparison.Ordinal))
@@ -93,6 +97,8 @@ internal sealed class CliArguments
                     case "quiet": quiet = true; break;
                     case "verbose": verbose = true; break;
                     case "help": help = true; break;
+                    case "strict": strict = true; break;
+                    case "no-config": noConfig = true; break;
                 }
                 continue;
             }
@@ -151,6 +157,8 @@ internal sealed class CliArguments
             Verbose = verbose,
             Help = help,
             ShowVersion = version,
+            Strict = strict,
+            NoConfig = noConfig,
             Options = options,
             InputDirectories = inputDirs
         };

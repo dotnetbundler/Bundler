@@ -832,4 +832,149 @@ public static class CliTests
         Assert.Equal(0, code);
         Assert.True(stdout.Trim().Length > 0, "version output must be non-empty");
     }
+
+    [Fact]
+    static void BundleWithOnlyInputDirUsesInferredDefaults()
+    {
+        // 快速路契约：只给 --input-dir 必须产出包，推断值逐条进 stderr 明示。
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "host-derived defaults are asserted on linux");
+        var root = Path.Combine(Path.GetTempPath(), "bundler-cli-infer-" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "coolapp");
+        var output = Path.Combine(root, "out");
+        try
+        {
+            Directory.CreateDirectory(input);
+            var exe = Path.Combine(input, "coolapp");
+            File.WriteAllText(exe, "#!/bin/sh\necho ok\n");
+            if (OperatingSystem.IsLinux()) // CA1416：分析器不认 SkipUnless
+            {
+                File.SetUnixFileMode(exe,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+            var (code, _, err) = Run("bundle", "--input-dir", input, "--output-dir", output);
+            Assert.True(code == 0, $"bundle with only --input-dir must succeed: {err}");
+            Assert.Contains("target=linux-x86_64", err);
+            Assert.Contains("formats=deb,zip", err);
+            Assert.Contains("productName=coolapp", err);
+            Assert.Contains("identifier=dev.bundler.coolapp", err);
+            Assert.Contains("version=0.1.0-dev", err);
+            Assert.Contains("mainExecutable=coolapp", err);
+            Assert.True(Directory.EnumerateFiles(output, "*.deb").Any(),
+                "expected a .deb in output: " + string.Join(",", Directory.EnumerateFiles(output)));
+            Assert.True(Directory.EnumerateFiles(output, "*.zip").Any(),
+                "expected a .zip in output: " + string.Join(",", Directory.EnumerateFiles(output)));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    static void StrictDisablesInference()
+    {
+        var input = CreateInputDirectory();
+        try
+        {
+            var (code, _, err) = Run("bundle", "--input-dir", input, "--strict");
+            Assert.Equal(2, code);
+            Assert.Contains("strict", err);
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+        }
+    }
+
+    [Fact]
+    static void InitWritesTemplateAndRefusesOverwrite()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "bundler-cli-init-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var previous = Directory.GetCurrentDirectory();
+        try
+        {
+            Directory.SetCurrentDirectory(dir);
+            var (code, stdout, _) = Run("init");
+            Assert.Equal(0, code);
+            Assert.True(File.Exists(Path.Combine(dir, "bundler.json")), $"init must write bundler.json: {stdout}");
+            var (code2, _, err2) = Run("init");
+            Assert.Equal(2, code2);
+            Assert.Contains("already exists", err2);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(previous);
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    static void BundlerJsonInWorkingDirectoryIsAutoDiscovered()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "bundler-cli-discover-" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "appdir");
+        Directory.CreateDirectory(input);
+        File.WriteAllText(Path.Combine(input, "DiscApp"), "x");
+        File.WriteAllText(Path.Combine(root, "bundler.json"), $$"""
+            { "productName": "DiscApp", "identifier": "dev.example.disc", "version": "1.0.0",
+              "targets": [{ "target": "linux-x86_64", "inputDirectory": "{{input.Replace("\\", "\\\\")}}",
+                           "formats": ["zip"] }] }
+            """);
+        var previous = Directory.GetCurrentDirectory();
+        try
+        {
+            Directory.SetCurrentDirectory(root);
+            var (code, _, err) = Run("validate");
+            Assert.True(code == 0, $"validate in dir with bundler.json must pass: {err}");
+            Assert.Contains("using configuration file", err);
+            // --no-config 跳过自动发现——此时连输入目录都没有，报错而非静默通过
+            var (code2, _, err2) = Run("validate", "--no-config");
+            Assert.True(code2 != 0, "--no-config must ignore ./bundler.json");
+            Assert.DoesNotContain("using configuration file", err2);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(previous);
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    static void PackageVersionIsAnAliasForVersion()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "bundler-cli-alias-" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "appdir");
+        var configDir = Path.Combine(root, "cfg");
+        Directory.CreateDirectory(input);
+        Directory.CreateDirectory(configDir);
+        File.WriteAllText(Path.Combine(input, "AliasApp"), "x");
+        try
+        {
+            var ok = Path.Combine(configDir, "ok.json");
+            File.WriteAllText(ok, $$"""
+                { "productName": "AliasApp", "identifier": "dev.example.alias",
+                  "packageVersion": "2.3.4",
+                  "targets": [{ "target": "linux-x86_64", "inputDirectory": "{{input.Replace("\\", "\\\\")}}",
+                               "formats": ["zip"] }] }
+                """);
+            var resolved = CliConfig.Resolve(CliArguments.Parse(["validate", "--config", ok]));
+            Assert.Equal("2.3.4", resolved.Bundle.Version);
+
+            var conflict = Path.Combine(configDir, "conflict.json");
+            File.WriteAllText(conflict, $$"""
+                { "productName": "AliasApp", "identifier": "dev.example.alias",
+                  "version": "1.0.0", "packageVersion": "2.3.4",
+                  "targets": [{ "target": "linux-x86_64", "inputDirectory": "{{input.Replace("\\", "\\\\")}}",
+                               "formats": ["zip"] }] }
+                """);
+            var (code, _, err) = Run("validate", "--config", conflict);
+            Assert.Equal(2, code);
+            Assert.Contains("aliases", err);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
 }

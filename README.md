@@ -46,18 +46,26 @@ Alpine `.apk` 已冻结并入 `main`（`0.1.0-alpha.63`，`APK-1..5` 完成、PR
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用；不包含 NSIS 实现 |
 | `DotNet.Bundler` | 空的便利元包，引入 `DotNet.Bundler.MSBuild` 且不屏蔽其传递性构建资产 |
 
-`bundler` CLI（`src/Bundler.Cli`）提供 `validate`/`plan`/`bundle` 三命令，覆盖全部冻结格式，双分发：dotnet tool（`DotNet.Bundler.Cli` nupkg，`ToolCommandName=bundler`）与原生 AOT 单二进制（`dotnet publish -r <rid>`，宿主裁剪自研后端）。
+`bundler` CLI（`src/Bundler.Cli`）提供 `validate`/`plan`/`bundle`/`init` 命令，覆盖全部冻结格式，双分发：dotnet tool（`DotNet.Bundler.Cli` nupkg，`ToolCommandName=bundler`）与原生 AOT 单二进制（`dotnet publish -r <rid>`，宿主裁剪自研后端）。
 
 ```powershell
 dotnet tool install --global DotNet.Bundler.Cli
+# 最小路径：只指发布目录，其余全部推断（target=宿主、formats=目标 OS 常用集、
+# productName=目录名、version=0.1.0-dev、identifier=dev.bundler.<名>、
+# mainExecutable=目录内唯一可执行文件）——推断值逐条打到 stderr
+bundler bundle --input-dir <publish目录>
+# 显式覆盖任意字段（恒胜推断）
 bundler bundle --input-dir <publish目录> --target linux-x86_64 --formats zip,deb \
   --product-name MyApp --identifier com.example.myapp --package-version 1.0.0 \
-  --main-executable myapp --output-dir dist
+  --output-dir dist
+# --strict 关闭推断：缺什么报什么，适合发布脚本
 # 多目录 universal 合并：--input-dir 可重复，≥2 个目录先合并再打包
 bundler bundle --input-dir bin/osx-x64 --input-dir bin/osx-arm64 --target macos-universal --formats zip
+# 生成最小 bundler.json 模板；cwd 里的 bundler.json 自动生效
+bundler init && bundler bundle
 ```
 
-也可用 `bundler.json` 承载配置（CLI 参数覆盖文件值，`--<fmt>.<knob>=` 透传格式旋钮），schema 与 MSBuild `Bundler*` 属性一一对应，映射表与退出码/`--json` 契约见 [`docs/cli-roadmap.md`](docs/cli-roadmap.md)。
+也可用 `bundler.json` 承载配置（自动发现于当前目录；CLI 参数覆盖文件值，`--<fmt>.<knob>=` 透传格式旋钮，`--no-config` 跳过自动发现），schema 与 MSBuild `Bundler*` 属性一一对应，映射表与退出码/`--json` 契约见 [`docs/cli-roadmap.md`](docs/cli-roadmap.md)。
 后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。
 WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..9` 的当前主机范围验证：current-user 安装、升级、修复和卸载，快捷方式与关联/协议候选注册，测试证书签名、英语/简体中文单语言包及受限故障回滚，x86 目标、显式 MSI 版本映射和可选降级，范围内安装目录、自定义 UI 序列、可选 Feature、PATH 精确追加与仅交互启动勾选，多语言输入资源与构建选项、受控 WiX 扩展与专家模式，以及通用能力审计与再冻结。
 MSI 编译把 WiX 警告视为失败，PackageCode 由 WiX 每次构建生成。
@@ -120,7 +128,8 @@ dotnet msbuild -t:BundlerBundle -p:BundlerTarget=linux-x86_64 -p:BundlerPublishR
 
 安装程序默认输出到 `artifacts/`（扁平布局；`BundlerOutputLayout=byFormat` 时按 `artifacts/<format>/` 分格）。
 自动打包发生在 `Publish` 之后，普通的 `Build` 不会生成安装包。
-`BundlerEnabled` 只控 Publish 钩子路；显式 `-t:BundlerBundle` 不需要它（除 `BundlerIdentifier` 仍必填外无开关依赖）。
+`BundlerEnabled` 只控 Publish 钩子路；显式 `-t:BundlerBundle` 不需要它（无任何开关依赖）。
+`BundlerIdentifier` 缺省时合成 `dev.bundler.<AssemblyName>` 并打警告——正式发布仍应显式指定。
 两入口同样支持 `BundlerUniversalTargets`（macOS universal 内层双 RID 发布+合并）。
 canonical RID 映射表：`windows-x86_64→win-x64`、`windows-i686→win-x86`、`windows-aarch64→win-arm64`、`macos-x86_64→osx-x64`、`macos-aarch64→osx-arm64`、`linux-x86_64→linux-x64`、`linux-i686→linux-x86`、`linux-aarch64→linux-arm64`、`linux-musl-x86_64→linux-musl-x64`、`linux-musl-aarch64→linux-musl-arm64`；`macos-universal` 无单一 RID 映射，走 `BundlerUniversalTargets`。
 
@@ -234,12 +243,12 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | 属性 | 是否必填 | 默认值 |
 | --- | --- | --- |
 | `BundlerEnabled` | Publish 钩子路必填 | `false`；显式 `-t:BundlerBundle` 不检查 |
-| `BundlerIdentifier` | 是 | — |
+| `BundlerIdentifier` | 否 | 缺省合成 `dev.bundler.<AssemblyName>`（打警告；正式发布应显式指定） |
 | `BundlerTarget` | 条件必填 | —；缺省时按 `$(RuntimeIdentifier)` 查 canonical RID 表推导，显式指定恒覆盖；`BundlerUniversalTargets` 设置时也可省略 |
 | `RuntimeIdentifier` | 否 | `dotnet publish` 侧标准属性（.NET RID）；`BundlerTarget` 缺省时兼作推导来源 |
 | `BundlerInputDir` | 否 | 无；`-t:BundlerBundle` 下非空即“只打包不发布”——拿已有发布目录直接打，跳过内层 publish |
 | `BundlerPublishRid` | 否 | 按 `BundlerTarget`→canonical publish RID 表默认；表外 RID 显式覆盖内层发布 |
-| `BundlerFormats` | 否 | `nsis`；分号分隔多值扇出，可用 `nsis`/`msi`/`app`/`dmg`/`pkg`/`deb`/`rpm`/`appimage`/`zip`/`targz`/`alpineapk`（CLI 另收 `all` 全量别名） |
+| `BundlerFormats` | 否 | 按目标 OS 推导：`windows→nsis`、`macos*/universal→dmg`、`linux→deb`、`linux-musl→alpineapk`；分号分隔多值扇出，可用 `nsis`/`msi`/`app`/`dmg`/`pkg`/`deb`/`rpm`/`appimage`/`zip`/`targz`/`alpineapk`（CLI 另收 `all` 全量别名） |
 | `BundlerUniversalTargets` | 否 | 无；macOS universal 用——复数 .NET RID（如 `osx-x64;osx-arm64`，命令行 `-p:` 须写 `%3B`）对每个 RID 内层 `dotnet publish` 后托管合并成 universal 目录再按 `macos-universal` 打包 |
 | `BundlerProductName` | 否 | `$(AssemblyName)` |
 | `BundlerVersion` | 否 | `$(Version)` |
