@@ -1,8 +1,0 @@
-name: probe
-on:
-  push:
-jobs:
-  x:
-    runs-on: ubuntu-26.04
-    steps:
-      - run: echo hi

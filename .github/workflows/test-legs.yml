@@ -1,6 +1,8 @@
 # 开发期定向测试腿：迭代验证载具，不是发布门（发布门仍是 release-verify）。
 # dispatch 选 suite×runners 只跑需要的腿；push 触发（tests/scripts/本文件改动）
 # 是开发自检通道——跑 unit 套件全矩阵，重量级验证仍 dispatch 或走 release-verify。
+# 注：job 级 if 在矩阵展开前求值，matrix/inputs 不可用于 job-if——runner 子集走
+# select 前置 job 产动态矩阵，不用 job-if 过滤。
 name: test-legs
 
 on:
@@ -30,27 +32,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # runners 输入 → 动态矩阵（job-if 拿不到 matrix，前置 job 是规范做法）。
+  select:
+    name: select
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      runners: ${{ steps.pick.outputs.runners }}
+    steps:
+      - id: pick
+        env:
+          RUNNERS_IN: ${{ inputs.runners || 'all' }}
+        run: |
+          set -euo pipefail
+          ALL='["ubuntu-26.04","ubuntu-26.04-arm","windows-2025","windows-11-arm","macos-26-intel","macos-26"]'
+          if [ -z "$RUNNERS_IN" ] || [ "$RUNNERS_IN" = "all" ]; then
+            echo "runners=$ALL" >> "$GITHUB_OUTPUT"
+          else
+            echo "runners=$(python3 -c 'import json,os;print(json.dumps([x.strip() for x in os.environ["RUNNERS_IN"].split(",") if x.strip()]))')" >> "$GITHUB_OUTPUT"
+          fi
+
   legs:
+    needs: select
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-26.04        # linux x64（含 docker 发行版矩阵腿）
-          - ubuntu-26.04-arm    # linux arm64 原生腿
-          - windows-2025        # win x64
-          - windows-11-arm      # win arm64
-          - macos-26-intel      # mac Intel-x64
-          - macos-26            # mac arm64
-    # runners 输入用逗号包裹做精确词元匹配——避免 macos-26 误中 macos-26-intel。
-    if: >-
-      github.event_name == 'push' ||
-      inputs.runners == 'all' ||
-      contains(format(',{0},', inputs.runners), format(',{0},', matrix.os))
+        os: ${{ fromJSON(needs.select.outputs.runners) }}
     env:
-      SUITE: ${{ github.event.inputs.suite || 'unit' }}
+      SUITE: ${{ inputs.suite || 'unit' }}
       # 集成真装真卸同意闸——CI runner 是可丢弃环境，装/卸断言即目的
       BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
