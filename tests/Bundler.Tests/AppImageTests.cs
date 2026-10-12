@@ -377,6 +377,26 @@ public static class AppImageTests
     }
 
     [Fact]
+    static void RepeatBuildIsByteIdentical()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "requires a Linux host");
+        var input = CreateInputDirectory();
+        var output = input + ".artifacts";
+        try
+        {
+            var first = new AppImageBundler().BuildAsync(
+                Configuration(input, output)).GetAwaiter().GetResult().Single();
+            var second = new AppImageBundler().BuildAsync(
+                Configuration(input, output)).GetAwaiter().GetResult().Single();
+            Assert.Equal(File.ReadAllBytes(first.Path), File.ReadAllBytes(second.Path));
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
     static void CrossBuildsAarch64()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux() &&
