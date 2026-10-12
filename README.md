@@ -114,7 +114,8 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
 dotnet publish -c Release -r win-x64
 ```
 
-`dotnet publish` 后自动打包；`BundlerTarget` 可按 `$(RuntimeIdentifier)` 从 canonical RID 表推导省略——上例 `win-x64` 即推导为 `windows-x86_64`，显式 `-p:BundlerTarget=` 恒覆盖；`BundlerTarget` 与 `RuntimeIdentifier` 都未设时回落 SDK 宿主 RID 推导（`-t:BundlerBundle -p:BundlerInputDir=` 免目标即开即用）。
+`dotnet publish` 后自动打包；`BundlerTarget` 可按 `$(RuntimeIdentifier)` 从 canonical RID 表推导省略——上例 `win-x64` 即推导为 `windows-x86_64`，显式 `-p:BundlerTarget=` 恒覆盖。
+`BundlerTarget` 与 `RuntimeIdentifier` 都未设时回落 SDK 宿主 RID 推导——`-t:BundlerBundle -p:BundlerInputDir=` 免目标即开即用，且推导在 eval 期完成，csproj 内按 `$(BundlerTarget)` 条件化的配置照常命中。
 不经 Publish 钩子也可以显式调用 `BundlerBundle` target，三种模式：
 
 ```powershell
@@ -244,7 +245,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | --- | --- | --- |
 | `BundlerEnabled` | Publish 钩子路必填 | `false`；显式 `-t:BundlerBundle` 不检查 |
 | `BundlerIdentifier` | 否 | 缺省合成 `dev.bundler.<AssemblyName>`（打警告；正式发布应显式指定） |
-| `BundlerTarget` | 条件必填 | —；缺省时按 `$(RuntimeIdentifier)` 查 canonical RID 表推导，显式指定恒覆盖；`BundlerUniversalTargets` 设置时也可省略 |
+| `BundlerTarget` | 条件必填 | —；缺省时按 `$(RuntimeIdentifier)`、再回落 SDK 宿主 RID 查 canonical RID 表推导，显式指定恒覆盖；`BundlerUniversalTargets` 设置时也可省略 |
 | `RuntimeIdentifier` | 否 | `dotnet publish` 侧标准属性（.NET RID）；`BundlerTarget` 缺省时兼作推导来源 |
 | `BundlerInputDir` | 否 | 无；`-t:BundlerBundle` 下非空即“只打包不发布”——拿已有发布目录直接打，跳过内层 publish |
 | `BundlerPublishRid` | 否 | 按 `BundlerTarget`→canonical publish RID 表默认；表外 RID 显式覆盖内层发布 |

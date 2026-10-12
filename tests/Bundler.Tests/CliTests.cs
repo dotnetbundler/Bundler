@@ -1107,6 +1107,9 @@ public static class CliTests
                   </PropertyGroup>
                   <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.props")}}" />
                   <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.targets")}}" />
+                  <Target Name="EvalCondHit" BeforeTargets="_BundlerDerive">
+                    <Message Importance="high" Condition="'$(BundlerTarget)' == 'linux-x86_64'" Text="COND-HIT eval BundlerTarget=linux-x86_64" />
+                  </Target>
                 </Project>
                 """);
             var output2 = Path.Combine(root, "out2");
@@ -1123,6 +1126,8 @@ public static class CliTests
             Assert.Equal(0, proc2.ExitCode);
             // normal 级推断消息在默认 minimal 详细度不输出——看 high 级 Bundling 行的推导目标
             Assert.Contains("for linux-x86_64:", log2);
+            // eval 期推导：csproj 内按 $(BundlerTarget) 条件化的配置照常命中
+            Assert.Contains("COND-HIT", log2);
             Assert.True(Directory.EnumerateFiles(output2, "*.deb").Any(),
                 "expected a .deb in output2: " + string.Join(",", Directory.EnumerateFiles(output2)));
         }
