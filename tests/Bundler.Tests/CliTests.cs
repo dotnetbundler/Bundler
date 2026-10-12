@@ -1094,6 +1094,79 @@ public static class CliTests
             Assert.Contains(": deb", log); // formats 按 linux 目标推导
             Assert.True(Directory.EnumerateFiles(output, "*.deb").Any(),
                 "expected a .deb in output: " + string.Join(",", Directory.EnumerateFiles(output)));
+
+            // SDK 项目免 BundlerTarget：NETCoreSdkPortableRuntimeIdentifier → 宿主推导
+            var sdkProject = Path.Combine(root, "sdk.csproj");
+            File.WriteAllText(sdkProject, $$"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net10.0</TargetFramework>
+                    <AssemblyName>TestApp</AssemblyName>
+                    <TargetName>TestApp</TargetName>
+                    <_BundlerTaskAssembly>{{taskDll}}</_BundlerTaskAssembly>
+                  </PropertyGroup>
+                  <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.props")}}" />
+                  <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.targets")}}" />
+                  <Target Name="EvalCondHit" BeforeTargets="_BundlerDerive">
+                    <Message Importance="high" Condition="'$(BundlerTarget)' == 'linux-x86_64'" Text="COND-HIT eval BundlerTarget=linux-x86_64" />
+                  </Target>
+                </Project>
+                """);
+            var output2 = Path.Combine(root, "out2");
+            var psi2 = new System.Diagnostics.ProcessStartInfo("dotnet",
+                $"msbuild \"{sdkProject}\" -t:BundlerBundle -p:BundlerInputDir=\"{input}\" " +
+                $"-p:BundlerOutputPath=\"{output2}\"")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            using var proc2 = System.Diagnostics.Process.Start(psi2)!;
+            var log2 = await proc2.StandardOutput.ReadToEndAsync() + proc2.StandardError.ReadToEndAsync();
+            await proc2.WaitForExitAsync();
+            Assert.Equal(0, proc2.ExitCode);
+            // normal 级推断消息在默认 minimal 详细度不输出——看 high 级 Bundling 行的推导目标
+            Assert.Contains("for linux-x86_64:", log2);
+            // eval 期推导：csproj 内按 $(BundlerTarget) 条件化的配置照常命中
+            Assert.Contains("COND-HIT", log2);
+            Assert.True(Directory.EnumerateFiles(output2, "*.deb").Any(),
+                "expected a .deb in output2: " + string.Join(",", Directory.EnumerateFiles(output2)));
+
+            // csproj 体内后设 RID：canonical 链按最终 BundlerTarget 重算，不残留宿主架构
+            var ridProject = Path.Combine(root, "rid.csproj");
+            File.WriteAllText(ridProject, $$"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net10.0</TargetFramework>
+                    <AssemblyName>TestApp</AssemblyName>
+                    <TargetName>TestApp</TargetName>
+                    <_BundlerTaskAssembly>{{taskDll}}</_BundlerTaskAssembly>
+                  </PropertyGroup>
+                  <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.props")}}" />
+                  <!-- RID 在 props 导入后才设置：eval 期先按宿主推导，target 期须刷新 -->
+                  <PropertyGroup>
+                    <RuntimeIdentifier>linux-arm64</RuntimeIdentifier>
+                  </PropertyGroup>
+                  <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.targets")}}" />
+                  <Target Name="DumpCanon" AfterTargets="_BundlerDerive">
+                    <Message Importance="high" Text="CANON=$(_BundlerCanonicalTarget)" />
+                  </Target>
+                </Project>
+                """);
+            var output3 = Path.Combine(root, "out3");
+            var psi3 = new System.Diagnostics.ProcessStartInfo("dotnet",
+                $"msbuild \"{ridProject}\" -t:BundlerBundle -p:BundlerInputDir=\"{input}\" " +
+                $"-p:BundlerOutputPath=\"{output3}\" -p:BundlerFormats=zip")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            using var proc3 = System.Diagnostics.Process.Start(psi3)!;
+            var log3 = await proc3.StandardOutput.ReadToEndAsync() + proc3.StandardError.ReadToEndAsync();
+            await proc3.WaitForExitAsync();
+            Assert.Equal(0, proc3.ExitCode);
+            Assert.Contains("CANON=linux-aarch64", log3);
+            Assert.True(Directory.EnumerateFiles(output3, "*.zip").Any(),
+                "expected a .zip in output3: " + string.Join(",", Directory.EnumerateFiles(output3)));
         }
         finally
         {

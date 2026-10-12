@@ -85,9 +85,18 @@
 
   <!-- 阶段1：BundlerTarget 推导（Rid→target 便捷推导，显式 BundlerTarget 恒覆盖）+ 入口参数校验 -->
   <Target Name="_BundlerDerive">
+    <PropertyGroup>
+      <!-- 宿主推导：RuntimeIdentifier 未设时回落 SDK 宿主 RID（对齐 CLI 'target = 当前宿主' 推断）——
+           -t:BundlerBundle -p:BundlerInputDir=<dir> 免 BundlerTarget 即开即用。
+           RID 在 eval 期未定、csproj 体内才设置的场景：target 期 RID 恒优先重算，
+           不许 eval 期冻结的宿主 RID 残留成包标签。 -->
+      <_BundlerEffectiveRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</_BundlerEffectiveRid>
+      <_BundlerEffectiveRid Condition="'$(_BundlerEffectiveRid)' == ''">$(NETCoreSdkPortableRuntimeIdentifier)</_BundlerEffectiveRid>
+      <_BundlerInferredHostTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == '' and '$(_BundlerEffectiveRid)' != ''">true</_BundlerInferredHostTarget>
+    </PropertyGroup>
     <ItemGroup>
       <_BundlerTargetFromRid Include="@(_BundlerRidMap->'%(Identity)')"
-          Condition="'%(_BundlerRidMap.Rid)' == '$(RuntimeIdentifier)'" />
+          Condition="'%(_BundlerRidMap.Rid)' == '$(_BundlerEffectiveRid)'" />
     </ItemGroup>
     <PropertyGroup>
       <BundlerTarget Condition="'$(BundlerTarget)' == ''">@(_BundlerTargetFromRid)</BundlerTarget>
@@ -100,6 +109,12 @@
            csproj 体内后设值也要吃），这里按最终值重算 _BundlerCanonicalTarget——
            下游 RidMap 反查/警告/任务输入只认 canonical，props eval 期那份仅供 eval 消费方。 -->
       <_BundlerTargetSep>$([System.String]::Copy('$(BundlerTarget)').LastIndexOf('-'))</_BundlerTargetSep>
+      <!-- 先清 eval 期残值：以下条件行只在命中时覆写，无别名的 arch（aarch64/loongarch64 等）
+           不清空会留住 eval 推导的宿主架构——包标签与内层发布 RID 都会错。 -->
+      <_BundlerTargetOs></_BundlerTargetOs>
+      <_BundlerTargetArch></_BundlerTargetArch>
+      <_BundlerTargetArchCanonical></_BundlerTargetArchCanonical>
+      <_BundlerCanonicalTarget></_BundlerCanonicalTarget>
       <_BundlerTargetOs Condition="'$(_BundlerTargetSep)' != '-1'">$([System.String]::Copy('$(BundlerTarget)').Substring(0, $(_BundlerTargetSep)).ToLowerInvariant())</_BundlerTargetOs>
       <_BundlerTargetArch Condition="'$(_BundlerTargetSep)' != '-1'">$([System.String]::Copy('$(BundlerTarget)').Substring($([MSBuild]::Add($(_BundlerTargetSep), 1))).ToLowerInvariant())</_BundlerTargetArch>
       <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'amd64' or '$(_BundlerTargetArch)' == 'x64'">x86_64</_BundlerTargetArchCanonical>
@@ -114,6 +129,8 @@
     </PropertyGroup>
     <Warning Condition="'$(_BundlerTargetStale)' == 'true'"
              Text="BundlerTarget was derived from a stale RuntimeIdentifier and was refreshed to '@(_BundlerTargetFromRid)'. Pass -p:BundlerTarget=&lt;target&gt; to pin it explicitly." />
+    <Message Importance="normal" Condition="'$(_BundlerInferredHostTarget)' == 'true' and '@(_BundlerTargetFromRid)' != ''"
+             Text="BundlerTarget inferred from host runtime identifier '$(_BundlerEffectiveRid)' → '@(_BundlerTargetFromRid)'." />
     <PropertyGroup>
       <!-- formats 缺省按目标 OS 推导（显式 BundlerFormats 恒胜）：universal 视同 macos，
            未知 OS 兜底 deb——deb 是纯托管后端任何宿主可产 -->
@@ -146,7 +163,7 @@
        只警告不改值——显式恒胜。只在钩子链：显式 BundlerBundle 路的 inner publish 用
        BundlerPublishRid 覆盖项目 RID，target 与项目 RID 不符是预期；universal/InputDir 同。 -->
   <Target Name="_BundlerPublishMismatchWarn">
-    <Warning Condition="'$(_BundlerTargetStale)' != 'true' and '$(_BundlerCanonicalTarget)' != '' and '@(_BundlerTargetFromRid)' != '' and '$(_BundlerCanonicalTarget)' != '@(_BundlerTargetFromRid)' and '$(BundlerInputDir)' == '' and '$(BundlerUniversalTargets)' == ''"
+    <Warning Condition="'$(_BundlerTargetStale)' != 'true' and '$(RuntimeIdentifier)' != '' and '$(_BundlerCanonicalTarget)' != '' and '@(_BundlerTargetFromRid)' != '' and '$(_BundlerCanonicalTarget)' != '@(_BundlerTargetFromRid)' and '$(BundlerInputDir)' == '' and '$(BundlerUniversalTargets)' == ''"
              Text="BundlerTarget '$(BundlerTarget)' does not match the target '@(_BundlerTargetFromRid)' mapped from RuntimeIdentifier '$(RuntimeIdentifier)'. The explicit target wins; remove BundlerTarget to derive from the RID." />
   </Target>
 
