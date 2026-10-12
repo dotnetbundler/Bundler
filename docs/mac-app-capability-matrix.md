@@ -1,7 +1,7 @@
 # macOS `.app` 能力矩阵
 
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
-计划实现与外部待验收行绑定到 `docs/mac-app-roadmap.md`、`docs/mac-app-open-items.md`、`docs/mac-app-manual-testing.md` 中的明确阶段/ID。
+计划实现与外部待验收行绑定到 `docs/mac-app-roadmap.md`、`docs/mac-app-open-items.md`、`docs/special-acceptance.md` 中的明确阶段/ID。
 上游参照：Tauri 审计（快照 `7dbfc1f`）；PKG 已确认另立 `MAC-PKG`。
 `MAC-APP-1`..`MAC-APP-5` 已完成（云 macOS VM 已验证，`2026-09-26`），`.app` 格式已冻结；表内“已实现”行为均附本机证据，冻结基线见 `docs/mac-app-roadmap.md`。
 
@@ -15,7 +15,7 @@
 | `LSMinimumSystemVersion`、`LSApplicationCategoryType`、`NSHumanReadableCopyright` | 已实现 | MAC-APP-1 | 类别受限枚举；最低系统版本由调用方显式配置、未配置不写入 |
 | `Info.plist` 固定键（`CFBundleInfoDictionaryVersion`/`CFBundlePackageType`/`NSHighResolutionCapable` 等） | 已实现 | MAC-APP-1 | 上游 `LSRequiresCarbon` 死键不复制 |
 | 主可执行/资源/framework/任意 `Contents` 映射 | 已实现 | MAC-APP-1 | framework 仅显式路径；不做宿主标准目录隐式查找 |
-| `macos-x86_64`/`macos-arm64`/`macos-universal` 产物 | 已实现 | MAC-APP-1、4、`e7dfeae` | 独立产物+裸 `macos-universal` 通用目标；macos-x86_64 结构与架构断言已实测；x64 启动 2026-10 CI 两腿（macos-26-intel 真 Intel + macos-26 Rosetta）实跑通过；观感仍人工（MT-03） |
+| `macos-x86_64`/`macos-arm64`/`macos-universal` 产物 | 已实现 | MAC-APP-1、4、`e7dfeae` | 独立产物+裸 `macos-universal` 通用目标；macos-x86_64 结构与架构断言已实测；x64 启动 2026-10 CI 两腿（macos-26-intel 真 Intel + macos-26 Rosetta）实跑通过；观感仍人工（`docs/special-acceptance.md`） |
 | universal/fat Mach-O 输入 | 已实现 | MAC-APP-2、`e7dfeae` | 后端托管解析 Mach-O 头（等价 `lipo -info`），按目标校验必需切片集——`macos-universal` 要求**每个** Mach-O 同时含 x86_64+arm64；Bundler 不合成 fat binary |
 | `macos-universal` 通用载荷契约 | 已实现（契约） | `e7dfeae`、main@`3811005` 三配方实测 | `macos-universal` 仅接收**已合并 universal 目录**——①每个 Mach-O 双切片（强制校验）；②非 Mach-O 资产须架构便携（契约声明，不可通用判定）；已实测可跑配方：`PublishSingleFile`×2+lipo、`PublishAot`×2+lipo、FDD（托管集**不带 `-r`** 发布保持中立+双 apphost lipo）；松散目录式自包含物理不可跑（运行时散件无中立形态），契约不承诺 |
 | MSBuild `osx` universal 编排 | 已实现 | OSX-UNIV | MSBuild 入口 `.NET` 专属旋钮 `BundlerUniversalTargets`（复数 publish RID 如 `osx-x64;osx-arm64`）：targets 对每个 RID 内层 `dotnet publish` 至 `obj/.../BundlerUniversal/<publish-rid>`，再由纯托管合并器产出 universal 目录喂 `macos-universal` 打包；托管 lipo 等价合并（fat 头+切片拼接，宿主无关）；合并规则=Mach-O 逐件并片/非 Mach-O 全同取一/dSYM+pdb 取首份/其余不同即拒 |
@@ -66,8 +66,8 @@
 | 离线构建 | 已实现 | MAC-APP-1 起 | 公证外全部离线；无第三方工具内嵌 |
 | 宿主工具探测与版本门槛 | 已实现 | MAC-APP-1 | 缺必需工具明确报错；可选工具降级警告 |
 | 示例项目 `samples/HelloBundlerApp`（`formats/MacApp.props`） | 已实现 | MAC-APP-1 | 真实 .NET 载荷 |
-| Gatekeeper 首启/信任评估 | 已实现+外部待验收 | MAC-APP-4 / MT-01、02 | 未签名隔离包被拦截已实测（`com.apple.quarantine` + `open` 阻断断言）；已公证场景需真实证书，外部待验收 |
-| 真实公证+上钉+撤销场景 | 外部待验收 | MAC-APP-MT-02、08 / OI-01 | 需 Apple Developer 凭证 |
+| Gatekeeper 首启/信任评估 | 已实现+外部待验收 | MAC-APP-4 / `docs/special-acceptance.md` | 未签名隔离包被拦截已实测（`com.apple.quarantine` + `open` 阻断断言）；已公证场景需真实证书，外部待验收 |
+| 真实公证+上钉+撤销场景 | 外部待验收 | `docs/special-acceptance.md` SA-P-02、08 / OI-01 | 需 Apple Developer 凭证 |
 
 ## 有意排除
 

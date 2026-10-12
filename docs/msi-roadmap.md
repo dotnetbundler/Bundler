@@ -6,7 +6,7 @@
 > 阶段实施证据以 git 提交与 PR 记录为准。
 > 原开发分支 `msi-development`（已并入 `main`）；历史记录中的 `codex/msi-development` 是改名前的名称。
 > 规范入口：`docs/roadmap.md`；
-> 上游 Tauri 审计已完成并固化进本文件与能力矩阵，逐项能力见 `docs/msi-capability-matrix.md`，外部条件见 `docs/msi-open-items.md`，人工步骤见 `docs/msi-manual-testing.md`；
+> 上游 Tauri 审计已完成并固化进本文件与能力矩阵，逐项能力见 `docs/msi-capability-matrix.md`，外部条件见 `docs/msi-open-items.md`，人工/特殊验收见 `docs/special-acceptance.md`；
 
 ## 1. 已核实事实、选择及风险
 

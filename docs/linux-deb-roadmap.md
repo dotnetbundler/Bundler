@@ -4,7 +4,7 @@
 > 冻结基线：`DebBundleConfiguration` 配置面与行为契约冻结于 `0.1.0-alpha.51`；冻结测试向量 = `Bundler.Tests` 141/141 + `DebIntegrationTests` 全绿；冻结后仅缺陷修复附回归测试。
 > 上游审计已完成（Tauri 固定快照 `447fa9f`）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
-> 逐项能力状态见 [`docs/linux-deb-capability-matrix.md`](linux-deb-capability-matrix.md)；外部条件见 [`docs/linux-deb-open-items.md`](linux-deb-open-items.md)；人工步骤见 [`docs/linux-deb-manual-testing.md`](linux-deb-manual-testing.md)。
+> 逐项能力状态见 [`docs/linux-deb-capability-matrix.md`](linux-deb-capability-matrix.md)；外部条件见 [`docs/linux-deb-open-items.md`](linux-deb-open-items.md)；人工/特殊验收见 [`docs/special-acceptance.md`](special-acceptance.md)。
 
 ## 1. 已确认决策（2026-09-27，用户逐条确认）
 

@@ -12,7 +12,7 @@
 - `PROJECT_CONTEXT.md` 记录当前实现事实与验证证据；
 - `AGENTS.md` 与 `docs/development-rules.md` 是接管和跨格式开发规则的入口；
 - 本文档记录从当前状态向后推进的正式计划；
-- `docs/manual-testing-index.md` 按格式链接独立的人工验收、能力矩阵和外部待办；
+- `docs/special-acceptance.md` 统一登记只能人工/外部付费完成的验收；各格式能力矩阵与外部待办按格式链接；
 - 代码和自动化测试是实现事实的最终依据。若它们与文档冲突，先调查差异，再同时修正文档和实现状态，不能默默选择其中一方。
 
 ## 1. 产品定位
@@ -88,7 +88,7 @@ NSIS 的取舍见 [NSIS 上游参考](nsis-upstream-reference.md)，MSI 的当�
 
 NSIS 原路线、能力基线、旧阶段映射和 `NSIS-R1..R4` 的历史证据集中在 [NSIS 专用路线](nsis-roadmap.md)；
 逐项当前能力见 [NSIS 能力矩阵](nsis-capability-matrix.md)。
-真实 UAC、生产签名、重启、旧 MSI、跨宿主等仍按 [NSIS 人工验收](nsis-manual-testing.md) 与 [外部待办](nsis-open-items.md)记录，不将外部缺环境等同于未实现。
+真实 UAC、生产签名、重启、旧 MSI、跨宿主等仍按 [特殊验收](special-acceptance.md) 与 [外部待办](nsis-open-items.md)记录，不将外部缺环境等同于未实现。
 
 ## 6. NSIS 之后的路线
 
@@ -133,7 +133,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 - 上游审计：固定快照 `7dbfc1f`（复核 `dev` `9f8922a` 无实质漂移），逐项登记 `.app`/`DMG` 用户可观察能力与选择阶段；
 - PKG 已确认纳入公共 `PackageFormat`；
 - 路线 [`mac-app-roadmap.md`](mac-app-roadmap.md)：含宿主工具供应策略与 `.app` 语义契约，全部决策已确认；
-- 能力矩阵 [`mac-app-capability-matrix.md`](mac-app-capability-matrix.md)、人工清单 [`mac-app-manual-testing.md`](mac-app-manual-testing.md)、外部待办 [`mac-app-open-items.md`](mac-app-open-items.md)。
+- 能力矩阵 [`mac-app-capability-matrix.md`](mac-app-capability-matrix.md)、特殊验收 [`special-acceptance.md`](special-acceptance.md)、外部待办 [`mac-app-open-items.md`](mac-app-open-items.md)。
 
 `Pkg` 枚举值与目标矩阵放行已随 `MAC-APP-1` 进入公共模型；格式顺序固定为 `MAC-DMG` 之后、Linux 之前。
 2026-09-27 `MAC-PKG-1..5` 全部完成、`.pkg` 冻结于 `0.1.0-alpha.47`；`MAC-PKG-3` 已完成（签名/公证/专家脚本：`pkgbuild --sign`+`productsign --sign`、notarytool+stapler 接线、`--scripts` 旋钮实测真实执行）；`MAC-PKG-2` 已完成（分发包与页面：title/页面/域名自动升级 `productbuild`，per-user 免提权真实安装实测通过）；`MAC-PKG-1` 已完成（2026-09-26（分支 `mac-pkg-development`）：`DotNet.Bundler.MacPkg` 后端落地——`pkgbuild` 组件包全链（identifier/version/install-location 默认与覆盖、`BundlerPkgPayload` 任意载荷、宿主门控、失败清理），MSBuild `BundlerMacPkg*` 接线；`Bundler.Tests` 109 项 + `tests/MacOS.Pkg.Integration` 实测全绿；示例 `samples/HelloMacPkg`；路线见 [`docs/mac-pkg-roadmap.md`](mac-pkg-roadmap.md)；`.pkg` 已冻结（`MAC-PKG-1..5` 全部完成，基线 `0.1.0-alpha.47`）；默认下一阶段 `LINUX` 规划轮，待启动指令。
@@ -158,7 +158,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 2026-09-27 `LINUX-RPM-2` 已完成（同分支，`0.1.0-alpha.53`）：六族关系字段（Requires/Provides/Conflicts/Obsoletes/Recommends/Suggests，`name [op evr]` 解析）透传 + License(SPDX)/Group/Url 覆盖 + freedesktop 生成器提取到 `Bundler.Core` 内部件供 deb/rpm 复用（deb 行为不变）+ `changelog.gz`%doc/`usr/share/licenses/<pkg>/`%license + `BundlerRpmFile` 任意路径映射；`rpm -qip`/`--queryformat` 逐字段、`desktop-file-validate`、docker 装后 `rpm -ql` 逐路径全绿；cpio 成员名 `./` 前缀修正（rpmlib PayloadFilesHavePrefix 的真实语义）。
 2026-09-27 `LINUX-RPM-3` 已完成（同分支，`0.1.0-alpha.54`）：四 scriptlet 旋钮 + `*Program` 解释器覆盖 + systemd unit 与 `daemon-reload` 合成 + `%config(noreplace)` 自动/显式标记 + gzip-only 压缩；容器内 `rpm -i/-e` 标记、`rpm -U` 升级原地保留、`rpm -e` `.rpmsave` 断言全绿。
 2026-09-27 `LINUX-RPM-4` 已完成（同分支，`0.1.0-alpha.55`）：`rpmlint` 豁免清单硬断言（`rpmlint-exemptions.txt`，7 项豁免入档，新 tag 即失败；`summary-ended-with-dot` 修 fixture 描述消解）；`linux-aarch64` 产物结构断言；docker 矩阵扩为 `fedora:latest`+`rockylinux:9`+`opensuse/leap:latest` 三容器真实 `rpm -i/-e` 全绿；`src/Bundler.Rpm` 零外部进程复核通过。
-2026-09-27 `LINUX-RPM-5` 已完成——**`.rpm` 冻结基线 `0.1.0-alpha.55`**：上游复核零漂移（`tauri@dev` 仍为 `447fa9f`）、能力矩阵定稿、OI-01..07/MT-01..07 收口、冻结写入路线与 PROJECT_CONTEXT；GPG 签名明确为冻结外后置评估（`LINUX-RPM-SIGN` 未排期）。
+2026-09-27 `LINUX-RPM-5` 已完成——**`.rpm` 冻结基线 `0.1.0-alpha.55`**：上游复核零漂移（`tauri@dev` 仍为 `447fa9f`）、能力矩阵定稿、OI-01..07 收口、冻结写入路线与 PROJECT_CONTEXT；GPG 签名明确为冻结外后置评估（`LINUX-RPM-SIGN` 未排期）。
 2026-09-27 `SIGN-1` 已完成（分支 `signing-development`）：`.rpm` 可选 OpenPGP 签名落地——`BundlerRpmSigningKeyFile`/`Passphrase` → BouncyCastle v3 签名嵌 `RPMSIGTAG_PGP`，纯托管无外部进程；隔离 rpmdb `rpm --import`+`rpm -K` 实测 `digests signatures OK`；无密钥产物与未签名构建逐字节一致；`Bundler.Tests` 201 项、`Verify.sh` 全绿。
 2026-09-28 `SIGN-2` 已完成（分支 `signing-development`）：`.AppImage` 可选 GPG 签名落地——`BundlerAppImageSigningKeyFile`/`Passphrase` → 隔离 `GNUPGHOME` 导入 + `APPIMAGETOOL_SIGN_PASSPHRASE` 注入走 `appimagetool --sign`（gpgme detached sig 嵌 `.sha256_sig`/`.sig_key`）；验签口径实测为双段置零镜像 sha256 裸 hex；`gpgv` `Good signature` 断言全绿；未签产物段全零；`Bundler.Tests` 203 项、`Verify.sh` 全绿。SIGN 工作项收官——rpm/AppImage 可选签名齐备，deb 维持不签裁决。
 2026-09-27 `LINUX-APPIMAGE-1` 已完成（分支 `linux-appimage-development`，`0.1.0-alpha.56`）：`DotNet.Bundler.AppImage` 内嵌 appimagetool（x86_64/aarch64）+ type2 runtime（x86_64/aarch64）带 SHA-256 provenance；AppDir 组装（共享 freedesktop 件 + 脚本 `AppRun` + 根 desktop 符号链接 + 图标三态回落）→ extract-and-run 调工具；决策 4 实测"可交叉"（runtime-aarch64 内嵌）、决策 10 实测"仅 zstd"（pinned mksquashfs 约束）、pinned 构建缺 runtime 会联网下载故始终外供；九 `BundlerAppImage*` 旋钮接线 + `deb;rpm;appimage` 扇出；`Bundler.Tests` 171 + `Verify.sh`（extract 结构/真实运行/三容器/arm64 结构/失败变体/API 消费）全绿。
@@ -192,7 +192,7 @@ Tauri updater 协议/提升权限计划任务若有需求另立跨格式产品�
 
 ### 7.1 外部验收队列
 
-由 [`docs/manual-testing-index.md`](manual-testing-index.md) 按格式引导；
+由 [`docs/special-acceptance.md`](special-acceptance.md) 统一登记；
 NSIS 和 MSI 的清单、结论及外部待办分别维护，包括 UAC、真实重启、生产证书、历史 MSI、Windows ARM64、真实 ACL/磁盘耗尽等。
 取得环境时逐项执行并保存证据；
 没有环境时保留准确边界。

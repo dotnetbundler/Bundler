@@ -4,7 +4,7 @@ MSI 后端已完成 **WIN-MSI-1..9 当前 Windows 11 x64 本机范围**（`0.1.0
 当前开发机上的独立 fixture 已通过真实 current-user 安装/卸载、两版本生命周期、x86 版本映射/降级、修复、被动运行、中文包并存、受限故障回滚，自定义目录安装、静默范围拒绝、PATH 保留与升级恢复目录，以及 en-US/ja-JP 双语并存安装与独立卸载；per-machine 仍仅静态检查产物。
 WIN-MSI-9 已完成 Tauri 通用能力审计与再冻结，实施证据以 git 提交与 PR 记录为准；下表仍只记录外部环境和证据。
 当前没有干净 Windows 10/11 或提权测试 VM；ARM64 原生腿已由 release-verify windows-11-arm 收编（2026-10：nsis/msi 装/覆盖装/修复/卸全绿）。这些缺口不阻塞本机可执行开发，不扩大支持声明。
-人工步骤见 `docs/msi-manual-testing.md`。
+只能人工/外部付费完成的验收登记在 `docs/special-acceptance.md`。
 
 | ID | 最早阶段 | 所需输入/环境 | 完成证据 |
 | --- | --- | --- | --- |

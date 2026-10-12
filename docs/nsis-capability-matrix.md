@@ -26,7 +26,7 @@
 | `installerIconFile` | `InstallerIconFile` / `BundlerNsisInstallerIconFile` | 已实现 | 可回退到通用图标列表中的首个 `.ico` |
 | `uninstallerIconFile` | `UninstallerIconFile` / `BundlerNsisUninstallerIconFile` | 已实现 | 可独立设置；默认回退到安装器图标 |
 | `uninstallerHeaderFile` | `UninstallerHeaderFile` / `BundlerNsisUninstallerHeaderFile` | 已实现 | 默认回退到安装器 Header |
-| `installScope` | `InstallScope` / `BundlerNsisInstallScope` | 已实现，外部待验收 | `currentUser`、`perMachine`、`both`；真实 UAC 见 MT-01/02 |
+| `installScope` | `InstallScope` / `BundlerNsisInstallScope` | 已实现，外部待验收 | `currentUser`、`perMachine`、`both`；真实 UAC 见 `docs/special-acceptance.md` |
 | `languages` | `Languages` / `BundlerNsisLanguages` | 已实现 | 内置固定快照中的 22 种语言；第一项在系统语言不匹配时回退；`Persian` 内部映射 NSIS `Farsi` |
 | `customLanguageFiles` | `CustomLanguageFiles` / `BundlerNsisLanguageFile` | 已实现 | 自定义文件完整替换同一已选语言；严格拒绝缺失、重复、未知键和错误语言常量 |
 | `displayLanguageSelector` | `DisplayLanguageSelector` / `BundlerNsisDisplayLanguageSelector` | 已实现 | 仅在多语言且显式启用时显示；单语言非系统语言已完成 Windows 静默安装回归 |
@@ -36,7 +36,7 @@
 | `minimumWebview2Version` | 无 | 不适用 | Tauri runtime 专属；本项目不安装或升级任意应用运行时 |
 
 结论：适用于通用 NSIS 后端的小型配置、签名和本地化能力均已收口。
-翻译内容的母语/专业审校属于 MT-11，不把自动结构校验冒充内容审校。
+翻译内容的母语/专业审校属人工验收（`docs/special-acceptance.md`），不把自动结构校验冒充内容审校。
 
 ## 2. `WindowsConfig` 逐项矩阵
 
@@ -44,14 +44,14 @@
 | --- | --- | --- | --- |
 | `digestAlgorithm` | 内置 Authenticode 固定安全默认 SHA-256；外部 provider 自行控制 | 已实现，方案不同 | 不为旧算法增加公共开关；特殊发布策略使用外部 provider |
 | `certificateThumbprint` | `WindowsAuthenticodeSigningOptions.CertificateThumbprint` / MSBuild 同名能力 | 已实现 | 证书选择和完整 staged payload/插件/卸载器/安装器链路均有自动化 |
-| `timestampUrl` | `TimestampUrl` / `BundlerWindowsSigningTimestampUrl` | 已实现，外部待验收 | 内置实现使用 RFC 3161；生产服务验证见 MT-04 |
+| `timestampUrl` | `TimestampUrl` / `BundlerWindowsSigningTimestampUrl` | 已实现，外部待验收 | 内置实现使用 RFC 3161；生产服务验证见 `docs/special-acceptance.md` SA-P-01 |
 | `tsp` | 内置实现固定 RFC 3161 | 已决策，方案不同 | 不增加旧 Authenticode timestamp 协议开关；确有遗留 provider 时走外部命令 |
 | `webviewInstallMode` | 无 | 不适用 | Tauri runtime 专属运行时部署 |
 | `allowDowngrades` | `AllowDowngrades` / `BundlerNsisAllowDowngrades` | 已实现、默认不同 | 本项目默认禁止降级；这是更安全的明确产品决策，不复制 Tauri 的 `true` 默认值 |
 | `minimumWebview2Version` | 无 | 不适用 | 同上，不承担 WebView2 生命周期 |
 | `wix` | `DotNet.Bundler.Wix` | 已实现 | 属于独立安装格式，不混入 NSIS 配置 |
 | `nsis` | `NsisBundleConfiguration` | 已实现 | 本项目通过强类型后端配置而非嵌套 Tauri JSON 模型组织 |
-| `signCommand` | `WindowsExternalCommandSigner` / `BundlerWindowsSigningCommand` | 已实现，外部待验收 | 参数 Item 支持安全占位符；Fixture 验证替换、退出码与错误脱敏，真实 HSM/云服务见 MT-04 |
+| `signCommand` | `WindowsExternalCommandSigner` / `BundlerWindowsSigningCommand` | 已实现，外部待验收 | 参数 Item 支持安全占位符；Fixture 验证替换、退出码与错误脱敏，真实 HSM/云服务见 `docs/special-acceptance.md` SA-P-01 |
 | `bundleVCRuntime` | 无 | 不适用 | Tauri 构建/runtime 约定；调用方可把已准备文件放入输入目录或资源，不由 Bundler 发现/下载依赖 |
 
 ## 3. 通用 `BundleConfig` 中与 NSIS 有关的能力
@@ -81,19 +81,19 @@ JSON 配置加载器是 CLI 的共享配置入口。
 | 行为 | 当前状态 | 差异/证据边界 |
 | --- | --- | --- |
 | 内嵌 NSIS 工具、无需系统预装 | 已实现 | 本项目使用独立 NsisToolset 和内容寻址共享缓存 |
-| Windows/Linux/macOS 宿主生成 Windows NSIS | 已实现，外部待验收 | 解析和工具资源已实现；2026-09-29/30 联合测试已实测 Linux/macOS 产 nsis.exe 在 Windows 实装卸+运行；原生 runner 见 MT-08 |
+| Windows/Linux/macOS 宿主生成 Windows NSIS | 已实现，外部待验收 | 解析和工具资源已实现；2026-09-29/30 联合测试已实测 Linux/macOS 产 nsis.exe 在 Windows 实装卸+运行；原生 runner 已由六宿主 CI 矩阵收编 |
 | windows-i686 目标产物 | 已实现 | `DesktopTargetMatrix` 的 x86 门禁已移除（PR #12）+ `TargetArchitectureName` 补 `X86=>"x86"`（模板 32 位分支既有）；x64 宿主产 x86 nsis.exe 经 WoW64 实装卸过，载荷运行需宿主有 32 位 .NET 运行时 |
 | SemVer 重装、升级、降级策略 | 已实现 | 本项目默认禁止降级 |
 | 旧 MSI 迁移 | 已实现，生产包外部待验收 | 本项目要求准确 ProductCode/UpgradeCode，不按显示名猜测 |
 | 运行程序协调 | 已实现 | Restart Manager 按完整程序路径关闭，不影响其他目录同名进程 |
-| 安装失败/进程中断恢复 | 已实现，提权 ACL 外部待验收 | 安装回滚 journal 和卸载前向恢复有 Windows E2E；清单不同返回 `6`，须原安装器 `/RECOVERONLY`；静态快照与恢复卸载器哈希校验，真实 perMachine ACL 见 MT-07 |
+| 安装失败/进程中断恢复 | 已实现，提权 ACL 外部待验收 | 安装回滚 journal 和卸载前向恢复有 Windows E2E；清单不同返回 `6`，须原安装器 `/RECOVERONLY`；静态快照与恢复卸载器哈希校验，真实 perMachine ACL 见 `docs/special-acceptance.md` |
 | 自动更新/被动/静默参数与稳定退出码 | 已实现 | `/UPDATE`、`/P`、`/S`、`/R`、`/ARGS`、`/RECOVERONLY` 等为本项目协议 |
-| 快捷方式生命周期 | 已实现，固定项外部待验收 | 按 `.lnk` 实际目标判断所有权；MT-06 覆盖 OS 固定项差异 |
+| 快捷方式生命周期 | 已实现，固定项外部待验收 | 按 `.lnk` 实际目标判断所有权；`docs/special-acceptance.md` 覆盖 OS 固定项差异 |
 | 文件关联和 URL 协议 | 已实现 | 不强抢 Windows 默认应用；协议删除有所有权检查 |
-| 完整内置语言集合 | 已实现，内容质量外部待验收 | 22 种语言均由真实 NSIS 编译；非拉丁 Windows E2E；MT-11 审校译文/RTL/截断 |
+| 完整内置语言集合 | 已实现，内容质量外部待验收 | 22 种语言均由真实 NSIS 编译；非拉丁 Windows E2E；`docs/special-acceptance.md` 母语审校译文/RTL/截断 |
 | payload、插件、卸载器、安装器完整签名 | 已实现，生产身份外部待验收 | 临时副本中签主 EXE和显式 payload，再签 Bundler 插件、卸载器和安装器；外部 provider 可替换内置实现 |
-| 真实 UAC、重启、生产证书 | 外部待验收 | 统一见 `docs/nsis-manual-testing.md` |
-| Windows ARM64 目标安装/卸载、非 Windows 宿主编译 | 部分已验证（2026-10 `windows-11-arm` 腿 + 六宿主 CI 矩阵跑绿） | MT-08/MT-09 |
+| 真实 UAC、重启、生产证书 | 外部待验收 | 统一见 `docs/special-acceptance.md` |
+| Windows ARM64 目标安装/卸载、非 Windows 宿主编译 | 已验证（2026-10 `windows-11-arm` 腿 + 六宿主 CI 矩阵跑绿） | — |
 | symlink、junction、重解析点 | 已实现，采用安全拒绝 | 构建输入、资源、安装快照/恢复、journal 和工具缓存均不跟随；Windows E2E 验证外部目录不被修改 |
 | ACL、ADS 与任意文件系统元数据 | 明确不承诺完整保真 | 保证失败不越界且不把混合载荷报告为成功；产品专属元数据应由显式 Hook 迁移 |
 | 工具缓存完整性和并发恢复 | 已实现 | 信任锚为固定 ZIP SHA-256 和 ZIP 内逐文件哈希；覆盖篡改、额外文件、manifest、链接、并发、Unicode 与长路径 |

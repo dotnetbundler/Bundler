@@ -15,30 +15,30 @@ NSIS 第一条完整产品链路现已冻结；后续只接受有明确用例和
 | 旧阶段 | 原主题 | 当前去向 |
 | --- | --- | --- |
 | 0 | 身份、行为与兼容契约 | 已完成并成为回归基线 |
-| 1 | 工具供应链、缓存、原生插件 | 已在 `NSIS-R4` 完成并冻结；真实宿主见 MT-08 |
-| 2 | 已安装版本、升级、旧 MSI 迁移 | 已完成；真实历史 MSI 留在 MT-05 |
+| 1 | 工具供应链、缓存、原生插件 | 已在 `NSIS-R4` 完成并冻结；真实宿主已由六宿主 CI 矩阵收编 |
+| 2 | 已安装版本、升级、旧 MSI 迁移 | 已完成；真实历史 MSI 留在 `docs/special-acceptance.md` |
 | 3 | 事务、进程、重启与恢复 | 自动化边界已在 `NSIS-R4` 收口；真实 OS 条件留在人工队列 |
 | 4 | 自动化参数与退出码 | 已完成并回归保护 |
 | 5 | 文件关联与深链接 | 已完成并回归保护 |
-| 6 | 快捷方式完整性 | 已完成；跨 Windows 固定项行为留在 MT-06 |
-| 7 | 完整内置多语言 | 已在 `NSIS-R3` 完成；内容质量见 MT-11 |
-| 8 | Authenticode 完整流水线 | 已完成；生产身份/HSM/公开时间戳见 MT-04 |
-| 9 | 真实 UAC、范围和注册表矩阵 | 实现已存在，外部验收见 MT-01/02/09 |
-| 10 | 跨宿主、跨架构与发布门禁 | 自动化部分已完成，原生环境证据进入 MT-08/09 |
+| 6 | 快捷方式完整性 | 已完成；跨 Windows 固定项行为留在 `docs/special-acceptance.md` |
+| 7 | 完整内置多语言 | 已在 `NSIS-R3` 完成；内容质量见 `docs/special-acceptance.md` |
+| 8 | Authenticode 完整流水线 | 已完成；生产身份/HSM/公开时间戳见 `docs/special-acceptance.md` SA-P-01 |
+| 9 | 真实 UAC、范围和注册表矩阵 | 实现已存在，外部验收见 `docs/special-acceptance.md` |
+| 10 | 跨宿主、跨架构与发布门禁 | 自动化部分已完成，原生环境证据已由六宿主 CI 矩阵收编 |
 
 | 能力 | 当前状态 | 后续位置 |
 | --- | --- | --- |
 | 产品元数据、图标、Header/Sidebar、许可证 | 已实现 | 回归保护 |
-| `currentUser` / `perMachine` / `both` | 已实现，真实 UAC 外部待验收 | 人工 MT-01/02 |
+| `currentUser` / `perMachine` / `both` | 已实现，真实 UAC 外部待验收 | 人工验收见 `docs/special-acceptance.md` |
 | 生命周期 Hook、自定义模板入口 | 已实现并完成入口审计 | 回归保护 |
-| 工具内嵌、内容寻址缓存、多宿主解析 | 已实现；逐文件完整性、并发和损坏恢复已自动验证，真实宿主矩阵外部待验收 | 回归保护、MT-08 |
-| SemVer、升级/降级、旧 MSI 精确迁移 | 已实现 | 回归保护、MT-05 |
+| 工具内嵌、内容寻址缓存、多宿主解析 | 已实现；逐文件完整性、并发和损坏恢复已自动验证，真实宿主矩阵外部待验收 | 回归保护 |
+| SemVer、升级/降级、旧 MSI 精确迁移 | 已实现 | 回归保护、`docs/special-acceptance.md` |
 | 自动化参数和稳定退出码 | 已实现 | 回归保护 |
 | 文件关联与 URL 协议 | 已实现 | 回归保护 |
-| 快捷方式生命周期和所有权保护 | 已实现 | 回归保护、MT-06 |
-| 安装事务、进程中断恢复、卸载前向恢复、重解析点安全拒绝 | 已实现 | 回归保护、MT-03/07/10 |
-| 内置语言 | 已实现：22 种内置语言、严格键校验、自定义覆盖、回退和非拉丁 E2E；内容审校外部待验收 | 回归保护、MT-11 |
-| Authenticode | 已实现：staged payload、Bundler 插件、卸载器和安装器；内置与外部 provider | 回归保护、MT-04 |
+| 快捷方式生命周期和所有权保护 | 已实现 | 回归保护、`docs/special-acceptance.md` |
+| 安装事务、进程中断恢复、卸载前向恢复、重解析点安全拒绝 | 已实现 | 回归保护；真实重启/ACL/Restart-Manager 边界见 `docs/special-acceptance.md` |
+| 内置语言 | 已实现：22 种内置语言、严格键校验、自定义覆盖、回退和非拉丁 E2E；内容审校外部待验收 | 回归保护；母语审校见 `docs/special-acceptance.md` |
+| Authenticode | 已实现：staged payload、Bundler 插件、卸载器和安装器；内置与外部 provider | 回归保护；生产链见 `docs/special-acceptance.md` SA-P-01 |
 | NSIS 压缩和配置面审计 | 已实现：LZMA、ZLIB、BZIP2、无压缩 | 回归保护 |
 | 任意应用运行时依赖安装 | 不适用/明确不做 | 不进入路线 |
 
@@ -158,7 +158,7 @@ Windows 集成测试同时运行安装目录内的程序和另一路径中的同
 - 当前示例选择 English、自定义 SimpChinese 和内置 Japanese，展示多语言选择器。
 
 22 种语言均已由真实 NSIS 编译测试，另有非拉丁 Unicode 安装/卸载集成测试。
-译文内容、RTL 和不同缩放下的布局仍需 MT-11 外部审校；结构与可编译不等于母语质量验收。
+译文内容、RTL 和不同缩放下的布局仍需 `docs/special-acceptance.md` 登记的母语外部审校；结构与可编译不等于母语质量验收。
 
 ### 4.3 安装范围
 
@@ -336,7 +336,7 @@ Windows 的开始菜单/任务栏固定存储和取消固定 API 随系统版本
 权限边界核查（2026-09-23，本机当前 shell 为 Medium integrity）：`%LOCALAPPDATA%\DotNetBundler` 由当前用户拥有，当前用户具有继承的 Full Control，currentUser journal 与 HKCU 锚点均可被同一用户修改；这不构成普通用户到管理员的提权隔离。
 `%ProgramData%` 由 SYSTEM 拥有，SYSTEM/Administrators 为 Full Control，普通 Users 在根上主要为读取/执行并具有限定的子目录创建权。
 代码现在要求 perMachine 产品目录、事务目录和 journal 树的所有者与允许 ACE 只属于 Administrators/SYSTEM，拒绝预建的宽权限目录；
-但本机尚无真实提权安装创建的最终 ACL，MT-01/MT-07 仍须验证创建、继承、重解析点和注册表锚点权限。
+但本机尚无真实提权安装创建的最终 ACL，`docs/special-acceptance.md` 的提权/可丢弃 VM 项仍须验证创建、继承、重解析点和注册表锚点权限。
 目标清单约束独立于 ACL；快照内容和恢复卸载器的提权完整性则依赖受保护的锚点及目录边界。
 
 ### 4.12 卸载前向恢复

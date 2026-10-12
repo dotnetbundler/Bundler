@@ -17,7 +17,7 @@
 | 脚本 | 对应验收 | 环境 | 人工点 |
 | --- | --- | --- | --- |
 | `nsis-reboot/Verify.ps1` | 真实重启+锁定文件删除（可丢弃 VM 故障族） | 可丢弃 Windows VM+管理员 | 重启后回跑 `-Phase Verify` |
-| `uac-assisted.ps1` | UAC 提权安装/卸载（MT-01/02、per-machine ACL 取证） | Windows+交互桌面 | 弹 UAC 时手动批准 |
+| `uac-assisted.ps1` | UAC 提权安装/卸载、`/R` 降权启动、per-machine ACL 取证 | Windows+交互桌面 | 弹 UAC 时手动批准 |
 | `disposable-vm-faults.ps1` | 真实 ACL 拒绝/物理盘满/锁文件重启复核 | 可丢弃 Windows VM+管理员 | — |
 | `mountvol-full-volume.ps1` | mountvol 全卷挂载语义实证 | Windows+管理员+可分配卷 | — |
 | `pinned-items.ps1` | 跨 Windows 版本固定项（开始菜单/任务栏） | 目标 build 的 Windows | — |
