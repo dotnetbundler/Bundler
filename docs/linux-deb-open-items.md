@@ -1,6 +1,6 @@
 # Linux `.deb` 外部待办索引（LINUX-DEB-OI）
 
-本文件只登记**需要外部输入或专用环境**的事项；可本机完成的内容见 `docs/linux-deb-roadmap.md` 阶段分解。
+本文件只登记**需要外部输入或专用环境**的事项；可本机完成的内容见 `docs/linux-deb-roadmap.md`。
 逐项用例步骤见 `docs/linux-deb-manual-testing.md`。
 
 ## 待办清单

@@ -54,70 +54,10 @@
 | `data.tar.gz` 目录条目 | header 文件清单含目录条目（dir mode） | 规范直写 |
 | `dpkg -i/-r/-P` | `rpm -i/-e` | 容器矩阵断言 |
 
-## 4. 阶段分解
-
-### LINUX-RPM-1：托管写入器最小可用（已实现 2026-09-27）
-
-- **交付**：`src/Bundler.Rpm`——lead+签名 header（SIZE/MD5/PAYLOADSIZE/SHA1HEADER/SHA256HEADER）+主 header（NAME/VERSION/RELEASE/EPOCH/SUMMARY/DESCRIPTION/BUILDTIME/BUILDHOST/SIZE/VENDOR/LICENSE/GROUP/URL/OS/ARCH/RPMVERSION/PAYLOAD*、文件清单全 tag、rpmlib 三依赖、自提供 `name = evr` 与 `name(arch) = evr`）+cpio newc+gzip；`RpmPackageReader` 回读器；SemVer→rpm 映射与八旋钮（PackageName/Version/Release/Epoch/Architecture/Vendor/InstallRoot/BinLink）；usr/lib+usr/bin 布局、目录显式条目；`.sha256` 侧车；MSBuild `BundlerFormats=rpm` 接线与 `deb;rpm` 扇出；`Rpm.Api.PackageFixture`；`Verify.sh` 全闭环。
-- **退出达成**：`rpm -qip` 识别产物；docker `fedora:latest` 真实 `rpm -i`/`rpm -q`/`rpm -ql`/运行/`rpm -V`/`rpm -e` 零残留全绿；`deb;rpm` 扇出断言通过。
-- **实测修正**（相对原始格式笔记）：ENCODING tag 实为 5062（5012=BUGURL）；PAYLOADDIGEST(5092) 是**压缩后**载荷 sha256、PAYLOADDIGESTALT(5097) 才是解压前 cpio 的；GNU cpio 提取不为符号链接自动建缺失父目录（`rpm -i` 无此问题），Verify.sh 按清单预建。
-- **不做**：关系字段、.desktop/图标、脚本、config 标记、压缩选项、rpmlint（信息级运行，RPM-3 转硬基线）。
-
-### LINUX-RPM-2：元数据与桌面集成（已实现 2026-09-27）
-
-- **交付**：`Requires`/`Provides`/`Conflicts`/`Obsoletes`/`Recommends`/`Suggests` 六族透传——`RpmDependency` 解析 `name [op evr]` 子句（`< <= = >= >` → LESS/GREATER/EQUAL 位组合，拒 `!=`）写入 REQUIRE*/PROVIDE*/CONFLICT*/OBSOLETE*/RECOMMEND*/SUGGEST* 三件套 tag；`License`（SPDX 惯例，`Unspecified` 默认）/`Group`（可置空省略 tag）/`Url`（默认 `Homepage`，置空省略）覆盖；共享 freedesktop 件提取到 `Bundler.Core` 内部 `FreedesktopFiles`（`.desktop` 生成/覆盖 + hicolor 图标 + metainfo，deb/rpm 双后端复用，deb 行为不变——153 断言背书）；`ChangelogFile`→`usr/share/doc/<pkg>/changelog.gz`（%doc 标记）；包级 `LicenseFile`→`usr/share/licenses/<pkg>/<文件名>`（%license=128 标记，rpm 原生惯例）；`@BundlerRpmFile` 任意绝对路径映射（逃逸校验）；目录占有规则对齐发行版惯例（包自有叶子目录占有，`/usr/share/icons` 子树与共享系统目录不占有）。
-- **实测修正**：cpio 成员名需带 `./` 前缀——`rpmlib(PayloadFilesHavePrefix)` 依赖的真实含义；绝对路径成员名会让裸 `cpio` 提取（rpmlint 管线）撞上宿主根权限而 fatal。`rpm -i` 本不受影响，但按上游惯例修正，RPM-1 产物缺陷一并回填。
-- **AUTOREQPROV 注记**：路线图曾列 `AUTOREQPROV`——实测它不是二进制 header tag（specfile 指令），无需落位；`rpmlib(...)` 自依赖已覆盖。
-- **退出达成**：`rpm -qip`/`--queryformat` 逐字段断言全绿；生成与覆盖 `.desktop` 均过 `desktop-file-validate`；docker `fedora:latest` 装后 `rpm -ql` 逐路径断言 + `rpm -qd` %doc 可见 + 卸载零残留全绿。
-- **不做**：scriptlet、systemd、`%config(noreplace)` 标记（`/etc` 文件暂为普通文件）、压缩选项、rpmlint 硬基线（信息级：6E4W，与预期一致）。
-
-### LINUX-RPM-3：脚本、systemd、config 与压缩（已实现 2026-09-27）
-
-- **交付**：`PreInstallFile`/`PostInstallFile`/`PreUninstallFile`/`PostUninstallFile` 四 scriptlet 专家旋钮 + `*Program` 解释器覆盖——文件 LF 行尾强制（拒 CRLF/裸 CR），`#!` 首行剥离为 `*PROG` tag（缺省 `/bin/sh`）；`SystemdServiceFile` 落 `/usr/lib/systemd/system/<pkg>.service` 并向 `%post`/`%postun` 合成 `daemon-reload` 尾段（装而不启）；`/etc` 下 `RpmFile` 目标自动 `%config(noreplace)`（FILEFLAGS 17）+ `ConfigFiles` 显式列表（须命中载荷常规文件）；`Compression` 仅 `gzip`（xz/zstd 拒绝）。
-- **实测注记**：scriptlet 语义为解释器喂体——script tag 存无 shebang 的正文，PROG tag 存解释器；rpm 安装/升级/卸载计数以 `$1` 传给 scriptlet。
-- **退出达成**：容器内 `rpm -i`/`rpm -e` 四个 scriptlet 标记断言、`rpm -U`（Release 1→2）升级 + `%config(noreplace)` `.rpmsave`/原地保留断言全绿；`PREINPROG`/`--scripts`/FILEFLAGS 主机侧断言全绿。
-
-### LINUX-RPM-4：原生 E2E 与支持矩阵（已实现 2026-09-27）
-
-- 交付：`rpmlint` 硬断言门控（`rpmlint-exemptions.txt` 豁免清单入档，7 项豁免——no-signature/no-packager-tag/no-group-tag/no-changelogname-tag/invalid-license/binary-or-shlib-defines-rpath/no-manual-page-for-binary；`summary-ended-with-dot` 以修 fixture 描述消解而非豁免）；`linux-aarch64` 产物结构断言（`*.aarch64.rpm`+`ARCH=aarch64`+载荷结构）；docker 发行版装卸矩阵扩为 `fedora:latest`+`rockylinux:9`+`opensuse/leap:latest` 三容器真实 `rpm -i/-e`（镜像不可拉取记 SKIP）；干净宿主复核：`src/Bundler.Rpm` 零外部进程调用。
-- 证据：`Verify.sh` 全绿含三容器矩阵 + `rpm -U`/`%config` 语义段 + rpmlint 门控；`Bundler.Tests` 163 全绿无新增用例（纯测试基建与断言强化）。
-- 边界：arm64 真机安装（OI-01）、更广发行版宿主（OI-04）、dnf/zypper 仓库（OI-06）、GUI 桌面（OI-02）、systemd 真机（OI-03）、GPG 签名（后置评估）——均登记未冒充。
-
-### LINUX-RPM-4 原始范围（存档）
-
-- **目标/交付**：`rpmlint` 硬断言基线（豁免清单入档）；`linux-aarch64` 产物结构断言；docker 发行版矩阵（`fedora:latest`+`rockylinux:9`+`opensuse/leap`）；干净宿主复核；示例全旋钮收口。
-- **退出**：矩阵实测格子有证据；未测格子进 OI/MT 清单。
-
-### LINUX-RPM-5：审计复核与冻结（已实现 2026-09-27）
-
-- 上游复核：`git ls-remote` 确认 `tauri-apps/tauri` `dev` HEAD 仍为 `447fa9f`——rpm 侧审计行（rpm crate 托管写入器、PGP 签名路径、`usr/lib` 布局惯例）基线保持有效，零漂移。
-- 能力矩阵定稿：无悬空"计划实现"行；GPG 签名明确为冻结外后置评估（`LINUX-RPM-SIGN`，未排期）。
-- OI/MT 收口：OI-01..07 逐条复核维持登记（OI-04 备注 fedora/rockylinux/opensuse 已由容器覆盖）；MT-01..07 全量保留。
-- **冻结基线**：`RpmBundleConfiguration` 配置面与行为契约冻结于 `0.1.0-alpha.55`；冻结测试向量 = `Bundler.Tests` 163/163 + `Verify.sh` 全绿（三容器真实 `rpm -i/-e/-U`、`%config`/scriptlet 语义、rpmlint 豁免门控、arm64 结构断言）。
-- 冻结后规则：仅接受带回归测试的缺陷修复；新能力另起阶段。
-
-### LINUX-RPM-5：审计与格式冻结
-
-- **前置**：LINUX-RPM-1..4 完成。
-- **目标/交付**：上游复核（快照漂移重核审计行）；能力矩阵定稿；OI/MT 收口；冻结基线写入本路线与 `PROJECT_CONTEXT.md`；`docs/roadmap.md` 推进 `LINUX-APPIMAGE`。
-- **退出**：`.rpm` 冻结基线写入，`LINUX-APPIMAGE` 规划轮待启动。
-
-## 5. 验证分层
+## 4. 验证分层
 
 | 验证层 | 内容 |
 | --- | --- |
 | 本机自动 | `RpmPackageReader` 双向互证、`rpm -qip`/`--queryformat`/`rpm -K`、`rpmlint`、单元断言（结构/映射/确定性/拒绝路径） |
 | 容器真实 | docker `fedora`/`rockylinux`/`opensuse` 内 `rpm -i/-e/-U`、二进制运行、conffile 语义、systemd unit 落位 |
 | 人工/外部 | GUI 桌面观感、arm64 真实宿主、签名验证（若引入）、`dnf`/`zypper` 仓库工作流 |
-
-### 2026-10-06 回归修复：样品声明运行时依赖
-
-- **发现**：main `dbbbf91` 联合测试——产物在裸 `fedora` 容器装后探针 rc=134（缺 libicu）；`Requires` 仅 rpmlib 自依赖，样品未用 `BundlerRpmRequires` 旋钮（写入器纯透传，非后端缺陷）。
-- **处置**：`samples/HelloBundlerApp/formats/Rpm.props` 默认声明 `glibc;libgcc;libstdc++;zlib;libicu`（`HelloBundlerRpmRequires` 可覆盖）。
-- **实证**：裸 `fedora:latest` 容器 `dnf install ./pkg.rpm` 自动解析拉入 `libicu`，探针 rc=0。
-
-### 2026-10-12 观察项收口：依赖声明改 rich deps
-
-- **发现**：openSUSE 容器 `zypper`/`rpm -i` 对 `libgcc` 无匹配（该发行版命名 `libgcc_s1`），样品装包需 `--nodeps`——上游命名差非后端缺陷，但声明可更跨发行版。
-- **处置**：`Rpm.props` 该处改 `glibc;(libgcc or libgcc_s1);libstdc++;zlib;libicu`；解析器 `RpmDependency` 接受 `(` 起始 rich deps 子句原样透传并校验括号平衡。
-- **实证**：`RpmTests` 断言 rich 子句原样进 `REQUIRENAME`；非法形态（未闭合/多余括号）rc=2 拒绝。openSUSE 容器安装级验证随既有 `opensuse/leap` docker 腿覆盖。

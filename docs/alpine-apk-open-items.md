@@ -1,6 +1,6 @@
 # Alpine `.apk` 外部待办索引（APK-OI）
 
-本文件只登记**需要外部输入或专用环境**的事项；可本机完成的内容见 `docs/alpine-apk-roadmap.md` 阶段分解。
+本文件只登记**需要外部输入或专用环境**的事项；可本机完成的内容见 `docs/alpine-apk-roadmap.md`。
 逐项用例步骤见 `docs/alpine-apk-manual-testing.md`。
 
 ## 待办清单

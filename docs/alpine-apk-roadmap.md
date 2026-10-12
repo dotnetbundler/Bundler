@@ -2,7 +2,7 @@
 
 > 状态：**APK-1..5 全部完成并已冻结并入 `main`**（2026-09-30/10-01，PR #13 `5585843`，冻结基线 `0.1.0-alpha.63`）；此前已确认决策（D1 改判 `AlpineApk`，其余按推荐）。
 > 格式指 Alpine Linux 的 `.apk`（apk-tools v2），**非 Android `.apk`**；移动端支持若将来立项另立路线，届时命名须显式区分（如 `AlpineApk`/`AndroidApk`）。
-> 本文档只放本格式的设计决策、阶段目标与实施证据；泛用规则在 `docs/development-rules.md`。
+> 本文档只放本格式的设计决策与语义契约；泛用规则在 `docs/development-rules.md`。
 
 ## 1. 已确认决策（2026-09-30 用户逐项确认）
 
@@ -39,41 +39,7 @@
 - 确定性：相同输入与配置逐字节一致（gzip mtime 归 0、tar 时间戳同 deb/rpm 归一化口径）。
 - 不冒充：`builddate` 默认 0 而非伪造当前时间；`size` 为写入器自算近似（apk 语义允许近似值）。
 
-## 4. 阶段分解
-
-### APK-1：最小可用 `.apk`
-
-范围：`Bundler.AlpineApk` 程序集骨架（`AlpineApkBundleBackend : IBundleBackend`、`AlpineApkBundler` 直接 API、`AlpineApkBundleConfiguration`）、gzip×3 写入器（TarWriter 段模式）、`.PKGINFO` 核心字段（pkgname/pkgver/pkgdesc/url/arch/origin/size/datahash）、数据段载荷+binlink、pax `APK-TOOLS.checksum.SHA1`、矩阵 `LinuxMusl`+`AlpineApk`、流水线注册、CLI/MSBuild 接线。
-验证：写出→自读回解析三段结构断言；`.PKGINFO` 字段断言；matrix 放通 musl+apk、其余目标拒绝断言；构建零警告。
-出口：`Bundler.Tests` 新增断言全绿。
-实施证据（2026-09-30，commit `074c203`，`0.1.0-alpha.63`）：`src/Bundler.AlpineApk` 落地，`Bundler.Tests` 225/225（新增 14 项），`dotnet build Bundler.slnx -c Release` 零警告；产物 `OutputDirectory/alpineapk/（byFormat 布局）<pkgname>-<ver>-r<rel>.apk` + `.sha256`。
-
-### APK-2：元数据、依赖与脚本
-
-范围：`depend`/`provides`/`triggers`/`license`/`release`/`builddate` 旋钮、六个安装脚本、任意文件映射、.desktop/freedesktop 件（按需——musl 桌面语义弱，默认不做，存在争议则降级为 OI）。
-验证：旋钮→字段/段内文件逐条断言；非法值拒绝（包名/版本/release 格式）。
-实施证据（2026-09-30，commit `06e7550`）：六脚本+五元数据旋钮+`BundlerAlpineApkFile`/`AlpineApkFileEntry` 任意映射落地；.desktop/freedesktop 按 OI 决议不做（musl 桌面语义弱，能力矩阵登记明确拒绝）；`Bundler.Tests` 断言新增（包名/release/triggers 非法值拒绝、脚本非空+LF 校验）。
-验证宿主发现（记入 D 决策修正）：真实 `musl` apk 解剖证实数据段每条目须带 pax `ctime=0`/`atime=0` 且 `APK-TOOLS.checksum.SHA1` 为**十六进制** sha1（符号链接按链接目标字符串哈希）——实现按此修正（见 APK-4 证据）。
-
-### APK-3：可选 RSA 签名
-
-范围：`BundlerAlpineApkSigningKeyFile`/`BundlerAlpineApkSigningKeyPassphrase`、`.SIGN.RSA.<name>.rsa.pub` 段生成、半配置拒绝、无密钥即未签名。
-验证：生成签名 apk→openssl/BouncyCastle 回验签名字节；半配置断言；签名产物确定性。
-实施证据（2026-09-30，commit `ed87ea4`）：`ApkSigner`（BouncyCastle `RsaDigestSigner`+`Sha1Digest`，PEM/PKCS8/加密私钥三态）+ 签名段前置；`Bundler.Tests` 新增 4 断言（`.SIGN.RSA` 成员与模式、`RSA.VerifyData` 回验、加密私钥、半配置 4 子例、签名确定性）。
-
-### APK-4：原生 E2E 与支持矩阵
-
-范围：`tests/Alpine.Apk.Integration/Verify.sh`——alpine 容器内 `apk add --allow-untrusted` 装未签名包、`apk add` 装签名包（自签公钥预置 keys）、装后真实运行载荷、`apk del` 卸载断言、python3 `zlib` 三段拆解结构断言（本机无 `abuild-gzsplit`，等价替身）、x86_64+aarch64（qemu）双腿、确定性三产逐字节。
-出口：能力矩阵 `docs/alpine-apk-capability-matrix.md` 初稿 + E2E 全绿。
-实施证据（2026-09-30，commit `63eabaf`）：`tests/Alpine.Apk.Integration/Verify.sh` 全绿——`alpine:latest` 容器 `apk add --allow-untrusted` 实装→脚本标记→运行→`apk del` 清理；未签名拒绝断言；自签包公钥入 `/etc/apk/keys/` 免 `--allow-untrusted` 实装；`openssl dgst -sha1 -verify` 独立验签；aarch64 经 qemu binfmt 实装+运行；确定性三产逐字节；`tests/AlpineApk.Api.PackageFixture` 直接 API 消费断言。同 commit 修正 pax 格式为真实 apk 实测口径（ctime/atime=0 全条目 + 十六进制 sha1 + 符号链接按目标字符串哈希——修正前被 `apk add` 以 missing embedded checksum 拒绝）。
-取舍实录：自包含 musl 载荷的 `libstdc++.so.6`/`libgcc_s.so.1` 经 `depend` 显式声明（fixture 中 `libstdc++;libgcc`），与 APK-D9 的“依赖调用方显式声明”一致；样本与文档如实标注。
-
-### APK-5：审计与格式冻结
-
-范围：干净宿主审计、OI 清单（`alpine-apk-open-items.md`：真实官方签名密钥、`apk` 仓库索引集成等）、manual-testing 清单、能力矩阵定稿、冻结基线版本号。
-实施证据（2026-09-30，本 commit）：能力矩阵/OI/MT 三文档定稿、`manual-testing-index` 收录、`PROJECT_CONTEXT`/`docs/roadmap.md`/`README` 状态同步、示例 `samples/HelloAlpineApkApp` 落地并经 `alpine:latest` 容器实装运行验证；**已冻结**——2026-09-30 终审合并入 `main`（PR #13，`5585843`），冻结基线 `0.1.0-alpha.63`。
-
-## 5. 验证分层
+## 4. 验证分层
 
 | 层 | 断言什么 | 在哪跑 |
 | --- | --- | --- |
@@ -82,13 +48,9 @@
 | 真实装卸 | `apk add`/`apk info`/`apk remove`、装后运行、签名免开关 | alpine docker（x86_64 + aarch64 qemu） |
 | 门禁回归 | musl 放通 zip/targz/alpineapk/appimage、deb/rpm 拒绝、glibc 目标拒绝 alpineapk | `Bundler.Tests` 矩阵断言 |
 
-## 6. 已知风险与留待裁决
+## 5. 已知风险与留待裁决
 
 - apk v3 若正式发布（zstd 流、新签名方案）需另起升级路线；v2 产物届时仍可装（apk-tools 兼容读）。
 - `.PKGINFO` 无官方完整键清单（权威来源是 abuild 源码）——写字段集保守收敛在常见子集，escape hatch 覆盖遗漏。
 - musl 目标的真实载荷（`dotnet publish -r linux-musl-*`）属调用方前提；验证腿用 self-contained fixture。
 - 桌面集成（.desktop/图标）在 Alpine 桌面场景价值弱——默认不做，若真实需求出现再加阶段。
-
-## 7. 外部待验收实证回填（2026-10-05，`0.1.0-alpha.70`，alpine-docker 宿主）
-
-- **qemu-aarch64 binfmt 激活**（APK-OI-02 补强）：`docker run --rm --privileged tonistiigi/binfmt --install arm64` 注册后，`AlpineApkIntegrationTests.DockerArm64InstallRunRemoveUnderBinfmt` 由 SKIP 转真跑通过 1/1/0·76s——arm64 alpine 容器内 `apk add`→运行→`apk del` 全链路；该腿随宿主 binfmt 注册态自动转 PASS。真机 ARM64 宿主仍待验。

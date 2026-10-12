@@ -4,19 +4,19 @@
 > alpha.40 已验证 x86 目标、显式 MSI 版本映射、同版碰撞、默认降级拒绝、显式降级和用户文件所有权，alpha.41 已验证范围内安装目录、自定义 UI 表结构、可选 Feature、PATH 精确追加/还原与仅交互启动勾选的产物和静默行为。
 > 以下人工/外部环境用例除各行已标注的已实证子项外均未执行——对应各阶段未覆盖的外部条件，未执行项不得宣称已完成。
 > 用户目前没有干净 Windows 10/11、ARM64 原生用户端或提权测试 VM，不将本机结果扩写为这些平台通过。
-> 路线见 `docs/msi-roadmap.md` 第 10 节。
+> 路线见 `docs/msi-roadmap.md`。
 
 `MSI-MT-02` 的自动化前置为 `MsiLocalPackagesTests`（`dotnet test tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj -c Release --filter-class "*MsiLocalPackagesTests*"`）。
-2026-09-24 本机运行通过，日志与哈希见 `docs/msi-roadmap.md` 第 6 节；这不代替干净 VM 的兼容性复测。
+2026-09-24 本机运行通过，日志与哈希证据以 git 提交与 PR 记录为准；这不代替干净 VM 的兼容性复测。
 
 `MSI-MT-04` 的本机自动前置为 `MsiLocalPackagesTests` 生命周期腿（`Requires=localinstall` trait + `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 同意闸）。
-脚本构建两个版本及同版本异内容包，检查升级、降级/异包拒绝、快捷方式、文件与协议候选注册、用户文件保留和卸载清理；结果见 `docs/msi-roadmap.md` 第 7 节。
+脚本构建两个版本及同版本异内容包，检查升级、降级/异包拒绝、快捷方式、文件与协议候选注册、用户文件保留和卸载清理；结果以 git 提交与 PR 记录为准。
 人工复测还要在 Windows 默认应用界面选择处理程序，实际打开文件/协议，观察 UAC、账户权限及同路径被其他程序接管的行为；原生 MSI 快捷方式不保证保留被替换的同路径链接。
 
 `MSI-MT-05..07` 的本机自动前置为 `MsiLocalPackagesTests` 维护腿（同上同意闸）与 `tests/Bundler.Tests/WixTests.cs`。
 前者使用独立 current-user 产品，验证损坏包的原生失败码、对测试包副本注入延迟失败后的回滚、被动安装/卸载、静默修复，以及带测试 RTF 许可的中文包与英文包并存。
 后者用短期自签名测试证书真实签名 PE 与 MSI。
-该脚本不触发重启、提权或生产签名；日志、哈希和本机结果见 `docs/msi-roadmap.md` 第 8 节。
+该脚本不触发重启、提权或生产签名；日志、哈希和本机结果以 git 提交与 PR 记录为准。
 人工复测仍要覆盖真实 UI、证书信任链、缺失源、锁定文件及重启。
 
 `MSI-MT-11` 的本机自动前置为 `MsiLocalPackagesTests`（同上同意闸）与 `tests/Bundler.Tests/WixTests.cs`。

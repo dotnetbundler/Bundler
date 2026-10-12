@@ -61,65 +61,9 @@
 - **输出**：`OutputDirectory/deb/（byFormat 布局；flat 为 OutputDirectory/）<package>_<version>_<arch>.deb` + `<file>.sha256` 侧车。
 - **诚实边界**：deb 不承诺"双击 GUI 安装观感"、"apt 仓库工作流"（那是仓库职责）；这些进能力矩阵"明确拒绝/不适用"行而非夸大。
 
-## 4. 阶段分解
-
-### LINUX-DEB-1：最小可用 `.deb`
-
-- **前置**：本路线确认入档（本阶段）。
-- **目标/交付**：`src/Bundler.Deb`（netstandard2.0，`DotNet.Bundler.Deb` 包）——托管 ar 写入器、tar 写入器（含符号链接条目、uid/gid 0、确定性排序）、gzip（`System.IO.Compression`）、`debian-binary`、control 核心字段（`Package`/`Version`/`Architecture`/`Installed-Size`/`Maintainer`/`Priority=optional`/`Homepage`/`Description`）、`md5sums`、载荷→`usr/lib/<name>/`+`usr/bin` 符号链接、SemVer→deb 版本映射与覆盖旋钮、`.sha256` 侧车；
-  `DebBundler` 直接 API + `BundlerFormats=deb` MSBuild 接线（`BundlerDeb*` 属性映射）；
-  `Bundler.Tests` 新用例 + `tests/Deb.Api.PackageFixture` + `tests/Linux.Deb.Integration/Verify.sh`（真实 `dpkg-deb -I/-c` 结构断言 + **sudo `dpkg -i`/`dpkg -r` 真实装卸烟雾** + `dpkg --contents` 清单核对）；
-  示例 `samples/HelloDebApp` 骨架（默认命令即产出可装 `.deb`）。
-- **不做**：Depends 等关系字段、.desktop/图标、维护者脚本、systemd、conffiles、压缩选项。
-- **退出**：`dpkg-deb` 识别产物、`dpkg -i/-r` 真实装卸零残留断言、失败路径无伪 `.deb`。
-- **状态**：**已完成**（2026-09-27）。
-  交付按规划落地：`src/Bundler.Deb` 纯托管 ar/tar/gzip 写入器、`DebBundler`/`DebBundleConfiguration` 公共面、`BundlerFormats=deb` MSBuild 接线与 `BundlerDeb*` 八个旋钮；
-  验证：`tests/Bundler.Tests` 新增 12 项 DebTests（结构/映射/覆盖/失败/确定性/sha256/MSBuild 接线断言）全绿（合计 133 项）；
-  `tests/Linux.Deb.Integration/Verify.sh` 全绿——`ar t` 三成员、`dpkg-deb -I/-c` 元数据与清单、解包运行、`md5sum -c`、`sha256sum -c`、覆盖/SemVer/失败变体、`Deb.Api.PackageFixture` NuGet 冒烟、免密 `sudo dpkg -i`/`dpkg -r` 真实装卸零残留；
-  `samples/HelloDebApp` 默认 publish 产出 `hello-deb-app_1.0.0-1_amd64.deb` 并被 `dpkg-deb` 识别；
-  `Bundler.LocalPackages.props` 修正 `RestoreSources` 丢失 nuget.org 的既有缺陷（干净宿主还原必需，属顺带修复）。
-
-### LINUX-DEB-2：元数据与桌面集成
-
-- **前置**：LINUX-DEB-1 通过。
-- **目标/交付**：`Depends`/`Recommends`/`Provides`/`Conflicts`/`Replaces`/`Section`/`Priority`/`Maintainer` 覆盖；`.desktop` 生成（决策 5 全字段，`MimeType` 并集含 `x-scheme-handler/`）；hicolor 图标（PNG 尺寸探测、`@2x`）；`ChangelogFile`→changelog.gz、`LicenseFile`→copyright；`BundlerDebFile` 包内绝对路径映射；`DesktopFile` 整文件覆盖旋钮；`BundlerDebInstallRoot`/`BundlerDebBinLink`。
-- **退出**：`desktop-file-validate` 通过断言；图标/桌面文件落入正确 hicolor/applications 路径断言；装后 `dpkg -L` 与 .desktop 内容回读。
-- **状态**：已完成（2026-09-27）。关系字段透传 + Section/Priority 校验、`.desktop` 生成与整文件覆盖、PNG 尺寸探测 + `@2x` hicolor 落位、metainfo、`changelog.gz`/`copyright`、`BundlerDebFile` 绝对路径映射全部实现；`BundlerDeb*` MSBuild 接线 + `@(BundlerDebFile)`（`Destination` 元数据）就位。
-- **证据**：`Bundler.Tests` 新增 4 项（合计 137 全绿）；`Verify.sh` 新增元数据/桌面覆盖/失败变体与 `desktop-file-validate`、装后 `dpkg -L` 回读断言全绿；`lintian` 信息级审计已运行，残余发现登记于 `linux-deb-open-items.md`。
-- **实现注记**：tar 条目 mtime 由 epoch 0 改为固定值 1980-01-01 UTC（`TarWriter.EntryMtime`）——保持字节级确定性的同时规避 lintian `package-contains-ancient-file`。
-
-### LINUX-DEB-3：维护者脚本、systemd 与压缩
-
-- **前置**：LINUX-DEB-2 通过。
-- **目标/交付**：`preinst`/`postinst`/`prerm`/`postrm` 专家旋钮（0755 归档）；`SystemdServiceFile` 托管 unit（含 postinst `daemon-reload` 片段的自动合成与调用方脚本冲突校验）；`Conffiles`；压缩枚举（默认 gzip；xz/zstd 在该阶段按宿主 dpkg 支持矩阵裁决或登记拒绝）；升级/降级语义实测（同包 `dpkg -i` 新版升级、`dpkg -r` conffiles 保留与 `-P` 清除断言）。
-- **退出**：脚本在真实 `dpkg -i` 中执行断言（标记文件）；unit 安装路径断言；重复安装/升级/卸载回归全绿。
-- **状态**：已完成（2026-09-27）。维护者脚本四旋钮（shebang+LF 校验，0755 入 control 归档）；`SystemdServiceFile` 落 `usr/lib/systemd/system/<包名>.service`（0644，装而不启）+ postinst `daemon-reload` 尾段自动合成/合并；`conffiles` 成员（`/etc` 下 `BundlerDebFile` 自动登记 + `Conffiles` 显式列表，均校验载荷存在）；压缩枚举仅 `gzip`，xz/zstd 登记拒绝（netstandard2.0 无托管编码器、zstd 需宿主 dpkg≥1.21.18）。
-- **证据**：`Bundler.Tests` 新增 3 项（合计 140 全绿）；`Verify.sh` 新增 scripts/systemd/upgrade/失败四变体——真实 `dpkg -i/-r` 下 postinst/prerm/postrm 标记断言、conffile `-r` 保留/`-P` 清除、修改后 conffile 升级保留（`--force-confold`）。
-- **实现注记**：`/etc` 下 `BundlerDebFile` 自动登记 conffile 改变了 `dpkg -r` 对这类文件的语义（由删除变为保留）——DEB-2 的零残留断言相应改为 `-r` 保留 + `-P` 清除两段式。
-
-### LINUX-DEB-4：原生 E2E 与支持矩阵
-
-- **前置**：LINUX-DEB-1..3 完成。
-- **目标/交付**：`lintian` 接入 Verify.sh（基线断言+豁免清单显式登记）；`linux-aarch64` 产物结构断言（arm64 运行态装测属外部）；docker `debian:stable`/`ubuntu:latest` 容器真实装卸矩阵；干净宿主复核（构建侧零系统依赖复核）；示例全旋钮收口；矩阵/文档/未验证格如实限缩。
-- **退出**：矩阵实测格子有证据；未测格子进 OI/MT 清单。
-- **状态**：已完成（2026-09-27）。lintian 由信息级升级为硬断言——`tests/Bundler.IntegrationTests/Fixtures/Deb/lintian-exemptions.txt` 登记豁免，新 tag 即失败；自动补发 `changelog.Debian.gz`（打包侧 changelog，固定日期保确定性）+ 扩展描述默认行 + fixture Maintainer 邮箱格式/Section 默认值消解了 DEB-2/3 的全部可修发现；`linux-aarch64` 产物结构与 `Architecture: arm64` 断言（装测仍属 OI-01）；docker `debian:stable`/`ubuntu:latest` 真实装卸+运行+conffile `-r` 保留/`-P` 清除矩阵全绿；构建侧零系统依赖复核（`src/Bundler.Deb` 无任何外部进程调用）。
-- **证据**：`Bundler.Tests` 141 全绿（新增 changelog.Debian.gz/扩展描述用例）；`Verify.sh` 全绿含 arm64 变体与 docker 矩阵；lintian 输出仅剩 5 个已登记豁免 tag。
-
-### LINUX-DEB-5：审计与格式冻结
-
-- **前置**：LINUX-DEB-4 完成。
-- **目标/交付**：上游复核（快照漂移重核审计行）；能力矩阵定稿；OI/MT 收口；冻结基线写入本路线与 `PROJECT_CONTEXT.md`；`docs/roadmap.md` 推进 `LINUX-RPM`。
-- **退出**：`.deb` 冻结基线写入，`LINUX-RPM` 规划轮待启动。
-
-## 5. 验证分层
+## 4. 验证分层
 
 | 验证层 | 内容 |
 | --- | --- |
 | 本机自动 | `dpkg-deb -I/-c` 结构、`sudo dpkg -i`/`dpkg -r`/`dpkg -P` 真实装卸、`dpkg -L` 清单、`lintian`、`desktop-file-validate`、systemd 单元落位、脚本执行标记、容器内装卸（docker debian/ubuntu） |
 | 人工/外部 | GUI 桌面观感（菜单项/图标/文件关联双击）、linux-aarch64 真实宿主、更多发行版矩阵（Debian oldstable、非 systemd 发行版）、apt 仓库工作流、生产签名流程（若后续阶段引入） |
-
-### 2026-10-06 回归修复：样品声明运行时依赖
-
-- **发现**：main `dbbbf91` 联合测试——产物在裸 `debian:stable` 容器装后探针 rc=134（缺 libicu）；`Depends:` 空段，样品未用 `BundlerDebDepends` 旋钮（写入器纯透传，非后端缺陷）。
-- **处置**：`samples/HelloBundlerApp/formats/Deb.props` 默认声明 `libc6;libgcc-s1;libstdc++6;zlib1g;libicu76 | libicu74 | libicu72 | libicu70`（与 AlpineApk `libstdc++;libgcc` 同口径，`HelloBundlerDebDepends` 仍可覆盖）。
-- **实证**：裸 `debian:stable` 容器 `apt-get install ./pkg.deb` 自动解析拉入 `libicu76`，探针 rc=0。

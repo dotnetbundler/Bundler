@@ -32,44 +32,7 @@
 - 输出：`OutputDirectory/<rid>/dmg/<产品名>.dmg`。
 - 卷内容标准形态：`.app` + `/Applications` 拖放符号链接 + 隐藏 `.app` 扩展名；可选窗口背景图、卷图标、EULA。
 
-## 4. 阶段分解
-
-### MAC-DMG-1：最小可用镜像
-
-- **前置**：MAC-APP 已冻结（已完成）。
-- **目标/交付**：`Bundler.MacDmg` 后端（netstandard2.0，`DotNet.Bundler.MacDmg` 包）；`hdiutil create -srcfolder`(UDRW)→resize→挂载→写入 `/Applications` 符号链接+隐藏 `.app` 扩展名→detach（EBUSY 指数退避）→`convert` 只读压缩（默认 `Ulmo`，可配 `Udzo`/`Udbz`）全链；非 macOS 宿主明确拒绝；MSBuild 映射与直接 API；`Bundler.Tests` 新用例 + `tests/MacOS.Dmg.Integration` bash 实测（构建→`hdiutil attach` 挂载→断言卷内容→detach→`hdiutil verify`）+ 示例 `samples/HelloMacDmg`（`BundlerFormats=dmg`，顺带演示 `.app` 中间产物自动产出）。
-- **不做**：Finder 布局、背景/卷图标、EULA、DMG 签名。
-- **退出**：本机真实产出可挂载/可校验 DMG；失败路径无残留卷与伪产物。
-- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64）**：`Bundler.Tests` 90/90 全绿（新增 9 条 dmg 用例：格式/宿主/卷名校验、链序、压缩枚举映射、detach 重试与耗尽清理、convert 失败无产物、MSBuild 映射）；`tests/MacOS.Dmg.Integration/Verify.sh` 全绿（真实产出 `.dmg`→attach→断言 `.app`+`/Applications` 链接→卷内启动→detach→`hdiutil verify` VALID→Udzo 变体 `Format: UDZO`）；`samples/HelloMacDmg` 实测产出 `.app`+`.dmg` 且挂载校验通过。踩坑修正：集成 fixture 在只读卷内写标记文件会崩（改 try/catch）；`unzip -l | grep -q` 在 pipefail 下偶发 SIGPIPE（改先落盘再 grep）。文件名 sanitize 复用 `MacAppBundleBackend.SanitizeFileName`（改 internal + InternalsVisibleTo）。
-
-### MAC-DMG-2：Finder 布局与品牌
-
-- **前置**：MAC-DMG-1 通过。
-- **目标/交付**：`osascript` 窗口布局（尺寸/位置/图标位/图标大小/隐藏扩展名/背景图拷贝+写 `.DS_Store`）；`.VolumeIcon.icns`+`SetFile -c icnC`（SetFile 缺失降级警告）；GUI 会话探测失败→跳过布局+警告；`BundlerDmgSkipWindowLayout` 显式开关。
-- **退出**：本机实测布局写盘与降级分支均走通。
-- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64）**：`Bundler.Tests` 95/95 全绿（新增 5 条：默认布局脚本断言/无 GUI 降级/显式跳过/品牌落盘/缺失背景拒绝）。`Verify.sh` 全绿：品牌文件 `.background/bg.png`+`.VolumeIcon.icns` 落卷断言通过，`.DS_Store` 断言在无 GUI 宿主按设计条件跳过（headless `osascript` 返回 -1728 `Can't get disk` 降级为警告），UDZO/SkipWindowLayout 变体照常验证。布局参数全可配（窗口 200,120+660×400、app=180,170、Applications=480,170、icon 128 默认对齐上游）。踩坑修正两条：(a) `hdiutil resize -size +64m` 相对增量在 `-srcfolder` 产出的大镜像上被报 `Invalid argument`，改走 `resize -limits` 取当前扇区数 +131072（64MiB）后用 `-sectors` 绝对值增长；(b) `attach -nobrowse` 会隐藏卷使 Finder `Can't get disk`，布局运行时去掉该参数。
-
-### MAC-DMG-3：签名与 EULA
-
-- **前置**：MAC-DMG-2 通过。
-- **目标/交付**：DMG 本体 `codesign`（复用 `.app` 签名配置/identity/临时钥匙串，`--timestamp`）；`LicenseFile`→`hdiutil udifrez` SLA 注入；与已签名 `.app` 的组合验证。
-- **退出**：ad-hoc 签名 DMG 本机验签通过；EULA 注入后挂载弹许可（或 `udifrez` 断言）。
-- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64）**：`Bundler.Tests` 99/99 全绿（新增 4 条：SLA 注入+codesign 顺序、签名互斥拒绝、缺失许可拒绝、SLA plist 结构/LPic 字节/RTF 分支/非 ASCII 告警）。`Verify.sh` 全绿：EULA+ad-hoc 变体 `udifderez -xml` 回读 LPic/STR#/TEXT 三类资源、`codesign --verify` 通过、`codesign -dvvv` 报 `Signature=adhoc`。`samples/HelloMacDmg` 补 `BundlerLicenseFile`（默认 `Assets/eula.txt`，`HelloMacDmgLicenseFile=none` 关闭）与 `BundlerMacDmgSign*`（`HelloMacDmgDmgSignIdentity=-` 直接演示 ad-hoc），实测产出签名 DMG。踩坑修正三条（均实测确认）：(a) `udifrez` 镜像必须走 `-image` 旗标，位置参数报 "no image specified"；(b) `udifrez` 只认转换后 UDIF 镜像，UDRW 报 `Function not implemented (78)`，EULA 注入排在 convert 之后；(c) SLA `LPic`/`STR#` 字节格式按上游 `dmg-license` 源码实测订正（`resID−5000` 相对编号 + doubleByte 字段），`udifderez` 回读通过。`MacAppSigning.TemporaryKeychain` 提取为 internal 供 MacDmg 经 InternalsVisibleTo 复用；identity/临时证书互斥与临时证书路径存在性在预检拒绝。真实证书签名与挂载观感弹窗登记 MAC-DMG-OI-01/OI-02。
-
-### MAC-DMG-4：原生 E2E 与支持矩阵
-
-- **前置**：MAC-DMG-1..3 完成。
-- **目标/交付**：macos-x86_64/macos-arm64 产物、quarantine/首次挂载行为、错误路径清理断言、文档与示例收口。
-- **退出**：矩阵实测格子有证据；未测格子限缩声明。
-- **验收记录（2026-09-26，云 macOS VM 26.5.2 arm64）**：`Verify.sh` 全绿扩展——(a) SLA 真实挂载门控：`hdiutil attach` stdin 关闭时被 EULA 取消（"attach canceled"），回 `Y` 即挂载且卷内容齐全；(b) quarantine 传播：对 DMG 写 `com.apple.quarantine` 后挂载，拷出的 `.app` 携带隔离属性（Gatekeeper 分发语义成立）；(c) `macos-x86_64` 变体：产物存在、可挂载、内部载荷 `file` 断言 x86_64 Mach-O（本机无 Rosetta，运行态启动属 MAC-DMG-OI-03）；(d) 失败路径：非法 `BundlerMacDmgCompression` 值 publish 失败、无 `.dmg` 产物、无残留挂载。`Bundler.Tests` 99/99 仍全绿。干净宿主复核：后端必需工具仅 `hdiutil`/`osascript`（品牌/布局可选 `SetFile`，签名可选 `codesign`/`security`），均无 Xcode/CLT 必需依赖；GUI 观感、Intel/Rosetta 宿主、干净宿主首启仍登记外部待验收（MAC-DMG-OI-01/03/04）。
-
-### MAC-DMG-5：审计与格式冻结
-
-- **前置**：MAC-DMG-4 完成。
-- **目标/交付**：上游漂移复核、能力矩阵定稿、冻结基线；`docs/roadmap.md` 推进到 `MAC-PKG`。
-- **验收记录（2026-09-26）**：上游漂移复核——tauri `dev` 头仍为 `447fa9f`（自 MAC-APP-5 无新提交），`.dmg` 侧 `dmg/mod.rs` 与内嵌 `bundle_dmg`（create-dmg 1.2.1 fork，638 行字节一致）在 `7dbfc1f`..`447fa9f` 间无漂移，无新能力缺口；能力矩阵定稿（逐项与 MAC-DMG-1..4 验收证据对齐，无悬空"计划实现"行）；许可/供应链复核——本格式无第三方内嵌工具，全走宿主系统工具（`hdiutil`/`osascript`/`SetFile`/`codesign`/`security`，`SetFile` 可降级），复核点收敛为宿主工具版本下限与凭证边界；外部待办 MAC-DMG-OI-01..04 逐条复核维持登记。**冻结基线**：`MacDmgBundleConfiguration`+`Signing` 配置面与行为契约冻结于 `0.1.0-alpha.45`；冻结测试向量 = `Bundler.Tests` 99/99 + `Verify.sh` 全绿；冻结后仅缺陷修复附回归测试。`docs/roadmap.md` 推进到 `MAC-PKG`。
-
-## 5. 验证分层
+## 4. 验证分层
 
 | 验证层 | 内容 |
 | --- | --- |
