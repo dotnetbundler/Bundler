@@ -8,7 +8,7 @@
 | ID | 最早阶段 | 所需输入/环境 | 完成证据 |
 | --- | --- | --- | --- |
 | APK-OI-01 | APK-1 | ~~Windows/macOS 构建宿主（跨宿主产出矩阵）~~ 已验证 | **已消解**：2026-10-01 联合测试——win/mac/linux 三产方产出 `.apk` 经 alpine-docker 消费侧 `apk add` 真实装卸 + sha256 逐行核对全过；同日 alpine 容器内直接产出 `.apk` 并实装运行通过（musl 生产宿主实测） |
-| APK-OI-02 | APK-4 | ARM64 Alpine 真机或真实 ARM64 宿主 | **部分已验证**：qemu binfmt aarch64 容器实装与 `DockerArm64InstallRunRemoveUnderBinfmt` 自动化断言已过；`arm64-real-hw.sh` 支持 `--apk` 但 `verify-posix.sh` 的 aarch64 腿只传 deb/rpm/appimage——真 ARM64 原生 apk 装卸尚未实证，给该腿补传 `--apk` 或真机跑一次即可消解 |
+| APK-OI-02 | APK-4 | ARM64 Alpine 真机或真实 ARM64 宿主 | **部分已验证**：qemu binfmt aarch64 容器实装与 `DockerArm64InstallRunRemoveUnderBinfmt` 自动化断言已过；真 ARM64 原生 apk 装卸尚未实证——`arm64-real-hw.sh` 直调宿主 `apk`（Ubuntu runner 无此工具），消解路径为 arm64 宿主上原生 docker alpine 装卸腿（如 `ubuntu-26.04-arm` 跑 `DockerArm64InstallRunRemove` 变体）或真 Alpine ARM64 设备 |
 | ~~APK-OI-03~~ | APK-2 | ~~真实升级工作流环境（旧版本已装的系统升级到新版本）~~ 已验证 | **已消解**：2026-10-02 `tests/Alpine.Apk.Integration/Verify.sh` 升级腿——v1 `-r0` `apk add` 后 v2 `-r1` `apk add` 升级，`.pre-upgrade`/`.post-upgrade` 标记断言真实执行通过；v2 `.post-install` 标记未出现（升级路径只跑升级脚本不跑安装脚本），`apk list` 证实装到 `1.0.0-r1` |
 | APK-OI-04 | 可选扩展 | apk 仓库/索引工作流环境（abuild/abuild-index/`apk add --repository` 网络场景） | **已消解**（2026-10 CI）：`tests/Special/linux/apk-index.sh` 在 release-verify ubuntu 腿跑绿——apk 索引生成+本地 repository 结构+`apk add --repository` 真装验证通过 |
 | APK-OI-05 | APK-1 | 其他 Alpine 版本宿主/容器（旧版 alpine、edge） | 各版本 `apk add`/`apk del` 行为差异核对（当前仅 `alpine:latest`） |
