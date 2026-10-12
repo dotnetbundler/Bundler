@@ -14,4 +14,3 @@
 | MAC-PKG-OI-05 | MAC-PKG-4 | ~~GUI 会话 macOS 宿主~~ 已验证 | **已消解**：2026-09-28 GUI 会话——Installer.app 双击安装欢迎/许可/结语页观感截图 |
 
 相关 `.app` 外部事项（Developer ID Application 凭证、`.app` 公证等）登记在 `docs/mac-app-open-items.md`，PKG 继承其结论不重复登记。
-| MAC-PKG-OI-06 | MAC-PKG-4 | —（CI 可自动化） | 升级覆盖安装收据版本递增断言：同 identifier 高版本 `.pkg` 覆盖安装后 `pkgutil --pkg-info` 版本断言（待收编 macOS 腿） |

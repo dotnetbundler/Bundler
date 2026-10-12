@@ -85,7 +85,7 @@
 | mac quarantine 首启 | `.app` 经真实分发渠道（公网/内网下载）产生 quarantine 首启场景 | 下载-首启观察记录 | quarantine xattr 标记落位模拟腿已一次性 CI 跑绿（run 37892544275）；真实下载首启弹窗观察仍挂本表 |
 | NSIS 22 语言母语审校 | 内置 22 语言文案母语/专业审校，阿拉伯语/波斯语重点 RTL 布局，代表性缩放下截图 | 母语审校意见+RTL/DPI 截图 | 机械层已全净（键集逐位一致、零条与英文同）；语言准确性、地区术语、截断只能真人 |
 | MSI 本地化审校+辅助功能 | 支持语言集 UI、缩放和可访问性检查 | 审校与可访问性记录 | 同上需真人 |
-| MSI 对话框交互腿 | Browse 对话框、范围外路径触发 `InvalidDirDlg`、`ADDLOCAL` Feature 选择交互、启动勾选生效、位图显示、缩放/辅助功能、per-machine UAC 交互安装 | 真实交互 UI 环境记录 | 需真实 Windows 桌面交互；许可/InstallDir/Install/Finish 流转已自动化 |
+| MSI 对话框交互腿 | Browse 对话框、范围外路径触发 `InvalidDirDlg`、`ADDLOCAL` Feature 选择交互、启动勾选生效、取消与修复（含缺源修复提示）、位图显示、缩放/辅助功能、per-machine UAC 交互安装 | 真实交互 UI 环境记录 | 需真实 Windows 桌面交互；许可/InstallDir/Install/Finish 流转已自动化 |
 | MSI 默认处理程序与同路径接管 | 在 Windows 默认应用界面选择处理程序、实际打开文件/协议；观察同路径被其他程序接管时 Windows Installer 的原生删除行为 | 默认应用界面截图、唤起结果、接管行为记录 | 原生 MSI 快捷方式不保证保留被替换的同路径链接；需真实交互桌面 |
 | MSI 第三方 WiX 专家模板 | 真实第三方 WiX 项目材料（自定义动作/扩展命名空间/merge module）接入专家模式逐项核对：回滚/所有权语义、第三方二进制许可归属、安装失败行为；常规模式白名单拒绝清单抽验 | 模板/fragment 清单与来源、许可核对记录、构建/安装/失败场景日志 | 需用户提供真实第三方 WiX 项目材料 |
 

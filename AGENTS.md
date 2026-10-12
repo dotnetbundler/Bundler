@@ -78,8 +78,7 @@ git status --short
 | `samples/<name>/*-sample.md` | 该示例的操作说明 | 后端规则、阶段证据 |
 | `tests/README.md` | 测试入口、门禁与 fixture 地图 | 测试结果记录 |
 | `third_party/<tool>/*-provenance.md` | 第三方来源、许可、哈希核查 | 实现规则 |
-| `docs/special-acceptance.md` | 只能人工/外部付费完成的验收登记 | 可自动化的内容、格式实现细节 |
-| `docs/special-acceptance.md` | 只能用户手动处理的特殊验收项登记 | 可自动化腿、脚本实现 |
+| `docs/special-acceptance.md` | 只能人工/外部付费完成的特殊验收登记 | 可自动化腿、格式实现细节 |
 
 找不到该放哪的内容时，先停下来想它属于"规则、计划、当前事实、历史、某格式、用户文档、第三方"中的哪一类，再放进对应文件；都不合适时向用户说明再定。
 
