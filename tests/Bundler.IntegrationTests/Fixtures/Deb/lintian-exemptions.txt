@@ -3,3 +3,8 @@ undeclared-elf-prerequisites
 no-manual-page
 changelog-not-compressed-with-max-compression
 initial-upload-closes-no-bugs
+# metainfo 落盘名随包名（<package>.metainfo.xml，FreedesktopFiles 固定契约），上游
+# validate-tree 要求文件名==组件 id——rDNS id 与包名落盘名只能满足其一，除非包名本身
+# 取 rDNS（合法但非惯例）。属已记录契约边界而非内容错误；metainfo 内容本体保持
+# appstreamcli validate --pedantic 零提示（fixture 数据质量线）。
+appstream-metadata-validation-failed
