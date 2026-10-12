@@ -284,11 +284,15 @@
       <_BundlerEffectiveInput Condition="'$(_BundlerEffectiveInput)' == ''">$(_BundlerPublishOutDir)</_BundlerEffectiveInput>
       <_BundlerEffectiveTarget Condition="'$(_BundlerEffectiveTarget)' == ''">$(_BundlerCanonicalTarget)</_BundlerEffectiveTarget>
       <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
+      <!-- Version 未设时 $(Version) 亦为空，再兜 0.1.0 并出警告（对齐 CLI 推断链）。 -->
+      <_BundlerVersionPlaceholder Condition="'$(BundlerVersion)' == '' and '$(Version)' == ''">true</_BundlerVersionPlaceholder>
       <BundlerVersion Condition="'$(BundlerVersion)' == ''">$(Version)</BundlerVersion>
+      <BundlerVersion Condition="'$(BundlerVersion)' == ''">0.1.0</BundlerVersion>
       <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == '' and ($([System.String]::Copy('$(_BundlerCanonicalTarget)').StartsWith('macos-')) == 'true' or $([System.String]::Copy('$(_BundlerCanonicalTarget)').StartsWith('linux-')) == 'true' or '$(_BundlerCanonicalTarget)' == 'macos-universal' or '$(BundlerUniversalTargets)' != '')">$(TargetName)</BundlerMainExecutable>
       <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''">$(TargetName).exe</BundlerMainExecutable>
       <BundlerNsisShortcutStartMenuFolder Condition="'$(BundlerNsisShortcutStartMenuFolder)' == ''">$(BundlerProductName)</BundlerNsisShortcutStartMenuFolder>
     </PropertyGroup>
+    <Warning Condition="'$(_BundlerVersionPlaceholder)' == 'true'" Text="Neither BundlerVersion nor the project Version is set; using placeholder '0.1.0'. Set BundlerVersion explicitly for release builds." />
     <Message Importance="high" Text="Bundling $(BundlerProductName) for $(_BundlerEffectiveTarget): $(BundlerFormats)..." />
     <DotNet.Bundler.MSBuild.BundleDesktopApplication
       ProductName="$(BundlerProductName)"

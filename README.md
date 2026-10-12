@@ -61,8 +61,8 @@ bundler bundle --input-dir <publish目录> --target linux-x86_64 --formats zip,d
 # --strict 关闭推断：缺什么报什么，适合发布脚本
 # 多目录 universal 合并：--input-dir 可重复，≥2 个目录先合并再打包
 bundler bundle --input-dir bin/osx-x64 --input-dir bin/osx-arm64 --target macos-universal --formats zip
-# 生成最小 bundler.json 模板；cwd 里的 bundler.json 自动生效
-bundler init && bundler bundle
+# 生成最小 bundler.json 模板（身份字段占位，targets 注释示例）；cwd 里的 bundler.json 自动生效
+bundler init && bundler bundle --input-dir <publish目录>
 ```
 
 也可用 `bundler.json` 承载配置（自动发现于当前目录；CLI 参数覆盖文件值，`--<fmt>.<knob>=` 透传格式旋钮，`--no-config` 跳过自动发现），schema 与 MSBuild `Bundler*` 属性一一对应，映射表与退出码/`--json` 契约见 [`docs/cli-roadmap.md`](docs/cli-roadmap.md)。

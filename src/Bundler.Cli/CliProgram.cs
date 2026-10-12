@@ -122,20 +122,22 @@ public static class CliProgram
 
     private const string InitTemplate = """
         {
-          // Every value here is overridable on the command line (bundler --help).
-          // Anything left unset is inferred: target = this host, formats = the
-          // usual set for the target OS, productName = input directory name,
-          // version = 0.1.0, identifier = dev.bundler.<name>.
+          // 模板开箱即可用：以下每个值都可被命令行覆盖（bundler --help）。
+          // 未写的值走推断：target = 当前宿主、formats = 目标 OS 常用集、
+          // productName = 输入目录名、version = 0.1.0、identifier = dev.bundler.<名>。
           "productName": "MyApp",
           "identifier": "com.example.myapp",
-          "version": "1.0.0",
-          "targets": [
-            {
-              "target": "linux-x86_64",
-              "inputDirectory": "publish/linux-x64",
-              "formats": ["deb", "zip"]
-            }
-          ]
+          "version": "1.0.0"
+
+          // 多目标示例：取消注释并按需编辑；不写 targets 时由
+          // `bundler bundle --input-dir <目录>` 即时生成单个目标。
+          // "targets": [
+          //   {
+          //     "target": "linux-x86_64",
+          //     "inputDirectory": "publish/linux-x64",
+          //     "formats": ["deb", "zip"]
+          //   }
+          // ]
         }
         """;
 

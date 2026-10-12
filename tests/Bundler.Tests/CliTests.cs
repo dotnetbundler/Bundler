@@ -852,7 +852,7 @@ public static class CliTests
                     UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             }
             var (code, _, err) = Run("bundle", "--input-dir", input, "--output-dir", output);
-            Assert.True(code == 0, $"bundle with only --input-dir must succeed: {err}");
+            Assert.Equal(0, code); // err 上下文由后续 Contains 断言给出
             Assert.Contains("target=linux-x86_64", err);
             Assert.Contains("formats=deb,zip", err);
             Assert.Contains("productName=coolapp", err);
@@ -901,6 +901,20 @@ public static class CliTests
             var (code2, _, err2) = Run("init");
             Assert.Equal(2, code2);
             Assert.Contains("already exists", err2);
+
+            // 模板开箱即可用：不写 targets，init 后直接 bundle --input-dir 即可跑通
+            var input = Path.Combine(dir, "publish");
+            Directory.CreateDirectory(input);
+            var exe = Path.Combine(input, "myapp");
+            File.WriteAllText(exe, "x");
+            if (OperatingSystem.IsLinux())
+            {
+                File.SetUnixFileMode(exe,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+            var (code3, _, err3) = Run("bundle", "--input-dir", input, "--formats", "zip");
+            Assert.Equal(0, code3);
+            Assert.DoesNotContain("At least one", err3);
         }
         finally
         {
@@ -926,11 +940,11 @@ public static class CliTests
         {
             Directory.SetCurrentDirectory(root);
             var (code, _, err) = Run("validate");
-            Assert.True(code == 0, $"validate in dir with bundler.json must pass: {err}");
+            Assert.Equal(0, code);
             Assert.Contains("using configuration file", err);
             // --no-config 跳过自动发现——此时连输入目录都没有，报错而非静默通过
             var (code2, _, err2) = Run("validate", "--no-config");
-            Assert.True(code2 != 0, "--no-config must ignore ./bundler.json");
+            Assert.NotEqual(0, code2);
             Assert.DoesNotContain("using configuration file", err2);
         }
         finally
@@ -971,6 +985,96 @@ public static class CliTests
             var (code, _, err) = Run("validate", "--config", conflict);
             Assert.Equal(2, code);
             Assert.Contains("aliases", err);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    static void MultiTargetInferenceLabelsOnlyFirstAsUniversal()
+    {
+        // ≥2 个 --input-dir 走 universal 合并且只进 targets[0]；
+        // 其余目标仍按宿主推导——断言两条推断标签各归其位（review flag）。
+        var root = Path.Combine(Path.GetTempPath(), "bundler-cli-multitarget-" + Guid.NewGuid().ToString("N"));
+        var dirA = Path.Combine(root, "osx-x64");
+        var dirB = Path.Combine(root, "osx-arm64");
+        var dirC = Path.Combine(root, "linux-x64");
+        Directory.CreateDirectory(dirA);
+        Directory.CreateDirectory(dirB);
+        Directory.CreateDirectory(dirC);
+        var config = Path.Combine(root, "bundler.json");
+        File.WriteAllText(config, $$"""
+            { "productName": "MultiApp", "identifier": "dev.example.multi", "version": "1.0.0",
+              "targets": [
+                { "inputDirectory": "{{dirA.Replace("\\", "\\\\")}}", "formats": ["zip"] },
+                { "inputDirectory": "{{dirC.Replace("\\", "\\\\")}}", "formats": ["deb"] }
+              ] }
+            """);
+        try
+        {
+            var resolved = CliConfig.Resolve(CliArguments.Parse(
+                ["plan", "--config", config, "--input-dir", dirA, "--input-dir", dirB]));
+            Assert.Equal("macos-universal", resolved.Bundle.Targets[0].Target.ToString());
+            Assert.NotEqual("macos-universal", resolved.Bundle.Targets[1].Target.ToString());
+            Assert.True(BundleTarget.TryParse(resolved.Bundle.Targets[1].Target.ToString(), out _),
+                "second target must get a real host-derived target, not the universal marker");
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    static async Task MsBuildDefaultsInferFormatsIdentifierAndVersion()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("linux host only (asserts deb derivation)");
+        }
+        var repo = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        var taskDll = Path.Combine(repo, "src/Bundler.MSBuild/bin/Release/netstandard2.0/DotNet.Bundler.MSBuild.dll");
+        if (!File.Exists(taskDll))
+        {
+            Assert.Skip("Bundler.MSBuild not built: " + taskDll);
+        }
+        var root = Path.Combine(Path.GetTempPath(), "bundler-msbuild-defaults-" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "input");
+        var output = Path.Combine(root, "out");
+        Directory.CreateDirectory(input);
+        File.WriteAllText(Path.Combine(input, "TestApp"), "x");
+        var project = Path.Combine(root, "proj.csproj");
+        File.WriteAllText(project, $$"""
+            <Project>
+              <PropertyGroup>
+                <AssemblyName>TestApp</AssemblyName>
+                <TargetName>TestApp</TargetName>
+                <_BundlerTaskAssembly>{{taskDll}}</_BundlerTaskAssembly>
+              </PropertyGroup>
+              <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.props")}}" />
+              <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.targets")}}" />
+            </Project>
+            """);
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("dotnet",
+                $"msbuild \"{project}\" -t:BundlerBundle -p:BundlerInputDir=\"{input}\" " +
+                $"-p:BundlerTarget=linux-x86_64 -p:BundlerOutputPath=\"{output}\"")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            using var proc = System.Diagnostics.Process.Start(psi)!;
+            var log = await proc.StandardOutput.ReadToEndAsync() + proc.StandardError.ReadToEndAsync();
+            await proc.WaitForExitAsync();
+            Assert.Equal(0, proc.ExitCode);
+            Assert.Contains("dev.bundler.testapp", log); // identifier 合成警告
+            Assert.Contains("placeholder '0.1.0'", log); // Version 空缺兜底警告
+            Assert.Contains(": deb", log); // formats 按 linux 目标推导
+            Assert.True(Directory.EnumerateFiles(output, "*.deb").Any(),
+                "expected a .deb in output: " + string.Join(",", Directory.EnumerateFiles(output)));
         }
         finally
         {
