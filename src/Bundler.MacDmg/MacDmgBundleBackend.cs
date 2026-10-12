@@ -511,12 +511,22 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 || (result is not null
                     && result.StandardError.IndexOf("No such file or directory", StringComparison.Ordinal) >= 0))
             {
-                return;
+                // detach 返回成功只代表卸载动作已发出——diskimages-helper 簿记
+                // 有滞后，hdiutil info 可能仍短暂列出挂载点；确认消失才算完成，
+                // 否则紧随其后的 convert / hdiutil info 断言会撞上残留簿记。
+                var info = await MacDmgProcessRunner.TryRunAsync(
+                    "hdiutil", ["info"], workingDirectory, cancellationToken);
+                if (info is not { ExitCode: 0 }
+                    || info.StandardOutput.IndexOf(mountDirectory, StringComparison.Ordinal) < 0)
+                {
+                    return;
+                }
+                result = null;
             }
             if (attempt >= DetachMaxAttempts)
             {
                 var detail = result is null
-                    ? "hdiutil could not be started"
+                    ? "mount point still listed by 'hdiutil info'"
                     : $"exit {result.ExitCode}: {result.StandardError}";
                 throw new InvalidOperationException(
                     $"hdiutil detach failed after {DetachMaxAttempts} attempts ({detail}).");
