@@ -1177,6 +1177,16 @@ public static class CliTests
     }
 
     [Fact]
+    static void IconsAcceptSemicolonSeparatedLists()
+    {
+        // 路径列表同样收 MSBuild 式 ';'——--icons=a.png;b.png 不当单路径。
+        var resolved = CliConfig.Resolve(CliArguments.Parse(
+            ["plan", "--input-dir", "/tmp/x", "--formats", "zip",
+             "--icons", "/tmp/a.png;/tmp/b.png"]));
+        Assert.Equal(2, resolved.Bundle.Icons.Count);
+    }
+
+    [Fact]
     static void NoExecutableCandidatesEmitsFallbackNote()
     {
         // 目录内零可执行候选时推断层先 note 预警——不等到 validator 才爆炸。

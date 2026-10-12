@@ -457,9 +457,10 @@ internal static class CliConfig
                 // fall through: treat as a plain string
             }
         }
-        if (value.Contains(','))
+        if (value.Contains(',') || value.Contains(';'))
         {
-            return new JsonArray(value.Split(',', StringSplitOptions.TrimEntries)
+            // 分号同收——MSBuild 列表惯例是 ';'（文件名含 ';' 与 MSBuild 同样不可表达）。
+            return new JsonArray(value.Split([',', ';'], StringSplitOptions.TrimEntries)
                 .Select<string, JsonNode?>(entry => entry).ToArray());
         }
         return JsonValue.Create(value);
