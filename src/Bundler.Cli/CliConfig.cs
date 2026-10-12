@@ -47,6 +47,9 @@ internal sealed class CliResolvedConfiguration
     public AppImageBundleConfiguration? AppImage { get; init; }
 #endif
     public ArchiveBundleConfiguration? Archive { get; init; }
+
+    /// <summary>Values the inference chain filled in; echoed to stderr so nothing is silent.</summary>
+    public IReadOnlyList<string> InferredNotes { get; init; } = [];
 }
 
 internal static class CliConfig
@@ -77,8 +80,13 @@ internal static class CliConfig
     public static CliResolvedConfiguration Resolve(CliArguments parsed)
     {
         var configPath = parsed.OptionalOption("config");
+        if (parsed.NoConfig && configPath is not null)
+        {
+            throw new CliUsageException("--no-config cannot be combined with --config.");
+        }
         JsonObject document;
         string baseDirectory;
+        var inferred = new List<string>();
         if (configPath is not null)
         {
             var fullPath = Path.GetFullPath(configPath);
@@ -90,24 +98,50 @@ internal static class CliConfig
                 ?? throw new CliUsageException($"Configuration file '{fullPath}' must be a JSON object.");
             baseDirectory = Path.GetDirectoryName(fullPath)!;
         }
+        else if (!parsed.NoConfig && File.Exists(DiscoveryFileName))
+        {
+            // cwd 里的 bundler.json 自动生效——显式 --config 覆盖、--no-config 关闭。
+            var fullPath = Path.GetFullPath(DiscoveryFileName);
+            document = JsonNode.Parse(File.ReadAllText(fullPath), documentOptions: DocumentOptions) as JsonObject
+                ?? throw new CliUsageException($"Configuration file '{fullPath}' must be a JSON object.");
+            baseDirectory = Path.GetDirectoryName(fullPath)!;
+            inferred.Add($"using configuration file '{fullPath}' (pass --no-config to ignore)");
+        }
         else
         {
             document = new JsonObject();
             baseDirectory = Directory.GetCurrentDirectory();
         }
 
+        // packageVersion 是 version 的别名——与 CLI --package-version 同名，词汇归一。
+        // 先翻译再叠 CLI，CLI 的 --package-version 才能正常覆盖文件值。
+        if (document["packageVersion"] is not null)
+        {
+            if (document["version"] is not null)
+            {
+                throw new CliUsageException(
+                    "'packageVersion' and 'version' are aliases for the same field; keep only one.");
+            }
+            var aliasValue = document["packageVersion"];
+            document.Remove("packageVersion"); // 先摘离父节点才能复挂
+            document["version"] = aliasValue;
+        }
+
         ApplyCliOverrides(document, parsed);
         ResolveRelativePaths(document, baseDirectory);
         EnforceSchema(document);
-        return Materialize(document, parsed, baseDirectory);
+        return Materialize(document, parsed, baseDirectory, inferred);
     }
+
+    internal const string DiscoveryFileName = "bundler.json";
 
     // Schema is fixed: unknown keys (typos) are rejected rather than ignored.
     private static readonly HashSet<string> TopLevelFields = new(StringComparer.Ordinal)
     {
-        "productName", "identifier", "version", "publisher", "description", "homepage",
-        "copyright", "licenseFile", "outputDirectory", "outputLayout", "icons", "resources",
-        "fileAssociations", "urlProtocols", "targets"
+        "productName", "identifier", "version", "packageVersion", "publisher",
+        "description", "homepage", "copyright", "licenseFile", "outputDirectory",
+        "outputLayout", "icons", "resources", "fileAssociations", "urlProtocols",
+        "targets"
     };
 
     // 全平台格式分节名（不分宿主）：写错宿主的节给"本宿主不支持"而不是 Unknown-key。
@@ -624,7 +658,8 @@ internal static class CliConfig
     private static CliResolvedConfiguration Materialize(
         JsonObject document,
         CliArguments parsed,
-        string baseDirectory)
+        string baseDirectory,
+        List<string> inferred)
     {
         var targetsNode = document["targets"] as JsonArray ?? new JsonArray();
         // 合成数组必须挂回文档——共享反序列化只看 document["targets"]。
@@ -658,10 +693,71 @@ internal static class CliConfig
                 CliProgram.ParseFormats(formats, TargetText(target, parsed))
                     .Select(f => (JsonNode?)JsonValue.Create(FormatName(f))).ToArray());
         }
+
+        // 推断链：缺省值按宿主与输入目录内容补齐并逐条记 notes 明示；
+        // --strict 关闭推断，缺什么报什么。显式值恒胜——只填 null。
+        var infer = !parsed.Strict;
+        foreach (var node in targetsNode.OfType<JsonObject>())
+        {
+            if (node["target"] is null)
+            {
+                if (!infer)
+                {
+                    throw new CliUsageException(
+                        "Target is required: pass --target or set targets[].target " +
+                        "(--strict disables inference).");
+                }
+                // ≥2 个 --input-dir 走 universal 合并且只进 targets[0]——
+                // 缺省目标只对第一目标标 universal（review BUG-2/二轮）；
+                // 其余目标按宿主推导，不误标。
+                node["target"] = parsed.InputDirectories.Count >= 2 && ReferenceEquals(node, target)
+                    ? "macos-universal"
+                    : HostTarget();
+                inferred.Add(parsed.InputDirectories.Count >= 2 && ReferenceEquals(node, target)
+                    ? $"target={node["target"]} (universal merge)"
+                    : $"target={node["target"]} (host default)");
+            }
+            if (node["formats"] is null && infer)
+            {
+                var chosen = FormatsForTarget(TargetText(node, parsed));
+                node["formats"] = new JsonArray(
+                    chosen.Select(f => (JsonNode?)JsonValue.Create(f)).ToArray());
+                inferred.Add($"formats={string.Join(",", chosen)} (default for {TargetText(node, parsed)})");
+            }
+            if (infer)
+            {
+                InferMainExecutable(node, baseDirectory, inferred);
+            }
+        }
         if (target["formats"] is null)
         {
             throw new CliUsageException(
                 "Formats are required: pass --formats or set targets[].formats in bundler.json.");
+        }
+
+        if (document["productName"] is null && infer)
+        {
+            var dir = Text(target, "inputDirectory");
+            if (dir is not null)
+            {
+                document["productName"] = Path.GetFileName(
+                    Path.GetFullPath(dir, baseDirectory).TrimEnd(
+                        Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                inferred.Add($"productName={document["productName"]} (input directory name)");
+            }
+        }
+        if (document["version"] is null && infer)
+        {
+            // 纯数字三段式：Apple 元数据只收 [0-9.]+（AppleVersionPattern），
+            // 带 -dev 后缀会在 dmg/app/pkg 腿构建期炸——推断值必须处处可产。
+            document["version"] = "0.1.0";
+            inferred.Add("version=0.1.0 (placeholder; pass --package-version for release)");
+        }
+        if (document["identifier"] is null && infer)
+        {
+            var product = document["productName"]?.GetValue<string>() ?? "app";
+            document["identifier"] = "dev.bundler." + NormalizeIdentifierSegment(product);
+            inferred.Add($"identifier={document["identifier"]} (synthesized; pass --identifier for release)");
         }
 
         // targets[].formats 归一成枚举名数组再走共享反序列化：ParseFormats 顺带
@@ -692,6 +788,7 @@ internal static class CliConfig
         return new CliResolvedConfiguration
         {
             Bundle = bundle,
+            InferredNotes = inferred,
             Nsis = Section<NsisBundleConfiguration>(document, "nsis"),
 #if BUNDLER_HOST_WINDOWS
             Msi = Section<WixBundleConfiguration>(document, "msi"),
@@ -714,7 +811,127 @@ internal static class CliConfig
     private static string TargetText(JsonObject target, CliArguments parsed) =>
         Text(target, "target")
         ?? (parsed.Options.TryGetValue("target", out var optionTarget) ? optionTarget : null)
-        ?? "linux-x86_64";
+        ?? HostTarget();
+
+    // 推断链后段：目标缺省=宿主映射；格式缺省=目标 OS 推荐集。
+    private static string HostTarget()
+    {
+        var arch = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture switch
+        {
+            System.Runtime.InteropServices.Architecture.X64 => "x86_64",
+            System.Runtime.InteropServices.Architecture.Arm64 => "aarch64",
+            System.Runtime.InteropServices.Architecture.X86 => "i686",
+            System.Runtime.InteropServices.Architecture.Arm => "armv7hf",
+            _ => "x86_64"
+        };
+        if (OperatingSystem.IsWindows())
+        {
+            return "windows-" + arch;
+        }
+        if (OperatingSystem.IsMacOS())
+        {
+            return "macos-" + arch;
+        }
+        return "linux-" + arch;
+    }
+
+    private static string[] FormatsForTarget(string targetText) =>
+        BundleTarget.TryParse(targetText, out var target) && target is not null
+            ? target.OperatingSystem switch
+            {
+                TargetOperatingSystem.Windows => ["nsis"],
+                TargetOperatingSystem.MacOS => ["dmg"],
+                TargetOperatingSystem.Linux => target.IsMusl ? ["alpineapk"] : ["deb", "zip"],
+                _ => ["zip"]
+            }
+            : ["zip"];
+
+    // mainExecutable 缺省推导：输入目录顶层唯一可执行文件时取用；多个候选不猜，
+    // 记进 notes 提示显式传参。windows 目标按 .exe 判，其余按 POSIX 执行位判。
+    private static void InferMainExecutable(
+        JsonObject target, string baseDirectory, List<string> inferred)
+    {
+        if (Text(target, "mainExecutable") is not null)
+        {
+            return;
+        }
+        var dir = Text(target, "inputDirectory");
+        if (dir is null)
+        {
+            return;
+        }
+        var fullDir = Path.GetFullPath(dir, baseDirectory);
+        if (!Directory.Exists(fullDir))
+        {
+            return;
+        }
+        // 调用点在同一迭代中已先填 target——这里读 node 拿到的总是有效值。
+        var forWindows = BundleTarget.TryParse(Text(target, "target"), out var t) &&
+            t?.OperatingSystem == TargetOperatingSystem.Windows;
+        var candidates = Directory.EnumerateFiles(fullDir)
+            .Select(path => new { Name = Path.GetFileName(path), Path = path })
+            .Where(entry => IsExecutableCandidate(entry.Path, entry.Name!, forWindows))
+            .Select(entry => entry.Name!)
+            .ToArray();
+        if (candidates.Length == 1)
+        {
+            target["mainExecutable"] = candidates[0];
+            inferred.Add($"mainExecutable={candidates[0]} (only executable in input directory)");
+        }
+        else if (candidates.Length > 1)
+        {
+            inferred.Add($"mainExecutable not inferred: {candidates.Length} executables " +
+                $"({string.Join(", ", candidates)}) — pass --main-executable");
+        }
+    }
+
+    private static bool IsExecutableCandidate(string path, string name, bool forWindows)
+    {
+        if (forWindows)
+        {
+            return name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+        }
+        if (OperatingSystem.IsWindows())
+        {
+            // POSIX 执行位在 Windows 宿主无从判——不猜，回落 productName 惯例。
+            return false;
+        }
+        try
+        {
+            return (File.GetUnixFileMode(path) & (UnixFileMode.UserExecute |
+                UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static string NormalizeIdentifierSegment(string name)
+    {
+        var builder = new System.Text.StringBuilder(name.Length);
+        var lastDash = true; // 首字符不允许 '-'——当作前导连续态跳过
+        foreach (var ch in name.ToLowerInvariant())
+        {
+            var valid = ch is >= 'a' and <= 'z' || ch is >= '0' and <= '9';
+            if (valid)
+            {
+                builder.Append(ch);
+                lastDash = false;
+            }
+            else if (!lastDash)
+            {
+                builder.Append('-');
+                lastDash = true;
+            }
+        }
+        var segment = builder.ToString().TrimEnd('-');
+        return segment.Length == 0 ? "app" : segment;
+    }
 
     private static string? Text(JsonObject node, string field) =>
         node[field] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;

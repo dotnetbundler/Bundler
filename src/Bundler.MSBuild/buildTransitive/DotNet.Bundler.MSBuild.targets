@@ -115,13 +115,27 @@
     <Warning Condition="'$(_BundlerTargetStale)' == 'true'"
              Text="BundlerTarget was derived from a stale RuntimeIdentifier and was refreshed to '@(_BundlerTargetFromRid)'. Pass -p:BundlerTarget=&lt;target&gt; to pin it explicitly." />
     <PropertyGroup>
-      <BundlerFormats Condition="'$(BundlerFormats)' == ''">nsis</BundlerFormats>
+      <!-- formats 缺省按目标 OS 推导（显式 BundlerFormats 恒胜）：universal 视同 macos，
+           未知 OS 兜底 deb——deb 是纯托管后端任何宿主可产 -->
+      <BundlerFormats Condition="'$(BundlerFormats)' == '' and '$(_BundlerTargetOs)' == 'windows'">nsis</BundlerFormats>
+      <BundlerFormats Condition="'$(BundlerFormats)' == '' and ('$(_BundlerTargetOs)' == 'macos' or '$(BundlerUniversalTargets)' != '')">dmg</BundlerFormats>
+      <BundlerFormats Condition="'$(BundlerFormats)' == '' and '$(_BundlerTargetOs)' == 'linux-musl'">alpineapk</BundlerFormats>
+      <BundlerFormats Condition="'$(BundlerFormats)' == ''">deb</BundlerFormats>
       <!-- 尾分隔符不能留——内层子进程 `-o "...\windows-x86_64\"` 的闭引号会被
            反斜杠转义，后续 -p: 参数全并迸输出目录名（win 腿 MSB3073 实证） -->
       <_BundlerPublishOutDir>$(MSBuildProjectExtensionsPath)BundlerPublish\$(_BundlerCanonicalTarget)</_BundlerPublishOutDir>
+      <!-- identifier 缺省合成 dev.bundler.<AssemblyName 规范化>：引包即用，
+           显式 BundlerIdentifier 恒胜；正式分发仍应显式指定 -->
+      <_BundlerIdentifierLower Condition="'$(BundlerIdentifier)' == ''">$(AssemblyName.ToLowerInvariant())</_BundlerIdentifierLower>
+      <_BundlerIdentifierSegment Condition="'$(BundlerIdentifier)' == ''">$([System.Text.RegularExpressions.Regex]::Replace('$(_BundlerIdentifierLower)', '[^a-z0-9]+', '-'))</_BundlerIdentifierSegment>
+      <_BundlerIdentifierSegment Condition="'$(BundlerIdentifier)' == ''">$(_BundlerIdentifierSegment.Trim('-'))</_BundlerIdentifierSegment>
+      <_BundlerIdentifierSegment Condition="'$(BundlerIdentifier)' == '' and '$(_BundlerIdentifierSegment)' == ''">app</_BundlerIdentifierSegment>
     </PropertyGroup>
-    <Error Condition="'$(BundlerIdentifier)' == ''"
-           Text="BundlerIdentifier is required to bundle." />
+    <Warning Condition="'$(BundlerIdentifier)' == '' and '$(_BundlerIdentifierSegment)' != ''"
+             Text="BundlerIdentifier was not set; using synthesized 'dev.bundler.$(_BundlerIdentifierSegment)'. Set BundlerIdentifier explicitly for release builds." />
+    <PropertyGroup>
+      <BundlerIdentifier Condition="'$(BundlerIdentifier)' == ''">dev.bundler.$(_BundlerIdentifierSegment)</BundlerIdentifier>
+    </PropertyGroup>
     <Error Condition="'$(BundlerTarget)' == '' and '$(BundlerUniversalTargets)' == ''"
            Text="BundlerTarget is required to bundle (pass -p:BundlerTarget=&lt;target&gt;, or -p:RuntimeIdentifier=&lt;rid&gt; for table derivation)." />
     <Error Condition="'$(BundlerInputDir)' != '' and '$(BundlerUniversalTargets)' != ''"
@@ -270,11 +284,15 @@
       <_BundlerEffectiveInput Condition="'$(_BundlerEffectiveInput)' == ''">$(_BundlerPublishOutDir)</_BundlerEffectiveInput>
       <_BundlerEffectiveTarget Condition="'$(_BundlerEffectiveTarget)' == ''">$(_BundlerCanonicalTarget)</_BundlerEffectiveTarget>
       <BundlerProductName Condition="'$(BundlerProductName)' == ''">$(AssemblyName)</BundlerProductName>
+      <!-- Version 未设时 $(Version) 亦为空，再兜 0.1.0 并出警告（对齐 CLI 推断链）。 -->
+      <_BundlerVersionPlaceholder Condition="'$(BundlerVersion)' == '' and '$(Version)' == ''">true</_BundlerVersionPlaceholder>
       <BundlerVersion Condition="'$(BundlerVersion)' == ''">$(Version)</BundlerVersion>
+      <BundlerVersion Condition="'$(BundlerVersion)' == ''">0.1.0</BundlerVersion>
       <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == '' and ($([System.String]::Copy('$(_BundlerCanonicalTarget)').StartsWith('macos-')) == 'true' or $([System.String]::Copy('$(_BundlerCanonicalTarget)').StartsWith('linux-')) == 'true' or '$(_BundlerCanonicalTarget)' == 'macos-universal' or '$(BundlerUniversalTargets)' != '')">$(TargetName)</BundlerMainExecutable>
       <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''">$(TargetName).exe</BundlerMainExecutable>
       <BundlerNsisShortcutStartMenuFolder Condition="'$(BundlerNsisShortcutStartMenuFolder)' == ''">$(BundlerProductName)</BundlerNsisShortcutStartMenuFolder>
     </PropertyGroup>
+    <Warning Condition="'$(_BundlerVersionPlaceholder)' == 'true'" Text="Neither BundlerVersion nor the project Version is set; using placeholder '0.1.0'. Set BundlerVersion explicitly for release builds." />
     <Message Importance="high" Text="Bundling $(BundlerProductName) for $(_BundlerEffectiveTarget): $(BundlerFormats)..." />
     <DotNet.Bundler.MSBuild.BundleDesktopApplication
       ProductName="$(BundlerProductName)"

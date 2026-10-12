@@ -69,6 +69,11 @@ public static class CliProgram
             return 0;
         }
 
+        if (parsed.Command is "init")
+        {
+            return RunInit(stdout, stderr);
+        }
+
         if (parsed.Command is not ("validate" or "plan" or "bundle"))
         {
             throw new CliUsageException($"Unknown command '{parsed.Command}'.");
@@ -76,6 +81,10 @@ public static class CliProgram
 
         var logger = new CliBundleLogger(stderr, parsed.Quiet, parsed.Verbose);
         var resolved = CliConfig.Resolve(parsed);
+        foreach (var note in resolved.InferredNotes)
+        {
+            logger.Log(BundleLogLevel.Information, note);
+        }
         var mergedDirectory = (string?)null;
         try
         {
@@ -96,6 +105,41 @@ public static class CliProgram
             }
         }
     }
+
+    // bundler init——cwd 生成最小 bundler.json；已存在则拒覆盖（RC=2）。
+    private static int RunInit(TextWriter stdout, TextWriter stderr)
+    {
+        var path = Path.Combine(Directory.GetCurrentDirectory(), CliConfig.DiscoveryFileName);
+        if (File.Exists(path))
+        {
+            stderr.WriteLine($"bundler: {CliConfig.DiscoveryFileName} already exists in the current directory.");
+            return 2;
+        }
+        File.WriteAllText(path, InitTemplate);
+        stdout.WriteLine($"bundler: wrote {path}");
+        return 0;
+    }
+
+    private const string InitTemplate = """
+        {
+          // 模板开箱即可用：以下每个值都可被命令行覆盖（bundler --help）。
+          // 未写的值走推断：target = 当前宿主、formats = 目标 OS 常用集、
+          // productName = 输入目录名、version = 0.1.0、identifier = dev.bundler.<名>。
+          "productName": "MyApp",
+          "identifier": "com.example.myapp",
+          "version": "1.0.0"
+
+          // 多目标示例：取消注释以下各行（含首个逗号行）并按需编辑；
+          // 不写 targets 时由 `bundler bundle --input-dir <目录>` 即时生成单个目标。
+          // , "targets": [
+          //   {
+          //     "target": "linux-x86_64",
+          //     "inputDirectory": "publish/linux-x64",
+          //     "formats": ["deb", "zip"]
+          //   }
+          // ]
+        }
+        """;
 
     // Repeated --input-dir feeds one target: a single value wins as before; two or more
     // directories are universal-merged (fat Mach-O + dedup rules) into a temp payload dir.
@@ -421,12 +465,18 @@ public static class CliProgram
     private static void PrintUsage(TextWriter writer)
     {
         writer.WriteLine("Usage:");
-        writer.WriteLine("  bundler validate|plan|bundle --input-dir <dir> [--input-dir <dir>...] --target <target> --formats <csv>");
+        writer.WriteLine("  bundler validate|plan|bundle --input-dir <dir> [options]");
         writer.WriteLine("      (--input-dir repeated merges the dirs into a universal payload, e.g. macos-x86_64 + macos-aarch64;");
         writer.WriteLine("       --reference-dir <dir> gives the RID-less publish that supplies managed payload files)");
-        writer.WriteLine("      --product-name <name> --identifier <id> --package-version <ver>");
-        writer.WriteLine("      [--output-dir <dir>] [--output-layout <flat|byFormat>] [--main-executable <name>] [--json] [--quiet|--verbose]");
+        writer.WriteLine("      [--target <t>] [--formats <csv>] [--product-name <name>] [--identifier <id>]");
+        writer.WriteLine("      [--package-version <ver>] [--main-executable <name>]");
+        writer.WriteLine("      [--output-dir <dir>] [--output-layout <flat|byFormat>] [--json] [--quiet|--verbose]");
+        writer.WriteLine("  Missing options are inferred: target=this host, formats=usual set for the target OS,");
+        writer.WriteLine("      productName=input directory name, version=0.1.0, identifier=dev.bundler.<name>,");
+        writer.WriteLine("      mainExecutable=the only executable in the input dir. --strict disables inference.");
+        writer.WriteLine("  ./bundler.json is loaded automatically when present (--config <file> overrides, --no-config skips).");
         writer.WriteLine("  Paths in --config resolve relative to the config file; paths given on the command line resolve relative to the working directory.");
+        writer.WriteLine("  bundler init                            write a minimal bundler.json here");
         writer.WriteLine("  bundler update-keygen --key-file <path>   generate an update signing key; prints key path and public key");
         writer.WriteLine("  bundler --version | --help");
         writer.WriteLine("Formats: nsis"

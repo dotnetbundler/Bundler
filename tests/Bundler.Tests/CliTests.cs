@@ -832,4 +832,271 @@ public static class CliTests
         Assert.Equal(0, code);
         Assert.True(stdout.Trim().Length > 0, "version output must be non-empty");
     }
+
+    [Fact]
+    static void BundleWithOnlyInputDirUsesInferredDefaults()
+    {
+        // 快速路契约：只给 --input-dir 必须产出包，推断值逐条进 stderr 明示。
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "host-derived defaults are asserted on linux");
+        var root = Path.Combine(Path.GetTempPath(), "bundler-cli-infer-" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "coolapp");
+        var output = Path.Combine(root, "out");
+        try
+        {
+            Directory.CreateDirectory(input);
+            var exe = Path.Combine(input, "coolapp");
+            File.WriteAllText(exe, "#!/bin/sh\necho ok\n");
+            if (OperatingSystem.IsLinux()) // CA1416：分析器不认 SkipUnless
+            {
+                File.SetUnixFileMode(exe,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+            var (code, _, err) = Run("bundle", "--input-dir", input, "--output-dir", output);
+            Assert.Equal(0, code); // err 上下文由后续 Contains 断言给出
+            Assert.Contains("target=linux-x86_64", err);
+            Assert.Contains("formats=deb,zip", err);
+            Assert.Contains("productName=coolapp", err);
+            Assert.Contains("identifier=dev.bundler.coolapp", err);
+            Assert.Contains("version=0.1.0", err);
+            Assert.Contains("mainExecutable=coolapp", err);
+            Assert.True(Directory.EnumerateFiles(output, "*.deb").Any(),
+                "expected a .deb in output: " + string.Join(",", Directory.EnumerateFiles(output)));
+            Assert.True(Directory.EnumerateFiles(output, "*.zip").Any(),
+                "expected a .zip in output: " + string.Join(",", Directory.EnumerateFiles(output)));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    static void StrictDisablesInference()
+    {
+        var input = CreateInputDirectory();
+        try
+        {
+            var (code, _, err) = Run("bundle", "--input-dir", input, "--strict");
+            Assert.Equal(2, code);
+            Assert.Contains("strict", err);
+        }
+        finally
+        {
+            Directory.Delete(input, true);
+        }
+    }
+
+    [Fact]
+    static void InitWritesTemplateAndRefusesOverwrite()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "bundler-cli-init-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var previous = Directory.GetCurrentDirectory();
+        try
+        {
+            Directory.SetCurrentDirectory(dir);
+            var (code, stdout, _) = Run("init");
+            Assert.Equal(0, code);
+            Assert.True(File.Exists(Path.Combine(dir, "bundler.json")), $"init must write bundler.json: {stdout}");
+            var (code2, _, err2) = Run("init");
+            Assert.Equal(2, code2);
+            Assert.Contains("already exists", err2);
+
+            // 模板开箱即可用：不写 targets，init 后直接 bundle --input-dir 即可跑通
+            var input = Path.Combine(dir, "publish");
+            Directory.CreateDirectory(input);
+            var exe = Path.Combine(input, "myapp");
+            File.WriteAllText(exe, "x");
+            if (OperatingSystem.IsLinux())
+            {
+                File.SetUnixFileMode(exe,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+            var (code3, _, err3) = Run("bundle", "--input-dir", input, "--formats", "zip");
+            Assert.Equal(0, code3);
+            Assert.DoesNotContain("At least one", err3);
+
+            // 取消注释 targets 示例（含首个逗号行）后 JSON 必须仍合法——
+            // 报错应落在配置校验（目录不存在）而非 JSON 解析（review BUG）。
+            var uncommented = File.ReadAllText(Path.Combine(dir, "bundler.json"))
+                .Replace("// , \"targets\"", ", \"targets\"")
+                .Replace("//   {", "  {")
+                .Replace("//     \"target\"", "    \"target\"")
+                .Replace("//     \"inputDirectory\"", "    \"inputDirectory\"")
+                .Replace("//     \"formats\"", "    \"formats\"")
+                .Replace("//   }", "  }")
+                .Replace("// ]", "]");
+            File.WriteAllText(Path.Combine(dir, "bundler.json"), uncommented);
+            var (code4, _, err4) = Run("validate");
+            Assert.DoesNotContain("JSON", err4);
+            Assert.DoesNotContain("parse", err4);
+            // 钉死在目录缺失校验：publish/linux-x64 不存在 → 存在性校验错（review flag）
+            Assert.Equal(2, code4);
+            Assert.Contains("does not exist", err4);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(previous);
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    static void BundlerJsonInWorkingDirectoryIsAutoDiscovered()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "bundler-cli-discover-" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "appdir");
+        Directory.CreateDirectory(input);
+        File.WriteAllText(Path.Combine(input, "DiscApp"), "x");
+        File.WriteAllText(Path.Combine(root, "bundler.json"), $$"""
+            { "productName": "DiscApp", "identifier": "dev.example.disc", "version": "1.0.0",
+              "targets": [{ "target": "linux-x86_64", "inputDirectory": "{{input.Replace("\\", "\\\\")}}",
+                           "formats": ["zip"] }] }
+            """);
+        var previous = Directory.GetCurrentDirectory();
+        try
+        {
+            Directory.SetCurrentDirectory(root);
+            var (code, _, err) = Run("validate");
+            Assert.Equal(0, code);
+            Assert.Contains("using configuration file", err);
+            // --no-config 跳过自动发现——此时连输入目录都没有，报错而非静默通过
+            var (code2, _, err2) = Run("validate", "--no-config");
+            Assert.NotEqual(0, code2);
+            Assert.DoesNotContain("using configuration file", err2);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(previous);
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    static void PackageVersionIsAnAliasForVersion()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "bundler-cli-alias-" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "appdir");
+        var configDir = Path.Combine(root, "cfg");
+        Directory.CreateDirectory(input);
+        Directory.CreateDirectory(configDir);
+        File.WriteAllText(Path.Combine(input, "AliasApp"), "x");
+        try
+        {
+            var ok = Path.Combine(configDir, "ok.json");
+            File.WriteAllText(ok, $$"""
+                { "productName": "AliasApp", "identifier": "dev.example.alias",
+                  "packageVersion": "2.3.4",
+                  "targets": [{ "target": "linux-x86_64", "inputDirectory": "{{input.Replace("\\", "\\\\")}}",
+                               "formats": ["zip"] }] }
+                """);
+            var resolved = CliConfig.Resolve(CliArguments.Parse(["validate", "--config", ok]));
+            Assert.Equal("2.3.4", resolved.Bundle.Version);
+
+            var conflict = Path.Combine(configDir, "conflict.json");
+            File.WriteAllText(conflict, $$"""
+                { "productName": "AliasApp", "identifier": "dev.example.alias",
+                  "version": "1.0.0", "packageVersion": "2.3.4",
+                  "targets": [{ "target": "linux-x86_64", "inputDirectory": "{{input.Replace("\\", "\\\\")}}",
+                               "formats": ["zip"] }] }
+                """);
+            var (code, _, err) = Run("validate", "--config", conflict);
+            Assert.Equal(2, code);
+            Assert.Contains("aliases", err);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    static void MultiTargetInferenceLabelsOnlyFirstAsUniversal()
+    {
+        // ≥2 个 --input-dir 走 universal 合并且只进 targets[0]；
+        // 其余目标仍按宿主推导——断言两条推断标签各归其位（review flag）。
+        var root = Path.Combine(Path.GetTempPath(), "bundler-cli-multitarget-" + Guid.NewGuid().ToString("N"));
+        var dirA = Path.Combine(root, "osx-x64");
+        var dirB = Path.Combine(root, "osx-arm64");
+        var dirC = Path.Combine(root, "linux-x64");
+        Directory.CreateDirectory(dirA);
+        Directory.CreateDirectory(dirB);
+        Directory.CreateDirectory(dirC);
+        var config = Path.Combine(root, "bundler.json");
+        File.WriteAllText(config, $$"""
+            { "productName": "MultiApp", "identifier": "dev.example.multi", "version": "1.0.0",
+              "targets": [
+                { "inputDirectory": "{{dirA.Replace("\\", "\\\\")}}", "formats": ["zip"] },
+                { "inputDirectory": "{{dirC.Replace("\\", "\\\\")}}", "formats": ["deb"] }
+              ] }
+            """);
+        try
+        {
+            var resolved = CliConfig.Resolve(CliArguments.Parse(
+                ["plan", "--config", config, "--input-dir", dirA, "--input-dir", dirB]));
+            Assert.Equal("macos-universal", resolved.Bundle.Targets[0].Target.ToString());
+            Assert.NotEqual("macos-universal", resolved.Bundle.Targets[1].Target.ToString());
+            Assert.True(BundleTarget.TryParse(resolved.Bundle.Targets[1].Target.ToString(), out _),
+                "second target must get a real host-derived target, not the universal marker");
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    static async Task MsBuildDefaultsInferFormatsIdentifierAndVersion()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("linux host only (asserts deb derivation)");
+        }
+        var repo = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        var taskDll = Path.Combine(repo, "src/Bundler.MSBuild/bin/Release/netstandard2.0/DotNet.Bundler.MSBuild.dll");
+        if (!File.Exists(taskDll))
+        {
+            Assert.Skip("Bundler.MSBuild not built: " + taskDll);
+        }
+        var root = Path.Combine(Path.GetTempPath(), "bundler-msbuild-defaults-" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "input");
+        var output = Path.Combine(root, "out");
+        Directory.CreateDirectory(input);
+        File.WriteAllText(Path.Combine(input, "TestApp"), "x");
+        var project = Path.Combine(root, "proj.csproj");
+        File.WriteAllText(project, $$"""
+            <Project>
+              <PropertyGroup>
+                <AssemblyName>TestApp</AssemblyName>
+                <TargetName>TestApp</TargetName>
+                <_BundlerTaskAssembly>{{taskDll}}</_BundlerTaskAssembly>
+              </PropertyGroup>
+              <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.props")}}" />
+              <Import Project="{{Path.Combine(repo, "src/Bundler.MSBuild/buildTransitive/DotNet.Bundler.MSBuild.targets")}}" />
+            </Project>
+            """);
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("dotnet",
+                $"msbuild \"{project}\" -t:BundlerBundle -p:BundlerInputDir=\"{input}\" " +
+                $"-p:BundlerTarget=linux-x86_64 -p:BundlerOutputPath=\"{output}\"")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            using var proc = System.Diagnostics.Process.Start(psi)!;
+            var log = await proc.StandardOutput.ReadToEndAsync() + proc.StandardError.ReadToEndAsync();
+            await proc.WaitForExitAsync();
+            Assert.Equal(0, proc.ExitCode);
+            Assert.Contains("dev.bundler.testapp", log); // identifier 合成警告
+            Assert.Contains("placeholder '0.1.0'", log); // Version 空缺兜底警告
+            Assert.Contains(": deb", log); // formats 按 linux 目标推导
+            Assert.True(Directory.EnumerateFiles(output, "*.deb").Any(),
+                "expected a .deb in output: " + string.Join(",", Directory.EnumerateFiles(output)));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
 }
