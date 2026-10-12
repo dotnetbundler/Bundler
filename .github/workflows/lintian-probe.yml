@@ -6,6 +6,7 @@ on:
     branches: [devin/1791806527-test-matrix-legs]
     paths:
       - '.github/workflows/lintian-probe.yml'
+      - 'tests/Bundler.IntegrationTests/Fixtures/Deb/**'
 
 permissions:
   contents: read

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.dotnetbundler.debintegrationfixture</id>
+  <id>bundler-deb-fixture</id>
   <metadata_license>MIT</metadata_license>
   <name>Bundler Deb Fixture</name>
   <summary>Bundler deb integration fixture</summary>
