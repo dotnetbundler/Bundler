@@ -87,8 +87,10 @@
   <Target Name="_BundlerDerive">
     <PropertyGroup>
       <!-- 宿主推导：RuntimeIdentifier 未设时回落 SDK 宿主 RID（对齐 CLI 'target = 当前宿主' 推断）——
-           -t:BundlerBundle -p:BundlerInputDir=<dir> 免 BundlerTarget 即开即用 -->
-      <_BundlerEffectiveRid Condition="'$(_BundlerEffectiveRid)' == ''">$(RuntimeIdentifier)</_BundlerEffectiveRid>
+           -t:BundlerBundle -p:BundlerInputDir=<dir> 免 BundlerTarget 即开即用。
+           RID 在 eval 期未定、csproj 体内才设置的场景：target 期 RID 恒优先重算，
+           不许 eval 期冻结的宿主 RID 残留成包标签。 -->
+      <_BundlerEffectiveRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</_BundlerEffectiveRid>
       <_BundlerEffectiveRid Condition="'$(_BundlerEffectiveRid)' == ''">$(NETCoreSdkPortableRuntimeIdentifier)</_BundlerEffectiveRid>
       <_BundlerInferredHostTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == '' and '$(_BundlerEffectiveRid)' != ''">true</_BundlerInferredHostTarget>
     </PropertyGroup>
