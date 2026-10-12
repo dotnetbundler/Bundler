@@ -109,6 +109,12 @@
            csproj 体内后设值也要吃），这里按最终值重算 _BundlerCanonicalTarget——
            下游 RidMap 反查/警告/任务输入只认 canonical，props eval 期那份仅供 eval 消费方。 -->
       <_BundlerTargetSep>$([System.String]::Copy('$(BundlerTarget)').LastIndexOf('-'))</_BundlerTargetSep>
+      <!-- 先清 eval 期残值：以下条件行只在命中时覆写，无别名的 arch（aarch64/loongarch64 等）
+           不清空会留住 eval 推导的宿主架构——包标签与内层发布 RID 都会错。 -->
+      <_BundlerTargetOs></_BundlerTargetOs>
+      <_BundlerTargetArch></_BundlerTargetArch>
+      <_BundlerTargetArchCanonical></_BundlerTargetArchCanonical>
+      <_BundlerCanonicalTarget></_BundlerCanonicalTarget>
       <_BundlerTargetOs Condition="'$(_BundlerTargetSep)' != '-1'">$([System.String]::Copy('$(BundlerTarget)').Substring(0, $(_BundlerTargetSep)).ToLowerInvariant())</_BundlerTargetOs>
       <_BundlerTargetArch Condition="'$(_BundlerTargetSep)' != '-1'">$([System.String]::Copy('$(BundlerTarget)').Substring($([MSBuild]::Add($(_BundlerTargetSep), 1))).ToLowerInvariant())</_BundlerTargetArch>
       <_BundlerTargetArchCanonical Condition="'$(_BundlerTargetArch)' == 'amd64' or '$(_BundlerTargetArch)' == 'x64'">x86_64</_BundlerTargetArchCanonical>
