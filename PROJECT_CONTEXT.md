@@ -1,7 +1,7 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-10-12
-> 当前分支：`devin/1791786298-msbuild-readme-friction`（MSBuild/README 摩擦收口；最新已实测基线见 §3 最新一轮）
+> 当前分支：`main`（最新已实测基线见 §3 最新一轮）
 > 当前包版本：`0.1.0-alpha.100`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；基础目标模型重构已完成并入 `main`（alpha.90–93）——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `CpuArchitecture` 族序重排 + `BundlerTarget` `{os}[-{libc}]-{arch}` canonical GNU 词（别称仅输入归一，产物文件名层用各生态词），契约与全产物名目录见 `docs/target-matrix.md`**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
