@@ -70,7 +70,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - `.app`：骨架/Info.plist 生成（Bundle 键、文件关联 `CFBundleDocumentTypes`+UTI 导出、URL scheme、ATS 例外域、调用方 plist 文件或内联合并）、`.icns` 图标（PNG 合成、`.car` 直通、`.icon` 经 `actool` 编译）、托管 Mach-O fat/thin 校验；签名管线 inside-out `codesign`（ad-hoc/identity/p12 临时钥匙串三模式）+ hardened runtime + entitlements + 显式公证（ditto→notarytool→stapler，凭证显式配置或 `APPLE_*` 环境回退）。
 - `.dmg`：`hdiutil` 全链（UDRW→attach→拖放布局→convert），压缩 `Ulmo`/`Udzo`/`Udbz`，Finder 窗口布局全旋钮 + 无 GUI 会话自动降级，背景图/卷图标/`udifrez` SLA 注入，`codesign` 本体签名。
 - `.pkg`：`pkgbuild` 组件包 + `productbuild` 分发包（标题/欢迎/许可/结语页、`system`/`current-user-home` 域、`BundlerPkgPayload` 任意载荷、`--scripts` 专家脚本），`pkgbuild --sign`/`productsign` 签名与 notarytool 公证管线；per-user 域免提权真实安装已验。
-- 已登记分歧：macOS 打包工具不可再分发，采用"宿主工具检测+版本下限"策略（见各 `mac-*-roadmap.md`）；缺 codesigning 身份、Rosetta 等记入 `docs/mac-*-open-items.md`。
+- 已登记分歧：macOS 打包工具不可再分发，采用"宿主工具检测+版本下限"策略（见各 `mac-*-roadmap.md`）；缺 codesigning 身份等外部条件统一登记在 `docs/special-acceptance.md`。
 - `osx` 通用 RID：MSBuild `BundlerUniversalRuntimeIdentifiers` 复数 RID 内层发布 + 纯托管 fat 合并器（Mach-O 并片/其余逐字节一致/单边薄拒产），CLI `--input-dir` 可重复多目录合并（PR #14）。
 
 ### 其余格式
@@ -81,14 +81,14 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - `.zip`/`.tar.gz`（已冻结，`alpha.59`）：纯托管写入器，单顶层目录布局、执行位与符号链接保留、`.sha256` 侧车、确定性构建；zip/tar 均流式写出：zip 经 Zip64 动态升级无尺寸上限，tar 单条目至 ustar ~8GiB 顶。
 - `.apk`（已冻结，`alpha.63`）：纯托管三段 gzip 写入器，`.PKGINFO`+六脚本+`BundlerAlpineApkFile` 映射+pax SHA1 校验和，可选 RSA 签名段；`linux-musl-x86_64/arm64` 目标。
 - CLI（已冻结，`alpha.62`）：`validate`/`plan`/`bundle` 三命令共用 Core/后端、`bundler.json` 层叠、`--bundles`/`--input-dir`、稳定退出码与 `--json`；dotnet tool nupkg + `PublishAot` 原生二进制双分发。
-- UPDATE（已冻结，`alpha.74`，PR #27）：静态 JSON 清单 feed + ECDSA P-256 分离签名（`.sig`+`feed.sig` 防降级）+ `bundler-update.json` 身份旁车 + 外置 AOT 引导件（shell 降级）；nsis/msi 重跑安装器、zip/targz/app/appimage 三段式换包（备份/崩溃恢复/`--rollback`）；block-map 64KiB 差分默认开（实测 83% 复用，失败回落全量）；本地/UNC feed 离线可更新；deb/rpm/apk/dmg/pkg 按权威实践排除；外部待验收见 `docs/update-open-items.md`。
+- UPDATE（已冻结，`alpha.74`，PR #27）：静态 JSON 清单 feed + ECDSA P-256 分离签名（`.sig`+`feed.sig` 防降级）+ `bundler-update.json` 身份旁车 + 外置 AOT 引导件（shell 降级）；nsis/msi 重跑安装器、zip/targz/app/appimage 三段式换包（备份/崩溃恢复/`--rollback`）；block-map 64KiB 差分默认开（实测 83% 复用，失败回落全量）；本地/UNC feed 离线可更新；deb/rpm/apk/dmg/pkg 按权威实践排除；外部待验收见 `docs/special-acceptance.md`。
 
-各格式契约、证据与外部事项详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md` / `<format>-open-items.md`。
+各格式契约与证据详见 `docs/<format>-roadmap.md` / `<format>-capability-matrix.md`；外部事项统一登记在 `docs/special-acceptance.md`。
 
 ## 3. 最近验证
 
-当前基线：`main@17624bf`（`0.1.0-alpha.102`）。
-最近验证：`build` 0 警告；CliTests 42/42 通过；AppImage/Rpm 关联腿 47/47 通过——逐 PR 验证与轮测/CI 证据以 git 提交与 PR 记录为准，本文件不再逐条留档。
+当前基线：`main@5adb8fa`（`0.1.0-alpha.102`）；`devin/1791806527-test-matrix-legs` 在其上推进 CI 测试腿接线（universal 产/消同件、dbg-aot win-x86、arm64 原生腿、deb/apk/rpm 矩阵扩版与 lintian 腿）与外部待办登记收口（`*-open-items.md` 整删并入 `docs/special-acceptance.md`），待 PR 合并。
+最近验证：本机 Windows x64 `build` 0 警告、`Bundler.Tests` 全量 491 测 0 失败（CliTests 宿主感知修复后）；分支全量 CI 证据以 release-verify/dbg-aot 运行记录为准，本文件不再逐条留档。
 
 ## 4. 外部验收边界（未执行，不视为完成）
 
@@ -100,14 +100,14 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - 干净 Windows 10/11 宿主、x86/ARM64 宿主执行；
 - 生产 Authenticode 证书与 RFC 3161 时间戳；
 - 真实重启与锁定文件场景、本地化内容评审；
-- 启用 Windows FIPS 策略宿主的 `candle -fips` 真实行为与非拉丁语言交互安装审校（MSI-OI-13 与 `docs/special-acceptance.md` 母语审校项）。
+- 非拉丁语言交互安装审校（`docs/special-acceptance.md` 母语审校项；FIPS 策略宿主 `candle -fips` 已于 2026-10-05 实证消解，证据见 git/PR 记录）。
 
-逐项清单见各格式 `docs/<format>-open-items.md`；只能人工/外部付费完成的验收统一登记在 `docs/special-acceptance.md`。
+只能人工/外部付费完成的验收统一登记在 `docs/special-acceptance.md`。
 
 ## 5. 未决问题（等待用户或外部输入）
 
-- WiX v3 已退出免费社区服务；大范围公开分发前须重新评估维护风险（见 `third_party/wix/msi-wix-provenance.md`）。
-- 各格式外部事项按 OI 清单等待对应环境输入：`docs/<format>-open-items.md` 全套（生产证书/公证凭证、UAC 提权、真实重启、干净宿主矩阵、ARM64 真机、语言审校等；MSI 签名已裁决不补集成腿——`Bundler.Tests/WixTests` 三断言已覆盖，外部仅余 MSI-OI-06 生产证书/时间戳）。
+- 各格式外部事项等待对应环境输入，统一登记在 `docs/special-acceptance.md`（生产证书/公证凭证、UAC 提权、真实重启、干净宿主矩阵、语言审校等；MSI 签名已裁决不补集成腿——`Bundler.Tests/WixTests` 三断言已覆盖，时间戳子项已真实嵌入消解，外部仅余生产 CA 信任链）。
+- WiX v3 维护风险已裁决封存：v3 维持现状不再复议（2026-10-05，见 `docs/msi-roadmap.md` §1 与 `third_party/wix/msi-wix-provenance.md`），非未决项。
 - 仓外独立包消费 fixture（`tests/Bundler.LocalPackagesTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`,
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
   还原来源已由 packageSourceMapping 钉死本地源（PR #41，公网同版共存不会选错件）；
@@ -119,5 +119,5 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
 UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#59 持续加固与重构至 `alpha.94`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地，跨版本兼容冻件腿与三宿主真小卷 ENOSPC 腿在网，`tests/Special/` 特殊验收脚本矩阵就位（§3 最新三轮）。
 目标模型重构（PR #55..#59）已并入 main 并经三轮四宿主轮测（终轮全新会话整轮零缺陷）+ release-verify 同树 3 连绿收口。
-剩余工作：外部待验收项（各格式 OI 清单，见 §5）、发布链资产实际推送（nuget+release 为另一步）、以及零星已登记增强（按各 `<format>-open-items.md` 评估）。release-verify 六宿主全量验证已落地并入 main，main 上 dispatch 3 连绿。
+剩余工作：外部待验收项（统一登记在 `docs/special-acceptance.md`，见 §5）、发布链资产实际推送（nuget+release 为另一步）、以及零星已登记增强。release-verify 六宿主全量验证已落地并入 main；CLI 收口批（alpha.95–102）后合并树的最新全量验证随 test-matrix-legs 收口一并补齐。
 

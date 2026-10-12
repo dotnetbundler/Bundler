@@ -1,7 +1,7 @@
 # macOS `.app` 后端实施路线（MAC-APP）
 
 > 状态：**路线已确认，`MAC-APP-1`..`MAC-APP-5` 全部完成，`.app` 格式已冻结**（冻结基线：`mac-app-development` 分支 `BundlerPackageVersion=0.1.0-alpha.45`，行为契约=`mac-app-capability-matrix.md` 定稿表+本文件语义契约；冻结后仅缺陷修复附回归测试）。
-> 上游审计已完成（Tauri 固定快照 `7dbfc1f`）；PKG 已确认纳入公共 `PackageFormat`；逐项能力状态见 [`docs/mac-app-capability-matrix.md`](mac-app-capability-matrix.md)；外部条件见 [`docs/mac-app-open-items.md`](mac-app-open-items.md)；人工/特殊验收见 [`docs/special-acceptance.md`](special-acceptance.md)。
+> 上游审计已完成（Tauri 固定快照 `7dbfc1f`）；PKG 已确认纳入公共 `PackageFormat`；逐项能力状态见 [`docs/mac-app-capability-matrix.md`](mac-app-capability-matrix.md)；外部条件与人工/特殊验收统一登记在 [`docs/special-acceptance.md`](special-acceptance.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
 
 ## 1. 已核实事实、选择及风险
@@ -23,7 +23,7 @@ Windows 侧 NSIS（冻结 `71a5c90`）与 MSI（冻结基线 `0.1.0-alpha.43`）
 | 缺口 | 无任何 codesigning 身份（`security find-identity -v -p codesigning` 为 0）；Rosetta 未激活（`arch -x86_64` 报 Bad CPU type）；无 `pwsh` |
 
 含义：本机足以完成 `.app` 结构生成、`plutil` 校验、ad-hoc 签名、`codesign --verify`、真实启动/文件关联/URL 唤起等自动化验证；
-Developer ID 签名、真实公证、macos-x86_64 原生运行属外部待验收（`docs/mac-app-open-items.md`）。
+Developer ID 签名、真实公证属外部待验收（`docs/special-acceptance.md`）；macos-x86_64 启动已由 macos-26-intel 与 Rosetta CI 两腿实证，观感项仍人工。
 集成脚本用例用 POSIX shell 书写（无 pwsh），测试组织细节见第 4 节。
 
 ## 2. 工具供应与宿主门槛
@@ -85,9 +85,12 @@ Developer ID 签名、真实公证、macos-x86_64 原生运行属外部待验收
 4. **安装/卸载语义**：`.app` 无安装事务、无收据、无卸载器。
    产物是可整体移动/拷贝的目录；“安装”=用户放入 `/Applications`（或任意位置），“卸载”=删除 `.app`，“升级”=整体替换。
    Bundler 不伪造 MSI 式事务/回滚/注册语义；损坏 zip 式交付、部分拷贝等用户侧情形不属于后端承诺。
-5. **架构**：`macos-x86_64`/`macos-arm64` 各为独立产物；`macos-x86_64` 产物在 Apple Silicon 依赖 Rosetta 属系统行为，非后端能力。
-   请求 universal 语义时要求调用方提供已合成的 fat Mach-O（构建期 `lipo -info` 校验）；
-   Bundler 不做 `lipo` 合成。已确认（2026-09-26）：不在公共模型增加 `macos-universal-universal` 目标，用 `macos-x86_64`/`macos-arm64` 双产物覆盖；fat 输入校验保留为 MAC-APP-2 能力。
+5. **架构**：`macos-x86_64`/`macos-arm64`/`macos-universal` 各为独立产物；`macos-x86_64` 产物在 Apple Silicon 依赖 Rosetta 属系统行为，非后端能力。
+   `macos-universal` 已入公共目标模型（`e7dfeae`，推翻 2026-09-26 的不增设决定）：契约只收**已合并 universal 目录**——
+   每个 Mach-O 强制双切片，非 Mach-O 资产须架构便携；构建期托管解析 Mach-O 头（等价 `lipo -info`）。
+   MSBuild `BundlerUniversalTargets`（双 RID 内层发布）与 CLI 多 `--input-dir` 经纯托管合并器产 universal 目录（fat 头+切片拼接，宿主无关）；
+   预合并输入防呆按 2026-10-09 用户裁决方案①落地——`UniversalCodeProbe` 对 `rid=macos-universal` 载荷逐文件嗅探签名，
+   ELF/原生 PE/ReadyToRun 程序集显式拒收，瘦 Mach-O 由既有架构校验拦，FDD 纯 IL 放行（`MacAppBundleBackend.InspectPayload`）。
 6. **签名语义**：默认产物不签名，载荷既有签名（如 .NET apphost 的 linker ad-hoc 签名）原样保留；
    显式配置后才执行 `codesign`：identity 字符串、`"-"` ad-hoc、临时钥匙串证书导入三种提供器；
    hardened runtime 默认开启且只作用于可执行目标；entitlements 显式给定（文件路径或 plist 内容）；
@@ -110,5 +113,5 @@ Developer ID 签名、真实公证、macos-x86_64 原生运行属外部待验收
 | 专用 macOS 环境 | 干净宿主、Intel/Rosetta、不同 macOS 版本、下载-quarantine-首启、per-user 之外需提权的位置试验（可抛弃 VM） |
 | 外部待验收 | Developer ID 证书签名、真实公证/上钉/撤销、Gatekeeper 信任链评估、生产分发 |
 
-接班者先读 `AGENTS.md`、`docs/development-rules.md`、`PROJECT_CONTEXT.md`、`docs/roadmap.md`、本文、矩阵/待办/人工文档，再核 Git、代码与测试。
+接班者先读 `AGENTS.md`、`docs/development-rules.md`、`PROJECT_CONTEXT.md`、`docs/roadmap.md`、本文、矩阵/`docs/special-acceptance.md`，再核 Git、代码与测试。
 每阶段完成新增自动化和适用的真实 macOS 测试后报告结果；未经用户明确要求不开始后续阶段代码、不提交或推送（本路线文档轮次的提交推送已由用户明确授权）。

@@ -17,8 +17,8 @@
 3. 读 `PROJECT_CONTEXT.md` 文首的当前事实（分支、包版本、当前阶段、下一步）。
 4. 读 `docs/roadmap.md` 的产品边界与格式顺序。
 5. 读 `README.md` 了解面向用户的当前能力。
-6. 读当前格式的专属文档：`<format>-roadmap.md`、`<format>-capability-matrix.md`、`<format>-open-items.md`、上游审计/参考；
-   只能人工完成的特殊验收登记见 `docs/special-acceptance.md`。
+6. 读当前格式的专属文档：`<format>-roadmap.md`、`<format>-capability-matrix.md`、上游审计/参考；
+   只能人工/外部条件完成的特殊验收与外部待办统一登记在 `docs/special-acceptance.md`。
 7. 读与将做工作直接相关的代码、测试和 fixture。
 8. 需要历史背景时查 git 提交与 PR 记录；路线文档留设计决策、语义契约与进行中格式的阶段计划，已完成格式的阶段过程不逐条留档。
 
@@ -73,12 +73,11 @@ git status --short
 | `docs/<format>-roadmap.md` | 该格式的设计决策、语义契约与进行中格式的阶段计划 | 泛用规则、已完成过程记录、其他格式内容 |
 | `README.md` | 面向使用者的能力与用法 | 协作规则、阶段计划 |
 | `docs/<format>-capability-matrix.md` | 该格式逐项能力与验收状态 | 规则、路线叙述 |
-| `docs/<format>-open-items.md` | 该格式外部输入/环境待办索引 | 可本机完成的事项、用例步骤、人工验收登记 |
 | `docs/<format>-upstream-*.md` 等 | 该格式上游参照与取舍 | 当前能力承诺 |
 | `samples/<name>/*-sample.md` | 该示例的操作说明 | 后端规则、阶段证据 |
 | `tests/README.md` | 测试入口、门禁与 fixture 地图 | 测试结果记录 |
 | `third_party/<tool>/*-provenance.md` | 第三方来源、许可、哈希核查 | 实现规则 |
-| `docs/special-acceptance.md` | 只能人工/外部付费完成的特殊验收登记 | 可自动化腿、格式实现细节 |
+| `docs/special-acceptance.md` | 只能人工/外部付费完成的特殊验收与外部待办登记 | 可自动化腿、格式实现细节 |
 
 找不到该放哪的内容时，先停下来想它属于"规则、计划、当前事实、历史、某格式、用户文档、第三方"中的哪一类，再放进对应文件；都不合适时向用户说明再定。
 

@@ -1536,7 +1536,7 @@ public static class MacAppTests
         Assert.Null(MacAppAssetsCar.IconImageName("{}"));
     }
 
-    // R2 MAC-APP-OI-08：macos-universal 通用载荷按签名表探测拒收非 Mach-O 的按架构散件。
+    // macos-universal 通用载荷按签名表探测拒收非 Mach-O 的按架构散件（预合并防呆方案①）。
     [Fact]
     static async Task RejectsForeignCodeInUniversalPayload()
     {

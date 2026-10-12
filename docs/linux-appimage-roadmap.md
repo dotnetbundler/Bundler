@@ -11,7 +11,7 @@
 | 1 | 打包工具供应 | **内嵌固定版本 `appimagetool`**（x86_64 必备、aarch64 按需）入 `third_party/appimagetool/` + SHA-256 provenance，随 `DotNet.Bundler.AppImage` 包分发 | 上游 Tauri 用 linuxdeploy 打包时联网下载——违反"工具随包供应"硬规则；appimagetool 是 AppImage 官方规范工具，自包含（内嵌 runtime+mksquashfs） |
 | 2 | 不引入 linuxdeploy | **明确拒绝**：linuxdeploy 的职责是依赖拷贝/插件编排（gtk/gstreamer/webkit2gtk），属应用运行时依赖编排，超出产品边界 §2 | AppDir 只装调用方准备好的自包含载荷；契约写进示例文档："依赖须打进 publish 载荷" |
 | 3 | 构建宿主限制 | **Linux 宿主限定**（x86_64；aarch64 宿主取决决 4 结论） | appimagetool 是 Linux ELF；与 deb/rpm 不同，本格式不再是"任意宿主可产" |
-| 4 | 架构覆盖 | **已裁决（APPIMAGE-1 实测）**：x86_64 宿主产 `amd64` 命名产物；**可交叉**——`runtime-x86_64`/`runtime-aarch64` 双双内嵌并始终经 `--runtime-file` 供应（实测：所钉 appimagetool 构建不内嵌 runtime，缺省会联网下载，必须始终外供）；x86_64 宿主产出的 aarch64 AppImage 为合法 ELF（e_machine=0xb7）；运行验收仍归 OI-01 | `ARCH` env + `--runtime-file` 路径实测成立 |
+| 4 | 架构覆盖 | **已裁决（APPIMAGE-1 实测）**：x86_64 宿主产 `amd64` 命名产物；**可交叉**——`runtime-x86_64`/`runtime-aarch64` 双双内嵌并始终经 `--runtime-file` 供应（实测：所钉 appimagetool 构建不内嵌 runtime，缺省会联网下载，必须始终外供）；x86_64 宿主产出的 aarch64 AppImage 为合法 ELF（e_machine=0xb7）；真机运行验收挂 `docs/special-acceptance.md` | `ARCH` env + `--runtime-file` 路径实测成立 |
 | 5 | FUSE-less 运行 | 内嵌 appimagetool 一律以 `APPIMAGE_EXTRACT_AND_RUN=1`（或等价 `--appimage-extract-and-run`）方式调用 | 容器/CI 常无 FUSE；上游同样走此路径 |
 | 6 | AppDir 结构 | `usr/` 子树复用 `Bundler.Core` 共享 freedesktop 生成器（同 deb/rpm 数据树：`.desktop`+hicolor 图标+metainfo+`usr/lib/<pkg>/`+`usr/bin` 相对链接）；根级 `AppRun` 用**受控生成脚本**（`exec "$APPDIR/usr/bin/<main>" "$@"`）而非预编译二进制 | 上游复用 deb 数据树生成的做法同构；脚本 AppRun 可读可审 |
 | 7 | 图标策略 | `BundlerAppImageIconFile` 可选；缺省用 Bundler 自带默认 PNG 图标（`third_party` 登记来源） | appimagetool 对无图标硬失败；与上游"默认 tauri 图标"惯例一致 |

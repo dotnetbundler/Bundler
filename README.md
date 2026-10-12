@@ -70,7 +70,7 @@ bundler init && bundler bundle --input-dir <publish目录>
 WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..9` 的当前主机范围验证：current-user 安装、升级、修复和卸载，快捷方式与关联/协议候选注册，测试证书签名、英语/简体中文单语言包及受限故障回滚，x86 目标、显式 MSI 版本映射和可选降级，范围内安装目录、自定义 UI 序列、可选 Feature、PATH 精确追加与仅交互启动勾选，多语言输入资源与构建选项、受控 WiX 扩展与专家模式，以及通用能力审计与再冻结。
 MSI 编译把 WiX 警告视为失败，PackageCode 由 WiX 每次构建生成。
 per-machine 包仅生成并检查数据库；原生 x86/ARM64 宿主、生产证书、交互 UI、提权安装、干净 Windows 和真实重启尚未验收。
-**冻结的是 alpha 格式配置及已验证语义；2026-09-29/30 已完成四宿主跨环境联合验收（win/linux/mac/qemu 互产互装、四轮全绿），其余环境类能力按各格式 OI 清单如实保留外部待验收。**
+**冻结的是 alpha 格式配置及已验证语义；2026-09-29/30 已完成四宿主跨环境联合验收（win/linux/mac/qemu 互产互装、四轮全绿），其余环境类能力按 [`docs/special-acceptance.md`](docs/special-acceptance.md) 如实保留外部待验收。**
 可操作的当前能力示例见 [`samples/HelloBundlerApp/hello-bundler-app-sample.md`](samples/HelloBundlerApp/hello-bundler-app-sample.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
 
 `DotNet.Bundler.Wix` 是可独立引用的 MSI 后端包和直接 API；MSBuild 调用同一后端。
@@ -103,7 +103,7 @@ NSIS 编译仍会启动包内与当前宿主匹配的原生 `makensis`，因为�
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.100" PrivateAssets="all" />
+    <PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.102" PrivateAssets="all" />
   </ItemGroup>
 </Project>
 ```
@@ -139,7 +139,7 @@ canonical RID 映射表：`windows-x86_64→win-x64`、`windows-i686→win-x86`�
 不使用 MSBuild 集成的应用和构建工具可以直接引用 `DotNet.Bundler.Nsis`：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.100" />
+<PackageReference Include="DotNet.Bundler.Nsis" Version="0.1.0-alpha.102" />
 ```
 
 ```csharp
@@ -185,7 +185,7 @@ var artifacts = await new NsisBundler().BuildAsync(request);
 普通 .NET 项目可以只引用 MSI 后端包，直接打包已准备好的目录，无需引用 MSBuild 便利元包或本仓库源码：
 
 ```xml
-<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.100" />
+<PackageReference Include="DotNet.Bundler.Wix" Version="0.1.0-alpha.102" />
 ```
 
 ```csharp
@@ -751,7 +751,7 @@ MSI 集成测试每轮从本地包源还原，并核对隔离缓存中的实际�
 真装腿需 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 同意闸。
 干净宿主、ARM64、UAC、真实重启与生产证书仍按 MSI 人工验收文档执行。
 
-只能人工/外部付费完成的验收统一登记在 [`docs/special-acceptance.md`](docs/special-acceptance.md)；各格式外部待办见 `docs/<format>-open-items.md`。
+只能人工/外部付费完成的验收统一登记在 [`docs/special-acceptance.md`](docs/special-acceptance.md)。
 仓库可自动化的测试仍由上述命令执行，不转为人工清单。
 
 Abstractions 保存跨包稳定契约。

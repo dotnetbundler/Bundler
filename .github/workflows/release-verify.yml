@@ -62,7 +62,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
-  # MAC-APP-OI-09：同一份 macos-universal .app 在 x86_64 与 arm64 宿主各自原生启动。
+  # 同一份 macos-universal .app 在 x86_64 与 arm64 宿主各自原生启动。
   # 生产腿产件+全量 sha256 清单随件上传；消费腿在两 mac 宿主校验同一清单再原生启动，
   # "同一包"由清单比对钉死（非各腿重建）。universal 合并只收 FDD——消费腿靠
   # setup-dotnet 的运行时启动（UniversalCodeProbe 拒自包含载荷）。

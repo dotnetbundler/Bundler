@@ -79,7 +79,7 @@ jobs:
           path: C:\aot\windows-arm64\bundler-updater.exe
           retention-days: 1
 
-  # UPDATE-OI-01：windows-i686 引导件——x86 NativeAOT 需 VS x86 工具链，
+  # windows-i686 引导件——x86 NativeAOT 需 VS x86 工具链，
   # windows-2025 x64 runner 交叉产出，win32 件经 WOW64 冒烟同构于 win-arm 腿。
   win-x86:
     runs-on: windows-2025

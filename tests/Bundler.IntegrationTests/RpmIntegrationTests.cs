@@ -555,7 +555,7 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
     public void SignedRpmProducedOnAnyHost()
     {
         // 签名全托管（BouncyCastle）——任何宿主都能产签 rpm；此处断言签名结构落盘，
-        // 不依赖 rpm/gpg 工具链，windows/macOS 腿同路径覆盖 SIGN-OI-04。
+        // 不依赖 rpm/gpg 工具链——windows/macOS 腿经同一路径覆盖宿主无关签件断言。
         var keyFile = Path.Combine(RepositoryLayout.FixturesDirectory,
             "Rpm", "Assets", "rpm-test-key.asc");
         _f.Publish("signed-anyhost",

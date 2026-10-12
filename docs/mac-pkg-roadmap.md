@@ -6,7 +6,7 @@
 > `.pkg` 无上游参照：tauri 无 `.pkg` 输出（`PackageType` 仅 `MacOsBundle`/`IosBundle`/`Dmg`/`Updater` + Linux/Windows 各项），决策依据为原生 macOS 工具链语义（PKG 纳入决策经用户确认，见 git 记录）。
 > `.app`/`.dmg` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)、[`docs/mac-dmg-roadmap.md`](mac-dmg-roadmap.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
-> 逐项能力状态见 [`docs/mac-pkg-capability-matrix.md`](mac-pkg-capability-matrix.md)；外部条件见 [`docs/mac-pkg-open-items.md`](mac-pkg-open-items.md)；人工/特殊验收见 [`docs/special-acceptance.md`](special-acceptance.md)。
+> 逐项能力状态见 [`docs/mac-pkg-capability-matrix.md`](mac-pkg-capability-matrix.md)；外部条件与人工/特殊验收统一登记在 [`docs/special-acceptance.md`](special-acceptance.md)。
 
 ## 1. 已确认决策（2026-09-26，全部落定）
 

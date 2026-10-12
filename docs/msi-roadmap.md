@@ -6,7 +6,7 @@
 > 阶段实施证据以 git 提交与 PR 记录为准。
 > 原开发分支 `msi-development`（已并入 `main`）；历史记录中的 `codex/msi-development` 是改名前的名称。
 > 规范入口：`docs/roadmap.md`；
-> 上游 Tauri 审计已完成并固化进本文件与能力矩阵，逐项能力见 `docs/msi-capability-matrix.md`，外部条件见 `docs/msi-open-items.md`，人工/特殊验收见 `docs/special-acceptance.md`；
+> 上游 Tauri 审计已完成并固化进本文件与能力矩阵，逐项能力见 `docs/msi-capability-matrix.md`，外部条件与人工/特殊验收统一登记在 `docs/special-acceptance.md`；
 
 ## 1. 已核实事实、选择及风险
 
@@ -18,7 +18,10 @@
 用户已暂定 **WiX 3.14.1**，仅在 Windows 上构建 MSI；不要求非 Windows 宿主生成 MSI。
 选它是为了复用成熟的 WiX 3 工具链和 Windows Installer 原生语义，缩短实现工作量。
 这是产品选择，不等于已验证零环境、ARM64 宿主或未来安全维护。
-WiX 3 已归档且免费社区维护结束；因此在 WIN-MSI-1 设置实际分发门槛，后续每次冻结前复核风险。
+WiX 3 已归档且免费社区维护结束；**2026-10-05 用户裁决封存：v3 维持现状不再复议**——
+v4/v5 需 .NET 8+ 运行时（Windows 预载只有 .NET Framework，自包含体积不合"工具随包"定位）、
+纯托管写出器工程量过大，替代方案已否决，与 Tauri/electron-builder 同姿态捆绑 v3；
+若上游出具体安全/兼容事故由用户另行指示，本项不作主动复核。
 若门槛失败，停止该工具选型并记录替代决策，不通过静默安装 SDK/运行时、附带未核许可文件或声称不受支持的宿主来绕过。
 
 产品只打包调用方已准备的文件。
@@ -36,7 +39,7 @@ CLI 在全部格式冻结后交付（`CLI-C1`）。
 | 完整性 | 在可信来源取得一次归档，人工核对来源和实际 SHA-256；将归档哈希、内文件哈希与来源记录固定在仓库。下载或核验失败则不发布。不在运行时下载。 |
 | 分发/缓存 | 测量完整归档、真正必需子集、对应源码提供方式及压缩后 NuGet 增量；只捆绑经许可且可独立工作的最小子集。复用 Core 内容寻址、跨进程锁和逐文件校验缓存；断网构建必须可用。当时约 13.8 MB 的 WiX NuGet 包体积已获用户接受（当前实测约 14.4 MB）；若分发内容或体积明显变化，重新测量并记录。 |
 | 宿主依赖 | 本项只评价 WiX 3.14.1 的 `candle.exe`/`light.exe`，不计入调用 WiX 的产品或构建流程的依赖。发行二进制中两个 EXE 和 `wix.dll` 的目标属性均测得 `.NET Framework 4.5`；两个 EXE 的 CLI 标志要求 32 位进程。WiX 的该 Framework 需求不因生成 MSI 而传给最终用户。在 Windows x64、ARM64 干净 VM 核对工具启动、编译及 x86 仿真，记录 OS build 和预装依赖。若 OS 缺少必需 Framework，则不能称为零额外安装，不自动安装。 |
-| 生命周期 | WiX 3.14.1 归档、免费社区支持已结束；发布时记录已知风险、Windows 更新兼容性和后续迁移方案。任何紧急漏洞或目标宿主失败可触发重新选型。 |
+| 生命周期 | WiX 3.14.1 归档、免费社区支持已结束；v3 维持现状的封存裁决见 §1（2026-10-05）。发布时记录已知风险、Windows 更新兼容性和后续迁移方案；紧急漏洞或目标宿主失败仍可由用户触发重新选型。 |
 
 官方来源：[WiX 3.14.1 release](https://github.com/wixtoolset/wix3/releases/tag/wix3141rtm)、[WiX 3.14.1 许可证](https://github.com/wixtoolset/wix3/blob/wix3141rtm/LICENSE.TXT)、[WiX 3 维护状态](https://docs.firegiant.com/wix/wix3/)、[WiX 3 工具入门](https://docs.firegiant.com/wix3/tutorial/)。
 源代码有 ARM64 目标编译选项，但不证明 ARM64 构建宿主可用：[candle 源码](https://github.com/wixtoolset/wix3/blob/wix3141rtm/src/tools/candle/candle.cs)。

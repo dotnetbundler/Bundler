@@ -1,7 +1,7 @@
 # macOS `.app` 能力矩阵
 
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
-计划实现与外部待验收行绑定到 `docs/mac-app-roadmap.md`、`docs/mac-app-open-items.md`、`docs/special-acceptance.md` 中的明确阶段/ID。
+计划实现与外部待验收行绑定到 `docs/mac-app-roadmap.md`、`docs/special-acceptance.md` 中的明确阶段/项。
 上游参照：Tauri 审计（快照 `7dbfc1f`）；PKG 已确认另立 `MAC-PKG`。
 `MAC-APP-1`..`MAC-APP-5` 已完成（云 macOS VM 已验证，`2026-09-26`），`.app` 格式已冻结；表内“已实现”行为均附本机证据，冻结基线见 `docs/mac-app-roadmap.md`。
 
@@ -48,11 +48,11 @@
 | 能力 | 冻结状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
 | ad-hoc 签名（`codesign -s -`） | 已实现 | MAC-APP-3 | 本机实跑：`codesign -s -`+`--verify --deep --strict`+启动落盘标记全绿 |
-| Developer ID 应用签名（identity/临时钥匙串） | 已实现+外部待验收 | MAC-APP-3 / MAC-APP-OI-01 | identity 传入与临时钥匙串导入/销毁流程已代码化并桩断言；真实证书信任链外部待验收 |
+| Developer ID 应用签名（identity/临时钥匙串） | 已实现+外部待验收 | MAC-APP-3 / `docs/special-acceptance.md` | identity 传入与临时钥匙串导入/销毁流程已代码化并桩断言；真实证书信任链外部待验收 |
 | hardened runtime | 已实现 | MAC-APP-3 | `--options runtime` 作用于全部签名目标 |
 | entitlements | 已实现 | MAC-APP-3 | 文件路径显式配置，施加于主可执行与整包签名 |
 | inside-out 嵌套代码签名 | 已实现 | MAC-APP-3 | `MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries` 内全部常规文件先签（含非 Mach-O 托管 dll），后主可执行、再整包 |
-| 公证（`xcrun notarytool submit`+`xcrun stapler staple`） | 已实现+外部待验收 | MAC-APP-3 / MAC-APP-OI-01 | 默认关闭显式开启；ditto→submit(--wait)→staple 已组装；宿主下限 Xcode 13+/macOS 11.3+；真实提交外部待验收 |
+| 公证（`xcrun notarytool submit`+`xcrun stapler staple`） | 已实现+外部待验收 | MAC-APP-3 / `docs/special-acceptance.md` | 默认关闭显式开启；ditto→submit(--wait)→staple 已组装；宿主下限 Xcode 13+/macOS 11.3+；真实提交外部待验收 |
 | `skipStapling` 等价开关 | 已实现 | MAC-APP-3 | `SkipStapling`/`NotaryWait` 语义同上；不等待不上钉 |
 | 公证失败自动取 `notarytool log` | 已实现 | MAC-APP-3 | submit 非零退出即构建失败并附输出（notarytool 服务端日志在 `--wait` 输出内） |
 
@@ -67,7 +67,7 @@
 | 宿主工具探测与版本门槛 | 已实现 | MAC-APP-1 | 缺必需工具明确报错；可选工具降级警告 |
 | 示例项目 `samples/HelloBundlerApp`（`formats/MacApp.props`） | 已实现 | MAC-APP-1 | 真实 .NET 载荷 |
 | Gatekeeper 首启/信任评估 | 已实现+外部待验收 | MAC-APP-4 / `docs/special-acceptance.md` | 未签名隔离包被拦截已实测（`com.apple.quarantine` + `open` 阻断断言）；已公证场景需真实证书，外部待验收 |
-| 真实公证+上钉+撤销场景 | 外部待验收 | `docs/special-acceptance.md` SA-P-02、08 / OI-01 | 需 Apple Developer 凭证 |
+| 真实公证+上钉+撤销场景 | 外部待验收 | `docs/special-acceptance.md` SA-P-02、08 | 需 Apple Developer 凭证 |
 
 ## 有意排除
 

@@ -1,7 +1,7 @@
 # Alpine `.apk` 能力矩阵
 
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
-外部待验收行绑定到 `docs/alpine-apk-open-items.md`、`docs/special-acceptance.md` 中的明确 ID。
+外部待验收行绑定到 `docs/special-acceptance.md` 中的明确项。
 决策与阶段见 `docs/alpine-apk-roadmap.md`。
 本矩阵于 2026-09-30 随 `APK-1..5` 实施建立；全部行以 `AlpineApkIntegrationTests` 与 `tests/Bundler.Tests` `AlpineApkTests` 为证据（验证宿主为 Ubuntu x86_64 + docker `alpine:latest`，aarch64 经 qemu binfmt 仿真）。
 
@@ -10,7 +10,7 @@
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
 | `.apk` 产物（托管三段 gzip 流串联写入器，零原生工具） | 已实现 | APK-1 | `OutputDirectory/<package>-<version>-r<release>.apk`（默认 flat；`outputLayout=byFormat` 时 `alpineapk/` 分目录） + `.sha256` 侧车；gzip 魔数/段数/零块规则逐一断言 |
-| 任意构建宿主（含 Windows/macOS CI） | 已实现（Linux 宿主验证）/已由 CI 收编（release-verify alpine-docker + ubuntu-arm 腿） | APK-1 | 纯托管写出，无宿主 OS 门控；跨宿主构建矩阵属 APK-OI-01 |
+| 任意构建宿主（含 Windows/macOS CI） | 已实现（Linux 宿主验证）/已由 CI 收编（release-verify alpine-docker + ubuntu-arm 腿） | APK-1 | 纯托管写出，无宿主 OS 门控；跨宿主产件已由托管写出保证、联合测试验证 |
 | 目录载荷 → `/usr/lib/<package-name>/` | 已实现 | APK-1 | 固定安装根；数据段真实 `apk add` 后 `apk info -L` 逐路径断言 |
 | `/usr/bin/<command>` 相对符号链接 | 已实现 | APK-1 | `usr/bin/<name>` → `../lib/<package>/<main>`；`BundlerAlpineApkBinLink` 可改名或 `none` 关闭 |
 | pax 扩展头 `APK-TOOLS.checksum.SHA1`（十六进制 sha1） | 已实现 | APK-4 | 逐常规文件 + 逐符号链接（按链接目标字符串哈希）；对照真实 `musl` apk 解剖校验，缺此被 `apk add` 报 missing embedded checksum 拒绝 |
@@ -36,9 +36,9 @@
 | `apk add --allow-untrusted` 真实安装/运行/删除 | 已实现 | APK-4 | docker `alpine:latest` 容器内实装 → 脚本标记 → `/usr/bin` 运行 → `apk del` 清理断言 |
 | 未签名包拒绝验证（无 `--allow-untrusted`） | 已实现 | APK-4 | `apk add` 报错拒绝断言 |
 | 可信公钥安装（`/etc/apk/keys/`） | 已实现 | APK-4 | 自签包 + 公钥入 keys 后免 `--allow-untrusted` 实装通过 |
-| aarch64 仿真安装/运行 | 已实现（qemu binfmt）/外部待验收（真机） | APK-4 | tonistiigi/binfmt 下 `apk add` + 运行断言；真机属 APK-OI-02 |
+| aarch64 仿真安装/运行 | 已实现（qemu binfmt）/外部待验收（真机） | APK-4 | tonistiigi/binfmt 下 `apk add` + 运行断言；aarch64 真宿主由 release-verify `ubuntu-26.04-arm` 腿原生实证（`DockerArm64NativeInstallRunRemove`）；真设备观感仍挂 `docs/special-acceptance.md` |
 | 桌面集成（.desktop/图标/metainfo） | 明确拒绝 | — | musl/Alpine 是包管理器生态非桌面场景；与本格式不相关 |
-| `abuild`/apk 仓库索引与发布工作流 | 不适用（边界外） | — | 工具只产出单包；仓库管理属外部工作流（APK-OI-04 为可选扩展评估） |
+| `abuild`/apk 仓库索引与发布工作流 | 不适用（边界外） | — | 工具只产出单包；工具只产出单包；仓库索引/发布管理属外部工作流 |
 
 ## 签名
 
