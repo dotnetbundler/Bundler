@@ -50,7 +50,7 @@ jobs:
       inputs.runners == 'all' ||
       contains(format(',{0},', inputs.runners), format(',{0},', matrix.os))
     env:
-      SUITE: ${{ inputs.suite || 'unit' }}
+      SUITE: ${{ github.event.inputs.suite || 'unit' }}
       # 集成真装真卸同意闸——CI runner 是可丢弃环境，装/卸断言即目的
       BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
