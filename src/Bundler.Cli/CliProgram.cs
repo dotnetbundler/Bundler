@@ -62,15 +62,39 @@ public static class CliProgram
         if (parsed.Command is "update-keygen")
         {
             var keyPath = parsed.RequiredOption("key-file");
+            RejectUnrelatedOptions(parsed, ["key-file"]);
+            if (File.Exists(keyPath))
+            {
+                // 覆盖私钥=旧发布件签名链孤儿——先拦在写入前，rc=2 明示。
+                throw new CliUsageException(
+                    $"Key file already exists: {Path.GetFullPath(keyPath)} — remove it or pick a new path.");
+            }
+            // 父目录不存在的 IO 错不如直接建——用户指哪写哪。新目录默认权限在
+            // 宽松 umask 下对本地其他用户可读：CreateDirectory(path, mode) 一步把
+            // 链条里全部新建目录收成 700，无「建完未 chmod」窗口（review SEC）。
+            var parent = Path.GetDirectoryName(Path.GetFullPath(keyPath));
+            if (parent is { Length: > 0 } && !Directory.Exists(parent))
+            {
+                if (OperatingSystem.IsWindows())
+                {
+                    Directory.CreateDirectory(parent);
+                }
+                else
+                {
+                    Directory.CreateDirectory(parent, UnixFileMode.UserRead |
+                        UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                }
+            }
             var material = UpdateKeyMaterial.Generate();
             material.Save(keyPath);
-            stdout.WriteLine(keyPath);
-            stdout.WriteLine(material.PublicPointBase64());
+            stdout.WriteLine($"key file: {keyPath}");
+            stdout.WriteLine($"public key: {material.PublicPointBase64()}");
             return 0;
         }
 
         if (parsed.Command is "init")
         {
+            RejectUnrelatedOptions(parsed, []);
             return RunInit(stdout, stderr);
         }
 
@@ -103,6 +127,26 @@ public static class CliProgram
             {
                 Directory.Delete(mergedDirectory, recursive: true);
             }
+        }
+    }
+
+    // init/update-keygen 不读配置——bundle 旋钮在这两个命令上静默无效是误导，rc=2 明示。
+    // 旗标同理：--strict/--no-config 管推断与配置，这两个命令用上是误输；
+    // --json/--quiet/--verbose 是输出整形通用旗，不拒。
+    private static void RejectUnrelatedOptions(CliArguments parsed, string[] allowed)
+    {
+        var unexpected = parsed.Options.Keys.FirstOrDefault(k => !allowed.Contains(k, StringComparer.Ordinal));
+        if (unexpected is not null)
+        {
+            throw new CliUsageException($"Option '--{unexpected}' has no effect with '{parsed.Command}'.");
+        }
+        if (parsed.Strict)
+        {
+            throw new CliUsageException($"Option '--strict' has no effect with '{parsed.Command}'.");
+        }
+        if (parsed.NoConfig)
+        {
+            throw new CliUsageException($"Option '--no-config' has no effect with '{parsed.Command}'.");
         }
     }
 
@@ -469,7 +513,7 @@ public static class CliProgram
         writer.WriteLine("  bundler validate|plan|bundle --input-dir <dir> [options]");
         writer.WriteLine("      (--input-dir repeated merges the dirs into a universal payload, e.g. macos-x86_64 + macos-aarch64;");
         writer.WriteLine("       --reference-dir <dir> gives the RID-less publish that supplies managed payload files)");
-        writer.WriteLine("      [--target <t>] [--formats <csv>] [--product-name <name>] [--identifier <id>]");
+        writer.WriteLine("      [--target <t>] [--formats <csv|;list>] [--product-name <name>] [--identifier <id>]");
         writer.WriteLine("      [--package-version <ver>] [--main-executable <name>]");
         writer.WriteLine("      [--output-dir <dir>] [--output-layout <flat|byFormat>] [--json] [--quiet|--verbose]");
         writer.WriteLine("  Missing options are inferred: target=this host, formats=usual set for the target OS,");
@@ -478,8 +522,8 @@ public static class CliProgram
         writer.WriteLine("  ./bundler.json is loaded automatically when present (--config <file> overrides, --no-config skips).");
         writer.WriteLine("  Paths in --config resolve relative to the config file; paths given on the command line resolve relative to the working directory.");
         writer.WriteLine("  bundler init                            write a minimal bundler.json here");
-        writer.WriteLine("  bundler update-keygen --key-file <path>   generate an update signing key; prints key path and public key");
-        writer.WriteLine("  bundler --version | --help");
+        writer.WriteLine("  bundler update-keygen --key-file <path>   generate an update signing key; refuses to overwrite");
+        writer.WriteLine("  bundler --version | --help | -h");
         writer.WriteLine("Formats: nsis"
 #if BUNDLER_HOST_WINDOWS
             + " msi"

@@ -554,6 +554,8 @@ internal static class CliConfig
                 // fall through: treat as a plain string
             }
         }
+        // 注意：这里只劈逗号——非路径标量（description/productName 等）含 ';'
+        // 是合法单值，MSBuild 式分号列表只在 formats 与路径列表入口收。
         if (value.Contains(','))
         {
             return new JsonArray(value.Split(',', StringSplitOptions.TrimEntries)

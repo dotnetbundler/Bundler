@@ -64,6 +64,11 @@ internal sealed class CliArguments
         for (; index < args.Length; index++)
         {
             var argument = args[index];
+            if (argument is "-h")
+            {
+                help = true;
+                continue;
+            }
             if (!argument.StartsWith("--", StringComparison.Ordinal) || argument.Length == 2)
             {
                 throw CliUsageException($"Unexpected argument '{argument}'.");

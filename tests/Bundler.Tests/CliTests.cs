@@ -1121,6 +1121,62 @@ public static class CliTests
     }
 
     [Fact]
+    static void UpdateKeygenRefusesOverwriteAndLabelsOutput()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "bundler-keygen-" + Guid.NewGuid().ToString("N"));
+        var keyPath = Path.Combine(root, "update.key");
+        try
+        {
+            var (code, stdout, _) = Run("update-keygen", "--key-file", keyPath);
+            Assert.Equal(0, code);
+            // 两行必须有标签——人看输出才分得清路径与公钥。
+            Assert.Contains("key file:", stdout);
+            Assert.Contains("public key:", stdout);
+            // 覆盖私钥=签名链孤儿——先拦 rc=2 而非写半截 IO 错。
+            var (code2, _, err2) = Run("update-keygen", "--key-file", keyPath);
+            Assert.Equal(2, code2);
+            Assert.Contains("already exists", err2);
+            if (OperatingSystem.IsLinux())
+            {
+                // 新父目录必须 700——宽松 umask 下私钥目录不许对本地他用户可读。
+                var mode = File.GetUnixFileMode(Path.GetDirectoryName(keyPath)!);
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, mode);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    static void InitAndKeygenRejectBundleOptions()
+    {
+        // 不读配置的命令吃 bundle 旋钮静默无效是误导——rc=2 明示。
+        var (code, _, err) = Run("init", "--formats", "zip");
+        Assert.Equal(2, code);
+        Assert.Contains("no effect", err);
+        var (code2, _, err2) = Run("update-keygen", "--key-file", "k", "--identifier", "dev.x");
+        Assert.Equal(2, code2);
+        Assert.Contains("no effect", err2);
+        // 配置相关旗标同拒——--json/--quiet/--verbose 通用旗不在此列。
+        var (code3, _, err3) = Run("init", "--strict");
+        Assert.Equal(2, code3);
+        Assert.Contains("no effect", err3);
+        var (code4, _, err4) = Run("update-keygen", "--key-file", "k", "--no-config");
+        Assert.Equal(2, code4);
+        Assert.Contains("no effect", err4);
+    }
+
+    [Fact]
+    static void ShortHelpFlagIsAccepted()
+    {
+        var (code, stdout, _) = Run("-h");
+        Assert.Equal(0, code);
+        Assert.Contains("Usage:", stdout);
+    }
+
+    [Fact]
     static void NoExecutableCandidatesEmitsFallbackNote()
     {
         // 目录内零可执行候选时推断层先 note 预警——不等到 validator 才爆炸。
