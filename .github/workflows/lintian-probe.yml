@@ -1,0 +1,34 @@
+# 临时探针：trixie 容器内直跑 appstreamcli/lintian 校验 deb fixture metainfo，
+# 迭代 appstream-metadata-validation-failed 豁免/修复——定稿后整文件删除。
+name: lintian-probe
+
+on:
+  push:
+    branches: [devin/1791806527-test-matrix-legs]
+    paths:
+      - '.github/workflows/lintian-probe.yml'
+      - 'tests/Bundler.IntegrationTests/Fixtures/Deb/**'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: lintian-probe
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: trixie 容器内 pedantic 校验 metainfo
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD/tests/Bundler.IntegrationTests/Fixtures/Deb/Assets:/m:ro" \
+            debian:trixie sh -c '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq && apt-get install -y -qq appstream >/dev/null 2>&1
+              echo "=== appstreamcli validate --pedantic ==="
+              appstreamcli validate --pedantic /m/app.metainfo.xml || true
+              echo "=== appstreamcli validate ==="
+              appstreamcli validate /m/app.metainfo.xml || true
+            '

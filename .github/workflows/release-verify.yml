@@ -78,6 +78,12 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.x"
+      # fixture 走源内 buildTransitive targets——任务程序集须先建在 bin/Release，
+      # 否则 UsingTask 报 MSB4062（verify 脚本先 build 全解故集成腿无此坑）。
+      - name: 预构建 MSBuild 任务程序集
+        shell: bash
+        run: dotnet build src/Bundler.MSBuild/Bundler.MSBuild.csproj -c Release --nologo
+
       - name: 产 macos-universal .app（FDD 合并）+ sha256 清单
         shell: bash
         run: |
