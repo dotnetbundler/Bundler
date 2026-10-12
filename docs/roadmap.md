@@ -117,7 +117,7 @@ per-machine 只验证构建产物和数据库，原生 x86/ARM64 宿主、生产
 8. `WIN-MSI-8`（本机范围已完成）：常规模式白名单 `.wxs` fragment + 调用方 ID 前缀 + 显式 Component/Feature 引用；显式专家模式整份模板/merge module，身份经 `candle -d` 变量与构建后数据库回读强制；扩展输入计入指纹。
 9. `WIN-MSI-9`（已完成）：逐项 Tauri 通用能力审计（快照漂移复核无 MSI 实质变化）、全部本机适用回归、工具许可/体积复核和再冻结，无新增功能。
 
-前置条件、交付物、不做事项、自动化/真实安装测试及退出条件见 [`docs/msi-roadmap.md`](msi-roadmap.md) 第 10 节；
+前置条件、交付物、不做事项、自动化/真实安装测试及退出条件见 [`docs/msi-roadmap.md`](msi-roadmap.md)；
 上游审计分类（已实现/计划/明确排除/另立产品路线）与逐项状态记入 [MSI 能力矩阵](msi-capability-matrix.md)。
 原 WIN-MSI-4 的实际证据继续有效，不能借新路线宣称计划能力已完成。
 MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；

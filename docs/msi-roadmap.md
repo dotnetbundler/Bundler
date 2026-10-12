@@ -3,7 +3,7 @@
 > 状态：`WIN-MSI-1..6` 的当前 Windows 11 x64 本机自动化范围已完成（2026-09-26）；
 > `alpha.37` 是既有身份基线，`alpha.40` 增加 x86、显式版本映射和可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式，`alpha.44` 增加 Tauri 对齐的跨格式收尾（MSI 读前 NSIS 安装目录延续）。
 > `WIN-MSI-1..9` 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`；已全部并入 `main`。
-> 原阶段证据见第 6..9 节，扩展路线及 WIN-MSI-5/6 证据见第 10 节。
+> 阶段实施证据以 git 提交与 PR 记录为准。
 > 原开发分支 `msi-development`（已并入 `main`）；历史记录中的 `codex/msi-development` 是改名前的名称。
 > 规范入口：`docs/roadmap.md`；
 > 上游 Tauri 审计已完成并固化进本文件与能力矩阵，逐项能力见 `docs/msi-capability-matrix.md`，外部条件见 `docs/msi-open-items.md`，人工步骤见 `docs/msi-manual-testing.md`；

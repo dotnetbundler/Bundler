@@ -41,7 +41,7 @@ WiX 后续的 Open Source Maintenance Fee 从 v6 引入，不适用于 v3.14.1�
 WIN-MSI-4 于 2026-09-25 重新核对未改变的 15 文件子集。
 Release 构建现将 WiX 编译器和链接器警告视为错误，只有已说明的纯当前用户安装 `ICE91` 例外。
 MSI 集成测试的打包核对按 SHA-256 逐字节比对 NuGet 包内的许可证、对应源码归档、校验清单、本文与 `THIRD-PARTY-NOTICES.md`。
-最终包大小和 SHA-256 记于 `docs/msi-roadmap.md` 第 9 节，以免包内哈希自我引用。
+最终定稿包大小 **14,397,760 字节**、SHA-256 **`8892C11C9F18958E1A7916049BC524467C7E65EF82DDC9B9C0B151666C7D9025`**（记于本文以免包内哈希自我引用）。
 没有新增 WiX 或其他第三方二进制。
 WiX v3 已不再获得免费社区服务，包括安全修复：[官方状态](https://docs.firegiant.com/wix/wix3/)。
 大范围公开分发前须重新评估维护风险。
@@ -52,4 +52,4 @@ WiX v3 已不再获得免费社区服务，包括安全修复：[官方状态](h
 
 WiX v3 已退出免费社区服务。
 本项目不依赖付费 FireGiant 支持或扩展。
-构建宿主的 .NET Framework 与 ARM64 兼容性仍以 `docs/msi-roadmap.md` 中 Windows 虚拟机矩阵的验证为准。
+构建宿主的 .NET Framework 与 ARM64 兼容性的 Windows 虚拟机矩阵验证结果以 git 提交与 PR 记录为准。

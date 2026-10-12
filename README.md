@@ -10,7 +10,7 @@ Core 和格式后端本身不依赖 `.csproj` 或 .NET 应用模型，`bundler` 
 MSI 已完成 WIN-MSI-1..9，`alpha.37` 是既有 x64/ARM64 身份基线；
 `alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 翻译覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式，`alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 读取前 NSIS 安装目录延续）。
 WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线；`alpha.44` 在其上只做跨格式收尾。
-现有 MSI 用法以本文实际配置为准，计划与 Tauri 对照见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md) 第 10 节和 [`docs/msi-capability-matrix.md`](docs/msi-capability-matrix.md)。
+现有 MSI 用法以本文实际配置为准，能力逐项对照见 [`docs/msi-capability-matrix.md`](docs/msi-capability-matrix.md)。
 `bundler` CLI 已完成并入 `main`（CLI-C1 冻结于 `0.1.0-alpha.62`，dotnet tool nupkg 与原生 AOT 二进制双分发，用法见下文）；macOS `.app`/`.dmg`/`.pkg` 均已冻结（MAC-APP-1..5 / MAC-DMG-1..5 冻结基线 `0.1.0-alpha.45`，MAC-PKG-1..5 冻结基线 `0.1.0-alpha.47`）。
 Linux `.deb` 已冻结并入 `main`（`LINUX-DEB-1..5`，冻结基线 `0.1.0-alpha.51`）：纯托管 ar/tar/gzip 写入器（无原生工具依赖、任意构建宿主可产出），control 全字段+维护者脚本+conffiles+systemd unit+桌面集成，`sudo dpkg -i/-r/-P` 真实装卸、lintian 硬断言、docker debian/ubuntu 矩阵全部验证。
 Linux `.rpm` 已冻结并入 `main`（`0.1.0-alpha.55`，`LINUX-RPM-1..5`）：纯托管 lead/header/cpio/gzip 写入器，六族关系字段 + License/Group/Url + freedesktop 桌面集成（.desktop/图标/metainfo）+ 任意路径映射 + 四 scriptlet/systemd unit/%config(noreplace)，`rpm -qip` 逐字段断言、`desktop-file-validate`、docker `fedora/rockylinux/opensuse` 三容器真实 `rpm -i`/`rpm -U`/`rpm -e` 与 `.rpmsave` 语义验证、`rpmlint` 豁免清单硬基线、`deb;rpm` 同次 publish 扇出已放开；可选 OpenPGP 签名（供私钥即嵌 `RPMSIGTAG_RSA`+`PGP` 双标签，`rpm -K`/zypper/dnf 实测验签通过）。
