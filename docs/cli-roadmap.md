@@ -121,3 +121,12 @@ MSBuild 属性同步：`Bundler<Format><Old>` 全部按上表改名（如 `Bundl
 - `bundler.json` 顶层收 `packageVersion` 作 `version` 别名（与 CLI `--package-version` 同名）；与 `version` 同写为冲突（rc=2），CLI 覆盖文件值不受影响。
 - MSBuild 同步：`BundlerIdentifier` 缺省合成 `dev.bundler.<AssemblyName 规范化>`+`Warning`（原 Error）；`BundlerFormats` 缺省按目标 OS 推导（原 `nsis` 硬默认）。
 - 断言：`CliTests` 新增 5 件（快速路 e2e / strict / init / 自动发现+--no-config / packageVersion 别名+冲突）。
+
+### 2026-10-12 CLI 摩擦收口（三轮重构检查）
+
+- 列表分隔符归一：`--formats` 与路径类列表（`--icons` 等）在逗号之外同收 `;`，与 bundler.json/MSBuild 列表惯例对齐；非路径标量（`--description` 等）只劈逗号，含 `;` 仍是合法单值。
+- `mainExecutable` 零可执行候选时推断层先 note 预警回落 `<productName>[.exe]`，不再静默等到 validator。
+- `update-keygen`：已有文件先拒 rc=2（原撞 IOException 落 rc=1）；缺省父目录自动建且 POSIX 收 700；stdout 两行加 `key file:`/`public key:` 标签。
+- `init`/`update-keygen` 不读配置——bundle 旋钮与 `--strict`/`--no-config` 旗标一律 rc=2 明示 has no effect（`--json`/`--quiet`/`--verbose` 通用旗不拒）。
+- `-h` 收为帮助别名；usage 文本同步（formats 分隔符、`-h`、keygen 覆盖拒）。
+- 断言：`CliTests` 新增 7 件（分号 formats/分号 icons/零候选 note/keygen 覆盖拒+700/无关旋钮+旗标拒/`-h`）。

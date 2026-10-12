@@ -423,7 +423,10 @@ internal static class CliConfig
                 var knobName = KnobName(knob);
                 // CLI 覆盖值相对当前工作目录解析，不走配置文件的 baseDirectory；
                 // 路径旋钮不过 ParseValue 的数值强转（"00123"/"true" 是合法文件名）。
-                var sectionValue = IsPathKnob(section, knobName) ? ParsePathValue(value) : ParseValue(value);
+                // 分号列表只对集合型旋钮生效——标量路径含 ';' 是合法单值（review BUG）。
+                var sectionValue = IsPathKnob(section, knobName)
+                    ? ParsePathValue(value, IsCollectionProperty(SectionTypes[section], knobName))
+                    : ParseValue(value);
                 child[knobName] = AsCollectionElement(
                     IsPathKnob(section, knobName) ? ResolveOverridePaths(sectionValue) : sectionValue,
                     SectionTypes[section], knobName);
@@ -431,7 +434,9 @@ internal static class CliConfig
                 continue;
             }
             var fieldName = FieldName(name);
-            var overrideValue = SharedPathFields.Contains(fieldName) ? ParsePathValue(value) : ParseValue(value);
+            var overrideValue = SharedPathFields.Contains(fieldName)
+                ? ParsePathValue(value, IsCollectionProperty(typeof(BundleConfiguration), fieldName))
+                : ParseValue(value);
             document[fieldName] = AsCollectionElement(
                 SharedPathFields.Contains(fieldName) ? ResolveOverridePaths(overrideValue) : overrideValue,
                 typeof(BundleConfiguration), fieldName);
@@ -444,7 +449,7 @@ internal static class CliConfig
     // 内的路径同样按工作目录解析，逗号不再把 JSON 拆开。
     // 路径旋钮专用：不做数字/布尔强转——"00123"/"true" 是合法文件名；
     // JSON 容器仍按形状解析（叶串原样），逗号列表按原文逐项拆。
-    private static JsonNode? ParsePathValue(string value)
+    private static JsonNode? ParsePathValue(string value, bool allowSemicolon = false)
     {
         if (value.StartsWith('[') || value.StartsWith('{'))
         {
@@ -457,9 +462,12 @@ internal static class CliConfig
                 // fall through: treat as a plain string
             }
         }
-        if (value.Contains(','))
+        if (value.Contains(',') || allowSemicolon && value.Contains(';'))
         {
-            return new JsonArray(value.Split(',', StringSplitOptions.TrimEntries)
+            // 分号同收但只对集合型路径旋钮——MSBuild 列表惯例是 ';'（文件名含 ';'
+            // 与 MSBuild 同样不可表达）；标量路径（--output-dir "a;b"）保持字面量。
+            var separators = allowSemicolon ? new[] { ',', ';' } : new[] { ',' };
+            return new JsonArray(value.Split(separators, StringSplitOptions.TrimEntries)
                 .Select<string, JsonNode?>(entry => entry).ToArray());
         }
         return JsonValue.Create(value);
@@ -572,14 +580,14 @@ internal static class CliConfig
         {
             return node;
         }
-        var propertyType = BundlerJsonContext.Default.GetTypeInfo(owner)?.Properties
+        return IsCollectionProperty(owner, propertyName) ? new JsonArray(node) : node;
+    }
+
+    private static bool IsCollectionProperty(Type owner, string propertyName) =>
+        BundlerJsonContext.Default.GetTypeInfo(owner)?.Properties
             .FirstOrDefault(candidate =>
                 string.Equals(candidate.Name, propertyName, StringComparison.Ordinal))
-            ?.PropertyType;
-        return propertyType is not null && IsJsonCollection(propertyType)
-            ? new JsonArray(node)
-            : node;
-    }
+            ?.PropertyType is { } propertyType && IsJsonCollection(propertyType);
 
     private static bool IsJsonCollection(Type type) =>
         type != typeof(string) &&
