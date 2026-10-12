@@ -707,12 +707,13 @@ internal static class CliConfig
                         "Target is required: pass --target or set targets[].target " +
                         "(--strict disables inference).");
                 }
-                // ≥2 个 --input-dir 走 universal 合并——缺省目标必须标成 universal，
-                // 否则合并出的胖载荷被标上宿主单架构名（review BUG-2）。
-                node["target"] = parsed.InputDirectories.Count >= 2
+                // ≥2 个 --input-dir 走 universal 合并且只进 targets[0]——
+                // 缺省目标只对第一目标标 universal（review BUG-2/二轮）；
+                // 其余目标按宿主推导，不误标。
+                node["target"] = parsed.InputDirectories.Count >= 2 && ReferenceEquals(node, target)
                     ? "macos-universal"
                     : HostTarget();
-                inferred.Add(parsed.InputDirectories.Count >= 2
+                inferred.Add(parsed.InputDirectories.Count >= 2 && ReferenceEquals(node, target)
                     ? $"target={node["target"]} (universal merge)"
                     : $"target={node["target"]} (host default)");
             }
