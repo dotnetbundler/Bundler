@@ -386,9 +386,11 @@ public static class AppImageTests
         {
             var first = new AppImageBundler().BuildAsync(
                 Configuration(input, output)).GetAwaiter().GetResult().Single();
+            var firstBytes = File.ReadAllBytes(first.Path);
             var second = new AppImageBundler().BuildAsync(
                 Configuration(input, output)).GetAwaiter().GetResult().Single();
-            Assert.Equal(File.ReadAllBytes(first.Path), File.ReadAllBytes(second.Path));
+            var secondBytes = File.ReadAllBytes(second.Path);
+            Assert.Equal(firstBytes, secondBytes);
         }
         finally
         {
