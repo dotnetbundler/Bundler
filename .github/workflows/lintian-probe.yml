@@ -19,16 +19,20 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - name: trixie 容器内 pedantic 校验 metainfo
+      - name: trixie 容器内 pedantic 校验 + 真 deb 真 lintian 对照
         run: |
           set -euo pipefail
           docker run --rm \
             -v "$PWD/tests/Bundler.IntegrationTests/Fixtures/Deb/Assets:/m:ro" \
             debian:trixie sh -c '
               export DEBIAN_FRONTEND=noninteractive
-              apt-get update -qq && apt-get install -y -qq appstream >/dev/null 2>&1
+              apt-get update -qq && apt-get install -y -qq appstream lintian >/dev/null 2>&1
               echo "=== appstreamcli validate --pedantic ==="
               appstreamcli validate --pedantic /m/app.metainfo.xml || true
-              echo "=== appstreamcli validate ==="
-              appstreamcli validate /m/app.metainfo.xml || true
+              echo "=== lintian on minimal deb ==="
+              mkdir -p /tmp/root/DEBIAN /tmp/root/usr/share/metainfo
+              cp /m/app.metainfo.xml /tmp/root/usr/share/metainfo/com.dotnetbundler.debintegrationfixture.metainfo.xml
+              printf "Package: test-fixture\nVersion: 1.0-1\nArchitecture: amd64\nMaintainer: T <t@t>\nDescription: t\n" > /tmp/root/DEBIAN/control
+              dpkg-deb --build /tmp/root /tmp/test.deb >/dev/null
+              lintian /tmp/test.deb | grep -i appstream || echo "lintian: no appstream tags"
             '

@@ -4,7 +4,10 @@
   <metadata_license>MIT</metadata_license>
   <name>Bundler Deb Fixture</name>
   <summary>Bundler deb integration fixture</summary>
-  <description><p>Fixture application used by the Bundler deb integration tests.</p></description>
+  <developer><name>DotNet.Bundler</name></developer>
+  <description><p>Bundler deb integration fixture application. It exercises package installation, desktop integration, maintainer scripts, conffile handling, and removal semantics for the Bundler test suite.</p></description>
   <launchable type="desktop-id">bundler-deb-fixture.desktop</launchable>
   <url type="homepage">https://github.com/dotnetbundler/Bundler</url>
+  <releases><release version="1.0.0" date="2026-10-01" type="stable"/></releases>
+  <content_rating type="oars-1.1"/>
 </component>
