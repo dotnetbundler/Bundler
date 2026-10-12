@@ -915,6 +915,22 @@ public static class CliTests
             var (code3, _, err3) = Run("bundle", "--input-dir", input, "--formats", "zip");
             Assert.Equal(0, code3);
             Assert.DoesNotContain("At least one", err3);
+
+            // 取消注释 targets 示例（含首个逗号行）后 JSON 必须仍合法——
+            // 报错应落在配置校验（目录不存在）而非 JSON 解析（review BUG）。
+            var uncommented = File.ReadAllText(Path.Combine(dir, "bundler.json"))
+                .Replace("// , \"targets\"", ", \"targets\"")
+                .Replace("//   {", "  {")
+                .Replace("//     \"target\"", "    \"target\"")
+                .Replace("//     \"inputDirectory\"", "    \"inputDirectory\"")
+                .Replace("//     \"formats\"", "    \"formats\"")
+                .Replace("//   }", "  }")
+                .Replace("// ]", "]");
+            File.WriteAllText(Path.Combine(dir, "bundler.json"), uncommented);
+            var (code4, _, err4) = Run("validate");
+            Assert.DoesNotContain("JSON", err4);
+            Assert.DoesNotContain("parse", err4);
+            Assert.NotEqual(0, code4); // publish/linux-x64 不存在 → 校验错
         }
         finally
         {

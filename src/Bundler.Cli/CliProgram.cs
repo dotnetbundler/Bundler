@@ -129,9 +129,9 @@ public static class CliProgram
           "identifier": "com.example.myapp",
           "version": "1.0.0"
 
-          // 多目标示例：取消注释并按需编辑；不写 targets 时由
-          // `bundler bundle --input-dir <目录>` 即时生成单个目标。
-          // "targets": [
+          // 多目标示例：取消注释以下各行（含首个逗号行）并按需编辑；
+          // 不写 targets 时由 `bundler bundle --input-dir <目录>` 即时生成单个目标。
+          // , "targets": [
           //   {
           //     "target": "linux-x86_64",
           //     "inputDirectory": "publish/linux-x64",
