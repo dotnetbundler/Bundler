@@ -4,7 +4,7 @@
 > 上游审计已完成（`.dmg` 节，Tauri 固定快照 `7dbfc1f`）；
 > `.app` 侧已冻结的契约见 [`docs/mac-app-roadmap.md`](mac-app-roadmap.md)。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
-> 逐项能力状态见 [`docs/mac-dmg-capability-matrix.md`](mac-dmg-capability-matrix.md)；外部条件见 [`docs/mac-dmg-open-items.md`](mac-dmg-open-items.md)；人工步骤见 [`docs/mac-dmg-manual-testing.md`](mac-dmg-manual-testing.md)。
+> 逐项能力状态见 [`docs/mac-dmg-capability-matrix.md`](mac-dmg-capability-matrix.md)；外部条件见 [`docs/mac-dmg-open-items.md`](mac-dmg-open-items.md)；人工/特殊验收见 [`docs/special-acceptance.md`](special-acceptance.md)。
 
 ## 1. 已确认决策（2026-09-26，全部落定）
 

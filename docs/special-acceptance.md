@@ -1,8 +1,16 @@
 # 特殊验收清单
 
-> 本文件登记只能由外部付费条件或用户本人手动完成的验收项。
+> 本文件登记**只能由外部付费条件或用户本人手动完成**的验收项。
 > 每项自包含：要做什么、所需条件、完成证据、当前卡点、平替方案。
 > 能由自动化测试或宿主子会话完成的验收不在此列；完成证据以用户执行后的记录回填。
+
+## 执行约定
+
+- 需要重启、UAC、系统级待处理删除、磁盘耗尽或故意修改 ACL 的验收，只能在可抛弃虚拟机或专用测试机执行，先创建快照。
+- 每轮记录：Git SHA、包版本、OS build/架构、账户权限、产物 SHA-256、日志路径、结果与清理方式。
+- 生产私钥与密码只经环境变量/秘密库传递，不进仓库、命令行或记录。
+- 结论只写"通过/失败/未执行/条件不适用"，未执行不得写成通过。
+- 半自动验收脚本集中在 `tests/Special/`（索引见其 README），需人工动作处暂停等待。
 
 ## 一、付费凭证类
 
@@ -11,7 +19,7 @@
 - **要做什么**：用生产级 Authenticode 证书对隔离载荷、插件、卸载器、安装器逐件签名并挂 RFC 3161 时间戳，验签通过并在真实 Windows 上观察 SmartScreen 行为。
 - **所需条件**：OV 证书约 ¥700–3000/年或 EV 证书约 ¥2000–5000/年；时间戳服务器免费。
 - **完成证据**：`signtool verify /pa` 通过受信链；SmartScreen 拦截/放行观察记录；证书过期后已签件凭时间戳仍被信任的证据。
-- **当前卡点**：签名管线（顺序、隔离、PE 签名、提供方调用、失败清理、秘密隐藏）已全验；RFC 3161 时间戳嵌入已用自签证书+公共服务器实证（见末节）；缺 CA 信任链与 SmartScreen 声誉证据。
+- **当前卡点**：签名管线（顺序、隔离、PE 签名、提供方调用、失败清理、秘密隐藏）已全验；RFC 3161 时间戳嵌入已用自签证书+公共服务器实证；缺 CA 信任链与 SmartScreen 声誉证据。
 - **平替方案**：① Azure Trusted Signing 约 ¥70/月起按量计费、含时间戳，最低成本云签名；② SignPath 对合格开源项目免费；③ EV 证书立即获 SmartScreen 声誉，OV 需装机量自然积累；④ 接受警告期如实声明。
 
 ### SA-P-02 `.app` 签名+公证全链（Apple Developer ID）
@@ -57,6 +65,13 @@
 - **所需条件**：SA-P-02 的凭证就位后一次验收。
 - **完成证据**：签名应用更新链验证记录；现实现无生产证书只能跑未签名腿。
 
+### SA-P-08 mac 公证异常路径
+
+- **要做什么**：真实凭证下跑公证异常分支：凭证缺失/错误、非 Accepted、撤销后离线首启、`skipStapling` 产品行为。
+- **所需条件**：同 SA-P-02 的凭证与可联网宿主。
+- **完成证据**：`notarytool log`、各异常路径断言与离线首启记录。
+- **当前卡点**：正常路径（SA-P-02）与异常路径共用凭证；无凭证时两路均不可验。
+
 ## 二、只能用户手动处理类
 
 ### A. 用户账号/材料/真人审校类
@@ -70,29 +85,23 @@
 | mac quarantine 首启 | `.app` 经真实分发渠道（公网/内网下载）产生 quarantine 首启场景 | 下载-首启观察记录 | quarantine xattr 标记落位模拟腿已一次性 CI 跑绿（run 37892544275）；真实下载首启弹窗观察仍挂本表 |
 | NSIS 22 语言母语审校 | 内置 22 语言文案母语/专业审校，阿拉伯语/波斯语重点 RTL 布局，代表性缩放下截图 | 母语审校意见+RTL/DPI 截图 | 机械层已全净（键集逐位一致、零条与英文同）；语言准确性、地区术语、截断只能真人 |
 | MSI 本地化审校+辅助功能 | 支持语言集 UI、缩放和可访问性检查 | 审校与可访问性记录 | 同上需真人 |
-| MSI 对话框交互腿 | Browse 对话框、范围外路径触发 `InvalidDirDlg`、`ADDLOCAL` Feature 选择交互、启动勾选生效、位图显示、缩放/辅助功能、per-machine UAC 交互安装 | 真实交互 UI 环境记录 | 需真实 Windows 桌面交互；许可/InstallDir/Install/Finish 流转已自动化 |
+| MSI 对话框交互腿 | Browse 对话框、范围外路径触发 `InvalidDirDlg`、`ADDLOCAL` Feature 选择交互、启动勾选生效、取消与修复（含缺源修复提示）、位图显示、缩放/辅助功能、per-machine UAC 交互安装 | 真实交互 UI 环境记录 | 需真实 Windows 桌面交互；许可/InstallDir/Install/Finish 流转已自动化 |
+| MSI 默认处理程序与同路径接管 | 在 Windows 默认应用界面选择处理程序、实际打开文件/协议；观察同路径被其他程序接管时 Windows Installer 的原生删除行为 | 默认应用界面截图、唤起结果、接管行为记录 | 原生 MSI 快捷方式不保证保留被替换的同路径链接；需真实交互桌面 |
+| MSI 第三方 WiX 专家模板 | 真实第三方 WiX 项目材料（自定义动作/扩展命名空间/merge module）接入专家模式逐项核对：回滚/所有权语义、第三方二进制许可归属、安装失败行为；常规模式白名单拒绝清单抽验 | 模板/fragment 清单与来源、许可核对记录、构建/安装/失败场景日志 | 需用户提供真实第三方 WiX 项目材料 |
 
 ### B. 借设备/虚拟机类（按裁决由用户借设备或虚拟机验收）
 
 | 项 | 要做什么 | 完成证据 | 当前卡点/已有覆盖 |
 | --- | --- | --- | --- |
-| ~~ARM64 真机组（deb/rpm/AppImage/apk）~~ | ~~真机 ARM64 宿主装卸+运行各格式件~~ | **已完成**（2026-10-09） | `arm64-real-hw.sh` 收编进 `release-verify`，在 GitHub `ubuntu-26.04-arm` 真 arm64 硬件腿跑绿（deb/rpm/apk/AppImage 装卸+运行）；Windows 侧 `arm64-matrix.ps1` 在 `windows-11-arm` 跑绿 |
-| ~~UPDATE arm64 AOT 引导件~~ | ~~linux-aarch64/windows-aarch64 构建宿主产 arm64 引导件并入包，重跑 arm64 换包腿~~ | **已完成**（2026-10-09） | linux-aarch64/linux-musl-aarch64 由 GitHub `ubuntu-26.04-arm` runner、windows-aarch64 由 `windows-11-arm` runner 真宿主产出入库（`tools/<target>/`），冒烟 `apply` 过；arm64 换包腿收编进 `release-verify`（docker tmpfs/VHD 小卷） |
-| ~~Windows ARM64 矩阵~~ | ~~MSI/NSIS 在 Windows ARM64 的构建、安装、升级、修复、卸载逐组合~~ | **已完成**（2026-10-09） | `arm64-matrix.ps1` 收编进 `release-verify` 的 `windows-11-arm` 腿跑绿（装+NSIS/MSI 覆盖装+MSI 修复+卸逐组合，rc=0） |
-| ~~Intel Mac / Rosetta~~ | ~~macos-x86_64 `.app`/`.dmg`/`.pkg` 实跑、挂载、安装、启动~~ | **部分收编**（2026-10-09） | `macos-26-intel` CI 腿在真 Intel 硬件跑绿（macos-x86_64 `.app`/`.dmg`/`.pkg` 产包+挂载+装卸+全量单测）；`macos-26` arm64+Rosetta 腿跑绿（macos-x86_64 `.app`/`.dmg` 实跑）；剩启动观感仍挂本表 |
-| 干净 macOS 宿主矩阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg` | 挂载/EULA 弹窗/拖放安装首启记录 | 现宿主有开发工具链；云 mac 实例按天可租 |
+| Intel Mac / Rosetta 启动观感 | `macos-x86_64` `.app`/`.dmg`/`.pkg` 在 Intel/Rosetta 宿主的启动观感核对 | 观感记录 | `macos-26-intel` CI 腿与 `macos-26` arm64+Rosetta 腿的挂载/安装/启动断言已全绿；剩观感人工 |
+| 干净 macOS 宿主矩阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg`/`.pkg`；含低于 `LSMinimumSystemVersion` 的旧版本宿主拒跑断言 | 挂载/EULA 弹窗/拖放安装首启记录、拒跑提示 | 现宿主有开发工具链；云 mac 实例按天可租 |
 | 干净 Windows 10/11 | WiX 自身依赖边界（无 .NET SDK 仅 candle/light 编译）、独立 VM 复跑安装/卸载、Win7 记 Framework 缺失边界 | 各宿主构建/安装/卸载记录 | 非干净 Windows 11 x64 已有证据；干净宿主未测 |
 | 提权/UAC Windows | NSIS per-machine 安装/卸载与 journal ACL 取证、预建父目录所有权/继承；MSI current-user/per-machine 权限差异；UPDATE 引导件在 `Program Files` 提权目录的写权限与 UAC 交互 | `icacls`/HKLM 权限/提权边界记录 | 普通本机不得静默触发 UAC；当前实证均 per-user 目录 |
-| 可丢弃故障 VM | NSIS 真实重启+锁定文件删除（重启后复核）、真实 ACL 拒绝+物理磁盘/配额耗尽；MSI 重启/锁定/磁盘故障/缺源 | **部分收编**（2026-10-09） | `disposable-vm-faults.ps1` 收编进 `release-verify`（windows-2025 与 windows-11-arm 跑绿：真 ACL 拒装 rc=2+真 VHD 盘满 ENOSPC rc=2+无半途树）；真实重启+锁定文件删除与 MSI 故障仍挂本表 |
-| 跨 Windows 版本固定项 | Win10/11 各 build 上升级前/卸载前已固定开始菜单/任务栏项检查 | **部分收编**（2026-10-09） | `pinned-items.ps1` 收编进 `release-verify`（windows-2025 b26100 x64 与 windows-11-arm b26200 跑绿：装→`.lnk` 发现→pin 动词枚举→卸→lnk 消；另 Devin VM b20348 实证）；Win10 桌面 SKU 与任务栏 pin 落点仍挂本表——win11 已移除程序化 pin 通道（shell verb 枚举得到但 DoIt 返 E_ACCESSDENIED），落点只能人工 |
-| appimaged 类桌面集成 | appimaged/gear lever 工具对 AppImage 的识别与观感 | **部分收编**（2026-10-09） | `.desktop`/图标产出与 `desktop-file-validate` 校验收编为一次性 CI 腿跑绿（run 37892544275）；双击启动=FUSE 同路径已验；工具识别观感仍挂本表 |
-| ~~apk 仓库/索引工作流（可选扩展）~~ | ~~`abuild-index`/`apk add --repository` 真实索引服务验证~~ | **已完成**（2026-10-09） | `apk-index.sh` 收编进 `release-verify` ubuntu 腿跑绿——`apk index` 生成架构子目录索引 + `apk add --repository` 真装+卸（含 run 37892544275 实证） |
-
-## 三、已消解样板：RFC 3161 时间戳链路（免费项实证记录）
-
-RFC 3161 时间戳副签名协议不需要付费凭证。
-用自签名证书 + 公共时间戳服务器即可真实跑通签名→取时间戳→嵌入副签名全链。
-该腿证明的是时间戳管线与嵌入正确性，不证明 CA 信任链——信任链证据仍归 SA-P-01。
-
-**2026-10-06 已实证消解（windows-x86_64 宿主 `b7dd840`）**：自签代码签名证书 + `signtool sign /fd sha256 /tr http://timestamp.digicert.com /td sha256` exit 0；`Get-AuthenticodeSignature.TimeStamperCertificate` 非空（Issuer=DigiCert Trusted G4 TimeStamping RSA4096 SHA256 2025 CA1，有效期至 2037-11-04）；不带 `/tr` 对照组 TimeStamperCertificate 为空，证明时间戳确来自 RFC 3161 服务器而非残留；`timestamp.invalid.example` 负例 exit 1。
-教训：对已签名 PE 做此验证会读旧签名造成假阳性，须用无签名 PE。
+| 可丢弃故障 VM | NSIS 真实重启+锁定文件删除（重启后复核）、真实 ACL 拒绝+物理磁盘/配额耗尽；MSI 重启/锁定/磁盘故障/缺源 | 前后快照、退出码、verbose log、重启后文件/注册表 | `disposable-vm-faults.ps1` 收编进 `release-verify`（windows-2025 与 windows-11-arm 跑绿：真 ACL 拒装 rc=2+真 VHD 盘满 ENOSPC rc=2+无半途树）；真实重启+锁定文件删除（`tests/Special/win/nsis-reboot/Verify.ps1`）与 MSI 故障仍挂本表 |
+| 跨 Windows 版本固定项 | Win10/11 各 build 上升级前/卸载前已固定开始菜单/任务栏项检查 | 各 build 固定项行为记录 | `pinned-items.ps1` 收编进 `release-verify`（windows-2025 b26100 x64 与 windows-11-arm b26200 跑绿；另 Devin VM b20348 实证）；Win10 桌面 SKU 与任务栏 pin 落点仍挂本表——win11 已移除程序化 pin 通道（shell verb 枚举得到但 DoIt 返 E_ACCESSDENIED），落点只能人工 |
+| appimaged 类桌面集成 | appimaged/gear lever 工具对 AppImage 的识别与观感 | 工具识别观感记录 | `.desktop`/图标产出与 `desktop-file-validate` 校验收编为一次性 CI 腿跑绿（run 37892544275）；双击启动=FUSE 同路径已验；工具识别观感仍挂本表 |
+| NSIS `/R` 降权启动 | per-machine 安装后 `setup.exe /S /R` 启动已安装应用：进程 Integrity Level=Medium、属桌面用户不继承 High 令牌、参数传递到达 | Process Explorer 等 IL 观察 + 应用收到参数的断言 | 需交互桌面（UAC 弹窗手动批准）+ IL 观察工具；`uac-assisted.ps1` 辅助就位 |
+| NSIS Restart Manager 无法关闭进程 | 另一用户会话/受控 fixture 中运行安装目录主程序，静默升级应返回 `5`、不动旧安装、不影响同名他处进程 | 退出码、旧安装哈希对比、journal 记录 | 需可交互 Windows VM 双会话或不可终止 fixture；不得用系统关键进程 |
+| deb/rpm 文件/协议关联双击唤起 | GUI 桌面宿主双击 `.desktop` 声明关联的文件/协议，应用被唤起 | 唤起记录 | 菜单/图标/点击启动已验（KDE 截图）；关联唤起未验——验收 fixture 未声明关联对象，需先补声明再验收 |
+| `.app` 默认处理器切换/多 handler | 文件/URL scheme 在默认应用界面切换处理器、多 handler 共存场景的实际唤起观察 | LaunchServices 记录、唤起日志 | `lsregister`+`open` 唤起已自动化；切换处理器属 GUI 用户动作只能人工 |
+| UPDATE `open -n` 桌面重启语义 | 真实 macOS 桌面会话下 `open -n` 重启应用的 Dock 图标/聚焦/路径观察 | 桌面会话观察记录 | 现有断言止于 `open` 返回码与进程存活（无头环境） |

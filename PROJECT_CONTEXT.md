@@ -100,9 +100,9 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - 干净 Windows 10/11 宿主、x86/ARM64 宿主执行；
 - 生产 Authenticode 证书与 RFC 3161 时间戳；
 - 真实重启与锁定文件场景、本地化内容评审；
-- 启用 Windows FIPS 策略宿主的 `candle -fips` 真实行为与非拉丁语言交互安装审校（MSI-OI-13/MSI-MT-12）。
+- 启用 Windows FIPS 策略宿主的 `candle -fips` 真实行为与非拉丁语言交互安装审校（MSI-OI-13 与 `docs/special-acceptance.md` 母语审校项）。
 
-逐项清单见 `docs/msi-open-items.md`（`MSI-OI-*`）与 `docs/msi-manual-testing.md`（`MSI-MT-*`），NSIS 侧见 `docs/nsis-open-items.md`/`docs/nsis-manual-testing.md`；其余格式同类项经 `docs/manual-testing-index.md` 索引到各自 `*-open-items.md`/`*-manual-testing.md`。
+逐项清单见各格式 `docs/<format>-open-items.md`；只能人工/外部付费完成的验收统一登记在 `docs/special-acceptance.md`。
 
 ## 5. 未决问题（等待用户或外部输入）
 

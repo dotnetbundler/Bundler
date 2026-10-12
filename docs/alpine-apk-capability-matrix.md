@@ -1,7 +1,7 @@
 # Alpine `.apk` 能力矩阵
 
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
-外部待验收行绑定到 `docs/alpine-apk-open-items.md`、`docs/alpine-apk-manual-testing.md` 中的明确 ID。
+外部待验收行绑定到 `docs/alpine-apk-open-items.md`、`docs/special-acceptance.md` 中的明确 ID。
 决策与阶段见 `docs/alpine-apk-roadmap.md`。
 本矩阵于 2026-09-30 随 `APK-1..5` 实施建立；全部行以 `AlpineApkIntegrationTests` 与 `tests/Bundler.Tests` `AlpineApkTests` 为证据（验证宿主为 Ubuntu x86_64 + docker `alpine:latest`，aarch64 经 qemu binfmt 仿真）。
 

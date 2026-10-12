@@ -40,7 +40,7 @@ WIN-MSI-1..9 的阶段与复核证据以 git 提交与 PR 记录为准。
 ## Tauri 通用能力补齐状态
 
 WIN-MSI-5..9 的通用能力补齐已全部完成并经上游审计逐项分类（等价已实现/有意更安全语义/明确不适用/另立产品路线）。
-`0.1.0-alpha.43` 为 MSI 冻结基线；无现成环境的人工/外部验收项继续保留在 `docs/msi-manual-testing.md` 与 `docs/msi-open-items.md`，不构成已通过声明。
+`0.1.0-alpha.43` 为 MSI 冻结基线；无现成环境的人工/外部验收项继续保留在 `docs/special-acceptance.md` 与 `docs/msi-open-items.md`，不构成已通过声明。
 
 ## 已验证的平台范围
 
@@ -51,4 +51,4 @@ WIN-MSI-5..9 的通用能力补齐已全部完成并经上游审计逐项分类�
 
 Windows 7 上 WiX 3.14.1 自身的 Framework 零环境边界见 `docs/msi-roadmap.md` 第 2 节。
 上表是实测证据，不把单台开发机的结果推广到所有 Windows 11 设备。
-外部待验收的组合继续按 `docs/msi-manual-testing.md` 和 `docs/msi-open-items.md` 保存；`alpha.37` 的 x64/ARM64 身份基线继续受固定测试向量保护。
+外部待验收的组合继续按 `docs/special-acceptance.md` 和 `docs/msi-open-items.md` 保存；`alpha.37` 的 x64/ARM64 身份基线继续受固定测试向量保护。

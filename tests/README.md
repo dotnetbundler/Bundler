@@ -2,7 +2,7 @@
 
 本目录只放自动化测试工程、共享测试件与集成 fixture。
 `Special/` 存放不能收编成 dotnet test 的特殊验收脚本（真机/VM/凭证/交互/公网）；
-人工验证步骤见各格式 `docs/<format>-manual-testing.md`，外部待验收项见 `docs/<format>-open-items.md` 与 `docs/special-acceptance.md`。
+只能人工完成的验收项登记在 `docs/special-acceptance.md`，格式外部待办索引见 `docs/<format>-open-items.md`。
 
 ## 工程
 

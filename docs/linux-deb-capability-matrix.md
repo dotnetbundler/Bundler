@@ -1,7 +1,7 @@
 # Linux `.deb` 能力矩阵
 
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
-外部待验收行绑定到 `docs/linux-deb-open-items.md`、`docs/linux-deb-manual-testing.md` 中的明确 ID。
+外部待验收行绑定到 `docs/linux-deb-open-items.md`、`docs/special-acceptance.md` 中的明确项。
 上游参照：Tauri 审计（快照 `447fa9f`）；决策与阶段见 `docs/linux-deb-roadmap.md`。
 本矩阵于 2026-09-27 规划轮建立，已于 LINUX-DEB-5 定稿（冻结基线 `0.1.0-alpha.51`）；"已实现"行以 `DebIntegrationTests` 与 `tests/Bundler.Tests` DebTests 为证据。
 
@@ -33,7 +33,7 @@
 | `ChangelogFile`→`changelog.gz`、`LicenseFile`→`copyright` | 已实现 | LINUX-DEB-2 | `usr/share/doc/<包名>/`；changelog 自动 gzip |
 | `changelog.Debian.gz` 打包侧变更日志 | 已实现 | LINUX-DEB-4 | 自动补发单行打包条目（固定日期 Tue, 01 Jan 1980 保字节确定性）；消解 lintian `debian-changelog-file-missing-or-wrong-name` |
 | 包内绝对路径自定义映射（`/etc` 等载荷外路径） | 已实现 | LINUX-DEB-2 | `@(BundlerDebFile)` `Destination` 元数据（绝对路径含文件名，拒相对/`..`/空段）；API 面 `DebFileEntry` |
-| 桌面观感（菜单项/图标渲染/关联双击打开） | 外部待验收 | LINUX-DEB-4 起 | 需 GUI 桌面环境：LINUX-DEB-MT-01 |
+| 桌面观感（菜单项/图标渲染/关联双击打开） | 外部待验收 | LINUX-DEB-4 起 | 需 GUI 桌面环境：`docs/special-acceptance.md` |
 | `lintian` 基线断言 | 已实现 | LINUX-DEB-4 | `lintian-exemptions.txt` 豁免清单硬断言：新 tag 即失败；豁免 5 项——embedded-library/undeclared-elf-prerequisites（自包含载荷固有）、no-manual-page、changelog-not-compressed-with-max-compression（netstandard2.0 GZipStream 无最大档）、initial-upload-closes-no-bugs（非 Debian 官方包固有） |
 
 ## 脚本、服务与压缩

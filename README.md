@@ -751,8 +751,7 @@ MSI 集成测试每轮从本地包源还原，并核对隔离缓存中的实际�
 真装腿需 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 同意闸。
 干净宿主、ARM64、UAC、真实重启与生产证书仍按 MSI 人工验收文档执行。
 
-人工验收入口见 [`docs/manual-testing-index.md`](docs/manual-testing-index.md)；
-NSIS 历史用例仍在 [`docs/nsis-manual-testing.md`](docs/nsis-manual-testing.md)，MSI 用例在 [`docs/msi-manual-testing.md`](docs/msi-manual-testing.md)。
+只能人工/外部付费完成的验收统一登记在 [`docs/special-acceptance.md`](docs/special-acceptance.md)；各格式外部待办见 `docs/<format>-open-items.md`。
 仓库可自动化的测试仍由上述命令执行，不转为人工清单。
 
 Abstractions 保存跨包稳定契约。

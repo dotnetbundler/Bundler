@@ -3,7 +3,7 @@
 > 状态：**`.rpm` 冻结基线 `0.1.0-alpha.55`**（2026-09-27 LINUX-RPM-5 收口，`linux-rpm-development` 分支）。冻结后仅接受带回归测试的缺陷修复。
 > 上游审计已完成（Tauri 固定快照 `447fa9f`，DEB-5 复核确认零漂移）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
-> 逐项能力状态见 [`docs/linux-rpm-capability-matrix.md`](linux-rpm-capability-matrix.md)；外部条件见 [`docs/linux-rpm-open-items.md`](linux-rpm-open-items.md)；人工步骤见 [`docs/linux-rpm-manual-testing.md`](linux-rpm-manual-testing.md)。
+> 逐项能力状态见 [`docs/linux-rpm-capability-matrix.md`](linux-rpm-capability-matrix.md)；外部条件见 [`docs/linux-rpm-open-items.md`](linux-rpm-open-items.md)；人工/特殊验收见 [`docs/special-acceptance.md`](special-acceptance.md)。
 
 ## 1. 已确认决策（2026-09-27，用户"按推荐执行"确认）
 
