@@ -13,6 +13,8 @@ $RID = if ($IS_ARM) { "win-arm64" } else { "win-x64" }
 function Say($m) { Write-Host "=== $m" }
 
 Say "1/4 构建+打包"
+# 常驻 MSBuild 节点持任务程序集锁会致后续 dotnet pack MSB3027——build 前先关。
+dotnet build-server shutdown | Out-Null
 dotnet build Bundler.slnx -c Release --nologo
 dotnet pack Bundler.slnx -c Release -o artifacts/packages --nologo
 

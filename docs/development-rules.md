@@ -194,7 +194,7 @@
    项目自身声明必要 SDK 属性，不靠根 props、旧 `obj` 或隐藏的 `--source` 才工作。
 3. 集成测试按 Pack、隔离还原、生成产物、执行系统行为、断言最终状态组织，经 `tests/Shared/Tooling`（`ProcessRunner`、`DockerRunner`、`ElevatedRunner`、`IntegrationWorkspace`、`MsiSupport`、`ShellLink`）实现；
    真装腿用 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 门禁（等价于旧脚本的 `-ConfirmLocalInstall`）。
-   pack 前一律走 `Dotnet.ShutdownBuildServers()`（`Dotnet.BuildAndPack`/`MsiSupport`/`RepositoryPackages` 已统一收口）：Windows 常驻 MSBuild 节点持任务程序集锁会致 `dotnet pack` MSB3027——任何新增"build→pack"腿都要经该门面而不是裸 `dotnet pack`。
+   "build→pack"链在 build 前一律关闭构建服务器——测试腿走 `Dotnet.ShutdownBuildServers()`（`Dotnet.BuildAndPack`/`MsiSupport`/`RepositoryPackages` 已统一收口），脚本腿用 `dotnet build-server shutdown`：Windows 常驻 MSBuild 节点持任务程序集锁会致 `dotnet pack` MSB3027（MSB3027 是 Windows 文件锁语义，POSIX 腿不需要）。
    每轮使用独立输出和产品身份，预检无碰撞。
    记录命令、宿主/架构、包与应用版本、哈希、退出码、日志、清理及未验证范围。
    NuGet 可列出 SDK/VS fallback 文件夹，不能要求 `packageFolders` 只有缓存一项。
