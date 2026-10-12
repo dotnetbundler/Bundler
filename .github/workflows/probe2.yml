@@ -1,0 +1,22 @@
+name: probe2
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 测试套件（all=四工程全跑）
+        type: choice
+        default: unit
+        options: [unit, api, integration, localpackages, all]
+      runners:
+        description: runner 标签子集，逗号分隔不带空格；all=六腿全跑
+        type: string
+        default: all
+        required: true
+  push:
+    paths:
+      - '.github/workflows/probe2.yml'
+jobs:
+  x:
+    runs-on: ubuntu-26.04
+    steps:
+      - run: echo hi
