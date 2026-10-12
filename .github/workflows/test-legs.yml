@@ -44,10 +44,11 @@ jobs:
           - windows-11-arm      # win arm64
           - macos-26-intel      # mac Intel-x64
           - macos-26            # mac arm64
+    # runners 输入用逗号包裹做精确词元匹配——避免 macos-26 误中 macos-26-intel。
     if: >-
       github.event_name == 'push' ||
       inputs.runners == 'all' ||
-      contains(fromJSON(format('["{0}"]', replace(replace(inputs.runners, ' ', ''), ',', '","'))), matrix.os)
+      contains(format(',{0},', inputs.runners), format(',{0},', matrix.os))
     env:
       SUITE: ${{ inputs.suite || 'unit' }}
       # 集成真装真卸同意闸——CI runner 是可丢弃环境，装/卸断言即目的
