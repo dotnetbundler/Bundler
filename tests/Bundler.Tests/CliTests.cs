@@ -1187,6 +1187,16 @@ public static class CliTests
     }
 
     [Fact]
+    static void ScalarPathKnobKeepsSemicolonLiteral()
+    {
+        // 标量路径含 ';' 是合法单值——--output-dir "a;b" 不许劈成数组（review BUG）。
+        var resolved = CliConfig.Resolve(CliArguments.Parse(
+            ["plan", "--input-dir", "/tmp/x", "--formats", "zip",
+             "--output-dir", "/tmp/a;b"]));
+        Assert.Equal("/tmp/a;b", resolved.Bundle.OutputDirectory);
+    }
+
+    [Fact]
     static void NoExecutableCandidatesEmitsFallbackNote()
     {
         // 目录内零可执行候选时推断层先 note 预警——不等到 validator 才爆炸。
