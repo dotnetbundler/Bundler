@@ -31,6 +31,14 @@ internal static class RpmDependency
 
     internal static Parsed Parse(string clause)
     {
+        var trimmed = clause.Trim();
+        if (trimmed.StartsWith("(", StringComparison.Ordinal))
+        {
+            // rpm rich deps（rpm ≥4.13：or/and/if/with/unless）——如 `(libgcc or libgcc_s1)`
+            // 跨发行版依赖名差异的唯一合法表达；与原 `name <op> evr` 同口径原样透传。
+            ValidateRichDeps(trimmed);
+            return new Parsed(trimmed, 0, "");
+        }
         var tokens = clause.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         if (tokens.Length == 1)
         {
@@ -55,6 +63,38 @@ internal static class RpmDependency
         }
         throw new ArgumentException(
             $"'{clause}' is not a valid rpm dependency clause ('name' or 'name <op> evr').");
+    }
+
+    // rich deps 只验外壳：整体被括号包住且配对——内部 token 语义交给 rpm
+    // （与本文件的 pass-through 取舍一致，不发明子语法校验）。
+    private static void ValidateRichDeps(string clause)
+    {
+        void Reject()
+            => throw new ArgumentException(
+                $"'{clause}' is not a valid rpm rich dependency clause (expected '(...)').");
+        if (!clause.EndsWith(")", StringComparison.Ordinal) || clause.Length <= 2)
+        {
+            Reject();
+        }
+        var depth = 0;
+        foreach (var ch in clause)
+        {
+            if (ch == '(')
+            {
+                depth++;
+            }
+            else if (ch == ')')
+            {
+                if (--depth < 0)
+                {
+                    Reject();
+                }
+            }
+        }
+        if (depth != 0)
+        {
+            Reject();
+        }
     }
 
     private static void ValidateName(string name, string clause)
