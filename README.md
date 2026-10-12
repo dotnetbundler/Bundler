@@ -51,7 +51,7 @@ Alpine `.apk` 已冻结并入 `main`（`0.1.0-alpha.63`，`APK-1..5` 完成、PR
 ```powershell
 dotnet tool install --global DotNet.Bundler.Cli
 # 最小路径：只指发布目录，其余全部推断（target=宿主、formats=目标 OS 常用集、
-# productName=目录名、version=0.1.0-dev、identifier=dev.bundler.<名>、
+# productName=目录名、version=0.1.0、identifier=dev.bundler.<名>、
 # mainExecutable=目录内唯一可执行文件）——推断值逐条打到 stderr
 bundler bundle --input-dir <publish目录>
 # 显式覆盖任意字段（恒胜推断）

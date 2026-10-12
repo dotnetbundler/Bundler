@@ -857,7 +857,7 @@ public static class CliTests
             Assert.Contains("formats=deb,zip", err);
             Assert.Contains("productName=coolapp", err);
             Assert.Contains("identifier=dev.bundler.coolapp", err);
-            Assert.Contains("version=0.1.0-dev", err);
+            Assert.Contains("version=0.1.0", err);
             Assert.Contains("mainExecutable=coolapp", err);
             Assert.True(Directory.EnumerateFiles(output, "*.deb").Any(),
                 "expected a .deb in output: " + string.Join(",", Directory.EnumerateFiles(output)));

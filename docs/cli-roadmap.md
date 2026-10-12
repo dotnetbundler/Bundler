@@ -114,7 +114,7 @@ MSBuild 属性同步：`Bundler<Format><Old>` 全部按上表改名（如 `Bundl
 
 ### 2026-10-11 可用性推断链（破坏性重构）
 
-- 必填面收缩：`bundle` 只剩 `--input-dir` 必填；其余走"推断→stderr 逐条明示→显式参数恒胜"链——`target`=宿主映射（取代原 `linux-x86_64` 硬默认）、`formats`=目标 OS 常用集（windows→nsis、macos*/universal→dmg、linux→deb,zip、linux-musl→alpineapk）、`productName`=输入目录名、`version`=`0.1.0-dev`、`identifier`=`dev.bundler.<productName 规范化>`、`mainExecutable`=输入目录顶层唯一可执行文件（windows 目标按 `.exe`、其余按 POSIX 执行位；多候选不猜、notes 提示显式传参）。
+- 必填面收缩：`bundle` 只剩 `--input-dir` 必填；其余走"推断→stderr 逐条明示→显式参数恒胜"链——`target`=宿主映射（取代原 `linux-x86_64` 硬默认）、`formats`=目标 OS 常用集（windows→nsis、macos*/universal→dmg、linux→deb,zip、linux-musl→alpineapk）、`productName`=输入目录名、`version`=`0.1.0`、`identifier`=`dev.bundler.<productName 规范化>`、`mainExecutable`=输入目录顶层唯一可执行文件（windows 目标按 `.exe`、其余按 POSIX 执行位；多候选不猜、notes 提示显式传参）。
 - `--strict` 关闭推断，缺什么报什么（rc=2），给发布脚本用。
 - `bundler.json` 自动发现：cwd 存在即加载（stderr 明示），`--config` 覆盖、`--no-config` 跳过；`--no-config`+`--config` 同传为用法冲突（rc=2）。
 - 新命令 `bundler init`：cwd 写最小 `bundler.json` 模板，已存在拒覆盖（rc=2）。

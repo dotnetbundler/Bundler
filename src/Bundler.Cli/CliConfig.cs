@@ -707,8 +707,14 @@ internal static class CliConfig
                         "Target is required: pass --target or set targets[].target " +
                         "(--strict disables inference).");
                 }
-                node["target"] = HostTarget();
-                inferred.Add($"target={node["target"]} (host default)");
+                // ≥2 个 --input-dir 走 universal 合并——缺省目标必须标成 universal，
+                // 否则合并出的胖载荷被标上宿主单架构名（review BUG-2）。
+                node["target"] = parsed.InputDirectories.Count >= 2
+                    ? "macos-universal"
+                    : HostTarget();
+                inferred.Add(parsed.InputDirectories.Count >= 2
+                    ? $"target={node["target"]} (universal merge)"
+                    : $"target={node["target"]} (host default)");
             }
             if (node["formats"] is null && infer)
             {
@@ -717,7 +723,10 @@ internal static class CliConfig
                     chosen.Select(f => (JsonNode?)JsonValue.Create(f)).ToArray());
                 inferred.Add($"formats={string.Join(",", chosen)} (default for {TargetText(node, parsed)})");
             }
-            InferMainExecutable(node, baseDirectory, inferred);
+            if (infer)
+            {
+                InferMainExecutable(node, baseDirectory, inferred);
+            }
         }
         if (target["formats"] is null)
         {
@@ -738,8 +747,10 @@ internal static class CliConfig
         }
         if (document["version"] is null && infer)
         {
-            document["version"] = "0.1.0-dev";
-            inferred.Add("version=0.1.0-dev (placeholder; pass --package-version for release)");
+            // 纯数字三段式：Apple 元数据只收 [0-9.]+（AppleVersionPattern），
+            // 带 -dev 后缀会在 dmg/app/pkg 腿构建期炸——推断值必须处处可产。
+            document["version"] = "0.1.0";
+            inferred.Add("version=0.1.0 (placeholder; pass --package-version for release)");
         }
         if (document["identifier"] is null && infer)
         {

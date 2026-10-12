@@ -125,7 +125,7 @@ public static class CliProgram
           // Every value here is overridable on the command line (bundler --help).
           // Anything left unset is inferred: target = this host, formats = the
           // usual set for the target OS, productName = input directory name,
-          // version = 0.1.0-dev, identifier = dev.bundler.<name>.
+          // version = 0.1.0, identifier = dev.bundler.<name>.
           "productName": "MyApp",
           "identifier": "com.example.myapp",
           "version": "1.0.0",
@@ -470,7 +470,7 @@ public static class CliProgram
         writer.WriteLine("      [--package-version <ver>] [--main-executable <name>]");
         writer.WriteLine("      [--output-dir <dir>] [--output-layout <flat|byFormat>] [--json] [--quiet|--verbose]");
         writer.WriteLine("  Missing options are inferred: target=this host, formats=usual set for the target OS,");
-        writer.WriteLine("      productName=input directory name, version=0.1.0-dev, identifier=dev.bundler.<name>,");
+        writer.WriteLine("      productName=input directory name, version=0.1.0, identifier=dev.bundler.<name>,");
         writer.WriteLine("      mainExecutable=the only executable in the input dir. --strict disables inference.");
         writer.WriteLine("  ./bundler.json is loaded automatically when present (--config <file> overrides, --no-config skips).");
         writer.WriteLine("  Paths in --config resolve relative to the config file; paths given on the command line resolve relative to the working directory.");
