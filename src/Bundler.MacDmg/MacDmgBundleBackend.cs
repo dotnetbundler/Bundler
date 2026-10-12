@@ -523,10 +523,11 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 // detach 返回成功只代表卸载动作已发出——diskimages-helper 簿记
                 // 有滞后，hdiutil info 可能仍短暂列出挂载点；确认消失才算完成，
                 // 否则紧随其后的 convert / hdiutil info 断言会撞上残留簿记。
+                // info 自身跑不起来同样不能放行——簿记未确认就当未完成重试。
                 var info = await MacDmgProcessRunner.TryRunAsync(
                     "hdiutil", ["info"], workingDirectory, cancellationToken);
-                if (info is not { ExitCode: 0 }
-                    || info.StandardOutput.IndexOf(mountDirectory, StringComparison.Ordinal) < 0)
+                if (info is { ExitCode: 0 }
+                    && info.StandardOutput.IndexOf(mountDirectory, StringComparison.Ordinal) < 0)
                 {
                     return;
                 }

@@ -115,6 +115,12 @@ public static class CliProgram
         var input = Path.Combine(Path.GetTempPath(), "bundler-universal-" + Guid.NewGuid().ToString("N"));
         mergedDirectory = input; // assign before Merge so the finally cleanup also covers merge failures
         var referenceDir = parsed.OptionalOption("reference-dir");
+        if (referenceDir is not null && !Directory.Exists(referenceDir))
+        {
+            throw new CliUsageException(
+                $"--reference-dir '{referenceDir}' does not exist; it must point at the " +
+                "RID-less publish that supplies managed payload files for the universal merge.");
+        }
         MacUniversalPayloadMerger.Merge(dirs, input, referenceDir);
 
         var first = source.Targets[0];

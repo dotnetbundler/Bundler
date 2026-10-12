@@ -454,6 +454,41 @@ public static class CliTests
         }
     }
 
+    [Fact]
+    static void MissingReferenceDirIsAUsageError()
+    {
+        // --reference-dir pointing nowhere must fail fast as a usage error (RC=2) rather
+        // than silently merging without the neutral publish (regression: review finding —
+        // missing dir used to be ignored and reference-only files vanished from the payload).
+        var x64 = Path.Combine(Path.GetTempPath(), "bundler-cli-refmiss-x64-" + Guid.NewGuid().ToString("N"));
+        var arm64 = Path.Combine(Path.GetTempPath(), "bundler-cli-refmiss-arm64-" + Guid.NewGuid().ToString("N"));
+        var missing = Path.Combine(Path.GetTempPath(), "bundler-cli-refmiss-none-" + Guid.NewGuid().ToString("N"));
+        var output = Path.Combine(Path.GetTempPath(), "bundler-cli-refmiss-out-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(x64);
+            Directory.CreateDirectory(arm64);
+            WriteThinMachO(Path.Combine(x64, "cli-fixture"), 0x01000007);
+            WriteThinMachO(Path.Combine(arm64, "cli-fixture"), 0x0100000C);
+            var (code, _, err) = Run(
+                "bundle", "--input-dir", x64, "--input-dir", arm64,
+                "--reference-dir", missing,
+                "--target", "macos-universal", "--formats", "zip",
+                "--product-name", "CliFixture", "--identifier", "dev.example.cli",
+                "--package-version", "1.0.0", "--main-executable", "cli-fixture",
+                "--output-dir", output);
+            Assert.True(code == 2, $"missing reference-dir must exit 2, got {code}: {err}");
+            Assert.Contains("--reference-dir", err);
+        }
+        finally
+        {
+            foreach (var dir in new[] { x64, arm64, missing, output })
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, true);
+            }
+        }
+    }
+
     static void WriteThinMachO(string path, uint cpuType)
     {
         using var writer = new BinaryWriter(File.Create(path));
