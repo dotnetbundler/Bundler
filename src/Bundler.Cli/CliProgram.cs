@@ -62,15 +62,29 @@ public static class CliProgram
         if (parsed.Command is "update-keygen")
         {
             var keyPath = parsed.RequiredOption("key-file");
+            RejectUnrelatedOptions(parsed, ["key-file"]);
+            if (File.Exists(keyPath))
+            {
+                // 覆盖私钥=旧发布件签名链孤儿——先拦在写入前，rc=2 明示。
+                throw new CliUsageException(
+                    $"Key file already exists: {Path.GetFullPath(keyPath)} — remove it or pick a new path.");
+            }
+            // 父目录不存在的 IO 错不如直接建——用户指哪写哪。
+            var parent = Path.GetDirectoryName(Path.GetFullPath(keyPath));
+            if (parent is { Length: > 0 } && !Directory.Exists(parent))
+            {
+                Directory.CreateDirectory(parent);
+            }
             var material = UpdateKeyMaterial.Generate();
             material.Save(keyPath);
-            stdout.WriteLine(keyPath);
-            stdout.WriteLine(material.PublicPointBase64());
+            stdout.WriteLine($"key file: {keyPath}");
+            stdout.WriteLine($"public key: {material.PublicPointBase64()}");
             return 0;
         }
 
         if (parsed.Command is "init")
         {
+            RejectUnrelatedOptions(parsed, []);
             return RunInit(stdout, stderr);
         }
 
@@ -103,6 +117,16 @@ public static class CliProgram
             {
                 Directory.Delete(mergedDirectory, recursive: true);
             }
+        }
+    }
+
+    // init/update-keygen 不读配置——bundle 旋钮在这两个命令上静默无效是误导，rc=2 明示。
+    private static void RejectUnrelatedOptions(CliArguments parsed, string[] allowed)
+    {
+        var unexpected = parsed.Options.Keys.FirstOrDefault(k => !allowed.Contains(k, StringComparer.Ordinal));
+        if (unexpected is not null)
+        {
+            throw new CliUsageException($"Option '--{unexpected}' has no effect with '{parsed.Command}'.");
         }
     }
 
