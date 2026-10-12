@@ -9,8 +9,8 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
 {
     private const int DetachMaxAttempts = 5;
     private static readonly int[] DetachBackoffMilliseconds = { 250, 500, 1000, 2000 };
-    private const int ConvertTransientMaxAttempts = 3;
-    private static readonly int[] ConvertTransientBackoffMilliseconds = { 1000, 2000 };
+    private const int ConvertTransientMaxAttempts = 6;
+    private static readonly int[] ConvertTransientBackoffMilliseconds = { 1000, 2000, 4000, 8000, 16000 };
 
     public PackageFormat Format => PackageFormat.Dmg;
     public TargetOperatingSystem OperatingSystem => TargetOperatingSystem.MacOS;
@@ -171,30 +171,59 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             }
             // hdiutil convert 在高载宿主上偶发 EAGAIN（"Resource temporarily
             // unavailable"）——工具级瞬态，有限重试即可恢复，不是输入错误。
-            for (var attempt = 1; ; attempt++)
+            // 若源镜像的簿记状态在原文件上卡死（macOS 已知痼疾），换用字节相同的
+            // 副本继续 convert 即可绕开（electron-builder #8415 同款处置）。
+            var convertSource = readWriteImage;
+            string? convertSourceCopy = null;
+            try
             {
-                try
+                for (var attempt = 1; ; attempt++)
                 {
-                    await MacDmgProcessRunner.RunAsync(
-                        "hdiutil",
-                        ["convert", readWriteImage, "-format", compressionArgument, "-o", outputPath],
-                        workDirectory, cancellationToken);
-                    break;
-                }
-                catch (InvalidOperationException e)
-                    when (attempt < ConvertTransientMaxAttempts
-                          && e.Message.IndexOf("Resource temporarily unavailable", StringComparison.Ordinal) >= 0)
-                {
-                    var delay = ConvertTransientBackoffMilliseconds[
-                        Math.Min(attempt - 1, ConvertTransientBackoffMilliseconds.Length - 1)];
-                    logger.Log(
-                        BundleLogLevel.Warning,
-                        $"hdiutil convert transient failure (attempt {attempt}/{ConvertTransientMaxAttempts}); retrying in {delay} ms.");
-                    if (File.Exists(outputPath))
+                    try
                     {
-                        File.Delete(outputPath);
+                        await MacDmgProcessRunner.RunAsync(
+                            "hdiutil",
+                            ["convert", convertSource, "-format", compressionArgument, "-o", outputPath],
+                            workDirectory, cancellationToken);
+                        break;
                     }
-                    await Task.Delay(delay, cancellationToken);
+                    catch (InvalidOperationException e)
+                        when (attempt < ConvertTransientMaxAttempts
+                              && e.Message.IndexOf("Resource temporarily unavailable", StringComparison.Ordinal) >= 0)
+                    {
+                        var delay = ConvertTransientBackoffMilliseconds[
+                            Math.Min(attempt - 1, ConvertTransientBackoffMilliseconds.Length - 1)];
+                        logger.Log(
+                            BundleLogLevel.Warning,
+                            $"hdiutil convert transient failure (attempt {attempt}/{ConvertTransientMaxAttempts}); retrying in {delay} ms.");
+                        if (File.Exists(outputPath))
+                        {
+                            File.Delete(outputPath);
+                        }
+                        if (convertSourceCopy is null)
+                        {
+                            // 源镜像可能仍被 diskimages-helper / convert 子进程持柄，
+                            // 副本建不起来也属瞬态——留给下一轮重试再建。
+                            try
+                            {
+                                var copy = readWriteImage + ".convert-copy.dmg";
+                                File.Copy(readWriteImage, copy, overwrite: true);
+                                convertSourceCopy = copy;
+                                convertSource = copy;
+                            }
+                            catch (IOException)
+                            {
+                            }
+                        }
+                        await Task.Delay(delay, cancellationToken);
+                    }
+                }
+            }
+            finally
+            {
+                if (convertSourceCopy is not null && File.Exists(convertSourceCopy))
+                {
+                    File.Delete(convertSourceCopy);
                 }
             }
 
@@ -491,12 +520,23 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 || (result is not null
                     && result.StandardError.IndexOf("No such file or directory", StringComparison.Ordinal) >= 0))
             {
-                return;
+                // detach 返回成功只代表卸载动作已发出——diskimages-helper 簿记
+                // 有滞后，hdiutil info 可能仍短暂列出挂载点；确认消失才算完成，
+                // 否则紧随其后的 convert / hdiutil info 断言会撞上残留簿记。
+                // info 自身跑不起来同样不能放行——簿记未确认就当未完成重试。
+                var info = await MacDmgProcessRunner.TryRunAsync(
+                    "hdiutil", ["info"], workingDirectory, cancellationToken);
+                if (info is { ExitCode: 0 }
+                    && info.StandardOutput.IndexOf(mountDirectory, StringComparison.Ordinal) < 0)
+                {
+                    return;
+                }
+                result = null;
             }
             if (attempt >= DetachMaxAttempts)
             {
                 var detail = result is null
-                    ? "hdiutil could not be started"
+                    ? "mount point still listed by 'hdiutil info'"
                     : $"exit {result.ExitCode}: {result.StandardError}";
                 throw new InvalidOperationException(
                     $"hdiutil detach failed after {DetachMaxAttempts} attempts ({detail}).");

@@ -46,9 +46,10 @@ try {
 
     $installDir = "$env:ProgramFiles\HelloBundlerApp"
     Note "ProgramFiles 落位" (Test-Path $installDir) $installDir
-    $reg = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall"
+    $reg = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall",
+        "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
     $entry = Get-ChildItem $reg | Where-Object {
-        (Get-ItemProperty $_.PSPath).DisplayName -match "HelloBundlerApp" }
+        (Get-ItemProperty $_.PSPath).DisplayName -match "Hello\s*Bundler\s*App" }
     Note "HKLM 卸载注册项" ($null -ne $entry) ($entry?.PSChildName ?? "")
 
     # 2) 非提权写工具目录应被拒（ACL 证据）。
@@ -61,8 +62,9 @@ try {
     # 3) 卸载走真 UAC。
     Wait-Human "将运行卸载器——UAC 弹窗请批准；界面若要求确认请按默认"
     $uninst = if ($Format -eq "msi") {
-        $app = Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" |
-            Where-Object DisplayName -match "HelloBundlerApp"
+        $app = Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" |
+            Where-Object DisplayName -match "Hello\s*Bundler\s*App"
         Start-Process "msiexec.exe" -ArgumentList "/x `"$($app.PSChildName)`" /qb" -Wait -PassThru
     } else {
         $uninstPath = Join-Path $installDir "uninstall.exe"

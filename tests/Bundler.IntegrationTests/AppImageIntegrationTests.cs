@@ -238,8 +238,8 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
     [Fact]
     public void ExtractedAppRunAndWholeImageRun()
     {
-        Assert.SkipWhen(!TestPlatform.IsX64,
-            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
+        Assert.SkipWhen(!TestPlatform.IsX64 || TestPlatform.IsMusl,
+            "SKIP: 该腿工件为 x64 glibc 二进制/amd64 包，非 x64 或 musl 宿主无法执行或安装。");
         var root = _f.Extract(_f.DefaultImage, "run");
         var appRun = ProcessRunner.Run(Path.Combine(root, "AppRun"), ["hello", "world"],
             new ProcessRunner.Options { WorkingDirectory = root });

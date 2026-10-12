@@ -99,6 +99,10 @@ public static class CliProgram
 
     // Repeated --input-dir feeds one target: a single value wins as before; two or more
     // directories are universal-merged (fat Mach-O + dedup rules) into a temp payload dir.
+    // --reference-dir supplies the RID-less publish the merger needs to pick managed files:
+    // RID publishes stamp the arch into managed PEs and the runtime hard-rejects mismatches,
+    // so real per-arch publishes cannot be merged without this neutral copy (same channel
+    // MSBuild's universal leg fills automatically).
     private static BundleConfiguration ApplyInputDirectories(
         BundleConfiguration source, CliArguments parsed, out string? mergedDirectory)
     {
@@ -110,7 +114,14 @@ public static class CliProgram
         var dirs = parsed.InputDirectories.Select(Path.GetFullPath).ToArray();
         var input = Path.Combine(Path.GetTempPath(), "bundler-universal-" + Guid.NewGuid().ToString("N"));
         mergedDirectory = input; // assign before Merge so the finally cleanup also covers merge failures
-        MacUniversalPayloadMerger.Merge(dirs, input);
+        var referenceDir = parsed.OptionalOption("reference-dir");
+        if (referenceDir is not null && !Directory.Exists(referenceDir))
+        {
+            throw new CliUsageException(
+                $"--reference-dir '{referenceDir}' does not exist; it must point at the " +
+                "RID-less publish that supplies managed payload files for the universal merge.");
+        }
+        MacUniversalPayloadMerger.Merge(dirs, input, referenceDir);
 
         var first = source.Targets[0];
         var targets = source.Targets.ToArray();
@@ -411,7 +422,8 @@ public static class CliProgram
     {
         writer.WriteLine("Usage:");
         writer.WriteLine("  bundler validate|plan|bundle --input-dir <dir> [--input-dir <dir>...] --target <target> --formats <csv>");
-        writer.WriteLine("      (--input-dir repeated merges the dirs into a universal payload, e.g. macos-x86_64 + macos-aarch64)");
+        writer.WriteLine("      (--input-dir repeated merges the dirs into a universal payload, e.g. macos-x86_64 + macos-aarch64;");
+        writer.WriteLine("       --reference-dir <dir> gives the RID-less publish that supplies managed payload files)");
         writer.WriteLine("      --product-name <name> --identifier <id> --package-version <ver>");
         writer.WriteLine("      [--output-dir <dir>] [--output-layout <flat|byFormat>] [--main-executable <name>] [--json] [--quiet|--verbose]");
         writer.WriteLine("  Paths in --config resolve relative to the config file; paths given on the command line resolve relative to the working directory.");

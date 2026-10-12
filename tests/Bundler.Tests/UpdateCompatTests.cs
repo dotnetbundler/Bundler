@@ -141,7 +141,7 @@ public class UpdateCompatTests
     [Fact]
     static async Task V1Install_EndToEndSwap_ByCurrentFeed()
     {
-        Assert.SkipUnless(OperatingSystem.IsLinux() &&
+        Assert.SkipUnless(OperatingSystem.IsLinux() && !TestPlatform.IsMusl &&
             RuntimeInformation.ProcessArchitecture == Architecture.X64,
             "v1 冻件的引导件是 linux-x86_64 AOT——端到端腿只在 linux-x86_64 宿主跑。");
         var root = CreateTempDirectory();
@@ -222,7 +222,7 @@ public class UpdateCompatTests
     [Fact]
     static void V1AotBootstrap_Applies_CurrentPayload()
     {
-        Assert.SkipUnless(OperatingSystem.IsLinux() &&
+        Assert.SkipUnless(OperatingSystem.IsLinux() && !TestPlatform.IsMusl &&
             RuntimeInformation.ProcessArchitecture == Architecture.X64,
             "v1 AOT 引导件是 linux-x86_64——只在 linux-x86_64 宿主跑。");
         var root = CreateTempDirectory();

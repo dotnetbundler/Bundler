@@ -246,8 +246,8 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
     [Fact]
     public void CpioPayloadContentsAndBinaryRuns()
     {
-        Assert.SkipWhen(!TestPlatform.IsX64,
-            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
+        Assert.SkipWhen(!TestPlatform.IsX64 || TestPlatform.IsMusl,
+            "SKIP: 该腿工件为 x64 glibc 二进制/amd64 包，非 x64 或 musl 宿主无法执行或安装。");
         RpmTools.RequireCpio();
         var dest = Path.Combine(_f.ExtractRoot, "payload");
         RpmTools.ExtractPayload(_f.DefaultRpm, dest);

@@ -12,7 +12,10 @@ namespace DotNet.Bundler.MacApp;
 ///   into managed assemblies, so byte-identity between arch builds is unreachable);
 /// - present on all sides, differs, not Mach-O, no reference copy → hard error (no generic
 ///   arch-subdir fallback: a standard .NET apphost does not probe RID subdirectories, unlike
-///   MAUI's runtime);
+///   MAUI's runtime). When every side is a managed .NET assembly the error points at
+///   `referenceDirectory`: RID publishes stamp the arch into the PE, and the runtime
+///   hard-rejects a mismatched stamp, so picking any single side ships a broken payload —
+///   only the RID-less build's neutral (AnyCPU-stamped) copy is correct;
 /// - present on one side only → copied verbatim.
 /// Symlinks are dereferenced into their target contents; other special files are rejected.
 /// </summary>
@@ -121,12 +124,24 @@ public static class MacUniversalPayloadMerger
                 // is the usual trade-off (managed debugging has no fat-symbol format).
                 File.Copy(first, destination);
             }
+            else if (sources.All(PortableExecutable.IsManagedAssembly))
+            {
+                // Managed assemblies from RID publishes carry arch-stamped PEs (machine type +
+                // MVID) and the runtime hard-rejects a stamp mismatched to the process arch —
+                // no single side's copy can serve both arches. Only the neutral (RID-less,
+                // AnyCPU-stamped) build supplies correct copies, hence referenceDirectory.
+                throw new InvalidDataException(
+                    $"Universal merge conflict: '{relative}' is a managed assembly that differs between inputs; " +
+                    "pass a RID-less publish of the same project as referenceDirectory " +
+                    "(Bundler.Cli: --reference-dir) so its neutral copies can supply managed files.");
+            }
             else
             {
                 throw new InvalidDataException(
                     $"Universal merge conflict: '{relative}' differs between inputs and is not a Mach-O file " +
-                    $"(first: {first}). Universal payloads need byte-identical non-Mach-O files or " +
-                    "per-architecture Mach-O files to merge.");
+                    $"(first: {first}). Universal payloads need byte-identical non-Mach-O files, " +
+                    "per-architecture Mach-O files to merge, or a referenceDirectory " +
+                    "(Bundler.Cli: --reference-dir) supplying canonical copies.");
             }
         }
     }

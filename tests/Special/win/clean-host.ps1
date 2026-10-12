@@ -24,9 +24,12 @@ Note "宿主干净(无 dotnet)" ($null -eq $sdk) ($sdk?.Source ?? "无")
 Note "宿主干净(无 WiX/NSIS)" (($null -eq $wix) -and ($null -eq $nsis)) ""
 
 function Get-HelloBundlerEntries {
+    # ARP DisplayName 为 BundlerProductName "Hello Bundler App"（带空格）；
+    # x86 msi 注册在 WOW6432Node 视图，必须一并扫。
     Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
         "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
-        Where-Object DisplayName -match "HelloBundlerApp" | ForEach-Object PSChildName
+        Where-Object DisplayName -match "Hello\s*Bundler\s*App" | ForEach-Object PSChildName
 }
 $preExisting = @(Get-HelloBundlerEntries)
 if ($preExisting.Count -gt 0) {
