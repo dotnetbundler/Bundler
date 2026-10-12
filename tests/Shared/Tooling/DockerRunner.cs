@@ -33,8 +33,19 @@ internal static class DockerRunner
     public static void Require()
         => Assert.SkipWhen(!IsAvailable, "SKIP: docker is unavailable on this host.");
 
-    // 镜像确保可用（本地有或 pull 成功）→ true；不可用 → false（脚本"SKIP 单镜像继续"语义）。
-    public static bool TryEnsureImage(string image)
+    // Docker Hub 限流（429）或网络抖动时按映射回落备用 registry：
+    // pull 成功即 `docker tag` 回逻辑名，调用方与脚本语义完全不变。
+    // 只登记有官方/可信对应镜像的腿；未登记镜像保持单源拉取。
+    private static readonly IReadOnlyDictionary<string, string[]> ImageMirrors =
+        new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["fedora:latest"] = ["quay.io/fedora/fedora:latest"],
+            ["rockylinux:9"] = ["quay.io/rockylinux/rockylinux:9"],
+            ["opensuse/leap:latest"] = ["registry.opensuse.org/opensuse/leap:latest"],
+        };
+
+    // 镜像确保可用（本地有或 pull 成功，含镜像回落）→ true；不可用 → false（脚本"SKIP 单镜像继续"语义）。
+    private static bool EnsureImage(string image)
     {
         if (!IsAvailable)
         {
@@ -48,21 +59,38 @@ internal static class DockerRunner
         }
         var pull = ProcessRunner.Run("docker", ["pull", image],
             new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(10) });
-        return pull.ExitCode == 0;
+        if (pull.ExitCode == 0)
+        {
+            return true;
+        }
+        if (!ImageMirrors.TryGetValue(image, out var mirrors))
+        {
+            return false;
+        }
+        foreach (var mirror in mirrors)
+        {
+            var mirrorPull = ProcessRunner.Run("docker", ["pull", mirror],
+                new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(10) });
+            if (mirrorPull.ExitCode != 0)
+            {
+                continue;
+            }
+            var tag = ProcessRunner.Run("docker", ["tag", mirror, image],
+                new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(30) });
+            if (tag.ExitCode == 0)
+            {
+                return true;
+            }
+        }
+        return false;
     }
+
+    public static bool TryEnsureImage(string image) => EnsureImage(image);
 
     public static void RequireImage(string image)
     {
         Require();
-        var inspect = ProcessRunner.Run("docker", ["image", "inspect", image],
-            new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(30) });
-        if (inspect.ExitCode == 0)
-        {
-            return;
-        }
-        var pull = ProcessRunner.Run("docker", ["pull", image],
-            new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(10) });
-        Assert.SkipWhen(pull.ExitCode != 0,
+        Assert.SkipWhen(!EnsureImage(image),
             $"SKIP: docker image '{image}' could not be pulled (daemon present but image unavailable).");
     }
 
