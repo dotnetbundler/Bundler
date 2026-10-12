@@ -908,9 +908,11 @@ public static class CliTests
             // 模板开箱即可用：不写 targets，init 后直接 bundle --input-dir 即可跑通
             var input = Path.Combine(dir, "publish");
             Directory.CreateDirectory(input);
-            var exe = Path.Combine(input, "myapp");
+            // 可执行候选判定按推断目标走：windows 目标认 .exe 名，其余认 POSIX 执行位——
+            // fixture 按宿主造件（推断目标跟随宿主 OS）。
+            var exe = Path.Combine(input, OperatingSystem.IsWindows() ? "myapp.exe" : "myapp");
             File.WriteAllText(exe, "x");
-            if (OperatingSystem.IsLinux())
+            if (!OperatingSystem.IsWindows())
             {
                 File.SetUnixFileMode(exe,
                     UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
@@ -1269,7 +1271,9 @@ public static class CliTests
         var resolved = CliConfig.Resolve(CliArguments.Parse(
             ["plan", "--input-dir", "/tmp/x", "--formats", "zip",
              "--output-dir", "/tmp/a;b"]));
-        Assert.Equal("/tmp/a;b", resolved.Bundle.OutputDirectory);
+        // rooted 路径经 Path.GetFullPath 归一——Windows 下 '/'-根落到当前盘根，
+        // 两侧同调抵消宿主差异，断言只钉";"不劈列。
+        Assert.Equal(Path.GetFullPath("/tmp/a;b"), resolved.Bundle.OutputDirectory);
     }
 
     [Fact]
