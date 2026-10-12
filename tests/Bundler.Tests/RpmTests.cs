@@ -944,12 +944,34 @@ public static class RpmTests
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         try
         {
-            foreach (var clause in new[] { "foo != 1.0", "foo bar", "", "foo =" })
+            foreach (var clause in new[] { "foo != 1.0", "foo bar", "", "foo =",
+                                         "(libgcc", "(libgcc))", "(libgcc or libgcc_s1) trailing" })
             {
                 Assert.ThrowsAny<ArgumentException>(
                     () => new RpmBundler(new RpmBundleConfiguration { Depends = [clause] })
                         .BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult());
             }
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    static void AcceptsRichDependencyClause()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            // 跨发行版依赖名差异（Fedora libgcc vs openSUSE libgcc_s1）走 rpm rich deps 透传。
+            var artifact = new RpmBundler(new RpmBundleConfiguration
+            {
+                Depends = ["glibc", "(libgcc or libgcc_s1)"]
+            }).BuildAsync(RpmConfiguration(input, output)).GetAwaiter().GetResult().Single();
+            var package = RpmPackageReader.Read(artifact.Path);
+            Assert.Contains("(libgcc or libgcc_s1)", package.Main.Strings(1049));
         }
         finally
         {

@@ -147,6 +147,9 @@ public static class CliTests
             Assert.True(File.Exists(zip), $"zip artifact must exist at {zip}");
             Assert.True(File.Exists(zip + ".sha256"), "sha256 sidecar must exist");
             Assert.Contains(zip, stdout);
+            // .bundler-work 脚手架连壳层一并回收，不留空目录噪音
+            Assert.False(Directory.Exists(Path.Combine(output, ".bundler-work")),
+                ".bundler-work scaffold must be fully reclaimed");
         }
         finally
         {
