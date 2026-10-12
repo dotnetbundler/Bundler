@@ -1,2 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<component type="desktop-application"><id>com.dotnetbundler.rpmintegrationfixture</id><name>Bundler Rpm Fixture</name></component>
+<component type="desktop-application">
+  <id>com.dotnetbundler.rpmintegrationfixture</id>
+  <metadata_license>MIT</metadata_license>
+  <name>Bundler Rpm Fixture</name>
+  <summary>Bundler rpm integration fixture</summary>
+  <description><p>Fixture application used by the Bundler rpm integration tests.</p></description>
+  <launchable type="desktop-id">bundler-rpm-fixture.desktop</launchable>
+  <url type="homepage">https://github.com/dotnetbundler/Bundler</url>
+</component>

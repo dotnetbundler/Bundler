@@ -33,6 +33,35 @@ internal static class RpmTools
 
     // rpm2cpio | cpio -idm 解到目标目录；GNU cpio 不为符号链接预建父目录，
     // 先按 -qplv 清单里的 l 行预建（脚本同款处理）。
+    /// 无 rpm 工具链环境也可用的结构断言：签名 header 段是否携带 RPMSIGTAG_RSA(268)。
+    /// 布局：96B lead → 4B magic(8e ad e8) + 1B ver + 4B reserved + 4B nindex + 4B hsize → nindex×16B 条目(tag,type,offset,count)。
+    public static bool HasRsaSignatureTag(string rpmPath)
+    {
+        var bytes = File.ReadAllBytes(rpmPath);
+        if (bytes.Length < 96 + 16)
+        {
+            return false;
+        }
+        var o = 96;
+        if (bytes[o] != 0x8e || bytes[o + 1] != 0xad || bytes[o + 2] != 0xe8)
+        {
+            return false;
+        }
+        var nindex = ReadBe32(bytes, o + 8);
+        var entries = o + 16;
+        for (var i = 0; i < nindex; i++)
+        {
+            if (ReadBe32(bytes, entries + i * 16) == 268)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static int ReadBe32(byte[] b, int o) =>
+        (b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3];
+
     public static void ExtractPayload(string rpmPath, string destinationDir)
     {
         RequireCpio();

@@ -355,6 +355,7 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
         var desktopFile = Path.Combine(dataDir, "usr/share/applications/bundler-deb-fixture.desktop");
         Assert.True(File.Exists(desktopFile), "The override .desktop is missing.");
         Assert.Contains("Name=Bundler Deb Fixture Custom", File.ReadAllLines(desktopFile));
+        Assert.Contains("x-scheme-handler:bundler-fixture", File.ReadAllText(desktopFile));
         if (ExternalTools.Has("desktop-file-validate"))
         {
             ProcessRunner.AssertSuccess(
@@ -647,12 +648,39 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
             dpkg -P bundler-deb-fixture >/dev/null 2>&1 || true
             test ! -e /etc/bundler-deb-fixture/defaults.conf
             """;
-        foreach (var image in new[] { "debian:stable", "ubuntu:latest" })
+        foreach (var image in new[] { "debian:stable", "debian:bookworm", "debian:bullseye", "ubuntu:latest" })
         {
             DockerRunner.RequireImage(image);
             var result = DockerRunner.RunScript(image, containerScript,
                 [new DockerRunner.Mount(_f.DefaultDeb, "/tmp/pkg.deb")]);
             ProcessRunner.AssertSuccess(result, $"docker {image} install/run/remove failed.");
         }
+    }
+
+    [Fact]
+    [Trait("Requires", "docker")]
+    public void DockerLintianOnNewerDebian()
+    {
+        // 宿主 lintian 腿固定宿主版本；此腿在更新版 Debian 容器内复跑同一豁免清单。
+        Assert.SkipWhen(
+            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture !=
+                System.Runtime.InteropServices.Architecture.X64,
+            "SKIP: docker matrix leg installs amd64 packages; non-x64 host cannot run them.");
+        var exemptionsPath = Path.Combine(
+            RepositoryLayout.FixturesDirectory, "Deb", "lintian-exemptions.txt");
+        DockerRunner.RequireImage("debian:trixie");
+        var result = DockerRunner.RunScript("debian:trixie",
+            """
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq && apt-get install -y -qq lintian >/dev/null
+            lintian /tmp/pkg.deb > /tmp/lintian.out 2>&1 || true
+            grep -E '^[EW]: ' /tmp/lintian.out | sed -E 's/^[EW]: [^:]*: ([^ ]*).*/\1/' | sort -u > /tmp/tags.out
+            while IFS= read -r tag; do grep -qxF "$tag" /tmp/exempt.txt || echo "NON-EXEMPT: $tag"; done < /tmp/tags.out
+            """,
+            [new DockerRunner.Mount(_f.DefaultDeb, "/tmp/pkg.deb"),
+             new DockerRunner.Mount(exemptionsPath, "/tmp/exempt.txt")]);
+        ProcessRunner.AssertSuccess(result, "lintian leg inside debian:trixie failed.");
+        Assert.DoesNotContain("NON-EXEMPT:", result.StdOut);
     }
 }

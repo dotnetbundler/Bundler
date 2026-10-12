@@ -370,6 +370,21 @@ public sealed class AppImageIntegrationTests : IClassFixture<AppImageFixture>
     }
 
     [Fact]
+    [Trait("Requires", "docker")]
+    public void DockerOfflineExtractAndRun()
+    {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
+        DockerRunner.RequireImage("debian:stable");
+        var result = DockerRunner.RunScript("debian:stable",
+            "cp /tmp/pkg.AppImage /tmp/run.AppImage && chmod +x /tmp/run.AppImage && cd /tmp && ./run.AppImage --appimage-extract-and-run docker-ok",
+            [new DockerRunner.Mount(_f.DefaultImage, "/tmp/pkg.AppImage")],
+            extraArgs: "--network none");
+        ProcessRunner.AssertSuccess(result, "offline extract-and-run failed.");
+        Assert.Equal("BundlerAppImageIntegrationFixture:docker-ok", result.StdOut.Trim());
+    }
+
+    [Fact]
     public void ApiFixtureProducesAppImage()
     {
         Assert.SkipWhen(System.Runtime.InteropServices.RuntimeInformation.OSArchitecture

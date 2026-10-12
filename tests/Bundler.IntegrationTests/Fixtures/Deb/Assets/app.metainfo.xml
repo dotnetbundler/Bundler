@@ -1,2 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<component type="desktop-application"><id>com.dotnetbundler.debintegrationfixture</id><name>Bundler Deb Fixture</name></component>
+<component type="desktop-application">
+  <id>com.dotnetbundler.debintegrationfixture</id>
+  <metadata_license>MIT</metadata_license>
+  <name>Bundler Deb Fixture</name>
+  <summary>Bundler deb integration fixture</summary>
+  <description><p>Fixture application used by the Bundler deb integration tests.</p></description>
+  <launchable type="desktop-id">bundler-deb-fixture.desktop</launchable>
+  <url type="homepage">https://github.com/dotnetbundler/Bundler</url>
+</component>

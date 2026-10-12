@@ -440,6 +440,53 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
         ProcessRunner.AssertSuccess(result, "aarch64 container install/run/remove failed.");
     }
 
+    [Fact]
+    [Trait("Requires", "docker")]
+    public void DockerArm64NativeInstallRunRemove()
+    {
+        Assert.SkipWhen(
+            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture !=
+                System.Runtime.InteropServices.Architecture.Arm64,
+            "SKIP: 原生 aarch64 装卸腿只在 arm64 宿主跑（x64 宿主走 binfmt 腿）。");
+        DockerRunner.RequireImage("alpine:latest");
+        var result = DockerRunner.RunScript("alpine:latest",
+            """
+            set -e
+            apk add --allow-untrusted /tmp/pkg.apk >/dev/null
+            bundler-apk-fixture smoke | grep -q "BundlerAlpineApkIntegrationFixture:smoke"
+            apk del bundler-apk-fixture >/dev/null
+            """,
+            [new DockerRunner.Mount(_f.Arm64Apk, "/tmp/pkg.apk")]);
+        ProcessRunner.AssertSuccess(result, "native aarch64 container install/run/remove failed.");
+    }
+
+    [Fact]
+    [Trait("Requires", "docker")]
+    public void DockerAlpineVersionMatrixInstallRunRemove()
+    {
+        Assert.SkipWhen(!TestPlatform.IsX64,
+            "SKIP: 该腿工件为 x64 二进制/amd64 包，非 x64 宿主无法执行或安装。");
+        const string script = """
+            set -e
+            apk add --allow-untrusted /tmp/pkg.apk >/dev/null
+            bundler-apk-fixture smoke | grep -q "BundlerAlpineApkIntegrationFixture:smoke"
+            apk del bundler-apk-fixture >/dev/null
+            """;
+        var ranAny = false;
+        foreach (var image in new[] { "alpine:3.19", "alpine:3.21", "alpine:edge" })
+        {
+            if (!DockerRunner.TryEnsureImage(image))
+            {
+                continue; // 单镜像拉取失败记 SKIP 继续下一镜像
+            }
+            ranAny = true;
+            var result = DockerRunner.RunScript(image, script,
+                [new DockerRunner.Mount(_f.ScriptsApk, "/tmp/pkg.apk")]);
+            ProcessRunner.AssertSuccess(result, $"alpine version leg failed in {image}.");
+        }
+        Assert.SkipWhen(!ranAny, "SKIP: no alpine version image available (pull failed for all).");
+    }
+
     private static int CountOccurrences(byte[] haystack, byte[] needle)
     {
         var count = 0;
