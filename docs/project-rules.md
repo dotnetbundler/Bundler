@@ -42,17 +42,18 @@ AI 的行为与协作规则在根 `AGENTS.md`；格式专属契约在 `docs/form
 ## 3. 工具随包供应
 
 - **默认打包必需工具和资源随对应后端包分发**：普通使用者无需另装 NSIS/WiX，也无需运行时联网下载打包工具。
+  参照 NSIS 的内嵌工具与校验缓存模式，但须按各工具许可证和宿主条件设计。
 - 固定可信来源、版本、SHA-256 哈希、包内容清单、合法再分发与必要源码/声明义务；缓存污染、损坏和并发有安全处理。
 - 显式本地工具覆盖可作为受控高级入口。
 - NuGet 包获取和调用方 SDK/MSBuild 环境属于另一层，不能由"包内工具离线"推断整台零环境机器无需其他依赖。
-- 预编译冻件（如 `Bundler.Updater.Bootstrap` 的 per-target `bundler-updater` 引导件）按目标宿主工具链产件：musl RID 必须在 musl 工具链宿主内产（`mcr.microsoft.com/dotnet/sdk:10.0-alpine` 容器或 musl 发行版）——glibc 宿主直接 `dotnet publish -r linux-musl-*` 产出"解释器标 musl、NEEDED 仍挂 glibc `ld-linux`"的混血件，musl 宿主上起不来；
+- 预编译冻件（如 `Bundler.Updater.Bootstrap` 的 per-target `bundler-updater` 引导件）按目标宿主工具链产件：musl RID 必须在 musl 工具链宿主内产（`mcr.microsoft.com/dotnet/sdk:10.0-alpine` 容器或 musl 发行版）——glibc 宿主直接 `dotnet publish -r linux-musl-*` 产出"解释器标 musl、NEEDED 仍挂 glibc `ld-linux`"的混血件，musl 宿主上 rc=127 起不来；
   验收看 `readelf -d` NEEDED 仅 `libc.musl-*`（全静态件无 NEEDED 条目亦合规）加目标宿主实跑。
 - 工具选型目标：**合法免费、无付费必需服务、体积尽量小、尽量覆盖更多构建宿主和安装设备**；实际支持范围以原生验证为准。
 
 ## 4. 目标与格式门禁
 
-- 允许的限制依据仅两类：①工具链真实能力（打包工具或宿主确实做不到，如 WiX 需 Windows 宿主、`dmg`/`pkg` 需 macOS）；②产物语义真实性（能产出文件但安装/运行语义不成立的组合——如 musl 载荷打进 `.deb`/`.rpm`，musl 生态无对应发行版消费面——默认拒绝，显式豁免须用户明确要求）。
-- 除上述两类外不替工具预判：目标不做组合白名单；`BundleTarget.TryParse` 按 `<os>[-<libc>]-<arch>` 语法解析，枚举即 OS、libc 与架构全集，枚举外值解析失败，出现需求时按需补枚举与后端映射。
+- 允许的限制依据仅两类（2026-09-30 用户确认原则）：①工具链真实能力（打包工具或宿主确实做不到，如 WiX 需 Windows 宿主、`dmg`/`pkg` 需 macOS）；②产物语义真实性（能产出文件但安装/运行语义不成立的组合——如 musl 载荷打进 `.deb`/`.rpm`，musl 生态无对应发行版消费面——默认拒绝，显式豁免须用户明确要求）。
+- 除上述两类外不替工具预判：目标不做组合白名单；`BundleTarget.TryParse` 按 `<os>[-<libc>]-<arch>` 语法解析，`TargetOperatingSystem`/`LibC`/`CpuArchitecture` 枚举即 OS、libc 与架构全集，枚举外值解析失败，出现需求时按需补枚举与后端映射。
 - 工具能力由后端自报，不用与后端脱节的静态表替后端说不——防止矩阵与后端口径漂移。
 - 目标语法、架构词与产物命名契约见 `docs/targets.md`。
 
@@ -61,6 +62,7 @@ AI 的行为与协作规则在根 `AGENTS.md`；格式专属契约在 `docs/form
 - 实现、修复或随包文档调整导致 NuGet 包内容变化时，只在根 `Directory.Build.props` 递增 `BundlerPackageVersion`；包依赖、仓外包消费 fixture 的 `PackageReference` 与集成测试默认值引用此值。
   不在同一 ID/版本上发布不同内容并指望 NuGet 缓存刷新；一个未提交阶段使用同一新版本。
   工具包版本与被打包应用版本独立；公开示例应用版本保持稳定，升级/降级由独立 fixture 测试。
+  结项前核对所有包及用户文档与该版本一致。
 - 外部依赖版本集中在 `Directory.Packages.props`（中央包管理），`PackageReference` 不带 `Version=`（否则 NU1008）；引用仓内 `DotNet.Bundler*` 包时用 `VersionOverride="$(BundlerPackageVersion)"` 覆盖中央版本。
 - `src/` 各工程共享元数据（`Authors`、`PackageVersion`、`PackageReadmeFile`、`netstandard2.0` TFM、README 与 THIRD-PARTY-NOTICES 打包项）统一在 `src/Directory.Build.props`（链式导入根 props），个别工程按项目名条件豁免；不在单 csproj 里重复这些值。
 - 仓内示例与 fixture 一律以项目引用消费打包系统：共享接线在 `Bundler.ProjectReference.targets`（引用 `src/Bundler.MSBuild`、`ReferenceOutputAssembly=false`、`_BundlerTaskAssembly` 指向源树构建输出并导入 `buildTransitive` props/targets；`BuildReference=false` 使消费方不重建任务工程，避免常驻 MSBuild 节点持锁导致 MSB3021/3027），消费项目只加一行 `GetPathOfFileAbove` 导入即可直接 `dotnet publish`。
@@ -81,9 +83,7 @@ AI 的行为与协作规则在根 `AGENTS.md`；格式专属契约在 `docs/form
 
 - 每项新增或修改功能必须有可区分新旧行为的自动化断言，覆盖验证/映射、真实打包、NuGet 包内容、仓库外直接 API 包消费、应用层消费和适用的系统生命周期；
   只运行旧测试、只查模板或只发布公开示例，不证明新系统行为。
-  测试组织与断言机制见 `tests/README.md`。
-- 集成测试按 Pack、隔离还原、生成产物、执行系统行为、断言最终状态组织；每轮使用独立输出和产品身份，预检无碰撞；
-  "build→pack"链在 build 前一律关闭构建服务器（测试腿走 `Dotnet.ShutdownBuildServers()`，脚本腿用 `dotnet build-server shutdown`）——Windows 常驻 MSBuild 节点持任务程序集锁会致 `dotnet pack` MSB3027（POSIX 腿不需要）。
+- 测试组织、断言风格、fixture 布局与门禁机制以 `tests/README.md` 为准；本文件只留义务层——集成腿每轮必须使用独立输出和产品身份、预检无碰撞，失败留痕不放宽断言。
 - 签名私钥、PFX 密码、访问令牌等秘密不得进入仓库、示例项目、普通命令行或可回显日志；签名失败不得留下被误认为成功的最终产物。
 - 签名是打包发布能力，但生产私钥、HSM/云账户及第三方服务由发行方提供；生产证书与公开信任链只按真实发布环境验收。
 - 格式受管模式须定义身份、所有权与失败边界；用户自备脚本/模板或专家模式要显式标明责任范围，不能把任意用户逻辑宣称为 Bundler 内建安全能力。
