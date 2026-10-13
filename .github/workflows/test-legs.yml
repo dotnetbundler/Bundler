@@ -1,0 +1,119 @@
+# 开发期定向测试腿：迭代验证载具，不是发布门（发布门仍是 release-verify）。
+# dispatch 选 suite×runners 只跑需要的腿；push 触发（tests/scripts/本文件改动）
+# 是开发自检通道——跑 unit 套件全矩阵，重量级验证仍 dispatch 或走 release-verify。
+# 注：job 级 if 在矩阵展开前求值，matrix/inputs 不可用于 job-if——runner 子集走
+# select 前置 job 产动态矩阵，不用 job-if 过滤。
+name: test-legs
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 测试套件（all=四工程全跑）
+        type: choice
+        default: unit
+        options: [unit, api, integration, localpackages, all]
+      runners:
+        description: runner 标签子集，逗号分隔不带空格；all=六腿全跑
+        type: string
+        default: all
+        required: true
+  push:
+    paths:
+      - '.github/workflows/test-legs.yml'
+      - 'scripts/ci/**'
+      - 'tests/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # runners 输入 → 动态矩阵（job-if 拿不到 matrix，前置 job 是规范做法）。
+  select:
+    name: select
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      runners: ${{ steps.pick.outputs.runners }}
+    steps:
+      - id: pick
+        env:
+          RUNNERS_IN: ${{ inputs.runners || 'all' }}
+        run: |
+          set -euo pipefail
+          ALL='["ubuntu-26.04","ubuntu-26.04-arm","windows-2025","windows-11-arm","macos-26-intel","macos-26"]'
+          if [ -z "$RUNNERS_IN" ] || [ "$RUNNERS_IN" = "all" ]; then
+            echo "runners=$ALL" >> "$GITHUB_OUTPUT"
+          else
+            # 逐标签对 ALL 校验并去重——错拼标签会让矩阵腿挂死在不存在 runner 上等不到失败信号。
+            python3 - "$ALL" <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, sys
+          allowed = json.loads(sys.argv[1])
+          picked = list(dict.fromkeys(x.strip() for x in os.environ["RUNNERS_IN"].split(",") if x.strip()))
+          unknown = [x for x in picked if x not in allowed]
+          if unknown:
+              print(f"::error::未知 runner 标签 {unknown}，合法集合: {allowed}", file=sys.stderr)
+              sys.exit(1)
+          if not picked:
+              print("::error::runners 解析为空", file=sys.stderr)
+              sys.exit(1)
+          print("runners=" + json.dumps(picked))
+          PY
+          fi
+
+  legs:
+    needs: select
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.select.outputs.runners) }}
+    env:
+      SUITE: ${{ inputs.suite || 'unit' }}
+      # 集成真装真卸同意闸——CI runner 是可丢弃环境，装/卸断言即目的
+      BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.x"
+
+      # 常驻 MSBuild 节点持任务程序集锁会致后续 pack MSB3027——build 前先关（win 腿实证）。
+      - name: 构建
+        shell: bash
+        if: runner.os != 'Windows'
+        run: dotnet build Bundler.slnx -c Release --nologo
+      - name: 构建（Windows）
+        shell: pwsh
+        if: runner.os == 'Windows'
+        run: |
+          dotnet build-server shutdown | Out-Null
+          dotnet build Bundler.slnx -c Release --nologo
+
+      - name: 测试（POSIX）
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/ci/run-suite.sh "$SUITE"
+      - name: 测试（Windows）
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/run-suite.ps1 -Suite $env:SUITE
+
+      - name: 上传失败线索（进度日志）
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: progress-${{ matrix.os }}
+          path: artifacts/ci/test-progress.log
+          if-no-files-found: ignore
+          retention-days: 1
