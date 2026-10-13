@@ -270,50 +270,21 @@ internal static class AppDirBuilder
 
     private static void CopyTree(
         string source, string destination, IBundleLogger log,
-        HashSet<string>? claimed = null)
-    {
-        Directory.CreateDirectory(destination);
-        // 手工递归：AllDirectories 枚举会穿透目录链接，祖先链接导致重复展开。
-        foreach (var directory in Directory.GetDirectories(source).OrderBy(d => d, StringComparer.Ordinal))
-        {
-            var dirTarget = Path.Combine(destination, Path.GetFileName(directory));
-            if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+        HashSet<string>? claimed = null) =>
+        FileTree.CopyTree(source, destination, log,
+            links: TreeLinkPolicy.WarnSkip,
+            sortEntries: true,
+            resolveFileDestination: claimed is null ? null : (file, dir) =>
             {
-                // 目录链接不展开：穿透会把目标树复制两遍，祖先链接会无界递归。
-                // netstandard2.0 无 LinkTarget/CreateSymbolicLink API，按跳过处理。
-                log.Log(BundleLogLevel.Warning,
-                    $"Skipping directory symlink: {directory}");
-                continue;
-            }
-            CopyTree(directory, dirTarget, log, claimed);
-        }
-        foreach (var file in Directory.GetFiles(source).OrderBy(f => f, StringComparer.Ordinal))
-        {
-            // Sockets, FIFOs and device nodes cannot be copied; skip them like
-            // the archive formats do.
-            if (!UnixFileTypes.IsRegularFile(file))
-            {
-                log.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
-                continue;
-            }
-            var target = Path.Combine(
-                destination, PathRelative(source, file));
-            if (claimed is not null && !claimed.Add(Path.GetFullPath(target)))
-            {
-                throw new InvalidOperationException(
-                    $"A resource file collides with an existing payload entry: '{Path.GetFullPath(target)}'.");
-            }
-            File.Copy(file, target, overwrite: true);
-        }
-    }
+                var target = Path.Combine(dir, Path.GetFileName(file));
+                if (!claimed.Add(Path.GetFullPath(target)))
+                {
+                    throw new InvalidOperationException(
+                        $"A resource file collides with an existing payload entry: '{Path.GetFullPath(target)}'.");
+                }
+                return target;
+            });
 
-    private static string PathRelative(string baseDir, string path)
-    {
-        var baseUri = new Uri(baseDir.TrimEnd(Path.DirectorySeparatorChar) +
-            Path.DirectorySeparatorChar, UriKind.Absolute);
-        var pathUri = new Uri(Path.GetFullPath(path), UriKind.Absolute);
-        return Uri.UnescapeDataString(baseUri.MakeRelativeUri(pathUri).ToString());
-    }
 
     // POSIX relative path between two slash-separated AppDir-relative paths
     // ("usr/bin" → "usr/lib/<pkg>/main" = "../lib/<pkg>/main").

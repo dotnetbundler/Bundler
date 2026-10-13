@@ -325,28 +325,9 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
         _ => throw new NotSupportedException("Unknown .pkg target architecture: " + architecture),
     };
 
-    internal static void CopyTree(string source, string destination, IBundleLogger log, int depth = 0)
-    {
-        // 目录符号链接环会让递归失控——深度封顶显式报错。
-        if (depth > 64)
-        {
-            throw new InvalidDataException(
-                "Directory nesting too deep inside the .pkg payload (possible symlink loop): " + source);
-        }
-        Directory.CreateDirectory(destination);
-        foreach (var file in Directory.GetFiles(source))
-        {
-            // Sockets, FIFOs and device nodes cannot be copied; skip them.
-            if (!UnixFileTypes.IsRegularFile(file))
-            {
-                log.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
-                continue;
-            }
-            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), overwrite: true);
-        }
-        foreach (var directory in Directory.GetDirectories(source))
-        {
-            CopyTree(directory, Path.Combine(destination, Path.GetFileName(directory)), log, depth + 1);
-        }
-    }
+    internal static void CopyTree(string source, string destination, IBundleLogger log, int depth = 0) =>
+        FileTree.CopyTree(source, destination, log, depth,
+            maxDepth: 64,
+            loopErrorMessage: "Directory nesting too deep inside the .pkg payload (possible symlink loop)",
+            links: TreeLinkPolicy.Traverse);
 }
