@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using DotNet.Bundler;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.MacApp;
 
@@ -95,7 +96,7 @@ internal static class MacAppSigning
                 identity == "-"
                     ? "Signing the .app ad-hoc (codesign -s -)."
                     : $"Signing the .app with identity '{identity}'.");
-            await MacProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "xattr", ["-crs", appPath], context.WorkDirectory, cancellationToken);
 
             var contentsDirectory = Path.Combine(appPath, "Contents");
@@ -120,7 +121,7 @@ internal static class MacAppSigning
 
             foreach (var file in nestedFiles)
             {
-                await MacProcessRunner.RunAsync("codesign",
+                await ToolRunner.RunAsync("codesign",
                     CodesignArguments(identity, signing, entitlements: false, file),
                     context.WorkDirectory, cancellationToken);
             }
@@ -129,19 +130,19 @@ internal static class MacAppSigning
                 await SignNestedBundleAsync(
                     context, signing, identity, nested, cancellationToken);
             }
-            await MacProcessRunner.RunAsync("codesign",
+            await ToolRunner.RunAsync("codesign",
                 CodesignArguments(identity, signing, entitlements: true, mainExecutablePath),
                 context.WorkDirectory, cancellationToken);
-            await MacProcessRunner.RunAsync("codesign",
+            await ToolRunner.RunAsync("codesign",
                 CodesignArguments(identity, signing, entitlements: true, appPath),
                 context.WorkDirectory, cancellationToken);
 
-            await MacProcessRunner.RunAsync("codesign",
+            await ToolRunner.RunAsync("codesign",
                 ["--verify", "--deep", "--strict", "--verbose=4", appPath],
                 context.WorkDirectory, cancellationToken);
             if (identity != "-")
             {
-                var assessment = await MacProcessRunner.TryRunAsync("spctl",
+                var assessment = await ToolRunner.TryRunAsync("spctl",
                     ["-a", "-t", "execute", "-vv", appPath],
                     context.WorkDirectory, cancellationToken);
                 if (assessment is { ExitCode: 0 })
@@ -198,7 +199,7 @@ internal static class MacAppSigning
                 .ToList();
             foreach (var file in loose)
             {
-                await MacProcessRunner.RunAsync("codesign",
+                await ToolRunner.RunAsync("codesign",
                     CodesignArguments(identity, signing, entitlements: false, file),
                     context.WorkDirectory, cancellationToken);
             }
@@ -208,7 +209,7 @@ internal static class MacAppSigning
             }
         }
         // bundle 根签名封住其主可执行与资源——不叠 entitlements（属主 app 的旋钮）。
-        await MacProcessRunner.RunAsync("codesign",
+        await ToolRunner.RunAsync("codesign",
             CodesignArguments(identity, signing, entitlements: false, bundlePath),
             context.WorkDirectory, cancellationToken);
     }
@@ -325,7 +326,7 @@ internal static class MacAppSigning
         try
         {
             context.Logger.Log(BundleLogLevel.Information, "Archiving the bundle for notarization (ditto -c -k --keepParent).");
-            await MacProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "ditto", ["-c", "-k", "--keepParent", appPath, zipPath],
                 context.WorkDirectory, cancellationToken);
             var submitArguments = new List<string> { "notarytool", "submit", zipPath };
@@ -340,7 +341,7 @@ internal static class MacAppSigning
                 signing.NotaryWait
                     ? "Submitting to notarytool and waiting for the verdict."
                     : "Submitting to notarytool without waiting (stapling is skipped).");
-            var result = await MacProcessRunner.TryRunAsync(
+            var result = await ToolRunner.TryRunAsync(
                 "xcrun", submitArguments, context.WorkDirectory, cancellationToken)
                 ?? throw new InvalidOperationException(
                     "xcrun/notarytool is unavailable; notarization requires Xcode 13+ (host macOS 11.3+).");
@@ -364,7 +365,7 @@ internal static class MacAppSigning
                 }
                 return;
             }
-            await MacProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "xcrun", ["stapler", "staple", appPath],
                 context.WorkDirectory, cancellationToken);
             context.Logger.Log(BundleLogLevel.Information, "stapler attached the notarization ticket.");
@@ -438,19 +439,19 @@ internal static class MacAppSigning
             var keychain = new TemporaryKeychain(path, password, "", existing);
             try
             {
-            await MacProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "security", ["create-keychain", "-p", password, path],
                 workDirectory, cancellationToken);
             var searchList = new List<string> { "list-keychains", "-d", "user", "-s", path };
             searchList.AddRange(existing);
-            await MacProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "security", searchList, workDirectory, cancellationToken);
-            await MacProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "security", ["unlock-keychain", "-p", password, path],
                 workDirectory, cancellationToken);
             // p12 口令不进 argv：先经 openssl 转成无口令 PEM 再导入。
             var imported = false;
-            MacProcessRunner.Result? unwrapped = null;
+            ToolRunner.Result? unwrapped = null;
             var pemPath = System.IO.Path.Combine(
                 workDirectory, $"bundler-cert-{Guid.NewGuid():N}.pem");
             var passwordFile = System.IO.Path.Combine(
@@ -462,14 +463,14 @@ internal static class MacAppSigning
                 await CreateSecretFileAsync(pemPath, null, workDirectory, cancellationToken);
                 await CreateSecretFileAsync(passwordFile, certificatePassword,
                     workDirectory, cancellationToken);
-                unwrapped = await MacProcessRunner.TryRunAsync(
+                unwrapped = await ToolRunner.TryRunAsync(
                     "openssl",
                     ["pkcs12", "-in", certificatePath, "-nodes",
                      "-passin", "file:" + passwordFile, "-out", pemPath],
                     workDirectory, cancellationToken);
                 if (unwrapped is { ExitCode: 0 } && File.Exists(pemPath))
                 {
-                    await MacProcessRunner.RunAsync(
+                    await ToolRunner.RunAsync(
                         "security", ["import", pemPath, "-k", path, "-T", "/usr/bin/codesign"],
                         workDirectory, cancellationToken);
                     imported = true;
@@ -498,7 +499,7 @@ internal static class MacAppSigning
                         $"exit code {unwrapped.ExitCode}") +
                     "; the certificate password must not appear in process arguments.");
             }
-            await MacProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "security", ["set-key-partition-list", "-S", "apple-tool:,apple:",
                     "-s", "-k", password, path],
                 workDirectory, cancellationToken);
@@ -525,7 +526,7 @@ internal static class MacAppSigning
             string filePath, string? contents, string workDirectory, CancellationToken cancellationToken)
         {
             using (new FileStream(filePath, FileMode.CreateNew, FileAccess.Write)) { }
-            await MacProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "chmod", ["600", filePath], workDirectory, cancellationToken);
             if (contents is not null)
             {
@@ -539,9 +540,9 @@ internal static class MacAppSigning
             {
                 var restore = new List<string> { "list-keychains", "-d", "user", "-s" };
                 restore.AddRange(PreviousKeychains);
-                await MacProcessRunner.TryRunAsync("security", restore, workDirectory, cancellationToken);
+                await ToolRunner.TryRunAsync("security", restore, workDirectory, cancellationToken);
             }
-            await MacProcessRunner.TryRunAsync(
+            await ToolRunner.TryRunAsync(
                 "security", ["delete-keychain", Path], workDirectory, cancellationToken);
             if (File.Exists(Path))
             {
@@ -552,7 +553,7 @@ internal static class MacAppSigning
         private static async Task<IReadOnlyList<string>> ListUserKeychains(
             string workDirectory, CancellationToken cancellationToken)
         {
-            var result = await MacProcessRunner.TryRunAsync(
+            var result = await ToolRunner.TryRunAsync(
                 "security", ["list-keychains", "-d", "user"], workDirectory, cancellationToken);
             if (result is not { ExitCode: 0 })
             {
@@ -570,7 +571,7 @@ internal static class MacAppSigning
         private static async Task<string?> FindIdentityAsync(
             string keychainPath, string workDirectory, CancellationToken cancellationToken)
         {
-            var result = await MacProcessRunner.TryRunAsync("security",
+            var result = await ToolRunner.TryRunAsync("security",
                 ["find-identity", "-v", "-p", "codesigning", keychainPath],
                 workDirectory, cancellationToken);
             if (result is not { ExitCode: 0 })

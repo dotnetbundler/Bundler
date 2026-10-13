@@ -144,7 +144,7 @@ internal sealed class NsisBundleBackend(
         async Task CompileAsync()
         {
             context.Logger.Log(BundleLogLevel.Trace, $"Running NSIS compiler '{fullCompilerPath}'.");
-            await ProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 fullCompilerPath,
                 ["-INPUTCHARSET", "UTF8", "-OUTPUTCHARSET", "UTF8", "-V2", scriptPath],
                 context.WorkDirectory,

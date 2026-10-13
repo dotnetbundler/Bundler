@@ -1,4 +1,5 @@
 using System.Threading;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.AppImage;
 
@@ -24,7 +25,7 @@ internal static class AppImageSigning
             }
             try
             {
-                AppImageProcessRunner.RunAsync(
+                ToolRunner.RunAsync(
                     "gpgconf", ["--kill", "gpg-agent"], GnupgHome,
                     CancellationToken.None,
                     new Dictionary<string, string> { ["GNUPGHOME"] = GnupgHome })
@@ -44,11 +45,11 @@ internal static class AppImageSigning
         Directory.CreateDirectory(gnupgHome);
         // gpg refuses a group/world-readable homedir.
         // 走同一个带参数转义与退出码检查的 runner——裸拼参数且不看退出码会静默产坏 home。
-        AppImageProcessRunner.RunAsync(
+        ToolRunner.RunAsync(
             "chmod", ["700", gnupgHome], workDirectory, CancellationToken.None)
             .GetAwaiter().GetResult();
 
-        AppImageProcessRunner.RunAsync(
+        ToolRunner.RunAsync(
             "gpg", ["--batch", "--yes", "--import", keyFile],
             workDirectory, CancellationToken.None,
             new Dictionary<string, string> { ["GNUPGHOME"] = gnupgHome })

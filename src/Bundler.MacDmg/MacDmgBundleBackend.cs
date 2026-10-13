@@ -79,7 +79,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             Directory.CreateDirectory(stageDirectory);
             Directory.CreateDirectory(mountDirectory);
             CopyTree(appPath, Path.Combine(stageDirectory, applicationName), logger);
-            await MacDmgProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "ln", ["-s", "/Applications", Path.Combine(stageDirectory, "Applications")],
                 workDirectory, cancellationToken);
 
@@ -90,7 +90,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             {
                 try
                 {
-                    await MacDmgProcessRunner.RunAsync(
+                    await ToolRunner.RunAsync(
                         "hdiutil",
                         ["create", "-srcfolder", stageDirectory, "-volname", volumeName,
                          "-format", "UDRW", "-ov", readWriteImage],
@@ -108,17 +108,17 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             if (settings.Layout is not null || settings.VolumeIconFile is not null)
             {
                 // Relative "+64m" is rejected on -srcfolder-sized images; grow via -limits math.
-                var limits = await MacDmgProcessRunner.TryRunAsync(
+                var limits = await ToolRunner.TryRunAsync(
                     "hdiutil", ["resize", "-limits", readWriteImage],
                     workDirectory, cancellationToken);
                 var fields = limits is { ExitCode: 0 }
                     ? limits.StandardOutput.Trim().Split(
                         new[] { ' ', '\t', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                     : Array.Empty<string>();
-                MacDmgProcessRunner.Result? resized = null;
+                ToolRunner.Result? resized = null;
                 if (fields.Length >= 2 && long.TryParse(fields[1], out var currentSectors))
                 {
-                    resized = await MacDmgProcessRunner.TryRunAsync(
+                    resized = await ToolRunner.TryRunAsync(
                         "hdiutil",
                         ["resize", "-sectors", (currentSectors + 131072).ToString(), readWriteImage],
                         workDirectory, cancellationToken);
@@ -145,7 +145,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             }
             attachArgs.Add("-mountpoint");
             attachArgs.Add(mountDirectory);
-            await MacDmgProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "hdiutil", attachArgs, workDirectory, cancellationToken);
             mounted = true;
 
@@ -181,7 +181,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 {
                     try
                     {
-                        await MacDmgProcessRunner.RunAsync(
+                        await ToolRunner.RunAsync(
                             "hdiutil",
                             ["convert", convertSource, "-format", compressionArgument, "-o", outputPath],
                             workDirectory, cancellationToken);
@@ -238,7 +238,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 var slaPlist = Path.Combine(workDirectory, "sla.plist");
                 File.WriteAllText(
                     slaPlist, MacDmgLicenseResources.BuildPlist(licenseFile, logger));
-                await MacDmgProcessRunner.RunAsync(
+                await ToolRunner.RunAsync(
                     "hdiutil", ["udifrez", "-xml", slaPlist, "-image", outputPath],
                     workDirectory, cancellationToken);
             }
@@ -253,7 +253,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             {
                 try
                 {
-                    await MacDmgProcessRunner.TryRunAsync(
+                    await ToolRunner.TryRunAsync(
                         "hdiutil", ["detach", mountDirectory, "-force"],
                         workDirectory, cancellationToken: CancellationToken.None);
                 }
@@ -330,7 +330,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                     $"The .dmg volume icon does not exist: {volumeIconFile}", volumeIconFile);
             }
             File.Copy(volumeIconFile, Path.Combine(mountDirectory, ".VolumeIcon.icns"), overwrite: true);
-            var flag = await MacDmgProcessRunner.TryRunAsync(
+            var flag = await ToolRunner.TryRunAsync(
                 "SetFile", ["-a", "C", mountDirectory], workDirectory, cancellationToken);
             if (flag is not { ExitCode: 0 })
             {
@@ -354,10 +354,10 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             .SelectMany(line => (string[])["-e", line])
             .ToArray();
         // Finder can take a moment to register a freshly attached volume; retry before degrading.
-        MacDmgProcessRunner.Result? layout = null;
+        ToolRunner.Result? layout = null;
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            layout = await MacDmgProcessRunner.TryRunAsync(
+            layout = await ToolRunner.TryRunAsync(
                 "osascript", scriptArgs, workDirectory, cancellationToken);
             if (layout is null or { ExitCode: 0 })
             {
@@ -488,12 +488,12 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 identity == "-"
                     ? "Signing the .dmg ad-hoc (codesign -s -)."
                     : $"Signing the .dmg with identity '{identity}'.");
-            await MacDmgProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "codesign",
                 ["--force", "--sign", identity,
                  identity == "-" ? "--timestamp=none" : "--timestamp", imagePath],
                 workDirectory, cancellationToken);
-            await MacDmgProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "codesign", ["--verify", imagePath], workDirectory, cancellationToken);
         }
         finally
@@ -513,7 +513,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
     {
         for (var attempt = 1; ; attempt++)
         {
-            var result = await MacDmgProcessRunner.TryRunAsync(
+            var result = await ToolRunner.TryRunAsync(
                 "hdiutil", ["detach", mountDirectory], workingDirectory, cancellationToken);
             if (result is { ExitCode: 0 }
                 // 卷已被其它仲裁者（Finder/diskarbitration）抢先卸下——ENOENT 即目标态。
@@ -524,7 +524,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 // 有滞后，hdiutil info 可能仍短暂列出挂载点；确认消失才算完成，
                 // 否则紧随其后的 convert / hdiutil info 断言会撞上残留簿记。
                 // info 自身跑不起来同样不能放行——簿记未确认就当未完成重试。
-                var info = await MacDmgProcessRunner.TryRunAsync(
+                var info = await ToolRunner.TryRunAsync(
                     "hdiutil", ["info"], workingDirectory, cancellationToken);
                 if (info is { ExitCode: 0 }
                     && info.StandardOutput.IndexOf(mountDirectory, StringComparison.Ordinal) < 0)

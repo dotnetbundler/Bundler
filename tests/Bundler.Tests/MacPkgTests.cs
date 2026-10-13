@@ -1,3 +1,4 @@
+using DotNet.Bundler.Core;
 using DotNet.Bundler;
 using DotNet.Bundler.MacApp;
 using DotNet.Bundler.MacPkg;
@@ -113,12 +114,12 @@ public static class MacPkgTests
     {
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
-        var requests = new List<MacPkgProcessRunner.Request>();
+        var requests = new List<ToolRunner.Request>();
         var staged = new List<string>();
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             if (request.Executable == "pkgbuild")
@@ -130,7 +131,7 @@ public static class MacPkgTests
                 Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
                 File.WriteAllText(pkgPath, "pkg");
             }
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -154,7 +155,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -166,10 +167,10 @@ public static class MacPkgTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        var requests = new List<MacPkgProcessRunner.Request>();
-        MacPkgProcessRunner.Handler = (request, _) =>
+        var requests = new List<ToolRunner.Request>();
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             if (request.Executable == "pkgbuild")
@@ -178,7 +179,7 @@ public static class MacPkgTests
                 Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
                 File.WriteAllText(pkgPath, "pkg");
             }
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -196,7 +197,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -211,9 +212,9 @@ public static class MacPkgTests
         File.WriteAllText(extra, "helper payload");
         var staged = new List<string>();
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             if (request.Executable == "pkgbuild")
             {
@@ -225,7 +226,7 @@ public static class MacPkgTests
                 Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
                 File.WriteAllText(pkgPath, "pkg");
             }
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -243,7 +244,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -262,9 +263,9 @@ public static class MacPkgTests
         File.WriteAllText(Path.Combine(payload, "helper.txt"), "helper");
         var staged = new List<string>();
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             if (request.Executable == "pkgbuild")
             {
@@ -276,7 +277,7 @@ public static class MacPkgTests
                 Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
                 File.WriteAllText(pkgPath, "pkg");
             }
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -303,7 +304,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output, payload);
         }
@@ -315,10 +316,10 @@ public static class MacPkgTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (_, _) =>
-            Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+        ToolRunner.Handler = (_, _) =>
+            Task.FromResult(new ToolRunner.Result(0, "", ""));
         try
         {
             Assert.ThrowsAny<FileNotFoundException>(
@@ -334,7 +335,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -388,10 +389,10 @@ public static class MacPkgTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
-            Task.FromResult(new MacPkgProcessRunner.Result(
+        ToolRunner.Handler = (request, _) =>
+            Task.FromResult(new ToolRunner.Result(
                 request.Executable == "pkgbuild" ? 2 : 0, "", "pkgbuild failed"));
         try
         {
@@ -405,7 +406,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -438,9 +439,9 @@ public static class MacPkgTests
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var distribution = "";
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             if (request.Executable == "productbuild")
             {
@@ -450,7 +451,7 @@ public static class MacPkgTests
             var pkgPath = request.Arguments[request.Arguments.Count - 1];
             Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
             File.WriteAllText(pkgPath, "pkg");
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -460,7 +461,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -472,17 +473,17 @@ public static class MacPkgTests
     {
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
-        var requests = new List<MacPkgProcessRunner.Request>();
+        var requests = new List<ToolRunner.Request>();
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             var pkgPath = request.Arguments[request.Arguments.Count - 1];
             Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
             File.WriteAllText(pkgPath, "pkg");
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -496,7 +497,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -510,9 +511,9 @@ public static class MacPkgTests
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var distribution = "";
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             if (request.Executable == "productbuild")
             {
@@ -522,7 +523,7 @@ public static class MacPkgTests
             var pkgPath = request.Arguments[request.Arguments.Count - 1];
             Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
             File.WriteAllText(pkgPath, "pkg");
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -538,7 +539,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -551,14 +552,14 @@ public static class MacPkgTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             var pkgPath = request.Arguments[request.Arguments.Count - 1];
             Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
             File.WriteAllText(pkgPath, "pkg");
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -578,7 +579,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -639,15 +640,15 @@ public static class MacPkgTests
     {
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
-        var requests = new List<MacPkgProcessRunner.Request>();
+        var requests = new List<ToolRunner.Request>();
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
         // The pipeline deletes the work directory after each step, so the
         // distribution document must be read inside the productbuild call.
         var distribution = "";
         var productbuildArgs = new List<string>();
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             if (request.Executable == "productbuild")
@@ -659,7 +660,7 @@ public static class MacPkgTests
             var pkgPath = request.Arguments[request.Arguments.Count - 1];
             Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
             File.WriteAllText(pkgPath, "pkg");
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -689,7 +690,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -700,17 +701,17 @@ public static class MacPkgTests
     {
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
-        var requests = new List<MacPkgProcessRunner.Request>();
+        var requests = new List<ToolRunner.Request>();
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             var pkgPath = request.Arguments[request.Arguments.Count - 1];
             Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
             File.WriteAllText(pkgPath, "pkg");
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -722,7 +723,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -733,12 +734,12 @@ public static class MacPkgTests
     {
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
-        var requests = new List<MacPkgProcessRunner.Request>();
+        var requests = new List<ToolRunner.Request>();
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
         var distribution = "";
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             if (request.Executable == "productbuild")
@@ -750,7 +751,7 @@ public static class MacPkgTests
             var pkgPath = request.Arguments[request.Arguments.Count - 1];
             Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
             File.WriteAllText(pkgPath, "pkg");
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -767,7 +768,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -780,9 +781,9 @@ public static class MacPkgTests
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var resources = new List<string>();
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             if (request.Executable == "productbuild")
             {
@@ -793,7 +794,7 @@ public static class MacPkgTests
             var pkgPath = request.Arguments[request.Arguments.Count - 1];
             Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
             File.WriteAllText(pkgPath, "pkg");
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -806,7 +807,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -818,14 +819,14 @@ public static class MacPkgTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             var pkgPath = request.Arguments[request.Arguments.Count - 1];
             Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
             File.WriteAllText(pkgPath, "pkg");
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -839,7 +840,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -852,17 +853,17 @@ public static class MacPkgTests
     {
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
-        var requests = new List<MacPkgProcessRunner.Request>();
+        var requests = new List<ToolRunner.Request>();
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             var pkgPath = request.Arguments[request.Arguments.Count - 1];
             Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
             File.WriteAllText(pkgPath, "pkg");
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -886,7 +887,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -897,11 +898,11 @@ public static class MacPkgTests
     {
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
-        var requests = new List<MacPkgProcessRunner.Request>();
+        var requests = new List<ToolRunner.Request>();
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             if (request.Executable == "productsign")
@@ -915,7 +916,7 @@ public static class MacPkgTests
                 Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
                 File.WriteAllText(pkgPath, "pkg");
             }
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -939,7 +940,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -1027,17 +1028,17 @@ public static class MacPkgTests
         var scripts = Path.Combine(input, "scripts");
         Directory.CreateDirectory(scripts);
         File.WriteAllText(Path.Combine(scripts, "postinstall"), "#!/bin/sh\nexit 0\n");
-        var requests = new List<MacPkgProcessRunner.Request>();
+        var requests = new List<ToolRunner.Request>();
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             var pkgPath = request.Arguments[request.Arguments.Count - 1];
             Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
             File.WriteAllText(pkgPath, "pkg");
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -1054,7 +1055,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -1088,11 +1089,11 @@ public static class MacPkgTests
     {
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
-        var requests = new List<MacPkgProcessRunner.Request>();
+        var requests = new List<ToolRunner.Request>();
         var previousHost = MacPkgBundleBackend.HostCheck;
-        var previous = MacPkgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
-        MacPkgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             var last = request.Arguments[request.Arguments.Count - 1];
@@ -1106,7 +1107,7 @@ public static class MacPkgTests
                          request.Arguments.Contains("notarytool")
                 ? "{\"id\":\"123e4567-e89b-12d3-a456-426614174000\"}"
                 : "";
-            return Task.FromResult(new MacPkgProcessRunner.Result(0, stdout, ""));
+            return Task.FromResult(new ToolRunner.Result(0, stdout, ""));
         };
         try
         {
@@ -1132,7 +1133,7 @@ public static class MacPkgTests
         }
         finally
         {
-            MacPkgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }

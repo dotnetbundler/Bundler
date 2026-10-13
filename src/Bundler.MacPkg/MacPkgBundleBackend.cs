@@ -170,7 +170,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                 pkgbuildArguments.AddRange(MacPkgSigning.PkgbuildSignArguments(identity, keychain));
             }
             pkgbuildArguments.Add(packagePath);
-            await MacPkgProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "pkgbuild", pkgbuildArguments, workDirectory, cancellationToken);
 
             if (useDistribution)
@@ -190,7 +190,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                     ArchitectureName(item.Target.Architecture),
                     logger,
                     settings);
-                await MacPkgProcessRunner.RunAsync(
+                await ToolRunner.RunAsync(
                     "productbuild",
                     ["--distribution", distributionPath,
                      "--package-path", workDirectory,

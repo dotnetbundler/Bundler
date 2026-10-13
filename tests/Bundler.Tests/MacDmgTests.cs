@@ -113,11 +113,11 @@ public static class MacDmgTests
     {
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
-        var requests = new List<MacDmgProcessRunner.Request>();
+        var requests = new List<ToolRunner.Request>();
         var previousHost = MacDmgBundleBackend.HostCheck;
-        var previous = MacDmgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
-        MacDmgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             WriteDsStore(request);
@@ -129,7 +129,7 @@ public static class MacDmgTests
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.WriteAllText(path, "dmg");
             }
-            return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -173,7 +173,7 @@ public static class MacDmgTests
         }
         finally
         {
-            MacDmgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacDmgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -192,10 +192,10 @@ public static class MacDmgTests
             var input = CreateInputDirectory();
             var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
             var previousHost = MacDmgBundleBackend.HostCheck;
-            var previous = MacDmgProcessRunner.Handler;
+            var previous = ToolRunner.Handler;
             MacDmgBundleBackend.HostCheck = () => true;
-            var requests = new List<MacDmgProcessRunner.Request>();
-            MacDmgProcessRunner.Handler = (request, _) =>
+            var requests = new List<ToolRunner.Request>();
+            ToolRunner.Handler = (request, _) =>
             {
                 requests.Add(request);
                 WriteDsStore(request);
@@ -206,7 +206,7 @@ public static class MacDmgTests
                     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                     File.WriteAllText(path, "dmg");
                 }
-                return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
+                return Task.FromResult(new ToolRunner.Result(0, "", ""));
             };
             try
             {
@@ -226,7 +226,7 @@ public static class MacDmgTests
             }
             finally
             {
-                MacDmgProcessRunner.Handler = previous;
+                ToolRunner.Handler = previous;
                 MacDmgBundleBackend.HostCheck = previousHost;
                 Cleanup(input, output);
             }
@@ -239,16 +239,16 @@ public static class MacDmgTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var previousHost = MacDmgBundleBackend.HostCheck;
-        var previous = MacDmgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
         var detachAttempts = 0;
-        MacDmgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             WriteDsStore(request);
             if (request.Arguments.Contains("detach") && !request.Arguments.Contains("-force"))
             {
                 detachAttempts++;
-                return Task.FromResult(new MacDmgProcessRunner.Result(
+                return Task.FromResult(new ToolRunner.Result(
                     detachAttempts < 3 ? 1 : 0, "", detachAttempts < 3 ? "Resource busy" : ""));
             }
             if (request.Arguments.Contains("convert"))
@@ -258,7 +258,7 @@ public static class MacDmgTests
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.WriteAllText(path, "dmg");
             }
-            return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -267,7 +267,7 @@ public static class MacDmgTests
         }
         finally
         {
-            MacDmgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacDmgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -279,17 +279,17 @@ public static class MacDmgTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var previousHost = MacDmgBundleBackend.HostCheck;
-        var previous = MacDmgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
         var forcedDetach = false;
-        MacDmgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             WriteDsStore(request);
             if (request.Arguments.Contains("detach") && request.Arguments.Contains("-force"))
             {
                 forcedDetach = true;
             }
-            return Task.FromResult(new MacDmgProcessRunner.Result(
+            return Task.FromResult(new ToolRunner.Result(
                 request.Arguments.Contains("detach") && !request.Arguments.Contains("-force") ? 1 : 0,
                 "", "Resource busy"));
         };
@@ -303,7 +303,7 @@ public static class MacDmgTests
         }
         finally
         {
-            MacDmgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacDmgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -315,12 +315,12 @@ public static class MacDmgTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var previousHost = MacDmgBundleBackend.HostCheck;
-        var previous = MacDmgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
-        MacDmgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             WriteDsStore(request);
-            return Task.FromResult(new MacDmgProcessRunner.Result(
+            return Task.FromResult(new ToolRunner.Result(
                 request.Arguments.Contains("convert") ? 2 : 0, "", "convert failed"));
         };
         try
@@ -334,7 +334,7 @@ public static class MacDmgTests
         }
         finally
         {
-            MacDmgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacDmgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -346,16 +346,16 @@ public static class MacDmgTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var previousHost = MacDmgBundleBackend.HostCheck;
-        var previous = MacDmgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
-        var requests = new List<MacDmgProcessRunner.Request>();
-        MacDmgProcessRunner.Handler = (request, _) =>
+        var requests = new List<ToolRunner.Request>();
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             CreateMountPoint(request);
             WriteDsStore(request);
             WriteConvertArtifact(request);
-            return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -380,7 +380,7 @@ public static class MacDmgTests
         }
         finally
         {
-            MacDmgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacDmgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -392,14 +392,14 @@ public static class MacDmgTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var previousHost = MacDmgBundleBackend.HostCheck;
-        var previous = MacDmgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
-        MacDmgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             CreateMountPoint(request);
             WriteDsStore(request);
             WriteConvertArtifact(request);
-            return Task.FromResult(new MacDmgProcessRunner.Result(
+            return Task.FromResult(new ToolRunner.Result(
                 request.Executable == "osascript" ? 1 : 0, "", "no GUI session"));
         };
         var warnings = new List<string>();
@@ -418,7 +418,7 @@ public static class MacDmgTests
         }
         finally
         {
-            MacDmgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacDmgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -430,16 +430,16 @@ public static class MacDmgTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var previousHost = MacDmgBundleBackend.HostCheck;
-        var previous = MacDmgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
-        var requests = new List<MacDmgProcessRunner.Request>();
-        MacDmgProcessRunner.Handler = (request, _) =>
+        var requests = new List<ToolRunner.Request>();
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             CreateMountPoint(request);
             WriteDsStore(request);
             WriteConvertArtifact(request);
-            return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -452,7 +452,7 @@ public static class MacDmgTests
         }
         finally
         {
-            MacDmgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacDmgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -468,7 +468,7 @@ public static class MacDmgTests
         File.WriteAllText(background, "png");
         File.WriteAllText(volumeIcon, "icns");
         var previousHost = MacDmgBundleBackend.HostCheck;
-        var previous = MacDmgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
         var stagedBackground = false;
         var stagedVolumeIconEarly = false;
@@ -476,7 +476,7 @@ public static class MacDmgTests
         var volumeIconFlaggedLate = false;
         var osascriptSeen = false;
         var mountDirectory = "";
-        MacDmgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             CreateMountPoint(request);
             WriteDsStore(request);
@@ -500,7 +500,7 @@ public static class MacDmgTests
                 volumeIconStagedLate = File.Exists(
                     Path.Combine(mountDirectory, ".VolumeIcon.icns"));
             }
-            return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -519,7 +519,7 @@ public static class MacDmgTests
         }
         finally
         {
-            MacDmgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacDmgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -531,13 +531,13 @@ public static class MacDmgTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var previousHost = MacDmgBundleBackend.HostCheck;
-        var previous = MacDmgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
-        MacDmgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             CreateMountPoint(request);
             WriteDsStore(request);
-            return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -550,7 +550,7 @@ public static class MacDmgTests
         }
         finally
         {
-            MacDmgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacDmgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -563,12 +563,12 @@ public static class MacDmgTests
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var license = Path.Combine(input, "license.txt");
         File.WriteAllText(license, "Test license.");
-        var requests = new List<MacDmgProcessRunner.Request>();
+        var requests = new List<ToolRunner.Request>();
         var slaPlist = "";
         var previousHost = MacDmgBundleBackend.HostCheck;
-        var previous = MacDmgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
-        MacDmgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             CreateMountPoint(request);
@@ -581,7 +581,7 @@ public static class MacDmgTests
                 var args = request.Arguments.ToList();
                 slaPlist = File.ReadAllText(args[args.IndexOf("-xml") + 1]);
             }
-            return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -616,7 +616,7 @@ public static class MacDmgTests
         }
         finally
         {
-            MacDmgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacDmgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -658,14 +658,14 @@ public static class MacDmgTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var previousHost = MacDmgBundleBackend.HostCheck;
-        var previous = MacDmgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
-        MacDmgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             CreateMountPoint(request);
             WriteDsStore(request);
             WriteConvertArtifact(request);
-            return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -676,7 +676,7 @@ public static class MacDmgTests
         }
         finally
         {
-            MacDmgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacDmgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -720,13 +720,13 @@ public static class MacDmgTests
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var background = Path.Combine(input, "bg.png");
         File.WriteAllBytes(background, [137, 80, 78, 71]);
-        var requests = new List<MacDmgProcessRunner.Request>();
+        var requests = new List<ToolRunner.Request>();
         var warnings = new List<string>();
         var mounts = new List<string>();
         var previousHost = MacDmgBundleBackend.HostCheck;
-        var previous = MacDmgProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
-        MacDmgProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
             if (request.Executable == "hdiutil" && request.Arguments.Contains("attach"))
@@ -741,7 +741,7 @@ public static class MacDmgTests
                 Directory.CreateDirectory(Path.GetDirectoryName(image)!);
                 File.WriteAllText(image, "dmg");
             }
-            return Task.FromResult(new MacDmgProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -760,7 +760,7 @@ public static class MacDmgTests
         }
         finally
         {
-            MacDmgProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             MacDmgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
@@ -790,7 +790,7 @@ public static class MacDmgTests
         }
     }
 
-    static void CreateMountPoint(MacDmgProcessRunner.Request request)
+    static void CreateMountPoint(ToolRunner.Request request)
     {
         var index = request.Arguments.ToList().IndexOf("-mountpoint");
         if (index >= 0)
@@ -799,7 +799,7 @@ public static class MacDmgTests
         }
     }
 
-    static void WriteDsStore(MacDmgProcessRunner.Request request)
+    static void WriteDsStore(ToolRunner.Request request)
     {
         if (request.Executable == "osascript")
         {
@@ -811,7 +811,7 @@ public static class MacDmgTests
         }
     }
 
-    static void WriteConvertArtifact(MacDmgProcessRunner.Request request)
+    static void WriteConvertArtifact(ToolRunner.Request request)
     {
         if (request.Executable == "hdiutil" && request.Arguments.Contains("convert"))
         {
