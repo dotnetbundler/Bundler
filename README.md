@@ -69,7 +69,7 @@ bundler init && bundler bundle --input-dir <publish目录>
 MSI 语义契约（current-user/per-machine、版本映射与升降级、旧 MSI 迁移、WiX 扩展与专家模式、38 语言产物）与验证边界见 [`docs/formats/win-msi.md`](docs/formats/win-msi.md)；外部待验收项登记在 [`docs/special-acceptance.md`](docs/special-acceptance.md)。
 
 `DotNet.Bundler.Wix` 是可独立引用的 MSI 后端包和直接 API；MSBuild 调用同一后端。
-跨格式的开发与包消费规则见 [`docs/development-rules.md`](docs/development-rules.md)。
+项目工程规则（包消费、工具随包、分层契约）见 [`docs/project-rules.md`](docs/project-rules.md)。
 
 `DotNet.Bundler.Nsis` 完整嵌入固定版本的 [`NsisToolset` 3.12-r1](https://github.com/dotnetbundler/NsisToolset/releases/tag/v3.12-r1)，其上游 NSIS 版本为 3.12。
 工具集包含一份公共 NSIS 数据目录，以及 Windows、Linux x64/arm64、macOS x64/arm64 的宿主编译器。

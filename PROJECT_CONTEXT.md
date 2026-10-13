@@ -7,7 +7,7 @@
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/formats/` 单文档只留设计决策、语义契约与能力状态
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
-> 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；各格式细节在 `docs/formats/` 下对应文档。
+> 项目不变量在 `docs/project-rules.md`，AI 协作规则在 `AGENTS.md`；产品顺序在 `docs/roadmap.md`；各格式细节在 `docs/formats/` 下对应文档。
 > 本文内容须与 Git、代码和测试一致；不一致时以后三者为准并先修正本文。
 
 ## 1. 项目结构（现况）
@@ -47,7 +47,7 @@
 | `third_party/` | 第三方归档、许可证、逐文件 SHA-256 与 provenance 文档 | — |
 
 根 `Directory.Build.props` 的默认 `TargetFramework` 为 `net10.0`；
-MSBuild 任务链保留 `netstandard2.0`（双宿主加载契约，见 `docs/development-rules.md` §3）。
+MSBuild 任务链保留 `netstandard2.0`（双宿主加载契约，见 `docs/project-rules.md` §2）。
 src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导入根 props），Cli/Core 按项目名条件豁免；
 外部依赖版本集中在 `Directory.Packages.props`（中央包管理），`PackageReference` 不带 `Version=`，自仓 `DotNet.Bundler*` 包引用用 `VersionOverride="$(BundlerPackageVersion)"`。
 

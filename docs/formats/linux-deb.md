@@ -1,7 +1,7 @@
 # Linux `.deb` 包（dpkg 系）
 
 本文件是 `.deb` 后端的唯一文档：决策、语义契约、能力状态与外部待验收。
-当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式规则见 `docs/development-rules.md`。
+当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project-rules.md`。
 
 ## 1. 状态与决策
 

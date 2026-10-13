@@ -1,7 +1,7 @@
 # NSIS 安装器（Windows）
 
 本文件是 NSIS 后端的唯一文档：能力契约、工具链事实、关键决策与外部待验收。
-当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式规则见 `docs/development-rules.md`。
+当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project-rules.md`。
 
 ## 1. 状态与边界
 

@@ -1,7 +1,7 @@
 # MSI 安装器（Windows，WiX 3.14.1）
 
 本文件是 MSI 后端的唯一文档：选型与封存裁决、工具链事实、MSI 语义契约、能力状态与外部待验收。
-当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式规则见 `docs/development-rules.md`。
+当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project-rules.md`。
 
 ## 1. 状态与选型
 
