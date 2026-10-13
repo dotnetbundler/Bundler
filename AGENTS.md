@@ -87,7 +87,8 @@ git status --short
 | `docs/targets.md` | 目标语法、架构词与产物命名契约 | 宿主支持矩阵 |
 | `docs/support-matrix.md` | 格式×平台生产/消费支持与签名宿主总览 | 目标语法、逐项能力 |
 | `docs/architecture.md` | 实现原理：输入模型、入口、门面、规划、编排、工作目录、工具缓存、命名、UPDATE 挂点 | 规则、格式专属契约、当前事实 |
-| `docs/cli.md`、`docs/update.md`、`docs/signing.md` | CLI、UPDATE 模块、签名横切面的决策与能力状态 | 单格式契约、项目不变量 |
+| `docs/update.md`、`docs/signing.md` | UPDATE 模块、签名横切面的决策与能力状态 | 单格式契约、项目不变量 |
+| `docs/usage/` | 用户面使用文档族（入口+后端各一件，最小到全量旋钮；CLI 唯一文档在 `usage/cli.md`） | 契约与决策、规则、当前事实 |
 | `README.md` | 面向使用者的能力与用法 | 协作规则、阶段计划 |
 | `samples/<name>/*-sample.md` | 该示例的操作说明 | 后端规则、阶段证据 |
 | `tests/README.md` | 测试入口、门禁、组织与 fixture 地图 | 测试结果记录 |
@@ -121,7 +122,7 @@ dotnet test tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj -
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 ```
 
-按格式/腿/资源筛选集成测试见 `tests/README.md`（`--` 后接 `--filter-class` 等传参约定与 trait 门禁以其为准）；MSI 真装腿需要 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 同意闸；发布+打包参数用法见 `README.md` 使用配置节。
+按格式/腿/资源筛选集成测试见 `tests/README.md`（`--` 后接 `--filter-class` 等传参约定与 trait 门禁以其为准）；MSI 真装腿需要 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 同意闸；发布+打包参数用法见 `docs/usage/msbuild.md`。
 
 ## 7. 阶段结束
 

@@ -14,7 +14,7 @@
 ## 2. 语义契约
 
 - `.PKGINFO`：`pkgname`/`pkgver`（`<版本>-r<release>`，release 默认 0）/`pkgdesc`（默认产品名）/`url`/`arch`/`origin`（默认=pkgname）/`license`（默认不写）/`depend`/`provides`/`triggers`（空格串联绝对路径）/`builddate`（默认 0 保确定性，`BundlerAlpineApkBuildDate` 可覆写）/`size`（写入器自算）/`datahash`（数据 gzip 流 sha256，v2 必需）。
-- 版本映射：SemVer 预发布→`r<previous>.<label>`；`~`/`+` 拒绝；`BundlerAlpineApkVersion`/`Release` 显式覆盖（release 须非负整数）。
+- 版本映射：SemVer 预发布 `-`→`_` 并入上游段；`~`/`+` 按 apk 字符集收；`BundlerAlpineApkVersion`/`Release` 显式覆盖（release 默认 `0`，须非负整数）。
 - 逐文件 `APK-TOOLS.checksum.SHA1` pax 扩展头（含符号链接按目标字符串哈希）——缺此被 `apk add` 拒。
 - 六段脚本：`.pre-install`/`.post-install`/`.pre-deinstall`/`.post-deinstall`/`.pre-upgrade`/`.post-upgrade` 对应 `BundlerAlpineApk*File`（0755、非空+LF）；v2 upgrade 腿执行 `.pre-upgrade`/`.post-upgrade` 而 `.post-install` 不触发。
 - 签名（可选 RSA）：`.SIGN.RSA.<密钥名>.rsa.pub` 段前置，DER PKCS#1 v1.5 RSA+SHA1 签在控制段 gzip 流上；`BundlerAlpineApkSigningKeyFile`（PEM，可加密）+ `Passphrase`；BouncyCastle 纯托管；确定性签名（同输入三产逐字节一致）；只给口令不给密钥文件=配置错误（三入口一致拒绝）。
