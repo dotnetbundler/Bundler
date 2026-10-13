@@ -73,8 +73,8 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 
 ## 3. 最近验证
 
-当前基线：`main@e0b6848`（`0.1.0-alpha.102`）——CI 测试腿接线、测试矩阵收口与文档一格式一件/目录化重构已随 PR #71–#75 合入。
-最近验证：本机 Windows x64 `build` 0 警告、`Bundler.Tests` 全量 491 测 0 失败；release-verify @ `a970992` 7/9 腿绿、`macos-26-intel` 撞 `hdiutil` 瞬抖、`windows-11-arm` 未落终态（以运行记录为准），本文件不逐条留档。
+当前基线：`main@3571832`（`0.1.0-alpha.102`）——CI 测试腿接线、测试矩阵收口与文档重构（一格式一件、规则分家、架构原理、使用文档族、三层目录）已随 PR #71–#80 合入。
+最近验证：本机 Windows x64 `build` 0 警告、`Bundler.Tests` 全量 491 测 0 失败（49 跳过均为非 Windows 宿主门控）；release-verify @ `a970992` 7/9 腿绿、`macos-26-intel` 撞 `hdiutil` 瞬抖、`windows-11-arm` 未落终态（以运行记录为准），本文件不逐条留档。
 
 ## 4. 外部验收边界（未执行，不视为完成）
 
