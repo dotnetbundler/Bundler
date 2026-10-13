@@ -30,9 +30,9 @@ BundleArtifact[]（产物清单）
 
 ## 3. 入口层
 
-- **MSBuild**：`buildTransitive` 导入的 targets 调 `BundleDesktopApplication` Task（MSBuild 进程内，不启动额外 CLI）；`Bundler*` 属性与 `Bundler*File` 项映射成 `BundleConfiguration`，`WindowsSigningFiles` 等签名项进 target 的 `SigningFiles`；构建后触发 UPDATE 发射。
-- **CLI**：`bundler`（`validate`/`plan`/`bundle`）把 `bundler.json`（经 `BundleConfigurationLoader` 反序列化并解析相对路径）与命令行参数合成 `BundleConfiguration`；`--<fmt>.<knob>` 透传格式旋钮；`FormatDispatcher` 按格式实例化门面（RID 裁剪的 AOT 构建里被剔格式报"本宿主不支持"）。
-- **直接 API**：消费方 `PackageReference` 任一后端包，`new <Format>Bundler(configuration?, options?)` 后调 `Validate`/`BuildAsync`。
+- **MSBuild**：`buildTransitive` 导入的 targets 调 `BundleDesktopApplication` Task（MSBuild 进程内，不启动额外 CLI）；`Bundler*` 属性与 `Bundler*` 项（`BundlerIcon`/`BundlerResource`/`BundlerMacPkgFile` 等）映射成 `BundleConfiguration`，`WindowsSigningFiles` 等签名项进 target 的 `SigningFiles`；构建后触发 UPDATE 发射。
+- **CLI**：`bundler`（`validate`/`plan`/`bundle`）把 `bundler.json` 与命令行参数合成 `BundleConfiguration`——JSON 侧走 `CliConfig.Resolve`：`JsonNode` 解析 → CLI 覆盖应用 → 相对路径解析 → schema 强制 → 物化（`BundlerJsonContext` 源生成序列化 + `BundleConfigurationPaths.Resolve`）；`--<fmt>.<knob>` 透传格式旋钮；`FormatDispatcher` 按格式实例化门面（RID 裁剪的 AOT 构建里被剔格式报"本宿主不支持"）。
+- **直接 API**：消费方 `PackageReference` 任一后端包后调门面 `Validate`/`BuildAsync`；多数门面构造为 `new <Format>Bundler(configuration?, options?)`，mac 的 dmg/pkg 门面带两个配置形参（自家配置 + `.app` 配置——dmg/pkg 以 `.app` 为上游载荷）。
 - 异常分类在入口统一兑现：配置错 → `ArgumentException` 族（聚合一次报完）；宿主门禁 → `PlatformNotSupportedException`（逐格式容错跳过）；不支持的格式 → `NotSupportedException`；共享校验 → `BundleValidationException`（带 `ValidationIssue` 列表）。
 
 ## 4. 门面层（`IFormatBundler`）
@@ -69,7 +69,7 @@ BundleArtifact[]（产物清单）
 
 - 工具包随后端 nupkg 内嵌（csproj `EmbeddedResource`：如 NSIS 工具集 zip+模板+语言+原生插件）；构建时先物化到工具缓存目录，再经 `ZipToolCache.ResolveToolAsync` 解析。
 - 缓存目录**内容寻址**：`<name>-<version>-<sha256前12位>`——同 (name,version) 不同哈希的并发解析互不清扫对方暂存。
-- 校验链：压缩包 SHA-256 整包核验 → 读包内逐文件清单（路径/长度/逐文件 SHA-256，拒绝链接与重复路径）→ 缓存目录存在则按清单全量复核（路径集一致+manifest 匹配+逐文件哈希）。
+- 校验链：压缩包 SHA-256 整包核验 → 读包内逐文件清单（路径/长度/逐文件 SHA-256，拒绝链接与重复路径——链接检测依赖 `ExternalAttributes`，net8+ 资产生效，netstandard2.0 资产上该检查为降级空操作）→ 缓存目录存在则按清单全量复核（路径集一致+manifest 匹配+逐文件哈希）。
 - 并发与完整性：`<dir>.lock` 文件锁跨进程互斥；解压走 `.{name}-{version}-{sha12}-{guid}` 暂存目录、自验后 `Directory.Move` 原子落位；崩溃遗留暂存按 glob 清扫。
 - 安全面：缓存根与锁拒绝重解析点、包内路径逐条验证不逃逸解压目录、枚举遍历遇重解析点即拒、删除带 Windows 文件锁重试。
 - 显式本地工具覆盖（如 `CompilerPath`/`ToolsetArchivePath`/`TemplatePath` 类选项）是受控逃生门，不改变默认"随包离线"路径。
@@ -82,7 +82,7 @@ BundleArtifact[]（产物清单）
 
 ## 10. UPDATE 挂点
 
-- UPDATE 不是格式，是**入口层收尾步**：各格式产物齐后，入口（MSBuild Task、CLI）调 `UpdateManifestEmitter.EmitAsync(configuration, artifacts)` 发射通道清单 `bundler-update-feed.{channel}.json` 与 `.sig`/`.blockmap` 旁车，并随产物落 `bundler-update.json` 安装身份。
+- UPDATE 不是格式，分两层挂：**载荷内身份**由后端在 `BuildAsync` 期写入——`UpdateIdentitySidecar.WriteIfEnabled` 把 `bundler-update.json` 安装身份落进产物树（archive/`.app`/AppImage 等可更新格式）；**清单与旁车**是入口层收尾步——各格式产物齐后，入口（MSBuild Task、CLI）调 `UpdateManifestEmitter.EmitAsync(configuration, artifacts)` 发射通道清单 `bundler-update-feed.{channel}.json` 与 `.sig`/`feed.sig`/`.blockmap` 旁车（`.app` 另产 `.zip` 运输件）。
 - `Bundler.Core/Update/` 提供清单模型、签名/验签、引导件暂存与身份侧车的共享件；应用内 `DotNet.Bundler.Updater` 是另一侧（查/下/验/换）。
 - 语义契约见 `docs/update.md`。
 
