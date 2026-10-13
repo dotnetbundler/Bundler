@@ -169,7 +169,7 @@
 
 单格式 API fixture 收编为 `tests/Bundler.ApiTests` 的 `<Format>ApiTests` 测试类，系统集成测试体收编为 `tests/Bundler.IntegrationTests` 的 `<Format>IntegrationTests` 测试类，均为 `dotnet test` 入口、`-- --filter-class`/`--filter-method` 选择、宿主门控经 `Assert.Skip`；
 资源需求用 `[Trait("Requires", ...)]` 标注——`docker`（DockerRunner 容器矩阵腿）、`elevation`（ElevatedRunner/SudoRunner 真装腿）、`localinstall`（需 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL` 同意的真装腿）、`interactive`（GUI 级验收腿：Windows 需交互式桌面会话走 `WindowsDesktop` UIA3 驱动，macOS 需 TCC 辅助功能授权走 osascript）；标在方法级，仅当全类都需同意时升类级（如 NSIS）；
-按资源裁剪用 `--filter-trait "Requires=<值>"`/`--filter-not-trait "Requires=<值>"`；
+按资源裁剪用 `-- --filter-trait "Requires=<值>"`/`--filter-not-trait "Requires=<值>"`；
 集成 fixture 与载荷资产集中在 `tests/Bundler.IntegrationTests/Fixtures/<格式>/`，本地包消费契约腿的独立 fixture 集中在 `tests/Bundler.LocalPackagesTests/Fixtures/<格式>/`，不再保留转发脚本；收不进 dotnet test 的特殊验收脚本（真机/VM/凭证/交互/公网）集中在 `tests/Special/`（索引见其 README），只能人工完成的验收项登记在 `docs/special-acceptance.md`；
 跨格式快速测试保留 `tests/Bundler.Tests`。
 格式专用测试与示例项目名称显式带格式名，只有真正跨格式的项目使用泛名。
