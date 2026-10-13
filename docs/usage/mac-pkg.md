@@ -76,5 +76,5 @@ MSBuild 前缀 `BundlerMacPkg*`；`bundler.json` 分节 `pkg.*`；API `MacPkgBun
 ## 5. 产物与边界
 
 - `artifacts\<产品名>-<版本>-<生态词>.pkg`。
-- 仅 macOS 宿主；分发包任一旋钮（title/welcome/conclusion/license/scope）出现即走 `productbuild`，否则产扁平组件包。
+- 仅 macOS 宿主；分发包触发条件 = title/welcome/conclusion/license 任一配置**或** `InstallScope` 显式设为非 `System`（显式 `System` 不触发），否则产扁平组件包。
 - `.pkg` 无自更新支持。

@@ -78,7 +78,7 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 | `BundlerUniversalTargets` | 否 | 无；macOS universal 专用 |
 | `BundlerIdentifier` | 否 | 缺省合成 `dev.bundler.<归一化 AssemblyName>`（小写、非字母数字→`-`、空→`app`）并打警告；正式发布应显式指定 |
 | `BundlerProductName` | 否 | `$(AssemblyName)` |
-| `BundlerVersion` | 否 | `$(Version)` |
+| `BundlerVersion` | 否 | `$(Version)`；`$(Version)` 亦空时回落 `0.1.0` 并打警告 |
 | `BundlerMainExecutable` | 否 | Windows 目标 `$(TargetName).exe`，macOS/Linux/universal `$(TargetName)`（无扩展名） |
 | `BundlerPublisher` | 否 | `$(Company)` |
 | `BundlerDescription` | 否 | `$(Description)` |
@@ -164,7 +164,7 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 | `BundlerUpdateEnabled` | `false` | 总闸 |
 | `BundlerUpdateFeedUrl` | 无 | 清单发布位置（http(s)/`file://`/UNC；制品按清单同目录解析） |
 | `BundlerUpdateChannel` | `latest` | 通道名，进清单文件名 `bundler-update-feed.<channel>.json` |
-| `BundlerUpdateSigningKeyFile` | 无 | PKCS#8 私钥（签名强制；`bundler update-keygen` 生成；私钥不入库） |
+| `BundlerUpdateSigningKeyFile` | 无 | ec-p256 JWK 私钥文件（签名强制；`bundler update-keygen` 生成；私钥不入库） |
 | `BundlerUpdatePublicKey` | 无 | base64 验签公钥，烙进载荷 `bundler-update.json` |
 | `BundlerUpdateNotes` | 无 | 版本说明写入清单 `notes` |
 
@@ -174,7 +174,8 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 ## 9. 产物
 
 - 默认落 `artifacts/`（`BundlerOutputPath` 可改）；`BundlerOutputLayout=byFormat` 时分格到 `artifacts\<format>\`。
-- 文件名由 `ArtifactNaming` 统一生成：`<包名>-<版本>-<生态词>-setup.exe`、`.msi`、`.dmg`、`.pkg`、`.deb`、`.rpm`、`.AppImage`、`.apk`、`.zip`、`.tar.gz`；`.app` 为目录。
+- 文件名由 `ArtifactNaming` 统一生成：`<包名>-<版本>-<生态词>-setup.exe`/`.msi`/`.dmg`/`.pkg`/`.AppImage`/`.zip`/`.tar.gz`；`.app` 为目录。
+  包管理器三格式走各自生态命名：`<名>_<ver>-<rel>_<arch>.deb`、`<名>-<ver>-<rel>.<arch>.rpm`、`<名>-<ver>-r<rel>.<arch>.apk`。
   "生态词"是各生态命名段而非 canonical target 字面（如 `x64-setup.exe`、`windows-x64.zip`、`linux-x86_64-musl.zip`）；非英文 MSI 带 `-<culture>` 后缀。命名全契约见 [`../targets.md`](../targets.md)。
 - 预览不构建：`dotnet msbuild -t:BundlerBundle` 前可用 CLI `bundler plan` 看计划，或读构建日志中展开的计划行。
 

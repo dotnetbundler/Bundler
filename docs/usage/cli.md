@@ -30,9 +30,9 @@ dotnet tool install --global DotNet.Bundler.Cli
 ## 3. 最小使用
 
 ```powershell
-# 只指发布目录，其余全部推断：target=宿主、formats=目标 OS 常用集、
-# productName=目录名、version=0.1.0、identifier=dev.bundler.<名>、
-# mainExecutable=目录内唯一可执行文件——推断值逐条打到 stderr
+# 只指发布目录，其余全部推断：target=宿主（≥2 个 --input-dir 时推 macos-universal）、
+# formats=目标 OS 常用集（universal→dmg）、productName=目录名、version=0.1.0、
+# identifier=dev.bundler.<名>、mainExecutable=目录内唯一可执行文件——推断值逐条打到 stderr
 bundler bundle --input-dir <publish目录>
 ```
 

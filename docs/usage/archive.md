@@ -29,7 +29,7 @@ MSBuild 前缀 `BundlerArchive*`；`bundler.json` 分节 `archive.*`；API `Arch
 | --- | --- | --- | --- |
 | `BundlerArchivePackageName` | `packageName` | `BundlerProductName` kebab-case | 进归档名与顶层目录 |
 | `BundlerArchiveVersion` | `version` | `BundlerVersion` 原样 | |
-| `BundlerArchiveName` | `archiveName` | `<包名>-<版本>-<target>` | 整名覆盖，须为单一路径段 |
+| `BundlerArchiveName` | `archiveName` | `<包名>-<版本>-<生态词>[-musl]` | 整名覆盖，须为单一路径段 |
 | `@BundlerArchiveFile`（`Destination`） | `files` / `Files` | 无 | 任意文件→顶层目录内相对 POSIX 路径（拒绝对路径/`..`/`.`/空段/反斜杠/载荷碰撞） |
 
 ## 4. 场景
@@ -47,5 +47,5 @@ MSBuild 前缀 `BundlerArchive*`；`bundler.json` 分节 `archive.*`；API `Arch
 
 - `artifacts\<包名>-<版本>-<生态词>.zip` / `….tar.gz`（+`….sha256` 侧车）。
 - 逐字节确定（纯托管写入器）。
-- 归档内容：发布载荷 + `BundlerArchiveFile` 映射 + `BundlerResource`；顶层目录名=产物 stem `<包名>-<版本>-<target>`（与归档文件同名；`BundlerArchiveName` 覆盖时同步）。
+- 归档内容：发布载荷 + `BundlerArchiveFile` 映射 + `BundlerResource`；顶层目录名=产物 stem `<包名>-<版本>-<生态词>[-musl]`（与归档文件同名；`BundlerArchiveName` 覆盖时同步）。
 - 自更新支持：`zip`/`targz` 走三段式换包（UPDATE）。

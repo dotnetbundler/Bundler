@@ -5,7 +5,7 @@
 ## 1. 接入
 
 - 后端包 `DotNet.Bundler.Rpm`（`netstandard2.0`）：**任意宿主可构建**。
-- 目标：全部 glibc `linux-*`（musl 目标矩阵拒绝）；架构词映射 `x86_64`/`i686`/`aarch64`/`armv7hl`/`riscv64`/`loongarch64`/`ppc64le`/`s390x`（`Architecture` 显式可覆盖，如 `noarch`）。
+- 目标：全部 glibc `linux-*`（musl 目标矩阵拒绝；`linux-armv7sf` 无 rpm 架构词）；架构词映射 `x86_64`/`i686`/`aarch64`/`armv7hl`/`riscv64`/`loongarch64`/`ppc64le`/`s390x`（`Architecture` 显式可覆盖，如 `noarch`）。
 
 ## 2. 最小使用
 
