@@ -49,8 +49,20 @@ jobs:
           if [ -z "$RUNNERS_IN" ] || [ "$RUNNERS_IN" = "all" ]; then
             echo "runners=$ALL" >> "$GITHUB_OUTPUT"
           else
-            echo "runners=$(python3 -c 'import json,os;print(json.dumps([x.strip() for x in os.environ["RUNNERS_IN"].split(",") if x.strip()]))')" >> "$GITHUB_OUTPUT"
-          fi
+            # 逐标签对 ALL 校验并去重——错拼标签会让矩阵腿挂死在不存在 runner 上等不到失败信号。
+            python3 - "$ALL" <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, sys
+          allowed = json.loads(sys.argv[1])
+          picked = list(dict.fromkeys(x.strip() for x in os.environ["RUNNERS_IN"].split(",") if x.strip()))
+          unknown = [x for x in picked if x not in allowed]
+          if unknown:
+              print(f"::error::未知 runner 标签 {unknown}，合法集合: {allowed}", file=sys.stderr)
+              sys.exit(1)
+          if not picked:
+              print("::error::runners 解析为空", file=sys.stderr)
+              sys.exit(1)
+          print("runners=" + json.dumps(picked))
+          PY
 
   legs:
     needs: select
