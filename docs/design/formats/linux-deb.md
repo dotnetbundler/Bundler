@@ -1,7 +1,7 @@
 # Linux `.deb` 包（dpkg 系）
 
 本文件是 `.deb` 后端的唯一文档：决策、语义契约、能力状态与外部待验收。
-当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project-rules.md`。
+当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project/project-rules.md`。
 
 ## 1. 状态与决策
 
@@ -49,7 +49,7 @@
 - 架构：`linux-aarch64` 产物结构与 `ubuntu-26.04-arm` 真机 `dpkg -i`/PATH/`-r`（`arm64-real-hw.sh`）实证。
 - 多发行版矩阵：debian:stable/bookworm/bullseye + ubuntu:latest 容器真实装卸跑；debian:trixie lintian 闸腿；更广矩阵属 CI 扩版候选。
 
-外部待验收（详见 `docs/special-acceptance.md`）：
+外部待验收（详见 `docs/project/special-acceptance.md`）：
 
 - GUI 桌面观感收窄项：文件/协议关联**双击唤起**（菜单项/图标/点击启动已于 KDE 真桌面验证消解）。
 - systemd unit 的 `status`/`journal` 观察与卸载后 unit 清理。

@@ -25,6 +25,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/Special/win/nsis-reboo
 
 - `Prepare`：安装 fixture 后对锁定文件执行卸载——断言卸载返回 `3010`、产品路径进入 `PendingFileRenameOperations`、状态文件落盘。
 - `Verify`（重启后）：pending rename 已执行——产品目录不存在、事务 journal 目录已清、卸载注册表键已删、队列中无残留产品项。
-- 本脚本验证的是卸载期锁定文件删除（`/REBOOTOK`）的重启清理路径；安装期"锁定载荷安全失败"策略见 `docs/formats/win-nsis.md` §4.13。
+- 本脚本验证的是卸载期锁定文件删除（`/REBOOTOK`）的重启清理路径；安装期"锁定载荷安全失败"策略见 `docs/design/formats/win-nsis.md` §4.13。
 
-归属：`docs/special-acceptance.md` 的可丢弃故障 VM 项；不纳入本机自动化例行验证。
+归属：`docs/project/special-acceptance.md` 的可丢弃故障 VM 项；不纳入本机自动化例行验证。

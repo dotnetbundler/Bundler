@@ -1,7 +1,7 @@
 # macOS `.app` 包
 
 本文件是 `.app` 后端的唯一文档：工具链裁决、语义契约、能力状态与外部待验收。
-当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project-rules.md`。
+当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project/project-rules.md`。
 
 ## 1. 状态与边界
 
@@ -42,7 +42,7 @@
 - 横切：独立 `Bundler.MacApp` 包、仓外 NuGet 消费、MSBuild 一致、离线构建、工具探测门槛、`samples/HelloBundlerApp`。
 - Gatekeeper 拦截断言：未签名隔离包被 `com.apple.quarantine`+`open` 阻断已实测。
 
-外部待验收（详见 `docs/special-acceptance.md`）：
+外部待验收（详见 `docs/project/special-acceptance.md`）：
 
 - Developer ID 真实证书签名、真实公证/上钉/撤销（SA-P-02、SA-P-08）、Gatekeeper 已公证场景。
 - universal links（`associated-domains`）：需 provisioning profile 与开发者账号，走 expert 边界。

@@ -37,7 +37,7 @@
 - `ScriptsDirectory` 专家旋钮（默认关）：`pkgbuild --scripts` 原样收目录，`postinstall` 在 per-user 真装中执行已验。
 - 覆盖升级实测（收据版本更新）；`macos-x86_64` 产物结构与 CI 运行态实测；universal 通用目标可产。
 
-外部待验收（详见 `docs/special-acceptance.md`）：
+外部待验收（详见 `docs/project/special-acceptance.md`）：
 
 - Developer ID Installer 真实签名与公证全链；GUI Installer.app 观感；干净宿主验证。
 

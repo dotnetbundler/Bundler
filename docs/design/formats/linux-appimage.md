@@ -1,7 +1,7 @@
 # Linux `.AppImage`
 
 本文件是 `.AppImage` 后端的唯一文档：决策、语义契约、能力状态与外部待验收。
-当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project-rules.md`。
+当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project/project-rules.md`。
 
 ## 1. 状态与决策
 
@@ -35,7 +35,7 @@
 - `appimagelint` 信息级接入（无 tag 豁免体系，非阻断）：有效项全过，✖ 项为载荷 glibc 地板与 `@2` 目录解析局限。
 - 已归因非缺陷：跨产方产物 sha256 差异（squashfs 元数据+内嵌 runtime 摘要随构建环境变化；解包树逐字节一致）——不在确定性承诺范围。
 
-外部待验收（详见 `docs/special-acceptance.md`）：
+外部待验收（详见 `docs/project/special-acceptance.md`）：
 
 - 真机观感项；`musl-arm64` 运行腿（仿真）。
 

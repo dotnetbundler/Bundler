@@ -1,7 +1,7 @@
 # MSI 安装器（Windows，WiX 3.14.1）
 
 本文件是 MSI 后端的唯一文档：选型与封存裁决、工具链事实、MSI 语义契约、能力状态与外部待验收。
-当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project-rules.md`。
+当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project/project-rules.md`。
 
 ## 1. 状态与选型
 
@@ -19,7 +19,7 @@
 - `candle.exe`/`light.exe`/`wix.dll` 目标框架 `.NETFramework,Version=v4.5`，两个 EXE 为 32 位进程；该需求不传给 MSI 最终用户。
 - 工具自身零环境边界（只评价 WiX 编译器，不含调用方依赖）：
   - Windows 7 SP1 未预装 Fx4.5，不满足严格零安装；
-  - Windows 10+ 预装 Fx4.6+/4.8.x，推断可解压即用，干净 VM 实测见 `docs/special-acceptance.md`；
+  - Windows 10+ 预装 Fx4.6+/4.8.x，推断可解压即用，干净 VM 实测见 `docs/project/special-acceptance.md`；
   - WiX v6 起的 Open Source Maintenance Fee 不适用于 3.14.1。
 
 ## 3. MSI 语义契约
@@ -46,7 +46,7 @@
 - 声明式 WiX 扩展（`ExtensionFragmentFiles` 白名单 `.wxs` fragment：Component/Directory/File/RegistryKey/Environment/Condition/Shortcut/Property 等核心元素 + `ExtensionIdPrefix` + 显式 Feature 引用注入；禁自定义动作/序列表/Binary/身份/UI/升级元素）与专家模式（`ExpertTemplateFile` 整份替换 + `ExpertMergeModuleFiles` 直传 + `MsiIdentityProbe` 回读强制 Bundler 身份；专家产物不享有受管安装保证）。
 - CLI：`bundler bundle --formats msi`，仅 Windows 宿主可产。
 
-已实现但外部待验收（详见 `docs/special-acceptance.md`）：
+已实现但外部待验收（详见 `docs/project/special-acceptance.md`）：
 
 - x64/ARM64/x86 在干净宿主与其他 Windows 版本的组合；per-machine 真实 UAC 安装。
 - 自定义交互 UI/位图（构建期校验 BMP 头与尺寸、拒重解析点已实现；真实交互流转/缩放/辅助功能未验）。

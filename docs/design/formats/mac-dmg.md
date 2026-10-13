@@ -1,7 +1,7 @@
 # macOS `.dmg` 镜像
 
 本文件是 `.dmg` 后端的唯一文档：决策、语义契约、能力状态与外部待验收。
-`.app` 侧契约见 `docs/formats/mac-app.md`；当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准。
+`.app` 侧契约见 `docs/design/formats/mac-app.md`；当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准。
 
 ## 1. 状态与决策
 
@@ -10,7 +10,7 @@
 - DMG 本体可 `codesign`（复用 `.app` 签名配置面，`Identity="-"` 跳过）；**DMG 本体不做公证**——Gatekeeper 核验内部 `.app` 的 stapled 票据。
 - EULA：`LicenseFile`（txt/rtf）经 `hdiutil udifrez` 注入 SLA 资源，挂载时弹同意面板。
 - 压缩枚举 `Udzo`/`Ulmo`/`Udbz`，**默认 `Ulmo`**（lzma；挂载侧需 macOS 10.15+；史前宿主显式改 `Udzo`）。
-- 产物命名 `名称-版本-架构.dmg`（契约以 `docs/targets.md` 为准）；`bless`/`internet-enable` 遗留开关不暴露。
+- 产物命名 `名称-版本-架构.dmg`（契约以 `docs/design/targets.md` 为准）；`bless`/`internet-enable` 遗留开关不暴露。
 
 ## 2. 宿主门槛
 
@@ -38,7 +38,7 @@
 - quarantine 挂载+拷出传播断言实测。
 - 横切：独立 `Bundler.MacDmg` 包、`BundlerMacDmg*` MSBuild 属性、全链离线、工具探测门槛。
 
-外部待验收（详见 `docs/special-acceptance.md`）：
+外部待验收（详见 `docs/project/special-acceptance.md`）：
 
 - 真实 Finder 双击挂载观感；EULA 弹窗观感；真实证书签名。
 - Intel/Rosetta 宿主挂载、干净宿主验证。

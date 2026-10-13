@@ -1,7 +1,7 @@
 # Linux `.rpm` 包（RPM 系）
 
 本文件是 `.rpm` 后端的唯一文档：决策、语义契约、能力状态与外部待验收。
-当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project-rules.md`。
+当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project/project-rules.md`。
 
 ## 1. 状态与决策
 
@@ -45,7 +45,7 @@
 - `linux-aarch64`：`ubuntu-26.04-arm` 真机腿 `arm64-real-hw.sh --rpm`（`rpm -i`/`-ql`/`-e`）实证。
 - `deb;rpm` 同次 publish 扇出断言。
 
-外部待验收（详见 `docs/special-acceptance.md`）：
+外部待验收（详见 `docs/project/special-acceptance.md`）：
 
 - GUI 桌面观感收窄项：文件/协议关联双击唤起。
 - 更广发行版宿主矩阵（RHEL8 旧版等）属 CI 扩版候选；生产 GPG 密钥分发/吊销属发布者流程（`gpg-production.sh` 临时密钥全链已收编入 release-verify ubuntu 腿）。

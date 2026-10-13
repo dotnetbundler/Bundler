@@ -1,6 +1,6 @@
 # macOS `.dmg` 使用指南
 
-产出拖放安装卷 `.dmg`。语义契约见 [`../formats/mac-dmg.md`](../../formats/mac-dmg.md)。
+产出拖放安装卷 `.dmg`。语义契约见 [`../../design/formats/mac-dmg.md`](../../design/formats/mac-dmg.md)。
 
 ## 1. 接入
 
@@ -53,7 +53,7 @@ MSBuild 前缀 `BundlerMacDmg*`；`bundler.json` 分节 `dmg.*`；API `MacDmgBun
 </PropertyGroup>
 ```
 
-签名+公证组合（内层 `.app` 签名走 `BundlerMacAppSign*`，DMG 本体签名走 `BundlerMacDmgSignIdentity`，公证走 `BundlerMacAppNotarize` 组——**公证的是内层 `.app`，DMG 本体不送 notarytool**）见 [`mac-app.md`](mac-app.md) 与 [`../signing.md`](../../signing.md)。
+签名+公证组合（内层 `.app` 签名走 `BundlerMacAppSign*`，DMG 本体签名走 `BundlerMacDmgSignIdentity`，公证走 `BundlerMacAppNotarize` 组——**公证的是内层 `.app`，DMG 本体不送 notarytool**）见 [`mac-app.md`](mac-app.md) 与 [`../../design/signing.md`](../../design/signing.md)。
 
 ## 5. 产物与边界
 

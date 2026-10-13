@@ -1,6 +1,6 @@
 # Alpine `.apk` 使用指南
 
-产出 Alpine Linux `.apk`（`.PKGINFO`+三段 gzip）。纯托管写入器 + `ApkPackageReader` 回读器，**任意宿主可构建**。语义契约见 [`../formats/linux-alpine-apk.md`](../../formats/linux-alpine-apk.md)。
+产出 Alpine Linux `.apk`（`.PKGINFO`+三段 gzip）。纯托管写入器 + `ApkPackageReader` 回读器，**任意宿主可构建**。语义契约见 [`../../design/formats/linux-alpine-apk.md`](../../design/formats/linux-alpine-apk.md)。
 
 ## 1. 接入
 
