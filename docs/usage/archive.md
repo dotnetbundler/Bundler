@@ -1,6 +1,6 @@
 # `.zip`/`.tar.gz` 归档使用指南
 
-产出分发归档：`.zip` 或 `.tar.gz` + `.sha256` 侧车。纯托管写入器（unix mode/符号链接保留），**任意宿主可构建**。语义契约见 [`../formats/archive.md`](../formats/archive.md)。
+产出分发归档：`.zip` 或 `.tar.gz` + `.sha256` 侧车。纯托管写入器（unix mode/符号链接保留），**任意宿主可构建**；唯一例外通路：macOS 宿主持 xattr 载荷时改走系统 `ditto`/`bsdtar`（产 `__MACOSX/` AppleDouble 段，失败回退托管写出器并告警）。语义契约见 [`../formats/archive.md`](../formats/archive.md)。
 
 ## 1. 接入
 
@@ -46,6 +46,6 @@ MSBuild 前缀 `BundlerArchive*`；`bundler.json` 分节 `archive.*`；API `Arch
 ## 5. 产物与边界
 
 - `artifacts\<包名>-<版本>-<生态词>.zip` / `….tar.gz`（+`….sha256` 侧车）。
-- 逐字节确定（纯托管写入器）。
+- 逐字节确定（纯托管写入器；macOS xattr→ditto/bsdtar 例外通路不保证逐字节一致）。
 - 归档内容：发布载荷 + `BundlerArchiveFile` 映射 + `BundlerResource`；顶层目录名=产物 stem `<包名>-<版本>-<生态词>[-musl]`（与归档文件同名；`BundlerArchiveName` 覆盖时同步）。
 - 自更新支持：`zip`/`targz` 走三段式换包（UPDATE）。

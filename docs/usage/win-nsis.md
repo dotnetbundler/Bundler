@@ -75,7 +75,7 @@ MSBuild 前缀 `BundlerNsis*`；`bundler.json` 分节 `nsis.*`（`--nsis.<knob>`
 | `BundlerNsisShortcutLegacyProductNames` | `shortcuts.legacyProductNames` / `Shortcuts.LegacyProductNames` | 空 | 改名后显式启用安全迁移 |
 | `BundlerNsisShortcutLegacyMainExecutables` | `shortcuts.legacyMainExecutables` / `Shortcuts.LegacyMainExecutables` | 空 | 旧主程序安装相对路径 |
 | `BundlerNsisTemplate` | — / `NsisBundlerOptions.TemplatePath` | 包内模板 | 自定义模板须保留占位符（§4.4） |
-| `BundlerNsisToolsetArchivePath`/`…CompilerPath`/`…DataDirectory` | — / `NsisBundlerOptions` | 包内嵌 | 测试/高级覆盖；自定义编译器需 `NSISDIR` 时还应给 `DataDirectory` |
+| `BundlerNsisToolsetArchivePath`/`…CompilerPath`/`…DataDirectory` | — / `NsisBundlerOptions` | 包内嵌 | 测试/高级覆盖；自定义编译器需 `NSISDIR` 时还应给 `DataDirectory`；options 另有 `LanguageDirectory`（语言文件目录）与 `ToolCacheDirectory`（≈MSBuild `BundlerToolCachePath`） |
 
 **项**：`@BundlerNsisLanguageFile`（`Language` 元数据）整文件替换所选语言内置文案——同语言仅一件，必须恰好含模板要求的全部 `LangString`，缺失/重复/未知键/错 `LANG_*` 常量打包时报错。API/JSON 侧为 `nsis.customLanguageFiles`（language→file 字典）。
 
