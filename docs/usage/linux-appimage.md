@@ -5,7 +5,7 @@
 ## 1. 接入
 
 - 后端包 `DotNet.Bundler.AppImage`（`netstandard2.0`）：内嵌工具链经 `ZipToolCache` 内容寻址缓存。
-- 目标：`linux-x86_64`/`linux-aarch64`/`linux-i686`（交叉经内嵌 runtime）。
+- 目标：`linux-x86_64`/`linux-aarch64`/`linux-musl-x86_64`/`linux-musl-aarch64`——随包仅内嵌 `x86_64`/`aarch64` 两族 runtime（静态 ELF 两 libc 皆可），`linux-i686` 等其他目标矩阵放行但构建必败。
 
 ## 2. 最小使用
 
@@ -28,7 +28,7 @@ MSBuild 前缀 `BundlerAppImage*`；`bundler.json` 分节 `appimage.*`；API `Ap
 | --- | --- | --- | --- |
 | `BundlerAppImagePackageName` | `packageName` | `BundlerProductName` kebab-case | 进文件名与根 `.desktop`/图标名 |
 | `BundlerAppImageVersion` | `version` | `BundlerVersion` 原样 | 无 EVR 规则 |
-| `BundlerAppImageArchitecture` | `architecture` | RID 映射 | 仅 `x86_64`/`aarch64`/`i686` |
+| `BundlerAppImageArchitecture` | `architecture` | RID 映射 | 仅 `x86_64`/`aarch64`（`amd64` 归一；`i686` 显式拒绝） |
 | `BundlerAppImageInstallRoot` | `installRoot` | `usr/lib/<包名>` | AppDir 相对路径（拒绝对路径/`..`/空段） |
 | `BundlerAppImageBinLink` | `binLink` | 包名 | `none` 关闭 `usr/bin` 链接（`AppRun` 直连主程序） |
 | `BundlerAppImageIconFile` | `iconFile` | hicolor 最大方图→内置默认 PNG | PNG 拷为根 `<包名>.png`+`.DirIcon` |
@@ -54,7 +54,7 @@ MSBuild 前缀 `BundlerAppImage*`；`bundler.json` 分节 `appimage.*`；API `Ap
 
 ## 5. 产物与边界
 
-- `artifacts\<包名>-<版本>-<架构>.AppImage`。
+- `artifacts\<包名>-<版本>-<架构>.AppImage`（musl 目标带 `-musl` 后缀）。
 - **仅 Linux 宿主**；压缩固定 `zstd`。
 - 不承诺逐字节一致（squashfs 元数据与内嵌 runtime 摘要随构建环境变化，属上游工具性质）。
 - 自更新支持：走三段式换包（UPDATE）。

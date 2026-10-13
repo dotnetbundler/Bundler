@@ -5,7 +5,7 @@
 ## 1. 接入
 
 - 后端包 `DotNet.Bundler.Deb`（`netstandard2.0`）：**任意宿主可构建**。
-- 目标：全部 `linux-*`；架构词映射 `amd64`/`i386`/`arm64`/`armhf`/`armel`/`riscv64`/`ppc64el`/`s390x`（`Architecture` 显式可覆盖为任意 Debian 架构名）。
+- 目标：glibc `linux-*`（musl 目标矩阵拒绝；`linux-loongarch64` 无 deb 架构词）；架构词映射 `amd64`/`i386`/`arm64`/`armhf`/`armel`/`riscv64`/`ppc64el`/`s390x`。
 
 ## 2. 最小使用
 

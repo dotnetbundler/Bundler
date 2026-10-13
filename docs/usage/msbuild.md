@@ -63,7 +63,7 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 - `BundlerFormats` 缺省按目标 OS 推导：`windows-*→nsis`、`macos-*→dmg`、`linux-*→deb`、`linux-musl-*→alpineapk`。
   分号分隔多值扇出：`nsis;msi;zip`（命令行 `-p:` 需 `%3B` 转义分号）。
   可用名：`nsis` `msi` `app` `dmg` `pkg` `deb` `rpm` `appimage` `zip` `targz` `alpineapk`。
-- `BundlerUniversalTargets`（macOS universal）：复数 .NET RID（`osx-x64;osx-arm64`，命令行 `%3B`）逐 RID 内层 publish 后托管合并成 universal 目录，再按 `macos-universal` 打包。
+- `BundlerUniversalTargets`（macOS universal）：复数 .NET RID（`osx-x64;osx-arm64`，命令行 `%3B`）逐 RID 内层 publish 后托管合并成 universal 目录，再按 `macos-universal` 打包。要求 framework-dependent 非单文件：`SelfContained`/`PublishAot`/`PublishSingleFile` 任一开即报错；与 `BundlerInputDir` 互斥（同设即 Error）。
 - 多格式扇出由 Core 管线编排，混排 `zip`/`targz` 与安装器格式同样支持。
 
 ## 4. 共享属性（全格式通用）
@@ -87,7 +87,7 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 | `BundlerLicenseFile` | 否 | 无；NSIS 支持 `.txt`/`.rtf`，MSI 交互许可页仅 `.rtf`，DMG 注入 SLA 挂载面板，`.pkg` 作分发包许可页；独立 `.app` 后端按契约硬拒许可文件 |
 | `BundlerOutputPath` | 否 | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerOutputLayout` | 否 | `flat`；`byFormat` 按 `artifacts\<format>\` 分格 |
-| `BundlerToolCachePath` | 否 | `%LOCALAPPDATA%\DotNetBundler\tools`；内容寻址共享缓存 |
+| `BundlerToolCachePath` | 否 | `LocalApplicationData\DotNetBundler\tools`（非 Windows 为 `~/.local/share` 等；空值回落临时目录）；内容寻址共享缓存 |
 | `BundlingDotnetExe` | 否 | 内层 `dotnet publish` 的 dotnet 可执行覆盖（逃生舱） |
 | `BundlerInnerPublishArgs` | 否 | 追加给内层 publish 的原样参数串（逃生舱） |
 
@@ -174,8 +174,8 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 ## 9. 产物
 
 - 默认落 `artifacts/`（`BundlerOutputPath` 可改）；`BundlerOutputLayout=byFormat` 时分格到 `artifacts\<format>\`。
-- 文件名由 `ArtifactNaming` 统一生成：`<包名>-<版本>-<target 词>-setup.exe`、`.msi`、`.dmg`、`.pkg`、`.deb`、`.rpm`、`.AppImage`、`.apk`、`.zip`、`.tar.gz`；`.app` 为目录。
-  非英文 MSI 带 `-<culture>` 后缀。命名全契约见 [`../targets.md`](../targets.md)。
+- 文件名由 `ArtifactNaming` 统一生成：`<包名>-<版本>-<生态词>-setup.exe`、`.msi`、`.dmg`、`.pkg`、`.deb`、`.rpm`、`.AppImage`、`.apk`、`.zip`、`.tar.gz`；`.app` 为目录。
+  "生态词"是各生态命名段而非 canonical target 字面（如 `x64-setup.exe`、`windows-x64.zip`、`linux-x86_64-musl.zip`）；非英文 MSI 带 `-<culture>` 后缀。命名全契约见 [`../targets.md`](../targets.md)。
 - 预览不构建：`dotnet msbuild -t:BundlerBundle` 前可用 CLI `bundler plan` 看计划，或读构建日志中展开的计划行。
 
 ## 10. 排错

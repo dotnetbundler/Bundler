@@ -53,11 +53,11 @@ MSBuild 前缀 `BundlerMacDmg*`；`bundler.json` 分节 `dmg.*`；API `MacDmgBun
 </PropertyGroup>
 ```
 
-签名+公证组合（内层 `.app` 签名走 `BundlerMacAppSign*`，DMG 本体签名走 `BundlerMacDmgSignIdentity`，公证走 `BundlerMacAppNotarize` 组）见 [`mac-app.md`](mac-app.md) 与 [`../signing.md`](../signing.md)。
+签名+公证组合（内层 `.app` 签名走 `BundlerMacAppSign*`，DMG 本体签名走 `BundlerMacDmgSignIdentity`，公证走 `BundlerMacAppNotarize` 组——**公证的是内层 `.app`，DMG 本体不送 notarytool**）见 [`mac-app.md`](mac-app.md) 与 [`../signing.md`](../signing.md)。
 
 ## 5. 产物与边界
 
-- `artifacts\<产品名>-<版本>-<target 词>.dmg`。
+- `artifacts\<产品名>-<版本>-<生态词>.dmg`。
 - 仅 macOS 宿主；无 GUI 时布局自动降级（仍产可挂载 DMG）。
 - `.app` 内层旋钮（图标/plist/签名/公证）全部生效，见 [`mac-app.md`](mac-app.md)。
 - DMG 无自更新支持（`update` 对 `dmg` 不产出）。

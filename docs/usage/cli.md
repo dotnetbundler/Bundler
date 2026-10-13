@@ -67,7 +67,7 @@ bundler bundle --input-dir bin/osx-x64 --input-dir bin/osx-arm64 --target macos-
 
 顶层 `target`/`formats` 不存在——target 面只在 `targets[]` 数组里；多 target 各配各的 inputDirectory/formats。
 
-格式名：`nsis` `msi` `app` `dmg` `pkg` `deb` `rpm` `appimage` `zip` `targz` `alpineapk`，另有 `all` 全量别名。
+格式名：`nsis` `msi` `app` `dmg` `pkg` `deb` `rpm` `appimage` `zip` `targz`（`tar.gz` 别名）`alpineapk`，另有 `all` 全量别名。
 格式选择优先级：`--formats` > `bundler.json` 的 `formats` > 目标 OS 缺省集。
 
 ## 5. `bundler.json` 全量 schema
@@ -107,7 +107,7 @@ schema 与 MSBuild `Bundler*` 属性一一对应：`Bundler<Format><Knob>` → `
     "signingKeyFile": "keys/update.key",
     "publicKey": "<base64>",
     "notes": "…",
-    "bootstrapperDirectory": "…"           // 空时按程序集旁约定解析
+    "bootstrapperDirectory": "…"           // 空时回退程序集内嵌引导件资源
   }
 }
 ```

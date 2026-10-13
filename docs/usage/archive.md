@@ -45,7 +45,7 @@ MSBuild 前缀 `BundlerArchive*`；`bundler.json` 分节 `archive.*`；API `Arch
 
 ## 5. 产物与边界
 
-- `artifacts\<包名>-<版本>-<target 词>.zip` / `….tar.gz`（+`….sha256` 侧车）。
+- `artifacts\<包名>-<版本>-<生态词>.zip` / `….tar.gz`（+`….sha256` 侧车）。
 - 逐字节确定（纯托管写入器）。
 - 归档内容：发布载荷 + `BundlerArchiveFile` 映射 + `BundlerResource`；顶层目录名=产物 stem `<包名>-<版本>-<target>`（与归档文件同名；`BundlerArchiveName` 覆盖时同步）。
 - 自更新支持：`zip`/`targz` 走三段式换包（UPDATE）。

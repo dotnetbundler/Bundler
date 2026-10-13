@@ -28,7 +28,7 @@ MSBuild 前缀 `BundlerAlpineApk*`；`bundler.json` 分节 `alpineapk.*`；API `
 | --- | --- | --- | --- |
 | `BundlerAlpineApkPackageName` | `packageName` | `BundlerProductName` kebab-case | `pkgname` 与文件名 |
 | `BundlerAlpineApkVersion` | `version` | SemVer→apk 映射 | 显式值须 apk 版本串 |
-| `BundlerAlpineApkRelease` | `release` | `0`（预发布映射值优先） | 非负整数，`pkgver=<version>-r<release>` |
+| `BundlerAlpineApkRelease` | `release` | `0` | 非负整数，`pkgver=<version>-r<release>`（预发布 `-`→`_` 并入上游段，不影响 release） |
 | `BundlerAlpineApkArchitecture` | `architecture` | RID 映射 | |
 | `BundlerAlpineApkOrigin` | `origin` | 包名 | |
 | `BundlerAlpineApkDescription` | `description` | `BundlerDescription` | |

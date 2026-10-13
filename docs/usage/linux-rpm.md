@@ -5,7 +5,7 @@
 ## 1. 接入
 
 - 后端包 `DotNet.Bundler.Rpm`（`netstandard2.0`）：**任意宿主可构建**。
-- 目标：全部 `linux-*`；架构词映射 `x86_64`/`i686`/`aarch64`/`armv7hl`/`riscv64`/`loongarch64`/`ppc64le`/`s390x` 等（`Architecture` 显式可覆盖，如 `noarch`）。
+- 目标：全部 glibc `linux-*`（musl 目标矩阵拒绝）；架构词映射 `x86_64`/`i686`/`aarch64`/`armv7hl`/`riscv64`/`loongarch64`/`ppc64le`/`s390x`（`Architecture` 显式可覆盖，如 `noarch`）。
 
 ## 2. 最小使用
 
@@ -48,7 +48,7 @@ MSBuild 前缀 `BundlerRpm*`；`bundler.json` 分节 `rpm.*`；API `RpmBundleCon
 | `BundlerRpmPreInstallProgram`/`PostInstallProgram`/`PreUninstallProgram`/`PostUninstallProgram` | `preInstallProgram`/`postInstallProgram`/`preUninstallProgram`/`postUninstallProgram` | 无 | 对应 scriptlet 的替代解释程序（如 `/bin/sh -e`） |
 | `BundlerRpmSigningKeyFile` | `signing.keyFile` | 无 | OpenPGP 私钥（ASCII-armored 或二进制）；供则签 `RPMSIGTAG_RSA`+`RPMSIGTAG_PGP` 双标签 v3，纯托管 BouncyCastle |
 | `BundlerRpmSigningKeyPassphrase` | `signing.passphrase` | 无 | 只给口令不给密钥文件为配置错误；口令属秘密勿入库 |
-| `@BundlerRpmFile`（`Destination`） | `files` / `Files` | 无 | 任意文件→包内绝对路径 |
+| `@BundlerRpmFile`（`Destination`） | `files` / `Files` | 无 | 任意文件→包内绝对路径（`/etc` 下自动标 `%config(noreplace)`） |
 
 ## 4. 场景
 

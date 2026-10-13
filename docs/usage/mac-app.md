@@ -75,13 +75,13 @@ MSBuild 前缀 `BundlerMacApp*`；`bundler.json` 分节 `app.*`；API `MacAppBun
 | `BundlerMacAppNotaryWait` | `signing.notaryWait` | 默认 `true`；`false` 不等待结果 |
 | `BundlerMacAppSkipStapling` | `signing.skipStapling` | 跳过 stapler |
 | `BundlerMacAppNotaryProfile` | `signing.keychainProfile` | 凭证模式一：keychain profile 名 |
-| `BundlerMacAppAppleId`/`…ApplePassword`/`…AppleTeamId` | `signing.appleId`/`applePassword`/`appleTeamId` | 凭证模式二：Apple ID 三元组 |
-| `BundlerMacAppNotaryApiKeyFile`/`…KeyId`/`…KeyIssuer` | `signing.apiKeyFile`/`apiKeyId`/`apiKeyIssuer` | 凭证模式三：App Store Connect API key 三元组 |
+| `BundlerMacAppNotaryApiKeyFile`/`…KeyId`/`…KeyIssuer` | `signing.apiKeyFile`/`apiKeyId`/`apiKeyIssuer` | 凭证模式二：App Store Connect API key 三元组 |
+| `BundlerMacAppAppleId`/`…ApplePassword`/`…AppleTeamId` | `signing.appleId`/`applePassword`/`appleTeamId` | 凭证模式三：Apple ID 三元组 |
 
-凭证属性全缺省时按序回退环境变量：`APPLE_PROFILE` → `APPLE_API_KEY_PATH`+`APPLE_API_KEY`+`APPLE_API_ISSUER` → `APPLE_ID`+`APPLE_PASSWORD`+`APPLE_TEAM_ID`，取第一组完整组；某组只出现一部分属配置错误直接抛异常，不会跳到下一组。
+凭证按**字段**逐一 `配置 ?? 环境变量` 合并（顺序 `APPLE_PROFILE` → `APPLE_API_KEY_PATH`+`APPLE_API_KEY`+`APPLE_API_ISSUER` → `APPLE_ID`+`APPLE_PASSWORD`+`APPLE_TEAM_ID`，配置与 env 可拼成完整组）；某组只凑出一部分属配置错误直接抛异常。
 **注意**：独立 `.app` 后端按契约硬拒 `BundlerLicenseFile`（许可载荷归 dmg/pkg）；`formats` 含独立 `app` 时不要配置许可文件。
 
 ## 4. 产物与边界
 
-- `artifacts\<产品名>-<版本>-<target 词>.app\` 目录。
+- `artifacts\<产品名>-<版本>-<生态词>.app\` 目录。
 - 签名/公证需 macOS 宿主与真实凭证；公证属外部网络调用，时长不可控（`notaryWait=false` 可异步）。

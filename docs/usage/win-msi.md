@@ -93,6 +93,6 @@ current-user 与 per-machine 是两条独立产品线，各自独立升级——
 
 ## 5. 产物与边界
 
-- `artifacts\<产品名>-<版本>-<target 词>.msi`（非英语 `…-<culture>.msi`）。
+- `artifacts\<产品名>-<版本>-<生态词>.msi`（非英语 `…-<culture>.msi`）。
 - 各语言是独立单语言 MSI 产品线。
 - 构建宿主限 Windows；当前开发版未上公共 NuGet 源时先本仓 `dotnet pack` 指本地源。
