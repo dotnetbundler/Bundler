@@ -1,6 +1,6 @@
 # MSI 安装器使用指南
 
-产出 Windows Installer `.msi`（WiX 3.14.1 工具链随包）。语义契约（版本映射/升降级/UI 序列/扩展与专家模式）见 [`../formats/win-msi.md`](../../formats/win-msi.md)。
+产出 Windows Installer `.msi`（WiX 3.14.1 工具链随包）。语义契约（版本映射/升降级/UI 序列/扩展与专家模式）见 [`../formats/win-msi.md`](../../design/formats/win-msi.md)。
 
 ## 1. 接入
 

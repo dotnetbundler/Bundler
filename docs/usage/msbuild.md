@@ -56,7 +56,7 @@ RID 推导在 eval 期完成，csproj 内按 `$(BundlerTarget)` 条件化的配�
 | `linux-x86_64` / `linux-i686` / `linux-aarch64` | `linux-x64` / `linux-x86` / `linux-arm64` |
 | `linux-musl-x86_64` / `linux-musl-aarch64` | `linux-musl-x64` / `linux-musl-arm64` |
 
-target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.md)。
+target 语法、架构词与产物命名契约见 [`../targets.md`](../design/targets.md)。
 
 ### 3.2 格式集与 universal
 
@@ -153,11 +153,11 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 ```
 
 内置签名器走 Windows Authenticode API，启用时构建宿主必须 Windows；外部 provider 可在其支持的宿主运行。
-本地自签名端到端验证脚本见 [`win-nsis.md` §4.5](formats/win-nsis.md)；签名决策与裁决见 [`../signing.md`](../signing.md)。
+本地自签名端到端验证脚本见 [`win-nsis.md` §4.5](formats/win-nsis.md)；签名决策与裁决见 [`../signing.md`](../design/signing.md)。
 
 ## 8. UPDATE 自更新
 
-打包侧开关；能力契约与应用侧接入见 [`../update.md`](../update.md)。
+打包侧开关；能力契约与应用侧接入见 [`../update.md`](../design/update.md)。
 
 | 属性 | 默认 | 说明 |
 | --- | --- | --- |
@@ -176,7 +176,7 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 - 默认落 `artifacts/`（`BundlerOutputPath` 可改）；`BundlerOutputLayout=byFormat` 时分格到 `artifacts\<format>\`。
 - 文件名由 `ArtifactNaming` 统一生成：`<包名>-<版本>-<生态词>-setup.exe`/`.msi`/`.dmg`/`.pkg`/`.AppImage`/`.zip`/`.tar.gz`；`.app` 为目录。
   包管理器三格式走各自生态命名：`<名>_<ver>-<rel>_<arch>.deb`、`<名>-<ver>-<rel>.<arch>.rpm`、`<名>-<ver>-r<rel>.<arch>.apk`。
-  "生态词"是各生态命名段而非 canonical target 字面（如 `x64-setup.exe`、`windows-x64.zip`、`linux-x86_64-musl.zip`）；非英文 MSI 带 `-<culture>` 后缀。命名全契约见 [`../targets.md`](../targets.md)。
+  "生态词"是各生态命名段而非 canonical target 字面（如 `x64-setup.exe`、`windows-x64.zip`、`linux-x86_64-musl.zip`）；非英文 MSI 带 `-<culture>` 后缀。命名全契约见 [`../targets.md`](../design/targets.md)。
 - 预览不构建：`dotnet msbuild -t:BundlerBundle` 前可用 CLI `bundler plan` 看计划，或读构建日志中展开的计划行。
 
 ## 10. 排错

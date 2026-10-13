@@ -1,6 +1,6 @@
 # macOS `.app` 使用指南
 
-产出 `.app` bundle 目录。语义契约（Info.plist 合并/图标管线/签名公证/UTI）见 [`../formats/mac-app.md`](../../formats/mac-app.md)。
+产出 `.app` bundle 目录。语义契约（Info.plist 合并/图标管线/签名公证/UTI）见 [`../formats/mac-app.md`](../../design/formats/mac-app.md)。
 
 ## 1. 接入
 

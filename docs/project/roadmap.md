@@ -1,17 +1,17 @@
 # DotNet.Bundler 产品边界与实施路线
 
 > 路线状态：全部格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`/`.zip`/`.tar.gz`/Alpine `.apk`）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`，无进行中的格式阶段。
-> 剩余仅为各格式外部待验收项（统一登记在 [`docs/special-acceptance.md`](special-acceptance.md)）与 §5.2 候选增强队列。
+> 剩余仅为各格式外部待验收项（统一登记在 [`docs/project/special-acceptance.md`](special-acceptance.md)）与 §5.2 候选增强队列。
 > 既有 per-machine、生产签名、交互 UI、干净宿主及重启等外部验收不阻塞新增功能开发，也不冒充已通过。
 
 本文档是项目后续路线的规范入口；
-产品与工程不变量见 [`docs/project-rules.md`](project-rules.md)，AI 协作规则见根 `AGENTS.md`，各格式决策/契约/能力状态各见其 `docs/formats/` 文档（如 [`win-nsis.md`](formats/win-nsis.md)、[`win-msi.md`](formats/win-msi.md)）。
+产品与工程不变量见 [`docs/project/project-rules.md`](project-rules.md)，AI 协作规则见根 `AGENTS.md`，各格式决策/契约/能力状态各见其 `docs/design/formats/` 文档（如 [`win-nsis.md`](../design/formats/win-nsis.md)、[`win-msi.md`](../design/formats/win-msi.md)）。
 它们使后续开发不依赖某一次对话或某个 AI 的记忆。
 
 - `PROJECT_CONTEXT.md` 记录当前实现事实与验证证据；
-- `AGENTS.md` 是 AI 接管与协作规则入口，`docs/project-rules.md` 是产品与工程不变量；
+- `AGENTS.md` 是 AI 接管与协作规则入口，`docs/project/project-rules.md` 是产品与工程不变量；
 - 本文档记录产品边界、格式顺序和向后推进的正式计划；
-- `docs/special-acceptance.md` 统一登记只能人工/外部付费完成的验收与外部待办；各格式文档按格式链接；
+- `docs/project/special-acceptance.md` 统一登记只能人工/外部付费完成的验收与外部待办；各格式文档按格式链接；
 - 代码和自动化测试是实现事实的最终依据。若它们与文档冲突，先调查差异，再同时修正文档和实现状态，不能默默选择其中一方。
 
 ## 1. 产品定位
@@ -69,12 +69,12 @@ Tauri 的 WebView2 等选项服务于 Tauri 自身运行时；直接复制会把
 
 Tauri 等产品只作为通用桌面打包能力的参照，不决定本项目的内部架构、配置字段或应用运行时部署范围。
 固定上游快照、比较用户结果、记录适用/拒绝理由和状态证据的统一方法见 `AGENTS.md` 文档写作约定。
-各格式的上游取舍与逐项能力见 `docs/formats/` 对应文档；
+各格式的上游取舍与逐项能力见 `docs/design/formats/` 对应文档；
 具体状态以各格式文档和代码测试为准。
 
 ## 4. 阶段执行协议
 
-跨格式的接管、**新后端先制定并确认完整路线**、测试、文档和 Git 规则，以 `AGENTS.md` 为规范；分层、工具随包供应、完整示例等项目不变量以 [`docs/project-rules.md`](project-rules.md) 为规范；
+跨格式的接管、**新后端先制定并确认完整路线**、测试、文档和 Git 规则，以 `AGENTS.md` 为规范；分层、工具随包供应、完整示例等项目不变量以 [`docs/project/project-rules.md`](project-rules.md) 为规范；
 本文件只决定格式顺序和阶段目标。
 
 一个阶段获准启动后，先按上述规则核对现状并向用户报告，再完成整个阶段。
@@ -90,19 +90,19 @@ Tauri 等产品只作为通用桌面打包能力的参照，不决定本项目�
 
 | 顺序 | 格式/模块 | 冻结基线 | 文档 |
 | --- | --- | --- | --- |
-| 1 | Windows NSIS | `0.1.0-alpha.31`（alpha.32/33 journal 加固） | [`win-nsis.md`](formats/win-nsis.md) |
-| 2 | Windows WiX/MSI | `0.1.0-alpha.43` | [`win-msi.md`](formats/win-msi.md) |
-| 3 | macOS `.app` | `0.1.0-alpha.45` | [`mac-app.md`](formats/mac-app.md) |
-| 4 | macOS `.dmg` | `0.1.0-alpha.45` | [`mac-dmg.md`](formats/mac-dmg.md) |
-| 5 | macOS `.pkg` | `0.1.0-alpha.47` | [`mac-pkg.md`](formats/mac-pkg.md) |
-| 6 | Linux `.deb` | `0.1.0-alpha.51` | [`linux-deb.md`](formats/linux-deb.md) |
-| 7 | Linux `.rpm` | `0.1.0-alpha.55`（GPG 签名后置并入） | [`linux-rpm.md`](formats/linux-rpm.md) |
-| 8 | Linux `.AppImage` | `0.1.0-alpha.58` | [`linux-appimage.md`](formats/linux-appimage.md) |
-| 9 | `.zip`/`.tar.gz` | `0.1.0-alpha.59` | [`archive.md`](formats/archive.md) |
-| 10 | CLI | `0.1.0-alpha.62` | [`usage/cli.md`](usage/cli.md) |
-| 11 | Alpine `.apk` | `0.1.0-alpha.63` | [`linux-alpine-apk.md`](formats/linux-alpine-apk.md) |
-| — | UPDATE 自更新 | `0.1.0-alpha.74` | [`update.md`](update.md) |
-| — | 签名横切面 | 随各格式 | [`signing.md`](signing.md) |
+| 1 | Windows NSIS | `0.1.0-alpha.31`（alpha.32/33 journal 加固） | [`win-nsis.md`](../design/formats/win-nsis.md) |
+| 2 | Windows WiX/MSI | `0.1.0-alpha.43` | [`win-msi.md`](../design/formats/win-msi.md) |
+| 3 | macOS `.app` | `0.1.0-alpha.45` | [`mac-app.md`](../design/formats/mac-app.md) |
+| 4 | macOS `.dmg` | `0.1.0-alpha.45` | [`mac-dmg.md`](../design/formats/mac-dmg.md) |
+| 5 | macOS `.pkg` | `0.1.0-alpha.47` | [`mac-pkg.md`](../design/formats/mac-pkg.md) |
+| 6 | Linux `.deb` | `0.1.0-alpha.51` | [`linux-deb.md`](../design/formats/linux-deb.md) |
+| 7 | Linux `.rpm` | `0.1.0-alpha.55`（GPG 签名后置并入） | [`linux-rpm.md`](../design/formats/linux-rpm.md) |
+| 8 | Linux `.AppImage` | `0.1.0-alpha.58` | [`linux-appimage.md`](../design/formats/linux-appimage.md) |
+| 9 | `.zip`/`.tar.gz` | `0.1.0-alpha.59` | [`archive.md`](../design/formats/archive.md) |
+| 10 | CLI | `0.1.0-alpha.62` | [`usage/cli.md`](../usage/cli.md) |
+| 11 | Alpine `.apk` | `0.1.0-alpha.63` | [`linux-alpine-apk.md`](../design/formats/linux-alpine-apk.md) |
+| — | UPDATE 自更新 | `0.1.0-alpha.74` | [`update.md`](../design/update.md) |
+| — | 签名横切面 | 随各格式 | [`signing.md`](../design/signing.md) |
 
 新后端默认仍一次推进一个完整格式；
 若真实用户需求或可用原生验证环境要求调整顺序，必须先在本文档写明依据和新顺序。
@@ -127,14 +127,14 @@ Tauri updater 协议/提升权限计划任务若有需求另立跨格式产品�
 
 ## 6. 外部验收队列
 
-由 [`docs/special-acceptance.md`](special-acceptance.md) 统一登记；
+由 [`docs/project/special-acceptance.md`](special-acceptance.md) 统一登记；
 取得环境时逐项执行并保存证据；
 没有环境时保留准确边界。
 
 ## 7. 路线维护与接班
 
 阶段结项及交接字段按 `AGENTS.md` 阶段结束节执行。
-每阶段在同一轮修改中把本文件顶部基线和默认下一阶段改成实际状态，更新对应格式文档与 `docs/special-acceptance.md`，并在 `PROJECT_CONTEXT.md` 留下 Git、版本、命令、结果和未决问题。
+每阶段在同一轮修改中把本文件顶部基线和默认下一阶段改成实际状态，更新对应格式文档与 `docs/project/special-acceptance.md`，并在 `PROJECT_CONTEXT.md` 留下 Git、版本、命令、结果和未决问题。
 参考 Tauri 时同步格式专用的固定上游快照。
 没有实施或没有对应环境证据的能力不得标为完成。
 

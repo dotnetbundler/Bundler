@@ -1,7 +1,7 @@
 # 使用文档
 
 本目录是 Bundler 的**使用文档族**：每个入口、每个后端一件，从最小可用配置写到全量旋钮。
-契约与决策（为什么这么设计、能力边界、验收口径）在 [`../formats/`](../formats/) 与各专题文档；管线机制见 [`../architecture.md`](../architecture.md)。
+契约与决策（为什么这么设计、能力边界、验收口径）在 [`../design/formats/`](../design/formats/) 与各专题文档；管线机制见 [`../architecture.md`](../design/architecture.md)。
 
 ## 入口
 
@@ -29,10 +29,10 @@
 | `.zip`/`.tar.gz` | `zip`/`targz` | [`archive.md`](formats/archive.md) | 任意宿主 |
 
 > "任意宿主"=托管实现随包携带工具链，不依赖宿主原生工具也不在线下载。
-> 各目标架构与产物消费面的完整矩阵见 [`../support-matrix.md`](../support-matrix.md)；target 语法与命名契约见 [`../targets.md`](../targets.md)。
+> 各目标架构与产物消费面的完整矩阵见 [`../support-matrix.md`](../design/support-matrix.md)；target 语法与命名契约见 [`../targets.md`](../design/targets.md)。
 
 ## 横切配置
 
 - Windows Authenticode 签名：MSBuild `BundlerWindowsSigning*` / API `IBundleSigner`——见 [`msbuild.md` §签名](msbuild.md) 与各 Windows 格式文档。
-- UPDATE 自更新：`BundlerUpdate*`/`update.*`/`UpdateBundleConfiguration`——见 [`msbuild.md`](msbuild.md)、[`cli.md`](cli.md)，应用侧接入见 [`../update.md`](../update.md)。
+- UPDATE 自更新：`BundlerUpdate*`/`update.*`/`UpdateBundleConfiguration`——见 [`msbuild.md`](msbuild.md)、[`cli.md`](cli.md)，应用侧接入见 [`../update.md`](../design/update.md)。
 - 示例工程：[`samples/HelloBundlerApp`](../../samples/HelloBundlerApp/hello-bundler-app-sample.md) 覆盖全部后端全部公开旋钮，可直接照抄组织方式。

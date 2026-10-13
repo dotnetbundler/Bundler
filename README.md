@@ -11,7 +11,7 @@ bundler bundle --input-dir <publish目录>  # 或 CLI：只指发布目录，其
 ```
 
 **使用文档族在 [`docs/usage/`](docs/usage/README.md)**：每个入口、每个后端一件，从最小配置到全量旋钮。
-实现原理见 [`docs/architecture.md`](docs/architecture.md)；格式契约见 [`docs/formats/`](docs/formats/)；项目规则见 [`docs/project-rules.md`](docs/project-rules.md)。
+实现原理见 [`docs/design/architecture.md`](docs/design/architecture.md)；格式契约见 [`docs/design/formats/`](docs/design/formats/)；项目规则见 [`docs/project/project-rules.md`](docs/project/project-rules.md)。
 
 ## 当前状态
 
@@ -19,15 +19,15 @@ bundler bundle --input-dir <publish目录>  # 或 CLI：只指发布目录，其
 
 | 平台 | 格式 | 使用文档 | 契约文档 |
 | --- | --- | --- | --- |
-| Windows | `nsis`、`msi` | [`win-nsis.md`](docs/usage/formats/win-nsis.md)、[`win-msi.md`](docs/usage/formats/win-msi.md) | [`docs/formats/`](docs/formats/) |
+| Windows | `nsis`、`msi` | [`win-nsis.md`](docs/usage/formats/win-nsis.md)、[`win-msi.md`](docs/usage/formats/win-msi.md) | [`docs/design/formats/`](docs/design/formats/) |
 | macOS | `.app`、`.dmg`、`.pkg` | [`mac-app.md`](docs/usage/formats/mac-app.md)、[`mac-dmg.md`](docs/usage/formats/mac-dmg.md)、[`mac-pkg.md`](docs/usage/formats/mac-pkg.md) | 同上 |
 | Linux | `.deb`、`.rpm`、`.AppImage`、Alpine `.apk` | [`linux-deb.md`](docs/usage/formats/linux-deb.md)、[`linux-rpm.md`](docs/usage/formats/linux-rpm.md)、[`linux-appimage.md`](docs/usage/formats/linux-appimage.md)、[`linux-alpine-apk.md`](docs/usage/formats/linux-alpine-apk.md) | 同上 |
 | 跨平台 | `.zip`/`.tar.gz` | [`archive.md`](docs/usage/formats/archive.md) | 同上 |
-| 其他 | CLI、MSBuild、UPDATE、签名 | [`cli.md`](docs/usage/cli.md)、[`msbuild.md`](docs/usage/msbuild.md) | [`docs/update.md`](docs/update.md)、[`docs/signing.md`](docs/signing.md) |
+| 其他 | CLI、MSBuild、UPDATE、签名 | [`cli.md`](docs/usage/cli.md)、[`msbuild.md`](docs/usage/msbuild.md) | [`docs/design/update.md`](docs/design/update.md)、[`docs/design/signing.md`](docs/design/signing.md) |
 
-各格式打包/消费的平台支持范围汇总见 [`docs/support-matrix.md`](docs/support-matrix.md)。
+各格式打包/消费的平台支持范围汇总见 [`docs/design/support-matrix.md`](docs/design/support-matrix.md)。
 全后端统一示例见 [`samples/HelloBundlerApp`](samples/HelloBundlerApp/hello-bundler-app-sample.md)：单个工程覆盖全部格式的全部公开旋钮。
-外部待验收项登记在 [`docs/special-acceptance.md`](docs/special-acceptance.md)；后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。
+外部待验收项登记在 [`docs/project/special-acceptance.md`](docs/project/special-acceptance.md)；后续路线和产品边界见 [`docs/project/roadmap.md`](docs/project/roadmap.md)。
 
 ## 包结构
 
@@ -65,7 +65,7 @@ dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64
 ```
 
-集成测试按格式类/资源 trait 筛选与真装同意闸见 [`tests/README.md`](tests/README.md)；只能人工/外部付费完成的验收统一登记在 [`docs/special-acceptance.md`](docs/special-acceptance.md)。
+集成测试按格式类/资源 trait 筛选与真装同意闸见 [`tests/README.md`](tests/README.md)；只能人工/外部付费完成的验收统一登记在 [`docs/project/special-acceptance.md`](docs/project/special-acceptance.md)。
 
 ## 安全与许可证
 

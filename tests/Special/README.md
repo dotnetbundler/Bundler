@@ -3,7 +3,7 @@
 不能收编成 `dotnet test` 的验收——真机、虚拟机、付费凭证、真人交互、公网服务、破坏性故障注入。
 每个脚本：前置条件自检 → 缺失即明确报错退出（不静默通过）→ 执行 → **自动清理工件/挂载/卷** → 证据写入 `tests/Special/evidence/<id>-<宿主>-<日期>.md`。
 半自动脚本在需要人工动作处暂停等待（UAC 点击、弹窗确认、真机观察），恢复后继续。
-回填 `docs/special-acceptance.md` 时贴证据文件内容。
+回填 `docs/project/special-acceptance.md` 时贴证据文件内容。
 
 ## 通用约定
 

@@ -1,7 +1,7 @@
 # NSIS 安装器（Windows）
 
 本文件是 NSIS 后端的唯一文档：能力契约、工具链事实、关键决策与外部待验收。
-当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project-rules.md`。
+当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准；跨格式项目规则见 `docs/project/project-rules.md`。
 
 ## 1. 状态与边界
 
@@ -42,7 +42,7 @@
 - 内置 22 种语言：Arabic、Bulgarian、Dutch、English、French、German、Italian、Japanese、Korean、Norwegian、Persian（NSIS 内部映射 `Farsi`）、Portuguese、PortugueseBR、Russian、SimpChinese、Spanish、SpanishInternational、Swedish、TradChinese、Turkish、Ukrainian、Vietnamese。
 - 分号配置语言列表，第一项为回退；多语言且启用选择器时显示语言选择页。
 - 自定义语言文件完整替换同语言内置文件，严格校验缺失、重复、未知键和 `LANG_*` 常量。
-- 22 种语言均经真实编译测试、有非拉丁 Unicode E2E；译文内容与 RTL/缩放布局属 `docs/special-acceptance.md` 母语审校。
+- 22 种语言均经真实编译测试、有非拉丁 Unicode E2E；译文内容与 RTL/缩放布局属 `docs/project/special-acceptance.md` 母语审校。
 
 ### 4.3 安装范围
 
@@ -77,7 +77,7 @@
 - `WindowsExternalCommandSigner` 为 HSM/USB Token/远程 provider 提供入口：可执行文件加独立参数数组（不经 shell），至少一个参数含 `{path}`/`%1`，支持 `{artifactKind}`、`{target}`、`{productName}` 占位；provider 参数与输出不进异常消息。
 - 内置实现不依赖 Windows SDK/`signtool.exe`，但要求 Windows 宿主；外部 provider 宿主范围由其命令决定。
 - 未配置 signer 时显式签名文件会失败而非静默忽略；`SigningFiles` 只选输入目录内文件，不自动重签第三方件。
-- 生产证书链、HSM 与公共时间戳服务验收见 `docs/special-acceptance.md` SA-P-01。
+- 生产证书链、HSM 与公共时间戳服务验收见 `docs/project/special-acceptance.md` SA-P-01。
 
 ### 4.9 安装器自动化协议
 
@@ -103,7 +103,7 @@
 - 公共 `NsisShortcutConfiguration`：Desktop/StartMenu、Arguments、WorkingDirectory、Icon、AppUserModelId、StartMenuFolder、LegacyProductNames、LegacyMainExecutables。
 - 工作目录与图标必须是安装目录内安全相对路径且存在于最终载荷。
 - `/UPDATE` 只刷新仍存在且仍由本产品拥有的快捷方式；卸载只删本产品拥有的 `.lnk`，被其他程序接管的保留；改名只能走显式旧名列表迁移。
-- Windows 固定项（开始菜单/任务栏 pin）随系统版本与策略变化，不保证自动取消固定，见 `docs/special-acceptance.md`。
+- Windows 固定项（开始菜单/任务栏 pin）随系统版本与策略变化，不保证自动取消固定，见 `docs/project/special-acceptance.md`。
 
 ### 4.11 安装事务与失败恢复
 
@@ -142,7 +142,7 @@
 
 ### 4.14 权限边界
 
-- perMachine 产品目录、事务目录与 journal 树要求所有者与允许 ACE 只属 Administrators/SYSTEM，拒绝预建宽权限目录；最终 ACL 在真实提权安装下的形态仍属 `docs/special-acceptance.md` 待验。
+- perMachine 产品目录、事务目录与 journal 树要求所有者与允许 ACE 只属 Administrators/SYSTEM，拒绝预建宽权限目录；最终 ACL 在真实提权安装下的形态仍属 `docs/project/special-acceptance.md` 待验。
 - 目标清单约束独立于 ACL；快照内容与恢复卸载器的提权完整性依赖受保护锚点及目录边界。
 
 ### 4.15 压缩与杂项
@@ -152,7 +152,7 @@
 - `IBundleSigner` 请求携带产物类别、产品名、目标 RID；类别区分主程序/显式 payload/Bundler 原生组件/卸载器/安装器。
 - `ToolCacheDirectory`：默认用户级内容寻址缓存可显式覆盖；信任锚为固定 ZIP SHA-256 与逐文件 manifest 哈希，覆盖篡改、额外文件、并发、Unicode 与长路径。
 
-## 5. 外部待验收（详见 `docs/special-acceptance.md`）
+## 5. 外部待验收（详见 `docs/project/special-acceptance.md`）
 
 - 真实 UAC、perMachine ACL 落位、真实重启 `3010` 链路、退出码 `5` 场景。
 - 生产 Authenticode 链（SA-P-01）；真实已发布产品的历史 MSI 迁移输入。

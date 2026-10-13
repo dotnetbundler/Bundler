@@ -1,6 +1,6 @@
 # Debian `.deb` 使用指南
 
-产出 Debian `.deb`。纯托管 ar/tar/gzip 写入器，无原生工具依赖。语义契约（版本映射/conffile/脚本/桌面集成）见 [`../formats/linux-deb.md`](../../formats/linux-deb.md)。
+产出 Debian `.deb`。纯托管 ar/tar/gzip 写入器，无原生工具依赖。语义契约（版本映射/conffile/脚本/桌面集成）见 [`../formats/linux-deb.md`](../../design/formats/linux-deb.md)。
 
 ## 1. 接入
 

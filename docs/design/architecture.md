@@ -1,7 +1,7 @@
 # 实现原理
 
 本文件讲整条打包管线**怎么工作**：输入模型、三层入口、格式门面、规划、编排、工作目录、工具缓存、命名与 UPDATE 挂点。
-"代码必须满足什么"的规则在 `docs/project-rules.md`；各格式语义契约在 `docs/formats/`；当前事实在 `PROJECT_CONTEXT.md`。
+"代码必须满足什么"的规则在 `docs/project/project-rules.md`；各格式语义契约在 `docs/design/formats/`；当前事实在 `PROJECT_CONTEXT.md`。
 类型名与源码对应，细节以代码为准。
 
 ## 1. 总览
@@ -18,7 +18,7 @@ BundleArtifact[]（产物清单）
   ↓ 入口层收尾：UPDATE 清单与旁车发射（配置启用时）
 ```
 
-- 三个入口**都落到同一套门面+管线**，没有任何一个入口自带打包语义（`docs/project-rules.md` §1）。
+- 三个入口**都落到同一套门面+管线**，没有任何一个入口自带打包语义（`docs/project/project-rules.md` §1）。
 - 一个配置可同时请求多格式多目标：入口先**统一预检**（共享校验 + 各格式 `Validate`，配置类错误一次报完），再**逐格式构建**（单格式失败不拖累其余，末位汇总）。
 
 ## 2. 输入模型（`Bundler.Abstractions`）
@@ -26,7 +26,7 @@ BundleArtifact[]（产物清单）
 - `BundleConfiguration` 是全部格式的统一配置：产品名/`Identifier`/`Version`/发布者/描述/主页/版权/`LicenseFile`、`OutputDirectory`、`OutputLayout`（`Flat` 默认｜`ByFormat` 按格式分一层子目录）、`Icons`、`Resources`、`FileAssociations`、`UrlProtocols`、`Targets[]`、`Update?`。
 - 每个 `BundleTargetConfiguration`：`Target`（canonical 词 `{os}[-{libc}]-{arch}`）、`InputDirectory`（已备好的普通应用目录）、`MainExecutable?`、`SigningFiles[]`、`Formats[]`。
 - `UpdateBundleConfiguration`：`FeedUrl`、`Channel`（默认 `latest`）、签名密钥/公钥、notes、`BootstrapperDirectory?`。
-- 目标语法与枚举全集见 `docs/targets.md`；`BundleTarget.TryParse` 在规划期把字符串解析成结构化目标。
+- 目标语法与枚举全集见 `docs/design/targets.md`；`BundleTarget.TryParse` 在规划期把字符串解析成结构化目标。
 
 ## 3. 入口层
 
@@ -62,7 +62,7 @@ BundleArtifact[]（产物清单）
 ## 7. 后端（`IBundleBackend`）
 
 - 契约面：`Format`、`OperatingSystem`、`RequiredLibC`（`null`=不分 libc；AlpineApk 声明 `Musl`）+ `BuildAsync(BundleBuildContext)`。
-- 后端拿到工作目录后在内部完成格式全流程：NSIS 渲模板跑 `makensis`、MSI 跑内嵌 WiX、`.app` 搭骨架写 plist、deb/rpm/apk 纯托管写入器直接产字节等——格式细节各见其 `docs/formats/` 文档。
+- 后端拿到工作目录后在内部完成格式全流程：NSIS 渲模板跑 `makensis`、MSI 跑内嵌 WiX、`.app` 搭骨架写 plist、deb/rpm/apk 纯托管写入器直接产字节等——格式细节各见其 `docs/design/formats/` 文档。
 - 一个计划项可多产物；产物路径由后端按 `ArtifactNaming` 落盘，管线只核验不命名。
 
 ## 8. 工具供应与缓存（`ZipToolCache`）
@@ -78,13 +78,13 @@ BundleArtifact[]（产物清单）
 
 - 单一来源：自描述格式统一 `{name}-{ver}-{platarch}.{ext}`；NSIS `…-setup.exe`、MSI `….msi`（多语言加后缀）、`.app`/`.dmg`/`.pkg`、`.AppImage`、`.zip`/`.tar.gz` 各带生态架构词与 `-musl` 段；`deb`/`rpm`/`apk` 保各生态原生命名（`{name}_{ver}-{rel}_{arch}.deb` 等）。
 - 架构词按后端生态取（x64/x86_64/amd64/aarch64…）；归档格式用 `windows-x64`/`macos-arm64`/`linux-<arch>` 生态词，边缘架构回退规范 GNU 词。
-- 规划期查重与后端产件都走这里，命名契约目录见 `docs/targets.md`。
+- 规划期查重与后端产件都走这里，命名契约目录见 `docs/design/targets.md`。
 
 ## 10. UPDATE 挂点
 
 - UPDATE 不是格式，分两层挂：**载荷内身份**由后端在 `BuildAsync` 期写入——`UpdateIdentitySidecar.WriteIfEnabled` 把 `bundler-update.json` 安装身份落进产物树（archive/`.app`/AppImage 等可更新格式）；**清单与旁车**是入口层收尾步——各格式产物齐后，入口（MSBuild Task、CLI）调 `UpdateManifestEmitter.EmitAsync(configuration, artifacts)` 发射通道清单 `bundler-update-feed.{channel}.json` 与 `.sig`/`feed.sig`/`.blockmap` 旁车（`.app` 另产 `.zip` 运输件）。
 - `Bundler.Core/Update/` 提供清单模型、签名/验签、引导件暂存与身份侧车的共享件；应用内 `DotNet.Bundler.Updater` 是另一侧（查/下/验/换）。
-- 语义契约见 `docs/update.md`。
+- 语义契约见 `docs/design/update.md`。
 
 ## 11. 测试与验证入口
 

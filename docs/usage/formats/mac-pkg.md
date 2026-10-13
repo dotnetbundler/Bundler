@@ -1,7 +1,7 @@
 # macOS `.pkg` 使用指南
 
 产出 `.pkg` 安装包：`pkgbuild` 组件包（扁平包），配置分发面后经 `productbuild` 升级为分发包。
-语义契约见 [`../formats/mac-pkg.md`](../../formats/mac-pkg.md)。
+语义契约见 [`../formats/mac-pkg.md`](../../design/formats/mac-pkg.md)。
 
 ## 1. 接入
 

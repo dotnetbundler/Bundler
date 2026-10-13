@@ -37,7 +37,7 @@
 - 差分双路实证：本地命中、脏缓存回退、回环 HTTP Range-206；`bundler-cache/artifact.bin` 源件缓存。
 - 离线/内网本地路径 feed 端到端。
 
-部分实现/外部待验收：macOS 同签名身份比对腿（无 Apple 证书，挂 `docs/special-acceptance.md`）。
+部分实现/外部待验收：macOS 同签名身份比对腿（无 Apple 证书，挂 `docs/project/special-acceptance.md`）。
 
 ## 4. 明确拒绝
 
