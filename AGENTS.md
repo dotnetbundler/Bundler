@@ -17,7 +17,7 @@
 3. 读 `PROJECT_CONTEXT.md` 文首的当前事实（分支、包版本、当前阶段、下一步）。
 4. 读 `docs/roadmap.md` 的产品边界与格式顺序。
 5. 读 `README.md` 了解面向用户的当前能力。
-6. 读当前格式的专属文档 `docs/<format>.md`；
+6. 读当前格式的专属文档 `docs/formats/` 下对应文件；
    只能人工/外部条件完成的特殊验收与外部待办统一登记在 `docs/special-acceptance.md`。
 7. 读与将做工作直接相关的代码、测试和 fixture。
 8. 需要历史背景时查 git 提交与 PR 记录；格式文档留设计决策、语义契约与能力状态，已完成格式的阶段过程不逐条留档。
@@ -70,7 +70,7 @@ git status --short
 | `docs/development-rules.md` | 全部跨格式泛用规则 | 任何格式专属内容、历史记录 |
 | `docs/roadmap.md` | 产品边界、格式顺序、未来计划 | 协作规则细则、格式实现细节 |
 | `PROJECT_CONTEXT.md` | 当前事实：版本、阶段、最近验证、未决问题、下一步 | 规则、历史分轮记录、格式专属细节 |
-| `docs/<format>.md` | 该格式的设计决策、语义契约、逐项能力状态与验收边界（一格式一文档） | 泛用规则、过程记录、其他格式内容 |
+| `docs/formats/<platform>-<format>.md` | 该格式的设计决策、语义契约、逐项能力状态与验收边界（一格式一文档） | 泛用规则、过程记录、其他格式内容 |
 | `README.md` | 面向使用者的能力与用法 | 协作规则、阶段计划 |
 | `samples/<name>/*-sample.md` | 该示例的操作说明 | 后端规则、阶段证据 |
 | `tests/README.md` | 测试入口、门禁与 fixture 地图 | 测试结果记录 |

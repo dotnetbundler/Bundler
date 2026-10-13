@@ -19,7 +19,7 @@
 已实现并验证：
 
 - 双写入器 + 单顶层目录 + exec 位 + symlink + `.sha256` 侧车全链。
-- 全目标覆盖：windows-i686/x86_64/aarch64、macos-universal/x86_64/arm64、linux-x86_64/aarch64、linux-musl-x86_64/aarch64（无架构门禁）；`macos-universal` 通用载荷契约见 `docs/mac-app.md`。
+- 全目标覆盖：windows-i686/x86_64/aarch64、macos-universal/x86_64/arm64、linux-x86_64/aarch64、linux-musl-x86_64/aarch64（无架构门禁）；`macos-universal` 通用载荷契约见 `docs/formats/mac-app.md`。
 - 多格式扇出（`BundlerFormats=zip;targz` 及与其他格式混排）。
 - 确定性：同输入同条件逐字节一致（跨轮 + linux↔qemu 跨宿主 16/16 对）；跨 OS 差异归因载荷 publish 元数据与宿主 mode 表达，非写入器缺陷。
 - 跨 OS 互读：win/linux/mac/qemu 四宿主互产互解（解压、exec 位/symlink 还原、载荷运行）；第三方互读（python `zipfile`/`tarfile` 断言）。

@@ -6,7 +6,7 @@
 > 既有 per-machine、生产签名、交互 UI、干净宿主及重启等外部验收仍各自记录，不阻塞新增功能开发，也不冒充已通过。
 
 本文档是项目后续路线的规范入口；
-跨格式执行规则见 [`docs/development-rules.md`](development-rules.md)，各格式决策/契约/能力状态各见其 `docs/<format>.md`（如 [`nsis.md`](nsis.md)、[`msi.md`](msi.md)）。
+跨格式执行规则见 [`docs/development-rules.md`](development-rules.md)，各格式决策/契约/能力状态各见其 `docs/formats/` 文档（如 [`nsis.md`](formats/win-nsis.md)、[`msi.md`](formats/win-msi.md)）。
 它们使后续开发不依赖某一次对话或某个 AI 的记忆。
 
 - `PROJECT_CONTEXT.md` 记录当前实现事实与验证证据；
@@ -70,7 +70,7 @@ Tauri 的 WebView2 等选项服务于 Tauri 自身运行时；直接复制会把
 
 Tauri 等产品只作为通用桌面打包能力的参照，不决定本项目的内部架构、配置字段或应用运行时部署范围。
 固定上游快照、比较用户结果、记录适用/拒绝理由和状态证据的统一方法见 [开发规则](development-rules.md) 第 2、6 节。
-各格式的上游取舍与逐项能力见对应 `docs/<format>.md`；
+各格式的上游取舍与逐项能力见 `docs/formats/` 对应文档；
 具体状态以各格式文档和代码测试为准。
 
 ## 4. 阶段执行协议
@@ -86,7 +86,7 @@ Tauri 等产品只作为通用桌面打包能力的参照，不决定本项目�
 
 ## 5. Windows NSIS 冻结基线
 
-NSIS 能力基线、工具链事实、能力契约与边界集中在 [NSIS 格式文档](nsis.md)；
+NSIS 能力基线、工具链事实、能力契约与边界集中在 [NSIS 格式文档](formats/win-nsis.md)；
 真实 UAC、生产签名、重启、旧 MSI、跨宿主等仍按 [特殊验收](special-acceptance.md) 记录，不将外部缺环境等同于未实现。
 
 ## 6. NSIS 之后的路线
@@ -116,7 +116,7 @@ per-machine 只验证构建产物和数据库，原生 x86/ARM64 宿主、生产
 8. `WIN-MSI-8`（本机范围已完成）：常规模式白名单 `.wxs` fragment + 调用方 ID 前缀 + 显式 Component/Feature 引用；显式专家模式整份模板/merge module，身份经 `candle -d` 变量与构建后数据库回读强制；扩展输入计入指纹。
 9. `WIN-MSI-9`（已完成）：逐项 Tauri 通用能力审计（快照漂移复核无 MSI 实质变化）、全部本机适用回归、工具许可/体积复核和再冻结，无新增功能。
 
-前置条件、交付物、不做事项、语义契约与逐项状态见 [`docs/msi.md`](msi.md)。
+前置条件、交付物、不做事项、语义契约与逐项状态见 [`docs/formats/win-msi.md`](formats/win-msi.md)。
 原 WIN-MSI-4 的实际证据继续有效，不能借新路线宣称计划能力已完成。
 MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 未经用户明确要求不开始代码。
@@ -124,17 +124,17 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 ### MAC：macOS `.app`、DMG 与 PKG（均已完成并冻结）
 
 `MAC-APP-1`..`MAC-APP-5` 已完成（2026-09-26，分支 `mac-app-development`），macOS `.app` 格式已冻结：`DotNet.Bundler.MacApp` 后端 + MSBuild/直接 API 入口交付 `.app`（骨架、Info.plist 键组、`.icns`/`Assets.car` 图标、文件关联/URL scheme/ATS、签名与显式公证管线、原生 E2E 矩阵），云 macOS VM 全链实测通过；`PackageFormat.Pkg` 已进公共枚举与 macos-universal 目标矩阵。
-2026-09-26 `MAC-DMG` 规划轮已收官（分支 `mac-dmg-development`）：决策全部确认（C# 原生编排不内嵌 create-dmg、DMG 本体可签名不公证、GUI 缺失降级、EULA SLA、默认 Ulmo 压缩、布局全可配），细节见 [`docs/mac-dmg.md`](mac-dmg.md)。
+2026-09-26 `MAC-DMG` 规划轮已收官（分支 `mac-dmg-development`）：决策全部确认（C# 原生编排不内嵌 create-dmg、DMG 本体可签名不公证、GUI 缺失降级、EULA SLA、默认 Ulmo 压缩、布局全可配），细节见 [`docs/formats/mac-dmg.md`](formats/mac-dmg.md)。
 `MAC-DMG-1`..`MAC-DMG-5` 已完成（2026-09-26，分支 `mac-dmg-development`），macOS `.dmg` 格式已冻结（冻结基线 `0.1.0-alpha.45`）：`DotNet.Bundler.MacDmg` 后端 + MSBuild/直接 API 交付 `.dmg`（hdiutil 全链、拖放卷、`Udzo`/`Ulmo`/`Udbz`、Finder 布局与品牌、DMG 签名、EULA SLA、原生 E2E 矩阵），云 macOS VM 全链实测通过；默认下一阶段为 `MAC-PKG`，待启动指令。
 2026-09-26 规划轮已产出该格式要求的完整前置文档（分支 `mac-app-development`）：
 
 - 上游审计：固定快照 `7dbfc1f`（复核 `dev` `9f8922a` 无实质漂移），逐项登记 `.app`/`DMG` 用户可观察能力与选择阶段；
 - PKG 已确认纳入公共 `PackageFormat`；
-- 格式文档 [`mac-app.md`](mac-app.md)：含宿主工具供应策略、`.app` 语义契约与逐项能力状态；
+- 格式文档 [`mac-app.md`](formats/mac-app.md)：含宿主工具供应策略、`.app` 语义契约与逐项能力状态；
 - 特殊验收 [`special-acceptance.md`](special-acceptance.md)。
 
 `Pkg` 枚举值与目标矩阵放行已随 `MAC-APP-1` 进入公共模型；格式顺序固定为 `MAC-DMG` 之后、Linux 之前。
-2026-09-27 `MAC-PKG-1..5` 全部完成、`.pkg` 冻结于 `0.1.0-alpha.47`；`MAC-PKG-3` 已完成（签名/公证/专家脚本：`pkgbuild --sign`+`productsign --sign`、notarytool+stapler 接线、`--scripts` 旋钮实测真实执行）；`MAC-PKG-2` 已完成（分发包与页面：title/页面/域名自动升级 `productbuild`，per-user 免提权真实安装实测通过）；`MAC-PKG-1` 已完成（2026-09-26（分支 `mac-pkg-development`）：`DotNet.Bundler.MacPkg` 后端落地——`pkgbuild` 组件包全链（identifier/version/install-location 默认与覆盖、`BundlerPkgPayload` 任意载荷、宿主门控、失败清理），MSBuild `BundlerMacPkg*` 接线；`Bundler.Tests` 109 项 + `tests/MacOS.Pkg.Integration` 实测全绿；示例 `samples/HelloMacPkg`；细节见 [`docs/mac-pkg.md`](mac-pkg.md)；`.pkg` 已冻结（`MAC-PKG-1..5` 全部完成，基线 `0.1.0-alpha.47`）；默认下一阶段 `LINUX` 规划轮，待启动指令。
+2026-09-27 `MAC-PKG-1..5` 全部完成、`.pkg` 冻结于 `0.1.0-alpha.47`；`MAC-PKG-3` 已完成（签名/公证/专家脚本：`pkgbuild --sign`+`productsign --sign`、notarytool+stapler 接线、`--scripts` 旋钮实测真实执行）；`MAC-PKG-2` 已完成（分发包与页面：title/页面/域名自动升级 `productbuild`，per-user 免提权真实安装实测通过）；`MAC-PKG-1` 已完成（2026-09-26（分支 `mac-pkg-development`）：`DotNet.Bundler.MacPkg` 后端落地——`pkgbuild` 组件包全链（identifier/version/install-location 默认与覆盖、`BundlerPkgPayload` 任意载荷、宿主门控、失败清理），MSBuild `BundlerMacPkg*` 接线；`Bundler.Tests` 109 项 + `tests/MacOS.Pkg.Integration` 实测全绿；示例 `samples/HelloMacPkg`；细节见 [`docs/formats/mac-pkg.md`](formats/mac-pkg.md)；`.pkg` 已冻结（`MAC-PKG-1..5` 全部完成，基线 `0.1.0-alpha.47`）；默认下一阶段 `LINUX` 规划轮，待启动指令。
 不得在没有原生 macOS 验证环境时宣称签名和 notarization 完成。
 
 ### LINUX：Linux 格式
@@ -144,14 +144,14 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 每个格式分别完成元数据、文件布局、桌面集成、升级/卸载语义、签名或仓库验证边界、原生发行版 E2E，再进入下一个格式。
 若真实用户需求或可用原生验证环境要求调整，必须先在本文档写明依据和新顺序。
 
-2026-09-27 `LINUX-DEB` 规划轮完成（分支 `linux-deb-development`）：上游审计（固定快照 `447fa9f`）、决策与语义契约 [`linux-deb.md`](linux-deb.md)、外部待办登记均已就位，全部决策已确认。
+2026-09-27 `LINUX-DEB` 规划轮完成（分支 `linux-deb-development`）：上游审计（固定快照 `447fa9f`）、决策与语义契约 [`linux-deb.md`](formats/linux-deb.md)、外部待办登记均已就位，全部决策已确认。
 核心决策：deb/rpm 用纯托管写入器（无原生工具、任意构建宿主），AppImage 内嵌固定版本 `appimagetool`（构建限 Linux 宿主）。
 2026-09-27 `LINUX-DEB-1` 已完成（分支 `linux-deb-development`，`0.1.0-alpha.48`）：`DotNet.Bundler.Deb` 纯托管 ar/tar/gzip 写入器落地——最小 control 字段、`md5sums`、`usr/lib`+`usr/bin` 布局、SemVer→deb 版本映射、`.sha256` 侧车；MSBuild `BundlerDeb*` 接线、`Deb.Api.PackageFixture`、`tests/Linux.Deb.Integration/Verify.sh`（含真实 `sudo dpkg -i/-r`）、示例 `samples/HelloDebApp` 全部就位且验证全绿。
 2026-09-27 `LINUX-DEB-2` 已完成（同分支，`0.1.0-alpha.49`）：`Depends`/`Recommends`/`Provides`/`Conflicts`/`Replaces` 透传、`Section`/`Priority` 覆盖、`.desktop` 生成（决策 5 全字段含 `x-scheme-handler/` 并集）与 `BundlerDebDesktopFile` 整文件覆盖、hicolor PNG 图标（尺寸探测 + `@2x`）、AppStream metainfo、`changelog.gz`/`copyright`、`@(BundlerDebFile)` 绝对路径映射；`desktop-file-validate` 与装后 `dpkg -L` 回读断言全绿，lintian 信息级残余以 `Fixtures/Deb/lintian-exemptions.txt` 豁免清单方式固定并由 trixie lintian 腿逐标签比对。
 2026-09-27 `LINUX-DEB-3` 已完成（同分支，`0.1.0-alpha.50`）：`preinst`/`postinst`/`prerm`/`postrm` 专家旋钮（0755、shebang+LF 校验）、`BundlerDebSystemdServiceFile` 托管 unit（`usr/lib/systemd/system/` 落位 + postinst `daemon-reload` 自动合成/合并）、conffiles（`/etc` 下 `BundlerDebFile` 自动登记 + 显式列表，真实 `-r` 保留/`-P` 清除断言）、压缩枚举仅 gzip（xz/zstd 登记拒绝）、同包升级与 conffile 修改保留实测全绿。
 2026-09-27 `LINUX-DEB-4` 已完成（同分支，`0.1.0-alpha.51`）：lintian 由信息级升级为豁免清单硬断言（`lintian-exemptions.txt`，新 tag 即失败）；自动补发 `changelog.Debian.gz` 与扩展描述默认行消解全部可修 lintian 发现；`linux-aarch64` 产物结构与 `Architecture: arm64` 断言（真机观感项挂特殊验收）；docker `debian:stable`/`ubuntu:latest` 容器真实装卸+运行+conffile 语义矩阵全绿；构建侧零系统依赖复核完成（`src/Bundler.Deb` 无外部进程调用）。
 2026-09-27 `LINUX-DEB-5` 已完成——**`.deb` 冻结基线 `0.1.0-alpha.51`**：上游复核零漂移（`tauri@dev` 仍为 `447fa9f`）、能力矩阵定稿、OI/MT 收口、冻结写入路线与 PROJECT_CONTEXT。
-2026-09-27 `LINUX-RPM` 规划轮完成并确认（分支 `linux-rpm-development`）：决策清单见 `docs/linux-rpm.md`（托管 RPM 写入器、SemVer→rpm 版本映射、scriptlet/systemd/config 对应关系、gzip-only 压缩、`deb;rpm` 多格式扇出）。
+2026-09-27 `LINUX-RPM` 规划轮完成并确认（分支 `linux-rpm-development`）：决策清单见 `docs/formats/linux-rpm.md`（托管 RPM 写入器、SemVer→rpm 版本映射、scriptlet/systemd/config 对应关系、gzip-only 压缩、`deb;rpm` 多格式扇出）。
 2026-09-27 `LINUX-RPM-1` 已完成（同分支，`0.1.0-alpha.52`）：`DotNet.Bundler.Rpm` 纯托管 lead/header/cpio/gzip 写入器落地，`rpm -qip` 识别 + `RpmPackageReader` 回读互证，docker `fedora:latest` 真实 `rpm -i`/`rpm -e` 零残留全绿；`BundlerFormats=deb;rpm` 多格式扇出落地。`LINUX-APPIMAGE` 仍在其规划轮定稿。
 2026-09-27 `LINUX-RPM-2` 已完成（同分支，`0.1.0-alpha.53`）：六族关系字段（Requires/Provides/Conflicts/Obsoletes/Recommends/Suggests，`name [op evr]` 解析）透传 + License(SPDX)/Group/Url 覆盖 + freedesktop 生成器提取到 `Bundler.Core` 内部件供 deb/rpm 复用（deb 行为不变）+ `changelog.gz`%doc/`usr/share/licenses/<pkg>/`%license + `BundlerRpmFile` 任意路径映射；`rpm -qip`/`--queryformat` 逐字段、`desktop-file-validate`、docker 装后 `rpm -ql` 逐路径全绿；cpio 成员名 `./` 前缀修正（rpmlib PayloadFilesHavePrefix 的真实语义）。
 2026-09-27 `LINUX-RPM-3` 已完成（同分支，`0.1.0-alpha.54`）：四 scriptlet 旋钮 + `*Program` 解释器覆盖 + systemd unit 与 `daemon-reload` 合成 + `%config(noreplace)` 自动/显式标记 + gzip-only 压缩；容器内 `rpm -i/-e` 标记、`rpm -U` 升级原地保留、`rpm -e` `.rpmsave` 断言全绿。
@@ -170,7 +170,7 @@ MSI 路线至此收官；默认下一实施阶段为 `MAC-APP`；
 
 记录一项后续格式决策（2026-09-26，用户提出）：在平台格式全部完成后增加一个压缩包后端
 （zip / tar.gz 等归档分发形式），跨 Windows/macOS/Linux 通用，阶段号 `ARCHIVE`。
-规划轮已完成（`docs/archive.md`：zip+tar.gz、纯托管写入器、单顶层目录、执行位与符号链接保留、`.sha256` 侧车、拒绝签名与 tar.xz/zst/7z）。
+规划轮已完成（`docs/formats/archive.md`：zip+tar.gz、纯托管写入器、单顶层目录、执行位与符号链接保留、`.sha256` 侧车、拒绝签名与 tar.xz/zst/7z）。
 `ARCHIVE-1..3` 已全部完成，`.zip`/`.tar.gz` 冻结于 `0.1.0-alpha.59`：`src/Bundler.Archive` 托管双写入器 + 三 OS 矩阵放开 + `BundlerFormats=zip;targz` 接线，
 `Bundler.Tests` 181/181 与 `tests/Archive.Integration/Verify.sh`（真实解包/mode/symlink 还原/五格式扇出/交叉目标）全绿。
 
@@ -210,7 +210,7 @@ NSIS 和 MSI 的人工/外部待办（UAC、真实重启、生产证书、历史
 
 - **应用自更新/升级包**（2026-09-27 登记，**2026-10-05 路线已立**）：为打包产物增加升级/更新能力。全面调研七家权威实现（Tauri/Sparkle/Velopack/electron-updater/Omaha/NetSparkle-Onova/AppImageUpdate）后按本仓资产裁剪定稿：静态 JSON 清单/通道 + ECDSA P-256 `.sig` 分离签名 + `bundler-update.json` 安装身份旁车 + 外置 Native AOT 引导（shell 降级）+ 两式应用语义（安装器重跑 / Sparkle 三段式换包）；deb/rpm/apk 依权威排除、dmg/pkg 非载体排除、差分后置 `UPDATE-5` 做 block-map（前置阶段全量）。决策、语义契约与能力状态见 [`docs/update.md`](update.md)。**已冻结并入 `main`**（PR #27，squash `4345670`，基线 `alpha.74`）：UPDATE-1..6 全阶段完成（清单/ECDSA sig/身份旁车/per-RID AOT 引导+shell 降级/三段式换包+回滚/应用内库/block-map 差分），四宿主实证全绿，外部待验收见 [`docs/special-acceptance.md`](special-acceptance.md)。
 - **CLI AOT 按宿主裁剪自研后端**（2026-09-28 用户提出并立项，**已实现并入 `main` `8f2ff8b`**）：AOT 发布的 CLI 单二进制此前内嵌全部后端及工具载荷（约 49 MB）。按 RID 剔除宿主不可用后端：`win-*` 剔 `MacDmg`/`MacPkg`/`AppImage`，`linux-*` 剔 `Wix`/`MacDmg`/`MacPkg`，`osx-*` 剔 `Wix`/`AppImage`；`MacApp` 在非 mac 宿主仍可产未签名 `.app`，全宿主保留；`Nsis`/`Deb`/`Rpm`/`Archive` 全宿主保留。实现：`Bundler.Cli.csproj` 按 `RuntimeIdentifier` 推导 `BundlerHostWindows`/`BundlerHostMacos`/`BundlerHostLinux`（无 RID 构建三者全真），`Wix`/`MacDmg`/`MacPkg`/`AppImage` 的 `ProjectReference` 加条件，`FormatDispatcher`/`CliConfig`/`BundlerJsonContext` 内对应符号以 `#if BUNDLER_HOST_*` 裁剪；被剔格式分发时抛 `PlatformNotSupportedException`，对应 bundler.json 段按未知键拒绝。验证：四种编译口径（无 RID、`linux-x64`/`win-x64`/`osx-arm64` RID）零错误零警告；`linux-x64` 实发 47.4 MiB（-2.3 MB），产物零 `Wix`/`Mac*` 引用、保留 `AppImage`，`--formats msi/dmg/pkg` 各报宿主错误；`Cli.Integration` 已加裁剪断言并全绿。
-- **Alpine `.apk` 后端**（2026-09-30 用户提出并登记，**已实现并入 `main` `5585843`——`0.1.0-alpha.63` 冻结，PR #13 终审合并**）：为 Alpine/musl 生态增加 `.apk` 包后端。apk v2 格式为单个 gzip 流串接三个 tar 段（签名段 + 控制段 `.PKGINFO`/脚本 + 数据段），纯托管写入器零宿主工具依赖（模式参照 `Bundler.Deb`/`Bundler.Rpm`）；载荷 RID 为 `linux-musl-x86_64`/`linux-musl-aarch64`，架构名映射 x86_64/aarch64；可选 RSA 签名（未签名安装需 `apk --allow-untrusted`）。**命名注意：此指 Alpine APK，非 Android `.apk`**——移动端支持若在非常后期立项另立路线，届时命名须显式区分（如 `AlpineApk`/`AndroidApk`）。决策与语义契约见 [`docs/alpine-apk.md`](alpine-apk.md)；外部待验收统一登记在 [`docs/special-acceptance.md`](special-acceptance.md)。
+- **Alpine `.apk` 后端**（2026-09-30 用户提出并登记，**已实现并入 `main` `5585843`——`0.1.0-alpha.63` 冻结，PR #13 终审合并**）：为 Alpine/musl 生态增加 `.apk` 包后端。apk v2 格式为单个 gzip 流串接三个 tar 段（签名段 + 控制段 `.PKGINFO`/脚本 + 数据段），纯托管写入器零宿主工具依赖（模式参照 `Bundler.Deb`/`Bundler.Rpm`）；载荷 RID 为 `linux-musl-x86_64`/`linux-musl-aarch64`，架构名映射 x86_64/aarch64；可选 RSA 签名（未签名安装需 `apk --allow-untrusted`）。**命名注意：此指 Alpine APK，非 Android `.apk`**——移动端支持若在非常后期立项另立路线，届时命名须显式区分（如 `AlpineApk`/`AndroidApk`）。决策与语义契约见 [`docs/formats/linux-alpine-apk.md`](formats/linux-alpine-apk.md)；外部待验收统一登记在 [`docs/special-acceptance.md`](special-acceptance.md)。
 - **`macos-universal` 通用 RID 目标**（2026-09-30 登记，**已实现并入 `main` `e7dfeae`**）：接受通用二进制载荷（macos-x86_64+macos-arm64 合并的 fat binary 输入目录）。实现：裸 `macos-universal` 解析为 `MacOS`+`CpuArchitecture.Universal`，经 MacOS 矩阵放行 app/dmg/pkg/zip/targz；`MacApp` 校验改必需切片集——`macos-universal` 要求载荷内**每个** Mach-O 文件同时含 x86_64+arm64（与既有逐文件严格度一致）；MSBuild 裸 `macos-universal` 不再误配 `.exe` 后缀。上游前提不变：`dotnet publish -r osx` 不直接产 fat 二进制，载荷须由调用方以双 RID 发布+lipo 合并或等效方式提供。
 - **`linux-musl-x86_64`/`linux-musl-aarch64` 目标**（2026-09-30 登记，**已实现并入 `main` `02b2521`**）：musl/Alpine 载荷目标，挂 `zip`/`targz`/`alpineapk`/`appimage`——`deb`/`rpm` 属 glibc 发行版包管理语义（musl 生态无对应消费面）按门禁原则拒绝；`AppImage` 曾以"内嵌 runtime 为 glibc 链接"同判拒绝，2026-10-01 实测 runtime 实为静态 ELF——alpine 容器真产、`--appimage-extract` 与 FUSE 挂载双路 musl 载荷运行通过，遂放行（断言随矩阵更新）；实现原为 `DesktopOperatingSystem.LinuxMusl`（2026-10-02 基础模型重构改为 `TargetOperatingSystem.Linux` + `LibC.Musl` 旁维度，后端经 `RequiredLibC` 声明服务变体）。Alpine `.apk` 后端落地后 musl 获得原生包格式。
 - **不予登记的 RID 类别**（2026-09-30 裁决，记录理由）：发行版专属 RID（`ubuntu.20.04`/`rhel.8` 等——.NET 8 起官方弃用便携 RID 外枚举，产出载荷与便携 RID 完全相同，登记只会制造差异假象）；`linux-bionic-*`（Android——非桌面边界，移动端若另立路线再议）。原"稀有架构暂不开通"项已于 2026-10-10 目标模型重构（PR #56，`alpha.90`）解除——`armv7hf`/`armv7sf`/`riscv64`/`loongarch64`/`ppc64le`/`s390x` 已入 `CpuArchitecture` 注册表并按格式逐个开通（生态词映射与未开通组合拒绝见 `docs/target-matrix.md`）；此后新架构仍遵循"有真实需求再按行补"。

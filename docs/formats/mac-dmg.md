@@ -1,7 +1,7 @@
 # macOS `.dmg` 镜像
 
 本文件是 `.dmg` 后端的唯一文档：决策、语义契约、能力状态与外部待验收。
-`.app` 侧契约见 `docs/mac-app.md`；当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准。
+`.app` 侧契约见 `docs/formats/mac-app.md`；当前实现事实以代码、测试和 `PROJECT_CONTEXT.md` 为准。
 
 ## 1. 状态与决策
 
