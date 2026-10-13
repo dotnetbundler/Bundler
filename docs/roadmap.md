@@ -6,7 +6,7 @@
 > 既有 per-machine、生产签名、交互 UI、干净宿主及重启等外部验收仍各自记录，不阻塞新增功能开发，也不冒充已通过。
 
 本文档是项目后续路线的规范入口；
-跨格式执行规则见 [`docs/development-rules.md`](development-rules.md)，各格式决策/契约/能力状态各见其 `docs/formats/` 文档（如 [`nsis.md`](formats/win-nsis.md)、[`msi.md`](formats/win-msi.md)）。
+跨格式执行规则见 [`docs/development-rules.md`](development-rules.md)，各格式决策/契约/能力状态各见其 `docs/formats/` 文档（如 [`win-nsis.md`](formats/win-nsis.md)、[`win-msi.md`](formats/win-msi.md)）。
 它们使后续开发不依赖某一次对话或某个 AI 的记忆。
 
 - `PROJECT_CONTEXT.md` 记录当前实现事实与验证证据；
