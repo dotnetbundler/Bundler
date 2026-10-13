@@ -16,7 +16,7 @@
 3. 读 `PROJECT_CONTEXT.md` 文首的当前事实（分支、包版本、当前阶段、下一步）。
 4. 读 `docs/roadmap.md` 的产品边界与格式顺序。
 5. 读 `README.md` 了解面向用户的当前能力。
-6. 读当前格式的专属文档 `docs/formats/` 下对应文件；
+6. 读当前格式的专属文档 `docs/formats/` 下对应文件；需要理解整体管线时读 `docs/architecture.md`；
    只能人工/外部条件完成的特殊验收与外部待办统一登记在 `docs/special-acceptance.md`。
 7. 读与将做工作直接相关的代码、测试和 fixture。
 8. 需要历史背景时查 git 提交与 PR 记录；格式文档留设计决策、语义契约与能力状态，已完成格式的阶段过程不逐条留档。
@@ -86,6 +86,7 @@ git status --short
 | `docs/formats/<platform>-<format>.md` | 该格式的设计决策、语义契约、逐项能力状态与验收边界（一格式一文档） | 泛用规则、过程记录、其他格式内容 |
 | `docs/targets.md` | 目标语法、架构词与产物命名契约 | 宿主支持矩阵 |
 | `docs/support-matrix.md` | 格式×平台生产/消费支持与签名宿主总览 | 目标语法、逐项能力 |
+| `docs/architecture.md` | 实现原理：输入模型、入口、门面、规划、编排、工作目录、工具缓存、命名、UPDATE 挂点 | 规则、格式专属契约、当前事实 |
 | `docs/cli.md`、`docs/update.md`、`docs/signing.md` | CLI、UPDATE 模块、签名横切面的决策与能力状态 | 单格式契约、项目不变量 |
 | `README.md` | 面向使用者的能力与用法 | 协作规则、阶段计划 |
 | `samples/<name>/*-sample.md` | 该示例的操作说明 | 后端规则、阶段证据 |
