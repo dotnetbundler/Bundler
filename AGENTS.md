@@ -71,6 +71,9 @@ git status --short
 | `docs/roadmap.md` | 产品边界、格式顺序、未来计划 | 协作规则细则、格式实现细节 |
 | `PROJECT_CONTEXT.md` | 当前事实：版本、阶段、最近验证、未决问题、下一步 | 规则、历史分轮记录、格式专属细节 |
 | `docs/formats/<platform>-<format>.md` | 该格式的设计决策、语义契约、逐项能力状态与验收边界（一格式一文档） | 泛用规则、过程记录、其他格式内容 |
+| `docs/targets.md` | 目标语法、架构词与产物命名契约 | 宿主支持矩阵 |
+| `docs/support-matrix.md` | 格式×平台生产/消费支持与签名宿主总览 | 目标语法、逐项能力 |
+| `docs/cli.md`、`docs/update.md`、`docs/signing.md` | CLI、UPDATE 模块、签名横切面的决策与能力状态 | 单格式契约、泛用规则 |
 | `README.md` | 面向使用者的能力与用法 | 协作规则、阶段计划 |
 | `samples/<name>/*-sample.md` | 该示例的操作说明 | 后端规则、阶段证据 |
 | `tests/README.md` | 测试入口、门禁与 fixture 地图 | 测试结果记录 |
@@ -90,7 +93,7 @@ dotnet test tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj -
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 ```
 
-按格式/腿/资源筛选集成测试见 `tests/README.md` 与 `docs/development-rules.md` 的命令节；MSI 真装腿需要 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 同意闸。
+按格式/腿/资源筛选集成测试见 `tests/README.md`（`--` 后接 `--filter-class` 等传参约定与 trait 门禁以其为准）；MSI 真装腿需要 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 同意闸。
 
 ## 6. 阶段结束
 

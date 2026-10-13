@@ -33,7 +33,7 @@
 ## 3. 分发形态与宿主边界
 
 - **`dotnet tool`**：`DotNet.Bundler.Cli` nupkg（PackAsTool，`bundler` 命令），需 `DOTNET_ROOT` 指向 SDK 安装。
-- **原生 AOT 二进制**：`dotnet publish -r <rid>` 免运行时 ELF/PE。
+- **原生 AOT 二进制**：`dotnet publish -r <rid>` 免运行时 ELF/PE；单二进制按 RID 裁剪自研后端——`win-*` 剔 `MacDmg`/`MacPkg`/`AppImage`，`linux-*` 剔 `Wix`/`MacDmg`/`MacPkg`，`osx-*` 剔 `Wix`/`AppImage`；`MacApp` 全宿主保留（非 mac 宿主可产未签名 `.app`），`Nsis`/`Deb`/`Rpm`/`Archive`/`AlpineApk` 全保留；被剔格式分发时抛 `PlatformNotSupportedException`，对应 `bundler.json` 段与 `--<fmt>.<knob>` 覆盖报"本宿主不支持"错误；无 RID 构建保留全部后端。
 - Windows/macOS/Linux 全格式经六宿主 CI 矩阵验证（各宿主跑其可产格式）。
 - centos7 等旧 glibc 宿主**明确不支持**：CLI 为 net10.0 托管工具且 AOT 走现代 glibc；产物 `.deb`/`.rpm` 装向 centos7 无格式障碍（载荷运行时兼容属载荷侧）。MSBuild 入口（netstandard2.0 程序集）理论上可被 .NET 6 SDK 加载，灰色组合未验证不承诺。
 

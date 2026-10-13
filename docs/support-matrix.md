@@ -1,4 +1,4 @@
-# 打包能力平台支持矩阵
+# 平台支持矩阵
 
 - `msbuild` 方式打包只要能安装 `.NET SDK` 的机器都能使用，见[安装 .NET](https://learn.microsoft.com/en-us/dotnet/core/install/)。
 - `cli` 方式打包的支持与发布时对应的 .NET 的支持一致，见[.NET 支持的操作系统策略](https://github.com/dotnet/core/blob/main/os-lifecycle-policy.md)。

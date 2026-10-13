@@ -6,19 +6,18 @@ Core 和格式后端本身不依赖 `.csproj` 或 .NET 应用模型，`bundler` 
 
 ## 当前状态
 
-第一条已冻结的链路是 Windows + NSIS。
-MSI 已完成 WIN-MSI-1..9，`alpha.37` 是既有 x64/ARM64 身份基线；
-`alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 翻译覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式，`alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 读取前 NSIS 安装目录延续）。
-WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线；`alpha.44` 在其上只做跨格式收尾。
-现有 MSI 用法以本文实际配置为准，能力逐项对照见 [`docs/formats/win-msi.md`](docs/formats/win-msi.md)。
-`bundler` CLI 已完成并入 `main`（CLI-C1 冻结于 `0.1.0-alpha.62`，dotnet tool nupkg 与原生 AOT 二进制双分发，用法见下文）；macOS `.app`/`.dmg`/`.pkg` 均已冻结（MAC-APP-1..5 / MAC-DMG-1..5 冻结基线 `0.1.0-alpha.45`，MAC-PKG-1..5 冻结基线 `0.1.0-alpha.47`）。
-Linux `.deb` 已冻结并入 `main`（`LINUX-DEB-1..5`，冻结基线 `0.1.0-alpha.51`）：纯托管 ar/tar/gzip 写入器（无原生工具依赖、任意构建宿主可产出），control 全字段+维护者脚本+conffiles+systemd unit+桌面集成，`sudo dpkg -i/-r/-P` 真实装卸、lintian 硬断言、docker debian/ubuntu 矩阵全部验证。
-Linux `.rpm` 已冻结并入 `main`（`0.1.0-alpha.55`，`LINUX-RPM-1..5`）：纯托管 lead/header/cpio/gzip 写入器，六族关系字段 + License/Group/Url + freedesktop 桌面集成（.desktop/图标/metainfo）+ 任意路径映射 + 四 scriptlet/systemd unit/%config(noreplace)，`rpm -qip` 逐字段断言、`desktop-file-validate`、docker `fedora/rockylinux/opensuse` 三容器真实 `rpm -i`/`rpm -U`/`rpm -e` 与 `.rpmsave` 语义验证、`rpmlint` 豁免清单硬基线、`deb;rpm` 同次 publish 扇出已放开；可选 OpenPGP 签名（供私钥即嵌 `RPMSIGTAG_RSA`+`PGP` 双标签，`rpm -K`/zypper/dnf 实测验签通过）。
-Linux `.AppImage` 已冻结并入 `main`（`LINUX-APPIMAGE-1..4` 完成，冻结基线 `0.1.0-alpha.58`）：`DotNet.Bundler.AppImage` 内嵌固定版本 `appimagetool`+type2 runtime（SHA-256 provenance、不联网下载），AppDir 组装复用共享 freedesktop 件 + 脚本式 `AppRun` + 根 `.desktop` 符号链接/`.DirIcon`/`@(BundlerAppImageFile)` 任意映射，仅 Linux 宿主构建、x86_64 宿主可交叉产 aarch64；`--appimage-extract` 结构断言、解出程序真实运行、docker 三容器 extract-and-run 冒烟、`deb;rpm;appimage` 扇出全绿；可选 GPG 签名（供 OpenPGP 私钥即走 `appimagetool --sign`，`gpgv` 实测验签通过）。
-通用 `.zip`/`.tar.gz` 归档已冻结并入 `main`（`ARCHIVE-1..3` 完成，冻结基线 `0.1.0-alpha.59`）：`DotNet.Bundler.Archive` 纯托管写入器（zip 自实现 unix mode/symlink，tar.gz 复用共享 ustar 写入器），单顶层目录 `<pkg>-<ver>-<target>/` 布局，执行位与符号链接双保留，`.sha256` 侧车，`BundlerFormats=zip;targz` 与 `deb;rpm;appimage;zip;targz` 扇出；`unzip`/`zipinfo -l`/`tar` 真实解包逐路径断言、解出载荷运行、mode/symlink 还原断言全绿。
-Alpine `.apk` 已冻结并入 `main`（`0.1.0-alpha.63`，`APK-1..5` 完成、PR #13 终审合并）：`DotNet.Bundler.AlpineApk` 纯托管三段 gzip 写入器（签名段+控制段 `.PKGINFO`/六脚本+数据段），`linux-musl-x86_64`/`linux-musl-aarch64` → `x86_64`/`aarch64`,逐文件 pax `APK-TOOLS.checksum.SHA1`、`depend`/`provides`/`triggers`/`license`/`release`/`builddate` 与 `@(BundlerAlpineApkFile)` 任意绝对路径映射，可选 RSA 签名（`.SIGN.RSA.<密钥名>.rsa.pub`，公钥入 `/etc/apk/keys/` 后免 `--allow-untrusted`）；`alpine:latest` 容器 x86_64 直跑 + aarch64 qemu binfmt 真实 `apk add`/`apk del` 全绿。
-全后端统一示例见 [`samples/HelloBundlerApp`](samples/HelloBundlerApp/hello-bundler-app-sample.md)：单个工程覆盖全部 11 种格式的全部公开旋钮——公共旋钮在主工程，各后端专属旋钮按 `formats/<Format>.props` 导入（用户项目可直接复制该组织方式）。
-各格式打包/消费的平台支持范围汇总见 [`docs/platform-support-matrix.md`](docs/platform-support-matrix.md)。
+全部打包格式、CLI 与 UPDATE 自更新模块均已冻结（冻结=功能面不再扩展，缺陷修复照走）。
+
+| 平台 | 格式 | 文档 |
+| --- | --- | --- |
+| Windows | `nsis`、`msi` | [`docs/formats/win-nsis.md`](docs/formats/win-nsis.md)、[`win-msi.md`](docs/formats/win-msi.md) |
+| macOS | `.app`、`.dmg`、`.pkg` | [`mac-app.md`](docs/formats/mac-app.md)、[`mac-dmg.md`](docs/formats/mac-dmg.md)、[`mac-pkg.md`](docs/formats/mac-pkg.md) |
+| Linux | `.deb`、`.rpm`、`.AppImage`、Alpine `.apk` | [`linux-deb.md`](docs/formats/linux-deb.md)、[`linux-rpm.md`](docs/formats/linux-rpm.md)、[`linux-appimage.md`](docs/formats/linux-appimage.md)、[`linux-alpine-apk.md`](docs/formats/linux-alpine-apk.md) |
+| 跨平台 | `.zip`/`.tar.gz` | [`archive.md`](docs/formats/archive.md) |
+| 其他 | `bundler` CLI、UPDATE、签名 | [`cli.md`](docs/cli.md)、[`update.md`](docs/update.md)、[`signing.md`](docs/signing.md) |
+
+各格式打包/消费的平台支持范围汇总见 [`docs/support-matrix.md`](docs/support-matrix.md)。
+全后端统一示例见 [`samples/HelloBundlerApp`](samples/HelloBundlerApp/hello-bundler-app-sample.md)：单个工程覆盖全部格式的全部公开旋钮——公共旋钮在主工程，各后端专属旋钮按 `formats/<Format>.props` 导入（用户项目可直接复制该组织方式）。
 
 实现已经拆分为可复用的 NuGet 包。
 `DotNet.Bundler` 只是便利元包，实际打包代码位于以下各层。
@@ -67,11 +66,7 @@ bundler init && bundler bundle --input-dir <publish目录>
 
 也可用 `bundler.json` 承载配置（自动发现于当前目录；CLI 参数覆盖文件值，`--<fmt>.<knob>=` 透传格式旋钮，`--no-config` 跳过自动发现），schema 与 MSBuild `Bundler*` 属性一一对应，映射表与退出码/`--json` 契约见 [`docs/cli.md`](docs/cli.md)。
 后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。
-WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..9` 的当前主机范围验证：current-user 安装、升级、修复和卸载，快捷方式与关联/协议候选注册，测试证书签名、英语/简体中文单语言包及受限故障回滚，x86 目标、显式 MSI 版本映射和可选降级，范围内安装目录、自定义 UI 序列、可选 Feature、PATH 精确追加与仅交互启动勾选，多语言输入资源与构建选项、受控 WiX 扩展与专家模式，以及通用能力审计与再冻结。
-MSI 编译把 WiX 警告视为失败，PackageCode 由 WiX 每次构建生成。
-per-machine 包仅生成并检查数据库；原生 x86/ARM64 宿主、生产证书、交互 UI、提权安装、干净 Windows 和真实重启尚未验收。
-**冻结的是 alpha 格式配置及已验证语义；2026-09-29/30 已完成四宿主跨环境联合验收（win/linux/mac/qemu 互产互装、四轮全绿），其余环境类能力按 [`docs/special-acceptance.md`](docs/special-acceptance.md) 如实保留外部待验收。**
-可操作的当前能力示例见 [`samples/HelloBundlerApp/hello-bundler-app-sample.md`](samples/HelloBundlerApp/hello-bundler-app-sample.md)，实施状态见 [`docs/formats/win-msi.md`](docs/formats/win-msi.md)。
+MSI 语义契约（current-user/per-machine、版本映射与升降级、旧 MSI 迁移、WiX 扩展与专家模式、38 语言产物）与验证边界见 [`docs/formats/win-msi.md`](docs/formats/win-msi.md)；外部待验收项登记在 [`docs/special-acceptance.md`](docs/special-acceptance.md)。
 
 `DotNet.Bundler.Wix` 是可独立引用的 MSI 后端包和直接 API；MSBuild 调用同一后端。
 跨格式的开发与包消费规则见 [`docs/development-rules.md`](docs/development-rules.md)。
@@ -483,81 +478,9 @@ Header 图片建议为 150×57 BMP，Sidebar 图片建议为 164×314 BMP。
 </ItemGroup>
 ```
 
-默认模板提供当前用户安装、可选择并记住上次位置的安装目录、非本应用的非空目录警告、DPI 感知、压缩、可选的开始菜单与桌面快捷方式、运行程序检测和关闭、“应用和功能”卸载信息、可选删除应用数据、静默卸载以及完成页启动程序。
-运行程序检测通过 Windows Restart Manager 注册安装目录中的当前主程序和显式声明的旧主程序完整路径，不再按映像文件名全局结束进程，因此不会关闭其他目录下的同名程序。
-快捷方式的默认选择、参数、工作目录、图标、稳定 AppUserModelID 和开始菜单目录均可配置；工作目录和图标必须存在于最终安装载荷中。
-更新只刷新仍存在且仍指向当前主程序或显式声明旧主程序的快捷方式；卸载采用相同所有权检查，因此同名快捷方式被其他程序接管后会保留。
-旧产品名和旧主程序名用于显式迁移改名版本。
-任务栏/开始菜单自动取消固定受 Windows 版本行为影响，目前只列为人工验收项，不宣称保证支持。
-未选择删除应用数据时，卸载只删除程序目录中属于构建载荷的路径：程序后来在新路径创建的文件会保留；如果创建或覆盖的是构建载荷中的同名路径，卸载时仍会删除。
-选择删除应用数据时，会递归删除整个程序安装目录，以及 `%APPDATA%\<identifier>` 和 `%LOCALAPPDATA%\<identifier>`。
-
-NSIS 安装和升级在修改持久状态前会把原安装目录、产品相关注册表项以及受管理的快捷方式写入用户或计算机范围的事务 journal。
-复制、Hook、注册或快捷方式阶段失败时会立即恢复旧状态；如果安装器进程被直接终止，下一次启动同一产品的安装器会先恢复未提交事务。
-journal 与当时选择的安装目录绑定，恢复时目录不一致会安全失败；首次自定义 `/D` 安装若在写入安装记录前中断，重试时应继续传入同一 `/D`。
-事务提交先把 journal 原子重命名为 `.committed`，再尽力删除快照；提交后的清理失败不会错误回滚已经完成的安装，而由下一次启动重试清理。
-构建输入、资源、安装快照、恢复树、journal 和工具缓存统一采用“不跟随链接”的策略：遇到 symlink、junction 或其他重解析点即在越界读写前失败，清理链接时只删除链接本身。
-快照会临时占用接近现有安装目录大小的额外磁盘空间。
-普通文件的内容、基础属性和时间戳会进入安装快照，但不承诺逐项保真恢复自定义 ACL、ADS、稀疏文件等任意文件系统元数据；需要这些语义的应用应把它们当作产品专属迁移，而不是依赖通用打包器猜测。
-旧 MSI 卸载是外部且不可逆的迁移边界；没有原 MSI 包时无法自动恢复，因此只保证迁移后新 NSIS 状态失败时会被清理，不宣称能重新安装已移除的 MSI。
-
-卸载采用独立的前向恢复 journal，而不是回滚事务。
-开始删除前会保存安装目录、删除应用数据选择和一份恢复卸载器；进入 active 后若 Hook 失败或进程中断，已完成的删除不会被伪装成可撤销，下次启动同一产品安装器时会先校验注册表中的安装目录，再用 journal 副本幂等完成剩余删除。
-卸载注册项保留到 finalizing 阶段作为受保护的路径锚点，完成后才删除并原子提交 journal。
-卸载 Hook 因此必须可重复执行；选择 `/DELETEAPPDATA` 和 `/REBOOTOK` 进入系统待删除队列的意图都会跨恢复保留。
-
-版本必须符合 SemVer 2.0，并且三个数字核心段都必须处于 Windows 版本资源允许的 `0-65535` 范围。
-安装器会在所选用户或计算机注册表上下文中检测现有安装，并通过包内使用 `NsisPlugin` 构建的 Native AOT 插件比较 `DisplayVersion`。
-交互安装允许用户选择先卸载或原位覆盖；静默同版本安装执行原位修复，静默升级会先卸载旧的构建载荷，同时保留应用数据。
-默认禁止降级，可通过 `BundlerNsisAllowDowngrades` 开启。
-
-仓库的 Windows 集成矩阵会在事务快照、事务激活、载荷恢复、注册表恢复和 active journal 清理检查点注入一次性可控故障，验证未修改旧状态的安全失败以及下次启动的重入恢复。
-这些是确定性测试检查点，不代替真实 ACL 拒绝、磁盘耗尽或断电/重启环境验收。
-
-跨版本配置变化后，恢复目标必须与创建 active journal 的原安装器清单一致。
-新版安装器遇到不同的关联、协议或快捷方式清单时会保留 journal 并返回 `6`。
-若原安装器支持 `/RECOVERONLY`，用创建 journal 的原安装器执行 `"<原安装器.exe>" /S /RECOVERONLY /D=<原安装目录>`；该模式只恢复旧状态，退出码为 `0` 后再运行新版安装器。
-更早、不支持该开关的原安装器仍可按原安装范围和目录重试，由它先自动恢复再继续自身安装；不能将其当作“仅恢复”模式。
-若原安装器不可用或自身安装也无法完成，必须保留 journal 并取得可信原包或人工排障，不能删除 journal 或放弃清单校验强行继续。
-安装范围必须与原安装器一致。
-
-恢复前会核对安装快照摘要，卸载前向恢复副本会与安装时登记在卸载注册项中的卸载器哈希比对。
-摘要和哈希用于发现静态篡改或损坏；`currentUser` 用户同时可修改自己的 journal 与 HKCU 锚点，不构成抵御同一用户恶意篡改的安全边界。
-提权安装的实际边界还取决于 ProgramData journal 和 HKLM 的 ACL，见人工验收文档。
-
-### 安装器命令行协议
-
-这些参数属于生成后的 NSIS 安装器接口，不是 MSBuild 属性：
-
-| 参数 | 行为 |
-| --- | --- |
-| `/S` | NSIS 原生静默模式，不显示窗口 |
-| `/P` | 被动安装或卸载，只显示进度并跳过需要输入的页面 |
-| `/UPDATE` | 自动更新模式；未同时指定 `/S` 时隐含 `/P`，原位覆盖并保留现有快捷方式状态和应用数据 |
-| `/NS` | 不创建桌面和开始菜单快捷方式 |
-| `/DELETEAPPDATA` | 卸载时连同应用数据目录一并删除（重卸载后可恢复的 journal 语义下仍生效） |
-| `/REBOOTOK` | 允许卸载把删不掉的锁定文件排入重启后删除队列（返回 3010） |
-| `/RECOVERONLY` | 只用当前安装器清单恢复 active 安装 journal，不安装新版本；应与 `/S` 和原安装目录的 `/D=` 一起使用 |
-| `/R` | 成功后以桌面用户而非安装器管理员令牌启动应用；只允许与 `/S`、`/P` 或 `/UPDATE` 一起使用 |
-| `/ARGS=<参数行>` | 与 `/R` 配合，把参数直接传给应用，不经过 `cmd.exe` 或 PowerShell |
-| `/D=<目录>` | NSIS 原生安装目录参数，必须是整条命令的最后一个参数 |
-
-`/ARGS` 也兼容不带等号的写法，此时它后面的全部文本都会成为应用参数。
-需要同时使用 `/D` 时应使用 `/ARGS=<参数行>`，并仍把 `/D` 放在最后。
-自动模式只接受空目录或带当前产品安装标记的目录；它不会用无交互方式确认覆盖无关的非空目录。
-
-安装器稳定退出码为：`0` 成功、`1` 用户取消、`2` 一般失败或快照内容完整性失败、`3` 参数或自动安装目录无效、`4` 版本策略阻止、`5` 无法关闭正在运行的应用、`6` active journal 与当前安装器恢复清单不同、`3010` 成功但需要重新启动 Windows。
-安装成功且重启标志已经置位时，安装事务会先提交并清理 journal，再返回 `3010`；即使指定 `/R`，也不会在重启前启动应用。
-实际卸载进程也把一般失败映射为 `2`、把 `/REBOOTOK` 已接受的删除映射为 `3010`。
-但直接启动安装目录中的 NSIS `Uninstall.exe` 会先经过自复制 launcher，外层进程不可靠地传播实际退出码；仓库的恢复与验收脚本会先复制卸载器并以 `_?=` 直接模式同步等待真实进程。
-不要把外层 launcher 的 `0` 当成卸载已完成的证据，应同时检查产品状态或使用受控的直接模式。
-
-当前普通安装载荷仍由 NSIS `File` 指令直接写入目标目录，它不会把无法覆盖的锁定文件自动转换成重启后替换。
-这是当前的明确安全策略：Windows 延迟替换需要管理员上下文，不能为 `currentUser` 安装提供一致保证；排入共享系统队列也只能证明请求被接受，不能证明重启时一定成功，更不能安全纳入当前回滚。
-安装器会检测这种跳过并返回 `2`；交互模式会提示关闭可能占用安装目录文件的应用后重试。
-若文件锁也阻止即时回滚，则保留 active journal，待释放锁后的下一次启动先恢复旧状态，绝不把新旧文件混合状态报告为成功。
-因此上述契约不能扩写为“已经支持锁定文件原位升级”：当前可验证的重启来源是旧 MSI 返回值、生命周期 Hook，以及提权卸载的 `/REBOOTOK` 删除。
-真实系统队列验收必须在可丢弃并允许重启的管理员 Windows 环境执行 `tests/Special/win/nsis-reboot.ps1`；脚本不会编辑或清空共享的 `PendingFileRenameOperations`。
+默认模板提供当前用户安装、可选择并记住上次位置的安装目录、运行程序检测和关闭（Restart Manager，不误关同名进程）、可选快捷方式与删除应用数据、静默卸载与完成页启动。
+安装事务 journal 与失败恢复、卸载前向恢复、版本/升级/降级策略、锁定载荷安全失败、安装器命令行协议与退出码的全部语义契约见 [`docs/formats/win-nsis.md`](docs/formats/win-nsis.md)（§4.1–4.13）；
+真实重启等外部验收项见 [`docs/special-acceptance.md`](docs/special-acceptance.md)。
 
 如果产品以前使用 MSI 发布，应配置历史安装包的准确标识，不按产品名猜测：
 
@@ -732,32 +655,17 @@ dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Re
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64
 # 只产某一格式：-p:BundlerFormats=nsis 或 =msi（msi 需 Windows 宿主）
-# 集成测试按格式类选择（`--filter-class` 单名过滤，各宿主只跑宿主可用腿）
-dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*NsisIntegrationTests*"
-dotnet test tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj -c Release --filter-class "*MsiLocalPackagesTests*"
-dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*CliIntegrationTests*"
+# 集成测试按格式类选择（`--` 后接 `--filter-class` 单名过滤，各宿主只跑宿主可用腿）
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release -- --filter-class "*NsisIntegrationTests*"
+dotnet test tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj -c Release -- --filter-class "*MsiLocalPackagesTests*"
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release -- --filter-class "*CliIntegrationTests*"
 ```
 
 Linux/macOS 宿主对应的真实集成按同规则选类（`DebIntegrationTests`/`RpmIntegrationTests`/`AppImageIntegrationTests`/`ArchiveIntegrationTests`/`AlpineApkIntegrationTests`/`MacAppIntegrationTests`/`MacDmgIntegrationTests`/`MacPkgIntegrationTests`）；
 真装腿另需同意闸与资源 trait 过滤，完整选择方式见 [`tests/README.md`](tests/README.md)。
 
-NSIS Windows 集成测试会把专用测试程序安装到包含中文和空格的目录，验证载荷、外部资源、元数据、注册表、快捷方式和进程关闭，分别执行保留数据与彻底删除数据的卸载，并在 `finally` 中清理测试状态。
-
-MSI 集成测试每轮从本地包源还原，并核对隔离缓存中的实际包版本。
-基础腿先把独立 API fixture 放在仓库外，只引用 `DotNet.Bundler.Wix` 生成真实 MSI；再用便利元包的 MSBuild fixture 执行真实安装/卸载。
-生命周期腿生成两版本和同版本异内容包，检查升级、降级/异包拒绝、桌面注册、快捷方式及用户文件保留。
-维护腿验证被动安装/卸载、静默修复、测试专用包的延迟故障回滚。
-公开示例腿只构建三种 MSI 变体并检查数据库，不安装示例产品。
-真装腿需 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 同意闸。
-干净宿主、ARM64、UAC、真实重启与生产证书仍按 MSI 人工验收文档执行。
-
 只能人工/外部付费完成的验收统一登记在 [`docs/special-acceptance.md`](docs/special-acceptance.md)。
 仓库可自动化的测试仍由上述命令执行，不转为人工清单。
-
-Abstractions 保存跨包稳定契约。
-Core 实现与格式无关的校验、规划、编排、工作目录生命周期和通用 ZIP 工具缓存。
-NSIS 项目包含公共后端 API、NSIS 专属配置、模板、进程执行和资源。
-MSBuild 与开发用 CLI 都只是这些包的适配层，不实现 NSIS 打包逻辑。
 
 ## 安全与许可证
 
