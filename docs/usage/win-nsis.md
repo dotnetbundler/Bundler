@@ -111,7 +111,7 @@ MSBuild 前缀 `BundlerNsis*`；`bundler.json` 分节 `nsis.*`（`--nsis.<knob>`
 
 复制 `src/Bundler.Nsis/templates/installer.nsi`，把 `BundlerNsisTemplate` 指到副本绝对路径。
 必须保留签名两阶段编译占位符 `uninstaller_finalize_command`/`uninstaller_import_define`/`signed_uninstaller`；用配置压缩时保留 `compression_directive`。
-其余变量：`product_name` `version` `numeric_version` `publisher` `identifier` `main_executable` `install_folder` `install_mode` `target_architecture` `allow_downgrades` `legacy_msi_product_codes` `legacy_msi_upgrade_codes` `input_glob` `output_file` `estimated_size` `plugin_directory` `uninstall_payload` `language_macros` `language_files` `display_language_selector`，写法 `{{name}}`。
+模板占位符共 51 个（写法 `{{name}}`），分身份（`product_name`/`version`/`numeric_version`/`publisher`/`identifier`/`copyright`/`description`/`homepage*`）、安装（`main_executable`/`install_folder`/`install_mode`/`target_architecture`/`allow_downgrades`/`input_glob`/`output_file`/`estimated_size`/`plugin_directory`/`uninstall_payload`）、迁移（`legacy_msi_*`）、语言（`language_*`/`display_language_selector`）、快捷方式（`shortcut_*`×10）、事务 journal（`transaction_*`×5）、文件关联（`association_*`）、资源（`resource_install_commands`）、许可页（`license_page`）、Hook（`installer_hooks_include`）、图标（`installer_icon_directives`）等族——**丢弃 `transaction_*`/`shortcut_*` 占位会静默失去 journal 恢复与快捷方式功能**；完整集合以 `templates/installer.nsi` 的 `{{…}}` 为准。
 
 ### 4.5 签名
 

@@ -5,7 +5,7 @@
 ## 1. 接入
 
 - 后端包 `DotNet.Bundler.AlpineApk`（`netstandard2.0`）。
-- 目标：仅 `linux-musl-x86_64`/`linux-musl-aarch64`（架构映射 `x86_64`/`aarch64`）。
+- 目标：`linux-musl-*`（架构词映射 `x86_64`/`x86`/`aarch64`/`armv7`/`armel`/`riscv64`/`loongarch64`/`ppc64le`/`s390x` 等 musl 架构）。
 
 ## 2. 最小使用
 

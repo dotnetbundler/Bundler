@@ -5,7 +5,7 @@
 ## 1. 接入
 
 - 后端包 `DotNet.Bundler.Rpm`（`netstandard2.0`）：**任意宿主可构建**。
-- 目标：`linux-x86_64`/`linux-i686`/`linux-aarch64`（架构映射 `x86_64`/`i686`/`aarch64`）。
+- 目标：全部 `linux-*`；架构词映射 `x86_64`/`i686`/`aarch64`/`armv7hl`/`riscv64`/`loongarch64`/`ppc64le`/`s390x` 等（`Architecture` 显式可覆盖，如 `noarch`）。
 
 ## 2. 最小使用
 
@@ -26,8 +26,8 @@ MSBuild 前缀 `BundlerRpm*`；`bundler.json` 分节 `rpm.*`；API `RpmBundleCon
 
 | MSBuild | `rpm.*` / API | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `BundlerRpmPackageName` | `packageName` | `BundlerProductName` kebab-case | `[A-Za-z0-9][A-Za-z0-9+._-]+` 且≥2 字符 |
-| `BundlerRpmVersion` | `version` | SemVer→rpm 映射 | 显式值禁含 `-`，须 `[0-9A-Za-z.+_]+`；预发布段→Release `0.<n>.<label>`，`+build`→Release 后缀 |
+| `BundlerRpmPackageName` | `packageName` | `BundlerProductName` kebab-case | `[A-Za-z0-9][A-Za-z0-9+._-]*` |
+| `BundlerRpmVersion` | `version` | SemVer→rpm 映射 | 显式值禁含 `-`，须 `[0-9A-Za-z.+_]+`；预发布段→Release `0.1.<label>`，`+build`→Release 后缀 |
 | `BundlerRpmRelease` | `release` | `1`（或映射值） | rpm Release 字符串 |
 | `BundlerRpmEpoch` | `epoch` | 无 | 非负整数写 EPOCH tag，不进文件名 |
 | `BundlerRpmArchitecture` | `architecture` | RID 映射 | rpm 架构名（可 `noarch`） |

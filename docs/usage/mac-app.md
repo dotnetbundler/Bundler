@@ -42,8 +42,8 @@ MSBuild 前缀 `BundlerMacApp*`；`bundler.json` 分节 `app.*`；API `MacAppBun
 ### 3.2 图标
 
 图标一律经共享 `@BundlerIcon` 项（JSON `icons[]` / API `BundleConfiguration.Icons`）进入，按扩展名自动分模式：
-`.png`（位图集自动合成 `.icns`）/ `.icns`（直给）/ `.car`（预编译 asset 目录）/ `.icon` 目录（Icon Composer，macOS 26+ 宿主 `actool` 编译）。
-`BundlerMacAppIconName`（`iconName`/`IconName`）默认 `AppIcon`，是 `CFBundleIconName`（car/icon 模式下须匹配 asset 名）。
+`.png`（位图集自动合成 `.icns`）/ `.icns`（直给）/ `.car`（预编译 asset 目录）/ `.icon` 目录（Icon Composer，需 macOS 宿主上 Xcode 26+ 的 `actool`，缺失/过旧时降级警告回退 `.icns` 路径）。
+`BundlerMacAppIconName`（`iconName`/`IconName`）默认 `AppIcon`：位图/`.icns` 模式下产 `<名>.icns` 并写 `CFBundleIconFile`；`.car`/`.icon` 模式无效（`CFBundleIconName` 由 `assetutil` 从 asset 目录回读）。
 
 ### 3.3 文件关联与 URL scheme
 

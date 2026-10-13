@@ -182,6 +182,6 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 
 - `BundlerIdentifier` 警告：显式设置正式 identifier 消警。
 - `-p:` 传分号列表：必须 `%3B` 转义（`-p:BundlerFormats=nsis%3Bmsi`）。
-- MSI/mac 宿主门禁：`msi` 仅 Windows 宿主、`dmg`/`pkg` 仅 macOS、`appimage` 仅 Linux；不满足在验证期即报。
+- MSI/mac 宿主门禁：`msi` 仅 Windows 宿主、`dmg`/`pkg` 仅 macOS、`appimage` 仅 Linux；`bundler validate` 对宿主不可产格式静默跳过，`bundle` 在对应构建腿按格式报错 rc=1（MSBuild 任务同构）。
 - x86 载荷运行前置：`windows-i686` 包在仅 x64 运行时宿主上启动报 `0x800700C1`，属目标环境前置。
 - 工具缓存损坏：删 `%LOCALAPPDATA%\DotNetBundler\tools`（或 `BundlerToolCachePath` 所指）后重构建，跨进程锁内自动安全重建。
