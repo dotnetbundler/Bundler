@@ -6,10 +6,10 @@
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；基础目标模型重构已完成并入 `main`（alpha.90–93）——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `CpuArchitecture` 族序重排 + `BundlerTarget` `{os}[-{libc}]-{arch}` canonical GNU 词（别称仅输入归一，产物文件名层用各生态词），契约与全产物名目录见 `docs/target-matrix.md`**
 > 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
 > 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——总览见 `docs/signing.md`，细节见各格式文档
-> 实施证据以 git 提交与 PR 记录为准，各格式 `docs/<format>.md` 只留设计决策、语义契约与能力状态
+> 实施证据以 git 提交与 PR 记录为准，各格式 `docs/formats/` 单文档只留设计决策、语义契约与能力状态
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
-> 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；各格式细节在各 `docs/<format>.md`。
+> 规则在 `docs/development-rules.md`；产品顺序在 `docs/roadmap.md`；各格式细节在 `docs/formats/` 下对应文档。
 > 本文内容须与 Git、代码和测试一致；不一致时以后三者为准并先修正本文。
 
 ## 1. 项目结构（现况）
@@ -57,19 +57,19 @@ src/ 各工程共享元数据（`Authors`/`PackageVersion`/`PackageReadmeFile`/`
 
 ### Windows + NSIS（已冻结，`71a5c90`，基线 `0.1.0-alpha.31`，alpha.32/33 journal 加固）
 
-实现契约（自动化协议、退出码、事务 journal、前向恢复、快捷方式规则、签名管线、工具供应、原生插件）与能力状态见 [`docs/nsis.md`](docs/nsis.md)；人工/外部待办统一登记在 `docs/special-acceptance.md`。
+实现契约（自动化协议、退出码、事务 journal、前向恢复、快捷方式规则、签名管线、工具供应、原生插件）与能力状态见 [`docs/formats/win-nsis.md`](docs/formats/win-nsis.md)；人工/外部待办统一登记在 `docs/special-acceptance.md`。
 
 ### Windows + WiX/MSI（已冻结，`0.1.0-alpha.43`）
 
 WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言独立产物、自定义 UI 序列、显式版本映射与升级/降级策略、旧 MSI 迁移与自动检测、受控 WiX 扩展与专家模式、可选 Authenticode 签名。
-设计决策、语义契约与能力状态见 [`docs/msi.md`](docs/msi.md)。
+设计决策、语义契约与能力状态见 [`docs/formats/win-msi.md`](docs/formats/win-msi.md)。
 
 ### macOS（`.app`/`.dmg`/`.pkg` 均已冻结，基线 `alpha.45`/`alpha.45`/`alpha.47`）
 
 - `.app`：骨架/Info.plist 生成（Bundle 键、文件关联 `CFBundleDocumentTypes`+UTI 导出、URL scheme、ATS 例外域、调用方 plist 文件或内联合并）、`.icns` 图标（PNG 合成、`.car` 直通、`.icon` 经 `actool` 编译）、托管 Mach-O fat/thin 校验；签名管线 inside-out `codesign`（ad-hoc/identity/p12 临时钥匙串三模式）+ hardened runtime + entitlements + 显式公证（ditto→notarytool→stapler，凭证显式配置或 `APPLE_*` 环境回退）。
 - `.dmg`：`hdiutil` 全链（UDRW→attach→拖放布局→convert），压缩 `Ulmo`/`Udzo`/`Udbz`，Finder 窗口布局全旋钮 + 无 GUI 会话自动降级，背景图/卷图标/`udifrez` SLA 注入，`codesign` 本体签名。
 - `.pkg`：`pkgbuild` 组件包 + `productbuild` 分发包（标题/欢迎/许可/结语页、`system`/`current-user-home` 域、`BundlerMacPkgFile` 任意载荷、`--scripts` 专家脚本），`pkgbuild --sign`/`productsign` 签名与 notarytool 公证管线；per-user 域免提权真实安装已验。
-- 已登记分歧：macOS 打包工具不可再分发，采用"宿主工具检测+版本下限"策略（见 `docs/mac-app.md` 等 `mac-*.md`）；缺 codesigning 身份等外部条件统一登记在 `docs/special-acceptance.md`。
+- 已登记分歧：macOS 打包工具不可再分发，采用"宿主工具检测+版本下限"策略（见 `docs/formats/mac-*.md`）；缺 codesigning 身份等外部条件统一登记在 `docs/special-acceptance.md`。
 - `osx` 通用 RID：MSBuild `BundlerUniversalTargets` 复数 RID 内层发布 + 纯托管 fat 合并器（Mach-O 并片/其余逐字节一致/单边薄拒产），CLI `--input-dir` 可重复多目录合并（PR #14）。
 
 ### 其余格式
@@ -82,7 +82,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - CLI（已冻结，`alpha.62`）：`validate`/`plan`/`bundle` 三命令共用 Core/后端、`bundler.json` 层叠、`--bundles`/`--input-dir`、稳定退出码与 `--json`；dotnet tool nupkg + `PublishAot` 原生二进制双分发。
 - UPDATE（已冻结，`alpha.74`，PR #27）：静态 JSON 清单 feed + ECDSA P-256 分离签名（`.sig`+`feed.sig` 防降级）+ `bundler-update.json` 身份旁车 + 外置 AOT 引导件（shell 降级）；nsis/msi 重跑安装器、zip/targz/app/appimage 三段式换包（备份/崩溃恢复/`--rollback`）；block-map 64KiB 差分默认开（实测 83% 复用，失败回落全量）；本地/UNC feed 离线可更新；deb/rpm/apk/dmg/pkg 按权威实践排除；外部待验收见 `docs/special-acceptance.md`。
 
-各格式契约与证据详见 `docs/<format>.md`；外部事项统一登记在 `docs/special-acceptance.md`。
+各格式契约与证据详见 `docs/formats/` 对应文档；外部事项统一登记在 `docs/special-acceptance.md`。
 
 ## 3. 最近验证
 
@@ -106,7 +106,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 ## 5. 未决问题（等待用户或外部输入）
 
 - 各格式外部事项等待对应环境输入，统一登记在 `docs/special-acceptance.md`（生产证书/公证凭证、UAC 提权、真实重启、干净宿主矩阵、语言审校等；MSI 签名已裁决不补集成腿——`Bundler.Tests/WixTests` 三断言已覆盖，时间戳子项已真实嵌入消解，外部仅余生产 CA 信任链）。
-- WiX v3 维护风险已裁决封存：v3 维持现状不再复议（2026-10-05，见 `docs/msi.md` §1 与 `third_party/wix/msi-wix-provenance.md`），非未决项。
+- WiX v3 维护风险已裁决封存：v3 维持现状不再复议（2026-10-05，见 `docs/formats/win-msi.md` §1 与 `third_party/wix/msi-wix-provenance.md`），非未决项。
 - 仓外独立包消费 fixture（`tests/Bundler.LocalPackagesTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`,
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
   还原来源已由 packageSourceMapping 钉死本地源（PR #41，公网同版共存不会选错件）；

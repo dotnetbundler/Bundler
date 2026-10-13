@@ -57,7 +57,7 @@ internal sealed class AppImageBundleBackend(
             ["APPIMAGE_EXTRACT_AND_RUN"] = "1",
             // mksquashfs 标准确定性旋钮：文件系统时间戳钉在 epoch，
             // 同宿主同输入重复构建字节一致（RepeatBuildIsByteIdentical 断言）；
-            // 跨产方 sha 差异属上游 appimagetool 性质，不在承诺范围（见 docs/linux-appimage.md）。
+            // 跨产方 sha 差异属上游 appimagetool 性质，不在承诺范围（见 docs/formats/linux-appimage.md）。
             ["SOURCE_DATE_EPOCH"] = "0"
         };
         context.Logger.Log(BundleLogLevel.Information,
