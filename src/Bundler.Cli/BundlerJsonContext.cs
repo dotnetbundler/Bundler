@@ -27,7 +27,17 @@ namespace DotNet.Bundler.Cli;
     PropertyNameCaseInsensitive = true,
     ReadCommentHandling = JsonCommentHandling.Skip,
     AllowTrailingCommas = true,
-    Converters = [typeof(JsonStringEnumConverter<PackageFormat>), typeof(JsonStringEnumConverter<OutputLayout>)])]
+    Converters = [
+        typeof(JsonStringEnumConverter<PackageFormat>), typeof(JsonStringEnumConverter<OutputLayout>),
+        typeof(JsonStringEnumConverter<NsisInstallScope>), typeof(JsonStringEnumConverter<NsisCompression>),
+#if BUNDLER_HOST_WINDOWS
+        typeof(JsonStringEnumConverter<WixInstallScope>),
+#endif
+        typeof(JsonStringEnumConverter<MacAppTypeRole>), typeof(JsonStringEnumConverter<MacAppHandlerRank>),
+#if BUNDLER_HOST_MACOS
+        typeof(JsonStringEnumConverter<MacDmgCompression>), typeof(JsonStringEnumConverter<MacPkgInstallScope>),
+#endif
+    ])]
 [JsonSerializable(typeof(BundleConfiguration))]
 [JsonSerializable(typeof(BundleResourceConfiguration))]
 [JsonSerializable(typeof(BundleFileAssociationConfiguration))]

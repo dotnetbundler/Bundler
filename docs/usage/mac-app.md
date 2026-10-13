@@ -39,21 +39,17 @@ MSBuild 前缀 `BundlerMacApp*`；`bundler.json` 分节 `app.*`；API `MacAppBun
 | `BundlerMacAppInfoPlistFile` | `infoPlistFile` / `InfoPlistFile` | 无 | 调用方 plist 整文件合并（与 `InfoPlistXml` 二选一；身份键回读拒绝） |
 | `BundlerMacAppInfoPlistXml` | `infoPlistXml` / `InfoPlistXml` | 无 | 内联 XML 合并 |
 
-### 3.2 图标（三模式）
+### 3.2 图标
 
-| 模式 | 配置 |
-| --- | --- |
-| `png`（默认） | `BundlerMacAppIconFile`（PNG 集自动合成 `.icns`）或 `BundlerIcon` PNG |
-| `car` | 预编译 `Assets.car` 经 `BundlerIc*` 项/`Files` 放入，`BundlerMacAppIconName` 匹配其内 asset 名 |
-| `icon`（Icon Composer） | `BundlerMacAppIconSource` 指向 `.icon` 目录，macOS 26+ 宿主 `actool` 编译 |
-
-`BundlerMacAppIconName`（`iconName`/`IconName`）默认 `AppIcon`，是 `CFBundleIconName`。
+图标一律经共享 `@BundlerIcon` 项（JSON `icons[]` / API `BundleConfiguration.Icons`）进入，按扩展名自动分模式：
+`.png`（位图集自动合成 `.icns`）/ `.icns`（直给）/ `.car`（预编译 asset 目录）/ `.icon` 目录（Icon Composer，macOS 26+ 宿主 `actool` 编译）。
+`BundlerMacAppIconName`（`iconName`/`IconName`）默认 `AppIcon`，是 `CFBundleIconName`（car/icon 模式下须匹配 asset 名）。
 
 ### 3.3 文件关联与 URL scheme
 
 | 项 | `app.*` / API | 说明 |
 | --- | --- | --- |
-| `@BundlerMacDocumentType` | `documentTypes` / `DocumentTypes` | `Extensions`/`Name`/`Role`/`Rank`/`ContentTypes`/`MimeType`/`ExportedTypeIdentifier`/`ExportedTypeConformsTo` → `CFBundleDocumentTypes`+UTI 导出 |
+| `@BundlerMacDocumentType` | `documentTypes` / `DocumentTypes` | `Extensions`/`Name`/`Description`/`Role`/`Rank`/`ContentTypes`/`MimeType`/`ExportedTypeIdentifier`/`ExportedTypeConformsTo` → `CFBundleDocumentTypes`+UTI 导出 |
 | `@BundlerMacUrlType` | `urlTypes` / `UrlTypes` | `Schemes`/`Name`/`Role` → `CFBundleURLTypes` |
 
 通用 `BundlerFileAssociation`/`BundlerUrlProtocol` 也会映射成对应项组；格式专属项提供更细的 UTI/角色控制。
@@ -63,7 +59,7 @@ MSBuild 前缀 `BundlerMacApp*`；`bundler.json` 分节 `app.*`；API `MacAppBun
 | 项 | `app.*` / API | 说明 |
 | --- | --- | --- |
 | `@BundlerMacAppFile`（`Destination`） | `files` / `Files` | 任意文件 → `Contents/` 下相对路径 |
-| `@BundlerMacAppFrameworkDirectory`（`Destination`） | `frameworkDirectories` / `FrameworkDirectories` | `Frameworks/` 嵌套目录 |
+| `@BundlerMacAppFrameworkDirectory` | `frameworkDirectories` / `FrameworkDirectories` | 目录原样进 `Contents/Frameworks/`（项值即源目录路径，无 `Destination` 元数据） |
 
 ### 3.5 签名与公证（仅 macOS 宿主）
 
@@ -82,7 +78,7 @@ MSBuild 前缀 `BundlerMacApp*`；`bundler.json` 分节 `app.*`；API `MacAppBun
 | `BundlerMacAppAppleId`/`…ApplePassword`/`…AppleTeamId` | `signing.appleId`/`applePassword`/`appleTeamId` | 凭证模式二：Apple ID 三元组 |
 | `BundlerMacAppNotaryApiKeyFile`/`…KeyId`/`…KeyIssuer` | `signing.apiKeyFile`/`apiKeyId`/`apiKeyIssuer` | 凭证模式三：App Store Connect API key 三元组 |
 
-凭证属性全缺省时按序回退环境变量：`APPLE_PROFILE` → `APPLE_API_KEY_PATH`+`APPLE_API_KEY`+`APPLE_API_ISSUER` → `APPLE_ID`+`APPLE_PASSWORD`+`APPLE_TEAM_ID`，取第一组完整组。
+凭证属性全缺省时按序回退环境变量：`APPLE_PROFILE` → `APPLE_API_KEY_PATH`+`APPLE_API_KEY`+`APPLE_API_ISSUER` → `APPLE_ID`+`APPLE_PASSWORD`+`APPLE_TEAM_ID`，取第一组完整组；某组只出现一部分属配置错误直接抛异常，不会跳到下一组。
 **注意**：独立 `.app` 后端按契约硬拒 `BundlerLicenseFile`（许可载荷归 dmg/pkg）；`formats` 含独立 `app` 时不要配置许可文件。
 
 ## 4. 产物与边界

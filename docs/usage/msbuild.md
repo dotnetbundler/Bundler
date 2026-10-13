@@ -76,10 +76,10 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 | `BundlerPublishRid` | 否 | canonical 表；表外 RID 显式覆盖 |
 | `BundlerFormats` | 否 | 按目标 OS 推导（§3.2） |
 | `BundlerUniversalTargets` | 否 | 无；macOS universal 专用 |
-| `BundlerIdentifier` | 否 | 缺省合成 `dev.bundler.<AssemblyName>` 并打警告；正式发布应显式指定 |
+| `BundlerIdentifier` | 否 | 缺省合成 `dev.bundler.<归一化 AssemblyName>`（小写、非字母数字→`-`、空→`app`）并打警告；正式发布应显式指定 |
 | `BundlerProductName` | 否 | `$(AssemblyName)` |
 | `BundlerVersion` | 否 | `$(Version)` |
-| `BundlerMainExecutable` | 否 | `$(TargetName).exe` |
+| `BundlerMainExecutable` | 否 | Windows 目标 `$(TargetName).exe`，macOS/Linux/universal `$(TargetName)`（无扩展名） |
 | `BundlerPublisher` | 否 | `$(Company)` |
 | `BundlerDescription` | 否 | `$(Description)` |
 | `BundlerHomepage` | 否 | `$(PackageProjectUrl)` |
@@ -88,6 +88,8 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 | `BundlerOutputPath` | 否 | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerOutputLayout` | 否 | `flat`；`byFormat` 按 `artifacts\<format>\` 分格 |
 | `BundlerToolCachePath` | 否 | `%LOCALAPPDATA%\DotNetBundler\tools`；内容寻址共享缓存 |
+| `BundlingDotnetExe` | 否 | 内层 `dotnet publish` 的 dotnet 可执行覆盖（逃生舱） |
+| `BundlerInnerPublishArgs` | 否 | 追加给内层 publish 的原样参数串（逃生舱） |
 
 ## 5. 共享项（全格式通用）
 
@@ -95,7 +97,7 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 <ItemGroup>
   <BundlerIcon Include="Assets\app.ico" />
   <BundlerResource Include="Assets\licenses\**\*">
-    <TargetPath>licenses\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+    <Destination>licenses\%(RecursiveDir)%(Filename)%(Extension)</Destination>
   </BundlerResource>
   <BundlerFileAssociation Include="mydoc" Name="我的应用文档"
       Description="我的应用文档文件" MimeType="application/x-myapp-document" />
@@ -103,8 +105,8 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 </ItemGroup>
 ```
 
-- `BundlerIcon`：图标集；Windows 用 `.ico`（第一个作 NSIS 安装器/卸载器回退图标），Linux 用 PNG（hicolor 集），mac 图标走 `BundlerMacApp*` 旋钮。
-- `BundlerResource`：任意资源随载荷进安装根；`TargetPath` 省略时用源文件名；目标路径冲突或逃逸安装目录打包前报错。
+- `BundlerIcon`：图标集，按扩展名分发——Windows `.ico`（第一个作 NSIS 安装器/卸载器回退）、Linux PNG（hicolor 集）、macOS `.png`/`.icns`/`.car`/`.icon`（见 [`mac-app.md`](mac-app.md) §3.2）。
+- `BundlerResource`：任意资源随载荷进安装根；`Destination` 省略时用源文件名；目标路径冲突或逃逸安装目录打包前报错。
 - `BundlerFileAssociation`：`Include`=扩展名（可带前导点，不区分大小写），`Name`/`Description`/`MimeType` 元数据。
   Windows 注册 ProgID/"打开方式"/默认应用 Capabilities（不抢用户默认），Linux 生成 freedesktop MimeType，macOS 落 `CFBundleDocumentTypes`+UTI。
 - `BundlerUrlProtocol`：自定义 URL scheme，安装后 `myapp:...` 直达；卸载只删仍指向本次安装目录的命令，不破坏后来者。

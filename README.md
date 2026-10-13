@@ -45,6 +45,7 @@ bundler bundle --input-dir <publish目录>  # 或 CLI：只指发布目录，其
 | `DotNet.Bundler.AppImage` | `.AppImage` API、内嵌 appimagetool+type2 runtime（仅 Linux 宿主） |
 | `DotNet.Bundler.Update` / `Updater` / `Updater.Bootstrap` | UPDATE 清单侧车 / 应用内更新客户端 / Native AOT 引导件 |
 | `DotNet.Bundler.MSBuild` | MSBuild 参数转换与后端 API 调用 |
+| `DotNet.Bundler.Cli` | `bundler` dotnet tool 命令包（`validate`/`plan`/`bundle`/`init`/`update-keygen`） |
 | `DotNet.Bundler` | 空元包，引入 MSBuild 包且不屏蔽传递性构建资产 |
 
 `DotNet.Bundler.Nsis` 内嵌固定版本 `NsisToolset 3.12-r1`（上游 NSIS 3.12）：公共 NSIS 数据目录 + Windows/Linux/macOS 宿主编译器，无需安装 NSIS 或在线下载。

@@ -53,7 +53,7 @@ MSBuild 前缀 `BundlerNsis*`；`bundler.json` 分节 `nsis.*`（`--nsis.<knob>`
 | --- | --- | --- | --- |
 | `BundlerNsisInstallScope` | `installScope` / `InstallScope` | `currentUser` | `perMachine`（提权+Program Files+HKLM）/`both`（MultiUser 页选择，启动即请求最高可用权限）；x64/arm64 用 64 位注册表视图 |
 | `BundlerNsisCompression` | `compression` / `Compression` | `lzma` | `zlib`/`bzip2`/`none` |
-| `BundlerNsisLanguages` | `languages` / `Languages` | `English` | 分号/数组语言列表；第一项为回退语言。可用 21 语言：Arabic Bulgarian Dutch English French German Italian Japanese Korean Norwegian Persian(→Farsi) Portuguese PortugueseBR Russian SimpChinese Spanish SpanishInternational Swedish TradChinese Turkish Ukrainian Vietnamese |
+| `BundlerNsisLanguages` | `languages` / `Languages` | `English` | 分号/数组语言列表；第一项为回退语言。可用 22 语言：Arabic Bulgarian Dutch English French German Italian Japanese Korean Norwegian Persian(→Farsi) Portuguese PortugueseBR Russian SimpChinese Spanish SpanishInternational Swedish TradChinese Turkish Ukrainian Vietnamese |
 | `BundlerNsisDisplayLanguageSelector` | `displayLanguageSelector` / `DisplayLanguageSelector` | `false` | 多语言时才显示选择器 |
 | `BundlerNsisInstallerIconFile` | `installerIconFile` / `InstallerIconFile` | 第一个 `BundlerIcon` `.ico` | 安装器图标 |
 | `BundlerNsisUninstallerIconFile` | `uninstallerIconFile` / `UninstallerIconFile` | 安装器图标 | |
@@ -74,7 +74,7 @@ MSBuild 前缀 `BundlerNsis*`；`bundler.json` 分节 `nsis.*`（`--nsis.<knob>`
 | `BundlerNsisShortcutStartMenuFolder` | `shortcuts.startMenuFolder` / `Shortcuts.StartMenuFolder` | `BundlerProductName` | `.` 表示 Programs 根目录 |
 | `BundlerNsisShortcutLegacyProductNames` | `shortcuts.legacyProductNames` / `Shortcuts.LegacyProductNames` | 空 | 改名后显式启用安全迁移 |
 | `BundlerNsisShortcutLegacyMainExecutables` | `shortcuts.legacyMainExecutables` / `Shortcuts.LegacyMainExecutables` | 空 | 旧主程序安装相对路径 |
-| `BundlerNsisTemplate` | — / `NsisBundlerOptions.TemplateFile` | 包内模板 | 自定义模板须保留占位符（§4.4） |
+| `BundlerNsisTemplate` | — / `NsisBundlerOptions.TemplatePath` | 包内模板 | 自定义模板须保留占位符（§4.4） |
 | `BundlerNsisToolsetArchivePath`/`…CompilerPath`/`…DataDirectory` | — / `NsisBundlerOptions` | 包内嵌 | 测试/高级覆盖；自定义编译器需 `NSISDIR` 时还应给 `DataDirectory` |
 
 **项**：`@BundlerNsisLanguageFile`（`Language` 元数据）整文件替换所选语言内置文案——同语言仅一件，必须恰好含模板要求的全部 `LangString`，缺失/重复/未知键/错 `LANG_*` 常量打包时报错。API/JSON 侧为 `nsis.customLanguageFiles`（language→file 字典）。
@@ -111,7 +111,7 @@ MSBuild 前缀 `BundlerNsis*`；`bundler.json` 分节 `nsis.*`（`--nsis.<knob>`
 
 复制 `src/Bundler.Nsis/templates/installer.nsi`，把 `BundlerNsisTemplate` 指到副本绝对路径。
 必须保留签名两阶段编译占位符 `uninstaller_finalize_command`/`uninstaller_import_define`/`signed_uninstaller`；用配置压缩时保留 `compression_directive`。
-其余变量：`product_name` `version` `numeric_version` `publisher` `identifier` `main_executable` `process_name` `install_folder` `install_mode` `target_architecture` `allow_downgrades` `legacy_msi_product_codes` `legacy_msi_upgrade_codes` `input_glob` `output_file` `estimated_size` `plugin_directory` `uninstall_payload` `language_macros` `language_files` `display_language_selector`，写法 `{{name}}`。
+其余变量：`product_name` `version` `numeric_version` `publisher` `identifier` `main_executable` `install_folder` `install_mode` `target_architecture` `allow_downgrades` `legacy_msi_product_codes` `legacy_msi_upgrade_codes` `input_glob` `output_file` `estimated_size` `plugin_directory` `uninstall_payload` `language_macros` `language_files` `display_language_selector`，写法 `{{name}}`。
 
 ### 4.5 签名
 

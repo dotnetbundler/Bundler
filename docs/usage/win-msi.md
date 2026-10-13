@@ -47,6 +47,7 @@ MSBuild 前缀 `BundlerWix*`；`bundler.json` 分节 `msi.*`；API `WixBundleCon
 | `BundlerWixAddToPath` | `addToPath` / `AddToPath` | `false` | 用户/系统 PATH 仅追加安装目录，卸载移除 |
 | `BundlerWixUninstallShortcut` | `uninstallShortcut` / `UninstallShortcut` | `false` | 开始菜单生成 `msiexec /x` 入口 |
 | `BundlerWixLaunchAfterInstall` | `launchAfterInstall` / `LaunchAfterInstall` | `false` | 仅交互完成页勾选时启动；静默/被动/修复/升级不触发 |
+| `BundlerWixToolsetArchivePath` | — / `WixBundlerOptions.ToolsetArchivePath` | 包内 WiX 3.14.1 | 测试/高级覆盖自带工具集压缩包 |
 
 **项**：
 

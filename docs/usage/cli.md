@@ -50,16 +50,22 @@ bundler bundle --input-dir bin/osx-x64 --input-dir bin/osx-arm64 --target macos-
 | 参数 | 对应 `bundler.json` 键 | 对应 MSBuild 属性 |
 | --- | --- | --- |
 | `--input-dir`（可重复） | `targets[].inputDirectory` | `BundlerInputDir` |
-| `--target` | `target`/`targets[].target` | `BundlerTarget` |
-| `--formats a,b` | `formats`/`targets[].formats` | `BundlerFormats` |
+| `--target` | `targets[].target` | `BundlerTarget` |
+| `--formats a,b` | `targets[].formats` | `BundlerFormats` |
 | `--product-name` | `productName` | `BundlerProductName` |
 | `--identifier` | `identifier` | `BundlerIdentifier` |
 | `--package-version` | `version` | `BundlerVersion` |
-| `--package-name` | `packageName` | 各格式 `*PackageName` |
-| `--output-dir` | `outputDir` | `BundlerOutputPath` |
-| `--strict` | — | —（关推断） |
+| `--main-executable` | `targets[].mainExecutable` | `BundlerMainExecutable` |
+| `--output-dir` | `outputDirectory` | `BundlerOutputPath` |
+| `--output-layout` | `outputLayout` | `BundlerOutputLayout` |
+| `--config <path>` | — | 显式指定 `bundler.json`（默认自动发现 cwd） |
+| `--no-config` | — | 跳过自动发现 |
+| `--reference-dir <dir>` | — | universal 合并的托管件来源目录 |
+| `--publisher`/`--description`/`--homepage`/`--copyright`/`--license-file`/`--icons` | 同名顶层键 | `BundlerPublisher`/`…Description`/`…Homepage`/`…Copyright`/`…LicenseFile`/`@BundlerIcon` |
+| `--strict` | — | 关闭推断：缺什么报什么 |
 | `--<fmt>.<knob>=<v>` | `<fmt>.<knob>` | `Bundler<Format><Knob>` |
-| `--no-config` | — | 跳过 `bundler.json` 自动发现 |
+
+顶层 `target`/`formats` 不存在——target 面只在 `targets[]` 数组里；多 target 各配各的 inputDirectory/formats。
 
 格式名：`nsis` `msi` `app` `dmg` `pkg` `deb` `rpm` `appimage` `zip` `targz` `alpineapk`，另有 `all` 全量别名。
 格式选择优先级：`--formats` > `bundler.json` 的 `formats` > 目标 OS 缺省集。
@@ -82,13 +88,13 @@ schema 与 MSBuild `Bundler*` 属性一一对应：`Bundler<Format><Knob>` → `
   "fileAssociations": [{ "extensions": ["mydoc"], "name": "…", "mimeType": "application/x-…" }],
   "urlProtocols": [{ "schemes": ["myapp"], "name": "…" }],
   "targets": [{
-    "target": "windows-x86_64",            // 单 target 也可用顶层 "target"
+    "target": "windows-x86_64",
     "inputDirectory": "publish/win-x64",
     "mainExecutable": "MyApp.exe",
     "formats": ["nsis", "zip"],
     "signingFiles": ["tools/Updater.exe"]  // 供 API 侧签名器追签
   }],
-  "outputDir": "artifacts",
+  "outputDirectory": "artifacts",
   "outputLayout": "flat",                  // flat | byFormat
   "nsis": { "installScope": "perMachine", "languages": ["English", "SimpChinese"] },
   "deb":  { "depends": ["libc6"], "files": [{ "source": "…", "destination": "/etc/…" }] },
