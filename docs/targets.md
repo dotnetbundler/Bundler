@@ -1,4 +1,4 @@
-# 目标矩阵
+# 目标与产物命名
 
 `target` 字符串语法：`{os}[-{libc}]-{arch}`，全小写。
 `libc` 段仅 linux 有：`glibc` 为默认（不写），`musl` 显式声明才挂——静态件（如 Go 式零依赖）应直接打不带 musl 的 linux 目标。

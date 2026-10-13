@@ -1,11 +1,9 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-10-13
-> 当前分支：`main`（最新已实测基线见 §3 最新一轮）
+> 当前分支：`main`
 > 当前包版本：`0.1.0-alpha.102`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
-> 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；基础目标模型重构已完成并入 `main`（alpha.90–93）——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `CpuArchitecture` 族序重排 + `BundlerTarget` `{os}[-{libc}]-{arch}` canonical GNU 词（别称仅输入归一，产物文件名层用各生态词），契约与全产物名目录见 `docs/target-matrix.md`**
-> 各格式冻结基线：NSIS `alpha.31`（后续 alpha.32/33 journal 加固）；MSI `alpha.43`；`.app`/`.dmg` `alpha.45`；`.pkg` `alpha.47`；`.deb` `alpha.51`；`.rpm` `alpha.55`；`.AppImage` `alpha.58`；`.zip`/`.tar.gz` `alpha.59`；CLI `alpha.62`；`.apk` `alpha.63`；UPDATE `alpha.74`
-> 签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG 签名、apk 可选 RSA 签名、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——总览见 `docs/signing.md`，细节见各格式文档
+> 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词（别称仅输入归一，产物名用各生态词），契约与全产物名目录见 `docs/targets.md`**
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/formats/` 单文档只留设计决策、语义契约与能力状态
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
@@ -49,74 +47,54 @@
 | `third_party/` | 第三方归档、许可证、逐文件 SHA-256 与 provenance 文档 | — |
 
 根 `Directory.Build.props` 的默认 `TargetFramework` 为 `net10.0`；
-MSBuild 任务链（`Bundler.MSBuild` 及其加载的 Abstractions/Core/Nsis/Wix/Signing.Windows）保留 `netstandard2.0`，因为任务程序集须同时被 .NET Framework `MSBuild.exe` 和 `dotnet msbuild` 双宿主加载（见 `docs/development-rules.md` 第 3 节）。
-src/ 各工程共享元数据（`Authors`/`PackageVersion`/`PackageReadmeFile`/`netstandard2.0` TFM/README 与 THIRD-PARTY-NOTICES 打包项）统一在 `src/Directory.Build.props`（链式导入根 props），Cli/Core 按项目名条件豁免；
+MSBuild 任务链保留 `netstandard2.0`（双宿主加载契约，见 `docs/development-rules.md` §3）。
+src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导入根 props），Cli/Core 按项目名条件豁免；
 外部依赖版本集中在 `Directory.Packages.props`（中央包管理），`PackageReference` 不带 `Version=`，自仓 `DotNet.Bundler*` 包引用用 `VersionOverride="$(BundlerPackageVersion)"`。
 
 ## 2. 各格式当前状态
 
-### Windows + NSIS（已冻结，`71a5c90`，基线 `0.1.0-alpha.31`，alpha.32/33 journal 加固）
+| 格式 | 冻结基线 | 文档 |
+| --- | --- | --- |
+| NSIS | `0.1.0-alpha.31`（alpha.32/33 journal 加固） | `docs/formats/win-nsis.md` |
+| MSI | `0.1.0-alpha.43` | `docs/formats/win-msi.md` |
+| `.app` | `0.1.0-alpha.45` | `docs/formats/mac-app.md` |
+| `.dmg` | `0.1.0-alpha.45` | `docs/formats/mac-dmg.md` |
+| `.pkg` | `0.1.0-alpha.47` | `docs/formats/mac-pkg.md` |
+| `.deb` | `0.1.0-alpha.51` | `docs/formats/linux-deb.md` |
+| `.rpm` | `0.1.0-alpha.55` | `docs/formats/linux-rpm.md` |
+| `.AppImage` | `0.1.0-alpha.58` | `docs/formats/linux-appimage.md` |
+| `.zip`/`.tar.gz` | `0.1.0-alpha.59` | `docs/formats/archive.md` |
+| CLI | `0.1.0-alpha.62` | `docs/cli.md` |
+| Alpine `.apk` | `0.1.0-alpha.63` | `docs/formats/linux-alpine-apk.md` |
+| UPDATE | `0.1.0-alpha.74` | `docs/update.md` |
 
-实现契约（自动化协议、退出码、事务 journal、前向恢复、快捷方式规则、签名管线、工具供应、原生插件）与能力状态见 [`docs/formats/win-nsis.md`](docs/formats/win-nsis.md)；人工/外部待办统一登记在 `docs/special-acceptance.md`。
-
-### Windows + WiX/MSI（已冻结，`0.1.0-alpha.43`）
-
-WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言独立产物、自定义 UI 序列、显式版本映射与升级/降级策略、旧 MSI 迁移与自动检测、受控 WiX 扩展与专家模式、可选 Authenticode 签名。
-设计决策、语义契约与能力状态见 [`docs/formats/win-msi.md`](docs/formats/win-msi.md)。
-
-### macOS（`.app`/`.dmg`/`.pkg` 均已冻结，基线 `alpha.45`/`alpha.45`/`alpha.47`）
-
-- `.app`：骨架/Info.plist 生成（Bundle 键、文件关联 `CFBundleDocumentTypes`+UTI 导出、URL scheme、ATS 例外域、调用方 plist 文件或内联合并）、`.icns` 图标（PNG 合成、`.car` 直通、`.icon` 经 `actool` 编译）、托管 Mach-O fat/thin 校验；签名管线 inside-out `codesign`（ad-hoc/identity/p12 临时钥匙串三模式）+ hardened runtime + entitlements + 显式公证（ditto→notarytool→stapler，凭证显式配置或 `APPLE_*` 环境回退）。
-- `.dmg`：`hdiutil` 全链（UDRW→attach→拖放布局→convert），压缩 `Ulmo`/`Udzo`/`Udbz`，Finder 窗口布局全旋钮 + 无 GUI 会话自动降级，背景图/卷图标/`udifrez` SLA 注入，`codesign` 本体签名。
-- `.pkg`：`pkgbuild` 组件包 + `productbuild` 分发包（标题/欢迎/许可/结语页、`system`/`current-user-home` 域、`BundlerMacPkgFile` 任意载荷、`--scripts` 专家脚本），`pkgbuild --sign`/`productsign` 签名与 notarytool 公证管线；per-user 域免提权真实安装已验。
-- 已登记分歧：macOS 打包工具不可再分发，采用"宿主工具检测+版本下限"策略（见 `docs/formats/mac-*.md`）；缺 codesigning 身份等外部条件统一登记在 `docs/special-acceptance.md`。
-- `osx` 通用 RID：MSBuild `BundlerUniversalTargets` 复数 RID 内层发布 + 纯托管 fat 合并器（Mach-O 并片/其余逐字节一致/单边薄拒产），CLI `--input-dir` 可重复多目录合并（PR #14）。
-
-### 其余格式
-
-- `.deb`（已冻结，`alpha.51`）：纯托管 ar/tar/gzip 写入器；control/`md5sums`、SemVer→deb 版本映射、关系字段、Section/Priority、maintainer 脚本、systemd unit、conffiles、`.desktop`/hicolor/metainfo/changelog/copyright、`BundlerDebFile` 映射；压缩仅 gzip（xz/zstd 登记拒绝）。
-- `.rpm`（已冻结，`alpha.55`）：纯托管 lead/header/cpio/gzip 写入器；六族关系字段、License/Group/Url、scriptlet/systemd unit/`%config(noreplace)`、gzip-only；可选 GPG 签名（`RPMSIGTAG_RSA`+`RPMSIGTAG_PGP`，`rpm -K`/zypper/dnf 可验）。
-- `.AppImage`（已冻结，`alpha.58`）：内嵌 appimagetool×2 + type2 runtime×2（SHA-256 provenance），AppDir 共享 freedesktop 件 + 脚本 AppRun，压缩固定 zstd；可选 GPG 签名（`.sha256_sig` 段，`gpgv` 已验）。
-- `.zip`/`.tar.gz`（已冻结，`alpha.59`）：纯托管写入器，单顶层目录布局、执行位与符号链接保留、`.sha256` 侧车、确定性构建；zip/tar 均流式写出：zip 经 Zip64 动态升级无尺寸上限，tar 单条目至 ustar ~8GiB 顶。
-- `.apk`（已冻结，`alpha.63`）：纯托管三段 gzip 写入器，`.PKGINFO`+六脚本+`BundlerAlpineApkFile` 映射+pax SHA1 校验和，可选 RSA 签名段；`linux-musl-x86_64/arm64` 目标。
-- CLI（已冻结，`alpha.62`）：`validate`/`plan`/`bundle` 三命令共用 Core/后端、`bundler.json` 层叠、`--bundles`/`--input-dir`、稳定退出码与 `--json`；dotnet tool nupkg + `PublishAot` 原生二进制双分发。
-- UPDATE（已冻结，`alpha.74`，PR #27）：静态 JSON 清单 feed + ECDSA P-256 分离签名（`.sig`+`feed.sig` 防降级）+ `bundler-update.json` 身份旁车 + 外置 AOT 引导件（shell 降级）；nsis/msi 重跑安装器、zip/targz/app/appimage 三段式换包（备份/崩溃恢复/`--rollback`）；block-map 64KiB 差分默认开（实测 83% 复用，失败回落全量）；本地/UNC feed 离线可更新；deb/rpm/apk/dmg/pkg 按权威实践排除；外部待验收见 `docs/special-acceptance.md`。
-
-各格式契约与证据详见 `docs/formats/` 对应文档；外部事项统一登记在 `docs/special-acceptance.md`。
+签名能力（SIGN 已收官）：rpm/AppImage 可选 OpenPGP/GPG、apk 可选 RSA、NSIS/MSI 托管 Authenticode、app/dmg codesign、pkg productsign——总览见 `docs/signing.md`。
+各格式契约与能力状态详见对应文档；外部事项统一登记在 `docs/special-acceptance.md`。
 
 ## 3. 最近验证
 
-当前基线：`main@a970992`（`0.1.0-alpha.102`）——CI 测试腿接线（universal 产/消同件、dbg-aot win-x86、arm64 原生腿、deb/apk/rpm 矩阵扩版与 lintian 腿）与外部待办登记收口（`*-open-items.md` 整删并入 `docs/special-acceptance.md`）已随 PR #71/#72/#73 合入。
-最近验证：本机 Windows x64 `build` 0 警告、`Bundler.Tests` 全量 491 测 0 失败（CliTests 宿主感知修复后）；合并后 release-verify @ `a970992` 7/9 腿绿、`macos-26-intel` 撞 `hdiutil` 瞬抖待复跑、`windows-11-arm` 在跑（以运行记录为准），本文件不再逐条留档。
+当前基线：`main@e0b6848`（`0.1.0-alpha.102`）——CI 测试腿接线、测试矩阵收口与文档一格式一件/目录化重构已随 PR #71–#75 合入。
+最近验证：本机 Windows x64 `build` 0 警告、`Bundler.Tests` 全量 491 测 0 失败；release-verify @ `a970992` 7/9 腿绿、`macos-26-intel` 撞 `hdiutil` 瞬抖、`windows-11-arm` 未落终态（以运行记录为准），本文件不逐条留档。
 
 ## 4. 外部验收边界（未执行，不视为完成）
 
-以下项目在本机无法自动化，转入人工/外部清单，**不得宣称已完成**：
-
-- 真实交互 UI 流转、勾选启动实际行为、`InvalidDirDlg`、位图显示、缩放/辅助功能；
-- junction/重解析点作为安装目标的安装时行为（原生 MSI 条件检测受限，记录为能力边界）；
-- per-machine UAC 真实提权安装/卸载；
-- 干净 Windows 10/11 宿主、x86/ARM64 宿主执行；
-- 生产 Authenticode 证书与 RFC 3161 时间戳；
-- 真实重启与锁定文件场景、本地化内容评审；
-- 非拉丁语言交互安装审校（`docs/special-acceptance.md` 母语审校项；FIPS 策略宿主 `candle -fips` 已于 2026-10-05 实证消解，证据见 git/PR 记录）。
-
-只能人工/外部付费完成的验收统一登记在 `docs/special-acceptance.md`。
+只能人工/外部付费完成的验收统一登记在 `docs/special-acceptance.md`，**不得宣称已完成**；
+覆盖：生产 Authenticode/Apple 证书与公证、真实 UAC/重启/锁定文件、干净宿主矩阵、母语审校、真实 GUI 交互、公网/真机腿等。
 
 ## 5. 未决问题（等待用户或外部输入）
 
-- 各格式外部事项等待对应环境输入，统一登记在 `docs/special-acceptance.md`（生产证书/公证凭证、UAC 提权、真实重启、干净宿主矩阵、语言审校等；MSI 签名已裁决不补集成腿——`Bundler.Tests/WixTests` 三断言已覆盖，时间戳子项已真实嵌入消解，外部仅余生产 CA 信任链）。
+- 各格式外部事项等待对应环境输入，统一登记在 `docs/special-acceptance.md`。
 - WiX v3 维护风险已裁决封存：v3 维持现状不再复议（2026-10-05，见 `docs/formats/win-msi.md` §1 与 `third_party/wix/msi-wix-provenance.md`），非未决项。
-- 仓外独立包消费 fixture（`tests/Bundler.LocalPackagesTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`,
+- 仓外独立包消费 fixture（`tests/Bundler.LocalPackagesTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`，
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
-  还原来源已由 packageSourceMapping 钉死本地源（PR #41，公网同版共存不会选错件）；
+  还原来源已由 packageSourceMapping 钉死本地源（PR #41）；
   是否换处理方式（如公开发布后改验公网源、或移入独立验收仓）留待后续裁决。
 
 ## 6. 默认下一步
 
-全部格式与 CLI 均已冻结并入 `main`，四宿主完整测试全绿（§3）。
-集成测试收编（PR #17）、dotnet/skills 审计整改（PR #18）、API 收窄与覆盖率收口（PR #19）、仓库结构清理与本地包消费独立工程（PR #20）均已并入 `main`（§3），本轮工作在途项清零。
-UPDATE 自更新模块已实现并冻结（`alpha.74` 起，PR #27..#59 持续加固与重构至 `alpha.94`），新一轮三轮四宿主测试全绿、三条待裁项与权威对标补齐全部落地，跨版本兼容冻件腿与三宿主真小卷 ENOSPC 腿在网，`tests/Special/` 特殊验收脚本矩阵就位（§3 最新三轮）。
-目标模型重构（PR #55..#59）已并入 main 并经三轮四宿主轮测（终轮全新会话整轮零缺陷）+ release-verify 同树 3 连绿收口。
-剩余工作：外部待验收项（统一登记在 `docs/special-acceptance.md`，见 §5）、发布链资产实际推送（nuget+release 为另一步）、以及零星已登记增强。release-verify 六宿主全量验证已落地并入 main；CLI 收口批（alpha.95–102）后合并树的最新全量验证已随 PR #71–#73 合入并复跑（§3）。
+全部格式、CLI 与 UPDATE 均已冻结并入 `main`，功能面无进行中阶段。
+剩余工作：
 
+- 外部待验收项（统一登记在 `docs/special-acceptance.md`，见 §5）；
+- 发布链资产实际推送（NuGet/Release 为另一步）；
+- 零星已登记增强按 `docs/roadmap.md` §5.2 候选标准排队。

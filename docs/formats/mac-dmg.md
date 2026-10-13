@@ -10,7 +10,7 @@
 - DMG 本体可 `codesign`（复用 `.app` 签名配置面，`Identity="-"` 跳过）；**DMG 本体不做公证**——Gatekeeper 核验内部 `.app` 的 stapled 票据。
 - EULA：`LicenseFile`（txt/rtf）经 `hdiutil udifrez` 注入 SLA 资源，挂载时弹同意面板。
 - 压缩枚举 `Udzo`/`Ulmo`/`Udbz`，**默认 `Ulmo`**（lzma；挂载侧需 macOS 10.15+；史前宿主显式改 `Udzo`）。
-- 产物命名 `名称-版本-架构.dmg`（契约以 `docs/target-matrix.md` 为准）；`bless`/`internet-enable` 遗留开关不暴露。
+- 产物命名 `名称-版本-架构.dmg`（契约以 `docs/targets.md` 为准）；`bless`/`internet-enable` 遗留开关不暴露。
 
 ## 2. 宿主门槛
 

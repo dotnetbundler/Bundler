@@ -1,7 +1,7 @@
 # 签名能力（跨格式）
 
 本文件是签名横切面（SIGN）的唯一文档：各格式签名的实现方式、密钥契约与边界。
-单格式细节见对应文档（`docs/formats/win-nsis.md` §4.8、`docs/formats/linux-rpm.md`、`docs/formats/linux-appimage.md`、`docs/formats/linux-alpine-apk.md`、`docs/formats/mac-app.md` §3.5-3.7、`docs/formats/mac-pkg.md`、`docs/formats/mac-dmg.md`）；平台×签名总览见 `docs/platform-support-matrix.md`。
+单格式细节见对应文档（`docs/formats/win-nsis.md` §4.8、`docs/formats/linux-rpm.md`、`docs/formats/linux-appimage.md`、`docs/formats/linux-alpine-apk.md`、`docs/formats/mac-app.md` §3.5-3.7、`docs/formats/mac-pkg.md`、`docs/formats/mac-dmg.md`）；平台×签名总览见 `docs/support-matrix.md`。
 
 ## 1. 通用契约
 
