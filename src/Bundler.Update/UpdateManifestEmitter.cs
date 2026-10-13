@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using DotNet.Bundler.Archive;
+using DotNet.Bundler.Core;
 using DotNet.Bundler.Core.Update;
 
 namespace DotNet.Bundler.Update;
@@ -113,7 +114,7 @@ public static class UpdateManifestEmitter
                 Url = relativeUrl,
                 File = fileName,
                 Size = new FileInfo(artifactFile).Length,
-                Sha256 = await Task.Run(() => Sha256Hex(artifactFile), cancellationToken),
+                Sha256 = await Task.Run(() => Hashes.Sha256HexFile(artifactFile), cancellationToken),
                 Signature = Convert.ToBase64String(signature),
                 BlockMap = relativeUrl + UpdateBlockMap.FileSuffix,
             };
@@ -163,16 +164,4 @@ public static class UpdateManifestEmitter
         return feedUri.MakeRelativeUri(new Uri(Path.GetFullPath(artifactFile))).OriginalString;
     }
 
-    private static string Sha256Hex(string path)
-    {
-        using var sha = SHA256.Create();
-        using var stream = File.OpenRead(path);
-        var hash = sha.ComputeHash(stream);
-        var builder = new StringBuilder(hash.Length * 2);
-        foreach (var b in hash)
-        {
-            builder.Append(b.ToString("x2"));
-        }
-        return builder.ToString();
-    }
 }

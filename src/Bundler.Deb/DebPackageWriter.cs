@@ -71,7 +71,7 @@ internal static class DebPackageWriter
         try
         {
             GzipTarToFile(payload, dataTarGzPath);
-            var controlTarGz = Gzip(TarBytes(ControlEntries(bundle, payload, packageName, version,
+            var controlTarGz = Gzip.Compress(TarBytes(ControlEntries(bundle, payload, packageName, version,
                 architecture, maintainer, settings)));
 
             var fileName = packageName + "_" + DebVersion.FileNameVersion(version) + "_" +
@@ -90,7 +90,7 @@ internal static class DebPackageWriter
                         ArMember.FromFile("data.tar.gz", dataTarGzPath)
                     ]);
                 }
-                var hash = Sha256HexFile(outputPath);
+                var hash = Hashes.Sha256HexFile(outputPath);
                 File.WriteAllText(sidecarPath,
                     hash + "  " + fileName + "\n", new UTF8Encoding(false));
                 logger.Log(BundleLogLevel.Information, $"Wrote {fileName} (sha256 {hash}).");
@@ -318,13 +318,13 @@ internal static class DebPackageWriter
             " -- " + maintainer + "  Tue, 01 Jan 1980 00:00:00 +0000\n";
         AddGeneratedFile(
             docRoot + "/changelog.Debian.gz",
-            Gzip(new UTF8Encoding(false).GetBytes(debianChangelog)),
+            Gzip.Compress(new UTF8Encoding(false).GetBytes(debianChangelog)),
             420 /* 0644 */);
         if (settings.ChangelogFile is { Length: > 0 } changelogSource)
         {
             AddGeneratedFile(
                 docRoot + "/changelog.gz",
-                Gzip(File.ReadAllBytes(FreedesktopFiles.RequireExisting(changelogSource, "ChangelogFile"))),
+                Gzip.Compress(File.ReadAllBytes(FreedesktopFiles.RequireExisting(changelogSource, "ChangelogFile"))),
                 420 /* 0644 */);
         }
         if (bundle.LicenseFile is { Length: > 0 } license)
@@ -411,8 +411,8 @@ internal static class DebPackageWriter
         foreach (var entry in payload.Where(e => e.Kind == TarEntryKind.File))
         {
             var hash = entry.Content is { } inline
-                ? Md5Hex(inline)
-                : Md5HexFile(entry.SourcePath!);
+                ? Hashes.Md5Hex(inline)
+                : Hashes.Md5HexFile(entry.SourcePath!);
             md5sums.Append(hash).Append("  ").Append(entry.ArchivePath).Append('\n');
         }
 
@@ -616,15 +616,6 @@ internal static class DebPackageWriter
         return buffer.ToArray();
     }
 
-    private static byte[] Gzip(byte[] content)
-    {
-        using var buffer = new MemoryStream();
-        using (var gzip = new GZipStream(buffer, CompressionLevel.Optimal, leaveOpen: true))
-        {
-            gzip.Write(content, 0, content.Length);
-        }
-        return buffer.ToArray();
-    }
 
     private static string MapArchitecture(BundleTarget target) =>
         ArtifactNaming.ArchToken(target, PackageFormat.Deb)
@@ -690,39 +681,8 @@ internal static class DebPackageWriter
     private static string ToPosixPath(string path) =>
         path.Replace(Path.DirectorySeparatorChar, '/').Replace(Path.AltDirectorySeparatorChar, '/');
 
-    private static string Md5Hex(byte[] content)
-    {
-        using var md5 = MD5.Create();
-        return Hex(md5.ComputeHash(content));
-    }
 
-    private static string Md5HexFile(string path)
-    {
-        using var md5 = MD5.Create();
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return Hex(md5.ComputeHash(stream));
-    }
 
-    private static string Sha256HexFile(string path)
-    {
-        using var sha256 = SHA256.Create();
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return Hex(sha256.ComputeHash(stream));
-    }
 
-    internal static string Sha256Hex(byte[] content)
-    {
-        using var sha256 = SHA256.Create();
-        return Hex(sha256.ComputeHash(content));
-    }
 
-    private static string Hex(byte[] hash)
-    {
-        var builder = new StringBuilder(hash.Length * 2);
-        foreach (var b in hash)
-        {
-            builder.Append(b.ToString("x2", System.Globalization.CultureInfo.InvariantCulture));
-        }
-        return builder.ToString();
-    }
 }

@@ -102,10 +102,10 @@ internal static class RpmPackageWriter
                     cpioSize = digest.BytesWritten;
                     digest.FinishHash();
                 }
-                cpioSha256 = Hex(cpioHash.Hash!);
+                cpioSha256 = Hashes.ToLowerHex(cpioHash.Hash!);
             }
             var compressedSize = new FileInfo(payloadPath).Length;
-            var payloadSha256 = Sha256HexFile(payloadPath);
+            var payloadSha256 = Hashes.Sha256HexFile(payloadPath);
 
             var mainHeader = RpmHeaderWriter.Write(MainHeaderEntries(
                 bundle, item, payload, packageName, mapped, architecture, installRoot, vendor,
@@ -146,7 +146,7 @@ internal static class RpmPackageWriter
                         payloadStream.CopyTo(stream);
                     }
                 }
-                var hash = Sha256HexFile(outputPath);
+                var hash = Hashes.Sha256HexFile(outputPath);
                 File.WriteAllText(sidecarPath,
                     hash + "  " + fileName + "\n", new UTF8Encoding(false));
                 logger.Log(BundleLogLevel.Information, $"Wrote {fileName} (sha256 {hash}).");
@@ -282,8 +282,8 @@ internal static class RpmPackageWriter
             RpmHeaderWriter.Int32s(1000, packageSize),                    // RPMSIGTAG_SIZE
             RpmHeaderWriter.Bin(1004, md5.Hash!),                         // RPMSIGTAG_MD5
             RpmHeaderWriter.Int32s(1007, checked((int)cpioSize)),         // RPMSIGTAG_PAYLOADSIZE
-            RpmHeaderWriter.Str(269, Hex(SHA1.Create().ComputeHash(mainHeader))),   // SHA1HEADER
-            RpmHeaderWriter.Str(273, Hex(SHA256.Create().ComputeHash(mainHeader))), // SHA256HEADER
+            RpmHeaderWriter.Str(269, Hashes.ToLowerHex(SHA1.Create().ComputeHash(mainHeader))),   // SHA1HEADER
+            RpmHeaderWriter.Str(273, Hashes.ToLowerHex(SHA256.Create().ComputeHash(mainHeader))), // SHA256HEADER
         };
         if (rsaSignature is not null)
         {
@@ -729,7 +729,7 @@ internal static class RpmPackageWriter
         {
             AddGeneratedFile(
                 "/usr/share/doc/" + packageName + "/changelog.gz",
-                Gzip(File.ReadAllBytes(
+                Gzip.Compress(File.ReadAllBytes(
                     FreedesktopFiles.RequireExisting(changelogSource, "ChangelogFile"))),
                 420 /* 0644 */);
         }
@@ -921,15 +921,6 @@ internal static class RpmPackageWriter
     private static string ToPosixPath(string path) =>
         path.Replace(Path.DirectorySeparatorChar, '/').Replace(Path.AltDirectorySeparatorChar, '/');
 
-    private static byte[] Gzip(byte[] content)
-    {
-        using var output = new MemoryStream();
-        using (var gzip = new GZipStream(output, CompressionLevel.Optimal))
-        {
-            gzip.Write(content, 0, content.Length);
-        }
-        return output.ToArray();
-    }
 
     private static byte[] Align8(byte[] header)
     {
@@ -940,11 +931,6 @@ internal static class RpmPackageWriter
         return result;
     }
 
-    internal static string Sha256Hex(byte[] content)
-    {
-        using var sha256 = SHA256.Create();
-        return Hex(sha256.ComputeHash(content));
-    }
 
     // FILEDIGESTS 逐文件 sha256：源流式喂哈希，整文件不再驻内存。
     private static string FileDigest(PayloadEntry entry)
@@ -952,32 +938,17 @@ internal static class RpmPackageWriter
         using var sha256 = SHA256.Create();
         if (entry.IsSymlink)
         {
-            return Hex(sha256.ComputeHash(Encoding.UTF8.GetBytes(entry.LinkTarget)));
+            return Hashes.ToLowerHex(sha256.ComputeHash(Encoding.UTF8.GetBytes(entry.LinkTarget)));
         }
         if (entry.Content is { } content)
         {
-            return Hex(sha256.ComputeHash(content));
+            return Hashes.ToLowerHex(sha256.ComputeHash(content));
         }
         using var stream = File.OpenRead(entry.SourcePath!);
-        return Hex(sha256.ComputeHash(stream));
+        return Hashes.ToLowerHex(sha256.ComputeHash(stream));
     }
 
-    private static string Sha256HexFile(string path)
-    {
-        using var sha256 = SHA256.Create();
-        using var stream = File.OpenRead(path);
-        return Hex(sha256.ComputeHash(stream));
-    }
 
-    private static string Hex(byte[] hash)
-    {
-        var builder = new StringBuilder(hash.Length * 2);
-        foreach (var b in hash)
-        {
-            builder.Append(b.ToString("x2", System.Globalization.CultureInfo.InvariantCulture));
-        }
-        return builder.ToString();
-    }
 
     private static void TryDelete(string path)
     {

@@ -73,7 +73,7 @@ internal static class ApkPackageWriter
         try
         {
             GzipTarToFile(payload, dataGzipPath, omitEndOfArchive: false);
-            var dataHash = Sha256HexFile(dataGzipPath);
+            var dataHash = Hashes.Sha256HexFile(dataGzipPath);
         var installedSize = payload
             .Where(entry => entry.Kind == TarEntryKind.File)
             .Sum(entry => entry.Size);
@@ -93,7 +93,7 @@ internal static class ApkPackageWriter
             }
         };
         EmitScripts(controlEntries, settings);
-        var controlGzip = Gzip(TarData(controlEntries, omitEndOfArchive: true));
+        var controlGzip = Gzip.Compress(TarData(controlEntries, omitEndOfArchive: true));
 
         // Optional signature segment: a tar holding .SIGN.RSA.<key name>.rsa.pub
         // whose content is the raw PKCS1v15 RSA-SHA1 signature over the control
@@ -108,7 +108,7 @@ internal static class ApkPackageWriter
             }
             var signature = ApkSigner.Sign(controlGzip, keyFile, settings.Signing.Passphrase);
             var memberName = ".SIGN.RSA." + Path.GetFileName(keyFile) + ".rsa.pub";
-            signatureGzip = Gzip(TarData(
+            signatureGzip = Gzip.Compress(TarData(
             [
                 new TarEntry
                 {
@@ -527,65 +527,35 @@ internal static class ApkPackageWriter
         {
             return TimestampRecords;
         }
-        using var sha1 = SHA1.Create();
-        byte[] hash;
+        string hash;
         if (entry.Kind == TarEntryKind.Symlink)
         {
-            hash = sha1.ComputeHash(new UTF8Encoding(false).GetBytes(entry.LinkTarget));
+            hash = Hashes.Sha1Hex(new UTF8Encoding(false).GetBytes(entry.LinkTarget));
         }
         else
         {
             using var stream = new FileStream(
                 entry.SourcePath!, FileMode.Open, FileAccess.Read, FileShare.Read);
-            hash = sha1.ComputeHash(stream);
+            hash = Hashes.Sha1Hex(stream);
         }
         return
         [
             new("ctime", "0"),
             new("atime", "0"),
-            new("APK-TOOLS.checksum.SHA1", Hex(hash))
+            new("APK-TOOLS.checksum.SHA1", hash)
         ];
     }
 
-    private static byte[] Gzip(byte[] content)
-    {
-        using var buffer = new MemoryStream();
-        using (var gzip = new GZipStream(buffer, CompressionLevel.Optimal, leaveOpen: true))
-        {
-            gzip.Write(content, 0, content.Length);
-        }
-        return buffer.ToArray();
-    }
 
     private static void WriteSha256Sidecar(string path)
     {
-        var hash = Sha256HexFile(path);
+        var hash = Hashes.Sha256HexFile(path);
         File.WriteAllText(path + ".sha256",
             hash + "  " + Path.GetFileName(path) + "\n", new UTF8Encoding(false));
     }
 
-    internal static string Sha256Hex(byte[] content)
-    {
-        using var sha256 = SHA256.Create();
-        return Hex(sha256.ComputeHash(content));
-    }
 
-    private static string Sha256HexFile(string path)
-    {
-        using var sha256 = SHA256.Create();
-        using var stream = File.OpenRead(path);
-        return Hex(sha256.ComputeHash(stream));
-    }
 
-    private static string Hex(byte[] bytes)
-    {
-        var builder = new StringBuilder(bytes.Length * 2);
-        foreach (var b in bytes)
-        {
-            builder.Append(b.ToString("x2"));
-        }
-        return builder.ToString();
-    }
 
     private static string RelativePath(string baseDirectory, string path)
     {

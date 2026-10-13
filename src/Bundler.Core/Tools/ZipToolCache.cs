@@ -472,17 +472,9 @@ public static class ZipToolCache
         }
     }
 
-    private static string HashFile(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return HashStream(stream);
-    }
+    private static string HashFile(string path) => Hashes.Sha256HexFile(path);
 
-    private static string HashStream(Stream stream)
-    {
-        using var sha256 = SHA256.Create();
-        return BitConverter.ToString(sha256.ComputeHash(stream)).Replace("-", string.Empty);
-    }
+    private static string HashStream(Stream stream) => Hashes.Sha256Hex(stream);
 
     private static void ValidateSha256(string value, string parameterName)
     {
