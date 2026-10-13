@@ -99,7 +99,7 @@ Tauri 等产品只作为通用桌面打包能力的参照，不决定本项目�
 | 7 | Linux `.rpm` | `0.1.0-alpha.55`（GPG 签名后置并入） | [`linux-rpm.md`](formats/linux-rpm.md) |
 | 8 | Linux `.AppImage` | `0.1.0-alpha.58` | [`linux-appimage.md`](formats/linux-appimage.md) |
 | 9 | `.zip`/`.tar.gz` | `0.1.0-alpha.59` | [`archive.md`](formats/archive.md) |
-| 10 | CLI | `0.1.0-alpha.62` | [`cli.md`](cli.md) |
+| 10 | CLI | `0.1.0-alpha.62` | [`usage/cli.md`](usage/cli.md) |
 | 11 | Alpine `.apk` | `0.1.0-alpha.63` | [`linux-alpine-apk.md`](formats/linux-alpine-apk.md) |
 | — | UPDATE 自更新 | `0.1.0-alpha.74` | [`update.md`](update.md) |
 | — | 签名横切面 | 随各格式 | [`signing.md`](signing.md) |

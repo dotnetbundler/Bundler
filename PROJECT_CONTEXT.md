@@ -7,7 +7,7 @@
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/formats/` 单文档只留设计决策、语义契约与能力状态
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
-> 项目不变量在 `docs/project-rules.md`，AI 协作规则在 `AGENTS.md`；实现原理在 `docs/architecture.md`；产品顺序在 `docs/roadmap.md`；各格式细节在 `docs/formats/` 下对应文档。
+> 项目不变量在 `docs/project-rules.md`，AI 协作规则在 `AGENTS.md`；实现原理在 `docs/architecture.md`；产品顺序在 `docs/roadmap.md`；各格式契约细节在 `docs/formats/` 下对应文档；用户面使用文档在 `docs/usage/`。
 > 本文内容须与 Git、代码和测试一致；不一致时以后三者为准并先修正本文。
 
 ## 1. 项目结构（现况）
@@ -64,7 +64,7 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 | `.rpm` | `0.1.0-alpha.55` | `docs/formats/linux-rpm.md` |
 | `.AppImage` | `0.1.0-alpha.58` | `docs/formats/linux-appimage.md` |
 | `.zip`/`.tar.gz` | `0.1.0-alpha.59` | `docs/formats/archive.md` |
-| CLI | `0.1.0-alpha.62` | `docs/cli.md` |
+| CLI | `0.1.0-alpha.62` | `docs/usage/cli.md` |
 | Alpine `.apk` | `0.1.0-alpha.63` | `docs/formats/linux-alpine-apk.md` |
 | UPDATE | `0.1.0-alpha.74` | `docs/update.md` |
 
