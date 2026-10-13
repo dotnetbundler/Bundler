@@ -344,7 +344,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerMacPkgWelcomeFile`/`…ConclusionFile` | 否 | 无；分发包欢迎/结语页文件 |
 | `BundlerMacPkgInstallScope` | 否 | `System`；也支持 `CurrentUserHome`（免提权装 `~/Applications`，枚举名不区分大小写） |
 | `BundlerMacPkgScriptsDirectory` | 否 | 无；`pkgbuild --scripts` 专家脚本目录 |
-| `@(BundlerPkgPayload)`（`Destination`） | 否 | 无；任意文件树 → install-location 相对路径 |
+| `@(BundlerMacPkgFile)`（`Destination`） | 否 | 无；任意文件树 → install-location 相对路径 |
 | `BundlerMacPkgSignIdentity`/`…SignCertificatePath`/`…SignCertificatePassword` | 否 | 无；`pkgbuild --sign`/`productsign --sign`（Installer 证书，仅 macOS 宿主） |
 | `BundlerMacPkgNotarize`/`…NotaryWait`/`…SkipStapling`/`…NotaryProfile`/`…AppleId`/`…ApplePassword`/`…AppleTeamId`/`…NotaryApiKeyFile`/`…KeyId`/`…KeyIssuer` | 否 | 同 `.app` 公证组（`.pkg` 直接过 notarytool，无 ad-hoc 签名等价物） |
 | `BundlerDebPackageName` | 否 | `BundlerProductName` 的 kebab-case 化；须匹配 Debian 包名规则 `[a-z0-9][a-z0-9+.-]+` |
