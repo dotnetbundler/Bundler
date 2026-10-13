@@ -63,6 +63,7 @@ jobs:
               sys.exit(1)
           print("runners=" + json.dumps(picked))
           PY
+          fi
 
   legs:
     needs: select
