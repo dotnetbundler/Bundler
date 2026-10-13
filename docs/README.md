@@ -8,6 +8,7 @@
 
 | 入口 | 文档 |
 | --- | --- |
+| 族索引 | [`usage/README.md`](usage/README.md) |
 | MSBuild | [`usage/msbuild.md`](usage/msbuild.md) |
 | `bundler` CLI | [`usage/cli.md`](usage/cli.md) |
 | 后端 ×10 | [`usage/formats/`](usage/formats/)（与 `design/formats/` 同名镜像） |

@@ -1,6 +1,6 @@
 # NSIS 安装器使用指南
 
-产出 Windows NSIS `.exe` 安装器。语义契约（journal/恢复/退出码/锁定载荷/CLI 协议）见 [`../formats/win-nsis.md`](../../design/formats/win-nsis.md)。
+产出 Windows NSIS `.exe` 安装器。语义契约（journal/恢复/退出码/锁定载荷/CLI 协议）见 [`../../design/formats/win-nsis.md`](../../design/formats/win-nsis.md)。
 
 ## 1. 接入
 
