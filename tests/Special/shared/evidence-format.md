@@ -1,7 +1,7 @@
 # Special 证据文件约定
 
 每条特殊验收脚本在结束时把证据写到 `tests/Special/evidence/<验收ID>-<宿主>-<日期>.md`。
-回填 `docs/special-acceptance.md` 或 `<format>-open-items.md` 时贴文件内容；文件本身不入库（`evidence/` 已 gitignore）。
+回填 `docs/special-acceptance.md` 时贴文件内容；文件本身不入库（`evidence/` 已 gitignore）。
 
 ## 结构
 

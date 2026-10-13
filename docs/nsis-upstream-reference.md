@@ -89,4 +89,4 @@ NSIS 3.12 将波斯语编译器语言称为 `Farsi`，并提供 `LANG_FARSI`；B
 
 ## 尚需外部验证
 
-需要凭据、生产标识或仓库当前不具备的平台条件的测试见 `docs/nsis-open-items.md`。
+需要凭据、生产标识或仓库当前不具备的平台条件的测试见 `docs/special-acceptance.md`。

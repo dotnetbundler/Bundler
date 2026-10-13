@@ -17,7 +17,7 @@ WIN-MSI-1..9 的阶段与复核证据以 git 提交与 PR 记录为准。
 | 显式 MSI 版本映射 | 已实现并本机自动验证 | WIN-MSI-5 | 仅显式三段有效数值可映射预发布应用版本；第四字段、无定义自动映射和越界值被拒绝。x86 真实映射升级、同 MSI 版本碰撞拒绝已通过；发行方负责跨发布单调分配。 |
 | 安装范围与权限 | 已实现但外部待验收 | current user 已实测；per machine 在 MSI-2 已编译/检查数据库 | 两种身份家族、HKCU/HKLM 与目录已静态验证；per-machine UAC/真实安装外部待验收。单包动态切换范围、跨范围自动迁移不支持。 |
 | 快捷方式 | 已实现并本机自动验证 | MSI-2 编译期开关；WIN-MSI-6 改为 Feature 内非 advertised 组件 | 显式启用的桌面/开始菜单链接创建、升级、卸载通过；组件化后可在 Feature 级别观察；同一路径被用户替换时 MSI 原生删除可能移除该链接，不承诺内容级所有权；系统固定项不自动取消固定。 |
-| 范围内可选安装目录 | 已实现并本机自动验证 | WIN-MSI-6 | `InstallDirectorySelection` 开启 InstallDir UI；静默 `INSTALLFOLDER=` 与交互共用 execute-sequence 范围校验——current-user 限 `%LOCALAPPDATA%` 内子目录、per-machine 限 Program Files 内子目录（x64/x86 根按架构），根本身与范围外/越界值实测返回 1603；升级经 `RegistrySearch` 恢复已选目录。安装时 junction/重解析点检测未实现（原生条件无法判定），属已记录边界——2026-10-05 实测定性：MSI 不解引用原样接受 junction 路径、写入透到真实目标、卸载保留 reparse point 本身（MSI-OI-12 子项）。 |
+| 范围内可选安装目录 | 已实现并本机自动验证 | WIN-MSI-6 | `InstallDirectorySelection` 开启 InstallDir UI；静默 `INSTALLFOLDER=` 与交互共用 execute-sequence 范围校验——current-user 限 `%LOCALAPPDATA%` 内子目录、per-machine 限 Program Files 内子目录（x64/x86 根按架构），根本身与范围外/越界值实测返回 1603；升级经 `RegistrySearch` 恢复已选目录。安装时 junction/重解析点检测未实现（原生条件无法判定），属已记录边界——2026-10-05 实测定性：MSI 不解引用原样接受 junction 路径、写入透到真实目标、卸载保留 reparse point 本身（属已记录边界，不再扩展）。 |
 | MSI 交互 UI 与品牌位图 | 已实现但外部待验收 | WIN-MSI-6 | 自定义 dialog 序列（Welcome→[License]→[InstallDir]→VerifyReady→Exit+Browse/InvalidDir/维护）覆盖无许可与有许可两种路由；位图构建时校验 BMP 头与 493x58/503x314 尺寸并拒绝重解析点。真实交互流转、勾选行为、缩放/辅助功能尚未人工执行。 |
 | 可选 Feature（PATH、卸载入口） | 已实现并本机自动验证 | WIN-MSI-6 | `AddToPath` 用 `Environment` 表 `[~];[INSTALLFOLDER]` 只增删本产品条目，实测原 PATH 各值保留、卸载后恢复原值；`UninstallShortcut` 在开始菜单生成 `msiexec /x [ProductCode]` 链接。feature 级别选择（`ADDLOCAL`）未实测交互设置。 |
 | 安装后启动勾选 | 已实现但外部待验收 | WIN-MSI-6 | ExitDialog Finish 的 `WIXUI_EXITDIALOGOPTIONALCHECKBOX` 条件 DoAction（FileKey、asyncNoWait、Impersonate）才启动主程序；条件排除 `Installed`/`WIX_UPGRADE_DETECTED`，`/qn`/`/passive`/修复/升级无 UI 不触发。真实勾选/未勾选交互行为待人工验收。 |
@@ -40,7 +40,7 @@ WIN-MSI-1..9 的阶段与复核证据以 git 提交与 PR 记录为准。
 ## Tauri 通用能力补齐状态
 
 WIN-MSI-5..9 的通用能力补齐已全部完成并经上游审计逐项分类（等价已实现/有意更安全语义/明确不适用/另立产品路线）。
-`0.1.0-alpha.43` 为 MSI 冻结基线；无现成环境的人工/外部验收项继续保留在 `docs/special-acceptance.md` 与 `docs/msi-open-items.md`，不构成已通过声明。
+`0.1.0-alpha.43` 为 MSI 冻结基线；无现成环境的人工/外部验收项继续保留在 `docs/special-acceptance.md`，不构成已通过声明。
 
 ## 已验证的平台范围
 
@@ -51,4 +51,4 @@ WIN-MSI-5..9 的通用能力补齐已全部完成并经上游审计逐项分类�
 
 Windows 7 上 WiX 3.14.1 自身的 Framework 零环境边界见 `docs/msi-roadmap.md` 第 2 节。
 上表是实测证据，不把单台开发机的结果推广到所有 Windows 11 设备。
-外部待验收的组合继续按 `docs/special-acceptance.md` 和 `docs/msi-open-items.md` 保存；`alpha.37` 的 x64/ARM64 身份基线继续受固定测试向量保护。
+外部待验收的组合继续按 `docs/special-acceptance.md` 保存；`alpha.37` 的 x64/ARM64 身份基线继续受固定测试向量保护。

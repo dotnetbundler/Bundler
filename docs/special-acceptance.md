@@ -94,7 +94,7 @@
 | 项 | 要做什么 | 完成证据 | 当前卡点/已有覆盖 |
 | --- | --- | --- | --- |
 | Intel Mac / Rosetta 启动观感 | `macos-x86_64` `.app`/`.dmg`/`.pkg` 在 Intel/Rosetta 宿主的启动观感核对 | 观感记录 | `macos-26-intel` CI 腿与 `macos-26` arm64+Rosetta 腿的挂载/安装/启动断言已全绿；剩观感人工 |
-| 干净 macOS 宿主矩阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg`/`.pkg`；含低于 `LSMinimumSystemVersion` 的旧版本宿主拒跑断言 | 挂载/EULA 弹窗/拖放安装首启记录、拒跑提示 | 现宿主有开发工具链；云 mac 实例按天可租 |
+| 干净 macOS 宿主矩阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg`/`.pkg`；含低于 `LSMinimumSystemVersion` 的旧版本宿主拒跑断言；顺带在无 `actool` 宿主构建 `.app` 验证降级分支（警告不阻塞） | 挂载/EULA 弹窗/拖放安装首启记录、拒跑提示、降级警告记录 | 现宿主有开发工具链；云 mac 实例按天可租 |
 | 干净 Windows 10/11 | WiX 自身依赖边界（无 .NET SDK 仅 candle/light 编译）、独立 VM 复跑安装/卸载、Win7 记 Framework 缺失边界 | 各宿主构建/安装/卸载记录 | 非干净 Windows 11 x64 已有证据；干净宿主未测 |
 | 提权/UAC Windows | NSIS per-machine 安装/卸载与 journal ACL 取证、预建父目录所有权/继承；MSI current-user/per-machine 权限差异；UPDATE 引导件在 `Program Files` 提权目录的写权限与 UAC 交互 | `icacls`/HKLM 权限/提权边界记录 | 普通本机不得静默触发 UAC；当前实证均 per-user 目录 |
 | 可丢弃故障 VM | NSIS 真实重启+锁定文件删除（重启后复核）、真实 ACL 拒绝+物理磁盘/配额耗尽；MSI 重启/锁定/磁盘故障/缺源 | 前后快照、退出码、verbose log、重启后文件/注册表 | `disposable-vm-faults.ps1` 收编进 `release-verify`（windows-2025 与 windows-11-arm 跑绿：真 ACL 拒装 rc=2+真 VHD 盘满 ENOSPC rc=2+无半途树）；真实重启+锁定文件删除（`tests/Special/win/nsis-reboot/Verify.ps1`）与 MSI 故障仍挂本表 |
@@ -102,6 +102,7 @@
 | appimaged 类桌面集成 | appimaged/gear lever 工具对 AppImage 的识别与观感 | 工具识别观感记录 | `.desktop`/图标产出与 `desktop-file-validate` 校验收编为一次性 CI 腿跑绿（run 37892544275）；双击启动=FUSE 同路径已验；工具识别观感仍挂本表 |
 | NSIS `/R` 降权启动 | per-machine 安装后 `setup.exe /S /R` 启动已安装应用：进程 Integrity Level=Medium、属桌面用户不继承 High 令牌、参数传递到达 | Process Explorer 等 IL 观察 + 应用收到参数的断言 | 需交互桌面（UAC 弹窗手动批准）+ IL 观察工具；`uac-assisted.ps1` 辅助就位 |
 | NSIS Restart Manager 无法关闭进程 | 另一用户会话/受控 fixture 中运行安装目录主程序，静默升级应返回 `5`、不动旧安装、不影响同名他处进程 | 退出码、旧安装哈希对比、journal 记录 | 需可交互 Windows VM 双会话或不可终止 fixture；不得用系统关键进程 |
-| deb/rpm 文件/协议关联双击唤起 | GUI 桌面宿主双击 `.desktop` 声明关联的文件/协议，应用被唤起 | 唤起记录 | 菜单/图标/点击启动已验（KDE 截图）；关联唤起未验——验收 fixture 未声明关联对象，需先补声明再验收 |
+| deb/rpm 文件/协议关联双击唤起 | GUI 桌面宿主双击 `.desktop` 声明关联的文件/协议，应用被唤起 | 唤起记录 | 菜单/图标/点击启动已验（KDE 截图）；验收 fixture 已声明 `text/plain`+`x-scheme-handler:bundler-fixture` 关联对象且装后断言自动化；GUI 双击唤起观感仍需人工 |
 | `.app` 默认处理器切换/多 handler | 文件/URL scheme 在默认应用界面切换处理器、多 handler 共存场景的实际唤起观察 | LaunchServices 记录、唤起日志 | `lsregister`+`open` 唤起已自动化；切换处理器属 GUI 用户动作只能人工 |
 | UPDATE `open -n` 桌面重启语义 | 真实 macOS 桌面会话下 `open -n` 重启应用的 Dock 图标/聚焦/路径观察 | 桌面会话观察记录 | 现有断言止于 `open` 返回码与进程存活（无头环境） |
+| deb systemd 生命周期补验 | 真实 systemd 宿主补验 `systemctl status`/journal、`-r` 后 unit 清理 | status/journal/清理记录 | 容器腿无 systemd；unit 落位、postinst `daemon-reload` 合成与真实宿主 `enable --now` 已验（2026-09-28 Ubuntu 记录，原 LINUX-DEB-OI-04） |

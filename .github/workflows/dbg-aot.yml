@@ -78,3 +78,37 @@ jobs:
           name: aot-win
           path: C:\aot\windows-arm64\bundler-updater.exe
           retention-days: 1
+
+  # windows-i686 引导件——x86 NativeAOT 需 VS x86 工具链，
+  # windows-2025 x64 runner 交叉产出，win32 件经 WOW64 冒烟同构于 win-arm 腿。
+  win-x86:
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x'
+      - name: MSVC x86 工具链探测（NativeAOT 需要链接器）
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          & $vswhere -latest -products * -property installationPath
+          & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+      - name: 产 windows-i686 引导件
+        shell: pwsh
+        run: dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r win-x86 -o C:\aot\windows-i686
+      - name: 冒烟——宿主真跑 apply 换包（WOW64）
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force C:\smoke\install, C:\smoke\payload | Out-Null
+          "v1" | Set-Content C:\smoke\install\app.txt -NoNewline
+          "v2" | Set-Content C:\smoke\payload\app.txt -NoNewline
+          & C:\aot\windows-i686\bundler-updater.exe apply --install-dir C:\smoke\install --payload C:\smoke\payload --log C:\smoke\u.log
+          if ($LASTEXITCODE -ne 0) { throw "apply rc=$LASTEXITCODE" }
+          if ((Get-Content C:\smoke\install\app.txt -Raw) -ne "v2") { throw "swap 未生效" }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: aot-win-x86
+          path: C:\aot\windows-i686\bundler-updater.exe
+          retention-days: 1

@@ -2,7 +2,7 @@
 
 本目录只放自动化测试工程、共享测试件与集成 fixture。
 `Special/` 存放不能收编成 dotnet test 的特殊验收脚本（真机/VM/凭证/交互/公网）；
-只能人工完成的验收项登记在 `docs/special-acceptance.md`，格式外部待办索引见 `docs/<format>-open-items.md`。
+只能人工/外部条件完成的验收项统一登记在 `docs/special-acceptance.md`。
 
 ## 工程
 
@@ -21,11 +21,12 @@
 测试类即格式：`NsisIntegrationTests`/`MacAppIntegrationTests`/`MacDmgIntegrationTests`/`MacPkgIntegrationTests`/`DebIntegrationTests`/`RpmIntegrationTests`/`AppImageIntegrationTests`/`ArchiveIntegrationTests`/`AlpineApkIntegrationTests`/`CliIntegrationTests`；本地包消费腿为 `MsiLocalPackagesTests`（在 `Bundler.LocalPackagesTests` 工程）。
 
 ```powershell
-dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-class "*DebIntegrationTests*"
-dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-method "*Smoke*"
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release -- --filter-class "*DebIntegrationTests*"
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release -- --filter-method "*Smoke*"
 ```
 
-xUnit v3/MTP 过滤器每次只接受一个名字，`--filter-class`/`--filter-method` 不支持 `A|B` 或逻辑写法。
+`--` 之后为传给测试宿主（Microsoft Testing Platform）的过滤选项，不是 `dotnet test` 自身参数；每次只接受一个名字，`--filter-class`/`--filter-method` 不支持 `A|B` 或逻辑写法。
+直接运行测试程序集（如 CI 脚本逐类驱动）时用 xUnit v3 原生单横线选项 `-class`/`-method`/`-trait`，参考 `scripts/ci/verify-*.sh|ps1`。
 
 ## 资源门禁（trait 与环境变量）
 
@@ -39,7 +40,7 @@ xUnit v3/MTP 过滤器每次只接受一个名字，`--filter-class`/`--filter-m
 | `interactive` | GUI 级验收：真实点击驱动安装向导/系统对话框 | Windows 需交互式桌面会话（UIA 可达）；macOS 需 TCC 辅助功能授权；缺席即 SKIP |
 
 ```powershell
-dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release --filter-trait "Requires=localinstall"
+dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release -- --filter-trait "Requires=localinstall"
 ```
 
 `localinstall` 双重门禁：trait 用于选择，`BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 是同意闸（对应原脚本 `-ConfirmLocalInstall`）。

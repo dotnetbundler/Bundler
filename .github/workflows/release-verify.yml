@@ -61,3 +61,84 @@ jobs:
             artifacts/ci/test-progress.log
           if-no-files-found: ignore
           retention-days: 1
+
+  # 同一份 macos-universal .app 在 x86_64 与 arm64 宿主各自原生启动。
+  # 生产腿产件+全量 sha256 清单随件上传；消费腿在两 mac 宿主校验同一清单再原生启动，
+  # "同一包"由清单比对钉死（非各腿重建）。universal 合并只收 FDD——消费腿靠
+  # setup-dotnet 的运行时启动（UniversalCodeProbe 拒自包含载荷）。
+  universal-produce:
+    name: universal-produce
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.x"
+      # fixture 走源内 buildTransitive targets——任务程序集须先建在 bin/Release，
+      # 否则 UsingTask 报 MSB4062（verify 脚本先 build 全解故集成腿无此坑）。
+      - name: 预构建 MSBuild 任务程序集
+        shell: bash
+        run: dotnet build src/Bundler.MSBuild/Bundler.MSBuild.csproj -c Release --nologo
+
+      - name: 产 macos-universal .app（FDD 合并）+ sha256 清单
+        shell: bash
+        run: |
+          set -euo pipefail
+          FIX=tests/Bundler.IntegrationTests/Fixtures/MacApp
+          # fixture 的 BundlerIcon 依赖 BundlerTestIconFile——造同款 512x512 PNG 头喂它
+          printf 'iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6AAAAAXNSR0IArs4c6Q==' | \
+            base64 -d > "$RUNNER_TEMP/icon.png"
+          dotnet publish "$FIX/BundlerMacAppIntegrationFixture.csproj" -c Release \
+            -p:BundlerUniversalTargets=osx-x64%3Bosx-arm64 \
+            -p:SelfContained=false \
+            "-p:BundlerTestIconFile=$RUNNER_TEMP/icon.png" \
+            "-p:BundlerIntegrationOutput=$RUNNER_TEMP/universal" --nologo
+          APP=$(find "$RUNNER_TEMP/universal" -type d -name '*.app' | head -1)
+          test -d "$APP"
+          ( cd "$APP" && find . -type f -exec shasum -a 256 {} + | sort ) \
+            > "$RUNNER_TEMP/universal/SHA256SUMS"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: universal-app
+          path: ${{ runner.temp }}/universal/
+          if-no-files-found: error
+          retention-days: 1
+
+  universal-consume:
+    name: universal-consume-${{ matrix.os }}
+    needs: universal-produce
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, macos-26-intel]
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.x"
+      - uses: actions/download-artifact@v7
+        with:
+          name: universal-app
+          path: ${{ runner.temp }}/uni
+      - name: 同包校验 + lipo 双切片 + 本宿主原生启动
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find "$RUNNER_TEMP/uni" -type d -name '*.app' | head -1)
+          ( cd "$APP" && shasum -a 256 -c "$RUNNER_TEMP/uni/SHA256SUMS" )
+          EXE="$APP/Contents/MacOS/BundlerMacIntegrationFixture"
+          lipo -info "$EXE"
+          lipo -info "$EXE" | grep -q "x86_64"
+          lipo -info "$EXE" | grep -q "arm64"
+          chmod +x "$EXE"   # 工件下载不保留执行位
+          OUT=$("$EXE" ci-marker)
+          echo "$OUT"
+          echo "$OUT" | grep -q "BundlerMacIntegrationFixture:ci-marker"

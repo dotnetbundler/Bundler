@@ -4,7 +4,7 @@
 > 冻结基线：`DebBundleConfiguration` 配置面与行为契约冻结于 `0.1.0-alpha.51`；冻结测试向量 = `Bundler.Tests` 141/141 + `DebIntegrationTests` 全绿；冻结后仅缺陷修复附回归测试。
 > 上游审计已完成（Tauri 固定快照 `447fa9f`）。
 > 规范入口：`docs/roadmap.md`；跨格式规则见 `docs/development-rules.md`。
-> 逐项能力状态见 [`docs/linux-deb-capability-matrix.md`](linux-deb-capability-matrix.md)；外部条件见 [`docs/linux-deb-open-items.md`](linux-deb-open-items.md)；人工/特殊验收见 [`docs/special-acceptance.md`](special-acceptance.md)。
+> 逐项能力状态见 [`docs/linux-deb-capability-matrix.md`](linux-deb-capability-matrix.md)；外部条件与人工/特殊验收统一登记在 [`docs/special-acceptance.md`](special-acceptance.md)。
 
 ## 1. 已确认决策（2026-09-27，用户逐条确认）
 
@@ -37,7 +37,7 @@
 11. **MSBuild 多格式**：放开适配层单格式限制，`BundlerFormats=deb;rpm` 同次 publish 由管线扇出（管线本身支持多后端，仅 Task 分发改动）；LINUX-DEB-1 先落地 `deb` 单格式，多格式扇出随 LINUX-RPM-1 一并验证。
 12. **分支**：`linux-deb-development`（逐格式分支，沿用 mac 先例），rpm/appimage 各自 `linux-rpm-development`/`linux-appimage-development`。
 13. **阶段骨架**：每格式"最小可用→元数据与桌面集成→脚本/systemd/压缩→原生 E2E 矩阵→审计冻结"五段；对应文档集在各自规划轮补齐。
-14. **命名**：示例 `samples/HelloDebApp`；fixture `tests/Bundler.ApiTests`（`DebApiTests`）；集成 `tests/Bundler.IntegrationTests` 的 `DebIntegrationTests`（fixture `Fixtures/Deb/`）；文档 ID 前缀 `LINUX-DEB-OI-xx`/`LINUX-DEB-MT-xx`。
+14. **命名**：示例 `samples/HelloDebApp`；fixture `tests/Bundler.ApiTests`（`DebApiTests`）；集成 `tests/Bundler.IntegrationTests` 的 `DebIntegrationTests`（fixture `Fixtures/Deb/`）。
 
 ## 2. 打包工具下限（三层口径）
 
@@ -66,4 +66,4 @@
 | 验证层 | 内容 |
 | --- | --- |
 | 本机自动 | `dpkg-deb -I/-c` 结构、`sudo dpkg -i`/`dpkg -r`/`dpkg -P` 真实装卸、`dpkg -L` 清单、`lintian`、`desktop-file-validate`、systemd 单元落位、脚本执行标记、容器内装卸（docker debian/ubuntu） |
-| 人工/外部 | GUI 桌面观感（菜单项/图标/文件关联双击）、linux-aarch64 真实宿主、更多发行版矩阵（Debian oldstable、非 systemd 发行版）、apt 仓库工作流、生产签名流程（若后续阶段引入） |
+| 人工/外部 | GUI 桌面观感（文件/协议关联双击唤起——登记 `docs/special-acceptance.md`；菜单项/图标/点击启动已于 2026-09-28 KDE 真桌面验证）；更广发行版宿主矩阵（非 systemd 发行版/oldstable/旧 dpkg）属 CI 扩版候选；apt 仓库工作流已于 2026-09-28 实证消解、包级签名已裁决明确拒绝 |

@@ -1,7 +1,7 @@
 # Linux `.deb` 能力矩阵
 
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
-外部待验收行绑定到 `docs/linux-deb-open-items.md`、`docs/special-acceptance.md` 中的明确项。
+外部待验收行绑定到 `docs/special-acceptance.md` 中的明确项。
 上游参照：Tauri 审计（快照 `447fa9f`）；决策与阶段见 `docs/linux-deb-roadmap.md`。
 本矩阵于 2026-09-27 规划轮建立，已于 LINUX-DEB-5 定稿（冻结基线 `0.1.0-alpha.51`）；"已实现"行以 `DebIntegrationTests` 与 `tests/Bundler.Tests` DebTests 为证据。
 
@@ -10,7 +10,7 @@
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
 | `.deb` 产物（托管 ar/tar.gz 写入器，零原生工具） | 已实现 | LINUX-DEB-1 | `OutputDirectory/<package>_<version>-<rel>_<arch>.deb`（默认 flat；`outputLayout=byFormat` 时 `deb/` 分目录） + `.sha256` 侧车；`dpkg-deb -I`/`ar t`/`tar` 结构断言已通过 |
-| 任意构建宿主（含 Windows/macOS CI） | 已实现（Linux 宿主验证）；Linux 侧已由 CI 收编（release-verify ubuntu-arm 真机 + qemu/docker 发行版腿） | LINUX-DEB-1 | 纯托管写出，无宿主 OS 门控；Windows/macOS 宿主构建腿属 LINUX-DEB-OI-05 |
+| 任意构建宿主（含 Windows/macOS CI） | 已实现（Linux 宿主验证）；Linux 侧已由 CI 收编（release-verify ubuntu-arm 真机 + qemu/docker 发行版腿） | LINUX-DEB-1 | 纯托管写出，无宿主 OS 门控；Windows/macOS 宿主产件已由联合测试跨宿主验证 |
 | 目录载荷 → `usr/lib/<package-name>/` | 已实现 | LINUX-DEB-1 | 默认安装根；`BundlerDebInstallRoot` 可改 `/opt/<name>` 等绝对路径 |
 | `usr/bin/<command>` 符号链接 | 已实现 | LINUX-DEB-1 | `/usr` 根下指向 `../lib/<package>/<main>`，其他根用绝对目标；`BundlerDebBinLink` 可改名或 `none` 关闭 |
 | 版本映射 SemVer→deb（`~` 预发布、`-revision`、`+` 保留） | 已实现 | LINUX-DEB-1 | 默认映射表；`BundlerDebVersion`/`BundlerDebRelease`/`BundlerDebEpoch` 覆盖 |
@@ -29,7 +29,7 @@
 | `.desktop` 生成与 `usr/share/applications/` 落位 | 已实现 | LINUX-DEB-2 | 决策 5 全字段（Type/Name/Comment/Exec 占位符/Icon/Terminal/Categories/MimeType 并集）；`desktop-file-validate` 对生成与安装后文件双重断言 |
 | 自定义 `.desktop` 整文件覆盖 | 已实现 | LINUX-DEB-2 | `BundlerDebDesktopFile` 原样打包到 applications 路径；内容合法性属调用方责任 |
 | hicolor 图标（PNG 尺寸探测、`@2x` 密度目录） | 已实现 | LINUX-DEB-2 | PNG 签名+IHDR 探测尺寸；`@2x` 文件名后缀 → `<W>x<H>@2`；非 PNG 报错 |
-| AppStream metainfo | 已实现 | LINUX-DEB-2 | `BundlerDebMetainfoFile` 可选 → `usr/share/metainfo/<包名>.metainfo.xml` |
+| AppStream metainfo | 已实现 | LINUX-DEB-2 | `BundlerDebMetainfoFile` 可选 → `usr/share/metainfo/<包名>.metainfo.xml`；落盘名随包名是固定契约——上游 `validate-tree` 要求文件名==组件 id，rDNS id 与非 rDNS 包名只能满足其一（已记入 lintian 豁免，内容本体仍按 pedantic 零提示） |
 | `ChangelogFile`→`changelog.gz`、`LicenseFile`→`copyright` | 已实现 | LINUX-DEB-2 | `usr/share/doc/<包名>/`；changelog 自动 gzip |
 | `changelog.Debian.gz` 打包侧变更日志 | 已实现 | LINUX-DEB-4 | 自动补发单行打包条目（固定日期 Tue, 01 Jan 1980 保字节确定性）；消解 lintian `debian-changelog-file-missing-or-wrong-name` |
 | 包内绝对路径自定义映射（`/etc` 等载荷外路径） | 已实现 | LINUX-DEB-2 | `@(BundlerDebFile)` `Destination` 元数据（绝对路径含文件名，拒相对/`..`/空段）；API 面 `DebFileEntry` |
@@ -41,7 +41,7 @@
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
 | maintainer 脚本（preinst/postinst/prerm/postrm） | 已实现 | LINUX-DEB-3 | `BundlerDeb{PreInstall,PostInstall,PreUninstall,PostUninstall}File` 整文件注入 control 归档 0755（shebang+LF 校验）；真实 `dpkg -i/-r` 标记断言 |
-| systemd unit（`usr/lib/systemd/system/`） | 已实现（落位+合成）/外部待验收（真实 enable/start） | LINUX-DEB-3 | `BundlerDebSystemdServiceFile` → `usr/lib/systemd/system/<包名>.service`；postinst `daemon-reload` 自动合成（与调用方脚本合并）；OI-04 保留真实 systemd 宿主验收 |
+| systemd unit（`usr/lib/systemd/system/`） | 已实现（落位+合成+真实 `enable --now`）/外部待验收（status/journal/卸载清理） | LINUX-DEB-3 | `BundlerDebSystemdServiceFile` → `usr/lib/systemd/system/<包名>.service`；postinst `daemon-reload` 自动合成（与调用方脚本合并）；真实宿主 `daemon-reload`/`enable --now` 已验（2026-09-28 Ubuntu 记录）；status/journal/`-r` 后 unit 清理挂 `docs/special-acceptance.md` |
 | conffiles 声明 | 已实现 | LINUX-DEB-3 | `BundlerDebConfigLocations` 显式列表 + `/etc` 下 `BundlerDebFile` 自动登记（均校验载荷存在）；真实 `-r` 保留/`-P` 清除与升级 `--force-confold` 断言 |
 | 压缩选项（gzip 默认；xz/zstd 候选） | 已实现（gzip）/登记拒绝（xz/zstd） | LINUX-DEB-3 | `BundlerDebCompression` 仅接受 `gzip`；xz/zstd 拒绝并说明（netstandard2.0 无托管编码器；zstd 另需 dpkg≥1.21.18） |
 | 升级/降级语义实测 | 已实现（升级）/写实登记（降级） | LINUX-DEB-3 | 同包 `dpkg -i` 1.0.0→1.0.1 + conffile 修改保留断言；降级需 `--force-downgrade` 属 dpkg 语义写实 |
@@ -61,5 +61,5 @@
 | `dpkg -i` 真实安装（本机 sudo） | 已实现 | LINUX-DEB-1 | `DebIntegrationTests` 装卸腿 + `dpkg -s`/`dpkg -L`/链接启动断言 |
 | `dpkg -r`/`dpkg -P` 卸载语义 | 已实现 | LINUX-DEB-1/3 | `-r` 删普通文件留 conffile、`-P` 全清——真实断言 |
 | 同包升级覆盖安装 | 已实现 | LINUX-DEB-3 | `dpkg -i` 1.0.0→1.0.1 后 `dpkg -s` 版本断言 + conffile 本地修改保留 |
-| `linux-aarch64` 产物 | 已实现（结构+运行） | LINUX-DEB-4 | `linux-aarch64` publish → `_arm64.deb`、`Architecture: arm64`、载荷结构断言全绿；2026-10 `ubuntu-24.04-arm` CI 真机装卸跑绿（`arm64-real-hw.sh`，OI-01 剩观感人工） |
-| 多发行版安装矩阵 | 已实现（debian:stable + ubuntu:latest 容器）/外部待验收（更广矩阵） | LINUX-DEB-4 | docker 容器内真实 `dpkg -i`/运行/`-r`/`-P` 断言全绿；GUI/更多发行版属 LINUX-DEB-OI-02 |
+| `linux-aarch64` 产物 | 已实现（结构+真机装跑卸） | LINUX-DEB-4 | `linux-aarch64` publish → `_arm64.deb`、`Architecture: arm64`、载荷结构断言全绿；`release-verify` `ubuntu-26.04-arm` 真机腿收编 `arm64-real-hw.sh --deb`（真 `dpkg -i`/PATH/`-r`，2026-10-09 跑绿，PR #44/#45）；真机观感项挂 `docs/special-acceptance.md` |
+| 多发行版安装矩阵 | 已实现（debian:stable/bookworm/bullseye + ubuntu:latest 容器） | LINUX-DEB-4 | docker 容器内真实 `dpkg -i`/运行/`-r`/`-P` 断言全绿；另有 `debian:trixie` 容器 lintian 豁免闸腿；更广发行版矩阵属 CI 扩版候选，非人工验收项 |

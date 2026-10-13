@@ -1,7 +1,7 @@
 # macOS `.pkg` 能力矩阵
 
 `已实现`、`部分实现`、`计划实现`、`外部待验收`、`不适用`、`明确拒绝` 状态口径见 `docs/development-rules.md`；
-已实现行验收证据：`Bundler.Tests` 122 项 + `MacPkgIntegrationTests`（macOS 26.5.2 arm64 全绿）；外部待验收行绑定到 `docs/mac-pkg-open-items.md`、`docs/special-acceptance.md` 中的明确 ID。
+已实现行验收证据：`Bundler.Tests` 122 项 + `MacPkgIntegrationTests`（macOS 26.5.2 arm64 全绿）；外部待验收行绑定到 `docs/special-acceptance.md` 中的明确项。
 `.pkg` 无上游参照（tauri 无 `.pkg` 输出），能力集由原生工具链语义与已确认边界决定。
 决策已于 `2026-09-26` 全部确认；`MAC-PKG-1..5` 全部完成，本矩阵已于 MAC-PKG-5 定稿（冻结基线 `0.1.0-alpha.47`），状态列如实反映当前实现。
 
@@ -33,7 +33,7 @@
 | --- | --- | --- | --- |
 | Developer ID Installer 签名 | 已实现 | MAC-PKG-3 实测 | 组件包 `pkgbuild --sign --timestamp`、分发包 `productsign --sign`；`"-"`（ad-hoc）明确拒绝；无效身份真实失败已验 |
 | 临时钥匙串证书导入 | 已实现 | MAC-PKG-3 单测 | p12 → 一次性 keychain → `--keychain`；构建后销毁 |
-| `.pkg` 公证 + `stapler` | 已实现（接线） | MAC-PKG-3 单测 | `xcrun notarytool submit` 直接收 `.pkg` + `stapler`；默认关闭；真实凭证属外部待验收 OI-03 |
+| `.pkg` 公证 + `stapler` | 已实现（接线） | MAC-PKG-3 单测 | `xcrun notarytool submit` 直接收 `.pkg` + `stapler`；默认关闭；真实凭证属外部待验收（`docs/special-acceptance.md`） |
 | `ScriptsDirectory` 专家脚本旋钮 | 已实现 | MAC-PKG-3 实测 | `pkgbuild --scripts` 原样收目录；`postinstall` 在 per-user 真实安装中执行已验（标记文件断言）；责任边界已标注 |
 | `preinstall`/`postinstall` 任意脚本默认面 | 明确拒绝 | — | 提权任意脚本风险面等价 MSI 自定义动作，仅专家模式 |
 
@@ -45,5 +45,5 @@
 | 覆盖安装升级 | 已实现 | MAC-PKG-4 实测 | 同 identifier v1→v2 覆盖安装实测：收据 `pkg-version` 更新到 2.0.0；无降级保护 |
 | 同 bundle 标识既有副本时的安装重定位 | 已记录边界 | 2026-09-30 联合测试实测 | 宿主存在同 CFBundleIdentifier 的既有 `.app` 副本时，macOS installer 将新 pkg 载荷安装到既有副本位置（重定位）而非全新目标路径；移除旧副本后按默认目标安装——系统原生语义非缺陷 |
 | 一键卸载 | 明确拒绝 | — | `.pkg` 无此语义；`pkgutil --forget` 只清收据，文件按 BOM 清单清理 |
-| `macos-x86_64` 产物 | 已实现（结构） | MAC-PKG-4 实测 | `macos-x86_64/pkg/` 产出、expand-full payload 内 `file` 断言 x86_64 Mach-O；运行态 2026-10 CI 两腿（Intel + Rosetta）实跑通过；观感仍人工（OI-04）；裸 `macos-universal` 通用目标 `e7dfeae` 起亦通 |
-| `system` 域管理员安装 | 外部待验收 | MAC-PKG-4 | 本机无 root，登记 MAC-PKG-OI-01 |
+| `macos-x86_64` 产物 | 已实现（结构） | MAC-PKG-4 实测 | `macos-x86_64/pkg/` 产出、expand-full payload 内 `file` 断言 x86_64 Mach-O；运行态 2026-10 CI 两腿（Intel + Rosetta）实跑通过；观感仍人工（`docs/special-acceptance.md`）；裸 `macos-universal` 通用目标 `e7dfeae` 起亦通 |
+| `system` 域管理员安装 | 已实现 | MAC-PKG-4 | sudo `installer -pkg` 真装/卸载断言已由集成腿实证；干净宿主观感挂 `docs/special-acceptance.md` |
