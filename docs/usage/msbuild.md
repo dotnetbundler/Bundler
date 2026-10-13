@@ -105,7 +105,7 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 </ItemGroup>
 ```
 
-- `BundlerIcon`：图标集，按扩展名分发——Windows `.ico`（第一个作 NSIS 安装器/卸载器回退）、Linux PNG（hicolor 集）、macOS `.png`/`.icns`/`.car`/`.icon`（见 [`mac-app.md`](mac-app.md) §3.2）。
+- `BundlerIcon`：图标集，按扩展名分发——Windows `.ico`（第一个作 NSIS 安装器/卸载器回退）、Linux PNG（hicolor 集）、macOS `.png`/`.icns`/`.car`/`.icon`（见 [`mac-app.md`](formats/mac-app.md) §3.2）。
 - `BundlerResource`：任意资源随载荷进安装根；`Destination` 省略时用源文件名；目标路径冲突或逃逸安装目录打包前报错。
 - `BundlerFileAssociation`：`Include`=扩展名（可带前导点，不区分大小写），`Name`/`Description`/`MimeType` 元数据。
   Windows 注册 ProgID/"打开方式"/默认应用 Capabilities（不抢用户默认），Linux 生成 freedesktop MimeType，macOS 落 `CFBundleDocumentTypes`+UTI。
@@ -117,16 +117,16 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 
 | 格式 | MSBuild 前缀 | 载荷项 | 使用文档 |
 | --- | --- | --- | --- |
-| NSIS | `BundlerNsis*` | `BundlerNsisLanguageFile` | [`win-nsis.md`](win-nsis.md) |
-| MSI | `BundlerWix*` | `BundlerWixLanguageFile`/`…Extension*`/`…ExpertMergeModule` | [`win-msi.md`](win-msi.md) |
-| `.app` | `BundlerMacApp*` | `BundlerMacAppFile`/`…FrameworkDirectory`/`BundlerMacDocumentType`/`BundlerMacUrlType` | [`mac-app.md`](mac-app.md) |
-| `.dmg` | `BundlerMacDmg*` | —（经内层 `.app`） | [`mac-dmg.md`](mac-dmg.md) |
-| `.pkg` | `BundlerMacPkg*` | `BundlerMacPkgFile` | [`mac-pkg.md`](mac-pkg.md) |
-| `.deb` | `BundlerDeb*` | `BundlerDebFile` | [`linux-deb.md`](linux-deb.md) |
-| `.rpm` | `BundlerRpm*` | `BundlerRpmFile` | [`linux-rpm.md`](linux-rpm.md) |
-| `.AppImage` | `BundlerAppImage*` | `BundlerAppImageFile` | [`linux-appimage.md`](linux-appimage.md) |
-| `.apk` | `BundlerAlpineApk*` | `BundlerAlpineApkFile` | [`linux-alpine-apk.md`](linux-alpine-apk.md) |
-| `.zip`/`.tar.gz` | `BundlerArchive*` | `BundlerArchiveFile` | [`archive.md`](archive.md) |
+| NSIS | `BundlerNsis*` | `BundlerNsisLanguageFile` | [`win-nsis.md`](formats/win-nsis.md) |
+| MSI | `BundlerWix*` | `BundlerWixLanguageFile`/`…Extension*`/`…ExpertMergeModule` | [`win-msi.md`](formats/win-msi.md) |
+| `.app` | `BundlerMacApp*` | `BundlerMacAppFile`/`…FrameworkDirectory`/`BundlerMacDocumentType`/`BundlerMacUrlType` | [`mac-app.md`](formats/mac-app.md) |
+| `.dmg` | `BundlerMacDmg*` | —（经内层 `.app`） | [`mac-dmg.md`](formats/mac-dmg.md) |
+| `.pkg` | `BundlerMacPkg*` | `BundlerMacPkgFile` | [`mac-pkg.md`](formats/mac-pkg.md) |
+| `.deb` | `BundlerDeb*` | `BundlerDebFile` | [`linux-deb.md`](formats/linux-deb.md) |
+| `.rpm` | `BundlerRpm*` | `BundlerRpmFile` | [`linux-rpm.md`](formats/linux-rpm.md) |
+| `.AppImage` | `BundlerAppImage*` | `BundlerAppImageFile` | [`linux-appimage.md`](formats/linux-appimage.md) |
+| `.apk` | `BundlerAlpineApk*` | `BundlerAlpineApkFile` | [`linux-alpine-apk.md`](formats/linux-alpine-apk.md) |
+| `.zip`/`.tar.gz` | `BundlerArchive*` | `BundlerArchiveFile` | [`archive.md`](formats/archive.md) |
 
 ## 7. Windows Authenticode 签名
 
@@ -153,7 +153,7 @@ target 语法、架构词与产物命名契约见 [`../targets.md`](../targets.m
 ```
 
 内置签名器走 Windows Authenticode API，启用时构建宿主必须 Windows；外部 provider 可在其支持的宿主运行。
-本地自签名端到端验证脚本见 [`win-nsis.md` §4.5](win-nsis.md)；签名决策与裁决见 [`../signing.md`](../signing.md)。
+本地自签名端到端验证脚本见 [`win-nsis.md` §4.5](formats/win-nsis.md)；签名决策与裁决见 [`../signing.md`](../signing.md)。
 
 ## 8. UPDATE 自更新
 

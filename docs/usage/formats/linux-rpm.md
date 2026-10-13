@@ -1,6 +1,6 @@
 # RPM `.rpm` 使用指南
 
-产出 RPM `.rpm`。纯托管 lead/header/cpio/gzip 写入器 + `RpmPackageReader` 回读器，无原生工具依赖。语义契约见 [`../formats/linux-rpm.md`](../formats/linux-rpm.md)。
+产出 RPM `.rpm`。纯托管 lead/header/cpio/gzip 写入器 + `RpmPackageReader` 回读器，无原生工具依赖。语义契约见 [`../formats/linux-rpm.md`](../../formats/linux-rpm.md)。
 
 ## 1. 接入
 

@@ -1,6 +1,6 @@
 # NSIS 安装器使用指南
 
-产出 Windows NSIS `.exe` 安装器。语义契约（journal/恢复/退出码/锁定载荷/CLI 协议）见 [`../formats/win-nsis.md`](../formats/win-nsis.md)。
+产出 Windows NSIS `.exe` 安装器。语义契约（journal/恢复/退出码/锁定载荷/CLI 协议）见 [`../formats/win-nsis.md`](../../formats/win-nsis.md)。
 
 ## 1. 接入
 
@@ -115,7 +115,7 @@ MSBuild 前缀 `BundlerNsis*`；`bundler.json` 分节 `nsis.*`（`--nsis.<knob>`
 
 ### 4.5 签名
 
-MSBuild 用共享 `BundlerWindowsSigning*`（见 [`msbuild.md` §7](msbuild.md)）；API 用 `NsisBundlerOptions.Signer`（`WindowsAuthenticodeSigner` 或自定义 `IBundleSigner`，目标级 `SigningFiles` 追加追签文件）。
+MSBuild 用共享 `BundlerWindowsSigning*`（见 [`msbuild.md` §7](../msbuild.md)）；API 用 `NsisBundlerOptions.Signer`（`WindowsAuthenticodeSigner` 或自定义 `IBundleSigner`，目标级 `SigningFiles` 追加追签文件）。
 CLI 无签名配置面。
 
 本地自签名端到端验证（只验证签名流程；自签名证书无 CA 链，`Get-AuthenticodeSignature` 报 `UnknownError` 属预期）：

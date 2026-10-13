@@ -19,10 +19,10 @@ bundler bundle --input-dir <publish目录>  # 或 CLI：只指发布目录，其
 
 | 平台 | 格式 | 使用文档 | 契约文档 |
 | --- | --- | --- | --- |
-| Windows | `nsis`、`msi` | [`win-nsis.md`](docs/usage/win-nsis.md)、[`win-msi.md`](docs/usage/win-msi.md) | [`docs/formats/`](docs/formats/) |
-| macOS | `.app`、`.dmg`、`.pkg` | [`mac-app.md`](docs/usage/mac-app.md)、[`mac-dmg.md`](docs/usage/mac-dmg.md)、[`mac-pkg.md`](docs/usage/mac-pkg.md) | 同上 |
-| Linux | `.deb`、`.rpm`、`.AppImage`、Alpine `.apk` | [`linux-deb.md`](docs/usage/linux-deb.md)、[`linux-rpm.md`](docs/usage/linux-rpm.md)、[`linux-appimage.md`](docs/usage/linux-appimage.md)、[`linux-alpine-apk.md`](docs/usage/linux-alpine-apk.md) | 同上 |
-| 跨平台 | `.zip`/`.tar.gz` | [`archive.md`](docs/usage/archive.md) | 同上 |
+| Windows | `nsis`、`msi` | [`win-nsis.md`](docs/usage/formats/win-nsis.md)、[`win-msi.md`](docs/usage/formats/win-msi.md) | [`docs/formats/`](docs/formats/) |
+| macOS | `.app`、`.dmg`、`.pkg` | [`mac-app.md`](docs/usage/formats/mac-app.md)、[`mac-dmg.md`](docs/usage/formats/mac-dmg.md)、[`mac-pkg.md`](docs/usage/formats/mac-pkg.md) | 同上 |
+| Linux | `.deb`、`.rpm`、`.AppImage`、Alpine `.apk` | [`linux-deb.md`](docs/usage/formats/linux-deb.md)、[`linux-rpm.md`](docs/usage/formats/linux-rpm.md)、[`linux-appimage.md`](docs/usage/formats/linux-appimage.md)、[`linux-alpine-apk.md`](docs/usage/formats/linux-alpine-apk.md) | 同上 |
+| 跨平台 | `.zip`/`.tar.gz` | [`archive.md`](docs/usage/formats/archive.md) | 同上 |
 | 其他 | CLI、MSBuild、UPDATE、签名 | [`cli.md`](docs/usage/cli.md)、[`msbuild.md`](docs/usage/msbuild.md) | [`docs/update.md`](docs/update.md)、[`docs/signing.md`](docs/signing.md) |
 
 各格式打包/消费的平台支持范围汇总见 [`docs/support-matrix.md`](docs/support-matrix.md)。

@@ -1,6 +1,6 @@
 # `.zip`/`.tar.gz` 归档使用指南
 
-产出分发归档：`.zip` 或 `.tar.gz` + `.sha256` 侧车。纯托管写入器（unix mode/符号链接保留），**任意宿主可构建**；唯一例外通路：macOS 宿主持 xattr 载荷时改走系统 `ditto`/`bsdtar`（产 `__MACOSX/` AppleDouble 段，失败回退托管写出器并告警）。语义契约见 [`../formats/archive.md`](../formats/archive.md)。
+产出分发归档：`.zip` 或 `.tar.gz` + `.sha256` 侧车。纯托管写入器（unix mode/符号链接保留），**任意宿主可构建**；唯一例外通路：macOS 宿主持 xattr 载荷时改走系统 `ditto`/`bsdtar`（产 `__MACOSX/` AppleDouble 段，失败回退托管写出器并告警）。语义契约见 [`../formats/archive.md`](../../formats/archive.md)。
 
 ## 1. 接入
 

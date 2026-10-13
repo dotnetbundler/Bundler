@@ -1,6 +1,6 @@
 # AppImage 使用指南
 
-产出 `.AppImage`。内嵌固定版本 `appimagetool` + type2 runtime（SHA-256 provenance），**仅 Linux 宿主构建**。语义契约见 [`../formats/linux-appimage.md`](../formats/linux-appimage.md)。
+产出 `.AppImage`。内嵌固定版本 `appimagetool` + type2 runtime（SHA-256 provenance），**仅 Linux 宿主构建**。语义契约见 [`../formats/linux-appimage.md`](../../formats/linux-appimage.md)。
 
 ## 1. 接入
 

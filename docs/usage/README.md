@@ -17,16 +17,16 @@
 
 | 产物 | 格式名（`BundlerFormats`/`--formats`） | 使用文档 | 宿主要求 |
 | --- | --- | --- | --- |
-| Windows NSIS 安装器 `.exe` | `nsis` | [`win-nsis.md`](win-nsis.md) | 任意宿主 |
-| Windows MSI `.msi` | `msi` | [`win-msi.md`](win-msi.md) | 仅 Windows |
-| macOS `.app` | `app` | [`mac-app.md`](mac-app.md) | 任意宿主（签名/公证需 macOS） |
-| macOS `.dmg` | `dmg` | [`mac-dmg.md`](mac-dmg.md) | 仅 macOS |
-| macOS `.pkg` | `pkg` | [`mac-pkg.md`](mac-pkg.md) | 仅 macOS |
-| Debian `.deb` | `deb` | [`linux-deb.md`](linux-deb.md) | 任意宿主 |
-| RPM `.rpm` | `rpm` | [`linux-rpm.md`](linux-rpm.md) | 任意宿主 |
-| Linux `.AppImage` | `appimage` | [`linux-appimage.md`](linux-appimage.md) | 仅 Linux |
-| Alpine `.apk` | `alpineapk` | [`linux-alpine-apk.md`](linux-alpine-apk.md) | 任意宿主 |
-| `.zip`/`.tar.gz` | `zip`/`targz` | [`archive.md`](archive.md) | 任意宿主 |
+| Windows NSIS 安装器 `.exe` | `nsis` | [`win-nsis.md`](formats/win-nsis.md) | 任意宿主 |
+| Windows MSI `.msi` | `msi` | [`win-msi.md`](formats/win-msi.md) | 仅 Windows |
+| macOS `.app` | `app` | [`mac-app.md`](formats/mac-app.md) | 任意宿主（签名/公证需 macOS） |
+| macOS `.dmg` | `dmg` | [`mac-dmg.md`](formats/mac-dmg.md) | 仅 macOS |
+| macOS `.pkg` | `pkg` | [`mac-pkg.md`](formats/mac-pkg.md) | 仅 macOS |
+| Debian `.deb` | `deb` | [`linux-deb.md`](formats/linux-deb.md) | 任意宿主 |
+| RPM `.rpm` | `rpm` | [`linux-rpm.md`](formats/linux-rpm.md) | 任意宿主 |
+| Linux `.AppImage` | `appimage` | [`linux-appimage.md`](formats/linux-appimage.md) | 仅 Linux |
+| Alpine `.apk` | `alpineapk` | [`linux-alpine-apk.md`](formats/linux-alpine-apk.md) | 任意宿主 |
+| `.zip`/`.tar.gz` | `zip`/`targz` | [`archive.md`](formats/archive.md) | 任意宿主 |
 
 > "任意宿主"=托管实现随包携带工具链，不依赖宿主原生工具也不在线下载。
 > 各目标架构与产物消费面的完整矩阵见 [`../support-matrix.md`](../support-matrix.md)；target 语法与命名契约见 [`../targets.md`](../targets.md)。
