@@ -20,7 +20,7 @@ internal sealed class AppImageBundleBackend(
         AppImageToolset.RequireLinuxHost();
         var built = AppDirBuilder.Build(
             context.Configuration, context.Item, settings, context.WorkDirectory, context.Logger);
-        var toolset = AppImageToolset.Resolve(
+        var toolset = await AppImageToolset.ResolveAsync(
             built.EnvironmentArchitecture, options.ToolsetCacheDirectory, cancellationToken);
         var signing = PrepareSigning(settings, context.WorkDirectory);
 

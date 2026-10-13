@@ -1,6 +1,7 @@
 namespace DotNet.Bundler.Wix;
 
 using DotNet.Bundler;
+using DotNet.Bundler.Core;
 
 public sealed class WixBundlerOptions
 {
@@ -9,18 +10,6 @@ public sealed class WixBundlerOptions
     public IBundleLogger? Logger { get; init; }
     public IBundleSigner? Signer { get; init; }
 
-    internal string ResolveToolCacheDirectory()
-    {
-        if (!string.IsNullOrWhiteSpace(ToolCacheDirectory))
-        {
-            return Path.GetFullPath(ToolCacheDirectory!);
-        }
-
-        var localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        if (string.IsNullOrWhiteSpace(localData))
-        {
-            localData = Path.GetTempPath();
-        }
-        return Path.Combine(localData, "DotNetBundler", "tools");
-    }
+    internal string ResolveToolCacheDirectory() =>
+        ToolCache.ResolveCacheDirectory(ToolCacheDirectory);
 }
