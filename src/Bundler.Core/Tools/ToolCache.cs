@@ -77,13 +77,20 @@ public static class ToolCache
         var toolDirectory = Path.Combine(
             cacheDirectory,
             $"{set.Name}-{set.Version}-{set.ContentId.Substring(0, 12).ToLowerInvariant()}");
-        var expectedFiles = set.Files
-            .Select(file => new ManifestEntry(
-                NormalizeRelativePath(toolDirectory, file.RelativePath, nameof(set.Files)),
-                file.Length,
-                file.Sha256))
-            .OrderBy(entry => entry.RelativePath, PathComparer)
+        var plan = set.Files
+            .Select(file => (
+                File: file,
+                Expected: new ManifestEntry(
+                    NormalizeRelativePath(toolDirectory, file.RelativePath, nameof(set.Files)),
+                    file.Length,
+                    file.Sha256)))
+            .OrderBy(pair => pair.Expected.RelativePath, PathComparer)
             .ToArray();
+        if (plan.Any(p => p.Expected.RelativePath.Equals(ManifestFileName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new ArgumentException("Tool file set must not contain the reserved manifest path.", nameof(set.Files));
+        }
+        var expectedFiles = plan.Select(p => p.Expected).ToArray();
         if (expectedFiles.Select(e => e.RelativePath).Distinct(PathComparer).Count() != expectedFiles.Length)
         {
             throw new ArgumentException("Tool file set contains duplicate relative paths.", nameof(set.Files));
@@ -103,7 +110,7 @@ public static class ToolCache
         if (!ValidateCache(toolDirectory, set.ContentId, expectedFiles))
         {
             SafeDeleteTree(toolDirectory);
-            await InstallVerifiedAsync(cacheDirectory, toolDirectory, set, expectedFiles, openFile, cancellationToken);
+            await InstallVerifiedAsync(cacheDirectory, toolDirectory, set, plan, openFile, cancellationToken);
         }
 
         return ValidateCache(toolDirectory, set.ContentId, expectedFiles)
@@ -116,7 +123,7 @@ public static class ToolCache
         string cacheDirectory,
         string toolDirectory,
         ToolFileSet set,
-        IReadOnlyList<ManifestEntry> expectedFiles,
+        IReadOnlyList<(ToolFileSpec File, ManifestEntry Expected)> plan,
         Func<ToolFileSpec, CancellationToken, Task<Stream>> openFile,
         CancellationToken cancellationToken)
     {
@@ -138,14 +145,11 @@ public static class ToolCache
         try
         {
             Directory.CreateDirectory(stagingDirectory);
-            foreach (var file in set.Files)
+            foreach (var (file, expected) in plan)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var normalized = expectedFiles
-                    .Single(e => PathComparer.Equals(e.RelativePath,
-                        NormalizeRelativePath(cacheDirectory, file.RelativePath, nameof(set.Files))));
                 var destination = Path.Combine(stagingDirectory,
-                    normalized.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+                    expected.RelativePath.Replace('/', Path.DirectorySeparatorChar));
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                 using var input = await openFile(file, cancellationToken);
                 using (var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None))
@@ -161,8 +165,9 @@ public static class ToolCache
                 }
             }
 
-            WriteManifest(stagingDirectory, set.ContentId, expectedFiles);
-            if (!ValidateCache(stagingDirectory, set.ContentId, expectedFiles))
+            var expectedList = plan.Select(p => p.Expected).ToArray();
+            WriteManifest(stagingDirectory, set.ContentId, expectedList);
+            if (!ValidateCache(stagingDirectory, set.ContentId, expectedList))
             {
                 throw new InvalidDataException($"The materialized {set.Name} files failed integrity validation.");
             }
@@ -174,7 +179,7 @@ public static class ToolCache
         }
     }
 
-    internal static async Task<FileStream> AcquireLockAsync(string lockPath, CancellationToken cancellationToken)
+    private static async Task<FileStream> AcquireLockAsync(string lockPath, CancellationToken cancellationToken)
     {
         while (true)
         {
@@ -190,7 +195,7 @@ public static class ToolCache
         }
     }
 
-    internal static bool ValidateCache(
+    private static bool ValidateCache(
         string toolDirectory,
         string contentId,
         IReadOnlyList<ManifestEntry> expectedFiles)
@@ -269,7 +274,7 @@ public static class ToolCache
         }
     }
 
-    internal static void WriteManifest(
+    private static void WriteManifest(
         string toolDirectory,
         string contentId,
         IReadOnlyList<ManifestEntry> entries)
@@ -315,7 +320,7 @@ public static class ToolCache
         return reader.BaseStream.Position == reader.BaseStream.Length;
     }
 
-    internal static void DeleteWithRetry(Action delete)
+    private static void DeleteWithRetry(Action delete)
     {
         // Windows 上刚退出的工具进程可能短暂持有原生 dll/文件锁——瞬态删除冲突用有限重试吸收
         const int attempts = 10;
@@ -334,7 +339,7 @@ public static class ToolCache
         }
     }
 
-    internal static void SafeDeleteTree(string path)
+    private static void SafeDeleteTree(string path)
     {
         if (File.Exists(path) && !Directory.Exists(path))
         {
@@ -366,7 +371,7 @@ public static class ToolCache
         DeleteWithRetry(() => Directory.Delete(path));
     }
 
-    internal static bool IsReparsePoint(string path) =>
+    private static bool IsReparsePoint(string path) =>
         (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
 
     private static string ValidateRelativePath(string toolDirectory, string relativePath, string parameterName)
@@ -375,7 +380,7 @@ public static class ToolCache
         return Path.GetFullPath(Path.Combine(toolDirectory, normalized.Replace('/', Path.DirectorySeparatorChar)));
     }
 
-    private static string NormalizeRelativePath(string toolDirectory, string relativePath, string parameterName)
+    internal static string NormalizeRelativePath(string toolDirectory, string relativePath, string parameterName)
     {
         if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
         {
@@ -403,7 +408,7 @@ public static class ToolCache
         return fullPath.Substring(prefix.Length).Replace('\\', '/');
     }
 
-    private static void ValidateSha256(string value, string parameterName)
+    internal static void ValidateSha256(string value, string parameterName)
     {
         if (value.Length != 64 || value.Any(character => !Uri.IsHexDigit(character)))
         {
@@ -411,7 +416,7 @@ public static class ToolCache
         }
     }
 
-    private static void ValidateSegment(string value, string parameterName)
+    internal static void ValidateSegment(string value, string parameterName)
     {
         if (string.IsNullOrWhiteSpace(value) || value.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
             value is "." or "..")

@@ -30,6 +30,9 @@ public static class ZipToolCache
         ZipToolArchive archive,
         CancellationToken cancellationToken = default)
     {
+        ToolCache.ValidateSegment(archive.Name, nameof(archive.Name));
+        ToolCache.ValidateSegment(archive.Version, nameof(archive.Version));
+        ToolCache.ValidateSha256(archive.Sha256, nameof(archive));
         archivePath = Path.GetFullPath(archivePath);
         cacheDirectory = Path.GetFullPath(cacheDirectory);
         if (!File.Exists(archivePath))
@@ -38,11 +41,14 @@ public static class ZipToolCache
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        var toolDirectory = Path.Combine(
+            cacheDirectory,
+            $"{archive.Name}-{archive.Version}-{archive.Sha256.Substring(0, 12).ToLowerInvariant()}");
         VerifyArchive(archivePath, archive.Sha256);
         var expectedFiles = ReadArchiveManifest(archivePath);
         var requiredPaths = (archive.RequiredRelativePaths ?? Array.Empty<string>())
             .Append(archive.ExecutableRelativePath)
-            .Select(relativePath => NormalizeRequiredPath(relativePath, nameof(archive)))
+            .Select(relativePath => ToolCache.NormalizeRelativePath(toolDirectory, relativePath, nameof(archive)))
             .Distinct(ToolCache.PathComparer)
             .ToArray();
         foreach (var requiredPath in requiredPaths)
@@ -60,27 +66,31 @@ public static class ZipToolCache
             expectedFiles
                 .Select(e => new ToolFileSpec(e.RelativePath, e.Sha256, e.Length))
                 .ToArray());
-        // openFile 复用同一归档句柄逐项回流；钉值即归档内实测值，物化管线再核一遍。
-        using var zip = ZipFile.OpenRead(archivePath);
-        var entriesByPath = zip.Entries
-            .Where(e => !IsDirectoryEntry(e))
-            .ToDictionary(e => NormalizeArchiveEntry(e.FullName), ToolCache.PathComparer);
-        var resolved = await ToolCache.ResolveAsync(
-            cacheDirectory,
-            fileSet,
-            (file, _) => Task.FromResult<Stream>(entriesByPath[file.RelativePath].Open()),
-            cancellationToken);
+        // openFile 首次落盘时才打开归档句柄：缓存命中/等锁期间不占文件锁。
+        ZipArchive? zip = null;
+        Dictionary<string, ZipArchiveEntry>? entriesByPath = null;
+        ResolvedTool resolved;
+        try
+        {
+            resolved = await ToolCache.ResolveAsync(
+                cacheDirectory,
+                fileSet,
+                (file, _) =>
+                {
+                    zip ??= ZipFile.OpenRead(archivePath);
+                    entriesByPath ??= zip.Entries
+                        .Where(e => !IsDirectoryEntry(e))
+                        .ToDictionary(e => NormalizeArchiveEntry(e.FullName), ToolCache.PathComparer);
+                    return Task.FromResult<Stream>(entriesByPath[file.RelativePath].Open());
+                },
+                cancellationToken);
+        }
+        finally
+        {
+            zip?.Dispose();
+        }
         var executablePath = ToolCache.ResolveToolPath(resolved.DirectoryPath, archive.ExecutableRelativePath);
         return new ResolvedZipTool(resolved.DirectoryPath, executablePath);
-    }
-
-    private static string NormalizeRequiredPath(string relativePath, string parameterName)
-    {
-        if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
-        {
-            throw new ArgumentException("Tool archive paths must be non-empty relative paths.", parameterName);
-        }
-        return relativePath.Replace('\\', '/');
     }
 
     private static IReadOnlyList<ToolCache.ManifestEntry> ReadArchiveManifest(string archivePath)
