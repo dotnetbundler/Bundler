@@ -66,4 +66,4 @@
 | 验证层 | 内容 |
 | --- | --- |
 | 本机自动 | `dpkg-deb -I/-c` 结构、`sudo dpkg -i`/`dpkg -r`/`dpkg -P` 真实装卸、`dpkg -L` 清单、`lintian`、`desktop-file-validate`、systemd 单元落位、脚本执行标记、容器内装卸（docker debian/ubuntu） |
-| 人工/外部 | GUI 桌面观感（菜单项/图标/文件关联双击——登记 `docs/special-acceptance.md`）；更广发行版宿主矩阵（非 systemd 发行版/oldstable/旧 dpkg）属 CI 扩版候选；apt 仓库工作流已于 2026-09-28 实证消解、包级签名已裁决明确拒绝 |
+| 人工/外部 | GUI 桌面观感（文件/协议关联双击唤起——登记 `docs/special-acceptance.md`；菜单项/图标/点击启动已于 2026-09-28 KDE 真桌面验证）；更广发行版宿主矩阵（非 systemd 发行版/oldstable/旧 dpkg）属 CI 扩版候选；apt 仓库工作流已于 2026-09-28 实证消解、包级签名已裁决明确拒绝 |
