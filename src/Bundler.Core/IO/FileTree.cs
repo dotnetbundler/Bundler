@@ -27,7 +27,8 @@ internal static class FileTree
     }
 
     /// <summary>
-    /// 复制目录树。非常规文件（socket/FIFO/设备/链接）记警告跳过。
+    /// 复制目录树。非常规文件（socket/FIFO/设备节点）记警告跳过；
+    /// 软链经 stat 跟随——指向常规文件者按目标内容处理，悬空者由 File.Copy 自报错。
     /// <paramref name="resolveFileDestination"/> 为 null 时目标即同名文件；
     /// 非 null 时负责碰撞检测等调用方语义并可抛自定义异常。
     /// </summary>
@@ -44,6 +45,14 @@ internal static class FileTree
         Func<string, string, string>? resolveFileDestination = null,
         bool overwrite = true)
     {
+        if (links == TreeLinkPolicy.Reject && linkErrorMessage is null)
+        {
+            throw new ArgumentNullException(nameof(linkErrorMessage));
+        }
+        if (maxDepth < int.MaxValue && loopErrorMessage is null)
+        {
+            throw new ArgumentNullException(nameof(loopErrorMessage));
+        }
         // 目录符号链接环会让递归失控——Traverse 语义下调用方须传深度封顶。
         if (depth > maxDepth)
         {
