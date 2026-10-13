@@ -7,7 +7,7 @@
 ## 1. 核心决策
 
 - **覆盖格式**：nsis/msi/app/appimage/zip/targz 六件；deb/rpm/alpineapk 属包管理器领地明确排除；dmg 是运输件、pkg 是提权安装器，非更新载体。
-- **清单形态**：静态 JSON 按通道分文件（`bundler-update-feed.{channel}.json`，文件名=通道，零服务端分流）：`{version, notes, publishedAt, artifacts:[{rid, format, url, size, sha256, sig, blockmap?}]}`；产物 `url` 为裸文件名按清单目录解析；GitHub Releases/静态站直接可用。
+- **清单形态**：静态 JSON 按通道分文件（`bundler-update-feed.{channel}.json`，文件名=通道，零服务端分流）：`{channel, version, notes, publishedAt, artifacts:[{rid, format, file, url, size, sha256, sig, blockmap?}]}`；`url` 是相对清单所在目录的输出根路径（byFormat 布局含 `<format>/` 前缀），`file` 为裸文件名；GitHub Releases/静态站直接可用。
 - **签名**：ECDSA P-256（.NET BCL 内置，零依赖）；`.sig` 旁车（64B P1363 r‖s，与 `.sha256` 同位部署）——签名防伪、sha256 防传输损坏、HTTPS 防中间人，三层各职。
 - **安装身份**：`bundler-update.json` 旁车写入安装目录/载荷顶层（`format/rid/channel/feedUrl/publicKey` 五元），不改应用任何文件；兜底链：旁车→ARP 注册表/Info.plist/receipt→确定性报"更新不可用"，绝不乱猜。
 - **应用语义两式分工**：安装器格式走重跑安装器（nsis `/S /UPDATE`、msi `msiexec` major upgrade——复用既有升级语义零新造）；非安装器格式走 Sparkle 式三段换包（stage→验签→备份→原子替换→重启）；**同格式约束**（zip 覆盖安装器装的程序会使 ARP/注册表/快捷方式/卸载所有权全线失联）。

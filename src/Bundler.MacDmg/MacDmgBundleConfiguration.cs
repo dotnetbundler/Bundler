@@ -6,7 +6,7 @@ public enum MacDmgCompression
     /// <summary>zlib; mountable on OS X 10.1+ — pick this for prehistoric mount hosts.</summary>
     Udzo,
 
-    /// <summary>LZFSE (default); smaller and faster, mountable on macOS 10.12+.</summary>
+    /// <summary>LZMA (default); smaller and faster, mountable on macOS 10.15+.</summary>
     Ulmo,
 
     /// <summary>bzip2; mountable on OS X 10.4+.</summary>

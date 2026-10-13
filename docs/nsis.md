@@ -9,6 +9,7 @@
 - 覆盖：身份/行为契约、工具供应、版本升级、旧 MSI 迁移、事务恢复、自动化协议、文件关联/深链接、快捷方式、本地化、签名、缓存完整性。
 - 明确不做：任意应用运行时安装（WebView2、VC Runtime）、Tauri updater 产物、ACL/ADS/稀疏文件等任意文件系统元数据的完整保真。
 - 受管文件树（构建输入、资源、安装快照/恢复、journal、工具缓存）统一拒绝 symlink、junction 与其他重解析点；安全清理只删链接本身，不跟随目标。
+- 能力面参照：已按固定 Tauri 快照 `tauri-apps/tauri@5d995ed35b029cecd780fdbe614dc6023a89b81b`（`dev` 分支，核对于 2026-09-21）完成 `NsisConfig`/`WindowsConfig` 逐项审计，采用/拒绝结论并入本文决策。
 
 ## 2. 工具供应链
 
@@ -22,7 +23,7 @@
 ## 3. 原生插件
 
 - 插件统一用 [dotnetbundler/NsisPlugin](https://github.com/dotnetbundler/NsisPlugin) 开发；产物为 `tools/Bundler.Nsis.Plugin` → `third_party/nsis/plugins/x86-unicode/DotNetBundlerNsis.dll`。
-- `windows-i686` Native AOT 构建（NSIS 插件宿主是 x86 Unicode ABI）；`installer.nsi` 调用面 24 个导出函数：事务日志、快捷方式生命周期、MSI 迁移辅助、Restart Manager 锁定进程处理、RunAsUser 降权启动、SemVer 比较。
+- `windows-i686` Native AOT 构建（NSIS 插件宿主是 x86 Unicode ABI）；`installer.nsi` 调用面 26 个导出函数：事务日志、快捷方式生命周期、MSI 迁移辅助、Restart Manager 锁定进程处理、RunAsUser 降权启动、SemVer 比较。
 - 插件为 .NET 10 Native AOT 且加载期依赖 UCRT 与 Win8+ API，消费机实际下限为 Windows 10 1607+。
 - Native AOT 下不能用 `ComImport`/RCW 操作 Shell Link，须直接调 COM vtable。
 
@@ -54,6 +55,7 @@
 - 旧 MSI 迁移要求准确 ProductCode/UpgradeCode，不按显示名猜测；`LegacyMsiAutoDetect`（默认关）显式启用后按卸载注册项 DisplayName+Publisher 匹配且要求卸载命令含 `msiexec`，枚举 HKCU/HKLM 双视图，与显式 GUID 列表合并去重。
 - 旧 MSI 卸载返回码：`0`/`1605` 继续，`1641`/`3010` 置重启标记，`1602` 按用户取消退出，其余非零视为迁移失败回滚新状态。
 - 同一 UpgradeCode 多版本并存取最高版本判定，逐个移除全部匹配产品。
+- 迁移次序：先卸载全部精确匹配的旧产品，再写入 NSIS 载荷（保留上游先卸载顺序，检测条件更严格）。
 
 ### 4.5 生命周期 Hook
 

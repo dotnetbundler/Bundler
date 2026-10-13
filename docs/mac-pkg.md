@@ -8,8 +8,8 @@
 - `.pkg` 已冻结（基线 `0.1.0-alpha.47`），此后变更走变更控制（改行 + 新测试 + 文档同步）。
 - C# 原生编排 `pkgbuild`/`productbuild`/`productsign`/`xar`/`pkgutil`/`installer`（全系统自带，零再分发成本）。
 - 包结构策略：默认纯组件包（`pkgbuild` 直出）；配置分发特性（欢迎/许可/结语页、标题、域名选择）时自动升级为 `productbuild`+`distribution.xml` 分发包；调用方看到同一个 `.pkg` 输出路径。
-- 载荷默认取 `.app` 中间产物（`Pkg` 自动补 `App`），也支持任意文件树映射（`BundlerPkgPayload` 的 `Destination` 落到 install-location 相对路径）；安装位置默认 `/Applications`，可配 `--install-location`（相对路径拒绝）。
-- identifier/version：单一 `.app` 载荷默认取其 `CFBundleIdentifier`/`CFBundleShortVersionString`；非 `.app` 或多组件必须显式 `BundlerPkgIdentifier`；`BundlerMacPkgPackageName`/`BundlerMacPkgVersion` 可覆盖。
+- 载荷默认取 `.app` 中间产物（`Pkg` 自动补 `App`），也支持任意文件树映射（`BundlerMacPkgFile` 项的 `Destination` 落到 install-location 相对路径）；安装位置默认 `/Applications`，可配 `--install-location`（相对路径拒绝）。
+- identifier/version 默认取 `BundlerIdentifier`/`BundlerVersion`（单一 `.app` 载荷可源自其 `CFBundleIdentifier`/`CFBundleShortVersionString`）；`BundlerMacPkgPackageName`/`BundlerMacPkgVersion` 可覆盖。
 - 定位：`.pkg` 是 macOS 唯一原生受管安装格式，角色对应 Windows 侧 MSI；`.app`/`.dmg` 对应免安装/拖拽分发面。
 
 ## 2. 宿主门槛

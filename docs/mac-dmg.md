@@ -9,14 +9,14 @@
 - C# 原生编排 `hdiutil`/`osascript`/`SetFile`/`sips`，不内嵌 create-dmg 类第三方 fork（参数全可控，与宿主检测策略一致）。
 - DMG 本体可 `codesign`（复用 `.app` 签名配置面，`Identity="-"` 跳过）；**DMG 本体不做公证**——Gatekeeper 核验内部 `.app` 的 stapled 票据。
 - EULA：`LicenseFile`（txt/rtf）经 `hdiutil udifrez` 注入 SLA 资源，挂载时弹同意面板。
-- 压缩枚举 `Udzo`/`Ulmo`/`Udbz`，**默认 `Ulmo`**（LZFSE；挂载侧需 macOS 10.12+；史前宿主显式改 `Udzo`）。
+- 压缩枚举 `Udzo`/`Ulmo`/`Udbz`，**默认 `Ulmo`**（lzma；挂载侧需 macOS 10.15+；史前宿主显式改 `Udzo`）。
 - 产物命名 `名称-版本-架构.dmg`（契约以 `docs/target-matrix.md` 为准）；`bless`/`internet-enable` 遗留开关不暴露。
 
 ## 2. 宿主门槛
 
 - DMG 制作**必须 macOS 宿主**（`hdiutil`/`osascript` 不可跨宿主），非 macOS 请求明确 `NotSupportedException`——与未签名 `.app` 任意宿主可产不同。
 - 打包工具侧无实质版本下限（arm64 宿主天然 ≥11.0）；`SetFile`（卷图标）属 Xcode/CLT 附带，缺失降级跳过不阻塞。
-- 产物可挂载下限由压缩选型决定：`Ulmo` 需 10.12+，`Udzo` 可到 OS X 10.1。
+- 产物可挂载下限由压缩选型决定：`Ulmo` 需 macOS 10.15+（hdiutil(1) 明文），`Udzo` 可到 OS X 10.1。
 - 后端 `netstandard2.0`；MSBuild 入口需 .NET 10 SDK。
 
 ## 3. 语义契约
