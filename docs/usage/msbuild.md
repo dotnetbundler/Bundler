@@ -87,7 +87,7 @@ target 语法、架构词与产物命名契约见 [`../design/targets.md`](../de
 | `BundlerLicenseFile` | 否 | 无；NSIS 支持 `.txt`/`.rtf`，MSI 交互许可页仅 `.rtf`，DMG 注入 SLA 挂载面板，`.pkg` 作分发包许可页；独立 `.app` 后端按契约硬拒许可文件 |
 | `BundlerOutputPath` | 否 | `$(MSBuildProjectDirectory)\artifacts` |
 | `BundlerOutputLayout` | 否 | `flat`；`byFormat` 按 `artifacts\<format>\` 分格 |
-| `BundlerToolCachePath` | 否 | `LocalApplicationData\DotNetBundler\tools`（非 Windows 为 `~/.local/share` 等；空值回落临时目录）；内容寻址共享缓存——对 AppImage 不生效（其工具缓存走 `$XDG_CACHE_HOME`/`~/.cache`，经 `AppImageBundlerOptions.ToolsetCacheDirectory` 覆盖） |
+| `BundlerToolCachePath` | 否 | `LocalApplicationData\DotNetBundler\tools`（非 Windows 为 `~/.local/share` 等；空值回落临时目录）；内容寻址共享缓存，NSIS/WiX/AppImage 共用（AppImage 侧亦可用 `AppImageBundlerOptions.ToolsetCacheDirectory` 覆盖） |
 | `BundlingDotnetExe` | 否 | 内层 `dotnet publish` 的 dotnet 可执行覆盖（逃生舱） |
 | `BundlerInnerPublishArgs` | 否 | 追加给内层 publish 的原样参数串（逃生舱） |
 
