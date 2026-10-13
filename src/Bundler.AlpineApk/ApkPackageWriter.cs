@@ -373,64 +373,27 @@ internal static class ApkPackageWriter
 
         var mainExecutable = item.MainExecutable.Replace('\\', '/');
         // 空目录也要落条目：仅按文件路径反推会丢无文件目录。
-        foreach (var directory in Directory.GetDirectories(input, "*", SearchOption.AllDirectories)
-                     .OrderBy(path => path, StringComparer.Ordinal))
+        foreach (var sourceItem in PayloadSource.CollectInput(item.InputDirectory, installRoot, mainExecutable, logger))
         {
-            ClaimDirectory(installRoot + "/" + ToPosixPath(RelativePath(input, directory)));
-        }
-        foreach (var file in Directory.GetFiles(input, "*", SearchOption.AllDirectories)
-                     .OrderBy(path => path, StringComparer.Ordinal))
-        {
-            // Sockets, FIFOs and device nodes cannot be packaged; skip them.
-            if (!UnixFileTypes.IsRegularFile(file))
+            if (sourceItem.Kind == PayloadSourceKind.Directory)
             {
-                logger.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
-                continue;
-            }
-            var relative = ToPosixPath(RelativePath(input, file));
-            var mode = string.Equals(relative, mainExecutable, StringComparison.Ordinal)
-                ? 493 /* 0755 */
-                : 420 /* 0644 */;
-            AddFile(installRoot + "/" + relative, file, mode);
-        }
-
-        foreach (var resource in bundle.Resources)
-        {
-            var target = resource.Destination.Replace('\\', '/').Trim('/');
-            if (target.Length == 0 || target.Split('/').Contains(".."))
-            {
-                throw new ArgumentException(
-                    $"The resource target must stay inside the payload: '{resource.Destination}'.");
-            }
-            var source = Path.GetFullPath(resource.Source);
-            if (Directory.Exists(source))
-            {
-                foreach (var directory in Directory.GetDirectories(source, "*", SearchOption.AllDirectories)
-                             .OrderBy(path => path, StringComparer.Ordinal))
-                {
-                    ClaimDirectory(installRoot + "/" + target + "/" +
-                                   ToPosixPath(RelativePath(source, directory)));
-                }
-                foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories)
-                             .OrderBy(path => path, StringComparer.Ordinal))
-                {
-                    if (!UnixFileTypes.IsRegularFile(file))
-                    {
-                        logger.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
-                        continue;
-                    }
-                    var relative = ToPosixPath(RelativePath(source, file));
-                    AddFile(installRoot + "/" + target + "/" + relative, file, 420 /* 0644 */);
-                }
-            }
-            else if (File.Exists(source))
-            {
-                AddFile(installRoot + "/" + target, source, 420 /* 0644 */);
+                ClaimDirectory(sourceItem.ArchivePath);
             }
             else
             {
-                throw new FileNotFoundException(
-                    $"The resource source does not exist: {source}", source);
+                AddFile(sourceItem.ArchivePath, sourceItem.SourcePath!, sourceItem.Mode);
+            }
+        }
+
+        foreach (var sourceItem in PayloadSource.CollectResources(bundle.Resources, installRoot, logger, includeDirectories: true))
+        {
+            if (sourceItem.Kind == PayloadSourceKind.Directory)
+            {
+                ClaimDirectory(sourceItem.ArchivePath);
+            }
+            else
+            {
+                AddFile(sourceItem.ArchivePath, sourceItem.SourcePath!, sourceItem.Mode);
             }
         }
 
@@ -552,20 +515,4 @@ internal static class ApkPackageWriter
             hash + "  " + Path.GetFileName(path) + "\n", new UTF8Encoding(false));
     }
 
-    private static string RelativePath(string baseDirectory, string path)
-    {
-        var prefix = Path.GetFullPath(baseDirectory)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
-            Path.DirectorySeparatorChar;
-        var full = Path.GetFullPath(path);
-        if (!full.StartsWith(prefix, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"A payload path escapes its base directory: '{path}'.");
-        }
-        return full.Substring(prefix.Length);
-    }
-
-    private static string ToPosixPath(string path) =>
-        path.Replace(Path.DirectorySeparatorChar, '/').Replace(Path.AltDirectorySeparatorChar, '/');
 }

@@ -198,70 +198,30 @@ internal static class DebPackageWriter
 
         var input = item.InputDirectory;
         var mainExecutable = item.MainExecutable.Replace('\\', '/');
-        foreach (var directory in Directory.GetDirectories(input, "*", SearchOption.AllDirectories)
-                     .OrderBy(path => path, StringComparer.Ordinal))
+        foreach (var sourceItem in PayloadSource.CollectInput(input, installRoot, mainExecutable, logger))
         {
-            var relative = ToPosixPath(RelativePath(input, directory));
-            var archivePath = installRoot + "/" + relative;
-            ClaimDirectory(archivePath.Substring(0, archivePath.LastIndexOf('/')));
-            if (directories.Add(archivePath))
+            if (sourceItem.Kind == PayloadSourceKind.Directory)
             {
-                entries.Add(new PayloadEntry
+                ClaimDirectory(sourceItem.ArchivePath.Substring(0, sourceItem.ArchivePath.LastIndexOf('/')));
+                if (directories.Add(sourceItem.ArchivePath))
                 {
-                    ArchivePath = archivePath,
-                    Kind = TarEntryKind.Directory,
-                    Mode = 493 /* 0755 */
-                });
-            }
-        }
-        foreach (var file in Directory.GetFiles(input, "*", SearchOption.AllDirectories)
-                     .OrderBy(path => path, StringComparer.Ordinal))
-        {
-            // Sockets, FIFOs and device nodes cannot be packaged; skip them.
-            if (!UnixFileTypes.IsRegularFile(file))
-            {
-                logger.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
-                continue;
-            }
-            var relative = ToPosixPath(RelativePath(input, file));
-            var mode = string.Equals(relative, mainExecutable, StringComparison.Ordinal)
-                ? 493 /* 0755 */
-                : 420 /* 0644 */;
-            AddFile(installRoot + "/" + relative, file, mode);
-        }
-
-        foreach (var resource in bundle.Resources)
-        {
-            var target = resource.Destination.Replace('\\', '/').Trim('/');
-            if (target.Length == 0 || target.Split('/').Contains(".."))
-            {
-                throw new ArgumentException(
-                    $"The resource target must stay inside the payload: '{resource.Destination}'.");
-            }
-            var source = Path.GetFullPath(resource.Source);
-            if (Directory.Exists(source))
-            {
-                foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories)
-                             .OrderBy(path => path, StringComparer.Ordinal))
-                {
-                    if (!UnixFileTypes.IsRegularFile(file))
+                    entries.Add(new PayloadEntry
                     {
-                        logger.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
-                        continue;
-                    }
-                    var relative = ToPosixPath(RelativePath(source, file));
-                    AddFile(installRoot + "/" + target + "/" + relative, file, 420 /* 0644 */);
+                        ArchivePath = sourceItem.ArchivePath,
+                        Kind = TarEntryKind.Directory,
+                        Mode = 493 /* 0755 */
+                    });
                 }
-            }
-            else if (File.Exists(source))
-            {
-                AddFile(installRoot + "/" + target, source, 420 /* 0644 */);
             }
             else
             {
-                throw new FileNotFoundException(
-                    $"The resource source does not exist: {source}", source);
+                AddFile(sourceItem.ArchivePath, sourceItem.SourcePath!, sourceItem.Mode);
             }
+        }
+
+        foreach (var sourceItem in PayloadSource.CollectResources(bundle.Resources, installRoot, logger))
+        {
+            AddFile(sourceItem.ArchivePath, sourceItem.SourcePath!, sourceItem.Mode);
         }
 
         if (binLink.Length > 0)
@@ -661,22 +621,5 @@ internal static class DebPackageWriter
                 $"'{name}' is not a valid /usr/bin link name (a bare file name).");
         }
     }
-
-    private static string RelativePath(string baseDirectory, string path)
-    {
-        var prefix = Path.GetFullPath(baseDirectory)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
-            Path.DirectorySeparatorChar;
-        var full = Path.GetFullPath(path);
-        if (!full.StartsWith(prefix, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"A payload path escapes its base directory: '{path}'.");
-        }
-        return full.Substring(prefix.Length);
-    }
-
-    private static string ToPosixPath(string path) =>
-        path.Replace(Path.DirectorySeparatorChar, '/').Replace(Path.AltDirectorySeparatorChar, '/');
 
 }
