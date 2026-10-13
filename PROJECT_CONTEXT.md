@@ -7,7 +7,7 @@
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/formats/` 单文档只留设计决策、语义契约与能力状态
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
-> 项目不变量在 `docs/project-rules.md`，AI 协作规则在 `AGENTS.md`；产品顺序在 `docs/roadmap.md`；各格式细节在 `docs/formats/` 下对应文档。
+> 项目不变量在 `docs/project-rules.md`，AI 协作规则在 `AGENTS.md`；实现原理在 `docs/architecture.md`；产品顺序在 `docs/roadmap.md`；各格式细节在 `docs/formats/` 下对应文档。
 > 本文内容须与 Git、代码和测试一致；不一致时以后三者为准并先修正本文。
 
 ## 1. 项目结构（现况）
