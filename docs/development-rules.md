@@ -167,7 +167,7 @@
 接返回值断言字段或消息；相等断言用 `Assert.Equal` 而非 `Assert.True(a==b)`；不用 try/catch 再断言。
 需要核对异常消息内容时可用带消息核对的断言包装（如 `ExpectAsync`，核对类型+消息子串）；仅断言类型的包装（如 `AssertThrows`，其 message 参数只是失败标签）亦可用——包装内部可 try/catch 或 `Record.Exception*` 捕获后断言，不得宽松成全类型通吃。
 
-单格式 API fixture 收编为 `tests/Bundler.ApiTests` 的 `<Format>ApiTests` 测试类，系统集成测试体收编为 `tests/Bundler.IntegrationTests` 的 `<Format>IntegrationTests` 测试类，均为 `dotnet test` 入口、`--filter-class`/`-method` 选择、宿主门控经 `Assert.Skip`；
+单格式 API fixture 收编为 `tests/Bundler.ApiTests` 的 `<Format>ApiTests` 测试类，系统集成测试体收编为 `tests/Bundler.IntegrationTests` 的 `<Format>IntegrationTests` 测试类，均为 `dotnet test` 入口、`-- --filter-class`/`--filter-method` 选择、宿主门控经 `Assert.Skip`；
 资源需求用 `[Trait("Requires", ...)]` 标注——`docker`（DockerRunner 容器矩阵腿）、`elevation`（ElevatedRunner/SudoRunner 真装腿）、`localinstall`（需 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL` 同意的真装腿）、`interactive`（GUI 级验收腿：Windows 需交互式桌面会话走 `WindowsDesktop` UIA3 驱动，macOS 需 TCC 辅助功能授权走 osascript）；标在方法级，仅当全类都需同意时升类级（如 NSIS）；
 按资源裁剪用 `--filter-trait "Requires=<值>"`/`--filter-not-trait "Requires=<值>"`；
 集成 fixture 与载荷资产集中在 `tests/Bundler.IntegrationTests/Fixtures/<格式>/`，本地包消费契约腿的独立 fixture 集中在 `tests/Bundler.LocalPackagesTests/Fixtures/<格式>/`，不再保留转发脚本；收不进 dotnet test 的特殊验收脚本（真机/VM/凭证/交互/公网）集中在 `tests/Special/`（索引见其 README），只能人工完成的验收项登记在 `docs/special-acceptance.md`；
@@ -257,4 +257,4 @@
 
 ## 7. 当前主要命令入口
 
-构建/测试/打包命令入口见 `AGENTS.md` §5 与 `tests/README.md`（按格式/腿/资源的选择方式、trait 门禁与 `--` 传参约定以其为准）。
+构建/测试/打包命令入口见 `AGENTS.md` §5 与 `tests/README.md`（按格式/腿/资源的选择方式、trait 门禁与 `--` 传参约定以其为准）；发布+打包参数用法见 `README.md` 使用配置节。
