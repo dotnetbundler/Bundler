@@ -13,5 +13,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("DotNet.Bundler.Updater")]
 [assembly: InternalsVisibleTo("DotNet.Bundler.Nsis")]
 [assembly: InternalsVisibleTo("DotNet.Bundler.Wix")]
-[assembly: InternalsVisibleTo("DotNet.Bundler.Signing.Windows")]
 [assembly: InternalsVisibleTo("bundler")]

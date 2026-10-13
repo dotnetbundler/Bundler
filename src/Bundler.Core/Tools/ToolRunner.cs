@@ -137,13 +137,15 @@ internal static class ToolRunner
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start '{executable}'.");
-        var output = process.StandardOutput.ReadToEnd();
+        // stdout 异步排空、stderr 同步读：两个都同步顺序读在管道缓冲满时会死锁。
+        var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEnd();
         process.WaitForExit();
+        output.Wait();
         if (process.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"'{executable}' exited with code {process.ExitCode}: {(output + error).Trim()}");
+                $"'{executable}' exited with code {process.ExitCode}: {(output.Result + error).Trim()}");
         }
     }
 

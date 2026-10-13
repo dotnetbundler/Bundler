@@ -536,14 +536,15 @@ internal static class MacAppSigning
 
         internal async Task DisposeAsync(string workDirectory, CancellationToken cancellationToken)
         {
+            // 清理不可取消：取消时杀子进程会留下半还原的钥匙串搜索列表/残留 keychain 文件。
             if (PreviousKeychains.Count > 0)
             {
                 var restore = new List<string> { "list-keychains", "-d", "user", "-s" };
                 restore.AddRange(PreviousKeychains);
-                await ToolRunner.TryRunAsync("security", restore, workDirectory, cancellationToken);
+                await ToolRunner.TryRunAsync("security", restore, workDirectory, CancellationToken.None);
             }
             await ToolRunner.TryRunAsync(
-                "security", ["delete-keychain", Path], workDirectory, cancellationToken);
+                "security", ["delete-keychain", Path], workDirectory, CancellationToken.None);
             if (File.Exists(Path))
             {
                 File.Delete(Path);
