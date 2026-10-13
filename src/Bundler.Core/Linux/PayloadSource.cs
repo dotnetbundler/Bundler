@@ -121,7 +121,7 @@ internal static class PayloadSource
         }
     }
 
-    internal static string RelativePath(string baseDirectory, string path)
+    private static string RelativePath(string baseDirectory, string path)
     {
         var prefix = Path.GetFullPath(baseDirectory)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
@@ -135,6 +135,6 @@ internal static class PayloadSource
         return full.Substring(prefix.Length);
     }
 
-    internal static string ToPosixPath(string path) =>
+    private static string ToPosixPath(string path) =>
         path.Replace(Path.DirectorySeparatorChar, '/').Replace(Path.AltDirectorySeparatorChar, '/');
 }

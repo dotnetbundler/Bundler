@@ -219,8 +219,10 @@ internal static class DebPackageWriter
             }
         }
 
+        // includeDirectories=false 时只产 File 项；改 true 须先处理 Directory 项。
         foreach (var sourceItem in PayloadSource.CollectResources(bundle.Resources, installRoot, logger))
         {
+            System.Diagnostics.Debug.Assert(sourceItem.Kind == PayloadSourceKind.File);
             AddFile(sourceItem.ArchivePath, sourceItem.SourcePath!, sourceItem.Mode);
         }
 
