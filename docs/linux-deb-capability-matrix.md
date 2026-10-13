@@ -61,5 +61,5 @@
 | `dpkg -i` 真实安装（本机 sudo） | 已实现 | LINUX-DEB-1 | `DebIntegrationTests` 装卸腿 + `dpkg -s`/`dpkg -L`/链接启动断言 |
 | `dpkg -r`/`dpkg -P` 卸载语义 | 已实现 | LINUX-DEB-1/3 | `-r` 删普通文件留 conffile、`-P` 全清——真实断言 |
 | 同包升级覆盖安装 | 已实现 | LINUX-DEB-3 | `dpkg -i` 1.0.0→1.0.1 后 `dpkg -s` 版本断言 + conffile 本地修改保留 |
-| `linux-aarch64` 产物 | 已实现（结构）/外部待验收（真机装跑卸） | LINUX-DEB-4 | `linux-aarch64` publish → `_arm64.deb`、`Architecture: arm64`、载荷结构断言全绿；docker 装卸腿为 x64 门控、arm64 真机侧未实证，挂 `docs/special-acceptance.md`（`tests/Special/linux/arm64-real-hw.sh --deb`） |
+| `linux-aarch64` 产物 | 已实现（结构+真机装跑卸） | LINUX-DEB-4 | `linux-aarch64` publish → `_arm64.deb`、`Architecture: arm64`、载荷结构断言全绿；`release-verify` `ubuntu-26.04-arm` 真机腿收编 `arm64-real-hw.sh --deb`（真 `dpkg -i`/PATH/`-r`，2026-10-09 跑绿，PR #44/#45）；真机观感项挂 `docs/special-acceptance.md` |
 | 多发行版安装矩阵 | 已实现（debian:stable/bookworm/bullseye + ubuntu:latest 容器） | LINUX-DEB-4 | docker 容器内真实 `dpkg -i`/运行/`-r`/`-P` 断言全绿；另有 `debian:trixie` 容器 lintian 豁免闸腿；更广发行版矩阵属 CI 扩版候选，非人工验收项 |

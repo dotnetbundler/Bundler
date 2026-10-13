@@ -47,5 +47,5 @@
 | --- | --- | --- | --- |
 | 容器真实装卸（fedora/rockylinux/opensuse/EL8） | 已实现 | LINUX-RPM-1/4 | `fedora:latest`+`rockylinux:9`+`opensuse/leap:latest`+`almalinux:8`+`rockylinux:8` 五容器真实 `rpm -i`/`rpm -q`/`rpm -ql`/运行/`rpm -V`/`rpm -e` 零残留全绿；镜像不可拉取记 SKIP |
 | `rpmlint` 基线 | 已实现 | LINUX-RPM-4 | `rpmlint-exemptions.txt` 豁免清单硬断言；7 项豁免入档，新 tag 即失败 |
-| `linux-aarch64` 产物 | 已实现（结构）/外部待验收（真机装跑卸） | LINUX-RPM-4 | `*.aarch64.rpm`+`ARCH=aarch64`+载荷结构断言全绿；docker 装卸腿为 x64 门控、arm64 真机侧未实证，挂 `docs/special-acceptance.md`（`tests/Special/linux/arm64-real-hw.sh --rpm`） |
+| `linux-aarch64` 产物 | 已实现（结构+真机装跑卸） | LINUX-RPM-4 | `*.aarch64.rpm`+`ARCH=aarch64`+载荷结构断言全绿；`release-verify` `ubuntu-26.04-arm` 真机腿收编 `arm64-real-hw.sh --rpm`（真 `rpm -i`/`-ql`/`-e`，2026-10-09 跑绿，PR #44/#45）；真机观感项挂 `docs/special-acceptance.md` |
 | 多格式扇出（`deb;rpm` 同次 publish） | 已实现 | LINUX-RPM-1 | `BundlerFormats=deb;rpm` 同次 publish 双产物断言；MSBuild `-p:` 分号须 `%3B` 转义 |
