@@ -38,14 +38,14 @@
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| 包级 GPG 签名 | 已实现 | `SIGN-1`（`signing-development`，`0.1.0-alpha.62+`） | 可选能力：供 `BundlerRpmSigningKeyFile`/`Passphrase` 即嵌双标签 `RPMSIGTAG_RSA`(268)+`RPMSIGTAG_PGP`(1002)（BouncyCastle OpenPGP v3 包，纯托管，同 rpmsign 形态）；不供则产物与未签名构建逐字节一致；隔离 rpmdb `rpm --import`+`rpm -K` 实测 `digests signatures OK`；zypper 认 RSA 标签（PGP-only 曾被报 unsigned） |
+| 包级 GPG 签名 | 已实现 | `SIGN-1`（`signing-development`，`0.1.0-alpha.62+`） | 可选能力：供 `BundlerRpmSigningKeyFile`/`Passphrase` 即嵌双标签 `RPMSIGTAG_RSA`(268)+`RPMSIGTAG_PGP`(1002)（BouncyCastle OpenPGP v3 包，纯托管，同 rpmsign 形态）；不供则产物与未签名构建逐字节一致；隔离 rpmdb `rpm --import`+`rpm -K` 实测 `digests signatures OK`；zypper 认 RSA 标签（PGP-only 曾被报 unsigned）；签件产出经 `SignedRpmProducedOnAnyHost` 断言但该类整体 Linux 门控——win/mac 宿主同路径产出未单独成腿（托管签名实现宿主无关，风险低，按需再设跨宿主断言腿） |
 | dnf/zypper 仓库生成 | 明确拒绝 | — | 仓库管理属分发管线而非打包器 |
 
 ## 生命周期与宿主矩阵
 
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
-| 容器真实装卸（fedora/rockylinux/opensuse） | 已实现 | LINUX-RPM-1/4 | `fedora:latest`+`rockylinux:9`+`opensuse/leap:latest` 三容器真实 `rpm -i`/`rpm -q`/`rpm -ql`/运行/`rpm -V`/`rpm -e` 零残留全绿；镜像不可拉取记 SKIP |
+| 容器真实装卸（fedora/rockylinux/opensuse/EL8） | 已实现 | LINUX-RPM-1/4 | `fedora:latest`+`rockylinux:9`+`opensuse/leap:latest`+`almalinux:8`+`rockylinux:8` 五容器真实 `rpm -i`/`rpm -q`/`rpm -ql`/运行/`rpm -V`/`rpm -e` 零残留全绿；镜像不可拉取记 SKIP |
 | `rpmlint` 基线 | 已实现 | LINUX-RPM-4 | `rpmlint-exemptions.txt` 豁免清单硬断言；7 项豁免入档，新 tag 即失败 |
-| `linux-aarch64` 产物 | 已实现（结构+运行） | LINUX-RPM-4 | `*.aarch64.rpm`+`ARCH=aarch64`+载荷结构断言全绿；2026-10 `ubuntu-24.04-arm` CI 真机装卸跑绿（`arm64-real-hw.sh`）；真机观感项挂 `docs/special-acceptance.md` |
+| `linux-aarch64` 产物 | 已实现（结构）/外部待验收（真机装跑卸） | LINUX-RPM-4 | `*.aarch64.rpm`+`ARCH=aarch64`+载荷结构断言全绿；docker 装卸腿为 x64 门控、arm64 真机侧未实证，挂 `docs/special-acceptance.md`（`tests/Special/linux/arm64-real-hw.sh --rpm`） |
 | 多格式扇出（`deb;rpm` 同次 publish） | 已实现 | LINUX-RPM-1 | `BundlerFormats=deb;rpm` 同次 publish 双产物断言；MSBuild `-p:` 分号须 `%3B` 转义 |

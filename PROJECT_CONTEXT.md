@@ -71,7 +71,7 @@ WIN-MSI-1..9 全部完成：current-user/all-users 安装、x64+x86、38 语言�
 - `.dmg`：`hdiutil` 全链（UDRW→attach→拖放布局→convert），压缩 `Ulmo`/`Udzo`/`Udbz`，Finder 窗口布局全旋钮 + 无 GUI 会话自动降级，背景图/卷图标/`udifrez` SLA 注入，`codesign` 本体签名。
 - `.pkg`：`pkgbuild` 组件包 + `productbuild` 分发包（标题/欢迎/许可/结语页、`system`/`current-user-home` 域、`BundlerPkgPayload` 任意载荷、`--scripts` 专家脚本），`pkgbuild --sign`/`productsign` 签名与 notarytool 公证管线；per-user 域免提权真实安装已验。
 - 已登记分歧：macOS 打包工具不可再分发，采用"宿主工具检测+版本下限"策略（见各 `mac-*-roadmap.md`）；缺 codesigning 身份等外部条件统一登记在 `docs/special-acceptance.md`。
-- `osx` 通用 RID：MSBuild `BundlerUniversalRuntimeIdentifiers` 复数 RID 内层发布 + 纯托管 fat 合并器（Mach-O 并片/其余逐字节一致/单边薄拒产），CLI `--input-dir` 可重复多目录合并（PR #14）。
+- `osx` 通用 RID：MSBuild `BundlerUniversalTargets` 复数 RID 内层发布 + 纯托管 fat 合并器（Mach-O 并片/其余逐字节一致/单边薄拒产），CLI `--input-dir` 可重复多目录合并（PR #14）。
 
 ### 其余格式
 

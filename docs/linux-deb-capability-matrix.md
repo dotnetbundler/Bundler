@@ -41,7 +41,7 @@
 | 能力 | 状态 | 适用性与计划阶段 | 完成条件/边界 |
 | --- | --- | --- | --- |
 | maintainer 脚本（preinst/postinst/prerm/postrm） | 已实现 | LINUX-DEB-3 | `BundlerDeb{PreInstall,PostInstall,PreUninstall,PostUninstall}File` 整文件注入 control 归档 0755（shebang+LF 校验）；真实 `dpkg -i/-r` 标记断言 |
-| systemd unit（`usr/lib/systemd/system/`） | 已实现（落位+合成）/外部待验收（真实 enable/start） | LINUX-DEB-3 | `BundlerDebSystemdServiceFile` → `usr/lib/systemd/system/<包名>.service`；postinst `daemon-reload` 自动合成（与调用方脚本合并）；真实 systemd 宿主 enable/start 验收挂 `docs/special-acceptance.md` |
+| systemd unit（`usr/lib/systemd/system/`） | 已实现（落位+合成）/外部待验收（真实 enable/start） | LINUX-DEB-3 | `BundlerDebSystemdServiceFile` → `usr/lib/systemd/system/<包名>.service`；postinst `daemon-reload` 自动合成（与调用方脚本合并）；真实 systemd 宿主 enable/start 验收挂 `docs/special-acceptance.md`（docker 腿无 systemd，待真实宿主验收） |
 | conffiles 声明 | 已实现 | LINUX-DEB-3 | `BundlerDebConfigLocations` 显式列表 + `/etc` 下 `BundlerDebFile` 自动登记（均校验载荷存在）；真实 `-r` 保留/`-P` 清除与升级 `--force-confold` 断言 |
 | 压缩选项（gzip 默认；xz/zstd 候选） | 已实现（gzip）/登记拒绝（xz/zstd） | LINUX-DEB-3 | `BundlerDebCompression` 仅接受 `gzip`；xz/zstd 拒绝并说明（netstandard2.0 无托管编码器；zstd 另需 dpkg≥1.21.18） |
 | 升级/降级语义实测 | 已实现（升级）/写实登记（降级） | LINUX-DEB-3 | 同包 `dpkg -i` 1.0.0→1.0.1 + conffile 修改保留断言；降级需 `--force-downgrade` 属 dpkg 语义写实 |
@@ -61,5 +61,5 @@
 | `dpkg -i` 真实安装（本机 sudo） | 已实现 | LINUX-DEB-1 | `DebIntegrationTests` 装卸腿 + `dpkg -s`/`dpkg -L`/链接启动断言 |
 | `dpkg -r`/`dpkg -P` 卸载语义 | 已实现 | LINUX-DEB-1/3 | `-r` 删普通文件留 conffile、`-P` 全清——真实断言 |
 | 同包升级覆盖安装 | 已实现 | LINUX-DEB-3 | `dpkg -i` 1.0.0→1.0.1 后 `dpkg -s` 版本断言 + conffile 本地修改保留 |
-| `linux-aarch64` 产物 | 已实现（结构+运行） | LINUX-DEB-4 | `linux-aarch64` publish → `_arm64.deb`、`Architecture: arm64`、载荷结构断言全绿；2026-10 `ubuntu-24.04-arm` CI 真机装卸跑绿（`arm64-real-hw.sh`）；真机观感项挂 `docs/special-acceptance.md` |
-| 多发行版安装矩阵 | 已实现（debian:stable + ubuntu:latest 容器）/外部待验收（更广矩阵） | LINUX-DEB-4 | docker 容器内真实 `dpkg -i`/运行/`-r`/`-P` 断言全绿，发行版矩阵已扩版（debian:bookworm/bullseye + ubuntu 22.04/24.04 + trixie lintian 腿）；GUI 观感挂 `docs/special-acceptance.md` |
+| `linux-aarch64` 产物 | 已实现（结构）/外部待验收（真机装跑卸） | LINUX-DEB-4 | `linux-aarch64` publish → `_arm64.deb`、`Architecture: arm64`、载荷结构断言全绿；docker 装卸腿为 x64 门控、arm64 真机侧未实证，挂 `docs/special-acceptance.md`（`tests/Special/linux/arm64-real-hw.sh --deb`） |
+| 多发行版安装矩阵 | 已实现（debian:stable/bookworm/bullseye + ubuntu:latest 容器） | LINUX-DEB-4 | docker 容器内真实 `dpkg -i`/运行/`-r`/`-P` 断言全绿；另有 `debian:trixie` 容器 lintian 豁免闸腿；更广发行版矩阵属 CI 扩版候选，非人工验收项 |

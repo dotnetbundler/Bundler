@@ -554,8 +554,9 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
     [Fact]
     public void SignedRpmProducedOnAnyHost()
     {
-        // 签名全托管（BouncyCastle）——任何宿主都能产签 rpm；此处断言签名结构落盘，
-        // 不依赖 rpm/gpg 工具链——windows/macOS 腿经同一路径覆盖宿主无关签件断言。
+        // 签名全托管（BouncyCastle）——实现本身宿主无关；但本类整体经 RpmFixture
+        // Linux 门控，本断言实际只在 Linux 腿跑。此处只断言签名结构落盘，不依赖
+        // rpm/gpg 工具链；win/mac 宿主同路径产出未单独成腿（风险低，边界记于矩阵）。
         var keyFile = Path.Combine(RepositoryLayout.FixturesDirectory,
             "Rpm", "Assets", "rpm-test-key.asc");
         _f.Publish("signed-anyhost",

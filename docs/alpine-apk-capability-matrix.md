@@ -38,7 +38,7 @@
 | 可信公钥安装（`/etc/apk/keys/`） | 已实现 | APK-4 | 自签包 + 公钥入 keys 后免 `--allow-untrusted` 实装通过 |
 | aarch64 仿真安装/运行 | 已实现（qemu binfmt）/外部待验收（真机） | APK-4 | tonistiigi/binfmt 下 `apk add` + 运行断言；aarch64 真宿主由 release-verify `ubuntu-26.04-arm` 腿原生实证（`DockerArm64NativeInstallRunRemove`）；真设备观感仍挂 `docs/special-acceptance.md` |
 | 桌面集成（.desktop/图标/metainfo） | 明确拒绝 | — | musl/Alpine 是包管理器生态非桌面场景；与本格式不相关 |
-| `abuild`/apk 仓库索引与发布工作流 | 不适用（边界外） | — | 工具只产出单包；工具只产出单包；仓库索引/发布管理属外部工作流 |
+| `abuild`/apk 仓库索引与发布工作流 | 不适用（边界外） | — | 工具只产出单包；仓库索引/发布管理属外部工作流 |
 
 ## 签名
 

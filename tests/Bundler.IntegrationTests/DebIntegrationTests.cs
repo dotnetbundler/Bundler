@@ -673,10 +673,15 @@ public sealed class DebIntegrationTests : IClassFixture<DebFixture>
             """
             set -e
             export DEBIAN_FRONTEND=noninteractive
-            apt-get update -qq && apt-get install -y -qq lintian >/dev/null
+            apt-get update -qq && apt-get install -y -qq lintian appstream >/dev/null
             lintian /tmp/pkg.deb > /tmp/lintian.out 2>&1 || true
             grep -E '^[EW]: ' /tmp/lintian.out | sed -E 's/^[EW]: [^:]*: ([^ ]*).*/\1/' | sort -u > /tmp/tags.out
             while IFS= read -r tag; do grep -qxF "$tag" /tmp/exempt.txt || echo "NON-EXEMPT: $tag"; done < /tmp/tags.out
+            # lintian 豁免 tag appstream-metadata-validation-failed 粒度宽于所记边界
+            # （任何 appstream 校验失败均放行）——此处对 metainfo 本体跑 pedantic 断言兜底，
+            # 确保豁免只吞 filename↔cid 契约边界，不吞内容回退。
+            dpkg-deb -x /tmp/pkg.deb /tmp/pkg
+            appstreamcli validate --pedantic /tmp/pkg/usr/share/metainfo/*.metainfo.xml
             """,
             [new DockerRunner.Mount(_f.DefaultDeb, "/tmp/pkg.deb"),
              new DockerRunner.Mount(exemptionsPath, "/tmp/exempt.txt")]);
