@@ -5,11 +5,11 @@
 > 既有 per-machine、生产签名、交互 UI、干净宿主及重启等外部验收不阻塞新增功能开发，也不冒充已通过。
 
 本文档是项目后续路线的规范入口；
-跨格式执行规则见 [`docs/development-rules.md`](development-rules.md)，各格式决策/契约/能力状态各见其 `docs/formats/` 文档（如 [`win-nsis.md`](formats/win-nsis.md)、[`win-msi.md`](formats/win-msi.md)）。
+产品与工程不变量见 [`docs/project-rules.md`](project-rules.md)，AI 协作规则见根 `AGENTS.md`，各格式决策/契约/能力状态各见其 `docs/formats/` 文档（如 [`win-nsis.md`](formats/win-nsis.md)、[`win-msi.md`](formats/win-msi.md)）。
 它们使后续开发不依赖某一次对话或某个 AI 的记忆。
 
 - `PROJECT_CONTEXT.md` 记录当前实现事实与验证证据；
-- `AGENTS.md` 与 `docs/development-rules.md` 是接管和跨格式开发规则的入口；
+- `AGENTS.md` 是 AI 接管与协作规则入口，`docs/project-rules.md` 是产品与工程不变量；
 - 本文档记录产品边界、格式顺序和向后推进的正式计划；
 - `docs/special-acceptance.md` 统一登记只能人工/外部付费完成的验收与外部待办；各格式文档按格式链接；
 - 代码和自动化测试是实现事实的最终依据。若它们与文档冲突，先调查差异，再同时修正文档和实现状态，不能默默选择其中一方。
@@ -68,13 +68,13 @@ Tauri 的 WebView2 等选项服务于 Tauri 自身运行时；直接复制会把
 ## 3. 上游能力参照
 
 Tauri 等产品只作为通用桌面打包能力的参照，不决定本项目的内部架构、配置字段或应用运行时部署范围。
-固定上游快照、比较用户结果、记录适用/拒绝理由和状态证据的统一方法见 [开发规则](development-rules.md) 第 2、6 节。
+固定上游快照、比较用户结果、记录适用/拒绝理由和状态证据的统一方法见 `AGENTS.md` 文档写作约定。
 各格式的上游取舍与逐项能力见 `docs/formats/` 对应文档；
 具体状态以各格式文档和代码测试为准。
 
 ## 4. 阶段执行协议
 
-跨格式的接管、**新后端先制定并确认完整路线**、分层、工具随包供应、测试、完整示例、文档和 Git 规则，以 [`docs/development-rules.md`](development-rules.md) 为唯一规范；
+跨格式的接管、**新后端先制定并确认完整路线**、测试、文档和 Git 规则，以 `AGENTS.md` 为规范；分层、工具随包供应、完整示例等项目不变量以 [`docs/project-rules.md`](project-rules.md) 为规范；
 本文件只决定格式顺序和阶段目标。
 
 一个阶段获准启动后，先按上述规则核对现状并向用户报告，再完成整个阶段。
@@ -133,7 +133,7 @@ Tauri updater 协议/提升权限计划任务若有需求另立跨格式产品�
 
 ## 7. 路线维护与接班
 
-阶段结项及交接字段按 [`docs/development-rules.md`](development-rules.md) 第 5、6 节执行。
+阶段结项及交接字段按 `AGENTS.md` 阶段结束节执行。
 每阶段在同一轮修改中把本文件顶部基线和默认下一阶段改成实际状态，更新对应格式文档与 `docs/special-acceptance.md`，并在 `PROJECT_CONTEXT.md` 留下 Git、版本、命令、结果和未决问题。
 参考 Tauri 时同步格式专用的固定上游快照。
 没有实施或没有对应环境证据的能力不得标为完成。
