@@ -755,7 +755,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                             Destination = item.GetMetadata("Destination")
                         }).ToArray()
                     },
-                    new AppImageBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
+                    new AppImageBundlerOptions
+                    {
+                        ToolsetCacheDirectory = EmptyToNull(ToolCacheDirectory),
+                        Logger = new MsBuildBundleLogger(Log)
+                    })
                     ;
             }
             else
