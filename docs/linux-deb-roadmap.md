@@ -37,7 +37,7 @@
 11. **MSBuild 多格式**：放开适配层单格式限制，`BundlerFormats=deb;rpm` 同次 publish 由管线扇出（管线本身支持多后端，仅 Task 分发改动）；LINUX-DEB-1 先落地 `deb` 单格式，多格式扇出随 LINUX-RPM-1 一并验证。
 12. **分支**：`linux-deb-development`（逐格式分支，沿用 mac 先例），rpm/appimage 各自 `linux-rpm-development`/`linux-appimage-development`。
 13. **阶段骨架**：每格式"最小可用→元数据与桌面集成→脚本/systemd/压缩→原生 E2E 矩阵→审计冻结"五段；对应文档集在各自规划轮补齐。
-14. **命名**：示例 `samples/HelloDebApp`；fixture `tests/Bundler.ApiTests`（`DebApiTests`）；集成 `tests/Bundler.IntegrationTests` 的 `DebIntegrationTests`（fixture `Fixtures/Deb/`）；文档 ID 前缀 `LINUX-DEB-OI-xx`/`LINUX-DEB-MT-xx`。
+14. **命名**：示例 `samples/HelloDebApp`；fixture `tests/Bundler.ApiTests`（`DebApiTests`）；集成 `tests/Bundler.IntegrationTests` 的 `DebIntegrationTests`（fixture `Fixtures/Deb/`）；文档 ID 前缀 `LINUX-DEB-MT-xx`（历史 `*-OI-xx` 清单已并入 `docs/special-acceptance.md`）。
 
 ## 2. 打包工具下限（三层口径）
 
@@ -66,4 +66,4 @@
 | 验证层 | 内容 |
 | --- | --- |
 | 本机自动 | `dpkg-deb -I/-c` 结构、`sudo dpkg -i`/`dpkg -r`/`dpkg -P` 真实装卸、`dpkg -L` 清单、`lintian`、`desktop-file-validate`、systemd 单元落位、脚本执行标记、容器内装卸（docker debian/ubuntu） |
-| 人工/外部 | GUI 桌面观感（菜单项/图标/文件关联双击）、linux-aarch64 真实宿主、更多发行版矩阵（Debian oldstable、非 systemd 发行版）、apt 仓库工作流、生产签名流程（若后续阶段引入） |
+| 人工/外部 | GUI 桌面观感（菜单项/图标/文件关联双击）、非 systemd 发行版宿主、apt 仓库工作流、生产签名流程——统一登记 `docs/special-acceptance.md`（linux-aarch64 真机装跑卸已由 `release-verify` `ubuntu-26.04-arm` 腿实证；更广发行版矩阵属 CI 扩版候选） |

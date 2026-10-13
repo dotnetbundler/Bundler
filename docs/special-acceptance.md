@@ -105,4 +105,4 @@
 | deb/rpm 文件/协议关联双击唤起 | GUI 桌面宿主双击 `.desktop` 声明关联的文件/协议，应用被唤起 | 唤起记录 | 菜单/图标/点击启动已验（KDE 截图）；验收 fixture 已声明 `text/plain`+`x-scheme-handler:bundler-fixture` 关联对象且装后断言自动化；GUI 双击唤起观感仍需人工 |
 | `.app` 默认处理器切换/多 handler | 文件/URL scheme 在默认应用界面切换处理器、多 handler 共存场景的实际唤起观察 | LaunchServices 记录、唤起日志 | `lsregister`+`open` 唤起已自动化；切换处理器属 GUI 用户动作只能人工 |
 | UPDATE `open -n` 桌面重启语义 | 真实 macOS 桌面会话下 `open -n` 重启应用的 Dock 图标/聚焦/路径观察 | 桌面会话观察记录 | 现有断言止于 `open` 返回码与进程存活（无头环境） |
-| deb systemd 真实 enable/start | 真实 systemd 宿主 `dpkg -i` 后 `systemctl daemon-reload`/`enable`/`start`/`status` 与 journal 断言、`-r` 后 unit 清理 | enable/start/status 与 journal 记录 | 容器腿无 systemd；unit 落位与 postinst `daemon-reload` 合成已自动化，真实服务生命周期待宿主验收 |
+| deb systemd 生命周期补验 | 真实 systemd 宿主补验 `systemctl status`/journal、`-r` 后 unit 清理 | status/journal/清理记录 | 容器腿无 systemd；unit 落位、postinst `daemon-reload` 合成与真实宿主 `enable --now` 已验（2026-09-28 Ubuntu 记录，原 LINUX-DEB-OI-04） |

@@ -58,7 +58,7 @@ src/ 各工程共享元数据（`Authors`/`PackageVersion`/`PackageReadmeFile`/`
 ### Windows + NSIS（已冻结，`71a5c90`，基线 `0.1.0-alpha.31`，alpha.32/33 journal 加固）
 
 实现契约（自动化协议、退出码、事务 journal、前向恢复、快捷方式规则、签名管线、工具供应、原生插件）见 [`docs/nsis-roadmap.md`](docs/nsis-roadmap.md)；
-能力矩阵、人工清单、外部待办、上游取舍、专项决策分别在对应 `nsis-*.md`。
+能力矩阵、上游取舍、专项决策分别在对应 `nsis-*.md`；人工/外部待办统一登记在 `docs/special-acceptance.md`。
 
 ### Windows + WiX/MSI（已冻结，`0.1.0-alpha.43`）
 

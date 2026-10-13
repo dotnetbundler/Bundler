@@ -33,7 +33,7 @@
 12. **压缩**：载荷压缩默认 gzip（`Compression=gzip`）；xz/zstd 同 deb 立场登记拒绝（netstandard2.0 无托管编码器），`PAYLOADCOMPRESSOR`/`PAYLOADFLAGS` 如实填写。
 13. **确定性**：`BUILDTIME`/`FILEMTIMES`/`header` 条目排序全部固定（沿用 deb mtime=1980-01-01 策略）；同输入字节级一致断言。
 14. **阶段骨架**：沿用五段——`LINUX-RPM-1`（托管写入器最小可用 + 容器真实装卸）、`LINUX-RPM-2`（元数据与桌面集成）、`LINUX-RPM-3`（脚本/systemd/config/压缩）、`LINUX-RPM-4`（矩阵与冻结前收口：arm64、多发行版容器矩阵、rpmlint 基线）、`LINUX-RPM-5`（审计复核与冻结）。
-15. **命名**：示例 `samples/HelloRpmApp`；fixture `tests/Bundler.ApiTests`（`RpmApiTests`）；集成 `tests/Bundler.IntegrationTests` 的 `RpmIntegrationTests`（fixture `Fixtures/Rpm/`）；文档 ID 前缀 `LINUX-RPM-OI-xx`/`LINUX-RPM-MT-xx`。
+15. **命名**：示例 `samples/HelloRpmApp`；fixture `tests/Bundler.ApiTests`（`RpmApiTests`）；集成 `tests/Bundler.IntegrationTests` 的 `RpmIntegrationTests`（fixture `Fixtures/Rpm/`）；文档 ID 前缀 `LINUX-RPM-MT-xx`（历史 `*-OI-xx` 清单已并入 `docs/special-acceptance.md`）。
 
 ## 2. 打包工具下限（三层口径）
 
@@ -60,4 +60,4 @@
 | --- | --- |
 | 本机自动 | `RpmPackageReader` 双向互证、`rpm -qip`/`--queryformat`/`rpm -K`、`rpmlint`、单元断言（结构/映射/确定性/拒绝路径） |
 | 容器真实 | docker `fedora`/`rockylinux`/`opensuse` 内 `rpm -i/-e/-U`、二进制运行、conffile 语义、systemd unit 落位 |
-| 人工/外部 | GUI 桌面观感、arm64 真实宿主、签名验证（若引入）、`dnf`/`zypper` 仓库工作流 |
+| 人工/外部 | GUI 桌面观感、生产签名分发流程、`dnf`/`zypper` 仓库工作流——统一登记 `docs/special-acceptance.md`（arm64 真机装跑卸已由 `release-verify` `ubuntu-26.04-arm` 腿实证；包级 GPG 签名已实现） |

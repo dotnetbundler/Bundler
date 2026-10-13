@@ -12,7 +12,7 @@
 - `PROJECT_CONTEXT.md` 记录当前实现事实与验证证据；
 - `AGENTS.md` 与 `docs/development-rules.md` 是接管和跨格式开发规则的入口；
 - 本文档记录从当前状态向后推进的正式计划；
-- `docs/special-acceptance.md` 统一登记只能人工/外部付费完成的验收；各格式能力矩阵与外部待办按格式链接；
+- `docs/special-acceptance.md` 统一登记只能人工/外部付费完成的验收与外部待办；各格式能力矩阵按格式链接；
 - 代码和自动化测试是实现事实的最终依据。若它们与文档冲突，先调查差异，再同时修正文档和实现状态，不能默默选择其中一方。
 
 ## 1. 产品定位
@@ -112,8 +112,8 @@ per-machine 只验证构建产物和数据库，原生 x86/ARM64 宿主、生产
 `WIN-MSI-1..9` 全部完成，MSI alpha 基线冻结于 `0.1.0-alpha.43`：
 
 5. `WIN-MSI-5`（本机范围已完成）：x86 目标、显式安全 MSI 版本映射、可选降级及既有身份兼容。
-6. `WIN-MSI-6`（本机范围已完成）：范围内安装目录、自定义 UI/品牌、受管可选功能、PATH 与仅交互勾选启动；交互 UI 实际行为和 junction 目标见人工清单。
-7. `WIN-MSI-7`（本机范围已完成）：38 语言独立 MSI 产物、调用方 `.wxl` 覆盖、快捷方式图标、`candle -fips` 透传；各语言母语审校与 FIPS 策略宿主见人工清单。
+6. `WIN-MSI-6`（本机范围已完成）：范围内安装目录、自定义 UI/品牌、受管可选功能、PATH 与仅交互勾选启动；交互 UI 实际行为和 junction 目标见 `docs/special-acceptance.md`。
+7. `WIN-MSI-7`（本机范围已完成）：38 语言独立 MSI 产物、调用方 `.wxl` 覆盖、快捷方式图标、`candle -fips` 透传；各语言母语审校与 FIPS 策略宿主见 `docs/special-acceptance.md`。
 8. `WIN-MSI-8`（本机范围已完成）：常规模式白名单 `.wxs` fragment + 调用方 ID 前缀 + 显式 Component/Feature 引用；显式专家模式整份模板/merge module，身份经 `candle -d` 变量与构建后数据库回读强制；扩展输入计入指纹。
 9. `WIN-MSI-9`（已完成）：逐项 Tauri 通用能力审计（快照漂移复核无 MSI 实质变化）、全部本机适用回归、工具许可/体积复核和再冻结，无新增功能。
 
@@ -193,7 +193,7 @@ Tauri updater 协议/提升权限计划任务若有需求另立跨格式产品�
 ### 7.1 外部验收队列
 
 由 [`docs/special-acceptance.md`](special-acceptance.md) 统一登记；
-NSIS 和 MSI 的清单、结论及外部待办分别维护，包括 UAC、真实重启、生产证书、历史 MSI、Windows ARM64、真实 ACL/磁盘耗尽等。
+NSIS 和 MSI 的人工/外部待办（UAC、真实重启、生产证书、历史 MSI、Windows ARM64、真实 ACL/磁盘耗尽等）亦已并入该登记，清单与结论各见对应格式文档。
 取得环境时逐项执行并保存证据；
 没有环境时保留准确边界。
 
@@ -223,7 +223,7 @@ NSIS 和 MSI 的清单、结论及外部待办分别维护，包括 UAC、真实
 ## 8. 路线维护与接班
 
 阶段结项及交接字段按 [`docs/development-rules.md`](development-rules.md) 第 5、6 节执行。
-每阶段在同一轮修改中把本文件顶部基线和默认下一阶段改成实际状态，更新格式路线/能力矩阵、人工清单与外部待办，并在 `PROJECT_CONTEXT.md` 留下 Git、版本、命令、结果和未决问题。
+每阶段在同一轮修改中把本文件顶部基线和默认下一阶段改成实际状态，更新格式路线/能力矩阵与 `docs/special-acceptance.md`，并在 `PROJECT_CONTEXT.md` 留下 Git、版本、命令、结果和未决问题。
 参考 Tauri 时同步格式专用的固定上游快照。
 没有实施或没有对应环境证据的能力不得标为完成。
 
