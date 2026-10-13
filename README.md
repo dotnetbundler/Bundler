@@ -36,7 +36,7 @@ bundler bundle --input-dir <publish目录>  # 或 CLI：只指发布目录，其
 | 包 | 职责 |
 | --- | --- |
 | `DotNet.Bundler.Abstractions` | 公共请求、目标、结果、日志契约和后端接口 |
-| `DotNet.Bundler.Core` | 验证、规划、编排、工作目录和共享的内容寻址 ZIP 工具缓存 |
+| `DotNet.Bundler.Core` | 验证、规划、编排、工作目录和共享的内容寻址工具缓存（zip 归档与裸内嵌件同一管线） |
 | `DotNet.Bundler.Nsis` | NSIS API、配置、脚本生成、内置 `makensis` 工具链 |
 | `DotNet.Bundler.Wix` | MSI API、WiX 3.14.1 工具子集和声明式 Windows Installer 数据库生成 |
 | `DotNet.Bundler.Signing.Windows` | 可复用的 Windows Authenticode 签名实现 |
@@ -49,7 +49,7 @@ bundler bundle --input-dir <publish目录>  # 或 CLI：只指发布目录，其
 | `DotNet.Bundler` | 空元包，引入 MSBuild 包且不屏蔽传递性构建资产 |
 
 `DotNet.Bundler.Nsis` 内嵌固定版本 `NsisToolset 3.12-r1`（上游 NSIS 3.12）：公共 NSIS 数据目录 + Windows/Linux/macOS 宿主编译器，无需安装 NSIS 或在线下载。
-缓存经压缩包 SHA-256 + 逐文件 manifest 校验，跨进程锁内安全重建。
+缓存经压缩包/逐文件 SHA-256 钉死 + manifest 校验，跨进程锁内安全重建。
 
 所有格式共用同一管线（校验→计划→隔离工作目录→后端→产物核验→清理）。
 产物确定性：`.deb`/`.rpm`/`.apk`/`.zip`/`.tar.gz` 逐字节确定；`.nsis` 与 `.AppImage` 不承诺（makensis 时间戳、squashfs 元数据属上游工具性质）。
