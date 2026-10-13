@@ -13,7 +13,7 @@ public static class UpdateManifestEmitter
 {
     public const string FeedNamePrefix = UpdateFeed.FeedNamePrefix;
 
-    // 自更新适配格式：deb/rpm/apk 属包管理器领地，dmg/pkg 非更新载体——逐字决策见 update-roadmap §1.1。
+    // 自更新适配格式：deb/rpm/apk 属包管理器领地，dmg/pkg 非更新载体——逐字决策见 docs/update.md §1。
     private static readonly HashSet<PackageFormat> CoveredFormats =
     [
         PackageFormat.Nsis, PackageFormat.Msi, PackageFormat.App,

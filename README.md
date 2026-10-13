@@ -10,7 +10,7 @@ Core 和格式后端本身不依赖 `.csproj` 或 .NET 应用模型，`bundler` 
 MSI 已完成 WIN-MSI-1..9，`alpha.37` 是既有 x64/ARM64 身份基线；
 `alpha.40` 增加 WIN-MSI-5 的 Windows x86 目标、显式 MSI 版本映射与可选降级，`alpha.41` 增加范围内安装目录、自定义 UI、可选 Feature、PATH 与交互启动勾选，`alpha.42` 增加 38 语言独立产物、调用方 `.wxl` 翻译覆盖、快捷方式图标与 FIPS 构建选项，`alpha.43` 增加受控 WiX 扩展与专家模式，`alpha.44` 增加 Tauri 对齐的跨格式收尾（NSIS 可选旧 MSI 自动检测、MSI 读取前 NSIS 安装目录延续）。
 WIN-MSI-1..9 已全部完成，`0.1.0-alpha.43` 为 MSI 冻结基线；`alpha.44` 在其上只做跨格式收尾。
-现有 MSI 用法以本文实际配置为准，能力逐项对照见 [`docs/msi-capability-matrix.md`](docs/msi-capability-matrix.md)。
+现有 MSI 用法以本文实际配置为准，能力逐项对照见 [`docs/msi.md`](docs/msi.md)。
 `bundler` CLI 已完成并入 `main`（CLI-C1 冻结于 `0.1.0-alpha.62`，dotnet tool nupkg 与原生 AOT 二进制双分发，用法见下文）；macOS `.app`/`.dmg`/`.pkg` 均已冻结（MAC-APP-1..5 / MAC-DMG-1..5 冻结基线 `0.1.0-alpha.45`，MAC-PKG-1..5 冻结基线 `0.1.0-alpha.47`）。
 Linux `.deb` 已冻结并入 `main`（`LINUX-DEB-1..5`，冻结基线 `0.1.0-alpha.51`）：纯托管 ar/tar/gzip 写入器（无原生工具依赖、任意构建宿主可产出），control 全字段+维护者脚本+conffiles+systemd unit+桌面集成，`sudo dpkg -i/-r/-P` 真实装卸、lintian 硬断言、docker debian/ubuntu 矩阵全部验证。
 Linux `.rpm` 已冻结并入 `main`（`0.1.0-alpha.55`，`LINUX-RPM-1..5`）：纯托管 lead/header/cpio/gzip 写入器，六族关系字段 + License/Group/Url + freedesktop 桌面集成（.desktop/图标/metainfo）+ 任意路径映射 + 四 scriptlet/systemd unit/%config(noreplace)，`rpm -qip` 逐字段断言、`desktop-file-validate`、docker `fedora/rockylinux/opensuse` 三容器真实 `rpm -i`/`rpm -U`/`rpm -e` 与 `.rpmsave` 语义验证、`rpmlint` 豁免清单硬基线、`deb;rpm` 同次 publish 扇出已放开；可选 OpenPGP 签名（供私钥即嵌 `RPMSIGTAG_RSA`+`PGP` 双标签，`rpm -K`/zypper/dnf 实测验签通过）。
@@ -65,13 +65,13 @@ bundler bundle --input-dir bin/osx-x64 --input-dir bin/osx-arm64 --target macos-
 bundler init && bundler bundle --input-dir <publish目录>
 ```
 
-也可用 `bundler.json` 承载配置（自动发现于当前目录；CLI 参数覆盖文件值，`--<fmt>.<knob>=` 透传格式旋钮，`--no-config` 跳过自动发现），schema 与 MSBuild `Bundler*` 属性一一对应，映射表与退出码/`--json` 契约见 [`docs/cli-roadmap.md`](docs/cli-roadmap.md)。
+也可用 `bundler.json` 承载配置（自动发现于当前目录；CLI 参数覆盖文件值，`--<fmt>.<knob>=` 透传格式旋钮，`--no-config` 跳过自动发现），schema 与 MSBuild `Bundler*` 属性一一对应，映射表与退出码/`--json` 契约见 [`docs/cli.md`](docs/cli.md)。
 后续路线和产品边界见 [`docs/roadmap.md`](docs/roadmap.md)。
 WiX 3.14.1 MSI 后端已完成 `WIN-MSI-1..9` 的当前主机范围验证：current-user 安装、升级、修复和卸载，快捷方式与关联/协议候选注册，测试证书签名、英语/简体中文单语言包及受限故障回滚，x86 目标、显式 MSI 版本映射和可选降级，范围内安装目录、自定义 UI 序列、可选 Feature、PATH 精确追加与仅交互启动勾选，多语言输入资源与构建选项、受控 WiX 扩展与专家模式，以及通用能力审计与再冻结。
 MSI 编译把 WiX 警告视为失败，PackageCode 由 WiX 每次构建生成。
 per-machine 包仅生成并检查数据库；原生 x86/ARM64 宿主、生产证书、交互 UI、提权安装、干净 Windows 和真实重启尚未验收。
 **冻结的是 alpha 格式配置及已验证语义；2026-09-29/30 已完成四宿主跨环境联合验收（win/linux/mac/qemu 互产互装、四轮全绿），其余环境类能力按 [`docs/special-acceptance.md`](docs/special-acceptance.md) 如实保留外部待验收。**
-可操作的当前能力示例见 [`samples/HelloBundlerApp/hello-bundler-app-sample.md`](samples/HelloBundlerApp/hello-bundler-app-sample.md)，实施状态见 [`docs/msi-roadmap.md`](docs/msi-roadmap.md)。
+可操作的当前能力示例见 [`samples/HelloBundlerApp/hello-bundler-app-sample.md`](samples/HelloBundlerApp/hello-bundler-app-sample.md)，实施状态见 [`docs/msi.md`](docs/msi.md)。
 
 `DotNet.Bundler.Wix` 是可独立引用的 MSI 后端包和直接 API；MSBuild 调用同一后端。
 跨格式的开发与包消费规则见 [`docs/development-rules.md`](docs/development-rules.md)。
@@ -344,7 +344,7 @@ WiX 3.14.1 工具随包提供，当前 MSI 构建要求 Windows 宿主。
 | `BundlerMacPkgWelcomeFile`/`…ConclusionFile` | 否 | 无；分发包欢迎/结语页文件 |
 | `BundlerMacPkgInstallScope` | 否 | `System`；也支持 `CurrentUserHome`（免提权装 `~/Applications`，枚举名不区分大小写） |
 | `BundlerMacPkgScriptsDirectory` | 否 | 无；`pkgbuild --scripts` 专家脚本目录 |
-| `@(BundlerPkgPayload)`（`Destination`） | 否 | 无；任意文件树 → install-location 相对路径 |
+| `@(BundlerMacPkgFile)`（`Destination`） | 否 | 无；任意文件树 → install-location 相对路径 |
 | `BundlerMacPkgSignIdentity`/`…SignCertificatePath`/`…SignCertificatePassword` | 否 | 无；`pkgbuild --sign`/`productsign --sign`（Installer 证书，仅 macOS 宿主） |
 | `BundlerMacPkgNotarize`/`…NotaryWait`/`…SkipStapling`/`…NotaryProfile`/`…AppleId`/`…ApplePassword`/`…AppleTeamId`/`…NotaryApiKeyFile`/`…KeyId`/`…KeyIssuer` | 否 | 同 `.app` 公证组（`.pkg` 直接过 notarytool，无 ad-hoc 签名等价物） |
 | `BundlerDebPackageName` | 否 | `BundlerProductName` 的 kebab-case 化；须匹配 Debian 包名规则 `[a-z0-9][a-z0-9+.-]+` |
@@ -689,7 +689,7 @@ Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
 
 ## 应用自更新（UPDATE）
 
-打包产物可选接入自更新模块（决策与证据见 `docs/update-roadmap.md`、能力清单见 `docs/update-capability-matrix.md`）。
+打包产物可选接入自更新模块（决策、契约与能力清单见 `docs/update.md`）。
 启用后打包额外产出：`bundler-update-feed.{channel}.json` 静态清单、每制品的 `.sig`（ECDSA P-256）与 `.blockmap` 差分块表，并在安装载荷内烙 `bundler-update.json` 身份旁车。
 
 | MSBuild 属性 | 用途 |
