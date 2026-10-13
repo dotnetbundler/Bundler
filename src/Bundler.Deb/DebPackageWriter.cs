@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Text;
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
@@ -616,7 +615,6 @@ internal static class DebPackageWriter
         return buffer.ToArray();
     }
 
-
     private static string MapArchitecture(BundleTarget target) =>
         ArtifactNaming.ArchToken(target, PackageFormat.Deb)
         ?? throw new NotSupportedException(
@@ -680,9 +678,5 @@ internal static class DebPackageWriter
 
     private static string ToPosixPath(string path) =>
         path.Replace(Path.DirectorySeparatorChar, '/').Replace(Path.AltDirectorySeparatorChar, '/');
-
-
-
-
 
 }

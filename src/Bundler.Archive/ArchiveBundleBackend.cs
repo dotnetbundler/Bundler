@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using DotNet.Bundler.Core;
 using DotNet.Bundler.Core.Update;
 

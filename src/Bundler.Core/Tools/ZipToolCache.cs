@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Security.Cryptography;
 
 namespace DotNet.Bundler.Core;
 

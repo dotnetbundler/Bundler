@@ -282,8 +282,8 @@ internal static class RpmPackageWriter
             RpmHeaderWriter.Int32s(1000, packageSize),                    // RPMSIGTAG_SIZE
             RpmHeaderWriter.Bin(1004, md5.Hash!),                         // RPMSIGTAG_MD5
             RpmHeaderWriter.Int32s(1007, checked((int)cpioSize)),         // RPMSIGTAG_PAYLOADSIZE
-            RpmHeaderWriter.Str(269, Hashes.ToLowerHex(SHA1.Create().ComputeHash(mainHeader))),   // SHA1HEADER
-            RpmHeaderWriter.Str(273, Hashes.ToLowerHex(SHA256.Create().ComputeHash(mainHeader))), // SHA256HEADER
+            RpmHeaderWriter.Str(269, Hashes.Sha1Hex(mainHeader)),   // SHA1HEADER
+            RpmHeaderWriter.Str(273, Hashes.Sha256Hex(mainHeader)), // SHA256HEADER
         };
         if (rsaSignature is not null)
         {

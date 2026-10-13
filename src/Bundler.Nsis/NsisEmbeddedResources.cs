@@ -1,6 +1,5 @@
-using DotNet.Bundler.Core;
 using System.Reflection;
-using System.Security.Cryptography;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Nsis;
 

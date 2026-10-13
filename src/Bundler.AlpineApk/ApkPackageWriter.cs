@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Text;
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
@@ -546,16 +545,12 @@ internal static class ApkPackageWriter
         ];
     }
 
-
     private static void WriteSha256Sidecar(string path)
     {
         var hash = Hashes.Sha256HexFile(path);
         File.WriteAllText(path + ".sha256",
             hash + "  " + Path.GetFileName(path) + "\n", new UTF8Encoding(false));
     }
-
-
-
 
     private static string RelativePath(string baseDirectory, string path)
     {
