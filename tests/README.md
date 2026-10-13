@@ -30,7 +30,7 @@ dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Re
 
 ## 资源门禁（trait 与环境变量）
 
-`[Trait("Requires", ...)]` 标记宿主级资源要求（标在方法级；仅当全类都需同意时升类级，如 NSIS），可按 `--filter-trait`/`--filter-not-trait` 精确选排：
+`[Trait("Requires", ...)]` 标记宿主级资源要求（标在方法级；仅当全类都需同意时升类级），可按 `--filter-trait`/`--filter-not-trait` 精确选排：
 
 | trait | 含义 | 另行同意条件 |
 | --- | --- | --- |
@@ -67,7 +67,7 @@ dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Re
   需要核对异常消息内容时可用带消息核对的断言包装（如 `ExpectAsync`，核对类型+消息子串）；仅断言类型的包装（如 `AssertThrows`，其 message 参数只是失败标签）亦可用——包装内部可 try/catch 或 `Record.Exception*` 捕获后断言，不得宽松成全类型通吃。
 - 单格式 API fixture 收编为 `Bundler.ApiTests` 的 `<Format>ApiTests` 测试类，系统集成测试体收编为 `Bundler.IntegrationTests` 的 `<Format>IntegrationTests` 测试类，宿主门控经 `Assert.Skip`；
   新后端参考现有目录、命名、fixture、包源、测试入口、断言、日志和清理——统一测试风格和组织，不统一各格式用例清单；有实际格式原因可采用专用方式并在格式测试说明写明，不要模拟另一格式不存在的行为。
-- API fixture 以项目引用直引对应后端项目；MSBuild fixture 经 `Bundler.ProjectReference.targets` 接入 `src/Bundler.MSBuild`；
+- API fixture 以项目引用直引对应后端项目；`Bundler.Tests` 同样使用项目引用；MSBuild fixture 经 `Bundler.ProjectReference.targets` 接入 `src/Bundler.MSBuild`；
   仓外独立包消费 fixture（`Bundler.LocalPackagesTests/Fixtures/Msi/`）保留 `PackageReference`+`Bundler.LocalPackages.props` 垫片，测试代码传本轮 `BundlerPackageSource`/`BundlerPackageVersion` 与独立缓存并用 `MsiSupport.AssertLocalBundlerRestore` 核验实际还原的包 ID、版本、源与缓存——复制项目连同 props 复制，项目自身声明必要 SDK 属性，不靠根 props、旧 `obj` 或隐藏 `--source` 才工作。
 - 集成测试按 Pack、隔离还原、生成产物、执行系统行为、断言最终状态组织；每轮使用独立输出和产品身份，预检无碰撞；NuGet 可列出 SDK/VS fallback 文件夹，不能要求 `packageFolders` 只有缓存一项。
   记录命令、宿主/架构、包与应用版本、哈希、退出码、日志、清理及未验证范围；集成失败即使复跑通过也记录首次失败、调查和复跑，不能仅放宽断言。
