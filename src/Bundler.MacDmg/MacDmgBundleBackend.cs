@@ -172,7 +172,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             // hdiutil convert 在高载宿主上偶发 EAGAIN（"Resource temporarily
             // unavailable"）——工具级瞬态，有限重试即可恢复，不是输入错误。
             // 若源镜像的簿记状态在原文件上卡死（macOS 已知痼疾），换用字节相同的
-            // 副本继续 convert 即可绕开（electron-builder #8415 同款处置）。
+            // 副本继续 convert 即可绕开。
             var convertSource = readWriteImage;
             string? convertSourceCopy = null;
             try

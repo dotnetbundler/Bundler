@@ -744,7 +744,7 @@ Function UninstallLegacyMsiInstallations
       SetRebootFlag true
       Goto legacy_msi_loop
     ${ElseIf} $0 == 1602
-      ; 用户在 MSI 卸载界面取消（Tauri 对齐）：按用户取消处理并退出安装；
+      ; 用户在 MSI 卸载界面取消：按用户取消处理并退出安装；
       ; Call 进来的 Function 里 Abort 只退出函数，必须用 existing_cancel 同款模式。
       ; 静默/被动模式下 /qn 与 /passive 不会返回 1602。
       StrCpy $ExitCode ${EXIT_CANCELLED}

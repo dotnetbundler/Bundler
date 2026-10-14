@@ -7,7 +7,7 @@ namespace DotNet.Bundler.Update;
 
 /// <summary>
 /// 更新清单发射器：对自更新适配格式的产物逐个产 `.sig` 旁车（ECDSA P-1363 64B），
-/// 并聚合成一份 `bundler-update-feed.{channel}.json`——静态托管即可消费（Tauri latest.json 式）。
+/// 并聚合成一份 `bundler-update-feed.{channel}.json`——静态托管即可消费。
 /// </summary>
 public static class UpdateManifestEmitter
 {
@@ -27,7 +27,7 @@ public static class UpdateManifestEmitter
 
     /// <summary>
     /// 对已产出的构件发射更新面：`.sig` 旁车 + 通道清单。返回新增产物路径（sig 与清单）。
-    /// 开启更新面必须带私钥文件——签名是强制信任根（Tauri 同型）。
+    /// 开启更新面必须带私钥文件——签名是强制信任根。
     /// </summary>
     public static async Task<IReadOnlyList<string>> EmitAsync(
         BundleConfiguration configuration,

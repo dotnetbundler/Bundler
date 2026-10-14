@@ -67,7 +67,7 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
         var perUser = settings.InstallScope == WixInstallScope.CurrentUser;
         var scopeRoot = perUser ? "LocalAppDataFolder" :
             item.Target.Architecture == CpuArchitecture.X86 ? "ProgramFilesFolder" : "ProgramFiles64Folder";
-        // 跨安装器目录延续（Tauri 对齐）：先读旧 NSIS 安装器写入的卸载键 InstallRoot，
+        // 跨安装器目录延续：先读旧 NSIS 安装器写入的卸载键 InstallRoot，
         // 再到 Bundler 自家注册；Bundler 注册的目录优先（后写者胜）。
         var nsisUninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\" + bundle.Identifier;
         // NSIS 在 x64/arm64 下写 64 位注册表视图（installer.nsi SetRegView 64），MSI 检索须同视图。
