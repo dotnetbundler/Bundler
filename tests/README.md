@@ -14,7 +14,8 @@
 | `Bundler.LocalPackagesTests` | 本地包消费契约：fixture 经 `Bundler.LocalPackages.props` 消费仓根本地 nupkg，验证发货包在真实消费方构建中可用（当前为 MSI 腿，仅 Windows） | `dotnet test tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj -c Release` |
 
 本机定位：未做特殊说明时 Windows 宿主**只跑基础面**（Release build + `Bundler.Tests`/`ApiTests` + 宿主可达的集成腿），**完整多宿主矩阵在 GitHub CI 跑**——`test-legs.yml` `workflow_dispatch`（suite×runners），真装/交互/提权腿在 CI 一次性环境由 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 自动启闸，本机默认不启。
-dispatch/盯 run 需要 GitHub PAT（期望位置 `secret:personal:Github_Linlccc_PAT`，走 `curl -H "Authorization: token $Github_Linlccc_PAT"`——`gh` wrapper 会忽略 `GH_TOKEN`）；本机找不到 PAT 时提醒用户提供，不要跳过 CI 腿冒充已验。
+dispatch/盯 run 需要 GitHub PAT：从环境变量取（具体变量名以用户说明为准），用 `curl -H "Authorization: token $env:PAT名"` 调 API——`gh` wrapper 会忽略 `GH_TOKEN`。
+找不到可用 PAT 时提醒用户提供，不要跳过 CI 腿冒充已验。
 
 先 `dotnet build Bundler.slnx -c Release` 再跑测试；集成测试的打包接线经 `Bundler.ProjectReference.targets` 走项目引用，不依赖已发布的 nupkg。
 `Bundler.LocalPackagesTests` 例外：它有意经 `Bundler.LocalPackages.props` 消费本地构建的 nupkg，运行前需要 `dotnet pack Bundler.slnx -c Release -o artifacts/packages`。
