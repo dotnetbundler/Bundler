@@ -72,6 +72,39 @@ public sealed class MiniReadersTests
         Assert.Equal("abc", Encoding.ASCII.GetString(entry.Data));
     }
 
+    [Fact]
+    public void MiniTar_PaxPath_OverridesHeaderName()
+    {
+        // pax 记录 "<len> path=<value>\n"——len 含自身数字位。
+        var pax = Encoding.UTF8.GetBytes("26 path=the-real-name.txt\n");
+        var tar = new List<byte>();
+        tar.AddRange(TarHeader("./PaxHeaders.1/x", "", pax.Length, type: (byte)'x'));
+        tar.AddRange(pax);
+        tar.AddRange(new byte[512 - pax.Length]);
+        tar.AddRange(TarHeader("stub", "", 2));
+        tar.AddRange(Encoding.ASCII.GetBytes("hi").Concat(new byte[510]).ToArray());
+        tar.AddRange(new byte[1024]);
+        var entry = Assert.Single(MiniTar.Read(tar.ToArray()));
+        Assert.Equal("the-real-name.txt", entry.Name);
+        Assert.Equal("hi", Encoding.ASCII.GetString(entry.Data));
+    }
+
+    [Fact]
+    public void MiniTar_PaxWithoutPath_FallsBackToHeaderName()
+    {
+        // pax 记录无 path 键（如 apk 的 hash 记录）——回退到 x 头自身名，后继条目沿用该名。
+        var pax = Encoding.UTF8.GetBytes("21 comment=some-hash\n");
+        var tar = new List<byte>();
+        tar.AddRange(TarHeader("data.tar.gz", "", pax.Length, type: (byte)'x'));
+        tar.AddRange(pax);
+        tar.AddRange(new byte[512 - pax.Length]);
+        tar.AddRange(TarHeader("data.tar.gz", "", 2));
+        tar.AddRange(Encoding.ASCII.GetBytes("hi").Concat(new byte[510]).ToArray());
+        tar.AddRange(new byte[1024]);
+        var entry = Assert.Single(MiniTar.Read(tar.ToArray()));
+        Assert.Equal("data.tar.gz", entry.Name);
+    }
+
     private static byte[] ArMember(string name, byte[] data)
     {
         var h = new byte[60];
