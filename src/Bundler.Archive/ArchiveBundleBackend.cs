@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using DotNet.Bundler.Core;
 using DotNet.Bundler.Core.Update;
 
@@ -112,15 +110,8 @@ internal sealed class ArchiveBundleBackend(
 
     private static void WriteSha256Sidecar(string path)
     {
-        using var sha = SHA256.Create();
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var hash = sha.ComputeHash(stream);
-        var builder = new StringBuilder(hash.Length * 2);
-        foreach (var b in hash)
-        {
-            builder.Append(b.ToString("x2"));
-        }
         File.WriteAllText(path + ".sha256",
-            builder + "  " + Path.GetFileName(path) + "\n");
+            Hashes.Sha256Hex(stream) + "  " + Path.GetFileName(path) + "\n");
     }
 }

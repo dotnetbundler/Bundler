@@ -1,5 +1,5 @@
 using System.Reflection;
-using System.Security.Cryptography;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Nsis;
 
@@ -121,17 +121,12 @@ internal static class NsisEmbeddedResources
         }
     }
 
-    private static string HashFile(string path)
-    {
-        using var stream = File.OpenRead(path);
-        using var sha = SHA256.Create();
-        return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", string.Empty);
-    }
+    private static string HashFile(string path) => Hashes.Sha256HexFile(path);
 
     private static string ComputeHash(byte[] bytes, int count)
     {
-        using var sha = SHA256.Create();
-        return BitConverter.ToString(sha.ComputeHash(bytes, 0, count)).Replace("-", string.Empty);
+        using var slice = new MemoryStream(bytes, 0, count, writable: false);
+        return Hashes.Sha256Hex(slice);
     }
 
     internal sealed record NsisResourcePaths(

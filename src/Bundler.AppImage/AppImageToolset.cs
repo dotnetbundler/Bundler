@@ -1,8 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using System.Text;
 using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.AppImage;
@@ -107,7 +105,7 @@ internal sealed class AppImageToolset
             throw new InvalidOperationException($"Embedded AppImage resource '{resourceName}' was not found.");
         using var memory = new MemoryStream();
         resource.CopyTo(memory);
-        var actual = Sha256(memory.ToArray());
+        var actual = Hashes.Sha256Hex(memory.ToArray());
         if (!string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
@@ -117,7 +115,7 @@ internal sealed class AppImageToolset
         Directory.CreateDirectory(cacheDirectory);
         var destination = Path.Combine(cacheDirectory, fileName);
         if (!File.Exists(destination) ||
-            !string.Equals(Sha256(File.ReadAllBytes(destination)), expectedSha256, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(Hashes.Sha256Hex(File.ReadAllBytes(destination)), expectedSha256, StringComparison.OrdinalIgnoreCase))
         {
             var temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
             File.WriteAllBytes(temporary, memory.ToArray());
@@ -130,7 +128,7 @@ internal sealed class AppImageToolset
                 // 并发构建同物化同一缓存件：另一进程先落位，丢弃副本再核哈希。
                 File.Delete(temporary);
             }
-            if (!string.Equals(Sha256(File.ReadAllBytes(destination)), expectedSha256,
+            if (!string.Equals(Hashes.Sha256Hex(File.ReadAllBytes(destination)), expectedSha256,
                     StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
@@ -152,15 +150,4 @@ internal sealed class AppImageToolset
     internal static void Symlink(string target, string linkPath) =>
         ToolRunner.RunSync("ln", new[] { "-sfn", target, linkPath });
 
-    private static string Sha256(byte[] data)
-    {
-        using var sha = SHA256.Create();
-        var hash = sha.ComputeHash(data);
-        var builder = new StringBuilder(hash.Length * 2);
-        foreach (var b in hash)
-        {
-            builder.Append(b.ToString("x2"));
-        }
-        return builder.ToString();
-    }
 }

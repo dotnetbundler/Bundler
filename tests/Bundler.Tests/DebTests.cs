@@ -836,7 +836,7 @@ public static class DebTests
                 .GetAwaiter().GetResult().Single();
             var sidecar = deb.Path + ".sha256";
             Assert.True(File.Exists(sidecar), "The .sha256 sidecar is missing.");
-            var expected = DebPackageWriter.Sha256Hex(File.ReadAllBytes(deb.Path));
+            var expected = Hashes.Sha256Hex(File.ReadAllBytes(deb.Path));
             var line = File.ReadAllText(sidecar).Trim();
             Assert.Equal(expected + "  " + Path.GetFileName(deb.Path), line);
         }
