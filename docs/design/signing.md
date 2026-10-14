@@ -26,7 +26,7 @@
 | `alpineapk` | 纯托管 BouncyCastle RSA PKCS#1 v1.5/SHA1：`.SIGN.RSA.<密钥>.rsa.pub` 前置段签控制段 | `BundlerAlpineApkSigningKeyFile`（PEM/PKCS8/加密）+`Passphrase` | 公钥入 `/etc/apk/keys/` 免 `--allow-untrusted` 实装；`openssl dgst -sha1 -verify` 旁证 |
 | `deb`/`zip`/`targz` | **不签** | — | deb 签名在 apt 仓库侧惯例；归档无通行签名惯例 |
 
-`msi` 不另补真装集成腿（裁决）：`Bundler.Tests`/`WixTests` 三断言已覆盖内嵌签名链，RFC 3161 时间戳子项已真实嵌入消解；外部仅余 SA-P-01 生产 CA 信任链。
+`msi` 不另补真装集成腿（裁决）：`Bundler.ApiTests`（`WixApiTests`/`SigningApiTests`）断言已覆盖内嵌签名链，RFC 3161 时间戳子项已真实嵌入消解；外部仅余 SA-P-01 生产 CA 信任链。
 
 ## 3. 明确不做
 

@@ -33,13 +33,13 @@
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
 | `src/Bundler.Cli` | CLI 适配层（dotnet tool nupkg + `PublishAot` 原生二进制双分发） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
-| `tests/Unit` | `Bundler.UnitTests`：单元层（纯进程内、零子进程 spawn；测试体系重写中，规格见 `docs/design/testing.md`） | `net10.0` |
+| `tests/Unit` | `Bundler.UnitTests`：单元层（纯进程内、零子进程 spawn） | `net10.0` |
 | `tests/Api` | `Bundler.ApiTests`：公共 API functional 层（无 IVT，真跑内嵌工具产真物） | `net10.0` |
 | `tests/Integration` | `Bundler.IntegrationTests`：真环境层（fixture 发布链/真装真卸/docker/更新链） | `net10.0` |
 | `tests/Package` | `Bundler.PackageTests`：本地 nupkg 消费契约层 | `net10.0` |
-| `tests/Shared` | 四测试工程链接共享的基建源码目录（重写中） | `net10.0` |
-| `tests/Fixtures` | 被测 fixture 工程与载荷集中地（重写中） | — |
-| `tests/Manual` | 特殊验收脚本层（重写中；验收登记在 `docs/project/special-acceptance.md`） | sh/ps1 |
+| `tests/Shared` | 四测试工程链接共享的基建源码目录 | `net10.0` |
+| `tests/Fixtures` | 被测 fixture 工程与载荷集中地 | — |
+| `tests/Manual` | 特殊验收脚本层（验收登记在 `docs/project/special-acceptance.md`） | sh/ps1 |
 | `samples/HelloBundlerApp` | 全后端统一公开示例（应用版本 `1.0.0`，主工程公共旋钮 + `formats/*.props` 各后端专属旋钮，100% 旋钮覆盖） | `net10.0` |
 | `tools/Bundler.Nsis.Plugin` | NSIS 原生插件源码（有意在 slnx 之外，重建需 .NET 10 + Windows 原生链） | `net10.0` |
 | `third_party/` | 第三方归档、许可证、逐文件 SHA-256 与 provenance 文档 | — |
