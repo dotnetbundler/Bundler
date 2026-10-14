@@ -98,4 +98,4 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
 - 发布链资产实际推送（NuGet/Release 为另一步）；
-- 零星已登记增强按 `docs/project/roadmap.md` §5.2 候选标准排队。
+- 零星已登记增强按 `docs/project/roadmap.md` §4.2 候选标准排队。
