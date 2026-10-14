@@ -99,7 +99,7 @@ tests/
 | 行为点 | 层 | 断言 |
 | --- | --- | --- |
 | `EcdsaSigner` | Unit | P-256 签/验自洽；P1363↔DER 双向转换逐字节；坏签拒 |
-| `UpdateManifestEmitter` | Unit | `IsUpdateAdapted` 覆盖格式表；`FeedFileName` 通道映射；`EmitAsync` 产物清单（feed/sig 旁车/blockmap/身份旁车注入）；无适配产物仍发射签名空 feed；重复 app 产物去重保最终件；URL 转义/相对 URL；必须签名钥 |
+| `UpdateManifestEmitter` | Unit | `IsUpdateAdapted` 覆盖格式表；`FeedFileName` 通道映射；`EmitAsync` 产物清单（`.app` zip 运输件/`*.sig` 签名旁车/`*.blockmap`/feed json/`feed.sig`）；无适配产物仍发射签名空 feed；重复 app 产物去重保最终件；URL 转义/相对 URL；必须签名钥 |
 | 打包侧集成 | Integration | 各格式产包时 update 节注入侧车/feed 的端到端面 |
 
 ### 3.6 Bundler.Updater（Unit + Integration）
