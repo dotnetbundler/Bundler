@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # 测试腿唯一驱动（POSIX）：run-tests.sh <unit|api|integration|package|all>
-# 测试程序集自宿主运行（MTP+xUnit3，`dotnet test` 发现不到用例）——直跑 dll；
-# IntegrationTests 逐类跑并落 artifacts/ci/test-progress.log 指认在途类；
-# -longRunning 300 打印挂起用例名。
+# 测试程序集自宿主（MTP+xUnit3）——直跑 dll 而非 dotnet test，以逐类调度、
+# 落 artifacts/ci/test-progress.log 指认在途类；-longRunning 300 打印挂起用例名。
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 ROOT="$(pwd)"
@@ -35,9 +34,10 @@ case " $PROJECTS " in
 esac
 
 for P in $PROJECTS; do
-    NAME="$(basename "$P" .csproj)"
-    DLL="tests/$P/bin/Release/net10.0/$NAME.dll"
-    if [ "$P" = "Integration/Bundler.IntegrationTests" ]; then
+    LAYER="${P%%/*}"; NAME="${P##*/}"
+    DLL="tests/$LAYER/bin/Release/net10.0/$NAME.dll"
+    [ -f "$DLL" ] || { echo "测试程序集不存在：$DLL（先 dotnet build）" >&2; exit 1; }
+    if [ "$NAME" = "Bundler.IntegrationTests" ]; then
         # mapfile 是 bash>=4 内建（macOS runner 自带 bash 3.2.57）——while 读行代替。
         # -list classes 本身失败也要判败：进程替换会丢退出码，先落变量再查。
         LIST_OUT="$(dotnet "$DLL" -list classes)" || { echo "-list classes 退出码非零，判失败" >&2; exit 1; }

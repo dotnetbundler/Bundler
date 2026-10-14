@@ -6,7 +6,7 @@
 
 | 目录 | 工程 | 层职责 |
 | --- | --- | --- |
-| `Unit/` | `Bundler.UnitTests` | 单元层：纯进程内、零子进程 spawn（机器可核查：`Process.Start`/`ToolRunner` 在工程内零命中） |
+| `Unit/` | `Bundler.UnitTests` | 单元层：纯进程内、零真实 spawn（机器可核查：`Process.Start(`/`ToolRunner.Run*` 实调用零命中，spawn 一律经 `ToolRunner.Handler` 桩缝） |
 | `Api/` | `Bundler.ApiTests` | 公共 API functional 层（无 IVT——编译期强制只碰公开面，真跑内嵌工具产真物） |
 | `Integration/` | `Bundler.IntegrationTests` | 真环境层：fixture 发布链、真装真卸、docker 矩阵、更新链、外部工具 |
 | `Package/` | `Bundler.PackageTests` | 本地 nupkg 消费契约层（不经项目引用） |
@@ -40,8 +40,9 @@ dotnet tests/Integration/bin/Release/net10.0/Bundler.IntegrationTests.dll -list 
 ### Package 前置
 
 `Package` 层消费本地 nupkg：跑前必须先打仓根包。
-`run-tests.*` 与测试自身 `RepositoryPackages` 共享 `artifacts/packages`（跨进程 `.pack.lock` 串行），
-重复跑不重打；手动则逐 src 工程 pack：`dotnet pack src/<Name>/<Name>.csproj -c Release -o artifacts/packages`。
+`run-tests.*` 与测试自身 `RepositoryPackages` 共享 `artifacts/packages`：同一进程内只打一次，
+跨进程经 `.pack.lock` 串行共用该目录（每次运行都会重打，由 MSBuild 增量兜底）；
+手动则逐 src 工程 pack：`dotnet pack src/<Name>/<Name>.csproj -c Release -o artifacts/packages`。
 
 ## 门禁
 
@@ -49,9 +50,9 @@ dotnet tests/Integration/bin/Release/net10.0/Bundler.IntegrationTests.dll -list 
 
 | 门禁 | 机制 | 含义 |
 | --- | --- | --- |
-| 宿主 | `TestPlatform.IsWindows/IsLinux/IsMacOS`、`OperatingSystem.IsX`、`IsX64/IsArm64` | 格式后端只在对应宿主可产/可装；错宿主跳过 |
+| 宿主 | `TestPlatform.IsWindows/IsLinux/IsMacOS/IsX64`、`OperatingSystem.IsX`、`Architecture.*`、`DockerRunner.CanRunArm64Containers` | 格式后端只在对应宿主可产/可装；错宿主跳过 |
 | 同意闸 | `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` | NSIS/MSI/包消费真装腿写真实用户配置与注册表；CI runner 可丢弃默认置 1，本机须显式同意 |
-| 外部工具 | `ExternalTools.Require/Has` | `makensis`、`candle`、`dpkg`、`rpmbuild`、`pkgbuild`、`hdiutil` 等缺席即跳 |
+| 外部工具 | `ExternalTools.Require/Has` | `rpm`/`rpm2cpio`/`cpio`、`desktop-file-validate`、`unsquashfs`、`gpg`、`lintian`/`rpmlint`、`docker`、`clang` 等缺席即跳（NSIS/WiX 工具链随包分发，不经此门禁） |
 | docker | `DockerRunner.IsAvailable` | 发行版矩阵腿需 docker daemon；镜像拉取失败按映射回落备用 registry |
 | fixture | fixture 工程文件存在性 | 载荷缺失即跳（不静默产出假断言） |
 
