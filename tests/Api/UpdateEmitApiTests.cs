@@ -67,6 +67,8 @@ public sealed class UpdateEmitApiTests : TempBase
             bundle, artifacts, TestContext.Current.CancellationToken);
 
         var feedPath = Path.Combine(bundle.OutputDirectory, "bundler-update-feed.beta.json");
+        // produced 只含 feed+feed.sig——非覆盖产物完全不进更新面。
+        Assert.Equal(2, produced.Count);
         Assert.True(File.Exists(feedPath));
         Assert.True(File.Exists(feedPath + ".sig"));
         using var feed = JsonDocument.Parse(File.ReadAllText(feedPath));

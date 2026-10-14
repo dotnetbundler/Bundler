@@ -37,6 +37,7 @@ public sealed class WixApiTests : TempBase
         Assert.Equal(2, artifacts.Count);
         // en-US 不带后缀；其余语言小写区域名后缀。
         Assert.Equal(["Sample-1.2.3-x64-zh-cn.msi", "Sample-1.2.3-x64.msi"],
-            artifacts.Select(a => Path.GetFileName(a.Path)).OrderBy(n => n).ToList());
+            artifacts.Select(a => Path.GetFileName(a.Path))
+                .OrderBy(n => n, StringComparer.Ordinal).ToList());
     }
 }

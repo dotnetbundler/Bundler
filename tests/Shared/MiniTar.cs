@@ -25,6 +25,12 @@ public static class MiniTar
                 break; // 全零块 = 归档尾
             }
             var name = Encoding.UTF8.GetString(header[..100]).TrimEnd('\0');
+            // ustar 长名拆 prefix(345..499)+name——本仓写器的真实长名机制。
+            var prefix = Encoding.UTF8.GetString(header[345..500]).TrimEnd('\0');
+            if (prefix.Length > 0)
+            {
+                name = prefix + "/" + name;
+            }
             var mode = Convert.ToInt32(Encoding.ASCII.GetString(header[100..108]).Trim('\0', ' '), 8);
             var size = (int)Convert.ToInt64(Encoding.ASCII.GetString(header[124..136]).Trim('\0', ' '), 8);
             var type = (char)header[156];

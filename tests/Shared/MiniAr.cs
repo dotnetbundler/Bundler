@@ -26,7 +26,7 @@ public static class MiniAr
             var name = Encoding.ASCII.GetString(header[..16]).TrimEnd();
             var size = int.Parse(Encoding.ASCII.GetString(header[48..58]).Trim());
             var data = blob.AsSpan(offset + 60, size).ToArray();
-            if (name == "#1/")
+            if (name.StartsWith("#1/", StringComparison.Ordinal))
             {
                 var nameLength = int.Parse(name[3..]);
                 name = Encoding.UTF8.GetString(data[..nameLength]);
@@ -34,7 +34,13 @@ public static class MiniAr
             }
             else if (name is "//" or "__.SYMDEF")
             {
-                longNames = data;
+                // 特殊成员：// 是 GNU 字符串名表（不进返回列表），__.SYMDEF 是符号索引（跳过）。
+                if (name == "//")
+                {
+                    longNames = data;
+                }
+                offset += 60 + size + (size % 2);
+                continue;
             }
             else if (name.StartsWith('/'))
             {

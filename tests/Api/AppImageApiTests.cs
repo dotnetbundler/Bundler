@@ -19,7 +19,7 @@ public sealed class AppImageApiTests : TempBase
 
         var artifact = Assert.Single(artifacts);
         Assert.Equal(PackageFormat.AppImage, artifact.Format);
-        Assert.Equal("Sample-1.2.3-x86_64.AppImage", Path.GetFileName(artifact.Path));
+        Assert.Equal("sample-1.2.3-x86_64.AppImage", Path.GetFileName(artifact.Path));
         // AppImage = ELF 头（runtime）+ squashfs 负载
         Assert.Equal([0x7F, 0x45, 0x4C, 0x46], BundleFixture.Magic(artifact.Path, 4));
     }
