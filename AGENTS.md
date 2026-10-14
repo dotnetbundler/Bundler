@@ -88,6 +88,7 @@ git status --short
 | `docs/design/support-matrix.md` | 格式×平台生产/消费支持与签名宿主总览 | 目标语法、逐项能力 |
 | `docs/design/architecture.md` | 实现原理：输入模型、入口、门面、规划、编排、工作目录、工具缓存、命名、UPDATE 挂点 | 规则、格式专属契约、当前事实 |
 | `docs/design/update.md`、`docs/design/signing.md` | UPDATE 模块、签名横切面的决策与能力状态 | 单格式契约、项目不变量 |
+| `docs/design/testing.md` | 测试体系规格：分层判据、逐模块覆盖清单、CI 拓扑 | 测试过程记录、结果留档 |
 | `docs/README.md` | docs/ 三层索引 | 规则与事实正文 |
 | `docs/usage/` | 用户面使用文档族（入口 + `formats/` 后端各一件，最小到全量旋钮；CLI 唯一文档在 `docs/usage/cli.md`） | 契约与决策、规则、当前事实 |
 | `README.md` | 面向使用者的能力与用法 | 协作规则、阶段计划 |

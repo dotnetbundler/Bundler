@@ -41,18 +41,19 @@ tests/
 
 | 行为点 | 断言 |
 | --- | --- |
-| `BundleTarget.TryParse/Parse` | canonical `{os}[-{libc}]-{arch}` 全词表往返；别称归一（x64/arm64/win/osx 等）；`macos-universal`；非法词拒；LibC 维度 |
+| `BundleTarget.TryParse/Parse` | canonical `{os}[-{libc}]-{arch}` 全词表往返；架构别称归一（x64/amd64→x86_64、arm64→aarch64 等；OS 段无别称，仅 windows/macos/linux/linux-musl）；`macos-universal`；非法词拒；LibC 维度 |
 | `BundleTarget.ArchName` | 全枚举映射正确、未知名抛 |
 | `ArtifactNaming.FileName` | 每格式生态词产物名（nsis `-setup.exe`、msi `.msi`、deb `.deb`、rpm `.rpm`、AppImage、zip/tar.gz/apk、dmg/pkg/app）；版本/架构 token 规则；重名处理 |
-| `ArtifactNaming.ArchToken` | 格式×架构 token 表正确（msi x64/x86/arm64、deb amd64/armhf、rpm x86_64/aarch64、apk x86_64/aarch64、appimage x86_64/aarch64、归档不嵌架构等） |
-| `TargetMatrix.Supports` | 格式×OS×libc 支持矩阵全表断言（win 仅 nsis/msi；macos 仅 app/dmg/pkg；apk 仅 linux-musl 宿主等边界） |
+| `ArtifactNaming.ArchToken` | 格式×架构 token 表正确（msi x64/x86/arm64、deb amd64/armhf、rpm x86_64/aarch64、apk x86_64/aarch64、appimage x86_64/aarch64、归档 token 为 os-arch 复合词等） |
 | `BundleConfiguration` 记录面 | 默认值、init 语义、嵌套记录（Update/Resource/KeyFile/FileAssociation/UrlProtocol/Target） |
-| `IFormatBundler`/`IBundleBackend`/`IBundleLogger` 契约 | 接口形状稳定（编译即验）、`NullBundleLogger` 行为 |
+| `IFormatBundler`/`IBundleBackend`/`IBundleLogger`/`IBundleSigner` 契约 | 接口形状稳定（编译即验）、`NullBundleLogger` 行为 |
 
 ### 3.2 Bundler.Core——配置/校验/规划/编排（Unit）
 
 | 行为点 | 断言 |
 | --- | --- |
+| `TargetMatrix.Supports` | 格式×OS×libc 支持矩阵全表断言（windows=nsis/msi/zip/targz；macos=app/dmg/pkg/zip/targz；linux=deb/rpm/appimage/zip/targz；apk 仅 linux-musl 等边界） |
+| `UnixFileTypes` | stat P/Invoke 与 st_mode 偏移按 ABI 分支的正确性（x64/s390x/ppc64le=24、asm-generic=16、macOS `stat$INODE64` 回退）；FIFO/socket 等特殊文件造样本需真环境——归 Integration 宿主腿 |
 | `BundleConfigurationValidator` | 逐条规则：必填四件（productName/identifier/version/outputDirectory）；identifier 反 DNS 正则；version SemVer 形；homepage 仅 http/https；targets 非空；target 可解析；formats 非空+矩阵支持；mainExecutable 空白/越界/存在性（win 默认 `.exe` 后缀）；inputDirectory 存在；outputDirectory 不得落在 inputDirectory 内（含大小写语义差异）；signingFiles 相对路径+存在；icons 存在；resources source/destination 必填+禁越界（`..`/rooted）；licenseFile 扩展名白名单（.txt/.rtf）；fileAssociations 扩展名正则+去重；urlProtocols scheme 正则+去重；update 节：feedUrl 必填/channel 文件名安全/signingKeyFile 必填+存在/publicKey P-256 65B+0x04/公钥与私钥派生一致/bootstrapperDirectory 存在；输出重名检测（含 dmg/pkg 隐式注入 app 占位） |
 | `BundlePlanner.Create` | 校验失败抛 `BundleValidationException` 携带 issues；dmg/pkg 缺 app 时注入 intermediate app 项；优先级排序 app<dmg<pkg；OutputLayout.Flat/ByFormat 目录扇出；产物名碰撞抛；MainExecutable 默认推断 |
 | `BundlePipeline` | 假后端：os+format+libc 精确/回退解析；同 libc 重复注册拒；无后端 `NotSupportedException`；后端返回 null/不存在路径/路径碰撞的契约违例；`.bundler-work` 创建+清空+脚手架逐层回收（非空即停不越界）；取消传播；日志序列 |
@@ -92,7 +93,14 @@ tests/
 | --- | --- |
 | `WindowsAuthenticodeSigner` | 证书文件/指纹/sha1 参数→签名请求构造；无证书环境报错路径 |
 | `WindowsExternalCommandSigner` | 外部命令模板渲染、占位符展开、退出码传播 |
-| `Update.EcdsaSigner` | P-256 签/验自洽；P1363↔DER 双向转换逐字节；坏签拒 |
+
+### 3.5a Bundler.Update（Unit + Integration）
+
+| 行为点 | 层 | 断言 |
+| --- | --- | --- |
+| `EcdsaSigner` | Unit | P-256 签/验自洽；P1363↔DER 双向转换逐字节；坏签拒 |
+| `UpdateManifestEmitter` | Unit | `IsUpdateAdapted` 覆盖格式表；`FeedFileName` 通道映射；`EmitAsync` 产物清单（feed/sig 旁车/blockmap/身份旁车注入）；无适配产物仍发射签名空 feed；重复 app 产物去重保最终件；URL 转义/相对 URL；必须签名钥 |
+| 打包侧集成 | Integration | 各格式产包时 update 节注入侧车/feed 的端到端面 |
 
 ### 3.6 Bundler.Updater（Unit + Integration）
 
@@ -151,7 +159,7 @@ HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 
 
 ### 3.11 包契约（Package）
 
-本地 `dotnet pack` → `Bundler.PackageTests` 消费：nupkg 还原来源、buildTransitive 目标注入、`Bundler.MSBuild` 任务程序集就位、各后端包内容清单；MSI fixture 真装腿保留（localinstall 闸）。
+本地 `dotnet pack` → `Bundler.PackageTests` 消费：nupkg 还原来源、buildTransitive 目标注入、`Bundler.MSBuild` 任务程序集就位、各后端包内容清单、`DotNet.Bundler` 元包依赖图与随包文件（README/LICENSE/THIRD-PARTY-NOTICES）；MSI fixture 真装腿保留（localinstall 闸）。
 
 ## 4. CI 拓扑（全新）
 
@@ -183,4 +191,6 @@ scripts/ci/
 
 ## 6. 验收标准
 
-重写完成 = 本清单每行有对应测试或登记条目；CI 两个 workflow 全绿；单测零子进程可机器核查（全仓 `Process.Start|ToolRunner.RunAsync(真)` 在 Unit 工程零命中）。
+重写完成 = 本清单每行有对应测试或登记条目；验证面 workflow（test/verify）全绿（aot 为产件流另行验证）；单测零子进程可机器核查（`Process.Start|ToolRunner.(RunAsync|TryRunAsync|RunSync)` 在 Unit 工程零命中）。
+
+**实施期同步义务**：本文件随引入登记进 AGENTS.md §4 文档地图与 `docs/README.md` 索引；工程改名面（Bundler.Tests→UnitTests、LocalPackagesTests→PackageTests、tests/Special→Manual）触发 AGENTS.md §6 命令表、tests/README 工程表、workflow 中 `tests/Special/` 路径引用的同步。
