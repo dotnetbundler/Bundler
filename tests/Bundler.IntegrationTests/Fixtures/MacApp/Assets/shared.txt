@@ -1,1 +1,0 @@
-Bundler macOS .app shared-support payload.

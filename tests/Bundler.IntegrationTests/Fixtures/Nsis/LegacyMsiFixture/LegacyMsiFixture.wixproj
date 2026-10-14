@@ -1,7 +1,0 @@
-<Project Sdk="WixToolset.Sdk/5.0.2">
-  <PropertyGroup>
-    <InstallerPlatform>x64</InstallerPlatform>
-    <OutputName>LegacyMsiFixture</OutputName>
-    <SuppressIces>ICE91</SuppressIces>
-  </PropertyGroup>
-</Project>

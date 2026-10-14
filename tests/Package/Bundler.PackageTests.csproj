@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <!-- 发货包契约腿：经本地 nupkg 消费（不引用 src 工程，不授 IVT）；
+         真装腿串行（共享安装状态与 msiexec 单例） -->
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="WixToolset.Dtf.WindowsInstaller" />
+    <PackageReference Include="Interop.UIAutomationClient" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="..\Fixtures\**\*.cs" />
+    <None Remove="..\Fixtures\**\*" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\**\*.cs" />
+  </ItemGroup>
+</Project>

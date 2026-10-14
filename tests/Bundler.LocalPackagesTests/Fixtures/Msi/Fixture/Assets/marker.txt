@@ -1,1 +1,0 @@
-Bundler MSI integration resource

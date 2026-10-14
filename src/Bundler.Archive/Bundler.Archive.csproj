@@ -10,7 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Bundler.Tests" />
+    <InternalsVisibleTo Include="Bundler.UnitTests" />
+    <InternalsVisibleTo Include="Bundler.IntegrationTests" />
     <InternalsVisibleTo Include="DotNet.Bundler.Update" />
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
   </ItemGroup>

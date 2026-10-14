@@ -1,1 +1,0 @@
-Integration fixture extra file.

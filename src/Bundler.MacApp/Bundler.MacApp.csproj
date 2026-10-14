@@ -7,7 +7,8 @@
     <PackageTags>dotnet;bundler;macos;app;bundle;desktop</PackageTags>
   </PropertyGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="Bundler.Tests" />
+    <InternalsVisibleTo Include="Bundler.UnitTests" />
+    <InternalsVisibleTo Include="Bundler.IntegrationTests" />
     <InternalsVisibleTo Include="DotNet.Bundler.MacDmg" />
     <InternalsVisibleTo Include="DotNet.Bundler.MacPkg" />
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />

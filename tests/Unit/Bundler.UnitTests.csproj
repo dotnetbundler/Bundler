@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <!-- 单元层：纯进程内、零子进程 spawn；机器核查表达式见 docs/design/testing.md §6 -->
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\**\*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Bundler.Abstractions\Bundler.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Core\Bundler.Core.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.AlpineApk\Bundler.AlpineApk.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.AppImage\Bundler.AppImage.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Archive\Bundler.Archive.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Cli\Bundler.Cli.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Deb\Bundler.Deb.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.MacApp\Bundler.MacApp.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.MacDmg\Bundler.MacDmg.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.MacPkg\Bundler.MacPkg.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.MSBuild\Bundler.MSBuild.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Nsis\Bundler.Nsis.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Rpm\Bundler.Rpm.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Signing.Windows\Bundler.Signing.Windows.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Update\Bundler.Update.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Updater\Bundler.Updater.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Updater.Bootstrap\Bundler.Updater.Bootstrap.csproj" />
+    <ProjectReference Include="..\..\src\Bundler.Wix\Bundler.Wix.csproj" />
+  </ItemGroup>
+</Project>
