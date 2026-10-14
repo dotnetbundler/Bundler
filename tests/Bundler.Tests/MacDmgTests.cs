@@ -144,9 +144,15 @@ public static class MacDmgTests
             var order = requests.Select(request => request.Executable + " " +
                 string.Join(' ', request.Arguments.Take(1))).ToList();
 
-            Assert.True(order[0] == "ln -s" &&
-                   requests[0].Arguments.Last().Replace('\\', '/').EndsWith("/Applications", StringComparison.Ordinal),
-                $"The /Applications drop link must be staged first, got: {order[0]}");
+            // ToolRunner 共享缝收录上游 .app 构建调用（chmod 等）——断言限定 dmg 管线次序：
+            // /Applications 拖放链接必须先于 hdiutil create -srcfolder 快照落位。
+            var linkIndex = requests.FindIndex(request =>
+                request.Executable == "ln" &&
+                request.Arguments.Last().Replace('\\', '/').EndsWith("/Applications", StringComparison.Ordinal));
+            var createIndex = requests.FindIndex(request =>
+                request.Executable == "hdiutil" && request.Arguments.Contains("create"));
+            Assert.True(linkIndex >= 0 && createIndex >= 0 && linkIndex < createIndex,
+                $"The /Applications drop link must be staged before the image create step:\n{joined}");
             Assert.True(order.Any(step => step == "hdiutil create") &&
                    order.Any(step => step == "hdiutil attach") &&
                    order.Any(step => step == "hdiutil detach") &&
