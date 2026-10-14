@@ -74,6 +74,9 @@ internal static class ArchiveExtractor
         {
             return false;
         }
+        // tar 的 -C 不自建目标目录——staging 缺失时原生腿必败，
+        // 且随后的 ClearDirectory 会对不存在的根抛 DirectoryNotFoundException。
+        Directory.CreateDirectory(staging);
         if (Run("/usr/bin/tar", "-xzf " + ShellQuote(tarGzPath) + " -C " + ShellQuote(staging)) == 0)
         {
             log?.Invoke("update: extracted via bsdtar (xattrs/symlinks preserved).");
@@ -176,6 +179,10 @@ internal static class ArchiveExtractor
 
     private static void ClearDirectory(string root)
     {
+        if (!Directory.Exists(root))
+        {
+            return;
+        }
         foreach (var entry in Directory.GetFileSystemEntries(root))
         {
             // 目录链/联接只删链节点自身（File.Delete 删链不触目标），
