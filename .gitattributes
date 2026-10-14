@@ -9,7 +9,7 @@
 *.ps1  text eol=crlf
 
 # 故意携带 CRLF 的负路径载荷（校验 rpm 对 CRLF 维护者脚本的拒绝路径），按原样存取不得规整。
-tests/Bundler.IntegrationTests/Fixtures/Rpm/Assets/bad-crlf.sh -text
+tests/Fixtures/Rpm/Assets/bad-crlf.sh -text
 
 *.png  binary
 *.icns binary
@@ -33,4 +33,4 @@ tests/Bundler.IntegrationTests/Fixtures/Rpm/Assets/bad-crlf.sh -text
 
 # 跨版本兼容冻件是字节级工件（feed 签名覆盖逐字节内容）——按原样存取，
 # 任何平台不做换行规整，否则 Windows CRLF 检出直接破签。
-tests/Bundler.Tests/Fixtures/UpdateCompat/** -text
+tests/Fixtures/UpdateCompat/** -text
