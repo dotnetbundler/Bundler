@@ -49,8 +49,8 @@ public sealed class MacApiTests : TempBase
         Assert.SkipUnless(OperatingSystem.IsMacOS(), "hdiutil 仅 macOS");
         var artifacts = await new MacDmgBundler().BuildAsync(
             MacBundle(PackageFormat.Dmg), TestContext.Current.CancellationToken);
-        var artifact = Assert.Single(artifacts);
-        Assert.Equal(PackageFormat.Dmg, artifact.Format);
+        // dmg 产出顺带落中间体 .app——按格式取件而非 Single。
+        var artifact = Assert.Single(artifacts, a => a.Format == PackageFormat.Dmg);
         Assert.Equal("Sample-1.2.3-arm64.dmg", Path.GetFileName(artifact.Path));
         Assert.True(new FileInfo(artifact.Path).Length > 0);
     }
@@ -61,8 +61,8 @@ public sealed class MacApiTests : TempBase
         Assert.SkipUnless(OperatingSystem.IsMacOS(), "pkgbuild/productbuild 仅 macOS");
         var artifacts = await new MacPkgBundler().BuildAsync(
             MacBundle(PackageFormat.Pkg), TestContext.Current.CancellationToken);
-        var artifact = Assert.Single(artifacts);
-        Assert.Equal(PackageFormat.Pkg, artifact.Format);
+        // pkg 产出顺带落中间体 .app——按格式取件而非 Single。
+        var artifact = Assert.Single(artifacts, a => a.Format == PackageFormat.Pkg);
         Assert.Equal("Sample-1.2.3-arm64.pkg", Path.GetFileName(artifact.Path));
         Assert.Equal("xar!"u8.ToArray(), BundleFixture.Magic(artifact.Path, 4));
     }
