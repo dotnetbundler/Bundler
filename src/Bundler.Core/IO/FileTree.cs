@@ -53,7 +53,11 @@ internal static class FileTree
         {
             throw new ArgumentNullException(nameof(loopErrorMessage));
         }
-        // 目录符号链接环会让递归失控——Traverse 语义下调用方须传深度封顶。
+        // 目录符号链接环会让递归失控——Traverse 语义强制要求深度封顶。
+        if (links == TreeLinkPolicy.Traverse && maxDepth == int.MaxValue)
+        {
+            throw new ArgumentException("Traverse requires a maxDepth cap to bound symlink loops.", nameof(maxDepth));
+        }
         if (depth > maxDepth)
         {
             throw new InvalidDataException($"{loopErrorMessage}: {source}");

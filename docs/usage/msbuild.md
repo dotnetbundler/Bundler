@@ -6,7 +6,7 @@
 ## 1. 接入
 
 ```xml
-<PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.102" PrivateAssets="all" />
+<PackageReference Include="DotNet.Bundler" Version="0.1.0-alpha.103" PrivateAssets="all" />
 ```
 
 包的 `buildTransitive` 资产随引用自动接入，不需要手写 `Import`。
