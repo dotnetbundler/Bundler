@@ -113,11 +113,13 @@ public sealed class CliProgramTests : TempBase
         Directory.CreateDirectory(input);
         File.WriteAllText(Path.Combine(input, "sample"), "#!/bin/sh\n");
 
+        // --main-executable 显式给：缺省名 <productName> 的存在性检查在
+        // Windows 大小写不敏感 FS 上会误配 sample——断言不该依赖宿主 FS 语义。
         var (code, stdout, _) = Run("validate", "--no-config",
             "--target", "linux-x86_64", "--formats", "deb",
             "--input-dir", input, "--output-dir", output,
             "--product-name", "Sample", "--identifier", "com.example.sample",
-            "--package-version", "1.0.0");
+            "--package-version", "1.0.0", "--main-executable", "sample");
         Assert.Equal(0, code);
         Assert.Contains("valid", stdout);
     }
@@ -146,7 +148,7 @@ public sealed class CliProgramTests : TempBase
             "--target", "linux-x86_64", "--formats", "deb",
             "--input-dir", input, "--output-dir", output,
             "--product-name", "Sample", "--identifier", "com.example.sample",
-            "--package-version", "1.0.0");
+            "--package-version", "1.0.0", "--main-executable", "sample");
         Assert.Equal(0, code);
         Assert.Contains("linux-x86_64", stdout);
         Assert.Contains("deb", stdout);
@@ -159,12 +161,12 @@ public sealed class CliProgramTests : TempBase
         Directory.CreateDirectory(input);
         File.WriteAllText(Path.Combine(input, "sample"), "x");
 
-        var (code, stdout, _) = Run("plan", "--no-config", "--json",
+        var (code, stdout, stderr) = Run("plan", "--no-config", "--json",
             "--target", "linux-x86_64", "--formats", "deb,zip",
             "--input-dir", input, "--output-dir", Path.Combine(Root, "out"),
             "--product-name", "Sample", "--identifier", "com.example.sample",
-            "--package-version", "1.0.0");
-        Assert.Equal(0, code);
+            "--package-version", "1.0.0", "--main-executable", "sample");
+        Assert.True(code == 0, $"rc={code} stderr: {stderr}");
         Assert.Contains("\"items\"", stdout);
         Assert.Contains("\"deb\"", stdout);
         Assert.Contains("\"zip\"", stdout);

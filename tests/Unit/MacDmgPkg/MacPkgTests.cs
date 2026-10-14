@@ -248,7 +248,8 @@ public sealed class MacPkgTests : TempBase
         };
         try
         {
-            var bindPath = Temp("bt").FullName;
+            // AF_UNIX Bind 要求路径不存在——Temp()/Root 已建目录会撞 EADDRINUSE。
+            var bindPath = TempPath("bt.sock");
             using (var socket = new System.Net.Sockets.Socket(
                        System.Net.Sockets.AddressFamily.Unix,
                        System.Net.Sockets.SocketType.Stream,
