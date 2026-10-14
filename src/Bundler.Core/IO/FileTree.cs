@@ -1,7 +1,7 @@
 namespace DotNet.Bundler.Core;
 
 /// <summary>
-/// 目录符号链接的处理策略：<see cref="Traverse"/> 沿链递归（调用方用深度封顶防环）、
+/// 目录符号链接的处理策略：<see cref="Traverse"/> 沿链递归（强制深度封顶防环）、
 /// <see cref="WarnSkip"/> 记警告跳过、<see cref="Reject"/> 显式拒绝。
 /// </summary>
 internal enum TreeLinkPolicy
@@ -13,7 +13,7 @@ internal enum TreeLinkPolicy
 
 /// <summary>
 /// 后端共享的文件系统树复制：常规文件过滤、链接策略、可选稳定排序、
-/// 可选深度封顶、目标碰撞回调各按调用方语义参数化。
+/// 深度封顶（Traverse 下强制）、目标碰撞回调各按调用方语义参数化。
 /// </summary>
 internal static class FileTree
 {

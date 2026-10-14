@@ -125,7 +125,7 @@ public static class ToolCache
         string toolDirectory,
         ToolFileSet set,
         IReadOnlyList<(ToolFileSpec File, ManifestEntry Expected)> plan,
-        ManifestEntry[] expectedFiles,
+        IReadOnlyList<ManifestEntry> expectedFiles,
         Func<ToolFileSpec, CancellationToken, Task<Stream>> openFile,
         CancellationToken cancellationToken)
     {
