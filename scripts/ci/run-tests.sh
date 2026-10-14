@@ -1,35 +1,40 @@
 #!/usr/bin/env bash
-# 定向测试腿驱动（POSIX）：run-suite.sh <unit|api|integration|localpackages|all>
-# 跑法与 verify-posix.sh §2 同款：直跑测试 dll（MTP+xUnit3，`dotnet test` 发现不到用例），
+# 测试腿唯一驱动（POSIX）：run-tests.sh <unit|api|integration|package|all>
+# 测试程序集自宿主运行（MTP+xUnit3，`dotnet test` 发现不到用例）——直跑 dll；
 # IntegrationTests 逐类跑并落 artifacts/ci/test-progress.log 指认在途类；
 # -longRunning 300 打印挂起用例名。
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 ROOT="$(pwd)"
 OUT="$ROOT/artifacts/ci"; mkdir -p "$OUT"
-SUITE="${1:?usage: run-suite.sh <unit|api|integration|localpackages|all>}"
+SUITE="${1:?usage: run-tests.sh <unit|api|integration|package|all>}"
 
 projects_for() {
     case "$1" in
-        unit)          echo "Bundler.Tests" ;;
-        api)           echo "Bundler.ApiTests" ;;
-        integration)   echo "Bundler.IntegrationTests" ;;
-        localpackages) echo "Bundler.LocalPackagesTests" ;;
-        all)           echo "Bundler.Tests Bundler.ApiTests Bundler.IntegrationTests Bundler.LocalPackagesTests" ;;
+        unit)        echo "Unit/Bundler.UnitTests" ;;
+        api)         echo "Api/Bundler.ApiTests" ;;
+        integration) echo "Integration/Bundler.IntegrationTests" ;;
+        package)     echo "Package/Bundler.PackageTests" ;;
+        all)         echo "Unit/Bundler.UnitTests Api/Bundler.ApiTests Integration/Bundler.IntegrationTests Package/Bundler.PackageTests" ;;
         *) echo "unknown suite: $1" >&2; exit 2 ;;
     esac
 }
 PROJECTS="$(projects_for "$SUITE")"
 
-# LocalPackagesTests 消费本地 nupkg——先打仓根包再跑（tests/README 前置条件）。
+# PackageTests 消费本地 nupkg——先打仓根 src 包再跑（tests/README 前置条件）。
+# 只打 src/*.csproj：连测试工程一起 pack 会向运行中进程的 bin/ 写文件。
 case " $PROJECTS " in
-    *" Bundler.LocalPackagesTests "*)
-        dotnet pack Bundler.slnx -c Release -o artifacts/packages --nologo ;;
+    *" Package/Bundler.PackageTests "*)
+        for P in src/*.csproj; do
+            dotnet pack "$P" -c Release -o artifacts/packages --nologo
+        done ;;
 esac
 
 for P in $PROJECTS; do
-    DLL="tests/$P/bin/Release/net10.0/$P.dll"
-    if [ "$P" = "Bundler.IntegrationTests" ]; then
+    NAME="$(basename "$P" .csproj)"
+    DLL="tests/$P/bin/Release/net10.0/$NAME.dll"
+    if [ "$P" = "Integration/Bundler.IntegrationTests" ]; then
+        # mapfile 是 bash>=4 内建（macOS runner 自带 bash 3.2.57）——while 读行代替。
         # -list classes 本身失败也要判败：进程替换会丢退出码，先落变量再查。
         LIST_OUT="$(dotnet "$DLL" -list classes)" || { echo "-list classes 退出码非零，判失败" >&2; exit 1; }
         CLASSES=()
