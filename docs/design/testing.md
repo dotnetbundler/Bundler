@@ -191,6 +191,6 @@ scripts/ci/
 
 ## 6. 验收标准
 
-重写完成 = 本清单每行有对应测试或登记条目；验证面 workflow（test/verify）全绿（aot 为产件流另行验证）；单测零子进程可机器核查（`Process.Start|ToolRunner.(RunAsync|TryRunAsync|RunSync)` 在 Unit 工程零命中）。
+重写完成 = 本清单每行有对应测试或登记条目；验证面 workflow（test/verify）全绿（aot 为产件流另行验证）；单测零子进程可机器核查（`Process.Start|ToolRunner.(RunAsync|TryRunAsync|RunSync)` 在 Unit 工程实调用零命中——`ToolRunnerTests` 自身经 `Handler` 桩的调用与 CliTests/MacAppTests 收割注释提及除外）。
 
 **实施期同步义务**：本文件随引入登记进 AGENTS.md §4 文档地图与 `docs/README.md` 索引；工程改名面（Bundler.Tests→UnitTests、LocalPackagesTests→PackageTests、tests/Special→Manual）触发 AGENTS.md §6 命令表、tests/README 工程表、workflow 中 `tests/Special/` 路径引用的同步。
