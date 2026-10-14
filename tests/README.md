@@ -6,7 +6,7 @@
 
 | 目录 | 工程 | 层职责 |
 | --- | --- | --- |
-| `Unit/` | `Bundler.UnitTests` | 单元层：纯进程内、零真实 spawn（机器可核查：`Process.Start(`/`ToolRunner.Run*` 实调用零命中，spawn 一律经 `ToolRunner.Handler` 桩缝） |
+| `Unit/` | `Bundler.UnitTests` | 单元层：纯进程内、零真实 spawn（机器可核查：`Process.Start`/`ToolRunner.(RunAsync|TryRunAsync|RunSync)` 实调用零命中——`ToolRunnerTests` 自身经桩调用除外，spawn 一律经 `ToolRunner.Handler` 桩缝） |
 | `Api/` | `Bundler.ApiTests` | 公共 API functional 层（无 IVT——编译期强制只碰公开面，真跑内嵌工具产真物） |
 | `Integration/` | `Bundler.IntegrationTests` | 真环境层：fixture 发布链、真装真卸、docker 矩阵、更新链、外部工具 |
 | `Package/` | `Bundler.PackageTests` | 本地 nupkg 消费契约层（不经项目引用） |
