@@ -73,17 +73,17 @@ public sealed class WindowsExternalCommandSigner : IBundleSigner
     private static readonly System.Text.RegularExpressions.Regex LegacyPathPlaceholder =
         new("%1(?![0-9])");
 
-    private static bool ContainsPathPlaceholder(string value) =>
+    internal static bool ContainsPathPlaceholder(string value) =>
         value.IndexOf("{path}", StringComparison.Ordinal) >= 0 || LegacyPathPlaceholder.IsMatch(value);
 
-    private static string Expand(string value, BundleSigningRequest request, string path) =>
+    internal static string Expand(string value, BundleSigningRequest request, string path) =>
         LegacyPathPlaceholder.Replace(value
             .Replace("{path}", path), path)
             .Replace("{artifactKind}", request.ArtifactKind.ToString())
             .Replace("{target}", request.TargetTarget)
             .Replace("{productName}", request.ProductName);
 
-    private static string Quote(string value)
+    internal static string Quote(string value)
     {
         if (value.Length > 0 && !value.Any(character => char.IsWhiteSpace(character) || character == '"'))
         {

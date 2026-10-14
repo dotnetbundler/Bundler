@@ -223,7 +223,8 @@ public static class BundleConfigurationValidator
             issues.Add(new($"{path}.mainExecutable", "Must stay inside inputDirectory."));
         }
 
-        if (!string.IsNullOrWhiteSpace(targetConfiguration.InputDirectory))
+        if (!string.IsNullOrWhiteSpace(targetConfiguration.InputDirectory) &&
+            !string.IsNullOrWhiteSpace(configuration.OutputDirectory))
         {
             var inputDirectory = Path.GetFullPath(targetConfiguration.InputDirectory)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
