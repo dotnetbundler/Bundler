@@ -154,7 +154,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         await InspectPayload(context, contentsDirectory, item.Target, cancellationToken);
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            await MacProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 "plutil", ["-lint", plistPath], context.WorkDirectory, cancellationToken);
         }
         else
@@ -380,7 +380,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             }
             if (!windows)
             {
-                await MacProcessRunner.RunAsync("chmod", ["755", file], context.WorkDirectory, cancellationToken);
+                await ToolRunner.RunAsync("chmod", ["755", file], context.WorkDirectory, cancellationToken);
             }
         }
     }

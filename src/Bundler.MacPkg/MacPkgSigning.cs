@@ -1,5 +1,6 @@
 using DotNet.Bundler;
 using DotNet.Bundler.MacApp;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.MacPkg;
 
@@ -99,7 +100,7 @@ internal static class MacPkgSigning
         }
         arguments.Add(unsignedPath);
         arguments.Add(packagePath);
-        await MacPkgProcessRunner.RunAsync(
+        await ToolRunner.RunAsync(
             "productsign", arguments, context.WorkDirectory, cancellationToken);
         File.Delete(unsignedPath);
     }
@@ -124,7 +125,7 @@ internal static class MacPkgSigning
             signing.NotaryWait
                 ? "Submitting the .pkg to notarytool and waiting for the verdict."
                 : "Submitting the .pkg to notarytool without waiting (stapling is skipped).");
-        var result = await MacPkgProcessRunner.TryRunAsync(
+        var result = await ToolRunner.TryRunAsync(
             "xcrun", submitArguments, context.WorkDirectory, cancellationToken)
             ?? throw new InvalidOperationException(
                 "xcrun/notarytool is unavailable; notarization requires Xcode 13+ (host macOS 11.3+).");
@@ -143,7 +144,7 @@ internal static class MacPkgSigning
         {
             return;
         }
-        await MacPkgProcessRunner.RunAsync(
+        await ToolRunner.RunAsync(
             "xcrun", ["stapler", "staple", packagePath],
             context.WorkDirectory, cancellationToken);
         context.Logger.Log(BundleLogLevel.Information, "stapler attached the notarization ticket.");

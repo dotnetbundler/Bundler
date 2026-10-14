@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using DotNet.Bundler;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.MacApp;
 
@@ -92,7 +93,7 @@ internal static class MacAppAssetsCar
             "--minimum-deployment-target", "26.0",
             "--platform", "macosx"
         };
-        var result = await MacProcessRunner.TryRunAsync("actool", arguments, workDirectory, cancellationToken);
+        var result = await ToolRunner.TryRunAsync("actool", arguments, workDirectory, cancellationToken);
         var produced = Path.Combine(output, "Assets.car");
         if (result is not { ExitCode: 0 } || !File.Exists(produced))
         {
@@ -108,7 +109,7 @@ internal static class MacAppAssetsCar
 
     private static async Task<double?> ActoolVersion(string workDirectory, CancellationToken cancellationToken)
     {
-        var result = await MacProcessRunner.TryRunAsync(
+        var result = await ToolRunner.TryRunAsync(
             "actool", ["--version", "--output-format", "human-readable-text"],
             workDirectory, cancellationToken);
         if (result is null or { ExitCode: not 0 })
@@ -140,7 +141,7 @@ internal static class MacAppAssetsCar
                 "CFBundleIconName is omitted.");
             return null;
         }
-        var result = await MacProcessRunner.TryRunAsync(
+        var result = await ToolRunner.TryRunAsync(
             "assetutil", ["--info", assetsCarPath], Path.GetDirectoryName(assetsCarPath)!, cancellationToken);
         if (result is not { ExitCode: 0 })
         {

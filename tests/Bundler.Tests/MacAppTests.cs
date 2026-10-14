@@ -1147,12 +1147,12 @@ public static class MacAppTests
         Assert.SkipUnless(TestPlatform.IsMacOS, "requires a macOS host");
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
-        var requests = new List<MacProcessRunner.Request>();
-        var previous = MacProcessRunner.Handler;
-        MacProcessRunner.Handler = (request, _) =>
+        var requests = new List<ToolRunner.Request>();
+        var previous = ToolRunner.Handler;
+        ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
-            return Task.FromResult(new MacProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -1190,7 +1190,7 @@ public static class MacAppTests
         }
         finally
         {
-            MacProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             Cleanup(input, output);
         }
     }
@@ -1207,19 +1207,19 @@ public static class MacAppTests
         File.WriteAllBytes(certificate, [1, 2, 3]);
         var calls = new List<string>();
         var deleted = false;
-        var previous = MacProcessRunner.Handler;
-        MacProcessRunner.Handler = (request, _) =>
+        var previous = ToolRunner.Handler;
+        ToolRunner.Handler = (request, _) =>
         {
             var joined = string.Join(' ', request.Arguments);
             calls.Add(request.Executable + " " + joined);
             if (request.Executable == "security" && joined.StartsWith("list-keychains") &&
                 !joined.Contains("-s", StringComparison.Ordinal))
             {
-                return Task.FromResult(new MacProcessRunner.Result(0, "\"/Users/x/Library/Keychains/login.keychain-db\"\n", ""));
+                return Task.FromResult(new ToolRunner.Result(0, "\"/Users/x/Library/Keychains/login.keychain-db\"\n", ""));
             }
             if (request.Executable == "security" && joined.StartsWith("find-identity"))
             {
-                return Task.FromResult(new MacProcessRunner.Result(0,
+                return Task.FromResult(new ToolRunner.Result(0,
                     "  1) AA11BB22CC33DD44EE55FF6600112233AABBCCDD \"Bundler Test\"\n     1 valid identities found\n", ""));
             }
             if (request.Executable == "security" && joined.StartsWith("delete-keychain"))
@@ -1228,9 +1228,9 @@ public static class MacAppTests
             }
             if (request.Executable == "codesign" && !joined.Contains("--verify"))
             {
-                return Task.FromResult(new MacProcessRunner.Result(1, "", "boom"));
+                return Task.FromResult(new ToolRunner.Result(1, "", "boom"));
             }
-            return Task.FromResult(new MacProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -1254,7 +1254,7 @@ public static class MacAppTests
         }
         finally
         {
-            MacProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             Cleanup(input, output, temp);
         }
     }
@@ -1265,11 +1265,11 @@ public static class MacAppTests
         Assert.SkipUnless(TestPlatform.IsMacOS, "requires a macOS host");
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
-        var previous = MacProcessRunner.Handler;
-        MacProcessRunner.Handler = (request, _) =>
+        var previous = ToolRunner.Handler;
+        ToolRunner.Handler = (request, _) =>
             Task.FromResult(request.Executable == "codesign" && request.Arguments.Contains("--verify")
-                ? new MacProcessRunner.Result(1, "", "not signed at all")
-                : new MacProcessRunner.Result(0, "", ""));
+                ? new ToolRunner.Result(1, "", "not signed at all")
+                : new ToolRunner.Result(0, "", ""));
         try
         {
             await AssertThrows<Exception>(
@@ -1282,7 +1282,7 @@ public static class MacAppTests
         }
         finally
         {
-            MacProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             Cleanup(input, output);
         }
     }
@@ -1760,11 +1760,11 @@ public static class MacAppTests
         var input = CreateInputDirectory();
         var output = Path.Combine(Path.GetTempPath(), "DotNet.Bundler.Tests", Guid.NewGuid().ToString("N"));
         var calls = new List<string>();
-        var previous = MacProcessRunner.Handler;
-        MacProcessRunner.Handler = (request, _) =>
+        var previous = ToolRunner.Handler;
+        ToolRunner.Handler = (request, _) =>
         {
             calls.Add(request.Executable + " " + string.Join(' ', request.Arguments));
-            return Task.FromResult(new MacProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -1804,7 +1804,7 @@ public static class MacAppTests
         }
         finally
         {
-            MacProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             Cleanup(input, output);
         }
     }
@@ -1822,9 +1822,9 @@ public static class MacAppTests
         var certificate = Path.Combine(temp, "cert.p12");
         File.WriteAllBytes(certificate, [1, 2, 3]);
         var calls = new List<string>();
-        var previous = MacProcessRunner.Handler;
+        var previous = ToolRunner.Handler;
         var opensslWorks = true;
-        MacProcessRunner.Handler = (request, _) =>
+        ToolRunner.Handler = (request, _) =>
         {
             var joined = string.Join(' ', request.Arguments);
             calls.Add(request.Executable + " " + joined);
@@ -1832,24 +1832,24 @@ public static class MacAppTests
             {
                 if (!opensslWorks)
                 {
-                    return Task.FromResult(new MacProcessRunner.Result(1, "", "no openssl"));
+                    return Task.FromResult(new ToolRunner.Result(1, "", "no openssl"));
                 }
                 var outIndex = request.Arguments.ToList().IndexOf("-out") + 1;
                 File.WriteAllText(request.Arguments[outIndex], "PEM");
-                return Task.FromResult(new MacProcessRunner.Result(0, "", ""));
+                return Task.FromResult(new ToolRunner.Result(0, "", ""));
             }
             if (request.Executable == "security" && joined.StartsWith("list-keychains") &&
                 !joined.Contains("-s", StringComparison.Ordinal))
             {
-                return Task.FromResult(new MacProcessRunner.Result(0,
+                return Task.FromResult(new ToolRunner.Result(0,
                     "\"/Users/x/Library/Keychains/login.keychain-db\"\n", ""));
             }
             if (request.Executable == "security" && joined.StartsWith("find-identity"))
             {
-                return Task.FromResult(new MacProcessRunner.Result(0,
+                return Task.FromResult(new ToolRunner.Result(0,
                     "  1) AA11BB22CC33DD44EE55FF6600112233AABBCCDD \"Bundler Test\"\n     1 valid identities found\n", ""));
             }
-            return Task.FromResult(new MacProcessRunner.Result(0, "", ""));
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -1884,7 +1884,7 @@ public static class MacAppTests
         }
         finally
         {
-            MacProcessRunner.Handler = previous;
+            ToolRunner.Handler = previous;
             Cleanup(input, output, temp);
         }
     }

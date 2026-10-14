@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.AppImage;
 
@@ -146,32 +147,10 @@ internal sealed class AppImageToolset
     // netstandard2.0 lacks Unix file-mode APIs; chmod/ln are small, fixed
     // argument-shape helper calls (no shell, no user input in argv[0]).
     internal static void Chmod(string path, string mode) =>
-        RunHelper("chmod", mode, path);
+        ToolRunner.RunSync("chmod", new[] { mode, path });
 
     internal static void Symlink(string target, string linkPath) =>
-        RunHelper("ln", "-sfn", target, linkPath);
-
-    private static void RunHelper(string name, params string[] args)
-    {
-        var info = new ProcessStartInfo(name)
-        {
-            UseShellExecute = false,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-        foreach (var arg in args)
-        {
-            info.Arguments += (info.Arguments.Length == 0 ? "" : " ") + "\"" + arg.Replace("\"", "\\\"") + "\"";
-        }
-        using var process = System.Diagnostics.Process.Start(info)
-            ?? throw new InvalidOperationException($"Failed to start '{name}'.");
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"'{name}' exited with code {process.ExitCode}: {error.Trim()}");
-        }
-    }
+        ToolRunner.RunSync("ln", new[] { "-sfn", target, linkPath });
 
     private static string Sha256(byte[] data)
     {

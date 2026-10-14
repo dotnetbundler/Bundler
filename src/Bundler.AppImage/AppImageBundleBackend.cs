@@ -72,7 +72,7 @@ internal sealed class AppImageBundleBackend(
                     environment["APPIMAGETOOL_SIGN_PASSPHRASE"] = passphrase;
                 }
             }
-            await AppImageProcessRunner.RunAsync(
+            await ToolRunner.RunAsync(
                 toolset.ToolPath, arguments, context.WorkDirectory, cancellationToken,
                 environment);
         }

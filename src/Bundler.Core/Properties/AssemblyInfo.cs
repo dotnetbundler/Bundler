@@ -11,4 +11,6 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("DotNet.Bundler.AlpineApk")]
 [assembly: InternalsVisibleTo("DotNet.Bundler.Update")]
 [assembly: InternalsVisibleTo("DotNet.Bundler.Updater")]
+[assembly: InternalsVisibleTo("DotNet.Bundler.Nsis")]
+[assembly: InternalsVisibleTo("DotNet.Bundler.Wix")]
 [assembly: InternalsVisibleTo("bundler")]
