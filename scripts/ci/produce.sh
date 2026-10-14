@@ -48,4 +48,4 @@ Darwin)
 esac
 
 ( cd "$OUT" && find . -type f ! -name SHA256SUMS -exec shasum -a 256 {} + | sort > SHA256SUMS )
-echo "=== 产件清单 ==="; cat "$OUT/SHA256SUMS" | head -40
+echo "=== 产件清单 ==="; head -40 "$OUT/SHA256SUMS"
