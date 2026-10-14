@@ -15,9 +15,6 @@ namespace Bundler.UnitTests.Updater;
 public sealed class UpdateClientTests : TempBase
 {
 
-    public UpdateClientTests()
-    {
-    }
 
     public override void Dispose()
     {
@@ -299,14 +296,7 @@ public sealed class UpdateClientTests : TempBase
 public sealed class UpdateApplierTests : TempBase
 {
 
-    public UpdateApplierTests()
-    {
-    }
 
-    public override void Dispose()
-    {
-        base.Dispose();
-    }
 
     [Fact]
     public void SingleTopDirectory_WrapperShape_PicksChild()

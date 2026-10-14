@@ -13,10 +13,6 @@ public sealed class MacSigningTests : TempBase
 {
 
 
-    public override void Dispose()
-    {
-        base.Dispose();
-    }
 
     private static BundleConfiguration Bundle() => new()
     {

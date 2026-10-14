@@ -11,10 +11,6 @@ public sealed class WixLocaleTests : TempBase
 {
 
 
-    public override void Dispose()
-    {
-        base.Dispose();
-    }
 
     private string WriteWxl(string body, string name = "custom.wxl")
     {

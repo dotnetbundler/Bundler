@@ -7,14 +7,7 @@ namespace Bundler.UnitTests.MacApp;
 public sealed class MacInternalsTests : TempBase
 {
 
-    public MacInternalsTests()
-    {
-    }
 
-    public override void Dispose()
-    {
-        base.Dispose();
-    }
 
     // ---- InfoPlist ----
 

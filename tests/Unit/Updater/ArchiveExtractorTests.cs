@@ -12,10 +12,6 @@ namespace Bundler.UnitTests.Updater;
 public sealed class ArchiveExtractorTests : TempBase
 {
 
-    public override void Dispose()
-    {
-        base.Dispose();
-    }
 
     [Fact]
     public void ExtractZip_ManagedFallback_LayoutsFiles()

@@ -11,10 +11,6 @@ namespace Bundler.UnitTests.Archive;
 public sealed class ArchiveTreeTests : TempBase
 {
 
-    public override void Dispose()
-    {
-        base.Dispose();
-    }
 
     private static ArchiveBundleConfiguration Settings(
         IReadOnlyList<ArchiveFileEntry>? files = null) =>

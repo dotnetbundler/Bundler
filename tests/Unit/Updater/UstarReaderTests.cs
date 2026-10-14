@@ -11,10 +11,6 @@ namespace Bundler.UnitTests.Updater;
 public sealed class UstarReaderTests : TempBase
 {
 
-    public override void Dispose()
-    {
-        base.Dispose();
-    }
 
     private static MemoryStream TarOf(params TarEntry[] entries)
     {

@@ -12,10 +12,6 @@ namespace Bundler.UnitTests.AppImage;
 public sealed class AppDirBuilderTests : TempBase
 {
 
-    public override void Dispose()
-    {
-        base.Dispose();
-    }
 
     private string InputWithMain()
     {
