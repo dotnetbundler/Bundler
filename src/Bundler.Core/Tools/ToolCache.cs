@@ -110,7 +110,8 @@ public static class ToolCache
         if (!ValidateCache(toolDirectory, set.ContentId, expectedFiles))
         {
             SafeDeleteTree(toolDirectory);
-            await InstallVerifiedAsync(cacheDirectory, toolDirectory, set, plan, openFile, cancellationToken);
+            await InstallVerifiedAsync(
+                cacheDirectory, toolDirectory, set, plan, expectedFiles, openFile, cancellationToken);
         }
 
         return ValidateCache(toolDirectory, set.ContentId, expectedFiles)
@@ -124,6 +125,7 @@ public static class ToolCache
         string toolDirectory,
         ToolFileSet set,
         IReadOnlyList<(ToolFileSpec File, ManifestEntry Expected)> plan,
+        IReadOnlyList<ManifestEntry> expectedFiles,
         Func<ToolFileSpec, CancellationToken, Task<Stream>> openFile,
         CancellationToken cancellationToken)
     {
@@ -165,9 +167,8 @@ public static class ToolCache
                 }
             }
 
-            var expectedList = plan.Select(p => p.Expected).ToArray();
-            WriteManifest(stagingDirectory, set.ContentId, expectedList);
-            if (!ValidateCache(stagingDirectory, set.ContentId, expectedList))
+            WriteManifest(stagingDirectory, set.ContentId, expectedFiles);
+            if (!ValidateCache(stagingDirectory, set.ContentId, expectedFiles))
             {
                 throw new InvalidDataException($"The materialized {set.Name} files failed integrity validation.");
             }
@@ -375,24 +376,24 @@ public static class ToolCache
     private static bool IsReparsePoint(string path) =>
         (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
 
-    private static string ValidateRelativePath(string toolDirectory, string relativePath, string parameterName)
+    private static string ValidateRelativePath(string toolDirectory, string relativePath, string paramName)
     {
-        var normalized = NormalizeRelativePath(toolDirectory, relativePath, parameterName);
+        var normalized = NormalizeRelativePath(toolDirectory, relativePath, paramName);
         return Path.GetFullPath(Path.Combine(toolDirectory, normalized.Replace('/', Path.DirectorySeparatorChar)));
     }
 
-    internal static string NormalizeRelativePath(string toolDirectory, string relativePath, string parameterName)
+    internal static string NormalizeRelativePath(string toolDirectory, string relativePath, string paramName)
     {
         if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
         {
-            throw new ArgumentException("Tool cache paths must be non-empty relative paths.", parameterName);
+            throw new ArgumentException("Tool cache paths must be non-empty relative paths.", paramName);
         }
         var fullPath = Path.GetFullPath(Path.Combine(toolDirectory, relativePath));
         var prefix = toolDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
             Path.DirectorySeparatorChar;
         if (!fullPath.StartsWith(prefix, PathStringComparison))
         {
-            throw new ArgumentException("Tool cache paths must stay inside the cache entry directory.", parameterName);
+            throw new ArgumentException("Tool cache paths must stay inside the cache entry directory.", paramName);
         }
         return RelativePath(toolDirectory, fullPath);
     }
@@ -409,20 +410,20 @@ public static class ToolCache
         return fullPath.Substring(prefix.Length).Replace('\\', '/');
     }
 
-    internal static void ValidateSha256(string value, string parameterName)
+    internal static void ValidateSha256(string value, string paramName)
     {
         if (value.Length != 64 || value.Any(character => !Uri.IsHexDigit(character)))
         {
-            throw new ArgumentException("SHA-256 pins must contain exactly 64 hexadecimal characters.", parameterName);
+            throw new ArgumentException("SHA-256 pins must contain exactly 64 hexadecimal characters.", paramName);
         }
     }
 
-    internal static void ValidateSegment(string value, string parameterName)
+    internal static void ValidateSegment(string value, string paramName)
     {
         if (string.IsNullOrWhiteSpace(value) || value.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
             value is "." or "..")
         {
-            throw new ArgumentException("Tool cache segments must be valid file names.", parameterName);
+            throw new ArgumentException("Tool cache segments must be valid file names.", paramName);
         }
     }
 

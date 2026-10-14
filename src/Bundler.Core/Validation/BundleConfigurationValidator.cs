@@ -229,7 +229,7 @@ public static class BundleConfigurationValidator
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var outputDirectory = Path.GetFullPath(configuration.OutputDirectory)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            // 宿主 FS 语义：Windows/macOS 不敏感、Linux 敏感（与 ToolCache.PathComparer 同规）。
+            // 宿主 FS 语义：Windows/macOS 默认不敏感、Linux 敏感。
             var comparison = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
                 System.Runtime.InteropServices.OSPlatform.Linux)
                 ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;

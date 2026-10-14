@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-13
 > 当前分支：`main`
-> 当前包版本：`0.1.0-alpha.102`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前包版本：`0.1.0-alpha.103`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词（别称仅输入归一，产物名用各生态词），契约与全产物名目录见 `docs/design/targets.md`**
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/design/formats/` 单文档只留设计决策、语义契约与能力状态
 >
@@ -73,9 +73,8 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 
 ## 3. 最近验证
 
-当前基线：`main@0232b2d`（`0.1.0-alpha.102`）——CI 测试腿接线、测试矩阵收口、CLI `bundler.json` 枚举字符串反序列化修复（#79 夹带）与文档重构已随 PR #71–#81 合入。
-进行中：全项目破坏性重构链（PR #82–#87 链式分支待终审）——`ToolRunner` 统一进程执行、`Hashes`/`Gzip` 收编、`PayloadSource` 三包枚举共享、`ToolCache` 泛化并入 AppImage（默认缓存根统一为 `DotNetBundler/tools`，弃 `XDG_CACHE_HOME`）、`FileTree` 树复制收敛；各 PR 未合并。
-最近验证：本机 Windows x64 `build` 0 警告、`Bundler.Tests` 全量 491 测 0 失败（49 跳过均为非 Windows 宿主门控）；release-verify @ `a970992` 7/9 腿绿、`macos-26-intel` 撞 `hdiutil` 瞬抖、`windows-11-arm` 未落终态（以运行记录为准），本文件不逐条留档。
+当前基线：`main@85b6f38`（`0.1.0-alpha.103`）——全项目重构链 PR #82–#88 已全部合入：`ToolRunner` 统一进程执行、`Hashes`/`Gzip` 收编、`PayloadSource` 三包枚举共享、`ToolCache` 泛化并入 AppImage（默认缓存根统一为 `DotNetBundler/tools`，弃 `XDG_CACHE_HOME`）、`FileTree` 树复制收敛、文档同步与 Tauri/上游产品参照框架移除。
+最近验证：链顶 CI `test-legs` 六腿与 `release-verify` 九 job 全绿；本机 Windows x64 `build` 0 警告、`Bundler.Tests` 全量 491 测 0 失败（49 跳过均为非 Windows 宿主门控）。
 
 ## 4. 外部验收边界（未执行，不视为完成）
 
@@ -85,7 +84,6 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 ## 5. 未决问题（等待用户或外部输入）
 
 - 各格式外部事项等待对应环境输入，统一登记在 `docs/project/special-acceptance.md`。
-- WiX v3 维护风险已裁决封存：v3 维持现状不再复议（2026-10-05，见 `docs/design/formats/win-msi.md` §1 与 `third_party/wix/msi-wix-provenance.md`），非未决项。
 - 仓外独立包消费 fixture（`tests/Bundler.LocalPackagesTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`，
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
   还原来源已由 packageSourceMapping 钉死本地源（PR #41）；
