@@ -6,7 +6,7 @@ namespace DotNet.Bundler.MacApp;
 /// <summary>
 /// CFBundleDocumentTypes/UTExportedTypeDeclarations, CFBundleURLTypes and
 /// NSAppTransportSecurity emission, plus caller Info.plist merging with identity-key readback.
-/// Mirrors tauri-bundler's macOS plist contract (snapshot 7dbfc1f).
+/// macOS plist contract for desktop integration keys.
 /// </summary>
 internal static class MacAppDesktopIntegration
 {

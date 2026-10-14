@@ -117,7 +117,7 @@ internal static class WixExtensionValidator
         return prefix;
     }
 
-    // Tauri-compatible behavior: detect xmlns="http://schemas.microsoft.com/wix/<Name>"
+    // Detect xmlns="http://schemas.microsoft.com/wix/<Name>" extension namespaces
     // in caller content and expose the matching bundled Wix<Name>.dll for -ext.
     internal static IReadOnlyList<string> DetectExtensionDlls(string content, string toolsetDirectory)
     {

@@ -69,7 +69,7 @@ internal static class MsiProducts
             }
         }
 
-        // 可选的按卸载注册项名称/发布者匹配（Tauri 对齐能力，显式启用时才非空）。
+        // 可选的按卸载注册项名称/发布者匹配（显式启用时才非空）。
         foreach (var productCode in FindByUninstallEntry(displayName, publisher))
         {
             if (visited.Add(productCode) && GetVersion(productCode) is not null)

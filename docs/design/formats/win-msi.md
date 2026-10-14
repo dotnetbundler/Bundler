@@ -7,7 +7,7 @@
 
 - MSI alpha 基线冻结于 `0.1.0-alpha.43`；后续只接受缺陷修复或有明确条件的增强。
 - 选型 **WiX 3.14.1**，仅 Windows 宿主构建 MSI，不要求非 Windows 宿主产出。
-- **2026-10-05 封存裁决：v3 维持现状不再复议**——v4/v5 需 .NET 8+ 运行时（Windows 预载仅 .NET Framework，自包含体积不合"工具随包"定位），纯托管写出器工程量过大，与 Tauri/electron-builder 同姿态捆绑 v3；上游出具体安全/兼容事故时由用户另行指示。
+- **2026-10-05 封存裁决：v3 维持现状不再复议**——v4/v5 需 .NET 8+ 运行时（Windows 预载仅 .NET Framework，自包含体积不合"工具随包"定位），纯托管写出器工程量过大，与主流打包器同姿态捆绑 v3；上游出具体安全/兼容事故时由用户另行指示。
 - 产品只打包调用方已准备的文件；不内建 WebView2/VC Runtime/.NET Runtime 的发现、下载或安装；不在 MSI 上复刻 NSIS journal 或任意脚本自定义操作。
 - `WixToolset.Sdk/5.0.2` 只出现在 NSIS 迁移测试的旧 MSI fixture 中，不构成选型。
 
