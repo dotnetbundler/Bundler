@@ -11,24 +11,34 @@ using UpdateKeyMaterial = DotNet.Bundler.Core.Update.UpdateKeyMaterial;
 
 public sealed class UpdateClientChainFixture : IDisposable
 {
-    public IntegrationWorkspace Ws { get; } = IntegrationWorkspace.Create(
-        "update-client-chain-integration", "BundlerUpdateClientChain");
+    // 惰性创建：宿主门禁在各用例体内 Skip，之后才允许占锁建目录。
+    private readonly Lazy<IntegrationWorkspace> _ws = new(() => IntegrationWorkspace.Create(
+        "update-client-chain-integration", "BundlerUpdateClientChain"));
 
-    public void Dispose() => Ws.Dispose();
+    public IntegrationWorkspace Ws => _ws.Value;
+
+    public void Dispose()
+    {
+        if (_ws.IsValueCreated)
+        {
+            _ws.Value.Dispose();
+        }
+    }
 }
 
 public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixture>
 {
-    private readonly IntegrationWorkspace _ws;
+    private IntegrationWorkspace Ws => _fixture.Ws;
+    private readonly UpdateClientChainFixture _fixture;
 
-    public UpdateClientChainTests(UpdateClientChainFixture fixture) => _ws = fixture.Ws;
+    public UpdateClientChainTests(UpdateClientChainFixture fixture) => _fixture = fixture;
 
     [Fact]
     public async Task Client_UpdateAsync_AppImage_FileSwap_Linux()
     {
         Assert.SkipUnless(TestPlatform.IsLinux,
             "Linux-only leg (bootstrapper rides host arch).");
-        var directory = _ws.Combine("appimage-fileswap");
+        var directory = Ws.Combine("appimage-fileswap");
         Directory.CreateDirectory(directory);
 
         // AppImage 安装单元=文件：安装目录是宿主目录（可含无关文件），install 参数是文件路径。
@@ -110,7 +120,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
     {
         Assert.SkipUnless(TestPlatform.IsLinux,
             "Linux-only leg (bootstrapper rides host arch).");
-        var directory = _ws.Combine("endtoend");
+        var directory = Ws.Combine("endtoend");
         Directory.CreateDirectory(directory);
 
         var install = InstallWithSidecar(directory, out var material, out var feedDir);
@@ -168,7 +178,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
     public async Task Client_UpdateAsync_UsesShellFallback()
     {
         Assert.SkipUnless(TestPlatform.IsLinux, "Linux-only leg.");
-        var directory = _ws.Combine("shell-fallback");
+        var directory = Ws.Combine("shell-fallback");
         Directory.CreateDirectory(directory);
 
         var install = InstallWithSidecar(directory, out var material, out var feedDir);

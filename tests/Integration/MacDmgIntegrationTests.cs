@@ -5,10 +5,11 @@
 [System.Runtime.Versioning.SupportedOSPlatform("macos")]
 public sealed class MacDmgFixture : IDisposable
 {
-    public IntegrationWorkspace Ws { get; }
-    public string CacheDir { get; }
+    // 工作区在 OS 门禁之后才创建——非 macOS 宿主上不抢锁不建目录。
+    public IntegrationWorkspace Ws { get; private set; } = null!;
+    public string CacheDir { get; private set; } = null!;
     public string FixtureProject { get; }
-    public string MountRoot { get; }
+    public string MountRoot { get; private set; } = null!;
 
     public string App { get; private set; } = "";
     public string Dmg { get; private set; } = "";
@@ -23,9 +24,6 @@ public sealed class MacDmgFixture : IDisposable
 
     public MacDmgFixture()
     {
-        Ws = IntegrationWorkspace.Create("macos-dmg-integration", "BundlerMacOSDmgIntegration");
-        CacheDir = Ws.Combine("nuget-cache");
-        MountRoot = Ws.Combine("mount");
         FixtureProject = Path.Combine(RepositoryLayout.FixturesDirectory,
             "MacDmg", "BundlerMacDmgIntegrationFixture.csproj");
         _init = new Lazy<bool>(Initialize);
@@ -63,6 +61,9 @@ public sealed class MacDmgFixture : IDisposable
         {
             ExternalTools.Require(tool);
         }
+        Ws = IntegrationWorkspace.Create("macos-dmg-integration", "BundlerMacOSDmgIntegration");
+        CacheDir = Ws.Combine("nuget-cache");
+        MountRoot = Ws.Combine("mount");
         _ = RepositoryPackages.DirectoryPath;
 
         var hostTarget = TestPlatform.OsxTarget;

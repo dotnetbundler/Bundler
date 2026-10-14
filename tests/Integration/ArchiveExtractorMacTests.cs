@@ -12,17 +12,27 @@ using DotNet.Bundler.Updater;
 
 public sealed class ArchiveExtractorMacFixture : IDisposable
 {
-    public IntegrationWorkspace Ws { get; } = IntegrationWorkspace.Create(
-        "archive-extractor-mac-integration", "BundlerArchiveExtractorMacIntegration");
+    // 惰性创建：宿主门禁在各用例体内 Skip，之后才允许占锁建目录。
+    private readonly Lazy<IntegrationWorkspace> _ws = new(() => IntegrationWorkspace.Create(
+        "archive-extractor-mac-integration", "BundlerArchiveExtractorMacIntegration"));
 
-    public void Dispose() => Ws.Dispose();
+    public IntegrationWorkspace Ws => _ws.Value;
+
+    public void Dispose()
+    {
+        if (_ws.IsValueCreated)
+        {
+            _ws.Value.Dispose();
+        }
+    }
 }
 
 public sealed class ArchiveExtractorMacTests : IClassFixture<ArchiveExtractorMacFixture>
 {
-    private readonly IntegrationWorkspace _ws;
+    private IntegrationWorkspace Ws => _fixture.Ws;
+    private readonly ArchiveExtractorMacFixture _fixture;
 
-    public ArchiveExtractorMacTests(ArchiveExtractorMacFixture fixture) => _ws = fixture.Ws;
+    public ArchiveExtractorMacTests(ArchiveExtractorMacFixture fixture) => _fixture = fixture;
 
     [Fact]
     public void Zip_XattrPayload_UsesHostToolPreservingMetadata()
@@ -30,8 +40,8 @@ public sealed class ArchiveExtractorMacTests : IClassFixture<ArchiveExtractorMac
         // macOS 上载荷带 xattr（签名件）时写端走 ditto——AppleDouble 入 __MACOSX/，
         // managed 写出器永远不会产这些条目，可区分新旧行为。
         Assert.SkipUnless(TestPlatform.IsMacOS, "ditto production is macOS-only");
-        var input = CreateInputDirectory(_ws.Combine("xattr-produce"));
-        var output = _ws.Combine("xattr-produce", "xattr-out");
+        var input = CreateInputDirectory(Ws.Combine("xattr-produce"));
+        var output = Ws.Combine("xattr-produce", "xattr-out");
 
         var target = Path.Combine(input, "signed.sh");
         File.WriteAllText(target, "#!/bin/sh\n");
@@ -50,9 +60,9 @@ public sealed class ArchiveExtractorMacTests : IClassFixture<ArchiveExtractorMac
         // 全链路往返断言（FLAG-1）：ditto 产件 → ArchiveExtractor 解包（mac 走
         // ditto -x -k）→ xattr 仍挂在提取出的文件上——只靠产件侧断言会漏掉解包侧丢签。
         Assert.SkipUnless(TestPlatform.IsMacOS, "ditto round-trip is macOS-only");
-        var input = CreateInputDirectory(_ws.Combine("xattr-roundtrip"));
-        var output = _ws.Combine("xattr-roundtrip", "xattr-rt-out");
-        var staging = _ws.Combine("xattr-roundtrip", "xattr-rt-staging");
+        var input = CreateInputDirectory(Ws.Combine("xattr-roundtrip"));
+        var output = Ws.Combine("xattr-roundtrip", "xattr-rt-out");
+        var staging = Ws.Combine("xattr-roundtrip", "xattr-rt-staging");
 
         var target = Path.Combine(input, "signed.sh");
         File.WriteAllText(target, "#!/bin/sh\n");
@@ -109,7 +119,7 @@ public sealed class ArchiveExtractorMacTests : IClassFixture<ArchiveExtractorMac
     {
         Assert.SkipUnless(TestPlatform.IsMacOS,
             "macOS 上 ExtractZipToDirectory 拉起 ditto 子进程——本腿断 ditto 路径的 __MACOSX 清场。");
-        var directory = _ws.Combine("nested-appledouble");
+        var directory = Ws.Combine("nested-appledouble");
         Directory.CreateDirectory(directory);
 
         // wrapper 内嵌套 __MACOSX（载荷含预解压 macOS 目录树）——managed 解包必须
@@ -139,7 +149,7 @@ public sealed class ArchiveExtractorMacTests : IClassFixture<ArchiveExtractorMac
         // macOS 上走 ditto 原生物化，与 managed 回退同一断言面。
         Assert.SkipUnless(TestPlatform.IsMacOS,
             "macOS 上 ExtractZipToDirectory 拉起 ditto 子进程——本腿断 ditto 路径的软链还原。");
-        var directory = _ws.Combine("symlink-restore");
+        var directory = Ws.Combine("symlink-restore");
         Directory.CreateDirectory(directory);
 
         var zipPath = Path.Combine(directory, "payload.zip");
@@ -185,7 +195,7 @@ public sealed class ArchiveExtractorMacTests : IClassFixture<ArchiveExtractorMac
         // ditto 产 zip 自带 __MACOSX/ 资源叉目录——managed 提取下它是垃圾树，清掉。
         Assert.SkipUnless(TestPlatform.IsMacOS,
             "macOS 上 ExtractZipToDirectory 拉起 ditto 子进程——本腿断 ditto 路径的 __MACOSX 清场。");
-        var directory = _ws.Combine("appledouble-drop");
+        var directory = Ws.Combine("appledouble-drop");
         Directory.CreateDirectory(directory);
 
         var zipPath = Path.Combine(directory, "ditto.zip");

@@ -6,10 +6,11 @@
 [System.Runtime.Versioning.SupportedOSPlatform("macos")]
 public sealed class MacPkgFixture : IDisposable
 {
-    public IntegrationWorkspace Ws { get; }
-    public string CacheDir { get; }
+    // 工作区在 OS 门禁之后才创建——非 macOS 宿主上不抢锁不建目录。
+    public IntegrationWorkspace Ws { get; private set; } = null!;
+    public string CacheDir { get; private set; } = null!;
     public string FixtureProject { get; }
-    public string ExpandRoot { get; }
+    public string ExpandRoot { get; private set; } = null!;
 
     public string App { get; private set; } = "";
     public string Pkg { get; private set; } = "";
@@ -25,9 +26,6 @@ public sealed class MacPkgFixture : IDisposable
 
     public MacPkgFixture()
     {
-        Ws = IntegrationWorkspace.Create("macos-pkg-integration", "BundlerMacOSPkgIntegration");
-        CacheDir = Ws.Combine("nuget-cache");
-        ExpandRoot = Ws.Combine("expand");
         FixtureProject = Path.Combine(RepositoryLayout.FixturesDirectory,
             "MacPkg", "BundlerMacPkgIntegrationFixture.csproj");
         _init = new Lazy<bool>(Initialize);
@@ -80,6 +78,9 @@ public sealed class MacPkgFixture : IDisposable
         {
             ExternalTools.Require(tool);
         }
+        Ws = IntegrationWorkspace.Create("macos-pkg-integration", "BundlerMacOSPkgIntegration");
+        CacheDir = Ws.Combine("nuget-cache");
+        ExpandRoot = Ws.Combine("expand");
         _ = RepositoryPackages.DirectoryPath;
 
         var hostTarget = TestPlatform.OsxTarget;

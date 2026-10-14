@@ -6,17 +6,27 @@ using System.Runtime.InteropServices;
 
 public sealed class MsBuildIntegrationFixture : IDisposable
 {
-    public IntegrationWorkspace Ws { get; } = IntegrationWorkspace.Create(
-        "msbuild-integration", "BundlerMsBuildIntegration");
+    // 惰性创建：宿主门禁在各用例体内 Skip，之后才允许占锁建目录。
+    private readonly Lazy<IntegrationWorkspace> _ws = new(() => IntegrationWorkspace.Create(
+        "msbuild-integration", "BundlerMsBuildIntegration"));
 
-    public void Dispose() => Ws.Dispose();
+    public IntegrationWorkspace Ws => _ws.Value;
+
+    public void Dispose()
+    {
+        if (_ws.IsValueCreated)
+        {
+            _ws.Value.Dispose();
+        }
+    }
 }
 
 public sealed class MsBuildIntegrationTests : IClassFixture<MsBuildIntegrationFixture>
 {
-    private readonly IntegrationWorkspace _ws;
+    private IntegrationWorkspace Ws => _fixture.Ws;
+    private readonly MsBuildIntegrationFixture _fixture;
 
-    public MsBuildIntegrationTests(MsBuildIntegrationFixture fixture) => _ws = fixture.Ws;
+    public MsBuildIntegrationTests(MsBuildIntegrationFixture fixture) => _fixture = fixture;
 
     // 宿主推导目标词：与 CliConfig.HostTarget 同一合同（linux 腿断言用，独立复算防循环遮蔽）。
     static string LinuxHostTarget =>
@@ -35,7 +45,7 @@ public sealed class MsBuildIntegrationTests : IClassFixture<MsBuildIntegrationFi
             "src", "Bundler.MSBuild", "bin", "Release", "netstandard2.0", "DotNet.Bundler.MSBuild.dll");
         Assert.SkipUnless(File.Exists(taskDll),
             "Bundler.MSBuild not built: " + taskDll);
-        var root = _ws.Combine("msbuild-defaults");
+        var root = Ws.Combine("msbuild-defaults");
         var input = Path.Combine(root, "input");
         var output = Path.Combine(root, "out");
         Directory.CreateDirectory(input);

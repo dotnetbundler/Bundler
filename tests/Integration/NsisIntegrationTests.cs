@@ -12,10 +12,11 @@ using Microsoft.Win32;
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public sealed class NsisFixture : IAsyncLifetime
 {
-    public IntegrationWorkspace Ws { get; } = IntegrationWorkspace.Create("windows-nsis-integration", "windows.nsis");
-    public string PackageCache { get; }
-    public string ApiOutput { get; }
-    public string ApiTools { get; }
+    // 工作区在 OS 门禁之后才创建——非 Windows 宿主上不抢锁不建目录（Skip 而非副作用）。
+    public IntegrationWorkspace Ws { get; private set; } = null!;
+    public string PackageCache { get; private set; } = null!;
+    public string ApiOutput { get; private set; } = null!;
+    public string ApiTools { get; private set; } = null!;
     public string? CertificateThumbprint { get; private set; }
     private X509Certificate2? _certificate;
 
@@ -29,9 +30,6 @@ public sealed class NsisFixture : IAsyncLifetime
     private readonly Lazy<bool> _init;
     public NsisFixture()
     {
-        PackageCache = Ws.Combine("packages");
-        ApiOutput = Ws.Combine("standalone-api");
-        ApiTools = Ws.Combine("shared-tools");
         _init = new Lazy<bool>(Initialize);
     }
 
@@ -43,6 +41,10 @@ public sealed class NsisFixture : IAsyncLifetime
         Assert.SkipWhen(!TestPlatform.IsX64,
             "SKIP: NSIS 工件为 windows-x86_64 安装器，仅 x64 宿主验收；arm64 仿真语义另列特殊项。");
         Assert.SkipWhen(!File.Exists(FixtureProject), "NSIS integration fixture 缺失。");
+        Ws = IntegrationWorkspace.Create("windows-nsis-integration", "windows.nsis");
+        PackageCache = Ws.Combine("packages");
+        ApiOutput = Ws.Combine("standalone-api");
+        ApiTools = Ws.Combine("shared-tools");
         // 仓库包一次 pack（含 nodeReuse 文件锁前导）；NSIS 脚本的包装配检查放
         // RepositoryPackagesCarryNsisBackendAndAssets 一条无门禁事实。
         var packages = RepositoryPackages.DirectoryPath;

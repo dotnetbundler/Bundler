@@ -8,8 +8,9 @@ using System.Text.Json;
 [System.Runtime.Versioning.SupportedOSPlatform("macos")]
 public sealed class MacAppFixture : IDisposable
 {
-    public IntegrationWorkspace Ws { get; }
-    public string CacheDir { get; }
+    // 工作区在 OS 门禁之后才创建——非 macOS 宿主上不抢锁不建目录。
+    public IntegrationWorkspace Ws { get; private set; } = null!;
+    public string CacheDir { get; private set; } = null!;
     public string FixtureProject { get; }
     public string FixtureDir { get; }
     public string IconPng { get; private set; } = "";
@@ -33,8 +34,6 @@ public sealed class MacAppFixture : IDisposable
 
     public MacAppFixture()
     {
-        Ws = IntegrationWorkspace.Create("macos-app-integration", "BundlerMacOSAppIntegration");
-        CacheDir = Ws.Combine("nuget-cache");
         FixtureDir = Path.Combine(RepositoryLayout.FixturesDirectory, "MacApp");
         FixtureProject = Path.Combine(FixtureDir, "BundlerMacAppIntegrationFixture.csproj");
         _init = new Lazy<bool>(Initialize);
@@ -48,6 +47,8 @@ public sealed class MacAppFixture : IDisposable
             ExternalTools.Require(tool);
         }
         Assert.True(File.Exists(LsRegister), "lsregister is unavailable on this host.");
+        Ws = IntegrationWorkspace.Create("macos-app-integration", "BundlerMacOSAppIntegration");
+        CacheDir = Ws.Combine("nuget-cache");
         _ = RepositoryPackages.DirectoryPath;
 
         // 512x512 PNG（仅签名头+IHDR；后端只需位图尺寸）
