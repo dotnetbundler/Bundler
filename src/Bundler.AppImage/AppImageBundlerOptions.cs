@@ -10,8 +10,8 @@ public sealed class AppImageBundlerOptions
 
     /// <summary>
     /// Directory the embedded appimagetool binaries are materialized to.
-    /// Defaults to a hash-stamped folder under the user cache
-    /// (<c>$XDG_CACHE_HOME</c> or <c>~/.cache</c> on Linux).
+    /// Defaults to the shared tool cache
+    /// (<c>%LocalAppData%/DotNetBundler/tools</c> or the platform equivalent).
     /// </summary>
     public string? ToolsetCacheDirectory { get; init; }
 }
