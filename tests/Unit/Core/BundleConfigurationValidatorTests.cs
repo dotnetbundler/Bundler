@@ -229,7 +229,7 @@ public sealed class BundleConfigurationValidatorTests
         var config = WithTarget(new BundleTargetConfiguration
         {
             Target = "linux-x86_64",
-            InputDirectory = Path.Combine(Path.GetTempPath(), "bundler-no-such-dir"),
+            InputDirectory = Path.Combine(Path.GetTempPath(), $"bundler-no-such-{Guid.NewGuid():N}"),
             Formats = [PackageFormat.Deb]
         });
         Assert.Contains(Validate(config, checkFileSystem: true),
