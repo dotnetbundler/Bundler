@@ -16,5 +16,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\**\*.cs" />
+    <!-- Package 层不引用 src 工程——BundleFixture 依赖产品公开 API 类型，不属于本程序集 -->
+    <Compile Remove="..\Shared\BundleFixture.cs" />
   </ItemGroup>
 </Project>

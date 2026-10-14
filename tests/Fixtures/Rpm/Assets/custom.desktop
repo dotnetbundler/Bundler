@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Bundler Rpm Fixture Custom
+Exec=/usr/lib/bundler-rpm-fixture/BundlerRpmIntegrationFixture
+Terminal=false
+MimeType=text/plain;x-scheme-handler:bundler-fixture;

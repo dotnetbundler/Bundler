@@ -1,0 +1,1 @@
+Bundler legacy MSI fixture payload version 0.8.0

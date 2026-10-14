@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-x64</RuntimeIdentifier>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == '' and '$(RuntimeIdentifiers)' == ''">linux-x86_64</BundlerTarget>
+    <SelfContained>true</SelfContained>
+    <AssemblyName>BundlerRpmIntegrationFixture</AssemblyName>
+    <Version>1.0.0</Version>
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerFormats>rpm</BundlerFormats>
+    <BundlerIdentifier>com.dotnetbundler.rpmintegrationfixture</BundlerIdentifier>
+    <BundlerProductName>Bundler Rpm Fixture</BundlerProductName>
+    <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
+    <BundlerDescription>Disposable .rpm integration-test fixture</BundlerDescription>
+    <BundlerHomepage>https://example.com/rpm-fixture</BundlerHomepage>
+    <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
+    <BundlerLicenseFile>$(MSBuildThisFileDirectory)Assets/LICENSE.txt</BundlerLicenseFile>
+    <BundlerRpmPackageName Condition="'$(BundlerTestRpmPackageName)' != ''">$(BundlerTestRpmPackageName)</BundlerRpmPackageName>
+    <BundlerRpmVersion Condition="'$(BundlerTestRpmVersion)' != ''">$(BundlerTestRpmVersion)</BundlerRpmVersion>
+    <BundlerRpmRelease Condition="'$(BundlerTestRpmRelease)' != ''">$(BundlerTestRpmRelease)</BundlerRpmRelease>
+    <BundlerRpmEpoch Condition="'$(BundlerTestRpmEpoch)' != ''">$(BundlerTestRpmEpoch)</BundlerRpmEpoch>
+    <BundlerRpmArchitecture Condition="'$(BundlerTestRpmArchitecture)' != ''">$(BundlerTestRpmArchitecture)</BundlerRpmArchitecture>
+    <BundlerRpmVendor Condition="'$(BundlerTestRpmVendor)' != ''">$(BundlerTestRpmVendor)</BundlerRpmVendor>
+    <BundlerRpmInstallRoot Condition="'$(BundlerTestRpmInstallRoot)' != ''">$(BundlerTestRpmInstallRoot)</BundlerRpmInstallRoot>
+    <BundlerRpmBinLink Condition="'$(BundlerTestRpmBinLink)' != ''">$(BundlerTestRpmBinLink)</BundlerRpmBinLink>
+    <BundlerRpmDepends Condition="'$(BundlerTestRpmDepends)' != ''">$(BundlerTestRpmDepends)</BundlerRpmDepends>
+    <BundlerRpmProvides Condition="'$(BundlerTestRpmProvides)' != ''">$(BundlerTestRpmProvides)</BundlerRpmProvides>
+    <BundlerRpmConflicts Condition="'$(BundlerTestRpmConflicts)' != ''">$(BundlerTestRpmConflicts)</BundlerRpmConflicts>
+    <BundlerRpmObsoletes Condition="'$(BundlerTestRpmObsoletes)' != ''">$(BundlerTestRpmObsoletes)</BundlerRpmObsoletes>
+    <BundlerRpmRecommends Condition="'$(BundlerTestRpmRecommends)' != ''">$(BundlerTestRpmRecommends)</BundlerRpmRecommends>
+    <BundlerRpmSuggests Condition="'$(BundlerTestRpmSuggests)' != ''">$(BundlerTestRpmSuggests)</BundlerRpmSuggests>
+    <BundlerRpmLicense Condition="'$(BundlerTestRpmLicense)' != ''">$(BundlerTestRpmLicense)</BundlerRpmLicense>
+    <BundlerRpmGroup Condition="'$(BundlerTestRpmGroup)' != ''">$(BundlerTestRpmGroup)</BundlerRpmGroup>
+    <BundlerRpmUrl Condition="'$(BundlerTestRpmUrl)' != ''">$(BundlerTestRpmUrl)</BundlerRpmUrl>
+    <BundlerRpmCategories>Utility;Development</BundlerRpmCategories>
+    <BundlerRpmCategories Condition="'$(BundlerTestRpmCategories)' != ''">$(BundlerTestRpmCategories)</BundlerRpmCategories>
+    <BundlerRpmDesktopFile Condition="'$(BundlerTestRpmDesktopFile)' != ''">$(BundlerTestRpmDesktopFile)</BundlerRpmDesktopFile>
+    <BundlerRpmMetainfoFile Condition="'$(BundlerTestRpmSkipMetainfo)' != 'true'">$(MSBuildThisFileDirectory)Assets/app.metainfo.xml</BundlerRpmMetainfoFile>
+    <BundlerRpmMetainfoFile Condition="'$(BundlerTestRpmMetainfoFile)' != ''">$(BundlerTestRpmMetainfoFile)</BundlerRpmMetainfoFile>
+    <BundlerRpmChangelogFile>$(MSBuildThisFileDirectory)Assets/CHANGELOG.md</BundlerRpmChangelogFile>
+    <BundlerFormats Condition="'$(BundlerTestFormats)' != ''">$(BundlerTestFormats)</BundlerFormats>
+    <BundlerRpmPreInstallFile Condition="'$(BundlerTestRpmScripts)' == '1'">$(MSBuildThisFileDirectory)Assets/preinstall.sh</BundlerRpmPreInstallFile>
+    <BundlerRpmPostInstallFile Condition="'$(BundlerTestRpmScripts)' == '1'">$(MSBuildThisFileDirectory)Assets/postinstall.sh</BundlerRpmPostInstallFile>
+    <BundlerRpmPreUninstallFile Condition="'$(BundlerTestRpmScripts)' == '1'">$(MSBuildThisFileDirectory)Assets/preuninstall.sh</BundlerRpmPreUninstallFile>
+    <BundlerRpmPostUninstallFile Condition="'$(BundlerTestRpmScripts)' == '1'">$(MSBuildThisFileDirectory)Assets/postuninstall.sh</BundlerRpmPostUninstallFile>
+    <BundlerRpmPreInstallFile Condition="'$(BundlerTestRpmCrlfScript)' == '1'">$(MSBuildThisFileDirectory)Assets/bad-crlf.sh</BundlerRpmPreInstallFile>
+    <BundlerRpmPreInstallProgram Condition="'$(BundlerTestRpmProg)' != ''">$(BundlerTestRpmProg)</BundlerRpmPreInstallProgram>
+    <BundlerRpmSystemdServiceFile Condition="'$(BundlerTestRpmSystemd)' == '1'">$(MSBuildThisFileDirectory)Assets/fixture.service</BundlerRpmSystemdServiceFile>
+    <BundlerRpmConfigLocations Condition="'$(BundlerTestRpmConfigLocations)' != ''">$(BundlerTestRpmConfigLocations)</BundlerRpmConfigLocations>
+  </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
+  <ItemGroup>
+    <BundlerResource Include="Assets/readme.txt" Destination="docs/readme.txt" />
+    <BundlerIcon Include="Assets/icon48.png" />
+    <BundlerIcon Include="Assets/icon@2x.png" />
+    <BundlerFileAssociation Include=".bdlfixture" Name="Bundler fixture document"
+        MimeType="application/x-bundler-fixture" />
+    <BundlerUrlProtocol Include="bdlfixture" Name="Bundler fixture" />
+    <BundlerRpmFile Include="Assets/defaults.conf" Destination="/etc/bundler-rpm-fixture/defaults.conf" />
+    <BundlerRpmFile Condition="'$(BundlerTestRpmBadFile)' == '1'"
+        Include="Assets/defaults.conf" Destination="etc/relative.conf" />
+  </ItemGroup>
+</Project>

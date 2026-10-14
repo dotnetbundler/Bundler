@@ -11,7 +11,12 @@
     <PackageReference Include="Microsoft.Build.Utilities.Core" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\Shared\**\*.cs" />
+    <!-- Unit 层只要进程内小件——Tooling（spawn 基建）与 BundleFixture（公开面构建器）不进本程序集 -->
+    <Compile Include="..\Shared\TempBase.cs" />
+    <Compile Include="..\Shared\TempDir.cs" />
+    <Compile Include="..\Shared\TestPlatform.cs" />
+    <Compile Include="..\Shared\MiniAr.cs" />
+    <Compile Include="..\Shared\MiniTar.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Bundler.Abstractions\Bundler.Abstractions.csproj" />
