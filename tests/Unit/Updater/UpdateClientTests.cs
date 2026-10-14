@@ -12,22 +12,17 @@ namespace Bundler.UnitTests.Updater;
 /// 跨程序集协议互操作是本测试的本体——feed 由打包侧（Core/Update 命名空间件）
 /// 序列化签名，由应用侧（Updater.Protocol 同源件）验证解析。
 /// </summary>
-public sealed class UpdateClientTests : IDisposable
+public sealed class UpdateClientTests : TempBase
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "uc-" + Guid.NewGuid().ToString("N"));
 
     public UpdateClientTests()
     {
-        Directory.CreateDirectory(_root);
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         UpdateClient.FreeSpaceProbe = null;
-        if (Directory.Exists(_root))
-        {
-            Directory.Delete(_root, recursive: true);
-        }
+        base.Dispose();
     }
 
     // ---- 身份加载 ----
@@ -35,7 +30,7 @@ public sealed class UpdateClientTests : IDisposable
     [Fact]
     public void FromInstallDirectory_MissingSidecar_Throws()
     {
-        var empty = Path.Combine(_root, "install");
+        var empty = Path.Combine(Root, "install");
         Directory.CreateDirectory(empty);
         Assert.Throws<UpdateException>(() =>
             UpdateClient.FromInstallDirectory(empty, "1.0.0"));
@@ -44,7 +39,7 @@ public sealed class UpdateClientTests : IDisposable
     [Fact]
     public void FromInstallDirectory_ReadsSidecar_Constructs()
     {
-        var install = Path.Combine(_root, "install2");
+        var install = Path.Combine(Root, "install2");
         Directory.CreateDirectory(install);
         var identity = Identity();
         using (var stream = File.Create(Path.Combine(install, Protocol.UpdateInstallIdentity.FileName)))
@@ -57,7 +52,7 @@ public sealed class UpdateClientTests : IDisposable
     [Fact]
     public void FromIdentity_MissingFeedOrKey_Throws()
     {
-        var install = Path.Combine(_root, "install3");
+        var install = Path.Combine(Root, "install3");
         var noFeed = Identity();
         noFeed.FeedUrl = "";
         Assert.Throws<UpdateException>(() =>
@@ -130,7 +125,7 @@ public sealed class UpdateClientTests : IDisposable
     [Fact]
     public async Task CheckForUpdateAsync_UnsignedFeed_Rejected()
     {
-        var feedDir = Path.Combine(_root, "unsigned");
+        var feedDir = Path.Combine(Root, "unsigned");
         Directory.CreateDirectory(feedDir);
         var feedPath = Path.Combine(feedDir, "bundler-update-feed.json");
         var feed = new CoreUpdate.UpdateFeed { Version = "2.0.0", Channel = "latest" };
@@ -170,7 +165,7 @@ public sealed class UpdateClientTests : IDisposable
         var info = await client.CheckForUpdateAsync(TestContext.Current.CancellationToken);
         Assert.NotNull(info);
 
-        var downloads = Path.Combine(_root, "dl");
+        var downloads = Path.Combine(Root, "dl");
         var path = await client.DownloadAsync(info!, downloads, TestContext.Current.CancellationToken);
 
         Assert.Equal(payload, File.ReadAllBytes(path));
@@ -186,7 +181,7 @@ public sealed class UpdateClientTests : IDisposable
         var client = Client(feedDir, key, currentVersion: "1.0.0");
         var info = await client.CheckForUpdateAsync(TestContext.Current.CancellationToken);
         var path = await client.DownloadAsync(
-            info!, Path.Combine(_root, "dl2"), TestContext.Current.CancellationToken);
+            info!, Path.Combine(Root, "dl2"), TestContext.Current.CancellationToken);
 
         File.WriteAllBytes(path, Encoding.UTF8.GetBytes("tampered"));
 
@@ -203,7 +198,7 @@ public sealed class UpdateClientTests : IDisposable
         var info = await client.CheckForUpdateAsync(TestContext.Current.CancellationToken);
 
         UpdateClient.FreeSpaceProbe = _ => 1; // 缝：只剩 1 字节
-        var downloads = Path.Combine(_root, "dl3");
+        var downloads = Path.Combine(Root, "dl3");
         await Assert.ThrowsAsync<UpdateException>(() =>
             client.DownloadAsync(info!, downloads, TestContext.Current.CancellationToken));
         Assert.False(File.Exists(Path.Combine(downloads, "app-2.0.0.exe")));
@@ -214,13 +209,13 @@ public sealed class UpdateClientTests : IDisposable
     {
         var (feedDir, key) = MakeFeed("2.0.0",
             [Artifact("win-x64", "nsis", "app-2.0.0.exe", "x"u8.ToArray())]);
-        var install = Path.Combine(_root, "install4");
+        var install = Path.Combine(Root, "install4");
         Directory.CreateDirectory(install);
         var client = Client(feedDir, key, currentVersion: "1.0.0", install);
         var info = await client.CheckForUpdateAsync(TestContext.Current.CancellationToken);
 
         Assert.Throws<UpdateException>(() =>
-            client.Apply(info!, Path.Combine(_root, "never-verified.bin")));
+            client.Apply(info!, Path.Combine(Root, "never-verified.bin")));
     }
 
     // ---- 装置 ----
@@ -234,7 +229,7 @@ public sealed class UpdateClientTests : IDisposable
             Format = "nsis",
             Target = "win-x64",
             Channel = "latest",
-            FeedUrl = feedUrl ?? "file:///" + _root.Replace('\\', '/') + "/feed/bundler-update-feed.json",
+            FeedUrl = feedUrl ?? "file:///" + Root.Replace('\\', '/') + "/feed/bundler-update-feed.json",
             PublicKey = material.PublicPointBase64(),
         };
     }
@@ -245,7 +240,7 @@ public sealed class UpdateClientTests : IDisposable
         var identity = Identity(key,
             new Uri(Path.Combine(feedDir, "bundler-update-feed.json")).AbsoluteUri);
         return UpdateClient.FromIdentity(
-            identity, installDirectory ?? Path.Combine(_root, "install-app"), currentVersion);
+            identity, installDirectory ?? Path.Combine(Root, "install-app"), currentVersion);
     }
 
     private readonly Dictionary<string, byte[]> _artifactContent = new();
@@ -265,7 +260,7 @@ public sealed class UpdateClientTests : IDisposable
         string version, CoreUpdate.UpdateFeedArtifact[] artifacts)
     {
         var key = CoreUpdate.UpdateKeyMaterial.Generate();
-        var feedDir = Path.Combine(_root, "feed-" + Guid.NewGuid().ToString("N")[..6]);
+        var feedDir = Path.Combine(Root, "feed-" + Guid.NewGuid().ToString("N")[..6]);
         Directory.CreateDirectory(feedDir);
         foreach (var artifact in artifacts)
         {
@@ -301,27 +296,22 @@ public sealed class UpdateClientTests : IDisposable
 }
 
 /// <summary><see cref="UpdateApplier"/> 纯文件缝：顶层目录决议、过期暂存清扫、回滚保留目录。</summary>
-public sealed class UpdateApplierTests : IDisposable
+public sealed class UpdateApplierTests : TempBase
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "ua-" + Guid.NewGuid().ToString("N"));
 
     public UpdateApplierTests()
     {
-        Directory.CreateDirectory(_root);
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
-        if (Directory.Exists(_root))
-        {
-            Directory.Delete(_root, recursive: true);
-        }
+        base.Dispose();
     }
 
     [Fact]
     public void SingleTopDirectory_WrapperShape_PicksChild()
     {
-        var staging = Path.Combine(_root, "s1");
+        var staging = Path.Combine(Root, "s1");
         var inner = Path.Combine(staging, "App.app");
         Directory.CreateDirectory(inner);
         Assert.Equal(inner, UpdateApplier.SingleTopDirectory(staging, "x.zip"));
@@ -330,7 +320,7 @@ public sealed class UpdateApplierTests : IDisposable
     [Fact]
     public void SingleTopDirectory_FlatShape_KeepsRoot()
     {
-        var staging = Path.Combine(_root, "s2");
+        var staging = Path.Combine(Root, "s2");
         Directory.CreateDirectory(Path.Combine(staging, "bin"));
         File.WriteAllText(Path.Combine(staging, "root.txt"), "r");
         Assert.Equal(staging, UpdateApplier.SingleTopDirectory(staging, "x.zip"));
@@ -339,7 +329,7 @@ public sealed class UpdateApplierTests : IDisposable
     [Fact]
     public void SingleTopDirectory_Empty_Throws()
     {
-        var staging = Path.Combine(_root, "s3");
+        var staging = Path.Combine(Root, "s3");
         Directory.CreateDirectory(staging);
         Assert.Throws<UpdateException>(() =>
             UpdateApplier.SingleTopDirectory(staging, "x.zip"));
@@ -348,7 +338,7 @@ public sealed class UpdateApplierTests : IDisposable
     [Fact]
     public void SweepStaleStaging_RemovesOnlyOldKnownPrefixes()
     {
-        var stagingRoot = Path.Combine(_root, "stagingRoot");
+        var stagingRoot = Path.Combine(Root, "stagingRoot");
         Directory.CreateDirectory(stagingRoot);
         var oldPayload = Path.Combine(stagingRoot, "payload-aaaa");
         var freshBoot = Path.Combine(stagingRoot, "bootstrap-bbbb");
@@ -368,16 +358,16 @@ public sealed class UpdateApplierTests : IDisposable
     [Fact]
     public void ResolveRetentionDirectory_Explicit_Wins()
     {
-        var explicitDir = Path.Combine(_root, "retained");
+        var explicitDir = Path.Combine(Root, "retained");
         var resolved = UpdateApplier.ResolveRetentionDirectory(
-            Path.Combine(_root, "install"), new ApplyOptions { RollbackBackupDirectory = explicitDir });
+            Path.Combine(Root, "install"), new ApplyOptions { RollbackBackupDirectory = explicitDir });
         Assert.Equal(Path.GetFullPath(explicitDir), resolved);
     }
 
     [Fact]
     public void ResolveRetentionDirectory_Default_DeterministicHashSuffix()
     {
-        var install = Path.Combine(_root, "install");
+        var install = Path.Combine(Root, "install");
         var options = new ApplyOptions();
         var first = UpdateApplier.ResolveRetentionDirectory(install, options);
         var second = UpdateApplier.ResolveRetentionDirectory(install, options);

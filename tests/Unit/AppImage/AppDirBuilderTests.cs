@@ -9,21 +9,17 @@ namespace Bundler.UnitTests.AppImage;
 /// mainExecutable 元字符拒收都在任何 chmod/ln 子进程之前抛，故可在单元层断言。
 /// AppDir 全量落树（desktop/图标/AppRun/根链）属集成层。
 /// </summary>
-public sealed class AppDirBuilderTests : IDisposable
+public sealed class AppDirBuilderTests : TempBase
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "adir-" + Guid.NewGuid().ToString("N"));
 
-    public void Dispose()
+    public override void Dispose()
     {
-        if (Directory.Exists(_root))
-        {
-            Directory.Delete(_root, recursive: true);
-        }
+        base.Dispose();
     }
 
     private string InputWithMain()
     {
-        var input = Path.Combine(_root, "in-" + Guid.NewGuid().ToString("N")[..6]);
+        var input = Path.Combine(Root, "in-" + Guid.NewGuid().ToString("N")[..6]);
         Directory.CreateDirectory(input);
         File.WriteAllText(Path.Combine(input, "app"), "elf");
         return input;
@@ -31,7 +27,7 @@ public sealed class AppDirBuilderTests : IDisposable
 
     private BundlePlanItem Item(string input, string mainExecutable = "app") =>
         new(BundleTarget.Parse("linux-x86_64"), PackageFormat.AppImage,
-            input, mainExecutable, _root, false);
+            input, mainExecutable, Root, false);
 
     private static BundleConfiguration Bundle(string version = "1.0.0") => new()
     {
@@ -49,7 +45,7 @@ public sealed class AppDirBuilderTests : IDisposable
     {
         var settings = new AppImageBundleConfiguration { Version = version };
         Assert.Throws<ArgumentException>(() => AppDirBuilder.Build(
-            Bundle(), Item(InputWithMain()), settings, _root, NullBundleLogger.Instance));
+            Bundle(), Item(InputWithMain()), settings, Root, NullBundleLogger.Instance));
     }
 
     [Theory]
@@ -65,7 +61,7 @@ public sealed class AppDirBuilderTests : IDisposable
     {
         var settings = new AppImageBundleConfiguration { InstallRoot = installRoot };
         Assert.Throws<ArgumentException>(() => AppDirBuilder.Build(
-            Bundle(), Item(InputWithMain()), settings, _root, NullBundleLogger.Instance));
+            Bundle(), Item(InputWithMain()), settings, Root, NullBundleLogger.Instance));
     }
 
     [Theory]
@@ -80,7 +76,7 @@ public sealed class AppDirBuilderTests : IDisposable
         // 校验在文件存在性检查之前——指向不存在的元字符名同样被拒。
         Assert.Throws<ArgumentException>(() => AppDirBuilder.Build(
             Bundle(), Item(InputWithMain(), executable), new AppImageBundleConfiguration(),
-            _root, NullBundleLogger.Instance));
+            Root, NullBundleLogger.Instance));
     }
 
     [Fact]
@@ -88,7 +84,7 @@ public sealed class AppDirBuilderTests : IDisposable
     {
         Assert.Throws<FileNotFoundException>(() => AppDirBuilder.Build(
             Bundle(), Item(InputWithMain(), "ghost"), new AppImageBundleConfiguration(),
-            _root, NullBundleLogger.Instance));
+            Root, NullBundleLogger.Instance));
     }
 
     [Fact]
@@ -96,6 +92,6 @@ public sealed class AppDirBuilderTests : IDisposable
     {
         var settings = new AppImageBundleConfiguration { Architecture = "armv7" };
         Assert.Throws<ArgumentException>(() => AppDirBuilder.Build(
-            Bundle(), Item(InputWithMain()), settings, _root, NullBundleLogger.Instance));
+            Bundle(), Item(InputWithMain()), settings, Root, NullBundleLogger.Instance));
     }
 }

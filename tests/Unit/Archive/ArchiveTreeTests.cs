@@ -8,16 +8,12 @@ namespace Bundler.UnitTests.Archive;
 /// <see cref="ArchiveTree"/> 收集面：载荷树→归档条目（相对路径/模式/序），
 /// BundlerArchiveFile 目的地校验与撞名拒收，stem 前缀包装与条目转写。
 /// </summary>
-public sealed class ArchiveTreeTests : IDisposable
+public sealed class ArchiveTreeTests : TempBase
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "at-" + Guid.NewGuid().ToString("N"));
 
-    public void Dispose()
+    public override void Dispose()
     {
-        if (Directory.Exists(_root))
-        {
-            Directory.Delete(_root, recursive: true);
-        }
+        base.Dispose();
     }
 
     private static ArchiveBundleConfiguration Settings(
@@ -29,7 +25,7 @@ public sealed class ArchiveTreeTests : IDisposable
         File.WriteAllText(Path.Combine(input, "app"), "x");
         return new BundlePlanItem(
             BundleTarget.Parse("linux-x86_64"), PackageFormat.Zip,
-            input, "app", _root, false);
+            input, "app", Root, false);
     }
 
     private static BundleConfiguration Bundle() => new()
@@ -42,13 +38,13 @@ public sealed class ArchiveTreeTests : IDisposable
     [Fact]
     public void Build_PayloadTree_RelativePathsSorted()
     {
-        var input = Path.Combine(_root, "in");
+        var input = Path.Combine(Root, "in");
         Directory.CreateDirectory(Path.Combine(input, "sub"));
         File.WriteAllText(Path.Combine(input, "b.txt"), "b");
         File.WriteAllText(Path.Combine(input, "a.txt"), "a");
         File.WriteAllText(Path.Combine(input, "sub", "c.txt"), "c");
 
-        var entries = ArchiveTree.Build(Bundle(), Item(input), Settings(), _root,
+        var entries = ArchiveTree.Build(Bundle(), Item(input), Settings(), Root,
             NullBundleLogger.Instance);
 
         var paths = entries.Select(e => e.ArchivePath).ToArray();
@@ -61,16 +57,16 @@ public sealed class ArchiveTreeTests : IDisposable
     [Fact]
     public void Build_ExtraFile_MappedAtDestination()
     {
-        var input = Path.Combine(_root, "in2");
+        var input = Path.Combine(Root, "in2");
         Directory.CreateDirectory(input);
-        var extra = Path.Combine(_root, "license.txt");
+        var extra = Path.Combine(Root, "license.txt");
         File.WriteAllText(extra, "L");
         var settings = Settings(
         [
             new ArchiveFileEntry { Source = extra, Destination = "docs/license.txt" }
         ]);
 
-        var entries = ArchiveTree.Build(Bundle(), Item(input), settings, _root,
+        var entries = ArchiveTree.Build(Bundle(), Item(input), settings, Root,
             NullBundleLogger.Instance);
 
         var mapped = entries.Single(e => e.ArchivePath == "docs/license.txt");
@@ -88,9 +84,9 @@ public sealed class ArchiveTreeTests : IDisposable
     [InlineData("")]
     public void Build_ExtraFile_UnsafeDestination_Rejected(string destination)
     {
-        var input = Path.Combine(_root, "in3-" + destination.Length);
+        var input = Path.Combine(Root, "in3-" + destination.Length);
         Directory.CreateDirectory(input);
-        var extra = Path.Combine(_root, "x.txt");
+        var extra = Path.Combine(Root, "x.txt");
         File.WriteAllText(extra, "x");
         var settings = Settings(
         [
@@ -98,16 +94,16 @@ public sealed class ArchiveTreeTests : IDisposable
         ]);
 
         Assert.Throws<ArgumentException>(() => ArchiveTree.Build(
-            Bundle(), Item(input), settings, _root, NullBundleLogger.Instance));
+            Bundle(), Item(input), settings, Root, NullBundleLogger.Instance));
     }
 
     [Fact]
     public void Build_ExtraFile_CollidesWithPayload_Rejected()
     {
-        var input = Path.Combine(_root, "in4");
+        var input = Path.Combine(Root, "in4");
         Directory.CreateDirectory(input);
         File.WriteAllText(Path.Combine(input, "app"), "x");
-        var extra = Path.Combine(_root, "dup.txt");
+        var extra = Path.Combine(Root, "dup.txt");
         File.WriteAllText(extra, "x");
         var settings = Settings(
         [
@@ -115,30 +111,30 @@ public sealed class ArchiveTreeTests : IDisposable
         ]);
 
         Assert.Throws<ArgumentException>(() => ArchiveTree.Build(
-            Bundle(), Item(input), settings, _root, NullBundleLogger.Instance));
+            Bundle(), Item(input), settings, Root, NullBundleLogger.Instance));
     }
 
     [Fact]
     public void Build_ExtraFile_MissingSource_Rejected()
     {
-        var input = Path.Combine(_root, "in5");
+        var input = Path.Combine(Root, "in5");
         Directory.CreateDirectory(input);
         var settings = Settings(
         [
             new ArchiveFileEntry
             {
-                Source = Path.Combine(_root, "ghost"), Destination = "g.txt"
+                Source = Path.Combine(Root, "ghost"), Destination = "g.txt"
             }
         ]);
 
         Assert.Throws<ArgumentException>(() => ArchiveTree.Build(
-            Bundle(), Item(input), settings, _root, NullBundleLogger.Instance));
+            Bundle(), Item(input), settings, Root, NullBundleLogger.Instance));
     }
 
     [Fact]
     public void CollectDirectory_StemsAllEntries()
     {
-        var source = Path.Combine(_root, "App.app");
+        var source = Path.Combine(Root, "App.app");
         Directory.CreateDirectory(Path.Combine(source, "Contents", "MacOS"));
         File.WriteAllText(Path.Combine(source, "Contents", "MacOS", "run"), "x");
 
@@ -152,10 +148,10 @@ public sealed class ArchiveTreeTests : IDisposable
     [Fact]
     public void UnderStem_PrependsStemDirectory()
     {
-        var input = Path.Combine(_root, "in6");
+        var input = Path.Combine(Root, "in6");
         Directory.CreateDirectory(input);
         File.WriteAllText(Path.Combine(input, "app"), "x");
-        var flat = ArchiveTree.Build(Bundle(), Item(input), Settings(), _root,
+        var flat = ArchiveTree.Build(Bundle(), Item(input), Settings(), Root,
             NullBundleLogger.Instance);
 
         var stemmed = ArchiveTree.UnderStem(flat, "sample-1.0.0-linux-x86_64").ToArray();
@@ -168,9 +164,9 @@ public sealed class ArchiveTreeTests : IDisposable
     [Fact]
     public void ToTarEntry_DirectoryGetsTrailingSlash()
     {
-        var input = Path.Combine(_root, "in7");
+        var input = Path.Combine(Root, "in7");
         Directory.CreateDirectory(Path.Combine(input, "d"));
-        var flat = ArchiveTree.Build(Bundle(), Item(input), Settings(), _root,
+        var flat = ArchiveTree.Build(Bundle(), Item(input), Settings(), Root,
             NullBundleLogger.Instance);
 
         var dir = flat.Single(e => e.ArchivePath == "d");
@@ -195,7 +191,7 @@ public sealed class ArchiveTreeTests : IDisposable
     [Fact]
     public void Identity_ArchiveStem_NameVersionOsArch()
     {
-        var input = Path.Combine(_root, "in8");
+        var input = Path.Combine(Root, "in8");
         Directory.CreateDirectory(input);
         var item = Item(input);
         var stem = ArchiveIdentity.ArchiveStem(Settings(), "sample-app", "1.0.0", item);

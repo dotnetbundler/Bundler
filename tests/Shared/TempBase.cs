@@ -23,7 +23,7 @@ public abstract class TempBase : IDisposable
     /// <summary>Root 下的散文件/子路径（不预建）。</summary>
     protected string TempPath(string name) => System.IO.Path.Combine(Root, name);
 
-    public void Dispose()
+    public virtual void Dispose()
     {
         foreach (var dir in _temps)
         {

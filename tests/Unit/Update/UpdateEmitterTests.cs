@@ -4,13 +4,8 @@ using DotNet.Bundler.Update;
 
 namespace Bundler.UnitTests.Update;
 
-public sealed class EcdsaSignerTests : IDisposable
+public sealed class EcdsaSignerTests : TempBase
 {
-    private readonly string _dir = Path.Combine(
-        Path.GetTempPath(), "bundler-ut-" + Guid.NewGuid().ToString("N"));
-
-    public EcdsaSignerTests() => Directory.CreateDirectory(_dir);
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
 
     [Fact]
     public void Sign_Verify_RoundTrip()
@@ -64,7 +59,7 @@ public sealed class EcdsaSignerTests : IDisposable
     {
         // ECDSA 非确定性（随机 k）：断可验性不比字节
         var key = UpdateKeyMaterial.Generate();
-        var file = Path.Combine(_dir, "f.bin");
+        var file = Path.Combine(Root, "f.bin");
         var data = new byte[100_000];
         new Random(7).NextBytes(data);
         await File.WriteAllBytesAsync(file, data, TestContext.Current.CancellationToken);
@@ -73,22 +68,19 @@ public sealed class EcdsaSignerTests : IDisposable
     }
 }
 
-public sealed class UpdateManifestEmitterTests : IDisposable
+public sealed class UpdateManifestEmitterTests : TempBase
 {
-    private readonly string _dir = Path.Combine(
-        Path.GetTempPath(), "bundler-ut-" + Guid.NewGuid().ToString("N"));
     private readonly string _output;
     private readonly string _keyPath;
 
     public UpdateManifestEmitterTests()
     {
-        _output = Path.Combine(_dir, "out");
+        _output = Path.Combine(Root, "out");
         Directory.CreateDirectory(_output);
-        _keyPath = Path.Combine(_dir, "key.json");
+        _keyPath = Path.Combine(Root, "key.json");
         UpdateKeyMaterial.Generate().Save(_keyPath);
     }
 
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
 
     private BundleConfiguration Config(string channel = "") => new()
     {

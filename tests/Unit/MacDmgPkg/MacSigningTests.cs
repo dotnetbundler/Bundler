@@ -9,18 +9,13 @@ namespace Bundler.UnitTests.MacDmgPkg;
 /// macOS 签名/打包的配置期校验面——全部在任何 codesign/pkgbuild 子进程之前抛，
 /// 是宿主无关的纯判定。真签名/真挂载归集成层与特殊验收。
 /// </summary>
-public sealed class MacSigningTests : IDisposable
+public sealed class MacSigningTests : TempBase
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "macsign-" + Guid.NewGuid().ToString("N"));
 
-    public MacSigningTests() => Directory.CreateDirectory(_root);
 
-    public void Dispose()
+    public override void Dispose()
     {
-        if (Directory.Exists(_root))
-        {
-            Directory.Delete(_root, recursive: true);
-        }
+        base.Dispose();
     }
 
     private static BundleConfiguration Bundle() => new()
@@ -35,7 +30,7 @@ public sealed class MacSigningTests : IDisposable
     [Fact]
     public void Signing_IdentityAndCertificate_MutuallyExclusive()
     {
-        var cert = Path.Combine(_root, "c.p12");
+        var cert = Path.Combine(Root, "c.p12");
         File.WriteAllText(cert, "stub");
         Assert.Throws<ArgumentException>(() => MacAppSigning.Validate(
             new MacAppSigningConfiguration
@@ -58,20 +53,20 @@ public sealed class MacSigningTests : IDisposable
         Assert.Throws<FileNotFoundException>(() => MacAppSigning.Validate(
             new MacAppSigningConfiguration
             {
-                TemporaryCertificateFile = Path.Combine(_root, "ghost.p12"),
+                TemporaryCertificateFile = Path.Combine(Root, "ghost.p12"),
             }));
     }
 
     [Fact]
     public void Signing_MissingEntitlementsFile_Rejected()
     {
-        var cert = Path.Combine(_root, "c2.p12");
+        var cert = Path.Combine(Root, "c2.p12");
         File.WriteAllText(cert, "stub");
         Assert.Throws<FileNotFoundException>(() => MacAppSigning.Validate(
             new MacAppSigningConfiguration
             {
                 TemporaryCertificateFile = cert,
-                EntitlementsFile = Path.Combine(_root, "ghost.entitlements"),
+                EntitlementsFile = Path.Combine(Root, "ghost.entitlements"),
             }));
     }
 
@@ -102,10 +97,7 @@ public sealed class MacSigningTests : IDisposable
     [Fact]
     public void Signing_SignedConfig_NonMacHost_Rejected()
     {
-        if (OperatingSystem.IsMacOS())
-        {
-            return; // 宿主分支在 mac 腿不触发
-        }
+        Assert.SkipWhen(OperatingSystem.IsMacOS(), "PNSE 支路只在非 macOS 触发");
         Assert.Throws<PlatformNotSupportedException>(() => MacAppSigning.Validate(
             new MacAppSigningConfiguration { Identity = "Developer ID Application: X" }));
     }
@@ -123,7 +115,7 @@ public sealed class MacSigningTests : IDisposable
     [Fact]
     public void Credentials_ApiKey_NeedsAllThree()
     {
-        var key = Path.Combine(_root, "key.p8");
+        var key = Path.Combine(Root, "key.p8");
         File.WriteAllText(key, "k");
         var args = MacAppSigning.ResolveCredentials(
             new MacAppSigningConfiguration
@@ -165,7 +157,7 @@ public sealed class MacSigningTests : IDisposable
     [Fact]
     public void CodesignArguments_HardenedAndEntitlements()
     {
-        var ent = Path.Combine(_root, "e.plist");
+        var ent = Path.Combine(Root, "e.plist");
         File.WriteAllText(ent, "<plist/>");
         var args = MacAppSigning.CodesignArguments(
             "Dev ID", new MacAppSigningConfiguration
@@ -202,7 +194,7 @@ public sealed class MacSigningTests : IDisposable
     [Fact]
     public void PkgSigning_MutexAndStaplingRules()
     {
-        var cert = Path.Combine(_root, "pkg.p12");
+        var cert = Path.Combine(Root, "pkg.p12");
         File.WriteAllText(cert, "stub");
         Assert.Throws<ArgumentException>(() => MacPkgSigning.Validate(
             new MacPkgSigningConfiguration { Identity = "X", TemporaryCertificateFile = cert }));
@@ -240,7 +232,7 @@ public sealed class MacSigningTests : IDisposable
             new MacPkgBundleConfiguration
             {
                 InstallRoot = "/Applications",
-                ScriptsDirectory = Path.Combine(_root, "ghost-scripts"),
+                ScriptsDirectory = Path.Combine(Root, "ghost-scripts"),
             }, Bundle()));
     }
 
@@ -279,7 +271,7 @@ public sealed class MacSigningTests : IDisposable
     [Fact]
     public void DmgConfig_SigningMutexAndEmptyIdentity()
     {
-        var cert = Path.Combine(_root, "dmg.p12");
+        var cert = Path.Combine(Root, "dmg.p12");
         File.WriteAllText(cert, "stub");
         Assert.Throws<ArgumentException>(() => MacDmgBundleBackend.ValidateConfiguration(
             new MacDmgBundleConfiguration
@@ -299,7 +291,7 @@ public sealed class MacSigningTests : IDisposable
             {
                 Signing = new MacDmgSigningConfiguration
                 {
-                    TemporaryCertificateFile = Path.Combine(_root, "ghost.p12"),
+                    TemporaryCertificateFile = Path.Combine(Root, "ghost.p12"),
                 },
             }, Bundle()));
         // "-" ad-hoc 合法：dmg 可以 ad-hoc 签。

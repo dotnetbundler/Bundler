@@ -11,23 +11,20 @@ namespace Bundler.UnitTests.Formats;
 /// deb/rpm/apk 写读器往返：构造最小输入目录 → 写器产包 → 读器解出结构断言字段。
 /// 全托管零进程。
 /// </summary>
-public sealed class PackageRoundTripTests : IDisposable
+public sealed class PackageRoundTripTests : TempBase
 {
-    private readonly string _root = Path.Combine(
-        Path.GetTempPath(), "bundler-ut-" + Guid.NewGuid().ToString("N"));
     private readonly string _input;
     private readonly string _output;
 
     public PackageRoundTripTests()
     {
-        _input = Path.Combine(_root, "input");
-        _output = Path.Combine(_root, "out");
+        _input = Path.Combine(Root, "input");
+        _output = Path.Combine(Root, "out");
         Directory.CreateDirectory(_input);
         File.WriteAllText(Path.Combine(_input, "sample"), "#!/bin/sh\necho hi\n");
         File.WriteAllText(Path.Combine(_input, "readme.txt"), "doc\n");
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
 
     private static BundleConfiguration Bundle() => new()
     {
@@ -134,7 +131,7 @@ public sealed class PackageRoundTripTests : IDisposable
     {
         // 进程内生成临时 RSA 密钥（测试件，不入库）写 PEM，走签名段分支
         using var rsa = System.Security.Cryptography.RSA.Create(2048);
-        var keyPath = Path.Combine(_root, "testkey.pem");
+        var keyPath = Path.Combine(Root, "testkey.pem");
         File.WriteAllText(keyPath, rsa.ExportPkcs8PrivateKeyPem());
 
         var result = ApkPackageWriter.Build(
@@ -162,7 +159,7 @@ public sealed class PackageRoundTripTests : IDisposable
                 {
                     Signing = new KeyFileSigningConfiguration
                     {
-                        KeyFile = Path.Combine(_root, "nope.pem")
+                        KeyFile = Path.Combine(Root, "nope.pem")
                     }
                 },
                 NullBundleLogger.Instance));

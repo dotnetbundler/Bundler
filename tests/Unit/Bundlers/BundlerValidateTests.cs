@@ -13,20 +13,15 @@ namespace Bundler.UnitTests.Bundlers;
 /// 各格式 Bundler 适配器的 Validate 预检面——全在任何子进程/构建副作用之前抛，
 /// 是统一契约：错格式 NotSupported、宿主不符 PNSE、配置错 Argument 族。
 /// </summary>
-public sealed class BundlerValidateTests : IDisposable
+public sealed class BundlerValidateTests : TempBase
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "bundler-validate-" + Guid.NewGuid().ToString("N"));
 
-    public BundlerValidateTests() => Directory.CreateDirectory(_root);
 
-    public void Dispose()
+    public override void Dispose()
     {
         MacDmgBundleBackend.HostCheck = null;
         MacPkgBundleBackend.HostCheck = null;
-        if (Directory.Exists(_root))
-        {
-            Directory.Delete(_root, recursive: true);
-        }
+        base.Dispose();
     }
 
     private BundleConfiguration Bundle(
@@ -38,7 +33,7 @@ public sealed class BundlerValidateTests : IDisposable
         string? licenseFile = null,
         string? payloadName = null)
     {
-        var input = Path.Combine(_root, "in-" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(Root, "in-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(input);
         File.WriteAllText(Path.Combine(input, "app"), "x");
         if (payloadName is not null)
@@ -101,7 +96,7 @@ public sealed class BundlerValidateTests : IDisposable
     [Fact]
     public void Nsis_SigningFiles_WithoutSigner_Rejected()
     {
-        var file = Path.Combine(_root, "s.exe");
+        var file = Path.Combine(Root, "s.exe");
         File.WriteAllText(file, "x");
         Assert.Throws<ArgumentException>(() =>
             new NsisBundler().Validate(Bundle(PackageFormat.Nsis, signingFiles: [file])));
@@ -110,7 +105,7 @@ public sealed class BundlerValidateTests : IDisposable
     [Fact]
     public void Nsis_IconsWithoutIco_Rejected()
     {
-        var png = Path.Combine(_root, "icon.png");
+        var png = Path.Combine(Root, "icon.png");
         File.WriteAllText(png, "x");
         Assert.Throws<ArgumentException>(() =>
             new NsisBundler().Validate(Bundle(PackageFormat.Nsis, icons: [png])));
@@ -121,10 +116,7 @@ public sealed class BundlerValidateTests : IDisposable
     {
         // NUL 在 Win32 是设备名——预检在打包前拒。
         // Windows 主机上 NUL 根本建不出来（IO 先抛）——仅在 POSIX 腿跑。
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "NUL 文件名在 Windows 建不出来");
         Assert.Throws<ArgumentException>(() =>
             new NsisBundler().Validate(Bundle(PackageFormat.Nsis, payloadName: "NUL")));
     }
@@ -134,10 +126,7 @@ public sealed class BundlerValidateTests : IDisposable
     [Fact]
     public void Wix_NonWindowsHost_Rejected()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "PNSE 支路只在非 Windows 触发");
         Assert.Throws<PlatformNotSupportedException>(() =>
             new WixBundler().Validate(Bundle(PackageFormat.Msi)));
     }
@@ -145,10 +134,7 @@ public sealed class BundlerValidateTests : IDisposable
     [Fact]
     public void Wix_UtfCodepage_Rejected()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            return; // 校验顺序：宿主门在先
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "codepage 校验在宿主门之后，非 Windows 走不到");
         Assert.Throws<ArgumentException>(() => new WixBundler(
             new WixBundleConfiguration { Codepage = 65001 }).Validate(Bundle(PackageFormat.Msi)));
     }
@@ -181,7 +167,7 @@ public sealed class BundlerValidateTests : IDisposable
     [Fact]
     public void MacApp_LicenseFile_Rejected()
     {
-        var lic = Path.Combine(_root, "LICENSE.rtf");
+        var lic = Path.Combine(Root, "LICENSE.rtf");
         File.WriteAllText(lic, "x");
         Assert.Throws<NotSupportedException>(() =>
             new MacAppBundler().Validate(Bundle(PackageFormat.App, licenseFile: lic)));
@@ -191,7 +177,7 @@ public sealed class BundlerValidateTests : IDisposable
     public void MacApp_SigningFiles_Rejected()
     {
         Assert.Throws<NotSupportedException>(() => new MacAppBundler().Validate(
-            Bundle(PackageFormat.App, signingFiles: [Path.Combine(_root, "x")])));
+            Bundle(PackageFormat.App, signingFiles: [Path.Combine(Root, "x")])));
     }
 
     [Fact]
@@ -204,12 +190,12 @@ public sealed class BundlerValidateTests : IDisposable
     [Fact]
     public void MacApp_IconFormats_Whitelist()
     {
-        var bad = Path.Combine(_root, "icon.bmp");
+        var bad = Path.Combine(Root, "icon.bmp");
         File.WriteAllText(bad, "x");
         Assert.Throws<ArgumentException>(() =>
             new MacAppBundler().Validate(Bundle(PackageFormat.App, icons: [bad])));
 
-        var icns = Path.Combine(_root, "icon.icns");
+        var icns = Path.Combine(Root, "icon.icns");
         File.WriteAllText(icns, "x");
         var ex = Record.Exception(() =>
             new MacAppBundler().Validate(Bundle(PackageFormat.App, icons: [icns])));
@@ -230,7 +216,7 @@ public sealed class BundlerValidateTests : IDisposable
     [Fact]
     public void MacApp_InfoPlistMutex()
     {
-        var plist = Path.Combine(_root, "Info.plist");
+        var plist = Path.Combine(Root, "Info.plist");
         File.WriteAllText(plist, "<plist/>");
         var config = new MacAppBundleConfiguration
         {

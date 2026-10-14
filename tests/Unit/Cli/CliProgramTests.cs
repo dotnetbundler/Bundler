@@ -3,13 +3,9 @@ using DotNet.Bundler.Cli;
 namespace Bundler.UnitTests.Cli;
 
 /// <summary>CliProgram.Run 进程内驱动：退出码表与 stdout/stderr 契约。</summary>
-public sealed class CliProgramTests : IDisposable
+public sealed class CliProgramTests : TempBase
 {
-    private readonly string _dir = Path.Combine(
-        Path.GetTempPath(), "bundler-ut-" + Guid.NewGuid().ToString("N"));
 
-    public CliProgramTests() => Directory.CreateDirectory(_dir);
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
 
     private static (int Code, string Stdout, string Stderr) Run(params string[] args)
     {
@@ -63,7 +59,7 @@ public sealed class CliProgramTests : IDisposable
     [Fact]
     public void Run_UpdateKeygen_WritesKey_PublicOnStdout()
     {
-        var keyPath = Path.Combine(_dir, "keys", "k.pem");
+        var keyPath = Path.Combine(Root, "keys", "k.pem");
         var (code, stdout, _) = Run("update-keygen", "--key-file", keyPath);
         Assert.Equal(0, code);
         Assert.True(File.Exists(keyPath));
@@ -84,10 +80,10 @@ public sealed class CliProgramTests : IDisposable
         var previous = Directory.GetCurrentDirectory();
         try
         {
-            Directory.SetCurrentDirectory(_dir);
+            Directory.SetCurrentDirectory(Root);
             var (code, stdout, _) = Run("init");
             Assert.Equal(0, code);
-            var config = Path.Combine(_dir, "bundler.json");
+            var config = Path.Combine(Root, "bundler.json");
             Assert.True(File.Exists(config));
             Assert.Contains("productName", File.ReadAllText(config));
 
@@ -112,8 +108,8 @@ public sealed class CliProgramTests : IDisposable
     [Fact]
     public void Run_Validate_ValidConfig_Zero()
     {
-        var input = Path.Combine(_dir, "in");
-        var output = Path.Combine(_dir, "out");
+        var input = Path.Combine(Root, "in");
+        var output = Path.Combine(Root, "out");
         Directory.CreateDirectory(input);
         File.WriteAllText(Path.Combine(input, "sample"), "#!/bin/sh\n");
 
@@ -131,7 +127,7 @@ public sealed class CliProgramTests : IDisposable
     {
         var (code, _, stderr) = Run("validate", "--no-config",
             "--target", "linux-x86_64", "--formats", "deb",
-            "--input-dir", _dir, "--output-dir", Path.Combine(_dir, "out"),
+            "--input-dir", Root, "--output-dir", Path.Combine(Root, "out"),
             "--product-name", "", "--identifier", "com.example.sample",
             "--package-version", "1.0.0");
         Assert.Equal(2, code);
@@ -141,8 +137,8 @@ public sealed class CliProgramTests : IDisposable
     [Fact]
     public void Run_Plan_ListsItems()
     {
-        var input = Path.Combine(_dir, "in");
-        var output = Path.Combine(_dir, "out");
+        var input = Path.Combine(Root, "in");
+        var output = Path.Combine(Root, "out");
         Directory.CreateDirectory(input);
         File.WriteAllText(Path.Combine(input, "sample"), "#!/bin/sh\n");
 
@@ -159,13 +155,13 @@ public sealed class CliProgramTests : IDisposable
     [Fact]
     public void Run_Plan_Json_FormatsStructured()
     {
-        var input = Path.Combine(_dir, "in");
+        var input = Path.Combine(Root, "in");
         Directory.CreateDirectory(input);
         File.WriteAllText(Path.Combine(input, "sample"), "x");
 
         var (code, stdout, _) = Run("plan", "--no-config", "--json",
             "--target", "linux-x86_64", "--formats", "deb,zip",
-            "--input-dir", input, "--output-dir", Path.Combine(_dir, "out"),
+            "--input-dir", input, "--output-dir", Path.Combine(Root, "out"),
             "--product-name", "Sample", "--identifier", "com.example.sample",
             "--package-version", "1.0.0");
         Assert.Equal(0, code);

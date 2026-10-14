@@ -8,16 +8,12 @@ namespace Bundler.UnitTests.Updater;
 /// <see cref="UstarReader"/> 提取防线：常规文件/目录落地、路径逃逸拒绝、
 /// 符号链接围界判定与预扫描。
 /// </summary>
-public sealed class UstarReaderTests : IDisposable
+public sealed class UstarReaderTests : TempBase
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "ustar-" + Guid.NewGuid().ToString("N"));
 
-    public void Dispose()
+    public override void Dispose()
     {
-        if (Directory.Exists(_root))
-        {
-            Directory.Delete(_root, recursive: true);
-        }
+        base.Dispose();
     }
 
     private static MemoryStream TarOf(params TarEntry[] entries)
@@ -31,7 +27,7 @@ public sealed class UstarReaderTests : IDisposable
     [Fact]
     public void Extract_FileAndDirectory_LayoutsContent()
     {
-        var destination = Path.Combine(_root, "out");
+        var destination = Path.Combine(Root, "out");
         // 文件执行位会触发 TryChmod 的 /bin/chmod 子进程——单元层只用 0644 文件，
         // 可执行位保留与 chmod 线归集成层。
         using var tar = TarOf(
@@ -51,7 +47,7 @@ public sealed class UstarReaderTests : IDisposable
     [InlineData("/abs/escape.txt")]
     public void Extract_EscapingEntryName_Rejected(string name)
     {
-        var destination = Path.Combine(_root, "esc-" + name.GetHashCode(StringComparison.Ordinal).ToString("x8"));
+        var destination = Path.Combine(Root, "esc-" + name.GetHashCode(StringComparison.Ordinal).ToString("x8"));
         Directory.CreateDirectory(destination);
         using var tar = TarOf(new TarEntry { Name = name, Kind = TarEntryKind.File, Content = "x"u8.ToArray() });
         Assert.Throws<UpdateException>(() => UstarReader.Extract(tar, destination));
@@ -60,7 +56,7 @@ public sealed class UstarReaderTests : IDisposable
     [Fact]
     public void LinkEscapesRoot_PathRelations()
     {
-        var root = Path.Combine(_root, "stage");
+        var root = Path.Combine(Root, "stage");
         var linkAt = Path.Combine(root, "sub", "link");
         Directory.CreateDirectory(Path.GetDirectoryName(linkAt)!);
 
@@ -68,13 +64,13 @@ public sealed class UstarReaderTests : IDisposable
         Assert.False(UstarReader.LinkEscapesRoot("../target.txt", linkAt, root));
         Assert.True(UstarReader.LinkEscapesRoot("../../escape.txt", linkAt, root));
         Assert.True(UstarReader.LinkEscapesRoot(
-            Path.Combine(_root, "outside.txt"), linkAt, root));
+            Path.Combine(Root, "outside.txt"), linkAt, root));
     }
 
     [Fact]
     public void ContainsEscapingLink_SafeArchive_False()
     {
-        var root = Path.Combine(_root, "safe");
+        var root = Path.Combine(Root, "safe");
         Directory.CreateDirectory(root);
         using var tar = TarOf(
             new TarEntry { Name = "app/", Kind = TarEntryKind.Directory, Mode = 493 },
@@ -85,7 +81,7 @@ public sealed class UstarReaderTests : IDisposable
     [Fact]
     public void ContainsEscapingLink_EscapingTarget_True()
     {
-        var root = Path.Combine(_root, "unsafe");
+        var root = Path.Combine(Root, "unsafe");
         Directory.CreateDirectory(root);
         using var tar = TarOf(
             new TarEntry { Name = "app/link", Kind = TarEntryKind.Symlink, LinkTarget = "../../../../etc/passwd" });
@@ -98,9 +94,9 @@ public sealed class UstarReaderTests : IDisposable
         if (OperatingSystem.IsWindows())
         {
             // Windows 开发机通常无符号链接特权——CreateSymlink 内 ln 不可用即跳过。
-            return;
+            Assert.Skip("符号链接创建在 Windows 需特权");
         }
-        var destination = Path.Combine(_root, "linked");
+        var destination = Path.Combine(Root, "linked");
         using var tar = TarOf(
             new TarEntry { Name = "real.txt", Kind = TarEntryKind.File, Content = "c"u8.ToArray() },
             new TarEntry { Name = "link", Kind = TarEntryKind.Symlink, LinkTarget = "real.txt" });

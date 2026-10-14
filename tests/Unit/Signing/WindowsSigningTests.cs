@@ -39,10 +39,7 @@ public sealed class WindowsAuthenticodeSignerTests
     [Fact]
     public async Task SignAsync_NonWindows_Pnse()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return; // Windows 上该支路不可达
-        }
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "PNSE 支路只在非 Windows 触发");
         var signer = new WindowsAuthenticodeSigner(
             new WindowsAuthenticodeSigningOptions { PfxFile = "a.pfx" });
         await Assert.ThrowsAsync<PlatformNotSupportedException>(() =>
@@ -54,10 +51,7 @@ public sealed class WindowsAuthenticodeSignerTests
     [Fact]
     public async Task SignAsync_MissingFile_Throws()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            return; // 文件存在性检查在 PNSE 门禁之后——非 Windows 走不到
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "文件存在性检查在宿主门之后");
         var signer = new WindowsAuthenticodeSigner(
             new WindowsAuthenticodeSigningOptions { PfxFile = "a.pfx" });
         await Assert.ThrowsAsync<FileNotFoundException>(() =>

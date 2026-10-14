@@ -6,17 +6,13 @@ namespace Bundler.UnitTests.Cli;
 /// bundler.json 解析与 CLI 覆盖合并面。全部经 --config 指到临时文件，
 /// 不依赖 cwd 发现（发现路径由 CliProgram/init 侧覆盖）。
 /// </summary>
-public sealed class CliConfigTests : IDisposable
+public sealed class CliConfigTests : TempBase
 {
-    private readonly string _dir = Path.Combine(
-        Path.GetTempPath(), "bundler-ut-" + Guid.NewGuid().ToString("N"));
 
-    public CliConfigTests() => Directory.CreateDirectory(_dir);
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
 
     private string WriteConfig(string json)
     {
-        var path = Path.Combine(_dir, "bundler.json");
+        var path = Path.Combine(Root, "bundler.json");
         File.WriteAllText(path, json);
         return path;
     }
@@ -100,7 +96,7 @@ public sealed class CliConfigTests : IDisposable
               "targets": [ { "target": "linux-x86_64", "inputDirectory": "in",
                              "formats": ["deb"] } ] }
             """);
-        Assert.Equal(Path.GetFullPath(Path.Combine(_dir, "scripts/post.sh")),
+        Assert.Equal(Path.GetFullPath(Path.Combine(Root, "scripts/post.sh")),
             resolved.Deb?.PostInstallFile);
     }
 
@@ -175,7 +171,7 @@ public sealed class CliConfigTests : IDisposable
     public void Resolve_MissingConfigFile_Rejected()
     {
         var parsed = CliArguments.Parse(
-            ["bundle", "--config", Path.Combine(_dir, "absent.json")]);
+            ["bundle", "--config", Path.Combine(Root, "absent.json")]);
         Assert.Throws<CliUsageException>(() => CliConfig.Resolve(parsed));
     }
 
@@ -202,7 +198,7 @@ public sealed class CliConfigTests : IDisposable
     [Fact]
     public void Resolve_MainExecutable_InferredFromSingleExe()
     {
-        var input = Path.Combine(_dir, "input");
+        var input = Path.Combine(Root, "input");
         Directory.CreateDirectory(input);
         if (OperatingSystem.IsWindows())
         {

@@ -8,26 +8,21 @@ namespace Bundler.UnitTests.UpdaterBootstrap;
 /// 测试恒不传 <c>--app</c>/<c>--wait-pid</c>，<see cref="BootstrapPlan.ForceManagedCopy"/>
 /// 置真让 POSIX 腿也走托管复制，保证零子进程。
 /// </summary>
-public sealed class BootstrapPlanTests : IDisposable
+public sealed class BootstrapPlanTests : TempBase
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "bp-" + Guid.NewGuid().ToString("N"));
     private readonly List<string> _log = [];
 
     public BootstrapPlanTests()
     {
-        Directory.CreateDirectory(_root);
         BootstrapPlan.ForceManagedCopy = true;
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         BootstrapPlan.ForceManagedCopy = false;
         BootstrapPlan.FreeSpaceProbe = null;
         BootstrapPlan.IoFaultProbe = null;
-        if (Directory.Exists(_root))
-        {
-            Directory.Delete(_root, recursive: true);
-        }
+        base.Dispose();
     }
 
     // ---- 参数面 / 退出码 ----
@@ -47,13 +42,13 @@ public sealed class BootstrapPlanTests : IDisposable
     [Fact]
     public void Main_MissingInstallDir_UsageError2()
     {
-        Assert.Equal(2, DotNet.Bundler.Updater.Bootstrap.Program.Main(["apply", "--payload", Path.Combine(_root, "p")]));
+        Assert.Equal(2, DotNet.Bundler.Updater.Bootstrap.Program.Main(["apply", "--payload", Path.Combine(Root, "p")]));
     }
 
     [Fact]
     public void Main_MissingPayload_UsageError2()
     {
-        var install = Path.Combine(_root, "i1");
+        var install = Path.Combine(Root, "i1");
         Assert.Equal(2, DotNet.Bundler.Updater.Bootstrap.Program.Main(["apply", "--install-dir", install]));
     }
 
@@ -65,8 +60,8 @@ public sealed class BootstrapPlanTests : IDisposable
     [InlineData("--lock-timeout", "-1")]
     public void Main_InvalidNumericOption_UsageError2(string option, string value)
     {
-        var install = Path.Combine(_root, "i-" + option.TrimStart('-'));
-        var payload = Path.Combine(_root, "p-" + option.TrimStart('-'));
+        var install = Path.Combine(Root, "i-" + option.TrimStart('-'));
+        var payload = Path.Combine(Root, "p-" + option.TrimStart('-'));
         Assert.Equal(2, DotNet.Bundler.Updater.Bootstrap.Program.Main(
             ["apply", "--install-dir", install, "--payload", payload, option, value]));
     }
@@ -75,8 +70,8 @@ public sealed class BootstrapPlanTests : IDisposable
     public void Main_UnknownOption_UsageError2()
     {
         Assert.Equal(2, DotNet.Bundler.Updater.Bootstrap.Program.Main(
-            ["apply", "--install-dir", Path.Combine(_root, "i"), "--payload",
-             Path.Combine(_root, "p"), "--frobnicate", "x"]));
+            ["apply", "--install-dir", Path.Combine(Root, "i"), "--payload",
+             Path.Combine(Root, "p"), "--frobnicate", "x"]));
     }
 
     // ---- 换包语义 ----
@@ -124,7 +119,7 @@ public sealed class BootstrapPlanTests : IDisposable
     {
         var install = Dir("install-retain", ("app.txt", "old"));
         var payload = Dir("payload-retain", ("app.txt", "new"));
-        var retain = Path.Combine(_root, "rollback-points");
+        var retain = Path.Combine(Root, "rollback-points");
 
         var rc = Apply(new BootstrapOptions
         {
@@ -225,7 +220,7 @@ public sealed class BootstrapPlanTests : IDisposable
     {
         Assert.Throws<UsageException>(() => Apply(new BootstrapOptions
         {
-            InstallDirectory = Path.Combine(_root, "does-not-exist"),
+            InstallDirectory = Path.Combine(Root, "does-not-exist"),
             PayloadDirectory = Dir("payload-m", ("a", "b")),
         }));
     }
@@ -237,16 +232,16 @@ public sealed class BootstrapPlanTests : IDisposable
         Assert.Throws<UsageException>(() => Apply(new BootstrapOptions
         {
             InstallDirectory = install,
-            PayloadDirectory = Path.Combine(_root, "no-payload"),
+            PayloadDirectory = Path.Combine(Root, "no-payload"),
         }));
     }
 
     [Fact]
     public void Apply_FileInstallUnit_SwapsSingleFile()
     {
-        var installFile = Path.Combine(_root, "app.AppImage");
+        var installFile = Path.Combine(Root, "app.AppImage");
         File.WriteAllText(installFile, "old-image");
-        var payloadFile = Path.Combine(_root, "new.AppImage");
+        var payloadFile = Path.Combine(Root, "new.AppImage");
         File.WriteAllText(payloadFile, "new-image");
 
         var rc = Apply(new BootstrapOptions
@@ -263,7 +258,7 @@ public sealed class BootstrapPlanTests : IDisposable
     [Fact]
     public void Apply_FileRollback_RestoresBackupFile()
     {
-        var installFile = Path.Combine(_root, "tool.AppImage");
+        var installFile = Path.Combine(Root, "tool.AppImage");
         File.WriteAllText(installFile, "broken-image");
         File.WriteAllText(installFile + ".bundler-backup", "good-image");
 
@@ -358,7 +353,7 @@ public sealed class BootstrapPlanTests : IDisposable
 
     private string Dir(string relative, params (string Name, string Content)[] files)
     {
-        var path = Path.Combine(_root, relative);
+        var path = Path.Combine(Root, relative);
         Directory.CreateDirectory(path);
         foreach (var (name, content) in files)
         {

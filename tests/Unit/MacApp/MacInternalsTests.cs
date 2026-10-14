@@ -4,21 +4,16 @@ using DotNet.Bundler.MacApp;
 namespace Bundler.UnitTests.MacApp;
 
 /// <summary>macOS 纯托管内件：plist 读写、Mach-O/FAT 解析与合成、icns 装配、PE 探测。</summary>
-public sealed class MacInternalsTests : IDisposable
+public sealed class MacInternalsTests : TempBase
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "mac-" + Guid.NewGuid().ToString("N"));
 
     public MacInternalsTests()
     {
-        Directory.CreateDirectory(_root);
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
-        if (Directory.Exists(_root))
-        {
-            Directory.Delete(_root, recursive: true);
-        }
+        base.Dispose();
     }
 
     // ---- InfoPlist ----
@@ -26,7 +21,7 @@ public sealed class MacInternalsTests : IDisposable
     [Fact]
     public void InfoPlist_WriteThenRead_RoundTripsValues()
     {
-        var path = Path.Combine(_root, "Info.plist");
+        var path = Path.Combine(Root, "Info.plist");
         InfoPlist.Write(path, new Dictionary<string, object>
         {
             ["CFBundleName"] = "Sample",
@@ -63,7 +58,7 @@ public sealed class MacInternalsTests : IDisposable
 
     private string WriteThinMachO(uint cpuTypeLe, bool le64 = true)
     {
-        var path = Path.Combine(_root, "thin-" + Guid.NewGuid().ToString("N")[..6] + ".bin");
+        var path = Path.Combine(Root, "thin-" + Guid.NewGuid().ToString("N")[..6] + ".bin");
         var bytes = new byte[32];
         // MH_CIGAM_64：盘上小端魔数 0xCFFAEDFE → 大端读得该值。
         bytes[0] = 0xCF; bytes[1] = 0xFA; bytes[2] = 0xED; bytes[3] = 0xFE;
@@ -86,7 +81,7 @@ public sealed class MacInternalsTests : IDisposable
     [Fact]
     public void MachO_NonMachO_EmptyList()
     {
-        var path = Path.Combine(_root, "not.bin");
+        var path = Path.Combine(Root, "not.bin");
         File.WriteAllBytes(path, [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
         Assert.Empty(MachO.ReadArchitectures(path));
         Assert.False(MachO.IsMachO(path));
@@ -96,7 +91,7 @@ public sealed class MacInternalsTests : IDisposable
     [Fact]
     public void MachO_TruncatedFile_EmptyList()
     {
-        var path = Path.Combine(_root, "tiny.bin");
+        var path = Path.Combine(Root, "tiny.bin");
         File.WriteAllBytes(path, [0xCF, 0xFA]);
         Assert.Empty(MachO.ReadArchitectures(path));
     }
@@ -108,7 +103,7 @@ public sealed class MacInternalsTests : IDisposable
     {
         var x64 = Encoding.ASCII.GetBytes("x86_64-code-bytes");
         var arm = Encoding.ASCII.GetBytes("arm64-code-bytes!");
-        var output = Path.Combine(_root, "fat.bin");
+        var output = Path.Combine(Root, "fat.bin");
 
         MachOFat.Create(output,
         [
@@ -175,7 +170,7 @@ public sealed class MacInternalsTests : IDisposable
     [Fact]
     public void PE_ManagedAssembly_CliDirectorySet()
     {
-        var path = Path.Combine(_root, "managed.dll");
+        var path = Path.Combine(Root, "managed.dll");
         var bytes = new byte[0x200];
         bytes[0] = (byte)'M'; bytes[1] = (byte)'Z';
         const int pe = 0x80;
@@ -193,7 +188,7 @@ public sealed class MacInternalsTests : IDisposable
     [Fact]
     public void PE_NativeAssembly_CliDirectoryZeroed()
     {
-        var path = Path.Combine(_root, "native.exe");
+        var path = Path.Combine(Root, "native.exe");
         var bytes = new byte[0x200];
         bytes[0] = (byte)'M'; bytes[1] = (byte)'Z';
         const int pe = 0x80;
@@ -207,7 +202,7 @@ public sealed class MacInternalsTests : IDisposable
     [Fact]
     public void PE_NonPe_False()
     {
-        var path = Path.Combine(_root, "elf.bin");
+        var path = Path.Combine(Root, "elf.bin");
         File.WriteAllBytes(path, [0x7F, (byte)'E', (byte)'L', (byte)'F']);
         Assert.False(PortableExecutable.IsManagedAssembly(path));
     }
@@ -219,7 +214,7 @@ public sealed class MacInternalsTests : IDisposable
     {
         var a = Dir("a", ("shared.txt", "same-bytes"));
         var b = Dir("b", ("shared.txt", "same-bytes"));
-        var output = Path.Combine(_root, "merged");
+        var output = Path.Combine(Root, "merged");
 
         MacUniversalPayloadMerger.Merge([a, b], output);
 
@@ -231,7 +226,7 @@ public sealed class MacInternalsTests : IDisposable
     {
         var a = Dir("a2", ("only-a.txt", "a"));
         var b = Dir("b2", ("only-b.txt", "b"));
-        var output = Path.Combine(_root, "merged2");
+        var output = Path.Combine(Root, "merged2");
 
         MacUniversalPayloadMerger.Merge([a, b], output);
 
@@ -246,7 +241,7 @@ public sealed class MacInternalsTests : IDisposable
         var b = Dir("b3");
         File.WriteAllBytes(Path.Combine(a, "lib.dylib"), ThinMachOBytes(0x01000007));
         File.WriteAllBytes(Path.Combine(b, "lib.dylib"), ThinMachOBytes(0x0100000C));
-        var output = Path.Combine(_root, "merged3");
+        var output = Path.Combine(Root, "merged3");
 
         MacUniversalPayloadMerger.Merge([a, b], output);
 
@@ -260,7 +255,7 @@ public sealed class MacInternalsTests : IDisposable
         var a = Dir("a4");
         var b = Dir("b4", ("note.txt", "n"));
         File.WriteAllBytes(Path.Combine(a, "solo.dylib"), ThinMachOBytes(0x01000007));
-        var output = Path.Combine(_root, "merged4");
+        var output = Path.Combine(Root, "merged4");
 
         Assert.Throws<InvalidDataException>(() => MacUniversalPayloadMerger.Merge([a, b], output));
     }
@@ -270,7 +265,7 @@ public sealed class MacInternalsTests : IDisposable
     {
         var a = Dir("a5", ("conf.dat", "aaa"));
         var b = Dir("b5", ("conf.dat", "bbb"));
-        var output = Path.Combine(_root, "merged5");
+        var output = Path.Combine(Root, "merged5");
 
         Assert.Throws<InvalidDataException>(() => MacUniversalPayloadMerger.Merge([a, b], output));
     }
@@ -281,7 +276,7 @@ public sealed class MacInternalsTests : IDisposable
         var a = Dir("a6", ("conf.dat", "aaa"));
         var b = Dir("b6", ("conf.dat", "bbb"));
         var reference = Dir("ref6", ("conf.dat", "neutral"));
-        var output = Path.Combine(_root, "merged6");
+        var output = Path.Combine(Root, "merged6");
 
         MacUniversalPayloadMerger.Merge([a, b], output, reference);
 
@@ -293,9 +288,9 @@ public sealed class MacInternalsTests : IDisposable
     {
         var a = Dir("a7");
         Assert.Throws<ArgumentException>(() =>
-            MacUniversalPayloadMerger.Merge([a], Path.Combine(_root, "m")));
+            MacUniversalPayloadMerger.Merge([a], Path.Combine(Root, "m")));
         Assert.Throws<DirectoryNotFoundException>(() =>
-            MacUniversalPayloadMerger.Merge([a, Path.Combine(_root, "ghost")], Path.Combine(_root, "m2")));
+            MacUniversalPayloadMerger.Merge([a, Path.Combine(Root, "ghost")], Path.Combine(Root, "m2")));
         var nonEmpty = Dir("nonempty", ("x", "y"));
         Assert.Throws<IOException>(() =>
             MacUniversalPayloadMerger.Merge([a, Dir("b7")], nonEmpty));
@@ -314,7 +309,7 @@ public sealed class MacInternalsTests : IDisposable
 
     private string Dir(string name, params (string File, string Content)[] files)
     {
-        var path = Path.Combine(_root, name);
+        var path = Path.Combine(Root, name);
         Directory.CreateDirectory(path);
         foreach (var (file, content) in files)
         {

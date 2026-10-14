@@ -7,23 +7,18 @@ namespace Bundler.UnitTests.Wix;
 /// 结构校验面（文件存在/根元素/Culture/Id）与编码校验面分离——后者走
 /// WideCharToMultiByte 只在 Windows 宿主可验，codepage=0 时跳过编码校验。
 /// </summary>
-public sealed class WixLocaleTests : IDisposable
+public sealed class WixLocaleTests : TempBase
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "wixlocale-" + Guid.NewGuid().ToString("N"));
 
-    public WixLocaleTests() => Directory.CreateDirectory(_root);
 
-    public void Dispose()
+    public override void Dispose()
     {
-        if (Directory.Exists(_root))
-        {
-            Directory.Delete(_root, recursive: true);
-        }
+        base.Dispose();
     }
 
     private string WriteWxl(string body, string name = "custom.wxl")
     {
-        var path = Path.Combine(_root, name);
+        var path = Path.Combine(Root, name);
         File.WriteAllText(path, body);
         return path;
     }
@@ -47,7 +42,7 @@ public sealed class WixLocaleTests : IDisposable
     public void ReadCallerStrings_MissingOrWrongExtension_Rejected()
     {
         Assert.Throws<ArgumentException>(() =>
-            WixLocale.ReadCallerStrings(Path.Combine(_root, "ghost.wxl"), En, 0));
+            WixLocale.ReadCallerStrings(Path.Combine(Root, "ghost.wxl"), En, 0));
         var txt = WriteWxl("<x/>", "strings.txt");
         Assert.Throws<ArgumentException>(() => WixLocale.ReadCallerStrings(txt, En, 0));
     }
@@ -105,10 +100,7 @@ public sealed class WixLocaleTests : IDisposable
     [Fact]
     public void UnencodableIds_RealCodepage_WindowsOnly()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            return; // WideCharToMultiByte 是 Windows 内核 API
-        }
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "WideCharToMultiByte 是 Windows 内核 API");
         var bad = WixLocale.UnencodableIds(
             new Dictionary<string, string> { ["Chinese"] = "中文" }, 1252);
         Assert.Equal(["Chinese"], bad);
