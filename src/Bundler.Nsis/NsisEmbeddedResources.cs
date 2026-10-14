@@ -63,7 +63,7 @@ internal static class NsisEmbeddedResources
 
         Directory.CreateDirectory(lockDirectory);
         var lockPath = Path.Combine(lockDirectory, expected + ".lock");
-        using var resourceLock = await AcquireLockAsync(lockPath, cancellationToken);
+        using var resourceLock = await ToolCache.AcquireLockAsync(lockPath, cancellationToken);
 
         if (File.Exists(destinationPath) && HashFile(destinationPath).Equals(expected, StringComparison.OrdinalIgnoreCase))
         {
@@ -101,22 +101,6 @@ internal static class NsisEmbeddedResources
             if (File.Exists(temporaryPath))
             {
                 File.Delete(temporaryPath);
-            }
-        }
-    }
-
-    private static async Task<FileStream> AcquireLockAsync(string path, CancellationToken cancellationToken)
-    {
-        while (true)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-            }
-            catch (IOException)
-            {
-                await Task.Delay(50, cancellationToken);
             }
         }
     }

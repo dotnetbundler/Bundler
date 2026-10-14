@@ -7,12 +7,17 @@ namespace DotNet.Bundler.Core;
 /// <summary>Shared hashing helpers: lowercase-hex digests used by package writers and tool verification.</summary>
 internal static class Hashes
 {
-    internal static string ToLowerHex(byte[] hash)
+    internal static string ToLowerHex(byte[] hash) => ToHex(hash, "x2");
+
+    /// <summary>大写 hex（MSI 身份指纹、清单等 Ordinal 比较处的契约形态）。</summary>
+    internal static string ToUpperHex(byte[] hash) => ToHex(hash, "X2");
+
+    private static string ToHex(byte[] hash, string format)
     {
         var builder = new StringBuilder(hash.Length * 2);
         foreach (var b in hash)
         {
-            builder.Append(b.ToString("x2", CultureInfo.InvariantCulture));
+            builder.Append(b.ToString(format, CultureInfo.InvariantCulture));
         }
         return builder.ToString();
     }
