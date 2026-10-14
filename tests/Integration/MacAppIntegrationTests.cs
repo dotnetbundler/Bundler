@@ -162,7 +162,7 @@ public sealed class MacAppFixture : IDisposable
         Assert.DoesNotContain("\"DotNet.Bundler", File.ReadAllText(assets));
     }
 
-    public void Dispose() => Ws.Dispose();
+    public void Dispose() => Ws?.Dispose();
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("macos")]

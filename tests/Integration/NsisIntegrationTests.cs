@@ -296,7 +296,7 @@ public sealed class NsisFixture : IAsyncLifetime
                 cng.Key.Delete();
             }
         }
-        Ws.Dispose();
+        Ws?.Dispose();
         return ValueTask.CompletedTask;
     }
 }

@@ -110,11 +110,11 @@ public sealed class MacDmgFixture : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(MountRoot))
+        if (MountRoot is not null && Directory.Exists(MountRoot))
         {
             ProcessRunner.Run("hdiutil", ["detach", MountRoot, "-force"]);
         }
-        Ws.Dispose();
+        Ws?.Dispose();
     }
 }
 

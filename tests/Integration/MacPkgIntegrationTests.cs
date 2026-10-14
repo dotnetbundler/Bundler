@@ -199,7 +199,7 @@ public sealed class MacPkgFixture : IDisposable
         _hiddenApps.Clear();
     }
 
-    public void Dispose() => Ws.Dispose();
+    public void Dispose() => Ws?.Dispose();
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("macos")]
