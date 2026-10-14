@@ -79,7 +79,6 @@ internal static class RpmPackageWriter
             }
         }
 
-
         ValidateSigning(settings);
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
         // cpio 直写 gzip→输出目录旁的临时文件（/tmp 小卷不堵构建——目标目录
@@ -645,61 +644,24 @@ internal static class RpmPackageWriter
 
         var input = item.InputDirectory;
         var mainExecutable = item.MainExecutable.Replace('\\', '/');
-        foreach (var directory in Directory.GetDirectories(input, "*", SearchOption.AllDirectories)
-                     .OrderBy(path => path, StringComparer.Ordinal))
+        foreach (var sourceItem in PayloadSource.CollectInput(input, installRoot, mainExecutable, logger))
         {
-            var relative = ToPosixPath(RelativePath(input, directory));
-            var archivePath = installRoot + "/" + relative;
-            ClaimDirectory(archivePath.Substring(0, archivePath.LastIndexOf('/')));
-            directories.Add(archivePath);
-        }
-        foreach (var file in Directory.GetFiles(input, "*", SearchOption.AllDirectories)
-                     .OrderBy(path => path, StringComparer.Ordinal))
-        {
-            // Sockets, FIFOs and device nodes cannot be packaged; skip them.
-            if (!UnixFileTypes.IsRegularFile(file))
+            if (sourceItem.Kind == PayloadSourceKind.Directory)
             {
-                logger.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
-                continue;
-            }
-            var relative = ToPosixPath(RelativePath(input, file));
-            var mode = string.Equals(relative, mainExecutable, StringComparison.Ordinal)
-                ? 493 /* 0755 */ : 420 /* 0644 */;
-            AddFile(installRoot + "/" + relative, file, mode);
-        }
-
-        foreach (var resource in bundle.Resources)
-        {
-            var target = resource.Destination.Replace('\\', '/').Trim('/');
-            if (target.Length == 0 || target.Split('/').Contains(".."))
-            {
-                throw new ArgumentException(
-                    $"The resource target must stay inside the payload: '{resource.Destination}'.");
-            }
-            var source = Path.GetFullPath(resource.Source);
-            if (Directory.Exists(source))
-            {
-                foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories)
-                             .OrderBy(path => path, StringComparer.Ordinal))
-                {
-                    if (!UnixFileTypes.IsRegularFile(file))
-                    {
-                        logger.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
-                        continue;
-                    }
-                    var relative = ToPosixPath(RelativePath(source, file));
-                    AddFile(installRoot + "/" + target + "/" + relative, file, 420 /* 0644 */);
-                }
-            }
-            else if (File.Exists(source))
-            {
-                AddFile(installRoot + "/" + target, source, 420 /* 0644 */);
+                ClaimDirectory(sourceItem.ArchivePath.Substring(0, sourceItem.ArchivePath.LastIndexOf('/')));
+                directories.Add(sourceItem.ArchivePath);
             }
             else
             {
-                throw new FileNotFoundException(
-                    $"The resource source does not exist: {source}", source);
+                AddFile(sourceItem.ArchivePath, sourceItem.SourcePath!, sourceItem.Mode);
             }
+        }
+
+        // includeDirectories=false 时只产 File 项；改 true 须先处理 Directory 项。
+        foreach (var sourceItem in PayloadSource.CollectResources(bundle.Resources, installRoot, logger))
+        {
+            System.Diagnostics.Debug.Assert(sourceItem.Kind == PayloadSourceKind.File);
+            AddFile(sourceItem.ArchivePath, sourceItem.SourcePath!, sourceItem.Mode);
         }
 
         // Desktop integration (shared with the .deb backend): a generated or
@@ -904,24 +866,6 @@ internal static class RpmPackageWriter
         }
     }
 
-    private static string RelativePath(string baseDirectory, string path)
-    {
-        var prefix = Path.GetFullPath(baseDirectory)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
-            Path.DirectorySeparatorChar;
-        var full = Path.GetFullPath(path);
-        if (!full.StartsWith(prefix, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"A payload path escapes its base directory: '{path}'.");
-        }
-        return full.Substring(prefix.Length);
-    }
-
-    private static string ToPosixPath(string path) =>
-        path.Replace(Path.DirectorySeparatorChar, '/').Replace(Path.AltDirectorySeparatorChar, '/');
-
-
     private static byte[] Align8(byte[] header)
     {
         var pad = (8 - header.Length % 8) % 8;
@@ -930,7 +874,6 @@ internal static class RpmPackageWriter
         Buffer.BlockCopy(header, 0, result, 0, header.Length);
         return result;
     }
-
 
     // FILEDIGESTS 逐文件 sha256：源流式喂哈希，整文件不再驻内存。
     private static string FileDigest(PayloadEntry entry)
@@ -947,8 +890,6 @@ internal static class RpmPackageWriter
         using var stream = File.OpenRead(entry.SourcePath!);
         return Hashes.ToLowerHex(sha256.ComputeHash(stream));
     }
-
-
 
     private static void TryDelete(string path)
     {
