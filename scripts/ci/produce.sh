@@ -5,7 +5,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 ROOT="$(pwd)"
-OUT="$(cd "${1:-artifacts/ci/produce}" 2>/dev/null && pwd || true)"
 OUT="${1:-$ROOT/artifacts/ci/produce}"; mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"
 FIX="$ROOT/tests/Fixtures"
 ARCH="$(uname -m)"; OS="$(uname -s)"
@@ -39,6 +38,11 @@ Darwin)
     produce "MacDmg/BundlerMacDmgIntegrationFixture.csproj" "$RID" "dmg"
     produce "MacPkg/BundlerMacPkgIntegrationFixture.csproj" "$RID" "pkg"
     produce_archive "$RID"
+    if [ "$ARCH" = "arm64" ]; then
+        # Rosetta 腿：osx-x64 件供 manual-auto 的 intel-x64 验收（arm64+Rosetta 实跑）。
+        produce "MacApp/BundlerMacAppIntegrationFixture.csproj" "osx-x64" "app-x64"
+        produce "MacDmg/BundlerMacDmgIntegrationFixture.csproj" "osx-x64" "dmg-x64"
+    fi
     ;;
 *) echo "produce.sh 不支持宿主 $OS" >&2; exit 1 ;;
 esac

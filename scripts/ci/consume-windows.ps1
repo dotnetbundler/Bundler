@@ -17,6 +17,10 @@ Get-Content $SUMS | ForEach-Object {
 }
 if ($bad.Count -gt 0) { throw "清单校验失败: $($bad -join ', ')" }
 
+# 应收件存在性对账：本宿主 produce 腿应收 nsis/msi/archive 三件——缺件即判败。
+$missing = @("nsis", "msi", "archive") | Where-Object { -not (Test-Path "$DIR/$_") }
+if ($missing.Count -gt 0) { throw "产件目录缺失: $($missing -join ', ')" }
+
 $WORK = "$env:RUNNER_TEMP/bundler-consume"
 New-Item -ItemType Directory -Force $WORK | Out-Null
 $failedLegs = @()
@@ -36,8 +40,13 @@ if ($nsis) {
         if (-not (Test-Path $exe)) { throw "装后主程序缺位：$exe" }
         $out = & $exe ci-marker
         if ($out -notmatch "DotNet.Bundler integration fixture") { throw "marker 输出异常：$out" }
-        $p = Start-Process "$inst/Uninstall.exe" -ArgumentList "/S", "/DELETEAPPDATA" -Wait -PassThru
-        if ($p.ExitCode -ne 0) { throw "uninstaller rc=$($p.ExitCode)" }
+        # NSIS 卸载器原地直启是 launcher 语义不透传真实 rc——复制出去 + _?= 拿真退出码
+        # （与 tests/Integration 的 DirectUninstall 同手法；rc=3010 需重启同样算成功）。
+        $uninst = "$inst/Uninstall.exe"
+        $copy = "$WORK/nsis-uninstall.exe"
+        Copy-Item $uninst $copy
+        $p = Start-Process $copy -ArgumentList "/S", "/DELETEAPPDATA", "_?=$inst" -Wait -PassThru
+        if ($p.ExitCode -notin 0, 3010) { throw "uninstaller rc=$($p.ExitCode)" }
         if (Test-Path $exe) { throw "卸后主程序仍在：$exe" }
     }
 }

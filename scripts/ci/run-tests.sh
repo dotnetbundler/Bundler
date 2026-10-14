@@ -22,10 +22,14 @@ projects_for() {
 PROJECTS="$(projects_for "$SUITE")"
 
 # PackageTests 消费本地 nupkg——先打仓根 src 包再跑（tests/README 前置条件）。
-# 只打 src/*.csproj：连测试工程一起 pack 会向运行中进程的 bin/ 写文件。
+# 只打 src/*/*.csproj：连测试工程一起 pack 会向运行中进程的 bin/ 写文件。
 case " $PROJECTS " in
     *" Package/Bundler.PackageTests "*)
-        for P in src/*.csproj; do
+        SRC_PROJECTS=(src/*/*.csproj)
+        if [ ${#SRC_PROJECTS[@]} -eq 0 ] || [ ! -e "${SRC_PROJECTS[0]}" ]; then
+            echo "src/*/*.csproj 零命中——pack 落空" >&2; exit 1
+        fi
+        for P in "${SRC_PROJECTS[@]}"; do
             dotnet pack "$P" -c Release -o artifacts/packages --nologo
         done ;;
 esac

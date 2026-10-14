@@ -28,8 +28,9 @@ on:
 permissions:
   contents: read
 
+# runners 入组：workflow_call 被 verify 六路调用时 suite 恒 all，靠 runners 分流防互杀。
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite || 'all' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite || 'all' }}-${{ inputs.runners || 'all' }}
   cancel-in-progress: true
 
 jobs:

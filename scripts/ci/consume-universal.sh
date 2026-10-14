@@ -5,10 +5,12 @@
 set -euo pipefail
 DIR="$(cd "${1:?usage: consume-universal.sh <artifact-dir>}" && pwd)"
 [ -f "$DIR/SHA256SUMS" ] || { echo "缺 SHA256SUMS：$DIR" >&2; exit 1; }
-( cd "$DIR" && shasum -a 256 -c SHA256SUMS )
 
 APP="$(find "$DIR" -type d -name '*.app' | head -1)"
 [ -d "$APP" ] || { echo "未找到 .app" >&2; exit 1; }
+# 清单在 .app 目录内生成（条目为 ./Contents/...）——校验基准目录对齐产侧。
+( cd "$APP" && shasum -a 256 -c "$DIR/SHA256SUMS" )
+
 EXE="$APP/Contents/MacOS/BundlerMacIntegrationFixture"
 lipo -info "$EXE"
 lipo -info "$EXE" | grep -q "x86_64"

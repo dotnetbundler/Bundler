@@ -11,6 +11,12 @@ FAILED=""
 run_leg(){ local name="$1"; shift
     if "$@"; then echo "[LEG-PASS] $name"; else echo "[LEG-FAIL] $name"; FAILED="$FAILED $name"; fi }
 
+# 应收件存在性对账：本宿主 produce 腿应收 app/dmg/pkg/archive 四件——缺件即判败。
+for D in app dmg pkg archive; do
+    [ -d "$DIR/$D" ] || { echo "[LEG-FAIL] $D（产件目录缺失）"; FAILED="$FAILED $D-missing"; }
+done
+[ -z "$FAILED" ] || { echo "失败腿:$FAILED" >&2; exit 1; }
+
 # .app：复制到暂存目录后原生启动（marker 写 Contents/.launch-marker）
 APP="$(find "$DIR/app" -type d -name '*.app' | head -1)"
 if [ -n "$APP" ]; then

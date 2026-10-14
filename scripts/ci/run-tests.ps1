@@ -22,9 +22,11 @@ $projects = switch ($Suite) {
 }
 
 # PackageTests 消费本地 nupkg——先打仓根 src 包再跑（tests/README 前置条件）。
-# 只打 src/*.csproj：连测试工程一起 pack 会向运行中进程的 bin/ 写文件。
+# 只打 src/*/*.csproj：连测试工程一起 pack 会向运行中进程的 bin/ 写文件。
 if ($projects -contains "Package/Bundler.PackageTests") {
-    foreach ($p in (Get-ChildItem "src/*.csproj")) {
+    $srcProjects = Get-ChildItem "src/*/*.csproj"
+    if ($srcProjects.Count -eq 0) { throw "src/*/*.csproj 零命中——pack 落空" }
+    foreach ($p in $srcProjects) {
         dotnet pack $p.FullName -c Release -o artifacts/packages --nologo
         if ($LASTEXITCODE -ne 0) { throw "dotnet pack $($p.Name) rc=$LASTEXITCODE" }
     }

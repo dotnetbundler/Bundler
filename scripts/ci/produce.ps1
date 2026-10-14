@@ -24,7 +24,9 @@ if ($LASTEXITCODE -ne 0) { throw "nsis produce rc=$LASTEXITCODE" }
 # 包落 $OUT 外，不进交换清单）。
 $PKGDIR = "$ROOT/artifacts/ci/packages"
 New-Item -ItemType Directory -Path $PKGDIR -Force | Out-Null
-foreach ($p in (Get-ChildItem "$ROOT/src/*.csproj")) {
+$srcProjects = Get-ChildItem "$ROOT/src/*/*.csproj"
+if ($srcProjects.Count -eq 0) { throw "src/*/*.csproj 零命中——pack 落空" }
+foreach ($p in $srcProjects) {
     dotnet pack $p.FullName -c Release -o $PKGDIR --nologo
     if ($LASTEXITCODE -ne 0) { throw "dotnet pack $($p.Name) rc=$LASTEXITCODE" }
 }

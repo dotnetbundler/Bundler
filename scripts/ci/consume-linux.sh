@@ -11,6 +11,13 @@ FAILED=""
 run_leg(){ local name="$1"; shift
     if "$@"; then echo "[LEG-PASS] $name"; else echo "[LEG-FAIL] $name"; FAILED="$FAILED $name"; fi }
 
+# 应收件存在性对账：本宿主 produce 腿应收 deb/rpm/appimage/apk/archive 五件——
+# 缺件即判败，防产侧布局漂移时"全绿零断言"。
+for D in deb rpm appimage apk archive; do
+    [ -d "$DIR/$D" ] || { echo "[LEG-FAIL] $D（产件目录缺失）"; FAILED="$FAILED $D-missing"; }
+done
+[ -z "$FAILED" ] || { echo "失败腿:$FAILED" >&2; exit 1; }
+
 # .deb：宿主直装（runner 是 deb 系；root 经 sudo）
 if find "$DIR/deb" -name '*.deb' | grep -q .; then
     DEB="$(find "$DIR/deb" -name '*.deb' | head -1)"
