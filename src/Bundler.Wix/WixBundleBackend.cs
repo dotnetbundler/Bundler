@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using DotNet.Bundler;
+using DotNet.Bundler.Core;
 using DotNet.Bundler.Core.Update;
 
 namespace DotNet.Bundler.Wix;
@@ -365,13 +366,8 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         }
     }
 
-    private static void CheckReparse(string path)
-    {
-        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-        {
-            throw new InvalidDataException("MSI input must not contain reparse points: " + path);
-        }
-    }
+    private static void CheckReparse(string path) =>
+        FileTree.RejectReparsePoint(path, "MSI input must not contain reparse points");
 
     private static string? SelectIcon(IReadOnlyList<string> icons)
     {

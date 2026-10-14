@@ -239,30 +239,20 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
     private static void CopyTree(string sourceDirectory, string destinationDirectory, HashSet<string> destinations, IBundleLogger log)
     {
         var root = Path.GetFullPath(sourceDirectory);
-        CheckReparse(root);
-        Visit(root, destinationDirectory);
-
-        void Visit(string source, string destination)
-        {
-            CheckReparse(source);
-            Directory.CreateDirectory(destination);
-            foreach (var directory in Directory.EnumerateDirectories(source)
-                         .OrderBy(path => path, StringComparer.Ordinal))
+        FileTree.CopyTree(root, destinationDirectory, log,
+            links: TreeLinkPolicy.Reject,
+            linkErrorMessage: ".app payload must not contain reparse points or symlinks",
+            sortEntries: true,
+            resolveFileDestination: (file, dir) =>
             {
-                Visit(directory, Path.Combine(destination, Path.GetFileName(directory)));
-            }
-            foreach (var file in Directory.EnumerateFiles(source)
-                         .OrderBy(path => path, StringComparer.Ordinal))
-            {
-                // Sockets, FIFOs and device nodes cannot be copied; skip them.
-                if (!UnixFileTypes.IsRegularFile(file))
+                var target = Path.Combine(dir, Path.GetFileName(file));
+                if (!destinations.Add(Path.GetFullPath(target)))
                 {
-                    log.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {file}");
-                    continue;
+                    throw new ArgumentException("Two .app payload entries map to the same bundle path: " + target);
                 }
-                CopyFileEntry(file, Path.Combine(destination, Path.GetFileName(file)), destinations);
-            }
-        }
+                return target;
+            },
+            overwrite: false);
     }
 
     private static void CopyPayloadEntry(string source, string destination, HashSet<string> destinations, IBundleLogger log)
@@ -293,13 +283,8 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
         File.Copy(source, destination);
     }
 
-    private static void CheckReparse(string path)
-    {
-        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-        {
-            throw new InvalidDataException(".app payload must not contain reparse points or symlinks: " + path);
-        }
-    }
+    private static void CheckReparse(string path) =>
+        FileTree.RejectReparsePoint(path, ".app payload must not contain reparse points or symlinks");
 
     private static bool IsBitmapIcon(string icon) =>
         icon.EndsWith(".icns", StringComparison.OrdinalIgnoreCase) ||

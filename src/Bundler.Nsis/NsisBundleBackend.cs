@@ -1137,13 +1137,9 @@ internal sealed class NsisBundleBackend(
         return new DirectoryTree(fullRoot, directories, files);
     }
 
-    private static void RejectReparsePoint(string path, string description)
-    {
-        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-        {
-            throw new InvalidDataException($"{description} must not contain a symbolic link, junction, or other reparse point: {path}");
-        }
-    }
+    private static void RejectReparsePoint(string path, string description) =>
+        FileTree.RejectReparsePoint(
+            path, $"{description} must not contain a symbolic link, junction, or other reparse point");
 
     private sealed record NsisLocalization(
         string LanguageMacros,
