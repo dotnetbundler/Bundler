@@ -3,7 +3,7 @@ using DotNet.Bundler.Core;
 
 namespace Bundler.UnitTests.Core;
 
-public sealed class PayloadSourceTests
+public sealed class PayloadSourceTests : TempBase
 {
     private sealed class RecordingLogger : IBundleLogger
     {
@@ -14,7 +14,7 @@ public sealed class PayloadSourceTests
     [Fact]
     public void CollectInput_DirectoriesThenFiles_Ordered()
     {
-        var input = Directory.CreateTempSubdirectory("bundler-payload");
+        var input = Temp("bundler-payload");
         Directory.CreateDirectory(Path.Combine(input.FullName, "zdir"));
         Directory.CreateDirectory(Path.Combine(input.FullName, "adir"));
         File.WriteAllText(Path.Combine(input.FullName, "zdir", "z.txt"), "z");
@@ -37,7 +37,7 @@ public sealed class PayloadSourceTests
     [Fact]
     public void CollectInput_MainExecutable_Gets0755()
     {
-        var input = Directory.CreateTempSubdirectory("bundler-payload");
+        var input = Temp("bundler-payload");
         File.WriteAllText(Path.Combine(input.FullName, "app"), "main");
         File.WriteAllText(Path.Combine(input.FullName, "data.txt"), "d");
 
@@ -66,7 +66,7 @@ public sealed class PayloadSourceTests
     [Fact]
     public void CollectResources_FileSource_MapsDirect()
     {
-        var source = Path.Combine(Path.GetTempPath(), $"res-{Guid.NewGuid():N}.txt");
+        var source = TempPath($"res-{Guid.NewGuid():N}.txt");
         File.WriteAllText(source, "r");
         var items = PayloadSource.CollectResources(
             [new BundleResourceConfiguration { Source = source, Destination = "share/doc.txt" }],
@@ -80,7 +80,7 @@ public sealed class PayloadSourceTests
     [Fact]
     public void CollectResources_DirectorySource_MapsTree()
     {
-        var root = Directory.CreateTempSubdirectory("bundler-res");
+        var root = Temp("bundler-res");
         Directory.CreateDirectory(Path.Combine(root.FullName, "sub"));
         File.WriteAllText(Path.Combine(root.FullName, "sub", "f.txt"), "f");
 
@@ -100,7 +100,7 @@ public sealed class PayloadSourceTests
             PayloadSource.CollectResources(
                 [new BundleResourceConfiguration
                 {
-                    Source = Path.Combine(Path.GetTempPath(), $"nope-{Guid.NewGuid():N}"),
+                    Source = TempPath($"nope-{Guid.NewGuid():N}"),
                     Destination = "x"
                 }],
                 "/opt/app", NullBundleLogger.Instance).ToList());

@@ -3,11 +3,11 @@ using DotNet.Bundler.Core;
 
 namespace Bundler.UnitTests.Core;
 
-public sealed class BundleConfigurationLoaderTests
+public sealed class BundleConfigurationLoaderTests : TempBase
 {
-    private static async Task<BundleConfiguration> Load(string json)
+    private async Task<BundleConfiguration> Load(string json)
     {
-        var dir = Directory.CreateTempSubdirectory("bundler-cfg");
+        var dir = Temp("bundler-cfg");
         var path = Path.Combine(dir.FullName, "bundler.json");
         await File.WriteAllTextAsync(path, json, TestContext.Current.CancellationToken);
         return await BundleConfigurationLoader.LoadAsync(path, TestContext.Current.CancellationToken);
@@ -59,7 +59,7 @@ public sealed class BundleConfigurationLoaderTests
     [Fact]
     public async Task Load_EmptyFile_ThrowsInvalidData()
     {
-        var dir = Directory.CreateTempSubdirectory("bundler-cfg");
+        var dir = Temp("bundler-cfg");
         var path = Path.Combine(dir.FullName, "bundler.json");
         await File.WriteAllTextAsync(path, "   ", TestContext.Current.CancellationToken);
         // 全空白文件在反序列化阶段即 JsonException（"empty" 分支只兜 null 对象）
@@ -72,7 +72,7 @@ public sealed class BundleConfigurationLoaderTests
     {
         await Assert.ThrowsAnyAsync<IOException>(() =>
             BundleConfigurationLoader.LoadAsync(
-                Path.Combine(Path.GetTempPath(), $"nope-{Guid.NewGuid():N}", "bundler.json"),
+                TempPath(System.IO.Path.Combine($"nope-{Guid.NewGuid():N}", "bundler.json")),
                 TestContext.Current.CancellationToken));
     }
 

@@ -4,7 +4,7 @@ using DotNet.Bundler.Core.Update;
 
 namespace Bundler.UnitTests.Core;
 
-public sealed class UpdateKeyMaterialTests
+public sealed class UpdateKeyMaterialTests : TempBase
 {
     [Fact]
     public void Generate_ProducesP256Pair()
@@ -21,7 +21,7 @@ public sealed class UpdateKeyMaterialTests
     [Fact]
     public void SaveLoad_RoundTrip_NoOverwrite()
     {
-        var dir = Directory.CreateTempSubdirectory("bundler-key");
+        var dir = Temp("bundler-key");
         var path = Path.Combine(dir.FullName, "key.json");
         var key = UpdateKeyMaterial.Generate();
         key.Save(path);
@@ -37,7 +37,7 @@ public sealed class UpdateKeyMaterialTests
     [Fact]
     public void Load_Garbage_Throws()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"key-{Guid.NewGuid():N}.json");
+        var path = TempPath($"key-{Guid.NewGuid():N}.json");
         File.WriteAllText(path, "{\"kty\":\"nope\"}");
         try
         {
@@ -115,12 +115,12 @@ public sealed class UpdateFeedModelTests
     }
 }
 
-public sealed class UpdateInstallIdentityTests
+public sealed class UpdateInstallIdentityTests : TempBase
 {
     [Fact]
     public void Write_TryRead_RoundTrip()
     {
-        var dir = Directory.CreateTempSubdirectory("bundler-id");
+        var dir = Temp("bundler-id");
         UpdateInstallIdentity.Write(dir.FullName, new UpdateInstallIdentity
         {
             Format = "deb", Target = "linux-x86_64", Channel = "stable",
@@ -140,7 +140,7 @@ public sealed class UpdateInstallIdentityTests
     [Fact]
     public void TryRead_Missing_ReturnsNull()
     {
-        var dir = Directory.CreateTempSubdirectory("bundler-id");
+        var dir = Temp("bundler-id");
         Assert.Null(UpdateInstallIdentity.TryRead(dir.FullName));
     }
 
@@ -152,12 +152,12 @@ public sealed class UpdateInstallIdentityTests
     }
 }
 
-public sealed class UpdateIdentitySidecarTests
+public sealed class UpdateIdentitySidecarTests : TempBase
 {
     [Fact]
     public void WriteIfEnabled_NullUpdate_NoOp()
     {
-        var dir = Directory.CreateTempSubdirectory("bundler-sc");
+        var dir = Temp("bundler-sc");
         UpdateIdentitySidecar.WriteIfEnabled(
             dir.FullName, null, PackageFormat.Deb, "linux-x86_64");
         Assert.Empty(Directory.GetFiles(dir.FullName));
@@ -166,7 +166,7 @@ public sealed class UpdateIdentitySidecarTests
     [Fact]
     public void WriteIfEnabled_WritesSidecar_WithDefaults()
     {
-        var dir = Directory.CreateTempSubdirectory("bundler-sc");
+        var dir = Temp("bundler-sc");
         var key = UpdateKeyMaterial.Generate();
         var keyPath = Path.Combine(dir.FullName, "key.json");
         key.Save(keyPath);
@@ -231,7 +231,7 @@ public sealed class UpdateSignatureVerifierTests
     }
 }
 
-public sealed class UpdateBootstrapperTests
+public sealed class UpdateBootstrapperTests : TempBase
 {
     [Theory]
     [InlineData("windows-x86_64", "bundler-updater.exe")]
@@ -245,7 +245,7 @@ public sealed class UpdateBootstrapperTests
     [Fact]
     public void TryResolve_PerTargetWins_OverPosix()
     {
-        var dir = Directory.CreateTempSubdirectory("bundler-boot");
+        var dir = Temp("bundler-boot");
         var perTarget = Path.Combine(dir.FullName, "linux-x86_64");
         Directory.CreateDirectory(perTarget);
         File.WriteAllText(Path.Combine(perTarget, "bundler-updater"), "aot");
@@ -260,7 +260,7 @@ public sealed class UpdateBootstrapperTests
     [Fact]
     public void TryResolve_PosixFallback_NonWindows()
     {
-        var dir = Directory.CreateTempSubdirectory("bundler-boot");
+        var dir = Temp("bundler-boot");
         Directory.CreateDirectory(Path.Combine(dir.FullName, "posix"));
         File.WriteAllText(Path.Combine(dir.FullName, "posix", "bundler-updater.sh"), "sh");
 
@@ -272,7 +272,7 @@ public sealed class UpdateBootstrapperTests
     [Fact]
     public void TryResolve_PosixNeverForWindows()
     {
-        var dir = Directory.CreateTempSubdirectory("bundler-boot");
+        var dir = Temp("bundler-boot");
         Directory.CreateDirectory(Path.Combine(dir.FullName, "posix"));
         File.WriteAllText(Path.Combine(dir.FullName, "posix", "bundler-updater.sh"), "sh");
 
@@ -283,7 +283,7 @@ public sealed class UpdateBootstrapperTests
     [Fact]
     public void TryResolve_Missing_ReturnsFalse()
     {
-        var dir = Directory.CreateTempSubdirectory("bundler-boot");
+        var dir = Temp("bundler-boot");
         var update = new UpdateBundleConfiguration { BootstrapperDirectory = dir.FullName };
         Assert.False(UpdateBootstrapper.TryResolve(update, "linux-x86_64", out _));
     }
@@ -291,8 +291,8 @@ public sealed class UpdateBootstrapperTests
     [Fact]
     public void Inject_CopiesWithFileName()
     {
-        var dir = Directory.CreateTempSubdirectory("bundler-boot");
-        var targetDir = Directory.CreateTempSubdirectory("bundler-payload");
+        var dir = Temp("bundler-boot");
+        var targetDir = Temp("bundler-payload");
         var perTarget = Path.Combine(dir.FullName, "linux-x86_64");
         Directory.CreateDirectory(perTarget);
         File.WriteAllText(Path.Combine(perTarget, "bundler-updater"), "binary");
@@ -305,7 +305,7 @@ public sealed class UpdateBootstrapperTests
     }
 }
 
-public sealed class UpdatePayloadStagingTests
+public sealed class UpdatePayloadStagingTests : TempBase
 {
     private static BundleBuildContext Context(string workDir, UpdateBundleConfiguration? update)
     {
@@ -319,8 +319,8 @@ public sealed class UpdatePayloadStagingTests
     [Fact]
     public void EnsureStaged_NoUpdate_ReturnsSameItem()
     {
-        var work = Directory.CreateTempSubdirectory("bundler-work");
-        var input = Directory.CreateTempSubdirectory("bundler-input");
+        var work = Temp("bundler-work");
+        var input = Temp("bundler-input");
         var item = new BundlePlanItem(
             BundleTarget.Parse("linux-x86_64"), PackageFormat.Deb,
             input.FullName, "app", "out", false);
@@ -335,8 +335,8 @@ public sealed class UpdatePayloadStagingTests
     [Fact]
     public void EnsureStaged_CopiesInputToWorkDir_WritesSidecar()
     {
-        var work = Directory.CreateTempSubdirectory("bundler-work");
-        var input = Directory.CreateTempSubdirectory("bundler-input");
+        var work = Temp("bundler-work");
+        var input = Temp("bundler-input");
         File.WriteAllText(Path.Combine(input.FullName, "app"), "bin");
         var key = UpdateKeyMaterial.Generate();
         var keyPath = Path.Combine(work.FullName, "key.json");
@@ -372,7 +372,7 @@ public sealed class UpdatePayloadStagingTests
     [Fact]
     public void EnsureStaged_AlreadyInsideWork_WritesInPlace()
     {
-        var work = Directory.CreateTempSubdirectory("bundler-work");
+        var work = Temp("bundler-work");
         var staged = Directory.CreateDirectory(Path.Combine(work.FullName, "signed-payload"));
         File.WriteAllText(Path.Combine(staged.FullName, "app"), "bin");
         var key = UpdateKeyMaterial.Generate();

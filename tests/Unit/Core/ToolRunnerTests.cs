@@ -83,16 +83,17 @@ public sealed class ToolRunnerTests
     }
 
     [Fact]
-    public async Task TryRunAsync_HandlerIsAsyncLocal_Isolated()
+    public async Task TryRunAsync_Handler_FlowsIntoAsyncTasks()
     {
+        // AsyncLocal 随 ExecutionContext 流入 Task.Run——缝在异步上下文内一致可见，
+        // 这正是它能替代全局静态、又允许测试隔离的语义。
         ToolRunner.Handler = (_, _) => Task.FromResult(new ToolRunner.Result(7, "", ""));
         try
         {
-            var probe = Task.Run(async () =>
-                await ToolRunner.TryRunAsync("t", [], "/w", TestContext.Current.CancellationToken));
-            // 异步上下文外的独立 Task 不继承 AsyncLocal —— 会走真实 spawn（本测例不等待它完成，
-            // 只证明 Handler 缝是 AsyncLocal 维度而非全局）
+            var probe = await Task.Run(() =>
+                ToolRunner.TryRunAsync("t", [], "/w", TestContext.Current.CancellationToken));
             Assert.NotNull(probe);
+            Assert.Equal(7, probe.ExitCode);
         }
         finally
         {

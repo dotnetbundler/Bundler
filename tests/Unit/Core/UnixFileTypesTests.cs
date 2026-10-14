@@ -3,12 +3,12 @@ using DotNet.Bundler.Core;
 
 namespace Bundler.UnitTests.Core;
 
-public sealed class UnixFileTypesTests
+public sealed class UnixFileTypesTests : TempBase
 {
     [Fact]
     public void IsRegularFile_RegularFile_True()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"bundler-reg-{Guid.NewGuid():N}");
+        var path = TempPath($"bundler-reg-{Guid.NewGuid():N}");
         File.WriteAllText(path, "x");
         try
         {
@@ -25,13 +25,13 @@ public sealed class UnixFileTypesTests
     {
         // stat 失败按"无法判定"放行——拷贝路径自己报错
         Assert.True(UnixFileTypes.IsRegularFile(
-            Path.Combine(Path.GetTempPath(), $"bundler-missing-{Guid.NewGuid():N}")));
+            TempPath($"bundler-missing-{Guid.NewGuid():N}")));
     }
 
     [Fact]
     public void IsRegularFile_Directory_FalseOnUnix()
     {
-        var dir = Directory.CreateTempSubdirectory("bundler-dir");
+        var dir = Temp("bundler-dir");
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) &&
             !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
@@ -58,7 +58,7 @@ public sealed class UnixFileTypesTests
         {
             Assert.Skip("FIFO 造样本需 Linux");
         }
-        var fifo = Path.Combine(Path.GetTempPath(), $"bundler-fifo-{Guid.NewGuid():N}");
+        var fifo = TempPath($"bundler-fifo-{Guid.NewGuid():N}");
         // mkfifo 不经 shell：libc mkfifo(3)
         if (mkfifo(fifo, 0x180 /* 0600 */) != 0)
         {

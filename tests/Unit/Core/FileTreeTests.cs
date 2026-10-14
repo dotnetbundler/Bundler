@@ -3,7 +3,7 @@ using DotNet.Bundler.Core;
 
 namespace Bundler.UnitTests.Core;
 
-public sealed class FileTreeTests
+public sealed class FileTreeTests : TempBase
 {
     private sealed class RecordingLogger : IBundleLogger
     {
@@ -11,9 +11,9 @@ public sealed class FileTreeTests
         public void Log(BundleLogLevel level, string message) => Entries.Add((level, message));
     }
 
-    private static (string Source, string Dest) Workspace()
+    private (string Source, string Dest) Workspace()
     {
-        var root = Directory.CreateTempSubdirectory("bundler-filetree");
+        var root = Temp("bundler-filetree");
         return (Path.Combine(root.FullName, "src"), Path.Combine(root.FullName, "dst"));
     }
 
@@ -119,7 +119,7 @@ public sealed class FileTreeTests
     {
         var (source, dest) = Workspace();
         Directory.CreateDirectory(source);
-        var real = Directory.CreateTempSubdirectory("bundler-real").FullName;
+        var real = Temp("bundler-real").FullName;
         File.WriteAllText(Path.Combine(real, "inside.txt"), "x");
         var link = Path.Combine(source, "linked");
         try
@@ -139,8 +139,8 @@ public sealed class FileTreeTests
     [Fact]
     public void RejectReparsePoint_ThrowsOnLink()
     {
-        var real = Directory.CreateTempSubdirectory("bundler-real").FullName;
-        var link = Path.Combine(Path.GetTempPath(), $"bundler-link-{Guid.NewGuid():N}");
+        var real = Temp("bundler-real").FullName;
+        var link = TempPath($"bundler-link-{Guid.NewGuid():N}");
         try
         {
             Directory.CreateSymbolicLink(link, real);

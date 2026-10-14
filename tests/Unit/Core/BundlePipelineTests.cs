@@ -3,7 +3,7 @@ using DotNet.Bundler.Core;
 
 namespace Bundler.UnitTests.Core;
 
-public sealed class BundlePipelineTests
+public sealed class BundlePipelineTests : TempBase
 {
     private sealed class FakeBackend(
         TargetOperatingSystem os, PackageFormat format, LibC? libc = null,
@@ -27,9 +27,9 @@ public sealed class BundlePipelineTests
         public void Log(BundleLogLevel level, string message) => Entries.Add((level, message));
     }
 
-    private static BundleConfiguration ConfigFor(string target, PackageFormat format, string output)
+    private BundleConfiguration ConfigFor(string target, PackageFormat format, string output)
     {
-        var input = Directory.CreateTempSubdirectory("bundler-pipe-in");
+        var input = Temp("bundler-pipe-in");
         var executableName = target.StartsWith("windows", StringComparison.Ordinal)
             ? "Sample.exe" : "Sample";
         File.WriteAllText(Path.Combine(input.FullName, executableName), "x");
@@ -47,7 +47,7 @@ public sealed class BundlePipelineTests
     [Fact]
     public async Task Build_ProducesArtifacts_AndCleansWorkDirectory()
     {
-        var output = Directory.CreateTempSubdirectory("bundler-pipe-out");
+        var output = Temp("bundler-pipe-out");
         var backend = new FakeBackend(TargetOperatingSystem.Linux, PackageFormat.Deb,
             produce: context =>
             {
@@ -71,7 +71,7 @@ public sealed class BundlePipelineTests
     [Fact]
     public async Task Build_NoBackend_ThrowsNotSupported()
     {
-        var output = Directory.CreateTempSubdirectory("bundler-pipe-out");
+        var output = Temp("bundler-pipe-out");
         var pipeline = new BundlePipeline([]);
         var config = ConfigFor("linux-x86_64", PackageFormat.Deb, output.FullName);
 
@@ -91,7 +91,7 @@ public sealed class BundlePipelineTests
     [Fact]
     public async Task Build_LibCSpecificBackend_PreferredOverGeneric()
     {
-        var output = Directory.CreateTempSubdirectory("bundler-pipe-out");
+        var output = Temp("bundler-pipe-out");
         var used = new List<string>();
         IReadOnlyList<BundleArtifact> Make(BundleBuildContext context, string tag)
         {
@@ -117,7 +117,7 @@ public sealed class BundlePipelineTests
     [Fact]
     public async Task Build_BackendReturnsNull_ContractViolation()
     {
-        var output = Directory.CreateTempSubdirectory("bundler-pipe-out");
+        var output = Temp("bundler-pipe-out");
         var backend = new NullReturningBackend();
         var pipeline = new BundlePipeline([backend]);
         var config = ConfigFor("linux-x86_64", PackageFormat.Deb, output.FullName);
@@ -142,7 +142,7 @@ public sealed class BundlePipelineTests
     [Fact]
     public async Task Build_BackendReturnsMissingPath_ContractViolation()
     {
-        var output = Directory.CreateTempSubdirectory("bundler-pipe-out");
+        var output = Temp("bundler-pipe-out");
         var backend = new FakeBackend(TargetOperatingSystem.Linux, PackageFormat.Deb,
             produce: context => [new BundleArtifact(
                 PackageFormat.Deb, context.Item.Target.Target,
@@ -156,7 +156,7 @@ public sealed class BundlePipelineTests
     [Fact]
     public async Task Build_DuplicateArtifactPaths_Rejected()
     {
-        var output = Directory.CreateTempSubdirectory("bundler-pipe-out");
+        var output = Temp("bundler-pipe-out");
         var backend = new FakeBackend(TargetOperatingSystem.Linux, PackageFormat.Deb,
             produce: context =>
             {
@@ -177,7 +177,7 @@ public sealed class BundlePipelineTests
     [Fact]
     public async Task Build_Cancellation_Propagates()
     {
-        var output = Directory.CreateTempSubdirectory("bundler-pipe-out");
+        var output = Temp("bundler-pipe-out");
         var pipeline = new BundlePipeline(
             [new FakeBackend(TargetOperatingSystem.Linux, PackageFormat.Deb)]);
         var config = ConfigFor("linux-x86_64", PackageFormat.Deb, output.FullName);
@@ -191,7 +191,7 @@ public sealed class BundlePipelineTests
     [Fact]
     public async Task Build_Logs_BuildAndCreatedSequence()
     {
-        var output = Directory.CreateTempSubdirectory("bundler-pipe-out");
+        var output = Temp("bundler-pipe-out");
         var logger = new RecordingLogger();
         var backend = new FakeBackend(TargetOperatingSystem.Linux, PackageFormat.Deb,
             produce: context =>

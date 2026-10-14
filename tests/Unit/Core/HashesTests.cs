@@ -10,13 +10,11 @@ public sealed class HashesTests
     [Fact]
     public void Sha256_KnownVector()
     {
-        // sha256("bundler") 预计算值
+        // sha256("bundler") 外部预计算值（sha256sum 核对）
         Assert.Equal(
-            "2f38085c71ebdd783ce573adc3e0f7549e05b78e1ba2f1ec8a3b7039e0303a2a".Length == 64
-                ? Hashes.Sha256Hex(Content) : Hashes.Sha256Hex(Content),
+            "d4b91025af98f042008ed124ac3f3c798b014f3bbcb27ce2e94031d5132bae66",
             Hashes.Sha256Hex(Content));
         Assert.Equal(64, Hashes.Sha256Hex(Content).Length);
-        Assert.Equal(Hashes.Sha256Hex(Content), Hashes.Sha256Hex(Content));
     }
 
     [Fact]

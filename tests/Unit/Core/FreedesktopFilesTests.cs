@@ -4,7 +4,7 @@ using DotNet.Bundler.Core;
 
 namespace Bundler.UnitTests.Core;
 
-public sealed class FreedesktopFilesTests
+public sealed class FreedesktopFilesTests : TempBase
 {
     private static BundleConfiguration Bundle(
         IReadOnlyList<BundleFileAssociationConfiguration>? associations = null,
@@ -150,7 +150,7 @@ public sealed class FreedesktopFilesTests
     [Fact]
     public void Collect_Icon_GoesToHicolorByPngSize()
     {
-        var icon = Path.Combine(Path.GetTempPath(), $"icon-{Guid.NewGuid():N}.png");
+        var icon = TempPath($"icon-{Guid.NewGuid():N}.png");
         File.WriteAllBytes(icon, TestPng(48, 48));
         try
         {
@@ -170,7 +170,7 @@ public sealed class FreedesktopFilesTests
     [Fact]
     public void Collect_IconAt2x_MapsToScaleSlot()
     {
-        var icon = Path.Combine(Path.GetTempPath(), $"icon-{Guid.NewGuid():N}@2x.png");
+        var icon = TempPath($"icon-{Guid.NewGuid():N}@2x.png");
         File.WriteAllBytes(icon, TestPng(96, 96));
         try
         {
@@ -190,7 +190,7 @@ public sealed class FreedesktopFilesTests
     [Fact]
     public void Collect_NonPngIcon_Rejected()
     {
-        var icon = Path.Combine(Path.GetTempPath(), $"icon-{Guid.NewGuid():N}.png");
+        var icon = TempPath($"icon-{Guid.NewGuid():N}.png");
         File.WriteAllBytes(icon, [1, 2, 3]);
         try
         {
@@ -207,7 +207,7 @@ public sealed class FreedesktopFilesTests
     [Fact]
     public void Collect_Metainfo_StagedVerbatim()
     {
-        var metainfo = Path.Combine(Path.GetTempPath(), $"m-{Guid.NewGuid():N}.xml");
+        var metainfo = TempPath($"m-{Guid.NewGuid():N}.xml");
         File.WriteAllText(metainfo, "<component/>");
         try
         {

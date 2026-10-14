@@ -6,7 +6,7 @@ namespace Bundler.UnitTests.Wix;
 /// WiX 内件：身份确定性（UpgradeCode 族 / ProductCode 逐版逐语言）、语言目录、
 /// 包内路径净化、扩展白名单校验。
 /// </summary>
-public sealed class WixInternalsTests
+public sealed class WixInternalsTests : TempBase
 {
     // ---- WixIdentity.Create ----
 
@@ -198,7 +198,7 @@ public sealed class WixInternalsTests
     [Fact]
     public void Fragment_AllowlistedCoreElements_Pass()
     {
-        var dir = Directory.CreateTempSubdirectory("wix-frag");
+        var dir = Temp("wix-frag");
         var path = Path.Combine(dir.FullName, "frag.wxs");
         File.WriteAllText(path, """
             <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
@@ -212,7 +212,7 @@ public sealed class WixInternalsTests
     [Fact]
     public void Fragment_NonCoreNamespace_Rejected()
     {
-        var dir = Directory.CreateTempSubdirectory("wix-frag");
+        var dir = Temp("wix-frag");
         var path = Path.Combine(dir.FullName, "frag.wxs");
         File.WriteAllText(path, """
             <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
@@ -226,7 +226,7 @@ public sealed class WixInternalsTests
     [Fact]
     public void Fragment_NonWhitelistedElement_Rejected()
     {
-        var dir = Directory.CreateTempSubdirectory("wix-frag");
+        var dir = Temp("wix-frag");
         var path = Path.Combine(dir.FullName, "frag.wxs");
         File.WriteAllText(path, """
             <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
@@ -239,7 +239,7 @@ public sealed class WixInternalsTests
     [Fact]
     public void Fragment_ForeignIdPrefix_Rejected()
     {
-        var dir = Directory.CreateTempSubdirectory("wix-frag");
+        var dir = Temp("wix-frag");
         var path = Path.Combine(dir.FullName, "frag.wxs");
         File.WriteAllText(path, """
             <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
@@ -252,7 +252,7 @@ public sealed class WixInternalsTests
     [Fact]
     public void Fragment_MissingOrNonWxs_Rejected()
     {
-        var dir = Directory.CreateTempSubdirectory("wix-frag");
+        var dir = Temp("wix-frag");
         var missing = Path.Combine(dir.FullName, "gone.wxs");
         Assert.Throws<ArgumentException>(() =>
             WixExtensionValidator.ValidateFragment(missing, "Acme."));
@@ -295,7 +295,7 @@ public sealed class WixInternalsTests
     [Fact]
     public void DetectExtensionDlls_FindsBundledNames()
     {
-        var dir = Directory.CreateTempSubdirectory("wix-ext");
+        var dir = Temp("wix-ext");
         File.WriteAllText(Path.Combine(dir.FullName, "WixUIExtension.dll"), "stub");
         var found = WixExtensionValidator.DetectExtensionDlls(
             """<Wix xmlns="http://schemas.microsoft.com/wix/UIExtension"/>""", dir.FullName);

@@ -3,7 +3,7 @@ using DotNet.Bundler.Core;
 
 namespace Bundler.UnitTests.Core;
 
-public sealed class ToolCacheTests
+public sealed class ToolCacheTests : TempBase
 {
     private static string Sha(byte[] content) =>
         Hashes.Sha256Hex(content);
@@ -48,7 +48,7 @@ public sealed class ToolCacheTests
     [Fact]
     public void ResolveToolPath_RejectsEscape()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "tooldir");
+        var dir = TempPath("tooldir");
         Assert.Throws<ArgumentException>(() => ToolCache.ResolveToolPath(dir, "../evil"));
         Assert.Throws<ArgumentException>(() => ToolCache.ResolveToolPath(dir, ""));
         Assert.Throws<ArgumentException>(() => ToolCache.ResolveToolPath(dir, Path.IsPathRooted("C:/x") ? "C:/x" : "/x"));
@@ -57,7 +57,7 @@ public sealed class ToolCacheTests
     [Fact]
     public async Task ResolveAsync_MaterializesFiles()
     {
-        var cache = Directory.CreateTempSubdirectory("bundler-cache").FullName;
+        var cache = Temp("bundler-cache").FullName;
         var set = Set(("bin/tool", "binary"u8.ToArray()), ("etc/cfg", "cfg"u8.ToArray()));
         var map = Map(("bin/tool", "binary"u8.ToArray()), ("etc/cfg", "cfg"u8.ToArray()));
 
@@ -72,7 +72,7 @@ public sealed class ToolCacheTests
     [Fact]
     public async Task ResolveAsync_CacheHit_SkipsOpen()
     {
-        var cache = Directory.CreateTempSubdirectory("bundler-cache").FullName;
+        var cache = Temp("bundler-cache").FullName;
         var set = Set(("a", "x"u8.ToArray()));
         var map = Map(("a", "x"u8.ToArray()));
 
@@ -90,7 +90,7 @@ public sealed class ToolCacheTests
     [Fact]
     public async Task ResolveAsync_TamperedFile_Reinstalls()
     {
-        var cache = Directory.CreateTempSubdirectory("bundler-cache").FullName;
+        var cache = Temp("bundler-cache").FullName;
         var set = Set(("a", "original"u8.ToArray()));
         var map = Map(("a", "original"u8.ToArray()));
 
@@ -110,7 +110,7 @@ public sealed class ToolCacheTests
     [Fact]
     public async Task ResolveAsync_WrongContent_ThrowsAndNotPersisted()
     {
-        var cache = Directory.CreateTempSubdirectory("bundler-cache").FullName;
+        var cache = Temp("bundler-cache").FullName;
         var set = Set(("a", "expected"u8.ToArray()));
         var bad = Map(("a", "WRONG"u8.ToArray()));
 
@@ -122,7 +122,7 @@ public sealed class ToolCacheTests
     [Fact]
     public async Task ResolveAsync_InvalidSegments_Rejected()
     {
-        var cache = Directory.CreateTempSubdirectory("bundler-cache").FullName;
+        var cache = Temp("bundler-cache").FullName;
         var files = new[] { new ToolFileSpec("a", new string('a', 64)) };
         var badName = new ToolFileSet("..", "1.0", ToolCache.ComputeContentId(files), files);
         await Assert.ThrowsAsync<ArgumentException>(() =>
@@ -136,7 +136,7 @@ public sealed class ToolCacheTests
     [Fact]
     public async Task ResolveAsync_DuplicatePaths_Rejected()
     {
-        var cache = Directory.CreateTempSubdirectory("bundler-cache").FullName;
+        var cache = Temp("bundler-cache").FullName;
         var content = "x"u8.ToArray();
         var files = new[]
         {
@@ -153,7 +153,7 @@ public sealed class ToolCacheTests
     [Fact]
     public async Task ResolveAsync_ReservedManifestName_Rejected()
     {
-        var cache = Directory.CreateTempSubdirectory("bundler-cache").FullName;
+        var cache = Temp("bundler-cache").FullName;
         var content = "x"u8.ToArray();
         var files = new[] { new ToolFileSpec(ToolCache.ManifestFileName, Sha(content), content.Length) };
         var set = new ToolFileSet("tool", "1.0", ToolCache.ComputeContentId(files), files);
