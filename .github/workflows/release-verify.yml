@@ -1,6 +1,6 @@
 # 发布前全量验证：手动触发，覆盖全功能面。
 # 只验不发——nuget 包与 release 资产发布是后期另一步。
-# 每条腿统一四段：构建+全量 dotnet test → 产包 → 真装真卸 → 更新链/Special 可跑腿。
+# 每条腿统一四段：构建+全量 dotnet test → 产包 → 真装真卸 → 更新链/Manual 可跑腿。
 name: release-verify
 
 on:
@@ -51,13 +51,13 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/verify-windows.ps1
 
-      - name: 上传 Special 证据与失败线索
+      - name: 上传 Manual 证据与失败线索
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: evidence-${{ matrix.os }}
           path: |
-            tests/Special/evidence/
+            tests/Manual/evidence/
             artifacts/ci/test-progress.log
           if-no-files-found: ignore
           retention-days: 1

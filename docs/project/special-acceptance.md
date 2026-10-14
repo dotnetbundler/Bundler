@@ -10,7 +10,7 @@
 - 每轮记录：Git SHA、包版本、OS build/架构、账户权限、产物 SHA-256、日志路径、结果与清理方式。
 - 生产私钥与密码只经环境变量/秘密库传递，不进仓库、命令行或记录。
 - 结论只写"通过/失败/未执行/条件不适用"，未执行不得写成通过。
-- 半自动验收脚本集中在 `tests/Special/`（索引见其 README），需人工动作处暂停等待。
+- 半自动验收脚本集中在 `tests/Manual/`（索引见其 README），需人工动作处暂停等待。
 
 ## 一、付费凭证类
 
@@ -97,7 +97,7 @@
 | 干净 macOS 宿主矩阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg`/`.pkg`；含低于 `LSMinimumSystemVersion` 的旧版本宿主拒跑断言；顺带在无 `actool` 宿主构建 `.app` 验证降级分支（警告不阻塞） | 挂载/EULA 弹窗/拖放安装首启记录、拒跑提示、降级警告记录 | 现宿主有开发工具链；云 mac 实例按天可租 |
 | 干净 Windows 10/11 | WiX 自身依赖边界（无 .NET SDK 仅 candle/light 编译）、独立 VM 复跑安装/卸载、Win7 记 Framework 缺失边界 | 各宿主构建/安装/卸载记录 | 非干净 Windows 11 x64 已有证据；干净宿主未测 |
 | 提权/UAC Windows | NSIS per-machine 安装/卸载与 journal ACL 取证、预建父目录所有权/继承；MSI current-user/per-machine 权限差异；UPDATE 引导件在 `Program Files` 提权目录的写权限与 UAC 交互 | `icacls`/HKLM 权限/提权边界记录 | 普通本机不得静默触发 UAC；当前实证均 per-user 目录 |
-| 可丢弃故障 VM | NSIS 真实重启+锁定文件删除（重启后复核）、真实 ACL 拒绝+物理磁盘/配额耗尽；MSI 重启/锁定/磁盘故障/缺源 | 前后快照、退出码、verbose log、重启后文件/注册表 | `disposable-vm-faults.ps1` 收编进 `release-verify`（windows-2025 与 windows-11-arm 跑绿：真 ACL 拒装 rc=2+真 VHD 盘满 ENOSPC rc=2+无半途树）；真实重启+锁定文件删除（`tests/Special/win/nsis-reboot/Verify.ps1`）与 MSI 故障仍挂本表 |
+| 可丢弃故障 VM | NSIS 真实重启+锁定文件删除（重启后复核）、真实 ACL 拒绝+物理磁盘/配额耗尽；MSI 重启/锁定/磁盘故障/缺源 | 前后快照、退出码、verbose log、重启后文件/注册表 | `disposable-vm-faults.ps1` 收编进 `release-verify`（windows-2025 与 windows-11-arm 跑绿：真 ACL 拒装 rc=2+真 VHD 盘满 ENOSPC rc=2+无半途树）；真实重启+锁定文件删除（`tests/Manual/win/nsis-reboot/Verify.ps1`）与 MSI 故障仍挂本表 |
 | 跨 Windows 版本固定项 | Win10/11 各 build 上升级前/卸载前已固定开始菜单/任务栏项检查 | 各 build 固定项行为记录 | `pinned-items.ps1` 收编进 `release-verify`（windows-2025 b26100 x64 与 windows-11-arm b26200 跑绿；另 Devin VM b20348 实证）；Win10 桌面 SKU 与任务栏 pin 落点仍挂本表——win11 已移除程序化 pin 通道（shell verb 枚举得到但 DoIt 返 E_ACCESSDENIED），落点只能人工 |
 | appimaged 类桌面集成 | appimaged/gear lever 工具对 AppImage 的识别与观感 | 工具识别观感记录 | `.desktop`/图标产出与 `desktop-file-validate` 校验收编为一次性 CI 腿跑绿（run 37892544275）；双击启动=FUSE 同路径已验；工具识别观感仍挂本表 |
 | NSIS `/R` 降权启动 | per-machine 安装后 `setup.exe /S /R` 启动已安装应用：进程 Integrity Level=Medium、属桌面用户不继承 High 令牌、参数传递到达 | Process Explorer 等 IL 观察 + 应用收到参数的断言 | 需交互桌面（UAC 弹窗手动批准）+ IL 观察工具；`uac-assisted.ps1` 辅助就位 |

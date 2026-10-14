@@ -82,7 +82,7 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 ## 5. 未决问题（等待用户或外部输入）
 
 - 各格式外部事项等待对应环境输入，统一登记在 `docs/project/special-acceptance.md`。
-- 仓外独立包消费 fixture（原 `tests/Bundler.LocalPackagesTests/Fixtures/Msi/`，随测试重写迁移至 `tests/Fixtures/` 体系）的 `Fixture` 与 `Standalone/` 在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`，
+- 仓外独立包消费 fixture（原 `tests/Fixtures/MsiPackage/`，随测试重写迁移至 `tests/Fixtures/` 体系）的 `Fixture` 与 `Standalone/` 在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`，
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
   还原来源已由 packageSourceMapping 钉死本地源（PR #41）；
   是否换处理方式（如公开发布后改验公网源、或移入独立验收仓）留待后续裁决。
