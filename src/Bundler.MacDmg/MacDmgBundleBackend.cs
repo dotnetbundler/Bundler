@@ -11,7 +11,7 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
     private static readonly int[] DetachBackoffMilliseconds = { 250, 500, 1000, 2000 };
     private const int ConvertTransientMaxAttempts = 9;
     // 共享 CI runner 上 diskimages-helper 资源竞争可持续一两分钟——
-    // 退避顶到 60s、总预算约两分半，仍属"有限重试"而非死等。
+    // 退避顶到 60s、总预算约三分钟（181s），仍属"有限重试"而非死等。
     private static readonly int[] ConvertTransientBackoffMilliseconds = { 1000, 2000, 4000, 8000, 16000, 30000, 60000, 60000 };
 
     public PackageFormat Format => PackageFormat.Dmg;
