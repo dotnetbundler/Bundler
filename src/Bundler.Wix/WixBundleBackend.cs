@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -141,7 +140,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         {
             throw new InvalidDataException("MSI output lock must not be a reparse point: " + lockPath);
         }
-        using var outputLock = await AcquireOutputLockAsync(lockPath, cancellationToken);
+        using var outputLock = await ToolCache.AcquireLockAsync(lockPath, cancellationToken);
         if (signer is not null && (File.Exists(outputPath) || File.Exists(manifestPath)))
             throw new IOException("An MSI with the same product version already exists with signed or unverified contents: " + outputPath);
         var definitionHash = DefinitionHash(bundle, item, files, icon, language);
@@ -419,8 +418,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         if (settings.DialogFile is not null) text.AppendLine(HashFile(settings.DialogFile));
         AppendExtensionFingerprint(text);
         text.AppendLine(canonical.ToString(SaveOptions.DisableFormatting));
-        using var sha = SHA256.Create();
-        return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(text.ToString()))).Replace("-", "");
+        return Hashes.ToUpperHex(Hashes.Sha256(Encoding.UTF8.GetBytes(text.ToString())));
     }
 
     private void AppendExtensionFingerprint(StringBuilder text)
@@ -485,31 +483,13 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         if (settings.BannerFile is not null) text.AppendLine(HashFile(settings.BannerFile));
         if (settings.DialogFile is not null) text.AppendLine(HashFile(settings.DialogFile));
         AppendExtensionFingerprint(text);
-        using var sha = SHA256.Create();
-        return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(text.ToString()))).Replace("-", "");
+        return Hashes.ToUpperHex(Hashes.Sha256(Encoding.UTF8.GetBytes(text.ToString())));
     }
 
     private static string HashFile(string path)
     {
         using var file = File.OpenRead(path);
-        using var sha = SHA256.Create();
-        return BitConverter.ToString(sha.ComputeHash(file)).Replace("-", "");
-    }
-
-    private static async Task<FileStream> AcquireOutputLockAsync(string path, CancellationToken cancellationToken)
-    {
-        while (true)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-            }
-            catch (IOException)
-            {
-                await Task.Delay(50, cancellationToken);
-            }
-        }
+        return Hashes.ToUpperHex(Hashes.Sha256(file));
     }
 
 }

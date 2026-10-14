@@ -326,7 +326,6 @@ internal static class ApkPackageWriter
         var entries = new List<PayloadEntry>();
         var claimed = new HashSet<string>(StringComparer.Ordinal);
         var directories = new HashSet<string>(StringComparer.Ordinal);
-        var input = Path.GetFullPath(item.InputDirectory);
 
         void ClaimDirectory(string path)
         {

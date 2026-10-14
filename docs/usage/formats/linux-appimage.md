@@ -4,7 +4,7 @@
 
 ## 1. 接入
 
-- 后端包 `DotNet.Bundler.AppImage`（`netstandard2.0`）：内嵌工具链经 `ZipToolCache` 内容寻址缓存。
+- 后端包 `DotNet.Bundler.AppImage`（`netstandard2.0`）：内嵌 appimagetool/runtime 二进制钉 SHA-256，经 `ToolCache` 物化到共享内容寻址缓存（默认 `~/.local/share/DotNetBundler/tools`，可用 `AppImageBundlerOptions.ToolsetCacheDirectory` 覆盖）。
 - 目标：`linux-x86_64`/`linux-aarch64`/`linux-musl-x86_64`/`linux-musl-aarch64`——随包仅内嵌 `x86_64`/`aarch64` 两族 runtime（静态 ELF 两 libc 皆可），`linux-i686` 等其他目标矩阵放行但构建必败。
 
 ## 2. 最小使用

@@ -179,7 +179,8 @@ public static class ToolCache
         }
     }
 
-    private static async Task<FileStream> AcquireLockAsync(string lockPath, CancellationToken cancellationToken)
+    /// <summary>50ms 轮询排他文件锁；资源物化等场景也共享此件。</summary>
+    internal static async Task<FileStream> AcquireLockAsync(string lockPath, CancellationToken cancellationToken)
     {
         while (true)
         {

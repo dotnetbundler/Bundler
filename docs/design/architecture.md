@@ -40,7 +40,7 @@ BundleArtifact[]（产物清单）
 每个后端包暴露一个 `<Format>Bundler` 门面，实现 `IFormatBundler`：
 
 - `Validate(BundleConfiguration)`：扇出前预检——版本/目标合法性、`SigningFiles` 配置了但没给 signer、载荷内平台病态文件名等能在构建前拦下的错误都在这里拒绝。
-- `BuildAsync(BundleConfiguration)`：先跑同一套 `Validate`（直调也保异常契约），然后**物化内嵌资源**（`NsisEmbeddedResources.MaterializeAsync`：工具集压缩包/模板/语言/插件从程序集资源落到工具缓存目录）、**解析工具**（`ZipToolCache` 或显式本地覆盖）、**组装 `IBundleBackend`**，最后交给 `BundlePipeline` 跑。
+- `BuildAsync(BundleConfiguration)`：先跑同一套 `Validate`（直调也保异常契约），然后**物化内嵌资源**（`NsisEmbeddedResources.MaterializeAsync`：工具集压缩包/模板/语言/插件从程序集资源落到工具缓存目录）、**解析工具**（`ToolCache`/`ZipToolCache` 或显式本地覆盖）、**组装 `IBundleBackend`**，最后交给 `BundlePipeline` 跑。
 
 ## 5. 规划（`BundlePlanner`）
 
@@ -64,14 +64,16 @@ BundleArtifact[]（产物清单）
 - 契约面：`Format`、`OperatingSystem`、`RequiredLibC`（`null`=不分 libc；AlpineApk 声明 `Musl`）+ `BuildAsync(BundleBuildContext)`。
 - 后端拿到工作目录后在内部完成格式全流程：NSIS 渲模板跑 `makensis`、MSI 跑内嵌 WiX、`.app` 搭骨架写 plist、deb/rpm/apk 纯托管写入器直接产字节等——格式细节各见其 `docs/design/formats/` 文档。
 - 一个计划项可多产物；产物路径由后端按 `ArtifactNaming` 落盘，管线只核验不命名。
+- 共享帮手件（`Bundler.Core` internal，IVT 对各后端开放）：`ToolRunner`（后端进程执行共享入口：环境注入、输出捕获、取消、`TryRun` 不抛变体、测试缝；`MacArchiveTools`/`Signing.Windows`/updater 家族因宿主语义或自包含设计仍自管进程）、`Hashes`/`Gzip`（SHA-256/MD5/SHA-1→小写 hex 与确定性 gzip 的唯一实现点）、`PayloadSource`（deb/rpm/apk 共享载荷枚举：有序遍历、非常规文件告警跳过、resources 归一与越界拒绝；格式专属 dedup/emit 留各家）、`FileTree`（目录树复制：链接策略 Traverse/WarnSkip/Reject + 排序 + 深度封顶 + 碰撞回调；reparse 拒绝件 `RejectReparsePoint` 共用）。
 
-## 8. 工具供应与缓存（`ZipToolCache`）
+## 8. 工具供应与缓存（`ToolCache`）
 
-- 工具包随后端 nupkg 内嵌（csproj `EmbeddedResource`：如 NSIS 工具集 zip+模板+语言+原生插件）；构建时先物化到工具缓存目录，再经 `ZipToolCache.ResolveToolAsync` 解析。
+- 工具随后端 nupkg 内嵌（csproj `EmbeddedResource`：NSIS/WiX 是工具集 zip，AppImage 是裸 appimagetool/runtime 二进制）；资源先经各后端物化步落到磁盘（zip 落出工具压缩包、裸件开流），内容寻址缓存目录统一走 `ToolCache.ResolveAsync` 管线；zip 形态由 `ZipToolCache` 薄封装先做整包 SHA-256 核验与清单读取再委托。
+- 默认缓存根全后端统一：`%LocalAppData%/DotNetBundler/tools`（非 Windows 为 `~/.local/share` 等；空值回落临时目录），各后端 options 的 `*CacheDirectory` 旋钮覆盖同一根。
 - 缓存目录**内容寻址**：`<name>-<version>-<sha256前12位>`——同 (name,version) 不同哈希的并发解析互不清扫对方暂存。
-- 校验链：压缩包 SHA-256 整包核验 → 读包内逐文件清单（路径/长度/逐文件 SHA-256，拒绝链接与重复路径——链接检测依赖 `ExternalAttributes`，net8+ 资产生效，netstandard2.0 资产上该检查为降级空操作）→ 缓存目录存在则按清单全量复核（路径集一致+manifest 匹配+逐文件哈希）。
-- 并发与完整性：`<dir>.lock` 文件锁跨进程互斥；解压走 `.{name}-{version}-{sha12}-{guid}` 暂存目录、自验后 `Directory.Move` 原子落位；崩溃遗留暂存按 glob 清扫。
-- 安全面：缓存根与锁拒绝重解析点、包内路径逐条验证不逃逸解压目录、枚举遍历遇重解析点即拒、删除带 Windows 文件锁重试。
+- 校验链：zip 先整包 SHA-256 核验再读包内逐文件清单（拒绝链接与重复路径——链接检测依赖 `ExternalAttributes`，net8+ 资产生效，netstandard2.0 资产上该检查为降级空操作）；裸文件集逐件钉 SHA-256、写入暂存时逐件复核；保留名 `.bundler-tool-manifest` 前置拒绝；缓存目录存在则按清单全量复核（路径集一致+manifest 匹配+逐文件哈希）。
+- 并发与完整性：`<dir>.lock` 文件锁跨进程互斥；物化走 `.{name}-{version}-{sha12}-{guid}` 暂存目录、自验后 `Directory.Move` 原子落位；崩溃遗留暂存按 glob 清扫。
+- 安全面：缓存根与锁拒绝重解析点、相对路径逐条验证不逃逸缓存项目录、枚举遍历遇重解析点即拒、删除带 Windows 文件锁重试。
 - 显式本地工具覆盖（如 `CompilerPath`/`ToolsetArchivePath`/`TemplatePath` 类选项）是受控逃生门，不改变默认"随包离线"路径。
 
 ## 9. 产物命名（`ArtifactNaming`）

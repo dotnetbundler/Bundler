@@ -1,6 +1,5 @@
 # 开发期定向测试腿：迭代验证载具，不是发布门（发布门仍是 release-verify）。
-# dispatch 选 suite×runners 只跑需要的腿；push 触发（tests/scripts/本文件改动）
-# 是开发自检通道——跑 unit 套件全矩阵，重量级验证仍 dispatch 或走 release-verify。
+# 纯手动触发：dispatch 选 suite×runners 只跑需要的腿。
 # 注：job 级 if 在矩阵展开前求值，matrix/inputs 不可用于 job-if——runner 子集走
 # select 前置 job 产动态矩阵，不用 job-if 过滤。
 name: test-legs
@@ -18,11 +17,6 @@ on:
         type: string
         default: all
         required: true
-  push:
-    paths:
-      - '.github/workflows/test-legs.yml'
-      - 'scripts/ci/**'
-      - 'tests/**'
 
 permissions:
   contents: read

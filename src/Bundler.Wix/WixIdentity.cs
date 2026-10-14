@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Wix;
 
@@ -86,9 +87,8 @@ public sealed record WixIdentity(Guid UpgradeCode, Guid ProductCode, string Prod
 
     internal static string StableId(string prefix, string name)
     {
-        using var sha = SHA256.Create();
-        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(name.ToLowerInvariant()));
-        return prefix + BitConverter.ToString(hash, 0, 12).Replace("-", string.Empty);
+        var hash = Hashes.Sha256(Encoding.UTF8.GetBytes(name.ToLowerInvariant()));
+        return prefix + Hashes.ToUpperHex(hash).Substring(0, 24);
     }
 
     private static Guid Uuid5(Guid namespaceId, string name)

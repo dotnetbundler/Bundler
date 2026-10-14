@@ -13,7 +13,7 @@
 - 压缩**仅 zstd**：pinned appimagetool 的 mksquashfs 只编译进 zstd（gzip/xz 实测报不支持），不暴露压缩旋钮。
 - AppDir 结构：`usr/` 子树复用 `Bundler.Core` 共享 freedesktop 生成器（`.desktop`+hicolor+metainfo+`usr/lib/<pkg>/`+`usr/bin` 相对链接）；根级 `AppRun` 为**受控生成脚本** `exec "$APPDIR/usr/bin/<main>" "$@"`（可读可审，非预编译二进制）；根 `.desktop` 是指向 staged 件的符号链接，`Exec`/`Icon` 按 AppDir 约定修正。
 - 图标：`BundlerAppImageIconFile` 可选，缺省用自带默认 PNG（appimagetool 对无图标硬失败）；`Categories` 缺省 `Utility`（硬要求）。
-- 后端 `Bundler.AppImage`（netstandard2.0）；工具经受控 `ProcessRunner` 调用，参数不拼 shell。
+- 后端 `Bundler.AppImage`（netstandard2.0）；工具经受控 `ToolRunner` 调用（全后端共享进程执行件），参数不拼 shell；工具集经 `ToolCache` 钉哈希物化到共享缓存根。
 
 ## 2. 语义对应（deb/rpm → AppImage）
 

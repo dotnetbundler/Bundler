@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Wix;
@@ -44,8 +43,7 @@ internal static class WixToolsetResolver
             throw new InvalidOperationException("The embedded WiX 3.14.1 archive is missing.");
         using var memory = new MemoryStream();
         await resource.CopyToAsync(memory, 81920, cancellationToken);
-        using var sha = SHA256.Create();
-        var hash = BitConverter.ToString(sha.ComputeHash(memory.ToArray())).Replace("-", "");
+        var hash = Hashes.Sha256Hex(memory.ToArray());
         if (!hash.Equals(ArchiveSha256, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException("The embedded WiX tool archive does not match the pinned SHA-256.");
@@ -53,27 +51,27 @@ internal static class WixToolsetResolver
 
         cacheDirectory = Path.GetFullPath(cacheDirectory);
         Directory.CreateDirectory(cacheDirectory);
-        CheckDirectory(cacheDirectory);
+        FileTree.RejectReparsePoint(cacheDirectory, "WiX resource cache directory is a reparse point");
         var resourcesDirectory = Path.Combine(cacheDirectory, "resources");
         Directory.CreateDirectory(resourcesDirectory);
-        CheckDirectory(resourcesDirectory);
+        FileTree.RejectReparsePoint(resourcesDirectory, "WiX resource cache directory is a reparse point");
         var directory = Path.Combine(resourcesDirectory, "wix-3.14.1");
         Directory.CreateDirectory(directory);
-        CheckDirectory(directory);
+        FileTree.RejectReparsePoint(directory, "WiX resource cache directory is a reparse point");
         var path = Path.Combine(directory, "wix3141-tools.zip");
         var lockPath = path + ".lock";
-        if (File.Exists(lockPath) && IsReparse(lockPath))
+        if (File.Exists(lockPath))
         {
-            throw new InvalidDataException("WiX resource lock is a reparse point.");
+            FileTree.RejectReparsePoint(lockPath, "WiX resource lock is a reparse point");
         }
-        using var resourceLock = await AcquireLockAsync(lockPath, cancellationToken);
-        if (File.Exists(path) && IsReparse(path))
+        using var resourceLock = await ToolCache.AcquireLockAsync(lockPath, cancellationToken);
+        if (File.Exists(path))
         {
-            throw new InvalidDataException("WiX resource archive is a reparse point.");
-        }
-        if (File.Exists(path) && HashFile(path).Equals(ArchiveSha256, StringComparison.OrdinalIgnoreCase))
-        {
-            return path;
+            FileTree.RejectReparsePoint(path, "WiX resource archive is a reparse point");
+            if (Hashes.Sha256HexFile(path).Equals(ArchiveSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                return path;
+            }
         }
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
@@ -95,40 +93,6 @@ internal static class WixToolsetResolver
             if (File.Exists(temporary))
             {
                 File.Delete(temporary);
-            }
-        }
-    }
-
-    private static string HashFile(string path)
-    {
-        using var stream = File.OpenRead(path);
-        using var sha = SHA256.Create();
-        return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "");
-    }
-
-    private static void CheckDirectory(string path)
-    {
-        if (IsReparse(path))
-        {
-            throw new InvalidDataException("WiX resource cache directory is a reparse point: " + path);
-        }
-    }
-
-    private static bool IsReparse(string path) =>
-        (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
-
-    private static async Task<FileStream> AcquireLockAsync(string path, CancellationToken cancellationToken)
-    {
-        while (true)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-            }
-            catch (IOException)
-            {
-                await Task.Delay(50, cancellationToken);
             }
         }
     }

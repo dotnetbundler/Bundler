@@ -112,6 +112,7 @@ internal static class ToolRunner
     /// <summary>
     /// Synchronous fixed-argument helper calls (chmod/ln on POSIX hosts):
     /// captures output, throws on non-zero exit. Not for user-facing tools.
+    /// 不经 <see cref="Handler"/> 测试缝——此路径是宿主机真实文件操作，调用不可桩。
     /// </summary>
     internal static void RunSync(
         string executable,
