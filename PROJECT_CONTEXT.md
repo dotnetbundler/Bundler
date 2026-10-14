@@ -72,7 +72,8 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 ## 3. 最近验证
 
 当前基线：`main@85b6f38`（`0.1.0-alpha.103`）——全项目重构链 PR #82–#88 已全部合入：`ToolRunner` 统一进程执行、`Hashes`/`Gzip` 收编、`PayloadSource` 三包枚举共享、`ToolCache` 泛化并入 AppImage（默认缓存根统一为 `DotNetBundler/tools`，弃 `XDG_CACHE_HOME`）、`FileTree` 树复制收敛、文档同步与 Tauri/上游产品参照框架移除。
-最近验证：链顶 CI `test-legs` 六腿与 `release-verify` 九 job 全绿；本机 Windows x64 `build` 0 警告、`Bundler.Tests` 全量 491 测 0 失败（49 跳过均为非 Windows 宿主门控）。
+最近验证：CI 拓扑已重写为 `test`（矩阵单点 dispatch/call）+ `verify`（发布门：tests→produce→consume 联合交换→manual-auto→universal 产/消）+ `aot`（产件流）三 workflow，dispatch 全量验证待链顶收口跑；
+本机 Windows x64 Release：Unit 1221 测（1191 过/30 宿主门控跳）、Api 84 测（70 过/14 跳）、Integration 234 测（45 过/189 门控跳）、Package 18 测（10 过/8 同意闸跳），全零失败。
 
 ## 4. 外部验收边界（未执行，不视为完成）
 
