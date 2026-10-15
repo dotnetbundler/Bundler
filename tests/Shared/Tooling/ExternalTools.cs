@@ -1,15 +1,42 @@
 // 外部工具探测：脚本 "command -v → SKIP" 的测试形态。
+// 探测经进程内 PATH 扫描而非 spawn where.exe/sh——共享 runner 高载时
+// where.exe 扫整条 PATH 曾超出 15s 探测超时被误判为"工具缺失"（CI 实证），
+// 进程内扫描不产子进程、无超时面，语义与 where/command -v 等价。
 internal static class ExternalTools
 {
     public static bool Has(string tool)
     {
+        if (tool.Length == 0 || tool.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            return false;
+        }
+        // where.exe 语义：先当前目录再逐 PATH 目录。
+        var dirs = new List<string> { Environment.CurrentDirectory };
+        dirs.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "")
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries));
+        if (OperatingSystem.IsWindows())
+        {
+            var names = Path.HasExtension(tool)
+                ? [tool]
+                : (Environment.GetEnvironmentVariable("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD")
+                    .Split(';', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(ext => tool + ext).ToArray();
+            return dirs.Any(dir => names.Any(name => File.Exists(Path.Combine(dir, name))));
+        }
+        return dirs.Any(dir => HasPosixExecuteBit(Path.Combine(dir, tool)));
+    }
+
+    private static bool HasPosixExecuteBit(string path)
+    {
+        if (OperatingSystem.IsWindows() || !File.Exists(path) || Directory.Exists(path))
+        {
+            return false;
+        }
         try
         {
-            var probe = OperatingSystem.IsWindows() ? "where.exe" : "/bin/sh";
-            var args = OperatingSystem.IsWindows() ? (IEnumerable<string>)[tool] : new[] { "-c", $"command -v {tool} >/dev/null 2>&1" };
-            var result = ProcessRunner.Run(probe, args,
-                new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(15) });
-            return result.ExitCode == 0;
+            var mode = File.GetUnixFileMode(path);
+            return (mode & (UnixFileMode.UserExecute
+                | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0;
         }
         catch
         {
