@@ -70,7 +70,7 @@ try {
             if (Get-ChildItem $pinDir -Filter *.lnk -ErrorAction SilentlyContinue |
                 Where-Object Name -match "Bundler") { $pinHit = $true; break }
         }
-        Wait-Human "检查任务栏是否出现 HelloBundlerApp 图标"
+        Wait-Human "检查任务栏是否出现 $($lnk.Name) 图标"
         if ($pinHit) {
             Note "任务栏 pin 落点" $true "build=$build dir=$pinDir"
         } elseif ($denied -and $build -ge 22621) {
