@@ -76,7 +76,7 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 verify 发布门 run `38678818534`（2026-10-15）**33 作业全绿**：tests 六宿主矩阵 + produce×6 + consume×6 异机验签真装真跑 + manual-auto×6 + universal 产/消×3。
 其后 run `38687565528` 再绿、`38692708521` 与 `38697374256` 各抓出一条宿主瞬态并修复：CLI 腿 `where.exe` 探测超时误判缺工具 + 夹具 ctor 内 Skip 误报整类失败（450d196/362cae2）、NuGet restore 连接层挂死 10min（7fe88d9 有界重试）。
 起跑三连绿前又收编两处收口小项：consume-linux AppImage 双腿各跑各验（FUSE 直跑+extract 免挂，新版 type2-runtime 吃 fuse3）、consume-macos pkg 腿 EXIT trap 防 fixture 滞留 /Applications；HelloBundlerApp 字面样品链经裁决不收编（fixture 链已等价覆盖，保留为 Manual 验收面）。
-稳定性判据：verify 需同内容**连续 3 次全绿**才收住——修复后内容首跑 `38724783912`（2026-10-15）**33/33 全绿，连胜 1/3**；ubuntu-26.04-arm 上 `appimage(fuse)` 真挂载 LEG-PASS 实证（fuse3+`/dev/fuse`+fusermount3 均在）。
+稳定性判据：verify 需同内容**连续 3 次全绿**才收住——`38724783912`（2026-10-15）33/33 全绿但跑在更名前内容（其后 test/verify 的 Windows 腿标签改 `*-vs2026*` 拼写即执行面已变），**不计入最终连胜，仅作证据留存**；最终 3 连胜在收口链顶上重跑。ubuntu-26.04-arm 上 `appimage(fuse)` 真挂载 LEG-PASS 实证（fuse3+`/dev/fuse`+fusermount3 均在）。
 收口期增补：`aot.yml` 更名 `produce-bootstrap.yml` 并扩为全 RID 产件流（linux/musl x86_64+aarch64、macos 双架构+fat universal 工件、win 三架构）；musl 件按实证改 `-static-pie` 静态产（`StaticExecutable=true`+`LinkerFlavor=lld`——glibc 宿主可产且产物 glibc/musl 通吃，bfd 链接 static-pie 会崩故 lld 必需）；Windows 腿标签钉显式 `windows-2025-vs2026`/`windows-11-vs2026-arm`。
 本机 Windows x64 Release：Unit 1222 测（1192 过/30 宿主门控跳）、Api 84 测、Integration 234 测、Package 18 测，全零失败。
 收口期修复的真缺陷：`produce.sh` `cat|head` SIGPIPE（92fe129）、NSIS 卸载注册表异步清理竞态（33f0472）、NSIS `/D` 正斜杠粘连+PKG relocation+artifact 丢执行位（b39d9af）、dmg 腿 EXIT trap 毒化（2190df7）、`hdiutil convert` 持续 EAGAIN 踢 diskimages-helper（7a8d2bd）。

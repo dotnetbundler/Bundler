@@ -167,8 +167,8 @@ HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 
 ```
 .github/workflows/
   test.yml       测试矩阵唯一定义：workflow_dispatch(suite×runners) + workflow_call
-                 legs: ubuntu-26.04 / ubuntu-26.04-arm / windows-2025 /
-                       windows-11-arm / macos-26-intel / macos-26（公开仓标准白名单）
+                 legs: ubuntu-26.04 / ubuntu-26.04-arm / windows-2025-vs2026 /
+                       windows-11-vs2026-arm / macos-26-intel / macos-26
                  每腿: build → run-tests 驱动（四工程直跑 dll + 逐类进度日志）
   verify.yml     发布门：workflow_dispatch
                  jobs: tests=call test.yml(suite=all,runners=all) →
