@@ -6,11 +6,15 @@
 # 键=腿名（app/dmg/pkg/archive），值=工件内子目录名，"-"=该产件无本宿主可用切片，刻意跳过。
 set -uo pipefail
 DIR="$(cd "${1:?usage: consume-macos.sh <artifact-dir> [腿=子目录 …]}" && pwd)"; shift
-declare -A LEGDIR=([app]=app [dmg]=dmg [pkg]=pkg [archive]=archive)
+# bash 3.2（macOS runner 自带）无关联数组——四具名变量+case 分派等价承载。
+DIR_APP=app; DIR_DMG=dmg; DIR_PKG=pkg; DIR_ARCHIVE=archive
 for KV in "$@"; do
     K="${KV%%=*}"; V="${KV#*=}"
     case "$K" in
-        app|dmg|pkg|archive) LEGDIR[$K]="$V" ;;
+        app)     DIR_APP="$V" ;;
+        dmg)     DIR_DMG="$V" ;;
+        pkg)     DIR_PKG="$V" ;;
+        archive) DIR_ARCHIVE="$V" ;;
         *) echo "未知腿映射：$KV" >&2; exit 1 ;;
     esac
 done
@@ -20,8 +24,10 @@ done
 FAILED=""
 run_leg(){ local name="$1"; shift
     if "$@"; then echo "[LEG-PASS] $name"; else echo "[LEG-FAIL] $name"; FAILED="$FAILED $name"; fi }
-leg_dir(){ echo "${LEGDIR[$1]}"; }        # 腿名 → 工件内子目录
-leg_on(){ [ "${LEGDIR[$1]}" != "-" ]; }   # 腿被映射为 - 时本产件无可消费切片
+leg_dir(){ case "$1" in                 # 腿名 → 工件内子目录
+    app) echo "$DIR_APP";; dmg) echo "$DIR_DMG";;
+    pkg) echo "$DIR_PKG";; archive) echo "$DIR_ARCHIVE";; esac; }
+leg_on(){ [ "$(leg_dir "$1")" != "-" ]; } # 腿被映射为 - 时本产件无可消费切片
 
 # 应收件存在性对账：映射表内每条腿的子目录都必须在（刻意跳过的除外）。
 for D in app dmg pkg archive; do

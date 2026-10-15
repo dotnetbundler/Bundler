@@ -103,7 +103,8 @@ jobs:
         run: |
           Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile "$env:RUNNER_TEMP/dotnet-install.ps1"
           & "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel 10.0 -Architecture x64 -InstallDir "$env:RUNNER_TEMP/dotnet-x64"
-          if ($LASTEXITCODE -ne 0) { throw "dotnet-install rc=$LASTEXITCODE" }
+          # & 调脚本不产 $LASTEXITCODE——以产物存在性断言安装成败。
+          if (-not (Test-Path "$env:RUNNER_TEMP/dotnet-x64/dotnet.exe")) { throw "x64 dotnet 安装失败" }
           echo "DOTNET_ROOT_X64=$env:RUNNER_TEMP\dotnet-x64" >> $env:GITHUB_ENV
       # Rosetta 腿附加：arm64 mac 吃 intel 产 x64 件前先保 Rosetta 在位。
       - name: Rosetta（arm64 mac 吃 intel 件）

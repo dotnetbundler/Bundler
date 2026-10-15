@@ -149,7 +149,7 @@ CI `verify.yml` 的 `consume` 腿为 **(消费宿主 × 产件源) 配对矩阵*
 | windows-x64 | nsis.exe + msi + zip/targz | windows-x64 同构 + **windows-arm64（WOW64 异构）** | 真装/跑/卸 |
 | windows-arm64 | nsis.exe + msi + zip/targz | windows-arm64 同构 | 真装/跑/卸 |
 | ubuntu-* | deb+rpm+AppImage+apk+zip+targz | 同架构 ubuntu/docker 子矩阵 | docker 内真装真跑；apk 在 alpine 容器 |
-| macos-arm64 | .app+.dmg+.pkg（arm64+x64 切片目录）+归档 | macos-arm64 同构 + **macos-intel（只吃 app-x64/dmg-x64 切片）** | 挂载/安装/启动 |
+| macos-arm64 | .app+.dmg+.pkg 走 arm64；另产 app-x64/dmg-x64 切片目录与 arm64 归档 | macos-arm64 同构 + **macos-intel（只吃 app-x64/dmg-x64 切片）** | 挂载/安装/启动 |
 | macos-intel | .app+.dmg+.pkg+归档（纯 x64） | macos-intel 同构 + **macos-arm64（Rosetta 全量）** | 挂载/安装/启动 |
 
 异构腿定义规则：只接真实宿主机制——WOW64/Rosetta 是产品级兼容层（用户真这么用），qemu/binfmt 类模拟不算"能使用"故 linux 无双向交换。macOS 侧 arm64 产件中 pkg/archive 无 x64 切片故 intel 消费腿对它们映射 `-` 刻意跳过（consume-macos.sh 腿=子目录映射参数）。`universal` .app 产/消对并入该拓扑（一产两消）。
