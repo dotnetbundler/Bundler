@@ -56,13 +56,20 @@ if find "$DIR/apk" -name '*.apk' | grep -q .; then
     '
 fi
 
-# .AppImage：宿主直跑（FUSE 缺席回落 --appimage-extract-and-run）
+# .AppImage 双腿各跑各验（轮测联合测试要求两条腿都断言，不许 OR 链遮蔽）：
+# fuse 路=直接运行经 FUSE 挂载（内嵌 type2-runtime 的 squashfuse 探测 fusermount/fusermount3，fuse2/fuse3 皆可用）；
+# extract 路=--appimage-extract-and-run 免挂载解压直跑（容器等无 /dev/fuse 环境的路径）。
 if find "$DIR/appimage" -name '*.AppImage' | grep -q .; then
     APPIMAGE="$(find "$DIR/appimage" -name '*.AppImage' | head -1)"
-    run_leg "appimage" bash -c '
+    chmod +x "$APPIMAGE"
+    run_leg "appimage(fuse)" bash -c '
         set -e
-        chmod +x "$0"
-        OUT=$("$0" ci-marker 2>/dev/null || "$0" --appimage-extract-and-run ci-marker)
+        OUT=$("$0" ci-marker)
+        echo "$OUT" | grep -q "BundlerAppImageIntegrationFixture:ci-marker"
+    ' "$APPIMAGE"
+    run_leg "appimage(extract)" bash -c '
+        set -e
+        OUT=$("$0" --appimage-extract-and-run ci-marker)
         echo "$OUT" | grep -q "BundlerAppImageIntegrationFixture:ci-marker"
     ' "$APPIMAGE"
 fi

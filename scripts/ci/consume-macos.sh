@@ -64,8 +64,11 @@ if find "$DIR/pkg" -name '*.pkg' | grep -q .; then
     PKG="$(find "$DIR/pkg" -name '*.pkg' | head -1)"
     run_leg "pkg" bash -c '
         set -e
-        sudo installer -pkg "$0" -target /
         B="/Applications/Bundler Mac PKG Fixture.app"
+        # installer/断言任何一步失败也要把 fixture 从 /Applications 清掉——
+        # 清理命令自身失败不得毒化腿 rc（EXIT trap 同 set -e 交互，须 || true）。
+        trap "sudo pkgutil --forget com.dotnetbundler.macpkgintegrationfixture 2>/dev/null || true; sudo rm -rf \"$B\" || true" EXIT
+        sudo installer -pkg "$0" -target /
         test -d "$B"
         OUT=$("$B/Contents/MacOS/BundlerMacPkgIntegrationFixture" ci-marker)
         echo "$OUT" | grep -q "BundlerMacPkgIntegrationFixture:ci-marker"
