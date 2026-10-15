@@ -156,6 +156,7 @@ CI `verify.yml` 新增 `joint` 段：各宿主产件 job 上传 `产物+SHA256SU
 ### 3.10 样品链（Integration）
 
 HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 产物可装/可跑断言；MSBuild 三模式（build/publish/pack 触发面）+ CLI 多 input-dir 面 + universal 合并面。
+覆盖面由各格式 fixture 发布链等价承担；样品工程本体的字面 publish 链经裁决不收编自动化，留 Manual 验收面（脚本以 `-InstallerPath` 消费样品产物）。
 
 ### 3.11 包契约（Package）
 
