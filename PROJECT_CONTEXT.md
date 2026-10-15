@@ -99,6 +99,11 @@ verify 发布门 run `38678818534`（2026-10-15）**33 作业全绿**：tests �
   - **静态兼容修复（先于 musl 收敛做）**：`BootstrapPlan.cs` 删 `PosixRename`（唯一 libc 直引——静态件上 `dlopen("libc")` 必挂）：`SameVolume` 改挂载表比对（`DriveInfo.GetDrives()` 静态件实证可用）或 `/proc/self/mountinfo` dev_t 比对，同卷 `File.Move` 即 rename 语义、异卷维持两段式；修后 ENOSPC 预检在静态件恢复（当前整检被 DllNotFound 拖进 WARN），且消除 `MoveFile` 单文件路径在静态件上的潜在异常；
   - linux 引导件收敛 musl 静态单件（`linux-musl-*` 静态件实测 glibc/musl 双宿主通吃，收敛后随包每架构省 ~1.2MB 并消 glibc 版本地板；依赖上一项先修——否则静态件丢 ENOSPC 预检）；
   - 既有冻件可选经 `produce-bootstrap` 全量重产统一 provenance（当前各件来源分散于历史开发周期）。
+- **spec §3 终验对账遗留**（审计结论：63 项零真缺口；弱覆盖中可自动化项已补断言，余下按性质归位）：
+  - 测试侧待做：`MacAppGate` 未签名 `.app` 拒绝腿（macOS 宿主可自动化，随 bootstrap 功能批次）；update 打包侧 e2e 非 zip 格式腿；zip/tar.gz 跨宿主同件交换接线（verify 拓扑）；
+  - 环境受限已登记 `special-acceptance.md`：s390x/ppc64le `UnixFileTypes` 偏移、Windows zip 符号链接还原、提权目录换装（原已登记）；
+  - 能力缺口（功能面）：`DebPackageReader` 不解 GNU 长名/PAX——真实第三方 deb 样本解析非当前目标，规格已对齐；
+  - 歧义待裁决：§3.9"windows-* 产件喂 windows-*"是否含"x64 件喂 arm64 Windows（WOW64）"——现 arm64 腿自产自消 win-arm64，跨架构消费未接线。
 
 ## 6. 默认下一步
 

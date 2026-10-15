@@ -60,9 +60,9 @@ tests/
 | `BundleConfigurationLoader` | bundler.json 反序列化（枚举字符串、缺失节、畸形 JSON 报错路径） |
 | `BundleConfigurationPaths` | 相对路径按基目录归一化 |
 | `FileTree.CopyTree` | Reject/WarnSkip/Traverse 三策略；Traverse 必须 maxDepth（断言）；符号链接环防；非常规文件跳过；排序稳定；resolveFileDestination 碰撞回调；overwrite 语义；reparse 点拒绝 |
-| `Hashes` | sha256/sha1/md5 byte[]/stream/file 三源；lower/upper hex 逐字节正确 |
+| `Hashes` | sha256 byte[]/stream/file 三源+sha1 byte[]/stream+md5 byte[]/file（按实际重载面）；lower/upper hex 逐字节正确 |
 | `Gzip`/`TarWriter` | gzip 确定性（同输入同输出）；ustar 头字段（名字/大小/模式/mtime/typeflag/校验和）、长名处理、symlink 项、目录项、结尾块 |
-| `ToolRunner` | RunAsync 经 `Handler` 缝：参数引用、退出码传播、输出捕获、取消传播、超时；`RunSync` 不经缝（文档化边界） |
+| `ToolRunner` | RunAsync 经 `Handler` 缝：参数引用、退出码传播、输出捕获、取消传播；`RunSync` 不经缝（文档化边界；超时非本 API 特性） |
 | `ToolCache` | `ResolveCacheDirectory` 默认根与显式覆盖；`ComputeContentId` 稳定性与序无关性；`ResolveToolPath` 越界拒绝；`ResolveAsync` 全生命周期：段校验/sha 校验/锁/暂存原子落位/清单写读/校验失败重建/陈旧暂存清扫/缓存命中不重写；reparse 点拒绝 |
 | `ZipToolCache` | zip 内嵌资源物化：条目归一化、目录项、非法条目、清单契约 |
 | `PayloadSource` | deb/rpm/apk 载荷枚举：输入目录遍历、file entries 覆盖、模式位、目录项、符号链接、binlink |
@@ -78,7 +78,7 @@ tests/
 | `ArWriter`（Deb） | ar 归档头、成员对齐、长名（`#1/`/`/` 表）、debian-binary/control/data 三段序 |
 | `CpioWriter`+`RpmHeaderWriter`（Rpm） | newc 头、header 结构（magic/索引区/存储区）、tag 写入、签名段、lead 结构 |
 | `ApkPackageWriter`（AlpineApk） | 三段 gzip 流、PKGINFO 字段、.SIGN.RSA 位置、脚本段 |
-| 各 `*PackageReader` | 自写自读 round-trip + 真实样本包解析（控字段/文件清单/大小） |
+| 各 `*PackageReader` | 自写自读 round-trip + 系统工具反向解析我件（真实第三方样本包解析非目标——DebPackageReader 不解 GNU 长名/PAX） |
 
 ### 3.4 入口适配层（Unit）
 
