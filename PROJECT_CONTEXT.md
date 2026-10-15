@@ -75,9 +75,9 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 **测试体系重写链 PR #90–#97 全部 open 未合**（stacked 基：#91→main、#92→skeleton、#93→unit、#94→api、#95→integration、#96→package、#97→ci），链顶 `test-rewrite/docs@7ea14e8`。
 verify 发布门 run `38678818534`（2026-10-15）**33 作业全绿**：tests 六宿主矩阵 + produce×6 + consume×6 异机验签真装真跑 + manual-auto×6 + universal 产/消×3。
 其后 run `38687565528` 再绿、`38692708521` 与 `38697374256` 各抓出一条宿主瞬态并修复：CLI 腿 `where.exe` 探测超时误判缺工具 + 夹具 ctor 内 Skip 误报整类失败（450d196/362cae2）、NuGet restore 连接层挂死 10min（7fe88d9 有界重试）。
-起跑三连绿前又收编三处收口小项（ed6565c/7ea14e8）：consume-linux AppImage 双腿各跑各验（FUSE 直跑+extract 免挂，新版 type2-runtime 吃 fuse3）、consume-macos pkg 腿 EXIT trap 防 fixture 滞留 /Applications、HelloBundlerApp 字面样品链自动化腿。
-稳定性判据：verify 需同内容**连续 3 次全绿**才收住——当前头 `7ea14e8` 尚未复跑验证（用户指令暂停 dispatch），前两次绿属于旧测试内容不计入新链顶连胜。
-本机 Windows x64 Release：Unit 1222 测（1192 过/30 宿主门控跳）、Api 84 测、Integration 236 测、Package 18 测，全零失败。
+起跑三连绿前又收编两处收口小项：consume-linux AppImage 双腿各跑各验（FUSE 直跑+extract 免挂，新版 type2-runtime 吃 fuse3）、consume-macos pkg 腿 EXIT trap 防 fixture 滞留 /Applications；HelloBundlerApp 字面样品链经裁决不收编（fixture 链已等价覆盖，保留为 Manual 验收面）。
+稳定性判据：verify 需同内容**连续 3 次全绿**才收住——当前链顶内容尚未复跑验证（用户指令暂停 dispatch），前两次绿属于旧测试内容不计入新链顶连胜。
+本机 Windows x64 Release：Unit 1222 测（1192 过/30 宿主门控跳）、Api 84 测、Integration 234 测、Package 18 测，全零失败。
 收口期修复的真缺陷：`produce.sh` `cat|head` SIGPIPE（92fe129）、NSIS 卸载注册表异步清理竞态（33f0472）、NSIS `/D` 正斜杠粘连+PKG relocation+artifact 丢执行位（b39d9af）、dmg 腿 EXIT trap 毒化（2190df7）、`hdiutil convert` 持续 EAGAIN 踢 diskimages-helper（7a8d2bd）。
 
 ## 4. 外部验收边界（未执行，不视为完成）
