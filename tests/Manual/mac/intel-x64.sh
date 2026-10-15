@@ -27,6 +27,9 @@ if [ -n "$APP" ] && [ -d "$APP" ]; then
     cp -a "$APP" "$WORK/app.app"
     # MacOS/ 内按字母序首件常是 createdump 等辅助件——按 CFBundleExecutable 取主程序。
     exe="$(defaults read "$WORK/app.app/Contents/Info" CFBundleExecutable 2>/dev/null || true)"
+    # CI 联合交换经 artifact 上传/下载会丢 POSIX 执行位——按 CFBundleExecutable 补位再判。
+    [ -n "$exe" ] && [ -f "$WORK/app.app/Contents/MacOS/$exe" ] \
+        && chmod +x "$WORK/app.app/Contents/MacOS/$exe"
     [ -n "$exe" ] && [ -x "$WORK/app.app/Contents/MacOS/$exe" ] \
         || die "CFBundleExecutable 不存在或不可执行: $exe"
     "$WORK/app.app/Contents/MacOS/$exe" --version >/dev/null 2>&1 \

@@ -42,14 +42,24 @@ if find "$DIR/dmg" -name '*.dmg' | grep -q .; then
         test -d "$B"
         cp -R "$B" "$T/app.app"
         hdiutil detach "$T/mnt" -force
+        xattr -dr com.apple.quarantine "$T/app.app" 2>/dev/null || true
         chmod +x "$T/app.app/Contents/MacOS/BundlerMacDmgIntegrationFixture"
-        OUT=$("$T/app.app/Contents/MacOS/BundlerMacDmgIntegrationFixture" ci-marker)
+        # 静默失败曾吃掉整腿信息——显式打印 rc 与输出再判。
+        set +e
+        OUT=$("$T/app.app/Contents/MacOS/BundlerMacDmgIntegrationFixture" ci-marker 2>&1); rc=$?
+        set -e
+        echo "dmg-fixture rc=$rc out=$OUT"
+        [ "$rc" -eq 0 ]
         echo "$OUT" | grep -q "BundlerMacDmgIntegrationFixture:ci-marker"
     ' "$DMG"
 fi
 
 # .pkg：installer 真装到 /Applications → 原生启动 → forget+删
+# 先清掉交换目录里的 .app 中间体：pkg-info 带 <relocate>，installer 见到同 bundle-id
+# 的已存在 .app 会原地升级（relocation）而非落 /Applications——LaunchServices 索引
+# 竞态导致落点漂移，删除同件保证 /Applications 确定性。
 if find "$DIR/pkg" -name '*.pkg' | grep -q .; then
+    find "$DIR/pkg" -type d -name '*.app' -exec rm -rf {} + 2>/dev/null || true
     PKG="$(find "$DIR/pkg" -name '*.pkg' | head -1)"
     run_leg "pkg" bash -c '
         set -e

@@ -21,7 +21,8 @@ if ($bad.Count -gt 0) { throw "清单校验失败: $($bad -join ', ')" }
 $missing = @("nsis", "msi", "archive") | Where-Object { -not (Test-Path "$DIR/$_") }
 if ($missing.Count -gt 0) { throw "产件目录缺失: $($missing -join ', ')" }
 
-$WORK = "$env:RUNNER_TEMP/bundler-consume"
+# /D= 与 _?= 走 NSIS 自有命令行解析——混入正斜杠会被吞成粘连路径而静默装偏，全程纯反斜杠。
+$WORK = "$env:RUNNER_TEMP\bundler-consume"
 New-Item -ItemType Directory -Force $WORK | Out-Null
 $failedLegs = @()
 function Leg($name, [scriptblock]$body) {
@@ -33,17 +34,17 @@ function Leg($name, [scriptblock]$body) {
 $nsis = Get-ChildItem "$DIR/nsis" -Filter *.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($nsis) {
     Leg "nsis" {
-        $inst = "$WORK/nsis-inst"
+        $inst = "$WORK\nsis-inst"
         $p = Start-Process $nsis.FullName -ArgumentList "/S", "/D=$inst" -Wait -PassThru
         if ($p.ExitCode -ne 0) { throw "installer rc=$($p.ExitCode)" }
-        $exe = "$inst/BundlerIntegrationFixture.exe"
+        $exe = "$inst\BundlerIntegrationFixture.exe"
         if (-not (Test-Path $exe)) { throw "装后主程序缺位：$exe" }
         $out = & $exe ci-marker
         if ($out -notmatch "DotNet.Bundler integration fixture") { throw "marker 输出异常：$out" }
         # NSIS 卸载器原地直启是 launcher 语义不透传真实 rc——复制出去 + _?= 拿真退出码
         # （与 tests/Integration 的 DirectUninstall 同手法；rc=3010 需重启同样算成功）。
-        $uninst = "$inst/Uninstall.exe"
-        $copy = "$WORK/nsis-uninstall.exe"
+        $uninst = "$inst\Uninstall.exe"
+        $copy = "$WORK\nsis-uninstall.exe"
         Copy-Item $uninst $copy
         $p = Start-Process $copy -ArgumentList "/S", "/DELETEAPPDATA", "_?=$inst" -Wait -PassThru
         if ($p.ExitCode -notin 0, 3010) { throw "uninstaller rc=$($p.ExitCode)" }
