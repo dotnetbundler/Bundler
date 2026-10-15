@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025, windows-11-arm, macos-26-intel, macos-26]
+        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025-vs2026, windows-11-vs2026-arm, macos-26-intel, macos-26]
     with:
       suite: all
       runners: ${{ matrix.os }}
@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025, windows-11-arm, macos-26-intel, macos-26]
+        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025-vs2026, windows-11-vs2026-arm, macos-26-intel, macos-26]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -71,7 +71,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025, windows-11-arm, macos-26-intel, macos-26]
+        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025-vs2026, windows-11-vs2026-arm, macos-26-intel, macos-26]
     steps:
       # checkout 只取 consume 脚本——消费机仍不见构建产物以外的树内容。
       - uses: actions/checkout@v7
@@ -107,7 +107,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025, windows-11-arm, macos-26-intel, macos-26]
+        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025-vs2026, windows-11-vs2026-arm, macos-26-intel, macos-26]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7

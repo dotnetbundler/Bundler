@@ -47,7 +47,7 @@ jobs:
           RUNNERS_IN: ${{ inputs.runners || 'all' }}
         run: |
           set -euo pipefail
-          ALL='["ubuntu-26.04","ubuntu-26.04-arm","windows-2025","windows-11-arm","macos-26-intel","macos-26"]'
+          ALL='["ubuntu-26.04","ubuntu-26.04-arm","windows-2025-vs2026","windows-11-vs2026-arm","macos-26-intel","macos-26"]'
           if [ -z "$RUNNERS_IN" ] || [ "$RUNNERS_IN" = "all" ]; then
             echo "runners=$ALL" >> "$GITHUB_OUTPUT"
           else
