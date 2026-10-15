@@ -83,7 +83,34 @@ internal static class Dotnet
     }
 
     public static void Restore(string project, IEnumerable<string> properties, string what)
-        => Checked(["restore", project, .. properties], what);
+        => RestoreWithRetry(["restore", project, .. properties], what);
+
+    // NuGet 还原在共享 runner 上偶发连接层挂死（零输出卡到进程超时，
+    // CI windows-11-arm 实证一单挂满 10min）——restore 幂等，超时/非零退出有界重试。
+    // 刻意失败的负例调用勿走此口：继续用 Run 单发，避免确定性失败陪跑重试。
+    public static ProcessRunner.Result RestoreWithRetry(IEnumerable<string> args, string what,
+        ProcessRunner.Options? options = null, int maxAttempts = 2)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                var result = Run(args, options ?? new ProcessRunner.Options());
+                if (result.ExitCode == 0)
+                {
+                    return result;
+                }
+                if (attempt >= maxAttempts)
+                {
+                    ProcessRunner.AssertSuccess(result, what);
+                    return result;
+                }
+            }
+            catch (TimeoutException) when (attempt < maxAttempts)
+            {
+            }
+        }
+    }
 
     public static ProcessRunner.Result Publish(string project, string configuration,
         IEnumerable<string> properties, string what, bool noRestore = true,

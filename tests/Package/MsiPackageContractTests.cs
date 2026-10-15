@@ -474,11 +474,10 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         var cache = Path.Combine(root, "nuget-cache");
         var config = PinnedPackageSource.WriteConfig(
             Path.Combine(root, "nuget-pin"), _f.Packages);
-        ProcessRunner.AssertSuccess(
-            Dotnet.Run(["restore", project, "--configfile", config,
-                $"-p:BundlerPackageSource={_f.Packages}",
-                $"-p:RestorePackagesPath={cache}", $"-p:BundlerPackageVersion={_f.Version}"],
-                new ProcessRunner.Options()),
+        Dotnet.RestoreWithRetry(
+            ["restore", project, "--configfile", config,
+             $"-p:BundlerPackageSource={_f.Packages}",
+             $"-p:RestorePackagesPath={cache}", $"-p:BundlerPackageVersion={_f.Version}"],
             "API fixture restore failed.");
         MsiSupport.AssertLocalBundlerRestore(project, _f.Version, _f.Packages, cache,
             ["DotNet.Bundler.Wix", "DotNet.Bundler.Core", "DotNet.Bundler.Abstractions"]);
@@ -1031,10 +1030,10 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
                 $"-p:HelloBundlerMsiInstallScope={variant.Scope}",
                 $"-p:BundlerOutputPath={output}",
             };
-            ProcessRunner.AssertSuccess(
-                Dotnet.Run(["restore", sample, .. props, "--force", "-v:minimal"],
-                    new ProcessRunner.Options { WorkingDirectory = RepositoryLayout.Root }),
-                $"Sample restore failed: {variant.Name}");
+            Dotnet.RestoreWithRetry(
+                ["restore", sample, .. props, "--force", "-v:minimal"],
+                $"Sample restore failed: {variant.Name}",
+                new ProcessRunner.Options { WorkingDirectory = RepositoryLayout.Root });
             ProcessRunner.AssertSuccess(
                 Dotnet.Run(["publish", sample, "-c", "Release", "--no-restore", .. props,
                     "-v:minimal"],
@@ -1118,10 +1117,10 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
             "-p:HelloBundlerMsiInstallScope=currentUser",
             $"-p:BundlerOutputPath={output}",
         };
-        ProcessRunner.AssertSuccess(
-            Dotnet.Run(["restore", sample, .. props, "--force", "-v:minimal"],
-                new ProcessRunner.Options { WorkingDirectory = RepositoryLayout.Root }),
-            "Sample restore failed (interactive leg)");
+        Dotnet.RestoreWithRetry(
+            ["restore", sample, .. props, "--force", "-v:minimal"],
+            "Sample restore failed (interactive leg)",
+            new ProcessRunner.Options { WorkingDirectory = RepositoryLayout.Root });
         ProcessRunner.AssertSuccess(
             Dotnet.Run(["publish", sample, "-c", "Release", "--no-restore", .. props,
                 "-v:minimal"],

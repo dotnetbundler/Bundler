@@ -104,8 +104,7 @@ internal static class MsiSupport
             args.Add("-r");
             args.Add(TestPlatform.ToPublishRid(target));
         }
-        ProcessRunner.AssertSuccess(Dotnet.Run(args, new ProcessRunner.Options()),
-            $"MSI fixture restore failed: {project}");
+        Dotnet.RestoreWithRetry(args, $"MSI fixture restore failed: {project}");
         AssertLocalBundlerRestore(project, version, packageDir, cache,
             ["DotNet.Bundler", "DotNet.Bundler.MSBuild", "DotNet.Bundler.Wix"]);
     }
