@@ -36,7 +36,8 @@ if find "$DIR/dmg" -name '*.dmg' | grep -q .; then
     DMG="$(find "$DIR/dmg" -name '*.dmg' | head -1)"
     run_leg "dmg" bash -c '
         set -e
-        T=$(mktemp -d); trap "hdiutil detach "$T/mnt" -force 2>/dev/null; rm -rf $T" EXIT
+        # EXIT trap 在 set -e 下遇失败命令即中断且毒化最终 rc——detach 已卸卷是常态失败，须 || true 吞掉。
+        T=$(mktemp -d); trap "hdiutil detach "$T/mnt" -force 2>/dev/null || true; rm -rf $T" EXIT
         hdiutil attach "$0" -nobrowse -readonly -mountpoint "$T/mnt"
         B=$(find "$T/mnt" -type d -name "*.app" | head -1)
         test -d "$B"
