@@ -174,7 +174,7 @@ HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 
                  jobs: tests=call test.yml(suite=all,runners=all) →
                        pack → produce-{win,linux,mac}（fixture 产件+SHA256SUMS）→
                        consume 矩阵（联合交换真装真跑）→ manual-auto 腿 → universal 产/消
-  aot.yml        产件流：per-RID AOT 引导件产出（workflow_dispatch）
+  produce-bootstrap.yml  产件流：per-RID AOT 引导件产出（workflow_dispatch，全 RID 五腿）
 scripts/ci/
   run-tests.{sh,ps1}   唯一测试驱动（四工程直跑 dll、逐类、进度日志、-longRunning）
   produce.{sh,ps1}     fixture 产件 + 清单
@@ -192,6 +192,6 @@ scripts/ci/
 
 ## 6. 验收标准
 
-重写完成 = 本清单每行有对应测试或登记条目；验证面 workflow（test/verify）全绿（aot 为产件流另行验证）；单测零子进程可机器核查（`Process.Start|ToolRunner.(RunAsync|TryRunAsync|RunSync)` 在 Unit 工程实调用零命中——`ToolRunnerTests` 自身经 `Handler` 桩的调用与 CliTests/MacAppTests 收割注释提及除外）。
+重写完成 = 本清单每行有对应测试或登记条目；验证面 workflow（test/verify）全绿（produce-bootstrap 为产件流另行验证）；单测零子进程可机器核查（`Process.Start|ToolRunner.(RunAsync|TryRunAsync|RunSync)` 在 Unit 工程实调用零命中——`ToolRunnerTests` 自身经 `Handler` 桩的调用与 CliTests/MacAppTests 收割注释提及除外）。
 
 **实施期同步义务**：本文件随引入登记进 AGENTS.md §4 文档地图与 `docs/README.md` 索引；工程改名面（Bundler.Tests→UnitTests、LocalPackagesTests→PackageTests、tests/Special→Manual）触发 AGENTS.md §6 命令表、tests/README 工程表、workflow 中 `tests/Special/` 路径引用的同步。

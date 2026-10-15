@@ -111,6 +111,10 @@
 
 纯粹"可能以后有用"、单一框架运行时需求或无法定义所有权的依赖安装，不进入实现路线。
 
+已登记待做项（测试重写收口期裁决，详见 `PROJECT_CONTEXT.md` §5）：
+
+- **linux 引导件收敛 musl 静态单件**：`StaticExecutable` musl-static-pie 件实测 glibc/musl 双宿主通吃、消 glibc 版本地板、随包每架构省 ~1.2MB；前置依赖 `PosixRename` 静态兼容修复（否则静态件丢 ENOSPC 预检）。
+
 已裁决不予登记的类别（记录理由，防重复提案）：
 
 - **发行版专属 RID**（`ubuntu.20.04`/`rhel.8` 等）：.NET 8 起官方弃用便携 RID 外枚举，产出载荷与便携 RID 完全相同，登记只会制造差异假象；

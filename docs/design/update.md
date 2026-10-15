@@ -26,7 +26,7 @@
 已实现并验证：
 
 - `UpdateManifestEmitter` 清单 + `.sig` 旁车 + `bundler-update.json` 身份烙记；`BundlerUpdate*` MSBuild 旋钮族。
-- AOT 引导件全 RID 内嵌（win x86_64/aarch64、linux x86_64/aarch64/musl×2、mac x86_64/arm64；arm64 件真宿主产出；windows-i686 经 aot CI 工件）。
+- AOT 引导件全 RID 内嵌（win x86_64/aarch64、linux x86_64/aarch64/musl×2、mac x86_64/arm64；arm64 件真宿主产出；windows-i686 经 produce-bootstrap CI 工件）。
 - POSIX `bundler-updater.sh` 降级件（bash/dash 双壳实证；`.app`/AppImage/zip/targz 换件+回滚同语义）。
 - 三段式换包 `<install>.bundler-swap` 崩溃恢复；kill -9 断电无砖化实证。
 - 并发互斥 `<install>.bundler-lock`（owner pid 存活判夺锁；`--lock-timeout` 默认 30s 超时 rc=3；AOT 与 shell 件跨实现互斥）。

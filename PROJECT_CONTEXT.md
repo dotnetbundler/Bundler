@@ -72,11 +72,12 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 ## 3. 最近验证
 
 当前基线：`main@85b6f38`（`0.1.0-alpha.103`）——全项目重构链 PR #82–#88 已全部合入：`ToolRunner` 统一进程执行、`Hashes`/`Gzip` 收编、`PayloadSource` 三包枚举共享、`ToolCache` 泛化并入 AppImage（默认缓存根统一为 `DotNetBundler/tools`，弃 `XDG_CACHE_HOME`）、`FileTree` 树复制收敛、文档同步与 Tauri/上游产品参照框架移除。
-**测试体系重写链 PR #90–#97 全部 open 未合**（stacked 基：#91→main、#92→skeleton、#93→unit、#94→api、#95→integration、#96→package、#97→ci），链顶 `test-rewrite/docs@aac3675`。
+**测试体系重写链 PR #90–#97 全部 open 未合**（stacked 基：#91→main、#92→skeleton、#93→unit、#94→api、#95→integration、#96→package、#97→ci），链顶 `test-rewrite/docs@57ec510`。
 verify 发布门 run `38678818534`（2026-10-15）**33 作业全绿**：tests 六宿主矩阵 + produce×6 + consume×6 异机验签真装真跑 + manual-auto×6 + universal 产/消×3。
 其后 run `38687565528` 再绿、`38692708521` 与 `38697374256` 各抓出一条宿主瞬态并修复：CLI 腿 `where.exe` 探测超时误判缺工具 + 夹具 ctor 内 Skip 误报整类失败（450d196/362cae2）、NuGet restore 连接层挂死 10min（7fe88d9 有界重试）。
 起跑三连绿前又收编两处收口小项：consume-linux AppImage 双腿各跑各验（FUSE 直跑+extract 免挂，新版 type2-runtime 吃 fuse3）、consume-macos pkg 腿 EXIT trap 防 fixture 滞留 /Applications；HelloBundlerApp 字面样品链经裁决不收编（fixture 链已等价覆盖，保留为 Manual 验收面）。
-稳定性判据：verify 需同内容**连续 3 次全绿**才收住——当前链顶内容尚未复跑验证（用户指令暂停 dispatch），前两次绿属于旧测试内容不计入新链顶连胜。
+稳定性判据：verify 需同内容**连续 3 次全绿**才收住——修复后内容首跑 `38724783912`（2026-10-15）**33/33 全绿，连胜 1/3**；ubuntu-26.04-arm 上 `appimage(fuse)` 真挂载 LEG-PASS 实证（fuse3+`/dev/fuse`+fusermount3 均在）。
+收口期增补：`aot.yml` 更名 `produce-bootstrap.yml` 并扩为全 RID 产件流（linux/musl x86_64+aarch64、macos 双架构+fat universal 工件、win 三架构）；musl 件按实证改 `-static-pie` 静态产（`StaticExecutable=true`+`LinkerFlavor=lld`——glibc 宿主可产且产物 glibc/musl 通吃，bfd 链接 static-pie 会崩故 lld 必需）；Windows 腿标签钉显式 `windows-2025-vs2026`/`windows-11-vs2026-arm`。
 本机 Windows x64 Release：Unit 1222 测（1192 过/30 宿主门控跳）、Api 84 测、Integration 234 测、Package 18 测，全零失败。
 收口期修复的真缺陷：`produce.sh` `cat|head` SIGPIPE（92fe129）、NSIS 卸载注册表异步清理竞态（33f0472）、NSIS `/D` 正斜杠粘连+PKG relocation+artifact 丢执行位（b39d9af）、dmg 腿 EXIT trap 毒化（2190df7）、`hdiutil convert` 持续 EAGAIN 踢 diskimages-helper（7a8d2bd）。
 
@@ -92,11 +93,17 @@ verify 发布门 run `38678818534`（2026-10-15）**33 作业全绿**：tests �
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
   还原来源已由 packageSourceMapping 钉死本地源（PR #41）；
   是否换处理方式（如公开发布后改验公网源、或移入独立验收仓）留待后续裁决。
+- **测试重写收口期登记的功能侧待办**（下阶段处理，本阶段只记不动）：
+  - `tools/macos-universal` fat 引导件入库——`macos-universal` target 当前落 `posix/bundler-updater.sh` 降级件（单架构件不能服务 universal：arm64 件 Intel 起不来、x86_64 件 ARM 走 Rosetta）；`produce-bootstrap` macos 腿已产 lipo 双切片工件，冻件提交即让 universal 包拿到原生引导件；
+  - `tools/windows-i686` 引导件入库——`windows-i686` target 的 update 引导件当前解析落空（Windows 无 posix 兜底），produce-bootstrap win-x86 腿工件下载后冻件；
+  - **静态兼容修复（先于 musl 收敛做）**：`BootstrapPlan.cs` 删 `PosixRename`（唯一 libc 直引——静态件上 `dlopen("libc")` 必挂）：`SameVolume` 改挂载表比对（`DriveInfo.GetDrives()` 静态件实证可用）或 `/proc/self/mountinfo` dev_t 比对，同卷 `File.Move` 即 rename 语义、异卷维持两段式；修后 ENOSPC 预检在静态件恢复（当前整检被 DllNotFound 拖进 WARN），且消除 `MoveFile` 单文件路径在静态件上的潜在异常；
+  - linux 引导件收敛 musl 静态单件（`linux-musl-*` 静态件实测 glibc/musl 双宿主通吃，收敛后随包每架构省 ~1.2MB 并消 glibc 版本地板；依赖上一项先修——否则静态件丢 ENOSPC 预检）；
+  - 既有冻件可选经 `produce-bootstrap` 全量重产统一 provenance（当前各件来源分散于历史开发周期）。
 
 ## 6. 默认下一步
 
 全部格式、CLI 与 UPDATE 均已冻结并入 `main`，功能面无进行中阶段。
-**测试体系重写已收口**（规格 `docs/design/testing.md`；Unit/Api/Integration/Package 四层 + `tests/Manual` 验收脚本层全量实现，CI 拓扑为 test/verify/aot 三 workflow，verify 发布门已全绿；PR 链 #90–#97 全部 open 待合入，基见 §3）。
+**测试体系重写已收口**（规格 `docs/design/testing.md`；Unit/Api/Integration/Package 四层 + `tests/Manual` 验收脚本层全量实现，CI 拓扑为 test/verify/produce-bootstrap 三 workflow，verify 发布门已全绿；PR 链 #90–#97 全部 open 待合入，基见 §3）。
 剩余工作：
 
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
