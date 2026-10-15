@@ -62,6 +62,10 @@ fi
 if find "$DIR/appimage" -name '*.AppImage' | grep -q .; then
     APPIMAGE="$(find "$DIR/appimage" -name '*.AppImage' | head -1)"
     chmod +x "$APPIMAGE"
+    # fuse 腿帮手兜底：ubuntu 镜像默认带 fuse3，缺装则补——无 /dev/fuse 的内核
+    # 环境装上也跑不了，那时 fuse 腿按设计真失败如实报（非环境差异遮蔽）。
+    command -v fusermount >/dev/null 2>&1 || command -v fusermount3 >/dev/null 2>&1 \
+        || sudo apt-get install -y fuse3 >/dev/null
     run_leg "appimage(fuse)" bash -c '
         set -e
         OUT=$("$0" ci-marker)
