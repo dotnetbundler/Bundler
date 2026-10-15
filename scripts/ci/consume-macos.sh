@@ -26,7 +26,8 @@ run_leg(){ local name="$1"; shift
     if "$@"; then echo "[LEG-PASS] $name"; else echo "[LEG-FAIL] $name"; FAILED="$FAILED $name"; fi }
 leg_dir(){ case "$1" in                 # 腿名 → 工件内子目录
     app) echo "$DIR_APP";; dmg) echo "$DIR_DMG";;
-    pkg) echo "$DIR_PKG";; archive) echo "$DIR_ARCHIVE";; esac; }
+    pkg) echo "$DIR_PKG";; archive) echo "$DIR_ARCHIVE";;
+    *) echo "leg_dir 未知腿名：$1" >&2; exit 1;; esac; }
 leg_on(){ [ "$(leg_dir "$1")" != "-" ]; } # 腿被映射为 - 时本产件无可消费切片
 
 # 应收件存在性对账：映射表内每条腿的子目录都必须在（刻意跳过的除外）。
