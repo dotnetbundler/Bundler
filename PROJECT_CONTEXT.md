@@ -103,7 +103,7 @@ verify 发布门 run `38678818534`（2026-10-15）**33 作业全绿**：tests �
   - 测试侧待做：`MacAppGate` 未签名 `.app` 拒绝腿（macOS 宿主可自动化，随 bootstrap 功能批次）；update 打包侧 e2e 非 zip 格式腿；zip/tar.gz 跨宿主同件交换接线（verify 拓扑）；
   - 环境受限已登记 `special-acceptance.md`：s390x/ppc64le `UnixFileTypes` 偏移、Windows zip 符号链接还原、提权目录换装（原已登记）；
   - 能力缺口（功能面）：`DebPackageReader` 不解 GNU 长名/PAX——真实第三方 deb 样本解析非当前目标，规格已对齐；
-  - 歧义待裁决：§3.9"windows-* 产件喂 windows-*"是否含"x64 件喂 arm64 Windows（WOW64）"——现 arm64 腿自产自消 win-arm64，跨架构消费未接线。
+  - §3.9 歧义已裁决落地：消费腿改全交换配对矩阵（宿主×产件源）——windows-arm64 吃 x64 件（WOW64）、macos-26 吃 intel 产件（Rosetta）、macos-intel 吃 arm 产件 x64 切片（consume-macos.sh 腿映射参数）；linux 无原生异构机制保持对角线。
 
 ## 6. 默认下一步
 

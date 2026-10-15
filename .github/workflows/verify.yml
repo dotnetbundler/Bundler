@@ -61,23 +61,33 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # 消费腿：异机下载同一件 → 清单校验 → 真装真跑真卸。
-  # 产/消是同标签不同机器：runner 用完即弃，消费机从未见构建树。
+  # 消费腿（全交换）：每台主机下载所有"自己能跑"的产件——清单校验 → 真装真跑真卸。
+  # 异构腿：arm64 Windows 吃 x64 件（WOW64）；arm64 mac 吃 intel 产 x64 件（Rosetta）；
+  # intel mac 吃 arm64 产件中的 x64 切片目录（app-x64/dmg-x64）。
   consume:
-    name: consume-${{ matrix.os }}
+    name: consume-${{ matrix.host }}<-${{ matrix.src }}
     needs: produce
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.host }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025-vs2026, windows-11-vs2026-arm, macos-26-intel, macos-26]
+        include:
+          - {host: ubuntu-26.04, src: ubuntu-26.04}
+          - {host: ubuntu-26.04-arm, src: ubuntu-26.04-arm}
+          - {host: windows-2025-vs2026, src: windows-2025-vs2026}
+          - {host: windows-11-vs2026-arm, src: windows-11-vs2026-arm}
+          - {host: windows-11-vs2026-arm, src: windows-2025-vs2026}
+          - {host: macos-26, src: macos-26}
+          - {host: macos-26-intel, src: macos-26-intel}
+          - {host: macos-26, src: macos-26-intel}
+          - {host: macos-26-intel, src: macos-26, remap: "app=app-x64 dmg=dmg-x64 pkg=- archive=-"}
     steps:
       # checkout 只取 consume 脚本——消费机仍不见构建产物以外的树内容。
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
-          name: produce-${{ matrix.os }}
+          name: produce-${{ matrix.src }}
           path: ${{ runner.temp }}/consume
       # NSIS fixture 是 FDD（SelfContained=false）——装出件需要 .NET 运行时，
       # 不赌镜像预置，显式装。
@@ -85,6 +95,21 @@ jobs:
         if: runner.os == 'Windows'
         with:
           dotnet-version: "10.x"
+      # WOW64 腿附加：x64 FDD fixture 需 x64 运行时——dotnet-install 装到旁目录
+      # 由 DOTNET_ROOT_X64 指给 x64 apphost（arm64 宿主上 setup-dotnet 只装 arm64 件）。
+      - name: x64 .NET 运行时（arm64 宿主吃 x64 件）
+        if: matrix.host == 'windows-11-vs2026-arm' && matrix.src == 'windows-2025-vs2026'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile "$env:RUNNER_TEMP/dotnet-install.ps1"
+          & "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel 10.0 -Architecture x64 -InstallDir "$env:RUNNER_TEMP/dotnet-x64"
+          if ($LASTEXITCODE -ne 0) { throw "dotnet-install rc=$LASTEXITCODE" }
+          echo "DOTNET_ROOT_X64=$env:RUNNER_TEMP\dotnet-x64" >> $env:GITHUB_ENV
+      # Rosetta 腿附加：arm64 mac 吃 intel 产 x64 件前先保 Rosetta 在位。
+      - name: Rosetta（arm64 mac 吃 intel 件）
+        if: matrix.host == 'macos-26' && matrix.src == 'macos-26-intel'
+        shell: bash
+        run: /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
       - name: 消费（Linux）
         if: runner.os == 'Linux'
         shell: bash
@@ -92,7 +117,7 @@ jobs:
       - name: 消费（macOS）
         if: runner.os == 'macOS'
         shell: bash
-        run: bash scripts/ci/consume-macos.sh "$RUNNER_TEMP/consume"
+        run: bash scripts/ci/consume-macos.sh "$RUNNER_TEMP/consume" ${{ matrix.remap }}
       - name: 消费（Windows）
         if: runner.os == 'Windows'
         shell: pwsh
