@@ -95,14 +95,13 @@ public sealed class SampleChainIntegrationTests : IClassFixture<SampleChainInteg
             "channel feed missing: " + OutputFiles(outDir));
         Assert.True(File.Exists(Path.Combine(outDir, "bundler-update-feed.stable.json.sig")),
             "feed signature missing: " + OutputFiles(outDir));
-        Assert.True(Directory.EnumerateFiles(outDir, "*.sig", SearchOption.AllDirectories).Any(),
-            "no artifact .sig sidecars: " + OutputFiles(outDir));
-        Assert.True(Directory.EnumerateFiles(outDir, "*.blockmap", SearchOption.AllDirectories).Any(),
-            "no .blockmap sidecars: " + OutputFiles(outDir));
 
-        // 身份侧车随载荷进包：zip 件内必带 bundler-update.json（feedUrl/channel 对握）
+        // 身份侧车随载荷进包：zip 件内必带 bundler-update.json；
+        // 产物级 .sig/.blockmap 断言须钉在已定位产物上——裸 *.sig 会被清单签名遮蔽成恒真。
         var zip = Directory.EnumerateFiles(outDir, "*.zip", SearchOption.AllDirectories).FirstOrDefault();
         Assert.NotNull(zip);
+        Assert.True(File.Exists(zip + ".sig"), "artifact .sig sidecar missing: " + zip);
+        Assert.True(File.Exists(zip + ".blockmap"), "artifact .blockmap sidecar missing: " + zip);
         using var archive = System.IO.Compression.ZipFile.OpenRead(zip);
         Assert.Contains(archive.Entries, e =>
             e.FullName.EndsWith("bundler-update.json", StringComparison.Ordinal));
