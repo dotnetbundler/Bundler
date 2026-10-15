@@ -14,7 +14,8 @@ run_leg(){ local name="$1"; shift
 # 应收件存在性对账：本宿主 produce 腿应收 deb/rpm/appimage/apk/archive 五件——
 # 缺件即判败，防产侧布局漂移时"全绿零断言"。
 for D in deb rpm appimage apk archive; do
-    [ -d "$DIR/$D" ] || { echo "[LEG-FAIL] $D（产件目录缺失）"; FAILED="$FAILED $D-missing"; }
+    # $D 后接全角括号必须 ${D} 定界——（的 UTF-8 首字节在部分 locale 下是字母。
+    [ -d "$DIR/$D" ] || { echo "[LEG-FAIL] ${D}（产件目录缺失）"; FAILED="$FAILED ${D}-missing"; }
 done
 [ -z "$FAILED" ] || { echo "失败腿:$FAILED" >&2; exit 1; }
 

@@ -36,7 +36,7 @@ esac
 for P in $PROJECTS; do
     LAYER="${P%%/*}"; NAME="${P##*/}"
     DLL="tests/$LAYER/bin/Release/net10.0/$NAME.dll"
-    [ -f "$DLL" ] || { echo "测试程序集不存在：$DLL（先 dotnet build）" >&2; exit 1; }
+    [ -f "$DLL" ] || { echo "测试程序集不存在：${DLL}（先 dotnet build）" >&2; exit 1; }
     if [ "$NAME" = "Bundler.IntegrationTests" ]; then
         # mapfile 是 bash>=4 内建（macOS runner 自带 bash 3.2.57）——while 读行代替。
         # -list classes 本身失败也要判败：进程替换会丢退出码，先落变量再查。

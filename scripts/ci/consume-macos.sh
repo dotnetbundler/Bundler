@@ -34,8 +34,10 @@ leg_on(){ local d; d="$(leg_dir "$1")" || exit 1; [ "$d" != "-" ]; }
 
 # 应收件存在性对账：映射表内每条腿的子目录都必须在（刻意跳过的除外）。
 for D in app dmg pkg archive; do
-    leg_on "$D" || { echo "[LEG-SKIP] $D（产件无本宿主可用切片，映射跳过）"; continue; }
-    [ -d "$DIR/$(leg_dir "$D")" ] || { echo "[LEG-FAIL] $D（产件目录缺失：$(leg_dir "$D")）"; FAILED="$FAILED $D-missing"; }
+    # 全角括号首字节在某些 locale 下是字母（Latin-1 ï）——$D 必须 ${D} 定界，
+    # 否则被拼进变量名在 set -u 下炸 unbound（本行 LEG-SKIP 是首条真踩中的路径）。
+    leg_on "$D" || { echo "[LEG-SKIP] ${D}（产件无本宿主可用切片，映射跳过）"; continue; }
+    [ -d "$DIR/$(leg_dir "$D")" ] || { echo "[LEG-FAIL] ${D}（产件目录缺失：$(leg_dir "$D")）"; FAILED="$FAILED ${D}-missing"; }
 done
 [ -z "$FAILED" ] || { echo "失败腿:$FAILED" >&2; exit 1; }
 
