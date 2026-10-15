@@ -657,7 +657,9 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             RunOk(unicodeUninstaller, "/S /DELETEAPPDATA");
             WaitFor.Until(() => !Directory.Exists(UnicodeInstallDir),
                 "Unicode fixture cleanup did not finish.", 30);
-            Assert.Null(Registry.CurrentUser.OpenSubKey(UnicodeRegistryPath));
+            // 卸载注册项在模板 finalizing 段删除，晚于 INSTDIR 移除——跟随等待而非裸断言。
+            WaitFor.Until(() => Registry.CurrentUser.OpenSubKey(UnicodeRegistryPath) is null,
+                "Unicode uninstall registry key was not removed.", 30);
             Assert.False(File.Exists(UnicodeStartMenuShortcut));
         }
         finally { Cleanup(); }
@@ -1625,7 +1627,9 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.True(Directory.Exists(RoamingData),
                 "Default uninstall removed roaming application data.");
             Assert.True(Directory.Exists(LocalData));
-            Assert.Null(Registry.CurrentUser.OpenSubKey(RegistryPath));
+            // 卸载注册项在模板 finalizing 段删除，晚于载荷移除——跟随等待而非裸断言。
+            WaitFor.Until(() => Registry.CurrentUser.OpenSubKey(RegistryPath) is null,
+                "Uninstall registry key was not removed.", 30);
             Assert.False(File.Exists(DesktopShortcut));
             Assert.False(File.Exists(StartMenuShortcut));
             Assert.Null(Registry.CurrentUser.OpenSubKey(FileProgIdKey));
