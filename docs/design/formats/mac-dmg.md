@@ -31,6 +31,7 @@
 已实现并验证：
 
 - `hdiutil create`→挂载→`convert` 全链；`/Applications` 符号链接；隐藏扩展名；失败清理。
+- 宿主瞬态自愈：`create` "Resource busy"/`detach` 簿记滞后/`convert` "Resource temporarily unavailable"（EAGAIN）定向重试；`convert` 连续 EAGAIN 超阈值后先 `killall -9 diskimages-helper`（单用户 XPC 服务随下次请求自动重生）再按退避重试——CI 实证该痼疾可致宿主级 3 分钟以上持续 EAGAIN。
 - Finder 布局：窗口尺寸/位置、`.app` 与 `/Applications` 图标位、图标大小、背景图（png/jpg/gif）、卷图标 `.VolumeIcon.icns`+`SetFile -c icnC`；默认对齐上游（660×400、app=180,170、Applications=480,170、图标 128）。
 - **无 GUI 会话降级**：探测无 GUI 跳过布局+警告仍产可挂载 DMG；显式开关 `BundlerMacDmgLayoutSkip`。
 - DMG 本体 `codesign` ad-hoc 验签实测；`udifrez` SLA 注入 + `udifderez` 回读断言实测。
@@ -41,7 +42,7 @@
 外部待验收（详见 `docs/project/special-acceptance.md`）：
 
 - 真实 Finder 双击挂载观感；EULA 弹窗观感；真实证书签名。
-- Intel/Rosetta 宿主挂载、干净宿主验证。
+- Intel/Rosetta 挂载观感与干净宿主验证（CI 已断言 Intel 宿主挂载+启动、arm64+Rosetta x64 件启动；观感人工）。
 
 ## 5. 有意排除
 

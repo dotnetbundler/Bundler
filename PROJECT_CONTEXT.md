@@ -1,7 +1,7 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-13
-> 当前分支：`main`
+> 最后更新：2026-10-15
+> 当前分支：`main`（重写链顶 `test-rewrite/docs`，PR #90–#97 stacked 待合）
 > 当前包版本：`0.1.0-alpha.103`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词（别称仅输入归一，产物名用各生态词），契约与全产物名目录见 `docs/design/targets.md`**
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/design/formats/` 单文档只留设计决策、语义契约与能力状态
@@ -72,8 +72,10 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 ## 3. 最近验证
 
 当前基线：`main@85b6f38`（`0.1.0-alpha.103`）——全项目重构链 PR #82–#88 已全部合入：`ToolRunner` 统一进程执行、`Hashes`/`Gzip` 收编、`PayloadSource` 三包枚举共享、`ToolCache` 泛化并入 AppImage（默认缓存根统一为 `DotNetBundler/tools`，弃 `XDG_CACHE_HOME`）、`FileTree` 树复制收敛、文档同步与 Tauri/上游产品参照框架移除。
-最近验证：CI 拓扑已重写为 `test`（矩阵单点 dispatch/call）+ `verify`（发布门：tests→produce→consume 联合交换→manual-auto→universal 产/消）+ `aot`（产件流）三 workflow，dispatch 全量验证待链顶收口跑；
-本机 Windows x64 Release：Unit 1221 测（1191 过/30 宿主门控跳）、Api 84 测（70 过/14 跳）、Integration 234 测（45 过/189 门控跳）、Package 18 测（10 过/8 同意闸跳），全零失败。
+**测试体系重写链 PR #90–#97 全部 open 未合**（stacked 基：#91→main、#92→skeleton、#93→unit、#94→api、#95→integration、#96→package、#97→ci），链顶 `test-rewrite/docs@7a8d2bd`。
+verify 发布门 run `38678818534`（2026-10-15，链顶等价内容）**33 作业全绿**：tests 六宿主矩阵 + produce×6 + consume×6 异机验签真装真跑 + manual-auto×6 + universal 产/消×3。
+本机 Windows x64 Release：Unit 1222 测（1192 过/30 宿主门控跳）、Api 84 测、Integration 234 测、Package 18 测，全零失败。
+收口期修复的真缺陷：`produce.sh` `cat|head` SIGPIPE（92fe129）、NSIS 卸载注册表异步清理竞态（33f0472）、NSIS `/D` 正斜杠粘连+PKG relocation+artifact 丢执行位（b39d9af）、dmg 腿 EXIT trap 毒化（2190df7）、`hdiutil convert` 持续 EAGAIN 踢 diskimages-helper（7a8d2bd）。
 
 ## 4. 外部验收边界（未执行，不视为完成）
 
@@ -91,7 +93,7 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 ## 6. 默认下一步
 
 全部格式、CLI 与 UPDATE 均已冻结并入 `main`，功能面无进行中阶段。
-**测试体系重写进行中**（规格 `docs/design/testing.md`；tests/ 已清为四层骨架，实现按 PR 链分阶段收口）。
+**测试体系重写已收口**（规格 `docs/design/testing.md`；Unit/Api/Integration/Package 四层 + `tests/Manual` 验收脚本层全量实现，CI 拓扑为 test/verify/aot 三 workflow，verify 发布门已全绿；PR 链 #90–#97 全部 open 待合入，基见 §3）。
 剩余工作：
 
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
