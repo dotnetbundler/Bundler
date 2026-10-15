@@ -370,6 +370,97 @@ public sealed class UpdatePayloadStagingTests : TempBase
     }
 
     [Fact]
+    public void EnsureStaged_MissingBootstrapper_Throws()
+    {
+        var work = Temp("bundler-work");
+        var input = Temp("bundler-input");
+        File.WriteAllText(Path.Combine(input.FullName, "app"), "bin");
+        var key = UpdateKeyMaterial.Generate();
+        var keyPath = Path.Combine(work.FullName, "key.json");
+        key.Save(keyPath);
+        // 显式引导件目录下既无 per-target 件也无 posix 脚本件：
+        // 配置了 BootstrapperDirectory 后不再查内嵌资源兜底——必走缺件抛错路径。
+        var boot = Directory.CreateDirectory(Path.Combine(work.FullName, "boot"));
+
+        var item = new BundlePlanItem(
+            BundleTarget.Parse("linux-x86_64"), PackageFormat.Deb,
+            input.FullName, "app", "out", false);
+        var context = new BundleBuildContext(
+            new BundleConfiguration
+            {
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://x", SigningKeyFile = keyPath,
+                    BootstrapperDirectory = boot.FullName
+                }
+            },
+            item, work.FullName, NullBundleLogger.Instance);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => UpdatePayloadStaging.EnsureStaged(context, item));
+        Assert.Contains("no bootstrapper", exception.Message);
+    }
+
+    [Fact]
+    public void EnsureStaged_NoEmbeddedBootstrapperForTarget_Throws()
+    {
+        var work = Temp("bundler-work");
+        var input = Temp("bundler-input");
+        File.WriteAllText(Path.Combine(input.FullName, "app"), "bin");
+        var key = UpdateKeyMaterial.Generate();
+        var keyPath = Path.Combine(work.FullName, "key.json");
+        key.Save(keyPath);
+
+        // windows-i686 无内嵌 per-target 件；windows 目标又不接受 posix 脚本件兜底。
+        var item = new BundlePlanItem(
+            BundleTarget.Parse("windows-i686"), PackageFormat.Zip,
+            input.FullName, "Sample.exe", "out", false);
+        var context = new BundleBuildContext(
+            new BundleConfiguration
+            {
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://x", SigningKeyFile = keyPath
+                }
+            },
+            item, work.FullName, NullBundleLogger.Instance);
+
+        Assert.Throws<InvalidOperationException>(
+            () => UpdatePayloadStaging.EnsureStaged(context, item));
+    }
+
+    [Fact]
+    public void EnsureStaged_InstallerReplayFormat_SkipsBootstrapper()
+    {
+        // nsis/msi 更新=重跑安装器：载荷不带换包执行体——无引导件可注也不抛。
+        var work = Temp("bundler-work");
+        var input = Temp("bundler-input");
+        File.WriteAllText(Path.Combine(input.FullName, "Sample.exe"), "bin");
+        var key = UpdateKeyMaterial.Generate();
+        var keyPath = Path.Combine(work.FullName, "key.json");
+        key.Save(keyPath);
+
+        var item = new BundlePlanItem(
+            BundleTarget.Parse("windows-x86_64"), PackageFormat.Nsis,
+            input.FullName, "Sample.exe", "out", false);
+        var context = new BundleBuildContext(
+            new BundleConfiguration
+            {
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://x", SigningKeyFile = keyPath
+                }
+            },
+            item, work.FullName, NullBundleLogger.Instance);
+
+        var staged = UpdatePayloadStaging.EnsureStaged(context, item);
+
+        Assert.Contains("update-payload", staged.InputDirectory);
+        Assert.NotNull(UpdateInstallIdentity.TryRead(staged.InputDirectory));
+        Assert.False(File.Exists(Path.Combine(staged.InputDirectory, "bundler-updater.exe")));
+    }
+
+    [Fact]
     public void EnsureStaged_AlreadyInsideWork_WritesInPlace()
     {
         var work = Temp("bundler-work");

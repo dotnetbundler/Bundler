@@ -622,6 +622,71 @@ public sealed class DebTests : TempBase
             "A resource must land under the install root at its TargetPath.");
     }
 
+    // deb 与 rpm 语义不同：载荷路径的所有前缀层都落 Directory 项（含 usr/usr/bin
+    // 共享层）——dpkg 下这些项即包对目录的所有权声明，统一 0755、root:root。
+    [Fact]
+    public async Task OwnsDirectoryEntries()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Root, "out");
+        Directory.CreateDirectory(Path.Combine(input, "sub"));
+        File.WriteAllText(Path.Combine(input, "sub", "inner.txt"), "nested");
+        var deb =(await new DebBundler()
+            .BuildAsync(DebConfiguration(input, output), TestContext.Current.CancellationToken)).Single();
+        var members = DebPackageReader.ReadAr(deb.Path);
+        var dataTar = DebPackageReader.Ungzip(members[2].Content);
+        var data = DebPackageReader.ReadTar(dataTar);
+
+        var dirs = data.Where(e => e.Kind == TarEntryKind.Directory)
+            .Select(e => e.Name).ToArray();
+        Assert.Contains("./usr/lib/example-app", dirs);
+        Assert.Contains("./usr/lib/example-app/sub", dirs);
+        Assert.Contains("./usr/bin", dirs);
+        Assert.Contains("./usr", dirs);
+        Assert.All(data.Where(e => e.Kind == TarEntryKind.Directory),
+            e => Assert.Equal(493 /* 0755 */, e.Mode));
+
+        // DebPackageReader 不回读 uid/gid/uname/gname——所有权断言直接扫 tar 头字段。
+        var owners = TarDirectoryOwners(dataTar);
+        Assert.Equal(
+            dirs.OrderBy(n => n, StringComparer.Ordinal),
+            owners.Select(o => o.Name).OrderBy(n => n, StringComparer.Ordinal));
+        Assert.All(owners, o =>
+        {
+            Assert.Equal(0, o.Uid);
+            Assert.Equal(0, o.Gid);
+            Assert.Equal("root", o.Uname);
+            Assert.Equal("root", o.Gname);
+        });
+    }
+
+    private static List<(string Name, int Uid, int Gid, string Uname, string Gname)>
+        TarDirectoryOwners(byte[] tarBytes)
+    {
+        var owners = new List<(string, int, int, string, string)>();
+        var offset = 0;
+        string Field(int at, int width) =>
+            Encoding.ASCII.GetString(tarBytes, offset + at, width).TrimEnd('\0', ' ');
+        while (offset + 512 <= tarBytes.Length &&
+               tarBytes.Skip(offset).Take(512).Any(b => b != 0))
+        {
+            var size = (int)Convert.ToInt64(Field(124, 12), 8);
+            if (tarBytes[offset + 156] == (byte)'5')
+            {
+                var name = Field(0, 100);
+                var prefix = Field(345, 155);
+                owners.Add((
+                    (prefix.Length > 0 ? prefix + "/" + name : name).TrimEnd('/'),
+                    (int)Convert.ToInt64(Field(108, 8), 8),
+                    (int)Convert.ToInt64(Field(116, 8), 8),
+                    Field(265, 32),
+                    Field(297, 32)));
+            }
+            offset += 512 + ((size + 511) / 512) * 512;
+        }
+        return owners;
+    }
+
     [Fact]
     public async Task WritesPackagingChangelog()
     {

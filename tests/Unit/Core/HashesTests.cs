@@ -40,6 +40,33 @@ public sealed class HashesTests
     }
 
     [Fact]
+    public void Sha1_KnownVector()
+    {
+        // sha1("abc") —— FIPS 180-1 附录 A 示例向量。
+        var abc = Encoding.UTF8.GetBytes("abc");
+        Assert.Equal("a9993e364706816aba3e25717850c26c9cd0d89d", Hashes.Sha1Hex(abc));
+        Assert.Equal("a9993e364706816aba3e25717850c26c9cd0d89d",
+            Hashes.Sha1Hex(new MemoryStream(abc)));
+    }
+
+    [Fact]
+    public void Md5_FileMatchesKnownVector()
+    {
+        // md5("abc") —— RFC 1321 测试套件向量；文件路径腿必须读内容而非路径。
+        var path = Path.Combine(Path.GetTempPath(), $"bundler-hash-{Guid.NewGuid():N}");
+        File.WriteAllBytes(path, Encoding.UTF8.GetBytes("abc"));
+        try
+        {
+            Assert.Equal("900150983cd24fb0d6963f7d28e17f72", Hashes.Md5HexFile(path));
+            Assert.Equal(Hashes.Md5Hex(Encoding.UTF8.GetBytes("abc")), Hashes.Md5HexFile(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Sha1_Md5_KnownLengths()
     {
         Assert.Equal(40, Hashes.Sha1Hex(Content).Length);

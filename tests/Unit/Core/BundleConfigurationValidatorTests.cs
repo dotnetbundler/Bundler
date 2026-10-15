@@ -239,6 +239,30 @@ public sealed class BundleConfigurationValidatorTests
     }
 
     [Fact]
+    public void Icons_Missing_Reports_WhenCheckingFileSystem()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), $"bundler-no-icon-{Guid.NewGuid():N}");
+        var iconFile = Path.Combine(Path.GetTempPath(), $"bundler-icon-{Guid.NewGuid():N}.png");
+        File.WriteAllBytes(iconFile, [0x89, 0x50, 0x4E, 0x47]);
+        try
+        {
+            var config = WithIcons([missing, iconFile, Path.GetTempPath()]);
+            var issues = Validate(config, checkFileSystem: true);
+            Assert.Contains(issues,
+                issue => issue.Path == "icons[0]" && issue.Message.Contains("does not exist"));
+            // 正腿：存在的文件与目录（Icon.icon 目录集形态）都不报。
+            Assert.False(HasIssue(issues, "icons[1]"));
+            Assert.False(HasIssue(issues, "icons[2]"));
+            // 关闭 FS 检查时存在性不验。
+            Assert.False(HasIssue(Validate(config, checkFileSystem: false), "icons["));
+        }
+        finally
+        {
+            File.Delete(iconFile);
+        }
+    }
+
+    [Fact]
     public void Resources_SourceDestinationRequired_NoEscape()
     {
         var config = ValidConfig.Create();
@@ -440,6 +464,17 @@ public sealed class BundleConfigurationValidatorTests
             Version = config.Version,
             OutputDirectory = outputDirectory ?? config.OutputDirectory,
             Targets = [target]
+        };
+    }
+
+    private static BundleConfiguration WithIcons(IReadOnlyList<string> icons)
+    {
+        var config = ValidConfig.Create();
+        return new BundleConfiguration
+        {
+            ProductName = config.ProductName, Identifier = config.Identifier,
+            Version = config.Version, OutputDirectory = config.OutputDirectory,
+            Targets = config.Targets, Icons = icons
         };
     }
 
