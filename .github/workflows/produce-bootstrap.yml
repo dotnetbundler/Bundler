@@ -26,14 +26,19 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.x'
-      # gcc 提供 musl static-pie 链接所需的 crtbeginS/crtendS/libgcc/libgcc_eh
-      # （x64 镜像预装 gcc，arm 镜像无——两腿显式装齐对称）
-      - name: NativeAOT 工具链（clang/lld/gcc/zlib）
-        run: sudo apt-get update && sudo apt-get install -y clang lld gcc zlib1g-dev
+      - name: NativeAOT 工具链（clang/gcc/zlib——glibc 动态件）
+        run: sudo apt-get update && sudo apt-get install -y clang gcc zlib1g-dev
       - name: 产 linux-x86_64 引导件（glibc 动态）
         run: dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-x64 -o /tmp/aot/linux-x86_64
-      - name: 产 linux-musl-x86_64 引导件（静态 -static-pie，lld 链接）
-        run: dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-musl-x64 -p:StaticExecutable=true -p:LinkerFlavor=lld -o /tmp/aot/linux-musl-x86_64
+      # musl 静态件在 alpine SDK 容器内产——容器内 clang 默认 target=musl，crt 目标件为
+      # musl 原生件；glibc 宿主直产 musl 需 musl target 的 GCC 探测路径，arm 镜像上缺失（实证两次失败）
+      - name: 产 linux-musl-x86_64 引导件（alpine 容器内静态 -static-pie，lld 链接）
+        run: |
+          mkdir -p /tmp/aot/linux-musl-x86_64
+          docker run --rm -v "$PWD:/src" -v /tmp/aot:/aot -w /src \
+            mcr.microsoft.com/dotnet/sdk:10.0-alpine \
+            sh -c "apk add --no-cache clang lld zlib-dev zlib-static build-base >/dev/null && \
+                   dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-musl-x64 -p:StaticExecutable=true -p:LinkerFlavor=lld -o /aot/linux-musl-x86_64"
       - name: 冒烟——两件各真跑 apply 换包 + musl 件进 alpine 容器真跑
         run: |
           set -eux
@@ -73,12 +78,17 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.x'
-      - name: NativeAOT 工具链（clang/lld/gcc/zlib）
-        run: sudo apt-get update && sudo apt-get install -y clang lld gcc zlib1g-dev
+      - name: NativeAOT 工具链（clang/gcc/zlib——glibc 动态件）
+        run: sudo apt-get update && sudo apt-get install -y clang gcc zlib1g-dev
       - name: 产 linux-aarch64 引导件（glibc 动态）
         run: dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-arm64 -o /tmp/aot/linux-aarch64
-      - name: 产 linux-musl-aarch64 引导件（静态 -static-pie，lld 链接）
-        run: dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-musl-arm64 -p:StaticExecutable=true -p:LinkerFlavor=lld -o /tmp/aot/linux-musl-aarch64
+      - name: 产 linux-musl-aarch64 引导件（alpine 容器内静态 -static-pie，lld 链接）
+        run: |
+          mkdir -p /tmp/aot/linux-musl-aarch64
+          docker run --rm -v "$PWD:/src" -v /tmp/aot:/aot -w /src \
+            mcr.microsoft.com/dotnet/sdk:10.0-alpine \
+            sh -c "apk add --no-cache clang lld zlib-dev zlib-static build-base >/dev/null && \
+                   dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-musl-arm64 -p:StaticExecutable=true -p:LinkerFlavor=lld -o /aot/linux-musl-aarch64"
       - name: 冒烟——两件各真跑 apply 换包 + musl 件进 alpine 容器真跑
         run: |
           set -eux
