@@ -314,6 +314,57 @@ public sealed class MacDmgTests : TempBase
     }
 
     [Fact]
+    public async Task ConvertEagainRetriesAndKicksWedgedHelper()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        var convertAttempts = 0;
+        var helperKicks = 0;
+        var warnings = new List<string>();
+        ToolRunner.Handler = (request, _) =>
+        {
+            WriteDsStore(request);
+            if (request.Executable == "killall")
+            {
+                helperKicks++;
+            }
+            if (request.Executable == "hdiutil" && request.Arguments.Contains("convert"))
+            {
+                convertAttempts++;
+                if (convertAttempts < 4)
+                {
+                    return Task.FromResult(new ToolRunner.Result(
+                        1, "", "hdiutil: convert failed - Resource temporarily unavailable"));
+                }
+                WriteConvertArtifact(request);
+            }
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            var artifacts = await new MacDmgBundler(
+                    dmgConfiguration: new MacDmgBundleConfiguration(),
+                    appConfiguration: null,
+                    options: new MacDmgBundlerOptions { Logger = new ListLogger(warnings) })
+                .BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken);
+            Assert.Equal(4, convertAttempts);
+            // 阈值第 3 次失败起踢 helper——前两次 EAGAIN 属于正常瞬态不踢
+            Assert.Equal(1, helperKicks);
+            Assert.Contains(warnings, message => message.Contains("diskimages-helper"));
+            Assert.NotEmpty(artifacts);
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
     public async Task RunsFinderLayoutDefaults()
     {
         var input = CreateInputDirectory();

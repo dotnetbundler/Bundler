@@ -10,6 +10,8 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
     private const int DetachMaxAttempts = 5;
     private static readonly int[] DetachBackoffMilliseconds = { 250, 500, 1000, 2000 };
     private const int ConvertTransientMaxAttempts = 9;
+    // 连续 EAGAIN 到本次数说明 diskimages-helper 簿记大概率已卡死——先踢掉再睡再试
+    private const int ConvertUnwedgeAttempt = 3;
     // 共享 CI runner 上 diskimages-helper 资源竞争可持续一两分钟——
     // 退避顶到 60s、总预算约三分钟（181s），仍属"有限重试"而非死等。
     private static readonly int[] ConvertTransientBackoffMilliseconds = { 1000, 2000, 4000, 8000, 16000, 30000, 60000, 60000 };
@@ -198,6 +200,18 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                         logger.Log(
                             BundleLogLevel.Warning,
                             $"hdiutil convert transient failure (attempt {attempt}/{ConvertTransientMaxAttempts}); retrying in {delay} ms.");
+                        if (attempt >= ConvertUnwedgeAttempt)
+                        {
+                            // diskimages-helper 是单用户 XPC 服务：卡死后每个后续 convert 都
+                            // 接续 EAGAIN（簿记不随进程退出自愈）；killall 后随下次 hdiutil
+                            // 请求自动重生。killall 无匹配进程返回非零——TryRun 忽略结果。
+                            await ToolRunner.TryRunAsync(
+                                "killall", ["-9", "diskimages-helper"],
+                                workDirectory, cancellationToken);
+                            logger.Log(
+                                BundleLogLevel.Warning,
+                                "diskimages-helper appears wedged; killed it so the next attempt respawns a fresh helper.");
+                        }
                         if (File.Exists(outputPath))
                         {
                             File.Delete(outputPath);
