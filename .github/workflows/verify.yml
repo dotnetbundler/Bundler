@@ -122,22 +122,33 @@ jobs:
       - name: 消费（Linux）
         if: runner.os == 'Linux'
         shell: bash
+        env:
+          # mktemp 暂存目录落到 runner.temp——失败线索工件按 bundler-consume* glob 收
+          TMPDIR: ${{ runner.temp }}
+        # matrix.arg 故意不加引号：靠词分裂展开为 0..n 个参数（空串=无参），加引号会拼成单参。
         run: bash scripts/ci/consume-linux.sh "$RUNNER_TEMP/consume" ${{ matrix.arg }}
       - name: 消费（macOS）
         if: runner.os == 'macOS'
         shell: bash
+        env:
+          TMPDIR: ${{ runner.temp }}
+        # matrix.remap/matrix.arg 故意不加引号：remap 是空格分隔多 KV（如 app=app-x64 dmg=dmg-x64），
+        # 靠词分裂逐个成参；加引号会拼成一个非法 KV。
         run: bash scripts/ci/consume-macos.sh "$RUNNER_TEMP/consume" ${{ matrix.remap }} ${{ matrix.arg }}
       - name: 消费（Windows）
         if: runner.os == 'Windows'
         shell: pwsh
+        # matrix.arg 故意不加引号：词分裂约定同 POSIX 腿。
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/consume-windows.ps1 -Dir "$env:RUNNER_TEMP/consume" ${{ matrix.arg }}
-      # 消费腿失败的线索工件（Windows 侧的 msiexec 日志、安装暂存树）——失败才上传。
+      # 消费腿失败的线索工件（Windows 侧的 msiexec 日志、安装暂存树；POSIX 侧 TMPDIR
+      # 重定向后的 bundler-consume.* mktemp 暂存）——失败才上传。
+      # glob 尾星同时收 bundler-consume 目录与 bundler-consume.XXXXXX 散件。
       - name: 上传消费腿失败线索
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: consume-${{ matrix.host }}-${{ matrix.src }}
-          path: ${{ runner.temp }}/bundler-consume
+          path: ${{ runner.temp }}/bundler-consume*
           if-no-files-found: ignore
           retention-days: 1
 
