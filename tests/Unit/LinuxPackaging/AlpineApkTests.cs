@@ -2,10 +2,12 @@ using DotNet.Bundler;
 using DotNet.Bundler.AlpineApk;
 using DotNet.Bundler.Cli;
 using DotNet.Bundler.Core;
+using DotNet.Bundler.Core.Update;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Text.Json;
 
 
 // 从旧 tests/Bundler.Tests/AlpineApkTests.cs 收割：.apk 打包器为纯托管实现，签名走
@@ -106,6 +108,63 @@ public sealed class AlpineApkTests : TempBase
             Assert.False(EndsWithZeroBlocks(segments[0]), "The control segment must not end with zero blocks.");
             Assert.True(EndsWithZeroBlocks(segments[1]),
                 "The data segment must end with the two 512-byte zero records.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateEnabled_InjectsIdentitySidecarAndBootstrapper()
+    {
+        // 更新面注入点：身份旁车 <installRoot>/bundler-update.json（0644，含 syspkg
+        // 专属 pkg 包名字段）+ 引导件 <installRoot>/bundler-updater（0755 musl 静态件——
+        // apk 只产 linux-musl 目标，per-target 件直中）。
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var keyPath = Path.Combine(input, "update-key.json");
+        var material = UpdateKeyMaterial.Generate();
+        material.Save(keyPath);
+        try
+        {
+            var baseline = ApkConfiguration(input, output);
+            var configuration = new BundleConfiguration
+            {
+                ProductName = baseline.ProductName,
+                Identifier = baseline.Identifier,
+                Publisher = baseline.Publisher,
+                Version = baseline.Version,
+                Homepage = baseline.Homepage,
+                Description = baseline.Description,
+                OutputDirectory = baseline.OutputDirectory,
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://example.test/updates",
+                    Channel = "beta",
+                    SigningKeyFile = keyPath,
+                },
+                Targets = baseline.Targets
+            };
+            var artifact = (await new AlpineApkBundler()
+                .BuildAsync(configuration, TestContext.Current.CancellationToken)).Single();
+
+            var segments = ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifact.Path));
+            var data = ApkPackageReader.ReadTar(segments[1]);
+            var sidecar = data.Single(e => e.Name == "usr/lib/example-app/bundler-update.json");
+            Assert.Equal(420 /* 0644 */, sidecar.Mode);
+            var bootstrapper = data.Single(e => e.Name == "usr/lib/example-app/bundler-updater");
+            Assert.Equal(493 /* 0755 */, bootstrapper.Mode);
+            Assert.True(bootstrapper.Content.Length > 0);
+
+            using var document = JsonDocument.Parse(Encoding.UTF8.GetString(sidecar.Content));
+            var root = document.RootElement;
+            Assert.Equal("alpineapk", root.GetProperty("format").GetString());
+            Assert.Equal("linux-musl-x86_64", root.GetProperty("rid").GetString());
+            Assert.Equal("beta", root.GetProperty("channel").GetString());
+            Assert.Equal("https://example.test/updates", root.GetProperty("feedUrl").GetString());
+            Assert.Equal(material.PublicPointBase64(), root.GetProperty("publicKey").GetString());
+            Assert.Equal("example-app", root.GetProperty("pkg").GetString());
         }
         finally
         {

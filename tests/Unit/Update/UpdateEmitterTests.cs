@@ -113,11 +113,11 @@ public sealed class UpdateManifestEmitterTests : TempBase
         Assert.True(UpdateManifestEmitter.IsUpdateAdapted(PackageFormat.AppImage));
         Assert.True(UpdateManifestEmitter.IsUpdateAdapted(PackageFormat.Zip));
         Assert.True(UpdateManifestEmitter.IsUpdateAdapted(PackageFormat.TarGz));
-        Assert.False(UpdateManifestEmitter.IsUpdateAdapted(PackageFormat.Deb));
-        Assert.False(UpdateManifestEmitter.IsUpdateAdapted(PackageFormat.Rpm));
+        Assert.True(UpdateManifestEmitter.IsUpdateAdapted(PackageFormat.Deb));
+        Assert.True(UpdateManifestEmitter.IsUpdateAdapted(PackageFormat.Rpm));
+        Assert.True(UpdateManifestEmitter.IsUpdateAdapted(PackageFormat.AlpineApk));
         Assert.False(UpdateManifestEmitter.IsUpdateAdapted(PackageFormat.Dmg));
         Assert.False(UpdateManifestEmitter.IsUpdateAdapted(PackageFormat.Pkg));
-        Assert.False(UpdateManifestEmitter.IsUpdateAdapted(PackageFormat.AlpineApk));
     }
 
     [Fact]
@@ -183,9 +183,10 @@ public sealed class UpdateManifestEmitterTests : TempBase
     [Fact]
     public async Task EmitAsync_NoAdaptedArtifacts_StillEmitsSignedFeed()
     {
-        var artifact = Artifact("x.deb");
+        // dmg 是仅剩的非覆盖产物形态之一——零适配产物仍须发射签名空 feed。
+        var artifact = Artifact("x.dmg");
         var produced = await UpdateManifestEmitter.EmitAsync(Config(),
-            [new BundleArtifact(PackageFormat.Deb, "linux-x86_64", artifact)],
+            [new BundleArtifact(PackageFormat.Dmg, "macos-aarch64", artifact)],
             TestContext.Current.CancellationToken);
 
         var feed = ReadFeed("latest");

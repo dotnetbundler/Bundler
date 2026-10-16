@@ -1,7 +1,9 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
+using DotNet.Bundler.Core.Update;
 using DotNet.Bundler.Deb;
 using System.Text;
+using System.Text.Json;
 
 namespace Bundler.UnitTests.LinuxPackaging;
 
@@ -64,6 +66,88 @@ public sealed class DebTests : TempBase
             $"usr/bin must be a relative symlink into the install root, got '{link.LinkTarget}'.");
         Assert.True(data.Any(e => e.Kind == TarEntryKind.Directory && e.Name == "./usr/lib/example-app"),
             "The install-root directory entry must be present.");
+    }
+
+    [Fact]
+    public async Task UpdateEnabled_InjectsIdentitySidecarAndBootstrapper()
+    {
+        // 更新面注入点：身份旁车 <installRoot>/bundler-update.json（0644，含 syspkg
+        // 专属 pkg 包名字段）+ 引导件 <installRoot>/bundler-updater（0755 musl 静态件）。
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Root, "out");
+        var keyPath = Path.Combine(Root, "update-key.json");
+        var material = UpdateKeyMaterial.Generate();
+        material.Save(keyPath);
+        var baseline = DebConfiguration(input, output);
+        var configuration = new BundleConfiguration
+        {
+            ProductName = baseline.ProductName,
+            Identifier = baseline.Identifier,
+            Publisher = baseline.Publisher,
+            Version = baseline.Version,
+            Homepage = baseline.Homepage,
+            Description = baseline.Description,
+            OutputDirectory = baseline.OutputDirectory,
+            Update = new UpdateBundleConfiguration
+            {
+                FeedUrl = "https://example.test/updates",
+                Channel = "beta",
+                SigningKeyFile = keyPath,
+            },
+            Targets = baseline.Targets
+        };
+
+        var deb = (await new DebBundler().BuildAsync(configuration, TestContext.Current.CancellationToken)).Single();
+        var members = DebPackageReader.ReadAr(deb.Path);
+        var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
+
+        var sidecar = data.Single(e => e.Name == "./usr/lib/example-app/bundler-update.json");
+        Assert.Equal(420 /* 0644 */, sidecar.Mode);
+        var bootstrapper = data.Single(e => e.Name == "./usr/lib/example-app/bundler-updater");
+        Assert.Equal(493 /* 0755 */, bootstrapper.Mode);
+        Assert.True(bootstrapper.Content.Length > 0);
+
+        using var document = JsonDocument.Parse(Encoding.UTF8.GetString(sidecar.Content));
+        var root = document.RootElement;
+        Assert.Equal("deb", root.GetProperty("format").GetString());
+        Assert.Equal("linux-x86_64", root.GetProperty("rid").GetString());
+        Assert.Equal("beta", root.GetProperty("channel").GetString());
+        Assert.Equal("https://example.test/updates", root.GetProperty("feedUrl").GetString());
+        Assert.Equal(material.PublicPointBase64(), root.GetProperty("publicKey").GetString());
+        Assert.Equal("example-app", root.GetProperty("pkg").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateEnabled_CustomInstallRoot_FollowsRoot()
+    {
+        // 旁车/引导件跟 installRoot 走而非硬编码 usr/lib——InstallRoot 覆盖后仍落在根内。
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Root, "out");
+        var keyPath = Path.Combine(Root, "update-key.json");
+        UpdateKeyMaterial.Generate().Save(keyPath);
+        var baseline = DebConfiguration(input, output);
+        var configuration = new BundleConfiguration
+        {
+            ProductName = baseline.ProductName,
+            Identifier = baseline.Identifier,
+            Publisher = baseline.Publisher,
+            Version = baseline.Version,
+            OutputDirectory = baseline.OutputDirectory,
+            Update = new UpdateBundleConfiguration
+            {
+                FeedUrl = "https://example.test/updates",
+                SigningKeyFile = keyPath,
+            },
+            Targets = baseline.Targets
+        };
+
+        var deb = (await new DebBundler(new DebBundleConfiguration { InstallRoot = "/opt/example-app" })
+            .BuildAsync(configuration, TestContext.Current.CancellationToken)).Single();
+        var members = DebPackageReader.ReadAr(deb.Path);
+        var names = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content))
+            .Select(e => e.Name).ToArray();
+        Assert.Contains("./opt/example-app/bundler-update.json", names);
+        Assert.Contains("./opt/example-app/bundler-updater", names);
     }
 
     [Fact]
