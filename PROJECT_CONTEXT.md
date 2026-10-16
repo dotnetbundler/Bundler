@@ -2,7 +2,7 @@
 
 > 最后更新：2026-10-17
 > 当前分支：`main`
-> 在途事项：UPDATE 系统包扩展阶段——B0 设计、B1 发射/身份、B2 引导件 `pkg-apply` 已合入（PR #107/#108/#109），B3 客户端 replay 编排（`SyspkgReplay`：预检/留存/三级提权退化链/env 件 0600/拉起即退/回滚重放）已实现于 `feat/update-syspkg-client` 待合入；剩余：B4 真机/容器验收腿、B5 收尾文档；冻件基线 `58b1ba8` 不含 `pkg-apply`，待 produce-bootstrap 重冻
+> 在途事项：UPDATE 系统包扩展阶段——B0 设计文档、B1 发射与身份、B2 引导件 `pkg-apply` 动词已合入（PR #107/#108/#109），B4 真机/容器验收腿已交付（syspkg-verify debian/fedora/alpine 三容器腿绿 run `38936728961`，降权器最小 argv 预检随之补入双实现；图形提权入口仍挂 `docs/project/special-acceptance.md`），B3 客户端 replay 编排（`SyspkgReplay`：预检/留存/三级提权退化链/env 件 0600 读毕即删/拉起即退/回滚重放）已实现于 `feat/update-syspkg-client` 待合入；剩余：B5 收尾文档；引导件冻件已重冻含 `pkg-apply`（produce-bootstrap run `38927820189`@`856abfb`，PR #113 已合入）
 > 当前包版本：`0.1.0-alpha.103`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词（别称仅输入归一，产物名用各生态词），契约与全产物名目录见 `docs/design/targets.md`**
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/design/formats/` 单文档只留设计决策、语义契约与能力状态

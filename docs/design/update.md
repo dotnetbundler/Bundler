@@ -3,7 +3,7 @@
 本文件是 UPDATE 的唯一文档：决策、协议、能力状态与边界。
 这是跨格式产品面而非新安装格式：产物随既有格式旁车而生，更新语义分两式复用既有安装器能力。
 已冻结（基线 `0.1.0-alpha.74`）。
-deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2）：发射、引导件 `pkg-apply` 动词与客户端 replay 编排均已实现，真 root 提权全链归外部待验收。
+deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2）：发射、引导件 `pkg-apply` 动词与客户端 replay 编排均已实现，容器内真 root 全链经 `syspkg-verify` 实证，图形提权入口链归外部待验收。
 
 ## 1. 核心决策
 
@@ -42,7 +42,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
 
 ## 2. deb/rpm/alpineapk：受约束 installer-replay
 
-状态：**已实现**（自动化层全绿）——§2.2 客户端编排（`SyspkgReplay`）、§2.3 引导件动词、§2.4 客户端回滚重放、§2.5 身份/发射全落地；真 root 提权全链与发行版实装归外部待验收（`docs/project/special-acceptance.md`）。
+状态：**已实现**（自动化层全绿）——§2.2 客户端编排（`SyspkgReplay`）、§2.3 引导件动词、§2.4 客户端回滚重放、§2.5 身份/发射全落地；容器内真 root 全链（退化链/降权重启/env 回灌/账本/conffile/apk 降级/`--rollback`）经 `syspkg-verify` 三容器实证，图形提权入口链与桌面宿主实装归外部待验收（`docs/project/special-acceptance.md`）。
 "包管理器领地"论证的真实内核是**不绕过账本**——此前据此整体拒绝，现把防线从"不碰"收紧为"不绕账本"：replay 让包管理器自己登记、卸旧、跑 scriptlet，恰恰尊重账本，与拒绝理由不冲突。
 
 ### 2.1 语义归属与分界
@@ -86,8 +86,10 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   `dpkg -i` 本就不解析依赖，不存在"防依赖不解析"的旗标功效。
   依赖解析归退化链首腿 `apt-get install` 管。
   裸 `dpkg -i` 退化腿遇缺依赖会留 unconfigured 态（归 `dpkg --configure -a`/`apt-get -f install` 原生机制修），故更新包**不得新增 Depends**——确需新增属依赖变更场景，登记外部验收/文档边界（`docs/project/special-acceptance.md`）。
-- **降权重启**：装完由 `PKEXEC_UID`/`SUDO_UID` 取回原始用户 → `setpriv`/`sudo -u` 降权 + 回灌客户端导出的会话 env 件（`DISPLAY`/`XAUTHORITY`/`DBUS_SESSION_BUS_ADDRESS` 等）→ 以原权限拉起 `--app`。
+- **降权重启**：装完由 `PKEXEC_UID`/`SUDO_UID` 取回原始用户 → `setpriv`/`sudo -u`/`runuser`/`su` 退化链降权 + 回灌客户端导出的会话 env 件（`DISPLAY`/`XAUTHORITY`/`DBUS_SESSION_BUS_ADDRESS` 等）→ 以原权限拉起 `--app`。
   不以 root 重启应用。
+  降权器"在场"不等于"能用"：每级先同步预检最小 argv（`工具 选项 /bin/sh -c :`，sudo 加 `-n` 免密闸），rc≠0 即降级下一级——分离 spawn 只证 `nohup` 分叉成，证不了降权器收下 argv（alpine busybox `setpriv` 在场却拒 `--reuid/--regid/--clear-groups` 是实证过的真案，无预检会把重启静默吞成 rc0）。
+  预检同步执行不设超时——最小 argv 形（`sh -c :` 即刻返回）+ stdin 钉死零交互，挂死无现实入口，超时+强制终结路径的复杂度不抵收益。
 - `--env-file` 是一次性输入件：读毕即删件与父级 `pkg-*` 暂存目录（删失败不挡退出码；
   装失败不消费也删——AOT `PkgApplyPlan` 与 sh 双侧同口径）。
 - 引导件 musl 静态件注入 `/usr/lib/<pkg>/`（与 zip/app 注入同构）。
@@ -100,9 +102,11 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
 ### 2.4 回滚
 
 `--rollback` = 与更新同路径提权、同退化链重放留存旧包，逐腿按各包管理器降级语义放行。
-deb 首腿 `apt-get install --allow-downgrades`（退化 `dpkg -i` 原生允许降级）。
-rpm 腿 `dnf downgrade` 装旧版本地件（`install` 装旧版不放行降级）、`zypper install --force`/`--oldpackage` 或旧包直装（直装默认走解题确认，非交互形态存疑，标外部待验收）、退化 `rpm -U` 加 `--oldpackage`。
-apk 降级行为未实测，登记外部待验收（`docs/project/special-acceptance.md`）。
+deb 退化链与更新同 argv（`apt-get install -y` 不带 `--allow-downgrades`）——debian 容器实证 apt 拒旧版降级、自动退化 `dpkg -i` 原生放行（rc=0、账本翻回旧版——`syspkg-verify` D3 相位）。
+rpm `dnf install -y` 与更新同 argv（非 `dnf downgrade`）——fedora 容器实证 dnf5 `install` 对本地旧版件原地放行降级（rc=0、账本翻回旧版——`syspkg-verify` R3 相位）。
+`zypper install -y` 同 argv 重放——非交互降级形态仍外部待验收（`docs/project/special-acceptance.md`）。
+退化腿 `rpm -U` 在 `--rollback` 下加 `--oldpackage`（`syspkg-verify` R3b 相位实证账本翻回旧版）。
+apk `apk add` 旧版本地件原生放行降级（alpine 容器实证：rc=0、账本翻回旧版——`syspkg-verify` K2 相位）。
 
 ### 2.5 身份与清单
 
@@ -142,13 +146,15 @@ apk 降级行为未实测，登记外部待验收（`docs/project/special-accept
 - `pkg-apply` 动词 AOT/POSIX 双实现同协议（deb/rpm/apk 前端退化链、降权重启链、env 回灌、`--rollback`、退出码 0/3/4/5/6）——stub 垫片非特权全链实证：unit 探针族（跨宿主断言）+ integration 真跑奇偶族。
   奇偶族整体仅非 Windows 宿主执行（各腿首部 `SkipWhen(IsWindows)`），Windows 面由 unit 探针族覆盖。
   Windows MSYS sh 腿挂 `docs/project/special-acceptance.md` 外部验收。
+- `pkg-apply` 容器真机全链：`syspkg-verify` CI 腿在 debian/fedora/alpine 三容器内以 root 实证——真包装/更新/`--rollback`、账本断言（`dpkg -s`/`rpm -q`/`apk list --installed`）、conffile 保留（deb confold / rpm `.rpmnew`）、apk unsigned `--allow-untrusted` 与签名闸、降权重启 uid 归属+env 回灌、busybox `setpriv` 拒参→`su` 承接、rc 0/4/5/6 全绿（run 38935978299）。
+  降权器逐级最小 argv 预检（`spawn` 只证分叉不证收参）由此腿实证补入双实现。
 - deb/rpm/alpineapk 客户端 replay 编排（`SyspkgReplay`，UPDATE 系统包扩展 B3）：预检三件套（构造闸 `pkg` 名 + 前端退化链 `command -v` + 账本归属双检）、留存目录 + `applied` 标记、三级提权退化链拉起安装位 `bundler-updater pkg-apply`（`alpineapk`→`apk` 映射、拉起即退）、rollback 拣留存旧包同链重放——unit 探针族跨宿主断言 + integration POSIX 垫片 e2e 全绿（Windows 腿 skip）。
 
 部分实现/外部待验收：macOS 同签名身份比对腿（无 Apple 证书，挂 `docs/project/special-acceptance.md`）。
 
 计划实现/外部待验收（UPDATE 系统包扩展阶段，设计定稿见 §2）：
 
-- 真机/容器提权全链、apk/zypper 降级语义、conffile 修改场景、repack 拒绝场景、依赖变更场景均为外部待验收，登记于 `docs/project/special-acceptance.md`。
+- 容器提权全链/apk 降级/conffile 修改场景已由 `syspkg-verify` 实证；zypper 降级形态、图形提权入口链（pkexec→zenity/kdialog→`sudo -S`）、repack 拒绝场景、依赖变更场景仍为外部待验收，登记于 `docs/project/special-acceptance.md`。
 
 ## 5. 明确拒绝
 

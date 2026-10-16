@@ -1,0 +1,160 @@
+# syspkg-verify：UPDATE 系统包扩展 B4 —— deb/rpm/apk 真机/容器验收腿。
+# 拓扑：select（dispatch 可选腿）→ bootstrap-musl-x64 产含 pkg-apply 的静态引导件 →
+#       三发行版容器矩阵（debian/fedora/alpine）在容器内以 root 直跑 pkg-apply 全链，
+#       AOT 引导件与 tools/posix sh 降级件双实现同场景奇偶。
+# 容器内 root = pkexec/sudo 提权成功后的等价执行体语境；SUDO_UID/SUDO_GID、PKEXEC_UID
+# 注入复现提权后降权回原用户语义。图形提权交互面（pkexec→zenity/kdialog→sudo -S）
+# 容器给不了，仍挂 docs/project/special-acceptance.md 外部验收。
+# 包管理器账本断言：dpkg -s / rpm -q / apk list --installed；conffile、--rollback
+# 降级、缺前端退化、降权重启 env 回灌、退出码 0/4/5/6 全在容器内实证。
+# workflow_call 预留——日后可整腿收编 verify 发布门；push 不触发（同 test/verify 口径）。
+name: syspkg-verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      legs:
+        description: 验收腿（all=deb,rpm,apk 三腿全跑；或逗号分隔子集如 deb,apk）
+        type: string
+        default: all
+        required: true
+  workflow_call:
+    inputs:
+      legs:
+        type: string
+        default: all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.legs || 'all' }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  # legs 输入 → 动态矩阵（job-if 拿不到 matrix，前置 job 是规范做法——test.yml 同构）。
+  # 腿↔容器镜像对在同一份 JSON 里：矩阵不硬编版本号散点，容器 tag 一处固定。
+  select:
+    name: select
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      legs: ${{ steps.pick.outputs.legs }}
+    steps:
+      - id: pick
+        env:
+          LEGS_IN: ${{ inputs.legs || 'all' }}
+        run: |
+          set -euo pipefail
+          ALL='[{"leg":"deb","image":"debian:stable"},{"leg":"rpm","image":"fedora:latest"},{"leg":"apk","image":"alpine:latest"}]'
+          if [ -z "$LEGS_IN" ] || [ "$LEGS_IN" = "all" ]; then
+            echo "legs=$ALL" >> "$GITHUB_OUTPUT"
+          else
+            # 逐腿名对 ALL 校验并去重——错拼腿名会让矩阵腿挂死在不存在的状态上。
+            python3 - "$ALL" <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, sys
+          allowed = {x["leg"]: x for x in json.loads(sys.argv[1])}
+          picked = list(dict.fromkeys(x.strip() for x in os.environ["LEGS_IN"].split(",") if x.strip()))
+          unknown = [x for x in picked if x not in allowed]
+          if unknown:
+              print(f"::error::未知验收腿 {unknown}，合法集合: {sorted(allowed)}", file=sys.stderr)
+              sys.exit(1)
+          if not picked:
+              print("::error::legs 解析为空", file=sys.stderr)
+              sys.exit(1)
+          print("legs=" + json.dumps([allowed[x] for x in picked], separators=(",", ":")))
+          PY
+          fi
+
+  # 产 linux-musl-x64 静态引导件：与 produce-bootstrap.yml 同法同料（alpine SDK 容器、
+  # clang+lld+zlib、StaticExecutable+LinkerFlavor=lld）。冻件基线不含 pkg-apply——
+  # 本腿对本分支头现产，不消费 src/.../tools/ 冻件。musl 静态件 glibc/musl 容器通吃。
+  bootstrap-musl-x64:
+    name: bootstrap-musl-x64
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - name: 产 linux-musl-x86_64 引导件（alpine SDK 容器内 NativeAOT，lld 链接）
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/aot/linux-musl-x86_64"
+          docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP/aot:/aot" -w /src \
+            mcr.microsoft.com/dotnet/sdk:10.0-alpine \
+            sh -c "apk add --no-cache clang lld zlib-dev zlib-static build-base >/dev/null && \
+                   dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-musl-x64 -p:StaticExecutable=true -p:LinkerFlavor=lld -o /aot/linux-musl-x86_64 && \
+                   chmod 0755 /aot/linux-musl-x86_64/bundler-updater"
+      - name: 冒烟——static-pie 链接形态 + pkg-apply 动词就位（参数面实跑）
+        run: |
+          set -eux
+          BIN="$RUNNER_TEMP/aot/linux-musl-x86_64/bundler-updater"
+          file "$BIN"
+          # 容器内已 chmod（root 属主宿主 chmod 不动）；这里断言可执行位到位即可
+          [ -x "$BIN" ]
+          set +e
+          out=$("$BIN" pkg-apply --pkg /nonexistent.deb --format deb --app /nonexistent 2>&1); rc=$?
+          set -e
+          echo "$out"
+          [ "$rc" -eq 3 ] && echo "$out" | grep -qF "does not exist"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: syspkg-bootstrap-musl-x64
+          path: ${{ runner.temp }}/aot/linux-musl-x86_64/bundler-updater
+          if-no-files-found: error
+          retention-days: 1
+
+  # 发行版容器腿：docker run 显式驱动（不走 job 级 container——musl 容器里 JS action
+  # 的 node 是 glibc 件跑不起来，且宿主侧 checkout/工件上下行更顺），
+  # produce-bootstrap.yml 与 tests/Shared DockerRunner 同先例。
+  # 容器内只读挂仓库（/src:ro），引导件挂 /opt/updater，证据回写 /ev。
+  syspkg:
+    name: syspkg-${{ matrix.leg }}
+    needs: [select, bootstrap-musl-x64]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.select.outputs.legs) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: syspkg-bootstrap-musl-x64
+          path: ${{ runner.temp }}/bootstrap
+      - name: ${{ matrix.leg }} 容器内 pkg-apply 全链（AOT+sh 双实现奇偶）
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ev"
+          # 工件往返丢执行位——落回 +x
+          chmod +x "$RUNNER_TEMP/bootstrap/bundler-updater"
+          # 镜像回落（tests DockerRunner 同策）：docker.io 限流时走备源
+          if ! docker pull "$IMAGE"; then
+            case "$IMAGE" in
+              fedora:*) docker pull "quay.io/fedora/$IMAGE" && docker tag "quay.io/fedora/$IMAGE" "$IMAGE" ;;
+              *) echo "::error::镜像 $IMAGE 拉取失败且无登记备源" >&2; exit 1 ;;
+            esac
+          fi
+          docker run --rm \
+            -v "$PWD:/src:ro" \
+            -v "$RUNNER_TEMP/bootstrap:/opt/updater:ro" \
+            -v "$RUNNER_TEMP/ev:/ev" \
+            -e "SYSPKG_AOT=/opt/updater/bundler-updater" \
+            -e "SYSPKG_SH=/src/src/Bundler.Updater.Bootstrap/tools/posix/bundler-updater.sh" \
+            -e "SYSPKG_EV=/ev" \
+            -e "SYSPKG_WORK=/work" \
+            "$IMAGE" sh /src/scripts/ci/syspkg-verify.sh "${{ matrix.leg }}"
+      - name: 上传证据工件（RESULTS 结论表/console 全量/逐腿 --log/账本快照/探针记录）
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: syspkg-evidence-${{ matrix.leg }}
+          path: ${{ runner.temp }}/ev/
+          if-no-files-found: warn
+          retention-days: 30
