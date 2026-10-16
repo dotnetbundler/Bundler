@@ -84,7 +84,9 @@ jobs:
                   toks = she[2:].split() if she.startswith('#!') else []
                   interp = os.path.basename(toks[0]) if toks else ''
                   if interp == 'env':
-                      interp = os.path.basename(toks[1]) if len(toks) > 1 else ''
+                      # env -S/-i/-u X/VAR=v 等选项与赋值前缀全部跳过，取首个真命令令牌。
+                      cand = [t for t in toks[1:] if not t.startswith('-') and '=' not in t]
+                      interp = os.path.basename(cand[0]) if cand else ''
                   if interp not in shells:
                       continue
               for i, line in enumerate(open(f, encoding='utf-8', errors='replace'), 1):
