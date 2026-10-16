@@ -63,11 +63,14 @@ _restart_nohup() {
 _mnt_of() {  # $1 路径→mountinfo 最长前缀挂载点（\040/\134 转义还原）；取不到返空
     # 单次 awk 扫描（逐行 fork 三进程×行数太贵）。前缀比对在 "t/" 上做：
     # mp="/" 取前缀 "/" 恰匹配一切绝对路径；mp 相等/段边界（/foo vs /foobar）都被兜住。
-    awk -v t="$1/" '
+    # awk 词法层先吃一层反斜杠：匹配字面 "\040" 要写 /\\\\040/（两反斜杠的 /\\040/
+    # 在 gawk 下 \040 会被当八进制转义再解成空格字符，\134 同理且会 Trailing backslash
+    # 解析期致命错）。路径经 ENVIRON 传入而非 -v——-v 对值做转义处理会吃掉反斜杠。
+    _MNT_T="$1/" awk 'BEGIN { t = ENVIRON["_MNT_T"] }
         {
             mp = $5
-            gsub(/\\040/, " ", mp)      # 空格转义还原
-            gsub(/\\134/, "\\\\", mp)   # 反斜杠最后解，防 "\\134040" 二次解码
+            gsub(/\\\\040/, " ", mp)      # 空格转义还原
+            gsub(/\\\\134/, "\\\\", mp)   # 反斜杠最后解，防 "\\134040" 二次解码
             pre = (mp == "/") ? "/" : mp "/"
             if (index(t, pre) == 1 && length(mp) > length(best)) best = mp
         }
@@ -399,8 +402,10 @@ while :; do
     sleep 0.1 2>/dev/null || sleep 1
 done
 
-# 空间预检（与 AOT CheckFreeSpace 同语义）：同卷原子 rename 不计；跨卷两段式暂存、
+# 空间预检（对账 AOT CheckFreeSpace）：同挂载点原子 rename 不计；跨挂载点两段式暂存、
 # --keep-payload 复制、回滚复制按树体积估到目标槽所在卷；探测失败只 WARN 放行。
+# 与 AOT 的口径差：空间池合并 sh 按 st_dev（bind mount 同池则加总），AOT 按挂载点根
+# 不加总——sh 侧更严（可能多算需求），方向安全。
 existing_ancestor() {  # $1 路径→返回已存在的可写祖先目录（文件取父目录）
     _ea=$1
     while [ ! -e "$_ea" ]; do
