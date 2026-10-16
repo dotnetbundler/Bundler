@@ -3,12 +3,12 @@
 本文件是 UPDATE 的唯一文档：决策、协议、能力状态与边界。
 这是跨格式产品面而非新安装格式：产物随既有格式旁车而生，更新语义分两式复用既有安装器能力。
 已冻结（基线 `0.1.0-alpha.74`）。
-deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项，状态=**计划实现**（§2），未经阶段授权不落地代码。
+deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2）：发射与引导件 `pkg-apply` 动词已实现，客户端 replay 编排仍为**计划实现**。
 
 ## 1. 核心决策
 
 - **覆盖格式**：nsis/msi/app/appimage/zip/targz 六件已实现。
-  deb/rpm/alpineapk 归 installer-replay 语义族按 §2 受约束设计定稿、**计划实现**。
+  deb/rpm/alpineapk 归 installer-replay 语义族按 §2 受约束实现——发射与 `pkg-apply` 动词已落地，客户端 replay 编排计划实现。
   dmg 是运输件、pkg 是提权安装器，非更新载体。
 - **清单形态**：静态 JSON 按通道分文件（`bundler-update-feed.{channel}.json`，文件名=通道，零服务端分流）：`{channel, version, notes, publishedAt, artifacts:[{rid, format, file, url, size, sha256, sig, blockmap?}]}`。
   `url` 是相对清单所在目录的输出根路径（byFormat 布局含 `<format>/` 前缀），`file` 为裸文件名。
@@ -42,8 +42,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项，状�
 
 ## 2. deb/rpm/alpineapk：受约束 installer-replay（计划实现）
 
-状态：**计划实现**，绑定 UPDATE 系统包扩展阶段。
-本节为设计定稿，未授权实施前代码不动。
+状态：**部分实现**——§2.3 引导件动词与 §2.5 身份/发射已落地，§2.2 客户端编排与 §2.4 回滚重放的客户端侧计划实现。
 "包管理器领地"论证的真实内核是**不绕过账本**——此前据此整体拒绝，现把防线从"不碰"收紧为"不绕账本"：replay 让包管理器自己登记、卸旧、跑 scriptlet，恰恰尊重账本，与拒绝理由不冲突。
 
 ### 2.1 语义归属与分界
@@ -82,6 +81,10 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项，状�
   不以 root 重启应用。
 - 引导件 musl 静态件注入 `/usr/lib/<pkg>/`（与 zip/app 注入同构）。
   nsis/msi"不注入引导件"先例不适用此处——installer-replay 族的执行体仍是引导件编排安装命令。
+  动词协议签名：`bundler-updater pkg-apply --pkg <本地包> --format <deb|rpm|apk> --app <重启目标> [--env-file <会话env件>] [--rollback] [--log <件>]`。
+  每级安装命令先 `command -v` 预检再调用；`--env-file` 会话 env 降权后经内层 `env K=V` 回灌（`sudo` env_reset 剥外层环境，缺省按最小集 HOME+DISPLAY）；外层 `nohup` 分离。
+  退出码独立面：0 成功 / 3 参数错 / 4 安装失败 / 5 包管理器缺席 / 6 重启失败（安装已提交，客户端据此报"已装待手动重启"）。
+  AOT `PkgApplyPlan` 与 POSIX `bundler-updater.sh` pkg-apply 支路逐字同协议同退出码；双侧同名测试缝 `BUNDLER_UPDATER_CMD_<TOOL>`/`BUNDLER_UPDATER_PASSWD_FILE`/`BUNDLER_UPDATER_APK_KEYS_DIR` 供 stub 垫片非特权跑全链。
 
 ### 2.4 回滚
 
@@ -125,12 +128,15 @@ apk 降级行为未实测，登记外部待验收（`docs/project/special-accept
 - 差分双路实证：本地命中、脏缓存回退、回环 HTTP Range-206。
   `bundler-cache/artifact.bin` 源件缓存。
 - 离线/内网本地路径 feed 端到端。
+- `pkg-apply` 动词 AOT/POSIX 双实现同协议（deb/rpm/apk 前端退化链、降权重启链、env 回灌、`--rollback`、退出码 0/3/4/5/6）——stub 垫片非特权全链实证：unit 探针族（跨宿主断言）+ integration 真跑奇偶族。
+  奇偶族整体仅非 Windows 宿主执行（各腿首部 `SkipWhen(IsWindows)`），Windows 面由 unit 探针族覆盖。
+  Windows MSYS sh 腿挂 `docs/project/special-acceptance.md` 外部验收。
 
 部分实现/外部待验收：macOS 同签名身份比对腿（无 Apple 证书，挂 `docs/project/special-acceptance.md`）。
 
 计划实现（UPDATE 系统包扩展阶段，设计定稿见 §2）：
 
-- deb/rpm/alpineapk installer-replay：`pkg-apply` 引导件动词、三级提权退化链、降权重启、账本归属双检预检、包管理器命令退化链、`--rollback` 重放回滚、`bundler-update.json` `pkg` 字段、`CoveredFormats` 扩收。
+- deb/rpm/alpineapk 客户端 replay 编排：预检三件套（旁车+`command -v`+账本归属双检）、三级提权退化链拉起 `pkg-apply`、回滚件留存与 `Apply`/`Rollback` 客户端分支。
 - 真机/容器提权全链、apk/zypper 降级语义、conffile 修改场景、repack 拒绝场景、依赖变更场景均为外部待验收，登记于 `docs/project/special-acceptance.md`。
 
 ## 5. 明确拒绝

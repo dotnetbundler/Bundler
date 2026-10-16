@@ -1,7 +1,8 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-15
-> 当前分支：`main`（测试重写链 PR #90–#97、收口修复链 #98–#104 及全量审计收口 PR #105 均已合入，无在途 PR）
+> 最后更新：2026-10-16
+> 当前分支：`main`
+> 在途事项：UPDATE 系统包扩展阶段——B0 设计文档、B1 发射与身份、B2 引导件 `pkg-apply` 动词已合入（PR #107/#108/#109）；剩余：B3 客户端 replay 编排、B4 真机/容器验收腿、B5 收尾文档；冻件基线 `58b1ba8` 不含 `pkg-apply`，待 produce-bootstrap 重冻
 > 当前包版本：`0.1.0-alpha.103`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词（别称仅输入归一，产物名用各生态词），契约与全产物名目录见 `docs/design/targets.md`**
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/design/formats/` 单文档只留设计决策、语义契约与能力状态
@@ -113,6 +114,6 @@ verify run `38881497256`（main@`cb76455`，#103/#104 合入后）4 条 macOS co
 剩余工作：
 
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
-- UPDATE 系统包扩展阶段（deb/rpm/alpineapk installer-replay 自更新）：设计定稿、PR #107 审中，状态=计划实现，契约见 `docs/design/update.md` §2；
+- UPDATE 系统包扩展阶段（deb/rpm/alpineapk installer-replay 自更新）：发射侧（`pkg` 身份字段、`CoveredFormats` 扩收、三后端旁车+引导件注入）与引导件 `pkg-apply` 动词（AOT/POSIX 双实现同协议）已实现；客户端 replay 编排（预检三件套、三级提权链、留存与 `Apply`/`Rollback` 分支）计划实现，契约见 `docs/design/update.md` §2；
 - 发布链资产实际推送（NuGet/Release 为另一步）；
 - 零星已登记增强按 `docs/project/roadmap.md` §4.2 候选标准排队。

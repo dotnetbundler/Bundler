@@ -2,7 +2,9 @@ namespace DotNet.Bundler.Updater.Bootstrap;
 
 public static class Program
 {
-    // 退出码：0 成功；2 用法错误；3 等待宿主退出超时；4 备份/换包失败（已尽力回滚）。
+    // 退出码（apply）：0 成功；2 用法错误；3 等待宿主退出超时；4 备份/换包失败（已尽力回滚）。
+    // pkg-apply 支路另有协议（0 成功/3 参数错/4 安装失败/5 包管理器缺席/6 重启失败），
+    // 由 PkgApplyPlan 内部自行映射，不经下面的 apply 异常分类。
     public static int Main(string[] args)
     {
         try
@@ -37,5 +39,7 @@ public static class Program
         writer.WriteLine("      [--keep-payload] [--retain-backup-to <dir>] [--log <file>] [--wait-timeout <seconds>]");
         writer.WriteLine("      [--lock-timeout <seconds>]");
         writer.WriteLine("  bundler-updater apply --install-dir <dir> --rollback");
+        writer.WriteLine("  bundler-updater pkg-apply --pkg <file> --format <deb|rpm|apk> --app <path>");
+        writer.WriteLine("      [--env-file <file>] [--rollback] [--log <file>]");
     }
 }
