@@ -958,6 +958,47 @@ public sealed class BootstrapPlanTests : TempBase
     }
 
     [Fact]
+    public void PkgApply_Restart_DropProbeRejected_FallsThrough()
+    {
+        // busybox setpriv 类"在场拒参"：预检 rc≠0 → 该级不可用，如实降级下一级
+        //（旧口径 spawn 分离层返真会把重启静默吃掉）。setpriv 拒 → su 承接。
+        var pkg = WritePkg();
+        var app = WriteApp();
+        var passwd = WritePasswd(
+            "root:x:0:0:root:/root:/bin/sh\n" +
+            "tester:x:4242:4343:Test User:/home/tester:/bin/sh\n");
+        SetupPkgProbes(
+            env: new Dictionary<string, string>
+            {
+                ["SUDO_UID"] = "4242",
+                ["BUNDLER_UPDATER_PASSWD_FILE"] = passwd,
+            },
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["setpriv"] = "/stub/setpriv",
+                ["su"] = "/stub/su",
+                ["nohup"] = "/stub/nohup",
+            },
+            exec: spec => spec.FileName.EndsWith("setpriv") ? 1 : 0);
+
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app]);
+
+        Assert.Equal(0, rc);
+        // 预检 argv 进 exec 记录（最小 argv 形可辨认）；spawn 只走 su 一级。
+        Assert.Contains(_pkgExecs,
+            exec => exec.File == "/stub/setpriv" &&
+                    exec.Args.SequenceEqual(
+                        new[] { "--reuid=4242", "--regid=4343", "--clear-groups",
+                                "/bin/sh", "-c", ":" }));
+        Assert.Equal(
+            ["/stub/su", "-s", "/bin/sh", "-c",
+             $"exec env 'HOME=/home/tester' '{app}'", "tester"],
+            Assert.Single(_pkgSpawns).Args);
+    }
+
+    [Fact]
     public void PkgApply_Restart_NoDropTool_Rc6_InstallCommitted()
     {
         var pkg = WritePkg();

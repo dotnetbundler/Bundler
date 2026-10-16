@@ -1670,14 +1670,18 @@ public static class UpdaterBootstrapParityTests
                     "--env-file", envFile);
 
                 Assert.Equal(0, rc);
-                var lines = WaitRecord(rec, 3);
+                var lines = WaitRecord(rec, 4);
+                // 降权器先过最小 argv 预检（busybox setpriv 类"在场拒参"真案）再分离 spawn。
+                Assert.Equal(
+                    "setpriv --reuid=4242 --regid=4343 --clear-groups /bin/sh -c :",
+                    lines[1]);
                 Assert.Equal(
                     $"setpriv --reuid=4242 --regid=4343 --clear-groups env DISPLAY=:9 MYVAR=a b {app}",
-                    lines[1]);
+                    lines[2]);
                 // 端到端：env 件真的灌进了 --app（含空格值与坏行过滤）。
-                Assert.StartsWith("app|pwd=" + dir, lines[2]);
-                Assert.Contains("DISPLAY=:9", lines[2]);
-                Assert.Contains("MYVAR=a b", lines[2]);
+                Assert.StartsWith("app|pwd=" + dir, lines[3]);
+                Assert.Contains("DISPLAY=:9", lines[3]);
+                Assert.Contains("MYVAR=a b", lines[3]);
             }
         }
         finally { Cleanup(root); }
@@ -1712,12 +1716,14 @@ public static class UpdaterBootstrapParityTests
                     ("BUNDLER_UPDATER_PASSWD_FILE", passwd));
 
                 // setpriv 缺席 → sudo -u #uid（内层 env 重建，env_reset 剥外层也不怕）。
+                // 预检 argv 带 -n 免密闸，记录先落预检行再落实跑行。
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
                     "--env-file", envFile));
-                var lines = WaitRecord(rec, 3);
-                Assert.Equal($"sudo -u #4242 env DISPLAY=:9 {app}", lines[1]);
-                Assert.Contains("DISPLAY=:9", lines[2]);
+                var lines = WaitRecord(rec, 4);
+                Assert.Equal("sudo -n -u #4242 /bin/sh -c :", lines[1]);
+                Assert.Equal($"sudo -u #4242 env DISPLAY=:9 {app}", lines[2]);
+                Assert.Contains("DISPLAY=:9", lines[3]);
 
                 // sudo 缺席 → runuser -u <passwd 查名>。
                 File.Delete(rec);
@@ -1725,9 +1731,10 @@ public static class UpdaterBootstrapParityTests
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
                     "--env-file", envFile));
-                lines = WaitRecord(rec, 3);
-                Assert.Equal($"runuser -u tester -- env DISPLAY=:9 {app}", lines[1]);
-                Assert.Contains("DISPLAY=:9", lines[2]);
+                lines = WaitRecord(rec, 4);
+                Assert.Equal("runuser -u tester -- /bin/sh -c :", lines[1]);
+                Assert.Equal($"runuser -u tester -- env DISPLAY=:9 {app}", lines[2]);
+                Assert.Contains("DISPLAY=:9", lines[3]);
 
                 // runuser 缺席 → su -s /bin/sh -c 'exec env <quoted> <quoted app>' <name>。
                 File.Delete(rec);
@@ -1735,11 +1742,12 @@ public static class UpdaterBootstrapParityTests
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
                     "--env-file", envFile));
-                lines = WaitRecord(rec, 3);
+                lines = WaitRecord(rec, 4);
+                Assert.Equal("su -s /bin/sh -c : tester", lines[1]);
                 Assert.Equal(
                     $"su -s /bin/sh -c exec env 'DISPLAY=:9' '{app}' tester",
-                    lines[1]);
-                Assert.Contains("DISPLAY=:9", lines[2]);
+                    lines[2]);
+                Assert.Contains("DISPLAY=:9", lines[3]);
             }
         }
         finally { Cleanup(root); }
@@ -2087,9 +2095,10 @@ public static class UpdaterBootstrapParityTests
                     ("BUNDLER_UPDATER_PASSWD_FILE", emptyPasswd));
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app));
+                // [1]=预检行，[2]=实跑行——预检 argv 尾附 /bin/sh -c : 与实跑 env 形可区分。
                 Assert.Contains(
                     $"setpriv --reuid=4242 --regid=4343 --clear-groups env {app}",
-                    WaitRecord(rec, 2)[1]);
+                    WaitRecord(rec, 3)[2]);
 
                 // 前导零 uid/gid 规范化进 argv。
                 File.Delete(rec);
@@ -2100,7 +2109,7 @@ public static class UpdaterBootstrapParityTests
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app));
                 Assert.Contains(
                     $"setpriv --reuid=42 --regid=43 --clear-groups env {app}",
-                    WaitRecord(rec, 2)[1]);
+                    WaitRecord(rec, 3)[2]);
 
                 // passwd gid 段非数字 → 回退 uid（含 SUDO_GID 缺席时 passwd 兜底）。
                 File.Delete(rec);
@@ -2115,7 +2124,7 @@ public static class UpdaterBootstrapParityTests
                 // gid 非数字回退 uid；passwd 家目录按降权口径进最小集。
                 Assert.Contains(
                     $"setpriv --reuid=4242 --regid=4242 --clear-groups env HOME=/home/tester {app}",
-                    WaitRecord(rec, 2)[1]);
+                    WaitRecord(rec, 3)[2]);
 
                 // 字面含转义形态的 uid（"1\060"）：sh 旧 awk -v 解 \060 转义
                 // 会误收成 uid 10——ENVIRON 传值后与 AOT 逐字符数字判同拒，
@@ -2129,7 +2138,7 @@ public static class UpdaterBootstrapParityTests
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app));
                 Assert.Contains(
                     $"setpriv --reuid=4242 --regid=4343 --clear-groups env {app}",
-                    WaitRecord(rec, 2)[1]);
+                    WaitRecord(rec, 3)[2]);
             }
         }
         finally { Cleanup(root); }
