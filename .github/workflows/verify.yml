@@ -64,6 +64,8 @@ jobs:
   # 消费腿（全交换）：每台主机下载所有"自己能跑"的产件——清单校验 → 真装真跑真卸。
   # 异构腿：arm64 Windows 吃 x64 件（WOW64）；arm64 mac 吃 intel 产 x64 件（Rosetta）；
   # intel mac 吃 arm64 产件中的 x64 切片目录（app-x64/dmg-x64）。
+  # arg 行=跨 OS 归档交换腿：异 OS 产件只做格式级断言（解包+结构+文本标记，
+  # 不执行异 RID 二进制），轮转覆盖六台产件源各被至少一台异 OS 宿主消费。
   consume:
     name: consume-${{ matrix.host }}<-${{ matrix.src }}
     needs: produce
@@ -82,6 +84,12 @@ jobs:
           - {host: macos-26-intel, src: macos-26-intel}
           - {host: macos-26, src: macos-26-intel}
           - {host: macos-26-intel, src: macos-26, remap: "app=app-x64 dmg=dmg-x64 pkg=- archive=-"}
+          - {host: ubuntu-26.04, src: macos-26, arg: "--archive-format-only"}
+          - {host: ubuntu-26.04-arm, src: macos-26-intel, arg: "--archive-format-only"}
+          - {host: windows-2025-vs2026, src: ubuntu-26.04, arg: "-ArchiveFormatOnly"}
+          - {host: windows-11-vs2026-arm, src: ubuntu-26.04-arm, arg: "-ArchiveFormatOnly"}
+          - {host: macos-26, src: windows-2025-vs2026, arg: "--archive-format-only"}
+          - {host: macos-26-intel, src: windows-11-vs2026-arm, arg: "--archive-format-only"}
     steps:
       # checkout 仅为取 consume 脚本——消费断言只依赖下载工件，不依赖构建树/产物。
       - uses: actions/checkout@v7
@@ -114,15 +122,15 @@ jobs:
       - name: 消费（Linux）
         if: runner.os == 'Linux'
         shell: bash
-        run: bash scripts/ci/consume-linux.sh "$RUNNER_TEMP/consume"
+        run: bash scripts/ci/consume-linux.sh "$RUNNER_TEMP/consume" ${{ matrix.arg }}
       - name: 消费（macOS）
         if: runner.os == 'macOS'
         shell: bash
-        run: bash scripts/ci/consume-macos.sh "$RUNNER_TEMP/consume" ${{ matrix.remap }}
+        run: bash scripts/ci/consume-macos.sh "$RUNNER_TEMP/consume" ${{ matrix.remap }} ${{ matrix.arg }}
       - name: 消费（Windows）
         if: runner.os == 'Windows'
         shell: pwsh
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/consume-windows.ps1 -Dir "$env:RUNNER_TEMP/consume"
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/consume-windows.ps1 -Dir "$env:RUNNER_TEMP/consume" ${{ matrix.arg }}
       # 消费腿失败的线索工件（Windows 侧的 msiexec 日志、安装暂存树）——失败才上传。
       - name: 上传消费腿失败线索
         if: failure()

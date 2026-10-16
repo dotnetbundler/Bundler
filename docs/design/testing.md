@@ -154,6 +154,8 @@ CI `verify.yml` 的 `consume` 腿为 **(消费宿主 × 产件源) 配对矩阵*
 
 异构腿定义规则：只接真实宿主机制——WOW64/Rosetta 是产品级兼容层（用户真这么用），qemu/binfmt 类模拟不算"能使用"故 linux 无双向交换。macOS 侧 arm64 产件中 pkg/archive 无 x64 切片故 intel 消费腿对它们映射 `-` 刻意跳过（consume-macos.sh 腿=子目录映射参数）。`universal` .app 产/消对并入该拓扑（一产两消）。
 
+跨 OS 归档交换腿（consume 矩阵 `arg` 行）：zip/tar.gz 格式本身跨 OS 可移植，但内嵌 fixture 二进制是 RID 绑定的 SelfContained 原生件，异 OS 不能"跑"——只做格式级断言：下载异 OS 产件 → SHA256SUMS 验同件 → 逐份解 zip/tar.gz → 断言单一顶层目录、`BundlerArchiveIntegrationFixture` 主件在位、`runtimeconfig.json` 文本标记可读，不执行二进制。轮转覆盖六台产件源各被至少一台异 OS 宿主消费；三端 consume 脚本以 `--archive-format-only`（POSIX）/`-ArchiveFormatOnly`（Windows）进入该模式。
+
 ### 3.10 样品链（Integration）
 
 HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 产物可装/可跑断言；MSBuild 三模式（build/publish/pack 触发面）+ CLI 多 input-dir 面 + universal 合并面。

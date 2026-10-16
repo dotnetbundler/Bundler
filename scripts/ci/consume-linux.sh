@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
-# 联合交换消费腿（Linux）：consume-linux.sh <produce-artifact-dir>
+# 联合交换消费腿（Linux）：consume-linux.sh <produce-artifact-dir> [--archive-format-only]
 # 消费断言只依赖下载的 produce 工件（不依赖构建树/产物）：SHA256SUMS 验同一件
 # → 各格式真装真跑真卸 → 清场。腿失败不连锁——逐条收集，末段统一判。
+# --archive-format-only=跨 OS 归档交换模式：只验 archive 目录的 zip/tar.gz，
+# 做格式级断言（解包+结构+文本标记）——内嵌 fixture 是 RID 绑定原生件，
+# 异 OS 不能"跑"只能"解+验结构"，不执行二进制。
 set -uo pipefail
-DIR="$(cd "${1:?usage: consume-linux.sh <artifact-dir>}" && pwd)"
+DIR="$(cd "${1:?usage: consume-linux.sh <artifact-dir> [--archive-format-only]}" && pwd)"
+MODE="${2:-}"
+case "$MODE" in
+    ""|--archive-format-only) ;;
+    *) echo "未知参数：$MODE" >&2; exit 1 ;;
+esac
+[ $# -le 2 ] || { echo "未知参数：$3" >&2; exit 1; }
 [ -f "$DIR/SHA256SUMS" ] || { echo "缺 SHA256SUMS：$DIR" >&2; exit 1; }
 ( cd "$DIR" && sha256sum -c --strict SHA256SUMS ) || { echo "清单校验失败" >&2; exit 1; }
 # 清单外文件即判失败——只验列名件会让产侧混入/夹带漏检。
@@ -18,7 +27,10 @@ run_leg(){ local name="$1"; shift
 
 # 应收件存在性对账：本宿主 produce 腿应收 deb/rpm/appimage/apk/archive 五件——
 # 缺件即判败，防产侧布局漂移时"全绿零断言"。
-for D in deb rpm appimage apk archive; do
+# 归档格式交换模式只验 archive——异 OS 产件其余目录无本宿主可消费格式，非缺失。
+EXPECT="deb rpm appimage apk archive"
+[ "$MODE" = "--archive-format-only" ] && EXPECT="archive"
+for D in $EXPECT; do
     # $D 后接全角括号必须 ${D} 定界——（的 UTF-8 首字节在部分 locale 下是字母。
     [ -d "$DIR/$D" ] || { echo "[LEG-FAIL] ${D}（产件目录缺失）"; FAILED="$FAILED ${D}-missing"; continue; }
     # 目录在但一件没有同样是产侧异常——空 glob 静默跳过会让腿报"全绿零断言"。
@@ -26,6 +38,8 @@ for D in deb rpm appimage apk archive; do
         || { echo "[LEG-FAIL] ${D}（产件目录空）"; FAILED="$FAILED ${D}-empty"; }
 done
 [ -z "$FAILED" ] || { echo "失败腿:$FAILED" >&2; exit 1; }
+
+if [ "$MODE" != "--archive-format-only" ]; then
 
 # .deb：宿主直装（runner 是 deb 系；root 经 sudo）
 if find "$DIR/deb" -name '*.deb' | grep -q .; then
@@ -115,6 +129,64 @@ if find "$DIR/archive" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | grep -q
     ' "$DIR/archive"
 else
     echo "[LEG-FAIL] archive（产件目录无 .zip/.tar.gz）"; FAILED="$FAILED archive-noformat"
+fi
+
+else
+# ---- 跨 OS 归档交换：格式级断言（不执行异 RID 二进制）----
+# 每份归档独立解包后断言：单一顶层目录 + BundlerArchiveIntegrationFixture 主件
+# 在位 + runtimeconfig.json 文本标记（"runtimeOptions"）可读。缺格式即判败。
+if find "$DIR/archive" -name '*.zip' | grep -q .; then
+    run_leg "archive-zip(xchg)" bash -c '
+        set -e
+        T=$(mktemp -d); trap "rm -rf $T" EXIT
+        n=0
+        for A in "$0"/*.zip; do
+            [ -e "$A" ] || continue
+            E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
+            unzip -q "$A" -d "$E"
+            TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX)
+            [ "$(printf '%s' "$TOPS" | grep -c .)" -eq 1 ]
+            D=$(printf '%s' "$TOPS" | head -1)
+            [ -d "$D" ]
+            find "$D" -maxdepth 1 -type f \
+                \( -name BundlerArchiveIntegrationFixture -o -name BundlerArchiveIntegrationFixture.exe \) \
+                | grep -q .
+            J="$D/BundlerArchiveIntegrationFixture.runtimeconfig.json"
+            [ -s "$J" ]
+            grep -q "\"runtimeOptions\"" "$J"
+        done
+        [ "$n" -gt 0 ]
+    ' "$DIR/archive"
+else
+    echo "[LEG-FAIL] archive-zip(xchg)（产件目录无 .zip）"; FAILED="$FAILED archive-zip-xchg-noformat"
+fi
+
+if find "$DIR/archive" -name '*.tar.gz' | grep -q .; then
+    run_leg "archive-targz(xchg)" bash -c '
+        set -e
+        T=$(mktemp -d); trap "rm -rf $T" EXIT
+        n=0
+        for A in "$0"/*.tar.gz; do
+            [ -e "$A" ] || continue
+            E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
+            tar -xzf "$A" -C "$E"
+            TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX)
+            [ "$(printf '%s' "$TOPS" | grep -c .)" -eq 1 ]
+            D=$(printf '%s' "$TOPS" | head -1)
+            [ -d "$D" ]
+            find "$D" -maxdepth 1 -type f \
+                \( -name BundlerArchiveIntegrationFixture -o -name BundlerArchiveIntegrationFixture.exe \) \
+                | grep -q .
+            J="$D/BundlerArchiveIntegrationFixture.runtimeconfig.json"
+            [ -s "$J" ]
+            grep -q "\"runtimeOptions\"" "$J"
+        done
+        [ "$n" -gt 0 ]
+    ' "$DIR/archive"
+else
+    echo "[LEG-FAIL] archive-targz(xchg)（产件目录无 .tar.gz）"; FAILED="$FAILED archive-targz-xchg-noformat"
+fi
+
 fi
 
 if [ -n "$FAILED" ]; then echo "失败腿:$FAILED" >&2; exit 1; fi
