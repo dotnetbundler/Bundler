@@ -70,12 +70,10 @@ internal static class MacAppStub
             $"setxattr({QuarantineXattr}) failed rc={rc} errno={Marshal.GetLastWin32Error()}");
     }
 
-    // getxattr 返回 -1（ENOATTR）即属性缺席。
-    internal static bool HasQuarantine(string path)
-    {
-        var buffer = new byte[256];
-        return getxattr(path, QuarantineXattr, buffer, (nuint)buffer.Length, 0, 0).ToInt64() >= 0;
-    }
+    // 存在性按返回码判：size=0 探测只回值长不落缓冲——值超缓冲的 ERANGE(-1)
+    // 与"无属性"的 -1 同形，靠读缓冲非零猜会把大件误判缺席；空值属性返回 0 算存在。
+    internal static bool HasQuarantine(string path) =>
+        getxattr(path, QuarantineXattr, [], 0, 0, 0).ToInt64() >= 0;
 
     // 仓内引导件真件路径——macOS 签名腿拿它当 Mach-O 主程序，e2e 腿拿它当真引导件。
     internal static string BootstrapperTool(string target) => Path.Combine(

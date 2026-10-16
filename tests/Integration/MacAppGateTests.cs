@@ -102,11 +102,50 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
     }
 
     [Fact]
+    public void CheckAndStrip_UnsignedInstall_SignedPayload_AllowsSwap()
+    {
+        // 未签 → 已签是升级方向的放行分支（旧件未签不拦升级，MacAppGate.cs:46）——
+        // 腿断言的不只是门禁放行，而是放行后换包真实成立（载荷落位）。
+        Assert.SkipUnless(TestPlatform.IsMacOS, "codesign/xattr 门禁只在 macOS 宿主存在。");
+        var directory = Ws.Combine("unsigned-install-signed-payload");
+        using var identity = RequireIdentity(
+            Path.Combine(directory, "signing"), "BundlerGateAlpha", "GATEAAAAAA");
+        var install = MacAppStub.WriteBundle(
+            Path.Combine(directory, "install-slot"), "App", "com.bundler.gate",
+            machOExecutable: true);
+        var payload = MacAppStub.WriteBundle(
+            Path.Combine(directory, "payload-slot"), "App", "com.bundler.gate",
+            machOExecutable: true);
+        // 区分落位内容后再签——签名后改动密封件会过不了 codesign --verify。
+        File.WriteAllText(
+            Path.Combine(payload, "Contents", "Resources", "data.txt"), "v2-data\n");
+        identity.Sign(payload);
+
+        var log = new List<string>();
+        var rc = BootstrapPlan.Apply(new BootstrapOptions
+        {
+            InstallDirectory = install,
+            PayloadDirectory = payload,
+        }, log.Add);
+
+        Assert.Equal(0, rc);
+        Assert.Contains(log, line => line.Contains(
+            "installed bundle unsigned; signed payload accepted"));
+        Assert.Equal("v2-data", File.ReadAllText(
+            Path.Combine(install, "Contents", "Resources", "data.txt")).TrimEnd());
+    }
+
+    [Fact]
     public void CheckAndStrip_CrossTeamIdentifier_RejectsCrossIdentity()
     {
         // 已签 → 已签但异队：跨签名者换包即通道劫持，必须拒。
         Assert.SkipUnless(TestPlatform.IsMacOS, "codesign/xattr 门禁只在 macOS 宿主存在。");
         var directory = Ws.Combine("cross-team");
+        // 双 keychain 处置序承重：每个 TemporaryKeychain 在创建时快照当时的
+        // list-keychains 搜索列表，Dispose 用它还原——逆序（LIFO）拆才把列表
+        // 逐层还原到各创建时刻；using 声明天然逆序 Dispose，别改成统一清理。
+        // 进程被强杀则搜索列表与 keychain 件残留（无析构方）——属可接受面，
+        // 测试宿主重启/手工 security list-keychains -s 还原即可。
         using var alpha = RequireIdentity(
             Path.Combine(directory, "signing-a"), "BundlerGateAlpha", "GATEAAAAAA");
         using var beta = RequireIdentity(
@@ -178,20 +217,35 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
         Assert.False(MacAppStub.HasQuarantine(payload));
     }
 
-    // 目录零变更断言面：相对路径 → 内容哈希（目录记 <dir>），字典等值即全等。
+    // 目录零变更断言面：相对路径 → 内容哈希（目录记 <dir>）+ unix mode + quarantine
+    // xattr 随节点走——拒换路径的零变更断言连同属性面一起钉死（只盯内容哈希会漏
+    // "同字节不同权限/带标"的暗变）。字典等值即全等。
     private static SortedDictionary<string, string> Snapshot(string root)
     {
         var map = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        map["."] = NodeSignature(root);
         foreach (var entry in Directory.EnumerateFileSystemEntries(
                      root, "*", SearchOption.AllDirectories))
         {
-            var relative = Path.GetRelativePath(root, entry);
-            map[relative] = Directory.Exists(entry)
-                ? "<dir>"
-                : Convert.ToHexString(
-                    System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(entry)));
+            map[Path.GetRelativePath(root, entry)] = NodeSignature(entry);
         }
         return map;
+    }
+
+    private static string NodeSignature(string entry)
+    {
+        var body = Directory.Exists(entry)
+            ? "<dir>"
+            : Convert.ToHexString(
+                System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(entry)));
+        // CA1416 不认 SkipUnless——mode/xattr 面挂在非 Windows 分支
+        //（本文件各腿在 macOS 门禁后才走到这里，运行时恒走此支）。
+        if (OperatingSystem.IsWindows())
+        {
+            return body;
+        }
+        return $"{body}|mode={(int)File.GetUnixFileMode(entry):x4}" +
+            $"|quarantine={MacAppStub.HasQuarantine(entry)}";
     }
 
     // 自签身份尽力腿：不可用即诚实 Skip——断言的是真 codesign 链，不伪造环境。
@@ -282,10 +336,22 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
             reason = $"self-sign probe failed: {exception.Message}";
             return null;
         }
-        var describe = ProcessRunner.Run("/usr/bin/codesign",
-            ["-dv", "--verbose=4", Path.Combine(workDir, "probe", "Probe.app")],
-            new ProcessRunner.Options { WorkingDirectory = workDir });
-        var team = Regex.Match(describe.StdErr, "^TeamIdentifier=(.+)$", RegexOptions.Multiline);
+        // 探针 -dv 同样尽力腿：与 identity.Sign 同款语义——工具拉起失败按不可用计（Skip），不炸测试。
+        string describeStdErr;
+        try
+        {
+            var describe = ProcessRunner.Run("/usr/bin/codesign",
+                ["-dv", "--verbose=4", Path.Combine(workDir, "probe", "Probe.app")],
+                new ProcessRunner.Options { WorkingDirectory = workDir });
+            describeStdErr = describe.StdErr;
+        }
+        catch (Exception exception)
+        {
+            identity.Dispose();
+            reason = $"codesign -dv probe failed: {exception.Message}";
+            return null;
+        }
+        var team = Regex.Match(describeStdErr, "^TeamIdentifier=(.+)$", RegexOptions.Multiline);
         var teamId = team.Success ? team.Groups[1].Value.Trim() : "";
         if (teamId.Length == 0 || teamId == "not set")
         {

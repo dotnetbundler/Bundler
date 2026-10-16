@@ -23,7 +23,9 @@ EXTRA=$(cd "$DIR" && comm -13 \
 [ -z "$EXTRA" ] || { echo "清单外文件: $EXTRA" >&2; exit 1; }
 
 FAILED=""
+RAN=0   # 实际执行腿数——零断言全绿由末段防线判败（与 consume-macos/consume-windows 同口径）
 run_leg(){ local name="$1"; shift
+    RAN=$((RAN+1))
     if "$@"; then echo "[LEG-PASS] $name"; else echo "[LEG-FAIL] $name"; FAILED="$FAILED $name"; fi }
 
 # 应收件存在性对账：本宿主 produce 腿应收 deb/rpm/appimage/apk/archive 五件——
@@ -35,7 +37,7 @@ for D in $EXPECT; do
     # $D 后接全角括号必须 ${D} 定界——（的 UTF-8 首字节在部分 locale 下是字母。
     [ -d "$DIR/$D" ] || { echo "[LEG-FAIL] ${D}（产件目录缺失）"; FAILED="$FAILED ${D}-missing"; continue; }
     # 目录在但一件没有同样是产侧异常——空 glob 静默跳过会让腿报"全绿零断言"。
-    find "$DIR/$D" -type f | grep -q . \
+    [ -n "$(find "$DIR/$D" -type f | head -1)" ] \
         || { echo "[LEG-FAIL] ${D}（产件目录空）"; FAILED="$FAILED ${D}-empty"; }
 done
 [ -z "$FAILED" ] || { echo "失败腿:$FAILED" >&2; exit 1; }
@@ -43,8 +45,8 @@ done
 if [ "$MODE" != "--archive-format-only" ]; then
 
 # .deb：宿主直装（runner 是 deb 系；root 经 sudo）
-if find "$DIR/deb" -name '*.deb' | grep -q .; then
-    DEB="$(find "$DIR/deb" -name '*.deb' | head -1)"
+if [ -n "$(find "$DIR/deb" -name '*.deb' | head -1)" ] ; then
+    DEB="$(find "$DIR/deb" -name '*.deb' -print -quit)"
     run_leg "deb" bash -c '
         set -e
         sudo dpkg -i "$0"
@@ -59,7 +61,7 @@ else
 fi
 
 # .rpm：跨发行版交换——ubuntu 产的包装进 fedora 容器
-if find "$DIR/rpm" -name '*.rpm' | grep -q .; then
+if [ -n "$(find "$DIR/rpm" -name '*.rpm' | head -1)" ] ; then
     run_leg "rpm(fedora)" docker run --rm -v "$DIR:/a:ro" fedora:latest bash -c '
         set -e
         dnf install -y /a/rpm/*.rpm >/dev/null
@@ -73,7 +75,7 @@ else
 fi
 
 # .apk：跨发行版交换——ubuntu 产的包装进 alpine 容器
-if find "$DIR/apk" -name '*.apk' | grep -q .; then
+if [ -n "$(find "$DIR/apk" -name '*.apk' | head -1)" ] ; then
     run_leg "apk(alpine)" docker run --rm -v "$DIR:/a:ro" alpine:latest sh -c '
         set -e
         apk add --allow-untrusted /a/apk/*.apk >/dev/null
@@ -89,8 +91,8 @@ fi
 # .AppImage 双腿各跑各验（轮测联合测试要求两条腿都断言，不许 OR 链遮蔽）：
 # fuse 路=直接运行经 FUSE 挂载（内嵌 type2-runtime 的 squashfuse 探测 fusermount/fusermount3，fuse2/fuse3 皆可用）；
 # extract 路=--appimage-extract-and-run 免挂载解压直跑（容器等无 /dev/fuse 环境的路径）。
-if find "$DIR/appimage" -name '*.AppImage' | grep -q .; then
-    APPIMAGE="$(find "$DIR/appimage" -name '*.AppImage' | head -1)"
+if [ -n "$(find "$DIR/appimage" -name '*.AppImage' | head -1)" ] ; then
+    APPIMAGE="$(find "$DIR/appimage" -name '*.AppImage' -print -quit)"
     chmod +x "$APPIMAGE"
     # fuse 腿帮手兜底：ubuntu 镜像默认带 fuse3，缺装则补——无 /dev/fuse 的内核
     # 环境装上也跑不了，那时 fuse 腿按设计真失败如实报（非环境差异遮蔽）。
@@ -111,10 +113,11 @@ else
 fi
 
 # 归档件：解开直接跑（zip/tar.gz 都接受）
-if find "$DIR/archive" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | grep -q .; then
+if [ -n "$(find "$DIR/archive" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | head -1)" ] ; then
     run_leg "archive" bash -c '
         set -e
-        T=$(mktemp -d); trap "rm -rf $T" EXIT
+        # 暂存目录命名与 consume-macos.sh 对齐——verify.yml 失败线索工件按 bundler-consume* glob 收
+        T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "rm -rf $T" EXIT
         for A in "$0"/*.zip "$0"/*.tar.gz; do
             [ -e "$A" ] || continue
             case "$A" in
@@ -136,16 +139,17 @@ else
 # ---- 跨 OS 归档交换：格式级断言（不执行异 RID 二进制）----
 # 每份归档独立解包后断言：单一顶层目录 + BundlerArchiveIntegrationFixture 主件
 # 在位 + runtimeconfig.json 文本标记（"runtimeOptions"）可读。缺格式即判败。
-if find "$DIR/archive" -name '*.zip' | grep -q .; then
+if [ -n "$(find "$DIR/archive" -name '*.zip' | head -1)" ] ; then
     run_leg "archive-zip(xchg)" bash -c '
         set -e
-        T=$(mktemp -d); trap "rm -rf $T" EXIT
+        T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "rm -rf $T" EXIT
         n=0
         for A in "$0"/*.zip; do
             [ -e "$A" ] || continue
             E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
             unzip -q "$A" -d "$E"
-            TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX)
+            # __MACOSX 目录与 ._* AppleDouble 旁枝同是 macOS 元数据——不计入顶层断言
+            TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX ! -name '._*')
             [ "$(printf '%s' "$TOPS" | grep -c .)" -eq 1 ]
             D=$(printf '%s' "$TOPS" | head -1)
             [ -d "$D" ]
@@ -162,16 +166,17 @@ else
     echo "[LEG-FAIL] archive-zip(xchg)（产件目录无 .zip）"; FAILED="$FAILED archive-zip-xchg-noformat"
 fi
 
-if find "$DIR/archive" -name '*.tar.gz' | grep -q .; then
+if [ -n "$(find "$DIR/archive" -name '*.tar.gz' | head -1)" ] ; then
     run_leg "archive-targz(xchg)" bash -c '
         set -e
-        T=$(mktemp -d); trap "rm -rf $T" EXIT
+        T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "rm -rf $T" EXIT
         n=0
         for A in "$0"/*.tar.gz; do
             [ -e "$A" ] || continue
             E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
             tar -xzf "$A" -C "$E"
-            TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX)
+            # 同 zip 腿：__MACOSX 目录与 ._* AppleDouble 旁枝豁免顶层计数
+            TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX ! -name '._*')
             [ "$(printf '%s' "$TOPS" | grep -c .)" -eq 1 ]
             D=$(printf '%s' "$TOPS" | head -1)
             [ -d "$D" ]
@@ -190,5 +195,7 @@ fi
 
 fi
 
+# 零腿全绿防线：一条腿都没实际执行到零断言全绿——须判败。
+[ "$RAN" -gt 0 ] || { echo "无任何腿执行（零断言全绿）" >&2; exit 1; }
 if [ -n "$FAILED" ]; then echo "失败腿:$FAILED" >&2; exit 1; fi
 echo "=== consume-linux 全绿 ==="

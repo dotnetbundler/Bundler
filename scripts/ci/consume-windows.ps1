@@ -24,7 +24,8 @@ $bad = @(); $malformed = @(); $listed = @()
 Get-Content $SUMS | ForEach-Object {
     if ($_ -match '^([0-9a-f]{64})  \./(.+)$') {
         $listed += $Matches[2]
-        $actual = (Get-FileHash "$DIR/$($Matches[2])" -Algorithm SHA256).Hash.ToLower()
+        # 清单路径可含 [] 等字符——按通配解析会失配/多配，须 -LiteralPath 字面取件
+        $actual = (Get-FileHash -LiteralPath "$DIR/$($Matches[2])" -Algorithm SHA256).Hash.ToLower()
         if ($actual -ne $Matches[1]) { $bad += $Matches[2] }
     } elseif ($_.Trim() -ne '') { $malformed += $_ }
 }
@@ -49,7 +50,9 @@ if ($empty.Count -gt 0) { throw "产件目录空: $($empty -join ', ')" }
 $WORK = Join-Path $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }) "bundler-consume"
 New-Item -ItemType Directory -Force $WORK | Out-Null
 $failedLegs = @()
+$legsRan = 0   # 实际执行腿数——零断言全绿由末段防线判败（与 consume-macos/consume-linux 同口径）
 function Leg($name, [scriptblock]$body) {
+    $script:legsRan++
     try { & $body; Write-Host "[LEG-PASS] $name" }
     catch { Write-Host "[LEG-FAIL] $name :: $_"; $script:failedLegs += $name }
 }
@@ -59,8 +62,8 @@ if ($ArchiveFormatOnly) {
 # 每份归档独立解包后断言：单一顶层目录 + BundlerArchiveIntegrationFixture 主件
 # 在位 + runtimeconfig.json 文本标记（"runtimeOptions"）可读。缺格式即判败。
 function Assert-ArchiveTree($root) {
-    # __MACOSX 是 ditto/AppleDouble 元数据目录，macOS 侧产件可能出现——不计入顶层断言。
-    $top = @(Get-ChildItem $root -Force | Where-Object { $_.Name -ne "__MACOSX" })
+    # __MACOSX 目录与 ._* AppleDouble 旁枝同是 macOS 元数据，macOS 侧产件可能出现——不计入顶层断言。
+    $top = @(Get-ChildItem $root -Force | Where-Object { $_.Name -ne "__MACOSX" -and $_.Name -notlike "._*" })
     if ($top.Count -ne 1 -or -not $top[0].PSIsContainer) { throw "归档顶层非单一目录（顶层 $($top.Count) 项）" }
     $d = $top[0].FullName
     $exe = Get-ChildItem $d -File |
@@ -146,6 +149,9 @@ else {
 }
 
 # zip/tar.gz 归档（fixture 产两件）：解开直接跑；缺任一件即判败——空 glob 静默跳过等于零断言。
+# 口径记账（不对称，有意）：本腿 Select-Object -First 1 只取每格式的头一件跑；
+# POSIX 腿（consume-macos/consume-linux 非 xchg 路）把目录内全部归档合解进同一棵树再跑。
+# 产侧约定每格式只产一件，差的是"多件的冗余覆盖"而非断言强度——维持现状，审计留痕。
 $zip = Get-ChildItem "$DIR/archive" -Filter *.zip -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $zip) { Write-Host "[LEG-FAIL] archive-zip（产件目录无 .zip）"; $failedLegs += "archive-zip" }
 else {
@@ -175,5 +181,7 @@ else {
 
 }
 
+# 零腿全绿防线：一条腿都没实际执行到零断言全绿——须判败。
+if ($legsRan -eq 0) { Write-Error "无任何腿执行（零断言全绿）" }
 if ($failedLegs.Count -gt 0) { Write-Error ("失败腿: " + ($failedLegs -join ", ")) }
 Write-Host "=== consume-windows 全绿 ==="

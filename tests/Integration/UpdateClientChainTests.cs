@@ -59,7 +59,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         File.WriteAllText(artifact, "v2-image");
         WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
         {
-            Target = "linux-x86_64", Format = "appimage",
+            Target = TestPlatform.LinuxTarget, Format = "appimage",
             Url = "MyApp-2.0.0.AppImage", File = "MyApp-2.0.0.AppImage",
             Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
             Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
@@ -69,7 +69,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var client = UpdateClient.FromIdentity(new Protocol.UpdateInstallIdentity
         {
             Format = "appimage",
-            Target = "linux-x86_64",
+            Target = TestPlatform.LinuxTarget,
             Channel = "stable",
             FeedUrl = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
             PublicKey = material.PublicPointBase64(),
@@ -95,6 +95,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         // 宿主目录里的无关文件原样保留——文件级换包的防误清面。
         Assert.Equal("keep-me", File.ReadAllText(Path.Combine(installDir, "sibling.txt")));
         Assert.False(File.Exists(install + ".bundler-swap"));
+        Assert.False(File.Exists(install + ".bundler-lock"));
         // 文件级安装单元的身份落在 <file>.bundler-update.json 旁车——
         // 下轮 FromInstallDirectory(文件路径) 直读，更新身份不随镜像内嵌而失联。
         var persisted = Protocol.UpdateInstallIdentity.TryRead(install);
@@ -129,14 +130,18 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var bootstrapper = LinuxBootstrapper();
         File.Copy(bootstrapper, Path.Combine(install, "bundler-updater"));
 
-        // v2 载荷 zip：单顶层目录 app-v2/app="v2" + 引导件也随包（真实发布形态）。
+        // v2 载荷 zip：单顶层目录 app-v2/app="v2" + 引导件与身份侧车也随包
+        //（真实发布形态——换包后安装位仍带 bundler-update.json，更新链可持续）。
         var artifact = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2",
-            extraEntry: ("bundler-updater", File.ReadAllBytes(bootstrapper)));
+            ("bundler-updater", File.ReadAllBytes(bootstrapper)),
+            ("bundler-update.json", SidecarBytes("zip", TestPlatform.LinuxTarget,
+                Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
+                material.PublicPointBase64())));
         var sha = Sha256Hex(artifact);
         var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material));
         WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
         {
-            Target = "linux-x86_64", Format = "zip",
+            Target = TestPlatform.LinuxTarget, Format = "zip",
             Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
             Sha256 = sha, Size = new FileInfo(artifact).Length, Signature = sig,
         });
@@ -159,6 +164,12 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.Equal("v1", File.ReadAllText(
             Path.Combine(directory, "backups", "install-x", "app")));
         Assert.False(File.Exists(install + ".bundler-swap"));
+        Assert.False(File.Exists(install + ".bundler-lock"));
+        // 载荷侧车换进安装位——更新链可持续（下轮 FromInstallDirectory 读得出身份）。
+        var persisted = Protocol.UpdateInstallIdentity.TryRead(install);
+        Assert.NotNull(persisted);
+        Assert.Equal("zip", persisted!.Format);
+        Assert.Equal(material.PublicPointBase64(), persisted.PublicKey);
 
         // 回滚钩子：保留位备份倒回 → 安装目录回到 v1。
         var rollback = client.Rollback(new ApplyOptions
@@ -190,7 +201,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material));
         WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
         {
-            Target = "linux-x86_64", Format = "zip",
+            Target = TestPlatform.LinuxTarget, Format = "zip",
             Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
             Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
             Signature = sig,
@@ -209,6 +220,8 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
     }
 
+    // SupportedOSPlatform 供 CA1416 编译期判定（运行期仍靠 SkipUnless 门禁）。
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
     [Fact]
     public async Task Client_UpdateAsync_TarGz_EndToEnd_Linux()
     {
@@ -226,7 +239,10 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         File.Copy(bootstrapper, Path.Combine(install, "bundler-updater"));
 
         var artifact = WriteTarGzArtifact(feedDir, "app-2.0.0.tar.gz", "v2",
-            extraEntry: ("bundler-updater", File.ReadAllBytes(bootstrapper)));
+            ("bundler-updater", File.ReadAllBytes(bootstrapper)),
+            ("bundler-update.json", SidecarBytes("targz", TestPlatform.LinuxTarget,
+                Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
+                material.PublicPointBase64())));
         var sha = Sha256Hex(artifact);
         var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material));
         WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
@@ -250,17 +266,19 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.Equal(0, process.ExitCode);
         Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
         // tar 保真面：随包引导件的 0755 经 ustar mode 落回文件系统。
-        if (OperatingSystem.IsLinux())
-        {
-            Assert.True(
-                (File.GetUnixFileMode(Path.Combine(install, "bundler-updater")) &
-                    UnixFileMode.UserExecute) != 0,
-                "payload executable bit must survive the tar.gz transport.");
-        }
+        Assert.True(
+            (File.GetUnixFileMode(Path.Combine(install, "bundler-updater")) &
+                UnixFileMode.UserExecute) != 0,
+            "payload executable bit must survive the tar.gz transport.");
         Assert.False(Directory.Exists(install + ".bundler-backup"));
         Assert.Equal("v1", File.ReadAllText(
             Path.Combine(directory, "backups", "install-x", "app")));
         Assert.False(File.Exists(install + ".bundler-swap"));
+        Assert.False(File.Exists(install + ".bundler-lock"));
+        // 载荷侧车换进安装位——更新链可持续。
+        var persisted = Protocol.UpdateInstallIdentity.TryRead(install);
+        Assert.NotNull(persisted);
+        Assert.Equal("targz", persisted!.Format);
 
         var rollback = client.Rollback(new ApplyOptions
         {
@@ -314,6 +332,16 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
                     UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
                     UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
         }
+        // 身份侧车落 Contents/Resources（资源密封位——TryRead 的 .app 标准读位），
+        // 换包后 .app 安装位仍带身份，更新链可持续。
+        Protocol.UpdateInstallIdentity.Write(
+            Path.Combine(payload, "Contents", "Resources"),
+            new Protocol.UpdateInstallIdentity
+            {
+                Format = "app", Target = TestPlatform.OsxTarget, Channel = "stable",
+                FeedUrl = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
+                PublicKey = material.PublicPointBase64(),
+            });
         MacAppStub.SetQuarantineTree(payload);
         var transport = Path.Combine(feedDir, "MyApp-2.0.0.app.zip");
         Assert.True(MacArchiveTools.TryWriteAppZipViaDitto(
@@ -357,6 +385,15 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.Contains("quarantine stripped", File.ReadAllText(logPath));
         Assert.Equal("v1", File.ReadAllText(Path.Combine(
             directory, "backups", "myapp", "Contents", "MacOS", "MyApp")));
+        // 兄弟位残件清零（瞬备迁走/marker 回收/锁释放）——与 Linux 目录腿平价。
+        Assert.False(Directory.Exists(install + ".bundler-backup"));
+        Assert.False(File.Exists(install + ".bundler-swap"));
+        Assert.False(File.Exists(install + ".bundler-lock"));
+        // 载荷侧车换进 .app 安装位（Contents/Resources 密封位）——更新链可持续。
+        var persisted = Protocol.UpdateInstallIdentity.TryRead(install);
+        Assert.NotNull(persisted);
+        Assert.Equal("app", persisted!.Format);
+        Assert.Equal(material.PublicPointBase64(), persisted.PublicKey);
 
         // 回滚对照：保留位备份倒回 → .app 回到 v1（回滚不验门禁——备份是自家产物）。
         var rollback = client.Rollback(new ApplyOptions
@@ -382,8 +419,9 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
 
     static string InstallWithSidecar(
         string root, out UpdateKeyMaterial material, out string feedDir,
-        string format = "zip", string target = "linux-x86_64")
+        string format = "zip", string? target = null)
     {
+        target ??= TestPlatform.LinuxTarget;
         var install = Path.Combine(root, "install");
         Directory.CreateDirectory(install);
         feedDir = Path.Combine(root, "feed");
@@ -425,7 +463,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
 
     static string WriteZipArtifact(
         string dir, string name, string content,
-        (string name, byte[] bytes)? extraEntry = null)
+        params (string name, byte[] bytes)[] extraEntries)
     {
         var path = Path.Combine(dir, name);
         using (var stream = File.Create(path))
@@ -436,7 +474,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             {
                 writer.Write(content);
             }
-            if (extraEntry is { } extra)
+            foreach (var extra in extraEntries)
             {
                 var e2 = archive.CreateEntry("app-v2/" + extra.name);
                 using var es = e2.Open();
@@ -446,11 +484,18 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         return path;
     }
 
+    // 载荷内身份侧车：与打包期 UpdateIdentitySidecar 同形态的最小 JSON——
+    // 换包后安装位仍带 bundler-update.json，下轮更新链才能续上。
+    static byte[] SidecarBytes(string format, string target, string feedJsonPath, string publicKey) =>
+        Encoding.UTF8.GetBytes(
+            "{\"format\":\"" + format + "\",\"rid\":\"" + target + "\",\"channel\":\"stable\"," +
+            "\"feedUrl\":\"" + feedJsonPath + "\",\"publicKey\":\"" + publicKey + "\"}");
+
     // tar.gz 运输件：仓内 TarWriter + GZipStream 产确定性 ustar——
     // 单顶层目录是 UpdateApplier.SingleTopDirectory 的载荷根判据。
     static string WriteTarGzArtifact(
         string dir, string name, string content,
-        (string name, byte[] bytes)? extraEntry = null)
+        params (string name, byte[] bytes)[] extraEntries)
     {
         var path = Path.Combine(dir, name);
         var entries = new List<TarEntry>
@@ -462,7 +507,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
                 Content = Encoding.UTF8.GetBytes(content),
             },
         };
-        if (extraEntry is { } extra)
+        foreach (var extra in extraEntries)
         {
             entries.Add(new TarEntry
             {

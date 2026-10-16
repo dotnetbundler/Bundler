@@ -13,21 +13,53 @@ using Protocol = DotNet.Bundler.Updater.Protocol;
 using UpdateKeyMaterial = DotNet.Bundler.Core.Update.UpdateKeyMaterial;
 
 
-public class UpdateCompatTests
+public sealed class UpdateCompatFixture : IDisposable
 {
-    static string V1Dir => RepoPath("tests/Fixtures/UpdateCompat/v1");
+    // 惰性创建：宿主/冻件门禁在各用例体内 Skip，之后才允许占锁建目录。
+    private readonly Lazy<IntegrationWorkspace> _ws = new(() => IntegrationWorkspace.Create(
+        "update-compat-integration", "BundlerUpdateCompat"));
+
+    public IntegrationWorkspace Ws => _ws.Value;
+
+    public void Dispose()
+    {
+        if (_ws.IsValueCreated)
+        {
+            _ws.Value.Dispose();
+        }
+    }
+}
+
+public sealed class UpdateCompatTests : IClassFixture<UpdateCompatFixture>
+{
+    private readonly UpdateCompatFixture _fixture;
+    private IntegrationWorkspace Ws => _fixture.Ws;
+
+    public UpdateCompatTests(UpdateCompatFixture fixture) => _fixture = fixture;
+
+    static string V1Dir => Path.Combine(RepositoryLayout.FixturesDirectory, "UpdateCompat", "v1");
     static string V1FeedJson => Path.Combine(V1Dir, "feed", "bundler-update-feed.stable.json");
     static string V1Zip => Path.Combine(V1Dir, "feed", "linux-x64", "zip",
         "hellov1-1.0.0-linux-x64.zip");
     static string V1Sh => Path.Combine(V1Dir, "bootstrap", "bundler-updater.sh");
     // linux 引导件收敛 musl 静态单件（static-pie 件 glibc 宿主照跑）——
     // linux-x86_64 目标经 musl 姊妹件解析，本腿直接取 musl 件跑真实 apply。
-    static string CurrentAot => RepoPath(
-        "src/Bundler.Updater.Bootstrap/tools/linux-musl-x86_64/bundler-updater");
+    static string CurrentAot => Path.Combine(RepositoryLayout.Root,
+        "src", "Bundler.Updater.Bootstrap", "tools", "linux-musl-x86_64", "bundler-updater");
+
+    // 每用例一个工作区子目录：IntegrationWorkspace 的身份标记+锁纪律，
+    // 不另起 /tmp GUID 目录。
+    string CaseRoot(string name)
+    {
+        var root = Ws.Combine(name);
+        Directory.CreateDirectory(root);
+        return root;
+    }
 
     // 解出 v1 zip 载荷当"旧装"（侧车+内嵌 v1 引导件都在树里）。
     static string ExtractV1Install(string root)
     {
+        Assert.SkipUnless(File.Exists(V1Zip), $"v1 frozen zip missing: {V1Zip}");
         var dir = Path.Combine(root, "v1zip");
         ZipFile.ExtractToDirectory(V1Zip, dir);
         var inner = Directory.GetDirectories(dir).Single();
@@ -111,6 +143,7 @@ public class UpdateCompatTests
     // 当前打包产物的载荷树形态：app + 身份侧车 + 引导件二进制 + 子目录件。
     static string CurrentShapePayload(string root)
     {
+        Assert.SkipUnless(File.Exists(CurrentAot), $"current AOT bootstrapper missing: {CurrentAot}");
         var payload = Path.Combine(root, "payload");
         Directory.CreateDirectory(Path.Combine(payload, "lib"));
         File.WriteAllText(Path.Combine(payload, "app"), "v2");
@@ -123,9 +156,10 @@ public class UpdateCompatTests
     }
 
     [Fact]
-    static async Task V1Feed_ReadableAndVerifiable_ByCurrentClient()
+    async Task V1Feed_ReadableAndVerifiable_ByCurrentClient()
     {
-        var root = CreateTempDirectory();
+        Assert.SkipUnless(File.Exists(V1FeedJson), $"v1 frozen feed missing: {V1FeedJson}");
+        var root = CaseRoot("v1feed");
         try
         {
             var install = ExtractV1Install(root);
@@ -137,16 +171,16 @@ public class UpdateCompatTests
             var downloaded = await client.DownloadAsync(info, Path.Combine(root, "dl"));
             client.Verify(info, downloaded);
         }
-        finally { Cleanup(root); }
+        finally { Ws.Remove(root); }
     }
 
     [Fact]
-    static async Task V1Install_EndToEndSwap_ByCurrentFeed()
+    async Task V1Install_EndToEndSwap_ByCurrentFeed()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux() && !TestPlatform.IsMusl &&
             RuntimeInformation.ProcessArchitecture == Architecture.X64,
             "v1 冻件的引导件是 linux-x86_64 AOT——端到端腿只在 linux-x86_64 宿主跑。");
-        var root = CreateTempDirectory();
+        var root = CaseRoot("v1swap");
         try
         {
             var material = UpdateKeyMaterial.Generate();
@@ -174,13 +208,13 @@ public class UpdateCompatTests
             Assert.Equal(0, process.ExitCode);
             AssertSwapped(install, "v2");
         }
-        finally { Cleanup(root); }
+        finally { Ws.Remove(root); }
     }
 
     [Fact]
-    static void V1Payload_AppliesUnder_CurrentBootstrap()
+    void V1Payload_AppliesUnder_CurrentBootstrap()
     {
-        var root = CreateTempDirectory();
+        var root = CaseRoot("v1payload");
         try
         {
             var payload = ExtractV1Install(Path.Combine(root, "p"));
@@ -196,38 +230,39 @@ public class UpdateCompatTests
             Assert.True(File.Exists(Path.Combine(install, "bundler-update.json")));
             Assert.False(File.Exists(Path.Combine(install, "stale.txt")));
         }
-        finally { Cleanup(root); }
+        finally { Ws.Remove(root); }
     }
 
     [Fact]
-    static void V1ShBootstrap_Applies_CurrentPayload()
+    void V1ShBootstrap_Applies_CurrentPayload()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
             "v1 sh 引导件腿只在 POSIX 宿主跑。");
-        var root = CreateTempDirectory();
+        Assert.SkipUnless(File.Exists(V1Sh), $"v1 frozen sh bootstrapper missing: {V1Sh}");
+        var root = CaseRoot("v1sh");
         try
         {
             var install = Path.Combine(root, "install");
             Directory.CreateDirectory(install);
             // 当前真实载荷形态：app + 侧车 + 引导件 + 子目录。
             var payload = CurrentShapePayload(root);
-            var rc = RunProcess("sh", [V1Sh, "apply", "--install-dir", install,
+            RunProcess("sh", [V1Sh, "apply", "--install-dir", install,
                 "--payload", payload, "--log", Path.Combine(root, "u.log")]);
-            Assert.Equal(0, rc);
             AssertSwapped(install, "v2");
             Assert.Equal("v2-data", File.ReadAllText(Path.Combine(install, "lib", "data.txt")));
             Assert.True(File.Exists(Path.Combine(install, "bundler-update.json")));
         }
-        finally { Cleanup(root); }
+        finally { Ws.Remove(root); }
     }
 
     [Fact]
-    static void V1AotBootstrap_Applies_CurrentPayload()
+    void V1AotBootstrap_Applies_CurrentPayload()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux() && !TestPlatform.IsMusl &&
             RuntimeInformation.ProcessArchitecture == Architecture.X64,
             "v1 AOT 引导件是 linux-x86_64——只在 linux-x86_64 宿主跑。");
-        var root = CreateTempDirectory();
+        Assert.SkipUnless(File.Exists(V1Zip), $"v1 frozen zip missing: {V1Zip}");
+        var root = CaseRoot("v1aot");
         try
         {
             var binary = Path.Combine(root, "bundler-updater");
@@ -245,17 +280,18 @@ public class UpdateCompatTests
             var install = Path.Combine(root, "install");
             Directory.CreateDirectory(install);
             var payload = CurrentShapePayload(root);
-            var rc = RunProcess(binary, ["apply", "--install-dir", install,
+            RunProcess(binary, ["apply", "--install-dir", install,
                 "--payload", payload, "--log", Path.Combine(root, "u.log")]);
-            Assert.Equal(0, rc);
             AssertSwapped(install, "v2");
             Assert.Equal("v2-data", File.ReadAllText(Path.Combine(install, "lib", "data.txt")));
             Assert.True(File.Exists(Path.Combine(install, "bundler-update.json")));
         }
-        finally { Cleanup(root); }
+        finally { Ws.Remove(root); }
     }
 
-    static int RunProcess(string file, IEnumerable<string> args)
+    // 退出码断言只留这一处：非零时把 stdout/stderr 一并带进失败消息，
+    // 调用方不再重复 Assert.Equal(0, rc)。
+    static void RunProcess(string file, IEnumerable<string> args)
     {
         var start = new ProcessStartInfo(file)
         {
@@ -274,31 +310,5 @@ public class UpdateCompatTests
         Task.WaitAll(stdout, stderr);
         Assert.True(process.ExitCode == 0,
             $"{file} rc={process.ExitCode}\nstdout:{stdout.Result}\nstderr:{stderr.Result}");
-        return process.ExitCode;
-    }
-
-    static string RepoPath(string relative)
-    {
-        var dir = AppContext.BaseDirectory;
-        while (dir != null && !File.Exists(Path.Combine(dir, "Bundler.slnx")))
-        {
-            dir = Directory.GetParent(dir)?.FullName;
-        }
-        Assert.NotNull(dir);
-        return Path.Combine(dir!, relative);
-    }
-
-    static string CreateTempDirectory()
-    {
-        var dir = Path.Combine(Path.GetTempPath(),
-            "bundler-updatecompat-" + Guid.NewGuid().ToString("N")[..10]);
-        Directory.CreateDirectory(dir);
-        return dir;
-    }
-
-    static void Cleanup(string directory)
-    {
-        try { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
-        catch { /* best-effort */ }
     }
 }

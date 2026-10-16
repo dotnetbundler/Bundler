@@ -15,6 +15,9 @@ FMT_ONLY=""
 for KV in "$@"; do
     [ "$KV" = "--archive-format-only" ] && { FMT_ONLY=1; continue; }
     K="${KV%%=*}"; V="${KV#*=}"
+    # 空值拒绝：app= 之类会把腿目录静默扩成工件根目录（"$DIR/" 下全件被当腿内
+    # 容消费）；显式跳过用 -。
+    [ -n "$V" ] || { echo "腿映射值为空（显式跳过用 -）：$KV" >&2; exit 1; }
     case "$K" in
         app)     DIR_APP="$V" ;;
         dmg)     DIR_DMG="$V" ;;
@@ -40,7 +43,9 @@ EXTRA=$(cd "$DIR" && comm -13 \
 [ -z "$EXTRA" ] || { echo "清单外文件: $EXTRA" >&2; exit 1; }
 
 FAILED=""
+RAN=0   # 实际执行腿数——全 LEG-SKIP 的零断言全绿由末段防线判败
 run_leg(){ local name="$1"; shift
+    RAN=$((RAN+1))
     if "$@"; then echo "[LEG-PASS] $name"; else echo "[LEG-FAIL] $name"; FAILED="$FAILED $name"; fi }
 leg_dir(){ case "$1" in                 # 腿名 → 工件内子目录
     app) echo "$DIR_APP";; dmg) echo "$DIR_DMG";;
@@ -57,14 +62,14 @@ for D in app dmg pkg archive; do
     leg_on "$D" || { echo "[LEG-SKIP] ${D}（产件无本宿主可用切片，映射跳过）"; continue; }
     [ -d "$DIR/$(leg_dir "$D")" ] || { echo "[LEG-FAIL] ${D}（产件目录缺失：$(leg_dir "$D")）"; FAILED="$FAILED ${D}-missing"; continue; }
     # 目录在但一件没有同样是产侧异常——空 glob 静默跳过会让腿报"全绿零断言"。
-    find "$DIR/$(leg_dir "$D")" -type f | grep -q . \
+    [ -n "$(find "$DIR/$(leg_dir "$D")" -type f | head -1)" ] \
         || { echo "[LEG-FAIL] ${D}（产件目录空：$(leg_dir "$D")）"; FAILED="$FAILED ${D}-empty"; }
 done
 [ -z "$FAILED" ] || { echo "失败腿:$FAILED" >&2; exit 1; }
 
 # .app：复制到暂存目录后原生启动（marker 写 Contents/.launch-marker）
 if leg_on app; then
-    APP="$(find "$DIR/$(leg_dir app)" -type d -name '*.app' | head -1)"
+    APP="$(find "$DIR/$(leg_dir app)" -type d -name '*.app' -print -quit)"
     if [ -n "$APP" ]; then
         run_leg "app" bash -c '
         set -e
@@ -82,8 +87,8 @@ fi
 
 # .dmg：挂载 → 拷出 .app → 卸载 → 原生启动
 if leg_on dmg; then
-    if find "$DIR/$(leg_dir dmg)" -name '*.dmg' | grep -q .; then
-        DMG="$(find "$DIR/$(leg_dir dmg)" -name '*.dmg' | head -1)"
+    if [ -n "$(find "$DIR/$(leg_dir dmg)" -name '*.dmg' | head -1)" ] ; then
+        DMG="$(find "$DIR/$(leg_dir dmg)" -name '*.dmg' -print -quit)"
         run_leg "dmg" bash -c '
         set -e
         # EXIT trap 在 set -e 下遇失败命令即中断且毒化最终 rc——detach 已卸卷是常态失败，须 || true 吞掉。
@@ -113,9 +118,9 @@ fi
 # 的已存在 .app 会原地升级（relocation）而非落 /Applications——LaunchServices 索引
 # 竞态导致落点漂移，删除同件保证 /Applications 确定性。
 if leg_on pkg; then
-    if find "$DIR/$(leg_dir pkg)" -name '*.pkg' | grep -q .; then
+    if [ -n "$(find "$DIR/$(leg_dir pkg)" -name '*.pkg' | head -1)" ] ; then
         find "$DIR/$(leg_dir pkg)" -type d -name '*.app' -exec rm -rf {} + 2>/dev/null || true
-        PKG="$(find "$DIR/$(leg_dir pkg)" -name '*.pkg' | head -1)"
+        PKG="$(find "$DIR/$(leg_dir pkg)" -name '*.pkg' -print -quit)"
         run_leg "pkg" bash -c '
         set -e
         B="/Applications/Bundler Mac PKG Fixture.app"
@@ -139,7 +144,7 @@ fi
 # 文本标记可读，不执行异 RID 二进制。缺格式即判败（分 zip/targz 两腿）。
 if leg_on archive; then
     if [ -z "$FMT_ONLY" ]; then
-        if find "$DIR/$(leg_dir archive)" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | grep -q .; then
+        if [ -n "$(find "$DIR/$(leg_dir archive)" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | head -1)" ] ; then
             run_leg "archive" bash -c '
             set -e
             T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "rm -rf $T" EXIT
@@ -160,7 +165,7 @@ if leg_on archive; then
             echo "[LEG-FAIL] archive（产件目录无 .zip/.tar.gz）"; FAILED="$FAILED archive-noformat"
         fi
     else
-        if find "$DIR/$(leg_dir archive)" -name '*.zip' | grep -q .; then
+        if [ -n "$(find "$DIR/$(leg_dir archive)" -name '*.zip' | head -1)" ] ; then
             run_leg "archive-zip(xchg)" bash -c '
             set -e
             T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "rm -rf $T" EXIT
@@ -169,7 +174,8 @@ if leg_on archive; then
                 [ -e "$A" ] || continue
                 E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
                 unzip -q "$A" -d "$E"
-                TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX)
+                # __MACOSX 目录与 ._* AppleDouble 旁枝同是 macOS 元数据——不计入顶层断言
+                TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX ! -name '._*')
                 [ "$(printf '%s' "$TOPS" | grep -c .)" -eq 1 ]
                 D=$(printf '%s' "$TOPS" | head -1)
                 [ -d "$D" ]
@@ -185,7 +191,7 @@ if leg_on archive; then
         else
             echo "[LEG-FAIL] archive-zip(xchg)（产件目录无 .zip）"; FAILED="$FAILED archive-zip-xchg-noformat"
         fi
-        if find "$DIR/$(leg_dir archive)" -name '*.tar.gz' | grep -q .; then
+        if [ -n "$(find "$DIR/$(leg_dir archive)" -name '*.tar.gz' | head -1)" ] ; then
             run_leg "archive-targz(xchg)" bash -c '
             set -e
             T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "rm -rf $T" EXIT
@@ -194,7 +200,8 @@ if leg_on archive; then
                 [ -e "$A" ] || continue
                 E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
                 tar -xzf "$A" -C "$E"
-                TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX)
+                # 同 zip 腿：__MACOSX 目录与 ._* AppleDouble 旁枝豁免顶层计数
+                TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX ! -name '._*')
                 [ "$(printf '%s' "$TOPS" | grep -c .)" -eq 1 ]
                 D=$(printf '%s' "$TOPS" | head -1)
                 [ -d "$D" ]
@@ -213,5 +220,8 @@ if leg_on archive; then
     fi
 fi
 
+# 零腿全绿防线：四条腿全被映射 "-"（如 --archive-format-only 叠加 archive=-）时
+# 零断言却走到这里全绿——组合静默须判败。
+[ "$RAN" -gt 0 ] || { echo "无任何腿执行（全 LEG-SKIP）" >&2; exit 1; }
 if [ -n "$FAILED" ]; then echo "失败腿:$FAILED" >&2; exit 1; fi
 echo "=== consume-macos 全绿 ==="

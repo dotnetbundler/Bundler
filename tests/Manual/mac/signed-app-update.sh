@@ -17,10 +17,13 @@ esac; done
 [ -n "$APPV1" ] && [ -d "$APPV1" ] || die "--v1 指向签名 v1 .app"
 [ -n "$APPV2" ] && [ -d "$APPV2" ] || die "--v2 指向签名 v2 .app"
 
-WORK="$(mktemp -d /tmp/bundler-sa07-XXXXXX)"; trap 'rm -rf "$WORK"' EXIT
+# EV.tmp 与 WORK 同清——die/中断路径不能让残表留在 evidence 目录。
+WORK="$(mktemp -d /tmp/bundler-sa07-XXXXXX)"; trap 'rm -rf "$WORK"; rm -f "$EV.tmp"' EXIT
 cp -a "$APPV1" "$WORK/install.app"
 
 team1=$(codesign -dvvv "$WORK/install.app" 2>&1 | grep "TeamIdentifier" | awk -F= '{print $2}')
+# 未签/取不到 TeamID 时无条件记 PASS 有误导——本腿前提就是"v1 已签名"，直接 die。
+[ -n "$team1" ] && [ "$team1" != "not set" ] || die "v1 未签名或 TeamIdentifier 缺失（读到 '${team1:-<empty>}'）"
 note "v1 TeamID" "PASS" "$team1"
 
 # 走 bundler-updater 换包（v2 签名包作为 payload）

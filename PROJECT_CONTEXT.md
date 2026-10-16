@@ -1,7 +1,7 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-10-15
-> 当前分支：`main`（重写链顶 `test-rewrite/docs`，PR #90–#97 stacked 待合）
+> 当前分支：`main`（测试重写链 PR #90–#97 及收口修复链 #98–#104 均已合入；#98–#104 全量审计收口修复在 PR #105 `fix/audit-98-104`，评审闭环后待用户终审合并）
 > 当前包版本：`0.1.0-alpha.103`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词（别称仅输入归一，产物名用各生态词），契约与全产物名目录见 `docs/design/targets.md`**
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/design/formats/` 单文档只留设计决策、语义契约与能力状态
@@ -71,16 +71,17 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 
 ## 3. 最近验证
 
-当前基线：`main@85b6f38`（`0.1.0-alpha.103`）——全项目重构链 PR #82–#88 已全部合入：`ToolRunner` 统一进程执行、`Hashes`/`Gzip` 收编、`PayloadSource` 三包枚举共享、`ToolCache` 泛化并入 AppImage（默认缓存根统一为 `DotNetBundler/tools`，弃 `XDG_CACHE_HOME`）、`FileTree` 树复制收敛、文档同步与 Tauri/上游产品参照框架移除。
-**测试体系重写链 PR #90–#97 全部 open 未合**（stacked 基：#91→main、#92→skeleton、#93→unit、#94→api、#95→integration、#96→package、#97→ci），链顶为 `test-rewrite/docs` 分支头（verify 实证内容 `7909ffe`，其后仅 docs 提交）。
-**verify 收口实证（判据经裁决收敛为"链顶同内容一次全绿"）**：run `38847618076`（2026-10-16，跑在临时探针分支 `dispatch-probe-test@44af979`——内容为 `7909ffe` + 逐字拷贝 `verify.yml` 的 `probe2.yml` shim，为免污染主 workflow 的 dispatch 通道，探针分支用后已删）**36 腿全绿**——tests 六宿主矩阵 + produce×6 + consume 九配对（自消×6 + WOW64 `win-arm←win-x64` + Rosetta `mac-arm←mac-intel` + universal x64 切片 `mac-intel←mac-arm`）+ manual-auto×6 + universal 产/消。
-更早证据轮 `38825129500`（同拓扑前身）36/36 绿、首轮收口 run `38833688512` 抓出 windows-11-arm runner 网络劣化（NuGet restore 连接挂死 10min×2 + artifact 上传步死寂 31min 后自愈）——据此 `RestoreWithRetry` 改 3min×4 短超时换枪（7909ffe）、fixture 统一 `NuGetAudit=false` 消可选网络往返。
+当前基线：`main@cb76455`（`0.1.0-alpha.103`）——全项目重构链 PR #82–#88、测试重写链 #90–#97、收口修复链 #98–#104 已全部合入：`ToolRunner` 统一进程执行、`Hashes`/`Gzip` 收编、`PayloadSource` 三包枚举共享、`ToolCache` 泛化并入 AppImage（默认缓存根统一为 `DotNetBundler/tools`，弃 `XDG_CACHE_HOME`）、`FileTree` 树复制收敛、文档同步与 Tauri/上游产品参照框架移除。
+**测试体系重写链 PR #90–#97 已全部合入 `main`**（原 stacked 基：#91→main、#92→skeleton、#93→unit、#94→api、#95→integration、#96→package、#97→ci），链顶 `test-rewrite/docs` 分支头（verify 实证内容 `7909ffe`，其后仅 docs 提交）。
+**verify 收口实证（判据经裁决收敛为"链顶同内容一次全绿"）**：run `38847618076`（2026-10-16，跑在临时探针分支 `dispatch-probe-test@44af979`——内容为 `7909ffe` + 逐字拷贝 `verify.yml` 的 `probe2.yml` shim，为免污染主 workflow 的 dispatch 通道，探针分支用后已删）**30 腿全绿**——tests 六宿主矩阵×6 + produce×6 + consume 九配对（自消×6 + WOW64 `win-arm←win-x64` + Rosetta `mac-arm←mac-intel` + universal x64 切片 `mac-intel←mac-arm`）+ manual-auto×6 + universal 产/消×3（该轮尚无跨 OS 归档交换腿；现 verify consume 矩阵已扩为 15 配对）。
+更早证据轮 `38825129500`（同拓扑前身）30/30 绿、首轮收口 run `38833688512` 抓出 windows-11-arm runner 网络劣化（NuGet restore 连接挂死 10min×2 + artifact 上传步死寂 31min 后自愈）——据此 `RestoreWithRetry` 改 3min×4 短超时换枪（7909ffe）、fixture 统一 `NuGetAudit=false` 消可选网络往返。
 verify 再早 run `38678818534`/`38687565528`/`38692708521`/`38697374256` 的宿主瞬态处置（where.exe 探测超时误判、ctor 内 Skip 误报、NuGet 挂死有界重试、AppImage 双腿各验、dmg EXIT trap 防滞留）均已收编；HelloBundlerApp 字面样品链经裁决不收编（fixture 链等价覆盖，留 Manual 验收面）。
 收口期增补：`aot.yml` 更名 `produce-bootstrap.yml` 并扩为全 RID 产件流（linux/musl x86_64+aarch64、macos 双架构+fat universal 工件、win 三架构；五腿 dispatch `38754749689` 实证全绿）；musl 件按实证改 `-static-pie` 静态产（`StaticExecutable=true`+`LinkerFlavor=lld`，产物 glibc/musl 通吃；bfd 链接 static-pie 会崩故 lld 必需；产件走 alpine SDK 容器——glibc 宿主直产 musl 缺 musl target 的 GCC crt 探测路径，arm 镜像实证两次失败，x64 镜像碰巧可产但不可赌）；
 shell 变量邻接守卫进 test.yml select 前置门（`$VAR`+非 ASCII 在部分 locale 下被拼进变量名炸 set-u——`consume-macos.sh` LEG-SKIP 首踩实证，lint 扫 .sh/shebang/workflow run 内联，bash 词法注释判定）；
 verify consume 腿按"每台消费宿主吃所有能跑的产件"裁决改 (host×src) 配对矩阵：windows-arm64 吃 x64 件（WOW64，旁装 x64 运行时经 `DOTNET_ROOT_X64` 指给 apphost）、macos-26 吃 intel 产件（Rosetta）、macos-intel 吃 arm 产件内 x64 切片（`consume-macos.sh` 新增 `腿=子目录` 映射），linux 无原生异构机制保持对角线；Windows 腿标签钉显式 `windows-2025-vs2026`/`windows-11-vs2026-arm`。
-本机 Windows x64 Release：Unit 1222 测（1192 过/30 宿主门控跳）、Api 84 测、Integration 234 测、Package 18 测，全零失败。
+本机 Windows x64 Release（PR #105 链上 `b270741` 实测）：Unit 1319 测（1285 过/34 宿主门控跳）、Api 84 测、Integration 244 测、Package 18 测，全零失败。
 收口期修复的真缺陷：`produce.sh` `cat|head` SIGPIPE（92fe129）、NSIS 卸载注册表异步清理竞态（33f0472）、NSIS `/D` 正斜杠粘连+PKG relocation+artifact 丢执行位（b39d9af）、dmg 腿 EXIT trap 毒化（2190df7）、`hdiutil convert` 持续 EAGAIN 踢 diskimages-helper（7a8d2bd）。
+verify run `38881497256`（main@`cb76455`，#103/#104 合入后）4 条 macOS consume 腿红：`app-empty`/`dmg-empty` 误报——根因为 `set -o pipefail` 域内 `find|grep -q` 的 SIGPIPE 竞态（grep 早退、find 收 141 连带管道判败，日志实证 `find: stdout: Broken pipe`），非产件真空；修复在 PR #105（`a1b5004` 外层 14 处改 `find|head -1` 形态，`87b2169` universal 脚本改 `-print -quit`）。
 
 ## 4. 外部验收边界（未执行，不视为完成）
 
@@ -98,7 +99,7 @@ verify consume 腿按"每台消费宿主吃所有能跑的产件"裁决改 (host
   - ~~静态兼容修复~~——已完成（PR #98）：`PosixRename` 已删，POSIX 同卷判定改 `/proc/self/mountinfo` 挂载点最长前缀比对（`DriveInfo.GetDrives()` 回退），ENOSPC 预检在静态件恢复；
   - ~~`tools/macos-universal` fat 件与 `tools/windows-i686` 引导件入库~~——已完成（PR #99，工件取 produce-bootstrap run `38865619194`；`macos-universal` 命中原生 fat 件，`windows-i686` 引导件从落空变有件）；
   - ~~linux 引导件收敛 musl 静态单件~~——已完成（PR #100：glibc 目标经 musl 姊妹件解析，两枚 glibc 件删除、produce-bootstrap glibc 产腿同步下线；静态兼容修复 PR #98 已落地）；
-  - ~~既有冻件可选经 `produce-bootstrap` 全量重产统一 provenance~~——升级为必须：旧件基线（run `38865619194`@`5c22c8c`）不含 PR #98 代码，`linux-musl-*` 静态件带 `dlopen("libc")` 实为破损件；已重产（run `38879370229`）全量换冻 8 件统一 provenance（PR #104）。
+  - ~~既有冻件可选经 `produce-bootstrap` 全量重产统一 provenance~~——升级为必须：旧件基线（run `38865619194`@`5c22c8c`）不含 PR #98 代码，`linux-musl-*` 静态件带 `dlopen("libc")` 实为破损件；已重产（run `38879370229`）全量换冻 8 件统一 provenance（PR #104）；PR #105 审计又改 `BootstrapPlan` 语义（回滚 marker、异型槽选腿、锁分流、nohup 重启），随包引导件再次换冻至 run `38891910886`@`2607ae2` 基线（8 件，特征串实证新码在件中）。
 - **spec §3 终验对账遗留**（审计结论：63 项零真缺口；弱覆盖中可自动化项已补断言，余下按性质归位）：
   - ~~测试侧待做：`MacAppGate` 未签名 `.app` 拒绝腿 + update e2e 非 zip 格式腿 + zip/tar.gz 跨宿主同件交换接线~~——已实现（PR #101：`MacAppGateTests` BundleID 拒换/quarantine 剥离恒自动化 + 自签尽力腿四件，TeamIdentifier 面探针驱动取不到即诚实 Skip 留 SA-P-07；`UpdateClientChainTests` 补 tar.gz 与 macOS 未签 .app e2e；PR #102：consume 三脚本归档格式级交换模式 + verify 矩阵 6 行轮转 + 产侧 SHA256SUMS LF 修复）；
   - 环境受限已登记 `special-acceptance.md`：s390x/ppc64le `UnixFileTypes` 偏移、Windows zip 符号链接还原、提权目录换装（原已登记）；
