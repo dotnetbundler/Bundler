@@ -406,7 +406,13 @@ node_bytes() {  # 文件/目录树总字节；不存在=0
 }
 volume_check() {  # $1 锚点 $2 需要字节；探测失败放行，明确不够才拒 rc=4
     [ "$2" -gt 0 ] 2>/dev/null || return 0
-    _free=$(df -kP "$1" 2>/dev/null | awk 'NR==2{print $4*1024}')
+    # 锚点缺席时上溯最近现存祖先——对账 AOT FindVolume 的 mountinfo 最长前缀语义，
+    # 缺席锚点直接 df 必败会把可判定的场景降级成 WARN 放行。
+    _anchor="$1"
+    while [ ! -e "$_anchor" ] && [ "$_anchor" != "$(dirname "$_anchor")" ]; do
+        _anchor=$(dirname "$_anchor")
+    done
+    _free=$(df -kP "$_anchor" 2>/dev/null | awk 'NR==2{print $4*1024}')
     [ -n "$_free" ] || { log "bundler-updater: WARN free-space probe failed near '$1'"; return 0; }
     log "bundler-updater: free-space check near '$1' — need ~$2 bytes, $_free available"
     [ "$_free" -ge "$2" ] || { echo "bundler-updater: insufficient free space near '$1': swap requires ~$2 bytes, only $_free available." >&2; return 1; }
@@ -512,13 +518,20 @@ if { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; } || \
     [ "$PAYLOAD_DIR" = "$INSTALL_DIR" ] && { echo "bundler-updater: install and payload must not be the same file." >&2; exit 2; }
     check_free_space
     log "bundler-updater: backup '$INSTALL_DIR' → '$BACKUP_DIR'"
-    # 备份父目录缺席时自建——与 AOT 侧 CopyTree 的隐式补链同义（POSIX mv 不会补）。
-    mkdir -p "$(dirname "$BACKUP_DIR")" || exit 4
     # 备份槽异型节点同义清理（AOT DeleteNodeIfPresent）：槽上挂目录节点时
     # rm -f 判败楔形——与装位槽同口径通吃 file/dir。
     rm -rf "$BACKUP_DIR" || exit 4
     printf 'swap in progress' >"$MARKER" || exit 4
-    move_node "$INSTALL_DIR" "$BACKUP_DIR" || { rm -f "$MARKER"; exit 4; }
+    # 槽位调用前已清空：失败时备份在场即 mv 已成功、仅源槽清场失败——
+    # 按 swap-failed 同款还原装位（对账 AOT catch 语义）；备份不在场则 mv 未发生，收 marker 报错。
+    move_node "$INSTALL_DIR" "$BACKUP_DIR" || {
+        if [ -e "$BACKUP_DIR" ]; then
+            rm -rf "$INSTALL_DIR" || { echo "bundler-updater: cannot clear install slot." >&2; exit 4; }
+            move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+        fi
+        rm -f "$MARKER" || exit 4
+        exit 4
+    }
     SWAP_FAILED=0
     if [ "$KEEP_PAYLOAD" = 1 ]; then
         log "bundler-updater: copy in '$PAYLOAD_DIR' → '$INSTALL_DIR'"
@@ -606,11 +619,18 @@ if [ "$ROLLBACK" = 1 ]; then
 fi
 
 log "bundler-updater: backup '$INSTALL_DIR' → '$BACKUP_DIR'"
-# 备份父目录缺席时自建——与 AOT 侧 CopyTree 的隐式补链同义。
-mkdir -p "$(dirname "$BACKUP_DIR")" || exit 4
 rm -rf "$BACKUP_DIR" || exit 4
 printf 'swap in progress' >"$MARKER" || exit 4
-move_node "$INSTALL_DIR" "$BACKUP_DIR" || { rm -f "$MARKER"; exit 4; }
+# 槽位调用前已清空：失败时备份在场即 mv 已成功、仅源槽清场失败——
+# 按 swap-failed 同款还原装位（对账 AOT catch 语义）；备份不在场则 mv 未发生，收 marker 报错。
+move_node "$INSTALL_DIR" "$BACKUP_DIR" || {
+    if [ -e "$BACKUP_DIR" ]; then
+        rm -rf "$INSTALL_DIR" || { echo "bundler-updater: cannot clear install slot." >&2; exit 4; }
+        move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+    fi
+    rm -f "$MARKER" || exit 4
+    exit 4
+}
 
 # --keep-payload 用复制换入（与 AOT copy 语义一致），否则 move_node 就位。
 SWAP_FAILED=0

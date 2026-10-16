@@ -69,7 +69,7 @@ done
 
 # .app：复制到暂存目录后原生启动（marker 写 Contents/.launch-marker）
 if leg_on app; then
-    APP="$(find "$DIR/$(leg_dir app)" -type d -name '*.app' | head -1)"
+    APP="$(find "$DIR/$(leg_dir app)" -type d -name '*.app' -print -quit)"
     if [ -n "$APP" ]; then
         run_leg "app" bash -c '
         set -e
@@ -88,7 +88,7 @@ fi
 # .dmg：挂载 → 拷出 .app → 卸载 → 原生启动
 if leg_on dmg; then
     if [ -n "$(find "$DIR/$(leg_dir dmg)" -name '*.dmg' | head -1)" ] ; then
-        DMG="$(find "$DIR/$(leg_dir dmg)" -name '*.dmg' | head -1)"
+        DMG="$(find "$DIR/$(leg_dir dmg)" -name '*.dmg' -print -quit)"
         run_leg "dmg" bash -c '
         set -e
         # EXIT trap 在 set -e 下遇失败命令即中断且毒化最终 rc——detach 已卸卷是常态失败，须 || true 吞掉。
@@ -120,7 +120,7 @@ fi
 if leg_on pkg; then
     if [ -n "$(find "$DIR/$(leg_dir pkg)" -name '*.pkg' | head -1)" ] ; then
         find "$DIR/$(leg_dir pkg)" -type d -name '*.app' -exec rm -rf {} + 2>/dev/null || true
-        PKG="$(find "$DIR/$(leg_dir pkg)" -name '*.pkg' | head -1)"
+        PKG="$(find "$DIR/$(leg_dir pkg)" -name '*.pkg' -print -quit)"
         run_leg "pkg" bash -c '
         set -e
         B="/Applications/Bundler Mac PKG Fixture.app"

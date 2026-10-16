@@ -270,7 +270,8 @@ jobs:
             -p:SelfContained=false \
             "-p:BundlerTestIconFile=$RUNNER_TEMP/icon.png" \
             "-p:BundlerIntegrationOutput=$RUNNER_TEMP/universal" --nologo
-          APP=$(find "$RUNNER_TEMP/universal" -type d -name '*.app' | head -1)
+          # find|head 在 pipefail+set-e 域有 SIGPIPE 杀步风险——-print -quit 自取首条正常退出
+          APP=$(find "$RUNNER_TEMP/universal" -type d -name '*.app' -print -quit)
           test -d "$APP"
           ( cd "$APP" && find . -type f -exec shasum -a 256 {} + | sort ) \
             > "$RUNNER_TEMP/universal/SHA256SUMS"

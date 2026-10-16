@@ -46,7 +46,7 @@ if [ "$MODE" != "--archive-format-only" ]; then
 
 # .deb：宿主直装（runner 是 deb 系；root 经 sudo）
 if [ -n "$(find "$DIR/deb" -name '*.deb' | head -1)" ] ; then
-    DEB="$(find "$DIR/deb" -name '*.deb' | head -1)"
+    DEB="$(find "$DIR/deb" -name '*.deb' -print -quit)"
     run_leg "deb" bash -c '
         set -e
         sudo dpkg -i "$0"
@@ -92,7 +92,7 @@ fi
 # fuse 路=直接运行经 FUSE 挂载（内嵌 type2-runtime 的 squashfuse 探测 fusermount/fusermount3，fuse2/fuse3 皆可用）；
 # extract 路=--appimage-extract-and-run 免挂载解压直跑（容器等无 /dev/fuse 环境的路径）。
 if [ -n "$(find "$DIR/appimage" -name '*.AppImage' | head -1)" ] ; then
-    APPIMAGE="$(find "$DIR/appimage" -name '*.AppImage' | head -1)"
+    APPIMAGE="$(find "$DIR/appimage" -name '*.AppImage' -print -quit)"
     chmod +x "$APPIMAGE"
     # fuse 腿帮手兜底：ubuntu 镜像默认带 fuse3，缺装则补——无 /dev/fuse 的内核
     # 环境装上也跑不了，那时 fuse 腿按设计真失败如实报（非环境差异遮蔽）。

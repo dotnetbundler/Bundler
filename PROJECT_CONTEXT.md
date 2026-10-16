@@ -79,7 +79,7 @@ verify 再早 run `38678818534`/`38687565528`/`38692708521`/`38697374256` 的宿
 收口期增补：`aot.yml` 更名 `produce-bootstrap.yml` 并扩为全 RID 产件流（linux/musl x86_64+aarch64、macos 双架构+fat universal 工件、win 三架构；五腿 dispatch `38754749689` 实证全绿）；musl 件按实证改 `-static-pie` 静态产（`StaticExecutable=true`+`LinkerFlavor=lld`，产物 glibc/musl 通吃；bfd 链接 static-pie 会崩故 lld 必需；产件走 alpine SDK 容器——glibc 宿主直产 musl 缺 musl target 的 GCC crt 探测路径，arm 镜像实证两次失败，x64 镜像碰巧可产但不可赌）；
 shell 变量邻接守卫进 test.yml select 前置门（`$VAR`+非 ASCII 在部分 locale 下被拼进变量名炸 set-u——`consume-macos.sh` LEG-SKIP 首踩实证，lint 扫 .sh/shebang/workflow run 内联，bash 词法注释判定）；
 verify consume 腿按"每台消费宿主吃所有能跑的产件"裁决改 (host×src) 配对矩阵：windows-arm64 吃 x64 件（WOW64，旁装 x64 运行时经 `DOTNET_ROOT_X64` 指给 apphost）、macos-26 吃 intel 产件（Rosetta）、macos-intel 吃 arm 产件内 x64 切片（`consume-macos.sh` 新增 `腿=子目录` 映射），linux 无原生异构机制保持对角线；Windows 腿标签钉显式 `windows-2025-vs2026`/`windows-11-vs2026-arm`。
-本机 Windows x64 Release（PR #105 头 `b270741` 实测）：Unit 1319 测（1285 过/34 宿主门控跳）、Api 84 测、Integration 244 测、Package 18 测，全零失败。
+本机 Windows x64 Release（PR #105 链上 `b270741` 实测）：Unit 1319 测（1285 过/34 宿主门控跳）、Api 84 测、Integration 244 测、Package 18 测，全零失败。
 收口期修复的真缺陷：`produce.sh` `cat|head` SIGPIPE（92fe129）、NSIS 卸载注册表异步清理竞态（33f0472）、NSIS `/D` 正斜杠粘连+PKG relocation+artifact 丢执行位（b39d9af）、dmg 腿 EXIT trap 毒化（2190df7）、`hdiutil convert` 持续 EAGAIN 踢 diskimages-helper（7a8d2bd）。
 verify run `38881497256`（main@`cb76455`，#103/#104 合入后）4 条 macOS consume 腿红：`app-empty`/`dmg-empty` 误报——根因为 `set -o pipefail` 域内 `find|grep -q` 的 SIGPIPE 竞态（grep 早退、find 收 141 连带管道判败，日志实证 `find: stdout: Broken pipe`），非产件真空；修复在 PR #105（`a1b5004` 外层 14 处改 `find|head -1` 形态，`87b2169` universal 脚本改 `-print -quit`）。
 
