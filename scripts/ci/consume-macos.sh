@@ -29,10 +29,13 @@ done
 ( cd "$DIR" && shasum -a 256 -c SHA256SUMS ) || { echo "清单校验失败" >&2; exit 1; }
 # shasum 无 --strict——畸形行（非空且不合 "hash  ./relpath" 形）单独判失败；
 # 清单外文件同样判失败，防产侧混入/夹带漏检。
-[ "$(grep -cvE '^([0-9a-f]{64}  \./[^ ]+|)$' "$DIR/SHA256SUMS")" = "0" ] \
+# 用 (...)? 而非 (...|) ——BSD grep 拒绝空备选分支（empty (sub)expression）。
+# 路径段放宽为 .+ ——清单路径可含空格（.app 束内逐文件路径随 ProductName 带空格）。
+[ "$(grep -cvE '^([0-9a-f]{64}  \./.+)?$' "$DIR/SHA256SUMS")" = "0" ] \
     || { echo "清单含畸形行" >&2; exit 1; }
+# 取列名须剥 64 位哈希+两格前缀而非 awk $2——后者在首个空格处截断路径。
 EXTRA=$(cd "$DIR" && comm -13 \
-    <(awk '{print $2}' SHA256SUMS | sed 's|^\./||' | sort) \
+    <(sed 's|^[0-9a-f]\{64\}  \./||' SHA256SUMS | sort) \
     <(find . -type f ! -path './SHA256SUMS' | sed 's|^\./||' | sort))
 [ -z "$EXTRA" ] || { echo "清单外文件: $EXTRA" >&2; exit 1; }
 
@@ -65,7 +68,7 @@ if leg_on app; then
     if [ -n "$APP" ]; then
         run_leg "app" bash -c '
         set -e
-        T=$(mktemp -d); trap "rm -rf $T" EXIT
+        T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "rm -rf $T" EXIT
         cp -R "$0" "$T/"
         B=$(find "$T" -type d -name "*.app" | head -1)
         chmod +x "$B/Contents/MacOS/BundlerMacIntegrationFixture"
@@ -84,7 +87,7 @@ if leg_on dmg; then
         run_leg "dmg" bash -c '
         set -e
         # EXIT trap 在 set -e 下遇失败命令即中断且毒化最终 rc——detach 已卸卷是常态失败，须 || true 吞掉。
-        T=$(mktemp -d); trap "hdiutil detach "$T/mnt" -force 2>/dev/null || true; rm -rf $T" EXIT
+        T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "hdiutil detach "$T/mnt" -force 2>/dev/null || true; rm -rf $T" EXIT
         hdiutil attach "$0" -nobrowse -readonly -mountpoint "$T/mnt"
         B=$(find "$T/mnt" -type d -name "*.app" | head -1)
         test -d "$B"
@@ -139,7 +142,7 @@ if leg_on archive; then
         if find "$DIR/$(leg_dir archive)" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | grep -q .; then
             run_leg "archive" bash -c '
             set -e
-            T=$(mktemp -d); trap "rm -rf $T" EXIT
+            T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "rm -rf $T" EXIT
             for A in "$0"/*.zip "$0"/*.tar.gz; do
                 [ -e "$A" ] || continue
                 case "$A" in
@@ -160,7 +163,7 @@ if leg_on archive; then
         if find "$DIR/$(leg_dir archive)" -name '*.zip' | grep -q .; then
             run_leg "archive-zip(xchg)" bash -c '
             set -e
-            T=$(mktemp -d); trap "rm -rf $T" EXIT
+            T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "rm -rf $T" EXIT
             n=0
             for A in "$0"/*.zip; do
                 [ -e "$A" ] || continue
@@ -185,7 +188,7 @@ if leg_on archive; then
         if find "$DIR/$(leg_dir archive)" -name '*.tar.gz' | grep -q .; then
             run_leg "archive-targz(xchg)" bash -c '
             set -e
-            T=$(mktemp -d); trap "rm -rf $T" EXIT
+            T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "rm -rf $T" EXIT
             n=0
             for A in "$0"/*.tar.gz; do
                 [ -e "$A" ] || continue
