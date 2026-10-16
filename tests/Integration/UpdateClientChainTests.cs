@@ -414,6 +414,568 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             Path.Combine(install, "Contents", "MacOS", "MyApp")));
     }
 
+    // ---- syspkg replay（deb/rpm/alpineapk）垫片端到端腿 ----
+    // 全链 POSIX-only：假 bundler-updater/pkexec/sudo/zenity/dpkg/apk 皆为 sh stub，
+    // 客户端命令面经 BUNDLER_UPDATER_CMD_<TOOL> env 缝供给 + CommandProbe=_=>null
+    // 权威缺席化真实 PATH——零提权真实发生；stub 记 argv 与 --env-file 内容进 rec 件。
+    // env 缝是进程全局——恢复与探针复位全收 finally（集成层无并行，见 AssemblyInfo）。
+
+    // bundler-updater 垫片：记 argv；扫到 --env-file 就把件内容与权限位一并落 rec——
+    // env 件 0600/会话变量面在它被引导件消费前的形态是可断言的。
+    private const string UpdaterStubBody = """
+        line=updater
+        for a do line="$line $a"; done
+        printf '%s\n' "$line" >> "$BUNDLER_STUB_REC"
+        prev=
+        for a do
+          if [ "$prev" = "--env-file" ]; then
+            {
+              printf 'env{'
+              cat "$a"
+              printf '}\n'
+              stat -c 'env-mode %a' "$a" 2>/dev/null || stat -f 'env-mode %Lp' "$a" 2>/dev/null || true
+            } >> "$BUNDLER_STUB_REC"
+          fi
+          prev=$a
+        done
+        exit "${BUNDLER_STUB_RC:-0}"
+        """;
+
+    // 账本垫片体把工具名烙进脚本（同名 env 槽多垫片会互踩）——rc 经 BUNDLER_STUB_LEDGER_RC 控。
+    private static string LedgerStubBody(string tool) => $$"""
+        line='{{tool}}'
+        for a do line="$line $a"; done
+        printf '%s\n' "$line" >> "$BUNDLER_STUB_REC"
+        exit "${BUNDLER_STUB_LEDGER_RC:-0}"
+        """;
+
+    private const string PkexecStubBody = """
+        line=pkexec
+        for a do line="$line $a"; done
+        printf '%s\n' "$line" >> "$BUNDLER_STUB_REC"
+        exec "$@"
+        """;
+
+    // sudo 垫片：剥掉 -S/-p <提示>/\-\- 前缀后 exec 余下命令行（密码行留在管道里）。
+    private const string SudoStubBody = """
+        line=sudo
+        for a do line="$line $a"; done
+        printf '%s\n' "$line" >> "$BUNDLER_STUB_REC"
+        while [ $# -gt 0 ]; do
+          case "$1" in
+            -S) shift ;;
+            -p) if [ $# -ge 2 ]; then shift 2; else shift; fi ;;
+            --) shift; break ;;
+            *) break ;;
+          esac
+        done
+        exec "$@"
+        """;
+
+    // 问密码垫片：记 argv，向 stdout 吐一行假密码喂 sudo -S。
+    private static string AskpassStubBody(string tool) => $$"""
+        line='{{tool}}'
+        for a do line="$line $a"; done
+        printf '%s\n' "$line" >> "$BUNDLER_STUB_REC"
+        printf 'stubpass\n'
+        """;
+
+    private static string WritePosixStub(string dir, string name, string body)
+    {
+        var path = Path.Combine(dir, name);
+        File.WriteAllText(path, "#!/bin/sh\n" + body + "\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
+        return path;
+    }
+
+    // syspkg 装位：身份旁车（pkg 包名入旁车）+ 垫片 bundler-updater；假 pm/提权器
+    // 各按 name 落 stub，路径经 BUNDLER_UPDATER_CMD_<TOOL> 缝供给客户端（env 全走
+    // EnvScope 记账——进程全局缝的恢复不能漏）。
+    private static (string Install, string FeedDir, string Bin, UpdateKeyMaterial Material)
+        SetupSyspkgInstall(EnvScope env, string directory, string format, string pkg,
+            string[] ledgerTools, params string[] elevationTools)
+    {
+        var install = Path.Combine(directory, "install");
+        Directory.CreateDirectory(install);
+        var feedDir = Path.Combine(directory, "feed");
+        Directory.CreateDirectory(feedDir);
+        var bin = Path.Combine(directory, "bin");
+        Directory.CreateDirectory(bin);
+        var material = UpdateKeyMaterial.Generate();
+        Protocol.UpdateInstallIdentity.Write(install, new Protocol.UpdateInstallIdentity
+        {
+            Format = format,
+            Target = TestPlatform.LinuxTarget,
+            Channel = "stable",
+            FeedUrl = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
+            PublicKey = material.PublicPointBase64(),
+            Pkg = pkg,
+        });
+        WritePosixStub(install, "bundler-updater", UpdaterStubBody);
+        foreach (var tool in ledgerTools)
+        {
+            env.Set("BUNDLER_UPDATER_CMD_" + CommandEnvName(tool),
+                WritePosixStub(bin, tool, LedgerStubBody(tool)));
+        }
+        foreach (var tool in elevationTools)
+        {
+            var body = tool switch
+            {
+                "pkexec" => PkexecStubBody,
+                "sudo" => SudoStubBody,
+                _ => AskpassStubBody(tool),
+            };
+            env.Set("BUNDLER_UPDATER_CMD_" + CommandEnvName(tool),
+                WritePosixStub(bin, tool, body));
+        }
+        return (install, feedDir, bin, material);
+    }
+
+    private static string CommandEnvName(string name)
+    {
+        var builder = new StringBuilder(name.Length);
+        foreach (var c in name)
+        {
+            var upper = char.ToUpperInvariant(c);
+            builder.Append(char.IsAsciiLetterOrDigit(upper) ? upper : '_');
+        }
+        return builder.ToString();
+    }
+
+    // rec 件按行断言：垫片顺序执行时确定性；管线腿内 zenity/sudo 行序可能并发翻转，
+    // 调用方对那两行用 Contains 而非按下标。
+    private static string[] WaitRecord(string path, int minLines)
+    {
+        for (var i = 0; i < 100; i++)
+        {
+            if (File.Exists(path))
+            {
+                var lines = File.ReadAllLines(path);
+                if (lines.Length >= minLines)
+                {
+                    return lines;
+                }
+            }
+            Thread.Sleep(100);
+        }
+        Assert.Fail($"record file '{path}' did not reach {minLines} lines");
+        return [];
+    }
+
+    private static void WaitForGone(string path)
+    {
+        for (var i = 0; i < 100 && File.Exists(path); i++)
+        {
+            Thread.Sleep(100);
+        }
+        Assert.False(File.Exists(path), $"session env file '{path}' must be deleted after launcher exit");
+    }
+
+    private sealed class EnvScope : IDisposable
+    {
+        private readonly Dictionary<string, string?> _previous = [];
+
+        internal void Set(string name, string? value)
+        {
+            if (!_previous.ContainsKey(name))
+            {
+                _previous[name] = Environment.GetEnvironmentVariable(name);
+            }
+            Environment.SetEnvironmentVariable(name, value);
+        }
+
+        public void Dispose()
+        {
+            foreach (var (name, value) in _previous)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
+            SyspkgReplay.CommandProbe = null;
+        }
+    }
+
+    [Fact]
+    public async Task Client_SyspkgApply_Deb_PkexecLeg_EndToEnd()
+    {
+        // deb 全链 pkexec 腿：预检（dpkg -s 账本）→ 新包留存 retention + applied 标记 →
+        // pkexec 原地直跑装位 bundler-updater pkg-apply → 客户端拉起即退。
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        var directory = Ws.Combine("syspkg-deb-pkexec");
+        Directory.CreateDirectory(directory);
+        using var env = new EnvScope();
+        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关。
+        var rec = Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt");
+        env.Set("BUNDLER_STUB_REC", rec);
+        env.Set("DISPLAY", ":99");
+        env.Set("XAUTHORITY", "/tmp/xa-file");
+        var (install, feedDir, _, material) = SetupSyspkgInstall(
+            env, directory, "deb", "myapp", ["apt-get", "dpkg"], "pkexec", "sudo", "zenity");
+        // CommandProbe 权威化全缺席——真实 PATH 上的 apt-get/pkexec 不得参与解析。
+        SyspkgReplay.CommandProbe = _ => null;
+
+        var artifact = Path.Combine(feedDir, "myapp_2.0-1_amd64.deb");
+        File.WriteAllText(artifact, "pkg-v2-bytes");
+        WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+        {
+            Target = TestPlatform.LinuxTarget, Format = "deb",
+            Url = "myapp_2.0-1_amd64.deb", File = "myapp_2.0-1_amd64.deb",
+            Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+            Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+        });
+
+        var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+        var info = (await client.CheckForUpdateAsync())!;
+        var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+        client.Verify(info, downloaded);
+        // env 件 0600 收权只在原生 POSIX fs 上有语义——DrvFs（/mnt/*）chmod 静默无操作，
+        // 故 StagingRoot 指原生临时区；retention/app 仍在工作区内。
+        var staging = Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-staging-" + Guid.NewGuid().ToString("N"));
+        var retention = Path.Combine(directory, "retention");
+        var app = WritePosixStub(directory, "app", "printf 'app-restarted\\n'\n");
+        var process = client.Apply(info, downloaded, new ApplyOptions
+        {
+            StagingRoot = staging,
+            AppPath = app,
+            RollbackBackupDirectory = retention,
+        });
+        Assert.True(process.WaitForExit(60_000), "pkg-apply launcher did not exit in 60s");
+        Assert.Equal(0, process.ExitCode);
+
+        var retained = Path.Combine(retention, "myapp_2.0-1_amd64.deb");
+        var lines = WaitRecord(rec, 3);
+        // rec[0]=账本查询（提权链之前）；rec[1]=pkexec 垫片见到的逐字 argv。
+        Assert.Equal("dpkg -s myapp", lines[0]);
+        Assert.StartsWith(
+            $"pkexec {install}/bundler-updater pkg-apply --pkg {retained} " +
+            $"--format deb --app {Path.GetFullPath(app)} --env-file {staging}/pkg-",
+            lines[1]);
+        Assert.EndsWith("/session.env", lines[1]);
+        Assert.StartsWith(
+            $"updater pkg-apply --pkg {retained} --format deb --app {Path.GetFullPath(app)} --env-file ",
+            lines[2]);
+        // env 件内容随 rec 回收：HOME 随行 + 显式注入的会话键。
+        var text = File.ReadAllText(rec);
+        Assert.Contains("DISPLAY=:99", text);
+        Assert.Contains("XAUTHORITY=/tmp/xa-file", text);
+        Assert.Contains("env-mode 600", text);
+        // 留存件 + applied 标记。
+        Assert.Equal("pkg-v2-bytes", File.ReadAllText(retained));
+        Assert.Equal("myapp_2.0-1_amd64.deb",
+            File.ReadAllText(Path.Combine(retention, "applied")).Trim());
+        // env 件用完即删（Exited 钩）——拉起即退语义下的清理面。
+        var envFile = lines[2][(lines[2].IndexOf("--env-file ") + "--env-file ".Length)..];
+        WaitForGone(envFile);
+    }
+
+    [Fact]
+    public async Task Client_SyspkgApply_Deb_AskpassPipeline_EndToEnd()
+    {
+        // pkexec 缺席 → zenity --password | sudo -S -p '' -- <verb> 管线腿：
+        // 密码行不过本进程，sh -c 包整条管线，末级 rc 即拉起 rc。
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        var directory = Ws.Combine("syspkg-deb-askpass");
+        Directory.CreateDirectory(directory);
+        using var env = new EnvScope();
+        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关。
+        var rec = Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt");
+        env.Set("BUNDLER_STUB_REC", rec);
+        var (install, feedDir, _, material) = SetupSyspkgInstall(
+            env, directory, "deb", "myapp", ["dpkg"], "zenity", "sudo");
+        SyspkgReplay.CommandProbe = _ => null;
+
+        var artifact = Path.Combine(feedDir, "myapp_2.0-1_amd64.deb");
+        File.WriteAllText(artifact, "pkg-v2-bytes");
+        WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+        {
+            Target = TestPlatform.LinuxTarget, Format = "deb",
+            Url = "myapp_2.0-1_amd64.deb", File = "myapp_2.0-1_amd64.deb",
+            Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+            Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+        });
+
+        var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+        var info = (await client.CheckForUpdateAsync())!;
+        var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+        client.Verify(info, downloaded);
+        var retention = Path.Combine(directory, "retention");
+        var app = WritePosixStub(directory, "app", "true\n");
+        var process = client.Apply(info, downloaded, new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging"),
+            AppPath = app,
+            RollbackBackupDirectory = retention,
+        });
+        Assert.True(process.WaitForExit(60_000));
+        Assert.Equal(0, process.ExitCode);
+
+        var retained = Path.Combine(retention, "myapp_2.0-1_amd64.deb");
+        var text = string.Join('\n', WaitRecord(rec, 4));
+        Assert.Contains("dpkg -s myapp\n", text);
+        Assert.Contains("zenity --password\n", text);
+        // sudo 垫片记的是它自己看到的 argv：-S -p '' -- 前缀 + verb argv 逐字。
+        Assert.Contains(
+            $"sudo -S -p  -- {install}/bundler-updater pkg-apply --pkg {retained} " +
+            $"--format deb --app {Path.GetFullPath(app)}", text);
+        Assert.Contains($"updater pkg-apply --pkg {retained}", text);
+    }
+
+    [Fact]
+    public async Task Client_SyspkgApply_Deb_BareSudo_EndToEnd()
+    {
+        // pkexec/问密码器全缺席只余 sudo → 末级腿（tty 密码提示场景）。
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        var directory = Ws.Combine("syspkg-deb-baresudo");
+        Directory.CreateDirectory(directory);
+        using var env = new EnvScope();
+        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关。
+        var rec = Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt");
+        env.Set("BUNDLER_STUB_REC", rec);
+        var (install, feedDir, _, material) = SetupSyspkgInstall(
+            env, directory, "deb", "myapp", ["dpkg"], "sudo");
+        SyspkgReplay.CommandProbe = _ => null;
+
+        var artifact = Path.Combine(feedDir, "myapp_2.0-1_amd64.deb");
+        File.WriteAllText(artifact, "pkg-v2-bytes");
+        WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+        {
+            Target = TestPlatform.LinuxTarget, Format = "deb",
+            Url = "myapp_2.0-1_amd64.deb", File = "myapp_2.0-1_amd64.deb",
+            Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+            Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+        });
+
+        var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+        var info = (await client.CheckForUpdateAsync())!;
+        var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+        client.Verify(info, downloaded);
+        var retention = Path.Combine(directory, "retention");
+        var app = WritePosixStub(directory, "app", "true\n");
+        var process = client.Apply(info, downloaded, new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging"),
+            AppPath = app,
+            RollbackBackupDirectory = retention,
+        });
+        Assert.True(process.WaitForExit(60_000));
+        Assert.Equal(0, process.ExitCode);
+        var text = string.Join('\n', WaitRecord(rec, 3));
+        var retained = Path.Combine(retention, "myapp_2.0-1_amd64.deb");
+        Assert.Contains(
+            $"sudo -- {install}/bundler-updater pkg-apply --pkg {retained} " +
+            $"--format deb --app {Path.GetFullPath(app)}", text);
+        Assert.Contains($"updater pkg-apply --pkg {retained}", text);
+    }
+
+    [Fact]
+    public async Task Client_SyspkgApply_AlpineApk_MapsToApkVerb()
+    {
+        // 身份 alpineapk → 动词 --format apk + 账本查询 apk info -e。
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        var directory = Ws.Combine("syspkg-apk");
+        Directory.CreateDirectory(directory);
+        using var env = new EnvScope();
+        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关。
+        var rec = Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt");
+        env.Set("BUNDLER_STUB_REC", rec);
+        var (install, feedDir, _, material) = SetupSyspkgInstall(
+            env, directory, "alpineapk", "myapp", ["apk"], "pkexec");
+        SyspkgReplay.CommandProbe = _ => null;
+
+        var artifact = Path.Combine(feedDir, "myapp-2.0.apk");
+        File.WriteAllText(artifact, "apk-v2-bytes");
+        WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+        {
+            Target = TestPlatform.LinuxTarget, Format = "alpineapk",
+            Url = "myapp-2.0.apk", File = "myapp-2.0.apk",
+            Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+            Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+        });
+
+        var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+        var info = (await client.CheckForUpdateAsync())!;
+        var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+        client.Verify(info, downloaded);
+        var retention = Path.Combine(directory, "retention");
+        var app = WritePosixStub(directory, "app", "true\n");
+        var process = client.Apply(info, downloaded, new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging"),
+            AppPath = app,
+            RollbackBackupDirectory = retention,
+        });
+        Assert.True(process.WaitForExit(60_000));
+        Assert.Equal(0, process.ExitCode);
+        var text = string.Join('\n', WaitRecord(rec, 3));
+        Assert.Contains("apk info -e myapp", text);
+        Assert.Contains("--format apk", text);
+        Assert.Contains($"--pkg {Path.Combine(retention, "myapp-2.0.apk")}", text);
+    }
+
+    [Fact]
+    public async Task Client_SyspkgApply_PrecheckRefusals_AreDeterministic()
+    {
+        // 预检三件套逐项缺席面（垫片供给可控）：
+        //   无包管理器前端 → 无账本工具 → 账本查询失败 → 无提权腿——全部 UpdateException。
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        var directory = Ws.Combine("syspkg-preflight");
+        Directory.CreateDirectory(directory);
+        using var env = new EnvScope();
+        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关。
+        var rec = Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt");
+        env.Set("BUNDLER_STUB_REC", rec);
+        var (install, feedDir, _, material) = SetupSyspkgInstall(env, directory, "deb", "myapp", []);
+        SyspkgReplay.CommandProbe = _ => null;
+        var artifact = Path.Combine(feedDir, "myapp_2.0-1_amd64.deb");
+        File.WriteAllText(artifact, "pkg-v2-bytes");
+        WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+        {
+            Target = TestPlatform.LinuxTarget, Format = "deb",
+            Url = "myapp_2.0-1_amd64.deb", File = "myapp_2.0-1_amd64.deb",
+            Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+            Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+        });
+        var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+        var info = (await client.CheckForUpdateAsync())!;
+        var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+        client.Verify(info, downloaded);
+        var options = new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging"),
+            AppPath = Path.Combine(directory, "app"),
+            RollbackBackupDirectory = Path.Combine(directory, "retention"),
+        };
+
+        // ①+②缺席面之一：env 缝不给任何包管理器 → "不参与更新"。
+        var noPm = Assert.Throws<UpdateException>(() => client.Apply(info, downloaded, options));
+        Assert.Contains("does not participate in updates", noPm.Message);
+
+        // ② 另一支：apt-get 在场但账本工具 dpkg 缺席。
+        env.Set("BUNDLER_UPDATER_CMD_APT_GET",
+            WritePosixStub(Path.Combine(directory, "bin"), "apt-get", LedgerStubBody("apt-get")));
+        var noLedger = Assert.Throws<UpdateException>(() => client.Apply(info, downloaded, options));
+        Assert.Contains("ledger tool 'dpkg' not found", noLedger.Message);
+
+        // ③ 账本查询返非零 → "未登记"拒绝（不空转）。
+        var bin = Path.Combine(directory, "bin");
+        env.Set("BUNDLER_UPDATER_CMD_DPKG",
+            WritePosixStub(bin, "dpkg", LedgerStubBody("dpkg")));
+        env.Set("BUNDLER_STUB_LEDGER_RC", "1");
+        var notOwned = Assert.Throws<UpdateException>(() => client.Apply(info, downloaded, options));
+        Assert.Contains("not registered in the dpkg ledger", notOwned.Message);
+        env.Set("BUNDLER_STUB_LEDGER_RC", null);
+
+        // 提权腿全缺席（pkexec/zenity/kdialog/sudo 皆无）→ 确定性拒绝。
+        var noElevation = Assert.Throws<UpdateException>(() => client.Apply(info, downloaded, options));
+        Assert.Contains("privilege escalation", noElevation.Message);
+        // 留存件不得污染——拒绝发生于留存动作之前。
+        Assert.False(Directory.Exists(Path.Combine(directory, "retention")));
+    }
+
+    [Fact]
+    public async Task Client_SyspkgRollback_ReplaysRetainedOldPackage()
+    {
+        // apply 留存新包（applied=新）→ rollback 拣 applied 之外最新件（旧包）重放
+        // 并带 --rollback；applied 标记翻回旧包名（flip-flop 语义）。
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        var directory = Ws.Combine("syspkg-rollback");
+        Directory.CreateDirectory(directory);
+        using var env = new EnvScope();
+        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关。
+        var rec = Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt");
+        env.Set("BUNDLER_STUB_REC", rec);
+        var (install, feedDir, _, material) = SetupSyspkgInstall(
+            env, directory, "deb", "myapp", ["dpkg"], "pkexec");
+        SyspkgReplay.CommandProbe = _ => null;
+
+        var artifact = Path.Combine(feedDir, "myapp_2.0-1_amd64.deb");
+        File.WriteAllText(artifact, "pkg-v2-bytes");
+        WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+        {
+            Target = TestPlatform.LinuxTarget, Format = "deb",
+            Url = "myapp_2.0-1_amd64.deb", File = "myapp_2.0-1_amd64.deb",
+            Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+            Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+        });
+        var retention = Path.Combine(directory, "retention");
+        var app = WritePosixStub(directory, "app", "true\n");
+        var options = new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging"),
+            AppPath = app,
+            RollbackBackupDirectory = retention,
+        };
+
+        var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+        var info = (await client.CheckForUpdateAsync())!;
+        var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+        client.Verify(info, downloaded);
+        var apply = client.Apply(info, downloaded, options);
+        Assert.True(apply.WaitForExit(60_000));
+        Assert.Equal(0, apply.ExitCode);
+        // 模拟"上一次 Bundler 链更新留存过旧包"——retention 里种旧件；
+        // applied 仍指新件（刚 apply 写入）。
+        var oldPkg = Path.Combine(retention, "myapp_1.0-1_amd64.deb");
+        File.WriteAllText(oldPkg, "pkg-v1-bytes");
+        File.SetLastWriteTimeUtc(oldPkg, DateTime.UtcNow.AddMinutes(-10));
+
+        File.Delete(rec);
+        var rollback = client.Rollback(options);
+        Assert.True(rollback.WaitForExit(60_000));
+        Assert.Equal(0, rollback.ExitCode);
+        var lines = WaitRecord(rec, 3);
+        // pkexec/updater 行：旧包 + --rollback 尾位；--env-file 夹在 --app 与
+        // --rollback 之间，故按行断言首/尾而不钉中间段。
+        Assert.StartsWith(
+            $"pkexec {install}/bundler-updater pkg-apply --pkg {oldPkg} " +
+            $"--format deb --app {Path.GetFullPath(app)}", lines[1]);
+        Assert.EndsWith("--rollback", lines[1]);
+        Assert.StartsWith($"updater pkg-apply --pkg {oldPkg}", lines[2]);
+        Assert.EndsWith("--rollback", lines[2]);
+        Assert.Equal("myapp_1.0-1_amd64.deb",
+            File.ReadAllText(Path.Combine(retention, "applied")).Trim());
+    }
+
+    [Fact]
+    public async Task Client_SyspkgRollback_NoRetainedPackage_Refuses()
+    {
+        // 无留存件 → 确定性拒绝不空转（pre-ledger 断言顺带覆盖回滚也走预检）。
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        var directory = Ws.Combine("syspkg-rollback-empty");
+        Directory.CreateDirectory(directory);
+        using var env = new EnvScope();
+        env.Set("BUNDLER_STUB_REC",
+            Path.Combine(Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt"));
+        var (install, _, _, _) = SetupSyspkgInstall(env, directory, "deb", "myapp", ["dpkg"], "pkexec");
+        SyspkgReplay.CommandProbe = _ => null;
+        var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+        var exception = Assert.Throws<UpdateException>(() => client.Rollback(new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging"),
+            AppPath = Path.Combine(directory, "app"),
+            RollbackBackupDirectory = Path.Combine(directory, "retention"),
+        }));
+        Assert.Contains("no retained package", exception.Message);
+    }
+
     // linux 引导件收敛 musl 静态单件（#100 起 tools/ 无字面 linux-<arch> 件，
     // static-pie 件 glibc/musl 双宿主通吃）——与打包侧 MuslSibling 同一选件语义。
     static string LinuxBootstrapper() => Path.Combine(

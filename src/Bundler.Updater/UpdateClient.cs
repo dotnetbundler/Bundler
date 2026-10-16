@@ -7,7 +7,7 @@ namespace DotNet.Bundler.Updater;
 
 /// <summary>
 /// 应用内更新客户端门面：`UpdateInstallIdentity`（安装目录旁车）→ 查清单 → 下载 →
-/// ECDSA 验签 → 两式应用（installer-replay / file-swap）→ 回滚钩子。
+/// ECDSA 验签 → 三式应用（installer-replay / file-swap / 系统包 pkg-apply replay）→ 回滚钩子。
 /// 消费方只需关心四个动词；协议/校验/拒绝全部确定性抛 <see cref="UpdateException"/>。
 /// </summary>
 public sealed class UpdateClient
@@ -32,7 +32,8 @@ public sealed class UpdateClient
         }
         // syspkg 格式的换包按包名定位已装单元：v1 旧旁车没有 pkg 字段——
         // 宁在构造闸确定性拒绝，也不拿产品名/安装路径去猜包管理器名。
-        if (SyspkgFormats.Contains(identity.Format) && identity.Pkg is not { Length: > 0 })
+        // （apply 面预检三件套之① 由此处与 FromInstallDirectory 旁车闸共同承担。）
+        if (SyspkgReplay.IsSyspkgFormat(identity.Format) && identity.Pkg is not { Length: > 0 })
         {
             throw new UpdateException(
                 $"install identity for '{identity.Format}' carries no 'pkg' package name — " +
@@ -192,9 +193,11 @@ public sealed class UpdateClient
     }
 
     /// <summary>
-    /// 启动应用流程：nsis/msi 走安装器重跑，其他走引导件三段式换包。
-    /// 返回已派生的进程——调用方应立即退出让 wait-pid 生效（file-swap）
-    /// 或让安装器接管（installer-replay）。
+    /// 启动应用流程：nsis/msi 走安装器重跑，deb/rpm/alpineapk 走系统包 replay
+    /// （SyspkgReplay：预检/留存/提权退化链拉起 bundler-updater pkg-apply），
+    /// 其他走引导件三段式换包。
+    /// 返回已派生的进程——调用方应立即退出让 wait-pid 生效（file-swap）、
+    /// 让提权引导件接管（pkg-replay）或让安装器接管（installer-replay）。
     /// </summary>
     public Process Apply(UpdateInfo info, string artifactPath, ApplyOptions? options = null)
     {
@@ -215,14 +218,16 @@ public sealed class UpdateClient
             UpdateInstallIdentity.WriteSidecar(_installDirectory, _identity);
         }
         // WaitPid=null 即不等任何进程（调用方自行安排退出时机）；真实流程恒传当前进程。
+        // syspkg 族同理拉起即退——重启权移交 pkg-apply 降权腿。
         return UpdateApplier.Apply(
-            info.Artifact, artifactPath, _installDirectory,
+            _identity, info.Artifact, artifactPath, _installDirectory,
             options ?? new ApplyOptions(), _options.Log);
     }
 
-    /// <summary>回滚钩子：换包留下的备份倒回安装目录（默认不保留回滚点——ApplyOptions.KeepRollbackBackup 开启后才有可回滚目标）。</summary>
+    /// <summary>回滚钩子：换包留下的备份倒回安装目录（默认不保留回滚点——ApplyOptions.KeepRollbackBackup 开启后才有可回滚目标）。
+    /// deb/rpm/alpineapk 身份按系统包 replay：重放 retention 留存的旧包，无留存件确定性拒绝。</summary>
     public Process Rollback(ApplyOptions? options = null) =>
-        UpdateApplier.Rollback(_installDirectory, options ?? new ApplyOptions(), _options.Log);
+        UpdateApplier.Rollback(_identity, _installDirectory, options ?? new ApplyOptions(), _options.Log);
 
     /// <summary>一步到位：查→下→验→启。无更新返回 false。</summary>
     public async Task<bool> UpdateAsync(
@@ -274,10 +279,6 @@ public sealed class UpdateClient
             return null;
         }
     }
-
-    // 包管理器格式：身份旁车必须带 pkg 包名（构造闸判定集）。
-    private static readonly HashSet<string> SyspkgFormats =
-        new(StringComparer.OrdinalIgnoreCase) { "deb", "rpm", "alpineapk" };
 
     private string FeedUrl() => _identity.FeedUrl;
 

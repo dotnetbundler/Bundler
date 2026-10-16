@@ -3,12 +3,12 @@
 本文件是 UPDATE 的唯一文档：决策、协议、能力状态与边界。
 这是跨格式产品面而非新安装格式：产物随既有格式旁车而生，更新语义分两式复用既有安装器能力。
 已冻结（基线 `0.1.0-alpha.74`）。
-deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2）：发射与引导件 `pkg-apply` 动词已实现，客户端 replay 编排仍为**计划实现**。
+deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2）：发射、引导件 `pkg-apply` 动词与客户端 replay 编排均已实现，真 root 提权全链归外部待验收。
 
 ## 1. 核心决策
 
 - **覆盖格式**：nsis/msi/app/appimage/zip/targz 六件已实现。
-  deb/rpm/alpineapk 归 installer-replay 语义族按 §2 受约束实现——发射与 `pkg-apply` 动词已落地，客户端 replay 编排计划实现。
+  deb/rpm/alpineapk 归 installer-replay 语义族按 §2 受约束实现——发射、`pkg-apply` 动词与客户端 replay 编排已落地。
   dmg 是运输件、pkg 是提权安装器，非更新载体。
 - **清单形态**：静态 JSON 按通道分文件（`bundler-update-feed.{channel}.json`，文件名=通道，零服务端分流）：`{channel, version, notes, publishedAt, artifacts:[{rid, format, file, url, size, sha256, sig, blockmap?}]}`。
   `url` 是相对清单所在目录的输出根路径（byFormat 布局含 `<format>/` 前缀），`file` 为裸文件名。
@@ -40,9 +40,9 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   更新器职责=换包前 `codesign --verify` 且签名身份与旧包一致（防劫持）+剥 `com.apple.quarantine`+`open -n` 重启。
 - **feedUrl 多形态**：http(s)/`file://`/本地路径/UNC——离线更新与企业内网分发是静态清单模型的免费特性。
 
-## 2. deb/rpm/alpineapk：受约束 installer-replay（计划实现）
+## 2. deb/rpm/alpineapk：受约束 installer-replay
 
-状态：**部分实现**——§2.3 引导件动词与 §2.5 身份/发射已落地，§2.2 客户端编排与 §2.4 回滚重放的客户端侧计划实现。
+状态：**已实现**（自动化层全绿）——§2.2 客户端编排（`SyspkgReplay`）、§2.3 引导件动词、§2.4 客户端回滚重放、§2.5 身份/发射全落地；真 root 提权全链与发行版实装归外部待验收（`docs/project/special-acceptance.md`）。
 "包管理器领地"论证的真实内核是**不绕过账本**——此前据此整体拒绝，现把防线从"不碰"收紧为"不绕账本"：replay 让包管理器自己登记、卸旧、跑 scriptlet，恰恰尊重账本，与拒绝理由不冲突。
 
 ### 2.1 语义归属与分界
@@ -65,6 +65,10 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   非 Bundler 链首装或 retention 无留存旧包时，`--rollback` 确定性拒绝报"无留存包可回滚"，不空转。
 - **提权三级退化链**：`pkexec` → `zenity`/`kdialog` 询问密码 + `sudo -S` → 裸 `sudo`。
   任一级拉起 `bundler-updater pkg-apply` 后客户端退出。
+- 实现落点（B3 `SyspkgReplay`）：客户端身份 `alpineapk` 在动词面映射 `--format apk`。
+  会话 env 件写 `<staging>/pkg-<guid>/session.env`（0600，含 CR/LF 的值跳过，零有效对或写败退为不带 `--env-file`），拉起进程退出即删。
+  新包复制进用户空间 retention 目录并写 `applied` 标记；rollback 拣 `applied` 之外最新留存件同链重放、applied 翻回旧包名。
+  测试缝与引导件同名同源：`BUNDLER_UPDATER_CMD_<TOOL>` env 覆盖 + `CommandProbe`/`EnvProbe`/`ExecProbe` 进程内探针。
 
 ### 2.3 引导件侧（root，新动词 `pkg-apply`）
 
@@ -134,9 +138,10 @@ apk 降级行为未实测，登记外部待验收（`docs/project/special-accept
 
 部分实现/外部待验收：macOS 同签名身份比对腿（无 Apple 证书，挂 `docs/project/special-acceptance.md`）。
 
-计划实现（UPDATE 系统包扩展阶段，设计定稿见 §2）：
+- deb/rpm/alpineapk 客户端 replay 编排（`SyspkgReplay`，UPDATE 系统包扩展 B3）：预检三件套（构造闸 `pkg` 名 + 前端退化链 `command -v` + 账本归属双检）、留存目录 + `applied` 标记、三级提权退化链拉起安装位 `bundler-updater pkg-apply`（`alpineapk`→`apk` 映射、拉起即退）、rollback 拣留存旧包同链重放——unit 探针族跨宿主断言 + integration POSIX 垫片 e2e 全绿（Windows 腿 skip）。
 
-- deb/rpm/alpineapk 客户端 replay 编排：预检三件套（旁车+`command -v`+账本归属双检）、三级提权退化链拉起 `pkg-apply`、回滚件留存与 `Apply`/`Rollback` 客户端分支。
+计划实现/外部待验收（UPDATE 系统包扩展阶段，设计定稿见 §2）：
+
 - 真机/容器提权全链、apk/zypper 降级语义、conffile 修改场景、repack 拒绝场景、依赖变更场景均为外部待验收，登记于 `docs/project/special-acceptance.md`。
 
 ## 5. 明确拒绝
