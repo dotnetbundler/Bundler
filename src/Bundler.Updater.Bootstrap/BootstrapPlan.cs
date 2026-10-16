@@ -186,7 +186,7 @@ internal static class BootstrapPlan
                 }
                 else
                 {
-                    MoveFile(backupDir, installDir);
+                    MoveRestoring(backupDir, installDir, isDirectory: false, log);
                 }
             }
             else if (Directory.Exists(backupDir))
@@ -198,7 +198,7 @@ internal static class BootstrapPlan
                 }
                 else
                 {
-                    MoveTree(backupDir, installDir, log);
+                    MoveRestoring(backupDir, installDir, isDirectory: true, log);
                 }
             }
             else
@@ -304,7 +304,7 @@ internal static class BootstrapPlan
             {
                 log("bundler-updater: swap failed, restoring backup");
                 DeleteNodeIfPresent(installDir);
-                MoveTree(backupDir, installDir, log);
+                MoveRestoring(backupDir, installDir, isDirectory: true, log);
             }
             File.Delete(markerPath);
             throw;
@@ -768,7 +768,7 @@ internal static class BootstrapPlan
             {
                 log("bundler-updater: swap failed, restoring backup");
                 DeleteNodeIfPresent(installPath);
-                MoveFile(backupPath, installPath);
+                MoveRestoring(backupPath, installPath, isDirectory: false, log);
             }
             File.Delete(markerPath);
             throw;
@@ -789,6 +789,32 @@ internal static class BootstrapPlan
         }
         log("bundler-updater: done");
         return 0;
+    }
+
+    // 恢复向搬移（备份→装位）的"已提交"容错：装位槽两态（缺席/全本）不变量下，
+    // 搬移抛异常后装位仍在场即搬移已提交、仅源槽清场失败——尽力再清残件按恢复成功走，
+    // 否则遗留 marker+残件会让下轮崩溃恢复把残件当全本还原（与 sh restore_move 同义）。
+    private static void MoveRestoring(string source, string destination, bool isDirectory, Action<string> log)
+    {
+        try
+        {
+            if (isDirectory)
+            {
+                MoveTree(source, destination, log);
+            }
+            else
+            {
+                MoveFile(source, destination);
+            }
+        }
+        catch
+        {
+            if (!(isDirectory ? Directory.Exists(destination) : File.Exists(destination)))
+            {
+                throw;
+            }
+            DeleteNodeIfPresent(source);
+        }
     }
 
     // 槽位既有节点按 lstat 语义清掉：叶链/联接只删节点本身不触目标（POSIX rm 同义）；
