@@ -454,7 +454,9 @@ if [ -f "$MARKER" ]; then
     esac
     log "bundler-updater: interrupted ${MARKER_KIND} detected, restoring backup first"
     if [ -f "$BACKUP_DIR" ]; then
-        rm -f "$INSTALL_DIR"
+        # 槽位节点类型不设限（与 AOT DeleteNodeIfPresent 同义）：备份是文件而
+        # 安装槽挂目录节点时 rm -f 删不掉、cp -f 会写进目录内部。
+        rm -rf "$INSTALL_DIR"
         if [ "$MARKER_KIND" = rollback ]; then
             cp -f "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
         else
