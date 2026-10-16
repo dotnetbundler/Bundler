@@ -152,7 +152,7 @@ apk `apk add` 旧版本地件原生放行降级（alpine 容器实证：rc=0、�
 
 部分实现/外部待验收：macOS 同签名身份比对腿（无 Apple 证书，挂 `docs/project/special-acceptance.md`）。
 
-计划实现/外部待验收（UPDATE 系统包扩展阶段，设计定稿见 §2）：
+外部待验收（UPDATE 系统包扩展阶段，设计定稿见 §2）：
 
 - 容器提权全链/apk 降级/conffile 修改场景已由 `syspkg-verify` 实证；zypper 降级形态、图形提权入口链（pkexec→zenity/kdialog→`sudo -S`）、repack 拒绝场景、依赖变更场景仍为外部待验收，登记于 `docs/project/special-acceptance.md`。
 
