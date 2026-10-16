@@ -79,7 +79,7 @@
 | 项 | 要做什么 | 完成证据 | 当前卡点/说明 |
 | --- | --- | --- | --- |
 | 真实旧 WiX/MSI 产品迁移 | 用真实历史 ProductCode/UpgradeCode 或已发布 MSI 验证迁移与 `LegacyMsiAutoDetect` 自动检测 | 真实已发布产品的识别、per-machine 提权枚举、迁移行为记录 | 通用机制与自动检测已由一次性 fixture 验证；需用户侧真实旧标识/已发布包 |
-| 生产 GPG 密钥流程 | 真实开发者 GPG 密钥给 rpm/AppImage 签名 + 公钥分发/吊销流程演练 | 生产密钥签名+分发/吊销记录 | `gpg-production.sh --self-contained`（临时密钥全链签名+验签）收编进 `release-verify` ubuntu 腿跑绿；真实开发者密钥分发/吊销仍挂本表 |
+| 生产 GPG 密钥流程 | 真实开发者 GPG 密钥给 rpm/AppImage 签名 + 公钥分发/吊销流程演练 | 生产密钥签名+分发/吊销记录 | `gpg-production.sh --self-contained`（临时密钥全链签名+验签）收编进 `verify` ubuntu 腿跑绿；真实开发者密钥分发/吊销仍挂本表 |
 | UPDATE 真实发布管线 | 真实通道 `BundlerUpdateFeed` 指向公网静态托管，HelloBundlerApp 走 pack→安装→Check/Download/Apply 全链 | 端到端狗食记录 | 静态托管免费（GitHub Pages 等）；需用户决定托管并保管 ECDSA 私钥 |
 | UPDATE 公网/CDN Range 行为 | 差分在真实公网/CDN 上的 HTTP Range 行为记录 | 公网腿 Range 响应与复用率记录 | 回环 206 已实证；部分 CDN 对 Range 有缓存语义差异 |
 | mac quarantine 首启 | `.app` 经真实分发渠道（公网/内网下载）产生 quarantine 首启场景 | 下载-首启观察记录 | quarantine xattr 标记落位模拟腿已一次性 CI 跑绿（run 37892544275）；真实下载首启弹窗观察仍挂本表 |
@@ -97,8 +97,8 @@
 | 干净 macOS 宿主矩阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg`/`.pkg`；含低于 `LSMinimumSystemVersion` 的旧版本宿主拒跑断言；顺带在无 `actool` 宿主构建 `.app` 验证降级分支（警告不阻塞） | 挂载/EULA 弹窗/拖放安装首启记录、拒跑提示、降级警告记录 | 现宿主有开发工具链；云 mac 实例按天可租 |
 | 干净 Windows 10/11 | WiX 自身依赖边界（无 .NET SDK 仅 candle/light 编译）、独立 VM 复跑安装/卸载、Win7 记 Framework 缺失边界 | 各宿主构建/安装/卸载记录 | 非干净 Windows 11 x64 已有证据；干净宿主未测 |
 | 提权/UAC Windows | NSIS per-machine 安装/卸载与 journal ACL 取证、预建父目录所有权/继承；MSI current-user/per-machine 权限差异；UPDATE 引导件在 `Program Files` 提权目录的写权限与 UAC 交互 | `icacls`/HKLM 权限/提权边界记录 | 普通本机不得静默触发 UAC；当前实证均 per-user 目录 |
-| 可丢弃故障 VM | NSIS 真实重启+锁定文件删除（重启后复核）、真实 ACL 拒绝+物理磁盘/配额耗尽；MSI 重启/锁定/磁盘故障/缺源 | 前后快照、退出码、verbose log、重启后文件/注册表 | `disposable-vm-faults.ps1` 收编进 `release-verify`（windows-2025 与 windows-11-arm 跑绿：真 ACL 拒装 rc=2+真 VHD 盘满 ENOSPC rc=2+无半途树）；真实重启+锁定文件删除（`tests/Manual/win/nsis-reboot/Verify.ps1`）与 MSI 故障仍挂本表 |
-| 跨 Windows 版本固定项 | Win10/11 各 build 上升级前/卸载前已固定开始菜单/任务栏项检查 | 各 build 固定项行为记录 | `pinned-items.ps1` 收编进 `release-verify`（windows-2025 b26100 x64 与 windows-11-arm b26200 跑绿；另 Devin VM b20348 实证）；Win10 桌面 SKU 与任务栏 pin 落点仍挂本表——win11 已移除程序化 pin 通道（shell verb 枚举得到但 DoIt 返 E_ACCESSDENIED），落点只能人工 |
+| 可丢弃故障 VM | NSIS 真实重启+锁定文件删除（重启后复核）、真实 ACL 拒绝+物理磁盘/配额耗尽；MSI 重启/锁定/磁盘故障/缺源 | 前后快照、退出码、verbose log、重启后文件/注册表 | `disposable-vm-faults.ps1` 收编进 `verify`（windows-2025 与 windows-11-arm 跑绿：真 ACL 拒装 rc=2+真 VHD 盘满 ENOSPC rc=2+无半途树）；真实重启+锁定文件删除（`tests/Manual/win/nsis-reboot/Verify.ps1`）与 MSI 故障仍挂本表 |
+| 跨 Windows 版本固定项 | Win10/11 各 build 上升级前/卸载前已固定开始菜单/任务栏项检查 | 各 build 固定项行为记录 | `pinned-items.ps1` 收编进 `verify`（windows-2025 b26100 x64 与 windows-11-arm b26200 跑绿；另 Devin VM b20348 实证）；Win10 桌面 SKU 与任务栏 pin 落点仍挂本表——win11 已移除程序化 pin 通道（shell verb 枚举得到但 DoIt 返 E_ACCESSDENIED），落点只能人工 |
 | appimaged 类桌面集成 | appimaged/gear lever 工具对 AppImage 的识别与观感 | 工具识别观感记录 | `.desktop`/图标产出与 `desktop-file-validate` 校验收编为一次性 CI 腿跑绿（run 37892544275）；双击启动=FUSE 同路径已验；工具识别观感仍挂本表 |
 | NSIS `/R` 降权启动 | per-machine 安装后 `setup.exe /S /R` 启动已安装应用：进程 Integrity Level=Medium、属桌面用户不继承 High 令牌、参数传递到达 | Process Explorer 等 IL 观察 + 应用收到参数的断言 | 需交互桌面（UAC 弹窗手动批准）+ IL 观察工具；`uac-assisted.ps1` 辅助就位 |
 | NSIS Restart Manager 无法关闭进程 | 另一用户会话/受控 fixture 中运行安装目录主程序，静默升级应返回 `5`、不动旧安装、不影响同名他处进程 | 退出码、旧安装哈希对比、journal 记录 | 需可交互 Windows VM 双会话或不可终止 fixture；不得用系统关键进程 |

@@ -1,0 +1,249 @@
+# 发布前全量验证（发布门）：手动触发，覆盖全功能面。
+# 只验不发——nuget 包与 release 资产发布是后期另一步。
+# 拓扑：tests(复用 test.yml 全矩阵) → produce 产件+清单 → consume 异机真装真跑
+#       （联合交换：产/消分离保证消费机不见构建树）→ manual-auto 腿 + universal 产/消。
+name: verify
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  tests:
+    name: tests-${{ matrix.os }}
+    uses: ./.github/workflows/test.yml
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025, windows-11-arm, macos-26-intel, macos-26]
+    with:
+      suite: all
+      runners: ${{ matrix.os }}
+
+  # 产件腿：fixture 真产包 + SHA256SUMS 清单随件上传。
+  produce:
+    name: produce-${{ matrix.os }}
+    needs: tests
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025, windows-11-arm, macos-26-intel, macos-26]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.x"
+      - name: 产件（POSIX）
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/ci/produce.sh "$RUNNER_TEMP/produce"
+      - name: 产件（Windows）
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/produce.ps1 -OutDir "$env:RUNNER_TEMP/produce"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: produce-${{ matrix.os }}
+          path: ${{ runner.temp }}/produce/
+          if-no-files-found: error
+          retention-days: 1
+
+  # 消费腿：异机下载同一件 → 清单校验 → 真装真跑真卸。
+  # 产/消是同标签不同机器：runner 用完即弃，消费机从未见构建树。
+  consume:
+    name: consume-${{ matrix.os }}
+    needs: produce
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025, windows-11-arm, macos-26-intel, macos-26]
+    steps:
+      # checkout 只取 consume 脚本——消费机仍不见构建产物以外的树内容。
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: produce-${{ matrix.os }}
+          path: ${{ runner.temp }}/consume
+      # NSIS fixture 是 FDD（SelfContained=false）——装出件需要 .NET 运行时，
+      # 不赌镜像预置，显式装。
+      - uses: actions/setup-dotnet@v6
+        if: runner.os == 'Windows'
+        with:
+          dotnet-version: "10.x"
+      - name: 消费（Linux）
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash scripts/ci/consume-linux.sh "$RUNNER_TEMP/consume"
+      - name: 消费（macOS）
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash scripts/ci/consume-macos.sh "$RUNNER_TEMP/consume"
+      - name: 消费（Windows）
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/consume-windows.ps1 -Dir "$env:RUNNER_TEMP/consume"
+
+  # CI 环境可跑的 Manual 自动腿（凭证/公网/人工类仍排除）——吃 produce 产件。
+  manual-auto:
+    name: manual-${{ matrix.os }}
+    needs: produce
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025, windows-11-arm, macos-26-intel, macos-26]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: produce-${{ matrix.os }}
+          path: ${{ runner.temp }}/produce
+      - name: Manual 自动腿（Linux）
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -uo pipefail
+          P="$RUNNER_TEMP/produce"; SP="tests/Manual"
+          FAILED=""
+          leg(){ local n="$1"; shift; if "$@"; then echo "[LEG-PASS] $n"; else echo "[LEG-FAIL] $n"; FAILED="$FAILED $n"; fi }
+          find1(){ find "$P/$1" -type f -name "$2" | head -1; }
+          leg "gpg-production(self-contained)" bash "$SP/linux/gpg-production.sh" --self-contained
+          leg "apk-index" bash "$SP/linux/apk-index.sh" --apk "$(find1 apk '*.apk')"
+          if [ "$(uname -m)" = "aarch64" ]; then
+            leg "arm64-real-hw" bash "$SP/linux/arm64-real-hw.sh" \
+                --deb "$(find1 deb '*.deb')" --rpm "$(find1 rpm '*.rpm')" \
+                --appimage "$(find1 appimage '*.AppImage')"
+          fi
+          if [ -n "$FAILED" ]; then echo "失败腿:$FAILED" >&2; exit 1; fi
+      - name: Manual 自动腿（macOS）
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -uo pipefail
+          P="$RUNNER_TEMP/produce"; SP="tests/Manual"
+          FAILED=""
+          leg(){ local n="$1"; shift; if "$@"; then echo "[LEG-PASS] $n"; else echo "[LEG-FAIL] $n"; FAILED="$FAILED $n"; fi }
+          find1(){ find "$P/$1" -type f -name "$2" | head -1; }
+          findd(){ find "$P/$1" -type d -name "$2" | head -1; }
+          leg "clean-host-matrix" bash "$SP/mac/clean-host-matrix.sh" \
+              --app "$(findd app '*.app')" --dmg "$(find1 dmg '*.dmg')" --pkg "$(find1 pkg '*.pkg')"
+          if [ "$(uname -m)" = "x86_64" ]; then
+            leg "intel-x64" bash "$SP/mac/intel-x64.sh" \
+                --app "$(findd app '*.app')" --dmg "$(find1 dmg '*.dmg')"
+          else
+            # Rosetta 腿：osx-x64 件在 arm64+Rosetta 下实跑（Intel Mac 行的另一半）。
+            # runner 未预置 Rosetta 时需管理员权限安装；失败要进失败统计而不是裸挂。
+            /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null \
+                || sudo softwareupdate --install-rosetta --agree-to-license \
+                || { echo "Rosetta 安装失败" >&2; exit 1; }
+            leg "intel-x64(rosetta)" bash "$SP/mac/intel-x64.sh" \
+                --app "$(findd app-x64 '*.app')" --dmg "$(find1 dmg-x64 '*.dmg')"
+          fi
+          if [ -n "$FAILED" ]; then echo "失败腿:$FAILED" >&2; exit 1; fi
+      - name: Manual 自动腿（Windows）
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $P = "$env:RUNNER_TEMP/produce"; $SP = "tests/Manual"
+          $nsis = Get-ChildItem "$P/nsis" -Filter *.exe -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          $msi  = Get-ChildItem "$P/msi"  -Filter *.msi -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          $failed = @()
+          function Leg($n, [scriptblock]$b) { & $b; if ($LASTEXITCODE -eq 0) { Write-Host "[LEG-PASS] $n" } else { Write-Host "[LEG-FAIL] $n"; $script:failed += $n } }
+          Leg "pinned-items"        { pwsh -NoProfile -ExecutionPolicy Bypass -File "$SP/win/pinned-items.ps1" -InstallerPath $nsis -InstallDirName "Bundler Integration Fixture" -TaskbarPin }
+          Leg "mountvol-full-volume" { pwsh -NoProfile -ExecutionPolicy Bypass -File "$SP/win/mountvol-full-volume.ps1" }
+          if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
+            Leg "arm64-matrix" { pwsh -NoProfile -ExecutionPolicy Bypass -Command "& '$PWD/$SP/win/arm64-matrix.ps1' -InstallerPaths @('$nsis','$msi')" }
+          }
+          # 留 PendingFileRename 的故障注入腿排最后
+          Leg "disposable-vm-faults" { pwsh -NoProfile -ExecutionPolicy Bypass -File "$SP/win/disposable-vm-faults.ps1" -InstallerPath $nsis -ConfirmDisposableMachine }
+          # EAP=Continue 下 Write-Error 不产生非零 rc——显式 exit 判红。
+          if ($failed.Count -gt 0) { Write-Host ("失败腿: " + ($failed -join ", ")); exit 1 }
+      - name: 上传 Manual 证据与失败线索
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: evidence-${{ matrix.os }}
+          path: |
+            tests/Manual/evidence/
+            artifacts/ci/
+          if-no-files-found: ignore
+          retention-days: 1
+
+  # universal .app 产/消：一份件在 x86_64 与 arm64 宿主各自原生启动，同一包由清单钉死。
+  # universal 合并只收 FDD——消费腿靠 setup-dotnet 的运行时启动。
+  universal-produce:
+    name: universal-produce
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.x"
+      # fixture 走源内 buildTransitive targets——任务程序集须先建在 bin/Release，
+      # 否则 UsingTask 报 MSB4062。
+      - name: 预构建 MSBuild 任务程序集
+        shell: bash
+        run: dotnet build src/Bundler.MSBuild/Bundler.MSBuild.csproj -c Release --nologo
+      - name: 产 macos-universal .app（FDD 合并）+ sha256 清单
+        shell: bash
+        run: |
+          set -euo pipefail
+          FIX=tests/Fixtures/MacApp
+          # fixture 的 BundlerIcon 依赖 BundlerTestIconFile——造同款 512x512 PNG 头喂它
+          printf 'iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6AAAAAXNSR0IArs4c6Q==' | \
+            base64 -d > "$RUNNER_TEMP/icon.png"
+          dotnet publish "$FIX/BundlerMacAppIntegrationFixture.csproj" -c Release \
+            -p:BundlerUniversalTargets=osx-x64%3Bosx-arm64 \
+            -p:SelfContained=false \
+            "-p:BundlerTestIconFile=$RUNNER_TEMP/icon.png" \
+            "-p:BundlerIntegrationOutput=$RUNNER_TEMP/universal" --nologo
+          APP=$(find "$RUNNER_TEMP/universal" -type d -name '*.app' | head -1)
+          test -d "$APP"
+          ( cd "$APP" && find . -type f -exec shasum -a 256 {} + | sort ) \
+            > "$RUNNER_TEMP/universal/SHA256SUMS"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: universal-app
+          path: ${{ runner.temp }}/universal/
+          if-no-files-found: error
+          retention-days: 1
+
+  universal-consume:
+    name: universal-consume-${{ matrix.os }}
+    needs: universal-produce
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, macos-26-intel]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.x"
+      - uses: actions/download-artifact@v7
+        with:
+          name: universal-app
+          path: ${{ runner.temp }}/uni
+      - name: 同包校验 + 原生启动
+        shell: bash
+        run: bash scripts/ci/consume-universal.sh "$RUNNER_TEMP/uni"

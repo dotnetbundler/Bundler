@@ -48,7 +48,7 @@
 外部待验收（详见 `docs/project/special-acceptance.md`）：
 
 - GUI 桌面观感收窄项：文件/协议关联双击唤起。
-- 更广发行版宿主矩阵（RHEL8 旧版等）属 CI 扩版候选；生产 GPG 密钥分发/吊销属发布者流程（`gpg-production.sh` 临时密钥全链已收编入 release-verify ubuntu 腿）。
+- 更广发行版宿主矩阵（RHEL8 旧版等）属 CI 扩版候选；生产 GPG 密钥分发/吊销属发布者流程（`gpg-production.sh` 临时密钥全链已收编入 verify ubuntu 腿）。
 
 ## 5. 明确拒绝
 

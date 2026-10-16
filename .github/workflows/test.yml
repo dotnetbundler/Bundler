@@ -1,8 +1,7 @@
-# 开发期定向测试腿：迭代验证载具，不是发布门（发布门仍是 release-verify）。
-# 纯手动触发：dispatch 选 suite×runners 只跑需要的腿。
-# 注：job 级 if 在矩阵展开前求值，matrix/inputs 不可用于 job-if——runner 子集走
-# select 前置 job 产动态矩阵，不用 job-if 过滤。
-name: test-legs
+# 测试矩阵唯一定义：开发期 dispatch 选腿 / 发布期被 verify 以 workflow_call 调全矩阵。
+# 消重：测试腿定义只在本文件一份；测试驱动逻辑只在 scripts/ci/run-tests.* 一份。
+# 注：job 级 if 在矩阵展开前求值——runner 子集走 select 前置 job 产动态矩阵。
+name: test
 
 on:
   workflow_dispatch:
@@ -11,18 +10,27 @@ on:
         description: 测试套件（all=四工程全跑）
         type: choice
         default: unit
-        options: [unit, api, integration, localpackages, all]
+        options: [unit, api, integration, package, all]
       runners:
         description: runner 标签子集，逗号分隔不带空格；all=六腿全跑
         type: string
         default: all
         required: true
+  workflow_call:
+    inputs:
+      suite:
+        type: string
+        default: all
+      runners:
+        type: string
+        default: all
 
 permissions:
   contents: read
 
+# runners 入组：workflow_call 被 verify 六路调用时 suite 恒 all，靠 runners 分流防互杀。
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite || 'all' }}-${{ inputs.runners || 'all' }}
   cancel-in-progress: true
 
 jobs:
@@ -97,11 +105,11 @@ jobs:
       - name: 测试（POSIX）
         if: runner.os != 'Windows'
         shell: bash
-        run: bash scripts/ci/run-suite.sh "$SUITE"
+        run: bash scripts/ci/run-tests.sh "$SUITE"
       - name: 测试（Windows）
         if: runner.os == 'Windows'
         shell: pwsh
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/run-suite.ps1 -Suite $env:SUITE
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/run-tests.ps1 -Suite $env:SUITE
 
       - name: 上传失败线索（进度日志）
         if: failure()
