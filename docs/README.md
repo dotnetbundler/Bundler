@@ -23,6 +23,7 @@
 | [`design/support-matrix.md`](design/support-matrix.md) | 格式×平台生产/消费/签名支持总览 |
 | [`design/update.md`](design/update.md) | UPDATE 自更新模块契约 |
 | [`design/signing.md`](design/signing.md) | 签名横切面契约与各格式裁决 |
+| [`design/testing.md`](design/testing.md) | 测试体系规格：分层判据、覆盖清单、CI 拓扑 |
 
 ## `project/` — 项目治理（给维护者与验收者）
 
