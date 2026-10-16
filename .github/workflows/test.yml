@@ -84,9 +84,23 @@ jobs:
                   toks = she[2:].split() if she.startswith('#!') else []
                   interp = os.path.basename(toks[0]) if toks else ''
                   if interp == 'env':
-                      # env -S/-i/-u X/VAR=v 等选项与赋值前缀全部跳过，取首个真命令令牌。
-                      cand = [t for t in toks[1:] if not t.startswith('-') and '=' not in t]
-                      interp = os.path.basename(cand[0]) if cand else ''
+                      # env 选项建模：-u/--unset/-P/-C/--chdir 吃独立实参（实参非解释器需连跳）；
+                      # -i/-0/-v/-S/-- 等不消费后续令牌；-S 后整串即命令（内核单实参传入、
+                      # env 自行切分，近似切分后首候选即命令）；VAR=v 赋值与 -x 选项各自跳。
+                      takes_arg = {'-u', '--unset', '-P', '-C', '--chdir'}
+                      rest = toks[1:]
+                      i2 = 0
+                      cmd = ''
+                      while i2 < len(rest):
+                          t = rest[i2]
+                          if t in takes_arg:
+                              i2 += 2
+                          elif t.startswith('-') or '=' in t:
+                              i2 += 1
+                          else:
+                              cmd = t
+                              break
+                      interp = os.path.basename(cmd) if cmd else ''
                   if interp not in shells:
                       continue
               for i, line in enumerate(open(f, encoding='utf-8', errors='replace'), 1):
