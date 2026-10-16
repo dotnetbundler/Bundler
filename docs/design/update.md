@@ -16,7 +16,7 @@
 - **回滚**：换包期瞬备 `<install>.bundler-backup` 必建（原子性+断电恢复载体），成功后默认删除；`KeepRollbackBackup`+`RollbackBackupDirectory` 显式保留→落数据区 `DotNet.Bundler/backups`（per-user=`%LOCALAPPDATA%`/`~/Library/Application Support`/`$XDG_DATA_HOME`，per-machine=`%ProgramData%`/`/Library`/`/var/lib`）；`--rollback` 显式回滚；不做孤儿清理；安装器式由安装器自身回滚语义承接。
 - **macOS**：新 `.app` 签名/公证由 MacApp 管线打包期完成；更新器职责=换包前 `codesign --verify` 且签名身份与旧包一致（防劫持）+剥 `com.apple.quarantine`+`open -n` 重启。
 - **feedUrl 多形态**：http(s)/`file://`/本地路径/UNC——离线更新与企业内网分发是静态清单模型的免费特性。
-- **pkg-apply 特权动词**：引导件第二动词 `bundler-updater pkg-apply --pkg <本地包> --format <deb|rpm|apk> --app <重启目标> [--env-file <会话env件>] [--rollback]`，deb/rpm/alpineapk 自更新的特权执行体。
+- **pkg-apply 特权动词**：引导件第二动词 `bundler-updater pkg-apply --pkg <本地包> --format <deb|rpm|apk> --app <重启目标> [--env-file <会话env件>] [--rollback] [--log <件>]`，deb/rpm/alpineapk 自更新的特权执行体。
   客户端经 pkexec/sudo 以 root 拉起，动词本体只做两件事：① 前端退化链装本地包——deb `apt-get→dpkg` 两级恒带 `DEBIAN_FRONTEND=noninteractive` 与 confdef/confold（apt 侧经 `-o Dpkg::Options::=` 透传，dpkg 侧裸旗标）；rpm `dnf→zypper→rpm`，`--rollback` 子形态末位换 `rpm -U --oldpackage`；apk `add`，`/etc/apk/keys` 无预置公钥时自动 `--allow-untrusted`；每级先 `command -v` 预检再调用，全缺席=5、在场全败=4。
   ② 降权重启——`PKEXEC_UID`→`SUDO_UID` 取原用户（都不在=本来就 root 直跑），`setpriv→sudo→runuser→su` 退化链降权拉起 `--app`（runuser/su 只收用户名，经 passwd 查名；gid 按 `SUDO_GID`→passwd→uid 兜底）；`--env-file` 会话 env 经内层 `env K=V …` 回灌（sudo env_reset 剥外层环境，回灌必须在降权后重建），缺省按最小集 HOME+DISPLAY 并记日志；外层 `nohup` 分离。
   包管理器账本即状态——不引入三段搬移/marker/锁/崩溃恢复；不验签（客户端已验）。
@@ -42,7 +42,7 @@
 - `Bundler.Updater` 应用内库：`UpdateClient` 四动词 Check→Download→Verify→Apply/Rollback（netstandard2.0+net10.0 双目标零依赖）；`BUNDLER_UPDATER_LINK` 源文件双栖编译。
 - 差分双路实证：本地命中、脏缓存回退、回环 HTTP Range-206；`bundler-cache/artifact.bin` 源件缓存。
 - 离线/内网本地路径 feed 端到端。
-- `pkg-apply` 动词 AOT/POSIX 双实现同协议（deb/rpm/apk 前端退化链、降权重启链、env 回灌、`--rollback`、退出码 0/3/4/5/6）——stub 垫片非特权全链实证：unit 探针族 + integration 真跑奇偶族 + MSYS sh 腿实跑。
+- `pkg-apply` 动词 AOT/POSIX 双实现同协议（deb/rpm/apk 前端退化链、降权重启链、env 回灌、`--rollback`、退出码 0/3/4/5/6）——stub 垫片非特权全链实证：unit 探针族 + integration 真跑奇偶族（POSIX 宿主 AOT/sh 双腿，Windows 宿主仅 AOT 腿；Windows MSYS sh 腿挂 `docs/project/special-acceptance.md` 外部验收）。
 
 部分实现/外部待验收：macOS 同签名身份比对腿（无 Apple 证书，挂 `docs/project/special-acceptance.md`）。
 
