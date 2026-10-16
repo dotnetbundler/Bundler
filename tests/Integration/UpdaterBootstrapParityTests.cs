@@ -508,6 +508,49 @@ public static class UpdaterBootstrapParityTests
     }
 
     [Fact]
+    static void OddShapeSlot_Rollback_ByBackupShape()
+    {
+        // 异型槽：回滚按备份形态选腿而非装位形态——文件装位+目录备份 /
+        // 目录装位+文件备份都清槽重建，双侧同断言（AOT DeleteNodeIfPresent /
+        // sh rm -rf 平价）。
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "case-" + impl);
+                var log = Path.Combine(dir, "u.log");
+
+                // 文件装位 + 目录备份 → 目录腿清槽重建目录树。
+                var fileInstall = Write(Path.Combine(dir, "odd1", "app.bin"), "stale-file");
+                var dirBackup = NewDir(dir, "odd1-bksrc");
+                Write(Path.Combine(dirBackup, "inner", "state.txt"), "v1-tree");
+                Directory.Move(dirBackup, fileInstall + ".bundler-backup");
+
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", fileInstall,
+                    "--rollback", "--log", log));
+                Assert.True(Directory.Exists(fileInstall));
+                Assert.Equal("v1-tree", File.ReadAllText(
+                    Path.Combine(fileInstall, "inner", "state.txt")));
+
+                // 目录装位 + 文件备份 → 文件腿清槽还原单件。
+                var dirInstall = NewDir(dir, "odd2");
+                Write(Path.Combine(dirInstall, "stray"), "stale-tree");
+                File.WriteAllText(dirInstall + ".bundler-backup", "v1-file");
+
+                Assert.Equal(0, Invoke(impl, "apply", "--install-dir", dirInstall,
+                    "--rollback", "--log", log));
+                Assert.True(File.Exists(dirInstall));
+                Assert.Equal("v1-file", File.ReadAllText(dirInstall));
+            }
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
     static void RetainFailure_WarnDegrades_TransientLeft()
     {
         Assert.SkipWhen(TestPlatform.IsWindows || TestPlatform.IsRoot,
