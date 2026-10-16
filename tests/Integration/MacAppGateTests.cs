@@ -28,6 +28,10 @@ public sealed class MacAppGateFixture : IDisposable
 
 public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
 {
+    // 自签 p12 的固定假口令与环境变量名：测试专用材料，与真实签名资产无关。
+    private const string P12PasswordEnvVar = "BUNDLER_TEST_P12_PASS";
+    private const string P12Password = "bundler-test-p12";
+
     private IntegrationWorkspace Ws => _fixture.Ws;
     private readonly MacAppGateFixture _fixture;
 
@@ -296,11 +300,22 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
             reason = $"openssl req failed rc={request.ExitCode}: {request.StdErr.Trim()}";
             return null;
         }
-        // 空口令 p12：测试专用假材料，同时避免口令进 argv（仓规"秘密不入命令行"）。
+        // p12 口令是测试专用假材料（自签件即用即弃，不进真实密钥链），经 env:
+        // 传给 openssl——不占 argv（仓规"秘密不入命令行"）；CI LibreSSL 拒收
+        // 空口令 pass: 形（解包侧报 "certificate password must not appear in
+        // process arguments"），故固定假口令走环境变量注入。
         var exported = ProcessRunner.Run("openssl",
             ["pkcs12", "-export", "-out", p12Path,
-             "-inkey", keyPath, "-in", certPath, "-passout", "pass:"],
-            new ProcessRunner.Options { WorkingDirectory = workDir });
+             "-inkey", keyPath, "-in", certPath,
+             "-passout", "env:" + P12PasswordEnvVar],
+            new ProcessRunner.Options
+            {
+                WorkingDirectory = workDir,
+                Environment = new Dictionary<string, string?>
+                {
+                    [P12PasswordEnvVar] = P12Password,
+                },
+            });
         if (exported.ExitCode != 0)
         {
             reason = $"openssl pkcs12 export failed rc={exported.ExitCode}: {exported.StdErr.Trim()}";
@@ -310,8 +325,10 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
         MacAppSigning.TemporaryKeychain keychain;
         try
         {
+            // 同一个固定假口令：TemporaryKeychain 内部把它落 0600 口令文件再以
+            // openssl -passin file: 解包导入，全程不进 argv。
             keychain = MacAppSigning.TemporaryKeychain.CreateAsync(
-                workDir, p12Path, "", NullBundleLogger.Instance, CancellationToken.None)
+                workDir, p12Path, P12Password, NullBundleLogger.Instance, CancellationToken.None)
                 .GetAwaiter().GetResult();
         }
         catch (Exception exception)
