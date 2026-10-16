@@ -94,7 +94,7 @@
 | 项 | 要做什么 | 完成证据 | 当前卡点/已有覆盖 |
 | --- | --- | --- | --- |
 | Intel Mac / Rosetta 启动观感 | `macos-x86_64` `.app`/`.dmg`/`.pkg` 在 Intel/Rosetta 宿主的启动观感核对 | 观感记录 | `macos-26-intel` CI 腿与 `macos-26` arm64+Rosetta 腿的挂载/安装/启动断言已全绿；剩观感人工 |
-| macOS 26+ quarantine 可写宿主 | 在 `com.apple.quarantine` 可写回的 macOS 宿主（macOS ≤15 或未被限制的环境）复跑四条打标腿：MacAppGate 剥标（unsigned-both/same-team）、`.app` 更新链 e2e 剥标断言、DMG quarantine 跨卷传播、Gatekeeper 观察腿 | 四条腿在可写宿主的跑绿记录 | macos-26 CI 实证受保护 xattr 对测试进程全写入面不持久化（`xattr -w` CLI 与裸 setxattr 同样 rc=0 但 getxattr 读不回，verify run 38914231566）；各腿已接 `TrySetQuarantineTree`/`HasQuarantine` 读回门禁，宿主不支持即诚实 Skip——macos-26 上为尽力腿，真实剥标/传播断言待可写宿主验收 |
+| macOS 26+ quarantine 可写宿主 | 在 `com.apple.quarantine` 可写回的 macOS 宿主（macOS ≤15 或未被限制的环境）复跑五条打标腿：MacAppGate 剥标（unsigned-both、same-team 两腿）、`.app` 更新链 e2e 剥标断言（全链照跑、仅打标面条件化）、DMG quarantine 跨卷传播、Gatekeeper 观察腿 | 五条腿在可写宿主的跑绿记录 | macos-26 CI 实证受保护 xattr 对测试进程全写入面不持久化（`xattr -w` CLI 与裸 setxattr 同样 rc=0 但 getxattr 读不回，verify run 38914231566）；各腿已接 `TrySetQuarantineTree`/`TrySetQuarantine` 写+读回探测，写失败或读不回即诚实 Skip（e2e 腿全链照跑、仅剥标断言按探测结果条件化）——macos-26 上为尽力腿，真实剥标/传播断言待可写宿主验收 |
 | 干净 macOS 宿主矩阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg`/`.pkg`；含低于 `LSMinimumSystemVersion` 的旧版本宿主拒跑断言；顺带在无 `actool` 宿主构建 `.app` 验证降级分支（警告不阻塞） | 挂载/EULA 弹窗/拖放安装首启记录、拒跑提示、降级警告记录 | 现宿主有开发工具链；云 mac 实例按天可租 |
 | 干净 Windows 10/11 | WiX 自身依赖边界（无 .NET SDK 仅 candle/light 编译）、独立 VM 复跑安装/卸载、Win7 记 Framework 缺失边界 | 各宿主构建/安装/卸载记录 | 非干净 Windows 11 x64 已有证据；干净宿主未测 |
 | 提权/UAC Windows | NSIS per-machine 安装/卸载与 journal ACL 取证、预建父目录所有权/继承；MSI current-user/per-machine 权限差异；UPDATE 引导件在 `Program Files` 提权目录的写权限与 UAC 交互 | `icacls`/HKLM 权限/提权边界记录 | 普通本机不得静默触发 UAC；当前实证均 per-user 目录 |

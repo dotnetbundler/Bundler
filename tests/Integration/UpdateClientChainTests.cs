@@ -342,10 +342,9 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
                 FeedUrl = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
                 PublicKey = material.PublicPointBase64(),
             });
-        // 能力门禁（探测即打标）：本腿断言日志含 "quarantine stripped"——宿主
-        // 不持久化打标时标从未在过，剥标语义是真空通过，必须诚实 Skip。
-        Assert.SkipWhen(!MacAppStub.TrySetQuarantineTree(payload),
-            "宿主不持久化 com.apple.quarantine（macOS 26+ 受保护属性），剥标断言不可用——归 special-acceptance。");
+        // 打标=宿主能力探测：e2e 换包链不依赖标存在而照跑——标落不了位的宿主上
+        // 剥标面是真空通过，只对依赖"标真实在过"的断言按 marked 条件化，不整腿 Skip。
+        var marked = MacAppStub.TrySetQuarantineTree(payload);
         var transport = Path.Combine(feedDir, "MyApp-2.0.0.app.zip");
         Assert.True(MacArchiveTools.TryWriteAppZipViaDitto(
             payload, transport, NullBundleLogger.Instance),
@@ -379,13 +378,17 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.Equal(0, process.ExitCode);
         Assert.Equal("v2", File.ReadAllText(
             Path.Combine(install, "Contents", "MacOS", "MyApp")));
-        // 门禁生效面：载荷 quarantine 在换包前剥掉，落位安装件全树零残留；
-        // 日志 "quarantine stripped" 证明标确实在过（"not present" 是另一支）。
-        Assert.False(MacAppStub.HasQuarantine(install));
-        Assert.All(
-            Directory.EnumerateFileSystemEntries(install, "*", SearchOption.AllDirectories),
-            entry => Assert.False(MacAppStub.HasQuarantine(entry)));
-        Assert.Contains("quarantine stripped", File.ReadAllText(logPath));
+        // 门禁生效面（marked 条件化）：标真实在过才谈得上剥——不持久化打标的宿主
+        // 上这组断言无对象，换包全链与其余断言不受影响（剥标面归 special-acceptance）。
+        if (marked)
+        {
+            Assert.False(MacAppStub.HasQuarantine(install));
+            Assert.All(
+                Directory.EnumerateFileSystemEntries(install, "*", SearchOption.AllDirectories),
+                entry => Assert.False(MacAppStub.HasQuarantine(entry)));
+            // 日志 "quarantine stripped" 证明标确实在过（"not present" 是另一支）。
+            Assert.Contains("quarantine stripped", File.ReadAllText(logPath));
+        }
         Assert.Equal("v1", File.ReadAllText(Path.Combine(
             directory, "backups", "myapp", "Contents", "MacOS", "MyApp")));
         // 兄弟位残件清零（瞬备迁走/marker 回收/锁释放）——与 Linux 目录腿平价。
