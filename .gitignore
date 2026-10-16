@@ -6,7 +6,7 @@ artifacts/
 TestResults/
 *.user
 *.suo
-tests/Special/evidence/
+tests/Manual/evidence/
 .DS_Store
 Thumbs.db
 desktop.ini

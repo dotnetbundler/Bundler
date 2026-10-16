@@ -1,6 +1,0 @@
-[Unit]
-Description=Bundler RPM fixture service
-[Service]
-ExecStart=/usr/bin/bundler-rpm-fixture
-[Install]
-WantedBy=multi-user.target

@@ -1,1 +1,0 @@
-DotNet.Bundler disposable integration-test resource.

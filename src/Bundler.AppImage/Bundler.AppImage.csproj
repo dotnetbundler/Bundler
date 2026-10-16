@@ -11,7 +11,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Bundler.Core\Bundler.Core.csproj" />
-    <InternalsVisibleTo Include="Bundler.Tests" />
+    <InternalsVisibleTo Include="Bundler.UnitTests" />
+    <InternalsVisibleTo Include="Bundler.IntegrationTests" />
   </ItemGroup>
 
   <ItemGroup>

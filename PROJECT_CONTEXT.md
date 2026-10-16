@@ -33,15 +33,13 @@
 | `src/Bundler.MSBuild` | MSBuild Task 适配层（`buildTransitive` 导入） | `netstandard2.0` |
 | `src/Bundler.Cli` | CLI 适配层（dotnet tool nupkg + `PublishAot` 原生二进制双分发） | `net10.0` |
 | `src/Bundler.Package` | 便利元包 `DotNet.Bundler`（聚合后端与 MSBuild 支持） | `netstandard2.0` |
-| `tests/Bundler.Tests` | 唯一快速测试入口（xUnit v3，`dotnet test`；用例全注册、宿主门控经 `Assert.Skip` 跳过，以每次实跑输出为准） | `net10.0` |
-| `tests/Bundler.ApiTests` | API 消费测试入口（xUnit v3，`dotnet test`；十格式 `<Format>ApiTests` 测试类直调后端 API 产真实产物再断言，宿主门控经 `Assert.Skip`，集成脚本经 `-- --filter-class` + `*_API_FIXTURE_OUTPUT` 环境变量复用） | `net10.0` |
-| `tests/Bundler.IntegrationTests` | 系统集成测试体（xUnit v3，`dotnet test -- --filter-class/--filter-method`；每格式一个 `<Format>IntegrationTests` 测试类，全部脚本测试点逐腿收编；共享基建在 `tests/Shared/Tooling/`；Windows 真装腿用 `BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL=1` 门禁） | `net10.0` |
-| `tests/Bundler.LocalPackagesTests/` | 本地包消费契约工程：`MsiLocalPackagesTests` + `Fixtures/Msi/`（经 `Bundler.LocalPackages.props` 消费本地 nupkg 的 `Fixture`+`Standalone`，仅 Windows 真跑） | `net10.0` |
-| `tests/Bundler.IntegrationTests/Fixtures/` | 集成 fixture 集中地：各格式被发布成包的 fixture 工程与载荷 `Assets/`（`Nsis/` 含 `LegacyMsiFixture*/`） | `net10.0` |
-| `tests/Shared/` | 四测试工程链接共享：`TestPlatform.cs` 宿主探测门面 + `Tooling/` 集成基建（`ProcessRunner`/`DockerRunner`/`ElevatedRunner`/`IntegrationWorkspace`/`MsiSupport`/`WindowsDesktop` UIA3 向导驱动/`ShellLink` 等） | `net10.0` |
-| `tests/README.md` | 测试入口、trait 门禁与 fixture 地图 | — |
-| `tests/Special/` | 特殊验收脚本矩阵（进不了 dotnet test 的验收项按 win/mac/linux 分宿主脚本 + 证据契约 `shared/evidence-format.md`，产出 `evidence/` 已 gitignore） | sh/ps1 |
-| `tests/Special/win/nsis-reboot` | 可抛弃 VM 重启验证入口（`Verify.ps1` 两阶段：锁定文件卸载 `3010` → 重启 → pending rename/目录/注册表/journal 清理断言） | PowerShell |
+| `tests/Unit` | `Bundler.UnitTests`：单元层（纯进程内、零子进程 spawn；测试体系重写中，规格见 `docs/design/testing.md`） | `net10.0` |
+| `tests/Api` | `Bundler.ApiTests`：公共 API functional 层（无 IVT，真跑内嵌工具产真物） | `net10.0` |
+| `tests/Integration` | `Bundler.IntegrationTests`：真环境层（fixture 发布链/真装真卸/docker/更新链） | `net10.0` |
+| `tests/Package` | `Bundler.PackageTests`：本地 nupkg 消费契约层 | `net10.0` |
+| `tests/Shared` | 四测试工程链接共享的基建源码目录（重写中） | `net10.0` |
+| `tests/Fixtures` | 被测 fixture 工程与载荷集中地（重写中） | — |
+| `tests/Manual` | 特殊验收脚本层（重写中；验收登记在 `docs/project/special-acceptance.md`） | sh/ps1 |
 | `samples/HelloBundlerApp` | 全后端统一公开示例（应用版本 `1.0.0`，主工程公共旋钮 + `formats/*.props` 各后端专属旋钮，100% 旋钮覆盖） | `net10.0` |
 | `tools/Bundler.Nsis.Plugin` | NSIS 原生插件源码（有意在 slnx 之外，重建需 .NET 10 + Windows 原生链） | `net10.0` |
 | `third_party/` | 第三方归档、许可证、逐文件 SHA-256 与 provenance 文档 | — |
@@ -84,7 +82,7 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 ## 5. 未决问题（等待用户或外部输入）
 
 - 各格式外部事项等待对应环境输入，统一登记在 `docs/project/special-acceptance.md`。
-- 仓外独立包消费 fixture（`tests/Bundler.LocalPackagesTests/Fixtures/Msi/` 的 `Fixture` 与 `Standalone/`）在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`，
+- 仓外独立包消费 fixture（原 `tests/Bundler.LocalPackagesTests/Fixtures/Msi/`，随测试重写迁移至 `tests/Fixtures/` 体系）的 `Fixture` 与 `Standalone/` 在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`，
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
   还原来源已由 packageSourceMapping 钉死本地源（PR #41）；
   是否换处理方式（如公开发布后改验公网源、或移入独立验收仓）留待后续裁决。
@@ -92,6 +90,7 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 ## 6. 默认下一步
 
 全部格式、CLI 与 UPDATE 均已冻结并入 `main`，功能面无进行中阶段。
+**测试体系重写进行中**（规格 `docs/design/testing.md`；tests/ 已清为四层骨架，实现按 PR 链分阶段收口）。
 剩余工作：
 
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；

@@ -58,9 +58,9 @@ bundler bundle --input-dir <publish目录>  # 或 CLI：只指发布目录，其
 
 ```powershell
 dotnet build Bundler.slnx -c Release
-dotnet test tests/Bundler.Tests/Bundler.Tests.csproj -c Release
-dotnet test tests/Bundler.ApiTests/Bundler.ApiTests.csproj -c Release
-dotnet test tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj -c Release -- --filter-class "*NsisIntegrationTests*"
+dotnet test tests/Unit/Bundler.UnitTests.csproj -c Release
+dotnet test tests/Api/Bundler.ApiTests.csproj -c Release
+dotnet test tests/Integration/Bundler.IntegrationTests.csproj -c Release -- --filter-class "*NsisIntegrationTests*"
 dotnet pack Bundler.slnx -c Release -o artifacts/packages
 dotnet publish samples/HelloBundlerApp/HelloBundlerApp.csproj -c Release -r win-x64
 ```

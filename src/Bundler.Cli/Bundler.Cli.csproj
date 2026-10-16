@@ -42,6 +42,7 @@
     <ProjectReference Include="..\Bundler.Update\Bundler.Update.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="Bundler.Tests" />
+    <InternalsVisibleTo Include="Bundler.UnitTests" />
+    <InternalsVisibleTo Include="Bundler.IntegrationTests" />
   </ItemGroup>
 </Project>

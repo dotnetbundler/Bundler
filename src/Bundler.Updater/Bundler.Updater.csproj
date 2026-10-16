@@ -13,7 +13,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Bundler.Tests" />
+    <InternalsVisibleTo Include="Bundler.UnitTests" />
+    <InternalsVisibleTo Include="Bundler.IntegrationTests" />
     <!-- 协议件与打包侧同源链接编译——单源事实，零程序集蔓延。 -->
     <Compile Include="..\Bundler.Core\Update\UpdateKeyMaterial.cs" />
     <Compile Include="..\Bundler.Core\Update\UpdateFeedModel.cs" />

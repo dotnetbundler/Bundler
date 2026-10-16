@@ -21,9 +21,9 @@
     <Project Path="src/Bundler.Package/Bundler.Package.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Bundler.Tests/Bundler.Tests.csproj" />
-    <Project Path="tests/Bundler.ApiTests/Bundler.ApiTests.csproj" />
-    <Project Path="tests/Bundler.IntegrationTests/Bundler.IntegrationTests.csproj" />
-    <Project Path="tests/Bundler.LocalPackagesTests/Bundler.LocalPackagesTests.csproj" />
+    <Project Path="tests/Unit/Bundler.UnitTests.csproj" />
+    <Project Path="tests/Api/Bundler.ApiTests.csproj" />
+    <Project Path="tests/Integration/Bundler.IntegrationTests.csproj" />
+    <Project Path="tests/Package/Bundler.PackageTests.csproj" />
   </Folder>
 </Solution>
