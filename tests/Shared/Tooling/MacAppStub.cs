@@ -65,7 +65,7 @@ internal static class MacAppStub
 
     internal static void SetQuarantine(string path)
     {
-        var rc = setxattr(path, QuarantineXattr, QuarantineValue, QuarantineValue.Length, 0, 0);
+        var rc = setxattr(path, QuarantineXattr, QuarantineValue, (nuint)QuarantineValue.Length, 0, 0);
         Assert.True(rc == 0,
             $"setxattr({QuarantineXattr}) failed rc={rc} errno={Marshal.GetLastWin32Error()}");
     }
@@ -74,7 +74,7 @@ internal static class MacAppStub
     internal static bool HasQuarantine(string path)
     {
         var buffer = new byte[256];
-        return getxattr(path, QuarantineXattr, buffer, buffer.Length, 0, 0).ToInt64() >= 0;
+        return getxattr(path, QuarantineXattr, buffer, (nuint)buffer.Length, 0, 0).ToInt64() >= 0;
     }
 
     // 仓内引导件真件路径——macOS 签名腿拿它当 Mach-O 主程序，e2e 腿拿它当真引导件。
@@ -84,9 +84,9 @@ internal static class MacAppStub
 
     [DllImport("libc", CharSet = CharSet.Ansi, SetLastError = true)]
     private static extern IntPtr getxattr(
-        string path, string name, byte[] value, int size, int position, int options);
+        string path, string name, byte[] value, nuint size, uint position, int options);
 
     [DllImport("libc", CharSet = CharSet.Ansi, SetLastError = true)]
     private static extern int setxattr(
-        string path, string name, byte[] value, int size, int position, int options);
+        string path, string name, byte[] value, nuint size, uint position, int options);
 }

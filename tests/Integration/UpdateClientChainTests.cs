@@ -306,6 +306,14 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         File.WriteAllText(Path.Combine(payload, "Contents", "MacOS", "MyApp"), "v2");
         File.Copy(bootstrapper,
             Path.Combine(payload, "Contents", "MacOS", "bundler-updater"));
+        if (!OperatingSystem.IsWindows())
+        {
+            // 真实发布形态：载荷内引导件同样要可执行（第二次更新跑它）。
+            File.SetUnixFileMode(Path.Combine(payload, "Contents", "MacOS", "bundler-updater"),
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                    UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                    UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
         MacAppStub.SetQuarantineTree(payload);
         var transport = Path.Combine(feedDir, "MyApp-2.0.0.app.zip");
         Assert.True(MacArchiveTools.TryWriteAppZipViaDitto(
