@@ -358,6 +358,11 @@ while :; do
         fi
     else
         _lk_owner=$(cat "$LOCK_FILE" 2>/dev/null || true)
+        # 装位根目录缺席时 noclobber 建锁恒失败、owner 恒空——不分流会空转到
+        # --lock-timeout 报 rc3 假竞争；装位根缺席是用法错 rc2（与 AOT
+        # ThrowIfInstallRootMissing 同义）。
+        [ -e "$LOCK_FILE" ] || [ -d "$(dirname "$INSTALL_DIR")" ] || \
+            { echo "bundler-updater: install directory '$INSTALL_DIR' does not exist." >&2; exit 2; }
     fi
     if [ -n "$_lk_owner" ] && ! pid_alive "$_lk_owner"; then
         # 死锁夺锁——删前复读 owner 未变且仍死才删，防双实例互删对方新锁件。
@@ -470,9 +475,9 @@ if [ -f "$MARKER" ]; then
     RECOVERED=1
 fi
 
-# 预检落点在等退出+崩溃恢复之后、换包之前（与 AOT ApplyLocked 同序）——恢复已还原时
-# 备份槽已空，node_bytes=0 自然放行不误拒。
-check_free_space
+# 空间预检在各腿的存在性检查之后（与 AOT 同序）：它是纯只读探测，装位/载荷缺席是
+# 用法错 rc2——探测抢跑会颠倒 rc2/rc4 分类序并对不存在的路径产出误导性 WARN。
+# 恢复已还原时备份槽已空，node_bytes=0 自然放行不误拒。
 
 # 文件级语义：安装目标是单文件（AppImage 单件）或回滚备份是文件——
 # 目录级换包会清掉宿主目录里的无关文件，故单件替换。
@@ -480,6 +485,7 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
     if [ "$ROLLBACK" = 1 ]; then
         [ "$RECOVERED" = 1 ] && { log "bundler-updater: crash recovery already restored the backup"; exit 0; }
         [ -f "$BACKUP_DIR" ] || { echo "bundler-updater: no rollback backup at '$BACKUP_DIR'." >&2; exit 4; }
+        check_free_space
         log "bundler-updater: rollback '$BACKUP_DIR' → '$INSTALL_DIR'"
         # 回滚在动安装目标前同样写 marker（内容与 swap 区分）：复制中途崩溃时
         # 恢复路径按 'rollback' 复制还原——备份保留可重试，故失败不复位 marker。
@@ -492,6 +498,7 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
     fi
     [ -f "$PAYLOAD_DIR" ] || { echo "bundler-updater: file-swap payload must be a file." >&2; exit 2; }
     [ "$PAYLOAD_DIR" = "$INSTALL_DIR" ] && { echo "bundler-updater: install and payload must not be the same file." >&2; exit 2; }
+    check_free_space
     log "bundler-updater: backup '$INSTALL_DIR' → '$BACKUP_DIR'"
     # 备份父目录缺席时自建——与 AOT 侧 CopyTree 的隐式补链同义（POSIX mv 不会补）。
     mkdir -p "$(dirname "$BACKUP_DIR")" || exit 4
@@ -525,6 +532,7 @@ fi
 
 [ -d "$INSTALL_DIR" ] || { echo "bundler-updater: install directory '$INSTALL_DIR' does not exist." >&2; exit 2; }
 [ "$ROLLBACK" = 1 ] || [ -d "$PAYLOAD_DIR" ] || { echo "bundler-updater: payload directory '$PAYLOAD_DIR' does not exist." >&2; exit 2; }
+check_free_space
 
 # macOS .app 三项门禁：签名完好/身份连续/剥 quarantine——动备份前拒绝，安装目录零变更。
 case "$PAYLOAD_DIR" in

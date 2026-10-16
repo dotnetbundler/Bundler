@@ -177,10 +177,9 @@ internal static class BootstrapPlan
                 : "bundler-updater: interrupted swap detected, restoring backup first");
             if (File.Exists(backupDir))
             {
-                if (File.Exists(installDir))
-                {
-                    File.Delete(installDir);
-                }
+                // 槽位节点类型不设限：备份是文件而安装槽挂目录节点时 File.Delete 会
+                // 撞错——按 lstat 语义清任意节点（sh rm -rf 同义）。
+                DeleteNodeIfPresent(installDir);
                 if (rollbackRecovery)
                 {
                     File.Copy(backupDir, installDir, overwrite: true);
@@ -192,10 +191,7 @@ internal static class BootstrapPlan
             }
             else if (Directory.Exists(backupDir))
             {
-                if (Directory.Exists(installDir))
-                {
-                    Directory.Delete(installDir, recursive: true);
-                }
+                DeleteNodeIfPresent(installDir);
                 if (rollbackRecovery)
                 {
                     CopyTree(backupDir, installDir, log);
@@ -847,7 +843,7 @@ internal static class BootstrapPlan
     {
         try
         {
-            return File.ReadAllText(markerPath).StartsWith("rollback", StringComparison.Ordinal);
+            return File.ReadAllText(markerPath) == "rollback in progress";
         }
         catch (Exception)
         {

@@ -134,14 +134,14 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         //（真实发布形态——换包后安装位仍带 bundler-update.json，更新链可持续）。
         var artifact = WriteZipArtifact(feedDir, "app-2.0.0.zip", "v2",
             ("bundler-updater", File.ReadAllBytes(bootstrapper)),
-            ("bundler-update.json", SidecarBytes("zip", "linux-x86_64",
+            ("bundler-update.json", SidecarBytes("zip", TestPlatform.LinuxTarget,
                 Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
                 material.PublicPointBase64())));
         var sha = Sha256Hex(artifact);
         var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material));
         WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
         {
-            Target = "linux-x86_64", Format = "zip",
+            Target = TestPlatform.LinuxTarget, Format = "zip",
             Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
             Sha256 = sha, Size = new FileInfo(artifact).Length, Signature = sig,
         });
@@ -201,7 +201,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material));
         WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
         {
-            Target = "linux-x86_64", Format = "zip",
+            Target = TestPlatform.LinuxTarget, Format = "zip",
             Url = "app-2.0.0.zip", File = "app-2.0.0.zip",
             Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
             Signature = sig,
@@ -419,8 +419,9 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
 
     static string InstallWithSidecar(
         string root, out UpdateKeyMaterial material, out string feedDir,
-        string format = "zip", string target = "linux-x86_64")
+        string format = "zip", string? target = null)
     {
+        target ??= TestPlatform.LinuxTarget;
         var install = Path.Combine(root, "install");
         Directory.CreateDirectory(install);
         feedDir = Path.Combine(root, "feed");

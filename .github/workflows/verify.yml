@@ -140,8 +140,9 @@ jobs:
         shell: pwsh
         # matrix.arg 故意不加引号：词分裂约定同 POSIX 腿。
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/consume-windows.ps1 -Dir "$env:RUNNER_TEMP/consume" ${{ matrix.arg }}
-      # 消费腿失败的线索工件（Windows 侧的 msiexec 日志、安装暂存树；POSIX 侧 TMPDIR
-      # 重定向后的 bundler-consume.* mktemp 暂存）——失败才上传。
+      # 消费腿失败的线索工件（Windows 侧的 msiexec 日志、安装暂存树）——失败才上传。
+      # POSIX 腿正常失败时 trap "rm -rf $T" EXIT 已清暂存，bundler-consume.* 仅在
+      # 腿被强杀/脚本 die 未及 trap 时有残件可收，多数时候该目录为空属预期。
       # glob 尾星同时收 bundler-consume 目录与 bundler-consume.XXXXXX 散件。
       - name: 上传消费腿失败线索
         if: failure()
