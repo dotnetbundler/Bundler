@@ -70,7 +70,7 @@ MSBuild 前缀 `BundlerDeb*`；`bundler.json` 分节 `deb.*`；API `DebBundleCon
   预检过则留存回滚件、经三级提权退化链拉起安装位 `bundler-updater pkg-apply`，客户端随即退出。
 - **提权退化链**：`pkexec`（polkit 弹窗）→ `zenity`/`kdialog` 图形问密码 + `sudo -S` → 裸 `sudo`。
   `DISPLAY`/`WAYLAND_DISPLAY` 全缺席的 headless 环境跳过图形问密码腿直落裸 `sudo`（tty 密码提示/NOPASSWD 场景存活）。
-- **引导件编排**：随包注入的 musl 静态件 `bundler-updater` 落 `<installRoot>/bundler-updater`（默认 `/usr/lib/<包名>/`），以 root 执行 `apt-get install -y ./x.deb`（缺席退化 `dpkg -i`，恒带 `DEBIAN_FRONTEND=noninteractive --force-confdef --force-confold` 静默 conffile）装本地包。
+- **引导件编排**：随包注入的 musl 静态件 `bundler-updater` 落 `<installRoot>/bundler-updater`（默认 `/usr/lib/<包名>/`），以 root 按 `apt-get install -y ./x.deb` → `dpkg -i` 退化链装本地包（逐级 `command -v` 预检、失败退化；恒带 `DEBIAN_FRONTEND=noninteractive --force-confdef --force-confold` 静默 conffile）。
   装完经 `setpriv`/`sudo -u`/`runuser`/`su` 降权回原用户、回灌会话 env 后拉起 `--app` 重启——不以 root 重启应用。
 - **回滚**：应用调 `UpdateClient.Rollback`（或引导件 `pkg-apply --rollback`）按同路径同提权链重放留存旧包。
   留存目录在用户数据区（`$XDG_DATA_HOME` 或 `~/.local/share` 下 `dotnet-bundler/backups/`），retention 只增不剪不设上限。
