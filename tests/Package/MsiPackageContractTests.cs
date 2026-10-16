@@ -133,7 +133,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         }
     }
 
-    // Verify.ps1：产 → 真装 → ProductState/名称/版本 → 未知用户文件 → 卸 → 文件保留。
+    // 产 → 真装 → ProductState/名称/版本 → 未知用户文件 → 卸 → 文件保留。
     [Fact]
     [Trait("Requires", "localinstall")]
     public void SmokeInstallUninstallPreservesUserData()
@@ -178,7 +178,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         }
     }
 
-    // VerifyLifecycle.ps1：major upgrade / same-version 变体 1638 / 降级 1603 / 快捷方式与注册全生命周期。
+    // major upgrade / same-version 变体 1638 / 降级 1603 / 快捷方式与注册全生命周期。
     [Fact]
     [Trait("Requires", "localinstall")]
     public void MajorUpgradeVariantCollisionAndDowngradeRejected()
@@ -340,7 +340,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         }
     }
 
-    // VerifyMaintenance.ps1：损坏 MSI 拒绝、注入失败回滚、静默装卸、静默修复、zh-CN 独立身份。
+    // 损坏 MSI 拒绝、注入失败回滚、静默装卸、静默修复、zh-CN 独立身份。
     [Fact]
     [Trait("Requires", "localinstall")]
     public void DamageInjectionRepairAndLocalizedIdentity()
@@ -408,7 +408,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
             Assert.False(File.Exists(executable));
             Assert.False(File.Exists(resource));
 
-            // 静默安装 + 静默修复 /fomus + passive 卸载，未知用户文件全程保留。
+            // 静默安装 + 静默修复 /fomus + 静默卸载，未知用户文件全程保留。
             MsiexecLogged("silent-install", root, ["/i", $"\"{msi}\""], 0);
             AssertInstalled(productCode, true);
             Assert.True(File.Exists(executable));
@@ -494,7 +494,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         return Path.Combine(appArgs[0], "artifacts");
     }
 
-    // VerifyWinMsi5.ps1：windows-i686 四变体版本映射 + 允许/拒绝降级 + 同版碰撞 1638。
+    // windows-i686 四变体版本映射 + 允许/拒绝降级 + 同版碰撞 1638。
     [Fact]
     [Trait("Requires", "localinstall")]
     public void X86VersionMappingAndDowngradePolicy()
@@ -619,7 +619,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         finally { /* 输出目录由 workspace 托管 */ }
     }
 
-    // VerifyWinMsi6.ps1：对话框/环境表/快捷方式/品牌图/属性契约 + INSTALLFOLDER 范围闸
+    // 对话框/环境表/快捷方式/品牌图/属性契约 + INSTALLFOLDER 范围闸
     // + 自选目录安装 + PATH 追加与还原 + ARP 元数据 + 升级保目录 + 修复 + 干净卸载。
     [Fact]
     [Trait("Requires", "localinstall")]
@@ -783,7 +783,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         }
     }
 
-    // VerifyWinMsi7.ps1：一次 publish 产 en-US+ja-JP 两个 MSI，身份/目录/菜单相互隔离。
+    // 一次 publish 产 en-US+ja-JP 两个 MSI，身份/目录/菜单相互隔离。
     [Fact]
     [Trait("Requires", "localinstall")]
     public void PerLanguageMsisInstallCoexistAndUninstallIndependently()
@@ -862,7 +862,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         }
     }
 
-    // VerifyWinMsi8.ps1：regular 扩展片段 + expert 自定义 .wxs 模板（Bundler.* 变量）两条模式。
+    // regular 扩展片段 + expert 自定义 .wxs 模板（Bundler.* 变量）两条模式。
     [Fact]
     [Trait("Requires", "localinstall")]
     public void ExtensionFragmentAndExpertTemplateInstallAndUninstall()
@@ -992,7 +992,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         Assert.Contains("DotNet.Bundler", result.Output);
     }
 
-    // VerifyPublicSample.ps1：HelloBundlerApp 三变体（en user / zh user / en machine）的表级契约，不安装。
+    // HelloBundlerApp 三变体（en user / zh user / en machine）的表级契约，不安装。
     [Fact]
     public void PublicSampleMsiTableContract()
     {
