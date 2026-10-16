@@ -40,11 +40,37 @@ internal static class BootstrapPlan
         // 路径，绝对化发生在 Apply 内部时写入侧仍拿相对拼写，换包后工作目录
         // 变迁会让日志静默写错位（--app 传参侧已在客户端绝对化，同款口径）。
         var logFile = options.LogFile is { Length: > 0 } lf ? Path.GetFullPath(lf) : null;
-        var log = logFile is not null
-            ? new Action<string>(line => File.AppendAllText(logFile, line + "\n"))
-            : new Action<string>(line => Console.Out.WriteLine(line));
+        var log = CreateLog(logFile);
         var result = Apply(options, log);
         return result;
+    }
+
+    // apply/pkg-apply 两动词共用：--log 缺省走 stdout；给了文件就追加写。
+    // 日志件写入失败降级 stderr WARN（首败报一次）并继续——日志是留痕辅助，
+    // 不可写不该阻断换包/装包主流程（sh 侧 log() WARN 同口径）。
+    internal static Action<string> CreateLog(string? logFile)
+    {
+        if (logFile is null)
+        {
+            return line => Console.Out.WriteLine(line);
+        }
+        var warned = false;
+        return line =>
+        {
+            try
+            {
+                File.AppendAllText(logFile, line + "\n");
+            }
+            catch (Exception)
+            {
+                if (!warned)
+                {
+                    warned = true;
+                    Console.Error.WriteLine(
+                        $"bundler-updater: WARN cannot write log file '{logFile}' — continuing without file logging");
+                }
+            }
+        };
     }
 
     internal static int Apply(BootstrapOptions options, Action<string> log)
@@ -930,10 +956,13 @@ internal static class BootstrapPlan
         else
         {
             // POSIX 经 nohup 拉起：屏蔽 SIGHUP——引导件退出/终端挂断不该带走新装
-            // 应用（sh 版 `(cd … && nohup "$APP_PATH" &)` 同义）。nohup 是 POSIX
-            // 工具二进制直接 Process.Start，不经 shell——appPath 只作 argv 传递，
-            // 路径里的 shell 元字符不构成注入面。
-            startInfo = new ProcessStartInfo("nohup", [appPath])
+            // 应用（sh 版 `(cd … && nohup "$APP_PATH" &)` 同义）。stdio 三向经
+            // /bin/sh exec 钉到 /dev/null（sh 版 `</dev/null >/dev/null 2>&1`
+            // 同价）：分离进程继承调用方管道写端会让调用方 ReadToEnd 永等 EOF。
+            // "$@" 逐参透传不经 shell 重解析——argv 拼写原样到达 nohup。
+            startInfo = new ProcessStartInfo("/bin/sh",
+                ["-c", "exec \"$@\" </dev/null >/dev/null 2>&1",
+                 "bundler-updater-spawn", "nohup", appPath])
             { UseShellExecute = false, WorkingDirectory = workingDirectory };
         }
         // 重启失败不致命：换包/回滚已完成，重启只是便利步骤——与 POSIX `|| true` 对齐为 WARN。

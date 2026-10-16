@@ -1086,6 +1086,249 @@ public sealed class BootstrapPlanTests : TempBase
             Assert.Single(_pkgSpawns).Args);
     }
 
+    [Fact]
+    public void PkgApply_Restart_DirectoryApp_Rc6()
+    {
+        // --app 指目录：File.Exists 拒非普通文件 → rc6（sh 侧 -f 判据同口径——
+        // 旧 -e/-x 判过会让 nohup exec 目录被 >/dev/null 吞成 rc0 假成功）。
+        var pkg = WritePkg();
+        var appDir = Temp("app-as-dir").FullName;
+        SetupPkgProbes(commands: new Dictionary<string, string>
+        {
+            ["dpkg"] = "/stub/dpkg",
+            ["nohup"] = "/stub/nohup",
+        });
+
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", appDir]);
+
+        Assert.Equal(6, rc);
+        Assert.Single(_pkgExecs);
+        Assert.Empty(_pkgSpawns);
+    }
+
+    [Fact]
+    public void PkgApply_EnvFile_Directory_MinimalEnv()
+    {
+        // env-file 指目录：按"读失败"退化最小集并记 WARN（sh 侧 -f 判据同拒）。
+        var pkg = WritePkg();
+        var app = WriteApp();
+        var envDir = Temp("env-as-dir").FullName;
+        SetupPkgProbes(
+            env: new Dictionary<string, string>
+            {
+                ["HOME"] = "/home/direct",
+                ["DISPLAY"] = ":8",
+            },
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["nohup"] = "/stub/nohup",
+            });
+        var logFile = TempPath("pkg-dir-env.log");
+
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--env-file", envDir, "--log", logFile]);
+
+        Assert.Equal(0, rc);
+        Assert.Contains("cannot read env file", File.ReadAllText(logFile));
+        Assert.Equal(
+            ["env", "HOME=/home/direct", "DISPLAY=:8", app],
+            Assert.Single(_pkgSpawns).Args);
+    }
+
+    [Fact]
+    public void PkgApply_EnvFile_ZeroPairs_MinimalEnv()
+    {
+        // env 件可读但零有效对：退化最小集——零对内层 `env` 零覆盖会把调用方
+        // 全套 env（pkexec 语境=root env）原样灌给降权 app（sh 同口径）。
+        var pkg = WritePkg();
+        var app = WriteApp();
+        var envFile = WriteEnvFile("1BAD=x\n=orphan\nNO_EQUALS\nA B=x\n");
+        SetupPkgProbes(
+            env: new Dictionary<string, string>
+            {
+                ["HOME"] = "/home/direct",
+                ["DISPLAY"] = ":8",
+            },
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["nohup"] = "/stub/nohup",
+            });
+        var logFile = TempPath("pkg-zero-env.log");
+
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--env-file", envFile, "--log", logFile]);
+
+        Assert.Equal(0, rc);
+        Assert.Contains("no usable assignments", File.ReadAllText(logFile));
+        Assert.Equal(
+            ["env", "HOME=/home/direct", "DISPLAY=:8", app],
+            Assert.Single(_pkgSpawns).Args);
+    }
+
+    [Fact]
+    public void PkgApply_EnvFile_CrlfLines_StripCarriageReturn()
+    {
+        // CRLF 件：行尾 \r 不透进值（ReadLines 按 \r\n 终结——sh 侧 tr 折行同口径）。
+        var pkg = WritePkg();
+        var app = WriteApp();
+        var envFile = WriteEnvFile("DISPLAY=:9\r\nMYVAR=a b\r\n");
+        SetupPkgProbes(
+            env: new Dictionary<string, string>(),
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["nohup"] = "/stub/nohup",
+            });
+
+        Assert.Equal(0, PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--env-file", envFile]));
+
+        Assert.Equal(
+            ["env", "DISPLAY=:9", "MYVAR=a b", app],
+            Assert.Single(_pkgSpawns).Args);
+    }
+
+    [Fact]
+    public void PkgApply_UnwritableLog_WarnOnceAndContinue()
+    {
+        // --log 不可写：降级 stderr WARN（首败一次）并继续——日志是留痕辅助，
+        // 不该阻断装包（sh log() 同口径；旧实现 AppendAllText 抛出即 rc4）。
+        var pkg = WritePkg();
+        var app = WriteApp();
+        SetupPkgProbes(
+            env: new Dictionary<string, string>(),
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["nohup"] = "/stub/nohup",
+            });
+        var logFile = Path.Combine(TempPath("missing-log-dir"), "u.log");
+        var stderr = new StringWriter();
+        var original = Console.Error;
+        Console.SetError(stderr);
+        int rc;
+        try
+        {
+            rc = PkgApplyPlan.Run(
+                ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                 "--log", logFile]);
+        }
+        finally
+        {
+            Console.SetError(original);
+        }
+
+        Assert.Equal(0, rc);
+        Assert.Single(_pkgExecs);
+        Assert.Single(
+            stderr.ToString().Split('\n'),
+            line => line.Contains("WARN cannot write log file", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PkgApply_Restart_OverflowUid_FallsBackToSudoUid()
+    {
+        // PKEXEC_UID 超 int64：ParseUid 溢出返 null → 落 SUDO_UID 兜底
+        //（sh _pa_uid64 超界拒收同口径——旧 sh 只查全数字会直灌 setpriv）。
+        var pkg = WritePkg();
+        var app = WriteApp();
+        // 空 passwd 件钉死查名——真实宿主 /etc/passwd 凑巧含该 uid 会翻进
+        // 最小集 HOME 让断言漂移。
+        var passwd = WritePasswd("");
+        SetupPkgProbes(
+            env: new Dictionary<string, string>
+            {
+                ["PKEXEC_UID"] = "99999999999999999999",
+                ["SUDO_UID"] = "4242",
+                ["SUDO_GID"] = "4343",
+                ["BUNDLER_UPDATER_PASSWD_FILE"] = passwd,
+            },
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["setpriv"] = "/stub/setpriv",
+                ["nohup"] = "/stub/nohup",
+            });
+
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app]);
+
+        Assert.Equal(0, rc);
+        var spawn = Assert.Single(_pkgSpawns);
+        Assert.Equal(
+            ["/stub/setpriv", "--reuid=4242", "--regid=4343", "--clear-groups",
+             "env", app],
+            spawn.Args);
+    }
+
+    [Fact]
+    public void PkgApply_Restart_LeadingZeroUid_Normalized()
+    {
+        // 前导零 uid 规范化进 argv——sh _pa_uid64 剥零回规范拼写同口径。
+        var pkg = WritePkg();
+        var app = WriteApp();
+        var passwd = WritePasswd("");
+        SetupPkgProbes(
+            env: new Dictionary<string, string>
+            {
+                ["PKEXEC_UID"] = "0042",
+                ["SUDO_GID"] = "043",
+                ["BUNDLER_UPDATER_PASSWD_FILE"] = passwd,
+            },
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["setpriv"] = "/stub/setpriv",
+                ["nohup"] = "/stub/nohup",
+            });
+
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app]);
+
+        Assert.Equal(0, rc);
+        Assert.Equal(
+            ["/stub/setpriv", "--reuid=42", "--regid=43", "--clear-groups",
+             "env", app],
+            Assert.Single(_pkgSpawns).Args);
+    }
+
+    [Fact]
+    public void PkgApply_Restart_NonNumericPasswdGid_FallsBackToUid()
+    {
+        // passwd gid 段非数字：TryParse 失败→null→回退 uid——sh _pa_uid64 同口径。
+        var pkg = WritePkg();
+        var app = WriteApp();
+        var passwd = WritePasswd("tester:x:4242:notanum:Test:/home/tester:/bin/sh\n");
+        SetupPkgProbes(
+            env: new Dictionary<string, string>
+            {
+                ["SUDO_UID"] = "4242",
+                ["BUNDLER_UPDATER_PASSWD_FILE"] = passwd,
+            },
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["setpriv"] = "/stub/setpriv",
+                ["nohup"] = "/stub/nohup",
+            });
+
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app]);
+
+        Assert.Equal(0, rc);
+        // gid 非数字回退 uid；passwd 家目录按降权口径进最小集。
+        Assert.Equal(
+            ["/stub/setpriv", "--reuid=4242", "--regid=4242", "--clear-groups",
+             "env", "HOME=/home/tester", app],
+            Assert.Single(_pkgSpawns).Args);
+    }
+
     // ---- 装置 ----
 
     private int Apply(BootstrapOptions options) =>

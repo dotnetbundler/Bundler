@@ -1361,7 +1361,7 @@ public static class UpdaterBootstrapParityTests
     // "缺席"语义不依赖宿主是否恰好装着 apt/dnf（Debian 系宿主也照样判 rc5）。
     static void SeedShim(string shim)
     {
-        foreach (var tool in new[] { "env", "dirname", "awk", "ls", "sed", "nohup" })
+        foreach (var tool in new[] { "env", "dirname", "awk", "ls", "sed", "nohup", "tr" })
         {
             var real = PkgRealTool(tool);
             if (real != tool && !File.Exists(Path.Combine(shim, tool)))
@@ -1809,6 +1809,248 @@ public static class UpdaterBootstrapParityTests
                 Assert.Contains("no --env-file", File.ReadAllText(log));
                 Assert.Contains("HOME=/home/minimal", lines[1]);
                 Assert.Contains("DISPLAY=:7", lines[1]);
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void PkgApply_DirectoryApp_Rc6_Parity()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "dirapp-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
+                // --app 指目录：-e/-x 双过的旧口径会让 nohup exec 目录被 >/dev/null
+                // 吞成 rc0 假成功——普通文件判据（-f / File.Exists）两侧同拒 rc6。
+                var appDir = NewDir(dir, "app-dir");
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", PmStub(bin, "dpkg", 0, rec)));
+
+                Assert.Equal(6, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", appDir));
+                var lines = WaitRecord(rec, 1);
+                // 安装已提交（pm 记录在场）但重启被拒——不得有 app 记录。
+                Assert.StartsWith("dpkg ", lines[0]);
+                Assert.Single(lines);
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void PkgApply_DirectoryEnvFile_MinimalEnv_Parity()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "direnv-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
+                var app = AppStub(dir, rec);
+                // env-file 指目录：-r 判真的旧口径会零对放行——env 零覆盖继承
+                // 调用方全套 env。非普通文件按"读失败"退化最小集（双侧同口径）。
+                var envDir = NewDir(dir, "env-dir");
+                var log = Path.Combine(dir, "u.log");
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", PmStub(bin, "dpkg", 0, rec)),
+                    ("HOME", "/home/minimal"),
+                    ("DISPLAY", ":7"));
+
+                Assert.Equal(0, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--env-file", envDir, "--log", log));
+                var lines = WaitRecord(rec, 2);
+                Assert.Contains("cannot read env file", File.ReadAllText(log));
+                Assert.StartsWith("app|pwd=" + dir, lines[1]);
+                Assert.Contains("HOME=/home/minimal", lines[1]);
+                Assert.Contains("DISPLAY=:7", lines[1]);
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void PkgApply_ZeroPairsEnvFile_MinimalEnv_Parity()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "zeroenv-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
+                var app = AppStub(dir, rec);
+                // env 件可读但零有效对：同走最小集——空对让内层 env 零覆盖，
+                // 会把调用方全套 env（pkexec 语境=root env）灌给降权 app。
+                var envFile = Write(Path.Combine(dir, "session.env"),
+                    "1BAD=x\n=orphan\nNO_EQUALS\nA B=x\n");
+                var log = Path.Combine(dir, "u.log");
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", PmStub(bin, "dpkg", 0, rec)),
+                    ("HOME", "/home/minimal"),
+                    ("DISPLAY", ":7"));
+
+                Assert.Equal(0, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--env-file", envFile, "--log", log));
+                var lines = WaitRecord(rec, 2);
+                Assert.Contains("no usable assignments", File.ReadAllText(log));
+                Assert.Contains("HOME=/home/minimal", lines[1]);
+                Assert.Contains("DISPLAY=:7", lines[1]);
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void PkgApply_EnvFileCrlf_Parity()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "crlf-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
+                var app = AppStub(dir, rec);
+                // CRLF 件：行尾 \r 不透进值——AOT ReadLines 按 \r\n 终结，
+                // sh 侧 tr 折行同口径。
+                var envFile = Write(Path.Combine(dir, "session.env"),
+                    "DISPLAY=:9\r\nMYVAR=a b\r\n");
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", PmStub(bin, "dpkg", 0, rec)));
+
+                Assert.Equal(0, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--env-file", envFile));
+                var lines = WaitRecord(rec, 2);
+                Assert.Contains("|DISPLAY=:9|XAUTHORITY=", lines[1]);
+                // \r 若漏进值尾会让记录行以 "\r" 收尾——EndsWith 精确判。
+                Assert.EndsWith("|MYVAR=a b", lines[1]);
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void PkgApply_UnwritableLog_Continues_Parity()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "badlog-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
+                var app = AppStub(dir, rec);
+                // --log 父目录缺席写必败：日志失败降级 WARN 不阻断装包
+                //（旧 AOT AppendAllText 抛出即 rc4——双侧统一降级口径）。
+                var log = Path.Combine(dir, "missing-log-dir", "u.log");
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", PmStub(bin, "dpkg", 0, rec)));
+
+                Assert.Equal(0, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--log", log));
+                var lines = WaitRecord(rec, 2);
+                Assert.StartsWith("dpkg ", lines[0]);
+                Assert.StartsWith("app|pwd=" + dir, lines[1]);
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void PkgApply_UidGidEdgeCases_Parity()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "uidedge-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
+                var app = AppStub(dir, rec);
+                var dpkg = PmStub(bin, "dpkg", 0, rec);
+                var setpriv = DropStub(bin, "setpriv", rec);
+                // 空 passwd 件钉死查名——真实宿主 /etc/passwd 凑巧含该 uid 会翻进
+                // passwd gid/家目录让断言漂移。
+                var emptyPasswd = Write(Path.Combine(dir, "empty-passwd"), "");
+
+                // PKEXEC_UID 超 int64 → 值缺席落 SUDO_UID 兜底。
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", dpkg),
+                    ("BUNDLER_UPDATER_CMD_SETPRIV", setpriv),
+                    ("PKEXEC_UID", "99999999999999999999"),
+                    ("SUDO_UID", "4242"),
+                    ("SUDO_GID", "4343"),
+                    ("BUNDLER_UPDATER_PASSWD_FILE", emptyPasswd));
+                Assert.Equal(0, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app));
+                Assert.Contains(
+                    $"setpriv --reuid=4242 --regid=4343 --clear-groups env {app}",
+                    WaitRecord(rec, 2)[1]);
+
+                // 前导零 uid/gid 规范化进 argv。
+                File.Delete(rec);
+                env["PKEXEC_UID"] = "0042";
+                env["SUDO_UID"] = "5000";
+                env["SUDO_GID"] = "043";
+                Assert.Equal(0, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app));
+                Assert.Contains(
+                    $"setpriv --reuid=42 --regid=43 --clear-groups env {app}",
+                    WaitRecord(rec, 2)[1]);
+
+                // passwd gid 段非数字 → 回退 uid（含 SUDO_GID 缺席时 passwd 兜底）。
+                File.Delete(rec);
+                var passwd = Write(Path.Combine(dir, "fake-passwd"),
+                    "tester:x:4242:notanum:Test:/home/tester:/bin/sh\n");
+                env["PKEXEC_UID"] = "4242";
+                env.Remove("SUDO_UID");
+                env.Remove("SUDO_GID");
+                env["BUNDLER_UPDATER_PASSWD_FILE"] = passwd;
+                Assert.Equal(0, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app));
+                // gid 非数字回退 uid；passwd 家目录按降权口径进最小集。
+                Assert.Contains(
+                    $"setpriv --reuid=4242 --regid=4242 --clear-groups env HOME=/home/tester {app}",
+                    WaitRecord(rec, 2)[1]);
             }
         }
         finally { Cleanup(root); }

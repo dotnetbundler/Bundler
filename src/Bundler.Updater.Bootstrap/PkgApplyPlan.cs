@@ -49,9 +49,7 @@ internal static class PkgApplyPlan
         }
         // 日志路径同 apply 口径：建委托前按本进程 cwd 绝对化。
         var logFile = options.LogFile is { Length: > 0 } lf ? Path.GetFullPath(lf) : null;
-        var log = logFile is not null
-            ? new Action<string>(line => File.AppendAllText(logFile, line + "\n"))
-            : new Action<string>(line => Console.Out.WriteLine(line));
+        var log = BootstrapPlan.CreateLog(logFile);
         try
         {
             return Apply(options, log);
@@ -286,8 +284,9 @@ internal static class PkgApplyPlan
         "'" + value.Replace("'", "'\\''") + "'";
 
     // 会话 env 回灌：env 件逐行收 KEY=value（键必须 [A-Za-z_][A-Za-z0-9_]*，
-    // 坏行静默跳过——与 sh 支路同款过滤）；件缺省/不可读按最小集
-    // HOME+DISPLAY 处理并记日志。
+    // 坏行静默跳过——与 sh 支路同款过滤）；件缺省/非普通文件/不可读按最小集
+    // HOME+DISPLAY 处理并记日志。解析出零有效对同样退化最小集——空对内层
+    // `env` 零覆盖，会把调用方全套 env（pkexec 语境=root env）原样灌给降权 app。
     private static List<string> LoadEnvPairs(
         string? envFile, long? uid, PasswdEntry? passwd, Action<string> log)
     {
@@ -303,7 +302,11 @@ internal static class PkgApplyPlan
                         pairs.Add(line);
                     }
                 }
-                return pairs;
+                if (pairs.Count > 0)
+                {
+                    return pairs;
+                }
+                log($"bundler-updater: WARN env file '{envFile}' has no usable assignments — minimal session env");
             }
             catch (Exception)
             {
@@ -525,13 +528,47 @@ internal static class PkgApplyPlan
         }
         try
         {
-            Process.Start(BuildStartInfo(spec));
+            StartDetached(spec);
             return true;
         }
         catch (Exception)
         {
             return false;
         }
+    }
+
+    // 分离 spawn 的 stdio 必须与调用方三向断开：pkexec 语境 stdout 常是管道——
+    // 分离进程继承写端会让调用方 ReadToEnd 永等 EOF，裸继承还会把目标进程输出
+    // 串到调用方面上（sh 支路全腿 `</dev/null >/dev/null 2>&1` 同价）。
+    // POSIX 经 /bin/sh `exec "$@"` 包裹把三向钉到 /dev/null——argv 逐参透传
+    // 不经 shell 重解析；Windows 兜底腿无 shell 钉法，改接管道：stdin 立即关
+    // =对端 EOF，out/err 后台抽干到 Null——子进程不再持有调用方句柄。
+    private static void StartDetached(ExecSpec spec)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var startInfo = BuildStartInfo(spec);
+            startInfo.RedirectStandardInput = true;
+            startInfo.RedirectStandardOutput = true;
+            startInfo.RedirectStandardError = true;
+            var process = Process.Start(startInfo)!;
+            process.StandardInput.Dispose();
+            _ = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
+            _ = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
+            return;
+        }
+        var wrapped = new ExecSpec
+        {
+            FileName = "/bin/sh",
+            Arguments =
+            [
+                "-c", "exec \"$@\" </dev/null >/dev/null 2>&1",
+                "bundler-updater-spawn", spec.FileName, .. spec.Arguments,
+            ],
+            WorkingDirectory = spec.WorkingDirectory,
+            Environment = spec.Environment,
+        };
+        Process.Start(BuildStartInfo(wrapped));
     }
 
     private static ProcessStartInfo BuildStartInfo(ExecSpec spec)
