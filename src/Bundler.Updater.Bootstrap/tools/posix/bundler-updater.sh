@@ -2,7 +2,8 @@
 # bundler-updater POSIX 降级实现：与 bundler-updater apply 同协议。
 # 覆盖无 Native AOT 引导件的宿主（老 macOS/裸 POSIX 便携件场景）。
 # 安装目标是目录或单文件（AppImage 单件走文件级换包）。
-# 退出码：0 成功；2 用法错误；3 等待宿主退出超时；4 备份/换包失败（已尽力回滚）。
+# apply 退出码：0 成功；2 用法错误；3 等待宿主退出超时；4 备份/换包失败（已尽力回滚）。
+# pkg-apply 退出码：0 成功；3 参数错；4 安装失败；5 包管理器缺席；6 重启失败（安装已提交）。
 
 set -u
 
@@ -25,6 +26,8 @@ usage() {
     echo "      [--wait-pid <pid>] [--app <path>] [--backup-dir <dir|file>]" >&2
     echo "      [--keep-payload] [--rollback] [--retain-backup-to <dir>] [--log <file>] [--wait-timeout <seconds>]" >&2
     echo "      [--lock-timeout <seconds>]" >&2
+    echo "  bundler-updater.sh pkg-apply --pkg <file> --format <deb|rpm|apk> --app <path>" >&2
+    echo "      [--env-file <file>] [--rollback] [--log <file>]" >&2
 }
 
 log() {
@@ -54,6 +57,267 @@ _restart_nohup() {
     else
         (cd "$(dirname "$INSTALL_DIR")" && nohup "$APP_PATH" >/dev/null 2>&1 &)
     fi
+}
+
+# ---- pkg-apply 支路：deb/rpm/apk 本地系统包特权安装（与 AOT PkgApplyPlan 逐字同协议）。
+# 客户端经 pkexec/sudo 以 root 拉起；动词只做：包管理器前端退化链装本地包 +
+# 降权重启 --app。包管理器账本即状态——不引入 marker/锁/崩溃恢复；不验签。
+
+# 命令解析：BUNDLER_UPDATER_CMD_<TOOL> env 覆盖先行（设了即视为存在并用该路径），
+# 否则 command -v。双侧同名测试缝（stub 垫片场景指到假工具）。
+_pa_cmd() {
+    case "$1" in
+        apt-get) _pc=${BUNDLER_UPDATER_CMD_APT_GET:-} ;;
+        dpkg) _pc=${BUNDLER_UPDATER_CMD_DPKG:-} ;;
+        dnf) _pc=${BUNDLER_UPDATER_CMD_DNF:-} ;;
+        zypper) _pc=${BUNDLER_UPDATER_CMD_ZYPPER:-} ;;
+        rpm) _pc=${BUNDLER_UPDATER_CMD_RPM:-} ;;
+        apk) _pc=${BUNDLER_UPDATER_CMD_APK:-} ;;
+        setpriv) _pc=${BUNDLER_UPDATER_CMD_SETPRIV:-} ;;
+        sudo) _pc=${BUNDLER_UPDATER_CMD_SUDO:-} ;;
+        runuser) _pc=${BUNDLER_UPDATER_CMD_RUNUSER:-} ;;
+        su) _pc=${BUNDLER_UPDATER_CMD_SU:-} ;;
+        nohup) _pc=${BUNDLER_UPDATER_CMD_NOHUP:-} ;;
+        env) _pc=${BUNDLER_UPDATER_CMD_ENV:-} ;;
+        *) _pc="" ;;
+    esac
+    if [ -n "$_pc" ]; then
+        printf '%s\n' "$_pc"
+        return 0
+    fi
+    command -v "$1" 2>/dev/null
+}
+
+# 单 token POSIX 单引号转义：' → '\''（与 AOT ShQuote 同算法，su -c 串用）。
+_pa_shq() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+# 前端退化链：逐级 command -v 预检，安装失败逐级退化。_PA_PM_SEEN 记"有前端在场"——
+# 区分退出码 5（全缺席）与 4（在场全败）。
+_pa_install() {
+    _PA_PM_SEEN=0
+    case "$PA_FMT" in
+        deb)
+            # 两级恒带 DEBIAN_FRONTEND=noninteractive 与 confdef/confold——
+            # apt-get 不认裸 dpkg 旗标，经 -o Dpkg::Options 透传。
+            if _c=$(_pa_cmd apt-get) && [ -n "$_c" ]; then
+                _PA_PM_SEEN=1
+                log "bundler-updater: install '$PA_PKG' via apt-get"
+                DEBIAN_FRONTEND=noninteractive "$_c" install -y \
+                    -o "Dpkg::Options::=--force-confdef" \
+                    -o "Dpkg::Options::=--force-confold" "$PA_PKG"
+                _rc=$?
+                [ "$_rc" -eq 0 ] && return 0
+                log "bundler-updater: apt-get failed (exit $_rc) — falling back"
+            else
+                log "bundler-updater: apt-get not found — skipping"
+            fi
+            if _c=$(_pa_cmd dpkg) && [ -n "$_c" ]; then
+                _PA_PM_SEEN=1
+                log "bundler-updater: install '$PA_PKG' via dpkg"
+                DEBIAN_FRONTEND=noninteractive "$_c" -i \
+                    --force-confdef --force-confold "$PA_PKG"
+                _rc=$?
+                [ "$_rc" -eq 0 ] && return 0
+                log "bundler-updater: dpkg failed (exit $_rc) — falling back"
+            else
+                log "bundler-updater: dpkg not found — skipping"
+            fi
+            ;;
+        rpm)
+            if _c=$(_pa_cmd dnf) && [ -n "$_c" ]; then
+                _PA_PM_SEEN=1
+                log "bundler-updater: install '$PA_PKG' via dnf"
+                "$_c" install -y "$PA_PKG"
+                _rc=$?
+                [ "$_rc" -eq 0 ] && return 0
+                log "bundler-updater: dnf failed (exit $_rc) — falling back"
+            else
+                log "bundler-updater: dnf not found — skipping"
+            fi
+            if _c=$(_pa_cmd zypper) && [ -n "$_c" ]; then
+                _PA_PM_SEEN=1
+                log "bundler-updater: install '$PA_PKG' via zypper"
+                "$_c" install -y "$PA_PKG"
+                _rc=$?
+                [ "$_rc" -eq 0 ] && return 0
+                log "bundler-updater: zypper failed (exit $_rc) — falling back"
+            else
+                log "bundler-updater: zypper not found — skipping"
+            fi
+            if _c=$(_pa_cmd rpm) && [ -n "$_c" ]; then
+                _PA_PM_SEEN=1
+                log "bundler-updater: install '$PA_PKG' via rpm"
+                # --rollback 子形态：rpm 退化链末位换 --oldpackage。
+                if [ "$PA_ROLLBACK" = 1 ]; then
+                    "$_c" -U --oldpackage "$PA_PKG"
+                else
+                    "$_c" -U "$PA_PKG"
+                fi
+                _rc=$?
+                [ "$_rc" -eq 0 ] && return 0
+                log "bundler-updater: rpm failed (exit $_rc) — falling back"
+            else
+                log "bundler-updater: rpm not found — skipping"
+            fi
+            ;;
+        apk)
+            if _c=$(_pa_cmd apk) && [ -n "$_c" ]; then
+                _PA_PM_SEEN=1
+                # /etc/apk/keys 有预置公钥才免 --allow-untrusted；缺席/空一律加。
+                # BUNDLER_UPDATER_APK_KEYS_DIR 双侧同名测试缝。
+                _keys=${BUNDLER_UPDATER_APK_KEYS_DIR:-/etc/apk/keys}
+                log "bundler-updater: install '$PA_PKG' via apk"
+                if [ -d "$_keys" ] && [ -n "$(ls "$_keys" 2>/dev/null)" ]; then
+                    "$_c" add "$PA_PKG"
+                else
+                    "$_c" add --allow-untrusted "$PA_PKG"
+                fi
+                _rc=$?
+                [ "$_rc" -eq 0 ] && return 0
+                log "bundler-updater: apk failed (exit $_rc) — falling back"
+            else
+                log "bundler-updater: apk not found — skipping"
+            fi
+            ;;
+    esac
+    return 1
+}
+
+# 降权重启：uid 由 PA_UID 携来——缺席=本来就 root 直跑，按当前权限直接 spawn；
+# 在场按 setpriv → sudo → runuser → su 退化链降权拉起 --app。
+# env 一律经内层 `env K=V … app` 构造（sudo env_reset 把外层环境剥光），
+# 外层 nohup 分离——引导件退出/终端挂断不该带走新装应用（apply 腿同策略）。
+_pa_restart() {
+    [ -e "$PA_APP" ] && [ -x "$PA_APP" ] || \
+        { echo "bundler-updater: restart target '$PA_APP' is missing or not executable." >&2; return 1; }
+    _d=$(dirname "$PA_APP")
+    _nohup=$(_pa_cmd nohup)
+    [ -n "$_nohup" ] || { log "bundler-updater: nohup not found — cannot detach restart"; return 1; }
+    # 会话 env 收进函数位置参数（$@=K=V 序列）：env 件逐行过滤
+    # [A-Za-z_][A-Za-z0-9_]*= 格式；缺省/不可读按最小集 HOME+DISPLAY。
+    set --
+    if [ -n "$PA_ENV" ] && [ -r "$PA_ENV" ]; then
+        while IFS= read -r _l || [ -n "$_l" ]; do
+            case "$_l" in
+                [A-Za-z_]*=*)
+                    _k=${_l%%=*}
+                    case "$_k" in
+                        *[!A-Za-z0-9_]*|"") ;;
+                        *) set -- "$@" "$_l" ;;
+                    esac ;;
+            esac
+        done < "$PA_ENV"
+    else
+        if [ -n "$PA_ENV" ]; then
+            log "bundler-updater: WARN cannot read env file '$PA_ENV' — minimal session env"
+        else
+            log "bundler-updater: no --env-file — restart uses minimal session env"
+        fi
+        # 降权场景 HOME 必须是目标用户的家目录（root 的 $HOME 不可回灌）；
+        # 直跑场景才按本进程 HOME。
+        if [ -n "$PA_UID" ]; then _h=$PA_HOME; else _h=${HOME:-}; fi
+        [ -n "$_h" ] && set -- "$@" "HOME=$_h"
+        [ -n "${DISPLAY:-}" ] && set -- "$@" "DISPLAY=$DISPLAY"
+    fi
+    if [ -z "$PA_UID" ]; then
+        log "bundler-updater: restart '$PA_APP'"
+        (cd "$_d" && "$_nohup" env "$@" "$PA_APP" >/dev/null 2>&1 &) && return 0
+        return 1
+    fi
+    log "bundler-updater: restart '$PA_APP' as uid $PA_UID"
+    if _c=$(_pa_cmd setpriv) && [ -n "$_c" ]; then
+        (cd "$_d" && "$_nohup" "$_c" --reuid="$PA_UID" --regid="$PA_GID" \
+            --clear-groups env "$@" "$PA_APP" >/dev/null 2>&1 &) && return 0
+        log "bundler-updater: WARN spawn via '$_c' failed — trying next"
+    fi
+    if _c=$(_pa_cmd sudo) && [ -n "$_c" ]; then
+        (cd "$_d" && "$_nohup" "$_c" -u "#$PA_UID" env "$@" "$PA_APP" >/dev/null 2>&1 &) && return 0
+        log "bundler-updater: WARN spawn via '$_c' failed — trying next"
+    fi
+    if [ -n "$PA_NAME" ]; then
+        if _c=$(_pa_cmd runuser) && [ -n "$_c" ]; then
+            (cd "$_d" && "$_nohup" "$_c" -u "$PA_NAME" -- env "$@" "$PA_APP" >/dev/null 2>&1 &) && return 0
+            log "bundler-updater: WARN spawn via '$_c' failed — trying next"
+        fi
+        if _c=$(_pa_cmd su) && [ -n "$_c" ]; then
+            _sc="exec env"
+            for _kv do _sc="$_sc $(_pa_shq "$_kv")"; done
+            _sc="$_sc $(_pa_shq "$PA_APP")"
+            (cd "$_d" && "$_nohup" "$_c" -s /bin/sh -c "$_sc" "$PA_NAME" >/dev/null 2>&1 &) && return 0
+            log "bundler-updater: WARN spawn via '$_c' failed — trying next"
+        fi
+    fi
+    log "bundler-updater: cannot drop privileges to uid $PA_UID — no setpriv/sudo/runuser/su available"
+    return 1
+}
+
+pkg_apply() {
+    PA_PKG=""; PA_FMT=""; PA_APP=""; PA_ENV=""; PA_ROLLBACK=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --rollback) PA_ROLLBACK=1; shift ;;
+            --pkg|--format|--app|--env-file|--log)
+                [ $# -ge 2 ] || { echo "bundler-updater: option '$1' requires a value." >&2; exit 3; }
+                case "$1" in
+                    --pkg) PA_PKG=$2 ;;
+                    --format) PA_FMT=$2 ;;
+                    --app) PA_APP=$2 ;;
+                    --env-file) PA_ENV=$2 ;;
+                    --log) LOG_FILE=$2 ;;
+                esac
+                shift 2 ;;
+            *) echo "bundler-updater: unknown option '$1'." >&2; pkg_usage; exit 3 ;;
+        esac
+    done
+    [ -n "$PA_PKG" ] || { echo "bundler-updater: --pkg is required." >&2; exit 3; }
+    [ -n "$PA_APP" ] || { echo "bundler-updater: --app is required." >&2; exit 3; }
+    case "$PA_FMT" in
+        deb|rpm|apk) ;;
+        *) echo "bundler-updater: --format must be deb, rpm or apk." >&2; exit 3 ;;
+    esac
+    [ -f "$PA_PKG" ] || { echo "bundler-updater: package '$PA_PKG' does not exist." >&2; exit 3; }
+    case "$PA_PKG" in /*) ;; *) PA_PKG="$PWD/$PA_PKG" ;; esac
+    case "$PA_APP" in /*) ;; *) PA_APP="$PWD/$PA_APP" ;; esac
+    case "$PA_ENV" in "") ;; /*) ;; *) PA_ENV="$PWD/$PA_ENV" ;; esac
+    case "$LOG_FILE" in "") ;; /*) ;; *) LOG_FILE="$PWD/$LOG_FILE" ;; esac
+
+    # 原用户 uid：PKEXEC_UID→SUDO_UID——都不在=本来就 root 直跑，按当前权限 spawn。
+    PA_UID=""; PA_GID=""; PA_NAME=""; PA_HOME=""
+    case "${PKEXEC_UID:-}" in ''|*[!0-9]*) ;; *) PA_UID=$PKEXEC_UID ;; esac
+    [ -n "$PA_UID" ] || case "${SUDO_UID:-}" in ''|*[!0-9]*) ;; *) PA_UID=$SUDO_UID ;; esac
+    if [ -n "$PA_UID" ]; then
+        # passwd 查名/gid/家目录：runuser/su 只收用户名；gid 兜底链 SUDO_GID→passwd→uid。
+        # BUNDLER_UPDATER_PASSWD_FILE 双侧同名测试缝。
+        _pw=$(awk -F: -v u="$PA_UID" 'NF>=7 && $3==u {print $1":"$4":"$6; exit}' \
+            "${BUNDLER_UPDATER_PASSWD_FILE:-/etc/passwd}" 2>/dev/null || true)
+        if [ -n "$_pw" ]; then
+            PA_NAME=${_pw%%:*}
+            _rest=${_pw#*:}
+            PA_GID=${_rest%%:*}
+            PA_HOME=${_rest#*:}
+        fi
+        case "${SUDO_GID:-}" in ''|*[!0-9]*) ;; *) PA_GID=$SUDO_GID ;; esac
+        [ -n "$PA_GID" ] || PA_GID=$PA_UID
+    fi
+
+    if _pa_install; then
+        _pa_restart && exit 0
+        exit 6
+    fi
+    if [ "$_PA_PM_SEEN" = 1 ]; then
+        echo "bundler-updater: package install failed via all available frontends." >&2
+        exit 4
+    fi
+    echo "bundler-updater: no package manager available for format '$PA_FMT'." >&2
+    exit 5
+}
+
+pkg_usage() {
+    echo "Usage:" >&2
+    echo "  bundler-updater.sh pkg-apply --pkg <file> --format <deb|rpm|apk> --app <path>" >&2
+    echo "      [--env-file <file>] [--rollback] [--log <file>]" >&2
 }
 
 # 同卷 mv=rename 原子就位（含进程被杀语义）；跨卷 mv 退化为 copy+unlink，
@@ -141,7 +405,11 @@ restore_move() {
     return "$_rm_rc"
 }
 
-[ "${1:-}" = "apply" ] || { usage; exit 2; }
+case "${1:-}" in
+    apply) ;;
+    pkg-apply) shift; pkg_apply "$@" ;;
+    *) usage; exit 2 ;;
+esac
 shift
 
 while [ $# -gt 0 ]; do

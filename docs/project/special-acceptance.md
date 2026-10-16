@@ -106,5 +106,6 @@
 | `.app` 默认处理器切换/多 handler | 文件/URL scheme 在默认应用界面切换处理器、多 handler 共存场景的实际唤起观察 | LaunchServices 记录、唤起日志 | `lsregister`+`open` 唤起已自动化；切换处理器属 GUI 用户动作只能人工 |
 | UPDATE `open -n` 桌面重启语义 | 真实 macOS 桌面会话下 `open -n` 重启应用的 Dock 图标/聚焦/路径观察 | 桌面会话观察记录 | 现有断言止于 `open` 返回码与进程存活（无头环境） |
 | deb systemd 生命周期补验 | 真实 systemd 宿主补验 `systemctl status`/journal、`-r` 后 unit 清理 | status/journal/清理记录 | 容器腿无 systemd；unit 落位、postinst `daemon-reload` 合成与真实宿主 `enable --now` 已验（2026-09-28 Ubuntu 记录，原 LINUX-DEB-OI-04） |
+| `pkg-apply` 真 root 系统包链 | 可丢弃 VM（debian/fedora/alpine 各一）上经 pkexec/sudo 真提权跑 `bundler-updater pkg-apply` 装真 `.deb`/`.rpm`/`.apk`：包管理器账本落位、`--app` 以原用户降权重启、rc=0；再演 `--rollback` 回放旧包 | 三类宿主实装记录（退出码/`dpkg -l`\|`rpm -q`\|`apk info` 账本/重启进程 uid 归属） | 命令选择/退化序/退出码/降权构造/env 回灌已由 stub 垫片非特权全链实证（unit 探针族 + integration 奇偶族 + MSYS sh 腿）；真 root 提权与真包管理器写账本必须可丢弃 VM |
 | s390x/ppc64le UnixFileTypes ABI 偏移 | 在 s390x/ppc64le 宿主（真机或 QEMU 整机模拟）跑 `UnixFileTypes` stat 偏移分支：st_mode/st_size/st_nlink 读值正确 | 对应架构宿主上类型读取断言记录 | 私有偏移表在 amd64/arm64 宿主已断言；s390x/ppc64le=24 偏移分支与 macOS `stat$INODE64` 回退、老 glibc 缺席放行无宿主可断言 |
 | Windows zip 符号链接还原 | Windows 宿主（开开发者模式或管理员）解含符号链接的 zip，断言链接还原语义 | Windows 侧链接还原记录 | POSIX 侧 `ArchiveExtractor`/xattr 腿已验；`WindowsLinks` 宿主差件需 Windows 符号链接权限，普通 CI 宿主不开开发者模式时创建被拒属平台预期 |

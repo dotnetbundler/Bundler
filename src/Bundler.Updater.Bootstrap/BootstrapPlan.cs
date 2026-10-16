@@ -29,6 +29,12 @@ internal static class BootstrapPlan
 
     internal static int Run(string[] args)
     {
+        // pkg-apply 支路：deb/rpm/apk 系统包特权安装——独立协议与退出码面
+        //（0/3/4/5/6），不进 apply 的三段式换包语义。
+        if (args.Length > 0 && args[0] == "pkg-apply")
+        {
+            return PkgApplyPlan.Run(args);
+        }
         var options = Parse(args);
         // 日志路径必须在建委托之前按本进程 cwd 绝对化——委托闭包捕获的是字面
         // 路径，绝对化发生在 Apply 内部时写入侧仍拿相对拼写，换包后工作目录

@@ -120,6 +120,7 @@ tests/
 | `BootstrapPlan.Run` 参数面 | Unit | 动词/参数解析、缺参报错、退出码 |
 | `Apply` 交换语义 | Integration | 提权/非提权目录换装；写失败回滚；`MacAppGate` 剥离 .app 语义；`CanonicalPath`；`ForceManagedCopy`/`IoFaultProbe`/`FreeSpaceProbe` 三缝 |
 | `Program.Main` | Integration | AOT 件与 sh 降级件行为奇偶 |
+| `pkg-apply` 动词 | Unit + Integration | deb/rpm/apk 前端退化链命令选择序与 argv/env 形、`--rollback`（rpm `--oldpackage`）、apk 公钥闸 `--allow-untrusted`、降权链 `setpriv→sudo→runuser→su` 构造、passwd 查名、`--env-file` 回灌+最小集、退出码 0/3/4/5/6 分类（含 rc6=安装已提交重启失败）；`CommandProbe`/`EnvProbe`/`ExecProbe`/`SpawnProbe` 四缝（AOT 腿）+ `BUNDLER_UPDATER_CMD_*`/`PASSWD_FILE`/`APK_KEYS_DIR` env 缝（双侧同名，sh 腿实跑 stub 垫片） |
 
 ### 3.8 十格式后端（Api + Integration + Unit 内件）
 
