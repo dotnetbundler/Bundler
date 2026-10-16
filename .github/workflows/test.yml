@@ -66,10 +66,21 @@ jobs:
               files = glob.glob('**/*', recursive=True)
           hits = []
           for f in files:
-              # shell 脚本全量 + workflow run: 内联 bash（同词法同隐患）——ps1/cmd 词法不同不在此列。
+              # shell 脚本全量（扩展名或 shebang 嗅探——postinstall 类无扩展名脚本）+
+              # workflow run: 内联 bash（同词法同隐患）；ps1/cmd 词法不同不在此列。
               nf = f.replace(os.sep, '/')
-              if not f.endswith(('.sh', '.bash', '.zsh')) and \
-                 not (nf.startswith('.github/workflows/') and f.endswith(('.yml', '.yaml'))):
+              if f.endswith(('.sh', '.bash', '.zsh')):
+                  pass
+              elif nf.startswith('.github/workflows/') and f.endswith(('.yml', '.yaml')):
+                  pass
+              elif os.path.isfile(f):
+                  try:
+                      she = open(f, encoding='utf-8', errors='replace').readline()
+                  except OSError:
+                      continue
+                  if not re.match(r'#!.*\b(ba|z|da)?sh\b', she):
+                      continue
+              else:
                   continue
               for i, line in enumerate(open(f, encoding='utf-8', errors='replace'), 1):
                   for m in pat.finditer(code_prefix(line)):
