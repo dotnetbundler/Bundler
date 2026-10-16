@@ -35,7 +35,8 @@
 - **验签**：与现状同一 ECDSA 链；rpm GPG/apk RSA 等包管理器自带签名层是**正交层**，不参与更新链信任（信任根仍是烙入身份的 `publicKey`）。
 - **预检三件套**：① `bundler-update.json` 旁车在场；② `command -v` 探得对应包管理器；③ 账本归属双检——`dpkg -s <pkg>`/`rpm -q <pkg>`/`apk info -e <pkg>` 确认 `pkg` 名确由该包管理器登记。
   缺任一→确定性拒绝"不参与更新"，防 repack/手动铺文件造成的漂移更新（Tauri #3595 类坑）。
-- **回滚留存**：包管理器账本只记安装事实、不保留包文件，留存责任在客户端——Apply 前把本次下载到的新包与（若可得）当前安装版本对应工件存入用户空间 retention 目录，供 `--rollback` 重放；非 Bundler 链首装或 retention 无留存旧包时，`--rollback` 确定性拒绝报"无留存包可回滚"，不空转。
+- **回滚留存**：包管理器账本只记安装事实、不保留包文件，留存责任在客户端——Apply 前把本次下载到的新包与（若可得）当前安装版本对应工件存入用户空间 retention 目录，供 `--rollback` 重放。
+非 Bundler 链首装或 retention 无留存旧包时，`--rollback` 确定性拒绝报"无留存包可回滚"，不空转。
 - **提权三级退化链**：`pkexec` → `zenity`/`kdialog` 询问密码 + `sudo -S` → 裸 `sudo`；任一级拉起 `bundler-updater pkg-apply` 后客户端退出。
 
 ### 2.3 引导件侧（root，新动词 `pkg-apply`）
@@ -43,15 +44,19 @@
 只做两件有意义的事：
 
 - **装本地包**：命令前端优先退化链——deb：`apt-get install -y ./x.deb` → `dpkg -i`；rpm：`dnf install -y ./x.rpm` → `zypper install` → `rpm -U`；apk：`apk add ./x.apk`（公钥未预置 `/etc/apk/keys/` 时 `--allow-untrusted`，标 TOFU 边界——信任已由 ECDSA 验签建立，包管理器签名层仅作运输完整性）。
-  dpkg 腿恒带 `DEBIAN_FRONTEND=noninteractive --force-confdef --force-confold`——职责仅 conffile 静默（防无 tty 环境交互挂死）；`dpkg -i` 本就不解析依赖，不存在"防依赖不解析"的旗标功效。
-  依赖解析归退化链首腿 `apt-get install` 管；裸 `dpkg -i` 退化腿遇缺依赖会留 unconfigured 态（归 `dpkg --configure -a`/`apt-get -f install` 原生机制修），故更新包**不得新增 Depends**——确需新增属依赖变更场景，登记外部验收/文档边界（`docs/project/special-acceptance.md`）。
+  dpkg 腿恒带 `DEBIAN_FRONTEND=noninteractive --force-confdef --force-confold`——职责仅 conffile 静默（防无 tty 环境交互挂死）。
+  `dpkg -i` 本就不解析依赖，不存在"防依赖不解析"的旗标功效。
+  依赖解析归退化链首腿 `apt-get install` 管。
+  裸 `dpkg -i` 退化腿遇缺依赖会留 unconfigured 态（归 `dpkg --configure -a`/`apt-get -f install` 原生机制修），故更新包**不得新增 Depends**——确需新增属依赖变更场景，登记外部验收/文档边界（`docs/project/special-acceptance.md`）。
 - **降权重启**：装完由 `PKEXEC_UID`/`SUDO_UID` 取回原始用户 → `setpriv`/`sudo -u` 降权 + 回灌客户端导出的会话 env 件（`DISPLAY`/`XAUTHORITY`/`DBUS_SESSION_BUS_ADDRESS` 等）→ 以原权限拉起 `--app`；不以 root 重启应用。
 - 引导件 musl 静态件注入 `/usr/lib/<pkg>/`（与 zip/app 注入同构）；nsis/msi"不注入引导件"先例不适用此处——installer-replay 族的执行体仍是引导件编排安装命令。
 
 ### 2.4 回滚
 
 `--rollback` = 与更新同路径提权、同退化链重放留存旧包，逐腿按各包管理器降级语义放行。
-deb 首腿 `apt-get install --allow-downgrades`（退化 `dpkg -i` 原生允许降级）；rpm 腿 `dnf downgrade` 装旧版本地件（`install` 装旧版不放行降级）、`zypper install --force` 或旧包直装（直装默认走解题确认，非交互形态存疑，标外部待验收）、退化 `rpm -U` 加 `--oldpackage`；apk 降级行为未实测，登记外部待验收（`docs/project/special-acceptance.md`）。
+deb 首腿 `apt-get install --allow-downgrades`（退化 `dpkg -i` 原生允许降级）。
+rpm 腿 `dnf downgrade` 装旧版本地件（`install` 装旧版不放行降级）、`zypper install --force`/`--oldpackage` 或旧包直装（直装默认走解题确认，非交互形态存疑，标外部待验收）、退化 `rpm -U` 加 `--oldpackage`。
+apk 降级行为未实测，登记外部待验收（`docs/project/special-acceptance.md`）。
 
 ### 2.5 身份与清单
 
