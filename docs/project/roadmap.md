@@ -111,9 +111,8 @@
 
 纯粹"可能以后有用"、单一框架运行时需求或无法定义所有权的依赖安装，不进入实现路线。
 
-已登记待做项（测试重写收口期裁决，详见 `PROJECT_CONTEXT.md` §5）：
-
-- **linux 引导件收敛 musl 静态单件**：`StaticExecutable` musl-static-pie 件实测 glibc/musl 双宿主通吃、消 glibc 版本地板、随包每架构省 ~1.2MB；前置 `PosixRename` 静态兼容修复已落地（PR #98），无阻塞。
+已登记待做项（测试重写收口期裁决，详见 `PROJECT_CONTEXT.md` §5）：当前无——
+"linux 引导件收敛 musl 静态单件"已随 PR #100 完成归档移出（musl 静态件双宿主通吃、glibc 件已删）。
 
 已裁决不予登记的类别（记录理由，防重复提案）：
 

@@ -15,6 +15,9 @@ FMT_ONLY=""
 for KV in "$@"; do
     [ "$KV" = "--archive-format-only" ] && { FMT_ONLY=1; continue; }
     K="${KV%%=*}"; V="${KV#*=}"
+    # 空值拒绝：app= 之类会把腿目录静默扩成工件根目录（"$DIR/" 下全件被当腿内
+    # 容消费）；显式跳过用 -。
+    [ -n "$V" ] || { echo "腿映射值为空（显式跳过用 -）：$KV" >&2; exit 1; }
     case "$K" in
         app)     DIR_APP="$V" ;;
         dmg)     DIR_DMG="$V" ;;
@@ -40,7 +43,9 @@ EXTRA=$(cd "$DIR" && comm -13 \
 [ -z "$EXTRA" ] || { echo "清单外文件: $EXTRA" >&2; exit 1; }
 
 FAILED=""
+RAN=0   # 实际执行腿数——全 LEG-SKIP 的零断言全绿由末段防线判败
 run_leg(){ local name="$1"; shift
+    RAN=$((RAN+1))
     if "$@"; then echo "[LEG-PASS] $name"; else echo "[LEG-FAIL] $name"; FAILED="$FAILED $name"; fi }
 leg_dir(){ case "$1" in                 # 腿名 → 工件内子目录
     app) echo "$DIR_APP";; dmg) echo "$DIR_DMG";;
@@ -169,7 +174,8 @@ if leg_on archive; then
                 [ -e "$A" ] || continue
                 E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
                 unzip -q "$A" -d "$E"
-                TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX)
+                # __MACOSX 目录与 ._* AppleDouble 旁枝同是 macOS 元数据——不计入顶层断言
+                TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX ! -name '._*')
                 [ "$(printf '%s' "$TOPS" | grep -c .)" -eq 1 ]
                 D=$(printf '%s' "$TOPS" | head -1)
                 [ -d "$D" ]
@@ -194,7 +200,8 @@ if leg_on archive; then
                 [ -e "$A" ] || continue
                 E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
                 tar -xzf "$A" -C "$E"
-                TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX)
+                # 同 zip 腿：__MACOSX 目录与 ._* AppleDouble 旁枝豁免顶层计数
+                TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX ! -name '._*')
                 [ "$(printf '%s' "$TOPS" | grep -c .)" -eq 1 ]
                 D=$(printf '%s' "$TOPS" | head -1)
                 [ -d "$D" ]
@@ -213,5 +220,8 @@ if leg_on archive; then
     fi
 fi
 
+# 零腿全绿防线：四条腿全被映射 "-"（如 --archive-format-only 叠加 archive=-）时
+# 零断言却走到这里全绿——组合静默须判败。
+[ "$RAN" -gt 0 ] || { echo "无任何腿执行（全 LEG-SKIP）" >&2; exit 1; }
 if [ -n "$FAILED" ]; then echo "失败腿:$FAILED" >&2; exit 1; fi
 echo "=== consume-macos 全绿 ==="

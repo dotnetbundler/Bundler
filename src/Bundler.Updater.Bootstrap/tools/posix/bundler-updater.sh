@@ -438,15 +438,31 @@ fi
 # 崩溃恢复、printf> 顺链写穿污染保护区外目标（与 AOT DeleteLinkNodeIfPresent 同义）。
 [ -L "$MARKER" ] && rm -f "$MARKER"
 # 崩溃恢复先于存在性检查：上轮死在备份与换包之间时安装目标可能缺失/半成品，先还原。
+# marker 内容分流（与 AOT 侧同构）：'rollback in progress'=回滚中崩溃——复制还原，
+# 备份保留在备份槽可重试；'swap in progress'/其他拼写（旧版引导件 marker）=换包语义——
+# 维持移动还原（备份移回安装位即耗尽）。
 RECOVERED=0
 if [ -f "$MARKER" ]; then
-    log "bundler-updater: interrupted swap detected, restoring backup first"
+    case "$(cat "$MARKER" 2>/dev/null || true)" in
+        "rollback in progress") MARKER_KIND=rollback ;;
+        *) MARKER_KIND=swap ;;
+    esac
+    log "bundler-updater: interrupted ${MARKER_KIND} detected, restoring backup first"
     if [ -f "$BACKUP_DIR" ]; then
         rm -f "$INSTALL_DIR"
-        move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+        if [ "$MARKER_KIND" = rollback ]; then
+            cp -f "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+        else
+            move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+        fi
     elif [ -d "$BACKUP_DIR" ]; then
         rm -rf "$INSTALL_DIR"
-        move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+        if [ "$MARKER_KIND" = rollback ]; then
+            mkdir -p "$INSTALL_DIR" || exit 4
+            cp -a "$BACKUP_DIR"/. "$INSTALL_DIR"/ || { echo "bundler-updater: rollback copy failed." >&2; exit 4; }
+        else
+            move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
+        fi
     else
         { echo "bundler-updater: swap marker exists but backup missing — cannot recover." >&2; exit 4; }
     fi
@@ -465,7 +481,11 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
         [ "$RECOVERED" = 1 ] && { log "bundler-updater: crash recovery already restored the backup"; exit 0; }
         [ -f "$BACKUP_DIR" ] || { echo "bundler-updater: no rollback backup at '$BACKUP_DIR'." >&2; exit 4; }
         log "bundler-updater: rollback '$BACKUP_DIR' → '$INSTALL_DIR'"
+        # 回滚在动安装目标前同样写 marker（内容与 swap 区分）：复制中途崩溃时
+        # 恢复路径按 'rollback' 复制还原——备份保留可重试，故失败不复位 marker。
+        printf 'rollback in progress' >"$MARKER" || exit 4
         cp -f "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback copy failed." >&2; exit 4; }
+        rm -f "$MARKER"
         [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
         log "bundler-updater: done"
         exit 0
@@ -547,9 +567,14 @@ if [ "$ROLLBACK" = 1 ]; then
         echo "bundler-updater: no rollback backup at '$BACKUP_DIR'." >&2; exit 4
     fi
     log "bundler-updater: rollback '$BACKUP_DIR' → '$INSTALL_DIR'"
+    # 回滚在删安装目录前同样写 marker（内容与 swap 区分）：崩溃窗口=备份完整
+    # 而安装位缺失/半成品——恢复路径按 'rollback' 复制还原（备份保留可重试），
+    # 故失败不复位 marker。
+    printf 'rollback in progress' >"$MARKER" || exit 4
     rm -rf "$INSTALL_DIR" || exit 4
     mkdir -p "$INSTALL_DIR" || exit 4
     cp -a "$BACKUP_DIR"/. "$INSTALL_DIR"/ || { echo "bundler-updater: rollback copy failed." >&2; exit 4; }
+    rm -f "$MARKER"
     [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
     log "bundler-updater: done"
     exit 0

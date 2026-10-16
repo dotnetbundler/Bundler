@@ -1,7 +1,7 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-10-15
-> 当前分支：`main`（重写链顶 `test-rewrite/docs`，PR #90–#97 stacked 待合）
+> 当前分支：`main`（测试重写链 PR #90–#97 及收口修复链 #98–#104 均已合入，无 stacked 待合）
 > 当前包版本：`0.1.0-alpha.103`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词（别称仅输入归一，产物名用各生态词），契约与全产物名目录见 `docs/design/targets.md`**
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/design/formats/` 单文档只留设计决策、语义契约与能力状态
@@ -72,9 +72,9 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 ## 3. 最近验证
 
 当前基线：`main@85b6f38`（`0.1.0-alpha.103`）——全项目重构链 PR #82–#88 已全部合入：`ToolRunner` 统一进程执行、`Hashes`/`Gzip` 收编、`PayloadSource` 三包枚举共享、`ToolCache` 泛化并入 AppImage（默认缓存根统一为 `DotNetBundler/tools`，弃 `XDG_CACHE_HOME`）、`FileTree` 树复制收敛、文档同步与 Tauri/上游产品参照框架移除。
-**测试体系重写链 PR #90–#97 全部 open 未合**（stacked 基：#91→main、#92→skeleton、#93→unit、#94→api、#95→integration、#96→package、#97→ci），链顶为 `test-rewrite/docs` 分支头（verify 实证内容 `7909ffe`，其后仅 docs 提交）。
-**verify 收口实证（判据经裁决收敛为"链顶同内容一次全绿"）**：run `38847618076`（2026-10-16，跑在临时探针分支 `dispatch-probe-test@44af979`——内容为 `7909ffe` + 逐字拷贝 `verify.yml` 的 `probe2.yml` shim，为免污染主 workflow 的 dispatch 通道，探针分支用后已删）**36 腿全绿**——tests 六宿主矩阵 + produce×6 + consume 九配对（自消×6 + WOW64 `win-arm←win-x64` + Rosetta `mac-arm←mac-intel` + universal x64 切片 `mac-intel←mac-arm`）+ manual-auto×6 + universal 产/消。
-更早证据轮 `38825129500`（同拓扑前身）36/36 绿、首轮收口 run `38833688512` 抓出 windows-11-arm runner 网络劣化（NuGet restore 连接挂死 10min×2 + artifact 上传步死寂 31min 后自愈）——据此 `RestoreWithRetry` 改 3min×4 短超时换枪（7909ffe）、fixture 统一 `NuGetAudit=false` 消可选网络往返。
+**测试体系重写链 PR #90–#97 已全部合入 `main`**（原 stacked 基：#91→main、#92→skeleton、#93→unit、#94→api、#95→integration、#96→package、#97→ci），链顶 `test-rewrite/docs` 分支头（verify 实证内容 `7909ffe`，其后仅 docs 提交）。
+**verify 收口实证（判据经裁决收敛为"链顶同内容一次全绿"）**：run `38847618076`（2026-10-16，跑在临时探针分支 `dispatch-probe-test@44af979`——内容为 `7909ffe` + 逐字拷贝 `verify.yml` 的 `probe2.yml` shim，为免污染主 workflow 的 dispatch 通道，探针分支用后已删）**30 腿全绿**——tests 六宿主矩阵×6 + produce×6 + consume 九配对（自消×6 + WOW64 `win-arm←win-x64` + Rosetta `mac-arm←mac-intel` + universal x64 切片 `mac-intel←mac-arm`）+ manual-auto×6 + universal 产/消×3（该轮尚无跨 OS 归档交换腿；现 verify consume 矩阵已扩为 15 配对）。
+更早证据轮 `38825129500`（同拓扑前身）30/30 绿、首轮收口 run `38833688512` 抓出 windows-11-arm runner 网络劣化（NuGet restore 连接挂死 10min×2 + artifact 上传步死寂 31min 后自愈）——据此 `RestoreWithRetry` 改 3min×4 短超时换枪（7909ffe）、fixture 统一 `NuGetAudit=false` 消可选网络往返。
 verify 再早 run `38678818534`/`38687565528`/`38692708521`/`38697374256` 的宿主瞬态处置（where.exe 探测超时误判、ctor 内 Skip 误报、NuGet 挂死有界重试、AppImage 双腿各验、dmg EXIT trap 防滞留）均已收编；HelloBundlerApp 字面样品链经裁决不收编（fixture 链等价覆盖，留 Manual 验收面）。
 收口期增补：`aot.yml` 更名 `produce-bootstrap.yml` 并扩为全 RID 产件流（linux/musl x86_64+aarch64、macos 双架构+fat universal 工件、win 三架构；五腿 dispatch `38754749689` 实证全绿）；musl 件按实证改 `-static-pie` 静态产（`StaticExecutable=true`+`LinkerFlavor=lld`，产物 glibc/musl 通吃；bfd 链接 static-pie 会崩故 lld 必需；产件走 alpine SDK 容器——glibc 宿主直产 musl 缺 musl target 的 GCC crt 探测路径，arm 镜像实证两次失败，x64 镜像碰巧可产但不可赌）；
 shell 变量邻接守卫进 test.yml select 前置门（`$VAR`+非 ASCII 在部分 locale 下被拼进变量名炸 set-u——`consume-macos.sh` LEG-SKIP 首踩实证，lint 扫 .sh/shebang/workflow run 内联，bash 词法注释判定）；
