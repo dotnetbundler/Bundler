@@ -33,7 +33,11 @@
 - musl 放通 zip/targz/alpineapk/appimage、deb/rpm 拒绝、glibc 目标拒绝 alpineapk 的门禁矩阵断言。
 - `alpineapk` 与其他格式混排扇出；CLI/bundler.json/API/NuGet 全接线；AOT 二进制内嵌产 apk（IL2026 干净）。
 
-外部待验收：签名公钥在目标机的分发（供方运维，非产物语义）；真机观感。
+计划实现（UPDATE 系统包扩展阶段）：
+
+- 自更新走 installer-replay：客户端 ECDSA 验签 + `apk info -e` 账本归属双检预检，经三级提权链拉起 `bundler-updater pkg-apply`，由引导件 `apk add ./x.apk` 装本地包（公钥未预置时 `--allow-untrusted`，TOFU 边界）、降权重启；契约见 `docs/design/update.md` §2。
+
+外部待验收：签名公钥在目标机的分发（供方运维，非产物语义）；真机观感；UPDATE 链 `apk add` 降级语义（登记 `docs/project/special-acceptance.md`）。
 
 ## 4. 明确拒绝 / 不适用
 

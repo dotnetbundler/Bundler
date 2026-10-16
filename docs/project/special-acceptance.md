@@ -82,7 +82,7 @@
 | 生产 GPG 密钥流程 | 真实开发者 GPG 密钥给 rpm/AppImage 签名 + 公钥分发/吊销流程演练 | 生产密钥签名+分发/吊销记录 | `gpg-production.sh --self-contained`（临时密钥全链签名+验签）收编进 `verify` ubuntu 腿跑绿；真实开发者密钥分发/吊销仍挂本表 |
 | UPDATE 真实发布管线 | 真实通道 `BundlerUpdateFeed` 指向公网静态托管，HelloBundlerApp 走 pack→安装→Check/Download/Apply 全链 | 端到端狗食记录 | 静态托管免费（GitHub Pages 等）；需用户决定托管并保管 ECDSA 私钥 |
 | UPDATE 公网/CDN Range 行为 | 差分在真实公网/CDN 上的 HTTP Range 行为记录 | 公网腿 Range 响应与复用率记录 | 回环 206 已实证；部分 CDN 对 Range 有缓存语义差异 |
-| mac quarantine 首启 | `.app` 经真实分发渠道（公网/内网下载）产生 quarantine 首启场景 | 下载-首启观察记录 | quarantine xattr 标记落位模拟腿已一次性 CI 跑绿（run 37892544275）；真实下载首启弹窗观察仍挂本表 |
+| mac quarantine 首启 | `.app` 经真实分发渠道（公网/内网下载）产生 quarantine 首启场景 | 下载-首启观察记录 | quarantine xattr 标记落位模拟腿已一次性 CI 跑绿（run 37892544275）；macos-26 起模拟打标不再持久（见 B 表"macOS 26+ quarantine 可写宿主"）；真实下载首启弹窗观察仍挂本表 |
 | NSIS 22 语言母语审校 | 内置 22 语言文案母语/专业审校，阿拉伯语/波斯语重点 RTL 布局，代表性缩放下截图 | 母语审校意见+RTL/DPI 截图 | 机械层已全净（键集逐位一致、零条与英文同）；语言准确性、地区术语、截断只能真人 |
 | MSI 本地化审校+辅助功能 | 支持语言集 UI、缩放和可访问性检查 | 审校与可访问性记录 | 同上需真人 |
 | MSI 对话框交互腿 | Browse 对话框、范围外路径触发 `InvalidDirDlg`、`ADDLOCAL` Feature 选择交互、启动勾选生效、取消与修复（含缺源修复提示）、位图显示、缩放/辅助功能、per-machine UAC 交互安装 | 真实交互 UI 环境记录 | 需真实 Windows 桌面交互；许可/InstallDir/Install/Finish 流转已自动化 |
@@ -94,6 +94,7 @@
 | 项 | 要做什么 | 完成证据 | 当前卡点/已有覆盖 |
 | --- | --- | --- | --- |
 | Intel Mac / Rosetta 启动观感 | `macos-x86_64` `.app`/`.dmg`/`.pkg` 在 Intel/Rosetta 宿主的启动观感核对 | 观感记录 | `macos-26-intel` CI 腿与 `macos-26` arm64+Rosetta 腿的挂载/安装/启动断言已全绿；剩观感人工 |
+| macOS 26+ quarantine 可写宿主 | 在 `com.apple.quarantine` 可写回的 macOS 宿主（macOS ≤15 或未被限制的环境）复跑五条打标腿：MacAppGate 剥标（unsigned-both、same-team 两腿）、`.app` 更新链 e2e 剥标断言（全链照跑、仅打标面条件化）、DMG quarantine 跨卷传播、Gatekeeper 观察腿 | 五条腿在可写宿主的跑绿记录 | macos-26 CI 实证受保护 xattr 对测试进程全写入面不持久化（`xattr -w` CLI 与裸 setxattr 同样 rc=0 但 getxattr 读不回，verify run 38914231566）；各腿已接 `TrySetQuarantineTree`/`TrySetQuarantine` 写+读回探测，写失败或读不回即诚实 Skip（e2e 腿全链照跑、仅剥标断言按探测结果条件化）——macos-26 上为尽力腿，真实剥标/传播断言待可写宿主验收 |
 | 干净 macOS 宿主矩阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg`/`.pkg`；含低于 `LSMinimumSystemVersion` 的旧版本宿主拒跑断言；顺带在无 `actool` 宿主构建 `.app` 验证降级分支（警告不阻塞） | 挂载/EULA 弹窗/拖放安装首启记录、拒跑提示、降级警告记录 | 现宿主有开发工具链；云 mac 实例按天可租 |
 | 干净 Windows 10/11 | WiX 自身依赖边界（无 .NET SDK 仅 candle/light 编译）、独立 VM 复跑安装/卸载、Win7 记 Framework 缺失边界 | 各宿主构建/安装/卸载记录 | 非干净 Windows 11 x64 已有证据；干净宿主未测 |
 | 提权/UAC Windows | NSIS per-machine 安装/卸载与 journal ACL 取证、预建父目录所有权/继承；MSI current-user/per-machine 权限差异；UPDATE 引导件在 `Program Files` 提权目录的写权限与 UAC 交互 | `icacls`/HKLM 权限/提权边界记录 | 普通本机不得静默触发 UAC；当前实证均 per-user 目录 |
@@ -108,3 +109,8 @@
 | deb systemd 生命周期补验 | 真实 systemd 宿主补验 `systemctl status`/journal、`-r` 后 unit 清理 | status/journal/清理记录 | 容器腿无 systemd；unit 落位、postinst `daemon-reload` 合成与真实宿主 `enable --now` 已验（2026-09-28 Ubuntu 记录，原 LINUX-DEB-OI-04） |
 | s390x/ppc64le UnixFileTypes ABI 偏移 | 在 s390x/ppc64le 宿主（真机或 QEMU 整机模拟）跑 `UnixFileTypes` stat 偏移分支：st_mode/st_size/st_nlink 读值正确 | 对应架构宿主上类型读取断言记录 | 私有偏移表在 amd64/arm64 宿主已断言；s390x/ppc64le=24 偏移分支与 macOS `stat$INODE64` 回退、老 glibc 缺席放行无宿主可断言 |
 | Windows zip 符号链接还原 | Windows 宿主（开开发者模式或管理员）解含符号链接的 zip，断言链接还原语义 | Windows 侧链接还原记录 | POSIX 侧 `ArchiveExtractor`/xattr 腿已验；`WindowsLinks` 宿主差件需 Windows 符号链接权限，普通 CI 宿主不开开发者模式时创建被拒属平台预期 |
+| UPDATE 系统包提权全链（deb/rpm/apk） | 真机或 docker 容器走 `bundler-updater pkg-apply` 全链：Debian `apt-get install`/`dpkg -i`、Fedora `dnf`/`rpm -U`、Alpine `apk add` 退化链 + `pkexec`→`zenity`/`kdialog`+`sudo -S`→裸 `sudo` 三级提权 + 降权重启 + 账本归属双检 | 各发行版宿主/容器安装→更新→重启记录、退出码、`dpkg -s`/`rpm -q`/`apk info -e` 账本断言 | 设计定稿（`docs/design/update.md` §2），实现未落地；容器内无 pkexec/polkit 交互通道，图形提权腿需桌面宿主 |
+| UPDATE apk/zypper 降级语义 | Alpine 宿主实测 `apk add` 旧版包的降级行为（是否需显式降级开关/报错形态）；openSUSE 宿主实测 `zypper install` 旧版本地件的非交互降级形态（`--force`/`--oldpackage` 或解题确认） | 降级命令序列与结果记录 | 设计定稿已把 apk/zypper 降级标为未实测；deb `apt-get install --allow-downgrades`（`dpkg -i` 原生放行降级）、rpm `dnf downgrade`/`rpm -U --oldpackage` 语义已明 |
+| UPDATE conffile 修改场景 | deb/rpm 更新时用户已改 conffile：`--force-confdef --force-confold`（deb）与 `%config(noreplace)`（rpm）在更新链下的实际行为 | conffile 保留/冲突处理记录 | 首装期 conffile 断言已有；更新链场景待 `pkg-apply` 实现后验收 |
+| UPDATE repack 拒绝场景 | 旁车在场但包非本包管理器账本登记（repack/手动铺文件）时，预检确定性拒绝"不参与更新" | 拒绝路径与退出码记录 | 防 Tauri #3595 类漂移更新；实现未落地 |
+| UPDATE 依赖变更场景 | 更新包相对已装版本新增/变更依赖声明（deb `Depends`/rpm `Requires`/apk `depends`）时更新链全行为验收，含 `dpkg -i` 退化腿缺依赖留 unconfigured 态的恢复路径 | 依赖变更包更新记录、退出码与账本状态 | 设计约束更新包不得新增依赖（`docs/design/update.md` §2.3）；确需放开先经本项验收再改文档边界 |

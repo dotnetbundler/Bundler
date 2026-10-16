@@ -1,6 +1,6 @@
 // .app 测试桩与 quarantine xattr 读写：MacAppGate 门禁腿与 .app 更新链腿共用。
-// macOS 专属面（xattr P/Invoke、主程序取真 Mach-O 才可被 codesign 签）——
-// 宿主门禁（Assert.SkipUnless(TestPlatform.IsMacOS, …)）由调用方负责。
+// macOS 专属面（写标走 xattr CLI、读标走 getxattr P/Invoke、主程序取真 Mach-O
+// 才可被 codesign 签）——宿主门禁（Assert.SkipUnless(TestPlatform.IsMacOS, …)）由调用方负责。
 using System.Runtime.InteropServices;
 
 internal static class MacAppStub
@@ -8,7 +8,7 @@ internal static class MacAppStub
     internal const string QuarantineXattr = "com.apple.quarantine";
 
     // LaunchServices quarantine 的常见值形（flag;时间戳;来源;）——门禁不解析值，形如即可。
-    private static readonly byte[] QuarantineValue = "0081;00000000;BundlerTests;"u8.ToArray();
+    private const string QuarantineValue = "0081;00000000;BundlerTests;";
 
     // 最小 .app：Info.plist（身份键全）+ Contents/MacOS/<name> + Resources/data.txt。
     // machOExecutable=true 时主程序落仓内真 Mach-O 引导件——codesign 拒签脚本主程序，
@@ -53,21 +53,35 @@ internal static class MacAppStub
     }
 
     // 下载经浏览器/通道而来的件真实带 quarantine——按真实形态整树打标（根+内层全节点）。
-    internal static void SetQuarantineTree(string root)
+    // 返回 bool 是宿主能力探测不是写入成败：macOS 26 起 com.apple.quarantine 是受保护
+    // xattr，整条写入面对测试进程不持久化——裸 setxattr(2) 与 /usr/bin/xattr -w 同样
+    // rc=0 但随后 getxattr 读不回（macos-26 CI verify run 38914231566 实证，第一轮
+    // "xattr CLI 属系统授权写通道"的假设被证伪）。逐节点写完即读回，任一读不回即
+    // 宿主不支持打标——调用方据此诚实 Skip，剥标断言不得真空通过。
+    internal static bool TrySetQuarantineTree(string root)
     {
-        SetQuarantine(root);
+        if (!TrySetQuarantine(root))
+        {
+            return false;
+        }
         foreach (var entry in Directory.EnumerateFileSystemEntries(
                      root, "*", SearchOption.AllDirectories))
         {
-            SetQuarantine(entry);
+            if (!TrySetQuarantine(entry))
+            {
+                return false;
+            }
         }
+        return true;
     }
 
-    internal static void SetQuarantine(string path)
+    // 单节点同款探针：xattr -w 后立即 getxattr 读回——写 rc=0 不算数，读得回才算在。
+    // 打标仍走 Apple 自带 xattr CLI（与生产剥标 xattr -dr 同通道、值形对齐真实下载件）。
+    internal static bool TrySetQuarantine(string path)
     {
-        var rc = setxattr(path, QuarantineXattr, QuarantineValue, (nuint)QuarantineValue.Length, 0, 0);
-        Assert.True(rc == 0,
-            $"setxattr({QuarantineXattr}) failed rc={rc} errno={Marshal.GetLastWin32Error()}");
+        var written = ProcessRunner.Run("/usr/bin/xattr",
+            ["-w", QuarantineXattr, QuarantineValue, path]);
+        return written.ExitCode == 0 && HasQuarantine(path);
     }
 
     // 存在性按返回码判：size=0 探测只回值长不落缓冲——值超缓冲的 ERANGE(-1)
@@ -82,9 +96,5 @@ internal static class MacAppStub
 
     [DllImport("libc", CharSet = CharSet.Ansi, SetLastError = true)]
     private static extern IntPtr getxattr(
-        string path, string name, byte[] value, nuint size, uint position, int options);
-
-    [DllImport("libc", CharSet = CharSet.Ansi, SetLastError = true)]
-    private static extern int setxattr(
         string path, string name, byte[] value, nuint size, uint position, int options);
 }

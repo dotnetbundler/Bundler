@@ -454,6 +454,10 @@ internal static class MacAppSigning
             ToolRunner.Result? unwrapped = null;
             var pemPath = System.IO.Path.Combine(
                 workDirectory, $"bundler-cert-{Guid.NewGuid():N}.pem");
+            var certPemPath = System.IO.Path.Combine(
+                workDirectory, $"bundler-leaf-{Guid.NewGuid():N}.pem");
+            var keyPemPath = System.IO.Path.Combine(
+                workDirectory, $"bundler-key-{Guid.NewGuid():N}.pem");
             var passwordFile = System.IO.Path.Combine(
                 workDirectory, $"bundler-cert-{Guid.NewGuid():N}.pass");
             try
@@ -461,6 +465,8 @@ internal static class MacAppSigning
                 // 口令文件与解包 PEM 含明文材料：以 0600 创建杜绝宽松 umask 下
                 // 他用户读取；openssl -out 截断既有文件时保留其权限位。
                 await CreateSecretFileAsync(pemPath, null, workDirectory, cancellationToken);
+                await CreateSecretFileAsync(certPemPath, null, workDirectory, cancellationToken);
+                await CreateSecretFileAsync(keyPemPath, null, workDirectory, cancellationToken);
                 await CreateSecretFileAsync(passwordFile, certificatePassword,
                     workDirectory, cancellationToken);
                 unwrapped = await ToolRunner.TryRunAsync(
@@ -473,19 +479,47 @@ internal static class MacAppSigning
                     await ToolRunner.RunAsync(
                         "security", ["import", pemPath, "-k", path, "-T", "/usr/bin/codesign"],
                         workDirectory, cancellationToken);
+                    // security import 对 key+cert 同件 PEM 在部分宿主只进部分条目
+                    //（macos-26 CI 实证 rc=0 但 find-identity 0 valid identities）——
+                    // 社区自签 codesign 配方即 cert/key 分件导入；再分件补一遍，
+                    // 已存在的条目重复导入按无害略过（TryRun 不判 dup 报错），
+                    // 身份是否成立由下方 find-identity 读回裁定。
+                    var leafOut = await ToolRunner.TryRunAsync(
+                        "openssl",
+                        ["pkcs12", "-in", certificatePath, "-clcerts", "-nokeys",
+                         "-passin", "file:" + passwordFile, "-out", certPemPath],
+                        workDirectory, cancellationToken);
+                    var keyOut = await ToolRunner.TryRunAsync(
+                        "openssl",
+                        ["pkcs12", "-in", certificatePath, "-nocerts", "-nodes",
+                         "-passin", "file:" + passwordFile, "-out", keyPemPath],
+                        workDirectory, cancellationToken);
+                    if (leafOut is { ExitCode: 0 } && File.Exists(certPemPath))
+                    {
+                        _ = await ToolRunner.TryRunAsync(
+                            "security", ["import", certPemPath, "-k", path,
+                                "-T", "/usr/bin/codesign"],
+                            workDirectory, cancellationToken);
+                    }
+                    if (keyOut is { ExitCode: 0 } && File.Exists(keyPemPath))
+                    {
+                        _ = await ToolRunner.TryRunAsync(
+                            "security", ["import", keyPemPath, "-k", path,
+                                "-T", "/usr/bin/codesign"],
+                            workDirectory, cancellationToken);
+                    }
                     imported = true;
                 }
             }
             finally
             {
                 // 中间产物含明文私钥与口令文件，立即清除。
-                if (File.Exists(pemPath))
+                foreach (var secret in new[] { pemPath, certPemPath, keyPemPath, passwordFile })
                 {
-                    File.Delete(pemPath);
-                }
-                if (File.Exists(passwordFile))
-                {
-                    File.Delete(passwordFile);
+                    if (File.Exists(secret))
+                    {
+                        File.Delete(secret);
+                    }
                 }
             }
             if (!imported)
@@ -500,13 +534,17 @@ internal static class MacAppSigning
                     "; the certificate password must not appear in process arguments.");
             }
             await ToolRunner.RunAsync(
-                "security", ["set-key-partition-list", "-S", "apple-tool:,apple:",
+                "security", ["set-key-partition-list", "-S", "apple-tool:,apple:,codesign:",
                     "-s", "-k", password, path],
                 workDirectory, cancellationToken);
-            var identity = await FindIdentityAsync(path, workDirectory, cancellationToken)
-                ?? throw new InvalidOperationException(
+            var (identity, probe) = await FindIdentityAsync(
+                path, workDirectory, cancellationToken);
+            if (identity is null)
+            {
+                throw new InvalidOperationException(
                     $"No signing identity was found in {certificatePath} after importing it " +
-                    "into the temporary keychain.");
+                    $"into the temporary keychain.{probe}");
+            }
             logger.Log(BundleLogLevel.Information,
                 $"Imported the signing certificate into a temporary keychain (identity '{identity}').");
             return new TemporaryKeychain(path, password, identity, existing);
@@ -569,19 +607,33 @@ internal static class MacAppSigning
                 .ToArray();
         }
 
-        private static async Task<string?> FindIdentityAsync(
+        // 返回（身份名, 探测现场）：未命中时第二路无策略全列帮助区分
+        // "条目根本没导进 keychain"（0 identities）与"有身份但 codesigning
+        // 策略面不认可"（有 identities、0 valid）——现场随异常进 Skip 理由。
+        private static async Task<(string? Identity, string Probe)> FindIdentityAsync(
             string keychainPath, string workDirectory, CancellationToken cancellationToken)
         {
             var result = await ToolRunner.TryRunAsync("security",
                 ["find-identity", "-v", "-p", "codesigning", keychainPath],
                 workDirectory, cancellationToken);
-            if (result is not { ExitCode: 0 })
+            var probe = " find-identity(-v -p codesigning): " + (result is null
+                ? "<security unavailable>"
+                : $"rc={result.ExitCode} [{(result.StandardOutput + result.StandardError).Trim()}]");
+            if (result is { ExitCode: 0 })
             {
-                return null;
+                var match = Regex.Match(result.StandardOutput,
+                    "\\)\\s+[0-9A-Fa-f]{40}\\s+\"(?<name>[^\"]+)\"");
+                if (match.Success)
+                {
+                    return (match.Groups["name"].Value, probe);
+                }
             }
-            var match = Regex.Match(result.StandardOutput,
-                "\\)\\s+[0-9A-Fa-f]{40}\\s+\"(?<name>[^\"]+)\"");
-            return match.Success ? match.Groups["name"].Value : null;
+            var all = await ToolRunner.TryRunAsync("security",
+                ["find-identity", keychainPath], workDirectory, cancellationToken);
+            probe += "; find-identity(no policy): " + (all is null
+                ? "<security unavailable>"
+                : $"rc={all.ExitCode} [{(all.StandardOutput + all.StandardError).Trim()}]");
+            return (null, probe);
         }
     }
 }
