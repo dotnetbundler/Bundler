@@ -60,19 +60,19 @@ _restart_nohup() {
 # 中途被杀/失败会在目标名上留"存在≠完整"半成品（恢复路径 -d 判存会还原半本）。
 # 故只有同卷才直移，跨卷一律两段式（与 AOT MoveTree/MoveFile 同义）：
 # 先复制到同级临时名再原子 mv 就位，目标槽只呈现"未开始"或"全本"两态。
-_mnt_of() {  # $1 路径→mountinfo 最长前缀挂载点（\040 等转义还原）；取不到返空
-    _m_t=$1
-    _m_best=""
-    while IFS= read -r _m_l; do
-        # 转义还原顺序：先 \040 空格后 \134 反斜杠（\134 先解会把 "\\134040" 二次解码错）；
-        # \011/\012 挂载点极端罕见不还原（BSD sed replacement 不认 \t）。
-        _m_mp=$(printf '%s\n' "$_m_l" | awk '{print $5}' | sed 's/\\040/ /g; s/\\134/\\/g')
-        # "$_m_t/" 前缀比对：mp="/" 时模式 "/*" 恰匹配一切绝对路径，mp 相等/祖先均覆盖。
-        case "$_m_t/" in "$_m_mp"/*)
-            [ ${#_m_mp} -gt ${#_m_best} ] && _m_best=$_m_mp ;;
-        esac
-    done </proc/self/mountinfo
-    [ -n "$_m_best" ] && printf '%s' "$_m_best"
+_mnt_of() {  # $1 路径→mountinfo 最长前缀挂载点（\040/\134 转义还原）；取不到返空
+    # 单次 awk 扫描（逐行 fork 三进程×行数太贵）。前缀比对在 "t/" 上做：
+    # mp="/" 取前缀 "/" 恰匹配一切绝对路径；mp 相等/段边界（/foo vs /foobar）都被兜住。
+    awk -v t="$1/" '
+        {
+            mp = $5
+            gsub(/\\040/, " ", mp)      # 空格转义还原
+            gsub(/\\134/, "\\\\", mp)   # 反斜杠最后解，防 "\\134040" 二次解码
+            pre = (mp == "/") ? "/" : mp "/"
+            if (index(t, pre) == 1 && length(mp) > length(best)) best = mp
+        }
+        END { if (best != "") print best }
+    ' </proc/self/mountinfo
 }
 same_mount() {  # $1,$2 路径属同一挂载点？mountinfo 最长前缀比对（对账 AOT SameVolume
     # 挂载点语义）；mountinfo 缺席平台（macOS 无 bind mount，st_dev 不失盲）退 st_dev 祖先比对。
@@ -425,8 +425,8 @@ node_bytes() {  # 文件/目录树总字节；不存在=0
 }
 volume_check() {  # $1 锚点 $2 需要字节；探测失败放行，明确不够才拒 rc=4
     [ "$2" -gt 0 ] 2>/dev/null || return 0
-    # 锚点缺席时上溯最近现存祖先——对账 AOT FindVolume 的最长前缀卷解析
-    # （mountinfo/DriveInfo 回退），缺席锚点直接 df 必败会把可判定场景降级成 WARN 放行。
+    # 锚点缺席时上溯最近现存祖先——对账 AOT FindVolume 的 DriveInfo 祖先走查，
+    # 缺席锚点直接 df 必败会把可判定场景降级成 WARN 放行。
     _anchor="$1"
     while [ ! -e "$_anchor" ] && [ "$_anchor" != "$(dirname "$_anchor")" ]; do
         _anchor=$(dirname "$_anchor")
@@ -442,11 +442,14 @@ check_free_space() {
         return 0
     fi
     _need_backup=0; _need_install=0
-    same_volume "$INSTALL_DIR" "$BACKUP_DIR" || _need_backup=$(node_bytes "$INSTALL_DIR")
-    if [ "$KEEP_PAYLOAD" = 1 ] || ! same_volume "$PAYLOAD_DIR" "$INSTALL_DIR"; then
+    # "会不会复制"按挂载点判（与 move_node 直移门同一谓词）：bind mount 同
+    # st_dev 异挂载点仍走两段式复制——按 st_dev 估零需求会中途 ENOSPC。
+    same_mount "$INSTALL_DIR" "$BACKUP_DIR" || _need_backup=$(node_bytes "$INSTALL_DIR")
+    if [ "$KEEP_PAYLOAD" = 1 ] || ! same_mount "$PAYLOAD_DIR" "$INSTALL_DIR"; then
         _need_install=$(node_bytes "$PAYLOAD_DIR")
     fi
-    # 备份槽父级与 install 同卷时两腿合并判——同卷需求要加总。
+    # 备份槽父级与 install 同卷时两腿合并判——"空间池是否共享"按 st_dev：
+    # bind mount 共享同一文件系统的空闲空间，需求要加总。
     if same_volume "$(dirname "$BACKUP_DIR")" "$INSTALL_DIR"; then
         volume_check "$INSTALL_DIR" "$(( _need_backup + _need_install ))" || exit 4
     else
