@@ -22,6 +22,7 @@ public sealed class BootstrapPlanTests : TempBase
         BootstrapPlan.ForceManagedCopy = false;
         BootstrapPlan.FreeSpaceProbe = null;
         BootstrapPlan.IoFaultProbe = null;
+        BootstrapPlan.MountInfoProbe = null;
         base.Dispose();
     }
 
@@ -344,6 +345,122 @@ public sealed class BootstrapPlanTests : TempBase
         }));
 
         Assert.Equal("x", File.ReadAllText(Path.Combine(install, "app.txt")));
+    }
+
+    // ---- 挂载表同卷判定 ----
+
+    [Fact]
+    public void ParseMountPoints_ExtractsFifthFieldAndUnescapes()
+    {
+        var mountInfo =
+            "22 1 8:1 / / rw,relatime - ext4 /dev/sda1 rw\n" +
+            "23 22 0:5 / /proc rw,nosuid - proc proc rw\n" +
+            @"24 22 0:6 / /mnt/my\040dir rw - tmpfs tmpfs rw" + "\n";
+
+        var points = BootstrapPlan.ParseMountPoints(mountInfo);
+
+        Assert.Equal(["/", "/proc", "/mnt/my dir"], points);
+    }
+
+    [Fact]
+    public void ParseMountPoints_IgnoresMalformedLines()
+    {
+        Assert.Empty(BootstrapPlan.ParseMountPoints("\nshort line\n"));
+    }
+
+    [Fact]
+    public void ResolveMountPoint_LongestPrefixWins()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "挂载点判定只在 POSIX 腿走");
+        BootstrapPlan.MountInfoProbe = () =>
+            "1 0 8:1 / / rw - ext4 /dev/sda1 rw\n" +
+            "2 1 8:2 / /data rw - ext4 /dev/sdb1 rw\n" +
+            "3 2 8:3 / /data/sub rw - ext4 /dev/sdc1 rw\n";
+
+        Assert.Equal("/data/sub", BootstrapPlan.ResolveMountPoint("/data/sub/dir/file"));
+        Assert.Equal("/data", BootstrapPlan.ResolveMountPoint("/data/other"));
+        Assert.Equal("/", BootstrapPlan.ResolveMountPoint("/elsewhere"));
+    }
+
+    [Fact]
+    public void ResolveMountPoint_PathSegmentBoundary_Required()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "挂载点判定只在 POSIX 腿走");
+        BootstrapPlan.MountInfoProbe = () =>
+            "1 0 8:1 / / rw - ext4 /dev/sda1 rw\n" +
+            "2 1 8:2 / /data rw - ext4 /dev/sdb1 rw\n";
+
+        // /database 不是 /data 的子路径——只能命中 /。
+        Assert.Equal("/", BootstrapPlan.ResolveMountPoint("/database/file"));
+        Assert.Equal("/data", BootstrapPlan.ResolveMountPoint("/data"));
+    }
+
+    [Fact]
+    public void Apply_CrossVolumeFileSwap_FallsBackToTwoPhase()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "挂载表判定只在 POSIX 腿走");
+
+        // 文件级换包才走 TryAtomicMove/MoveFile——虚构挂载表把两路径钉到
+        // 不同挂载点 → SameVolume 判跨卷 → 强制两段式。
+        // 挂载键必须按 canonical 名键入（Apply 内部先 CanonicalPath 解链——
+        // macOS /var→/private/var 链接会让字面键失配回落根挂载）。
+        // IoFaultProbe 计数可观测所走腿：原子 1 次，两段式 3 次。
+        var installFile = Path.Combine(Root, "install-xvol", "app.bin");
+        var payloadFile = Path.Combine(Root, "payload-xvol", "app.bin");
+        Directory.CreateDirectory(Path.GetDirectoryName(installFile)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(payloadFile)!);
+        File.WriteAllText(installFile, "old");
+        File.WriteAllText(payloadFile, "new");
+
+        var root = BootstrapPlan.CanonicalPath(Root)!.TrimEnd('/').Replace(" ", "\\040");
+        BootstrapPlan.MountInfoProbe = () =>
+            "1 0 8:1 / / rw - ext4 /dev/sda1 rw\n" +
+            $"2 1 8:2 / {root}/install-xvol rw - ext4 /dev/sdb1 rw\n" +
+            $"3 1 8:3 / {root}/payload-xvol rw - ext4 /dev/sdc1 rw\n";
+        var ioCalls = 0;
+        BootstrapPlan.IoFaultProbe = (_, _) => ioCalls++;
+
+        var rc = Apply(new BootstrapOptions
+        {
+            InstallDirectory = installFile,
+            PayloadDirectory = payloadFile,
+        });
+
+        Assert.Equal(0, rc);
+        Assert.Equal("new", File.ReadAllText(installFile));
+        Assert.False(File.Exists(payloadFile));
+        // ApplyFile 两次 MoveFile：install→backup 同挂载原子 1 次，
+        // payload→install 跨卷两段式 3 次，合计 4。
+        Assert.Equal(4, ioCalls);
+    }
+
+    [Fact]
+    public void Apply_SameMountPaths_TakeAtomicPath()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "挂载表判定只在 POSIX 腿走");
+
+        // 虚构表只挂根——一切路径同卷，文件级换包两次 MoveFile 皆原子
+        // （install→backup、payload→install 各 1 次探测），合计 2。
+        BootstrapPlan.MountInfoProbe = () =>
+            "1 0 8:1 / / rw - ext4 /dev/sda1 rw\n";
+        var ioCalls = 0;
+        BootstrapPlan.IoFaultProbe = (_, _) => ioCalls++;
+
+        var installFile = Path.Combine(Root, "app-sv.AppImage");
+        var payloadFile = Path.Combine(Root, "new-sv.AppImage");
+        File.WriteAllText(installFile, "old-image");
+        File.WriteAllText(payloadFile, "new-image");
+
+        var rc = Apply(new BootstrapOptions
+        {
+            InstallDirectory = installFile,
+            PayloadDirectory = payloadFile,
+        });
+
+        Assert.Equal(0, rc);
+        Assert.Equal("new-image", File.ReadAllText(installFile));
+        Assert.False(File.Exists(payloadFile));
+        Assert.Equal(2, ioCalls);
     }
 
     // ---- 装置 ----
