@@ -968,9 +968,13 @@ public sealed class UpdateTests : TempBase
         Assert.True(UpdateBootstrapper.TryResolve(update, "windows-x86_64", out var win));
         Assert.EndsWith(".exe", win);
         Assert.True(File.Exists(win));
-        // windows-aarch64 有内嵌真件（arm64 宿主产出随包）；windows-i686 仍无件且不降级脚本 → 确定性不可用。
+        // windows-aarch64/windows-i686/macos-universal 均有内嵌真件（produce-bootstrap 随包入库）；
+        // macos-universal 命中 per-target fat 件而不再降级 posix 脚本。
         Assert.True(UpdateBootstrapper.TryResolve(update, "windows-aarch64", out _));
-        Assert.False(UpdateBootstrapper.TryResolve(update, "windows-i686", out _));
+        Assert.True(UpdateBootstrapper.TryResolve(update, "windows-i686", out var i686));
+        Assert.EndsWith(".exe", i686);
+        Assert.True(UpdateBootstrapper.TryResolve(update, "macos-universal", out var universal));
+        Assert.EndsWith(Path.Combine("macos-universal", "bundler-updater"), universal);
     }
 
     [Fact]

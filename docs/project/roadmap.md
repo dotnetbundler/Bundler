@@ -113,7 +113,7 @@
 
 已登记待做项（测试重写收口期裁决，详见 `PROJECT_CONTEXT.md` §5）：
 
-- **linux 引导件收敛 musl 静态单件**：`StaticExecutable` musl-static-pie 件实测 glibc/musl 双宿主通吃、消 glibc 版本地板、随包每架构省 ~1.2MB；前置依赖 `PosixRename` 静态兼容修复（否则静态件丢 ENOSPC 预检）。
+- **linux 引导件收敛 musl 静态单件**：`StaticExecutable` musl-static-pie 件实测 glibc/musl 双宿主通吃、消 glibc 版本地板、随包每架构省 ~1.2MB；前置 `PosixRename` 静态兼容修复已落地（PR #98），无阻塞。
 
 已裁决不予登记的类别（记录理由，防重复提案）：
 
