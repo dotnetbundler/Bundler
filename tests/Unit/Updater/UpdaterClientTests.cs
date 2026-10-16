@@ -14,7 +14,7 @@ using Protocol = DotNet.Bundler.Updater.Protocol;
 // 差分下载、签名校验、ustar 提取）全托管；LoopbackFeedServer 为进程内回环服务器。
 // 去 spawn：Client_UpdateAsync_AppImage_FileSwap_Linux、Client_UpdateAsync_EndToEnd_Linux、
 // Client_UpdateAsync_UsesShellFallback 调 UpdateApplier.Apply 拉起引导进程——
-// 记入 artifacts/harvest-spawn-list.md。
+// 去向见 Integration/Manual 层对应文件。
 // 逐方法判重已跳过：Version_ComparesNumericAndPrerelease→UpdateVersionTests；
 // Client_FromInstallDirectory_ReadsAppContentsSidecar/RequiresSidecar、
 // Client_FromIdentity_RequiresFeedIdentity、Client_DownloadsLocalFeed_AndVerifiesSha256、

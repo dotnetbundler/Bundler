@@ -17,7 +17,7 @@ using System.Text;
 //   PassesCarAndDegradesIconInputs、RebuildsIdenticalAppBundles、MarksMachOFilesExecutable、
 //   PassesPlutilLint（直接 Process.Start plutil）、RejectsForeignCodeInUniversalPayload、
 //   SharedFileAssociationMergesOnce、SharedUrlProtocolMergesOnce、SkipsNonRegularPayloadFiles
-//   ——记入 artifacts/harvest-spawn-list.md。
+//   ——去向见 Integration/Manual 层对应文件。
 // 保留的签名用例全部经 ToolRunner.Handler 桩运行，不产子进程。
 // 判重跳过：PlansAppBeforePkg（BundlePlannerTests）、SigningHostGateIsPlatformNotSupported
 // （Signing_SignedConfig_NonMacHost_Rejected）、AssemblesCodesignArguments（CodesignArguments_*）、

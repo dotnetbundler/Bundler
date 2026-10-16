@@ -139,13 +139,6 @@ internal static class MsiSupport
         }
     }
 
-    public static void MsiexecExpect(string argumentLine, params int[] allowed)
-    {
-        var result = Msiexec(argumentLine);
-        Assert.True(allowed.Contains(result.ExitCode),
-            $"msiexec returned {result.ExitCode}, expected one of [{string.Join(", ", allowed)}]: {argumentLine}\n{result.StdErr}");
-    }
-
     public static string GetProperty(string msiPath, string name)
     {
         using var database = new Database(msiPath, DatabaseOpenMode.ReadOnly);

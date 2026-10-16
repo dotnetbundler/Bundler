@@ -74,4 +74,62 @@ public sealed class FormatDispatcherTests
         Assert.IsType<ArchiveBundler>(zip);
         Assert.IsType<ArchiveBundler>(targz);
     }
+
+    /// <summary>
+    /// 枚举全表对账：PackageFormat 每个成员都要落到声明的后端类型。
+    /// 新增枚举成员不进表 → Count 断言先炸；臂落错类型 → IsType 炸。
+    /// </summary>
+    [Fact]
+    public void Create_EveryPackageFormat_MapsToDeclaredBackend()
+    {
+        var expected = new Dictionary<PackageFormat, Type>
+        {
+            [PackageFormat.Nsis] = typeof(NsisBundler),
+            [PackageFormat.Msi] = typeof(WixBundler),
+            [PackageFormat.App] = typeof(MacAppBundler),
+            [PackageFormat.Dmg] = typeof(MacDmgBundler),
+            [PackageFormat.Pkg] = typeof(MacPkgBundler),
+            [PackageFormat.Deb] = typeof(DebBundler),
+            [PackageFormat.Rpm] = typeof(RpmBundler),
+            [PackageFormat.AppImage] = typeof(AppImageBundler),
+            [PackageFormat.Zip] = typeof(ArchiveBundler),
+            [PackageFormat.TarGz] = typeof(ArchiveBundler),
+            [PackageFormat.AlpineApk] = typeof(AlpineApkBundler),
+        };
+        Assert.Equal(Enum.GetValues<PackageFormat>().Length, expected.Count);
+        foreach (var (format, backendType) in expected)
+        {
+            Assert.IsType(backendType,
+                FormatDispatcher.Create(format, Resolved, NullBundleLogger.Instance));
+        }
+    }
+
+    /// <summary>'all' 哨兵按 target 展开为 TargetMatrix 支持集——literal 清单对账不照抄实现。</summary>
+    [Theory]
+    [InlineData("windows-x86_64", new[] { PackageFormat.Nsis, PackageFormat.Msi, PackageFormat.Zip, PackageFormat.TarGz })]
+    [InlineData("macos-aarch64", new[] { PackageFormat.App, PackageFormat.Dmg, PackageFormat.Pkg, PackageFormat.Zip, PackageFormat.TarGz })]
+    [InlineData("linux-x86_64", new[] { PackageFormat.Deb, PackageFormat.Rpm, PackageFormat.AppImage, PackageFormat.Zip, PackageFormat.TarGz })]
+    [InlineData("linux-musl-x86_64", new[] { PackageFormat.AppImage, PackageFormat.Zip, PackageFormat.TarGz, PackageFormat.AlpineApk })]
+    public void ParseFormats_All_ExpandsToTargetMatrixRow(string target, PackageFormat[] expected)
+    {
+        Assert.Equal(expected.OrderBy(f => f).ToArray(),
+            CliProgram.ParseFormats("all", target).OrderBy(f => f).ToArray());
+    }
+
+    [Fact]
+    public void ParseFormats_All_UnknownTarget_Rejected()
+    {
+        Assert.Throws<CliUsageException>(() => CliProgram.ParseFormats("all", "plan9-x86"));
+    }
+
+    [Theory]
+    // 分隔符两种都收；大小写不敏感；重复词去重；空白容忍。
+    [InlineData("deb,rpm", new[] { PackageFormat.Deb, PackageFormat.Rpm })]
+    [InlineData("deb;rpm", new[] { PackageFormat.Deb, PackageFormat.Rpm })]
+    [InlineData("DEB;Deb;deb", new[] { PackageFormat.Deb })]
+    [InlineData(" zip , targz ", new[] { PackageFormat.Zip, PackageFormat.TarGz })]
+    public void ParseFormats_SeparatorsCaseAndDedup(string words, PackageFormat[] expected)
+    {
+        Assert.Equal(expected, CliProgram.ParseFormats(words, "linux-x86_64").ToArray());
+    }
 }

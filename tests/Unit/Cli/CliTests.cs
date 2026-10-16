@@ -4,7 +4,7 @@ using DotNet.Bundler.Cli;
 
 // 从旧 tests/Bundler.Tests/CliTests.cs 收割：CLI 走 CliProgram.Run 进程内入口。
 // 去 spawn：MsBuildDefaultsInferFormatsIdentifierAndVersion 直接 Process.Start("dotnet")
-// 驱动真实 MSBuild——记入 artifacts/harvest-spawn-list.md。
+// 驱动真实 MSBuild——去向见 Integration/Manual 层对应文件。
 // 逐方法判重已跳过（已并入 Cli/CliProgramTests.cs 等）：
 //   PrintsUsage、RejectsUnknownCommand、ValidateOk、ValidateBadInput、PlanJson、PlanAll、
 //   ConfigCliOverride、RejectsUnknownConfigKey、PrintsVersion、InitWritesTemplateAndRefusesOverwrite、

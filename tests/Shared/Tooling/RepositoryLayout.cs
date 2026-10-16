@@ -19,21 +19,6 @@ internal static class RepositoryLayout
     public static string PackageDirectory => Path.Combine(ArtifactsRoot, "packages");
     public static string TestsDirectory => Path.Combine(Root, "tests");
 
-    private static readonly Lazy<string> _projectDirectory = new(() =>
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !dir.EnumerateFiles("*.csproj").Any())
-        {
-            dir = dir.Parent;
-        }
-        return dir?.FullName
-            ?? throw new InvalidOperationException(
-                $"Could not locate a test project directory above {AppContext.BaseDirectory}");
-    });
-
-    // 测试工程自身目录（从 AppContext.BaseDirectory 向上找第一个含 *.csproj 的目录）。
-    public static string ProjectDirectory => _projectDirectory.Value;
-
     // fixture 工程统一放仓级 tests/Fixtures/——集成腿与包契约腿共用同一套载荷。
     public static string FixturesDirectory => Path.Combine(TestsDirectory, "Fixtures");
 

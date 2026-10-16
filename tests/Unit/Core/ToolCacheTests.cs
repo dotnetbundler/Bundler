@@ -161,4 +161,159 @@ public sealed class ToolCacheTests : TempBase
         await Assert.ThrowsAsync<ArgumentException>(() =>
             ToolCache.ResolveAsync(cache, set, Opener(Map()), TestContext.Current.CancellationToken));
     }
+
+    private static string LockPath(string cache, ToolFileSet set) =>
+        Path.Combine(cache,
+            $"{set.Name}-{set.Version}-{set.ContentId.Substring(0, 12).ToLowerInvariant()}.lock");
+
+    [Fact]
+    public async Task ResolveAsync_LockHeld_WaitsForRelease()
+    {
+        // 排他锁真挡物化：持锁期间 ResolveAsync 不能完成，放锁后才落位。
+        var cache = Temp("bundler-cache").FullName;
+        var content = "x"u8.ToArray();
+        var set = Set(("a", content));
+        var map = Map(("a", content));
+        using var held = new FileStream(
+            LockPath(cache, set), FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
+
+        var pending = ToolCache.ResolveAsync(
+            cache, set, Opener(map), TestContext.Current.CancellationToken);
+        await Task.Delay(250, TestContext.Current.CancellationToken);
+        Assert.False(pending.IsCompleted);
+
+        held.Dispose();
+        var resolved = await pending.WaitAsync(
+            TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal("x", File.ReadAllText(Path.Combine(resolved.DirectoryPath, "a")));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_ConcurrentResolves_SingleConsistentEntry()
+    {
+        var cache = Temp("bundler-cache").FullName;
+        var a = "payload"u8.ToArray();
+        var c = "data"u8.ToArray();
+        var set = Set(("a", a), ("b/c", c));
+        var map = Map(("a", a), ("b/c", c));
+        // 慢 opener 拉长临界区——并发者真的在锁上排队而不是错身。
+        Func<ToolFileSpec, CancellationToken, Task<Stream>> slowOpener = async (spec, ct) =>
+        {
+            await Task.Delay(20, ct);
+            return new MemoryStream(map[spec.RelativePath]);
+        };
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
+            Task.Run(() => ToolCache.ResolveAsync(
+                cache, set, slowOpener, TestContext.Current.CancellationToken))));
+
+        var directory = results[0].DirectoryPath;
+        Assert.All(results, r => Assert.Equal(directory, r.DirectoryPath));
+        Assert.Equal("payload", File.ReadAllText(Path.Combine(directory, "a")));
+        Assert.True(File.Exists(Path.Combine(directory, ToolCache.ManifestFileName)));
+        // 暂存原子落位：并发收敛后只剩最终目录，不留 .{name}-* 暂存残骸。
+        Assert.Single(Directory.GetDirectories(cache));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_SweepsStaleStaging_OnlyMatchingSha12()
+    {
+        var cache = Temp("bundler-cache").FullName;
+        var content = "x"u8.ToArray();
+        var set = Set(("a", content));
+        var map = Map(("a", content));
+        var sha12 = set.ContentId.Substring(0, 12).ToLowerInvariant();
+
+        // 同 sha12 的崩溃暂存：本工具集的孤儿，清扫。
+        var stale = Path.Combine(cache, $".tool-1.0-{sha12}-deadbeef");
+        Directory.CreateDirectory(stale);
+        File.WriteAllText(Path.Combine(stale, "junk"), "j");
+        // 异 sha12 前缀的暂存：可能是另一 (name,version) 并行物化的在跑目录，不许动。
+        var inflight = Path.Combine(cache, ".tool-1.0-ffffffffffff-inflight");
+        Directory.CreateDirectory(inflight);
+        File.WriteAllText(Path.Combine(inflight, "junk"), "j");
+
+        var resolved = await ToolCache.ResolveAsync(
+            cache, set, Opener(map), TestContext.Current.CancellationToken);
+
+        Assert.False(Directory.Exists(stale));
+        Assert.True(Directory.Exists(inflight));
+        Assert.Equal("x", File.ReadAllText(Path.Combine(resolved.DirectoryPath, "a")));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_CacheRootReparsePoint_Rejected()
+    {
+        var real = Temp("bundler-real").FullName;
+        var link = TempPath("bundler-cache-link");
+        try
+        {
+            Directory.CreateSymbolicLink(link, real);
+        }
+        catch (IOException) { Assert.Skip("symlink creation not permitted"); }
+        catch (UnauthorizedAccessException) { Assert.Skip("symlink creation not permitted"); }
+
+        var content = "x"u8.ToArray();
+        var set = Set(("a", content));
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            ToolCache.ResolveAsync(link, set, Opener(Map(("a", content))),
+                TestContext.Current.CancellationToken));
+        Assert.Contains("reparse", exception.Message);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_LockFileReparsePoint_Rejected()
+    {
+        var cache = Temp("bundler-cache").FullName;
+        var content = "x"u8.ToArray();
+        var set = Set(("a", content));
+        var target = TempPath("lock-target");
+        File.WriteAllText(target, "x");
+        try
+        {
+            File.CreateSymbolicLink(LockPath(cache, set), target);
+        }
+        catch (IOException) { Assert.Skip("symlink creation not permitted"); }
+        catch (UnauthorizedAccessException) { Assert.Skip("symlink creation not permitted"); }
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            ToolCache.ResolveAsync(cache, set, Opener(Map(("a", content))),
+                TestContext.Current.CancellationToken));
+        Assert.Contains("reparse", exception.Message);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_CachedTreeWithInjectedLink_Reinstalled()
+    {
+        var cache = Temp("bundler-cache").FullName;
+        var content = "x"u8.ToArray();
+        var set = Set(("a", content));
+        var map = Map(("a", content));
+        var first = await ToolCache.ResolveAsync(
+            cache, set, Opener(map), TestContext.Current.CancellationToken);
+
+        var outside = Temp("bundler-outside").FullName;
+        var injected = Path.Combine(first.DirectoryPath, "injected-link");
+        try
+        {
+            Directory.CreateSymbolicLink(injected, outside);
+        }
+        catch (IOException) { Assert.Skip("symlink creation not permitted"); }
+        catch (UnauthorizedAccessException) { Assert.Skip("symlink creation not permitted"); }
+
+        var reopened = false;
+        var second = await ToolCache.ResolveAsync(cache, set,
+            (spec, _) =>
+            {
+                reopened = true;
+                return Task.FromResult<Stream>(new MemoryStream(map[spec.RelativePath]));
+            },
+            TestContext.Current.CancellationToken);
+
+        // 校验枚举遇 reparse 点判缓存无效 → 重开源流整树重装，不拿带链缓存命中。
+        Assert.True(reopened);
+        Assert.False(Directory.Exists(Path.Combine(second.DirectoryPath, "injected-link")));
+        // 清扫只删链接本身：链接目标目录不许被级联清掉。
+        Assert.True(Directory.Exists(outside));
+    }
 }

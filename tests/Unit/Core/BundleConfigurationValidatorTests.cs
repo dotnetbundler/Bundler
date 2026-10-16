@@ -1,9 +1,10 @@
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
+using DotNet.Bundler.Core.Update;
 
 namespace Bundler.UnitTests.Core;
 
-public sealed class BundleConfigurationValidatorTests
+public sealed class BundleConfigurationValidatorTests : TempBase
 {
     private static IReadOnlyList<ValidationIssue> Validate(
         BundleConfiguration config, bool checkFileSystem = false) =>
@@ -452,6 +453,170 @@ public sealed class BundleConfigurationValidatorTests
         };
         // dmg 隐式注入 app 中间项占位 → 与显式 app 撞槽
         Assert.Contains(Validate(config), issue => issue.Message.Contains("Duplicate"));
+    }
+
+    [Fact]
+    public void MainExecutable_Existence_CheckedAgainstInput()
+    {
+        var input = Temp("input").FullName;
+        var config = WithTarget(new BundleTargetConfiguration
+        {
+            Target = "linux-x86_64", InputDirectory = input,
+            MainExecutable = "app", Formats = [PackageFormat.Deb]
+        });
+
+        var issues = Validate(config, checkFileSystem: true);
+        Assert.Contains(issues,
+            i => i.Path == "targets[0].mainExecutable" && i.Message.Contains("does not exist"));
+
+        File.WriteAllText(Path.Combine(input, "app"), "x");
+        Assert.False(HasIssue(
+            Validate(config, checkFileSystem: true), "targets[0].mainExecutable"));
+    }
+
+    [Fact]
+    public void MainExecutable_WindowsDefault_RequiresExeSuffix()
+    {
+        var input = Temp("wininput").FullName;
+        var config = WithTarget(new BundleTargetConfiguration
+        {
+            Target = "windows-x86_64", InputDirectory = input, Formats = [PackageFormat.Zip]
+        });
+
+        // windows 目标缺省主程序是 "{ProductName}.exe"——只落裸名文件不算数。
+        File.WriteAllText(Path.Combine(input, "Sample"), "x");
+        var issues = Validate(config, checkFileSystem: true);
+        Assert.Contains(issues,
+            i => i.Path == "targets[0].mainExecutable" && i.Message.Contains("Sample.exe"));
+
+        File.WriteAllText(Path.Combine(input, "Sample.exe"), "x");
+        Assert.False(HasIssue(
+            Validate(config, checkFileSystem: true), "targets[0].mainExecutable"));
+    }
+
+    [Fact]
+    public void SigningFiles_Existence_CheckedAgainstInput()
+    {
+        var input = Temp("signinput").FullName;
+        File.WriteAllText(Path.Combine(input, "Sample"), "x"); // linux 缺省主程序占位
+        File.WriteAllText(Path.Combine(input, "a.dll"), "x");
+        var config = WithTarget(new BundleTargetConfiguration
+        {
+            Target = "linux-x86_64", InputDirectory = input, Formats = [PackageFormat.Deb],
+            SigningFiles = ["a.dll", "missing.dll"]
+        });
+
+        var issues = Validate(config, checkFileSystem: true);
+        Assert.False(HasIssue(issues, "targets[0].signingFiles[0]"));
+        Assert.Contains(issues,
+            i => i.Path == "targets[0].signingFiles[1]" && i.Message.Contains("does not exist"));
+        // 关 FS 检查只剩相对路径规则——存在性不报。
+        Assert.False(HasIssue(
+            Validate(config, checkFileSystem: false), "targets[0].signingFiles"));
+    }
+
+    [Fact]
+    public void OutputDirectory_InsideInput_CaseDifference_HostSemantics()
+    {
+        // 纯字符串前缀判定随宿主 FS 语义：Windows/macOS 默认不敏感（报），Linux 敏感（不报）。
+        var baseDir = Path.Combine(Root, "case-base");
+        var config = WithTarget(new BundleTargetConfiguration
+        {
+            Target = "linux-x86_64",
+            InputDirectory = Path.Combine(baseDir, "InputDir"),
+            Formats = [PackageFormat.Deb]
+        }, outputDirectory: Path.Combine(baseDir, "INPUTDIR", "artifacts"));
+
+        var issues = Validate(config);
+        if (OperatingSystem.IsLinux())
+        {
+            Assert.DoesNotContain(issues, i => i.Path == "outputDirectory");
+        }
+        else
+        {
+            Assert.Contains(issues, i => i.Path == "outputDirectory");
+        }
+    }
+
+    [Fact]
+    public void Update_SigningKeyFile_Missing_Reports_WhenCheckingFileSystem()
+    {
+        var missing = Path.Combine(Root, "no-such-key.json");
+        var config = WithUpdate(new UpdateBundleConfiguration
+        {
+            FeedUrl = "https://example.com/feed", Channel = "stable", SigningKeyFile = missing
+        });
+
+        Assert.Contains(Validate(config, checkFileSystem: true),
+            i => i.Path == "update.signingKeyFile" && i.Message.Contains("does not exist"));
+        Assert.False(HasIssue(
+            Validate(config, checkFileSystem: false), "update.signingKeyFile"));
+    }
+
+    [Fact]
+    public void Update_SigningKeyFile_Unparsable_Reports()
+    {
+        // 派生一致性校验要先读钥：文件存在但不是 ec-p256 JSON → signingKeyFile 项报解析失败。
+        var keyPath = TempPath("bad-key.json");
+        File.WriteAllText(keyPath, "not a key file");
+        var point = new byte[65];
+        point[0] = 0x04;
+        var config = WithUpdate(new UpdateBundleConfiguration
+        {
+            FeedUrl = "https://example.com/feed", Channel = "stable",
+            SigningKeyFile = keyPath, PublicKey = Convert.ToBase64String(point)
+        });
+
+        Assert.Contains(Validate(config, checkFileSystem: true),
+            i => i.Path == "update.signingKeyFile" && i.Message.Contains("ec-p256"));
+    }
+
+    [Fact]
+    public void Update_PublicKey_MustMatchSigningKeyFile()
+    {
+        var keyPath = TempPath("update-key.json");
+        UpdateKeyMaterial.Generate().Save(keyPath);
+        var other = UpdateKeyMaterial.Generate();
+
+        var mismatched = WithUpdate(new UpdateBundleConfiguration
+        {
+            FeedUrl = "https://example.com/feed", Channel = "stable",
+            SigningKeyFile = keyPath, PublicKey = other.PublicPointBase64()
+        });
+        Assert.Contains(Validate(mismatched, checkFileSystem: true),
+            i => i.Path == "update.publicKey" && i.Message.Contains("signingKeyFile"));
+
+        var matched = WithUpdate(new UpdateBundleConfiguration
+        {
+            FeedUrl = "https://example.com/feed", Channel = "stable",
+            SigningKeyFile = keyPath,
+            PublicKey = UpdateKeyMaterial.Load(keyPath).PublicPointBase64()
+        });
+        Assert.False(HasIssue(Validate(matched, checkFileSystem: true), "update."));
+    }
+
+    [Fact]
+    public void Update_BootstrapperDirectory_Existence_Checked()
+    {
+        var keyPath = TempPath("update-key.json");
+        UpdateKeyMaterial.Generate().Save(keyPath);
+        var missing = Path.Combine(Root, "no-such-bootstrapper");
+        var config = WithUpdate(new UpdateBundleConfiguration
+        {
+            FeedUrl = "https://example.com/feed", Channel = "stable",
+            SigningKeyFile = keyPath, BootstrapperDirectory = missing
+        });
+
+        Assert.Contains(Validate(config, checkFileSystem: true),
+            i => i.Path == "update.bootstrapperDirectory" && i.Message.Contains("does not exist"));
+
+        var existing = WithUpdate(new UpdateBundleConfiguration
+        {
+            FeedUrl = "https://example.com/feed", Channel = "stable",
+            SigningKeyFile = keyPath, BootstrapperDirectory = Temp("bootdir").FullName
+        });
+        Assert.False(HasIssue(
+            Validate(existing, checkFileSystem: true), "update.bootstrapperDirectory"));
     }
 
     private static BundleConfiguration WithTarget(

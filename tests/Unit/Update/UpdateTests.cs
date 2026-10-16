@@ -11,7 +11,7 @@ using DotNet.Bundler.Update;
 // 去 spawn：Applier_ManagedExtract_RemovesNestedAppleDouble、
 // ExtractZip_RestoresSymlinkEntries、ExtractZip_DropsAppleDoubleTree 走
 // ArchiveExtractor.ExtractZipToDirectory——macOS 上会拉起 ditto 子进程，
-// 不迁入 Unit，记入 artifacts/harvest-spawn-list.md。
+// 不迁入 Unit，去向见 Integration/Manual 层对应文件。
 // （ExtractZip_RejectsSymlinkEscapingStaging 例外保留：逃逸链接预扫描强制 managed
 // 提取路径，任何宿主都不触 ditto。）
 // 逐方法判重（对照现有 tests/Unit）已跳过并入项：
