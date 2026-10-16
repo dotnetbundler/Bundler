@@ -13,8 +13,8 @@ public static class UpdateManifestEmitter
 {
     public const string FeedNamePrefix = UpdateFeed.FeedNamePrefix;
 
-    // 自更新适配格式：syspkg（deb/rpm/alpineapk）经包内身份+引导件入链；
-    // dmg 是运输件、pkg 是提权安装器，非更新载体——逐字决策见 docs/design/update.md §2。
+    // 自更新适配格式：syspkg（deb/rpm/alpineapk）经包内身份+引导件入链——决策见 docs/design/update.md §2；
+    // dmg 是运输件、pkg 是提权安装器，非更新载体——逐字决策见同文件 §1。
     private static readonly HashSet<PackageFormat> CoveredFormats =
     [
         PackageFormat.Nsis, PackageFormat.Msi, PackageFormat.App,
