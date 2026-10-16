@@ -63,14 +63,26 @@ _restart_nohup() {
 _mnt_of() {  # $1 路径→mountinfo 最长前缀挂载点（\040/\134 转义还原）；取不到返空
     # 单次 awk 扫描（逐行 fork 三进程×行数太贵）。前缀比对在 "t/" 上做：
     # mp="/" 取前缀 "/" 恰匹配一切绝对路径；mp 相等/段边界（/foo vs /foobar）都被兜住。
-    # awk 词法层先吃一层反斜杠：匹配字面 "\040" 要写 /\\\\040/（两反斜杠的 /\\040/
-    # 在 gawk 下 \040 会被当八进制转义再解成空格字符，\134 同理且会 Trailing backslash
-    # 解析期致命错）。路径经 ENVIRON 传入而非 -v——-v 对值做转义处理会吃掉反斜杠。
-    _MNT_T="$1/" awk 'BEGIN { t = ENVIRON["_MNT_T"] }
+    # 路径经 ENVIRON 传入而非 -v——-v 对值做转义处理会吃掉路径里的反斜杠。
+    # \ddd 转义逐段用 index/substr 解码（AOT UnescapeMountField 同口径，覆盖
+    # \040/\011/\012/\134 全部）——不走 gsub：awk 正则/替换串的转义层数在
+    # gawk/mawk/busybox 间方言不一，实测各方都不一致。
+    _MNT_T="$1/" awk '
+        BEGIN { t = ENVIRON["_MNT_T"] }
+        function unesc(s,   out,p,idx,o) {
+            out=""; p=s
+            while ((idx = index(p, "\\")) > 0) {
+                out = out substr(p, 1, idx-1)
+                o = substr(p, idx+1, 3)
+                if (o ~ /^[0-7][0-7][0-7]$/) {
+                    out = out sprintf("%c", substr(o,1,1)*64 + substr(o,2,1)*8 + substr(o,3,1))
+                    p = substr(p, idx+4)
+                } else { out = out "\\"; p = substr(p, idx+1) }
+            }
+            return out p
+        }
         {
-            mp = $5
-            gsub(/\\\\040/, " ", mp)      # 空格转义还原
-            gsub(/\\\\134/, "\\\\", mp)   # 反斜杠最后解，防 "\\134040" 二次解码
+            mp = unesc($5)
             pre = (mp == "/") ? "/" : mp "/"
             if (index(t, pre) == 1 && length(mp) > length(best)) best = mp
         }
