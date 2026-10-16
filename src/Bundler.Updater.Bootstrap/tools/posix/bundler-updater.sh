@@ -455,15 +455,16 @@ if [ -f "$MARKER" ]; then
     log "bundler-updater: interrupted ${MARKER_KIND} detected, restoring backup first"
     if [ -f "$BACKUP_DIR" ]; then
         # 槽位节点类型不设限（与 AOT DeleteNodeIfPresent 同义）：备份是文件而
-        # 安装槽挂目录节点时 rm -f 删不掉、cp -f 会写进目录内部。
-        rm -rf "$INSTALL_DIR"
+        # 安装槽挂目录节点时 rm -f 删不掉、cp -f 会写进目录内部；删除失败同样
+        # 判 rc4——清不掉还继续写就是静默假恢复。
+        rm -rf "$INSTALL_DIR" || { echo "bundler-updater: cannot clear install slot." >&2; exit 4; }
         if [ "$MARKER_KIND" = rollback ]; then
             cp -f "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
         else
             move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
         fi
     elif [ -d "$BACKUP_DIR" ]; then
-        rm -rf "$INSTALL_DIR"
+        rm -rf "$INSTALL_DIR" || { echo "bundler-updater: cannot clear install slot." >&2; exit 4; }
         if [ "$MARKER_KIND" = rollback ]; then
             mkdir -p "$INSTALL_DIR" || exit 4
             cp -a "$BACKUP_DIR"/. "$INSTALL_DIR"/ || { echo "bundler-updater: rollback copy failed." >&2; exit 4; }
@@ -492,6 +493,9 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
         # 回滚在动安装目标前同样写 marker（内容与 swap 区分）：复制中途崩溃时
         # 恢复路径按 'rollback' 复制还原——备份保留可重试，故失败不复位 marker。
         printf 'rollback in progress' >"$MARKER" || exit 4
+        # 装位挂目录节点时 cp -f 会把备份复制进目录内部并 rc0 静默假成功——
+        # 先清槽再写（与恢复腿同义，AOT File.Copy 到目录路径本就抛 rc4）。
+        rm -rf "$INSTALL_DIR" || { echo "bundler-updater: cannot clear install slot." >&2; exit 4; }
         cp -f "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback copy failed." >&2; exit 4; }
         rm -f "$MARKER"
         [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
@@ -517,7 +521,7 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
     fi
     if [ "$SWAP_FAILED" = 1 ]; then
         log "bundler-updater: swap failed, restoring backup"
-        rm -f "$INSTALL_DIR"
+        rm -rf "$INSTALL_DIR" || { echo "bundler-updater: cannot clear install slot." >&2; exit 4; }
         move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
         rm -f "$MARKER"
         exit 4
@@ -609,7 +613,7 @@ else
 fi
 if [ "$SWAP_FAILED" = 1 ]; then
     log "bundler-updater: swap failed, restoring backup"
-    rm -rf "$INSTALL_DIR"
+    rm -rf "$INSTALL_DIR" || { echo "bundler-updater: cannot clear install slot." >&2; exit 4; }
     move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
     rm -f "$MARKER"
     exit 4

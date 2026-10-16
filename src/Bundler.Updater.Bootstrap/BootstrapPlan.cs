@@ -258,7 +258,9 @@ internal static class BootstrapPlan
             // marker 先行再动安装位：Delete+Copy 中途崩死时，下轮按 "rollback"
             // 内容分流走复制还原——备份是可重试回滚点，不被恢复消耗。
             File.WriteAllText(markerPath, "rollback in progress");
-            Directory.Delete(installDir, recursive: true);
+            // 槽位节点类型不设限（sh rm -rf 同义）：安装槽挂文件节点时
+            // Directory.Delete 撞错——换包与回滚都可能面对异型槽。
+            DeleteNodeIfPresent(installDir);
             CopyTree(backupDir, installDir, log);
             File.Delete(markerPath);
             if (options.AppPath is { Length: > 0 } rollbackApp)
@@ -297,10 +299,7 @@ internal static class BootstrapPlan
             if (Directory.Exists(backupDir))
             {
                 log("bundler-updater: swap failed, restoring backup");
-                if (Directory.Exists(installDir))
-                {
-                    Directory.Delete(installDir, recursive: true);
-                }
+                DeleteNodeIfPresent(installDir);
                 MoveTree(backupDir, installDir, log);
             }
             File.Delete(markerPath);
@@ -716,6 +715,9 @@ internal static class BootstrapPlan
             log($"bundler-updater: rollback '{backupPath}' → '{installPath}'");
             // 同目录级：marker 先行——Copy 半途截断件留给下轮按 rollback 分流复制还原。
             File.WriteAllText(markerPath, "rollback in progress");
+            // 同目录级：装位挂目录节点时 File.Copy 会把备份静默写进目录内部
+            // 或抛错——先按 lstat 语义清槽（sh rm -rf 同义）。
+            DeleteNodeIfPresent(installPath);
             File.Copy(backupPath, installPath, overwrite: true);
             File.Delete(markerPath);
             if (options.AppPath is { Length: > 0 } rollbackApp)
@@ -761,10 +763,7 @@ internal static class BootstrapPlan
             if (backupTaken)
             {
                 log("bundler-updater: swap failed, restoring backup");
-                if (File.Exists(installPath))
-                {
-                    File.Delete(installPath);
-                }
+                DeleteNodeIfPresent(installPath);
                 MoveFile(backupPath, installPath);
             }
             File.Delete(markerPath);
