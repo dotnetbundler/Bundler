@@ -48,14 +48,32 @@ jobs:
       - name: shell 变量邻接检查
         run: |
           python3 - <<'PY'
-          import re, glob, sys
+          import re, glob, sys, os
           pat = re.compile(r'\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7f]')
+          def code_prefix(line):
+              # bash 词法：# 仅在词首（行首/空白/控制算符后）起注释——$#、${#arr[@]}、
+              # 引号内 'a#b' 都不算注释。残余盲区：引号内 "x # y" 之后的真违规会漏检，
+              # 接受为已知代价（比"# 一律截断"宽严相济）。
+              prev = ''
+              for i, c in enumerate(line):
+                  if c == '#' and (i == 0 or prev in ' \t;&|()<>'):
+                      return line[:i]
+                  prev = c
+              return line
+          try:
+              files = glob.glob('**/*', recursive=True, include_hidden=True)
+          except TypeError:  # python<3.11 无 include_hidden
+              files = glob.glob('**/*', recursive=True)
           hits = []
-          for f in glob.glob('**/*.sh', recursive=True):
+          for f in files:
+              # shell 脚本全量 + workflow run: 内联 bash（同词法同隐患）——ps1/cmd 词法不同不在此列。
+              nf = f.replace(os.sep, '/')
+              if not f.endswith(('.sh', '.bash', '.zsh')) and \
+                 not (nf.startswith('.github/workflows/') and f.endswith(('.yml', '.yaml'))):
+                  continue
               for i, line in enumerate(open(f, encoding='utf-8', errors='replace'), 1):
-                  for m in pat.finditer(line):
-                      if '#' not in line[:m.start()]:
-                          hits.append(f"{f}:{i}: {line.strip()[:90]}")
+                  for m in pat.finditer(code_prefix(line)):
+                      hits.append(f"{f}:{i}: {line.strip()[:90]}")
           if hits:
               print("::error::$VAR 后接非 ASCII 会在部分 locale 下被拼进变量名（set -u 炸 unbound）——改用 ${VAR} 定界：")
               print('\n'.join(hits))
