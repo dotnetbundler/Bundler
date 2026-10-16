@@ -1,7 +1,7 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-10-15
-> 当前分支：`main`（测试重写链 PR #90–#97 及收口修复链 #98–#104 均已合入；#98–#104 全量审计收口修复在 PR #105 `fix/audit-98-104`，评审闭环后待用户终审合并）
+> 当前分支：`main`（测试重写链 PR #90–#97、收口修复链 #98–#104 及全量审计收口 PR #105 均已合入，无在途 PR）
 > 当前包版本：`0.1.0-alpha.103`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词（别称仅输入归一，产物名用各生态词），契约与全产物名目录见 `docs/design/targets.md`**
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/design/formats/` 单文档只留设计决策、语义契约与能力状态
