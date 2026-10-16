@@ -21,13 +21,14 @@ public sealed class WixBundler : IFormatBundler
         {
             throw new ArgumentNullException(nameof(bundle));
         }
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            throw new PlatformNotSupportedException("WiX 3.14.1 MSI builds require a Windows host.");
-        }
+        // 格式门先于宿主门——与全部兄弟后端统一：错格式永远 NotSupported。
         if (bundle.Targets.SelectMany(target => target.Formats).Any(format => format != PackageFormat.Msi))
         {
             throw new NotSupportedException("DotNet.Bundler.Wix accepts MSI targets only.");
+        }
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            throw new PlatformNotSupportedException("WiX 3.14.1 MSI builds require a Windows host.");
         }
         if (bundle.Targets.Any(target => target.SigningFiles.Count > 0) && _options.Signer is null)
         {

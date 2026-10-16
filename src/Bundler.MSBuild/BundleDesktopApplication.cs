@@ -283,56 +283,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         {
             var formats = ParseFormats();
             BundleConfiguration Configure(IReadOnlyList<PackageFormat> targetFormats) =>
-                new BundleConfiguration
-            {
-                ProductName = ProductName,
-                Identifier = Identifier,
-                Version = Version,
-                Publisher = EmptyToNull(Publisher),
-                Description = EmptyToNull(Description),
-                Homepage = EmptyToNull(Homepage),
-                Copyright = EmptyToNull(Copyright),
-                LicenseFile = OptionalFullPath(LicenseFile),
-                OutputDirectory = Path.GetFullPath(OutputDirectory),
-                OutputLayout = ParseOutputLayout(),
-                Update = UpdateEnabled ? new UpdateBundleConfiguration
-                {
-                    FeedUrl = UpdateFeedUrl,
-                    Channel = UpdateChannel,
-                    SigningKeyFile = OptionalFullPath(UpdateSigningKeyFile),
-                    PublicKey = EmptyToNull(UpdatePublicKey),
-                    Notes = EmptyToNull(UpdateNotes)
-                } : null,
-                Icons = Icons.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
-                Resources = Resources.Select(item => new BundleResourceConfiguration
-                {
-                    Source = Path.GetFullPath(item.ItemSpec),
-                    Destination = ResourceTargetPath(item)
-                }).ToArray(),
-                FileAssociations = FileAssociations.Select(item => new BundleFileAssociationConfiguration
-                {
-                    Extensions = new[] { item.ItemSpec },
-                    Name = EmptyMetadataToNull(item, "Name"),
-                    Description = EmptyMetadataToNull(item, "Description"),
-                    MimeType = EmptyMetadataToNull(item, "MimeType")
-                }).ToArray(),
-                UrlProtocols = UrlProtocols.Select(item => new BundleUrlProtocolConfiguration
-                {
-                    Schemes = new[] { item.ItemSpec },
-                    Name = EmptyMetadataToNull(item, "Name")
-                }).ToArray(),
-                Targets = new[]
-                {
-                    new BundleTargetConfiguration
-                    {
-                        Target = BundlerTarget,
-                        InputDirectory = Path.GetFullPath(InputDirectory),
-                        MainExecutable = MainExecutable,
-                        SigningFiles = WindowsSigningFiles.Select(item => item.ItemSpec).ToArray(),
-                        Formats = targetFormats
-                    }
-                }
-            };
+                BuildBundleConfiguration(targetFormats);
 
             // 统一预检：共享配置与各格式旋钮在扇出前一次验全；配置类错误
             // 一次报完即失败；宿主门禁格式不进预检，留构建趟逐格式容错。
@@ -400,46 +351,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             {
                 if (format == PackageFormat.Msi)
             {
-                if (!Enum.TryParse<DotNet.Bundler.Wix.WixInstallScope>(WixInstallScope, true, out var scope) ||
-                    !Enum.IsDefined(typeof(DotNet.Bundler.Wix.WixInstallScope), scope))
-                {
-                    throw new ArgumentException("BundlerWixInstallScope must be currentUser or perMachine.");
-                }
-                var languages = (string.IsNullOrWhiteSpace(WixLanguages) ? WixLanguage : WixLanguages)
-                    .Split(';').Select(entry => entry.Trim())
-                    .Where(entry => entry.Length > 0).ToArray();
                 return new WixBundler(
-                    new WixBundleConfiguration
-                    {
-                        InstallScope = scope,
-                        UpgradeCode = EmptyToNull(WixUpgradeCode),
-                        Version = EmptyToNull(WixVersion),
-                        AllowDowngrades = WixAllowDowngrades,
-                        Codepage = WixCodepage,
-                        Languages = languages,
-                        LocaleFiles = ParseWixLanguageFiles(),
-                        FipsCompliant = WixFipsCompliant,
-                        StartMenuShortcut = WixStartMenuShortcut,
-                        DesktopShortcut = WixDesktopShortcut,
-                        InstallDirectorySelection = WixInstallDirectorySelection,
-                        BannerFile = OptionalFullPath(WixBannerFile),
-                        DialogFile = OptionalFullPath(WixDialogFile),
-                        AddToPath = WixAddToPath,
-                        UninstallShortcut = WixUninstallShortcut,
-                        LaunchAfterInstall = WixLaunchAfterInstall,
-                        ExtensionFragmentFiles = WixExtensionFragmentFiles
-                            .Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
-                        ExtensionIdPrefix = EmptyToNull(WixExtensionIdPrefix),
-                        ExtensionComponentRefs = WixExtensionComponentRefs
-                            .Select(item => item.ItemSpec).ToArray(),
-                        ExtensionComponentGroupRefs = WixExtensionComponentGroupRefs
-                            .Select(item => item.ItemSpec).ToArray(),
-                        ExtensionFeatureRefs = WixExtensionFeatureRefs
-                            .Select(item => item.ItemSpec).ToArray(),
-                        ExpertTemplateFile = OptionalFullPath(WixExpertTemplateFile),
-                        ExpertMergeModuleFiles = WixExpertMergeModuleFiles
-                            .Select(item => Path.GetFullPath(item.ItemSpec)).ToArray()
-                    },
+                    (WixBundleConfiguration)BuildFormatConfiguration(format)!,
                     new WixBundlerOptions
                     {
                         ToolsetArchivePath = EmptyToNull(WixToolsetArchivePath),
@@ -450,36 +363,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             }
             else if (format == PackageFormat.Nsis)
             {
-            var nsisConfiguration = new NsisBundleConfiguration
-            {
-                InstallScope = ParseInstallMode(),
-                Compression = ParseCompression(),
-                InstallerIconFile = OptionalFullPath(NsisInstallerIconFile),
-                UninstallerIconFile = OptionalFullPath(NsisUninstallerIconFile),
-                HeaderFile = OptionalFullPath(NsisHeaderFile),
-                SidebarFile = OptionalFullPath(NsisSidebarFile),
-                UninstallerHeaderFile = OptionalFullPath(NsisUninstallerHeaderFile),
-                InstallerHooksFile = OptionalFullPath(NsisInstallerHooksFile),
-                Languages = ParseLanguages(),
-                DisplayLanguageSelector = NsisDisplayLanguageSelector,
-                AllowDowngrades = NsisAllowDowngrades,
-                Shortcuts = new NsisShortcutConfiguration
-                {
-                    Desktop = NsisShortcutDesktop,
-                    StartMenu = NsisShortcutStartMenu,
-                    Arguments = EmptyToNull(NsisShortcutArguments),
-                    WorkingDirectory = EmptyToNull(NsisShortcutWorkingDirectory),
-                    Icon = EmptyToNull(NsisShortcutIcon),
-                    AppUserModelId = EmptyToNull(NsisShortcutAppUserModelId),
-                    StartMenuFolder = EmptyToNull(NsisShortcutStartMenuFolder),
-                    LegacyProductNames = ParseSemicolonList(NsisShortcutLegacyProductNames),
-                    LegacyMainExecutables = ParseSemicolonList(NsisShortcutLegacyMainExecutables)
-                },
-                LegacyMsiProductCodes = ParseSemicolonList(NsisLegacyMsiProductCodes),
-                LegacyMsiUpgradeCodes = ParseSemicolonList(NsisLegacyMsiUpgradeCodes),
-                LegacyMsiAutoDetect = NsisLegacyMsiAutoDetect,
-                CustomLanguageFiles = ParseCustomLanguageFiles()
-            };
+            var nsisConfiguration =
+                (NsisBundleConfiguration)BuildFormatConfiguration(format)!;
             var nsisOptions = new NsisBundlerOptions
             {
                 ToolsetArchivePath = EmptyToNull(NsisToolsetArchivePath),
@@ -502,42 +387,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             else if (format == PackageFormat.Pkg)
             {
                 return new MacPkgBundler(
-                    new MacPkgBundleConfiguration
-                    {
-                        PackageName = EmptyToNull(MacPkgPackageName),
-                        Version = EmptyToNull(MacPkgVersion),
-                        InstallRoot = string.IsNullOrWhiteSpace(MacPkgInstallRoot)
-                            ? "/Applications"
-                            : MacPkgInstallRoot.Trim(),
-                        Files = MacPkgFiles.Select(item => new MacPkgFileEntry
-                        {
-                            Source = Path.GetFullPath(item.ItemSpec),
-                            Destination = EmptyMetadataToNull(item, "Destination")
-                        }).ToArray(),
-                        Title = EmptyToNull(MacPkgTitle),
-                        WelcomeFile = OptionalFullPath(MacPkgWelcomeFile),
-                        ConclusionFile = OptionalFullPath(MacPkgConclusionFile),
-                        InstallScope = string.IsNullOrWhiteSpace(MacPkgInstallScope)
-                            ? DotNet.Bundler.MacPkg.MacPkgInstallScope.System
-                            : ParseMacPkgDomain(),
-                        ScriptsDirectory = OptionalFullPath(MacPkgScriptsDirectory),
-                        Signing = new MacPkgSigningConfiguration
-                        {
-                            Identity = EmptyToNull(MacPkgSignIdentity),
-                            TemporaryCertificateFile = OptionalFullPath(MacPkgTemporaryCertificateFile),
-                            TemporaryCertificatePassword = EmptyToNull(MacPkgTemporaryCertificatePassword),
-                            Notarize = MacPkgNotarize,
-                            NotaryWait = MacPkgNotaryWait,
-                            SkipStapling = MacPkgSkipStapling,
-                            KeychainProfile = EmptyToNull(MacPkgNotaryProfile),
-                            AppleId = EmptyToNull(MacPkgAppleId),
-                            ApplePassword = EmptyToNull(MacPkgApplePassword),
-                            AppleTeamId = EmptyToNull(MacPkgAppleTeamId),
-                            ApiKeyFile = OptionalFullPath(MacPkgNotaryApiKeyFile),
-                            ApiKeyId = EmptyToNull(MacPkgNotaryApiKeyId),
-                            ApiKeyIssuer = EmptyToNull(MacPkgNotaryApiKeyIssuer)
-                        }
-                    },
+                    (MacPkgBundleConfiguration)BuildFormatConfiguration(format)!,
                     BuildMacAppConfiguration(),
                     new MacPkgBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     ;
@@ -545,35 +395,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             else if (format == PackageFormat.Dmg)
             {
                 return new MacDmgBundler(
-                    new MacDmgBundleConfiguration
-                    {
-                        Compression = MacEnumValue<DotNet.Bundler.MacDmg.MacDmgCompression>(
-                                MacDmgCompression, "BundlerMacDmgCompression")
-                            ?? DotNet.Bundler.MacDmg.MacDmgCompression.Ulmo,
-                        VolumeName = EmptyToNull(MacDmgVolumeName),
-                        Layout = string.Equals(
-                            MacDmgLayoutSkip, "true", StringComparison.OrdinalIgnoreCase)
-                            ? null
-                            : new MacDmgLayoutConfiguration
-                            {
-                                WindowX = MacIntValue(MacDmgLayoutWindowX, "BundlerMacDmgLayoutWindowX", 200),
-                                WindowY = MacIntValue(MacDmgLayoutWindowY, "BundlerMacDmgLayoutWindowY", 120),
-                                WindowWidth = MacIntValue(
-                                    MacDmgLayoutWindowWidth, "BundlerMacDmgLayoutWindowWidth", 660),
-                                WindowHeight = MacIntValue(
-                                    MacDmgLayoutWindowHeight, "BundlerMacDmgLayoutWindowHeight", 400),
-                                AppIconX = MacIntValue(MacDmgLayoutAppIconX, "BundlerMacDmgLayoutAppIconX", 180),
-                                AppIconY = MacIntValue(MacDmgLayoutAppIconY, "BundlerMacDmgLayoutAppIconY", 170),
-                                ApplicationsIconX = MacIntValue(
-                                    MacDmgLayoutApplicationsIconX, "BundlerMacDmgLayoutApplicationsIconX", 480),
-                                ApplicationsIconY = MacIntValue(
-                                    MacDmgLayoutApplicationsIconY, "BundlerMacDmgLayoutApplicationsIconY", 170),
-                                IconSize = MacIntValue(MacDmgLayoutIconSize, "BundlerMacDmgLayoutIconSize", 128),
-                            },
-                        BackgroundFile = EmptyToNull(MacDmgBackgroundFile),
-                        VolumeIconFile = EmptyToNull(MacDmgVolumeIconFile),
-                        Signing = BuildMacDmgSigning()
-                    },
+                    (MacDmgBundleConfiguration)BuildFormatConfiguration(format)!,
                     BuildMacAppConfiguration(),
                     new MacDmgBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     ;
@@ -581,180 +403,35 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             else if (format == PackageFormat.Deb)
             {
                 return new DebBundler(
-                    new DebBundleConfiguration
-                    {
-                        PackageName = EmptyToNull(DebPackageName),
-                        Version = EmptyToNull(DebVersion),
-                        Release = EmptyToNull(DebRelease),
-                        Epoch = EmptyToNull(DebEpoch),
-                        Architecture = EmptyToNull(DebArchitecture),
-                        Vendor = EmptyToNull(DebVendor),
-                        InstallRoot = EmptyToNull(DebInstallRoot),
-                        BinLink = string.Equals(DebBinLink, "none", StringComparison.OrdinalIgnoreCase)
-                            ? ""
-                            : EmptyToNull(DebBinLink),
-                        Depends = SplitList(DebDepends),
-                        Recommends = SplitList(DebRecommends),
-                        Provides = SplitList(DebProvides),
-                        Conflicts = SplitList(DebConflicts),
-                        Replaces = SplitList(DebReplaces),
-                        Section = EmptyToNull(DebSection),
-                        Priority = EmptyToNull(DebPriority),
-                        Categories = SplitList(DebCategories),
-                        DesktopFile = OptionalFullPath(DebDesktopFile),
-                        MetainfoFile = OptionalFullPath(DebMetainfoFile),
-                        ChangelogFile = OptionalFullPath(DebChangelogFile),
-                        PreInstallFile = OptionalFullPath(DebPreInstallFile),
-                        PostInstallFile = OptionalFullPath(DebPostInstallFile),
-                        PreUninstallFile = OptionalFullPath(DebPreUninstallFile),
-                        PostUninstallFile = OptionalFullPath(DebPostUninstallFile),
-                        SystemdServiceFile = OptionalFullPath(DebSystemdServiceFile),
-                        ConfigLocations = SplitList(DebConfigLocations),
-                        Files = DebFiles.Select(item => new DebFileEntry
-                        {
-                            Source = Path.GetFullPath(item.ItemSpec),
-                            Destination = item.GetMetadata("Destination")
-                        }).ToArray()
-                    },
+                    (DebBundleConfiguration)BuildFormatConfiguration(format)!,
                     new DebBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     ;
             }
             else if (format == PackageFormat.Rpm)
             {
                 return new RpmBundler(
-                    new RpmBundleConfiguration
-                    {
-                        PackageName = EmptyToNull(RpmPackageName),
-                        Version = EmptyToNull(RpmVersion),
-                        Release = EmptyToNull(RpmRelease),
-                        Epoch = EmptyToNull(RpmEpoch),
-                        Architecture = EmptyToNull(RpmArchitecture),
-                        Vendor = EmptyToNull(RpmVendor),
-                        InstallRoot = EmptyToNull(RpmInstallRoot),
-                        BinLink = string.Equals(RpmBinLink, "none", StringComparison.OrdinalIgnoreCase)
-                            ? ""
-                            : EmptyToNull(RpmBinLink),
-                        Depends = SplitList(RpmDepends),
-                        Provides = SplitList(RpmProvides),
-                        Conflicts = SplitList(RpmConflicts),
-                        Obsoletes = SplitList(RpmObsoletes),
-                        Recommends = SplitList(RpmRecommends),
-                        Suggests = SplitList(RpmSuggests),
-                        License = EmptyToNull(RpmLicense),
-                        Group = EmptyToNull(RpmGroup),
-                        Url = EmptyToNull(RpmUrl),
-                        Categories = SplitList(RpmCategories),
-                        DesktopFile = OptionalFullPath(RpmDesktopFile),
-                        MetainfoFile = OptionalFullPath(RpmMetainfoFile),
-                        ChangelogFile = OptionalFullPath(RpmChangelogFile),
-                        ConfigLocations = SplitList(RpmConfigLocations),
-                        SystemdServiceFile = OptionalFullPath(RpmSystemdServiceFile),
-                        PreInstallFile = OptionalFullPath(RpmPreInstallFile),
-                        PostInstallFile = OptionalFullPath(RpmPostInstallFile),
-                        PreUninstallFile = OptionalFullPath(RpmPreUninstallFile),
-                        PostUninstallFile = OptionalFullPath(RpmPostUninstallFile),
-                        PreInstallProgram = EmptyToNull(RpmPreInstallProgram),
-                        PostInstallProgram = EmptyToNull(RpmPostInstallProgram),
-                        PreUninstallProgram = EmptyToNull(RpmPreUninstallProgram),
-                        PostUninstallProgram = EmptyToNull(RpmPostUninstallProgram),
-                        Signing = new KeyFileSigningConfiguration
-                        {
-                            KeyFile = OptionalFullPath(RpmSigningKeyFile),
-                            Passphrase = EmptyToNull(RpmSigningKeyPassphrase),
-                        },
-                        Files = RpmFiles.Select(item => new RpmFileEntry
-                        {
-                            Source = Path.GetFullPath(item.ItemSpec),
-                            Destination = item.GetMetadata("Destination")
-                        }).ToArray()
-                    },
+                    (RpmBundleConfiguration)BuildFormatConfiguration(format)!,
                     new RpmBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     ;
             }
             else if (format is PackageFormat.Zip or PackageFormat.TarGz)
             {
                 return new ArchiveBundler(
-                    new ArchiveBundleConfiguration
-                    {
-                        PackageName = EmptyToNull(ArchivePackageName),
-                        Version = EmptyToNull(ArchiveVersion),
-                        ArchiveName = EmptyToNull(ArchiveName),
-                        Files = ArchiveFiles.Select(item => new ArchiveFileEntry
-                        {
-                            Source = Path.GetFullPath(item.ItemSpec),
-                            Destination = item.GetMetadata("Destination")
-                        }).ToArray()
-                    },
+                    (ArchiveBundleConfiguration)BuildFormatConfiguration(format)!,
                     new ArchiveBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     ;
             }
             else if (format == PackageFormat.AlpineApk)
             {
                 return new AlpineApkBundler(
-                    new AlpineApkBundleConfiguration
-                    {
-                        PackageName = EmptyToNull(AlpineApkPackageName),
-                        Version = EmptyToNull(AlpineApkVersion),
-                        Architecture = EmptyToNull(AlpineApkArchitecture),
-                        Origin = EmptyToNull(AlpineApkOrigin),
-                        Description = EmptyToNull(AlpineApkDescription),
-                        Url = EmptyToNull(AlpineApkUrl),
-                        BinLink = string.Equals(AlpineApkBinLink, "none", StringComparison.OrdinalIgnoreCase)
-                            ? ""
-                            : EmptyToNull(AlpineApkBinLink),
-                        Release = EmptyToNull(AlpineApkRelease),
-                        License = EmptyToNull(AlpineApkLicense),
-                        BuildDate = EmptyToNull(AlpineApkBuildDate),
-                        Depends = SplitList(AlpineApkDepends),
-                        Provides = SplitList(AlpineApkProvides),
-                        Triggers = SplitList(AlpineApkTriggers),
-                        PreInstallFile = OptionalFullPath(AlpineApkPreInstallFile),
-                        PostInstallFile = OptionalFullPath(AlpineApkPostInstallFile),
-                        PreUninstallFile = OptionalFullPath(AlpineApkPreUninstallFile),
-                        PostUninstallFile = OptionalFullPath(AlpineApkPostUninstallFile),
-                        PreUpgradeFile = OptionalFullPath(AlpineApkPreUpgradeFile),
-                        PostUpgradeFile = OptionalFullPath(AlpineApkPostUpgradeFile),
-                        Files = AlpineApkFiles.Select(item => new AlpineApkFileEntry
-                        {
-                            Source = Path.GetFullPath(item.ItemSpec),
-                            Destination = item.GetMetadata("Destination")
-                        }).ToArray(),
-                        Signing = new KeyFileSigningConfiguration
-                        {
-                            KeyFile = OptionalFullPath(AlpineApkSigningKeyFile),
-                            Passphrase = EmptyToNull(AlpineApkSigningKeyPassphrase),
-                        }
-                    },
+                    (AlpineApkBundleConfiguration)BuildFormatConfiguration(format)!,
                     new AlpineApkBundlerOptions { Logger = new MsBuildBundleLogger(Log) })
                     ;
             }
             else if (format == PackageFormat.AppImage)
             {
                 return new AppImageBundler(
-                    new AppImageBundleConfiguration
-                    {
-                        PackageName = EmptyToNull(AppImagePackageName),
-                        Version = EmptyToNull(AppImageVersion),
-                        Architecture = EmptyToNull(AppImageArchitecture),
-                        InstallRoot = EmptyToNull(AppImageInstallRoot),
-                        BinLink = string.Equals(AppImageBinLink, "none", StringComparison.OrdinalIgnoreCase)
-                            ? ""
-                            : EmptyToNull(AppImageBinLink),
-                        IconFile = OptionalFullPath(AppImageIconFile),
-                        DesktopFile = OptionalFullPath(AppImageDesktopFile),
-                        Categories = SplitList(AppImageCategories),
-                        MetainfoFile = OptionalFullPath(AppImageMetainfoFile),
-                        Signing = new KeyFileSigningConfiguration
-                        {
-                            KeyFile = OptionalFullPath(AppImageSigningKeyFile),
-                            Passphrase = EmptyToNull(AppImageSigningKeyPassphrase),
-                        },
-                        Files = AppImageFiles.Select(item => new AppImageFileEntry
-                        {
-                            Source = Path.GetFullPath(item.ItemSpec),
-                            Destination = item.GetMetadata("Destination")
-                        }).ToArray()
-                    },
+                    (AppImageBundleConfiguration)BuildFormatConfiguration(format)!,
                     new AppImageBundlerOptions
                     {
                         ToolsetCacheDirectory = EmptyToNull(ToolCacheDirectory),
@@ -820,6 +497,381 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             Log.LogErrorFromException(exception, showStackTrace: true);
             return false;
         }
+    }
+
+    /// <summary>任务属性 → 共享 <see cref="BundleConfiguration"/> 映射（测试缝）。</summary>
+    internal BundleConfiguration BuildBundleConfiguration(
+        IReadOnlyList<PackageFormat> targetFormats) =>
+        new BundleConfiguration
+        {
+            ProductName = ProductName,
+            Identifier = Identifier,
+            Version = Version,
+            Publisher = EmptyToNull(Publisher),
+            Description = EmptyToNull(Description),
+            Homepage = EmptyToNull(Homepage),
+            Copyright = EmptyToNull(Copyright),
+            LicenseFile = OptionalFullPath(LicenseFile),
+            OutputDirectory = Path.GetFullPath(OutputDirectory),
+            OutputLayout = ParseOutputLayout(),
+            Update = UpdateEnabled ? new UpdateBundleConfiguration
+            {
+                FeedUrl = UpdateFeedUrl,
+                Channel = UpdateChannel,
+                SigningKeyFile = OptionalFullPath(UpdateSigningKeyFile),
+                PublicKey = EmptyToNull(UpdatePublicKey),
+                Notes = EmptyToNull(UpdateNotes)
+            } : null,
+            Icons = Icons.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
+            Resources = Resources.Select(item => new BundleResourceConfiguration
+            {
+                Source = Path.GetFullPath(item.ItemSpec),
+                Destination = ResourceTargetPath(item)
+            }).ToArray(),
+            FileAssociations = FileAssociations.Select(item => new BundleFileAssociationConfiguration
+            {
+                Extensions = new[] { item.ItemSpec },
+                Name = EmptyMetadataToNull(item, "Name"),
+                Description = EmptyMetadataToNull(item, "Description"),
+                MimeType = EmptyMetadataToNull(item, "MimeType")
+            }).ToArray(),
+            UrlProtocols = UrlProtocols.Select(item => new BundleUrlProtocolConfiguration
+            {
+                Schemes = new[] { item.ItemSpec },
+                Name = EmptyMetadataToNull(item, "Name")
+            }).ToArray(),
+            Targets = new[]
+            {
+                new BundleTargetConfiguration
+                {
+                    Target = BundlerTarget,
+                    InputDirectory = Path.GetFullPath(InputDirectory),
+                    MainExecutable = MainExecutable,
+                    SigningFiles = WindowsSigningFiles.Select(item => item.ItemSpec).ToArray(),
+                    Formats = targetFormats
+                }
+            }
+        };
+
+    /// <summary>任务属性 → 各格式分节配置对象（测试缝；返回具体 *BundleConfiguration 类型）。</summary>
+    internal object? BuildFormatConfiguration(PackageFormat format)
+    {
+        if (format == PackageFormat.Msi)
+        {
+            if (!Enum.TryParse<DotNet.Bundler.Wix.WixInstallScope>(WixInstallScope, true, out var scope) ||
+                !Enum.IsDefined(typeof(DotNet.Bundler.Wix.WixInstallScope), scope))
+            {
+                throw new ArgumentException("BundlerWixInstallScope must be currentUser or perMachine.");
+            }
+            var languages = (string.IsNullOrWhiteSpace(WixLanguages) ? WixLanguage : WixLanguages)
+                .Split(';').Select(entry => entry.Trim())
+                .Where(entry => entry.Length > 0).ToArray();
+            return new WixBundleConfiguration
+            {
+                InstallScope = scope,
+                UpgradeCode = EmptyToNull(WixUpgradeCode),
+                Version = EmptyToNull(WixVersion),
+                AllowDowngrades = WixAllowDowngrades,
+                Codepage = WixCodepage,
+                Languages = languages,
+                LocaleFiles = ParseWixLanguageFiles(),
+                FipsCompliant = WixFipsCompliant,
+                StartMenuShortcut = WixStartMenuShortcut,
+                DesktopShortcut = WixDesktopShortcut,
+                InstallDirectorySelection = WixInstallDirectorySelection,
+                BannerFile = OptionalFullPath(WixBannerFile),
+                DialogFile = OptionalFullPath(WixDialogFile),
+                AddToPath = WixAddToPath,
+                UninstallShortcut = WixUninstallShortcut,
+                LaunchAfterInstall = WixLaunchAfterInstall,
+                ExtensionFragmentFiles = WixExtensionFragmentFiles
+                    .Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
+                ExtensionIdPrefix = EmptyToNull(WixExtensionIdPrefix),
+                ExtensionComponentRefs = WixExtensionComponentRefs
+                    .Select(item => item.ItemSpec).ToArray(),
+                ExtensionComponentGroupRefs = WixExtensionComponentGroupRefs
+                    .Select(item => item.ItemSpec).ToArray(),
+                ExtensionFeatureRefs = WixExtensionFeatureRefs
+                    .Select(item => item.ItemSpec).ToArray(),
+                ExpertTemplateFile = OptionalFullPath(WixExpertTemplateFile),
+                ExpertMergeModuleFiles = WixExpertMergeModuleFiles
+                    .Select(item => Path.GetFullPath(item.ItemSpec)).ToArray()
+            };
+        }
+        if (format == PackageFormat.Nsis)
+        {
+            return new NsisBundleConfiguration
+            {
+                InstallScope = ParseInstallMode(),
+                Compression = ParseCompression(),
+                InstallerIconFile = OptionalFullPath(NsisInstallerIconFile),
+                UninstallerIconFile = OptionalFullPath(NsisUninstallerIconFile),
+                HeaderFile = OptionalFullPath(NsisHeaderFile),
+                SidebarFile = OptionalFullPath(NsisSidebarFile),
+                UninstallerHeaderFile = OptionalFullPath(NsisUninstallerHeaderFile),
+                InstallerHooksFile = OptionalFullPath(NsisInstallerHooksFile),
+                Languages = ParseLanguages(),
+                DisplayLanguageSelector = NsisDisplayLanguageSelector,
+                AllowDowngrades = NsisAllowDowngrades,
+                Shortcuts = new NsisShortcutConfiguration
+                {
+                    Desktop = NsisShortcutDesktop,
+                    StartMenu = NsisShortcutStartMenu,
+                    Arguments = EmptyToNull(NsisShortcutArguments),
+                    WorkingDirectory = EmptyToNull(NsisShortcutWorkingDirectory),
+                    Icon = EmptyToNull(NsisShortcutIcon),
+                    AppUserModelId = EmptyToNull(NsisShortcutAppUserModelId),
+                    StartMenuFolder = EmptyToNull(NsisShortcutStartMenuFolder),
+                    LegacyProductNames = ParseSemicolonList(NsisShortcutLegacyProductNames),
+                    LegacyMainExecutables = ParseSemicolonList(NsisShortcutLegacyMainExecutables)
+                },
+                LegacyMsiProductCodes = ParseSemicolonList(NsisLegacyMsiProductCodes),
+                LegacyMsiUpgradeCodes = ParseSemicolonList(NsisLegacyMsiUpgradeCodes),
+                LegacyMsiAutoDetect = NsisLegacyMsiAutoDetect,
+                CustomLanguageFiles = ParseCustomLanguageFiles()
+            };
+        }
+        if (format == PackageFormat.App)
+        {
+            return BuildMacAppConfiguration();
+        }
+        if (format == PackageFormat.Pkg)
+        {
+            return new MacPkgBundleConfiguration
+            {
+                PackageName = EmptyToNull(MacPkgPackageName),
+                Version = EmptyToNull(MacPkgVersion),
+                InstallRoot = string.IsNullOrWhiteSpace(MacPkgInstallRoot)
+                    ? "/Applications"
+                    : MacPkgInstallRoot.Trim(),
+                Files = MacPkgFiles.Select(item => new MacPkgFileEntry
+                {
+                    Source = Path.GetFullPath(item.ItemSpec),
+                    Destination = EmptyMetadataToNull(item, "Destination")
+                }).ToArray(),
+                Title = EmptyToNull(MacPkgTitle),
+                WelcomeFile = OptionalFullPath(MacPkgWelcomeFile),
+                ConclusionFile = OptionalFullPath(MacPkgConclusionFile),
+                InstallScope = string.IsNullOrWhiteSpace(MacPkgInstallScope)
+                    ? DotNet.Bundler.MacPkg.MacPkgInstallScope.System
+                    : ParseMacPkgDomain(),
+                ScriptsDirectory = OptionalFullPath(MacPkgScriptsDirectory),
+                Signing = new MacPkgSigningConfiguration
+                {
+                    Identity = EmptyToNull(MacPkgSignIdentity),
+                    TemporaryCertificateFile = OptionalFullPath(MacPkgTemporaryCertificateFile),
+                    TemporaryCertificatePassword = EmptyToNull(MacPkgTemporaryCertificatePassword),
+                    Notarize = MacPkgNotarize,
+                    NotaryWait = MacPkgNotaryWait,
+                    SkipStapling = MacPkgSkipStapling,
+                    KeychainProfile = EmptyToNull(MacPkgNotaryProfile),
+                    AppleId = EmptyToNull(MacPkgAppleId),
+                    ApplePassword = EmptyToNull(MacPkgApplePassword),
+                    AppleTeamId = EmptyToNull(MacPkgAppleTeamId),
+                    ApiKeyFile = OptionalFullPath(MacPkgNotaryApiKeyFile),
+                    ApiKeyId = EmptyToNull(MacPkgNotaryApiKeyId),
+                    ApiKeyIssuer = EmptyToNull(MacPkgNotaryApiKeyIssuer)
+                }
+            };
+        }
+        if (format == PackageFormat.Dmg)
+        {
+            return new MacDmgBundleConfiguration
+            {
+                Compression = MacEnumValue<DotNet.Bundler.MacDmg.MacDmgCompression>(
+                        MacDmgCompression, "BundlerMacDmgCompression")
+                    ?? DotNet.Bundler.MacDmg.MacDmgCompression.Ulmo,
+                VolumeName = EmptyToNull(MacDmgVolumeName),
+                Layout = string.Equals(
+                    MacDmgLayoutSkip, "true", StringComparison.OrdinalIgnoreCase)
+                    ? null
+                    : new MacDmgLayoutConfiguration
+                    {
+                        WindowX = MacIntValue(MacDmgLayoutWindowX, "BundlerMacDmgLayoutWindowX", 200),
+                        WindowY = MacIntValue(MacDmgLayoutWindowY, "BundlerMacDmgLayoutWindowY", 120),
+                        WindowWidth = MacIntValue(
+                            MacDmgLayoutWindowWidth, "BundlerMacDmgLayoutWindowWidth", 660),
+                        WindowHeight = MacIntValue(
+                            MacDmgLayoutWindowHeight, "BundlerMacDmgLayoutWindowHeight", 400),
+                        AppIconX = MacIntValue(MacDmgLayoutAppIconX, "BundlerMacDmgLayoutAppIconX", 180),
+                        AppIconY = MacIntValue(MacDmgLayoutAppIconY, "BundlerMacDmgLayoutAppIconY", 170),
+                        ApplicationsIconX = MacIntValue(
+                            MacDmgLayoutApplicationsIconX, "BundlerMacDmgLayoutApplicationsIconX", 480),
+                        ApplicationsIconY = MacIntValue(
+                            MacDmgLayoutApplicationsIconY, "BundlerMacDmgLayoutApplicationsIconY", 170),
+                        IconSize = MacIntValue(MacDmgLayoutIconSize, "BundlerMacDmgLayoutIconSize", 128),
+                    },
+                BackgroundFile = EmptyToNull(MacDmgBackgroundFile),
+                VolumeIconFile = EmptyToNull(MacDmgVolumeIconFile),
+                Signing = BuildMacDmgSigning()
+            };
+        }
+        if (format == PackageFormat.Deb)
+        {
+            return new DebBundleConfiguration
+            {
+                PackageName = EmptyToNull(DebPackageName),
+                Version = EmptyToNull(DebVersion),
+                Release = EmptyToNull(DebRelease),
+                Epoch = EmptyToNull(DebEpoch),
+                Architecture = EmptyToNull(DebArchitecture),
+                Vendor = EmptyToNull(DebVendor),
+                InstallRoot = EmptyToNull(DebInstallRoot),
+                BinLink = string.Equals(DebBinLink, "none", StringComparison.OrdinalIgnoreCase)
+                    ? ""
+                    : EmptyToNull(DebBinLink),
+                Depends = SplitList(DebDepends),
+                Recommends = SplitList(DebRecommends),
+                Provides = SplitList(DebProvides),
+                Conflicts = SplitList(DebConflicts),
+                Replaces = SplitList(DebReplaces),
+                Section = EmptyToNull(DebSection),
+                Priority = EmptyToNull(DebPriority),
+                Categories = SplitList(DebCategories),
+                DesktopFile = OptionalFullPath(DebDesktopFile),
+                MetainfoFile = OptionalFullPath(DebMetainfoFile),
+                ChangelogFile = OptionalFullPath(DebChangelogFile),
+                PreInstallFile = OptionalFullPath(DebPreInstallFile),
+                PostInstallFile = OptionalFullPath(DebPostInstallFile),
+                PreUninstallFile = OptionalFullPath(DebPreUninstallFile),
+                PostUninstallFile = OptionalFullPath(DebPostUninstallFile),
+                SystemdServiceFile = OptionalFullPath(DebSystemdServiceFile),
+                ConfigLocations = SplitList(DebConfigLocations),
+                Files = DebFiles.Select(item => new DebFileEntry
+                {
+                    Source = Path.GetFullPath(item.ItemSpec),
+                    Destination = item.GetMetadata("Destination")
+                }).ToArray()
+            };
+        }
+        if (format == PackageFormat.Rpm)
+        {
+            return new RpmBundleConfiguration
+            {
+                PackageName = EmptyToNull(RpmPackageName),
+                Version = EmptyToNull(RpmVersion),
+                Release = EmptyToNull(RpmRelease),
+                Epoch = EmptyToNull(RpmEpoch),
+                Architecture = EmptyToNull(RpmArchitecture),
+                Vendor = EmptyToNull(RpmVendor),
+                InstallRoot = EmptyToNull(RpmInstallRoot),
+                BinLink = string.Equals(RpmBinLink, "none", StringComparison.OrdinalIgnoreCase)
+                    ? ""
+                    : EmptyToNull(RpmBinLink),
+                Depends = SplitList(RpmDepends),
+                Provides = SplitList(RpmProvides),
+                Conflicts = SplitList(RpmConflicts),
+                Obsoletes = SplitList(RpmObsoletes),
+                Recommends = SplitList(RpmRecommends),
+                Suggests = SplitList(RpmSuggests),
+                License = EmptyToNull(RpmLicense),
+                Group = EmptyToNull(RpmGroup),
+                Url = EmptyToNull(RpmUrl),
+                Categories = SplitList(RpmCategories),
+                DesktopFile = OptionalFullPath(RpmDesktopFile),
+                MetainfoFile = OptionalFullPath(RpmMetainfoFile),
+                ChangelogFile = OptionalFullPath(RpmChangelogFile),
+                ConfigLocations = SplitList(RpmConfigLocations),
+                SystemdServiceFile = OptionalFullPath(RpmSystemdServiceFile),
+                PreInstallFile = OptionalFullPath(RpmPreInstallFile),
+                PostInstallFile = OptionalFullPath(RpmPostInstallFile),
+                PreUninstallFile = OptionalFullPath(RpmPreUninstallFile),
+                PostUninstallFile = OptionalFullPath(RpmPostUninstallFile),
+                PreInstallProgram = EmptyToNull(RpmPreInstallProgram),
+                PostInstallProgram = EmptyToNull(RpmPostInstallProgram),
+                PreUninstallProgram = EmptyToNull(RpmPreUninstallProgram),
+                PostUninstallProgram = EmptyToNull(RpmPostUninstallProgram),
+                Signing = new KeyFileSigningConfiguration
+                {
+                    KeyFile = OptionalFullPath(RpmSigningKeyFile),
+                    Passphrase = EmptyToNull(RpmSigningKeyPassphrase),
+                },
+                Files = RpmFiles.Select(item => new RpmFileEntry
+                {
+                    Source = Path.GetFullPath(item.ItemSpec),
+                    Destination = item.GetMetadata("Destination")
+                }).ToArray()
+            };
+        }
+        if (format is PackageFormat.Zip or PackageFormat.TarGz)
+        {
+            return new ArchiveBundleConfiguration
+            {
+                PackageName = EmptyToNull(ArchivePackageName),
+                Version = EmptyToNull(ArchiveVersion),
+                ArchiveName = EmptyToNull(ArchiveName),
+                Files = ArchiveFiles.Select(item => new ArchiveFileEntry
+                {
+                    Source = Path.GetFullPath(item.ItemSpec),
+                    Destination = item.GetMetadata("Destination")
+                }).ToArray()
+            };
+        }
+        if (format == PackageFormat.AlpineApk)
+        {
+            return new AlpineApkBundleConfiguration
+            {
+                PackageName = EmptyToNull(AlpineApkPackageName),
+                Version = EmptyToNull(AlpineApkVersion),
+                Architecture = EmptyToNull(AlpineApkArchitecture),
+                Origin = EmptyToNull(AlpineApkOrigin),
+                Description = EmptyToNull(AlpineApkDescription),
+                Url = EmptyToNull(AlpineApkUrl),
+                BinLink = string.Equals(AlpineApkBinLink, "none", StringComparison.OrdinalIgnoreCase)
+                    ? ""
+                    : EmptyToNull(AlpineApkBinLink),
+                Release = EmptyToNull(AlpineApkRelease),
+                License = EmptyToNull(AlpineApkLicense),
+                BuildDate = EmptyToNull(AlpineApkBuildDate),
+                Depends = SplitList(AlpineApkDepends),
+                Provides = SplitList(AlpineApkProvides),
+                Triggers = SplitList(AlpineApkTriggers),
+                PreInstallFile = OptionalFullPath(AlpineApkPreInstallFile),
+                PostInstallFile = OptionalFullPath(AlpineApkPostInstallFile),
+                PreUninstallFile = OptionalFullPath(AlpineApkPreUninstallFile),
+                PostUninstallFile = OptionalFullPath(AlpineApkPostUninstallFile),
+                PreUpgradeFile = OptionalFullPath(AlpineApkPreUpgradeFile),
+                PostUpgradeFile = OptionalFullPath(AlpineApkPostUpgradeFile),
+                Files = AlpineApkFiles.Select(item => new AlpineApkFileEntry
+                {
+                    Source = Path.GetFullPath(item.ItemSpec),
+                    Destination = item.GetMetadata("Destination")
+                }).ToArray(),
+                Signing = new KeyFileSigningConfiguration
+                {
+                    KeyFile = OptionalFullPath(AlpineApkSigningKeyFile),
+                    Passphrase = EmptyToNull(AlpineApkSigningKeyPassphrase),
+                }
+            };
+        }
+        if (format == PackageFormat.AppImage)
+        {
+            return new AppImageBundleConfiguration
+            {
+                PackageName = EmptyToNull(AppImagePackageName),
+                Version = EmptyToNull(AppImageVersion),
+                Architecture = EmptyToNull(AppImageArchitecture),
+                InstallRoot = EmptyToNull(AppImageInstallRoot),
+                BinLink = string.Equals(AppImageBinLink, "none", StringComparison.OrdinalIgnoreCase)
+                    ? ""
+                    : EmptyToNull(AppImageBinLink),
+                IconFile = OptionalFullPath(AppImageIconFile),
+                DesktopFile = OptionalFullPath(AppImageDesktopFile),
+                Categories = SplitList(AppImageCategories),
+                MetainfoFile = OptionalFullPath(AppImageMetainfoFile),
+                Signing = new KeyFileSigningConfiguration
+                {
+                    KeyFile = OptionalFullPath(AppImageSigningKeyFile),
+                    Passphrase = EmptyToNull(AppImageSigningKeyPassphrase),
+                },
+                Files = AppImageFiles.Select(item => new AppImageFileEntry
+                {
+                    Source = Path.GetFullPath(item.ItemSpec),
+                    Destination = item.GetMetadata("Destination")
+                }).ToArray()
+            };
+        }
+        return null;
     }
 
     private MacAppBundleConfiguration BuildMacAppConfiguration() =>
@@ -911,17 +963,20 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         return layout;
     }
 
-    private IReadOnlyList<PackageFormat> ParseFormats()
+    internal IReadOnlyList<PackageFormat> ParseFormats()
     {
         var result = new List<PackageFormat>();
         foreach (var value in Formats.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries))
         {
             PackageFormat format;
-            // IsDefined 必查：Enum.TryParse 会放行 "3" 这类数值串。
-            if (!Enum.TryParse(value.Trim(), true, out format) ||
+            // TryParse+IsDefined 仍放行 "3" 这类命中枚举值的数值串——格式名全是字母，
+            // 非字母输入一并拒。
+            var trimmed = value.Trim();
+            if (!trimmed.All(char.IsLetter) ||
+                !Enum.TryParse(trimmed, true, out format) ||
                 !Enum.IsDefined(typeof(PackageFormat), format))
             {
-                throw new ArgumentException("Unknown bundle format '" + value.Trim() + "'.", nameof(Formats));
+                throw new ArgumentException("Unknown bundle format '" + trimmed + "'.", nameof(Formats));
             }
 
             if (!result.Contains(format))
