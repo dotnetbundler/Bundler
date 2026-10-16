@@ -23,10 +23,6 @@ on:
       legs:
         type: string
         default: all
-  # 临时注册门槛：GitHub 只允许对"至少跑过一次"的 workflow 发 dispatch，
-  # 新工作流在分支上要先借 push 自跑注册一次；验收收口、并入 verify 前删除本块。
-  push:
-    branches: [feat/syspkg-verify]
 
 permissions:
   contents: read

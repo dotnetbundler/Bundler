@@ -120,7 +120,7 @@ tests/
 | `BootstrapPlan.Run` 参数面 | Unit | 动词/参数解析、缺参报错、退出码 |
 | `Apply` 交换语义 | Integration | 提权/非提权目录换装；写失败回滚；`MacAppGate` 剥离 .app 语义；`CanonicalPath`；`ForceManagedCopy`/`IoFaultProbe`/`FreeSpaceProbe` 三缝 |
 | `Program.Main` | Integration | AOT 件与 sh 降级件行为奇偶 |
-| `pkg-apply` 动词 | Unit + Integration | deb/rpm/apk 前端退化链命令选择序与 argv/env 形、`--rollback`（rpm `--oldpackage`）、apk 公钥闸 `--allow-untrusted`、降权链 `setpriv→sudo→runuser→su` 构造、passwd 查名、`--env-file` 回灌+最小集（目录件/零对件退化判拒、CRLF 折叠）、`--app` 普通文件判据、`--log` 不可写降级、uid/gid 边界规范化（超界/前导零/坏段回退）、退出码 0/3/4/5/6 分类（含 rc6=安装已提交重启失败）；`CommandProbe`/`EnvProbe`/`ExecProbe`/`SpawnProbe` 四缝（AOT 腿）+ `BUNDLER_UPDATER_CMD_*`/`PASSWD_FILE`/`APK_KEYS_DIR` env 缝（双侧同名，sh 腿实跑 stub 垫片） |
+| `pkg-apply` 动词 | Unit + Integration | deb/rpm/apk 前端退化链命令选择序与 argv/env 形、`--rollback`（rpm `--oldpackage`）、apk 公钥闸 `--allow-untrusted`、降权链 `setpriv→sudo→runuser→su` 构造、**降权器最小 argv 预检**（`工具 选项 /bin/sh -c :` rc≠0→降级下一级——busybox `setpriv` 在场拒参案，spawn 只证分叉不证收参）、passwd 查名、`--env-file` 回灌+最小集（目录件/零对件退化判拒、CRLF 折叠）、`--app` 普通文件判据、`--log` 不可写降级、uid/gid 边界规范化（超界/前导零/坏段回退）、退出码 0/3/4/5/6 分类（含 rc6=安装已提交重启失败）；`CommandProbe`/`EnvProbe`/`ExecProbe`/`SpawnProbe` 四缝（AOT 腿）+ `BUNDLER_UPDATER_CMD_*`/`PASSWD_FILE`/`APK_KEYS_DIR` env 缝（双侧同名，sh 腿实跑 stub 垫片） |
 
 ### 3.8 十格式后端（Api + Integration + Unit 内件）
 
@@ -180,10 +180,19 @@ HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 
                        consume 配对矩阵（联合交换真装真跑 + 跨 OS 归档格式断言）→
                        manual-auto×6 腿 → universal 产/消
   produce-bootstrap.yml  产件流：per-RID AOT 引导件产出（workflow_dispatch，全 RID 五腿）
+  syspkg-verify.yml    UPDATE 系统包验收腿：workflow_dispatch(legs)/workflow_call
+                       select（legs→动态矩阵）→ bootstrap-musl-x64（alpine SDK 容器
+                       NativeAOT 静态引导件）→ debian/fedora/alpine 三容器矩阵——
+                       容器内 root 直跑 pkg-apply 真包装/更新/回滚，账本断言
+                       （dpkg -s / rpm -q / apk list --installed）、conffile、
+                       apk 签名闸、降权重启 uid/env 证据、rc 0/4/5/6，
+                       AOT 引导件与 sh 降级件双实现同场景奇偶，证据逐腿成件
 scripts/ci/
   run-tests.{sh,ps1}   唯一测试驱动（四工程直跑 dll、逐类、进度日志、-longRunning）
   produce.{sh,ps1}     fixture 产件 + 清单
   consume-*.{sh,ps1}   联合交换消费腿
+  syspkg-verify.sh     容器内全链驱动（deb/rpm/apk 三腿参数化：
+                       容器内造包→pkg-apply 双实现相位→账本/探针断言→证据落 /ev）
 ```
 
 **消重原则**：测试驱动逻辑只存在 `run-tests.*` 一份；测试腿定义只在 `test.yml` 一份；verify 经 `workflow_call` 复用不复制；push 不自动触发任何 workflow（本机=基础面，全量=手动 dispatch）。
