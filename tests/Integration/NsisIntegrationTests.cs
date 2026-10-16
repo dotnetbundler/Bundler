@@ -660,7 +660,9 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             // 卸载注册项在模板 finalizing 段删除，晚于 INSTDIR 移除——跟随等待而非裸断言。
             WaitFor.Until(() => Registry.CurrentUser.OpenSubKey(UnicodeRegistryPath) is null,
                 "Unicode uninstall registry key was not removed.", 30);
-            Assert.False(File.Exists(UnicodeStartMenuShortcut));
+            // 快捷方式由分离副本在 RemoveOwnedShortcuts 阶段删除——同一异步语义，跟随等待。
+            WaitFor.Until(() => !File.Exists(UnicodeStartMenuShortcut),
+                "Unicode Start Menu shortcut was not removed.", 30);
         }
         finally { Cleanup(); }
     }
@@ -1620,24 +1622,34 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.False(Directory.Exists(UninstallTransactionDir));
             Directory.Delete(payloadJunction);
             RunOk(Uninstaller, "/S");
+            // $INSTDIR 内直启的卸载器先自我复制到 $TEMP 再由分离副本继续删除——RunOk 只等到
+            // 原进程退出，载荷/快捷方式/注册表项的移除断言全部跟随等待而非裸断言。
             WaitFor.Until(() => !File.Exists(Exe), "Packaged executable survived uninstall.", 30);
             Assert.True(File.Exists(runtimeData),
                 "Default uninstall should preserve runtime-created program data.");
-            Assert.False(File.Exists(Path.Combine(InstallDir, "docs", "license.txt")));
+            WaitFor.Until(() => !File.Exists(Path.Combine(InstallDir, "docs", "license.txt")),
+                "Configured external resource survived uninstall.", 30);
             Assert.True(Directory.Exists(RoamingData),
                 "Default uninstall removed roaming application data.");
             Assert.True(Directory.Exists(LocalData));
             // 卸载注册项在模板 finalizing 段删除，晚于载荷移除——跟随等待而非裸断言。
             WaitFor.Until(() => Registry.CurrentUser.OpenSubKey(RegistryPath) is null,
                 "Uninstall registry key was not removed.", 30);
-            Assert.False(File.Exists(DesktopShortcut));
-            Assert.False(File.Exists(StartMenuShortcut));
-            Assert.Null(Registry.CurrentUser.OpenSubKey(FileProgIdKey));
-            Assert.Null(Registry.CurrentUser
-                .OpenSubKey($@"{FileExtensionKey}\OpenWithProgids")?.GetValue(FileProgId));
-            Assert.Null(Registry.CurrentUser.OpenSubKey(UrlSchemeKey));
-            Assert.Null(Registry.CurrentUser.OpenSubKey(UrlProgIdKey));
-            Assert.Null(Registry.CurrentUser.OpenSubKey(CapabilitiesKey));
+            WaitFor.Until(() => !File.Exists(DesktopShortcut),
+                "Desktop shortcut survived uninstall.", 30);
+            WaitFor.Until(() => !File.Exists(StartMenuShortcut),
+                "Start Menu shortcut survived uninstall.", 30);
+            WaitFor.Until(() => Registry.CurrentUser.OpenSubKey(FileProgIdKey) is null,
+                "File association ProgID key was not removed.", 30);
+            WaitFor.Until(() => Registry.CurrentUser
+                    .OpenSubKey($@"{FileExtensionKey}\OpenWithProgids")?.GetValue(FileProgId) is null,
+                "File extension OpenWithProgids entry was not removed.", 30);
+            WaitFor.Until(() => Registry.CurrentUser.OpenSubKey(UrlSchemeKey) is null,
+                "URL scheme key was not removed.", 30);
+            WaitFor.Until(() => Registry.CurrentUser.OpenSubKey(UrlProgIdKey) is null,
+                "URL ProgID key was not removed.", 30);
+            WaitFor.Until(() => Registry.CurrentUser.OpenSubKey(CapabilitiesKey) is null,
+                "Capabilities registry key was not removed.", 30);
             Assert.True(File.Exists(Path.Combine(Temp, "DotNetBundler-preuninstall.txt")),
                 "Pre-uninstall hook did not run.");
             Assert.True(File.Exists(Path.Combine(Temp, "DotNetBundler-postuninstall.txt")),
@@ -1689,10 +1701,13 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             ShellLink.Write(StartMenuShortcut, foreignTarget,
                 Path.GetDirectoryName(foreignTarget)!);
             RunOk(Uninstaller, "/S /DELETEAPPDATA");
+            // 分离副本继续删除：INSTDIR 与 appdata 目录的移除同样跟随等待。
             WaitFor.Until(() => !Directory.Exists(InstallDir),
                 "DELETEAPPDATA did not remove the complete program directory.", 30);
-            Assert.False(Directory.Exists(RoamingData));
-            Assert.False(Directory.Exists(LocalData));
+            WaitFor.Until(() => !Directory.Exists(RoamingData),
+                "DELETEAPPDATA did not remove roaming application data.", 30);
+            WaitFor.Until(() => !Directory.Exists(LocalData),
+                "DELETEAPPDATA did not remove local application data.", 30);
             Assert.NotNull(Registry.CurrentUser.OpenSubKey(UrlSchemeKey));
             Assert.True(File.Exists(DesktopShortcut),
                 "Uninstall removed a same-name desktop shortcut owned by another application.");
