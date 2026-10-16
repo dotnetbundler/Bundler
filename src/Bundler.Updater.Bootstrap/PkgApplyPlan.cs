@@ -219,7 +219,14 @@ internal static class PkgApplyPlan
         var gid = ParseUid(GetEnv("SUDO_GID")) ?? passwd?.Gid ?? uid.Value;
         log($"bundler-updater: restart '{app}' as uid {uid.Value}");
         string? tool;
+        // 每级先同步预检最小 argv 再分离 spawn：分离只证 nohup 分叉成，证不了
+        // 降权器收下本链 argv 形——busybox setpriv 等在 PATH 里却只认
+        // capabilities 子集，预检缺席时 spawn"成功"返真、子进程即刻参数错死
+        // 在分离层，重启被静默吃掉（rc0 假成功）。预检 rc≠0 如实降级下一级。
         if ((tool = ResolveCommand("setpriv")) is not null &&
+            DropProbe(tool,
+                [$"--reuid={uid.Value}", $"--regid={gid}", "--clear-groups",
+                 "/bin/sh", "-c", ":"], workingDir, log) &&
             TrySpawn(nohup,
                 [tool, $"--reuid={uid.Value}", $"--regid={gid}", "--clear-groups",
                  "env", .. envPairs, app],
@@ -228,7 +235,11 @@ internal static class PkgApplyPlan
             return true;
         }
         // sudo env_reset 会剥外层环境——env 回灌只能在降权后内层 env 上重建。
+        // 预检加 -n 免密闸：要口令的 sudo 在真实 spawn 里同样败于 EOF，
+        // -n 只是把同一结局提前确定（sh 支路同口径）。
         if ((tool = ResolveCommand("sudo")) is not null &&
+            DropProbe(tool, ["-n", "-u", $"#{uid.Value}", "/bin/sh", "-c", ":"],
+                workingDir, log) &&
             TrySpawn(nohup, [tool, "-u", $"#{uid.Value}", "env", .. envPairs, app],
                 workingDir, log))
         {
@@ -238,12 +249,16 @@ internal static class PkgApplyPlan
         if (passwd?.Name is { Length: > 0 } name)
         {
             if ((tool = ResolveCommand("runuser")) is not null &&
+                DropProbe(tool, ["-u", name, "--", "/bin/sh", "-c", ":"],
+                    workingDir, log) &&
                 TrySpawn(nohup, [tool, "-u", name, "--", "env", .. envPairs, app],
                     workingDir, log))
             {
                 return true;
             }
             if ((tool = ResolveCommand("su")) is not null &&
+                DropProbe(tool, ["-s", "/bin/sh", "-c", ":", name],
+                    workingDir, log) &&
                 TrySpawn(nohup, [tool, "-s", "/bin/sh", "-c", SuCommand(envPairs, app), name],
                     workingDir, log))
             {
@@ -252,6 +267,26 @@ internal static class PkgApplyPlan
         }
         log($"bundler-updater: cannot drop privileges to uid {uid.Value} — " +
             "no setpriv/sudo/runuser/su available");
+        return false;
+    }
+
+    // 降权器可用性=最小 argv 实跑通（同 ExecProbe 缝），三向钉死不透
+    // 调用方 stdio；被拒记 WARN 交给退化链下一级。
+    private static bool DropProbe(string tool, string[] probeArgv, string workingDir,
+        Action<string> log)
+    {
+        var rc = ExecSilent(new ExecSpec
+        {
+            FileName = tool,
+            Arguments = probeArgv,
+            WorkingDirectory = workingDir,
+        });
+        if (rc == 0)
+        {
+            return true;
+        }
+        log($"bundler-updater: WARN drop tool '{Path.GetFileName(tool)}' " +
+            $"rejected probe (exit {rc}) — trying next");
         return false;
     }
 
@@ -532,6 +567,35 @@ internal static class PkgApplyPlan
         catch (Exception)
         {
             // command -v 与 exec 之间的竞态（二进制被摘走）按"该级失败"退化下一级。
+            return 127;
+        }
+    }
+
+    // 预检用同步执行：stdin 立即钉死（防降权器读调用方终端/管道），
+    // out/err 后台抽干到 Null——用法文本、PAM/auth 噪声不透调用方面。
+    // 不设超时：预检 argv 恒为"工具+最小参数+sh -c :"零交互形（stdin 已钉 EOF
+    // 无读面、命令即刻返回），挂死无现实入口；超时+强制终结路径的复杂度不抵收益。
+    private static int ExecSilent(ExecSpec spec)
+    {
+        if (ExecProbe is { } probe)
+        {
+            return probe(spec);
+        }
+        try
+        {
+            var startInfo = BuildStartInfo(spec);
+            startInfo.RedirectStandardInput = true;
+            startInfo.RedirectStandardOutput = true;
+            startInfo.RedirectStandardError = true;
+            using var process = Process.Start(startInfo)!;
+            process.StandardInput.Dispose();
+            _ = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
+            _ = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
+            process.WaitForExit();
+            return process.ExitCode;
+        }
+        catch (Exception)
+        {
             return 127;
         }
     }

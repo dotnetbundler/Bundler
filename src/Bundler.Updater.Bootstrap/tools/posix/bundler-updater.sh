@@ -268,26 +268,49 @@ _pa_restart() {
         return 1
     fi
     log "bundler-updater: restart '$PA_APP' as uid $PA_UID"
+    # 降权器"在场"≠"能用"——每级先同步预检最小 argv 再分离 spawn：分离只证
+    # nohup 分叉成，证不了降权器收下本链 argv 形（busybox setpriv 等在 PATH
+    # 里却只认 capabilities 子集，无预检时 spawn"成功"返真、子进程即刻参数
+    # 错死在分离层，重启被静默吃掉）。预检三向钉死不透调用方 stdio。
     if _c=$(_pa_cmd setpriv) && [ -n "$_c" ]; then
-        (cd "$_d" && "$_nohup" "$_c" --reuid="$PA_UID" --regid="$PA_GID" \
-            --clear-groups env "$@" "$PA_APP" </dev/null >/dev/null 2>&1 &) && return 0
-        log "bundler-updater: WARN spawn via '$_c' failed — trying next"
+        if "$_c" --reuid="$PA_UID" --regid="$PA_GID" --clear-groups \
+                /bin/sh -c : </dev/null >/dev/null 2>&1; then
+            (cd "$_d" && "$_nohup" "$_c" --reuid="$PA_UID" --regid="$PA_GID" \
+                --clear-groups env "$@" "$PA_APP" </dev/null >/dev/null 2>&1 &) && return 0
+            log "bundler-updater: WARN spawn via '$_c' failed — trying next"
+        else
+            log "bundler-updater: WARN drop tool '$_c' rejected probe — trying next"
+        fi
     fi
+    # sudo 预检加 -n 免密闸——要口令的 sudo 在真实 spawn 里同样败于 EOF，
+    # -n 只是把同一结局提前确定（AOT 支路同口径）。
     if _c=$(_pa_cmd sudo) && [ -n "$_c" ]; then
-        (cd "$_d" && "$_nohup" "$_c" -u "#$PA_UID" env "$@" "$PA_APP" </dev/null >/dev/null 2>&1 &) && return 0
-        log "bundler-updater: WARN spawn via '$_c' failed — trying next"
+        if "$_c" -n -u "#$PA_UID" /bin/sh -c : </dev/null >/dev/null 2>&1; then
+            (cd "$_d" && "$_nohup" "$_c" -u "#$PA_UID" env "$@" "$PA_APP" </dev/null >/dev/null 2>&1 &) && return 0
+            log "bundler-updater: WARN spawn via '$_c' failed — trying next"
+        else
+            log "bundler-updater: WARN drop tool '$_c' rejected probe — trying next"
+        fi
     fi
     if [ -n "$PA_NAME" ]; then
         if _c=$(_pa_cmd runuser) && [ -n "$_c" ]; then
-            (cd "$_d" && "$_nohup" "$_c" -u "$PA_NAME" -- env "$@" "$PA_APP" </dev/null >/dev/null 2>&1 &) && return 0
-            log "bundler-updater: WARN spawn via '$_c' failed — trying next"
+            if "$_c" -u "$PA_NAME" -- /bin/sh -c : </dev/null >/dev/null 2>&1; then
+                (cd "$_d" && "$_nohup" "$_c" -u "$PA_NAME" -- env "$@" "$PA_APP" </dev/null >/dev/null 2>&1 &) && return 0
+                log "bundler-updater: WARN spawn via '$_c' failed — trying next"
+            else
+                log "bundler-updater: WARN drop tool '$_c' rejected probe — trying next"
+            fi
         fi
         if _c=$(_pa_cmd su) && [ -n "$_c" ]; then
-            _sc="exec env"
-            for _kv do _sc="$_sc $(_pa_shq "$_kv")"; done
-            _sc="$_sc $(_pa_shq "$PA_APP")"
-            (cd "$_d" && "$_nohup" "$_c" -s /bin/sh -c "$_sc" "$PA_NAME" </dev/null >/dev/null 2>&1 &) && return 0
-            log "bundler-updater: WARN spawn via '$_c' failed — trying next"
+            if "$_c" -s /bin/sh -c : "$PA_NAME" </dev/null >/dev/null 2>&1; then
+                _sc="exec env"
+                for _kv do _sc="$_sc $(_pa_shq "$_kv")"; done
+                _sc="$_sc $(_pa_shq "$PA_APP")"
+                (cd "$_d" && "$_nohup" "$_c" -s /bin/sh -c "$_sc" "$PA_NAME" </dev/null >/dev/null 2>&1 &) && return 0
+                log "bundler-updater: WARN spawn via '$_c' failed — trying next"
+            else
+                log "bundler-updater: WARN drop tool '$_c' rejected probe — trying next"
+            fi
         fi
     fi
     log "bundler-updater: cannot drop privileges to uid $PA_UID — no setpriv/sudo/runuser/su available"
