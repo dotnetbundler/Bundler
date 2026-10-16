@@ -17,7 +17,8 @@ public static class UpdateBootstrapper
 
     /// <summary>
     /// 把引导件复制进 <paramref name="targetDirectory"/>；返回目标文件名，未找到任何件时返回 null。
-    /// 选取顺序：<c>&lt;dir&gt;/&lt;target&gt;/bundler-updater[.exe]</c> →（非 win）<c>&lt;dir&gt;/posix/bundler-updater.sh</c>。
+    /// 选取顺序：<c>&lt;dir&gt;/&lt;target&gt;/bundler-updater[.exe]</c> →（linux 非 musl 目标）
+    /// <c>&lt;dir&gt;/linux-musl-&lt;arch&gt;/bundler-updater</c> →（非 win）<c>&lt;dir&gt;/posix/bundler-updater.sh</c>。
     /// </summary>
     public static string? Inject(string targetDirectory, UpdateBundleConfiguration update,
         string target)
@@ -33,6 +34,10 @@ public static class UpdateBootstrapper
         return null;
     }
 
+    /// <summary>是否配置了显式引导件目录（探测谓词的唯一出处，诊断文案同用）。</summary>
+    internal static bool HasExplicitDirectory(UpdateBundleConfiguration update) =>
+        update.BootstrapperDirectory is { Length: > 0 };
+
     /// <summary>仅解析选件路径，不落盘——供校验与测试（内嵌件解析为临时解出路径）。</summary>
     public static bool TryResolve(UpdateBundleConfiguration update, string target,
         out string source)
@@ -40,12 +45,21 @@ public static class UpdateBootstrapper
         var fileName = FileNameFor(target);
         var isWindows = target.StartsWith("win", StringComparison.OrdinalIgnoreCase);
         // Windows 宿主绝不能拿到 POSIX 脚本（.sh 改名 .exe 无法执行）——只认 per-target 二进制。
-        if (update.BootstrapperDirectory is { Length: > 0 } directory)
+        if (HasExplicitDirectory(update))
         {
+            var directory = update.BootstrapperDirectory!;
             var perTarget = Path.Combine(directory, target, fileName);
             if (File.Exists(perTarget))
             {
                 source = perTarget;
+                return true;
+            }
+            // linux glibc 目标收敛到 musl 静态件（static-pie 双宿主通吃）；
+            // 字面 per-target 命中优先——显式目录仍允许开发覆盖自有 glibc 件。
+            if (MuslSibling(target) is { } muslDir &&
+                File.Exists(Path.Combine(directory, muslDir, fileName)))
+            {
+                source = Path.Combine(directory, muslDir, fileName);
                 return true;
             }
             var script = Path.Combine(directory, "posix", "bundler-updater.sh");
@@ -63,6 +77,11 @@ public static class UpdateBootstrapper
         {
             return true;
         }
+        if (MuslSibling(target) is { } muslResource &&
+            TryExtractEmbedded($"updater/{muslResource}/{fileName}", out source))
+        {
+            return true;
+        }
         if (!isWindows &&
             TryExtractEmbedded("updater/posix/bundler-updater.sh", out source))
         {
@@ -70,6 +89,18 @@ public static class UpdateBootstrapper
         }
         source = "";
         return false;
+    }
+
+    // linux 非 musl 目标的 musl 姊妹目录名（linux-x86_64 → linux-musl-x86_64）；
+    // musl 目标本身、windows/macos 目标返回 null。
+    private static string? MuslSibling(string target)
+    {
+        const string linuxPrefix = "linux-";
+        const string muslPrefix = "linux-musl-";
+        return target.StartsWith(linuxPrefix, StringComparison.OrdinalIgnoreCase) &&
+               !target.StartsWith(muslPrefix, StringComparison.OrdinalIgnoreCase)
+            ? muslPrefix + target.Substring(linuxPrefix.Length)
+            : null;
     }
 
     // 引导件工具已内嵌进本程序集（Core csproj EmbeddedResource）——任何消费形态都不依赖盘符约定。

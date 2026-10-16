@@ -96,8 +96,8 @@ verify consume 腿按"每台消费宿主吃所有能跑的产件"裁决改 (host
   是否换处理方式（如公开发布后改验公网源、或移入独立验收仓）留待后续裁决。
 - **测试重写收口期登记的功能侧待办**（分批推进中）：
   - ~~静态兼容修复~~——已完成（PR #98）：`PosixRename` 已删，POSIX 同卷判定改 `/proc/self/mountinfo` 挂载点最长前缀比对（`DriveInfo.GetDrives()` 回退），ENOSPC 预检在静态件恢复；
-  - `tools/macos-universal` fat 件与 `tools/windows-i686` 引导件入库——进行中（`feat/bootstrapper-artifacts`，工件取 produce-bootstrap run `38865619194`）；
-  - linux 引导件收敛 musl 静态单件（`linux-musl-*` 静态件实测 glibc/musl 双宿主通吃，收敛后随包每架构省 ~1.2MB 并消 glibc 版本地板；静态兼容修复已落地，无前置阻塞）；
+  - ~~`tools/macos-universal` fat 件与 `tools/windows-i686` 引导件入库~~——已完成（PR #99，工件取 produce-bootstrap run `38865619194`；`macos-universal` 命中原生 fat 件，`windows-i686` 引导件从落空变有件）；
+  - linux 引导件收敛 musl 静态单件——进行中（`feat/musl-converge`：glibc 目标经 musl 姊妹件解析，glibc 件删除随包每架构省 ~1.2MB；静态兼容修复已落地，无前置阻塞）；
   - 既有冻件可选经 `produce-bootstrap` 全量重产统一 provenance（当前各件来源分散于历史开发周期）。
 - **spec §3 终验对账遗留**（审计结论：63 项零真缺口；弱覆盖中可自动化项已补断言，余下按性质归位）：
   - 测试侧待做：`MacAppGate` 未签名 `.app` 拒绝腿（macOS 宿主可自动化，随 bootstrap 功能批次）；update 打包侧 e2e 非 zip 格式腿；zip/tar.gz 跨宿主同件交换接线（verify 拓扑）；

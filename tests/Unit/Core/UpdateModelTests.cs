@@ -258,6 +258,37 @@ public sealed class UpdateBootstrapperTests : TempBase
     }
 
     [Fact]
+    public void TryResolve_MuslSibling_UsedWhenExactMissing()
+    {
+        var dir = Temp("bundler-boot");
+        Directory.CreateDirectory(Path.Combine(dir.FullName, "linux-musl-aarch64"));
+        File.WriteAllText(Path.Combine(dir.FullName, "linux-musl-aarch64", "bundler-updater"), "musl");
+
+        var update = new UpdateBundleConfiguration { BootstrapperDirectory = dir.FullName };
+        // linux glibc 目标无字面件 → 收敛 musl 姊妹件（static-pie 双宿主通吃）。
+        Assert.True(UpdateBootstrapper.TryResolve(update, "linux-aarch64", out var source));
+        Assert.Contains(Path.Combine("linux-musl-aarch64", "bundler-updater"), source);
+        // musl 目标自身走字面命中，不再二次映射。
+        Assert.True(UpdateBootstrapper.TryResolve(update, "linux-musl-aarch64", out source));
+        Assert.Contains(Path.Combine("linux-musl-aarch64", "bundler-updater"), source);
+    }
+
+    [Fact]
+    public void TryResolve_ExactWins_OverMuslSibling()
+    {
+        var dir = Temp("bundler-boot");
+        Directory.CreateDirectory(Path.Combine(dir.FullName, "linux-x86_64"));
+        Directory.CreateDirectory(Path.Combine(dir.FullName, "linux-musl-x86_64"));
+        File.WriteAllText(Path.Combine(dir.FullName, "linux-x86_64", "bundler-updater"), "glibc");
+        File.WriteAllText(Path.Combine(dir.FullName, "linux-musl-x86_64", "bundler-updater"), "musl");
+
+        // 显式目录的字面 per-target 件优先于 musl 收敛（开发覆盖自有 glibc 件）。
+        var update = new UpdateBundleConfiguration { BootstrapperDirectory = dir.FullName };
+        Assert.True(UpdateBootstrapper.TryResolve(update, "linux-x86_64", out var source));
+        Assert.Contains(Path.Combine("linux-x86_64", "bundler-updater"), source);
+    }
+
+    [Fact]
     public void TryResolve_PosixFallback_NonWindows()
     {
         var dir = Temp("bundler-boot");

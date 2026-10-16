@@ -20,8 +20,10 @@ public class UpdateCompatTests
     static string V1Zip => Path.Combine(V1Dir, "feed", "linux-x64", "zip",
         "hellov1-1.0.0-linux-x64.zip");
     static string V1Sh => Path.Combine(V1Dir, "bootstrap", "bundler-updater.sh");
+    // linux 引导件收敛 musl 静态单件（static-pie 件 glibc 宿主照跑）——
+    // linux-x86_64 目标经 musl 姊妹件解析，本腿直接取 musl 件跑真实 apply。
     static string CurrentAot => RepoPath(
-        "src/Bundler.Updater.Bootstrap/tools/linux-x86_64/bundler-updater");
+        "src/Bundler.Updater.Bootstrap/tools/linux-musl-x86_64/bundler-updater");
 
     // 解出 v1 zip 载荷当"旧装"（侧车+内嵌 v1 引导件都在树里）。
     static string ExtractV1Install(string root)

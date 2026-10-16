@@ -1,6 +1,9 @@
-# 产件工作流（手动）：updater 引导件冻件全 RID 产线——真架构宿主五腿各产各件上传工件，
+# 产件工作流（手动）：updater 引导件冻件产线——真架构宿主五腿各产各件上传工件，
 # 产物下载后人工入 src/Bundler.Updater.Bootstrap/tools/<rid>/ 冻件随包（本工作流只产不入；
 # BootstrapPlan 变更需重产冻件时重跑）。
+# 入库清单（本工作流产件）：win x86_64/aarch64/i686、macos x86_64/aarch64/universal fat、
+# linux musl 双架构静态件——linux glibc 目标不入库（运行时经 UpdateBootstrapper musl 姊妹件
+# 解析）；tools/posix/bundler-updater.sh 是源码件非本流产出，不在此列。
 # NativeAOT 不能跨 OS 产件、x64↔arm64 需目标架构工具链——故逐架构真宿主；
 # macOS Xcode 默认双工具链，一台产两架构并 lipo 合 fat 件。
 name: produce-bootstrap
@@ -16,20 +19,14 @@ permissions:
   contents: read
 
 jobs:
-  # linux-x64 腿：同机产 glibc 动态件 + musl 静态件两枚。
+  # linux-x64 腿：只产 musl 静态件——glibc 动态件已无入库消费方
+  # （linux-* 目标运行时经 musl 姊妹件解析）。
   # lld 必需：musl 静态 -static-pie 链接走默认 bfd 会断言崩溃（实证过）。
   linux-x64:
     runs-on: ubuntu-26.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.x'
-      - name: NativeAOT 工具链（clang/gcc/zlib——glibc 动态件）
-        run: sudo apt-get update && sudo apt-get install -y clang gcc zlib1g-dev
-      - name: 产 linux-x86_64 引导件（glibc 动态）
-        run: dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-x64 -o /tmp/aot/linux-x86_64
       # musl 静态件在 alpine SDK 容器内产——容器内 clang 默认 target=musl，crt 目标件为
       # musl 原生件；glibc 宿主直产 musl 需 musl target 的 GCC 探测路径，arm 镜像上缺失（实证两次失败）
       - name: 产 linux-musl-x86_64 引导件（alpine 容器内静态 -static-pie，lld 链接）
@@ -39,18 +36,13 @@ jobs:
             mcr.microsoft.com/dotnet/sdk:10.0-alpine \
             sh -c "apk add --no-cache clang lld zlib-dev zlib-static build-base >/dev/null && \
                    dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-musl-x64 -p:StaticExecutable=true -p:LinkerFlavor=lld -o /aot/linux-musl-x86_64"
-      - name: 冒烟——两件各真跑 apply 换包 + musl 件进 alpine 容器真跑
+      - name: 冒烟——musl 件 glibc 宿主真跑 apply 换包 + alpine 容器再验
         run: |
           set -eux
-          # 链接形态留证：动态件应 dynamically linked，musl 件应 static-pie
-          file /tmp/aot/linux-x86_64/bundler-updater /tmp/aot/linux-musl-x86_64/bundler-updater || true
+          # 链接形态留证：musl 件应 static-pie（statically linked）
+          file /tmp/aot/linux-musl-x86_64/bundler-updater || true
           # apply 默认 move 语义会消费 payload 目录——每次 apply 前重建
           mkdir -p /tmp/smoke/install /tmp/smoke/payload
-          echo v2 > /tmp/smoke/payload/app.txt
-          echo v1 > /tmp/smoke/install/app.txt
-          /tmp/aot/linux-x86_64/bundler-updater apply --install-dir /tmp/smoke/install --payload /tmp/smoke/payload --log /tmp/smoke/u-x64.log
-          grep -q v2 /tmp/smoke/install/app.txt
-          mkdir -p /tmp/smoke/payload
           echo v2 > /tmp/smoke/payload/app.txt
           echo v1 > /tmp/smoke/install/app.txt
           /tmp/aot/linux-musl-x86_64/bundler-updater apply --install-dir /tmp/smoke/install --payload /tmp/smoke/payload --log /tmp/smoke/u-musl.log
@@ -69,19 +61,12 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # linux-arm 腿：arm64 真宿主产 aarch64 两枚，与 linux-x64 腿同构。
+  # linux-arm 腿：arm64 真宿主只产 musl 静态件，与 linux-x64 腿同构。
   linux-arm:
     runs-on: ubuntu-26.04-arm
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.x'
-      - name: NativeAOT 工具链（clang/gcc/zlib——glibc 动态件）
-        run: sudo apt-get update && sudo apt-get install -y clang gcc zlib1g-dev
-      - name: 产 linux-aarch64 引导件（glibc 动态）
-        run: dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-arm64 -o /tmp/aot/linux-aarch64
       - name: 产 linux-musl-aarch64 引导件（alpine 容器内静态 -static-pie，lld 链接）
         run: |
           mkdir -p /tmp/aot/linux-musl-aarch64
@@ -89,18 +74,13 @@ jobs:
             mcr.microsoft.com/dotnet/sdk:10.0-alpine \
             sh -c "apk add --no-cache clang lld zlib-dev zlib-static build-base >/dev/null && \
                    dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-musl-arm64 -p:StaticExecutable=true -p:LinkerFlavor=lld -o /aot/linux-musl-aarch64"
-      - name: 冒烟——两件各真跑 apply 换包 + musl 件进 alpine 容器真跑
+      - name: 冒烟——musl 件 glibc 宿主真跑 apply 换包 + alpine 容器再验
         run: |
           set -eux
-          # 链接形态留证：动态件应 dynamically linked，musl 件应 static-pie
-          file /tmp/aot/linux-aarch64/bundler-updater /tmp/aot/linux-musl-aarch64/bundler-updater || true
+          # 链接形态留证：musl 件应 static-pie（statically linked）
+          file /tmp/aot/linux-musl-aarch64/bundler-updater || true
           # apply 默认 move 语义会消费 payload 目录——每次 apply 前重建
           mkdir -p /tmp/smoke/install /tmp/smoke/payload
-          echo v2 > /tmp/smoke/payload/app.txt
-          echo v1 > /tmp/smoke/install/app.txt
-          /tmp/aot/linux-aarch64/bundler-updater apply --install-dir /tmp/smoke/install --payload /tmp/smoke/payload --log /tmp/smoke/u-arm64.log
-          grep -q v2 /tmp/smoke/install/app.txt
-          mkdir -p /tmp/smoke/payload
           echo v2 > /tmp/smoke/payload/app.txt
           echo v1 > /tmp/smoke/install/app.txt
           /tmp/aot/linux-musl-aarch64/bundler-updater apply --install-dir /tmp/smoke/install --payload /tmp/smoke/payload --log /tmp/smoke/u-musl.log

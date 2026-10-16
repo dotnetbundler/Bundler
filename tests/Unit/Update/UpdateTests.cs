@@ -962,9 +962,11 @@ public sealed class UpdateTests : TempBase
     {
         // 无显式工具目录 → Bundler.Core 内嵌资源兜底（MSBuild 包/CLI/直引/NuGet 全形态可达）。
         var update = new UpdateBundleConfiguration();
+        // linux glibc 目标收敛到 musl 静态单件（linux-x86_64 已无独立件）。
         Assert.True(UpdateBootstrapper.TryResolve(update, "linux-x86_64", out var linux));
         Assert.True(File.Exists(linux));
         Assert.True(new FileInfo(linux).Length > 1_000_000); // 真 AOT 件非桩
+        Assert.Contains(Path.Combine("linux-musl-x86_64", "bundler-updater"), linux);
         Assert.True(UpdateBootstrapper.TryResolve(update, "windows-x86_64", out var win));
         Assert.EndsWith(".exe", win);
         Assert.True(File.Exists(win));
