@@ -45,6 +45,10 @@
 - `linux-aarch64`：`ubuntu-26.04-arm` 真机腿 `arm64-real-hw.sh --rpm`（`rpm -i`/`-ql`/`-e`）实证。
 - `deb;rpm` 同次 publish 扇出断言。
 
+计划实现（UPDATE 系统包扩展阶段）：
+
+- 自更新走 installer-replay：客户端 ECDSA 验签 + `rpm -q` 账本归属双检预检，经三级提权链拉起 `bundler-updater pkg-apply`，由引导件按 `dnf install -y` → `zypper install` → `rpm -U` 退化链装本地包、降权重启；回滚重放加 `--oldpackage`；契约见 `docs/design/update.md` §2。
+
 外部待验收（详见 `docs/project/special-acceptance.md`）：
 
 - GUI 桌面观感收窄项：文件/协议关联双击唤起。

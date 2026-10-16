@@ -113,5 +113,6 @@ verify run `38881497256`（main@`cb76455`，#103/#104 合入后）4 条 macOS co
 剩余工作：
 
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
+- UPDATE 系统包扩展阶段（deb/rpm/alpineapk installer-replay 自更新）：设计定稿、PR #107 审中，状态=计划实现，契约见 `docs/design/update.md` §2；
 - 发布链资产实际推送（NuGet/Release 为另一步）；
 - 零星已登记增强按 `docs/project/roadmap.md` §4.2 候选标准排队。
