@@ -72,12 +72,12 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 ## 3. 最近验证
 
 当前基线：`main@85b6f38`（`0.1.0-alpha.103`）——全项目重构链 PR #82–#88 已全部合入：`ToolRunner` 统一进程执行、`Hashes`/`Gzip` 收编、`PayloadSource` 三包枚举共享、`ToolCache` 泛化并入 AppImage（默认缓存根统一为 `DotNetBundler/tools`，弃 `XDG_CACHE_HOME`）、`FileTree` 树复制收敛、文档同步与 Tauri/上游产品参照框架移除。
-**测试体系重写链 PR #90–#97 全部 open 未合**（stacked 基：#91→main、#92→skeleton、#93→unit、#94→api、#95→integration、#96→package、#97→ci），链顶 `test-rewrite/docs@57ec510`。
-verify 发布门 run `38678818534`（2026-10-15）**33 作业全绿**：tests 六宿主矩阵 + produce×6 + consume×6 异机验签真装真跑 + manual-auto×6 + universal 产/消×3。
-其后 run `38687565528` 再绿、`38692708521` 与 `38697374256` 各抓出一条宿主瞬态并修复：CLI 腿 `where.exe` 探测超时误判缺工具 + 夹具 ctor 内 Skip 误报整类失败（450d196/362cae2）、NuGet restore 连接层挂死 10min（7fe88d9 有界重试）。
-起跑三连绿前又收编两处收口小项：consume-linux AppImage 双腿各跑各验（FUSE 直跑+extract 免挂，新版 type2-runtime 吃 fuse3）、consume-macos pkg 腿 EXIT trap 防 fixture 滞留 /Applications；HelloBundlerApp 字面样品链经裁决不收编（fixture 链已等价覆盖，保留为 Manual 验收面）。
-稳定性判据：verify 需同内容**连续 3 次全绿**才收住——`38724783912`（2026-10-15）33/33 全绿但跑在更名前内容（其后 test/verify 的 Windows 腿标签改 `*-vs2026*` 拼写即执行面已变），**不计入最终连胜，仅作证据留存**；最终 3 连胜在收口链顶上重跑。ubuntu-26.04-arm 上 `appimage(fuse)` 真挂载 LEG-PASS 实证（fuse3+`/dev/fuse`+fusermount3 均在）。
+**测试体系重写链 PR #90–#97 全部 open 未合**（stacked 基：#91→main、#92→skeleton、#93→unit、#94→api、#95→integration、#96→package、#97→ci），链顶 `test-rewrite/docs@7909ffe`。
+**verify 收口实证（判据经裁决收敛为"链顶同内容一次全绿"）**：run `38847618076`（2026-10-16，`45f16fa`+7909ffe 等价内容）**36 腿全绿**——tests 六宿主矩阵 + produce×6 + consume 九配对（自消×4 + WOW64 `win-arm←win-x64` + Rosetta `mac-arm←mac-intel` + universal x64 切片 `mac-intel←mac-arm`）+ manual-auto×6 + universal 产/消。
+更早证据轮 `38825129500`（同拓扑前身）36/36 绿、首轮收口 run `38833688512` 抓出 windows-11-arm runner 网络劣化（NuGet restore 连接挂死 10min×2 + artifact 上传步死寂 31min 后自愈）——据此 `RestoreWithRetry` 改 3min×4 短超时换枪（7909ffe）、fixture 统一 `NuGetAudit=false` 消可选网络往返。
+verify 再早 run `38678818534`/`38687565528`/`38692708521`/`38697374256` 的宿主瞬态处置（where.exe 探测超时误判、ctor 内 Skip 误报、NuGet 挂死有界重试、AppImage 双腿各验、dmg EXIT trap 防滞留）均已收编；HelloBundlerApp 字面样品链经裁决不收编（fixture 链等价覆盖，留 Manual 验收面）。
 收口期增补：`aot.yml` 更名 `produce-bootstrap.yml` 并扩为全 RID 产件流（linux/musl x86_64+aarch64、macos 双架构+fat universal 工件、win 三架构；五腿 dispatch `38754749689` 实证全绿）；musl 件按实证改 `-static-pie` 静态产（`StaticExecutable=true`+`LinkerFlavor=lld`，产物 glibc/musl 通吃；bfd 链接 static-pie 会崩故 lld 必需；产件走 alpine SDK 容器——glibc 宿主直产 musl 缺 musl target 的 GCC crt 探测路径，arm 镜像实证两次失败，x64 镜像碰巧可产但不可赌）；
+shell 变量邻接守卫进 test.yml select 前置门（`$VAR`+非 ASCII 在部分 locale 下被拼进变量名炸 set-u——`consume-macos.sh` LEG-SKIP 首踩实证，lint 扫 .sh/shebang/workflow run 内联，bash 词法注释判定）；
 verify consume 腿按"每台消费宿主吃所有能跑的产件"裁决改 (host×src) 配对矩阵：windows-arm64 吃 x64 件（WOW64，旁装 x64 运行时经 `DOTNET_ROOT_X64` 指给 apphost）、macos-26 吃 intel 产件（Rosetta）、macos-intel 吃 arm 产件内 x64 切片（`consume-macos.sh` 新增 `腿=子目录` 映射），linux 无原生异构机制保持对角线；Windows 腿标签钉显式 `windows-2025-vs2026`/`windows-11-vs2026-arm`。
 本机 Windows x64 Release：Unit 1222 测（1192 过/30 宿主门控跳）、Api 84 测、Integration 234 测、Package 18 测，全零失败。
 收口期修复的真缺陷：`produce.sh` `cat|head` SIGPIPE（92fe129）、NSIS 卸载注册表异步清理竞态（33f0472）、NSIS `/D` 正斜杠粘连+PKG relocation+artifact 丢执行位（b39d9af）、dmg 腿 EXIT trap 毒化（2190df7）、`hdiutil convert` 持续 EAGAIN 踢 diskimages-helper（7a8d2bd）。
