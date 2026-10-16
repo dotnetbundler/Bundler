@@ -1,6 +1,6 @@
 // .app 测试桩与 quarantine xattr 读写：MacAppGate 门禁腿与 .app 更新链腿共用。
-// macOS 专属面（xattr P/Invoke、主程序取真 Mach-O 才可被 codesign 签）——
-// 宿主门禁（Assert.SkipUnless(TestPlatform.IsMacOS, …)）由调用方负责。
+// macOS 专属面（写标走 xattr CLI、读标走 getxattr P/Invoke、主程序取真 Mach-O
+// 才可被 codesign 签）——宿主门禁（Assert.SkipUnless(TestPlatform.IsMacOS, …)）由调用方负责。
 using System.Runtime.InteropServices;
 
 internal static class MacAppStub
@@ -8,7 +8,7 @@ internal static class MacAppStub
     internal const string QuarantineXattr = "com.apple.quarantine";
 
     // LaunchServices quarantine 的常见值形（flag;时间戳;来源;）——门禁不解析值，形如即可。
-    private static readonly byte[] QuarantineValue = "0081;00000000;BundlerTests;"u8.ToArray();
+    private const string QuarantineValue = "0081;00000000;BundlerTests;";
 
     // 最小 .app：Info.plist（身份键全）+ Contents/MacOS/<name> + Resources/data.txt。
     // machOExecutable=true 时主程序落仓内真 Mach-O 引导件——codesign 拒签脚本主程序，
@@ -63,11 +63,15 @@ internal static class MacAppStub
         }
     }
 
+    // 打标必须走 Apple 自带 xattr CLI：macOS 26 起 com.apple.quarantine 是受保护
+    // xattr——第三方进程裸 setxattr(2) 返回 0 但属性被系统静默丢弃（随后 getxattr
+    // 读回失败，macos-26 CI 实证）；/usr/bin/xattr -w 由系统授权写，与生产剥标
+    // （MacAppGate 走 xattr -dr）同款 CLI 通道。
     internal static void SetQuarantine(string path)
     {
-        var rc = setxattr(path, QuarantineXattr, QuarantineValue, (nuint)QuarantineValue.Length, 0, 0);
-        Assert.True(rc == 0,
-            $"setxattr({QuarantineXattr}) failed rc={rc} errno={Marshal.GetLastWin32Error()}");
+        ProcessRunner.AssertSuccess(ProcessRunner.Run("/usr/bin/xattr",
+            ["-w", QuarantineXattr, QuarantineValue, path]),
+            $"set {QuarantineXattr} on '{path}'");
     }
 
     // 存在性按返回码判：size=0 探测只回值长不落缓冲——值超缓冲的 ERANGE(-1)
@@ -82,9 +86,5 @@ internal static class MacAppStub
 
     [DllImport("libc", CharSet = CharSet.Ansi, SetLastError = true)]
     private static extern IntPtr getxattr(
-        string path, string name, byte[] value, nuint size, uint position, int options);
-
-    [DllImport("libc", CharSet = CharSet.Ansi, SetLastError = true)]
-    private static extern int setxattr(
         string path, string name, byte[] value, nuint size, uint position, int options);
 }
