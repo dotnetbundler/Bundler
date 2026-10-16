@@ -109,7 +109,7 @@ verify consume 腿按"每台消费宿主吃所有能跑的产件"裁决改 (host
 ## 6. 默认下一步
 
 全部格式、CLI 与 UPDATE 均已冻结并入 `main`，功能面无进行中阶段。
-**测试体系重写已收口**（规格 `docs/design/testing.md`；Unit/Api/Integration/Package 四层 + `tests/Manual` 验收脚本层全量实现，CI 拓扑为 test/verify/produce-bootstrap 三 workflow，verify 发布门已全绿；PR 链 #90–#97 全部 open 待合入，基见 §3）。
+**测试体系重写已收口**（规格 `docs/design/testing.md`；Unit/Api/Integration/Package 四层 + `tests/Manual` 验收脚本层全量实现，CI 拓扑为 test/verify/produce-bootstrap 三 workflow，verify 发布门已全绿；PR 链 #90–#97 已全部合入 `main`）。
 剩余工作：
 
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
