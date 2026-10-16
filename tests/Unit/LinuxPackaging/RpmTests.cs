@@ -1,4 +1,5 @@
 using DotNet.Bundler;
+using DotNet.Bundler.Core.Update;
 using DotNet.Bundler.Rpm;
 using Org.BouncyCastle.Bcpg;
 using Org.BouncyCastle.Bcpg.OpenPgp;
@@ -7,6 +8,7 @@ using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Security;
 using System.Text;
+using System.Text.Json;
 
 
 // 从旧 tests/Bundler.Tests/RpmTests.cs 收割：.rpm 打包器与 BouncyCastle 签名验证均在
@@ -380,6 +382,99 @@ public sealed class RpmTests : TempBase
             Assert.True(digests.SequenceEqual(package.Payload.Select(e =>
                 (e.Mode & 0xF000) == 0x4000 ? "" : Sha256(e.Data))),
                 "FILEDIGESTS must hold sha256 of every non-directory entry.");
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateEnabled_InjectsIdentitySidecarAndBootstrapper()
+    {
+        // 更新面注入点：身份旁车 <installRoot>/bundler-update.json（0644，含 syspkg
+        // 专属 pkg 包名字段）+ 引导件 <installRoot>/bundler-updater（0755 musl 静态件——
+        // glibc 目标经 musl 姊妹解析命中）。
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var keyPath = Path.Combine(input, "update-key.json");
+        var material = UpdateKeyMaterial.Generate();
+        material.Save(keyPath);
+        try
+        {
+            var baseline = RpmConfiguration(input, output);
+            var configuration = new BundleConfiguration
+            {
+                ProductName = baseline.ProductName,
+                Identifier = baseline.Identifier,
+                Publisher = baseline.Publisher,
+                Version = baseline.Version,
+                OutputDirectory = baseline.OutputDirectory,
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://example.test/updates",
+                    Channel = "beta",
+                    SigningKeyFile = keyPath,
+                },
+                Targets = baseline.Targets
+            };
+            var artifact = (await new RpmBundler()
+                .BuildAsync(configuration, TestContext.Current.CancellationToken)).Single();
+            var package = RpmPackageReader.Read(artifact.Path);
+
+            var sidecar = package.Payload.Single(e => e.Path == "/usr/lib/example-app/bundler-update.json");
+            Assert.Equal(420 /* 0644 */, sidecar.Mode & 511);
+            var bootstrapper = package.Payload.Single(e => e.Path == "/usr/lib/example-app/bundler-updater");
+            Assert.Equal(493 /* 0755 */, bootstrapper.Mode & 511);
+            Assert.True(bootstrapper.Data.Length > 0);
+
+            using var document = JsonDocument.Parse(Encoding.UTF8.GetString(sidecar.Data));
+            var root = document.RootElement;
+            Assert.Equal("rpm", root.GetProperty("format").GetString());
+            Assert.Equal("linux-x86_64", root.GetProperty("rid").GetString());
+            Assert.Equal("beta", root.GetProperty("channel").GetString());
+            Assert.Equal("https://example.test/updates", root.GetProperty("feedUrl").GetString());
+            Assert.Equal(material.PublicPointBase64(), root.GetProperty("publicKey").GetString());
+            Assert.Equal("example-app", root.GetProperty("pkg").GetString());
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    // claimed 撞名显式拒绝的负路径：用户载荷占住更新注入名（身份旁车 bundler-update.json /
+    // 引导件 bundler-updater）时，UPDATE 开启构建必须确定性拒绝——不静默覆盖用户文件。
+    [Theory]
+    [InlineData("bundler-update.json")]
+    [InlineData("bundler-updater")]
+    public async Task UpdateEnabled_PayloadNameCollision_Rejected(string claimedName)
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var keyPath = Path.Combine(input, "update-key.json");
+        UpdateKeyMaterial.Generate().Save(keyPath);
+        File.WriteAllText(Path.Combine(input, claimedName), "user payload");
+        try
+        {
+            var baseline = RpmConfiguration(input, output);
+            var configuration = new BundleConfiguration
+            {
+                ProductName = baseline.ProductName,
+                Identifier = baseline.Identifier,
+                Publisher = baseline.Publisher,
+                Version = baseline.Version,
+                OutputDirectory = baseline.OutputDirectory,
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://example.test/updates",
+                    SigningKeyFile = keyPath,
+                },
+                Targets = baseline.Targets
+            };
+            var rejected = await Assert.ThrowsAnyAsync<InvalidOperationException>(async () =>
+                await new RpmBundler().BuildAsync(configuration, TestContext.Current.CancellationToken));
+            Assert.Contains("/usr/lib/example-app/" + claimedName, rejected.Message);
         }
         finally
         {

@@ -63,5 +63,5 @@ MSBuild 前缀 `BundlerDeb*`；`bundler.json` 分节 `deb.*`；API `DebBundleCon
 ## 5. 产物与边界
 
 - `artifacts\<包名>_<debian 版本串>_<架构>.deb`（默认 release 进版本串：如 `myapp_1.0.0-1_amd64.deb`），逐字节确定（纯托管写入器）。
-- 无自更新（`deb` 按权威实践走系统包管理器）。
+- 自更新走 installer-replay（系统包管理器重放），已设计定稿、计划实现——绑定 UPDATE 系统包扩展阶段，契约见 [`../../design/update.md`](../../design/update.md) §2。
 - 安装需 `dpkg`/`apt`；GUI 双击唤起属桌面环境行为，非包内能力。

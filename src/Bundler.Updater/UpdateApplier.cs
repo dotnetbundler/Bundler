@@ -48,6 +48,8 @@ internal sealed class UpdateApplier
                 MakeExecutable(staged);
                 return RunBootstrapper(staged, installDirectory, options, log);
             }
+            // 阶段边界：deb/rpm/alpineapk 已由打包侧接入更新链（包内身份旁车+引导件），
+            // 其 apply 分支属 UPDATE 系统包扩展阶段的后续 PR——当前统一走 default 确定性拒绝。
             default:
                 throw new UpdateException($"format '{artifact.Format}' has no apply semantics.");
         }

@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Text;
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
+using DotNet.Bundler.Core.Update;
 
 namespace DotNet.Bundler.Deb;
 
@@ -224,6 +225,21 @@ internal static class DebPackageWriter
         {
             System.Diagnostics.Debug.Assert(sourceItem.Kind == PayloadSourceKind.File);
             AddFile(sourceItem.ArchivePath, sourceItem.SourcePath!, sourceItem.Mode);
+        }
+
+        // 更新面：身份旁车（含 pkg 包名——换包按它定位已装单元）+ 引导件（linux 统一
+        // musl 静态件，glibc 目标经 musl 姊妹解析）随包装进安装根，与用户载荷同权：
+        // 撞名走 claimed 冲突显式拒绝，不静默覆盖。
+        if (bundle.Update is { } update)
+        {
+            var target = item.Target.Target;
+            AddGeneratedFile(
+                installRoot + "/" + UpdateInstallIdentity.FileName,
+                UpdateIdentitySidecar.Serialize(update, PackageFormat.Deb, target, packageName),
+                420 /* 0644 */);
+            AddFile(
+                installRoot + "/" + UpdateBootstrapper.FileNameFor(target),
+                UpdateBootstrapper.ResolveOrThrow(update, target), 493 /* 0755 */);
         }
 
         if (binLink.Length > 0)

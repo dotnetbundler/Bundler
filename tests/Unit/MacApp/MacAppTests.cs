@@ -787,9 +787,14 @@ public sealed class MacAppTests : TempBase
                         TemporaryCertificatePassword = "s3cret-pw"
                     }
                 }).BuildAsync(MacConfiguration(input, output), TestContext.Current.CancellationToken);
-            var import = calls.Single(c => c.StartsWith("security import"));
-            Assert.DoesNotContain("s3cret-pw", import);
-            Assert.DoesNotContain(" -P ", " " + import + " ");
+            // 导入面现为整件 PEM + cert/key 分件补导多调用——逐条核，任何一条都不得带口令/-P。
+            var imports = calls.Where(c => c.StartsWith("security import")).ToList();
+            Assert.NotEmpty(imports);
+            Assert.All(imports, import =>
+            {
+                Assert.DoesNotContain("s3cret-pw", import);
+                Assert.DoesNotContain(" -P ", " " + import + " ");
+            });
             Assert.True(calls.Any(c => c.StartsWith("openssl pkcs12") && c.Contains("-passin")),
                 "openssl 转换路径必须先把 p12 换成无口令 PEM。");
             // openssl 缺席/失败：如实报错，任何调用面都不得携带口令。

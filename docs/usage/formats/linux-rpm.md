@@ -67,5 +67,5 @@ MSBuild 前缀 `BundlerRpm*`；`bundler.json` 分节 `rpm.*`；API `RpmBundleCon
 ## 5. 产物与边界
 
 - `artifacts\<包名>-<版本>-<release>.<架构>.rpm`，逐字节确定（含签名包——签名在构建内完成）。
-- 无自更新。
+- 自更新走 installer-replay（系统包管理器重放），已设计定稿、计划实现——绑定 UPDATE 系统包扩展阶段，契约见 [`../../design/update.md`](../../design/update.md) §2。
 - 文件清单含 `%doc`/`%license` 标记；`license` 键与 `BundlerLicenseFile` 落位独立。

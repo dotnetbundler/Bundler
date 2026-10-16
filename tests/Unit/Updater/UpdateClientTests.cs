@@ -60,6 +60,26 @@ public sealed class UpdateClientTests : TempBase
             UpdateClient.FromIdentity(noKey, install, "1.0.0"));
     }
 
+    [Fact]
+    public void FromIdentity_SyspkgFormatWithoutPkg_Throws()
+    {
+        // v1 旧旁车没有 pkg 字段：syspkg 格式换包要靠包名定位已装单元，
+        // 缺件在构造闸确定性拒绝——非 syspkg 格式无 pkg 属正常，不受影响。
+        var install = Path.Combine(Root, "install-pkg");
+        foreach (var format in new[] { "deb", "rpm", "alpineapk" })
+        {
+            var identity = Identity();
+            identity.Format = format;
+            Assert.Throws<UpdateException>(() =>
+                UpdateClient.FromIdentity(identity, install, "1.0.0"));
+            identity.Pkg = "example-app";
+            Assert.NotNull(UpdateClient.FromIdentity(identity, install, "1.0.0"));
+        }
+        // zip 等非 syspkg 格式：旁车无 pkg 字段（EmitDefaultValue 不落地）照常构造。
+        Assert.Null(Identity().Pkg);
+        Assert.NotNull(UpdateClient.FromIdentity(Identity(), install, "1.0.0"));
+    }
+
     // ---- 清单决议（file:// feed）----
 
     [Fact]
