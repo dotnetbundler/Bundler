@@ -146,7 +146,7 @@ apk `apk add` 旧版本地件原生放行降级（alpine 容器实证：rc=0、�
 - `pkg-apply` 动词 AOT/POSIX 双实现同协议（deb/rpm/apk 前端退化链、降权重启链、env 回灌、`--rollback`、退出码 0/3/4/5/6）——stub 垫片非特权全链实证：unit 探针族（跨宿主断言）+ integration 真跑奇偶族。
   奇偶族整体仅非 Windows 宿主执行（各腿首部 `SkipWhen(IsWindows)`），Windows 面由 unit 探针族覆盖。
   Windows MSYS sh 腿挂 `docs/project/special-acceptance.md` 外部验收。
-- `pkg-apply` 容器真机全链：`syspkg-verify` CI 腿在 debian/fedora/alpine 三容器内以 root 实证——真包装/更新/`--rollback`、账本断言（`dpkg -s`/`rpm -q`/`apk list --installed`）、conffile 保留（deb confold / rpm `.rpmnew`）、apk unsigned `--allow-untrusted` 与签名闸、降权重启 uid 归属+env 回灌、busybox `setpriv` 拒参→`su` 承接、rc 0/4/5/6 全绿（run 38935978299）。
+- `pkg-apply` 容器真机全链：`syspkg-verify` CI 腿在 debian/fedora/alpine 三容器内以 root 实证——真包装/更新/`--rollback`、账本断言（`dpkg -s`/`rpm -q`/`apk list --installed`）、conffile 保留（deb confold / rpm `.rpmnew`）、apk unsigned `--allow-untrusted` 与签名闸、降权重启 uid 归属+env 回灌、busybox `setpriv` 拒参→`su` 承接、rc 0/4/5/6 全绿（run 38936728961）。
   降权器逐级最小 argv 预检（`spawn` 只证分叉不证收参）由此腿实证补入双实现。
 - deb/rpm/alpineapk 客户端 replay 编排（`SyspkgReplay`，UPDATE 系统包扩展 B3）：预检三件套（构造闸 `pkg` 名 + 前端退化链 `command -v` + 账本归属双检）、留存目录 + `applied` 标记、三级提权退化链拉起安装位 `bundler-updater pkg-apply`（`alpineapk`→`apk` 映射、拉起即退）、rollback 拣留存旧包同链重放——unit 探针族跨宿主断言 + integration POSIX 垫片 e2e 全绿（Windows 腿 skip）。
 

@@ -114,6 +114,6 @@ verify run `38881497256`（main@`cb76455`，#103/#104 合入后）4 条 macOS co
 剩余工作：
 
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
-- UPDATE 系统包扩展阶段（deb/rpm/alpineapk installer-replay 自更新）：发射侧（`pkg` 身份字段、`CoveredFormats` 扩收、三后端旁车+引导件注入）与引导件 `pkg-apply` 动词（AOT/POSIX 双实现同协议）已实现；客户端 replay 编排（预检三件套、三级提权链、留存与 `Apply`/`Rollback` 分支）计划实现，契约见 `docs/design/update.md` §2；
+- UPDATE 系统包扩展阶段（deb/rpm/alpineapk installer-replay 自更新）：发射侧（`pkg` 身份字段、`CoveredFormats` 扩收、三后端旁车+引导件注入）与引导件 `pkg-apply` 动词（AOT/POSIX 双实现同协议）已实现；客户端 replay 编排（预检三件套、三级提权链、留存与 `Apply`/`Rollback` 分支）已实现（PR #111），契约见 `docs/design/update.md` §2；
 - 发布链资产实际推送（NuGet/Release 为另一步）；
 - 零星已登记增强按 `docs/project/roadmap.md` §4.2 候选标准排队。
