@@ -63,4 +63,5 @@ MSBuild 前缀 `BundlerAlpineApk*`；`bundler.json` 分节 `alpineapk.*`；API `
 ## 5. 产物与边界
 
 - `artifacts\<包名>-<version>-r<release>.<arch>.apk`，逐字节确定（含可选 RSA 签名段——PKCS#1 v1.5 确定性签名）。
-- 无自更新；安装需 `apk`。
+- 自更新走 installer-replay（系统包管理器重放），已设计定稿、计划实现——绑定 UPDATE 系统包扩展阶段，契约见 [`../../design/update.md`](../../design/update.md) §2。
+- 安装需 `apk`。
