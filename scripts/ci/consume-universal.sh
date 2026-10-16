@@ -6,7 +6,10 @@ set -euo pipefail
 DIR="$(cd "${1:?usage: consume-universal.sh <artifact-dir>}" && pwd)"
 [ -f "$DIR/SHA256SUMS" ] || { echo "缺 SHA256SUMS：$DIR" >&2; exit 1; }
 
-APP="$(find "$DIR" -type d -name '*.app' | head -1)"
+# find|head 的 SIGPIPE 竞态在 set -euo pipefail 域内是杀脚本级——
+# 多个 .app 命中时 head 早退、find 吃 141 连带赋值行失败退出；
+# -print -quit 让 find 自取首条即正常退出（GNU/BSD 通用）。
+APP="$(find "$DIR" -type d -name '*.app' -print -quit)"
 [ -d "$APP" ] || { echo "未找到 .app" >&2; exit 1; }
 # 清单在 .app 目录内生成（条目为 ./Contents/...）——校验基准目录对齐产侧。
 ( cd "$APP" && shasum -a 256 -c "$DIR/SHA256SUMS" )
