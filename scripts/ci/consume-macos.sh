@@ -62,7 +62,7 @@ for D in app dmg pkg archive; do
     leg_on "$D" || { echo "[LEG-SKIP] ${D}（产件无本宿主可用切片，映射跳过）"; continue; }
     [ -d "$DIR/$(leg_dir "$D")" ] || { echo "[LEG-FAIL] ${D}（产件目录缺失：$(leg_dir "$D")）"; FAILED="$FAILED ${D}-missing"; continue; }
     # 目录在但一件没有同样是产侧异常——空 glob 静默跳过会让腿报"全绿零断言"。
-    find "$DIR/$(leg_dir "$D")" -type f | grep -q . \
+    [ -n "$(find "$DIR/$(leg_dir "$D")" -type f | head -1)" ] \
         || { echo "[LEG-FAIL] ${D}（产件目录空：$(leg_dir "$D")）"; FAILED="$FAILED ${D}-empty"; }
 done
 [ -z "$FAILED" ] || { echo "失败腿:$FAILED" >&2; exit 1; }
@@ -87,7 +87,7 @@ fi
 
 # .dmg：挂载 → 拷出 .app → 卸载 → 原生启动
 if leg_on dmg; then
-    if find "$DIR/$(leg_dir dmg)" -name '*.dmg' | grep -q .; then
+    if [ -n "$(find "$DIR/$(leg_dir dmg)" -name '*.dmg' | head -1)" ] ; then
         DMG="$(find "$DIR/$(leg_dir dmg)" -name '*.dmg' | head -1)"
         run_leg "dmg" bash -c '
         set -e
@@ -118,7 +118,7 @@ fi
 # 的已存在 .app 会原地升级（relocation）而非落 /Applications——LaunchServices 索引
 # 竞态导致落点漂移，删除同件保证 /Applications 确定性。
 if leg_on pkg; then
-    if find "$DIR/$(leg_dir pkg)" -name '*.pkg' | grep -q .; then
+    if [ -n "$(find "$DIR/$(leg_dir pkg)" -name '*.pkg' | head -1)" ] ; then
         find "$DIR/$(leg_dir pkg)" -type d -name '*.app' -exec rm -rf {} + 2>/dev/null || true
         PKG="$(find "$DIR/$(leg_dir pkg)" -name '*.pkg' | head -1)"
         run_leg "pkg" bash -c '
@@ -144,7 +144,7 @@ fi
 # 文本标记可读，不执行异 RID 二进制。缺格式即判败（分 zip/targz 两腿）。
 if leg_on archive; then
     if [ -z "$FMT_ONLY" ]; then
-        if find "$DIR/$(leg_dir archive)" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | grep -q .; then
+        if [ -n "$(find "$DIR/$(leg_dir archive)" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | head -1)" ] ; then
             run_leg "archive" bash -c '
             set -e
             T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "rm -rf $T" EXIT
@@ -165,7 +165,7 @@ if leg_on archive; then
             echo "[LEG-FAIL] archive（产件目录无 .zip/.tar.gz）"; FAILED="$FAILED archive-noformat"
         fi
     else
-        if find "$DIR/$(leg_dir archive)" -name '*.zip' | grep -q .; then
+        if [ -n "$(find "$DIR/$(leg_dir archive)" -name '*.zip' | head -1)" ] ; then
             run_leg "archive-zip(xchg)" bash -c '
             set -e
             T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "rm -rf $T" EXIT
@@ -191,7 +191,7 @@ if leg_on archive; then
         else
             echo "[LEG-FAIL] archive-zip(xchg)（产件目录无 .zip）"; FAILED="$FAILED archive-zip-xchg-noformat"
         fi
-        if find "$DIR/$(leg_dir archive)" -name '*.tar.gz' | grep -q .; then
+        if [ -n "$(find "$DIR/$(leg_dir archive)" -name '*.tar.gz' | head -1)" ] ; then
             run_leg "archive-targz(xchg)" bash -c '
             set -e
             T=$(mktemp -d "${TMPDIR:-/tmp}/bundler-consume.XXXXXX"); trap "rm -rf $T" EXIT
