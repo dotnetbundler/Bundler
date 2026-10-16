@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 发布前验证驱动（POSIX：ubuntu x64/arm + macos intel/arm64）。
-# 段序：构建 → 全量 dotnet test → fixture 产包 → Special 自动腿。
+# 段序：构建 → 全量 dotnet test → fixture 产包 → Manual 自动腿。
 # 残留纪律：产包与证据落 artifacts/ci/（job 结束由 runner 回收），工作区不留临时目录。
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -43,7 +43,7 @@ for P in Bundler.Tests Bundler.ApiTests Bundler.IntegrationTests Bundler.LocalPa
     fi
 done
 
-say "3/4 fixture 产包（喂 Special 腿）"
+say "3/4 fixture 产包（喂 Manual 腿）"
 FIX="tests/Bundler.IntegrationTests/Fixtures"
 produce(){ # $1=fixture csproj $2=rid $3=out-subdir
     dotnet publish "$FIX/$1" -c Release -r "$2" -p:BundlerIntegrationOutput="$OUT/$3" --nologo
@@ -64,8 +64,8 @@ Darwin)
     ;;
 esac
 
-say "4/4 Special 自动腿（CI 环境可跑者；凭证/公网/人工类仍排除）"
-SP="tests/Special"
+say "4/4 Manual 自动腿（CI 环境可跑者；凭证/公网/人工类仍排除）"
+SP="tests/Manual"
 run_leg(){ # 腿失败不连锁——逐条收集，末段统一判
     local name="$1"; shift
     if "$@"; then echo "[LEG-PASS] $name"; else echo "[LEG-FAIL] $name"; FAILED_LEGS="$FAILED_LEGS $name"; fi

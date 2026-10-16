@@ -90,5 +90,5 @@ BundleArtifact[]（产物清单）
 
 ## 11. 测试与验证入口
 
-- 快速单元/契约：`tests/Bundler.Tests`；直调门面 API 产真实产物：`tests/Bundler.ApiTests`；端到端真装真卸/容器矩阵：`tests/Bundler.IntegrationTests`；仓外 nupkg 消费契约：`tests/Bundler.LocalPackagesTests`。
+- 进程内零子进程：`tests/Unit`；公共 API 产真实产物：`tests/Api`；端到端真装真卸/容器矩阵：`tests/Integration`；本地 nupkg 消费契约：`tests/Package`；脚本化特殊验收：`tests/Manual`。
 - 组织、过滤与门禁机制见 `tests/README.md`。

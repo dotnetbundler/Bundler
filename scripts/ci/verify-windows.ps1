@@ -1,5 +1,5 @@
 # 发布前验证驱动（Windows：x64 + arm64 runner）。
-# 段序：构建 → 全量 dotnet test → fixture 产包 → Special 自动腿。
+# 段序：构建 → 全量 dotnet test → fixture 产包 → Manual 自动腿。
 # 残留纪律：产包与证据落 artifacts/ci/（job 结束由 runner 回收）；disposable-vm-faults 排最后
 # （它会留 PendingFileRenameOperations 到下轮重启——CI runner 用完即弃，接受）。
 #requires -RunAsAdministrator
@@ -46,12 +46,12 @@ foreach ($P in "Bundler.Tests", "Bundler.ApiTests", "Bundler.IntegrationTests", 
     }
 }
 
-Say "3/4 fixture 产包（喂 Special 腿）"
+Say "3/4 fixture 产包（喂 Manual 腿）"
 $FIX = "tests/Bundler.IntegrationTests/Fixtures"
 dotnet publish "$FIX/Nsis/Fixture/BundlerNsisIntegrationFixture.csproj" -c Release -r $RID `
     -p:BundlerIntegrationOutput="$OUT/nsis" --nologo
 # MSI 产包走 LocalPackages fixture（仓内唯一 MSI 生产工程，消费仓根刚打的 nupkg）
-dotnet publish "tests/Bundler.LocalPackagesTests/Fixtures/Msi/Fixture/BundlerMsiSmoke.csproj" -c Release -r $RID `
+dotnet publish "tests/Fixtures/MsiPackage/Fixture/BundlerMsiSmoke.csproj" -c Release -r $RID `
     -p:BundlerOutputPath="$OUT/msi" -p:BundlerPackageSource="$ROOT/artifacts/packages" --nologo
 
 $nsis = Get-ChildItem "$OUT/nsis" -Filter *.exe -Recurse | Select-Object -First 1 -ExpandProperty FullName
@@ -59,8 +59,8 @@ $msi  = Get-ChildItem "$OUT/msi"  -Filter *.msi -Recurse | Select-Object -First 
 if (-not $nsis) { throw "nsis 产包缺位" }
 if (-not $msi)  { throw "msi 产包缺位" }
 
-Say "4/4 Special 自动腿（凭证/公网/人工/真重启类仍排除）"
-$SP = "tests/Special"
+Say "4/4 Manual 自动腿（凭证/公网/人工/真重启类仍排除）"
+$SP = "tests/Manual"
 $failedLegs = @()
 function Run-Leg($name, $script, $argList) {
     pwsh -NoProfile -ExecutionPolicy Bypass -File $script @argList
@@ -72,7 +72,7 @@ Run-Leg "pinned-items"        "$SP/win/pinned-items.ps1"        @("-InstallerPat
 Run-Leg "mountvol-full-volume" "$SP/win/mountvol-full-volume.ps1" @()
 if ($IS_ARM) {
     # pwsh -File 下 string[] 参数只吃首个 token（其余会位置绑定到下一参数）——改 -Command 真表达式传数组
-    pwsh -NoProfile -ExecutionPolicy Bypass -Command "& '$ROOT/tests/Special/win/arm64-matrix.ps1' -InstallerPaths @('$nsis','$msi')"
+    pwsh -NoProfile -ExecutionPolicy Bypass -Command "& '$ROOT/tests/Manual/win/arm64-matrix.ps1' -InstallerPaths @('$nsis','$msi')"
     if ($LASTEXITCODE -eq 0) { Write-Host "[LEG-PASS] arm64-matrix" }
     else { Write-Host "[LEG-FAIL] arm64-matrix"; $failedLegs += "arm64-matrix" }
 }

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <BundlerTarget>windows-x86_64</BundlerTarget>
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerFormats>msi</BundlerFormats>
+    <BundlerIdentifier>com.example.bundler.msi.smoke</BundlerIdentifier>
+    <BundlerProductName>Bundler MSI Smoke</BundlerProductName>
+    <BundlerVersion>1.0.0</BundlerVersion>
+    <BundlerPublisher>Bundler Tests</BundlerPublisher>
+    <BundlerDescription>Isolated MSI install and uninstall smoke fixture</BundlerDescription>
+  </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.LocalPackages.props', '$(MSBuildThisFileDirectory)'))" />
+  <ItemGroup>
+    <PackageReference Include="DotNet.Bundler" VersionOverride="$(BundlerPackageVersion)" />
+    <BundlerResource Include="Assets\marker.txt" Destination="docs\marker.txt" />
+    <BundlerResource Include="Assets\v1-only.txt" Destination="docs\v1-only.txt"
+                     Condition="'$(MsiLifecycleTest)' == 'true' and '$(BundlerVersion)' == '1.0.0'" />
+    <BundlerResource Include="Assets\v2-only.txt" Destination="docs\v2-only.txt"
+                     Condition="'$(MsiLifecycleTest)' == 'true' and ('$(BundlerVersion)' == '1.1.0' or '$(BundlerWixVersion)' == '1.1.0')" />
+    <BundlerResource Include="Assets\variant-only.txt" Destination="docs\variant-only.txt"
+                     Condition="'$(MsiVariantTest)' == 'true'" />
+    <BundlerFileAssociation Include="$(BundlerTestExtension)" Condition="'$(MsiLifecycleTest)' == 'true'">
+      <Name>Bundler MSI lifecycle file</Name>
+      <MimeType>application/x-bundler-msi-lifecycle</MimeType>
+    </BundlerFileAssociation>
+    <BundlerUrlProtocol Include="$(BundlerTestScheme)" Condition="'$(MsiLifecycleTest)' == 'true'">
+      <Name>Bundler MSI lifecycle link</Name>
+    </BundlerUrlProtocol>
+    <BundlerWixExtensionFragment Include="Assets\extra.wxs" Condition="'$(MsiExtensionTest)' == 'true'" />
+    <BundlerWixExtensionComponentGroupRef Include="Ext.Extras" Condition="'$(MsiExtensionTest)' == 'true'" />
+  </ItemGroup>
+</Project>
