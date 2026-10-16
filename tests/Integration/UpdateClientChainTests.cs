@@ -1,9 +1,13 @@
 // UpdateClient.Apply 真链腿：UpdateApplier 拉起真实引导件子进程做三段式换包——
 // 原 UpdaterClientTests 的 Linux 真环境腿（Unit 层零子进程规则不收）。
-// 覆盖：文件级安装单元（AppImage）换包+保留位备份+回滚、目录级 zip 端到端、
-// 无 AOT 二进制时 /bin/sh 降级脚本链。
+// 覆盖：文件级安装单元（AppImage）换包+保留位备份+回滚、目录级 zip/tar.gz 端到端、
+// macOS 未签 .app 端到端（含 MacAppGate quarantine 剥离）、/bin/sh 降级脚本链。
 using System.IO.Compression;
 using System.Runtime.Serialization.Json;
+using System.Text;
+using DotNet.Bundler;
+using DotNet.Bundler.Archive;
+using DotNet.Bundler.Core;
 using DotNet.Bundler.Update;
 using DotNet.Bundler.Updater;
 using Protocol = DotNet.Bundler.Updater.Protocol;
@@ -77,9 +81,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var process = client.Apply(info, downloaded, new ApplyOptions
         {
             StagingRoot = Path.Combine(directory, "staging"),
-            BootstrapperPath = Path.Combine(RepositoryLayout.Root,
-                "src", "Bundler.Updater.Bootstrap", "tools",
-                TestPlatform.LinuxTarget, "bundler-updater"),
+            BootstrapperPath = LinuxBootstrapper(),
             KeepRollbackBackup = true,
             RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
         });
@@ -104,9 +106,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var rollback = client.Rollback(new ApplyOptions
         {
             StagingRoot = Path.Combine(directory, "staging-rb"),
-            BootstrapperPath = Path.Combine(RepositoryLayout.Root,
-                "src", "Bundler.Updater.Bootstrap", "tools",
-                TestPlatform.LinuxTarget, "bundler-updater"),
+            BootstrapperPath = LinuxBootstrapper(),
             KeepRollbackBackup = true,
             RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
         });
@@ -125,10 +125,8 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
 
         var install = InstallWithSidecar(directory, out var material, out var feedDir);
         File.WriteAllText(Path.Combine(install, "app"), "v1");
-        // 引导件：安装目录内注入真实 linux-<arch> AOT 二进制。
-        var bootstrapper = Path.Combine(RepositoryLayout.Root,
-            "src", "Bundler.Updater.Bootstrap", "tools",
-            TestPlatform.LinuxTarget, "bundler-updater");
+        // 引导件：安装目录内注入真实 musl 静态 AOT 二进制（glibc 宿主同跑）。
+        var bootstrapper = LinuxBootstrapper();
         File.Copy(bootstrapper, Path.Combine(install, "bundler-updater"));
 
         // v2 载荷 zip：单顶层目录 app-v2/app="v2" + 引导件也随包（真实发布形态）。
@@ -211,8 +209,172 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
     }
 
+    [Fact]
+    public async Task Client_UpdateAsync_TarGz_EndToEnd_Linux()
+    {
+        // tar.gz 运输件端到端：与 zip 腿同一换包通道（ExtractTarGz → 三段式），
+        // 独有断言面是执行位经 ustar mode 还原——managed zip 腿无此保真。
+        Assert.SkipUnless(TestPlatform.IsLinux,
+            "Linux-only leg (bootstrapper rides host arch).");
+        var directory = Ws.Combine("targz-endtoend");
+        Directory.CreateDirectory(directory);
+
+        var install = InstallWithSidecar(directory, out var material, out var feedDir,
+            format: "targz", target: TestPlatform.LinuxTarget);
+        File.WriteAllText(Path.Combine(install, "app"), "v1");
+        var bootstrapper = LinuxBootstrapper();
+        File.Copy(bootstrapper, Path.Combine(install, "bundler-updater"));
+
+        var artifact = WriteTarGzArtifact(feedDir, "app-2.0.0.tar.gz", "v2",
+            extraEntry: ("bundler-updater", File.ReadAllBytes(bootstrapper)));
+        var sha = Sha256Hex(artifact);
+        var sig = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material));
+        WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+        {
+            Target = TestPlatform.LinuxTarget, Format = "targz",
+            Url = "app-2.0.0.tar.gz", File = "app-2.0.0.tar.gz",
+            Sha256 = sha, Size = new FileInfo(artifact).Length, Signature = sig,
+        });
+
+        var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+        var info = (await client.CheckForUpdateAsync())!;
+        var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+        client.Verify(info, downloaded);
+        var process = client.Apply(info, downloaded, new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging"),
+            KeepRollbackBackup = true,
+            RollbackBackupDirectory = Path.Combine(directory, "backups", "install-x"),
+        });
+        Assert.True(process.WaitForExit(90_000), "bootstrapper did not exit in 90s");
+        Assert.Equal(0, process.ExitCode);
+        Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
+        // tar 保真面：随包引导件的 0755 经 ustar mode 落回文件系统。
+        if (OperatingSystem.IsLinux())
+        {
+            Assert.True(
+                (File.GetUnixFileMode(Path.Combine(install, "bundler-updater")) &
+                    UnixFileMode.UserExecute) != 0,
+                "payload executable bit must survive the tar.gz transport.");
+        }
+        Assert.False(Directory.Exists(install + ".bundler-backup"));
+        Assert.Equal("v1", File.ReadAllText(
+            Path.Combine(directory, "backups", "install-x", "app")));
+        Assert.False(File.Exists(install + ".bundler-swap"));
+
+        var rollback = client.Rollback(new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging-rb"),
+            KeepRollbackBackup = true,
+            RollbackBackupDirectory = Path.Combine(directory, "backups", "install-x"),
+        });
+        Assert.True(rollback.WaitForExit(60_000));
+        Assert.Equal(0, rollback.ExitCode);
+        Assert.Equal("v1", File.ReadAllText(Path.Combine(install, "app")));
+    }
+
+    [Fact]
+    public async Task Client_UpdateAsync_AppBundle_EndToEnd_MacOS()
+    {
+        // 未签 .app 双方换包全链（CI 无 Apple 凭证——MacAppGate 走"双未签+BundleID"面）：
+        // 载荷带 quarantine 经 ditto 运输件往返，换包前门剥离、落位件不得再带。
+        Assert.SkipUnless(TestPlatform.IsMacOS,
+            "macOS-only leg (.app gate + ditto transport zip).");
+        var directory = Ws.Combine("app-bundle-e2e");
+        Directory.CreateDirectory(directory);
+        var material = UpdateKeyMaterial.Generate();
+        var feedDir = Path.Combine(directory, "feed");
+        Directory.CreateDirectory(feedDir);
+
+        // v1 安装位：.app 目录件 + 引导件按真实装位注入 Contents/MacOS/。
+        var install = MacAppStub.WriteBundle(
+            Path.Combine(directory, "install-slot"), "MyApp", "com.bundler.chain");
+        File.WriteAllText(Path.Combine(install, "Contents", "MacOS", "MyApp"), "v1");
+        var bootstrapper = MacAppStub.BootstrapperTool(TestPlatform.OsxTarget);
+        File.Copy(bootstrapper, Path.Combine(install, "Contents", "MacOS", "bundler-updater"));
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(Path.Combine(install, "Contents", "MacOS", "bundler-updater"),
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                    UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                    UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
+
+        // v2 载荷：同 BundleID .app + quarantine 全树打标——经 ditto 运输件保真到提取侧。
+        var payload = MacAppStub.WriteBundle(
+            Path.Combine(directory, "payload-src"), "MyApp", "com.bundler.chain");
+        File.WriteAllText(Path.Combine(payload, "Contents", "MacOS", "MyApp"), "v2");
+        File.Copy(bootstrapper,
+            Path.Combine(payload, "Contents", "MacOS", "bundler-updater"));
+        MacAppStub.SetQuarantineTree(payload);
+        var transport = Path.Combine(feedDir, "MyApp-2.0.0.app.zip");
+        Assert.True(MacArchiveTools.TryWriteAppZipViaDitto(
+            payload, transport, NullBundleLogger.Instance),
+            "ditto transport zip must be writable on macOS (xattr fidelity path).");
+        WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+        {
+            Target = TestPlatform.OsxTarget, Format = "app",
+            Url = "MyApp-2.0.0.app.zip", File = "MyApp-2.0.0.app.zip",
+            Sha256 = Sha256Hex(transport), Size = new FileInfo(transport).Length,
+            Signature = Convert.ToBase64String(EcdsaSigner.SignFile(transport, material)),
+        });
+
+        var client = UpdateClient.FromIdentity(new Protocol.UpdateInstallIdentity
+        {
+            Format = "app", Target = TestPlatform.OsxTarget, Channel = "stable",
+            FeedUrl = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
+            PublicKey = material.PublicPointBase64(),
+        }, install, "1.0.0");
+        var info = (await client.CheckForUpdateAsync())!;
+        var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+        client.Verify(info, downloaded);
+        var logPath = Path.Combine(directory, "update.log");
+        var process = client.Apply(info, downloaded, new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging"),
+            KeepRollbackBackup = true,
+            RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
+            LogFile = logPath,
+        });
+        Assert.True(process.WaitForExit(90_000), "bootstrapper did not exit in 90s");
+        Assert.Equal(0, process.ExitCode);
+        Assert.Equal("v2", File.ReadAllText(
+            Path.Combine(install, "Contents", "MacOS", "MyApp")));
+        // 门禁生效面：载荷 quarantine 在换包前剥掉，落位安装件全树零残留；
+        // 日志 "quarantine stripped" 证明标确实在过（"not present" 是另一支）。
+        Assert.False(MacAppStub.HasQuarantine(install));
+        Assert.All(
+            Directory.EnumerateFileSystemEntries(install, "*", SearchOption.AllDirectories),
+            entry => Assert.False(MacAppStub.HasQuarantine(entry)));
+        Assert.Contains("quarantine stripped", File.ReadAllText(logPath));
+        Assert.Equal("v1", File.ReadAllText(Path.Combine(
+            directory, "backups", "myapp", "Contents", "MacOS", "MyApp")));
+
+        // 回滚对照：保留位备份倒回 → .app 回到 v1（回滚不验门禁——备份是自家产物）。
+        var rollback = client.Rollback(new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging-rb"),
+            KeepRollbackBackup = true,
+            RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
+        });
+        Assert.True(rollback.WaitForExit(60_000));
+        Assert.Equal(0, rollback.ExitCode);
+        Assert.Equal("v1", File.ReadAllText(
+            Path.Combine(install, "Contents", "MacOS", "MyApp")));
+    }
+
+    // linux 引导件收敛 musl 静态单件（#100 起 tools/ 无字面 linux-<arch> 件，
+    // static-pie 件 glibc/musl 双宿主通吃）——与打包侧 MuslSibling 同一选件语义。
+    static string LinuxBootstrapper() => Path.Combine(
+        RepositoryLayout.Root, "src", "Bundler.Updater.Bootstrap", "tools",
+        System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
+            System.Runtime.InteropServices.Architecture.Arm64
+            ? "linux-musl-aarch64" : "linux-musl-x86_64",
+        "bundler-updater");
+
     static string InstallWithSidecar(
-        string root, out UpdateKeyMaterial material, out string feedDir)
+        string root, out UpdateKeyMaterial material, out string feedDir,
+        string format = "zip", string target = "linux-x86_64")
     {
         var install = Path.Combine(root, "install");
         Directory.CreateDirectory(install);
@@ -222,8 +384,8 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         // FeedUrl = 清单文件位置（本地路径或 file:// 均可）；产物按同目录解析。
         Protocol.UpdateInstallIdentity.Write(install, new Protocol.UpdateInstallIdentity
         {
-            Format = "zip",
-            Target = "linux-x86_64",
+            Format = format,
+            Target = target,
             Channel = "stable",
             FeedUrl = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
             PublicKey = material.PublicPointBase64(),
@@ -272,6 +434,38 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
                 using var es = e2.Open();
                 es.Write(extra.bytes, 0, extra.bytes.Length);
             }
+        }
+        return path;
+    }
+
+    // tar.gz 运输件：仓内 TarWriter + GZipStream 产确定性 ustar——
+    // 单顶层目录是 UpdateApplier.SingleTopDirectory 的载荷根判据。
+    static string WriteTarGzArtifact(
+        string dir, string name, string content,
+        (string name, byte[] bytes)? extraEntry = null)
+    {
+        var path = Path.Combine(dir, name);
+        var entries = new List<TarEntry>
+        {
+            new() { Name = "app-v2/", Kind = TarEntryKind.Directory, Mode = 493 /* 0755 */ },
+            new()
+            {
+                Name = "app-v2/app", Kind = TarEntryKind.File, Mode = 420 /* 0644 */,
+                Content = Encoding.UTF8.GetBytes(content),
+            },
+        };
+        if (extraEntry is { } extra)
+        {
+            entries.Add(new TarEntry
+            {
+                Name = "app-v2/" + extra.name, Kind = TarEntryKind.File,
+                Mode = 493 /* 0755 */, Content = extra.bytes,
+            });
+        }
+        using (var stream = File.Create(path))
+        using (var gzip = new GZipStream(stream, CompressionLevel.Optimal))
+        {
+            TarWriter.Write(gzip, entries);
         }
         return path;
     }
