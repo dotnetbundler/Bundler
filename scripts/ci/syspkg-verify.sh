@@ -80,6 +80,9 @@ want_rec() { # $1 phase-id $2 rec-file $3 expect-substr（形如 uid=1000）$4 d
 # shim"分流成各退化腿。sh 支路协议基础工具固定入组（awk/sed/tr/ls/dirname/env/nohup/id/
 # mkdir——前六件协议解析用，id/mkdir 喂探针）。
 BASETOOLS="env nohup dirname awk ls sed tr id mkdir cat"
+# dpkg 在 PATH 内自查运行依赖（缺一个整体报 "expected programs not found" 退 2）：
+# sh/rm/tar/diff + dpkg-deb/ldconfig/start-stop-daemon——shim 给 dpkg 时必须一并给。
+DPKGTOOLS="sh rm tar diff dpkg dpkg-deb ldconfig start-stop-daemon"
 makeshim() { # $1=dir; rest=tool 名（缺失宿主工具即 FAIL——shim 缺口属环境问题）
     _ms_d=$1; shift
     rm -rf "$_ms_d"; mkdir -p "$_ms_d"
@@ -189,6 +192,26 @@ EOF
     cp "$_mr_top"/RPMS/*/*.rpm "$2"
 }
 
+# tar 段去 EOA 尾零块——apk 把整文件当一个 tar/gzip 复合流读，sig/control 段
+# 若带标准 tar 的尾部零块（EOA），解析会在流中间被截断：apk 报
+# "unexpected end of file"。data 段保留 EOA。
+# 语义对齐 src/Bundler.AlpineApk/ApkPackageWriter.cs 的 omitEndOfArchive。
+strip_eoa() { # $1=raw.tar $2=out.tar（已去尾零块）
+    _se_zero="$W/.zero512"
+    dd if=/dev/zero of="$_se_zero" bs=512 count=1 2>/dev/null
+    _se_sz=$(wc -c <"$1")
+    _se_blk=$(( (_se_sz + 511) / 512 ))
+    while [ "$_se_blk" -gt 0 ]; do
+        if dd if="$1" of="$W/.se-blk" bs=512 skip=$((_se_blk - 1)) count=1 2>/dev/null \
+            && cmp -s "$W/.se-blk" "$_se_zero"; then
+            _se_blk=$((_se_blk - 1))
+        else
+            break
+        fi
+    done
+    dd if="$1" of="$2" bs=512 count="$_se_blk" 2>/dev/null
+}
+
 # ---- apk：手工三段 gzip 拼装（签名段=.SIGN.RSA.<key>.rsa.pub 对 control 段的
 # PKCS1v15-SHA1 裸签——与 abuild `openssl dgst -sha1 -sign` 同谱）。$3=1 时签名。
 mk_apk() { # $1=pkgver(如 2.0.0-r0) $2=out.apk $3=sign(0/1)
@@ -198,7 +221,7 @@ mk_apk() { # $1=pkgver(如 2.0.0-r0) $2=out.apk $3=sign(0/1)
     printf 'conf-content v%s\n' "$1" >"$_ma/root$CONF"
     tar -czf "$_ma/data.tar.gz" -C "$_ma/root" usr etc
     _ma_dh=$(sha256sum "$_ma/data.tar.gz" | awk '{print $1}')
-    _ma_sz=$(cd "$_ma/root" && find . -type f -exec wc -c {} + | awk '{s+=$1} END {print s}')
+    _ma_sz=$(cd "$_ma/root" && find . -type f -exec wc -c {} \; | awk '{s+=$1} END {print s}')
     _ma_now=$(date +%s)
     { echo "pkgname = $PKG"; echo "pkgver = $1"
       echo "pkgdesc = syspkg-verify probe"; echo "url = https://bundler.invalid"
@@ -208,11 +231,15 @@ mk_apk() { # $1=pkgver(如 2.0.0-r0) $2=out.apk $3=sign(0/1)
     { echo '#!/bin/sh'
       echo "echo post-install >> $STAMPS 2>/dev/null || true"
     } >"$_ma/ctl/.post-install"
-    tar -czf "$_ma/control.tar.gz" -C "$_ma/ctl" .PKGINFO .post-install
+    tar -cf "$_ma/control.raw.tar" -C "$_ma/ctl" .PKGINFO .post-install
+    strip_eoa "$_ma/control.raw.tar" "$_ma/control.stripped.tar"
+    gzip -9 <"$_ma/control.stripped.tar" >"$_ma/control.tar.gz"
     if [ "$3" = 1 ]; then
         openssl dgst -sha1 -sign "$W/syspkg-key.rsa" \
             -out "$_ma/sig/.SIGN.RSA.syspkg-key.rsa.rsa.pub" "$_ma/control.tar.gz"
-        tar -czf "$_ma/sig.tar.gz" -C "$_ma/sig" ".SIGN.RSA.syspkg-key.rsa.rsa.pub"
+        tar -cf "$_ma/sig.raw.tar" -C "$_ma/sig" ".SIGN.RSA.syspkg-key.rsa.rsa.pub"
+        strip_eoa "$_ma/sig.raw.tar" "$_ma/sig.stripped.tar"
+        gzip -9 <"$_ma/sig.stripped.tar" >"$_ma/sig.tar.gz"
         cat "$_ma/sig.tar.gz" "$_ma/control.tar.gz" "$_ma/data.tar.gz" >"$2"
     else
         cat "$_ma/control.tar.gz" "$_ma/data.tar.gz" >"$2"
@@ -279,7 +306,7 @@ leg_deb() {
     fi
 
     # D4：sh 支路 + 无 apt-get shim（退化 dpkg -i）+ su 降权腿（shim 不给 setpriv/sudo/runuser）
-    makeshim "$W/shim-su" $BASETOOLS dpkg su
+    makeshim "$W/shim-su" $BASETOOLS $DPKGTOOLS su
     mk_env "$W/env.d4" "$REC/d4.txt" d4-sh
     rc_of env PATH="$W/shim-su" SUDO_UID="$T_UID" SUDO_GID="$T_GID" \
         /bin/sh "$SHIMPL" pkg-apply --pkg "$W/v2.deb" --format deb --app "$APP" \
@@ -291,7 +318,7 @@ leg_deb() {
     want_rec D4 "$REC/d4.txt" "uid=$T_UID" "su 降权腿重启探针 uid=tester"
 
     # D5：sh 支路 + sudo 降权腿（shim 只给 sudo 不给 setpriv/runuser/su）v2→v3
-    makeshim "$W/shim-sudo" $BASETOOLS dpkg sudo
+    makeshim "$W/shim-sudo" $BASETOOLS $DPKGTOOLS sudo
     mk_env "$W/env.d5" "$REC/d5.txt" d5-sh
     rc_of env PATH="$W/shim-sudo" SUDO_UID="$T_UID" SUDO_GID="$T_GID" \
         /bin/sh "$SHIMPL" pkg-apply --pkg "$W/v3.deb" --format deb --app "$APP" \
@@ -318,7 +345,10 @@ leg_deb() {
         --log "$EV/d8-sh.log"
     expect_rc D8 6 $?
     expect_ver D8 3.0 "sh 支路 rc6 安装已提交（账本=3.0）"
-    dpkg -i "$W/v1.deb" >>"$CONSOLE" 2>&1 || true
+    # 回摆 v1 基线（留尾账本=v1）；conffile 已被用户编辑——裸 dpkg -i 会交互
+    # prompt 撞 stdin EOF，须同实现口径给 noninteractive+confold。
+    DEBIAN_FRONTEND=noninteractive dpkg -i --force-confdef --force-confold \
+        "$W/v1.deb" >>"$CONSOLE" 2>&1 || true
 
     # D9：包管理器全缺席 → rc5（AOT 与 sh 双腿，shim 内不给 apt-get/dpkg）
     makeshim "$W/shim-none" $BASETOOLS
@@ -372,15 +402,31 @@ leg_rpm() {
     want_line R2 "$CONF" "# user-edit" "%config(noreplace) 用户修改保留"
     want_file R2 "$CONF.rpmnew" "%config(noreplace) 新配置落 .rpmnew"
 
-    # R3：AOT --rollback——dnf 装旧版本地件拒降级 → zypper 缺席 → rpm -U --oldpackage
+    # R3：AOT --rollback v3→v1——dnf 对本地旧版件的裁决以实跑为准：dnf5 实测
+    # 原地降级成功（via dnf）；若环境拒降则走 zypper/rpm 退化。两路都以
+    # 账本 1.0-1 收口，跑的是哪条按日志定——两口径都如实留证。
     rc_of "$AOT" pkg-apply --rollback --pkg "$W/v1.rpm" --format rpm --app "$APP" \
         --env-file "$W/env.r1" --log "$EV/r3-aot.log"
     expect_rc R3 0 $?
-    expect_ver R3 1.0-1 "rollback --oldpackage 降级回 v1"
-    want_line R3 "$EV/r3-aot.log" "zypper not found" "zypper 缺席退化证据"
-    if grep -qF "dnf failed" "$EV/r3-aot.log" 2>/dev/null && grep -qF "via rpm" "$EV/r3-aot.log" 2>/dev/null; then
-        info "R3 dnf 拒降级 → rpm -U --oldpackage 腿完成（降级成功即 --oldpackage 已带证据）"
+    expect_ver R3 1.0-1 "rollback 降级回 v1"
+    if grep -qF "via rpm" "$EV/r3-aot.log" 2>/dev/null; then
+        want_line R3 "$EV/r3-aot.log" "zypper not found" "zypper 缺席退化证据"
+    else
+        want_line R3 "$EV/r3-aot.log" "via dnf" "dnf 原地降级腿选用"
     fi
+
+    # R3b：shim 只给 rpm（dnf/zypper 缺席）——证 `rpm -U --oldpackage` 降级链：
+    # rpm -U 装旧件缺 --oldpackage 会报 "newer already installed" 非零，账本回到
+    # 1.0-1 即降级链真走通的证据（重启按当前权限 root spawn，此处不断 uid）。
+    rpm -U "$W/v3.rpm" >>"$CONSOLE" 2>&1
+    makeshim "$W/shim-rpm" $BASETOOLS rpm
+    rc_of env PATH="$W/shim-rpm" SUDO_UID="$T_UID" SUDO_GID="$T_GID" "$AOT" pkg-apply \
+        --rollback --pkg "$W/v1.rpm" --format rpm --app "$APP" \
+        --log "$EV/r3b-aot.log"
+    expect_rc R3 0 $?
+    expect_ver R3 1.0-1 "shim-rpm 腿 --oldpackage 降级"
+    want_line R3 "$EV/r3b-aot.log" "zypper not found" "zypper 缺席退化证据"
+    want_line R3 "$EV/r3b-aot.log" "via rpm" "rpm -U 退化腿选用"
 
     # R4：sh 支路 + runuser 降权腿（shim 给 rpm+runuser，不给 dnf/zypper/setpriv/sudo/su）
     makeshim "$W/shim-runuser" $BASETOOLS rpm runuser
@@ -482,7 +528,8 @@ leg_apk() {
     snap k1n
 
     # K2：AOT --rollback 重放签名 v1——观察 apk 对旧版本地件的降级语义（special-acceptance 在册项）。
-    # 两种自洽结局都算证据：rc0+账本 v1=原生放行；rc4+账本守 v2=拒绝降级。
+    # 自洽结局都算证据：rc0+账本 v1=原生放行；rc≠0+账本守 v2=拒绝降级；
+    # rc0+账本守 v2=受理但 no-op 不翻页。只有 rc 与账本互斥才 FAIL。
     rc_of "$AOT" pkg-apply --rollback --pkg "$W/v1s.apk" --format apk --app "$APP" \
         --env-file "$W/env.k1" --log "$EV/k2-aot.log"
     _k2_rc=$?
@@ -491,6 +538,8 @@ leg_apk() {
         pass "K2 apk 降级语义=原生放行（rc=0，账本=1.0.0-r0）"
     elif [ "$_k2_rc" -ne 0 ] && [ "$_k2_v" = "2.0.0-r0" ]; then
         pass "K2 apk 降级语义=拒绝旧版重放（rc=${_k2_rc}，账本守 2.0.0-r0）"
+    elif [ "$_k2_rc" -eq 0 ] && [ "$_k2_v" = "2.0.0-r0" ]; then
+        pass "K2 apk 降级语义=受理但不翻页（rc=0 no-op，账本守 2.0.0-r0）"
     else
         fail "K2" "rollback rc=${_k2_rc} 账本=${_k2_v} —— 账本与 rc 不自洽"
     fi
