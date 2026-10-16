@@ -483,6 +483,19 @@ leg_apk() {
     mk_apk 1.0.0-r0 "$W/v1s.apk" 1 && mk_apk 2.0.0-r0 "$W/v2s.apk" 1 \
         && pass "apk-env 五包产出（unsigned×3 + signed×2）" || { fail apk-env "apk 产包失败"; return; }
 
+    # 降权器实测（前台同步——分离 spawn 的沉默失败在此现形）：
+    # alpine busybox 提供 setpriv/su；逐条实跑把真实 argv 可行性钉进 console。
+    { echo "== 降权器前台实测 =="
+      for _t in setpriv su; do
+          echo "  $_t -> $(command -v "$_t" 2>/dev/null || echo absent)"
+      done
+      if command -v setpriv >/dev/null 2>&1; then
+          setpriv --reuid="$T_UID" --regid="$T_GID" --clear-groups env MARK=ok \
+              /bin/sh -c 'id -u; echo MARK=$MARK' 2>&1 || echo "  setpriv rc=$?"
+      fi
+      su -s /bin/sh -c 'id -u' tester 2>&1 || echo "  su rc=$?"
+    } >>"$CONSOLE" 2>&1
+
     # K0：放空 /etc/apk/keys——触发 --allow-untrusted 腿（TOFU 边界实态）
     [ -d /etc/apk/keys ] && mv /etc/apk/keys /etc/apk/keys.stock
     mkdir -p /etc/apk/keys
@@ -609,6 +622,12 @@ case "$LEG" in
     rpm) leg_rpm ;;
     apk) leg_apk ;;
 esac
+
+# 探针记录落证据件——分离 spawn 的写面在 /tmp，收尾拷进工件。
+{ cp -r "$REC" "$EV/rec" 2>/dev/null || true
+  echo "== 探针记录目录 =="
+  find "$REC" -type f -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \; 2>/dev/null || true
+} >>"$CONSOLE" 2>&1
 
 echo "================================" | tee -a "$RESULTS"
 if [ -n "$FAILS" ]; then
