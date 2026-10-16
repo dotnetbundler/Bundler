@@ -1,0 +1,1 @@
+Extra payload file staged next to the .app inside the .pkg.

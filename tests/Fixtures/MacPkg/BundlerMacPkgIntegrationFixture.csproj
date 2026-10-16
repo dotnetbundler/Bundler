@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">osx-arm64</RuntimeIdentifier>
+    <BundlerTarget Condition="'$(BundlerTarget)' == '' and '$(RuntimeIdentifier)' == '' and '$(RuntimeIdentifiers)' == ''">macos-aarch64</BundlerTarget>
+    <SelfContained>true</SelfContained>
+    <AssemblyName>BundlerMacPkgIntegrationFixture</AssemblyName>
+    <Version>1.0.0</Version>
+    <BundlerEnabled>true</BundlerEnabled>
+    <BundlerIntegrationIdentifier Condition="'$(BundlerIntegrationIdentifier)' == ''">com.dotnetbundler.macpkgintegrationfixture</BundlerIntegrationIdentifier>
+    <BundlerIntegrationProductName Condition="'$(BundlerIntegrationProductName)' == ''">Bundler Mac PKG Fixture</BundlerIntegrationProductName>
+    <BundlerFormats>pkg</BundlerFormats>
+    <BundlerIdentifier>$(BundlerIntegrationIdentifier)</BundlerIdentifier>
+    <BundlerProductName>$(BundlerIntegrationProductName)</BundlerProductName>
+    <BundlerPublisher>DotNet.Bundler Tests</BundlerPublisher>
+    <BundlerDescription>Disposable macOS .pkg integration-test fixture.</BundlerDescription>
+    <BundlerCopyright>Copyright DotNet.Bundler Tests</BundlerCopyright>
+    <BundlerOutputPath>$(BundlerIntegrationOutput)</BundlerOutputPath>
+    <BundlerMacAppPackageName>PkgFixture</BundlerMacAppPackageName>
+    <BundlerMacAppDisplayName>Bundler Mac PKG Fixture</BundlerMacAppDisplayName>
+    <BundlerMacAppBuildVersion>2026.9.1</BundlerMacAppBuildVersion>
+    <BundlerMacPkgPackageName Condition="'$(BundlerTestPkgPackageName)' != ''">$(BundlerTestPkgPackageName)</BundlerMacPkgPackageName>
+    <BundlerMacPkgVersion Condition="'$(BundlerTestPkgVersion)' != ''">$(BundlerTestPkgVersion)</BundlerMacPkgVersion>
+    <BundlerMacPkgInstallRoot Condition="'$(BundlerTestPkgInstallRoot)' != ''">$(BundlerTestPkgInstallRoot)</BundlerMacPkgInstallRoot>
+    <BundlerMacPkgTitle Condition="'$(BundlerTestPkgTitle)' != ''">$(BundlerTestPkgTitle)</BundlerMacPkgTitle>
+    <BundlerMacPkgWelcomeFile Condition="'$(BundlerTestPkgWelcome)' == 'true'">Assets/welcome.txt</BundlerMacPkgWelcomeFile>
+    <BundlerMacPkgConclusionFile Condition="'$(BundlerTestPkgConclusion)' == 'true'">Assets/conclusion.rtf</BundlerMacPkgConclusionFile>
+    <BundlerMacPkgInstallScope Condition="'$(BundlerTestPkgInstallScope)' != ''">$(BundlerTestPkgInstallScope)</BundlerMacPkgInstallScope>
+    <BundlerLicenseFile Condition="'$(BundlerTestPkgLicense)' == 'true'">Assets/license.txt</BundlerLicenseFile>
+    <BundlerMacPkgScriptsDirectory Condition="'$(BundlerTestPkgScripts)' == 'true'">Scripts</BundlerMacPkgScriptsDirectory>
+    <BundlerMacPkgSignIdentity Condition="'$(BundlerTestPkgSignIdentity)' != ''">$(BundlerTestPkgSignIdentity)</BundlerMacPkgSignIdentity>
+    <BundlerMacPkgNotarize Condition="'$(BundlerTestPkgNotarize)' == 'true'">true</BundlerMacPkgNotarize>
+  </PropertyGroup>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
+  <ItemGroup>
+    <BundlerResource Include="Assets/readme.txt" Destination="docs/readme.txt" />
+    <BundlerMacPkgFile Include="Assets/helper.txt" Destination="support/helper.txt" />
+  </ItemGroup>
+</Project>

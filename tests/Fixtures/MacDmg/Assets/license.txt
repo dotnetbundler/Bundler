@@ -1,0 +1,2 @@
+Bundler Mac DMG integration-test license.
+This text is only asserted through the embedded SLA resources; it grants nothing.

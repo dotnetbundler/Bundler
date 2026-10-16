@@ -1,0 +1,861 @@
+using DotNet.Bundler;
+using DotNet.Bundler.Core;
+using DotNet.Bundler.MacApp;
+using DotNet.Bundler.MacDmg;
+using System.Runtime.InteropServices;
+
+
+// 从旧 tests/Bundler.Tests/MacDmgTests.cs 收割：hdiutil/osascript 全程经
+// ToolRunner.Handler 桩 + MacDmgBundleBackend.HostCheck 强制宿主真，不产子进程。
+// 判重跳过：RejectsNonDmgFormats（BundlerValidateTests.FormatGate_RejectForeignFormats）、
+// RejectsEmptyVolumeName（DmgConfig_VolumeNameDefaultsAndKnob）、
+// RejectsConflictingSigning（DmgConfig_SigningMutexAndEmptyIdentity）。
+namespace Bundler.UnitTests.MacDmgPkg;
+
+public sealed class MacDmgTests : TempBase
+{
+
+        [Fact]
+    public async Task RejectsNonMacOsHost()
+    {
+        var input = CreateInputDirectory();
+        var previous = MacDmgBundleBackend.HostCheck;
+        MacDmgBundleBackend.HostCheck = () => false;
+        try
+        {
+            var wrongHost = await Assert.ThrowsAnyAsync<NotSupportedException>(async () => await  new MacDmgBundler()
+                    .BuildAsync(DmgConfiguration(input), TestContext.Current.CancellationToken));
+            Assert.Contains("macOS host", wrongHost.Message);
+        }
+        finally
+        {
+            MacDmgBundleBackend.HostCheck = previous;
+            Cleanup(input);
+        }
+    }
+
+    [Fact]
+    public void HostGateIsPlatformNotSupported()
+    {
+        // 宿主门禁标记类型：入口层靠它区分“逐格式容错”与“配置错误聚合”。
+        var input = CreateInputDirectory();
+        var previous = MacDmgBundleBackend.HostCheck;
+        MacDmgBundleBackend.HostCheck = () => false;
+        try
+        {
+            Assert.Throws<PlatformNotSupportedException>(
+                () => new MacDmgBundler().Validate(DmgConfiguration(input)));
+        }
+        finally
+        {
+            MacDmgBundleBackend.HostCheck = previous;
+            Cleanup(input);
+        }
+    }
+
+    [Fact]
+    public void ValidateCoversEmbeddedAppKnobs()
+    {
+        // dmg 的构建管线内嵌 .app 阶段——其旋钮错也必须在预检趟报出，
+        // 而不是构建途中才炸（后面已落盘的前置格式就白跑了）。
+        var input = CreateInputDirectory();
+        var previous = MacDmgBundleBackend.HostCheck;
+        MacDmgBundleBackend.HostCheck = () => true;
+        try
+        {
+            Assert.Throws<ArgumentException>(
+                () => new MacDmgBundler(
+                    appConfiguration: new MacAppBundleConfiguration { ExceptionDomain = " " })
+                    .Validate(DmgConfiguration(input)));
+        }
+        finally
+        {
+            MacDmgBundleBackend.HostCheck = previous;
+            Cleanup(input);
+        }
+    }
+
+        [Fact]
+    public async Task RunsHdiutilChainOnStubbedTools()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var requests = new List<ToolRunner.Request>();
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            WriteDsStore(request);
+            // The convert step's -o artifact must exist for the pipeline artifact check.
+            if (request.Arguments.Contains("convert"))
+            {
+                var index = request.Arguments.ToList().IndexOf("-o");
+                var path = request.Arguments[index + 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, "dmg");
+            }
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            var artifacts = await new MacDmgBundler()
+                .BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken);
+            Assert.Equal(2, artifacts.Count);
+            var dmg = artifacts.Single(artifact => artifact.Format == PackageFormat.Dmg);
+            Assert.EndsWith("ExampleApp-1.0.0-arm64.dmg", dmg.Path);
+
+            var joined = string.Join("\n", requests.Select(request =>
+                request.Executable + " " + string.Join(' ', request.Arguments)));
+            var order = requests.Select(request => request.Executable + " " +
+                string.Join(' ', request.Arguments.Take(1))).ToList();
+
+            // ToolRunner 共享缝收录上游 .app 构建调用（chmod 等）——断言限定 dmg 管线次序：
+            // /Applications 拖放链接必须先于 hdiutil create -srcfolder 快照落位。
+            var linkIndex = requests.FindIndex(request =>
+                request.Executable == "ln" &&
+                request.Arguments.Last().Replace('\\', '/').EndsWith("/Applications", StringComparison.Ordinal));
+            var createIndex = requests.FindIndex(request =>
+                request.Executable == "hdiutil" && request.Arguments.Contains("create"));
+            Assert.True(linkIndex >= 0 && createIndex >= 0 && linkIndex < createIndex,
+                $"The /Applications drop link must be staged before the image create step:\n{joined}");
+            Assert.True(order.Any(step => step == "hdiutil create") &&
+                   order.Any(step => step == "hdiutil attach") &&
+                   order.Any(step => step == "hdiutil detach") &&
+                   order.Any(step => step == "hdiutil convert"),
+                $"Missing hdiutil steps in:\n{joined}");
+            var createArgs = requests.First(request =>
+                request.Executable == "hdiutil" && request.Arguments.Contains("create"));
+            Assert.True(createArgs.Arguments.Contains("UDRW") && createArgs.Arguments.Contains("-srcfolder"),
+                "The master image must be a UDRW read-write image from -srcfolder.");
+            var convertArgs = requests.First(request =>
+                request.Executable == "hdiutil" && request.Arguments.Contains("convert"));
+            Assert.Contains("ULMO", convertArgs.Arguments);
+            var convertArgList = convertArgs.Arguments.ToList();
+            var outputFlag = convertArgList.IndexOf("-o");
+            Assert.True(outputFlag >= 0 && convertArgList[outputFlag + 1] == dmg.Path,
+                "The convert output must be written via -o <artifact path>.");
+            // 隐藏扩展位的 SetFile -a E 已移除——它把 com.apple.FinderInfo 写到 .app 根，
+            // 拖放安装后 codesign --verify --deep --strict 判 detritus 拒绝（D2 回归断言）。
+            Assert.DoesNotContain(requests,
+                request => request.Executable == "SetFile" && request.Arguments.Contains("E"));
+            Assert.True(order.IndexOf("hdiutil attach") < order.IndexOf("hdiutil detach") &&
+                   order.IndexOf("hdiutil detach") < order.LastIndexOf("hdiutil convert"),
+                "attach → detach → convert ordering is required.");
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    public async Task MapsCompressionFormats()
+    {
+        foreach (var (compression, expected) in new[]
+                 {
+                     (MacDmgCompression.Udzo, "UDZO"),
+                     (MacDmgCompression.Ulmo, "ULMO"),
+                     (MacDmgCompression.Udbz, "UDBZ")
+                 })
+        {
+            var input = CreateInputDirectory();
+            var output = Temp("DotNet.Bundler.Tests").FullName;
+            var previousHost = MacDmgBundleBackend.HostCheck;
+            var previous = ToolRunner.Handler;
+            MacDmgBundleBackend.HostCheck = () => true;
+            var requests = new List<ToolRunner.Request>();
+            ToolRunner.Handler = (request, _) =>
+            {
+                requests.Add(request);
+                WriteDsStore(request);
+                if (request.Arguments.Contains("convert"))
+                {
+                    var index = request.Arguments.ToList().IndexOf("-o");
+                    var path = request.Arguments[index + 1];
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    File.WriteAllText(path, "dmg");
+                }
+                return Task.FromResult(new ToolRunner.Result(0, "", ""));
+            };
+            try
+            {
+                await new MacDmgBundler(new MacDmgBundleConfiguration
+                    {
+                        Compression = compression,
+                        VolumeName = "Custom Volume"
+                    })
+                    .BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken);
+                var convertArgs = requests.First(request =>
+                    request.Executable == "hdiutil" && request.Arguments.Contains("convert"));
+                Assert.True(convertArgs.Arguments.Contains(expected),
+                    $"Compression {compression} must map to -format {expected}.");
+                var createArgs = requests.First(request =>
+                    request.Executable == "hdiutil" && request.Arguments.Contains("create"));
+                Assert.Contains("Custom Volume", createArgs.Arguments);
+            }
+            finally
+            {
+                ToolRunner.Handler = previous;
+                MacDmgBundleBackend.HostCheck = previousHost;
+                Cleanup(input, output);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task RetriesBusyDetach()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        var detachAttempts = 0;
+        ToolRunner.Handler = (request, _) =>
+        {
+            WriteDsStore(request);
+            if (request.Arguments.Contains("detach") && !request.Arguments.Contains("-force"))
+            {
+                detachAttempts++;
+                return Task.FromResult(new ToolRunner.Result(
+                    detachAttempts < 3 ? 1 : 0, "", detachAttempts < 3 ? "Resource busy" : ""));
+            }
+            if (request.Arguments.Contains("convert"))
+            {
+                var index = request.Arguments.ToList().IndexOf("-o");
+                var path = request.Arguments[index + 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, "dmg");
+            }
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacDmgBundler().BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken);
+            Assert.Equal(3, detachAttempts);
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    public async Task DetachExhaustionCleansUp()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        var forcedDetach = false;
+        ToolRunner.Handler = (request, _) =>
+        {
+            WriteDsStore(request);
+            if (request.Arguments.Contains("detach") && request.Arguments.Contains("-force"))
+            {
+                forcedDetach = true;
+            }
+            return Task.FromResult(new ToolRunner.Result(
+                request.Arguments.Contains("detach") && !request.Arguments.Contains("-force") ? 1 : 0,
+                "", "Resource busy"));
+        };
+        try
+        {
+            var detachFailure = await Assert.ThrowsAnyAsync<InvalidOperationException>(
+                () => new MacDmgBundler().BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken));
+            Assert.Contains("detach", detachFailure.Message);
+            Assert.True(forcedDetach, "A leftover mounted volume must be force-detached on failure.");
+            Assert.Empty(Directory.EnumerateFiles(output, "*.dmg", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    public async Task ConvertFailureLeavesNoArtifact()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (request, _) =>
+        {
+            WriteDsStore(request);
+            return Task.FromResult(new ToolRunner.Result(
+                request.Arguments.Contains("convert") ? 2 : 0, "", "convert failed"));
+        };
+        try
+        {
+            await Assert.ThrowsAnyAsync<InvalidOperationException>(
+                () => new MacDmgBundler().BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken));
+            var dmgDirectory = output;
+            Assert.True(!Directory.Exists(dmgDirectory) ||
+                   !Directory.EnumerateFiles(dmgDirectory, "*.dmg").Any(),
+                "A failed convert must not leave a .dmg artifact.");
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    public async Task RunsFinderLayoutDefaults()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        var requests = new List<ToolRunner.Request>();
+        ToolRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            CreateMountPoint(request);
+            WriteDsStore(request);
+            WriteConvertArtifact(request);
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacDmgBundler().BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken);
+            var osascript = requests.Single(request => request.Executable == "osascript");
+            var script = string.Join("\n", osascript.Arguments);
+            Assert.Contains("{200, 120, 860, 520}", script);
+            Assert.True(script.Contains("{180, 170}") && script.Contains("{480, 170}"),
+                $"Default icon positions must be app=180,170 / Applications=480,170, got:\n{script}");
+            Assert.Contains("set icon size of theViewOptions to 128", script);
+            Assert.True(script.Contains("set theDisk to disk (name of (POSIX file") &&
+                   script.Contains("dmg-mount") && script.Contains("tell theDisk"),
+                $"The layout script must resolve the disk via the mount point, got:\n{script}");
+            Assert.DoesNotContain("tell disk \"ExampleApp\"", script);
+            Assert.True(requests.Any(request =>
+                    request.Executable == "hdiutil" && request.Arguments.Contains("resize")),
+                "The read-write image must gain headroom before the layout pass.");
+            Assert.DoesNotContain("background picture", script);
+            var attach = requests.First(request =>
+                request.Executable == "hdiutil" && request.Arguments.Contains("attach"));
+            Assert.DoesNotContain("-nobrowse", attach.Arguments);
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    public async Task DegradesLayoutWithoutGui()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (request, _) =>
+        {
+            CreateMountPoint(request);
+            WriteDsStore(request);
+            WriteConvertArtifact(request);
+            return Task.FromResult(new ToolRunner.Result(
+                request.Executable == "osascript" ? 1 : 0, "", "no GUI session"));
+        };
+        var warnings = new List<string>();
+        try
+        {
+            var artifacts = await new MacDmgBundler(
+                    dmgConfiguration: new MacDmgBundleConfiguration(),
+                    appConfiguration: null,
+                    options: new MacDmgBundlerOptions
+                    {
+                        Logger = new ListLogger(warnings)
+                    })
+                .BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken);
+            Assert.Equal(2, artifacts.Count);
+            Assert.Contains(warnings, message => message.Contains("GUI session"));
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    public async Task LayoutSkipSkipsOsascript()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        var requests = new List<ToolRunner.Request>();
+        ToolRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            CreateMountPoint(request);
+            WriteDsStore(request);
+            WriteConvertArtifact(request);
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacDmgBundler(new MacDmgBundleConfiguration { Layout = null })
+                .BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken);
+            Assert.False(requests.Any(request => request.Executable == "osascript"), "LayoutSkip must not invoke osascript.");
+            var attach = requests.First(request =>
+                request.Executable == "hdiutil" && request.Arguments.Contains("attach"));
+            Assert.Contains("-nobrowse", attach.Arguments);
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    public async Task StagesBrandingFiles()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var background = Path.Combine(input, "bg.png");
+        var volumeIcon = Path.Combine(input, "volume.icns");
+        File.WriteAllText(background, "png");
+        File.WriteAllText(volumeIcon, "icns");
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        var stagedBackground = false;
+        var stagedVolumeIconEarly = false;
+        var volumeIconStagedLate = false;
+        var volumeIconFlaggedLate = false;
+        var osascriptSeen = false;
+        var mountDirectory = "";
+        ToolRunner.Handler = (request, _) =>
+        {
+            CreateMountPoint(request);
+            WriteDsStore(request);
+            WriteConvertArtifact(request);
+            var mountIndex = request.Arguments.ToList().IndexOf("-mountpoint");
+            if (mountIndex >= 0)
+            {
+                mountDirectory = request.Arguments[mountIndex + 1];
+            }
+            if (request.Executable == "osascript")
+            {
+                osascriptSeen = true;
+                stagedBackground = File.Exists(
+                    Path.Combine(mountDirectory, ".background", "bg.png"));
+                stagedVolumeIconEarly = File.Exists(
+                    Path.Combine(mountDirectory, ".VolumeIcon.icns"));
+            }
+            if (request.Executable == "SetFile" && request.Arguments.Contains("C"))
+            {
+                volumeIconFlaggedLate = osascriptSeen;
+                volumeIconStagedLate = File.Exists(
+                    Path.Combine(mountDirectory, ".VolumeIcon.icns"));
+            }
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacDmgBundler(new MacDmgBundleConfiguration
+                {
+                    BackgroundFile = background,
+                    VolumeIconFile = volumeIcon
+                })
+                .BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken);
+            Assert.True(stagedBackground, "The background image must land in .background/ on the volume.");
+            Assert.False(stagedVolumeIconEarly, "Finder strips a pre-staged .VolumeIcon.icns during the window pass; it must be copied after osascript.");
+            Assert.True(volumeIconStagedLate,
+                "The volume icon must land as .VolumeIcon.icns after the layout pass.");
+            Assert.True(volumeIconFlaggedLate,
+                "SetFile -a C must mark the volume after the layout pass ran.");
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    public async Task MissingBackgroundRejected()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (request, _) =>
+        {
+            CreateMountPoint(request);
+            WriteDsStore(request);
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await Assert.ThrowsAnyAsync<FileNotFoundException>(
+                () => new MacDmgBundler(new MacDmgBundleConfiguration
+                    {
+                        BackgroundFile = Path.Combine(input, "missing.png")
+                    })
+                    .BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    public async Task InjectsLicenseThenSigns()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var license = Path.Combine(input, "license.txt");
+        File.WriteAllText(license, "Test license.");
+        var requests = new List<ToolRunner.Request>();
+        var slaPlist = "";
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            CreateMountPoint(request);
+            WriteDsStore(request);
+            WriteConvertArtifact(request);
+            if (request.Arguments.Contains("udifrez"))
+            {
+                // The work directory is deleted after the build; capture the SLA
+                // plist while the udifrez call is in flight.
+                var args = request.Arguments.ToList();
+                slaPlist = File.ReadAllText(args[args.IndexOf("-xml") + 1]);
+            }
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacDmgBundler(new MacDmgBundleConfiguration
+                {
+                    Layout = null,
+                    Signing = new MacDmgSigningConfiguration { Identity = "-" }
+                })
+                .BuildAsync(DmgConfiguration(input, output, licenseFile: license), TestContext.Current.CancellationToken);
+            var verbs = requests
+                .Where(request => request.Executable == "hdiutil" || request.Executable == "codesign")
+                .Select(request =>
+                    request.Executable == "codesign"
+                        ? "codesign " + (request.Arguments.Contains("--sign") ? "sign" : "verify")
+                        : request.Arguments[0])
+                .ToList();
+            var convert = verbs.IndexOf("convert");
+            var udifrez = verbs.IndexOf("udifrez");
+            var sign = verbs.IndexOf("codesign sign");
+            var verify = verbs.IndexOf("codesign verify");
+            Assert.True(convert >= 0 && udifrez > convert && sign > udifrez && verify > sign,
+                $"Expected convert → udifrez → codesign --sign → --verify order, got: {string.Join(",", verbs)}");
+            var signCall = requests.First(request =>
+                request.Executable == "codesign" && request.Arguments.Contains("--sign"));
+            Assert.Contains("--timestamp=none", signCall.Arguments);
+            var frezCall = requests.First(request => request.Arguments.Contains("udifrez"));
+            Assert.True(frezCall.Arguments.Contains("-xml") && frezCall.Arguments.Contains("-image"),
+                "udifrez must take the generated SLA plist via -xml and the image via -image.");
+            Assert.True(slaPlist.Contains("<key>TEXT</key>") && slaPlist.Contains("<key>STR#</key>") &&
+                   slaPlist.Contains("<key>LPic</key>"),
+                "The SLA plist must carry LPic/STR#/TEXT resources.");
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+        [Fact]
+    public async Task MissingLicenseRejected()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (request, _) =>
+        {
+            CreateMountPoint(request);
+            WriteDsStore(request);
+            WriteConvertArtifact(request);
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await Assert.ThrowsAnyAsync<BundleValidationException>(
+                () => new MacDmgBundler(new MacDmgBundleConfiguration { Layout = null })
+                    .BuildAsync(DmgConfiguration(
+                        input, output, licenseFile: Path.Combine(input, "missing.txt")), TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
+    public void BuildsSlaPlist()
+    {
+        var directory = Temp("DotNet.Bundler.Tests").FullName;
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var warnings = new List<string>();
+            var logger = new ListLogger(warnings);
+            var txt = Path.Combine(directory, "sla.txt");
+            File.WriteAllText(txt, "Plain license text.");
+            var plist = MacDmgLicenseResources.BuildPlist(txt, logger);
+            Assert.True(plist.Contains("<key>LPic</key>") && plist.Contains("<key>STR#</key>") &&
+                   plist.Contains("<key>TEXT</key>"),
+                "The SLA plist must carry LPic/STR#/TEXT resources.");
+            var rtf = Path.Combine(directory, "sla.rtf");
+            File.WriteAllText(rtf, "{\\rtf1 ansi hello}");
+            var rtfPlist = MacDmgLicenseResources.BuildPlist(rtf, logger);
+            Assert.Contains("<key>RTF </key>", rtfPlist);
+            var unicode = Path.Combine(directory, "sla-unicode.txt");
+            File.WriteAllText(unicode, "License 中文 text.");
+            MacDmgLicenseResources.BuildPlist(unicode, logger);
+            Assert.Contains(warnings, message => message.Contains("non-ASCII"));
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    // R2: Layout=null（-nobrowse）下不跑 Finder 布局，背景图不再拷入成孤儿文件。
+    [Fact]
+    public async Task LayoutSkipSkipsBackgroundCopy()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var background = Path.Combine(input, "bg.png");
+        File.WriteAllBytes(background, [137, 80, 78, 71]);
+        var requests = new List<ToolRunner.Request>();
+        var warnings = new List<string>();
+        var mounts = new List<string>();
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            if (request.Executable == "hdiutil" && request.Arguments.Contains("attach"))
+            {
+                CreateMountPoint(request);
+                var args = request.Arguments.ToList();
+                mounts.Add(args[args.IndexOf("-mountpoint") + 1]);
+            }
+            var image = request.Arguments[request.Arguments.Count - 1];
+            if (image.EndsWith(".dmg", StringComparison.Ordinal))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(image)!);
+                File.WriteAllText(image, "dmg");
+            }
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            await new MacDmgBundler(
+                    dmgConfiguration: new MacDmgBundleConfiguration
+                    {
+                        Layout = null, BackgroundFile = background
+                    },
+                    appConfiguration: null,
+                    options: new MacDmgBundlerOptions { Logger = new ListLogger(warnings) })
+                .BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken);
+            Assert.NotEmpty(mounts);
+            Assert.All(mounts, mount =>
+                Assert.False(Directory.Exists(Path.Combine(mount, ".background"))));
+            Assert.Contains(warnings, message => message.Contains("BackgroundFile"));
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    // R2: CopyTree 遇目录符号链接环显式报错，不再递归失控。
+    [Fact]
+    public void CopyTreeRejectsSymlinkLoop()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "requires symlink support");
+        var root = Temp("DotNet.Bundler.Tests").FullName;
+        var destination = root + ".out";
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "sub"));
+            Directory.CreateSymbolicLink(Path.Combine(root, "sub", "loop"), root);
+            // macOS 内核 MAXSYMLINKS=32 先于托管跳数上限报 ELOOP（IOException），
+            // Linux 走托管判定 InvalidDataException（非 IOException 子类）——两种都接受。
+            var error = Record.Exception(
+                () => MacDmgBundleBackend.CopyTree(root, destination, NullBundleLogger.Instance));
+            Assert.True(error is InvalidDataException or IOException,
+                $"环链必须被拒：期望 InvalidDataException/IOException，实际 {error?.GetType().Name}: {error?.Message}");
+        }
+        finally
+        {
+            Cleanup(root, destination);
+        }
+    }
+
+    static void CreateMountPoint(ToolRunner.Request request)
+    {
+        var index = request.Arguments.ToList().IndexOf("-mountpoint");
+        if (index >= 0)
+        {
+            Directory.CreateDirectory(request.Arguments[index + 1]);
+        }
+    }
+
+    static void WriteDsStore(ToolRunner.Request request)
+    {
+        if (request.Executable == "osascript")
+        {
+            // Finder flushes .DS_Store to the volume asynchronously after the layout pass;
+            // the stub writes it up front so the post-layout wait returns immediately.
+            var mount = Path.Combine(request.WorkingDirectory, "dmg-mount");
+            Directory.CreateDirectory(mount);
+            File.WriteAllText(Path.Combine(mount, ".DS_Store"), "store");
+        }
+    }
+
+    static void WriteConvertArtifact(ToolRunner.Request request)
+    {
+        if (request.Executable == "hdiutil" && request.Arguments.Contains("convert"))
+        {
+            var index = request.Arguments.ToList().IndexOf("-o");
+            var path = request.Arguments[index + 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "dmg");
+        }
+    }
+
+    sealed class ListLogger(List<string> warnings) : IBundleLogger
+    {
+        public void Log(BundleLogLevel level, string message)
+        {
+            if (level == BundleLogLevel.Warning)
+            {
+                warnings.Add(message);
+            }
+        }
+    }
+
+    [Fact]
+    public void MapsDmgSettingsThroughMsBuild()
+    {
+        var targets = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.targets"));
+        var props = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Bundler.MSBuild", "buildTransitive", "DotNet.Bundler.MSBuild.props"));
+        var task = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Bundler.MSBuild", "BundleDesktopApplication.cs"));
+        Assert.True(targets.Contains("MacDmgCompression=\"$(BundlerMacDmgCompression)\"", StringComparison.Ordinal) &&
+               targets.Contains("MacDmgVolumeName=\"$(BundlerMacDmgVolumeName)\"", StringComparison.Ordinal),
+            "MSBuild does not map the BundlerMacDmg* properties to the task.");
+        Assert.Contains("<BundlerMacDmgCompression Condition=\"'$(BundlerMacDmgCompression)' == ''\">Ulmo<", props);
+        Assert.True(task.Contains("new MacDmgBundler(", StringComparison.Ordinal) &&
+               task.Contains("PackageFormat.Dmg", StringComparison.Ordinal),
+            "The MSBuild task does not construct the .dmg backend.");
+        Assert.True(targets.Contains("MacDmgSignIdentity=\"$(BundlerMacDmgSignIdentity)\"", StringComparison.Ordinal) &&
+               targets.Contains("MacDmgTemporaryCertificateFile=\"$(BundlerMacDmgTemporaryCertificateFile)\"", StringComparison.Ordinal) &&
+               targets.Contains("LicenseFile=\"$(BundlerLicenseFile)\"", StringComparison.Ordinal),
+            "MSBuild does not map the .dmg signing/license properties to the task.");
+    }
+
+    static BundleConfiguration DmgConfiguration(
+        string input,
+        string output = "",
+        string target = "macos-aarch64",
+        IReadOnlyList<PackageFormat>? formats = null,
+        string? licenseFile = null) => new()
+        {
+            ProductName = "ExampleApp",
+            Identifier = "com.example.app",
+            Version = "1.0.0",
+            LicenseFile = licenseFile,
+            OutputDirectory = output.Length == 0 ? input + ".artifacts" : output,
+            Targets =
+            [
+                new BundleTargetConfiguration
+                {
+                    Target = target,
+                    InputDirectory = input,
+                    MainExecutable = "ExampleApp",
+                    Formats = formats ?? [PackageFormat.Dmg]
+                }
+            ]
+        };
+
+    string CreateInputDirectory()
+    {
+        var input = Temp("DotNet.Bundler.Tests").FullName;
+        Directory.CreateDirectory(input);
+        File.WriteAllBytes(Path.Combine(input, "ExampleApp"), FakeMachO());
+        File.WriteAllText(Path.Combine(input, "ExampleApp.dll"), "payload");
+        return input;
+    }
+
+    static byte[] FakeMachO(uint cpuType = 0x0100000C)
+    {
+        var bytes = new byte[64];
+        bytes[0] = 0xCF; bytes[1] = 0xFA; bytes[2] = 0xED; bytes[3] = 0xFE;
+        bytes[4] = (byte)cpuType; bytes[5] = (byte)(cpuType >> 8);
+        bytes[6] = (byte)(cpuType >> 16); bytes[7] = (byte)(cpuType >> 24);
+        return bytes;
+    }
+
+    static void Cleanup(params string[] paths)
+    {
+        foreach (var path in paths)
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+    }
+
+    static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Bundler.slnx")))
+        {
+            dir = dir.Parent;
+        }
+        return dir?.FullName
+            ?? throw new InvalidOperationException("repo root not found above " + AppContext.BaseDirectory);
+    }
+}

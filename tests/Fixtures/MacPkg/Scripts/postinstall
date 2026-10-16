@@ -1,0 +1,5 @@
+#!/bin/sh
+# 真实安装时由 installer 执行；写一个标记文件供集成测试断言脚本确实被运行。
+marker="${HOME:-/tmp}/.bundler-pkg-postinstall-ran"
+echo "ran at $(date +%s)" > "$marker"
+exit 0
