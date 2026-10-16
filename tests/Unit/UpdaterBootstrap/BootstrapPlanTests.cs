@@ -401,7 +401,10 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.SkipWhen(OperatingSystem.IsWindows(), "挂载表判定只在 POSIX 腿走");
 
         // 文件级换包才走 TryAtomicMove/MoveFile——虚构挂载表把两路径钉到
-        // 不同挂载点 → SameVolume 判跨卷 → 强制两段式；断言端到端仍正确。
+        // 不同挂载点 → SameVolume 判跨卷 → 强制两段式。
+        // 挂载键必须按 canonical 名键入（Apply 内部先 CanonicalPath 解链——
+        // macOS /var→/private/var 链接会让字面键失配回落根挂载）。
+        // IoFaultProbe 计数可观测所走腿：原子 1 次，两段式 3 次。
         var installFile = Path.Combine(Root, "install-xvol", "app.bin");
         var payloadFile = Path.Combine(Root, "payload-xvol", "app.bin");
         Directory.CreateDirectory(Path.GetDirectoryName(installFile)!);
@@ -409,11 +412,13 @@ public sealed class BootstrapPlanTests : TempBase
         File.WriteAllText(installFile, "old");
         File.WriteAllText(payloadFile, "new");
 
-        var root = Path.GetFullPath(Root).TrimEnd('/');
+        var root = BootstrapPlan.CanonicalPath(Root)!.TrimEnd('/');
         BootstrapPlan.MountInfoProbe = () =>
             "1 0 8:1 / / rw - ext4 /dev/sda1 rw\n" +
             $"2 1 8:2 / {root}/install-xvol rw - ext4 /dev/sdb1 rw\n" +
             $"3 1 8:3 / {root}/payload-xvol rw - ext4 /dev/sdc1 rw\n";
+        var ioCalls = 0;
+        BootstrapPlan.IoFaultProbe = (_, _) => ioCalls++;
 
         var rc = Apply(new BootstrapOptions
         {
@@ -424,6 +429,7 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Equal(0, rc);
         Assert.Equal("new", File.ReadAllText(installFile));
         Assert.False(File.Exists(payloadFile));
+        Assert.True(ioCalls >= 3, $"跨卷应走两段式（3 次 IO 探测），实走 {ioCalls} 次");
     }
 
     [Fact]
@@ -431,9 +437,11 @@ public sealed class BootstrapPlanTests : TempBase
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "挂载表判定只在 POSIX 腿走");
 
-        // 虚构表只挂根——一切路径同卷，文件级换包走 rename 原子路（幂等断言）。
+        // 虚构表只挂根——一切路径同卷，文件级换包走 rename 原子路（探测 1 次）。
         BootstrapPlan.MountInfoProbe = () =>
             "1 0 8:1 / / rw - ext4 /dev/sda1 rw\n";
+        var ioCalls = 0;
+        BootstrapPlan.IoFaultProbe = (_, _) => ioCalls++;
 
         var installFile = Path.Combine(Root, "app-sv.AppImage");
         var payloadFile = Path.Combine(Root, "new-sv.AppImage");
@@ -449,6 +457,7 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Equal(0, rc);
         Assert.Equal("new-image", File.ReadAllText(installFile));
         Assert.False(File.Exists(payloadFile));
+        Assert.Equal(1, ioCalls);
     }
 
     // ---- 装置 ----

@@ -574,8 +574,8 @@ internal static class BootstrapPlan
     }
 
     // mountinfo 第 5 字段是挂载点（\040/\011/\012/\134 八进制转义需还原）。
-    // 良构行至少 10 字段且 "-" 分隔符落在第 7 字段之后——短行/坏行丢弃，
-    // 不容忍注入空串挂载点污染最长前缀匹配。
+    // 良构行至少 10 字段且 "-" 分隔符出现在索引 6 或其后（可选字段可为零个）——
+    // 短行/坏行丢弃，不容忍注入空串挂载点污染最长前缀匹配。
     internal static List<string> ParseMountPoints(string mountInfo)
     {
         var points = new List<string>();
