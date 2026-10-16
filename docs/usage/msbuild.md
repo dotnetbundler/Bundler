@@ -169,7 +169,7 @@ target 语法、架构词与产物命名契约见 [`../design/targets.md`](../de
 | `BundlerUpdateNotes` | 无 | 版本说明写入清单 `notes` |
 
 启用后产物附带 `.sig`（ECDSA P-256）与 `.blockmap` 旁车 + feed 清单。
-自更新仅 `nsis`/`msi`/`.app`/`zip`/`targz`/`appimage` 支持；`deb`/`rpm`/`apk`/`dmg`/`pkg` 按权威实践不做。
+自更新当前仅 `nsis`/`msi`/`.app`/`zip`/`targz`/`appimage` 支持；`deb`/`rpm`/`alpineapk` 的 installer-replay 自更新已设计定稿、计划实现（见 [`../design/update.md`](../design/update.md) §2）；`dmg`/`pkg` 不做（非更新载体）。
 
 ## 9. 产物
 

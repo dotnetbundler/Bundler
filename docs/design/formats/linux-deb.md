@@ -49,6 +49,10 @@
 - 架构：`linux-aarch64` 产物结构与 `ubuntu-26.04-arm` 真机 `dpkg -i`/PATH/`-r`（`arm64-real-hw.sh`）实证。
 - 多发行版矩阵：debian:stable/bookworm/bullseye + ubuntu:latest 容器真实装卸跑；debian:trixie lintian 闸腿；更广矩阵属 CI 扩版候选。
 
+计划实现（UPDATE 系统包扩展阶段）：
+
+- 自更新走 installer-replay：客户端 ECDSA 验签 + `dpkg -s` 账本归属双检预检，经三级提权链拉起 `bundler-updater pkg-apply`，由引导件按 `apt-get install -y` → `dpkg -i`（`DEBIAN_FRONTEND=noninteractive --force-confdef --force-confold`）退化链装本地包、降权重启；契约见 `docs/design/update.md` §2。
+
 外部待验收（详见 `docs/project/special-acceptance.md`）：
 
 - GUI 桌面观感收窄项：文件/协议关联**双击唤起**（菜单项/图标/点击启动已于 KDE 真桌面验证消解）。
