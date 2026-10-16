@@ -26,7 +26,7 @@ done
     || { echo "清单含畸形行" >&2; exit 1; }
 EXTRA=$(cd "$DIR" && comm -13 \
     <(awk '{print $2}' SHA256SUMS | sed 's|^\./||' | sort) \
-    <(find . -type f ! -name SHA256SUMS | sed 's|^\./||' | sort))
+    <(find . -type f ! -path './SHA256SUMS' | sed 's|^\./||' | sort))
 [ -z "$EXTRA" ] || { echo "清单外文件: $EXTRA" >&2; exit 1; }
 
 FAILED=""
@@ -53,10 +53,10 @@ done
 [ -z "$FAILED" ] || { echo "失败腿:$FAILED" >&2; exit 1; }
 
 # .app：复制到暂存目录后原生启动（marker 写 Contents/.launch-marker）
-APP=""
-if leg_on app; then APP="$(find "$DIR/$(leg_dir app)" -type d -name '*.app' | head -1)"; fi
-if [ -n "$APP" ]; then
-    run_leg "app" bash -c '
+if leg_on app; then
+    APP="$(find "$DIR/$(leg_dir app)" -type d -name '*.app' | head -1)"
+    if [ -n "$APP" ]; then
+        run_leg "app" bash -c '
         set -e
         T=$(mktemp -d); trap "rm -rf $T" EXIT
         cp -R "$0" "$T/"
@@ -65,12 +65,16 @@ if [ -n "$APP" ]; then
         OUT=$("$B/Contents/MacOS/BundlerMacIntegrationFixture" ci-marker)
         echo "$OUT" | grep -q "BundlerMacIntegrationFixture:ci-marker"
     ' "$APP"
+    else
+        echo "[LEG-FAIL] app（产件目录无 .app）"; FAILED="$FAILED app-empty"
+    fi
 fi
 
 # .dmg：挂载 → 拷出 .app → 卸载 → 原生启动
-if leg_on dmg && find "$DIR/$(leg_dir dmg)" -name '*.dmg' | grep -q .; then
-    DMG="$(find "$DIR/$(leg_dir dmg)" -name '*.dmg' | head -1)"
-    run_leg "dmg" bash -c '
+if leg_on dmg; then
+    if find "$DIR/$(leg_dir dmg)" -name '*.dmg' | grep -q .; then
+        DMG="$(find "$DIR/$(leg_dir dmg)" -name '*.dmg' | head -1)"
+        run_leg "dmg" bash -c '
         set -e
         # EXIT trap 在 set -e 下遇失败命令即中断且毒化最终 rc——detach 已卸卷是常态失败，须 || true 吞掉。
         T=$(mktemp -d); trap "hdiutil detach "$T/mnt" -force 2>/dev/null || true; rm -rf $T" EXIT
@@ -89,16 +93,20 @@ if leg_on dmg && find "$DIR/$(leg_dir dmg)" -name '*.dmg' | grep -q .; then
         [ "$rc" -eq 0 ]
         echo "$OUT" | grep -q "BundlerMacDmgIntegrationFixture:ci-marker"
     ' "$DMG"
+    else
+        echo "[LEG-FAIL] dmg（产件目录无 .dmg）"; FAILED="$FAILED dmg-empty"
+    fi
 fi
 
 # .pkg：installer 真装到 /Applications → 原生启动 → forget+删
 # 先清掉交换目录里的 .app 中间体：pkg-info 带 <relocate>，installer 见到同 bundle-id
 # 的已存在 .app 会原地升级（relocation）而非落 /Applications——LaunchServices 索引
 # 竞态导致落点漂移，删除同件保证 /Applications 确定性。
-if leg_on pkg && find "$DIR/$(leg_dir pkg)" -name '*.pkg' | grep -q .; then
-    find "$DIR/$(leg_dir pkg)" -type d -name '*.app' -exec rm -rf {} + 2>/dev/null || true
-    PKG="$(find "$DIR/$(leg_dir pkg)" -name '*.pkg' | head -1)"
-    run_leg "pkg" bash -c '
+if leg_on pkg; then
+    if find "$DIR/$(leg_dir pkg)" -name '*.pkg' | grep -q .; then
+        find "$DIR/$(leg_dir pkg)" -type d -name '*.app' -exec rm -rf {} + 2>/dev/null || true
+        PKG="$(find "$DIR/$(leg_dir pkg)" -name '*.pkg' | head -1)"
+        run_leg "pkg" bash -c '
         set -e
         B="/Applications/Bundler Mac PKG Fixture.app"
         # installer/断言任何一步失败也要把 fixture 从 /Applications 清掉——
@@ -111,11 +119,15 @@ if leg_on pkg && find "$DIR/$(leg_dir pkg)" -name '*.pkg' | grep -q .; then
         sudo pkgutil --forget com.dotnetbundler.macpkgintegrationfixture 2>/dev/null || true
         sudo rm -rf "$B"
     ' "$PKG"
+    else
+        echo "[LEG-FAIL] pkg（产件目录无 .pkg）"; FAILED="$FAILED pkg-empty"
+    fi
 fi
 
 # 归档件：解开直接跑
-if leg_on archive && find "$DIR/$(leg_dir archive)" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | grep -q .; then
-    run_leg "archive" bash -c '
+if leg_on archive; then
+    if find "$DIR/$(leg_dir archive)" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | grep -q .; then
+        run_leg "archive" bash -c '
         set -e
         T=$(mktemp -d); trap "rm -rf $T" EXIT
         for A in "$0"/*.zip "$0"/*.tar.gz; do
@@ -131,6 +143,9 @@ if leg_on archive && find "$DIR/$(leg_dir archive)" -type f \( -name '*.zip' -o 
         OUT=$("$EXE" ci-marker)
         echo "$OUT" | grep -q "BundlerArchiveIntegrationFixture:ci-marker"
     ' "$DIR/$(leg_dir archive)"
+    else
+        echo "[LEG-FAIL] archive（产件目录无 .zip/.tar.gz）"; FAILED="$FAILED archive-empty"
+    fi
 fi
 
 if [ -n "$FAILED" ]; then echo "失败腿:$FAILED" >&2; exit 1; fi

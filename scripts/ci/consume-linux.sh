@@ -9,7 +9,7 @@ DIR="$(cd "${1:?usage: consume-linux.sh <artifact-dir>}" && pwd)"
 # 清单外文件即判失败——只验列名件会让产侧混入/夹带漏检。
 EXTRA=$(cd "$DIR" && comm -13 \
     <(awk '{print $2}' SHA256SUMS | sed 's|^\./||' | sort) \
-    <(find . -type f ! -name SHA256SUMS | sed 's|^\./||' | sort))
+    <(find . -type f ! -path './SHA256SUMS' | sed 's|^\./||' | sort))
 [ -z "$EXTRA" ] || { echo "清单外文件: $EXTRA" >&2; exit 1; }
 
 FAILED=""
@@ -39,6 +39,8 @@ if find "$DIR/deb" -name '*.deb' | grep -q .; then
         sudo dpkg -r bundler-deb-fixture
         ! test -e /usr/lib/bundler-deb-fixture/BundlerDebIntegrationFixture
     ' "$DEB"
+else
+    echo "[LEG-FAIL] deb（产件目录无 .deb）"; FAILED="$FAILED deb-empty"
 fi
 
 # .rpm：跨发行版交换——ubuntu 产的包装进 fedora 容器
@@ -51,6 +53,8 @@ if find "$DIR/rpm" -name '*.rpm' | grep -q .; then
         dnf remove -y bundler-rpm-fixture >/dev/null
         ! test -e /usr/lib/bundler-rpm-fixture/BundlerRpmIntegrationFixture
     '
+else
+    echo "[LEG-FAIL] rpm（产件目录无 .rpm）"; FAILED="$FAILED rpm-empty"
 fi
 
 # .apk：跨发行版交换——ubuntu 产的包装进 alpine 容器
@@ -63,6 +67,8 @@ if find "$DIR/apk" -name '*.apk' | grep -q .; then
         apk del bundler-apk-fixture >/dev/null
         ! test -e /usr/lib/bundler-apk-fixture/BundlerAlpineApkIntegrationFixture
     '
+else
+    echo "[LEG-FAIL] apk（产件目录无 .apk）"; FAILED="$FAILED apk-empty"
 fi
 
 # .AppImage 双腿各跑各验（轮测联合测试要求两条腿都断言，不许 OR 链遮蔽）：
@@ -85,6 +91,8 @@ if find "$DIR/appimage" -name '*.AppImage' | grep -q .; then
         OUT=$("$0" --appimage-extract-and-run ci-marker)
         echo "$OUT" | grep -q "BundlerAppImageIntegrationFixture:ci-marker"
     ' "$APPIMAGE"
+else
+    echo "[LEG-FAIL] appimage（产件目录无 .AppImage）"; FAILED="$FAILED appimage-empty"
 fi
 
 # 归档件：解开直接跑（zip/tar.gz 都接受）
@@ -105,6 +113,8 @@ if find "$DIR/archive" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | grep -q
         OUT=$("$EXE" ci-marker)
         echo "$OUT" | grep -q "BundlerArchiveIntegrationFixture:ci-marker"
     ' "$DIR/archive"
+else
+    echo "[LEG-FAIL] archive（产件目录无 .zip/.tar.gz）"; FAILED="$FAILED archive-empty"
 fi
 
 if [ -n "$FAILED" ]; then echo "失败腿:$FAILED" >&2; exit 1; fi
