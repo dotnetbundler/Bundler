@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 联合交换消费腿（macOS）：consume-macos.sh <produce-artifact-dir> [腿=子目录 …]
-# 在未见构建树的机器上：SHA256SUMS 验同一件 → .app/.dmg/.pkg/归档真装真跑 → 清场。
+# 消费断言只依赖下载的 produce 工件（不依赖构建树/产物）：SHA256SUMS 验同一件 → .app/.dmg/.pkg/归档真装真跑 → 清场。
 # 腿失败不连锁——逐条收集，末段统一判。
 # 可选腿重映射（异构消费用）：app=app-x64 dmg=dmg-x64 pkg=- archive=- ——
 # 键=腿名（app/dmg/pkg/archive），值=工件内子目录名，"-"=该产件无本宿主可用切片，刻意跳过。
@@ -20,6 +20,14 @@ for KV in "$@"; do
 done
 [ -f "$DIR/SHA256SUMS" ] || { echo "缺 SHA256SUMS：$DIR" >&2; exit 1; }
 ( cd "$DIR" && shasum -a 256 -c SHA256SUMS ) || { echo "清单校验失败" >&2; exit 1; }
+# shasum 无 --strict——畸形行（非空且不合 "hash  ./relpath" 形）单独判失败；
+# 清单外文件同样判失败，防产侧混入/夹带漏检。
+[ "$(grep -cvE '^([0-9a-f]{64}  \./[^ ]+|)$' "$DIR/SHA256SUMS")" = "0" ] \
+    || { echo "清单含畸形行" >&2; exit 1; }
+EXTRA=$(cd "$DIR" && comm -13 \
+    <(awk '{print $2}' SHA256SUMS | sed 's|^\./||' | sort) \
+    <(find . -type f ! -name SHA256SUMS | sed 's|^\./||' | sort))
+[ -z "$EXTRA" ] || { echo "清单外文件: $EXTRA" >&2; exit 1; }
 
 FAILED=""
 run_leg(){ local name="$1"; shift
@@ -37,7 +45,10 @@ for D in app dmg pkg archive; do
     # 全角括号首字节在某些 locale 下是字母（Latin-1 ï）——$D 必须 ${D} 定界，
     # 否则被拼进变量名在 set -u 下炸 unbound（本行 LEG-SKIP 是首条真踩中的路径）。
     leg_on "$D" || { echo "[LEG-SKIP] ${D}（产件无本宿主可用切片，映射跳过）"; continue; }
-    [ -d "$DIR/$(leg_dir "$D")" ] || { echo "[LEG-FAIL] ${D}（产件目录缺失：$(leg_dir "$D")）"; FAILED="$FAILED ${D}-missing"; }
+    [ -d "$DIR/$(leg_dir "$D")" ] || { echo "[LEG-FAIL] ${D}（产件目录缺失：$(leg_dir "$D")）"; FAILED="$FAILED ${D}-missing"; continue; }
+    # 目录在但一件没有同样是产侧异常——空 glob 静默跳过会让腿报"全绿零断言"。
+    find "$DIR/$(leg_dir "$D")" -type f | grep -q . \
+        || { echo "[LEG-FAIL] ${D}（产件目录空：$(leg_dir "$D")）"; FAILED="$FAILED ${D}-empty"; }
 done
 [ -z "$FAILED" ] || { echo "失败腿:$FAILED" >&2; exit 1; }
 

@@ -83,7 +83,7 @@ jobs:
           - {host: macos-26, src: macos-26-intel}
           - {host: macos-26-intel, src: macos-26, remap: "app=app-x64 dmg=dmg-x64 pkg=- archive=-"}
     steps:
-      # checkout 只取 consume 脚本——消费机仍不见构建产物以外的树内容。
+      # checkout 仅为取 consume 脚本——消费断言只依赖下载工件，不依赖构建树/产物。
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
@@ -123,6 +123,15 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/consume-windows.ps1 -Dir "$env:RUNNER_TEMP/consume"
+      # 消费腿失败的线索工件（Windows 侧的 msiexec 日志、安装暂存树）——失败才上传。
+      - name: 上传消费腿失败线索
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: consume-${{ matrix.host }}-${{ matrix.src }}
+          path: ${{ runner.temp }}/bundler-consume
+          if-no-files-found: ignore
+          retention-days: 1
 
   # CI 环境可跑的 Manual 自动腿（凭证/公网/人工类仍排除）——吃 produce 产件。
   manual-auto:

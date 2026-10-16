@@ -64,7 +64,7 @@
 | 宿主/目标 | 实测范围 |
 | --- | --- |
 | 本机 Windows 11 x64（非干净） | x86/x64 current-user 构建、真实安装、映射升级、降级拒/许、同版碰撞拒、卸载；x86/x64 per-machine 仅生成并检查数据库（未提权安装） |
-| `windows-11-arm` CI | ARM64 MSI 真机安装/覆盖装/修复/卸载（verify 绿） |
+| `windows-11-arm` CI | windows-x86_64 目标 MSI 在 arm64 宿主经 WOW64 真机安装/覆盖装/修复/卸载（verify 绿） |
 | 干净 Windows 10/11 各架构 | 未执行，属外部待验收 |
 
 不把单台开发机结果推广到所有 Windows 11 设备；`alpha.37` x64/ARM64 身份基线受固定测试向量保护。

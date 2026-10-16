@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # 联合交换消费腿（Linux）：consume-linux.sh <produce-artifact-dir>
-# 在未见构建树的机器上：SHA256SUMS 验同一件 → 各格式真装真跑真卸 → 清场。
-# 腿失败不连锁——逐条收集，末段统一判。
+# 消费断言只依赖下载的 produce 工件（不依赖构建树/产物）：SHA256SUMS 验同一件
+# → 各格式真装真跑真卸 → 清场。腿失败不连锁——逐条收集，末段统一判。
 set -uo pipefail
 DIR="$(cd "${1:?usage: consume-linux.sh <artifact-dir>}" && pwd)"
 [ -f "$DIR/SHA256SUMS" ] || { echo "缺 SHA256SUMS：$DIR" >&2; exit 1; }
-( cd "$DIR" && sha256sum -c SHA256SUMS ) || { echo "清单校验失败" >&2; exit 1; }
+( cd "$DIR" && sha256sum -c --strict SHA256SUMS ) || { echo "清单校验失败" >&2; exit 1; }
+# 清单外文件即判失败——只验列名件会让产侧混入/夹带漏检。
+EXTRA=$(cd "$DIR" && comm -13 \
+    <(awk '{print $2}' SHA256SUMS | sed 's|^\./||' | sort) \
+    <(find . -type f ! -name SHA256SUMS | sed 's|^\./||' | sort))
+[ -z "$EXTRA" ] || { echo "清单外文件: $EXTRA" >&2; exit 1; }
 
 FAILED=""
 run_leg(){ local name="$1"; shift
@@ -15,7 +20,10 @@ run_leg(){ local name="$1"; shift
 # 缺件即判败，防产侧布局漂移时"全绿零断言"。
 for D in deb rpm appimage apk archive; do
     # $D 后接全角括号必须 ${D} 定界——（的 UTF-8 首字节在部分 locale 下是字母。
-    [ -d "$DIR/$D" ] || { echo "[LEG-FAIL] ${D}（产件目录缺失）"; FAILED="$FAILED ${D}-missing"; }
+    [ -d "$DIR/$D" ] || { echo "[LEG-FAIL] ${D}（产件目录缺失）"; FAILED="$FAILED ${D}-missing"; continue; }
+    # 目录在但一件没有同样是产侧异常——空 glob 静默跳过会让腿报"全绿零断言"。
+    find "$DIR/$D" -type f | grep -q . \
+        || { echo "[LEG-FAIL] ${D}（产件目录空）"; FAILED="$FAILED ${D}-empty"; }
 done
 [ -z "$FAILED" ] || { echo "失败腿:$FAILED" >&2; exit 1; }
 
