@@ -98,7 +98,7 @@ verify consume 腿按"每台消费宿主吃所有能跑的产件"裁决改 (host
   - ~~静态兼容修复~~——已完成（PR #98）：`PosixRename` 已删，POSIX 同卷判定改 `/proc/self/mountinfo` 挂载点最长前缀比对（`DriveInfo.GetDrives()` 回退），ENOSPC 预检在静态件恢复；
   - ~~`tools/macos-universal` fat 件与 `tools/windows-i686` 引导件入库~~——已完成（PR #99，工件取 produce-bootstrap run `38865619194`；`macos-universal` 命中原生 fat 件，`windows-i686` 引导件从落空变有件）；
   - ~~linux 引导件收敛 musl 静态单件~~——已完成（PR #100：glibc 目标经 musl 姊妹件解析，两枚 glibc 件删除、produce-bootstrap glibc 产腿同步下线；静态兼容修复 PR #98 已落地）；
-  - ~~既有冻件可选经 `produce-bootstrap` 全量重产统一 provenance~~——升级为必须：旧件基线（run `38865619194`@`5c22c8c`）不含 PR #98 代码，`linux-musl-*` 静态件带 `dlopen("libc")` 实为破损件；已重产（run `38879370229`）全量换冻 8 件统一 provenance（PR 待审）。
+  - ~~既有冻件可选经 `produce-bootstrap` 全量重产统一 provenance~~——升级为必须：旧件基线（run `38865619194`@`5c22c8c`）不含 PR #98 代码，`linux-musl-*` 静态件带 `dlopen("libc")` 实为破损件；已重产（run `38879370229`）全量换冻 8 件统一 provenance（PR #104）。
 - **spec §3 终验对账遗留**（审计结论：63 项零真缺口；弱覆盖中可自动化项已补断言，余下按性质归位）：
   - ~~测试侧待做：`MacAppGate` 未签名 `.app` 拒绝腿 + update e2e 非 zip 格式腿 + zip/tar.gz 跨宿主同件交换接线~~——已实现（PR #101：`MacAppGateTests` BundleID 拒换/quarantine 剥离恒自动化 + 自签尽力腿四件，TeamIdentifier 面探针驱动取不到即诚实 Skip 留 SA-P-07；`UpdateClientChainTests` 补 tar.gz 与 macOS 未签 .app e2e；PR #102：consume 三脚本归档格式级交换模式 + verify 矩阵 6 行轮转 + 产侧 SHA256SUMS LF 修复）；
   - 环境受限已登记 `special-acceptance.md`：s390x/ppc64le `UnixFileTypes` 偏移、Windows zip 符号链接还原、提权目录换装（原已登记）；
