@@ -90,13 +90,15 @@ jobs:
           docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP/aot:/aot" -w /src \
             mcr.microsoft.com/dotnet/sdk:10.0-alpine \
             sh -c "apk add --no-cache clang lld zlib-dev zlib-static build-base >/dev/null && \
-                   dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-musl-x64 -p:StaticExecutable=true -p:LinkerFlavor=lld -o /aot/linux-musl-x86_64"
+                   dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-musl-x64 -p:StaticExecutable=true -p:LinkerFlavor=lld -o /aot/linux-musl-x86_64 && \
+                   chmod 0755 /aot/linux-musl-x86_64/bundler-updater"
       - name: 冒烟——static-pie 链接形态 + pkg-apply 动词就位（参数面实跑）
         run: |
           set -eux
           BIN="$RUNNER_TEMP/aot/linux-musl-x86_64/bundler-updater"
           file "$BIN"
-          chmod +x "$BIN"
+          # 容器内已 chmod（root 属主宿主 chmod 不动）；这里断言可执行位到位即可
+          [ -x "$BIN" ]
           set +e
           out=$("$BIN" pkg-apply --pkg /nonexistent.deb --format deb --app /nonexistent 2>&1); rc=$?
           set -e
