@@ -75,6 +75,34 @@ public sealed class BootstrapPlanTests : TempBase
              Path.Combine(Root, "p"), "--frobnicate", "x"]));
     }
 
+    [Fact]
+    public void Main_OrphanMarkerWithoutBackup_Returns4()
+    {
+        // marker 在而备份缺席 → UpdateRejectedException → Main 映射 rc 4。
+        var install = Dir("install-rc4", ("a", "b"));
+        var payload = Dir("payload-rc4", ("a", "c"));
+        File.WriteAllText(install + ".bundler-swap", "swap in progress");
+
+        var rc = DotNet.Bundler.Updater.Bootstrap.Program.Main(
+            ["apply", "--install-dir", install, "--payload", payload]);
+
+        Assert.Equal(4, rc);
+    }
+
+    [Fact]
+    public void Main_MissingInstallParent_UsageError2NotLockTimeout()
+    {
+        // 装位父目录缺席时建锁必败——按用法错（rc2）拒绝，
+        // 不能空转到 --lock-timeout 报假竞争（rc3）。
+        var install = Path.Combine(Root, "absent-parent", "install");
+        var payload = Dir("payload-noparent", ("a", "b"));
+
+        var rc = DotNet.Bundler.Updater.Bootstrap.Program.Main(
+            ["apply", "--install-dir", install, "--payload", payload, "--lock-timeout", "0"]);
+
+        Assert.Equal(2, rc);
+    }
+
     // ---- 换包语义 ----
 
     [Fact]
@@ -150,6 +178,55 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Equal(0, rc);
         Assert.Equal("good", File.ReadAllText(Path.Combine(install, "app.txt")));
         Assert.True(Directory.Exists(backup), "回滚复制不消耗备份——保留可重试");
+    }
+
+    [Fact]
+    public void Apply_RollbackMarkerRecovery_RestoresByCopyKeepingBackup()
+    {
+        var install = Dir("install-rbrec", ("app.txt", "half-restored"));
+        var backup = Dir("install-rbrec.bundler-backup", ("app.txt", "good"));
+        // 上轮回滚死在 Delete+Copy 中途："rollback" marker + 半成品安装位 + 完整备份。
+        File.WriteAllText(install + ".bundler-swap", "rollback in progress");
+
+        var rc = Apply(new BootstrapOptions
+        {
+            InstallDirectory = install,
+            Rollback = true,
+        });
+
+        Assert.Equal(0, rc);
+        Assert.Equal("good", File.ReadAllText(Path.Combine(install, "app.txt")));
+        // 回滚恢复是复制语义：备份不被消耗（留作可重试回滚点）——与 swap 恢复的移动语义相对。
+        Assert.Equal("good", File.ReadAllText(Path.Combine(backup, "app.txt")));
+        Assert.False(File.Exists(install + ".bundler-swap"));
+    }
+
+    [Fact]
+    public void Apply_RollbackCopyFailure_LeavesRollbackMarkerForRecovery()
+    {
+        var install = Dir("install-rbfail", ("app.txt", "broken"));
+        Dir("install-rbfail.bundler-backup", ("app.txt", "good"));
+        BootstrapPlan.IoFaultProbe = (_, _) => throw new IOException("simulated ENOSPC");
+
+        Assert.Throws<IOException>(() => Apply(new BootstrapOptions
+        {
+            InstallDirectory = install,
+            Rollback = true,
+        }));
+
+        // 回滚半途失败必须留 "rollback" marker——下轮按内容分流走复制恢复，不是移动。
+        Assert.Equal("rollback in progress", File.ReadAllText(install + ".bundler-swap"));
+
+        BootstrapPlan.IoFaultProbe = null;
+        var rc = Apply(new BootstrapOptions
+        {
+            InstallDirectory = install,
+            Rollback = true,
+        });
+
+        Assert.Equal(0, rc);
+        Assert.Equal("good", File.ReadAllText(Path.Combine(install, "app.txt")));
+        Assert.False(File.Exists(install + ".bundler-swap"));
     }
 
     [Fact]
@@ -355,11 +432,15 @@ public sealed class BootstrapPlanTests : TempBase
         var mountInfo =
             "22 1 8:1 / / rw,relatime - ext4 /dev/sda1 rw\n" +
             "23 22 0:5 / /proc rw,nosuid - proc proc rw\n" +
+            // 带可选字段（shared/master propagation）的真实形态——"-" 落在索引 6 之后。
+            "25 22 0:7 / /var/lib rw,relatime shared:1 master:2 - ext4 /dev/sda2 rw\n" +
+            // 非绝对路径的挂载点字段是坏行——丢弃，不进最长前缀匹配。
+            "26 22 0:8 / relmount rw - tmpfs tmpfs rw\n" +
             @"24 22 0:6 / /mnt/my\040dir rw - tmpfs tmpfs rw" + "\n";
 
         var points = BootstrapPlan.ParseMountPoints(mountInfo);
 
-        Assert.Equal(["/", "/proc", "/mnt/my dir"], points);
+        Assert.Equal(["/", "/proc", "/var/lib", "/mnt/my dir"], points);
     }
 
     [Fact]
