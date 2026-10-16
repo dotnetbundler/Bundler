@@ -205,7 +205,11 @@ mk_apk() { # $1=pkgver(如 2.0.0-r0) $2=out.apk $3=sign(0/1)
     mkdir -p "$_ma/root/usr/bin" "$_ma/root/etc/$PKG" "$_ma/ctl" "$_ma/sig"
     cp "$W/probe.sh" "$_ma/root/usr/bin/$PKG"; chmod 0755 "$_ma/root/usr/bin/$PKG"
     printf 'conf-content v%s\n' "$1" >"$_ma/root$CONF"
-    ( cd "$_ma/root" && tar -cf - usr etc | abuild-tar --hash | gzip -9 ) \
+    # --format=posix：GNU tar posix 逐文件产 'x' pax 头（atime/ctime），abuild-tar
+    # --hash 把 APK-TOOLS.checksum.SHA1 追加进该 'x' 头（paxhdr 是输入 x 头的
+    # memcpy——输入无 x 头它会写全零头，apk3 即判 V2PKG_FORMAT）。control/sig
+    # 段不走 --hash，ustar 即可（无 x 头噪音）。
+    ( cd "$_ma/root" && tar --format=posix -cf - usr etc | abuild-tar --hash | gzip -9 ) \
         >"$_ma/data.tar.gz"
     _ma_dh=$(sha256sum "$_ma/data.tar.gz" | awk '{print $1}')
     _ma_sz=$(cd "$_ma/root" && find . -type f -exec wc -c {} \; | awk '{s+=$1} END {print s}')
@@ -218,17 +222,21 @@ mk_apk() { # $1=pkgver(如 2.0.0-r0) $2=out.apk $3=sign(0/1)
     { echo '#!/bin/sh'
       echo "echo post-install >> $STAMPS 2>/dev/null || true"
     } >"$_ma/ctl/.post-install"
-    ( cd "$_ma/ctl" && tar -cf - .PKGINFO .post-install | abuild-tar --cut | gzip -9 ) \
+    ( cd "$_ma/ctl" && tar --format=ustar -cf - .PKGINFO .post-install | abuild-tar --cut | gzip -9 ) \
         >"$_ma/control.tar.gz"
     if [ "$3" = 1 ]; then
         openssl dgst -sha1 -sign "$W/syspkg-key.rsa" \
             -out "$_ma/sig/.SIGN.RSA.syspkg-key.rsa.rsa.pub" "$_ma/control.tar.gz"
-        ( cd "$_ma/sig" && tar -cf - ".SIGN.RSA.syspkg-key.rsa.rsa.pub" | abuild-tar --cut | gzip -9 ) \
+        ( cd "$_ma/sig" && tar --format=ustar -cf - ".SIGN.RSA.syspkg-key.rsa.rsa.pub" | abuild-tar --cut | gzip -9 ) \
             >"$_ma/sig.tar.gz"
         cat "$_ma/sig.tar.gz" "$_ma/control.tar.gz" "$_ma/data.tar.gz" >"$2"
     else
         cat "$_ma/control.tar.gz" "$_ma/data.tar.gz" >"$2"
     fi
+    # 证据留档：段成员清单——apk3 拒装时可直接看出是否混入 pax_global_header 之类
+    { echo "[$1 sign=$3]"; for _s in sig control data; do
+        [ -f "$_ma/$_s.tar.gz" ] && { echo "  $_s:"; tar tzf "$_ma/$_s.tar.gz" 2>&1 | sed 's/^/    /'; }
+      done; } >>"$CONSOLE" 2>&1 || true
 }
 
 # ============================ debian 腿 ============================
