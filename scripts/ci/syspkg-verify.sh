@@ -233,7 +233,10 @@ mk_apk() { # $1=pkgver(如 2.0.0-r0) $2=out.apk $3=sign(0/1)
     else
         cat "$_ma/control.tar.gz" "$_ma/data.tar.gz" >"$2"
     fi
-    # 证据留档：段成员清单——apk3 拒装时可直接看出是否混入 pax_global_header 之类
+    # 证据留档：段成员清单——apk3 拒装时可直接看出是否混入 pax_global_header 之类。
+    # 末句恒 rc0（|| true）取舍：证据块成败不该回传假失败；且 POSIX 函数 rc 本来就
+    # 只是末命令 rc，前段产包步骤失败本函数也兜不住——包好坏由后续 apk add 相位
+    # 断言接住（坏包装不进账本即 FAIL），mk_apk rc 只表"产包流程走完"。
     { echo "[$1 sign=$3]"; for _s in sig control data; do
         [ -f "$_ma/$_s.tar.gz" ] && { echo "  $_s:"; tar tzf "$_ma/$_s.tar.gz" 2>&1 | sed 's/^/    /'; }
       done; } >>"$CONSOLE" 2>&1 || true
@@ -284,8 +287,8 @@ leg_deb() {
     expect_ver D2 3.0 "conffile 场景更新"
     want_line D2 "$CONF" "# user-edit" "conffile 用户修改在更新后保留"
 
-    # D3：AOT --rollback 重放 v1——设计 §2.4 期望 apt-get --allow-downgrades 首腿；
-    # 实现退化链两腿同 argv，apt 拒降级（-y 无 --allow-downgrades）→ dpkg -i 原生放行。
+    # D3：AOT --rollback 重放 v1——退化链两腿同 argv（无 --allow-downgrades），
+    # apt -y 拒降级 → dpkg -i 原生放行（§2.4 已按此实态口径登记）。
     # 此处如实留证实际走的哪条腿。
     rc_of "$AOT" pkg-apply --rollback --pkg "$W/v1.deb" --format deb --app "$APP" \
         --env-file "$W/env.d1" --log "$EV/d3-aot.log"

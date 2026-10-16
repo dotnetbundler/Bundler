@@ -573,6 +573,8 @@ internal static class PkgApplyPlan
 
     // 预检用同步执行：stdin 立即钉死（防降权器读调用方终端/管道），
     // out/err 后台抽干到 Null——用法文本、PAM/auth 噪声不透调用方面。
+    // 不设超时：预检 argv 恒为"工具+最小参数+sh -c :"零交互形（stdin 已钉 EOF
+    // 无读面、命令即刻返回），挂死无现实入口；超时+强制终结路径的复杂度不抵收益。
     private static int ExecSilent(ExecSpec spec)
     {
         if (ExecProbe is { } probe)

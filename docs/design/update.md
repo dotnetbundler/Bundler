@@ -80,6 +80,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
 - **降权重启**：装完由 `PKEXEC_UID`/`SUDO_UID` 取回原始用户 → `setpriv`/`sudo -u`/`runuser`/`su` 退化链降权 + 回灌客户端导出的会话 env 件（`DISPLAY`/`XAUTHORITY`/`DBUS_SESSION_BUS_ADDRESS` 等）→ 以原权限拉起 `--app`。
   不以 root 重启应用。
   降权器"在场"不等于"能用"：每级先同步预检最小 argv（`工具 选项 /bin/sh -c :`，sudo 加 `-n` 免密闸），rc≠0 即降级下一级——分离 spawn 只证 `nohup` 分叉成，证不了降权器收下 argv（alpine busybox `setpriv` 在场却拒 `--reuid/--regid/--clear-groups` 是实证过的真案，无预检会把重启静默吞成 rc0）。
+  预检同步执行不设超时——最小 argv 形（`sh -c :` 即刻返回）+ stdin 钉死零交互，挂死无现实入口，超时+强制终结路径的复杂度不抵收益。
 - 引导件 musl 静态件注入 `/usr/lib/<pkg>/`（与 zip/app 注入同构）。
   nsis/msi"不注入引导件"先例不适用此处——installer-replay 族的执行体仍是引导件编排安装命令。
   动词协议签名：`bundler-updater pkg-apply --pkg <本地包> --format <deb|rpm|apk> --app <重启目标> [--env-file <会话env件>] [--rollback] [--log <件>]`。
@@ -90,9 +91,11 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
 ### 2.4 回滚
 
 `--rollback` = 与更新同路径提权、同退化链重放留存旧包，逐腿按各包管理器降级语义放行。
-deb 首腿 `apt-get install --allow-downgrades`（退化 `dpkg -i` 原生允许降级）。
-rpm 腿 `dnf downgrade` 装旧版本地件（`install` 装旧版不放行降级）、`zypper install --force`/`--oldpackage` 或旧包直装（直装默认走解题确认，非交互形态存疑，标外部待验收）、退化 `rpm -U` 加 `--oldpackage`。
-apk `apk add` 旧版本地件原生放行降级（alpine 容器实证：rc=0、账本翻回旧版——`syspkg-verify` K2 相位）；仅 zypper 非交互降级形态仍外部待验收（`docs/project/special-acceptance.md`）。
+deb 退化链与更新同 argv（`apt-get install -y` 不带 `--allow-downgrades`）——debian 容器实证 apt 拒旧版降级、自动退化 `dpkg -i` 原生放行（rc=0、账本翻回旧版——`syspkg-verify` D3 相位）。
+rpm `dnf install -y` 与更新同 argv（非 `dnf downgrade`）——fedora 容器实证 dnf5 `install` 对本地旧版件原地放行降级（rc=0、账本翻回旧版——`syspkg-verify` R3 相位）。
+`zypper install -y` 同 argv 重放——非交互降级形态仍外部待验收（`docs/project/special-acceptance.md`）。
+退化腿 `rpm -U` 在 `--rollback` 下加 `--oldpackage`（`syspkg-verify` R3b 相位实证账本翻回旧版）。
+apk `apk add` 旧版本地件原生放行降级（alpine 容器实证：rc=0、账本翻回旧版——`syspkg-verify` K2 相位）。
 
 ### 2.5 身份与清单
 
