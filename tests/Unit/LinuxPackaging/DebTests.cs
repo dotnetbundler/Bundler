@@ -150,6 +150,39 @@ public sealed class DebTests : TempBase
         Assert.Contains("./opt/example-app/bundler-updater", names);
     }
 
+    // claimed 撞名显式拒绝的负路径：用户载荷占住更新注入名（身份旁车 bundler-update.json /
+    // 引导件 bundler-updater）时，UPDATE 开启构建必须确定性拒绝——不静默覆盖用户文件。
+    [Theory]
+    [InlineData("bundler-update.json")]
+    [InlineData("bundler-updater")]
+    public async Task UpdateEnabled_PayloadNameCollision_Rejected(string claimedName)
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(Root, "out");
+        File.WriteAllText(Path.Combine(input, claimedName), "user payload");
+        var keyPath = Path.Combine(Root, "update-key.json");
+        UpdateKeyMaterial.Generate().Save(keyPath);
+        var baseline = DebConfiguration(input, output);
+        var configuration = new BundleConfiguration
+        {
+            ProductName = baseline.ProductName,
+            Identifier = baseline.Identifier,
+            Publisher = baseline.Publisher,
+            Version = baseline.Version,
+            OutputDirectory = baseline.OutputDirectory,
+            Update = new UpdateBundleConfiguration
+            {
+                FeedUrl = "https://example.test/updates",
+                SigningKeyFile = keyPath,
+            },
+            Targets = baseline.Targets
+        };
+
+        var rejected = await Assert.ThrowsAnyAsync<InvalidOperationException>(async () =>
+            await new DebBundler().BuildAsync(configuration, TestContext.Current.CancellationToken));
+        Assert.Contains("usr/lib/example-app/" + claimedName, rejected.Message);
+    }
+
     [Fact]
     public async Task MapsSemVerToDebianVersion()
     {

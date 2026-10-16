@@ -172,6 +172,45 @@ public sealed class AlpineApkTests : TempBase
         }
     }
 
+    // claimed 撞名显式拒绝的负路径：用户载荷占住更新注入名（身份旁车 bundler-update.json /
+    // 引导件 bundler-updater）时，UPDATE 开启构建必须确定性拒绝——不静默覆盖用户文件。
+    [Theory]
+    [InlineData("bundler-update.json")]
+    [InlineData("bundler-updater")]
+    public async Task UpdateEnabled_PayloadNameCollision_Rejected(string claimedName)
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var keyPath = Path.Combine(input, "update-key.json");
+        UpdateKeyMaterial.Generate().Save(keyPath);
+        File.WriteAllText(Path.Combine(input, claimedName), "user payload");
+        try
+        {
+            var baseline = ApkConfiguration(input, output);
+            var configuration = new BundleConfiguration
+            {
+                ProductName = baseline.ProductName,
+                Identifier = baseline.Identifier,
+                Publisher = baseline.Publisher,
+                Version = baseline.Version,
+                OutputDirectory = baseline.OutputDirectory,
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://example.test/updates",
+                    SigningKeyFile = keyPath,
+                },
+                Targets = baseline.Targets
+            };
+            var rejected = await Assert.ThrowsAnyAsync<InvalidOperationException>(async () =>
+                await new AlpineApkBundler().BuildAsync(configuration, TestContext.Current.CancellationToken));
+            Assert.Contains("usr/lib/example-app/" + claimedName, rejected.Message);
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
     [Fact]
     public async Task MapsOverrides()
     {
