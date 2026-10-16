@@ -1406,8 +1406,8 @@ public static class UpdaterBootstrapParityTests
             "exit 0\n");
 
     // 重启目标 stub：落 pwd 与会话 env 实测值——回灌断言的证据面。
-    static string AppStub(string dir, string rec) =>
-        WritePkgStub(Path.Combine(dir, "app-under-test"),
+    static string AppStub(string dir, string rec, string appName = "app-under-test") =>
+        WritePkgStub(Path.Combine(dir, appName),
             "#!/bin/sh\n" +
             "{ printf 'app|pwd=%s' \"$PWD\";" +
             " printf '|DISPLAY=%s|XAUTHORITY=%s|DBUS=%s|WAYLAND=%s|XDG=%s|HOME=%s|MYVAR=%s\\n'" +
@@ -2133,23 +2133,36 @@ public static class UpdaterBootstrapParityTests
                 var bin = NewDir(dir, "bin");
                 var shim = NewDir(dir, "shim");
                 SeedShim(shim);
-                var rec = Path.Combine(dir, "rec.txt");
                 var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
-                var app = AppStub(dir, rec);
-                var dpkg = PmStub(bin, "dpkg", 0, rec);
-                var setpriv = DropStub(bin, "setpriv", rec);
                 // 空 passwd 件钉死查名——真实宿主 /etc/passwd 凑巧含该 uid 会翻进
                 // passwd gid/家目录让断言漂移。
                 var emptyPasswd = Write(Path.Combine(dir, "empty-passwd"), "");
+                // 每子用例独立 rec/app：降权链分离 spawn 里 setpriv argv 行与 app|pwd
+                // 行依序晚落——共用 rec 走 File.Delete 重建时，上例 app 行会迟到落进
+                // 新件把行序挤掉（慢 spawn 宿主上确定性 flake）；逐例换名让迟到写落
+                // 专属旧件。dpkg/setpriv stub 原地重写体烙新 rec（本例 exec 已过不受
+                // 影响），唯独 app 在分离树里 exec 最迟——件名也须逐例换。
+                var seq = 0;
+                var rec = "";
+                var app = "";
+                void FreshCase()
+                {
+                    var n = ++seq;
+                    rec = Path.Combine(dir, "rec-" + n + ".txt");
+                    app = AppStub(dir, rec, "app-under-test-" + n);
+                    PmStub(bin, "dpkg", 0, rec);
+                    DropStub(bin, "setpriv", rec);
+                }
 
                 // PKEXEC_UID 超 int64 → 值缺席落 SUDO_UID 兜底。
                 var env = PkgEnv(
-                    ("BUNDLER_UPDATER_CMD_DPKG", dpkg),
-                    ("BUNDLER_UPDATER_CMD_SETPRIV", setpriv),
+                    ("BUNDLER_UPDATER_CMD_DPKG", Path.Combine(bin, "dpkg")),
+                    ("BUNDLER_UPDATER_CMD_SETPRIV", Path.Combine(bin, "setpriv")),
                     ("PKEXEC_UID", "99999999999999999999"),
                     ("SUDO_UID", "4242"),
                     ("SUDO_GID", "4343"),
                     ("BUNDLER_UPDATER_PASSWD_FILE", emptyPasswd));
+                FreshCase();
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app));
                 // [1]=预检行，[2]=实跑行——预检 argv 尾附 /bin/sh -c : 与实跑 env 形可区分。
@@ -2158,7 +2171,7 @@ public static class UpdaterBootstrapParityTests
                     WaitRecord(rec, 3)[2]);
 
                 // 前导零 uid/gid 规范化进 argv。
-                File.Delete(rec);
+                FreshCase();
                 env["PKEXEC_UID"] = "0042";
                 env["SUDO_UID"] = "5000";
                 env["SUDO_GID"] = "043";
@@ -2169,7 +2182,7 @@ public static class UpdaterBootstrapParityTests
                     WaitRecord(rec, 3)[2]);
 
                 // passwd gid 段非数字 → 回退 uid（含 SUDO_GID 缺席时 passwd 兜底）。
-                File.Delete(rec);
+                FreshCase();
                 var passwd = Write(Path.Combine(dir, "fake-passwd"),
                     "tester:x:4242:notanum:Test:/home/tester:/bin/sh\n");
                 env["PKEXEC_UID"] = "4242";
@@ -2186,7 +2199,7 @@ public static class UpdaterBootstrapParityTests
                 // 字面含转义形态的 uid（"1\060"）：sh 旧 awk -v 解 \060 转义
                 // 会误收成 uid 10——ENVIRON 传值后与 AOT 逐字符数字判同拒，
                 // 按"值缺席"落 SUDO_UID 兜底（双侧同断言）。
-                File.Delete(rec);
+                FreshCase();
                 env["PKEXEC_UID"] = "1\\060";
                 env["SUDO_UID"] = "4242";
                 env["SUDO_GID"] = "4343";
