@@ -38,7 +38,11 @@ public static class UpdateBootstrapper
     internal static bool HasExplicitDirectory(UpdateBundleConfiguration update) =>
         update.BootstrapperDirectory is { Length: > 0 };
 
-    /// <summary>仅解析选件路径，不落盘——供校验与测试（内嵌件解析为临时解出路径）。</summary>
+    /// <summary>
+    /// 仅解析选件路径、不复制进载荷——供校验与测试。注意内嵌资源件会先流式解出到
+    /// 进程级临时缓存目录再回路径：GetManifestResourceStream 没有"仅探存在不解出"
+    /// 的轻路径（记账：现调用方全是"解出即用"，不另开免落盘探针链防双链漂移）。
+    /// </summary>
     public static bool TryResolve(UpdateBundleConfiguration update, string target,
         out string source)
     {
@@ -99,7 +103,7 @@ public static class UpdateBootstrapper
         const string muslPrefix = "linux-musl-";
         return target.StartsWith(linuxPrefix, StringComparison.OrdinalIgnoreCase) &&
                !target.StartsWith(muslPrefix, StringComparison.OrdinalIgnoreCase)
-            ? muslPrefix + target.Substring(linuxPrefix.Length)
+            ? muslPrefix + target.Substring(linuxPrefix.Length).ToLowerInvariant()
             : null;
     }
 
@@ -184,13 +188,20 @@ public static class UpdateBootstrapper
     private static extern uint getuid();
 
     // netstandard2.0 无 Unix mode API；Windows 上权限位由文件系统无关化、跳过。
+    // 返回值不可吞：chmod 失败=注入件缺执行位=死更新链（applier 拉不起引导件），
+    // 把 errno 带进诊断而非静默产出一个跑不动的载荷。
     internal static void Chmod755(string path)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             return;
         }
-        chmod(path, 0x1ED /* 0755 */);
+        if (chmod(path, 0x1ED /* 0755 */) != 0)
+        {
+            throw new InvalidOperationException(
+                $"chmod 0755 failed for '{path}' (errno {Marshal.GetLastWin32Error()}) — " +
+                "the injected bootstrapper would not be executable.");
+        }
     }
 
     [DllImport("libc", EntryPoint = "chmod", SetLastError = true)]

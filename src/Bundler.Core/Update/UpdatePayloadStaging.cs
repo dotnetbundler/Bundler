@@ -24,7 +24,7 @@ public static class UpdatePayloadStaging
             return item;
         }
 
-        var staged = Path.Combine(context.WorkDirectory, "update-payload");
+        var staged = Path.Combine(workRoot, "update-payload");
         CopyDirectory(input, staged);
         InjectPayloadFiles(staged, update, item);
         context.Logger.Log(BundleLogLevel.Information,
@@ -33,7 +33,9 @@ public static class UpdatePayloadStaging
     }
 
     // 旁车+引导件写进“最终进包的载荷目录”：旁车记录身份，引导件是换包执行体。
-    // installer-replay 格式（nsis/msi）更新=重跑安装器，载荷不需要换包执行体。
+    // installer-replay 跳过表口径：只有"更新=重跑安装器"的格式才进表
+    //（nsis 跑 /UPDATE、msi 走 msiexec major upgrade——安装器自身就是换包执行体，
+    // 载荷里不再塞引导件）；其余格式更新=引导件三段式换包，载荷必须带执行体。
     private static void InjectPayloadFiles(
         string payloadRoot, UpdateBundleConfiguration update, BundlePlanItem item)
     {
@@ -54,6 +56,9 @@ public static class UpdatePayloadStaging
         }
     }
 
+    // 平铺复制：不保符号链接（解引用成实体内容）、不保执行位/xattr——
+    // staging 只是"让旁车能写进载荷"的过渡目录，下游打包器按各自管线重建属性；
+    // 需要保真链接/权限的格式（.app 等）必须走后端自有 staging 不经过这里。
     private static void CopyDirectory(string source, string destination)
     {
         Directory.CreateDirectory(destination);

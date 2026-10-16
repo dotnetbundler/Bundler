@@ -92,7 +92,7 @@ public sealed class UpdateTests : TempBase
         Assert.True(EcdsaSigner.Verify(payload, p1363, material));
     }
 
-                [Fact]
+    [Fact]
     public async Task ArchiveBackend_InjectsSidecarIntoZip()
     {
         // 集成断言：真实后端产 zip → 归档顶层目录内带 bundler-update.json。
@@ -107,7 +107,7 @@ public sealed class UpdateTests : TempBase
             var material = UpdateKeyMaterial.Generate();
             material.Save(keyPath);
 
-            var artifacts =await  new DotNet.Bundler.Archive.ArchiveBundler(
+            var artifacts = await new DotNet.Bundler.Archive.ArchiveBundler(
                 new DotNet.Bundler.Archive.ArchiveBundleConfiguration())
                 .BuildAsync(new BundleConfiguration
                 {
@@ -1011,7 +1011,7 @@ public sealed class UpdateTests : TempBase
                 new BundleArtifact(PackageFormat.App, "macos-aarch64", appDir)
             };
 
-            var produced =await  UpdateManifestEmitter.EmitAsync(configuration, artifacts, TestContext.Current.CancellationToken);
+            var produced = await UpdateManifestEmitter.EmitAsync(configuration, artifacts, TestContext.Current.CancellationToken);
 
             var zipPath = appDir + ".zip";
             Assert.Contains(zipPath, produced);
@@ -1039,7 +1039,6 @@ public sealed class UpdateTests : TempBase
         }
     }
 
-                
     [Fact]
     public async Task Emitter_KeepsEscapedChars_InArtifactUrl()
     {
@@ -1063,10 +1062,11 @@ public sealed class UpdateTests : TempBase
                     Channel = "stable",
                     SigningKeyFile = keyPath,
                 }
-            };await 
+            };
 
-            UpdateManifestEmitter.EmitAsync(configuration,
-                    [new BundleArtifact(PackageFormat.Zip, "linux-x86_64", artifact)], TestContext.Current.CancellationToken);
+            await UpdateManifestEmitter.EmitAsync(configuration,
+                [new BundleArtifact(PackageFormat.Zip, "linux-x86_64", artifact)],
+                TestContext.Current.CancellationToken);
 
             var feedPath = Path.Combine(directory, "bundler-update-feed.stable.json");
             using var document = JsonDocument.Parse(File.ReadAllText(feedPath));
@@ -1104,10 +1104,11 @@ public sealed class UpdateTests : TempBase
                     Channel = "latest",
                     SigningKeyFile = keyPath,
                 }
-            };await 
+            };
 
-            UpdateManifestEmitter.EmitAsync(configuration,
-                    [new BundleArtifact(PackageFormat.Zip, "linux-x86_64", artifact)], TestContext.Current.CancellationToken);
+            await UpdateManifestEmitter.EmitAsync(configuration,
+                [new BundleArtifact(PackageFormat.Zip, "linux-x86_64", artifact)],
+                TestContext.Current.CancellationToken);
 
             var feedPath = Path.Combine(directory, "bundler-update-feed.latest.json");
             using var document = JsonDocument.Parse(File.ReadAllText(feedPath));
@@ -1279,7 +1280,7 @@ public sealed class UpdateTests : TempBase
             var material = UpdateKeyMaterial.Generate();
             material.Save(keyPath);
 
-            var artifacts =await  new DotNet.Bundler.Archive.ArchiveBundler(
+            var artifacts = await new DotNet.Bundler.Archive.ArchiveBundler(
                 new DotNet.Bundler.Archive.ArchiveBundleConfiguration())
                 .BuildAsync(new BundleConfiguration
                 {
@@ -1316,8 +1317,6 @@ public sealed class UpdateTests : TempBase
         }
     }
 
-    
-        
     private sealed class SilentLogger : IBundleLogger
     {
         public void Log(BundleLogLevel level, string message)
