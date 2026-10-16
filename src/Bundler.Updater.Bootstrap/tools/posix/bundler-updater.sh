@@ -105,7 +105,10 @@ _pa_shq() {
 # 超界/非数字输入按"值缺席"处理，空输出=拒收。
 # 串尾连 'x' 强制词法比对（同长十进制串词法序=数值序），不走 awk 数值双精度。
 _pa_uid64() {
-    awk -v u="$1" 'BEGIN{
+    # 值经 ENVIRON 入 awk（_mnt_of 同先例）——-v 会解 \ddd 转义把
+    # "1\060" 吃掉成 10 误收（AOT 逐字符数字判同值拒收，口径分叉）。
+    _PA_UID64_V=$1 awk 'BEGIN{
+        u = ENVIRON["_PA_UID64_V"]
         if (u !~ /^[0-9]+$/) exit 1
         sub(/^0+/, "", u); if (u == "") u = "0"
         if (length(u) > 19 || (length(u) == 19 && (u "x") > "9223372036854775807x")) exit 1

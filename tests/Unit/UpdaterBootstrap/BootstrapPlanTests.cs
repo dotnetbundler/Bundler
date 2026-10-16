@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using DotNet.Bundler.Updater.Bootstrap;
 
 namespace Bundler.UnitTests.UpdaterBootstrap;
@@ -1327,6 +1328,137 @@ public sealed class BootstrapPlanTests : TempBase
             ["/stub/setpriv", "--reuid=4242", "--regid=4242", "--clear-groups",
              "env", "HOME=/home/tester", app],
             Assert.Single(_pkgSpawns).Args);
+    }
+
+    [Fact]
+    public void PkgApply_Restart_EscapeLikeUid_RejectedFallsToSudoUid()
+    {
+        // PKEXEC_UID 字面含反斜杠转义形态 "1\060"：AOT 逐字符数字判拒 →
+        // 落 SUDO_UID 兜底；sh 侧同值经 ENVIRON 入 awk 逐字比对同拒——
+        // 旧 awk -v 会把 \060 解成 '0' 误收成 uid 10（双侧口径分叉）。
+        var pkg = WritePkg();
+        var app = WriteApp();
+        var passwd = WritePasswd("");
+        SetupPkgProbes(
+            env: new Dictionary<string, string>
+            {
+                ["PKEXEC_UID"] = "1\\060",
+                ["SUDO_UID"] = "4242",
+                ["SUDO_GID"] = "4343",
+                ["BUNDLER_UPDATER_PASSWD_FILE"] = passwd,
+            },
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["setpriv"] = "/stub/setpriv",
+                ["nohup"] = "/stub/nohup",
+            });
+
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app]);
+
+        Assert.Equal(0, rc);
+        Assert.Equal(
+            ["/stub/setpriv", "--reuid=4242", "--regid=4343", "--clear-groups",
+             "env", app],
+            Assert.Single(_pkgSpawns).Args);
+    }
+
+    // 非目录特殊件：mkfifo 造 fifo（sh -f 拒、File.Exists 收、stat 类型位非
+    // S_IFREG）——P/Invoke 直调不引子进程，unit 层保持零 spawn。
+    [DllImport("libc", SetLastError = true)]
+    private static extern int mkfifo(string path, uint mode);
+
+    [Fact]
+    public void PkgApply_SpecialFileInputs_RejectedLikeShDashF()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "特殊件判据只在 POSIX 腿走");
+        var dir = Temp("pkg-special").FullName;
+        var special = Path.Combine(dir, "fifo");
+        Assert.Equal(0, mkfifo(special, 0x1A4 /* 0644 */));
+        // exec 位也授上——隔离"非普通文件"判拒本身（旧口径 File.Exists+exec 双过）。
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(special,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        var app = WriteApp();
+        var pkg = WritePkg();
+        SetupPkgProbes(
+            env: new Dictionary<string, string>
+            {
+                ["HOME"] = "/home/minimal",
+                ["DISPLAY"] = ":7",
+            },
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["nohup"] = "/stub/nohup",
+            });
+        var logFile = TempPath("pkg-special.log");
+
+        // --pkg 指特殊件：-f/IsRegularFile 同口径判拒 → rc3，pm 零调用。
+        Assert.Equal(3, PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", special, "--format", "deb", "--app", app]));
+        Assert.Empty(_pkgExecs);
+
+        // --app 指特殊件：重启目标判拒 → rc6（安装已提交但重启没跑）。
+        Assert.Equal(6, PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", special]));
+        Assert.Single(_pkgExecs);
+        Assert.Empty(_pkgSpawns);
+
+        // --env-file 指特殊件：判拒走"读失败"WARN + 最小集——旧口径
+        // ReadLines 对 fifo/套接件会挂等写端。
+        _pkgExecs.Clear();
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--env-file", special, "--log", logFile]);
+        Assert.Equal(0, rc);
+        Assert.Contains("cannot read env file", File.ReadAllText(logFile));
+        Assert.Equal(
+            ["env", "HOME=/home/minimal", "DISPLAY=:7", app],
+            Assert.Single(_pkgSpawns).Args);
+    }
+
+    [Fact]
+    public void PkgApply_WindowsDetachedSpawn_StdinEof_OutputDrained()
+    {
+        // StartDetached 的 Windows 兜底腿只在 SpawnProbe 缺席时走：stdin 立即关
+        // =对端 EOF、out/err 后台抽干——子进程不持调用方管道任一端。
+        // 真 spawn 一只 .cmd 探针验证：more 读 stdin 到 EOF 才落 marker-eof
+        //（stdin 未断会永久卡读），再洪泛远超管道缓冲的 stdout 才落
+        // marker-done（out 不抽干会卡写端）。本测试是唯一放行真 spawn 的
+        // unit 腿——兜底路径无 stub 可代。
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows 兜底腿只在该宿主真跑");
+        var pkg = WritePkg();
+        var dir = Temp("win-detached").FullName;
+        var app = Path.Combine(dir, "app.cmd");
+        var markerEof = Path.Combine(dir, "marker-eof");
+        var markerDone = Path.Combine(dir, "marker-done");
+        File.WriteAllText(app,
+            "@echo off\r\n" +
+            "more > nul\r\n" +
+            "echo eof> \"" + markerEof + "\"\r\n" +
+            "for /l %%i in (1,1,4000) do @echo 0123456789012345678901234567890123456789\r\n" +
+            "echo done> \"" + markerDone + "\"\r\n");
+        PkgApplyPlan.EnvProbe = _ => null;
+        PkgApplyPlan.CommandProbe = name => name == "dpkg" ? "/stub/dpkg" : null;
+        PkgApplyPlan.ExecProbe = _ => 0;
+        // SpawnProbe 恒置 null——真实 StartDetached 才触 Windows 兜底腿。
+
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app]);
+
+        Assert.Equal(0, rc);
+        for (var i = 0; i < 300 && !File.Exists(markerDone); i++)
+        {
+            Thread.Sleep(100);
+        }
+        Assert.True(File.Exists(markerEof),
+            "分离子进程 stdin 应已到 EOF（more 读完才落 marker-eof）");
+        Assert.True(File.Exists(markerDone),
+            "分离子进程 stdout 应被后台抽干（洪泛写完才落 marker-done）");
     }
 
     // ---- 装置 ----

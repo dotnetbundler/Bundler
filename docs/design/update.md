@@ -42,7 +42,7 @@
 - `Bundler.Updater` 应用内库：`UpdateClient` 四动词 Check→Download→Verify→Apply/Rollback（netstandard2.0+net10.0 双目标零依赖）；`BUNDLER_UPDATER_LINK` 源文件双栖编译。
 - 差分双路实证：本地命中、脏缓存回退、回环 HTTP Range-206；`bundler-cache/artifact.bin` 源件缓存。
 - 离线/内网本地路径 feed 端到端。
-- `pkg-apply` 动词 AOT/POSIX 双实现同协议（deb/rpm/apk 前端退化链、降权重启链、env 回灌、`--rollback`、退出码 0/3/4/5/6）——stub 垫片非特权全链实证：unit 探针族 + integration 真跑奇偶族（POSIX 宿主 AOT/sh 双腿，Windows 宿主仅 AOT 腿；Windows MSYS sh 腿挂 `docs/project/special-acceptance.md` 外部验收）。
+- `pkg-apply` 动词 AOT/POSIX 双实现同协议（deb/rpm/apk 前端退化链、降权重启链、env 回灌、`--rollback`、退出码 0/3/4/5/6）——stub 垫片非特权全链实证：unit 探针族（跨宿主断言）+ integration 真跑奇偶族——奇偶族整体仅非 Windows 宿主执行（各腿首部 `SkipWhen(IsWindows)`，Windows 宿主上 AOT/sh 双腿均不跑），Windows 面由 unit 探针族覆盖；Windows MSYS sh 腿挂 `docs/project/special-acceptance.md` 外部验收。
 
 部分实现/外部待验收：macOS 同签名身份比对腿（无 Apple 证书，挂 `docs/project/special-acceptance.md`）。
 

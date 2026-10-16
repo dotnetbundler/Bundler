@@ -72,7 +72,9 @@ internal static class PkgApplyPlan
         // 重启目标按本进程 cwd 绝对化——相对路径在特权 exec 语境里静默错位。
         var pkg = Path.GetFullPath(options.PackagePath);
         var app = Path.GetFullPath(options.AppPath);
-        if (!File.Exists(pkg))
+        // -f 同口径：仅普通文件——fifo/设备/套接件 File.Exists 照收（只排目录），
+        // sh -f 判拒同走本拒绝（消息逐字保一致）。
+        if (!IsRegularFile(pkg))
         {
             throw new UsageException($"package '{options.PackagePath}' does not exist.");
         }
@@ -294,6 +296,12 @@ internal static class PkgApplyPlan
         {
             try
             {
+                // -f 同口径先判普通文件：fifo 上 ReadLines 会挂等写端——
+                // sh -f 判拒同走"读失败"WARN。
+                if (!IsRegularFile(envFile))
+                {
+                    throw new IOException("not a regular file");
+                }
                 var pairs = new List<string>();
                 foreach (var line in File.ReadLines(envFile))
                 {
@@ -398,7 +406,7 @@ internal static class PkgApplyPlan
 
     private static bool AppLaunchable(string app)
     {
-        if (!File.Exists(app))
+        if (!IsRegularFile(app))
         {
             return false;
         }
@@ -418,6 +426,14 @@ internal static class PkgApplyPlan
             return false;
         }
     }
+
+    // "仅普通文件"口径（sh -f 同义，顺链同规）：fifo/设备/套接件 File.Exists
+    // 照收（只排目录）——BCL 公开面无类型位判据（File.GetAttributes 对特殊件
+    // 同报 Normal，GetUnixFileMode 只回权限位，.NET 10/Linux 实测）；stat(2)
+    // S_IFMT=S_IFREG 走 UnixFileTypes（打包 staging 同源链接件）判，其"无法
+    // 判定放行"语义使 stat 缺席宿主退化 File.Exists 口径。
+    private static bool IsRegularFile(string path) =>
+        File.Exists(path) && UnixFileTypes.IsRegularFile(path);
 
     // command -v 存在性预检：BUNDLER_UPDATER_CMD_<TOOL> env 覆盖先行
     //（双侧同名测试缝——设了即视为存在并用该路径），否则 PATH 实查。

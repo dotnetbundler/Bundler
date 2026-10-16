@@ -1885,6 +1885,71 @@ public static class UpdaterBootstrapParityTests
     }
 
     [Fact]
+    static void PkgApply_SpecialFiles_Reject_Parity()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "fifo-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
+                var app = AppStub(dir, rec);
+                var log = Path.Combine(dir, "u.log");
+                // fifo 特殊件（exec 位也授上——隔离"非普通文件"判拒本身）：
+                // sh -f 判拒、AOT IsRegularFile 判拒；File.Exists 只排目录的旧口径会收。
+                var fifo = Path.Combine(dir, "fifo");
+                using (var mkfifo = Process.Start(new ProcessStartInfo("mkfifo", fifo)
+                       { UseShellExecute = false })!)
+                {
+                    mkfifo.WaitForExit();
+                    Assert.Equal(0, mkfifo.ExitCode);
+                }
+                if (!OperatingSystem.IsWindows())
+                {
+                    // CA1416 不认 SkipWhen——mode 面挂在非 Windows 分支
+                    File.SetUnixFileMode(fifo,
+                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                }
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", PmStub(bin, "dpkg", 0, rec)),
+                    ("HOME", "/home/minimal"),
+                    ("DISPLAY", ":7"));
+
+                // --pkg 指 fifo → rc3，pm 零调用（记录件不落）。
+                Assert.Equal(3, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", fifo, "--format", "deb", "--app", app));
+                Thread.Sleep(200);
+                Assert.False(File.Exists(rec));
+
+                // --app 指 fifo → rc6：安装已提交但重启判拒。
+                Assert.Equal(6, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", fifo));
+                var lines = WaitRecord(rec, 1);
+                Assert.StartsWith("dpkg ", lines[0]);
+                Assert.Single(lines);
+
+                // --env-file 指 fifo → "读失败"WARN + 最小集（ReadLines 会挂等
+                // 写端的旧口径在本断言上死等——判拒腿必须先行）。
+                File.Delete(rec);
+                Assert.Equal(0, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--env-file", fifo, "--log", log));
+                lines = WaitRecord(rec, 2);
+                Assert.Contains("cannot read env file", File.ReadAllText(log));
+                Assert.Contains("HOME=/home/minimal", lines[1]);
+                Assert.Contains("DISPLAY=:7", lines[1]);
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
     static void PkgApply_ZeroPairsEnvFile_MinimalEnv_Parity()
     {
         Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
@@ -2050,6 +2115,20 @@ public static class UpdaterBootstrapParityTests
                 // gid 非数字回退 uid；passwd 家目录按降权口径进最小集。
                 Assert.Contains(
                     $"setpriv --reuid=4242 --regid=4242 --clear-groups env HOME=/home/tester {app}",
+                    WaitRecord(rec, 2)[1]);
+
+                // 字面含转义形态的 uid（"1\060"）：sh 旧 awk -v 解 \060 转义
+                // 会误收成 uid 10——ENVIRON 传值后与 AOT 逐字符数字判同拒，
+                // 按"值缺席"落 SUDO_UID 兜底（双侧同断言）。
+                File.Delete(rec);
+                env["PKEXEC_UID"] = "1\\060";
+                env["SUDO_UID"] = "4242";
+                env["SUDO_GID"] = "4343";
+                env["BUNDLER_UPDATER_PASSWD_FILE"] = emptyPasswd;
+                Assert.Equal(0, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app));
+                Assert.Contains(
+                    $"setpriv --reuid=4242 --regid=4343 --clear-groups env {app}",
                     WaitRecord(rec, 2)[1]);
             }
         }

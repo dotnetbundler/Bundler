@@ -10,12 +10,15 @@
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <DefineConstants>$(DefineConstants);BUNDLER_UPDATER_LINK</DefineConstants>
     <Description>External swap bootstrapper for DotNet.Bundler self-update: wait-exit, backup, atomic swap, restart.</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Bundler.UnitTests" />
     <InternalsVisibleTo Include="Bundler.IntegrationTests" />
+    <!-- 普通文件判定件与打包侧同源链接编译——单源事实（stat S_IFREG），零程序集蔓延。 -->
+    <Compile Include="..\Bundler.Core\UnixFileTypes.cs" />
   </ItemGroup>
 
 </Project>
