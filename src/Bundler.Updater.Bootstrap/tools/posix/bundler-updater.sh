@@ -210,6 +210,21 @@ _pa_install() {
     return 1
 }
 
+# --env-file 是客户端 <staging>/pkg-<guid>/session.env 一次性输入件：消费完
+#（或装失败确定不消费）即删件与 pkg-* 暂存目录——客户端拉起即退后删不了，
+# 残件兜底在客户端 Exited 钩与 24h staging 清扫。rm -f/rmdir 全尽力不挡退出码；
+# 父目录仅本编排契约的 pkg-* 名才动，外来目录不碰。
+_pa_env_cleanup() {
+    [ -n "$PA_ENV" ] || return 0
+    rm -f "$PA_ENV" 2>/dev/null || true
+    _d=${PA_ENV%/*}
+    [ -n "$_d" ] || _d=/
+    case "${_d##*/}" in
+        pkg-*) rmdir "$_d" 2>/dev/null || true ;;
+    esac
+    return 0
+}
+
 # 降权重启：uid 由 PA_UID 携来——缺席=本来就 root 直跑，按当前权限直接 spawn；
 # 在场按 setpriv → sudo → runuser → su 退化链降权拉起 --app。
 # env 一律经内层 `env K=V … app` 构造（sudo env_reset 把外层环境剥光），
@@ -374,9 +389,14 @@ pkg_apply() {
     fi
 
     if _pa_install; then
-        _pa_restart && exit 0
+        _pa_restart
+        _rc=$?
+        _pa_env_cleanup
+        [ "$_rc" -eq 0 ] && exit 0
         exit 6
     fi
+    # 装失败路径 env 件从未被消费——同按一次性输入清走。
+    _pa_env_cleanup
     if [ "$_PA_PM_SEEN" = 1 ]; then
         echo "bundler-updater: package install failed via all available frontends." >&2
         exit 4

@@ -903,6 +903,7 @@ public sealed class BootstrapPlanTests : TempBase
     {
         var pkg = WritePkg();
         var app = WriteApp();
+        // env 件是一次性输入——Run 读毕即删，逐腿重放前须重写。
         var envFile = WriteEnvFile("DISPLAY=:9\n");
         var passwd = WritePasswd(
             "root:x:0:0:root:/root:/bin/sh\n" +
@@ -930,10 +931,12 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Equal(
             ["/stub/sudo", "-u", "#4242", "env", "DISPLAY=:9", app],
             Assert.Single(_pkgSpawns).Args);
+        Assert.False(File.Exists(envFile), "--env-file 读毕即删");
 
         // sudo 缺席 → runuser -u <name>（passwd 查名）。
         _pkgSpawns.Clear();
         commands.Remove("sudo");
+        envFile = WriteEnvFile("DISPLAY=:9\n");
         SetupPkgProbes(env, commands);
         rc = PkgApplyPlan.Run(
             ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
@@ -946,6 +949,7 @@ public sealed class BootstrapPlanTests : TempBase
         // runuser 缺席 → su -s /bin/sh -c 'exec env <quoted> <quoted app>' <name>。
         _pkgSpawns.Clear();
         commands.Remove("runuser");
+        envFile = WriteEnvFile("DISPLAY=:9\n");
         SetupPkgProbes(env, commands);
         rc = PkgApplyPlan.Run(
             ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
@@ -1234,6 +1238,54 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Equal(
             ["env", "DISPLAY=:9", "MYVAR=a b", app],
             Assert.Single(_pkgSpawns).Args);
+    }
+
+    [Fact]
+    public void PkgApply_EnvFile_DeletedOnFailurePaths()
+    {
+        // 一次性输入件在每条失败出口同删——装失败 rc4、pm 全缺席 rc5、
+        // 重启失败 rc6（装已提交）都不留件；pkg-* 暂存目录随件走。
+        var pkg = WritePkg();
+        var app = WriteApp();
+
+        // rc4：在场前端全败。
+        var pkgDir = Temp("pkg").FullName;
+        var envFile = Path.Combine(pkgDir, "session.env");
+        File.WriteAllText(envFile, "DISPLAY=:9\n");
+        SetupPkgProbes(
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["nohup"] = "/stub/nohup",
+            },
+            exec: _ => 9);
+        Assert.Equal(4, PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--env-file", envFile]));
+        Assert.False(File.Exists(envFile), "rc4 出口删件");
+        Assert.False(Directory.Exists(pkgDir), "pkg-* 暂存目录随件同删");
+
+        // rc5：包管理器全缺席（件未被消费也删）。
+        envFile = WriteEnvFile("DISPLAY=:9\n");
+        SetupPkgProbes(commands: new Dictionary<string, string>());
+        Assert.Equal(5, PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--env-file", envFile]));
+        Assert.False(File.Exists(envFile), "rc5 出口删件");
+
+        // rc6：装成、降权重启缺腿。
+        envFile = WriteEnvFile("DISPLAY=:9\n");
+        SetupPkgProbes(
+            env: new Dictionary<string, string> { ["PKEXEC_UID"] = "4242" },
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["nohup"] = "/stub/nohup",
+            });
+        Assert.Equal(6, PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--env-file", envFile]));
+        Assert.False(File.Exists(envFile), "rc6 出口删件");
     }
 
     [Fact]

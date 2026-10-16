@@ -1359,9 +1359,10 @@ public static class UpdaterBootstrapParityTests
 
     // sh 腿 PATH 白名单：只有协议需要的基础工具——真实包管理器一律不在 PATH，
     // "缺席"语义不依赖宿主是否恰好装着 apt/dnf（Debian 系宿主也照样判 rc5）。
+    // rm/rmdir 属 --env-file 用完即删（件 + pkg-* 暂存目录）的协议内工具。
     static void SeedShim(string shim)
     {
-        foreach (var tool in new[] { "env", "dirname", "awk", "ls", "sed", "nohup", "tr" })
+        foreach (var tool in new[] { "env", "dirname", "awk", "ls", "sed", "nohup", "tr", "rm", "rmdir" })
         {
             var real = PkgRealTool(tool);
             if (real != tool && !File.Exists(Path.Combine(shim, tool)))
@@ -1682,6 +1683,7 @@ public static class UpdaterBootstrapParityTests
                 Assert.StartsWith("app|pwd=" + dir, lines[3]);
                 Assert.Contains("DISPLAY=:9", lines[3]);
                 Assert.Contains("MYVAR=a b", lines[3]);
+                Assert.False(File.Exists(envFile), "--env-file 读毕即删（双侧同口径）");
             }
         }
         finally { Cleanup(root); }
@@ -1703,7 +1705,6 @@ public static class UpdaterBootstrapParityTests
                 var rec = Path.Combine(dir, "rec.txt");
                 var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
                 var app = AppStub(dir, rec);
-                var envFile = Write(Path.Combine(dir, "session.env"), "DISPLAY=:9\n");
                 var passwd = Write(Path.Combine(dir, "fake-passwd"),
                     "root:x:0:0:root:/root:/bin/sh\n" +
                     "tester:x:4242:4343:Test User:/home/tester:/bin/sh\n");
@@ -1715,8 +1716,10 @@ public static class UpdaterBootstrapParityTests
                     ("SUDO_UID", "4242"),
                     ("BUNDLER_UPDATER_PASSWD_FILE", passwd));
 
+                // env 件是一次性输入——pkg-apply 读毕即删，逐腿重放前须重写。
                 // setpriv 缺席 → sudo -u #uid（内层 env 重建，env_reset 剥外层也不怕）。
                 // 预检 argv 带 -n 免密闸，记录先落预检行再落实跑行。
+                var envFile = Write(Path.Combine(dir, "session.env"), "DISPLAY=:9\n");
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
                     "--env-file", envFile));
@@ -1724,10 +1727,12 @@ public static class UpdaterBootstrapParityTests
                 Assert.Equal("sudo -n -u #4242 /bin/sh -c :", lines[1]);
                 Assert.Equal($"sudo -u #4242 env DISPLAY=:9 {app}", lines[2]);
                 Assert.Contains("DISPLAY=:9", lines[3]);
+                Assert.False(File.Exists(envFile), "--env-file 读毕即删（双侧同口径）");
 
                 // sudo 缺席 → runuser -u <passwd 查名>。
                 File.Delete(rec);
                 env.Remove("BUNDLER_UPDATER_CMD_SUDO");
+                envFile = Write(Path.Combine(dir, "session.env"), "DISPLAY=:9\n");
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
                     "--env-file", envFile));
@@ -1739,6 +1744,7 @@ public static class UpdaterBootstrapParityTests
                 // runuser 缺席 → su -s /bin/sh -c 'exec env <quoted> <quoted app>' <name>。
                 File.Delete(rec);
                 env.Remove("BUNDLER_UPDATER_CMD_RUNUSER");
+                envFile = Write(Path.Combine(dir, "session.env"), "DISPLAY=:9\n");
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
                     "--env-file", envFile));
@@ -1782,6 +1788,50 @@ public static class UpdaterBootstrapParityTests
                 Assert.StartsWith("app|pwd=" + dir, lines[1]);
                 Assert.Contains("DISPLAY=:9", lines[1]);
                 Assert.Contains("MYVAR=a b", lines[1]);
+                Assert.False(File.Exists(envFile), "--env-file 读毕即删（双侧同口径）");
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void PkgApply_EnvFileConsumed_DeletedWithPkgDir_Parity()
+    {
+        // env 件按真实契约形状落 <staging>/pkg-*/session.env——消费后件与
+        // pkg-* 暂存目录双删；非 pkg-* 外来目录不碰（双侧同断言）。
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "envdel-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
+                var app = AppStub(dir, rec);
+                var envDir = NewDir(dir, "pkg-0123456789abcdef0123456789abcdef");
+                var envFile = Write(Path.Combine(envDir, "session.env"), "DISPLAY=:9\n");
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", PmStub(bin, "dpkg", 0, rec)));
+
+                Assert.Equal(0, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--env-file", envFile));
+                Assert.False(File.Exists(envFile));
+                Assert.False(Directory.Exists(envDir), "pkg-* 暂存目录随件同删（非递归——非空即弃）");
+
+                // 装失败不消费也删——件仍是一次性输入；父目录非 pkg-* 不动。
+                env["BUNDLER_UPDATER_CMD_DPKG"] = PmStub(bin, "dpkg", 3, rec);
+                var strayDir = NewDir(dir, "stray");
+                var strayEnv = Write(Path.Combine(strayDir, "session.env"), "DISPLAY=:9\n");
+                Assert.Equal(4, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--env-file", strayEnv));
+                Assert.False(File.Exists(strayEnv));
+                Assert.True(Directory.Exists(strayDir));
             }
         }
         finally { Cleanup(root); }

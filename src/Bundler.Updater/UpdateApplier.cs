@@ -5,16 +5,19 @@ using DotNet.Bundler.Updater.Protocol;
 namespace DotNet.Bundler.Updater;
 
 /// <summary>
-/// 应用面分派：同格式同通道两大语义——
+/// 应用面分派：同格式同通道三大语义——
 ///   installer-replay：nsis `/UPDATE`（被动默认）/ msiexec major upgrade；
-///   file-swap：zip/targz 解包 → 引导程序三段式换包；appimage 单件视为目录内文件同款。
+///   file-swap：zip/targz 解包 → 引导程序三段式换包；appimage 单件视为目录内文件同款；
+///   pkg-replay：deb/rpm/alpineapk 系统包经 SyspkgReplay 编排——预检/留存/提权退化链
+///     拉起安装位 `bundler-updater pkg-apply`（不走 file-swap，包管理器账本即状态）。
 /// 引导件优先取注入安装目录的 `bundler-updater[.exe]`，缺失退 `bundler-updater.sh`；
-/// 均先复制到临时目录再启动——引导件自身不能被它要换的目录锁死（Windows）。
+/// file-swap 先复制到临时目录再启动——引导件自身不能被它要换的目录锁死（Windows）；
+/// pkg-replay 不搬移安装目录，注入件原地直跑。
 /// </summary>
 internal sealed class UpdateApplier
 {
     internal static Process Apply(
-        UpdateFeedArtifact artifact, string artifactPath,
+        UpdateInstallIdentity identity, UpdateFeedArtifact artifact, string artifactPath,
         string installDirectory, ApplyOptions options, Action<string>? log)
     {
         switch (artifact.Format)
@@ -38,6 +41,14 @@ internal sealed class UpdateApplier
                 var payload = ExtractTarGz(artifactPath, options, log);
                 return RunBootstrapper(payload, installDirectory, options, log);
             }
+            // --- 系统包 replay（deb/rpm/alpineapk，docs/design/update.md §2.2）---
+            // 预检三件套 → 新包留存 retention → 三级提权退化链（pkexec →
+            // 问密码+sudo -S → 裸 sudo）拉起安装位 bundler-updater 的 pkg-apply，
+            // 拉起即返回；alpineapk 在动词面映射 apk。
+            case "deb":
+            case "rpm":
+            case "alpineapk":
+                return SyspkgReplay.Apply(identity, artifactPath, installDirectory, options, log);
             case "appimage":
             {
                 // 单文件载荷：AppImage 的安装单元就是文件本身——install 目标是 .AppImage 文件路径，
@@ -48,18 +59,22 @@ internal sealed class UpdateApplier
                 MakeExecutable(staged);
                 return RunBootstrapper(staged, installDirectory, options, log);
             }
-            // 阶段边界：deb/rpm/alpineapk 已由打包侧接入更新链（包内身份旁车+引导件），
-            // 其 apply 分支属 UPDATE 系统包扩展阶段的后续 PR——当前统一走 default 确定性拒绝。
             default:
                 throw new UpdateException($"format '{artifact.Format}' has no apply semantics.");
         }
     }
 
     /// <summary>回滚钩子：引导程序 `--rollback` 模式——备份复制回安装目录且不二次备份。
-    /// 备份位置与换包时的保留决策一致：开启保留指数据区目录，未开启指兄弟位瞬备（多半已删→拒绝）。</summary>
+    /// 备份位置与换包时的保留决策一致：开启保留指数据区目录，未开启指兄弟位瞬备（多半已删→拒绝）。
+    /// deb/rpm/alpineapk 身份改走 SyspkgReplay：同提权链重放留存旧包并带 --rollback。</summary>
     internal static Process Rollback(
+        UpdateInstallIdentity identity,
         string installDirectory, ApplyOptions options, Action<string>? log)
     {
+        if (SyspkgReplay.IsSyspkgFormat(identity.Format))
+        {
+            return SyspkgReplay.Rollback(identity, installDirectory, options, log);
+        }
         var backup = BackupLocationForRollback(installDirectory, options);
         log?.Invoke("update: rolling back to '" + backup + "'");
         return RunBootstrapper(null, installDirectory, options, log, rollback: true, backupDirectory: backup);
@@ -109,8 +124,9 @@ internal sealed class UpdateApplier
             "package was not built with update support.");
     }
 
-    // per-target 二进制优先；次 posix 脚本降级件。
-    private static string? ResolveBootstrapper(string? overridePath, string installDirectory)
+    // per-target 二进制优先；次 posix 脚本降级件。SyspkgReplay 同入口复用——
+    // 系统包装位注入件原地直跑（pkg-apply 不搬移安装目录，无需 runDir 防自锁复制）。
+    internal static string? ResolveBootstrapper(string? overridePath, string installDirectory)
     {
         if (overridePath is { Length: > 0 } over && File.Exists(over) &&
             !over.EndsWith(".sh", StringComparison.Ordinal))
@@ -134,7 +150,7 @@ internal sealed class UpdateApplier
         return null;
     }
 
-    private static string? ResolveBootstrapperScript(string? overridePath, string installDirectory)
+    internal static string? ResolveBootstrapperScript(string? overridePath, string installDirectory)
     {
         if (overridePath is { Length: > 0 } over &&
             over.EndsWith(".sh", StringComparison.Ordinal) && File.Exists(over))
@@ -197,10 +213,10 @@ internal sealed class UpdateApplier
         return staging;
     }
 
-    // `bootstrap-<guid>`/`payload-<guid>` 暂存目录按进程唯一命名——发起方死在
-    // 半路时无清理方，残件在 StagingRoot 下无限积累。新建暂存前按 mtime 清扫
-    // 24h 前的同类目录；仍在用的目录（在飞引导件的 runDir）删除会失败自然跳过，
-    // 全路径 best-effort 不挡主流程。
+    // `bootstrap-<guid>`/`payload-<guid>`/`pkg-<guid>`（会话 env 件目录）暂存目录
+    // 按进程唯一命名——发起方死在半路时无清理方，残件在 StagingRoot 下无限积累。
+    // 新建暂存前按 mtime 清扫 24h 前的同类目录；仍在用的目录（在飞引导件的 runDir、
+    // 在飞 pkg-apply 未读完的 env 件）删除会失败自然跳过，全路径 best-effort 不挡主流程。
     internal static void SweepStaleStaging(string stagingRoot)
     {
         try
@@ -214,7 +230,8 @@ internal sealed class UpdateApplier
             {
                 var name = Path.GetFileName(directory);
                 if (!name.StartsWith("bootstrap-", StringComparison.Ordinal) &&
-                    !name.StartsWith("payload-", StringComparison.Ordinal))
+                    !name.StartsWith("payload-", StringComparison.Ordinal) &&
+                    !name.StartsWith("pkg-", StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -268,15 +285,21 @@ internal sealed class UpdateApplier
             return Path.GetFullPath(explicitDir);
         }
         var full = Path.GetFullPath(installDirectory);
-        var name = Path.GetFileName(full.TrimEnd('\\', '/'));
+        return Path.Combine(RetentionRoot(full), RetentionDirName(full));
+    }
+
+    // 留存目录名 = 安装目录名 + 路径哈希缀——SyspkgReplay 的用户空间留存目录共用此口径。
+    internal static string RetentionDirName(string fullPath)
+    {
+        var name = Path.GetFileName(fullPath.TrimEnd('\\', '/'));
         var hashBytes = System.Security.Cryptography.SHA256.Create()
-            .ComputeHash(System.Text.Encoding.UTF8.GetBytes(full));
+            .ComputeHash(System.Text.Encoding.UTF8.GetBytes(fullPath));
         var hex = new System.Text.StringBuilder(8);
         for (var i = 0; i < 4; i++)
         {
             hex.Append(hashBytes[i].ToString("x2", System.Globalization.CultureInfo.InvariantCulture));
         }
-        return Path.Combine(RetentionRoot(full), name + "-" + hex);
+        return name + "-" + hex;
     }
 
     private static string RetentionRoot(string installPath)
