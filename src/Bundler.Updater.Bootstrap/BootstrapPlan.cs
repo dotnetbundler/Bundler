@@ -22,6 +22,11 @@ internal static class BootstrapPlan
     // WARN 放行；生产为 null 走真 DriveInfo。
     internal static Func<string, long?>? FreeSpaceProbe;
 
+    // 测试缝：覆盖挂载表来源——返回 mountinfo 格式文本即走解析分支（可喂
+    // 虚构挂载点断言最长前缀/转义还原）；返回 null 或不留缝走生产来源
+    // （Linux /proc/self/mountinfo，其余 POSIX 回退 DriveInfo.GetDrives()）。
+    internal static Func<string?>? MountInfoProbe;
+
     internal static int Run(string[] args)
     {
         var options = Parse(args);
@@ -504,9 +509,12 @@ internal static class BootstrapPlan
         return best;
     }
 
-    // 同卷判定：Windows 走 GetVolumePathName（覆盖目录挂载卷）；POSIX 的
-    // Path.GetPathRoot 恒 "/" 无法判——两端已存在祖先间做 rename 探针，EXDEV 即跨卷。
-    // 探测失败抛出让外层 WARN 跳过（宁肯不检也不错拒）。
+    // 同卷判定：rename(2) 只在同一挂载点内保证原子——跨挂载点可能 EXDEV
+    // （btrfs 子卷共享 dev_t 但跨子卷 rename 仍失败，故按挂载点而非 dev_t 比对，
+    // bind mount 的误报只多走两段式不损正确性）。
+    // Windows 走 GetVolumePathName（覆盖目录挂载卷）；POSIX 读挂载表做
+    // 最长前缀匹配——纯文本/托管 API，静态 NativeAOT 件无 libc 依赖。
+    // 判不出挂载点抛出让外层 WARN 跳过（宁肯不检也不错拒）。
     private static bool SameVolume(string a, string b)
     {
         if (OperatingSystem.IsWindows())
@@ -518,30 +526,92 @@ internal static class BootstrapPlan
             }
             return string.Equals(volumeA, WindowsVolumeRoot(b), StringComparison.OrdinalIgnoreCase);
         }
-        var probeName = ".bundler-volprobe-" + Guid.NewGuid().ToString("N")[..8];
-        var probeA = Path.Combine(ExistingAncestor(a), probeName);
-        var probeB = Path.Combine(ExistingAncestor(b), probeName);
-        try
+        var mounts = MountPoints();
+        var mountA = ResolveMountPoint(a, mounts);
+        var mountB = ResolveMountPoint(b, mounts);
+        if (mountA is null || mountB is null)
         {
-            File.WriteAllBytes(probeA, []);
-            return PosixRename(probeA, probeB) == 0;
+            throw new IOException($"cannot resolve mount point of '{a}'/'{b}'.");
         }
-        finally
-        {
-            DeleteNodeIfPresent(probeA);
-            DeleteNodeIfPresent(probeB);
-        }
+        return string.Equals(mountA, mountB, StringComparison.Ordinal);
     }
 
-    private static string ExistingAncestor(string path)
+    // 挂载点集合的最长前缀匹配：/a/bb 不能算挂到 /a/b——前缀命中须过路径段边界。
+    internal static string? ResolveMountPoint(string path) =>
+        ResolveMountPoint(path, MountPoints());
+
+    internal static string? ResolveMountPoint(string path, IEnumerable<string> mounts)
     {
-        var probe = Path.GetFullPath(path);
-        while (!Directory.Exists(probe) && !File.Exists(probe))
+        var full = Path.GetFullPath(path);
+        string? best = null;
+        foreach (var mount in mounts)
         {
-            var parent = Path.GetDirectoryName(probe);
-            probe = parent ?? throw new IOException($"no existing ancestor for '{path}'.");
+            if (full.StartsWith(mount, StringComparison.Ordinal) &&
+                (full.Length == mount.Length ||
+                 full[mount.Length] == '/' ||
+                 mount.EndsWith('/')) &&
+                (best is null || mount.Length > best.Length))
+            {
+                best = mount;
+            }
         }
-        return File.Exists(probe) ? Path.GetDirectoryName(probe)! : probe;
+        return best;
+    }
+
+    private static IEnumerable<string> MountPoints()
+    {
+        var mountInfo = MountInfoProbe?.Invoke();
+        if (mountInfo is null && File.Exists("/proc/self/mountinfo"))
+        {
+            mountInfo = File.ReadAllText("/proc/self/mountinfo");
+        }
+        if (mountInfo is not null)
+        {
+            return ParseMountPoints(mountInfo);
+        }
+        // 无 /proc 的 POSIX（macOS/BSD）：DriveInfo 枚举挂载点，静态件可用。
+        return DriveInfo.GetDrives().Select(drive => drive.RootDirectory.FullName.Replace('\\', '/'));
+    }
+
+    // mountinfo 第 5 字段是挂载点（\040/\011/\012/\134 八进制转义需还原）。
+    // 良构行至少 10 字段且 "-" 分隔符出现在索引 6 或其后（可选字段可为零个）——
+    // 短行/坏行丢弃，不容忍注入空串挂载点污染最长前缀匹配。
+    internal static List<string> ParseMountPoints(string mountInfo)
+    {
+        var points = new List<string>();
+        foreach (var line in mountInfo.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (fields.Length >= 10 && Array.IndexOf(fields, "-") >= 6)
+            {
+                points.Add(UnescapeMountField(fields[4]));
+            }
+        }
+        return points;
+    }
+
+    private static string UnescapeMountField(string field)
+    {
+        if (!field.Contains('\\'))
+        {
+            return field;
+        }
+        var builder = new StringBuilder(field.Length);
+        for (var i = 0; i < field.Length; i++)
+        {
+            if (field[i] == '\\' && i + 3 < field.Length &&
+                field[i + 1] is >= '0' and <= '7' && field[i + 2] is >= '0' and <= '7' &&
+                field[i + 3] is >= '0' and <= '7')
+            {
+                builder.Append((char)((field[i + 1] - '0') * 64 + (field[i + 2] - '0') * 8 + field[i + 3] - '0'));
+                i += 3;
+            }
+            else
+            {
+                builder.Append(field[i]);
+            }
+        }
+        return builder.ToString();
     }
 
     // 备份的最终去向：--retain-backup-to 给了目录就迁过去当回滚点，不给就删——
@@ -828,7 +898,25 @@ internal static class BootstrapPlan
             File.Move(source, destination);
             return true;
         }
-        return PosixRename(source, destination) == 0;
+        // POSIX：同挂载点 File.Move 即 rename 原子语义；判不出卷或跨卷一律两段式——
+        // File.Move 跨卷内部 copy+delete 半途留截断件，裸调被禁。
+        try
+        {
+            if (!SameVolume(source, destination))
+            {
+                return false;
+            }
+            File.Move(source, destination);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private static string? WindowsVolumeRoot(string path)
@@ -940,8 +1028,6 @@ internal static class BootstrapPlan
         IntPtr lpInBuffer, uint nInBufferSize, IntPtr lpOutBuffer, uint nOutBufferSize,
         out uint lpBytesReturned, IntPtr lpOverlapped);
 
-    [DllImport("libc", EntryPoint = "rename", SetLastError = true, CharSet = CharSet.Ansi)]
-    private static extern int PosixRename(string oldPath, string newPath);
 
     // 同卷 rename(2)/MoveFile 原子就位；跨卷两段式：先 CopyTree 到同级临时名再原子
     // rename 就位——destination 只呈现"未开始"或"全本"两态，调用方靠 Exists 即可判
