@@ -65,23 +65,28 @@ jobs:
           except TypeError:  # python<3.11 无 include_hidden
               files = glob.glob('**/*', recursive=True)
           hits = []
+          shells = ('sh', 'bash', 'zsh', 'dash', 'ash', 'ksh', 'mksh')
           for f in files:
               # shell 脚本全量（扩展名或 shebang 嗅探——postinstall 类无扩展名脚本）+
               # workflow run: 内联 bash（同词法同隐患）；ps1/cmd 词法不同不在此列。
+              if not os.path.isfile(f):
+                  continue
               nf = f.replace(os.sep, '/')
               if f.endswith(('.sh', '.bash', '.zsh')):
                   pass
               elif nf.startswith('.github/workflows/') and f.endswith(('.yml', '.yaml')):
                   pass
-              elif os.path.isfile(f):
+              else:
                   try:
-                      she = open(f, encoding='utf-8', errors='replace').readline()
+                      she = open(f, encoding='utf-8', errors='replace').readline(256)
                   except OSError:
                       continue
-                  if not re.match(r'#!.*\b(ba|z|da)?sh\b', she):
+                  toks = she[2:].split() if she.startswith('#!') else []
+                  interp = os.path.basename(toks[0]) if toks else ''
+                  if interp == 'env':
+                      interp = os.path.basename(toks[1]) if len(toks) > 1 else ''
+                  if interp not in shells:
                       continue
-              else:
-                  continue
               for i, line in enumerate(open(f, encoding='utf-8', errors='replace'), 1):
                   for m in pat.finditer(code_prefix(line)):
                       hits.append(f"{f}:{i}: {line.strip()[:90]}")
