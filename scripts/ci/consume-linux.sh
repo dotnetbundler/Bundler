@@ -12,6 +12,7 @@ case "$MODE" in
     ""|--archive-format-only) ;;
     *) echo "未知参数：$MODE" >&2; exit 1 ;;
 esac
+[ $# -le 2 ] || { echo "未知参数：$3" >&2; exit 1; }
 [ -f "$DIR/SHA256SUMS" ] || { echo "缺 SHA256SUMS：$DIR" >&2; exit 1; }
 ( cd "$DIR" && sha256sum -c --strict SHA256SUMS ) || { echo "清单校验失败" >&2; exit 1; }
 # 清单外文件即判失败——只验列名件会让产侧混入/夹带漏检。
@@ -143,8 +144,9 @@ if find "$DIR/archive" -name '*.zip' | grep -q .; then
             [ -e "$A" ] || continue
             E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
             unzip -q "$A" -d "$E"
-            [ "$(find "$E" -mindepth 1 -maxdepth 1 | wc -l)" -eq 1 ]
-            D=$(find "$E" -mindepth 1 -maxdepth 1 -type d | head -1)
+            TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX)
+            [ "$(printf '%s' "$TOPS" | grep -c .)" -eq 1 ]
+            D=$(printf '%s' "$TOPS" | head -1)
             [ -n "$D" ]
             find "$D" -maxdepth 1 -type f \
                 \( -name BundlerArchiveIntegrationFixture -o -name BundlerArchiveIntegrationFixture.exe \) \
@@ -168,8 +170,9 @@ if find "$DIR/archive" -name '*.tar.gz' | grep -q .; then
             [ -e "$A" ] || continue
             E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
             tar -xzf "$A" -C "$E"
-            [ "$(find "$E" -mindepth 1 -maxdepth 1 | wc -l)" -eq 1 ]
-            D=$(find "$E" -mindepth 1 -maxdepth 1 -type d | head -1)
+            TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX)
+            [ "$(printf '%s' "$TOPS" | grep -c .)" -eq 1 ]
+            D=$(printf '%s' "$TOPS" | head -1)
             [ -n "$D" ]
             find "$D" -maxdepth 1 -type f \
                 \( -name BundlerArchiveIntegrationFixture -o -name BundlerArchiveIntegrationFixture.exe \) \

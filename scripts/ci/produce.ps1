@@ -44,5 +44,6 @@ $sums = Get-ChildItem $OUT -Recurse -File |
         $rel = $_.FullName.Substring($OUT.Length).TrimStart('\','/') -replace '\\','/'
         "{0}  ./{1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $rel
     }
-$sums | Sort-Object | Set-Content "$OUT/SHA256SUMS" -Encoding ascii
+# LF 行尾写死——POSIX consume 腿用 awk '{print $2}' 取清单字段，CRLF 会留 \r 破坏对账。
+[IO.File]::WriteAllText("$OUT/SHA256SUMS", (($sums | Sort-Object) -join "`n") + "`n")
 Write-Host "=== 产件清单 ==="; Get-Content "$OUT/SHA256SUMS" | Select-Object -First 40

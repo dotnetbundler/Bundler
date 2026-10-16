@@ -2,7 +2,9 @@
 # 消费断言只依赖下载的 produce 工件（不依赖构建树/产物）：SHA256SUMS 验同一件 → NSIS/MSI/zip/tar.gz 真装真跑真卸 → 清场。
 # -ArchiveFormatOnly=跨 OS 归档交换模式：只验 archive 目录的 zip/tar.gz，做格式级
 # 断言（Expand-Archive/tar -xzf 解包 + 结构 + 文本标记）——内嵌 fixture 是 RID 绑定
-# 原生件，异 OS 不能"跑"只能"解+验结构"，不执行二进制；该模式不需要管理员。
+# 原生件，异 OS 不能"跑"只能"解+验结构"，不执行二进制；该模式常规不需管理员——
+# 唯一例外：若归档内含符号链接，Windows 上 bsdtar 建链需提升态或开发者模式
+# （CI runner 提升态无碍）。
 param([Parameter(Mandatory = $true)][string]$Dir, [switch]$ArchiveFormatOnly)
 $ErrorActionPreference = "Stop"
 # 完整腿（NSIS/MSI 真装真卸）需管理员——等价原 #requires -RunAsAdministrator 门禁，
@@ -57,7 +59,8 @@ if ($ArchiveFormatOnly) {
 # 每份归档独立解包后断言：单一顶层目录 + BundlerArchiveIntegrationFixture 主件
 # 在位 + runtimeconfig.json 文本标记（"runtimeOptions"）可读。缺格式即判败。
 function Assert-ArchiveTree($root) {
-    $top = @(Get-ChildItem $root -Force)
+    # __MACOSX 是 ditto/AppleDouble 元数据目录，macOS 侧产件可能出现——不计入顶层断言。
+    $top = @(Get-ChildItem $root -Force | Where-Object { $_.Name -ne "__MACOSX" })
     if ($top.Count -ne 1 -or -not $top[0].PSIsContainer) { throw "归档顶层非单一目录（顶层 $($top.Count) 项）" }
     $d = $top[0].FullName
     $exe = Get-ChildItem $d -File |
@@ -161,7 +164,7 @@ else {
     Leg "archive-targz" {
         $t = "$WORK/archive-targz"
         New-Item -ItemType Directory -Force $t | Out-Null
-        tar -xzf $tarGz.FullName -C $t
+        & "$env:SystemRoot\System32\tar.exe" -xzf $tarGz.FullName -C $t
         if ($LASTEXITCODE -ne 0) { throw "tar rc=$LASTEXITCODE" }
         $exe = Get-ChildItem $t -Filter "BundlerArchiveIntegrationFixture*.exe" -Recurse | Select-Object -First 1
         if (-not $exe) { throw "归档内无主程序" }

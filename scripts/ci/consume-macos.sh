@@ -166,8 +166,9 @@ if leg_on archive; then
                 [ -e "$A" ] || continue
                 E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
                 unzip -q "$A" -d "$E"
-                [ "$(find "$E" -mindepth 1 -maxdepth 1 | wc -l)" -eq 1 ]
-                D=$(find "$E" -mindepth 1 -maxdepth 1 -type d | head -1)
+                TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX)
+                [ "$(printf '%s' "$TOPS" | grep -c .)" -eq 1 ]
+                D=$(printf '%s' "$TOPS" | head -1)
                 [ -n "$D" ]
                 find "$D" -maxdepth 1 -type f \
                     \( -name BundlerArchiveIntegrationFixture -o -name BundlerArchiveIntegrationFixture.exe \) \
@@ -190,8 +191,9 @@ if leg_on archive; then
                 [ -e "$A" ] || continue
                 E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
                 tar -xzf "$A" -C "$E"
-                [ "$(find "$E" -mindepth 1 -maxdepth 1 | wc -l)" -eq 1 ]
-                D=$(find "$E" -mindepth 1 -maxdepth 1 -type d | head -1)
+                TOPS=$(find "$E" -mindepth 1 -maxdepth 1 ! -name __MACOSX)
+                [ "$(printf '%s' "$TOPS" | grep -c .)" -eq 1 ]
+                D=$(printf '%s' "$TOPS" | head -1)
                 [ -n "$D" ]
                 find "$D" -maxdepth 1 -type f \
                     \( -name BundlerArchiveIntegrationFixture -o -name BundlerArchiveIntegrationFixture.exe \) \
