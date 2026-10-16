@@ -1,8 +1,9 @@
 # 产件工作流（手动）：updater 引导件冻件产线——真架构宿主五腿各产各件上传工件，
 # 产物下载后人工入 src/Bundler.Updater.Bootstrap/tools/<rid>/ 冻件随包（本工作流只产不入；
 # BootstrapPlan 变更需重产冻件时重跑）。
-# 入库清单：win x86_64/aarch64/i686、mac x86_64/arm64/universal fat、linux musl 双架构
-# 静态件——linux glibc 目标不入库（运行时经 UpdateBootstrapper musl 姊妹件解析）。
+# 入库清单（本工作流产件）：win x86_64/aarch64/i686、macos x86_64/aarch64/universal fat、
+# linux musl 双架构静态件——linux glibc 目标不入库（运行时经 UpdateBootstrapper musl 姊妹件
+# 解析）；tools/posix/bundler-updater.sh 是源码件非本流产出，不在此列。
 # NativeAOT 不能跨 OS 产件、x64↔arm64 需目标架构工具链——故逐架构真宿主；
 # macOS Xcode 默认双工具链，一台产两架构并 lipo 合 fat 件。
 name: produce-bootstrap
@@ -26,9 +27,6 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.x'
       # musl 静态件在 alpine SDK 容器内产——容器内 clang 默认 target=musl，crt 目标件为
       # musl 原生件；glibc 宿主直产 musl 需 musl target 的 GCC 探测路径，arm 镜像上缺失（实证两次失败）
       - name: 产 linux-musl-x86_64 引导件（alpine 容器内静态 -static-pie，lld 链接）
@@ -69,9 +67,6 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.x'
       - name: 产 linux-musl-aarch64 引导件（alpine 容器内静态 -static-pie，lld 链接）
         run: |
           mkdir -p /tmp/aot/linux-musl-aarch64
