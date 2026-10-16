@@ -34,6 +34,10 @@ public static class UpdateBootstrapper
         return null;
     }
 
+    /// <summary>是否配置了显式引导件目录（探测谓词的唯一出处，诊断文案同用）。</summary>
+    internal static bool HasExplicitDirectory(UpdateBundleConfiguration update) =>
+        update.BootstrapperDirectory is { Length: > 0 };
+
     /// <summary>仅解析选件路径，不落盘——供校验与测试（内嵌件解析为临时解出路径）。</summary>
     public static bool TryResolve(UpdateBundleConfiguration update, string target,
         out string source)
@@ -41,8 +45,9 @@ public static class UpdateBootstrapper
         var fileName = FileNameFor(target);
         var isWindows = target.StartsWith("win", StringComparison.OrdinalIgnoreCase);
         // Windows 宿主绝不能拿到 POSIX 脚本（.sh 改名 .exe 无法执行）——只认 per-target 二进制。
-        if (update.BootstrapperDirectory is { Length: > 0 } directory)
+        if (HasExplicitDirectory(update))
         {
+            var directory = update.BootstrapperDirectory!;
             var perTarget = Path.Combine(directory, target, fileName);
             if (File.Exists(perTarget))
             {

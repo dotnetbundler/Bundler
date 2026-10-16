@@ -45,9 +45,10 @@ public static class UpdatePayloadStaging
         }
         if (UpdateBootstrapper.Inject(payloadRoot, update, target) is null)
         {
-            var probe = update.BootstrapperDirectory is { Length: > 0 } dir
-                ? $"in '{dir}': {target}/ → (linux glibc 目标) linux-musl-<arch>/ → (非 win) posix/bundler-updater.sh"
-                : "in Bundler.Core embedded resources: updater/{target}/ → (linux glibc 目标) updater/linux-musl-<arch>/ → (非 win) updater/posix/bundler-updater.sh — or configure update.bootstrapperDirectory";
+            var fileName = UpdateBootstrapper.FileNameFor(target);
+            var probe = UpdateBootstrapper.HasExplicitDirectory(update)
+                ? $"in '{update.BootstrapperDirectory}': {target}/{fileName} → (linux glibc 目标) linux-musl-<arch>/{fileName} → (非 win) posix/bundler-updater.sh"
+                : $"in Bundler.Core embedded resources: updater/{target}/{fileName} → (linux glibc 目标) updater/linux-musl-<arch>/{fileName} → (非 win) updater/posix/bundler-updater.sh — or configure update.bootstrapperDirectory";
             throw new InvalidOperationException(
                 $"BundlerUpdate enabled but no bootstrapper found for '{target}' — probed {probe}; none matched.");
         }
