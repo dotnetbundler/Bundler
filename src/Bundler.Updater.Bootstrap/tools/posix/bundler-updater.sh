@@ -60,19 +60,35 @@ _restart_nohup() {
 # 中途被杀/失败会在目标名上留"存在≠完整"半成品（恢复路径 -d 判存会还原半本）。
 # 故只有同卷才直移，跨卷一律两段式（与 AOT MoveTree/MoveFile 同义）：
 # 先复制到同级临时名再原子 mv 就位，目标槽只呈现"未开始"或"全本"两态。
-_mn_dev() {
-    # 卷设备号：Linux/busybox `stat -c %d`，Darwin/BSD `stat -f %d`；
-    # stat 缺席/失败返回空——按跨卷处理走两段式（保守安全）。
-    if [ "$(uname -s)" = "Darwin" ]; then
-        stat -f %d "$1" 2>/dev/null
+_mnt_of() {  # $1 路径→mountinfo 最长前缀挂载点（\040 等转义还原）；取不到返空
+    _m_t=$1
+    _m_best=""
+    while IFS= read -r _m_l; do
+        # 转义还原顺序：先 \040 空格后 \134 反斜杠（\134 先解会把 "\\134040" 二次解码错）；
+        # \011/\012 挂载点极端罕见不还原（BSD sed replacement 不认 \t）。
+        _m_mp=$(printf '%s\n' "$_m_l" | awk '{print $5}' | sed 's/\\040/ /g; s/\\134/\\/g')
+        # "$_m_t/" 前缀比对：mp="/" 时模式 "/*" 恰匹配一切绝对路径，mp 相等/祖先均覆盖。
+        case "$_m_t/" in "$_m_mp"/*)
+            [ ${#_m_mp} -gt ${#_m_best} ] && _m_best=$_m_mp ;;
+        esac
+    done </proc/self/mountinfo
+    [ -n "$_m_best" ] && printf '%s' "$_m_best"
+}
+same_mount() {  # $1,$2 路径属同一挂载点？mountinfo 最长前缀比对（对账 AOT SameVolume
+    # 挂载点语义）；mountinfo 缺席平台（macOS 无 bind mount，st_dev 不失盲）退 st_dev 祖先比对。
+    if [ -r /proc/self/mountinfo ]; then
+        _sm_a=$(_mnt_of "$1"); _sm_b=$(_mnt_of "$2")
+        [ -n "$_sm_a" ] && [ "$_sm_a" = "$_sm_b" ]
     else
-        stat -c %d "$1" 2>/dev/null
+        _sm_a=$(_dev_of "$(existing_ancestor "$1")" 2>/dev/null)
+        _sm_b=$(_dev_of "$(existing_ancestor "$2")" 2>/dev/null)
+        [ -n "$_sm_a" ] && [ -n "$_sm_b" ] && [ "$_sm_a" = "$_sm_b" ]
     fi
 }
 move_node() {
-    _mn_sdev=$(_mn_dev "$1")
-    _mn_ddev=$(_mn_dev "$(dirname "$2")")
-    if [ -n "$_mn_sdev" ] && [ "$_mn_sdev" = "$_mn_ddev" ] && mv "$1" "$2" 2>/dev/null; then
+    # 直移快路只走"确证同挂载点"（rename 原子）：st_dev 判卷对 bind mount 失盲——
+    # 同 superblock 跨挂载点 rename 仍 EXDEV，mv 内部退 copy+unlink 半途留残件/损源件。
+    if same_mount "$1" "$2" && mv "$1" "$2" 2>/dev/null; then
         return 0
     fi
     # 直 mv 半途可能已把部分条目落进目标名——先清槽再两段式。清不掉还继续
@@ -87,7 +103,10 @@ move_node() {
         cp -p "$1" "$_mn_staged" || { rm -rf "$_mn_staged"; return 1; }
     fi
     if mv "$_mn_staged" "$2"; then
-        rm -rf "$1" || return 1
+        # 目标已确立后源槽清场失败属"已提交"类——返独立 rc=2 供调用方分流
+        # （备份腿据此还原、载荷腿据 AOT catch 同款走还原），不混同未提交失败；
+        # 其余失败点 $2 只可能是未开始/残缺，绝不被当全本。
+        rm -rf "$1" || return 2
         return 0
     fi
     rm -rf "$_mn_staged"
@@ -406,8 +425,8 @@ node_bytes() {  # 文件/目录树总字节；不存在=0
 }
 volume_check() {  # $1 锚点 $2 需要字节；探测失败放行，明确不够才拒 rc=4
     [ "$2" -gt 0 ] 2>/dev/null || return 0
-    # 锚点缺席时上溯最近现存祖先——对账 AOT FindVolume 的 mountinfo 最长前缀语义，
-    # 缺席锚点直接 df 必败会把可判定的场景降级成 WARN 放行。
+    # 锚点缺席时上溯最近现存祖先——对账 AOT FindVolume 的最长前缀卷解析
+    # （mountinfo/DriveInfo 回退），缺席锚点直接 df 必败会把可判定场景降级成 WARN 放行。
     _anchor="$1"
     while [ ! -e "$_anchor" ] && [ "$_anchor" != "$(dirname "$_anchor")" ]; do
         _anchor=$(dirname "$_anchor")
@@ -520,18 +539,23 @@ if { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; } || \
     log "bundler-updater: backup '$INSTALL_DIR' → '$BACKUP_DIR'"
     # 备份槽异型节点同义清理（AOT DeleteNodeIfPresent）：槽上挂目录节点时
     # rm -f 判败楔形——与装位槽同口径通吃 file/dir。
+    # 备份父目录不预建：自定义 --backup-dir 父链缺席时 AOT File.Copy 判败 rc4，
+    # sh 侧 staged cp -p 同形判败——parity 要求不补（目录腿经 staged mkdir -p 自补，
+    # 与 AOT CreateDirectory 同义对称）。
     rm -rf "$BACKUP_DIR" || exit 4
     printf 'swap in progress' >"$MARKER" || exit 4
-    # 槽位调用前已清空：失败时备份在场即 mv 已成功、仅源槽清场失败——
-    # 按 swap-failed 同款还原装位（对账 AOT catch 语义）；备份不在场则 mv 未发生，收 marker 报错。
-    move_node "$INSTALL_DIR" "$BACKUP_DIR" || {
-        if [ -e "$BACKUP_DIR" ]; then
+    # move_node rc2 = 备份已确立、仅装位源槽清场失败——按 swap-failed 同款还原
+    # （对账 AOT catch 按备份在场还原的语义）；rc1 = 备份未确立/残缺，收 marker 保装位。
+    move_node "$INSTALL_DIR" "$BACKUP_DIR"
+    _mn_rc=$?
+    if [ "$_mn_rc" -ne 0 ]; then
+        if [ "$_mn_rc" -eq 2 ]; then
             rm -rf "$INSTALL_DIR" || { echo "bundler-updater: cannot clear install slot." >&2; exit 4; }
             move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
         fi
         rm -f "$MARKER" || exit 4
         exit 4
-    }
+    fi
     SWAP_FAILED=0
     if [ "$KEEP_PAYLOAD" = 1 ]; then
         log "bundler-updater: copy in '$PAYLOAD_DIR' → '$INSTALL_DIR'"
@@ -619,18 +643,22 @@ if [ "$ROLLBACK" = 1 ]; then
 fi
 
 log "bundler-updater: backup '$INSTALL_DIR' → '$BACKUP_DIR'"
+# 备份父目录不预建：备份槽父链缺席时 AOT CreateDirectory 与 staged mkdir -p
+# 同形自补，本就对称；装位缺席 rc2 已前置拦截。
 rm -rf "$BACKUP_DIR" || exit 4
 printf 'swap in progress' >"$MARKER" || exit 4
-# 槽位调用前已清空：失败时备份在场即 mv 已成功、仅源槽清场失败——
-# 按 swap-failed 同款还原装位（对账 AOT catch 语义）；备份不在场则 mv 未发生，收 marker 报错。
-move_node "$INSTALL_DIR" "$BACKUP_DIR" || {
-    if [ -e "$BACKUP_DIR" ]; then
+# move_node rc2 = 备份已确立、仅装位源槽清场失败——按 swap-failed 同款还原
+# （对账 AOT catch 按备份在场还原的语义）；rc1 = 备份未确立/残缺，收 marker 保装位。
+move_node "$INSTALL_DIR" "$BACKUP_DIR"
+_mn_rc=$?
+if [ "$_mn_rc" -ne 0 ]; then
+    if [ "$_mn_rc" -eq 2 ]; then
         rm -rf "$INSTALL_DIR" || { echo "bundler-updater: cannot clear install slot." >&2; exit 4; }
         move_node "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback failed." >&2; exit 4; }
     fi
     rm -f "$MARKER" || exit 4
     exit 4
-}
+fi
 
 # --keep-payload 用复制换入（与 AOT copy 语义一致），否则 move_node 就位。
 SWAP_FAILED=0

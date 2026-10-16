@@ -842,7 +842,8 @@ internal static class BootstrapPlan
 
     // marker 内容判回滚腿：回滚恢复走复制语义（备份留作可重试回滚点）；
     // swap/不可读/其他内容一律按换包恢复处理（移动语义，备份移入即耗尽）。
-    // TrimEnd 对账 sh 侧 $(cat) 命令替换剥尾换行的判读口径，带尾换行的 marker 不分叉。
+    // TrimEnd('\r','\n') 对账 sh 侧 $(cat) 命令替换剥尾换行的判读口径——多剥 \r 是良性超集
+    // （两侧写方都不产尾字符，纯容错），带尾换行的 marker 两实现不分叉。
     private static bool IsRollbackMarker(string markerPath)
     {
         try
