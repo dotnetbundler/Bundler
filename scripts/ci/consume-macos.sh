@@ -4,11 +4,16 @@
 # 腿失败不连锁——逐条收集，末段统一判。
 # 可选腿重映射（异构消费用）：app=app-x64 dmg=dmg-x64 pkg=- archive=- ——
 # 键=腿名（app/dmg/pkg/archive），值=工件内子目录名，"-"=该产件无本宿主可用切片，刻意跳过。
+# --archive-format-only=跨 OS 归档交换模式：app/dmg/pkg 腿强制映射 "-"，
+# archive 腿改做格式级断言（解包+结构+文本标记）——内嵌 fixture 是 RID 绑定
+# 原生件，异 OS 不能"跑"只能"解+验结构"，不执行二进制。
 set -uo pipefail
-DIR="$(cd "${1:?usage: consume-macos.sh <artifact-dir> [腿=子目录 …]}" && pwd)"; shift
+DIR="$(cd "${1:?usage: consume-macos.sh <artifact-dir> [腿=子目录 …] [--archive-format-only]}" && pwd)"; shift
 # bash 3.2（macOS runner 自带）无关联数组——四具名变量+case 分派等价承载。
 DIR_APP=app; DIR_DMG=dmg; DIR_PKG=pkg; DIR_ARCHIVE=archive
+FMT_ONLY=""
 for KV in "$@"; do
+    [ "$KV" = "--archive-format-only" ] && { FMT_ONLY=1; continue; }
     K="${KV%%=*}"; V="${KV#*=}"
     case "$K" in
         app)     DIR_APP="$V" ;;
@@ -18,6 +23,8 @@ for KV in "$@"; do
         *) echo "未知腿映射：$KV" >&2; exit 1 ;;
     esac
 done
+# 归档格式交换模式：非 archive 腿强制跳过（等价显式映射 -），archive 映射仍可调。
+[ -n "$FMT_ONLY" ] && { DIR_APP=-; DIR_DMG=-; DIR_PKG=-; }
 [ -f "$DIR/SHA256SUMS" ] || { echo "缺 SHA256SUMS：$DIR" >&2; exit 1; }
 ( cd "$DIR" && shasum -a 256 -c SHA256SUMS ) || { echo "清单校验失败" >&2; exit 1; }
 # shasum 无 --strict——畸形行（非空且不合 "hash  ./relpath" 形）单独判失败；
@@ -124,27 +131,80 @@ if leg_on pkg; then
     fi
 fi
 
-# 归档件：解开直接跑
+# 归档件：默认模式解开直接跑；--archive-format-only 跨 OS 交换模式只做
+# 格式级断言——逐份解包 + 单一顶层目录 + 主件在位 + runtimeconfig.json
+# 文本标记可读，不执行异 RID 二进制。缺格式即判败（分 zip/targz 两腿）。
 if leg_on archive; then
-    if find "$DIR/$(leg_dir archive)" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | grep -q .; then
-        run_leg "archive" bash -c '
-        set -e
-        T=$(mktemp -d); trap "rm -rf $T" EXIT
-        for A in "$0"/*.zip "$0"/*.tar.gz; do
-            [ -e "$A" ] || continue
-            case "$A" in
-                *.zip)    unzip -q "$A" -d "$T" ;;
-                *.tar.gz) tar -xzf "$A" -C "$T" ;;
-            esac
-        done
-        EXE=$(find "$T" -name BundlerArchiveIntegrationFixture -type f | head -1)
-        test -n "$EXE"
-        chmod +x "$EXE"
-        OUT=$("$EXE" ci-marker)
-        echo "$OUT" | grep -q "BundlerArchiveIntegrationFixture:ci-marker"
-    ' "$DIR/$(leg_dir archive)"
+    if [ -z "$FMT_ONLY" ]; then
+        if find "$DIR/$(leg_dir archive)" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | grep -q .; then
+            run_leg "archive" bash -c '
+            set -e
+            T=$(mktemp -d); trap "rm -rf $T" EXIT
+            for A in "$0"/*.zip "$0"/*.tar.gz; do
+                [ -e "$A" ] || continue
+                case "$A" in
+                    *.zip)    unzip -q "$A" -d "$T" ;;
+                    *.tar.gz) tar -xzf "$A" -C "$T" ;;
+                esac
+            done
+            EXE=$(find "$T" -name BundlerArchiveIntegrationFixture -type f | head -1)
+            test -n "$EXE"
+            chmod +x "$EXE"
+            OUT=$("$EXE" ci-marker)
+            echo "$OUT" | grep -q "BundlerArchiveIntegrationFixture:ci-marker"
+        ' "$DIR/$(leg_dir archive)"
+        else
+            echo "[LEG-FAIL] archive（产件目录无 .zip/.tar.gz）"; FAILED="$FAILED archive-noformat"
+        fi
     else
-        echo "[LEG-FAIL] archive（产件目录无 .zip/.tar.gz）"; FAILED="$FAILED archive-noformat"
+        if find "$DIR/$(leg_dir archive)" -name '*.zip' | grep -q .; then
+            run_leg "archive-zip(xchg)" bash -c '
+            set -e
+            T=$(mktemp -d); trap "rm -rf $T" EXIT
+            n=0
+            for A in "$0"/*.zip; do
+                [ -e "$A" ] || continue
+                E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
+                unzip -q "$A" -d "$E"
+                [ "$(find "$E" -mindepth 1 -maxdepth 1 | wc -l)" -eq 1 ]
+                D=$(find "$E" -mindepth 1 -maxdepth 1 -type d | head -1)
+                [ -n "$D" ]
+                find "$D" -maxdepth 1 -type f \
+                    \( -name BundlerArchiveIntegrationFixture -o -name BundlerArchiveIntegrationFixture.exe \) \
+                    | grep -q .
+                J="$D/BundlerArchiveIntegrationFixture.runtimeconfig.json"
+                [ -s "$J" ]
+                grep -q "\"runtimeOptions\"" "$J"
+            done
+            [ "$n" -gt 0 ]
+        ' "$DIR/$(leg_dir archive)"
+        else
+            echo "[LEG-FAIL] archive-zip(xchg)（产件目录无 .zip）"; FAILED="$FAILED archive-zip-xchg-noformat"
+        fi
+        if find "$DIR/$(leg_dir archive)" -name '*.tar.gz' | grep -q .; then
+            run_leg "archive-targz(xchg)" bash -c '
+            set -e
+            T=$(mktemp -d); trap "rm -rf $T" EXIT
+            n=0
+            for A in "$0"/*.tar.gz; do
+                [ -e "$A" ] || continue
+                E="$T/x$n"; n=$((n+1)); mkdir -p "$E"
+                tar -xzf "$A" -C "$E"
+                [ "$(find "$E" -mindepth 1 -maxdepth 1 | wc -l)" -eq 1 ]
+                D=$(find "$E" -mindepth 1 -maxdepth 1 -type d | head -1)
+                [ -n "$D" ]
+                find "$D" -maxdepth 1 -type f \
+                    \( -name BundlerArchiveIntegrationFixture -o -name BundlerArchiveIntegrationFixture.exe \) \
+                    | grep -q .
+                J="$D/BundlerArchiveIntegrationFixture.runtimeconfig.json"
+                [ -s "$J" ]
+                grep -q "\"runtimeOptions\"" "$J"
+            done
+            [ "$n" -gt 0 ]
+        ' "$DIR/$(leg_dir archive)"
+        else
+            echo "[LEG-FAIL] archive-targz(xchg)（产件目录无 .tar.gz）"; FAILED="$FAILED archive-targz-xchg-noformat"
+        fi
     fi
 fi
 

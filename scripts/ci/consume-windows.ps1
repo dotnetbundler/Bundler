@@ -1,8 +1,17 @@
-# 联合交换消费腿（Windows）：pwsh -File consume-windows.ps1 -Dir <produce-artifact-dir>
+# 联合交换消费腿（Windows）：pwsh -File consume-windows.ps1 -Dir <produce-artifact-dir> [-ArchiveFormatOnly]
 # 消费断言只依赖下载的 produce 工件（不依赖构建树/产物）：SHA256SUMS 验同一件 → NSIS/MSI/zip/tar.gz 真装真跑真卸 → 清场。
-#requires -RunAsAdministrator
-param([Parameter(Mandatory = $true)][string]$Dir)
+# -ArchiveFormatOnly=跨 OS 归档交换模式：只验 archive 目录的 zip/tar.gz，做格式级
+# 断言（Expand-Archive/tar -xzf 解包 + 结构 + 文本标记）——内嵌 fixture 是 RID 绑定
+# 原生件，异 OS 不能"跑"只能"解+验结构"，不执行二进制；该模式不需要管理员。
+param([Parameter(Mandatory = $true)][string]$Dir, [switch]$ArchiveFormatOnly)
 $ErrorActionPreference = "Stop"
+# 完整腿（NSIS/MSI 真装真卸）需管理员——等价原 #requires -RunAsAdministrator 门禁，
+# 改为运行期判定以便归档格式交换腿可在非提升环境跑（只解包不断言系统态）。
+if (-not $ArchiveFormatOnly -and
+    -not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+        [Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw "完整消费腿需管理员权限运行（-ArchiveFormatOnly 格式交换腿不需要）"
+}
 $DIR = (Resolve-Path $Dir).Path
 $SUMS = "$DIR/SHA256SUMS"
 if (-not (Test-Path $SUMS)) { throw "缺 SHA256SUMS：$DIR" }
@@ -26,20 +35,68 @@ if ($extra.Count -gt 0) { throw "清单外文件: $($extra -join ', ')" }
 
 # 应收件存在性对账：本宿主 produce 腿应收 nsis/msi/archive 三件——
 # 缺件或目录空即判败，防产侧布局漂移时"全绿零断言"。
-$missing = @("nsis", "msi", "archive") | Where-Object { -not (Test-Path "$DIR/$_") }
+# 归档格式交换模式只验 archive——异 OS 产件其余目录无本宿主可消费格式，非缺失。
+$expected = if ($ArchiveFormatOnly) { @("archive") } else { @("nsis", "msi", "archive") }
+$missing = $expected | Where-Object { -not (Test-Path "$DIR/$_") }
 if ($missing.Count -gt 0) { throw "产件目录缺失: $($missing -join ', ')" }
-$empty = @("nsis", "msi", "archive") | Where-Object {
+$empty = $expected | Where-Object {
     -not (Get-ChildItem "$DIR/$_" -Recurse -File | Select-Object -First 1) }
 if ($empty.Count -gt 0) { throw "产件目录空: $($empty -join ', ')" }
 
 # /D= 与 _?= 走 NSIS 自有命令行解析——混入正斜杠会被吞成粘连路径而静默装偏，全程纯反斜杠。
-$WORK = "$env:RUNNER_TEMP\bundler-consume"
+$WORK = Join-Path $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }) "bundler-consume"
 New-Item -ItemType Directory -Force $WORK | Out-Null
 $failedLegs = @()
 function Leg($name, [scriptblock]$body) {
     try { & $body; Write-Host "[LEG-PASS] $name" }
     catch { Write-Host "[LEG-FAIL] $name :: $_"; $script:failedLegs += $name }
 }
+
+if ($ArchiveFormatOnly) {
+# ---- 跨 OS 归档交换：格式级断言（不执行异 RID 二进制）----
+# 每份归档独立解包后断言：单一顶层目录 + BundlerArchiveIntegrationFixture 主件
+# 在位 + runtimeconfig.json 文本标记（"runtimeOptions"）可读。缺格式即判败。
+function Assert-ArchiveTree($root) {
+    $top = @(Get-ChildItem $root -Force)
+    if ($top.Count -ne 1 -or -not $top[0].PSIsContainer) { throw "归档顶层非单一目录（顶层 $($top.Count) 项）" }
+    $d = $top[0].FullName
+    $exe = Get-ChildItem $d -File |
+        Where-Object { $_.Name -in @("BundlerArchiveIntegrationFixture", "BundlerArchiveIntegrationFixture.exe") }
+    if (-not $exe) { throw "归档内无主程序" }
+    $j = "$d\BundlerArchiveIntegrationFixture.runtimeconfig.json"
+    if (-not (Test-Path $j) -or (Get-Item $j).Length -eq 0) { throw "runtimeconfig.json 缺失/为空" }
+    if (-not (Select-String -Path $j -Pattern '"runtimeOptions"' -Quiet)) { throw "runtimeconfig.json 缺 runtimeOptions 文本标记" }
+}
+
+$zips = @(Get-ChildItem "$DIR/archive" -Filter *.zip -Recurse -ErrorAction SilentlyContinue)
+if ($zips.Count -eq 0) { Write-Host "[LEG-FAIL] archive-zip-xchg（产件目录无 .zip）"; $failedLegs += "archive-zip-xchg" }
+else {
+    Leg "archive-zip-xchg" {
+        $i = 0
+        foreach ($z in $zips) {
+            $t = "$WORK\xchg-zip-$i"; $i++
+            Expand-Archive $z.FullName -DestinationPath $t -Force
+            Assert-ArchiveTree $t
+        }
+    }
+}
+$tgzs = @(Get-ChildItem "$DIR/archive" -Filter *.tar.gz -Recurse -ErrorAction SilentlyContinue)
+if ($tgzs.Count -eq 0) { Write-Host "[LEG-FAIL] archive-targz-xchg（产件目录无 .tar.gz）"; $failedLegs += "archive-targz-xchg" }
+else {
+    Leg "archive-targz-xchg" {
+        $i = 0
+        foreach ($a in $tgzs) {
+            $t = "$WORK\xchg-targz-$i"; $i++
+            New-Item -ItemType Directory -Force $t | Out-Null
+            # 钉 System32 的 bsdtar——PATH 里 Git 的 GNU tar 会把 C:\ 误当 host:path 远程语法。
+            & "$env:SystemRoot\System32\tar.exe" -xzf $a.FullName -C $t
+            if ($LASTEXITCODE -ne 0) { throw "tar rc=$LASTEXITCODE" }
+            Assert-ArchiveTree $t
+        }
+    }
+}
+
+} else {
 
 # NSIS：/S /D=<dir> 真装 → 主程序真跑 → Uninstall.exe /S 真卸
 $nsis = Get-ChildItem "$DIR/nsis" -Filter *.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -111,6 +168,8 @@ else {
         $out = & $exe.FullName ci-marker
         if ($out -notmatch "BundlerArchiveIntegrationFixture:ci-marker") { throw "marker 输出异常：$out" }
     }
+}
+
 }
 
 if ($failedLegs.Count -gt 0) { Write-Error ("失败腿: " + ($failedLegs -join ", ")) }
