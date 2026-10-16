@@ -110,7 +110,7 @@ apk 降级行为未实测，登记外部待验收（`docs/project/special-accept
 
 - `UpdateManifestEmitter` 清单 + `.sig` 旁车 + `bundler-update.json` 身份烙记。
   `BundlerUpdate*` MSBuild 旋钮族。
-- AOT 引导件全 RID 内嵌（win x86_64/aarch64/i686、linux musl×2 静态件、mac x86_64/arm64/universal fat；arm64 件真宿主产出，macos-universal 为 x86_64+arm64 lipo 双切片 fat 件，windows-i686 为 x64 宿主产的独立 thin 件，PR #104 起全 8 件均经 produce-bootstrap CI 工件入库、统一 provenance）。
+- AOT 引导件全 RID 内嵌（win x86_64/aarch64/i686、linux musl×2 静态件、mac x86_64/arm64/universal fat，arm64 件真宿主产出，macos-universal 为 x86_64+arm64 lipo 双切片 fat 件，windows-i686 为 x64 宿主产的独立 thin 件，PR #104 起全 8 件均经 produce-bootstrap CI 工件入库、统一 provenance）。
   linux glibc 目标经 musl 姊妹件解析（static-pie 双宿主通吃）。
 - POSIX `bundler-updater.sh` 降级件（bash/dash 双壳实证，`.app`/AppImage/zip/targz 换件+回滚同语义）。
 - 三段式换包 `<install>.bundler-swap` 崩溃恢复。
