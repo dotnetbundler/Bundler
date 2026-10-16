@@ -94,11 +94,10 @@ verify consume 腿按"每台消费宿主吃所有能跑的产件"裁决改 (host
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
   还原来源已由 packageSourceMapping 钉死本地源（PR #41）；
   是否换处理方式（如公开发布后改验公网源、或移入独立验收仓）留待后续裁决。
-- **测试重写收口期登记的功能侧待办**（下阶段处理，本阶段只记不动）：
-  - `tools/macos-universal` fat 引导件入库——`macos-universal` target 当前落 `posix/bundler-updater.sh` 降级件（单架构件不能服务 universal：arm64 件 Intel 起不来、x86_64 件 ARM 走 Rosetta）；`produce-bootstrap` macos 腿已产 lipo 双切片工件，冻件提交即让 universal 包拿到原生引导件；
-  - `tools/windows-i686` 引导件入库——`windows-i686` target 的 update 引导件当前解析落空（Windows 无 posix 兜底），produce-bootstrap win-x86 腿工件下载后冻件；
-  - **静态兼容修复（先于 musl 收敛做）**：`BootstrapPlan.cs` 删 `PosixRename`（唯一 libc 直引——静态件上 `dlopen("libc")` 必挂）：`SameVolume` 改挂载表比对（`DriveInfo.GetDrives()` 静态件实证可用）或 `/proc/self/mountinfo` dev_t 比对，同卷 `File.Move` 即 rename 语义、异卷维持两段式；修后 ENOSPC 预检在静态件恢复（当前整检被 DllNotFound 拖进 WARN），且消除 `MoveFile` 单文件路径在静态件上的潜在异常；
-  - linux 引导件收敛 musl 静态单件（`linux-musl-*` 静态件实测 glibc/musl 双宿主通吃，收敛后随包每架构省 ~1.2MB 并消 glibc 版本地板；依赖上一项先修——否则静态件丢 ENOSPC 预检）；
+- **测试重写收口期登记的功能侧待办**（分批推进中）：
+  - ~~静态兼容修复~~——已完成（PR #98）：`PosixRename` 已删，POSIX 同卷判定改 `/proc/self/mountinfo` 挂载点最长前缀比对（`DriveInfo.GetDrives()` 回退），ENOSPC 预检在静态件恢复；
+  - ~~`tools/macos-universal` fat 件与 `tools/windows-i686` 引导件入库~~——已完成（PR #99，工件取 produce-bootstrap run `38865619194`；`macos-universal` 命中原生 fat 件，`windows-i686` 引导件从落空变有件）；
+  - linux 引导件收敛 musl 静态单件——进行中（`feat/musl-converge`：glibc 目标经 musl 姊妹件解析，glibc 件删除随包每架构省 ~1.2MB；静态兼容修复已落地，无前置阻塞）；
   - 既有冻件可选经 `produce-bootstrap` 全量重产统一 provenance（当前各件来源分散于历史开发周期）。
 - **spec §3 终验对账遗留**（审计结论：63 项零真缺口；弱覆盖中可自动化项已补断言，余下按性质归位）：
   - 测试侧待做：`MacAppGate` 未签名 `.app` 拒绝腿（macOS 宿主可自动化，随 bootstrap 功能批次）；update 打包侧 e2e 非 zip 格式腿；zip/tar.gz 跨宿主同件交换接线（verify 拓扑）；
@@ -109,7 +108,7 @@ verify consume 腿按"每台消费宿主吃所有能跑的产件"裁决改 (host
 ## 6. 默认下一步
 
 全部格式、CLI 与 UPDATE 均已冻结并入 `main`，功能面无进行中阶段。
-**测试体系重写已收口**（规格 `docs/design/testing.md`；Unit/Api/Integration/Package 四层 + `tests/Manual` 验收脚本层全量实现，CI 拓扑为 test/verify/produce-bootstrap 三 workflow，verify 发布门已全绿；PR 链 #90–#97 已全部合入 `main`）。
+**测试体系重写已收口**（规格 `docs/design/testing.md`；Unit/Api/Integration/Package 四层 + `tests/Manual` 验收脚本层全量实现，CI 拓扑为 test/verify/produce-bootstrap 三 workflow，verify 发布门已全绿；PR 链 #90–#97 与静态兼容 PR #98 均已合入 `main`）。
 剩余工作：
 
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；

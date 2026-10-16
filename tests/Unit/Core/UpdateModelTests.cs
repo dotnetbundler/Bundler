@@ -442,9 +442,9 @@ public sealed class UpdatePayloadStagingTests : TempBase
         var keyPath = Path.Combine(work.FullName, "key.json");
         key.Save(keyPath);
 
-        // windows-i686 无内嵌 per-target 件；windows 目标又不接受 posix 脚本件兜底。
+        // windows-riscv64 无内嵌 per-target 件；windows 目标又不接受 posix 脚本件兜底。
         var item = new BundlePlanItem(
-            BundleTarget.Parse("windows-i686"), PackageFormat.Zip,
+            BundleTarget.Parse("windows-riscv64"), PackageFormat.Zip,
             input.FullName, "Sample.exe", "out", false);
         var context = new BundleBuildContext(
             new BundleConfiguration
