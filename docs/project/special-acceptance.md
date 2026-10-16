@@ -82,7 +82,7 @@
 | 生产 GPG 密钥流程 | 真实开发者 GPG 密钥给 rpm/AppImage 签名 + 公钥分发/吊销流程演练 | 生产密钥签名+分发/吊销记录 | `gpg-production.sh --self-contained`（临时密钥全链签名+验签）收编进 `verify` ubuntu 腿跑绿；真实开发者密钥分发/吊销仍挂本表 |
 | UPDATE 真实发布管线 | 真实通道 `BundlerUpdateFeed` 指向公网静态托管，HelloBundlerApp 走 pack→安装→Check/Download/Apply 全链 | 端到端狗食记录 | 静态托管免费（GitHub Pages 等）；需用户决定托管并保管 ECDSA 私钥 |
 | UPDATE 公网/CDN Range 行为 | 差分在真实公网/CDN 上的 HTTP Range 行为记录 | 公网腿 Range 响应与复用率记录 | 回环 206 已实证；部分 CDN 对 Range 有缓存语义差异 |
-| mac quarantine 首启 | `.app` 经真实分发渠道（公网/内网下载）产生 quarantine 首启场景 | 下载-首启观察记录 | quarantine xattr 标记落位模拟腿已一次性 CI 跑绿（run 37892544275）；真实下载首启弹窗观察仍挂本表 |
+| mac quarantine 首启 | `.app` 经真实分发渠道（公网/内网下载）产生 quarantine 首启场景 | 下载-首启观察记录 | quarantine xattr 标记落位模拟腿已一次性 CI 跑绿（run 37892544275）；macos-26 起模拟打标不再持久（见 B 表"macOS 26+ quarantine 可写宿主"）；真实下载首启弹窗观察仍挂本表 |
 | NSIS 22 语言母语审校 | 内置 22 语言文案母语/专业审校，阿拉伯语/波斯语重点 RTL 布局，代表性缩放下截图 | 母语审校意见+RTL/DPI 截图 | 机械层已全净（键集逐位一致、零条与英文同）；语言准确性、地区术语、截断只能真人 |
 | MSI 本地化审校+辅助功能 | 支持语言集 UI、缩放和可访问性检查 | 审校与可访问性记录 | 同上需真人 |
 | MSI 对话框交互腿 | Browse 对话框、范围外路径触发 `InvalidDirDlg`、`ADDLOCAL` Feature 选择交互、启动勾选生效、取消与修复（含缺源修复提示）、位图显示、缩放/辅助功能、per-machine UAC 交互安装 | 真实交互 UI 环境记录 | 需真实 Windows 桌面交互；许可/InstallDir/Install/Finish 流转已自动化 |
@@ -94,6 +94,7 @@
 | 项 | 要做什么 | 完成证据 | 当前卡点/已有覆盖 |
 | --- | --- | --- | --- |
 | Intel Mac / Rosetta 启动观感 | `macos-x86_64` `.app`/`.dmg`/`.pkg` 在 Intel/Rosetta 宿主的启动观感核对 | 观感记录 | `macos-26-intel` CI 腿与 `macos-26` arm64+Rosetta 腿的挂载/安装/启动断言已全绿；剩观感人工 |
+| macOS 26+ quarantine 可写宿主 | 在 `com.apple.quarantine` 可写回的 macOS 宿主（macOS ≤15 或未被限制的环境）复跑五条打标腿：MacAppGate 剥标（unsigned-both、same-team 两腿）、`.app` 更新链 e2e 剥标断言（全链照跑、仅打标面条件化）、DMG quarantine 跨卷传播、Gatekeeper 观察腿 | 五条腿在可写宿主的跑绿记录 | macos-26 CI 实证受保护 xattr 对测试进程全写入面不持久化（`xattr -w` CLI 与裸 setxattr 同样 rc=0 但 getxattr 读不回，verify run 38914231566）；各腿已接 `TrySetQuarantineTree`/`TrySetQuarantine` 写+读回探测，写失败或读不回即诚实 Skip（e2e 腿全链照跑、仅剥标断言按探测结果条件化）——macos-26 上为尽力腿，真实剥标/传播断言待可写宿主验收 |
 | 干净 macOS 宿主矩阵 | 无 Xcode/CLT 干净宿主各 macOS 主版本首装 `.app`/`.dmg`/`.pkg`；含低于 `LSMinimumSystemVersion` 的旧版本宿主拒跑断言；顺带在无 `actool` 宿主构建 `.app` 验证降级分支（警告不阻塞） | 挂载/EULA 弹窗/拖放安装首启记录、拒跑提示、降级警告记录 | 现宿主有开发工具链；云 mac 实例按天可租 |
 | 干净 Windows 10/11 | WiX 自身依赖边界（无 .NET SDK 仅 candle/light 编译）、独立 VM 复跑安装/卸载、Win7 记 Framework 缺失边界 | 各宿主构建/安装/卸载记录 | 非干净 Windows 11 x64 已有证据；干净宿主未测 |
 | 提权/UAC Windows | NSIS per-machine 安装/卸载与 journal ACL 取证、预建父目录所有权/继承；MSI current-user/per-machine 权限差异；UPDATE 引导件在 `Program Files` 提权目录的写权限与 UAC 交互 | `icacls`/HKLM 权限/提权边界记录 | 普通本机不得静默触发 UAC；当前实证均 per-user 目录 |

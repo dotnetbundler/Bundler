@@ -53,25 +53,35 @@ internal static class MacAppStub
     }
 
     // 下载经浏览器/通道而来的件真实带 quarantine——按真实形态整树打标（根+内层全节点）。
-    internal static void SetQuarantineTree(string root)
+    // 返回 bool 是宿主能力探测不是写入成败：macOS 26 起 com.apple.quarantine 是受保护
+    // xattr，整条写入面对测试进程不持久化——裸 setxattr(2) 与 /usr/bin/xattr -w 同样
+    // rc=0 但随后 getxattr 读不回（macos-26 CI verify run 38914231566 实证，第一轮
+    // "xattr CLI 属系统授权写通道"的假设被证伪）。逐节点写完即读回，任一读不回即
+    // 宿主不支持打标——调用方据此诚实 Skip，剥标断言不得真空通过。
+    internal static bool TrySetQuarantineTree(string root)
     {
-        SetQuarantine(root);
+        if (!TrySetQuarantine(root))
+        {
+            return false;
+        }
         foreach (var entry in Directory.EnumerateFileSystemEntries(
                      root, "*", SearchOption.AllDirectories))
         {
-            SetQuarantine(entry);
+            if (!TrySetQuarantine(entry))
+            {
+                return false;
+            }
         }
+        return true;
     }
 
-    // 打标必须走 Apple 自带 xattr CLI：macOS 26 起 com.apple.quarantine 是受保护
-    // xattr——第三方进程裸 setxattr(2) 返回 0 但属性被系统静默丢弃（随后 getxattr
-    // 读回失败，macos-26 CI 实证）；/usr/bin/xattr -w 由系统授权写，与生产剥标
-    // （MacAppGate 走 xattr -dr）同款 CLI 通道。
-    internal static void SetQuarantine(string path)
+    // 单节点同款探针：xattr -w 后立即 getxattr 读回——写 rc=0 不算数，读得回才算在。
+    // 打标仍走 Apple 自带 xattr CLI（与生产剥标 xattr -dr 同通道、值形对齐真实下载件）。
+    internal static bool TrySetQuarantine(string path)
     {
-        ProcessRunner.AssertSuccess(ProcessRunner.Run("/usr/bin/xattr",
-            ["-w", QuarantineXattr, QuarantineValue, path]),
-            $"set {QuarantineXattr} on '{path}'");
+        var written = ProcessRunner.Run("/usr/bin/xattr",
+            ["-w", QuarantineXattr, QuarantineValue, path]);
+        return written.ExitCode == 0 && HasQuarantine(path);
     }
 
     // 存在性按返回码判：size=0 探测只回值长不落缓冲——值超缓冲的 ERANGE(-1)
