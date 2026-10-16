@@ -81,8 +81,9 @@ want_rec() { # $1 phase-id $2 rec-file $3 expect-substr（形如 uid=1000）$4 d
 # mkdir——前六件协议解析用，id/mkdir 喂探针）。
 BASETOOLS="env nohup dirname awk ls sed tr id mkdir cat"
 # dpkg 在 PATH 内自查运行依赖（缺一个整体报 "expected programs not found" 退 2）：
-# sh/rm/tar/diff + dpkg-deb/ldconfig/start-stop-daemon——shim 给 dpkg 时必须一并给。
-DPKGTOOLS="sh rm tar diff dpkg dpkg-deb ldconfig start-stop-daemon"
+# sh/rm/tar/diff + dpkg-deb/dpkg-split/ldconfig/start-stop-daemon（实跑见
+# "unable to execute split package reassembly (dpkg-split)"）——shim 给 dpkg 必须一并给。
+DPKGTOOLS="sh rm tar diff dpkg dpkg-deb dpkg-split dpkg-query ldconfig start-stop-daemon"
 makeshim() { # $1=dir; rest=tool 名（缺失宿主工具即 FAIL——shim 缺口属环境问题）
     _ms_d=$1; shift
     rm -rf "$_ms_d"; mkdir -p "$_ms_d"
@@ -192,34 +193,20 @@ EOF
     cp "$_mr_top"/RPMS/*/*.rpm "$2"
 }
 
-# tar 段去 EOA 尾零块——apk 把整文件当一个 tar/gzip 复合流读，sig/control 段
-# 若带标准 tar 的尾部零块（EOA），解析会在流中间被截断：apk 报
-# "unexpected end of file"。data 段保留 EOA。
-# 语义对齐 src/Bundler.AlpineApk/ApkPackageWriter.cs 的 omitEndOfArchive。
-strip_eoa() { # $1=raw.tar $2=out.tar（已去尾零块）
-    _se_zero="$W/.zero512"
-    dd if=/dev/zero of="$_se_zero" bs=512 count=1 2>/dev/null
-    _se_sz=$(wc -c <"$1")
-    _se_blk=$(( (_se_sz + 511) / 512 ))
-    while [ "$_se_blk" -gt 0 ]; do
-        if dd if="$1" of="$W/.se-blk" bs=512 skip=$((_se_blk - 1)) count=1 2>/dev/null \
-            && cmp -s "$W/.se-blk" "$_se_zero"; then
-            _se_blk=$((_se_blk - 1))
-        else
-            break
-        fi
-    done
-    dd if="$1" of="$2" bs=512 count="$_se_blk" 2>/dev/null
-}
-
-# ---- apk：手工三段 gzip 拼装（签名段=.SIGN.RSA.<key>.rsa.pub 对 control 段的
-# PKCS1v15-SHA1 裸签——与 abuild `openssl dgst -sha1 -sign` 同谱）。$3=1 时签名。
+# ---- apk：三段 gzip 拼装，用 abuild-tar 产段——
+#   data    : tar | abuild-tar --hash | gzip   每文件加 APK-TOOLS.checksum.SHA1
+#             pax 扩展头（裸 tar 无此头 → apk 报 missing embedded checksum 拒装）
+#   control : tar | abuild-tar --cut  | gzip   --cut 去掉 EOA 尾零块
+#   sig     : tar | abuild-tar --cut  | gzip   成员 .SIGN.RSA.<key基名>.rsa.pub
+#             内容=对 control.tar.gz 的 PKCS1v15-SHA1 裸签（abuild 同谱）
+# 与 src/Bundler.AlpineApk/ApkPackageWriter.cs 段语义对齐。$3=1 时签名。
 mk_apk() { # $1=pkgver(如 2.0.0-r0) $2=out.apk $3=sign(0/1)
     _ma="$W/apk-$1$3"; rm -rf "$_ma"
     mkdir -p "$_ma/root/usr/bin" "$_ma/root/etc/$PKG" "$_ma/ctl" "$_ma/sig"
     cp "$W/probe.sh" "$_ma/root/usr/bin/$PKG"; chmod 0755 "$_ma/root/usr/bin/$PKG"
     printf 'conf-content v%s\n' "$1" >"$_ma/root$CONF"
-    tar -czf "$_ma/data.tar.gz" -C "$_ma/root" usr etc
+    ( cd "$_ma/root" && tar -cf - usr etc | abuild-tar --hash | gzip -9 ) \
+        >"$_ma/data.tar.gz"
     _ma_dh=$(sha256sum "$_ma/data.tar.gz" | awk '{print $1}')
     _ma_sz=$(cd "$_ma/root" && find . -type f -exec wc -c {} \; | awk '{s+=$1} END {print s}')
     _ma_now=$(date +%s)
@@ -231,15 +218,13 @@ mk_apk() { # $1=pkgver(如 2.0.0-r0) $2=out.apk $3=sign(0/1)
     { echo '#!/bin/sh'
       echo "echo post-install >> $STAMPS 2>/dev/null || true"
     } >"$_ma/ctl/.post-install"
-    tar -cf "$_ma/control.raw.tar" -C "$_ma/ctl" .PKGINFO .post-install
-    strip_eoa "$_ma/control.raw.tar" "$_ma/control.stripped.tar"
-    gzip -9 <"$_ma/control.stripped.tar" >"$_ma/control.tar.gz"
+    ( cd "$_ma/ctl" && tar -cf - .PKGINFO .post-install | abuild-tar --cut | gzip -9 ) \
+        >"$_ma/control.tar.gz"
     if [ "$3" = 1 ]; then
         openssl dgst -sha1 -sign "$W/syspkg-key.rsa" \
             -out "$_ma/sig/.SIGN.RSA.syspkg-key.rsa.rsa.pub" "$_ma/control.tar.gz"
-        tar -cf "$_ma/sig.raw.tar" -C "$_ma/sig" ".SIGN.RSA.syspkg-key.rsa.rsa.pub"
-        strip_eoa "$_ma/sig.raw.tar" "$_ma/sig.stripped.tar"
-        gzip -9 <"$_ma/sig.stripped.tar" >"$_ma/sig.tar.gz"
+        ( cd "$_ma/sig" && tar -cf - ".SIGN.RSA.syspkg-key.rsa.rsa.pub" | abuild-tar --cut | gzip -9 ) \
+            >"$_ma/sig.tar.gz"
         cat "$_ma/sig.tar.gz" "$_ma/control.tar.gz" "$_ma/data.tar.gz" >"$2"
     else
         cat "$_ma/control.tar.gz" "$_ma/data.tar.gz" >"$2"
@@ -417,14 +402,16 @@ leg_rpm() {
 
     # R3b：shim 只给 rpm（dnf/zypper 缺席）——证 `rpm -U --oldpackage` 降级链：
     # rpm -U 装旧件缺 --oldpackage 会报 "newer already installed" 非零，账本回到
-    # 1.0-1 即降级链真走通的证据（重启按当前权限 root spawn，此处不断 uid）。
+    # 1.0-1 即降级链真走通的证据。
+    # 实测语义：SUDO_UID 在场但 shim 内无任何降权器（setpriv/sudo/runuser/su 全缺）
+    # → 重启失败 rc6——安装已提交（账本翻页）但 app 未重启，rc 与账本自洽。
     rpm -U "$W/v3.rpm" >>"$CONSOLE" 2>&1
     makeshim "$W/shim-rpm" $BASETOOLS rpm
     rc_of env PATH="$W/shim-rpm" SUDO_UID="$T_UID" SUDO_GID="$T_GID" "$AOT" pkg-apply \
         --rollback --pkg "$W/v1.rpm" --format rpm --app "$APP" \
         --log "$EV/r3b-aot.log"
-    expect_rc R3 0 $?
-    expect_ver R3 1.0-1 "shim-rpm 腿 --oldpackage 降级"
+    expect_rc R3 6 $?
+    expect_ver R3 1.0-1 "shim-rpm 腿 --oldpackage 降级（rc6=安装提交+降权器缺席重启失败）"
     want_line R3 "$EV/r3b-aot.log" "zypper not found" "zypper 缺席退化证据"
     want_line R3 "$EV/r3b-aot.log" "via rpm" "rpm -U 退化腿选用"
 
@@ -468,9 +455,12 @@ leg_rpm() {
 
 leg_apk() {
     note "== apk 腿环境 =="
-    command -v openssl >/dev/null 2>&1 || {
-        apk add --no-cache openssl >>"$CONSOLE" 2>&1 || { fail apk-env "openssl 安装失败"; return; }
+    # abuild 包供 abuild-tar（apk 段拼装必需——裸 tar 无 checksum pax 头/EOA 口径不合）
+    command -v abuild-tar >/dev/null 2>&1 || {
+        apk add --no-cache abuild openssl >>"$CONSOLE" 2>&1 || { fail apk-env "abuild/openssl 安装失败"; return; }
     }
+    command -v abuild-tar >/dev/null 2>&1 || { fail apk-env "abuild-tar 缺席"; return; }
+    command -v openssl >/dev/null 2>&1 || { fail apk-env "openssl 缺席"; return; }
     adduser -D tester 2>/dev/null || true
     T_UID=$(id -u tester 2>/dev/null || true); T_GID=$(id -g tester 2>/dev/null || true)
     [ -n "$T_UID" ] && [ -n "$T_GID" ] || { fail apk-env "tester 用户创建失败"; return; }
