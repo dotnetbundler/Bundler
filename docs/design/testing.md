@@ -174,9 +174,10 @@ HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 
                        windows-11-vs2026-arm / macos-26-intel / macos-26
                  每腿: build → run-tests 驱动（四工程直跑 dll + 逐类进度日志）
   verify.yml     发布门：workflow_dispatch
-                 jobs: tests=call test.yml(suite=all,runners=all) →
-                       pack → produce-{win,linux,mac}（fixture 产件+SHA256SUMS）→
-                       consume 矩阵（联合交换真装真跑）→ manual-auto 腿 → universal 产/消
+                 jobs: tests=call test.yml ×6 宿主矩阵（每腿 suite=all、runners=<单宿主>）→
+                       produce×6 宿主（fixture 产件+SHA256SUMS；msi 腿内含本地 pack）→
+                       consume 配对矩阵（联合交换真装真跑 + 跨 OS 归档格式断言）→
+                       manual-auto×6 腿 → universal 产/消
   produce-bootstrap.yml  产件流：per-RID AOT 引导件产出（workflow_dispatch，全 RID 五腿）
 scripts/ci/
   run-tests.{sh,ps1}   唯一测试驱动（四工程直跑 dll、逐类、进度日志、-longRunning）
