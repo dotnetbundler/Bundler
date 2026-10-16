@@ -29,7 +29,8 @@ done
 ( cd "$DIR" && shasum -a 256 -c SHA256SUMS ) || { echo "清单校验失败" >&2; exit 1; }
 # shasum 无 --strict——畸形行（非空且不合 "hash  ./relpath" 形）单独判失败；
 # 清单外文件同样判失败，防产侧混入/夹带漏检。
-[ "$(grep -cvE '^([0-9a-f]{64}  \./[^ ]+|)$' "$DIR/SHA256SUMS")" = "0" ] \
+# 用 (...)? 而非 (...|) ——BSD grep 拒绝空备选分支（empty (sub)expression）。
+[ "$(grep -cvE '^([0-9a-f]{64}  \./[^ ]+)?$' "$DIR/SHA256SUMS")" = "0" ] \
     || { echo "清单含畸形行" >&2; exit 1; }
 EXTRA=$(cd "$DIR" && comm -13 \
     <(awk '{print $2}' SHA256SUMS | sed 's|^\./||' | sort) \
