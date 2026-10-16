@@ -180,9 +180,12 @@ HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 
                  jobs: tests=call test.yml ×6 宿主矩阵（每腿 suite=all、runners=<单宿主>）→
                        produce×6 宿主（fixture 产件+SHA256SUMS；msi 腿内含本地 pack）→
                        consume 配对矩阵（联合交换真装真跑 + 跨 OS 归档格式断言）→
-                       manual-auto×6 腿 → universal 产/消
+                       manual-auto×6 腿 → universal 产/消；
+                       syspkg=call syspkg-verify.yml（needs tests——UPDATE 系统包
+                       三容器验收腿，30 分钟级容器重腿只挂发布门不进 test.yml）
   produce-bootstrap.yml  产件流：per-RID AOT 引导件产出（workflow_dispatch，全 RID 五腿）
   syspkg-verify.yml    UPDATE 系统包验收腿：workflow_dispatch(legs)/workflow_call
+                       （verify 发布门经 call 整腿复用）
                        select（legs→动态矩阵）→ bootstrap-musl-x64（alpine SDK 容器
                        NativeAOT 静态引导件）→ debian/fedora/alpine 三容器矩阵——
                        容器内 root 直跑 pkg-apply 真包装/更新/回滚，账本断言
