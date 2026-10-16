@@ -16,8 +16,9 @@ esac
 [ -f "$DIR/SHA256SUMS" ] || { echo "缺 SHA256SUMS：$DIR" >&2; exit 1; }
 ( cd "$DIR" && sha256sum -c --strict SHA256SUMS ) || { echo "清单校验失败" >&2; exit 1; }
 # 清单外文件即判失败——只验列名件会让产侧混入/夹带漏检。
+# 取列名须剥 64 位哈希+两格前缀而非 awk $2——后者在首个空格处截断路径。
 EXTRA=$(cd "$DIR" && comm -13 \
-    <(awk '{print $2}' SHA256SUMS | sed 's|^\./||' | sort) \
+    <(sed 's|^[0-9a-f]\{64\}  \./||' SHA256SUMS | sort) \
     <(find . -type f ! -path './SHA256SUMS' | sed 's|^\./||' | sort))
 [ -z "$EXTRA" ] || { echo "清单外文件: $EXTRA" >&2; exit 1; }
 
