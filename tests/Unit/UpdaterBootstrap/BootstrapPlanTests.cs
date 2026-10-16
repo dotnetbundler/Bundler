@@ -412,7 +412,7 @@ public sealed class BootstrapPlanTests : TempBase
         File.WriteAllText(installFile, "old");
         File.WriteAllText(payloadFile, "new");
 
-        var root = BootstrapPlan.CanonicalPath(Root)!.TrimEnd('/');
+        var root = BootstrapPlan.CanonicalPath(Root)!.TrimEnd('/').Replace(" ", "\\040");
         BootstrapPlan.MountInfoProbe = () =>
             "1 0 8:1 / / rw - ext4 /dev/sda1 rw\n" +
             $"2 1 8:2 / {root}/install-xvol rw - ext4 /dev/sdb1 rw\n" +
@@ -429,7 +429,9 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Equal(0, rc);
         Assert.Equal("new", File.ReadAllText(installFile));
         Assert.False(File.Exists(payloadFile));
-        Assert.True(ioCalls >= 3, $"跨卷应走两段式（3 次 IO 探测），实走 {ioCalls} 次");
+        // ApplyFile 两次 MoveFile：install→backup 同挂载原子 1 次，
+        // payload→install 跨卷两段式 3 次，合计 4。
+        Assert.Equal(4, ioCalls);
     }
 
     [Fact]
@@ -437,7 +439,8 @@ public sealed class BootstrapPlanTests : TempBase
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "挂载表判定只在 POSIX 腿走");
 
-        // 虚构表只挂根——一切路径同卷，文件级换包走 rename 原子路（探测 1 次）。
+        // 虚构表只挂根——一切路径同卷，文件级换包两次 MoveFile 皆原子
+        // （install→backup、payload→install 各 1 次探测），合计 2。
         BootstrapPlan.MountInfoProbe = () =>
             "1 0 8:1 / / rw - ext4 /dev/sda1 rw\n";
         var ioCalls = 0;
@@ -457,7 +460,7 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Equal(0, rc);
         Assert.Equal("new-image", File.ReadAllText(installFile));
         Assert.False(File.Exists(payloadFile));
-        Assert.Equal(1, ioCalls);
+        Assert.Equal(2, ioCalls);
     }
 
     // ---- 装置 ----
