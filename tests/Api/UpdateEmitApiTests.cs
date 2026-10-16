@@ -9,8 +9,9 @@ namespace Bundler.ApiTests;
 
 /// <summary>
 /// UPDATE 发射公开契约：BuildAsync 产物 → EmitAsync 在输出根产 feed+签名+块表，
-/// 全宿主可跑（纯托管）。自更新面只覆盖 nsis/msi/app/appimage/zip/targz——
-/// 系统包管理器格式（deb/rpm/apk/pkg）不进更新链，自带生态更新通道。
+/// 全宿主可跑（纯托管）。自更新面覆盖 nsis/msi/app/appimage/zip/targz 与
+/// 系统包管理器格式 deb/rpm/alpineapk（身份旁车+引导件已随包注入载荷）；
+/// dmg/pkg 非更新载体不进链。
 /// </summary>
 public sealed class UpdateEmitApiTests : TempBase
 {
@@ -57,9 +58,10 @@ public sealed class UpdateEmitApiTests : TempBase
     }
 
     [Fact]
-    public async Task Emit_NonCoveredFormat_EmptyFeedButSigned()
+    public async Task Emit_DebArtifact_EntersFeedWithSigBlockmap()
     {
-        // deb 不进更新链——feed 仍发射（零产物但带签名），客户端读"无适用更新"而非配置坏。
+        // syspkg 格式（deb/rpm/alpineapk）进更新链——deb 产物同样产 .sig/.blockmap
+        // 旁车并进 feed（feed.format 口径=枚举名小写 "deb"）。
         var bundle = UpdateBundle(PackageFormat.Deb);
         var artifacts = await new DotNet.Bundler.Deb.DebBundler().BuildAsync(
             bundle, TestContext.Current.CancellationToken);
@@ -67,14 +69,19 @@ public sealed class UpdateEmitApiTests : TempBase
             bundle, artifacts, TestContext.Current.CancellationToken);
 
         var feedPath = Path.Combine(bundle.OutputDirectory, "bundler-update-feed.beta.json");
-        // produced 只含 feed+feed.sig——非覆盖产物完全不进更新面。
-        Assert.Equal(2, produced.Count);
         Assert.True(File.Exists(feedPath));
         Assert.True(File.Exists(feedPath + ".sig"));
+        Assert.Contains(feedPath, produced);
+
+        var artifact = artifacts[0].Path;
+        Assert.True(File.Exists(artifact + ".sig"));
+        Assert.True(File.Exists(artifact + UpdateBlockMap.FileSuffix));
+
         using var feed = JsonDocument.Parse(File.ReadAllText(feedPath));
-        Assert.Equal(0, feed.RootElement.GetProperty("artifacts").GetArrayLength());
-        // 非覆盖产物无 .sig/.blockmap
-        Assert.False(File.Exists(artifacts[0].Path + ".sig"));
+        var items = feed.RootElement.GetProperty("artifacts");
+        Assert.Equal(1, items.GetArrayLength());
+        Assert.Equal("deb", items[0].GetProperty("format").GetString());
+        Assert.Equal("linux-x86_64", items[0].GetProperty("rid").GetString());
     }
 
     [Fact]

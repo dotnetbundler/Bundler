@@ -95,6 +95,24 @@ public static class UpdateBootstrapper
         return false;
     }
 
+    /// <summary>
+    /// <see cref="TryResolve"/> 的强制变体：更新面已声明而引导件无件可选 = 死更新链——
+    /// 静默跳过会产出装得出但永远换不了包的载荷。抛出诊断列出全部探测位。
+    /// </summary>
+    public static string ResolveOrThrow(UpdateBundleConfiguration update, string target)
+    {
+        if (TryResolve(update, target, out var source))
+        {
+            return source;
+        }
+        var fileName = FileNameFor(target);
+        var probe = HasExplicitDirectory(update)
+            ? $"in '{update.BootstrapperDirectory}': {target}/{fileName} → (linux glibc 目标) linux-musl-<arch>/{fileName} → (非 win) posix/bundler-updater.sh"
+            : $"in Bundler.Core embedded resources: updater/{target}/{fileName} → (linux glibc 目标) updater/linux-musl-<arch>/{fileName} → (非 win) updater/posix/bundler-updater.sh — or configure update.bootstrapperDirectory";
+        throw new InvalidOperationException(
+            $"BundlerUpdate enabled but no bootstrapper found for '{target}' — probed {probe}; none matched.");
+    }
+
     // linux 非 musl 目标的 musl 姊妹目录名（linux-x86_64 → linux-musl-x86_64）；
     // musl 目标本身、windows/macos 目标返回 null。
     private static string? MuslSibling(string target)

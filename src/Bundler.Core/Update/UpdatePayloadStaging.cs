@@ -47,12 +47,8 @@ public static class UpdatePayloadStaging
         }
         if (UpdateBootstrapper.Inject(payloadRoot, update, target) is null)
         {
-            var fileName = UpdateBootstrapper.FileNameFor(target);
-            var probe = UpdateBootstrapper.HasExplicitDirectory(update)
-                ? $"in '{update.BootstrapperDirectory}': {target}/{fileName} → (linux glibc 目标) linux-musl-<arch>/{fileName} → (非 win) posix/bundler-updater.sh"
-                : $"in Bundler.Core embedded resources: updater/{target}/{fileName} → (linux glibc 目标) updater/linux-musl-<arch>/{fileName} → (非 win) updater/posix/bundler-updater.sh — or configure update.bootstrapperDirectory";
-            throw new InvalidOperationException(
-                $"BundlerUpdate enabled but no bootstrapper found for '{target}' — probed {probe}; none matched.");
+            // Inject 返回 null 即解析链全空——ResolveOrThrow 复跑同一条链产出带探测位的诊断文案。
+            UpdateBootstrapper.ResolveOrThrow(update, target);
         }
     }
 

@@ -22,6 +22,10 @@ public sealed class UpdateInstallIdentity
     [DataMember(Name = "channel", EmitDefaultValue = false)] public string Channel = "";
     [DataMember(Name = "feedUrl", EmitDefaultValue = false)] public string FeedUrl = "";
     [DataMember(Name = "publicKey", EmitDefaultValue = false)] public string? PublicKey;
+    // 包管理器名——syspkg 格式（deb/rpm/alpineapk）换包时按它定位已装单元；
+    // 非 syspkg 格式恒缺省不落地。v1 旧读端对未知成员按忽略处理；
+    // 新读端读到无 pkg 的 syspkg 旁车按"身份缺件"确定性拒绝（UpdateClient 构造闸）。
+    [DataMember(Name = "pkg", EmitDefaultValue = false)] public string? Pkg;
 
     public const string FileName = "bundler-update.json";
 

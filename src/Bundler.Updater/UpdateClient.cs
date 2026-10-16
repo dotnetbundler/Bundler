@@ -30,6 +30,14 @@ public sealed class UpdateClient
         {
             throw new UpdateException("install identity carries no feed url or public key.");
         }
+        // syspkg 格式的换包按包名定位已装单元：v1 旧旁车没有 pkg 字段——
+        // 宁在构造闸确定性拒绝，也不拿产品名/安装路径去猜包管理器名。
+        if (SyspkgFormats.Contains(identity.Format) && identity.Pkg is not { Length: > 0 })
+        {
+            throw new UpdateException(
+                $"install identity for '{identity.Format}' carries no 'pkg' package name — " +
+                "the installed package cannot be located; reinstall with a package built by this bundler version.");
+        }
         _identity = identity;
         // 绝对化：引导件以自身目录为工作目录，相对路径会在它那边解析失败。
         _installDirectory = Path.GetFullPath(installDirectory);
@@ -266,6 +274,10 @@ public sealed class UpdateClient
             return null;
         }
     }
+
+    // 包管理器格式：身份旁车必须带 pkg 包名（构造闸判定集）。
+    private static readonly HashSet<string> SyspkgFormats =
+        new(StringComparer.OrdinalIgnoreCase) { "deb", "rpm", "alpineapk" };
 
     private string FeedUrl() => _identity.FeedUrl;
 
