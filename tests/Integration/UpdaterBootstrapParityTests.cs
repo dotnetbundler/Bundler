@@ -1438,6 +1438,12 @@ public static class UpdaterBootstrapParityTests
             // CommandProbe 权威缺席：一切命令经 BUNDLER_UPDATER_CMD_* 缝供给，
             // 真实 PATH 上的包管理器对 AOT 腿同样不可见。
             PkgApplyPlan.CommandProbe = _ => null;
+            // 宿主 env 会透进真 exec 的 stub 子进程（ExecSpec.Environment 为 null 的
+            // 安装步走 ProcessStartInfo 默认继承本进程环境块）：CI ubuntu 镜像携带
+            // DEBIAN_FRONTEND=noninteractive 会使 rpm/apk 腿 `|DF=` 断言面失真——
+            // 腿内刮净保证确定性，与 sh 支路 startInfo.Environment.Clear() 同价。
+            var hostFrontend = Environment.GetEnvironmentVariable("DEBIAN_FRONTEND");
+            Environment.SetEnvironmentVariable("DEBIAN_FRONTEND", null);
             try
             {
                 return BootstrapPlan.Run(args);
@@ -1446,6 +1452,7 @@ public static class UpdaterBootstrapParityTests
             {
                 PkgApplyPlan.EnvProbe = null;
                 PkgApplyPlan.CommandProbe = null;
+                Environment.SetEnvironmentVariable("DEBIAN_FRONTEND", hostFrontend);
             }
         }
         var startInfo = new ProcessStartInfo("/bin/sh")
