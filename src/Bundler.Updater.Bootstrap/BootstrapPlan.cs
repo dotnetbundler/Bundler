@@ -526,8 +526,9 @@ internal static class BootstrapPlan
             }
             return string.Equals(volumeA, WindowsVolumeRoot(b), StringComparison.OrdinalIgnoreCase);
         }
-        var mountA = ResolveMountPoint(a);
-        var mountB = ResolveMountPoint(b);
+        var mounts = MountPoints();
+        var mountA = ResolveMountPoint(a, mounts);
+        var mountB = ResolveMountPoint(b, mounts);
         if (mountA is null || mountB is null)
         {
             throw new IOException($"cannot resolve mount point of '{a}'/'{b}'.");
@@ -536,11 +537,14 @@ internal static class BootstrapPlan
     }
 
     // 挂载点集合的最长前缀匹配：/a/bb 不能算挂到 /a/b——前缀命中须过路径段边界。
-    internal static string? ResolveMountPoint(string path)
+    internal static string? ResolveMountPoint(string path) =>
+        ResolveMountPoint(path, MountPoints());
+
+    internal static string? ResolveMountPoint(string path, IEnumerable<string> mounts)
     {
         var full = Path.GetFullPath(path);
         string? best = null;
-        foreach (var mount in MountPoints())
+        foreach (var mount in mounts)
         {
             if (full.StartsWith(mount, StringComparison.Ordinal) &&
                 (full.Length == mount.Length ||
@@ -570,13 +574,15 @@ internal static class BootstrapPlan
     }
 
     // mountinfo 第 5 字段是挂载点（\040/\011/\012/\134 八进制转义需还原）。
+    // 良构行至少 10 字段且 "-" 分隔符落在第 7 字段之后——短行/坏行丢弃，
+    // 不容忍注入空串挂载点污染最长前缀匹配。
     internal static List<string> ParseMountPoints(string mountInfo)
     {
         var points = new List<string>();
         foreach (var line in mountInfo.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
-            var fields = line.Split(' ');
-            if (fields.Length > 4)
+            var fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (fields.Length >= 10 && Array.IndexOf(fields, "-") >= 6)
             {
                 points.Add(UnescapeMountField(fields[4]));
             }

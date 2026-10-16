@@ -396,25 +396,59 @@ public sealed class BootstrapPlanTests : TempBase
     }
 
     [Fact]
-    public void Apply_CrossVolumePaths_FallsBackToTwoPhaseSwap()
+    public void Apply_CrossVolumeFileSwap_FallsBackToTwoPhase()
     {
-        // 虚构挂载表只挂根：Windows 不走该判定直接断言换包正确，
-        // POSIX 上 install/payload 同根挂载即同卷、语义仍须正确——
-        // 本测验证挂载表判定接入后真实换包链路在两端宿主都不回归。
-        BootstrapPlan.MountInfoProbe = () =>
-            "1 0 8:1 / / rw - ext4 /dev/sda1 rw\n";
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "挂载表判定只在 POSIX 腿走");
 
-        var install = Dir("install-xvol", ("app.txt", "old"));
-        var payload = Dir("payload-xvol", ("app.txt", "new"));
+        // 文件级换包才走 TryAtomicMove/MoveFile——虚构挂载表把两路径钉到
+        // 不同挂载点 → SameVolume 判跨卷 → 强制两段式；断言端到端仍正确。
+        var installFile = Path.Combine(Root, "install-xvol", "app.bin");
+        var payloadFile = Path.Combine(Root, "payload-xvol", "app.bin");
+        Directory.CreateDirectory(Path.GetDirectoryName(installFile)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(payloadFile)!);
+        File.WriteAllText(installFile, "old");
+        File.WriteAllText(payloadFile, "new");
+
+        var root = Path.GetFullPath(Root).TrimEnd('/');
+        BootstrapPlan.MountInfoProbe = () =>
+            "1 0 8:1 / / rw - ext4 /dev/sda1 rw\n" +
+            $"2 1 8:2 / {root}/install-xvol rw - ext4 /dev/sdb1 rw\n" +
+            $"3 1 8:3 / {root}/payload-xvol rw - ext4 /dev/sdc1 rw\n";
 
         var rc = Apply(new BootstrapOptions
         {
-            InstallDirectory = install,
-            PayloadDirectory = payload,
+            InstallDirectory = installFile,
+            PayloadDirectory = payloadFile,
         });
 
         Assert.Equal(0, rc);
-        Assert.Equal("new", File.ReadAllText(Path.Combine(install, "app.txt")));
+        Assert.Equal("new", File.ReadAllText(installFile));
+        Assert.False(File.Exists(payloadFile));
+    }
+
+    [Fact]
+    public void Apply_SameMountPaths_TakeAtomicPath()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "挂载表判定只在 POSIX 腿走");
+
+        // 虚构表只挂根——一切路径同卷，文件级换包走 rename 原子路（幂等断言）。
+        BootstrapPlan.MountInfoProbe = () =>
+            "1 0 8:1 / / rw - ext4 /dev/sda1 rw\n";
+
+        var installFile = Path.Combine(Root, "app-sv.AppImage");
+        var payloadFile = Path.Combine(Root, "new-sv.AppImage");
+        File.WriteAllText(installFile, "old-image");
+        File.WriteAllText(payloadFile, "new-image");
+
+        var rc = Apply(new BootstrapOptions
+        {
+            InstallDirectory = installFile,
+            PayloadDirectory = payloadFile,
+        });
+
+        Assert.Equal(0, rc);
+        Assert.Equal("new-image", File.ReadAllText(installFile));
+        Assert.False(File.Exists(payloadFile));
     }
 
     // ---- 装置 ----
