@@ -1,3 +1,7 @@
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
+using System.Text;
+using System.Text.Json;
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
 using DotNet.Bundler.Core.Update;
@@ -142,6 +146,62 @@ public sealed class UpdateInstallIdentityTests : TempBase
     {
         var dir = Temp("bundler-id");
         Assert.Null(UpdateInstallIdentity.TryRead(dir.FullName));
+    }
+
+    // v1 兼容断言：含 `pkg` 的新旁车喂给 v1 形读端（无 pkg 成员的 v1 模型）不炸——
+    // netstandard2.0 走 DataContractJsonSerializer、net10 走 System.Text.Json，
+    // 两条 v1 读径对未知 JSON 成员均为忽略语义；已知字段照常解析。
+    [Fact]
+    public void V1Reader_UnknownPkgField_Ignored()
+    {
+        var dir = Temp("bundler-id-v1");
+        UpdateInstallIdentity.Write(dir.FullName, new UpdateInstallIdentity
+        {
+            Format = "deb", Target = "linux-x86_64", Channel = "stable",
+            FeedUrl = "https://example.com/feed", PublicKey = "pk", Pkg = "example-app",
+        });
+        var json = File.ReadAllText(Path.Combine(dir.FullName, UpdateInstallIdentity.FileName));
+        Assert.Contains("\"pkg\"", json, StringComparison.Ordinal); // 确带 v1 未知字段，否则断言落空转
+
+        // v1 netstandard2.0 读径：DataContractJsonSerializer。
+        var viaDcs = (V1IdentityShape)new DataContractJsonSerializer(typeof(V1IdentityShape))
+            .ReadObject(new MemoryStream(Encoding.UTF8.GetBytes(json)))!;
+        Assert.Equal("deb", viaDcs.Format);
+        Assert.Equal("linux-x86_64", viaDcs.Target);
+        Assert.Equal("stable", viaDcs.Channel);
+        Assert.Equal("https://example.com/feed", viaDcs.FeedUrl);
+        Assert.Equal("pk", viaDcs.PublicKey);
+
+        // v1 net10 读径：System.Text.Json（与源生成上下文同一命名策略——rid 自定义映射在此生效）。
+        var stjOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = UpdateJsonNamingPolicy.Instance,
+            IncludeFields = true,
+        };
+        var viaStj = JsonSerializer.Deserialize<V1IdentityShape>(json, stjOptions)!;
+        Assert.Equal("deb", viaStj.Format);
+        Assert.Equal("linux-x86_64", viaStj.Target);
+        Assert.Equal("stable", viaStj.Channel);
+        Assert.Equal("https://example.com/feed", viaStj.FeedUrl);
+        Assert.Equal("pk", viaStj.PublicKey);
+
+        // 新读端同件照常读出 pkg——新增字段双向兼容。
+        var current = UpdateInstallIdentity.TryRead(dir.FullName);
+        Assert.NotNull(current);
+        Assert.Equal("example-app", current!.Pkg);
+    }
+
+    // v1 时代身份模型形——UpdateInstallIdentity 去掉 B1 起新增的 `pkg` 成员。
+    [DataContract]
+    private sealed class V1IdentityShape
+    {
+        [DataMember(Name = "format")] public string Format = "";
+        [DataMember(Name = "rid")] public string Target = "";
+        [DataMember(Name = "channel")] public string Channel = "";
+        [DataMember(Name = "feedUrl")] public string FeedUrl = "";
+#pragma warning disable CS0649 // 字段只由反序列化赋值——v1 读端模型复刻，保留 nullable 原状
+        [DataMember(Name = "publicKey")] public string? PublicKey;
+#pragma warning restore CS0649
     }
 
     [Fact]

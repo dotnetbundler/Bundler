@@ -1,7 +1,8 @@
 # 发布前全量验证（发布门）：手动触发，覆盖全功能面。
 # 只验不发——nuget 包与 release 资产发布是后期另一步。
 # 拓扑：tests(复用 test.yml 全矩阵) → produce 产件+清单 → consume 异机真装真跑
-#       （联合交换：产/消分离保证消费机不见构建树）→ manual-auto 腿 + universal 产/消。
+#       （联合交换：产/消分离保证消费机不见构建树）→ manual-auto 腿 + universal 产/消；
+#       tests → syspkg（复用 syspkg-verify.yml——UPDATE 系统包三容器验收腿）。
 name: verify
 
 on:
@@ -303,3 +304,15 @@ jobs:
       - name: 同包校验 + 原生启动
         shell: bash
         run: bash scripts/ci/consume-universal.sh "$RUNNER_TEMP/uni"
+
+  # UPDATE 系统包验收腿：deb/rpm/apk 三容器内 root 直跑 pkg-apply 全链
+  # （AOT+sh 双实现奇偶、账本/conffile/降级/降权重启/rc 面）——复用
+  # syspkg-verify.yml 完整拓扑，不复制腿定义（消重原则同 test.yml 调用先例）。
+  # 30 分钟级容器重腿只挂发布门：不进 test.yml（它还被 verify 矩阵化调用，
+  # 放进去会按宿主矩阵重复六份）。
+  syspkg:
+    name: syspkg-verify
+    needs: tests
+    uses: ./.github/workflows/syspkg-verify.yml
+    with:
+      legs: all

@@ -7,7 +7,8 @@
 # 容器给不了，仍挂 docs/project/special-acceptance.md 外部验收。
 # 包管理器账本断言：dpkg -s / rpm -q / apk list --installed；conffile、--rollback
 # 降级、缺前端退化、降权重启 env 回灌、退出码 0/4/5/6 全在容器内实证。
-# workflow_call 预留——日后可整腿收编 verify 发布门；push 不触发（同 test/verify 口径）。
+# workflow_call 由 verify.yml syspkg job 收编（发布门整腿复用，needs tests 后跑）；
+# push 不触发（同 test/verify 口径）。
 name: syspkg-verify
 
 on:
