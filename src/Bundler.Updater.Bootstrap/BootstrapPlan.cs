@@ -212,13 +212,17 @@ internal static class BootstrapPlan
 
         // 文件级语义：安装目标是单文件（AppImage 单件）或回滚备份是文件——
         // 同协议、粒度换成文件：marker/备份为 <file>.bundler-{swap,backup}。
+        // 回滚按备份形态选腿而非装位形态：异型槽（文件装位+目录备份）也走
+        // 目录腿清槽重建，与槽位节点通吃清理配套（sh 同义）。
         // 文件腿的存在性检查与空间预检都在 ApplyFile 内部按同一顺序执行。
-        if (File.Exists(installDir) || (options.Rollback && File.Exists(backupDir)))
+        if (options.Rollback ? File.Exists(backupDir) : File.Exists(installDir))
         {
             return ApplyFile(options, log, installDir, payloadDir, backupDir, markerPath, recovered);
         }
 
-        if (!Directory.Exists(installDir))
+        // 装位必须存在；回滚时容忍任意节点形态——异型槽（文件装位+目录备份）
+        // 走本腿清槽重建，装位非目录不是用法错。
+        if (!Directory.Exists(installDir) && !(options.Rollback && File.Exists(installDir)))
         {
             throw new UsageException($"install directory '{installDir}' does not exist.");
         }

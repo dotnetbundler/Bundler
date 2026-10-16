@@ -75,10 +75,11 @@ move_node() {
     if [ -n "$_mn_sdev" ] && [ "$_mn_sdev" = "$_mn_ddev" ] && mv "$1" "$2" 2>/dev/null; then
         return 0
     fi
-    # 直 mv 半途可能已把部分条目落进目标名——先清槽再两段式。
-    rm -rf "$2"
+    # 直 mv 半途可能已把部分条目落进目标名——先清槽再两段式。清不掉还继续
+    # mv 会把暂存件嵌进目标目录内部并 rc0——静默假成功，必须判败。
+    rm -rf "$2" || return 1
     _mn_staged="$2.partial-$$"
-    rm -rf "$_mn_staged"
+    rm -rf "$_mn_staged" || return 1
     if [ -d "$1" ]; then
         mkdir -p "$_mn_staged" || { rm -rf "$_mn_staged"; return 1; }
         cp -a "$1"/. "$_mn_staged"/ || { rm -rf "$_mn_staged"; return 1; }
@@ -86,7 +87,7 @@ move_node() {
         cp -p "$1" "$_mn_staged" || { rm -rf "$_mn_staged"; return 1; }
     fi
     if mv "$_mn_staged" "$2"; then
-        rm -rf "$1"
+        rm -rf "$1" || return 1
         return 0
     fi
     rm -rf "$_mn_staged"
@@ -474,7 +475,9 @@ if [ -f "$MARKER" ]; then
     else
         { echo "bundler-updater: swap marker exists but backup missing — cannot recover." >&2; exit 4; }
     fi
-    rm -f "$MARKER"
+    # 恢复成功后 marker 回收失败会留下假现场——下轮再进恢复腿楔形（swap 型
+    # 备份已耗尽撞 "backup missing"；rollback 型误还原）。宁可响败不留残。
+    rm -f "$MARKER" || exit 4
     RECOVERED=1
 fi
 
@@ -484,7 +487,10 @@ fi
 
 # 文件级语义：安装目标是单文件（AppImage 单件）或回滚备份是文件——
 # 目录级换包会清掉宿主目录里的无关文件，故单件替换。
-if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; then
+# 回滚按备份形态选腿而非装位形态（与 AOT 同义）：异型槽（文件装位+目录
+# 备份）走目录腿清槽重建。
+if { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; } || \
+   { [ "$ROLLBACK" != 1 ] && [ -f "$INSTALL_DIR" ]; }; then
     if [ "$ROLLBACK" = 1 ]; then
         [ "$RECOVERED" = 1 ] && { log "bundler-updater: crash recovery already restored the backup"; exit 0; }
         [ -f "$BACKUP_DIR" ] || { echo "bundler-updater: no rollback backup at '$BACKUP_DIR'." >&2; exit 4; }
@@ -497,7 +503,7 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
         # 先清槽再写（与恢复腿同义，AOT File.Copy 到目录路径本就抛 rc4）。
         rm -rf "$INSTALL_DIR" || { echo "bundler-updater: cannot clear install slot." >&2; exit 4; }
         cp -f "$BACKUP_DIR" "$INSTALL_DIR" || { echo "bundler-updater: rollback copy failed." >&2; exit 4; }
-        rm -f "$MARKER"
+        rm -f "$MARKER" || exit 4
         [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
         log "bundler-updater: done"
         exit 0
@@ -508,7 +514,9 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
     log "bundler-updater: backup '$INSTALL_DIR' → '$BACKUP_DIR'"
     # 备份父目录缺席时自建——与 AOT 侧 CopyTree 的隐式补链同义（POSIX mv 不会补）。
     mkdir -p "$(dirname "$BACKUP_DIR")" || exit 4
-    rm -f "$BACKUP_DIR" || exit 4
+    # 备份槽异型节点同义清理（AOT DeleteNodeIfPresent）：槽上挂目录节点时
+    # rm -f 判败楔形——与装位槽同口径通吃 file/dir。
+    rm -rf "$BACKUP_DIR" || exit 4
     printf 'swap in progress' >"$MARKER" || exit 4
     move_node "$INSTALL_DIR" "$BACKUP_DIR" || { rm -f "$MARKER"; exit 4; }
     SWAP_FAILED=0
@@ -526,7 +534,7 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
         rm -f "$MARKER"
         exit 4
     fi
-    rm -f "$MARKER"
+    rm -f "$MARKER" || exit 4
     # 文件级备份保留时按安装文件真名落在保留目录里；迁移失败降级留瞬备不阻断换包。
     retain_or_remove_backup "$BACKUP_DIR" "$(basename "$INSTALL_DIR")" || \
         log "bundler-updater: WARN retain/remove backup failed; transient backup left at '$BACKUP_DIR'."
@@ -536,7 +544,10 @@ if [ -f "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$BACKUP_DIR" ]; }; th
     exit 0
 fi
 
-[ -d "$INSTALL_DIR" ] || { echo "bundler-updater: install directory '$INSTALL_DIR' does not exist." >&2; exit 2; }
+# 装位必须存在；回滚时容忍任意节点形态——异型槽（文件装位+目录备份）走
+# 本腿清槽重建，装位非目录不是用法错（与 AOT 同义）。
+[ -d "$INSTALL_DIR" ] || { [ "$ROLLBACK" = 1 ] && [ -f "$INSTALL_DIR" ]; } || \
+    { echo "bundler-updater: install directory '$INSTALL_DIR' does not exist." >&2; exit 2; }
 [ "$ROLLBACK" = 1 ] || [ -d "$PAYLOAD_DIR" ] || { echo "bundler-updater: payload directory '$PAYLOAD_DIR' does not exist." >&2; exit 2; }
 check_free_space
 
@@ -588,7 +599,7 @@ if [ "$ROLLBACK" = 1 ]; then
     rm -rf "$INSTALL_DIR" || exit 4
     mkdir -p "$INSTALL_DIR" || exit 4
     cp -a "$BACKUP_DIR"/. "$INSTALL_DIR"/ || { echo "bundler-updater: rollback copy failed." >&2; exit 4; }
-    rm -f "$MARKER"
+    rm -f "$MARKER" || exit 4
     [ -n "$APP_PATH" ] && { log "bundler-updater: restart '$APP_PATH'"; restart_app; }
     log "bundler-updater: done"
     exit 0
@@ -618,7 +629,7 @@ if [ "$SWAP_FAILED" = 1 ]; then
     rm -f "$MARKER"
     exit 4
 fi
-rm -f "$MARKER"
+rm -f "$MARKER" || exit 4
 
 retain_or_remove_backup "$BACKUP_DIR" "" || \
     log "bundler-updater: WARN retain/remove backup failed; transient backup left at '$BACKUP_DIR'."

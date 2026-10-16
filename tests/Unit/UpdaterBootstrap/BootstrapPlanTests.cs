@@ -350,6 +350,45 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Equal("good-image", File.ReadAllText(installFile));
     }
 
+    [Fact]
+    public void Apply_FileRollback_DirNodeInInstallSlot_ClearsAndRestoresFile()
+    {
+        // 异型槽：文件级备份在场而安装槽挂着目录节点（形态切换后的回滚）——
+        // 清槽还原而非把备份复制进目录内部（sh rm -rf 同语义）。
+        var installPath = Path.Combine(Root, "tool.AppImage");
+        Directory.CreateDirectory(installPath);
+        File.WriteAllText(Path.Combine(installPath, "stray"), "stale");
+        File.WriteAllText(installPath + ".bundler-backup", "good-image");
+
+        var rc = Apply(new BootstrapOptions
+        {
+            InstallDirectory = installPath,
+            Rollback = true,
+        });
+
+        Assert.Equal(0, rc);
+        Assert.True(File.Exists(installPath));
+        Assert.Equal("good-image", File.ReadAllText(installPath));
+    }
+
+    [Fact]
+    public void Apply_Rollback_FileNodeInInstallSlot_ClearsAndRestoresTree()
+    {
+        // 反向异型槽：目录级备份在场而安装槽挂着文件节点——清槽重建目录树。
+        var install = Path.Combine(Root, "install-oddslot");
+        File.WriteAllText(install, "stale-file");
+        Dir("install-oddslot.bundler-backup", ("app.txt", "good"));
+
+        var rc = Apply(new BootstrapOptions
+        {
+            InstallDirectory = install,
+            Rollback = true,
+        });
+
+        Assert.Equal(0, rc);
+        Assert.Equal("good", File.ReadAllText(Path.Combine(install, "app.txt")));
+    }
+
     // ---- 并发锁 ----
 
     [Fact]
