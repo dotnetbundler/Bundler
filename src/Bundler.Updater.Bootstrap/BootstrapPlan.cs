@@ -30,7 +30,11 @@ internal static class BootstrapPlan
     internal static int Run(string[] args)
     {
         var options = Parse(args);
-        var log = options.LogFile is { Length: > 0 } logFile
+        // 日志路径必须在建委托之前按本进程 cwd 绝对化——委托闭包捕获的是字面
+        // 路径，绝对化发生在 Apply 内部时写入侧仍拿相对拼写，换包后工作目录
+        // 变迁会让日志静默写错位（--app 传参侧已在客户端绝对化，同款口径）。
+        var logFile = options.LogFile is { Length: > 0 } lf ? Path.GetFullPath(lf) : null;
+        var log = logFile is not null
             ? new Action<string>(line => File.AppendAllText(logFile, line + "\n"))
             : new Action<string>(line => Console.Out.WriteLine(line));
         var result = Apply(options, log);
@@ -72,14 +76,11 @@ internal static class BootstrapPlan
         var payloadCmp = payloadDir is null ? null : NtCmpPath(payloadDir);
         var backupCmp = NtCmpPath(backupDirCmp);
         var markerPath = installDir.TrimEnd('/', '\\') + ".bundler-swap";
-        // 重启目标与日志路径都按本进程 cwd 绝对化——相对路径会在换包后的临时工作目录里静默错位。
+        // 重启目标按本进程 cwd 绝对化——相对路径会在换包后的临时工作目录里静默错位。
+        // 日志路径不在这里绝对化：log 委托由 Run 建委托前已定形，这里改写 options.LogFile 是死写。
         if (options.AppPath is { Length: > 0 })
         {
             options.AppPath = Path.GetFullPath(options.AppPath);
-        }
-        if (options.LogFile is { Length: > 0 })
-        {
-            options.LogFile = Path.GetFullPath(options.LogFile);
         }
 
         if (!options.Rollback && payloadDir is null)
@@ -167,14 +168,27 @@ internal static class BootstrapPlan
         var recovered = false;
         if (File.Exists(markerPath))
         {
-            log("bundler-updater: interrupted swap detected, restoring backup first");
+            // marker 内容分流回滚腿与换包腿：回滚中途崩溃时备份是可重试回滚点，
+            // 恢复必须复制还原（备份保留）；swap 崩溃则是"备份即安装位前身"，
+            // 维持移动语义（移入即耗尽）。内容不可读按 swap 计——不赌残件内容。
+            var rollbackRecovery = IsRollbackMarker(markerPath);
+            log(rollbackRecovery
+                ? "bundler-updater: interrupted rollback detected, restoring backup first"
+                : "bundler-updater: interrupted swap detected, restoring backup first");
             if (File.Exists(backupDir))
             {
                 if (File.Exists(installDir))
                 {
                     File.Delete(installDir);
                 }
-                MoveFile(backupDir, installDir);
+                if (rollbackRecovery)
+                {
+                    File.Copy(backupDir, installDir, overwrite: true);
+                }
+                else
+                {
+                    MoveFile(backupDir, installDir);
+                }
             }
             else if (Directory.Exists(backupDir))
             {
@@ -182,7 +196,14 @@ internal static class BootstrapPlan
                 {
                     Directory.Delete(installDir, recursive: true);
                 }
-                MoveTree(backupDir, installDir, log);
+                if (rollbackRecovery)
+                {
+                    CopyTree(backupDir, installDir, log);
+                }
+                else
+                {
+                    MoveTree(backupDir, installDir, log);
+                }
             }
             else
             {
@@ -193,12 +214,9 @@ internal static class BootstrapPlan
             recovered = true;
         }
 
-        // 空间预检：只挡会真写盘的量——同卷两段式/回滚复制按树体积估，同卷原子
-        // 改名不计（rename 不占额外空间）。估不出卷/大小只 WARN 不拒。
-        CheckFreeSpace(options, log, installDir, payloadDir, backupDir);
-
         // 文件级语义：安装目标是单文件（AppImage 单件）或回滚备份是文件——
         // 同协议、粒度换成文件：marker/备份为 <file>.bundler-{swap,backup}。
+        // 文件腿的存在性检查与空间预检都在 ApplyFile 内部按同一顺序执行。
         if (File.Exists(installDir) || (options.Rollback && File.Exists(backupDir)))
         {
             return ApplyFile(options, log, installDir, payloadDir, backupDir, markerPath, recovered);
@@ -212,6 +230,12 @@ internal static class BootstrapPlan
         {
             throw new UsageException($"payload directory '{options.PayloadDirectory}' does not exist.");
         }
+
+        // 空间预检在存在性检查之后：它是纯只读探测，装位/载荷缺席是用法错（rc2）——
+        // 探测抢跑会颠倒 rc2/rc4 分类序并对不存在的路径产出误导性 WARN。
+        // 只挡会真写盘的量——同卷两段式/回滚复制按树体积估，同卷原子改名不计
+        //（rename 不占额外空间）。估不出卷/大小只 WARN 不拒。
+        CheckFreeSpace(options, log, installDir, payloadDir, backupDir);
 
         // macOS .app 三项门禁（签名完好/身份连续/剥 quarantine）：动备份前拒绝，零变更安全。
         // 回滚不验——备份目录是上次换包前的自家产物，非外来载荷。
@@ -235,8 +259,12 @@ internal static class BootstrapPlan
                 throw new UpdateRejectedException($"no rollback backup at '{backupDir}'.");
             }
             log($"bundler-updater: rollback '{backupDir}' → '{installDir}'");
+            // marker 先行再动安装位：Delete+Copy 中途崩死时，下轮按 "rollback"
+            // 内容分流走复制还原——备份是可重试回滚点，不被恢复消耗。
+            File.WriteAllText(markerPath, "rollback in progress");
             Directory.Delete(installDir, recursive: true);
             CopyTree(backupDir, installDir, log);
+            File.Delete(markerPath);
             if (options.AppPath is { Length: > 0 } rollbackApp)
             {
                 Restart(rollbackApp, installDir, log);
@@ -326,9 +354,11 @@ internal static class BootstrapPlan
             }
             catch (IOException)
             {
+                ThrowIfInstallRootMissing(lockPath, installDir);
             }
             catch (UnauthorizedAccessException)
             {
+                ThrowIfInstallRootMissing(lockPath, installDir);
             }
 
             if (!announced)
@@ -353,6 +383,20 @@ internal static class BootstrapPlan
                     $"another updater holds the lock '{lockPath}' — timed out waiting.");
             }
             Thread.Sleep(50);
+        }
+    }
+
+    // 建锁失败先分流再进等锁循环：锁件不在且锁槽父目录也不在了=装位根缺席——
+    // 那是用法错（rc2）而非竞争，空转到 --lock-timeout 会把"目录没有"误报成假竞争。
+    private static void ThrowIfInstallRootMissing(string lockPath, string installDir)
+    {
+        if (!File.Exists(lockPath) && !Directory.Exists(lockPath))
+        {
+            var parent = Path.GetDirectoryName(lockPath);
+            if (parent is { Length: > 0 } && !Directory.Exists(parent))
+            {
+                throw new UsageException($"install directory '{installDir}' does not exist.");
+            }
         }
     }
 
@@ -422,22 +466,24 @@ internal static class BootstrapPlan
                 }
             }
             // 同卷多腿需求合并——备份槽与 install 槽可能同卷。
-            var perVolume = new Dictionary<string, (long Required, string Anchor)>(
+            var perVolume = new Dictionary<string, (long Required, string Anchor, DriveInfo Volume)>(
                 OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
             foreach (var (bytes, anchor) in demands)
             {
                 var volume = FindVolume(anchor);
                 if (volume is null)
                 {
+                    // 探不到卷的腿不得静默消失——WARN 留痕但只跳过该腿不拒换包。
+                    log($"bundler-updater: WARN cannot resolve volume for '{anchor}' — free-space check skipped for that leg");
                     continue;
                 }
                 var key = volume.RootDirectory.FullName;
                 perVolume.TryGetValue(key, out var existing);
-                perVolume[key] = (existing.Required + bytes, anchor);
+                perVolume[key] = (existing.Required + bytes, anchor, volume);
             }
-            foreach (var (root, (required, anchor)) in perVolume)
+            foreach (var (root, (required, anchor, volume)) in perVolume)
             {
-                var free = FreeSpaceProbe?.Invoke(anchor) ?? FindVolume(anchor)!.AvailableFreeSpace;
+                var free = FreeSpaceProbe?.Invoke(anchor) ?? volume.AvailableFreeSpace;
                 log($"bundler-updater: free-space check on '{root}' — need ~{required} bytes, {free} available");
                 if (required > free)
                 {
@@ -574,15 +620,17 @@ internal static class BootstrapPlan
     }
 
     // mountinfo 第 5 字段是挂载点（\040/\011/\012/\134 八进制转义需还原）。
-    // 良构行至少 10 字段且 "-" 分隔符出现在索引 6 或其后（可选字段可为零个）——
-    // 短行/坏行丢弃，不容忍注入空串挂载点污染最长前缀匹配。
+    // 良构行至少 10 字段且 "-" 分隔符出现在索引 6 或其后（可选字段可为零个），
+    // 挂载点必须是绝对路径（/ 起头）——短行/坏行/相对挂载点一律丢弃，
+    // 不容忍注入空串或相对名污染最长前缀匹配。
     internal static List<string> ParseMountPoints(string mountInfo)
     {
         var points = new List<string>();
         foreach (var line in mountInfo.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (fields.Length >= 10 && Array.IndexOf(fields, "-") >= 6)
+            if (fields.Length >= 10 && Array.IndexOf(fields, "-") >= 6 &&
+                fields[4].StartsWith('/'))
             {
                 points.Add(UnescapeMountField(fields[4]));
             }
@@ -668,8 +716,12 @@ internal static class BootstrapPlan
             {
                 throw new UpdateRejectedException($"no rollback backup at '{backupPath}'.");
             }
+            CheckFreeSpace(options, log, installPath, payloadPath, backupPath);
             log($"bundler-updater: rollback '{backupPath}' → '{installPath}'");
+            // 同目录级：marker 先行——Copy 半途截断件留给下轮按 rollback 分流复制还原。
+            File.WriteAllText(markerPath, "rollback in progress");
             File.Copy(backupPath, installPath, overwrite: true);
+            File.Delete(markerPath);
             if (options.AppPath is { Length: > 0 } rollbackApp)
             {
                 Restart(rollbackApp, Path.GetDirectoryName(installPath) ?? ".", log);
@@ -686,6 +738,8 @@ internal static class BootstrapPlan
         {
             throw new UsageException("install and payload must not be the same file.");
         }
+        // 同目录级顺序：存在性/同址用法错（rc2）先于空间预检（rc4 状态拒）。
+        CheckFreeSpace(options, log, installPath, payloadPath, backupPath);
         log($"bundler-updater: backup '{installPath}' → '{backupPath}'");
         // 同目录级：备份槽叶链节点删链本身（File.Exists 顺链探测会漏挂链）。
         DeleteNodeIfPresent(backupPath);
@@ -787,6 +841,20 @@ internal static class BootstrapPlan
         catch (IOException) { }
     }
 
+    // marker 内容判回滚腿：回滚恢复走复制语义（备份留作可重试回滚点）；
+    // swap/不可读/其他内容一律按换包恢复处理（移动语义，备份移入即耗尽）。
+    private static bool IsRollbackMarker(string markerPath)
+    {
+        try
+        {
+            return File.ReadAllText(markerPath).StartsWith("rollback", StringComparison.Ordinal);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     private static void WaitForExit(int pid, int timeoutSeconds, Action<string> log)
     {
         log($"bundler-updater: waiting for pid {pid} to exit");
@@ -828,8 +896,11 @@ internal static class BootstrapPlan
         }
         else
         {
-            // 直启不经 shell：appPath 只作 argv 传递，路径里的 shell 替换元字符不构成注入面。
-            startInfo = new ProcessStartInfo(appPath)
+            // POSIX 经 nohup 拉起：屏蔽 SIGHUP——引导件退出/终端挂断不该带走新装
+            // 应用（sh 版 `(cd … && nohup "$APP_PATH" &)` 同义）。nohup 是 POSIX
+            // 工具二进制直接 Process.Start，不经 shell——appPath 只作 argv 传递，
+            // 路径里的 shell 元字符不构成注入面。
+            startInfo = new ProcessStartInfo("nohup", [appPath])
             { UseShellExecute = false, WorkingDirectory = workingDirectory };
         }
         // 重启失败不致命：换包/回滚已完成，重启只是便利步骤——与 POSIX `|| true` 对齐为 WARN。
@@ -895,8 +966,20 @@ internal static class BootstrapPlan
             {
                 return false;
             }
-            File.Move(source, destination);
-            return true;
+            // 同卷 MoveFile 也可能拒（ACL/锁定/只读件）——与 POSIX 腿同口径降级两段式。
+            try
+            {
+                File.Move(source, destination);
+                return true;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
         }
         // POSIX：同挂载点 File.Move 即 rename 原子语义；判不出卷或跨卷一律两段式——
         // File.Move 跨卷内部 copy+delete 半途留截断件，裸调被禁。
@@ -1043,6 +1126,14 @@ internal static class BootstrapPlan
         catch (IOException)
         {
         }
+        // 与 TryAtomicMove 同口径：POSIX rename 的 EPERM/EACCES 映射为
+        // UnauthorizedAccessException——权限拒绝同样降级两段式，不裸抛。
+        catch (UnauthorizedAccessException)
+        {
+        }
+        // 与 MoveFile 同契约：两段式接手前清掉目标槽既有节点——原子腿失败的常见
+        // 原因正是 destination 已存在（残留/叶链），不清就把 rename 再撞一遍。
+        DeleteNodeIfPresent(destination);
         var staged = destination + ".partial-" + Guid.NewGuid().ToString("N")[..8];
         try
         {
@@ -1141,7 +1232,7 @@ internal static class BootstrapPlan
 
     private static bool IsSubpathOf(string candidate, string parent) =>
         candidate.StartsWith(
-            parent.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
+            parent.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar,
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     // 物理规范化：逐级解析已存在的符号链接段——路径关系判断必须比对物理位置而非拼写
@@ -1514,8 +1605,8 @@ internal static class BootstrapPlan
     private static bool SameOrInside(string candidate, string parent) =>
         IsSubpathOf(candidate, parent) ||
         string.Equals(
-            candidate.TrimEnd(Path.DirectorySeparatorChar),
-            parent.TrimEnd(Path.DirectorySeparatorChar),
+            candidate.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            parent.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     private static bool IsVolumeRoot(string path)
