@@ -331,6 +331,10 @@ public sealed class MacDmgIntegrationTests : IClassFixture<MacDmgFixture>
             ["-w", "com.apple.quarantine",
              "0181;00000000;curl;00000000-0000-0000-0000-000000000000", quarDmg]),
             "Failed to quarantine the dmg copy.");
+        // 写 rc=0 不等于标在：macOS 26+ 受保护 xattr 全写面不持久——读不回即
+        // 跨卷传播断言无对象，诚实 Skip（归 special-acceptance）。
+        Assert.SkipWhen(!MacAppStub.HasQuarantine(quarDmg),
+            "宿主不持久化 com.apple.quarantine（macOS 26+ 受保护属性），跨卷传播断言不可用——归 special-acceptance。");
         var quarApp = _f.Ws.Combine("quar-app.app");
         _f.WithMounted(quarDmg, mount =>
             ProcessRunner.AssertSuccess(

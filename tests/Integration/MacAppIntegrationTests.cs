@@ -490,6 +490,10 @@ public sealed class MacAppIntegrationTests : IClassFixture<MacAppFixture>
         ProcessRunner.AssertSuccess(ProcessRunner.Run("xattr",
             ["-w", "com.apple.quarantine", $"0081;{stamp};Verify;", quarantined]),
             "Failed to set com.apple.quarantine.");
+        // 写 rc=0 不等于标在：macOS 26+ 受保护 xattr 全写面不持久——读不回即
+        // Gatekeeper 观察腿无对象，诚实 Skip（归 special-acceptance）。
+        Assert.SkipWhen(!MacAppStub.HasQuarantine(quarantined),
+            "宿主不持久化 com.apple.quarantine（macOS 26+ 受保护属性），Gatekeeper 观察腿不可用——归 special-acceptance。");
         var listed = ProcessRunner.Run("xattr", ["-l", quarantined]);
         Assert.Contains("com.apple.quarantine", listed.StdOut);
 

@@ -68,8 +68,9 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
             Path.Combine(directory, "install-slot"), "App", "com.bundler.gate");
         var payload = MacAppStub.WriteBundle(
             Path.Combine(directory, "payload-slot"), "App", "com.bundler.gate");
-        MacAppStub.SetQuarantineTree(payload);
-        Assert.True(MacAppStub.HasQuarantine(payload), "fixture must mark the payload first.");
+        // 能力门禁：探测即打标——宿主读不回标时剥标断言是真空通过，诚实 Skip。
+        Assert.SkipWhen(!MacAppStub.TrySetQuarantineTree(payload),
+            "宿主不持久化 com.apple.quarantine（macOS 26+ 受保护属性），剥标断言不可用——归 special-acceptance。");
 
         var log = new List<string>();
         MacAppGate.CheckAndStrip(install, payload, log.Add);
@@ -212,7 +213,9 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
             machOExecutable: true);
         identity.Sign(install);
         identity.Sign(payload);
-        MacAppStub.SetQuarantineTree(payload);
+        // 同 unsigned-both 腿：宿主不持久化打标时剥标断言是真空通过，诚实 Skip。
+        Assert.SkipWhen(!MacAppStub.TrySetQuarantineTree(payload),
+            "宿主不持久化 com.apple.quarantine（macOS 26+ 受保护属性），剥标断言不可用——归 special-acceptance。");
 
         var log = new List<string>();
         MacAppGate.CheckAndStrip(install, payload, log.Add);

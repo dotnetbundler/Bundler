@@ -342,7 +342,10 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
                 FeedUrl = Path.Combine(feedDir, Protocol.UpdateFeed.FeedFileName("stable")),
                 PublicKey = material.PublicPointBase64(),
             });
-        MacAppStub.SetQuarantineTree(payload);
+        // 能力门禁（探测即打标）：本腿断言日志含 "quarantine stripped"——宿主
+        // 不持久化打标时标从未在过，剥标语义是真空通过，必须诚实 Skip。
+        Assert.SkipWhen(!MacAppStub.TrySetQuarantineTree(payload),
+            "宿主不持久化 com.apple.quarantine（macOS 26+ 受保护属性），剥标断言不可用——归 special-acceptance。");
         var transport = Path.Combine(feedDir, "MyApp-2.0.0.app.zip");
         Assert.True(MacArchiveTools.TryWriteAppZipViaDitto(
             payload, transport, NullBundleLogger.Instance),
