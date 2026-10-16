@@ -45,3 +45,4 @@
 | `update-public-pipeline.sh` | UPDATE 真实发布管线全链 | linux+公网 feed+私钥 | — |
 | `gpg-production.sh` | 生产 GPG 密钥签名/分发/吊销流程 | linux+用户 GPG 密钥 | — |
 | `apk-index.sh` | apk 仓库/索引工作流（可选扩展） | alpine 或 docker | — |
+| `appimage-desktop.sh` | AppImage 内嵌 .desktop/图标识别素材合法性 | linux+产出 .AppImage | 观感段仍人工 |

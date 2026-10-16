@@ -10,7 +10,7 @@ using System.Xml.Linq;
 
 // 从旧 tests/Bundler.Tests/WixTests.cs 收割。
 // 真实 candle.exe/light.exe 构建、进程取消与编译警告腿全部属 spawn，
-// 记入 artifacts/harvest-spawn-list.md：CancelsHangingWixToolProcess、
+// 去向见 Integration/Manual 层对应文件：CancelsHangingWixToolProcess、
 // RejectsWixCompilerWarnings、BuildsAndInspectsMsi、ReusesOnlyVerifiedMsi、
 // RejectsChangedSameVersionPayload、RecoversTamperedWixCompiler、
 // SerializesConcurrentWixCacheUsers、BuildsMachineMsi、BuildsArm64TargetedMsi、
@@ -325,7 +325,7 @@ public sealed class WixTests : TempBase
             await ExpectAsync<ArgumentException>(() => new WixBundler(settings,
                 new WixBundlerOptions { ToolCacheDirectory = fixture.Cache }).BuildAsync(fixture.Request(), TestContext.Current.CancellationToken), "bmp");
         }
-        // 合法位图接真实 candle/light 构建的腿属 spawn，记入 artifacts/harvest-spawn-list.md；
+        // 合法位图接真实 candle/light 构建的腿属 spawn，去向见 Integration/Manual 层对应文件；
         // 这里保留全部校验期拒绝断言（CheckBitmap 在 WixBundler.Validate 内完成，不触工具）。
     }
 

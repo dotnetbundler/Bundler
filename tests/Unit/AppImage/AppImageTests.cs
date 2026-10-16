@@ -6,7 +6,7 @@ using System.Text;
 // 从旧 tests/Bundler.Tests/AppImageTests.cs 收割：AppDirBuilder 为纯托管实现。
 // 去 spawn：SkipsNonRegularPayloadFiles（Linux 腿整体走真 mksquashfs）、
 // BuildsRealAppImage、RepeatBuildIsByteIdentical、CrossBuildsAarch64、SignsAppImage
-// 均执行真实 appimagetool/gpg——记入 artifacts/harvest-spawn-list.md。
+// 均执行真实 appimagetool/gpg——去向见 Integration/Manual 层对应文件。
 // 判重跳过：RejectsNonAppImageFormats（已并入 BundlerValidateTests.FormatGate_RejectForeignFormats）。
 namespace Bundler.UnitTests.AppImage;
 

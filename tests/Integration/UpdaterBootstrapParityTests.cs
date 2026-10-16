@@ -60,8 +60,15 @@ public static class UpdaterBootstrapParityTests
             startInfo.ArgumentList.Add(arg);
         }
         using var process = Process.Start(startInfo)!;
-        process.WaitForExit(60_000);
-        Assert.True(process.HasExited, "bundler-updater.sh did not exit within 60s");
+        // stdout/stderr 异步消费：任一管道写满未消费会把子进程卡在写端。
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(60_000))
+        {
+            try { process.Kill(); } catch (InvalidOperationException) { }
+            Assert.Fail("bundler-updater.sh did not exit within 60s");
+        }
+        Task.WaitAll(stdout, stderr);
         return process.ExitCode;
     }
 
@@ -583,7 +590,14 @@ public static class UpdaterBootstrapParityTests
             startInfo.ArgumentList.Add("--payload");
             startInfo.ArgumentList.Add(payload);
             using var process = Process.Start(startInfo)!;
-            Assert.True(process.WaitForExit(60_000));
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            if (!process.WaitForExit(60_000))
+            {
+                try { process.Kill(); } catch (InvalidOperationException) { }
+                Assert.Fail("updater bootstrapper did not exit within 60s");
+            }
+            Task.WaitAll(stdout, stderr);
             Assert.Equal(0, process.ExitCode);
                 AssertTree(expected, install);
         }
@@ -1007,10 +1021,15 @@ public static class UpdaterBootstrapParityTests
             startInfo.ArgumentList.Add(arg);
         }
         using var process = Process.Start(startInfo)!;
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit(60_000);
-        Assert.True(process.HasExited, "bundler-updater.sh did not exit within 60s");
-        return (process.ExitCode, stderr);
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(60_000))
+        {
+            try { process.Kill(); } catch (InvalidOperationException) { }
+            Assert.Fail("bundler-updater.sh did not exit within 60s");
+        }
+        Task.WaitAll(stdout, stderr);
+        return (process.ExitCode, stderr.Result);
     }
 
     [Fact]

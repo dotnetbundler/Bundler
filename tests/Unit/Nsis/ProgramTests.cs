@@ -14,7 +14,7 @@ using System.Xml.Linq;
 // 真实 makensis 编译腿（BuildsThroughStandaloneNsisApi、BuildsEveryBuiltInNsisLanguage、
 // ValidatesCustomNsisLanguageFiles、BuildsEveryNsisCompressionMode、
 // SignsBothNsisInstallerArtifacts、RemovesFailedSignedInstaller）与拉起外部签名命令的
-// RunsExternalWindowsSigningProviderSafely 属 spawn，记入 artifacts/harvest-spawn-list.md；
+// RunsExternalWindowsSigningProviderSafely 属 spawn，去向见 Integration/Manual 层对应文件；
 // 其中可拆出的进程内断言另立 RejectsDuplicateAndUnsupportedNsisLanguages /
 // RejectsUnknownNsisCompression / RejectsInvalidCustomNsisLanguageFiles。
 // 判重跳过：ParsesSupportedDesktopTargets（BundleTargetTests）、
@@ -1489,7 +1489,7 @@ public sealed class ProgramTests : TempBase
     };
 
     // BuildsEveryBuiltInNsisLanguage 的进程内腿：重复/不支持语言在 Validate 段拒绝，
-    // 不触 makensis；真实编译腿属于 spawn，记入 artifacts/harvest-spawn-list.md。
+    // 不触 makensis；真实编译腿属于 spawn，去向见 Integration/Manual 层对应文件。
     [Fact]
     public async Task RejectsDuplicateAndUnsupportedNsisLanguages()
     {
@@ -1515,7 +1515,7 @@ public sealed class ProgramTests : TempBase
     }
 
     // ValidatesCustomNsisLanguageFiles 的进程内腿：自定义语言文件校验先于 makensis
-    // 编译段运行；完整替换+真实编译腿属于 spawn，记入 artifacts/harvest-spawn-list.md。
+    // 编译段运行；完整替换+真实编译腿属于 spawn，去向见 Integration/Manual 层对应文件。
     [Fact]
     public async Task RejectsInvalidCustomNsisLanguageFiles()
     {

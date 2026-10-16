@@ -11,7 +11,7 @@ using System.Text;
 // 逐方法判重（对照现有 tests/Unit）：无既有 Archive 包行为断言重复项。
 // 去 spawn：Zip_XattrPayload_UsesHostToolPreservingMetadata、
 // Zip_XattrPayload_RoundTrips_ThroughUpdateExtraction 在 macOS 上会经 ArchiveBundler/
-// ArchiveExtractor 拉起 ditto 子进程，不迁入 Unit——记入 artifacts/harvest-spawn-list.md。
+// ArchiveExtractor 拉起 ditto 子进程，不迁入 Unit——去向见 Integration/Manual 层对应文件。
 namespace Bundler.UnitTests.Archive;
 
 public sealed class ArchiveTests : TempBase
@@ -823,7 +823,8 @@ public sealed class ArchiveTests : TempBase
         var output = Path.Combine(input, "..", "socket-skip-out");
         try
         {
-            var bindPath = Temp("bt").FullName;
+            // AF_UNIX Bind 要求路径不存在——Temp()/Root 已建目录会撞 EADDRINUSE。
+            var bindPath = TempPath("bt.sock");
             using (var socket = new System.Net.Sockets.Socket(
                        System.Net.Sockets.AddressFamily.Unix,
                        System.Net.Sockets.SocketType.Stream,

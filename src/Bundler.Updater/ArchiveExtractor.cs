@@ -12,6 +12,10 @@ namespace DotNet.Bundler.Updater;
 /// </summary>
 internal static class ArchiveExtractor
 {
+    // 测试缝：Unit 层零子进程判据要求 macOS 宿主也不 spawn ditto/bsdtar——
+    // 置 true 时两条原生腿直接判不可用、直走 managed 路径（同 BootstrapPlan.ForceManagedCopy 模式）。
+    internal static bool ForceManagedExtract;
+
     internal static string ExtractZipToDirectory(string zipPath, string staging, Action<string>? log)
     {
         // ditto 自行物化符号链接——归档含越根链接时必须走 managed 逐条防线，
@@ -51,7 +55,7 @@ internal static class ArchiveExtractor
     // ditto -x -k 还原 AppleDouble xattr 与符号链接；失败回 managed（会 WARN 丢 xattr）。
     private static bool TryDittoExtractZip(string zipPath, string staging, Action<string>? log)
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        if (ForceManagedExtract || !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             return false;
         }
@@ -70,10 +74,13 @@ internal static class ArchiveExtractor
     // macOS 系统 tar=bsdtar：`._*` AppleDouble 条目自动还原为 xattr。
     private static bool TryBsdTarExtract(string tarGzPath, string staging, Action<string>? log)
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        if (ForceManagedExtract || !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             return false;
         }
+        // tar 的 -C 不自建目标目录——staging 缺失时原生腿必败，
+        // 且随后的 ClearDirectory 会对不存在的根抛 DirectoryNotFoundException。
+        Directory.CreateDirectory(staging);
         if (Run("/usr/bin/tar", "-xzf " + ShellQuote(tarGzPath) + " -C " + ShellQuote(staging)) == 0)
         {
             log?.Invoke("update: extracted via bsdtar (xattrs/symlinks preserved).");
@@ -176,6 +183,10 @@ internal static class ArchiveExtractor
 
     private static void ClearDirectory(string root)
     {
+        if (!Directory.Exists(root))
+        {
+            return;
+        }
         foreach (var entry in Directory.GetFileSystemEntries(root))
         {
             // 目录链/联接只删链节点自身（File.Delete 删链不触目标），

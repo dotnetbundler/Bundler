@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # 联合交换消费腿（Linux）：consume-linux.sh <produce-artifact-dir>
-# 在未见构建树的机器上：SHA256SUMS 验同一件 → 各格式真装真跑真卸 → 清场。
-# 腿失败不连锁——逐条收集，末段统一判。
+# 消费断言只依赖下载的 produce 工件（不依赖构建树/产物）：SHA256SUMS 验同一件
+# → 各格式真装真跑真卸 → 清场。腿失败不连锁——逐条收集，末段统一判。
 set -uo pipefail
 DIR="$(cd "${1:?usage: consume-linux.sh <artifact-dir>}" && pwd)"
 [ -f "$DIR/SHA256SUMS" ] || { echo "缺 SHA256SUMS：$DIR" >&2; exit 1; }
-( cd "$DIR" && sha256sum -c SHA256SUMS ) || { echo "清单校验失败" >&2; exit 1; }
+( cd "$DIR" && sha256sum -c --strict SHA256SUMS ) || { echo "清单校验失败" >&2; exit 1; }
+# 清单外文件即判失败——只验列名件会让产侧混入/夹带漏检。
+EXTRA=$(cd "$DIR" && comm -13 \
+    <(awk '{print $2}' SHA256SUMS | sed 's|^\./||' | sort) \
+    <(find . -type f ! -path './SHA256SUMS' | sed 's|^\./||' | sort))
+[ -z "$EXTRA" ] || { echo "清单外文件: $EXTRA" >&2; exit 1; }
 
 FAILED=""
 run_leg(){ local name="$1"; shift
@@ -14,7 +19,11 @@ run_leg(){ local name="$1"; shift
 # 应收件存在性对账：本宿主 produce 腿应收 deb/rpm/appimage/apk/archive 五件——
 # 缺件即判败，防产侧布局漂移时"全绿零断言"。
 for D in deb rpm appimage apk archive; do
-    [ -d "$DIR/$D" ] || { echo "[LEG-FAIL] $D（产件目录缺失）"; FAILED="$FAILED $D-missing"; }
+    # $D 后接全角括号必须 ${D} 定界——（的 UTF-8 首字节在部分 locale 下是字母。
+    [ -d "$DIR/$D" ] || { echo "[LEG-FAIL] ${D}（产件目录缺失）"; FAILED="$FAILED ${D}-missing"; continue; }
+    # 目录在但一件没有同样是产侧异常——空 glob 静默跳过会让腿报"全绿零断言"。
+    find "$DIR/$D" -type f | grep -q . \
+        || { echo "[LEG-FAIL] ${D}（产件目录空）"; FAILED="$FAILED ${D}-empty"; }
 done
 [ -z "$FAILED" ] || { echo "失败腿:$FAILED" >&2; exit 1; }
 
@@ -30,6 +39,8 @@ if find "$DIR/deb" -name '*.deb' | grep -q .; then
         sudo dpkg -r bundler-deb-fixture
         ! test -e /usr/lib/bundler-deb-fixture/BundlerDebIntegrationFixture
     ' "$DEB"
+else
+    echo "[LEG-FAIL] deb（产件目录无 .deb）"; FAILED="$FAILED deb-noformat"
 fi
 
 # .rpm：跨发行版交换——ubuntu 产的包装进 fedora 容器
@@ -42,6 +53,8 @@ if find "$DIR/rpm" -name '*.rpm' | grep -q .; then
         dnf remove -y bundler-rpm-fixture >/dev/null
         ! test -e /usr/lib/bundler-rpm-fixture/BundlerRpmIntegrationFixture
     '
+else
+    echo "[LEG-FAIL] rpm（产件目录无 .rpm）"; FAILED="$FAILED rpm-noformat"
 fi
 
 # .apk：跨发行版交换——ubuntu 产的包装进 alpine 容器
@@ -54,17 +67,32 @@ if find "$DIR/apk" -name '*.apk' | grep -q .; then
         apk del bundler-apk-fixture >/dev/null
         ! test -e /usr/lib/bundler-apk-fixture/BundlerAlpineApkIntegrationFixture
     '
+else
+    echo "[LEG-FAIL] apk（产件目录无 .apk）"; FAILED="$FAILED apk-noformat"
 fi
 
-# .AppImage：宿主直跑（FUSE 缺席回落 --appimage-extract-and-run）
+# .AppImage 双腿各跑各验（轮测联合测试要求两条腿都断言，不许 OR 链遮蔽）：
+# fuse 路=直接运行经 FUSE 挂载（内嵌 type2-runtime 的 squashfuse 探测 fusermount/fusermount3，fuse2/fuse3 皆可用）；
+# extract 路=--appimage-extract-and-run 免挂载解压直跑（容器等无 /dev/fuse 环境的路径）。
 if find "$DIR/appimage" -name '*.AppImage' | grep -q .; then
     APPIMAGE="$(find "$DIR/appimage" -name '*.AppImage' | head -1)"
-    run_leg "appimage" bash -c '
+    chmod +x "$APPIMAGE"
+    # fuse 腿帮手兜底：ubuntu 镜像默认带 fuse3，缺装则补——无 /dev/fuse 的内核
+    # 环境装上也跑不了，那时 fuse 腿按设计真失败如实报（非环境差异遮蔽）。
+    command -v fusermount >/dev/null 2>&1 || command -v fusermount3 >/dev/null 2>&1 \
+        || sudo apt-get install -y fuse3 >/dev/null
+    run_leg "appimage(fuse)" bash -c '
         set -e
-        chmod +x "$0"
-        OUT=$("$0" ci-marker 2>/dev/null || "$0" --appimage-extract-and-run ci-marker)
+        OUT=$("$0" ci-marker)
         echo "$OUT" | grep -q "BundlerAppImageIntegrationFixture:ci-marker"
     ' "$APPIMAGE"
+    run_leg "appimage(extract)" bash -c '
+        set -e
+        OUT=$("$0" --appimage-extract-and-run ci-marker)
+        echo "$OUT" | grep -q "BundlerAppImageIntegrationFixture:ci-marker"
+    ' "$APPIMAGE"
+else
+    echo "[LEG-FAIL] appimage（产件目录无 .AppImage）"; FAILED="$FAILED appimage-noformat"
 fi
 
 # 归档件：解开直接跑（zip/tar.gz 都接受）
@@ -85,6 +113,8 @@ if find "$DIR/archive" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | grep -q
         OUT=$("$EXE" ci-marker)
         echo "$OUT" | grep -q "BundlerArchiveIntegrationFixture:ci-marker"
     ' "$DIR/archive"
+else
+    echo "[LEG-FAIL] archive（产件目录无 .zip/.tar.gz）"; FAILED="$FAILED archive-noformat"
 fi
 
 if [ -n "$FAILED" ]; then echo "失败腿:$FAILED" >&2; exit 1; fi

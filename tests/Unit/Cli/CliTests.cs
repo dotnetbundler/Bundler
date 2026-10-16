@@ -4,7 +4,7 @@ using DotNet.Bundler.Cli;
 
 // 从旧 tests/Bundler.Tests/CliTests.cs 收割：CLI 走 CliProgram.Run 进程内入口。
 // 去 spawn：MsBuildDefaultsInferFormatsIdentifierAndVersion 直接 Process.Start("dotnet")
-// 驱动真实 MSBuild——记入 artifacts/harvest-spawn-list.md。
+// 驱动真实 MSBuild——去向见 Integration/Manual 层对应文件。
 // 逐方法判重已跳过（已并入 Cli/CliProgramTests.cs 等）：
 //   PrintsUsage、RejectsUnknownCommand、ValidateOk、ValidateBadInput、PlanJson、PlanAll、
 //   ConfigCliOverride、RejectsUnknownConfigKey、PrintsVersion、InitWritesTemplateAndRefusesOverwrite、
@@ -840,7 +840,10 @@ public sealed class CliTests : TempBase
     public void UpdateKeygenRefusesOverwriteAndLabelsOutput()
     {
         var root = Temp("bundler-keygen-").FullName;
-        var keyPath = Path.Combine(root, "update.key");
+        // 700 断言必须落在 keygen 自建的父目录上——Temp() 已建的目录是默认
+        // umask 权限，断言它会误判实现；用不存在的子目录逼 keygen 亲手建。
+        var keyDir = Path.Combine(root, "keys");
+        var keyPath = Path.Combine(keyDir, "update.key");
         try
         {
             var (code, stdout, _) = Run("update-keygen", "--key-file", keyPath);
@@ -855,7 +858,7 @@ public sealed class CliTests : TempBase
             if (OperatingSystem.IsLinux())
             {
                 // 新父目录必须 700——宽松 umask 下私钥目录不许对本地他用户可读。
-                var mode = File.GetUnixFileMode(Path.GetDirectoryName(keyPath)!);
+                var mode = File.GetUnixFileMode(keyDir);
                 Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, mode);
             }
         }

@@ -60,9 +60,9 @@ tests/
 | `BundleConfigurationLoader` | bundler.json 反序列化（枚举字符串、缺失节、畸形 JSON 报错路径） |
 | `BundleConfigurationPaths` | 相对路径按基目录归一化 |
 | `FileTree.CopyTree` | Reject/WarnSkip/Traverse 三策略；Traverse 必须 maxDepth（断言）；符号链接环防；非常规文件跳过；排序稳定；resolveFileDestination 碰撞回调；overwrite 语义；reparse 点拒绝 |
-| `Hashes` | sha256/sha1/md5 byte[]/stream/file 三源；lower/upper hex 逐字节正确 |
+| `Hashes` | sha256 byte[]/stream/file 三源+sha1 byte[]/stream+md5 byte[]/file（按实际重载面）；lower/upper hex 逐字节正确 |
 | `Gzip`/`TarWriter` | gzip 确定性（同输入同输出）；ustar 头字段（名字/大小/模式/mtime/typeflag/校验和）、长名处理、symlink 项、目录项、结尾块 |
-| `ToolRunner` | RunAsync 经 `Handler` 缝：参数引用、退出码传播、输出捕获、取消传播、超时；`RunSync` 不经缝（文档化边界） |
+| `ToolRunner` | RunAsync 经 `Handler` 缝：参数引用、退出码传播、输出捕获、取消传播；`RunSync` 不经缝（文档化边界；超时非本 API 特性） |
 | `ToolCache` | `ResolveCacheDirectory` 默认根与显式覆盖；`ComputeContentId` 稳定性与序无关性；`ResolveToolPath` 越界拒绝；`ResolveAsync` 全生命周期：段校验/sha 校验/锁/暂存原子落位/清单写读/校验失败重建/陈旧暂存清扫/缓存命中不重写；reparse 点拒绝 |
 | `ZipToolCache` | zip 内嵌资源物化：条目归一化、目录项、非法条目、清单契约 |
 | `PayloadSource` | deb/rpm/apk 载荷枚举：输入目录遍历、file entries 覆盖、模式位、目录项、符号链接、binlink |
@@ -78,7 +78,7 @@ tests/
 | `ArWriter`（Deb） | ar 归档头、成员对齐、长名（`#1/`/`/` 表）、debian-binary/control/data 三段序 |
 | `CpioWriter`+`RpmHeaderWriter`（Rpm） | newc 头、header 结构（magic/索引区/存储区）、tag 写入、签名段、lead 结构 |
 | `ApkPackageWriter`（AlpineApk） | 三段 gzip 流、PKGINFO 字段、.SIGN.RSA 位置、脚本段 |
-| 各 `*PackageReader` | 自写自读 round-trip + 真实样本包解析（控字段/文件清单/大小） |
+| 各 `*PackageReader` | 自写自读 round-trip + 系统工具反向解析我件（真实第三方样本包解析非目标——DebPackageReader 不解 GNU 长名/PAX） |
 
 ### 3.4 入口适配层（Unit）
 
@@ -142,20 +142,22 @@ tests/
 
 ### 3.9 联合交换（Integration + CI 设施）
 
-CI `verify.yml` 新增 `joint` 段：各宿主产件 job 上传 `产物+SHA256SUMS` → 消费腿按宿主可消费面下载清单校验后**真装/真跑**：
+CI `verify.yml` 的 `consume` 腿为 **(消费宿主 × 产件源) 配对矩阵**：各宿主产件 job 上传 `产物+SHA256SUMS` → 每台消费宿主下载**所有自己能跑**的产件，清单校验后真装/真跑/真卸：
 
-| 产件腿 | 产 | 消费腿 | 验 |
+| 产件腿 | 产 | 消费宿主（配对源） | 验 |
 | --- | --- | --- | --- |
-| windows-* | nsis.exe + msi | windows-*（同构+arm64 异构） | 真装/跑/卸 |
-| ubuntu-* | deb+rpm+AppImage+apk+zip+targz | ubuntu-*/docker 子矩阵 | docker 内真装真跑；apk 在 alpine 容器 |
-| macos-* | .app+.dmg+.pkg | macos-*（双架构互喂） | 挂载/安装/启动 |
-| 任意 | zip/tar.gz | 三宿主 | 解开+跑 |
+| windows-x64 | nsis.exe + msi + zip/targz | windows-x64 同构 + **windows-arm64（WOW64 异构）** | 真装/跑/卸 |
+| windows-arm64 | nsis.exe + msi + zip/targz | windows-arm64 同构 | 真装/跑/卸 |
+| ubuntu-* | deb+rpm+AppImage+apk+zip+targz | 同架构 ubuntu/docker 子矩阵 | docker 内真装真跑；apk 在 alpine 容器 |
+| macos-arm64 | .app+.dmg+.pkg 走 arm64；另产 app-x64/dmg-x64 切片目录与 arm64 归档 | macos-arm64 同构 + **macos-intel（只吃 app-x64/dmg-x64 切片）** | 挂载/安装/启动 |
+| macos-intel | .app+.dmg+.pkg+归档（纯 x64） | macos-intel 同构 + **macos-arm64（Rosetta 全量）** | 挂载/安装/启动 |
 
-`universal` .app 产/消对并入该拓扑（一产两消）。
+异构腿定义规则：只接真实宿主机制——WOW64/Rosetta 是产品级兼容层（用户真这么用），qemu/binfmt 类模拟不算"能使用"故 linux 无双向交换。macOS 侧 arm64 产件中 pkg/archive 无 x64 切片故 intel 消费腿对它们映射 `-` 刻意跳过（consume-macos.sh 腿=子目录映射参数）。`universal` .app 产/消对并入该拓扑（一产两消）。
 
 ### 3.10 样品链（Integration）
 
 HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 产物可装/可跑断言；MSBuild 三模式（build/publish/pack 触发面）+ CLI 多 input-dir 面 + universal 合并面。
+覆盖面由各格式 fixture 发布链等价承担；样品工程本体的字面 publish 链经裁决不收编自动化，留 Manual 验收面（脚本以 `-InstallerPath` 消费样品产物）。
 
 ### 3.11 包契约（Package）
 
@@ -166,14 +168,14 @@ HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 
 ```
 .github/workflows/
   test.yml       测试矩阵唯一定义：workflow_dispatch(suite×runners) + workflow_call
-                 legs: ubuntu-26.04 / ubuntu-26.04-arm / windows-2025 /
-                       windows-11-arm / macos-26-intel / macos-26（公开仓标准白名单）
+                 legs: ubuntu-26.04 / ubuntu-26.04-arm / windows-2025-vs2026 /
+                       windows-11-vs2026-arm / macos-26-intel / macos-26
                  每腿: build → run-tests 驱动（四工程直跑 dll + 逐类进度日志）
   verify.yml     发布门：workflow_dispatch
                  jobs: tests=call test.yml(suite=all,runners=all) →
                        pack → produce-{win,linux,mac}（fixture 产件+SHA256SUMS）→
                        consume 矩阵（联合交换真装真跑）→ manual-auto 腿 → universal 产/消
-  aot.yml        产件流：per-RID AOT 引导件产出（workflow_dispatch）
+  produce-bootstrap.yml  产件流：per-RID AOT 引导件产出（workflow_dispatch，全 RID 五腿）
 scripts/ci/
   run-tests.{sh,ps1}   唯一测试驱动（四工程直跑 dll、逐类、进度日志、-longRunning）
   produce.{sh,ps1}     fixture 产件 + 清单
@@ -191,6 +193,6 @@ scripts/ci/
 
 ## 6. 验收标准
 
-重写完成 = 本清单每行有对应测试或登记条目；验证面 workflow（test/verify）全绿（aot 为产件流另行验证）；单测零子进程可机器核查（`Process.Start|ToolRunner.(RunAsync|TryRunAsync|RunSync)` 在 Unit 工程零命中）。
+重写完成 = 本清单每行有对应测试或登记条目；验证面 workflow（test/verify）全绿（produce-bootstrap 为产件流另行验证）；单测零子进程可机器核查（`Process.Start|ToolRunner.(RunAsync|TryRunAsync|RunSync)` 在 Unit 工程实调用零命中——`ToolRunnerTests` 自身经 `Handler` 桩的调用与 CliTests/MacAppTests 收割注释提及除外）。
 
 **实施期同步义务**：本文件随引入登记进 AGENTS.md §4 文档地图与 `docs/README.md` 索引；工程改名面（Bundler.Tests→UnitTests、LocalPackagesTests→PackageTests、tests/Special→Manual）触发 AGENTS.md §6 命令表、tests/README 工程表、workflow 中 `tests/Special/` 路径引用的同步。

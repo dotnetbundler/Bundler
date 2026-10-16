@@ -6,12 +6,23 @@ using DotNet.Bundler.Updater;
 namespace Bundler.UnitTests.Updater;
 
 /// <summary>
-/// <see cref="ArchiveExtractor"/> 的双格式提取面：managed 回退路径（本类全程零子进程，
-/// ditto/bsdtar 只在 macOS 被尝试且失败时安全回退）、逃逸链接预扫拒收。
+/// <see cref="ArchiveExtractor"/> 的双格式提取面：managed 回退路径、逃逸链接预扫拒收。
+/// <see cref="ArchiveExtractor.ForceManagedExtract"/> 强制 managed 腿——否则 macOS 宿主
+/// 会拉起 ditto/bsdtar 子进程，破 Unit 零子进程判据且 managed 回退在 macOS 永不被测到。
+/// 用例串行执行（程序集 ParallelMode.None），ctor/Dispose 成对即安全。
 /// </summary>
 public sealed class ArchiveExtractorTests : TempBase
 {
+    public ArchiveExtractorTests()
+    {
+        ArchiveExtractor.ForceManagedExtract = true;
+    }
 
+    public override void Dispose()
+    {
+        ArchiveExtractor.ForceManagedExtract = false;
+        base.Dispose();
+    }
 
     [Fact]
     public void ExtractZip_ManagedFallback_LayoutsFiles()

@@ -1,7 +1,6 @@
 # 测试腿唯一驱动（Windows）：pwsh -File run-tests.ps1 -Suite <unit|api|integration|package|all>
-# 测试程序集自宿主运行（MTP+xUnit3，`dotnet test` 发现不到用例）——直跑 dll；
-# IntegrationTests 逐类跑并落 artifacts/ci/test-progress.log 指认在途类；
-# -longRunning 300 打印挂起用例名。
+# 测试程序集自宿主（MTP+xUnit3）——直跑 dll 而非 dotnet test，以逐类调度、
+# 落 artifacts/ci/test-progress.log 指认在途类；-longRunning 300 打印挂起用例名。
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet("unit", "api", "integration", "package", "all")]
@@ -33,9 +32,10 @@ if ($projects -contains "Package/Bundler.PackageTests") {
 }
 
 foreach ($P in $projects) {
-    $name = [IO.Path]::GetFileNameWithoutExtension($P)
-    $dll = "tests/$P/bin/Release/net10.0/$name.dll"
-    if ($P -eq "Integration/Bundler.IntegrationTests") {
+    $layer, $name = $P -split '/', 2
+    $dll = "tests/$layer/bin/Release/net10.0/$name.dll"
+    if (-not (Test-Path $dll)) { throw "测试程序集不存在：$dll（先 dotnet build）" }
+    if ($name -eq "Bundler.IntegrationTests") {
         $listOut = dotnet $dll -list classes
         if ($LASTEXITCODE -ne 0) { throw "-list classes 退出码非零（$LASTEXITCODE），判失败" }
         $classes = $listOut | Where-Object { $_ -match '^\w[\w.]*$' }
@@ -50,7 +50,7 @@ foreach ($P in $projects) {
             $rc = $LASTEXITCODE
             "[$([datetime]::UtcNow.ToString('o'))] END   $c rc=$rc" | Out-File "$OUT/test-progress.log" -Append
             Write-Host "[CLASS-END] $c rc=$rc"
-            if ($rc -ne 0) { throw "$name/$c 失败 rc=$rc" }
+            if ($rc -ne 0) { throw "$c 失败 rc=$rc" }
         }
     } else {
         dotnet $dll -longRunning 300

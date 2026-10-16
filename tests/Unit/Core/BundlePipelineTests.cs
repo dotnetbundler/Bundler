@@ -189,6 +189,68 @@ public sealed class BundlePipelineTests : TempBase
     }
 
     [Fact]
+    public async Task Build_ScaffoldResidueAtTargetLayer_StopsReclaim()
+    {
+        var output = Temp("bundler-pipe-out");
+        var backend = new FakeBackend(TargetOperatingSystem.Linux, PackageFormat.Deb,
+            produce: context =>
+            {
+                // 工作目录是 <out>/.bundler-work/<target>/<fmt>/<guid>：
+                // 残留写进 <target> 层——<fmt> 空壳照收，<target> 起须停在非空层。
+                var residue = Path.GetFullPath(
+                    Path.Combine(context.WorkDirectory, "..", "..", "residue.txt"));
+                File.WriteAllText(residue, "leftover");
+                var artifact = Path.Combine(context.Item.OutputDirectory, "a.deb");
+                File.WriteAllText(artifact, "pkg");
+                return [new BundleArtifact(PackageFormat.Deb, context.Item.Target.Target, artifact)];
+            });
+        var pipeline = new BundlePipeline([backend]);
+        var config = ConfigFor("linux-x86_64", PackageFormat.Deb, output.FullName);
+        var sibling = Path.Combine(output.FullName, "sibling");
+        Directory.CreateDirectory(sibling);
+        File.WriteAllText(Path.Combine(sibling, "keep.txt"), "x");
+
+        await pipeline.BuildAsync(config, TestContext.Current.CancellationToken);
+
+        var scaffoldRoot = Path.Combine(output.FullName, ".bundler-work");
+        // 非空层挡住回收：残留与 .bundler-work 根都还在……
+        Assert.True(File.Exists(Path.Combine(scaffoldRoot, "linux-x86_64", "residue.txt")));
+        Assert.True(Directory.Exists(scaffoldRoot));
+        // ……但非空层以下的空壳（<fmt>）仍被回收；
+        Assert.False(Directory.Exists(Path.Combine(scaffoldRoot, "linux-x86_64", "deb")));
+        // ……且不越界：.bundler-work 之外的兄弟与产物原样未动。
+        Assert.True(File.Exists(Path.Combine(sibling, "keep.txt")));
+        Assert.True(File.Exists(Path.Combine(output.FullName, "a.deb")));
+    }
+
+    [Fact]
+    public async Task Build_ScaffoldRootResidue_KeepsRootReclaimsInnerShells()
+    {
+        var output = Temp("bundler-pipe-out");
+        // 上一轮构建留下的 .bundler-work 根层残件——本轮构建不该顺手清掉它。
+        var scaffoldRoot = Path.Combine(output.FullName, ".bundler-work");
+        Directory.CreateDirectory(scaffoldRoot);
+        var stale = Path.Combine(scaffoldRoot, "stale.txt");
+        File.WriteAllText(stale, "from a previous run");
+        var backend = new FakeBackend(TargetOperatingSystem.Linux, PackageFormat.Deb,
+            produce: context =>
+            {
+                var artifact = Path.Combine(context.Item.OutputDirectory, "a.deb");
+                File.WriteAllText(artifact, "pkg");
+                return [new BundleArtifact(PackageFormat.Deb, context.Item.Target.Target, artifact)];
+            });
+        var pipeline = new BundlePipeline([backend]);
+        var config = ConfigFor("linux-x86_64", PackageFormat.Deb, output.FullName);
+
+        await pipeline.BuildAsync(config, TestContext.Current.CancellationToken);
+
+        Assert.True(File.Exists(stale));
+        // 本轮脚手架的 <target>/<fmt> 空壳层仍被回收。
+        Assert.False(Directory.Exists(Path.Combine(scaffoldRoot, "linux-x86_64")));
+        Assert.True(File.Exists(Path.Combine(output.FullName, "a.deb")));
+    }
+
+    [Fact]
     public async Task Build_Logs_BuildAndCreatedSequence()
     {
         var output = Temp("bundler-pipe-out");

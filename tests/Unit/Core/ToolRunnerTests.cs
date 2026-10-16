@@ -83,6 +83,41 @@ public sealed class ToolRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_Cancellation_PropagatesToExecution()
+    {
+        // 桩住一个挂起的执行体：只在取消（真实路径即 process.Kill）时退出。
+        // 取消必须穿到 handler 手里的 token，且 RunAsync 以 OCE 收场。
+        var observed = new TaskCompletionSource<bool>();
+        ToolRunner.Handler = async (_, ct) =>
+        {
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
+                return new ToolRunner.Result(0, "", "");
+            }
+            catch (OperationCanceledException)
+            {
+                observed.TrySetResult(true);
+                throw;
+            }
+        };
+        try
+        {
+            using var cts = new CancellationTokenSource();
+            var run = ToolRunner.RunAsync("tool", [], "/work", cts.Token);
+            cts.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+            // 执行体侧确实收到取消——真实 spawn 路径对应子进程被杀。
+            Assert.True(await observed.Task.WaitAsync(TimeSpan.FromSeconds(10),
+                TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            ToolRunner.Handler = null;
+        }
+    }
+
+    [Fact]
     public async Task TryRunAsync_Handler_FlowsIntoAsyncTasks()
     {
         // AsyncLocal 随 ExecutionContext 流入 Task.Run——缝在异步上下文内一致可见，

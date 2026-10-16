@@ -104,8 +104,7 @@ internal static class MsiSupport
             args.Add("-r");
             args.Add(TestPlatform.ToPublishRid(target));
         }
-        ProcessRunner.AssertSuccess(Dotnet.Run(args, new ProcessRunner.Options()),
-            $"MSI fixture restore failed: {project}");
+        Dotnet.RestoreWithRetry(args, $"MSI fixture restore failed: {project}");
         AssertLocalBundlerRestore(project, version, packageDir, cache,
             ["DotNet.Bundler", "DotNet.Bundler.MSBuild", "DotNet.Bundler.Wix"]);
     }
@@ -138,13 +137,6 @@ internal static class MsiSupport
             }
             Thread.Sleep(TimeSpan.FromSeconds(15));
         }
-    }
-
-    public static void MsiexecExpect(string argumentLine, params int[] allowed)
-    {
-        var result = Msiexec(argumentLine);
-        Assert.True(allowed.Contains(result.ExitCode),
-            $"msiexec returned {result.ExitCode}, expected one of [{string.Join(", ", allowed)}]: {argumentLine}\n{result.StdErr}");
     }
 
     public static string GetProperty(string msiPath, string name)

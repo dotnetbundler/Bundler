@@ -34,8 +34,8 @@ updater="$repo/src/Bundler.Updater.Bootstrap/tools/$target/bundler-updater"
 team2=$(codesign -dvvv "$WORK/install.app" 2>&1 | grep "TeamIdentifier" | awk -F= '{print $2}')
 codesign --verify --deep --strict "$WORK/install.app" \
     && note "换包后签名仍有效" "PASS" "" || note "换包后签名仍有效" "FAIL" ""
-[ "$team1" = "$team2" ] && note "TeamID 一致" "PASS" "$team1→$team2" \
-    || note "TeamID 一致" "FAIL" "$team1→$team2"
+[ "$team1" = "$team2" ] && note "TeamID 一致" "PASS" "${team1}→${team2}" \
+    || note "TeamID 一致" "FAIL" "${team1}→${team2}"
 
 cat > "$EV" <<EOF
 # SA-P-07 签名 .app 更新链

@@ -7,12 +7,20 @@ using System.Text.Json;
 
 public sealed class CliFixture : IDisposable
 {
-    public IntegrationWorkspace Ws { get; }
-    public string CliDll { get; }
-    public string PublishDir { get; }
-    public string OutDir { get; }
+    private readonly Lazy<bool> _init;
 
-    public CliFixture()
+    public IntegrationWorkspace Ws { get; private set; } = null!;
+    public string CliDll { get; private set; } = null!;
+    public string PublishDir { get; private set; } = null!;
+    public string OutDir { get; private set; } = null!;
+
+    public CliFixture() => _init = new Lazy<bool>(() => { Initialize(); return true; });
+
+    // 门禁必须惰性：fixture ctor 跑在测试上下文外，Assert.SkipWhen 抛在 ctor 里
+    // 会被 xUnit 报成整类夹具失败（FAIL）而非跳过——跟随其余夹具的 Ensure() 约定。
+    public void Ensure() => _ = _init.Value;
+
+    private void Initialize()
     {
         // 原脚本无 OS 门禁（非 Linux 上 appimage/AOT 子腿单独跳过），保持一致。
         ExternalTools.Require("dotnet");
@@ -51,7 +59,7 @@ public sealed class CliFixture : IDisposable
     public string MainExe => "BundlerCliIntegrationFixture";
 
     // NativeAOT 发布很贵（分钟级），三个 AOT 用例共享同一份产物。
-    private readonly Lazy<string> _native;
+    private Lazy<string> _native = null!;
 
     public string NativeBinary => _native.Value;
     public string NativeDir => Path.GetDirectoryName(_native.Value)!;
@@ -68,7 +76,14 @@ public sealed class CliFixture : IDisposable
         => ProcessRunner.Run("dotnet", [CliDll, .. args],
             new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(10) });
 
-    public void Dispose() => Ws.Dispose();
+    public void Dispose()
+    {
+        // 未过门禁（含跳过）时 Ws 可能从未创建——只在真实初始化后清。
+        if (_init.IsValueCreated)
+        {
+            Ws.Dispose();
+        }
+    }
 }
 
 public sealed class CliIntegrationTests : IClassFixture<CliFixture>
@@ -83,6 +98,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void VersionAndHelp()
     {
+        _f.Ensure();
         var version = _f.Cli("--version");
         ProcessRunner.AssertSuccess(version, "--version failed");
         Assert.Matches(new System.Text.RegularExpressions.Regex(@"^\d+\.\d+\.\d+"), version.StdOut);
@@ -94,6 +110,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void UsageFailuresExit2()
     {
+        _f.Ensure();
         Assert.Equal(2, _f.Cli().ExitCode);
         Assert.Equal(2, _f.Cli("badcmd").ExitCode);
         Assert.Equal(2, _f.Cli(["bundle", .. BasePlus(_f, "--formats", "bogus")]).ExitCode);
@@ -104,6 +121,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void ValidateValidInvalidAndMissingInput()
     {
+        _f.Ensure();
         var ok = _f.Cli(["validate", .. BasePlus(_f, "--formats", "zip")]);
         ProcessRunner.AssertSuccess(ok, "validate must exit 0 on valid config");
 
@@ -127,6 +145,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void ValidateMatrixViolationExits2()
     {
+        _f.Ensure();
         var result = _f.Cli(["validate", .. BasePlus(_f, "--formats", "nsis")]);
         Assert.Equal(2, result.ExitCode);
         Assert.Contains("not supported", result.StdErr);
@@ -135,6 +154,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void PlanHumanAndJsonOutput()
     {
+        _f.Ensure();
         var formats = TestPlatform.IsLinux ? "deb,rpm,appimage,zip,targz" : "deb,rpm,zip,targz";
         var plan = _f.Cli(["plan", .. BasePlus(_f, "--formats", formats)]);
         ProcessRunner.AssertSuccess(plan, "plan must exit 0");
@@ -154,6 +174,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void PlanAllExpandsToLinuxFormatsOnly()
     {
+        _f.Ensure();
         var json = _f.Cli(["plan", .. BasePlus(_f, "--formats", "all", "--json")]);
         ProcessRunner.AssertSuccess(json, "plan all must exit 0");
         using var doc = JsonDocument.Parse(json.StdOut);
@@ -165,6 +186,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void BundleProducesArtifactsOnStdout()
     {
+        _f.Ensure();
         var formats = TestPlatform.IsLinux ? "deb,rpm,appimage,zip,targz" : "deb,rpm,zip,targz";
         var result = _f.Cli(["bundle", .. BasePlus(_f, "--formats", formats)]);
         ProcessRunner.AssertSuccess(result, $"bundle must exit 0 (stderr: {result.StdErr})");
@@ -193,6 +215,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void BundleJsonIsCleanMachineOutput()
     {
+        _f.Ensure();
         var outDir = _f.Ws.Combine("out-json");
         var result = _f.Cli(["bundle", .. _f.BaseArgs(outDir), "--formats", "zip", "--json"]);
         ProcessRunner.AssertSuccess(result, "bundle --json must exit 0");
@@ -207,6 +230,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void QuietSuppressesInfoVerboseKeepsIt()
     {
+        _f.Ensure();
         var quiet = _f.Cli(["bundle", .. _f.BaseArgs(_f.Ws.Combine("out-quiet")),
             "--formats", "zip", "--quiet"]);
         ProcessRunner.AssertSuccess(quiet, "quiet bundle must exit 0");
@@ -222,6 +246,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void BackendFailureExits1()
     {
+        _f.Ensure();
         Assert.SkipWhen(OperatingSystem.IsWindows(), "SKIP: chmod-based failure leg is POSIX-only.");
         Assert.SkipWhen(TestPlatform.IsRoot, "SKIP: running as root bypasses chmod-based permission checks.");
         var emptyDir = _f.Ws.Combine("empty");
@@ -249,6 +274,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void BundlerJsonDrivesBundle()
     {
+        _f.Ensure();
         var cfgDir = _f.Ws.Combine("cfg");
         Directory.CreateDirectory(Path.Combine(cfgDir, "docs"));
         File.WriteAllText(Path.Combine(cfgDir, "docs", "readme.txt"), "readme-content");
@@ -298,6 +324,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void BundlerJsonUpdateSectionEmitsFeedAndSidecar()
     {
+        _f.Ensure();
         var cfgDir = _f.Ws.Combine("cfg-update");
         Directory.CreateDirectory(cfgDir);
         var keyPath = Path.Combine(cfgDir, "update.key");
@@ -347,6 +374,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void UnknownConfigKeysAndMissingFileRejected()
     {
+        _f.Ensure();
         var cfgDir = _f.Ws.Combine("cfg-reject");
         Directory.CreateDirectory(cfgDir);
         var goodPath = Path.Combine(cfgDir, "bundler.json");
@@ -375,6 +403,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void AotPublishRunsEndToEnd()
     {
+        _f.Ensure();
         Assert.SkipWhen(!TestPlatform.IsLinux, "SKIP: AOT native section is Linux-only.");
         var native = _f.NativeBinary;
         Assert.True(File.Exists(native), "AOT binary missing.");
@@ -402,6 +431,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void AotPublishTrimsHostRestrictedBackends()
     {
+        _f.Ensure();
         Assert.SkipWhen(!TestPlatform.IsLinux, "SKIP: AOT section is Linux-only.");
         var aotDir = _f.NativeDir;
         foreach (var asm in new[] { "Wix", "MacDmg", "MacPkg" })
@@ -422,6 +452,7 @@ public sealed class CliIntegrationTests : IClassFixture<CliFixture>
     [Fact]
     public void AotHostRestrictedFormatsFailExplicitly()
     {
+        _f.Ensure();
         Assert.SkipWhen(!TestPlatform.IsLinux, "SKIP: AOT section is Linux-only.");
         var native = _f.NativeBinary;
         foreach (var fmt in new[] { "msi", "dmg", "pkg" })

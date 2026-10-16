@@ -42,12 +42,70 @@ jobs:
     outputs:
       runners: ${{ steps.pick.outputs.runners }}
     steps:
+      # 便宜前置守卫：$VAR 后接非 ASCII（全角标点/箭头）在部分 locale 下会被拼进变量名，
+      # set -u 下炸 unbound——本检查强制 ${VAR} 定界写法，失配即拒全矩阵。
+      - uses: actions/checkout@v7
+      - name: shell 变量邻接检查
+        run: |
+          python3 - <<'PY'
+          import re, glob, sys, os
+          pat = re.compile(r'\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7f]')
+          def code_prefix(line):
+              # bash 词法：# 仅在词首（行首/空白/控制算符后）起注释——$#、${#arr[@]}、
+              # 引号内 'a#b' 都不算注释。残余盲区：引号内 "x # y" 之后的真违规会漏检，
+              # 接受为已知代价（比"# 一律截断"宽严相济）。
+              prev = ''
+              for i, c in enumerate(line):
+                  if c == '#' and (i == 0 or prev in ' \t;&|()<>'):
+                      return line[:i]
+                  prev = c
+              return line
+          try:
+              files = glob.glob('**/*', recursive=True, include_hidden=True)
+          except TypeError:  # python<3.11 无 include_hidden
+              files = glob.glob('**/*', recursive=True)
+          hits = []
+          shells = ('sh', 'bash', 'zsh', 'dash', 'ash', 'ksh', 'mksh')
+          for f in files:
+              # shell 脚本全量（扩展名或 shebang 嗅探——postinstall 类无扩展名脚本）+
+              # workflow run: 内联 bash（同词法同隐患）；ps1/cmd 词法不同不在此列。
+              if not os.path.isfile(f):
+                  continue
+              nf = f.replace(os.sep, '/')
+              if f.endswith(('.sh', '.bash', '.zsh')):
+                  pass
+              elif nf.startswith('.github/workflows/') and f.endswith(('.yml', '.yaml')):
+                  pass
+              else:
+                  try:
+                      she = open(f, encoding='utf-8', errors='replace').readline(256)
+                  except OSError:
+                      continue
+                  toks = she[2:].split() if she.startswith('#!') else []
+                  interp = os.path.basename(toks[0]) if toks else ''
+                  if interp == 'env':
+                      # env 后命令位置不可稳定建模（GNU/BSD 各代选项差异）——任一令牌路径基名
+                      # 是 shell 名即纳入；代价仅 "env -u bash" 类退化行多扫一文件，方向保守。
+                      interp = next((os.path.basename(t) for t in toks[1:]
+                                     if os.path.basename(t) in shells), '')
+                  if interp not in shells:
+                      continue
+              for i, line in enumerate(open(f, encoding='utf-8', errors='replace'), 1):
+                  for m in pat.finditer(code_prefix(line)):
+                      hits.append(f"{f}:{i}: {line.strip()[:90]}")
+          if hits:
+              print("::error::$VAR 后接非 ASCII 会在部分 locale 下被拼进变量名（set -u 炸 unbound）——改用 ${VAR} 定界：")
+              print('\n'.join(hits))
+              sys.exit(1)
+          print("shell 变量-非ASCII邻接检查：0 命中")
+          PY
+
       - id: pick
         env:
           RUNNERS_IN: ${{ inputs.runners || 'all' }}
         run: |
           set -euo pipefail
-          ALL='["ubuntu-26.04","ubuntu-26.04-arm","windows-2025","windows-11-arm","macos-26-intel","macos-26"]'
+          ALL='["ubuntu-26.04","ubuntu-26.04-arm","windows-2025-vs2026","windows-11-vs2026-arm","macos-26-intel","macos-26"]'
           if [ -z "$RUNNERS_IN" ] || [ "$RUNNERS_IN" = "all" ]; then
             echo "runners=$ALL" >> "$GITHUB_OUTPUT"
           else
