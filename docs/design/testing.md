@@ -112,9 +112,8 @@ tests/
 | `UpdateApplier` | Unit | staging 清扫（`SweepStaleStaging`）、retention 目录解析、single-top-dir 断言 |
 | Apply/Rollback 真链 | Integration | v1 装→feed v2→Check/Download/Verify/Apply 进程链→换包生效；Rollback 还原；互嵌拒；KeepPayload/KeepRollbackBackup；WaitPid 等待；sh/dash/AOT 三引导件对照（Linux/mac 腿） |
 | `UpdateDownloader` | Integration | file:// feed 全链；Range 差分（blockmap 复用率断言）；签名验真/验伪 |
-| `SyspkgReplay` | Unit | 预检三件套拒绝面（`pkg` 构造闸/前端链缺席/账本归属非零/账本工具缺席）；三级提权退化链选腿（pkexec→zenity+`sudo -S`→裸 `sudo`→全缺拒）；`pkg-apply` argv 逐字（`alpineapk`→`apk` 映射、`--env-file`/`--rollback`/`--log` 位次）；retention 留存 + `applied` 标记；rollback 拣选与无留存拒；`session.env` 键集/CRLF 剔除/0600；`CommandProbe`/`EnvProbe`/`ExecProbe` 三缝零 spawn |
-| syspkg replay e2e | Integration | POSIX 垫片全链（Windows 腿 skip）：deb pkexec/问密码管线/裸 sudo 三腿真 spawn argv+rec 记录断言、`alpineapk`→`apk` 动词映射、留存+applied 回写、回滚重放旧包、无留存拒、预检三拒；
-  提权器/账本/`bundler-updater` 均为 sh 垫片（`BUNDLER_UPDATER_CMD_<TOOL>` 缝 + `CommandProbe` 权威缺席化真实 PATH），零真提权发生 |
+| `SyspkgReplay` | Unit | 预检三件套拒绝面（`pkg` 构造闸/前端链缺席/账本归属非零/账本工具缺席）；三级提权退化链选腿（pkexec→zenity+`sudo -S`→裸 `sudo`→全缺拒，问密码管线腿带 `DISPLAY`/`WAYLAND_DISPLAY` 图形会话门槛——headless 直落裸 sudo）；`pkg-apply` argv 逐字（`alpineapk`→`apk` 映射、`--env-file`/`--rollback`/`--log` 位次）；`JoinArgv` 内嵌引号/尾反斜杠转义；retention 留存 + `applied` 标记 + 默认根跨宿主断言（win `LocalApplicationData`/mac 用户 Library/linux `XDG_DATA_HOME` 与 `~/.local/share` 兜底——`UserBackupsRoot` 平台形参缝）；rollback 拣选与无留存拒；`session.env` 键集/CRLF 剔除/0600/`ChmodProbe` 收权失败零残留；`CommandProbe`/`EnvProbe`/`ExecProbe`/`ChmodProbe` 四缝零 spawn |
+| syspkg replay e2e | Integration | POSIX 垫片全链（Windows 腿 skip）：deb pkexec/问密码管线/裸 sudo 三腿真 spawn argv+rec 记录断言、`alpineapk`→`apk` 动词映射、留存+applied 回写、回滚重放旧包、无留存拒、预检三拒；提权器/账本/`bundler-updater` 均为 sh 垫片（`BUNDLER_UPDATER_CMD_<TOOL>` 缝 + `CommandProbe` 权威缺席化真实 PATH），零真提权发生 |
 
 ### 3.7 Bundler.Updater.Bootstrap（Unit + Integration）
 
@@ -123,7 +122,7 @@ tests/
 | `BootstrapPlan.Run` 参数面 | Unit | 动词/参数解析、缺参报错、退出码 |
 | `Apply` 交换语义 | Integration | 提权/非提权目录换装；写失败回滚；`MacAppGate` 剥离 .app 语义；`CanonicalPath`；`ForceManagedCopy`/`IoFaultProbe`/`FreeSpaceProbe` 三缝 |
 | `Program.Main` | Integration | AOT 件与 sh 降级件行为奇偶 |
-| `pkg-apply` 动词 | Unit + Integration | deb/rpm/apk 前端退化链命令选择序与 argv/env 形、`--rollback`（rpm `--oldpackage`）、apk 公钥闸 `--allow-untrusted`、降权链 `setpriv→sudo→runuser→su` 构造、passwd 查名、`--env-file` 回灌+最小集（目录件/零对件退化判拒、CRLF 折叠）、`--app` 普通文件判据、`--log` 不可写降级、uid/gid 边界规范化（超界/前导零/坏段回退）、退出码 0/3/4/5/6 分类（含 rc6=安装已提交重启失败）；`CommandProbe`/`EnvProbe`/`ExecProbe`/`SpawnProbe` 四缝（AOT 腿）+ `BUNDLER_UPDATER_CMD_*`/`PASSWD_FILE`/`APK_KEYS_DIR` env 缝（双侧同名，sh 腿实跑 stub 垫片） |
+| `pkg-apply` 动词 | Unit + Integration | deb/rpm/apk 前端退化链命令选择序与 argv/env 形、`--rollback`（rpm `--oldpackage`）、apk 公钥闸 `--allow-untrusted`、降权链 `setpriv→sudo→runuser→su` 构造、passwd 查名、`--env-file` 回灌+最小集+读毕即删件与 `pkg-*` 暂存目录（目录件/零对件退化判拒、CRLF 折叠、rc4/rc5/rc6 失败出口同删）、`--app` 普通文件判据、`--log` 不可写降级、uid/gid 边界规范化（超界/前导零/坏段回退）、退出码 0/3/4/5/6 分类（含 rc6=安装已提交重启失败）；`CommandProbe`/`EnvProbe`/`ExecProbe`/`SpawnProbe` 四缝（AOT 腿）+ `BUNDLER_UPDATER_CMD_*`/`PASSWD_FILE`/`APK_KEYS_DIR` env 缝（双侧同名，sh 腿实跑 stub 垫片） |
 
 ### 3.8 十格式后端（Api + Integration + Unit 内件）
 

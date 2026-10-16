@@ -34,6 +34,13 @@ internal static class SyspkgReplay
     /// </summary>
     internal static Func<string, string[], int>? ExecProbe;
 
+    /// <summary>
+    /// 收权缝（会话 env 件 chmod 0600）：置非 null 即权威（返回 chmod 退出码——
+    /// 非 0 按收权失败走降级清理路径，供测试注入失败点）；生产为 null 走
+    /// Windows 跳过收权 + POSIX P/Invoke 实调。
+    /// </summary>
+    internal static Func<string, int>? ChmodProbe;
+
     // 会话 env 件的固定键集——在场才写行，不在场跳过（§2.2 "等在"口径）。
     private static readonly string[] SessionEnvKeys =
     {
@@ -282,24 +289,29 @@ internal static class SyspkgReplay
 
     // 选腿：pkexec → zenity/kdialog 问密码 + sudo -S → 裸 sudo。
     // 这里只做可用性探测选腿；哪级拉起成功即定，不起二次重试循环。
+    // 问密码管线腿硬需要图形会话通道——DISPLAY/WAYLAND_DISPLAY 全缺席（headless）
+    // 时 zenity/kdialog 必败，直接跳过直落裸 sudo（tty 密码提示/NOPASSWD 场景存活）。
     private static ElevationLeg PickElevationLeg(string pkg)
     {
         if (ResolveCommand("pkexec") is { } pkexec)
         {
             return ElevationLeg.Direct(pkexec, "pkexec");
         }
-        var zenity = ResolveCommand("zenity");
-        var kdialog = zenity is null ? ResolveCommand("kdialog") : null;
-        string[]? askpass = zenity is not null
-            ? [zenity, "--password"]
-            : kdialog is not null
-                ? [kdialog, "--password", AskpassPrompt]
-                : null;
         var sudo = ResolveCommand("sudo");
-        if (askpass is not null && sudo is not null)
+        var hasDisplay = GetEnv("DISPLAY") is { Length: > 0 } ||
+                         GetEnv("WAYLAND_DISPLAY") is { Length: > 0 };
+        if (sudo is not null && hasDisplay)
         {
-            return ElevationLeg.Askpass(askpass, sudo,
-                (zenity is not null ? "zenity" : "kdialog") + "+sudo -S");
+            var zenity = ResolveCommand("zenity");
+            var kdialog = zenity is null ? ResolveCommand("kdialog") : null;
+            if (zenity is not null || kdialog is not null)
+            {
+                return ElevationLeg.Askpass(
+                    zenity is not null
+                        ? [zenity, "--password"]
+                        : [kdialog!, "--password", AskpassPrompt],
+                    sudo, (zenity is not null ? "zenity" : "kdialog") + "+sudo -S");
+            }
         }
         if (sudo is not null)
         {
@@ -388,15 +400,23 @@ internal static class SyspkgReplay
     // per-user 数据根：与 UpdateApplier.RetentionRoot 的用户分支同口径
     //（Windows=%LOCALAPPDATA%\DotNet.Bundler、macOS=~/Library/Application Support/
     //  DotNet.Bundler、Linux=$XDG_DATA_HOME 或 ~/.local/share 下的 dotnet-bundler）。
-    private static string UserBackupsRoot()
+    private static string UserBackupsRoot() =>
+        UserBackupsRoot(
+            RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? OSPlatform.Windows
+                : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? OSPlatform.OSX
+                : OSPlatform.Linux);
+
+    // 跨宿主断言缝：平台作形参直供——单测在任一宿主断言三平台根路径与 XDG 覆盖，
+    // 不必虚拟 RuntimeInformation。
+    internal static string UserBackupsRoot(OSPlatform platform)
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (platform == OSPlatform.Windows)
         {
             return Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "DotNet.Bundler", "backups");
         }
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        if (platform == OSPlatform.OSX)
         {
             return Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -554,7 +574,10 @@ internal static class SyspkgReplay
         {
             Directory.CreateDirectory(dir);
             File.WriteAllLines(file, lines);
-            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && Chmod600(file) != 0)
+            var chmodFailed = ChmodProbe is { } chmod
+                ? chmod(file) != 0
+                : !RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && Chmod600(file) != 0;
+            if (chmodFailed)
             {
                 throw new IOException($"chmod 0600 failed (errno {Marshal.GetLastWin32Error()})");
             }
@@ -566,6 +589,9 @@ internal static class SyspkgReplay
             log?.Invoke(
                 $"update: WARN cannot write session env file ({exception.Message}) — " +
                 "restart falls back to the minimal environment set");
+            // 先删件再删目录（CleanupEnvFile 同序）——非递归删非空目录恒抛，
+            // 倒置会把已写出的 env 件按默认 umask 残留。
+            TryDeleteFile(file);
             TryDeleteDirectory(dir);
             return null;
         }
@@ -606,9 +632,10 @@ internal static class SyspkgReplay
         public string? EnvFileDirectory;
     }
 
-    // 拉起即返回：Exited 钩做两件尽力事——会话 env 件用完即删 +
-    // 退出码分类留痕（拉起即退语义下 rc 主要靠 --log 件；活到读码的调用方
-    // 也得分类口径）。hook 挂在 ThreadPool——句柄返回后异步触发。
+    // 拉起即返回：Exited 钩做两件尽力事——会话 env 件删余（引导件读毕即删为主，
+    // 此钩与下次 apply 的 24h staging 清扫是两道兜底）+ 退出码分类留痕
+    //（拉起即退语义下 rc 主要靠 --log 件；活到读码的调用方也得分类口径）。
+    // hook 挂在 ThreadPool——句柄返回后异步触发；本进程先退则钩不触发。
     private static Process StartLaunch(SyspkgLaunch launch, Action<string>? log)
     {
         Process process;
@@ -691,7 +718,9 @@ internal static class SyspkgReplay
                 }
                 return -1;
             }
-            Task.WaitAll(stdout, stderr);
+            // 抽干收尾要有界：孙进程继承管道写端会让 ReadToEnd 在进程退出后
+            // 仍挂等 EOF——输出本不消费（只为防缓冲卡死），超时弃读照报退出码。
+            Task.WaitAll(new Task[] { stdout, stderr }, 10_000);
             return process.ExitCode;
         }
         catch (Exception)
@@ -812,7 +841,9 @@ internal static class SyspkgReplay
     }
 
     // ProcessStartInfo.Arguments 是整条字符串（netstandard2.0 无 ArgumentList）——
-    // 逐元双引号包裹空格连接，POSIX argv 还原按层透明。
+    // 逐元双引号包裹空格连接；内嵌 " 与紧邻引号/串尾的 \ 按 CommandLineToArgvW
+    // 规则转义（.NET 的 POSIX Arguments→argv 解析同规则）——不转义时路径里的
+    // " 或尾 \ 会撕裂参数边界，直进真 spawn/Exec 两条真实执行路径。
     internal static string JoinArgv(IEnumerable<string> argv)
     {
         var builder = new StringBuilder();
@@ -822,9 +853,35 @@ internal static class SyspkgReplay
             {
                 builder.Append(' ');
             }
-            builder.Append('"').Append(arg).Append('"');
+            AppendQuoted(builder, arg);
         }
         return builder.ToString();
+    }
+
+    // 引号规则：引号区内 " → 前导 \ 翻倍后再附 \"；串尾连续 \（紧邻收尾引号）
+    // 翻倍防吞引号；其余 \ 原样。
+    private static void AppendQuoted(StringBuilder builder, string arg)
+    {
+        builder.Append('"');
+        var backslashes = 0;
+        foreach (var c in arg)
+        {
+            if (c == '\\')
+            {
+                backslashes++;
+                continue;
+            }
+            if (c == '"')
+            {
+                builder.Append('\\', backslashes * 2 + 1).Append('"');
+            }
+            else
+            {
+                builder.Append('\\', backslashes).Append(c);
+            }
+            backslashes = 0;
+        }
+        builder.Append('\\', backslashes * 2).Append('"');
     }
 
     // POSIX 单引号引用（' 折为 '\''）——与引导件 PkgApplyPlan.ShQuote 同算法。

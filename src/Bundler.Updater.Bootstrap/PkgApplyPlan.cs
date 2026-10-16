@@ -11,7 +11,8 @@ namespace DotNet.Bundler.Updater.Bootstrap;
 /// 不引入三段式搬移/marker/锁/崩溃恢复，也不在引导件重复验签（客户端已验）。</item>
 /// <item>装成功后降权重启 <c>--app</c>：<c>PKEXEC_UID</c>→<c>SUDO_UID</c> 取原用户
 ///（都不在=本来就 root 直跑，按当前权限直接 spawn），
-/// setpriv → sudo → runuser → su 退化链降权，回灌 <c>--env-file</c> 会话环境。</item>
+/// setpriv → sudo → runuser → su 退化链降权，回灌 <c>--env-file</c> 会话环境
+///（件是一次性输入——读毕即删件与 <c>pkg-*</c> 暂存目录，装失败不消费也删）。</item>
 /// </list>
 /// 退出码：0 成功；3 参数错；4 安装失败（在场前端全败）；5 包管理器全缺席；
 /// 6 重启失败（安装已提交——客户端据此报"已装待手动重启"）。
@@ -79,37 +80,76 @@ internal static class PkgApplyPlan
             throw new UsageException($"package '{options.PackagePath}' does not exist.");
         }
 
-        var attempted = false;
-        foreach (var step in InstallChain(options, pkg))
+        try
         {
-            var tool = ResolveCommand(step.Tool);
-            if (tool is null)
+            var attempted = false;
+            foreach (var step in InstallChain(options, pkg))
             {
-                log($"bundler-updater: {step.Tool} not found — skipping");
-                continue;
+                var tool = ResolveCommand(step.Tool);
+                if (tool is null)
+                {
+                    log($"bundler-updater: {step.Tool} not found — skipping");
+                    continue;
+                }
+                attempted = true;
+                log($"bundler-updater: install '{pkg}' via {step.Tool}");
+                var rc = Exec(new ExecSpec
+                {
+                    FileName = tool,
+                    Arguments = step.Arguments,
+                    Environment = step.Environment,
+                });
+                if (rc == 0)
+                {
+                    return Restart(app, options, log) ? 0 : 6;
+                }
+                log($"bundler-updater: {step.Tool} failed (exit {rc}) — falling back");
             }
-            attempted = true;
-            log($"bundler-updater: install '{pkg}' via {step.Tool}");
-            var rc = Exec(new ExecSpec
+            if (!attempted)
             {
-                FileName = tool,
-                Arguments = step.Arguments,
-                Environment = step.Environment,
-            });
-            if (rc == 0)
-            {
-                return Restart(app, options, log) ? 0 : 6;
+                Console.Error.WriteLine(
+                    $"bundler-updater: no package manager available for format '{options.Format}'.");
+                return 5;
             }
-            log($"bundler-updater: {step.Tool} failed (exit {rc}) — falling back");
+            Console.Error.WriteLine("bundler-updater: package install failed via all available frontends.");
+            return 4;
         }
-        if (!attempted)
+        finally
         {
-            Console.Error.WriteLine(
-                $"bundler-updater: no package manager available for format '{options.Format}'.");
-            return 5;
+            // --env-file 是客户端 <staging>/pkg-<guid>/session.env 一次性输入——
+            // 消费完（或装失败确定不消费）即删件与 pkg-* 暂存目录；客户端拉起即退
+            // 后删不了，残件兜底在客户端 Exited 钩与 24h staging 清扫。
+            CleanupEnvFile(options.EnvFile);
         }
-        Console.Error.WriteLine("bundler-updater: package install failed via all available frontends.");
-        return 4;
+    }
+
+    // --env-file 清理：删件恒做（尽力）；父目录仅本编排契约的 pkg-* 暂存名才删
+    //（非递归——非空即弃），外来目录不碰。
+    private static void CleanupEnvFile(string? envFile)
+    {
+        if (envFile is null)
+        {
+            return;
+        }
+        try
+        {
+            File.Delete(envFile);
+        }
+        catch (Exception)
+        {
+        }
+        try
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(envFile));
+            if (dir is not null &&
+                Path.GetFileName(dir).StartsWith("pkg-", StringComparison.Ordinal))
+            {
+                Directory.Delete(dir);
+            }
+        }
+        catch (Exception)
+        {
+        }
     }
 
     private sealed record InstallStep(

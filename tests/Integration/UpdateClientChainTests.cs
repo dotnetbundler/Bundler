@@ -681,6 +681,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
     {
         // pkexec 缺席 → zenity --password | sudo -S -p '' -- <verb> 管线腿：
         // 密码行不过本进程，sh -c 包整条管线，末级 rc 即拉起 rc。
+        // 管线腿有图形会话门槛——显式注 DISPLAY，headless CI 宿主也选得到。
         Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
         var directory = Ws.Combine("syspkg-deb-askpass");
         Directory.CreateDirectory(directory);
@@ -690,6 +691,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var rec = Path.Combine(
             Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt");
         env.Set("BUNDLER_STUB_REC", rec);
+        env.Set("DISPLAY", ":99");
         var (install, feedDir, _, material) = SetupSyspkgInstall(
             env, directory, "deb", "myapp", ["dpkg"], "zenity", "sudo");
         SyspkgReplay.CommandProbe = _ => null;

@@ -18,6 +18,7 @@ public sealed class SyspkgReplayTests : TempBase
         SyspkgReplay.CommandProbe = null;
         SyspkgReplay.EnvProbe = null;
         SyspkgReplay.ExecProbe = null;
+        SyspkgReplay.ChmodProbe = null;
         base.Dispose();
     }
 
@@ -146,37 +147,89 @@ public sealed class SyspkgReplayTests : TempBase
         var retained = Path.Combine(RetentionDir, "myapp_2.0-1_amd64.deb");
         var appAbs = Path.GetFullPath(AppFile);
 
-        // pkexec 缺席 + zenity+sudo 在场 → 问密码管线腿。
-        SetupProbes(commands: new Dictionary<string, string>
-        {
-            ["apt-get"] = "/stub/apt-get",
-            ["dpkg"] = "/stub/dpkg",
-            ["zenity"] = "/stub/zenity",
-            ["sudo"] = "/stub/sudo",
-        });
+        // pkexec 缺席 + zenity+sudo 在场 + 图形会话在位（DISPLAY）→ 问密码管线腿；
+        // DISPLAY 本身进会话 env 件，管线 argv 尾段带 --env-file。
+        SetupProbes(
+            env: new Dictionary<string, string> { ["DISPLAY"] = ":0" },
+            commands: new Dictionary<string, string>
+            {
+                ["apt-get"] = "/stub/apt-get",
+                ["dpkg"] = "/stub/dpkg",
+                ["zenity"] = "/stub/zenity",
+                ["sudo"] = "/stub/sudo",
+            });
         var launch = SyspkgReplay.PlanApply(Identity("deb"), artifact, install, Options(), _log.Add);
         Assert.Equal("/bin/sh", launch.FileName);
+        Assert.NotNull(launch.EnvFile);
         var expected =
             "'/stub/zenity' '--password' | '/stub/sudo' '-S' '-p' '' '--' " +
-            $"'{UpdaterPath}' 'pkg-apply' '--pkg' '{retained}' '--format' 'deb' '--app' '{appAbs}'";
+            $"'{UpdaterPath}' 'pkg-apply' '--pkg' '{retained}' '--format' 'deb' '--app' '{appAbs}' " +
+            $"'--env-file' '{launch.EnvFile}'";
         Assert.Equal(new[] { "-c", expected }, launch.Arguments);
 
         // zenity 缺席退 kdialog（提示文本随 argv 进管线）。
-        SetupProbes(commands: new Dictionary<string, string>
-        {
-            ["apt-get"] = "/stub/apt-get",
-            ["dpkg"] = "/stub/dpkg",
-            ["kdialog"] = "/stub/kdialog",
-            ["sudo"] = "/stub/sudo",
-        });
+        SetupProbes(
+            env: new Dictionary<string, string> { ["DISPLAY"] = ":0" },
+            commands: new Dictionary<string, string>
+            {
+                ["apt-get"] = "/stub/apt-get",
+                ["dpkg"] = "/stub/dpkg",
+                ["kdialog"] = "/stub/kdialog",
+                ["sudo"] = "/stub/sudo",
+            });
         _execs.Clear();
         launch = SyspkgReplay.PlanApply(Identity("deb"), artifact, install, Options(), _log.Add);
         Assert.Equal("/bin/sh", launch.FileName);
+        Assert.NotNull(launch.EnvFile);
         expected =
             "'/stub/kdialog' '--password' 'Authentication required to install the update' | " +
             $"'/stub/sudo' '-S' '-p' '' '--' '{UpdaterPath}' 'pkg-apply' '--pkg' '{retained}' " +
-            $"'--format' 'deb' '--app' '{appAbs}'";
+            $"'--format' 'deb' '--app' '{appAbs}' '--env-file' '{launch.EnvFile}'";
         Assert.Equal(new[] { "-c", expected }, launch.Arguments);
+    }
+
+    [Fact]
+    public void PlanApply_AskpassLeg_NoDisplay_FallsToBareSudo()
+    {
+        // zenity/kdialog+sudo 在场但 DISPLAY/WAYLAND_DISPLAY 全缺席（headless）——
+        // 问密码管线必败，直接退化裸 sudo 腿（tty 提示/NOPASSWD 场景存活）。
+        SetupProbes(
+            env: new Dictionary<string, string>(),
+            commands: new Dictionary<string, string>
+            {
+                ["apt-get"] = "/stub/apt-get",
+                ["dpkg"] = "/stub/dpkg",
+                ["zenity"] = "/stub/zenity",
+                ["kdialog"] = "/stub/kdialog",
+                ["sudo"] = "/stub/sudo",
+            });
+        var install = InstallDir();
+
+        var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), install, Options(), _log.Add);
+        Assert.Equal("/stub/sudo", launch.FileName);
+        Assert.Equal("--", launch.Arguments[0]);
+        Assert.Null(launch.EnvFile);
+        Assert.DoesNotContain("--env-file", launch.Arguments);
+    }
+
+    [Fact]
+    public void PlanApply_AskpassLeg_WaylandDisplay_Suffices()
+    {
+        // 仅 WAYLAND_DISPLAY 在场同样算图形会话——管线腿照选。
+        SetupProbes(
+            env: new Dictionary<string, string> { ["WAYLAND_DISPLAY"] = "wayland-1" },
+            commands: new Dictionary<string, string>
+            {
+                ["apt-get"] = "/stub/apt-get",
+                ["dpkg"] = "/stub/dpkg",
+                ["zenity"] = "/stub/zenity",
+                ["sudo"] = "/stub/sudo",
+            });
+        var install = InstallDir();
+
+        var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), install, Options(), _log.Add);
+        Assert.Equal("/bin/sh", launch.FileName);
+        Assert.StartsWith("'/stub/zenity' '--password' | ", launch.Arguments[1]);
     }
 
     [Fact]
@@ -441,6 +494,28 @@ public sealed class SyspkgReplayTests : TempBase
         Assert.Contains(_log, line => line.Contains("cannot retain rollback artifact"));
     }
 
+    [Fact]
+    public void PlanApply_EnvFile_ChmodFailure_LeavesNoResidue()
+    {
+        // 收权失败注入（ChmodProbe 缝）：env 件已写出后失败——catch 必须先删件
+        // 再删目录，否则非空目录的非递归删恒抛、env 件按默认 umask 残留。
+        SetupProbes(
+            env: new Dictionary<string, string> { ["HOME"] = "/home/u" },
+            commands: PkexecCommands("dpkg"));
+        SyspkgReplay.ChmodProbe = _ => 1;
+        var install = InstallDir();
+
+        var launch = SyspkgReplay.PlanApply(
+            Identity("deb"), Artifact(), install, Options(), _log.Add);
+
+        Assert.Null(launch.EnvFile);
+        Assert.DoesNotContain("--env-file", launch.Arguments);
+        Assert.Contains(_log, line => line.Contains("cannot write session env file"));
+        // pkg-<guid>/ 目录连同 session.env 全清走——staging 根下零残件。
+        Assert.True(Directory.Exists(StagingRoot));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(StagingRoot));
+    }
+
     // ---- rollback ----
 
     [Fact]
@@ -528,6 +603,77 @@ public sealed class SyspkgReplayTests : TempBase
         Assert.Equal("no package manager available", SyspkgReplay.DescribeExitCode(5));
         Assert.Contains("restart failed", SyspkgReplay.DescribeExitCode(6));
         Assert.Equal("elevation/launcher failure", SyspkgReplay.DescribeExitCode(126));
+    }
+
+    // ---- 留存默认根（跨宿主断言——UserBackupsRoot 平台形参缝）----
+
+    [Fact]
+    public void UserBackupsRoot_Windows_LocalAppData()
+    {
+        Assert.Equal(
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "DotNet.Bundler", "backups"),
+            SyspkgReplay.UserBackupsRoot(OSPlatform.Windows));
+    }
+
+    [Fact]
+    public void UserBackupsRoot_MacOS_UserLibraryApplicationSupport()
+    {
+        Assert.Equal(
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Library", "Application Support", "DotNet.Bundler", "backups"),
+            SyspkgReplay.UserBackupsRoot(OSPlatform.OSX));
+    }
+
+    [Fact]
+    public void UserBackupsRoot_Linux_XdgOverrideOrLocalShare()
+    {
+        var expected = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".local", "share", "dotnet-bundler", "backups");
+
+        // XDG_DATA_HOME 缺席 → ~/.local/share 兜底。
+        SyspkgReplay.EnvProbe = _ => null;
+        Assert.Equal(expected, SyspkgReplay.UserBackupsRoot(OSPlatform.Linux));
+
+        // 空值按缺席处理（{ Length: > 0 } 口径）。
+        SyspkgReplay.EnvProbe = name => name == "XDG_DATA_HOME" ? "" : null;
+        Assert.Equal(expected, SyspkgReplay.UserBackupsRoot(OSPlatform.Linux));
+
+        // 显式 XDG_DATA_HOME 覆盖优先。
+        var xdg = Path.Combine(Root, "xdg-data");
+        SyspkgReplay.EnvProbe = name => name == "XDG_DATA_HOME" ? xdg : null;
+        Assert.Equal(Path.Combine(xdg, "dotnet-bundler", "backups"),
+            SyspkgReplay.UserBackupsRoot(OSPlatform.Linux));
+    }
+
+    [Fact]
+    public void ResolveRetentionDirectory_DefaultRoot_UserBackupsRootPlusLeafHash()
+    {
+        // 显式 RollbackBackupDirectory 缺席 → 默认根 = 宿主平台 UserBackupsRoot
+        // + "<装位叶名>-<路径哈希>"（UpdateApplier.RetentionDirName 同口径）。
+        var install = InstallDir();
+        var resolved = SyspkgReplay.ResolveRetentionDirectory(install, new ApplyOptions());
+        var leaf = UpdateApplier.RetentionDirName(Path.GetFullPath(install));
+        Assert.Equal(leaf, Path.GetFileName(resolved));
+        var platform = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? OSPlatform.Windows
+            : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? OSPlatform.OSX
+            : OSPlatform.Linux;
+        Assert.Equal(Path.Combine(SyspkgReplay.UserBackupsRoot(platform), leaf), resolved);
+    }
+
+    // ---- argv 拼接转义 ----
+
+    [Fact]
+    public void JoinArgv_EscapesEmbeddedQuote_AndTrailingBackslash()
+    {
+        // Arguments 是整条字符串进真 spawn/Exec——内嵌 " 折 \"、串尾 \ 翻倍、
+        // 非引号相邻 \ 原样（CommandLineToArgvW 规则）。
+        Assert.Equal(
+            "\"a\\\"b\" \"c\\\\\" \"d\\e\" \"plain\"",
+            SyspkgReplay.JoinArgv(new[] { "a\"b", "c\\", "d\\e", "plain" }));
     }
 
     // ---- 分发闸 ----
