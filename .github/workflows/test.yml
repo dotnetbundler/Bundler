@@ -42,6 +42,27 @@ jobs:
     outputs:
       runners: ${{ steps.pick.outputs.runners }}
     steps:
+      # 便宜前置守卫：$VAR 后接非 ASCII（全角标点/箭头）在部分 locale 下会被拼进变量名，
+      # set -u 下炸 unbound——本检查强制 ${VAR} 定界写法，失配即拒全矩阵。
+      - uses: actions/checkout@v7
+      - name: shell 变量邻接检查
+        run: |
+          python3 - <<'PY'
+          import re, glob, sys
+          pat = re.compile(r'\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7f]')
+          hits = []
+          for f in glob.glob('**/*.sh', recursive=True):
+              for i, line in enumerate(open(f, encoding='utf-8', errors='replace'), 1):
+                  for m in pat.finditer(line):
+                      if '#' not in line[:m.start()]:
+                          hits.append(f"{f}:{i}: {line.strip()[:90]}")
+          if hits:
+              print("::error::$VAR 后接非 ASCII 会在部分 locale 下被拼进变量名（set -u 炸 unbound）——改用 ${VAR} 定界：")
+              print('\n'.join(hits))
+              sys.exit(1)
+          print("shell 变量-非ASCII邻接检查：0 命中")
+          PY
+
       - id: pick
         env:
           RUNNERS_IN: ${{ inputs.runners || 'all' }}
