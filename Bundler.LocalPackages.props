@@ -6,5 +6,8 @@
     <!-- 还原源已由测试侧 packageSourceMapping 钉死（DotNet.Bundler.* 只走本地源），
          多源告警无实际歧义；包的真实来源另由 Assert-LocalBundlerRestore 按 .nupkg.metadata 逐包核验。 -->
     <NoWarn>$(NoWarn);NU1507</NoWarn>
+    <!-- fixture 还原不向任何 HTTP 源取漏洞审计数据——消掉唯一的可选网络往返，
+         让 runner 出网抖动不至于把确定性还原拖死（CI windows-11-arm 实证）。 -->
+    <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 </Project>

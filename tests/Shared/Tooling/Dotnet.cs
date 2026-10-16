@@ -87,15 +87,21 @@ internal static class Dotnet
 
     // NuGet 还原在共享 runner 上偶发连接层挂死（零输出卡到进程超时，
     // CI windows-11-arm 实证一单挂满 10min）——restore 幂等，超时/非零退出有界重试。
+    // 挂死特征是打完 "Determining projects to restore..." 即零输出僵住：
+    // 3 分钟陪跑已给足正常还原十倍冗余，到点杀进程换枪（attemptTimeout 可显式覆盖；
+    // 本方法接管 options.Timeout——调用方传的 Timeout 不生效）。
     // 刻意失败的负例调用勿走此口：继续用 Run 单发，避免确定性失败陪跑重试。
     public static ProcessRunner.Result RestoreWithRetry(IEnumerable<string> args, string what,
-        ProcessRunner.Options? options = null, int maxAttempts = 2)
+        ProcessRunner.Options? options = null, int maxAttempts = 4,
+        TimeSpan? attemptTimeout = null)
     {
+        options ??= new ProcessRunner.Options();
+        options.Timeout = attemptTimeout ?? TimeSpan.FromMinutes(3);
         for (var attempt = 1; ; attempt++)
         {
             try
             {
-                var result = Run(args, options ?? new ProcessRunner.Options());
+                var result = Run(args, options);
                 if (result.ExitCode == 0)
                 {
                     return result;
