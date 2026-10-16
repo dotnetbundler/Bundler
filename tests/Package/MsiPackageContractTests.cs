@@ -340,7 +340,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         }
     }
 
-    // VerifyMaintenance.ps1：损坏 MSI 拒绝、注入失败回滚、passive 装卸、静默修复、zh-CN 独立身份。
+    // VerifyMaintenance.ps1：损坏 MSI 拒绝、注入失败回滚、静默装卸、静默修复、zh-CN 独立身份。
     [Fact]
     [Trait("Requires", "localinstall")]
     public void DamageInjectionRepairAndLocalizedIdentity()
@@ -408,8 +408,8 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
             Assert.False(File.Exists(executable));
             Assert.False(File.Exists(resource));
 
-            // passive 安装 + 静默修复 /fomus + passive 卸载，未知用户文件全程保留。
-            MsiexecLogged("passive-install", root, ["/i", $"\"{msi}\""], 0);
+            // 静默安装 + 静默修复 /fomus + passive 卸载，未知用户文件全程保留。
+            MsiexecLogged("silent-install", root, ["/i", $"\"{msi}\""], 0);
             AssertInstalled(productCode, true);
             Assert.True(File.Exists(executable));
             Assert.True(File.Exists(resource));
@@ -440,7 +440,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
             Assert.False(Directory.Exists(chineseInstall));
             AssertInstalled(productCode, true);
 
-            MsiexecLogged("passive-uninstall", root, ["/x", productCode], 0);
+            MsiexecLogged("silent-uninstall", root, ["/x", productCode], 0);
             AssertInstalled(productCode, false);
             Assert.False(File.Exists(executable));
             Assert.False(File.Exists(resource));

@@ -66,7 +66,7 @@ if leg_on app; then
         echo "$OUT" | grep -q "BundlerMacIntegrationFixture:ci-marker"
     ' "$APP"
     else
-        echo "[LEG-FAIL] app（产件目录无 .app）"; FAILED="$FAILED app-empty"
+        echo "[LEG-FAIL] app（产件目录无 .app）"; FAILED="$FAILED app-noformat"
     fi
 fi
 
@@ -94,7 +94,7 @@ if leg_on dmg; then
         echo "$OUT" | grep -q "BundlerMacDmgIntegrationFixture:ci-marker"
     ' "$DMG"
     else
-        echo "[LEG-FAIL] dmg（产件目录无 .dmg）"; FAILED="$FAILED dmg-empty"
+        echo "[LEG-FAIL] dmg（产件目录无 .dmg）"; FAILED="$FAILED dmg-noformat"
     fi
 fi
 
@@ -120,7 +120,7 @@ if leg_on pkg; then
         sudo rm -rf "$B"
     ' "$PKG"
     else
-        echo "[LEG-FAIL] pkg（产件目录无 .pkg）"; FAILED="$FAILED pkg-empty"
+        echo "[LEG-FAIL] pkg（产件目录无 .pkg）"; FAILED="$FAILED pkg-noformat"
     fi
 fi
 
@@ -144,7 +144,7 @@ if leg_on archive; then
         echo "$OUT" | grep -q "BundlerArchiveIntegrationFixture:ci-marker"
     ' "$DIR/$(leg_dir archive)"
     else
-        echo "[LEG-FAIL] archive（产件目录无 .zip/.tar.gz）"; FAILED="$FAILED archive-empty"
+        echo "[LEG-FAIL] archive（产件目录无 .zip/.tar.gz）"; FAILED="$FAILED archive-noformat"
     fi
 fi
 

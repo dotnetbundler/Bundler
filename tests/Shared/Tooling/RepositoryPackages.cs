@@ -23,6 +23,11 @@ internal static class RepositoryPackages
             {
                 Thread.Sleep(500);
             }
+            catch (IOException ex)
+            {
+                // 超期后裸 IOException 被 Lazy 缓存重放——换成带上下文的失败断言。
+                Assert.Fail($"共享包锁等待超时（10min）：{lockPath}——另一测试进程可能挂死 ({ex.Message})");
+            }
         }
         using var _ = lockStream;
         Dotnet.ShutdownBuildServers();
