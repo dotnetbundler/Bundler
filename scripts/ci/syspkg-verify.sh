@@ -98,7 +98,7 @@ makeshim() { # $1=dir; rest=tool 名（缺失宿主工具即 FAIL——shim 缺�
 }
 
 # 会话 env 件：HOME/DISPLAY 属最小集语义验证，MYVAR 标记归属相位，SYSPKG_REC 指
-# 挥探针把记录落到本相位专属件（2777 目录内众人可写）。件被实现读毕即删——
+# 挥探针把记录落到本相位专属件（$REC 目录 0777，相位间共写）。件被实现读毕即删——
 # 一相位一件不复用：跨相位复用会走 minimal-env WARN，MYVAR/SYSPKG_REC 不注入，
 # 探针落共享 default.txt，后续相位的 uid=0 断言会被前序相位记录喂成假绿。
 mk_env() { # $1=file $2=rec-file $3=myvar-tag
@@ -510,6 +510,8 @@ leg_apk() {
     openssl rsa -in "$W/syspkg-key.rsa" -pubout -out "$W/syspkg-key.rsa.rsa.pub" >>"$CONSOLE" 2>&1 \
         || { fail apk-env "公钥导出失败"; return; }
     # mk_apk 尾块恒 rc0（证据留档 || true）——&& 链无判别力，逐件 -s 断言接住产包失败。
+    # -s 只证"存在且非空"；签名/未签形态的有效性由下游 K1N（签名闸拒收）与
+    # K1B/K3（账本翻页）行为断言兜住，不在此闸重复校验。
     mk_apk 1.0.0-r0 "$W/v1u.apk" 0; mk_apk 2.0.0-r0 "$W/v2u.apk" 0; mk_apk 3.0.0-r0 "$W/v3u.apk" 0
     mk_apk 1.0.0-r0 "$W/v1s.apk" 1; mk_apk 2.0.0-r0 "$W/v2s.apk" 1
     _apk_missing=""
@@ -567,7 +569,8 @@ leg_apk() {
     want_rec K1B "$REC/k1b.txt" "uid=$T_UID" "sh 支路降权重启探针 uid=tester"
 
     # K1N：负面对照——keys 非空后 unsigned 新包应被 apk 签名闸拒（rc=4 账本不翻页）。
-    # 专属 env.k1n/rec k1n.txt（rc4 无重启探针不写；件仍被实现读毕即删）。
+    # 专属 env.k1n/rec k1n.txt：rc4 无重启探针不写 rec；env 件未被消费成会话
+    # env，但双侧清理是全出口统一执行（finally→CleanupEnvFile / _pa_env_cleanup）。
     cp "$W/syspkg-key.rsa.rsa.pub" /etc/apk/keys/
     mk_env "$W/env.k1n" "$REC/k1n.txt" k1n-aot
     rc_of "$AOT" pkg-apply --pkg "$W/v3u.apk" --format apk --app "$APP" \
