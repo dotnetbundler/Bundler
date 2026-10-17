@@ -16,18 +16,40 @@ namespace DotNet.Bundler.Core;
 /// </summary>
 internal static class UnixFileTypes
 {
-    private const int TypeMask = 0xF000;   // S_IFMT
-    private const int RegularFile = 0x8000; // S_IFREG
+    private const int TypeMask = 0xF000;   // PAL_S_IFMT
+    private const int RegularFile = 0x8000; // PAL_S_IFREG
 
-    [DllImport("libc", EntryPoint = "stat", SetLastError = true, CharSet = CharSet.Ansi)]
-    private static extern int Stat(string path, byte[] buffer);
+    // libSystem.Native PAL：SystemNative_* 符号链进每个 .NET 进程映像（BCL
+    // 文件 IO 全靠它们）——静态 musl AOT 引导件（static-pie、.dynsym 无 libc
+    // 符号可解析目标）内同样可达；裸 DllImport("libc") 在那里恒
+    // DllNotFoundException 退化"无法判定放行"（syspkg 冻件腿实证）。
+    // FileStatus 布局由 PAL C 侧对各 ABI 归一化（Mode@4 定死）——内核
+    // struct stat 的架构偏移表、__xstat/stat$INODE64 退化面整体不需要。
+    [DllImport("libSystem.Native", EntryPoint = "SystemNative_Stat", SetLastError = true, CharSet = CharSet.Ansi)]
+    private static extern int SysStat(string path, out FileStatus output);
 
-    // macOS 上裸 "stat" 符号在 x86_64 绑到遗留 non-INODE64 变体（st_dev,st_ino,...
-    // st_mode 在偏移 8），arm64 无遗留变体恰是 inode64——同名符号两架构不同布局。
-    // 显式绑 stat$INODE64 拿到确定的 inode64 布局（st_mode 恒在偏移 4）；
-    // 符号缺失（理论上 arm64 已无二名）退回 "stat" 亦同布局，双保险。
-    [DllImport("libc", EntryPoint = "stat$INODE64", SetLastError = true, CharSet = CharSet.Ansi)]
-    private static extern int StatInode64(string path, byte[] buffer);
+    // pal_io.h FileStatus 的同形镜像（前 4 槽为本判据所需，余者占位对齐）。
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FileStatus
+    {
+        internal int Flags;
+        internal int Mode;
+        internal uint Uid;
+        internal uint Gid;
+        internal long Size;
+        internal long ATime;
+        internal long ATimeNsec;
+        internal long MTime;
+        internal long MTimeNsec;
+        internal long CTime;
+        internal long CTimeNsec;
+        internal long BirthTime;
+        internal long BirthTimeNsec;
+        internal long Dev;
+        internal long RDev;
+        internal long Ino;
+        internal uint UserFlags;
+    }
 
     /// <summary>
     /// True when <paramref name="path"/> resolves (symlinks followed) to a
@@ -37,69 +59,24 @@ internal static class UnixFileTypes
     /// </summary>
     internal static bool IsRegularFile(string path)
     {
-        var linux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-        var mac = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
-        if (!linux && !mac)
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) &&
+            !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             return true;
         }
-        var status = new byte[256];
-        int rc;
-        if (mac)
+        // stat 不可得（PAL 缺席的路径名奇异宿主）按"无法判定"放行——
+        // 拷贝路径自己对缺失/悬空件报错，fail-open 口径保留。
+        try
         {
-            try
-            {
-                rc = StatInode64(path, status);
-            }
-            catch (EntryPointNotFoundException)
-            {
-                rc = Stat(path, status);
-            }
-        }
-        else
-        {
-            // 老 glibc（<2.33）不导出裸 stat 符号（只有 __xstat 系）——
-            // 与 mac 兜底同规：stat 缺席按"无法判定"放行，拷贝路径自己报错。
-            try
-            {
-                rc = Stat(path, status);
-            }
-            catch (EntryPointNotFoundException)
+            if (SysStat(path, out var status) != 0)
             {
                 return true;
             }
-            catch (DllNotFoundException)
-            {
-                return true;
-            }
+            return (status.Mode & TypeMask) == RegularFile;
         }
-        if (rc != 0)
+        catch (Exception)
         {
             return true;
         }
-        var mode = linux
-            ? BitConverter.ToInt32(status, LinuxModeOffset())
-            : BitConverter.ToUInt16(status, 4);
-        return (mode & TypeMask) == RegularFile;
-    }
-
-    // struct stat st_mode offset: 64-bit ABIs that give st_nlink a full
-    // machine word (x86_64, s390x, ppc64le) put st_mode at 24; the asm-generic
-    // layout every other Linux arch uses puts it at 16. macOS inode64 (u32
-    // st_dev + u16 st_mode) puts it at 4. An ABI not covered above defaults
-    // to the asm-generic offset on a best-effort basis — a wrong guess reads
-    // garbage mode bits and can either pass a special file through the filter
-    // or wrongly skip a regular file; neither outcome is verified safe, the
-    // caller must tolerate both.
-    private static int LinuxModeOffset()
-    {
-        var architecture = RuntimeInformation.ProcessArchitecture;
-        // .NET Architecture 枚举值（实测枚举）：X86=0 X64=1 Arm=2 Arm64=3 Wasm=4
-        // S390x=5 LoongArch64=6 Armv6=7 Ppc64le=8——netstandard2.0 枚举面缺
-        // 具名成员只能用数值判据。旧判据 `5 or 7` 把 Armv6 误送 24、Ppc64le
-        // 漏进 16，修正为 5 or 8。
-        return architecture == Architecture.X64 || (int)architecture is 5 /* S390x */ or 8 /* Ppc64le */
-            ? 24
-            : 16;
     }
 }

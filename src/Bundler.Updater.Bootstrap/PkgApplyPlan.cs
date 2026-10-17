@@ -430,11 +430,12 @@ internal static class PkgApplyPlan
     }
 
     // --env-file 校验+读定（TOCTOU 收口，rc3 拒绝口径——sh _pa_env_validate 同义）：
-    // POSIX 上 O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK 打开，fstat 已开描述符
-    // 复核 S_IFREG + st_uid==调用 uid（uid 缺席按本进程 euid）——三重全过才
-    // 把同一描述符包成 FileStream 读。O_NOFOLLOW 让"判存→open"窗内的链接偷换
-    // 直接 ELOOP；O_NONBLOCK 对普通文件无害、对 fifo 让 open 立刻返回再由
-    // fstat 类型位拒掉（裸 open 阻塞性 fifo 会挂死本进程等写端）。
+    // POSIX 经 libSystem.Native PAL 走 O_RDONLY|O_NOFOLLOW|O_CLOEXEC 打开
+    //（PAL_O_NOFOLLOW 由 C 侧转译成各 ABI 原生值），fstat 已开描述符复核
+    // S_IFREG + st_uid==调用 uid（uid 缺席按本进程 euid）——三重全过才把同一
+    // 描述符包成 FileStream 读。O_NOFOLLOW 让链接偷换直接 ELOOP；PAL 旗标集
+    // 不导 O_NONBLOCK，fifo 阻塞窗由带 5s 时限的线程内 open 收口
+    //（sh `timeout 5 cat` 同口径——裸 open 阻塞性 fifo 会挂死本进程等写端）。
     // 任一步不过一律抛 UsageException 归 rc3——不静默降级"件不存在"：
     // 件显式给了就按校验输，内容永不进降权 app 的 env。
     private static List<string>? ReadEnvFile(string? envFile, long? uid)
@@ -500,19 +501,14 @@ internal static class PkgApplyPlan
                 return null;
             }
         }
-        var fd = NativeMethods.Open(path, NativeMethods.OpenFlagsForCurrentOs());
-        if (fd < 0)
+        var fd = NativeMethods.OpenWithDeadline(path);
+        if (fd == NativeMethods.InvalidFd)
         {
             return null;
         }
         // fstat 已开描述符——校验对象是 open 钉住的同一 inode，窗内换件骗不过。
-        var status = new byte[NativeMethods.StatBufferSize];
-        if (!NativeMethods.TryFstat(fd, status))
-        {
-            NativeMethods.Close(fd);
-            return null;
-        }
-        if (!NativeMethods.IsRegularMode(status) ||
+        if (!NativeMethods.TryFStat(fd, out var status) ||
+            !NativeMethods.IsRegularMode(status) ||
             !NativeMethods.OwnerMatches(status, callerUid))
         {
             NativeMethods.Close(fd);
@@ -612,8 +608,8 @@ internal static class PkgApplyPlan
     // "仅普通文件"口径（sh -f 同义，顺链同规）：fifo/设备/套接件 File.Exists
     // 照收（只排目录）——BCL 公开面无类型位判据（File.GetAttributes 对特殊件
     // 同报 Normal，GetUnixFileMode 只回权限位，.NET 10/Linux 实测）；stat(2)
-    // S_IFMT=S_IFREG 走 UnixFileTypes（打包 staging 同源链接件）判，其"无法
-    // 判定放行"语义使 stat 缺席宿主退化 File.Exists 口径。
+    // S_IFMT=S_IFREG 走 UnixFileTypes（打包 staging 同源链接件、PAL stat 判），
+    // 其"无法判定放行"语义使 stat 不可达宿主退化 File.Exists 口径。
     private static bool IsRegularFile(string path) =>
         File.Exists(path) && UnixFileTypes.IsRegularFile(path);
 
@@ -924,89 +920,112 @@ internal sealed class ExecSpec
     public string? WorkingDirectory { get; init; }
 }
 
-// --env-file 校验的 POSIX 原生面：open/fstat/close/geteuid 直调 libc。
-// struct stat 用 256 字节裸缓冲按 ABI 偏移取 st_mode/st_uid——布局与
-// UnixFileTypes 同源（st_mode 偏移同表），st_uid 恒在 st_mode 之后第一个
-// u32 槽位（Linux x86_64 类 nlink-全字宽 ABI @28、asm-generic @24；
-// macOS inode64 @16；FreeBSD @28）。
+// --env-file 校验的 POSIX 原生面：libSystem.Native PAL（SystemNative_*）。
+// 这些符号链进每个 .NET 进程映像（BCL 文件 IO 全靠它们），静态 musl AOT
+// 件里同样可解析——裸 DllImport("libc") 在 static-pie 件中没有 .dynsym
+// 可解析目标，P/Invoke 一步都走不到 syscall（syspkg 冻件腿 rc3 实证）。
+// PAL 的 FileStatus 布局由 C 侧对各 ABI 归一化（Mode/Uid 槽位定死），
+// 内核 struct stat 的架构偏移表与 __fxstat/inode64 退化面整体不需要；
+// PAL_O_NOFOLLOW 由 C 侧转译各 ABI 的 O_NOFOLLOW 原生值，旗标表也不存在
+//（arm 紧凑表/generic 表之分消失在 PAL 内部）。
 internal static class NativeMethods
 {
-    internal const int StatBufferSize = 256;
+    // PAL OpenFlags（pal_io.h 定值，与 POSIX 数值无关的固定中间值）：
+    // PAL_O_RDONLY=0x0000 | PAL_O_CLOEXEC=0x0010 | PAL_O_NOFOLLOW=0x0200。
+    // PAL 旗标集不导 O_NONBLOCK——fifo 阻塞窗由 OpenWithDeadline 的
+    // 5s 线程内 open 收口（sh `timeout 5 cat` 同口径）。
+    internal const int EnvOpenFlags = 0x0010 | 0x0200;
+    internal const int OpenDeadlineMs = 5000;
+    internal static readonly IntPtr InvalidFd = new IntPtr(-1);
 
-    private const int TypeMask = 0xF000;    // S_IFMT
-    private const int RegularFile = 0x8000; // S_IFREG
+    private const int TypeMask = 0xF000;    // PAL_S_IFMT
+    private const int RegularFile = 0x8000; // PAL_S_IFREG
 
-    [DllImport("libc", EntryPoint = "open", SetLastError = true, CharSet = CharSet.Ansi)]
-    private static extern int OpenRaw(string pathname, int flags);
-
-    [DllImport("libc", EntryPoint = "close", SetLastError = true)]
-    private static extern int CloseRaw(int fd);
-
-    [DllImport("libc", EntryPoint = "fstat", SetLastError = true)]
-    private static extern int FStat(int fd, byte[] buffer);
-
-    // macOS inode64 显式绑名（同 UnixFileTypes stat$INODE64 先例）；
-    // 老 glibc（<2.33）不导裸 fstat，退 __fxstat(ver, fd, buf)——
-    // ver 依 ABI：x86_64 系全字宽 nlink 布局=1，asm-generic=0。
-    // 猜测口径：ver 按"当前进程是否 x86_64"映射，对老 glibc 上非 x64 ABI
-    // 未必命中——出货腿是 musl 静态件（glibc 版本面不可达），登记边界。
-    [DllImport("libc", EntryPoint = "fstat$INODE64", SetLastError = true)]
-    private static extern int FStatInode64(int fd, byte[] buffer);
-
-    [DllImport("libc", EntryPoint = "__fxstat", SetLastError = true)]
-    private static extern int FxStat(int version, int fd, byte[] buffer);
-
-    [DllImport("libc", EntryPoint = "geteuid")]
-    private static extern uint GetEuidRaw();
-
-    // O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK——三旗标常量按 ABI 分：
-    // macOS 0x100/0x1000000/0x4；FreeBSD 0x200/0x100000/0x4。
-    // Linux 侧 O_NOFOLLOW 按 fcntl 表族分——arm/arm64/powerpc 用自有
-    // 紧凑表（O_NOFOLLOW=0x8000），其余架构走 asm-generic 表
-    //（O_NOFOLLOW=0x20000——x86_64/s390x/riscv/loongarch 同值）。
-    // 与 stat st_mode 的 24/16 分桶**不同分类**：ppc64le 的 stat 在
-    // 全字宽桶但 fcntl 属紧凑族，riscv/loongarch 反之——不可互借。
-    // O_CLOEXEC/O_NONBLOCK 恒 0x80000/0x800 全 Linux 通。
-    // arm64 上塞 0x20000 等于只开 O_LARGEFILE 位——链接跟随放行
-    //（ubuntu-arm 腿实证红）。
-    internal static int OpenFlagsForCurrentOs() =>
-        OpenFlags(RuntimeInformation.ProcessArchitecture);
-
-    // 架构形参化的纯函数面——供全枚举表驱动断言（Linux 腿）。
-    internal static int OpenFlags(Architecture architecture)
+    // pal_io.h FileStatus 的同形镜像——PAL 归一化布局，Mode@4/Uid@8 定死。
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct FileStatus
     {
-        if (OperatingSystem.IsMacOS())
-        {
-            return 0x100 | 0x1000000 | 0x4;
-        }
-        if (OperatingSystem.IsFreeBSD())
-        {
-            return 0x200 | 0x100000 | 0x4;
-        }
-        var nofollow = architecture is Architecture.Arm or Architecture.Armv6
-            or Architecture.Arm64 or Architecture.Ppc64le
-                ? 0x8000
-                : 0x20000;
-        return nofollow | 0x80000 | 0x800;
+        internal int Flags;
+        internal int Mode;
+        internal uint Uid;
+        internal uint Gid;
+        internal long Size;
+        internal long ATime;
+        internal long ATimeNsec;
+        internal long MTime;
+        internal long MTimeNsec;
+        internal long CTime;
+        internal long CTimeNsec;
+        internal long BirthTime;
+        internal long BirthTimeNsec;
+        internal long Dev;
+        internal long RDev;
+        internal long Ino;
+        internal uint UserFlags;
     }
 
-    internal static int Open(string pathname, int flags)
+    [DllImport("libSystem.Native", EntryPoint = "SystemNative_Open", SetLastError = true, CharSet = CharSet.Ansi)]
+    private static extern IntPtr SysOpen(string path, int flags, int mode);
+
+    [DllImport("libSystem.Native", EntryPoint = "SystemNative_Close", SetLastError = true)]
+    private static extern int SysClose(IntPtr fd);
+
+    [DllImport("libSystem.Native", EntryPoint = "SystemNative_FStat", SetLastError = true)]
+    private static extern int SysFStat(IntPtr fd, out FileStatus output);
+
+    [DllImport("libSystem.Native", EntryPoint = "SystemNative_GetEUid")]
+    private static extern uint SysGetEUid();
+
+    // env 件 open：PAL 无 O_NONBLOCK 旗标，fifo 阻塞窗用带时限的后台线程
+    // 收口（sh `timeout 5 cat` 同口径 5s）——超时按 InvalidFd 拒；被弃
+    // 线程仍卡在 open，随短命引导进程退出收尸。P/Invoke 解析失败（静态
+    // 件理论不可达 PAL、或符号缺失）一律 InvalidFd——fail closed。
+    internal static IntPtr OpenWithDeadline(string path)
     {
+        var fd = InvalidFd;
+        // gate 不 using：超时被弃的线程若在 gate 释放后解除阻塞，
+        // finally 对已 Dispose 的 MRES 抛 ObjectDisposedException——
+        // 后台线程未处理异常会带走整个进程（干净 rc3 变 crash）。
+        // 不 Dispose 由 GC 收，无句柄面。
+        var gate = new ManualResetEventSlim();
+        var worker = new Thread(() =>
+        {
+            try
+            {
+                fd = SysOpen(path, EnvOpenFlags, 0);
+            }
+            catch (Exception)
+            {
+            }
+            finally
+            {
+                try
+                {
+                    gate.Set();
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+            }
+        })
+        { IsBackground = true };
         try
         {
-            return OpenRaw(pathname, flags);
+            worker.Start();
         }
         catch (Exception)
         {
-            return -1;
+            // 线程起不来（极端）按校验失败拒——不冒泡成 rc4。
+            return InvalidFd;
         }
+        return gate.Wait(OpenDeadlineMs) ? fd : InvalidFd;
     }
 
-    internal static void Close(int fd)
+    internal static void Close(IntPtr fd)
     {
         try
         {
-            CloseRaw(fd);
+            SysClose(fd);
         }
         catch (Exception)
         {
@@ -1015,48 +1034,25 @@ internal static class NativeMethods
 
     // fstat 失败一律 false——无法复核 inode 属性即按校验失败拒（fail closed，
     // 与 UnixFileTypes"无法判定放行"口径刻意不同：这里是安全边界不是拷贝过滤）。
-    internal static bool TryFstat(int fd, byte[] buffer)
+    internal static bool TryFStat(IntPtr fd, out FileStatus status)
     {
         try
         {
-            if (OperatingSystem.IsMacOS())
-            {
-                try
-                {
-                    return FStatInode64(fd, buffer) == 0;
-                }
-                catch (EntryPointNotFoundException)
-                {
-                    return FStat(fd, buffer) == 0;
-                }
-            }
-            try
-            {
-                return FStat(fd, buffer) == 0;
-            }
-            catch (EntryPointNotFoundException)
-            {
-                var version = RuntimeInformation.ProcessArchitecture == Architecture.X64
-                    ? 1
-                    : 0;
-                return FxStat(version, fd, buffer) == 0;
-            }
+            return SysFStat(fd, out status) == 0;
         }
         catch (Exception)
         {
+            status = default;
             return false;
         }
     }
 
-    internal static bool IsRegularMode(byte[] status)
-    {
-        var mode = ModeBits(status);
-        return (mode & TypeMask) == RegularFile;
-    }
+    internal static bool IsRegularMode(FileStatus status) =>
+        (status.Mode & TypeMask) == RegularFile;
 
     // st_uid 复核：期望 uid=已解析调用 uid，缺席按本进程 euid——
     // geteuid 拿不到（不该发生）按校验失败拒。
-    internal static bool OwnerMatches(byte[] status, long? callerUid)
+    internal static bool OwnerMatches(FileStatus status, long? callerUid)
     {
         long expected;
         if (callerUid is { } uid)
@@ -1067,48 +1063,13 @@ internal static class NativeMethods
         {
             try
             {
-                expected = GetEuidRaw();
+                expected = SysGetEUid();
             }
             catch (Exception)
             {
                 return false;
             }
         }
-        return BitConverter.ToUInt32(status, UidOffset()) == expected;
-    }
-
-    private static int ModeBits(byte[] status) =>
-        OperatingSystem.IsMacOS()
-            ? BitConverter.ToUInt16(status, 4)
-            : BitConverter.ToInt32(status, LinuxModeOffset());
-
-    // st_mode 偏移：nlink 全字宽 ABI（x86_64/s390x/ppc64le）@24、asm-generic @16。
-    // 上游 UnixFileTypes.LinuxModeOffset 曾因 netstandard2.0 缺具名成员用
-    // 数值判据误标（`5 or 7` 把 Armv6 误送 24、Ppc64le 漏进 16）——本轮已修
-    // 正为 `5 or 8`，本表具名成员天然取准，两侧口径一致。
-    private static int LinuxModeOffset()
-    {
-        var architecture = RuntimeInformation.ProcessArchitecture;
-        return architecture is Architecture.X64 or Architecture.S390x or Architecture.Ppc64le
-            ? 24
-            : 16;
-    }
-
-    // st_uid 偏移：Linux nlink-全字宽 ABI（x86_64/s390x/ppc64le）@28、
-    // asm-generic @24；macOS inode64 @16；FreeBSD @28。
-    private static int UidOffset()
-    {
-        if (OperatingSystem.IsMacOS())
-        {
-            return 16;
-        }
-        if (OperatingSystem.IsFreeBSD())
-        {
-            return 28;
-        }
-        var architecture = RuntimeInformation.ProcessArchitecture;
-        return architecture is Architecture.X64 or Architecture.S390x or Architecture.Ppc64le
-            ? 28
-            : 24;
+        return status.Uid == expected;
     }
 }

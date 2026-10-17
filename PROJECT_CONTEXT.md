@@ -107,7 +107,7 @@ verify run `38881497256`（main@`cb76455`，#103/#104 合入后）4 条 macOS co
   - ~~既有冻件可选经 `produce-bootstrap` 全量重产统一 provenance~~——升级为必须：旧件基线（run `38865619194`@`5c22c8c`）不含 PR #98 代码，`linux-musl-*` 静态件带 `dlopen("libc")` 实为破损件；已重产（run `38879370229`）全量换冻 8 件统一 provenance（PR #104）；#105 审计再改 `BootstrapPlan` 语义（回滚 marker、异型槽选腿、锁分流、nohup 重启、恢复向已提交容错），随包引导件最终换冻至 run `38903696939`@`58b1ba8` 基线（8 件，魔数/架构/执行位核验）。
 - **spec §3 终验对账遗留**（审计结论：63 项零真缺口；弱覆盖中可自动化项已补断言，余下按性质归位）：
   - ~~测试侧待做：`MacAppGate` 未签名 `.app` 拒绝腿 + update e2e 非 zip 格式腿 + zip/tar.gz 跨宿主同件交换接线~~——已实现（PR #101：`MacAppGateTests` BundleID 拒换/quarantine 剥离恒自动化 + 自签尽力腿四件，TeamIdentifier 面探针驱动取不到即诚实 Skip 留 SA-P-07；`UpdateClientChainTests` 补 tar.gz 与 macOS 未签 .app e2e；PR #102：consume 三脚本归档格式级交换模式 + verify 矩阵 6 行轮转 + 产侧 SHA256SUMS LF 修复）；
-  - 环境受限已登记 `special-acceptance.md`：s390x/ppc64le `UnixFileTypes` 偏移、Windows zip 符号链接还原、提权目录换装（原已登记）；
+  - 环境受限已登记 `special-acceptance.md`：s390x/ppc64le `UnixFileTypes` PAL 可达性（stat 已改走 `libSystem.Native`，ABI 偏移表不存在）、Windows zip 符号链接还原、提权目录换装（原已登记）；
   - 能力缺口（功能面）：`DebPackageReader` 不解 GNU 长名/PAX——真实第三方 deb 样本解析非当前目标，规格已对齐；
 
 

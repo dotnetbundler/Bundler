@@ -79,7 +79,9 @@ want_rec() { # $1 phase-id $2 rec-file $3 expect-substr（形如 uid=1000）$4 d
 # 实现侧 command -v/PATH 探测只看得到 shim 内工具——包管理器与降权工具靠"给不给进
 # shim"分流成各退化腿。sh 支路协议基础工具固定入组（awk/sed/tr/ls/dirname/env/nohup/id/
 # mkdir——前六件协议解析用，id/mkdir 喂探针）。
-BASETOOLS="env nohup dirname awk ls sed tr id mkdir cat"
+# stat 属协议工具：_pa_env_validate 的 st_uid 复核走 stat -c %u（缺 stat=
+# 无法复核→拒，shim 腿曾被空值拒成 rc3）；timeout 喂读侧 timeout 5 cat 上限。
+BASETOOLS="env nohup dirname awk ls sed tr id mkdir cat stat timeout"
 # dpkg 在 PATH 内自查运行依赖（缺一个整体报 "expected programs not found" 退 2）：
 # sh/rm/tar/diff + dpkg-deb/dpkg-split/ldconfig/start-stop-daemon（实跑见
 # "unable to execute split package reassembly (dpkg-split)"）——shim 给 dpkg 必须一并给。
