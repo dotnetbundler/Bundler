@@ -127,7 +127,7 @@ internal static class ToolRunner
     }
 
     // 子进程死亡但孙代持管道时 ReadToEnd 不完——排空最多再等 5s，拿到的算数、拿不到的弃。
-    // IsCompletedSuccessfully：faulted/canceled 读任务不在此重抛，超时语义不丢。
+    // Drained：faulted/canceled 读任务不在此重抛，超时/取消语义不丢。
     private static async Task<(string Out, string Err)> DrainPipesAsync(
         Task<string> standardOutput, Task<string> standardError)
     {
@@ -229,9 +229,12 @@ internal static class ToolRunner
                     $"'{Path.GetFileName(executable)}' did not exit within {bound} and was killed.");
             }
         }
-        await Task.WhenAll(standardOutput, standardError).ConfigureAwait(false);
+        // 正常/取消腿同走有界排空：旧 TFM 杀直系后孙代持管道时 EOF 不至，
+        // ReadToEnd 的 WhenAll 会在取消后悬停——5s 宽限后拿到多少算多少。
+        var (stdout, stderr) = await DrainPipesAsync(standardOutput, standardError)
+            .ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
-        return new Result(process.ExitCode, standardOutput.Result, standardError.Result);
+        return new Result(process.ExitCode, stdout, stderr);
     }
 
     /// <summary>
