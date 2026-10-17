@@ -370,8 +370,21 @@ public sealed class MacDmgIntegrationTests : IClassFixture<MacDmgFixture>
             ? Directory.EnumerateFiles(badDir, "*.dmg", SearchOption.AllDirectories)
             : [];
         Assert.Empty(leftovers);
-        var mounted = ProcessRunner.Run("hdiutil", ["info"]);
-        Assert.DoesNotContain(_f.Ws.Root, mounted.StdOut);
+        // hdiutil detach 返回后内核簿记有滞后——image-path 会短暂残留 listing；
+        // 有界轮询确认消失，保留"失败构建不遗留挂载"的真实断言力（真泄漏超窗仍判败）。
+        string mounted = "";
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+        do
+        {
+            mounted = ProcessRunner.Run("hdiutil", ["info"]).StdOut;
+            if (!mounted.Contains(_f.Ws.Root, StringComparison.Ordinal))
+            {
+                break;
+            }
+            Thread.Sleep(2000);
+        }
+        while (DateTime.UtcNow < deadline);
+        Assert.DoesNotContain(_f.Ws.Root, mounted);
     }
 
     [Fact]
