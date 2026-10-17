@@ -75,7 +75,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   `pkexec` 弹窗在场被用户拒绝授权属用户裁决面（非自动化判定域），归 `docs/project/special-acceptance.md` 外部待验收。
 - 实现落点（B3 `SyspkgReplay`）：客户端身份 `alpineapk` 在动词面映射 `--format apk`。
   会话 env 件写 `<staging>/pkg-<guid>/session.env`（0600，含 CR/LF 的值跳过，零有效对或写败退为不带 `--env-file`）。
-  件是一次性输入：引导件读毕即删件与 `pkg-*` 暂存目录，客户端 `Exited` 钩尽力删余——
+  件是一次性输入：引导件读毕即删件与 `pkg-*` 暂存目录，客户端在拉起腿退出时尽力删余（观察窗内 rc0 速退内联执行、仍存活腿挂 `Exited` 钩——已终结进程不保证派发 `Exited`）——
   客户端可能先于引导件退出使钩不触发，残件由下一次 apply 的 24h stale staging 清扫兜底。
   新包复制进用户空间 retention 目录并写 `applied` 标记；留存副本在拉起前再过一遍公钥验签（apply 与 rollback 同口径），验不过即拒绝并还原现场。
   rollback 拣 `applied` 之外最新留存件（须 pkg+sig 成对且过签，否则跳选下一个）同链重放、applied 翻回旧包名。

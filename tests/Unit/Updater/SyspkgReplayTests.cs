@@ -816,7 +816,41 @@ public sealed class SyspkgReplayTests : TempBase
             Directory.EnumerateFiles(RetentionDir).ToArray());
     }
 
+    [Fact]
+    public void Apply_LegExitedWithinWindow_EnvFileStillCleaned()
+    {
+        // 回归：提权腿观察窗内 rc==0 速退（垫片/工具同步成功即退形态）——
+        // 已终结进程不保证派发 Exited（POSIX 已 reap 路径实测不派发；
+        // ubuntu CI 实测残留）——清理只挂事件钩会让 session.env 残留磁盘。
+        // 生产侧改为速退腿内联清理。
+        // 断言：Apply 返回已退句柄后轮询 env 件必被删——速退腿走内联清理。
+        SetupProbes(
+            env: new Dictionary<string, string> { ["DISPLAY"] = ":0" },
+            commands: PkexecCommands("dpkg"));
+        SyspkgReplay.SpawnProbe = _ => FastOkProcess();
+        var install = InstallDir();
+        var artifact = Artifact();
+
+        using var process = SyspkgReplay.Apply(Identity("deb"), artifact,
+            Sig(Material, artifact), install, Options(), _log.Add);
+
+        Assert.True(process.HasExited, "腿已在观察窗内退出（rc==0 速退）");
+        // session.env 落在 <StagingRoot>/pkg-*/ 下。断言面是"session.env
+        // 不复存在"——速退腿走内联清理（本测试腿窗内必退，钩从未挂）；
+        // 轮询兼容内联已跑/未跑的时序（残留即回归）。
+        bool SessionEnvRemains() =>
+            Directory.Exists(StagingRoot) &&
+            Directory.EnumerateFiles(StagingRoot, "session.env", SearchOption.AllDirectories).Any();
+        for (var i = 0; i < 100 && SessionEnvRemains(); i++)
+        {
+            Thread.Sleep(100);
+        }
+        Assert.False(SessionEnvRemains(), "env 件删余必须执行——session.env（含会话变量）不得残留");
+    }
+
     // 观察窗进程道具：快败件即刻非零退出；长活件窗内不退出（测试尾即杀）。
+    // 速退成功件模拟垫片/同步命令"拉起即 rc0 退出"——窗内必已退出，
+    // 命中"已退进程不保证派发 Exited、须内联清理"的回归面。
     private static Process SpawnRaw(string file, string args) =>
         Process.Start(new ProcessStartInfo(file, args)
         {
@@ -828,6 +862,11 @@ public sealed class SyspkgReplayTests : TempBase
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? SpawnRaw("cmd.exe", "/c exit 3")
             : SpawnRaw("/bin/sh", "-c \"exit 3\"");
+
+    private static Process FastOkProcess() =>
+        RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? SpawnRaw("cmd.exe", "/c exit 0")
+            : SpawnRaw("/bin/sh", "-c \"exit 0\"");
 
     private static Process SleeperProcess() =>
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
