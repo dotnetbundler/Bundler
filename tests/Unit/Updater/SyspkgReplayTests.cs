@@ -639,9 +639,12 @@ public sealed class SyspkgReplayTests : TempBase
         File.WriteAllText(Path.Combine(RetentionDir, "applied"), "myapp_1.0-1_amd64.deb\n");
         var artifact = Artifact();
 
-        Assert.Throws<InvalidOperationException>(() =>
+        // 全腿失败统一抛 UpdateException（spawn 原异常入 inner、notes 细节并消息）。
+        var exception = Assert.Throws<UpdateException>(() =>
             SyspkgReplay.Apply(Identity("deb"), artifact, Sig(Material, artifact),
                 install, Options(), _log.Add));
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Contains("spawn gone", exception.Message);
 
         Assert.Equal("myapp_1.0-1_amd64.deb",
             File.ReadAllText(Path.Combine(RetentionDir, "applied")).Trim());
@@ -669,8 +672,10 @@ public sealed class SyspkgReplayTests : TempBase
         WriteSigSidecar(old);
         File.WriteAllText(Path.Combine(RetentionDir, "applied"), "myapp_2.0-1_amd64.deb\n");
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var exception = Assert.Throws<UpdateException>(() =>
             SyspkgReplay.Rollback(Identity("deb"), install, Options(), _log.Add));
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Contains("spawn gone", exception.Message);
 
         Assert.Equal("myapp_2.0-1_amd64.deb",
             File.ReadAllText(Path.Combine(RetentionDir, "applied")).Trim());
