@@ -524,6 +524,8 @@ internal static class SyspkgReplay
     // B2 留存件完整性再核：retention 目录与原件同为用户可写——直喂提权
     // pkg-apply 的候选必须 <name> 配 <name>.sig 成对且对身份公钥验过；
     // 签名缺失/畸形/验不过一律按不可信处理（调用方决定跳选还是拒绝）。
+    // 残余边界：验签在规划时、读取在使用时，同用户对留存件的验后替换窗仍在——
+    // 彻底封闭须引导件侧持公钥重验（root 进程信任面）；当前登记为已知边界。
     private static bool VerifyRetainedPackage(string packagePath, string? publicKey)
     {
         try
@@ -583,6 +585,10 @@ internal static class SyspkgReplay
         }
     }
 
+    // applied 标记还原（spawn 失败/验签拒绝时）：previous==null 表示该标记本
+    // 不该存在→删；否则写回前值。注意残留语义：同名工件逐次覆盖（无版本号
+    // 命名）叠加失败还原时，标记可能指向已被覆盖的留存名——悬空标记使后续
+    // rollback 跳选该名，实质损害发生在覆盖当下而非此处，登记边界。
     private static void RestoreAppliedMarker(string retentionDir, string? previous)
     {
         try
@@ -836,6 +842,9 @@ internal static class SyspkgReplay
             }
             var envFile = leg.EnvFile;
             var envDir = leg.EnvFileDirectory;
+            // WaitForExit/EnableRaisingEvents 在 spawn try-catch 之外：此处抛异常会
+            // 越过退化与函数尾还原——生产 Process.Start 产物上实际不可达，仅
+            // SpawnProbe 测试缝误用可触发（登记边界，不为此加 try 扰动主链）。
             process.EnableRaisingEvents = true;
             process.Exited += (_, _) =>
             {
@@ -858,7 +867,16 @@ internal static class SyspkgReplay
             RestoreAppliedMarker(retentionDir, launch.AppliedBefore);
         }
         TryDeleteRetained(launch.RetainedFile);
-        throw spawnFailure ?? new UpdateException(
+        // spawnFailure 是最后一条腿的 spawn 异常——异常主信息里并入 notes 全腿
+        // 细节（spawn 失败 + 观察窗速退），避免混合失败时诊断面只剩一条。
+        if (spawnFailure is not null)
+        {
+            throw new UpdateException(
+                $"no privilege escalation leg could launch pkg-apply: {spawnFailure.Message} " +
+                $"({string.Join("; ", notes)}).",
+                spawnFailure);
+        }
+        throw new UpdateException(
             $"no privilege escalation leg could launch pkg-apply ({string.Join("; ", notes)}).");
     }
 
