@@ -186,6 +186,7 @@ public static class ToolCache
     internal static async Task<FileStream> AcquireLockAsync(string lockPath, CancellationToken cancellationToken)
     {
         var started = Stopwatch.StartNew();
+        TimeSpan? missingSince = null;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -195,10 +196,20 @@ public static class ToolCache
             }
             catch (IOException)
             {
-                // 锁文件不存在=非争用型错误（路径过长/权限等），重试无意义直接抛。
-                if (!File.Exists(lockPath))
+                if (File.Exists(lockPath))
                 {
-                    throw;
+                    missingSince = null;   // 争用：锁文件被持方占着
+                }
+                else
+                {
+                    // 建不出文件：释放+删文件竞态窗（WixBundleBackend finally 删锁件）给 1s
+                    // 缺席宽限——窗内下一次 OpenOrCreate 会自己重建成功；持续缺席=确定性
+                    // 非争用错误（路径/权限/目录缺），直抛不报超时。
+                    missingSince ??= started.Elapsed;
+                    if (started.Elapsed - missingSince.Value >= TimeSpan.FromSeconds(1))
+                    {
+                        throw;
+                    }
                 }
                 if (started.Elapsed >= ToolRunner.ProcessTimeout)
                 {

@@ -137,6 +137,25 @@ public sealed class ToolRunnerTests
     }
 
     [Theory]
+    // 密位旗标后参遮罩：security create-keychain -p <pw> / set-key-partition-list -k <pw>。
+    [InlineData(new[] { "create-keychain", "-p", "hunter2", "/tmp/kc" },
+        "\"create-keychain\" \"-p\" \"***\" \"/tmp/kc\"")]
+    [InlineData(new[] { "set-key-partition-list", "-s", "-k", "hunter2" },
+        "\"set-key-partition-list\" \"-s\" \"-k\" \"***\"")]
+    // --flag=value 形与连续密位旗标（后旗标对再后参仍有遮罩义务）。
+    [InlineData(new[] { "--password=abc123", "--team-id", "TEAM" },
+        "--password=\"***\" \"--team-id\" \"***\"")]
+    [InlineData(new[] { "-p", "--password", "secret" },
+        "\"-p\" \"***\" \"***\"")]
+    // 普通参数原样、密位旗标缺席不遮。
+    [InlineData(new[] { "sign", "-f", "/tmp/a b" },
+        "\"sign\" \"-f\" \"/tmp/a b\"")]
+    public void SafeArgs_SecretFlagsMasked(string[] argv, string expected)
+    {
+        Assert.Equal(expected, ToolRunner.SafeArgs(argv));
+    }
+
+    [Theory]
     [InlineData("simple", "\"simple\"")]
     [InlineData("has space", "\"has space\"")]
     [InlineData("quote\"inside", "\"quote\\\"inside\"")]

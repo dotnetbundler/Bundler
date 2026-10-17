@@ -64,13 +64,14 @@ internal static class ToolRunner
     }
 
     // 值随旗标/等号承载秘密的旗标集合——遮罩其后一参或 = 右值。
-    private static readonly HashSet<string> s_secretFlags = new(StringComparer.Ordinal)
+    // -k 在 security set-key-partition-list 里是密码位（import -k <path> 的可接受过遮罩）。
+    internal static readonly HashSet<string> s_secretFlags = new(StringComparer.Ordinal)
     {
-        "-p", "-P", "--password", "--pass", "--secret",
+        "-p", "-P", "-k", "--password", "--pass", "--secret",
         "--apple-id", "--team-id", "--key", "--key-id", "--api-key", "--apiKey",
     };
 
-    private static string SafeArgs(IReadOnlyList<string> arguments)
+    internal static string SafeArgs(IReadOnlyList<string> arguments)
     {
         var parts = new List<string>(arguments.Count);
         var maskNext = false;
@@ -78,8 +79,9 @@ internal static class ToolRunner
         {
             if (maskNext)
             {
+                // 被遮位若本身还是密位旗标（flag-flag-value 形），它对后参仍有遮罩义务。
                 parts.Add("\"***\"");
-                maskNext = false;
+                maskNext = s_secretFlags.Contains(arg);
                 continue;
             }
             var eq = arg.IndexOf('=');
@@ -118,15 +120,18 @@ internal static class ToolRunner
     }
 
     // 子进程死亡但孙代持管道时 ReadToEnd 不完——排空最多再等 5s，拿到的算数、拿不到的弃。
+    // IsCompletedSuccessfully：faulted/canceled 读任务不在此重抛，超时语义不丢。
     private static async Task<(string Out, string Err)> DrainPipesAsync(
         Task<string> standardOutput, Task<string> standardError)
     {
         await Task.WhenAny(
             Task.WhenAll(standardOutput, standardError),
             Task.Delay(TimeSpan.FromSeconds(5))).ConfigureAwait(false);
-        return (standardOutput.IsCompleted ? standardOutput.Result : "",
-                standardError.IsCompleted ? standardError.Result : "");
+        return (Drained(standardOutput), Drained(standardError));
     }
+
+    private static string Drained(Task<string> task) =>
+        task is { IsCompleted: true, IsFaulted: false, IsCanceled: false } ? task.Result : "";
 
     internal static async Task RunAsync(
         string executable,
@@ -209,7 +214,7 @@ internal static class ToolRunner
             if (!process.WaitForExit(WaitMilliseconds(bound)))
             {
                 KillProcessTree(process);
-                process.WaitForExit();
+                process.WaitForExit(5000);
                 var (outText, errText) = await DrainPipesAsync(standardOutput, standardError)
                     .ConfigureAwait(false);
                 return new Result(-1, outText,
@@ -258,7 +263,7 @@ internal static class ToolRunner
         if (!process.WaitForExit(WaitMilliseconds(ProcessTimeout)))
         {
             KillProcessTree(process);
-            process.WaitForExit();
+            process.WaitForExit(5000);
             var drained = DrainPipesAsync(output, error);
             drained.Wait();
             throw new InvalidOperationException(
