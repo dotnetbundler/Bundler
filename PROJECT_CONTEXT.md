@@ -2,9 +2,10 @@
 
 > 最后更新：2026-10-17
 > 当前分支：`main`
-> 在途事项：UPDATE 系统包扩展 B0–B4 全部合入 `main`（PR #107 设计定稿、#108 发射+`pkg` 身份、#109 引导件 `pkg-apply` 动词双实现、#111 客户端 replay 编排 `SyspkgReplay`、#112 syspkg-verify debian/fedora/alpine 三容器验收腿+冻件重冻 #113），B5 收尾进行中（syspkg-verify 经 `workflow_call` 收编 verify 发布门、usage/文档收尾、`pkg` 字段 v1 兼容断言）。
-> 引导件冻件口径：已重冻含 `pkg-apply`（produce-bootstrap run `38927820189`@`856abfb`，PR #113）。
-> 另一次全量重冻进行中（run `38947305956`@`940403e`，含 DropProbe 修复与 env 清理口径），最终入库 run 由后续 PR 落地。
+> UPDATE 系统包扩展 B0–B5 全链完成并入 `main`（PR #107 设计、#108 发射+`pkg` 身份、#109 引导件 `pkg-apply` 双实现、#110 macOS quarantine 能力探测、#111 客户端 `SyspkgReplay`、#112 syspkg-verify 三容器验收+DropProbe 修复、#113/#115 冻件重冻、#114 收尾：syspkg-verify 经 `workflow_call` 收编 verify 发布门、usage 文档、`pkg` 字段 v1 兼容断言）。
+> 测试确定性修复 #116（奇偶腿宿主 `DEBIAN_FRONTEND` env 泄漏+uidedge rec 竞态）与 #117（NSIS 卸载分离删除断言改 WaitFor）已并入。
+> 发布门实证：verify 于 `0e4a015` 基线**三连全绿**（run `38975789470`、`38980755696`、`38985327721`——六宿主测试矩阵 + syspkg 三容器腿 + produce/consume/manual/universal 全链）。
+> 引导件冻件口径：现嵌 8 件为 produce-bootstrap run `38947305956`@`940403e` 产出（PR #115 入库 `7925ae4`，含 `pkg-apply`+DropProbe 预检+env 件清理），SHA-256 与字节数留账于该 squash 正文。
 > 图形提权入口链等剩余边界仍挂 `docs/project/special-acceptance.md`。
 > 当前包版本：`0.1.0-alpha.103`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词（别称仅输入归一，产物名用各生态词），契约与全产物名目录见 `docs/design/targets.md`**
