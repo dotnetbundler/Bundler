@@ -34,6 +34,10 @@ log() {
     if [ -n "$LOG_FILE" ]; then
         # 日志件写入失败降级 stderr WARN（首败报一次）并继续——日志是留痕
         # 辅助，不可写不该阻断换包/装包主流程（AOT CreateLog 同口径）。
+        # 复核登记：--log 追加写顺链——日志路径属调用方受托面（特权进程按调用方
+        # 指定位置写日志是天职，不做链接拒判）；无 --log 时写 stdout，对端管道
+        # 先关会 SIGPIPE 中途打死脚本——换包主链有 marker/恢复兜底不砖，stdio
+        # 存活性同样属调用方受托面，仅登记不改。
         if ! (printf '%s\n' "$1" >>"$LOG_FILE") 2>/dev/null; then
             [ -n "${_LOG_WARNED:-}" ] && return 0
             _LOG_WARNED=1
@@ -59,6 +63,9 @@ restart_app() {
 _restart_nohup() {
     # cwd 对齐 AOT：目录级=INSTALL_DIR 本身，文件级=INSTALL_DIR 的父目录。
     # stdin 一并钉 /dev/null——分离进程不得持有调用方管道任一端（AOT 侧同口径）。
+    # 注：后台子壳里的 cd 失败会被 & 吞成"启动即成功"——与 pkg-apply 重启腿同形，
+    # 但本腿是尽力而为语义（换包已提交、重启成败不进退出码），不设同步 cd 探测，
+    # 与 pkg-apply 的 rc6 硬约束刻意不同（A1 登记）。
     if [ -d "$INSTALL_DIR" ]; then
         (cd "$INSTALL_DIR" && nohup "$APP_PATH" </dev/null >/dev/null 2>&1 &)
     else
@@ -70,8 +77,13 @@ _restart_nohup() {
 # 客户端经 pkexec/sudo 以 root 拉起；动词只做：包管理器前端退化链装本地包 +
 # 降权重启 --app。包管理器账本即状态——不引入 marker/锁/崩溃恢复；不验签。
 
-# 命令解析：BUNDLER_UPDATER_CMD_<TOOL> env 覆盖先行（设了即视为存在并用该路径），
-# 否则 command -v。双侧同名测试缝（stub 垫片场景指到假工具）。
+# 命令解析：BUNDLER_UPDATER_CMD_<TOOL> env 覆盖先行——覆盖值由 root 直 exec，
+# 必须"存在+普通文件+有执行位"才生效（不设防等于把任意路径提权为权威命令）；
+# 不可用覆盖按未设置退化 command -v（AOT ResolveCommand 同序同口径）。
+# command -v 结果额外要求绝对路径（/*）且 -x：内建/函数名命中 PATH 时不产绝对
+# 路径、PATH 空元素或相对段会命中 cwd——两者都不得在 root 语境当工具使。
+# env 不在本地解析面：spawn argv 里的内层 `env K=V` 由 nohup 子进程经 execvp
+# 按自己的 PATH 解析，从不经本函数——原 env) 覆盖支路是死支路已删（A4）。
 _pa_cmd() {
     case "$1" in
         apt-get) _pc=${BUNDLER_UPDATER_CMD_APT_GET:-} ;;
@@ -85,17 +97,25 @@ _pa_cmd() {
         runuser) _pc=${BUNDLER_UPDATER_CMD_RUNUSER:-} ;;
         su) _pc=${BUNDLER_UPDATER_CMD_SU:-} ;;
         nohup) _pc=${BUNDLER_UPDATER_CMD_NOHUP:-} ;;
-        env) _pc=${BUNDLER_UPDATER_CMD_ENV:-} ;;
         *) _pc="" ;;
     esac
     if [ -n "$_pc" ]; then
-        printf '%s\n' "$_pc"
-        return 0
+        if [ -f "$_pc" ] && [ -x "$_pc" ]; then
+            printf '%s\n' "$_pc"
+            return 0
+        fi
+        _pc=""
     fi
-    command -v "$1" 2>/dev/null
+    _pc=$(command -v "$1" 2>/dev/null) || _pc=""
+    case "$_pc" in
+        /*) [ -x "$_pc" ] && { printf '%s\n' "$_pc"; return 0; } ;;
+    esac
+    return 1
 }
 
 # 单 token POSIX 单引号转义：' → '\''（与 AOT ShQuote 同算法，su -c 串用）。
+# 复核登记：$() 会剥掉被引值的尾部换行，与 AOT Replace 原样保留有别——
+# 客户端写 env 件前已滤掉含 CR/LF 的值，该边缘现实不可达，仅登记不改。
 _pa_shq() {
     printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
 }
@@ -220,35 +240,77 @@ _pa_env_cleanup() {
     _d=${PA_ENV%/*}
     [ -n "$_d" ] || _d=/
     case "${_d##*/}" in
-        pkg-*) rmdir "$_d" 2>/dev/null || true ;;
+        # rmdir 对符号链接报 ENOTDIR 会留下链接本身——AOT Directory.Delete
+        # 对链接叶删的是链接节点（不触目标）：rmdir 失败后补 rm -f 对齐同口径
+        #（真目录非空同样留弃——非递归契约双侧一致）。
+        pkg-*) rmdir "$_d" 2>/dev/null || { [ -h "$_d" ] && rm -f "$_d" 2>/dev/null; } || true ;;
     esac
     return 0
 }
 
-# 降权重启：uid 由 PA_UID 携来——缺席=本来就 root 直跑，按当前权限直接 spawn；
+# --env-file 预检+预读（TOCTOU 收口，rc3 拒绝口径）：显式给了就必须是"调用者
+# 所有的可读普通件"——普通文件 + 非链接 + st_uid==调用 uid 三重校验，任一过不了
+# 一律拒（调用方判参错），绝不静默降级成"件未提供"。旧口径 -f/-r 检查与真实 open
+# 之间有窗：fifo 能把读它的 root 进程挂死，symlink 会把 root 私有件内容灌进降权
+# app 的 env（用户经 /proc/<app>/environ 读回）——双侧同口径。
+# 属主=st_uid 复核：stat 优先 GNU/busybox -c %u，退化 BSD -f %u；两种 stat 或
+# id（uid 缺席取本进程 euid 时用）都缺席=无法复核→拒（安全默认）。
+# 读取侧 timeout 5 cat 兜底：check→open 残窗内换入 fifo 只败在 5s 上限内，
+# timeout 缺席才退裸 cat（此刻已三重校验过）。内容读定进 _PA_ENV_RAW 钉住——
+# 其后不再触路径，窗内换件/删件都影响不了本轮回放。
+_pa_env_validate() {
+    if [ ! -f "$PA_ENV" ] || [ -h "$PA_ENV" ] || [ ! -r "$PA_ENV" ]; then
+        echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
+        pkg_usage
+        return 1
+    fi
+    _ev_uid=$PA_UID
+    [ -n "$_ev_uid" ] || _ev_uid=$(id -u 2>/dev/null || true)
+    _ev_own=$(stat -c %u "$PA_ENV" 2>/dev/null || stat -f %u "$PA_ENV" 2>/dev/null || true)
+    if [ -z "$_ev_uid" ] || [ -z "$_ev_own" ] || [ "$_ev_own" != "$_ev_uid" ]; then
+        echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
+        pkg_usage
+        return 1
+    fi
+    if command -v timeout >/dev/null 2>&1; then
+        _PA_ENV_RAW=$(timeout 5 cat "$PA_ENV" 2>/dev/null)
+    else
+        _PA_ENV_RAW=$(cat "$PA_ENV" 2>/dev/null)
+    fi
+    if [ $? -ne 0 ]; then
+        echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
+        pkg_usage
+        return 1
+    fi
+    return 0
+}
+
+# 降权重启：uid 由 PA_UID 携来——解析器缺席（awk 不在场）与值缺席必须分流：
+# 前者不能按"本来就 root 直跑"误降成 root spawn，宁可拒重启（rc6，§2.3 不以
+# root 重启的口径优先）；值缺席=本来就 root 直跑，按当前权限直接 spawn；
 # 在场按 setpriv → sudo → runuser → su 退化链降权拉起 --app。
 # env 一律经内层 `env K=V … app` 构造（sudo env_reset 把外层环境剥光），
 # 外层 nohup 分离——引导件退出/终端挂断不该带走新装应用（apply 腿同策略）。
 _pa_restart() {
+    [ "$PA_UID_FAIL" = 0 ] || \
+        { echo "bundler-updater: cannot resolve caller uid (awk unavailable) — refusing restart." >&2; return 1; }
     # 重启目标须是可执行普通文件——目录件 -e/-x 双过会让 nohup exec 目录、
     # 输出被 >/dev/null 吞成 rc0 假成功（AOT File.Exists 同拒 → rc6）。
     [ -f "$PA_APP" ] && [ -x "$PA_APP" ] || \
         { echo "bundler-updater: restart target '$PA_APP' is missing or not executable." >&2; return 1; }
     _d=$(dirname "$PA_APP")
-    _nohup=$(_pa_cmd nohup)
-    [ -n "$_nohup" ] || { log "bundler-updater: nohup not found — cannot detach restart"; return 1; }
-    # 会话 env 收进函数位置参数（$@=K=V 序列）：env 件须普通文件且可读
-    #（目录件 -r 判真会零对放行——AOT ReadLines 抛同走"读失败"）；
-    # \r 统一折成 \n，与 AOT ReadLines 的 \r\n/\r/\n 三终结符同口径；
+    # 会话 env 收进函数位置参数（$@=K=V 序列）：env 件内容已在本动词装包前
+    # 完成校验+读定（_PA_ENV_RAW，见 _pa_env_validate）——此步只做行过滤不再
+    # 触件。\r 统一折成 \n，与 AOT ReadLines 的 \r\n/\r/\n 三终结符同口径；
     # 解析出零有效对按"件不可用"退化最小集——空 $@ 会让内层 env 零覆盖
     # 继承调用方全套（pkexec 语境=root env）原样灌给降权 app。
     set --
-    if [ -n "$PA_ENV" ] && [ -f "$PA_ENV" ] && [ -r "$PA_ENV" ]; then
+    if [ -n "$PA_ENV" ]; then
         _eifs=$IFS
         IFS='
 '
         set -f
-        for _l in $(tr '\r' '\n' <"$PA_ENV"); do
+        for _l in $(printf '%s\n' "$_PA_ENV_RAW" | tr '\r' '\n'); do
             case "$_l" in
                 [A-Za-z_]*=*)
                     _k=${_l%%=*}
@@ -262,11 +324,7 @@ _pa_restart() {
         IFS=$_eifs
         [ $# -gt 0 ] || log "bundler-updater: WARN env file '$PA_ENV' has no usable assignments — minimal session env"
     else
-        if [ -n "$PA_ENV" ]; then
-            log "bundler-updater: WARN cannot read env file '$PA_ENV' — minimal session env"
-        else
-            log "bundler-updater: no --env-file — restart uses minimal session env"
-        fi
+        log "bundler-updater: no --env-file — restart uses minimal session env"
     fi
     if [ $# -eq 0 ]; then
         # 降权场景 HOME 必须是目标用户的家目录（root 的 $HOME 不可回灌）；
@@ -275,10 +333,20 @@ _pa_restart() {
         [ -n "$_h" ] && set -- "$@" "HOME=$_h"
         [ -n "${DISPLAY:-}" ] && set -- "$@" "DISPLAY=$DISPLAY"
     fi
+    # nohup 解析排在 env 解析之后——与 AOT LoadEnvPairs→ResolveCommand 同序，
+    # 使 WARN 序双侧一致。
+    _nohup=$(_pa_cmd nohup)
+    [ -n "$_nohup" ] || { log "bundler-updater: nohup not found — cannot detach restart"; return 1; }
     # 分离腿的 stdin 一并钉 /dev/null——子进程不得持有调用方管道读端，
     # 与 >/dev/null 2>&1 合起来三向全断（AOT StartDetached 同口径）。
+    # 另注：各腿 spawn 前先同步 cd 探测——后台子壳 `(cd … && … &)` 里的 cd
+    # 失败会被 & 吞成"启动即成功"假成功；同步探测失败即如实失败/降下一级，
+    # 与 AOT Process.Start 按 WorkingDirectory 同步拒同口径。
+    # 残余：探测→spawn 间 µs 级 TOCTOU 窗仍在（两 cd 非同次）——完全闭合须
+    # `(cd || exit; spawn&)` 子壳内自判，收益不抵结构扰动，登记边界。
     if [ -z "$PA_UID" ]; then
         log "bundler-updater: restart '$PA_APP'"
+        (cd "$_d") 2>/dev/null || return 1
         (cd "$_d" && "$_nohup" env "$@" "$PA_APP" </dev/null >/dev/null 2>&1 &) && return 0
         return 1
     fi
@@ -288,43 +356,59 @@ _pa_restart() {
     # 里却只认 capabilities 子集，无预检时 spawn"成功"返真、子进程即刻参数
     # 错死在分离层，重启被静默吃掉）。预检三向钉死不透调用方 stdio。
     if _c=$(_pa_cmd setpriv) && [ -n "$_c" ]; then
-        if "$_c" --reuid="$PA_UID" --regid="$PA_GID" --clear-groups \
-                /bin/sh -c : </dev/null >/dev/null 2>&1; then
-            (cd "$_d" && "$_nohup" "$_c" --reuid="$PA_UID" --regid="$PA_GID" \
-                --clear-groups env "$@" "$PA_APP" </dev/null >/dev/null 2>&1 &) && return 0
+        "$_c" --reuid="$PA_UID" --regid="$PA_GID" --clear-groups \
+            /bin/sh -c : </dev/null >/dev/null 2>&1
+        _rc=$?
+        if [ "$_rc" -eq 0 ]; then
+            if (cd "$_d") 2>/dev/null; then
+                (cd "$_d" && "$_nohup" "$_c" --reuid="$PA_UID" --regid="$PA_GID" \
+                    --clear-groups env "$@" "$PA_APP" </dev/null >/dev/null 2>&1 &) && return 0
+            fi
             log "bundler-updater: WARN spawn via '$_c' failed — trying next"
         else
-            log "bundler-updater: WARN drop tool '$_c' rejected probe — trying next"
+            log "bundler-updater: WARN drop tool '${_c##*/}' rejected probe (exit $_rc) — trying next"
         fi
     fi
     # sudo 预检加 -n 免密闸——要口令的 sudo 在真实 spawn 里同样败于 EOF，
     # -n 只是把同一结局提前确定（AOT 支路同口径）。
     if _c=$(_pa_cmd sudo) && [ -n "$_c" ]; then
-        if "$_c" -n -u "#$PA_UID" /bin/sh -c : </dev/null >/dev/null 2>&1; then
-            (cd "$_d" && "$_nohup" "$_c" -u "#$PA_UID" env "$@" "$PA_APP" </dev/null >/dev/null 2>&1 &) && return 0
+        "$_c" -n -u "#$PA_UID" /bin/sh -c : </dev/null >/dev/null 2>&1
+        _rc=$?
+        if [ "$_rc" -eq 0 ]; then
+            if (cd "$_d") 2>/dev/null; then
+                (cd "$_d" && "$_nohup" "$_c" -u "#$PA_UID" env "$@" "$PA_APP" </dev/null >/dev/null 2>&1 &) && return 0
+            fi
             log "bundler-updater: WARN spawn via '$_c' failed — trying next"
         else
-            log "bundler-updater: WARN drop tool '$_c' rejected probe — trying next"
+            log "bundler-updater: WARN drop tool '${_c##*/}' rejected probe (exit $_rc) — trying next"
         fi
     fi
     if [ -n "$PA_NAME" ]; then
         if _c=$(_pa_cmd runuser) && [ -n "$_c" ]; then
-            if "$_c" -u "$PA_NAME" -- /bin/sh -c : </dev/null >/dev/null 2>&1; then
-                (cd "$_d" && "$_nohup" "$_c" -u "$PA_NAME" -- env "$@" "$PA_APP" </dev/null >/dev/null 2>&1 &) && return 0
+            "$_c" -u "$PA_NAME" -- /bin/sh -c : </dev/null >/dev/null 2>&1
+            _rc=$?
+            if [ "$_rc" -eq 0 ]; then
+                if (cd "$_d") 2>/dev/null; then
+                    (cd "$_d" && "$_nohup" "$_c" -u "$PA_NAME" -- env "$@" "$PA_APP" </dev/null >/dev/null 2>&1 &) && return 0
+                fi
                 log "bundler-updater: WARN spawn via '$_c' failed — trying next"
             else
-                log "bundler-updater: WARN drop tool '$_c' rejected probe — trying next"
+                log "bundler-updater: WARN drop tool '${_c##*/}' rejected probe (exit $_rc) — trying next"
             fi
         fi
         if _c=$(_pa_cmd su) && [ -n "$_c" ]; then
-            if "$_c" -s /bin/sh -c : "$PA_NAME" </dev/null >/dev/null 2>&1; then
+            "$_c" -s /bin/sh -c : "$PA_NAME" </dev/null >/dev/null 2>&1
+            _rc=$?
+            if [ "$_rc" -eq 0 ]; then
                 _sc="exec env"
                 for _kv do _sc="$_sc $(_pa_shq "$_kv")"; done
                 _sc="$_sc $(_pa_shq "$PA_APP")"
-                (cd "$_d" && "$_nohup" "$_c" -s /bin/sh -c "$_sc" "$PA_NAME" </dev/null >/dev/null 2>&1 &) && return 0
+                if (cd "$_d") 2>/dev/null; then
+                    (cd "$_d" && "$_nohup" "$_c" -s /bin/sh -c "$_sc" "$PA_NAME" </dev/null >/dev/null 2>&1 &) && return 0
+                fi
                 log "bundler-updater: WARN spawn via '$_c' failed — trying next"
             else
-                log "bundler-updater: WARN drop tool '$_c' rejected probe — trying next"
+                log "bundler-updater: WARN drop tool '${_c##*/}' rejected probe (exit $_rc) — trying next"
             fi
         fi
     fi
@@ -338,7 +422,7 @@ pkg_apply() {
         case "$1" in
             --rollback) PA_ROLLBACK=1; shift ;;
             --pkg|--format|--app|--env-file|--log)
-                [ $# -ge 2 ] || { echo "bundler-updater: option '$1' requires a value." >&2; exit 3; }
+                [ $# -ge 2 ] || { echo "bundler-updater: option '$1' requires a value." >&2; pkg_usage; exit 3; }
                 case "$1" in
                     --pkg) PA_PKG=$2 ;;
                     --format) PA_FMT=$2 ;;
@@ -350,13 +434,16 @@ pkg_apply() {
             *) echo "bundler-updater: unknown option '$1'." >&2; pkg_usage; exit 3 ;;
         esac
     done
-    [ -n "$PA_PKG" ] || { echo "bundler-updater: --pkg is required." >&2; exit 3; }
-    [ -n "$PA_APP" ] || { echo "bundler-updater: --app is required." >&2; exit 3; }
+    [ -n "$PA_PKG" ] || { echo "bundler-updater: --pkg is required." >&2; pkg_usage; exit 3; }
+    [ -n "$PA_APP" ] || { echo "bundler-updater: --app is required." >&2; pkg_usage; exit 3; }
     case "$PA_FMT" in
         deb|rpm|apk) ;;
-        *) echo "bundler-updater: --format must be deb, rpm or apk." >&2; exit 3 ;;
+        *) echo "bundler-updater: --format must be deb, rpm or apk." >&2; pkg_usage; exit 3 ;;
     esac
-    [ -f "$PA_PKG" ] || { echo "bundler-updater: package '$PA_PKG' does not exist." >&2; exit 3; }
+    # 复核登记（N10）：-f 跟随符号链接——与 AOT File.Exists 同口径；包路径属
+    # 调用方受托输入（root 本就受托装这包），刻意不做 --env-file 那套三重校验：
+    # env 件内容会越信任边界灌进降权 app 才须硬化，包件本身不越界。
+    [ -f "$PA_PKG" ] || { echo "bundler-updater: package '$PA_PKG' does not exist." >&2; pkg_usage; exit 3; }
     case "$PA_PKG" in /*) ;; *) PA_PKG="$PWD/$PA_PKG" ;; esac
     case "$PA_APP" in /*) ;; *) PA_APP="$PWD/$PA_APP" ;; esac
     case "$PA_ENV" in "") ;; /*) ;; *) PA_ENV="$PWD/$PA_ENV" ;; esac
@@ -366,12 +453,29 @@ pkg_apply() {
     # _pa_uid64 统一"全数字且 int64 内"口径并剥前导零规范化——超界垃圾值按
     # 值缺席走兜底（AOT long.TryParse 溢出返 null 同义）；旧侧只查全数字，
     # 超界 uid 会直灌 setpriv 吃沉默假成功。
-    PA_UID=""; PA_GID=""; PA_NAME=""; PA_HOME=""
-    PA_UID=$(_pa_uid64 "${PKEXEC_UID:-}")
-    [ -n "$PA_UID" ] || PA_UID=$(_pa_uid64 "${SUDO_UID:-}")
+    # 解析器缺席（awk 不在场）与 uid 值缺席必须分流：awk 不在 uid/passwd 全
+    # 解析不出，按值缺席放行会把降权重启静默做成 root spawn——PA_UID_FAIL=1
+    # 记状态交重启腿拒重启（rc6，§2.3 不以 root 重启的口径优先）。
+    PA_UID=""; PA_GID=""; PA_NAME=""; PA_HOME=""; PA_UID_FAIL=0; _PA_ENV_RAW=""
+    # 复核登记（N9）：awk/stat/id/timeout/tr/dirname 等辅助件走裸 command -v，
+    # 刻意不进 BUNDLER_UPDATER_CMD_<TOOL> 覆盖面——覆盖缝只给测试垫片要 stub
+    # 的包前端/降权器/nohup；PATH 在特权语境本属调用方受托面，辅助件与
+    # nohup 同级，扩大覆盖面只增攻击面无收益。
+    if command -v awk >/dev/null 2>&1; then
+        PA_UID=$(_pa_uid64 "${PKEXEC_UID:-}")
+        [ -n "$PA_UID" ] || PA_UID=$(_pa_uid64 "${SUDO_UID:-}")
+    elif [ -n "${PKEXEC_UID:-}${SUDO_UID:-}" ]; then
+        # 解析器缺席且确有 uid 变量待解——不能按"值缺席"误放成 root spawn；
+        # 变量本来就全空（uid 真缺席）仍按直跑腿放行，与 AOT 侧对偶。
+        PA_UID_FAIL=1
+    fi
     if [ -n "$PA_UID" ]; then
         # passwd 查名/gid/家目录：runuser/su 只收用户名；gid 兜底链 SUDO_GID→passwd→uid。
         # BUNDLER_UPDATER_PASSWD_FILE 双侧同名测试缝。
+        # 复核登记（N13）：NF>=7 与 AOT fields.Length>=7 同口径；但 $3==u 走
+        # strnum 数值比——uid>2^53 时 awk 双精度可对相近大数别名误中，AOT 是
+        # int64 精确等值。真实 passwd uid 远不及此量级，且查名只喂
+        # runuser/su 退腿（setpriv 直接用 uid 不吃名），误中代价低、登记不改。
         _pw=$(awk -F: -v u="$PA_UID" 'NF>=7 && $3==u {print $1":"$4":"$6; exit}' \
             "${BUNDLER_UPDATER_PASSWD_FILE:-/etc/passwd}" 2>/dev/null || true)
         if [ -n "$_pw" ]; then
@@ -386,6 +490,13 @@ pkg_apply() {
         # 与 AOT `passwd?.Gid ?? uid`（TryParse 失败→null→uid）同口径。
         PA_GID=$(_pa_uid64 "$PA_GID")
         [ -n "$PA_GID" ] || PA_GID=$PA_UID
+    fi
+
+    # --env-file 显式给了先校验+读定（三重校验 rc3 拒绝，见 _pa_env_validate）——
+    # 先于装包，与 AOT Run 前置 LoadEnvPairs 同序。uid 解析失败（PA_UID_FAIL=1）
+    # 时跳过校验——重启腿反正会拒（rc6），内容永不进 env，件仍按一次性清走。
+    if [ -n "$PA_ENV" ] && [ "$PA_UID_FAIL" = 0 ]; then
+        _pa_env_validate || { _pa_env_cleanup; exit 3; }
     fi
 
     if _pa_install; then

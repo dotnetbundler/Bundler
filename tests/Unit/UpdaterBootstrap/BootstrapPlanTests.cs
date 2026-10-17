@@ -871,9 +871,12 @@ public sealed class BootstrapPlanTests : TempBase
         var pkg = WritePkg();
         var app = WriteApp();
         var envFile = WriteEnvFile("DISPLAY=:9\n");
+        // env 件属主=st_uid 复核要求"调用 uid==件属主"——件由测试进程创建，
+        // POSIX 上调用 uid 须取真实 euid 才过校验（Windows 无该判据按 4242）。
+        var callerUid = CallerUid;
         var env = new Dictionary<string, string>
         {
-            ["PKEXEC_UID"] = "4242",
+            ["PKEXEC_UID"] = callerUid.ToString(),
             ["SUDO_UID"] = "5000",      // PKEXEC_UID 优先
             ["SUDO_GID"] = "4343",
         };
@@ -893,7 +896,7 @@ public sealed class BootstrapPlanTests : TempBase
         var spawn = Assert.Single(_pkgSpawns);
         Assert.Equal("/stub/nohup", spawn.File);
         Assert.Equal(
-            ["/stub/setpriv", "--reuid=4242", "--regid=4343", "--clear-groups",
+            ["/stub/setpriv", $"--reuid={callerUid}", "--regid=4343", "--clear-groups",
              "env", "DISPLAY=:9", app],
             spawn.Args);
     }
@@ -905,12 +908,15 @@ public sealed class BootstrapPlanTests : TempBase
         var app = WriteApp();
         // env 件是一次性输入——Run 读毕即删，逐腿重放前须重写。
         var envFile = WriteEnvFile("DISPLAY=:9\n");
+        // env 件属主=st_uid 复核要求调用 uid==件属主——POSIX 用真实 euid
+        //（Windows 无该判据按 4242）；passwd 条目 uid 同值对齐查名。
+        var callerUid = CallerUid;
         var passwd = WritePasswd(
             "root:x:0:0:root:/root:/bin/sh\n" +
-            "tester:x:4242:4343:Test User:/home/tester:/bin/sh\n");
+            $"tester:x:{callerUid}:4343:Test User:/home/tester:/bin/sh\n");
         var env = new Dictionary<string, string>
         {
-            ["SUDO_UID"] = "4242",
+            ["SUDO_UID"] = callerUid.ToString(),
             ["BUNDLER_UPDATER_PASSWD_FILE"] = passwd,
         };
         var commands = new Dictionary<string, string>
@@ -929,7 +935,7 @@ public sealed class BootstrapPlanTests : TempBase
              "--env-file", envFile]);
         Assert.Equal(0, rc);
         Assert.Equal(
-            ["/stub/sudo", "-u", "#4242", "env", "DISPLAY=:9", app],
+            ["/stub/sudo", "-u", $"#{callerUid}", "env", "DISPLAY=:9", app],
             Assert.Single(_pkgSpawns).Args);
         Assert.False(File.Exists(envFile), "--env-file 读毕即删");
 
@@ -1154,34 +1160,140 @@ public sealed class BootstrapPlanTests : TempBase
     }
 
     [Fact]
-    public void PkgApply_EnvFile_Directory_MinimalEnv()
+    public void PkgApply_EnvFile_Directory_Rc3()
     {
-        // env-file 指目录：按"读失败"退化最小集并记 WARN（sh 侧 -f 判据同拒）。
+        // env-file 指目录：显式给了的非普通文件一律 rc3 拒绝（装包前、pm 零
+        // 调用）——旧口径"读失败退化最小集"会把--env-file 失效静默吞掉
+        //（sh 侧 ! -f → pkg_usage rc3 同拒）。
         var pkg = WritePkg();
         var app = WriteApp();
         var envDir = Temp("env-as-dir").FullName;
         SetupPkgProbes(
+            env: new Dictionary<string, string>(),
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["nohup"] = "/stub/nohup",
+            });
+
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--env-file", envDir]);
+
+        Assert.Equal(3, rc);
+        Assert.Empty(_pkgExecs);
+        Assert.Empty(_pkgSpawns);
+    }
+
+    [Fact]
+    public void PkgApply_EnvFile_Missing_Rc3()
+    {
+        // --env-file 指不存在的路径：rc3 拒绝（同不静默降级"件缺席"——sh -f 判拒）。
+        var pkg = WritePkg();
+        var app = WriteApp();
+        SetupPkgProbes(commands: new Dictionary<string, string>
+        {
+            ["dpkg"] = "/stub/dpkg",
+            ["nohup"] = "/stub/nohup",
+        });
+
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--env-file", TempPath("missing-session.env")]);
+
+        Assert.Equal(3, rc);
+        Assert.Empty(_pkgExecs);
+    }
+
+    [Fact]
+    public void PkgApply_EnvFile_Symlink_Rc3()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "链接判拒只在 POSIX open(O_NOFOLLOW) 腿走");
+        var pkg = WritePkg();
+        var app = WriteApp();
+        // env-file 是链接：即使目标合法也拒——O_NOFOLLOW 让 open 直接 ELOOP，
+        // 防 "判存→open" 窗内被换成 root 私有件回灌降权 app（sh ! -h 同拒）。
+        var target = WriteEnvFile("MYVAR=leaked\n");
+        var link = TempPath("session-link.env");
+        File.CreateSymbolicLink(link, target);
+        SetupPkgProbes(commands: new Dictionary<string, string>
+        {
+            ["dpkg"] = "/stub/dpkg",
+            ["nohup"] = "/stub/nohup",
+        });
+
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--env-file", link]);
+
+        Assert.Equal(3, rc);
+        Assert.Empty(_pkgExecs);
+        Assert.Empty(_pkgSpawns);
+    }
+
+    [Fact]
+    public void PkgApply_EnvFile_WrongOwner_Rc3()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "st_uid 复核只在 POSIX 腿走");
+        var pkg = WritePkg();
+        var app = WriteApp();
+        // 件属本进程 uid，但解析出的调用 uid 是别的值（euid+1 保证脱钩）——
+        // st_uid≠调用 uid 即拒：异属主件内容不许进降权 app 的 env。
+        var envFile = WriteEnvFile("DISPLAY=:9\n");
+        SetupPkgProbes(
             env: new Dictionary<string, string>
             {
-                ["HOME"] = "/home/direct",
-                ["DISPLAY"] = ":8",
+                ["PKEXEC_UID"] = (CallerUid + 1).ToString(),
             },
             commands: new Dictionary<string, string>
             {
                 ["dpkg"] = "/stub/dpkg",
                 ["nohup"] = "/stub/nohup",
             });
-        var logFile = TempPath("pkg-dir-env.log");
 
         var rc = PkgApplyPlan.Run(
             ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
-             "--env-file", envDir, "--log", logFile]);
+             "--env-file", envFile]);
+
+        Assert.Equal(3, rc);
+        Assert.Empty(_pkgExecs);
+        Assert.Empty(_pkgSpawns);
+    }
+
+    [Fact]
+    public void PkgApply_CmdOverride_InvalidFallsBackToProbe()
+    {
+        // BUNDLER_UPDATER_CMD_<TOOL> 覆盖必须"存在+普通文件+执行位"才权威——
+        // 缺失路径与非可执行普通件都按未设置退化 CommandProbe（sh -f/-x 同口径）。
+        var pkg = WritePkg();
+        var app = WriteApp();
+        var badOverride = TempPath("not-exec-stub");
+        File.WriteAllText(badOverride, "#!/bin/sh\n");
+        // POSIX 剥执行位；Windows 无执行位面——用不存在路径当不可用覆盖。
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(badOverride,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+        SetupPkgProbes(
+            env: new Dictionary<string, string>
+            {
+                ["BUNDLER_UPDATER_CMD_DPKG"] =
+                    OperatingSystem.IsWindows() ? TempPath("missing-stub") : badOverride,
+            },
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["nohup"] = "/stub/nohup",
+            });
+
+        var rc = PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app]);
 
         Assert.Equal(0, rc);
-        Assert.Contains("cannot read env file", File.ReadAllText(logFile));
-        Assert.Equal(
-            ["env", "HOME=/home/direct", "DISPLAY=:8", app],
-            Assert.Single(_pkgSpawns).Args);
+        // 覆盖值不可用 → CommandProbe 供给的 /stub/dpkg 实跑。
+        Assert.Equal("/stub/dpkg", Assert.Single(_pkgExecs).File);
+        Assert.Single(_pkgSpawns);
     }
 
     [Fact]
@@ -1273,10 +1385,11 @@ public sealed class BootstrapPlanTests : TempBase
              "--env-file", envFile]));
         Assert.False(File.Exists(envFile), "rc5 出口删件");
 
-        // rc6：装成、降权重启缺腿。
+        // rc6：装成、降权重启缺腿。uid 取真实 euid 过 env 件属主复核
+        //（件属本进程 uid——POSIX 校验腿要求 st_uid==调用 uid）。
         envFile = WriteEnvFile("DISPLAY=:9\n");
         SetupPkgProbes(
-            env: new Dictionary<string, string> { ["PKEXEC_UID"] = "4242" },
+            env: new Dictionary<string, string> { ["PKEXEC_UID"] = CallerUid.ToString() },
             commands: new Dictionary<string, string>
             {
                 ["dpkg"] = "/stub/dpkg",
@@ -1462,6 +1575,15 @@ public sealed class BootstrapPlanTests : TempBase
     [DllImport("libc", SetLastError = true)]
     private static extern int mkfifo(string path, uint mode);
 
+    // --env-file 属主校验（st_uid==解析调用 uid）需要真实 euid：uid env 与
+    // env 件同场的用例以本进程 euid 充当"调用者"（Windows 无该判据——
+    // env 件校验退 IsRegularFile 口径，任意 uid 值不触发异属主拒）。
+    [DllImport("libc")]
+    private static extern uint geteuid();
+
+    private static long CallerUid =>
+        OperatingSystem.IsWindows() ? 4242 : geteuid();
+
     [Fact]
     public void PkgApply_SpecialFileInputs_RejectedLikeShDashF()
     {
@@ -1501,17 +1623,16 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Single(_pkgExecs);
         Assert.Empty(_pkgSpawns);
 
-        // --env-file 指特殊件：判拒走"读失败"WARN + 最小集——旧口径
-        // ReadLines 对 fifo/套接件会挂等写端。
+        // --env-file 指特殊件：rc3 拒绝（装包前、pm 零调用）——旧口径"读失败
+        // WARN + 最小集"会让 ReadLines 对 fifo 挂等写端/把链接目标灌进降权
+        // app 的 env。O_NONBLOCK open + fstat S_IFREG 判据先行，裸 open 不阻。
         _pkgExecs.Clear();
         var rc = PkgApplyPlan.Run(
             ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
              "--env-file", special, "--log", logFile]);
-        Assert.Equal(0, rc);
-        Assert.Contains("cannot read env file", File.ReadAllText(logFile));
-        Assert.Equal(
-            ["env", "HOME=/home/minimal", "DISPLAY=:7", app],
-            Assert.Single(_pkgSpawns).Args);
+        Assert.Equal(3, rc);
+        Assert.Empty(_pkgExecs);
+        Assert.Empty(_pkgSpawns);
     }
 
     [Fact]
