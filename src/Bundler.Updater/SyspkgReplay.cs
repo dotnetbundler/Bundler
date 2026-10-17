@@ -778,10 +778,11 @@ internal static class SyspkgReplay
     // 全腿皆没拉起才清场透传：env 件删余 + applied 标记回记规划前值 +
     // apply 侧新留存件连 .sig 一并删（B1——不留"标记指新件而装未成"的歪斜现场，
     // 否则下次 rollback 会把从未装上的新件排除在旧包候选外）。
-    // 已拉起句柄挂 Exited 钩做两件尽力事——会话 env 件删余（引导件读毕即删为主，
+    // 已拉起句柄做两件尽力事——会话 env 件删余（引导件读毕即删为主，
     // 此钩与下次 apply 的 24h staging 清扫是两道兜底）+ 退出码分类留痕
     //（拉起即退语义下 rc 主要靠 --log 件；活到读码的调用方也得分类口径）。
-    // hook 挂在 ThreadPool——句柄返回后异步触发；本进程先退则钩不触发。
+    // 存活腿挂 Exited 钩（ThreadPool 异步触发；本进程先退则钩不触发）；
+    // 观察窗内 rc0 速退的腿进程已终结、事件不保证派发——两件直接内联做。
     private static Process StartLaunch(SyspkgLaunch launch, Action<string>? log)
     {
         var legs = new List<SyspkgLaunch> { launch };
@@ -819,6 +820,22 @@ internal static class SyspkgReplay
                     $"({exception.Message}) — trying next leg");
                 continue;
             }
+            var envFile = leg.EnvFile;
+            var envDir = leg.EnvFileDirectory;
+            // 拉起后退出的两件尽力事：退出码分类留痕 + env 件删余。
+            void OnLegExited()
+            {
+                try
+                {
+                    log?.Invoke(
+                        $"update: pkg-apply launcher exited {process.ExitCode} " +
+                        $"({DescribeExitCode(process.ExitCode)})");
+                }
+                catch (Exception)
+                {
+                }
+                CleanupEnvFile(envFile, envDir);
+            }
             if (process.WaitForExit(LaunchObserveMilliseconds))
             {
                 int rc;
@@ -839,26 +856,17 @@ internal static class SyspkgReplay
                     process.Dispose();
                     continue;
                 }
+                // 窗内 rc==0 速退=已拉起即完成：已终结进程不保证派发 Exited
+                //（POSIX 已 reap 路径实测不派发）——日志与 env 件清理必须
+                // 内联做，否则 session.env 残留磁盘。
+                OnLegExited();
+                return process;
             }
-            var envFile = leg.EnvFile;
-            var envDir = leg.EnvFileDirectory;
             // WaitForExit/EnableRaisingEvents 在 spawn try-catch 之外：此处抛异常会
             // 越过退化与函数尾还原——生产 Process.Start 产物上实际不可达，仅
             // SpawnProbe 测试缝误用可触发（登记边界，不为此加 try 扰动主链）。
+            process.Exited += (_, _) => OnLegExited();
             process.EnableRaisingEvents = true;
-            process.Exited += (_, _) =>
-            {
-                try
-                {
-                    log?.Invoke(
-                        $"update: pkg-apply launcher exited {process.ExitCode} " +
-                        $"({DescribeExitCode(process.ExitCode)})");
-                }
-                catch (Exception)
-                {
-                }
-                CleanupEnvFile(envFile, envDir);
-            };
             return process;
         }
         CleanupEnvFile(launch.EnvFile, launch.EnvFileDirectory);

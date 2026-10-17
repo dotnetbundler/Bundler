@@ -232,7 +232,7 @@ _pa_install() {
 
 # --env-file 是客户端 <staging>/pkg-<guid>/session.env 一次性输入件：消费完
 #（或装失败确定不消费）即删件与 pkg-* 暂存目录——客户端拉起即退后删不了，
-# 残件兜底在客户端 Exited 钩与 24h staging 清扫。rm -f/rmdir 全尽力不挡退出码；
+# 残件兜底在客户端拉起腿退出删余（Exited 钩/速退内联）与 24h staging 清扫。rm -f/rmdir 全尽力不挡退出码；
 # 父目录仅本编排契约的 pkg-* 名才动，外来目录不碰。
 _pa_env_cleanup() {
     [ -n "$PA_ENV" ] || return 0

@@ -743,7 +743,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.Equal("pkg-v2-bytes", File.ReadAllText(retained));
         Assert.Equal("myapp_2.0-1_amd64.deb",
             File.ReadAllText(Path.Combine(retention, "applied")).Trim());
-        // env 件用完即删（Exited 钩）——拉起即退语义下的清理面。
+        // env 件用完即删（Exited 钩/速退内联删余）——拉起即退语义下的清理面。
         // --env-file 是 verb argv 末位（本腿无 --rollback/--log），值一路到行尾——
         // 按分隔截取而非空格切分（路径含空格也不撕）。
         var envFile = lines[2][(lines[2].IndexOf("--env-file ") + "--env-file ".Length)..];
@@ -983,7 +983,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.Equal("pkg-v2-bytes", File.ReadAllText(retained));
         Assert.Equal("myapp-2.0-1.x86_64.rpm",
             File.ReadAllText(Path.Combine(retention, "applied")).Trim());
-        // env 件用完即删（Exited 钩）——--env-file 居 verb argv 末位，值到行尾。
+        // env 件用完即删（Exited 钩/速退内联删余）——--env-file 居 verb argv 末位，值到行尾。
         var envFile = lines[2][(lines[2].IndexOf("--env-file ") + "--env-file ".Length)..];
         WaitForGone(envFile);
     }

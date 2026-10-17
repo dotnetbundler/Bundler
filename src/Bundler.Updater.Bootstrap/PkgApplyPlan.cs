@@ -136,7 +136,7 @@ internal static class PkgApplyPlan
         {
             // --env-file 是客户端 <staging>/pkg-<guid>/session.env 一次性输入——
             // 消费完（或装失败确定不消费）即删件与 pkg-* 暂存目录；客户端拉起即退
-            // 后删不了，残件兜底在客户端 Exited 钩与 24h staging 清扫。
+            // 后删不了，残件兜底在客户端拉起腿退出删余（Exited 钩/速退内联）与 24h staging 清扫。
             CleanupEnvFile(options.EnvFile);
         }
     }
