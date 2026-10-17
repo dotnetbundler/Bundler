@@ -98,7 +98,9 @@ makeshim() { # $1=dir; rest=tool 名（缺失宿主工具即 FAIL——shim 缺�
 }
 
 # 会话 env 件：HOME/DISPLAY 属最小集语义验证，MYVAR 标记归属相位，SYSPKG_REC 指
-# 挥探针把记录落到本相位专属件（2777 目录内众人可写）。
+# 挥探针把记录落到本相位专属件（2777 目录内众人可写）。件被实现读毕即删——
+# 一相位一件不复用：跨相位复用会走 minimal-env WARN，MYVAR/SYSPKG_REC 不注入，
+# 探针落共享 default.txt，后续相位的 uid=0 断言会被前序相位记录喂成假绿。
 mk_env() { # $1=file $2=rec-file $3=myvar-tag
     printf 'HOME=/home/tester\nDISPLAY=:99\nMYVAR=%s\nSYSPKG_REC=%s\n' "$3" "$2" >"$1"
 }
@@ -279,21 +281,28 @@ leg_deb() {
     want_rec D1 "$REC/d1.txt" "MYVAR=d1-aot" "env 件回灌到达 --app"
     want_rec D1 "$REC/d1.txt" "HOME=/home/tester" "HOME 回灌为原用户家目录"
 
-    # D2：AOT conffile——用户改 /etc/<pkg>/probe.conf 后 v2→v3 更新不丢（--force-confold）
+    # D2：AOT conffile——用户改 /etc/<pkg>/probe.conf 后 v2→v3 更新不丢（--force-confold）。
+    # root 直跑相位（无 uid env）——专属 env.d2/rec d2.txt 把探针记录封在本相位。
     echo "# user-edit" >>"$CONF"
+    mk_env "$W/env.d2" "$REC/d2.txt" d2-aot
     rc_of "$AOT" pkg-apply --pkg "$W/v3.deb" --format deb --app "$APP" \
-        --env-file "$W/env.d1" --log "$EV/d2-aot.log"
+        --env-file "$W/env.d2" --log "$EV/d2-aot.log"
     expect_rc D2 0 $?
     expect_ver D2 3.0 "conffile 场景更新"
     want_line D2 "$CONF" "# user-edit" "conffile 用户修改在更新后保留"
+    want_rec D2 "$REC/d2.txt" "uid=0" "root 直跑语境探针 uid=0（相位专属件）"
+    want_rec D2 "$REC/d2.txt" "MYVAR=d2-aot" "env 件回灌到达 --app"
 
     # D3：AOT --rollback 重放 v1——退化链两腿同 argv（无 --allow-downgrades），
     # apt -y 拒降级 → dpkg -i 原生放行（§2.4 已按此实态口径登记）。
-    # 此处如实留证实际走的哪条腿。
+    # 此处如实留证实际走的哪条腿。root 直跑相位——专属 env.d3/rec d3.txt。
+    mk_env "$W/env.d3" "$REC/d3.txt" d3-aot
     rc_of "$AOT" pkg-apply --rollback --pkg "$W/v1.deb" --format deb --app "$APP" \
-        --env-file "$W/env.d1" --log "$EV/d3-aot.log"
+        --env-file "$W/env.d3" --log "$EV/d3-aot.log"
     expect_rc D3 0 $?
     expect_ver D3 1.0 "rollback 重放旧包账本回到 v1"
+    want_rec D3 "$REC/d3.txt" "uid=0" "root 直跑语境探针 uid=0（相位专属件）"
+    want_rec D3 "$REC/d3.txt" "MYVAR=d3-aot" "env 件回灌到达 --app"
     if grep -qF "apt-get failed" "$EV/d3-aot.log" 2>/dev/null && \
        grep -qF "via dpkg" "$EV/d3-aot.log" 2>/dev/null; then
         info "D3 降级实走 dpkg 退化腿（apt -y 缺 --allow-downgrades 拒装旧版）"
@@ -324,7 +333,10 @@ leg_deb() {
     want_rec D5 "$REC/d5.txt" "uid=$T_UID" "sudo -u 降权腿重启探针 uid=tester"
     want_rec D5 "$REC/d5.txt" "MYVAR=d5-sh" "sudo env_reset 下 env 件经内层 env 回灌"
 
-    # D6：AOT root 直跑（无 SUDO_UID=提权后语境基线形）——--rollback 重放 v1，重启不降权
+    # D6：AOT root 直跑（无 SUDO_UID=提权后语境基线形）——--rollback 重放 v1，重启不降权。
+    # minimal-env 相位（无 --env-file）探针落共享 default.txt——先清场把
+    # uid=0 证据封闭到本相位（此前相位各有专属 rec 件，此处清完只剩本相位写入）。
+    rm -f "$REC/default.txt"
     rc_of "$AOT" pkg-apply --rollback --pkg "$W/v1.deb" --format deb --app "$APP" \
         --log "$EV/d6-aot.log"
     expect_rc D6 0 $?
@@ -346,18 +358,20 @@ leg_deb() {
     DEBIAN_FRONTEND=noninteractive dpkg -i --force-confdef --force-confold \
         "$W/v1.deb" >>"$CONSOLE" 2>&1 || true
 
-    # D9：包管理器全缺席 → rc5（AOT 与 sh 双腿，shim 内不给 apt-get/dpkg）
+    # D9：包管理器全缺席 → rc5（AOT 与 sh 双腿，shim 内不给 apt-get/dpkg；
+    # 双腿分相 id -AOT/-SH，RESULTS 直读是哪条实现过的）
     makeshim "$W/shim-none" $BASETOOLS
     rc_of env PATH="$W/shim-none" "$AOT" pkg-apply --pkg "$W/v2.deb" --format deb --app "$APP"
-    expect_rc D9 5 $?
+    expect_rc D9-AOT 5 $?
     rc_of env PATH="$W/shim-none" /bin/sh "$SHIMPL" pkg-apply --pkg "$W/v2.deb" --format deb --app "$APP"
-    expect_rc D9 5 $?
+    expect_rc D9-SH 5 $?
 }
 
 # ============================ fedora 腿 ============================
 # 场景面：dnf install 腿 + PKEXEC_UID 分支（R1）、%config(noreplace) 更新（R2）、
-# --rollback --oldpackage 降级（R3）、缺 dnf/zypper 退化 rpm -U + runuser 降权（R4）、
-# root 直跑（R5）、rc6（R6）、rc5 全缺席（R7）。
+# --rollback --oldpackage 降级（R3）、shim-rpm 降级+降权器缺席 rc6（R3B）、
+# 缺 dnf/zypper 退化 rpm -U + runuser 降权（R4）、root 直跑（R5）、rc6（R6）、
+# rc5 全缺席（R7-AOT/R7-SH）。
 
 leg_rpm() {
     note "== rpm 腿环境 =="
@@ -389,42 +403,54 @@ leg_rpm() {
     want_rec R1 "$REC/r1.txt" "uid=$T_UID" "PKEXEC_UID 取回降权 uid=tester"
     want_rec R1 "$REC/r1.txt" "MYVAR=r1-aot" "env 回灌到达 --app"
 
-    # R2：AOT %config(noreplace)——用户改 conf 后 v2→v3：保留用户件，新件落 .rpmnew
+    # R2：AOT %config(noreplace)——用户改 conf 后 v2→v3：保留用户件，新件落 .rpmnew。
+    # root 直跑相位——专属 env.r2/rec r2.txt 把探针记录封在本相位。
     echo "# user-edit" >>"$CONF"
+    mk_env "$W/env.r2" "$REC/r2.txt" r2-aot
     rc_of "$AOT" pkg-apply --pkg "$W/v3.rpm" --format rpm --app "$APP" \
-        --env-file "$W/env.r1" --log "$EV/r2-aot.log"
+        --env-file "$W/env.r2" --log "$EV/r2-aot.log"
     expect_rc R2 0 $?
     expect_ver R2 3.0-1 "conffile 场景更新"
     want_line R2 "$CONF" "# user-edit" "%config(noreplace) 用户修改保留"
     want_file R2 "$CONF.rpmnew" "%config(noreplace) 新配置落 .rpmnew"
+    want_rec R2 "$REC/r2.txt" "uid=0" "root 直跑语境探针 uid=0（相位专属件）"
+    want_rec R2 "$REC/r2.txt" "MYVAR=r2-aot" "env 件回灌到达 --app"
 
     # R3：AOT --rollback v3→v1——dnf 对本地旧版件的裁决以实跑为准：dnf5 实测
     # 原地降级成功（via dnf）；若环境拒降则走 zypper/rpm 退化。两路都以
     # 账本 1.0-1 收口，跑的是哪条按日志定——两口径都如实留证。
+    # root 直跑相位——专属 env.r3/rec r3.txt。
+    mk_env "$W/env.r3" "$REC/r3.txt" r3-aot
     rc_of "$AOT" pkg-apply --rollback --pkg "$W/v1.rpm" --format rpm --app "$APP" \
-        --env-file "$W/env.r1" --log "$EV/r3-aot.log"
+        --env-file "$W/env.r3" --log "$EV/r3-aot.log"
     expect_rc R3 0 $?
     expect_ver R3 1.0-1 "rollback 降级回 v1"
+    want_rec R3 "$REC/r3.txt" "uid=0" "root 直跑语境探针 uid=0（相位专属件）"
+    want_rec R3 "$REC/r3.txt" "MYVAR=r3-aot" "env 件回灌到达 --app"
     if grep -qF "via rpm" "$EV/r3-aot.log" 2>/dev/null; then
         want_line R3 "$EV/r3-aot.log" "zypper not found" "zypper 缺席退化证据"
     else
         want_line R3 "$EV/r3-aot.log" "via dnf" "dnf 原地降级腿选用"
     fi
 
-    # R3b：shim 只给 rpm（dnf/zypper 缺席）——证 `rpm -U --oldpackage` 降级链：
+    # R3B：shim 只给 rpm（dnf/zypper 缺席）——证 `rpm -U --oldpackage` 降级链：
     # rpm -U 装旧件缺 --oldpackage 会报 "newer already installed" 非零，账本回到
-    # 1.0-1 即降级链真走通的证据。
+    # 1.0-1 即降级链真走通的证据。相位 id 独立于 R3（不再覆写 ledger-R3.txt）。
+    # 前提：账本从 R3 的 v1 回摆 v3——重置步显式断 rc+账本，前提不成立即 FAIL，
+    # 不让后续断言跑在错误前提上假绿。
     # 实测语义：SUDO_UID 在场但 shim 内无任何降权器（setpriv/sudo/runuser/su 全缺）
     # → 重启失败 rc6——安装已提交（账本翻页）但 app 未重启，rc 与账本自洽。
-    rpm -U "$W/v3.rpm" >>"$CONSOLE" 2>&1
+    rpm -U "$W/v3.rpm" >>"$CONSOLE" 2>&1 \
+        && pass "R3B-pre 前提 rpm -U 回摆 v3" || fail "R3B-pre" "rpm -U v3 前提回摆失败"
+    expect_ver R3B-pre 3.0-1 "前提账本=v3"
     makeshim "$W/shim-rpm" $BASETOOLS rpm
     rc_of env PATH="$W/shim-rpm" SUDO_UID="$T_UID" SUDO_GID="$T_GID" "$AOT" pkg-apply \
         --rollback --pkg "$W/v1.rpm" --format rpm --app "$APP" \
         --log "$EV/r3b-aot.log"
-    expect_rc R3 6 $?
-    expect_ver R3 1.0-1 "shim-rpm 腿 --oldpackage 降级（rc6=安装提交+降权器缺席重启失败）"
-    want_line R3 "$EV/r3b-aot.log" "zypper not found" "zypper 缺席退化证据"
-    want_line R3 "$EV/r3b-aot.log" "via rpm" "rpm -U 退化腿选用"
+    expect_rc R3B 6 $?
+    expect_ver R3B 1.0-1 "shim-rpm 腿 --oldpackage 降级（rc6=安装提交+降权器缺席重启失败）"
+    want_line R3B "$EV/r3b-aot.log" "zypper not found" "zypper 缺席退化证据"
+    want_line R3B "$EV/r3b-aot.log" "via rpm" "rpm -U 退化腿选用"
 
     # R4：sh 支路 + runuser 降权腿（shim 给 rpm+runuser，不给 dnf/zypper/setpriv/sudo/su）
     makeshim "$W/shim-runuser" $BASETOOLS rpm runuser
@@ -438,7 +464,9 @@ leg_rpm() {
     want_line R4 "$EV/r4-sh.log" "via rpm" "rpm -U 腿被选用"
     want_rec R4 "$REC/r4.txt" "uid=$T_UID" "runuser 降权腿重启探针 uid=tester"
 
-    # R5：AOT root 直跑 --rollback（无 uid env=按当前权限 spawn）
+    # R5：AOT root 直跑 --rollback（无 uid env=按当前权限 spawn）——minimal-env
+    # 相位探针落共享 default.txt，先清场把 uid=0 证据封闭到本相位。
+    rm -f "$REC/default.txt"
     rc_of "$AOT" pkg-apply --rollback --pkg "$W/v1.rpm" --format rpm --app "$APP" \
         --log "$EV/r5-aot.log"
     expect_rc R5 0 $?
@@ -451,12 +479,12 @@ leg_rpm() {
     expect_ver R6 2.0-1 "rc6 时安装已提交（账本=2.0-1）"
     rpm -e "$PKG" >>"$CONSOLE" 2>&1 || true
 
-    # R7：包管理器全缺席 → rc5（shim 不给 dnf/zypper/rpm）
+    # R7：包管理器全缺席 → rc5（shim 不给 dnf/zypper/rpm；双腿分相 id -AOT/-SH）
     makeshim "$W/shim-none" $BASETOOLS
     rc_of env PATH="$W/shim-none" "$AOT" pkg-apply --pkg "$W/v2.rpm" --format rpm --app "$APP"
-    expect_rc R7 5 $?
+    expect_rc R7-AOT 5 $?
     rc_of env PATH="$W/shim-none" /bin/sh "$SHIMPL" pkg-apply --pkg "$W/v2.rpm" --format rpm --app "$APP"
-    expect_rc R7 5 $?
+    expect_rc R7-SH 5 $?
 }
 
 # ============================ alpine 腿 ============================
@@ -481,10 +509,15 @@ leg_apk() {
     openssl genrsa -out "$W/syspkg-key.rsa" 2048 >>"$CONSOLE" 2>&1 || { fail apk-env "genrsa 失败"; return; }
     openssl rsa -in "$W/syspkg-key.rsa" -pubout -out "$W/syspkg-key.rsa.rsa.pub" >>"$CONSOLE" 2>&1 \
         || { fail apk-env "公钥导出失败"; return; }
-    mk_apk 1.0.0-r0 "$W/v1u.apk" 0 && mk_apk 2.0.0-r0 "$W/v2u.apk" 0 && \
-    mk_apk 3.0.0-r0 "$W/v3u.apk" 0 && \
-    mk_apk 1.0.0-r0 "$W/v1s.apk" 1 && mk_apk 2.0.0-r0 "$W/v2s.apk" 1 \
-        && pass "apk-env 五包产出（unsigned×3 + signed×2）" || { fail apk-env "apk 产包失败"; return; }
+    # mk_apk 尾块恒 rc0（证据留档 || true）——&& 链无判别力，逐件 -s 断言接住产包失败。
+    mk_apk 1.0.0-r0 "$W/v1u.apk" 0; mk_apk 2.0.0-r0 "$W/v2u.apk" 0; mk_apk 3.0.0-r0 "$W/v3u.apk" 0
+    mk_apk 1.0.0-r0 "$W/v1s.apk" 1; mk_apk 2.0.0-r0 "$W/v2s.apk" 1
+    _apk_missing=""
+    for _p in v1u v2u v3u v1s v2s; do
+        [ -s "$W/$_p.apk" ] || _apk_missing="$_apk_missing $_p.apk"
+    done
+    [ -z "$_apk_missing" ] && pass "apk-env 五包产出（unsigned×3 + signed×2）" \
+        || { fail apk-env "apk 产出件缺失：$_apk_missing"; return; }
 
     # 降权器实测（前台同步——分离 spawn 的沉默失败在此现形）：
     # alpine busybox 提供 setpriv/su；逐条实跑把真实 argv 可行性钉进 console。
@@ -518,9 +551,13 @@ leg_apk() {
     want_rec K1A "$REC/k1.txt" "MYVAR=k1-aot" "env 回灌到达 --app"
     info "K1A keys 空目录 → --allow-untrusted 证据=装成（无该旗标本件必被 apk 拒）"
 
-    # K1b：sh 支路同边界（busybox ash 实跑）——重置账本到 v1 再 unsigned v1→v2
-    apk del "$PKG" >>"$CONSOLE" 2>&1 || true
-    apk add --allow-untrusted "$W/v1u.apk" >>"$CONSOLE" 2>&1 || true
+    # K1b：sh 支路同边界（busybox ash 实跑）——重置账本到 v1 再 unsigned v1→v2。
+    # 重置步显式断 rc+账本：前提不成立即 FAIL，后续断言不跑在错误前提上假绿。
+    apk del "$PKG" >>"$CONSOLE" 2>&1 \
+        && pass "K1B-pre 前提 apk del 清账本" || fail "K1B-pre" "apk del 前提失败"
+    apk add --allow-untrusted "$W/v1u.apk" >>"$CONSOLE" 2>&1 \
+        && pass "K1B-pre 前提 v1 基线直装" || fail "K1B-pre" "v1 基线装失败"
+    expect_ver K1B-pre 1.0.0-r0 "前提账本=v1"
     mk_env "$W/env.k1b" "$REC/k1b.txt" k1b-sh
     rc_of env SUDO_UID="$T_UID" SUDO_GID="$T_GID" /bin/sh "$SHIMPL" pkg-apply \
         --pkg "$W/v2u.apk" --format apk --app "$APP" \
@@ -529,10 +566,12 @@ leg_apk() {
     expect_ver K1B 2.0.0-r0 "sh 支路 unsigned --allow-untrusted 腿真装"
     want_rec K1B "$REC/k1b.txt" "uid=$T_UID" "sh 支路降权重启探针 uid=tester"
 
-    # K1N：负面对照——keys 非空后 unsigned 新包应被 apk 签名闸拒（rc=4 账本不翻页）
+    # K1N：负面对照——keys 非空后 unsigned 新包应被 apk 签名闸拒（rc=4 账本不翻页）。
+    # 专属 env.k1n/rec k1n.txt（rc4 无重启探针不写；件仍被实现读毕即删）。
     cp "$W/syspkg-key.rsa.rsa.pub" /etc/apk/keys/
+    mk_env "$W/env.k1n" "$REC/k1n.txt" k1n-aot
     rc_of "$AOT" pkg-apply --pkg "$W/v3u.apk" --format apk --app "$APP" \
-        --env-file "$W/env.k1" --log "$EV/k1n-aot.log"
+        --env-file "$W/env.k1n" --log "$EV/k1n-aot.log"
     _kn_rc=$?
     if [ "$_kn_rc" -eq 4 ] && [ "$(ledger_ver)" = "2.0.0-r0" ]; then
         pass "K1N keys 非空时 unsigned 包被 apk 签名闸拒（rc=4，账本未翻页）"
@@ -544,8 +583,10 @@ leg_apk() {
     # K2：AOT --rollback 重放签名 v1——观察 apk 对旧版本地件的降级语义（special-acceptance 在册项）。
     # 自洽结局都算证据：rc0+账本 v1=原生放行；rc≠0+账本守 v2=拒绝降级；
     # rc0+账本守 v2=受理但 no-op 不翻页。只有 rc 与账本互斥才 FAIL。
+    # 专属 env.k2/rec k2.txt：rc0 放行时 root 直跑探针记录落本相位件，不串 default.txt。
+    mk_env "$W/env.k2" "$REC/k2.txt" k2-aot
     rc_of "$AOT" pkg-apply --rollback --pkg "$W/v1s.apk" --format apk --app "$APP" \
-        --env-file "$W/env.k1" --log "$EV/k2-aot.log"
+        --env-file "$W/env.k2" --log "$EV/k2-aot.log"
     _k2_rc=$?
     _k2_v=$(ledger_ver)
     if [ "$_k2_rc" -eq 0 ] && [ "$_k2_v" = "1.0.0-r0" ]; then
@@ -559,9 +600,13 @@ leg_apk() {
     fi
     snap k2
 
-    # K3：sh 支路 + 签名信任链——keys 有预置公钥 → 裸 `apk add` 腿（busybox ash 实跑）
-    apk del "$PKG" >>"$CONSOLE" 2>&1 || true
-    apk add --allow-untrusted "$W/v1u.apk" >>"$CONSOLE" 2>&1 || true
+    # K3：sh 支路 + 签名信任链——keys 有预置公钥 → 裸 `apk add` 腿（busybox ash 实跑）。
+    # 重置步显式断 rc+账本（同 K1B 口径）。
+    apk del "$PKG" >>"$CONSOLE" 2>&1 \
+        && pass "K3-pre 前提 apk del 清账本" || fail "K3-pre" "apk del 前提失败"
+    apk add --allow-untrusted "$W/v1u.apk" >>"$CONSOLE" 2>&1 \
+        && pass "K3-pre 前提 v1 基线直装" || fail "K3-pre" "v1 基线装失败"
+    expect_ver K3-pre 1.0.0-r0 "前提账本=v1"
     mk_env "$W/env.k3" "$REC/k3.txt" k3-sh
     rc_of env SUDO_UID="$T_UID" SUDO_GID="$T_GID" /bin/sh "$SHIMPL" pkg-apply \
         --pkg "$W/v2s.apk" --format apk --app "$APP" \
@@ -571,7 +616,9 @@ leg_apk() {
     want_rec K3 "$REC/k3.txt" "uid=$T_UID" "busybox su/setpriv 降权腿 uid=tester"
     want_rec K3 "$REC/k3.txt" "MYVAR=k3-sh" "sh 支路 env 回灌到达 --app"
 
-    # K4：AOT root 直跑（无 uid env）重放 v2s——当前权限直接 spawn
+    # K4：AOT root 直跑（无 uid env）重放 v2s——当前权限直接 spawn。minimal-env
+    # 相位探针落共享 default.txt，先清场把 uid=0 证据封闭到本相位。
+    rm -f "$REC/default.txt"
     rc_of "$AOT" pkg-apply --pkg "$W/v2s.apk" --format apk --app "$APP" --log "$EV/k4-aot.log"
     expect_rc K4 0 $?
     want_rec K4 "$REC/default.txt" "uid=0" "无 uid env 时按当前权限（root）spawn"
@@ -588,12 +635,12 @@ leg_apk() {
     fi
     snap k5
 
-    # K6：包管理器缺席 → rc5（shim 不给 apk）
+    # K6：包管理器缺席 → rc5（shim 不给 apk；双腿分相 id -AOT/-SH）
     makeshim "$W/shim-none" $BASETOOLS
     rc_of env PATH="$W/shim-none" "$AOT" pkg-apply --pkg "$W/v2s.apk" --format apk --app "$APP"
-    expect_rc K6 5 $?
+    expect_rc K6-AOT 5 $?
     rc_of env PATH="$W/shim-none" /bin/sh "$SHIMPL" pkg-apply --pkg "$W/v2s.apk" --format apk --app "$APP"
-    expect_rc K6 5 $?
+    expect_rc K6-SH 5 $?
 }
 
 # ============================ 入口 ============================

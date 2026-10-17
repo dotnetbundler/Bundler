@@ -6,7 +6,8 @@
 # 注入复现提权后降权回原用户语义。图形提权交互面（pkexec→zenity/kdialog→sudo -S）
 # 容器给不了，仍挂 docs/project/special-acceptance.md 外部验收。
 # 包管理器账本断言：dpkg -s / rpm -q / apk list --installed；conffile、--rollback
-# 降级、缺前端退化、降权重启 env 回灌、退出码 0/4/5/6 全在容器内实证。
+# 降级、缺前端退化、降权重启 env 回灌、退出码 0/4/5/6 为三腿矩阵合计实证
+# （非逐腿全量——rc4 仅 apk 腿签名闸覆盖）。
 # workflow_call 由 verify.yml syspkg job 收编（发布门整腿复用，needs tests 后跑）；
 # push 不触发（同 test/verify 口径）。
 name: syspkg-verify
@@ -89,11 +90,13 @@ jobs:
             sh -c "apk add --no-cache clang lld zlib-dev zlib-static build-base >/dev/null && \
                    dotnet publish src/Bundler.Updater.Bootstrap/Bundler.Updater.Bootstrap.csproj -c Release -r linux-musl-x64 -p:StaticExecutable=true -p:LinkerFlavor=lld -o /aot/linux-musl-x86_64 && \
                    chmod 0755 /aot/linux-musl-x86_64/bundler-updater"
-      - name: 冒烟——static-pie 链接形态 + pkg-apply 动词就位（参数面实跑）
+      - name: 冒烟——musl 静态件 glibc 宿主可 exec + pkg-apply 动词就位（参数面实跑）
         run: |
           set -eux
           BIN="$RUNNER_TEMP/aot/linux-musl-x86_64/bundler-updater"
-          file "$BIN"
+          # 链接形态实证双钉：file 断言 static 链接 + 下方 rc3 实跑=glibc 宿主
+          # 直 exec musl 件（动态 musl 件在 glibc 宿主根本起不来）。
+          file "$BIN" | grep -F 'static'
           # 容器内已 chmod（root 属主宿主 chmod 不动）；这里断言可执行位到位即可
           [ -x "$BIN" ]
           set +e
@@ -130,6 +133,7 @@ jobs:
       - name: ${{ matrix.leg }} 容器内 pkg-apply 全链（AOT+sh 双实现奇偶）
         env:
           IMAGE: ${{ matrix.image }}
+          LEG: ${{ matrix.leg }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/ev"
@@ -150,7 +154,7 @@ jobs:
             -e "SYSPKG_SH=/src/src/Bundler.Updater.Bootstrap/tools/posix/bundler-updater.sh" \
             -e "SYSPKG_EV=/ev" \
             -e "SYSPKG_WORK=/work" \
-            "$IMAGE" sh /src/scripts/ci/syspkg-verify.sh "${{ matrix.leg }}"
+            "$IMAGE" sh /src/scripts/ci/syspkg-verify.sh "$LEG"
       - name: 上传证据工件（RESULTS 结论表/console 全量/逐腿 --log/账本快照/探针记录）
         if: always()
         uses: actions/upload-artifact@v7
