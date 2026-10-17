@@ -2024,8 +2024,8 @@ public static class UpdaterBootstrapParityTests
                 Assert.StartsWith("dpkg ", lines[0]);
                 Assert.Single(lines);
 
-                // --env-file 指 fifo → rc3（装包前拒绝）——裸 open 阻塞性 fifo
-                // 会挂死读端（O_NONBLOCK+fstat 判据先行，open 即刻返回再拒）。
+                // --env-file 指 fifo → rc3（装包前拒绝）——fifo 的 open 阻塞
+                // 由带 5s 时限的线程内 open 收口（sh `timeout 5 cat` 同口径）。
                 File.Delete(rec);
                 Assert.Equal(3, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,

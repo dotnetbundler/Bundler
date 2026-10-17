@@ -608,8 +608,8 @@ internal static class PkgApplyPlan
     // "仅普通文件"口径（sh -f 同义，顺链同规）：fifo/设备/套接件 File.Exists
     // 照收（只排目录）——BCL 公开面无类型位判据（File.GetAttributes 对特殊件
     // 同报 Normal，GetUnixFileMode 只回权限位，.NET 10/Linux 实测）；stat(2)
-    // S_IFMT=S_IFREG 走 UnixFileTypes（打包 staging 同源链接件）判，其"无法
-    // 判定放行"语义使 stat 缺席宿主退化 File.Exists 口径。
+    // S_IFMT=S_IFREG 走 UnixFileTypes（打包 staging 同源链接件、PAL stat 判），
+    // 其"无法判定放行"语义使 stat 不可达宿主退化 File.Exists 口径。
     private static bool IsRegularFile(string path) =>
         File.Exists(path) && UnixFileTypes.IsRegularFile(path);
 
@@ -983,7 +983,11 @@ internal static class NativeMethods
     internal static IntPtr OpenWithDeadline(string path)
     {
         var fd = InvalidFd;
-        using var gate = new ManualResetEventSlim();
+        // gate 不 using：超时被弃的线程若在 gate 释放后解除阻塞，
+        // finally 对已 Dispose 的 MRES 抛 ObjectDisposedException——
+        // 后台线程未处理异常会带走整个进程（干净 rc3 变 crash）。
+        // 不 Dispose 由 GC 收，无句柄面。
+        var gate = new ManualResetEventSlim();
         var worker = new Thread(() =>
         {
             try
@@ -995,11 +999,25 @@ internal static class NativeMethods
             }
             finally
             {
-                gate.Set();
+                try
+                {
+                    gate.Set();
+                }
+                catch (ObjectDisposedException)
+                {
+                }
             }
         })
         { IsBackground = true };
-        worker.Start();
+        try
+        {
+            worker.Start();
+        }
+        catch (Exception)
+        {
+            // 线程起不来（极端）按校验失败拒——不冒泡成 rc4。
+            return InvalidFd;
+        }
         return gate.Wait(OpenDeadlineMs) ? fd : InvalidFd;
     }
 

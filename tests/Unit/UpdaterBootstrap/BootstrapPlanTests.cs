@@ -1636,7 +1636,7 @@ public sealed class BootstrapPlanTests : TempBase
 
         // --env-file 指特殊件：rc3 拒绝（装包前、pm 零调用）——旧口径"读失败
         // WARN + 最小集"会让 ReadLines 对 fifo 挂等写端/把链接目标灌进降权
-        // app 的 env。O_NONBLOCK open + fstat S_IFREG 判据先行，裸 open 不阻。
+        // app 的 env。fifo 的 open 阻塞由带 5s 时限的线程内 open 收口。
         _pkgExecs.Clear();
         var rc = PkgApplyPlan.Run(
             ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
