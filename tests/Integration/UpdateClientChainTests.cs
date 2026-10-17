@@ -1096,9 +1096,11 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.True(apply.WaitForExit(60_000));
         Assert.Equal(0, apply.ExitCode);
         // 模拟"上一次 Bundler 链更新留存过旧包"——retention 里种旧件；
+        // 留存件必须 pkg+sig 成对（B2 再验签口径：孤立件不被 rollback 拣选），
         // applied 仍指新件（刚 apply 写入）。
         var oldPkg = Path.Combine(retention, "myapp_1.0-1_amd64.deb");
         File.WriteAllText(oldPkg, "pkg-v1-bytes");
+        File.WriteAllBytes(oldPkg + ".sig", EcdsaSigner.SignFile(oldPkg, material));
         File.SetLastWriteTimeUtc(oldPkg, DateTime.UtcNow.AddMinutes(-10));
 
         File.Delete(rec);
