@@ -1,8 +1,11 @@
 // SyspkgReplay（deb/rpm/alpineapk 客户端 replay 编排）进程内面：
-// 预检三件套拒绝、三级提权退化链选腿、verb argv 逐字、env 件内容/权限、
-// 留存件/applied 标记、回滚选件——全经 CommandProbe/EnvProbe/ExecProbe 缝断言，
-// 零子进程；真 spawn 面在 Integration/UpdateClientChainTests 的 POSIX 垫片腿。
+// 预检三件套拒绝、三级提权退化链选腿与运行时退化（SpawnProbe 缝）、verb argv 逐字、
+// env 件内容/权限、留存件/applied 标记/签名旁车再验、回滚选件——
+// 全经 CommandProbe/EnvProbe/ExecProbe/ChmodProbe/SpawnProbe 缝断言，
+// 零真提权子进程；真 spawn 面在 Integration/UpdateClientChainTests 的 POSIX 垫片腿。
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using DotNet.Bundler.Updater;
 using Protocol = DotNet.Bundler.Updater.Protocol;
 
@@ -19,6 +22,7 @@ public sealed class SyspkgReplayTests : TempBase
         SyspkgReplay.EnvProbe = null;
         SyspkgReplay.ExecProbe = null;
         SyspkgReplay.ChmodProbe = null;
+        SyspkgReplay.SpawnProbe = null;
         base.Dispose();
     }
 
@@ -47,15 +51,34 @@ public sealed class SyspkgReplayTests : TempBase
         ["pkexec"] = "/stub/pkexec",
     };
 
+    // 真实密钥材料：B2 起留存副本再验签吃身份公钥——"AA==" 式假 key 会让
+    // VerifyRetainedPackage 恒假，apply 路径全部验签拒绝。
+    private static readonly Protocol.UpdateKeyMaterial Material =
+        Protocol.UpdateKeyMaterial.Generate();
+
     private static Protocol.UpdateInstallIdentity Identity(string format) => new()
     {
         Format = format,
         Target = "linux-x86_64",
         Channel = "stable",
         FeedUrl = "/feed/bundler-update.stable.json",
-        PublicKey = "AA==",
+        PublicKey = Material.PublicPointBase64(),
         Pkg = "myapp",
     };
+
+    // 喂给 PlanApply 的清单签名（base64）；留存 .sig 旁车写它的原始字节形态。
+    private static string Sig(Protocol.UpdateKeyMaterial material, string path)
+    {
+        using var ecdsa = ECDsa.Create();
+        ecdsa.ImportParameters(material.ToPrivateParameters());
+        return Convert.ToBase64String(Protocol.UpdateSignatureVerifier.ToP1363(
+            ecdsa.SignData(File.ReadAllBytes(path), HashAlgorithmName.SHA256)));
+    }
+
+    // retention 里种 pkg+sig 成对候选：签名按件内容现签。
+    private static void WriteSigSidecar(string packagePath) =>
+        File.WriteAllBytes(packagePath + ".sig",
+            Convert.FromBase64String(Sig(Material, packagePath)));
 
     // 引导件宿主名按 OS 解析口径（Windows 装 bundler-updater.exe）。
     private static string BootstrapperName =>
@@ -111,7 +134,7 @@ public sealed class SyspkgReplayTests : TempBase
         var retained = Path.Combine(RetentionDir, "myapp_2.0-1_amd64.deb");
 
         var launch = SyspkgReplay.PlanApply(
-            Identity("deb"), artifact, install, Options(), _log.Add);
+            Identity("deb"), artifact, Sig(Material, artifact), install, Options(), _log.Add);
 
         // pkexec 腿优先：sudo/zenity 在场也不降级；argv 逐字按 §2.3 签名。
         Assert.Equal("/stub/pkexec", launch.FileName);
@@ -158,7 +181,7 @@ public sealed class SyspkgReplayTests : TempBase
                 ["zenity"] = "/stub/zenity",
                 ["sudo"] = "/stub/sudo",
             });
-        var launch = SyspkgReplay.PlanApply(Identity("deb"), artifact, install, Options(), _log.Add);
+        var launch = SyspkgReplay.PlanApply(Identity("deb"), artifact, Sig(Material, artifact), install, Options(), _log.Add);
         Assert.Equal("/bin/sh", launch.FileName);
         Assert.NotNull(launch.EnvFile);
         var expected =
@@ -178,7 +201,7 @@ public sealed class SyspkgReplayTests : TempBase
                 ["sudo"] = "/stub/sudo",
             });
         _execs.Clear();
-        launch = SyspkgReplay.PlanApply(Identity("deb"), artifact, install, Options(), _log.Add);
+        launch = SyspkgReplay.PlanApply(Identity("deb"), artifact, Sig(Material, artifact), install, Options(), _log.Add);
         Assert.Equal("/bin/sh", launch.FileName);
         Assert.NotNull(launch.EnvFile);
         expected =
@@ -205,7 +228,7 @@ public sealed class SyspkgReplayTests : TempBase
             });
         var install = InstallDir();
 
-        var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), install, Options(), _log.Add);
+        var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add);
         Assert.Equal("/stub/sudo", launch.FileName);
         Assert.Equal("--", launch.Arguments[0]);
         Assert.Null(launch.EnvFile);
@@ -227,7 +250,7 @@ public sealed class SyspkgReplayTests : TempBase
             });
         var install = InstallDir();
 
-        var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), install, Options(), _log.Add);
+        var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add);
         Assert.Equal("/bin/sh", launch.FileName);
         Assert.StartsWith("'/stub/zenity' '--password' | ", launch.Arguments[1]);
     }
@@ -246,7 +269,7 @@ public sealed class SyspkgReplayTests : TempBase
             ["sudo"] = "/stub/sudo",
         });
 
-        var launch = SyspkgReplay.PlanApply(Identity("deb"), artifact, install, Options(), _log.Add);
+        var launch = SyspkgReplay.PlanApply(Identity("deb"), artifact, Sig(Material, artifact), install, Options(), _log.Add);
         Assert.Equal("/stub/sudo", launch.FileName);
         Assert.Equal(
             new[]
@@ -274,7 +297,7 @@ public sealed class SyspkgReplayTests : TempBase
         var script = Path.Combine(install, "bundler-updater.sh");
         File.WriteAllText(script, "#!/bin/sh\n");
 
-        var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), install, Options(), _log.Add);
+        var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add);
         Assert.Equal("/stub/pkexec", launch.FileName);
         Assert.Equal("/bin/sh", launch.Arguments[0]);
         Assert.Equal(script, launch.Arguments[1]);
@@ -290,7 +313,7 @@ public sealed class SyspkgReplayTests : TempBase
         SetupProbes(commands: new Dictionary<string, string>());
         var install = InstallDir();
         var exception = Assert.Throws<UpdateException>(() =>
-            SyspkgReplay.PlanApply(Identity("deb"), Artifact(), install, Options(), _log.Add));
+            SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add));
         Assert.Contains("does not participate in updates", exception.Message);
         Assert.Contains("apt-get/dpkg", exception.Message);
         Assert.Empty(_execs);
@@ -303,7 +326,7 @@ public sealed class SyspkgReplayTests : TempBase
         SetupProbes(commands: new Dictionary<string, string> { ["apt-get"] = "/stub/apt-get" });
         var install = InstallDir();
         var exception = Assert.Throws<UpdateException>(() =>
-            SyspkgReplay.PlanApply(Identity("deb"), Artifact(), install, Options(), _log.Add));
+            SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add));
         Assert.Contains("ledger tool 'dpkg' not found", exception.Message);
         Assert.Contains("does not participate in updates", exception.Message);
         Assert.Empty(_execs);
@@ -321,7 +344,7 @@ public sealed class SyspkgReplayTests : TempBase
         }, ledgerRc: 1);
         var install = InstallDir();
         var exception = Assert.Throws<UpdateException>(() =>
-            SyspkgReplay.PlanApply(Identity("deb"), Artifact(), install, Options(), _log.Add));
+            SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add));
         Assert.Contains("not registered in the dpkg ledger", exception.Message);
         Assert.Contains("does not participate in updates", exception.Message);
         Assert.Single(_execs);
@@ -334,7 +357,7 @@ public sealed class SyspkgReplayTests : TempBase
         SetupProbes(commands: new Dictionary<string, string> { ["dpkg"] = "/stub/dpkg" });
         var install = InstallDir();
         var exception = Assert.Throws<UpdateException>(() =>
-            SyspkgReplay.PlanApply(Identity("deb"), Artifact(), install, Options(), _log.Add));
+            SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add));
         Assert.Contains("privilege escalation", exception.Message);
     }
 
@@ -348,7 +371,7 @@ public sealed class SyspkgReplayTests : TempBase
         });
         var install = InstallDir();
         var exception = Assert.Throws<UpdateException>(() =>
-            SyspkgReplay.PlanApply(Identity("deb"), Artifact(), install,
+            SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install,
                 new ApplyOptions { StagingRoot = StagingRoot }, _log.Add));
         Assert.Contains("ApplyOptions.AppPath", exception.Message);
     }
@@ -359,7 +382,7 @@ public sealed class SyspkgReplayTests : TempBase
         SetupProbes(commands: PkexecCommands("dpkg"));
         var install = InstallDir(withBootstrapper: false);
         var exception = Assert.Throws<UpdateException>(() =>
-            SyspkgReplay.PlanApply(Identity("deb"), Artifact(), install, Options(), _log.Add));
+            SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add));
         Assert.Contains("not built with update support", exception.Message);
     }
 
@@ -377,7 +400,7 @@ public sealed class SyspkgReplayTests : TempBase
         });
         var install = InstallDir();
         var rpm = Artifact("myapp-2.0-1.x86_64.rpm");
-        var launch = SyspkgReplay.PlanApply(Identity("rpm"), rpm, install, Options(), _log.Add);
+        var launch = SyspkgReplay.PlanApply(Identity("rpm"), rpm, Sig(Material, rpm), install, Options(), _log.Add);
         var exec = Assert.Single(_execs);
         Assert.Equal("/stub/rpm", exec.File);
         Assert.Equal(new[] { "-q", "myapp" }, exec.Args);
@@ -399,7 +422,7 @@ public sealed class SyspkgReplayTests : TempBase
         var install = InstallDir();
         var apk = Artifact("myapp-2.0.apk");
         var launch = SyspkgReplay.PlanApply(
-            Identity("alpineapk"), apk, install, Options(), _log.Add);
+            Identity("alpineapk"), apk, Sig(Material, apk), install, Options(), _log.Add);
         var exec = Assert.Single(_execs);
         Assert.Equal("/stub/apk", exec.File);
         Assert.Equal(new[] { "info", "-e", "myapp" }, exec.Args);
@@ -419,7 +442,7 @@ public sealed class SyspkgReplayTests : TempBase
             },
             commands: new Dictionary<string, string>());   // CommandProbe 全缺席
         var install = InstallDir();
-        var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), install, Options(), _log.Add);
+        var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add);
         Assert.Equal("/env/pkexec", launch.FileName);
         var exec = Assert.Single(_execs);
         Assert.Equal("/env/dpkg", exec.File);
@@ -443,7 +466,7 @@ public sealed class SyspkgReplayTests : TempBase
             commands: PkexecCommands("dpkg"));
         var install = InstallDir();
 
-        var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), install, Options(), _log.Add);
+        var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add);
 
         Assert.NotNull(launch.EnvFile);
         Assert.Equal(
@@ -487,7 +510,7 @@ public sealed class SyspkgReplayTests : TempBase
             RollbackBackupDirectory = Path.Combine(blocker, "retention"),
         };
 
-        var launch = SyspkgReplay.PlanApply(Identity("deb"), artifact, install, options, _log.Add);
+        var launch = SyspkgReplay.PlanApply(Identity("deb"), artifact, Sig(Material, artifact), install, options, _log.Add);
         Assert.Equal(
             Path.GetFullPath(artifact),
             launch.Arguments[Array.IndexOf(launch.Arguments, "--pkg") + 1]);
@@ -506,7 +529,7 @@ public sealed class SyspkgReplayTests : TempBase
         var install = InstallDir();
 
         var launch = SyspkgReplay.PlanApply(
-            Identity("deb"), Artifact(), install, Options(), _log.Add);
+            Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add);
 
         Assert.Null(launch.EnvFile);
         Assert.DoesNotContain("--env-file", launch.Arguments);
@@ -535,9 +558,13 @@ public sealed class SyspkgReplayTests : TempBase
         SetupProbes(commands: PkexecCommands("dpkg"));
         var install = InstallDir();
         Directory.CreateDirectory(RetentionDir);
-        // 当前件（applied 标记指向）+ 旧件——回滚应选旧件。
-        File.WriteAllText(Path.Combine(RetentionDir, "myapp_2.0-1_amd64.deb"), "pkg-v2");
-        File.WriteAllText(Path.Combine(RetentionDir, "myapp_1.0-1_amd64.deb"), "pkg-v1");
+        // 当前件（applied 标记指向）+ 旧件——回滚应选旧件；B2 起候选必须 pkg+sig 成对。
+        var current = Path.Combine(RetentionDir, "myapp_2.0-1_amd64.deb");
+        var old = Path.Combine(RetentionDir, "myapp_1.0-1_amd64.deb");
+        File.WriteAllText(current, "pkg-v2");
+        File.WriteAllText(old, "pkg-v1");
+        WriteSigSidecar(current);
+        WriteSigSidecar(old);
         File.WriteAllText(Path.Combine(RetentionDir, "applied"), "myapp_2.0-1_amd64.deb\n");
 
         var launch = SyspkgReplay.PlanRollback(Identity("deb"), install, Options(), _log.Add);
@@ -571,6 +598,9 @@ public sealed class SyspkgReplayTests : TempBase
         File.WriteAllText(older, "o");
         File.WriteAllText(newer, "n");
         File.WriteAllText(current, "c");
+        WriteSigSidecar(older);
+        WriteSigSidecar(newer);
+        WriteSigSidecar(current);
         File.SetLastWriteTimeUtc(older, DateTime.UtcNow.AddHours(-3));
         File.SetLastWriteTimeUtc(newer, DateTime.UtcNow.AddHours(-2));
         File.SetLastWriteTimeUtc(current, DateTime.UtcNow.AddHours(-1)); // 最新但被标记排除
@@ -590,6 +620,239 @@ public sealed class SyspkgReplayTests : TempBase
         var install = InstallDir();
         Assert.Throws<UpdateException>(() =>
             SyspkgReplay.PlanRollback(Identity("deb"), install, Options(), _log.Add));
+    }
+
+    // ---- B1：spawn 失败还原 ----
+
+    [Fact]
+    public void Apply_SpawnFailure_RestoresAppliedMarker_AndDeletesRetainedPair()
+    {
+        // B1：探测后提权工具被删/执行位丢失 → Process.Start 抛——全腿失败时
+        // applied 标记必须回记规划前值，本轮新留存件（pkg+.sig）一并删，
+        // env 件目录一并清。
+        SetupProbes(
+            env: new Dictionary<string, string> { ["HOME"] = "/home/u" },
+            commands: PkexecCommands("dpkg"));
+        SyspkgReplay.SpawnProbe = _ => throw new InvalidOperationException("spawn gone");
+        var install = InstallDir();
+        Directory.CreateDirectory(RetentionDir);
+        File.WriteAllText(Path.Combine(RetentionDir, "applied"), "myapp_1.0-1_amd64.deb\n");
+        var artifact = Artifact();
+
+        // 全腿失败统一抛 UpdateException（spawn 原异常入 inner、notes 细节并消息）。
+        var exception = Assert.Throws<UpdateException>(() =>
+            SyspkgReplay.Apply(Identity("deb"), artifact, Sig(Material, artifact),
+                install, Options(), _log.Add));
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Contains("spawn gone", exception.Message);
+
+        Assert.Equal("myapp_1.0-1_amd64.deb",
+            File.ReadAllText(Path.Combine(RetentionDir, "applied")).Trim());
+        // retention 只剩 applied——本轮留存对（pkg+.sig）已随失败删走。
+        Assert.Equal(
+            new[] { Path.Combine(RetentionDir, "applied") },
+            Directory.EnumerateFiles(RetentionDir).ToArray());
+        Assert.Empty(Directory.EnumerateFileSystemEntries(StagingRoot));
+    }
+
+    [Fact]
+    public void Rollback_SpawnFailure_RestoresAppliedMarker()
+    {
+        // B1：rollback 规划期把 applied 翻记成所选旧包——全腿 spawn 失败必须翻回；
+        // 所选旧包是既有件，失败还原绝不能误删。
+        SetupProbes(commands: PkexecCommands("dpkg"));
+        SyspkgReplay.SpawnProbe = _ => throw new InvalidOperationException("spawn gone");
+        var install = InstallDir();
+        Directory.CreateDirectory(RetentionDir);
+        var current = Path.Combine(RetentionDir, "myapp_2.0-1_amd64.deb");
+        var old = Path.Combine(RetentionDir, "myapp_1.0-1_amd64.deb");
+        File.WriteAllText(current, "pkg-v2");
+        WriteSigSidecar(current);
+        File.WriteAllText(old, "pkg-v1");
+        WriteSigSidecar(old);
+        File.WriteAllText(Path.Combine(RetentionDir, "applied"), "myapp_2.0-1_amd64.deb\n");
+
+        var exception = Assert.Throws<UpdateException>(() =>
+            SyspkgReplay.Rollback(Identity("deb"), install, Options(), _log.Add));
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Contains("spawn gone", exception.Message);
+
+        Assert.Equal("myapp_2.0-1_amd64.deb",
+            File.ReadAllText(Path.Combine(RetentionDir, "applied")).Trim());
+        Assert.True(File.Exists(old) && File.Exists(old + ".sig"));
+    }
+
+    // ---- B2：留存件签名再验 ----
+
+    [Fact]
+    public void PlanApply_RetainedCopyFailsReverify_RefusesAndRestores()
+    {
+        // B2：直喂提权 pkg-apply 的留存副本必须自身过签——喂异件签名则副本
+        // 验签失败→确定性拒绝不绕道，applied/留存对还原不留不可信件。
+        SetupProbes(commands: PkexecCommands("dpkg"));
+        var install = InstallDir();
+        var artifact = Artifact();
+        var other = Path.Combine(Root, "other.deb");
+        File.WriteAllText(other, "different-bytes");
+
+        var exception = Assert.Throws<UpdateException>(() =>
+            SyspkgReplay.PlanApply(Identity("deb"), artifact, Sig(Material, other),
+                install, Options(), _log.Add));
+
+        Assert.Contains("re-verification", exception.Message);
+        Assert.False(File.Exists(Path.Combine(RetentionDir, "myapp_2.0-1_amd64.deb")));
+        Assert.False(File.Exists(Path.Combine(RetentionDir, "myapp_2.0-1_amd64.deb.sig")));
+        Assert.False(File.Exists(Path.Combine(RetentionDir, "applied")));
+    }
+
+    [Fact]
+    public void PlanRollback_TamperedCandidate_SkippedForNextVerified()
+    {
+        // B2：最新候选签后被换内容 → 验签失败跳过，拣下一个过签件；
+        // .sig 件自身永不作候选。
+        SetupProbes(commands: PkexecCommands("dpkg"));
+        var install = InstallDir();
+        Directory.CreateDirectory(RetentionDir);
+        var current = Path.Combine(RetentionDir, "a_3.0-1_amd64.deb");
+        var valid = Path.Combine(RetentionDir, "a_2.0-1_amd64.deb");
+        var tampered = Path.Combine(RetentionDir, "a_1.0-1_amd64.deb");
+        File.WriteAllText(current, "v3");
+        WriteSigSidecar(current);
+        File.WriteAllText(valid, "v2");
+        WriteSigSidecar(valid);
+        File.WriteAllText(tampered, "v1");
+        WriteSigSidecar(tampered);
+        File.WriteAllText(tampered, "v1-tampered");   // 签后篡改——验签必败
+        File.SetLastWriteTimeUtc(current, DateTime.UtcNow.AddHours(-1));
+        File.SetLastWriteTimeUtc(tampered, DateTime.UtcNow.AddHours(-2)); // 比 valid 新
+        File.SetLastWriteTimeUtc(valid, DateTime.UtcNow.AddHours(-3));
+        File.WriteAllText(Path.Combine(RetentionDir, "applied"), "a_3.0-1_amd64.deb\n");
+
+        var launch = SyspkgReplay.PlanRollback(Identity("deb"), install, Options(), _log.Add);
+
+        Assert.Equal(valid,
+            launch.Arguments[Array.IndexOf(launch.Arguments, "--pkg") + 1]);
+        Assert.Contains(_log, line => line.Contains("skipping retained package"));
+    }
+
+    [Fact]
+    public void PlanRollback_UnpairedCandidate_Refuses()
+    {
+        // B2：无 .sig 旁车的留存件不成对不候选——全部不可用即"无留存件"拒绝。
+        SetupProbes(commands: PkexecCommands("dpkg"));
+        var install = InstallDir();
+        Directory.CreateDirectory(RetentionDir);
+        File.WriteAllText(Path.Combine(RetentionDir, "a_1.0-1_amd64.deb"), "v1");
+
+        var exception = Assert.Throws<UpdateException>(() =>
+            SyspkgReplay.PlanRollback(Identity("deb"), install, Options(), _log.Add));
+        Assert.Contains("no retained package", exception.Message);
+    }
+
+    // ---- B3：提权腿运行时退化 ----
+
+    [Fact]
+    public void Apply_ElevationLegFastFail_DegradesToNextLeg()
+    {
+        // B3：pkexec 在而无 polkit agent → 拉起即非零速退——观察窗内退出按该腿
+        // 失败退化裸 sudo；第二腿窗口内仍在运行按"已拉起"交还。
+        SetupProbes(commands: new Dictionary<string, string>
+        {
+            ["dpkg"] = "/stub/dpkg",
+            ["pkexec"] = "/stub/pkexec",
+            ["sudo"] = "/stub/sudo",
+        });
+        var spawned = new List<ProcessStartInfo>();
+        using var sleeper = SleeperProcess();
+        SyspkgReplay.SpawnProbe = startInfo =>
+        {
+            spawned.Add(startInfo);
+            return spawned.Count == 1 ? FastFailProcess() : sleeper;
+        };
+        var install = InstallDir();
+        var artifact = Artifact();
+
+        var process = SyspkgReplay.Apply(Identity("deb"), artifact, Sig(Material, artifact),
+            install, Options(), _log.Add);
+
+        Assert.Same(sleeper, process);
+        Assert.Equal(2, spawned.Count);
+        Assert.Equal("/stub/pkexec", spawned[0].FileName);
+        Assert.Equal("/stub/sudo", spawned[1].FileName);
+        Assert.StartsWith("\"--\"", spawned[1].Arguments);   // 裸 sudo 腿 "--" 前缀保留
+        // 退化成功不还原——applied 标记指向新包。
+        Assert.Equal("myapp_2.0-1_amd64.deb",
+            File.ReadAllText(Path.Combine(RetentionDir, "applied")).Trim());
+        Assert.Contains(_log, line => line.Contains("trying next leg"));
+        try
+        {
+            sleeper.Kill();
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    [Fact]
+    public void Apply_AllLegsFastFail_RefusesAndRestores()
+    {
+        // B3+B1：唯一腿快败且无腿可退 → 确定性拒绝 + applied/留存对还原。
+        SetupProbes(commands: PkexecCommands("dpkg"));
+        SyspkgReplay.SpawnProbe = _ => FastFailProcess();
+        var install = InstallDir();
+        Directory.CreateDirectory(RetentionDir);
+        File.WriteAllText(Path.Combine(RetentionDir, "applied"), "myapp_1.0-1_amd64.deb\n");
+        var artifact = Artifact();
+
+        var exception = Assert.Throws<UpdateException>(() =>
+            SyspkgReplay.Apply(Identity("deb"), artifact, Sig(Material, artifact),
+                install, Options(), _log.Add));
+
+        Assert.Contains("no privilege escalation leg", exception.Message);
+        Assert.Equal("myapp_1.0-1_amd64.deb",
+            File.ReadAllText(Path.Combine(RetentionDir, "applied")).Trim());
+        Assert.Equal(
+            new[] { Path.Combine(RetentionDir, "applied") },
+            Directory.EnumerateFiles(RetentionDir).ToArray());
+    }
+
+    // 观察窗进程道具：快败件即刻非零退出；长活件窗内不退出（测试尾即杀）。
+    private static Process SpawnRaw(string file, string args) =>
+        Process.Start(new ProcessStartInfo(file, args)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        })!;
+
+    private static Process FastFailProcess() =>
+        RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? SpawnRaw("cmd.exe", "/c exit 3")
+            : SpawnRaw("/bin/sh", "-c \"exit 3\"");
+
+    private static Process SleeperProcess() =>
+        RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? SpawnRaw("cmd.exe", "/c ping -n 30 127.0.0.1 >nul")
+            : SpawnRaw("/bin/sh", "-c \"sleep 30\"");
+
+    // ---- B5：artifact/identity format 词面一致性 ----
+
+    [Fact]
+    public void Apply_FormatLiteralMismatch_Refuses()
+    {
+        // B5：SelectArtifact 大小写不敏感匹配放进来的漂移 format（"DEB" vs "deb"）
+        // → syspkg 分支词面一致性闸确定性拒绝（emitter 双侧恒小写不会触发）。
+        var artifact = new Protocol.UpdateFeedArtifact
+        {
+            Target = "linux-x86_64",
+            Format = "DEB",
+            Url = "x.deb",
+            File = "x.deb",
+            Signature = "AA==",
+        };
+        var exception = Assert.Throws<UpdateException>(() =>
+            UpdateApplier.Apply(Identity("deb"), artifact, Artifact(),
+                InstallDir(), Options(), _log.Add));
+        Assert.Contains("does not literally match", exception.Message);
     }
 
     // ---- 退出码分类 ----
@@ -647,6 +910,10 @@ public sealed class SyspkgReplayTests : TempBase
         SyspkgReplay.EnvProbe = name => name == "XDG_DATA_HOME" ? xdg : null;
         Assert.Equal(Path.Combine(xdg, "dotnet-bundler", "backups"),
             SyspkgReplay.UserBackupsRoot(OSPlatform.Linux));
+
+        // B-N8：相对值 XDG_DATA_HOME 按缺席退化——不漂到 cwd 下。
+        SyspkgReplay.EnvProbe = name => name == "XDG_DATA_HOME" ? "relative/dir" : null;
+        Assert.Equal(expected, SyspkgReplay.UserBackupsRoot(OSPlatform.Linux));
     }
 
     [Fact]

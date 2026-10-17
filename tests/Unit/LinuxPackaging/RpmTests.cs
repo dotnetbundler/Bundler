@@ -275,6 +275,70 @@ public sealed class RpmTests : TempBase
     }
 
     [Fact]
+    public async Task UpdateInjectedFiles_UnderEtc_NotConfigNoreplace()
+    {
+        // C1：bundler-update.json/bundler-updater 是更新自持件——InstallRoot 配 /etc
+        // 下或显式 ConfigLocations 点名都不得打 %config(noreplace)：标了升级永不
+        // 替换，旧 feedUrl/pkg/旧引导件随"保留原配置"语义滞留。同根普通 /etc 件照常打标。
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var keyPath = Path.Combine(Root, "update-key.json");
+        UpdateKeyMaterial.Generate().Save(keyPath);
+        try
+        {
+            var baseline = RpmConfiguration(input, output);
+            var configuration = new BundleConfiguration
+            {
+                ProductName = baseline.ProductName,
+                Identifier = baseline.Identifier,
+                Publisher = baseline.Publisher,
+                Version = baseline.Version,
+                OutputDirectory = baseline.OutputDirectory,
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://example.test/updates",
+                    SigningKeyFile = keyPath,
+                },
+                Targets = baseline.Targets
+            };
+            var artifact = (await new RpmBundler(new RpmBundleConfiguration
+            {
+                InstallRoot = "/etc/example-app",
+                ConfigLocations =
+                [
+                    "/etc/example-app/bundler-update.json",
+                    "/etc/example-app/bundler-updater",
+                ]
+            }).BuildAsync(configuration, TestContext.Current.CancellationToken)).Single();
+            var package = RpmPackageReader.Read(artifact.Path);
+            var dirnames = package.Main.Strings(1118);
+            var dirindexes = package.Main.Ints(1116);
+            var basenames = package.Main.Strings(1117);
+            var flags = package.Main.Ints(1037);
+            string Full(int i) => dirnames[dirindexes[i]] + basenames[i];
+            int Flag(string path)
+            {
+                for (var i = 0; i < basenames.Length; i++)
+                {
+                    if (Full(i) == path + "/") return flags[i];
+                    if (Full(i).TrimEnd('/') == path) return flags[i];
+                }
+                throw new InvalidOperationException("missing " + path);
+            }
+            // 更新自持件不打 17；同根普通件（/etc 自动标）照打。
+            Assert.Equal(0, Flag("/etc/example-app/bundler-update.json") & 17);
+            Assert.Equal(0, Flag("/etc/example-app/bundler-updater") & 17);
+            Assert.Equal(17, Flag("/etc/example-app/ExampleApp") & 17);
+            Assert.DoesNotContain(package.Payload,
+                e => e.Path.EndsWith("/update-key.json", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Cleanup(input, output);
+        }
+    }
+
+    [Fact]
     public async Task RejectsInvalidScriptlets()
     {
         var input = CreateInputDirectory();
@@ -397,7 +461,9 @@ public sealed class RpmTests : TempBase
         // glibc 目标经 musl 姊妹解析命中）。
         var input = CreateInputDirectory();
         var output = Temp("DotNet.Bundler.Tests").FullName;
-        var keyPath = Path.Combine(input, "update-key.json");
+        // 私钥绝不能写进 input 载荷根——CollectInput 会把根内一切文件打进包，
+        // 私钥随载荷外发即泄密（E5 反模式，与 DebTests 同口径放 Root）。
+        var keyPath = Path.Combine(Root, "update-key.json");
         var material = UpdateKeyMaterial.Generate();
         material.Save(keyPath);
         try
@@ -421,6 +487,9 @@ public sealed class RpmTests : TempBase
             var artifact = (await new RpmBundler()
                 .BuildAsync(configuration, TestContext.Current.CancellationToken)).Single();
             var package = RpmPackageReader.Read(artifact.Path);
+
+            Assert.DoesNotContain(package.Payload,
+                e => e.Path.EndsWith("/update-key.json", StringComparison.Ordinal));
 
             var sidecar = package.Payload.Single(e => e.Path == "/usr/lib/example-app/bundler-update.json");
             Assert.Equal(420 /* 0644 */, sidecar.Mode & 511);
@@ -452,7 +521,8 @@ public sealed class RpmTests : TempBase
     {
         var input = CreateInputDirectory();
         var output = Temp("DotNet.Bundler.Tests").FullName;
-        var keyPath = Path.Combine(input, "update-key.json");
+        // 私钥放 Root 不放 input——载荷根内的 update-key.json 会被打进包外发。
+        var keyPath = Path.Combine(Root, "update-key.json");
         UpdateKeyMaterial.Generate().Save(keyPath);
         File.WriteAllText(Path.Combine(input, claimedName), "user payload");
         try

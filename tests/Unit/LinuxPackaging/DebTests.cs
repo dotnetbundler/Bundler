@@ -101,6 +101,10 @@ public sealed class DebTests : TempBase
         var members = DebPackageReader.ReadAr(deb.Path);
         var data = DebPackageReader.ReadTar(DebPackageReader.Ungzip(members[2].Content));
 
+        // E5 对照面：私钥在 Root 不在载荷根——包内不得出现 update-key.json。
+        Assert.DoesNotContain(data,
+            e => e.Name.EndsWith("/update-key.json", StringComparison.Ordinal));
+
         var sidecar = data.Single(e => e.Name == "./usr/lib/example-app/bundler-update.json");
         Assert.Equal(420 /* 0644 */, sidecar.Mode);
         var bootstrapper = data.Single(e => e.Name == "./usr/lib/example-app/bundler-updater");
