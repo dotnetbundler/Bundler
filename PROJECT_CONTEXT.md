@@ -5,7 +5,7 @@
 > UPDATE 系统包扩展 B0–B5 全链完成并入 `main`（PR #107 设计、#108 发射+`pkg` 身份、#109 引导件 `pkg-apply` 双实现、#106/#110 macOS quarantine 能力探测、#111 客户端 `SyspkgReplay`、#112 syspkg-verify 三容器验收+DropProbe 修复、#113/#115 冻件重冻、#114 收尾：syspkg-verify 经 `workflow_call` 收编 verify 发布门、usage 文档、`pkg` 字段 v1 兼容断言）。
 > 测试确定性修复 #116（奇偶腿宿主 `DEBIAN_FRONTEND` env 泄漏+uidedge rec 竞态）与 #117（NSIS 卸载分离删除断言改 WaitFor）已并入。
 > 发布门实证：verify 于 `0e4a015` 基线**三连全绿**（run `38975789470`、`38980755696`、`38985327721`——六宿主测试矩阵 + syspkg 三容器腿 + produce/consume/manual/universal 全链）。
-> 引导件冻件口径：现嵌 8 件为 produce-bootstrap run `39012876066`@`e7d92f4` 产出（PR #126 入库 `b447d36`，含 O_NOFOLLOW fcntl 表族修复——arm/arm64/ppc64le 紧凑表 0x8000），SHA-256 与字节数留账于该 squash 正文。
+> 引导件冻件口径：现嵌 8 件为 produce-bootstrap run `39030858362`@`e0174dc` 产出（PR #129 入库，含 #128 PAL 化——env 件校验与 `UnixFileTypes` 改走 `libSystem.Native`、gate 竞态修复），SHA-256 与字节数留账于该 squash 正文。
 > 图形提权入口链等剩余边界仍挂 `docs/project/special-acceptance.md`。
 > 当前包版本：`0.1.0-alpha.103`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词（别称仅输入归一，产物名用各生态词），契约与全产物名目录见 `docs/design/targets.md`**
