@@ -17,8 +17,9 @@ internal static class SyspkgReplay
     // ---- 测试缝（与引导件 PkgApplyPlan 同名同源约定）----
 
     /// <summary>
-    /// command -v 存在性/解析缝：置非 null 即权威（返 null=命令缺席，不回 PATH）；
-    /// 生产为 null 走 BUNDLER_UPDATER_CMD_&lt;TOOL&gt; env 覆盖 → PATH 实查。
+    /// command -v 存在性/解析缝：BUNDLER_UPDATER_CMD_&lt;TOOL&gt; env 覆盖先判（见
+    /// ResolveCommand 顺序），env 缺席时探针置非 null 即权威（返 null=命令缺席，
+    /// 不回 PATH）；生产为 null 走 PATH 实查。
     /// </summary>
     internal static Func<string, string?>? CommandProbe;
 
@@ -41,6 +42,12 @@ internal static class SyspkgReplay
     /// </summary>
     internal static Func<string, int>? ChmodProbe;
 
+    /// <summary>
+    /// 提权腿拉起缝：置非 null 即不真 spawn——由测试决定返回什么（快败进程/
+    /// 长活进程/抛异常），断言拉起观察窗退化与失败还原；生产为 null 走 Process.Start。
+    /// </summary>
+    internal static Func<ProcessStartInfo, Process?>? SpawnProbe;
+
     // 会话 env 件的固定键集——在场才写行，不在场跳过（§2.2 "等在"口径）。
     private static readonly string[] SessionEnvKeys =
     {
@@ -54,6 +61,12 @@ internal static class SyspkgReplay
 
     private const string AskpassPrompt = "Authentication required to install the update";
 
+    // B3 拉起观察窗：spawn 成功 ≠ 提权腿可用（pkexec 在而无 polkit agent 的
+    // headless 场景拉起即刻非零退出，command -v 探测期证不出）。窗口内已退出且
+    // rc≠0 按该腿运行时失败退化下一腿；超时仍在运行（鉴权提示等用户交互，分钟级
+    // 合理）或 rc==0（极速装完）都按"已拉起"交还句柄——拉起即退口径不变。
+    private const int LaunchObserveMilliseconds = 2_000;
+
     /// <summary>deb/rpm/alpineapk 判定——客户端身份 format 词面。</summary>
     internal static bool IsSyspkgFormat(string? format) =>
         string.Equals(format, "deb", StringComparison.OrdinalIgnoreCase) ||
@@ -61,13 +74,15 @@ internal static class SyspkgReplay
         string.Equals(format, "alpineapk", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// apply 编排：验签已过（UpdateClient 闸）→ 预检 → 留存回滚件 → 提权退化链
-    /// 拉起安装位 bundler-updater。返回的是提权器进程句柄（拉起即退语义）。
+    /// apply 编排：验签已过（UpdateClient 闸）→ 预检 → 留存回滚件（连签名件）→
+    /// 留存副本再验签 → 提权退化链拉起安装位 bundler-updater。
+    /// 返回的是提权器进程句柄（拉起即退语义）。signature = 清单上行 base64 签名。
     /// </summary>
     internal static Process Apply(
-        UpdateInstallIdentity identity, string artifactPath,
+        UpdateInstallIdentity identity, string artifactPath, string signature,
         string installDirectory, ApplyOptions options, Action<string>? log)
-        => StartLaunch(PlanApply(identity, artifactPath, installDirectory, options, log), log);
+        => StartLaunch(
+            PlanApply(identity, artifactPath, signature, installDirectory, options, log), log);
 
     /// <summary>
     /// rollback 编排：同路径同提权链重放留存旧包并带 --rollback——
@@ -80,20 +95,24 @@ internal static class SyspkgReplay
 
     /// <summary>
     /// apply 拉起面规划（纯规划无 spawn——单测可逐字断言）：预检三件套 →
-    /// 解析安装位引导件 → 选提权腿 → 留存新包 + applied 标记 → 会话 env 件 → verb argv。
+    /// 解析安装位引导件 → 探测提权退化链 → 留存新包（pkg+sig 成对）+ applied 标记 →
+    /// 留存副本再验签 → 会话 env 件 → verb argv。
     /// 规划半途失败不污染 retention/env 现场（尽力还原后透传拒绝）。
+    /// signature = 清单上行 base64 签名——留存 .sig 与副本再验签都吃它。
     /// </summary>
     internal static SyspkgLaunch PlanApply(
-        UpdateInstallIdentity identity, string artifactPath,
+        UpdateInstallIdentity identity, string artifactPath, string signature,
         string installDirectory, ApplyOptions options, Action<string>? log)
     {
         var format = VerbFormat(identity.Format);
+        // 身份字段 pkg = 包管理器登记名（账本归属/预检用）；与 verb --pkg
+        // （本地包文件路径）同名异义，勿混（C-N6）。
         var pkg = identity.Pkg ?? "";
         UpdateApplier.SweepStaleStaging(options.StagingRoot);
         PrecheckLedgerAndManagers(format, pkg);
         var updaterArgv = ResolveUpdaterArgv(options.BootstrapperPath, installDirectory);
         var app = RequireAppPath(format, options);
-        var leg = PickElevationLeg(pkg);
+        var legs = PickElevationLegs(pkg);
         var pkgArg = Path.GetFullPath(artifactPath);
         var retentionDir = ResolveRetentionDirectory(installDirectory, options);
         var appliedBefore = ReadAppliedMarker(retentionDir);
@@ -102,25 +121,39 @@ internal static class SyspkgReplay
         string? envDir = null;
         try
         {
-            retained = TryRetainPackage(artifactPath, retentionDir, log);
+            retained = TryRetainPackage(artifactPath, retentionDir, signature, log);
             if (retained is not null)
             {
+                // B2 留存副本再验签：retention 目录与原件同为用户可写——验签对原路径做、
+                // 装的是留存副本，验→拷→root 读之间存在同用户替换窗。直喂提权
+                // pkg-apply 的件必须先自身过签：验不过即篡改/腐坏信号，确定性拒绝
+                // 不绕道降级（留存失败的原始路径降级属 B-N3 登记的另一条口径）。
+                if (!VerifyRetainedPackage(retained, identity.PublicKey))
+                {
+                    throw new UpdateException(
+                        $"retained package '{retained}' failed signature re-verification — refused.");
+                }
                 pkgArg = retained;
             }
             envFile = TryWriteSessionEnvFile(options, out envDir, log);
             var verbArgv = BuildVerbArgv(
                 updaterArgv, pkgArg, format, app, envFile, rollback: false, LogFilePath(options));
-            log?.Invoke($"update: pkg-apply '{pkgArg}' via {leg.Description}");
-            return BuildLaunch(leg, verbArgv, envFile, envDir);
+            log?.Invoke($"update: pkg-apply '{pkgArg}' via {legs[0].Description}");
+            var launch = BuildLaunch(legs[0], verbArgv, envFile, envDir);
+            launch.Fallbacks = legs.Skip(1)
+                .Select(leg => BuildLaunch(leg, verbArgv, envFile, envDir)).ToArray();
+            // B1 还原上下文随拉起面走：全腿 spawn 失败时 StartLaunch 据此还原
+            // applied 标记并删掉本轮新留存件（含 .sig）。
+            launch.RetentionDir = retentionDir;
+            launch.AppliedBefore = appliedBefore;
+            launch.RetainedFile = retained;
+            return launch;
         }
         catch
         {
             CleanupEnvFile(envFile, envDir);
             RestoreAppliedMarker(retentionDir, appliedBefore);
-            if (retained is not null)
-            {
-                TryDeleteFile(retained);
-            }
+            TryDeleteRetained(retained);
             throw;
         }
     }
@@ -128,6 +161,8 @@ internal static class SyspkgReplay
     /// <summary>
     /// rollback 拉起面规划：预检 → 留存集选旧包（缺席确定性拒绝）→ 引导件/提权腿 →
     /// verb argv 带 --rollback；applied 标记改记所选旧包（回滚后账本以它为当前）。
+    /// 留存候选必须 pkg+sig 成对且对身份公钥再验过——retention 用户可写，
+    /// 未过签件绝不进提权 pkg-apply（B2）。
     /// </summary>
     internal static SyspkgLaunch PlanRollback(
         UpdateInstallIdentity identity,
@@ -138,13 +173,13 @@ internal static class SyspkgReplay
         UpdateApplier.SweepStaleStaging(options.StagingRoot);
         PrecheckLedgerAndManagers(format, pkg);
         var retentionDir = ResolveRetentionDirectory(installDirectory, options);
-        var selected = PickRollbackPackage(retentionDir, out var appliedBefore)
+        var selected = PickRollbackPackage(retentionDir, identity.PublicKey, log, out var appliedBefore)
             ?? throw new UpdateException(
                 $"no retained package to roll back '{pkg}' — " +
                 "rollback replays a package retained by a previous update through this client.");
         var updaterArgv = ResolveUpdaterArgv(options.BootstrapperPath, installDirectory);
         var app = RequireAppPath(format, options);
-        var leg = PickElevationLeg(pkg);
+        var legs = PickElevationLegs(pkg);
         string? envFile = null;
         string? envDir = null;
         try
@@ -153,8 +188,15 @@ internal static class SyspkgReplay
             var verbArgv = BuildVerbArgv(
                 updaterArgv, selected, format, app, envFile, rollback: true, LogFilePath(options));
             TryWriteAppliedMarker(retentionDir, Path.GetFileName(selected), log);
-            log?.Invoke($"update: pkg-apply rollback '{selected}' via {leg.Description}");
-            return BuildLaunch(leg, verbArgv, envFile, envDir);
+            log?.Invoke($"update: pkg-apply rollback '{selected}' via {legs[0].Description}");
+            var launch = BuildLaunch(legs[0], verbArgv, envFile, envDir);
+            launch.Fallbacks = legs.Skip(1)
+                .Select(leg => BuildLaunch(leg, verbArgv, envFile, envDir)).ToArray();
+            // B1 还原上下文：rollback 无新建留存件（RetainedFile 留 null——
+            // 所选旧包是既有件绝不能删），只还原 applied 标记翻记。
+            launch.RetentionDir = retentionDir;
+            launch.AppliedBefore = appliedBefore;
+            return launch;
         }
         catch
         {
@@ -201,6 +243,9 @@ internal static class SyspkgReplay
                 $"package '{pkg}' is not registered in the {ledgerTool} ledger (probe exit {rc}) — " +
                 "this installation does not participate in updates.");
         }
+        // B-N4：dpkg -s 对 config-files 态（已卸未 purge 只剩配置件）同样退 0——
+        // 方向安全：残留配置视同"账本有登记"，pkg-apply 重放安装原生覆盖，
+        // 不会把漂移面误放进更新链。
     }
 
     // 前端退化链与账本工具按引导件 PkgApplyPlan 同款口径：apt-get→dpkg、
@@ -287,15 +332,17 @@ internal static class SyspkgReplay
             new(description) { AskpassArgv = askpassArgv, SudoPath = sudoPath };
     }
 
-    // 选腿：pkexec → zenity/kdialog 问密码 + sudo -S → 裸 sudo。
-    // 这里只做可用性探测选腿；哪级拉起成功即定，不起二次重试循环。
+    // 探测退化链：pkexec → zenity/kdialog 问密码 + sudo -S → 裸 sudo——
+    // 这里只做可用性探测排出有序腿表；首选腿拉起失败（spawn 抛/观察窗内非零
+    // 速退）时 StartLaunch 沿表逐腿运行时退化（B3），不起二次重试循环。
     // 问密码管线腿硬需要图形会话通道——DISPLAY/WAYLAND_DISPLAY 全缺席（headless）
-    // 时 zenity/kdialog 必败，直接跳过直落裸 sudo（tty 密码提示/NOPASSWD 场景存活）。
-    private static ElevationLeg PickElevationLeg(string pkg)
+    // 时 zenity/kdialog 必败，探测期直接不进表（tty 密码提示/NOPASSWD 场景靠裸 sudo）。
+    private static ElevationLeg[] PickElevationLegs(string pkg)
     {
+        var legs = new List<ElevationLeg>(3);
         if (ResolveCommand("pkexec") is { } pkexec)
         {
-            return ElevationLeg.Direct(pkexec, "pkexec");
+            legs.Add(ElevationLeg.Direct(pkexec, "pkexec"));
         }
         var sudo = ResolveCommand("sudo");
         var hasDisplay = GetEnv("DISPLAY") is { Length: > 0 } ||
@@ -306,26 +353,34 @@ internal static class SyspkgReplay
             var kdialog = zenity is null ? ResolveCommand("kdialog") : null;
             if (zenity is not null || kdialog is not null)
             {
-                return ElevationLeg.Askpass(
+                legs.Add(ElevationLeg.Askpass(
                     zenity is not null
                         ? [zenity, "--password"]
                         : [kdialog!, "--password", AskpassPrompt],
-                    sudo, (zenity is not null ? "zenity" : "kdialog") + "+sudo -S");
+                    sudo, (zenity is not null ? "zenity" : "kdialog") + "+sudo -S"));
             }
         }
         if (sudo is not null)
         {
-            return ElevationLeg.Direct(sudo, "sudo", ["--"]);
+            legs.Add(ElevationLeg.Direct(sudo, "sudo", ["--"]));
         }
-        throw new UpdateException(
-            "no privilege escalation mechanism available (probed pkexec / zenity+kdialog + sudo / sudo) — " +
-            $"cannot replay package '{pkg}'.");
+        if (legs.Count == 0)
+        {
+            throw new UpdateException(
+                "no privilege escalation mechanism available (probed pkexec / zenity+kdialog + sudo / sudo) — " +
+                $"cannot replay package '{pkg}'.");
+        }
+        return legs.ToArray();
     }
 
     // verb argv 按 §2.3 协议签名逐字：
     //   bundler-updater pkg-apply --pkg <本地包> --format <deb|rpm|apk> --app <重启目标>
     //       [--env-file <会话env件>] [--rollback] [--log <件>]
     // updaterArgv 已含引导件直跑或 "/bin/sh <script>" 前缀。
+    // C-N6 消歧：verb --pkg 传本地包文件路径（留存副本优先），与身份字段
+    // pkg（包管理器登记名）同名异义——一个指件、一个指名，分层语义。
+    // B-N10：argv 全程结构化传递（数组进 JoinArgv 引用、管线腿走 ShJoin 单引号），
+    // 提权腿无 shell 注入面；--pkg/--app 均取自规划内路径不接受外部拼词。
     private static string[] BuildVerbArgv(
         string[] updaterArgv, string pkgPath, string format, string app,
         string? envFile, bool rollback, string? logFile)
@@ -423,24 +478,36 @@ internal static class SyspkgReplay
                 "Library", "Application Support", "DotNet.Bundler", "backups");
         }
         var xdg = GetEnv("XDG_DATA_HOME");
-        return Path.Combine(
-            xdg is { Length: > 0 } ? xdg
-                : Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".local", "share"),
-            "dotnet-bundler", "backups");
+        // B-N8：XDG 规范只认绝对路径——相对值按缺席退化默认基址，
+        // 不把留存根漂到调用方 cwd 下。
+        var dataHome = xdg is { Length: > 0 } && Path.IsPathRooted(xdg)
+            ? xdg
+            : Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".local", "share");
+        return Path.Combine(dataHome, "dotnet-bundler", "backups");
     }
 
-    // 留存本次下载的新包到 retention（按工件名落位）+ applied 标记。
+    // 留存本次下载的新包到 retention（按工件名落位）+ 签名件 + applied 标记。
     // 包管理器账本不替用户保留包文件——留存责任在客户端；写不进按 WARN 降级
     // 放行，rollback 腿自有"无留存件"确定性拒绝兜底。
-    private static string? TryRetainPackage(string artifactPath, string retentionDir, Action<string>? log)
+    // B-N2：按工件文件名落位 + overwrite 覆盖——同名异版工件互相塌缩（同名覆盖后
+    // 旧件连同其 .sig 一并顶掉）。工件名恒含版本/架构段使碰撞实际罕见，
+    // 登记为可接受边界；留档位只增不剪不设上限（§2.2 开放边界）。
+    // B-N3：留存失败降级直喂原始 artifactPath——下载位件若在拉起前被清则
+    // pkg-apply 无包可装（悬空风险登记可接受）；原路径已验过签但与留存副本
+    // 一样存在同用户替换窗，故留存成功时宁可喂副本（再过一次 B2 再验）。
+    private static string? TryRetainPackage(
+        string artifactPath, string retentionDir, string signature, Action<string>? log)
     {
         try
         {
             Directory.CreateDirectory(retentionDir);
             var retained = Path.Combine(retentionDir, Path.GetFileName(artifactPath));
             File.Copy(artifactPath, retained, overwrite: true);
+            // .sig 旁车与包成对留存（feed .sig 同款原始签名字节）——rollback 选件与
+            // apply 副本再验都以这对为准；签名写不进按留存整体失败降级。
+            File.WriteAllBytes(retained + ".sig", Convert.FromBase64String(signature));
             TryWriteAppliedMarker(retentionDir, Path.GetFileName(retained), log);
             log?.Invoke($"update: retained rollback artifact '{retained}'");
             return retained;
@@ -452,6 +519,40 @@ internal static class SyspkgReplay
                 "rollback may have nothing to replay");
             return null;
         }
+    }
+
+    // B2 留存件完整性再核：retention 目录与原件同为用户可写——直喂提权
+    // pkg-apply 的候选必须 <name> 配 <name>.sig 成对且对身份公钥验过；
+    // 签名缺失/畸形/验不过一律按不可信处理（调用方决定跳选还是拒绝）。
+    private static bool VerifyRetainedPackage(string packagePath, string? publicKey)
+    {
+        try
+        {
+            var signaturePath = packagePath + ".sig";
+            if (publicKey is not { Length: > 0 } || !File.Exists(signaturePath))
+            {
+                return false;
+            }
+            return UpdateSignatureVerifier.VerifyFile(
+                packagePath, File.ReadAllBytes(signaturePath),
+                UpdateKeyMaterial.FromPublicPoint(publicKey));
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    // 删留存对（apply 侧失败还原用）：pkg 连同 .sig 一并删，不留孤儿签名件
+    // 让同名旧包靠新签名"复活"进候选集。
+    private static void TryDeleteRetained(string? retained)
+    {
+        if (retained is null)
+        {
+            return;
+        }
+        TryDeleteFile(retained);
+        TryDeleteFile(retained + ".sig");
     }
 
     private static string? ReadAppliedMarker(string retentionDir)
@@ -504,9 +605,16 @@ internal static class SyspkgReplay
         }
     }
 
-    // 回滚选件：retention 内除 applied 标记当前件外最新落位者——
-    // 首次 Bundler 链更新前/留存缺失 → null（调用方确定性拒绝不空转）。
-    private static string? PickRollbackPackage(string retentionDir, out string? appliedName)
+    // 回滚选件：retention 内除 applied 标记当前件外、pkg+sig 成对且过签者里
+    // 最新落位的候选——首次 Bundler 链更新前/留存缺失/候选全不可信 → null
+    //（调用方确定性拒绝不空转）。
+    // B-N1 flip-flop 是规格：applied 标记随每次选件翻记，连续两次 rollback
+    // 在两个最新可信件间往复——语义即"回到上一个"，不追求全历史栈。
+    // B-N9：applied 件同为用户可写——篡改标记只改变选件排除集，引不进未授权包
+    //（候选硬门槛是 .sig 成对 + 身份公钥过签，与标记无关）。
+    // B2 起无 .sig 的旧留档不再作候选（本仓冻结前无历史包袱，确定性收口）。
+    private static string? PickRollbackPackage(
+        string retentionDir, string? publicKey, Action<string>? log, out string? appliedName)
     {
         appliedName = ReadAppliedMarker(retentionDir);
         try
@@ -521,8 +629,16 @@ internal static class SyspkgReplay
             {
                 var name = Path.GetFileName(file);
                 if (string.Equals(name, AppliedMarkerName, StringComparison.Ordinal) ||
+                    name.EndsWith(".sig", StringComparison.Ordinal) ||
                     string.Equals(name, appliedName, StringComparison.Ordinal))
                 {
+                    continue;
+                }
+                if (!VerifyRetainedPackage(file, publicKey))
+                {
+                    log?.Invoke(
+                        $"update: skipping retained package '{name}' — " +
+                        "missing sidecar signature or verification failed");
                     continue;
                 }
                 var stamp = File.GetLastWriteTimeUtc(file);
@@ -546,6 +662,8 @@ internal static class SyspkgReplay
 
     // 会话 env 件：<StagingRoot>/pkg-<guid>/session.env，逐行 K=V，0600 仅属主可读——
     // pkexec/sudo 剥环境后引导件经 --env-file 回灌会话变量做降权重启。
+    // B-N11：剥外层环境是提权器预期行为而非缺陷——会话 env 经文件通道传递
+    // 是有意设计（sudo env_reset/pkexec 清环境都拦不住 --env-file 路径参数）。
     // 全部键缺席或写入/收权失败时降级为不带 --env-file（引导件按最小集处理），
     // 失败现场随清扫口径不残留。
     private static string? TryWriteSessionEnvFile(
@@ -573,6 +691,10 @@ internal static class SyspkgReplay
         try
         {
             Directory.CreateDirectory(dir);
+            // B-N6：netstandard2.0 无"建件定 mode"API——WriteAllLines 按进程 umask
+            // 建件到下方 chmod 0600 之间存在瞬时较宽权限窗（同用户/同组可读片刻）。
+            // 窗内值是会话 env（XAUTHORITY 等，敏感度有限且本就同用户可见），
+            // 登记为可接受边界。
             File.WriteAllLines(file, lines);
             var chmodFailed = ChmodProbe is { } chmod
                 ? chmod(file) != 0
@@ -623,56 +745,121 @@ internal static class SyspkgReplay
 
     // ---- 进程面 ----
 
-    /// <summary>提权拉起规格：启动文件/argv/待清理会话 env 件——纯数据无 spawn。</summary>
+    /// <summary>
+    /// 提权拉起规格：首选腿启动文件/argv/待清理会话 env 件 + 退化腿表 +
+    /// 规划期状态件还原上下文——纯数据无 spawn。
+    /// </summary>
     internal sealed class SyspkgLaunch
     {
         public string FileName = "";
         public string[] Arguments = [];
         public string? EnvFile;
         public string? EnvFileDirectory;
+        /// <summary>B3 运行时退化腿：首选腿 spawn 抛/观察窗内非零速退时依序补位。</summary>
+        public SyspkgLaunch[] Fallbacks = [];
+        /// <summary>B1 还原上下文之一：retention 目录（applied 标记所在）。</summary>
+        public string? RetentionDir;
+        /// <summary>B1 还原上下文之二：本轮翻记前的 applied 标记值（null=原无标记）。</summary>
+        public string? AppliedBefore;
+        /// <summary>B1 还原上下文之三：apply 侧本轮新留存件（连 .sig 一并删）；
+        /// rollback 侧恒 null——所选旧包是既有件绝不能删。</summary>
+        public string? RetainedFile;
     }
 
-    // 拉起即返回：Exited 钩做两件尽力事——会话 env 件删余（引导件读毕即删为主，
+    // 拉起面：沿探测腿表逐腿拉起——单腿 spawn 抛（探测后工具被删/执行位丢失）
+    // 或观察窗内非零速退（pkexec 在无 polkit agent 的 headless 拉起即败）都退化
+    // 下一腿；观察窗内未退（含仍在等待鉴权交互）或 rc==0 按"已拉起"交还句柄。
+    // 全腿皆没拉起才清场透传：env 件删余 + applied 标记回记规划前值 +
+    // apply 侧新留存件连 .sig 一并删（B1——不留"标记指新件而装未成"的歪斜现场，
+    // 否则下次 rollback 会把从未装上的新件排除在旧包候选外）。
+    // 已拉起句柄挂 Exited 钩做两件尽力事——会话 env 件删余（引导件读毕即删为主，
     // 此钩与下次 apply 的 24h staging 清扫是两道兜底）+ 退出码分类留痕
     //（拉起即退语义下 rc 主要靠 --log 件；活到读码的调用方也得分类口径）。
     // hook 挂在 ThreadPool——句柄返回后异步触发；本进程先退则钩不触发。
     private static Process StartLaunch(SyspkgLaunch launch, Action<string>? log)
     {
-        Process process;
-        try
+        var legs = new List<SyspkgLaunch> { launch };
+        legs.AddRange(launch.Fallbacks);
+        Exception? spawnFailure = null;
+        var notes = new List<string>();
+        foreach (var leg in legs)
         {
-            var startInfo = new ProcessStartInfo(launch.FileName)
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                // 继承 stdio：裸 sudo 的 tty 密码提示与 pkexec/zenity 的 GUI 通道都靠它。
-                Arguments = JoinArgv(launch.Arguments),
-            };
-            process = Process.Start(startInfo)
-                ?? throw new UpdateException($"failed to start '{launch.FileName}'.");
-        }
-        catch
-        {
-            CleanupEnvFile(launch.EnvFile, launch.EnvFileDirectory);
-            throw;
-        }
-        var envFile = launch.EnvFile;
-        var envDir = launch.EnvFileDirectory;
-        process.EnableRaisingEvents = true;
-        process.Exited += (_, _) =>
-        {
+            Process? process;
             try
             {
-                log?.Invoke(
-                    $"update: pkg-apply launcher exited {process.ExitCode} " +
-                    $"({DescribeExitCode(process.ExitCode)})");
+                var startInfo = new ProcessStartInfo(leg.FileName)
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    // 继承 stdio：裸 sudo 的 tty 密码提示与 pkexec/zenity 的 GUI 通道都靠它。
+                    Arguments = JoinArgv(leg.Arguments),
+                };
+                process = SpawnProbe is { } spawn
+                    ? spawn(startInfo)
+                    : Process.Start(startInfo)
+                        ?? throw new UpdateException($"failed to start '{leg.FileName}'.");
+                if (process is null)
+                {
+                    throw new UpdateException($"failed to start '{leg.FileName}'.");
+                }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                // 单腿失败不还原状态件——还有后续腿；还原口径在函数尾统一执行。
+                spawnFailure = exception;
+                notes.Add($"{leg.FileName}: spawn failed ({exception.Message})");
+                log?.Invoke(
+                    $"update: elevation leg '{leg.FileName}' failed to spawn " +
+                    $"({exception.Message}) — trying next leg");
+                continue;
             }
-            CleanupEnvFile(envFile, envDir);
-        };
-        return process;
+            if (process.WaitForExit(LaunchObserveMilliseconds))
+            {
+                int rc;
+                try
+                {
+                    rc = process.ExitCode;
+                }
+                catch (Exception)
+                {
+                    rc = -1;
+                }
+                if (rc != 0)
+                {
+                    notes.Add($"{leg.FileName}: exited {rc} within {LaunchObserveMilliseconds}ms");
+                    log?.Invoke(
+                        $"update: elevation leg '{leg.FileName}' exited {rc} " +
+                        $"within {LaunchObserveMilliseconds}ms — trying next leg");
+                    process.Dispose();
+                    continue;
+                }
+            }
+            var envFile = leg.EnvFile;
+            var envDir = leg.EnvFileDirectory;
+            process.EnableRaisingEvents = true;
+            process.Exited += (_, _) =>
+            {
+                try
+                {
+                    log?.Invoke(
+                        $"update: pkg-apply launcher exited {process.ExitCode} " +
+                        $"({DescribeExitCode(process.ExitCode)})");
+                }
+                catch (Exception)
+                {
+                }
+                CleanupEnvFile(envFile, envDir);
+            };
+            return process;
+        }
+        CleanupEnvFile(launch.EnvFile, launch.EnvFileDirectory);
+        if (launch.RetentionDir is { } retentionDir)
+        {
+            RestoreAppliedMarker(retentionDir, launch.AppliedBefore);
+        }
+        TryDeleteRetained(launch.RetainedFile);
+        throw spawnFailure ?? new UpdateException(
+            $"no privilege escalation leg could launch pkg-apply ({string.Join("; ", notes)}).");
     }
 
     // pkg-apply 退出码语义（§2.3）：0 成功；3 参数错；4 安装失败；5 包管理器缺席；

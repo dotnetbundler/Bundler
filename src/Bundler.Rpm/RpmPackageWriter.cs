@@ -604,6 +604,8 @@ internal static class RpmPackageWriter
             ClaimDirectory(dir);
             if (!claimed.Add(path))
             {
+                // C-N4：撞名报错文案三后端各异（deb/alpineapk 同构不同词）——
+                // 同为确定性拒绝即可，文案对齐登记为开放项。
                 throw new InvalidOperationException(
                     $"Two payload sources map to the same .rpm path: '{path}'.");
             }
@@ -675,6 +677,8 @@ internal static class RpmPackageWriter
                 installRoot + "/" + UpdateInstallIdentity.FileName,
                 UpdateIdentitySidecar.Serialize(update, PackageFormat.Rpm, target, packageName),
                 420 /* 0644 */);
+            // C-N5：ResolveOrThrow 失败路径会复跑整条探测链产出带探测位的诊断
+            // （TryResolve 刚跑过同一条链）——开销可忽略，登记。
             AddFile(
                 installRoot + "/" + UpdateBootstrapper.FileNameFor(target),
                 UpdateBootstrapper.ResolveOrThrow(update, target), 493 /* 0755 */);
@@ -749,7 +753,12 @@ internal static class RpmPackageWriter
                 throw new ArgumentException(
                     $"The ConfigLocations entry '{path}' has no regular file in the payload.");
             }
-            entry.FileFlags |= 17; // RPMFILE_CONFIG | RPMFILE_NOREPLACE
+            // C1：更新自持件显式列进 ConfigLocations 也不打 noreplace——
+            // 升级必须能替换身份旁车与引导件。
+            if (!IsUpdateSelfFile(entry.ArchivePath))
+            {
+                entry.FileFlags |= 17; // RPMFILE_CONFIG | RPMFILE_NOREPLACE
+            }
         }
 
         // Emit the owned directory entries (install root plus everything below it).
@@ -828,12 +837,21 @@ internal static class RpmPackageWriter
         {
             flags |= 2; // RPMFILE_DOC
         }
-        if (archivePath.StartsWith("/etc/", StringComparison.Ordinal))
+        if (archivePath.StartsWith("/etc/", StringComparison.Ordinal) &&
+            !IsUpdateSelfFile(archivePath))
         {
             flags |= 17; // RPMFILE_CONFIG | RPMFILE_NOREPLACE
         }
         return flags;
     }
+
+    // C1：更新自持件豁免 %config(noreplace)——bundler-update.json（feedUrl/pkg/
+    // publicKey）与 bundler-updater（换包执行体）标了 noreplace 后升级永不替换，
+    // 旧身份/旧引导件会随包管理器"保留原配置"语义滞留。按归档路径叶名判定
+    //（InstallRoot 可配 /etc 下，注入件与用户 /etc 件走同一打标面）。
+    private static bool IsUpdateSelfFile(string archivePath) =>
+        archivePath.EndsWith("/" + UpdateInstallIdentity.FileName, StringComparison.Ordinal) ||
+        archivePath.EndsWith("/bundler-updater", StringComparison.Ordinal);
 
     internal static string MapArchitecture(BundleTarget target) =>
         ArtifactNaming.ArchToken(target, PackageFormat.Rpm)

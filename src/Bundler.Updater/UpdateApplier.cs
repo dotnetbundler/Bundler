@@ -20,7 +20,10 @@ internal sealed class UpdateApplier
         UpdateInstallIdentity identity, UpdateFeedArtifact artifact, string artifactPath,
         string installDirectory, ApplyOptions options, Action<string>? log)
     {
-        switch (artifact.Format)
+        // B-N12：IsSyspkgFormat 判定大小写不敏感，分派 switch 对齐同口径——
+        // emitter 恒产小写 format，大小写漂移件统一走到 syspkg 分支内的
+        // 词面一致性闸而非"no apply semantics"。
+        switch (artifact.Format?.ToLowerInvariant())
         {
             case "nsis":
                 return StartReplay(artifactPath,
@@ -42,13 +45,23 @@ internal sealed class UpdateApplier
                 return RunBootstrapper(payload, installDirectory, options, log);
             }
             // --- 系统包 replay（deb/rpm/alpineapk，docs/design/update.md §2.2）---
-            // 预检三件套 → 新包留存 retention → 三级提权退化链（pkexec →
-            // 问密码+sudo -S → 裸 sudo）拉起安装位 bundler-updater 的 pkg-apply，
-            // 拉起即返回；alpineapk 在动词面映射 apk。
+            // 预检三件套 → 新包留存 retention（pkg+sig 成对 + 副本再验签）→
+            // 三级提权退化链（pkexec → 问密码+sudo -S → 裸 sudo）拉起安装位
+            // bundler-updater 的 pkg-apply，拉起即返回；alpineapk 在动词面映射 apk。
             case "deb":
             case "rpm":
             case "alpineapk":
-                return SyspkgReplay.Apply(identity, artifactPath, installDirectory, options, log);
+                // B5 词面一致性闸：清单 artifact.Format 与身份 format 必须逐字一致——
+                // SelectArtifact 的不敏感匹配放进来的大小写漂移件（"DEB" vs "deb"）
+                // 是手造清单信号，确定性拒绝（emitter 双侧恒小写不会触发）。
+                if (!string.Equals(artifact.Format, identity.Format, StringComparison.Ordinal))
+                {
+                    throw new UpdateException(
+                        $"artifact format '{artifact.Format}' does not literally match " +
+                        $"install identity format '{identity.Format}' — refused.");
+                }
+                return SyspkgReplay.Apply(
+                    identity, artifactPath, artifact.Signature, installDirectory, options, log);
             case "appimage":
             {
                 // 单文件载荷：AppImage 的安装单元就是文件本身——install 目标是 .AppImage 文件路径，
@@ -215,8 +228,10 @@ internal sealed class UpdateApplier
 
     // `bootstrap-<guid>`/`payload-<guid>`/`pkg-<guid>`（会话 env 件目录）暂存目录
     // 按进程唯一命名——发起方死在半路时无清理方，残件在 StagingRoot 下无限积累。
-    // 新建暂存前按 mtime 清扫 24h 前的同类目录；仍在用的目录（在飞引导件的 runDir、
-    // 在飞 pkg-apply 未读完的 env 件）删除会失败自然跳过，全路径 best-effort 不挡主流程。
+    // 新建暂存前按 mtime 清扫 24h 前的同类目录；在飞目录（在飞引导件的 runDir、
+    // 在飞 pkg-apply 未读完的 env 件）理论上也会被扫——现实里 >24h 仍在飞的换包
+    // 概率近零（换包是分钟级操作），且 POSIX unlink 打开中文件照删不误并非
+    // "删除会失败自然跳过"——登记为可接受边界，全路径 best-effort 不挡主流程。
     internal static void SweepStaleStaging(string stagingRoot)
     {
         try
@@ -333,10 +348,12 @@ internal sealed class UpdateApplier
             return Path.Combine("/var/lib", "dotnet-bundler", "backups");
         }
         var xdg = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
-        return Path.Combine(
-            xdg is { Length: > 0 } ? xdg
-                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share"),
-            "dotnet-bundler", "backups");
+        // XDG 规范只认绝对路径——相对值按缺席退化默认基址，
+        // 不把留存根漂到调用方 cwd 下（与 SyspkgReplay.UserBackupsRoot 同口径）。
+        var dataHome = xdg is { Length: > 0 } && Path.IsPathRooted(xdg)
+            ? xdg
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
+        return Path.Combine(dataHome, "dotnet-bundler", "backups");
     }
 
     // 前缀命中还要过路径段边界："/optimal" 不能算落在 "/opt"——
@@ -393,9 +410,12 @@ public sealed class ApplyOptions
     public bool SilentInstaller { get; init; }
     /// <summary>保留暂存载荷（默认换包后清掉）。</summary>
     public bool KeepPayload { get; init; }
-    /// <summary>换包成功后保留回滚备份（默认 false 不保留——备份仅作换包期崩溃恢复载体）。</summary>
+    /// <summary>换包成功后保留回滚备份（默认 false 不保留——备份仅作换包期崩溃恢复载体）。
+    /// syspkg 族（deb/rpm/alpineapk）不受此约束：回滚留存件（pkg+sig+applied 标记）恒写
+    /// retention 目录——包管理器账本不替用户保留包文件，留存责任在客户端。</summary>
     public bool KeepRollbackBackup { get; init; }
-    /// <summary>回滚备份显式目录——默认按安装层级解析到用户/机器数据目录下的 DotNet.Bundler/backups。</summary>
+    /// <summary>回滚备份显式目录——默认按安装层级解析到用户/机器数据目录下的 DotNet.Bundler/backups。
+    /// syspkg 族兼作留存根：留存的新包、签名旁车与 applied 标记同样落此目录。</summary>
     public string? RollbackBackupDirectory { get; init; }
     /// <summary>引导件显式路径——默认探测安装目录内注入件。</summary>
     public string? BootstrapperPath { get; init; }
