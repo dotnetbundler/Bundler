@@ -101,8 +101,12 @@ makeshim() { # $1=dir; rest=tool 名（缺失宿主工具即 FAIL——shim 缺�
 # 挥探针把记录落到本相位专属件（$REC 目录 0777，相位间共写）。件被实现读毕即删——
 # 一相位一件不复用：跨相位复用会走 minimal-env WARN，MYVAR/SYSPKG_REC 不注入，
 # 探针落共享 default.txt，后续相位的 uid=0 断言会被前序相位记录喂成假绿。
-mk_env() { # $1=file $2=rec-file $3=myvar-tag
+mk_env() { # $1=file $2=rec-file $3=myvar-tag $4=caller-uid（可选）
     printf 'HOME=/home/tester\nDISPLAY=:99\nMYVAR=%s\nSYSPKG_REC=%s\n' "$3" "$2" >"$1"
+    # --env-file 属主复核（A2）：声明 SUDO_UID/PKEXEC_UID 的相位须把件 chown
+    # 给该 uid——本脚本以 root 写件，不 chown 会按"异属主"被 rc3 拒（真实语义：
+    # 件本由非特权客户端写出）。无 uid 相位保持 root 属主（调用者=root euid）。
+    if [ -n "${4:-}" ]; then chown "$4" "$1" || echo "WARN: chown $4 $1 failed" >&2; fi
 }
 
 # 账本快照进证据（每相位一帧）。
@@ -270,7 +274,7 @@ leg_deb() {
     want_line deb-env "$STAMPS" "postinst" "postinst scriptlet 已跑（账本外证据）"
 
     # D1：AOT + SUDO_UID → apt-get 腿 + 默认 PATH 降权链（setpriv 优先）+ env 回灌
-    mk_env "$W/env.d1" "$REC/d1.txt" d1-aot
+    mk_env "$W/env.d1" "$REC/d1.txt" d1-aot "$T_UID"
     rc_of env SUDO_UID="$T_UID" SUDO_GID="$T_GID" "$AOT" pkg-apply \
         --pkg "$W/v2.deb" --format deb --app "$APP" \
         --env-file "$W/env.d1" --log "$EV/d1-aot.log"
@@ -312,7 +316,7 @@ leg_deb() {
 
     # D4：sh 支路 + 无 apt-get shim（退化 dpkg -i）+ su 降权腿（shim 不给 setpriv/sudo/runuser）
     makeshim "$W/shim-su" $BASETOOLS $DPKGTOOLS su
-    mk_env "$W/env.d4" "$REC/d4.txt" d4-sh
+    mk_env "$W/env.d4" "$REC/d4.txt" d4-sh "$T_UID"
     rc_of env PATH="$W/shim-su" SUDO_UID="$T_UID" SUDO_GID="$T_GID" \
         /bin/sh "$SHIMPL" pkg-apply --pkg "$W/v2.deb" --format deb --app "$APP" \
         --env-file "$W/env.d4" --log "$EV/d4-sh.log"
@@ -324,7 +328,7 @@ leg_deb() {
 
     # D5：sh 支路 + sudo 降权腿（shim 只给 sudo 不给 setpriv/runuser/su）v2→v3
     makeshim "$W/shim-sudo" $BASETOOLS $DPKGTOOLS sudo
-    mk_env "$W/env.d5" "$REC/d5.txt" d5-sh
+    mk_env "$W/env.d5" "$REC/d5.txt" d5-sh "$T_UID"
     rc_of env PATH="$W/shim-sudo" SUDO_UID="$T_UID" SUDO_GID="$T_GID" \
         /bin/sh "$SHIMPL" pkg-apply --pkg "$W/v3.deb" --format deb --app "$APP" \
         --env-file "$W/env.d5" --log "$EV/d5-sh.log"
@@ -393,7 +397,7 @@ leg_rpm() {
     want_line rpm-env "$STAMPS" "post:" "%post scriptlet 已跑"
 
     # R1：AOT + PKEXEC_UID（pkexec 语境 env 名分支）→ dnf 腿 + 降权 + env 回灌
-    mk_env "$W/env.r1" "$REC/r1.txt" r1-aot
+    mk_env "$W/env.r1" "$REC/r1.txt" r1-aot "$T_UID"
     rc_of env PKEXEC_UID="$T_UID" "$AOT" pkg-apply \
         --pkg "$W/v2.rpm" --format rpm --app "$APP" \
         --env-file "$W/env.r1" --log "$EV/r1-aot.log"
@@ -454,7 +458,7 @@ leg_rpm() {
 
     # R4：sh 支路 + runuser 降权腿（shim 给 rpm+runuser，不给 dnf/zypper/setpriv/sudo/su）
     makeshim "$W/shim-runuser" $BASETOOLS rpm runuser
-    mk_env "$W/env.r4" "$REC/r4.txt" r4-sh
+    mk_env "$W/env.r4" "$REC/r4.txt" r4-sh "$T_UID"
     rc_of env PATH="$W/shim-runuser" SUDO_UID="$T_UID" SUDO_GID="$T_GID" \
         /bin/sh "$SHIMPL" pkg-apply --pkg "$W/v2.rpm" --format rpm --app "$APP" \
         --env-file "$W/env.r4" --log "$EV/r4-sh.log"
@@ -543,7 +547,7 @@ leg_apk() {
     want_line apk-env "$STAMPS" "post-install" ".post-install scriptlet 已跑"
 
     # K1a：AOT unsigned v1→v2 + SUDO_UID 降权——keys 空目录 → apk add --allow-untrusted
-    mk_env "$W/env.k1" "$REC/k1.txt" k1-aot
+    mk_env "$W/env.k1" "$REC/k1.txt" k1-aot "$T_UID"
     rc_of env SUDO_UID="$T_UID" SUDO_GID="$T_GID" "$AOT" pkg-apply \
         --pkg "$W/v2u.apk" --format apk --app "$APP" \
         --env-file "$W/env.k1" --log "$EV/k1a-aot.log"
@@ -560,7 +564,7 @@ leg_apk() {
     apk add --allow-untrusted "$W/v1u.apk" >>"$CONSOLE" 2>&1 \
         && pass "K1B-pre 前提 v1 基线直装" || fail "K1B-pre" "v1 基线装失败"
     expect_ver K1B-pre 1.0.0-r0 "前提账本=v1"
-    mk_env "$W/env.k1b" "$REC/k1b.txt" k1b-sh
+    mk_env "$W/env.k1b" "$REC/k1b.txt" k1b-sh "$T_UID"
     rc_of env SUDO_UID="$T_UID" SUDO_GID="$T_GID" /bin/sh "$SHIMPL" pkg-apply \
         --pkg "$W/v2u.apk" --format apk --app "$APP" \
         --env-file "$W/env.k1b" --log "$EV/k1b-sh.log"
@@ -610,7 +614,7 @@ leg_apk() {
     apk add --allow-untrusted "$W/v1u.apk" >>"$CONSOLE" 2>&1 \
         && pass "K3-pre 前提 v1 基线直装" || fail "K3-pre" "v1 基线装失败"
     expect_ver K3-pre 1.0.0-r0 "前提账本=v1"
-    mk_env "$W/env.k3" "$REC/k3.txt" k3-sh
+    mk_env "$W/env.k3" "$REC/k3.txt" k3-sh "$T_UID"
     rc_of env SUDO_UID="$T_UID" SUDO_GID="$T_GID" /bin/sh "$SHIMPL" pkg-apply \
         --pkg "$W/v2s.apk" --format apk --app "$APP" \
         --env-file "$W/env.k3" --log "$EV/k3-sh.log"
