@@ -439,11 +439,22 @@ internal static class PkgApplyPlan
     // 件显式给了就按校验输，内容永不进降权 app 的 env。
     private static List<string>? ReadEnvFile(string? envFile, long? uid)
     {
-        if (envFile is null)
+        // 空串按"件未给"处理——与 sh 侧 `-n "$PA_ENV"` 门同口径（否则
+        // GetFullPath("") 抛 ArgumentException 会归 rc4 与 sh 分叉）。
+        if (string.IsNullOrEmpty(envFile))
         {
             return null;
         }
-        var full = Path.GetFullPath(envFile);
+        // 规范化/读段任一步失败同归 rc3：sh 侧 cat 读败也落 rc3，双侧一致。
+        string full;
+        try
+        {
+            full = Path.GetFullPath(envFile);
+        }
+        catch (Exception)
+        {
+            throw new UsageException($"--env-file '{envFile}' is not a valid path.");
+        }
         using var stream = OpenEnvFile(full, uid);
         if (stream is null)
         {
@@ -451,15 +462,22 @@ internal static class PkgApplyPlan
                 $"--env-file '{full}' is not a readable regular file owned by the calling user.");
         }
         var lines = new List<string>();
-        using (var reader = new StreamReader(stream))
+        try
         {
-            // \r/\r\n/\n 三终结符与 sh `tr '\r' '\n'` 折行同口径
-            //（TextReader.ReadLine 把裸 \r 也当终结符）。
-            string? line;
-            while ((line = reader.ReadLine()) is not null)
+            using (var reader = new StreamReader(stream))
             {
-                lines.Add(line);
+                // \r/\r\n/\n 三终结符与 sh `tr '\r' '\n'` 折行同口径
+                //（TextReader.ReadLine 把裸 \r 也当终结符）。
+                string? line;
+                while ((line = reader.ReadLine()) is not null)
+                {
+                    lines.Add(line);
+                }
             }
+        }
+        catch (Exception)
+        {
+            throw new UsageException($"--env-file '{full}' could not be read.");
         }
         return lines;
     }
@@ -930,6 +948,8 @@ internal static class NativeMethods
     // macOS inode64 显式绑名（同 UnixFileTypes stat$INODE64 先例）；
     // 老 glibc（<2.33）不导裸 fstat，退 __fxstat(ver, fd, buf)——
     // ver 依 ABI：x86_64 系全字宽 nlink 布局=1，asm-generic=0。
+    // 猜测口径：ver 按"当前进程是否 x86_64"映射，对老 glibc 上非 x64 ABI
+    // 未必命中——出货腿是 musl 静态件（glibc 版本面不可达），登记边界。
     [DllImport("libc", EntryPoint = "fstat$INODE64", SetLastError = true)]
     private static extern int FStatInode64(int fd, byte[] buffer);
 

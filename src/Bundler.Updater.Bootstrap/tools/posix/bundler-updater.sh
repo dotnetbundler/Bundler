@@ -342,6 +342,8 @@ _pa_restart() {
     # 另注：各腿 spawn 前先同步 cd 探测——后台子壳 `(cd … && … &)` 里的 cd
     # 失败会被 & 吞成"启动即成功"假成功；同步探测失败即如实失败/降下一级，
     # 与 AOT Process.Start 按 WorkingDirectory 同步拒同口径。
+    # 残余：探测→spawn 间 µs 级 TOCTOU 窗仍在（两 cd 非同次）——完全闭合须
+    # `(cd || exit; spawn&)` 子壳内自判，收益不抵结构扰动，登记边界。
     if [ -z "$PA_UID" ]; then
         log "bundler-updater: restart '$PA_APP'"
         (cd "$_d") 2>/dev/null || return 1

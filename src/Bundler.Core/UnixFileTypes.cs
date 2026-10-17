@@ -94,7 +94,11 @@ internal static class UnixFileTypes
     private static int LinuxModeOffset()
     {
         var architecture = RuntimeInformation.ProcessArchitecture;
-        return architecture == Architecture.X64 || (int)architecture is 5 /* S390x */ or 7 /* Ppc64le */
+        // .NET Architecture 枚举值（实测枚举）：X86=0 X64=1 Arm=2 Arm64=3 Wasm=4
+        // S390x=5 LoongArch64=6 Armv6=7 Ppc64le=8——netstandard2.0 枚举面缺
+        // 具名成员只能用数值判据。旧判据 `5 or 7` 把 Armv6 误送 24、Ppc64le
+        // 漏进 16，修正为 5 or 8。
+        return architecture == Architecture.X64 || (int)architecture is 5 /* S390x */ or 8 /* Ppc64le */
             ? 24
             : 16;
     }

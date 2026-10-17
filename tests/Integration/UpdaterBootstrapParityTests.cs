@@ -1446,15 +1446,22 @@ public static class UpdaterBootstrapParityTests
     }
 
     static int InvokePkg(Impl impl, IReadOnlyDictionary<string, string> env,
-        string shimPath, params string[] args)
+        string shimPath, params string[] args) =>
+        InvokePkg(impl, env, shimPath, null, args);
+
+    // probe 覆盖 AOT 腿的 CommandProbe（缺省权威缺席=只走 CMD_* 缝）；
+    // sh 腿忽略该参——shim PATH 由 startInfo.Environment 供。
+    static int InvokePkg(Impl impl, IReadOnlyDictionary<string, string> env,
+        string shimPath, Func<string, string?>? probe, params string[] args)
     {
         if (impl == Impl.Aot)
         {
             PkgApplyPlan.EnvProbe = name =>
                 env.TryGetValue(name, out var value) ? value : null;
             // CommandProbe 权威缺席：一切命令经 BUNDLER_UPDATER_CMD_* 缝供给，
-            // 真实 PATH 上的包管理器对 AOT 腿同样不可见。
-            PkgApplyPlan.CommandProbe = _ => null;
+            // 真实 PATH 上的包管理器对 AOT 腿同样不可见。显式 probe 入参用于
+            // "shim 内可解析"的腿（probe 返回 shim 路径=sh 侧 PATH 命中的对价）。
+            PkgApplyPlan.CommandProbe = probe ?? (_ => null);
             // 宿主 env 会透进真 exec 的 stub 子进程（ExecSpec.Environment 为 null 的
             // 安装步走 ProcessStartInfo 默认继承本进程环境块）：CI ubuntu 镜像携带
             // DEBIAN_FRONTEND=noninteractive 会使 rpm/apk 腿 `|DF=` 断言面失真——
@@ -2416,7 +2423,11 @@ public static class UpdaterBootstrapParityTests
                 var env = PkgEnv(
                     ("BUNDLER_UPDATER_CMD_DPKG", Path.Combine(dir, "no-such-dpkg")));
 
+                // AOT 腿 PATH 对实现不可见（EnvProbe 权威 env 里 PATH 缺席）——
+                // "退化到 PATH 命中 shim"对价为 probe 返回 shim 路径；sh 腿走
+                // 真 PATH 语义（忽略 probe），双侧断言同一结局。
                 Assert.Equal(0, InvokePkg(impl, env, shim,
+                    name => name == "dpkg" ? dpkgInShim : null,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app));
                 var lines = WaitRecord(rec, 2);
                 Assert.Equal($"dpkg -i --force-confdef --force-confold {pkg}|DF=noninteractive", lines[0]);
