@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 
 namespace DotNet.Bundler.Core;
@@ -180,9 +181,12 @@ public static class ToolCache
         }
     }
 
-    /// <summary>50ms 轮询排他文件锁；资源物化等场景也共享此件。</summary>
+    /// <summary>50ms 轮询排他文件锁；资源物化等场景也共享此件。
+    /// 有界等待（与 <see cref="ToolRunner.ProcessTimeout"/> 同限）——持锁方挂死不再造成无限自旋。</summary>
     internal static async Task<FileStream> AcquireLockAsync(string lockPath, CancellationToken cancellationToken)
     {
+        var started = Stopwatch.StartNew();
+        TimeSpan? missingSince = null;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -192,6 +196,29 @@ public static class ToolCache
             }
             catch (IOException)
             {
+                if (File.Exists(lockPath))
+                {
+                    missingSince = null;   // 争用：锁文件被持方占着
+                }
+                else
+                {
+                    // 建不出文件：释放+删文件竞态窗（WixBundleBackend finally 删锁件）给 1s
+                    // 缺席宽限——窗内下一次 OpenOrCreate 会自己重建成功；持续缺席=确定性
+                    // 非争用错误（路径/权限/目录缺），直抛不报超时。缺席路径不受
+                    // ProcessTimeout 管辖：它的上界就是这条 1s 宽限，不是锁争用。
+                    missingSince ??= started.Elapsed;
+                    if (started.Elapsed - missingSince.Value >= TimeSpan.FromSeconds(1))
+                    {
+                        throw;
+                    }
+                    await Task.Delay(50, cancellationToken);
+                    continue;
+                }
+                if (started.Elapsed >= ToolRunner.ProcessTimeout)
+                {
+                    throw new TimeoutException(
+                        $"Tool cache lock '{lockPath}' was not released within {ToolRunner.ProcessTimeout}.");
+                }
                 await Task.Delay(50, cancellationToken);
             }
         }

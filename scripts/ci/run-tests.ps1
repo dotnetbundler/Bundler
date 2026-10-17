@@ -31,6 +31,15 @@ if ($projects -contains "Package/Bundler.PackageTests") {
     }
 }
 
+# 挂死插桩：BUNDLER_TOOL_TRACE 指文件时，后台 powershell Get-Content -Wait 把 trace
+# 流进本 job 日志（-NoNewWindow 继承控制台，job 被 timeout 硬杀也能看到最后在途 spawn）。
+$tailProc = $null
+if ($env:BUNDLER_TOOL_TRACE) {
+    New-Item -ItemType File -Force -Path $env:BUNDLER_TOOL_TRACE | Out-Null
+    $tailProc = Start-Process -PassThru -NoNewWindow -FilePath "powershell" `
+        -ArgumentList "-NoProfile","-Command","Get-Content -Wait -Tail 0 -Path `"$env:BUNDLER_TOOL_TRACE`""
+}
+try {
 foreach ($P in $projects) {
     $layer, $name = $P -split '/', 2
     $dll = "tests/$layer/bin/Release/net10.0/$name.dll"
@@ -56,4 +65,7 @@ foreach ($P in $projects) {
         dotnet $dll -longRunning 300
         if ($LASTEXITCODE -ne 0) { throw "$name 失败 rc=$LASTEXITCODE" }
     }
+}
+} finally {
+    if ($tailProc) { Stop-Process -Id $tailProc.Id -Force -ErrorAction SilentlyContinue }
 }

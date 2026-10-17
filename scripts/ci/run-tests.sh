@@ -33,6 +33,15 @@ case " $PROJECTS " in
         done ;;
 esac
 
+# 挂死插桩：BUNDLER_TOOL_TRACE 指文件时后台 tail 进本 job 日志——job 被 timeout 硬杀
+# 也能从日志看到最后一条在途 spawn（文件自身不进工件，日志即证据）。
+if [ -n "${BUNDLER_TOOL_TRACE:-}" ]; then
+    mkdir -p "$(dirname "$BUNDLER_TOOL_TRACE")"; : > "$BUNDLER_TOOL_TRACE"
+    tail -n +1 -f "$BUNDLER_TOOL_TRACE" &
+    TRACE_TAIL=$!
+    trap 'kill "$TRACE_TAIL" 2>/dev/null || true' EXIT
+fi
+
 for P in $PROJECTS; do
     LAYER="${P%%/*}"; NAME="${P##*/}"
     DLL="tests/$LAYER/bin/Release/net10.0/$NAME.dll"
