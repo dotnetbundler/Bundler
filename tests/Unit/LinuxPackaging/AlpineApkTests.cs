@@ -123,7 +123,8 @@ public sealed class AlpineApkTests : TempBase
         // apk 只产 linux-musl 目标，per-target 件直中）。
         var input = CreateInputDirectory();
         var output = Temp("DotNet.Bundler.Tests").FullName;
-        var keyPath = Path.Combine(input, "update-key.json");
+        // 私钥落测试根（载荷目录之外）——签名材料进 input 会被当载荷打进包。
+        var keyPath = Path.Combine(Root, "update-key.json");
         var material = UpdateKeyMaterial.Generate();
         material.Save(keyPath);
         try
@@ -150,12 +151,19 @@ public sealed class AlpineApkTests : TempBase
                 .BuildAsync(configuration, TestContext.Current.CancellationToken)).Single();
 
             var segments = ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(artifact.Path));
-            var data = ApkPackageReader.ReadTar(segments[1]);
+            // 数据段恒为末段（未签=2 段、带签=3 段）——按 [^1] 取不钉段数。
+            var data = ApkPackageReader.ReadTar(segments[^1]);
+            Assert.DoesNotContain(data,
+                e => e.Name.EndsWith("update-key.json", StringComparison.Ordinal));
             var sidecar = data.Single(e => e.Name == "usr/lib/example-app/bundler-update.json");
             Assert.Equal(420 /* 0644 */, sidecar.Mode);
             var bootstrapper = data.Single(e => e.Name == "usr/lib/example-app/bundler-updater");
             Assert.Equal(493 /* 0755 */, bootstrapper.Mode);
-            Assert.True(bootstrapper.Content.Length > 0);
+            // "0755 musl 静态件"语义不止非空——验 ELF magic，占位/文本件混进即现形。
+            Assert.True(bootstrapper.Content.Length > 4 &&
+                bootstrapper.Content[0] == 0x7F && bootstrapper.Content[1] == (byte)'E' &&
+                bootstrapper.Content[2] == (byte)'L' && bootstrapper.Content[3] == (byte)'F',
+                "The injected bootstrapper must be a real ELF binary, not a placeholder.");
 
             using var document = JsonDocument.Parse(Encoding.UTF8.GetString(sidecar.Content));
             var root = document.RootElement;
@@ -181,7 +189,8 @@ public sealed class AlpineApkTests : TempBase
     {
         var input = CreateInputDirectory();
         var output = Temp("DotNet.Bundler.Tests").FullName;
-        var keyPath = Path.Combine(input, "update-key.json");
+        // 私钥落测试根（载荷目录之外）——签名材料进 input 会被当载荷打进包。
+        var keyPath = Path.Combine(Root, "update-key.json");
         UpdateKeyMaterial.Generate().Save(keyPath);
         File.WriteAllText(Path.Combine(input, claimedName), "user payload");
         try

@@ -1625,13 +1625,8 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             // $INSTDIR 内直启的卸载器先自我复制到 $TEMP 再由分离副本继续删除——RunOk 只等到
             // 原进程退出，载荷/快捷方式/注册表项的移除断言全部跟随等待而非裸断言。
             WaitFor.Until(() => !File.Exists(Exe), "Packaged executable survived uninstall.", 30);
-            Assert.True(File.Exists(runtimeData),
-                "Default uninstall should preserve runtime-created program data.");
             WaitFor.Until(() => !File.Exists(Path.Combine(InstallDir, "docs", "license.txt")),
                 "Configured external resource survived uninstall.", 30);
-            Assert.True(Directory.Exists(RoamingData),
-                "Default uninstall removed roaming application data.");
-            Assert.True(Directory.Exists(LocalData));
             // 卸载注册项在模板 finalizing 段删除，晚于载荷移除——跟随等待而非裸断言。
             WaitFor.Until(() => Registry.CurrentUser.OpenSubKey(RegistryPath) is null,
                 "Uninstall registry key was not removed.", 30);
@@ -1650,6 +1645,16 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                 "URL ProgID key was not removed.", 30);
             WaitFor.Until(() => Registry.CurrentUser.OpenSubKey(CapabilitiesKey) is null,
                 "Capabilities registry key was not removed.", 30);
+            // 卸载事务 journal 由分离副本在收尾段原子改名 .committed 再尽力清——
+            // .uninstall 消失即"卸载已跑到提交点"的完成证据；存活面断言一律排在
+            // 此证据之后，早于它的快照会把"分离副本未完"误当"已保留"。
+            WaitFor.Until(() => !Directory.Exists(UninstallTransactionDir),
+                "Uninstall transaction journal was not committed.", 30);
+            Assert.True(File.Exists(runtimeData),
+                "Default uninstall should preserve runtime-created program data.");
+            Assert.True(Directory.Exists(RoamingData),
+                "Default uninstall removed roaming application data.");
+            Assert.True(Directory.Exists(LocalData));
             Assert.True(File.Exists(Path.Combine(Temp, "DotNetBundler-preuninstall.txt")),
                 "Pre-uninstall hook did not run.");
             Assert.True(File.Exists(Path.Combine(Temp, "DotNetBundler-postuninstall.txt")),
@@ -1708,6 +1713,10 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                 "DELETEAPPDATA did not remove roaming application data.", 30);
             WaitFor.Until(() => !Directory.Exists(LocalData),
                 "DELETEAPPDATA did not remove local application data.", 30);
+            // 卸载事务 journal 提交（.uninstall 消失）= 分离副本收尾证据——
+            // 外属件存活断言排在其后，早于它的快照会把"分离副本未完"误当"已保留"。
+            WaitFor.Until(() => !Directory.Exists(UninstallTransactionDir),
+                "Uninstall transaction journal was not committed.", 30);
             Assert.NotNull(Registry.CurrentUser.OpenSubKey(UrlSchemeKey));
             Assert.True(File.Exists(DesktopShortcut),
                 "Uninstall removed a same-name desktop shortcut owned by another application.");
