@@ -1,6 +1,7 @@
 // 真实 spawn 腿：Unit 层零真实进程不变量不适用此层——子进程永不退出时
 // ToolRunner 有界等待到点杀进程，按 ExitCode=-1 交给既有非零处理面。
-// 直 spawn 平台既有 sleeper（ping/sleep），不经 cmd/sh 壳——杀直系即收，无孤儿孙代。
+// 首条直 spawn 平台既有 sleeper（ping/sleep）不借壳；第二条刻意经 cmd/sh 壳
+// 造持管道孙代，验树杀+有界排空在孙代存活时不悬停。
 using DotNet.Bundler.Core;
 
 public static class ToolRunnerIntegrationTests
