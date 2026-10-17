@@ -56,7 +56,7 @@ internal static class ToolRunner
         {
             File.AppendAllText(path,
                 $"{DateTime.UtcNow:O} pid={process.Id} exe={request.Executable} " +
-                $"cwd={request.WorkingDirectory} args={SafeArgs(request.Arguments)}" + Environment.NewLine);
+                $"cwd={request.WorkingDirectory} args={SafeArgs(request.Executable, request.Arguments)}" + Environment.NewLine);
         }
         catch
         {
@@ -64,15 +64,21 @@ internal static class ToolRunner
     }
 
     // 值随旗标/等号承载秘密的旗标集合——遮罩其后一参或 = 右值。
-    // -k 在 security set-key-partition-list 里是密码位（import -k <path> 的可接受过遮罩）。
-    internal static readonly HashSet<string> s_secretFlags = new(StringComparer.Ordinal)
+    // -k 只在 security 子命令里是密码位（ditto -c -k --keepParent 的 -k 不携秘密），
+    // 按可执行名分流，不过遮罩非密语义。
+    private static readonly HashSet<string> s_secretFlags = new(StringComparer.Ordinal)
     {
-        "-p", "-P", "-k", "--password", "--pass", "--secret",
+        "-p", "-P", "--password", "--pass", "--secret",
         "--apple-id", "--team-id", "--key", "--key-id", "--api-key", "--apiKey",
     };
 
-    internal static string SafeArgs(IReadOnlyList<string> arguments)
+    private static bool IsSecretFlag(string arg, bool isSecurityTool) =>
+        s_secretFlags.Contains(arg) || (isSecurityTool && arg == "-k");
+
+    internal static string SafeArgs(string executable, IReadOnlyList<string> arguments)
     {
+        var isSecurityTool = string.Equals(
+            Path.GetFileNameWithoutExtension(executable), "security", StringComparison.OrdinalIgnoreCase);
         var parts = new List<string>(arguments.Count);
         var maskNext = false;
         foreach (var arg in arguments)
@@ -81,17 +87,17 @@ internal static class ToolRunner
             {
                 // 被遮位若本身还是密位旗标（flag-flag-value 形），它对后参仍有遮罩义务。
                 parts.Add("\"***\"");
-                maskNext = s_secretFlags.Contains(arg);
+                maskNext = IsSecretFlag(arg, isSecurityTool);
                 continue;
             }
             var eq = arg.IndexOf('=');
-            if (eq > 0 && s_secretFlags.Contains(arg.Substring(0, eq)))
+            if (eq > 0 && IsSecretFlag(arg.Substring(0, eq), isSecurityTool))
             {
                 parts.Add(arg.Substring(0, eq) + "=\"***\"");
                 continue;
             }
             parts.Add(QuoteArgument(arg));
-            if (s_secretFlags.Contains(arg))
+            if (IsSecretFlag(arg, isSecurityTool))
             {
                 maskNext = true;
             }

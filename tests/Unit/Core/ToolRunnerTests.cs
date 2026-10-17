@@ -152,7 +152,18 @@ public sealed class ToolRunnerTests
         "\"sign\" \"-f\" \"/tmp/a b\"")]
     public void SafeArgs_SecretFlagsMasked(string[] argv, string expected)
     {
-        Assert.Equal(expected, ToolRunner.SafeArgs(argv));
+        Assert.Equal(expected, ToolRunner.SafeArgs("security", argv));
+    }
+
+    [Fact]
+    public void SafeArgs_KFlag_OnlyMaskedForSecurityTool()
+    {
+        // ditto 的 -k 不携秘密（-c -k --keepParent 固定形）——按可执行名分流不过遮罩。
+        Assert.Equal("\"-c\" \"-k\" \"--keepParent\" \"src\" \"dst.zip\"",
+            ToolRunner.SafeArgs("ditto", ["-c", "-k", "--keepParent", "src", "dst.zip"]));
+        // 同一 -k 旗标在 security 下是密码位，后参必遮。
+        Assert.Equal("\"set-key-partition-list\" \"-k\" \"***\"",
+            ToolRunner.SafeArgs("security", ["set-key-partition-list", "-k", "hunter2"]));
     }
 
     [Theory]

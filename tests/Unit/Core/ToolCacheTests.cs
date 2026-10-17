@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using DotNet.Bundler.Core;
 
@@ -315,5 +316,18 @@ public sealed class ToolCacheTests : TempBase
         Assert.False(Directory.Exists(Path.Combine(second.DirectoryPath, "injected-link")));
         // 清扫只删链接本身：链接目标目录不许被级联清掉。
         Assert.True(Directory.Exists(outside));
+    }
+
+    [Fact]
+    public async Task AcquireLockAsync_DeterministicAbsence_ThrowsIOExceptionNotTimeout()
+    {
+        // 父目录确定性缺席：OpenOrCreate 抛 DirectoryNotFoundException(⊂IOException) 且
+        // File.Exists 恒假 → 走 1s 缺席宽限后直抛底层错误，不误报 TimeoutException。
+        var lockPath = Path.Combine(TempPath("no-such-parent"), "entry.lock");
+        var elapsed = Stopwatch.StartNew();
+        var exception = await Assert.ThrowsAnyAsync<IOException>(() =>
+            ToolCache.AcquireLockAsync(lockPath, TestContext.Current.CancellationToken));
+        Assert.IsNotType<TimeoutException>(exception);
+        Assert.True(elapsed.Elapsed >= TimeSpan.FromSeconds(1));
     }
 }
