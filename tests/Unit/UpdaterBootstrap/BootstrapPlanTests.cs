@@ -1232,6 +1232,32 @@ public sealed class BootstrapPlanTests : TempBase
     }
 
     [Fact]
+    public void OpenFlags_NoFollow_PerAbiTable()
+    {
+        // O_NOFOLLOW 按 fcntl 表族分：arm/armv6/arm64/ppc64le 紧凑表=0x8000，
+        // 其余（x64/s390x/riscv64/loongarch64/x86=asm-generic 表）=0x20000。
+        // 与 stat st_mode 分桶不同分类（ppc64le stat 在 24 桶但 fcntl 紧凑）。
+        Assert.SkipUnless(TestPlatform.IsLinux, "Linux ABI 旗标面只在 Linux 宿主可断言");
+        const int oCloexec = 0x80000, oNonblock = 0x800;
+        foreach (var arch in new[]
+        {
+            Architecture.Arm, Architecture.Armv6, Architecture.Arm64,
+            Architecture.Ppc64le,
+        })
+        {
+            Assert.Equal(0x8000 | oCloexec | oNonblock, NativeMethods.OpenFlags(arch));
+        }
+        foreach (var arch in new[]
+        {
+            Architecture.X64, Architecture.X86, Architecture.S390x,
+            Architecture.RiscV64, Architecture.LoongArch64, Architecture.Wasm,
+        })
+        {
+            Assert.Equal(0x20000 | oCloexec | oNonblock, NativeMethods.OpenFlags(arch));
+        }
+    }
+
+    [Fact]
     public void PkgApply_EnvFile_WrongOwner_Rc3()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "st_uid 复核只在 POSIX 腿走");

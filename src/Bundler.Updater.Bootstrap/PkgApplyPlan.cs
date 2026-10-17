@@ -960,9 +960,20 @@ internal static class NativeMethods
     private static extern uint GetEuidRaw();
 
     // O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK——三旗标常量按 ABI 分：
-    // Linux 全架构 0x20000/0x80000/0x800；macOS 0x100/0x1000000/0x4；
-    // FreeBSD 0x200/0x100000/0x4；其余 POSIX 按 Linux 常量兜底。
-    internal static int OpenFlagsForCurrentOs()
+    // macOS 0x100/0x1000000/0x4；FreeBSD 0x200/0x100000/0x4。
+    // Linux 侧 O_NOFOLLOW 按 fcntl 表族分——arm/arm64/powerpc 用自有
+    // 紧凑表（O_NOFOLLOW=0x8000），其余架构走 asm-generic 表
+    //（O_NOFOLLOW=0x20000——x86_64/s390x/riscv/loongarch 同值）。
+    // 与 stat st_mode 的 24/16 分桶**不同分类**：ppc64le 的 stat 在
+    // 全字宽桶但 fcntl 属紧凑族，riscv/loongarch 反之——不可互借。
+    // O_CLOEXEC/O_NONBLOCK 恒 0x80000/0x800 全 Linux 通。
+    // arm64 上塞 0x20000 等于只开 O_LARGEFILE 位——链接跟随放行
+    //（ubuntu-arm 腿实证红）。
+    internal static int OpenFlagsForCurrentOs() =>
+        OpenFlags(RuntimeInformation.ProcessArchitecture);
+
+    // 架构形参化的纯函数面——供全枚举表驱动断言（Linux 腿）。
+    internal static int OpenFlags(Architecture architecture)
     {
         if (OperatingSystem.IsMacOS())
         {
@@ -972,7 +983,11 @@ internal static class NativeMethods
         {
             return 0x200 | 0x100000 | 0x4;
         }
-        return 0x20000 | 0x80000 | 0x800;
+        var nofollow = architecture is Architecture.Arm or Architecture.Armv6
+            or Architecture.Arm64 or Architecture.Ppc64le
+                ? 0x8000
+                : 0x20000;
+        return nofollow | 0x80000 | 0x800;
     }
 
     internal static int Open(string pathname, int flags)
