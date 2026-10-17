@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace DotNet.Bundler.Updater.Bootstrap;
@@ -11,8 +12,9 @@ namespace DotNet.Bundler.Updater.Bootstrap;
 /// 不引入三段式搬移/marker/锁/崩溃恢复，也不在引导件重复验签（客户端已验）。</item>
 /// <item>装成功后降权重启 <c>--app</c>：<c>PKEXEC_UID</c>→<c>SUDO_UID</c> 取原用户
 ///（都不在=本来就 root 直跑，按当前权限直接 spawn），
-/// setpriv → sudo → runuser → su 退化链降权，回灌 <c>--env-file</c> 会话环境
-///（件是一次性输入——读毕即删件与 <c>pkg-*</c> 暂存目录，装失败不消费也删）。</item>
+/// setpriv → sudo → runuser → su 退化链降权，回灌 <c>--env-file</c> 会话环境。
+/// env 件须是调用者所有的可读普通件（open+fstat 三重校验，不过归 rc3 拒绝），
+/// 且是一次性输入——读毕即删件与 <c>pkg-*</c> 暂存目录，装失败不消费也删。</item>
 /// </list>
 /// 退出码：0 成功；3 参数错；4 安装失败（在场前端全败）；5 包管理器全缺席；
 /// 6 重启失败（安装已提交——客户端据此报"已装待手动重启"）。
@@ -75,13 +77,29 @@ internal static class PkgApplyPlan
         var app = Path.GetFullPath(options.AppPath);
         // -f 同口径：仅普通文件——fifo/设备/套接件 File.Exists 照收（只排目录），
         // sh -f 判拒同走本拒绝（消息逐字保一致）。
+        // 复核登记（N10）：File.Exists/-f 双侧都跟随符号链接——包路径属调用方
+        // 受托输入（root 本就受托装这包），刻意不做 --env-file 的三重校验：
+        // env 件内容越信任边界灌进降权 app 才须硬化，包件本身不越界。
         if (!IsRegularFile(pkg))
         {
             throw new UsageException($"package '{options.PackagePath}' does not exist.");
         }
 
+        // 原用户 uid 前置解析（sh PA_UID 段同位：装包前解好）——env 件属主
+        // 复核（st_uid==调用 uid，缺席按本进程 euid）与重启降权两边都要用。
+        // AOT vs sh 缺分流项：uid 解析在进程内做不存在"解析器缺席"态——
+        // sh 侧 awk 缺席走 PA_UID_FAIL→拒重启（rc6）的分流在 AOT 天然无对应物。
+        var uid = ParseUid(GetEnv("PKEXEC_UID")) ?? ParseUid(GetEnv("SUDO_UID"));
+        var passwd = uid is { } id ? LookupPasswd(id) : null;
         try
         {
+            // --env-file 校验+读定在装包前（sh _pa_env_validate 同位，rc3 拒绝
+            // 口径）：显式给了就必须是"调用者所有的可读普通件"——O_NOFOLLOW
+            // open + fstat S_IFREG + st_uid 三重收口，任不过抛 UsageException
+            // 归 rc3，绝不静默降级成"件缺席"：旧判存/open 之间窗内 fifo 可
+            // 挂死 root 进程、symlink 可把 root 私有件内容灌进降权 app 的 env
+            //（用户经 /proc/<app>/environ 读回）。
+            var envLines = ReadEnvFile(options.EnvFile, uid);
             var attempted = false;
             foreach (var step in InstallChain(options, pkg))
             {
@@ -101,7 +119,7 @@ internal static class PkgApplyPlan
                 });
                 if (rc == 0)
                 {
-                    return Restart(app, options, log) ? 0 : 6;
+                    return Restart(app, options, uid, passwd, envLines, log) ? 0 : 6;
                 }
                 log($"bundler-updater: {step.Tool} failed (exit {rc}) — falling back");
             }
@@ -212,7 +230,8 @@ internal static class PkgApplyPlan
     // 降权拉起 --app；uid 缺席=本来就 root 直跑/非特权直跑，按当前权限 spawn。
     // env 一律经内层 `env K=V … app` 构造（sudo env_reset 会把外层环境剥光），
     // 外层 nohup 分离——引导件退出/终端挂断不该带走新装应用（apply 腿同策略）。
-    private static bool Restart(string app, PkgApplyOptions options, Action<string> log)
+    private static bool Restart(string app, PkgApplyOptions options, long? uid,
+        PasswdEntry? passwd, List<string>? envLines, Action<string> log)
     {
         if (!AppLaunchable(app))
         {
@@ -221,9 +240,9 @@ internal static class PkgApplyPlan
             return false;
         }
         var workingDir = Path.GetDirectoryName(app) ?? ".";
-        var uid = ParseUid(GetEnv("PKEXEC_UID")) ?? ParseUid(GetEnv("SUDO_UID"));
-        var passwd = uid is { } id ? LookupPasswd(id) : null;
-        var envPairs = LoadEnvPairs(options.EnvFile, uid, passwd, log);
+        // env 对构建（含"无可用对/无 env 件"WARN）先于 nohup 解析——
+        // 与 sh _pa_restart 同序（WARN 序双侧一致）。
+        var envPairs = BuildEnvPairs(envLines, options.EnvFile, uid, passwd, log);
 
         if (OperatingSystem.IsWindows() && SpawnProbe is null)
         {
@@ -330,6 +349,9 @@ internal static class PkgApplyPlan
         return false;
     }
 
+    // WorkingDirectory 由 Process.Start 同步设定——工作目录缺席/不可进在
+    // spawn 点即抛→false→降下一级，与 sh 侧 spawn 前显式 (cd "$_d") 同步
+    // 探测同价（sh 是后台子壳 cd 失败被 & 吞需预检，AOT 天然同步拒）。
     private static bool TrySpawn(string nohup, string[] argv, string workingDir, Action<string> log)
     {
         var spawned = Spawn(new ExecSpec
@@ -360,41 +382,32 @@ internal static class PkgApplyPlan
     private static string ShQuote(string value) =>
         "'" + value.Replace("'", "'\\''") + "'";
 
-    // 会话 env 回灌：env 件逐行收 KEY=value（键必须 [A-Za-z_][A-Za-z0-9_]*，
-    // 坏行静默跳过——与 sh 支路同款过滤）；件缺省/非普通文件/不可读按最小集
-    // HOME+DISPLAY 处理并记日志。解析出零有效对同样退化最小集——空对内层
-    // `env` 零覆盖，会把调用方全套 env（pkexec 语境=root env）原样灌给降权 app。
-    private static List<string> LoadEnvPairs(
+    // 会话 env 回灌：env 件行集逐行收 KEY=value（键必须 [A-Za-z_][A-Za-z0-9_]*，
+    // 坏行静默跳过——与 sh 支路同款过滤）；件缺省按最小集 HOME+DISPLAY 处理并记
+    // 日志。解析出零有效对同样退化最小集——空对内层 `env` 零覆盖，会把调用方
+    // 全套 env（pkexec 语境=root env）原样灌给降权 app。
+    // envLines==null 只在 --env-file 未给时出现——件给了但校验失败走 rc3 在
+    // 装包前已拒绝（ReadEnvFile），到不了这里。
+    private static List<string> BuildEnvPairs(List<string>? envLines,
         string? envFile, long? uid, PasswdEntry? passwd, Action<string> log)
     {
-        if (envFile is not null)
+        if (envLines is not null)
         {
-            try
+            var pairs = new List<string>();
+            foreach (var line in envLines)
             {
-                // -f 同口径先判普通文件：fifo 上 ReadLines 会挂等写端——
-                // sh -f 判拒同走"读失败"WARN。
-                if (!IsRegularFile(envFile))
+                if (IsEnvAssignment(line))
                 {
-                    throw new IOException("not a regular file");
+                    pairs.Add(line);
                 }
-                var pairs = new List<string>();
-                foreach (var line in File.ReadLines(envFile))
-                {
-                    if (IsEnvAssignment(line))
-                    {
-                        pairs.Add(line);
-                    }
-                }
-                if (pairs.Count > 0)
-                {
-                    return pairs;
-                }
-                log($"bundler-updater: WARN env file '{envFile}' has no usable assignments — minimal session env");
             }
-            catch (Exception)
+            if (pairs.Count > 0)
             {
-                log($"bundler-updater: WARN cannot read env file '{envFile}' — minimal session env");
+                return pairs;
             }
+            // 消息用规范化全路径——sh 侧 PA_ENV 同已绝对化，WARN 文案一致。
+            log($"bundler-updater: WARN env file '{Path.GetFullPath(envFile!)}' " +
+                "has no usable assignments — minimal session env");
         }
         else
         {
@@ -414,6 +427,82 @@ internal static class PkgApplyPlan
             minimal.Add("DISPLAY=" + display);
         }
         return minimal;
+    }
+
+    // --env-file 校验+读定（TOCTOU 收口，rc3 拒绝口径——sh _pa_env_validate 同义）：
+    // POSIX 上 O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK 打开，fstat 已开描述符
+    // 复核 S_IFREG + st_uid==调用 uid（uid 缺席按本进程 euid）——三重全过才
+    // 把同一描述符包成 FileStream 读。O_NOFOLLOW 让"判存→open"窗内的链接偷换
+    // 直接 ELOOP；O_NONBLOCK 对普通文件无害、对 fifo 让 open 立刻返回再由
+    // fstat 类型位拒掉（裸 open 阻塞性 fifo 会挂死本进程等写端）。
+    // 任一步不过一律抛 UsageException 归 rc3——不静默降级"件不存在"：
+    // 件显式给了就按校验输，内容永不进降权 app 的 env。
+    private static List<string>? ReadEnvFile(string? envFile, long? uid)
+    {
+        if (envFile is null)
+        {
+            return null;
+        }
+        var full = Path.GetFullPath(envFile);
+        using var stream = OpenEnvFile(full, uid);
+        if (stream is null)
+        {
+            throw new UsageException(
+                $"--env-file '{full}' is not a readable regular file owned by the calling user.");
+        }
+        var lines = new List<string>();
+        using (var reader = new StreamReader(stream))
+        {
+            // \r/\r\n/\n 三终结符与 sh `tr '\r' '\n'` 折行同口径
+            //（TextReader.ReadLine 把裸 \r 也当终结符）。
+            string? line;
+            while ((line = reader.ReadLine()) is not null)
+            {
+                lines.Add(line);
+            }
+        }
+        return lines;
+    }
+
+    // 校验开件：POSIX 走 open+fstat 三重（见上）；Windows/pkg-apply 现实不可达的
+    // 宿主退 IsRegularFile 口径（stat 同源判据，无 uid 面可复核——
+    // 该腿只在测试宿主可触达）。
+    private static FileStream? OpenEnvFile(string path, long? callerUid)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                return IsRegularFile(path)
+                    ? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)
+                    : null;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+        var fd = NativeMethods.Open(path, NativeMethods.OpenFlagsForCurrentOs());
+        if (fd < 0)
+        {
+            return null;
+        }
+        // fstat 已开描述符——校验对象是 open 钉住的同一 inode，窗内换件骗不过。
+        var status = new byte[NativeMethods.StatBufferSize];
+        if (!NativeMethods.TryFstat(fd, status))
+        {
+            NativeMethods.Close(fd);
+            return null;
+        }
+        if (!NativeMethods.IsRegularMode(status) ||
+            !NativeMethods.OwnerMatches(status, callerUid))
+        {
+            NativeMethods.Close(fd);
+            return null;
+        }
+        return new FileStream(
+            new Microsoft.Win32.SafeHandles.SafeFileHandle(fd, ownsHandle: true),
+            FileAccess.Read);
     }
 
     private static bool IsEnvAssignment(string line)
@@ -511,11 +600,17 @@ internal static class PkgApplyPlan
         File.Exists(path) && UnixFileTypes.IsRegularFile(path);
 
     // command -v 存在性预检：BUNDLER_UPDATER_CMD_<TOOL> env 覆盖先行
-    //（双侧同名测试缝——设了即视为存在并用该路径），否则 PATH 实查。
+    //（双侧同名测试缝），否则 CommandProbe/PATH 实查。
+    // 覆盖值由 root 直 exec——必须"存在+普通文件+有执行位"才权威（不设防
+    // 等于把任意路径提权为权威命令）；不可用覆盖按未设置退化下一解析源，
+    // 与 sh _pa_cmd 的 -f/-x 校验同口径。
+    // env 不在本解析面：spawn argv 里的内层 `env K=V` 由 nohup 子进程经
+    // execvp 按自己的 PATH 解析，从不经本函数——sh 侧原 env) 死支路已删（A4），
+    // AOT 本就无对应 case，此处仅登记对齐事实。
     private static string? ResolveCommand(string name)
     {
         var overridePath = GetEnv("BUNDLER_UPDATER_CMD_" + CommandEnvName(name));
-        if (!string.IsNullOrEmpty(overridePath))
+        if (!string.IsNullOrEmpty(overridePath) && IsExecutableFile(overridePath))
         {
             return overridePath;
         }
@@ -525,6 +620,13 @@ internal static class PkgApplyPlan
         }
         return FindOnPath(name);
     }
+
+    // 覆盖路径执行性判据：存在+普通文件（IsRegularFile/stat 同源——fifo/目录
+    // 不算数），POSIX 另要任一执行位；Windows 无执行位面按普通文件即足
+    //（pkg-apply POSIX 限定腿，该判据只在测试宿主落到 Windows）。
+    private static bool IsExecutableFile(string path) =>
+        IsRegularFile(path) &&
+        (OperatingSystem.IsWindows() || HasExecuteBit(path));
 
     private static string CommandEnvName(string name)
     {
@@ -545,6 +647,13 @@ internal static class PkgApplyPlan
         }
         foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
+            // 空元素已被 RemoveEmptyEntries 剥掉；相对段（PATH="bin:..."）与
+            // 空元素同源问题——candidate 会解析到 cwd 下同名件，sh 侧
+            // command -v 结果要求 /* 同口径：只收绝对段。
+            if (!Path.IsPathRooted(dir))
+            {
+                continue;
+            }
             var candidate = Path.Combine(dir, name);
             if (OperatingSystem.IsWindows())
             {
@@ -795,4 +904,175 @@ internal sealed class ExecSpec
     public required string[] Arguments { get; init; }
     public Dictionary<string, string>? Environment { get; init; }
     public string? WorkingDirectory { get; init; }
+}
+
+// --env-file 校验的 POSIX 原生面：open/fstat/close/geteuid 直调 libc。
+// struct stat 用 256 字节裸缓冲按 ABI 偏移取 st_mode/st_uid——布局与
+// UnixFileTypes 同源（st_mode 偏移同表），st_uid 恒在 st_mode 之后第一个
+// u32 槽位（Linux x86_64 类 nlink-全字宽 ABI @28、asm-generic @24；
+// macOS inode64 @16；FreeBSD @28）。
+internal static class NativeMethods
+{
+    internal const int StatBufferSize = 256;
+
+    private const int TypeMask = 0xF000;    // S_IFMT
+    private const int RegularFile = 0x8000; // S_IFREG
+
+    [DllImport("libc", EntryPoint = "open", SetLastError = true, CharSet = CharSet.Ansi)]
+    private static extern int OpenRaw(string pathname, int flags);
+
+    [DllImport("libc", EntryPoint = "close", SetLastError = true)]
+    private static extern int CloseRaw(int fd);
+
+    [DllImport("libc", EntryPoint = "fstat", SetLastError = true)]
+    private static extern int FStat(int fd, byte[] buffer);
+
+    // macOS inode64 显式绑名（同 UnixFileTypes stat$INODE64 先例）；
+    // 老 glibc（<2.33）不导裸 fstat，退 __fxstat(ver, fd, buf)——
+    // ver 依 ABI：x86_64 系全字宽 nlink 布局=1，asm-generic=0。
+    [DllImport("libc", EntryPoint = "fstat$INODE64", SetLastError = true)]
+    private static extern int FStatInode64(int fd, byte[] buffer);
+
+    [DllImport("libc", EntryPoint = "__fxstat", SetLastError = true)]
+    private static extern int FxStat(int version, int fd, byte[] buffer);
+
+    [DllImport("libc", EntryPoint = "geteuid")]
+    private static extern uint GetEuidRaw();
+
+    // O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK——三旗标常量按 ABI 分：
+    // Linux 全架构 0x20000/0x80000/0x800；macOS 0x100/0x1000000/0x4；
+    // FreeBSD 0x200/0x100000/0x4；其余 POSIX 按 Linux 常量兜底。
+    internal static int OpenFlagsForCurrentOs()
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            return 0x100 | 0x1000000 | 0x4;
+        }
+        if (OperatingSystem.IsFreeBSD())
+        {
+            return 0x200 | 0x100000 | 0x4;
+        }
+        return 0x20000 | 0x80000 | 0x800;
+    }
+
+    internal static int Open(string pathname, int flags)
+    {
+        try
+        {
+            return OpenRaw(pathname, flags);
+        }
+        catch (Exception)
+        {
+            return -1;
+        }
+    }
+
+    internal static void Close(int fd)
+    {
+        try
+        {
+            CloseRaw(fd);
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    // fstat 失败一律 false——无法复核 inode 属性即按校验失败拒（fail closed，
+    // 与 UnixFileTypes"无法判定放行"口径刻意不同：这里是安全边界不是拷贝过滤）。
+    internal static bool TryFstat(int fd, byte[] buffer)
+    {
+        try
+        {
+            if (OperatingSystem.IsMacOS())
+            {
+                try
+                {
+                    return FStatInode64(fd, buffer) == 0;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return FStat(fd, buffer) == 0;
+                }
+            }
+            try
+            {
+                return FStat(fd, buffer) == 0;
+            }
+            catch (EntryPointNotFoundException)
+            {
+                var version = RuntimeInformation.ProcessArchitecture == Architecture.X64
+                    ? 1
+                    : 0;
+                return FxStat(version, fd, buffer) == 0;
+            }
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    internal static bool IsRegularMode(byte[] status)
+    {
+        var mode = ModeBits(status);
+        return (mode & TypeMask) == RegularFile;
+    }
+
+    // st_uid 复核：期望 uid=已解析调用 uid，缺席按本进程 euid——
+    // geteuid 拿不到（不该发生）按校验失败拒。
+    internal static bool OwnerMatches(byte[] status, long? callerUid)
+    {
+        long expected;
+        if (callerUid is { } uid)
+        {
+            expected = uid;
+        }
+        else
+        {
+            try
+            {
+                expected = GetEuidRaw();
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+        return BitConverter.ToUInt32(status, UidOffset()) == expected;
+    }
+
+    private static int ModeBits(byte[] status) =>
+        OperatingSystem.IsMacOS()
+            ? BitConverter.ToUInt16(status, 4)
+            : BitConverter.ToInt32(status, LinuxModeOffset());
+
+    // st_mode 偏移：nlink 全字宽 ABI（x86_64/s390x/ppc64le）@24、asm-generic @16。
+    // 注意 UnixFileTypes.LinuxModeOffset 的 `(int) is 5 or 7` 写法把 Armv6(7)
+    // 误当 Ppc64le(8)——上游登记性偏差，本表用具名成员取准。
+    private static int LinuxModeOffset()
+    {
+        var architecture = RuntimeInformation.ProcessArchitecture;
+        return architecture is Architecture.X64 or Architecture.S390x or Architecture.Ppc64le
+            ? 24
+            : 16;
+    }
+
+    // st_uid 偏移：Linux nlink-全字宽 ABI（x86_64/s390x/ppc64le）@28、
+    // asm-generic @24；macOS inode64 @16；FreeBSD @28。
+    private static int UidOffset()
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            return 16;
+        }
+        if (OperatingSystem.IsFreeBSD())
+        {
+            return 28;
+        }
+        var architecture = RuntimeInformation.ProcessArchitecture;
+        return architecture is Architecture.X64 or Architecture.S390x or Architecture.Ppc64le
+            ? 28
+            : 24;
+    }
 }
