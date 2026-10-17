@@ -109,7 +109,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
 deb 退化链与更新同 argv（`apt-get install -y` 不带 `--allow-downgrades`）——debian 容器实证 apt 拒旧版降级、自动退化 `dpkg -i` 原生放行（rc=0、账本翻回旧版——`syspkg-verify` D3 相位）。
 rpm `dnf install -y` 与更新同 argv（非 `dnf downgrade`）——fedora 容器实证 dnf5 `install` 对本地旧版件原地放行降级（rc=0、账本翻回旧版——`syspkg-verify` R3 相位）。
 `zypper install -y` 同 argv 重放——非交互降级形态仍外部待验收（`docs/project/special-acceptance.md`）。
-退化腿 `rpm -U` 在 `--rollback` 下加 `--oldpackage`（`syspkg-verify` R3b 相位实证账本翻回旧版）。
+退化腿 `rpm -U` 在 `--rollback` 下加 `--oldpackage`（`syspkg-verify` R3B 相位实证账本翻回旧版）。
 apk `apk add` 旧版本地件原生放行降级（alpine 容器实证：rc=0、账本翻回旧版——`syspkg-verify` K2 相位）。
 
 ### 2.5 身份与清单
