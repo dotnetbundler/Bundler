@@ -136,6 +136,30 @@ public sealed class ToolRunnerTests
         }
     }
 
+    [Fact]
+    public async Task TryRunAsync_HungChild_KilledAndReported()
+    {
+        // 真实 spawn 腿：子进程永不退出时不再无限挂——有界等待到点杀树，
+        // 按 ExitCode=-1 交给既有非零处理面并把"哪个工具/限值"打进 stderr。
+        var (exe, args) = OperatingSystem.IsWindows()
+            ? ("cmd.exe", new[] { "/c", "ping", "-n", "30", "127.0.0.1" })
+            : ("/bin/sh", new[] { "-c", "sleep 30" });
+        var previous = ToolRunner.ProcessTimeout;
+        ToolRunner.ProcessTimeout = TimeSpan.FromMilliseconds(500);
+        try
+        {
+            var result = await ToolRunner.TryRunAsync(
+                exe, args, ".", TestContext.Current.CancellationToken);
+            Assert.NotNull(result);
+            Assert.Equal(-1, result!.ExitCode);
+            Assert.Contains("did not exit", result.StandardError);
+        }
+        finally
+        {
+            ToolRunner.ProcessTimeout = previous;
+        }
+    }
+
     [Theory]
     [InlineData("simple", "\"simple\"")]
     [InlineData("has space", "\"has space\"")]

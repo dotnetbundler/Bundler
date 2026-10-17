@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 
 namespace DotNet.Bundler.Core;
@@ -180,9 +181,11 @@ public static class ToolCache
         }
     }
 
-    /// <summary>50ms 轮询排他文件锁；资源物化等场景也共享此件。</summary>
+    /// <summary>50ms 轮询排他文件锁；资源物化等场景也共享此件。
+    /// 有界等待（与 <see cref="ToolRunner.ProcessTimeout"/> 同限）——持锁方挂死不再造成无限自旋。</summary>
     internal static async Task<FileStream> AcquireLockAsync(string lockPath, CancellationToken cancellationToken)
     {
+        var started = Stopwatch.StartNew();
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -192,6 +195,11 @@ public static class ToolCache
             }
             catch (IOException)
             {
+                if (started.Elapsed >= ToolRunner.ProcessTimeout)
+                {
+                    throw new TimeoutException(
+                        $"Tool cache lock '{lockPath}' was not released within {ToolRunner.ProcessTimeout}.");
+                }
                 await Task.Delay(50, cancellationToken);
             }
         }

@@ -28,6 +28,18 @@ internal static class ToolRunner
         set => s_handler.Value = value;
     }
 
+    // 挂死兜底：外部工具永不返回时给有界等待——默认 15min，BUNDLER_TOOL_TIMEOUT_SECONDS 可配。
+    // 超时后杀整棵进程树并按 ExitCode=-1 交给既有非零处理面，让"卡死"变成带工具名与耗时的失败。
+    internal static TimeSpan ProcessTimeout { get; set; } = ResolveDefaultTimeout();
+
+    private static TimeSpan ResolveDefaultTimeout()
+    {
+        var raw = Environment.GetEnvironmentVariable("BUNDLER_TOOL_TIMEOUT_SECONDS");
+        return int.TryParse(raw, out var seconds) && seconds > 0
+            ? TimeSpan.FromSeconds(seconds)
+            : TimeSpan.FromMinutes(15);
+    }
+
     internal static async Task RunAsync(
         string executable,
         IEnumerable<string> arguments,
@@ -102,7 +114,15 @@ internal static class ToolRunner
             try { if (!process.HasExited) process.Kill(); } catch { }
         }))
         {
-            process.WaitForExit();
+            if (!process.WaitForExit((int)ProcessTimeout.TotalMilliseconds))
+            {
+                try { process.Kill(); } catch { }
+                process.WaitForExit();
+                await Task.WhenAll(standardOutput, standardError).ConfigureAwait(false);
+                return new Result(-1, standardOutput.Result,
+                    standardError.Result + $"{Environment.NewLine}bundler: " +
+                    $"'{Path.GetFileName(executable)}' did not exit within {ProcessTimeout} and was killed.");
+            }
         }
         await Task.WhenAll(standardOutput, standardError).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
@@ -138,15 +158,22 @@ internal static class ToolRunner
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start '{executable}'.");
-        // stdout 异步排空、stderr 同步读：两个都同步顺序读在管道缓冲满时会死锁。
+        // 两路都异步排空（同步顺序读在管道缓冲满时会死锁）；等待再有界——子进程挂死不再是无底洞。
         var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEnd();
+        var error = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit((int)ProcessTimeout.TotalMilliseconds))
+        {
+            try { process.Kill(); } catch { }
+            process.WaitForExit();
+            throw new InvalidOperationException(
+                $"'{executable}' did not exit within {ProcessTimeout} and was killed.");
+        }
         process.WaitForExit();
-        output.Wait();
+        Task.WaitAll(output, error);
         if (process.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"'{executable}' exited with code {process.ExitCode}: {(output.Result + error).Trim()}");
+                $"'{executable}' exited with code {process.ExitCode}: {(output.Result + error.Result).Trim()}");
         }
     }
 
