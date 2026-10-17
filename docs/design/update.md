@@ -99,6 +99,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   预检同步执行不设超时——最小 argv 形（`sh -c :` 即刻返回）+ stdin 钉死零交互，挂死无现实入口，超时+强制终结路径的复杂度不抵收益。
 - `--env-file` 是一次性输入件：读毕即删件与父级 `pkg-*` 暂存目录（删失败不挡退出码；
   装失败不消费也删——AOT `PkgApplyPlan` 与 sh 双侧同口径）。
+  显式给出的 env 件须过完整性三重（普通文件 + 非符号链接 + 属主=调用 uid，uid 缺席取进程 euid）——判存到 open 的 TOCTOU 窗内 fifo 可挂死 root 进程、symlink 可把 root 私有件灌进降权 app 的 env；任一步不过按 rc3 拒绝，不静默降级"件缺席"。
 - 引导件 musl 静态件注入 `/usr/lib/<pkg>/`（与 zip/app 注入同构）。
   nsis/msi"不注入引导件"先例不适用此处——installer-replay 族的执行体仍是引导件编排安装命令。
   动词协议签名：`bundler-updater pkg-apply --pkg <本地包> --format <deb|rpm|apk> --app <重启目标> [--env-file <会话env件>] [--rollback] [--log <件>]`。
