@@ -1232,29 +1232,14 @@ public sealed class BootstrapPlanTests : TempBase
     }
 
     [Fact]
-    public void OpenFlags_NoFollow_PerAbiTable()
+    public void OpenFlags_PalConstants()
     {
-        // O_NOFOLLOW 按 fcntl 表族分：arm/armv6/arm64/ppc64le 紧凑表=0x8000，
-        // 其余（x64/s390x/riscv64/loongarch64/x86=asm-generic 表）=0x20000。
-        // 与 stat st_mode 分桶不同分类（ppc64le stat 在 24 桶但 fcntl 紧凑）。
-        Assert.SkipUnless(TestPlatform.IsLinux, "Linux ABI 旗标面只在 Linux 宿主可断言");
-        const int oCloexec = 0x80000, oNonblock = 0x800;
-        foreach (var arch in new[]
-        {
-            Architecture.Arm, Architecture.Armv6, Architecture.Arm64,
-            Architecture.Ppc64le,
-        })
-        {
-            Assert.Equal(0x8000 | oCloexec | oNonblock, NativeMethods.OpenFlags(arch));
-        }
-        foreach (var arch in new[]
-        {
-            Architecture.X64, Architecture.X86, Architecture.S390x,
-            Architecture.RiscV64, Architecture.LoongArch64, Architecture.Wasm,
-        })
-        {
-            Assert.Equal(0x20000 | oCloexec | oNonblock, NativeMethods.OpenFlags(arch));
-        }
+        // env 件走 libSystem.Native PAL：旗标是 pal_io.h 的固定中间值
+        //（PAL_O_RDONLY=0 | PAL_O_CLOEXEC=0x0010 | PAL_O_NOFOLLOW=0x0200），
+        // 各 ABI 原生值由 PAL C 侧转译——原生常量表随 ABI 漂移的坑
+        //（arm64 紧凑表/musl static 解析面）整条不存在。
+        Assert.Equal(0x0010 | 0x0200, NativeMethods.EnvOpenFlags);
+        Assert.Equal(5000, NativeMethods.OpenDeadlineMs);
     }
 
     [Fact]
