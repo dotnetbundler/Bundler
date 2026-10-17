@@ -1068,8 +1068,9 @@ internal static class NativeMethods
             : BitConverter.ToInt32(status, LinuxModeOffset());
 
     // st_mode 偏移：nlink 全字宽 ABI（x86_64/s390x/ppc64le）@24、asm-generic @16。
-    // 注意 UnixFileTypes.LinuxModeOffset 的 `(int) is 5 or 7` 写法把 Armv6(7)
-    // 误当 Ppc64le(8)——上游登记性偏差，本表用具名成员取准。
+    // 上游 UnixFileTypes.LinuxModeOffset 曾因 netstandard2.0 缺具名成员用
+    // 数值判据误标（`5 or 7` 把 Armv6 误送 24、Ppc64le 漏进 16）——本轮已修
+    // 正为 `5 or 8`，本表具名成员天然取准，两侧口径一致。
     private static int LinuxModeOffset()
     {
         var architecture = RuntimeInformation.ProcessArchitecture;
