@@ -1100,8 +1100,12 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         // applied 仍指新件（刚 apply 写入）。
         var oldPkg = Path.Combine(retention, "myapp_1.0-1_amd64.deb");
         File.WriteAllText(oldPkg, "pkg-v1-bytes");
-        File.WriteAllBytes(oldPkg + ".sig", EcdsaSigner.SignFile(oldPkg, material));
+        var oldSig = oldPkg + ".sig";
+        File.WriteAllBytes(oldSig, EcdsaSigner.SignFile(oldPkg, material));
+        // 拣选按 mtime 取"applied 之外最新"：.sig 须严格早于包件，否则两版
+        // 拣选器（基线无 .sig 过滤、B2 后恒 .sig 拒候选）都会把签名件当候选。
         File.SetLastWriteTimeUtc(oldPkg, DateTime.UtcNow.AddMinutes(-10));
+        File.SetLastWriteTimeUtc(oldSig, DateTime.UtcNow.AddMinutes(-11));
 
         File.Delete(rec);
         var rollback = client.Rollback(options);
