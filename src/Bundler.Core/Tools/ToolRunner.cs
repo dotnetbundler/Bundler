@@ -64,8 +64,9 @@ internal static class ToolRunner
     }
 
     // 值随旗标/等号承载秘密的旗标集合——遮罩其后一参或 = 右值。
-    // -k 只在 security 子命令里是密码位（ditto -c -k --keepParent 的 -k 不携秘密），
-    // 按可执行名分流，不过遮罩非密语义。
+    // -k 只在 security 可执行名下视为密码位（ditto -c -k --keepParent 的 -k 不携秘密）。
+    // 判据是可执行名而非子命令：security 域内 -k 对 import 钥匙串路径等非密操作数仍遮，
+    // 属可接受过遮罩——方向安全，仅 trace 可读性微降。
     private static readonly HashSet<string> s_secretFlags = new(StringComparer.Ordinal)
     {
         "-p", "-P", "--password", "--pass", "--secret",
