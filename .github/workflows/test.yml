@@ -140,6 +140,8 @@ jobs:
       BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"
+      # 外部工具 spawn 落盘->run-tests.* tail 进 job 日志：挂死现场=最后一条在途 spawn。
+      BUNDLER_TOOL_TRACE: ${{ github.workspace }}/artifacts/ci/bundler-tool-trace.log
     steps:
       - uses: actions/checkout@v7
 

@@ -40,6 +40,27 @@ internal static class ToolRunner
             : TimeSpan.FromMinutes(15);
     }
 
+    // 挂死插桩：BUNDLER_TOOL_TRACE 指向文件时，每次真实 spawn 追加一行（打开即写即关，
+    // 进程被硬杀也不丢已落行）——CI 侧 tail 进 job 日志后，挂死现场=最后一条在途 spawn。
+    private static void TraceSpawn(Process process, Request request)
+    {
+        var path = Environment.GetEnvironmentVariable("BUNDLER_TOOL_TRACE");
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+        try
+        {
+            var args = string.Join(" ", request.Arguments.Select(QuoteArgument));
+            File.AppendAllText(path,
+                $"{DateTime.UtcNow:O} pid={process.Id} exe={request.Executable} " +
+                $"cwd={request.WorkingDirectory} args={args}" + Environment.NewLine);
+        }
+        catch
+        {
+        }
+    }
+
     internal static async Task RunAsync(
         string executable,
         IEnumerable<string> arguments,
@@ -107,6 +128,7 @@ internal static class ToolRunner
             return null;
         }
 
+        TraceSpawn(process, request);
         var standardOutput = process.StandardOutput.ReadToEndAsync();
         var standardError = process.StandardError.ReadToEndAsync();
         using (cancellationToken.Register(() =>
@@ -158,6 +180,7 @@ internal static class ToolRunner
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start '{executable}'.");
+        TraceSpawn(process, new Request(executable, arguments, startInfo.WorkingDirectory, environment));
         // 两路都异步排空（同步顺序读在管道缓冲满时会死锁）；等待再有界——子进程挂死不再是无底洞。
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
