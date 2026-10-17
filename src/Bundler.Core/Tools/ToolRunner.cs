@@ -28,8 +28,10 @@ internal static class ToolRunner
         set => s_handler.Value = value;
     }
 
-    // 挂死兜底：外部工具永不返回时给有界等待——默认 15min，BUNDLER_TOOL_TIMEOUT_SECONDS 可配。
-    // 超时后杀整棵进程树并按 ExitCode=-1 交给既有非零处理面，让"卡死"变成带工具名与耗时的失败。
+    // 挂死兜底：外部工具永不返回时给有界等待——默认 15min，BUNDLER_TOOL_TIMEOUT_SECONDS 可配，
+    // 合法长任务（notarytool --wait 类）走 RunAsync/TryRunAsync 的 timeout 形参按调用点豁免。
+    // 超时后杀进程树（net10 面；旧框架杀直系）并按 ExitCode=-1 交给既有非零处理面，
+    // 让"卡死"变成带工具名与耗时的失败。
     internal static TimeSpan ProcessTimeout { get; set; } = ResolveDefaultTimeout();
 
     private static TimeSpan ResolveDefaultTimeout()
@@ -42,6 +44,7 @@ internal static class ToolRunner
 
     // 挂死插桩：BUNDLER_TOOL_TRACE 指向文件时，每次真实 spawn 追加一行（打开即写即关，
     // 进程被硬杀也不丢已落行）——CI 侧 tail 进 job 日志后，挂死现场=最后一条在途 spawn。
+    // argv 过密旗标遮罩：security -p / notarytool --password 等凭证位不落明文（秘密不入可回显日志）。
     private static void TraceSpawn(Process process, Request request)
     {
         var path = Environment.GetEnvironmentVariable("BUNDLER_TOOL_TRACE");
@@ -51,14 +54,78 @@ internal static class ToolRunner
         }
         try
         {
-            var args = string.Join(" ", request.Arguments.Select(QuoteArgument));
             File.AppendAllText(path,
                 $"{DateTime.UtcNow:O} pid={process.Id} exe={request.Executable} " +
-                $"cwd={request.WorkingDirectory} args={args}" + Environment.NewLine);
+                $"cwd={request.WorkingDirectory} args={SafeArgs(request.Arguments)}" + Environment.NewLine);
         }
         catch
         {
         }
+    }
+
+    // 值随旗标/等号承载秘密的旗标集合——遮罩其后一参或 = 右值。
+    private static readonly HashSet<string> s_secretFlags = new(StringComparer.Ordinal)
+    {
+        "-p", "-P", "--password", "--pass", "--secret",
+        "--apple-id", "--team-id", "--key", "--key-id", "--api-key", "--apiKey",
+    };
+
+    private static string SafeArgs(IReadOnlyList<string> arguments)
+    {
+        var parts = new List<string>(arguments.Count);
+        var maskNext = false;
+        foreach (var arg in arguments)
+        {
+            if (maskNext)
+            {
+                parts.Add("\"***\"");
+                maskNext = false;
+                continue;
+            }
+            var eq = arg.IndexOf('=');
+            if (eq > 0 && s_secretFlags.Contains(arg.Substring(0, eq)))
+            {
+                parts.Add(arg.Substring(0, eq) + "=\"***\"");
+                continue;
+            }
+            parts.Add(QuoteArgument(arg));
+            if (s_secretFlags.Contains(arg))
+            {
+                maskNext = true;
+            }
+        }
+        return string.Join(" ", parts);
+    }
+
+    private static int WaitMilliseconds(TimeSpan timeout) =>
+        (int)Math.Max(1, Math.Min(timeout.TotalMilliseconds, int.MaxValue - 1));
+
+    // netstandard2.0 无 Kill(true)：新目标杀整棵树，旧面只杀直系子——
+    // 孙代持管道时由有界排空收尾兜底，不无限等 ReadToEnd。
+    private static void KillProcessTree(Process process)
+    {
+        try
+        {
+#if NET10_0_OR_GREATER
+            process.Kill(entireProcessTree: true);
+#else
+            process.Kill();
+#endif
+        }
+        catch
+        {
+        }
+    }
+
+    // 子进程死亡但孙代持管道时 ReadToEnd 不完——排空最多再等 5s，拿到的算数、拿不到的弃。
+    private static async Task<(string Out, string Err)> DrainPipesAsync(
+        Task<string> standardOutput, Task<string> standardError)
+    {
+        await Task.WhenAny(
+            Task.WhenAll(standardOutput, standardError),
+            Task.Delay(TimeSpan.FromSeconds(5))).ConfigureAwait(false);
+        return (standardOutput.IsCompleted ? standardOutput.Result : "",
+                standardError.IsCompleted ? standardError.Result : "");
     }
 
     internal static async Task RunAsync(
@@ -66,9 +133,10 @@ internal static class ToolRunner
         IEnumerable<string> arguments,
         string workingDirectory,
         CancellationToken cancellationToken,
-        IReadOnlyDictionary<string, string>? environment = null)
+        IReadOnlyDictionary<string, string>? environment = null,
+        TimeSpan? timeout = null)
     {
-        var result = await TryRunAsync(executable, arguments, workingDirectory, cancellationToken, environment)
+        var result = await TryRunAsync(executable, arguments, workingDirectory, cancellationToken, environment, timeout)
             .ConfigureAwait(false);
         if (result is null)
         {
@@ -88,8 +156,10 @@ internal static class ToolRunner
         IEnumerable<string> arguments,
         string workingDirectory,
         CancellationToken cancellationToken,
-        IReadOnlyDictionary<string, string>? environment = null)
+        IReadOnlyDictionary<string, string>? environment = null,
+        TimeSpan? timeout = null)
     {
+        var bound = timeout ?? ProcessTimeout;
         var request = new Request(executable, arguments.ToArray(), workingDirectory, environment);
         var handler = Handler;
         if (handler is not null)
@@ -133,17 +203,18 @@ internal static class ToolRunner
         var standardError = process.StandardError.ReadToEndAsync();
         using (cancellationToken.Register(() =>
         {
-            try { if (!process.HasExited) process.Kill(); } catch { }
+            try { if (!process.HasExited) KillProcessTree(process); } catch { }
         }))
         {
-            if (!process.WaitForExit((int)ProcessTimeout.TotalMilliseconds))
+            if (!process.WaitForExit(WaitMilliseconds(bound)))
             {
-                try { process.Kill(); } catch { }
+                KillProcessTree(process);
                 process.WaitForExit();
-                await Task.WhenAll(standardOutput, standardError).ConfigureAwait(false);
-                return new Result(-1, standardOutput.Result,
-                    standardError.Result + $"{Environment.NewLine}bundler: " +
-                    $"'{Path.GetFileName(executable)}' did not exit within {ProcessTimeout} and was killed.");
+                var (outText, errText) = await DrainPipesAsync(standardOutput, standardError)
+                    .ConfigureAwait(false);
+                return new Result(-1, outText,
+                    errText + $"{Environment.NewLine}bundler: " +
+                    $"'{Path.GetFileName(executable)}' did not exit within {bound} and was killed.");
             }
         }
         await Task.WhenAll(standardOutput, standardError).ConfigureAwait(false);
@@ -184,12 +255,15 @@ internal static class ToolRunner
         // 两路都异步排空（同步顺序读在管道缓冲满时会死锁）；等待再有界——子进程挂死不再是无底洞。
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit((int)ProcessTimeout.TotalMilliseconds))
+        if (!process.WaitForExit(WaitMilliseconds(ProcessTimeout)))
         {
-            try { process.Kill(); } catch { }
+            KillProcessTree(process);
             process.WaitForExit();
+            var drained = DrainPipesAsync(output, error);
+            drained.Wait();
             throw new InvalidOperationException(
-                $"'{executable}' did not exit within {ProcessTimeout} and was killed.");
+                $"'{executable}' did not exit within {ProcessTimeout} and was killed." +
+                $"{Environment.NewLine}{drained.Result.Out}{drained.Result.Err}".TrimEnd());
         }
         process.WaitForExit();
         Task.WaitAll(output, error);

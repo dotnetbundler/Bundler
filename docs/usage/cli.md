@@ -24,7 +24,7 @@ dotnet tool install --global DotNet.Bundler.Cli
 
 - 退出码三级：`0` 成功、`1` 打包/后端执行失败、`2` 用法或配置校验失败。
 - `--json`：stdout 只放机器可读 JSON，人类日志走 stderr。
-- `--quiet`/`--verbose` 三档日志；`--help`/`--version`；环境变量仅 `DOTNET_BUNDLER_VERBOSE`。
+- `--quiet`/`--verbose` 三档日志；`--help`/`--version`；环境变量 `DOTNET_BUNDLER_VERBOSE`（日志档）、`BUNDLER_TOOL_TIMEOUT_SECONDS`（外部工具单次调用上限秒数，默认 900）、`BUNDLER_TOOL_TRACE`（诊断埋点：指文件则每次外部工具 spawn 追加一行记录）。
 - **输入契约：只吃已发布目录**（`--input-dir` + `--target`）——`dotnet publish` 由用户或 MSBuild 路径负责，CLI 不做二次构建编排。
 
 ## 3. 最小使用

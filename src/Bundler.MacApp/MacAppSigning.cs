@@ -342,7 +342,8 @@ internal static class MacAppSigning
                     ? "Submitting to notarytool and waiting for the verdict."
                     : "Submitting to notarytool without waiting (stapling is skipped).");
             var result = await ToolRunner.TryRunAsync(
-                "xcrun", submitArguments, context.WorkDirectory, cancellationToken)
+                "xcrun", submitArguments, context.WorkDirectory, cancellationToken,
+                timeout: TimeSpan.FromHours(1))
                 ?? throw new InvalidOperationException(
                     "xcrun/notarytool is unavailable; notarization requires Xcode 13+ (host macOS 11.3+).");
             if (result.ExitCode != 0)

@@ -195,6 +195,11 @@ public static class ToolCache
             }
             catch (IOException)
             {
+                // 锁文件不存在=非争用型错误（路径过长/权限等），重试无意义直接抛。
+                if (!File.Exists(lockPath))
+                {
+                    throw;
+                }
                 if (started.Elapsed >= ToolRunner.ProcessTimeout)
                 {
                     throw new TimeoutException(
