@@ -63,6 +63,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   ③ 账本归属双检——`dpkg -s <pkg>`/`rpm -q <pkg>`/`apk info -e <pkg>` 确认 `pkg` 名确由该包管理器登记。
   缺任一→确定性拒绝"不参与更新"，防 repack/手动铺文件造成的漂移更新（Tauri #3595 类坑）。
 - **回滚留存**：包管理器账本只记安装事实、不保留包文件，留存责任在客户端——Apply 前把本次下载到的新包存入用户空间 retention 目录，供 `--rollback` 重放；旧件=历轮更新留存件，无主动取回当前安装版本工件的机制。
+  留存是 `<包件>` + `<包件>.sig` 成对落位（签名字节取自本次 feed 验签所用值）——retention 在用户可写区，重放前必须用身份 `publicKey` 对留存副本再验签；验不过/缺 `.sig` 的候选不被拣选（防止同用户写权篡改件借 sanctioned 提权装为 root）。
   非 Bundler 链首装或 retention 无留存旧包时，`--rollback` 确定性拒绝报"无留存包可回滚"，不空转。
   retention 不做容量剪枝——留存件只增不剪不设上限，登记为开放边界（清理由外部运维策略管）。
 - **提权三级退化链**：`pkexec` → `zenity`/`kdialog` 询问密码 + `sudo -S` → 裸 `sudo`。
@@ -76,8 +77,10 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   会话 env 件写 `<staging>/pkg-<guid>/session.env`（0600，含 CR/LF 的值跳过，零有效对或写败退为不带 `--env-file`）。
   件是一次性输入：引导件读毕即删件与 `pkg-*` 暂存目录，客户端 `Exited` 钩尽力删余——
   客户端可能先于引导件退出使钩不触发，残件由下一次 apply 的 24h stale staging 清扫兜底。
-  新包复制进用户空间 retention 目录并写 `applied` 标记；rollback 拣 `applied` 之外最新留存件同链重放、applied 翻回旧包名。
-  测试缝与引导件同名同源：`BUNDLER_UPDATER_CMD_<TOOL>` env 覆盖 + `CommandProbe`/`EnvProbe`/`ExecProbe`/`ChmodProbe` 进程内探针。
+  新包复制进用户空间 retention 目录并写 `applied` 标记；留存副本在拉起前再过一遍公钥验签（apply 与 rollback 同口径），验不过即拒绝并还原现场。
+  rollback 拣 `applied` 之外最新留存件（须 pkg+sig 成对且过签，否则跳选下一个）同链重放、applied 翻回旧包名。
+  提权腿全部拉起失败（spawn 抛/观察窗内非零退）时还原 `applied` 标记并删除本轮 retained 件——rollback 侧只还原标记、绝不删既有留存件。
+  测试缝与引导件同名同源：`BUNDLER_UPDATER_CMD_<TOOL>` env 覆盖 + `CommandProbe`/`EnvProbe`/`ExecProbe`/`ChmodProbe`/`SpawnProbe` 进程内探针。
 
 ### 2.3 引导件侧（root，新动词 `pkg-apply`）
 
@@ -106,6 +109,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
 ### 2.4 回滚
 
 `--rollback` = 与更新同路径提权、同退化链重放留存旧包，逐腿按各包管理器降级语义放行。
+留存旧包重放前同样过身份 `publicKey` 再验签——孤立无 `.sig` 或验签失败的候选件被跳过拣选（按留存 mtime 试下一个），全数不合则确定性拒绝。
 deb 退化链与更新同 argv（`apt-get install -y` 不带 `--allow-downgrades`）——debian 容器实证 apt 拒旧版降级、自动退化 `dpkg -i` 原生放行（rc=0、账本翻回旧版——`syspkg-verify` D3 相位）。
 rpm `dnf install -y` 与更新同 argv（非 `dnf downgrade`）——fedora 容器实证 dnf5 `install` 对本地旧版件原地放行降级（rc=0、账本翻回旧版——`syspkg-verify` R3 相位）。
 `zypper install -y` 同 argv 重放——非交互降级形态仍外部待验收（`docs/project/special-acceptance.md`）。
