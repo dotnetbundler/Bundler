@@ -797,6 +797,13 @@ public sealed class MacAppTests : TempBase
             });
             Assert.True(calls.Any(c => c.StartsWith("openssl pkcs12") && c.Contains("-passin")),
                 "openssl 转换路径必须先把 p12 换成无口令 PEM。");
+            // 与第二阶段同口径的全量核：import 行之外，openssl/其余进程 argv 同样
+            // 不得见口令本体或 -P 兜底——只核 import 行会漏掉 openssl 侧的面。
+            Assert.False(calls.Any(c => c.Contains("s3cret-pw") || c.Contains(" -P ")),
+                "任何进程参数都不得出现口令或 -P 兜底。");
+            // -passin 只许 file:<口令件>——pass:<明文> 内联形态同样把口令摆上 argv。
+            Assert.False(calls.Any(c => c.Contains("-passin pass:")),
+                "-passin 不得以 pass: 内联形态把口令摆上 argv。");
             // openssl 缺席/失败：如实报错，任何调用面都不得携带口令。
             opensslWorks = false;
             calls.Clear();

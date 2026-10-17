@@ -296,6 +296,9 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
     {
         // 未签 .app 双方换包全链（CI 无 Apple 凭证——MacAppGate 走"双未签+BundleID"面）：
         // 载荷带 quarantine 经 ditto 运输件往返，换包前门剥离、落位件不得再带。
+        // MacAppStub 的 quarantine 探针在非 macOS 上不返 false 而是直接抛——
+        // getxattr 走 Darwin 签名 P/Invoke、/usr/bin/xattr 只存在 macOS——
+        // 故宿主门禁是承重墙不是可选项，不能用 Try 语义当降级探测用。
         Assert.SkipUnless(TestPlatform.IsMacOS,
             "macOS-only leg (.app gate + ditto transport zip).");
         var directory = Ws.Combine("app-bundle-e2e");
@@ -415,10 +418,14 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
     }
 
     // ---- syspkg replay（deb/rpm/alpineapk）垫片端到端腿 ----
-    // 全链 POSIX-only：假 bundler-updater/pkexec/sudo/zenity/dpkg/apk 皆为 sh stub，
-    // 客户端命令面经 BUNDLER_UPDATER_CMD_<TOOL> env 缝供给 + CommandProbe=_=>null
-    // 权威缺席化真实 PATH——零提权真实发生；stub 记 argv 与 --env-file 内容进 rec 件。
+    // 全链 Linux-only：假 bundler-updater/pkexec/sudo/zenity/dpkg/apk/dnf/rpm 皆为
+    // sh stub，客户端命令面经 BUNDLER_UPDATER_CMD_<TOOL> env 缝供给 +
+    // CommandProbe=_=>null 权威缺席化真实 PATH——零提权真实发生；
+    // stub 记 argv 与 --env-file 内容进 rec 件。
     // env 缝是进程全局——恢复与探针复位全收 finally（集成层无并行，见 AssemblyInfo）。
+    // 门禁收窄到 Linux 是口径取舍而非 POSIX 技术限制：垫片 stat -f 兜底已兼容
+    // BSD，macOS 理论上也能跑——但 syspkg 语义只在 Linux 包管理器上成立，
+    // 不在 macOS 冒充覆盖。
 
     // bundler-updater 垫片：记 argv；扫到 --env-file 就把件内容与权限位一并落 rec——
     // env 件 0600/会话变量面在它被引导件消费前的形态是可断言的。
@@ -441,12 +448,15 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         exit "${BUNDLER_STUB_RC:-0}"
         """;
 
-    // 账本垫片体把工具名烙进脚本（同名 env 槽多垫片会互踩）——rc 经 BUNDLER_STUB_LEDGER_RC 控。
-    private static string LedgerStubBody(string tool) => $$"""
+    // 记账垫片体只干两件事：把 "<工具名> <argv>" 行落 rec、按 BUNDLER_STUB_RECORD_RC
+    // 返回假退出码。账本工具（dpkg -s/rpm -q/apk info -e）与前端（apt-get/dnf——
+    // 预检只探 presence，永不真跑）共用同一垫片体，故不冠名"账本"以免误读
+    // apt-get 垫片也走账本语义。工具名烙进脚本——同名 env 槽多垫片会互踩。
+    private static string RecordStubBody(string tool) => $$"""
         line='{{tool}}'
         for a do line="$line $a"; done
         printf '%s\n' "$line" >> "$BUNDLER_STUB_REC"
-        exit "${BUNDLER_STUB_LEDGER_RC:-0}"
+        exit "${BUNDLER_STUB_RECORD_RC:-0}"
         """;
 
     private const string PkexecStubBody = """
@@ -457,6 +467,10 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         """;
 
     // sudo 垫片：剥掉 -S/-p <提示>/\-\- 前缀后 exec 余下命令行（密码行留在管道里）。
+    // 已知取舍：真 sudo -S 会从 stdin 消费一行密码，垫片不读——zenity 垫片吐的
+    // 密码行留在管道里没人取（单行小量写入落管道缓冲即返，不触 SIGPIPE，管线
+    // 照常终结）。被测面是提权 argv 形态与末级 rc；"密码不经本进程内存"这点
+    // 由生产侧管线结构保证，非垫片职责。
     private const string SudoStubBody = """
         line=sudo
         for a do line="$line $a"; done
@@ -521,7 +535,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         foreach (var tool in ledgerTools)
         {
             env.Set("BUNDLER_UPDATER_CMD_" + CommandEnvName(tool),
-                WritePosixStub(bin, tool, LedgerStubBody(tool)));
+                WritePosixStub(bin, tool, RecordStubBody(tool)));
         }
         foreach (var tool in elevationTools)
         {
@@ -568,6 +582,34 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         return [];
     }
 
+    // rec 件内容门槛：垫片各段是独立 >> 追加（updater 垫片的 env{...} 倾倒段
+    // 与其 argv 行分两次落件），行数门槛只数行不保证目标段已写完——
+    // 对断言内容本身轮询（如 "env-mode" 尾行落地即代表整个 env 倾倒段就绪）。
+    private static string WaitRecordText(string path, string needle)
+    {
+        for (var i = 0; i < 100; i++)
+        {
+            if (File.Exists(path))
+            {
+                try
+                {
+                    var text = File.ReadAllText(path);
+                    if (text.Contains(needle, StringComparison.Ordinal))
+                    {
+                        return text;
+                    }
+                }
+                catch (IOException)
+                {
+                    // 垫片正在追加写入——下一拍重读。
+                }
+            }
+            Thread.Sleep(100);
+        }
+        Assert.Fail($"record file '{path}' never contained '{needle}'");
+        return "";
+    }
+
     private static void WaitForGone(string path)
     {
         for (var i = 0; i < 100 && File.Exists(path); i++)
@@ -580,6 +622,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
     private sealed class EnvScope : IDisposable
     {
         private readonly Dictionary<string, string?> _previous = [];
+        private readonly List<string> _tempPaths = [];
 
         internal void Set(string name, string? value)
         {
@@ -590,6 +633,15 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             Environment.SetEnvironmentVariable(name, value);
         }
 
+        // rec/staging 落原生 POSIX 临时区（在工作区回收面之外）——登记后 Dispose
+        // 尽力删，对齐 IntegrationWorkspace 的"本轮划痕不留"口径；删除失败不掩盖
+        // 测试结论（残留归 OS 临时区自清）。
+        internal string TrackTemp(string path)
+        {
+            _tempPaths.Add(path);
+            return path;
+        }
+
         public void Dispose()
         {
             foreach (var (name, value) in _previous)
@@ -597,6 +649,23 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
                 Environment.SetEnvironmentVariable(name, value);
             }
             SyspkgReplay.CommandProbe = null;
+            foreach (var path in _tempPaths)
+            {
+                try
+                {
+                    if (File.Exists(path))
+                    {
+                        File.Delete(path);
+                    }
+                    else if (Directory.Exists(path))
+                    {
+                        Directory.Delete(path, recursive: true);
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
         }
     }
 
@@ -605,14 +674,15 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
     {
         // deb 全链 pkexec 腿：预检（dpkg -s 账本）→ 新包留存 retention + applied 标记 →
         // pkexec 原地直跑装位 bundler-updater pkg-apply → 客户端拉起即退。
-        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are Linux-only");
         var directory = Ws.Combine("syspkg-deb-pkexec");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
         // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
-        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关。
-        var rec = Path.Combine(
-            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt");
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
+        // TrackTemp 登记随 EnvScope 释放回收。
+        var rec = env.TrackTemp(Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt"));
         env.Set("BUNDLER_STUB_REC", rec);
         env.Set("DISPLAY", ":99");
         env.Set("XAUTHORITY", "/tmp/xa-file");
@@ -636,9 +706,9 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
         client.Verify(info, downloaded);
         // env 件 0600 收权只在原生 POSIX fs 上有语义——DrvFs（/mnt/*）chmod 静默无操作，
-        // 故 StagingRoot 指原生临时区；retention/app 仍在工作区内。
-        var staging = Path.Combine(
-            Path.GetTempPath(), "bundler-syspkg-staging-" + Guid.NewGuid().ToString("N"));
+        // 故 StagingRoot 指原生临时区（TrackTemp 登记回收）；retention/app 仍在工作区内。
+        var staging = env.TrackTemp(Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-staging-" + Guid.NewGuid().ToString("N")));
         var retention = Path.Combine(directory, "retention");
         var app = WritePosixStub(directory, "app", "printf 'app-restarted\\n'\n");
         var process = client.Apply(info, downloaded, new ApplyOptions
@@ -663,7 +733,9 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             $"updater pkg-apply --pkg {retained} --format deb --app {Path.GetFullPath(app)} --env-file ",
             lines[2]);
         // env 件内容随 rec 回收：HOME 随行 + 显式注入的会话键。
-        var text = File.ReadAllText(rec);
+        // 垫片的 env{...} 倾倒段是独立 >> 追加——拉起即退语义下行数门槛不保证
+        // 该段已落完，对 "env-mode" 尾行做内容轮询再断言（E3 竞态修复）。
+        var text = WaitRecordText(rec, "env-mode");
         Assert.Contains("DISPLAY=:99", text);
         Assert.Contains("XAUTHORITY=/tmp/xa-file", text);
         Assert.Contains("env-mode 600", text);
@@ -672,6 +744,8 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.Equal("myapp_2.0-1_amd64.deb",
             File.ReadAllText(Path.Combine(retention, "applied")).Trim());
         // env 件用完即删（Exited 钩）——拉起即退语义下的清理面。
+        // --env-file 是 verb argv 末位（本腿无 --rollback/--log），值一路到行尾——
+        // 按分隔截取而非空格切分（路径含空格也不撕）。
         var envFile = lines[2][(lines[2].IndexOf("--env-file ") + "--env-file ".Length)..];
         WaitForGone(envFile);
     }
@@ -682,14 +756,15 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         // pkexec 缺席 → zenity --password | sudo -S -p '' -- <verb> 管线腿：
         // 密码行不过本进程，sh -c 包整条管线，末级 rc 即拉起 rc。
         // 管线腿有图形会话门槛——显式注 DISPLAY，headless CI 宿主也选得到。
-        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are Linux-only");
         var directory = Ws.Combine("syspkg-deb-askpass");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
         // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
-        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关。
-        var rec = Path.Combine(
-            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt");
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
+        // TrackTemp 登记随 EnvScope 释放回收。
+        var rec = env.TrackTemp(Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt"));
         env.Set("BUNDLER_STUB_REC", rec);
         env.Set("DISPLAY", ":99");
         var (install, feedDir, _, material) = SetupSyspkgInstall(
@@ -736,14 +811,15 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
     public async Task Client_SyspkgApply_Deb_BareSudo_EndToEnd()
     {
         // pkexec/问密码器全缺席只余 sudo → 末级腿（tty 密码提示场景）。
-        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are Linux-only");
         var directory = Ws.Combine("syspkg-deb-baresudo");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
         // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
-        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关。
-        var rec = Path.Combine(
-            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt");
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
+        // TrackTemp 登记随 EnvScope 释放回收。
+        var rec = env.TrackTemp(Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt"));
         env.Set("BUNDLER_STUB_REC", rec);
         var (install, feedDir, _, material) = SetupSyspkgInstall(
             env, directory, "deb", "myapp", ["dpkg"], "sudo");
@@ -785,14 +861,15 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
     public async Task Client_SyspkgApply_AlpineApk_MapsToApkVerb()
     {
         // 身份 alpineapk → 动词 --format apk + 账本查询 apk info -e。
-        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are Linux-only");
         var directory = Ws.Combine("syspkg-apk");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
         // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
-        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关。
-        var rec = Path.Combine(
-            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt");
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
+        // TrackTemp 登记随 EnvScope 释放回收。
+        var rec = env.TrackTemp(Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt"));
         env.Set("BUNDLER_STUB_REC", rec);
         var (install, feedDir, _, material) = SetupSyspkgInstall(
             env, directory, "alpineapk", "myapp", ["apk"], "pkexec");
@@ -823,9 +900,92 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.True(process.WaitForExit(60_000));
         Assert.Equal(0, process.ExitCode);
         var text = string.Join('\n', WaitRecord(rec, 3));
+        var retained = Path.Combine(retention, "myapp-2.0.apk");
         Assert.Contains("apk info -e myapp", text);
-        Assert.Contains("--format apk", text);
-        Assert.Contains($"--pkg {Path.Combine(retention, "myapp-2.0.apk")}", text);
+        // "--format apk" 锚定到 pkg-apply 动词 argv 语境（--app 紧邻）——
+        // 裸子串会被同形片段撞名。
+        Assert.Contains($"--format apk --app {Path.GetFullPath(app)}", text);
+        Assert.Contains($"--pkg {retained}", text);
+    }
+
+    [Fact]
+    public async Task Client_SyspkgApply_Rpm_PkexecLeg_EndToEnd()
+    {
+        // rpm 全链 pkexec 腿（deb pkexec 腿同构）：账本查询 rpm -q 记账 →
+        // 新包留存 retention + applied 标记 → pkexec 原地直跑装位
+        // bundler-updater pkg-apply --format rpm → 客户端拉起即退。
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are Linux-only");
+        var directory = Ws.Combine("syspkg-rpm-pkexec");
+        Directory.CreateDirectory(directory);
+        using var env = new EnvScope();
+        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
+        // TrackTemp 登记随 EnvScope 释放回收。
+        var rec = env.TrackTemp(Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt"));
+        env.Set("BUNDLER_STUB_REC", rec);
+        env.Set("DISPLAY", ":99");
+        env.Set("XAUTHORITY", "/tmp/xa-file");
+        // 前端探测链 dnf→zypper→rpm 在 dnf 即短路；rpm 既喂 presence 又当账本工具。
+        var (install, feedDir, _, material) = SetupSyspkgInstall(
+            env, directory, "rpm", "myapp", ["dnf", "rpm"], "pkexec");
+        // CommandProbe 权威化全缺席——真实 PATH 上的 dnf/rpm/pkexec 不得参与解析。
+        SyspkgReplay.CommandProbe = _ => null;
+
+        var artifact = Path.Combine(feedDir, "myapp-2.0-1.x86_64.rpm");
+        File.WriteAllText(artifact, "pkg-v2-bytes");
+        WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+        {
+            Target = TestPlatform.LinuxTarget, Format = "rpm",
+            Url = "myapp-2.0-1.x86_64.rpm", File = "myapp-2.0-1.x86_64.rpm",
+            Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+            Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+        });
+
+        var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+        var info = (await client.CheckForUpdateAsync())!;
+        var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+        client.Verify(info, downloaded);
+        // env 件 0600 收权只在原生 POSIX fs 上有语义——与 deb 腿同口径指原生
+        // 临时区（TrackTemp 登记回收）；retention/app 仍在工作区内。
+        var staging = env.TrackTemp(Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-staging-" + Guid.NewGuid().ToString("N")));
+        var retention = Path.Combine(directory, "retention");
+        var app = WritePosixStub(directory, "app", "printf 'app-restarted\\n'\n");
+        var process = client.Apply(info, downloaded, new ApplyOptions
+        {
+            StagingRoot = staging,
+            AppPath = app,
+            RollbackBackupDirectory = retention,
+        });
+        Assert.True(process.WaitForExit(60_000), "pkg-apply launcher did not exit in 60s");
+        Assert.Equal(0, process.ExitCode);
+
+        var retained = Path.Combine(retention, "myapp-2.0-1.x86_64.rpm");
+        var lines = WaitRecord(rec, 3);
+        // rec[0]=账本查询（提权链之前）；rec[1]=pkexec 垫片见到的逐字 argv。
+        Assert.Equal("rpm -q myapp", lines[0]);
+        Assert.StartsWith(
+            $"pkexec {install}/bundler-updater pkg-apply --pkg {retained} " +
+            $"--format rpm --app {Path.GetFullPath(app)} --env-file {staging}/pkg-",
+            lines[1]);
+        Assert.EndsWith("/session.env", lines[1]);
+        Assert.StartsWith(
+            $"updater pkg-apply --pkg {retained} --format rpm --app {Path.GetFullPath(app)} --env-file ",
+            lines[2]);
+        // env 件内容随 rec 回收：垫片 env{...} 倾倒段独立 >> 追加——
+        // 与 deb 腿同口径对 "env-mode" 尾行做内容轮询再断言。
+        var text = WaitRecordText(rec, "env-mode");
+        Assert.Contains("DISPLAY=:99", text);
+        Assert.Contains("XAUTHORITY=/tmp/xa-file", text);
+        Assert.Contains("env-mode 600", text);
+        // 留存件 + applied 标记。
+        Assert.Equal("pkg-v2-bytes", File.ReadAllText(retained));
+        Assert.Equal("myapp-2.0-1.x86_64.rpm",
+            File.ReadAllText(Path.Combine(retention, "applied")).Trim());
+        // env 件用完即删（Exited 钩）——--env-file 居 verb argv 末位，值到行尾。
+        var envFile = lines[2][(lines[2].IndexOf("--env-file ") + "--env-file ".Length)..];
+        WaitForGone(envFile);
     }
 
     [Fact]
@@ -833,14 +993,15 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
     {
         // 预检三件套逐项缺席面（垫片供给可控）：
         //   无包管理器前端 → 无账本工具 → 账本查询失败 → 无提权腿——全部 UpdateException。
-        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are Linux-only");
         var directory = Ws.Combine("syspkg-preflight");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
         // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
-        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关。
-        var rec = Path.Combine(
-            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt");
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
+        // TrackTemp 登记随 EnvScope 释放回收。
+        var rec = env.TrackTemp(Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt"));
         env.Set("BUNDLER_STUB_REC", rec);
         var (install, feedDir, _, material) = SetupSyspkgInstall(env, directory, "deb", "myapp", []);
         SyspkgReplay.CommandProbe = _ => null;
@@ -870,18 +1031,18 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
 
         // ② 另一支：apt-get 在场但账本工具 dpkg 缺席。
         env.Set("BUNDLER_UPDATER_CMD_APT_GET",
-            WritePosixStub(Path.Combine(directory, "bin"), "apt-get", LedgerStubBody("apt-get")));
+            WritePosixStub(Path.Combine(directory, "bin"), "apt-get", RecordStubBody("apt-get")));
         var noLedger = Assert.Throws<UpdateException>(() => client.Apply(info, downloaded, options));
         Assert.Contains("ledger tool 'dpkg' not found", noLedger.Message);
 
         // ③ 账本查询返非零 → "未登记"拒绝（不空转）。
         var bin = Path.Combine(directory, "bin");
         env.Set("BUNDLER_UPDATER_CMD_DPKG",
-            WritePosixStub(bin, "dpkg", LedgerStubBody("dpkg")));
-        env.Set("BUNDLER_STUB_LEDGER_RC", "1");
+            WritePosixStub(bin, "dpkg", RecordStubBody("dpkg")));
+        env.Set("BUNDLER_STUB_RECORD_RC", "1");
         var notOwned = Assert.Throws<UpdateException>(() => client.Apply(info, downloaded, options));
         Assert.Contains("not registered in the dpkg ledger", notOwned.Message);
-        env.Set("BUNDLER_STUB_LEDGER_RC", null);
+        env.Set("BUNDLER_STUB_RECORD_RC", null);
 
         // 提权腿全缺席（pkexec/zenity/kdialog/sudo 皆无）→ 确定性拒绝。
         var noElevation = Assert.Throws<UpdateException>(() => client.Apply(info, downloaded, options));
@@ -895,14 +1056,15 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
     {
         // apply 留存新包（applied=新）→ rollback 拣 applied 之外最新件（旧包）重放
         // 并带 --rollback；applied 标记翻回旧包名（flip-flop 语义）。
-        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are Linux-only");
         var directory = Ws.Combine("syspkg-rollback");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
         // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
-        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关。
-        var rec = Path.Combine(
-            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt");
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
+        // TrackTemp 登记随 EnvScope 释放回收。
+        var rec = env.TrackTemp(Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt"));
         env.Set("BUNDLER_STUB_REC", rec);
         var (install, feedDir, _, material) = SetupSyspkgInstall(
             env, directory, "deb", "myapp", ["dpkg"], "pkexec");
@@ -934,10 +1096,16 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.True(apply.WaitForExit(60_000));
         Assert.Equal(0, apply.ExitCode);
         // 模拟"上一次 Bundler 链更新留存过旧包"——retention 里种旧件；
+        // 留存件必须 pkg+sig 成对（B2 再验签口径：孤立件不被 rollback 拣选），
         // applied 仍指新件（刚 apply 写入）。
         var oldPkg = Path.Combine(retention, "myapp_1.0-1_amd64.deb");
         File.WriteAllText(oldPkg, "pkg-v1-bytes");
+        var oldSig = oldPkg + ".sig";
+        File.WriteAllBytes(oldSig, EcdsaSigner.SignFile(oldPkg, material));
+        // 拣选按 mtime 取"applied 之外最新"：.sig 须严格早于包件，否则两版
+        // 拣选器（基线无 .sig 过滤、B2 后恒 .sig 拒候选）都会把签名件当候选。
         File.SetLastWriteTimeUtc(oldPkg, DateTime.UtcNow.AddMinutes(-10));
+        File.SetLastWriteTimeUtc(oldSig, DateTime.UtcNow.AddMinutes(-11));
 
         File.Delete(rec);
         var rollback = client.Rollback(options);
@@ -960,12 +1128,12 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
     public async Task Client_SyspkgRollback_NoRetainedPackage_Refuses()
     {
         // 无留存件 → 确定性拒绝不空转（pre-ledger 断言顺带覆盖回滚也走预检）。
-        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are POSIX-only");
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are Linux-only");
         var directory = Ws.Combine("syspkg-rollback-empty");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
-        env.Set("BUNDLER_STUB_REC",
-            Path.Combine(Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt"));
+        env.Set("BUNDLER_STUB_REC", env.TrackTemp(
+            Path.Combine(Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt")));
         var (install, _, _, _) = SetupSyspkgInstall(env, directory, "deb", "myapp", ["dpkg"], "pkexec");
         SyspkgReplay.CommandProbe = _ => null;
         var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
