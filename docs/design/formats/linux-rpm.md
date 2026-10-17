@@ -44,7 +44,7 @@
 - 容器矩阵：fedora:latest、rockylinux:9、opensuse/leap:latest、almalinux:8、rockylinux:8 五镜像真实 `rpm -i/-q/-ql`/运行/`-V`/`-e` 零残留。
 - `linux-aarch64`：`ubuntu-26.04-arm` 真机腿 `arm64-real-hw.sh --rpm`（`rpm -i`/`-ql`/`-e`）实证。
 - `deb;rpm` 同次 publish 扇出断言。
-- 自更新走 installer-replay（UPDATE 系统包扩展，已实现）：客户端 ECDSA 验签 + `rpm -q` 账本归属双检预检，经三级提权链拉起 `bundler-updater pkg-apply`，由引导件按 `dnf install -y` → `zypper install` → `rpm -U` 退化链装本地包、降权重启。
+- 自更新走 installer-replay（UPDATE 系统包扩展，已实现）：客户端 ECDSA 验签 + `rpm -q` 账本归属双检预检，经三级提权链拉起 `bundler-updater pkg-apply`，由引导件按 `dnf install -y` → `zypper install -y` → `rpm -U` 退化链装本地包、降权重启。
   回滚重放加 `--oldpackage`——发射/`pkg` 身份/双实现动词/客户端 replay 编排全落地，fedora 容器真 root 全链（含 dnf5 `install` 原地降级）经 `syspkg-verify` 实证。
   契约见 `docs/design/update.md` §2。
 
@@ -52,7 +52,7 @@
 
 - GUI 桌面观感收窄项：文件/协议关联双击唤起。
 - 更广发行版宿主矩阵（RHEL8 旧版等）属 CI 扩版候选；生产 GPG 密钥分发/吊销属发布者流程（`gpg-production.sh` 临时密钥全链已收编入 verify ubuntu 腿）。
-- UPDATE 图形提权入口链（pkexec→zenity/kdialog→`sudo -S` 桌面交互）、`zypper install` 非交互降级形态、repack 拒绝与依赖变更场景。
+- UPDATE 图形提权入口链（pkexec→zenity/kdialog→`sudo -S` 桌面交互）、`zypper install -y` 非交互降级形态、repack 拒绝与依赖变更场景。
 
 ## 5. 明确拒绝
 
