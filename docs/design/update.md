@@ -20,6 +20,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
 - **应用语义两式分工**：安装器格式走重跑安装器（nsis `/S /UPDATE`、msi `msiexec` major upgrade——复用既有升级语义零新造）。
   deb/rpm/alpineapk 同属 installer-replay 族，由引导件 `pkg-apply` 提权编排包管理器安装命令（§2）。
   非安装器格式走 Sparkle 式三段换包（stage→验签→备份→原子替换→重启）。
+  syspkg（deb/rpm/alpineapk）为 installer-replay 族的受约束子形——产品语义仍两式，实现层按派发路径计为三式。
   **同格式约束**（zip 覆盖安装器装的程序会使 ARP/注册表/快捷方式/卸载所有权全线失联，系统包格式同样绝不跨格式换装——`format` 严格相等 + 同 RID 约束不动）。
 - **引导程序**：外置 Native AOT per-RID 二进制 `bundler-updater[.exe]`——运行中应用无法自换文件后重启（win 文件锁死、posix "退出后谁拉起新版"需外置）。
   极老宿主降级 POSIX shell 脚本（清单 `bootstrap` 字段声明）。
@@ -61,13 +62,16 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   ② `command -v` 探得对应包管理器。
   ③ 账本归属双检——`dpkg -s <pkg>`/`rpm -q <pkg>`/`apk info -e <pkg>` 确认 `pkg` 名确由该包管理器登记。
   缺任一→确定性拒绝"不参与更新"，防 repack/手动铺文件造成的漂移更新（Tauri #3595 类坑）。
-- **回滚留存**：包管理器账本只记安装事实、不保留包文件，留存责任在客户端——Apply 前把本次下载到的新包与（若可得）当前安装版本对应工件存入用户空间 retention 目录，供 `--rollback` 重放。
+- **回滚留存**：包管理器账本只记安装事实、不保留包文件，留存责任在客户端——Apply 前把本次下载到的新包存入用户空间 retention 目录，供 `--rollback` 重放；旧件=历轮更新留存件，无主动取回当前安装版本工件的机制。
   非 Bundler 链首装或 retention 无留存旧包时，`--rollback` 确定性拒绝报"无留存包可回滚"，不空转。
   retention 不做容量剪枝——留存件只增不剪不设上限，登记为开放边界（清理由外部运维策略管）。
 - **提权三级退化链**：`pkexec` → `zenity`/`kdialog` 询问密码 + `sudo -S` → 裸 `sudo`。
+  退化判据=可用性探测（`command -v`）+ 拉起即时失败退化：`pkexec` 腿拉起后做有界退出观察，
+  短窗内即退出按腿不可用退化下一级——`pkexec` 在场但会话无 polkit agent 的拉起即败即由此退化兜住。
   任一级拉起 `bundler-updater pkg-apply` 后客户端退出。
   问密码管线腿有图形会话门槛：`DISPLAY`/`WAYLAND_DISPLAY` 全缺席（headless）时
   zenity/kdialog 必败直接跳过，直落裸 `sudo`（tty 密码提示/NOPASSWD 场景存活）。
+  `pkexec` 弹窗在场被用户拒绝授权属用户裁决面（非自动化判定域），归 `docs/project/special-acceptance.md` 外部待验收。
 - 实现落点（B3 `SyspkgReplay`）：客户端身份 `alpineapk` 在动词面映射 `--format apk`。
   会话 env 件写 `<staging>/pkg-<guid>/session.env`（0600，含 CR/LF 的值跳过，零有效对或写败退为不带 `--env-file`）。
   件是一次性输入：引导件读毕即删件与 `pkg-*` 暂存目录，客户端 `Exited` 钩尽力删余——
@@ -80,14 +84,14 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
 只做两件有意义的事：
 
 - **装本地包**：命令前端优先退化链——deb：`apt-get install -y ./x.deb` → `dpkg -i`。
-  rpm：`dnf install -y ./x.rpm` → `zypper install` → `rpm -U`。
+  rpm：`dnf install -y ./x.rpm` → `zypper install -y` → `rpm -U`。
   apk：`apk add ./x.apk`（公钥未预置 `/etc/apk/keys/` 时 `--allow-untrusted`，标 TOFU 边界——信任已由 ECDSA 验签建立，包管理器签名层仅作运输完整性）。
-  dpkg 腿恒带 `DEBIAN_FRONTEND=noninteractive --force-confdef --force-confold`——职责仅 conffile 静默（防无 tty 环境交互挂死）。
+  deb 两级恒带 `DEBIAN_FRONTEND=noninteractive --force-confdef --force-confold`（`apt-get` 经 `-o Dpkg::Options` 透传、`dpkg` 直带旗标）——职责仅 conffile 静默（防无 tty 环境交互挂死）。
   `dpkg -i` 本就不解析依赖，不存在"防依赖不解析"的旗标功效。
   依赖解析归退化链首腿 `apt-get install` 管。
   裸 `dpkg -i` 退化腿遇缺依赖会留 unconfigured 态（归 `dpkg --configure -a`/`apt-get -f install` 原生机制修），故更新包**不得新增 Depends**——确需新增属依赖变更场景，登记外部验收/文档边界（`docs/project/special-acceptance.md`）。
 - **降权重启**：装完由 `PKEXEC_UID`/`SUDO_UID` 取回原始用户 → `setpriv`/`sudo -u`/`runuser`/`su` 退化链降权 + 回灌客户端导出的会话 env 件（`DISPLAY`/`XAUTHORITY`/`DBUS_SESSION_BUS_ADDRESS` 等）→ 以原权限拉起 `--app`。
-  不以 root 重启应用。
+  提权语境下不以 root 重启应用；`PKEXEC_UID`/`SUDO_UID` 均缺席（su/root 直跑、无 `PKEXEC_UID` 的 polkit 会话）时按当前权限 spawn——直接 root 拉起场景即以 root 起 `--app`。
   降权器"在场"不等于"能用"：每级先同步预检最小 argv（`工具 选项 /bin/sh -c :`，sudo 加 `-n` 免密闸），rc≠0 即降级下一级——分离 spawn 只证 `nohup` 分叉成，证不了降权器收下 argv（alpine busybox `setpriv` 在场却拒 `--reuid/--regid/--clear-groups` 是实证过的真案，无预检会把重启静默吞成 rc0）。
   预检同步执行不设超时——最小 argv 形（`sh -c :` 即刻返回）+ stdin 钉死零交互，挂死无现实入口，超时+强制终结路径的复杂度不抵收益。
 - `--env-file` 是一次性输入件：读毕即删件与父级 `pkg-*` 暂存目录（删失败不挡退出码；
@@ -97,7 +101,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   动词协议签名：`bundler-updater pkg-apply --pkg <本地包> --format <deb|rpm|apk> --app <重启目标> [--env-file <会话env件>] [--rollback] [--log <件>]`。
   每级安装命令先 `command -v` 预检再调用；`--env-file` 会话 env 降权后经内层 `env K=V` 回灌（`sudo` env_reset 剥外层环境，缺省按最小集 HOME+DISPLAY）；外层 `nohup` 分离。
   退出码独立面：0 成功 / 3 参数错 / 4 安装失败 / 5 包管理器缺席 / 6 重启失败（安装已提交，客户端据此报"已装待手动重启"）。
-  AOT `PkgApplyPlan` 与 POSIX `bundler-updater.sh` pkg-apply 支路逐字同协议同退出码；双侧同名测试缝 `BUNDLER_UPDATER_CMD_<TOOL>`/`BUNDLER_UPDATER_PASSWD_FILE`/`BUNDLER_UPDATER_APK_KEYS_DIR` 供 stub 垫片非特权跑全链。
+  AOT `PkgApplyPlan` 与 POSIX `bundler-updater.sh` pkg-apply 支路 argv/退出码同协议、诊断输出同口径；双侧同名测试缝 `BUNDLER_UPDATER_CMD_<TOOL>`/`BUNDLER_UPDATER_PASSWD_FILE`/`BUNDLER_UPDATER_APK_KEYS_DIR` 供 stub 垫片非特权跑全链。
 
 ### 2.4 回滚
 
@@ -148,7 +152,7 @@ apk `apk add` 旧版本地件原生放行降级（alpine 容器实证：rc=0、�
   Windows MSYS sh 腿挂 `docs/project/special-acceptance.md` 外部验收。
 - `pkg-apply` 容器真机全链：`syspkg-verify` CI 腿在 debian/fedora/alpine 三容器内以 root 实证——真包装/更新/`--rollback`、账本断言（`dpkg -s`/`rpm -q`/`apk list --installed`）、conffile 保留（deb confold / rpm `.rpmnew`）、apk unsigned `--allow-untrusted` 与签名闸、降权重启 uid 归属+env 回灌、busybox `setpriv` 拒参→`su` 承接、rc 0/4/5/6 全绿（run 38936728961）。
   降权器逐级最小 argv 预检（`spawn` 只证分叉不证收参）由此腿实证补入双实现。
-- deb/rpm/alpineapk 客户端 replay 编排（`SyspkgReplay`，UPDATE 系统包扩展 B3）：预检三件套（构造闸 `pkg` 名 + 前端退化链 `command -v` + 账本归属双检）、留存目录 + `applied` 标记、三级提权退化链拉起安装位 `bundler-updater pkg-apply`（`alpineapk`→`apk` 映射、拉起即退）、rollback 拣留存旧包同链重放——unit 探针族跨宿主断言 + integration POSIX 垫片 e2e 全绿（Windows 腿 skip）。
+- deb/rpm/alpineapk 客户端 replay 编排（`SyspkgReplay`，UPDATE 系统包扩展 B3）：预检三件套（构造闸 `pkg` 名 + 前端退化链 `command -v` + 账本归属双检）、留存目录 + `applied` 标记、三级提权退化链拉起安装位 `bundler-updater pkg-apply`（`alpineapk`→`apk` 映射、拉起即退）、rollback 拣留存旧包同链重放——unit 探针族跨宿主断言 + integration POSIX 垫片 e2e 仅 Linux 宿主执行（非 Linux 腿 skip）全绿。
 
 部分实现/外部待验收：macOS 同签名身份比对腿（无 Apple 证书，挂 `docs/project/special-acceptance.md`）。
 

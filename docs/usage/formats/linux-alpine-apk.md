@@ -69,11 +69,17 @@ MSBuild 前缀 `BundlerAlpineApk*`；`bundler.json` 分节 `alpineapk.*`；API `
 - **链路面**：应用内 `UpdateClient` Check→Download→ECDSA `.sig` 验签后，客户端做预检三件套——`bundler-update.json` 旁车在场 + `apk` 前端 `command -v` 可达 + `apk info -e <包名>` 账本归属双检。
   预检过则留存回滚件、经三级提权退化链拉起安装位 `bundler-updater pkg-apply`（身份 `alpineapk` 在动词面映射 `--format apk`），客户端随即退出。
 - **提权退化链**：`pkexec`（polkit 弹窗）→ `zenity`/`kdialog` 图形问密码 + `sudo -S` → 裸 `sudo`。
+  退化判据=可用性探测+拉起即时失败退化：`pkexec` 腿拉起经有界退出观察，在场但会话无 polkit agent 的拉起即败会退化下一级。
   `DISPLAY`/`WAYLAND_DISPLAY` 全缺席的 headless 环境跳过图形问密码腿直落裸 `sudo`（tty 密码提示/NOPASSWD 场景存活）。
+  `pkexec` 弹窗在场被用户拒绝授权属用户裁决面，归外部待验收（`docs/project/special-acceptance.md`）。
 - **引导件编排**：随包注入的 musl 静态件 `bundler-updater` 落 `<installRoot>/bundler-updater`（默认 `/usr/lib/<包名>/`），以 root 执行 `apk add ./x.apk` 装本地包——公钥未预置目标机 `/etc/apk/keys/` 时带 `--allow-untrusted`（TOFU 边界：信任已由 ECDSA 验签建立，apk 签名层仅作运输完整性）。
-  装完经 `setpriv`/`sudo -u`/`runuser`/`su` 降权回原用户、回灌会话 env 后拉起 `--app` 重启——不以 root 重启应用。
+  装完经 `setpriv`/`sudo -u`/`runuser`/`su` 降权回原用户、回灌会话 env 后拉起 `--app` 重启——提权语境下不以 root 重启应用（`PKEXEC_UID`/`SUDO_UID` 均缺席时按当前权限起 `--app`）。
 - **回滚**：应用调 `UpdateClient.Rollback`（或引导件 `pkg-apply --rollback`）按同路径同提权链重放留存旧包——`apk add` 旧版本地件原生放行降级。
   留存目录在用户数据区（`$XDG_DATA_HOME` 或 `~/.local/share` 下 `dotnet-bundler/backups/`），retention 只增不剪不设上限。
+  留存按工件文件名落位同名覆盖——无版本号文件名会逐次覆盖使留存池塌缩至一件。
+  回滚拣 `applied` 标记之外的最新留存件——连续 rollback 在两最新留存件间往复，非沿版本链回走。
+  留存为恒驻行为不经 `KeepRollbackBackup` 开关（该旋钮只管三段式换包路径）；`RollbackBackupDirectory` 仍可改留存落点。
+  留存失败按 WARN 降级放行、pkg-apply 直用调用方原始下载件——自清下载件的调用方须把清理排在更新完成之后，过早删除会使装包无源。
   非 Bundler 链首装或无留存件时确定性拒绝"无留存包可回滚"，不空转。
 - **约束**：`apk add` 原生解析 `depend`。
   新增/变更依赖属依赖变更场景，登记外部验收边界（`docs/project/special-acceptance.md`）。
