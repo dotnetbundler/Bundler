@@ -230,7 +230,7 @@ internal static class ToolRunner
             }
         }
         // 正常/取消腿同走有界排空：旧 TFM 杀直系后孙代持管道时 EOF 不至，
-        // ReadToEnd 的 WhenAll 会在取消后悬停——5s 宽限后拿到多少算多少。
+        // ReadToEnd 的 WhenAll 会在取消后悬停——5s 宽限内读完的算数、读不完的整路弃。
         var (stdout, stderr) = await DrainPipesAsync(standardOutput, standardError)
             .ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
