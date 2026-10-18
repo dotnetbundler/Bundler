@@ -37,7 +37,7 @@ $tailProc = $null
 if ($env:BUNDLER_TOOL_TRACE) {
     New-Item -ItemType File -Force -Path $env:BUNDLER_TOOL_TRACE | Out-Null
     $tailProc = Start-Process -PassThru -NoNewWindow -FilePath "powershell" `
-        -ArgumentList "-NoProfile","-Command","Get-Content -Wait -Tail 0 -Path `"$env:BUNDLER_TOOL_TRACE`""
+        -ArgumentList "-NoProfile","-Command","Get-Content -Wait -Tail 0 -Encoding UTF8 -Path `"$env:BUNDLER_TOOL_TRACE`""
 }
 
 # 进程快照采样：每 60s 一份进程清单落 process-snapshots.log 并 tail 进 job 日志——
