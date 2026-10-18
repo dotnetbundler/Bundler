@@ -25,7 +25,9 @@ dotnet test tests/Package/Bundler.PackageTests.csproj -c Release
 ```
 
 CI 与成批跑法唯一驱动是 `scripts/ci/run-tests.{sh,ps1}`（suite=unit|api|integration|package|all）：
-测试程序集自宿主（MTP+xUnit3）——集成腿逐类直跑 dll 并落 `artifacts/ci/test-progress.log` 指认在途类，`-longRunning 300` 打印挂起用例名。
+测试程序集自宿主（MTP+xUnit3）——集成腿逐类直跑 dll 并落 `artifacts/ci/test-progress.log` 指认在途类，`-longRunning 300` 打印挂起用例名；
+双侧另起 60s 进程快照采样（POSIX `ps`/Windows CIM，白名单过滤），`BUNDLER_TOOL_TRACE` 指文件则逐 spawn 落一行——
+诊断件（progress/snapshots/trace 三份）只落盘不进 job 日志，CI 经 `ci-logs-<os>` 工件 `always()` 上传。
 
 ### 筛选
 
