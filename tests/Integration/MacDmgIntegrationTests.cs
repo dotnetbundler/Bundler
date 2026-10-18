@@ -411,6 +411,13 @@ public sealed class MacDmgIntegrationTests : IClassFixture<MacDmgFixture>
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("background image does not exist",
             result.Output, StringComparison.OrdinalIgnoreCase);
+        // 挂载事实日志（Information→MSBuild High，正常发布输出可见）证明执行确实
+        // 进到挂载段——同一行同时含本工作域 badDir 与 dmg-mount 挂载点名，
+        // 结构性提前失败（没跑过 attach）不能空过本断言。
+        Assert.Contains(result.Output.Split('\n'),
+            line => line.Contains("Mounted DMG volume at", StringComparison.Ordinal)
+                && line.Contains(badDir, StringComparison.Ordinal)
+                && line.Contains("dmg-mount", StringComparison.Ordinal));
         var leftovers = Directory.Exists(badDir)
             ? Directory.EnumerateFiles(badDir, "*.dmg", SearchOption.AllDirectories)
             : [];

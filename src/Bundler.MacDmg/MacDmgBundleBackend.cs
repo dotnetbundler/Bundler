@@ -152,6 +152,11 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             await ToolRunner.RunAsync(
                 "hdiutil", attachArgs, workDirectory, cancellationToken);
             mounted = true;
+            // 挂载事实落 Information 日志（MSBuild 侧映射 High，正常发布输出可见）——
+            // 挂载点+镜像路径入消息便于关联后续 branding/detach 失败域。
+            logger.Log(
+                BundleLogLevel.Information,
+                $"Mounted DMG volume at '{mountDirectory}' from '{readWriteImage}'.");
 
             // 不设 Finder 扩展隐藏位：SetFile -a E 会把 com.apple.FinderInfo xattr 写到 .app 根，
             // 随拖放安装跟到用户机，`codesign --verify --deep --strict` 判 detritus 拒绝。

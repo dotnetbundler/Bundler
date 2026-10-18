@@ -580,6 +580,107 @@ public sealed class MacDmgTests : TempBase
         }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task MountedFactLoggedOnlyAfterSuccessfulAttach(bool attachSuccess)
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var previousHost = MacDmgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacDmgBundleBackend.HostCheck = () => true;
+        var recorder = new RecordingLogger();
+        var requests = new List<ToolRunner.Request>();
+        var attachSawMountedMessage = false;
+        var detachSawMountedMessage = false;
+        string? attachMountpoint = null;
+        ToolRunner.Handler = (request, _) =>
+        {
+            requests.Add(request);
+            CreateMountPoint(request);
+            WriteDsStore(request);
+            WriteConvertArtifact(request);
+            var sawMounted = recorder.Entries.Any(entry =>
+                entry.Level == BundleLogLevel.Information &&
+                entry.Message.Contains("Mounted DMG volume at", StringComparison.Ordinal));
+            if (request.Executable == "hdiutil" && request.Arguments.Contains("attach"))
+            {
+                attachSawMountedMessage = sawMounted;
+                var index = request.Arguments.ToList().IndexOf("-mountpoint");
+                attachMountpoint = request.Arguments[index + 1];
+                if (!attachSuccess)
+                {
+                    return Task.FromResult(new ToolRunner.Result(
+                        1, "", "hdiutil: attach failed - simulated"));
+                }
+            }
+            if (request.Executable == "hdiutil" && request.Arguments.Contains("detach"))
+            {
+                detachSawMountedMessage = sawMounted;
+            }
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            // 缺背景注入：attach 成功后 ApplyBrandingAsync 才抛 FileNotFoundException，
+            // 走 catch 强制 detach——与集成腿 bundle-midfail 同一注入点；
+            // attach 非零则由 RunAsync 抛 InvalidOperationException，绝不到挂载段。
+            // 异常类型分分支钉死失败域，宽泛 ThrowsAnyAsync 会掩掉错误注入点。
+            Func<Task> act = () => new MacDmgBundler(
+                    dmgConfiguration: new MacDmgBundleConfiguration
+                    {
+                        BackgroundFile = Path.Combine(input, "missing.png")
+                    },
+                    appConfiguration: null,
+                    options: new MacDmgBundlerOptions { Logger = recorder })
+                .BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken);
+            if (attachSuccess)
+            {
+                var ex = await Assert.ThrowsAsync<FileNotFoundException>(act);
+                Assert.Contains("background image does not exist",
+                    ex.Message, StringComparison.OrdinalIgnoreCase);
+            }
+            else
+            {
+                var ex = await Assert.ThrowsAsync<InvalidOperationException>(act);
+                Assert.Contains("attach failed", ex.Message, StringComparison.OrdinalIgnoreCase);
+            }
+            // 挂载事实日志只能在 attach 成功之后落：attach 回调瞬间绝不能已见。
+            Assert.False(attachSawMountedMessage);
+            // attach 请求必须真到过（防校验前移让本用例空转）。
+            Assert.NotNull(attachMountpoint);
+            var mountedMessages = recorder.Entries
+                .Where(entry => entry.Level == BundleLogLevel.Information &&
+                    entry.Message.Contains("Mounted DMG volume at", StringComparison.Ordinal))
+                .ToList();
+            var detachRequests = requests.Where(request =>
+                request.Executable == "hdiutil" && request.Arguments.Contains("detach")).ToList();
+            if (attachSuccess)
+            {
+                // 恰一条，同一消息带实际挂载点与 image-rw.dmg 路径；
+                // catch 里的 detach 回调时该消息必须已在（日志先于 branding 失败）。
+                var message = Assert.Single(mountedMessages).Message;
+                Assert.Contains($"'{attachMountpoint}' from '", message);
+                Assert.Contains("image-rw.dmg", message, StringComparison.Ordinal);
+                Assert.NotEmpty(detachRequests);
+                Assert.True(detachSawMountedMessage);
+            }
+            else
+            {
+                // attach 失败：绝不落成功消息，也不得对本挂载点误发 detach。
+                Assert.Empty(mountedMessages);
+                Assert.Empty(detachRequests);
+            }
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacDmgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
     [Fact]
     public async Task InjectsLicenseThenSigns()
     {
@@ -824,6 +925,16 @@ public sealed class MacDmgTests : TempBase
             {
                 warnings.Add(message);
             }
+        }
+    }
+
+    sealed class RecordingLogger : IBundleLogger
+    {
+        public readonly List<(BundleLogLevel Level, string Message)> Entries = [];
+
+        public void Log(BundleLogLevel level, string message)
+        {
+            Entries.Add((level, message));
         }
     }
 
