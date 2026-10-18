@@ -40,16 +40,19 @@ if ($env:BUNDLER_TOOL_TRACE) {
         -ArgumentList "-NoProfile","-Command","Get-Content -Wait -Tail 0 -Encoding UTF8 -Path `"$env:BUNDLER_TOOL_TRACE`""
 }
 
-# 进程快照采样：每 60s 一份进程清单落 process-snapshots.log 并 tail 进 job 日志——
-# 挂死复现时 trace 指认最后在途 spawn，快照指认进程树（挂起、孤儿子树），常开不挂 env。
+# 进程快照采样：每 60s 一份过滤后进程清单落 process-snapshots.log 并 tail 进 job 日志——
+# 挂死复现时 trace 指认最后在途 spawn，快照指认进程树。清单按名称/命令行白名单过滤
+# （测试/工具/打包工具/宿主壳），全量表数千行/份的噪音裁到数十行；常开不挂 env。
 $snapPath = "$OUT/process-snapshots.log"
 New-Item -ItemType File -Force -Path $snapPath | Out-Null
 $snapJob = Start-Job -ScriptBlock {
     param($path)
+    $keep = 'dotnet|Bundler|hdiutil|codesign|security|pkgbuild|productbuild|productsign|pkgutil|makensis|notarytool|ditto|xar|lipo|otool|spctl|candle|light\.exe|heat|msiexec|sudo|docker|conhost|taskkill|MsMpEng|smartscreen|TrustedInstaller|TiWorker|powershell|pwsh|cmd\.exe|tail'
     while ($true) {
         "===== $([datetime]::UtcNow.ToString('o')) =====" | Out-File -Append $path
         # Job runspace 无控制台、缓冲宽 120——Out-String -Width 防 ExecutablePath/CommandLine 截断。
         Get-CimInstance Win32_Process |
+            Where-Object { $_.Name -match $keep -or $_.CommandLine -match $keep } |
             Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine |
             Format-Table -AutoSize | Out-String -Width 4096 | Out-File -Append $path
         Start-Sleep -Seconds 60

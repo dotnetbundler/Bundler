@@ -171,11 +171,14 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/run-tests.ps1 -Suite $env:SUITE
 
-      - name: 上传失败线索（进度日志）
+      - name: 上传失败线索（进度/快照/trace 日志）
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: progress-${{ matrix.os }}
-          path: artifacts/ci/test-progress.log
+          path: |
+            artifacts/ci/test-progress.log
+            artifacts/ci/process-snapshots.log
+            artifacts/ci/bundler-tool-trace.log
           if-no-files-found: ignore
           retention-days: 1
