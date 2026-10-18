@@ -1,12 +1,12 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-17
-> 当前分支：`main`
+> 最后更新：2026-10-18
+> 当前分支：`main`（最新基线 `d51f1f6`，verify `39098097192`/`39107053316` 两轮全绿）
 > UPDATE 系统包扩展 B0–B5 全链完成并入 `main`（PR #107 设计、#108 发射+`pkg` 身份、#109 引导件 `pkg-apply` 双实现、#106/#110 macOS quarantine 能力探测、#111 客户端 `SyspkgReplay`、#112 syspkg-verify 三容器验收+DropProbe 修复、#113/#115 冻件重冻、#114 收尾：syspkg-verify 经 `workflow_call` 收编 verify 发布门、usage 文档、`pkg` 字段 v1 兼容断言）。
 > 测试确定性修复 #116（奇偶腿宿主 `DEBIAN_FRONTEND` env 泄漏+uidedge rec 竞态）与 #117（NSIS 卸载分离删除断言改 WaitFor）已并入。
 > 发布门实证：verify 于 `9d51ba3` 基线**三连全绿**（run `39062962978`、`39066991823`、`39070871573`——六宿主测试矩阵 + syspkg 三容器腿 + produce/consume/manual/universal 全链）。
 > 引导件冻件口径：现嵌 8 件为 produce-bootstrap run `39030858362`@`e0174dc` 产出（PR #129 入库，含 #128 PAL 化——env 件校验与 `UnixFileTypes` 改走 `libSystem.Native`、gate 竞态修复），SHA-256 与字节数留账于该 squash 正文。
-> 外部工具挂死加固：PR #130 给 `ToolRunner`/`ToolCache` 全链有界等待+spawn 追踪（`BUNDLER_TOOL_TIMEOUT_SECONDS`/`BUNDLER_TOOL_TRACE`），挂死收敛为带现场的有界失败；macOS 偶发 `hdiutil` 簿记滞后断言面由 PR #131 改有界轮询。
+> 外部工具挂死加固：PR #130 给 `ToolRunner`/`ToolCache` 全链有界等待+spawn 追踪（`BUNDLER_TOOL_TIMEOUT_SECONDS`/`BUNDLER_TOOL_TRACE`），挂死收敛为带现场的有界失败；macOS 偶发 `hdiutil` 簿记滞后断言面由 PR #131 改有界轮询；PR #132 加 CI 进程快照采样（随后过滤瘦身至测试/工具面白名单）——加固后 intel 腿 suite=all 八连压测零复现，OS 层凶手未捕获。
 > 图形提权入口链等剩余边界仍挂 `docs/project/special-acceptance.md`。
 > 当前包版本：`0.1.0-alpha.103`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词（别称仅输入归一，产物名用各生态词），契约与全产物名目录见 `docs/design/targets.md`**
@@ -89,8 +89,9 @@ verify consume 腿按"每台消费宿主吃所有能跑的产件"裁决改 (host
 收口期修复的真缺陷：`produce.sh` `cat|head` SIGPIPE（92fe129）、NSIS 卸载注册表异步清理竞态（33f0472）、NSIS `/D` 正斜杠粘连+PKG relocation+artifact 丢执行位（b39d9af）、dmg 腿 EXIT trap 毒化（2190df7）、`hdiutil convert` 持续 EAGAIN 踢 diskimages-helper（7a8d2bd）。
 verify run `38881497256`（main@`cb76455`，#103/#104 合入后）4 条 macOS consume 腿红：`app-empty`/`dmg-empty` 误报——根因为 `set -o pipefail` 域内 `find|grep -q` 的 SIGPIPE 竞态（grep 早退、find 收 141 连带管道判败，日志实证 `find: stdout: Broken pipe`），非产件真空；修复在 PR #105（`a1b5004` 外层 14 处改 `find|head -1` 形态，`87b2169` universal 脚本改 `-print -quit`）。
 #106 起全量审计收口链（#106–#117 六域评审 + #119–#122/#118 处置复审 + #123/#126/#129 冻件重冻 + #124/#125/#127 终末修复 + #128 PAL 化）全部经 Local Review 闭环合入；verify `39019835195` 红因实证为静态 musl 件 `DllImport("libc")` 无 .dynsym 可解析 + CI shim 漏 `stat`，PR #128 改走 `libSystem.Native` PAL 修复。
-macOS intel 测试腿两轮同签名挂死（三个 fork 外部进程的打包测试锁步零输出，verify `39036085326` 180min 硬超时作废、`39049066432` 同签名复现后取消）；api-only 诊断 `39050493000` 于同类型 runner 79s 全绿排除确定性回归，定性 runner 实例级间歇失响应——PR #130 把"无超时兜底"放大器收掉（有界等待+杀树+有界排空+spawn 追踪+锁上限），intel api 腿随后 10 连压测全绿；verify `39061153128` macos-26 腿再实证 `hdiutil detach` 簿记滞后让一次性 `hdiutil info` 断言误报，PR #131 改 60s 有界轮询修复。
-**三连最终实证**：`39062962978`、`39066991823`、`39070871573`（均 `main@9d51ba3`）全绿。
+macOS intel 测试腿两轮同签名挂死（三个 fork 外部进程的打包测试锁步零输出，verify `39036085326` 180min 硬超时作废、`39049066432` 同签名复现后取消）；api-only 诊断 `39050493000` 于同类型 runner 79s 全绿排除确定性回归，定性 runner 实例级间歇失响应——PR #130 把"无超时兜底"放大器收掉（有界等待+杀树+有界排空+spawn 追踪+锁上限），intel api 腿随后 10 连压测全绿；verify `39061153128` macos-26 腿再实证 `hdiutil detach` 簿记滞后让一次性 `hdiutil info` 断言误报，PR #131 改 60s 有界轮询修复；PR #132 补进程快照采样插桩（60s uptime+进程清单+hdiutil info tail 进 job 日志）。
+**三连最终实证**：`39062962978`、`39066991823`、`39070871573`（均 `main@9d51ba3`）全绿；PR #132 合入后 `main@d51f1f6` 再经 intel 腿 `suite=all` 八连压测全绿（`39096945395`–`39112493531`，零复现；逐段对比实证同标签 runner 实例间均匀 ~2x 时长方差源于冷机预热与负载水位，快照 load avg 佐证）+ verify `39098097192`/`39107053316` 全绿。
+OS 层挂死凶手未捕获（21 连绿零现场），已坐实并修复的我方缺陷为"全链无超时兜底"；快照/trace 插桩留作复发取证面。
 
 ## 4. 外部验收边界（未执行，不视为完成）
 
