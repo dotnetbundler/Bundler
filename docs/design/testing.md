@@ -195,7 +195,8 @@ HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 
                        AOT 引导件与 sh 降级件双实现同场景奇偶，证据逐腿成件
 scripts/ci/
   run-tests.{sh,ps1}   唯一测试驱动（四工程直跑 dll、逐类、进度日志、-longRunning、
-                       60s 进程快照采样——非睡眠态+测试/工具面白名单过滤）
+                       60s 进程快照采样——测试/工具面白名单过滤，
+                       POSIX 侧另滤非睡眠态）
                        诊断只落盘不进 job 日志：`artifacts/ci/` 下 test-progress.log、
                        process-snapshots.log、bundler-tool-trace.log（BUNDLER_TOOL_TRACE
                        spawn 追踪，CI 恒开），经 `ci-logs-<os>` 工件 always() 上传

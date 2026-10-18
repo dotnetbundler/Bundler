@@ -80,7 +80,7 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 当前基线：`main@2453c25`（`0.1.0-alpha.103`）。
 全量重构、测试重写、收口修复与 UPDATE 系统包扩展链（PR #82–#136）均已合入 `main`；逐轮验证过程与 run 记录以 git 提交和 PR 留痕为准，本文不留分轮过程，仅保留当前事实与仍有意义的结论。
 
-- **verify 发布门**：`9d51ba3` 基线三连全绿（`39062962978`/`39066991823`/`39070871573`——六宿主测试矩阵 + syspkg 三容器 + produce/consume/manual/universal 全链）；`d51f1f6` 基线 verify `39098097192`/`39107053316`/`39118079751` 全绿；`2453c25` 起（#136 合入后）尚无全矩阵 verify，待补。
+- **verify 发布门**：`9d51ba3` 基线三连全绿（`39062962978`/`39066991823`/`39070871573`——六宿主测试矩阵 + syspkg 三容器 + produce/consume/manual/universal 全链）；`d51f1f6` 基线 verify `39098097192`/`39107053316` 全绿；`6141ab5`（#133 合入）verify `39118079751` 全绿；`2453c25` 起（#134–#136 合入后）尚无全矩阵 verify，待补。
 - **macOS intel 挂死面**：两轮三测试锁步挂死定性 runner 实例级间歇失响应，OS 层凶手未捕获；我方"全链无超时兜底"放大器已修——#130 有界等待/杀树/有界排空/spawn 追踪（`BUNDLER_TOOL_TIMEOUT_SECONDS`/`BUNDLER_TOOL_TRACE`）+ `ToolCache` 锁上限，#132–#134 进程快照采样瘦身至白名单并经 `ci-logs-*` 工件 `always()` 上传（不进 job 日志）；suite=all 八连压测 + api 十连 + verify 多轮累计零复现，插桩留作复发取证面。
 - **dmg 失败清理断言面**：`hdiutil detach` 簿记滞后一次性断言误报由 #131 改 60s 有界轮询；`diskimages-helper` 邻座残影污染全局断言由 #135 收窄至失败域（retest `39124695555` macos 双腿绿）；#136 补挂载后失败真实注入腿（`BundlerMacDmgBackgroundFile` 缺件→attach 后 `ApplyBrandingAsync` 抛→catch 强制 detach）。
 - **引导件冻件口径**：现嵌 8 件为 produce-bootstrap run `39030858362`@`e0174dc` 产出（PR #129 入库），SHA-256 与字节数留账于该 squash 正文；musl 静态单件经 alpine SDK 容器产、双宿主通吃（`docs/design/update.md`）。
@@ -108,7 +108,7 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 **测试体系重写已收口**（规格 `docs/design/testing.md`；Unit/Api/Integration/Package 四层 + `tests/Manual` 验收脚本层全量实现，CI 拓扑为 test/verify/produce-bootstrap/syspkg-verify 四 workflow，verify 发布门已全绿；PR 链 #90–#97 与静态兼容 PR #98 均已合入 `main`）。
 剩余工作：
 
-- **`main@2453c25` 补一次全矩阵 verify**——#133–#136 合入后尚无发布门实证：快照白名单过滤真机形态、`ci-logs-*` 工件通道、#135 断言收窄与 #136 `MountedPhaseFailureLeavesNoMountResidue` 新腿（仅两条 macOS 宿主执行）均在待验面内；
+- **`main@2453c25` 补一次全矩阵 verify**——#134–#136 合入后尚无发布门实证：`ci-logs-*`/`always()` 工件通道已由冒烟 run `39122209805` 实证可取（顺带抓出 #135 修复的断言误报），#135 断言收窄经 retest `39124695555` macos 双腿实证；剩余待验面为 #136 `MountedPhaseFailureLeavesNoMountResidue` 新腿（仅两条 macOS 宿主执行）与发布门全链贯通；
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
 - UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 全链已实现：发射（`pkg` 身份字段、`CoveredFormats` 扩收、三后端旁车+引导件注入）、`pkg-apply` 动词 AOT/POSIX 双实现同协议、客户端 replay 编排（`SyspkgReplay`：预检三件套/留存/三级提权退化链/回滚重放）、debian/fedora/alpine 容器验收腿（经 `workflow_call` 收编 verify 发布门 `syspkg` job）——契约见 `docs/design/update.md` §2，图形提权入口链等剩余边界登记 `docs/project/special-acceptance.md`；
 - 发布链资产实际推送（NuGet/Release 为另一步）；
