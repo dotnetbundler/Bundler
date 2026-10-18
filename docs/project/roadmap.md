@@ -111,8 +111,9 @@
 
 纯粹"可能以后有用"、单一框架运行时需求或无法定义所有权的依赖安装，不进入实现路线。
 
-已登记待做项（测试重写收口期裁决，详见 `PROJECT_CONTEXT.md` §5）：当前无——
-"linux 引导件收敛 musl 静态单件"已随 PR #100 完成归档移出（musl 静态件双宿主通吃、glibc 件已删）。
+已登记待做项：
+
+- **`.dmg` 挂载事实可观测**（PR #136 Local Review 登记）：后端 `hdiutil attach` 成功处落 `Information` 级日志后，`MountedPhaseFailureLeavesNoMountResidue` 类断言可钉死"挂载后失败"腿确实经过 mounted=true 路径——防该覆盖随校验前移再度结构性空转。
 
 已裁决不予登记的类别（记录理由，防重复提案）：
 

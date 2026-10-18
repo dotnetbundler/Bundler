@@ -176,6 +176,7 @@ HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 
                  legs: ubuntu-26.04 / ubuntu-26.04-arm / windows-2025-vs2026 /
                        windows-11-vs2026-arm / macos-26-intel / macos-26
                  每腿: build → run-tests 驱动（四工程直跑 dll + 逐类进度日志）
+                      → `ci-logs-<os>` 工件（progress/snapshots/trace，always() 上传）
   verify.yml     发布门：workflow_dispatch
                  jobs: tests=call test.yml ×6 宿主矩阵（每腿 suite=all、runners=<单宿主>）→
                        produce×6 宿主（fixture 产件+SHA256SUMS；msi 腿内含本地 pack）→
@@ -193,7 +194,12 @@ HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 
                        apk 签名闸、降权重启 uid/env 证据、rc 0/4/5/6，
                        AOT 引导件与 sh 降级件双实现同场景奇偶，证据逐腿成件
 scripts/ci/
-  run-tests.{sh,ps1}   唯一测试驱动（四工程直跑 dll、逐类、进度日志、-longRunning）
+  run-tests.{sh,ps1}   唯一测试驱动（四工程直跑 dll、逐类、进度日志、-longRunning、
+                       60s 进程快照采样——测试/工具面白名单过滤，
+                       POSIX 侧另滤非睡眠态）
+                       诊断只落盘不进 job 日志：`artifacts/ci/` 下 test-progress.log、
+                       process-snapshots.log、bundler-tool-trace.log（BUNDLER_TOOL_TRACE
+                       spawn 追踪，CI 恒开），经 `ci-logs-<os>` 工件 always() 上传
   produce.{sh,ps1}     fixture 产件 + 清单
   consume-*.{sh,ps1}   联合交换消费腿
   syspkg-verify.sh     容器内全链驱动（deb/rpm/apk 三腿参数化：
