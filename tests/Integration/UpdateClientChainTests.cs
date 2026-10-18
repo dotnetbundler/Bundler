@@ -2,6 +2,7 @@
 // 原 UpdaterClientTests 的 Linux 真环境腿（Unit 层零子进程规则不收）。
 // 覆盖：文件级安装单元（AppImage）换包+保留位备份+回滚、目录级 zip/tar.gz 端到端、
 // macOS 未签 .app 端到端（含 MacAppGate quarantine 剥离）、/bin/sh 降级脚本链。
+using System.Collections.Concurrent;
 using System.IO.Compression;
 using System.Runtime.Serialization.Json;
 using System.Text;
@@ -466,11 +467,9 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         exec "$@"
         """;
 
-    // sudo 垫片：剥掉 -S/-p <提示>/\-\- 前缀后 exec 余下命令行（密码行留在管道里）。
-    // 已知取舍：真 sudo -S 会从 stdin 消费一行密码，垫片不读——zenity 垫片吐的
-    // 密码行留在管道里没人取（单行小量写入落管道缓冲即返，不触 SIGPIPE，管线
-    // 照常终结）。被测面是提权 argv 形态与末级 rc；"密码不经本进程内存"这点
-    // 由生产侧管线结构保证，非垫片职责。
+    // sudo 垫片：剥掉 -S/-p <提示>/\-\- 前缀后 exec 余下命令行（不读 stdin——
+    // 模拟缓存票据直放形态，用于断言"取消的对话框绝不会触达 sudo"；密码管道
+    // 内容断言面归 SudoReadingStubBody 的成功管线腿）。
     private const string SudoStubBody = """
         line=sudo
         for a do line="$line $a"; done
@@ -486,7 +485,8 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         exec "$@"
         """;
 
-    // 问密码垫片：记 argv，向 stdout 吐一行假密码喂 sudo -S。
+    // 问密码垫片：记 argv，向 stdout 吐一行假密码（生产串行脚本先收进 sh
+    // 变量、成功后再经 `command printf` 管道喂 sudo -S）。
     private static string AskpassStubBody(string tool) => $$"""
         line='{{tool}}'
         for a do line="$line $a"; done
@@ -494,10 +494,62 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         printf 'stubpass\n'
         """;
 
+    // pkexec 失败垫片：记 argv 后按 BUNDLER_STUB_PKEXEC_RC 退出、不 exec 子命令——
+    // 模拟 126 用户取消/127 鉴权失败/pkg-apply 级 4/6 等"已启动腿"退出码，
+    // 断言已启动腿绝不换腿重放（sudo/zenity/updater 全不得触达）。
+    private const string PkexecFailStubBody = """
+        line=pkexec
+        for a do line="$line $a"; done
+        printf '%s\n' "$line" >> "$BUNDLER_STUB_REC"
+        exit "${BUNDLER_STUB_PKEXEC_RC:-0}"
+        """;
+
+    // 问密码取消垫片：记 argv 后 exit 1（用户取消/对话框失败）——生产脚本
+    // 捕获非零即 exit 126，sudo 与 updater 全不得触达。
+    private static string AskpassCancelStubBody(string tool) => $$"""
+        line='{{tool}}'
+        for a do line="$line $a"; done
+        printf '%s\n' "$line" >> "$BUNDLER_STUB_REC"
+        exit 1
+        """;
+
+    // 问密码吐件垫片：记 argv 后把 BUNDLER_STUB_PASSWORD 原样吐一行——
+    // 密码只经 stub stdout→sh 变量→sudo stdin 通道走，不进 argv/env 供件。
+    private const string ZenityPasswordStubBody = """
+        line=zenity
+        for a do line="$line $a"; done
+        printf '%s\n' "$line" >> "$BUNDLER_STUB_REC"
+        printf '%s\n' "$BUNDLER_STUB_PASSWORD"
+        """;
+
+    // sudo 垫片（读密码版）：记 argv 后从 stdin IFS= read -r 原样读一行密码
+    //（sudo -S 契约面）落 rec 作断言通道，再剥旗标 exec 余下命令行；
+    // 另记 `${password+x}` 探针行——脚本同名变量若被 export 泄漏进子进程
+    // 环境即留痕（只记存在性不落口令值）。
+    private const string SudoReadingStubBody = """
+        line=sudo
+        for a do line="$line $a"; done
+        printf '%s\n' "$line" >> "$BUNDLER_STUB_REC"
+        IFS= read -r bundler_pw
+        printf 'sudo-pw %s\n' "$bundler_pw" >> "$BUNDLER_STUB_REC"
+        if [ "${password+x}" = x ]; then printf 'sudo-pwenv set\n' >> "$BUNDLER_STUB_REC"; fi
+        while [ $# -gt 0 ]; do
+          case "$1" in
+            -S) shift ;;
+            -p) if [ $# -ge 2 ]; then shift 2; else shift; fi ;;
+            --) shift; break ;;
+            *) break ;;
+          esac
+        done
+        exec "$@"
+        """;
+
     private static string WritePosixStub(string dir, string name, string body)
     {
         var path = Path.Combine(dir, name);
-        File.WriteAllText(path, "#!/bin/sh\n" + body + "\n");
+        // stub 体是 C# 原样字面量——随源文件检出 EOL 走；CRLF 检出宿主（Windows
+        // autocrlf）下跑 POSIX 执行会得 shebang/语法错——垫片语义恒 LF，落盘归一。
+        File.WriteAllText(path, "#!/bin/sh\n" + body.Replace("\r\n", "\n") + "\n");
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(path,
@@ -562,8 +614,8 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         return builder.ToString();
     }
 
-    // rec 件按行断言：垫片顺序执行时确定性；管线腿内 zenity/sudo 行序可能并发翻转，
-    // 调用方对那两行用 Contains 而非按下标。
+    // rec 件按行断言：垫片顺序执行确定性落行（问密码腿新串行脚本下
+    // askpass/sudo 行序亦确定）；对顺序不敏感的断言仍用 Contains 而非按下标。
     private static string[] WaitRecord(string path, int minLines)
     {
         for (var i = 0; i < 100; i++)
@@ -678,7 +730,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var directory = Ws.Combine("syspkg-deb-pkexec");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
-        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // rec 件落原生 POSIX 临时区：垫片各段独立 `>>` 追加，
         // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
         // TrackTemp 登记随 EnvScope 释放回收。
         var rec = env.TrackTemp(Path.Combine(
@@ -753,14 +805,14 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
     [Fact]
     public async Task Client_SyspkgApply_Deb_AskpassPipeline_EndToEnd()
     {
-        // pkexec 缺席 → zenity --password | sudo -S -p '' -- <verb> 管线腿：
-        // 密码行不过本进程，sh -c 包整条管线，末级 rc 即拉起 rc。
-        // 管线腿有图形会话门槛——显式注 DISPLAY，headless CI 宿主也选得到。
+        // pkexec 缺席 → 问密码腿：串行 sh 脚本先收 zenity 输出进变量、成功后
+        // `command printf` 管道喂 sudo -S -p '' -- <verb>——密码不过本进程/argv，
+        // 末级 rc 即拉起 rc。腿有图形会话门槛——显式注 DISPLAY，headless CI 也选得到。
         Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are Linux-only");
         var directory = Ws.Combine("syspkg-deb-askpass");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
-        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // rec 件落原生 POSIX 临时区：垫片各段独立 `>>` 追加，
         // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
         // TrackTemp 登记随 EnvScope 释放回收。
         var rec = env.TrackTemp(Path.Combine(
@@ -815,7 +867,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var directory = Ws.Combine("syspkg-deb-baresudo");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
-        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // rec 件落原生 POSIX 临时区：垫片各段独立 `>>` 追加，
         // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
         // TrackTemp 登记随 EnvScope 释放回收。
         var rec = env.TrackTemp(Path.Combine(
@@ -865,7 +917,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var directory = Ws.Combine("syspkg-apk");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
-        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // rec 件落原生 POSIX 临时区：垫片各段独立 `>>` 追加，
         // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
         // TrackTemp 登记随 EnvScope 释放回收。
         var rec = env.TrackTemp(Path.Combine(
@@ -918,7 +970,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var directory = Ws.Combine("syspkg-rpm-pkexec");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
-        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // rec 件落原生 POSIX 临时区：垫片各段独立 `>>` 追加，
         // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
         // TrackTemp 登记随 EnvScope 释放回收。
         var rec = env.TrackTemp(Path.Combine(
@@ -997,7 +1049,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var directory = Ws.Combine("syspkg-preflight");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
-        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // rec 件落原生 POSIX 临时区：垫片各段独立 `>>` 追加，
         // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
         // TrackTemp 登记随 EnvScope 释放回收。
         var rec = env.TrackTemp(Path.Combine(
@@ -1060,7 +1112,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var directory = Ws.Combine("syspkg-rollback");
         Directory.CreateDirectory(directory);
         using var env = new EnvScope();
-        // rec 件落原生 POSIX 临时区：管线腿里问密码器/sudo 并发 `>>` 追加，
+        // rec 件落原生 POSIX 临时区：垫片各段独立 `>>` 追加，
         // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
         // TrackTemp 登记随 EnvScope 释放回收。
         var rec = env.TrackTemp(Path.Combine(
@@ -1144,6 +1196,256 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             RollbackBackupDirectory = Path.Combine(directory, "retention"),
         }));
         Assert.Contains("no retained package", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(126)]
+    [InlineData(127)]
+    [InlineData(4)]
+    [InlineData(6)]
+    public async Task Client_SyspkgApply_PkexecExitCode_ReturnedAsIs_NoReplay(int rc)
+    {
+        // 已启动腿即终局：pkexec 垫片以给定码退出（126 用户取消、127 鉴权失败、
+        // pkg-apply 级 4 安装失败/6 重启失败）——sudo/zenity 腿在场也绝不补拉，
+        // rc 原样交还调用方，updater 从未执行；留存件/applied 标记按
+        // "最近交付工件"语义保留（不表示安装成功，取消亦非安装成功）。
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are Linux-only");
+        var directory = Ws.Combine($"syspkg-deb-pkexec-rc{rc}");
+        Directory.CreateDirectory(directory);
+        using var env = new EnvScope();
+        // rec 件落原生 POSIX 临时区：垫片各段独立 `>>` 追加，
+        // DrvFs（/mnt/*）上 O_APPEND 语义不可靠会撕裂行——rec 属测试划痕与工作区无关，
+        // TrackTemp 登记随 EnvScope 释放回收。
+        var rec = env.TrackTemp(Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt"));
+        env.Set("BUNDLER_STUB_REC", rec);
+        env.Set("DISPLAY", ":99");
+        var (install, feedDir, bin, material) = SetupSyspkgInstall(
+            env, directory, "deb", "myapp", ["dpkg"], "sudo", "zenity");
+        env.Set("BUNDLER_UPDATER_CMD_PKEXEC",
+            WritePosixStub(bin, "pkexec", PkexecFailStubBody));
+        env.Set("BUNDLER_STUB_PKEXEC_RC", rc.ToString());
+        SyspkgReplay.CommandProbe = _ => null;
+
+        var artifact = Path.Combine(feedDir, "myapp_2.0-1_amd64.deb");
+        File.WriteAllText(artifact, "pkg-v2-bytes");
+        WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+        {
+            Target = TestPlatform.LinuxTarget, Format = "deb",
+            Url = "myapp_2.0-1_amd64.deb", File = "myapp_2.0-1_amd64.deb",
+            Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+            Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+        });
+
+        var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+        var info = (await client.CheckForUpdateAsync())!;
+        var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+        client.Verify(info, downloaded);
+        var retention = Path.Combine(directory, "retention");
+        var app = WritePosixStub(directory, "app", "true\n");
+        using var process = client.Apply(info, downloaded, new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging"),
+            AppPath = app,
+            RollbackBackupDirectory = retention,
+        });
+        Assert.True(process.WaitForExit(60_000), "pkexec stub leg did not exit in 60s");
+        Assert.Equal(rc, process.ExitCode);
+
+        // 只调了 pkexec 一腿：dpkg 账本行 + pkexec argv 行，再无 sudo/zenity/updater。
+        var lines = WaitRecord(rec, 2);
+        Assert.Equal(2, lines.Length);
+        Assert.Equal("dpkg -s myapp", lines[0]);
+        Assert.StartsWith($"pkexec {install}/bundler-updater pkg-apply --pkg ", lines[1]);
+        Assert.Equal("myapp_2.0-1_amd64.deb",
+            File.ReadAllText(Path.Combine(retention, "applied")).Trim());
+        Assert.True(File.Exists(Path.Combine(retention, "myapp_2.0-1_amd64.deb.sig")));
+    }
+
+    [Theory]
+    [InlineData("zenity")]
+    [InlineData("kdialog")]
+    public async Task Client_SyspkgApply_AskpassCancel_StopsBeforeSudo(string askpassTool)
+    {
+        // 问密码对话框取消（垫片 exit 1）：串行脚本捕获对话框 rc 非零即
+        // exit 126——sudo 垫片模拟缓存票据直放形态（不读 stdin 直接可执行）
+        // 也绝不被触达，updater 从未运行；Process rc=126 原样交还。
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are Linux-only");
+        var directory = Ws.Combine($"syspkg-deb-askpass-cancel-{askpassTool}");
+        Directory.CreateDirectory(directory);
+        using var env = new EnvScope();
+        var rec = env.TrackTemp(Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt"));
+        env.Set("BUNDLER_STUB_REC", rec);
+        env.Set("DISPLAY", ":99");
+        var (install, feedDir, bin, material) = SetupSyspkgInstall(
+            env, directory, "deb", "myapp", ["dpkg"], "sudo");
+        env.Set("BUNDLER_UPDATER_CMD_" + CommandEnvName(askpassTool),
+            WritePosixStub(bin, askpassTool, AskpassCancelStubBody(askpassTool)));
+        SyspkgReplay.CommandProbe = _ => null;
+
+        var artifact = Path.Combine(feedDir, "myapp_2.0-1_amd64.deb");
+        File.WriteAllText(artifact, "pkg-v2-bytes");
+        WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+        {
+            Target = TestPlatform.LinuxTarget, Format = "deb",
+            Url = "myapp_2.0-1_amd64.deb", File = "myapp_2.0-1_amd64.deb",
+            Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+            Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+        });
+
+        var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+        var info = (await client.CheckForUpdateAsync())!;
+        var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+        client.Verify(info, downloaded);
+        var retention = Path.Combine(directory, "retention");
+        var app = WritePosixStub(directory, "app", "true\n");
+        using var process = client.Apply(info, downloaded, new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging"),
+            AppPath = app,
+            RollbackBackupDirectory = retention,
+        });
+        Assert.True(process.WaitForExit(60_000), "askpass leg did not exit in 60s");
+        Assert.Equal(126, process.ExitCode);
+
+        // 只落了账本行 + 对话框 argv 行——sudo 与 updater 全未触达。
+        var lines = WaitRecord(rec, 2);
+        Assert.Equal(2, lines.Length);
+        Assert.Equal("dpkg -s myapp", lines[0]);
+        Assert.StartsWith(askpassTool + " --password", lines[1]);
+        // 取消也不是安装成功：交付标记保留（诊断/回滚面），用户可显式重试。
+        Assert.Equal("myapp_2.0-1_amd64.deb",
+            File.ReadAllText(Path.Combine(retention, "applied")).Trim());
+    }
+
+    [Fact]
+    public async Task Client_SyspkgApply_AskpassPassword_PipedVerbatimToSudo()
+    {
+        // 成功问密码管线：含空格/引号/美元/反斜杠的测试口令原样经 stdin 抵
+        // sudo（sudo-pw 断言通道），不出现在 argv/日志；updater 恰执行一次。
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are Linux-only");
+        var directory = Ws.Combine("syspkg-deb-askpass-pw");
+        Directory.CreateDirectory(directory);
+        using var env = new EnvScope();
+        var rec = env.TrackTemp(Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt"));
+        env.Set("BUNDLER_STUB_REC", rec);
+        env.Set("DISPLAY", ":99");
+        var password = "p@ss w0rd$\"'\\";
+        env.Set("BUNDLER_STUB_PASSWORD", password);
+        var (install, feedDir, bin, material) = SetupSyspkgInstall(
+            env, directory, "deb", "myapp", ["dpkg"]);
+        env.Set("BUNDLER_UPDATER_CMD_ZENITY",
+            WritePosixStub(bin, "zenity", ZenityPasswordStubBody));
+        env.Set("BUNDLER_UPDATER_CMD_SUDO",
+            WritePosixStub(bin, "sudo", SudoReadingStubBody));
+        SyspkgReplay.CommandProbe = _ => null;
+
+        var artifact = Path.Combine(feedDir, "myapp_2.0-1_amd64.deb");
+        File.WriteAllText(artifact, "pkg-v2-bytes");
+        WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+        {
+            Target = TestPlatform.LinuxTarget, Format = "deb",
+            Url = "myapp_2.0-1_amd64.deb", File = "myapp_2.0-1_amd64.deb",
+            Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+            Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+        });
+
+        // Exited 钩在 ThreadPool 异步触发——日志收集用线程安全容器。
+        var clientLog = new ConcurrentQueue<string>();
+        var client = UpdateClient.FromInstallDirectory(install, "1.0.0",
+            new UpdateClientOptions { Log = clientLog.Enqueue });
+        var info = (await client.CheckForUpdateAsync())!;
+        var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+        client.Verify(info, downloaded);
+        var retention = Path.Combine(directory, "retention");
+        var app = WritePosixStub(directory, "app", "true\n");
+        using var process = client.Apply(info, downloaded, new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging"),
+            AppPath = app,
+            RollbackBackupDirectory = retention,
+        });
+        Assert.True(process.WaitForExit(60_000), "askpass leg did not exit in 60s");
+        Assert.Equal(0, process.ExitCode);
+
+        var lines = WaitRecord(rec, 4);
+        var text = string.Join('\n', lines);
+        // 密码只从 stdin 抵 sudo：rec 里唯一含口令的行是 sudo-pw 断言通道——
+        // argv 行（zenity/sudo/updater）、客户端日志与 sudo 子进程环境
+        //（sudo-pwenv 探针）全不得携带口令。
+        var pwLines = lines.Where(line => line.Contains(password, StringComparison.Ordinal))
+            .ToArray();
+        Assert.Single(pwLines);
+        Assert.Equal("sudo-pw " + password, pwLines[0]);
+        Assert.DoesNotContain("sudo-pwenv", text);
+        Assert.Contains(
+            $"sudo -S -p  -- {install}/bundler-updater pkg-apply --pkg " +
+            Path.Combine(retention, "myapp_2.0-1_amd64.deb"), text);
+        Assert.Single(lines, line => line.StartsWith("updater ", StringComparison.Ordinal));
+        Assert.DoesNotContain(clientLog, line => line.Contains(password, StringComparison.Ordinal));
+        Assert.Equal("myapp_2.0-1_amd64.deb",
+            File.ReadAllText(Path.Combine(retention, "applied")).Trim());
+    }
+
+    [Fact]
+    public async Task Client_SyspkgApply_AskpassInheritedPasswordEnv_NotExportedToSudo()
+    {
+        // 回归：父环境已有已 export 的同名 password 变量——同名赋值会保留
+        // export 属性把口令带进 sudo 等子进程环境；生产脚本先 unset 清继承
+        // 属性再捕获。断言 sudo 环境无 password（sudo-pwenv 探针不出现）、
+        // stdin 口令仍是对话框吐的测试口令，父侧环境由 EnvScope 恢复。
+        Assert.SkipUnless(TestPlatform.IsLinux, "syspkg replay shim legs are Linux-only");
+        var directory = Ws.Combine("syspkg-deb-askpass-pwenv");
+        Directory.CreateDirectory(directory);
+        using var env = new EnvScope();
+        var rec = env.TrackTemp(Path.Combine(
+            Path.GetTempPath(), "bundler-syspkg-rec-" + Guid.NewGuid().ToString("N") + ".txt"));
+        env.Set("BUNDLER_STUB_REC", rec);
+        env.Set("DISPLAY", ":99");
+        var password = "pw$ w\"'\\ith space";
+        env.Set("BUNDLER_STUB_PASSWORD", password);
+        env.Set("password", "inherited-not-secret");   // 预置已 export 同名变量
+        var (install, feedDir, bin, material) = SetupSyspkgInstall(
+            env, directory, "deb", "myapp", ["dpkg"]);
+        env.Set("BUNDLER_UPDATER_CMD_ZENITY",
+            WritePosixStub(bin, "zenity", ZenityPasswordStubBody));
+        env.Set("BUNDLER_UPDATER_CMD_SUDO",
+            WritePosixStub(bin, "sudo", SudoReadingStubBody));
+        SyspkgReplay.CommandProbe = _ => null;
+
+        var artifact = Path.Combine(feedDir, "myapp_2.0-1_amd64.deb");
+        File.WriteAllText(artifact, "pkg-v2-bytes");
+        WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+        {
+            Target = TestPlatform.LinuxTarget, Format = "deb",
+            Url = "myapp_2.0-1_amd64.deb", File = "myapp_2.0-1_amd64.deb",
+            Sha256 = Sha256Hex(artifact), Size = new FileInfo(artifact).Length,
+            Signature = Convert.ToBase64String(EcdsaSigner.SignFile(artifact, material)),
+        });
+
+        var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+        var info = (await client.CheckForUpdateAsync())!;
+        var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
+        client.Verify(info, downloaded);
+        var retention = Path.Combine(directory, "retention");
+        var app = WritePosixStub(directory, "app", "true\n");
+        using var process = client.Apply(info, downloaded, new ApplyOptions
+        {
+            StagingRoot = Path.Combine(directory, "staging"),
+            AppPath = app,
+            RollbackBackupDirectory = retention,
+        });
+        Assert.True(process.WaitForExit(60_000), "askpass leg did not exit in 60s");
+        Assert.Equal(0, process.ExitCode);
+
+        var lines = WaitRecord(rec, 4);
+        var text = string.Join('\n', lines);
+        // stdin 口令仍是对话框测试口令原样；sudo 环境不出现 password 变量。
+        Assert.Contains("sudo-pw " + password, text);
+        Assert.DoesNotContain("sudo-pwenv", text);
+        Assert.DoesNotContain("inherited-not-secret", text);
     }
 
     // linux 引导件收敛 musl 静态单件（#100 起 tools/ 无字面 linux-<arch> 件，

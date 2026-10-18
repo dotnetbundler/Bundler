@@ -43,8 +43,9 @@ internal static class SyspkgReplay
     internal static Func<string, int>? ChmodProbe;
 
     /// <summary>
-    /// 提权腿拉起缝：置非 null 即不真 spawn——由测试决定返回什么（快败进程/
-    /// 长活进程/抛异常），断言拉起观察窗退化与失败还原；生产为 null 走 Process.Start。
+    /// 提权腿拉起缝：置非 null 即不真 spawn——由测试决定返回什么（任意退出码的
+    /// 进程道具/抛异常），断言"spawn 抛异常才退化下一腿、已启动腿不重放"语义；
+    /// 生产为 null 走 Process.Start。
     /// </summary>
     internal static Func<ProcessStartInfo, Process?>? SpawnProbe;
 
@@ -61,10 +62,12 @@ internal static class SyspkgReplay
 
     private const string AskpassPrompt = "Authentication required to install the update";
 
-    // B3 拉起观察窗：spawn 成功 ≠ 提权腿可用（pkexec 在而无 polkit agent 的
-    // headless 场景拉起即刻非零退出，command -v 探测期证不出）。窗口内已退出且
-    // rc≠0 按该腿运行时失败退化下一腿；超时仍在运行（鉴权提示等用户交互，分钟级
-    // 合理）或 rc==0（极速装完）都按"已拉起"交还句柄——拉起即退口径不变。
+    // 拉起观察窗只用于退出码留痕与会话 env 删余，不是退化判据——Process.Start
+    // 一旦返回有效句柄，该腿即终局：窗内任意 rc（含 pkexec 126 取消、127 鉴权
+    // 失败、pkg-apply 3/4/5/6）都按"已拉起"交还句柄由调用方观察退出码，绝不
+    // 补拉下一级（授权取消/拒绝/未知鉴权失败一律停，已执行安装器不重放）。
+    // 超时仍在运行（鉴权提示等用户交互，分钟级合理）挂 Exited 钩同样只留痕+清理；
+    // 窗内已退出（任意 rc）的已终结进程不保证派发 Exited——清理内联做。
     private const int LaunchObserveMilliseconds = 2_000;
 
     /// <summary>deb/rpm/alpineapk 判定——客户端身份 format 词面。</summary>
@@ -333,8 +336,9 @@ internal static class SyspkgReplay
     }
 
     // 探测退化链：pkexec → zenity/kdialog 问密码 + sudo -S → 裸 sudo——
-    // 这里只做可用性探测排出有序腿表；首选腿拉起失败（spawn 抛/观察窗内非零
-    // 速退）时 StartLaunch 沿表逐腿运行时退化（B3），不起二次重试循环。
+    // 这里只做可用性探测排出有序腿表；首选腿 spawn 抛（探测后工具被删/执行位
+    // 丢失，Process.Start 未起成）时 StartLaunch 沿表退化下一腿——已 spawn 成
+    // 功的腿无论退出码都不再换腿，不起二次重试循环。
     // 问密码管线腿硬需要图形会话通道——DISPLAY/WAYLAND_DISPLAY 全缺席（headless）
     // 时 zenity/kdialog 必败，探测期直接不进表（tty 密码提示/NOPASSWD 场景靠裸 sudo）。
     private static ElevationLeg[] PickElevationLegs(string pkg)
@@ -416,14 +420,28 @@ internal static class SyspkgReplay
     {
         if (leg.AskpassArgv is { } askpass)
         {
-            // 问密码腿经 POSIX 管道：zenity/kdialog 把密码行直接喂 sudo -S——
-            // 密码不过本进程内存；管线退出码按末级（sudo 起起的 pkg-apply）算。
-            var pipeline = ShJoin(askpass) + " | " +
-                ShJoin([leg.SudoPath!, "-S", "-p", "", "--", .. verbArgv]);
+            // 问密码腿为串行 sh 脚本：先 unset 清掉可能继承的同名 export 变量
+            //——同名变量已 export 时赋值会保留 export 属性，口令会随环境进
+            // sudo 等子进程；清完后捕获 zenity/kdialog 的 stdout 与退出码——
+            // 对话框非零（用户取消/失败）一律清变量 exit 126，绝不调 sudo
+            //（旧管线 sudo 与对话框并发，sudo 缓存票据会越过取消直接放行）；
+            // 对话框成功才把密码经 command printf 管道喂 sudo -S，拿 sudo
+            // 退出码清变量原样退出。command 是 POSIX 内建命令（builtin 是 bash
+            // 私有、dash/busybox 全无），绕开函数遮蔽仍命中各 sh 内建 printf
+            //——密码不外落外部进程 argv/环境变量/磁盘/日志，
+            // 也不过本进程内存——$() 捕获在 sh 局部变量里。
+            var script =
+                "unset password\n" +
+                "password=$(" + ShJoin(askpass) + ") || { unset password; exit 126; }\n" +
+                "command printf '%s\\n' \"$password\" | " +
+                ShJoin([leg.SudoPath!, "-S", "-p", "", "--", .. verbArgv]) + "\n" +
+                "rc=$?\n" +
+                "unset password\n" +
+                "exit \"$rc\"";
             return new SyspkgLaunch
             {
                 FileName = "/bin/sh",
-                Arguments = ["-c", pipeline],
+                Arguments = ["-c", script],
                 EnvFile = envFile,
                 EnvFileDirectory = envDir,
             };
@@ -761,7 +779,8 @@ internal static class SyspkgReplay
         public string[] Arguments = [];
         public string? EnvFile;
         public string? EnvFileDirectory;
-        /// <summary>B3 运行时退化腿：首选腿 spawn 抛/观察窗内非零速退时依序补位。</summary>
+        /// <summary>运行时退化腿：首选腿 spawn 抛异常（Process.Start 未起成）时依序补位；
+        /// 已 spawn 成功的腿无论退出码均不换腿、不重放。</summary>
         public SyspkgLaunch[] Fallbacks = [];
         /// <summary>B1 还原上下文之一：retention 目录（applied 标记所在）。</summary>
         public string? RetentionDir;
@@ -772,17 +791,21 @@ internal static class SyspkgReplay
         public string? RetainedFile;
     }
 
-    // 拉起面：沿探测腿表逐腿拉起——单腿 spawn 抛（探测后工具被删/执行位丢失）
-    // 或观察窗内非零速退（pkexec 在无 polkit agent 的 headless 拉起即败）都退化
-    // 下一腿；观察窗内未退（含仍在等待鉴权交互）或 rc==0 按"已拉起"交还句柄。
-    // 全腿皆没拉起才清场透传：env 件删余 + applied 标记回记规划前值 +
+    // 拉起面：沿探测腿表逐腿拉起——单腿 spawn 抛（探测后工具被删/执行位丢失，
+    // Process.Start 未起成）才退化下一腿；一旦 spawn 返回有效句柄该腿即终局：
+    // 观察窗内任意退出码（0/3/4/5/6/126/127/其他）或窗外退出都只做退出码分类
+    // 留痕+会话 env 删余，原句柄交还调用方——授权取消/拒绝/未知鉴权失败一律停，
+    // 已执行安装器不重放（用户需其他方式时显式重试）。
+    // applied 标记/留存件按"最近交付工件"语义保留（诊断与回滚用，不代表安装
+    // 成功——取消也不是安装成功），不为 126/127 加迟到的异步还原。
+    // 全腿皆 spawn 失败才清场透传：env 件删余 + applied 标记回记规划前值 +
     // apply 侧新留存件连 .sig 一并删（B1——不留"标记指新件而装未成"的歪斜现场，
     // 否则下次 rollback 会把从未装上的新件排除在旧包候选外）。
     // 已拉起句柄做两件尽力事——会话 env 件删余（引导件读毕即删为主，
     // 此钩与下次 apply 的 24h staging 清扫是两道兜底）+ 退出码分类留痕
     //（拉起即退语义下 rc 主要靠 --log 件；活到读码的调用方也得分类口径）。
     // 存活腿挂 Exited 钩（ThreadPool 异步触发；本进程先退则钩不触发）；
-    // 观察窗内 rc0 速退的腿进程已终结、事件不保证派发——两件直接内联做。
+    // 观察窗内已退出（任意 rc）的已终结进程不保证派发 Exited——两件直接内联做。
     private static Process StartLaunch(SyspkgLaunch launch, Action<string>? log)
     {
         var legs = new List<SyspkgLaunch> { launch };
@@ -838,27 +861,10 @@ internal static class SyspkgReplay
             }
             if (process.WaitForExit(LaunchObserveMilliseconds))
             {
-                int rc;
-                try
-                {
-                    rc = process.ExitCode;
-                }
-                catch (Exception)
-                {
-                    rc = -1;
-                }
-                if (rc != 0)
-                {
-                    notes.Add($"{leg.FileName}: exited {rc} within {LaunchObserveMilliseconds}ms");
-                    log?.Invoke(
-                        $"update: elevation leg '{leg.FileName}' exited {rc} " +
-                        $"within {LaunchObserveMilliseconds}ms — trying next leg");
-                    process.Dispose();
-                    continue;
-                }
-                // 窗内 rc==0 速退=已拉起即完成：已终结进程不保证派发 Exited
-                //（POSIX 已 reap 路径实测不派发）——日志与 env 件清理必须
-                // 内联做，否则 session.env 残留磁盘。
+                // 窗内已退出（任意 rc，含授权取消/拒绝/鉴权失败）=该腿终局：
+                // 已终结进程不保证派发 Exited（POSIX 已 reap 路径实测不派发）——
+                // 退出码留痕与 env 件清理必须内联做，否则 session.env 残留磁盘；
+                // 非零不换腿，原句柄交还调用方观察退出码。
                 OnLegExited();
                 return process;
             }
@@ -876,7 +882,7 @@ internal static class SyspkgReplay
         }
         TryDeleteRetained(launch.RetainedFile);
         // spawnFailure 是最后一条腿的 spawn 异常——异常主信息里并入 notes 全腿
-        // 细节（spawn 失败 + 观察窗速退），避免混合失败时诊断面只剩一条。
+        // spawn 失败明细（能走到这里说明每腿都是 spawn 前就抛了）。
         if (spawnFailure is not null)
         {
             throw new UpdateException(
@@ -889,7 +895,9 @@ internal static class SyspkgReplay
     }
 
     // pkg-apply 退出码语义（§2.3）：0 成功；3 参数错；4 安装失败；5 包管理器缺席；
-    // 6 重启失败（安装已提交）。其余为提权器自身码（pkexec 126/127 鉴权失败等）。
+    // 6 重启失败（安装已提交）。126/127 属提权器自身码——126 是用户取消或问密码
+    // 提示失败（pkexec 取消/问密码腿对话框失败归一值），127 是鉴权/拉起失败
+    //（含工具链自身失败，不妄断为"无 agent"）；其余按提权/拉起失败归类。
     internal static string DescribeExitCode(int exitCode) => exitCode switch
     {
         0 => "success",
@@ -897,6 +905,8 @@ internal static class SyspkgReplay
         4 => "package install failed",
         5 => "no package manager available",
         6 => "installed; restart failed — relaunch manually",
+        126 => "authorization cancelled or password prompt failed",
+        127 => "authorization/launcher failure",
         _ => "elevation/launcher failure",
     };
 
