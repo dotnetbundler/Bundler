@@ -48,14 +48,16 @@ $snapJob = Start-Job -ScriptBlock {
     param($path)
     while ($true) {
         "===== $([datetime]::UtcNow.ToString('o')) =====" | Out-File -Append $path
+        # Job runspace 无控制台、缓冲宽 120——Out-String -Width 防 ExecutablePath/CommandLine 截断。
         Get-CimInstance Win32_Process |
-            Select-Object ProcessId, ParentProcessId, Name, ExecutablePath |
-            Format-Table -AutoSize | Out-String | Out-File -Append $path
+            Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine |
+            Format-Table -AutoSize | Out-String -Width 4096 | Out-File -Append $path
         Start-Sleep -Seconds 60
     }
 } -ArgumentList $snapPath
+# -Tail 4096：job 先于 tail 写出的早期样本也能流进日志，不缺 t=0 快照。
 $snapTail = Start-Process -PassThru -NoNewWindow -FilePath "powershell" `
-    -ArgumentList "-NoProfile","-Command","Get-Content -Wait -Tail 0 -Path `"$snapPath`""
+    -ArgumentList "-NoProfile","-Command","Get-Content -Wait -Tail 4096 -Path `"$snapPath`""
 try {
 foreach ($P in $projects) {
     $layer, $name = $P -split '/', 2
@@ -86,5 +88,5 @@ foreach ($P in $projects) {
 } finally {
     if ($tailProc) { Stop-Process -Id $tailProc.Id -Force -ErrorAction SilentlyContinue }
     if ($snapTail) { Stop-Process -Id $snapTail.Id -Force -ErrorAction SilentlyContinue }
-    if ($snapJob) { Stop-Job $snapJob; Remove-Job $snapJob -Force -ErrorAction SilentlyContinue }
+    if ($snapJob) { Remove-Job $snapJob -Force -ErrorAction SilentlyContinue }
 }
