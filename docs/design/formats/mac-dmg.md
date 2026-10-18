@@ -41,6 +41,11 @@
 - DMG 本体 `codesign` ad-hoc 验签实测；`udifrez` SLA 注入 + `udifderez` 回读断言实测。
 - x86_64/arm64/universal 三架构产物结构与挂载实测；x64 运行态启动 CI 两腿通过。
 - quarantine 挂载+拷出传播断言实测。
+- 挂载事实日志：`hdiutil attach` 成功后落 Information 级 `Mounted DMG volume at '<挂载点>' from '<image-rw.dmg>'`（MSBuild 侧映射 `MessageImportance.High`，正常发布输出可见）；
+  `attach` 未成功绝不落该消息。
+- 挂载后失败清理边界：已挂载且尚未成功卸载时后续失败，catch 尽力 `detach -force`（`TryRun` best-effort，不保证一定成功）；
+  管线 `finally` 回收工作目录与临时镜像，失败不留最终伪产物；
+  集成腿断言发布输出含挂载事实行（带工作域与 `dmg-mount` 挂载点）且 `hdiutil info` 有界轮询确认无残余挂载。
 - 横切：独立 `Bundler.MacDmg` 包、`BundlerMacDmg*` MSBuild 属性、全链离线、工具探测门槛。
 
 外部待验收（详见 `docs/project/special-acceptance.md`）：

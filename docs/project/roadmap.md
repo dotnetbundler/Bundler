@@ -113,7 +113,12 @@
 
 已登记待做项：
 
-- **`.dmg` 挂载事实可观测**（PR #136 Local Review 登记）：后端 `hdiutil attach` 成功处落 `Information` 级日志后，`MountedPhaseFailureLeavesNoMountResidue` 类断言可钉死"挂载后失败"腿确实经过 mounted=true 路径——防该覆盖随校验前移再度结构性空转。
+- 当前无待做项。
+
+已实现候选项（能力事实以格式文档为准）：
+
+- **`.dmg` 挂载事实可观测**（PR #136 Local Review 登记，`0.1.0-alpha.105` 落地）：`hdiutil attach` 成功后落 Information 级 `Mounted DMG volume at` 日志；
+  契约与边界见 [`mac-dmg.md`](../design/formats/mac-dmg.md)。
 
 已裁决不予登记的类别（记录理由，防重复提案）：
 
