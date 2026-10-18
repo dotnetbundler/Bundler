@@ -370,8 +370,11 @@ public sealed class MacDmgIntegrationTests : IClassFixture<MacDmgFixture>
             ? Directory.EnumerateFiles(badDir, "*.dmg", SearchOption.AllDirectories)
             : [];
         Assert.Empty(leftovers);
-        // hdiutil detach 返回后内核簿记有滞后——image-path 会短暂残留 listing；
-        // 有界轮询确认消失，保留"失败构建不遗留挂载"的真实断言力（真泄漏超窗仍判败）。
+        // 不变量收窄到本用例的产物域：失败构建不得在 bundle-bad 下留 image-path/挂载。
+        // 不能断言整个 Ws.Root——同 fixture 兄弟用例的合法镜像 detach 后仍被存活中的
+        // diskimages-helper 持有（hdiutil info 以 process ID 注册），慢宿主上可滞留
+        // 分钟级，邻座残影会把全局断言污染成假失败（intel 腿实证）。
+        // hdiutil detach 返回后内核簿记有滞后——有界轮询确认消失，真泄漏超窗仍判败。
         // info 非零退出视为"未确认"继续轮询——空 StdOut 不许把断言掏空成空过。
         var mounted = "";
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
@@ -379,15 +382,15 @@ public sealed class MacDmgIntegrationTests : IClassFixture<MacDmgFixture>
         {
             var info = ProcessRunner.Run("hdiutil", ["info"],
                 new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(30) });
-            mounted = info.ExitCode == 0 ? info.StdOut : _f.Ws.Root;
-            if (!mounted.Contains(_f.Ws.Root, StringComparison.Ordinal))
+            mounted = info.ExitCode == 0 ? info.StdOut : badDir;
+            if (!mounted.Contains(badDir, StringComparison.Ordinal))
             {
                 break;
             }
             Thread.Sleep(2000);
         }
         while (DateTime.UtcNow < deadline);
-        Assert.DoesNotContain(_f.Ws.Root, mounted);
+        Assert.DoesNotContain(badDir, mounted);
     }
 
     [Fact]
