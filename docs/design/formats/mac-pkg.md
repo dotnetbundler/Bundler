@@ -14,7 +14,8 @@
 
 ## 2. 宿主门槛
 
-- `.pkg` 制作必须 macOS 宿主，非 macOS 明确 `NotSupportedException`；工具全部系统自带（`/usr/bin`/`/usr/sbin`），macOS 10.7+ 起长期存在。
+- `.pkg` 制作必须 macOS 宿主，非 macOS 明确 `PlatformNotSupportedException`；
+  工具全部系统自带（`/usr/bin`/`/usr/sbin`），macOS 10.7+ 起长期存在。
 - `system` 域安装需管理员授权；`current-user-home` 域非管理员可装（`~/Applications` 等）。
 - 后端 `netstandard2.0`；MSBuild 入口需 .NET 10 SDK。
 

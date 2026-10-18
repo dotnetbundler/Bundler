@@ -7,14 +7,16 @@
 
 - `.dmg` 格式已冻结（基线 `0.1.0-alpha.45`），仅缺陷修复附回归测试。
 - C# 原生编排 `hdiutil`/`osascript`/`SetFile`/`sips`，不内嵌 create-dmg 类第三方 fork（参数全可控，与宿主检测策略一致）。
-- DMG 本体可 `codesign`（复用 `.app` 签名配置面，`Identity="-"` 跳过）；**DMG 本体不做公证**——Gatekeeper 核验内部 `.app` 的 stapled 票据。
+- DMG 本体可 `codesign`：自有 `Signing` 配置（identity 字符串 / `-` ad-hoc / 临时钥匙串证书，互斥），临时钥匙串实现复用 `MacAppSigning`；
+  `Identity="-"` 产 ad-hoc 签名并随即 `codesign --verify` 验签，完全未配置签名才跳过；
+  **DMG 本体不做公证**——Gatekeeper 核验内部 `.app` 的 stapled 票据。
 - EULA：`LicenseFile`（txt/rtf）经 `hdiutil udifrez` 注入 SLA 资源，挂载时弹同意面板。
 - 压缩枚举 `Udzo`/`Ulmo`/`Udbz`，**默认 `Ulmo`**（lzma；挂载侧需 macOS 10.15+；史前宿主显式改 `Udzo`）。
 - 产物命名 `名称-版本-架构.dmg`（契约以 `docs/design/targets.md` 为准）；`bless`/`internet-enable` 遗留开关不暴露。
 
 ## 2. 宿主门槛
 
-- DMG 制作**必须 macOS 宿主**（`hdiutil`/`osascript` 不可跨宿主），非 macOS 请求明确 `NotSupportedException`——与未签名 `.app` 任意宿主可产不同。
+- DMG 制作**必须 macOS 宿主**（`hdiutil`/`osascript` 不可跨宿主），非 macOS 请求明确 `PlatformNotSupportedException`——与未签名 `.app` 任意宿主可产不同。
 - 打包工具侧无实质版本下限（arm64 宿主天然 ≥11.0）；`SetFile`（卷图标）属 Xcode/CLT 附带，缺失降级跳过不阻塞。
 - 产物可挂载下限由压缩选型决定：`Ulmo` 需 macOS 10.15+（hdiutil(1) 明文），`Udzo` 可到 OS X 10.1。
 - 后端 `netstandard2.0`；MSBuild 入口需 .NET 10 SDK。
@@ -24,13 +26,15 @@
 - 只接受已存在 `.app` 目录输入（规划器请求 `Dmg` 时自动补 `App` 中间产物）；不重复签名 `.app` 内部、不改写其内容。
 - 任何一步失败：卸载残留卷 + 删临时 `.dmg`，不留伪产物。
 - 无安装事务，沿用 `.app` 拖放惯例（受管安装归 `.pkg`）。
-- 卷标准形态：`.app` + `/Applications` 拖放符号链接 + 隐藏 `.app` 扩展名；可选窗口背景图、卷图标、EULA。
+- 卷标准形态：`.app` + `/Applications` 拖放符号链接；
+  可选窗口背景图、卷图标、EULA。
+  不设置隐藏 `.app` 扩展名的 FinderInfo 属性：`SetFile -a E` 会把 `com.apple.FinderInfo` xattr 写到 .app 根，随拖放安装跟到用户机后被 `codesign --verify --deep --strict` 判 detritus 拒绝。
 
 ## 4. 能力状态
 
 已实现并验证：
 
-- `hdiutil create`→挂载→`convert` 全链；`/Applications` 符号链接；隐藏扩展名；失败清理。
+- `hdiutil create`→挂载→`convert` 全链；`/Applications` 符号链接；失败清理。
 - 宿主瞬态自愈：`create` "Resource busy"/`detach` 簿记滞后/`convert` "Resource temporarily unavailable"（EAGAIN）定向重试；`convert` 连续 EAGAIN 超阈值后先 `killall -9 diskimages-helper`（单用户 XPC 服务随下次请求自动重生）再按退避重试——CI 实证该痼疾可致宿主级 3 分钟以上持续 EAGAIN。
 - Finder 布局：窗口尺寸/位置、`.app` 与 `/Applications` 图标位、图标大小、背景图（png/jpg/gif）、卷图标 `.VolumeIcon.icns`+`SetFile -c icnC`；默认对齐上游（660×400、app=180,170、Applications=480,170、图标 128）。
 - **无 GUI 会话降级**：探测无 GUI 跳过布局+警告仍产可挂载 DMG；显式开关 `BundlerMacDmgLayoutSkip`。
