@@ -1,8 +1,9 @@
 // SyspkgReplay（deb/rpm/alpineapk 客户端 replay 编排）进程内面：
-// 预检三件套拒绝、三级提权退化链选腿与运行时退化（SpawnProbe 缝）、verb argv 逐字、
-// env 件内容/权限、留存件/applied 标记/签名旁车再验、回滚选件——
-// 全经 CommandProbe/EnvProbe/ExecProbe/ChmodProbe/SpawnProbe 缝断言，
-// 零真提权子进程；真 spawn 面在 Integration/UpdateClientChainTests 的 POSIX 垫片腿。
+// 预检三件套拒绝、三级提权退化链选腿与 spawn 前失败退化（SpawnProbe 抛异常缝）、
+// verb argv 逐字、问密码脚本形态、env 件内容/权限、留存件/applied 标记/签名旁车再验、
+// 回滚选件——全经 CommandProbe/EnvProbe/ExecProbe/ChmodProbe/SpawnProbe 缝断言，
+// 零真提权子进程；真进程层在 Integration/SyspkgReplayLaunchIntegrationTests，
+// 全链垫片面在 Integration/UpdateClientChainTests 的 POSIX 垫片腿。
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -185,9 +186,14 @@ public sealed class SyspkgReplayTests : TempBase
         Assert.Equal("/bin/sh", launch.FileName);
         Assert.NotNull(launch.EnvFile);
         var expected =
-            "'/stub/zenity' '--password' | '/stub/sudo' '-S' '-p' '' '--' " +
+            "unset password\n" +
+            "password=$('/stub/zenity' '--password') || { unset password; exit 126; }\n" +
+            "command printf '%s\\n' \"$password\" | '/stub/sudo' '-S' '-p' '' '--' " +
             $"'{UpdaterPath}' 'pkg-apply' '--pkg' '{retained}' '--format' 'deb' '--app' '{appAbs}' " +
-            $"'--env-file' '{launch.EnvFile}'";
+            $"'--env-file' '{launch.EnvFile}'\n" +
+            "rc=$?\n" +
+            "unset password\n" +
+            "exit \"$rc\"";
         Assert.Equal(new[] { "-c", expected }, launch.Arguments);
 
         // zenity 缺席退 kdialog（提示文本随 argv 进管线）。
@@ -205,9 +211,15 @@ public sealed class SyspkgReplayTests : TempBase
         Assert.Equal("/bin/sh", launch.FileName);
         Assert.NotNull(launch.EnvFile);
         expected =
-            "'/stub/kdialog' '--password' 'Authentication required to install the update' | " +
+            "unset password\n" +
+            "password=$('/stub/kdialog' '--password' 'Authentication required to install the update') " +
+            "|| { unset password; exit 126; }\n" +
+            "command printf '%s\\n' \"$password\" | " +
             $"'/stub/sudo' '-S' '-p' '' '--' '{UpdaterPath}' 'pkg-apply' '--pkg' '{retained}' " +
-            $"'--format' 'deb' '--app' '{appAbs}' '--env-file' '{launch.EnvFile}'";
+            $"'--format' 'deb' '--app' '{appAbs}' '--env-file' '{launch.EnvFile}'\n" +
+            "rc=$?\n" +
+            "unset password\n" +
+            "exit \"$rc\"";
         Assert.Equal(new[] { "-c", expected }, launch.Arguments);
     }
 
@@ -252,7 +264,11 @@ public sealed class SyspkgReplayTests : TempBase
 
         var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add);
         Assert.Equal("/bin/sh", launch.FileName);
-        Assert.StartsWith("'/stub/zenity' '--password' | ", launch.Arguments[1]);
+        Assert.StartsWith(
+            "unset password\n" +
+            "password=$('/stub/zenity' '--password') || { unset password; exit 126; }",
+            launch.Arguments[1]);
+        Assert.Contains("| '/stub/sudo' '-S' '-p' '' '--'", launch.Arguments[1]);
     }
 
     [Fact]
@@ -749,56 +765,29 @@ public sealed class SyspkgReplayTests : TempBase
         Assert.Contains("no retained package", exception.Message);
     }
 
-    // ---- B3：提权腿运行时退化 ----
+    // ---- B3：提权腿 spawn 前失败退化 ----
+    // 已 spawn 成功腿的任何退出码（含 126/127）在本层不可达——本层零真 spawn，
+    // 已启动腿不换腿/不重放的进程面归 Integration/SyspkgReplayLaunchIntegrationTests。
 
     [Fact]
-    public void Apply_ElevationLegFastFail_DegradesToNextLeg()
+    public void Apply_SpawnThrowsOnFirstLeg_NextLegAttemptedInOrder()
     {
-        // B3：pkexec 在而无 polkit agent → 拉起即非零速退——观察窗内退出按该腿
-        // 失败退化裸 sudo；第二腿窗口内仍在运行按"已拉起"交还。
-        SetupProbes(commands: new Dictionary<string, string>
-        {
-            ["dpkg"] = "/stub/dpkg",
-            ["pkexec"] = "/stub/pkexec",
-            ["sudo"] = "/stub/sudo",
-        });
+        // 退化判据只剩"Process.Start 未起成"：第一腿 spawn 抛异常依序试下一腿；
+        // 第二腿同样抛则全腿失败走统一还原——尝试顺序与次数经记录断言（零真 spawn）。
+        SetupProbes(
+            env: new Dictionary<string, string> { ["HOME"] = "/home/u" },
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["pkexec"] = "/stub/pkexec",
+                ["sudo"] = "/stub/sudo",
+            });
         var spawned = new List<ProcessStartInfo>();
-        using var sleeper = SleeperProcess();
         SyspkgReplay.SpawnProbe = startInfo =>
         {
             spawned.Add(startInfo);
-            return spawned.Count == 1 ? FastFailProcess() : sleeper;
+            throw new InvalidOperationException("spawn gone #" + spawned.Count);
         };
-        var install = InstallDir();
-        var artifact = Artifact();
-
-        var process = SyspkgReplay.Apply(Identity("deb"), artifact, Sig(Material, artifact),
-            install, Options(), _log.Add);
-
-        Assert.Same(sleeper, process);
-        Assert.Equal(2, spawned.Count);
-        Assert.Equal("/stub/pkexec", spawned[0].FileName);
-        Assert.Equal("/stub/sudo", spawned[1].FileName);
-        Assert.StartsWith("\"--\"", spawned[1].Arguments);   // 裸 sudo 腿 "--" 前缀保留
-        // 退化成功不还原——applied 标记指向新包。
-        Assert.Equal("myapp_2.0-1_amd64.deb",
-            File.ReadAllText(Path.Combine(RetentionDir, "applied")).Trim());
-        Assert.Contains(_log, line => line.Contains("trying next leg"));
-        try
-        {
-            sleeper.Kill();
-        }
-        catch (Exception)
-        {
-        }
-    }
-
-    [Fact]
-    public void Apply_AllLegsFastFail_RefusesAndRestores()
-    {
-        // B3+B1：唯一腿快败且无腿可退 → 确定性拒绝 + applied/留存对还原。
-        SetupProbes(commands: PkexecCommands("dpkg"));
-        SyspkgReplay.SpawnProbe = _ => FastFailProcess();
         var install = InstallDir();
         Directory.CreateDirectory(RetentionDir);
         File.WriteAllText(Path.Combine(RetentionDir, "applied"), "myapp_1.0-1_amd64.deb\n");
@@ -809,69 +798,19 @@ public sealed class SyspkgReplayTests : TempBase
                 install, Options(), _log.Add));
 
         Assert.Contains("no privilege escalation leg", exception.Message);
+        Assert.Equal(2, spawned.Count);
+        Assert.Equal("/stub/pkexec", spawned[0].FileName);
+        Assert.Equal("/stub/sudo", spawned[1].FileName);
+        Assert.StartsWith("\"--\"", spawned[1].Arguments);   // 裸 sudo 腿 "--" 前缀保留
+        // 全腿 spawn 失败还原：applied 回记规划前值、本轮留存对被删。
         Assert.Equal("myapp_1.0-1_amd64.deb",
             File.ReadAllText(Path.Combine(RetentionDir, "applied")).Trim());
         Assert.Equal(
             new[] { Path.Combine(RetentionDir, "applied") },
             Directory.EnumerateFiles(RetentionDir).ToArray());
+        Assert.Empty(Directory.EnumerateFileSystemEntries(StagingRoot));
+        Assert.Contains(_log, line => line.Contains("trying next leg"));
     }
-
-    [Fact]
-    public void Apply_LegExitedWithinWindow_EnvFileStillCleaned()
-    {
-        // 回归：提权腿观察窗内 rc==0 速退（垫片/工具同步成功即退形态）——
-        // 已终结进程不保证派发 Exited（POSIX 已 reap 路径实测不派发；
-        // ubuntu CI 实测残留）——清理只挂事件钩会让 session.env 残留磁盘。
-        // 生产侧改为速退腿内联清理。
-        // 断言：Apply 返回已退句柄后轮询 env 件必被删——速退腿走内联清理。
-        SetupProbes(
-            env: new Dictionary<string, string> { ["DISPLAY"] = ":0" },
-            commands: PkexecCommands("dpkg"));
-        SyspkgReplay.SpawnProbe = _ => FastOkProcess();
-        var install = InstallDir();
-        var artifact = Artifact();
-
-        using var process = SyspkgReplay.Apply(Identity("deb"), artifact,
-            Sig(Material, artifact), install, Options(), _log.Add);
-
-        Assert.True(process.HasExited, "腿已在观察窗内退出（rc==0 速退）");
-        // session.env 落在 <StagingRoot>/pkg-*/ 下。断言面是"session.env
-        // 不复存在"——速退腿走内联清理（本测试腿窗内必退，钩从未挂）；
-        // 轮询兼容内联已跑/未跑的时序（残留即回归）。
-        bool SessionEnvRemains() =>
-            Directory.Exists(StagingRoot) &&
-            Directory.EnumerateFiles(StagingRoot, "session.env", SearchOption.AllDirectories).Any();
-        for (var i = 0; i < 100 && SessionEnvRemains(); i++)
-        {
-            Thread.Sleep(100);
-        }
-        Assert.False(SessionEnvRemains(), "env 件删余必须执行——session.env（含会话变量）不得残留");
-    }
-
-    // 观察窗进程道具：快败件即刻非零退出；长活件窗内不退出（测试尾即杀）。
-    // 速退成功件模拟垫片/同步命令"拉起即 rc0 退出"——窗内必已退出，
-    // 命中"已退进程不保证派发 Exited、须内联清理"的回归面。
-    private static Process SpawnRaw(string file, string args) =>
-        Process.Start(new ProcessStartInfo(file, args)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        })!;
-
-    private static Process FastFailProcess() =>
-        RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? SpawnRaw("cmd.exe", "/c exit 3")
-            : SpawnRaw("/bin/sh", "-c \"exit 3\"");
-
-    private static Process FastOkProcess() =>
-        RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? SpawnRaw("cmd.exe", "/c exit 0")
-            : SpawnRaw("/bin/sh", "-c \"exit 0\"");
-
-    private static Process SleeperProcess() =>
-        RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? SpawnRaw("cmd.exe", "/c ping -n 30 127.0.0.1 >nul")
-            : SpawnRaw("/bin/sh", "-c \"sleep 30\"");
 
     // ---- B5：artifact/identity format 词面一致性 ----
 
@@ -904,7 +843,12 @@ public sealed class SyspkgReplayTests : TempBase
         Assert.Equal("package install failed", SyspkgReplay.DescribeExitCode(4));
         Assert.Equal("no package manager available", SyspkgReplay.DescribeExitCode(5));
         Assert.Contains("restart failed", SyspkgReplay.DescribeExitCode(6));
-        Assert.Equal("elevation/launcher failure", SyspkgReplay.DescribeExitCode(126));
+        // 126/127 属提权器自身码：取消/问密码失败与鉴权/拉起失败分列，
+        // 不妄断 127=="无 polkit agent"。
+        Assert.Equal("authorization cancelled or password prompt failed",
+            SyspkgReplay.DescribeExitCode(126));
+        Assert.Equal("authorization/launcher failure", SyspkgReplay.DescribeExitCode(127));
+        Assert.Equal("elevation/launcher failure", SyspkgReplay.DescribeExitCode(42));
     }
 
     // ---- 留存默认根（跨宿主断言——UserBackupsRoot 平台形参缝）----

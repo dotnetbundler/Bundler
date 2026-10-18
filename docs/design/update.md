@@ -43,7 +43,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
 
 ## 2. deb/rpm/alpineapk：受约束 installer-replay
 
-状态：**已实现**（自动化层全绿）——§2.2 客户端编排（`SyspkgReplay`）、§2.3 引导件动词、§2.4 客户端回滚重放、§2.5 身份/发射全落地；容器内真 root 全链（退化链/降权重启/env 回灌/账本/conffile/apk 降级/`--rollback`）经 `syspkg-verify` 三容器实证，图形提权入口链与桌面宿主实装归外部待验收（`docs/project/special-acceptance.md`）。
+状态：**已实现**（自动化层全绿）——§2.2 客户端编排（`SyspkgReplay`）、§2.3 引导件动词、§2.4 客户端回滚重放、§2.5 身份/发射全落地；容器内真 root 全链（退化链/降权重启/env 回灌/账本/conffile/apk 降级/`--rollback`）经 `syspkg-verify` 三容器实证；图形提权入口链的停链语义（取消/拒绝/鉴权失败一律停、已启动腿不重放、对话框失败不触 sudo）已实现并自动化覆盖，真实桌面观感与 GUI 交互归外部待验收（`docs/project/special-acceptance.md`）。
 "包管理器领地"论证的真实内核是**不绕过账本**——此前据此整体拒绝，现把防线从"不碰"收紧为"不绕账本"：replay 让包管理器自己登记、卸旧、跑 scriptlet，恰恰尊重账本，与拒绝理由不冲突。
 
 ### 2.1 语义归属与分界
@@ -67,19 +67,27 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   非 Bundler 链首装或 retention 无留存旧包时，`--rollback` 确定性拒绝报"无留存包可回滚"，不空转。
   retention 不做容量剪枝——留存件只增不剪不设上限，登记为开放边界（清理由外部运维策略管）。
 - **提权三级退化链**：`pkexec` → `zenity`/`kdialog` 询问密码 + `sudo -S` → 裸 `sudo`。
-  退化判据=可用性探测（`command -v`）+ 拉起即时失败退化：`pkexec` 腿拉起后做有界退出观察，
-  短窗内即退出按腿不可用退化下一级——`pkexec` 在场但会话无 polkit agent 的拉起即败即由此退化兜住。
-  任一级拉起 `bundler-updater pkg-apply` 后客户端退出。
-  问密码管线腿有图形会话门槛：`DISPLAY`/`WAYLAND_DISPLAY` 全缺席（headless）时
+  退化判据只剩可用性探测（`command -v`）与 spawn 前失败：`Process.Start` 未起成
+  （探测后工具被删/执行位丢失）才依序补下一腿；一旦 spawn 返回有效句柄该腿即终局——
+  观察窗内任意退出码（0/3/4/5/6/126/127/其他）或窗外退出都只留痕+清 env 件，
+  句柄原样交还调用方观察退出码，绝不重放已执行安装器。
+  授权取消/拒绝/未知鉴权失败一律停（pkexec 126 取消、127 鉴权失败、问密码腿
+  对话框失败归一 126）——用户需其他方式时显式重试，不自动换腿。
+  问密码腿为串行 sh 脚本：先 `unset password` 清掉可能继承的同名 export 属性，
+  再把对话框 stdout/rc 收进 sh 变量——密码不进子进程环境；
+  非零即清变量 exit 126 不触 sudo（sudo 缓存票据不得越过取消放行），
+  成功才 `command printf` 管道喂 `sudo -S`；密码不进 argv/环境变量/磁盘/日志。
+  问密码腿有图形会话门槛：`DISPLAY`/`WAYLAND_DISPLAY` 全缺席（headless）时
   zenity/kdialog 必败直接跳过，直落裸 `sudo`（tty 密码提示/NOPASSWD 场景存活）。
-  `pkexec` 弹窗在场被用户拒绝授权属用户裁决面（非自动化判定域），归 `docs/project/special-acceptance.md` 外部待验收。
+  `Apply`/`Rollback` 返回已拉起 `Process` 供观察退出码——已启动不表示安装成功；
+  `applied` 标记/留存件是"最近交付工件"面（诊断与回滚用），非零 rc 不还原。
 - 实现落点（B3 `SyspkgReplay`）：客户端身份 `alpineapk` 在动词面映射 `--format apk`。
   会话 env 件写 `<staging>/pkg-<guid>/session.env`（0600，含 CR/LF 的值跳过，零有效对或写败退为不带 `--env-file`）。
-  件是一次性输入：引导件读毕即删件与 `pkg-*` 暂存目录，客户端在拉起腿退出时尽力删余（观察窗内 rc0 速退内联执行、仍存活腿挂 `Exited` 钩——已终结进程不保证派发 `Exited`）——
+  件是一次性输入：引导件读毕即删件与 `pkg-*` 暂存目录，客户端在拉起腿退出时尽力删余（观察窗内退出任意 rc 均内联执行、仍存活腿挂 `Exited` 钩——已终结进程不保证派发 `Exited`）——
   客户端可能先于引导件退出使钩不触发，残件由下一次 apply 的 24h stale staging 清扫兜底。
   新包复制进用户空间 retention 目录并写 `applied` 标记；留存副本在拉起前再过一遍公钥验签（apply 与 rollback 同口径），验不过即拒绝并还原现场。
   rollback 拣 `applied` 之外最新留存件（须 pkg+sig 成对且过签，否则跳选下一个）同链重放、applied 翻回旧包名。
-  提权腿全部拉起失败（spawn 抛/观察窗内非零退）时还原 `applied` 标记并删除本轮 retained 件——rollback 侧只还原标记、绝不删既有留存件。
+  提权腿全部 spawn 失败（逐腿 `Process.Start` 均未起成）时还原 `applied` 标记并删除本轮 retained 件——rollback 侧只还原标记、绝不删既有留存件；已启动腿非零退出不属于此还原面。
   测试缝与引导件同名同源：`BUNDLER_UPDATER_CMD_<TOOL>` env 覆盖 + `CommandProbe`/`EnvProbe`/`ExecProbe`/`ChmodProbe`/`SpawnProbe` 进程内探针。
 
 ### 2.3 引导件侧（root，新动词 `pkg-apply`）
@@ -157,13 +165,13 @@ apk `apk add` 旧版本地件原生放行降级（alpine 容器实证：rc=0、�
   Windows MSYS sh 腿挂 `docs/project/special-acceptance.md` 外部验收。
 - `pkg-apply` 容器真机全链：`syspkg-verify` CI 腿在 debian/fedora/alpine 三容器内以 root 实证——真包装/更新/`--rollback`、账本断言（`dpkg -s`/`rpm -q`/`apk list --installed`）、conffile 保留（deb confold / rpm `.rpmnew`）、apk unsigned `--allow-untrusted` 与签名闸、降权重启 uid 归属+env 回灌、busybox `setpriv` 拒参→`su` 承接、rc 0/4/5/6 全绿（run 38936728961）。
   降权器逐级最小 argv 预检（`spawn` 只证分叉不证收参）由此腿实证补入双实现。
-- deb/rpm/alpineapk 客户端 replay 编排（`SyspkgReplay`，UPDATE 系统包扩展 B3）：预检三件套（构造闸 `pkg` 名 + 前端退化链 `command -v` + 账本归属双检）、留存目录 + `applied` 标记、三级提权退化链拉起安装位 `bundler-updater pkg-apply`（`alpineapk`→`apk` 映射、拉起即退）、rollback 拣留存旧包同链重放——unit 探针族跨宿主断言 + integration POSIX 垫片 e2e 仅 Linux 宿主执行（非 Linux 腿 skip）全绿。
+- deb/rpm/alpineapk 客户端 replay 编排（`SyspkgReplay`，UPDATE 系统包扩展 B3）：预检三件套（构造闸 `pkg` 名 + 前端退化链 `command -v` + 账本归属双检）、留存目录 + `applied` 标记、三级提权退化链拉起安装位 `bundler-updater pkg-apply`（`alpineapk`→`apk` 映射、拉起即退；退化判据=工具缺席/spawn 前失败，已启动腿任意 rc 不重放、取消/拒绝/鉴权失败停链、问密码取消不触 sudo）、rollback 拣留存旧包同链重放——unit 探针族跨宿主断言 + integration 真进程层道具（rc 原样/窗外清理/spawn 换腿）+ POSIX 垫片 e2e 仅 Linux 宿主执行（非 Linux 腿 skip）全绿。
 
 部分实现/外部待验收：macOS 同签名身份比对腿（无 Apple 证书，挂 `docs/project/special-acceptance.md`）。
 
 外部待验收（UPDATE 系统包扩展阶段，设计定稿见 §2）：
 
-- 容器提权全链/apk 降级/conffile 修改场景已由 `syspkg-verify` 实证；zypper 降级形态、图形提权入口链（pkexec→zenity/kdialog→`sudo -S`）、repack 拒绝场景、依赖变更场景仍为外部待验收，登记于 `docs/project/special-acceptance.md`。
+- 容器提权全链/apk 降级/conffile 修改场景已由 `syspkg-verify` 实证；zypper 降级形态、repack 拒绝场景、依赖变更场景仍为外部待验收；图形提权入口链的真实桌面观感（pkexec 弹窗/zenity/kdialog 对话框实机交互）亦归外部验收——停链/取消语义已自动化覆盖，登记口径见 `docs/project/special-acceptance.md`。
 
 ## 5. 明确拒绝
 
