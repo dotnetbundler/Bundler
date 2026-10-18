@@ -43,7 +43,7 @@ internal static class ToolRunner
     }
 
     // 挂死插桩：BUNDLER_TOOL_TRACE 指向文件时，每次真实 spawn 追加一行（打开即写即关，
-    // 进程被硬杀也不丢已落行）——CI 侧 tail 进 job 日志后，挂死现场=最后一条在途 spawn。
+    // 进程被硬杀也不丢已落行）——CI 侧落盘经 ci-logs-* 工件上传，挂死现场=最后一条在途 spawn。
     // argv 过密旗标遮罩：security -p / notarytool --password 等凭证位不落明文（秘密不入可回显日志）。
     private static void TraceSpawn(Process process, Request request)
     {
