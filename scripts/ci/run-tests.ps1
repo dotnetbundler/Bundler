@@ -47,7 +47,7 @@ $snapPath = "$OUT/process-snapshots.log"
 New-Item -ItemType File -Force -Path $snapPath | Out-Null
 $snapJob = Start-Job -ScriptBlock {
     param($path)
-    $keep = 'dotnet|Bundler|hdiutil|codesign|security|pkgbuild|productbuild|makensis|notarytool|ditto|xar|lipo|otool|spctl|productsign|syspolicyd|amfid|diskimages|candle|light\.exe|heat|msiexec|powershell|pwsh|cmd|tail'
+    $keep = 'dotnet|Bundler|hdiutil|codesign|security|pkgbuild|productbuild|productsign|pkgutil|makensis|notarytool|ditto|xar|lipo|otool|spctl|candle|light\.exe|heat|msiexec|sudo|docker|conhost|taskkill|MsMpEng|smartscreen|TrustedInstaller|TiWorker|powershell|pwsh|cmd\.exe|tail'
     while ($true) {
         "===== $([datetime]::UtcNow.ToString('o')) =====" | Out-File -Append $path
         # Job runspace 无控制台、缓冲宽 120——Out-String -Width 防 ExecutablePath/CommandLine 截断。
