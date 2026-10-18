@@ -35,12 +35,33 @@ esac
 
 # 挂死插桩：BUNDLER_TOOL_TRACE 指文件时后台 tail 进本 job 日志——job 被 timeout 硬杀
 # 也能从日志看到最后一条在途 spawn（文件自身不进工件，日志即证据）。
+TRACE_TAIL=""
 if [ -n "${BUNDLER_TOOL_TRACE:-}" ]; then
     mkdir -p "$(dirname "$BUNDLER_TOOL_TRACE")"; : > "$BUNDLER_TOOL_TRACE"
     tail -n +1 -f "$BUNDLER_TOOL_TRACE" &
     TRACE_TAIL=$!
-    trap 'kill "$TRACE_TAIL" 2>/dev/null || true' EXIT
 fi
+
+# 进程快照采样：每 60s 一份 uptime+进程树+hdiutil info 落 process-snapshots.log 并 tail
+# 进 job 日志——挂死复现时 trace 指认最后在途 spawn，快照指认其进程树/状态（挂起态、
+# 孤儿子树、挂载簿记残留），两路合起来钉凶手。常开不挂 env：本文件本就是 CI 驱动。
+SNAP="$OUT/process-snapshots.log"; : > "$SNAP"
+(
+    while :; do
+        {
+            echo "===== $(date -u +%FT%TZ) ====="
+            uptime || true
+            ps -axww -o pid,ppid,stat,etime,command 2>/dev/null || ps auxww || true
+            command -v hdiutil >/dev/null 2>&1 && hdiutil info || true
+            echo
+        } >> "$SNAP"
+        sleep 60
+    done
+) &
+SNAP_LOOP=$!
+tail -n +1 -f "$SNAP" &
+SNAP_TAIL=$!
+trap 'kill $TRACE_TAIL $SNAP_LOOP $SNAP_TAIL 2>/dev/null || true' EXIT
 
 for P in $PROJECTS; do
     LAYER="${P%%/*}"; NAME="${P##*/}"
