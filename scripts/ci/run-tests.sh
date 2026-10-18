@@ -33,17 +33,14 @@ case " $PROJECTS " in
         done ;;
 esac
 
-# 挂死插桩：BUNDLER_TOOL_TRACE 指文件时后台 tail 进本 job 日志——job 被 timeout 硬杀
-# 也能从日志看到最后一条在途 spawn（文件自身不进工件，日志即证据）。
-TRACE_TAIL=""
+# 挂死插桩：trace 与快照只落文件不刷 job 日志（日常日志保持干净）——由 test.yml 上传
+# 工件、需要时下载取证。残余盲区：job 被 timeout 硬杀时上传步不执行；#130 有界等待
+# 已把挂死收敛为步内失败，该场景仅剩非 ToolRunner 面的卡死。
 if [ -n "${BUNDLER_TOOL_TRACE:-}" ]; then
     mkdir -p "$(dirname "$BUNDLER_TOOL_TRACE")"; : > "$BUNDLER_TOOL_TRACE"
-    tail -n +1 -f "$BUNDLER_TOOL_TRACE" &
-    TRACE_TAIL=$!
 fi
 
-# 进程快照采样：每 60s 一份 uptime+过滤后进程清单+hdiutil info 落 process-snapshots.log
-# 并 tail 进 job 日志——挂死复现时 trace 指认最后在途 spawn，快照指认其进程树/状态。
+# 进程快照采样：每 60s 一份 uptime+过滤后进程清单+hdiutil info 落 process-snapshots.log。
 # ps 只留头行+非常驻状态（R/D/U/T/Z 首字符——S/I 长眠态滤掉）+spawn 面命令白名单：
 # 全量 ~300 行/份裁到数十行。白名单含已知嫌疑守护进程与 IPC 对端（securityd/amfid/
 # syspolicyd/diskimages/diskarbitrationd/trustd/installd/lsd）、SLA 点击驱动 osascript/
@@ -64,9 +61,7 @@ SNAP="$OUT/process-snapshots.log"; : > "$SNAP"
     done
 ) &
 SNAP_LOOP=$!
-tail -n +1 -f "$SNAP" &
-SNAP_TAIL=$!
-trap 'kill $TRACE_TAIL $SNAP_LOOP $SNAP_TAIL 2>/dev/null || true' EXIT
+trap 'kill $SNAP_LOOP 2>/dev/null || true' EXIT
 
 for P in $PROJECTS; do
     LAYER="${P%%/*}"; NAME="${P##*/}"
