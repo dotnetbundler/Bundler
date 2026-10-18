@@ -140,7 +140,7 @@ jobs:
       BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"
-      # 外部工具 spawn 落盘->run-tests.* tail 进 job 日志：挂死现场=最后一条在途 spawn。
+      # 外部工具 spawn 落盘->诊断工件：挂死现场=文件里最后一条在途 spawn。
       BUNDLER_TOOL_TRACE: ${{ github.workspace }}/artifacts/ci/bundler-tool-trace.log
     steps:
       - uses: actions/checkout@v7
@@ -171,11 +171,13 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/run-tests.ps1 -Suite $env:SUITE
 
-      - name: 上传失败线索（进度/快照/trace 日志）
-        if: failure()
+      # 诊断日志走工件不上 job 输出：always() 让绿腿也能下载（负载水位对比等观测面），
+      # 挂死经 ToolRunner 有界等待已收敛为步内失败，failure 场景同样覆盖。
+      - name: 上传诊断日志（进度/快照/trace）
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: progress-${{ matrix.os }}
+          name: ci-logs-${{ matrix.os }}
           path: |
             artifacts/ci/test-progress.log
             artifacts/ci/process-snapshots.log

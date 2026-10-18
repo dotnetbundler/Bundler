@@ -31,18 +31,15 @@ if ($projects -contains "Package/Bundler.PackageTests") {
     }
 }
 
-# 挂死插桩：BUNDLER_TOOL_TRACE 指文件时，后台 powershell Get-Content -Wait 把 trace
-# 流进本 job 日志（-NoNewWindow 继承控制台，job 被 timeout 硬杀也能看到最后在途 spawn）。
-$tailProc = $null
+# 挂死插桩：trace 与快照只落文件不刷 job 日志（日常日志保持干净）——由 test.yml 上传
+# 工件、需要时下载取证。残余盲区：job 被 timeout 硬杀时上传步不执行；#130 有界等待
+# 已把挂死收敛为步内失败，该场景仅剩非 ToolRunner 面的卡死。
 if ($env:BUNDLER_TOOL_TRACE) {
     New-Item -ItemType File -Force -Path $env:BUNDLER_TOOL_TRACE | Out-Null
-    $tailProc = Start-Process -PassThru -NoNewWindow -FilePath "powershell" `
-        -ArgumentList "-NoProfile","-Command","Get-Content -Wait -Tail 0 -Encoding UTF8 -Path `"$env:BUNDLER_TOOL_TRACE`""
 }
 
-# 进程快照采样：每 60s 一份过滤后进程清单落 process-snapshots.log 并 tail 进 job 日志——
-# 挂死复现时 trace 指认最后在途 spawn，快照指认进程树。清单按名称/命令行白名单过滤
-# （测试/工具/打包工具/宿主壳），全量表数千行/份的噪音裁到数十行；常开不挂 env。
+# 进程快照采样：每 60s 一份过滤后进程清单落 process-snapshots.log。清单按名称/命令行
+# 白名单过滤（测试/工具/打包工具/宿主壳），全量表数千行/份的噪音裁到数十行；常开不挂 env。
 $snapPath = "$OUT/process-snapshots.log"
 New-Item -ItemType File -Force -Path $snapPath | Out-Null
 $snapJob = Start-Job -ScriptBlock {
@@ -58,9 +55,6 @@ $snapJob = Start-Job -ScriptBlock {
         Start-Sleep -Seconds 60
     }
 } -ArgumentList $snapPath
-# -Tail 4096：job 先于 tail 写出的早期样本也能流进日志，不缺 t=0 快照。
-$snapTail = Start-Process -PassThru -NoNewWindow -FilePath "powershell" `
-    -ArgumentList "-NoProfile","-Command","Get-Content -Wait -Tail 4096 -Encoding UTF8 -Path `"$snapPath`""
 try {
 foreach ($P in $projects) {
     $layer, $name = $P -split '/', 2
@@ -89,7 +83,5 @@ foreach ($P in $projects) {
     }
 }
 } finally {
-    if ($tailProc) { Stop-Process -Id $tailProc.Id -Force -ErrorAction SilentlyContinue }
-    if ($snapTail) { Stop-Process -Id $snapTail.Id -Force -ErrorAction SilentlyContinue }
     if ($snapJob) { Remove-Job $snapJob -Force -ErrorAction SilentlyContinue }
 }
