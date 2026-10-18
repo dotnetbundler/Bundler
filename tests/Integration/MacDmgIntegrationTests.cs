@@ -394,6 +394,46 @@ public sealed class MacDmgIntegrationTests : IClassFixture<MacDmgFixture>
     }
 
     [Fact]
+    public void MountedPhaseFailureLeavesNoMountResidue()
+    {
+        _f.Ensure();
+        var badDir = _f.Ws.Combine("bundle-midfail");
+        // 注入点：BackgroundFile 不存在——校验期通过（它只是字符串），attach 完成后
+        // ApplyBrandingAsync 才在 mounted=true 态抛 FileNotFoundException，走 catch 强制
+        // detach。这条腿让"挂载后失败不留挂载残影"有真实触发面（bundle-bad 注入在校验期
+        // 就死、结构性跑不到挂载段）。
+        var result = Dotnet.Run(
+            ["publish", _f.FixtureProject, "-c", "Release",
+             $"-p:BundlerIntegrationOutput={badDir}",
+             "-p:BundlerMacDmgBackgroundFile=/nonexistent/no-such-background.png",
+             "--packages", _f.CacheDir],
+            new ProcessRunner.Options { Timeout = TimeSpan.FromMinutes(15) });
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("background image does not exist",
+            result.Output, StringComparison.OrdinalIgnoreCase);
+        var leftovers = Directory.Exists(badDir)
+            ? Directory.EnumerateFiles(badDir, "*.dmg", SearchOption.AllDirectories)
+            : [];
+        Assert.Empty(leftovers);
+        // 与 bundle-bad 同域判据：catch 的 detach -force 已先行，簿记残影超窗仍判败。
+        var mounted = "";
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+        do
+        {
+            var info = ProcessRunner.Run("hdiutil", ["info"],
+                new ProcessRunner.Options { Timeout = TimeSpan.FromSeconds(30) });
+            mounted = info.ExitCode == 0 ? info.StdOut : badDir;
+            if (!mounted.Contains(badDir, StringComparison.Ordinal))
+            {
+                break;
+            }
+            Thread.Sleep(2000);
+        }
+        while (DateTime.UtcNow < deadline);
+        Assert.DoesNotContain(badDir, mounted);
+    }
+
+    [Fact]
     public void ApiFixtureProducesMountableDmg()
     {
         _f.Ensure();
