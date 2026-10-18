@@ -55,7 +55,7 @@ SNAP="$OUT/process-snapshots.log"; : > "$SNAP"
             echo "===== $(date -u +%FT%TZ) ====="
             uptime || true
             ps -axww -o pid,ppid,stat,etime,command 2>/dev/null \
-                | awk 'NR==1 || $3 ~ /^[RDUTZ]/ || /dotnet|Bundler|hdiutil|codesign|security|pkgbuild|productbuild|productsign|pkgutil|installd|makensis|notarytool|ditto|xar |lipo|otool|spctl|osascript|syspolicyd|amfid|trustd|diskimages|diskarbitrationd|lsd|sudo|docker|containerd|dpkg|rpm|apk |abuild|zip |tar |gzip|sleep|bash|tail|open |[ /]sh /' \
+                | awk 'NR==1 || $3 ~ /^[RDUTZ]/ || /dotnet|Bundler|hdiutil|codesign|security|pkgbuild|productbuild|productsign|pkgutil|installd|makensis|notarytool|ditto|xar |lipo|otool|spctl|osascript|syspolicyd|amfid|trustd|diskimages|diskarbitrationd|lsd|sudo|docker|containerd|dpkg|rpm|apk |abuild|zip |tar |gzip|sleep|bash|tail|open |sh |cp |ln |chmod |plutil|nohup|xcrun|apt|dnf|zypper/' \
                 || ps auxww || true
             command -v hdiutil >/dev/null 2>&1 && hdiutil info || true
             echo
