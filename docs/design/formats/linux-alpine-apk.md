@@ -8,7 +8,9 @@
 - `.apk` 已冻结（基线 `0.1.0-alpha.63`），仅缺陷修复附回归测试。
 - 公共标识：`PackageFormat.AlpineApk`、`Bundler.AlpineApk` 包、CLI `--formats alpineapk`、MSBuild `BundlerAlpineApk*`、bundler.json `alpineapk` 段；**`apk` 别名已移除**（留给未来 Android 格式）。
 - **纯托管写入器，零原生工具**：apk v2 单文件 = 三段 gzip 流串联——签名段 tar（无末尾空块）+ 控制段 tar（无末尾空块）+ 数据 tar（有末尾空块）；复用 `Bundler.Core` `TarWriter` 段模式 + `GZipStream`（mtime=0 确定性）。apk v3 未发布稳定版不预支。
-- **目标仅 `linux-musl-x86_64`/`linux-musl-aarch64`**——apk 是 musl/Alpine 生态包管理器，向 glibc 目标产 apk 语义不成立（与 musl 拒绝 deb/rpm 对称）；架构映射 `x86_64`/`aarch64`，`BundlerAlpineApkArchitecture` 可覆盖（须 apk 架构名）。
+- **目标族 `linux-musl-<arch>`**——apk 是 musl/Alpine 生态包管理器，向 glibc 目标产 apk 语义不成立（与 musl 拒绝 deb/rpm 对称）；
+  架构映射以 `ArtifactNaming.ArchToken` 为单一来源，九词表见 `docs/design/targets.md`（`x86_64`/`x86`/`aarch64`/`armv7`/`armel`/`riscv64`/`loongarch64`/`ppc64le`/`s390x`），`BundlerAlpineApkArchitecture` 可覆盖（须 apk 架构名）；
+  真实装跑证据仍限 x86_64/aarch64（见 §3）。
 - 数据段布局：`/usr/lib/<pkgname>/` 载荷 + `/usr/bin/<binname>` 符号链接（`BundlerAlpineApkBinLink` 改名/关闭）；`BundlerAlpineApkFile` 任意绝对路径映射。Alpine 官方包用 `/usr/` 非 `/opt/`。
 
 ## 2. 语义契约
