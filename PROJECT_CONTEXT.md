@@ -1,9 +1,11 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-10-18
-> 当前分支：`fix/dmg-mounted-observability`（叠加分支：父链 `fix/updater-elevation-stop`@`841484f` 已推送为 PR #139、未合并；
+> 当前分支：`fix/dmg-mounted-observability`@`0c18cf9`（叠加分支：父链 `fix/updater-elevation-stop`@`841484f` 已推送为 PR #139、未合并；
+> 本分支已推送为 PR #140、base=PR #139、未合并；
 > 基线 `main@c319b8c`——含 #133/#134 诊断瘦身回净、#135 dmg 断言收窄、#136 dmg 挂载后失败注入腿、#137 文档对账、#138 签名文档修正；
-> `110a2fe` 基线全矩阵 verify `39133258129` 已 completed/success 全绿——不覆盖 alpha.104/105 新代码）
+> `110a2fe` 基线全矩阵 verify `39133258129` 已 completed/success 全绿——不覆盖 alpha.104/105 新代码；
+> 两阶段联合 verify run `39142103135`（head=`0c18cf9`）已触发、结果待确认）
 > UPDATE 系统包扩展 B0–B5 全链完成并入 `main`（PR #107 设计、#108 发射+`pkg` 身份、#109 引导件 `pkg-apply` 双实现、#106/#110 macOS quarantine 能力探测、#111 客户端 `SyspkgReplay`、#112 syspkg-verify 三容器验收+DropProbe 修复、#113/#115 冻件重冻、#114 收尾：syspkg-verify 经 `workflow_call` 收编 verify 发布门、usage 文档、`pkg` 字段 v1 兼容断言）。
 > 测试确定性修复 #116（奇偶腿宿主 `DEBIAN_FRONTEND` env 泄漏+uidedge rec 竞态）与 #117（NSIS 卸载分离删除断言改 WaitFor）已并入。
 > 发布门实证：verify 于 `9d51ba3` 基线**三连全绿**（run `39062962978`、`39066991823`、`39070871573`——六宿主测试矩阵 + syspkg 三容器腿 + produce/consume/manual/universal 全链）。
@@ -11,7 +13,7 @@
 > 外部工具挂死加固：PR #130 给 `ToolRunner`/`ToolCache` 全链有界等待+spawn 追踪（`BUNDLER_TOOL_TIMEOUT_SECONDS`/`BUNDLER_TOOL_TRACE`），挂死收敛为带现场的有界失败；macOS 偶发 `hdiutil` 簿记滞后断言面由 PR #131 改有界轮询；PR #132 加 CI 进程快照采样（随后过滤瘦身至测试/工具面白名单）——加固后 intel 腿 suite=all 八连压测零复现，OS 层凶手未捕获。
 > 图形提权入口链等剩余边界仍挂 `docs/project/special-acceptance.md`。
 > 当前包版本：`0.1.0-alpha.105`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；
-> 本分支 DMG 挂载可观测增强进行中，未合并、完整 CI 待跑）
+> 本分支 DMG 挂载可观测增强进行中，未合并、联合 verify `39142103135` 已触发待结论）
 > 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词（别称仅输入归一，产物名用各生态词），契约与全产物名目录见 `docs/design/targets.md`**
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/design/formats/` 单文档只留设计决策、语义契约与能力状态
 >
@@ -82,8 +84,10 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 
 当前基线：`main@c319b8c`（含 #137 文档对账、#138 签名文档修正；`0.1.0-alpha.103`）。
 最近非文档变更为 `2453c25`/#136（挂载后失败集成测试）。
-`fix/updater-elevation-stop` 分支在其上实施 UPDATE 提权停链修复（`0.1.0-alpha.104`）：已启动提权腿即终局、取消/拒绝/鉴权失败一律停不重放、问密码取消 126 不触 sudo——已推送为 PR #139（`841484f`），未合并、分支 CI 待跑；
-`fix/dmg-mounted-observability` 叠加其上实施 DMG 挂载可观测增强（`0.1.0-alpha.105`）：`hdiutil attach` 成功后落挂载事实 Information 日志（挂载点+镜像路径），attach 失败不落——未合并、完整 CI 待跑。
+`fix/updater-elevation-stop` 分支在其上实施 UPDATE 提权停链修复（`0.1.0-alpha.104`）：已启动提权腿即终局、取消/拒绝/鉴权失败一律停不重放、问密码取消 126 不触 sudo——已推送为 PR #139（`841484f`），未合并、CI 证据由联合 run `39142103135` 覆盖；
+`fix/dmg-mounted-observability` 叠加其上实施 DMG 挂载可观测增强（`0.1.0-alpha.105`）：`hdiutil attach` 成功后落挂载事实 Information 日志（挂载点+镜像路径），attach 失败不落——已推送为 PR #140（`0c18cf9`，base=PR #139），未合并；
+两 PR 均已过本地首轮评审（Local Review clean）；
+联合 verify run `39142103135`（head=`0c18cf9`）已触发、结果待确认——该 run 覆盖当前叠加分支运行时代码（含 #139 祖先），非 `841484f` 独立 CI 证据。
 全量重构、测试重写、收口修复与 UPDATE 系统包扩展链（PR #82–#136）均已合入 `main`；逐轮验证过程与 run 记录以 git 提交和 PR 留痕为准，本文不留分轮过程，仅保留当前事实与仍有意义的结论。
 
 - **verify 发布门**：`9d51ba3` 基线三连全绿（`39062962978`/`39066991823`/`39070871573`——六宿主测试矩阵 + syspkg 三容器 + produce/consume/manual/universal 全链）；
@@ -111,7 +115,8 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
   `--filter-class '*MacDmgIntegrationTests*'` 12 总/1 通过/11 跳过（macOS 门禁，真实挂载腿由 macOS CI 执行）；
   最终基础门：Unit 全量 1409 总/1372 通过/37 跳过/0 失败、Api 84/70/14/0、`PackageContentContractTests` 8/8；
   日志留临时目录 `bundler-verify-1792329808/dmg-observability/`；
-  `39133258129` 绿仅覆盖 `110a2fe` 基线，不含本分支新代码。
+  `39133258129` 绿仅覆盖 `110a2fe` 基线，不含本分支新代码；
+  本分支运行时代码 CI 证据待联合 verify `39142103135` 结论。
 
 ## 4. 外部验收边界（未执行，不视为完成）
 
@@ -135,9 +140,9 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 **测试体系重写已收口**（规格 `docs/design/testing.md`；Unit/Api/Integration/Package 四层 + `tests/Manual` 验收脚本层全量实现，CI 拓扑为 test/verify/produce-bootstrap/syspkg-verify 四 workflow，verify 发布门已全绿；PR 链 #90–#97 与静态兼容 PR #98 均已合入 `main`）。
 剩余工作：
 
-- **PR #139（`fix/updater-elevation-stop`@`841484f`）UPDATE 提权停链修复已完成本地评审（Local Review 首轮 clean）、CI 待跑**：`110a2fe` 基线全矩阵 verify `39133258129` 已全绿（旧基线证据，不覆盖分支新代码）；
-  其叠加分支 `fix/dmg-mounted-observability`（`0.1.0-alpha.105`，PR base 为 `fix/updater-elevation-stop`）DMG 挂载可观测增强已本机窄验证，未合并、完整 CI 待跑；
-  两分支新代码均需 PR 分支全矩阵 verify；
+- **PR #139（`fix/updater-elevation-stop`@`841484f`，UPDATE 提权停链修复）与其叠加 PR #140（`fix/dmg-mounted-observability`@`0c18cf9`，DMG 挂载可观测增强，`0.1.0-alpha.105`）均未合并、均已过本地首轮评审（Local Review clean）**：
+  联合 verify run `39142103135`（head=`0c18cf9`）已触发、结果待确认——覆盖当前叠加分支运行时代码（含 #139 祖先），非 `841484f` 独立 CI 证据；
+  `110a2fe` 基线全矩阵 verify `39133258129` 已全绿（旧基线证据，不覆盖分支新代码）；
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
 - UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 全链已实现：发射（`pkg` 身份字段、`CoveredFormats` 扩收、三后端旁车+引导件注入）、`pkg-apply` 动词 AOT/POSIX 双实现同协议、客户端 replay 编排（`SyspkgReplay`：预检三件套/留存/三级提权退化链/回滚重放）、debian/fedora/alpine 容器验收腿（经 `workflow_call` 收编 verify 发布门 `syspkg` job）——契约见 `docs/design/update.md` §2，图形提权真实桌面观感等剩余边界登记 `docs/project/special-acceptance.md`；
 - 发布链资产实际推送（NuGet/Release 为另一步）；
