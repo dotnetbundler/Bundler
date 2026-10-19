@@ -48,7 +48,8 @@ public sealed class ToolProcessStartInfo
     public Dictionary<string, string?> Environment { get; } = new();
     /// <summary>
     /// <see cref="Environment"/> 为完整环境块而非增量覆写。默认 false=继承+覆盖。
-    /// <see cref="UseShellExecute"/> 置位时本旗标不生效（环境块整体被跳过）。
+    /// <see cref="UseShellExecute"/> 置位时本旗标在 Windows 腿不生效
+    ///（环境块整体被跳过）；Unix 腿 UseShellExecute 无语义直通、旗标照常消费。
     /// </summary>
     public bool EnvironmentIsComplete { get; set; }
 }
