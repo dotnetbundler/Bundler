@@ -204,7 +204,6 @@ internal static class AppDirBuilder
         // rejected rather than silently shadowed.
         if (settings.Files is { Count: > 0 } files)
         {
-            var reserved = ReservedNames(packageName);
             foreach (var entry in files)
             {
                 var destination = (entry.Destination ?? "").Replace('\\', '/').Trim('/');
@@ -311,12 +310,16 @@ internal static class AppDirBuilder
             var full = Path.GetFullPath(hostPath);
             if (item.Kind == PayloadSourceKind.Directory)
             {
-                // 反向碰撞：目录条目落在一个已登记的文件/链接路径上同样拒绝。
+                // 反向碰撞：目录条目落在一个已登记的文件/链接路径上同样拒绝；
+                // 父链任一前缀被已落文件/链接占位（含子目录资源）也拒绝。
                 if (File.Exists(hostPath) || !claimed.Add(full))
                 {
                     throw new InvalidOperationException(
                         $"A resource directory collides with an existing payload entry: '{full}'.");
                 }
+                EnsureDirectories(appDir, Path.GetDirectoryName(hostPath)!,
+                    path => new InvalidOperationException(
+                        $"A payload directory collides with an existing file: '{path}'."));
                 Directory.CreateDirectory(hostPath);
                 continue;
             }

@@ -317,7 +317,8 @@ public sealed class AppImageTests : TempBase
         var work = input + ".work";
         var extraDir = Path.Combine(input, "extra-dir");
         Directory.CreateDirectory(extraDir);
-        File.WriteAllText(Path.Combine(extraDir, "x.txt"), "x");
+        Directory.CreateDirectory(Path.Combine(extraDir, "inner"));
+        File.WriteAllText(Path.Combine(extraDir, "inner", "x.txt"), "x");
         var extraFile = Path.Combine(input, "extra.conf");
         File.WriteAllText(extraFile, "k=v");
         try
