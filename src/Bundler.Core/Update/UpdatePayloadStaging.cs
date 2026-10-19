@@ -18,10 +18,13 @@ public static class UpdatePayloadStaging
         var workRoot = Path.GetFullPath(context.WorkDirectory);
         var input = Path.GetFullPath(item.InputDirectory);
         // 已在工作目录内（例如 signed-payload staging）→ 直接写旁车。
-        // TrimEnd 先剥尾部分隔符：根目录输入（"C:\"、"/"）拼 sep 会出双分隔符永不命中。
+        // TrimEnd 先剥尾部分隔符：根目录输入（"C:\"、"/"）拼 sep 会出双分隔符永不命中；
+        // workRoot 本身就是文件系统根时前缀退化成 "/"+任意输入全命中——排除根目录情形。
         var workPrefix = workRoot.TrimEnd(
             Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        if (input.StartsWith(workPrefix, PathText.Comparison))
+        var workIsRoot = string.Equals(
+            workRoot, Path.GetPathRoot(workRoot), PathText.Comparison);
+        if (!workIsRoot && input.StartsWith(workPrefix, PathText.Comparison))
         {
             InjectPayloadFiles(input, update, item);
             return item;

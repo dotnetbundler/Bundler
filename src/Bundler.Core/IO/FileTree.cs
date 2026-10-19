@@ -107,4 +107,33 @@ internal static class FileTree
             File.Copy(file, target, overwrite);
         }
     }
+
+    /// <summary>
+    /// 目录树是否"全旧"：根或任一后代（文件/目录皆可 stat）的 LastWriteTimeUtc
+    /// 新于 <paramref name="cutoff"/> 即非陈旧——深层在写的长跑进程顶层目录
+    /// mtime 可以很旧，只看顶层会误删在跑的工作目录。reparse 点不递归
+    /// （目录链绕回祖先会死递归；链接自身时戳照常计入）。
+    /// </summary>
+    internal static bool IsStale(string root, DateTime cutoff)
+    {
+        if (File.GetLastWriteTimeUtc(root) >= cutoff)
+        {
+            return false;
+        }
+        foreach (var entry in Directory.EnumerateFileSystemEntries(root))
+        {
+            if (File.GetLastWriteTimeUtc(entry) >= cutoff)
+            {
+                return false;
+            }
+            var attributes = File.GetAttributes(entry);
+            if (attributes.HasFlag(FileAttributes.Directory) &&
+                (attributes & FileAttributes.ReparsePoint) == 0 &&
+                !IsStale(entry, cutoff))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 }

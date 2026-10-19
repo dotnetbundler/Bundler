@@ -82,8 +82,8 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 
 ## 3. 最近验证
 
-当前基线：`main@09c9646`（`0.1.0-alpha.105`）+ PR #142 `rework/core-abstractions@fc1be05`（`0.1.0-alpha.106`，已推送、Local Review 第 1 轮处置中）。
-PR-1（Core+Abstractions 收口）本机验证（Windows x64，.NET SDK 10.0.302）：Release build rc 0（0 警告 0 错误）；Unit 全量 1433 总/0 失败/37 跳过；Api 全量 84 总/0 失败/14 跳过；Integration `ToolRunnerIntegrationTests` 3/3。
+当前基线：`main@09c9646`（`0.1.0-alpha.105`）+ PR #142 `rework/core-abstractions`（`0.1.0-alpha.106`，已推送、Local Review 进行中——头部 sha 以 git/PR 为准，快照不钉死）。
+PR-1（Core+Abstractions 收口）本机验证（Windows x64，.NET SDK 10.0.302）：Release build rc 0（0 警告 0 错误）；Unit 全量 1434 总/0 失败/37 跳过；Api 全量 84 总/0 失败/14 跳过；Integration `ToolRunnerIntegrationTests` 3/3。
 PR-1 已落改动面：`ToolRunner.RunSync` 成功腿有界排空（对齐 TryRunAsync，消最后一条无界等待）；`UpdatePayloadStaging` 改走 `FileTree.CopyTree`+自复制防护+保留名（`bundler-update.json`/引导件）撞名显式拒绝；
 `UpdateBootstrapper` 注入改 `InjectOrThrow` 直抛、target 词显式校验、提取根属主/0700/24h 清扫（含 squatting 降级根）；`UpdateKeyMaterial` P-256 坐标+在场私钥 d 校验、POSIX 0600；`.desktop` 全落文值 CR/LF 净化；
 Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline` producedPaths 归一化+缺失/碰撞分类异常+`.bundler-work` stale 清扫；

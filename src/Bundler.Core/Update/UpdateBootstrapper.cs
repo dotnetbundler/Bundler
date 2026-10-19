@@ -237,7 +237,7 @@ public static class UpdateBootstrapper
     {
         try
         {
-            if (Directory.GetLastWriteTimeUtc(directory) < cutoff)
+            if (FileTree.IsStale(directory, cutoff))
             {
                 Directory.Delete(directory, recursive: true);
             }

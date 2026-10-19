@@ -61,13 +61,13 @@ public sealed class UpdateKeyMaterial
             return Invalid(path);
         }
         // d 私钥字段在场即校验：缺失仍是合法的"只含公钥"件形态（ToPrivateParameters
-        // 给分类异常）；在场却坏 base64/非 32 字节标量时把畸形挡在 Load——
-        // 不能让坏 d 漏到签名时才炸成原始 FormatException。
+        // 给分类异常）；在场却坏 base64/非 32 字节/越出 [1, n-1] 标量时把畸形挡在
+        // Load——不能让坏 d 漏到签名时才炸成原始 Format/CryptographicException。
         if (material.D is { Length: > 0 } d)
         {
             try
             {
-                if (Convert.FromBase64String(d).Length != 32)
+                if (!IsValidP256Scalar(Convert.FromBase64String(d)))
                 {
                     return Invalid(path);
                 }
@@ -78,6 +78,38 @@ public sealed class UpdateKeyMaterial
             }
         }
         return material;
+    }
+
+    // P-256 群阶 n（secp256r1，大端 32 字节）：合法私钥标量须满足 0 < d < n。
+    private static readonly byte[] P256Order =
+    [
+        0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        0xBC, 0xE6, 0xFA, 0xAD, 0xA7, 0x17, 0x9E, 0x84,
+        0xF3, 0xB9, 0xCA, 0xC2, 0xFC, 0x63, 0x25, 0x51,
+    ];
+
+    private static bool IsValidP256Scalar(byte[] d)
+    {
+        if (d.Length != 32)
+        {
+            return false;
+        }
+        var allZero = true;
+        var lessThanOrder = false;
+        for (var i = 0; i < 32; i++)
+        {
+            allZero &= d[i] == 0;
+            if (!lessThanOrder && d[i] != P256Order[i])
+            {
+                lessThanOrder = d[i] < P256Order[i];
+            }
+            if (!lessThanOrder && d[i] > P256Order[i])
+            {
+                return false;
+            }
+        }
+        return !allZero && lessThanOrder;
     }
 
     // 旁车/清单里携带的未压缩点（0x04|X|Y）还原出只含公钥的材料。
