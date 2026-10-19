@@ -93,16 +93,7 @@ internal static class ApkPackageWriter
         if (settings.Signing.KeyFile is { Length: > 0 } keyFile)
         {
             var signature = ApkSigner.Sign(controlGzip, keyFile, settings.Signing.Passphrase);
-            var keyName = Path.GetFileName(keyFile);
-            if (keyName.EndsWith(".rsa.pub", StringComparison.Ordinal))
-            {
-                keyName = keyName.Substring(0, keyName.Length - ".rsa.pub".Length);
-            }
-            else if (keyName.EndsWith(".rsa", StringComparison.Ordinal))
-            {
-                keyName = keyName.Substring(0, keyName.Length - ".rsa".Length);
-            }
-            var memberName = ".SIGN.RSA." + keyName + ".rsa.pub";
+            var memberName = SignatureMemberName(keyFile);
             signatureGzip = Gzip.Compress(TarData(
             [
                 new TarEntry
@@ -244,6 +235,34 @@ internal static class ApkPackageWriter
     }
 
     /// <summary>The six apk control-script knobs and their dotted member names.</summary>
+    /// <summary>
+    /// The signature member name for a key file: <c>.SIGN.RSA.&lt;name&gt;.rsa.pub</c>
+    /// where <c>&lt;name&gt;</c> is the file's basename minus any
+    /// <c>.rsa</c>/<c>.rsa.pub</c> suffix — matching <c>/etc/apk/keys/&lt;name&gt;.rsa.pub</c>
+    /// lookup. A name that reduces to empty rejects. Shared with
+    /// <see cref="ApkValidation"/> so `bundler validate` surfaces the same error.
+    /// </summary>
+    internal static string SignatureMemberName(string keyFile)
+    {
+        var keyName = Path.GetFileName(keyFile);
+        if (keyName.EndsWith(".rsa.pub", StringComparison.Ordinal))
+        {
+            keyName = keyName.Substring(0, keyName.Length - ".rsa.pub".Length);
+        }
+        else if (keyName.EndsWith(".rsa", StringComparison.Ordinal))
+        {
+            keyName = keyName.Substring(0, keyName.Length - ".rsa".Length);
+        }
+        if (keyName.Length == 0)
+        {
+            throw new ArgumentException(
+                $"The .apk signing key file name '{Path.GetFileName(keyFile)}' has no usable " +
+                "base name — the signature member would be '.SIGN.RSA..rsa.pub'. " +
+                "Rename the key file to '<name>.rsa'.");
+        }
+        return ".SIGN.RSA." + keyName + ".rsa.pub";
+    }
+
     internal static (string? Path, string Name)[] ScriptKnobs(AlpineApkBundleConfiguration settings) =>
     [
         (settings.PreInstallFile, ".pre-install"),

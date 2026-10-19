@@ -82,11 +82,12 @@ internal static class PayloadSource
                     $"The resource target must stay inside the payload: '{resource.Destination}'.");
             }
             var source = Path.GetFullPath(resource.Source);
-            if (IsLink(source) && Directory.Exists(source))
+            if (IsLink(source))
             {
+                // 先判链接再判存在性——悬空链接也能拿到统一的链接专错。
                 throw new ArgumentException(
-                    $"The resource source '{resource.Source}' is a directory link — " +
-                    "point the resource at the real directory.");
+                    $"The resource source '{resource.Source}' is a link — " +
+                    "point the resource at the real file/directory it refers to.");
             }
             if (Directory.Exists(source))
             {
@@ -105,14 +106,6 @@ internal static class PayloadSource
             }
             else if (File.Exists(source))
             {
-                if (IsLink(source))
-                {
-                    // A single-file resource that is a link has no meaningful
-                    // in-tree target — preserving it would ship a dangling link.
-                    throw new ArgumentException(
-                        $"The resource source '{resource.Source}' is a link — " +
-                        "map the real file it points at instead.");
-                }
                 if (!UnixFileTypes.IsRegularFile(source))
                 {
                     logger.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {source}");
@@ -165,7 +158,21 @@ internal static class PayloadSource
                         $"The payload path '{entry}' is a directory link on a Windows host — " +
                         "junctions cannot be expressed as package symlinks; use the real directory.");
                 }
-                var target = ResolveInTreeTarget(treeRoot, entry);
+                if (!LinkProbe.TryReadTarget(entry, out var raw) || raw.Length == 0)
+                {
+                    // Windows 的非链接 reparse 点（云端占位、去重 chunk 等）维持
+                    // 基线的警告跳过；POSIX 上读不到目标的就是坏链接，拒绝。
+                    if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+                    {
+                        logger.Log(BundleLogLevel.Warning,
+                            $"Skipping non-link reparse point: {entry}");
+                        continue;
+                    }
+                    throw new ArgumentException(
+                        $"The payload path '{entry}' is a link whose target cannot be read — " +
+                        "links are only supported when they resolve inside the payload tree.");
+                }
+                var target = ResolveInTreeTarget(treeRoot, entry, raw);
                 // 链接是叶条目（与 includeDirectories 无关）——恒入 leaves。
                 leaves.Add(new PayloadSourceItem(
                     PayloadSourceKind.Symlink, archivePath, entry, LinkMode, target));
@@ -219,14 +226,8 @@ internal static class PayloadSource
     /// inside <paramref name="treeRoot"/> and exist; returns the target
     /// re-emitted relative to the link's parent directory in POSIX form.
     /// </summary>
-    private static string ResolveInTreeTarget(string treeRoot, string linkPath)
+    private static string ResolveInTreeTarget(string treeRoot, string linkPath, string raw)
     {
-        if (!LinkProbe.TryReadTarget(linkPath, out var raw) || raw.Length == 0)
-        {
-            throw new ArgumentException(
-                $"The payload path '{linkPath}' is a link whose target cannot be read — " +
-                "links are only supported when they resolve inside the payload tree.");
-        }
         var linkDirectory = Path.GetDirectoryName(Path.GetFullPath(linkPath))!;
         var resolved = Path.GetFullPath(
             Path.IsPathRooted(raw) ? raw : Path.Combine(linkDirectory, raw));
@@ -245,7 +246,10 @@ internal static class PayloadSource
                 $"The payload link '{linkPath}' is dangling ('{raw}') — " +
                 "the link target must exist inside the payload tree.");
         }
-        return MakeRelative(linkDirectory, resolved);
+        var relative = MakeRelative(linkDirectory, resolved);
+        // 指向自身所在目录（`ln -s . link`）时相对路径为空——POSIX 上 "." 就是
+        // 合法目标文本，原样保留而不是产空 LinkTarget。
+        return relative.Length == 0 ? "." : relative;
     }
 
     /// <summary>POSIX relative path from <paramref name="fromDirectory"/> to <paramref name="toPath"/>.</summary>

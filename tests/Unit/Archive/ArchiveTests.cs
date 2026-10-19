@@ -156,6 +156,40 @@ public sealed class ArchiveTests : TempBase
     }
 
     [Fact]
+    public async Task RejectsParentChildFileDestinations()
+    {
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "prefix-out");
+        var extra = Path.Combine(Path.GetDirectoryName(input)!, "x.conf");
+        File.WriteAllText(extra, "x");
+        try
+        {
+            // 同一 Files 列表内部"父是文件、下有子项"双向都拒。
+            foreach (var files in new[]
+            {
+                new[] { "a/b", "a/b/c" },
+                new[] { "a/b/c", "a/b" }
+            })
+            {
+                await Assert.ThrowsAsync<ArgumentException>(() =>
+                    new ArchiveBundler(new ArchiveBundleConfiguration
+                    {
+                        Files = files.Select(d => new ArchiveFileEntry
+                        {
+                            Source = extra, Destination = d
+                        }).ToArray()
+                    }).BuildAsync(
+                        Configuration(input, output, formats: [PackageFormat.Zip]),
+                        TestContext.Current.CancellationToken));
+            }
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
+    [Fact]
     public async Task RejectsInvalidSettings()
     {
         var input = CreateInputDirectory();

@@ -75,10 +75,6 @@ internal static class FileTree
         }
         foreach (var directory in directories)
         {
-            if (links == TreeLinkPolicy.Reject)
-            {
-                RejectReparsePoint(directory, linkErrorMessage!);
-            }
             CopyTree(
                 directory,
                 Path.Combine(destination, Path.GetFileName(directory)),

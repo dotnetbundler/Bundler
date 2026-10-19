@@ -33,7 +33,16 @@ internal static class LinkProbe
     {
         target = "";
         var buffer = new byte[4096];
-        var length = SystemNative_ReadLink(path, buffer, buffer.Length);
+        int length;
+        try
+        {
+            length = SystemNative_ReadLink(path, buffer, buffer.Length);
+        }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)
+        {
+            // 边缘宿主缺 libSystem.Native——按"读不到链接"处理而不是炸管线。
+            return false;
+        }
         if (length <= 0)
         {
             return false;
@@ -55,23 +64,34 @@ internal static class LinkProbe
     private static bool TryReadReparsePoint(string path, out string target)
     {
         target = "";
-        using var handle = CreateFileW(
-            path,
-            0 /* metadata only */,
-            0x00000007 /* FileShare.ReadWrite | FileShare.Delete */,
-            IntPtr.Zero,
-            3 /* FileMode.Open */,
-            FileFlagOpenReparsePoint | FileFlagBackupSemantics,
-            IntPtr.Zero);
-        if (handle.IsInvalid)
+        SafeFileHandle handle;
+        try
+        {
+            handle = CreateFileW(
+                path,
+                0 /* metadata only */,
+                0x00000007 /* FileShare.ReadWrite | FileShare.Delete */,
+                IntPtr.Zero,
+                3 /* FileMode.Open */,
+                FileFlagOpenReparsePoint | FileFlagBackupSemantics,
+                IntPtr.Zero);
+        }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)
         {
             return false;
         }
+        using (handle)
+        {
+            if (handle.IsInvalid)
+            {
+                return false;
+            }
 
         var buffer = new byte[16384];
+        // 最小记录 = 8B 头 + 2×4B name offset/length（mountpoint）；symlink 另带 4B flags。
         if (!DeviceIoControl(handle, FsctlGetReparsePoint,
                 IntPtr.Zero, 0, buffer, buffer.Length, out var bytesReturned, IntPtr.Zero) ||
-            bytesReturned < 20)
+            bytesReturned < 16)
         {
             return false;
         }
@@ -82,7 +102,7 @@ internal static class LinkProbe
             IoReparseTagMountPoint => 16,
             _ => 0
         };
-        if (pathBufferOffset == 0)
+        if (pathBufferOffset == 0 || bytesReturned < pathBufferOffset)
         {
             return false;
         }
@@ -99,6 +119,7 @@ internal static class LinkProbe
             : raw.StartsWith("\\\\?\\", StringComparison.Ordinal) ? raw.Substring(4)
             : raw;
         return target.Length > 0;
+        }
     }
 
     [DllImport("libSystem.Native", EntryPoint = "SystemNative_ReadLink", CharSet = CharSet.Ansi,

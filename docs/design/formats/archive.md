@@ -10,7 +10,7 @@
 - 布局：**单顶层目录** `<pkg>-<ver>-<target>/` 含完整 publish 载荷（解压不成"散弹"）；不引入 usr 语义。
 - **可执行位保留**：tar 写 mode；zip 写 `version made by=Unix`+external attrs（Info-ZIP 惯例）；文件头魔数探针判定（ELF/shebang/Mach-O→0755，其余 0644）。
 - **符号链接保留**：tar 原生 symlink 条目；zip 按 Info-ZIP 惯例（mode 0100777+数据为链接目标）——publish 载荷常见 `lib*.so` 链接，展平会改语义。
-  链接目标读取走 Core `LinkProbe` 单源（Unix `readlink`、Windows reparse point 布局），外指/悬空链接打包前拒绝。
+  链接目标读取走 Core `LinkProbe` 单源（Unix `readlink`、Windows reparse point 布局）；归档按目标文本原样入档、不解析内/外指向（可重定位归档与包内固定根不同——`PayloadSource` 的树内约束不适用于此）。
 - **宿主工具腿先写临时件**：macOS xattr 腿让 `zip`/`tar` 先写独立临时归档、成功后 move 到最终路径——超时/被杀的残留进程不会与托管回退并发改同一输出。
 - `.sha256` 侧车与其他格式一致；压缩级别固定（gzip/deflate level 6）不暴露旋钮。
 - 旋钮最小集：`PackageName`/`Version`/`ArchiveName` 模板、`@(BundlerArchiveFile)` 归档相对路径映射（逃逸/碰撞校验同 AppDir 口径）；freedesktop/desktop 件不属归档职责。

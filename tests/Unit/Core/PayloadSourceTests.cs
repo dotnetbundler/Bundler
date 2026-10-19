@@ -228,6 +228,27 @@ public sealed class PayloadSourceTests : TempBase
     }
 
     [Fact]
+    public void CollectInput_SelfDirectoryLink_TargetDot()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows 上指向目录的链接统一按目录链接拒绝");
+        var input = Temp("bundler-payload");
+        var link = Path.Combine(input.FullName, "self");
+        if (!TryCreateLink(link, "."))
+        {
+            Assert.Skip("The host cannot create symlinks; link leg unverifiable.");
+        }
+
+        var items = PayloadSource.CollectInput(input.FullName, "/opt/app", "x",
+            NullBundleLogger.Instance).ToArray();
+
+        // 指向自身所在目录的链接目标是 "."——绝不产空 LinkTarget。
+        var item = items.Single(i => i.ArchivePath == "/opt/app/self");
+        Assert.Equal(PayloadSourceKind.Symlink, item.Kind);
+        Assert.Equal(".", item.LinkTarget);
+    }
+
+    [Fact]
     public void CollectResources_LinkSource_Rejected()
     {
         var real = TempPath($"res-{Guid.NewGuid():N}.txt");

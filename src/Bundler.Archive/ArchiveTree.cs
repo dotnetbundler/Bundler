@@ -61,6 +61,13 @@ internal static class ArchiveTree
                     throw new ArgumentException(
                         $"BundlerArchiveFile destination '{destination}' collides with an existing payload entry.");
                 }
+                // 新认领条目要回写簿记：目的地本身是叶，隐式父前缀在归档里是目录——
+                // 不登记会让同一 Files 列表内 "a/b" 与 "a/b/c" 形态滑过。
+                leaves.Add(destination);
+                for (var i = 0; i < segments.Length - 1; i++)
+                {
+                    directories.Add(i == 0 ? segments[0] : string.Join("/", segments.Take(i + 1)));
+                }
                 var source = RequireExisting(file.Source);
                 entries.Add(new Entry
                 {

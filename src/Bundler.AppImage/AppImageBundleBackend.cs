@@ -144,6 +144,19 @@ internal sealed class AppImageBundleBackend(
         {
             LinuxLinkName.Validate(binLink, "AppImageBinLink");
         }
+        // mainExecutable 插值进 AppRun 的双引号 shell 行——与 installRoot 同规净化。
+        foreach (var target in bundle.Targets)
+        {
+            var mainExecutable = (target.MainExecutable ?? "").Replace('\\', '/');
+            if (mainExecutable.Length > 0 &&
+                mainExecutable.Split('/').Any(segment =>
+                    segment is "" or "." or ".." ||
+                    segment.Any(c => char.IsWhiteSpace(c) || c is '"' or '\'' or '$' or '`' or '\\')))
+            {
+                throw new ArgumentException(
+                    $"The main executable must be a relative path without shell metacharacters, got '{target.MainExecutable}'.");
+            }
+        }
         if (settings.Architecture is { Length: > 0 } archOverride)
         {
             AppImageIdentity.NormalizeArchitecture(archOverride);
@@ -178,6 +191,11 @@ internal sealed class AppImageBundleBackend(
             {
                 throw new ArgumentException(
                     $"BundlerAppImageFile destinations must be relative paths inside the AppDir, got '{entry.Destination}'.");
+            }
+            if (AppDirBuilder.ReservedNames(packageName).Contains(destination))
+            {
+                throw new ArgumentException(
+                    $"BundlerAppImageFile destination '{destination}' collides with a generated AppDir entry.");
             }
             FreedesktopFiles.RequireExisting(entry.Source, "BundlerAppImageFile");
         }

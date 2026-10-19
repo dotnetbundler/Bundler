@@ -46,11 +46,16 @@ internal static class ApkValidation
             throw new ArgumentException(
                 "Signing.Passphrase requires Signing.KeyFile to point at a PEM RSA private key.");
         }
-        if (hasKey && !File.Exists(settings.Signing.KeyFile!))
+        if (hasKey)
         {
-            throw new FileNotFoundException(
-                $"The .apk signing key does not exist: {settings.Signing.KeyFile}",
-                settings.Signing.KeyFile);
+            if (!File.Exists(settings.Signing.KeyFile!))
+            {
+                throw new FileNotFoundException(
+                    $"The .apk signing key does not exist: {settings.Signing.KeyFile}",
+                    settings.Signing.KeyFile);
+            }
+            // 成员名推导的可空基名检查与构建同链。
+            ApkPackageWriter.SignatureMemberName(settings.Signing.KeyFile!);
         }
 
         foreach (var depend in settings.Depends ?? [])
@@ -148,11 +153,26 @@ internal static class ApkValidation
         {
             description = bundle.ProductName;
         }
+        // .PKGINFO 字段单行——校验落在解析后值上，bundle.Description/Homepage
+        // 回退源同样被门住（否则 validate 过、Build 才在 Field() 抛）。
+        var url = settings.Url ?? bundle.Homepage ?? "";
+        var origin = settings.Origin ?? packageName;
+        var license = settings.License ?? "";
+        foreach (var (knob, value) in new (string, string)[]
+        {
+            ("Description", description), ("Url", url),
+            ("License", license), ("Origin", origin)
+        })
+        {
+            if (value.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+            {
+                throw new ArgumentException($"The .apk {knob} must be a single line.");
+            }
+        }
         return new Resolved(
             packageName, upstream + "-r" + release, architecture,
             "usr/lib/" + packageName, binLink,
-            settings.Origin ?? packageName, description,
-            settings.Url ?? bundle.Homepage ?? "", settings.License ?? "", buildDate);
+            origin, description, url, license, buildDate);
     }
 
     internal static readonly string[] BuiltInFields =

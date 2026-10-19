@@ -123,7 +123,7 @@ public sealed class FileTreeTests : TempBase
         catch (IOException) { Assert.Skip("symlink creation not permitted"); }
         catch (UnauthorizedAccessException) { Assert.Skip("symlink creation not permitted"); }
 
-        // Reject 语义覆盖嵌套目录链接——此前只对树根本身检查。
+        // Reject 经递归入口检查覆盖嵌套目录链接（不止树根）。
         Assert.Throws<InvalidDataException>(() =>
             FileTree.CopyTree(source, dest, NullBundleLogger.Instance,
                 links: TreeLinkPolicy.Reject, linkErrorMessage: "link rejected"));

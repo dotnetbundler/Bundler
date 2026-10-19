@@ -1143,4 +1143,23 @@ public sealed class AlpineApkTests : TempBase
         return dir?.FullName
             ?? throw new InvalidOperationException("repo root not found above " + AppContext.BaseDirectory);
     }
+
+    [Fact]
+    public void SignatureMemberName_StripsRsaSuffix()
+    {
+        Assert.Equal(".SIGN.RSA.mykey.rsa.pub",
+            ApkPackageWriter.SignatureMemberName("/keys/mykey.rsa"));
+        Assert.Equal(".SIGN.RSA.mykey.rsa.pub",
+            ApkPackageWriter.SignatureMemberName("/keys/mykey.rsa.pub"));
+        Assert.Equal(".SIGN.RSA.mykey.pem.rsa.pub",
+            ApkPackageWriter.SignatureMemberName("/keys/mykey.pem"));
+    }
+
+    [Fact]
+    public void SignatureMemberName_EmptyBaseName_Rejected()
+    {
+        // 私钥文件名恰为 .rsa/.rsa.pub 时基名为空——显式拒而非产 .SIGN.RSA..rsa.pub。
+        Assert.Throws<ArgumentException>(() => ApkPackageWriter.SignatureMemberName("/keys/.rsa"));
+        Assert.Throws<ArgumentException>(() => ApkPackageWriter.SignatureMemberName("/keys/.rsa.pub"));
+    }
 }

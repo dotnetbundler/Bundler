@@ -513,7 +513,7 @@ internal static class RpmPackageWriter
 
     private static string SummaryOf(BundleConfiguration bundle)
     {
-        // SUMMARY 是单行 i18n 字段——多行描述取第一个非空行，超长截断。
+        // SUMMARY 是单行 i18n 字段——多行描述取第一个非空行，超长或缺失回退产品名+版本。
         var firstLine = (bundle.Description ?? "")
             .Replace("\r\n", "\n").Replace('\r', '\n').Split('\n')
             .FirstOrDefault(line => line.Trim().Length > 0)?.Trim();

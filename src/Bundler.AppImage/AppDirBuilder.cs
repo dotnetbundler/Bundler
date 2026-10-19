@@ -86,7 +86,7 @@ internal static class AppDirBuilder
         var input = item.InputDirectory;
         var payloadRoot = Path.Combine(appDir, installRoot.Replace('/', Path.DirectorySeparatorChar));
         // 已落载荷的宿主路径登记册：Resources 撞名一律显式拒绝，不静默覆盖。
-        var claimed = new HashSet<string>(StringComparer.Ordinal);
+        var claimed = new HashSet<string>(PathText.Comparer);
         var update = bundle.Update;
         if (update is not null)
         {
@@ -204,11 +204,7 @@ internal static class AppDirBuilder
         // rejected rather than silently shadowed.
         if (settings.Files is { Count: > 0 } files)
         {
-            var reserved = new HashSet<string>(StringComparer.Ordinal)
-            {
-                "AppRun", ".DirIcon",
-                packageName + ".desktop", packageName + ".png"
-            };
+            var reserved = ReservedNames(packageName);
             foreach (var entry in files)
             {
                 var destination = (entry.Destination ?? "").Replace('\\', '/').Trim('/');
@@ -237,7 +233,7 @@ internal static class AppDirBuilder
                     throw new ArgumentException(
                         $"BundlerAppImageFile destination '{destination}' already exists in the AppDir.");
                 }
-                Directory.CreateDirectory(Path.GetDirectoryName(hostDestination)!);
+                EnsureDirectories(appDir, Path.GetDirectoryName(hostDestination)!);
                 File.Copy(source, hostDestination);
             }
         }
@@ -250,6 +246,38 @@ internal static class AppDirBuilder
             EnvironmentArchitecture = envArch,
             FileArchitecture = envArch
         };
+    }
+
+    /// <summary>Generated AppDir root entries <c>BundlerAppImageFile</c> may not shadow.</summary>
+    internal static HashSet<string> ReservedNames(string packageName) =>
+        new(StringComparer.Ordinal)
+        {
+            "AppRun", ".DirIcon",
+            packageName + ".desktop", packageName + ".png"
+        };
+
+    /// <summary>
+    /// 逐级建父目录——任一前缀被已落文件/链接占位时给统一的碰撞口径，
+    /// 而不是让 <see cref="Directory.CreateDirectory"/> 抛裸 IOException。
+    /// </summary>
+    private static void EnsureDirectories(string appDir, string parent)
+    {
+        var chain = new List<string>();
+        for (var dir = parent; dir is not null &&
+             !string.Equals(dir, appDir, PathText.Comparison);
+             dir = Path.GetDirectoryName(dir))
+        {
+            chain.Add(dir);
+        }
+        for (var i = chain.Count - 1; i >= 0; i--)
+        {
+            if (File.Exists(chain[i]))
+            {
+                throw new InvalidOperationException(
+                    $"A payload directory collides with an existing file: '{chain[i]}'.");
+            }
+            Directory.CreateDirectory(chain[i]);
+        }
     }
 
     /// <summary>
@@ -283,7 +311,7 @@ internal static class AppDirBuilder
                 throw new InvalidOperationException(
                     $"A resource file collides with an existing payload entry: '{full}'.");
             }
-            Directory.CreateDirectory(Path.GetDirectoryName(hostPath)!);
+            EnsureDirectories(appDir, Path.GetDirectoryName(hostPath)!);
             if (item.Kind == PayloadSourceKind.Symlink)
             {
                 AppImageToolset.Symlink(item.LinkTarget!, hostPath);
