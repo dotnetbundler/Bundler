@@ -1030,7 +1030,16 @@ public sealed class MacPkgTests : TempBase
         var output = Temp("DotNet.Bundler.Tests").FullName;
         var scripts = Path.Combine(input, "scripts");
         Directory.CreateDirectory(scripts);
-        File.WriteAllText(Path.Combine(scripts, "postinstall"), "#!/bin/sh\nexit 0\n");
+        var postinstall = Path.Combine(scripts, "postinstall");
+        File.WriteAllText(postinstall, "#!/bin/sh\nexit 0\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            // pkgbuild 要执行位——生产路径预检会拒 0644 件，夹具按真实形态 chmod +x。
+            File.SetUnixFileMode(postinstall,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
         var requests = new List<ToolRunner.Request>();
         var previousHost = MacPkgBundleBackend.HostCheck;
         var previous = ToolRunner.Handler;
@@ -1055,6 +1064,83 @@ public sealed class MacPkgTests : TempBase
             var index = args.IndexOf("--scripts");
             Assert.True(index > 0 && args[index + 1] == Path.GetFullPath(scripts),
                 $"--scripts must forward the configured directory, got: {string.Join(' ', args)}");
+            var filterIndex = args.IndexOf("--filter");
+            Assert.True(filterIndex > 0 && args[filterIndex + 1] == "\\.DS_Store$",
+                $"pkgbuild must always carry --filter '\\.DS_Store$', got: {string.Join(' ', args)}");
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    // 脚本位预检：缺 #! shebang 的 preinstall/postinstall 在 pkgbuild 前显式拒绝。
+    [Fact]
+    public async Task RejectsScriptWithoutShebang()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var scripts = Path.Combine(input, "scripts");
+        Directory.CreateDirectory(scripts);
+        var postinstall = Path.Combine(scripts, "postinstall");
+        File.WriteAllText(postinstall, "echo no-shebang\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(postinstall, UnixFileMode.UserRead | UnixFileMode.UserWrite |
+                UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+        }
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (_, _) => Task.FromResult(new ToolRunner.Result(0, "", ""));
+        try
+        {
+            var error = await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    ScriptsDirectory = scripts
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+            Assert.Contains("shebang", error.Message);
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    // 执行位支路只在 POSIX 宿主可验——Windows 上 HasAnyExecuteBit fail-open。
+    [Fact]
+    public async Task RejectsScriptWithoutExecuteBit()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "exec-bit leg only exists on POSIX hosts");
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var scripts = Path.Combine(input, "scripts");
+        Directory.CreateDirectory(scripts);
+        var postinstall = Path.Combine(scripts, "postinstall");
+        File.WriteAllText(postinstall, "#!/bin/sh\nexit 0\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(postinstall,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite |
+                UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+        }
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (_, _) => Task.FromResult(new ToolRunner.Result(0, "", ""));
+        try
+        {
+            var error = await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    ScriptsDirectory = scripts
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+            Assert.Contains("not executable", error.Message);
         }
         finally
         {
