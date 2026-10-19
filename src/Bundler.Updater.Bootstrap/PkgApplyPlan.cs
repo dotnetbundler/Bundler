@@ -954,7 +954,7 @@ internal static class PkgApplyPlan
     // out/err 后台抽干到 Null——用法文本、PAM/auth 噪声不透调用方面。
     // 预检 argv 恒为"工具+最小参数+sh -c :"零交互形（stdin 已钉 EOF 无读面、命令
     // 即刻返回），工具自身挂死无现实入口——但进程面仍要有界：轮询 5min
-    //（远超预检真实耗时），spawn 本身同走 60s 界。
+    //（远超预检真实耗时），spawn 本身同走 ~1min 级界。
     private static int ExecSilent(ExecSpec spec)
     {
         if (ExecProbe is { } probe)

@@ -324,7 +324,7 @@ internal static class NativeSpawnUnix
                         // cwd 包过 spawn 是 POSIX 下唯一等价形态——窗口仅一条
                         // P/Invoke，其余线程相对路径解析竞态按已知残余登记；
                         // posix_spawn 在锁内卡死时后续带 cwd 的 spawn 排队堵锁
-                        //（各自 60s 有界——是退化不是传染，cwd 本就无并行安全语义）。
+                        //（各自 ~1min 级有界——是退化不是传染，cwd 本就无并行安全语义）。
                         lock (s_workDirLock)
                         {
                             var old = GetCwd();
