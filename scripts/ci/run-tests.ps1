@@ -4,7 +4,9 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet("unit", "api", "integration", "package", "all")]
-    [string]$Suite
+    [string]$Suite,
+    # 可选精确测试类过滤（逗号分隔），仅 integration/package；留空=原默认覆盖。
+    [string]$ClassFilter = ""
 )
 $ErrorActionPreference = "Stop"
 Set-Location (Resolve-Path "$PSScriptRoot/../..")
@@ -18,6 +20,23 @@ $projects = switch ($Suite) {
     "integration" { @("Integration/Bundler.IntegrationTests") }
     "package"     { @("Package/Bundler.PackageTests") }
     "all"         { @("Unit/Bundler.UnitTests", "Api/Bundler.ApiTests", "Integration/Bundler.IntegrationTests", "Package/Bundler.PackageTests") }
+}
+
+# 精确类过滤：仅 integration/package 接受非空 ClassFilter，其余套件给非空即拒
+# （不静默忽略，防 dispatch 参数悄悄变成空跑全矩阵的误会）。仅真""视无筛选——
+# 全空白也要进解析以"无有效类名"判拒，不退回默认覆盖；去重与名单比较均 Ordinal
+# 区分大小写（xunit -class 区分大小写，大小写不符必须按不存在判拒）。
+$classFilterList = @()
+if (-not [string]::IsNullOrEmpty($ClassFilter)) {
+    if ($Suite -ne "integration" -and $Suite -ne "package") {
+        throw "-ClassFilter 仅允许 Suite=integration/package（实际 '$Suite'）"
+    }
+    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($raw in ($ClassFilter -split ',')) {
+        $t = $raw.Trim()
+        if ($t -ne "" -and $seen.Add($t)) { $classFilterList += $t }
+    }
+    if ($classFilterList.Count -eq 0) { throw "-ClassFilter 解析后无有效类名" }
 }
 
 # PackageTests 消费本地 nupkg——先打仓根 src 包再跑（tests/README 前置条件）。
@@ -50,7 +69,7 @@ $snapJob = Start-Job -ScriptBlock {
         # Job runspace 无控制台、缓冲宽 120——Out-String -Width 防 ExecutablePath/CommandLine 截断。
         Get-CimInstance Win32_Process |
             Where-Object { $_.Name -match $keep -or $_.CommandLine -match $keep } |
-            Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine |
+            Select-Object ProcessId, ParentProcessId, Name, KernelModeTime, UserModeTime, WorkingSetSize, ExecutablePath, CommandLine |
             Format-Table -AutoSize | Out-String -Width 4096 | Out-File -Append $path
         Start-Sleep -Seconds 60
     }
@@ -60,12 +79,23 @@ foreach ($P in $projects) {
     $layer, $name = $P -split '/', 2
     $dll = "tests/$layer/bin/Release/net10.0/$name.dll"
     if (-not (Test-Path $dll)) { throw "测试程序集不存在：$dll（先 dotnet build）" }
-    if ($name -eq "Bundler.IntegrationTests") {
+    # Integration 恒逐类调度；Package 仅在有 ClassFilter 时转逐类（默认仍整程序集）。
+    if ($name -eq "Bundler.IntegrationTests" -or
+        ($name -eq "Bundler.PackageTests" -and $classFilterList.Count -gt 0)) {
         $listOut = dotnet $dll -list classes
         if ($LASTEXITCODE -ne 0) { throw "-list classes 退出码非零（$LASTEXITCODE），判失败" }
-        $classes = $listOut | Where-Object { $_ -match '^\w[\w.]*$' }
+        $classes = @($listOut | Where-Object { $_ -match '^\w[\w.]*$' } | ForEach-Object { $_.Trim() })
         if (-not $classes -or $classes.Count -eq 0) {
             throw "-list classes 无输出：集成测试可能整段蒸发"
+        }
+        if ($classFilterList.Count -gt 0) {
+            # 错拼类名非零拒——不允许"过滤后零命中=空过"假绿。
+            # -ccontains 大小写敏感：xunit -class 区分大小写，fakefirsttests 不算命中。
+            $missing = @($classFilterList | Where-Object { $classes -cnotcontains $_ })
+            if ($missing.Count -gt 0) {
+                throw "ClassFilter 中不存在的类：$($missing -join ', ')"
+            }
+            $classes = $classFilterList
         }
         foreach ($c in $classes) {
             $c = $c.Trim()
