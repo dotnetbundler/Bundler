@@ -27,9 +27,18 @@ internal static class TestProcessExit
         bool killLateSpawned = true)
     {
         var process = new Process { StartInfo = startInfo };
-        return StartCore(process, milliseconds, killLateSpawned, disposeOnLateComplete: true)
-            ? process
-            : null;
+        try
+        {
+            return StartCore(process, milliseconds, killLateSpawned, disposeOnLateComplete: true)
+                ? process
+                : null;
+        }
+        catch
+        {
+            // 界内 fault：Start 已抛=无子件产出，内部 Process 就地释放（迟到腿归续体）。
+            process.Dispose();
+            throw;
+        }
     }
 
     private static bool StartCore(Process process, int milliseconds,
