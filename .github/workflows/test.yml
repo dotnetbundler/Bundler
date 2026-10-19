@@ -16,6 +16,11 @@ on:
         type: string
         default: all
         required: true
+      test_class:
+        description: 可选精确测试类，逗号分隔；仅 integration/package，留空不筛选
+        type: string
+        required: false
+        default: ""
   workflow_call:
     inputs:
       suite:
@@ -24,13 +29,17 @@ on:
       runners:
         type: string
         default: all
+      test_class:
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
 # runners 入组：workflow_call 被 verify 六路调用时 suite 恒 all，靠 runners 分流防互杀。
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite || 'all' }}-${{ inputs.runners || 'all' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite || 'all' }}-${{ inputs.runners || 'all' }}-${{ inputs.test_class || 'all-classes' }}
   cancel-in-progress: true
 
 jobs:
@@ -136,12 +145,19 @@ jobs:
         os: ${{ fromJSON(needs.select.outputs.runners) }}
     env:
       SUITE: ${{ inputs.suite || 'unit' }}
+      TEST_CLASS: ${{ inputs.test_class || '' }}
       # 集成真装真卸同意闸——CI runner 是可丢弃环境，装/卸断言即目的
       BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"
       # 外部工具 spawn 落盘->诊断工件：挂死现场=文件里最后一条在途 spawn。
       BUNDLER_TOOL_TRACE: ${{ github.workspace }}/artifacts/ci/bundler-tool-trace.log
+      # restore 逐 attempt 事件（BEGIN/SPAWN/EXIT/TIMEOUT/RETRY）落盘->诊断工件：
+      # "Determining projects" 后零输出卡死到超时的取证面（win-arm restore 超时实证）。
+      BUNDLER_RESTORE_TRACE: ${{ github.workspace }}/artifacts/ci/restore-progress.log
+      # NSIS 重安装腿进程事实（owned/external/installer pid+退出态+控制台成员）落盘：
+      # installer rc=0xC000013A（退出码特征，原因待判）取证面——非断言放宽。
+      BUNDLER_NSIS_DIAGNOSTICS: ${{ github.workspace }}/artifacts/ci/nsis-shutdown.log
     steps:
       - uses: actions/checkout@v7
 
@@ -165,11 +181,14 @@ jobs:
       - name: 测试（POSIX）
         if: runner.os != 'Windows'
         shell: bash
-        run: bash scripts/ci/run-tests.sh "$SUITE"
+        run: bash scripts/ci/run-tests.sh "$SUITE" "$TEST_CLASS"
       - name: 测试（Windows）
         if: runner.os == 'Windows'
         shell: pwsh
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/run-tests.ps1 -Suite $env:SUITE
+        run: |
+          $runArgs = @('-Suite', $env:SUITE)
+          if ($env:TEST_CLASS) { $runArgs += @('-ClassFilter', $env:TEST_CLASS) }
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci/run-tests.ps1 @runArgs
 
       # 诊断日志走工件不上 job 输出：always() 让绿腿也能下载（负载水位对比等观测面），
       # 挂死经 ToolRunner 有界等待已收敛为步内失败，failure 场景同样覆盖。
@@ -182,5 +201,7 @@ jobs:
             artifacts/ci/test-progress.log
             artifacts/ci/process-snapshots.log
             artifacts/ci/bundler-tool-trace.log
+            artifacts/ci/restore-progress.log
+            artifacts/ci/nsis-shutdown.log
           if-no-files-found: ignore
           retention-days: 1
