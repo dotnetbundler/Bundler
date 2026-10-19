@@ -173,48 +173,62 @@ internal sealed class UpdateDownloader
     /// <summary>
     /// 下载/复制产物到 destinationPath 并验 sha256（声明了才验——清单缺哈希视为协议错误）。
     /// http(s) 支持 .part 续传；本地件直接复制。哈希不符即删档抛错，绝不放行。
+    /// 抓取/IO/HTTP 异常全归 UpdateException（与 feed 腿同契约——裸
+    /// HttpRequestException/IOException 会把只捕 UpdateException 的调用方打穿）；
+    /// 用户取消（ct 已请求）原样穿透。
     /// </summary>
     internal async Task DownloadAsync(
         string location, UpdateFeedArtifact artifact, string destinationPath,
         Action<string>? log, CancellationToken cancellationToken)
     {
-        if (IsHttp(location))
+        try
         {
-            await DownloadHttpAsync(location, destinationPath, log, cancellationToken);
-        }
-        else
-        {
-            var source = location.StartsWith("file://", StringComparison.Ordinal)
-                ? new Uri(location).LocalPath
-                : location;
-            log?.Invoke($"update: copy '{source}' → '{destinationPath}'");
-            File.Copy(source, destinationPath, overwrite: true);
-        }
+            if (IsHttp(location))
+            {
+                await DownloadHttpAsync(location, destinationPath, log, cancellationToken);
+            }
+            else
+            {
+                var source = location.StartsWith("file://", StringComparison.Ordinal)
+                    ? new Uri(location).LocalPath
+                    : location;
+                log?.Invoke($"update: copy '{source}' → '{destinationPath}'");
+                File.Copy(source, destinationPath, overwrite: true);
+            }
 
-        // 校验失败连同 `.part` 一并清——陈旧残件留存会让下轮按同偏移续传，
-        // 服务端仍回 206 就再拼出同样的坏文件，永久循环。
-        var partPath = destinationPath + ".part";
-        if (artifact.Size > 0 && new FileInfo(destinationPath).Length != artifact.Size)
-        {
-            File.Delete(destinationPath);
-            TryDelete(partPath);
-            throw new UpdateException(
-                $"downloaded artifact size mismatch: expected {artifact.Size} bytes.");
+            // 校验失败连同 `.part` 一并清——陈旧残件留存会让下轮按同偏移续传，
+            // 服务端仍回 206 就再拼出同样的坏文件，永久循环。
+            var partPath = destinationPath + ".part";
+            if (artifact.Size > 0 && new FileInfo(destinationPath).Length != artifact.Size)
+            {
+                File.Delete(destinationPath);
+                TryDelete(partPath);
+                throw new UpdateException(
+                    $"downloaded artifact size mismatch: expected {artifact.Size} bytes.");
+            }
+            if (artifact.Sha256.Length == 0)
+            {
+                File.Delete(destinationPath);
+                TryDelete(partPath);
+                throw new UpdateException("manifest artifact carries no sha256 — refusing unverifiable payload.");
+            }
+            var actual = Sha256Hex(destinationPath);
+            if (!string.Equals(actual, artifact.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                File.Delete(destinationPath);
+                TryDelete(partPath);
+                throw new UpdateException("downloaded artifact sha256 mismatch — payload refused.");
+            }
+            log?.Invoke($"update: sha256 verified ({actual.Substring(0, 12)}…)");
         }
-        if (artifact.Sha256.Length == 0)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            File.Delete(destinationPath);
-            TryDelete(partPath);
-            throw new UpdateException("manifest artifact carries no sha256 — refusing unverifiable payload.");
+            throw;
         }
-        var actual = Sha256Hex(destinationPath);
-        if (!string.Equals(actual, artifact.Sha256, StringComparison.OrdinalIgnoreCase))
+        catch (Exception exception) when (exception is not UpdateException)
         {
-            File.Delete(destinationPath);
-            TryDelete(partPath);
-            throw new UpdateException("downloaded artifact sha256 mismatch — payload refused.");
+            throw new UpdateException($"download '{location}' failed.", exception);
         }
-        log?.Invoke($"update: sha256 verified ({actual.Substring(0, 12)}…)");
     }
 
     /// <summary>
