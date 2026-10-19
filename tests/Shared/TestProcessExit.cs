@@ -35,7 +35,7 @@ internal static class TestProcessExit
         }
         catch
         {
-            // 界内 fault：Start 已抛=无子件产出，内部 Process 就地释放（迟到腿归续体）。
+            // 界内 fault：Start 已抛=无子件产出，内部 Process 就地释放（迟到腿才归续体）。
             process.Dispose();
             throw;
         }
