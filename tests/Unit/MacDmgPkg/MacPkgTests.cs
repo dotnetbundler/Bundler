@@ -94,9 +94,13 @@ public sealed class MacPkgTests : TempBase
                 var args = request.Arguments.ToList();
                 var root = args[args.IndexOf("--root") + 1];
                 staged.AddRange(Directory.GetFileSystemEntries(root).Select(Path.GetFileName)!);
-                var pkgPath = request.Arguments[request.Arguments.Count - 1];
-                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-                File.WriteAllText(pkgPath, "pkg");
+                // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+                if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+                {
+                    var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                    Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                    File.WriteAllText(pkgPath, "pkg");
+                }
             }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
@@ -142,9 +146,13 @@ public sealed class MacPkgTests : TempBase
             requests.Add(request);
             if (request.Executable == "pkgbuild")
             {
-                var pkgPath = request.Arguments[request.Arguments.Count - 1];
-                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-                File.WriteAllText(pkgPath, "pkg");
+                // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+                if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+                {
+                    var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                    Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                    File.WriteAllText(pkgPath, "pkg");
+                }
             }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
@@ -189,9 +197,13 @@ public sealed class MacPkgTests : TempBase
                 var root = args[args.IndexOf("--root") + 1];
                 staged.AddRange(Directory.GetFileSystemEntries(root, "*", SearchOption.AllDirectories)
                     .Select(path => Path.GetRelativePath(root, path)));
-                var pkgPath = request.Arguments[request.Arguments.Count - 1];
-                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-                File.WriteAllText(pkgPath, "pkg");
+                // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+                if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+                {
+                    var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                    Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                    File.WriteAllText(pkgPath, "pkg");
+                }
             }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
@@ -240,9 +252,13 @@ public sealed class MacPkgTests : TempBase
                 var root = args[args.IndexOf("--root") + 1];
                 staged.AddRange(Directory.GetFileSystemEntries(root, "*", SearchOption.AllDirectories)
                     .Select(path => Path.GetRelativePath(root, path)));
-                var pkgPath = request.Arguments[request.Arguments.Count - 1];
-                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-                File.WriteAllText(pkgPath, "pkg");
+                // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+                if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+                {
+                    var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                    Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                    File.WriteAllText(pkgPath, "pkg");
+                }
             }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
@@ -413,9 +429,13 @@ public sealed class MacPkgTests : TempBase
                 var args = request.Arguments.ToList();
                 distribution = File.ReadAllText(args[args.IndexOf("--distribution") + 1]);
             }
-            var pkgPath = request.Arguments[request.Arguments.Count - 1];
-            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-            File.WriteAllText(pkgPath, "pkg");
+            // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+            if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
@@ -445,9 +465,13 @@ public sealed class MacPkgTests : TempBase
         ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
-            var pkgPath = request.Arguments[request.Arguments.Count - 1];
-            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-            File.WriteAllText(pkgPath, "pkg");
+            // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+            if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
@@ -485,9 +509,13 @@ public sealed class MacPkgTests : TempBase
                 var args = request.Arguments.ToList();
                 distribution = File.ReadAllText(args[args.IndexOf("--distribution") + 1]);
             }
-            var pkgPath = request.Arguments[request.Arguments.Count - 1];
-            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-            File.WriteAllText(pkgPath, "pkg");
+            // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+            if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
@@ -521,9 +549,13 @@ public sealed class MacPkgTests : TempBase
         MacPkgBundleBackend.HostCheck = () => true;
         ToolRunner.Handler = (request, _) =>
         {
-            var pkgPath = request.Arguments[request.Arguments.Count - 1];
-            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-            File.WriteAllText(pkgPath, "pkg");
+            // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+            if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
@@ -563,9 +595,13 @@ public sealed class MacPkgTests : TempBase
         MacPkgBundleBackend.HostCheck = () => true;
         ToolRunner.Handler = (request, _) =>
         {
-            var pkgPath = request.Arguments[request.Arguments.Count - 1];
-            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-            File.WriteAllText(pkgPath, "pkg");
+            // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+            if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
@@ -618,9 +654,13 @@ public sealed class MacPkgTests : TempBase
         MacPkgBundleBackend.HostCheck = () => true;
         ToolRunner.Handler = (request, _) =>
         {
-            var pkgPath = request.Arguments[request.Arguments.Count - 1];
-            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-            File.WriteAllText(pkgPath, "pkg");
+            // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+            if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
@@ -736,9 +776,13 @@ public sealed class MacPkgTests : TempBase
                 distribution = File.ReadAllText(
                     productbuildArgs[productbuildArgs.IndexOf("--distribution") + 1]);
             }
-            var pkgPath = request.Arguments[request.Arguments.Count - 1];
-            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-            File.WriteAllText(pkgPath, "pkg");
+            // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+            if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
@@ -787,9 +831,13 @@ public sealed class MacPkgTests : TempBase
         ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
-            var pkgPath = request.Arguments[request.Arguments.Count - 1];
-            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-            File.WriteAllText(pkgPath, "pkg");
+            // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+            if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
@@ -827,9 +875,13 @@ public sealed class MacPkgTests : TempBase
                 distribution = File.ReadAllText(
                     pargs[pargs.IndexOf("--distribution") + 1]);
             }
-            var pkgPath = request.Arguments[request.Arguments.Count - 1];
-            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-            File.WriteAllText(pkgPath, "pkg");
+            // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+            if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
@@ -870,9 +922,13 @@ public sealed class MacPkgTests : TempBase
                 var dir = pargs[pargs.IndexOf("--resources") + 1];
                 resources.AddRange(Directory.GetFiles(dir).Select(Path.GetFileName)!);
             }
-            var pkgPath = request.Arguments[request.Arguments.Count - 1];
-            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-            File.WriteAllText(pkgPath, "pkg");
+            // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+            if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
@@ -902,9 +958,13 @@ public sealed class MacPkgTests : TempBase
         MacPkgBundleBackend.HostCheck = () => true;
         ToolRunner.Handler = (request, _) =>
         {
-            var pkgPath = request.Arguments[request.Arguments.Count - 1];
-            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-            File.WriteAllText(pkgPath, "pkg");
+            // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+            if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
@@ -937,9 +997,13 @@ public sealed class MacPkgTests : TempBase
         ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
-            var pkgPath = request.Arguments[request.Arguments.Count - 1];
-            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-            File.WriteAllText(pkgPath, "pkg");
+            // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+            if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
@@ -989,9 +1053,13 @@ public sealed class MacPkgTests : TempBase
             }
             else
             {
-                var pkgPath = request.Arguments[request.Arguments.Count - 1];
-                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-                File.WriteAllText(pkgPath, "pkg");
+                // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+                if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+                {
+                    var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                    Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                    File.WriteAllText(pkgPath, "pkg");
+                }
             }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
@@ -1047,9 +1115,13 @@ public sealed class MacPkgTests : TempBase
         ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
-            var pkgPath = request.Arguments[request.Arguments.Count - 1];
-            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
-            File.WriteAllText(pkgPath, "pkg");
+            // xattr/codesign 末参是 .app 目录而非输出件——只对产包工具落 pkg 占位件。
+            if (request.Executable is "pkgbuild" or "productbuild" or "productsign")
+            {
+                var pkgPath = request.Arguments[request.Arguments.Count - 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+                File.WriteAllText(pkgPath, "pkg");
+            }
             return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try

@@ -146,21 +146,16 @@ public sealed class ZipToolCacheTests : TempBase
     [Fact]
     public async Task ResolveAsync_CaseVariantDuplicatePaths_HostSemantics()
     {
-        // PathComparer 按分隔符判定：Windows=OrdinalIgnoreCase 清单读即拒仅大小写之差的重名；
-        // POSIX=Ordinal 清单不拒——之后是否并存取决于宿主 FS：Linux 敏感可共存，
-        // 默认 APFS 不敏感，物化时 FileMode.CreateNew 撞同名文件抛 IOException。
+        // PathText.Comparer 按宿主语义判定：Windows/macOS=OrdinalIgnoreCase（默认 APFS
+        // 不敏感）清单读即拒仅大小写之差的重名——确定性早拒，不等物化期撞 FS；
+        // Linux=Ordinal 清单不拒，敏感 FS 上两件并存。
         var zip = WriteZipRaw("dup.zip", zip =>
         {
             AddEntry(zip, "a.txt", "1"u8.ToArray());
             AddEntry(zip, "A.TXT", "2"u8.ToArray());
         });
         var archive = Archive(zip, "a.txt");
-        if (OperatingSystem.IsWindows())
-        {
-            await Assert.ThrowsAsync<InvalidDataException>(() =>
-                ZipToolCache.ResolveAsync(zip, Temp("cache").FullName, archive, Ct));
-        }
-        else if (OperatingSystem.IsLinux())
+        if (OperatingSystem.IsLinux())
         {
             var resolved = await ZipToolCache.ResolveToolAsync(
                 zip, Temp("cache").FullName, archive, Ct);
@@ -169,8 +164,8 @@ public sealed class ZipToolCacheTests : TempBase
         }
         else
         {
-            await Assert.ThrowsAsync<IOException>(() =>
-                ZipToolCache.ResolveToolAsync(zip, Temp("cache").FullName, archive, Ct));
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                ZipToolCache.ResolveAsync(zip, Temp("cache").FullName, archive, Ct));
         }
     }
 
