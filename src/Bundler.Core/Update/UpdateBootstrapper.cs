@@ -204,23 +204,42 @@ public static class UpdateBootstrapper
     // `.<guid>` 提取目录按进程唯一命名——打包进程死在半路时无清理方，残件
     // 在提取根下无限积累。每次新建前按 mtime 清扫 24h 前的同类目录；删不动
     // 的（被占用/权限）尽力跳过，全路径 best-effort 不挡打包。
+    // squatting 降级根 `bundler-updater-<uid>-<guid>` 同样在临时根下按本 uid
+    // 前缀一并清扫——持续 squatting 不该让降级根永久积累。
     private static void SweepStaleExtractions(string root)
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-24);
+        try
+        {
+            var scopePrefix = $"bundler-updater-{UserScope()}-";
+            foreach (var fallback in Directory.GetDirectories(
+                         Path.GetTempPath(), scopePrefix + "*"))
+            {
+                TryDeleteIfStale(fallback, cutoff);
+            }
+        }
+        catch (Exception)
+        {
+        }
+        try
+        {
+            foreach (var directory in Directory.GetDirectories(root, ".*"))
+            {
+                TryDeleteIfStale(directory, cutoff);
+            }
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private static void TryDeleteIfStale(string directory, DateTime cutoff)
     {
         try
         {
-            var cutoff = DateTime.UtcNow.AddHours(-24);
-            foreach (var directory in Directory.GetDirectories(root, ".*"))
+            if (Directory.GetLastWriteTimeUtc(directory) < cutoff)
             {
-                try
-                {
-                    if (Directory.GetLastWriteTimeUtc(directory) < cutoff)
-                    {
-                        Directory.Delete(directory, recursive: true);
-                    }
-                }
-                catch (Exception)
-                {
-                }
+                Directory.Delete(directory, recursive: true);
             }
         }
         catch (Exception)

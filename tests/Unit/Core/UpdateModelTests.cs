@@ -121,6 +121,51 @@ public sealed class UpdateKeyMaterialTests : TempBase
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void Load_BadPrivateScalar_Throws()
+    {
+        // d 在场即校验：坏 base64/非 32 字节标量不能漏到签名时炸 FormatException；
+        // 缺失 d 仍是合法"只含公钥"件形态。
+        var coord = Convert.ToBase64String(new byte[32]);
+        var path = TempPath($"key-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path,
+            $"{{\"kty\":\"ec-p256\",\"x\":\"{coord}\",\"y\":\"{coord}\",\"d\":\"!!!\"}}");
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => UpdateKeyMaterial.Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+
+        var shortPath = TempPath($"key-{Guid.NewGuid():N}.json");
+        File.WriteAllText(shortPath,
+            $"{{\"kty\":\"ec-p256\",\"x\":\"{coord}\",\"y\":\"{coord}\"," +
+            $"\"d\":\"{Convert.ToBase64String(new byte[16])}\"}}");
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => UpdateKeyMaterial.Load(shortPath));
+        }
+        finally
+        {
+            File.Delete(shortPath);
+        }
+
+        var publicPath = TempPath($"key-{Guid.NewGuid():N}.json");
+        File.WriteAllText(publicPath,
+            $"{{\"kty\":\"ec-p256\",\"x\":\"{coord}\",\"y\":\"{coord}\"}}");
+        try
+        {
+            var loaded = UpdateKeyMaterial.Load(publicPath);
+            Assert.Null(loaded.D);
+        }
+        finally
+        {
+            File.Delete(publicPath);
+        }
+    }
 }
 
 public sealed class UpdateFeedModelTests

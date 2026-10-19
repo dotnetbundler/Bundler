@@ -86,7 +86,7 @@ BundleArtifact[]（产物清单）
 ## 10. UPDATE 挂点
 
 - UPDATE 不是格式，分两层挂：**载荷内身份**由后端在 `BuildAsync` 期写入——`UpdateIdentitySidecar.WriteIfEnabled` 把 `bundler-update.json` 安装身份落进产物树（archive/`.app`/AppImage 等可更新格式）；**清单与旁车**是入口层收尾步——各格式产物齐后，入口（MSBuild Task、CLI）调 `UpdateManifestEmitter.EmitAsync(configuration, artifacts)` 发射通道清单 `bundler-update-feed.{channel}.json` 与 `.sig`/`feed.sig`/`.blockmap` 旁车（`.app` 另产 `.zip` 运输件）。
-- 更新注入件是**保留名**：用户载荷自带 `bundler-update.json`/`bundler-updater[.exe]` 时全后端统一显式拒绝（不静默覆盖也不静默剔除）；引导件缺件时全后端统一 `ResolveOrThrow` 诊断抛出（死更新链不产出）——nsis/msi 属 installer-replay 例外：写旁车不注引导件。
+- 更新注入件是**保留名**：用户载荷在注入件落位处自带 `bundler-update.json`/`bundler-updater[.exe]` 同路径条目时，全后端统一显式拒绝（不静默覆盖也不静默剔除）。判定按各格式安装位——`.app` 的旁车落 `Contents/Resources/`，用户根级同名文件进 `Contents/MacOS/` 不构成撞名（也不干扰身份读取）；引导件缺件时全后端统一 `ResolveOrThrow` 诊断抛出（死更新链不产出）——nsis/msi 属 installer-replay 例外：写旁车不注引导件。
 - `Bundler.Core/Update/` 提供清单模型、签名/验签、引导件暂存与身份侧车的共享件；应用内 `DotNet.Bundler.Updater` 是另一侧（查/下/验/换）。
 - 语义契约见 `docs/design/update.md`。
 

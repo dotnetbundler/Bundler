@@ -301,9 +301,14 @@ public sealed class BundlePipelineTests : TempBase
         var live = Path.Combine(workRoot, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stale);
         Directory.CreateDirectory(live);
-        File.WriteAllText(Path.Combine(stale, "residue"), "x");
+        var staleResidue = Path.Combine(stale, "residue");
+        File.WriteAllText(staleResidue, "x");
         File.WriteAllText(Path.Combine(live, "residue"), "x");
-        Directory.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddHours(-48));
+        // 陈旧判定看整棵树最深时戳——真实崩溃残留文件与目录同为旧时戳；
+        // 只改目录不改文件会落入"深层在写"语义被保活（并发长跑构建防误扫）。
+        var old = DateTime.UtcNow.AddHours(-48);
+        File.SetLastWriteTimeUtc(staleResidue, old);
+        Directory.SetLastWriteTimeUtc(stale, old);
         var backend = new FakeBackend(TargetOperatingSystem.Linux, PackageFormat.Deb,
             produce: context =>
             {

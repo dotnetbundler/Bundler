@@ -82,13 +82,13 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 
 ## 3. 最近验证
 
-当前基线：`main@09c9646`（`0.1.0-alpha.105`）+ 工作区分支 `rework/core-abstractions`（`0.1.0-alpha.106`，PR-1 未提交）。
-PR-1（Core+Abstractions 收口）进行中的本机验证（Windows x64，.NET SDK 10.0.302）：Release build rc 0（0 警告 0 错误）；Unit 全量 1431 总/0 失败/37 跳过；Api 全量进行中——以最新跑数为准。
+当前基线：`main@09c9646`（`0.1.0-alpha.105`）+ PR #142 `rework/core-abstractions@fc1be05`（`0.1.0-alpha.106`，已推送、Local Review 第 1 轮处置中）。
+PR-1（Core+Abstractions 收口）本机验证（Windows x64，.NET SDK 10.0.302）：Release build rc 0（0 警告 0 错误）；Unit 全量 1433 总/0 失败/37 跳过；Api 全量 84 总/0 失败/14 跳过；Integration `ToolRunnerIntegrationTests` 3/3。
 PR-1 已落改动面：`ToolRunner.RunSync` 成功腿有界排空（对齐 TryRunAsync，消最后一条无界等待）；`UpdatePayloadStaging` 改走 `FileTree.CopyTree`+自复制防护+保留名（`bundler-update.json`/引导件）撞名显式拒绝；
-`UpdateBootstrapper` 注入改 `InjectOrThrow` 直抛、target 词显式校验、提取根属主/0700/24h 清扫；`UpdateKeyMaterial` P-256 点/私钥字段校验+POSIX 0600；`.desktop` 全落文值 CR/LF 净化；
+`UpdateBootstrapper` 注入改 `InjectOrThrow` 直抛、target 词显式校验、提取根属主/0700/24h 清扫（含 squatting 降级根）；`UpdateKeyMaterial` P-256 坐标+在场私钥 d 校验、POSIX 0600；`.desktop` 全落文值 CR/LF 净化；
 Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline` producedPaths 归一化+缺失/碰撞分类异常+`.bundler-work` stale 清扫；
 `ArtifactNaming` APK `-r<release>` 生态词修正+planner 默认 release 单源；`ToolCache` 清单定长读+段名拒 `*`/`?`/`:`（glob/ADS）；
-新增 `IO/PathText` 统一宿主路径比较口径（Windows 大小写不敏感），收编 staging/pipeline/PayloadSource/planner/ToolCache/ZipToolCache 六处；
+新增 `IO/PathText` 统一宿主路径比较口径（Windows/macOS 不敏感、Linux 敏感，与 validator 同约定），收编 staging/pipeline/PayloadSource/planner/ToolCache/ZipToolCache 六处；
 `BundleConfigurationLoader`（net10-only JSON）由 Core 挪至 `tests/Shared`（Core 留 netstandard-safe `BundleConfigurationPaths`）。
 最近非文档变更为 PR #139/#140 squash 合入：`a3ea637`/#139 UPDATE 提权停链修复（已启动提权腿即终局、取消/拒绝/鉴权失败一律停不重放、问密码取消 126 不触 sudo）；
 `09c9646`/#140 DMG 挂载可观测增强（`hdiutil attach` 成功后落挂载事实 Information 日志（挂载点+镜像路径），attach 失败不落）。
@@ -151,7 +151,6 @@ Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline`
 收口后 dispatch 一次 verify 全矩阵（`39142103135` 已作废，覆盖 alpha.106+ 的 CI 证据）。
 其余既有剩余工作：
 
-- 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
 - UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 全链已实现：发射（`pkg` 身份字段、`CoveredFormats` 扩收、三后端旁车+引导件注入）、`pkg-apply` 动词 AOT/POSIX 双实现同协议、客户端 replay 编排（`SyspkgReplay`：预检三件套/留存/三级提权退化链/回滚重放）、debian/fedora/alpine 容器验收腿（经 `workflow_call` 收编 verify 发布门 `syspkg` job）——契约见 `docs/design/update.md` §2，图形提权真实桌面观感等剩余边界登记 `docs/project/special-acceptance.md`；
 - 发布链资产实际推送（NuGet/Release 为另一步，仍需用户明确许可）；

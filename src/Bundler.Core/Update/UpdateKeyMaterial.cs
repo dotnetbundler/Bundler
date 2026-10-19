@@ -56,7 +56,28 @@ public sealed class UpdateKeyMaterial
         {
             return Invalid(path);
         }
-        return x.Length == 32 && y.Length == 32 ? material : Invalid(path);
+        if (x.Length != 32 || y.Length != 32)
+        {
+            return Invalid(path);
+        }
+        // d 私钥字段在场即校验：缺失仍是合法的"只含公钥"件形态（ToPrivateParameters
+        // 给分类异常）；在场却坏 base64/非 32 字节标量时把畸形挡在 Load——
+        // 不能让坏 d 漏到签名时才炸成原始 FormatException。
+        if (material.D is { Length: > 0 } d)
+        {
+            try
+            {
+                if (Convert.FromBase64String(d).Length != 32)
+                {
+                    return Invalid(path);
+                }
+            }
+            catch (FormatException)
+            {
+                return Invalid(path);
+            }
+        }
+        return material;
     }
 
     // 旁车/清单里携带的未压缩点（0x04|X|Y）还原出只含公钥的材料。

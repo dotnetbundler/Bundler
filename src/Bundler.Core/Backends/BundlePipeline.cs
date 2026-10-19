@@ -183,7 +183,10 @@ public sealed class BundlePipeline(
                     {
                         try
                         {
-                            if (Directory.GetLastWriteTimeUtc(workDirectory) < cutoff)
+                            // 顶层 mtime 只在直接子项变化时刷新——深层文件在写的
+                            // 长跑构建顶层时戳可以很旧。删除前看整棵树最深时戳：
+                            // 任何一条新于阈值即视为在跑，不动。
+                            if (IsStale(workDirectory, cutoff))
                             {
                                 Directory.Delete(workDirectory, recursive: true);
                             }
@@ -199,5 +202,31 @@ public sealed class BundlePipeline(
         {
             // 清扫是纯辅助动作——任何失败都不该挡住构建主流程。
         }
+    }
+
+    // 整棵树取最深 LastWriteTimeUtc：根或任一后代（文件/目录皆可 stat）新于
+    // 阈值即非陈旧——在跑构建的深层写入保活，全旧才算残骸。
+    private static bool IsStale(string root, DateTime cutoff)
+    {
+        if (File.GetLastWriteTimeUtc(root) >= cutoff)
+        {
+            return false;
+        }
+        foreach (var entry in Directory.EnumerateFileSystemEntries(root))
+        {
+            if (File.GetLastWriteTimeUtc(entry) >= cutoff)
+            {
+                return false;
+            }
+            // reparse 点不递归——目录链会绕回祖先造成无限递归；链接自身时戳上面已算。
+            var attributes = File.GetAttributes(entry);
+            if (attributes.HasFlag(FileAttributes.Directory) &&
+                (attributes & FileAttributes.ReparsePoint) == 0 &&
+                !IsStale(entry, cutoff))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 }

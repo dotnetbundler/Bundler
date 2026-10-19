@@ -18,7 +18,10 @@ public static class UpdatePayloadStaging
         var workRoot = Path.GetFullPath(context.WorkDirectory);
         var input = Path.GetFullPath(item.InputDirectory);
         // 已在工作目录内（例如 signed-payload staging）→ 直接写旁车。
-        if (input.StartsWith(workRoot + Path.DirectorySeparatorChar, PathText.Comparison))
+        // TrimEnd 先剥尾部分隔符：根目录输入（"C:\"、"/"）拼 sep 会出双分隔符永不命中。
+        var workPrefix = workRoot.TrimEnd(
+            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (input.StartsWith(workPrefix, PathText.Comparison))
         {
             InjectPayloadFiles(input, update, item);
             return item;
@@ -26,9 +29,11 @@ public static class UpdatePayloadStaging
 
         var staged = Path.Combine(workRoot, "update-payload");
         // 输入树包住 staged（如调用方把 OutputDirectory/work 指进 payload）时自复制会
-        // 把 staged 再拷进自己——递归直到路径爆掉。前置拒掉，错误要直说。
-        if ((staged + Path.DirectorySeparatorChar).StartsWith(
-                input + Path.DirectorySeparatorChar, PathText.Comparison))
+        // 把 staged 再拷进自己——递归直到路径爆掉。前置拒掉，错误要直说；
+        // 根目录输入同样靠 TrimEnd 归一（"C:\\"→"C:"）。
+        var inputPrefix = input.TrimEnd(
+            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if ((staged + Path.DirectorySeparatorChar).StartsWith(inputPrefix, PathText.Comparison))
         {
             throw new InvalidOperationException(
                 $"The update staging directory '{staged}' must not be inside the payload input directory '{input}'.");
@@ -48,8 +53,9 @@ public static class UpdatePayloadStaging
         string payloadRoot, UpdateBundleConfiguration update, BundlePlanItem item)
     {
         var target = item.Target.Target;
-        // 更新件是保留名：用户载荷自带同名文件时不静默覆盖——与 deb/rpm/apk/macOS 的
-        // claimed 簿同一语义：撞名显式拒绝。nsis/msi 不注引导件，但旁车恒写。
+        // 更新件是保留名：注入落位处用户载荷自带同路径条目时不静默覆盖——
+        // 与 deb/rpm/apk/macOS 的 claimed 簿同一语义：撞名显式拒绝。
+        // nsis/msi 不注引导件，但旁车恒写。
         RejectReservedName(payloadRoot, UpdateIdentitySidecar.FileName);
         if (item.Format is not (PackageFormat.Nsis or PackageFormat.Msi))
         {
