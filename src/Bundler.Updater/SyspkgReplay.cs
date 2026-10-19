@@ -134,7 +134,7 @@ internal static class SyspkgReplay
                 // 不绕道降级（留存失败的原始路径降级属 B-N3 登记的另一条口径）。
                 // 验签同趟带出 sha256 交 --sha256——root 进程对暂存副本复核同值，
                 // 客户端验签与 root 安装间的验后替换窗随字节绑定归零。
-                if (!VerifyRetainedPackage(retained, identity.PublicKey, out pkgSha256))
+                if (!VerifyRetainedPackage(retained, identity.PublicKey, out pkgSha256, log))
                 {
                     throw new UpdateException(
                         $"retained package '{retained}' failed signature re-verification — refused.");
@@ -143,8 +143,14 @@ internal static class SyspkgReplay
             }
             else
             {
-                // 原件降级路径同样给哈希——"验签已过"只在喂件字节不变时成立。
-                pkgSha256 = RequireSha256Hex(pkgArg);
+                // 原件降级腿同趟验签+哈希：清单签名本在手上，VerifyFile out 参
+                // 单次读取一并出指纹——验签→root 读取之间的同用户替换窗与留存腿
+                // 同口径归零（只哈希不验会把"签名仍有效"的断言留在规划时点）。
+                if (!VerifyOriginalPackage(pkgArg, signature, identity.PublicKey, out pkgSha256, log))
+                {
+                    throw new UpdateException(
+                        $"package '{pkgArg}' failed signature re-verification — refused.");
+                }
             }
             envFile = TryWriteSessionEnvFile(options, out envDir, log);
             var verbArgv = BuildVerbArgv(
@@ -562,7 +568,7 @@ internal static class SyspkgReplay
     // --sha256 交到 root 进程对暂存副本复核，"客户端验的字节"与"root 装的
     // 字节"逐位绑定，验签→root 读取之间的同用户替换窗归零（§2.3 协议）。
     private static bool VerifyRetainedPackage(
-        string packagePath, string? publicKey, out string? sha256Hex)
+        string packagePath, string? publicKey, out string? sha256Hex, Action<string>? log)
     {
         sha256Hex = null;
         try
@@ -570,19 +576,65 @@ internal static class SyspkgReplay
             var signaturePath = packagePath + ".sig";
             if (publicKey is not { Length: > 0 } || !File.Exists(signaturePath))
             {
+                log?.Invoke(
+                    $"update: retained package '{packagePath}' rejected — " +
+                    "missing identity key or .sig sidecar");
                 return false;
             }
             if (!UpdateSignatureVerifier.VerifyFile(
                     packagePath, File.ReadAllBytes(signaturePath),
                     UpdateKeyMaterial.FromPublicPoint(publicKey), out var hash))
             {
+                log?.Invoke(
+                    $"update: retained package '{packagePath}' rejected — " +
+                    "signature does not verify");
                 return false;
             }
             sha256Hex = Sha256ToHex(hash);
             return true;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            // 失败原因入日志：权限错/IO 错与伪造签不可分辨会把排障推向猜——
+            // 拒绝结论不变，但拒绝理由必须是可观测的一等事实。
+            log?.Invoke(
+                $"update: retained package '{packagePath}' rejected — {exception.Message}");
+            return false;
+        }
+    }
+
+    // 原件降级腿的同趟验签+哈希：signature 是清单上行的 base64 签名（留存 .sig
+    // 同源），VerifyFile out 参单次读取验签出指纹——验签→暂存→root 读取链上
+    // 任一替换都同时推翻验签断言与哈希钉值。
+    private static bool VerifyOriginalPackage(
+        string packagePath, string signatureBase64, string? publicKey,
+        out string? sha256Hex, Action<string>? log)
+    {
+        sha256Hex = null;
+        try
+        {
+            if (publicKey is not { Length: > 0 })
+            {
+                log?.Invoke(
+                    $"update: package '{packagePath}' rejected — no identity key");
+                return false;
+            }
+            if (!UpdateSignatureVerifier.VerifyFile(
+                    packagePath, Convert.FromBase64String(signatureBase64),
+                    UpdateKeyMaterial.FromPublicPoint(publicKey), out var hash))
+            {
+                log?.Invoke(
+                    $"update: package '{packagePath}' rejected — " +
+                    "signature does not verify");
+                return false;
+            }
+            sha256Hex = Sha256ToHex(hash);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            log?.Invoke(
+                $"update: package '{packagePath}' rejected — {exception.Message}");
             return false;
         }
     }
@@ -595,23 +647,6 @@ internal static class SyspkgReplay
             builder.Append(b.ToString("x2"));
         }
         return builder.ToString();
-    }
-
-    // 非留存路径（retention 写不进降级喂原件）的字节指纹——算不出即原件此刻
-    // 已不可读，确定性拒绝不降级放行（"验签已过"的断言此刻已不可复核）。
-    private static string RequireSha256Hex(string path)
-    {
-        try
-        {
-            using var sha = System.Security.Cryptography.SHA256.Create();
-            using var stream = File.OpenRead(path);
-            return Sha256ToHex(sha.ComputeHash(stream));
-        }
-        catch (Exception exception)
-        {
-            throw new UpdateException(
-                $"cannot hash artifact '{path}' for the pkg-apply handoff.", exception);
-        }
     }
 
     // 删留存对（apply 侧失败还原用）：pkg 连同 .sig 一并删，不留孤儿签名件
@@ -712,7 +747,7 @@ internal static class SyspkgReplay
                 {
                     continue;
                 }
-                if (!VerifyRetainedPackage(file, publicKey, out var fileHash))
+                if (!VerifyRetainedPackage(file, publicKey, out var fileHash, log))
                 {
                     log?.Invoke(
                         $"update: skipping retained package '{name}' — " +

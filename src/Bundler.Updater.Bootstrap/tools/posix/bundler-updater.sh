@@ -144,14 +144,27 @@ _pa_uid64() {
 }
 
 # 安装腿有界：timeout 在场即包裹（默认 1800s，BUNDLER_UPDATER_PKG_TIMEOUT
-# 数字秒覆盖——AOT ExecTimeoutMilliseconds 同名同缝）；pm 挂死会把特权进程拖成
-# 永驻。timeout 缺席退裸跑（_pa_env_validate 的 cat 兜底同款残余登记）。
+# 正数秒覆盖——AOT ExecTimeoutMilliseconds 同名同缝，0/非数字双侧同归默认）；
+# pm 挂死会把特权进程拖成永驻。-k 30 给 TERM 30s 善后窗再补 KILL——
+# 忽略 TERM 的前端不能赖在界内（AOT Kill(entireProcessTree) 的 TERM-less
+# 对应收敛方向一致）。timeout 缺席退裸跑（_pa_env_validate 的 cat 兜底同款
+# 残余登记）。
 _pa_timed() {
     if command -v timeout >/dev/null 2>&1; then
-        timeout "$_PA_TMO" "$@"
+        timeout -k 30 "$_PA_TMO" "$@"
     else
         "$@"
     fi
+}
+
+# SIGKILL 残件兜底：EXIT trap 管不到强杀路径——清扫 24h 前的 bundler-pkg
+# 暂存目（sh 建 bundler-pkg.XXXX / AOT 建 bundler-pkg-<guid>——[.-] 双形
+# 都收，跨实现残件互不漏；AOT SweepStaleStageDirs 同义）。find 缺席的
+# 宿主不扫（残余由 OS tmp 清理器兜）。
+_pa_sweep_stages() {
+    command -v find >/dev/null 2>&1 || return 0
+    find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'bundler-pkg[.-]*' -type d -mmin +1440 \
+        -exec rm -rf {} + 2>/dev/null || true
 }
 
 # sha256 工具链退化：sha256sum → shasum -a 256 → openssl dgst -sha256（全缺席返 1）。
@@ -459,11 +472,16 @@ _pa_restart() {
 
 pkg_apply() {
     PA_PKG=""; PA_FMT=""; PA_APP=""; PA_ENV=""; PA_ROLLBACK=0; PA_SHA256=""; PA_STAGE=""
-    # 安装腿超时界（AOT ExecTimeoutMilliseconds 同名同缝）：非数字/缺席按默认 1800s。
+    # 安装腿超时界（AOT ExecTimeoutMilliseconds 同名同缝）：非数字/零/缺席按默认
+    # 1800s——"0" 必须归默认：GNU `timeout 0` 是无界义（禁用超时），不排零会让
+    # 同名 env 缝双侧语义分叉（AOT `seconds > 0` 判 0 非法回默认）。
     case "${BUNDLER_UPDATER_PKG_TIMEOUT:-}" in
         ''|*[!0-9]*) _PA_TMO=1800 ;;
-        *) _PA_TMO=$BUNDLER_UPDATER_PKG_TIMEOUT ;;
+        *) if [ "$BUNDLER_UPDATER_PKG_TIMEOUT" -gt 0 ] 2>/dev/null
+           then _PA_TMO=$BUNDLER_UPDATER_PKG_TIMEOUT
+           else _PA_TMO=1800; fi ;;
     esac
+    _pa_sweep_stages
     while [ $# -gt 0 ]; do
         case "$1" in
             --rollback) PA_ROLLBACK=1; shift ;;
@@ -567,7 +585,15 @@ pkg_apply() {
             { echo "bundler-updater: cannot stage package for verification." >&2; _pa_env_cleanup; exit 4; }
     fi
     trap '_pa_stage_cleanup' EXIT
-    cp "$PA_PKG" "$PA_STAGE/" >/dev/null 2>&1 || \
+    # 判存→拷贝的类型替换窗：包件在用户可写目录，-f 判存后被换成 fifo/设备会
+    # 让 root 的 cp 挂死 open 或无限量读——cp 走 timeout 60s 有界包裹收口
+    #（AOT OpenWithDeadline+fstat 同向收敛），拷贝后复核暂存件仍是普通文件。
+    if command -v timeout >/dev/null 2>&1; then
+        timeout -k 10 60 cp "$PA_PKG" "$PA_STAGE/" >/dev/null 2>&1
+    else
+        cp "$PA_PKG" "$PA_STAGE/" >/dev/null 2>&1
+    fi
+    [ $? -eq 0 ] && [ -f "$PA_STAGE/${PA_PKG##*/}" ] || \
         { echo "bundler-updater: cannot stage package for verification." >&2; _pa_env_cleanup; exit 4; }
     PA_PKG="$PA_STAGE/${PA_PKG##*/}"
     if [ -n "$PA_SHA256" ]; then

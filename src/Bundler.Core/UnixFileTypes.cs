@@ -30,6 +30,9 @@ internal static class UnixFileTypes
     [DllImport("libSystem.Native", EntryPoint = "SystemNative_Stat", SetLastError = true, CharSet = CharSet.Ansi)]
     private static extern int SysStat(string path, out FileStatus output);
 
+    [DllImport("libSystem.Native", EntryPoint = "SystemNative_GetEUid")]
+    private static extern uint SysGetEUid();
+
     // pal_io.h FileStatus 的同形镜像（前 4 槽为本判据所需，余者占位对齐）。
     [StructLayout(LayoutKind.Sequential)]
     private struct FileStatus
@@ -128,6 +131,29 @@ internal static class UnixFileTypes
                 return false;
             }
             uid = status.Uid;
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 本进程 euid（geteuid(2)）——用户名缺席的宿主上区分共享 /tmp 槽位的
+    /// 兜底身份。仅 POSIX 宿主可得；取不到按"无法判定"返 false。
+    /// </summary>
+    internal static bool TryGetEUid(out uint uid)
+    {
+        uid = 0;
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) &&
+            !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return false;
+        }
+        try
+        {
+            uid = SysGetEUid();
             return true;
         }
         catch (Exception)

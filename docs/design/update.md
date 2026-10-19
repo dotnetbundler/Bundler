@@ -116,10 +116,11 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
 - 引导件 musl 静态件注入 `/usr/lib/<pkg>/`（与 zip/app 注入同构）。
   nsis/msi"不注入引导件"先例不适用此处——installer-replay 族的执行体仍是引导件编排安装命令。
   动词协议签名：`bundler-updater pkg-apply --pkg <本地包> --format <deb|rpm|apk> --app <重启目标> [--sha256 <hex>] [--env-file <会话env件>] [--rollback] [--log <件>]`。
-- **暂存核验（留存包 TOCTOU 收口）**：包先 `cp`/`File.Copy` 进 root 私有临时目录（`bundler-pkg.*`/`bundler-pkg-*`，umask-077/0700），装了暂存副本——装期间原件被改写不影响本轮回放；
+- **暂存核验（留存包 TOCTOU 收口）**：包先拷进 root 私有临时目录（`bundler-pkg.*`/`bundler-pkg-*`，umask-077/0700），装了暂存副本——装期间原件被改写不影响本轮回放；
+  拷贝本身有界：AOT 经 PAL `O_NOFOLLOW`+5s 时限开件、fstat 复核普通件并按其尺寸封顶读；sh 侧 `timeout -k 10 60 cp` 包裹——判存到 open 的类型替换窗（fifo 挂死/设备件读不尽）双侧同形收口；
   `--sha256`（严格 64 位十六进制，畸形归用法错 rc3）对暂存副本逐位复核，不匹配/无哈希工具一律 rc4 拒绝，不降级装原件；
-  暂存根随进程全出口回收（finally/EXIT trap）。
-- 每级安装命令先 `command -v` 预检再调用；安装腿有界——AOT `WaitForExit` 超时杀进程返 124、sh 侧 `timeout(1)` 包裹同码，默认 30min，`BUNDLER_UPDATER_PKG_TIMEOUT` 秒数双侧同名覆盖；
+  暂存根随进程全出口回收（finally/EXIT trap），SIGKILL 残件由下一轮 `bundler-pkg-*`>24h 同名清扫兜底（find 缺席的宿主不扫，归 OS tmp 清理器）。
+- 每级安装命令先 `command -v` 预检再调用；安装腿有界——AOT `WaitForExit` 超时整进程树杀返 124、sh 侧 `timeout -k 30` 包裹同码，默认 30min，`BUNDLER_UPDATER_PKG_TIMEOUT` **正数**秒双侧同名覆盖（`0`/非数字同归默认——GNU `timeout 0` 的无界义不外露）；
   apt-get 另带 `-o DPkg::Lock::Timeout=120` 把 dpkg 锁等待钉在包管理器自身界内。
   `--env-file` 会话 env 降权后经内层 `env K=V` 回灌（`sudo` env_reset 剥外层环境，缺省按最小集 HOME+DISPLAY）；外层 `nohup` 分离——nohup 走与包管理器同一 `ResolveCommand`/`_pa_cmd` 解析序（`BUNDLER_UPDATER_CMD_NOHUP` 覆盖 → PATH），spawn 包三向钉 `/dev/null`。
   `BUNDLER_UPDATER_CMD_<TOOL>` 覆盖值须过存在+普通文件+执行位三重复核才权威，不可用值按未设置退化——覆盖缝只给测试垫片用，流浪 env 不许把探测结果对调用方会话造假。

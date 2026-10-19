@@ -1364,11 +1364,12 @@ public static class UpdaterBootstrapParityTests
     //（timeout 缺席时 sh 退裸 cat，属可选——PkgRealTool 找不到就不种）；
     // mktemp/cp/mkdir 属包暂存（root 私有快照），sha256sum/shasum/openssl
     // 属 --sha256 复核的退化链（全缺席时 sh 支路按"无法核验"拒——同样属
-    // 协议内行为差异，须按宿主可用性对断言而非照单全收）。
+    // 协议内行为差异，须按宿主可用性对断言而非照单全收）；find 属
+    // bundler-pkg.* 残件清扫（缺席即跳过——协议允许）。
     static void SeedShim(string shim)
     {
         foreach (var tool in new[] { "env", "dirname", "awk", "ls", "sed", "nohup", "tr", "rm", "rmdir",
-                                   "stat", "id", "cat", "timeout",
+                                   "stat", "id", "cat", "timeout", "find",
                                    "mktemp", "cp", "mkdir",
                                    "sha256sum", "shasum", "openssl" })
         {

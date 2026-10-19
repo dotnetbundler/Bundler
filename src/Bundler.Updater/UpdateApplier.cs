@@ -275,20 +275,37 @@ internal sealed class UpdateApplier
     }
 
     // 暂存根默认路径：POSIX %TEMP%=/tmp 跨用户共享——按用户名分槽。
+    // 分槽名必须单射（非允许字符一律 _xNNNN 编码，含 '_' 自身——"a b"/"a_b"
+    // 这类洗净同形不并槽）；用户名缺席（最小容器无 passwd 条目）回退
+    // euid 数字槽——仍保 per-user 语义不回落共享名。
     // UpdateClientOptions.DownloadDirectory 同根复用（同一暂存域）。
     internal static string DefaultStagingRoot()
     {
         var user = SanitizePathSegment(Environment.UserName);
+        if (user.Length == 0 && UnixFileTypes.TryGetEUid(out var uid))
+        {
+            // '_u' 前缀保证与任何真实用户名编码结果不并槽（'_' 恒被编码）。
+            user = "_u" + uid;
+        }
         var name = user.Length > 0 ? "bundler-update-" + user : "bundler-update";
         return Path.Combine(Path.GetTempPath(), name);
     }
 
-    private static string SanitizePathSegment(string value)
+    // internal：单射性有单测断言（"a b"/"a_b"/"a_x0020b" 三名不并槽）。
+    internal static string SanitizePathSegment(string value)
     {
         var builder = new System.Text.StringBuilder(value.Length);
         foreach (var c in value)
         {
-            builder.Append(char.IsLetterOrDigit(c) || c is '.' or '_' or '-' ? c : '_');
+            if (char.IsLetterOrDigit(c) || c is '.' or '-')
+            {
+                builder.Append(c);
+            }
+            else
+            {
+                // 单射编码：'_' 也在编码面内——字面 "_x0020" 与转义结果不并槽。
+                builder.Append("_x").Append(((int)c).ToString("x4"));
+            }
         }
         return builder.ToString();
     }

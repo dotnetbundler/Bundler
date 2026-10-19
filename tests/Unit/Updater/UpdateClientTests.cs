@@ -209,6 +209,32 @@ public sealed class UpdateClientTests : TempBase
             client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task CheckForUpdateAsync_NullArtifactFile_Rejected()
+    {
+        // 畸形清单的显式 null（"file":null）与非法词法同归 UpdateException——
+        // 裸 NRE 会打穿"协议/校验/拒绝全确定性 UpdateException"调用方契约。
+        var (feedDir, key) = MakeFeed("2.0.0",
+            [Artifact("win-x64", "nsis", "app-2.0.0.exe")]);
+        MutateFeed(feedDir, key, feed => feed.Artifacts[0].File = null!);
+        var client = Client(feedDir, key, currentVersion: "1.0.0");
+
+        await Assert.ThrowsAsync<UpdateException>(() =>
+            client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CheckForUpdateAsync_NullArtifacts_TreatedAsEmpty()
+    {
+        // "artifacts":null 与空清单同义——无匹配 artifact 即无更新（null 不
+        // 崩进 NRE）。畸形仍是签名清单内的形状问题，客户端按空集确定性处理。
+        var (feedDir, key) = MakeFeed("2.0.0", []);
+        MutateFeed(feedDir, key, feed => feed.Artifacts = null!);
+        var client = Client(feedDir, key, currentVersion: "1.0.0");
+
+        Assert.Null(await client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
+    }
+
     // ---- 下载/验签/应用闸 ----
 
     [Fact]
@@ -272,6 +298,26 @@ public sealed class UpdateClientTests : TempBase
 
         Assert.Throws<UpdateException>(() =>
             client.Apply(info!, Path.Combine(Root, "never-verified.bin")));
+    }
+
+    [Theory]
+    [InlineData("a b", "a_b")]      // 空格与下划线不得并槽
+    [InlineData("a b", "a_x0020b")] // 字面 _xNNNN 与转义结果不得并槽
+    [InlineData("alice", "alice-")] // 尾连字符合法直过但形状不同
+    public void SanitizePathSegment_Injective(string left, string right)
+    {
+        // /tmp 跨用户共享的分槽名：非允许字符一律 _xNNNN 编码（含 '_' 自身），
+        // 不同用户名恒产不同段名——并槽会让先建者的目录权限卡死后到用户。
+        Assert.NotEqual(
+            UpdateApplier.SanitizePathSegment(left),
+            UpdateApplier.SanitizePathSegment(right));
+    }
+
+    [Fact]
+    public void SanitizePathSegment_SafeCharsPassThrough()
+    {
+        Assert.Equal("alice.d-9", UpdateApplier.SanitizePathSegment("alice.d-9"));
+        Assert.Equal("a_x005fb", UpdateApplier.SanitizePathSegment("a_b"));
     }
 
     // ---- 装置 ----
@@ -348,6 +394,28 @@ public sealed class UpdateClientTests : TempBase
         // 签名地址约定：<feed>.sig
         File.WriteAllBytes(feedPath + ".sig", EcdsaSigner.Sign(feedBytes, key));
         return (feedDir, key);
+    }
+
+    /// <summary>读回清单、原地改指定字段、重写并重签——畸形-but-签名有效清单装置。</summary>
+    private void MutateFeed(
+        string feedDir, CoreUpdate.UpdateKeyMaterial key,
+        Action<CoreUpdate.UpdateFeed> mutate)
+    {
+        var feedPath = Path.Combine(feedDir, "bundler-update-feed.json");
+        CoreUpdate.UpdateFeed feed;
+        using (var input = File.OpenRead(feedPath))
+        {
+            feed = CoreUpdate.UpdateJson.ReadFeed(input)!;
+        }
+        mutate(feed);
+        byte[] feedBytes;
+        using (var stream = new MemoryStream())
+        {
+            CoreUpdate.UpdateJson.WriteFeed(stream, feed);
+            feedBytes = stream.ToArray();
+        }
+        File.WriteAllBytes(feedPath, feedBytes);
+        File.WriteAllBytes(feedPath + ".sig", EcdsaSigner.Sign(feedBytes, key));
     }
 }
 

@@ -35,14 +35,19 @@ internal sealed class UpdateDownloader
     {
         // feed 本体与签名腿同一例外面：调用方契约"协议/校验/拒绝全部确定性抛
         // UpdateException"——裸 HttpRequestException/IOException 会把只捕
-        // UpdateException 的调用方打穿。用户取消（ct）不算协议拒绝，原样穿透。
+        // UpdateException 的调用方打穿。用户取消（ct 已请求）不算协议拒绝，原样
+        // 穿透；HttpClient.Timeout 产生的 OCE 不带用户取消标记——超时归
+        // UpdateException，不被误分类成"用户取消"静默漏出。
         byte[] bytes;
         try
         {
             bytes = await GetBytesAsync(feedUrl, cancellationToken);
         }
-        catch (Exception exception) when (exception is not UpdateException and
-            not OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not UpdateException)
         {
             throw new UpdateException($"update feed '{feedUrl}' is unreachable.", exception);
         }
@@ -51,8 +56,11 @@ internal sealed class UpdateDownloader
         {
             signature = await GetBytesAsync(SignatureUrl(feedUrl), cancellationToken);
         }
-        catch (Exception exception) when (exception is not UpdateException and
-            not OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not UpdateException)
         {
             throw new UpdateException(
                 $"update feed signature '{SignatureUrl(feedUrl)}' is unreachable — refusing unsigned manifest.",
@@ -92,10 +100,10 @@ internal sealed class UpdateDownloader
         // artifact.file 经 Path.Combine 拼本地下载名——词法必须是单段文件名：
         // 分隔符/../等会让签名清单把下载件写到下载目录之外（签名只保真不保意图，
         // 词法收口在客户端侧做）。
-        foreach (var artifact in feed.Artifacts)
+        foreach (var artifact in feed.Artifacts ?? new List<UpdateFeedArtifact>())
         {
-            var file = artifact.File;
-            if (file.Length == 0 || file is "." or ".." ||
+            var file = artifact?.File;
+            if (file is not { Length: > 0 } || file is "." or ".." ||
                 file.IndexOf('/') >= 0 || file.IndexOf('\\') >= 0)
             {
                 throw new UpdateException(
@@ -390,15 +398,37 @@ internal sealed class UpdateDownloader
         await CopyExactlyAsync(input, output, length, cancellationToken);
     }
 
+    // 体读有界读的共享腿：每块独立给停滞上界（CancelAfter 每趟重置）——
+    // 挂起的响应体/Range 段不能拖死下载；用户取消（外层 ct）原样穿透，
+    // 停滞超时归 UpdateException。差分腿与全量腿共用同一停滞语义。
+    private static async Task<int> ReadBoundedAsync(
+        Stream input, byte[] buffer, int count, CancellationTokenSource stall,
+        CancellationToken cancellationToken, string what)
+    {
+        stall.CancelAfter(BodyStallMilliseconds);
+        try
+        {
+            return await input.ReadAsync(buffer, 0, count, stall.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new UpdateException(
+                $"{what} stalled — no bytes within {BodyStallMilliseconds / 1000}s.");
+        }
+    }
+
     private static async Task CopyExactlyAsync(
         Stream input, Stream output, long length, CancellationToken cancellationToken)
     {
         var buffer = new byte[81920];
         var remaining = length;
+        // Range/差分源读同样挂停滞界——HTTP 206 腿挂起与全量腿同险。
+        using var stall = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         while (remaining > 0)
         {
-            var read = await input.ReadAsync(
-                buffer, 0, (int)Math.Min(buffer.Length, remaining), cancellationToken);
+            var read = await ReadBoundedAsync(
+                input, buffer, (int)Math.Min(buffer.Length, remaining), stall,
+                cancellationToken, "delta source/range read");
             if (read == 0)
             {
                 throw new UpdateException("delta source/range read ended early.");
@@ -469,23 +499,14 @@ internal sealed class UpdateDownloader
             using (var output = new FileStream(partPath, mode, FileAccess.Write, FileShare.None))
             {
                 // 逐块停滞界：ResponseHeadersRead 下流读不受发送侧超时保护——
-                // 慢速/挂起连接会把下载拖死；每块独立 linked-cts 给停滞上界。
+                // 慢速/挂起连接会把下载拖死；每块独立给停滞上界。
                 using var stall = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 var buffer = new byte[81920];
                 while (true)
                 {
-                    stall.CancelAfter(BodyStallMilliseconds);
-                    int read;
-                    try
-                    {
-                        read = await input.ReadAsync(buffer, 0, buffer.Length, stall.Token);
-                    }
-                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-                    {
-                        throw new UpdateException(
-                            $"download '{url}' stalled — no bytes within " +
-                            $"{BodyStallMilliseconds / 1000}s.");
-                    }
+                    var read = await ReadBoundedAsync(
+                        input, buffer, buffer.Length, stall, cancellationToken,
+                        $"download '{url}'");
                     if (read == 0)
                     {
                         break;
@@ -521,14 +542,21 @@ internal sealed class UpdateDownloader
             response.EnsureSuccessStatusCode();
             // 体读停滞界：ReadAsByteArrayAsync 不吃外层 ct——挂起的响应体会拖死取件。
             var content = response.Content.ReadAsByteArrayAsync();
-            if (await Task.WhenAny(content, Task.Delay(BodyStallMilliseconds, cancellationToken))
+            // 计时器挂独立 cts——分胜负即刻取消，不留 ≤120s 挂钟残件。
+            using var timer = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            if (await Task.WhenAny(content, Task.Delay(BodyStallMilliseconds, timer.Token))
                     != content)
             {
+                // 弃置腿观异常防 unobserved 上报；计时器已赢/随本次取消回收。
+                _ = content.ContinueWith(
+                    t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                timer.Cancel();
                 cancellationToken.ThrowIfCancellationRequested();
                 throw new UpdateException(
                     $"fetch of '{location}' stalled — body not complete within " +
                     $"{BodyStallMilliseconds / 1000}s.");
             }
+            timer.Cancel();
             return await content;
         }
         var path = location.StartsWith("file://", StringComparison.Ordinal)

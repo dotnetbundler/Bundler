@@ -93,6 +93,8 @@ internal static class PkgApplyPlan
         // sh 侧 awk 缺席走 PA_UID_FAIL→拒重启（rc6）的分流在 AOT 天然无对应物。
         var uid = ParseUid(GetEnv("PKEXEC_UID")) ?? ParseUid(GetEnv("SUDO_UID"));
         var passwd = uid is { } id ? LookupPasswd(id) : null;
+        // SIGKILL 留下的上轮暂存目兜底清扫（finally/EXIT trap 管不到强杀路径）。
+        SweepStaleStageDirs();
         var staged = "";
         try
         {
@@ -175,7 +177,7 @@ internal static class PkgApplyPlan
         var staged = Path.Combine(dir, Path.GetFileName(pkg));
         try
         {
-            File.Copy(pkg, staged);
+            CopyPackage(pkg, staged);
             if (expectedHex is { Length: > 0 })
             {
                 var actual = Sha256Hex(staged);
@@ -203,6 +205,108 @@ internal static class PkgApplyPlan
         }
         catch (Exception)
         {
+        }
+    }
+
+    // 判存→open 的类型替换窗收口（与 --env-file 同一威胁形）：包件是用户可写
+    // 路径，-f 判存后 open 前被换成 fifo/设备会让 root 进程挂死 open 或无限量
+    // 读设备件。POSIX 走 OpenWithDeadline 有界开件（fifo 阻塞 5s 收口）+ fstat
+    // 钉住 inode 复核 S_IFREG + 按 fstat 尺寸封顶拷贝——并发 append 流不进本
+    // 轮副本（内容篡改另由 --sha256 闸收）。Windows 无同形 fifo 换件面，File.Copy。
+    private static void CopyPackage(string source, string staged)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            File.Copy(source, staged);
+            return;
+        }
+        var fd = NativeMethods.OpenWithDeadline(source);
+        if (fd == NativeMethods.InvalidFd)
+        {
+            throw new UpdateRejectedException(
+                $"package '{source}' could not be opened for staging.");
+        }
+        try
+        {
+            if (!NativeMethods.TryFStat(fd, out var status) ||
+                !NativeMethods.IsRegularMode(status))
+            {
+                throw new UpdateRejectedException(
+                    $"package '{source}' is not a regular file — refusing to stage.");
+            }
+            using var input = new FileStream(
+                new Microsoft.Win32.SafeHandles.SafeFileHandle(fd, ownsHandle: true),
+                FileAccess.Read);
+            fd = NativeMethods.InvalidFd; // 描述符归属移交 FileStream
+            using var output = new FileStream(
+                staged, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            // 按 fstat 尺寸封顶：读满即停（提前 EOF→sha256 闸收；追加内容不进来）。
+            var remaining = status.Size;
+            var buffer = new byte[81920];
+            while (remaining > 0)
+            {
+                var read = input.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                if (read == 0)
+                {
+                    break;
+                }
+                output.Write(buffer, 0, read);
+                remaining -= read;
+            }
+        }
+        finally
+        {
+            if (fd != NativeMethods.InvalidFd)
+            {
+                NativeMethods.Close(fd);
+            }
+        }
+    }
+
+    // SIGKILL 残件兜底：EXIT/finally 清不到被强杀的进程——按名+龄清扫本轮
+    // 之前的暂存目（默认 24h，客户端 SweepStaleStaging 同龄口径）。root 侧
+    // /tmp 跨进程共享，只动 bundler-pkg-* 本契约名。
+    private static void SweepStaleStageDirs()
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-24);
+        string tempRoot;
+        try
+        {
+            tempRoot = Path.GetTempPath();
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        string[] dirs;
+        try
+        {
+            // sh 腿建 bundler-pkg.XXXX（mktemp -d）、AOT 建 bundler-pkg-<guid>——
+            // 两种本契约名都收（跨实现残件互不漏）。
+            dirs = Directory.GetDirectories(tempRoot, "bundler-pkg*")
+                .Where(d =>
+                {
+                    var name = Path.GetFileName(d);
+                    return name.StartsWith("bundler-pkg-", StringComparison.Ordinal) ||
+                           name.StartsWith("bundler-pkg.", StringComparison.Ordinal);
+                }).ToArray();
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        foreach (var dir in dirs)
+        {
+            try
+            {
+                if (Directory.GetLastWriteTimeUtc(dir) < cutoff)
+                {
+                    Directory.Delete(dir, recursive: true);
+                }
+            }
+            catch (Exception)
+            {
+            }
         }
     }
 
@@ -764,7 +868,8 @@ internal static class PkgApplyPlan
                     return candidate;
                 }
             }
-            else if (File.Exists(candidate) && HasExecuteBit(candidate))
+            else if (File.Exists(candidate) && IsRegularFile(candidate) &&
+                     HasExecuteBit(candidate))
             {
                 return candidate;
             }
@@ -811,7 +916,9 @@ internal static class PkgApplyPlan
             {
                 try
                 {
-                    process.Kill();
+                    // 整树杀：apt-get/dnf 的 dpkg/rpm 孙进程不能成孤儿继续持锁——
+                    // 与 sh `timeout` 对进程组发信号同口径（双侧超时后无遗留 pm）。
+                    process.Kill(entireProcessTree: true);
                 }
                 catch (Exception)
                 {

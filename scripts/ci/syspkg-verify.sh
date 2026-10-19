@@ -84,7 +84,7 @@ want_rec() { # $1 phase-id $2 rec-file $3 expect-substr（形如 uid=1000）$4 d
 # cp/mktemp/rm/rmdir/sha256sum 属新暂存+核验面：包先 cp 进 bundler-pkg.* 私有
 # 暂存目再过 --sha256 复核（root 侧验签替代窗收口），缺 cp/sha256sum 会按
 # 暂存/核验失败 rc4；rm/rmdir 喂 env 件一次性清理与暂存根回收。
-BASETOOLS="env nohup dirname awk ls sed tr id mkdir cat stat timeout cp mktemp rm rmdir sha256sum"
+BASETOOLS="env nohup dirname awk ls sed tr id mkdir cat stat timeout cp mktemp rm rmdir sha256sum find"
 # dpkg 在 PATH 内自查运行依赖（缺一个整体报 "expected programs not found" 退 2）：
 # sh/rm/tar/diff + dpkg-deb/dpkg-split/ldconfig/start-stop-daemon（实跑见
 # "unable to execute split package reassembly (dpkg-split)"）——shim 给 dpkg 必须一并给。
