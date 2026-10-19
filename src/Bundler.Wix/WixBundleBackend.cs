@@ -443,12 +443,12 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
     private static readonly Regex SourceReferencePattern =
         new("\\bSource(?:File)?\\s*=\\s*[\"'](?<source>[^\"']+)[\"']", RegexOptions.Compiled);
 
-    // WiX 预处理器引用按文档化命名空间判定（var/env/sys/wix/loc + bind 族含
-    // bindpath；命名空间后立即接 .）——字面文件名中的 $( 或 !( 串（如
-    // "a$(b).txt"、"$(varx.y)"）不匹配，未知命名空间也不匹配，统一走字面
-    // 路径解析（多半落到 MISSING 哨兵，可观测）。
+    // WiX 预处理器引用按文档化命名空间判定（var/env/sys/wix/loc/bind/bindpath；
+    // 命名空间后立即接 .）——字面文件名中的 $( 或 !( 串（如 "a$(b).txt"、
+    // "$(varx.y)"）与未知命名空间均不匹配，统一走字面路径解析
+    //（多半落到 MISSING 哨兵，可观测）。
     private static readonly Regex PreprocessorReferencePattern =
-        new("[!$]\\((?:var|env|sys|wix|loc|bind[A-Za-z0-9_]*)\\.", RegexOptions.Compiled);
+        new("[!$]\\((?:var|env|sys|wix|loc|bind|bindpath)\\.", RegexOptions.Compiled);
 
     // 片段/专家模板经 Source/SourceFile 引用的文件不在载荷清单内，逐一把
     // 被引用文件哈希进指纹；相对路径以该 .wxs 所在目录解析。WiX 预处理器引用
