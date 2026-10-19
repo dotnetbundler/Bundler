@@ -55,7 +55,7 @@ public sealed class WindowsExternalCommandSigner : IBundleSigner
         }
         var standardOutput = process.StandardOutput.ReadToEndAsync();
         var standardError = process.StandardError.ReadToEndAsync();
-        var bound = ProcessTimeout();
+        var bound = ProcessTimeout(options);
         using var registration = cancellationToken.Register(() =>
         {
             try { if (!process.HasExited) process.Kill(); } catch { }
@@ -86,8 +86,12 @@ public sealed class WindowsExternalCommandSigner : IBundleSigner
         }
     }
 
-    private static TimeSpan ProcessTimeout()
+    private static TimeSpan ProcessTimeout(WindowsExternalCommandSigningOptions options)
     {
+        if (options.Timeout is { } timeout && timeout > TimeSpan.Zero)
+        {
+            return timeout;
+        }
         var raw = Environment.GetEnvironmentVariable("BUNDLER_TOOL_TIMEOUT_SECONDS");
         return int.TryParse(raw, out var seconds) && seconds > 0
             ? TimeSpan.FromSeconds(seconds)

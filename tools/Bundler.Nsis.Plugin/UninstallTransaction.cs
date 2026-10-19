@@ -126,6 +126,32 @@ internal static class UninstallTransaction
         }
     }
 
+    // 归属兜底：标记件缺失时由插件按注册 InstallRoot（回退 InstallLocation）判定
+    // 候选 $INSTDIR 归属——与 Begin 同一套 GetFullPath+OrdinalIgnoreCase 规范化比较。
+    internal static int CheckDirectoryOwnership(
+        string installDirectory,
+        string rootName,
+        int viewBits,
+        string uninstallSubKey)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(installDirectory))
+            {
+                return 1;
+            }
+            var candidate = Path.GetFullPath(installDirectory.Trim())
+                .TrimEnd(Path.DirectorySeparatorChar);
+            RejectExistingReparsePoints(candidate);
+            var registered = ReadRegisteredInstallRoot(rootName, viewBits, uninstallSubKey);
+            return candidate.Equals(registered, StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+        }
+        catch (Exception exception)
+        {
+            return exception.HResult;
+        }
+    }
+
     internal static int GetState(
         string transactionDirectory,
         string expectedInstallDirectory,

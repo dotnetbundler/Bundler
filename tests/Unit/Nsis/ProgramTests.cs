@@ -165,7 +165,7 @@ public sealed class ProgramTests : TempBase
                 repositoryRoot,
                 "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
             Assert.True(File.Exists(pluginPath), "The bundled NSIS plug-in is missing.");
-            Assert.Equal("C18232C2940F76BB9E367C3AE6F1AC5BEBBBD71B1134658FB814FBF83285F981",
+            Assert.Equal("115BFC316970AF7C0436688EFB378D9FCDE816661FB6AEA7BD54E0768BD09A11",
                 Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))));
 
             var toolset = await NsisToolResolver.ResolveAsync(archive, cache, TestContext.Current.CancellationToken);

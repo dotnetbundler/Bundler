@@ -182,10 +182,11 @@ public sealed class WindowsExternalCommandSignerTests
         File.WriteAllText(script, "@ping -n 60 127.0.0.1 >nul\r\n");
         try
         {
-            Environment.SetEnvironmentVariable("BUNDLER_TOOL_TIMEOUT_SECONDS", "1");
+            // Timeout 走 options 显式旋钮而非进程级环境变量——并发测试互不污染。
             var signer = new WindowsExternalCommandSigner(new WindowsExternalCommandSigningOptions
             {
-                Command = "cmd", Arguments = ["/c", "{path}"]
+                Command = "cmd", Arguments = ["/c", "{path}"],
+                Timeout = TimeSpan.FromSeconds(1)
             });
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -199,7 +200,6 @@ public sealed class WindowsExternalCommandSignerTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("BUNDLER_TOOL_TIMEOUT_SECONDS", null);
             Directory.Delete(dir, recursive: true);
         }
     }

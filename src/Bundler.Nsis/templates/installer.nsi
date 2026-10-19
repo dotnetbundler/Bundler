@@ -466,10 +466,9 @@ Function un.onInit
   ; 都要求安装目录与注册 InstallRoot 一致，伪造 journal 无法重定向删除目标。
   ${If} $UninstallTransactionState == 0
     IfFileExists "$INSTDIR\${INSTALL_MARKER}" uninstall_directory_owned
-    ReadRegStr $0 SHCTX "${UNINSTALL_KEY}" "InstallRoot"
-    StrCmp $0 "" 0 +2
-      ReadRegStr $0 SHCTX "${UNINSTALL_KEY}" "InstallLocation"
-    StrCmp $0 $INSTDIR uninstall_directory_owned
+    DotNetBundlerNsis::CheckUninstallDirectoryOwnership "$INSTDIR" "$TransactionRegistryRoot" "$TransactionRegistryView" "${UNINSTALL_KEY}"
+    Pop $0
+    IntCmp $0 0 uninstall_directory_owned
       StrCpy $ExitCode ${EXIT_FAILURE}
       SetErrorLevel $ExitCode
       Abort

@@ -144,7 +144,7 @@ Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline`
 1. **PR-1 Core+Abstractions**（`rework/core-abstractions`，**已合入 #142**，4 轮 Local Review 清零）：有界等待/FileTree 复用/validator 剥 null/桌面净化/命名与注入收口/秘密面/PathText 统一路径比较。
 2. **PR-2 入口层**（`rework/entry-layer`，**完成待统一合并 #144**，2 轮清零）：CLI 混合 target 格式串台、POSIX `\` 路径统一 `/`、CLI ParseValue 类型感知+JSON→rc2、MSBuild 异常聚合、推断链下沉 Core、缺省格式表单源、签名秘密改 `*EnvironmentVariable` 间址、旋钮覆盖机械化测试。
 3. **PR-3 Linux**（`rework/linux-backends`，**完成待统一合并 #145**，5 轮清零）：binLink 校验四后端收敛（`LinuxLinkName`）、PayloadSource 链接策略（in-tree 保留/外指拒绝/悬空拒绝/`link→.` 归一）、`PayloadPathBook` 共享簿记、Archive 父前缀拒绝+暂存件移出归档源、RPM 2GiB 长标签+Int64s、GNUPGHOME 出树进工作目录、四门面 `Validate` 接校验缝、apk 签名成员名对齐 abuild 且签名成员推导进校验缝、i686-AppImage 收窄为拒绝、AppImage 保留名前缀收口+异常口径分层（旋钮腿 ArgumentException/载荷腿 IOp）。
-4. **PR-4 Windows**（**进行中**）：`Uninstall.exe` INSTDIR 归属校验（插件源码重建+provenance）、外部签名器走 ToolRunner、PFX `EphemeralKeySet`、`RmGetList` 先于 `RmShutdown`、21 语言恢复文案、LegacyMsiAutoDetect 收紧。
+4. **PR-4 Windows**（**进行中**）：`Uninstall.exe` INSTDIR 归属校验（插件源码重建+provenance）、外部签名器同 `ToolRunner` 口径有界等待（独立包不引 Core，自带同语义实现+`Timeout` 旋钮）、PFX `EphemeralKeySet`、`RmGetList` 先于 `RmShutdown`、21 语言恢复文案、LegacyMsiAutoDetect 收紧。
 5. **PR-5 macOS**：`MacSigningSupport` 共享化（凭据/keychain/参数生成单源）、codesign `--keychain` 替代搜索列表变异、productsign `--timestamp`、detach 统一、撞名簿、`.rtfd` 移除声明、`resize -limits` 字段序（macOS 实机复核登记）。
 6. **PR-6 UPDATE**：feed fetch/`TryRead`/argv `JoinArgv`/feed File 词法/pkg-apply 有界/ProcessAlive+MacAppGate fail-closed、**retained 包 root 侧重验签**（动 `Bundler.Updater.Bootstrap` 源码→必须 dispatch `produce-bootstrap` 重冻 8 件入库评审 + `syspkg-verify` 复验）。
 
