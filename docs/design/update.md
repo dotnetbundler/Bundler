@@ -118,7 +118,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   动词协议签名：`bundler-updater pkg-apply --pkg <本地包> --format <deb|rpm|apk> --app <重启目标> [--sha256 <hex>] [--env-file <会话env件>] [--rollback] [--log <件>]`。
 - **暂存核验（留存包 TOCTOU 收口）**：包先拷进 root 私有临时目录（`bundler-pkg.*`/`bundler-pkg-*`，umask-077/0700），装了暂存副本——装期间原件被改写不影响本轮回放；
   拷贝本身有界：AOT 经 PAL `O_NOFOLLOW`+5s 时限开件、fstat 复核普通件并按其尺寸封顶读；sh 侧 `timeout -k 10 60 cp` 包裹——判存到 open 的类型替换窗（fifo 挂死/设备件读不尽）双侧同形收口；
-  `--sha256`（严格 64 位十六进制，畸形归用法错 rc3）对暂存副本逐位复核，不匹配/无哈希工具一律 rc4 拒绝，不降级装原件；
+  `--sha256`（严格 64 位十六进制，畸形归用法错 rc3）对暂存副本逐位复核，不匹配/无哈希工具一律 rc4 拒绝，不降级装原件（AOT 摘要走内置纯托管 `BundledSha256`——musl 静态件无 OpenSSL 宿主面可依赖；sh 侧经 `sha256sum`→`shasum`→`openssl dgst` 工具链退化序）；
   暂存根随进程全出口回收（finally/EXIT trap），SIGKILL 残件由下一轮 `bundler-pkg-*`>24h 同名清扫兜底（find 缺席的宿主不扫，归 OS tmp 清理器）。
 - 每级安装命令先 `command -v` 预检再调用；安装腿有界——AOT `WaitForExit` 超时 SIGKILL 整进程树返 124（.NET 无 TERM/组信号面，孙进程必死优先于善后窗）、sh 侧 `timeout -k 30` 先 TERM 后 KILL 包裹同码——超时界与"无遗留 pm"双侧一致，善后窗宽严属已知实现差；
   默认 30min，`BUNDLER_UPDATER_PKG_TIMEOUT` **正数**秒双侧同名覆盖（`0`/非数字同归默认——GNU `timeout 0` 的无界义不外露）；

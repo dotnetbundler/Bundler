@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
 using DotNet.Bundler.Updater.Protocol;
 
@@ -313,16 +312,11 @@ internal static class PkgApplyPlan
         }
     }
 
+    // musl 静态 AOT 无 OpenSSL——摘要走纯托管 BundledSha256（sh 侧 _pa_sha256 工具链同义）。
     private static string Sha256Hex(string path)
     {
-        using var sha = SHA256.Create();
         using var stream = File.OpenRead(path);
-        var builder = new StringBuilder(64);
-        foreach (var b in sha.ComputeHash(stream))
-        {
-            builder.Append(b.ToString("x2"));
-        }
-        return builder.ToString();
+        return BundledSha256.Hex(stream);
     }
 
     // --env-file 清理：删件恒做（尽力）；父目录仅本编排契约的 pkg-* 暂存名才删
