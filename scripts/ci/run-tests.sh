@@ -78,7 +78,8 @@ fi
 # ps 只留头行+非常驻状态（R/D/U/T/Z 首字符——S/I 长眠态滤掉）+spawn 面命令白名单：
 # 全量 ~300 行/份裁到数十行。白名单含已知嫌疑守护进程与 IPC 对端（securityd/amfid/
 # syspolicyd/diskimages/diskarbitrationd/trustd/installd/lsd）、SLA 点击驱动 osascript/
-# open、提权/包管 sudo/pkgutil/dpkg/rpm/docker 面与宿主壳 bash/tail——宁宽勿漏。
+# open、打包调用面全家桶（xattr/actool/PlistBuddy/unzip/rpmbuild/wix 系等——S 态挂死
+# 的非白名单工具会漏快照）、提权/包管 sudo/pkgutil/dpkg/rpm/docker 面与宿主壳 bash/tail——宁宽勿漏。
 SNAP="$OUT/process-snapshots.log"; : > "$SNAP"
 (
     while :; do
@@ -86,7 +87,7 @@ SNAP="$OUT/process-snapshots.log"; : > "$SNAP"
             echo "===== $(date -u +%FT%TZ) ====="
             uptime || true
             ps -axww -o pid,ppid,stat,etime,%cpu,%mem,rss,command 2>/dev/null \
-                | awk 'NR==1 || $3 ~ /^[RDUTZ]/ || /dotnet|Bundler|hdiutil|codesign|security|pkgbuild|productbuild|productsign|pkgutil|installd|makensis|notarytool|ditto|xar |lipo|otool|spctl|osascript|syspolicyd|amfid|trustd|diskimages|diskarbitrationd|lsd|sudo|docker|containerd|dpkg|rpm|apk |abuild|zip |tar |gzip|sleep|bash|tail|open |sh |cp |ln |chmod |plutil|nohup|xcrun|apt|dnf|zypper/' \
+                | awk 'NR==1 || $3 ~ /^[RDUTZ]/ || /dotnet|Bundler|hdiutil|codesign|security|pkgbuild|productbuild|productsign|pkgutil|installd|makensis|notarytool|ditto|xar |lipo|otool|spctl|osascript|syspolicyd|amfid|trustd|diskimages|diskarbitrationd|lsd|sudo|docker|containerd|dpkg|rpm|apk |abuild|zip |tar |gzip|sleep|bash|tail|open |sh |cp |ln |chmod |plutil|nohup|xcrun|apt|dnf|zypper|xattr|actool|ibtool|PlistBuddy|sw_vers|dot_clean|SetFile|tccutil|unzip|rpmbuild|rpmsign|candle|light|heat/' \
                 || ps auxww || true
             command -v hdiutil >/dev/null 2>&1 && hdiutil info || true
             echo
