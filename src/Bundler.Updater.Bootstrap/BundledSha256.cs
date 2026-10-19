@@ -28,17 +28,36 @@ internal static class BundledSha256
             0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
         };
         var block = new byte[64];
+        var readBuf = new byte[64 * 1024];
         var buffered = 0;
         long total = 0;
         int read;
-        while ((read = stream.Read(block, buffered, 64 - buffered)) > 0)
+        // 外圈大块读（FileStream 无用户态缓冲，64B/次的直接喂法会放大成百万级
+        // syscall），内圈按 64B 整块切喂 Transform，尾余滚入 block 等下一轮补满。
+        while ((read = stream.Read(readBuf, 0, readBuf.Length)) > 0)
         {
-            buffered += read;
             total += read;
-            if (buffered == 64)
+            var consumed = 0;
+            if (buffered > 0)
             {
-                Transform(h, block, 0);
-                buffered = 0;
+                var take = Math.Min(64 - buffered, read);
+                Array.Copy(readBuf, 0, block, buffered, take);
+                buffered += take;
+                consumed = take;
+                if (buffered == 64)
+                {
+                    Transform(h, block, 0);
+                    buffered = 0;
+                }
+            }
+            for (; consumed + 64 <= read; consumed += 64)
+            {
+                Transform(h, readBuf, consumed);
+            }
+            if (consumed < read)
+            {
+                Array.Copy(readBuf, consumed, block, 0, read - consumed);
+                buffered = read - consumed;
             }
         }
         // 终态填充：0x80 + 零填充到余 8 字节放 64 位大端位长。
