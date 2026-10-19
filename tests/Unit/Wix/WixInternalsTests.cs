@@ -339,6 +339,7 @@ public sealed class WixInternalsTests : TempBase
                 <Component><File Source="$(var.BuildDir)\dyn.dll"/></Component>
                 <Component><File Source="!(bindpath.binsecrets)\gen.dll"/></Component>
                 <Component><File Source="literal$(paren).txt"/></Component>
+                <Component><File Source="$(varx.fake)near-miss.txt"/></Component>
                 <Component><File Source="absent-file.txt"/></Component>
               </Fragment>
             </Wix>
@@ -351,6 +352,8 @@ public sealed class WixInternalsTests : TempBase
         Assert.DoesNotContain("dyn.dll", output, StringComparison.Ordinal);
         Assert.DoesNotContain("gen.dll", output, StringComparison.Ordinal);
         Assert.Contains("literal$(paren).txt", output, StringComparison.Ordinal);
+        // $(varx.*) 非文档化命名空间——按字面处理而非静默跳过。
+        Assert.Contains("near-miss.txt", output, StringComparison.Ordinal);
         Assert.Contains("MISSING", output, StringComparison.Ordinal);
         Assert.Contains("absent-file.txt", output, StringComparison.Ordinal);
     }
