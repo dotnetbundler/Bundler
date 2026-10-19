@@ -71,7 +71,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   非 Bundler 链首装或 retention 无留存旧包时，`--rollback` 确定性拒绝报"无留存包可回滚"，不空转。
   retention 不做容量剪枝——留存件只增不剪不设上限，登记为开放边界（清理由外部运维策略管）。
 - **提权三级退化链**：`pkexec` → `zenity`/`kdialog` 询问密码 + `sudo -S` → 裸 `sudo`。
-  退化判据只剩可用性探测（`command -v`）与 spawn 前失败：`Process.Start` 未起成
+  退化判据只剩可用性探测（`command -v`）与 spawn 前失败：`ToolProcess.Start` 未起成
   （探测后工具被删/执行位丢失）才依序补下一腿；一旦 spawn 返回有效句柄该腿即终局——
   观察窗内任意退出码（0/3/4/5/6/126/127/其他）或窗外退出都只留痕+清 env 件，
   句柄原样交还调用方观察退出码，绝不重放已执行安装器。
@@ -92,7 +92,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   新包复制进用户空间 retention 目录并写 `applied` 标记；留存副本在拉起前再过一遍公钥验签（apply 与 rollback 同口径），验不过即拒绝并还原现场。
   验签同趟算出的 sha256 随 verb argv 以 `--sha256` 携给引导件——留存件在用户可写目录，验签到 root 执行之间仍有窗；root 侧把包暂存进私有目录并对暂存副本复核该哈希，验后替换窗收口到"暂存目录属 root"（详见 §2.3）。
   rollback 拣 `applied` 之外最新留存件（须 pkg+sig 成对且过签，否则跳选下一个）同链重放、applied 翻回旧包名。
-  提权腿全部 spawn 失败（逐腿 `Process.Start` 均未起成）时还原 `applied` 标记并删除本轮 retained 件——rollback 侧只还原标记、绝不删既有留存件；已启动腿非零退出不属于此还原面。
+  提权腿全部 spawn 失败（逐腿 `ToolProcess.Start` 均未起成）时还原 `applied` 标记并删除本轮 retained 件——rollback 侧只还原标记、绝不删既有留存件；已启动腿非零退出不属于此还原面。
   测试缝与引导件同名同源：`BUNDLER_UPDATER_CMD_<TOOL>` env 覆盖 + `CommandProbe`/`EnvProbe`/`ExecProbe`/`ChmodProbe`/`SpawnProbe` 进程内探针。
 
 ### 2.3 引导件侧（root，新动词 `pkg-apply`）
@@ -120,7 +120,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   拷贝本身有界：AOT 经 PAL `O_NOFOLLOW`+5s 时限开件、fstat 复核普通件并按其尺寸封顶读；sh 侧 `timeout -k 10 60 cp` 包裹——判存到 open 的类型替换窗（fifo 挂死/设备件读不尽）双侧同形收口；
   `--sha256`（严格 64 位十六进制，畸形归用法错 rc3）对暂存副本逐位复核，不匹配/无哈希工具一律 rc4 拒绝，不降级装原件（AOT 摘要走内置纯托管 `BundledSha256`——musl 静态件无 OpenSSL 宿主面可依赖；sh 侧经 `sha256sum`→`shasum`→`openssl dgst` 工具链退化序）；
   暂存根随进程全出口回收（finally/EXIT trap），SIGKILL 残件由下一轮 `bundler-pkg-*`>24h 同名清扫兜底（find 缺席的宿主不扫，归 OS tmp 清理器）。
-- 每级安装命令先 `command -v` 预检再调用；安装腿有界——AOT `ProcessWait` 有界 spawn+等待、超时 SIGKILL 整进程树返 124（.NET 无 TERM/组信号面，孙进程必死优先于善后窗；进程面不走裸 `Process` API——macOS 实证过 spawn/reap 全局锁死锁把已退子进程留成僵尸、spawn 面堵死）、sh 侧 `timeout -k 30` 先 TERM 后 KILL 包裹同码——超时界与"无遗留 pm"双侧一致，善后窗宽严属已知实现差；
+- 每级安装命令先 `command -v` 预检再调用；安装腿有界——`ToolProcess` 有界 spawn+等待、超时 SIGKILL 整进程树（Unix 子件 setpgid 自立组）返 124（.NET 无 TERM/组信号面，孙进程必死优先于善后窗；进程面不走裸 `Process` API——macOS 实证过 spawn/reap 全局锁死锁把已退子进程留成僵尸、spawn 面堵死）、sh 侧 `timeout -k 30` 先 TERM 后 KILL 包裹同码——超时界与"无遗留 pm"双侧一致，善后窗宽严属已知实现差；
   默认 30min，`BUNDLER_UPDATER_PKG_TIMEOUT` **正数**秒双侧同名覆盖（`0`/非数字同归默认——GNU `timeout 0` 的无界义不外露）；
   apt-get 另带 `-o DPkg::Lock::Timeout=120` 把 dpkg 锁等待钉在包管理器自身界内。
   `--env-file` 会话 env 降权后经内层 `env K=V` 回灌（`sudo` env_reset 剥外层环境，缺省按最小集 HOME+DISPLAY）；外层 `nohup` 分离——nohup 走与包管理器同一 `ResolveCommand`/`_pa_cmd` 解析序（`BUNDLER_UPDATER_CMD_NOHUP` 覆盖 → PATH），spawn 包三向钉 `/dev/null`。

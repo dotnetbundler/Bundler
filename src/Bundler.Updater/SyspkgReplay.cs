@@ -45,9 +45,9 @@ internal static class SyspkgReplay
     /// <summary>
     /// 提权腿拉起缝：置非 null 即不真 spawn——由测试决定返回什么（任意退出码的
     /// 进程道具/抛异常），断言"spawn 抛异常才退化下一腿、已启动腿不重放"语义；
-    /// 生产为 null 走 ProcessWait.Start（spawn 本身有界——Unix 全局 spawn 锁死锁面不悬）。
+    /// 生产为 null 走 ToolProcess.Start（Unix 经 libc posix_spawn——不碰运行时 spawn/reap 全局锁）。
     /// </summary>
-    internal static Func<ProcessStartInfo, Process?>? SpawnProbe;
+    internal static Func<ToolProcessStartInfo, ToolProcess?>? SpawnProbe;
 
     // 会话 env 件的固定键集——在场才写行，不在场跳过（§2.2 "等在"口径）。
     private static readonly string[] SessionEnvKeys =
@@ -81,7 +81,7 @@ internal static class SyspkgReplay
     /// 留存副本再验签 → 提权退化链拉起安装位 bundler-updater。
     /// 返回的是提权器进程句柄（拉起即退语义）。signature = 清单上行 base64 签名。
     /// </summary>
-    internal static Process Apply(
+    internal static ToolProcess Apply(
         UpdateInstallIdentity identity, string artifactPath, string signature,
         string installDirectory, ApplyOptions options, Action<string>? log)
         => StartLaunch(
@@ -91,7 +91,7 @@ internal static class SyspkgReplay
     /// rollback 编排：同路径同提权链重放留存旧包并带 --rollback——
     /// 无留存件确定性拒绝，不做空转 replay。
     /// </summary>
-    internal static Process Rollback(
+    internal static ToolProcess Rollback(
         UpdateInstallIdentity identity,
         string installDirectory, ApplyOptions options, Action<string>? log)
         => StartLaunch(PlanRollback(identity, installDirectory, options, log), log);
@@ -400,7 +400,7 @@ internal static class SyspkgReplay
     // 直读哈希（原件降级路径）算出的值，把"客户端验的字节"钉到"root 装的字节"上。
     // C-N6 消歧：verb --pkg 传本地包文件路径（留存副本优先），与身份字段
     // pkg（包管理器登记名）同名异义——一个指件、一个指名，分层语义。
-    // B-N10：argv 全程结构化传递（数组进 JoinArgv 引用、管线腿走 ShJoin 单引号），
+    // B-N10：argv 全程结构化传递（spawn/Exec 走 Arguments 列表，管线腿走 ShJoin 单引号），
     // 提权腿无 shell 注入面；--pkg/--app 均取自规划内路径不接受外部拼词。
     private static string[] BuildVerbArgv(
         string[] updaterArgv, string pkgPath, string? pkgSha256, string format, string app,
@@ -897,7 +897,7 @@ internal static class SyspkgReplay
     //（拉起即退语义下 rc 主要靠 --log 件；活到读码的调用方也得分类口径）。
     // 存活腿挂 Exited 钩（ThreadPool 异步触发；本进程先退则钩不触发）；
     // 观察窗内已退出（任意 rc）的已终结进程不保证派发 Exited——两件直接内联做。
-    private static Process StartLaunch(SyspkgLaunch launch, Action<string>? log)
+    private static ToolProcess StartLaunch(SyspkgLaunch launch, Action<string>? log)
     {
         var legs = new List<SyspkgLaunch> { launch };
         legs.AddRange(launch.Fallbacks);
@@ -905,19 +905,18 @@ internal static class SyspkgReplay
         var notes = new List<string>();
         foreach (var leg in legs)
         {
-            Process? process;
+            ToolProcess? process;
             try
             {
-                var startInfo = new ProcessStartInfo(leg.FileName)
+                var startInfo = new ToolProcessStartInfo
                 {
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
+                    FileName = leg.FileName,
                     // 继承 stdio：裸 sudo 的 tty 密码提示与 pkexec/zenity 的 GUI 通道都靠它。
-                    Arguments = JoinArgv(leg.Arguments),
                 };
+                startInfo.Arguments.AddRange(leg.Arguments);
                 process = SpawnProbe is { } spawn
                     ? spawn(startInfo)
-                    : ProcessWait.Start(startInfo)
+                    : ToolProcess.Start(startInfo)
                         ?? throw new UpdateException($"failed to start '{leg.FileName}'.");
                 if (process is null)
                 {
@@ -950,7 +949,7 @@ internal static class SyspkgReplay
                 }
                 CleanupEnvFile(envFile, envDir);
             }
-            if (ProcessWait.WaitForExit(process, LaunchObserveMilliseconds))
+            if (process.WaitForExit(LaunchObserveMilliseconds))
             {
                 // 窗内已退出（任意 rc，含授权取消/拒绝/鉴权失败）=该腿终局：
                 // 已终结进程不保证派发 Exited（POSIX 已 reap 路径实测不派发）——
@@ -959,11 +958,9 @@ internal static class SyspkgReplay
                 OnLegExited();
                 return process;
             }
-            // WaitForExit/EnableRaisingEvents 在 spawn try-catch 之外：此处抛异常会
-            // 越过退化与函数尾还原——生产 Process.Start 产物上实际不可达，仅
-            // SpawnProbe 测试缝误用可触发（登记边界，不为此加 try 扰动主链）。
+            // Exited 订阅在 spawn try-catch 之外：此处抛异常会越过退化与函数尾
+            // 还原——登记边界，不为此加 try 扰动主链。
             process.Exited += (_, _) => OnLegExited();
-            process.EnableRaisingEvents = true;
             return process;
         }
         CleanupEnvFile(launch.EnvFile, launch.EnvFileDirectory);
@@ -1011,18 +1008,18 @@ internal static class SyspkgReplay
         }
         try
         {
-            var startInfo = new ProcessStartInfo(file, JoinArgv(args))
+            var startInfo = new ToolProcessStartInfo
             {
-                UseShellExecute = false,
-                CreateNoWindow = true,
+                FileName = file,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
-            using var process = ProcessWait.Start(startInfo)
+            startInfo.Arguments.AddRange(args);
+            using var process = ToolProcess.Start(startInfo)
                 ?? throw new InvalidOperationException($"spawn timed out: {file}");
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
-            if (!ProcessWait.WaitForExit(process, 60_000))
+            if (!process.WaitForExit(60_000))
             {
                 try
                 {
@@ -1172,10 +1169,7 @@ internal static class SyspkgReplay
         }
     }
 
-    // argv 拼写委托 UpdateArgv（Core/Update 同源链接件）——CommandLineToArgvW
-    // 转义与 POSIX 单引号引用全链单源：客户端 spawn/Exec、问密码管线腿、
-    // 引导件 su -c 串同算法，任何一处演化不漂移。
-    internal static string JoinArgv(IEnumerable<string> argv) => UpdateArgv.Join(argv);
-
+    // POSIX shell 管线腿（su -c/问密码）的逐 token 单引号引用——
+    // 结构化 argv 不经 shell 的腿（spawn/Exec）走 Arguments 列表不拼串。
     private static string ShJoin(IEnumerable<string> argv) => UpdateArgv.ShJoin(argv);
 }

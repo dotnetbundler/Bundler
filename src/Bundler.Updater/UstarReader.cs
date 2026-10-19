@@ -245,22 +245,18 @@ internal static class UstarReader
     {
         try
         {
-            using var process = ProcessWait.Start(
-                new System.Diagnostics.ProcessStartInfo("/bin/chmod",
-                    Convert.ToString(mode, 8) + " \"" + path + "\"")
-                { UseShellExecute = false });
+            var chmodInfo = new ToolProcessStartInfo { FileName = "/bin/chmod" };
+            chmodInfo.Arguments.AddRange(new[] { Convert.ToString(mode, 8), path });
+            using var process = ToolProcess.Start(chmodInfo);
             if (process is not null)
             {
-                ProcessWait.WaitForExit(process, 10_000);
+                process.WaitForExit(10_000);
             }
         }
         catch (Exception)
         {
         }
     }
-
-    private static string ShellQuote(string value) =>
-        "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
     // 链接目标必须留在提取根内：绝对或 ../ 逃逸目标落地后，后续条目
     // 虽过 SafePath 字面检查，写盘时会顺已物化的链接写出暂存区。
@@ -375,15 +371,16 @@ internal static class UstarReader
             }
             return true;
 #else
-            using var process = ProcessWait.Start(
-                new System.Diagnostics.ProcessStartInfo("/bin/ln",
-                    "-sfn " + ShellQuote(target) + " " + ShellQuote(linkPath))
-                { UseShellExecute = false });
+            var linkInfo = new ToolProcessStartInfo { FileName = "/bin/ln" };
+            linkInfo.Arguments.Add("-sfn");
+            linkInfo.Arguments.Add(target);
+            linkInfo.Arguments.Add(linkPath);
+            using var process = ToolProcess.Start(linkInfo);
             if (process is null)
             {
                 return false;
             }
-            if (!ProcessWait.WaitForExit(process, 10_000))
+            if (!process.WaitForExit(10_000))
             {
                 try { process.Kill(); } catch (Exception) { }
                 return false;

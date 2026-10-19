@@ -16,7 +16,7 @@ namespace DotNet.Bundler.Updater;
 /// </summary>
 internal sealed class UpdateApplier
 {
-    internal static Process Apply(
+    internal static ToolProcess Apply(
         UpdateInstallIdentity identity, UpdateFeedArtifact artifact, string artifactPath,
         string installDirectory, ApplyOptions options, Action<string>? log)
     {
@@ -86,7 +86,7 @@ internal sealed class UpdateApplier
     /// <summary>回滚钩子：引导程序 `--rollback` 模式——备份复制回安装目录且不二次备份。
     /// 备份位置与换包时的保留决策一致：开启保留指数据区目录，未开启指兄弟位瞬备（多半已删→拒绝）。
     /// deb/rpm/alpineapk 身份改走 SyspkgReplay：同提权链重放留存旧包并带 --rollback。</summary>
-    internal static Process Rollback(
+    internal static ToolProcess Rollback(
         UpdateInstallIdentity identity,
         string installDirectory, ApplyOptions options, Action<string>? log)
     {
@@ -100,7 +100,7 @@ internal sealed class UpdateApplier
     }
 
     // 引导程序 = 换包执行体；从安装目录/包内取件复制到临时目录执行，防自锁。
-    private static Process RunBootstrapper(
+    private static ToolProcess RunBootstrapper(
         string? payloadDirectory, string installDirectory,
         ApplyOptions options, Action<string>? log, bool rollback = false,
         string? backupDirectory = null)
@@ -168,15 +168,16 @@ internal sealed class UpdateApplier
             File.Copy(binary, staged, overwrite: true);
             MakeExecutable(staged);
             log?.Invoke($"update: bootstrapper '{staged}' {arguments}");
-            return Start(staged, arguments, runDir, shellExecute: false);
+            return Start(staged, argv, runDir);
         }
         if (ResolveBootstrapperScript(options.BootstrapperPath, installDirectory) is { } script)
         {
             var staged = Path.Combine(runDir, "bundler-updater.sh");
             File.Copy(script, staged, overwrite: true);
             log?.Invoke($"update: bootstrapper(script) '{staged}' {arguments}");
-            return Start("/bin/sh",
-                UpdateArgv.Join(new[] { staged }) + " " + arguments, runDir, shellExecute: false);
+            var scriptArgv = new List<string> { staged };
+            scriptArgv.AddRange(argv);
+            return Start("/bin/sh", scriptArgv, runDir);
         }
         if (File.Exists(installDirectory))
         {
@@ -453,23 +454,33 @@ internal sealed class UpdateApplier
         path.StartsWith(prefix, comparison) &&
         (path.Length == prefix.Length || path[prefix.Length] is '/' or '\\');
 
-    private static Process StartReplay(string file, string arguments, Action<string>? log)
+    private static ToolProcess StartReplay(string file, string arguments, Action<string>? log)
     {
         log?.Invoke($"update: replay '{file}' {arguments}");
-        return Start(file, arguments, Path.GetDirectoryName(file) ?? ".", shellExecute: true);
+        // ShellExecute 腿（Windows 安装器重放）——参数以 lpParameters 整串传递。
+        var startInfo = new ToolProcessStartInfo
+        {
+            FileName = file,
+            ArgumentLine = arguments,
+            UseShellExecute = true,
+            WorkingDirectory = Path.GetDirectoryName(file) ?? ".",
+        };
+        return ToolProcess.Start(startInfo)
+            ?? throw new UpdateException($"failed to start '{file}'.");
     }
 
-    private static Process Start(string file, string arguments, string workingDirectory,
-        bool shellExecute)
+    // 结构化 spawn 腿（POSIX bootstrapper/重启）——argv 列表不经 shell 转义层。
+    private static ToolProcess Start(string file, IReadOnlyList<string> arguments,
+        string workingDirectory)
     {
-        var startInfo = new ProcessStartInfo(file, arguments)
+        var startInfo = new ToolProcessStartInfo
         {
-            UseShellExecute = shellExecute,
+            FileName = file,
             WorkingDirectory = workingDirectory,
-            CreateNoWindow = !shellExecute,
         };
-        // 分离 spawn（bootstrap/重启腿）——迟到完成产出的子件是正当重启目标，不扑杀。
-        return ProcessWait.Start(startInfo, killLateSpawned: false)
+        startInfo.Arguments.AddRange(arguments);
+        // 分离 spawn（bootstrap/重启腿）——拉起即退语义，句柄只供留痕/观察用。
+        return ToolProcess.Start(startInfo)
             ?? throw new UpdateException($"failed to start '{file}'.");
     }
 
@@ -481,12 +492,12 @@ internal sealed class UpdateApplier
         }
         try
         {
-            using var process = ProcessWait.Start(new ProcessStartInfo(
-                "/bin/chmod", UpdateArgv.Join(new[] { "+x", path }))
-            { UseShellExecute = false });
+            var chmodInfo = new ToolProcessStartInfo { FileName = "/bin/chmod" };
+            chmodInfo.Arguments.AddRange(new[] { "+x", path });
+            using var process = ToolProcess.Start(chmodInfo);
             if (process is not null)
             {
-                ProcessWait.WaitForExit(process, 10_000);
+                process.WaitForExit(10_000);
             }
         }
         catch (Exception)

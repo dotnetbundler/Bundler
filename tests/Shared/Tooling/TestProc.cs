@@ -1,0 +1,43 @@
+// 测试夹具沿用 ProcessStartInfo 数据袋形状的转换层：
+// 数据袋字段映射到 ToolProcessStartInfo 后交产品 ToolProcess——
+// 无平行进程实现，spawn/wait/kill 语义全在产品件（杜绝测试镜像漂移）。
+using System.Diagnostics;
+using DotNet.Bundler.Core;
+
+internal static class TestProc
+{
+    public static ToolProcessStartInfo Map(ProcessStartInfo info)
+    {
+        var mapped = new ToolProcessStartInfo
+        {
+            FileName = info.FileName,
+            // ProcessStartInfo.Arguments 默认 ""（非 null）——空串不得覆盖 ArgumentList，
+            // 否则 spawn 出去的进程拿不到任何参数。
+            ArgumentLine = string.IsNullOrEmpty(info.Arguments) ? null : info.Arguments,
+            WorkingDirectory = info.WorkingDirectory,
+            UseShellExecute = info.UseShellExecute,
+            RedirectStandardInput = info.RedirectStandardInput,
+            RedirectStandardOutput = info.RedirectStandardOutput,
+            RedirectStandardError = info.RedirectStandardError,
+        };
+        foreach (var arg in info.ArgumentList)
+        {
+            mapped.Arguments.Add(arg);
+        }
+        foreach (var pair in info.Environment)
+        {
+            mapped.Environment[pair.Key] = pair.Value;
+        }
+        return mapped;
+    }
+
+    // 夹具把启动参数拼回整串（道具 spawn 需要 argv 文本）。
+    public static string Describe(ToolProcessStartInfo info)
+        => info.Arguments.Count > 0 ? string.Join(' ', info.Arguments) : info.ArgumentLine ?? "";
+
+    public static ToolProcess? Start(ProcessStartInfo info)
+        => ToolProcess.Start(Map(info));
+
+    public static bool WaitForExit(ToolProcess process, int timeoutMilliseconds)
+        => process.WaitForExit(timeoutMilliseconds);
+}

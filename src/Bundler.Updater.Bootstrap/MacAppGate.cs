@@ -159,19 +159,16 @@ internal static class MacAppGate
     {
         try
         {
-            var startInfo = new ProcessStartInfo(path) { UseShellExecute = false };
-            foreach (var argument in arguments)
-            {
-                startInfo.ArgumentList.Add(argument);
-            }
+            var startInfo = new ToolProcessStartInfo { FileName = path };
+            startInfo.Arguments.AddRange(arguments);
             startInfo.RedirectStandardOutput = true;
             startInfo.RedirectStandardError = true;
-            using var process = ProcessWait.Start(startInfo)
+            using var process = ToolProcess.Start(startInfo)
                 ?? throw new InvalidOperationException($"spawn timed out: {path}");
             // 并行消费：stderr 写满管道会让子进程卡住，等满 30s 造成假超时。
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
-            if (!ProcessWait.WaitForExit(process, 30_000))
+            if (!process.WaitForExit(30_000))
             {
                 try
                 {
@@ -180,9 +177,8 @@ internal static class MacAppGate
                 catch (InvalidOperationException)
                 {
                 }
-                // 杀后回收也有界：macOS CI 实证过 reaper 饿死后僵尸子件不回收——
-                // 轮询旗标不落位也按期放弃，不在此悬停。
-                ProcessWait.WaitForExit(process, 30_000);
+                // 杀后回收也有界：waitpid 直查内核，按期放弃不在此悬停。
+                process.WaitForExit(30_000);
                 return (-1, "", "timeout");
             }
             Task.WaitAll(stdout, stderr);

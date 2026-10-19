@@ -833,7 +833,7 @@ public sealed class SyspkgReplayTests : TempBase
                 ["pkexec"] = "/stub/pkexec",
                 ["sudo"] = "/stub/sudo",
             });
-        var spawned = new List<ProcessStartInfo>();
+        var spawned = new List<ToolProcessStartInfo>();
         SyspkgReplay.SpawnProbe = startInfo =>
         {
             spawned.Add(startInfo);
@@ -852,7 +852,7 @@ public sealed class SyspkgReplayTests : TempBase
         Assert.Equal(2, spawned.Count);
         Assert.Equal("/stub/pkexec", spawned[0].FileName);
         Assert.Equal("/stub/sudo", spawned[1].FileName);
-        Assert.StartsWith("\"--\"", spawned[1].Arguments);   // 裸 sudo 腿 "--" 前缀保留
+        Assert.Equal("--", spawned[1].Arguments[0]);   // 裸 sudo 腿 "--" 前缀保留
         // 全腿 spawn 失败还原：applied 回记规划前值、本轮留存对被删。
         Assert.Equal("myapp_1.0-1_amd64.deb",
             File.ReadAllText(Path.Combine(RetentionDir, "applied")).Trim());
@@ -974,7 +974,7 @@ public sealed class SyspkgReplayTests : TempBase
         // 非引号相邻 \ 原样（CommandLineToArgvW 规则）。
         Assert.Equal(
             "\"a\\\"b\" \"c\\\\\" \"d\\e\" \"plain\"",
-            SyspkgReplay.JoinArgv(new[] { "a\"b", "c\\", "d\\e", "plain" }));
+            DotNet.Bundler.Core.Update.UpdateArgv.Join(new[] { "a\"b", "c\\", "d\\e", "plain" }));
     }
 
     // ---- 分发闸 ----

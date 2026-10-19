@@ -904,22 +904,21 @@ internal static class PkgApplyPlan
         }
         try
         {
-            using var process = ProcessWait.Start(BuildStartInfo(spec))
+            using var process = ToolProcess.Start(BuildStartInfo(spec))
                 ?? throw new InvalidOperationException($"spawn timed out: {spec.FileName}");
             // 安装腿有界：pm 挂死（dpkg 锁竞态外的死锁/前端自身卡死）会把特权
             // 进程拖成永驻——默认 30min，BUNDLER_UPDATER_PKG_TIMEOUT 秒数覆盖
             //（sh 侧 timeout 包裹同名同缝）；超时杀进程返 124（timeout(1) 同码，
             // 对调用方是可分类的"安装腿超时"）。
-            if (!ProcessWait.WaitForExit(process, ExecTimeoutMilliseconds()))
+            if (!process.WaitForExit(ExecTimeoutMilliseconds()))
             {
                 try
                 {
                     // 整树杀：apt-get/dnf 的 dpkg/rpm 孙进程不能成孤儿继续持锁——
                     // 双侧超时后都无遗留 pm。善后口径刻意不同：sh `timeout -k 30`
-                    // 给组发 TERM+30s 善后窗再 KILL；.NET Process 无 TERM/组信号
-                    // 面（子进程与本进程同组，TERM 组发会自尽；TERM 只给直子又会
-                    // 让孙进程孤儿化）——AOT 直 SIGKILL 整树是唯一能同时满足
-                    // "有界 + 孙进程必死"的形态，善后窗差异登记为已知实现差。
+                    // 给组发 TERM+30s 善后窗再 KILL；本面直 SIGKILL 进程组
+                    //（子件 setpgid 自立）是唯一能同时满足"有界 + 孙进程必死"
+                    // 的形态，善后窗差异登记为已知实现差。
                     process.Kill(entireProcessTree: true);
                 }
                 catch (Exception)
@@ -927,7 +926,7 @@ internal static class PkgApplyPlan
                 }
                 try
                 {
-                    ProcessWait.WaitForExit(process, 30_000);
+                    process.WaitForExit(30_000);
                 }
                 catch (Exception)
                 {
@@ -954,9 +953,8 @@ internal static class PkgApplyPlan
     // 预检用同步执行：stdin 立即钉死（防降权器读调用方终端/管道），
     // out/err 后台抽干到 Null——用法文本、PAM/auth 噪声不透调用方面。
     // 预检 argv 恒为"工具+最小参数+sh -c :"零交互形（stdin 已钉 EOF 无读面、命令
-    // 即刻返回），工具自身挂死无现实入口——但进程面仍要有界：macOS CI 实证过
-    // .NET Unix spawn/reap 全局锁死锁（子件僵尸不回收、spawn 不返回）；轮询旗标
-    // 保底 5min（远超预检真实耗时），spawn 本身同走 60s 界。
+    // 即刻返回），工具自身挂死无现实入口——但进程面仍要有界：轮询 5min
+    //（远超预检真实耗时），spawn 本身同走 60s 界。
     private static int ExecSilent(ExecSpec spec)
     {
         if (ExecProbe is { } probe)
@@ -969,15 +967,15 @@ internal static class PkgApplyPlan
             startInfo.RedirectStandardInput = true;
             startInfo.RedirectStandardOutput = true;
             startInfo.RedirectStandardError = true;
-            using var process = ProcessWait.Start(startInfo)
+            using var process = ToolProcess.Start(startInfo)
                 ?? throw new InvalidOperationException($"spawn timed out: {spec.FileName}");
             process.StandardInput.Dispose();
             _ = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
             _ = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
-            if (!ProcessWait.WaitForExit(process, 5 * 60_000))
+            if (!process.WaitForExit(5 * 60_000))
             {
                 try { process.Kill(entireProcessTree: true); } catch (Exception) { }
-                ProcessWait.WaitForExit(process, 10_000);
+                process.WaitForExit(10_000);
                 return 127;
             }
             return process.ExitCode;
@@ -1021,7 +1019,7 @@ internal static class PkgApplyPlan
             startInfo.RedirectStandardInput = true;
             startInfo.RedirectStandardOutput = true;
             startInfo.RedirectStandardError = true;
-            var process = ProcessWait.Start(startInfo, killLateSpawned: false);
+            var process = ToolProcess.Start(startInfo);
             if (process is null)
             {
                 return false;
@@ -1029,6 +1027,8 @@ internal static class PkgApplyPlan
             process.StandardInput.Dispose();
             _ = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
             _ = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
+            // 分离腿刻意不 Dispose：子件还要跑——Unix 自有 spawn 的后台 reap
+            // 线程会在其退出时收尸（Dispose 才关排水管，此刻后台抽干还在用）。
             return true;
         }
         var wrapped = new ExecSpec
@@ -1042,19 +1042,13 @@ internal static class PkgApplyPlan
             WorkingDirectory = spec.WorkingDirectory,
             Environment = spec.Environment,
         };
-        return ProcessWait.Start(BuildStartInfo(wrapped), killLateSpawned: false) is not null;
+        return ToolProcess.Start(BuildStartInfo(wrapped)) is not null;
     }
 
-    private static ProcessStartInfo BuildStartInfo(ExecSpec spec)
+    private static ToolProcessStartInfo BuildStartInfo(ExecSpec spec)
     {
-        var startInfo = new ProcessStartInfo(spec.FileName)
-        {
-            UseShellExecute = false,
-        };
-        foreach (var argument in spec.Arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
+        var startInfo = new ToolProcessStartInfo { FileName = spec.FileName };
+        startInfo.Arguments.AddRange(spec.Arguments);
         if (spec.WorkingDirectory is { } workingDirectory)
         {
             startInfo.WorkingDirectory = workingDirectory;

@@ -59,7 +59,7 @@ internal static class ArchiveExtractor
         {
             return false;
         }
-        if (Run("/usr/bin/ditto", "-x -k " + ShellQuote(zipPath) + " " + ShellQuote(staging)) == 0)
+        if (Run("/usr/bin/ditto", "-x", "-k", zipPath, staging) == 0)
         {
             log?.Invoke("update: extracted via ditto (xattrs/symlinks preserved).");
             return true;
@@ -81,7 +81,7 @@ internal static class ArchiveExtractor
         // tar 的 -C 不自建目标目录——staging 缺失时原生腿必败，
         // 且随后的 ClearDirectory 会对不存在的根抛 DirectoryNotFoundException。
         Directory.CreateDirectory(staging);
-        if (Run("/usr/bin/tar", "-xzf " + ShellQuote(tarGzPath) + " -C " + ShellQuote(staging)) == 0)
+        if (Run("/usr/bin/tar", "-xzf", tarGzPath, "-C", staging) == 0)
         {
             log?.Invoke("update: extracted via bsdtar (xattrs/symlinks preserved).");
             return true;
@@ -342,30 +342,28 @@ internal static class ArchiveExtractor
         return full;
     }
 
-    private static string ShellQuote(string value) =>
-        "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
-
     // 超时即杀——否则超时的 ditto/tar 会继续写暂存目录，与回退提取器并发改同一载荷。
-    private static int Run(string file, string arguments)
+    private static int Run(string file, params string[] arguments)
     {
         try
         {
-            using var process = ProcessWait.Start(
-                new System.Diagnostics.ProcessStartInfo(file, arguments)
-                {
-                    UseShellExecute = false,
-                    RedirectStandardError = true,
-                });
+            var startInfo = new ToolProcessStartInfo
+            {
+                FileName = file,
+                RedirectStandardError = true,
+            };
+            startInfo.Arguments.AddRange(arguments);
+            using var process = ToolProcess.Start(startInfo);
             if (process is null)
             {
                 return -1;
             }
             // stderr 并行消费：工具刷大量诊断时写满管道会卡死子进程直到超时。
             var stderr = process.StandardError.ReadToEndAsync();
-            if (!ProcessWait.WaitForExit(process, 60_000))
+            if (!process.WaitForExit(60_000))
             {
                 try { process.Kill(); } catch (Exception) { }
-                try { ProcessWait.WaitForExit(process, 10_000); } catch (Exception) { }
+                try { process.WaitForExit(10_000); } catch (Exception) { }
                 return -1;
             }
             return process.ExitCode;

@@ -86,7 +86,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             KeepRollbackBackup = true,
             RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 90_000), "bootstrapper did not exit in 90s");
+        Assert.True(process.WaitForExit(90_000), "bootstrapper did not exit in 90s");
         Assert.Equal(0, process.ExitCode);
         Assert.Equal("v2-image", File.ReadAllText(install));
         // 保留语义：文件级备份按安装文件真名落保留目录；兄弟位瞬备清走。
@@ -112,7 +112,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             KeepRollbackBackup = true,
             RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
         });
-        Assert.True(TestProcessExit.WaitForExit(rollback, 60_000));
+        Assert.True(rollback.WaitForExit(60_000));
         Assert.Equal(0, rollback.ExitCode);
         Assert.Equal("v1-image", File.ReadAllText(install));
     }
@@ -157,7 +157,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             KeepRollbackBackup = true,
             RollbackBackupDirectory = Path.Combine(directory, "backups", "install-x"),
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 90_000), "bootstrapper did not exit in 90s");
+        Assert.True(process.WaitForExit(90_000), "bootstrapper did not exit in 90s");
         Assert.Equal(0, process.ExitCode);
         Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
         // 保留语义：备份迁到保留目录当回滚点；兄弟位瞬备清走。
@@ -179,7 +179,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             KeepRollbackBackup = true,
             RollbackBackupDirectory = Path.Combine(directory, "backups", "install-x"),
         });
-        Assert.True(TestProcessExit.WaitForExit(rollback, 60_000));
+        Assert.True(rollback.WaitForExit(60_000));
         Assert.Equal(0, rollback.ExitCode);
         Assert.Equal("v1", File.ReadAllText(Path.Combine(install, "app")));
     }
@@ -216,7 +216,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         {
             StagingRoot = Path.Combine(directory, "staging"),
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 90_000));
+        Assert.True(process.WaitForExit(90_000));
         Assert.Equal(0, process.ExitCode);
         Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
     }
@@ -263,7 +263,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             KeepRollbackBackup = true,
             RollbackBackupDirectory = Path.Combine(directory, "backups", "install-x"),
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 90_000), "bootstrapper did not exit in 90s");
+        Assert.True(process.WaitForExit(90_000), "bootstrapper did not exit in 90s");
         Assert.Equal(0, process.ExitCode);
         Assert.Equal("v2", File.ReadAllText(Path.Combine(install, "app")));
         // tar 保真面：随包引导件的 0755 经 ustar mode 落回文件系统。
@@ -287,7 +287,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             KeepRollbackBackup = true,
             RollbackBackupDirectory = Path.Combine(directory, "backups", "install-x"),
         });
-        Assert.True(TestProcessExit.WaitForExit(rollback, 60_000));
+        Assert.True(rollback.WaitForExit(60_000));
         Assert.Equal(0, rollback.ExitCode);
         Assert.Equal("v1", File.ReadAllText(Path.Combine(install, "app")));
     }
@@ -378,7 +378,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
             LogFile = logPath,
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 90_000), "bootstrapper did not exit in 90s");
+        Assert.True(process.WaitForExit(90_000), "bootstrapper did not exit in 90s");
         Assert.Equal(0, process.ExitCode);
         Assert.Equal("v2", File.ReadAllText(
             Path.Combine(install, "Contents", "MacOS", "MyApp")));
@@ -412,7 +412,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             KeepRollbackBackup = true,
             RollbackBackupDirectory = Path.Combine(directory, "backups", "myapp"),
         });
-        Assert.True(TestProcessExit.WaitForExit(rollback, 60_000));
+        Assert.True(rollback.WaitForExit(60_000));
         Assert.Equal(0, rollback.ExitCode);
         Assert.Equal("v1", File.ReadAllText(
             Path.Combine(install, "Contents", "MacOS", "MyApp")));
@@ -769,7 +769,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             AppPath = app,
             RollbackBackupDirectory = retention,
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 60_000), "pkg-apply launcher did not exit in 60s");
+        Assert.True(process.WaitForExit(60_000), "pkg-apply launcher did not exit in 60s");
         Assert.Equal(0, process.ExitCode);
 
         var retained = Path.Combine(retention, "myapp_2.0-1_amd64.deb");
@@ -845,7 +845,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             AppPath = app,
             RollbackBackupDirectory = retention,
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 60_000));
+        Assert.True(process.WaitForExit(60_000));
         Assert.Equal(0, process.ExitCode);
 
         var retained = Path.Combine(retention, "myapp_2.0-1_amd64.deb");
@@ -899,7 +899,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             AppPath = app,
             RollbackBackupDirectory = retention,
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 60_000));
+        Assert.True(process.WaitForExit(60_000));
         Assert.Equal(0, process.ExitCode);
         var text = string.Join('\n', WaitRecord(rec, 3));
         var retained = Path.Combine(retention, "myapp_2.0-1_amd64.deb");
@@ -949,7 +949,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             AppPath = app,
             RollbackBackupDirectory = retention,
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 60_000));
+        Assert.True(process.WaitForExit(60_000));
         Assert.Equal(0, process.ExitCode);
         var text = string.Join('\n', WaitRecord(rec, 3));
         var retained = Path.Combine(retention, "myapp-2.0.apk");
@@ -1010,7 +1010,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             AppPath = app,
             RollbackBackupDirectory = retention,
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 60_000), "pkg-apply launcher did not exit in 60s");
+        Assert.True(process.WaitForExit(60_000), "pkg-apply launcher did not exit in 60s");
         Assert.Equal(0, process.ExitCode);
 
         var retained = Path.Combine(retention, "myapp-2.0-1.x86_64.rpm");
@@ -1145,7 +1145,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var downloaded = await client.DownloadAsync(info, Path.Combine(directory, "dl"));
         client.Verify(info, downloaded);
         var apply = client.Apply(info, downloaded, options);
-        Assert.True(TestProcessExit.WaitForExit(apply, 60_000));
+        Assert.True(apply.WaitForExit(60_000));
         Assert.Equal(0, apply.ExitCode);
         // 模拟"上一次 Bundler 链更新留存过旧包"——retention 里种旧件；
         // 留存件必须 pkg+sig 成对（B2 再验签口径：孤立件不被 rollback 拣选），
@@ -1161,7 +1161,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
 
         File.Delete(rec);
         var rollback = client.Rollback(options);
-        Assert.True(TestProcessExit.WaitForExit(rollback, 60_000));
+        Assert.True(rollback.WaitForExit(60_000));
         Assert.Equal(0, rollback.ExitCode);
         var lines = WaitRecord(rec, 3);
         // pkexec/updater 行：旧包 + --rollback 尾位；--env-file 夹在 --app 与
@@ -1249,7 +1249,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             AppPath = app,
             RollbackBackupDirectory = retention,
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 60_000), "pkexec stub leg did not exit in 60s");
+        Assert.True(process.WaitForExit(60_000), "pkexec stub leg did not exit in 60s");
         Assert.Equal(rc, process.ExitCode);
 
         // 只调了 pkexec 一腿：dpkg 账本行 + pkexec argv 行，再无 sudo/zenity/updater。
@@ -1306,7 +1306,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             AppPath = app,
             RollbackBackupDirectory = retention,
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 60_000), "askpass leg did not exit in 60s");
+        Assert.True(process.WaitForExit(60_000), "askpass leg did not exit in 60s");
         Assert.Equal(126, process.ExitCode);
 
         // 只落了账本行 + 对话框 argv 行——sudo 与 updater 全未触达。
@@ -1367,7 +1367,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             AppPath = app,
             RollbackBackupDirectory = retention,
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 60_000), "askpass leg did not exit in 60s");
+        Assert.True(process.WaitForExit(60_000), "askpass leg did not exit in 60s");
         Assert.Equal(0, process.ExitCode);
 
         var lines = WaitRecord(rec, 4);
@@ -1437,7 +1437,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
             AppPath = app,
             RollbackBackupDirectory = retention,
         });
-        Assert.True(TestProcessExit.WaitForExit(process, 60_000), "askpass leg did not exit in 60s");
+        Assert.True(process.WaitForExit(60_000), "askpass leg did not exit in 60s");
         Assert.Equal(0, process.ExitCode);
 
         var lines = WaitRecord(rec, 4);

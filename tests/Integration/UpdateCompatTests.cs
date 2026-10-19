@@ -204,7 +204,7 @@ public sealed class UpdateCompatTests : IClassFixture<UpdateCompatFixture>
             // 换包由装机内嵌的 v1 AOT 引导件执行——真实"旧装被新更新"链。
             var process = client.Apply(info, downloaded,
                 new ApplyOptions { StagingRoot = Path.Combine(root, "staging") });
-            Assert.True(TestProcessExit.WaitForExit(process, 90_000), "v1 bootstrapper did not exit in 90s");
+            Assert.True(process.WaitForExit(90_000), "v1 bootstrapper did not exit in 90s");
             Assert.Equal(0, process.ExitCode);
             AssertSwapped(install, "v2");
         }
@@ -299,11 +299,11 @@ public sealed class UpdateCompatTests : IClassFixture<UpdateCompatFixture>
             UseShellExecute = false,
         };
         foreach (var arg in args) start.ArgumentList.Add(arg);
-        using var process = TestProcessExit.Start(start)
+        using var process = TestProc.Start(start)
             ?? throw new InvalidOperationException($"spawn timed out: {file}");
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
-        if (!TestProcessExit.WaitForExit(process, 90_000))
+        if (!process.WaitForExit(90_000))
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
             Assert.Fail($"{file} did not exit in 90s");

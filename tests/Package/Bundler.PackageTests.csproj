@@ -20,5 +20,8 @@
     <Compile Remove="..\Shared\BundleFixture.cs" />
     <!-- 包消费契约测试只走公开面——测试侧加载器引用 Core 内部件，不进本程序集 -->
     <Compile Remove="..\Shared\BundleConfigurationLoader.cs" />
+    <!-- Package 层不引用 src 工程——Tooling 进程面自带的 ToolProcess 编译件（本 dll 唯一定义） -->
+    <Compile Include="..\..\src\Bundler.Core\ToolProcess.cs" />
+    <Compile Include="..\..\src\Bundler.Core\NativeSpawnUnix.cs" />
   </ItemGroup>
 </Project>

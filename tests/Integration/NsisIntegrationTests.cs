@@ -445,7 +445,8 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
         return Run(copy, $"{args} _?={installDir}");
     }
 
-    private Process StartDirectUninstallerAsync(string uninstaller, string installDir, string args)
+    private DotNet.Bundler.Core.ToolProcess StartDirectUninstallerAsync(
+        string uninstaller, string installDir, string args)
     {
         var copy = _f.Ws.Combine($"direct-uninstaller-{Guid.NewGuid():N}.exe");
         File.Copy(uninstaller, copy);
@@ -789,7 +790,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             WaitFor.Until(() => File.Exists(InterruptedUninstallMarker),
                 "Interrupted-uninstall fixture did not reach its post-uninstall hook.");
             ProcessRunner.TryKillTree(interrupted);
-            TestProcessExit.WaitForExit(interrupted, 60_000);
+            interrupted.WaitForExit(60_000);
             Assert.NotEqual(0, interrupted.ExitCode);
             Assert.True(Directory.Exists(UninstallTransactionDir),
                 "Interrupted uninstall did not preserve its active forward journal.");
@@ -1087,9 +1088,8 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                     ?.GetValue(""));
             Assert.NotNull(Registry.CurrentUser.OpenSubKey(UrlProgIdKey));
             // ShellExecute 深链拉起——分离 spawn，迟到子件不扑杀。
-            using (TestProcessExit.Start(new ProcessStartInfo
-                   { FileName = "bundlerfixture:integration-value", UseShellExecute = true },
-                   killLateSpawned: false))
+            using (TestProc.Start(new ProcessStartInfo
+                   { FileName = "bundlerfixture:integration-value", UseShellExecute = true }))
             { }
             WaitFor.Until(() => File.Exists(DeepLinkMarker),
                 "Registered deep link did not launch the installed application.");
@@ -1122,8 +1122,8 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
     {
         _f.Ensure();
         RequireConsent();
-        Process? external = null;
-        Process? owned = null;
+        DotNet.Bundler.Core.ToolProcess? external = null;
+        DotNet.Bundler.Core.ToolProcess? owned = null;
         try
         {
             InstallDefault();
@@ -1134,7 +1134,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             owned = ProcessRunner.StartDetached(Exe, "--wait");
             Thread.Sleep(500);
             Assert.False(owned.HasExited, "Fixture process did not remain running.");
-            Assert.False(external.HasExited, "External fixture process did not remain running.");
+            Assert.False(external!.HasExited, "External fixture process did not remain running.");
             NsisShutdownDiag(
                 $"before-reinstall owned={DescribeProc(owned)} external={DescribeProc(external)} {ConsoleMembers()}");
             var installerPid = -1;
@@ -1165,13 +1165,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                     $"owned={DescribeProc(owned)} external={DescribeProc(external)} {ConsoleMembers()}");
             }
             ProcessRunner.AssertExitCode(reinstall!, 0, Installer("bundle"));
-            owned.Refresh();
-            external.Refresh();
-            Assert.True(owned.HasExited, "Reinstall did not close the running application.");
-            Assert.False(external.HasExited,
+            Assert.True(owned!.HasExited, "Reinstall did not close the running application.");
+            Assert.False(external!.HasExited,
                 "Reinstall closed a same-name process outside the installation directory.");
             ProcessRunner.TryKillTree(external);
-            TestProcessExit.WaitForExit(external, 60_000);
+            external.WaitForExit(60_000);
             UninstallDefault();
         }
         finally
@@ -1201,7 +1199,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
         }
     }
 
-    private static string DescribeProc(Process? process)
+    private static string DescribeProc(DotNet.Bundler.Core.ToolProcess? process)
     {
         if (process is null)
         {
@@ -1209,7 +1207,6 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
         }
         try
         {
-            process.Refresh();
             return process.HasExited
                 ? $"pid={process.Id},exited,rc={process.ExitCode}"
                 : $"pid={process.Id},running";
@@ -1521,7 +1518,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             WaitFor.Until(() => File.Exists(InterruptedHookMarker),
                 "Interrupted-install fixture did not reach its post-install hook.", 120);
             ProcessRunner.TryKillTree(interrupted);
-            TestProcessExit.WaitForExit(interrupted, 60_000);
+            interrupted.WaitForExit(60_000);
             Assert.NotEqual(0, interrupted.ExitCode);
             Assert.True(Directory.Exists(TransactionDir),
                 "Interrupted install did not preserve its active journal.");
@@ -1547,7 +1544,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             WaitFor.Until(() => File.Exists(InterruptedHookMarker),
                 "Second interrupted-install fixture did not reach its post-install hook.", 120);
             ProcessRunner.TryKillTree(interrupted2);
-            TestProcessExit.WaitForExit(interrupted2, 60_000);
+            interrupted2.WaitForExit(60_000);
             Assert.True(Directory.Exists(TransactionDir));
 
             var payloadSnapshot = Path.Combine(TransactionDir, "payload", "docs", "license.txt");

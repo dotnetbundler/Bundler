@@ -34,25 +34,21 @@ public sealed class WindowsExternalCommandSigner : IBundleSigner
             throw new FileNotFoundException("The file to sign was not found.", path);
         }
 
-        using var process = new Process
+        // 进程面与全产品同构件：Unix 经 libc posix_spawn（osslsigncode 类跨宿主
+        // 签名场景也免疫 .NET spawn 全局锁死锁）；Windows 包装 Process。
+        var startInfo = new ToolProcessStartInfo
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = options.Command,
-                Arguments = string.Join(" ", options.Arguments.Select(argument => Quote(Expand(argument, request, path)))),
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            },
-            EnableRaisingEvents = true
+            FileName = options.Command,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
         };
+        startInfo.Arguments.AddRange(options.Arguments.Select(
+            argument => Expand(argument, request, path)));
+        using var process = ToolProcess.Start(startInfo)
+            ?? throw new InvalidOperationException(
+                "The external signing command could not be started.");
         var completion = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         process.Exited += (_, _) => completion.TrySetResult(process.ExitCode);
-        if (!process.Start())
-        {
-            throw new InvalidOperationException("The external signing command could not be started.");
-        }
         var standardOutput = process.StandardOutput.ReadToEndAsync();
         var standardError = process.StandardError.ReadToEndAsync();
         var bound = ProcessTimeout(options);
@@ -112,30 +108,4 @@ public sealed class WindowsExternalCommandSigner : IBundleSigner
             .Replace("{target}", request.TargetTarget)
             .Replace("{productName}", request.ProductName);
 
-    internal static string Quote(string value)
-    {
-        if (value.Length > 0 && !value.Any(character => char.IsWhiteSpace(character) || character == '"'))
-        {
-            return value;
-        }
-        var result = new System.Text.StringBuilder("\"");
-        var slashes = 0;
-        foreach (var character in value)
-        {
-            if (character == '\\')
-            {
-                slashes++;
-                continue;
-            }
-            if (character == '"')
-            {
-                result.Append('\\', slashes * 2 + 1).Append('"');
-                slashes = 0;
-                continue;
-            }
-            result.Append('\\', slashes).Append(character);
-            slashes = 0;
-        }
-        return result.Append('\\', slashes * 2).Append('"').ToString();
-    }
 }

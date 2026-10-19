@@ -24,7 +24,8 @@
     <Compile Include="..\Bundler.Core\Update\UpdateBlockMapModel.cs" />
     <Compile Include="..\Bundler.Core\Update\UpdateArgv.cs" />
     <Compile Include="..\Bundler.Core\UnixFileTypes.cs" />
-    <Compile Include="..\Bundler.Core\ProcessWait.cs" />
+    <Compile Include="..\Bundler.Core\ToolProcess.cs" />
+    <Compile Include="..\Bundler.Core\NativeSpawnUnix.cs" />
   </ItemGroup>
 
 </Project>

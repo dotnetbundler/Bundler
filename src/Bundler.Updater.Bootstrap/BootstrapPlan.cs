@@ -944,16 +944,17 @@ internal static class BootstrapPlan
     {
         log($"bundler-updater: restart '{appPath}'");
         // 分离子进程：引导程序退出后新进程继续存活；macOS .app 目录件交给 open 走 LaunchServices。
-        ProcessStartInfo startInfo;
+        ToolProcessStartInfo startInfo;
         if (OperatingSystem.IsWindows())
         {
-            startInfo = new ProcessStartInfo(appPath)
-            { UseShellExecute = true, WorkingDirectory = workingDirectory };
+            startInfo = new ToolProcessStartInfo
+            { FileName = appPath, UseShellExecute = true, WorkingDirectory = workingDirectory };
         }
         else if (OperatingSystem.IsMacOS() && MacAppGate.LooksLikeAppBundle(appPath))
         {
-            startInfo = new ProcessStartInfo("/usr/bin/open", ["-n", appPath])
-            { UseShellExecute = false, WorkingDirectory = workingDirectory };
+            startInfo = new ToolProcessStartInfo
+            { FileName = "/usr/bin/open", WorkingDirectory = workingDirectory };
+            startInfo.Arguments.AddRange(new[] { "-n", appPath });
         }
         else
         {
@@ -970,17 +971,20 @@ internal static class BootstrapPlan
                 log("bundler-updater: WARN nohup not found — cannot detach restart");
                 return;
             }
-            startInfo = new ProcessStartInfo("/bin/sh",
-                ["-c", "exec \"$@\" </dev/null >/dev/null 2>&1",
-                 "bundler-updater-spawn", nohup, appPath])
-            { UseShellExecute = false, WorkingDirectory = workingDirectory };
+            startInfo = new ToolProcessStartInfo
+            { FileName = "/bin/sh", WorkingDirectory = workingDirectory };
+            startInfo.Arguments.AddRange(new[]
+            {
+                "-c", "exec \"$@\" </dev/null >/dev/null 2>&1",
+                "bundler-updater-spawn", nohup, appPath
+            });
         }
         // 重启失败不致命：换包/回滚已完成，重启只是便利步骤——与 POSIX `|| true` 对齐为 WARN。
         try
         {
-            // 分离重启腿：迟到子件是正当重启目标——killLateSpawned=false 不扑杀；
-            // spawn 超时只意味"60s 内未回报"，迟到真拉起仍可能发生，WARN 留痕对齐 || true 口径。
-            if (ProcessWait.Start(startInfo, killLateSpawned: false) is null)
+            // 分离重启腿：返回的句柄即弃（拉起即退语义），reaper 线程兜底收尸。
+            // spawn 超时只意味"60s 内无 exec 回报"——已按失败留痕对齐 || true 口径。
+            if (ToolProcess.Start(startInfo) is null)
             {
                 log("bundler-updater: WARN restart spawn timed out");
             }
@@ -1244,11 +1248,20 @@ internal static class BootstrapPlan
             try
             {
                 Directory.CreateDirectory(destination);
-                ProcessStartInfo startInfo = OperatingSystem.IsMacOS()
-                    ? new ProcessStartInfo("/usr/bin/ditto", [source, destination])
-                    : new ProcessStartInfo("cp", ["-a", source + "/.", destination + "/"]);
-                startInfo.RedirectStandardError = true;
-                using var process = ProcessWait.Start(startInfo);
+                var startInfo = new ToolProcessStartInfo
+                {
+                    FileName = OperatingSystem.IsMacOS() ? "/usr/bin/ditto" : "cp",
+                    RedirectStandardError = true,
+                };
+                if (OperatingSystem.IsMacOS())
+                {
+                    startInfo.Arguments.AddRange(new[] { source, destination });
+                }
+                else
+                {
+                    startInfo.Arguments.AddRange(new[] { "-a", source + "/.", destination + "/" });
+                }
+                using var process = ToolProcess.Start(startInfo);
                 if (process is null)
                 {
                     DeleteNodeIfPresent(destination);
@@ -1260,11 +1273,11 @@ internal static class BootstrapPlan
                     // "活进程挂死"（cp/ditto 在 FIFO/设备件上 open 阻塞，stderr 永不 EOF）
                     // 在界外无限挂住——与 sh 侧 timeout -k 10 60 cp 包裹的是同一威胁面。
                     var stderrTask = process.StandardError.ReadToEndAsync();
-                    var wedged = !ProcessWait.WaitForExit(process, 60_000);
+                    var wedged = !process.WaitForExit(60_000);
                     if (wedged)
                     {
                         try { process.Kill(); } catch (Exception) { }
-                        ProcessWait.WaitForExit(process, 10_000);
+                        process.WaitForExit(10_000);
                     }
                     // EOF 排空也给限窗：孙代继承管道写端时退出不等于 EOF（孙进程必死但
                     // 其持管期间 ReadToEndAsync 不返）——5s 内读不到按无细节处理。

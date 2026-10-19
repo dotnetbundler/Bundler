@@ -689,15 +689,16 @@ public sealed class MacAppBuildApiTests : TempBase
                 urlProtocols: [new BundleUrlProtocolConfiguration { Schemes = ["myapp"] }]),
                 TestContext.Current.CancellationToken);
             var plist = Path.Combine(artifacts[0].Path, "Contents", "Info.plist");
-            using var process = TestProcessExit.Start(new System.Diagnostics.ProcessStartInfo
+            var plutilInfo = new DotNet.Bundler.Core.ToolProcessStartInfo
             {
                 FileName = "plutil",
-                Arguments = $"-lint \"{plist}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                UseShellExecute = false
-            }) ?? throw new InvalidOperationException("plutil spawn did not complete in 60s");
-            Assert.True(TestProcessExit.WaitForExit(process, 60_000), "plutil -lint did not exit in 60s");
+            };
+            plutilInfo.Arguments.AddRange(new[] { "-lint", plist });
+            using var process = DotNet.Bundler.Core.ToolProcess.Start(plutilInfo)
+                ?? throw new InvalidOperationException("plutil spawn did not complete in 60s");
+            Assert.True(process.WaitForExit(60_000), "plutil -lint did not exit in 60s");
             Assert.Equal(0, process.ExitCode);
         }
         finally
