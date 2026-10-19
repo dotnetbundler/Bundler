@@ -530,7 +530,7 @@ internal static class PkgApplyPlan
         return false;
     }
 
-    // WorkingDirectory 由 Process.Start 同步设定——工作目录缺席/不可进在
+    // WorkingDirectory 由 ToolProcess 同步设定——工作目录缺席/不可进在
     // spawn 点即抛→false→降下一级，与 sh 侧 spawn 前显式 (cd "$_d") 同步
     // 探测同价（sh 是后台子壳 cd 失败被 & 吞需预检，AOT 天然同步拒）。
     private static bool TrySpawn(string nohup, string[] argv, string workingDir, Action<string> log)

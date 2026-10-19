@@ -12,7 +12,9 @@ internal static class TestProc
         {
             FileName = info.FileName,
             // ProcessStartInfo.Arguments 默认 ""（非 null）——空串不得覆盖 ArgumentList，
-            // 否则 spawn 出去的进程拿不到任何参数。
+            // 否则 spawn 出去的进程拿不到任何参数。已知口径差：BCL 双设时
+            // ArgumentList 优先 Arguments 串，本映射后 ToolProcessStartInfo 是
+            // ArgumentLine 优先——调用面无双设者，登记不处理。
             ArgumentLine = string.IsNullOrEmpty(info.Arguments) ? null : info.Arguments,
             WorkingDirectory = info.WorkingDirectory,
             UseShellExecute = info.UseShellExecute,

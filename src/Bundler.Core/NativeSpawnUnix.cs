@@ -186,7 +186,7 @@ internal static class NativeSpawnUnix
             }
         }
 
-        var executable = ResolveOnPath(info.FileName, env)
+        var executable = ResolveOnPath(info.FileName, env, info.WorkingDirectory)
             ?? throw new Win32Exception(ENOENT, $"Tool not found on PATH: '{info.FileName}'.");
         var exeBytes = Utf8(executable);
         var cwdBytes = info.WorkingDirectory is { Length: > 0 } cwd ? Utf8(cwd) : null;
@@ -221,15 +221,15 @@ internal static class NativeSpawnUnix
         int[] stdinPipe = [-1, -1], stdoutPipe = [-1, -1], stderrPipe = [-1, -1];
         try
         {
-            if (info.RedirectStandardInput && (pipe(stdinPipe) != 0 || !CloExec(stdinPipe)))
+            if (info.RedirectStandardInput && !CreatePipe(stdinPipe))
             {
                 throw PipeFailure();
             }
-            if (info.RedirectStandardOutput && (pipe(stdoutPipe) != 0 || !CloExec(stdoutPipe)))
+            if (info.RedirectStandardOutput && !CreatePipe(stdoutPipe))
             {
                 throw PipeFailure();
             }
-            if (info.RedirectStandardError && (pipe(stderrPipe) != 0 || !CloExec(stderrPipe)))
+            if (info.RedirectStandardError && !CreatePipe(stderrPipe))
             {
                 throw PipeFailure();
             }
@@ -286,7 +286,9 @@ internal static class NativeSpawnUnix
         public bool TimedOut;
         public int WorkerTid = -1; // Linux 孤件清扫用
         public Exception? Failure; // worker 内异常——父件重抛，不可落"假成功"位
-        public bool HasPid => !TimedOut && Failure is null && Error == 0;
+        // Pid>0 硬校验：Error==0 配 Pid=-1 的漏账路径一旦出现即落本位（"未产出"），
+        // 不放行成 waitpid(-1)（收任意子件）/kill(-(-1))（广播杀）灾难面。
+        public bool HasPid => !TimedOut && Failure is null && Error == 0 && Pid > 0;
     }
 
     private static SpawnResult SpawnOnWorkerThread(byte[] exeBytes, byte[]? cwdBytes,
@@ -316,13 +318,23 @@ internal static class NativeSpawnUnix
                 {
                     if (cwdBytes is not null && !ChdirViaActions(actions, cwdBytes))
                     {
-                        // addchdir 缺席（glibc<2.29/musl<1.1.24/老 libSystem）：
-                        // 锁内临时改父件 cwd 包过 spawn——窗口仅一条 P/Invoke，
-                        // 其余线程相对路径解析竞态按已知残余登记。
+                        // addchdir 缺席（glibc<2.29/musl<1.1.24/老 libSystem/静态件
+                        // 符号不可解析）时的兜底：cwd 是进程级资源，锁内临时改父件
+                        // cwd 包过 spawn 是 POSIX 下唯一等价形态——窗口仅一条
+                        // P/Invoke，其余线程相对路径解析竞态按已知残余登记；
+                        // posix_spawn 在锁内卡死时后续带 cwd 的 spawn 排队堵锁
+                        //（各自 60s 有界——是退化不是传染，cwd 本就无并行安全语义）。
                         lock (s_workDirLock)
                         {
                             var old = GetCwd();
-                            if (old is null || chdir(cwdBytes) != 0)
+                            if (old is null)
+                            {
+                                // getcwd 失败时 GetLastWin32Error 是无效槽位值
+                                //（新线程常为 0）——显式记 EIO，0 会落假成功。
+                                result.Error = EIO;
+                                return;
+                            }
+                            if (chdir(cwdBytes) != 0)
                             {
                                 result.Error = Marshal.GetLastWin32Error();
                                 return;
@@ -358,6 +370,15 @@ internal static class NativeSpawnUnix
             }
             finally
             {
+                // 弃件腿自查：父件已超时放行而本件迟到产出的子件，就地扑杀+收尸——
+                // 未登记 reaper 的件不能滞留成僵尸。macOS 无 /proc 清扫靠此腿；
+                // Linux 与 ScavengeStrayChildren 双向覆盖（竞态下双重 kill/waitpid
+                // 对 ESRCH/ECHILD 静默无害）。
+                if (Volatile.Read(ref result.TimedOut) && result.Pid > 0)
+                {
+                    KillTree(result.Pid);
+                    ReapSync(result.Pid);
+                }
                 // 正常返回才释放——超时弃件路径下调用仍在栈内，释放=use-after-free，
                 // 这些缓冲随弃件一并泄漏（病理态每进程至多 ~1KB，如实登记）。
                 posix_spawn_file_actions_destroy(actions);
@@ -371,8 +392,16 @@ internal static class NativeSpawnUnix
         worker.Start();
         if (!done.Wait(SpawnTimeoutMilliseconds))
         {
+            // 先置位再清扫：worker finally 的弃件自查读同一旗标——次序颠倒会
+            // 留出"worker 读到 false 而过置位窗"的缝，迟到产出件就没人收尸。
+            Volatile.Write(ref result.TimedOut, true);
             ScavengeStrayChildren(result.WorkerTid);
-            result.TimedOut = true;
+        }
+        else
+        {
+            // 置位即 worker 已越过 finally——Dispose 安全；弃件腿刻意不 Dispose
+            //（worker 仍持引用，后台续跑不受影响，MRES 无内核件泄漏）。
+            done.Dispose();
         }
         return result;
     }
@@ -382,6 +411,13 @@ internal static class NativeSpawnUnix
         int stdinR, int stdoutW, int stderrW,
         int stdinParentFd, int stdoutParentFd, int stderrParentFd)
     {
+        static bool ClosesDupTarget(int fd, int stdinR, int stdoutW, int stderrW) => fd switch
+        {
+            0 => stdinR >= 0,   // stdin 重定向开启→槽 0 是 dup2 目标的子件管
+            1 => stdoutW >= 0,
+            2 => stderrW >= 0,
+            _ => false,
+        };
         var rc = posix_spawn_file_actions_init(actions);
         if (rc != 0)
         {
@@ -404,9 +440,15 @@ internal static class NativeSpawnUnix
             if ((rc = posix_spawn_file_actions_adddup2(actions, stderrW, 2)) != 0) { return rc; }
             if ((rc = posix_spawn_file_actions_addclose(actions, stderrW)) != 0) { return rc; }
         }
-        if (stdinParentFd >= 0 && (rc = posix_spawn_file_actions_addclose(actions, stdinParentFd)) != 0) { return rc; }
-        if (stdoutParentFd >= 0 && (rc = posix_spawn_file_actions_addclose(actions, stdoutParentFd)) != 0) { return rc; }
-        if (stderrParentFd >= 0 && (rc = posix_spawn_file_actions_addclose(actions, stderrParentFd)) != 0) { return rc; }
+        // 父件端 addclose：fd 值落在 0-2 且该槽恰是前序 dup2 目标时跳过——
+        // 父件 std 全关场景管道端可占入 0/1/2，此时该数字指向刚装上的排水口
+        //（dup2 已把原槽位覆写——无父件端可关），误关即断该标准管。
+        if (stdinParentFd >= 0 && !ClosesDupTarget(stdinParentFd, stdinR, stdoutW, stderrW)
+            && (rc = posix_spawn_file_actions_addclose(actions, stdinParentFd)) != 0) { return rc; }
+        if (stdoutParentFd >= 0 && !ClosesDupTarget(stdoutParentFd, stdinR, stdoutW, stderrW)
+            && (rc = posix_spawn_file_actions_addclose(actions, stdoutParentFd)) != 0) { return rc; }
+        if (stderrParentFd >= 0 && !ClosesDupTarget(stderrParentFd, stdinR, stdoutW, stderrW)
+            && (rc = posix_spawn_file_actions_addclose(actions, stderrParentFd)) != 0) { return rc; }
         if ((rc = posix_spawnattr_init(attr)) != 0)
         {
             return rc;
@@ -430,11 +472,16 @@ internal static class NativeSpawnUnix
             return AddChdirStd(actions, path);
         }
         catch (EntryPointNotFoundException) { }
+        catch (DllNotFoundException) { }
         try
         {
             return AddChdirNp(actions, path);
         }
         catch (EntryPointNotFoundException)
+        {
+            return ENOSYS;
+        }
+        catch (DllNotFoundException)
         {
             return ENOSYS;
         }
@@ -455,6 +502,7 @@ internal static class NativeSpawnUnix
     }
 
     private const int ENOSYS = 38;
+    private const int EIO = 5;
     private static readonly object s_workDirLock = new();
 
     private static byte[]? GetCwd()
@@ -568,7 +616,10 @@ internal static class NativeSpawnUnix
                 exitCode = -1;
                 return true;
             }
-            return false;
+            // 其余错误（EINVAL 类）皆为永久性——返 false 会让登记项在 reaper 里
+            // 永久滞留空转；按"已收不可考"收口，码记 -1。
+            exitCode = -1;
+            return true;
         }
     }
 
@@ -591,17 +642,27 @@ internal static class NativeSpawnUnix
 
     internal static void KillOnly(int pid) => _ = kill(pid, SIGKILL);
 
-    /// <summary>PATH 解析在父件：含 / 直用（不存在也放行——execve 报准确 errno），否则按生效 envp 的 PATH 逐项 access(X_OK)。</summary>
-    private static string? ResolveOnPath(string fileName, Dictionary<string, string> env)
+    /// <summary>
+    /// PATH 解析在父件：含 / 直用（不存在也放行——execve 报准确 errno），否则按生效
+    /// envp 的 PATH 逐项 access(X_OK)。相对 PATH 项（含空项="."）的解析基准是
+    /// 子件的执行 cwd（exec 在 chdir 后跑），不是父件 cwd。
+    /// </summary>
+    private static string? ResolveOnPath(string fileName, Dictionary<string, string> env,
+        string? workingDirectory)
     {
         if (fileName.Contains('/'))
         {
             return fileName;
         }
         var path = env.TryGetValue("PATH", out var p) ? p : "/usr/bin:/bin";
+        // 基准归一成绝对路径：拼出的候选要同时满足父件 access 检查与子件
+        // chdir 后的 exec 解析——绝对路径两语境同指一目标，无二次错解。
+        var relativeBase = Path.GetFullPath(workingDirectory ?? ".");
         foreach (var dir in path.Split(':'))
         {
-            var candidate = string.Concat(dir.Length == 0 ? "." : dir, "/", fileName);
+            var candidate = dir.Length > 0 && dir[0] == '/'
+                ? string.Concat(dir, "/", fileName)
+                : string.Concat(relativeBase, "/", dir.Length == 0 ? "." : dir, "/", fileName);
             if (access(Utf8(candidate), X_OK) == 0)
             {
                 return candidate;
@@ -609,6 +670,32 @@ internal static class NativeSpawnUnix
         }
         return null;
     }
+
+    // pipe2(O_CLOEXEC) 原子建管——消灭 pipe→fcntl 之间"并发 spawn 可能继承
+    // 未收口 fd"的竞态窗（排水管写端漏进无关子件→ReadToEnd EOF 永不至的
+    // 实测病理）。macOS/旧内核无 pipe2 落 pipe+fcntl，微窗按残余登记。
+    private const int O_CLOEXEC = 0x80000;
+    private static bool CreatePipe(int[] fds)
+    {
+        try
+        {
+            if (Pipe2(fds, O_CLOEXEC) == 0)
+            {
+                return true;
+            }
+            if (Marshal.GetLastWin32Error() != ENOSYS)
+            {
+                return false; // 真实失败（EMFILE 等）——errno 透传给 PipeFailure
+            }
+        }
+        catch (EntryPointNotFoundException) { }
+        catch (DllNotFoundException) { }
+        // ENOSYS/无该符号 → pipe+fcntl 兜底（macOS 微窗按残余登记）
+        return pipe(fds) == 0 && CloExec(fds);
+    }
+
+    [DllImport(LibC, SetLastError = true, EntryPoint = "pipe2")]
+    private static extern int Pipe2([Out] int[] fds, int flags);
 
     private static bool CloExec(int[] fds) =>
         // 两端都 CLOEXEC：孙代一律不继承宿主 fd——并发工具排水管的写端若被无关
@@ -637,17 +724,32 @@ internal static class NativeSpawnUnix
     private static IntPtr MarshalArgv(IEnumerable<string> values)
     {
         var ptrs = new List<IntPtr>();
-        foreach (var s in values)
+        try
         {
-            var bytes = Encoding.UTF8.GetBytes((s ?? "") + '\0');
-            var p = Marshal.AllocHGlobal(bytes.Length);
-            Marshal.Copy(bytes, 0, p, bytes.Length);
-            ptrs.Add(p);
+            foreach (var s in values)
+            {
+                var bytes = Encoding.UTF8.GetBytes((s ?? "") + '\0');
+                var p = Marshal.AllocHGlobal(bytes.Length);
+                Marshal.Copy(bytes, 0, p, bytes.Length);
+                ptrs.Add(p);
+            }
+            ptrs.Add(IntPtr.Zero);
+            var arr = Marshal.AllocHGlobal(IntPtr.Size * ptrs.Count);
+            Marshal.Copy(ptrs.ToArray(), 0, arr, ptrs.Count);
+            return arr;
         }
-        ptrs.Add(IntPtr.Zero);
-        var arr = Marshal.AllocHGlobal(IntPtr.Size * ptrs.Count);
-        Marshal.Copy(ptrs.ToArray(), 0, arr, ptrs.Count);
-        return arr;
+        catch
+        {
+            // 中途失败（OOM 等）回收已分配段——HG 不受 GC 管，放任即成堆泄漏。
+            foreach (var p in ptrs)
+            {
+                if (p != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(p);
+                }
+            }
+            throw;
+        }
     }
 
     private static void FreeArgv(IntPtr arr)

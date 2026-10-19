@@ -115,15 +115,22 @@ public sealed class ToolProcess : IDisposable
         {
             psi.Arguments = string.Join(" ", info.Arguments.Select(QuoteWin));
         }
-        foreach (var pair in info.Environment)
+        // ShellExecute 不接受环境块——BCL Process.Start 同位抛
+        // InvalidOperationException。本面按 ShellExecute 天然继承父件环境的
+        // 语义跳过覆盖（适配层把 ProcessStartInfo.Environment 全集拷来是常态，
+        // 显式覆写在 ShellExecute 下本就不可表达）。
+        if (!info.UseShellExecute)
         {
-            if (pair.Value is null)
+            foreach (var pair in info.Environment)
             {
-                psi.EnvironmentVariables.Remove(pair.Key);
-            }
-            else
-            {
-                psi.EnvironmentVariables[pair.Key] = pair.Value;
+                if (pair.Value is null)
+                {
+                    psi.EnvironmentVariables.Remove(pair.Key);
+                }
+                else
+                {
+                    psi.EnvironmentVariables[pair.Key] = pair.Value;
+                }
             }
         }
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
@@ -288,6 +295,9 @@ public sealed class ToolProcess : IDisposable
             return;
         }
         Action? onReaped = null;
+        // 阻塞 waitpid 持 ReapLock 是刻意的：同一 pid 本就只允许一个收尸者，
+        // 其余等待方在锁上排队与"自己去 waitpid 阻塞"语义等价——子件退出
+        // 即放行，不构成死锁（锁内无回调、无子件依赖回环）。
         lock (_unix!.ReapLock)
         {
             if (!_unix.Reaped && ReapUnix(blocking: true))
@@ -370,6 +380,13 @@ public sealed class ToolProcess : IDisposable
             _win.Kill();
 #endif
             return;
+        }
+        // 已退出件拒杀对齐 BCL Process.Kill：子件收尸后其 pid/pgid 可被系统
+        // 复用，kill(-pid) 会把 SIGKILL 打进无关进程组——先 waitpid 刷退出态再判。
+        if (HasExited)
+        {
+            throw new InvalidOperationException(
+                "Cannot kill a process that has already exited.");
         }
         if (entireProcessTree)
         {
