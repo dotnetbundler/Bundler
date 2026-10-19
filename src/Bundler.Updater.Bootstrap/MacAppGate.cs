@@ -166,7 +166,8 @@ internal static class MacAppGate
             }
             startInfo.RedirectStandardOutput = true;
             startInfo.RedirectStandardError = true;
-            using var process = ProcessWait.Start(startInfo)!;
+            using var process = ProcessWait.Start(startInfo)
+                ?? throw new InvalidOperationException($"spawn timed out: {path}");
             // 并行消费：stderr 写满管道会让子进程卡住，等满 30s 造成假超时。
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();

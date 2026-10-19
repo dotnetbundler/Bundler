@@ -978,8 +978,12 @@ internal static class BootstrapPlan
         // 重启失败不致命：换包/回滚已完成，重启只是便利步骤——与 POSIX `|| true` 对齐为 WARN。
         try
         {
-            // 分离重启腿：迟到子件是正当重启目标——killLateSpawned=false 不扑杀。
-            ProcessWait.Start(startInfo, killLateSpawned: false);
+            // 分离重启腿：迟到子件是正当重启目标——killLateSpawned=false 不扑杀；
+            // spawn 超时只意味"60s 内未回报"，迟到真拉起仍可能发生，WARN 留痕对齐 || true 口径。
+            if (ProcessWait.Start(startInfo, killLateSpawned: false) is null)
+            {
+                log("bundler-updater: WARN restart spawn timed out");
+            }
         }
         catch (Exception exception)
         {
@@ -1245,35 +1249,43 @@ internal static class BootstrapPlan
                     : new ProcessStartInfo("cp", ["-a", source + "/.", destination + "/"]);
                 startInfo.RedirectStandardError = true;
                 using var process = ProcessWait.Start(startInfo);
-                // stderr 后台抽干+退出同盖一个 60s 界：同步 ReadToEnd 先排空再等会让
-                // "活进程挂死"（cp/ditto 在 FIFO/设备件上 open 阻塞，stderr 永不 EOF）
-                // 在界外无限挂住——与 sh 侧 timeout -k 10 60 cp 包裹的是同一威胁面。
-                var stderrTask = process!.StandardError.ReadToEndAsync();
-                var wedged = !ProcessWait.WaitForExit(process, 60_000);
-                if (wedged)
-                {
-                    try { process.Kill(); } catch (Exception) { }
-                    ProcessWait.WaitForExit(process, 10_000);
-                }
-                // EOF 排空也给限窗：孙代继承管道写端时退出不等于 EOF（孙进程必死但
-                // 其持管期间 ReadToEndAsync 不返）——5s 内读不到按无细节处理。
-                var stderr = "";
-                try { if (stderrTask.Wait(5_000)) stderr = stderrTask.Result; } catch (Exception) { }
-                if (wedged)
+                if (process is null)
                 {
                     DeleteNodeIfPresent(destination);
-                    log("bundler-updater: WARN host copy timed out — falling back to managed copy");
-                }
-                else if (process.ExitCode == 0)
-                {
-                    return;
+                    log("bundler-updater: WARN host copy spawn timed out — falling back to managed copy");
                 }
                 else
                 {
-                    DeleteNodeIfPresent(destination);
-                    var detail = stderr.Trim();
-                    if (detail.Length > 240) { detail = "…" + detail[^240..]; }
-                    log($"bundler-updater: WARN host copy failed (exit {process.ExitCode}){(detail.Length > 0 ? $" — {detail}" : "")} — falling back to managed copy");
+                    // stderr 后台抽干+退出同盖一个 60s 界：同步 ReadToEnd 先排空再等会让
+                    // "活进程挂死"（cp/ditto 在 FIFO/设备件上 open 阻塞，stderr 永不 EOF）
+                    // 在界外无限挂住——与 sh 侧 timeout -k 10 60 cp 包裹的是同一威胁面。
+                    var stderrTask = process.StandardError.ReadToEndAsync();
+                    var wedged = !ProcessWait.WaitForExit(process, 60_000);
+                    if (wedged)
+                    {
+                        try { process.Kill(); } catch (Exception) { }
+                        ProcessWait.WaitForExit(process, 10_000);
+                    }
+                    // EOF 排空也给限窗：孙代继承管道写端时退出不等于 EOF（孙进程必死但
+                    // 其持管期间 ReadToEndAsync 不返）——5s 内读不到按无细节处理。
+                    var stderr = "";
+                    try { if (stderrTask.Wait(5_000)) stderr = stderrTask.Result; } catch (Exception) { }
+                    if (wedged)
+                    {
+                        DeleteNodeIfPresent(destination);
+                        log("bundler-updater: WARN host copy timed out — falling back to managed copy");
+                    }
+                    else if (process.ExitCode == 0)
+                    {
+                        return;
+                    }
+                    else
+                    {
+                        DeleteNodeIfPresent(destination);
+                        var detail = stderr.Trim();
+                        if (detail.Length > 240) { detail = "…" + detail[^240..]; }
+                        log($"bundler-updater: WARN host copy failed (exit {process.ExitCode}){(detail.Length > 0 ? $" — {detail}" : "")} — falling back to managed copy");
+                    }
                 }
             }
             catch (Exception exception)

@@ -904,7 +904,8 @@ internal static class PkgApplyPlan
         }
         try
         {
-            using var process = ProcessWait.Start(BuildStartInfo(spec))!;
+            using var process = ProcessWait.Start(BuildStartInfo(spec))
+                ?? throw new InvalidOperationException($"spawn timed out: {spec.FileName}");
             // 安装腿有界：pm 挂死（dpkg 锁竞态外的死锁/前端自身卡死）会把特权
             // 进程拖成永驻——默认 30min，BUNDLER_UPDATER_PKG_TIMEOUT 秒数覆盖
             //（sh 侧 timeout 包裹同名同缝）；超时杀进程返 124（timeout(1) 同码，
@@ -968,7 +969,8 @@ internal static class PkgApplyPlan
             startInfo.RedirectStandardInput = true;
             startInfo.RedirectStandardOutput = true;
             startInfo.RedirectStandardError = true;
-            using var process = ProcessWait.Start(startInfo)!;
+            using var process = ProcessWait.Start(startInfo)
+                ?? throw new InvalidOperationException($"spawn timed out: {spec.FileName}");
             process.StandardInput.Dispose();
             _ = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
             _ = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
@@ -994,8 +996,7 @@ internal static class PkgApplyPlan
         }
         try
         {
-            StartDetached(spec);
-            return true;
+            return StartDetached(spec);
         }
         catch (Exception)
         {
@@ -1009,7 +1010,10 @@ internal static class PkgApplyPlan
     // POSIX 经 /bin/sh `exec "$@"` 包裹把三向钉到 /dev/null——argv 逐参透传
     // 不经 shell 重解析；Windows 兜底腿无 shell 钉法，改接管道：stdin 立即关
     // =对端 EOF，out/err 后台抽干到 Null——子进程不再持有调用方句柄。
-    private static void StartDetached(ExecSpec spec)
+    // spawn 超时按 false 上报走退化下一腿——迟到子件可能随后真落地、与退化腿
+    // 构成双重拉起的竞态角是刻意接受项：锁死面下次腿 spawn 同样会在界内失败，
+    // 失败可观测优先于静默报成（Spawn 报 true 会吞掉整个降级链且无留痕）。
+    private static bool StartDetached(ExecSpec spec)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -1020,12 +1024,12 @@ internal static class PkgApplyPlan
             var process = ProcessWait.Start(startInfo, killLateSpawned: false);
             if (process is null)
             {
-                return;
+                return false;
             }
             process.StandardInput.Dispose();
             _ = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
             _ = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
-            return;
+            return true;
         }
         var wrapped = new ExecSpec
         {
@@ -1038,7 +1042,7 @@ internal static class PkgApplyPlan
             WorkingDirectory = spec.WorkingDirectory,
             Environment = spec.Environment,
         };
-        ProcessWait.Start(BuildStartInfo(wrapped), killLateSpawned: false);
+        return ProcessWait.Start(BuildStartInfo(wrapped), killLateSpawned: false) is not null;
     }
 
     private static ProcessStartInfo BuildStartInfo(ExecSpec spec)

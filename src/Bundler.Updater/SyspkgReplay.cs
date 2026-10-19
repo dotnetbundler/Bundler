@@ -1018,7 +1018,8 @@ internal static class SyspkgReplay
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
-            using var process = ProcessWait.Start(startInfo)!;
+            using var process = ProcessWait.Start(startInfo)
+                ?? throw new InvalidOperationException($"spawn timed out: {file}");
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
             if (!ProcessWait.WaitForExit(process, 60_000))

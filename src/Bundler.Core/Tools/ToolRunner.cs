@@ -197,15 +197,19 @@ internal static class ToolRunner
             }
         }
 
-        using var process = new Process { StartInfo = startInfo };
+        // 经 ProcessStartInfo 重载 spawn：超时腿返回 null 而内部 Process 不归本层
+        // Dispose——迟到完成产出的子件由 ProcessWait 续体扑杀（using 会吞掉这个 kill）。
+        Process? maybeProcess;
         try
         {
-            if (!ProcessWait.Start(process))
-            {
-                return null;
-            }
+            maybeProcess = ProcessWait.Start(startInfo);
         }
         catch (Exception)
+        {
+            return null;
+        }
+        using var process = maybeProcess;
+        if (process is null)
         {
             return null;
         }

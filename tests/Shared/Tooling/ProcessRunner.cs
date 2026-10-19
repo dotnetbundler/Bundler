@@ -87,42 +87,47 @@ internal static class ProcessRunner
         }
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
-        using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
+        var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdout.AppendLine(e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
         if (!TestProcessExit.Start(process))
         {
+            // 刻意不 Dispose：spawn 迟到完成时迟到子件的扑杀续体要经此对象走，
+            // 已释放对象的 Kill 会抛 ObjectDisposedException 而漏杀（件归 GC 收尾）。
             throw new TimeoutException(
                 $"Process spawn did not complete within {TestProcessExit.SpawnTimeoutMilliseconds}ms: " +
                 $"{filePath} {argumentLine ?? string.Join(' ', arguments ?? [])}");
         }
-        try { options.ProcessStarted?.Invoke(process.Id); }
-        catch { /* 诊断回调故障不得改变被测进程流程 */ }
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        if (options.StandardInput is not null)
+        using (process)
         {
-            process.StandardInput.Write(options.StandardInput);
+            try { options.ProcessStarted?.Invoke(process.Id); }
+            catch { /* 诊断回调故障不得改变被测进程流程 */ }
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            if (options.StandardInput is not null)
+            {
+                process.StandardInput.Write(options.StandardInput);
+            }
+            process.StandardInput.Close();
+            if (!TestProcessExit.WaitForExit(process, (int)options.Timeout.TotalMilliseconds))
+            {
+                TryKillTree(process);
+                throw new TimeoutException(
+                    $"Process timed out after {options.Timeout}: {filePath} {argumentLine ?? string.Join(' ', arguments ?? [])}\n" +
+                    $"stdout so far:\n{stdout}\nstderr so far:\n{stderr}");
+            }
+            // 无参 WaitForExit 会等异步读取遇到管道 EOF；孙进程（VBCSCompiler 等构建守护）
+            // 继承重定向管道写端且不退出时永不 EOF——musl 上实测挂满 10m 超时。
+            // 给 EOF 一个限时窗，过期取消异步读收尾（仅丢弃该管道缓冲尾量）。
+            var eofWait = Task.Run(() => process.WaitForExit());
+            if (!eofWait.Wait(TimeSpan.FromSeconds(10)))
+            {
+                try { process.CancelOutputRead(); } catch { /* 读已结束 */ }
+                try { process.CancelErrorRead(); } catch { /* 读已结束 */ }
+                process.WaitForExit();
+            }
+            return new Result(process.ExitCode, stdout.ToString(), stderr.ToString());
         }
-        process.StandardInput.Close();
-        if (!TestProcessExit.WaitForExit(process, (int)options.Timeout.TotalMilliseconds))
-        {
-            TryKillTree(process);
-            throw new TimeoutException(
-                $"Process timed out after {options.Timeout}: {filePath} {argumentLine ?? string.Join(' ', arguments ?? [])}\n" +
-                $"stdout so far:\n{stdout}\nstderr so far:\n{stderr}");
-        }
-        // 无参 WaitForExit 会等异步读取遇到管道 EOF；孙进程（VBCSCompiler 等构建守护）
-        // 继承重定向管道写端且不退出时永不 EOF——musl 上实测挂满 10m 超时。
-        // 给 EOF 一个限时窗，过期取消异步读收尾（仅丢弃该管道缓冲尾量）。
-        var eofWait = Task.Run(() => process.WaitForExit());
-        if (!eofWait.Wait(TimeSpan.FromSeconds(10)))
-        {
-            try { process.CancelOutputRead(); } catch { /* 读已结束 */ }
-            try { process.CancelErrorRead(); } catch { /* 读已结束 */ }
-            process.WaitForExit();
-        }
-        return new Result(process.ExitCode, stdout.ToString(), stderr.ToString());
     }
 
     // 启动后不等待：供 "进程仍在运行 / 杀进程树模拟崩溃" 等腿使用。

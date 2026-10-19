@@ -15,17 +15,45 @@ internal static class TestProcessExit
     /// <summary>
     /// 有界 <see cref="Process.Start()"/>：超时返回 false；迟到完成的 spawn 在
     /// <paramref name="killLateSpawned"/> 为 true 时扑杀其迟到子件（分离 spawn 传
-    /// false——子件本就该存活）。
+    /// false——子件本就该存活）。调用方对超时腿的 <paramref name="process"/> 不得
+    /// 提前 Dispose——迟到扑杀经该对象走，已释放对象的 Kill 会漏杀。
     /// </summary>
     public static bool Start(Process process, int milliseconds = SpawnTimeoutMilliseconds,
+        bool killLateSpawned = true) =>
+        StartCore(process, milliseconds, killLateSpawned, disposeOnLateComplete: false);
+
+    /// <summary><see cref="ProcessStartInfo"/> 形式：超时返回 null。</summary>
+    public static Process? Start(ProcessStartInfo startInfo, int milliseconds = SpawnTimeoutMilliseconds,
         bool killLateSpawned = true)
     {
-        var startTask = Task.Run(process.Start);
-        if (!startTask.Wait(milliseconds))
+        var process = new Process { StartInfo = startInfo };
+        return StartCore(process, milliseconds, killLateSpawned, disposeOnLateComplete: true)
+            ? process
+            : null;
+    }
+
+    private static bool StartCore(Process process, int milliseconds,
+        bool killLateSpawned, bool disposeOnLateComplete)
+    {
+        var startTask = Task.Factory.StartNew(
+            process.Start,
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach,
+            TaskScheduler.Default);
+        if (startTask.Wait(milliseconds))
         {
-            _ = startTask.ContinueWith(
-                t =>
+            return startTask.GetAwaiter().GetResult();
+        }
+        _ = startTask.ContinueWith(
+            t =>
+            {
+                try
                 {
+                    if (t.IsFaulted)
+                    {
+                        _ = t.Exception;
+                        return;
+                    }
                     if (killLateSpawned && t.Result)
                     {
                         try
@@ -38,21 +66,19 @@ internal static class TestProcessExit
                         }
                         catch (Exception) { }
                     }
-                },
-                CancellationToken.None,
-                TaskContinuationOptions.OnlyOnRanToCompletion,
-                TaskScheduler.Default);
-            return false;
-        }
-        return startTask.GetAwaiter().GetResult();
-    }
-
-    /// <summary><see cref="ProcessStartInfo"/> 形式：超时返回 null。</summary>
-    public static Process? Start(ProcessStartInfo startInfo, int milliseconds = SpawnTimeoutMilliseconds,
-        bool killLateSpawned = true)
-    {
-        var process = new Process { StartInfo = startInfo };
-        return Start(process, milliseconds, killLateSpawned) ? process : null;
+                }
+                finally
+                {
+                    if (disposeOnLateComplete)
+                    {
+                        try { process.Dispose(); } catch (Exception) { }
+                    }
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default);
+        return false;
     }
 
     public static bool WaitForExit(Process process, int milliseconds)

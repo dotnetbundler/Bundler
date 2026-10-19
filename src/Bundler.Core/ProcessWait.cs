@@ -31,16 +31,56 @@ internal static class ProcessWait
     /// <paramref name="killLateSpawned"/> 为 true（同步工具调用——迟到子件是废物）
     /// 时迟到完成的 Start 产出子进程立即扑杀；分离 spawn（子件本就该存活——
     /// nohup/open 重启腿）传 false，迟到子件按正常落地处理。
+    /// 注意：调用方对 <paramref name="process"/> 的超时腿不得提前 Dispose——迟到
+    /// 扑杀经该对象走，已释放对象的 Kill 会抛 ObjectDisposedException 而漏杀；
+    /// 需要事件订阅等成员的场景若必须早释放，改用 <see cref="ProcessStartInfo"/>
+    /// 重载（内部自建 Process 不归调用方处置）。
     /// </summary>
     public static bool Start(Process process, int milliseconds = SpawnTimeoutMilliseconds,
+        bool killLateSpawned = true) =>
+        StartCore(process, milliseconds, killLateSpawned, disposeOnLateComplete: false);
+
+    /// <summary>
+    /// <see cref="Start(Process, int, bool)"/> 的 <see cref="ProcessStartInfo"/> 形式，
+    /// 替代静态 <see cref="Process.Start(ProcessStartInfo)"/>：超时返回 null（与原
+    /// API "未能产出子进程"的 null 语义同位）。内部持有的 Process 不交给调用方，
+    /// 迟到完成处置干净（杀/放后释放对象）。调用方对返回值的使用与处置照旧。
+    /// </summary>
+    public static Process? Start(ProcessStartInfo startInfo, int milliseconds = SpawnTimeoutMilliseconds,
         bool killLateSpawned = true)
     {
-        var startTask = Task.Run(process.Start);
-        if (!startTask.Wait(milliseconds))
+        var process = new Process { StartInfo = startInfo };
+        return StartCore(process, milliseconds, killLateSpawned, disposeOnLateComplete: true)
+            ? process
+            : null;
+    }
+
+    // 内嵌 Start 走独立线程而非线程池：锁死面下每次卡死 spawn 永久占用工作线程，
+    // LongRunning 专线把病损隔离出池，不饿死同宿主其余任务。
+    private static bool StartCore(Process process, int milliseconds,
+        bool killLateSpawned, bool disposeOnLateComplete)
+    {
+        var startTask = Task.Factory.StartNew(
+            process.Start,
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach,
+            TaskScheduler.Default);
+        if (startTask.Wait(milliseconds))
         {
-            _ = startTask.ContinueWith(
-                t =>
+            return startTask.GetAwaiter().GetResult();
+        }
+        _ = startTask.ContinueWith(
+            t =>
+            {
+                try
                 {
+                    if (t.IsFaulted)
+                    {
+                        // 触摸 Exception 记为已观察——spawn 迟到失败的异常不外溢成
+                        // UnobservedTaskException 噪声。
+                        _ = t.Exception;
+                        return;
+                    }
                     if (killLateSpawned && t.Result)
                     {
                         try
@@ -53,25 +93,19 @@ internal static class ProcessWait
                         }
                         catch (Exception) { }
                     }
-                },
-                CancellationToken.None,
-                TaskContinuationOptions.OnlyOnRanToCompletion,
-                TaskScheduler.Default);
-            return false;
-        }
-        return startTask.GetAwaiter().GetResult();
-    }
-
-    /// <summary>
-    /// <see cref="Start(Process, int, bool)"/> 的 <see cref="ProcessStartInfo"/> 形式，
-    /// 替代静态 <see cref="Process.Start(ProcessStartInfo)"/>：超时返回 null（与原
-    /// API "未能产出子进程"的 null 语义同位）。调用方对返回值的使用与处置照旧。
-    /// </summary>
-    public static Process? Start(ProcessStartInfo startInfo, int milliseconds = SpawnTimeoutMilliseconds,
-        bool killLateSpawned = true)
-    {
-        var process = new Process { StartInfo = startInfo };
-        return Start(process, milliseconds, killLateSpawned) ? process : null;
+                }
+                finally
+                {
+                    if (disposeOnLateComplete)
+                    {
+                        try { process.Dispose(); } catch (Exception) { }
+                    }
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default);
+        return false;
     }
 
     /// <summary>
