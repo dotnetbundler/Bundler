@@ -49,11 +49,11 @@ public static class ZipToolCache
         var requiredPaths = (archive.RequiredRelativePaths ?? Array.Empty<string>())
             .Append(archive.ExecutableRelativePath)
             .Select(relativePath => ToolCache.NormalizeRelativePath(toolDirectory, relativePath, nameof(archive)))
-            .Distinct(ToolCache.PathComparer)
+            .Distinct(PathText.Comparer)
             .ToArray();
         foreach (var requiredPath in requiredPaths)
         {
-            if (!expectedFiles.Any(file => ToolCache.PathComparer.Equals(file.RelativePath, requiredPath)))
+            if (!expectedFiles.Any(file => PathText.Comparer.Equals(file.RelativePath, requiredPath)))
             {
                 throw new InvalidDataException($"The {archive.Name} archive does not contain '{requiredPath}'.");
             }
@@ -80,7 +80,7 @@ public static class ZipToolCache
                     zip ??= ZipFile.OpenRead(archivePath);
                     entriesByPath ??= zip.Entries
                         .Where(e => !IsDirectoryEntry(e))
-                        .ToDictionary(e => NormalizeArchiveEntry(e.FullName), ToolCache.PathComparer);
+                        .ToDictionary(e => NormalizeArchiveEntry(e.FullName), PathText.Comparer);
                     return Task.FromResult<Stream>(entriesByPath[file.RelativePath].Open());
                 },
                 cancellationToken);
@@ -96,7 +96,7 @@ public static class ZipToolCache
     private static IReadOnlyList<ToolCache.ManifestEntry> ReadArchiveManifest(string archivePath)
     {
         using var zip = ZipFile.OpenRead(archivePath);
-        var paths = new HashSet<string>(ToolCache.PathComparer);
+        var paths = new HashSet<string>(PathText.Comparer);
         var entries = new List<ToolCache.ManifestEntry>();
         foreach (var entry in zip.Entries)
         {
@@ -120,7 +120,7 @@ public static class ZipToolCache
             using var stream = entry.Open();
             entries.Add(new ToolCache.ManifestEntry(relativePath, entry.Length, Hashes.Sha256Hex(stream)));
         }
-        return entries.OrderBy(entry => entry.RelativePath, ToolCache.PathComparer).ToArray();
+        return entries.OrderBy(entry => entry.RelativePath, PathText.Comparer).ToArray();
     }
 
     internal static string NormalizeArchiveEntry(string entryName)

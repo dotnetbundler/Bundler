@@ -37,13 +37,79 @@ public sealed class UpdateKeyMaterial
     {
         using var stream = File.OpenRead(path);
         var material = UpdateJson.ReadKeyMaterial(stream);
-        if (material is null || material.Kty != "ec-p256" ||
-            material.X.Length == 0 || material.Y.Length == 0)
-        {
+        static UpdateKeyMaterial Invalid(string path) =>
             throw new InvalidOperationException(
                 $"The update signing key '{path}' is not a valid ec-p256 key file.");
+        if (material is null || material.Kty != "ec-p256" ||
+            string.IsNullOrWhiteSpace(material.X) || string.IsNullOrWhiteSpace(material.Y))
+        {
+            Invalid(path);
+        }
+        // 段必须能解码出 32 字节坐标——base64 合法但长度不对的 JSON 同样不是 P-256 公钥。
+        byte[] x, y;
+        try
+        {
+            x = Convert.FromBase64String(material!.X!);
+            y = Convert.FromBase64String(material.Y!);
+        }
+        catch (FormatException)
+        {
+            return Invalid(path);
+        }
+        if (x.Length != 32 || y.Length != 32)
+        {
+            return Invalid(path);
+        }
+        // d 私钥字段在场即校验：缺失仍是合法的"只含公钥"件形态（ToPrivateParameters
+        // 给分类异常）；在场却坏 base64/非 32 字节/越出 [1, n-1] 标量时把畸形挡在
+        // Load——不能让坏 d 漏到签名时才炸成原始 Format/CryptographicException。
+        if (material.D is { Length: > 0 } d)
+        {
+            try
+            {
+                if (!IsValidP256Scalar(Convert.FromBase64String(d)))
+                {
+                    return Invalid(path);
+                }
+            }
+            catch (FormatException)
+            {
+                return Invalid(path);
+            }
         }
         return material;
+    }
+
+    // P-256 群阶 n（secp256r1，大端 32 字节）：合法私钥标量须满足 0 < d < n。
+    private static readonly byte[] P256Order =
+    [
+        0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        0xBC, 0xE6, 0xFA, 0xAD, 0xA7, 0x17, 0x9E, 0x84,
+        0xF3, 0xB9, 0xCA, 0xC2, 0xFC, 0x63, 0x25, 0x51,
+    ];
+
+    private static bool IsValidP256Scalar(byte[] d)
+    {
+        if (d.Length != 32)
+        {
+            return false;
+        }
+        var allZero = true;
+        var lessThanOrder = false;
+        for (var i = 0; i < 32; i++)
+        {
+            allZero &= d[i] == 0;
+            if (!lessThanOrder && d[i] != P256Order[i])
+            {
+                lessThanOrder = d[i] < P256Order[i];
+            }
+            if (!lessThanOrder && d[i] > P256Order[i])
+            {
+                return false;
+            }
+        }
+        return !allZero && lessThanOrder;
     }
 
     // 旁车/清单里携带的未压缩点（0x04|X|Y）还原出只含公钥的材料。
@@ -68,11 +134,52 @@ public sealed class UpdateKeyMaterial
 #if NET10_0_OR_GREATER
         if (!OperatingSystem.IsWindows())
         {
-            // 私钥文件权限收窄到属主，不随 umask。
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            try
+            {
+                // 私钥文件权限收窄到属主，不随 umask。
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+            catch (Exception exception)
+            {
+                FailSecuring(path, exception);
+            }
+        }
+#else
+        // netstandard2.0 腿（Core 由老宿主消费时）：同口径 libc chmod 收紧——
+        // 私钥落盘权限不能按 TFM 分运；收紧失败则文件保持 umask 权限，
+        // 宁可报错删件也不能静默留下 644 私钥。
+        if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                System.Runtime.InteropServices.OSPlatform.Windows))
+        {
+            var secured = false;
+            try
+            {
+                secured = chmod(path, 0x180 /* 0600 */) == 0;
+            }
+            catch (Exception)
+            {
+            }
+            if (!secured)
+            {
+                FailSecuring(path, null);
+            }
         }
 #endif
     }
+
+    private static void FailSecuring(string path, Exception? cause)
+    {
+        try { File.Delete(path); } catch (Exception) { }
+        throw new InvalidOperationException(
+            $"Could not restrict the update signing key '{path}' to owner-only permissions — " +
+            "the file was removed rather than left with default umask permissions.", cause);
+    }
+
+#if !NET10_0_OR_GREATER
+    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "chmod",
+        SetLastError = true)]
+    private static extern int chmod(string path, ushort mode);
+#endif
 
     private void SaveCore(string path)
     {

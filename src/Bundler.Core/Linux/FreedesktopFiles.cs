@@ -141,21 +141,27 @@ internal static class FreedesktopFiles
         }
 
         // Desktop Entry 规范：引号内 '"' '`' '$' '\' 要反斜杠转义；保留字符 '%' 要成对。
+        // 换行/NUL 转义不掉——参数含它们会破坏整行语义，显式拒绝。
         static string QuoteExecArgument(string argument)
-    {
-        var escaped = argument.Replace("%", "%%");
-        if (escaped.Length > 0 &&
-            !escaped.Any(character => char.IsWhiteSpace(character) ||
-                                      character is '"' or '\'' or '\\' or ';' or '&' or '|' or
-                                      '<' or '>' or '(' or ')' or '$' or '`' or '~' or '*' or '?' or '#'))
         {
-            return escaped;
-        }
-        return "\"" + escaped
-            .Replace("\\", "\\\\")
-            .Replace("\"", "\\\"")
-            .Replace("`", "\\`")
-            .Replace("$", "\\$") + "\"";
+            if (argument.IndexOfAny(new[] { '\r', '\n', '\0' }) >= 0)
+            {
+                throw new ArgumentException(
+                    "The .desktop Exec value must be a single line.");
+            }
+            var escaped = argument.Replace("%", "%%");
+            if (escaped.Length > 0 &&
+                !escaped.Any(character => char.IsWhiteSpace(character) ||
+                                          character is '"' or '\'' or '\\' or ';' or '&' or '|' or
+                                          '<' or '>' or '(' or ')' or '$' or '`' or '~' or '*' or '?' or '#'))
+            {
+                return escaped;
+            }
+            return "\"" + escaped
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("`", "\\`")
+                .Replace("$", "\\$") + "\"";
         }
 
         var builder = new StringBuilder();
@@ -178,7 +184,7 @@ internal static class FreedesktopFiles
             .Append(hasUrls ? " %u" : hasFiles ? " %f" : "").Append('\n');
         if (bundle.Icons.Count > 0 || alwaysEmitIcon)
         {
-            builder.Append("Icon=").Append(packageName).Append('\n');
+            builder.Append("Icon=").Append(SanitizeDesktopValue(packageName, "Icon")).Append('\n');
         }
         builder.Append("Terminal=false\n");
         if (categories is { Length: > 0 })
@@ -204,7 +210,8 @@ internal static class FreedesktopFiles
                 .Select(scheme => "x-scheme-handler/" + scheme.Trim()))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        if (mimeTypes.Any(m => m.IndexOf('/') <= 0 || m.IndexOfAny(new[] { ' ', '\t', ';' }) >= 0))
+        if (mimeTypes.Any(m => m.IndexOf('/') <= 0 ||
+                m.IndexOfAny(new[] { ' ', '\t', ';', '\r', '\n', '\0' }) >= 0))
         {
             throw new ArgumentException(
                 $"Invalid MimeType entry for the .desktop file: '{string.Join(";", mimeTypes)}'.");

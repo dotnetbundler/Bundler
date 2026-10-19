@@ -93,7 +93,6 @@ internal sealed class AppImageBundleBackend(
                 $"appimagetool exited cleanly but produced no '{outputPath}'.");
         }
         AppImageToolset.Chmod(outputPath, "+x");
-        WriteSha256Sidecar(outputPath);
 
         return [new BundleArtifact(
             PackageFormat.AppImage, context.Item.Target.Target, outputPath)];
@@ -129,10 +128,4 @@ internal sealed class AppImageBundleBackend(
         return AppImageSigning.Prepare(settings.Signing.KeyFile!, workDirectory);
     }
 
-    private static void WriteSha256Sidecar(string path)
-    {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        File.WriteAllText(path + ".sha256",
-            Hashes.Sha256Hex(stream) + "  " + Path.GetFileName(path) + "\n");
-    }
 }

@@ -57,7 +57,7 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
             // 引导件落 MacOS/（代码位正常签名）——两者随 bundle 一起被 codesign 覆盖。
             UpdateIdentitySidecar.WriteIfEnabled(
                 resourcesDirectory, update, PackageFormat.App, item.Target.Target);
-            UpdateBootstrapper.Inject(
+            UpdateBootstrapper.InjectOrThrow(
                 executablesDirectory, update, item.Target.Target);
         }
 

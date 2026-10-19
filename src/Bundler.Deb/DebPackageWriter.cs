@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Text;
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
@@ -77,7 +76,6 @@ internal static class DebPackageWriter
             var fileName = packageName + "_" + DebVersion.FileNameVersion(version) + "_" +
                 architecture + ".deb";
             var outputPath = Path.Combine(item.OutputDirectory, fileName);
-            var sidecarPath = outputPath + ".sha256";
             try
             {
                 Directory.CreateDirectory(item.OutputDirectory);
@@ -90,10 +88,7 @@ internal static class DebPackageWriter
                         ArMember.FromFile("data.tar.gz", dataTarGzPath)
                     ]);
                 }
-                var hash = Hashes.Sha256HexFile(outputPath);
-                File.WriteAllText(sidecarPath,
-                    hash + "  " + fileName + "\n", new UTF8Encoding(false));
-                logger.Log(BundleLogLevel.Information, $"Wrote {fileName} (sha256 {hash}).");
+                logger.Log(BundleLogLevel.Information, $"Wrote {fileName}.");
                 return new Result
                 {
                     OutputPath = outputPath,
@@ -108,9 +103,9 @@ internal static class DebPackageWriter
                 {
                     File.Delete(outputPath);
                 }
-                if (File.Exists(sidecarPath))
+                if (File.Exists(outputPath + ".sha256"))
                 {
-                    File.Delete(sidecarPath);
+                    File.Delete(outputPath + ".sha256");
                 }
                 throw;
             }
@@ -551,7 +546,7 @@ internal static class DebPackageWriter
     private static void GzipTarToFile(IEnumerable<PayloadEntry> entries, string path)
     {
         using var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-        using (var gzip = new GZipStream(file, CompressionLevel.Optimal, leaveOpen: true))
+        using (var gzip = Gzip.WrapWrite(file))
         {
             TarWriter.Write(gzip, entries
                 .OrderBy(entry => entry.ArchivePath, StringComparer.Ordinal)

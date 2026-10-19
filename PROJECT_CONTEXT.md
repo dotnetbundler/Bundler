@@ -4,16 +4,17 @@
 > 当前工作基线：`main@09c9646`（最新实现基线——含 #139 UPDATE 提权停链修复与 #140 DMG 挂载可观测增强 squash 合入）；
 > 此前 `main@c319b8c` 含 #133/#134 诊断瘦身回净、#135 dmg 断言收窄、#136 dmg 挂载后失败注入腿、#137 文档对账、#138 签名文档修正；
 > `110a2fe` 基线全矩阵 verify `39133258129` 已 completed/success 全绿；
-> 联合 verify run `39142103135`（head=`0c18cf9`）已触发、最终结果待确认——用户允许在等待结果前合并，该 run 不等同已通过；
-> 已核实 `0c18cf9` 与 main 的 src/tests/scripts/.github/根构建与包版本配置完全无差异，该 run 结论可直接归属当前 main 运行时代码。
+> 联合 verify run `39142103135`（head=`0c18cf9`）**已作废**——`tests-windows-11-vs2026-arm` 腿测试步运行 ~85min（历史约 45min）后被取消，run 未得全绿结论；alpha.104/105 代码的 CI 全矩阵证据缺席，待全功能面收口后重 dispatch verify 覆盖；
+> 已核实 `0c18cf9` 与 main 的 src/tests/scripts/.github/根构建与包版本配置完全无差异。
 > UPDATE 系统包扩展 B0–B5 全链完成并入 `main`（PR #107 设计、#108 发射+`pkg` 身份、#109 引导件 `pkg-apply` 双实现、#106/#110 macOS quarantine 能力探测、#111 客户端 `SyspkgReplay`、#112 syspkg-verify 三容器验收+DropProbe 修复、#113/#115 冻件重冻、#114 收尾：syspkg-verify 经 `workflow_call` 收编 verify 发布门、usage 文档、`pkg` 字段 v1 兼容断言）。
 > 测试确定性修复 #116（奇偶腿宿主 `DEBIAN_FRONTEND` env 泄漏+uidedge rec 竞态）与 #117（NSIS 卸载分离删除断言改 WaitFor）已并入。
 > 发布门实证：verify 于 `9d51ba3` 基线**三连全绿**（run `39062962978`、`39066991823`、`39070871573`——六宿主测试矩阵 + syspkg 三容器腿 + produce/consume/manual/universal 全链）。
 > 引导件冻件口径：现嵌 8 件为 produce-bootstrap run `39030858362`@`e0174dc` 产出（PR #129 入库，含 #128 PAL 化——env 件校验与 `UnixFileTypes` 改走 `libSystem.Native`、gate 竞态修复），SHA-256 与字节数留账于该 squash 正文。
 > 外部工具挂死加固：PR #130 给 `ToolRunner`/`ToolCache` 全链有界等待+spawn 追踪（`BUNDLER_TOOL_TIMEOUT_SECONDS`/`BUNDLER_TOOL_TRACE`），挂死收敛为带现场的有界失败；macOS 偶发 `hdiutil` 簿记滞后断言面由 PR #131 改有界轮询；PR #132 加 CI 进程快照采样（随后过滤瘦身至测试/工具面白名单）——加固后 intel 腿 suite=all 八连压测零复现，OS 层凶手未捕获。
 > 图形提权入口链等剩余边界仍挂 `docs/project/special-acceptance.md`。
-> 当前包版本：`0.1.0-alpha.105`（根 `Directory.Build.props` 的 `BundlerPackageVersion`，已随 #140 入 `main`）
-> 当前阶段：**全部 11 个格式、CLI 与 UPDATE 均已冻结，无进行中的格式阶段；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词（别称仅输入归一，产物名用各生态词），契约与全产物名目录见 `docs/design/targets.md`**
+> 当前包版本：`0.1.0-alpha.106`（根 `Directory.Build.props` 的 `BundlerPackageVersion`，工作区分支 `rework/core-abstractions` 上，尚未提交推送）
+> 当前阶段：**全功能面体检收口进行中**——七域并行审查（Bugs/Security/Flags/Notes 四级全清零）产出约 95 项 findings，按用户授权分 6 个连贯 PR 处置：PR-1 Core+Abstractions（进行中）、PR-2 入口层、PR-3 Linux、PR-4 Windows、PR-5 macOS、PR-6 UPDATE（含 produce-bootstrap 重冻）；
+> 全部 11 个格式、CLI 与 UPDATE 均已冻结（冻结指功能面不扩展，质量收口仍在进行）；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词，契约与全产物名目录见 `docs/design/targets.md`
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/design/formats/` 单文档只留设计决策、语义契约与能力状态
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
@@ -81,7 +82,14 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 
 ## 3. 最近验证
 
-当前基线：`main@09c9646`（`0.1.0-alpha.105`）。
+当前基线：`main@09c9646`（`0.1.0-alpha.105`）+ PR #142 `rework/core-abstractions`（`0.1.0-alpha.106`，已推送、Local Review 进行中——头部 sha 以 git/PR 为准，快照不钉死）。
+PR-1（Core+Abstractions 收口）本机验证（Windows x64，.NET SDK 10.0.302）：Release build rc 0（0 警告 0 错误）；Unit 全量 1434 总/0 失败/37 跳过；Api 全量 84 总/0 失败/14 跳过；Integration `ToolRunnerIntegrationTests` 3/3。
+PR-1 已落改动面：`ToolRunner.RunSync` 成功腿有界排空（对齐 TryRunAsync，消最后一条无界等待）；`UpdatePayloadStaging` 改走 `FileTree.CopyTree`+自复制防护+保留名（`bundler-update.json`/引导件）撞名显式拒绝；
+`UpdateBootstrapper` 注入改 `InjectOrThrow` 直抛、target 词显式校验、提取根属主/0700/24h 清扫（含 squatting 降级根）；`UpdateKeyMaterial` P-256 坐标+在场私钥 d 校验、POSIX 0600；`.desktop` 全落文值 CR/LF 净化；
+Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline` producedPaths 归一化+缺失/碰撞分类异常+`.bundler-work` stale 清扫；
+`ArtifactNaming` APK `-r<release>` 生态词修正+planner 默认 release 单源；`ToolCache` 清单定长读+段名拒 `*`/`?`/`:`（glob/ADS）；
+新增 `IO/PathText` 统一宿主路径比较口径（Windows/macOS 不敏感、Linux 敏感，与 validator 同约定），收编 staging/pipeline/PayloadSource/planner/ToolCache/ZipToolCache 六处；
+`BundleConfigurationLoader`（net10-only JSON）由 Core 挪至 `tests/Shared`（Core 留 netstandard-safe `BundleConfigurationPaths`）。
 最近非文档变更为 PR #139/#140 squash 合入：`a3ea637`/#139 UPDATE 提权停链修复（已启动提权腿即终局、取消/拒绝/鉴权失败一律停不重放、问密码取消 126 不触 sudo）；
 `09c9646`/#140 DMG 挂载可观测增强（`hdiutil attach` 成功后落挂载事实 Information 日志（挂载点+镜像路径），attach 失败不落）。
 两 PR 合并前均过本地评审（Local Review clean）；
@@ -130,14 +138,19 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 
 ## 6. 默认下一步
 
-全部格式、CLI 与 UPDATE 均已冻结并入 `main`，功能面无进行中阶段。
-**测试体系重写已收口**（规格 `docs/design/testing.md`；Unit/Api/Integration/Package 四层 + `tests/Manual` 验收脚本层全量实现，CI 拓扑为 test/verify/produce-bootstrap/syspkg-verify 四 workflow，verify 发布门已全绿；PR 链 #90–#97 与静态兼容 PR #98 均已合入 `main`）。
-剩余工作：
+全部格式、CLI 与 UPDATE 均已冻结并入 `main`。
+**当前主线：全功能面体检收口（用户已授权"开始"）**——七域只读审查产出约 95 项 findings（Bugs ~22 / Security ~12 / Flags ~18 / Notes ~30 / 改进 ~25），按因果链分 6 个连贯 PR，各走 Local Review 闭环（`devin-reviewer` 子会话审 diff 自发评论、四类清零才合）：
 
-- **联合 verify run `39142103135`（head=`0c18cf9`）结论跟踪**：已触发、最终结果待确认；
-  若失败调查修复；
-  #139/#140 已按用户授权不等 CI 合入 `main@09c9646`，本次合并不以等待 CI 结果为前提；
-- `110a2fe` 基线全矩阵 verify `39133258129` 已全绿（旧基线证据，不覆盖新代码）；
+1. **PR-1 Core+Abstractions**（`rework/core-abstractions`，进行中）：有界等待/FileTree 复用/validator 剥 null/桌面净化/命名与注入收口/秘密面/PathText 统一路径比较；收口证据＝本机 Release build+Unit+Api 全绿 + Local Review clean 后提交。
+2. **PR-2 入口层**：CLI 混合 target 格式串台、POSIX `\` 路径统一 `/`、CLI ParseValue 类型感知+JSON→rc2、MSBuild 异常聚合、推断链下沉 Core、缺省格式表单源、签名秘密改 `*EnvironmentVariable` 间址、旋钮覆盖机械化测试。
+3. **PR-3 Linux**：binLink 校验四后端收敛、PayloadSource 链接策略（目录链 Reject/WarnSkip、文件链策略化）、Archive 父前缀拒绝、RPM 2GiB 长标签、GNUPGHOME 出树、四浅门面接 Validate 缝、`ClaimDirectory` 收敛、apk 签名成员名对齐 abuild、i686-AppImage 矩阵收窄。
+4. **PR-4 Windows**：`Uninstall.exe` INSTDIR 归属校验（插件源码重建+provenance）、外部签名器走 ToolRunner、PFX `EphemeralKeySet`、`RmGetList` 先于 `RmShutdown`、21 语言恢复文案、LegacyMsiAutoDetect 收紧。
+5. **PR-5 macOS**：`MacSigningSupport` 共享化（凭据/keychain/参数生成单源）、codesign `--keychain` 替代搜索列表变异、productsign `--timestamp`、detach 统一、撞名簿、`.rtfd` 移除声明、`resize -limits` 字段序（macOS 实机复核登记）。
+6. **PR-6 UPDATE**：feed fetch/`TryRead`/argv `JoinArgv`/feed File 词法/pkg-apply 有界/ProcessAlive+MacAppGate fail-closed、**retained 包 root 侧重验签**（动 `Bundler.Updater.Bootstrap` 源码→必须 dispatch `produce-bootstrap` 重冻 8 件入库评审 + `syspkg-verify` 复验）。
+
+收口后 dispatch 一次 verify 全矩阵（`39142103135` 已作废，覆盖 alpha.106+ 的 CI 证据）。
+其余既有剩余工作：
+
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
 - UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 全链已实现：发射（`pkg` 身份字段、`CoveredFormats` 扩收、三后端旁车+引导件注入）、`pkg-apply` 动词 AOT/POSIX 双实现同协议、客户端 replay 编排（`SyspkgReplay`：预检三件套/留存/三级提权退化链/回滚重放）、debian/fedora/alpine 容器验收腿（经 `workflow_call` 收编 verify 发布门 `syspkg` job）——契约见 `docs/design/update.md` §2，图形提权真实桌面观感等剩余边界登记 `docs/project/special-acceptance.md`；
 - 发布链资产实际推送（NuGet/Release 为另一步，仍需用户明确许可）；

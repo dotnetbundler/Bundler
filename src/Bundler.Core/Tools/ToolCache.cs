@@ -48,7 +48,7 @@ public static class ToolCache
     public static string ComputeContentId(IEnumerable<ToolFileSpec> files)
     {
         var builder = new StringBuilder();
-        foreach (var file in files.OrderBy(f => f.RelativePath, PathComparer))
+        foreach (var file in files.OrderBy(f => f.RelativePath, PathText.Comparer))
         {
             builder.Append(file.RelativePath).Append(':').Append(file.Sha256.ToLowerInvariant()).Append('\n');
         }
@@ -85,14 +85,14 @@ public static class ToolCache
                     NormalizeRelativePath(toolDirectory, file.RelativePath, nameof(set.Files)),
                     file.Length,
                     file.Sha256)))
-            .OrderBy(pair => pair.Expected.RelativePath, PathComparer)
+            .OrderBy(pair => pair.Expected.RelativePath, PathText.Comparer)
             .ToArray();
         if (plan.Any(p => p.Expected.RelativePath.Equals(ManifestFileName, StringComparison.OrdinalIgnoreCase)))
         {
             throw new ArgumentException("Tool file set must not contain the reserved manifest path.", nameof(set.Files));
         }
         var expectedFiles = plan.Select(p => p.Expected).ToArray();
-        if (expectedFiles.Select(e => e.RelativePath).Distinct(PathComparer).Count() != expectedFiles.Length)
+        if (expectedFiles.Select(e => e.RelativePath).Distinct(PathText.Comparer).Count() != expectedFiles.Length)
         {
             throw new ArgumentException("Tool file set contains duplicate relative paths.", nameof(set.Files));
         }
@@ -238,9 +238,9 @@ public static class ToolCache
             var actualFiles = EnumerateSafeFiles(toolDirectory)
                 .Select(path => RelativePath(toolDirectory, path))
                 .Where(path => !path.Equals(ManifestFileName, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(path => path, PathComparer)
+                .OrderBy(path => path, PathText.Comparer)
                 .ToArray();
-            if (!actualFiles.SequenceEqual(expectedFiles.Select(entry => entry.RelativePath), PathComparer))
+            if (!actualFiles.SequenceEqual(expectedFiles.Select(entry => entry.RelativePath), PathText.Comparer))
             {
                 return false;
             }
@@ -332,21 +332,56 @@ public static class ToolCache
         }
         using var reader = new BinaryReader(File.OpenRead(path));
         if (reader.ReadInt32() != 1 ||
-            !reader.ReadString().Equals(contentId, StringComparison.OrdinalIgnoreCase) ||
+            !ReadBoundedString(reader, 4096).Equals(contentId, StringComparison.OrdinalIgnoreCase) ||
             reader.ReadInt32() != expected.Count)
         {
             return false;
         }
         foreach (var entry in expected)
         {
-            if (!reader.ReadString().Equals(entry.RelativePath, PathStringComparison) ||
+            if (!ReadBoundedString(reader, 4096).Equals(entry.RelativePath, PathText.Comparison) ||
                 reader.ReadInt64() != entry.Length ||
-                !reader.ReadString().Equals(entry.Sha256, StringComparison.OrdinalIgnoreCase))
+                !ReadBoundedString(reader, 4096).Equals(entry.Sha256, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
         }
         return reader.BaseStream.Position == reader.BaseStream.Length;
+    }
+
+    // 定长前缀字符串的保守读法：ReadString 看到伪造的超大长度前缀会先按声明值
+    // 分配缓冲区——畸形 manifest 变成内存放大攻击面。先把声明长度与上限/
+    // 剩余流比对，超限直接丢给调用方按"缓存无效"处理。
+    private static string ReadBoundedString(BinaryReader reader, int maxBytes)
+    {
+        var length = Read7BitEncodedIntCompat(reader);
+        if (length < 0 || length > maxBytes ||
+            length > reader.BaseStream.Length - reader.BaseStream.Position)
+        {
+            throw new InvalidDataException("Tool cache manifest is malformed.");
+        }
+        var bytes = reader.ReadBytes(length);
+        if (bytes.Length != length)
+        {
+            throw new InvalidDataException("Tool cache manifest is truncated.");
+        }
+        return Encoding.UTF8.GetString(bytes);
+    }
+
+    // BinaryReader.Read7BitEncodedInt 在 netstandard2.0 缺席——按公开编码格式自实现。
+    private static int Read7BitEncodedIntCompat(BinaryReader reader)
+    {
+        var result = 0;
+        for (var shift = 0; shift < 35; shift += 7)
+        {
+            var b = reader.ReadByte();
+            result |= (b & 0x7F) << shift;
+            if ((b & 0x80) == 0)
+            {
+                return result;
+            }
+        }
+        throw new InvalidDataException("Tool cache manifest is malformed.");
     }
 
     private static void DeleteWithRetry(Action delete)
@@ -418,7 +453,7 @@ public static class ToolCache
         var fullPath = Path.GetFullPath(Path.Combine(toolDirectory, relativePath));
         var prefix = toolDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
             Path.DirectorySeparatorChar;
-        if (!fullPath.StartsWith(prefix, PathStringComparison))
+        if (!fullPath.StartsWith(prefix, PathText.Comparison))
         {
             throw new ArgumentException("Tool cache paths must stay inside the cache entry directory.", paramName);
         }
@@ -430,7 +465,7 @@ public static class ToolCache
         var prefix = Path.GetFullPath(root)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
         var fullPath = Path.GetFullPath(path);
-        if (!fullPath.StartsWith(prefix, PathStringComparison))
+        if (!fullPath.StartsWith(prefix, PathText.Comparison))
         {
             throw new ArgumentException("Path must stay inside its root.", nameof(path));
         }
@@ -447,7 +482,10 @@ public static class ToolCache
 
     internal static void ValidateSegment(string value, string paramName)
     {
+        // GetInvalidFileNameChars 各宿主口径不同（POSIX 上 '*'/'?'/':' 是合法文件名）——
+        // 这些字符同时是目录通配符/Windows ADS 分隔符，段名一律拒，不分宿主。
         if (string.IsNullOrWhiteSpace(value) || value.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            value.IndexOfAny(new[] { '*', '?', ':' }) >= 0 ||
             value is "." or "..")
         {
             throw new ArgumentException("Tool cache segments must be valid file names.", paramName);
@@ -455,10 +493,4 @@ public static class ToolCache
     }
 
     internal sealed record ManifestEntry(string RelativePath, long Length, string Sha256);
-
-    internal static StringComparer PathComparer =>
-        Path.DirectorySeparatorChar == '\\' ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-
-    private static StringComparison PathStringComparison =>
-        Path.DirectorySeparatorChar == '\\' ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 }

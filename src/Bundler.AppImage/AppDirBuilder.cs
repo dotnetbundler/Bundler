@@ -82,17 +82,24 @@ internal static class AppDirBuilder
         var payloadRoot = Path.Combine(appDir, installRoot.Replace('/', Path.DirectorySeparatorChar));
         // 已落载荷的宿主路径登记册：Resources 撞名一律显式拒绝，不静默覆盖。
         var claimed = new HashSet<string>(StringComparer.Ordinal);
+        var update = bundle.Update;
+        if (update is not null)
+        {
+            // 更新件是保留名：先登记碰撞簿再落载荷，用户资源撞名走标准冲突错误
+            //（与 deb/rpm/apk/macOS/更新 staging 同一口径）。
+            claimed.Add(Path.GetFullPath(
+                Path.Combine(payloadRoot, UpdateIdentitySidecar.FileName)));
+            claimed.Add(Path.GetFullPath(
+                Path.Combine(payloadRoot,
+                    UpdateBootstrapper.FileNameFor(item.Target.Target))));
+        }
         CopyTree(input, payloadRoot, logger, claimed);
-        if (bundle.Update is { } update)
+        if (update is not null)
         {
             UpdateIdentitySidecar.WriteIfEnabled(
                 payloadRoot, update, PackageFormat.AppImage, item.Target.Target);
-            claimed.Add(Path.GetFullPath(
-                Path.Combine(payloadRoot, UpdateIdentitySidecar.FileName)));
-            if (UpdateBootstrapper.Inject(payloadRoot, update, item.Target.Target) is { } injected)
-            {
-                claimed.Add(Path.GetFullPath(Path.Combine(payloadRoot, injected)));
-            }
+            UpdateBootstrapper.InjectOrThrow(
+                payloadRoot, update, item.Target.Target);
         }
         var mainHostPath = Path.Combine(
             payloadRoot, mainExecutable.Replace('/', Path.DirectorySeparatorChar));

@@ -73,6 +73,142 @@ public sealed class UpdateKeyMaterialTests : TempBase
         var publicOnly = UpdateKeyMaterial.FromPublicPoint(UpdateKeyMaterial.Generate().PublicPointBase64());
         Assert.Throws<InvalidOperationException>(() => publicOnly.ToPrivateParameters());
     }
+
+    [Fact]
+    public void Load_NullCoordinates_Throws_NotNre()
+    {
+        // JSON 显式 null 字段曾 NRE——必须按"非法密钥文件"分类。
+        var path = TempPath($"key-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, "{\"kty\":\"ec-p256\",\"x\":null,\"y\":null}");
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => UpdateKeyMaterial.Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Load_WrongLengthCoordinates_Throws()
+    {
+        // base64 合法但坐标非 32 字节——不是 P-256 公钥。
+        var path = TempPath($"key-{Guid.NewGuid():N}.json");
+        var short64 = Convert.ToBase64String(new byte[16]);
+        File.WriteAllText(path, $"{{\"kty\":\"ec-p256\",\"x\":\"{short64}\",\"y\":\"{short64}\"}}");
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => UpdateKeyMaterial.Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Load_BadBase64_Throws()
+    {
+        var path = TempPath($"key-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, "{\"kty\":\"ec-p256\",\"x\":\"!!!\",\"y\":\"!!!\"}");
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => UpdateKeyMaterial.Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Load_BadPrivateScalar_Throws()
+    {
+        // d 在场即校验：坏 base64/非 32 字节标量不能漏到签名时炸 FormatException；
+        // 缺失 d 仍是合法"只含公钥"件形态。
+        var coord = Convert.ToBase64String(new byte[32]);
+        var path = TempPath($"key-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path,
+            $"{{\"kty\":\"ec-p256\",\"x\":\"{coord}\",\"y\":\"{coord}\",\"d\":\"!!!\"}}");
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => UpdateKeyMaterial.Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+
+        var shortPath = TempPath($"key-{Guid.NewGuid():N}.json");
+        File.WriteAllText(shortPath,
+            $"{{\"kty\":\"ec-p256\",\"x\":\"{coord}\",\"y\":\"{coord}\"," +
+            $"\"d\":\"{Convert.ToBase64String(new byte[16])}\"}}");
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => UpdateKeyMaterial.Load(shortPath));
+        }
+        finally
+        {
+            File.Delete(shortPath);
+        }
+
+        var publicPath = TempPath($"key-{Guid.NewGuid():N}.json");
+        File.WriteAllText(publicPath,
+            $"{{\"kty\":\"ec-p256\",\"x\":\"{coord}\",\"y\":\"{coord}\"}}");
+        try
+        {
+            var loaded = UpdateKeyMaterial.Load(publicPath);
+            Assert.Null(loaded.D);
+        }
+        finally
+        {
+            File.Delete(publicPath);
+        }
+    }
+
+    [Theory]
+    // P-256 群阶 n = FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551。
+    // 合法标量须 0 < d < n——长度合格但越界的标量必须在 Load 被拒。
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")] // d = 0
+    [InlineData("/////wAAAAD//////////7zm+q2nF56E87nKwvxjJVE=")] // d = n
+    [InlineData("/////wAAAAD//////////7zm+q2nF56E87nKwvxjJVI=")] // d = n+1
+    [InlineData("//////////////////////////////////////////8=")] // d = 2^256-1
+    public void Load_OutOfRangePrivateScalar_Throws(string scalarBase64)
+    {
+        var coord = Convert.ToBase64String(new byte[32]);
+        var path = TempPath($"key-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path,
+            $"{{\"kty\":\"ec-p256\",\"x\":\"{coord}\",\"y\":\"{coord}\",\"d\":\"{scalarBase64}\"}}");
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => UpdateKeyMaterial.Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Load_MaxValidPrivateScalar_Accepted()
+    {
+        // 区间上界下沿 d = n-1 是合法标量——边界内侧不得误拒。
+        var coord = Convert.ToBase64String(new byte[32]);
+        var path = TempPath($"key-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path,
+            $"{{\"kty\":\"ec-p256\",\"x\":\"{coord}\",\"y\":\"{coord}\"," +
+            "\"d\":\"/////wAAAAD//////////7zm+q2nF56E87nKwvxjJVA=\"}"); // d = n-1
+        try
+        {
+            var loaded = UpdateKeyMaterial.Load(path);
+            Assert.NotNull(loaded.D);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }
 
 public sealed class UpdateFeedModelTests
@@ -145,6 +281,19 @@ public sealed class UpdateInstallIdentityTests : TempBase
     public void TryRead_Missing_ReturnsNull()
     {
         var dir = Temp("bundler-id");
+        Assert.Null(UpdateInstallIdentity.TryRead(dir.FullName));
+    }
+
+    [Fact]
+    public void TryRead_IoFailure_ReturnsNull()
+    {
+        // 旁车存在但读不到（排他锁/权限/竞争删除）与"解析失败"同义返回 null——
+        // 探测语义不该把原始 IO 异常漏给调用方。
+        var dir = Temp("bundler-id");
+        var path = Path.Combine(dir.FullName, UpdateInstallIdentity.FileName);
+        File.WriteAllText(path, "{}");
+        using var exclusive = new FileStream(
+            path, FileMode.Open, FileAccess.Read, FileShare.None);
         Assert.Null(UpdateInstallIdentity.TryRead(dir.FullName));
     }
 
@@ -389,10 +538,38 @@ public sealed class UpdateBootstrapperTests : TempBase
         File.WriteAllText(Path.Combine(perTarget, "bundler-updater"), "binary");
 
         var update = new UpdateBundleConfiguration { BootstrapperDirectory = dir.FullName };
-        var name = UpdateBootstrapper.Inject(targetDir.FullName, update, "linux-x86_64");
+        var name = UpdateBootstrapper.InjectOrThrow(targetDir.FullName, update, "linux-x86_64");
 
         Assert.Equal("bundler-updater", name);
         Assert.True(File.Exists(Path.Combine(targetDir.FullName, "bundler-updater")));
+    }
+
+    [Fact]
+    public void InjectOrThrow_ThrowsWhenUnresolvable()
+    {
+        var dir = Temp("bundler-boot");
+        var targetDir = Temp("bundler-payload");
+        var update = new UpdateBundleConfiguration { BootstrapperDirectory = dir.FullName };
+
+        // 缺件不再容忍 null——死更新链必须带诊断抛出。
+        var error = Assert.Throws<InvalidOperationException>(
+            () => UpdateBootstrapper.InjectOrThrow(targetDir.FullName, update, "linux-x86_64"));
+        Assert.Contains("bundler-updater", error.Message);
+    }
+
+    [Fact]
+    public void TryResolve_RejectsNonCanonicalTarget()
+    {
+        var dir = Temp("bundler-boot");
+        var update = new UpdateBundleConfiguration { BootstrapperDirectory = dir.FullName };
+
+        // target 直拼目录段——分隔符/上跳会被当成工具目录路径的一部分。
+        Assert.Throws<ArgumentException>(
+            () => UpdateBootstrapper.TryResolve(update, "../escape", out _));
+        Assert.Throws<ArgumentException>(
+            () => UpdateBootstrapper.TryResolve(update, "linux/../x", out _));
+        Assert.Throws<ArgumentException>(
+            () => UpdateBootstrapper.TryResolve(update, "", out _));
     }
 }
 
@@ -581,5 +758,90 @@ public sealed class UpdatePayloadStagingTests : TempBase
 
         Assert.Equal(staged.FullName, result.InputDirectory);
         Assert.NotNull(UpdateInstallIdentity.TryRead(staged.FullName));
+    }
+
+    [Fact]
+    public void EnsureStaged_ReservedSidecarName_Rejected()
+    {
+        var work = Temp("bundler-work");
+        var input = Temp("bundler-input");
+        // 用户载荷自带保留名：显式拒绝，不静默覆盖身份旁车。
+        File.WriteAllText(Path.Combine(input.FullName, UpdateIdentitySidecar.FileName), "{}");
+        var key = UpdateKeyMaterial.Generate();
+        var keyPath = Path.Combine(work.FullName, "key.json");
+        key.Save(keyPath);
+
+        var item = new BundlePlanItem(
+            BundleTarget.Parse("linux-x86_64"), PackageFormat.Deb,
+            input.FullName, "app", "out", false);
+        var context = new BundleBuildContext(
+            new BundleConfiguration
+            {
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://x", SigningKeyFile = keyPath,
+                }
+            },
+            item, work.FullName, NullBundleLogger.Instance);
+
+        var error = Assert.Throws<InvalidOperationException>(
+            () => UpdatePayloadStaging.EnsureStaged(context, item));
+        Assert.Contains(UpdateIdentitySidecar.FileName, error.Message);
+    }
+
+    [Fact]
+    public void EnsureStaged_ReservedBootstrapperName_Rejected()
+    {
+        var work = Temp("bundler-work");
+        var input = Temp("bundler-input");
+        File.WriteAllText(Path.Combine(input.FullName, "bundler-updater"), "squat");
+        var key = UpdateKeyMaterial.Generate();
+        var keyPath = Path.Combine(work.FullName, "key.json");
+        key.Save(keyPath);
+
+        var item = new BundlePlanItem(
+            BundleTarget.Parse("linux-x86_64"), PackageFormat.Deb,
+            input.FullName, "app", "out", false);
+        var context = new BundleBuildContext(
+            new BundleConfiguration
+            {
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://x", SigningKeyFile = keyPath,
+                }
+            },
+            item, work.FullName, NullBundleLogger.Instance);
+
+        var error = Assert.Throws<InvalidOperationException>(
+            () => UpdatePayloadStaging.EnsureStaged(context, item));
+        Assert.Contains("bundler-updater", error.Message);
+    }
+
+    [Fact]
+    public void EnsureStaged_StagingInsideInput_Rejected()
+    {
+        // 工作目录落在输入树内时 staged 会把自己再拷进自己——前置拒掉。
+        var input = Temp("bundler-input");
+        var work = Path.Combine(input.FullName, "work");
+        Directory.CreateDirectory(work);
+        var key = UpdateKeyMaterial.Generate();
+        var keyPath = Path.Combine(work, "key.json");
+        key.Save(keyPath);
+
+        var item = new BundlePlanItem(
+            BundleTarget.Parse("linux-x86_64"), PackageFormat.Deb,
+            input.FullName, "app", "out", false);
+        var context = new BundleBuildContext(
+            new BundleConfiguration
+            {
+                Update = new UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://x", SigningKeyFile = keyPath,
+                }
+            },
+            item, work, NullBundleLogger.Instance);
+
+        Assert.Throws<InvalidOperationException>(
+            () => UpdatePayloadStaging.EnsureStaged(context, item));
     }
 }

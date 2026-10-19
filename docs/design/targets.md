@@ -54,7 +54,8 @@ OS 枚举（`TargetOperatingSystem`）只有 `Windows`/`MacOS`/`Linux` 三个值
 
 ## 产物名全目录
 
-以 `name=myapp`、`ver=1.0.0`、deb/rpm `release=1`、apk `release=r0` 为例。
+以 `name=myapp`、`ver=1.0.0`、deb/rpm `release=1`、apk `release=0` 为例
+（`ArtifactNaming` 调用方统一传裸 release 数字，apk 的 `r` 前缀由命名函数补）。
 每格词形均以官方文档或权威项目实例为依据，不靠约定俗成。
 
 ### nsis（Windows，3 架构词）
@@ -110,7 +111,7 @@ musl：`myapp-1.0.0-x86_64-musl.AppImage`。
 
 ### 侧车与 feed
 
-每件产物挂 `.sha256`；可签格式另挂 `.sig`；nsis/可增量格式挂 `.blockmap`。
+每件文件产物挂 `.sha256`（管线统一发射，`sha256sum -c` 兼容格式；`.app` 等目录产物不挂）；可签格式另挂 `.sig`；nsis/可增量格式挂 `.blockmap`。
 更新 feed `bundler-update-feed.{channel}.json` 恒落输出根目录（两种布局都钉根）。
 
 ## 输出布局

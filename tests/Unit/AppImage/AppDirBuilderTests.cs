@@ -76,6 +76,28 @@ public sealed class AppDirBuilderTests : TempBase
     }
 
     [Fact]
+    public void Build_ReservedUpdateName_RejectedBeforeCopy()
+    {
+        // 用户载荷自带 bundler-update.json 时在 CopyTree 前就撞 claimed 簿——
+        // 显式拒绝，不被注入件静默覆盖。
+        var input = InputWithMain();
+        File.WriteAllText(Path.Combine(input, "bundler-update.json"), "{}");
+        var bundle = Bundle();
+        bundle = new BundleConfiguration
+        {
+            ProductName = bundle.ProductName,
+            Identifier = bundle.Identifier,
+            Version = bundle.Version,
+            Update = new UpdateBundleConfiguration { FeedUrl = "https://x" },
+        };
+
+        var error = Assert.Throws<InvalidOperationException>(() => AppDirBuilder.Build(
+            bundle, Item(input), new AppImageBundleConfiguration(),
+            Path.Combine(Root, "work"), NullBundleLogger.Instance));
+        Assert.Contains("collides", error.Message);
+    }
+
+    [Fact]
     public void Build_MissingMainExecutable_Throws()
     {
         Assert.Throws<FileNotFoundException>(() => AppDirBuilder.Build(

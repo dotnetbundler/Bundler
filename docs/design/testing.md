@@ -56,8 +56,8 @@ tests/
 | `UnixFileTypes` | `libSystem.Native` PAL（`SystemNative_Stat`）的判型正确性——`FileStatus` 由 PAL 对各 ABI 归一化（Mode 槽位定死，无架构偏移表）；FIFO 已有单测腿断言 False，socket 等特殊文件造样本需真环境——归 Integration 宿主腿 |
 | `BundleConfigurationValidator` | 逐条规则：必填四件（productName/identifier/version/outputDirectory）；identifier 反 DNS 正则；version SemVer 形；homepage 仅 http/https；targets 非空；target 可解析；formats 非空+矩阵支持；mainExecutable 空白/越界/存在性（win 默认 `.exe` 后缀）；inputDirectory 存在；outputDirectory 不得落在 inputDirectory 内（含大小写语义差异）；signingFiles 相对路径+存在；icons 存在；resources source/destination 必填+禁越界（`..`/rooted）；licenseFile 扩展名白名单（.txt/.rtf）；fileAssociations 扩展名正则+去重；urlProtocols scheme 正则+去重；update 节：feedUrl 必填/channel 文件名安全/signingKeyFile 必填+存在/publicKey P-256 65B+0x04/公钥与私钥派生一致/bootstrapperDirectory 存在；输出重名检测（含 dmg/pkg 隐式注入 app 占位） |
 | `BundlePlanner.Create` | 校验失败抛 `BundleValidationException` 携带 issues；dmg/pkg 缺 app 时注入 intermediate app 项；优先级排序 app<dmg<pkg；OutputLayout.Flat/ByFormat 目录扇出；产物名碰撞抛；MainExecutable 默认推断 |
-| `BundlePipeline` | 假后端：os+format+libc 精确/回退解析；同 libc 重复注册拒；无后端 `NotSupportedException`；后端返回 null/不存在路径/路径碰撞的契约违例；`.bundler-work` 创建+清空+脚手架逐层回收（非空即停不越界）；取消传播；日志序列 |
-| `BundleConfigurationLoader` | bundler.json 反序列化（枚举字符串、缺失节、畸形 JSON 报错路径） |
+| `BundlePipeline` | 假后端：os+format+libc 精确/回退解析；同 libc 重复注册拒；无后端 `NotSupportedException`；后端返回 null/null 元素/不存在路径/路径碰撞（归一化后）的契约违例；`.bundler-work` 创建+清空+脚手架逐层回收（非空即停不越界）+24h 陈旧工作目录清扫（近时戳不动）；取消传播；日志序列 |
+| `BundleConfigurationLoader`（tests/Shared，测试侧装载器） | bundler.json 反序列化（枚举字符串、缺失节、畸形 JSON 报错路径） |
 | `BundleConfigurationPaths` | 相对路径按基目录归一化 |
 | `FileTree.CopyTree` | Reject/WarnSkip/Traverse 三策略；Traverse 必须 maxDepth（断言）；符号链接环防；非常规文件跳过；排序稳定；resolveFileDestination 碰撞回调；overwrite 语义；reparse 点拒绝 |
 | `Hashes` | sha256 byte[]/stream/file 三源+sha1 byte[]/stream+md5 byte[]/file（按实际重载面）；lower/upper hex 逐字节正确 |

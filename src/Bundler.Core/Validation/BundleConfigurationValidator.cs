@@ -53,21 +53,34 @@ public static class BundleConfigurationValidator
             issues.Add(new("homepage", "Must be an absolute HTTP or HTTPS URL."));
         }
 
-        if (configuration.Targets.Count == 0)
+        var targets = configuration.Targets ?? [];
+        if (targets.Count == 0)
         {
             issues.Add(new("targets", "At least one desktop target is required."));
         }
 
-        for (var index = 0; index < configuration.Targets.Count; index++)
+        for (var index = 0; index < targets.Count; index++)
         {
-            ValidateTarget(configuration, configuration.Targets[index], index, checkFileSystem, issues);
+            var targetConfiguration = targets[index];
+            if (targetConfiguration is null)
+            {
+                issues.Add(new($"targets[{index}]", "Null elements are not allowed."));
+                continue;
+            }
+            ValidateTarget(configuration, targetConfiguration, index, checkFileSystem, issues);
         }
 
-        ValidateIcons(configuration.Icons, checkFileSystem, issues);
+        ValidateIcons(configuration.Icons ?? [], checkFileSystem, issues);
         ValidateOptionalFile(configuration.LicenseFile, "licenseFile", [".txt", ".rtf"], checkFileSystem, issues);
-        for (var index = 0; index < configuration.Resources.Count; index++)
+        var resources = configuration.Resources ?? [];
+        for (var index = 0; index < resources.Count; index++)
         {
-            var resource = configuration.Resources[index];
+            var resource = resources[index];
+            if (resource is null)
+            {
+                issues.Add(new($"resources[{index}]", "Null elements are not allowed."));
+                continue;
+            }
             Required(resource.Source, $"resources[{index}].source", issues);
             Required(resource.Destination, $"resources[{index}].targetPath", issues);
             if (!string.IsNullOrWhiteSpace(resource.Destination) &&
@@ -84,8 +97,8 @@ public static class BundleConfigurationValidator
                 issues.Add(new($"resources[{index}].source", $"Path does not exist: {resource.Source}"));
             }
         }
-        ValidateFileAssociations(configuration.FileAssociations, issues);
-        ValidateUrlProtocols(configuration.UrlProtocols, issues);
+        ValidateFileAssociations(configuration.FileAssociations ?? [], issues);
+        ValidateUrlProtocols(configuration.UrlProtocols ?? [], issues);
         ValidateUpdateSection(configuration.Update, checkFileSystem, issues);
         ValidateDuplicateOutputs(configuration, issues);
         return issues;
@@ -195,12 +208,13 @@ public static class BundleConfigurationValidator
             return;
         }
 
-        if (targetConfiguration.Formats.Count == 0)
+        var formats = targetConfiguration.Formats ?? [];
+        if (formats.Count == 0)
         {
             issues.Add(new($"{path}.formats", "At least one package format is required."));
         }
 
-        foreach (var format in targetConfiguration.Formats.Distinct())
+        foreach (var format in formats.Distinct())
         {
             if (!TargetMatrix.Supports(target!, format))
             {
@@ -209,8 +223,7 @@ public static class BundleConfigurationValidator
         }
 
         var configuredExecutable = targetConfiguration.MainExecutable;
-        if (configuredExecutable is { } && configuredExecutable.Trim().Length == 0 &&
-            configuredExecutable.Length > 0)
+        if (configuredExecutable is { } && configuredExecutable.Trim().Length == 0)
         {
             issues.Add(new($"{path}.mainExecutable",
                 "Must not be blank; omit the knob to use the default executable."));
@@ -241,9 +254,10 @@ public static class BundleConfigurationValidator
             }
         }
 
-        for (var signingIndex = 0; signingIndex < targetConfiguration.SigningFiles.Count; signingIndex++)
+        var signingFiles = targetConfiguration.SigningFiles ?? [];
+        for (var signingIndex = 0; signingIndex < signingFiles.Count; signingIndex++)
         {
-            var signingFile = targetConfiguration.SigningFiles[signingIndex];
+            var signingFile = signingFiles[signingIndex];
             if (string.IsNullOrWhiteSpace(signingFile) || Path.IsPathRooted(signingFile) ||
                 signingFile.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                     .Contains("..", StringComparer.Ordinal))
@@ -263,18 +277,20 @@ public static class BundleConfigurationValidator
             return;
         }
 
-        var executableName = targetConfiguration.MainExecutable ??
-            (target!.OperatingSystem == TargetOperatingSystem.Windows
+        var executableName = targetConfiguration.MainExecutable is { } configured &&
+            configured.Trim().Length > 0
+            ? configured
+            : target!.OperatingSystem == TargetOperatingSystem.Windows
                 ? $"{configuration.ProductName}.exe"
-                : configuration.ProductName);
+                : configuration.ProductName;
         var executablePath = Path.Combine(targetConfiguration.InputDirectory, executableName);
         if (!File.Exists(executablePath))
         {
             issues.Add(new($"{path}.mainExecutable", $"Main executable does not exist: {executablePath}"));
         }
-        for (var signingIndex = 0; signingIndex < targetConfiguration.SigningFiles.Count; signingIndex++)
+        for (var signingIndex = 0; signingIndex < signingFiles.Count; signingIndex++)
         {
-            var signingFile = targetConfiguration.SigningFiles[signingIndex];
+            var signingFile = signingFiles[signingIndex];
             if (!string.IsNullOrWhiteSpace(signingFile) && !Path.IsPathRooted(signingFile))
             {
                 var signingPath = Path.Combine(targetConfiguration.InputDirectory, signingFile);
@@ -291,14 +307,20 @@ public static class BundleConfigurationValidator
         List<ValidationIssue> issues)
     {
         var outputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (var targetIndex = 0; targetIndex < configuration.Targets.Count; targetIndex++)
+        var targets = configuration.Targets ?? [];
+        for (var targetIndex = 0; targetIndex < targets.Count; targetIndex++)
         {
-            var target = configuration.Targets[targetIndex];
+            var target = targets[targetIndex];
+            if (target is null)
+            {
+                continue;   // 顶层循环已记 issue——这里只防穿透。
+            }
             // 注入的中间 App 项同样占输出槽：dmg/pkg 未显式带 app 时 planner 会
             // 补一个中间 app——同 target 双格式判定不能漏它。
-            var formats = target.Formats.Concat(
-                target.Formats.Any(format => format is PackageFormat.Dmg or PackageFormat.Pkg) &&
-                !target.Formats.Contains(PackageFormat.App)
+            var requestedFormats = target.Formats ?? [];
+            var formats = requestedFormats.Concat(
+                requestedFormats.Any(format => format is PackageFormat.Dmg or PackageFormat.Pkg) &&
+                !requestedFormats.Contains(PackageFormat.App)
                     ? new[] { PackageFormat.App }
                     : []);
             foreach (var format in formats)
@@ -321,7 +343,11 @@ public static class BundleConfigurationValidator
         {
             // 图标类型因格式而异（nsis .ico / mac .png/.icns/.car 或 Icon.icon 目录集）——
             // 共享层只验存在；文件/目录形态与类型校验在各格式的 Validate 里。
-            if (checkFileSystem && !File.Exists(icons[index]) && !Directory.Exists(icons[index]))
+            if (icons[index] is null)
+            {
+                issues.Add(new($"icons[{index}]", "Null elements are not allowed."));
+            }
+            else if (checkFileSystem && !File.Exists(icons[index]) && !Directory.Exists(icons[index]))
             {
                 issues.Add(new($"icons[{index}]", $"Path does not exist: {icons[index]}"));
             }
@@ -336,14 +362,27 @@ public static class BundleConfigurationValidator
         for (var associationIndex = 0; associationIndex < associations.Count; associationIndex++)
         {
             var association = associations[associationIndex];
-            if (association.Extensions.Count == 0)
+            if (association is null)
+            {
+                issues.Add(new($"fileAssociations[{associationIndex}]", "Null elements are not allowed."));
+                continue;
+            }
+            var extensions = association.Extensions ?? [];
+            if (extensions.Count == 0)
             {
                 issues.Add(new($"fileAssociations[{associationIndex}].extensions", "At least one file extension is required."));
             }
 
-            for (var extensionIndex = 0; extensionIndex < association.Extensions.Count; extensionIndex++)
+            for (var extensionIndex = 0; extensionIndex < extensions.Count; extensionIndex++)
             {
-                var configured = association.Extensions[extensionIndex].Trim();
+                var configured = extensions[extensionIndex]?.Trim();
+                if (configured is null)
+                {
+                    issues.Add(new(
+                        $"fileAssociations[{associationIndex}].extensions[{extensionIndex}]",
+                        "Null elements are not allowed."));
+                    continue;
+                }
                 var extension = configured.StartsWith(".", StringComparison.Ordinal) ? configured.Substring(1) : configured;
                 var path = $"fileAssociations[{associationIndex}].extensions[{extensionIndex}]";
                 if (!FileExtensionPattern.IsMatch(extension))
@@ -366,14 +405,27 @@ public static class BundleConfigurationValidator
         for (var protocolIndex = 0; protocolIndex < protocols.Count; protocolIndex++)
         {
             var protocol = protocols[protocolIndex];
-            if (protocol.Schemes.Count == 0)
+            if (protocol is null)
+            {
+                issues.Add(new($"urlProtocols[{protocolIndex}]", "Null elements are not allowed."));
+                continue;
+            }
+            var schemes = protocol.Schemes ?? [];
+            if (schemes.Count == 0)
             {
                 issues.Add(new($"urlProtocols[{protocolIndex}].schemes", "At least one URL scheme is required."));
             }
 
-            for (var schemeIndex = 0; schemeIndex < protocol.Schemes.Count; schemeIndex++)
+            for (var schemeIndex = 0; schemeIndex < schemes.Count; schemeIndex++)
             {
-                var scheme = protocol.Schemes[schemeIndex].Trim();
+                var scheme = schemes[schemeIndex]?.Trim();
+                if (scheme is null)
+                {
+                    issues.Add(new(
+                        $"urlProtocols[{protocolIndex}].schemes[{schemeIndex}]",
+                        "Null elements are not allowed."));
+                    continue;
+                }
                 var path = $"urlProtocols[{protocolIndex}].schemes[{schemeIndex}]";
                 if (!UrlSchemePattern.IsMatch(scheme))
                 {

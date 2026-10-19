@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using DotNet.Bundler;
@@ -95,7 +94,7 @@ internal static class RpmPackageWriter
             using (var raw = File.Create(payloadPath))
             {
                 var cpioHash = SHA256.Create();
-                using (var gzip = new GZipStream(raw, CompressionLevel.Optimal, leaveOpen: true))
+                using (var gzip = Gzip.WrapWrite(raw))
                 {
                     var digest = new DigestWriteStream(gzip, cpioHash);
                     CpioWriter.Write(digest, payload.Select(ToCpioEntry).ToList());
@@ -132,7 +131,6 @@ internal static class RpmPackageWriter
             var fileName = packageName + "-" + mapped.Version + "-" + mapped.Release +
                 "." + architecture + ".rpm";
             var outputPath = Path.Combine(item.OutputDirectory, fileName);
-            var sidecarPath = outputPath + ".sha256";
             try
             {
                 Directory.CreateDirectory(item.OutputDirectory);
@@ -146,10 +144,7 @@ internal static class RpmPackageWriter
                         payloadStream.CopyTo(stream);
                     }
                 }
-                var hash = Hashes.Sha256HexFile(outputPath);
-                File.WriteAllText(sidecarPath,
-                    hash + "  " + fileName + "\n", new UTF8Encoding(false));
-                logger.Log(BundleLogLevel.Information, $"Wrote {fileName} (sha256 {hash}).");
+                logger.Log(BundleLogLevel.Information, $"Wrote {fileName}.");
                 return new Result
                 {
                     OutputPath = outputPath,
@@ -162,7 +157,7 @@ internal static class RpmPackageWriter
             catch
             {
                 TryDelete(outputPath);
-                TryDelete(sidecarPath);
+                TryDelete(outputPath + ".sha256");
                 throw;
             }
         }
