@@ -34,4 +34,42 @@ public sealed class BundledSha256Tests
         }
         Assert.Equal(Convert.ToHexString(SHA256.HashData(input)).ToLowerInvariant(), hex);
     }
+
+    [Theory]
+    [InlineData(7)]
+    [InlineData(13)]
+    [InlineData(100)]
+    public void Hash_ShortReadStream_MatchesBcl(int chunkSize)
+    {
+        // 网络/管道流按任意短读返回——carry 补满分肢（buffered>0 路径）只在
+        // 非 64 对齐喂件时才执行。1MB 内容按 chunkSize 切片，摘要须逐位一致。
+        var input = Enumerable.Range(0, 1_000_000).Select(i => (byte)(i % 251)).ToArray();
+        using var stream = new ChunkedStream(input, chunkSize);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(input)).ToLowerInvariant(),
+            BundledSha256.Hex(stream));
+    }
+
+    /// <summary>每次 Read 至多返回 <paramref name="chunkSize"/> 字节的包装流。</summary>
+    private sealed class ChunkedStream(byte[] data, int chunkSize) : Stream
+    {
+        private int _pos;
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var n = Math.Min(Math.Min(count, chunkSize), data.Length - _pos);
+            Array.Copy(data, _pos, buffer, offset, n);
+            _pos += n;
+            return n;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => _pos; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
 }
