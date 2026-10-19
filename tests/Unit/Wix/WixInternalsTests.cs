@@ -306,6 +306,52 @@ public sealed class WixInternalsTests : TempBase
             """<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"/>""", dir.FullName));
     }
 
+    // ---- AppendReferencedSourceHashes ----
+
+    [Fact]
+    public void ReferencedSources_PercentLiteralName_Fingerprinted()
+    {
+        // % 不是 WiX 预处理器语法——含 % 的字面文件名必须照常进指纹，
+        // 否则其内容变更不再翻转指纹。
+        var dir = Temp("wix-refsrc");
+        File.WriteAllText(Path.Combine(dir.FullName, "percent%name.txt"), "content");
+        var fragment = Path.Combine(dir.FullName, "frag.wxs");
+        File.WriteAllText(fragment, """
+            <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+              <Fragment><Component><File Source="percent%name.txt"/></Component></Fragment>
+            </Wix>
+            """);
+        var text = new System.Text.StringBuilder();
+        WixBundleBackend.AppendReferencedSourceHashes(text, fragment);
+        var output = text.ToString();
+        Assert.Contains("percent%name.txt", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("MISSING", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReferencedSources_PreprocessorAndMissing_Covered()
+    {
+        var dir = Temp("wix-refsrc2");
+        var fragment = Path.Combine(dir.FullName, "frag.wxs");
+        File.WriteAllText(fragment, """
+            <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+              <Fragment>
+                <Component><File Source="$(var.BuildDir)\dyn.dll"/></Component>
+                <Component><File Source="!(bindpath.binsecrets)\gen.dll"/></Component>
+                <Component><File Source="absent-file.txt"/></Component>
+              </Fragment>
+            </Wix>
+            """);
+        var text = new System.Text.StringBuilder();
+        WixBundleBackend.AppendReferencedSourceHashes(text, fragment);
+        var output = text.ToString();
+        // 编译期展开的引用不进指纹（既定口径）；字面缺失计 MISSING 哨兵。
+        Assert.DoesNotContain("dyn.dll", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("gen.dll", output, StringComparison.Ordinal);
+        Assert.Contains("MISSING", output, StringComparison.Ordinal);
+        Assert.Contains("absent-file.txt", output, StringComparison.Ordinal);
+    }
+
     // ---- WixLocale ----
 
     [Fact]
