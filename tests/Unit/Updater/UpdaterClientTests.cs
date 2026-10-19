@@ -315,6 +315,8 @@ public sealed class UpdaterClientTests : TempBase
         // 归一壳断言：本地腿 File.Copy 的 FileNotFoundException 与 http 腿
         // HttpRequestException 同归 UpdateException——"抓取/IO/HTTP 全归
         // UpdateException"契约的可区分断言（旧实现会漏裸 FileNotFoundException）。
+        // 消息含件名的断言是刻意的：类型归一之外还要钉住"失败的是哪个件"——
+        // 归一消息把 location 全路径带出来，不丢诊断面。
         var directory = CreateTempDirectory();
         try
         {
