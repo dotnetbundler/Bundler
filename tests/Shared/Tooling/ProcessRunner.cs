@@ -90,7 +90,12 @@ internal static class ProcessRunner
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdout.AppendLine(e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
-        process.Start();
+        if (!TestProcessExit.Start(process))
+        {
+            throw new TimeoutException(
+                $"Process spawn did not complete within {TestProcessExit.SpawnTimeoutMilliseconds}ms: " +
+                $"{filePath} {argumentLine ?? string.Join(' ', arguments ?? [])}");
+        }
         try { options.ProcessStarted?.Invoke(process.Id); }
         catch { /* 诊断回调故障不得改变被测进程流程 */ }
         process.BeginOutputReadLine();
@@ -149,7 +154,8 @@ internal static class ProcessRunner
                 }
             }
         }
-        return Process.Start(startInfo)
+        // 分离 spawn：迟到完成产出的子件是正当被测对象，不扑杀。
+        return TestProcessExit.Start(startInfo, killLateSpawned: false)
             ?? throw new InvalidOperationException($"Failed to start {filePath} {argumentLine}");
     }
 

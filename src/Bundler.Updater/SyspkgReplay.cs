@@ -45,7 +45,7 @@ internal static class SyspkgReplay
     /// <summary>
     /// 提权腿拉起缝：置非 null 即不真 spawn——由测试决定返回什么（任意退出码的
     /// 进程道具/抛异常），断言"spawn 抛异常才退化下一腿、已启动腿不重放"语义；
-    /// 生产为 null 走 Process.Start。
+    /// 生产为 null 走 ProcessWait.Start（spawn 本身有界——Unix 全局 spawn 锁死锁面不悬）。
     /// </summary>
     internal static Func<ProcessStartInfo, Process?>? SpawnProbe;
 
@@ -917,7 +917,7 @@ internal static class SyspkgReplay
                 };
                 process = SpawnProbe is { } spawn
                     ? spawn(startInfo)
-                    : Process.Start(startInfo)
+                    : ProcessWait.Start(startInfo)
                         ?? throw new UpdateException($"failed to start '{leg.FileName}'.");
                 if (process is null)
                 {
@@ -1018,7 +1018,7 @@ internal static class SyspkgReplay
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
-            using var process = Process.Start(startInfo)!;
+            using var process = ProcessWait.Start(startInfo)!;
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
             if (!ProcessWait.WaitForExit(process, 60_000))

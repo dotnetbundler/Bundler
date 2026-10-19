@@ -138,11 +138,11 @@ public sealed class SyspkgReplayLaunchIntegrationTests : TempBase
 
     private Process SpawnProp((string File, string Args) prop)
     {
-        var process = Process.Start(new ProcessStartInfo(prop.File, prop.Args)
+        var process = TestProcessExit.Start(new ProcessStartInfo(prop.File, prop.Args)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
-        })!;
+        }) ?? throw new InvalidOperationException($"spawn timed out: {prop.File}");
         _props.Add(process);
         return process;
     }

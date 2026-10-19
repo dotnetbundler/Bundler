@@ -242,7 +242,8 @@ public sealed class AppImageApiTests : TempBase
         {
             info.EnvironmentVariables["GNUPGHOME"] = gnupgHome;
         }
-        using var process = System.Diagnostics.Process.Start(info)!;
+        using var process = TestProcessExit.Start(info)
+            ?? throw new InvalidOperationException(tool + " spawn did not complete in 60s");
         var stdOut = process.StandardOutput.ReadToEndAsync();
         var stdErr = process.StandardError.ReadToEndAsync();
         if (!TestProcessExit.WaitForExit(process, 120_000))

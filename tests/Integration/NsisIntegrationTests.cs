@@ -1086,8 +1086,10 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
                 Registry.CurrentUser.OpenSubKey($@"{UrlSchemeKey}\shell\open\command")
                     ?.GetValue(""));
             Assert.NotNull(Registry.CurrentUser.OpenSubKey(UrlProgIdKey));
-            using (Process.Start(new ProcessStartInfo
-                   { FileName = "bundlerfixture:integration-value", UseShellExecute = true }))
+            // ShellExecute 深链拉起——分离 spawn，迟到子件不扑杀。
+            using (TestProcessExit.Start(new ProcessStartInfo
+                   { FileName = "bundlerfixture:integration-value", UseShellExecute = true },
+                   killLateSpawned: false))
             { }
             WaitFor.Until(() => File.Exists(DeepLinkMarker),
                 "Registered deep link did not launch the installed application.");

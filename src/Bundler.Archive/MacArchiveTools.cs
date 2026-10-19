@@ -226,7 +226,7 @@ internal static class MacArchiveTools
     // 超时即杀——不许半成品工具与回退写出器并发改同一目标。
     private static int Run(string file, string arguments, int timeoutMilliseconds = 60_000)
     {
-        using var process = Process.Start(
+        using var process = ProcessWait.Start(
             new ProcessStartInfo(file, arguments) { UseShellExecute = false });
         if (process is null)
         {

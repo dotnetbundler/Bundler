@@ -350,7 +350,7 @@ internal static class ArchiveExtractor
     {
         try
         {
-            using var process = System.Diagnostics.Process.Start(
+            using var process = ProcessWait.Start(
                 new System.Diagnostics.ProcessStartInfo(file, arguments)
                 {
                     UseShellExecute = false,

@@ -468,7 +468,8 @@ internal sealed class UpdateApplier
             WorkingDirectory = workingDirectory,
             CreateNoWindow = !shellExecute,
         };
-        return Process.Start(startInfo)
+        // 分离 spawn（bootstrap/重启腿）——迟到完成产出的子件是正当重启目标，不扑杀。
+        return ProcessWait.Start(startInfo, killLateSpawned: false)
             ?? throw new UpdateException($"failed to start '{file}'.");
     }
 
@@ -480,7 +481,7 @@ internal sealed class UpdateApplier
         }
         try
         {
-            using var process = Process.Start(new ProcessStartInfo(
+            using var process = ProcessWait.Start(new ProcessStartInfo(
                 "/bin/chmod", UpdateArgv.Join(new[] { "+x", path }))
             { UseShellExecute = false });
             if (process is not null)

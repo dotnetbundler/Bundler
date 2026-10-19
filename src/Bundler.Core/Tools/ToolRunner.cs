@@ -200,7 +200,7 @@ internal static class ToolRunner
         using var process = new Process { StartInfo = startInfo };
         try
         {
-            if (!process.Start())
+            if (!ProcessWait.Start(process))
             {
                 return null;
             }
@@ -218,8 +218,8 @@ internal static class ToolRunner
             try { if (!process.HasExited) KillProcessTree(process); } catch { }
         }))
         {
-            // WaitForExit(ms) 走运行时 wait-state 事件链——macOS CI 实证过子进程成
-            // zombie 而它永不返回；改 ProcessWait 轮询（每趟直探内核退出态）。
+            // 退出观察与启动面统一收编 ProcessWait：macOS CI 实证过 Unix spawn/reap
+            // 全局锁死锁（fork 子件卡死→reaper 饿死→zombie 不回收、spawn 面全堵）。
             if (!ProcessWait.WaitForExit(process, WaitMilliseconds(bound)))
             {
                 KillProcessTree(process);
@@ -266,7 +266,7 @@ internal static class ToolRunner
             }
         }
 
-        using var process = Process.Start(startInfo)
+        using var process = ProcessWait.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start '{executable}'.");
         TraceSpawn(process, new Request(executable, arguments, startInfo.WorkingDirectory, environment));
         // 两路都异步排空（同步顺序读在管道缓冲满时会死锁）；等待再有界——子进程挂死不再是无底洞。

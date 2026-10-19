@@ -245,7 +245,7 @@ internal static class UstarReader
     {
         try
         {
-            using var process = System.Diagnostics.Process.Start(
+            using var process = ProcessWait.Start(
                 new System.Diagnostics.ProcessStartInfo("/bin/chmod",
                     Convert.ToString(mode, 8) + " \"" + path + "\"")
                 { UseShellExecute = false });
@@ -375,7 +375,7 @@ internal static class UstarReader
             }
             return true;
 #else
-            using var process = System.Diagnostics.Process.Start(
+            using var process = ProcessWait.Start(
                 new System.Diagnostics.ProcessStartInfo("/bin/ln",
                     "-sfn " + ShellQuote(target) + " " + ShellQuote(linkPath))
                 { UseShellExecute = false });

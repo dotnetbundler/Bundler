@@ -904,7 +904,7 @@ internal static class PkgApplyPlan
         }
         try
         {
-            using var process = Process.Start(BuildStartInfo(spec))!;
+            using var process = ProcessWait.Start(BuildStartInfo(spec))!;
             // 安装腿有界：pm 挂死（dpkg 锁竞态外的死锁/前端自身卡死）会把特权
             // 进程拖成永驻——默认 30min，BUNDLER_UPDATER_PKG_TIMEOUT 秒数覆盖
             //（sh 侧 timeout 包裹同名同缝）；超时杀进程返 124（timeout(1) 同码，
@@ -968,7 +968,7 @@ internal static class PkgApplyPlan
             startInfo.RedirectStandardInput = true;
             startInfo.RedirectStandardOutput = true;
             startInfo.RedirectStandardError = true;
-            using var process = Process.Start(startInfo)!;
+            using var process = ProcessWait.Start(startInfo)!;
             process.StandardInput.Dispose();
             _ = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
             _ = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
@@ -1017,7 +1017,11 @@ internal static class PkgApplyPlan
             startInfo.RedirectStandardInput = true;
             startInfo.RedirectStandardOutput = true;
             startInfo.RedirectStandardError = true;
-            var process = Process.Start(startInfo)!;
+            var process = ProcessWait.Start(startInfo, killLateSpawned: false);
+            if (process is null)
+            {
+                return;
+            }
             process.StandardInput.Dispose();
             _ = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
             _ = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
@@ -1034,7 +1038,7 @@ internal static class PkgApplyPlan
             WorkingDirectory = spec.WorkingDirectory,
             Environment = spec.Environment,
         };
-        Process.Start(BuildStartInfo(wrapped));
+        ProcessWait.Start(BuildStartInfo(wrapped), killLateSpawned: false);
     }
 
     private static ProcessStartInfo BuildStartInfo(ExecSpec spec)

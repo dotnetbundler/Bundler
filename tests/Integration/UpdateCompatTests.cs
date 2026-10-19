@@ -299,7 +299,8 @@ public sealed class UpdateCompatTests : IClassFixture<UpdateCompatFixture>
             UseShellExecute = false,
         };
         foreach (var arg in args) start.ArgumentList.Add(arg);
-        using var process = Process.Start(start)!;
+        using var process = TestProcessExit.Start(start)
+            ?? throw new InvalidOperationException($"spawn timed out: {file}");
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         if (!TestProcessExit.WaitForExit(process, 90_000))

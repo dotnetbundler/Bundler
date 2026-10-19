@@ -978,7 +978,8 @@ internal static class BootstrapPlan
         // 重启失败不致命：换包/回滚已完成，重启只是便利步骤——与 POSIX `|| true` 对齐为 WARN。
         try
         {
-            Process.Start(startInfo);
+            // 分离重启腿：迟到子件是正当重启目标——killLateSpawned=false 不扑杀。
+            ProcessWait.Start(startInfo, killLateSpawned: false);
         }
         catch (Exception exception)
         {
@@ -1243,7 +1244,7 @@ internal static class BootstrapPlan
                     ? new ProcessStartInfo("/usr/bin/ditto", [source, destination])
                     : new ProcessStartInfo("cp", ["-a", source + "/.", destination + "/"]);
                 startInfo.RedirectStandardError = true;
-                using var process = Process.Start(startInfo);
+                using var process = ProcessWait.Start(startInfo);
                 // stderr 后台抽干+退出同盖一个 60s 界：同步 ReadToEnd 先排空再等会让
                 // "活进程挂死"（cp/ditto 在 FIFO/设备件上 open 阻塞，stderr 永不 EOF）
                 // 在界外无限挂住——与 sh 侧 timeout -k 10 60 cp 包裹的是同一威胁面。

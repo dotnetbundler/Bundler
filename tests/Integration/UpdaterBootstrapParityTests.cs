@@ -59,7 +59,8 @@ public static class UpdaterBootstrapParityTests
         {
             startInfo.ArgumentList.Add(arg);
         }
-        using var process = Process.Start(startInfo)!;
+        using var process = TestProcessExit.Start(startInfo)
+            ?? throw new InvalidOperationException("spawn timed out");
         // stdout/stderr 异步消费：任一管道写满未消费会把子进程卡在写端。
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
@@ -632,7 +633,8 @@ public static class UpdaterBootstrapParityTests
             startInfo.ArgumentList.Add(install);
             startInfo.ArgumentList.Add("--payload");
             startInfo.ArgumentList.Add(payload);
-            using var process = Process.Start(startInfo)!;
+            using var process = TestProcessExit.Start(startInfo)
+            ?? throw new InvalidOperationException("spawn timed out");
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
             if (!TestProcessExit.WaitForExit(process, 60_000))
@@ -1063,7 +1065,8 @@ public static class UpdaterBootstrapParityTests
         {
             startInfo.ArgumentList.Add(arg);
         }
-        using var process = Process.Start(startInfo)!;
+        using var process = TestProcessExit.Start(startInfo)
+            ?? throw new InvalidOperationException("spawn timed out");
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         if (!TestProcessExit.WaitForExit(process, 60_000))
@@ -1124,7 +1127,8 @@ public static class UpdaterBootstrapParityTests
             {
                 sleeperStart.ArgumentList.Add("30");
             }
-            using var sleeper = Process.Start(sleeperStart)!;
+            using var sleeper = TestProcessExit.Start(sleeperStart)
+                ?? throw new InvalidOperationException("sleeper spawn timed out");
             try
             {
                 foreach (var impl in Impls)
@@ -1385,11 +1389,11 @@ public static class UpdaterBootstrapParityTests
     // 本进程 euid——uid env 与 env 件同场的奇偶腿用真实 euid 当"调用者"。
     static string CurrentUserUid()
     {
-        using var id = Process.Start(new ProcessStartInfo(PkgRealTool("id"), "-u")
+        using var id = TestProcessExit.Start(new ProcessStartInfo(PkgRealTool("id"), "-u")
         {
             UseShellExecute = false,
             RedirectStandardOutput = true,
-        })!;
+        }) ?? throw new InvalidOperationException("id spawn timed out");
         var uid = id.StandardOutput.ReadToEnd().Trim();
         TestProcessExit.WaitForExit(id, 60_000);
         return uid;
@@ -1518,7 +1522,8 @@ public static class UpdaterBootstrapParityTests
         {
             startInfo.Environment[pair.Key] = pair.Value;
         }
-        using var process = Process.Start(startInfo)!;
+        using var process = TestProcessExit.Start(startInfo)
+            ?? throw new InvalidOperationException("spawn timed out");
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         if (!TestProcessExit.WaitForExit(process, 60_000))
@@ -2067,8 +2072,9 @@ public static class UpdaterBootstrapParityTests
                 // fifo 特殊件（exec 位也授上——隔离"非普通文件"判拒本身）：
                 // sh -f 判拒、AOT IsRegularFile 判拒；File.Exists 只排目录的旧口径会收。
                 var fifo = Path.Combine(dir, "fifo");
-                using (var mkfifo = Process.Start(new ProcessStartInfo("mkfifo", fifo)
-                       { UseShellExecute = false })!)
+                using (var mkfifo = TestProcessExit.Start(new ProcessStartInfo("mkfifo", fifo)
+                       { UseShellExecute = false })
+                       ?? throw new InvalidOperationException("mkfifo spawn timed out"))
                 {
                     TestProcessExit.WaitForExit(mkfifo, 60_000);
                     Assert.Equal(0, mkfifo.ExitCode);
