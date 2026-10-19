@@ -27,18 +27,10 @@ internal static class TestProc
             mapped.Arguments.Add(arg);
         }
         // BCL：ProcessStartInfo.Environment 是"最终整块环境"（构造时预填父件
-        // env，Clear() 后所余即全集）；ToolProcessStartInfo.Environment 是增量
-        // 覆写。逐对拷贝会把"父件有而袋中缺席"的变量默默透传——Clear() 语义
-        // 丢失（CI 实证：sh 腿 Clear() 后 DEBIAN_FRONTEND 仍漏进 stub 环境）。
-        // 缺席项显式补 null 移除，等效整块替换。
-        foreach (System.Collections.DictionaryEntry entry in
-            System.Environment.GetEnvironmentVariables())
-        {
-            if (entry.Key is string key && !info.Environment.ContainsKey(key))
-            {
-                mapped.Environment[key] = null;
-            }
-        }
+        // env，Clear() 后所余即全集）——整块语义原样交 EnvironmentIsComplete
+        // 完整块模式（增量差集会把"袋中缺席"的父件变量透传：CI 实证 sh 腿
+        // Clear() 后 DEBIAN_FRONTEND 仍漏进 stub 环境）。
+        mapped.EnvironmentIsComplete = true;
         foreach (var pair in info.Environment)
         {
             mapped.Environment[pair.Key] = pair.Value;

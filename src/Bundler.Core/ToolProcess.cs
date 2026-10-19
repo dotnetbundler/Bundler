@@ -35,8 +35,17 @@ public sealed class ToolProcessStartInfo
     /// 与 .NET 同规按 PATH 解析直接 exec，等价寻常 spawn。
     /// </summary>
     public bool UseShellExecute { get; set; }
-    /// <summary>环境覆盖：value=null 表示从继承环境里移除该变量。</summary>
+    /// <summary>
+    /// 环境覆盖：value=null 表示从继承环境里移除该变量。
+    /// <see cref="EnvironmentIsComplete"/> 置位时本字典即子件完整环境块
+    ///（父件 env 不参与——OS env-block 原语语义，对应 BCL
+    /// ProcessStartInfo.Environment 清空重填的形态），null 值按缺席处理。
+    /// </summary>
     public Dictionary<string, string?> Environment { get; } = new();
+    /// <summary>
+    /// <see cref="Environment"/> 为完整环境块而非增量覆写。默认 false=继承+覆盖。
+    /// </summary>
+    public bool EnvironmentIsComplete { get; set; }
 }
 
 /// <summary>
@@ -121,6 +130,10 @@ public sealed class ToolProcess : IDisposable
         // 显式覆写在 ShellExecute 下本就不可表达）。
         if (!info.UseShellExecute)
         {
+            if (info.EnvironmentIsComplete)
+            {
+                psi.EnvironmentVariables.Clear();
+            }
             foreach (var pair in info.Environment)
             {
                 if (pair.Value is null)

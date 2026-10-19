@@ -166,13 +166,17 @@ internal static class NativeSpawnUnix
     /// </summary>
     internal static SpawnedChild? Spawn(ToolProcessStartInfo info)
     {
-        // envp：父进程环境 + overrides（null 值=移除）。
+        // envp：默认=父进程环境 + overrides（null 值=移除）；
+        // EnvironmentIsComplete=袋子即完整环境块（父件 env 不参与，null 值按缺席跳过）。
         var env = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        if (!info.EnvironmentIsComplete)
         {
-            if (entry.Key is string k && entry.Value is string v)
+            foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
             {
-                env[k] = v;
+                if (entry.Key is string k && entry.Value is string v)
+                {
+                    env[k] = v;
+                }
             }
         }
         foreach (var pair in info.Environment)

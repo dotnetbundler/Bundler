@@ -128,6 +128,40 @@ public sealed class ToolProcessTests
     }
 
     [Fact]
+    public void CompleteEnvironmentBlockDropsInheritedVars()
+    {
+        // EnvironmentIsComplete：袋子即完整环境块——父件变量不漏进子件
+        //（BCL ProcessStartInfo.Environment.Clear() 的同位语义；缺它时
+        // DEBIAN_FRONTEND 这类宿主变量会污染被测子件环境，CI 实证）。
+        var marker = $"BUNDLER_TP_{Guid.NewGuid():N}"[..27];
+        System.Environment.SetEnvironmentVariable(marker, "host-value");
+        try
+        {
+            var info = new ToolProcessStartInfo
+            {
+                FileName = OperatingSystem.IsWindows() ? "cmd" : "sh",
+                RedirectStandardOutput = true,
+                EnvironmentIsComplete = true,
+            };
+            info.Arguments.AddRange(OperatingSystem.IsWindows()
+                ? ["/c", $"echo M=%{marker}%"]
+                : ["-c", $"echo M=${marker}"]);
+            info.Environment["PATH"] = OperatingSystem.IsWindows()
+                ? System.Environment.GetEnvironmentVariable("PATH")!
+                : "/usr/bin:/bin";
+            using var process = ToolProcess.Start(info);
+            Assert.NotNull(process);
+            var output = process.StandardOutput.ReadToEnd();
+            Assert.True(process.WaitForExit(10_000));
+            Assert.DoesNotContain("host-value", output);
+        }
+        finally
+        {
+            System.Environment.SetEnvironmentVariable(marker, null);
+        }
+    }
+
+    [Fact]
     public void ExitedEventFiresOnExit()
     {
         if (OperatingSystem.IsWindows())
