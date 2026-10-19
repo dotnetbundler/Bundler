@@ -27,7 +27,7 @@
     <BundlerAppImageMetainfoFile Condition="'$(BundlerTestAppImageSkipMetainfo)' != 'true'">$(MSBuildThisFileDirectory)Assets/app.metainfo.xml</BundlerAppImageMetainfoFile>
     <BundlerAppImageMetainfoFile Condition="'$(BundlerTestAppImageMetainfoFile)' != ''">$(BundlerTestAppImageMetainfoFile)</BundlerAppImageMetainfoFile>
     <BundlerAppImageSigningKeyFile Condition="'$(BundlerTestAppImageSigningKeyFile)' != ''">$(BundlerTestAppImageSigningKeyFile)</BundlerAppImageSigningKeyFile>
-    <BundlerAppImageSigningKeyPassphrase Condition="'$(BundlerTestAppImageSigningKeyPassphrase)' != ''">$(BundlerTestAppImageSigningKeyPassphrase)</BundlerAppImageSigningKeyPassphrase>
+    <BundlerAppImageSigningKeyPassphraseEnvironmentVariable Condition="'$(BundlerTestAppImageSigningKeyPassphrase)' != ''">BundlerTestAppImageSigningKeyPassphrase</BundlerAppImageSigningKeyPassphraseEnvironmentVariable>
     <BundlerFormats Condition="'$(BundlerTestFormats)' != ''">$(BundlerTestFormats)</BundlerFormats>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />

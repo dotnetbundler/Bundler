@@ -40,9 +40,9 @@ MSBuild 前缀 `BundlerAlpineApk*`；`bundler.json` 分节 `alpineapk.*`；API `
 | `BundlerAlpineApkBinLink` | `binLink` | 包名 | `none` 关闭 `usr/bin` 链接 |
 | `BundlerAlpineApkPreInstallFile`/`PostInstallFile`/`PreUninstallFile`/`PostUninstallFile`/`PreUpgradeFile`/`PostUpgradeFile` | `preInstallFile`/`postInstallFile`/`preUninstallFile`/`postUninstallFile`/`preUpgradeFile`/`postUpgradeFile` | 无 | 六段脚本入控制段 0755（须非空+LF） |
 | `BundlerAlpineApkSigningKeyFile` | `signing.keyFile` | 无 | PEM RSA 私钥；供则前置 `.SIGN.RSA.<文件名>.rsa.pub` 签名段 |
-| `BundlerAlpineApkSigningKeyPassphrase` | `signing.passphrase` | 无 | 只给口令不给密钥文件为配置错误；口令属秘密 |
+| `BundlerAlpineApkSigningKeyPassphraseEnvironmentVariable` | `signing.passphrase` | 无 | 只收**存口令的环境变量名**（口令不进项目文件/日志）；只给口令不给密钥文件为配置错误 |
 | `@BundlerAlpineApkFile`（`Destination`） | `files` / `Files` | 无 | 任意文件→绝对路径（含文件名；拒相对/`..`/`.`/尾斜杠/重复目标） |
-| —（仅 API/JSON） | `extraPkgInfo` / `ExtraPkgInfo` | 无 | 任意 `.PKGINFO` 键值追加（MSBuild 无对应旋钮） |
+| `@BundlerAlpineApkExtraPkgInfo`（`Value`） | `extraPkgInfo` / `ExtraPkgInfo` | 无 | 任意 `.PKGINFO` 键值追加（ItemSpec 为键、`Value` 元数据为值） |
 
 **签名公钥部署**：目标机把 `<私钥文件名>.rsa.pub` 落 `/etc/apk/keys/` 即视为已信任。
 

@@ -121,7 +121,7 @@ public sealed class CliConfigTests : TempBase
               "targets": [ { "target": "linux-x86_64", "inputDirectory": "in" } ] }
             """);
         Assert.Equal(
-            [DotNet.Bundler.PackageFormat.Deb, DotNet.Bundler.PackageFormat.Zip],
+            [DotNet.Bundler.PackageFormat.Deb],
             resolved.Bundle.Targets[0].Formats);
     }
 
@@ -227,6 +227,142 @@ public sealed class CliConfigTests : TempBase
                 """);
             Assert.Equal("run", resolved.Bundle.Targets[0].MainExecutable);
         }
+    }
+
+    [Fact]
+    public void Resolve_SecretEnvVar_Resolves()
+    {
+        Environment.SetEnvironmentVariable("_UT_RPM_PASS", "s3cret");
+        try
+        {
+            var resolved = Resolve("""
+                { "productName": "X", "identifier": "com.x", "version": "1.0",
+                  "rpm": { "signing": { "keyFile": "key.pem",
+                             "passphraseEnvironmentVariable": "_UT_RPM_PASS" } },
+                  "targets": [ { "target": "linux-x86_64", "inputDirectory": "in",
+                                 "formats": ["rpm"] } ] }
+                """);
+            Assert.Equal("s3cret", resolved.Rpm?.Signing.Passphrase);
+            Assert.Equal(Path.GetFullPath(Path.Combine(Root, "key.pem")),
+                resolved.Rpm?.Signing.KeyFile);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("_UT_RPM_PASS", null);
+        }
+    }
+
+    [Fact]
+    public void Resolve_SecretEnvVar_MissingEnv_Rejected()
+    {
+        Environment.SetEnvironmentVariable("_UT_RPM_PASS_ABSENT", null);
+        var ex = Assert.Throws<CliUsageException>(() => Resolve("""
+            { "productName": "X", "identifier": "com.x", "version": "1.0",
+              "rpm": { "signing": {
+                         "passphraseEnvironmentVariable": "_UT_RPM_PASS_ABSENT" } },
+              "targets": [ { "target": "linux-x86_64", "inputDirectory": "in",
+                             "formats": ["rpm"] } ] }
+            """));
+        Assert.Contains("_UT_RPM_PASS_ABSENT", ex.Message);
+    }
+
+    [Fact]
+    public void Resolve_SecretEnvVar_AndPlainValue_Ambiguous()
+    {
+        Assert.Throws<CliUsageException>(() => Resolve("""
+            { "productName": "X", "identifier": "com.x", "version": "1.0",
+              "rpm": { "signing": { "passphrase": "plain",
+                         "passphraseEnvironmentVariable": "ANY_ENV" } },
+              "targets": [ { "target": "linux-x86_64", "inputDirectory": "in",
+                             "formats": ["rpm"] } ] }
+            """));
+    }
+
+    [Fact]
+    public void Resolve_SecretEnvKey_ForNonSecret_Rejected()
+    {
+        // EnvironmentVariable 后缀只对 *Password/*Passphrase 字符串字段放行。
+        Assert.Throws<CliUsageException>(() => Resolve("""
+            { "productName": "X", "identifier": "com.x", "version": "1.0",
+              "rpm": { "packageNameEnvironmentVariable": "ANY_ENV" },
+              "targets": [ { "target": "linux-x86_64", "inputDirectory": "in",
+                             "formats": ["rpm"] } ] }
+            """));
+    }
+
+    [Fact]
+    public void Resolve_SectionScalarShape_Rejected()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => Resolve("""
+            { "productName": "X", "identifier": "com.x", "version": "1.0",
+              "deb": "utils",
+              "targets": [ { "target": "linux-x86_64", "inputDirectory": "in",
+                             "formats": ["deb"] } ] }
+            """));
+        Assert.Contains("'deb'", ex.Message);
+    }
+
+    [Fact]
+    public void Resolve_TargetsScalarShape_Rejected()
+    {
+        Assert.Throws<CliUsageException>(() => Resolve("""
+            { "productName": "X", "identifier": "com.x", "version": "1.0",
+              "targets": "linux-x86_64" }
+            """));
+    }
+
+    [Fact]
+    public void Resolve_StringKnob_KeepsLiteral()
+    {
+        // 字符串旋钮不做数值/布尔/逗号强转——"00123"/"true" 是合法字面值。
+        var resolved = Resolve("""
+            { "productName": "X", "identifier": "com.x", "version": "1.0",
+              "targets": [ { "target": "linux-x86_64", "inputDirectory": "in",
+                             "formats": ["deb"] } ] }
+            """, "--deb.epoch=00123", "--deb.package-name=name,with,commas");
+        Assert.Equal("00123", resolved.Deb?.Epoch);
+        Assert.Equal("name,with,commas", resolved.Deb?.PackageName);
+    }
+
+    [Fact]
+    public void Resolve_BoolKnob_Coerces()
+    {
+        var resolved = Resolve("""
+            { "productName": "X", "identifier": "com.x", "version": "1.0",
+              "nsis": { "allowDowngrades": true },
+              "targets": [ { "target": "linux-x86_64", "inputDirectory": "in",
+                             "formats": ["deb"] } ] }
+            """, "--nsis.allow-downgrades=false");
+        Assert.False(resolved.Nsis?.AllowDowngrades);
+    }
+
+    [Fact]
+    public void Resolve_BoolKnob_NonLiteral_Rejected()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => Resolve("""
+            { "productName": "X", "identifier": "com.x", "version": "1.0",
+              "targets": [ { "target": "linux-x86_64", "inputDirectory": "in",
+                             "formats": ["deb"] } ] }
+            """, "--nsis.allow-downgrades=maybe"));
+        Assert.Contains("nsis", ex.Message);
+    }
+
+    [Fact]
+    public void Resolve_MalformedJson_Rejected()
+    {
+        Assert.Throws<CliUsageException>(() => Resolve("{ not json"));
+    }
+
+    [Fact]
+    public void Resolve_SectionValueShape_Rejected()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => Resolve("""
+            { "productName": "X", "identifier": "com.x", "version": "1.0",
+              "deb": { "section": 5 },
+              "targets": [ { "target": "linux-x86_64", "inputDirectory": "in",
+                             "formats": ["deb"] } ] }
+            """));
+        Assert.Contains("'deb'", ex.Message);
     }
 
     private static string JsonEscape(string path) =>

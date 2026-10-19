@@ -39,7 +39,7 @@ MSBuild 前缀 `BundlerMacDmg*`；`bundler.json` 分节 `dmg.*`；API `MacDmgBun
 | `BundlerMacDmgBackgroundFile` | `backgroundFile` / `BackgroundFile` | 无 | 拷入卷内 `.background/` 并被 `.DS_Store` 引用 |
 | `BundlerMacDmgVolumeIconFile` | `volumeIconFile` / `VolumeIconFile` | 无 | 落盘 `.VolumeIcon.icns` + `SetFile -a C` |
 | `BundlerLicenseFile`（全局） | 顶层 `licenseFile` | 无 | 注入 SLA 挂载许可面板；不配置即不注入 |
-| `BundlerMacDmgSignIdentity`/`…TemporaryCertificateFile`/`…Password` | `signing.identity`/`temporaryCertificateFile`/`temporaryCertificatePassword` | 无 | DMG 本体 `codesign`；identity `-`=ad-hoc，与临时证书互斥（`MacDmgSigningConfiguration`） |
+| `BundlerMacDmgSignIdentity`/`…TemporaryCertificateFile`/`…PasswordEnvironmentVariable` | `signing.identity`/`temporaryCertificateFile`/`temporaryCertificatePassword` | 无 | DMG 本体 `codesign`；identity `-`=ad-hoc，与临时证书互斥（`MacDmgSigningConfiguration`）；密码经 env 间址 |
 
 ## 4. 场景
 

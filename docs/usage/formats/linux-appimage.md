@@ -36,7 +36,7 @@ MSBuild 前缀 `BundlerAppImage*`；`bundler.json` 分节 `appimage.*`；API `Ap
 | `BundlerAppImageCategories` | `categories` | `Utility` | 分号/数组 freedesktop 分类 |
 | `BundlerAppImageMetainfoFile` | `metainfoFile` | 无 | → `usr/share/metainfo/<包名>.metainfo.xml` |
 | `BundlerAppImageSigningKeyFile` | `signing.keyFile` | 无 | OpenPGP 私钥（ASCII-armored）；走 `appimagetool --sign`（需宿主 `gpg`） |
-| `BundlerAppImageSigningKeyPassphrase` | `signing.passphrase` | 无 | 经 `APPIMAGETOOL_SIGN_PASSPHRASE` 注入；只给口令为配置错误 |
+| `BundlerAppImageSigningKeyPassphraseEnvironmentVariable` | `signing.passphrase` | 无 | 只收**存口令的环境变量名**（口令不进项目文件/日志），经 `APPIMAGETOOL_SIGN_PASSPHRASE` 注入；只给口令为配置错误 |
 | `@BundlerAppImageFile`（`Destination`） | `files` / `Files` | 无 | 任意文件→AppDir 相对路径（含文件名；拒绝对路径/`..`/空段/反斜杠/生成件碰撞） |
 
 ## 4. 场景

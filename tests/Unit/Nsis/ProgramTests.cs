@@ -1451,8 +1451,8 @@ public sealed class ProgramTests : TempBase
             var propsPath = Path.Combine(root, "samples", "HelloBundlerApp", "formats", format + ".props");
             Assert.Contains(prefix, File.ReadAllText(propsPath));
             Assert.True(mergedSample.Descendants("Import").Any(item =>
-                   ((string?)item.Attribute("Project"))?.Contains("formats\\" + format + ".props", StringComparison.Ordinal) == true),
-                "The merged sample must import formats/" + format + ".props.");
+                   ((string?)item.Attribute("Project"))?.Contains("formats/" + format + ".props", StringComparison.Ordinal) == true),
+                "The merged sample must import formats/" + format + ".props with a host-portable forward slash.");
         }
         Assert.Equal("BundlerIntegrationFixture",
             XDocument.Load(Path.Combine(root, "tests", "Fixtures", "Nsis", "Fixture", "BundlerNsisIntegrationFixture.csproj"))

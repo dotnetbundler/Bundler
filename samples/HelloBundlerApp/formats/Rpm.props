@@ -32,9 +32,9 @@
     <BundlerRpmCategories>Utility;Development</BundlerRpmCategories>
     <BundlerRpmCategories Condition="'$(HelloBundlerRpmCategories)' != ''">$(HelloBundlerRpmCategories)</BundlerRpmCategories>
     <BundlerRpmDesktopFile Condition="'$(HelloBundlerRpmDesktopFile)' != ''">$(HelloBundlerRpmDesktopFile)</BundlerRpmDesktopFile>
-    <BundlerRpmMetainfoFile>$(HelloBundlerAppAssets)rpm\app.metainfo.xml</BundlerRpmMetainfoFile>
+    <BundlerRpmMetainfoFile>$(HelloBundlerAppAssets)rpm/app.metainfo.xml</BundlerRpmMetainfoFile>
     <BundlerRpmMetainfoFile Condition="'$(HelloBundlerRpmMetainfoFile)' != ''">$(HelloBundlerRpmMetainfoFile)</BundlerRpmMetainfoFile>
-    <BundlerRpmChangelogFile>$(HelloBundlerAppAssets)rpm\CHANGELOG.md</BundlerRpmChangelogFile>
+    <BundlerRpmChangelogFile>$(HelloBundlerAppAssets)rpm/CHANGELOG.md</BundlerRpmChangelogFile>
     <BundlerRpmChangelogFile Condition="'$(HelloBundlerRpmChangelogFile)' != ''">$(HelloBundlerRpmChangelogFile)</BundlerRpmChangelogFile>
     <BundlerRpmConfigLocations Condition="'$(HelloBundlerRpmConfigLocations)' != ''">$(HelloBundlerRpmConfigLocations)</BundlerRpmConfigLocations>
     <BundlerRpmSystemdServiceFile Condition="'$(HelloBundlerRpmSystemdServiceFile)' != ''">$(HelloBundlerRpmSystemdServiceFile)</BundlerRpmSystemdServiceFile>
@@ -52,11 +52,11 @@
     <!-- GPG 签名：供 OpenPGP 私钥文件才签，纯托管 BouncyCastle；
          产出 RPMSIGTAG_RSA+PGP 双标签 v3 签名包。 -->
     <BundlerRpmSigningKeyFile Condition="'$(HelloBundlerRpmSigningKeyFile)' != ''">$(HelloBundlerRpmSigningKeyFile)</BundlerRpmSigningKeyFile>
-    <BundlerRpmSigningKeyPassphrase Condition="'$(HelloBundlerRpmSigningKeyPassphrase)' != ''">$(HelloBundlerRpmSigningKeyPassphrase)</BundlerRpmSigningKeyPassphrase>
+    <BundlerRpmSigningKeyPassphraseEnvironmentVariable Condition="'$(HelloBundlerRpmSigningKeyPassphraseEnvironmentVariable)' != ''">$(HelloBundlerRpmSigningKeyPassphraseEnvironmentVariable)</BundlerRpmSigningKeyPassphraseEnvironmentVariable>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- 任意绝对路径映射演示：/etc/hello-rpm-app/defaults.conf。 -->
-    <BundlerRpmFile Include="$(HelloBundlerAppAssets)rpm\defaults.conf" Destination="/etc/hello-rpm-app/defaults.conf" />
+    <BundlerRpmFile Include="$(HelloBundlerAppAssets)rpm/defaults.conf" Destination="/etc/hello-rpm-app/defaults.conf" />
   </ItemGroup>
 </Project>

@@ -12,16 +12,16 @@
     <BundlerNsisDataDirectory Condition="'$(HelloBundlerNsisDataDirectory)' != ''">$(HelloBundlerNsisDataDirectory)</BundlerNsisDataDirectory>
     <BundlerNsisTemplate Condition="'$(HelloBundlerNsisTemplate)' != ''">$(HelloBundlerNsisTemplate)</BundlerNsisTemplate>
     <!-- 安装器外观素材：从固定第三方 NSIS 工具集解包（见下方 target）。 -->
-    <_HelloBundlerNsisToolsetArchive>$(HelloBundlerAppAssets)..\..\..\third_party\nsis\nsis-toolset-3.12-r1.zip</_HelloBundlerNsisToolsetArchive>
-    <_HelloBundlerNsisArtworkDirectory>$(BaseIntermediateOutputPath)sample-nsis-artwork\</_HelloBundlerNsisArtworkDirectory>
-    <_HelloBundlerNsisArtworkRoot>$(_HelloBundlerNsisArtworkDirectory)common\Contrib\Graphics</_HelloBundlerNsisArtworkRoot>
+    <_HelloBundlerNsisToolsetArchive>$(HelloBundlerAppAssets)../../../third_party/nsis/nsis-toolset-3.12-r1.zip</_HelloBundlerNsisToolsetArchive>
+    <_HelloBundlerNsisArtworkDirectory>$(BaseIntermediateOutputPath)sample-nsis-artwork/</_HelloBundlerNsisArtworkDirectory>
+    <_HelloBundlerNsisArtworkRoot>$(_HelloBundlerNsisArtworkDirectory)common/Contrib/Graphics</_HelloBundlerNsisArtworkRoot>
     <_HelloBundlerNsisArtworkMarker>$(_HelloBundlerNsisArtworkDirectory).complete</_HelloBundlerNsisArtworkMarker>
-    <BundlerNsisInstallerIconFile>$(_HelloBundlerNsisArtworkRoot)\Icons\modern-install-colorful.ico</BundlerNsisInstallerIconFile>
-    <BundlerNsisUninstallerIconFile>$(_HelloBundlerNsisArtworkRoot)\Icons\modern-uninstall-colorful.ico</BundlerNsisUninstallerIconFile>
-    <BundlerNsisHeaderFile>$(_HelloBundlerNsisArtworkRoot)\Header\nsis3-grey.bmp</BundlerNsisHeaderFile>
-    <BundlerNsisUninstallerHeaderFile>$(_HelloBundlerNsisArtworkRoot)\Header\orange-uninstall.bmp</BundlerNsisUninstallerHeaderFile>
-    <BundlerNsisSidebarFile>$(_HelloBundlerNsisArtworkRoot)\Wizard\nsis3-grey.bmp</BundlerNsisSidebarFile>
-    <BundlerNsisInstallerHooksFile>$(HelloBundlerAppAssets)nsis\installer-hooks.nsh</BundlerNsisInstallerHooksFile>
+    <BundlerNsisInstallerIconFile>$(_HelloBundlerNsisArtworkRoot)/Icons/modern-install-colorful.ico</BundlerNsisInstallerIconFile>
+    <BundlerNsisUninstallerIconFile>$(_HelloBundlerNsisArtworkRoot)/Icons/modern-uninstall-colorful.ico</BundlerNsisUninstallerIconFile>
+    <BundlerNsisHeaderFile>$(_HelloBundlerNsisArtworkRoot)/Header/nsis3-grey.bmp</BundlerNsisHeaderFile>
+    <BundlerNsisUninstallerHeaderFile>$(_HelloBundlerNsisArtworkRoot)/Header/orange-uninstall.bmp</BundlerNsisUninstallerHeaderFile>
+    <BundlerNsisSidebarFile>$(_HelloBundlerNsisArtworkRoot)/Wizard/nsis3-grey.bmp</BundlerNsisSidebarFile>
+    <BundlerNsisInstallerHooksFile>$(HelloBundlerAppAssets)nsis/installer-hooks.nsh</BundlerNsisInstallerHooksFile>
     <!-- 升级/旧版迁移旋钮。 -->
     <BundlerNsisAllowDowngrades Condition="'$(HelloBundlerNsisAllowDowngrades)' != ''">$(HelloBundlerNsisAllowDowngrades)</BundlerNsisAllowDowngrades>
     <BundlerNsisLegacyMsiProductCodes Condition="'$(HelloBundlerNsisLegacyMsiProductCodes)' != ''">$(HelloBundlerNsisLegacyMsiProductCodes)</BundlerNsisLegacyMsiProductCodes>
@@ -40,11 +40,11 @@
     <BundlerNsisShortcutIcon>HelloBundlerApp.exe</BundlerNsisShortcutIcon>
     <BundlerNsisShortcutAppUserModelId>com.example.hellobundlerapp.desktop</BundlerNsisShortcutAppUserModelId>
     <BundlerNsisShortcutStartMenuFolder>Bundler Examples</BundlerNsisShortcutStartMenuFolder>
-    <ApplicationIcon>$(_HelloBundlerNsisArtworkRoot)\Icons\modern-install-colorful.ico</ApplicationIcon>
+    <ApplicationIcon>$(_HelloBundlerNsisArtworkRoot)/Icons/modern-install-colorful.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
-    <BundlerNsisLanguageFile Include="$(HelloBundlerAppAssets)nsis\SimpChinese.nsh" Language="SimpChinese" />
+    <BundlerNsisLanguageFile Include="$(HelloBundlerAppAssets)nsis/SimpChinese.nsh" Language="SimpChinese" />
   </ItemGroup>
 
   <Target Name="PrepareHelloBundlerNsisArtwork"
@@ -56,7 +56,7 @@
            SkipUnchangedFiles="true" />
     <Touch Files="$(_HelloBundlerNsisArtworkMarker)" AlwaysCreate="true" />
     <ItemGroup>
-      <FileWrites Include="$(_HelloBundlerNsisArtworkDirectory)**\*" />
+      <FileWrites Include="$(_HelloBundlerNsisArtworkDirectory)**/*" />
       <FileWrites Include="$(_HelloBundlerNsisArtworkMarker)" />
     </ItemGroup>
   </Target>

@@ -533,7 +533,11 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
         ProcessRunner.AssertSuccess(exportPub, "gpg public key export failed.");
 
         _f.Publish("signed",
-            new Dictionary<string, string?> { ["BundlerRpmSigningKeyPassphrase"] = "bundler-test-pass" },
+            new Dictionary<string, string?>
+            {
+                ["BundlerRpmSigningKeyPassphraseEnvironmentVariable"] = "BundlerTestRpmSigningPass",
+                ["BundlerTestRpmSigningPass"] = "bundler-test-pass",
+            },
             $"-p:BundlerRpmSigningKeyFile={secretAsc}");
         var signedRpm = Directory.EnumerateFiles(_f.Ws.Combine("signed"), "*.rpm",
             SearchOption.AllDirectories).FirstOrDefault();
@@ -560,7 +564,11 @@ public sealed class RpmIntegrationTests : IClassFixture<RpmFixture>
         var keyFile = Path.Combine(RepositoryLayout.FixturesDirectory,
             "Rpm", "Assets", "rpm-test-key.asc");
         _f.Publish("signed-anyhost",
-            new Dictionary<string, string?> { ["BundlerRpmSigningKeyPassphrase"] = "bundler-test-pass" },
+            new Dictionary<string, string?>
+            {
+                ["BundlerRpmSigningKeyPassphraseEnvironmentVariable"] = "BundlerTestRpmSigningPass",
+                ["BundlerTestRpmSigningPass"] = "bundler-test-pass",
+            },
             $"-p:BundlerRpmSigningKeyFile={keyFile}");
         var signed = Directory.EnumerateFiles(_f.Ws.Combine("signed-anyhost"), "*.rpm",
             SearchOption.AllDirectories).FirstOrDefault();

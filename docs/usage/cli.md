@@ -98,7 +98,8 @@ schema 与 MSBuild `Bundler*` 属性一一对应：`Bundler<Format><Knob>` → `
   "outputLayout": "flat",                  // flat | byFormat
   "nsis": { "installScope": "perMachine", "languages": ["English", "SimpChinese"] },
   "deb":  { "depends": ["libc6"], "files": [{ "source": "…", "destination": "/etc/…" }] },
-  "rpm":  { "signing": { "keyFile": "…", "passphrase": "…" } },
+  "rpm":  { "signing": { "keyFile": "…",
+            "passphraseEnvironmentVariable": "RPM_SIGNING_PASS" } },
   "dmg":  { "layout": { "iconSize": 96 } },
   "archive": { "archiveName": "myapp-dist" },
   "update": {
@@ -115,6 +116,9 @@ schema 与 MSBuild `Bundler*` 属性一一对应：`Bundler<Format><Knob>` → `
 各格式分节可用键 = 该后端 `<Format>BundleConfiguration` 成员的 camelCase（嵌套 `signing`/`shortcuts`/`layout`/`documentTypes`/`urlTypes`/`files` 同规则递归）；逐键表见各后端使用文档 §全旋钮。
 `update` 段不是格式，但同走节解析与 `--update.<knob>` 覆盖。
 `--<fmt>.<knob>` 透传：`--nsis.install-scope=perMachine`（kebab→camel 归一）。
+
+秘密字段（`*Password`/`*Passphrase` 字符串，如 `signing.passphrase`/`signing.applePassword`/`signing.temporaryCertificatePassword`）可写 `<名>EnvironmentVariable` 间址键——值是环境变量**名**，解析时从该变量取真值：文件里不落成文明文。
+同一字段的明文键与间址键同设属配置错误；间址键只放行秘密字段（其他键照旧 Unknown-key）。
 
 ## 6. 分发形态与宿主边界
 

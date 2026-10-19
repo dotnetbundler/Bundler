@@ -64,7 +64,7 @@
     <BundlerCopyright Condition="'$(BundlerCopyright)' == ''">$(Copyright)</BundlerCopyright>
     <BundlerLicenseFile Condition="'$(BundlerLicenseFile)' == ''"></BundlerLicenseFile>
     <BundlerMainExecutable Condition="'$(BundlerMainExecutable)' == ''"></BundlerMainExecutable>
-    <BundlerOutputPath Condition="'$(BundlerOutputPath)' == ''">$(MSBuildProjectDirectory)\artifacts</BundlerOutputPath>
+    <BundlerOutputPath Condition="'$(BundlerOutputPath)' == ''">$(MSBuildProjectDirectory)/artifacts</BundlerOutputPath>
     <BundlerOutputLayout Condition="'$(BundlerOutputLayout)' == ''">flat</BundlerOutputLayout>
     <BundlerInputDir Condition="'$(BundlerInputDir)' == ''"></BundlerInputDir>
     <BundlerPublishRid Condition="'$(BundlerPublishRid)' == ''"></BundlerPublishRid>
@@ -130,7 +130,7 @@
     <BundlerMacAppIconName Condition="'$(BundlerMacAppIconName)' == ''"></BundlerMacAppIconName>
     <BundlerMacAppSignIdentity Condition="'$(BundlerMacAppSignIdentity)' == ''"></BundlerMacAppSignIdentity>
     <BundlerMacAppTemporaryCertificateFile Condition="'$(BundlerMacAppTemporaryCertificateFile)' == ''"></BundlerMacAppTemporaryCertificateFile>
-    <BundlerMacAppTemporaryCertificatePassword Condition="'$(BundlerMacAppTemporaryCertificatePassword)' == ''"></BundlerMacAppTemporaryCertificatePassword>
+    <BundlerMacAppTemporaryCertificatePasswordEnvironmentVariable Condition="'$(BundlerMacAppTemporaryCertificatePasswordEnvironmentVariable)' == ''"></BundlerMacAppTemporaryCertificatePasswordEnvironmentVariable>
     <BundlerMacAppHardenedRuntime Condition="'$(BundlerMacAppHardenedRuntime)' == ''">false</BundlerMacAppHardenedRuntime>
     <BundlerMacAppEntitlementsFile Condition="'$(BundlerMacAppEntitlementsFile)' == ''"></BundlerMacAppEntitlementsFile>
     <BundlerMacAppNotarize Condition="'$(BundlerMacAppNotarize)' == ''">false</BundlerMacAppNotarize>
@@ -138,7 +138,7 @@
     <BundlerMacAppSkipStapling Condition="'$(BundlerMacAppSkipStapling)' == ''">false</BundlerMacAppSkipStapling>
     <BundlerMacAppNotaryProfile Condition="'$(BundlerMacAppNotaryProfile)' == ''"></BundlerMacAppNotaryProfile>
     <BundlerMacAppAppleId Condition="'$(BundlerMacAppAppleId)' == ''"></BundlerMacAppAppleId>
-    <BundlerMacAppApplePassword Condition="'$(BundlerMacAppApplePassword)' == ''"></BundlerMacAppApplePassword>
+    <BundlerMacAppApplePasswordEnvironmentVariable Condition="'$(BundlerMacAppApplePasswordEnvironmentVariable)' == ''"></BundlerMacAppApplePasswordEnvironmentVariable>
     <BundlerMacAppAppleTeamId Condition="'$(BundlerMacAppAppleTeamId)' == ''"></BundlerMacAppAppleTeamId>
     <BundlerMacAppNotaryApiKeyFile Condition="'$(BundlerMacAppNotaryApiKeyFile)' == ''"></BundlerMacAppNotaryApiKeyFile>
     <BundlerMacAppNotaryApiKeyId Condition="'$(BundlerMacAppNotaryApiKeyId)' == ''"></BundlerMacAppNotaryApiKeyId>
@@ -159,7 +159,7 @@
     <BundlerMacDmgVolumeIconFile Condition="'$(BundlerMacDmgVolumeIconFile)' == ''"></BundlerMacDmgVolumeIconFile>
     <BundlerMacDmgSignIdentity Condition="'$(BundlerMacDmgSignIdentity)' == ''"></BundlerMacDmgSignIdentity>
     <BundlerMacDmgTemporaryCertificateFile Condition="'$(BundlerMacDmgTemporaryCertificateFile)' == ''"></BundlerMacDmgTemporaryCertificateFile>
-    <BundlerMacDmgTemporaryCertificatePassword Condition="'$(BundlerMacDmgTemporaryCertificatePassword)' == ''"></BundlerMacDmgTemporaryCertificatePassword>
+    <BundlerMacDmgTemporaryCertificatePasswordEnvironmentVariable Condition="'$(BundlerMacDmgTemporaryCertificatePasswordEnvironmentVariable)' == ''"></BundlerMacDmgTemporaryCertificatePasswordEnvironmentVariable>
     <BundlerMacPkgPackageName Condition="'$(BundlerMacPkgPackageName)' == ''"></BundlerMacPkgPackageName>
     <BundlerMacPkgVersion Condition="'$(BundlerMacPkgVersion)' == ''"></BundlerMacPkgVersion>
     <BundlerMacPkgInstallRoot Condition="'$(BundlerMacPkgInstallRoot)' == ''">/Applications</BundlerMacPkgInstallRoot>
@@ -170,13 +170,13 @@
     <BundlerMacPkgScriptsDirectory Condition="'$(BundlerMacPkgScriptsDirectory)' == ''"></BundlerMacPkgScriptsDirectory>
     <BundlerMacPkgSignIdentity Condition="'$(BundlerMacPkgSignIdentity)' == ''"></BundlerMacPkgSignIdentity>
     <BundlerMacPkgTemporaryCertificateFile Condition="'$(BundlerMacPkgTemporaryCertificateFile)' == ''"></BundlerMacPkgTemporaryCertificateFile>
-    <BundlerMacPkgTemporaryCertificatePassword Condition="'$(BundlerMacPkgTemporaryCertificatePassword)' == ''"></BundlerMacPkgTemporaryCertificatePassword>
+    <BundlerMacPkgTemporaryCertificatePasswordEnvironmentVariable Condition="'$(BundlerMacPkgTemporaryCertificatePasswordEnvironmentVariable)' == ''"></BundlerMacPkgTemporaryCertificatePasswordEnvironmentVariable>
     <BundlerMacPkgNotarize Condition="'$(BundlerMacPkgNotarize)' == ''">false</BundlerMacPkgNotarize>
     <BundlerMacPkgNotaryWait Condition="'$(BundlerMacPkgNotaryWait)' == ''">true</BundlerMacPkgNotaryWait>
     <BundlerMacPkgSkipStapling Condition="'$(BundlerMacPkgSkipStapling)' == ''">false</BundlerMacPkgSkipStapling>
     <BundlerMacPkgNotaryProfile Condition="'$(BundlerMacPkgNotaryProfile)' == ''"></BundlerMacPkgNotaryProfile>
     <BundlerMacPkgAppleId Condition="'$(BundlerMacPkgAppleId)' == ''"></BundlerMacPkgAppleId>
-    <BundlerMacPkgApplePassword Condition="'$(BundlerMacPkgApplePassword)' == ''"></BundlerMacPkgApplePassword>
+    <BundlerMacPkgApplePasswordEnvironmentVariable Condition="'$(BundlerMacPkgApplePasswordEnvironmentVariable)' == ''"></BundlerMacPkgApplePasswordEnvironmentVariable>
     <BundlerMacPkgAppleTeamId Condition="'$(BundlerMacPkgAppleTeamId)' == ''"></BundlerMacPkgAppleTeamId>
     <BundlerMacPkgNotaryApiKeyFile Condition="'$(BundlerMacPkgNotaryApiKeyFile)' == ''"></BundlerMacPkgNotaryApiKeyFile>
     <BundlerMacPkgNotaryApiKeyId Condition="'$(BundlerMacPkgNotaryApiKeyId)' == ''"></BundlerMacPkgNotaryApiKeyId>
@@ -269,6 +269,6 @@
     <BundlerAlpineApkPreUpgradeFile Condition="'$(BundlerAlpineApkPreUpgradeFile)' == ''"></BundlerAlpineApkPreUpgradeFile>
     <BundlerAlpineApkPostUpgradeFile Condition="'$(BundlerAlpineApkPostUpgradeFile)' == ''"></BundlerAlpineApkPostUpgradeFile>
     <BundlerAlpineApkSigningKeyFile Condition="'$(BundlerAlpineApkSigningKeyFile)' == ''"></BundlerAlpineApkSigningKeyFile>
-    <BundlerAlpineApkSigningKeyPassphrase Condition="'$(BundlerAlpineApkSigningKeyPassphrase)' == ''"></BundlerAlpineApkSigningKeyPassphrase>
+    <BundlerAlpineApkSigningKeyPassphraseEnvironmentVariable Condition="'$(BundlerAlpineApkSigningKeyPassphraseEnvironmentVariable)' == ''"></BundlerAlpineApkSigningKeyPassphraseEnvironmentVariable>
   </PropertyGroup>
 </Project>

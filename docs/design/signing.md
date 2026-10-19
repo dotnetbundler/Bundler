@@ -11,6 +11,7 @@
   加密私钥须提供可正确解密的口令。
 - **打包内联**：签名是产物属性，配了就签，不做后置独立命令。
 - **密钥形态**：私钥文件路径 + passphrase 旋钮（不依赖宿主 keyring；路径可走参数，passphrase 建议 secret 注入文件/环境）；密钥字面量绝不进 csproj/命令行/日志。
+  入口层只收 env 间址：MSBuild 的 `*Passphrase`/`*Password` 旋钮为 `*EnvironmentVariable` 形式（属性值=环境变量名）；bundler.json 的秘密字段可写 `<名>EnvironmentVariable` 间址键。
 - **签而必验**：签名产物必须有真实校验断言，拒绝"只签不验"。
 - **测试密钥现生成**（`gpg --batch --gen-key` 一次性断言即弃），不入库。
 - **信任模型边界**：只产签名，不管密钥分发与吊销——密钥生命周期属开发者职责。

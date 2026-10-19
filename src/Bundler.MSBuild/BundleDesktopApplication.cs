@@ -34,6 +34,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     [Required] public string BundlerTarget { get; set; } = "";
     [Required] public string InputDirectory { get; set; } = "";
     [Required] public string OutputDirectory { get; set; } = "";
+    // 相对路径解析基准——targets 传 $(MSBuildProjectDirectory)；
+    // 空值回落进程 cwd（直调任务的测试场景）。
+    public string ProjectDirectory { get; set; } = "";
     public string OutputLayout { get; set; } = "";
     [Required] public string MainExecutable { get; set; } = "";
     [Required] public string Formats { get; set; } = "";
@@ -115,7 +118,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacAppInfoPlistXml { get; set; } = "";
     public string MacAppSignIdentity { get; set; } = "";
     public string MacAppTemporaryCertificateFile { get; set; } = "";
-    public string MacAppTemporaryCertificatePassword { get; set; } = "";
+    public string MacAppTemporaryCertificatePasswordEnvironmentVariable { get; set; } = "";
     public bool MacAppHardenedRuntime { get; set; }
     public string MacAppEntitlementsFile { get; set; } = "";
     public bool MacAppNotarize { get; set; }
@@ -123,7 +126,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public bool MacAppSkipStapling { get; set; }
     public string MacAppNotaryProfile { get; set; } = "";
     public string MacAppAppleId { get; set; } = "";
-    public string MacAppApplePassword { get; set; } = "";
+    public string MacAppApplePasswordEnvironmentVariable { get; set; } = "";
     public string MacAppAppleTeamId { get; set; } = "";
     public string MacAppNotaryApiKeyFile { get; set; } = "";
     public string MacAppNotaryApiKeyId { get; set; } = "";
@@ -144,7 +147,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacDmgVolumeIconFile { get; set; } = "";
     public string MacDmgSignIdentity { get; set; } = "";
     public string MacDmgTemporaryCertificateFile { get; set; } = "";
-    public string MacDmgTemporaryCertificatePassword { get; set; } = "";
+    public string MacDmgTemporaryCertificatePasswordEnvironmentVariable { get; set; } = "";
     public string MacPkgPackageName { get; set; } = "";
     public string MacPkgVersion { get; set; } = "";
     public string MacPkgInstallRoot { get; set; } = "";
@@ -156,13 +159,13 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string MacPkgScriptsDirectory { get; set; } = "";
     public string MacPkgSignIdentity { get; set; } = "";
     public string MacPkgTemporaryCertificateFile { get; set; } = "";
-    public string MacPkgTemporaryCertificatePassword { get; set; } = "";
+    public string MacPkgTemporaryCertificatePasswordEnvironmentVariable { get; set; } = "";
     public bool MacPkgNotarize { get; set; }
     public bool MacPkgNotaryWait { get; set; } = true;
     public bool MacPkgSkipStapling { get; set; }
     public string MacPkgNotaryProfile { get; set; } = "";
     public string MacPkgAppleId { get; set; } = "";
-    public string MacPkgApplePassword { get; set; } = "";
+    public string MacPkgApplePasswordEnvironmentVariable { get; set; } = "";
     public string MacPkgAppleTeamId { get; set; } = "";
     public string MacPkgNotaryApiKeyFile { get; set; } = "";
     public string MacPkgNotaryApiKeyId { get; set; } = "";
@@ -226,7 +229,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string RpmPreUninstallProgram { get; set; } = "";
     public string RpmPostUninstallProgram { get; set; } = "";
     public string RpmSigningKeyFile { get; set; } = "";
-    public string RpmSigningKeyPassphrase { get; set; } = "";
+    // 秘密只收 env 名——与 WindowsSigningPfxPasswordEnvironmentVariable 先例一致；
+    // 口令值不写项目文件、不进 MSBuild 属性面/二进制日志。
+    public string RpmSigningKeyPassphraseEnvironmentVariable { get; set; } = "";
     public string AppImagePackageName { get; set; } = "";
     public string AppImageVersion { get; set; } = "";
     public string AppImageArchitecture { get; set; } = "";
@@ -237,7 +242,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string AppImageCategories { get; set; } = "";
     public string AppImageMetainfoFile { get; set; } = "";
     public string AppImageSigningKeyFile { get; set; } = "";
-    public string AppImageSigningKeyPassphrase { get; set; } = "";
+    public string AppImageSigningKeyPassphraseEnvironmentVariable { get; set; } = "";
     public ITaskItem[] AppImageFiles { get; set; } = Array.Empty<ITaskItem>();
     public string ArchivePackageName { get; set; } = "";
     public string ArchiveVersion { get; set; } = "";
@@ -264,7 +269,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string AlpineApkPostUpgradeFile { get; set; } = "";
     public ITaskItem[] AlpineApkFiles { get; set; } = Array.Empty<ITaskItem>();
     public string AlpineApkSigningKeyFile { get; set; } = "";
-    public string AlpineApkSigningKeyPassphrase { get; set; } = "";
+    public string AlpineApkSigningKeyPassphraseEnvironmentVariable { get; set; } = "";
+    // ItemSpec 为 .PKGINFO 键（[A-Za-z0-9._-]+），Value 元数据为值。
+    public ITaskItem[] AlpineApkExtraPkgInfo { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacAppFiles { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacAppFrameworkDirectories { get; set; } = Array.Empty<ITaskItem>();
     public ITaskItem[] MacDocumentTypes { get; set; } = Array.Empty<ITaskItem>();
@@ -273,6 +280,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     public string UpdateFeedUrl { get; set; } = "";
     public string UpdateChannel { get; set; } = "";
     public string UpdateSigningKeyFile { get; set; } = "";
+    public string UpdateBootstrapperDirectory { get; set; } = "";
     public string UpdatePublicKey { get; set; } = "";
     public string UpdateNotes { get; set; } = "";
     [Output] public ITaskItem[] Artifacts { get; private set; } = Array.Empty<ITaskItem>();
@@ -511,21 +519,22 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             Description = EmptyToNull(Description),
             Homepage = EmptyToNull(Homepage),
             Copyright = EmptyToNull(Copyright),
-            LicenseFile = OptionalFullPath(LicenseFile),
-            OutputDirectory = Path.GetFullPath(OutputDirectory),
+            LicenseFile = OptionalProjectPath(LicenseFile),
+            OutputDirectory = ProjectPath(OutputDirectory),
             OutputLayout = ParseOutputLayout(),
             Update = UpdateEnabled ? new UpdateBundleConfiguration
             {
                 FeedUrl = UpdateFeedUrl,
                 Channel = UpdateChannel,
-                SigningKeyFile = OptionalFullPath(UpdateSigningKeyFile),
+                SigningKeyFile = OptionalProjectPath(UpdateSigningKeyFile),
+                BootstrapperDirectory = OptionalProjectPath(UpdateBootstrapperDirectory),
                 PublicKey = EmptyToNull(UpdatePublicKey),
                 Notes = EmptyToNull(UpdateNotes)
             } : null,
-            Icons = Icons.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
+            Icons = Icons.Select(item => ProjectPath(item.ItemSpec)).ToArray(),
             Resources = Resources.Select(item => new BundleResourceConfiguration
             {
-                Source = Path.GetFullPath(item.ItemSpec),
+                Source = ProjectPath(item.ItemSpec),
                 Destination = ResourceTargetPath(item)
             }).ToArray(),
             FileAssociations = FileAssociations.Select(item => new BundleFileAssociationConfiguration
@@ -545,7 +554,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 new BundleTargetConfiguration
                 {
                     Target = BundlerTarget,
-                    InputDirectory = Path.GetFullPath(InputDirectory),
+                    InputDirectory = ProjectPath(InputDirectory),
                     MainExecutable = MainExecutable,
                     SigningFiles = WindowsSigningFiles.Select(item => item.ItemSpec).ToArray(),
                     Formats = targetFormats
@@ -579,13 +588,13 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 StartMenuShortcut = WixStartMenuShortcut,
                 DesktopShortcut = WixDesktopShortcut,
                 InstallDirectorySelection = WixInstallDirectorySelection,
-                BannerFile = OptionalFullPath(WixBannerFile),
-                DialogFile = OptionalFullPath(WixDialogFile),
+                BannerFile = OptionalProjectPath(WixBannerFile),
+                DialogFile = OptionalProjectPath(WixDialogFile),
                 AddToPath = WixAddToPath,
                 UninstallShortcut = WixUninstallShortcut,
                 LaunchAfterInstall = WixLaunchAfterInstall,
                 ExtensionFragmentFiles = WixExtensionFragmentFiles
-                    .Select(item => Path.GetFullPath(item.ItemSpec)).ToArray(),
+                    .Select(item => ProjectPath(item.ItemSpec)).ToArray(),
                 ExtensionIdPrefix = EmptyToNull(WixExtensionIdPrefix),
                 ExtensionComponentRefs = WixExtensionComponentRefs
                     .Select(item => item.ItemSpec).ToArray(),
@@ -593,9 +602,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                     .Select(item => item.ItemSpec).ToArray(),
                 ExtensionFeatureRefs = WixExtensionFeatureRefs
                     .Select(item => item.ItemSpec).ToArray(),
-                ExpertTemplateFile = OptionalFullPath(WixExpertTemplateFile),
+                ExpertTemplateFile = OptionalProjectPath(WixExpertTemplateFile),
                 ExpertMergeModuleFiles = WixExpertMergeModuleFiles
-                    .Select(item => Path.GetFullPath(item.ItemSpec)).ToArray()
+                    .Select(item => ProjectPath(item.ItemSpec)).ToArray()
             };
         }
         if (format == PackageFormat.Nsis)
@@ -604,12 +613,12 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             {
                 InstallScope = ParseInstallMode(),
                 Compression = ParseCompression(),
-                InstallerIconFile = OptionalFullPath(NsisInstallerIconFile),
-                UninstallerIconFile = OptionalFullPath(NsisUninstallerIconFile),
-                HeaderFile = OptionalFullPath(NsisHeaderFile),
-                SidebarFile = OptionalFullPath(NsisSidebarFile),
-                UninstallerHeaderFile = OptionalFullPath(NsisUninstallerHeaderFile),
-                InstallerHooksFile = OptionalFullPath(NsisInstallerHooksFile),
+                InstallerIconFile = OptionalProjectPath(NsisInstallerIconFile),
+                UninstallerIconFile = OptionalProjectPath(NsisUninstallerIconFile),
+                HeaderFile = OptionalProjectPath(NsisHeaderFile),
+                SidebarFile = OptionalProjectPath(NsisSidebarFile),
+                UninstallerHeaderFile = OptionalProjectPath(NsisUninstallerHeaderFile),
+                InstallerHooksFile = OptionalProjectPath(NsisInstallerHooksFile),
                 Languages = ParseLanguages(),
                 DisplayLanguageSelector = NsisDisplayLanguageSelector,
                 AllowDowngrades = NsisAllowDowngrades,
@@ -646,29 +655,33 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                     : MacPkgInstallRoot.Trim(),
                 Files = MacPkgFiles.Select(item => new MacPkgFileEntry
                 {
-                    Source = Path.GetFullPath(item.ItemSpec),
+                    Source = ProjectPath(item.ItemSpec),
                     Destination = EmptyMetadataToNull(item, "Destination")
                 }).ToArray(),
                 Title = EmptyToNull(MacPkgTitle),
-                WelcomeFile = OptionalFullPath(MacPkgWelcomeFile),
-                ConclusionFile = OptionalFullPath(MacPkgConclusionFile),
+                WelcomeFile = OptionalProjectPath(MacPkgWelcomeFile),
+                ConclusionFile = OptionalProjectPath(MacPkgConclusionFile),
                 InstallScope = string.IsNullOrWhiteSpace(MacPkgInstallScope)
                     ? DotNet.Bundler.MacPkg.MacPkgInstallScope.System
                     : ParseMacPkgDomain(),
-                ScriptsDirectory = OptionalFullPath(MacPkgScriptsDirectory),
+                ScriptsDirectory = OptionalProjectPath(MacPkgScriptsDirectory),
                 Signing = new MacPkgSigningConfiguration
                 {
                     Identity = EmptyToNull(MacPkgSignIdentity),
-                    TemporaryCertificateFile = OptionalFullPath(MacPkgTemporaryCertificateFile),
-                    TemporaryCertificatePassword = EmptyToNull(MacPkgTemporaryCertificatePassword),
+                    TemporaryCertificateFile = OptionalProjectPath(MacPkgTemporaryCertificateFile),
+                    TemporaryCertificatePassword = EnvSecret(
+                        MacPkgTemporaryCertificatePasswordEnvironmentVariable,
+                        nameof(MacPkgTemporaryCertificatePasswordEnvironmentVariable)),
                     Notarize = MacPkgNotarize,
                     NotaryWait = MacPkgNotaryWait,
                     SkipStapling = MacPkgSkipStapling,
                     KeychainProfile = EmptyToNull(MacPkgNotaryProfile),
                     AppleId = EmptyToNull(MacPkgAppleId),
-                    ApplePassword = EmptyToNull(MacPkgApplePassword),
+                    ApplePassword = EnvSecret(
+                        MacPkgApplePasswordEnvironmentVariable,
+                        nameof(MacPkgApplePasswordEnvironmentVariable)),
                     AppleTeamId = EmptyToNull(MacPkgAppleTeamId),
-                    ApiKeyFile = OptionalFullPath(MacPkgNotaryApiKeyFile),
+                    ApiKeyFile = OptionalProjectPath(MacPkgNotaryApiKeyFile),
                     ApiKeyId = EmptyToNull(MacPkgNotaryApiKeyId),
                     ApiKeyIssuer = EmptyToNull(MacPkgNotaryApiKeyIssuer)
                 }
@@ -701,8 +714,8 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                             MacDmgLayoutApplicationsIconY, "BundlerMacDmgLayoutApplicationsIconY", 170),
                         IconSize = MacIntValue(MacDmgLayoutIconSize, "BundlerMacDmgLayoutIconSize", 128),
                     },
-                BackgroundFile = EmptyToNull(MacDmgBackgroundFile),
-                VolumeIconFile = EmptyToNull(MacDmgVolumeIconFile),
+                BackgroundFile = OptionalProjectPath(MacDmgBackgroundFile),
+                VolumeIconFile = OptionalProjectPath(MacDmgVolumeIconFile),
                 Signing = BuildMacDmgSigning()
             };
         }
@@ -728,18 +741,18 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Section = EmptyToNull(DebSection),
                 Priority = EmptyToNull(DebPriority),
                 Categories = SplitList(DebCategories),
-                DesktopFile = OptionalFullPath(DebDesktopFile),
-                MetainfoFile = OptionalFullPath(DebMetainfoFile),
-                ChangelogFile = OptionalFullPath(DebChangelogFile),
-                PreInstallFile = OptionalFullPath(DebPreInstallFile),
-                PostInstallFile = OptionalFullPath(DebPostInstallFile),
-                PreUninstallFile = OptionalFullPath(DebPreUninstallFile),
-                PostUninstallFile = OptionalFullPath(DebPostUninstallFile),
-                SystemdServiceFile = OptionalFullPath(DebSystemdServiceFile),
+                DesktopFile = OptionalProjectPath(DebDesktopFile),
+                MetainfoFile = OptionalProjectPath(DebMetainfoFile),
+                ChangelogFile = OptionalProjectPath(DebChangelogFile),
+                PreInstallFile = OptionalProjectPath(DebPreInstallFile),
+                PostInstallFile = OptionalProjectPath(DebPostInstallFile),
+                PreUninstallFile = OptionalProjectPath(DebPreUninstallFile),
+                PostUninstallFile = OptionalProjectPath(DebPostUninstallFile),
+                SystemdServiceFile = OptionalProjectPath(DebSystemdServiceFile),
                 ConfigLocations = SplitList(DebConfigLocations),
                 Files = DebFiles.Select(item => new DebFileEntry
                 {
-                    Source = Path.GetFullPath(item.ItemSpec),
+                    Source = ProjectPath(item.ItemSpec),
                     Destination = item.GetMetadata("Destination")
                 }).ToArray()
             };
@@ -768,27 +781,29 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Group = EmptyToNull(RpmGroup),
                 Url = EmptyToNull(RpmUrl),
                 Categories = SplitList(RpmCategories),
-                DesktopFile = OptionalFullPath(RpmDesktopFile),
-                MetainfoFile = OptionalFullPath(RpmMetainfoFile),
-                ChangelogFile = OptionalFullPath(RpmChangelogFile),
+                DesktopFile = OptionalProjectPath(RpmDesktopFile),
+                MetainfoFile = OptionalProjectPath(RpmMetainfoFile),
+                ChangelogFile = OptionalProjectPath(RpmChangelogFile),
                 ConfigLocations = SplitList(RpmConfigLocations),
-                SystemdServiceFile = OptionalFullPath(RpmSystemdServiceFile),
-                PreInstallFile = OptionalFullPath(RpmPreInstallFile),
-                PostInstallFile = OptionalFullPath(RpmPostInstallFile),
-                PreUninstallFile = OptionalFullPath(RpmPreUninstallFile),
-                PostUninstallFile = OptionalFullPath(RpmPostUninstallFile),
+                SystemdServiceFile = OptionalProjectPath(RpmSystemdServiceFile),
+                PreInstallFile = OptionalProjectPath(RpmPreInstallFile),
+                PostInstallFile = OptionalProjectPath(RpmPostInstallFile),
+                PreUninstallFile = OptionalProjectPath(RpmPreUninstallFile),
+                PostUninstallFile = OptionalProjectPath(RpmPostUninstallFile),
                 PreInstallProgram = EmptyToNull(RpmPreInstallProgram),
                 PostInstallProgram = EmptyToNull(RpmPostInstallProgram),
                 PreUninstallProgram = EmptyToNull(RpmPreUninstallProgram),
                 PostUninstallProgram = EmptyToNull(RpmPostUninstallProgram),
                 Signing = new KeyFileSigningConfiguration
                 {
-                    KeyFile = OptionalFullPath(RpmSigningKeyFile),
-                    Passphrase = EmptyToNull(RpmSigningKeyPassphrase),
+                    KeyFile = OptionalProjectPath(RpmSigningKeyFile),
+                    Passphrase = EnvSecret(
+                        RpmSigningKeyPassphraseEnvironmentVariable,
+                        nameof(RpmSigningKeyPassphraseEnvironmentVariable)),
                 },
                 Files = RpmFiles.Select(item => new RpmFileEntry
                 {
-                    Source = Path.GetFullPath(item.ItemSpec),
+                    Source = ProjectPath(item.ItemSpec),
                     Destination = item.GetMetadata("Destination")
                 }).ToArray()
             };
@@ -802,7 +817,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 ArchiveName = EmptyToNull(ArchiveName),
                 Files = ArchiveFiles.Select(item => new ArchiveFileEntry
                 {
-                    Source = Path.GetFullPath(item.ItemSpec),
+                    Source = ProjectPath(item.ItemSpec),
                     Destination = item.GetMetadata("Destination")
                 }).ToArray()
             };
@@ -826,22 +841,29 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Depends = SplitList(AlpineApkDepends),
                 Provides = SplitList(AlpineApkProvides),
                 Triggers = SplitList(AlpineApkTriggers),
-                PreInstallFile = OptionalFullPath(AlpineApkPreInstallFile),
-                PostInstallFile = OptionalFullPath(AlpineApkPostInstallFile),
-                PreUninstallFile = OptionalFullPath(AlpineApkPreUninstallFile),
-                PostUninstallFile = OptionalFullPath(AlpineApkPostUninstallFile),
-                PreUpgradeFile = OptionalFullPath(AlpineApkPreUpgradeFile),
-                PostUpgradeFile = OptionalFullPath(AlpineApkPostUpgradeFile),
+                PreInstallFile = OptionalProjectPath(AlpineApkPreInstallFile),
+                PostInstallFile = OptionalProjectPath(AlpineApkPostInstallFile),
+                PreUninstallFile = OptionalProjectPath(AlpineApkPreUninstallFile),
+                PostUninstallFile = OptionalProjectPath(AlpineApkPostUninstallFile),
+                PreUpgradeFile = OptionalProjectPath(AlpineApkPreUpgradeFile),
+                PostUpgradeFile = OptionalProjectPath(AlpineApkPostUpgradeFile),
                 Files = AlpineApkFiles.Select(item => new AlpineApkFileEntry
                 {
-                    Source = Path.GetFullPath(item.ItemSpec),
+                    Source = ProjectPath(item.ItemSpec),
                     Destination = item.GetMetadata("Destination")
                 }).ToArray(),
                 Signing = new KeyFileSigningConfiguration
                 {
-                    KeyFile = OptionalFullPath(AlpineApkSigningKeyFile),
-                    Passphrase = EmptyToNull(AlpineApkSigningKeyPassphrase),
-                }
+                    KeyFile = OptionalProjectPath(AlpineApkSigningKeyFile),
+                    Passphrase = EnvSecret(
+                        AlpineApkSigningKeyPassphraseEnvironmentVariable,
+                        nameof(AlpineApkSigningKeyPassphraseEnvironmentVariable)),
+                },
+                ExtraPkgInfo = AlpineApkExtraPkgInfo.Length == 0
+                    ? null
+                    : AlpineApkExtraPkgInfo.ToDictionary(
+                        item => item.ItemSpec,
+                        item => item.GetMetadata("Value"))
             };
         }
         if (format == PackageFormat.AppImage)
@@ -855,18 +877,20 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 BinLink = string.Equals(AppImageBinLink, "none", StringComparison.OrdinalIgnoreCase)
                     ? ""
                     : EmptyToNull(AppImageBinLink),
-                IconFile = OptionalFullPath(AppImageIconFile),
-                DesktopFile = OptionalFullPath(AppImageDesktopFile),
+                IconFile = OptionalProjectPath(AppImageIconFile),
+                DesktopFile = OptionalProjectPath(AppImageDesktopFile),
                 Categories = SplitList(AppImageCategories),
-                MetainfoFile = OptionalFullPath(AppImageMetainfoFile),
+                MetainfoFile = OptionalProjectPath(AppImageMetainfoFile),
                 Signing = new KeyFileSigningConfiguration
                 {
-                    KeyFile = OptionalFullPath(AppImageSigningKeyFile),
-                    Passphrase = EmptyToNull(AppImageSigningKeyPassphrase),
+                    KeyFile = OptionalProjectPath(AppImageSigningKeyFile),
+                    Passphrase = EnvSecret(
+                        AppImageSigningKeyPassphraseEnvironmentVariable,
+                        nameof(AppImageSigningKeyPassphraseEnvironmentVariable)),
                 },
                 Files = AppImageFiles.Select(item => new AppImageFileEntry
                 {
-                    Source = Path.GetFullPath(item.ItemSpec),
+                    Source = ProjectPath(item.ItemSpec),
                     Destination = item.GetMetadata("Destination")
                 }).ToArray()
             };
@@ -886,11 +910,11 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
             IconName = EmptyToNull(MacAppIconName),
             Files = MacAppFiles.Select(item => new MacAppFileEntry
             {
-                Source = Path.GetFullPath(item.ItemSpec),
+                Source = ProjectPath(item.ItemSpec),
                 Destination = item.GetMetadata("Destination").Trim()
             }).ToArray(),
             FrameworkDirectories = MacAppFrameworkDirectories.Select(
-                item => Path.GetFullPath(item.ItemSpec)).ToArray(),
+                item => ProjectPath(item.ItemSpec)).ToArray(),
             DocumentTypes = MacDocumentTypes.Select(item => new MacAppDocumentTypeConfiguration
             {
                 Extensions = MacListMetadata(item, "Extensions", item.ItemSpec),
@@ -910,23 +934,27 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 Role = MacEnumMetadata<MacAppTypeRole>(item, "Role")
             }).ToArray(),
             ExceptionDomain = EmptyToNull(MacAppExceptionDomain),
-            InfoPlistFile = OptionalFullPath(MacAppInfoPlistFile),
+            InfoPlistFile = OptionalProjectPath(MacAppInfoPlistFile),
             InfoPlistXml = EmptyToNull(MacAppInfoPlistXml),
             Signing = new MacAppSigningConfiguration
             {
                 Identity = EmptyToNull(MacAppSignIdentity),
-                TemporaryCertificateFile = OptionalFullPath(MacAppTemporaryCertificateFile),
-                TemporaryCertificatePassword = EmptyToNull(MacAppTemporaryCertificatePassword),
+                TemporaryCertificateFile = OptionalProjectPath(MacAppTemporaryCertificateFile),
+                TemporaryCertificatePassword = EnvSecret(
+                    MacAppTemporaryCertificatePasswordEnvironmentVariable,
+                    nameof(MacAppTemporaryCertificatePasswordEnvironmentVariable)),
                 HardenedRuntime = MacAppHardenedRuntime,
-                EntitlementsFile = OptionalFullPath(MacAppEntitlementsFile),
+                EntitlementsFile = OptionalProjectPath(MacAppEntitlementsFile),
                 Notarize = MacAppNotarize,
                 NotaryWait = MacAppNotaryWait,
                 SkipStapling = MacAppSkipStapling,
                 KeychainProfile = EmptyToNull(MacAppNotaryProfile),
                 AppleId = EmptyToNull(MacAppAppleId),
-                ApplePassword = EmptyToNull(MacAppApplePassword),
+                ApplePassword = EnvSecret(
+                    MacAppApplePasswordEnvironmentVariable,
+                    nameof(MacAppApplePasswordEnvironmentVariable)),
                 AppleTeamId = EmptyToNull(MacAppAppleTeamId),
-                ApiKeyFile = OptionalFullPath(MacAppNotaryApiKeyFile),
+                ApiKeyFile = OptionalProjectPath(MacAppNotaryApiKeyFile),
                 ApiKeyId = EmptyToNull(MacAppNotaryApiKeyId),
                 ApiKeyIssuer = EmptyToNull(MacAppNotaryApiKeyIssuer)
             }
@@ -935,7 +963,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     private MacDmgSigningConfiguration? BuildMacDmgSigning()
     {
         var identity = EmptyToNull(MacDmgSignIdentity);
-        var certificatePath = OptionalFullPath(MacDmgTemporaryCertificateFile);
+        var certificatePath = OptionalProjectPath(MacDmgTemporaryCertificateFile);
         if (identity is null && certificatePath is null)
         {
             return null;
@@ -944,7 +972,9 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
         {
             Identity = identity,
             TemporaryCertificateFile = certificatePath,
-            TemporaryCertificatePassword = EmptyToNull(MacDmgTemporaryCertificatePassword)
+            TemporaryCertificatePassword = EnvSecret(
+                MacDmgTemporaryCertificatePasswordEnvironmentVariable,
+                nameof(MacDmgTemporaryCertificatePasswordEnvironmentVariable))
         };
     }
 
@@ -996,8 +1026,34 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
     private static string? EmptyToNull(string value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
 
-    private static string? OptionalFullPath(string value) =>
-        string.IsNullOrWhiteSpace(value) ? null : Path.GetFullPath(value);
+    // 相对路径一律按项目目录（$(MSBuildProjectDirectory)）解析——裸
+    // Path.GetFullPath 以进程 cwd 为基准，`dotnet build` 从别处调用时
+    // 相对旋钮静默指错位置。ProjectDirectory 缺省回落 cwd（直调任务）。
+    private string ProjectPath(string value) =>
+        Path.GetFullPath(Path.IsPathRooted(value) || string.IsNullOrEmpty(ProjectDirectory)
+            ? value
+            : Path.Combine(ProjectDirectory, value));
+
+    private string? OptionalProjectPath(string value) =>
+        string.IsNullOrWhiteSpace(value) ? null : ProjectPath(value);
+
+    // 秘密旋钮只收 env 名——值从环境变量读，不进项目文件/命令行/日志。
+    // env 名给了但变量不存在是配置错误，与 PFX 密码同一口径。
+    private static string? EnvSecret(string variableName, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(variableName))
+        {
+            return null;
+        }
+        var value = Environment.GetEnvironmentVariable(variableName);
+        if (value is null)
+        {
+            throw new InvalidOperationException(
+                $"Environment variable '{variableName}' referenced by " +
+                $"Bundler{propertyName} is not set.");
+        }
+        return value;
+    }
 
     // Debian relation fields hold comma-separated clauses, so the MSBuild-facing
     // list separator is ';' (e.g. "libc6 (>= 2.35);libssl3").
@@ -1147,7 +1203,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 throw new ArgumentException("Duplicate MSI locale file for '" + language + "'.");
             }
 
-            result.Add(language, Path.GetFullPath(item.ItemSpec));
+            result.Add(language, ProjectPath(item.ItemSpec));
         }
 
         return result;
@@ -1171,7 +1227,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
                 throw new ArgumentException("Duplicate custom NSIS language file for '" + language + "'.");
             }
 
-            result.Add(language, Path.GetFullPath(item.ItemSpec));
+            result.Add(language, ProjectPath(item.ItemSpec));
         }
 
         return result;
@@ -1235,7 +1291,7 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
 
         return new WindowsAuthenticodeSigner(new WindowsAuthenticodeSigningOptions
         {
-            PfxFile = pfxFile is null ? null : Path.GetFullPath(pfxFile),
+            PfxFile = pfxFile is null ? null : ProjectPath(pfxFile),
             PfxPassword = password,
             CertificateThumbprint = thumbprint,
             CertificateStoreLocation = storeLocation,

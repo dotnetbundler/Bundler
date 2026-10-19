@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
-    <_BundlerPackageRoot Condition="'$(_BundlerPackageRoot)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\'))</_BundlerPackageRoot>
-    <_BundlerTaskAssembly Condition="'$(_BundlerTaskAssembly)' == ''">$(_BundlerPackageRoot)tasks\netstandard2.0\DotNet.Bundler.MSBuild.dll</_BundlerTaskAssembly>
+    <_BundlerPackageRoot Condition="'$(_BundlerPackageRoot)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../'))</_BundlerPackageRoot>
+    <_BundlerTaskAssembly Condition="'$(_BundlerTaskAssembly)' == ''">$(_BundlerPackageRoot)tasks/netstandard2.0/DotNet.Bundler.MSBuild.dll</_BundlerTaskAssembly>
     <!-- 内层发布子进程的 dotnet 入口；universal/自动发布腿用 Exec 调它（原因见 _BundlerUniversalMerge 注释） -->
     <BundlingDotnetExe Condition="'$(BundlingDotnetExe)' == ''">dotnet</BundlingDotnetExe>
     <!-- 转发给内层 dotnet publish 的调用方构建配置——子进程不继承外层全局属性，
@@ -132,15 +132,19 @@
     <Message Importance="normal" Condition="'$(_BundlerInferredHostTarget)' == 'true' and '@(_BundlerTargetFromRid)' != ''"
              Text="BundlerTarget inferred from host runtime identifier '$(_BundlerEffectiveRid)' → '@(_BundlerTargetFromRid)'." />
     <PropertyGroup>
-      <!-- formats 缺省按目标 OS 推导（显式 BundlerFormats 恒胜）：universal 视同 macos，
-           未知 OS 兜底 deb——deb 是纯托管后端任何宿主可产 -->
+      <!-- formats 缺省按目标 OS 推导（显式 BundlerFormats 恒胜）——与 Core
+           BundleDefaults.DefaultFormatsForTarget 同一张表：windows→nsis、
+           macos/universal→dmg、linux-musl→alpineapk、linux→deb、未知→zip
+           （zip 与 deb 同为纯托管、全宿主可产；未知 target 语义上不该赌某个
+           系统包生态，通用归档最稳） -->
       <BundlerFormats Condition="'$(BundlerFormats)' == '' and '$(_BundlerTargetOs)' == 'windows'">nsis</BundlerFormats>
       <BundlerFormats Condition="'$(BundlerFormats)' == '' and ('$(_BundlerTargetOs)' == 'macos' or '$(BundlerUniversalTargets)' != '')">dmg</BundlerFormats>
       <BundlerFormats Condition="'$(BundlerFormats)' == '' and '$(_BundlerTargetOs)' == 'linux-musl'">alpineapk</BundlerFormats>
-      <BundlerFormats Condition="'$(BundlerFormats)' == ''">deb</BundlerFormats>
+      <BundlerFormats Condition="'$(BundlerFormats)' == '' and '$(_BundlerTargetOs)' == 'linux'">deb</BundlerFormats>
+      <BundlerFormats Condition="'$(BundlerFormats)' == ''">zip</BundlerFormats>
       <!-- 尾分隔符不能留——内层子进程 `-o "...\windows-x86_64\"` 的闭引号会被
            反斜杠转义，后续 -p: 参数全并迸输出目录名（win 腿 MSB3073 实证） -->
-      <_BundlerPublishOutDir>$(MSBuildProjectExtensionsPath)BundlerPublish\$(_BundlerCanonicalTarget)</_BundlerPublishOutDir>
+      <_BundlerPublishOutDir>$(MSBuildProjectExtensionsPath)BundlerPublish/$(_BundlerCanonicalTarget)</_BundlerPublishOutDir>
       <!-- identifier 缺省合成 dev.bundler.<AssemblyName 规范化>：引包即用，
            显式 BundlerIdentifier 恒胜；正式分发仍应显式指定 -->
       <_BundlerIdentifierLower Condition="'$(BundlerIdentifier)' == ''">$(AssemblyName.ToLowerInvariant())</_BundlerIdentifierLower>
@@ -157,6 +161,10 @@
            Text="BundlerTarget is required to bundle (pass -p:BundlerTarget=&lt;target&gt;, or -p:RuntimeIdentifier=&lt;rid&gt; for table derivation)." />
     <Error Condition="'$(BundlerInputDir)' != '' and '$(BundlerUniversalTargets)' != ''"
            Text="BundlerInputDir cannot be combined with BundlerUniversalTargets." />
+    <!-- 显式 BundlerTarget 与 universal 同设必矛盾（有效目标恒 macos-universal）；
+         RID 推导/宿主推导出的值放行——那是自动产物不是用户意图。 -->
+    <Error Condition="'$(BundlerUniversalTargets)' != '' and '$(BundlerTarget)' != '' and '$(BundlerTarget)' != 'macos-universal' and '$(BundlerTarget)' != '@(_BundlerTargetFromRid)' and '$(BundlerTarget)' != '$(_BundlerEvalTarget)'"
+           Text="BundlerTarget '$(BundlerTarget)' cannot be combined with BundlerUniversalTargets; the effective target is always macos-universal." />
   </Target>
 
   <!-- 钩子链专属警告：显式 BundlerTarget 与发布 RID 推导值冲突（payload 平台≠包标签）。
@@ -197,7 +205,7 @@
   <!-- macOS universal 输入解析：per-RID 内层发布 + 托管合并（两入口共用；BundlerUniversalTargets 未设时跳过） -->
   <Target Name="_BundlerUniversalMerge" Condition="'$(BundlerUniversalTargets)' != ''">
     <PropertyGroup>
-      <_BundlerUniversalDir>$(MSBuildProjectExtensionsPath)BundlerUniversal\</_BundlerUniversalDir>
+      <_BundlerUniversalDir>$(MSBuildProjectExtensionsPath)BundlerUniversal/</_BundlerUniversalDir>
       <_BundlerEffectiveTarget>macos-universal</_BundlerEffectiveTarget>
     </PropertyGroup>
     <ItemGroup>
@@ -257,7 +265,8 @@
     <DotNet.Bundler.MSBuild.MergeUniversalPayload
       SourceDirectories="@(_BundlerUniversalRid -> '$(_BundlerUniversalDir)%(Identity)')"
       ReferenceDirectory="$(_BundlerUniversalDir)reference"
-      OutputDirectory="$(_BundlerUniversalDir)merged">
+      OutputDirectory="$(_BundlerUniversalDir)merged"
+      ProjectDirectory="$(MSBuildProjectDirectory)">
       <Output TaskParameter="MergedDirectory" PropertyName="_BundlerEffectiveInput" />
     </DotNet.Bundler.MSBuild.MergeUniversalPayload>
   </Target>
@@ -323,6 +332,7 @@
       BundlerTarget="$(_BundlerEffectiveTarget)"
       InputDirectory="$(_BundlerEffectiveInput)"
       OutputDirectory="$(BundlerOutputPath)"
+      ProjectDirectory="$(MSBuildProjectDirectory)"
       OutputLayout="$(BundlerOutputLayout)"
       MainExecutable="$(BundlerMainExecutable)"
       Formats="$(BundlerFormats)"
@@ -404,7 +414,7 @@
       MacAppInfoPlistXml="$(BundlerMacAppInfoPlistXml)"
       MacAppSignIdentity="$(BundlerMacAppSignIdentity)"
       MacAppTemporaryCertificateFile="$(BundlerMacAppTemporaryCertificateFile)"
-      MacAppTemporaryCertificatePassword="$(BundlerMacAppTemporaryCertificatePassword)"
+      MacAppTemporaryCertificatePasswordEnvironmentVariable="$(BundlerMacAppTemporaryCertificatePasswordEnvironmentVariable)"
       MacAppHardenedRuntime="$(BundlerMacAppHardenedRuntime)"
       MacAppEntitlementsFile="$(BundlerMacAppEntitlementsFile)"
       MacAppNotarize="$(BundlerMacAppNotarize)"
@@ -412,7 +422,7 @@
       MacAppSkipStapling="$(BundlerMacAppSkipStapling)"
       MacAppNotaryProfile="$(BundlerMacAppNotaryProfile)"
       MacAppAppleId="$(BundlerMacAppAppleId)"
-      MacAppApplePassword="$(BundlerMacAppApplePassword)"
+      MacAppApplePasswordEnvironmentVariable="$(BundlerMacAppApplePasswordEnvironmentVariable)"
       MacAppAppleTeamId="$(BundlerMacAppAppleTeamId)"
       MacAppNotaryApiKeyFile="$(BundlerMacAppNotaryApiKeyFile)"
       MacAppNotaryApiKeyId="$(BundlerMacAppNotaryApiKeyId)"
@@ -433,7 +443,7 @@
       MacDmgVolumeIconFile="$(BundlerMacDmgVolumeIconFile)"
       MacDmgSignIdentity="$(BundlerMacDmgSignIdentity)"
       MacDmgTemporaryCertificateFile="$(BundlerMacDmgTemporaryCertificateFile)"
-      MacDmgTemporaryCertificatePassword="$(BundlerMacDmgTemporaryCertificatePassword)"
+      MacDmgTemporaryCertificatePasswordEnvironmentVariable="$(BundlerMacDmgTemporaryCertificatePasswordEnvironmentVariable)"
       MacPkgPackageName="$(BundlerMacPkgPackageName)"
       MacPkgVersion="$(BundlerMacPkgVersion)"
       MacPkgInstallRoot="$(BundlerMacPkgInstallRoot)"
@@ -445,13 +455,13 @@
       MacPkgScriptsDirectory="$(BundlerMacPkgScriptsDirectory)"
       MacPkgSignIdentity="$(BundlerMacPkgSignIdentity)"
       MacPkgTemporaryCertificateFile="$(BundlerMacPkgTemporaryCertificateFile)"
-      MacPkgTemporaryCertificatePassword="$(BundlerMacPkgTemporaryCertificatePassword)"
+      MacPkgTemporaryCertificatePasswordEnvironmentVariable="$(BundlerMacPkgTemporaryCertificatePasswordEnvironmentVariable)"
       MacPkgNotarize="$(BundlerMacPkgNotarize)"
       MacPkgNotaryWait="$(BundlerMacPkgNotaryWait)"
       MacPkgSkipStapling="$(BundlerMacPkgSkipStapling)"
       MacPkgNotaryProfile="$(BundlerMacPkgNotaryProfile)"
       MacPkgAppleId="$(BundlerMacPkgAppleId)"
-      MacPkgApplePassword="$(BundlerMacPkgApplePassword)"
+      MacPkgApplePasswordEnvironmentVariable="$(BundlerMacPkgApplePasswordEnvironmentVariable)"
       MacPkgAppleTeamId="$(BundlerMacPkgAppleTeamId)"
       MacPkgNotaryApiKeyFile="$(BundlerMacPkgNotaryApiKeyFile)"
       MacPkgNotaryApiKeyId="$(BundlerMacPkgNotaryApiKeyId)"
@@ -514,7 +524,7 @@
       RpmPreUninstallProgram="$(BundlerRpmPreUninstallProgram)"
       RpmPostUninstallProgram="$(BundlerRpmPostUninstallProgram)"
       RpmSigningKeyFile="$(BundlerRpmSigningKeyFile)"
-      RpmSigningKeyPassphrase="$(BundlerRpmSigningKeyPassphrase)"
+      RpmSigningKeyPassphraseEnvironmentVariable="$(BundlerRpmSigningKeyPassphraseEnvironmentVariable)"
       AppImagePackageName="$(BundlerAppImagePackageName)"
       AppImageVersion="$(BundlerAppImageVersion)"
       AppImageArchitecture="$(BundlerAppImageArchitecture)"
@@ -525,7 +535,7 @@
       AppImageCategories="$(BundlerAppImageCategories)"
       AppImageMetainfoFile="$(BundlerAppImageMetainfoFile)"
       AppImageSigningKeyFile="$(BundlerAppImageSigningKeyFile)"
-      AppImageSigningKeyPassphrase="$(BundlerAppImageSigningKeyPassphrase)"
+      AppImageSigningKeyPassphraseEnvironmentVariable="$(BundlerAppImageSigningKeyPassphraseEnvironmentVariable)"
       AppImageFiles="@(BundlerAppImageFile)"
       ArchivePackageName="$(BundlerArchivePackageName)"
       ArchiveVersion="$(BundlerArchiveVersion)"
@@ -551,8 +561,9 @@
       AlpineApkPreUpgradeFile="$(BundlerAlpineApkPreUpgradeFile)"
       AlpineApkPostUpgradeFile="$(BundlerAlpineApkPostUpgradeFile)"
       AlpineApkFiles="@(BundlerAlpineApkFile)"
+      AlpineApkExtraPkgInfo="@(BundlerAlpineApkExtraPkgInfo)"
       AlpineApkSigningKeyFile="$(BundlerAlpineApkSigningKeyFile)"
-      AlpineApkSigningKeyPassphrase="$(BundlerAlpineApkSigningKeyPassphrase)"
+      AlpineApkSigningKeyPassphraseEnvironmentVariable="$(BundlerAlpineApkSigningKeyPassphraseEnvironmentVariable)"
       RpmFiles="@(BundlerRpmFile)"
       MacAppFiles="@(BundlerMacAppFile)"
       MacAppFrameworkDirectories="@(BundlerMacAppFrameworkDirectory)"
@@ -562,6 +573,7 @@
       UpdateFeedUrl="$(BundlerUpdateFeedUrl)"
       UpdateChannel="$(BundlerUpdateChannel)"
       UpdateSigningKeyFile="$(BundlerUpdateSigningKeyFile)"
+      UpdateBootstrapperDirectory="$(BundlerUpdateBootstrapperDirectory)"
       UpdatePublicKey="$(BundlerUpdatePublicKey)"
       UpdateNotes="$(BundlerUpdateNotes)">
       <Output TaskParameter="Artifacts" ItemName="BundlerArtifact" />

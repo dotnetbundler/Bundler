@@ -18,9 +18,9 @@
     <BundlerMacDmgLayoutApplicationsIconY Condition="'$(HelloBundlerDmgLayoutApplicationsIconY)' != ''">$(HelloBundlerDmgLayoutApplicationsIconY)</BundlerMacDmgLayoutApplicationsIconY>
     <BundlerMacDmgLayoutIconSize Condition="'$(HelloBundlerDmgLayoutIconSize)' != ''">$(HelloBundlerDmgLayoutIconSize)</BundlerMacDmgLayoutIconSize>
     <BundlerMacDmgBackgroundFile Condition="'$(HelloBundlerDmgBackgroundFile)' != ''">$(HelloBundlerDmgBackgroundFile)</BundlerMacDmgBackgroundFile>
-    <BundlerMacDmgBackgroundFile Condition="'$(HelloBundlerDmgBackgroundFile)' == ''">$(HelloBundlerAppAssets)dmg\bg.png</BundlerMacDmgBackgroundFile>
+    <BundlerMacDmgBackgroundFile Condition="'$(HelloBundlerDmgBackgroundFile)' == ''">$(HelloBundlerAppAssets)dmg/bg.png</BundlerMacDmgBackgroundFile>
     <BundlerMacDmgVolumeIconFile Condition="'$(HelloBundlerDmgVolumeIconFile)' != ''">$(HelloBundlerDmgVolumeIconFile)</BundlerMacDmgVolumeIconFile>
-    <BundlerMacDmgVolumeIconFile Condition="'$(HelloBundlerDmgVolumeIconFile)' == ''">$(HelloBundlerAppAssets)dmg\volume.icns</BundlerMacDmgVolumeIconFile>
+    <BundlerMacDmgVolumeIconFile Condition="'$(HelloBundlerDmgVolumeIconFile)' == ''">$(HelloBundlerAppAssets)dmg/volume.icns</BundlerMacDmgVolumeIconFile>
 
     <!-- EULA：默认用公共 BundlerLicenseFile（Assets/common/LICENSE.txt），挂载时弹许可面板；
          -p:HelloBundlerDmgLicenseFile=none 不注入 SLA，也可改指自有许可文件。 -->
@@ -30,6 +30,6 @@
     <!-- DMG 本体签名：identity（"-"=ad-hoc）与临时钥匙串证书互斥。 -->
     <BundlerMacDmgSignIdentity Condition="'$(HelloBundlerDmgSignIdentity)' != ''">$(HelloBundlerDmgSignIdentity)</BundlerMacDmgSignIdentity>
     <BundlerMacDmgTemporaryCertificateFile Condition="'$(HelloBundlerDmgTemporaryCertificateFile)' != ''">$(HelloBundlerDmgTemporaryCertificateFile)</BundlerMacDmgTemporaryCertificateFile>
-    <BundlerMacDmgTemporaryCertificatePassword Condition="'$(HelloBundlerDmgTemporaryCertificatePassword)' != ''">$(HelloBundlerDmgTemporaryCertificatePassword)</BundlerMacDmgTemporaryCertificatePassword>
+    <BundlerMacDmgTemporaryCertificatePasswordEnvironmentVariable Condition="'$(HelloBundlerDmgTemporaryCertificatePasswordEnvironmentVariable)' != ''">$(HelloBundlerDmgTemporaryCertificatePasswordEnvironmentVariable)</BundlerMacDmgTemporaryCertificatePasswordEnvironmentVariable>
   </PropertyGroup>
 </Project>

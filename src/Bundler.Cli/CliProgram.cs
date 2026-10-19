@@ -480,17 +480,21 @@ public static class CliProgram
         return 0;
     }
 
-    private static BundleConfiguration SingleFormatConfiguration(
+    // 只保留声明了该格式的 targets——混合 targets（windows+linux 各声明各自
+    // 格式）时给全部 targets 盖上单格式会把别的平台载荷推进当前后端串台。
+    internal static BundleConfiguration SingleFormatConfiguration(
         BundleConfiguration source, PackageFormat format) =>
         BundleConfigurationPaths.WithTargets(source,
-            source.Targets.Select(target => new BundleTargetConfiguration
-            {
-                Target = target.Target,
-                InputDirectory = target.InputDirectory,
-                MainExecutable = target.MainExecutable,
-                SigningFiles = target.SigningFiles,
-                Formats = [format]
-            }).ToArray());
+            source.Targets
+                .Where(target => target.Formats.Contains(format))
+                .Select(target => new BundleTargetConfiguration
+                {
+                    Target = target.Target,
+                    InputDirectory = target.InputDirectory,
+                    MainExecutable = target.MainExecutable,
+                    SigningFiles = target.SigningFiles,
+                    Formats = [format]
+                }).ToArray());
 
     private static string FormatName(PackageFormat format) => format switch
     {

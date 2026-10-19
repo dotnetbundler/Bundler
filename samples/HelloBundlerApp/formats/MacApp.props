@@ -8,9 +8,9 @@
     <HelloBundlerMacAppInfoPlistMode Condition="'$(HelloBundlerMacAppInfoPlistMode)' == ''">file</HelloBundlerMacAppInfoPlistMode>
     <HelloBundlerMacAppSignIdentity Condition="'$(HelloBundlerMacAppSignIdentity)' == ''"></HelloBundlerMacAppSignIdentity>
     <HelloBundlerMacAppTemporaryCertificateFile Condition="'$(HelloBundlerMacAppTemporaryCertificateFile)' == ''"></HelloBundlerMacAppTemporaryCertificateFile>
-    <HelloBundlerMacAppTemporaryCertificatePassword Condition="'$(HelloBundlerMacAppTemporaryCertificatePassword)' == ''"></HelloBundlerMacAppTemporaryCertificatePassword>
+    <HelloBundlerMacAppTemporaryCertificatePasswordEnvironmentVariable Condition="'$(HelloBundlerMacAppTemporaryCertificatePasswordEnvironmentVariable)' == ''"></HelloBundlerMacAppTemporaryCertificatePasswordEnvironmentVariable>
     <HelloBundlerMacAppHardenedRuntime Condition="'$(HelloBundlerMacAppHardenedRuntime)' == ''">true</HelloBundlerMacAppHardenedRuntime>
-    <HelloBundlerMacAppEntitlementsFile Condition="'$(HelloBundlerMacAppEntitlementsFile)' == ''">$(HelloBundlerAppAssets)mac\entitlements.plist</HelloBundlerMacAppEntitlementsFile>
+    <HelloBundlerMacAppEntitlementsFile Condition="'$(HelloBundlerMacAppEntitlementsFile)' == ''">$(HelloBundlerAppAssets)mac/entitlements.plist</HelloBundlerMacAppEntitlementsFile>
     <HelloBundlerMacAppNotarize Condition="'$(HelloBundlerMacAppNotarize)' == ''">false</HelloBundlerMacAppNotarize>
 
     <BundlerMacAppPackageName Condition="'$(HelloBundlerMacAppPackageName)' != ''">$(HelloBundlerMacAppPackageName)</BundlerMacAppPackageName>
@@ -23,13 +23,13 @@
     <BundlerMacAppExceptionDomain>hello.example.local</BundlerMacAppExceptionDomain>
     <BundlerMacAppIconName Condition="'$(HelloBundlerMacAppIconMode)' == 'car'">AppIcon</BundlerMacAppIconName>
     <BundlerMacAppIconName Condition="'$(HelloBundlerMacAppIconMode)' != 'car'">HelloBundlerAppIcon</BundlerMacAppIconName>
-    <BundlerMacAppInfoPlistFile Condition="'$(HelloBundlerMacAppInfoPlistMode)' == 'file'">$(HelloBundlerAppAssets)mac\extra.plist</BundlerMacAppInfoPlistFile>
+    <BundlerMacAppInfoPlistFile Condition="'$(HelloBundlerMacAppInfoPlistMode)' == 'file'">$(HelloBundlerAppAssets)mac/extra.plist</BundlerMacAppInfoPlistFile>
     <BundlerMacAppInfoPlistXml Condition="'$(HelloBundlerMacAppInfoPlistMode)' == 'xml'">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;&lt;plist version=&quot;1.0&quot;&gt;&lt;dict&gt;&lt;key&gt;NSSupportsSuddenTermination&lt;/key&gt;&lt;true/&gt;&lt;key&gt;HelloMacCustomKey&lt;/key&gt;&lt;string&gt;hello&lt;/string&gt;&lt;/dict&gt;&lt;/plist&gt;</BundlerMacAppInfoPlistXml>
 
     <!-- .app 签名/加固运行时/entitlements（identity 空即仅 ad-hoc）。 -->
     <BundlerMacAppSignIdentity Condition="'$(HelloBundlerMacAppSignIdentity)' != ''">$(HelloBundlerMacAppSignIdentity)</BundlerMacAppSignIdentity>
     <BundlerMacAppTemporaryCertificateFile Condition="'$(HelloBundlerMacAppTemporaryCertificateFile)' != ''">$(HelloBundlerMacAppTemporaryCertificateFile)</BundlerMacAppTemporaryCertificateFile>
-    <BundlerMacAppTemporaryCertificatePassword Condition="'$(HelloBundlerMacAppTemporaryCertificatePassword)' != ''">$(HelloBundlerMacAppTemporaryCertificatePassword)</BundlerMacAppTemporaryCertificatePassword>
+    <BundlerMacAppTemporaryCertificatePasswordEnvironmentVariable Condition="'$(HelloBundlerMacAppTemporaryCertificatePasswordEnvironmentVariable)' != ''">$(HelloBundlerMacAppTemporaryCertificatePasswordEnvironmentVariable)</BundlerMacAppTemporaryCertificatePasswordEnvironmentVariable>
     <BundlerMacAppHardenedRuntime Condition="'$(HelloBundlerMacAppSignIdentity)' != ''">$(HelloBundlerMacAppHardenedRuntime)</BundlerMacAppHardenedRuntime>
     <BundlerMacAppEntitlementsFile Condition="'$(HelloBundlerMacAppSignIdentity)' != ''">$(HelloBundlerMacAppEntitlementsFile)</BundlerMacAppEntitlementsFile>
 
@@ -39,7 +39,7 @@
     <BundlerMacAppSkipStapling Condition="'$(HelloBundlerMacAppSkipStapling)' != ''">$(HelloBundlerMacAppSkipStapling)</BundlerMacAppSkipStapling>
     <BundlerMacAppNotaryProfile Condition="'$(HelloBundlerMacAppNotaryProfile)' != ''">$(HelloBundlerMacAppNotaryProfile)</BundlerMacAppNotaryProfile>
     <BundlerMacAppAppleId Condition="'$(HelloBundlerMacAppAppleId)' != ''">$(HelloBundlerMacAppAppleId)</BundlerMacAppAppleId>
-    <BundlerMacAppApplePassword Condition="'$(HelloBundlerMacAppApplePassword)' != ''">$(HelloBundlerMacAppApplePassword)</BundlerMacAppApplePassword>
+    <BundlerMacAppApplePasswordEnvironmentVariable Condition="'$(HelloBundlerMacAppApplePasswordEnvironmentVariable)' != ''">$(HelloBundlerMacAppApplePasswordEnvironmentVariable)</BundlerMacAppApplePasswordEnvironmentVariable>
     <BundlerMacAppAppleTeamId Condition="'$(HelloBundlerMacAppAppleTeamId)' != ''">$(HelloBundlerMacAppAppleTeamId)</BundlerMacAppAppleTeamId>
     <BundlerMacAppNotaryApiKeyFile Condition="'$(HelloBundlerMacAppNotaryApiKeyFile)' != ''">$(HelloBundlerMacAppNotaryApiKeyFile)</BundlerMacAppNotaryApiKeyFile>
     <BundlerMacAppNotaryApiKeyId Condition="'$(HelloBundlerMacAppNotaryApiKeyId)' != ''">$(HelloBundlerMacAppNotaryApiKeyId)</BundlerMacAppNotaryApiKeyId>
@@ -48,13 +48,13 @@
 
   <ItemGroup>
     <!-- BundlerIcon 是跨后端全局项——mac 图标必须 RID 门控，否则 PNG 漏进 win（MSI 只收 .ico）/linux 图标集。 -->
-    <BundlerIcon Include="$(HelloBundlerAppAssets)mac\icon-256.png" Condition="'$(HelloBundlerMacAppIconMode)' == 'png' and $(Target.Contains('macos'))" />
-    <BundlerIcon Include="$(HelloBundlerAppAssets)mac\icon-512.png" Condition="'$(HelloBundlerMacAppIconMode)' == 'png' and $(Target.Contains('macos'))" />
-    <BundlerIcon Include="$(HelloBundlerAppAssets)mac\hello.car" Condition="'$(HelloBundlerMacAppIconMode)' == 'car' and $(Target.Contains('macos'))" />
+    <BundlerIcon Include="$(HelloBundlerAppAssets)mac/icon-256.png" Condition="'$(HelloBundlerMacAppIconMode)' == 'png' and $(Target.Contains('macos'))" />
+    <BundlerIcon Include="$(HelloBundlerAppAssets)mac/icon-512.png" Condition="'$(HelloBundlerMacAppIconMode)' == 'png' and $(Target.Contains('macos'))" />
+    <BundlerIcon Include="$(HelloBundlerAppAssets)mac/hello.car" Condition="'$(HelloBundlerMacAppIconMode)' == 'car' and $(Target.Contains('macos'))" />
     <BundlerIcon Include="$(HelloBundlerMacAppIconSource)" Condition="'$(HelloBundlerMacAppIconMode)' == 'icon' and '$(HelloBundlerMacAppIconSource)' != '' and $(Target.Contains('macos'))" />
-    <BundlerMacAppFrameworkDirectory Include="$(HelloBundlerAppAssets)mac\libhello.dylib" />
+    <BundlerMacAppFrameworkDirectory Include="$(HelloBundlerAppAssets)mac/libhello.dylib" />
     <BundlerMacDocumentType Include="hellomac" Role="Editor" Rank="Owner" ExportedTypeIdentifier="com.example.hellobundlerapp.hellomac" ExportedTypeConformsTo="public.data" />
     <BundlerMacUrlType Include="hellomac" Role="Viewer" />
-    <BundlerMacAppFile Include="$(HelloBundlerAppAssets)mac\shared-note.txt" Destination="SharedSupport/shared-note.txt" />
+    <BundlerMacAppFile Include="$(HelloBundlerAppAssets)mac/shared-note.txt" Destination="SharedSupport/shared-note.txt" />
   </ItemGroup>
 </Project>

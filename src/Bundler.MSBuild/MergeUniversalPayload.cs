@@ -17,15 +17,17 @@ public sealed class MergeUniversalPayload : Microsoft.Build.Utilities.Task
     [Required] public ITaskItem[] SourceDirectories { get; set; } = Array.Empty<ITaskItem>();
     [Required] public string OutputDirectory { get; set; } = "";
     public string ReferenceDirectory { get; set; } = "";
+    // 相对路径解析基准——targets 传 $(MSBuildProjectDirectory)；空值回落 cwd。
+    public string ProjectDirectory { get; set; } = "";
     [Output] public string MergedDirectory { get; private set; } = "";
 
     public override bool Execute()
     {
         try
         {
-            var sources = SourceDirectories.Select(item => Path.GetFullPath(item.ItemSpec)).ToArray();
-            var output = Path.GetFullPath(OutputDirectory);
-            var reference = string.IsNullOrEmpty(ReferenceDirectory) ? null : Path.GetFullPath(ReferenceDirectory);
+            var sources = SourceDirectories.Select(item => ProjectPath(item.ItemSpec)).ToArray();
+            var output = ProjectPath(OutputDirectory);
+            var reference = string.IsNullOrEmpty(ReferenceDirectory) ? null : ProjectPath(ReferenceDirectory);
             MacUniversalPayloadMerger.Merge(sources, output, reference);
             MergedDirectory = output;
             Log.LogMessage(MessageImportance.High,
@@ -38,4 +40,9 @@ public sealed class MergeUniversalPayload : Microsoft.Build.Utilities.Task
             return false;
         }
     }
+
+    private string ProjectPath(string value) =>
+        Path.GetFullPath(Path.IsPathRooted(value) || string.IsNullOrEmpty(ProjectDirectory)
+            ? value
+            : Path.Combine(ProjectDirectory, value));
 }
