@@ -192,7 +192,7 @@ internal sealed class AppImageBundleBackend(
                 throw new ArgumentException(
                     $"BundlerAppImageFile destinations must be relative paths inside the AppDir, got '{entry.Destination}'.");
             }
-            if (AppDirBuilder.ReservedNames(packageName).Contains(destination))
+            if (AppDirBuilder.IsReservedEntry(packageName, destination))
             {
                 throw new ArgumentException(
                     $"BundlerAppImageFile destination '{destination}' collides with a generated AppDir entry.");

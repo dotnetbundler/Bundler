@@ -216,7 +216,7 @@ internal static class AppDirBuilder
                     throw new ArgumentException(
                         $"BundlerAppImageFile destinations must be relative paths inside the AppDir, got '{entry.Destination}'.");
                 }
-                if (reserved.Contains(destination))
+                if (IsReservedEntry(packageName, destination))
                 {
                     throw new ArgumentException(
                         $"BundlerAppImageFile destination '{destination}' collides with a generated AppDir entry.");
@@ -236,7 +236,7 @@ internal static class AppDirBuilder
                 EnsureDirectories(appDir, Path.GetDirectoryName(hostDestination)!,
                     path => new ArgumentException(
                         $"BundlerAppImageFile destination '{entry.Destination}' collides " +
-                        $"with a payload file occupying '{path}'."));
+                        $"with an existing file at '{path}'."));
                 File.Copy(source, hostDestination);
             }
         }
@@ -258,6 +258,15 @@ internal static class AppDirBuilder
             "AppRun", ".DirIcon",
             packageName + ".desktop", packageName + ".png"
         };
+
+    /// <summary>
+    /// 生成件保留命中——保留名本身或其下的路径（保留名是文件；
+    /// <c>AppRun/x</c> 会把 AppRun 落成目录，同样冲突）。POSIX 精确。
+    /// </summary>
+    internal static bool IsReservedEntry(string packageName, string destination) =>
+        ReservedNames(packageName).Any(r =>
+            string.Equals(destination, r, StringComparison.Ordinal) ||
+            destination.StartsWith(r + '/', StringComparison.Ordinal));
 
     /// <summary>
     /// 逐级建父目录——任一前缀被已落文件/链接占位时按 <paramref name="occupied"/>

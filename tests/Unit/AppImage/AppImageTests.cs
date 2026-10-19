@@ -274,6 +274,12 @@ public sealed class AppImageTests : TempBase
                     new AppImageBundleConfiguration { Files = [Entry(collision)] }, work, NullBundleLogger.Instance),
                     $"generated-entry collision '{collision}' must be rejected");
             }
+            // 保留名之下的路径同样撞生成件（AppRun 是文件，不能落成目录）。
+            AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
+                BundleWith(null), PlanItem(input, work),
+                new AppImageBundleConfiguration { Files = [Entry("AppRun/inner")] },
+                work, NullBundleLogger.Instance),
+                "destination under a reserved file must be rejected");
             // Payload file already under the AppDir.
             AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
                 BundleWith(null), PlanItem(input, work),
@@ -282,6 +288,14 @@ public sealed class AppImageTests : TempBase
                     Files = [Entry("usr/lib/example-app/ExampleApp.dll")]
                 }, work, NullBundleLogger.Instance),
                 "existing payload path must be rejected");
+            // 目的地的父前缀被已落载荷文件占位——旋钮腿抛 ArgumentException。
+            AssertThrows<ArgumentException>(() => AppDirBuilder.Build(
+                BundleWith(null), PlanItem(input, work),
+                new AppImageBundleConfiguration
+                {
+                    Files = [Entry("usr/lib/example-app/ExampleApp.dll/inner")]
+                }, work, NullBundleLogger.Instance),
+                "destination under a payload file must be rejected");
             AssertThrows<FileNotFoundException>(() => AppDirBuilder.Build(
                 BundleWith(null), PlanItem(input, work),
                 new AppImageBundleConfiguration
@@ -289,6 +303,35 @@ public sealed class AppImageTests : TempBase
                     Files = [new AppImageFileEntry { Source = input + "/missing", Destination = "opt/x" }]
                 }, work, NullBundleLogger.Instance),
                 "missing source must be rejected");
+        }
+        finally
+        {
+            Cleanup(input, work);
+        }
+    }
+
+    [Fact]
+    public void RejectsResourceDirectoryUnderClaimedFile()
+    {
+        var input = CreateInputDirectory();
+        var work = input + ".work";
+        var extraDir = Path.Combine(input, "extra-dir");
+        Directory.CreateDirectory(extraDir);
+        File.WriteAllText(Path.Combine(extraDir, "x.txt"), "x");
+        var extraFile = Path.Combine(input, "extra.conf");
+        File.WriteAllText(extraFile, "k=v");
+        try
+        {
+            // 载荷落盘腿：资源目录目的地落在先声明的文件路径之下——
+            // 与 claimed 簿同口径的 InvalidOperationException。
+            AssertThrows<InvalidOperationException>(() => AppDirBuilder.Build(
+                BundleWith(null, resources:
+                [
+                    new BundleResourceConfiguration { Source = extraFile, Destination = "res/tools" },
+                    new BundleResourceConfiguration { Source = extraDir, Destination = "res/tools/sub" }
+                ]), PlanItem(input, work), new AppImageBundleConfiguration(),
+                work, NullBundleLogger.Instance),
+                "resource directory under a claimed file must be rejected");
         }
         finally
         {
