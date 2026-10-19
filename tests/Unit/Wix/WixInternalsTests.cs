@@ -338,6 +338,7 @@ public sealed class WixInternalsTests : TempBase
               <Fragment>
                 <Component><File Source="$(var.BuildDir)\dyn.dll"/></Component>
                 <Component><File Source="!(bindpath.binsecrets)\gen.dll"/></Component>
+                <Component><File Source="literal$(paren).txt"/></Component>
                 <Component><File Source="absent-file.txt"/></Component>
               </Fragment>
             </Wix>
@@ -345,9 +346,11 @@ public sealed class WixInternalsTests : TempBase
         var text = new System.Text.StringBuilder();
         WixBundleBackend.AppendReferencedSourceHashes(text, fragment);
         var output = text.ToString();
-        // 编译期展开的引用不进指纹（既定口径）；字面缺失计 MISSING 哨兵。
+        // 编译期展开的已知命名空间引用不进指纹（既定口径）；
+        // 未知 $()/!() 串按字面处理——多半落 MISSING 哨兵，可观测。
         Assert.DoesNotContain("dyn.dll", output, StringComparison.Ordinal);
         Assert.DoesNotContain("gen.dll", output, StringComparison.Ordinal);
+        Assert.Contains("literal$(paren).txt", output, StringComparison.Ordinal);
         Assert.Contains("MISSING", output, StringComparison.Ordinal);
         Assert.Contains("absent-file.txt", output, StringComparison.Ordinal);
     }

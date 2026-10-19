@@ -443,10 +443,17 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
     private static readonly Regex SourceReferencePattern =
         new("\\bSource(?:File)?\\s*=\\s*[\"'](?<source>[^\"']+)[\"']", RegexOptions.Compiled);
 
+    // WiX 预处理器引用按已知命名空间判定（var/env/sys/wix/loc/custom/bind*）——
+    // 字面文件名中的 $( 或 !( 串（如 "a$(b).txt"）不匹配，未知命名空间也不匹配，
+    // 统一走字面路径解析（多半落到 MISSING 哨兵，可观测）。
+    private static readonly Regex PreprocessorReferencePattern =
+        new("[!$]\\((?:var|env|sys|wix|loc|custom|bind)[A-Za-z0-9_.]*\\.", RegexOptions.Compiled);
+
     // 片段/专家模板经 Source/SourceFile 引用的文件不在载荷清单内，逐一把
     // 被引用文件哈希进指纹；相对路径以该 .wxs 所在目录解析。WiX 预处理器引用
     // （$(var.*)、$(env.*)、!(bindpath.*) 之类）在编译期才展开，字面正则无法求值，
-    // 显式跳过——该限制是既定口径（字面文件名含 % 不受此限：WiX 无 % 展开语法）。
+    // 显式跳过——该限制是既定口径（字面文件名含 % 或裸 $(/!( 不受此限：
+    // WiX 无 % 展开语法，预处理引用按已知命名空间判定）。
     // 字面引用但磁盘缺失的路径计 MISSING 哨兵进指纹——文件随后出现时指纹翻转，
     // 比静默忽略更可观测。
     internal static void AppendReferencedSourceHashes(StringBuilder text, string wixSource)
@@ -455,7 +462,7 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         foreach (Match match in SourceReferencePattern.Matches(File.ReadAllText(wixSource)))
         {
             var source = match.Groups["source"].Value;
-            if (source.Contains("$(") || source.Contains("!("))
+            if (PreprocessorReferencePattern.IsMatch(source))
             {
                 continue;
             }
