@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Text;
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
@@ -153,14 +152,18 @@ internal static class ApkPackageWriter
         }
         catch
         {
-            // No half-written package is left behind on failure.
+            // No half-written package is left behind on failure; 同删陈旧
+            // .sha256 旁车，避免失败构建留下与实际产物不匹配的哈希。
             if (File.Exists(outputPath))
             {
                 File.Delete(outputPath);
             }
+            if (File.Exists(outputPath + ".sha256"))
+            {
+                File.Delete(outputPath + ".sha256");
+            }
             throw;
         }
-        WriteSha256Sidecar(outputPath);
         return new Result { Path = outputPath };
         }
         finally
@@ -482,7 +485,7 @@ internal static class ApkPackageWriter
         IEnumerable<PayloadEntry> entries, string path, bool omitEndOfArchive)
     {
         using var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-        using (var gzip = new GZipStream(file, CompressionLevel.Optimal, leaveOpen: true))
+        using (var gzip = Gzip.WrapWrite(file))
         {
             TarWriter.Write(gzip, entries
                 .OrderBy(entry => entry.ArchivePath, StringComparer.Ordinal)
@@ -546,13 +549,6 @@ internal static class ApkPackageWriter
             new("atime", "0"),
             new("APK-TOOLS.checksum.SHA1", hash)
         ];
-    }
-
-    private static void WriteSha256Sidecar(string path)
-    {
-        var hash = Hashes.Sha256HexFile(path);
-        File.WriteAllText(path + ".sha256",
-            hash + "  " + Path.GetFileName(path) + "\n", new UTF8Encoding(false));
     }
 
 }

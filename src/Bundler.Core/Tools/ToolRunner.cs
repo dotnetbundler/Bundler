@@ -280,12 +280,12 @@ internal static class ToolRunner
                 $"'{executable}' did not exit within {ProcessTimeout} and was killed." +
                 $"{Environment.NewLine}{drained.Result.Out}{drained.Result.Err}".TrimEnd());
         }
-        process.WaitForExit();
-        Task.WaitAll(output, error);
+        // 与 TryRunAsync 同口径：子进程已退但孙代仍持管道时 EOF 排空有界，不无限等。
+        var (stdout, stderr) = DrainPipesAsync(output, error).Result;
         if (process.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"'{executable}' exited with code {process.ExitCode}: {(output.Result + error.Result).Trim()}");
+                $"'{executable}' exited with code {process.ExitCode}: {(stdout + stderr).Trim()}");
         }
     }
 

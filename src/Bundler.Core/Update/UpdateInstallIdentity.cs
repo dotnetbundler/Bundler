@@ -94,6 +94,16 @@ public sealed class UpdateInstallIdentity
             using var stream = File.OpenRead(path);
             return UpdateJson.ReadIdentity(stream);
         }
+        // 缺失/竞争删除/权限问题与解析失败同义："读不到身份"不是致命错误，
+        // 调用方据此决定是否走更新面；泄漏原始 IO 异常反而破坏探测契约。
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
         catch (SerializationException)
         {
             return null;

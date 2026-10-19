@@ -619,6 +619,101 @@ public sealed class BundleConfigurationValidatorTests : TempBase
             Validate(existing, checkFileSystem: true), "update.bootstrapperDirectory"));
     }
 
+    [Fact]
+    public void NullElements_ReportIssue_NotNre()
+    {
+        // 直接 API 构造可塞 null 元素（JSON 装载路径已在 Resolve 剥除）——
+        // validator 必须报 issue 而不是 NRE。
+        var config = ValidConfig.Create();
+        var issues = Validate(new BundleConfiguration
+        {
+            ProductName = config.ProductName,
+            Identifier = config.Identifier,
+            Version = config.Version,
+            OutputDirectory = config.OutputDirectory,
+            Icons = [null!],
+            Resources = [null!],
+            FileAssociations = [null!],
+            UrlProtocols = [null!],
+            Targets = [null!, config.Targets[0]],
+        });
+
+        Assert.True(HasIssue(issues, "targets[0]"));
+        Assert.True(HasIssue(issues, "icons[0]"));
+        Assert.True(HasIssue(issues, "resources[0]"));
+        Assert.True(HasIssue(issues, "fileAssociations[0]"));
+        Assert.True(HasIssue(issues, "urlProtocols[0]"));
+    }
+
+    [Fact]
+    public void NullElements_Nested_ReportIssue()
+    {
+        var config = ValidConfig.Create();
+        var issues = Validate(new BundleConfiguration
+        {
+            ProductName = config.ProductName,
+            Identifier = config.Identifier,
+            Version = config.Version,
+            OutputDirectory = config.OutputDirectory,
+            FileAssociations =
+            [
+                new BundleFileAssociationConfiguration { Extensions = ["txt", null!] }
+            ],
+            UrlProtocols =
+            [
+                new BundleUrlProtocolConfiguration { Schemes = [null!, "app"] }
+            ],
+            Targets =
+            [
+                new BundleTargetConfiguration
+                {
+                    Target = "linux-x86_64",
+                    InputDirectory = "input",
+                    SigningFiles = [null!, "cert.pem"],
+                    Formats = [PackageFormat.Deb],
+                }
+            ],
+        });
+
+        Assert.True(HasIssue(issues, "fileAssociations[0].extensions[1]"));
+        Assert.True(HasIssue(issues, "urlProtocols[0].schemes[0]"));
+        Assert.True(HasIssue(issues, "targets[0].signingFiles[0]"));
+    }
+
+    [Fact]
+    public void NullLists_TreatedAsEmpty_NotNre()
+    {
+        // 集合属性被 init 成 null（直接 API 可写）——按空集合处理，不 NRE。
+        var issues = Validate(new BundleConfiguration
+        {
+            ProductName = "x",
+            Identifier = "com.example.x",
+            Version = "1.0.0",
+            Icons = null!,
+            Resources = null!,
+            FileAssociations = null!,
+            UrlProtocols = null!,
+            Targets = null!,
+        });
+
+        Assert.True(HasIssue(issues, "targets"));
+    }
+
+    [Fact]
+    public void MainExecutable_Empty_Reports()
+    {
+        // "" 不是"未设置"——显式空串必须与空白同口径报 issue，不能漏进计划项。
+        var issues = Validate(WithTarget(new BundleTargetConfiguration
+        {
+            Target = "linux-x86_64",
+            InputDirectory = "input",
+            MainExecutable = "",
+            Formats = [PackageFormat.Deb],
+        }));
+
+        Assert.True(HasIssue(issues, "targets[0].mainExecutable"));
+    }
+
     private static BundleConfiguration WithTarget(
         BundleTargetConfiguration target, string? outputDirectory = null)
     {

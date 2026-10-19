@@ -5,7 +5,8 @@ using DotNet.Bundler;
 
 namespace DotNet.Bundler.Core;
 
-// bundler.json → BundleConfiguration 的 net10 加载入口（DeserializeAsync 等 net10 API）。
+// bundler.json → BundleConfiguration 的测试侧加载器：src 产物只保留 CLI 文档管线
+// 一个装载面（CliConfig），不再内嵌仅服务测试的第二装载器。
 // 路径解析部分在 BundleConfigurationPaths，与 netstandard2.0 消费面共用。
 internal static class BundleConfigurationLoader
 {

@@ -29,20 +29,22 @@ internal sealed class ArchiveBundleBackend(
         if (context.Configuration.Update is { } update)
         {
             // 身份旁车写进工作目录后作为额外条目随归档顶层目录进包；
-            // 输入树若自带同名条目一律剔除——打包期身份以本构建为准，重复名进包会导致解包歧义。
+            // 更新件是保留名——输入树自带同名条目显式拒绝，与各后端 claimed 簿同语义。
             UpdateIdentitySidecar.WriteIfEnabled(
                 context.WorkDirectory, update, format, context.Item.Target.Target);
             var target = context.Item.Target.Target;
-            UpdateBootstrapper.TryResolve(update, target, out var bootstrapper);
+            var bootstrapper = UpdateBootstrapper.ResolveOrThrow(update, target);
             var injected = new HashSet<string>(StringComparer.Ordinal)
             {
                 stem + "/" + UpdateIdentitySidecar.FileName,
+                stem + "/" + UpdateBootstrapper.FileNameFor(target),
             };
-            if (bootstrapper is { Length: > 0 })
+            if (entries.FirstOrDefault(e => injected.Contains(e.ArchivePath)) is { } collision)
             {
-                injected.Add(stem + "/" + UpdateBootstrapper.FileNameFor(target));
+                throw new InvalidOperationException(
+                    $"The payload already contains the reserved update file name '{collision.ArchivePath}' — " +
+                    "remove it from the input directory; update payload files are injected by the build.");
             }
-            entries.RemoveAll(e => injected.Contains(e.ArchivePath));
             entries.Add(new ArchiveTree.Entry
             {
                 ArchivePath = stem + "/" + UpdateIdentitySidecar.FileName,
@@ -50,16 +52,13 @@ internal sealed class ArchiveBundleBackend(
                 Mode = 420 /* 0644 */,
                 SourcePath = Path.Combine(context.WorkDirectory, UpdateIdentitySidecar.FileName),
             });
-            if (bootstrapper is { Length: > 0 })
+            entries.Add(new ArchiveTree.Entry
             {
-                entries.Add(new ArchiveTree.Entry
-                {
-                    ArchivePath = stem + "/" + UpdateBootstrapper.FileNameFor(target),
-                    Kind = TarEntryKind.File,
-                    Mode = 493 /* 0755 */,
-                    SourcePath = bootstrapper,
-                });
-            }
+                ArchivePath = stem + "/" + UpdateBootstrapper.FileNameFor(target),
+                Kind = TarEntryKind.File,
+                Mode = 493 /* 0755 */,
+                SourcePath = bootstrapper,
+            });
         }
         var extension = format == PackageFormat.Zip ? ".zip" : ".tar.gz";
         Directory.CreateDirectory(context.Item.OutputDirectory);
@@ -103,15 +102,7 @@ internal sealed class ArchiveBundleBackend(
             }
             throw;
         }
-        WriteSha256Sidecar(outputPath);
         return Task.FromResult<IReadOnlyList<BundleArtifact>>(
             [new BundleArtifact(format, context.Item.Target.Target, outputPath)]);
-    }
-
-    private static void WriteSha256Sidecar(string path)
-    {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        File.WriteAllText(path + ".sha256",
-            Hashes.Sha256Hex(stream) + "  " + Path.GetFileName(path) + "\n");
     }
 }

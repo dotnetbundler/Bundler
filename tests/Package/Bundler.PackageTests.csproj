@@ -18,5 +18,7 @@
     <Compile Include="..\Shared\**\*.cs" />
     <!-- Package 层不引用 src 工程——BundleFixture 依赖产品公开 API 类型，不属于本程序集 -->
     <Compile Remove="..\Shared\BundleFixture.cs" />
+    <!-- 包消费契约测试只走公开面——测试侧加载器引用 Core 内部件，不进本程序集 -->
+    <Compile Remove="..\Shared\BundleConfigurationLoader.cs" />
   </ItemGroup>
 </Project>

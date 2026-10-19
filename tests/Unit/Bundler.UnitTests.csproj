@@ -17,6 +17,8 @@
     <Compile Include="..\Shared\TestPlatform.cs" />
     <Compile Include="..\Shared\MiniAr.cs" />
     <Compile Include="..\Shared\MiniTar.cs" />
+    <!-- bundler.json → BundleConfiguration 加载器只服务测试（src 产物不留第二装载面） -->
+    <Compile Include="..\Shared\BundleConfigurationLoader.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Bundler.Abstractions\Bundler.Abstractions.csproj" />

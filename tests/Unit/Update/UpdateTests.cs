@@ -1264,9 +1264,10 @@ public sealed class UpdateTests : TempBase
     }
 
     [Fact]
-    public async Task ArchiveBackend_DedupesSidecarEntries()
+    public async Task ArchiveBackend_RejectsReservedSidecarName()
     {
-        // 输入树自带 bundler-update.json 时，归档里只能有一份——本构建注入的身份为准。
+        // 输入树自带 bundler-update.json 属保留名碰撞——与各后端 claimed 簿同语义：
+        // 显式拒绝，不再静默剔除后以本构建身份为准。
         var directory = CreateTempDirectory();
         try
         {
@@ -1280,36 +1281,30 @@ public sealed class UpdateTests : TempBase
             var material = UpdateKeyMaterial.Generate();
             material.Save(keyPath);
 
-            var artifacts = await new DotNet.Bundler.Archive.ArchiveBundler(
-                new DotNet.Bundler.Archive.ArchiveBundleConfiguration())
-                .BuildAsync(new BundleConfiguration
-                {
-                    ProductName = "App",
-                    Identifier = "com.example.app",
-                    Version = "1.0.0",
-                    OutputDirectory = output,
-                    Update = new UpdateBundleConfiguration
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => new DotNet.Bundler.Archive.ArchiveBundler(
+                    new DotNet.Bundler.Archive.ArchiveBundleConfiguration())
+                    .BuildAsync(new BundleConfiguration
                     {
-                        FeedUrl = "https://example.test/updates",
-                        SigningKeyFile = keyPath,
-                        PublicKey = material.PublicPointBase64(),
-                    },
-                    Targets = [new BundleTargetConfiguration
-                    {
-                        Target = "linux-x86_64",
-                        InputDirectory = input,
-                        MainExecutable = "app.bin",
-                        Formats = [PackageFormat.Zip]
-                    }]
-                }, TestContext.Current.CancellationToken);
-
-            using var archive = System.IO.Compression.ZipFile.OpenRead(artifacts.Single().Path);
-            var sidecars = archive.Entries.Where(
-                e => e.FullName.EndsWith("/" + UpdateIdentitySidecar.FileName)).ToArray();
-            Assert.Single(sidecars);
-            using var reader = new StreamReader(sidecars[0].Open());
-            using var document = JsonDocument.Parse(reader.ReadToEnd());
-            Assert.Equal("zip", document.RootElement.GetProperty("format").GetString());
+                        ProductName = "App",
+                        Identifier = "com.example.app",
+                        Version = "1.0.0",
+                        OutputDirectory = output,
+                        Update = new UpdateBundleConfiguration
+                        {
+                            FeedUrl = "https://example.test/updates",
+                            SigningKeyFile = keyPath,
+                            PublicKey = material.PublicPointBase64(),
+                        },
+                        Targets = [new BundleTargetConfiguration
+                        {
+                            Target = "linux-x86_64",
+                            InputDirectory = input,
+                            MainExecutable = "app.bin",
+                            Formats = [PackageFormat.Zip]
+                        }]
+                    }, TestContext.Current.CancellationToken));
+            Assert.Contains(UpdateIdentitySidecar.FileName, error.Message);
         }
         finally
         {
