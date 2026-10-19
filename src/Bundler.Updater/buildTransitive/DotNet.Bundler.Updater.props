@@ -1,0 +1,38 @@
+<Project>
+  <!-- musl 静态 -static-pie 件无 .dynsym，裸 DllImport("libc") 运行期不可解析：
+       NativeSpawnUnix（posix_spawn 面）与 SyspkgReplay（chmod/access）的 libc
+       符号在此逐一直绑——ILC 发直接 extern 调用，链接期对 musl 静态库解析，
+       符号缺席即链接失败（发布期报错而非运行期崩）。
+       本文件同时被两处消费，清单改动须双侧生效：
+         1. 本包 nupkg 的 buildTransitive——消费方 -r linux-musl-* 静态发布
+            自更新应用时透传；
+         2. src/Bundler.Updater.Bootstrap 的 csproj 直接 Import——冻件产线。
+       addchdir/addchdir_np 刻意不入清单：musl 版本不齐一，留运行时探测
+       缺席走父件锁内 chdir 兜底。 -->
+  <ItemGroup Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-musl'))">
+    <DirectPInvoke Include="libc!pipe" />
+    <DirectPInvoke Include="libc!pipe2" />
+    <DirectPInvoke Include="libc!fcntl" />
+    <DirectPInvoke Include="libc!close" />
+    <DirectPInvoke Include="libc!access" />
+    <DirectPInvoke Include="libc!chmod" />
+    <DirectPInvoke Include="libc!kill" />
+    <DirectPInvoke Include="libc!waitpid" />
+    <DirectPInvoke Include="libc!chdir" />
+    <DirectPInvoke Include="libc!readlink" />
+    <DirectPInvoke Include="libc!getcwd" />
+    <DirectPInvoke Include="libc!sigemptyset" />
+    <DirectPInvoke Include="libc!sigfillset" />
+    <DirectPInvoke Include="libc!posix_spawn" />
+    <DirectPInvoke Include="libc!posix_spawnattr_init" />
+    <DirectPInvoke Include="libc!posix_spawnattr_destroy" />
+    <DirectPInvoke Include="libc!posix_spawnattr_setflags" />
+    <DirectPInvoke Include="libc!posix_spawnattr_setpgroup" />
+    <DirectPInvoke Include="libc!posix_spawnattr_setsigmask" />
+    <DirectPInvoke Include="libc!posix_spawnattr_setsigdefault" />
+    <DirectPInvoke Include="libc!posix_spawn_file_actions_init" />
+    <DirectPInvoke Include="libc!posix_spawn_file_actions_destroy" />
+    <DirectPInvoke Include="libc!posix_spawn_file_actions_adddup2" />
+    <DirectPInvoke Include="libc!posix_spawn_file_actions_addclose" />
+  </ItemGroup>
+</Project>

@@ -396,6 +396,15 @@ internal static class NativeSpawnUnix
             // 留出"worker 读到 false 而过置位窗"的缝，迟到产出件就没人收尸。
             Volatile.Write(ref result.TimedOut, true);
             ScavengeStrayChildren(result.WorkerTid);
+            // 残余窗收口：worker 读 false 后退出、子件 reparent 后 /proc 清单与
+            // worker 自查双漏——清扫顺带解开卡死的 spawn 返回，短留口让 finally
+            // 落账 Pid，再按记账 pid 补杀补收一次（双杀/双收对 ESRCH/ECHILD 静默）。
+            _ = done.Wait(TimeSpan.FromSeconds(2));
+            if (Volatile.Read(ref result.Pid) > 0)
+            {
+                KillTree(result.Pid);
+                ReapSync(result.Pid);
+            }
         }
         else
         {
@@ -675,21 +684,26 @@ internal static class NativeSpawnUnix
     // 未收口 fd"的竞态窗（排水管写端漏进无关子件→ReadToEnd EOF 永不至的
     // 实测病理）。macOS/旧内核无 pipe2 落 pipe+fcntl，微窗按残余登记。
     private const int O_CLOEXEC = 0x80000;
+    private static int s_pipe2Absent; // 0=未探 1=缺席——探测失败一次即记住，不再每 spawn 抛探测异常
     private static bool CreatePipe(int[] fds)
     {
-        try
+        if (Volatile.Read(ref s_pipe2Absent) == 0)
         {
-            if (Pipe2(fds, O_CLOEXEC) == 0)
+            try
             {
-                return true;
+                if (Pipe2(fds, O_CLOEXEC) == 0)
+                {
+                    return true;
+                }
+                if (Marshal.GetLastWin32Error() != ENOSYS)
+                {
+                    return false; // 真实失败（EMFILE 等）——errno 透传给 PipeFailure
+                }
             }
-            if (Marshal.GetLastWin32Error() != ENOSYS)
-            {
-                return false; // 真实失败（EMFILE 等）——errno 透传给 PipeFailure
-            }
+            catch (EntryPointNotFoundException) { }
+            catch (DllNotFoundException) { }
+            Volatile.Write(ref s_pipe2Absent, 1);
         }
-        catch (EntryPointNotFoundException) { }
-        catch (DllNotFoundException) { }
         // ENOSYS/无该符号 → pipe+fcntl 兜底（macOS 微窗按残余登记）
         return pipe(fds) == 0 && CloExec(fds);
     }
@@ -724,6 +738,7 @@ internal static class NativeSpawnUnix
     private static IntPtr MarshalArgv(IEnumerable<string> values)
     {
         var ptrs = new List<IntPtr>();
+        var arr = IntPtr.Zero;
         try
         {
             foreach (var s in values)
@@ -734,13 +749,19 @@ internal static class NativeSpawnUnix
                 ptrs.Add(p);
             }
             ptrs.Add(IntPtr.Zero);
-            var arr = Marshal.AllocHGlobal(IntPtr.Size * ptrs.Count);
+            arr = Marshal.AllocHGlobal(IntPtr.Size * ptrs.Count);
             Marshal.Copy(ptrs.ToArray(), 0, arr, ptrs.Count);
-            return arr;
+            var result = arr;
+            arr = IntPtr.Zero;
+            return result;
         }
         catch
         {
             // 中途失败（OOM 等）回收已分配段——HG 不受 GC 管，放任即成堆泄漏。
+            if (arr != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(arr);
+            }
             foreach (var p in ptrs)
             {
                 if (p != IntPtr.Zero)

@@ -25,34 +25,8 @@
   </ItemGroup>
 
   <!-- musl 静态 -static-pie 件无 .dynsym，裸 DllImport("libc") 运行时不可解析
-       （syspkg 冻件腿 rc3 实证）——NativeSpawnUnix 的 libc 符号在此逐一直绑：
-       ILC 把它们发成直接 extern 调用，lld 链接期对 musl 静态库解析，符号缺席
-       即链接失败（产线期报错而非运行期崩）。addchdir/addchdir_np 刻意不入清单：
-       musl 版本不齐一，留运行时探测缺席走父件锁内 chdir 兜底。 -->
-  <ItemGroup Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-musl'))">
-    <DirectPInvoke Include="libc!pipe" />
-    <DirectPInvoke Include="libc!pipe2" />
-    <DirectPInvoke Include="libc!fcntl" />
-    <DirectPInvoke Include="libc!close" />
-    <DirectPInvoke Include="libc!access" />
-    <DirectPInvoke Include="libc!kill" />
-    <DirectPInvoke Include="libc!waitpid" />
-    <DirectPInvoke Include="libc!chdir" />
-    <DirectPInvoke Include="libc!readlink" />
-    <DirectPInvoke Include="libc!getcwd" />
-    <DirectPInvoke Include="libc!sigemptyset" />
-    <DirectPInvoke Include="libc!sigfillset" />
-    <DirectPInvoke Include="libc!posix_spawn" />
-    <DirectPInvoke Include="libc!posix_spawnattr_init" />
-    <DirectPInvoke Include="libc!posix_spawnattr_destroy" />
-    <DirectPInvoke Include="libc!posix_spawnattr_setflags" />
-    <DirectPInvoke Include="libc!posix_spawnattr_setpgroup" />
-    <DirectPInvoke Include="libc!posix_spawnattr_setsigmask" />
-    <DirectPInvoke Include="libc!posix_spawnattr_setsigdefault" />
-    <DirectPInvoke Include="libc!posix_spawn_file_actions_init" />
-    <DirectPInvoke Include="libc!posix_spawn_file_actions_destroy" />
-    <DirectPInvoke Include="libc!posix_spawn_file_actions_adddup2" />
-    <DirectPInvoke Include="libc!posix_spawn_file_actions_addclose" />
-  </ItemGroup>
+       （syspkg 冻件腿 rc3 实证）——libc 直绑清单与 Bundler.Updater 包随包
+       透传面同源（单一事实在该 props，勿在本文件再抄一份）。 -->
+  <Import Project="..\Bundler.Updater\buildTransitive\DotNet.Bundler.Updater.props" />
 
 </Project>
