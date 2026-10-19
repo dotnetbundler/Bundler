@@ -170,6 +170,45 @@ public sealed class UpdateClientTests : TempBase
             client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task CheckForUpdateAsync_UnreachableFeed_UpdateException()
+    {
+        // 抓取失败（文件缺席/IO/HTTP 错）统一包 UpdateException——客户端契约
+        // "协议/校验/拒绝全确定性"，裸 IOException/HttpRequestException 不漏出。
+        var key = CoreUpdate.UpdateKeyMaterial.Generate();
+        var client = Client(TempPath("no-such-feed-dir"), key, currentVersion: "1.0.0");
+
+        await Assert.ThrowsAsync<UpdateException>(() =>
+            client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CheckForUpdateAsync_MultiSegmentArtifactFile_Rejected()
+    {
+        // artifact.file 只做本地下载文件名——多段词法（分隔符/../绝对路径）
+        // 会把下载件写到下载目录之外；签名保真不保意图，词法收口在客户端。
+        var artifact = Artifact("win-x64", "nsis", "app-2.0.0.exe");
+        artifact.File = "../escape.exe";
+        var (feedDir, key) = MakeFeed("2.0.0", [artifact]);
+        var client = Client(feedDir, key, currentVersion: "1.0.0");
+
+        await Assert.ThrowsAsync<UpdateException>(() =>
+            client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CheckForUpdateAsync_BackslashArtifactFile_Rejected()
+    {
+        // 反斜杠多段/跨分隔符词法同拒——Windows 写件面会被 \\ 解进目录结构。
+        var artifact = Artifact("win-x64", "nsis", "app-2.0.0.exe");
+        artifact.File = "..\\evil.exe";
+        var (feedDir, key) = MakeFeed("2.0.0", [artifact]);
+        var client = Client(feedDir, key, currentVersion: "1.0.0");
+
+        await Assert.ThrowsAsync<UpdateException>(() =>
+            client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
+    }
+
     // ---- 下载/验签/应用闸 ----
 
     [Fact]

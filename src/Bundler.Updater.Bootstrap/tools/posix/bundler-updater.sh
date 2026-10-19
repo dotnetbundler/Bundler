@@ -27,7 +27,7 @@ usage() {
     echo "      [--keep-payload] [--rollback] [--retain-backup-to <dir>] [--log <file>] [--wait-timeout <seconds>]" >&2
     echo "      [--lock-timeout <seconds>]" >&2
     echo "  bundler-updater.sh pkg-apply --pkg <file> --format <deb|rpm|apk> --app <path>" >&2
-    echo "      [--env-file <file>] [--rollback] [--log <file>]" >&2
+    echo "      [--sha256 <hex>] [--env-file <file>] [--rollback] [--log <file>]" >&2
 }
 
 log() {
@@ -66,16 +66,23 @@ _restart_nohup() {
     # 注：后台子壳里的 cd 失败会被 & 吞成"启动即成功"——与 pkg-apply 重启腿同形，
     # 但本腿是尽力而为语义（换包已提交、重启成败不进退出码），不设同步 cd 探测，
     # 与 pkg-apply 的 rc6 硬约束刻意不同（A1 登记）。
+    # nohup 与 pkg-apply 重启腿同走 _pa_cmd 解析（BUNDLER_UPDATER_CMD_NOHUP 覆盖缝
+    # 双侧同名）；缺席/不可执行即 WARN 跳过——重启是便利步骤不拦已提交的换包。
+    _nohup=$(_pa_cmd nohup)
+    [ -n "$_nohup" ] || { log "bundler-updater: nohup not found — cannot detach restart"; return 0; }
     if [ -d "$INSTALL_DIR" ]; then
-        (cd "$INSTALL_DIR" && nohup "$APP_PATH" </dev/null >/dev/null 2>&1 &)
+        (cd "$INSTALL_DIR" && "$_nohup" "$APP_PATH" </dev/null >/dev/null 2>&1 &)
     else
-        (cd "$(dirname "$INSTALL_DIR")" && nohup "$APP_PATH" </dev/null >/dev/null 2>&1 &)
+        (cd "$(dirname "$INSTALL_DIR")" && "$_nohup" "$APP_PATH" </dev/null >/dev/null 2>&1 &)
     fi
 }
 
 # ---- pkg-apply 支路：deb/rpm/apk 本地系统包特权安装（与 AOT PkgApplyPlan 逐字同协议）。
 # 客户端经 pkexec/sudo 以 root 拉起；动词只做：包管理器前端退化链装本地包 +
-# 降权重启 --app。包管理器账本即状态——不引入 marker/锁/崩溃恢复；不验签。
+# 降权重启 --app。包管理器账本即状态——不引入 marker/锁/崩溃恢复；
+# 包完整性不验签（sh 无 ECDSA），改走 --sha256 字节指纹钉定：客户端留存件
+# 验签同趟算出的哈希随 argv 携来，root 侧对暂存副本复核同值才把包交给
+# 包管理器——"客户端验的字节"与"root 装的字节"逐位绑定，验后替换窗归零。
 
 # 命令解析：BUNDLER_UPDATER_CMD_<TOOL> env 覆盖先行——覆盖值由 root 直 exec，
 # 必须"存在+普通文件+有执行位"才生效（不设防等于把任意路径提权为权威命令）；
@@ -136,6 +143,39 @@ _pa_uid64() {
     }'
 }
 
+# 安装腿有界：timeout 在场即包裹（默认 1800s，BUNDLER_UPDATER_PKG_TIMEOUT
+# 数字秒覆盖——AOT ExecTimeoutMilliseconds 同名同缝）；pm 挂死会把特权进程拖成
+# 永驻。timeout 缺席退裸跑（_pa_env_validate 的 cat 兜底同款残余登记）。
+_pa_timed() {
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$_PA_TMO" "$@"
+    else
+        "$@"
+    fi
+}
+
+# sha256 工具链退化：sha256sum → shasum -a 256 → openssl dgst -sha256（全缺席返 1）。
+_pa_sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        _out=$(sha256sum "$1" 2>/dev/null) || return 1
+        printf '%s\n' "${_out%% *}"
+    elif command -v shasum >/dev/null 2>&1; then
+        _out=$(shasum -a 256 "$1" 2>/dev/null) || return 1
+        printf '%s\n' "${_out%% *}"
+    elif command -v openssl >/dev/null 2>&1; then
+        _out=$(openssl dgst -sha256 "$1" 2>/dev/null) || return 1
+        printf '%s\n' "${_out##* }"
+    else
+        return 1
+    fi
+}
+
+# 暂存根清理：EXIT trap 从建立处起全路径兜底（AOT CleanupStage 同义）。
+_pa_stage_cleanup() {
+    [ -n "$PA_STAGE" ] && rm -rf "$PA_STAGE" 2>/dev/null
+    PA_STAGE=""
+}
+
 # 前端退化链：逐级 command -v 预检，安装失败逐级退化。_PA_PM_SEEN 记"有前端在场"——
 # 区分退出码 5（全缺席）与 4（在场全败）。
 _pa_install() {
@@ -147,9 +187,10 @@ _pa_install() {
             if _c=$(_pa_cmd apt-get) && [ -n "$_c" ]; then
                 _PA_PM_SEEN=1
                 log "bundler-updater: install '$PA_PKG' via apt-get"
-                DEBIAN_FRONTEND=noninteractive "$_c" install -y \
+                DEBIAN_FRONTEND=noninteractive _pa_timed "$_c" install -y \
                     -o "Dpkg::Options::=--force-confdef" \
-                    -o "Dpkg::Options::=--force-confold" "$PA_PKG"
+                    -o "Dpkg::Options::=--force-confold" \
+                    -o "DPkg::Lock::Timeout=120" "$PA_PKG"
                 _rc=$?
                 [ "$_rc" -eq 0 ] && return 0
                 log "bundler-updater: apt-get failed (exit $_rc) — falling back"
@@ -159,7 +200,7 @@ _pa_install() {
             if _c=$(_pa_cmd dpkg) && [ -n "$_c" ]; then
                 _PA_PM_SEEN=1
                 log "bundler-updater: install '$PA_PKG' via dpkg"
-                DEBIAN_FRONTEND=noninteractive "$_c" -i \
+                DEBIAN_FRONTEND=noninteractive _pa_timed "$_c" -i \
                     --force-confdef --force-confold "$PA_PKG"
                 _rc=$?
                 [ "$_rc" -eq 0 ] && return 0
@@ -172,7 +213,7 @@ _pa_install() {
             if _c=$(_pa_cmd dnf) && [ -n "$_c" ]; then
                 _PA_PM_SEEN=1
                 log "bundler-updater: install '$PA_PKG' via dnf"
-                "$_c" install -y "$PA_PKG"
+                _pa_timed "$_c" install -y "$PA_PKG"
                 _rc=$?
                 [ "$_rc" -eq 0 ] && return 0
                 log "bundler-updater: dnf failed (exit $_rc) — falling back"
@@ -182,7 +223,7 @@ _pa_install() {
             if _c=$(_pa_cmd zypper) && [ -n "$_c" ]; then
                 _PA_PM_SEEN=1
                 log "bundler-updater: install '$PA_PKG' via zypper"
-                "$_c" install -y "$PA_PKG"
+                _pa_timed "$_c" install -y "$PA_PKG"
                 _rc=$?
                 [ "$_rc" -eq 0 ] && return 0
                 log "bundler-updater: zypper failed (exit $_rc) — falling back"
@@ -194,9 +235,9 @@ _pa_install() {
                 log "bundler-updater: install '$PA_PKG' via rpm"
                 # --rollback 子形态：rpm 退化链末位换 --oldpackage。
                 if [ "$PA_ROLLBACK" = 1 ]; then
-                    "$_c" -U --oldpackage "$PA_PKG"
+                    _pa_timed "$_c" -U --oldpackage "$PA_PKG"
                 else
-                    "$_c" -U "$PA_PKG"
+                    _pa_timed "$_c" -U "$PA_PKG"
                 fi
                 _rc=$?
                 [ "$_rc" -eq 0 ] && return 0
@@ -215,9 +256,9 @@ _pa_install() {
                 _keys=${BUNDLER_UPDATER_APK_KEYS_DIR:-/etc/apk/keys}
                 log "bundler-updater: install '$PA_PKG' via apk"
                 if [ -d "$_keys" ] && [ -n "$(ls -A "$_keys" 2>/dev/null)" ]; then
-                    "$_c" add "$PA_PKG"
+                    _pa_timed "$_c" add "$PA_PKG"
                 else
-                    "$_c" add --allow-untrusted "$PA_PKG"
+                    _pa_timed "$_c" add --allow-untrusted "$PA_PKG"
                 fi
                 _rc=$?
                 [ "$_rc" -eq 0 ] && return 0
@@ -417,14 +458,20 @@ _pa_restart() {
 }
 
 pkg_apply() {
-    PA_PKG=""; PA_FMT=""; PA_APP=""; PA_ENV=""; PA_ROLLBACK=0
+    PA_PKG=""; PA_FMT=""; PA_APP=""; PA_ENV=""; PA_ROLLBACK=0; PA_SHA256=""; PA_STAGE=""
+    # 安装腿超时界（AOT ExecTimeoutMilliseconds 同名同缝）：非数字/缺席按默认 1800s。
+    case "${BUNDLER_UPDATER_PKG_TIMEOUT:-}" in
+        ''|*[!0-9]*) _PA_TMO=1800 ;;
+        *) _PA_TMO=$BUNDLER_UPDATER_PKG_TIMEOUT ;;
+    esac
     while [ $# -gt 0 ]; do
         case "$1" in
             --rollback) PA_ROLLBACK=1; shift ;;
-            --pkg|--format|--app|--env-file|--log)
+            --pkg|--sha256|--format|--app|--env-file|--log)
                 [ $# -ge 2 ] || { echo "bundler-updater: option '$1' requires a value." >&2; pkg_usage; exit 3; }
                 case "$1" in
                     --pkg) PA_PKG=$2 ;;
+                    --sha256) PA_SHA256=$2 ;;
                     --format) PA_FMT=$2 ;;
                     --app) PA_APP=$2 ;;
                     --env-file) PA_ENV=$2 ;;
@@ -436,6 +483,15 @@ pkg_apply() {
     done
     [ -n "$PA_PKG" ] || { echo "bundler-updater: --pkg is required." >&2; pkg_usage; exit 3; }
     [ -n "$PA_APP" ] || { echo "bundler-updater: --app is required." >&2; pkg_usage; exit 3; }
+    # --sha256 词法：恰 64 位十六进制（AOT IsSha256Hex 同口径）——畸形按用法错 rc3。
+    case "$PA_SHA256" in
+        "") ;;
+        *[!0-9a-fA-F]*)
+            echo "bundler-updater: --sha256 must be exactly 64 hexadecimal characters." >&2; pkg_usage; exit 3 ;;
+        *)
+            [ ${#PA_SHA256} -eq 64 ] || \
+                { echo "bundler-updater: --sha256 must be exactly 64 hexadecimal characters." >&2; pkg_usage; exit 3; } ;;
+    esac
     case "$PA_FMT" in
         deb|rpm|apk) ;;
         *) echo "bundler-updater: --format must be deb, rpm or apk." >&2; pkg_usage; exit 3 ;;
@@ -499,6 +555,37 @@ pkg_apply() {
         _pa_env_validate || { _pa_env_cleanup; exit 3; }
     fi
 
+    # 客户端验签→root 读件的 TOCTOU 收口：包先复制进 root 私有临时目录，
+    # --sha256 给了就对暂存副本复核——客户端留存件验签同趟算出的哈希随 argv
+    # 携来，与 root 实际要装的字节逐位绑定，验后替换窗归零；装期间原路径被
+    # 改写也不影响本轮回放（装的是快照非引用）。核验/暂存失败按安装失败 rc4。
+    PA_STAGE=$(mktemp -d "${TMPDIR:-/tmp}/bundler-pkg.XXXXXX" 2>/dev/null) || PA_STAGE=""
+    if [ -z "$PA_STAGE" ]; then
+        # mktemp 缺席（裸 busybox/最小镜像）退化 umask-077 建目——root 私有语义保持。
+        PA_STAGE="${TMPDIR:-/tmp}/bundler-pkg.$$"
+        (umask 077; mkdir "$PA_STAGE" 2>/dev/null) || \
+            { echo "bundler-updater: cannot stage package for verification." >&2; _pa_env_cleanup; exit 4; }
+    fi
+    trap '_pa_stage_cleanup' EXIT
+    cp "$PA_PKG" "$PA_STAGE/" >/dev/null 2>&1 || \
+        { echo "bundler-updater: cannot stage package for verification." >&2; _pa_env_cleanup; exit 4; }
+    PA_PKG="$PA_STAGE/${PA_PKG##*/}"
+    if [ -n "$PA_SHA256" ]; then
+        _h=$(_pa_sha256 "$PA_PKG" || true)
+        if [ -z "$_h" ]; then
+            echo "bundler-updater: no sha256 tool available — refusing to verify package." >&2
+            _pa_env_cleanup
+            exit 4
+        fi
+        # 客户端恒发小写——比对前双侧归一防大小写假阴性。
+        [ "$(printf '%s' "$_h" | tr 'A-F' 'a-f')" = "$(printf '%s' "$PA_SHA256" | tr 'A-F' 'a-f')" ] || {
+            echo "bundler-updater: package sha256 mismatch — refusing." >&2
+            _pa_env_cleanup
+            exit 4
+        }
+        log "bundler-updater: package sha256 verified"
+    fi
+
     if _pa_install; then
         _pa_restart
         _rc=$?
@@ -519,7 +606,7 @@ pkg_apply() {
 pkg_usage() {
     echo "Usage:" >&2
     echo "  bundler-updater.sh pkg-apply --pkg <file> --format <deb|rpm|apk> --app <path>" >&2
-    echo "      [--env-file <file>] [--rollback] [--log <file>]" >&2
+    echo "      [--sha256 <hex>] [--env-file <file>] [--rollback] [--log <file>]" >&2
 }
 
 # 同卷 mv=rename 原子就位（含进程被杀语义）；跨卷 mv 退化为 copy+unlink，

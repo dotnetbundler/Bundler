@@ -40,6 +40,6 @@ public static class Program
         writer.WriteLine("      [--lock-timeout <seconds>]");
         writer.WriteLine("  bundler-updater apply --install-dir <dir> --rollback");
         writer.WriteLine("  bundler-updater pkg-apply --pkg <file> --format <deb|rpm|apk> --app <path>");
-        writer.WriteLine("      [--env-file <file>] [--rollback] [--log <file>]");
+        writer.WriteLine("      [--sha256 <hex>] [--env-file <file>] [--rollback] [--log <file>]");
     }
 }

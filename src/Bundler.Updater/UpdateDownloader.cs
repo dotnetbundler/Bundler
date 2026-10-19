@@ -13,6 +13,18 @@ internal sealed class UpdateDownloader
 {
     private static readonly HttpClient SharedHttp = new();
 
+    // 体读停滞上界（ms）：feed/产物 HTTP 读共用；env 覆盖是测试缝，生产恒 120s。
+    internal static int BodyStallMilliseconds
+    {
+        get
+        {
+            var raw = Environment.GetEnvironmentVariable("BUNDLER_UPDATER_BODY_STALL");
+            return raw is { Length: > 0 } && int.TryParse(raw, out var ms) && ms > 0
+                ? ms
+                : 120_000;
+        }
+    }
+
     /// <summary>
     /// 拉取并验签清单：`<feedUrl>.sig` 与清单同源，用安装身份公钥验过才解析——
     /// 清单本身不可信：签名只绑产物字节，不验清单则换源可把旧签名件标成新版本降级安装。
@@ -21,13 +33,26 @@ internal sealed class UpdateDownloader
     internal async Task<UpdateFeed> FetchFeedAsync(
         string feedUrl, string publicPointBase64, CancellationToken cancellationToken)
     {
-        var bytes = await GetBytesAsync(feedUrl, cancellationToken);
+        // feed 本体与签名腿同一例外面：调用方契约"协议/校验/拒绝全部确定性抛
+        // UpdateException"——裸 HttpRequestException/IOException 会把只捕
+        // UpdateException 的调用方打穿。用户取消（ct）不算协议拒绝，原样穿透。
+        byte[] bytes;
+        try
+        {
+            bytes = await GetBytesAsync(feedUrl, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not UpdateException and
+            not OperationCanceledException)
+        {
+            throw new UpdateException($"update feed '{feedUrl}' is unreachable.", exception);
+        }
         byte[] signature;
         try
         {
             signature = await GetBytesAsync(SignatureUrl(feedUrl), cancellationToken);
         }
-        catch (Exception exception) when (exception is not UpdateException)
+        catch (Exception exception) when (exception is not UpdateException and
+            not OperationCanceledException)
         {
             throw new UpdateException(
                 $"update feed signature '{SignatureUrl(feedUrl)}' is unreachable — refusing unsigned manifest.",
@@ -51,9 +76,10 @@ internal sealed class UpdateDownloader
                 $"update feed '{feedUrl}' failed signature verification — refused.");
         }
         using var stream = new MemoryStream(bytes);
+        UpdateFeed feed;
         try
         {
-            return UpdateJson.ReadFeed(stream)
+            feed = UpdateJson.ReadFeed(stream)
                 ?? throw new UpdateException($"update feed '{feedUrl}' is not a valid manifest.");
         }
         catch (Exception exception) when (exception is not UpdateException)
@@ -63,6 +89,21 @@ internal sealed class UpdateDownloader
             throw new UpdateException(
                 $"update feed '{feedUrl}' is not a valid manifest.", exception);
         }
+        // artifact.file 经 Path.Combine 拼本地下载名——词法必须是单段文件名：
+        // 分隔符/../等会让签名清单把下载件写到下载目录之外（签名只保真不保意图，
+        // 词法收口在客户端侧做）。
+        foreach (var artifact in feed.Artifacts)
+        {
+            var file = artifact.File;
+            if (file.Length == 0 || file is "." or ".." ||
+                file.IndexOf('/') >= 0 || file.IndexOf('\\') >= 0)
+            {
+                throw new UpdateException(
+                    $"update feed '{feedUrl}' carries artifact file '{file}' — " +
+                    "not a plain single-segment file name.");
+            }
+        }
+        return feed;
     }
 
     /// <summary>
@@ -424,10 +465,33 @@ internal sealed class UpdateDownloader
             response.EnsureSuccessStatusCode();
 
             var mode = offset > 0 ? FileMode.Append : FileMode.Create;
+            using (var input = await response.Content.ReadAsStreamAsync())
             using (var output = new FileStream(partPath, mode, FileAccess.Write, FileShare.None))
             {
-                await (await response.Content.ReadAsStreamAsync())
-                    .CopyToAsync(output, 81920, cancellationToken);
+                // 逐块停滞界：ResponseHeadersRead 下流读不受发送侧超时保护——
+                // 慢速/挂起连接会把下载拖死；每块独立 linked-cts 给停滞上界。
+                using var stall = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                var buffer = new byte[81920];
+                while (true)
+                {
+                    stall.CancelAfter(BodyStallMilliseconds);
+                    int read;
+                    try
+                    {
+                        read = await input.ReadAsync(buffer, 0, buffer.Length, stall.Token);
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        throw new UpdateException(
+                            $"download '{url}' stalled — no bytes within " +
+                            $"{BodyStallMilliseconds / 1000}s.");
+                    }
+                    if (read == 0)
+                    {
+                        break;
+                    }
+                    await output.WriteAsync(buffer, 0, read, cancellationToken);
+                }
             }
             // 目标已存在（同一更新重下/复用下载目录）也要能落——netstandard2.0 无 Move 覆写重载。
             if (File.Exists(destinationPath))
@@ -455,7 +519,17 @@ internal sealed class UpdateDownloader
             using var response = await SharedHttp.GetAsync(
                 location, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsByteArrayAsync();
+            // 体读停滞界：ReadAsByteArrayAsync 不吃外层 ct——挂起的响应体会拖死取件。
+            var content = response.Content.ReadAsByteArrayAsync();
+            if (await Task.WhenAny(content, Task.Delay(BodyStallMilliseconds, cancellationToken))
+                    != content)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new UpdateException(
+                    $"fetch of '{location}' stalled — body not complete within " +
+                    $"{BodyStallMilliseconds / 1000}s.");
+            }
+            return await content;
         }
         var path = location.StartsWith("file://", StringComparison.Ordinal)
             ? new Uri(location).LocalPath

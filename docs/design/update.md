@@ -39,6 +39,10 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   deb/rpm/alpineapk 回滚=同路径提权重放留存旧包（§2）。
 - **macOS**：新 `.app` 签名/公证由 MacApp 管线打包期完成。
   更新器职责=换包前 `codesign --verify` 且签名身份与旧包一致（防劫持）+剥 `com.apple.quarantine`+`open -n` 重启。
+  签名态探测 fail-closed：`codesign` 不可运行/输出不可判与"确证未签名"分流——判不出签名态一律拒换（已签旧件被未签件降级、跨 Team-ID 换装同样拒）；Info.plist 为二进制 plist 时经 `/usr/libexec/PlistBuddy` 兜底解 bundle id。
+- **清单取信次序**：`<feed>.sig` 旁车先于 JSON 解析验签（签名防伪先于内容语义）；`artifact.file` 词法收口为单段文件名（分隔符/`..`/绝对路径一律拒——签名保真不保意图，落盘名不信远端词法）；
+  http(s) `.part` 断点续传核对 `Content-Range`，断点态不一致即弃 `.part` 从头干净拉；
+  抓取/IO/HTTP/畸形 JSON/坏公钥全归 `UpdateException` 确定性契约，用户取消（cancellation）原样穿透不包。
 - **feedUrl 多形态**：http(s)/`file://`/本地路径/UNC——离线更新与企业内网分发是静态清单模型的免费特性。
 
 ## 2. deb/rpm/alpineapk：受约束 installer-replay
@@ -86,6 +90,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   件是一次性输入：引导件读毕即删件与 `pkg-*` 暂存目录，客户端在拉起腿退出时尽力删余（观察窗内退出任意 rc 均内联执行、仍存活腿挂 `Exited` 钩——已终结进程不保证派发 `Exited`）——
   客户端可能先于引导件退出使钩不触发，残件由下一次 apply 的 24h stale staging 清扫兜底。
   新包复制进用户空间 retention 目录并写 `applied` 标记；留存副本在拉起前再过一遍公钥验签（apply 与 rollback 同口径），验不过即拒绝并还原现场。
+  验签同趟算出的 sha256 随 verb argv 以 `--sha256` 携给引导件——留存件在用户可写目录，验签到 root 执行之间仍有窗；root 侧把包暂存进私有目录并对暂存副本复核该哈希，验后替换窗收口到"暂存目录属 root"（详见 §2.3）。
   rollback 拣 `applied` 之外最新留存件（须 pkg+sig 成对且过签，否则跳选下一个）同链重放、applied 翻回旧包名。
   提权腿全部 spawn 失败（逐腿 `Process.Start` 均未起成）时还原 `applied` 标记并删除本轮 retained 件——rollback 侧只还原标记、绝不删既有留存件；已启动腿非零退出不属于此还原面。
   测试缝与引导件同名同源：`BUNDLER_UPDATER_CMD_<TOOL>` env 覆盖 + `CommandProbe`/`EnvProbe`/`ExecProbe`/`ChmodProbe`/`SpawnProbe` 进程内探针。
@@ -110,8 +115,14 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   显式给出的 env 件须过完整性三重（普通文件 + 非符号链接 + 属主=调用 uid，uid 缺席取进程 euid）——判存到 open 的 TOCTOU 窗内 fifo 可挂死 root 进程、symlink 可把 root 私有件灌进降权 app 的 env；任一步不过按 rc3 拒绝，不静默降级"件缺席"。
 - 引导件 musl 静态件注入 `/usr/lib/<pkg>/`（与 zip/app 注入同构）。
   nsis/msi"不注入引导件"先例不适用此处——installer-replay 族的执行体仍是引导件编排安装命令。
-  动词协议签名：`bundler-updater pkg-apply --pkg <本地包> --format <deb|rpm|apk> --app <重启目标> [--env-file <会话env件>] [--rollback] [--log <件>]`。
-  每级安装命令先 `command -v` 预检再调用；`--env-file` 会话 env 降权后经内层 `env K=V` 回灌（`sudo` env_reset 剥外层环境，缺省按最小集 HOME+DISPLAY）；外层 `nohup` 分离。
+  动词协议签名：`bundler-updater pkg-apply --pkg <本地包> --format <deb|rpm|apk> --app <重启目标> [--sha256 <hex>] [--env-file <会话env件>] [--rollback] [--log <件>]`。
+- **暂存核验（留存包 TOCTOU 收口）**：包先 `cp`/`File.Copy` 进 root 私有临时目录（`bundler-pkg.*`/`bundler-pkg-*`，umask-077/0700），装了暂存副本——装期间原件被改写不影响本轮回放；
+  `--sha256`（严格 64 位十六进制，畸形归用法错 rc3）对暂存副本逐位复核，不匹配/无哈希工具一律 rc4 拒绝，不降级装原件；
+  暂存根随进程全出口回收（finally/EXIT trap）。
+- 每级安装命令先 `command -v` 预检再调用；安装腿有界——AOT `WaitForExit` 超时杀进程返 124、sh 侧 `timeout(1)` 包裹同码，默认 30min，`BUNDLER_UPDATER_PKG_TIMEOUT` 秒数双侧同名覆盖；
+  apt-get 另带 `-o DPkg::Lock::Timeout=120` 把 dpkg 锁等待钉在包管理器自身界内。
+  `--env-file` 会话 env 降权后经内层 `env K=V` 回灌（`sudo` env_reset 剥外层环境，缺省按最小集 HOME+DISPLAY）；外层 `nohup` 分离——nohup 走与包管理器同一 `ResolveCommand`/`_pa_cmd` 解析序（`BUNDLER_UPDATER_CMD_NOHUP` 覆盖 → PATH），spawn 包三向钉 `/dev/null`。
+  `BUNDLER_UPDATER_CMD_<TOOL>` 覆盖值须过存在+普通文件+执行位三重复核才权威，不可用值按未设置退化——覆盖缝只给测试垫片用，流浪 env 不许把探测结果对调用方会话造假。
   退出码独立面：0 成功 / 3 参数错 / 4 安装失败 / 5 包管理器缺席 / 6 重启失败（安装已提交，客户端据此报"已装待手动重启"）。
   AOT `PkgApplyPlan` 与 POSIX `bundler-updater.sh` pkg-apply 支路 argv/退出码同协议、诊断输出同口径；双侧同名测试缝 `BUNDLER_UPDATER_CMD_<TOOL>`/`BUNDLER_UPDATER_PASSWD_FILE`/`BUNDLER_UPDATER_APK_KEYS_DIR` 供 stub 垫片非特权跑全链。
 
@@ -151,6 +162,7 @@ apk `apk add` 旧版本地件原生放行降级（alpine 容器实证：rc=0、�
 - 三段式换包 `<install>.bundler-swap` 崩溃恢复。
   kill -9 断电无砖化实证。
 - 并发互斥 `<install>.bundler-lock`（owner pid 存活判夺锁，`--lock-timeout` 默认 30s 超时 rc=3，AOT 与 shell 件跨实现互斥）。
+  存活判定 fail-closed：进程确定不存在才算死锁可回收；异属主查看受限/判定异常一律按"活"处理——宁等超时也不误杀活着的持锁者（sh `kill -0` EPERM 复核 `/proc` 存在性、AOT `GetProcessById` 全异常保守按活）。
 - 磁盘空间预检（下载前按精确 size 比对 + apply 前跨卷两段暂存/复制按树估到目标卷，估不出 WARN 不放行）。
 - symlink/exec 位保留。
   install 叶链解析穿透（双侧同语义：`UpdateClient` 持字面拼写、引导件 apply 时 `CanonicalPath` 逐段物理化——客户端不代解链、引导件不信未规范化输入）。
@@ -160,7 +172,8 @@ apk `apk add` 旧版本地件原生放行降级（alpine 容器实证：rc=0、�
 - 差分双路实证：本地命中、脏缓存回退、回环 HTTP Range-206。
   `bundler-cache/artifact.bin` 源件缓存。
 - 离线/内网本地路径 feed 端到端。
-- `pkg-apply` 动词 AOT/POSIX 双实现同协议（deb/rpm/apk 前端退化链、降权重启链、env 回灌、`--rollback`、退出码 0/3/4/5/6）——stub 垫片非特权全链实证：unit 探针族（跨宿主断言）+ integration 真跑奇偶族。
+- `pkg-apply` 动词 AOT/POSIX 双实现同协议（deb/rpm/apk 前端退化链、降权重启链、env 回灌、`--rollback`、`--sha256` root 侧暂存复核、退出码 0/3/4/5/6）——stub 垫片非特权全链实证：unit 探针族（跨宿主断言）+ integration 真跑奇偶族。
+  argv 拼写单源 `UpdateArgv`（`src/Bundler.Core/Update/UpdateArgv.cs` 同源链接编译）——逐元双引号 CommandLineToArgvW 转义（ProcessStartInfo.Arguments 面）与 POSIX 单引号（su -c/问密码管线面）双侧共用。
   奇偶族整体仅非 Windows 宿主执行（各腿首部 `SkipWhen(IsWindows)`），Windows 面由 unit 探针族覆盖。
   Windows MSYS sh 腿挂 `docs/project/special-acceptance.md` 外部验收。
 - `pkg-apply` 容器真机全链：`syspkg-verify` CI 腿在 debian/fedora/alpine 三容器内以 root 实证——真包装/更新/`--rollback`、账本断言（`dpkg -s`/`rpm -q`/`apk list --installed`）、conffile 保留（deb confold / rpm `.rpmnew`）、apk unsigned `--allow-untrusted` 与签名闸、降权重启 uid 归属+env 回灌、busybox `setpriv` 拒参→`su` 承接、rc 0/4/5/6 全绿（run 38936728961）。

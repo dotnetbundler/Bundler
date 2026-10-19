@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
+using DotNet.Bundler.Updater.Protocol;
 
 namespace DotNet.Bundler.Updater.Bootstrap;
 
@@ -91,6 +93,7 @@ internal static class PkgApplyPlan
         // sh 侧 awk 缺席走 PA_UID_FAIL→拒重启（rc6）的分流在 AOT 天然无对应物。
         var uid = ParseUid(GetEnv("PKEXEC_UID")) ?? ParseUid(GetEnv("SUDO_UID"));
         var passwd = uid is { } id ? LookupPasswd(id) : null;
+        var staged = "";
         try
         {
             // --env-file 校验+读定在装包前（sh _pa_env_validate 同位，rc3 拒绝
@@ -100,8 +103,13 @@ internal static class PkgApplyPlan
             // 挂死 root 进程、symlink 可把 root 私有件内容灌进降权 app 的 env
             //（用户经 /proc/<app>/environ 读回）。
             var envLines = ReadEnvFile(options.EnvFile, uid);
+            // root 侧核验+暂存（客户端验签→root 读件 TOCTOU 收口）：包先复制进
+            // root 私有临时目录，--sha256 给了就对暂存副本复核——客户端验签算出的
+            // 哈希与 root 实际要装的字节逐位绑定，验后替换窗归零；装期间原路径被
+            // 改写也影响不了本轮回放（装的是快照非引用）。
+            staged = StagePackage(pkg, options.PackageSha256, log);
             var attempted = false;
-            foreach (var step in InstallChain(options, pkg))
+            foreach (var step in InstallChain(options, staged))
             {
                 var tool = ResolveCommand(step.Tool);
                 if (tool is null)
@@ -134,11 +142,80 @@ internal static class PkgApplyPlan
         }
         finally
         {
+            // 暂存副本随进程回收——成功/失败/拒绝路径全清（sh _pa_stage_cleanup 同义）。
+            if (staged.Length > 0)
+            {
+                CleanupStage(Path.GetDirectoryName(staged)!);
+            }
             // --env-file 是客户端 <staging>/pkg-<guid>/session.env 一次性输入——
             // 消费完（或装失败确定不消费）即删件与 pkg-* 暂存目录；客户端拉起即退
             // 后删不了，残件兜底在客户端拉起腿退出删余（Exited 钩/速退内联）与 24h staging 清扫。
             CleanupEnvFile(options.EnvFile);
         }
+    }
+
+    // 暂存到 root 私有目录 + --sha256 复核（sh pkg_apply 暂存段同义）：
+    // 返回暂存副本路径（其父目录即待清暂存根）。核验失败/复制失败抛异常归 rc4——
+    // 字节不符是篡改/腐坏信号，确定性拒绝不降级装原件。
+    private static string StagePackage(string pkg, string? expectedHex, Action<string> log)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "bundler-pkg-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        if (!OperatingSystem.IsWindows())
+        {
+            try
+            {
+                File.SetUnixFileMode(dir,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+            catch (Exception)
+            {
+            }
+        }
+        var staged = Path.Combine(dir, Path.GetFileName(pkg));
+        try
+        {
+            File.Copy(pkg, staged);
+            if (expectedHex is { Length: > 0 })
+            {
+                var actual = Sha256Hex(staged);
+                if (!string.Equals(actual, expectedHex, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new UpdateRejectedException(
+                        $"package sha256 mismatch — expected {expectedHex}, staged copy hashed {actual}.");
+                }
+                log($"bundler-updater: package sha256 verified ({actual.Substring(0, 12)}…)");
+            }
+            return staged;
+        }
+        catch
+        {
+            CleanupStage(dir);
+            throw;
+        }
+    }
+
+    private static void CleanupStage(string dir)
+    {
+        try
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private static string Sha256Hex(string path)
+    {
+        using var sha = SHA256.Create();
+        using var stream = File.OpenRead(path);
+        var builder = new StringBuilder(64);
+        foreach (var b in sha.ComputeHash(stream))
+        {
+            builder.Append(b.ToString("x2"));
+        }
+        return builder.ToString();
     }
 
     // --env-file 清理：删件恒做（尽力）；父目录仅本编排契约的 pkg-* 暂存名才删
@@ -188,7 +265,10 @@ internal static class PkgApplyPlan
                 yield return new InstallStep("apt-get",
                     ["install", "-y",
                      "-o", "Dpkg::Options::=--force-confdef",
-                     "-o", "Dpkg::Options::=--force-confold", pkg],
+                     "-o", "Dpkg::Options::=--force-confold",
+                     // dpkg 锁等待有界：别家包管理操作持锁时 apt-get 内部轮转
+                     // 等待是有界的，不叠加本层 Exec 超时才败（sh 侧同款 -o 行）。
+                     "-o", "DPkg::Lock::Timeout=120", pkg],
                     debEnv);
                 yield return new InstallStep("dpkg",
                     ["-i", "--force-confdef", "--force-confold", pkg],
@@ -379,8 +459,7 @@ internal static class PkgApplyPlan
         return command.Append(' ').Append(ShQuote(app)).ToString();
     }
 
-    private static string ShQuote(string value) =>
-        "'" + value.Replace("'", "'\\''") + "'";
+    private static string ShQuote(string value) => UpdateArgv.ShQuote(value);
 
     // 会话 env 回灌：env 件行集逐行收 KEY=value（键必须 [A-Za-z_][A-Za-z0-9_]*，
     // 坏行静默跳过——与 sh 支路同款过滤）；件缺省按最小集 HOME+DISPLAY 处理并记
@@ -621,7 +700,7 @@ internal static class PkgApplyPlan
     // env 不在本解析面：spawn argv 里的内层 `env K=V` 由 nohup 子进程经
     // execvp 按自己的 PATH 解析，从不经本函数——sh 侧原 env) 死支路已删（A4），
     // AOT 本就无对应 case，此处仅登记对齐事实。
-    private static string? ResolveCommand(string name)
+    internal static string? ResolveCommand(string name)
     {
         var overridePath = GetEnv("BUNDLER_UPDATER_CMD_" + CommandEnvName(name));
         if (!string.IsNullOrEmpty(overridePath) && IsExecutableFile(overridePath))
@@ -724,7 +803,28 @@ internal static class PkgApplyPlan
         try
         {
             using var process = Process.Start(BuildStartInfo(spec))!;
-            process.WaitForExit();
+            // 安装腿有界：pm 挂死（dpkg 锁竞态外的死锁/前端自身卡死）会把特权
+            // 进程拖成永驻——默认 30min，BUNDLER_UPDATER_PKG_TIMEOUT 秒数覆盖
+            //（sh 侧 timeout 包裹同名同缝）；超时杀进程返 124（timeout(1) 同码，
+            // 对调用方是可分类的"安装腿超时"）。
+            if (!process.WaitForExit(ExecTimeoutMilliseconds()))
+            {
+                try
+                {
+                    process.Kill();
+                }
+                catch (Exception)
+                {
+                }
+                try
+                {
+                    process.WaitForExit(30_000);
+                }
+                catch (Exception)
+                {
+                }
+                return 124;
+            }
             return process.ExitCode;
         }
         catch (Exception)
@@ -732,6 +832,14 @@ internal static class PkgApplyPlan
             // command -v 与 exec 之间的竞态（二进制被摘走）按"该级失败"退化下一级。
             return 127;
         }
+    }
+
+    private static int ExecTimeoutMilliseconds()
+    {
+        var raw = GetEnv("BUNDLER_UPDATER_PKG_TIMEOUT");
+        return raw is { Length: > 0 } && int.TryParse(raw, out var seconds) && seconds > 0
+            ? (int)Math.Min((long)seconds * 1000, int.MaxValue)
+            : 30 * 60 * 1000;
     }
 
     // 预检用同步执行：stdin 立即钉死（防降权器读调用方终端/管道），
@@ -872,12 +980,17 @@ internal static class PkgApplyPlan
             switch (name)
             {
                 case "--pkg": options.PackagePath = value; break;
+                case "--sha256": options.PackageSha256 = value; break;
                 case "--format": options.Format = value; break;
                 case "--app": options.AppPath = value; break;
                 case "--env-file": options.EnvFile = value; break;
                 case "--log": options.LogFile = value; break;
                 default: throw new UsageException($"unknown option '{name}'.");
             }
+        }
+        if (options.PackageSha256 is { Length: > 0 } sha && !IsSha256Hex(sha))
+        {
+            throw new UsageException("--sha256 must be exactly 64 hexadecimal characters.");
         }
         if (options.PackagePath.Length == 0)
         {
@@ -898,13 +1011,31 @@ internal static class PkgApplyPlan
     {
         writer.WriteLine("Usage:");
         writer.WriteLine("  bundler-updater pkg-apply --pkg <file> --format <deb|rpm|apk> --app <path>");
-        writer.WriteLine("      [--env-file <file>] [--rollback] [--log <file>]");
+        writer.WriteLine("      [--sha256 <hex>] [--env-file <file>] [--rollback] [--log <file>]");
+    }
+
+    // --sha256 词法校验：64 位十六进制——非该形状按用法错拒（sh 侧同判 rc3）。
+    private static bool IsSha256Hex(string value)
+    {
+        if (value.Length != 64)
+        {
+            return false;
+        }
+        foreach (var c in value)
+        {
+            if (!(c is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F'))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 }
 
 internal sealed class PkgApplyOptions
 {
     public string PackagePath = "";
+    public string PackageSha256 = "";
     public string Format = "";
     public string AppPath = "";
     public string? EnvFile;

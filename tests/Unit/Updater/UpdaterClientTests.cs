@@ -141,12 +141,14 @@ public sealed class UpdaterClientTests : TempBase
                 new Protocol.UpdateFeedArtifact
                 {
                     Target = "windows-x86_64", Format = "zip",
-                    Url = "other.zip", Sha256 = "0", Size = 1, Signature = "AA=="
+                    Url = "other.zip", File = "other.zip",
+                    Sha256 = "0", Size = 1, Signature = "AA=="
                 },
                 new Protocol.UpdateFeedArtifact
                 {
                     Target = "linux-x86_64", Format = "zip",
-                    Url = "app-2.0.0-linux-x86_64.zip", Sha256 = "0", Size = 1, Signature = "AA=="
+                    Url = "app-2.0.0-linux-x86_64.zip", File = "app-2.0.0-linux-x86_64.zip",
+                    Sha256 = "0", Size = 1, Signature = "AA=="
                 });
 
             var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
@@ -164,7 +166,7 @@ public sealed class UpdaterClientTests : TempBase
                 new Protocol.UpdateFeedArtifact
                 {
                     Target = "windows-x86_64", Format = "msi",
-                    Url = "x.msi", Sha256 = "0", Size = 1, Signature = "AA=="
+                    Url = "x.msi", File = "x.msi", Sha256 = "0", Size = 1, Signature = "AA=="
                 });
             var client2 = UpdateClient.FromInstallDirectory(install, "1.0.0");
             Assert.Null(await client2.CheckForUpdateAsync(TestContext.Current.CancellationToken));

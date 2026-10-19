@@ -1,8 +1,10 @@
 using System.Runtime.InteropServices;
 
-// 引导件同源链接编译（Bundler.Updater.Bootstrap 引本文件并定义 BUNDLER_UPDATER_LINK）——
+// 引导件/客户端同源链接编译（Bundler.Updater.Bootstrap 与 Bundler.Updater 均引本文件）——
 // 命名空间随宿主切换，与 Update/* 协议件双栖先例同规。
-#if BUNDLER_UPDATER_LINK
+#if BUNDLER_UPDATER_CLIENT
+namespace DotNet.Bundler.Updater;
+#elif BUNDLER_UPDATER_LINK
 namespace DotNet.Bundler.Updater.Bootstrap;
 #else
 namespace DotNet.Bundler.Core;

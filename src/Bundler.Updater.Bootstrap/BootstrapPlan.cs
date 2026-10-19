@@ -457,6 +457,12 @@ internal static class BootstrapPlan
         }
     }
 
+    // 判活对齐 sh pid_alive 的 fail-closed 语义：进程不存在（ArgumentException）
+    // 才算死；其余一切异常（无权限查看异属主进程=EPERM 对偶面、竞态取码失败）
+    // 按"判定不可得=存活"处理——宁等 --lock-timeout/--wait-timeout 超时，
+    // 也不把活着的持锁者误判死偷锁、不把活着的宿主当已退出跳等换包。
+    // sh 侧 kill -0 EPERM 后复核 /proc/<pid> 存在性，本侧无同样复核件——
+    // GetProcessById 全异常一律按活保守收口。
     private static bool ProcessAlive(int pid)
     {
         try
@@ -464,9 +470,13 @@ internal static class BootstrapPlan
             using var process = Process.GetProcessById(pid);
             return !process.HasExited;
         }
+        catch (ArgumentException)
+        {
+            return false; // 进程不存在=已退出
+        }
         catch (Exception)
         {
-            return false;
+            return true; // 判定不可得=按活——两误判方向都退化超时而非误操作
         }
     }
 
@@ -920,17 +930,9 @@ internal static class BootstrapPlan
         var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
         while (DateTime.UtcNow < deadline)
         {
-            try
+            if (!ProcessAlive(pid))
             {
-                using var process = Process.GetProcessById(pid);
-                if (process.HasExited)
-                {
-                    return;
-                }
-            }
-            catch (ArgumentException)
-            {
-                return; // 进程不存在即视为已退出
+                return;
             }
             Thread.Sleep(200);
         }
@@ -960,9 +962,17 @@ internal static class BootstrapPlan
             // /bin/sh exec 钉到 /dev/null（sh 版 `</dev/null >/dev/null 2>&1`
             // 同价）：分离进程继承调用方管道写端会让调用方 ReadToEnd 永等 EOF。
             // "$@" 逐参透传不经 shell 重解析——argv 拼写原样到达 nohup。
+            // nohup 走与 pkg-apply 链同一 ResolveCommand——BUNDLER_UPDATER_CMD_NOHUP
+            // 覆盖缝双侧同名同源；缺席 WARN 跳过重启（不拦已提交的换包）。
+            var nohup = PkgApplyPlan.ResolveCommand("nohup");
+            if (nohup is null)
+            {
+                log("bundler-updater: WARN nohup not found — cannot detach restart");
+                return;
+            }
             startInfo = new ProcessStartInfo("/bin/sh",
                 ["-c", "exec \"$@\" </dev/null >/dev/null 2>&1",
-                 "bundler-updater-spawn", "nohup", appPath])
+                 "bundler-updater-spawn", nohup, appPath])
             { UseShellExecute = false, WorkingDirectory = workingDirectory };
         }
         // 重启失败不致命：换包/回滚已完成，重启只是便利步骤——与 POSIX `|| true` 对齐为 WARN。

@@ -1361,11 +1361,16 @@ public static class UpdaterBootstrapParityTests
     // "缺席"语义不依赖宿主是否恰好装着 apt/dnf（Debian 系宿主也照样判 rc5）。
     // rm/rmdir 属 --env-file 用完即删（件 + pkg-* 暂存目录）的协议内工具；
     // stat/id/cat/timeout 属 --env-file 三重校验+限时预读的协议内工具
-    //（timeout 缺席时 sh 退裸 cat，属可选——PkgRealTool 找不到就不种）。
+    //（timeout 缺席时 sh 退裸 cat，属可选——PkgRealTool 找不到就不种）；
+    // mktemp/cp/mkdir 属包暂存（root 私有快照），sha256sum/shasum/openssl
+    // 属 --sha256 复核的退化链（全缺席时 sh 支路按"无法核验"拒——同样属
+    // 协议内行为差异，须按宿主可用性对断言而非照单全收）。
     static void SeedShim(string shim)
     {
         foreach (var tool in new[] { "env", "dirname", "awk", "ls", "sed", "nohup", "tr", "rm", "rmdir",
-                                   "stat", "id", "cat", "timeout" })
+                                   "stat", "id", "cat", "timeout",
+                                   "mktemp", "cp", "mkdir",
+                                   "sha256sum", "shasum", "openssl" })
         {
             var real = PkgRealTool(tool);
             if (real != tool && !File.Exists(Path.Combine(shim, tool)))
@@ -1443,6 +1448,22 @@ public static class UpdaterBootstrapParityTests
             Thread.Sleep(100);
         }
         return File.Exists(rec) ? File.ReadAllLines(rec) : [];
+    }
+
+    // pm 记录行形态：" <名> <固定argv…> <暂存包>|DF=<DEBIAN_FRONTEND>"。
+    // 包经 root 私有暂存副本喂给 pm（AOT bundler-pkg-*，sh bundler-pkg.*）——
+    // 断言固定前缀 + 暂存目录名 + 原包基名尾，不逐字比路径。
+    static void AssertPmLine(string line, string argsPrefix, string pkg, string debianFrontend)
+    {
+        var suffix = "|DF=" + debianFrontend;
+        Assert.EndsWith(suffix, line);
+        var argv = line[..^suffix.Length];
+        Assert.StartsWith(argsPrefix + " ", argv);
+        var staged = argv[(argsPrefix.Length + 1)..];
+        Assert.EndsWith("/" + Path.GetFileName(pkg), staged);
+        var stageDir = Path.GetFileName(Path.GetDirectoryName(staged)!);
+        Assert.NotNull(stageDir);
+        Assert.StartsWith("bundler-pkg", stageDir);
     }
 
     static int InvokePkg(Impl impl, IReadOnlyDictionary<string, string> env,
@@ -1546,13 +1567,64 @@ public static class UpdaterBootstrapParityTests
 
                 Assert.Equal(0, rc);
                 var lines = WaitRecord(rec, 3);
-                Assert.Equal(
-                    $"apt-get install -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold {pkg}|DF=noninteractive",
-                    lines[0]);
-                Assert.Equal(
-                    $"dpkg -i --force-confdef --force-confold {pkg}|DF=noninteractive",
-                    lines[1]);
+                AssertPmLine(lines[0],
+                    "apt-get install -y -o Dpkg::Options::=--force-confdef " +
+                    "-o Dpkg::Options::=--force-confold -o DPkg::Lock::Timeout=120",
+                    pkg, "noninteractive");
+                AssertPmLine(lines[1],
+                    "dpkg -i --force-confdef --force-confold", pkg, "noninteractive");
                 Assert.StartsWith("app|pwd=" + dir, lines[2]);
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void PkgApply_Sha256_VerifiedOnStagedCopy_Parity()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "sha-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
+                var app = AppStub(dir, rec);
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", PmStub(bin, "dpkg", 0, rec)));
+
+                // 双侧各自算包字节 sha256——--sha256 复核在暂存副本上做（sh 侧
+                // 依赖 sha256sum/shasum/openssl 退化链，宿主全无才 rc4，CI
+                // POSIX 宿主恒有 sha256sum）。
+                var sha = Convert.ToHexString(
+                    System.Security.Cryptography.SHA256.HashData(
+                        File.ReadAllBytes(pkg))).ToLowerInvariant();
+                Assert.Equal(0, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--sha256", sha));
+                var lines = WaitRecord(rec, 2);
+                AssertPmLine(lines[0], "dpkg -i --force-confdef --force-confold",
+                    pkg, "noninteractive");
+                Assert.StartsWith("app|pwd=", lines[1]);
+
+                // 不匹配 → 确定性 rc4，pm 零调用（记录件不再增长）。
+                File.Delete(rec);
+                var wrong = new string('0', 64);
+                Assert.Equal(4, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--sha256", wrong));
+                Thread.Sleep(200);
+                Assert.False(File.Exists(rec));
+
+                // 畸形（非 64 hex）→ 用法错 rc3。
+                Assert.Equal(3, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--sha256", "deadbeef"));
             }
         }
         finally { Cleanup(root); }
@@ -1620,8 +1692,8 @@ public static class UpdaterBootstrapParityTests
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "rpm", "--app", app));
                 var lines = WaitRecord(rec, 3);
-                Assert.Equal($"zypper install -y {pkg}|DF=", lines[0]);
-                Assert.Equal($"rpm -U {pkg}|DF=", lines[1]);
+                AssertPmLine(lines[0], "zypper install -y", pkg, "");
+                AssertPmLine(lines[1], "rpm -U", pkg, "");
                 Assert.StartsWith("app|pwd=", lines[2]);
 
                 // --rollback 子形态：rpm 末位换 --oldpackage。
@@ -1629,7 +1701,7 @@ public static class UpdaterBootstrapParityTests
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "rpm", "--app", app, "--rollback"));
                 lines = WaitRecord(rec, 3);
-                Assert.Equal($"rpm -U --oldpackage {pkg}|DF=", lines[1]);
+                AssertPmLine(lines[1], "rpm -U --oldpackage", pkg, "");
             }
         }
         finally { Cleanup(root); }
@@ -1659,14 +1731,14 @@ public static class UpdaterBootstrapParityTests
                 // keys 目录空 → --allow-untrusted。
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "apk", "--app", app));
-                Assert.Equal($"apk add --allow-untrusted {pkg}|DF=", WaitRecord(rec, 2)[0]);
+                AssertPmLine(WaitRecord(rec, 2)[0], "apk add --allow-untrusted", pkg, "");
 
                 // 预置公钥在场 → 不加旗标。
                 File.Delete(rec);
                 File.WriteAllText(Path.Combine(keysDir, "bundler-abc123.rsa.pub"), "pub");
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "apk", "--app", app));
-                Assert.Equal($"apk add {pkg}|DF=", WaitRecord(rec, 2)[0]);
+                AssertPmLine(WaitRecord(rec, 2)[0], "apk add", pkg, "");
             }
         }
         finally { Cleanup(root); }
@@ -2430,7 +2502,7 @@ public static class UpdaterBootstrapParityTests
                     name => name == "dpkg" ? dpkgInShim : null,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app));
                 var lines = WaitRecord(rec, 2);
-                Assert.Equal($"dpkg -i --force-confdef --force-confold {pkg}|DF=noninteractive", lines[0]);
+                AssertPmLine(lines[0], "dpkg -i --force-confdef --force-confold", pkg, "noninteractive");
                 Assert.StartsWith("app|pwd=" + dir, lines[1]);
             }
         }

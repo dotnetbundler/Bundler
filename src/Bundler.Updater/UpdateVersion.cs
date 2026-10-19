@@ -39,19 +39,39 @@ internal readonly struct UpdateVersion : IComparable<UpdateVersion>
             core = core.Substring(0, dash);
         }
         var parts = core.Split('.');
+        // 组件词法按 semver 口径收"全数字"：int.TryParse 会放过 " 5"/"+5"/"1 2"
+        // 这类空白/符号形（宽松解析把畸形的远端版本串误收成合法版本）。
         if (parts.Length < 2 || parts.Length > 3 ||
-            !int.TryParse(parts[0], out var major) ||
-            !int.TryParse(parts[1], out var minor))
+            !TryParseNumeric(parts[0], out var major) ||
+            !TryParseNumeric(parts[1], out var minor))
         {
             return false;
         }
         var patch = 0;
-        if (parts.Length == 3 && !int.TryParse(parts[2], out patch))
+        if (parts.Length == 3 && !TryParseNumeric(parts[2], out patch))
         {
             return false;
         }
         version = new UpdateVersion(major, minor, patch, prerelease);
         return true;
+    }
+
+    // semver 数字标识符词法：非空纯 ASCII 数字（无前导空白/符号容忍）。
+    private static bool TryParseNumeric(string text, out int value)
+    {
+        value = 0;
+        if (text.Length == 0 || text.Length > 10)
+        {
+            return false;
+        }
+        foreach (var c in text)
+        {
+            if (!(c is >= '0' and <= '9'))
+            {
+                return false;
+            }
+        }
+        return int.TryParse(text, out value);
     }
 
     public int CompareTo(UpdateVersion other)
@@ -77,8 +97,8 @@ internal readonly struct UpdateVersion : IComparable<UpdateVersion>
         {
             if (i >= a.Length) return -1;
             if (i >= b.Length) return 1;
-            var numericA = int.TryParse(a[i], out var numberA);
-            var numericB = int.TryParse(b[i], out var numberB);
+            var numericA = TryParseNumeric(a[i], out var numberA);
+            var numericB = TryParseNumeric(b[i], out var numberB);
             if (numericA && numericB)
             {
                 var numeric = numberA.CompareTo(numberB);

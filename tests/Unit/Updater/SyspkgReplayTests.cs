@@ -117,6 +117,28 @@ public sealed class SyspkgReplayTests : TempBase
 
     private string UpdaterPath => Path.Combine(Root, "install", BootstrapperName);
 
+    // pkg-apply argv 里 --sha256 的期望值：留存副本（或降级原件）的内容哈希——
+    // root 侧对暂存副本复核的就是这个值。
+    private static string HashOf(string path)
+    {
+        using var sha = SHA256.Create();
+        return SyspkgReplay.Sha256ToHex(sha.ComputeHash(File.ReadAllBytes(path)));
+    }
+
+    // env 覆盖测试用的真可执行垫片——BUNDLER_UPDATER_CMD_* 覆盖值现在按引导件
+    // 同款口径复核（存在+普通文件+执行位），虚构路径会被按未设置退化。
+    private string StubExe(string name)
+    {
+        var path = Path.Combine(Root, name);
+        File.WriteAllText(path, "#!/bin/sh\nexit 0\n");
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            File.SetUnixFileMode(path,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        return path;
+    }
+
     // ---- apply：提权退化链 ----
 
     [Fact]
@@ -145,6 +167,7 @@ public sealed class SyspkgReplayTests : TempBase
                 UpdaterPath,
                 "pkg-apply",
                 "--pkg", retained,
+                "--sha256", HashOf(retained),
                 "--format", "deb",
                 "--app", Path.GetFullPath(AppFile),
             },
@@ -189,8 +212,8 @@ public sealed class SyspkgReplayTests : TempBase
             "unset password\n" +
             "password=$('/stub/zenity' '--password') || { unset password; exit 126; }\n" +
             "command printf '%s\\n' \"$password\" | '/stub/sudo' '-S' '-p' '' '--' " +
-            $"'{UpdaterPath}' 'pkg-apply' '--pkg' '{retained}' '--format' 'deb' '--app' '{appAbs}' " +
-            $"'--env-file' '{launch.EnvFile}'\n" +
+            $"'{UpdaterPath}' 'pkg-apply' '--pkg' '{retained}' '--sha256' '{HashOf(retained)}' " +
+            $"'--format' 'deb' '--app' '{appAbs}' '--env-file' '{launch.EnvFile}'\n" +
             "rc=$?\n" +
             "unset password\n" +
             "exit \"$rc\"";
@@ -216,7 +239,7 @@ public sealed class SyspkgReplayTests : TempBase
             "|| { unset password; exit 126; }\n" +
             "command printf '%s\\n' \"$password\" | " +
             $"'/stub/sudo' '-S' '-p' '' '--' '{UpdaterPath}' 'pkg-apply' '--pkg' '{retained}' " +
-            $"'--format' 'deb' '--app' '{appAbs}' '--env-file' '{launch.EnvFile}'\n" +
+            $"'--sha256' '{HashOf(retained)}' '--format' 'deb' '--app' '{appAbs}' '--env-file' '{launch.EnvFile}'\n" +
             "rc=$?\n" +
             "unset password\n" +
             "exit \"$rc\"";
@@ -293,6 +316,7 @@ public sealed class SyspkgReplayTests : TempBase
                 "--", UpdaterPath,
                 "pkg-apply",
                 "--pkg", retained,
+                "--sha256", HashOf(retained),
                 "--format", "deb",
                 "--app", Path.GetFullPath(AppFile),
             },
@@ -449,19 +473,45 @@ public sealed class SyspkgReplayTests : TempBase
     public void PlanApply_EnvOverride_BeatsCommandProbe()
     {
         // BUNDLER_UPDATER_CMD_<TOOL> env 覆盖先于 CommandProbe（生产=权威缺席化的
-        // 垫片供应通道——与引导件 PkgApplyPlan 同名同源约定）。
+        // 垫片供应通道——与引导件 PkgApplyPlan 同名同源约定）。覆盖值须过 -f -x
+        // 复核（引导件同款判据）才权威——垫片写成真可执行件供给。
+        var envDpkg = StubExe("dpkg-env");
+        var envPkexec = StubExe("pkexec-env");
         SetupProbes(
             env: new Dictionary<string, string>
             {
-                ["BUNDLER_UPDATER_CMD_DPKG"] = "/env/dpkg",
-                ["BUNDLER_UPDATER_CMD_PKEXEC"] = "/env/pkexec",
+                ["BUNDLER_UPDATER_CMD_DPKG"] = envDpkg,
+                ["BUNDLER_UPDATER_CMD_PKEXEC"] = envPkexec,
             },
             commands: new Dictionary<string, string>());   // CommandProbe 全缺席
         var install = InstallDir();
         var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add);
-        Assert.Equal("/env/pkexec", launch.FileName);
+        Assert.Equal(envPkexec, launch.FileName);
         var exec = Assert.Single(_execs);
-        Assert.Equal("/env/dpkg", exec.File);
+        Assert.Equal(envDpkg, exec.File);
+    }
+
+    [Fact]
+    public void PlanApply_EnvOverride_Unusable_FallsBackToCommandProbe()
+    {
+        // 指向不存在件的 env 覆盖按"未设置"退化（引导件 -f -x 同口径）——
+        // 流浪 env 不能让预检/提权链探测对会话造假。
+        SetupProbes(
+            env: new Dictionary<string, string>
+            {
+                ["BUNDLER_UPDATER_CMD_DPKG"] = Path.Combine(Root, "does-not-exist-dpkg"),
+                ["BUNDLER_UPDATER_CMD_PKEXEC"] = Path.Combine(Root, "does-not-exist-pkexec"),
+            },
+            commands: new Dictionary<string, string>
+            {
+                ["dpkg"] = "/stub/dpkg",
+                ["pkexec"] = "/stub/pkexec",
+            });
+        var install = InstallDir();
+        var launch = SyspkgReplay.PlanApply(Identity("deb"), Artifact(), Sig(Material, Artifact()), install, Options(), _log.Add);
+        Assert.Equal("/stub/pkexec", launch.FileName);
+        var exec = Assert.Single(_execs);
+        Assert.Equal("/stub/dpkg", exec.File);
     }
 
     // ---- apply：env 件 ----
@@ -592,6 +642,7 @@ public sealed class SyspkgReplayTests : TempBase
                 UpdaterPath,
                 "pkg-apply",
                 "--pkg", retained,
+                "--sha256", HashOf(retained),
                 "--format", "deb",
                 "--app", Path.GetFullPath(AppFile),
                 "--rollback",

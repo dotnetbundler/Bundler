@@ -16,14 +16,22 @@ public static class UpdateSignatureVerifier
     {
         using var ecdsa = ECDsa.Create();
         ecdsa.ImportParameters(publicKey.ToPublicParameters());
-        return TryVerify(ecdsa, signature, () => new MemoryStream(data, writable: false));
+        return TryVerify(ecdsa, signature, () => new MemoryStream(data, writable: false), out _);
     }
 
-    public static bool VerifyFile(string path, byte[] signature, UpdateKeyMaterial publicKey)
+    public static bool VerifyFile(string path, byte[] signature, UpdateKeyMaterial publicKey) =>
+        VerifyFile(path, signature, publicKey, out _);
+
+    /// <summary>
+    /// 验签同趟输出内容 sha256——留存件复核这类"验签+字节指纹都要"的场景单次读取
+    /// 一并产出（先 hash 再另验会把两个读取窗口并成可被替换的缝隙）。
+    /// </summary>
+    public static bool VerifyFile(
+        string path, byte[] signature, UpdateKeyMaterial publicKey, out byte[] contentHash)
     {
         using var ecdsa = ECDsa.Create();
         ecdsa.ImportParameters(publicKey.ToPublicParameters());
-        return TryVerify(ecdsa, signature, () => File.OpenRead(path));
+        return TryVerify(ecdsa, signature, () => File.OpenRead(path), out contentHash);
     }
 
     /// <summary>便捷面：清单里的 base64 签名 + 旁车里的 base64 公钥直接验文件。</summary>
@@ -36,7 +44,8 @@ public static class UpdateSignatureVerifier
 
     // 数据只过一次：流式算 SHA-256 后对每个编码候选 VerifyHash——
     // 旧实现按候选把整件复制进 MemoryStream，大工件内存翻倍且重复哈希。
-    private static bool TryVerify(ECDsa ecdsa, byte[] signature, Func<Stream> openData)
+    private static bool TryVerify(
+        ECDsa ecdsa, byte[] signature, Func<Stream> openData, out byte[] contentHash)
     {
         byte[] hash;
         using (var sha = SHA256.Create())
@@ -44,6 +53,7 @@ public static class UpdateSignatureVerifier
         {
             hash = sha.ComputeHash(input);
         }
+        contentHash = hash;
         foreach (var candidate in Candidates(signature))
         {
             try
@@ -90,16 +100,20 @@ public static class UpdateSignatureVerifier
         {
             return signature;
         }
-        // DER: 30 <len> 02 <rlen> <r> 02 <slen> <s>
-        if (signature.Length < 8 || signature[0] != 0x30)
+        // DER: 30 <len> 02 <rlen> <r> 02 <slen> <s> ——P-256 签名总长 ≤72B，
+        // DER 恒为短式长度；严收"长度字节=总长-2"的精确形状：非最短长式
+        //（0x81）与尾随垃圾同属远端可控输入的畸形面，一律拒——
+        // 严解不为兼容留缝（本链签名件恒由 Bundler 侧产出）。
+        if (signature.Length < 8 || signature[0] != 0x30 ||
+            signature[1] != signature.Length - 2)
         {
             throw new InvalidOperationException("Unexpected ECDSA signature encoding.");
         }
-        var offset = signature[1] == 0x81 ? 3 : 2; // 长/短长度前缀
+        var offset = 2;
         // 逐段取前先做边界断言：本函数吃远端可控的 .sig 输入，越界索引/
         // BlockCopy 会漏出 ArgumentException/IndexOutOfRangeException 穿透
         // Candidates 的 InvalidOperationException 过滤器——统一按畸形拒。
-        if (offset + 2 > signature.Length || signature[offset] != 0x02)
+        if (signature[offset] != 0x02)
         {
             throw new InvalidOperationException("Malformed ECDSA DER signature.");
         }
@@ -116,7 +130,7 @@ public static class UpdateSignatureVerifier
             throw new InvalidOperationException("Malformed ECDSA DER signature.");
         }
         var sLen = signature[sOffset + 1];
-        if (sOffset + 2 + sLen > signature.Length)
+        if (sOffset + 2 + sLen != signature.Length)
         {
             throw new InvalidOperationException("Malformed ECDSA DER signature.");
         }

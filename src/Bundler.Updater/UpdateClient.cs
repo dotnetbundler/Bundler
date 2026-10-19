@@ -328,8 +328,10 @@ public sealed class UpdateClientOptions
     /// <summary>链路事件行输出（进度/决议/拒绝原因）。</summary>
     public Action<string>? Log { get; init; }
     /// <summary><see cref="UpdateClient.UpdateAsync"/> 一步法的下载落点目录。</summary>
+    /// <summary>下载暂存目录——与 ApplyOptions.StagingRoot 同一 per-user 根
+    ///（POSIX /tmp 跨用户共享，先建者权限会卡死后到用户——按用户名分槽）。</summary>
     public string DownloadDirectory { get; init; } =
-        Path.Combine(Path.GetTempPath(), "bundler-update", "downloads");
+        Path.Combine(UpdateApplier.DefaultStagingRoot(), "downloads");
     /// <summary>block-map 差分开关（默认开；清单无块表或本地无缓存时自动全量）。</summary>
     public bool EnableDelta { get; init; } = true;
 }
