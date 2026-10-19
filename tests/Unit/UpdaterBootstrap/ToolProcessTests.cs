@@ -90,6 +90,44 @@ public sealed class ToolProcessTests
     }
 
     [Fact]
+    public void RelativePathEntryResolvesAgainstParentCwd()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return; // NativeSpawnUnix 的 PATH 相对项语义——Windows 腿由 BCL 自管不重复验。
+        }
+        // PATH 含相对项且 WorkingDirectory 为 ""（不 chdir）时，解析基准=父件 cwd——
+        // 上一条测试只钉异常点，本条直接断言拼接路径正确。
+        var dirName = $"toolpath-{Guid.NewGuid():N}";
+        var dir = Path.Combine(Environment.CurrentDirectory, dirName);
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var tool = Path.Combine(dir, "fake-tool-x9");
+            File.WriteAllText(tool, "#!/bin/sh\necho rel-cwd-ok\n");
+            var mode = File.GetUnixFileMode(tool);
+            File.SetUnixFileMode(tool, mode | UnixFileMode.UserExecute
+                | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+            var info = new ToolProcessStartInfo
+            {
+                FileName = "fake-tool-x9",
+                WorkingDirectory = "",
+                RedirectStandardOutput = true,
+            };
+            info.Environment["PATH"] = dirName;
+            using var process = ToolProcess.Start(info);
+            Assert.NotNull(process);
+            var output = process.StandardOutput.ReadToEnd();
+            Assert.True(process.WaitForExit(10_000));
+            Assert.Contains("rel-cwd-ok", output);
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
     public void ExitedEventFiresOnExit()
     {
         if (OperatingSystem.IsWindows())
