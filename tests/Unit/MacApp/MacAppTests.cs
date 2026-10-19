@@ -449,11 +449,6 @@ public sealed class MacAppTests : TempBase
         {
             var joined = string.Join(' ', request.Arguments);
             calls.Add(request.Executable + " " + joined);
-            if (request.Executable == "security" && joined.StartsWith("list-keychains") &&
-                !joined.Contains("-s", StringComparison.Ordinal))
-            {
-                return Task.FromResult(new ToolRunner.Result(0, "\"/Users/x/Library/Keychains/login.keychain-db\"\n", ""));
-            }
             if (request.Executable == "security" && joined.StartsWith("find-identity"))
             {
                 return Task.FromResult(new ToolRunner.Result(0,
@@ -482,9 +477,12 @@ public sealed class MacAppTests : TempBase
                 }).BuildAsync(MacConfiguration(input, output), TestContext.Current.CancellationToken),
                 "A failing codesign must surface as a build failure.");
             Assert.True(deleted, "The temporary keychain must be deleted even when codesign fails.");
-            Assert.True(calls.Any(c => c.StartsWith("security list-keychains") && c.Contains("-s") &&
-                                  c.Contains("login.keychain")),
-                "The user's keychain search list must be restored after failure.");
+            // 临时 keychain 经 codesign --keychain 直给——用户搜索列表全程不被触碰，
+            // 无还原义务，也不会与并行构建抢同一份全局状态。
+            Assert.False(calls.Any(c => c.StartsWith("security list-keychains")),
+                "The keychain search list must never be read or mutated.");
+            Assert.True(calls.Any(c => c.StartsWith("codesign") && c.Contains("--keychain")),
+                "codesign must resolve the identity through an explicit --keychain argument.");
             Assert.True(calls.Any(c => c.StartsWith("security create-keychain")) &&
                    calls.Any(c => c.StartsWith("security import")),
                 "The temporary keychain is created and the certificate imported before signing.");
@@ -665,7 +663,7 @@ public sealed class MacAppTests : TempBase
             }
             Environment.SetEnvironmentVariable("APPLE_API_KEY_PATH_UNSET", "/tmp/fake-key.p8");
             Assert.Throws<ArgumentException>(
-                () => MacAppSigning.ResolveCredentials(
+                () => MacSigningSupport.ResolveCredentials(
                     new MacAppSigningConfiguration { Notarize = true }));
         }
         finally
@@ -763,12 +761,6 @@ public sealed class MacAppTests : TempBase
                 var outIndex = request.Arguments.ToList().IndexOf("-out") + 1;
                 File.WriteAllText(request.Arguments[outIndex], "PEM");
                 return Task.FromResult(new ToolRunner.Result(0, "", ""));
-            }
-            if (request.Executable == "security" && joined.StartsWith("list-keychains") &&
-                !joined.Contains("-s", StringComparison.Ordinal))
-            {
-                return Task.FromResult(new ToolRunner.Result(0,
-                    "\"/Users/x/Library/Keychains/login.keychain-db\"\n", ""));
             }
             if (request.Executable == "security" && joined.StartsWith("find-identity"))
             {

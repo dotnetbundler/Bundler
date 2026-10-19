@@ -36,7 +36,7 @@ MSBuild 前缀 `BundlerMacPkg*`；`bundler.json` 分节 `pkg.*`；API `MacPkgBun
 | `BundlerMacPkgVersion` | `version` / `Version` | `BundlerVersion` | |
 | `BundlerMacPkgInstallRoot` | `installRoot` / `InstallRoot` | `/Applications` | install-location |
 | `BundlerMacPkgScriptsDirectory` | `scriptsDirectory` / `ScriptsDirectory` | 无 | 专家旋钮：目录原样给 `pkgbuild --scripts`，脚本以安装器权限运行 |
-| `@BundlerMacPkgFile`（`Destination`） | `files` / `Files`（`{source,destination}`） | 无 | 任意文件树 → install-location 相对路径 |
+| `@BundlerMacPkgFile`（`Destination`） | `files` / `Files`（`{source,destination}`） | 无 | 任意文件树 → install-location 相对路径；落点必须留在包根内、不得注入暂存 `.app` 内部、与同/祖先/后代目的地冲突即拒绝 |
 
 ### 3.2 分发包（任一配置即升级 `productbuild`）
 

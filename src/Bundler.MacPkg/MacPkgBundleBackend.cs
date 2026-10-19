@@ -22,13 +22,13 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
     internal static (string Identifier, string Version) ValidateConfiguration(
         MacPkgBundleConfiguration settings, BundleConfiguration bundle)
     {
-        var identifier = settings.PackageName ?? bundle.Identifier;
-        if (identifier.Trim().Length == 0)
+        var identifier = (settings.PackageName ?? bundle.Identifier).Trim();
+        if (identifier.Length == 0)
         {
             throw new ArgumentException("The .pkg identifier must not be empty.");
         }
-        var version = settings.Version ?? bundle.Version;
-        if (version.Trim().Length == 0)
+        var version = (settings.Version ?? bundle.Version).Trim();
+        if (version.Length == 0)
         {
             throw new ArgumentException("The .pkg version must not be empty.");
         }
@@ -71,7 +71,7 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
         var packageName = ArtifactNaming.FileName(
             MacAppBundleBackend.SanitizeFileName(bundle.ProductName), bundle.Version, item.Target, PackageFormat.Pkg);
         var outputPath = Path.Combine(item.OutputDirectory, packageName);
-        MacAppSigning.TemporaryKeychain? keychain = null;
+        MacSigningSupport.TemporaryKeychain? keychain = null;
         var identity = "";
 
         try
@@ -97,7 +97,16 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                     "The .pkg backend expects the intermediate .app at " + appPath +
                     " (the planner adds it automatically when 'pkg' is requested).");
             }
-            CopyTree(appPath, Path.Combine(stageDirectory, applicationName), logger);
+            var stagedAppPath = Path.Combine(stageDirectory, applicationName);
+            CopyTree(appPath, stagedAppPath, logger);
+
+            // Staging collision book (APFS default is case-insensitive): the staged .app is
+            // already signed-worthy content — a payload destination inside it would inject
+            // files into the sealed bundle, and two entries claiming one destination would
+            // silently overwrite each other.
+            var stageRoot = Path.GetFullPath(stageDirectory) + Path.DirectorySeparatorChar;
+            var appBundleRoot = Path.GetFullPath(stagedAppPath);
+            var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { appBundleRoot };
 
             foreach (var payload in files)
             {
@@ -119,7 +128,26 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                     throw new FileNotFoundException(
                         $"The .pkg payload source does not exist: {source}", source);
                 }
-                var destination = Path.Combine(stageDirectory, destinationName.TrimStart('/'));
+                var destination = Path.GetFullPath(
+                    Path.Combine(stageDirectory, destinationName.TrimStart('/')));
+                if (!destination.StartsWith(stageRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new ArgumentException(
+                        $"The .pkg payload destination must resolve inside the package root: '{payload.Destination}'.");
+                }
+                var collision = claimed.FirstOrDefault(other =>
+                    string.Equals(other, destination, StringComparison.OrdinalIgnoreCase) ||
+                    other.StartsWith(destination + Path.DirectorySeparatorChar,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    destination.StartsWith(other + Path.DirectorySeparatorChar,
+                        StringComparison.OrdinalIgnoreCase));
+                if (collision is not null)
+                {
+                    throw new ArgumentException(collision == appBundleRoot
+                        ? $"The .pkg payload destination cannot inject files into the staged .app bundle: '{payload.Destination}'."
+                        : $"The .pkg payload destination collides with '{collision.Substring(stageRoot.Length)}': '{payload.Destination}'.");
+                }
+                claimed.Add(destination);
                 if (Directory.Exists(source))
                 {
                     CopyTree(source, destination, logger);
@@ -156,18 +184,21 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
                 "--install-location", settings.InstallRoot,
                 "--identifier", identifier,
                 "--version", version,
-                "--ownership", "recommended"
+                "--ownership", "recommended",
+                // Finder bookkeeping files must not become package payload.
+                "--filter", "\\.DS_Store$"
             };
-            if (settings.ScriptsDirectory is { Length: > 0 })
+            if (settings.ScriptsDirectory is { Length: > 0 } scriptsDirectory)
             {
+                ValidateScriptsDirectory(Path.GetFullPath(scriptsDirectory));
                 pkgbuildArguments.Add("--scripts");
-                pkgbuildArguments.Add(Path.GetFullPath(settings.ScriptsDirectory));
+                pkgbuildArguments.Add(Path.GetFullPath(scriptsDirectory));
             }
             // Component packages are signed inside pkgbuild; distribution packages are
             // signed by productsign after productbuild emits the unsigned product archive.
             if (identity.Length > 0 && !useDistribution)
             {
-                pkgbuildArguments.AddRange(MacPkgSigning.PkgbuildSignArguments(identity, keychain));
+                pkgbuildArguments.AddRange(MacSigningSupport.PkgbuildSignArguments(identity, keychain));
             }
             pkgbuildArguments.Add(packagePath);
             await ToolRunner.RunAsync(
@@ -304,11 +335,45 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
         }
     }
 
+    /// <summary>
+    /// pkgbuild embeds preinstall/postinstall verbatim: a file without a shebang or without
+    /// its executable bit ships dead scripts inside an otherwise fine-looking package.
+    /// Checked here (macOS host) rather than at config time so cross-host pre-validation
+    /// does not fail on permission bits it cannot evaluate.
+    /// </summary>
+    private static void ValidateScriptsDirectory(string scriptsDirectory)
+    {
+        foreach (var name in new[] { "preinstall", "postinstall" })
+        {
+            var script = Path.Combine(scriptsDirectory, name);
+            if (!File.Exists(script))
+            {
+                continue;
+            }
+            var header = new byte[2];
+            using (var stream = new FileStream(script, FileMode.Open, FileAccess.Read))
+            {
+                var read = stream.Read(header, 0, header.Length);
+                if (read < header.Length || header[0] != (byte)'#' || header[1] != (byte)'!')
+                {
+                    throw new ArgumentException(
+                        $"The .pkg scripts file '{name}' must start with a #! shebang line.");
+                }
+            }
+            if (!UnixFileTypes.HasAnyExecuteBit(script))
+            {
+                throw new ArgumentException(
+                    $"The .pkg scripts file '{name}' is not executable (chmod +x); " +
+                    "pkgbuild would embed it unusable.");
+            }
+        }
+    }
+
     private static string MimeType(string file) =>
         Path.GetExtension(file).ToLowerInvariant() switch
         {
             ".html" or ".htm" => "text/html",
-            ".rtf" or ".rtfd" => "text/richtext",
+            ".rtf" => "text/richtext",
             _ => "text/plain",
         };
 

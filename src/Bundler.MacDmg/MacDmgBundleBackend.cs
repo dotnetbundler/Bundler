@@ -8,6 +8,8 @@ namespace DotNet.Bundler.MacDmg;
 internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : IBundleBackend
 {
     private const int DetachMaxAttempts = 5;
+    // 连续两次 graceful 失败后递进 -force（卷被 Finder/diskarbitration 占持时的标准处置）
+    private const int DetachForceAttempt = 3;
     private static readonly int[] DetachBackoffMilliseconds = { 250, 500, 1000, 2000 };
     private const int ConvertTransientMaxAttempts = 9;
     // 连续 EAGAIN 到本次数说明 diskimages-helper 簿记大概率已卡死——先踢掉再睡再试
@@ -30,8 +32,8 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
     /// </summary>
     internal static string ValidateConfiguration(MacDmgBundleConfiguration settings, BundleConfiguration bundle)
     {
-        var volumeName = settings.VolumeName ?? MacAppBundleBackend.SanitizeFileName(bundle.ProductName);
-        if (volumeName.Trim().Length == 0)
+        var volumeName = (settings.VolumeName ?? MacAppBundleBackend.SanitizeFileName(bundle.ProductName)).Trim();
+        if (volumeName.Length == 0)
         {
             throw new ArgumentException("The .dmg volume name must not be empty.");
         }
@@ -115,12 +117,11 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 var limits = await ToolRunner.TryRunAsync(
                     "hdiutil", ["resize", "-limits", readWriteImage],
                     workDirectory, cancellationToken);
-                var fields = limits is { ExitCode: 0 }
-                    ? limits.StandardOutput.Trim().Split(
-                        new[] { ' ', '\t', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                    : Array.Empty<string>();
+                var baseSectors = limits is { ExitCode: 0 }
+                    ? ResizeBaseSectors(limits.StandardOutput)
+                    : null;
                 ToolRunner.Result? resized = null;
-                if (fields.Length >= 2 && long.TryParse(fields[1], out var currentSectors))
+                if (baseSectors is { } currentSectors)
                 {
                     resized = await ToolRunner.TryRunAsync(
                         "hdiutil",
@@ -165,7 +166,8 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 mountDirectory, applicationName, workDirectory,
                 cancellationToken, logger);
 
-            await DetachWithRetryAsync(mountDirectory, workDirectory, cancellationToken, logger);
+            await EnsureDetachedAsync(
+                mountDirectory, workDirectory, cancellationToken, logger, mandatory: true);
             mounted = false;
 
             var compressionArgument = settings.Compression switch
@@ -274,9 +276,11 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             {
                 try
                 {
-                    await ToolRunner.TryRunAsync(
-                        "hdiutil", ["detach", mountDirectory, "-force"],
-                        workDirectory, cancellationToken: CancellationToken.None);
+                    // 失败路复用同一 detach 序列（graceful→-force 递进+info 复核），
+                    // 非强制档：尽力清理不留挂载残留，但绝不掩盖真实失败。
+                    await EnsureDetachedAsync(
+                        mountDirectory, workDirectory, CancellationToken.None, logger,
+                        mandatory: false);
                 }
                 catch
                 {
@@ -458,21 +462,8 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         {
             return;
         }
-        if (signing.Identity is not null && !string.IsNullOrEmpty(signing.TemporaryCertificateFile))
-        {
-            throw new ArgumentException(
-                "DMG SignIdentity and TemporaryCertificateFile are mutually exclusive.");
-        }
-        if (signing.Identity is { Length: 0 })
-        {
-            throw new ArgumentException("DMG SignIdentity cannot be empty (use \"-\" for ad-hoc).");
-        }
-        if (signing.TemporaryCertificateFile is { Length: > 0 } certificatePath &&
-            !File.Exists(Path.GetFullPath(certificatePath)))
-        {
-            throw new FileNotFoundException(
-                "DMG TemporaryCertificateFile does not exist.", certificatePath);
-        }
+        MacSigningSupport.ValidateIdentityAndCertificate(
+            signing.Identity, signing.TemporaryCertificateFile, allowAdHoc: true, ".dmg");
     }
 
     private async Task SignImageAsync(
@@ -488,21 +479,13 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             return;
         }
 
-        MacAppSigning.TemporaryKeychain? keychain = null;
+        MacSigningSupport.TemporaryKeychain? keychain = null;
         string identity;
         try
         {
-            if (signing.TemporaryCertificateFile is { Length: > 0 } certificatePath)
-            {
-                keychain = await MacAppSigning.TemporaryKeychain.CreateAsync(
-                    workDirectory, Path.GetFullPath(certificatePath),
-                    signing.TemporaryCertificatePassword ?? "", logger, cancellationToken);
-                identity = keychain.Identity;
-            }
-            else
-            {
-                identity = signing.Identity!;
-            }
+            (identity, keychain) = await MacSigningSupport.ResolveIdentityAsync(
+                workDirectory, logger, signing.Identity, signing.TemporaryCertificateFile,
+                signing.TemporaryCertificatePassword, cancellationToken);
 
             logger.Log(
                 BundleLogLevel.Information,
@@ -511,8 +494,9 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                     : $"Signing the .dmg with identity '{identity}'.");
             await ToolRunner.RunAsync(
                 "codesign",
-                ["--force", "--sign", identity,
-                 identity == "-" ? "--timestamp=none" : "--timestamp", imagePath],
+                MacSigningSupport.CodesignArguments(
+                    identity, hardenedRuntime: false, entitlementsFile: null,
+                    applyEntitlements: false, keychain, imagePath),
                 workDirectory, cancellationToken);
             await ToolRunner.RunAsync(
                 "codesign", ["--verify", imagePath], workDirectory, cancellationToken);
@@ -526,16 +510,46 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
         }
     }
 
-    private static async Task DetachWithRetryAsync(
+    /// <summary>
+    /// hdiutil resize -limits 打印三段扇区数（行序随宿主版本在 cur/min/max 与
+    /// min/cur/max 间漂移）。-srcfolder 自动定寸的镜像 min≈cur，取前两字段较大者
+    /// 在两种序下都还原出当前尺寸；解析失败返回 null 走警告降级路。
+    /// </summary>
+    internal static long? ResizeBaseSectors(string limitsOutput)
+    {
+        var fields = limitsOutput.Trim().Split(
+            new[] { ' ', '\t', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        if (fields.Length < 2 ||
+            !long.TryParse(fields[0], out var first) ||
+            !long.TryParse(fields[1], out var second))
+        {
+            return null;
+        }
+        return Math.Max(first, second);
+    }
+
+    /// <summary>
+    /// 统一卸载序列：graceful detach → 中途递进 -force → 每次成功后以 hdiutil info
+    /// 复核挂载点确已消失（diskimages-helper 簿记有滞后）。mandatory 档穷尽后抛
+    /// InvalidOperationException（成功路径）；非强制档穷尽后记警告返回（清理路径
+    /// 不掩盖真实失败）。两条路径共用同一序列，消灭行为分叉。
+    /// </summary>
+    private static async Task EnsureDetachedAsync(
         string mountDirectory,
         string workingDirectory,
         CancellationToken cancellationToken,
-        IBundleLogger logger)
+        IBundleLogger logger,
+        bool mandatory)
     {
         for (var attempt = 1; ; attempt++)
         {
+            var detachArgs = new List<string> { "detach", mountDirectory };
+            if (attempt >= DetachForceAttempt)
+            {
+                detachArgs.Add("-force");
+            }
             var result = await ToolRunner.TryRunAsync(
-                "hdiutil", ["detach", mountDirectory], workingDirectory, cancellationToken);
+                "hdiutil", detachArgs, workingDirectory, cancellationToken);
             if (result is { ExitCode: 0 }
                 // 卷已被其它仲裁者（Finder/diskarbitration）抢先卸下——ENOENT 即目标态。
                 || (result is not null
@@ -550,6 +564,9 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 if (info is { ExitCode: 0 }
                     && info.StandardOutput.IndexOf(mountDirectory, StringComparison.Ordinal) < 0)
                 {
+                    logger.Log(
+                        BundleLogLevel.Information,
+                        $"Detached DMG volume at '{mountDirectory}'.");
                     return;
                 }
                 result = null;
@@ -559,13 +576,20 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                 var detail = result is null
                     ? "mount point still listed by 'hdiutil info'"
                     : $"exit {result.ExitCode}: {result.StandardError}";
-                throw new InvalidOperationException(
-                    $"hdiutil detach failed after {DetachMaxAttempts} attempts ({detail}).");
+                var message =
+                    $"hdiutil detach failed after {DetachMaxAttempts} attempts ({detail}).";
+                if (mandatory)
+                {
+                    throw new InvalidOperationException(message);
+                }
+                logger.Log(BundleLogLevel.Warning, message);
+                return;
             }
             var delay = DetachBackoffMilliseconds[Math.Min(attempt - 1, DetachBackoffMilliseconds.Length - 1)];
             logger.Log(
                 BundleLogLevel.Warning,
-                $"hdiutil detach busy/failed (attempt {attempt}/{DetachMaxAttempts}); retrying in {delay} ms.");
+                $"hdiutil detach busy/failed (attempt {attempt}/{DetachMaxAttempts}); retrying in {delay} ms" +
+                (attempt + 1 >= DetachForceAttempt ? " (escalating to -force)" : "") + ".");
             await Task.Delay(delay, cancellationToken);
         }
     }

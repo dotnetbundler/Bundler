@@ -21,9 +21,9 @@
 | 格式 | 实现 | 密钥/提供器 | 验签证据 |
 | --- | --- | --- | --- |
 | `nsis`/`msi` | Authenticode：内置 `mssign32` P/Invoke（仅 Windows 宿主）或 `WindowsExternalCommandSigner` 外部命令（任意宿主，HSM/云/远程 provider；有界等待 `Timeout` 旋钮 > `BUNDLER_TOOL_TIMEOUT_SECONDS` > 默认 15min，超时杀进程）；SHA-256+RFC 3161 | PFX/P12（密码走环境变量名；`EphemeralKeySet` 私钥不落用户密钥存储区——运行宿主须 ≥.NET Framework 4.7.2 或 .NET Core 才支持该旗标）或 `My` 证书指纹；外部 provider 独立参数数组+占位符 | payload/插件/卸载器/安装器 staged 链路自动化；生产链见 SA-P-01 |
-| `app` | 系统 `codesign` inside-out（identity/ad-hoc `-`/临时钥匙串）；`notarytool`/`stapler` 公证 | identity 字符串/钥匙串导入；公证凭证三模式+`APPLE_*` 回退 | ad-hoc 实跑全绿；Developer ID/公证挂 SA-P-02/08 |
-| `dmg` | `codesign` 本体签名（identity / `-` ad-hoc / 临时钥匙串；`-` 签后 `codesign --verify`，未配置才跳过）；本体不公证 | DMG 自有 `Signing` 段，钥匙串实现复用 `MacAppSigning` | ad-hoc 验签实测 |
-| `pkg` | `pkgbuild --sign`/`productsign --sign`（Developer ID Installer，**无 ad-hoc**）；`.pkg` 本体公证 | 同 `.app` 钥匙串复用 | 无效身份真实失败已验；真实证书挂外部 |
+| `app` | 系统 `codesign` inside-out（identity/ad-hoc `-`/临时钥匙串）；`notarytool`/`stapler` 公证（`--wait` 1h 工具超时） | identity 字符串/钥匙串导入；公证凭证三模式+`APPLE_*` 回退；Apple ID 口令路进 argv（运行期警告，推荐 keychain-profile/API key） | ad-hoc 实跑全绿；Developer ID/公证挂 SA-P-02/08 |
+| `dmg` | `codesign` 本体签名（identity / `-` ad-hoc / 临时钥匙串；`-` 签后 `codesign --verify`，未配置才跳过）；本体不公证 | DMG 自有 `Signing` 段；钥匙串/参数/校验复用 `MacSigningSupport`（`codesign --keychain` 直给，不读写用户搜索列表） | ad-hoc 验签实测 |
+| `pkg` | `pkgbuild --sign --timestamp`/`productsign --sign --timestamp`（Developer ID Installer，**无 ad-hoc**）；`.pkg` 本体公证（`--wait` 1h 工具超时） | 同 `.app` 经 `MacSigningSupport` 共享 | 无效身份真实失败已验；真实证书挂外部 |
 | `rpm` | 纯托管 BouncyCastle OpenPGP v3 双标签：`RPMSIGTAG_RSA`(268，签 main header——zypper 所验）+`RPMSIGTAG_PGP`(1002，签 header+payload——`rpm -K` 所验），与 `rpmsign --addsign` 同形态 | `BundlerRpmSigningKeyFile`/`Passphrase`（armor 私钥文件+口令） | 隔离 rpmdb `rpm --import`+`rpm -K` `digests signatures OK`；fedora `dnf install`（gpgcheck=1）过/未导公钥拒 |
 | `appimage` | `appimagetool --sign`（唯一外部进程出口，仅供密钥时触发）；隔离 `GNUPGHOME` 导钥，口令经 `APPIMAGETOOL_SIGN_PASSPHRASE` 注入不上命令行 | 私钥文件+口令（同 rpm 口径） | `gpgv` Good signature 断言；未签构建 `.sha256_sig` 全零断言 |
 | `alpineapk` | 纯托管 BouncyCastle RSA PKCS#1 v1.5/SHA1：`.SIGN.RSA.<密钥>.rsa.pub` 前置段签控制段 | `BundlerAlpineApkSigningKeyFile`（PEM/PKCS8/加密）+`Passphrase` | 公钥入 `/etc/apk/keys/` 免 `--allow-untrusted` 实装；`openssl dgst -sha1 -verify` 旁证 |

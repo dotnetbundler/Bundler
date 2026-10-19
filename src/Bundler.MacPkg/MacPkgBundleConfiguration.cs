@@ -63,13 +63,13 @@ public sealed class MacPkgBundleConfiguration
     public string? Title { get; init; }
 
     /// <summary>
-    /// Welcome page shown before installation (.html/.rtf/.rtfd/.txt);
+    /// Welcome page shown before installation (.html/.rtf/.txt);
     /// setting it upgrades the output to a distribution package.
     /// </summary>
     public string? WelcomeFile { get; init; }
 
     /// <summary>
-    /// Conclusion page shown after installation (.html/.rtf/.rtfd/.txt);
+    /// Conclusion page shown after installation (.html/.rtf/.txt);
     /// setting it upgrades the output to a distribution package.
     /// </summary>
     public string? ConclusionFile { get; init; }

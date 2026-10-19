@@ -550,6 +550,120 @@ public sealed class MacPkgTests : TempBase
         }
     }
 
+    // B4: payload.Destination 注入暂存 .app 内部会污染已签 bundle——前缀一律拒绝。
+    [Fact]
+    public async Task RejectsPayloadDestinationInsideStagedApp()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var extra = Path.Combine(input, "evil.txt");
+        File.WriteAllText(extra, "x");
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (request, _) =>
+        {
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            var inside = await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Files =
+                    [
+                        new MacPkgFileEntry
+                        {
+                            Source = extra,
+                            Destination = "ExampleApp.app/Contents/Resources/evil.txt"
+                        }
+                    ]
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+            Assert.Contains(".app bundle", inside.Message);
+
+            var exact = await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Files =
+                    [
+                        new MacPkgFileEntry { Source = extra, Destination = "ExampleApp.app" }
+                    ]
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+            Assert.Contains(".app bundle", exact.Message);
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    // B4: 两条 payload 认领同一目的地（含祖先/后代重叠）必须显式拒绝而不是静默覆盖。
+    [Fact]
+    public async Task RejectsCollidingPayloadDestinations()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var extraDir = Path.Combine(input, "extra");
+        Directory.CreateDirectory(extraDir);
+        File.WriteAllText(Path.Combine(extraDir, "x.txt"), "x");
+        var file = Path.Combine(input, "dup.txt");
+        File.WriteAllText(file, "x");
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (request, _) =>
+        {
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            // 同目的地两次认领
+            await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Files =
+                    [
+                        new MacPkgFileEntry { Source = file, Destination = "dup.txt" },
+                        new MacPkgFileEntry { Source = file, Destination = "dup.txt" },
+                    ]
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+            // 目录祖先 vs 后代文件
+            await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Files =
+                    [
+                        new MacPkgFileEntry { Source = extraDir, Destination = "support" },
+                        new MacPkgFileEntry { Source = file, Destination = "support/dup.txt" },
+                    ]
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+            // 反向：后代先认领，祖先后到同样拒绝
+            await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Files =
+                    [
+                        new MacPkgFileEntry { Source = file, Destination = "support/dup.txt" },
+                        new MacPkgFileEntry { Source = extraDir, Destination = "support" },
+                    ]
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
     // R2: CopyTree 遇目录符号链接环显式报错，不再递归失控。
     [Fact]
     public void CopyTreeRejectsSymlinkLoop()

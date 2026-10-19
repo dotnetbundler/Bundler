@@ -33,9 +33,9 @@
    CLI 多 `--input-dir` 走同一合并器，架构戳托管件相异时硬拒并指向 `--reference-dir`。
    fat binary 合成由上述托管合并器完成（`MacUniversalPayloadMerger` + 内部 `MachOFat`，等价 `lipo -create`、任意宿主可用、不依赖外部 `lipo`）；
    rpath 改写、依赖解析仍是调用方构建职责。
-5. **签名**：默认不签名，载荷既有签名原样保留；显式配置后才 `codesign`：identity 字符串 / `-` ad-hoc / 临时钥匙串导入三种提供器；hardened runtime 默认开、只作用可执行目标；entitlements 显式给定；inside-out 顺序（`MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries` 内文件先签含托管 dll，后主可执行、再整包）；签名前 `xattr -crs`；失败不留看似成功的产物。
-6. **公证**：显式开启的网络上传，默认关；`xcrun notarytool`/`stapler`；凭证经环境变量/密钥提供器传入（Apple ID+专用密码或 ASC API Key），不入库不入命令行；`SkipStapling`/`NotaryWait` 独立开关；submit 非零即构建失败并附输出；上钉失败不标"已公证"。
-7. **秘密**：证书/密码/API key 只经密钥提供器或约定环境变量；临时钥匙串用完即删。
+5. **签名**：默认不签名，载荷既有签名原样保留；显式配置后才 `codesign`：identity 字符串 / `-` ad-hoc / 临时钥匙串导入三种提供器；hardened runtime 默认开、只作用可执行目标；entitlements 显式给定；inside-out 顺序（`MacOS`/`Frameworks`/`Plugins`/`Helpers`/`XPCServices`/`Libraries` 内文件先签含托管 dll，后主可执行、再整包）；`xattr -crs` 在 macOS 宿主无条件先跑（剥载荷 quarantine/FinderInfo 残迹，签名与否一致）；失败不留看似成功的产物。
+6. **公证**：显式开启的网络上传，默认关；`xcrun notarytool`/`stapler`；凭证经环境变量/密钥提供器传入（keychain profile 或 ASC API Key 优先；Apple ID+专用密码会把口令摆上 notarytool argv，运行时记警告提示改用前两路）；`SkipStapling`/`NotaryWait` 独立开关；`--wait` 提交用 1 小时工具超时（排队长尾不夭折）；submit 非零即构建失败并附输出；上钉失败不标"已公证"。
+7. **秘密**：证书/密码/API key 只经密钥提供器或约定环境变量；临时钥匙串用完即删，且全程经 `--keychain` 直给签名工具——用户 keychain 搜索列表不被读取或改写。
 
 ## 4. 能力状态
 

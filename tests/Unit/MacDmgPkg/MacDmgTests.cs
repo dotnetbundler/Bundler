@@ -215,12 +215,15 @@ public sealed class MacDmgTests : TempBase
         var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
         var detachAttempts = 0;
+        var forcedDetach = false;
         ToolRunner.Handler = (request, _) =>
         {
             WriteDsStore(request);
-            if (request.Arguments.Contains("detach") && !request.Arguments.Contains("-force"))
+            if (request.Arguments.Contains("detach"))
             {
                 detachAttempts++;
+                forcedDetach |= request.Arguments.Contains("-force");
+                // 统一序列：前两次 busy 失败，第三次（已递进 -force）成功 + info 复核放行。
                 return Task.FromResult(new ToolRunner.Result(
                     detachAttempts < 3 ? 1 : 0, "", detachAttempts < 3 ? "Resource busy" : ""));
             }
@@ -237,6 +240,7 @@ public sealed class MacDmgTests : TempBase
         {
             await new MacDmgBundler().BuildAsync(DmgConfiguration(input, output), TestContext.Current.CancellationToken);
             Assert.Equal(3, detachAttempts);
+            Assert.True(forcedDetach, "The unified detach sequence escalates to -force after two graceful failures.");
         }
         finally
         {
@@ -255,16 +259,28 @@ public sealed class MacDmgTests : TempBase
         var previous = ToolRunner.Handler;
         MacDmgBundleBackend.HostCheck = () => true;
         var forcedDetach = false;
+        string? mountPoint = null;
         ToolRunner.Handler = (request, _) =>
         {
             WriteDsStore(request);
-            if (request.Arguments.Contains("detach") && request.Arguments.Contains("-force"))
+            if (request.Arguments.Contains("-mountpoint"))
             {
-                forcedDetach = true;
+                mountPoint = request.Arguments
+                    .SkipWhile(arg => arg != "-mountpoint").Skip(1).First();
             }
-            return Task.FromResult(new ToolRunner.Result(
-                request.Arguments.Contains("detach") && !request.Arguments.Contains("-force") ? 1 : 0,
-                "", "Resource busy"));
+            if (request.Arguments.Contains("detach"))
+            {
+                forcedDetach |= request.Arguments.Contains("-force");
+                // detach 全部报成功，但 hdiutil info 持续列出挂载点——
+                // 簿记未确认即未完成，mandatory 档穷尽后抛，清理档穷尽后警告。
+                return Task.FromResult(new ToolRunner.Result(0, "", ""));
+            }
+            if (request.Arguments.Contains("info"))
+            {
+                return Task.FromResult(new ToolRunner.Result(
+                    0, $"/dev/disk4s1 {mountPoint ?? "/x/dmg-mount"}\n", ""));
+            }
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
         };
         try
         {
@@ -280,6 +296,25 @@ public sealed class MacDmgTests : TempBase
             MacDmgBundleBackend.HostCheck = previousHost;
             Cleanup(input, output);
         }
+    }
+
+    // hdiutil resize -limits 的行序随宿主版本漂移（cur/min/max vs min/cur/max）——
+    // -srcfolder 镜像 min≈cur，取前两字段较大者两种序下都还原当前尺寸。
+    [Theory]
+    [InlineData("4915200 8192 4294967295\n", 4915200L)]   // cur min max
+    [InlineData("8192 4915200 4294967295\n", 4915200L)]   // min cur max
+    [InlineData("100 200", 200L)]
+    public void ResizeLimits_BaseSectorsSelfCorrects(string output, long expected)
+    {
+        Assert.Equal(expected, MacDmgBundleBackend.ResizeBaseSectors(output));
+    }
+
+    [Theory]
+    [InlineData("garbage")]
+    [InlineData("12345")]
+    public void ResizeLimits_UnparseableOutput_ReturnsNull(string output)
+    {
+        Assert.Null(MacDmgBundleBackend.ResizeBaseSectors(output));
     }
 
     [Fact]
