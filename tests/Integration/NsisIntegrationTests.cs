@@ -4,6 +4,7 @@
 // taskkill 中断进程树、junction/快照篡改经 HKCU+文件双 sentinel 验证。
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -1106,7 +1107,36 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Thread.Sleep(500);
             Assert.False(owned.HasExited, "Fixture process did not remain running.");
             Assert.False(external.HasExited, "External fixture process did not remain running.");
-            RunOk(Installer("bundle"), $"/S /D={InstallDir}");
+            NsisShutdownDiag(
+                $"before-reinstall owned={DescribeProc(owned)} external={DescribeProc(external)} {ConsoleMembers()}");
+            var installerPid = -1;
+            ProcessRunner.Result? reinstall = null;
+            try
+            {
+                reinstall = ProcessRunner.Run(Installer("bundle"), $"/S /D={InstallDir}",
+                    new ProcessRunner.Options
+                    {
+                        Timeout = TimeSpan.FromMinutes(5),
+                        // spawn 即落 installer 身份：进程被中止后仍留有 pid 现场，
+                        // 否则只剩 before 行无法关联。
+                        ProcessStarted = pid =>
+                        {
+                            installerPid = pid;
+                            NsisShutdownDiag(
+                                $"installer-spawn pid={pid} owned={DescribeProc(owned)} " +
+                                $"external={DescribeProc(external)} {ConsoleMembers()}");
+                        }
+                    });
+            }
+            finally
+            {
+                // 无论成败/超时都落 after-state 与 installerPid 关联（Run 抛出时 rc 记 n/a），
+                // 不捕获原异常、不改变主流程成败。
+                NsisShutdownDiag(
+                    $"after-reinstall installerPid={installerPid} rc={(reinstall is { } r ? r.ExitCode : "n/a")} " +
+                    $"owned={DescribeProc(owned)} external={DescribeProc(external)} {ConsoleMembers()}");
+            }
+            ProcessRunner.AssertExitCode(reinstall!, 0, Installer("bundle"));
             owned.Refresh();
             external.Refresh();
             Assert.True(owned.HasExited, "Reinstall did not close the running application.");
@@ -1123,6 +1153,78 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Cleanup();
         }
     }
+
+    // BUNDLER_NSIS_DIAGNOSTICS 置位时落进程事实（pid/退出态/控制台成员）到诊断文件——
+    // 诊断 best-effort 写文件，IO 失败不遮主测试流程；只记 pid/退出码，不记命令行/环境。
+    private static void NsisShutdownDiag(string line)
+    {
+        var path = Environment.GetEnvironmentVariable("BUNDLER_NSIS_DIAGNOSTICS");
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+        try
+        {
+            File.AppendAllText(path,
+                $"[{DateTime.UtcNow:o}] testPid={Environment.ProcessId} {line}\n");
+        }
+        catch
+        {
+        }
+    }
+
+    private static string DescribeProc(Process? process)
+    {
+        if (process is null)
+        {
+            return "null";
+        }
+        try
+        {
+            process.Refresh();
+            return process.HasExited
+                ? $"pid={process.Id},exited,rc={process.ExitCode}"
+                : $"pid={process.Id},running";
+        }
+        catch (Exception e)
+        {
+            return $"pid={process.Id},probe-err:{e.GetType().Name}";
+        }
+    }
+
+    // 只读查询调用进程控制台成员清单（不 AttachConsole/FreeConsole、不发控制事件）——
+    // 命中只证明成员与测试宿主同控制台，缺席不推断其他进程归属；
+    // 用途是 installer rc=0xC000013A（退出码特征，原因待判）的现场取证面；
+    // API 失败记 Win32Error，不做归因推断。
+    private static string ConsoleMembers()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return "console=n/a";
+        }
+        try
+        {
+            var buffer = new uint[64];
+            var count = GetConsoleProcessList(buffer, (uint)buffer.Length);
+            if (count == 0)
+            {
+                return $"console=win32err:{Marshal.GetLastWin32Error()}";
+            }
+            if (count > buffer.Length)
+            {
+                buffer = new uint[count];
+                count = GetConsoleProcessList(buffer, (uint)buffer.Length);
+            }
+            return "console=[" + string.Join(',', buffer.Take((int)count)) + "]";
+        }
+        catch (Exception e)
+        {
+            return $"console=err:{e.GetType().Name}";
+        }
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint GetConsoleProcessList(uint[] processList, uint processCount);
 
     private static void CopyDirectory(string source, string destination)
     {

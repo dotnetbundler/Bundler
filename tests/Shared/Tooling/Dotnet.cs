@@ -72,30 +72,83 @@ internal static class Dotnet
     // 3 分钟陪跑已给足正常还原十倍冗余，到点杀进程换枪（attemptTimeout 可显式覆盖；
     // 本方法接管 options.Timeout——调用方传的 Timeout 不生效）。
     // 刻意失败的负例调用勿走此口：继续用 Run 单发，避免确定性失败陪跑重试。
+    // BUNDLER_RESTORE_TRACE 置位时逐 attempt 落事件（BEGIN/SPAWN/EXIT/TIMEOUT/RETRY）：
+    // "Determining projects" 后零输出卡到超时的取证面——只记 pid/attempt/rc/elapsed/
+    // 已有 what 标签，不落 argv/环境/输出（防秘密入档）。
     public static ProcessRunner.Result RestoreWithRetry(IEnumerable<string> args, string what,
         ProcessRunner.Options? options = null, int maxAttempts = 4,
         TimeSpan? attemptTimeout = null)
     {
         options ??= new ProcessRunner.Options();
         options.Timeout = attemptTimeout ?? TimeSpan.FromMinutes(3);
-        for (var attempt = 1; ; attempt++)
+        var tracePath = Environment.GetEnvironmentVariable("BUNDLER_RESTORE_TRACE");
+        var tracing = !string.IsNullOrEmpty(tracePath);
+        var originalStarted = options.ProcessStarted;
+        var attempt = 0;
+        if (tracing)
         {
-            try
+            // 包装（非替换）调用方 ProcessStarted：本钩子只加 SPAWN 行，退出时还原。
+            options.ProcessStarted = pid =>
             {
-                var result = Run(args, options);
-                if (result.ExitCode == 0)
+                TraceRestore(tracePath!, $"SPAWN pid={pid} attempt={attempt}");
+                originalStarted?.Invoke(pid);
+            };
+        }
+        try
+        {
+            for (attempt = 1; ; attempt++)
+            {
+                var attemptStart = DateTime.UtcNow;
+                TraceRestore(tracePath,
+                    $"BEGIN pid={Environment.ProcessId} what=\"{what}\" attempt={attempt}/{maxAttempts} timeout={options.Timeout.TotalSeconds:F0}s");
+                try
                 {
-                    return result;
+                    var result = Run(args, options);
+                    var elapsed = (DateTime.UtcNow - attemptStart).TotalSeconds;
+                    TraceRestore(tracePath, $"EXIT rc={result.ExitCode} elapsed={elapsed:F1}s attempt={attempt}");
+                    if (result.ExitCode == 0)
+                    {
+                        return result;
+                    }
+                    if (attempt >= maxAttempts)
+                    {
+                        ProcessRunner.AssertSuccess(result, what);
+                        return result;
+                    }
+                    TraceRestore(tracePath, $"RETRY next-attempt={attempt + 1}");
                 }
-                if (attempt >= maxAttempts)
+                catch (TimeoutException)
                 {
-                    ProcessRunner.AssertSuccess(result, what);
-                    return result;
+                    // 终试也记 TIMEOUT 再原样抛——中间 attempt 不再无迹吞掉。
+                    TraceRestore(tracePath,
+                        $"TIMEOUT elapsed={(DateTime.UtcNow - attemptStart).TotalSeconds:F1}s attempt={attempt}");
+                    if (attempt >= maxAttempts)
+                    {
+                        throw;
+                    }
+                    TraceRestore(tracePath, $"RETRY next-attempt={attempt + 1}");
                 }
             }
-            catch (TimeoutException) when (attempt < maxAttempts)
-            {
-            }
+        }
+        finally
+        {
+            options.ProcessStarted = originalStarted;
+        }
+    }
+
+    private static void TraceRestore(string? tracePath, string line)
+    {
+        if (string.IsNullOrEmpty(tracePath))
+        {
+            return;
+        }
+        try
+        {
+            File.AppendAllText(tracePath, $"[{DateTime.UtcNow:o}] {line}\n");
+        }
+        catch
+        {
+            // 诊断落盘失败不遮 restore 主异常。
         }
     }
 

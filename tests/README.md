@@ -39,6 +39,10 @@ dotnet tests/Integration/bin/Release/net10.0/Bundler.IntegrationTests.dll -class
 dotnet tests/Integration/bin/Release/net10.0/Bundler.IntegrationTests.dll -list classes
 ```
 
+CI 驱动与 `test` workflow 另有 `test_class`/`-ClassFilter`/第二参数精确类过滤（逗号分隔，仅 suite=integration/package）：
+请求的类名必须真实存在于 `-list classes`，错拼/缺类立即非零拒（防"过滤后零命中=空过"假绿）；
+留空保持原默认覆盖——integration 恒逐类、其余层整程序集，Package 仅在有过滤时转逐类。
+
 ### Package 前置
 
 `Package` 层消费本地 nupkg：跑前必须先打仓根包。
