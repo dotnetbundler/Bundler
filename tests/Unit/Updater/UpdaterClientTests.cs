@@ -310,6 +310,36 @@ public sealed class UpdaterClientTests : TempBase
     }
 
     [Fact]
+    public async Task Client_DownloadAsync_MissingLocalArtifact_WrappedAsUpdateException()
+    {
+        // 归一壳断言：本地腿 File.Copy 的 FileNotFoundException 与 http 腿
+        // HttpRequestException 同归 UpdateException——"抓取/IO/HTTP 全归
+        // UpdateException"契约的可区分断言（旧实现会漏裸 FileNotFoundException）。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+            {
+                Target = "linux-x86_64", Format = "zip",
+                Url = "missing-2.0.0.zip", File = "missing-2.0.0.zip",
+                Sha256 = "0", Size = 1, Signature = "AA==",
+            });
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            var info = (await client.CheckForUpdateAsync(TestContext.Current.CancellationToken))!;
+
+            var exception = await Assert.ThrowsAsync<UpdateException>(() =>
+                client.DownloadAsync(info, Path.Combine(directory, "dl"),
+                    TestContext.Current.CancellationToken));
+            Assert.Contains("missing-2.0.0.zip", exception.Message);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     public async Task Client_DownloadAsync_UsesDelta_OverHttp()
     {
         var directory = CreateTempDirectory();
