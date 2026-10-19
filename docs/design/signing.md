@@ -20,7 +20,7 @@
 
 | 格式 | 实现 | 密钥/提供器 | 验签证据 |
 | --- | --- | --- | --- |
-| `nsis`/`msi` | Authenticode：内置 `mssign32` P/Invoke（仅 Windows 宿主）或 `WindowsExternalCommandSigner` 外部命令（任意宿主，HSM/云/远程 provider）；SHA-256+RFC 3161 | PFX/P12（密码走环境变量名）或 `My` 证书指纹；外部 provider 独立参数数组+占位符 | payload/插件/卸载器/安装器 staged 链路自动化；生产链见 SA-P-01 |
+| `nsis`/`msi` | Authenticode：内置 `mssign32` P/Invoke（仅 Windows 宿主）或 `WindowsExternalCommandSigner` 外部命令（任意宿主，HSM/云/远程 provider；有界等待 `BUNDLER_TOOL_TIMEOUT_SECONDS` 默认 15min，超时杀进程）；SHA-256+RFC 3161 | PFX/P12（密码走环境变量名；`EphemeralKeySet` 私钥不落用户密钥存储区）或 `My` 证书指纹；外部 provider 独立参数数组+占位符 | payload/插件/卸载器/安装器 staged 链路自动化；生产链见 SA-P-01 |
 | `app` | 系统 `codesign` inside-out（identity/ad-hoc `-`/临时钥匙串）；`notarytool`/`stapler` 公证 | identity 字符串/钥匙串导入；公证凭证三模式+`APPLE_*` 回退 | ad-hoc 实跑全绿；Developer ID/公证挂 SA-P-02/08 |
 | `dmg` | `codesign` 本体签名（identity / `-` ad-hoc / 临时钥匙串；`-` 签后 `codesign --verify`，未配置才跳过）；本体不公证 | DMG 自有 `Signing` 段，钥匙串实现复用 `MacAppSigning` | ad-hoc 验签实测 |
 | `pkg` | `pkgbuild --sign`/`productsign --sign`（Developer ID Installer，**无 ad-hoc**）；`.pkg` 本体公证 | 同 `.app` 钥匙串复用 | 无效身份真实失败已验；真实证书挂外部 |

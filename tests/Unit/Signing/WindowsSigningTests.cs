@@ -171,4 +171,36 @@ public sealed class WindowsExternalCommandSignerTests
                 BundleSigningArtifactKind.Installer, "App", "windows-x86_64"),
                 TestContext.Current.CancellationToken));
     }
+
+    [Fact]
+    public async Task SignAsync_HungCommand_BoundedTimeout()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "cmd.exe 仅 Windows 宿主");
+        var dir = Path.Combine(Path.GetTempPath(), "bundler-signing-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var script = Path.Combine(dir, "hang.cmd");
+        File.WriteAllText(script, "@ping -n 60 127.0.0.1 >nul\r\n");
+        try
+        {
+            Environment.SetEnvironmentVariable("BUNDLER_TOOL_TIMEOUT_SECONDS", "1");
+            var signer = new WindowsExternalCommandSigner(new WindowsExternalCommandSigningOptions
+            {
+                Command = "cmd", Arguments = ["/c", "{path}"]
+            });
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                signer.SignAsync(new BundleSigningRequest(
+                    script, BundleSigningArtifactKind.Installer, "App", "windows-x86_64"),
+                    CancellationToken.None));
+            sw.Stop();
+            Assert.Contains("did not exit", ex.Message, StringComparison.Ordinal);
+            Assert.True(sw.Elapsed < TimeSpan.FromSeconds(30),
+                $"hung signer must be bounded, took {sw.Elapsed}");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("BUNDLER_TOOL_TIMEOUT_SECONDS", null);
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

@@ -55,18 +55,43 @@ public sealed class WindowsExternalCommandSigner : IBundleSigner
         }
         var standardOutput = process.StandardOutput.ReadToEndAsync();
         var standardError = process.StandardError.ReadToEndAsync();
+        var bound = ProcessTimeout();
         using var registration = cancellationToken.Register(() =>
         {
             try { if (!process.HasExited) process.Kill(); } catch { }
             completion.TrySetCanceled(cancellationToken);
         });
+        // 有界等待（与 Bundler.Core ToolRunner 同口径：BUNDLER_TOOL_TIMEOUT_SECONDS、
+        // 默认 15min）——签名工具挂死/等控制台输入时不能让 MSBuild 任务无限悬停。
+        var exited = await Task.WhenAny(
+            completion.Task, Task.Delay(bound, CancellationToken.None)).ConfigureAwait(false);
+        if (exited != completion.Task)
+        {
+            try { if (!process.HasExited) process.Kill(); } catch { }
+            await Task.WhenAny(
+                completion.Task, Task.Delay(TimeSpan.FromSeconds(5))).ConfigureAwait(false);
+            throw new InvalidOperationException(
+                $"The external signing command did not exit within {bound} and was killed. " +
+                "Provider output and arguments were suppressed because they may contain secrets.");
+        }
         var exitCode = await completion.Task.ConfigureAwait(false);
-        await Task.WhenAll(standardOutput, standardError).ConfigureAwait(false);
+        // 杀直系后孙代持管道时 ReadToEnd 悬停——5s 有界排空，读不到的弃。
+        await Task.WhenAny(
+            Task.WhenAll(standardOutput, standardError),
+            Task.Delay(TimeSpan.FromSeconds(5))).ConfigureAwait(false);
         if (exitCode != 0)
         {
             throw new InvalidOperationException(
                 $"The external signing command failed for {request.ArtifactKind} with exit code {exitCode}. Provider output and arguments were suppressed because they may contain secrets.");
         }
+    }
+
+    private static TimeSpan ProcessTimeout()
+    {
+        var raw = Environment.GetEnvironmentVariable("BUNDLER_TOOL_TIMEOUT_SECONDS");
+        return int.TryParse(raw, out var seconds) && seconds > 0
+            ? TimeSpan.FromSeconds(seconds)
+            : TimeSpan.FromMinutes(15);
     }
 
     // %1 只在 token 边界匹配：%10/%100 等更长数字占位不被误伤。

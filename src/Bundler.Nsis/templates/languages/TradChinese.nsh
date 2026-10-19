@@ -24,5 +24,5 @@ LangString InvalidRestartMode ${LANG_TRADCHINESE} "/R 只能與 /S、/P 或 /UPD
 LangString ArgumentsRequireRestart ${LANG_TRADCHINESE} "/ARGS 只能與 /R 一起使用。"
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_TRADCHINESE} "自動安裝拒絕使用不屬於 ${PRODUCT_NAME} 的非空資料夾。"
 LangString ApplicationLaunchFailed ${LANG_TRADCHINESE} "安裝已完成，但無法啟動 ${PRODUCT_NAME}。"
-LangString RecoveryManifestMismatch ${LANG_TRADCHINESE} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
-LangString RecoveryManifestMismatchDetail ${LANG_TRADCHINESE} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatch ${LANG_TRADCHINESE} "被中斷的安裝是使用不同的修復資訊清單建立的。請使用 /S /RECOVERONLY 與相同的 /D= 目錄執行原始安裝程式，然後重試。"
+LangString RecoveryManifestMismatchDetail ${LANG_TRADCHINESE} "由於設定不同，此安裝程式無法修復被中斷的安裝。請使用 /S /RECOVERONLY 與相同的 /D= 目錄執行原始安裝程式，然後重試。"

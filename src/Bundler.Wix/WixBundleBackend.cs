@@ -443,15 +443,18 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
     private static readonly Regex SourceReferencePattern =
         new("\\bSource(?:File)?\\s*=\\s*[\"'](?<source>[^\"']+)[\"']", RegexOptions.Compiled);
 
-    // 片段/专家模板经 Source/SourceFile 引用的文件不在载荷清单内，逐一把磁盘上存在的
-    // 被引用文件哈希进指纹；相对路径以该 .wxs 所在目录解析，预处理器变量引用自然跳过。
+    // 片段/专家模板经 Source/SourceFile 引用的文件不在载荷清单内，逐一把
+    // 被引用文件哈希进指纹；相对路径以该 .wxs 所在目录解析，预处理器变量
+    // （$(var.*) 之类）引用不在正则面内自然跳过。字面引用但磁盘缺失的路径
+    // 计 MISSING 哨兵进指纹——文件随后出现时指纹翻转，比静默忽略更可观测。
     private static void AppendReferencedSourceHashes(StringBuilder text, string wixSource)
     {
         var baseDirectory = Path.GetDirectoryName(Path.GetFullPath(wixSource))!;
         foreach (Match match in SourceReferencePattern.Matches(File.ReadAllText(wixSource)))
         {
             var fullPath = Path.GetFullPath(Path.Combine(baseDirectory, match.Groups["source"].Value));
-            if (File.Exists(fullPath)) text.AppendLine(fullPath).AppendLine(HashFile(fullPath));
+            text.AppendLine(fullPath)
+                .AppendLine(File.Exists(fullPath) ? HashFile(fullPath) : "MISSING");
         }
     }
 

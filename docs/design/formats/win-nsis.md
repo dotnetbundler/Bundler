@@ -22,7 +22,7 @@
 ## 3. 原生插件
 
 - 插件统一用 [dotnetbundler/NsisPlugin](https://github.com/dotnetbundler/NsisPlugin) 开发；产物为 `tools/Bundler.Nsis.Plugin` → `third_party/nsis/plugins/x86-unicode/DotNetBundlerNsis.dll`。
-- `windows-i686` Native AOT 构建（NSIS 插件宿主是 x86 Unicode ABI）；`installer.nsi` 调用面 26 个导出函数：事务日志、快捷方式生命周期、MSI 迁移辅助、Restart Manager 锁定进程处理、RunAsUser 降权启动、SemVer 比较。
+- `windows-i686` Native AOT 构建（NSIS 插件宿主是 x86 Unicode ABI）；插件导出契约共 36 个函数——`installer.nsi` 字面调用 26 种，其余 10 种（事务快照/校验/恢复与快捷方式所有权检查）经 `transaction_*` 与快捷方式占位符展开生成；导出族：事务日志、快捷方式生命周期、MSI 迁移辅助、Restart Manager 锁定进程处理、RunAsUser 降权启动、SemVer 比较。
 - 插件为 .NET 10 Native AOT 且加载期依赖 UCRT 与 Win8+ API，消费机实际下限为 Windows 10 1607+。
 - Native AOT 下不能用 `ComImport`/RCW 操作 Shell Link，须直接调 COM vtable。
 
@@ -51,7 +51,7 @@
 
 - 版本要求 SemVer 2.0；Windows 文件版本三段核心均限 `0-65535`。
 - 交互处理同版本重装/升级/降级；静默同版本原位修复、静默升级先移除旧载荷保留应用数据；默认禁止降级，可显式允许（有意从严的默认决策）。
-- 旧 MSI 迁移要求准确 ProductCode/UpgradeCode，不按显示名猜测；`LegacyMsiAutoDetect`（默认关）显式启用后按卸载注册项 DisplayName+Publisher 匹配且要求卸载命令含 `msiexec`，枚举 HKCU/HKLM 双视图，与显式 GUID 列表合并去重。
+- 旧 MSI 迁移要求准确 ProductCode/UpgradeCode，不按显示名猜测；`LegacyMsiAutoDetect`（默认关）显式启用后按卸载注册项 DisplayName+Publisher 匹配且要求卸载命令含 `msiexec`、`WindowsInstaller=1`，并以 `MsiGetProductInfo` 返回的 MSI 权威 ProductName/Publisher 复核——手写或伪造注册项在此出局；真实同名同发布者 MSI 在设计上不可区分（autodetect 固有边界）。枚举 HKCU/HKLM 双视图，与显式 GUID 列表合并去重。
 - 旧 MSI 卸载返回码：`0`/`1605` 继续，`1641`/`3010` 置重启标记，`1602` 按用户取消退出，其余非零视为迁移失败回滚新状态。
 - 同一 UpgradeCode 多版本并存取最高版本判定，逐个移除全部匹配产品。
 - 迁移次序：先卸载全部精确匹配的旧产品，再写入 NSIS 载荷（保留先卸载后安装次序，检测条件更严格）。
@@ -117,6 +117,8 @@
 - 载荷提取 `SetOverwrite try` + 检查 error flag：锁定非主程序载荷返回 `2`；交互模式提示关程序重试，静默/被动不弹窗；锁也阻止回滚时保留 journal，释放后下次启动先恢复。
 - 快捷方式目录/偏好、卸载信息、文件关联、URL 协议注册均在提交前检查 error flag，失败进入同一回滚路径。
 - 快照需接近现有安装目录大小的临时空间；空间不足或遇不可安全复制的重解析点在修改旧状态前失败。
+- 快照不保留安全描述符（ACL）：回滚后自定义 ACL 的文件/注册表键回到继承默认权限；所涉均为应用自有默认 ACL 场景，属有意接受的边界。
+- 卸载器归属：`un.onInit` 在全新卸载前要求 `$INSTDIR` 持有归属标记件或注册 `InstallRoot`/`InstallLocation` 相等；journal 层 `BeginUninstallTransaction` 与恢复续跑（`GetUninstallTransactionState`/`RecoverUninstallTransaction`）同样强制 journal 记录的安装目录与注册 `InstallRoot` 一致——被复制到陌生目录的 `Uninstall.exe` 或伪造 journal 都不能借卸载事务把删除目标重定向到任意树；finalizing 后注册锚点可能已移除，持久状态删除届时已完成，恢复腿不再要求绑定。
 
 ### 4.12 卸载前向恢复
 
