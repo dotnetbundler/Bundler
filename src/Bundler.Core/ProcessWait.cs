@@ -50,9 +50,18 @@ internal static class ProcessWait
         bool killLateSpawned = true)
     {
         var process = new Process { StartInfo = startInfo };
-        return StartCore(process, milliseconds, killLateSpawned, disposeOnLateComplete: true)
-            ? process
-            : null;
+        try
+        {
+            return StartCore(process, milliseconds, killLateSpawned, disposeOnLateComplete: true)
+                ? process
+                : null;
+        }
+        catch
+        {
+            // 界内 fault：Start 已抛=无子件产出，内部 Process 就地释放（迟到腿才归续体）。
+            process.Dispose();
+            throw;
+        }
     }
 
     // 内嵌 Start 走独立线程而非线程池：锁死面下每次卡死 spawn 永久占用工作线程，

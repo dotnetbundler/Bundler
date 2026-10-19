@@ -90,7 +90,18 @@ internal static class ProcessRunner
         var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdout.AppendLine(e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
-        if (!TestProcessExit.Start(process))
+        bool started;
+        try
+        {
+            started = TestProcessExit.Start(process);
+        }
+        catch
+        {
+            // fault 腿 Start 已抛=无子件产出，安全释放；不释放的刻意豁免只属超时腿。
+            process.Dispose();
+            throw;
+        }
+        if (!started)
         {
             // 刻意不 Dispose：spawn 迟到完成时迟到子件的扑杀续体要经此对象走，
             // 已释放对象的 Kill 会抛 ObjectDisposedException 而漏杀（件归 GC 收尾）。
