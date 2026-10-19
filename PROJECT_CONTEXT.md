@@ -6,7 +6,7 @@
 > `110a2fe` 基线全矩阵 verify `39133258129` 已 completed/success 全绿；
 > 联合 verify run `39142103135`（head=`0c18cf9`）未全绿：WindowsARM MSI Package 腿 attempt1 两测试 `dotnet restore` 3min 超时后 job 被取消、attempt2 restore 超时判败，其余已运行的 tests 矩阵腿通过、下游未执行——根因未证实；
 > verify run `39177022111`（head=`a137268`）Windows2025 x64 NSIS 重安装腿安装器 rc=0xC000013A、UbuntuARM runner 失联无工件——根因未证实；
-> `diagnostics/ci-failures-20261019` 分支只做定向复现入口与安全诊断插桩（不改产品语义、不放宽断言、非产品修复），已提交为 PR #143（验证实现基线 `a95468d`，待合并——用户已明确授权合并，Local Review 第 1 轮 clean）；当前阶段为取证/诊断就绪、本轮复验通过、根因未确认；
+> `diagnostics/ci-failures-20261019` 分支只做定向复现入口与安全诊断插桩（不改产品语义、不放宽断言、非产品修复），已提交并合入 main 为 PR #143（验证实现基线 `a95468d`，`576e6f7`，Local Review 第 1 轮 clean）；当前阶段为取证/诊断就绪、本轮复验通过、根因未确认；
 > 基于 `a95468d`（alpha.105）的四条定向/复验 CI 均 completed/success（Windows2025 `NsisIntegrationTests` 类 28/28、WindowsARM `MsiPackageContractTests` 10/10、UbuntuARM Integration 全类完成、Windows2025 suite=all 原调度四层 0 失败）——本轮未重现旧故障，不能证明根因已修；该基线不覆盖主线 PR #142/alpha.106 新代码；
 > 已停止额外盲跑，旧三类故障（MSI restore 超时/NSIS 0xC000013A/UbuntuARM 失联）保留未决；完整 verify 仍无全矩阵绿证。
 > UPDATE 系统包扩展 B0–B5 全链完成并入 `main`（PR #107 设计、#108 发射+`pkg` 身份、#109 引导件 `pkg-apply` 双实现、#106/#110 macOS quarantine 能力探测、#111 客户端 `SyspkgReplay`、#112 syspkg-verify 三容器验收+DropProbe 修复、#113/#115 冻件重冻、#114 收尾：syspkg-verify 经 `workflow_call` 收编 verify 发布门、usage 文档、`pkg` 字段 v1 兼容断言）。
@@ -98,7 +98,7 @@ Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline`
 此前非文档变更包括 PR #139/#140 squash 合入：`a3ea637`/#139 UPDATE 提权停链修复（已启动提权腿即终局、取消/拒绝/鉴权失败一律停不重放、问密码取消 126 不触 sudo）；
 `09c9646`/#140 DMG 挂载可观测增强（`hdiutil attach` 成功后落挂载事实 Information 日志（挂载点+镜像路径），attach 失败不落）。
 两 PR 合并前均过本地评审（Local Review clean）；
-合并后 CI 连续失败取证就绪（PR #143 待合并）、根因未证实（见下条），不声称已过全矩阵。
+合并后 CI 连续失败取证就绪（PR #143 已合入 `576e6f7`）、根因未证实（见下条），不声称已过全矩阵。
 全量重构、测试重写、收口修复与 UPDATE 系统包扩展链（PR #82–#136）均已合入 `main`；逐轮验证过程与 run 记录以 git 提交和 PR 留痕为准，本文不留分轮过程，仅保留当前事实与仍有意义的结论。
 
 - **verify 发布门**：`9d51ba3` 基线三连全绿（`39062962978`/`39066991823`/`39070871573`——六宿主测试矩阵 + syspkg 三容器 + produce/consume/manual/universal 全链）；
@@ -128,7 +128,7 @@ Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline`
   verify `39142103135`@`0c18cf9` WindowsARM MSI Package 腿——attempt1 `FeatureSetScopePathAndCustomDirectory`/`PublicSampleMsiTableContract` 在 `dotnet restore` 3min 超时后 job 被取消；attempt2 `PerLanguageMsisInstallCoexistAndUninstallIndependently` 同样 restore 超时判败（该 attempt 为 Package 18 总 1 失败）；其余已运行的 tests 矩阵腿通过，下游 produce/consume/syspkg/manual 未执行；
   verify `39177022111`@`a137268` Windows2025 x64 `NsisIntegrationTests.ReinstallClosesOwnedProcessOnly` 安装器 rc=`-1073741510`=0xC000013A（退出码特征，原因待判）；UbuntuARM runner 失联、job logs 404 无工件；
   最新 WindowsARM 与 macOS 双腿均成功；
-  `diagnostics/ci-failures-20261019` 分支只加定向复现入口（`test_class` 精确过滤）与安全诊断插桩（`BUNDLER_RESTORE_TRACE`/`BUNDLER_NSIS_DIAGNOSTICS`/快照资源字段），不放宽断言、不改产品语义，已提交 PR #143（验证实现基线 `a95468d`，未合并，Local Review 第 1 轮 clean）。
+  `diagnostics/ci-failures-20261019` 分支只加定向复现入口（`test_class` 精确过滤）与安全诊断插桩（`BUNDLER_RESTORE_TRACE`/`BUNDLER_NSIS_DIAGNOSTICS`/快照资源字段），不放宽断言、不改产品语义，已提交并合入 PR #143（验证实现基线 `a95468d`，`576e6f7`，Local Review 第 1 轮 clean）。
 - **PR #143 定向 CI 取证**（验证实现基线 `a95468d`，工件与原始日志留 `bundler-ci-failures-65e61f0a8a4744318d37534977a69b40`）：
   run `39183902219` Windows2025 `NsisIntegrationTests` 类 28/28 completed/success（含 `ReinstallClosesOwnedProcessOnly`；art `12157855300`：`nsis-shutdown.log` 记 owned 退出 0xC000013A、installer rc0、external 存活——本轮行为符合预期，旧 installer 中断原因未证实）；
   run `39183904434` WindowsARM `MsiPackageContractTests` 10/10 completed/success（art `12157349776`：`restore-progress.log` 20 BEGIN/20 SPAWN/20 EXIT 全 rc0、均 attempt1、无 TIMEOUT/RETRY）；
@@ -181,7 +181,7 @@ Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline`
 
 - **CI 连续失败根治**：verify `39142103135`@`0c18cf9`（MSI Package restore 超时后取消/重跑判败）与 `39177022111`@`a137268`（NSIS rc=0xC000013A、UbuntuARM 失联）根因未证实、旧失败未重现；
   PR #143（`diagnostics/ci-failures-20261019`，验证实现基线 `a95468d`）四条定向/复验 run 均过、本轮未复现旧故障；已停止额外盲跑，旧三类故障保留未决；
-  该 PR 待合并（用户已明确授权合并）；四条取证基线为 alpha.105，不覆盖 PR #142/alpha.106；完整 verify 仍无全矩阵绿证；
+  该 PR 已合入 `576e6f7`；四条取证基线为 alpha.105，不覆盖 PR #142/alpha.106；完整 verify 仍无全矩阵绿证；
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
 - UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 全链已实现：发射（`pkg` 身份字段、`CoveredFormats` 扩收、三后端旁车+引导件注入）、`pkg-apply` 动词 AOT/POSIX 双实现同协议、客户端 replay 编排（`SyspkgReplay`：预检三件套/留存/三级提权退化链/回滚重放）、debian/fedora/alpine 容器验收腿（经 `workflow_call` 收编 verify 发布门 `syspkg` job）——契约见 `docs/design/update.md` §2，图形提权真实桌面观感等剩余边界登记 `docs/project/special-acceptance.md`；
 - 发布链资产实际推送（NuGet/Release 为另一步，仍需用户明确许可）；
