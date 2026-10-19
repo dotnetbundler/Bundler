@@ -137,14 +137,14 @@ target 语法、架构词与产物命名契约见 [`../design/targets.md`](../de
 | --- | --- |
 | `BundlerWindowsSigningPfxFile` | PFX/P12 代码签名证书路径 |
 | `BundlerWindowsSigningPfxPasswordEnvironmentVariable` | 存 PFX 密码的环境变量名（密码不写进工程/命令行） |
-
-所有秘密旋钮（PFX 密码、`…SigningKeyPassphrase`、`…CertificatePassword`、`…ApplePassword`）一律走 `*EnvironmentVariable` 间址：属性值是环境变量**名**，任务运行时取值——口令不进项目文件、命令行与二进制日志；变量未设置属配置错误。
 | `BundlerWindowsSigningCertificateThumbprint` | `My` 存储区证书指纹（与 PFX 二选一） |
 | `BundlerWindowsSigningCertificateStoreLocation` | `CurrentUser`（默认）/`LocalMachine` |
 | `BundlerWindowsSigningTimestampUrl` | RFC 3161 时间戳 URL；正式发布强烈建议配置 |
 | `BundlerWindowsSigningCommand` | 外部签名 provider 可执行文件（云 HSM/USB Token）；与 PFX/指纹互斥 |
 | `@(BundlerWindowsSigningFile)` | 输入目录内需追签的 DLL/sidecar 相对路径 |
 | `@(BundlerWindowsSigningCommandArgument)` | 外部命令独立参数；至少一项含 `{path}`/`%1`，另支持 `{artifactKind}`/`{target}`/`{productName}` 占位符；秘密经环境变量传入 |
+
+所有秘密旋钮（PFX 密码、`…SigningKeyPassphrase`、`…CertificatePassword`、`…ApplePassword`）一律走 `*EnvironmentVariable` 间址：属性值是环境变量**名**，任务运行时取值——口令不进项目文件、命令行与二进制日志；变量未设置属配置错误。
 
 ```xml
 <PropertyGroup>

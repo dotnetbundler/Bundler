@@ -582,8 +582,11 @@ internal static class CliConfig
                     // fall through: treat as a plain comma list
                 }
             }
+            // 非标量元素（如 files[] 对象）CoerceScalar 返 null——落字面值让反序列化
+            // 给干净的 JsonException（归 rc=2），不是 [null] 进下游 NRE。
             return new JsonArray(value.Split(',', StringSplitOptions.TrimEntries)
-                .Select(entry => (JsonNode?)CoerceScalar(elementType, entry)).ToArray());
+                .Select(entry => (JsonNode?)CoerceScalar(elementType, entry)
+                    ?? JsonValue.Create(entry)).ToArray());
         }
         return CoerceScalar(scalar, value) ?? ParseValue(value);
     }

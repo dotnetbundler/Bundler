@@ -237,6 +237,8 @@
     <BundlerRpmPostInstallProgram Condition="'$(BundlerRpmPostInstallProgram)' == ''"></BundlerRpmPostInstallProgram>
     <BundlerRpmPreUninstallProgram Condition="'$(BundlerRpmPreUninstallProgram)' == ''"></BundlerRpmPreUninstallProgram>
     <BundlerRpmPostUninstallProgram Condition="'$(BundlerRpmPostUninstallProgram)' == ''"></BundlerRpmPostUninstallProgram>
+    <BundlerRpmSigningKeyFile Condition="'$(BundlerRpmSigningKeyFile)' == ''"></BundlerRpmSigningKeyFile>
+    <BundlerRpmSigningKeyPassphraseEnvironmentVariable Condition="'$(BundlerRpmSigningKeyPassphraseEnvironmentVariable)' == ''"></BundlerRpmSigningKeyPassphraseEnvironmentVariable>
     <BundlerAppImagePackageName Condition="'$(BundlerAppImagePackageName)' == ''"></BundlerAppImagePackageName>
     <BundlerAppImageVersion Condition="'$(BundlerAppImageVersion)' == ''"></BundlerAppImageVersion>
     <BundlerAppImageArchitecture Condition="'$(BundlerAppImageArchitecture)' == ''"></BundlerAppImageArchitecture>
@@ -246,6 +248,8 @@
     <BundlerAppImageDesktopFile Condition="'$(BundlerAppImageDesktopFile)' == ''"></BundlerAppImageDesktopFile>
     <BundlerAppImageCategories Condition="'$(BundlerAppImageCategories)' == ''"></BundlerAppImageCategories>
     <BundlerAppImageMetainfoFile Condition="'$(BundlerAppImageMetainfoFile)' == ''"></BundlerAppImageMetainfoFile>
+    <BundlerAppImageSigningKeyFile Condition="'$(BundlerAppImageSigningKeyFile)' == ''"></BundlerAppImageSigningKeyFile>
+    <BundlerAppImageSigningKeyPassphraseEnvironmentVariable Condition="'$(BundlerAppImageSigningKeyPassphraseEnvironmentVariable)' == ''"></BundlerAppImageSigningKeyPassphraseEnvironmentVariable>
     <BundlerArchivePackageName Condition="'$(BundlerArchivePackageName)' == ''"></BundlerArchivePackageName>
     <BundlerArchiveVersion Condition="'$(BundlerArchiveVersion)' == ''"></BundlerArchiveVersion>
     <BundlerArchiveName Condition="'$(BundlerArchiveName)' == ''"></BundlerArchiveName>

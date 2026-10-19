@@ -133,12 +133,15 @@
              Text="BundlerTarget inferred from host runtime identifier '$(_BundlerEffectiveRid)' → '@(_BundlerTargetFromRid)'." />
     <PropertyGroup>
       <!-- formats 缺省按目标 OS 推导（显式 BundlerFormats 恒胜）——与 Core
-           BundleDefaults.DefaultFormatsForTarget 同一张表：windows→nsis、
-           macos/universal→dmg、linux-musl→alpineapk、linux→deb、未知→zip
+           BundleDefaults.DefaultFormatsForTarget 同一张表：universal→dmg、
+           windows→nsis、macos→dmg、linux-musl→alpineapk、linux→deb、未知→zip
            （zip 与 deb 同为纯托管、全宿主可产；未知 target 语义上不该赌某个
-           系统包生态，通用归档最稳） -->
+           系统包生态，通用归档最稳）。universal 判定在最前——有效目标恒为
+           macos-universal，宿主推导出的 BundlerTarget（如 Windows 宿主
+           windows-*）不能抢先命中别的分支。 -->
+      <BundlerFormats Condition="'$(BundlerFormats)' == '' and '$(BundlerUniversalTargets)' != ''">dmg</BundlerFormats>
       <BundlerFormats Condition="'$(BundlerFormats)' == '' and '$(_BundlerTargetOs)' == 'windows'">nsis</BundlerFormats>
-      <BundlerFormats Condition="'$(BundlerFormats)' == '' and ('$(_BundlerTargetOs)' == 'macos' or '$(BundlerUniversalTargets)' != '')">dmg</BundlerFormats>
+      <BundlerFormats Condition="'$(BundlerFormats)' == '' and '$(_BundlerTargetOs)' == 'macos'">dmg</BundlerFormats>
       <BundlerFormats Condition="'$(BundlerFormats)' == '' and '$(_BundlerTargetOs)' == 'linux-musl'">alpineapk</BundlerFormats>
       <BundlerFormats Condition="'$(BundlerFormats)' == '' and '$(_BundlerTargetOs)' == 'linux'">deb</BundlerFormats>
       <BundlerFormats Condition="'$(BundlerFormats)' == ''">zip</BundlerFormats>
