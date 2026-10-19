@@ -231,10 +231,11 @@ internal static class PayloadSource
         var linkDirectory = Path.GetDirectoryName(Path.GetFullPath(linkPath))!;
         var resolved = Path.GetFullPath(
             Path.IsPathRooted(raw) ? raw : Path.Combine(linkDirectory, raw));
-        var root = Path.GetFullPath(treeRoot)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
-            Path.DirectorySeparatorChar;
-        if (!resolved.StartsWith(root, PathText.Comparison))
+        var rootNoSlash = Path.GetFullPath(treeRoot)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        // 树内 = 严格前缀或就是树根本身（`ln -s .` 指向根的链接合法）。
+        if (!resolved.StartsWith(rootNoSlash + Path.DirectorySeparatorChar, PathText.Comparison) &&
+            !string.Equals(resolved, rootNoSlash, PathText.Comparison))
         {
             throw new ArgumentException(
                 $"The payload link '{linkPath}' points outside the payload tree " +

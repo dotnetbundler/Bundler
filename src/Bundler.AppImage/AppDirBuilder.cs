@@ -233,7 +233,10 @@ internal static class AppDirBuilder
                     throw new ArgumentException(
                         $"BundlerAppImageFile destination '{destination}' already exists in the AppDir.");
                 }
-                EnsureDirectories(appDir, Path.GetDirectoryName(hostDestination)!);
+                EnsureDirectories(appDir, Path.GetDirectoryName(hostDestination)!,
+                    path => new ArgumentException(
+                        $"BundlerAppImageFile destination '{entry.Destination}' collides " +
+                        $"with a payload file occupying '{path}'."));
                 File.Copy(source, hostDestination);
             }
         }
@@ -257,10 +260,13 @@ internal static class AppDirBuilder
         };
 
     /// <summary>
-    /// 逐级建父目录——任一前缀被已落文件/链接占位时给统一的碰撞口径，
-    /// 而不是让 <see cref="Directory.CreateDirectory"/> 抛裸 IOException。
+    /// 逐级建父目录——任一前缀被已落文件/链接占位时按 <paramref name="occupied"/>
+    /// 抛错：载荷落盘腿给 InvalidOperationException（与 claimed 簿同口径），
+    /// BundlerAppImageFile 旋钮腿给 ArgumentException（与相邻目的地校验同口径）；
+    /// 都比裸 <see cref="Directory.CreateDirectory"/> 的 IOException 可读。
     /// </summary>
-    private static void EnsureDirectories(string appDir, string parent)
+    private static void EnsureDirectories(
+        string appDir, string parent, Func<string, Exception> occupied)
     {
         var chain = new List<string>();
         for (var dir = parent; dir is not null &&
@@ -273,8 +279,7 @@ internal static class AppDirBuilder
         {
             if (File.Exists(chain[i]))
             {
-                throw new InvalidOperationException(
-                    $"A payload directory collides with an existing file: '{chain[i]}'.");
+                throw occupied(chain[i]);
             }
             Directory.CreateDirectory(chain[i]);
         }
@@ -311,7 +316,9 @@ internal static class AppDirBuilder
                 throw new InvalidOperationException(
                     $"A resource file collides with an existing payload entry: '{full}'.");
             }
-            EnsureDirectories(appDir, Path.GetDirectoryName(hostPath)!);
+            EnsureDirectories(appDir, Path.GetDirectoryName(hostPath)!,
+                path => new InvalidOperationException(
+                    $"A payload directory collides with an existing file: '{path}'."));
             if (item.Kind == PayloadSourceKind.Symlink)
             {
                 AppImageToolset.Symlink(item.LinkTarget!, hostPath);

@@ -34,8 +34,9 @@ internal static class MacArchiveTools
         // 工具先写工作目录暂存件再换到输出位：超时 kill 后未死透的进程继续写也只碰
         // 暂存件（孤儿随 .bundler-work 陈旧清扫走），绝不与回退的 managed 写出器
         // 并发改 outputPath，也不在输出目录留 .bundler-part 孤儿。
-        var partPath = Path.Combine(stagingRoot,
-            "part" + (format == PackageFormat.Zip ? ".zip" : ".tar.gz"));
+        var partPath = Path.Combine(workDirectory,
+            "macfidelity-part-" + Guid.NewGuid().ToString("N") +
+            (format == PackageFormat.Zip ? ".zip" : ".tar.gz"));
         try
         {
             Materialize(entries, stagingRoot);

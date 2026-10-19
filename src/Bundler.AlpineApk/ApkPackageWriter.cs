@@ -234,7 +234,6 @@ internal static class ApkPackageWriter
         return builder.ToString();
     }
 
-    /// <summary>The six apk control-script knobs and their dotted member names.</summary>
     /// <summary>
     /// The signature member name for a key file: <c>.SIGN.RSA.&lt;name&gt;.rsa.pub</c>
     /// where <c>&lt;name&gt;</c> is the file's basename minus any
@@ -263,6 +262,7 @@ internal static class ApkPackageWriter
         return ".SIGN.RSA." + keyName + ".rsa.pub";
     }
 
+    /// <summary>The six apk control-script knobs and their dotted member names.</summary>
     internal static (string? Path, string Name)[] ScriptKnobs(AlpineApkBundleConfiguration settings) =>
     [
         (settings.PreInstallFile, ".pre-install"),
