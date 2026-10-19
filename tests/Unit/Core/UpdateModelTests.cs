@@ -166,6 +166,49 @@ public sealed class UpdateKeyMaterialTests : TempBase
             File.Delete(publicPath);
         }
     }
+
+    [Theory]
+    // P-256 群阶 n = FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551。
+    // 合法标量须 0 < d < n——长度合格但越界的标量必须在 Load 被拒。
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")] // d = 0
+    [InlineData("/////wAAAAD//////////7zm+q2nF56E87nKwvxjJVE=")] // d = n
+    [InlineData("/////wAAAAD//////////7zm+q2nF56E87nKwvxjJVI=")] // d = n+1
+    [InlineData("//////////////////////////////////////////8=")] // d = 2^256-1
+    public void Load_OutOfRangePrivateScalar_Throws(string scalarBase64)
+    {
+        var coord = Convert.ToBase64String(new byte[32]);
+        var path = TempPath($"key-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path,
+            $"{{\"kty\":\"ec-p256\",\"x\":\"{coord}\",\"y\":\"{coord}\",\"d\":\"{scalarBase64}\"}}");
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => UpdateKeyMaterial.Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Load_MaxValidPrivateScalar_Accepted()
+    {
+        // 区间上界下沿 d = n-1 是合法标量——边界内侧不得误拒。
+        var coord = Convert.ToBase64String(new byte[32]);
+        var path = TempPath($"key-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path,
+            $"{{\"kty\":\"ec-p256\",\"x\":\"{coord}\",\"y\":\"{coord}\"," +
+            "\"d\":\"/////wAAAAD//////////7zm+q2nF56E87nKwvxjJVA=\"}"); // d = n-1
+        try
+        {
+            var loaded = UpdateKeyMaterial.Load(path);
+            Assert.NotNull(loaded.D);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }
 
 public sealed class UpdateFeedModelTests
