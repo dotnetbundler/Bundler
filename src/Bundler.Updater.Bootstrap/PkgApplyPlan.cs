@@ -954,9 +954,9 @@ internal static class PkgApplyPlan
     // 预检用同步执行：stdin 立即钉死（防降权器读调用方终端/管道），
     // out/err 后台抽干到 Null——用法文本、PAM/auth 噪声不透调用方面。
     // 预检 argv 恒为"工具+最小参数+sh -c :"零交互形（stdin 已钉 EOF 无读面、命令
-    // 即刻返回），工具自身挂死无现实入口——但等待面仍要有界：无参 WaitForExit 走
-    // 运行时 wait-state 事件链，macOS CI 实证过子进程 zombie 而事件永不落地；
-    // 轮询探活与丢唤醒解耦，界给足 5min（远超预检真实耗时）。
+    // 即刻返回），工具自身挂死无现实入口——但进程面仍要有界：macOS CI 实证过
+    // .NET Unix spawn/reap 全局锁死锁（子件僵尸不回收、spawn 不返回）；轮询旗标
+    // 保底 5min（远超预检真实耗时），spawn 本身同走 60s 界。
     private static int ExecSilent(ExecSpec spec)
     {
         if (ExecProbe is { } probe)

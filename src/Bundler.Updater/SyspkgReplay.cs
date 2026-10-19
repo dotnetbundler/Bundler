@@ -62,7 +62,7 @@ internal static class SyspkgReplay
 
     private const string AskpassPrompt = "Authentication required to install the update";
 
-    // 拉起观察窗只用于退出码留痕与会话 env 删余，不是退化判据——Process.Start
+    // 拉起观察窗只用于退出码留痕与会话 env 删余，不是退化判据——spawn
     // 一旦返回有效句柄，该腿即终局：窗内任意 rc（含 pkexec 126 取消、127 鉴权
     // 失败、pkg-apply 3/4/5/6）都按"已拉起"交还句柄由调用方观察退出码，绝不
     // 补拉下一级（授权取消/拒绝/未知鉴权失败一律停，已执行安装器不重放）。
@@ -352,7 +352,7 @@ internal static class SyspkgReplay
 
     // 探测退化链：pkexec → zenity/kdialog 问密码 + sudo -S → 裸 sudo——
     // 这里只做可用性探测排出有序腿表；首选腿 spawn 抛（探测后工具被删/执行位
-    // 丢失，Process.Start 未起成）时 StartLaunch 沿表退化下一腿——已 spawn 成
+    // 丢失，spawn 未起成）时 StartLaunch 沿表退化下一腿——已 spawn 成
     // 功的腿无论退出码都不再换腿，不起二次重试循环。
     // 问密码管线腿硬需要图形会话通道——DISPLAY/WAYLAND_DISPLAY 全缺席（headless）
     // 时 zenity/kdialog 必败，探测期直接不进表（tty 密码提示/NOPASSWD 场景靠裸 sudo）。
