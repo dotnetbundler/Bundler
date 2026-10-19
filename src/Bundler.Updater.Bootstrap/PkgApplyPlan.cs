@@ -213,6 +213,8 @@ internal static class PkgApplyPlan
     // 读设备件。POSIX 走 OpenWithDeadline 有界开件（fifo 阻塞 5s 收口）+ fstat
     // 钉住 inode 复核 S_IFREG + 按 fstat 尺寸封顶拷贝——并发 append 流不进本
     // 轮副本（内容篡改另由 --sha256 闸收）。Windows 无同形 fifo 换件面，File.Copy。
+    // 残余：NFS/FUSE 挂起读属内核 D-state，两侧（本循环/sh `timeout cp`）都杀
+    // 不动——与用户态可控窗不同级，登记为宿主层边界。
     private static void CopyPackage(string source, string staged)
     {
         if (OperatingSystem.IsWindows())
@@ -234,10 +236,11 @@ internal static class PkgApplyPlan
                 throw new UpdateRejectedException(
                     $"package '{source}' is not a regular file — refusing to stage.");
             }
-            using var input = new FileStream(
-                new Microsoft.Win32.SafeHandles.SafeFileHandle(fd, ownsHandle: true),
-                FileAccess.Read);
-            fd = NativeMethods.InvalidFd; // 描述符归属移交 FileStream
+            // 句柄先行包、归属即移交——FileStream ctor 抛时只剩 SafeFileHandle
+            // 终结器收口，finally 不再二次 Close 同一 fd 号（号复用窗口免疫）。
+            var handle = new Microsoft.Win32.SafeHandles.SafeFileHandle(fd, ownsHandle: true);
+            fd = NativeMethods.InvalidFd;
+            using var input = new FileStream(handle, FileAccess.Read);
             using var output = new FileStream(
                 staged, FileMode.CreateNew, FileAccess.Write, FileShare.None);
             // 按 fstat 尺寸封顶：读满即停（提前 EOF→sha256 闸收；追加内容不进来）。
@@ -917,7 +920,11 @@ internal static class PkgApplyPlan
                 try
                 {
                     // 整树杀：apt-get/dnf 的 dpkg/rpm 孙进程不能成孤儿继续持锁——
-                    // 与 sh `timeout` 对进程组发信号同口径（双侧超时后无遗留 pm）。
+                    // 双侧超时后都无遗留 pm。善后口径刻意不同：sh `timeout -k 30`
+                    // 给组发 TERM+30s 善后窗再 KILL；.NET Process 无 TERM/组信号
+                    // 面（子进程与本进程同组，TERM 组发会自尽；TERM 只给直子又会
+                    // 让孙进程孤儿化）——AOT 直 SIGKILL 整树是唯一能同时满足
+                    // "有界 + 孙进程必死"的形态，善后窗差异登记为已知实现差。
                     process.Kill(entireProcessTree: true);
                 }
                 catch (Exception)

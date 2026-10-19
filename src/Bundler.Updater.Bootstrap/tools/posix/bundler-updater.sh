@@ -159,12 +159,17 @@ _pa_timed() {
 
 # SIGKILL 残件兜底：EXIT trap 管不到强杀路径——清扫 24h 前的 bundler-pkg
 # 暂存目（sh 建 bundler-pkg.XXXX / AOT 建 bundler-pkg-<guid>——[.-] 双形
-# 都收，跨实现残件互不漏；AOT SweepStaleStageDirs 同义）。find 缺席的
-# 宿主不扫（残余由 OS tmp 清理器兜）。
+# 都收，跨实现残件互不漏；AOT SweepStaleStageDirs 同义）。glob 枚举候选
+# + find -prune -mmin 判龄（-maxdepth 是 GNU 专旗，BSD/macOS find 不收）。
+# find/rm 缺席的宿主不扫（残余由 OS tmp 清理器兜）。
 _pa_sweep_stages() {
     command -v find >/dev/null 2>&1 || return 0
-    find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'bundler-pkg[.-]*' -type d -mmin +1440 \
-        -exec rm -rf {} + 2>/dev/null || true
+    command -v rm >/dev/null 2>&1 || return 0
+    for _d in "${TMPDIR:-/tmp}"/bundler-pkg.[!.]* "${TMPDIR:-/tmp}"/bundler-pkg-*; do
+        [ -d "$_d" ] || continue
+        [ -n "$(find "$_d" -prune -mmin +1440 -print 2>/dev/null)" ] && \
+            rm -rf "$_d" 2>/dev/null || true
+    done
 }
 
 # sha256 工具链退化：sha256sum → shasum -a 256 → openssl dgst -sha256（全缺席返 1）。

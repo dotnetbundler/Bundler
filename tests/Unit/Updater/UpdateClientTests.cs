@@ -216,7 +216,13 @@ public sealed class UpdateClientTests : TempBase
         // 裸 NRE 会打穿"协议/校验/拒绝全确定性 UpdateException"调用方契约。
         var (feedDir, key) = MakeFeed("2.0.0",
             [Artifact("win-x64", "nsis", "app-2.0.0.exe")]);
-        MutateFeed(feedDir, key, feed => feed.Artifacts[0].File = null!);
+        // JSON 字节手术产真 null——WriteFeed(WhenWritingNull) 会省略键而非写 null。
+        MutateFeedJson(feedDir, key, json =>
+        {
+            var mutated = json.Replace("\"file\":\"app-2.0.0.exe\"", "\"file\":null");
+            Assert.NotEqual(json, mutated);
+            return mutated;
+        });
         var client = Client(feedDir, key, currentVersion: "1.0.0");
 
         await Assert.ThrowsAsync<UpdateException>(() =>
@@ -229,7 +235,12 @@ public sealed class UpdateClientTests : TempBase
         // "artifacts":null 与空清单同义——无匹配 artifact 即无更新（null 不
         // 崩进 NRE）。畸形仍是签名清单内的形状问题，客户端按空集确定性处理。
         var (feedDir, key) = MakeFeed("2.0.0", []);
-        MutateFeed(feedDir, key, feed => feed.Artifacts = null!);
+        MutateFeedJson(feedDir, key, json =>
+        {
+            var mutated = json.Replace("\"artifacts\":[]", "\"artifacts\":null");
+            Assert.NotEqual(json, mutated);
+            return mutated;
+        });
         var client = Client(feedDir, key, currentVersion: "1.0.0");
 
         Assert.Null(await client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
@@ -396,24 +407,13 @@ public sealed class UpdateClientTests : TempBase
         return (feedDir, key);
     }
 
-    /// <summary>读回清单、原地改指定字段、重写并重签——畸形-but-签名有效清单装置。</summary>
-    private void MutateFeed(
-        string feedDir, CoreUpdate.UpdateKeyMaterial key,
-        Action<CoreUpdate.UpdateFeed> mutate)
+    /// <summary>对清单 JSON 做字节手术并重签——产"畸形但签名有效"的清单
+    ///（WhenWritingNull 序列化写不出显式 null，须绕过模型层直接改字节）。</summary>
+    private void MutateFeedJson(
+        string feedDir, CoreUpdate.UpdateKeyMaterial key, Func<string, string> mutate)
     {
         var feedPath = Path.Combine(feedDir, "bundler-update-feed.json");
-        CoreUpdate.UpdateFeed feed;
-        using (var input = File.OpenRead(feedPath))
-        {
-            feed = CoreUpdate.UpdateJson.ReadFeed(input)!;
-        }
-        mutate(feed);
-        byte[] feedBytes;
-        using (var stream = new MemoryStream())
-        {
-            CoreUpdate.UpdateJson.WriteFeed(stream, feed);
-            feedBytes = stream.ToArray();
-        }
+        var feedBytes = Encoding.UTF8.GetBytes(mutate(File.ReadAllText(feedPath)));
         File.WriteAllBytes(feedPath, feedBytes);
         File.WriteAllBytes(feedPath + ".sig", EcdsaSigner.Sign(feedBytes, key));
     }

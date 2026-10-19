@@ -40,7 +40,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
 - **macOS**：新 `.app` 签名/公证由 MacApp 管线打包期完成。
   更新器职责=换包前 `codesign --verify` 且签名身份与旧包一致（防劫持）+剥 `com.apple.quarantine`+`open -n` 重启。
   签名态探测 fail-closed：`codesign` 不可运行/输出不可判与"确证未签名"分流——判不出签名态一律拒换（已签旧件被未签件降级、跨 Team-ID 换装同样拒）；Info.plist 为二进制 plist 时经 `/usr/libexec/PlistBuddy` 兜底解 bundle id。
-- **清单取信次序**：`<feed>.sig` 旁车先于 JSON 解析验签（签名防伪先于内容语义）；`artifact.file` 词法收口为单段文件名（分隔符/`..`/绝对路径一律拒——签名保真不保意图，落盘名不信远端词法）；
+- **清单取信次序**：`<feed>.sig` 旁车先于 JSON 解析验签（签名防伪先于内容语义）；`artifact.file` 词法收口为单段文件名（分隔符/`..`/绝对路径一律拒——签名保真不保意图，落盘名不信远端词法），`url`/`sha256` 同列必携、缺即拒；畸形清单的显式 null 与缺省键同归 `UpdateException`（netstandard DCS 不跑字段初始化器，消费面不允许裸 NRE）；
   http(s) `.part` 断点续传核对 `Content-Range`，断点态不一致即弃 `.part` 从头干净拉；
   抓取/IO/HTTP/畸形 JSON/坏公钥全归 `UpdateException` 确定性契约，用户取消（cancellation）原样穿透不包。
 - **feedUrl 多形态**：http(s)/`file://`/本地路径/UNC——离线更新与企业内网分发是静态清单模型的免费特性。
@@ -120,7 +120,8 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   拷贝本身有界：AOT 经 PAL `O_NOFOLLOW`+5s 时限开件、fstat 复核普通件并按其尺寸封顶读；sh 侧 `timeout -k 10 60 cp` 包裹——判存到 open 的类型替换窗（fifo 挂死/设备件读不尽）双侧同形收口；
   `--sha256`（严格 64 位十六进制，畸形归用法错 rc3）对暂存副本逐位复核，不匹配/无哈希工具一律 rc4 拒绝，不降级装原件；
   暂存根随进程全出口回收（finally/EXIT trap），SIGKILL 残件由下一轮 `bundler-pkg-*`>24h 同名清扫兜底（find 缺席的宿主不扫，归 OS tmp 清理器）。
-- 每级安装命令先 `command -v` 预检再调用；安装腿有界——AOT `WaitForExit` 超时整进程树杀返 124、sh 侧 `timeout -k 30` 包裹同码，默认 30min，`BUNDLER_UPDATER_PKG_TIMEOUT` **正数**秒双侧同名覆盖（`0`/非数字同归默认——GNU `timeout 0` 的无界义不外露）；
+- 每级安装命令先 `command -v` 预检再调用；安装腿有界——AOT `WaitForExit` 超时 SIGKILL 整进程树返 124（.NET 无 TERM/组信号面，孙进程必死优先于善后窗）、sh 侧 `timeout -k 30` 先 TERM 后 KILL 包裹同码——超时界与"无遗留 pm"双侧一致，善后窗宽严属已知实现差；
+  默认 30min，`BUNDLER_UPDATER_PKG_TIMEOUT` **正数**秒双侧同名覆盖（`0`/非数字同归默认——GNU `timeout 0` 的无界义不外露）；
   apt-get 另带 `-o DPkg::Lock::Timeout=120` 把 dpkg 锁等待钉在包管理器自身界内。
   `--env-file` 会话 env 降权后经内层 `env K=V` 回灌（`sudo` env_reset 剥外层环境，缺省按最小集 HOME+DISPLAY）；外层 `nohup` 分离——nohup 走与包管理器同一 `ResolveCommand`/`_pa_cmd` 解析序（`BUNDLER_UPDATER_CMD_NOHUP` 覆盖 → PATH），spawn 包三向钉 `/dev/null`。
   `BUNDLER_UPDATER_CMD_<TOOL>` 覆盖值须过存在+普通文件+执行位三重复核才权威，不可用值按未设置退化——覆盖缝只给测试垫片用，流浪 env 不许把探测结果对调用方会话造假。

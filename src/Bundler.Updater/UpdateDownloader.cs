@@ -97,12 +97,24 @@ internal sealed class UpdateDownloader
             throw new UpdateException(
                 $"update feed '{feedUrl}' is not a valid manifest.", exception);
         }
+        // 畸形清单归一化先行：netstandard DCS 不跑字段初始化器——缺省键与显式
+        // null 都产 null 字段（net10 STJ 侧显式 null 同样 null），消费面
+        //（SelectArtifact 遍历/artifact.Url/Sha256.Length）裸 NRE 会打穿
+        //"协议/校验/拒绝全归 UpdateException"的调用方契约。
+        feed.Artifacts ??= new List<UpdateFeedArtifact>();
         // artifact.file 经 Path.Combine 拼本地下载名——词法必须是单段文件名：
         // 分隔符/../等会让签名清单把下载件写到下载目录之外（签名只保真不保意图，
-        // 词法收口在客户端侧做）。
-        foreach (var artifact in feed.Artifacts ?? new List<UpdateFeedArtifact>())
+        // 词法收口在客户端侧做）。url/sha256 同列必携——null/空在下游消费点
+        //（ResolveArtifactLocation/Sha256.Length）同样以 NRE 形态漏出。
+        foreach (var artifact in feed.Artifacts)
         {
-            var file = artifact?.File;
+            if (artifact is null || artifact.Url is not { Length: > 0 } ||
+                artifact.Sha256 is not { Length: > 0 })
+            {
+                throw new UpdateException(
+                    $"update feed '{feedUrl}' carries an artifact missing url/sha256.");
+            }
+            var file = artifact.File;
             if (file is not { Length: > 0 } || file is "." or ".." ||
                 file.IndexOf('/') >= 0 || file.IndexOf('\\') >= 0)
             {
@@ -347,12 +359,14 @@ internal sealed class UpdateDownloader
             TryDelete(destinationPath + ".part");
             return true;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
         catch (Exception exception) when (exception is not UpdateException)
         {
+            // 非用户取消的 OCE（HttpClient.Timeout/非 ct 触发的取消）同归差分
+            // 回落——超时态误当用户取消穿透会把调用方推向静默 catch(OCE)。
             log?.Invoke($"update: delta failed ({exception.Message}) — full download");
             TryDelete(destinationPath);
             return false;
@@ -458,6 +472,22 @@ internal sealed class UpdateDownloader
 
     // `.part` 续传：服务端给了 Accept-Ranges 就接着写；否则整档重下。
     private async Task DownloadHttpAsync(
+        string url, string destinationPath, Action<string>? log, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await DownloadHttpCoreAsync(url, destinationPath, log, cancellationToken);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // HttpClient.Timeout 的 OCE 不带用户取消标记——发送侧超时是协议
+            // 事实不是用户取消，误穿透会被调用方 catch(OCE) 静默当取消。
+            throw new UpdateException(
+                $"download '{url}' timed out — server did not respond in time.");
+        }
+    }
+
+    private async Task DownloadHttpCoreAsync(
         string url, string destinationPath, Action<string>? log, CancellationToken cancellationToken)
     {
         var partPath = destinationPath + ".part";
