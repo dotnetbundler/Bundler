@@ -22,7 +22,7 @@ public sealed class ProcessWaitTests
     {
         using var process = StartSleep(60);
         Assert.False(ProcessWait.WaitForExit(process, 200));
-        try { process.Kill(); } catch (Exception) { }
+        try { process.Kill(entireProcessTree: true); } catch (Exception) { }
         // 杀后回收不挂死：僵尸/未落地事件都能被下一趟轮询探到。
         Assert.True(ProcessWait.WaitForExit(process, 10_000));
     }

@@ -1244,15 +1244,24 @@ internal static class BootstrapPlan
                     : new ProcessStartInfo("cp", ["-a", source + "/.", destination + "/"]);
                 startInfo.RedirectStandardError = true;
                 using var process = Process.Start(startInfo);
-                // 必须先排空 stderr——cp/ditto 大量报错写满管道会反压阻塞子进程，
-                // WaitForExit 将永久卡死。ReadToEnd 排水直到子进程退出再取码。
-                var stderr = process!.StandardError.ReadToEnd();
-                if (!ProcessWait.WaitForExit(process, 60_000))
+                // stderr 后台抽干+退出同盖一个 60s 界：同步 ReadToEnd 先排空再等会让
+                // "活进程挂死"（cp/ditto 在 FIFO/设备件上 open 阻塞，stderr 永不 EOF）
+                // 在界外无限挂住——与 sh 侧 timeout -k 10 60 cp 包裹的是同一威胁面。
+                var stderrTask = process!.StandardError.ReadToEndAsync();
+                var wedged = !ProcessWait.WaitForExit(process, 60_000);
+                if (wedged)
                 {
                     try { process.Kill(); } catch (Exception) { }
                     ProcessWait.WaitForExit(process, 10_000);
+                }
+                // EOF 排空也给限窗：孙代继承管道写端时退出不等于 EOF（孙进程必死但
+                // 其持管期间 ReadToEndAsync 不返）——5s 内读不到按无细节处理。
+                var stderr = "";
+                try { if (stderrTask.Wait(5_000)) stderr = stderrTask.Result; } catch (Exception) { }
+                if (wedged)
+                {
                     DeleteNodeIfPresent(destination);
-                    log("bundler-updater: WARN host copy wait wedged — falling back to managed copy");
+                    log("bundler-updater: WARN host copy timed out — falling back to managed copy");
                 }
                 else if (process.ExitCode == 0)
                 {

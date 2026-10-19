@@ -12,7 +12,7 @@
 > UPDATE 系统包扩展 B0–B5 全链完成并入 `main`（PR #107 设计、#108 发射+`pkg` 身份、#109 引导件 `pkg-apply` 双实现、#106/#110 macOS quarantine 能力探测、#111 客户端 `SyspkgReplay`、#112 syspkg-verify 三容器验收+DropProbe 修复、#113/#115 冻件重冻、#114 收尾：syspkg-verify 经 `workflow_call` 收编 verify 发布门、usage 文档、`pkg` 字段 v1 兼容断言）。
 > 测试确定性修复 #116（奇偶腿宿主 `DEBIAN_FRONTEND` env 泄漏+uidedge rec 竞态）与 #117（NSIS 卸载分离删除断言改 WaitFor）已并入。
 > 发布门实证：verify 于 `9d51ba3` 基线**三连全绿**（run `39062962978`、`39066991823`、`39070871573`——六宿主测试矩阵 + syspkg 三容器腿 + produce/consume/manual/universal 全链）。
-> 引导件冻件口径：现嵌 8 件为 produce-bootstrap run `39030858362`@`e0174dc` 产出（PR #129 入库，含 #128 PAL 化——env 件校验与 `UnixFileTypes` 改走 `libSystem.Native`、gate 竞态修复），SHA-256 与字节数留账于该 squash 正文。
+> 引导件冻件口径：现嵌 8 件为 produce-bootstrap run `39239955900`@`556ef0b` 产出（`7642386` 入库——BundledSha256 换 BCL SHA256 的 musl libssl 崩溃修复随件就位），SHA-256 与字节数留账于 PR #148 处置记录评论（squash 时并入正文）。
 > 外部工具挂死加固：PR #130 给 `ToolRunner`/`ToolCache` 全链有界等待+spawn 追踪（`BUNDLER_TOOL_TIMEOUT_SECONDS`/`BUNDLER_TOOL_TRACE`），挂死收敛为带现场的有界失败；macOS 偶发 `hdiutil` 簿记滞后断言面由 PR #131 改有界轮询；PR #132 加 CI 进程快照采样（随后过滤瘦身至测试/工具面白名单）——加固后 intel 腿 suite=all 八连压测零复现，OS 层凶手未捕获；verify `39225055542`@`09d6a01` macos-intel 腿复现真挂死——取证（`ci-logs-macos-26-intel`）实证 `hdiutil`/`makensis` 已退而宿主 `WaitForExit` 永不返回（两子进程 Z 态 defunct ~3h 未被 reap），指向运行时 wait-state 事件链丢唤醒；修复收编为 `Bundler.Core/ProcessWait` 轮询等待（`HasExited` 逐趟直探内核），src 全部 `WaitForExit` 点与测试侧 `TestProcessExit` 同构替换。
 > 图形提权入口链等剩余边界仍挂 `docs/project/special-acceptance.md`。
 > 当前包版本：`0.1.0-alpha.109`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
@@ -107,7 +107,7 @@ Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline`
   `110a2fe` 基线（#137 文档对账）全矩阵 verify `39133258129` 已 completed/success 全绿（六宿主 tests、produce/consume、manual/auto、universal、syspkg 三容器全 success）——该绿只覆盖 `110a2fe` 基线；`39142103135`/`39177022111` 均未全绿，当前无全矩阵绿证。
 - **macOS intel 挂死面**：两轮三测试锁步挂死定性 runner 实例级间歇失响应，OS 层凶手未捕获；我方"全链无超时兜底"放大器已修——#130 有界等待/杀树/有界排空/spawn 追踪（`BUNDLER_TOOL_TIMEOUT_SECONDS`/`BUNDLER_TOOL_TRACE`）+ `ToolCache` 锁上限，#132–#134 进程快照采样瘦身至白名单并经 `ci-logs-*` 工件 `always()` 上传（不进 job 日志）；suite=all 八连压测 + api 十连 + verify 多轮累计零复现，插桩留作复发取证面。
 - **dmg 失败清理断言面**：`hdiutil detach` 簿记滞后一次性断言误报由 #131 改 60s 有界轮询；`diskimages-helper` 邻座残影污染全局断言由 #135 收窄至失败域（retest `39124695555` macos 双腿绿）；#136 补挂载后失败真实注入腿（`BundlerMacDmgBackgroundFile` 缺件→attach 后 `ApplyBrandingAsync` 抛→catch 强制 detach）。
-- **引导件冻件口径**：现嵌 8 件为 produce-bootstrap run `39030858362`@`e0174dc` 产出（PR #129 入库），SHA-256 与字节数留账于该 squash 正文；musl 静态单件经 alpine SDK 容器产、双宿主通吃（`docs/design/update.md`）。
+- **引导件冻件口径**：现嵌 8 件为 produce-bootstrap run `39239955900`@`556ef0b` 产出（`7642386` 入库），SHA-256 与字节数留账于 PR #148 处置记录评论（squash 时并入正文）；musl 静态单件经 alpine SDK 容器产、双宿主通吃（`docs/design/update.md`）。
 - 本机 Windows x64 Release 基准（Windows 10.0.26200 win-x64，.NET SDK 10.0.302 / MSBuild 18.6.11，`main@110a2fe` 接管时实测）：`dotnet build Bundler.slnx -c Release --no-restore` rc 0（0 警告 0 错误）；
   `dotnet test tests/Unit/Bundler.UnitTests.csproj -c Release --no-build --no-restore` rc 0（总 1409 / 通过 1372 / 跳过 37 / 失败 0）；
   `dotnet test tests/Api/Bundler.ApiTests.csproj -c Release --no-build --no-restore` rc 0（总 84 / 通过 70 / 跳过 14 / 失败 0）；
