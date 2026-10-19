@@ -40,10 +40,15 @@ public sealed class ToolProcessStartInfo
     /// <see cref="EnvironmentIsComplete"/> 置位时本字典即子件完整环境块
     ///（父件 env 不参与——OS env-block 原语语义，对应 BCL
     /// ProcessStartInfo.Environment 清空重填的形态），null 值按缺席处理。
+    /// 字典为 Ordinal：Unix 面大小写变体是两个合法不同变量；Windows 腿
+    /// 写入 OrdinalIgnoreCase 的 EnvironmentVariables 后写覆盖（确定性）。
+    /// 豁免：<see cref="UseShellExecute"/> 时 Windows Process API 不接受环境块，
+    /// 本子段连同完整块语义整体不适用——子件恒继承父件环境（上方注释同口径）。
     /// </summary>
     public Dictionary<string, string?> Environment { get; } = new();
     /// <summary>
     /// <see cref="Environment"/> 为完整环境块而非增量覆写。默认 false=继承+覆盖。
+    /// <see cref="UseShellExecute"/> 置位时本旗标不生效（环境块整体被跳过）。
     /// </summary>
     public bool EnvironmentIsComplete { get; set; }
 }
