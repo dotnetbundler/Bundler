@@ -82,7 +82,7 @@ public sealed class ToolProcess : IDisposable
 
     /// <summary>
     /// 启动子进程。exec 失败抛 <see cref="Win32Exception"/>（与 Process.Start 同语义）；
-    /// spawn 超时（Unix shim 卡死 60s 无 exec 回报）返回 null——"未能产出子进程"位。
+    /// spawn 超时（Unix shim 卡死 ~1min 级上界仍无 exec 回报）返回 null——"未能产出子进程"位。
     /// </summary>
     public static ToolProcess? Start(ToolProcessStartInfo info)
     {

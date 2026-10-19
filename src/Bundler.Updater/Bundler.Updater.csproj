@@ -27,7 +27,7 @@
     <Compile Include="..\Bundler.Core\ToolProcess.cs" />
     <Compile Include="..\Bundler.Core\NativeSpawnUnix.cs" />
     <!-- musl 静态发布消费方的 libc 直绑清单一并随包透传（文件内注释为单一事实）。 -->
-    <None Include="buildTransitive\DotNet.Bundler.Updater.props" Pack="true" PackagePath="buildTransitive/" />
+    <None Include="buildTransitive\DotNet.Bundler.Updater.targets" Pack="true" PackagePath="buildTransitive/" />
   </ItemGroup>
 
 </Project>

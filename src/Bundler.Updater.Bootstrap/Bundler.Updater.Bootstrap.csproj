@@ -26,7 +26,7 @@
 
   <!-- musl 静态 -static-pie 件无 .dynsym，裸 DllImport("libc") 运行时不可解析
        （syspkg 冻件腿 rc3 实证）——libc 直绑清单与 Bundler.Updater 包随包
-       透传面同源（单一事实在该 props，勿在本文件再抄一份）。 -->
-  <Import Project="..\Bundler.Updater\buildTransitive\DotNet.Bundler.Updater.props" />
+       透传面同源（单一事实在该 targets，勿在本文件再抄一份）。 -->
+  <Import Project="..\Bundler.Updater\buildTransitive\DotNet.Bundler.Updater.targets" />
 
 </Project>

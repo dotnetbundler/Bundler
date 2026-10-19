@@ -4,8 +4,10 @@
        符号在此逐一直绑——ILC 发直接 extern 调用，链接期对 musl 静态库解析，
        符号缺席即链接失败（发布期报错而非运行期崩）。
        本文件同时被两处消费，清单改动须双侧生效：
-         1. 本包 nupkg 的 buildTransitive——消费方 -r linux-musl-* 静态发布
-            自更新应用时透传；
+         1. 本包 nupkg 的 buildTransitive——消费方 -r linux-musl-* 或 csproj
+            内设 RuntimeIdentifier 静态发布自更新应用时透传（必须用 .targets
+            扩展名：props 在 nuget.g.props 里先于消费方本体导入，csproj 内设
+            RID 的条件会取到空值静默缺席）；
          2. src/Bundler.Updater.Bootstrap 的 csproj 直接 Import——冻件产线。
        addchdir/addchdir_np 刻意不入清单：musl 版本不齐一，留运行时探测
        缺席走父件锁内 chdir 兜底。 -->

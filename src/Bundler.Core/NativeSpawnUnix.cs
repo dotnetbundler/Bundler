@@ -25,7 +25,8 @@ namespace DotNet.Bundler.Core;
 /// 托管代码只出现在父件。
 /// 残余如实登记：posix_spawn 内部仍是 fork+shim——若命中最深层机况（内核级
 /// pre-exec 卡死），该次调用会堵在 libc 回报管上。差异在性质不在有无：它
-/// 无任何共享锁，单点卡死不传染进程其余 spawn；且调用放专线程 60s 有界，
+/// 无任何共享锁，单点卡死不传染进程其余 spawn；且调用放专线程 ~1min 级有界
+///（60s 主界 + 落账留口与扑孤收尾），
 /// Linux 超时经 /proc/self/task/&lt;tid&gt;/children 精确扑杀该线程的孤件
 /// （macOS 无对应廉价枚举面，按弃件登记——调用方拿到的是失败而非挂死）。
 /// </summary>
@@ -276,8 +277,8 @@ internal static class NativeSpawnUnix
 
     /// <summary>
     /// posix_spawn 放专线程：调用本身可能堵在 libc 子件回报管（shim 卡死形态），
-    /// 父件 60s 有界等待，超时扑杀该线程的孤件后报"未产出"。无共享锁——
-    /// 单点卡死不传染。
+    /// 父件 60s 主界等待，超时腿加 2s worker 落账留口与扑孤收尾（上界 ~62s+）
+    /// 后报"未产出"。无共享锁——单点卡死不传染。
     /// </summary>
     private sealed class SpawnResult
     {
