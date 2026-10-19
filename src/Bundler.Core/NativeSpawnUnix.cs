@@ -667,7 +667,10 @@ internal static class NativeSpawnUnix
         var path = env.TryGetValue("PATH", out var p) ? p : "/usr/bin:/bin";
         // 基准归一成绝对路径：拼出的候选要同时满足父件 access 检查与子件
         // chdir 后的 exec 解析——绝对路径两语境同指一目标，无二次错解。
-        var relativeBase = Path.GetFullPath(workingDirectory ?? ".");
+        // WorkingDirectory 空串与 null 同为"不 chdir"（BCL 同位语义），
+        // 此时子件 cwd=父件 cwd，基准即 "."。
+        var relativeBase = Path.GetFullPath(
+            string.IsNullOrEmpty(workingDirectory) ? "." : workingDirectory);
         foreach (var dir in path.Split(':'))
         {
             var candidate = dir.Length > 0 && dir[0] == '/'

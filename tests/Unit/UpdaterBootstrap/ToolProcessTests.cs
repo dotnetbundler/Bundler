@@ -70,6 +70,26 @@ public sealed class ToolProcessTests
     }
 
     [Fact]
+    public void EmptyWorkingDirectoryFallsBackToParentCwd()
+    {
+        // BCL ProcessStartInfo.WorkingDirectory 默认 ""——空串与 null 同为"不 chdir"；
+        // 裸文件名经 PATH 解析时基准须按父件 cwd，不得抛 ArgumentException（CI 实证回归）。
+        var info = new ToolProcessStartInfo
+        {
+            FileName = OperatingSystem.IsWindows() ? "cmd" : "sh",
+            ArgumentLine = OperatingSystem.IsWindows()
+                ? "/c echo cwd-ok" : "-c \"echo cwd-ok\"",
+            WorkingDirectory = "",
+            RedirectStandardOutput = true,
+        };
+        using var process = ToolProcess.Start(info);
+        Assert.NotNull(process);
+        var output = process.StandardOutput.ReadToEnd();
+        Assert.True(process.WaitForExit(10_000));
+        Assert.Contains("cwd-ok", output);
+    }
+
+    [Fact]
     public void ExitedEventFiresOnExit()
     {
         if (OperatingSystem.IsWindows())
