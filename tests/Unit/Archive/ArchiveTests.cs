@@ -885,6 +885,53 @@ public sealed class ArchiveTests : TempBase
     [DllImport("libc", CharSet = CharSet.Ansi, SetLastError = true)]
     static extern int lsetxattr(string path, string name, byte[] value, int size, int flags);
 
+    [Fact]
+    public async Task UpdateEnabled_ReservedNameCollision_Rejected()
+    {
+        // 用户载荷自带 bundler-update.json——保留名碰撞与各后端 claimed 簿同语义：
+        // 显式拒绝，不静默剔除。
+        var input = CreateInputDirectory();
+        var output = Path.Combine(input, "..", "reserved-out");
+        var keyPath = Path.Combine(input, "..", "update-key.json");
+        try
+        {
+            File.WriteAllText(Path.Combine(input, "bundler-update.json"), "{}");
+            var material = DotNet.Bundler.Core.Update.UpdateKeyMaterial.Generate();
+            material.Save(keyPath);
+            var configuration = Configuration(input, output, formats: [PackageFormat.Zip]);
+            var withUpdate = new BundleConfiguration
+            {
+                ProductName = configuration.ProductName,
+                Identifier = configuration.Identifier,
+                Version = configuration.Version,
+                OutputDirectory = configuration.OutputDirectory,
+                Update = new DotNet.Bundler.UpdateBundleConfiguration
+                {
+                    FeedUrl = "https://example.test/updates",
+                    SigningKeyFile = keyPath,
+                },
+                Targets = configuration.Targets
+            };
+
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => new ArchiveBundler(new ArchiveBundleConfiguration())
+                    .BuildAsync(withUpdate, TestContext.Current.CancellationToken));
+            Assert.Contains("bundler-update.json", error.Message);
+        }
+        finally
+        {
+            Cleanup(input);
+            if (File.Exists(keyPath))
+            {
+                File.Delete(keyPath);
+            }
+            if (Directory.Exists(output))
+            {
+                Directory.Delete(output, recursive: true);
+            }
+        }
+    }
+
     static BundleConfiguration Configuration(string input, string output,
         string target = "linux-x86_64", IReadOnlyList<PackageFormat>? formats = null)
     {

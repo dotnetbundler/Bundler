@@ -8,11 +8,6 @@
     <Description>Format-neutral validation, planning, orchestration, and tool caching for desktop packages.</Description>
   </PropertyGroup>
   <ItemGroup>
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <Compile Remove="Configuration\BundleConfigurationLoader.cs" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\Bundler.Abstractions\Bundler.Abstractions.csproj" />
     <!-- 引导件内嵌：任何消费形态（MSBuild 包/CLI/项目直引/NuGet）都能为载荷选件，
          无需盘符约定；UpdateBootstrapper 经清单资源名 updater/<rid>/ 解析。

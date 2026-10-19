@@ -79,4 +79,32 @@ internal static class UnixFileTypes
             return true;
         }
     }
+
+    /// <summary>
+    /// stat 后返回 <paramref name="path"/> 的属主 uid（symlink 跟随到目标）。
+    /// 与 <see cref="IsRegularFile"/> 的 fail-open 相反——属主判据用于
+    /// "共享目录是否可信"的安全判定，stat 不可得按"无法判定=不信任"返回 false。
+    /// </summary>
+    internal static bool TryGetOwnerUid(string path, out uint uid)
+    {
+        uid = 0;
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) &&
+            !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return false;
+        }
+        try
+        {
+            if (SysStat(path, out var status) != 0)
+            {
+                return false;
+            }
+            uid = status.Uid;
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
 }

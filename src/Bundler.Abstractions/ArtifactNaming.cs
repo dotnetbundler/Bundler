@@ -100,8 +100,9 @@ public static class ArtifactNaming
     }
 
     /// <summary>
-    /// 产物文件名（不含目录）。<paramref name="release"/> 仅 deb/rpm/apk 用（包管理器
-    /// 修订段）；<paramref name="languageSuffix"/> 仅多语言 msi 用；
+    /// 产物文件名（不含目录）。<paramref name="release"/> 为裸修订数字，仅 deb/rpm/apk
+    /// 用（包管理器修订段）——apk 的 "r" 前缀由本函数补，调用方不自拼；
+    /// <paramref name="languageSuffix"/> 仅多语言 msi 用；
     /// <paramref name="archToken"/> 为跨架构覆盖场景显式指定架构词。
     /// </summary>
     public static string FileName(
@@ -128,7 +129,9 @@ public static class ArtifactNaming
             PackageFormat.TarGz => $"{productName}-{version}-{arch}{musl}.tar.gz",
             PackageFormat.Deb => $"{productName}_{version}-{release}_{arch}.deb",
             PackageFormat.Rpm => $"{productName}-{version}-{release}.{arch}.rpm",
-            PackageFormat.AlpineApk => $"{productName}-{version}-{release}.{arch}.apk",
+            // apk 的 release 词带 "r" 前缀（pkgver={upstream}-r{N}）——调用方传裸数字，
+            // 前缀由本函数补，不再靠各调用点自己拼。
+            PackageFormat.AlpineApk => $"{productName}-{version}-r{release ?? "0"}.{arch}.apk",
             _ => throw new ArgumentOutOfRangeException(nameof(format))
         };
     }

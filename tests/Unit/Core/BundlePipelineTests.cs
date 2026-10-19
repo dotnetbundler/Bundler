@@ -171,7 +171,7 @@ public sealed class BundlePipelineTests : TempBase
         var pipeline = new BundlePipeline([backend]);
         var config = ConfigFor("linux-x86_64", PackageFormat.Deb, output.FullName);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => pipeline.BuildAsync(config, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => pipeline.BuildAsync(config, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -248,6 +248,121 @@ public sealed class BundlePipelineTests : TempBase
         // 本轮脚手架的 <target>/<fmt> 空壳层仍被回收。
         Assert.False(Directory.Exists(Path.Combine(scaffoldRoot, "linux-x86_64")));
         Assert.True(File.Exists(Path.Combine(output.FullName, "a.deb")));
+    }
+
+    [Fact]
+    public async Task Build_NullArtifact_ThrowsContractViolation()
+    {
+        var output = Temp("bundler-pipe-out");
+        var backend = new FakeBackend(TargetOperatingSystem.Linux, PackageFormat.Deb,
+            produce: _ => [null!]);
+        var pipeline = new BundlePipeline([backend]);
+        var config = ConfigFor("linux-x86_64", PackageFormat.Deb, output.FullName);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => pipeline.BuildAsync(config, TestContext.Current.CancellationToken));
+        Assert.Contains("produced list contains null", error.Message);
+    }
+
+    [Fact]
+    public async Task Build_ArtifactCollision_NormalizedPaths_Throws()
+    {
+        var output = Temp("bundler-pipe-out");
+        // "./same.deb" 与 "same.deb" 是同一物理文件——碰撞判定须先归一化。
+        var backend = new FakeBackend(TargetOperatingSystem.Linux, PackageFormat.Deb,
+            produce: context =>
+            {
+                var path = Path.Combine(context.Item.OutputDirectory, "same.deb");
+                File.WriteAllText(path, "x");
+                return
+                [
+                    new BundleArtifact(PackageFormat.Deb, context.Item.Target.Target,
+                        Path.Combine(context.Item.OutputDirectory, "same.deb")),
+                    new BundleArtifact(PackageFormat.Deb, context.Item.Target.Target,
+                        Path.Combine(context.Item.OutputDirectory, ".", "same.deb"))
+                ];
+            });
+        var pipeline = new BundlePipeline([backend]);
+        var config = ConfigFor("linux-x86_64", PackageFormat.Deb, output.FullName);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => pipeline.BuildAsync(config, TestContext.Current.CancellationToken));
+        Assert.Contains("collision", error.Message);
+    }
+
+    [Fact]
+    public async Task Build_StaleWorkDirectories_Swept()
+    {
+        var output = Temp("bundler-pipe-out");
+        // 上一轮崩溃留下的工作目录残骸（>24h）——本轮构建应清扫；
+        // 近时戳（并发在跑）的目录不能动。
+        var workRoot = Path.Combine(output.FullName, ".bundler-work", "linux-x86_64", "deb");
+        var stale = Path.Combine(workRoot, Guid.NewGuid().ToString("N"));
+        var live = Path.Combine(workRoot, Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(stale);
+        Directory.CreateDirectory(live);
+        File.WriteAllText(Path.Combine(stale, "residue"), "x");
+        File.WriteAllText(Path.Combine(live, "residue"), "x");
+        Directory.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddHours(-48));
+        var backend = new FakeBackend(TargetOperatingSystem.Linux, PackageFormat.Deb,
+            produce: context =>
+            {
+                var artifact = Path.Combine(context.Item.OutputDirectory, "a.deb");
+                File.WriteAllText(artifact, "pkg");
+                return [new BundleArtifact(PackageFormat.Deb, context.Item.Target.Target, artifact)];
+            });
+        var pipeline = new BundlePipeline([backend]);
+        var config = ConfigFor("linux-x86_64", PackageFormat.Deb, output.FullName);
+
+        await pipeline.BuildAsync(config, TestContext.Current.CancellationToken);
+
+        Assert.False(Directory.Exists(stale));
+        Assert.True(Directory.Exists(live));
+    }
+
+    [Fact]
+    public async Task Build_FileArtifact_Sha256SidecarWritten()
+    {
+        // .sha256 旁车是管线统一发射（各后端不再自写）——sha256sum -c 兼容：
+        // "<64hex>  <basename>\n"，且哈希内容与文件一致。
+        var output = Temp("bundler-pipe-out");
+        var backend = new FakeBackend(TargetOperatingSystem.Linux, PackageFormat.Deb,
+            produce: context =>
+            {
+                var artifact = Path.Combine(context.Item.OutputDirectory, "a.deb");
+                File.WriteAllText(artifact, "pkg-bytes");
+                return [new BundleArtifact(PackageFormat.Deb, context.Item.Target.Target, artifact)];
+            });
+        var pipeline = new BundlePipeline([backend]);
+        var config = ConfigFor("linux-x86_64", PackageFormat.Deb, output.FullName);
+
+        var artifacts = await pipeline.BuildAsync(config, TestContext.Current.CancellationToken);
+
+        var sidecarPath = artifacts[0].Path + ".sha256";
+        Assert.True(File.Exists(sidecarPath));
+        var sidecar = File.ReadAllText(sidecarPath);
+        Assert.Matches(@"^[0-9a-f]{64}  a\.deb\n$", sidecar);
+        Assert.Equal(Hashes.Sha256HexFile(artifacts[0].Path), sidecar.Split(' ')[0]);
+    }
+
+    [Fact]
+    public async Task Build_DirectoryArtifact_NoSha256Sidecar()
+    {
+        // .app 一类目录产物无法 sha256sum——管线跳过目录，不挂旁车。
+        var output = Temp("bundler-pipe-out");
+        var backend = new FakeBackend(TargetOperatingSystem.MacOS, PackageFormat.App,
+            produce: context =>
+            {
+                var artifact = Path.Combine(context.Item.OutputDirectory, "Sample.app");
+                Directory.CreateDirectory(artifact);
+                return [new BundleArtifact(PackageFormat.App, context.Item.Target.Target, artifact)];
+            });
+        var pipeline = new BundlePipeline([backend]);
+        var config = ConfigFor("macos-aarch64", PackageFormat.App, output.FullName);
+
+        var artifacts = await pipeline.BuildAsync(config, TestContext.Current.CancellationToken);
+
+        Assert.False(File.Exists(artifacts[0].Path + ".sha256"));
     }
 
     [Fact]

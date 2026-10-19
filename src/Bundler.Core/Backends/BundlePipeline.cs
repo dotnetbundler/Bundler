@@ -37,7 +37,11 @@ public sealed class BundlePipeline(
     {
         var plan = BundlePlanner.Create(configuration);
         var artifacts = new List<BundleArtifact>();
-        var producedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var producedPaths = new HashSet<string>(PathText.Comparer);
+        // 崩溃进程留下的 <target>/<fmt>/<guid> 残骸无清理方——按 mtime 阈值清扫；
+        // 并发在跑的同根构建不受影响（其工作目录 mtime 都在阈值内）。
+        SweepStaleWorkDirectories(
+            Path.Combine(configuration.OutputDirectory, ".bundler-work"));
 
         foreach (var item in plan.Items)
         {
@@ -75,20 +79,42 @@ public sealed class BundlePipeline(
                 }
                 foreach (var artifact in produced)
                 {
+                    if (artifact is null)
+                    {
+                        throw new InvalidOperationException(
+                            $"The {backend.Format} backend violated its contract: produced list contains null.");
+                    }
                     if (!File.Exists(artifact.Path) && !Directory.Exists(artifact.Path))
                     {
                         throw new InvalidOperationException(
                             $"The {backend.Format} backend returned a missing artifact: {artifact.Path}");
                     }
-                    if (!producedPaths.Add(artifact.Path))
+                    // 后端报告相对/冗余路径时归一再判重——
+                    // "out/app.zip" 与 "out/./app.zip" 是同一碰撞。
+                    if (!producedPaths.Add(Path.GetFullPath(artifact.Path)))
                     {
-                        throw new ArgumentException(
+                        throw new InvalidOperationException(
                             $"Artifact path collision: '{artifact.Path}' was already produced in this run" +
                             " (a custom name override such as archiveName can bypass the default per-target naming).");
                     }
 
-                    artifacts.Add(artifact);
-                    _logger.Log(BundleLogLevel.Information, $"Created {artifact.Path}.");
+                    // 文件产物统一挂 sha256sum 格式旁车——发射点收在管线单源，
+                    // 不再依赖各后端自觉；目录产物（.app）不挂。
+                    if (File.Exists(artifact.Path))
+                    {
+                        var hash = Hashes.Sha256HexFile(artifact.Path);
+                        File.WriteAllText(artifact.Path + ".sha256",
+                            hash + "  " + Path.GetFileName(artifact.Path) + "\n",
+                            new System.Text.UTF8Encoding(false));
+                        artifacts.Add(artifact);
+                        _logger.Log(BundleLogLevel.Information,
+                            $"Created {artifact.Path} (sha256 {hash}).");
+                    }
+                    else
+                    {
+                        artifacts.Add(artifact);
+                        _logger.Log(BundleLogLevel.Information, $"Created {artifact.Path}.");
+                    }
                 }
             }
             finally
@@ -111,7 +137,7 @@ public sealed class BundlePipeline(
                 var scaffoldRoot = Path.Combine(configuration.OutputDirectory, ".bundler-work");
                 var parent = Path.GetDirectoryName(workDirectory);
                 while (parent is not null && parent != scaffoldRoot &&
-                       parent.StartsWith(scaffoldRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                       parent.StartsWith(scaffoldRoot + Path.DirectorySeparatorChar, PathText.Comparison))
                 {
                     try
                     {
@@ -135,5 +161,43 @@ public sealed class BundlePipeline(
         }
 
         return artifacts;
+    }
+
+    // 每次运行的工作目录是 <target>/<format>/<guid>——崩溃进程留下的残骸没有清理方，
+    // 只按 mtime 阈值清扫（与 UpdateBootstrapper 提取根清扫同口径）；阈值内的
+    // 在跑构建不受影响。清扫范围严格限定在 workRoot/<target>/<format>/<workdir> 三层。
+    private static void SweepStaleWorkDirectories(string workRoot)
+    {
+        try
+        {
+            if (!Directory.Exists(workRoot))
+            {
+                return;
+            }
+            var cutoff = DateTime.UtcNow.AddHours(-24);
+            foreach (var targetDirectory in Directory.EnumerateDirectories(workRoot))
+            {
+                foreach (var formatDirectory in Directory.EnumerateDirectories(targetDirectory))
+                {
+                    foreach (var workDirectory in Directory.EnumerateDirectories(formatDirectory))
+                    {
+                        try
+                        {
+                            if (Directory.GetLastWriteTimeUtc(workDirectory) < cutoff)
+                            {
+                                Directory.Delete(workDirectory, recursive: true);
+                            }
+                        }
+                        catch (Exception)
+                        {
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // 清扫是纯辅助动作——任何失败都不该挡住构建主流程。
+        }
     }
 }

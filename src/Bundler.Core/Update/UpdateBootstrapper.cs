@@ -16,22 +16,19 @@ public static class UpdateBootstrapper
             : "bundler-updater";
 
     /// <summary>
-    /// 把引导件复制进 <paramref name="targetDirectory"/>；返回目标文件名，未找到任何件时返回 null。
-    /// 选取顺序：<c>&lt;dir&gt;/&lt;target&gt;/bundler-updater[.exe]</c> →（linux 非 musl 目标）
-    /// <c>&lt;dir&gt;/linux-musl-&lt;arch&gt;/bundler-updater</c> →（非 win）<c>&lt;dir&gt;/posix/bundler-updater.sh</c>。
+    /// 把引导件复制进 <paramref name="targetDirectory"/>；返回目标文件名。
+    /// 更新面已声明而引导件无件可选 = 死更新链——全后端统一走
+    /// <see cref="ResolveOrThrow"/> 诊断抛出，不容忍静默缺件。
     /// </summary>
-    public static string? Inject(string targetDirectory, UpdateBundleConfiguration update,
+    public static string InjectOrThrow(string targetDirectory, UpdateBundleConfiguration update,
         string target)
     {
         var fileName = FileNameFor(target);
-        if (TryResolve(update, target, out var source))
-        {
-            var destination = Path.Combine(targetDirectory, fileName);
-            File.Copy(source, destination, overwrite: true);
-            Chmod755(destination);
-            return fileName;
-        }
-        return null;
+        var source = ResolveOrThrow(update, target);
+        var destination = Path.Combine(targetDirectory, fileName);
+        File.Copy(source, destination, overwrite: true);
+        Chmod755(destination);
+        return fileName;
     }
 
     /// <summary>是否配置了显式引导件目录（探测谓词的唯一出处，诊断文案同用）。</summary>
@@ -46,6 +43,17 @@ public static class UpdateBootstrapper
     public static bool TryResolve(UpdateBundleConfiguration update, string target,
         out string source)
     {
+        // target 直拼工具目录段：分隔符/上跳/根路径会把解析带出自有目录，
+        // 把任意宿主文件当引导件拷进载荷——canonical target 词只含字母数字与 '-'，
+        // 含 '.'/'/'/'\' 或根路径即拒。
+        if (string.IsNullOrEmpty(target) ||
+            target.IndexOfAny(new[] { '/', '\\', '.' }) >= 0 ||
+            Path.IsPathRooted(target))
+        {
+            throw new ArgumentException(
+                $"The target '{target}' must be a canonical target token such as 'linux-x86_64'.",
+                nameof(target));
+        }
         var fileName = FileNameFor(target);
         var isWindows = target.StartsWith("win", StringComparison.OrdinalIgnoreCase);
         // Windows 宿主绝不能拿到 POSIX 脚本（.sh 改名 .exe 无法执行）——只认 per-target 二进制。
@@ -155,13 +163,42 @@ public static class UpdateBootstrapper
     private static string ExtractionRoot()
     {
         var root = Path.Combine(Path.GetTempPath(), $"bundler-updater-{UserScope()}");
-        Directory.CreateDirectory(root);
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        // 共享 /tmp 下同名路径可被其他本地用户预置（squatting，含 symlink 指向他处）：
+        // 目录必须 chmod 0700 成功且属主=当前 uid 才可信——不满足即落到不可预测
+        // GUID 根（攻击者无法预置不存在的名字），同样先建后验。
+        if (!TryPreparePrivateRoot(root))
         {
-            chmod(root, 0x1C0 /* 0700 */);
+            root = Path.Combine(
+                Path.GetTempPath(), $"bundler-updater-{UserScope()}-{Guid.NewGuid():N}");
+            if (!TryPreparePrivateRoot(root))
+            {
+                throw new InvalidOperationException(
+                    $"Could not create a private updater extraction directory under '{Path.GetTempPath()}'.");
+            }
         }
         SweepStaleExtractions(root);
         return root;
+    }
+
+    private static bool TryPreparePrivateRoot(string root)
+    {
+        try
+        {
+            Directory.CreateDirectory(root);
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return true;
+            }
+            // stat 跟随 symlink：链接指向他属目录时属主检查照常在目标上失败；
+            // chmod 非属主 EPERM 同样落到不信任分支。
+            return chmod(root, 0x1C0 /* 0700 */) == 0 &&
+                UnixFileTypes.TryGetOwnerUid(root, out var owner) &&
+                owner == getuid();
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     // `.<guid>` 提取目录按进程唯一命名——打包进程死在半路时无清理方，残件

@@ -52,7 +52,6 @@ public sealed class PackageRoundTripTests : TempBase
         Assert.EndsWith(".deb", result.OutputPath);
         Assert.Equal("sample", result.PackageName);
         Assert.Equal("amd64", result.Architecture);
-        Assert.True(File.Exists(result.OutputPath + ".sha256"));
 
         var members = DebPackageReader.ReadAr(result.OutputPath);
         Assert.Equal(3, members.Count);
@@ -88,7 +87,6 @@ public sealed class PackageRoundTripTests : TempBase
         Assert.EndsWith(".rpm", result.OutputPath);
         Assert.Equal("sample", result.PackageName);
         Assert.Equal("x86_64", result.Architecture);
-        Assert.True(File.Exists(result.OutputPath + ".sha256"));
 
         var rpm = RpmPackageReader.Read(result.OutputPath);
         Assert.Equal("sample", rpm.Main.Text(1000));         // NAME

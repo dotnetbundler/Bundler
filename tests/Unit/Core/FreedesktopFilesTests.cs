@@ -224,6 +224,30 @@ public sealed class FreedesktopFilesTests : TempBase
         }
     }
 
+    [Theory]
+    [InlineData("/usr/bin/app\nExec=/bin/evil")]
+    [InlineData("/usr/bin/app\r\nX=1")]
+    [InlineData("/usr/bin/app\0junk")]
+    public void DesktopFile_ExecArgument_RejectsNewlines(string binLink)
+    {
+        // 换行/NUL 是 .desktop 行格式破坏者——Exec 参数必须显式拒绝，不静默转义。
+        Assert.Throws<ArgumentException>(() => Desktop(Bundle(), binLink: binLink));
+    }
+
+    [Fact]
+    public void DesktopFile_MimeType_RejectsNewlines()
+    {
+        var bundle = Bundle(associations:
+        [
+            new BundleFileAssociationConfiguration
+            {
+                Extensions = ["x"], MimeType = "application/x-a\nName=evil"
+            }
+        ]);
+
+        Assert.Throws<ArgumentException>(() => Desktop(bundle));
+    }
+
     /// <summary>构造合法 PNG 头 + IHDR 尺寸段。</summary>
     internal static byte[] TestPng(int width, int height)
     {

@@ -95,7 +95,8 @@ public sealed class ArtifactNamingTests
         {
             PackageFormat.Deb => "1",
             PackageFormat.Rpm => "1",
-            PackageFormat.AlpineApk => "r0",
+            // apk release 传裸数字——"r" 前缀由 ArtifactNaming 统一补。
+            PackageFormat.AlpineApk => "0",
             _ => null
         };
         var languageSuffix = format == PackageFormat.Msi ? "" : null;

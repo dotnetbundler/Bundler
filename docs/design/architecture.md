@@ -56,8 +56,9 @@ BundleArtifact[]（产物清单）
 - 后端注册表按 `(OperatingSystem, Format)` 分组、再按 `RequiredLibC` 区分；解析顺序：精确 `RequiredLibC` 匹配 → `null`（任意 libc）兜底；同键同 libc 重复注册直接 `ArgumentException`。
 - 构建前先全量解析：任一计划项无后端 → `NotSupportedException`（不产生半成品）。
 - 逐计划项建**隔离工作目录** `out/.bundler-work/<target>/<format>/<guid>`，经 `BundleBuildContext`（配置+计划项+工作目录+日志）交给后端。
-- 后端返回产物列表（一个计划项可扇出多件，如 MSI 每语言一件）；管线逐件核验：返回 `null` 违反契约、产物路径必须实际存在、全局路径去重（撞名提示 `archiveName` 类覆盖可绕过默认命名）。
+- 后端返回产物列表（一个计划项可扇出多件，如 MSI 每语言一件）；管线逐件核验：返回 `null` 违反契约、产物路径必须实际存在、全局路径归一化后去重（`InvalidOperationException`，撞名提示 `archiveName` 类覆盖可绕过默认命名）。
 - `finally` 清理工作目录：删失败只告警不遮蔽构建异常；再逐层回收空脚手架目录（`<fmt>`→`<target>`→`.bundler-work`），非空即停——只清壳层，绝不动输出本体。
+- 崩溃进程留下的 `<target>/<fmt>/<guid>` 残骸无 finally 可执行——每轮构建启动时按 mtime>24h 阈值清扫旧工作目录；阈值内（并发在跑）的目录不动，清扫范围严格限定在 `.bundler-work` 三层壳内。
 
 ## 7. 后端（`IBundleBackend`）
 
@@ -85,6 +86,7 @@ BundleArtifact[]（产物清单）
 ## 10. UPDATE 挂点
 
 - UPDATE 不是格式，分两层挂：**载荷内身份**由后端在 `BuildAsync` 期写入——`UpdateIdentitySidecar.WriteIfEnabled` 把 `bundler-update.json` 安装身份落进产物树（archive/`.app`/AppImage 等可更新格式）；**清单与旁车**是入口层收尾步——各格式产物齐后，入口（MSBuild Task、CLI）调 `UpdateManifestEmitter.EmitAsync(configuration, artifacts)` 发射通道清单 `bundler-update-feed.{channel}.json` 与 `.sig`/`feed.sig`/`.blockmap` 旁车（`.app` 另产 `.zip` 运输件）。
+- 更新注入件是**保留名**：用户载荷自带 `bundler-update.json`/`bundler-updater[.exe]` 时全后端统一显式拒绝（不静默覆盖也不静默剔除）；引导件缺件时全后端统一 `ResolveOrThrow` 诊断抛出（死更新链不产出）——nsis/msi 属 installer-replay 例外：写旁车不注引导件。
 - `Bundler.Core/Update/` 提供清单模型、签名/验签、引导件暂存与身份侧车的共享件；应用内 `DotNet.Bundler.Updater` 是另一侧（查/下/验/换）。
 - 语义契约见 `docs/design/update.md`。
 

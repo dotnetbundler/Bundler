@@ -18,14 +18,22 @@ public static class UpdatePayloadStaging
         var workRoot = Path.GetFullPath(context.WorkDirectory);
         var input = Path.GetFullPath(item.InputDirectory);
         // 已在工作目录内（例如 signed-payload staging）→ 直接写旁车。
-        if (input.StartsWith(workRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        if (input.StartsWith(workRoot + Path.DirectorySeparatorChar, PathText.Comparison))
         {
             InjectPayloadFiles(input, update, item);
             return item;
         }
 
         var staged = Path.Combine(workRoot, "update-payload");
-        CopyDirectory(input, staged);
+        // 输入树包住 staged（如调用方把 OutputDirectory/work 指进 payload）时自复制会
+        // 把 staged 再拷进自己——递归直到路径爆掉。前置拒掉，错误要直说。
+        if ((staged + Path.DirectorySeparatorChar).StartsWith(
+                input + Path.DirectorySeparatorChar, PathText.Comparison))
+        {
+            throw new InvalidOperationException(
+                $"The update staging directory '{staged}' must not be inside the payload input directory '{input}'.");
+        }
+        CopyDirectory(input, staged, context.Logger);
         InjectPayloadFiles(staged, update, item);
         context.Logger.Log(BundleLogLevel.Information,
             $"Staged update payload with bundler-update.json sidecar → {staged}");
@@ -40,31 +48,44 @@ public static class UpdatePayloadStaging
         string payloadRoot, UpdateBundleConfiguration update, BundlePlanItem item)
     {
         var target = item.Target.Target;
+        // 更新件是保留名：用户载荷自带同名文件时不静默覆盖——与 deb/rpm/apk/macOS 的
+        // claimed 簿同一语义：撞名显式拒绝。nsis/msi 不注引导件，但旁车恒写。
+        RejectReservedName(payloadRoot, UpdateIdentitySidecar.FileName);
+        if (item.Format is not (PackageFormat.Nsis or PackageFormat.Msi))
+        {
+            RejectReservedName(payloadRoot, UpdateBootstrapper.FileNameFor(target));
+        }
         UpdateIdentitySidecar.WriteIfEnabled(payloadRoot, update, item.Format, target);
         if (item.Format is PackageFormat.Nsis or PackageFormat.Msi)
         {
             return;
         }
-        if (UpdateBootstrapper.Inject(payloadRoot, update, target) is null)
+        UpdateBootstrapper.InjectOrThrow(payloadRoot, update, target);
+    }
+
+    private static void RejectReservedName(string payloadRoot, string fileName)
+    {
+        // File.Exists 漏掉同名目录——目录撞旁车会让写入炸成 IO 异常，一样是撞名要直说。
+        var path = Path.Combine(payloadRoot, fileName);
+        if (File.Exists(path) || Directory.Exists(path))
         {
-            // Inject 返回 null 即解析链全空——ResolveOrThrow 复跑同一条链产出带探测位的诊断文案。
-            UpdateBootstrapper.ResolveOrThrow(update, target);
+            throw new InvalidOperationException(
+                $"The payload already contains the reserved update file name '{fileName}' — " +
+                "remove it from the input directory; update payload files are injected by the build.");
         }
     }
 
     // 平铺复制：不保符号链接（解引用成实体内容）、不保执行位/xattr——
     // staging 只是"让旁车能写进载荷"的过渡目录，下游打包器按各自管线重建属性；
     // 需要保真链接/权限的格式（.app 等）必须走后端自有 staging 不经过这里。
-    private static void CopyDirectory(string source, string destination)
+    // 复用 FileTree：目录链 Traverse+深度封顶防环，非常规文件（FIFO/socket）告警跳过。
+    private static void CopyDirectory(string source, string destination, IBundleLogger logger)
     {
-        Directory.CreateDirectory(destination);
-        foreach (var file in Directory.GetFiles(source))
-        {
-            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), overwrite: true);
-        }
-        foreach (var directory in Directory.GetDirectories(source))
-        {
-            CopyDirectory(directory, Path.Combine(destination, Path.GetFileName(directory)));
-        }
+        FileTree.CopyTree(
+            source, destination, logger,
+            maxDepth: 64,
+            loopErrorMessage: "Update payload staging exceeded the directory depth limit (symlink loop?)",
+            links: TreeLinkPolicy.Traverse,
+            overwrite: true);
     }
 }

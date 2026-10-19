@@ -127,7 +127,7 @@ internal static class PayloadSource
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
             Path.DirectorySeparatorChar;
         var full = Path.GetFullPath(path);
-        if (!full.StartsWith(prefix, StringComparison.Ordinal))
+        if (!full.StartsWith(prefix, PathText.Comparison))
         {
             throw new InvalidOperationException(
                 $"A payload path escapes its base directory: '{path}'.");
