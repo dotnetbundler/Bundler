@@ -950,7 +950,7 @@ internal static class SyspkgReplay
                 }
                 CleanupEnvFile(envFile, envDir);
             }
-            if (process.WaitForExit(LaunchObserveMilliseconds))
+            if (ProcessWait.WaitForExit(process, LaunchObserveMilliseconds))
             {
                 // 窗内已退出（任意 rc，含授权取消/拒绝/鉴权失败）=该腿终局：
                 // 已终结进程不保证派发 Exited（POSIX 已 reap 路径实测不派发）——
@@ -1021,7 +1021,7 @@ internal static class SyspkgReplay
             using var process = Process.Start(startInfo)!;
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
-            if (!process.WaitForExit(60_000))
+            if (!ProcessWait.WaitForExit(process, 60_000))
             {
                 try
                 {

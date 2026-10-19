@@ -909,7 +909,7 @@ internal static class PkgApplyPlan
             // 进程拖成永驻——默认 30min，BUNDLER_UPDATER_PKG_TIMEOUT 秒数覆盖
             //（sh 侧 timeout 包裹同名同缝）；超时杀进程返 124（timeout(1) 同码，
             // 对调用方是可分类的"安装腿超时"）。
-            if (!process.WaitForExit(ExecTimeoutMilliseconds()))
+            if (!ProcessWait.WaitForExit(process, ExecTimeoutMilliseconds()))
             {
                 try
                 {
@@ -926,7 +926,7 @@ internal static class PkgApplyPlan
                 }
                 try
                 {
-                    process.WaitForExit(30_000);
+                    ProcessWait.WaitForExit(process, 30_000);
                 }
                 catch (Exception)
                 {
@@ -952,8 +952,10 @@ internal static class PkgApplyPlan
 
     // 预检用同步执行：stdin 立即钉死（防降权器读调用方终端/管道），
     // out/err 后台抽干到 Null——用法文本、PAM/auth 噪声不透调用方面。
-    // 不设超时：预检 argv 恒为"工具+最小参数+sh -c :"零交互形（stdin 已钉 EOF
-    // 无读面、命令即刻返回），挂死无现实入口；超时+强制终结路径的复杂度不抵收益。
+    // 预检 argv 恒为"工具+最小参数+sh -c :"零交互形（stdin 已钉 EOF 无读面、命令
+    // 即刻返回），工具自身挂死无现实入口——但等待面仍要有界：无参 WaitForExit 走
+    // 运行时 wait-state 事件链，macOS CI 实证过子进程 zombie 而事件永不落地；
+    // 轮询探活与丢唤醒解耦，界给足 5min（远超预检真实耗时）。
     private static int ExecSilent(ExecSpec spec)
     {
         if (ExecProbe is { } probe)
@@ -970,7 +972,12 @@ internal static class PkgApplyPlan
             process.StandardInput.Dispose();
             _ = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
             _ = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
-            process.WaitForExit();
+            if (!ProcessWait.WaitForExit(process, 5 * 60_000))
+            {
+                try { process.Kill(entireProcessTree: true); } catch (Exception) { }
+                ProcessWait.WaitForExit(process, 10_000);
+                return 127;
+            }
             return process.ExitCode;
         }
         catch (Exception)

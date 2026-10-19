@@ -218,10 +218,12 @@ internal static class ToolRunner
             try { if (!process.HasExited) KillProcessTree(process); } catch { }
         }))
         {
-            if (!process.WaitForExit(WaitMilliseconds(bound)))
+            // WaitForExit(ms) 走运行时 wait-state 事件链——macOS CI 实证过子进程成
+            // zombie 而它永不返回；改 ProcessWait 轮询（每趟直探内核退出态）。
+            if (!ProcessWait.WaitForExit(process, WaitMilliseconds(bound)))
             {
                 KillProcessTree(process);
-                process.WaitForExit(5000);
+                ProcessWait.WaitForExit(process, 5000);
                 var (outText, errText) = await DrainPipesAsync(standardOutput, standardError)
                     .ConfigureAwait(false);
                 return new Result(-1, outText,
@@ -270,10 +272,10 @@ internal static class ToolRunner
         // 两路都异步排空（同步顺序读在管道缓冲满时会死锁）；等待再有界——子进程挂死不再是无底洞。
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(WaitMilliseconds(ProcessTimeout)))
+        if (!ProcessWait.WaitForExit(process, WaitMilliseconds(ProcessTimeout)))
         {
             KillProcessTree(process);
-            process.WaitForExit(5000);
+            ProcessWait.WaitForExit(process, 5000);
             var drained = DrainPipesAsync(output, error);
             drained.Wait();
             throw new InvalidOperationException(

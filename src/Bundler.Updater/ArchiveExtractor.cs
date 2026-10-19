@@ -362,10 +362,10 @@ internal static class ArchiveExtractor
             }
             // stderr 并行消费：工具刷大量诊断时写满管道会卡死子进程直到超时。
             var stderr = process.StandardError.ReadToEndAsync();
-            if (!process.WaitForExit(60_000))
+            if (!ProcessWait.WaitForExit(process, 60_000))
             {
                 try { process.Kill(); } catch (Exception) { }
-                try { process.WaitForExit(10_000); } catch (Exception) { }
+                try { ProcessWait.WaitForExit(process, 10_000); } catch (Exception) { }
                 return -1;
             }
             return process.ExitCode;

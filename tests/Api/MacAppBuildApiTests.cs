@@ -697,7 +697,7 @@ public sealed class MacAppBuildApiTests : TempBase
                 RedirectStandardError = true,
                 UseShellExecute = false
             })!;
-            await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+            Assert.True(TestProcessExit.WaitForExit(process, 60_000), "plutil -lint did not exit in 60s");
             Assert.Equal(0, process.ExitCode);
         }
         finally

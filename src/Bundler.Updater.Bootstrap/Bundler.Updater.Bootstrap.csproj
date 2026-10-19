@@ -20,6 +20,7 @@
     <!-- 普通文件判定件与 argv 拼写件与打包侧/客户端同源链接编译——单源事实，零程序集蔓延。 -->
     <Compile Include="..\Bundler.Core\UnixFileTypes.cs" />
     <Compile Include="..\Bundler.Core\Update\UpdateArgv.cs" />
+    <Compile Include="..\Bundler.Core\ProcessWait.cs" />
   </ItemGroup>
 
 </Project>

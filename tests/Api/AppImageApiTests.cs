@@ -245,7 +245,7 @@ public sealed class AppImageApiTests : TempBase
         using var process = System.Diagnostics.Process.Start(info)!;
         var stdOut = process.StandardOutput.ReadToEndAsync();
         var stdErr = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(120_000))
+        if (!TestProcessExit.WaitForExit(process, 120_000))
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
             Assert.Fail(tool + " did not exit in 120s");

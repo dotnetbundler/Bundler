@@ -789,7 +789,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             WaitFor.Until(() => File.Exists(InterruptedUninstallMarker),
                 "Interrupted-uninstall fixture did not reach its post-uninstall hook.");
             ProcessRunner.TryKillTree(interrupted);
-            interrupted.WaitForExit();
+            TestProcessExit.WaitForExit(interrupted, 60_000);
             Assert.NotEqual(0, interrupted.ExitCode);
             Assert.True(Directory.Exists(UninstallTransactionDir),
                 "Interrupted uninstall did not preserve its active forward journal.");
@@ -1169,7 +1169,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             Assert.False(external.HasExited,
                 "Reinstall closed a same-name process outside the installation directory.");
             ProcessRunner.TryKillTree(external);
-            external.WaitForExit();
+            TestProcessExit.WaitForExit(external, 60_000);
             UninstallDefault();
         }
         finally
@@ -1519,7 +1519,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             WaitFor.Until(() => File.Exists(InterruptedHookMarker),
                 "Interrupted-install fixture did not reach its post-install hook.", 120);
             ProcessRunner.TryKillTree(interrupted);
-            interrupted.WaitForExit();
+            TestProcessExit.WaitForExit(interrupted, 60_000);
             Assert.NotEqual(0, interrupted.ExitCode);
             Assert.True(Directory.Exists(TransactionDir),
                 "Interrupted install did not preserve its active journal.");
@@ -1545,7 +1545,7 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             WaitFor.Until(() => File.Exists(InterruptedHookMarker),
                 "Second interrupted-install fixture did not reach its post-install hook.", 120);
             ProcessRunner.TryKillTree(interrupted2);
-            interrupted2.WaitForExit();
+            TestProcessExit.WaitForExit(interrupted2, 60_000);
             Assert.True(Directory.Exists(TransactionDir));
 
             var payloadSnapshot = Path.Combine(TransactionDir, "payload", "docs", "license.txt");

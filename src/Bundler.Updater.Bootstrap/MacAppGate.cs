@@ -170,7 +170,7 @@ internal static class MacAppGate
             // 并行消费：stderr 写满管道会让子进程卡住，等满 30s 造成假超时。
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
-            if (!process.WaitForExit(30_000))
+            if (!ProcessWait.WaitForExit(process, 30_000))
             {
                 try
                 {
@@ -179,7 +179,9 @@ internal static class MacAppGate
                 catch (InvalidOperationException)
                 {
                 }
-                process.WaitForExit();
+                // 杀后回收也有界：无参 WaitForExit 与 WaitForExit(ms) 同走 wait-state
+                // 事件链——macOS CI 实证过子进程 zombie 而事件永不落地；轮询直探内核。
+                ProcessWait.WaitForExit(process, 30_000);
                 return (-1, "", "timeout");
             }
             Task.WaitAll(stdout, stderr);

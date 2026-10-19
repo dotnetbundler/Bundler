@@ -100,7 +100,7 @@ internal static class ProcessRunner
             process.StandardInput.Write(options.StandardInput);
         }
         process.StandardInput.Close();
-        if (!process.WaitForExit((int)options.Timeout.TotalMilliseconds))
+        if (!TestProcessExit.WaitForExit(process, (int)options.Timeout.TotalMilliseconds))
         {
             TryKillTree(process);
             throw new TimeoutException(

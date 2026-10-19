@@ -483,7 +483,10 @@ internal sealed class UpdateApplier
             using var process = Process.Start(new ProcessStartInfo(
                 "/bin/chmod", UpdateArgv.Join(new[] { "+x", path }))
             { UseShellExecute = false });
-            process?.WaitForExit(10_000);
+            if (process is not null)
+            {
+                ProcessWait.WaitForExit(process, 10_000);
+            }
         }
         catch (Exception)
         {

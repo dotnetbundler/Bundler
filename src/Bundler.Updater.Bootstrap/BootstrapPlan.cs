@@ -1247,15 +1247,24 @@ internal static class BootstrapPlan
                 // 必须先排空 stderr——cp/ditto 大量报错写满管道会反压阻塞子进程，
                 // WaitForExit 将永久卡死。ReadToEnd 排水直到子进程退出再取码。
                 var stderr = process!.StandardError.ReadToEnd();
-                process.WaitForExit();
-                if (process.ExitCode == 0)
+                if (!ProcessWait.WaitForExit(process, 60_000))
+                {
+                    try { process.Kill(); } catch (Exception) { }
+                    ProcessWait.WaitForExit(process, 10_000);
+                    DeleteNodeIfPresent(destination);
+                    log("bundler-updater: WARN host copy wait wedged — falling back to managed copy");
+                }
+                else if (process.ExitCode == 0)
                 {
                     return;
                 }
-                DeleteNodeIfPresent(destination);
-                var detail = stderr.Trim();
-                if (detail.Length > 240) { detail = "…" + detail[^240..]; }
-                log($"bundler-updater: WARN host copy failed (exit {process.ExitCode}){(detail.Length > 0 ? $" — {detail}" : "")} — falling back to managed copy");
+                else
+                {
+                    DeleteNodeIfPresent(destination);
+                    var detail = stderr.Trim();
+                    if (detail.Length > 240) { detail = "…" + detail[^240..]; }
+                    log($"bundler-updater: WARN host copy failed (exit {process.ExitCode}){(detail.Length > 0 ? $" — {detail}" : "")} — falling back to managed copy");
+                }
             }
             catch (Exception exception)
             {

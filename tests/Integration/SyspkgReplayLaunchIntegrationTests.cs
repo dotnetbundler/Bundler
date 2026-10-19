@@ -199,7 +199,7 @@ public sealed class SyspkgReplayLaunchIntegrationTests : TempBase
 
         Assert.Single(spawned);
         Assert.Equal("/stub/pkexec", spawned[0].FileName);
-        Assert.True(process.WaitForExit(30_000), "道具腿应有界退出");
+        Assert.True(TestProcessExit.WaitForExit(process, 30_000), "道具腿应有界退出");
         Assert.Equal(rc, process.ExitCode);
         // 窗内速退走内联清理——session.env 与 pkg-* 目录不得残留。
         AssertSessionEnvGone("窗内退出腿的 env 件删余必须已执行");
@@ -238,7 +238,7 @@ public sealed class SyspkgReplayLaunchIntegrationTests : TempBase
         Assert.Single(spawned);
         Assert.False(process.HasExited, "gate 未释放时腿应仍存活");
         File.WriteAllText(gate, "go");
-        Assert.True(process.WaitForExit(45_000), "gate 释放后道具应有界退出");
+        Assert.True(TestProcessExit.WaitForExit(process, 45_000), "gate 释放后道具应有界退出");
         Assert.Equal(rc, process.ExitCode);
         Assert.Single(spawned);   // 窗外退出仍不补拉第二腿
         AssertSessionEnvGone("窗外退出腿的 Exited 钩删余必须已执行");
@@ -275,7 +275,7 @@ public sealed class SyspkgReplayLaunchIntegrationTests : TempBase
         Assert.Equal("/stub/pkexec", spawned[0].FileName);
         Assert.Equal("/stub/sudo", spawned[1].FileName);
         Assert.StartsWith("\"--\"", spawned[1].Arguments);   // 裸 sudo 腿 "--" 前缀保留
-        Assert.True(process.WaitForExit(30_000));
+        Assert.True(TestProcessExit.WaitForExit(process, 30_000));
         Assert.Equal(0, process.ExitCode);
         AssertSessionEnvGone("第二腿交付后 env 件删余必须已执行");
         Assert.Equal("myapp_2.0-1_amd64.deb", File.ReadAllText(AppliedMarker).Trim());

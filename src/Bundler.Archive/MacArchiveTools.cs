@@ -232,10 +232,10 @@ internal static class MacArchiveTools
         {
             return -1;
         }
-        if (!process.WaitForExit(timeoutMilliseconds))
+        if (!ProcessWait.WaitForExit(process, timeoutMilliseconds))
         {
             try { process.Kill(); } catch (Exception) { }
-            try { process.WaitForExit(10_000); } catch (Exception) { }
+            try { ProcessWait.WaitForExit(process, 10_000); } catch (Exception) { }
             return -1;
         }
         return process.ExitCode;

@@ -63,7 +63,7 @@ public static class UpdaterBootstrapParityTests
         // stdout/stderr 异步消费：任一管道写满未消费会把子进程卡在写端。
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(60_000))
+        if (!TestProcessExit.WaitForExit(process, 60_000))
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
             Assert.Fail("bundler-updater.sh did not exit within 60s");
@@ -635,7 +635,7 @@ public static class UpdaterBootstrapParityTests
             using var process = Process.Start(startInfo)!;
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
-            if (!process.WaitForExit(60_000))
+            if (!TestProcessExit.WaitForExit(process, 60_000))
             {
                 try { process.Kill(); } catch (InvalidOperationException) { }
                 Assert.Fail("updater bootstrapper did not exit within 60s");
@@ -1066,7 +1066,7 @@ public static class UpdaterBootstrapParityTests
         using var process = Process.Start(startInfo)!;
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(60_000))
+        if (!TestProcessExit.WaitForExit(process, 60_000))
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
             Assert.Fail("bundler-updater.sh did not exit within 60s");
@@ -1391,7 +1391,7 @@ public static class UpdaterBootstrapParityTests
             RedirectStandardOutput = true,
         })!;
         var uid = id.StandardOutput.ReadToEnd().Trim();
-        id.WaitForExit();
+        TestProcessExit.WaitForExit(id, 60_000);
         return uid;
     }
 
@@ -1521,7 +1521,7 @@ public static class UpdaterBootstrapParityTests
         using var process = Process.Start(startInfo)!;
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(60_000))
+        if (!TestProcessExit.WaitForExit(process, 60_000))
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
             Assert.Fail("bundler-updater.sh pkg-apply did not exit within 60s");
@@ -2070,7 +2070,7 @@ public static class UpdaterBootstrapParityTests
                 using (var mkfifo = Process.Start(new ProcessStartInfo("mkfifo", fifo)
                        { UseShellExecute = false })!)
                 {
-                    mkfifo.WaitForExit();
+                    TestProcessExit.WaitForExit(mkfifo, 60_000);
                     Assert.Equal(0, mkfifo.ExitCode);
                 }
                 if (!OperatingSystem.IsWindows())

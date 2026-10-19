@@ -249,7 +249,10 @@ internal static class UstarReader
                 new System.Diagnostics.ProcessStartInfo("/bin/chmod",
                     Convert.ToString(mode, 8) + " \"" + path + "\"")
                 { UseShellExecute = false });
-            process?.WaitForExit(10_000);
+            if (process is not null)
+            {
+                ProcessWait.WaitForExit(process, 10_000);
+            }
         }
         catch (Exception)
         {
@@ -380,7 +383,7 @@ internal static class UstarReader
             {
                 return false;
             }
-            if (!process.WaitForExit(10_000))
+            if (!ProcessWait.WaitForExit(process, 10_000))
             {
                 try { process.Kill(); } catch (Exception) { }
                 return false;
