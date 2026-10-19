@@ -16,6 +16,8 @@ internal static class ProcessRunner
         public TimeSpan Timeout { get; set; } = TimeSpan.FromMinutes(10);
         public string? StandardInput { get; set; }
         public Dictionary<string, string?>? Environment;
+        // 进程 Start 成功后的 pid 观测钩子（诊断用）：回调异常不外溢破坏被测流程。
+        public Action<int>? ProcessStarted;
     }
 
     // ArgumentList 形式：参数逐个传递，由运行时负责转义。
@@ -89,6 +91,8 @@ internal static class ProcessRunner
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdout.AppendLine(e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
         process.Start();
+        try { options.ProcessStarted?.Invoke(process.Id); }
+        catch { /* 诊断回调故障不得改变被测进程流程 */ }
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
         if (options.StandardInput is not null)
