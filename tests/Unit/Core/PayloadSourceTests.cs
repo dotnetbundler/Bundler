@@ -105,4 +105,142 @@ public sealed class PayloadSourceTests : TempBase
                 }],
                 "/opt/app", NullBundleLogger.Instance).ToList());
     }
+
+    // ---- 链接契约：树内保留 / 树外拒绝 / 悬空拒绝 ----
+
+    private static bool TryCreateLink(string path, string target, bool directory = false)
+    {
+        try
+        {
+            if (directory)
+            {
+                Directory.CreateSymbolicLink(path, target);
+            }
+            else
+            {
+                File.CreateSymbolicLink(path, target);
+            }
+            return true;
+        }
+        catch
+        {
+            // 文件系统/权限不支持建链——显式 Skip 而不是当断言通过。
+            return false;
+        }
+    }
+
+    [Fact]
+    public void CollectInput_InTreeFileLink_Preserved()
+    {
+        var input = Temp("bundler-payload");
+        File.WriteAllText(Path.Combine(input.FullName, "real.so"), "lib");
+        var link = Path.Combine(input.FullName, "link.so");
+        if (!TryCreateLink(link, "real.so"))
+        {
+            Assert.Skip("The host cannot create symlinks; link leg unverifiable.");
+        }
+
+        var items = PayloadSource.CollectInput(input.FullName, "/opt/app", "real.so",
+            NullBundleLogger.Instance).ToArray();
+
+        var item = items.Single(i => i.ArchivePath == "/opt/app/link.so");
+        Assert.Equal(PayloadSourceKind.Symlink, item.Kind);
+        Assert.Equal("real.so", item.LinkTarget); // 目标重写为相对链接目录的形式
+        Assert.Equal(511 /* 0777 */, item.Mode);
+    }
+
+    [Fact]
+    public void CollectInput_LinkOutsideTree_Rejected()
+    {
+        var input = Temp("bundler-payload");
+        var outside = TempPath($"outside-{Guid.NewGuid():N}.txt");
+        File.WriteAllText(outside, "o");
+        var link = Path.Combine(input.FullName, "link.txt");
+        if (!TryCreateLink(link, outside))
+        {
+            Assert.Skip("The host cannot create symlinks; link leg unverifiable.");
+        }
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            PayloadSource.CollectInput(input.FullName, "/opt/app", "x",
+                NullBundleLogger.Instance).ToList());
+        Assert.Contains("outside the payload tree", ex.Message);
+    }
+
+    [Fact]
+    public void CollectInput_DanglingLink_Rejected()
+    {
+        var input = Temp("bundler-payload");
+        var link = Path.Combine(input.FullName, "link.txt");
+        if (!TryCreateLink(link, "missing.txt"))
+        {
+            Assert.Skip("The host cannot create symlinks; link leg unverifiable.");
+        }
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            PayloadSource.CollectInput(input.FullName, "/opt/app", "x",
+                NullBundleLogger.Instance).ToList());
+        Assert.Contains("dangling", ex.Message);
+    }
+
+    [Fact]
+    public void CollectInput_DirLink_PreservedAsLeaf()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows 宿主上目录链接统一拒绝（junction 歧义）");
+        var input = Temp("bundler-payload");
+        var real = Path.Combine(input.FullName, "realdir");
+        Directory.CreateDirectory(real);
+        File.WriteAllText(Path.Combine(real, "f.txt"), "f");
+        var link = Path.Combine(input.FullName, "dirlink");
+        if (!TryCreateLink(link, "realdir", directory: true))
+        {
+            Assert.Skip("The host cannot create symlinks; link leg unverifiable.");
+        }
+
+        var items = PayloadSource.CollectInput(input.FullName, "/opt/app", "x",
+            NullBundleLogger.Instance).ToArray();
+
+        var leaf = items.Single(i => i.ArchivePath == "/opt/app/dirlink");
+        Assert.Equal(PayloadSourceKind.Symlink, leaf.Kind);
+        Assert.Equal("realdir", leaf.LinkTarget);
+        // 目录链接是叶项——不穿透递归、不物化内容。
+        Assert.DoesNotContain(items, i => i.ArchivePath.StartsWith("/opt/app/dirlink/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CollectInput_DirLink_RejectedOnWindows()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(),
+            "junction 拒绝支路只在 Windows 宿主触发");
+        var input = Temp("bundler-payload");
+        var real = Path.Combine(input.FullName, "realdir");
+        Directory.CreateDirectory(real);
+        var link = Path.Combine(input.FullName, "dirlink");
+        if (!TryCreateLink(link, real, directory: true))
+        {
+            Assert.Skip("The host cannot create directory links; leg unverifiable.");
+        }
+
+        Assert.Throws<ArgumentException>(() =>
+            PayloadSource.CollectInput(input.FullName, "/opt/app", "x",
+                NullBundleLogger.Instance).ToList());
+    }
+
+    [Fact]
+    public void CollectResources_LinkSource_Rejected()
+    {
+        var real = TempPath($"res-{Guid.NewGuid():N}.txt");
+        File.WriteAllText(real, "r");
+        var link = TempPath($"res-link-{Guid.NewGuid():N}.txt");
+        if (!TryCreateLink(link, real))
+        {
+            Assert.Skip("The host cannot create symlinks; link leg unverifiable.");
+        }
+
+        Assert.Throws<ArgumentException>(() =>
+            PayloadSource.CollectResources(
+                [new BundleResourceConfiguration { Source = link, Destination = "x.txt" }],
+                "/opt/app", NullBundleLogger.Instance).ToList());
+    }
 }

@@ -22,19 +22,19 @@ internal static class AppImageIdentity
     }
 
     /// <summary>
-    /// appimagetool <c>ARCH</c> value for a target
-    /// (x86_64/aarch64/i686 naming). The <see cref="AppImageBundleConfiguration.Architecture"/>
-    /// override is already in this namespace; <c>amd64</c> is normalized to
-    /// <c>x86_64</c>.
+    /// appimagetool <c>ARCH</c> value for a target. Only x86_64/aarch64 are
+    /// mappable: the bundled runtime set (see <see cref="AppImageToolset"/>) has
+    /// no i686 build, so a linux-i686 target must reject here instead of
+    /// failing mid-build at runtime resolution.
     /// </summary>
     internal static string EnvironmentArchitecture(BundleTarget target) =>
         target.Architecture switch
         {
             CpuArchitecture.X64 => "x86_64",
             CpuArchitecture.Arm64 => "aarch64",
-            CpuArchitecture.X86 => "i686",
             _ => throw new ArgumentException(
-                $"Cannot map target '{target.Target}' to an AppImage architecture (x86_64/aarch64/i686).")
+                $"Cannot map target '{target.Target}' to an AppImage architecture — " +
+                "only x86_64/aarch64 runtimes are bundled.")
         };
 
     /// <summary>Normalize an <see cref="AppImageBundleConfiguration.Architecture"/> override.</summary>

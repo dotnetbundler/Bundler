@@ -301,9 +301,15 @@ public sealed class LinuxIdentityTests
     [Theory]
     [InlineData("linux-x86_64", "x86_64")]
     [InlineData("linux-aarch64", "aarch64")]
-    [InlineData("linux-x86", "i686")]
-    public void AppImageArch_Environment(string target, string expected)
+    [InlineData("linux-x86", null)] // i686 无随包 runtime，拒绝
+    public void AppImageArch_Environment(string target, string? expected)
     {
+        if (expected is null)
+        {
+            Assert.ThrowsAny<ArgumentException>(() =>
+                AppImageIdentity.EnvironmentArchitecture(BundleTarget.Parse(target)));
+            return;
+        }
         Assert.Equal(expected,
             AppImageIdentity.EnvironmentArchitecture(BundleTarget.Parse(target)));
     }

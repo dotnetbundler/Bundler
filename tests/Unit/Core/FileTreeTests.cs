@@ -5,12 +5,6 @@ namespace Bundler.UnitTests.Core;
 
 public sealed class FileTreeTests : TempBase
 {
-    private sealed class RecordingLogger : IBundleLogger
-    {
-        public List<(BundleLogLevel Level, string Message)> Entries { get; } = [];
-        public void Log(BundleLogLevel level, string message) => Entries.Add((level, message));
-    }
-
     private (string Source, string Dest) Workspace()
     {
         var root = Temp("bundler-filetree");
@@ -115,7 +109,7 @@ public sealed class FileTreeTests : TempBase
     }
 
     [Fact]
-    public void CopyTree_DirectorySymlink_WarnSkipSkips()
+    public void CopyTree_NestedDirectorySymlink_RejectThrows()
     {
         var (source, dest) = Workspace();
         Directory.CreateDirectory(source);
@@ -129,11 +123,10 @@ public sealed class FileTreeTests : TempBase
         catch (IOException) { Assert.Skip("symlink creation not permitted"); }
         catch (UnauthorizedAccessException) { Assert.Skip("symlink creation not permitted"); }
 
-        var logger = new RecordingLogger();
-        FileTree.CopyTree(source, dest, logger, links: TreeLinkPolicy.WarnSkip);
-
-        Assert.False(Directory.Exists(Path.Combine(dest, "linked")));
-        Assert.Contains(logger.Entries, e => e.Message.Contains("symlink"));
+        // Reject 语义覆盖嵌套目录链接——此前只对树根本身检查。
+        Assert.Throws<InvalidDataException>(() =>
+            FileTree.CopyTree(source, dest, NullBundleLogger.Instance,
+                links: TreeLinkPolicy.Reject, linkErrorMessage: "link rejected"));
     }
 
     [Fact]

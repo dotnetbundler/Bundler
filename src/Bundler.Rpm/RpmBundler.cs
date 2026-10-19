@@ -35,6 +35,12 @@ public sealed class RpmBundler : IFormatBundler
             throw new NotSupportedException(
                 $"DotNet.Bundler.Rpm accepts Rpm targets only; '{unsupported}' requires another backend package.");
         }
+        // 与 Build 同一条校验链——validate 阶段即暴露配置错误。
+        RpmValidation.Settings(_configuration, bundle);
+        foreach (var target in bundle.Targets)
+        {
+            RpmValidation.Target(_configuration, bundle, BundleTarget.Parse(target.Target));
+        }
     }
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(

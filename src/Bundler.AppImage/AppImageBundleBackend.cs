@@ -22,7 +22,7 @@ internal sealed class AppImageBundleBackend(
             context.Configuration, context.Item, settings, context.WorkDirectory, context.Logger);
         var toolset = await AppImageToolset.ResolveAsync(
             built.EnvironmentArchitecture, options.ToolsetCacheDirectory, cancellationToken);
-        var signing = PrepareSigning(settings, context.WorkDirectory);
+        var signing = PrepareSigning(settings, context.Configuration, context.WorkDirectory);
 
         var fileName = ArtifactNaming.FileName(
             built.PackageName, built.Version, context.Item.Target, PackageFormat.AppImage,
@@ -101,8 +101,11 @@ internal sealed class AppImageBundleBackend(
     /// <summary>
     /// Configuration-time checks the facade also runs during multi-format
     /// pre-validation; everything past this point needs the build environment.
+    /// Mirrors <see cref="AppDirBuilder.Build"/>'s config surface so
+    /// <c>bundler validate</c> catches the same errors early.
     /// </summary>
-    internal static void ValidateConfiguration(AppImageBundleConfiguration settings)
+    internal static void ValidateConfiguration(
+        AppImageBundleConfiguration settings, BundleConfiguration bundle)
     {
         var hasKey = settings.Signing.KeyFile is { Length: > 0 };
         if (settings.Signing.Passphrase is { Length: > 0 } && !hasKey)
@@ -115,12 +118,75 @@ internal sealed class AppImageBundleBackend(
             throw new ArgumentException(
                 $"Signing.KeyFile '{settings.Signing.KeyFile}' does not exist.");
         }
+
+        var packageName = AppImageIdentity.PackageName(settings.PackageName, bundle.ProductName);
+        var version = (settings.Version ?? bundle.Version).Trim();
+        if (version.Length == 0 || version.IndexOfAny(new[] { '/', '\\', ' ', '\n', '\r' }) >= 0)
+        {
+            throw new ArgumentException(
+                $"The AppImage version must be a single token usable in a file name, got '{version}'.");
+        }
+        var installRoot = (settings.InstallRoot ?? "usr/lib/" + packageName)
+            .Replace('\\', '/').Trim('/');
+        if (installRoot.Length == 0 ||
+            installRoot.Split('/').Any(segment =>
+                segment is "" or "." or ".." ||
+                segment.Any(c => char.IsWhiteSpace(c) || c is '"' or '\'' or '$' or '`' or '\\')) ||
+            (settings.InstallRoot is { } explicitRoot && explicitRoot.TrimStart().StartsWith("/")))
+        {
+            throw new ArgumentException(
+                $"The AppDir install root must be a relative path inside the AppDir, got '{settings.InstallRoot}'.");
+        }
+        // 与 deb/rpm/apk 同规："" 或 "none" 关闭链接。
+        var binLink = settings.BinLink ?? packageName;
+        if (binLink.Length > 0 &&
+            !string.Equals(binLink, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            LinuxLinkName.Validate(binLink, "AppImageBinLink");
+        }
+        if (settings.Architecture is { Length: > 0 } archOverride)
+        {
+            AppImageIdentity.NormalizeArchitecture(archOverride);
+        }
+        else
+        {
+            foreach (var target in bundle.Targets)
+            {
+                AppImageIdentity.EnvironmentArchitecture(BundleTarget.Parse(target.Target));
+            }
+        }
+
+        foreach (var (file, knob) in new (string?, string)[]
+        {
+            (settings.DesktopFile, "DesktopFile"),
+            (settings.MetainfoFile, "MetainfoFile"),
+            (settings.IconFile, "IconFile")
+        })
+        {
+            if (file is { Length: > 0 })
+            {
+                FreedesktopFiles.RequireExisting(file, knob);
+            }
+        }
+        foreach (var entry in settings.Files ?? [])
+        {
+            var destination = (entry.Destination ?? "").Replace('\\', '/').Trim('/');
+            if (destination.Length == 0 ||
+                destination.Split('/').Any(segment => segment is "" or "." or "..") ||
+                (entry.Destination ?? "").Contains('\\') ||
+                (entry.Destination ?? "").TrimStart().StartsWith("/"))
+            {
+                throw new ArgumentException(
+                    $"BundlerAppImageFile destinations must be relative paths inside the AppDir, got '{entry.Destination}'.");
+            }
+            FreedesktopFiles.RequireExisting(entry.Source, "BundlerAppImageFile");
+        }
     }
 
     private static AppImageSigning.SigningContext? PrepareSigning(
-        AppImageBundleConfiguration settings, string workDirectory)
+        AppImageBundleConfiguration settings, BundleConfiguration bundle, string workDirectory)
     {
-        ValidateConfiguration(settings);
+        ValidateConfiguration(settings, bundle);
         if (settings.Signing.KeyFile is not { Length: > 0 })
         {
             return null;

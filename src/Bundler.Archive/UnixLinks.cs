@@ -1,15 +1,12 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Archive;
 
 /// <summary>Minimal libc readlink for symlink preservation on Unix payloads.</summary>
 internal static class UnixLinks
 {
-    // ssize_t 的正确 CLR 型是 IntPtr（指针宽）：long 在 32 位 ABI 上高位寄存器是垃圾。
-    [DllImport("libc", SetLastError = true, CharSet = CharSet.Ansi)]
-    private static extern IntPtr readlink(string path, byte[] buffer, int bufferSize);
-
     [DllImport("libc", SetLastError = true, CharSet = CharSet.Ansi)]
     private static extern int access(string path, int mode);
 
@@ -24,20 +21,12 @@ internal static class UnixLinks
     /// <summary>Returns the symlink target, or null when unsupported/failed.</summary>
     internal static string? ReadLink(string path)
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            // Windows 相对 reparse 目标带反斜杠——归一成 / 再进归档，否则 POSIX
-            // 侧把 `lib\current.so` 当字面文件名，链接指到不存在的名字。
-            return WindowsLinks.ReadReparseTarget(path)?.Replace('\\', '/');
-        }
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) &&
-            !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            return null;
-        }
-        var buffer = new byte[4096];
-        var length = readlink(path, buffer, buffer.Length).ToInt64();
-        return length > 0 ? Encoding.UTF8.GetString(buffer, 0, (int)length) : null;
+        // 读取走 Core 的 LinkProbe（Unix readlink / Windows reparse 双宿主）；
+        // Windows 相对 reparse 目标带反斜杠——归一成 / 再进归档，否则 POSIX
+        // 侧把 `lib\current.so` 当字面文件名，链接指到不存在的名字。
+        return LinkProbe.TryReadTarget(path, out var target) && target.Length > 0
+            ? target.Replace('\\', '/')
+            : null;
     }
 
     /// <summary>

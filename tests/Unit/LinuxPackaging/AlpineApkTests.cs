@@ -781,7 +781,7 @@ public sealed class AlpineApkTests : TempBase
             Assert.True(EndsWithZeroBlocks(segments[2]), "The data tar keeps its end-of-archive blocks.");
 
             var sig = ApkPackageReader.ReadTar(segments[0]);
-            Assert.True(sig.Count == 1 && sig[0].Name == ".SIGN.RSA.testkey.rsa.rsa.pub" &&
+            Assert.True(sig.Count == 1 && sig[0].Name == ".SIGN.RSA.testkey.rsa.pub" &&
                 sig[0].TypeFlag == '0' && sig[0].Mode == 420,
                 $"Signature member mismatch: {string.Join(',', sig.Select(e => e.Name))}");
             var control = ApkPackageReader.ReadTar(segments[1]);
@@ -820,7 +820,7 @@ public sealed class AlpineApkTests : TempBase
             var controlGzip = apk.Skip(members[1]).Take(members[2] - members[1]).ToArray();
             using var rsa = RSA.Create();
             rsa.ImportFromPem(EncryptedPublicKeyPem);
-            Assert.True(sig.Count == 1 && sig[0].Name == ".SIGN.RSA.enckey.rsa.rsa.pub" &&
+            Assert.True(sig.Count == 1 && sig[0].Name == ".SIGN.RSA.enckey.rsa.pub" &&
                 rsa.VerifyData(controlGzip, sig[0].Content,
                     HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1),
                 "The encrypted key must produce a verifiable signature.");

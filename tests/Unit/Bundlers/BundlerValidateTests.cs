@@ -1,10 +1,13 @@
 using DotNet.Bundler;
+using DotNet.Bundler.AlpineApk;
 using DotNet.Bundler.AppImage;
+using DotNet.Bundler.Archive;
 using DotNet.Bundler.Deb;
 using DotNet.Bundler.MacApp;
 using DotNet.Bundler.MacDmg;
 using DotNet.Bundler.MacPkg;
 using DotNet.Bundler.Nsis;
+using DotNet.Bundler.Rpm;
 using DotNet.Bundler.Wix;
 
 namespace Bundler.UnitTests.Bundlers;
@@ -67,6 +70,9 @@ public sealed class BundlerValidateTests : TempBase
         Assert.Throws<NotSupportedException>(() => new NsisBundler().Validate(Bundle(PackageFormat.Msi)));
         Assert.Throws<NotSupportedException>(() => new WixBundler().Validate(Bundle(PackageFormat.Deb)));
         Assert.Throws<NotSupportedException>(() => new DebBundler().Validate(Bundle(PackageFormat.Rpm)));
+        Assert.Throws<NotSupportedException>(() => new RpmBundler().Validate(Bundle(PackageFormat.Deb)));
+        Assert.Throws<NotSupportedException>(() => new AlpineApkBundler().Validate(Bundle(PackageFormat.Rpm)));
+        Assert.Throws<NotSupportedException>(() => new ArchiveBundler().Validate(Bundle(PackageFormat.Deb)));
         Assert.Throws<NotSupportedException>(() => new AppImageBundler().Validate(Bundle(PackageFormat.Zip)));
         Assert.Throws<NotSupportedException>(() => new MacAppBundler().Validate(Bundle(PackageFormat.Pkg)));
         Assert.Throws<NotSupportedException>(() => new MacDmgBundler().Validate(Bundle(PackageFormat.App)));
@@ -78,6 +84,10 @@ public sealed class BundlerValidateTests : TempBase
     {
         Assert.Throws<ArgumentNullException>(() => new NsisBundler().Validate(null!));
         Assert.Throws<ArgumentNullException>(() => new DebBundler().Validate(null!));
+        Assert.Throws<ArgumentNullException>(() => new RpmBundler().Validate(null!));
+        Assert.Throws<ArgumentNullException>(() => new AlpineApkBundler().Validate(null!));
+        Assert.Throws<ArgumentNullException>(() => new ArchiveBundler().Validate(null!));
+        Assert.Throws<ArgumentNullException>(() => new AppImageBundler().Validate(null!));
         Assert.Throws<ArgumentNullException>(() => new MacDmgBundler().Validate(null!));
     }
 
@@ -225,5 +235,98 @@ public sealed class BundlerValidateTests : TempBase
         };
         Assert.Throws<ArgumentException>(() =>
             new MacAppBundler(config).Validate(Bundle(PackageFormat.App)));
+    }
+
+    // ---- Linux 门面：binLink/脚本/签名/路径预检 ----
+
+    [Fact]
+    public void Deb_BinLink_ShellMetachar_Rejected()
+    {
+        // 反引号进 maintainer 脚本会在安装期展开——与 rpm/apk/AppImage 同规拒。
+        Assert.Throws<ArgumentException>(() => new DebBundler(
+            new DebBundleConfiguration { BinLink = "a`b" }).Validate(
+                Bundle(PackageFormat.Deb, mainExecutable: "app")));
+    }
+
+    [Fact]
+    public void Deb_BinLink_NoneAccepted()
+    {
+        var ex = Record.Exception(() => new DebBundler(
+            new DebBundleConfiguration { BinLink = "none" }).Validate(
+                Bundle(PackageFormat.Deb, mainExecutable: "app")));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Deb_Script_CrlfRejected()
+    {
+        var script = Path.Combine(Root, "postinst");
+        File.WriteAllText(script, "#!/bin/sh\r\nexit 0\r\n");
+        Assert.Throws<ArgumentException>(() => new DebBundler(
+            new DebBundleConfiguration { PostInstallFile = script }).Validate(
+                Bundle(PackageFormat.Deb, mainExecutable: "app")));
+    }
+
+    [Fact]
+    public void Rpm_PassphraseWithoutKey_Rejected()
+    {
+        Assert.Throws<ArgumentException>(() => new RpmBundler(
+            new RpmBundleConfiguration
+            {
+                Signing = new KeyFileSigningConfiguration { Passphrase = "x" }
+            }).Validate(Bundle(PackageFormat.Rpm, mainExecutable: "app")));
+    }
+
+    [Fact]
+    public void Rpm_BinLink_WithSeparator_Rejected()
+    {
+        Assert.Throws<ArgumentException>(() => new RpmBundler(
+            new RpmBundleConfiguration { BinLink = "sub/dir" }).Validate(
+                Bundle(PackageFormat.Rpm, mainExecutable: "app")));
+    }
+
+    [Fact]
+    public void Apk_BinLink_Backtick_Rejected()
+    {
+        Assert.Throws<ArgumentException>(() => new AlpineApkBundler(
+            new AlpineApkBundleConfiguration { BinLink = "a`b" }).Validate(
+                Bundle(PackageFormat.AlpineApk, mainExecutable: "app")));
+    }
+
+    [Fact]
+    public void Apk_Script_Bom_Rejected()
+    {
+        var script = Path.Combine(Root, "pre-install");
+        File.WriteAllBytes(script,
+            new byte[] { 0xEF, 0xBB, 0xBF }.Concat(
+                System.Text.Encoding.UTF8.GetBytes("#!/bin/sh\nexit 0\n")).ToArray());
+        Assert.Throws<ArgumentException>(() => new AlpineApkBundler(
+            new AlpineApkBundleConfiguration { PreInstallFile = script }).Validate(
+                Bundle(PackageFormat.AlpineApk, mainExecutable: "app")));
+    }
+
+    [Fact]
+    public void AppImage_BinLink_Space_Rejected()
+    {
+        Assert.Throws<ArgumentException>(() => new AppImageBundler(
+            new AppImageBundleConfiguration { BinLink = "a b" }).Validate(
+                Bundle(PackageFormat.AppImage, mainExecutable: "app")));
+    }
+
+    [Fact]
+    public void AppImage_I686Override_Rejected()
+    {
+        // 随包 runtime 只有 x86_64/aarch64——配置面不承诺 i686。
+        Assert.Throws<ArgumentException>(() => new AppImageBundler(
+            new AppImageBundleConfiguration { Architecture = "i686" }).Validate(
+                Bundle(PackageFormat.AppImage, mainExecutable: "app")));
+    }
+
+    [Fact]
+    public void Archive_Stem_WithSeparator_Rejected()
+    {
+        Assert.Throws<ArgumentException>(() => new ArchiveBundler(
+            new ArchiveBundleConfiguration { ArchiveName = "a/b" }).Validate(
+                Bundle(PackageFormat.Zip, mainExecutable: "app")));
     }
 }

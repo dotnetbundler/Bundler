@@ -29,14 +29,19 @@ internal static class ArchiveIdentity
                 ?? throw new ArgumentException(
                     $"Architecture '{item.Target.Architecture}' is not supported for archives.")) +
             (item.Target.IsMusl ? "-musl" : "");
-        // 与 PackageName 同字符集：':'与空白同样会破坏归档顶层目录名。
+        ValidateStem(stem);
+        return stem;
+    }
+
+    /// <summary>与 PackageName 同字符集：':'与空白同样会破坏归档顶层目录名。</summary>
+    internal static void ValidateStem(string stem)
+    {
         if (stem.Length == 0 || stem is "." or ".." || stem.Contains("..") ||
             stem.Any(c => c is '/' or '\\' or ':' || char.IsWhiteSpace(c)))
         {
             throw new ArgumentException(
                 $"ArchiveName must be a single safe path segment; got '{stem}'.");
         }
-        return stem;
     }
 
     private static string Kebab(string productName)

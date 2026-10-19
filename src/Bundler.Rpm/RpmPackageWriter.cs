@@ -47,39 +47,16 @@ internal static class RpmPackageWriter
         RpmBundleConfiguration settings,
         IBundleLogger logger)
     {
-        var packageName = settings.PackageName ?? RpmName.Sanitize(bundle.ProductName);
-        RpmName.Validate(packageName);
-        var mapped = RpmVersion.Map(bundle.Version, settings);
-        var architecture = settings.Architecture ?? MapArchitecture(item.Target);
-        ValidateArchitecture(architecture);
-        var installRoot = NormalizeInstallRoot(settings.InstallRoot, packageName);
-        var binLink = settings.BinLink ?? packageName;
-        if (string.Equals(binLink, "none", StringComparison.OrdinalIgnoreCase))
-        {
-            binLink = "";
-        }
-        if (binLink.Length > 0)
-        {
-            ValidateBinLinkName(binLink);
-        }
-        var vendor = settings.Vendor ?? bundle.Publisher ?? bundle.Identifier;
-        if (string.IsNullOrWhiteSpace(vendor) || vendor.IndexOf('\n') >= 0)
-        {
-            throw new ArgumentException(
-                "The .rpm vendor must be a non-empty single line; set Publisher or Vendor.");
-        }
-        foreach (var (knob, value) in new[]
-        {
-            ("License", settings.License), ("Group", settings.Group), ("Url", settings.Url)
-        })
-        {
-            if (value is { } v && v.IndexOf('\n') >= 0)
-            {
-                throw new ArgumentException($"The .rpm {knob} must be a single line.");
-            }
-        }
+        // 与门面 Validate 同一条校验链——直调 writer 也得到一致异常契约。
+        RpmValidation.Settings(settings, bundle);
+        var resolved = RpmValidation.Target(settings, bundle, item.Target);
+        var packageName = resolved.PackageName;
+        var mapped = resolved.Version;
+        var architecture = resolved.Architecture;
+        var installRoot = resolved.InstallRoot;
+        var binLink = resolved.BinLink;
+        var vendor = resolved.Vendor;
 
-        ValidateSigning(settings);
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
         // cpio 直写 gzip→输出目录旁的临时文件（/tmp 小卷不堵构建——目标目录
         // 反正得装下成品），全程不驻内存；未压缩 cpio 的尺寸与 sha256
@@ -237,28 +214,12 @@ internal static class RpmPackageWriter
 
     // ---- headers ------------------------------------------------------------
 
-    private static void ValidateSigning(RpmBundleConfiguration settings)
-    {
-        var hasKey = settings.Signing.KeyFile is { Length: > 0 };
-        var hasPassphrase = settings.Signing.Passphrase is { Length: > 0 };
-        if (hasPassphrase && !hasKey)
-        {
-            throw new ArgumentException(
-                "Signing.Passphrase requires Signing.KeyFile to point at an OpenPGP secret key.");
-        }
-        if (hasKey && !File.Exists(settings.Signing.KeyFile!))
-        {
-            throw new ArgumentException(
-                $"Signing.KeyFile '{settings.Signing.KeyFile}' does not exist.");
-        }
-    }
-
     private static List<RpmHeaderWriter.Entry> SignatureEntries(
         byte[] mainHeader, long compressedSize, long cpioSize, string payloadPath,
         byte[]? rsaSignature, byte[]? pgpSignature)
     {
         // RPMSIGTAG_SIZE = main header bytes + compressed payload bytes
-        var packageSize = checked((int)(mainHeader.Length + compressedSize));
+        var packageSize = (long)mainHeader.Length + compressedSize;
         // RPMSIGTAG_MD5 覆盖主头+压缩载荷——载荷分块流喂，不整档物化。
         var md5 = MD5.Create();
         md5.TransformBlock(mainHeader, 0, mainHeader.Length, null, 0);
@@ -274,12 +235,27 @@ internal static class RpmPackageWriter
         md5.TransformFinalBlock([], 0, 0);
         var entries = new List<RpmHeaderWriter.Entry>
         {
-            RpmHeaderWriter.Int32s(1000, packageSize),                    // RPMSIGTAG_SIZE
             RpmHeaderWriter.Bin(1004, md5.Hash!),                         // RPMSIGTAG_MD5
-            RpmHeaderWriter.Int32s(1007, checked((int)cpioSize)),         // RPMSIGTAG_PAYLOADSIZE
             RpmHeaderWriter.Str(269, Hashes.Sha1Hex(mainHeader)),   // SHA1HEADER
             RpmHeaderWriter.Str(273, Hashes.Sha256Hex(mainHeader)), // SHA256HEADER
         };
+        // 尺寸标签 int32 封顶 ~2GiB：超出时发 RPM 4.15+ 的 LONG 变体而不是截断。
+        if (packageSize <= int.MaxValue)
+        {
+            entries.Add(RpmHeaderWriter.Int32s(1000, (int)packageSize));  // RPMSIGTAG_SIZE
+        }
+        else
+        {
+            entries.Add(RpmHeaderWriter.Int64s(270, packageSize));        // RPMSIGTAG_LONGSIZE
+        }
+        if (cpioSize <= int.MaxValue)
+        {
+            entries.Add(RpmHeaderWriter.Int32s(1007, (int)cpioSize));     // RPMSIGTAG_PAYLOADSIZE
+        }
+        else
+        {
+            entries.Add(RpmHeaderWriter.Int64s(271, cpioSize));           // RPMSIGTAG_LONGARCHIVESIZE
+        }
         if (rsaSignature is not null)
         {
             // RPMSIGTAG_RSA (268): v3 signature packet over the main header
@@ -508,8 +484,9 @@ internal static class RpmPackageWriter
 
     // Reads a caller-supplied scriptlet file: LF only; a "#!" first line is
     // stripped from the body and supplies the interpreter when no explicit
-    // *Program knob is set.
-    private static (string? body, string? prog) ReadScriptlet(string path, string knob)
+    // *Program knob is set. Shared with RpmValidation so `bundler validate`
+    // catches bad script files before any payload work.
+    internal static (string? body, string? prog) ReadScriptlet(string path, string knob)
     {
         var full = FreedesktopFiles.RequireExisting(path, knob);
         var text = File.ReadAllText(full);
@@ -534,9 +511,15 @@ internal static class RpmPackageWriter
         return (body, prog);
     }
 
-    private static string SummaryOf(BundleConfiguration bundle) =>
-        bundle.Description is { Length: > 0 } d && d.Length <= 80
-            ? d : bundle.ProductName + " " + bundle.Version;
+    private static string SummaryOf(BundleConfiguration bundle)
+    {
+        // SUMMARY 是单行 i18n 字段——多行描述取第一个非空行，超长截断。
+        var firstLine = (bundle.Description ?? "")
+            .Replace("\r\n", "\n").Replace('\r', '\n').Split('\n')
+            .FirstOrDefault(line => line.Trim().Length > 0)?.Trim();
+        return firstLine is { Length: > 0, Length: <= 80 } ? firstLine
+            : bundle.ProductName + " " + bundle.Version;
+    }
 
     private static string DescriptionOf(BundleConfiguration bundle) =>
         bundle.Description ?? bundle.ProductName + " " + bundle.Version;
@@ -559,9 +542,6 @@ internal static class RpmPackageWriter
         IBundleLogger logger)
     {
         var entries = new List<PayloadEntry>();
-        var claimed = new HashSet<string>(StringComparer.Ordinal);
-        var directories = new HashSet<string>(StringComparer.Ordinal);
-
         // Directories the distro owns and a leaf package must not claim — rpm's
         // own convention: a package owns the directories only it creates (e.g.
         // /usr/share/licenses/<pkg>) but not shared parents like /usr/share/doc
@@ -575,35 +555,15 @@ internal static class RpmPackageWriter
             "/usr/share/man", "/usr/share/info", "/usr/share/icons",
             "/usr/lib/systemd", "/usr/lib/systemd/system"
         };
-
-        // rpm owns the directories it creates (explicit dir entries); claiming
-        // walks ancestors from the leaf up to the nearest shared directory.
-        void ClaimDirectory(string path)
-        {
-            var current = path;
-            while (current.Length > 0 && !sharedDirs.Contains(current))
-            {
-                if (current.StartsWith("/usr/share/icons/", StringComparison.Ordinal))
-                {
-                    break; // hicolor subtree belongs to hicolor-icon-theme
-                }
-                directories.Add(current);
-                var slash = current.LastIndexOf('/');
-                current = slash <= 0 ? "" : current.Substring(0, slash);
-            }
-        }
+        var book = new PayloadPathBook(
+            sharedBoundary: path =>
+                sharedDirs.Contains(path) ||
+                path.StartsWith("/usr/share/icons/", StringComparison.Ordinal),
+            systemLeaf: path => sharedDirs.Contains(path));
 
         void AddFile(string path, string sourcePath, int mode)
         {
-            var dir = path.Substring(0, path.LastIndexOf('/'));
-            ClaimDirectory(dir);
-            if (!claimed.Add(path))
-            {
-                // C-N4：撞名报错文案三后端各异（deb/alpineapk 同构不同词）——
-                // 同为确定性拒绝即可，文案对齐登记为开放项。
-                throw new InvalidOperationException(
-                    $"Two payload sources map to the same .rpm path: '{path}'.");
-            }
+            book.ClaimFile(path);
             var info = new FileInfo(sourcePath);
             // rpm FILESIZES 与 cpio newc 都记 int32 尺寸：>2GiB 截断产坏包，显式拒绝。
             if (info.Length > int.MaxValue)
@@ -621,15 +581,21 @@ internal static class RpmPackageWriter
             });
         }
 
+        void AddLink(string path, string linkTarget)
+        {
+            book.ClaimFile(path);
+            entries.Add(new PayloadEntry
+            {
+                ArchivePath = path,
+                Mode = 0xA000 | 511 /* 0120777 */,
+                LinkTarget = linkTarget,
+                Size = linkTarget.Length
+            });
+        }
+
         void AddGeneratedFile(string path, byte[] content, int mode)
         {
-            var dir = path.Substring(0, path.LastIndexOf('/'));
-            ClaimDirectory(dir);
-            if (!claimed.Add(path))
-            {
-                throw new InvalidOperationException(
-                    $"Two payload sources map to the same .rpm path: '{path}'.");
-            }
+            book.ClaimFile(path);
             entries.Add(new PayloadEntry
             {
                 ArchivePath = path,
@@ -646,8 +612,11 @@ internal static class RpmPackageWriter
         {
             if (sourceItem.Kind == PayloadSourceKind.Directory)
             {
-                ClaimDirectory(sourceItem.ArchivePath.Substring(0, sourceItem.ArchivePath.LastIndexOf('/')));
-                directories.Add(sourceItem.ArchivePath);
+                book.ClaimDirectory(sourceItem.ArchivePath);
+            }
+            else if (sourceItem.Kind == PayloadSourceKind.Symlink)
+            {
+                AddLink(sourceItem.ArchivePath, sourceItem.LinkTarget!);
             }
             else
             {
@@ -655,11 +624,18 @@ internal static class RpmPackageWriter
             }
         }
 
-        // includeDirectories=false 时只产 File 项；改 true 须先处理 Directory 项。
+        // includeDirectories=false 时只产 File/Symlink 项；改 true 须先处理 Directory 项。
         foreach (var sourceItem in PayloadSource.CollectResources(bundle.Resources, installRoot, logger))
         {
-            System.Diagnostics.Debug.Assert(sourceItem.Kind == PayloadSourceKind.File);
-            AddFile(sourceItem.ArchivePath, sourceItem.SourcePath!, sourceItem.Mode);
+            System.Diagnostics.Debug.Assert(sourceItem.Kind != PayloadSourceKind.Directory);
+            if (sourceItem.Kind == PayloadSourceKind.Symlink)
+            {
+                AddLink(sourceItem.ArchivePath, sourceItem.LinkTarget!);
+            }
+            else
+            {
+                AddFile(sourceItem.ArchivePath, sourceItem.SourcePath!, sourceItem.Mode);
+            }
         }
 
         // 更新面：身份旁车（含 pkg 包名——换包按它定位已装单元）+ 引导件（linux 统一
@@ -757,38 +733,18 @@ internal static class RpmPackageWriter
         }
 
         // Emit the owned directory entries (install root plus everything below it).
-        ClaimDirectory(installRoot);
-        foreach (var dir in directories.OrderBy(d => d, StringComparer.Ordinal))
+        book.ClaimDirectory(installRoot);
+        foreach (var dir in book.Directories.OrderBy(d => d, StringComparer.Ordinal))
         {
-            if (claimed.Add(dir))
-            {
-                entries.Add(new PayloadEntry { ArchivePath = dir, Mode = 0x4000 | 493 /* 040755 */ });
-            }
-            else
-            {
-                throw new InvalidOperationException(
-                    $"A payload file collides with a directory: '{dir}'.");
-            }
+            entries.Add(new PayloadEntry { ArchivePath = dir, Mode = 0x4000 | 493 /* 040755 */ });
         }
 
         if (binLink.Length > 0)
         {
-            var linkPath = "/usr/bin/" + binLink;
-            if (!claimed.Add(linkPath))
-            {
-                throw new InvalidOperationException(
-                    $"The /usr/bin link collides with a payload file: '{linkPath}'.");
-            }
             var target = installRoot.StartsWith("/usr/", StringComparison.Ordinal)
                 ? "../" + installRoot.Substring("/usr/".Length) + "/" + mainExecutable
                 : installRoot + "/" + mainExecutable;
-            entries.Add(new PayloadEntry
-            {
-                ArchivePath = linkPath,
-                Mode = 0xA000 | 511 /* 0120777 */,
-                LinkTarget = target,
-                Size = target.Length
-            });
+            AddLink("/usr/bin/" + binLink, target);
         }
 
         entries.Sort((a, b) => string.CompareOrdinal(a.ArchivePath, b.ArchivePath));
@@ -851,49 +807,6 @@ internal static class RpmPackageWriter
     internal static string MapArchitecture(BundleTarget target) =>
         ArtifactNaming.ArchToken(target, PackageFormat.Rpm)
         ?? throw new NotSupportedException($"No rpm architecture mapping for '{target.Architecture}'.") ;
-
-    private static void ValidateArchitecture(string architecture)
-    {
-        if (architecture.Length == 0 || !architecture.All(c => char.IsLetterOrDigit(c) || c == '_'))
-        {
-            throw new ArgumentException(
-                $"'{architecture}' is not a valid RPM architecture (letters, digits, '_').");
-        }
-    }
-
-    private static string NormalizeInstallRoot(string? installRoot, string packageName)
-    {
-        var root = string.IsNullOrWhiteSpace(installRoot)
-            ? "/usr/lib/" + packageName
-            : installRoot!.Trim();
-        // 与 deb 同规：绝对路径 + 每段非空、非 . / ..、不含空白。
-        if (!root.StartsWith("/", StringComparison.Ordinal))
-        {
-            throw new ArgumentException(
-                $"The .rpm install root must be an absolute path: '{root}'.");
-        }
-        var normalized = root.Trim('/');
-        if (normalized.Length == 0 ||
-            normalized.Split('/').Any(segment =>
-                segment is "" or "." or ".." || segment.Any(char.IsWhiteSpace)))
-        {
-            throw new ArgumentException(
-                $"The .rpm install root contains an invalid segment: '{root}'.");
-        }
-        // 调用方按 installRoot + "/" + relative 拼绝对路径——前导斜杠必须保留。
-        return "/" + normalized;
-    }
-
-    private static void ValidateBinLinkName(string name)
-    {
-        var normalized = string.Equals(name, "none", StringComparison.OrdinalIgnoreCase) ? "" : name;
-        if (normalized.Length == 0) return;
-        if (normalized.Contains('/') || normalized.Contains(' ') || normalized == "." || normalized == "..")
-        {
-            throw new ArgumentException(
-                $"'{name}' is not a valid /usr/bin link name (basename only, no '/' or spaces).");
-        }
-    }
 
     private static byte[] Align8(byte[] header)
     {

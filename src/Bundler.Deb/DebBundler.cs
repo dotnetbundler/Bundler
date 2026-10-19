@@ -34,6 +34,12 @@ public sealed class DebBundler : IFormatBundler
             throw new NotSupportedException(
                 $"DotNet.Bundler.Deb accepts Deb targets only; '{unsupported}' requires another backend package.");
         }
+        // 与 Build 同一条校验链——validate 阶段即暴露配置错误。
+        DebValidation.Settings(_configuration, bundle);
+        foreach (var target in bundle.Targets)
+        {
+            DebValidation.Target(_configuration, bundle, BundleTarget.Parse(target.Target));
+        }
     }
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(

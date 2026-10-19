@@ -12,14 +12,15 @@
   架构映射以 `ArtifactNaming.ArchToken` 为单一来源，九词表见 `docs/design/targets.md`（`x86_64`/`x86`/`aarch64`/`armv7`/`armel`/`riscv64`/`loongarch64`/`ppc64le`/`s390x`），`BundlerAlpineApkArchitecture` 可覆盖（须 apk 架构名）；
   真实装跑证据仍限 x86_64/aarch64（见 §3）。
 - 数据段布局：`/usr/lib/<pkgname>/` 载荷 + `/usr/bin/<binname>` 符号链接（`BundlerAlpineApkBinLink` 改名/关闭）；`BundlerAlpineApkFile` 任意绝对路径映射。Alpine 官方包用 `/usr/` 非 `/opt/`。
+- 链接契约与 deb/rpm/AppImage 统一（`PayloadSource`/`PayloadPathBook`）：输入树内符号链接保留为链接条目（目标重写为相对链接目录的形式），外指/悬空链接打包前拒绝，目录链接不穿透递归。
 
 ## 2. 语义契约
 
 - `.PKGINFO`：`pkgname`/`pkgver`（`<版本>-r<release>`，release 默认 0）/`pkgdesc`（默认产品名）/`url`/`arch`/`origin`（默认=pkgname）/`license`（默认不写）/`depend`/`provides`/`triggers`（空格串联绝对路径）/`builddate`（默认 0 保确定性，`BundlerAlpineApkBuildDate` 可覆写）/`size`（写入器自算）/`datahash`（数据 gzip 流 sha256，v2 必需）。
 - 版本映射：SemVer 预发布 `-`→`_` 并入上游段；`~`/`+` 按 apk 字符集收；`BundlerAlpineApkVersion`/`Release` 显式覆盖（release 默认 `0`，须非负整数）。
 - 逐文件 `APK-TOOLS.checksum.SHA1` pax 扩展头（含符号链接按目标字符串哈希）——缺此被 `apk add` 拒。
-- 六段脚本：`.pre-install`/`.post-install`/`.pre-deinstall`/`.post-deinstall`/`.pre-upgrade`/`.post-upgrade` 对应 `BundlerAlpineApk*File`（0755、非空+LF）；v2 upgrade 腿执行 `.pre-upgrade`/`.post-upgrade` 而 `.post-install` 不触发。
-- 签名（可选 RSA）：`.SIGN.RSA.<密钥名>.rsa.pub` 段前置，DER PKCS#1 v1.5 RSA+SHA1 签在控制段 gzip 流上；`BundlerAlpineApkSigningKeyFile`（PEM，可加密）+ `Passphrase`；BouncyCastle 纯托管；确定性签名（同输入三产逐字节一致）；只给口令不给密钥文件=配置错误（三入口一致拒绝）。
+- 六段脚本：`.pre-install`/`.post-install`/`.pre-deinstall`/`.post-deinstall`/`.pre-upgrade`/`.post-upgrade` 对应 `BundlerAlpineApk*File`（0755、非空+LF、拒绝 UTF-8 BOM——成员字节原样入包，BOM 会被 busybox 当正文）；v2 upgrade 腿执行 `.pre-upgrade`/`.post-upgrade` 而 `.post-install` 不触发。
+- 签名（可选 RSA）：`.SIGN.RSA.<密钥名>.rsa.pub` 段前置（密钥名=私钥文件名去 `.rsa`/`.rsa.pub` 后缀，与 `/etc/apk/keys/` 公钥件名对齐），DER PKCS#1 v1.5 RSA+SHA1 签在控制段 gzip 流上；`BundlerAlpineApkSigningKeyFile`（PEM，可加密）+ `Passphrase`；BouncyCastle 纯托管；确定性签名（同输入三产逐字节一致）；只给口令不给密钥文件=配置错误（三入口一致拒绝）。
 - 未签名产物需 `apk add --allow-untrusted`；签名公钥须预置目标机 `/etc/apk/keys/` 才有验签意义（分发属供方运维）。
 - 确定性：条目排序、uid/gid 0、mtime/atime/ctime 归一——同输入逐字节一致；`builddate` 默认 0 而非伪造时间。
 - 产物 `<pkgname>-<pkgver>-r<rel>.apk` + `.sha256` 侧车。

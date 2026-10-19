@@ -20,6 +20,8 @@ internal sealed class ArchiveBundleBackend(
     public Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleBuildContext context, CancellationToken cancellationToken)
     {
+        // 与门面 Validate 同一条校验链——直调后端也得到一致异常契约。
+        ArchiveValidation.Settings(settings, context.Configuration);
         var packageName = ArchiveIdentity.PackageName(context.Configuration, settings);
         var version = settings.Version ?? context.Configuration.Version;
         var stem = ArchiveIdentity.ArchiveStem(settings, packageName, version, context.Item);
@@ -86,8 +88,7 @@ internal sealed class ArchiveBundleBackend(
                     }
                     else
                     {
-                        using var gzip = new System.IO.Compression.GZipStream(
-                            stream, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true);
+                        using var gzip = Gzip.WrapWrite(stream);
                         TarWriter.Write(gzip, entries.Select(ArchiveTree.ToTarEntry));
                     }
                 }

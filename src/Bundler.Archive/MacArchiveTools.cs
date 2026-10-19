@@ -31,27 +31,28 @@ internal static class MacArchiveTools
             return false;
         }
         var stagingRoot = Path.Combine(workDirectory, "macfidelity-" + Guid.NewGuid().ToString("N"));
+        // 工具先写同目录暂存件再原子换名：超时 kill 后未死透的进程继续写也只碰
+        // 暂存件，绝不与回退的 managed 写出器并发改 outputPath。
+        var partPath = outputPath + ".bundler-part";
         try
         {
             Materialize(entries, stagingRoot);
             var ok = format == PackageFormat.Zip
                 ? Run("/usr/bin/ditto", "-c -k --sequesterRsrc " +
-                    ShellQuote(stagingRoot) + " " + ShellQuote(outputPath),
+                    ShellQuote(stagingRoot) + " " + ShellQuote(partPath),
                     ScaledTimeoutMs(entries)) == 0
-                : Run("/usr/bin/tar", "-czf " + ShellQuote(outputPath) + " -C " +
+                : Run("/usr/bin/tar", "-czf " + ShellQuote(partPath) + " -C " +
                     ShellQuote(stagingRoot) + " " + ShellQuote(TopStem(entries)),
                     ScaledTimeoutMs(entries)) == 0;
             if (!ok)
             {
                 logger.Log(BundleLogLevel.Warning,
                     "ditto/tar archival failed; falling back to managed writer (xattrs will be lost).");
-                if (File.Exists(outputPath))
-                {
-                    File.Delete(outputPath);
-                }
+                TryDelete(partPath);
             }
             else
             {
+                File.Move(partPath, outputPath);
                 logger.Log(BundleLogLevel.Information,
                     "extended attributes detected — archived via host tool to preserve xattrs/symlinks.");
             }
@@ -61,10 +62,7 @@ internal static class MacArchiveTools
         {
             logger.Log(BundleLogLevel.Warning,
                 "host-tool archival unavailable; falling back to managed writer (xattrs will be lost).");
-            if (File.Exists(outputPath))
-            {
-                File.Delete(outputPath);
-            }
+            TryDelete(partPath);
             return false;
         }
         finally
@@ -88,28 +86,29 @@ internal static class MacArchiveTools
         {
             return false;
         }
+        // 与 TryWriteWithHostTools 同规：先写暂存件再换名——被 kill 的 ditto
+        // 残留进程不会与调用方/重试并发写 outputPath。
+        var partPath = outputPath + ".bundler-part";
         try
         {
             var ok = Run("/usr/bin/ditto", "-c -k --sequesterRsrc --keepParent " +
-                ShellQuote(appDirectory) + " " + ShellQuote(outputPath),
+                ShellQuote(appDirectory) + " " + ShellQuote(partPath),
                 ScaledTimeoutMs(appDirectory)) == 0;
-            if (!ok && File.Exists(outputPath))
-            {
-                File.Delete(outputPath);
-            }
             if (ok)
             {
+                File.Move(partPath, outputPath);
                 logger.Log(BundleLogLevel.Information,
                     "extended attributes detected — app transport zip written via ditto.");
+            }
+            else
+            {
+                TryDelete(partPath);
             }
             return ok;
         }
         catch (Exception)
         {
-            if (File.Exists(outputPath))
-            {
-                File.Delete(outputPath);
-            }
+            TryDelete(partPath);
             return false;
         }
     }
@@ -207,6 +206,18 @@ internal static class MacArchiveTools
         {
             return 0;
         }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception) { }
     }
 
     // 超时即杀——不许半成品工具与回退写出器并发改同一目标。

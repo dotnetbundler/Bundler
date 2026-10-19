@@ -37,28 +37,15 @@ internal static class DebPackageWriter
         DebBundleConfiguration settings,
         IBundleLogger logger)
     {
-        var packageName = settings.PackageName ?? DebName.Sanitize(bundle.ProductName);
-        DebName.Validate(packageName);
-        var version = DebVersion.Map(bundle.Version, settings);
-        var architecture = settings.Architecture ?? MapArchitecture(item.Target);
-        ValidateArchitecture(architecture);
-        var installRoot = NormalizeInstallRoot(settings.InstallRoot, packageName);
-        var binLink = settings.BinLink ?? packageName;
-        // 与 rpm/appimage/apk 同规："none" 是关闭语义，不产字面 usr/bin/none 链接。
-        if (string.Equals(binLink, "none", StringComparison.OrdinalIgnoreCase))
-        {
-            binLink = "";
-        }
-        if (binLink.Length > 0)
-        {
-            ValidateBinLinkName(binLink);
-        }
-        var maintainer = settings.Vendor ?? bundle.Publisher ?? bundle.Identifier;
-        if (string.IsNullOrWhiteSpace(maintainer) || maintainer.IndexOfAny(['\r', '\n']) >= 0)
-        {
-            throw new ArgumentException(
-                "The .deb maintainer must be a non-empty single line; set Publisher or Vendor.");
-        }
+        // 与门面 Validate 同一条校验链——直调 writer 也得到一致异常契约。
+        DebValidation.Settings(settings, bundle);
+        var resolved = DebValidation.Target(settings, bundle, item.Target);
+        var packageName = resolved.PackageName;
+        var version = resolved.Version;
+        var architecture = resolved.Architecture;
+        var installRoot = resolved.InstallRoot;
+        var binLink = resolved.BinLink;
+        var maintainer = resolved.Maintainer;
 
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, version, maintainer, settings, logger);
         // data.tar.gz 是大件：tar 直写 gzip→输出目录旁的临时文件（/tmp 小卷不堵
@@ -128,60 +115,44 @@ internal static class DebPackageWriter
         IBundleLogger logger)
     {
         var entries = new List<PayloadEntry>();
-        var claimed = new HashSet<string>(StringComparer.Ordinal);
-        var directories = new HashSet<string>(StringComparer.Ordinal);
-
-        void ClaimDirectory(string path)
-        {
-            var segments = path.Split('/');
-            for (var i = 1; i <= segments.Length; i++)
+        var book = new PayloadPathBook(
+            onNewDirectory: prefix => entries.Add(new PayloadEntry
             {
-                var prefix = string.Join("/", segments.Take(i));
-                if (claimed.Contains(prefix))
-                {
-                    throw new InvalidOperationException(
-                        $"A payload file and a directory map to the same .deb path: '{prefix}'.");
-                }
-                if (directories.Add(prefix))
-                {
-                    entries.Add(new PayloadEntry
-                    {
-                        ArchivePath = prefix,
-                        Kind = TarEntryKind.Directory,
-                        Mode = 493 /* 0755 */
-                    });
-                }
-            }
-        }
+                ArchivePath = prefix,
+                Kind = TarEntryKind.Directory,
+                Mode = 493 /* 0755 */
+            }));
+
+        void ClaimDirectory(string? path) => book.ClaimDirectory(path);
 
         void AddFile(string archivePath, string sourcePath, int mode)
         {
-            ClaimDirectory(archivePath.Substring(0, archivePath.LastIndexOf('/')));
-            // claimed 只收文件/链接；撞上已落目录的同路径文件同样要显式拒绝。
-            if (directories.Contains(archivePath) || !claimed.Add(archivePath))
-            {
-                throw new InvalidOperationException(
-                    $"Two payload sources map to the same .deb path: '{archivePath}'.");
-            }
-            var info = new FileInfo(sourcePath);
+            book.ClaimFile(archivePath);
             entries.Add(new PayloadEntry
             {
                 ArchivePath = archivePath,
                 Kind = TarEntryKind.File,
                 Mode = mode,
                 SourcePath = sourcePath,
-                Size = info.Length
+                Size = new FileInfo(sourcePath).Length
+            });
+        }
+
+        void AddLink(string archivePath, string linkTarget)
+        {
+            book.ClaimFile(archivePath);
+            entries.Add(new PayloadEntry
+            {
+                ArchivePath = archivePath,
+                Kind = TarEntryKind.Symlink,
+                Mode = 511 /* 0777 */,
+                LinkTarget = linkTarget
             });
         }
 
         void AddGeneratedFile(string archivePath, byte[] content, int mode)
         {
-            ClaimDirectory(archivePath.Substring(0, archivePath.LastIndexOf('/')));
-            if (directories.Contains(archivePath) || !claimed.Add(archivePath))
-            {
-                throw new InvalidOperationException(
-                    $"Two payload sources map to the same .deb path: '{archivePath}'.");
-            }
+            book.ClaimFile(archivePath);
             entries.Add(new PayloadEntry
             {
                 ArchivePath = archivePath,
@@ -198,16 +169,11 @@ internal static class DebPackageWriter
         {
             if (sourceItem.Kind == PayloadSourceKind.Directory)
             {
-                ClaimDirectory(sourceItem.ArchivePath.Substring(0, sourceItem.ArchivePath.LastIndexOf('/')));
-                if (directories.Add(sourceItem.ArchivePath))
-                {
-                    entries.Add(new PayloadEntry
-                    {
-                        ArchivePath = sourceItem.ArchivePath,
-                        Kind = TarEntryKind.Directory,
-                        Mode = 493 /* 0755 */
-                    });
-                }
+                ClaimDirectory(sourceItem.ArchivePath);
+            }
+            else if (sourceItem.Kind == PayloadSourceKind.Symlink)
+            {
+                AddLink(sourceItem.ArchivePath, sourceItem.LinkTarget!);
             }
             else
             {
@@ -215,11 +181,18 @@ internal static class DebPackageWriter
             }
         }
 
-        // includeDirectories=false 时只产 File 项；改 true 须先处理 Directory 项。
+        // includeDirectories=false 时只产 File/Symlink 项；改 true 须先处理 Directory 项。
         foreach (var sourceItem in PayloadSource.CollectResources(bundle.Resources, installRoot, logger))
         {
-            System.Diagnostics.Debug.Assert(sourceItem.Kind == PayloadSourceKind.File);
-            AddFile(sourceItem.ArchivePath, sourceItem.SourcePath!, sourceItem.Mode);
+            System.Diagnostics.Debug.Assert(sourceItem.Kind != PayloadSourceKind.Directory);
+            if (sourceItem.Kind == PayloadSourceKind.Symlink)
+            {
+                AddLink(sourceItem.ArchivePath, sourceItem.LinkTarget!);
+            }
+            else
+            {
+                AddFile(sourceItem.ArchivePath, sourceItem.SourcePath!, sourceItem.Mode);
+            }
         }
 
         // 更新面：身份旁车（含 pkg 包名——换包按它定位已装单元）+ 引导件（linux 统一
@@ -239,25 +212,12 @@ internal static class DebPackageWriter
 
         if (binLink.Length > 0)
         {
-            var linkPath = "usr/bin/" + binLink;
-            if (!claimed.Add(linkPath))
-            {
-                throw new InvalidOperationException(
-                    $"A payload file already occupies the bin-link path: '{linkPath}'.");
-            }
-            ClaimDirectory("usr/bin");
             // Links under /usr/bin use a relative target for usr/* roots and an
             // absolute target for other roots (e.g. /opt/<name>).
             var target = installRoot.StartsWith("usr/", StringComparison.Ordinal)
                 ? "../" + installRoot.Substring(4) + "/" + mainExecutable
                 : "/" + installRoot + "/" + mainExecutable;
-            entries.Add(new PayloadEntry
-            {
-                ArchivePath = linkPath,
-                Kind = TarEntryKind.Symlink,
-                Mode = 511 /* 0777 */,
-                LinkTarget = target
-            });
+            AddLink("usr/bin/" + binLink, target);
         }
 
         // Desktop integration (shared with the .rpm backend): a generated or
@@ -336,22 +296,10 @@ internal static class DebPackageWriter
         control.Append("Architecture: ").Append(architecture).Append('\n');
         control.Append("Maintainer: ").Append(maintainer).Append('\n');
         control.Append("Installed-Size: ").Append(InstalledSize(payload)).Append('\n');
-        var priority = (settings.Priority ?? "optional").Trim();
-        if (priority is not ("required" or "important" or "standard" or "optional" or "extra"))
-        {
-            throw new ArgumentException(
-                $"'{priority}' is not a valid Debian priority (required|important|standard|optional|extra).");
-        }
-        control.Append("Priority: ").Append(priority).Append('\n');
+        control.Append("Priority: ").Append((settings.Priority ?? "optional").Trim()).Append('\n');
         if (settings.Section is { Length: > 0 } section)
         {
-            var trimmedSection = section.Trim();
-            if (!SectionPattern.IsMatch(trimmedSection))
-            {
-                throw new ArgumentException(
-                    $"'{trimmedSection}' is not a valid Debian archive section (lowercase letters, digits, '+', '-', '.'; optional '/' subsections).");
-            }
-            control.Append("Section: ").Append(trimmedSection).Append('\n');
+            control.Append("Section: ").Append(section.Trim()).Append('\n');
         }
         AppendRelation(control, "Depends", settings.Depends);
         AppendRelation(control, "Recommends", settings.Recommends);
@@ -360,10 +308,6 @@ internal static class DebPackageWriter
         AppendRelation(control, "Replaces", settings.Replaces);
         if (!string.IsNullOrWhiteSpace(bundle.Homepage))
         {
-            if (bundle.Homepage!.IndexOfAny(['\r', '\n']) >= 0)
-            {
-                throw new ArgumentException("The homepage must be a single line.");
-            }
             control.Append("Homepage: ").Append(bundle.Homepage).Append('\n');
         }
         var description = (bundle.Description ?? "").Replace("\r\n", "\n").Replace('\r', '\n');
@@ -445,13 +389,7 @@ internal static class DebPackageWriter
         var seen = new HashSet<string>(StringComparer.Ordinal);
         void Add(string destination, string knob)
         {
-            var path = destination.Trim().Replace('\\', '/');
-            if (!path.StartsWith("/", StringComparison.Ordinal) ||
-                path.Split('/').Skip(1).Any(segment => segment is "" or "." or ".."))
-            {
-                throw new ArgumentException(
-                    $"A {knob} entry must be an absolute package path: '{destination}'.");
-            }
+            var path = ValidateConffileDestination(destination, knob);
             var archivePath = path.TrimStart('/');
             if (!payloadFiles.Contains(archivePath))
             {
@@ -478,6 +416,22 @@ internal static class DebPackageWriter
         return conffiles.ToArray();
     }
 
+    /// <summary>
+    /// Validates a conffile/<c>/etc</c> destination shape (absolute POSIX path
+    /// with a file name) — shared by the writer and <see cref="DebValidation"/>.
+    /// </summary>
+    internal static string ValidateConffileDestination(string destination, string knob)
+    {
+        var path = destination.Trim().Replace('\\', '/');
+        if (!path.StartsWith("/", StringComparison.Ordinal) ||
+            path.Split('/').Skip(1).Any(segment => segment is "" or "." or ".."))
+        {
+            throw new ArgumentException(
+                $"A {knob} entry must be an absolute package path: '{destination}'.");
+        }
+        return path;
+    }
+
     private static void AddScript(List<TarEntry> entries, string name, string? file)
     {
         if (file is not { Length: > 0 })
@@ -491,7 +445,8 @@ internal static class DebPackageWriter
         });
     }
 
-    private static string ReadScript(string path, string knob)
+    /// <summary>Reads a maintainer script — must exist, start with a shebang and use LF.</summary>
+    internal static string ReadScript(string path, string knob)
     {
         var full = FreedesktopFiles.RequireExisting(path, knob);
         var text = File.ReadAllText(full);
@@ -508,23 +463,14 @@ internal static class DebPackageWriter
         return text;
     }
 
-    private static readonly System.Text.RegularExpressions.Regex SectionPattern = new(
-        "^[a-z0-9][a-z0-9+.-]*(/[a-z0-9][a-z0-9+.-]*)*$",
-        System.Text.RegularExpressions.RegexOptions.Compiled);
-
     private static void AppendRelation(StringBuilder control, string field, IReadOnlyList<string>? clauses)
     {
         if (clauses is not { Count: > 0 })
         {
             return;
         }
-        var trimmed = clauses.Select(clause => clause.Trim()).ToArray();
-        if (trimmed.Any(clause => clause.Length == 0 || clause.IndexOfAny(new[] { '\r', '\n' }) >= 0))
-        {
-            throw new ArgumentException(
-                $"The .deb {field} entries must be non-empty single lines.");
-        }
-        control.Append(field).Append(": ").Append(string.Join(", ", trimmed)).Append('\n');
+        control.Append(field).Append(": ")
+            .Append(string.Join(", ", clauses.Select(clause => clause.Trim()))).Append('\n');
     }
 
     private static int InstalledSize(List<PayloadEntry> payload)
@@ -586,53 +532,6 @@ internal static class DebPackageWriter
         using var buffer = new MemoryStream();
         TarWriter.Write(buffer, entries);
         return buffer.ToArray();
-    }
-
-    private static string MapArchitecture(BundleTarget target) =>
-        ArtifactNaming.ArchToken(target, PackageFormat.Deb)
-        ?? throw new NotSupportedException(
-            $"No Debian architecture mapping for {target.Architecture}; set Architecture explicitly.");
-
-    private static void ValidateArchitecture(string architecture)
-    {
-        if (!architecture.All(c => char.IsLower(c) || char.IsDigit(c) || c == '-') ||
-            architecture.Length == 0)
-        {
-            throw new ArgumentException(
-                $"'{architecture}' is not a valid Debian architecture (lowercase letters, digits, '-').");
-        }
-    }
-
-    // Returns the tar-relative path (no leading '/'), e.g. "usr/lib/pkg".
-    private static string NormalizeInstallRoot(string? installRoot, string packageName)
-    {
-        var root = string.IsNullOrWhiteSpace(installRoot)
-            ? "/usr/lib/" + packageName
-            : installRoot!.Trim();
-        if (!root.StartsWith("/", StringComparison.Ordinal))
-        {
-            throw new ArgumentException(
-                $"The .deb install root must be an absolute path: '{root}'.");
-        }
-        var normalized = root.Trim('/');
-        if (normalized.Length == 0 ||
-            normalized.Split('/').Any(segment => segment is "" or "." or ".."))
-        {
-            throw new ArgumentException(
-                $"The .deb install root contains an invalid segment: '{root}'.");
-        }
-        return normalized;
-    }
-
-    private static void ValidateBinLinkName(string name)
-    {
-        if (name.IndexOfAny(new[] { '/', '\\' }) >= 0 ||
-            name is "." or ".." ||
-            name.Trim().Length != name.Length || name.Length == 0)
-        {
-            throw new ArgumentException(
-                $"'{name}' is not a valid /usr/bin link name (a bare file name).");
-        }
     }
 
 }

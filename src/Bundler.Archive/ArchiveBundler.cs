@@ -36,6 +36,8 @@ public sealed class ArchiveBundler : IFormatBundler
             throw new NotSupportedException(
                 $"DotNet.Bundler.Archive accepts Zip/TarGz targets only; '{unsupported}' requires another backend package.");
         }
+        // 与 Build 同一条校验链——validate 阶段即暴露配置错误。
+        ArchiveValidation.Settings(_configuration, bundle);
     }
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(

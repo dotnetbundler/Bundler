@@ -357,7 +357,9 @@ public sealed class AppImageTests : TempBase
     {
         Assert.Equal("x86_64", AppImageIdentity.EnvironmentArchitecture(BundleTarget.Parse("linux-x86_64")));
         Assert.Equal("aarch64", AppImageIdentity.EnvironmentArchitecture(BundleTarget.Parse("linux-aarch64")));
-        Assert.Equal("i686", AppImageIdentity.EnvironmentArchitecture(BundleTarget.Parse("linux-i686")));
+        // linux-x86/i686 无随包 runtime——收窄后与 NormalizeArchitecture 同口径拒绝。
+        Assert.ThrowsAny<ArgumentException>(() =>
+            AppImageIdentity.EnvironmentArchitecture(BundleTarget.Parse("linux-x86")));
     }
 
     [Fact]
