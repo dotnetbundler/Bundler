@@ -63,6 +63,10 @@ public sealed class MsiPackageFixture : IAsyncLifetime
         // PublicSample 消费仓根 artifacts/packages；RepositoryPackages 已含
         // build-server shutdown + build + pack。
         Ws ??= IntegrationWorkspace.Create("windows-msi-integration", "windows.msi");
+        // 与 Ensure() 同款共享还原缓存——空 Cache 会让 -p:RestorePackagesPath=
+        // 落机器级全局目录，钉源语义被残留旧件绕过。
+        Cache = Ws.Combine("nuget");
+        Directory.CreateDirectory(Cache);
         Version = RepositoryLayout.PackageVersion;
         _ = RepositoryPackages.DirectoryPath;
         return true;
