@@ -21,7 +21,8 @@ env:
   # 签名包证书吊销检查（CRL/OCSP）走 HTTP/80 且仅 Windows 做——受限出口下
   # 可达性抖动能把 restore/publish 卡数十分钟（NuGet/Home#11548/#13659 同款
   # 实证，本仓 windows-arm 腿两次 4×3min 重试全超时即此面）；CI 取 offline
-  # 口径是文档记名的受限环境解法，本文件内 produce/manual/consume 腿同食；
+  # 口径是文档记名的受限环境解法，本文件内全部普通 job（produce/consume/
+  # manual/universal-*）同食；
   # syspkg/tests 是 workflow_call 复用工作流，顶层 env 不穿透（各自由
   # syspkg-verify.yml/test.yml 自带 env 覆盖——syspkg 全 Linux 腿无需此项）。
   NUGET_CERT_REVOCATION_MODE: "offline"
