@@ -1447,14 +1447,34 @@ public static class UpdaterBootstrapParityTests
     {
         for (var i = 0; i < 100; i++)
         {
-            var lines = File.Exists(rec) ? File.ReadAllLines(rec) : [];
+            var lines = CompleteLines(rec);
             if (lines.Length >= minLines)
             {
                 return lines;
             }
             Thread.Sleep(100);
         }
-        return File.Exists(rec) ? File.ReadAllLines(rec) : [];
+        return CompleteLines(rec);
+    }
+
+    // 只数换行终止的完整行：AppStub 的 app| 记录行由两次 printf/write 组成，
+    // File.ReadAllLines 会把尚无换行尾的半截段计作一行——慢宿主（qemu arm64 腿
+    // 实证一次，两次 write 间被调度拉开）读到 `app|pwd=<dir>` 裸半截会让
+    // DISPLAY/MYVAR 段断言假败。
+    static string[] CompleteLines(string rec)
+    {
+        if (!File.Exists(rec))
+        {
+            return [];
+        }
+        var text = File.ReadAllText(rec);
+        var end = text.LastIndexOf('\n');
+        if (end < 0)
+        {
+            return [];
+        }
+        var lines = text[..(end + 1)].Split('\n');
+        return lines[..^1];
     }
 
     // pm 记录行形态：" <名> <固定argv…> <暂存包>|DF=<DEBIAN_FRONTEND>"。
