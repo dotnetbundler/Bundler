@@ -37,6 +37,9 @@ public sealed class MsiPackageFixture : IAsyncLifetime
             "MSI smoke fixture 目录缺失。");
         Ws ??= IntegrationWorkspace.Create("windows-msi-integration", "windows.msi");
         Packages = Ws.Combine("packages");
+        // 还原缓存全类共享：-r win-x64 拖入的签名 runtime packs 下载+验签一次即
+        // 够——逐测试隔离缓存会让每次 restore 重走下载与 Windows 吊销检查面
+        //（签名验证仅 Windows 做，网络抖动即挂死，win-arm 腿实证两次）。
         Cache = Ws.Combine("nuget");
         Directory.CreateDirectory(Packages);
         Directory.CreateDirectory(Cache);
@@ -471,7 +474,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         File.Copy(Path.Combine(RepositoryLayout.Root, "Bundler.LocalPackages.props"),
             Path.Combine(dir, "Bundler.LocalPackages.props"));
         var project = Path.Combine(dir, "Msi.Api.PackageFixture.csproj");
-        var cache = Path.Combine(root, "nuget-cache");
+        var cache = _f.Cache;
         var config = PinnedPackageSource.WriteConfig(
             Path.Combine(root, "nuget-pin"), _f.Packages);
         Dotnet.RestoreWithRetry(
@@ -523,7 +526,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
                 var project = MsiSupport.CopyFixture(Path.Combine(root, $"fixture-{c.Name}"),
                     _f.FixtureSource);
                 MsiSupport.RestoreFixture(project, _f.Packages,
-                    Path.Combine(root, "nuget"), _f.Version, "windows-i686");
+                    _f.Cache, _f.Version, "windows-i686");
                 var msiDir = Publish(project, Path.Combine(root, $"output-{c.Name}"), id,
                     c.AppVersion, "windows-i686",
                     $"-p:BundlerWixVersion={c.Version}",
@@ -648,7 +651,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
                 var fixtureDir = Path.Combine(root, $"fixture-{version}");
                 var project = MsiSupport.CopyFixture(fixtureDir, _f.FixtureSource);
                 MsiSupport.RestoreFixture(project, _f.Packages,
-                    Path.Combine(root, "nuget"), _f.Version, "windows-x86_64");
+                    _f.Cache, _f.Version, "windows-x86_64");
                 msis.Add(Path.Combine(
                     Publish(project, Path.Combine(root, $"output-{version}"), id, version, "windows-x86_64",
                         "-p:MsiLifecycleTest=true", "-p:BundlerWixInstallDirectorySelection=true",
@@ -801,7 +804,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         {
             var project = MsiSupport.CopyFixture(Path.Combine(root, "fixture"), _f.FixtureSource);
             MsiSupport.RestoreFixture(project, _f.Packages,
-                Path.Combine(root, "nuget"), _f.Version, "windows-x86_64");
+                _f.Cache, _f.Version, "windows-x86_64");
             var msiDir = Publish(project, Path.Combine(root, "output"), id, "1.0.0", "windows-x86_64",
                 "-p:BundlerWixLanguages=en-US%3Bja-JP", "-p:BundlerWixStartMenuShortcut=true");
             var msiEn = Path.Combine(msiDir, $"{MsiName}-1.0.0-x64.msi");
@@ -884,7 +887,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         {
             var project = MsiSupport.CopyFixture(Path.Combine(root, "fixture"), _f.FixtureSource);
             MsiSupport.RestoreFixture(project, _f.Packages,
-                Path.Combine(root, "nuget"), _f.Version, "windows-x86_64");
+                _f.Cache, _f.Version, "windows-x86_64");
             var msi = Path.Combine(
                 Publish(project, Path.Combine(root, "output"), id, "1.0.0", "windows-x86_64",
                     "-p:MsiExtensionTest=true", "-p:BundlerWixExtensionIdPrefix=Ext."),
@@ -1017,7 +1020,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         };
         var productCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var upgradeCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var cache = Path.Combine(root, "packages");
+        var cache = _f.Cache;
         foreach (var variant in variants)
         {
             var output = Path.Combine(root, variant.Name);
@@ -1112,7 +1115,7 @@ public sealed class MsiPackageContractTests(MsiPackageFixture fixture) : IClassF
         {
             "-r", "win-x64", "-p:BundlerTarget=windows-x86_64",
             "-p:BundlerFormats=msi",
-            $"-p:RestorePackagesPath={Path.Combine(root, "packages")}",
+            $"-p:RestorePackagesPath={_f.Cache}",
             "-p:HelloBundlerMsiLanguage=en-US",
             "-p:HelloBundlerMsiInstallScope=currentUser",
             $"-p:BundlerOutputPath={output}",
