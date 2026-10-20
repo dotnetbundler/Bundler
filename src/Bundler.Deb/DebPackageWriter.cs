@@ -35,7 +35,9 @@ internal static class DebPackageWriter
         BundleConfiguration bundle,
         BundlePlanItem item,
         DebBundleConfiguration settings,
-        IBundleLogger logger)
+        string workDirectory,
+        IBundleLogger logger,
+        CancellationToken cancellationToken = default)
     {
         // 与门面 Validate 同一条校验链——直调 writer 也得到一致异常契约。
         DebValidation.Settings(settings, bundle);
@@ -52,11 +54,13 @@ internal static class DebPackageWriter
         // 构建——目标目录反正得装下成品），ar 装配时流式拷贝——全程不驻内存。
         // control.tar.gz 只有维护脚本与元数据（KB 级），留内存路径。
         Directory.CreateDirectory(item.OutputDirectory);
-        var dataTarGzPath = Path.Combine(item.OutputDirectory,
+        // 临时载荷件进 workDirectory（管线每轮清扫+陈旧扫描兜底）——写
+        // OutputDirectory 时进程崩溃会留 .bundler-deb-* 孤儿混在产物里。
+        var dataTarGzPath = Path.Combine(workDirectory,
             ".bundler-deb-" + Guid.NewGuid().ToString("N") + ".tar.gz");
         try
         {
-            GzipTarToFile(payload, dataTarGzPath);
+            GzipTarToFile(payload, dataTarGzPath, cancellationToken);
             var controlTarGz = Gzip.Compress(TarBytes(ControlEntries(bundle, payload, packageName, version,
                 architecture, maintainer, settings)));
 
@@ -86,20 +90,14 @@ internal static class DebPackageWriter
             }
             catch
             {
-                if (File.Exists(outputPath))
-                {
-                    File.Delete(outputPath);
-                }
-                if (File.Exists(outputPath + ".sha256"))
-                {
-                    File.Delete(outputPath + ".sha256");
-                }
+                FileTree.TryDeleteFile(outputPath);
+                FileTree.TryDeleteFile(outputPath + ".sha256");
                 throw;
             }
         }
         finally
         {
-            TryDelete(dataTarGzPath);
+            FileTree.TryDeleteFile(dataTarGzPath);
         }
     }
 
@@ -391,6 +389,14 @@ internal static class DebPackageWriter
         {
             var path = ValidateConffileDestination(destination, knob);
             var archivePath = path.TrimStart('/');
+            // 更新自持件豁免 conffile——bundler-update.json（feedUrl/pkg/
+            // publicKey）与 bundler-updater（换包执行体）打了 conffile 标记后
+            // 升级永不替换；显式列进 ConfigLocations 也不打（与 rpm 同口径）。
+            if (archivePath.EndsWith("/" + UpdateInstallIdentity.FileName, StringComparison.Ordinal) ||
+                archivePath.EndsWith("/bundler-updater", StringComparison.Ordinal))
+            {
+                return;
+            }
             if (!payloadFiles.Contains(archivePath))
             {
                 throw new ArgumentException(
@@ -489,7 +495,8 @@ internal static class DebPackageWriter
 
     // data tar 直写 gzip→文件：TarWriter 的 OpenContent 已惰性流源文件，
     // 这一层再把 tar/gzip 字节驻内存才是唯一的整量缓冲点。
-    private static void GzipTarToFile(IEnumerable<PayloadEntry> entries, string path)
+    private static void GzipTarToFile(IEnumerable<PayloadEntry> entries, string path,
+        CancellationToken cancellationToken)
     {
         using var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
         using (var gzip = Gzip.WrapWrite(file))
@@ -508,22 +515,7 @@ internal static class DebPackageWriter
                         ? () => new FileStream(entry.SourcePath!, FileMode.Open, FileAccess.Read, FileShare.Read)
                         : null,
                     LinkTarget = entry.LinkTarget
-                }));
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch
-        {
-            // 临时件清扫失败不遮主流程。
+                }), cancellationToken);
         }
     }
 

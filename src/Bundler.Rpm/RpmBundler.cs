@@ -27,6 +27,10 @@ public sealed class RpmBundler : IFormatBundler
         {
             throw new ArgumentNullException(nameof(bundle));
         }
+        if (bundle.Targets.Any(target => target is null))
+        {
+            throw new ArgumentException("Targets must not contain null elements.", nameof(bundle));
+        }
         if (bundle.Targets.SelectMany(target => target.Formats).Any(format => format != PackageFormat.Rpm))
         {
             var unsupported = bundle.Targets

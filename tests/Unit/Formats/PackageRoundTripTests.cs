@@ -15,12 +15,15 @@ public sealed class PackageRoundTripTests : TempBase
 {
     private readonly string _input;
     private readonly string _output;
+    private readonly string _work;
 
     public PackageRoundTripTests()
     {
         _input = Path.Combine(Root, "input");
         _output = Path.Combine(Root, "out");
+        _work = Path.Combine(Root, "work");
         Directory.CreateDirectory(_input);
+        Directory.CreateDirectory(_work);
         File.WriteAllText(Path.Combine(_input, "sample"), "#!/bin/sh\necho hi\n");
         File.WriteAllText(Path.Combine(_input, "readme.txt"), "doc\n");
     }
@@ -47,7 +50,8 @@ public sealed class PackageRoundTripTests : TempBase
     {
         var result = DebPackageWriter.Build(
             Bundle(), Item(LinuxX64, PackageFormat.Deb),
-            new DebBundleConfiguration(), NullBundleLogger.Instance);
+            new DebBundleConfiguration(), _work, NullBundleLogger.Instance,
+            TestContext.Current.CancellationToken);
 
         Assert.EndsWith(".deb", result.OutputPath);
         Assert.Equal("sample", result.PackageName);
@@ -82,7 +86,8 @@ public sealed class PackageRoundTripTests : TempBase
     {
         var result = RpmPackageWriter.Build(
             Bundle(), Item(LinuxX64, PackageFormat.Rpm),
-            new RpmBundleConfiguration(), NullBundleLogger.Instance);
+            new RpmBundleConfiguration(), _work, NullBundleLogger.Instance,
+            TestContext.Current.CancellationToken);
 
         Assert.EndsWith(".rpm", result.OutputPath);
         Assert.Equal("sample", result.PackageName);
@@ -104,7 +109,8 @@ public sealed class PackageRoundTripTests : TempBase
     {
         var result = ApkPackageWriter.Build(
             Bundle(), Item(LinuxX64, PackageFormat.AlpineApk),
-            new AlpineApkBundleConfiguration(), NullBundleLogger.Instance);
+            new AlpineApkBundleConfiguration(), _work, NullBundleLogger.Instance,
+            TestContext.Current.CancellationToken);
 
         Assert.EndsWith(".apk", result.Path);
 
@@ -138,7 +144,7 @@ public sealed class PackageRoundTripTests : TempBase
             {
                 Signing = new KeyFileSigningConfiguration { KeyFile = keyPath }
             },
-            NullBundleLogger.Instance);
+            _work, NullBundleLogger.Instance, TestContext.Current.CancellationToken);
 
         var streams = ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(result.Path));
         Assert.Equal(3, streams.Count); // signature + control + data
@@ -160,6 +166,6 @@ public sealed class PackageRoundTripTests : TempBase
                         KeyFile = Path.Combine(Root, "nope.pem")
                     }
                 },
-                NullBundleLogger.Instance));
+                _work, NullBundleLogger.Instance, TestContext.Current.CancellationToken));
     }
 }

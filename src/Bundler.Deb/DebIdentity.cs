@@ -10,30 +10,10 @@ internal static class DebName
         "^[a-z0-9][a-z0-9+.-]+$", RegexOptions.Compiled);
 
     // Kebab-cases a product name into a valid Debian package name.
+    // Algorithm shared with RPM via DotNet.Bundler.Core.PackageNames.
     internal static string Sanitize(string productName)
     {
-        var builder = new StringBuilder(productName.Length);
-        var pendingSeparator = false;
-        foreach (var raw in productName.Trim().ToLowerInvariant())
-        {
-            var c = raw == '_' ? '-' : raw;
-            var valid = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-                c == '+' || c == '-' || c == '.';
-            if (valid)
-            {
-                if (pendingSeparator && builder.Length > 0 && builder[builder.Length - 1] != '-')
-                {
-                    builder.Append('-');
-                }
-                pendingSeparator = false;
-                builder.Append(c);
-            }
-            else
-            {
-                pendingSeparator = builder.Length > 0;
-            }
-        }
-        var name = builder.ToString().Trim('-', '+', '.');
+        var name = DotNet.Bundler.Core.PackageNames.SanitizeLinuxName(productName);
         if (!ValidName.IsMatch(name))
         {
             throw new ArgumentException(
@@ -74,13 +54,20 @@ internal static class DebVersion
         }
 
         var upstream = MapUpstream(semver);
+        // Release 三态契约：未写（null）→ "1"；显式空串 → 裸 upstream 无
+        // revision 段（Debian 原生包形态）；非空 → 校验后拼 "-<revision>"。
+        if (settings.Release is { Length: 0 })
+        {
+            Validate(upstream);
+            return upstream;
+        }
         var revision = settings.Release ?? "1";
-        if (revision.Length > 0 && !ValidRevision.IsMatch(revision))
+        if (!ValidRevision.IsMatch(revision))
         {
             throw new ArgumentException(
                 $"'{revision}' is not a valid Debian revision (allowed: letters, digits, '+', '.', '~').");
         }
-        var version = revision.Length > 0 ? upstream + "-" + revision : upstream;
+        var version = upstream + "-" + revision;
         if (settings.Epoch is { Length: > 0 } epoch)
         {
             if (!epoch.All(char.IsDigit))

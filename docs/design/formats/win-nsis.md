@@ -149,6 +149,7 @@
 ### 4.15 压缩与杂项
 
 - `Compression`/`BundlerNsisCompression`：`lzma`（默认）、`zlib`、`bzip2`、`none`，四种均经内嵌 makensis 实际编译验证。
+- 同名产物构建侧覆盖：NSIS 安装器非内容寻址身份（产物名只含产品名/版本/目标），同路径直接覆盖重建；MSI 因 ProductVersion 三段身份不可区分同版异载荷，按拒改处理（见 `win-msi.md` 身份节）——两侧语义刻意不同，各自随格式身份模型走。
 - JSON 配置路径保留文件关联、URL 协议及元数据——CLI 共享入口不静默丢能力。
 - `IBundleSigner` 请求携带产物类别、产品名、目标 RID；类别区分主程序/显式 payload/Bundler 原生组件/卸载器/安装器。
 - `ToolCacheDirectory`：默认用户级内容寻址缓存可显式覆盖；信任锚为固定 ZIP SHA-256 与逐文件 manifest 哈希，覆盖篡改、额外文件、并发、Unicode 与长路径。

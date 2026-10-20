@@ -37,6 +37,7 @@ internal static class TestPlatform
         "macos-x86_64" => "osx-x64",
         "macos-aarch64" => "osx-arm64",
         "linux-x86_64" => "linux-x64",
+        "linux-i686" => "linux-x86",
         "linux-aarch64" => "linux-arm64",
         "linux-musl-x86_64" => "linux-musl-x64",
         "linux-musl-aarch64" => "linux-musl-arm64",

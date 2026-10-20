@@ -63,9 +63,6 @@ internal static class Dotnet
         return archive.Entries.Select(e => e.FullName).ToArray();
     }
 
-    public static void Restore(string project, IEnumerable<string> properties, string what)
-        => RestoreWithRetry(["restore", project, .. properties], what);
-
     // NuGet 还原在共享 runner 上偶发连接层挂死（零输出卡到进程超时，
     // CI windows-11-arm 实证一单挂满 10min）——restore 幂等，超时/非零退出有界重试。
     // 挂死特征是打完 "Determining projects to restore..." 即零输出僵住：

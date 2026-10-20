@@ -141,8 +141,15 @@ internal static class NativeSpawnUnix
             }
             foreach (var child in pending)
             {
+                // 阻塞等待方（WaitForExit() 无参）持着该子件 ReapLock 时本趟
+                // 跳过——lock 排队会把轮询线程钉死在这一个 pid 上，其余全部
+                // 子件的收尸与 Exited 派发随之停摆（饿死在前的实测病理）。
+                if (!Monitor.TryEnter(child.ReapLock))
+                {
+                    continue;
+                }
                 Action? onReaped = null;
-                lock (child.ReapLock)
+                try
                 {
                     if (!child.Reaped && TryReap(child.Pid, out var code))
                     {
@@ -150,6 +157,10 @@ internal static class NativeSpawnUnix
                         child.ExitCode = code;
                         onReaped = child.OnReaped;
                     }
+                }
+                finally
+                {
+                    Monitor.Exit(child.ReapLock);
                 }
                 try { onReaped?.Invoke(); }
                 catch { /* 订阅者异常不外溢收尸链 */ }
@@ -244,8 +255,9 @@ internal static class NativeSpawnUnix
                 stdinPipe[1], stdoutPipe[0], stderrPipe[0]);
             callInFlight = spawn.TimedOut; // 仅在超腿时调用可能还在栈内
 
-            // 父件：无论成败先关子件端。
-            CloseIf(stdinPipe[0]); CloseIf(stdoutPipe[1]); CloseIf(stderrPipe[1]);
+            // 父件：无论成败先关子件端（槽位置 -1，其后 CloseAll 不会双关
+            // 误伤并发 open 复用同号的无关 fd）。
+            CloseIf(stdinPipe, 0); CloseIf(stdoutPipe, 1); CloseIf(stderrPipe, 1);
             if (spawn.Failure is not null)
             {
                 CloseAll(stdinPipe); CloseAll(stdoutPipe); CloseAll(stderrPipe);
@@ -726,8 +738,12 @@ internal static class NativeSpawnUnix
 
     private static Win32Exception PipeFailure() => new(Marshal.GetLastWin32Error(), "pipe/fcntl failed.");
 
-    private static void CloseIf(int fd)
+    // 槽位关闭一并置 -1：两关之间 fd 号可被并发 open 复用——关后不置 -1，
+    // 后续 CloseAll 会把同一个号当"自己的 fd"再关一次，误杀无关描述符。
+    private static void CloseIf(int[] fds, int index)
     {
+        var fd = fds[index];
+        fds[index] = -1;
         if (fd >= 0)
         {
             _ = close(fd);
@@ -736,8 +752,8 @@ internal static class NativeSpawnUnix
 
     private static void CloseAll(int[] fds)
     {
-        CloseIf(fds[0]);
-        CloseIf(fds[1]);
+        CloseIf(fds, 0);
+        CloseIf(fds, 1);
     }
 
     private static byte[] Utf8(string s) => Encoding.UTF8.GetBytes(s + '\0');

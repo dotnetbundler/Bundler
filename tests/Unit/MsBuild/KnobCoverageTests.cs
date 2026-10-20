@@ -177,9 +177,64 @@ public sealed class KnobCoverageTests
         }
     }
 
+    // targets 引用但 props 刻意不设 eval 期默认的旋钮——例外登记：
+    // BundlerFormats 设默认会抢占消费方按 BundlerTarget 的格式选型（props 注释有记）；
+    // BundlerIdentifier 是必填旋钮，用户必须显式给。
+    private static readonly HashSet<string> UndeclaredByDesign = new(StringComparer.Ordinal)
+    {
+        "BundlerFormats",
+        "BundlerIdentifier",
+    };
+
+    [Fact]
+    public void ConsumedBundlerProperties_AllDeclaredOrRegistered()
+    {
+        // props/targets 镜像断言：targets 消费的每个 $(BundlerX) 必须有
+        // props 缺省声明或登记进 UndeclaredByDesign——新旋钮漏声明在这里当场炸。
+        var props = File.ReadAllText(PropsPath());
+        var declared = System.Text.RegularExpressions.Regex
+            .Matches(props, @"<(Bundler[A-Za-z0-9]+)[\s>]")
+            .Select(match => match.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+        var targets = File.ReadAllText(TargetsPath());
+        var used = System.Text.RegularExpressions.Regex
+            .Matches(targets, @"\$\((Bundler[A-Za-z0-9]+)\)")
+            .Select(match => match.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+        var missing = used.Where(name => !declared.Contains(name) && !UndeclaredByDesign.Contains(name)).ToArray();
+        Assert.Empty(missing);
+        // 反向：例外表不得挂已声明项（例外作废必须随声明删除，防表烂尾）。
+        var stale = UndeclaredByDesign.Where(declared.Contains).ToArray();
+        Assert.Empty(stale);
+    }
+
+    [Fact]
+    public void RidMap_TargetsAreCanonicalAndPublishable()
+    {
+        // _BundlerRidMap 是 eval 期的 target→publish-RID 镜像表：Identity 必须是
+        // canonical BundleTarget 词，RID 必须与 TestPlatform.ToPublishRid 一致——
+        // 表漂一格，推导出的 BundlerTarget/RID 静默错乱。
+        var targets = File.ReadAllText(TargetsPath());
+        var entries = System.Text.RegularExpressions.Regex
+            .Matches(targets, @"<_BundlerRidMap Include=""([^""]+)"">\s*<Rid>([^<]+)</Rid>")
+            .Select(match => (Target: match.Groups[1].Value, Rid: match.Groups[2].Value.Trim()))
+            .ToArray();
+        Assert.True(entries.Length >= 8, $"_BundlerRidMap 只剩 {entries.Length} 行——镜像表被破坏");
+        foreach (var (target, rid) in entries)
+        {
+            var parsed = BundleTarget.Parse(target);
+            Assert.Equal(target, parsed.Target);
+            Assert.Equal(rid, TestPlatform.ToPublishRid(target));
+        }
+    }
+
     private static string TargetsPath() =>
         Path.Combine(RepoRoot(), "src", "Bundler.MSBuild", "buildTransitive",
             "DotNet.Bundler.MSBuild.targets");
+
+    private static string PropsPath() =>
+        Path.Combine(RepoRoot(), "src", "Bundler.MSBuild", "buildTransitive",
+            "DotNet.Bundler.MSBuild.props");
 
     private static string RepoRoot()
     {

@@ -216,8 +216,10 @@ internal static class PayloadSource
         {
             // lstat-based reads disagree on dangling links across hosts; a
             // readable link target is enough to classify it as a link.
+            // 非链接时返回 0 而非 -1：-1 全位置 1 会被 Directory 位检查误判
+            // 成目录，让 stat 失败的瞬态项走 WalkTree 炸掉；0 则落非常规件跳过。
             isLink = LinkProbe.TryReadTarget(path, out _);
-            return (FileAttributes)(-1);
+            return (FileAttributes)0;
         }
     }
 

@@ -62,6 +62,10 @@ internal static class WixLocale
             .Select(pair => pair.Key).ToArray();
     }
 
+    // 产品名/发布者/描述这类非 locale 负载串同按 MSI 码页编码——
+    // UnencodableIds 只覆盖 UI 串，这些字段单独走本判定（WixBundler.Validate）。
+    internal static bool CanEncodeValue(string value, int codepage) => CanEncode(value, codepage);
+
     private static bool CanEncode(string value, int codepage)
     {
         // WC_ERR_INVALID_CHARS is not honored by every ANSI code page, so rely

@@ -45,7 +45,9 @@ internal static class RpmPackageWriter
         BundleConfiguration bundle,
         BundlePlanItem item,
         RpmBundleConfiguration settings,
-        IBundleLogger logger)
+        string workDirectory,
+        IBundleLogger logger,
+        CancellationToken cancellationToken = default)
     {
         // 与门面 Validate 同一条校验链——直调 writer 也得到一致异常契约。
         RpmValidation.Settings(settings, bundle);
@@ -58,11 +60,11 @@ internal static class RpmPackageWriter
         var vendor = resolved.Vendor;
 
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
-        // cpio 直写 gzip→输出目录旁的临时文件（/tmp 小卷不堵构建——目标目录
+        // cpio 直写 gzip→workDirectory 临时文件（/tmp 小卷不堵构建——输出卷
         // 反正得装下成品），全程不驻内存；未压缩 cpio 的尺寸与 sha256
         // （PAYLOADSIZE / PAYLOADDIGESTALT）由穿透流边写边算。
         Directory.CreateDirectory(item.OutputDirectory);
-        var payloadPath = Path.Combine(item.OutputDirectory,
+        var payloadPath = Path.Combine(workDirectory,
             ".bundler-rpm-" + Guid.NewGuid().ToString("N") + ".cpio.gz");
         try
         {
@@ -74,7 +76,7 @@ internal static class RpmPackageWriter
                 using (var gzip = Gzip.WrapWrite(raw))
                 {
                     var digest = new DigestWriteStream(gzip, cpioHash);
-                    CpioWriter.Write(digest, payload.Select(ToCpioEntry).ToList());
+                    CpioWriter.Write(digest, payload.Select(ToCpioEntry).ToList(), cancellationToken);
                     cpioSize = digest.BytesWritten;
                     digest.FinishHash();
                 }
@@ -102,7 +104,8 @@ internal static class RpmPackageWriter
                     "Signing package (RPMSIGTAG_RSA + RPMSIGTAG_PGP).");
             }
             var signatureHeader = RpmHeaderWriter.Write(SignatureEntries(
-                mainHeader, compressedSize, cpioSize, payloadPath, rsaSignature, pgpSignature), 62);
+                mainHeader, compressedSize, cpioSize, payloadPath, rsaSignature, pgpSignature,
+                cancellationToken), 62);
             signatureHeader = Align8(signatureHeader);
 
             var fileName = packageName + "-" + mapped.Version + "-" + mapped.Release +
@@ -133,14 +136,14 @@ internal static class RpmPackageWriter
             }
             catch
             {
-                TryDelete(outputPath);
-                TryDelete(outputPath + ".sha256");
+                FileTree.TryDeleteFile(outputPath);
+                FileTree.TryDeleteFile(outputPath + ".sha256");
                 throw;
             }
         }
         finally
         {
-            TryDelete(payloadPath);
+            FileTree.TryDeleteFile(payloadPath);
         }
     }
 
@@ -216,7 +219,7 @@ internal static class RpmPackageWriter
 
     private static List<RpmHeaderWriter.Entry> SignatureEntries(
         byte[] mainHeader, long compressedSize, long cpioSize, string payloadPath,
-        byte[]? rsaSignature, byte[]? pgpSignature)
+        byte[]? rsaSignature, byte[]? pgpSignature, CancellationToken cancellationToken)
     {
         // RPMSIGTAG_SIZE = main header bytes + compressed payload bytes
         var packageSize = (long)mainHeader.Length + compressedSize;
@@ -229,6 +232,7 @@ internal static class RpmPackageWriter
             int read;
             while ((read = payloadStream.Read(chunk, 0, chunk.Length)) > 0)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 md5.TransformBlock(chunk, 0, read, null, 0);
             }
         }
@@ -831,10 +835,5 @@ internal static class RpmPackageWriter
         }
         using var stream = File.OpenRead(entry.SourcePath!);
         return Hashes.ToLowerHex(sha256.ComputeHash(stream));
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { if (File.Exists(path)) File.Delete(path); } catch { /* best effort */ }
     }
 }

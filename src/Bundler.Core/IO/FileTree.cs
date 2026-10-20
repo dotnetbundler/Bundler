@@ -128,4 +128,22 @@ internal static class FileTree
         }
         return true;
     }
+
+    /// <summary>
+    /// 尽力删除单个文件——失败路径清理专用：删除本身失败（权限/占用）不得
+    /// 遮蔽触发清理的真实异常，静默吞掉。
+    /// </summary>
+    internal static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception)
+        {
+        }
+    }
 }

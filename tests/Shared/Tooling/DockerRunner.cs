@@ -159,13 +159,4 @@ internal static class DockerRunner
         return ProcessRunner.Run("docker", args,
             new ProcessRunner.Options { Timeout = timeout ?? TimeSpan.FromMinutes(10) });
     }
-
-    public static ProcessRunner.Result CheckedScript(string image, string script,
-        string what, IEnumerable<Mount>? mounts = null, string? platform = null,
-        TimeSpan? timeout = null, string? extraArgs = null)
-    {
-        var result = RunScript(image, script, mounts, platform, timeout, extraArgs);
-        ProcessRunner.AssertSuccess(result, what);
-        return result;
-    }
 }

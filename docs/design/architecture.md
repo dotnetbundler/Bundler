@@ -19,7 +19,7 @@ BundleArtifact[]（产物清单）
 ```
 
 - 三个入口**都落到同一套门面+管线**，没有任何一个入口自带打包语义（`docs/project/project-rules.md` §1）。
-- 一个配置可同时请求多格式多目标：入口先**统一预检**（共享校验 + 各格式 `Validate`，配置类错误一次报完），再**逐格式构建**（单格式失败不拖累其余，末位汇总）。
+- 一个配置可同时请求多格式多目标：入口先**统一预检**（共享校验 + 各格式 `Validate`，配置类错误一次报完），再**逐格式构建**（单格式失败不拖累其余，末位汇总）——CLI 与 MSBuild 共用 `Bundler.Core/Backends/BundleOrchestrator`（`PlanFanout`/`BuildAllAsync`/`EmitUpdateAsync` 三段），两入口不再各带一份扇出实现；UPDATE 清单发射在全部格式产物生成后由编排器尾段统一触发。
 
 ## 2. 输入模型（`Bundler.Abstractions`）
 

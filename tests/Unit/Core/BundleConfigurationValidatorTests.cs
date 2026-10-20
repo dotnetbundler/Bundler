@@ -292,6 +292,26 @@ public sealed class BundleConfigurationValidatorTests : TempBase
     }
 
     [Theory]
+    [InlineData("a/./b", true)]
+    [InlineData("a//b", true)]
+    [InlineData("./a", true)]
+    [InlineData("a/", true)]
+    [InlineData("a/b/c", false)]
+    public void Resources_TargetPath_RejectsDotAndEmptySegments(string destination, bool expectIssue)
+    {
+        // "." 与空段会让各后端归一成不同落点——与归档 entry 归一化同口径拒绝。
+        var config = ValidConfig.Create();
+        config = new BundleConfiguration
+        {
+            ProductName = config.ProductName, Identifier = config.Identifier,
+            Version = config.Version, OutputDirectory = config.OutputDirectory,
+            Targets = config.Targets,
+            Resources = [new BundleResourceConfiguration { Source = "s", Destination = destination }]
+        };
+        Assert.Equal(expectIssue, HasIssue(Validate(config), "resources[0].targetPath"));
+    }
+
+    [Theory]
     [InlineData("license.txt", false)]
     [InlineData("license.rtf", false)]
     [InlineData("license.md", true)]

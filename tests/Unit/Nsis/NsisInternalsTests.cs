@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using DotNet.Bundler.Core;
 using DotNet.Bundler.Nsis;
 
 namespace Bundler.UnitTests.Nsis;

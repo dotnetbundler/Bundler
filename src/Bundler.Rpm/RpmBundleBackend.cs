@@ -13,7 +13,8 @@ internal sealed class RpmBundleBackend(RpmBundleConfiguration settings) : IBundl
     {
         // The writer is pure managed code: no host-OS gate and no external tools.
         var result = RpmPackageWriter.Build(
-            context.Configuration, context.Item, settings, context.Logger);
+            context.Configuration, context.Item, settings,
+            context.WorkDirectory, context.Logger, cancellationToken);
         return Task.FromResult<IReadOnlyList<BundleArtifact>>(
             [new BundleArtifact(PackageFormat.Rpm, context.Item.Target.Target,
                 result.OutputPath)]);

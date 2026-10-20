@@ -859,9 +859,12 @@ public sealed class RpmTests : TempBase
             "The MSBuild task does not construct the .rpm backend.");
         var msbuildProject = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Bundler.MSBuild", "Bundler.MSBuild.csproj"));
         Assert.Contains("DotNet.Bundler.Rpm.dll", msbuildProject);
-        // The multi-format fanout is the RPM-1 contract.
-        Assert.True(task.Contains("foreach (var format in formats.Distinct())", StringComparison.Ordinal) &&
-               task.Contains("artifacts.AddRange(produced)", StringComparison.Ordinal),
+        // The multi-format fanout is the RPM-1 contract — 现由共享
+        // BundleOrchestrator 承载（CLI/MSBuild 同路），任务侧只需走编排器。
+        var orchestrator = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Bundler.Core", "Backends", "BundleOrchestrator.cs"));
+        Assert.True(task.Contains("BundleOrchestrator", StringComparison.Ordinal) &&
+               orchestrator.Contains("foreach (var item in pending)", StringComparison.Ordinal) &&
+               orchestrator.Contains("artifacts.AddRange(produced)", StringComparison.Ordinal),
             "The MSBuild dispatch must fan out per format.");
     }
 

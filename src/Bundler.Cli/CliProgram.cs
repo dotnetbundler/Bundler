@@ -195,14 +195,31 @@ public static class CliProgram
         BundleConfiguration source, CliArguments parsed, out string? mergedDirectory)
     {
         mergedDirectory = null;
+        var referenceDir = parsed.OptionalOption("reference-dir");
         if (parsed.InputDirectories.Count <= 1 || source.Targets.Count == 0)
         {
+            // reference-dir 只服务多输入 universal 合并——单输入给了属于语义
+            // 不命中（静默吞旋钮比报错更糟）。
+            if (referenceDir is not null)
+            {
+                throw new CliUsageException(
+                    "--reference-dir only applies when multiple --input-dir values are merged into a universal payload.");
+            }
             return source;
         }
         var dirs = parsed.InputDirectories.Select(Path.GetFullPath).ToArray();
+        // 缺件输入目录在合并路前置判成用法错误——单输入路径由
+        // BundleConfigurationValidator 归 rc=2，合并路抛裸
+        // DirectoryNotFoundException 会落 rc=1（同一用户错误两个出口码）。
+        foreach (var dir in dirs)
+        {
+            if (!Directory.Exists(dir))
+            {
+                throw new CliUsageException($"--input-dir '{dir}' does not exist.");
+            }
+        }
         var input = Path.Combine(Path.GetTempPath(), "bundler-universal-" + Guid.NewGuid().ToString("N"));
         mergedDirectory = input; // assign before Merge so the finally cleanup also covers merge failures
-        var referenceDir = parsed.OptionalOption("reference-dir");
         if (referenceDir is not null && !Directory.Exists(referenceDir))
         {
             throw new CliUsageException(
@@ -358,47 +375,15 @@ public static class CliProgram
     {
         var formats = configuration.Targets.SelectMany(t => t.Formats).Distinct().ToArray();
         var artifacts = new List<BundleArtifact>();
-        var failures = new List<(PackageFormat Format, string Reason)>();
 
         // 统一预检：共享配置与各格式旋钮在扇出前一次验全；配置类错误聚合
         // 报完即 rc=2；宿主门禁格式不进预检，留构建趟按逐格式容错处理。
-        var validationErrors = new List<(string Path, string Message)>();
-        try
-        {
-            BundlePlanner.Create(configuration);
-        }
-        catch (BundleValidationException validation)
-        {
-            foreach (var issue in validation.Issues)
-            {
-                // target×format 矩阵不兼容（"X is not supported for Y"）属显式请求的
-                // 用法错——归聚合配置错 rc=2；宿主门禁（PNSE）才走逐格式容错 rc=1。
-                validationErrors.Add((issue.Path, issue.Message));
-            }
-        }
-        var pending = new List<(PackageFormat Format, BundleConfiguration Single, IFormatBundler? Bundler)>();
-        foreach (var format in formats)
-        {
-            var single = SingleFormatConfiguration(configuration, format);
-            try
-            {
-                var bundler = FormatDispatcher.Create(format, resolved, logger);
-                bundler.Validate(single);
-                pending.Add((format, single, bundler));
-            }
-            catch (PlatformNotSupportedException)
-            {
-                pending.Add((format, single, null));
-            }
-            catch (BundleValidationException validation)
-            {
-                validationErrors.AddRange(validation.Issues.Select(issue => (issue.Path, issue.Message)));
-            }
-            catch (Exception exception) when (exception is not CliUsageException)
-            {
-                validationErrors.Add((FormatName(format), exception.Message));
-            }
-        }
+        var pending = new List<FormatFanoutItem>();
+        var validationErrors = BundleOrchestrator.PlanFanout(
+            configuration, formats,
+            format => SingleFormatConfiguration(configuration, format),
+            format => FormatDispatcher.Create(format, resolved, logger),
+            pending);
         if (validationErrors.Count > 0)
         {
             foreach (var (path, message) in validationErrors)
@@ -408,42 +393,23 @@ public static class CliProgram
             return 2;
         }
 
-        foreach (var (format, single, bundler) in pending)
-        {
-            try
-            {
-                var produced = (bundler ?? FormatDispatcher.Create(format, resolved, logger))
-                    .BuildAsync(single)
-                    .GetAwaiter().GetResult();
-                artifacts.AddRange(produced);
-            }
-            catch (Exception exception) when (exception is not BundleValidationException and not CliUsageException)
-            {
-                // 逐格式独立失败：单格式失败不拖累其余格式，末位汇总非零 rc；
-                // 校验拒绝仍是 rc=2 用法层错误，直接向上传播。
-                failures.Add((format, exception.Message));
-                logger.Log(BundleLogLevel.Warning,
-                    $"format '{FormatName(format)}' failed: {exception.Message}");
-            }
-        }
+        // 逐格式独立失败：单格式失败不拖累其余格式，末位汇总非零 rc；
+        // 校验拒绝/用法层错误不容错，直接向上传播。
+        var failures = BundleOrchestrator.BuildAllAsync(
+            pending,
+            format => FormatDispatcher.Create(format, resolved, logger),
+            artifacts, logger,
+            isFatal: exception => exception is CliUsageException)
+            .GetAwaiter().GetResult();
 
-        var updateArtifacts = configuration.Update is null || artifacts.Count == 0
+        IReadOnlyList<string> updateArtifacts = configuration.Update is null
             ? Array.Empty<string>()
-            : UpdateManifestEmitter.EmitAsync(configuration, artifacts)
-                .GetAwaiter().GetResult();
-        if (configuration.Update is not null && artifacts.Count == 0)
-        {
-            logger.Log(BundleLogLevel.Warning,
-                "update is enabled but no artifacts were produced; " +
-                "no update feed was emitted — installed apps keep polling the last published feed.");
-        }
-        else if (configuration.Update is not null &&
-                 !artifacts.Any(a => UpdateManifestEmitter.IsUpdateAdapted(a.Format)))
-        {
-            logger.Log(BundleLogLevel.Warning,
-                "update is enabled but no produced format is update-adapted; " +
-                "the emitted feed carries no artifacts — clients read it as 'no update'.");
-        }
+            : BundleOrchestrator.EmitUpdateAsync(
+                configuration, artifacts,
+                (configured, produced, cancellationToken) =>
+                    UpdateManifestEmitter.EmitAsync(configured, produced, cancellationToken),
+                UpdateManifestEmitter.IsUpdateAdapted,
+                logger).GetAwaiter().GetResult();
 
         if (parsed.Json)
         {
@@ -496,11 +462,7 @@ public static class CliProgram
                     Formats = [format]
                 }).ToArray());
 
-    private static string FormatName(PackageFormat format) => format switch
-    {
-        PackageFormat.TarGz => "targz",
-        _ => format.ToString().ToLowerInvariant()
-    };
+    private static string FormatName(PackageFormat format) => BundleOrchestrator.DisplayName(format);
 
     private static string CliVersion() =>
         typeof(CliProgram).Assembly

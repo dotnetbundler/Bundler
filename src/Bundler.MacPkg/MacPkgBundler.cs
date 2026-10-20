@@ -27,6 +27,10 @@ public sealed class MacPkgBundler : IFormatBundler
         {
             throw new ArgumentNullException(nameof(bundle));
         }
+        if (bundle.Targets.Any(target => target is null))
+        {
+            throw new ArgumentException("Targets must not contain null elements.", nameof(bundle));
+        }
         if (bundle.Targets.SelectMany(target => target.Formats).Any(format => format != PackageFormat.Pkg))
         {
             var unsupported = bundle.Targets
@@ -44,6 +48,15 @@ public sealed class MacPkgBundler : IFormatBundler
         // 构建管线内嵌 .app 阶段，其旋钮一并预检。
         MacAppBundler.ValidateConfiguration(_appConfiguration, bundle);
         MacPkgBundleBackend.ValidateConfiguration(_pkgConfiguration, bundle);
+        // pkg 级公证提交的是内嵌 .app 的容器——内件代码签名未开 hardened
+        // runtime 时 notary 服务端拒收，前置拦在扇出前。
+        if (_pkgConfiguration.Signing?.Notarize == true &&
+            _appConfiguration.Signing?.HardenedRuntime != true)
+        {
+            throw new ArgumentException(
+                ".pkg notarization requires the bundled .app signing to enable HardenedRuntime — " +
+                "Apple's notary service rejects the inner code signature without it.");
+        }
     }
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(

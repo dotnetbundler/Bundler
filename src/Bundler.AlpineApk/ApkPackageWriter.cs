@@ -34,7 +34,9 @@ internal static class ApkPackageWriter
         BundleConfiguration bundle,
         BundlePlanItem item,
         AlpineApkBundleConfiguration settings,
-        IBundleLogger logger)
+        string workDirectory,
+        IBundleLogger logger,
+        CancellationToken cancellationToken = default)
     {
         // 与门面 Validate 同一条校验链——直调 writer 也得到一致异常契约。
         ApkValidation.Settings(settings, bundle);
@@ -53,14 +55,14 @@ internal static class ApkPackageWriter
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
 
         // Data segment first: .PKGINFO carries the sha256 of its gzip stream.
-        // data tar.gz 是大件——直写输出目录旁的临时文件不驻内存（/tmp 小卷不堵
-        // 构建——目标目录反正得装下成品）；control/签名段 KB 级留内存。
+        // data tar.gz 是大件——直写 workDirectory 临时文件不驻内存（/tmp 小卷
+        // 不堵构建——输出卷反正得装下成品）；control/签名段 KB 级留内存。
         Directory.CreateDirectory(item.OutputDirectory);
-        var dataGzipPath = Path.Combine(item.OutputDirectory,
+        var dataGzipPath = Path.Combine(workDirectory,
             ".bundler-apk-" + Guid.NewGuid().ToString("N") + ".tar.gz");
         try
         {
-            GzipTarToFile(payload, dataGzipPath, omitEndOfArchive: false);
+            GzipTarToFile(payload, dataGzipPath, omitEndOfArchive: false, cancellationToken);
             var dataHash = Hashes.Sha256HexFile(dataGzipPath);
         var installedSize = payload
             .Where(entry => entry.Kind == TarEntryKind.File)
@@ -140,36 +142,15 @@ internal static class ApkPackageWriter
         {
             // No half-written package is left behind on failure; 同删陈旧
             // .sha256 旁车，避免失败构建留下与实际产物不匹配的哈希。
-            if (File.Exists(outputPath))
-            {
-                File.Delete(outputPath);
-            }
-            if (File.Exists(outputPath + ".sha256"))
-            {
-                File.Delete(outputPath + ".sha256");
-            }
+            FileTree.TryDeleteFile(outputPath);
+            FileTree.TryDeleteFile(outputPath + ".sha256");
             throw;
         }
         return new Result { Path = outputPath };
         }
         finally
         {
-            TryDelete(dataGzipPath);
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch
-        {
-            // 临时件清扫失败不遮主流程。
+            FileTree.TryDeleteFile(dataGzipPath);
         }
     }
 
@@ -284,6 +265,12 @@ internal static class ApkPackageWriter
             throw new FileNotFoundException(
                 $"The .apk script '{name}' does not exist: {full}", full);
         }
+        // fifo/设备件 File.Exists 照收——fifo 会让 ReadAllBytes 永久阻塞。
+        if (!UnixFileTypes.IsRegularFile(full))
+        {
+            throw new ArgumentException(
+                $"The .apk script '{name}' must be a regular file: {full}");
+        }
         var bytes = File.ReadAllBytes(full);
         var hasBom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
         if (bytes.Length == 0 || hasBom ||
@@ -300,7 +287,9 @@ internal static class ApkPackageWriter
     {
         foreach (var (path, name) in ScriptKnobs(settings))
         {
-            if (path is null)
+            // 空串与 null 同判缺席（deb AddScript/rpm 脚本旋钮同口径）——
+            // "" 漏到 ReadScript 只会落成一句没说哪个旋钮的 FileNotFound。
+            if (path is not { Length: > 0 })
             {
                 continue;
             }
@@ -441,7 +430,8 @@ internal static class ApkPackageWriter
     // data tar 直写 gzip→文件：TarWriter 的 OpenContent 已惰性流源文件，
     // 这一层再把 tar/gzip 字节驻内存才是唯一的整量缓冲点。
     private static void GzipTarToFile(
-        IEnumerable<PayloadEntry> entries, string path, bool omitEndOfArchive)
+        IEnumerable<PayloadEntry> entries, string path, bool omitEndOfArchive,
+        CancellationToken cancellationToken)
     {
         using var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
         using (var gzip = Gzip.WrapWrite(file))
@@ -461,7 +451,7 @@ internal static class ApkPackageWriter
                             : () => new FileStream(entry.SourcePath!, FileMode.Open, FileAccess.Read, FileShare.Read),
                     LinkTarget = entry.LinkTarget,
                     PaxRecords = PayloadPaxRecords(entry)
-                }), omitEndOfArchive);
+                }), omitEndOfArchive, cancellationToken);
         }
     }
 

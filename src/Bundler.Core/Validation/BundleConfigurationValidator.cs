@@ -83,10 +83,13 @@ public static class BundleConfigurationValidator
             }
             Required(resource.Source, $"resources[{index}].source", issues);
             Required(resource.Destination, $"resources[{index}].targetPath", issues);
+            // 与 ZipToolCache.NormalizeArchiveEntry 同口径：除根径/越界外，
+            // "."与空段（"a/./b"、"a//b"、尾部"/"）也拒——后端把目标当相对路径
+            // 拼接，畸形段会在各格式里归一出不同落点。
             if (!string.IsNullOrWhiteSpace(resource.Destination) &&
                 (IsRootedInstallerPath(resource.Destination) ||
                  resource.Destination.Split(new[] { '/', '\\' }, StringSplitOptions.None)
-                      .Contains("..", StringComparer.Ordinal)))
+                      .Any(segment => segment is "" or "." or "..")))
             {
                 issues.Add(new($"resources[{index}].targetPath", "Must stay inside the installation directory."));
             }

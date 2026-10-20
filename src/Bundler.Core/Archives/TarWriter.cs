@@ -48,26 +48,29 @@ internal static class TarWriter
     // package-contains-ancient-file) flag dates at/below the mid-70s.
     internal const long EntryMtime = 315532800L;
 
-    internal static void Write(Stream output, IEnumerable<TarEntry> entries) =>
-        Write(output, entries, omitEndOfArchive: false);
+    internal static void Write(Stream output, IEnumerable<TarEntry> entries,
+        CancellationToken cancellationToken = default) =>
+        Write(output, entries, omitEndOfArchive: false, cancellationToken);
 
     /// <summary>
     /// Writes the entries; <paramref name="omitEndOfArchive"/> drops the final
     /// pair of zero blocks for tar fragments that continue inside a larger
     /// container (apk signature/control gzip streams never carry the end marker).
     /// </summary>
-    internal static void Write(Stream output, IEnumerable<TarEntry> entries, bool omitEndOfArchive)
+    internal static void Write(Stream output, IEnumerable<TarEntry> entries, bool omitEndOfArchive,
+        CancellationToken cancellationToken = default)
     {
         var header = new byte[512];
         var zeroBlock = new byte[512];
         var copyBuffer = new byte[81920];
         foreach (var entry in entries)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (entry.PaxRecords is { Count: > 0 } paxRecords)
             {
-                WriteEntry(output, header, zeroBlock, copyBuffer, PaxEntry(entry.Name, paxRecords));
+                WriteEntry(output, header, zeroBlock, copyBuffer, PaxEntry(entry.Name, paxRecords), cancellationToken);
             }
-            WriteEntry(output, header, zeroBlock, copyBuffer, entry);
+            WriteEntry(output, header, zeroBlock, copyBuffer, entry, cancellationToken);
         }
         if (!omitEndOfArchive)
         {
@@ -76,7 +79,8 @@ internal static class TarWriter
         }
     }
 
-    private static void WriteEntry(Stream output, byte[] header, byte[] zeroBlock, byte[] copyBuffer, TarEntry entry)
+    private static void WriteEntry(Stream output, byte[] header, byte[] zeroBlock, byte[] copyBuffer, TarEntry entry,
+        CancellationToken cancellationToken)
     {
         Stream? contentStream = null;
         try
@@ -150,6 +154,7 @@ internal static class TarWriter
                     var remaining = contentLength;
                     while (remaining > 0)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         var read = contentStream.Read(
                             copyBuffer, 0, (int)Math.Min(copyBuffer.Length, remaining));
                         if (read == 0)

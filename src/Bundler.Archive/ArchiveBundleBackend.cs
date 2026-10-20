@@ -96,11 +96,11 @@ internal sealed class ArchiveBundleBackend(
         }
         catch
         {
-            // No half-written archive is left behind on failure.
-            if (File.Exists(outputPath))
-            {
-                File.Delete(outputPath);
-            }
+            // No half-written archive is left behind on failure; 同删陈旧
+            // .sha256 旁车——失败构建留下与实际产物不匹配的哈希是静默毒源
+            //（deb/rpm/apk 同款收口）。
+            FileTree.TryDeleteFile(outputPath);
+            FileTree.TryDeleteFile(outputPath + ".sha256");
             throw;
         }
         return Task.FromResult<IReadOnlyList<BundleArtifact>>(

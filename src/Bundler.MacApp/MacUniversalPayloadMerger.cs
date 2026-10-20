@@ -161,13 +161,14 @@ public static class MacUniversalPayloadMerger
     private static void MergeMachO(string[] sources, string destination)
     {
         var slices = new List<FatSlice>();
-        var seen = new HashSet<uint>();
+        // Dedup on (cputype, cpusubtype): arm64 and arm64e share CPU_TYPE_ARM64
+        // with different subtypes — keying on cputype alone silently drops arm64e.
+        var seen = new HashSet<(uint, uint)>();
         foreach (var source in sources)
         {
             foreach (var info in MachO.ReadSliceInfos(source))
             {
-                var cpuType = info.CpuType;
-                if (!seen.Add(cpuType))
+                if (!seen.Add((info.CpuType, info.CpuSubtype)))
                 {
                     continue;
                 }

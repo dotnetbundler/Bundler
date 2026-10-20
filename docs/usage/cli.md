@@ -56,7 +56,7 @@ bundler bundle --input-dir bin/osx-x64 --input-dir bin/osx-arm64 --target macos-
 | `--identifier` | `identifier` | `BundlerIdentifier` |
 | `--package-version` | `version` | `BundlerVersion` |
 | `--main-executable` | `targets[].mainExecutable` | `BundlerMainExecutable` |
-| `--output-dir` | `outputDirectory` | `BundlerOutputPath` |
+| `--output-dir` | `outputDirectory` | `BundlerOutputPath`（默认 `artifacts/`） |
 | `--output-layout` | `outputLayout` | `BundlerOutputLayout` |
 | `--config <path>` | — | 显式指定 `bundler.json`（默认自动发现 cwd） |
 | `--no-config` | — | 跳过自动发现 |

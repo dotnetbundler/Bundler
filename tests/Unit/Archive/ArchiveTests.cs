@@ -411,7 +411,7 @@ public sealed class ArchiveTests : TempBase
         TarWriter.Write(viaInline,
         [
             new TarEntry { Name = "a/f.bin", Kind = TarEntryKind.File, Mode = 420, Content = payload }
-        ]);
+        ], TestContext.Current.CancellationToken);
         using var viaStream = new MemoryStream();
         TarWriter.Write(viaStream,
         [
@@ -420,7 +420,7 @@ public sealed class ArchiveTests : TempBase
                 Name = "a/f.bin", Kind = TarEntryKind.File, Mode = 420,
                 OpenContent = () => new MemoryStream(payload, writable: false)
             }
-        ]);
+        ], TestContext.Current.CancellationToken);
         Assert.Equal(viaInline.ToArray(), viaStream.ToArray());
     }
 

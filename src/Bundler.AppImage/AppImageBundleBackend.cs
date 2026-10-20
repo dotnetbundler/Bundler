@@ -76,11 +76,11 @@ internal sealed class AppImageBundleBackend(
         }
         catch
         {
-            // No half-written .AppImage is left behind on tool failure.
-            if (File.Exists(outputPath))
-            {
-                File.Delete(outputPath);
-            }
+            // No half-written .AppImage is left behind on tool failure; 同删
+            // 陈旧 .sha256 旁车（deb/rpm/apk/archive 同款收口——失败构建
+            // 留下的哈希与实际产物不匹配即成静默毒源）。
+            FileTree.TryDeleteFile(outputPath);
+            FileTree.TryDeleteFile(outputPath + ".sha256");
             throw;
         }
         finally
@@ -145,16 +145,21 @@ internal sealed class AppImageBundleBackend(
             LinuxLinkName.Validate(binLink, "AppImageBinLink");
         }
         // mainExecutable 插值进 AppRun 的双引号 shell 行——与 installRoot 同规净化。
+        // 校验落到解析后真值：未写时默认取 ProductName（其本身不含 shell 净化），
+        // 只看显式旋钮会让默认路径绕过本段直到 AppDirBuilder 才拦。
         foreach (var target in bundle.Targets)
         {
-            var mainExecutable = (target.MainExecutable ?? "").Replace('\\', '/');
-            if (mainExecutable.Length > 0 &&
+            var mainExecutable = (target.MainExecutable ??
+                (BundleTarget.Parse(target.Target).OperatingSystem == TargetOperatingSystem.Windows
+                    ? bundle.ProductName + ".exe"
+                    : bundle.ProductName)).Replace('\\', '/');
+            if (mainExecutable.Length == 0 ||
                 mainExecutable.Split('/').Any(segment =>
                     segment is "" or "." or ".." ||
                     segment.Any(c => char.IsWhiteSpace(c) || c is '"' or '\'' or '$' or '`' or '\\')))
             {
                 throw new ArgumentException(
-                    $"The main executable must be a relative path without shell metacharacters, got '{target.MainExecutable}'.");
+                    $"The main executable must be a relative path without shell metacharacters, got '{target.MainExecutable ?? mainExecutable}'.");
             }
         }
         if (settings.Architecture is { Length: > 0 } archOverride)

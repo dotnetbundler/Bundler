@@ -140,16 +140,15 @@ public sealed class WixTests : TempBase
     {
         Assert.SkipUnless(TestPlatform.IsWindows, "requires a Windows host");
         using var fixture = new WixTestFixture(Temp("wix-fixture").FullName);
-        foreach (var path in new[] { "../escape", "docs/../escape", "C:\\Windows\\file" })
+        // 越界/根径/空段由共享前置校验拒（BundleValidationException）；
+        // 尾空格这类 Windows 名规则仍由 WiX 门面拒（ArgumentException）。
+        foreach (var path in new[] { "../escape", "docs/../escape", "C:\\Windows\\file", "docs//file" })
         {
             var rejected = await Assert.ThrowsAnyAsync<BundleValidationException>(
                 () => fixture.Bundler().BuildAsync(fixture.Request(path), TestContext.Current.CancellationToken));
             Assert.Contains(rejected.Issues, issue => issue.Path == "resources[0].targetPath");
         }
-        foreach (var path in new[] { "docs//file", "file. " })
-        {
-            await ExpectAsync<ArgumentException>(() => fixture.Bundler().BuildAsync(fixture.Request(path), TestContext.Current.CancellationToken), "path");
-        }
+        await ExpectAsync<ArgumentException>(() => fixture.Bundler().BuildAsync(fixture.Request("file. "), TestContext.Current.CancellationToken), "path");
         var output = Path.Combine(fixture.Root, "output");
         Assert.True(!Directory.Exists(output) || !Directory.EnumerateFiles(output, "*.msi", SearchOption.AllDirectories).Any(),
             "An invalid resource path produced an MSI.");

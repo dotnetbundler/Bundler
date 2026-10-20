@@ -13,7 +13,8 @@ internal sealed class DebBundleBackend(DebBundleConfiguration settings) : IBundl
     {
         // The writer is pure managed code: no host-OS gate and no external tools.
         var result = DebPackageWriter.Build(
-            context.Configuration, context.Item, settings, context.Logger);
+            context.Configuration, context.Item, settings,
+            context.WorkDirectory, context.Logger, cancellationToken);
         return Task.FromResult<IReadOnlyList<BundleArtifact>>(
             [new BundleArtifact(PackageFormat.Deb, context.Item.Target.Target,
                 result.OutputPath)]);

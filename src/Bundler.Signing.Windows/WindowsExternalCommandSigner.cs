@@ -105,7 +105,7 @@ public sealed class WindowsExternalCommandSigner : IBundleSigner
         LegacyPathPlaceholder.Replace(value
             .Replace("{path}", path), path)
             .Replace("{artifactKind}", request.ArtifactKind.ToString())
-            .Replace("{target}", request.TargetTarget)
+            .Replace("{target}", request.Target)
             .Replace("{productName}", request.ProductName);
 
 }

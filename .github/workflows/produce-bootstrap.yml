@@ -153,6 +153,10 @@ jobs:
   windows-x64:
     runs-on: windows-2025-vs2026
     timeout-minutes: 90
+    env:
+      # 签名包还原的吊销检查走 HTTP/80——托管宿主该出站不可达时逐端点黑洞
+      # 挂死（test.yml/verify.yml 同款防御）。
+      NUGET_CERT_REVOCATION_MODE: offline
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -199,6 +203,8 @@ jobs:
   windows-arm:
     runs-on: windows-11-vs2026-arm
     timeout-minutes: 90
+    env:
+      NUGET_CERT_REVOCATION_MODE: offline
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6

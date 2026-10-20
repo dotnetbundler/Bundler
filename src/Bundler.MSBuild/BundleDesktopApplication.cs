@@ -295,65 +295,26 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
 
             // 统一预检：共享配置与各格式旋钮在扇出前一次验全；配置类错误
             // 一次报完即失败；宿主门禁格式不进预检，留构建趟逐格式容错。
-            var pending = new List<(PackageFormat Format, BundleConfiguration Configuration, IFormatBundler? Bundler)>();
-            var validationErrors = new List<string>();
-            try
-            {
-                BundlePlanner.Create(Configure(formats.Distinct().ToArray()));
-            }
-            catch (BundleValidationException exception)
-            {
-                // 共享层错误收集后继续跑各格式预检，与 CLI 一样一次报完。
-                validationErrors.AddRange(exception.Issues.Select(
-                    issue => $"{issue.Path}: {issue.Message}"));
-            }
-            foreach (var format in formats.Distinct())
-            {
-                var configuration = Configure([format]);
-                try
-                {
-                    var bundler = CreateBundler(format);
-                    bundler.Validate(configuration);
-                    pending.Add((format, configuration, bundler));
-                }
-                catch (PlatformNotSupportedException)
-                {
-                    pending.Add((format, configuration, null));
-                }
-                catch (Exception exception) when (exception is not BundleValidationException)
-                {
-                    validationErrors.Add($"{format}: {exception.Message}");
-                }
-            }
+            var distinctFormats = formats.Distinct().ToArray();
+            var pending = new List<FormatFanoutItem>();
+            var validationErrors = BundleOrchestrator.PlanFanout(
+                Configure(distinctFormats), distinctFormats,
+                format => Configure([format]),
+                CreateBundler,
+                pending);
             if (validationErrors.Count > 0)
             {
                 Log.LogError("Bundler: package configuration is invalid: " +
-                    string.Join("; ", validationErrors));
+                    string.Join("; ", validationErrors.Select(issue => $"{issue.Path}: {issue.Message}")));
                 return false;
             }
 
             // Multi-format fanout: each backend runs once per requested format
             // against a configuration whose targets carry only that format.
             var artifacts = new List<BundleArtifact>();
-            var failedFormats = new List<(PackageFormat Format, string Reason)>();
-            foreach (var (format, configuration, bundler) in pending)
-            {
-            try
-            {
-                var produced = (bundler ?? CreateBundler(format))
-                    .BuildAsync(configuration)
-                    .GetAwaiter()
-                    .GetResult();
-                artifacts.AddRange(produced);
-            }
-            catch (Exception exception) when (exception is not BundleValidationException)
-            {
-                // 逐格式独立失败：单格式失败不拖累其余格式，末位汇总失败；
-                // 校验拒绝仍走任务级 catch 打印 issue 列表。
-                failedFormats.Add((format, exception.Message));
-                Log.LogWarning($"Bundler format '{format}' failed and was skipped: {exception.Message}");
-            }
-            }
+            var failedFormats = BundleOrchestrator.BuildAllAsync(
+                pending, CreateBundler, artifacts, new MsBuildBundleLogger(Log))
+                .GetAwaiter().GetResult();
 
             IFormatBundler CreateBundler(PackageFormat format)
             {
@@ -455,23 +416,15 @@ public sealed class BundleDesktopApplication : Microsoft.Build.Utilities.Task
 
             if (UpdateEnabled)
             {
-                var feed = artifacts.Count == 0
-                    ? Array.Empty<string>()
-                    : UpdateManifestEmitter.EmitAsync(
-                        Configure(formats), artifacts).GetAwaiter().GetResult();
+                var feed = BundleOrchestrator.EmitUpdateAsync(
+                    Configure(distinctFormats), artifacts,
+                    (configured, produced, cancellationToken) =>
+                        UpdateManifestEmitter.EmitAsync(configured, produced, cancellationToken),
+                    UpdateManifestEmitter.IsUpdateAdapted,
+                    new MsBuildBundleLogger(Log)).GetAwaiter().GetResult();
                 foreach (var path in feed)
                 {
                     Log.LogMessage(MessageImportance.High, $"Bundler update: {path}");
-                }
-                if (artifacts.Count == 0)
-                {
-                    Log.LogWarning("Bundler: update is enabled but no artifacts were produced; " +
-                        "no update feed was emitted — installed apps keep polling the last published feed.");
-                }
-                else if (!artifacts.Any(a => UpdateManifestEmitter.IsUpdateAdapted(a.Format)))
-                {
-                    Log.LogWarning("Bundler: update is enabled but no produced format is update-adapted; " +
-                        "the emitted feed carries no artifacts — clients read it as 'no update'.");
                 }
             }
 

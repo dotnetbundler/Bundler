@@ -16,7 +16,8 @@ public static class BundleDefaults
     /// <summary>未提供 identifier 时的合成前缀。</summary>
     public const string IdentifierPrefix = "dev.bundler.";
 
-    /// <summary>当前宿主的 canonical target 词（{os}-{arch}）。</summary>
+    /// <summary>当前宿主的 canonical target 词（{os}-{arch}）。宿主 OS/架构不可识别即抛——
+    /// 静默落 linux-x86_64 会把"未识别"伪装成确定答案，包标签与内层发布 RID 全错。</summary>
     public static string HostTarget()
     {
         var arch = RuntimeInformation.ProcessArchitecture switch
@@ -25,7 +26,8 @@ public static class BundleDefaults
             Architecture.Arm64 => "aarch64",
             Architecture.X86 => "i686",
             Architecture.Arm => "armv7hf",
-            _ => "x86_64"
+            var unknown => throw new PlatformNotSupportedException(
+                $"Unsupported host architecture '{unknown}' — pass an explicit target.")
         };
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
@@ -35,7 +37,12 @@ public static class BundleDefaults
         {
             return "macos-" + arch;
         }
-        return "linux-" + arch;
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            return "linux-" + arch;
+        }
+        throw new PlatformNotSupportedException(
+            "Unsupported host operating system — pass an explicit target.");
     }
 
     /// <summary>

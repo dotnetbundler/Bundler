@@ -42,6 +42,7 @@
 - ARP 元数据（`ARPNOMODIFY`/`ARPCONTACT`/`ARPCOMMENTS`/`ARPURLINFOABOUT`/`ARPPRODUCTICON`/`ARPINSTALLLOCATION`；"更改"禁用）。
 - FIPS 选项：仅向 `candle.exe` 透传 `-fips`；已在 FIPS 策略宿主实证（4688 捕获实参、关闭时 CNDL0308 拒构）——不构成 FIPS 认证声明。
 - 前 NSIS 安装目录延续：`RegistrySearch` 读旧 NSIS 卸载键 `InstallRoot`（双视图），范围内且 Bundler 未注册自己 `InstallDir` 时设为默认 `INSTALLFOLDER`；三段真实场景已验。
+- NSIS→MSI 迁移边界：MSI 只接管目录不接管 NSIS 卸载登记——旧 NSIS ARP 条目与 `uninstall.exe` 仍留系统（调用/注销事务式旧卸载器属另一安装会话，MSI 序列内不可安全内嵌；ARP 双条目为已知形态，需调用方安排先跑旧卸载器或接受并存）。
 - 离线构建与工具缓存：官方归档 SHA-256/逐文件哈希、许可证、缓存污染、`--no-restore` 全验。
 - 声明式 WiX 扩展（`ExtensionFragmentFiles` 白名单 `.wxs` fragment：Component/Directory/File/RegistryKey/Environment/Condition/Shortcut/Property 等核心元素 + `ExtensionIdPrefix` + 显式 Feature 引用注入；禁自定义动作/序列表/Binary/身份/UI/升级元素）与专家模式（`ExpertTemplateFile` 整份替换 + `ExpertMergeModuleFiles` 直传 + `MsiIdentityProbe` 回读强制 Bundler 身份；专家产物不享有受管安装保证）。
 - CLI：`bundler bundle --formats msi`，仅 Windows 宿主可产。

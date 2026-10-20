@@ -34,7 +34,7 @@ internal static class ApkValidation
     {
         foreach (var (path, name) in ApkPackageWriter.ScriptKnobs(settings))
         {
-            if (path is not null)
+            if (path is { Length: > 0 })
             {
                 ApkPackageWriter.ReadScript(path, name);
             }
@@ -53,6 +53,11 @@ internal static class ApkValidation
                 throw new FileNotFoundException(
                     $"The .apk signing key does not exist: {settings.Signing.KeyFile}",
                     settings.Signing.KeyFile);
+            }
+            if (!UnixFileTypes.IsRegularFile(settings.Signing.KeyFile!))
+            {
+                throw new ArgumentException(
+                    $"The .apk signing key must be a regular file: {settings.Signing.KeyFile}");
             }
             // 成员名推导的可空基名检查与构建同链。
             ApkPackageWriter.SignatureMemberName(settings.Signing.KeyFile!);
@@ -88,6 +93,12 @@ internal static class ApkValidation
                 {
                     throw new ArgumentException(
                         $"The .PKGINFO key '{pair.Key}' collides with a built-in field.");
+                }
+                // 值与内置字段同规：.PKGINFO 单行——嵌行进值会伪造出额外字段行。
+                if (pair.Value is { } pkgValue && pkgValue.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+                {
+                    throw new ArgumentException(
+                        $"The .PKGINFO value for '{pair.Key}' must be a single line.");
                 }
             }
         }

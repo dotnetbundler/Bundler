@@ -28,6 +28,19 @@ run_leg(){ local name="$1"; shift
     RAN=$((RAN+1))
     if "$@"; then echo "[LEG-PASS] $name"; else echo "[LEG-FAIL] $name"; FAILED="$FAILED $name"; fi }
 
+# docker hub 限流/网络抖动时按登记镜像源回落拉取并 tag 回逻辑名——
+# 与 tests/Shared/Tooling/DockerRunner.cs 的 ImageMirrors 同机制、同登记面。
+ensure_image(){ local image="$1" mirror=""
+    docker image inspect "$image" >/dev/null 2>&1 && return 0
+    docker pull "$image" >/dev/null 2>&1 && return 0
+    case "$image" in
+        fedora:latest) mirror="quay.io/fedora/fedora:latest" ;;
+        alpine:latest) mirror="public.ecr.aws/docker/library/alpine:latest" ;;
+        *) return 1 ;;
+    esac
+    docker pull "$mirror" >/dev/null 2>&1 || return 1
+    docker tag "$mirror" "$image" >/dev/null 2>&1; }
+
 # 应收件存在性对账：本宿主 produce 腿应收 deb/rpm/appimage/apk/archive 五件——
 # 缺件即判败，防产侧布局漂移时"全绿零断言"。
 # 归档格式交换模式只验 archive——异 OS 产件其余目录无本宿主可消费格式，非缺失。
@@ -62,6 +75,7 @@ fi
 
 # .rpm：跨发行版交换——ubuntu 产的包装进 fedora 容器
 if [ -n "$(find "$DIR/rpm" -name '*.rpm' | head -1)" ] ; then
+    if ensure_image fedora:latest; then
     run_leg "rpm(fedora)" docker run --rm -v "$DIR:/a:ro" fedora:latest bash -c '
         set -e
         dnf install -y /a/rpm/*.rpm >/dev/null
@@ -70,12 +84,14 @@ if [ -n "$(find "$DIR/rpm" -name '*.rpm' | head -1)" ] ; then
         dnf remove -y bundler-rpm-fixture >/dev/null
         ! test -e /usr/lib/bundler-rpm-fixture/BundlerRpmIntegrationFixture
     '
+    else echo "[LEG-FAIL] rpm(fedora)（镜像不可拉取）"; FAILED="$FAILED rpm-image"; fi
 else
     echo "[LEG-FAIL] rpm（产件目录无 .rpm）"; FAILED="$FAILED rpm-noformat"
 fi
 
 # .apk：跨发行版交换——ubuntu 产的包装进 alpine 容器
 if [ -n "$(find "$DIR/apk" -name '*.apk' | head -1)" ] ; then
+    if ensure_image alpine:latest; then
     run_leg "apk(alpine)" docker run --rm -v "$DIR:/a:ro" alpine:latest sh -c '
         set -e
         apk add --allow-untrusted /a/apk/*.apk >/dev/null
@@ -84,6 +100,7 @@ if [ -n "$(find "$DIR/apk" -name '*.apk' | head -1)" ] ; then
         apk del bundler-apk-fixture >/dev/null
         ! test -e /usr/lib/bundler-apk-fixture/BundlerAlpineApkIntegrationFixture
     '
+    else echo "[LEG-FAIL] apk(alpine)（镜像不可拉取）"; FAILED="$FAILED apk-image"; fi
 else
     echo "[LEG-FAIL] apk（产件目录无 .apk）"; FAILED="$FAILED apk-noformat"
 fi

@@ -274,5 +274,17 @@
     <BundlerAlpineApkPostUpgradeFile Condition="'$(BundlerAlpineApkPostUpgradeFile)' == ''"></BundlerAlpineApkPostUpgradeFile>
     <BundlerAlpineApkSigningKeyFile Condition="'$(BundlerAlpineApkSigningKeyFile)' == ''"></BundlerAlpineApkSigningKeyFile>
     <BundlerAlpineApkSigningKeyPassphraseEnvironmentVariable Condition="'$(BundlerAlpineApkSigningKeyPassphraseEnvironmentVariable)' == ''"></BundlerAlpineApkSigningKeyPassphraseEnvironmentVariable>
+    <BundlerMacAppInfoPlistFile Condition="'$(BundlerMacAppInfoPlistFile)' == ''"></BundlerMacAppInfoPlistFile>
+    <BundlerMacAppInfoPlistXml Condition="'$(BundlerMacAppInfoPlistXml)' == ''"></BundlerMacAppInfoPlistXml>
+    <BundlerMacAppExceptionDomain Condition="'$(BundlerMacAppExceptionDomain)' == ''"></BundlerMacAppExceptionDomain>
+    <BundlerUniversalTargets Condition="'$(BundlerUniversalTargets)' == ''"></BundlerUniversalTargets>
+    <BundlerInnerPublishArgs Condition="'$(BundlerInnerPublishArgs)' == ''"></BundlerInnerPublishArgs>
+    <BundlerUpdateEnabled Condition="'$(BundlerUpdateEnabled)' == ''">false</BundlerUpdateEnabled>
+    <BundlerUpdateFeedUrl Condition="'$(BundlerUpdateFeedUrl)' == ''"></BundlerUpdateFeedUrl>
+    <BundlerUpdateChannel Condition="'$(BundlerUpdateChannel)' == ''"></BundlerUpdateChannel>
+    <BundlerUpdateSigningKeyFile Condition="'$(BundlerUpdateSigningKeyFile)' == ''"></BundlerUpdateSigningKeyFile>
+    <BundlerUpdateBootstrapperDirectory Condition="'$(BundlerUpdateBootstrapperDirectory)' == ''"></BundlerUpdateBootstrapperDirectory>
+    <BundlerUpdatePublicKey Condition="'$(BundlerUpdatePublicKey)' == ''"></BundlerUpdatePublicKey>
+    <BundlerUpdateNotes Condition="'$(BundlerUpdateNotes)' == ''"></BundlerUpdateNotes>
   </PropertyGroup>
 </Project>

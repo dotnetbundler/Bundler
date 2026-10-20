@@ -40,26 +40,44 @@ internal static class BootstrapPlan
         // 路径，绝对化发生在 Apply 内部时写入侧仍拿相对拼写，换包后工作目录
         // 变迁会让日志静默写错位（--app 传参侧已在客户端绝对化，同款口径）。
         var logFile = options.LogFile is { Length: > 0 } lf ? Path.GetFullPath(lf) : null;
-        var log = CreateLog(logFile);
-        var result = Apply(options, log);
-        return result;
+        // apply 与 pkg-apply 同走 OpenLogFile——apply 也可能在提权语境被拉起，
+        // 写路径同样按"调用者可写"复核+fd 钉住；开件失败 WARN 降级续行。
+        var stream = PkgApplyPlan.TryOpenLogFile(logFile, PkgApplyPlan.ResolveCallerUid());
+        try
+        {
+            return Apply(options, CreateLog(stream, logFile is not null));
+        }
+        finally
+        {
+            stream?.Dispose();
+        }
     }
 
-    // apply/pkg-apply 两动词共用：--log 缺省走 stdout；给了文件就追加写。
-    // 日志件写入失败降级 stderr WARN（首败报一次）并继续——日志是留痕辅助，
-    // 不可写不该阻断换包/装包主流程（sh 侧 log() WARN 同口径）。
-    internal static Action<string> CreateLog(string? logFile)
+    // apply/pkg-apply 两动词共用：--log 缺省走 stdout；给了文件就追加写——
+    // 流由 PkgApplyPlan.OpenLogFile 校验+open 钉 fd 产出（双动词同路，
+    // 校验后路径换件骗不过追加写）。写入失败降级 stderr WARN（首败报
+    // 一次）并继续——日志是留痕辅助，不可写不该阻断换包/装包主流程
+    //（sh log() WARN 同口径）。行内 \r\n 写前折空格——调用方串
+    //（--pkg/--app/--install-dir 原值）嵌行进日志会把一条记录拆成多行，
+    // 日志件沦为伪造记录/单行注入面（sh tr '\r\n' '  ' 同口径）。
+    // WARN 不携路径——钉 fd 后路径文本不再对应真实写位。
+    internal static Action<string> CreateLog(FileStream? stream, bool fileRequested = false)
     {
-        if (logFile is null)
+        if (stream is null)
         {
-            return line => Console.Out.WriteLine(line);
+            // 显式 --log 但开件被拒：行不落 stdout 回显（sh _LOG_BAD 丢弃同
+            // 口径）——WARN 已在 open 处报过；未给 --log 才写 stdout。
+            return fileRequested
+                ? (Action<string>)(_ => { })
+                : line => Console.Out.WriteLine(SanitizeLogLine(line));
         }
+        var writer = new StreamWriter(stream) { AutoFlush = true };
         var warned = false;
         return line =>
         {
             try
             {
-                File.AppendAllText(logFile, line + "\n");
+                writer.WriteLine(SanitizeLogLine(line));
             }
             catch (Exception)
             {
@@ -67,11 +85,14 @@ internal static class BootstrapPlan
                 {
                     warned = true;
                     Console.Error.WriteLine(
-                        $"bundler-updater: WARN cannot write log file '{logFile}' — continuing without file logging");
+                        "bundler-updater: WARN cannot write log file — continuing without file logging");
                 }
             }
         };
     }
+
+    private static string SanitizeLogLine(string line) =>
+        line.Replace('\r', ' ').Replace('\n', ' ');
 
     internal static int Apply(BootstrapOptions options, Action<string> log)
     {
