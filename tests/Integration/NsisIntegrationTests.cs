@@ -349,6 +349,10 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
         Path.Combine(Temp, "DotNetBundler-failing-postuninstall-forward.once");
     private string InterruptedUninstallMarker =>
         Path.Combine(Temp, "DotNetBundler-interrupted-postuninstall-forward.once");
+    // 分离 NSIS 链达钩位标记的统一等待窗口：安装/卸载器跑真落盘链，满载共享
+    // runner 上 120s 曾未达钩位（verify run 39368446045 windows-2025 腿实证一次）；
+    // 窗口放宽不松语义，标记仍必须出现。
+    private const int HookWaitSeconds = 300;
     private string RoamingData => Path.Combine(AppData, Identifier);
     private string LocalData => Path.Combine(LocalAppData, Identifier);
     private string TransactionDir =>
@@ -788,7 +792,8 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             using var interrupted =
                 StartDirectUninstallerAsync(Uninstaller, InstallDir, "/S /DELETEAPPDATA");
             WaitFor.Until(() => File.Exists(InterruptedUninstallMarker),
-                "Interrupted-uninstall fixture did not reach its post-uninstall hook.");
+                "Interrupted-uninstall fixture did not reach its post-uninstall hook.",
+                HookWaitSeconds);
             ProcessRunner.TryKillTree(interrupted);
             interrupted.WaitForExit(60_000);
             Assert.NotEqual(0, interrupted.ExitCode);
@@ -1515,11 +1520,9 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
             using var interrupted = ProcessRunner.StartDetached(
                 Installer("bundle-interrupted", "1.2.0"), $"/S /UPDATE /D={InstallDir}");
-            // 钩点位窗口给足：安装器跑的是真 NSIS 落盘链，满载共享 runner 上
-            // 120s 曾未达钩位（verify run 39368446045 windows-2025 腿实证一次）——
-            // 窗口放宽不松语义，标记仍必须出现。
             WaitFor.Until(() => File.Exists(InterruptedHookMarker),
-                "Interrupted-install fixture did not reach its post-install hook.", 300);
+                "Interrupted-install fixture did not reach its post-install hook.",
+                HookWaitSeconds);
             ProcessRunner.TryKillTree(interrupted);
             interrupted.WaitForExit(60_000);
             Assert.NotEqual(0, interrupted.ExitCode);
@@ -1545,7 +1548,8 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
             using var interrupted2 = ProcessRunner.StartDetached(
                 Installer("bundle-interrupted", "1.2.0"), $"/S /UPDATE /D={InstallDir}");
             WaitFor.Until(() => File.Exists(InterruptedHookMarker),
-                "Second interrupted-install fixture did not reach its post-install hook.", 120);
+                "Second interrupted-install fixture did not reach its post-install hook.",
+                HookWaitSeconds);
             ProcessRunner.TryKillTree(interrupted2);
             interrupted2.WaitForExit(60_000);
             Assert.True(Directory.Exists(TransactionDir));
