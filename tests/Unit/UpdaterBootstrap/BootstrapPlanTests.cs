@@ -1203,10 +1203,13 @@ public sealed class BootstrapPlanTests : TempBase
     {
         var pkg = WritePkg();
         var app = WriteApp();
-        var passwd = WritePasswd("tester:x:4242:4343::/home/tester:/bin/sh\n");
+        // --log 属主复核要求"调用 uid==件/父目录属主"——PKEXEC_UID 须取真实
+        // euid 才过校验（Windows 无该判据按 4242，passwd/断言同步）。
+        var callerUid = CallerUid;
+        var passwd = WritePasswd($"tester:x:{callerUid}:4343::/home/tester:/bin/sh\n");
         var env = new Dictionary<string, string>
         {
-            ["PKEXEC_UID"] = "4242",
+            ["PKEXEC_UID"] = callerUid.ToString(),
             ["SUDO_GID"] = "4343",
             ["BUNDLER_UPDATER_PASSWD_FILE"] = passwd,
             ["DISPLAY"] = ":7",
@@ -1230,7 +1233,7 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Contains("no --env-file", log);
         // 最小集：降权场景 HOME 取目标用户 passwd 家目录而非 root 的 $HOME。
         Assert.Equal(
-            ["/stub/setpriv", "--reuid=4242", "--regid=4343", "--clear-groups",
+            ["/stub/setpriv", $"--reuid={callerUid}", "--regid=4343", "--clear-groups",
              "env", "HOME=/home/tester", "DISPLAY=:7", app],
             Assert.Single(_pkgSpawns).Args);
     }
