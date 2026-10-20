@@ -612,6 +612,30 @@ _pa_restart() {
     return 1
 }
 
+# 词法归一（不触文件系统）：折 ./.. 段、相对路径按 $PWD 绝对化——
+# 与 AOT Path.GetFullPath 同口径。定义先于 pkg_apply/apply 两腿共用；
+# 输出路径的叶段必须保留拼写（叶链由各自校验判拒，不能物理化）。
+norm_lexical() {
+    _nl=$1
+    case "$_nl" in /*) ;; *) _nl="$PWD/$_nl" ;; esac
+    _saved_ifs=$IFS
+    IFS='/'
+    set -f
+    # 故意不带引号：按 / 拆段
+    set -- $_nl
+    set +f
+    IFS=$_saved_ifs
+    _out=
+    for _s do
+        case "$_s" in
+            ""|.) ;;
+            ..) _out=${_out%/*} ;;
+            *) _out="$_out/$_s" ;;
+        esac
+    done
+    printf '%s\n' "${_out:-/}"
+}
+
 pkg_apply() {
     PA_PKG=""; PA_FMT=""; PA_APP=""; PA_ENV=""; PA_ROLLBACK=0; PA_SHA256=""; PA_STAGE=""
     # 安装腿超时界（AOT ExecTimeoutMilliseconds 同名同缝）：非数字/零/缺席按默认
@@ -663,7 +687,9 @@ pkg_apply() {
     case "$PA_PKG" in /*) ;; *) PA_PKG="$PWD/$PA_PKG" ;; esac
     case "$PA_APP" in /*) ;; *) PA_APP="$PWD/$PA_APP" ;; esac
     case "$PA_ENV" in "") ;; /*) ;; *) PA_ENV="$PWD/$PA_ENV" ;; esac
-    case "$LOG_FILE" in "") ;; /*) ;; *) LOG_FILE="$PWD/$LOG_FILE" ;; esac
+    # --log 与 apply 腿同口径词法归一（AOT GetFullPath 同义）：折 ./.. 段，
+    # 叶拼写必须留给 _pa_log_open 的 -h 链接拒判，绝不能走物理化。
+    [ -z "$LOG_FILE" ] || LOG_FILE="$(norm_lexical "$LOG_FILE")" || exit 3
 
     # 原用户 uid：PKEXEC_UID→SUDO_UID——都不在=本来就 root 直跑，按当前权限 spawn。
     # _pa_uid64 统一"全数字且 int64 内"口径并剥前导零规范化——超界垃圾值按
@@ -1000,29 +1026,6 @@ norm_parent() {
     _nb=$(basename "$_np")
     _nr=$(norm_seg "$_nd") || { echo "bundler-updater: path '$_nd' resolves to a cyclic link." >&2; return 1; }
     printf '%s/%s\n' "${_nr%/}" "$_nb"
-}
-
-# 父目录缺席时物理解析走不通——退回词法折叠消掉 ./.. 段，
-# 否则 .. 留字面会绕开嵌套判，而 retain 的 mkdir -p 又恰好把逃逸路径做实。
-norm_lexical() {
-    _nl=$1
-    case "$_nl" in /*) ;; *) _nl="$PWD/$_nl" ;; esac
-    _saved_ifs=$IFS
-    IFS='/'
-    set -f
-    # 故意不带引号：按 / 拆段
-    set -- $_nl
-    set +f
-    IFS=$_saved_ifs
-    _out=
-    for _s do
-        case "$_s" in
-            ""|.) ;;
-            ..) _out=${_out%/*} ;;
-            *) _out="$_out/$_s" ;;
-        esac
-    done
-    printf '%s\n' "${_out:-/}"
 }
 
 [ -n "$INSTALL_DIR" ] || { echo "bundler-updater: --install-dir is required." >&2; exit 2; }
