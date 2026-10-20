@@ -82,11 +82,16 @@ _pa_log_open() {
         # 属致命错整脚本暴毙（|| 永远走不到），且 exec 上 2>/dev/null
         # 会把全脚本 stderr 永久钉死——预探测放子壳收容（子壳 fatal
         # 只杀子壳回非零、不带走主壳），探测过才 exec 钉 fd。
-        # 残余：探测→exec 之间件被删时裸 exec 仍按 special builtin
-        # 致命暴毙——毫秒级竞态窗、后果仅为脚本退出不越权，登记；
-        # check(-f)→探测之间换入 fifo 时 >>/exec 无时限阻塞（AOT 同位
-        # OpenWithDeadline 5s 收口、sh 无等价原语——timeout 只能包
-        # 外部命令，登记为两实现已知差异，旧实现同款暴露未恶化）。
+        # 残余窗登记：(a) 探测→exec 之间换入不可开目标（目录等）时裸
+        #   exec 仍按 special builtin 致命暴毙——毫秒级竞态、后果仅为
+        #   脚本退出不越权；件被删不触发（>> 带 O_CREAT 会重建，随后
+        #   inode 比对按干净拒收）；(b) check(-f)→探测 与 探测→exec
+        #   两段窗内换入 fifo 时 >>/exec 无时限阻塞（建件分支
+        #   create→exec 同形；AOT 同位 OpenWithDeadline 5s 收口、sh
+        #   无等价原语——timeout 只能包外部命令，登记为两实现已知
+        #   差异，旧实现同款暴露未恶化）；(c) 探测 >> 在换件窗内可建
+        #   出 euid 属空件——随后被 inode 复核拒但件留存（良性残留，
+        #   不越权）。
         ( : >>"$LOG_FILE" ) 2>/dev/null || return 1
         exec 9>>"$LOG_FILE" || { exec 9>&-; return 1; }
     else
@@ -403,9 +408,12 @@ _pa_env_cleanup() {
 # 逐段查与真实 open 之间窗内 fifo 可挂死 root 进程、symlink 可把 root
 # 私有件灌进降权 app 的 env（用户经 /proc/<app>/environ 读回）。
 # 换件窗由 dev:ino 比对钉死：预探测时 stat 记下路径件的 dev:ino，
-# exec 3<> 后 fd 上 stat -L 复核同值——check→open 之间任何换件
-#（同主/异主/链接）都 mismatch 被拒；-h 预查只为对齐 AOT 链接
-# 拒判面（NOFOLLOW→ELOOP 语义）。
+# exec 3<> 后 fd 上 stat -L 复核同值——check→open 之间换件（同主/
+# 异主/链接）即 mismatch 被拒；-h 预查只为对齐 AOT 链接拒判面
+#（NOFOLLOW→ELOOP 语义）。
+# 残余：探测→exec 之间换入目录等不可开目标时裸 exec 按 special
+# builtin 致命退 2（不带 usage 文案）——毫秒级竞态不越权，登记；
+# <> O_RDWR 对 fifo 不阻塞，无 log 侧同形阻塞窗。
 # 读定内容进 _PA_ENV_RAW 并置 _PA_ENV_OK=1——其后不再触路径，清件闸只认
 # 读定态（校验被拒的路径不归我们删，见 _pa_env_cleanup）。
 _pa_env_validate() {
@@ -418,9 +426,10 @@ _pa_env_validate() {
     fi
     # check→open 换件窗收口：记 dev:ino，fd 复核比对同件——窗内换成
     # 指向异主件的链接会 mismatch 被拒（-h 预查对齐链接拒判面，真正
-    # 钉住靠 inode 比对）。裸 exec 重定向失败在 dash 属致命错且
-    # 2>/dev/null 会永久静默全脚本 stderr——先普通内建 : 预探测
-    #（<> 读写模式开 fifo 不阻塞），探测过才 exec 钉 fd。
+    # 钉住靠 inode 比对）。: 与 exec 同属 POSIX special builtin——
+    # 重定向失败在 dash 属致命错且 exec 上 2>/dev/null 会永久静默
+    # 全脚本 stderr，预探测放子壳收容（<> 读写模式开 fifo 不阻塞），
+    # 探测过才 exec 钉 fd。
     _ei=$(stat -c '%d:%i' "$PA_ENV" 2>/dev/null || stat -f '%d:%i' "$PA_ENV" 2>/dev/null || true)
     if [ -z "$_ei" ]; then
         echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
