@@ -67,19 +67,32 @@ _pa_log_open() {
     _lu=${PA_UID:-}
     [ -n "$_lu" ] || _lu=$(id -u 2>/dev/null || true)
     [ -n "$_lu" ] || return 1
+    _li=""
     # -e 对悬空链接为假——-h 一并判存在，否则 dangling link 走"件不在"
-    # 分支只验父目录，exec 9>> 会跟随链接以提权身份建出目标件（AOT
-    # O_NOFOLLOW→ELOOP 拒的同形攻击面）。
+    # 分支只验父目录，open 会跟随链接以提权身份建出目标件。
     if [ -e "$LOG_FILE" ] || [ -h "$LOG_FILE" ]; then
         [ -f "$LOG_FILE" ] && [ ! -h "$LOG_FILE" ] || return 1
         _lo=$(stat -c %u "$LOG_FILE" 2>/dev/null || stat -f %u "$LOG_FILE" 2>/dev/null || true)
         [ -n "$_lo" ] && [ "$_lo" = "$_lu" ] || return 1
+        # check→open 换件窗收口：记下 dev:ino，fd 复核比对同件——窗内
+        # 把路径换成指向 root 件的链接会 mismatch 被拒（SEC 回归）。
+        _li=$(stat -c '%d:%i' "$LOG_FILE" 2>/dev/null || stat -f '%d:%i' "$LOG_FILE" 2>/dev/null || true)
+        [ -n "$_li" ] || return 1
+        # 裸 exec 重定向是 POSIX special builtin：失败在 dash 属致命错
+        # 整脚本暴毙（|| 永远走不到），且 2>/dev/null 会把全脚本 stderr
+        # 永久钉死——先普通内建 : 预探测（失败只回非零不致命、错误输出
+        # 只罩组内），探测过才 exec 钉 fd。
+        { : >>"$LOG_FILE"; } 2>/dev/null || return 1
+        exec 9>>"$LOG_FILE" || { exec 9>&-; return 1; }
     else
         _ld=${LOG_FILE%/*}
         [ "$_ld" = "$LOG_FILE" ] && _ld=.
-        # 父目录不存在=良性不可写（rc2 语义）→WARN 降级续行；目录是符号
-        # 链接=换件窗违规（rc1 语义）→硬拒（AOT LogUnavailable/UsageException
-        # 两级同口径）。
+        # 根直下路径 /x 的 %/* 得空串——归一 / 再走目录判（AOT
+        # GetDirectoryName 返 "/" 同位）。
+        [ -z "$_ld" ] && _ld=/
+        # 父目录不存在/非目录=良性不可写（rc2 语义）→WARN 降级续行；
+        # 目录是符号链接=换件窗违规（rc1 语义）→硬拒（AOT
+        # LogUnavailable/UsageException 两级同口径）。
         [ -d "$_ld" ] || return 2
         [ -h "$_ld" ] && return 1
         _lo=$(stat -c %u "$_ld" 2>/dev/null || stat -f %u "$_ld" 2>/dev/null || true)
@@ -88,14 +101,26 @@ _pa_log_open() {
             # 公共可写区（/tmp sticky 类）：others 写+执行两位置位才放行
             case "$_lp" in *[37]) : ;; *) return 1 ;; esac
         fi
+        # O_EXCL 原子建件：noclobber 让 > 对已存在路径（含符号链接——
+        # O_CREAT|O_EXCL 不跟随，dangling 同拒）失败，check→open 换件
+        # 窗在 open 一刻归零（AOT CREAT|NOFOLLOW 同口径）。子壳执行
+        # 失败只回非零不致命；建成记 inode 让 fd 复核比对同件。
+        (set -C; : >"$LOG_FILE") 2>/dev/null || return 1
+        _li=$(stat -c '%d:%i' "$LOG_FILE" 2>/dev/null || stat -f '%d:%i' "$LOG_FILE" 2>/dev/null || true)
+        if [ -z "$_li" ]; then
+            rm -f "$LOG_FILE" 2>/dev/null || true
+            return 1
+        fi
+        exec 9>>"$LOG_FILE" || { exec 9>&-; return 1; }
     fi
-    exec 9>>"$LOG_FILE" 2>/dev/null || return 1
     _lf=/dev/fd/9
     [ -e "$_lf" ] || _lf=/proc/self/fd/9
+    _fi=$(stat -Lc '%d:%i' "$_lf" 2>/dev/null || stat -Lf '%d:%i' "$_lf" 2>/dev/null || true)
     _lo=$(stat -Lc %u "$_lf" 2>/dev/null || stat -Lf %u "$_lf" 2>/dev/null || true)
-    # 属主拿不到=无法复核→拒（fail closed）；两不沾（非调用 uid 且非
-    # euid——新件是我们开的，属主应落其一）同样拒。
-    if [ ! -f "$_lf" ] || [ -z "$_lo" ] || { [ "$_lo" != "$_lu" ] && [ "$_lo" != "$(id -u 2>/dev/null)" ]; }; then
+    # 三重复核：普通件 + inode 与 check 钉住的同件 + 属主落调用 uid
+    #（既有件）或 euid（新件）——任一拿不到/对不上即拒（fail closed）。
+    if [ ! -f "$_lf" ] || [ -z "$_fi" ] || [ "$_fi" != "$_li" ] || [ -z "$_lo" ] || \
+       { [ "$_lo" != "$_lu" ] && [ "$_lo" != "$(id -u 2>/dev/null)" ]; }; then
         exec 9>&-
         return 1
     fi
@@ -385,17 +410,34 @@ _pa_env_validate() {
         pkg_usage
         return 1
     fi
-    exec 3<>"$PA_ENV" 2>/dev/null || {
+    # check→open 换件窗收口：记 dev:ino，fd 复核比对同件——窗内换成
+    # 指向异主件的链接会 mismatch 被拒（-h 预查对齐链接拒判面，真正
+    # 钉住靠 inode 比对）。裸 exec 重定向失败在 dash 属致命错且
+    # 2>/dev/null 会永久静默全脚本 stderr——先普通内建 : 预探测
+    #（<> 读写模式开 fifo 不阻塞），探测过才 exec 钉 fd。
+    _ei=$(stat -c '%d:%i' "$PA_ENV" 2>/dev/null || stat -f '%d:%i' "$PA_ENV" 2>/dev/null || true)
+    if [ -z "$_ei" ]; then
+        echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
+        pkg_usage
+        return 1
+    fi
+    { : <>"$PA_ENV"; } 2>/dev/null || {
+        echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
+        pkg_usage
+        return 1
+    }
+    exec 3<>"$PA_ENV" || {
         echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
         pkg_usage
         return 1
     }
     _fe=/dev/fd/3
     [ -e "$_fe" ] || _fe=/proc/self/fd/3
-    _ev_uid=$PA_UID
+    _ev_uid=${PA_UID:-}
     [ -n "$_ev_uid" ] || _ev_uid=$(id -u 2>/dev/null || true)
     _ev_own=$(stat -Lc %u "$_fe" 2>/dev/null || stat -Lf %u "$_fe" 2>/dev/null || true)
-    if [ ! -f "$_fe" ] || [ -z "$_ev_uid" ] || [ -z "$_ev_own" ] || [ "$_ev_own" != "$_ev_uid" ]; then
+    _fi=$(stat -Lc '%d:%i' "$_fe" 2>/dev/null || stat -Lf '%d:%i' "$_fe" 2>/dev/null || true)
+    if [ ! -f "$_fe" ] || [ -z "$_ev_uid" ] || [ -z "$_ev_own" ] || [ "$_ev_own" != "$_ev_uid" ] || [ -z "$_fi" ] || [ "$_fi" != "$_ei" ]; then
         exec 3>&-
         echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
         pkg_usage

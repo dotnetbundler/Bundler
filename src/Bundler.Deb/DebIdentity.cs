@@ -56,18 +56,22 @@ internal static class DebVersion
         var upstream = MapUpstream(semver);
         // Release 三态契约：未写（null）→ "1"；显式空串 → 裸 upstream 无
         // revision 段（Debian 原生包形态）；非空 → 校验后拼 "-<revision>"。
+        string version;
         if (settings.Release is { Length: 0 })
         {
-            Validate(upstream);
-            return upstream;
+            version = upstream;
         }
-        var revision = settings.Release ?? "1";
-        if (!ValidRevision.IsMatch(revision))
+        else
         {
-            throw new ArgumentException(
-                $"'{revision}' is not a valid Debian revision (allowed: letters, digits, '+', '.', '~').");
+            var revision = settings.Release ?? "1";
+            if (!ValidRevision.IsMatch(revision))
+            {
+                throw new ArgumentException(
+                    $"'{revision}' is not a valid Debian revision (allowed: letters, digits, '+', '.', '~').");
+            }
+            version = upstream + "-" + revision;
         }
-        var version = upstream + "-" + revision;
+        // Epoch 前缀对三态一视同仁——早退路径不得静默丢段。
         if (settings.Epoch is { Length: > 0 } epoch)
         {
             if (!epoch.All(char.IsDigit))

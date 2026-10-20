@@ -767,10 +767,13 @@ internal static class PkgApplyPlan
         if (OperatingSystem.IsWindows())
         {
             // Windows 腿只在测试宿主可触达（env 件同款口径）：链接拒判后
-            // Append 模式打开，属主面无可复核项。
+            // Append 模式打开，属主面无可复核项。FileInfo.LinkTarget 不依赖
+            // File.Exists——dangling 链接 Exists=false 但 LinkTarget 仍可读，
+            // 先判链接再开件，否则 dangling 会被 Append 跟随建出目标件
+            //（POSIX 两腿 O_NOFOLLOW→ELOOP 拒的同形攻击面）。
             try
             {
-                if (File.Exists(path) && new FileInfo(path).LinkTarget is not null)
+                if (new FileInfo(path).LinkTarget is not null)
                 {
                     throw new UsageException(
                         $"--log '{path}' is not a regular file owned by the calling user.");
@@ -831,15 +834,24 @@ internal static class PkgApplyPlan
             throw new UsageException(
                 $"--log '{path}' parent directory is not accessible.");
         }
-        var dirOk = NativeMethods.TryFStat(dfd, out var dstatus) &&
-            NativeMethods.DirWritableByCaller(dstatus, callerUid);
+        var dirOk = NativeMethods.TryFStat(dfd, out var dstatus);
+        if (dirOk && !NativeMethods.IsDirMode(dstatus))
+        {
+            // 父路径是普通件等非目录：写必败但无安全敏感——良性不可写降级
+            //（sh `[ -d "$_ld" ]` 失败→rc2 良性同口径），与目录不可写的
+            // 违规级区分。
+            NativeMethods.Close(dfd);
+            throw new LogUnavailableException(
+                $"--log '{path}' parent path is not a directory.");
+        }
+        dirOk = dirOk && NativeMethods.DirWritableByCaller(dstatus, callerUid);
         NativeMethods.Close(dfd);
         if (!dirOk)
         {
             throw new UsageException(
                 $"--log '{path}' parent directory is not writable by the calling user.");
         }
-        fd = NativeMethods.OpenWithDeadline(path, NativeMethods.LogCreateFlags);
+        fd = NativeMethods.OpenWithDeadline(path, NativeMethods.LogCreateFlags, 0x1B6 /* 0666 */);
         if (fd == NativeMethods.InvalidFd)
         {
             throw new UsageException(
@@ -1405,7 +1417,12 @@ internal static class NativeMethods
     // 件理论不可达 PAL、或符号缺失）一律 InvalidFd——fail closed。
     internal static IntPtr OpenWithDeadline(string path) => OpenWithDeadline(path, EnvOpenFlags);
 
-    internal static IntPtr OpenWithDeadline(string path, int flags)
+    internal static IntPtr OpenWithDeadline(string path, int flags) =>
+        OpenWithDeadline(path, flags, 0);
+
+    // CREAT 路须带 0666 建件模（内核再按 umask 剥——sh `9>>` 同口径）；
+    // mode=0 会建出权限位 000 的件，调用方读不回自己的日志。
+    internal static IntPtr OpenWithDeadline(string path, int flags, int mode)
     {
         var fd = InvalidFd;
         // gate 不 using：超时被弃的线程若在 gate 释放后解除阻塞，
@@ -1417,7 +1434,7 @@ internal static class NativeMethods
         {
             try
             {
-                fd = SysOpen(path, flags, 0);
+                fd = SysOpen(path, flags, mode);
             }
             catch (Exception)
             {
