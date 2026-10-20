@@ -1046,7 +1046,10 @@ INSTALL_BASE=${INSTALL_DIR%/}
 [ -z "$RETAIN_DIR" ] || RETAIN_CMP="$(norm_path "$RETAIN_DIR")" || exit 2
 # 重启目标与日志同样按调用方 cwd 规范化成绝对路径——脚本的工作目录不是用户的 cwd。
 [ -z "$APP_PATH" ] || APP_PATH="$(norm_path "$APP_PATH")" || exit 2
-[ -z "$LOG_FILE" ] || LOG_FILE="$(norm_path "$LOG_FILE")" || exit 2
+# LOG_FILE 不能走 norm_path——逐段 resolve_link 会把 --log 的叶链接物理化成
+# 目标件，链接拒判（_pa_log_open -h/AOT O_NOFOLLOW→ELOOP）被整体绕过。
+# 词法归一即可（AOT Path.GetFullPath 同口径：消 ./.. 段不动链接）。
+[ -z "$LOG_FILE" ] || LOG_FILE="$(norm_lexical "$LOG_FILE")" || exit 2
 # --log 与 pkg-apply 同域校验（apply 也可能在提权语境下被拉起）：违规
 # rc2 拒；良性不可写 WARN 降级续行（AOT TryOpenLogFile 两级同口径）。
 # _pa_log_done 预置让 log() 不再懒开。
