@@ -1411,8 +1411,10 @@ public static class UpdaterBootstrapParityTests
     }
 
     // 包管理器 stub：记录 <名> <argv>|DF=<DEBIAN_FRONTEND> 一行后按 rc 退出。
-    static string PmStub(string bin, string name, int rc, string rec) =>
-        WritePkgStub(Path.Combine(bin, name),
+    // fileName 与记录名解耦：逐例独立 stub 路径防"重写进行中被旧分离树 exec
+    // 读到半截脚本"竞态，记录名保持工具本名不漂移断言面。
+    static string PmStub(string bin, string name, int rc, string rec, string? fileName = null) =>
+        WritePkgStub(Path.Combine(bin, fileName ?? name),
             "#!/bin/sh\n" +
             "{ printf '%s' '" + name + "'; for a do printf ' %s' \"$a\"; done;" +
             " printf '|DF=%s\\n' \"${DEBIAN_FRONTEND:-}\"; } >> '" + rec + "'\n" +
@@ -1421,8 +1423,8 @@ public static class UpdaterBootstrapParityTests
     // 降权工具 stub：记录 <名> <argv> 一行后链式执行内层——
     // setpriv/sudo/runuser 腿在 argv 里找 `env` 标记并 exec 其后内容，
     // su 腿找 `-c` 并交给 /bin/sh——端到端验证 env 回灌真的到达 --app。
-    static string DropStub(string bin, string name, string rec) =>
-        WritePkgStub(Path.Combine(bin, name),
+    static string DropStub(string bin, string name, string rec, string? fileName = null) =>
+        WritePkgStub(Path.Combine(bin, fileName ?? name),
             "#!/bin/sh\n" +
             "{ printf '%s' '" + name + "'; for a do printf ' %s' \"$a\"; done; printf '\\n'; } >> '" + rec + "'\n" +
             "while [ $# -gt 0 ]; do\n" +
@@ -2247,23 +2249,26 @@ public static class UpdaterBootstrapParityTests
                 var seq = 0;
                 var rec = "";
                 var app = "";
+                // CMD_* 覆盖由 FreshCase 逐例指向新 stub 路径，初值不预置死路径。
+                var env = PkgEnv(
+                    ("PKEXEC_UID", "99999999999999999999"),
+                    ("SUDO_UID", "4242"),
+                    ("SUDO_GID", "4343"),
+                    ("BUNDLER_UPDATER_PASSWD_FILE", emptyPasswd));
                 void FreshCase()
                 {
                     var n = ++seq;
                     rec = Path.Combine(dir, "rec-" + n + ".txt");
                     app = AppStub(dir, rec, "app-under-test-" + n);
-                    PmStub(bin, "dpkg", 0, rec);
-                    DropStub(bin, "setpriv", rec);
+                    // stub 路径也须逐例换：上例分离树里尚未 exec 的降权器会去读
+                    // stub 文件——原地重写会让它读到半截脚本，半截 printf 记出
+                    // 裸 "setpriv" 行挤进新 rec（CI ubuntu 实证一次）。
+                    // CMD_* 覆盖缝指向新路径（env 覆盖优先于 command -v，双腿同口径）。
+                    env["BUNDLER_UPDATER_CMD_DPKG"] = PmStub(bin, "dpkg", 0, rec, "dpkg-" + n);
+                    env["BUNDLER_UPDATER_CMD_SETPRIV"] = DropStub(bin, "setpriv", rec, "setpriv-" + n);
                 }
 
                 // PKEXEC_UID 超 int64 → 值缺席落 SUDO_UID 兜底。
-                var env = PkgEnv(
-                    ("BUNDLER_UPDATER_CMD_DPKG", Path.Combine(bin, "dpkg")),
-                    ("BUNDLER_UPDATER_CMD_SETPRIV", Path.Combine(bin, "setpriv")),
-                    ("PKEXEC_UID", "99999999999999999999"),
-                    ("SUDO_UID", "4242"),
-                    ("SUDO_GID", "4343"),
-                    ("BUNDLER_UPDATER_PASSWD_FILE", emptyPasswd));
                 FreshCase();
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app));

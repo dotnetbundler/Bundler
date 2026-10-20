@@ -1515,8 +1515,11 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
 
             using var interrupted = ProcessRunner.StartDetached(
                 Installer("bundle-interrupted", "1.2.0"), $"/S /UPDATE /D={InstallDir}");
+            // 钩点位窗口给足：安装器跑的是真 NSIS 落盘链，满载共享 runner 上
+            // 120s 曾未达钩位（verify run 39368446045 windows-2025 腿实证一次）——
+            // 窗口放宽不松语义，标记仍必须出现。
             WaitFor.Until(() => File.Exists(InterruptedHookMarker),
-                "Interrupted-install fixture did not reach its post-install hook.", 120);
+                "Interrupted-install fixture did not reach its post-install hook.", 300);
             ProcessRunner.TryKillTree(interrupted);
             interrupted.WaitForExit(60_000);
             Assert.NotEqual(0, interrupted.ExitCode);
