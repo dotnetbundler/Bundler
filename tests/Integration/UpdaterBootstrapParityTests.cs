@@ -2762,7 +2762,8 @@ public static class UpdaterBootstrapParityTests
             foreach (var impl in Impls)
             {
                 var dir = NewDir(root, "applognl-" + impl);
-                var install = Path.Combine(dir, "ins\ntall");
+                // 换包语义要求装位已存在——\n 名 POSIX 合法，Directory.CreateDirectory 照建。
+                var install = NewDir(dir, "ins\ntall");
                 var payload = NewDir(dir, "payload");
                 Write(Path.Combine(payload, "app"), "x");
                 var log = Path.Combine(dir, "u-" + impl + ".log");
