@@ -78,11 +78,16 @@ _pa_log_open() {
         # 把路径换成指向 root 件的链接会 mismatch 被拒（SEC 回归）。
         _li=$(stat -c '%d:%i' "$LOG_FILE" 2>/dev/null || stat -f '%d:%i' "$LOG_FILE" 2>/dev/null || true)
         [ -n "$_li" ] || return 1
-        # 裸 exec 重定向是 POSIX special builtin：失败在 dash 属致命错
-        # 整脚本暴毙（|| 永远走不到），且 2>/dev/null 会把全脚本 stderr
-        # 永久钉死——先普通内建 : 预探测（失败只回非零不致命、错误输出
-        # 只罩组内），探测过才 exec 钉 fd。
-        { : >>"$LOG_FILE"; } 2>/dev/null || return 1
+        # POSIX special builtin（exec 与 : 同档）的重定向失败在 dash
+        # 属致命错整脚本暴毙（|| 永远走不到），且 exec 上 2>/dev/null
+        # 会把全脚本 stderr 永久钉死——预探测放子壳收容（子壳 fatal
+        # 只杀子壳回非零、不带走主壳），探测过才 exec 钉 fd。
+        # 残余：探测→exec 之间件被删时裸 exec 仍按 special builtin
+        # 致命暴毙——毫秒级竞态窗、后果仅为脚本退出不越权，登记；
+        # check(-f)→探测之间换入 fifo 时 >>/exec 无时限阻塞（AOT 同位
+        # OpenWithDeadline 5s 收口、sh 无等价原语——timeout 只能包
+        # 外部命令，登记为两实现已知差异，旧实现同款暴露未恶化）。
+        ( : >>"$LOG_FILE" ) 2>/dev/null || return 1
         exec 9>>"$LOG_FILE" || { exec 9>&-; return 1; }
     else
         _ld=${LOG_FILE%/*}
@@ -397,9 +402,10 @@ _pa_env_cleanup() {
 # 全走 fd（/dev/fd/3，缺席退 /proc/self/fd/3）不触路径——旧 -f/-h/-r/stat/cat
 # 逐段查与真实 open 之间窗内 fifo 可挂死 root 进程、symlink 可把 root
 # 私有件灌进降权 app 的 env（用户经 /proc/<app>/environ 读回）。
-# 残余窗：-h 预查后 exec 前同主换位（调用者件→调用者件的链接）属内容
-# 等价无害；异主换位被 fd 上属主复核拒（AOT O_NOFOLLOW+fstat 同口径，
-# -h 预查只为对齐链接拒判面）。
+# 换件窗由 dev:ino 比对钉死：预探测时 stat 记下路径件的 dev:ino，
+# exec 3<> 后 fd 上 stat -L 复核同值——check→open 之间任何换件
+#（同主/异主/链接）都 mismatch 被拒；-h 预查只为对齐 AOT 链接
+# 拒判面（NOFOLLOW→ELOOP 语义）。
 # 读定内容进 _PA_ENV_RAW 并置 _PA_ENV_OK=1——其后不再触路径，清件闸只认
 # 读定态（校验被拒的路径不归我们删，见 _pa_env_cleanup）。
 _pa_env_validate() {
@@ -421,7 +427,7 @@ _pa_env_validate() {
         pkg_usage
         return 1
     fi
-    { : <>"$PA_ENV"; } 2>/dev/null || {
+    ( : <>"$PA_ENV" ) 2>/dev/null || {
         echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
         pkg_usage
         return 1

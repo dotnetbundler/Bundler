@@ -1364,7 +1364,9 @@ internal static class NativeMethods
     internal const int EnvOpenFlags = 0x0010 | 0x0200;
     internal const int LogOpenFlags = 0x0001 | 0x0010 | 0x0200;
     // CREAT 不带 EXCL：抢建窗内出现的件由开后 fstat 按属主（调用 uid 或
-    // 本进程 euid）复核——sh `exec 9>>` 同样无 EXCL、开后 /dev/fd/9 复核。
+    // 本进程 euid）复核收口；sh 侧更严——noclobber O_EXCL 原子建件 +
+    // dev:ino 比对，窗在 open 一刻归零（本侧 CREAT|NOFOLLOW 对链接已拒，
+    // 残余窗为同主普通件抢建、内容无害等价，故不加 EXCL 保既有件路径）。
     internal const int LogCreateFlags = LogOpenFlags | 0x0020;
     internal const int DirOpenFlags = 0x0010 | 0x0200;
     // 包路径刻意跟随符号链接（sh -f/cp 同口径登记 N10）：包件是调用方
