@@ -413,13 +413,18 @@ _pa_env_cleanup() {
 # exec 3<> 后 fd 上 stat -L 复核同值——stat→open 之间换件（同主/
 # 异主/链接）即 mismatch 被拒；-h 预查只为对齐 AOT 链接拒判面
 #（NOFOLLOW→ELOOP 语义）。
-# 残余窗登记：-h check→stat 之间换同主件/同主链接会静默通过
-#（stat 记新件 ino、fd 复核照样匹配——良性，两实现同款暴露）；
+# 残余窗登记：-h check→stat 之间换同主普通件（含同 inode 硬链接
+# 换位）会静默通过——良性，两实现同款暴露；换链接不通过（stat
+# lstat 记链接自身 ino，fd 复核记目标 ino——必 mismatch 拒）；
 # 探测→exec 之间换入目录等不可开目标时裸 exec 按 special builtin
 # 致命退（dash rc2/bash rc1，不带 usage 文案）——毫秒级竞态不越权；
 # 件被删不触发 fatal（<> 带 O_CREAT 会重建空件→inode mismatch
-# 干净拒，残留 euid 空件属良性）；<> O_RDWR 对 fifo 不阻塞，无
-# log 侧同形阻塞窗。
+# 干净拒）；探测 <> 对窗内换入的 dangling 链接会在链接目标处建
+# 出 euid 属空件（提权语境即任意路径空件残留——拒仍成立、副作用
+# 不可安全回收：按链接目标 rm 会删错件，登记不处置）；件被删
+# 重建若复用刚释放 inode 可比中放行——euid==调用 uid 时读空件
+# 退化最小 env（良性），euid≠uid 时被属主复核拒；<> O_RDWR 对
+# fifo 不阻塞，无 log 侧同形阻塞窗。
 # 读定内容进 _PA_ENV_RAW 并置 _PA_ENV_OK=1——其后不再触路径，清件闸只认
 # 读定态（校验被拒的路径不归我们删，见 _pa_env_cleanup）。
 _pa_env_validate() {
