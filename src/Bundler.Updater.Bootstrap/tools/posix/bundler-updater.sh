@@ -83,12 +83,14 @@ _pa_log_open() {
         # 会把全脚本 stderr 永久钉死——预探测放子壳收容（子壳 fatal
         # 只杀子壳回非零、不带走主壳），探测过才 exec 钉 fd。
         # 残余窗登记：(a) 探测→exec 之间换入不可开目标（目录等）时裸
-        #   exec 仍按 special builtin 致命暴毙——毫秒级竞态、后果仅为
-        #   脚本退出不越权；件被删不触发（>> 带 O_CREAT 会重建，随后
-        #   inode 比对按干净拒收）；(b) check(-f)→探测 与 探测→exec
-        #   两段窗内换入 fifo 时 >>/exec 无时限阻塞（建件分支
-        #   create→exec 同形；AOT 同位 OpenWithDeadline 5s 收口、sh
-        #   无等价原语——timeout 只能包外部命令，登记为两实现已知
+        #   exec 仍按 special builtin 致命暴毙（建件分支 stat→exec
+        #   同形窗未单列登记）——毫秒级竞态、后果仅为脚本退出不越权；
+        #   件被删不触发（>> 带 O_CREAT 会重建，随后 inode 比对按
+        #   干净拒收——复用刚释放 inode 的理论窗内可比中放行，后果
+        #   仍良性：euid 属空件作日志）；(b) check(-f)→探测 与
+        #   探测→exec 两段窗内换入 fifo 时 >>/exec 无时限阻塞（建件
+        #   分支 create→exec 同形；AOT 同位 OpenWithDeadline 5s 收口、
+        #   sh 无等价原语——timeout 只能包外部命令，登记为两实现已知
         #   差异，旧实现同款暴露未恶化）；(c) 探测 >> 在换件窗内可建
         #   出 euid 属空件——随后被 inode 复核拒但件留存（良性残留，
         #   不越权）。
@@ -408,12 +410,16 @@ _pa_env_cleanup() {
 # 逐段查与真实 open 之间窗内 fifo 可挂死 root 进程、symlink 可把 root
 # 私有件灌进降权 app 的 env（用户经 /proc/<app>/environ 读回）。
 # 换件窗由 dev:ino 比对钉死：预探测时 stat 记下路径件的 dev:ino，
-# exec 3<> 后 fd 上 stat -L 复核同值——check→open 之间换件（同主/
+# exec 3<> 后 fd 上 stat -L 复核同值——stat→open 之间换件（同主/
 # 异主/链接）即 mismatch 被拒；-h 预查只为对齐 AOT 链接拒判面
 #（NOFOLLOW→ELOOP 语义）。
-# 残余：探测→exec 之间换入目录等不可开目标时裸 exec 按 special
-# builtin 致命退 2（不带 usage 文案）——毫秒级竞态不越权，登记；
-# <> O_RDWR 对 fifo 不阻塞，无 log 侧同形阻塞窗。
+# 残余窗登记：-h check→stat 之间换同主件/同主链接会静默通过
+#（stat 记新件 ino、fd 复核照样匹配——良性，两实现同款暴露）；
+# 探测→exec 之间换入目录等不可开目标时裸 exec 按 special builtin
+# 致命退（dash rc2/bash rc1，不带 usage 文案）——毫秒级竞态不越权；
+# 件被删不触发 fatal（<> 带 O_CREAT 会重建空件→inode mismatch
+# 干净拒，残留 euid 空件属良性）；<> O_RDWR 对 fifo 不阻塞，无
+# log 侧同形阻塞窗。
 # 读定内容进 _PA_ENV_RAW 并置 _PA_ENV_OK=1——其后不再触路径，清件闸只认
 # 读定态（校验被拒的路径不归我们删，见 _pa_env_cleanup）。
 _pa_env_validate() {
