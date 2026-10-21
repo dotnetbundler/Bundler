@@ -260,8 +260,8 @@ internal static class NativeSpawnUnix
             // 搬离：占自家目标槽会跳过 dup2 动作→fd 带 CLOEXEC 进 exec 即被
             // 收；占别家目标槽会被前序 dup2 覆写——两者都是子件标准管无声死
             //（0 空 stdin、1/2 数据丢入虚空）。dup2(fd,fd) 清 CLOEXEC 与
-            // F_DUPFD_CLOEXEC 都有跨 libc/ABI 的语义或调用面缺口——
-            // F_GETFD 探测+dup2 搬走是跨三家 libc 与 ARM64 变参 ABI 的确定形。
+            // F_DUPFD_CLOEXEC 都有跨 libc/ABI 的语义或调用面缺口——dup()
+            // 链占槽搬高是跨三家 libc 与 ARM64 变参 ABI 的确定形。
             RelocateStdSlotFd(stdinPipe, 0);
             RelocateStdSlotFd(stdoutPipe, 1);
             RelocateStdSlotFd(stderrPipe, 1);

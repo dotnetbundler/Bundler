@@ -364,10 +364,16 @@ internal static class PkgApplyPlan
     private static void SweepOne(string dir)
     {
         var held = dir + ".sweep-" + Environment.ProcessId;
-        // 链接名目也进扫：rename 搬链本体不跟目标。按条目 attr 分派——
-        // File.Move 见 Directory 位（含链→目录）即拒，故链→目/真目同走
-        // Directory.Move，链→文件/悬空链走 File.Move。
+        // 链接名目也进扫：rename 搬链本体不跟目标。先判条目形态——非目非链
+        // 名目是契约外普通件，不动其名（旧实现 Directory.Move 即抛、原件
+        // 原位留的同款语义）；名目 held 撞已存在件时 Move 抛异常→上层 catch
+        // 跳过、原位留待下轮。有 Directory 位（真目/链→目）走 Directory.Move，
+        // 链→文件/悬空链走 File.Move（File.Move 见 Directory 位即拒）。
         var srcAttr = File.GetAttributes(dir);
+        if ((srcAttr & (FileAttributes.Directory | FileAttributes.ReparsePoint)) == 0)
+        {
+            return;
+        }
         if ((srcAttr & FileAttributes.Directory) != 0)
         {
             Directory.Move(dir, held);
@@ -392,6 +398,20 @@ internal static class PkgApplyPlan
                 else
                 {
                     File.Delete(held);
+                }
+                return;
+            }
+            if ((heldAttr & FileAttributes.Directory) == 0)
+            {
+                // 判格到 Move 之间名目被换成普通件（µs 窗）：held 非链非目
+                // 时搬回原名恢复名目——原名已被新名目占住则弃收（.sweep 后
+                // 缀不在契约 glob 面，属登记残余，不代位删件）。
+                try
+                {
+                    File.Move(held, dir);
+                }
+                catch (Exception)
+                {
                 }
                 return;
             }
