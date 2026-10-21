@@ -70,6 +70,12 @@ public static class UpdaterBootstrapParityTests
             Assert.Fail("bundler-updater.sh did not exit within 60s");
         }
         Task.WaitAll(stdout, stderr);
+        // sh 腿 stderr 回显进 CI 日志——失败断言前 sh 的拒因静默吞掉难定位
+        //（Aot 腿 Console.Error 本就实时可见，本侧对等口径）。
+        if (!string.IsNullOrEmpty(stderr.Result))
+        {
+            Console.Error.Write(stderr.Result);
+        }
         return process.ExitCode;
     }
 
@@ -1554,6 +1560,10 @@ public static class UpdaterBootstrapParityTests
             Assert.Fail("bundler-updater.sh pkg-apply did not exit within 60s");
         }
         Task.WaitAll(stdout, stderr);
+        if (!string.IsNullOrEmpty(stderr.Result))
+        {
+            Console.Error.Write(stderr.Result);
+        }
         return process.ExitCode;
     }
 

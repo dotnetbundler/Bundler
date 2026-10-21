@@ -1357,8 +1357,10 @@ internal static class NativeMethods
 {
     // PAL OpenFlags（pal_io.h 定值，与 POSIX 数值无关的固定中间值）：
     // RDONLY=0x0000 WRONLY=0x0001 CLOEXEC=0x0010 CREAT=0x0020 EXCL=0x0040
-    // NOFOLLOW=0x0200——PAL 枚举止于 NONBLOCK_WRITE=0x0800，无 DIRECTORY
-    // 位（未映射位被 C 侧丢弃，目录判据改由开后 fstat 的 S_ISDIR 闭环）。
+    // TRUNC=0x0080 SYNC=0x0100 NOFOLLOW=0x0200 NONBLOCK_READ=0x0400
+    // NONBLOCK_WRITE=0x0800 DIRECTORY=0x1000（PAL 枚举末位——
+    // O_RDONLY 目录开件由原生 O_DIRECTORY 在内核侧拒非目录节点，
+    // 开后 fstat 的 S_ISDIR 仍作双保险复核）。
     // PAL 旗标集不导 O_NONBLOCK——fifo 阻塞窗由 OpenWithDeadline 的
     // 5s 线程内 open 收口（sh `timeout 5 cat` 同口径）。
     internal const int EnvOpenFlags = 0x0010 | 0x0200;
@@ -1368,7 +1370,7 @@ internal static class NativeMethods
     // dev:ino 比对，窗在 open 一刻归零（本侧 CREAT|NOFOLLOW 对链接已拒，
     // 残余窗为同主普通件抢建、内容无害等价，故不加 EXCL 保既有件路径）。
     internal const int LogCreateFlags = LogOpenFlags | 0x0020;
-    internal const int DirOpenFlags = 0x0010 | 0x0200;
+    internal const int DirOpenFlags = 0x0010 | 0x0200 | 0x1000;
     // 包路径刻意跟随符号链接（sh -f/cp 同口径登记 N10）：包件是调用方
     // 受托输入不越信任边界，只须 fstat 钉住 S_IFREG 防 fifo/设备换件窗。
     internal const int PkgOpenFlags = 0x0010;
@@ -1399,6 +1401,7 @@ internal static class NativeMethods
         internal long RDev;
         internal long Ino;
         internal uint UserFlags;
+        internal uint HardLinkCount;
     }
 
     [DllImport("libSystem.Native", EntryPoint = "SystemNative_Open", SetLastError = true, CharSet = CharSet.Ansi)]
