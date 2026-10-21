@@ -395,9 +395,10 @@ internal static class PayloadSource
 
     // 归档路径归一：去前导 '/'、折叠空/'.' 段——后端 installRoot 形态不同
     //（deb/apk/AppImage 相对、rpm 绝对），覆盖核查与比对统一在规范相对形
-    // 上进行，否则绝对/相对失配会让 Ordinal 二分永不命中。
+    // 上进行，否则绝对/相对失配会让 Ordinal 二分永不命中。不折叠 '\\'：
+    // POSIX 文件名可合法含反斜杠，且 emitted/resolved 两侧本就 '/' 成形。
     private static string CanonicalArchivePath(string path) =>
-        string.Join("/", path.Replace('\\', '/').Split('/')
+        string.Join("/", path.Split('/')
             .Where(segment => segment.Length > 0 && segment != "."));
 
     private static bool IsLink(string path)

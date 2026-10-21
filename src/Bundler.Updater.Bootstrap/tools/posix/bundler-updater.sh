@@ -366,14 +366,16 @@ _pa_sweep_stages() {
         # 钉名：先 mv 私有名——判龄到删件窗内名目被换链的风险归零；
         # .sweep.$$ 后缀仍在 bundler-pkg* glob 面内，弃收件下轮重扫不丢。
         # held 名目撞已有目（跨进程 PID 复用残留）时 mv 会把 _d 嵌套进去
-        # 产永久弃收件——在场即跳过，留待下轮换名再扫。
+        # 产永久弃收件——预检在场即跳过 + mv -n 无覆盖语义关 check→act 残
+        # 窗（撞名时 -n 静默不搬——_held 不在则后续清扫空跑、_d 留名下轮重扫；
+        # 实现不收 -n 则 mv 报错同走 continue）。
         _held="${_d}.sweep.$$"
         [ -e "$_held" ] || [ -L "$_held" ] && continue
-        mv "$_d" "$_held" 2>/dev/null || continue
+        mv -n "$_d" "$_held" 2>/dev/null || continue
         # mv 钉住的是条目本体：名目本来就是链接（或竞态被换链）时 mv 移的是
-        # 链非目标——held 是链则只摘链（龄门对链取链自身 mtime——find 默认
-        # -P 走 lstat；AOT SweepOne 取目标 mtime，两侧口径不同但结局一致：
-        # 链只被摘除不触目标）。
+        # 链非目标——held 是链则只摘链（龄门口径两侧不同：sh find -P lstat
+        # 取链自身 mtime，AOT GetLastWriteTimeUtc 跟链取目标 mtime——陈旧链
+        # +新目标时 sh 摘而 AOT 留；摘除动作本身两路都只摘链不触目标）。
         if [ -L "$_held" ]; then rm -f "$_held" 2>/dev/null; continue; fi
         # 契约暂存目只装平铺常规件——逐条只删条目本体：链接 rm -f 只摘链
         # 不跟目标；真目录（含 FUSE/bind 挂载点）出现即整体弃收。root 侧
