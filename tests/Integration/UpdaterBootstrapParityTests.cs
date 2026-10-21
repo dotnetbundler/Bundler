@@ -67,6 +67,11 @@ public static class UpdaterBootstrapParityTests
         if (!process.WaitForExit(60_000))
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
+            Task.WaitAll(stdout, stderr);
+            if (!string.IsNullOrEmpty(stderr.Result))
+            {
+                Console.Error.Write(stderr.Result);
+            }
             Assert.Fail("bundler-updater.sh did not exit within 60s");
         }
         Task.WaitAll(stdout, stderr);
@@ -646,6 +651,11 @@ public static class UpdaterBootstrapParityTests
             if (!process.WaitForExit(60_000))
             {
                 try { process.Kill(); } catch (InvalidOperationException) { }
+                Task.WaitAll(stdout, stderr);
+                if (!string.IsNullOrEmpty(stderr.Result))
+                {
+                    Console.Error.Write(stderr.Result);
+                }
                 Assert.Fail("updater bootstrapper did not exit within 60s");
             }
             Task.WaitAll(stdout, stderr);
@@ -1561,6 +1571,11 @@ public static class UpdaterBootstrapParityTests
         if (!process.WaitForExit(60_000))
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
+            Task.WaitAll(stdout, stderr);
+            if (!string.IsNullOrEmpty(stderr.Result))
+            {
+                Console.Error.Write(stderr.Result);
+            }
             Assert.Fail("bundler-updater.sh pkg-apply did not exit within 60s");
         }
         Task.WaitAll(stdout, stderr);

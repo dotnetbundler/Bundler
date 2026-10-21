@@ -53,11 +53,56 @@ log() {
     fi
 }
 
+# fd 钉住复核：fd 上开定的是"与 check 时记录的 dev:ino 同件"普通件，
+# 属主落允许 uid 集。/dev/fd|/proc/self/fd 直 stat 先行（Linux 恒达）；
+# devfs 宿主（macOS 对自属 fd 的 /dev/fd/N stat 常 EBADF——CI 实证）
+# 报节点自身 dev:ino 或直接失败的两种形态都不符→退 lsof 读内核
+# vnode：REG/VREG 类型+inode 等值即同件（跨卷同 ino 不同件需跨卷
+# 硬链——POSIX 不容）。lsof 缺席/取不到→拒（fail closed 同口径）。
+# $1=fd 号；$2=check 时记录的 dev:ino；$3=允许 uid 列表（空格分隔，
+# 空=不复核属主——属主复核抓 chown 竞态，inode 等值不挡属主变更）。
+_pa_fd_same() {
+    _fs_p=/dev/fd/$1
+    [ -e "$_fs_p" ] || _fs_p=/proc/self/fd/$1
+    _fs_i=$(stat -Lc '%d:%i' "$_fs_p" 2>/dev/null || stat -Lf '%d:%i' "$_fs_p" 2>/dev/null || true)
+    if [ -n "$_fs_i" ] && [ "$_fs_i" = "$2" ] && [ -f "$_fs_p" ]; then
+        [ -z "$3" ] && return 0
+        _fs_o=$(stat -Lc %u "$_fs_p" 2>/dev/null || stat -Lf %u "$_fs_p" 2>/dev/null || true)
+        for _fs_w in $3; do
+            [ "$_fs_o" = "$_fs_w" ] && return 0
+        done
+        return 1
+    fi
+    command -v lsof >/dev/null 2>&1 || return 1
+    # -n 免 DNS 反查：提权语境无解析器会让 vnode 名解析阻塞 lsof 本身。
+    _fs_l=$(lsof -n -a -p "$$" -d "$1" -F tiun 2>/dev/null)
+    _fs_t=$(printf '%s\n' "$_fs_l" | sed -n 's/^t//p')
+    _fs_n=$(printf '%s\n' "$_fs_l" | sed -n 's/^i//p')
+    { [ "$_fs_t" = REG ] || [ "$_fs_t" = VREG ]; } && \
+        [ -n "$_fs_n" ] && [ "$_fs_n" = "${2##*:}" ] || return 1
+    [ -z "$3" ] && return 0
+    _fs_u=$(printf '%s\n' "$_fs_l" | sed -n 's/^u//p')
+    case $_fs_u in ''|*[!0-9]*)
+        # lsof u 字段给不出数字 uid 时按 vnode 名补 stat——名缺失
+        #（已删件）即拒：属主拿不到=fail closed。
+        _fs_nm=$(printf '%s\n' "$_fs_l" | sed -n 's/^n//p')
+        [ -n "$_fs_nm" ] && \
+            _fs_u=$(stat -c %u "$_fs_nm" 2>/dev/null || stat -f %u "$_fs_nm" 2>/dev/null || true)
+        ;;
+    esac
+    [ -n "$_fs_u" ] || return 1
+    for _fs_w in $3; do
+        [ "$_fs_u" = "$_fs_w" ] && return 0
+    done
+    return 1
+}
+
 # --log 开件+校验（pkg_apply 前置硬调、log() 首用懒调）：提权侧 argv 给的
 # 写路径按"调用者可写"复核——件在=普通件且属主==调用 uid；件不在=父目录
 # 调用者可写（属主匹配或 o+wx 公共可写区）。exec 9>> 一次开定 O_APPEND
-# 钉住 inode，其后在 fd 上（/dev/fd/9）复核属主——check→open 换件窗内
-# 出现的件属主两不沾（非调用 uid 且非 euid）即拒（AOT OpenLogFile 同口径）。
+# 钉住 inode，其后在 fd 上（/dev/fd/9，devfs 宿主走 _pa_fd_same 的 lsof
+# 兜底）复核属主——check→open 换件窗内出现的件属主两不沾（非调用 uid
+# 且非 euid）即拒（AOT OpenLogFile 同口径）。
 # uid 拿不到=无法复核属主→拒（fail closed，env 件同款口径）。
 _pa_log_open() {
     [ -n "$LOG_FILE" ] || return 0
@@ -125,14 +170,9 @@ _pa_log_open() {
         fi
         exec 9>>"$LOG_FILE" || { exec 9>&-; return 1; }
     fi
-    _lf=/dev/fd/9
-    [ -e "$_lf" ] || _lf=/proc/self/fd/9
-    _fi=$(stat -Lc '%d:%i' "$_lf" 2>/dev/null || stat -Lf '%d:%i' "$_lf" 2>/dev/null || true)
-    _lo=$(stat -Lc %u "$_lf" 2>/dev/null || stat -Lf %u "$_lf" 2>/dev/null || true)
-    # 三重复核：普通件 + inode 与 check 钉住的同件 + 属主落调用 uid
-    #（既有件）或 euid（新件）——任一拿不到/对不上即拒（fail closed）。
-    if [ ! -f "$_lf" ] || [ -z "$_fi" ] || [ "$_fi" != "$_li" ] || [ -z "$_lo" ] || \
-       { [ "$_lo" != "$_lu" ] && [ "$_lo" != "$(id -u 2>/dev/null)" ]; }; then
+    # 三重复核（普通件+dev:ino 同件+属主落调用 uid 或本进程 euid）收进
+    # _pa_fd_same——devfs 宿主的 fd 复核由该函数内 lsof 兜底。
+    if ! _pa_fd_same 9 "$_li" "$_lu $(id -u 2>/dev/null)"; then
         exec 9>&-
         return 1
     fi
@@ -406,7 +446,7 @@ _pa_env_cleanup() {
 # "件未提供"。open 先钉住 inode：exec 3<> 走 O_RDWR——fifo 以读写开立即
 # 返回不阻塞（裸 O_RDONLY 开会挂死等写端，原 timeout 5 cat 兜底窗一并
 # 消掉），普通件在 root 身份下不受权限位约束能开；其后类型/属主/读取
-# 全走 fd（/dev/fd/3，缺席退 /proc/self/fd/3）不触路径——旧 -f/-h/-r/stat/cat
+# 全走 fd（/dev/fd/3→/proc/self/fd/3→lsof 三级，见 _pa_fd_same）不触路径——旧 -f/-h/-r/stat/cat
 # 逐段查与真实 open 之间窗内 fifo 可挂死 root 进程、symlink 可把 root
 # 私有件灌进降权 app 的 env（用户经 /proc/<app>/environ 读回）。
 # 换件窗由 dev:ino 比对钉死：预探测时 stat 记下路径件的 dev:ino，
@@ -457,13 +497,9 @@ _pa_env_validate() {
         pkg_usage
         return 1
     }
-    _fe=/dev/fd/3
-    [ -e "$_fe" ] || _fe=/proc/self/fd/3
     _ev_uid=${PA_UID:-}
     [ -n "$_ev_uid" ] || _ev_uid=$(id -u 2>/dev/null || true)
-    _ev_own=$(stat -Lc %u "$_fe" 2>/dev/null || stat -Lf %u "$_fe" 2>/dev/null || true)
-    _fi=$(stat -Lc '%d:%i' "$_fe" 2>/dev/null || stat -Lf '%d:%i' "$_fe" 2>/dev/null || true)
-    if [ ! -f "$_fe" ] || [ -z "$_ev_uid" ] || [ -z "$_ev_own" ] || [ "$_ev_own" != "$_ev_uid" ] || [ -z "$_fi" ] || [ "$_fi" != "$_ei" ]; then
+    if [ -z "$_ev_uid" ] || ! _pa_fd_same 3 "$_ei" "$_ev_uid"; then
         exec 3>&-
         echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
         pkg_usage

@@ -828,11 +828,11 @@ internal static class PkgApplyPlan
         {
             if (!Directory.Exists(dir))
             {
-                // 父路径存在但 open 失败且非目录（非常规节点/悬空链接等）——
-                // 与真缺席分流保准确报文（两级同为 LogUnavailable 良性降级，
-                // sh `[ -d ]` 同口径）。
+                // 父路径存在但非目录（普通件/fifo/socket/设备等——Path.Exists
+                // 只判"节点在场"）——与真缺席分流保准确报文（两级同为
+                // LogUnavailable 良性降级，sh `[ -d ]` 同口径）。
                 throw new LogUnavailableException(
-                    File.Exists(dir)
+                    Path.Exists(dir)
                         ? $"--log '{path}' parent path is not a directory."
                         : $"--log '{path}' parent directory does not exist.");
             }
