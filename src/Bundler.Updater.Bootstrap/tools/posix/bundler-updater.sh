@@ -57,9 +57,10 @@ log() {
 # 属主落允许 uid 集。/dev/fd|/proc/self/fd 直 stat 先行（Linux 恒达）；
 # devfs 宿主（macOS 对自属 fd 的 /dev/fd/N stat 常 EBADF——CI 实证）
 # 报节点自身 dev:ino 或直接失败的两种形态都不符→退 lsof 读内核
-# vnode：REG/VREG 类型+inode 等值钉身（fd 真实 vnode），名可 stat 时
-# 叠加 dev:ino 全量钉 dev——inode 是 fs 局部量，跨 fs 同 ino 属天然
-# 巧合，单 ino 比对残窗见内层登记。lsof 缺席/取不到→拒（fail closed）。
+# vnode：i 字段钉 fd 真实 inode（mandatory）、D 字段钉 fs dev，
+# 件身钉死不靠路径名；属主只能经 vnode 名 stat 复核（lsof 无件属主
+# 字段——u 是进程 uid），名缺/转义时件身已 dev:ino 全钉、属主残窗
+# 登记见函数尾。 lsof 缺席→拒（fail closed 同口径）。
 # $1=fd 号；$2=check 时记录的 dev:ino；$3=允许 uid 列表（空格分隔，
 # 空=不复核属主——属主复核抓 chown 竞态，inode 等值不挡属主变更）。
 _pa_fd_same() {
@@ -74,39 +75,65 @@ _pa_fd_same() {
         done
         return 1
     fi
-    command -v lsof >/dev/null 2>&1 || return 1
+    # lsof 先走 PATH，兜底知名绝对位——提权/最小 env 的 PATH 常裁掉
+    # /usr/sbin（macOS 的 lsof 恒在该处），protocol 内工具不依赖 PATH。
+    _fs_lsof=$(command -v lsof 2>/dev/null || true)
+    if [ -z "$_fs_lsof" ]; then
+        for _fs_lp in /usr/sbin/lsof /usr/bin/lsof /sbin/lsof /bin/lsof; do
+            [ -x "$_fs_lp" ] && { _fs_lsof=$_fs_lp; break; }
+        done
+    fi
+    [ -n "$_fs_lsof" ] || return 1
     # -n 免 DNS 反查：提权语境无解析器会让 vnode 名解析阻塞 lsof 本身。
-    _fs_l=$(lsof -n -a -p "$$" -d "$1" -F tiun 2>/dev/null)
+    # 不取 u 字段——那是"进程 uid"非件属主，对属主复核无意义。
+    _fs_l=$("$_fs_lsof" -n -a -p "$$" -d "$1" -F tiDn 2>/dev/null)
     _fs_t=$(printf '%s\n' "$_fs_l" | sed -n 's/^t//p')
     { [ "$_fs_t" = REG ] || [ "$_fs_t" = VREG ]; } || return 1
-    # fd vnode inode 比对为 mandatory——name-stat 只补 dev 分量，不能替代
+    # fd vnode inode 比对为 mandatory——name-stat 只补 dev/属主，不能替代
     # fd 钉身（exec 开完到 lsof 之间名被换回的话，stat(name) 会指回旧件）。
     _fs_n=$(printf '%s\n' "$_fs_l" | sed -n 's/^i//p')
     [ -n "$_fs_n" ] && [ "$_fs_n" = "${2##*:}" ] || return 1
-    # 名可 stat 时叠加 dev:ino 全量比对钉住 dev；lsof 对控制字符名转义/
-    # 已删件无名时只钉 ino——残余窗登记：跨 fs 同 ino 巧合换件的理论缝
-    #（仍卡属主集，且攻击者无法自选 ino）。
+    # dev 分量钉住走 D 字段（件所在 fs 的 st_dev，0x 十六进制转十进制
+    # 后与 stat %d 同单位）——不靠名。D 缺席退化 ino 单分量，残窗同登记。
+    _fs_d=$(printf '%s\n' "$_fs_l" | sed -n 's/^D//p')
+    case $_fs_d in
+        0x*) _fs_d=${_fs_d#0x}
+             case $_fs_d in
+                 ''|*[!0-9a-fA-F]*) _fs_d="" ;;
+                 *) _fs_d=$((0x${_fs_d})) ;;
+             esac ;;
+        *) _fs_d="" ;;
+    esac
+    if [ -n "$_fs_d" ]; then
+        [ "$_fs_d" = "${2%%:*}" ] || return 1
+    fi
+    # 名可 stat 时叠加 dev:ino 全量一致性核（lsof 报的名此刻仍指同件）；
+    # 名缺/控制字符转义/已删件 → 件身靠 i+D 钉死即可，属主复核不可达。
     _fs_nm=$(printf '%s\n' "$_fs_l" | sed -n 's/^n//p')
     _fs_i=""
     [ -n "$_fs_nm" ] && \
         _fs_i=$(stat -c '%d:%i' "$_fs_nm" 2>/dev/null || stat -f '%d:%i' "$_fs_nm" 2>/dev/null || true)
     if [ -n "$_fs_i" ]; then
         [ "$_fs_i" = "$2" ] || return 1
+    elif [ -z "$_fs_d" ]; then
+        # ino 单分量 + 属主不可核 = 双残窗 → 拒。
+        return 1
     fi
     [ -z "${3:-}" ] && return 0
-    _fs_u=$(printf '%s\n' "$_fs_l" | sed -n 's/^u//p')
-    case $_fs_u in ''|*[!0-9]*)
-        # lsof u 字段给不出数字 uid 时按 vnode 名补 stat——名缺失
-        #（已删件）即拒：属主拿不到=fail closed。
-        [ -n "$_fs_nm" ] && \
-            _fs_u=$(stat -c %u "$_fs_nm" 2>/dev/null || stat -f %u "$_fs_nm" 2>/dev/null || true)
-        ;;
-    esac
-    [ -n "$_fs_u" ] || return 1
-    for _fs_w in $3; do
-        [ "$_fs_u" = "$_fs_w" ] && return 0
-    done
-    return 1
+    if [ -n "$_fs_i" ]; then
+        # 属主只能经 vnode 名 stat（lsof 无件属主字段）；名 dev:ino 已
+        # 证同件，其 st_uid 即 fd 件属主。
+        _fs_u=$(stat -c %u "$_fs_nm" 2>/dev/null || stat -f %u "$_fs_nm" 2>/dev/null || true)
+        [ -n "$_fs_u" ] || return 1
+        for _fs_w in $3; do
+            [ "$_fs_u" = "$_fs_w" ] && return 0
+        done
+        return 1
+    fi
+    # 名不可 stat 但件身 dev:ino 全钉——残窗登记：check 后 chown 竞态
+    #（仅件主/root 可为；件主自竞或特权方本就无碍）。放行对 AOT
+    # fstat 恒达的口径——\n 名等转义件在双腿保持同行为。
+    return 0
 }
 
 # --log 开件+校验（pkg_apply 前置硬调、log() 首用懒调）：提权侧 argv 给的

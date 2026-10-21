@@ -1392,6 +1392,8 @@ public static class UpdaterBootstrapParityTests
     // 属 --sha256 复核的退化链（全缺席时 sh 支路按"无法核验"拒——同样属
     // 协议内行为差异，须按宿主可用性对断言而非照单全收）；find 属
     // bundler-pkg.* 残件清扫（缺席即跳过——协议允许）。
+    // lsof 刻意不入白名单——fd 钉住的 devfs 兜底在协议内按知名绝对位
+    //（/usr/sbin/lsof 等）自解析，不依赖 PATH（最小 env 是真实生产形态）。
     static void SeedShim(string shim)
     {
         foreach (var tool in new[] { "env", "dirname", "awk", "ls", "sed", "nohup", "tr", "rm", "rmdir",
