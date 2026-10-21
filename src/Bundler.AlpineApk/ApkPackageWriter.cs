@@ -451,7 +451,7 @@ internal static class ApkPackageWriter
                             : () => new FileStream(entry.SourcePath!, FileMode.Open, FileAccess.Read, FileShare.Read),
                     LinkTarget = entry.LinkTarget,
                     PaxRecords = PayloadPaxRecords(entry)
-                }), omitEndOfArchive, cancellationToken);
+                }), omitEndOfArchive, permitPaxLinkpath: true, cancellationToken);
         }
     }
 

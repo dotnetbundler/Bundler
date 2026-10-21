@@ -88,10 +88,13 @@ internal static class PayloadSource
         foreach (var resource in resources)
         {
             var target = resource.Destination.Replace('\\', '/').Trim('/');
-            if (target.Length == 0 || target.Split('/').Contains(".."))
+            // 空段（a//b）与 '.' 段同拒——出件归档路径带字面 /./ 会与
+            // ResolveArchiveTarget 的归一化口径失配，让覆盖核查误拒合法链接。
+            if (target.Length == 0 ||
+                target.Split('/').Any(segment => segment.Length == 0 || segment is "." or ".."))
             {
                 throw new ArgumentException(
-                    $"The resource target must stay inside the payload: '{resource.Destination}'.");
+                    $"The resource target must be a clean path inside the payload: '{resource.Destination}'.");
             }
             var source = Path.GetFullPath(resource.Source);
             if (IsLink(source))
@@ -319,17 +322,21 @@ internal static class PayloadSource
         foreach (var link in links)
         {
             var resolved = ResolveArchiveTarget(link.ArchivePath, link.LinkTarget!);
-            // emitted 按 Ordinal 有序——首个 >= resolved 的项即唯一候选：等于
-            // resolved（目标是出件文件/目录/链接）或以 resolved+"/" 为前缀
-            // （目标作为该出件项的祖先目录被隐式物化）。
-            var index = emitted.BinarySearch(resolved, StringComparer.Ordinal);
-            if (index < 0)
+            // 两探：等值命中 resolved（目标是出件文件/目录/链接）；前缀命中
+            // resolved+"/" 下界（目标作为出件项的祖先目录被隐式物化）——
+            // 序区间 (resolved, resolved+"/") 内的旁路兄弟件（plugins.bak 之类
+            // '.'/'-' 续名 < '/' 的项）会盖住 resolved 的插入点，不能直接看 ~idx。
+            var covered = emitted.BinarySearch(resolved, StringComparer.Ordinal) >= 0;
+            if (!covered)
             {
-                index = ~index;
+                var prefixIndex = emitted.BinarySearch(resolved + "/", StringComparer.Ordinal);
+                if (prefixIndex < 0)
+                {
+                    prefixIndex = ~prefixIndex;
+                }
+                covered = prefixIndex < emitted.Count &&
+                    emitted[prefixIndex].StartsWith(resolved + "/", StringComparison.Ordinal);
             }
-            var covered = index < emitted.Count &&
-                (string.Equals(emitted[index], resolved, StringComparison.Ordinal) ||
-                 emitted[index].StartsWith(resolved + "/", StringComparison.Ordinal));
             if (!covered)
             {
                 throw new ArgumentException(

@@ -89,7 +89,9 @@ internal sealed class ArchiveBundleBackend(
                     else
                     {
                         using var gzip = Gzip.WrapWrite(stream);
-                        TarWriter.Write(gzip, entries.Select(ArchiveTree.ToTarEntry));
+                        // .tar.gz 面向通用 tar 读者——pax linkpath 标准可读，开闸。
+                        TarWriter.Write(gzip, entries.Select(ArchiveTree.ToTarEntry),
+                            omitEndOfArchive: false, permitPaxLinkpath: true, cancellationToken);
                     }
                 }
             }

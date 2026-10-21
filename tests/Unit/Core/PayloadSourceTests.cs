@@ -61,6 +61,15 @@ public sealed class PayloadSourceTests : TempBase
             PayloadSource.CollectResources(
                 [new BundleResourceConfiguration { Source = "x", Destination = "/" }],
                 "/opt/app", NullBundleLogger.Instance).ToList());
+        // '.'/空段与 '..' 同口径——字面段会跟链接覆盖核查的归一化口径失配
+        Assert.Throws<ArgumentException>(() =>
+            PayloadSource.CollectResources(
+                [new BundleResourceConfiguration { Source = "x", Destination = "a/./b" }],
+                "/opt/app", NullBundleLogger.Instance).ToList());
+        Assert.Throws<ArgumentException>(() =>
+            PayloadSource.CollectResources(
+                [new BundleResourceConfiguration { Source = "x", Destination = "a//b" }],
+                "/opt/app", NullBundleLogger.Instance).ToList());
     }
 
     [Fact]
@@ -318,6 +327,31 @@ public sealed class PayloadSourceTests : TempBase
 
         Assert.Contains(items, i => i.ArchivePath == "/opt/app/link");
         Assert.Contains(items, i => i.ArchivePath == "/opt/app/plugins/ext.so");
+    }
+
+    [Fact]
+    public void CollectResources_LinkDirMaskedBySiblingName_Allowed()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows 宿主上目录链接统一拒绝");
+        var root = Temp("bundler-res");
+        Directory.CreateDirectory(Path.Combine(root.FullName, "plugins"));
+        File.WriteAllText(Path.Combine(root.FullName, "plugins", "real.so"), "lib");
+        // 'plugins.bak' 排在 ('plugins', 'plugins/') 序区间里会盖住 naive 二分插入点——
+        // 真实后代 plugins/real.so 不得被它遮蔽
+        File.WriteAllText(Path.Combine(root.FullName, "plugins.bak"), "b");
+        var link = Path.Combine(root.FullName, "link");
+        if (!TryCreateLink(link, "plugins", directory: true))
+        {
+            Assert.Skip("The host cannot create directory links; link leg unverifiable.");
+        }
+
+        var items = PayloadSource.CollectResources(
+            [new BundleResourceConfiguration { Source = root.FullName, Destination = "res" }],
+            "/opt/app", NullBundleLogger.Instance).ToArray();
+
+        Assert.Contains(items, i => i.ArchivePath == "/opt/app/res/link");
+        Assert.Contains(items, i => i.ArchivePath == "/opt/app/res/plugins/real.so");
     }
 
     [Fact]

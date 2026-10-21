@@ -107,18 +107,35 @@ public sealed class TarWriterTests
     }
 
     [Fact]
-    public void Write_LongSymlinkTarget_EmitsPaxLinkpath()
+    public void Write_LongSymlinkTarget_PaxPermitted_EmitsPaxLinkpath()
     {
-        // ustar linkname 只有 100B——超长目标改走 pax linkpath，ustar 字段写截断值
+        // ustar linkname 只有 100B——开闸后超长目标走 pax linkpath，ustar 字段写截断值
         var target = "../" + new string('t', 120) + "/run";
-        var bytes = Write(new TarEntry
-        {
-            Name = "usr/bin/app", Kind = TarEntryKind.Symlink, Mode = 0x1ED,
-            LinkTarget = target
-        });
+        using var stream = new MemoryStream();
+        TarWriter.Write(stream,
+            [new TarEntry
+            {
+                Name = "usr/bin/app", Kind = TarEntryKind.Symlink, Mode = 0x1ED,
+                LinkTarget = target
+            }],
+            omitEndOfArchive: false, permitPaxLinkpath: true,
+            cancellationToken: TestContext.Current.CancellationToken);
+        var bytes = stream.ToArray();
         Assert.Equal((byte)'x', bytes[156]);   // pax 扩展头先行
         var paxBody = Encoding.UTF8.GetString(bytes, 512, 512);
         Assert.Contains("linkpath=" + target, paxBody);
+    }
+
+    [Fact]
+    public void Write_LongSymlinkTarget_NoPaxPermit_Throws()
+    {
+        // deb data.tar 走默认关闸——dpkg 拒 'x' 头，超长链接目标必须响失败
+        var target = "../" + new string('t', 120) + "/run";
+        Assert.Throws<ArgumentException>(() => Write(new TarEntry
+        {
+            Name = "usr/bin/app", Kind = TarEntryKind.Symlink, Mode = 0x1ED,
+            LinkTarget = target
+        }));
     }
 
     [Fact]

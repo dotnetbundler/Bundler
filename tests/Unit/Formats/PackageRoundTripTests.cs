@@ -162,6 +162,18 @@ public sealed class PackageRoundTripTests : TempBase
     }
 
     [Fact]
+    public void Rpm_HeaderRoundTrip_Int64TagDecodes()
+    {
+        // LONGSIZE 回读验证：type5 标签须解码为真实 long[]，不是占位零
+        var value = (long)int.MaxValue + 42;
+        var blob = RpmHeaderWriter.Write([RpmHeaderWriter.Int64s(5009, value)], 63);
+        var offset = 0;
+        var tags = RpmPackageReader.ParseHeader(blob, ref offset, 63);
+        var decoded = Assert.IsType<long[]>(tags[5009]);
+        Assert.Equal(value, decoded[0]);
+    }
+
+    [Fact]
     public void Apk_WriterReader_RoundTrip()
     {
         var result = ApkPackageWriter.Build(
