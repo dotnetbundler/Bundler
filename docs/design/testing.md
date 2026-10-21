@@ -168,7 +168,7 @@ HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 
 ### 3.11 包契约（Package）
 
 本地 `dotnet pack` → `Bundler.PackageTests` 消费：nupkg 还原来源、buildTransitive 目标注入、`Bundler.MSBuild` 任务程序集就位、各后端包内容清单、`DotNet.Bundler` 元包依赖图与随包文件（README/LICENSE/THIRD-PARTY-NOTICES）；MSI fixture 真装腿保留（localinstall 闸）。
-fixture 还原走 `RestoreWithRetry` 统一面：共享 `RestorePackagesPath` 缓存（`-r win-x64` 签名 runtime packs 下载+验签一次到位）+ `-p:NuGetAudit=false`（砍掉与包无关的固定 HTTP 触点——缓存命中后逼近零公网；NU190x 抑制属测试语境登记取舍，仓库 `TreatWarningsAsErrors` 下 audit 反而会把公告级告警升 error 阻断测试）+ 75s 零输出空闲看门狗（`ProcessRunner.IdleTimeout`——共享 runner 上 NuGet 连接层僵死"Determining projects"后零输出，沉默即换枪，慢速活跃 restore 不受影响；看门狗判沉默不判进展，慢速大下载的静默窗口仍可能被换枪，登记取舍）+ 3min 墙钟上限 + 6 次有界重试；尝试级取证经 `BUNDLER_RESTORE_TRACE` 置位落 `restore-progress.log`（BEGIN/SPAWN/EXIT/TIMEOUT/RETRY，不记 argv/env）。
+fixture 还原走 `RestoreWithRetry` 统一面：共享 `RestorePackagesPath` 缓存（`-r win-x64` 签名 runtime packs 下载+验签一次到位）+ `-p:NuGetAudit=false`（砍掉与包无关的固定 HTTP 触点——缓存命中后逼近零公网；NU190x 抑制属测试语境登记取舍，仓库 `TreatWarningsAsErrors` 下 audit 反而会把公告级告警升 error 阻断测试）+ 75s 零输出空闲看门狗（`ProcessRunner.IdleTimeout`——共享 runner 上 NuGet 连接层僵死"Determining projects"后零输出，沉默即换枪，慢速活跃 restore 不受影响；看门狗判沉默不判进展，慢速大下载的静默窗口仍可能被换枪，登记取舍）+ 3min 墙钟上限 + 至多 6 次 attempt 有界重试；尝试级取证经 `BUNDLER_RESTORE_TRACE` 置位落 `restore-progress.log`（BEGIN/SPAWN/EXIT/TIMEOUT/RETRY，不记 argv/env）。
 
 ## 4. CI 拓扑（全新）
 
@@ -202,7 +202,8 @@ scripts/ci/
                        诊断只落盘不进 job 日志：`artifacts/ci/` 下 test-progress.log、
                        process-snapshots.log、bundler-tool-trace.log（BUNDLER_TOOL_TRACE
                        spawn 追踪，CI 恒开）、restore-progress.log（BUNDLER_RESTORE_TRACE
-                       还原尝试追踪，CI 恒开），经 `ci-logs-<os>`
+                       还原尝试追踪，CI 恒开）、nsis-shutdown.log
+                       （BUNDLER_NSIS_DIAGNOSTICS，NSIS 腿专属），经 `ci-logs-<os>`
                        工件 always() 上传
   produce.{sh,ps1}     fixture 产件 + 清单
   consume-*.{sh,ps1}   联合交换消费腿
