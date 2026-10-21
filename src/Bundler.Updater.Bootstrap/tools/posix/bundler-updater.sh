@@ -87,6 +87,15 @@ _pa_fd_same() {
     # -n 免 DNS 反查：提权语境无解析器会让 vnode 名解析阻塞 lsof 本身。
     # 不取 u 字段——那是"进程 uid"非件属主，对属主复核无意义。
     _fs_l=$("$_fs_lsof" -n -a -p "$$" -d "$1" -F tiDn 2>/dev/null)
+    if [ -z "$_fs_l" ]; then
+        # PATH 命中的 lsof 损坏/执行失败 → 重扫知名绝对位（同一二进制
+        # 重扫无害：fd 无匹配的空输出换源仍空→拒，fail-closed 同口径）。
+        for _fs_lp in /usr/sbin/lsof /usr/bin/lsof /sbin/lsof /bin/lsof; do
+            [ -x "$_fs_lp" ] || continue
+            _fs_l=$("$_fs_lp" -n -a -p "$$" -d "$1" -F tiDn 2>/dev/null)
+            [ -n "$_fs_l" ] && break
+        done
+    fi
     _fs_t=$(printf '%s\n' "$_fs_l" | sed -n 's/^t//p')
     { [ "$_fs_t" = REG ] || [ "$_fs_t" = VREG ]; } || return 1
     # fd vnode inode 比对为 mandatory——name-stat 只补 dev/属主，不能替代
@@ -94,7 +103,8 @@ _pa_fd_same() {
     _fs_n=$(printf '%s\n' "$_fs_l" | sed -n 's/^i//p')
     [ -n "$_fs_n" ] && [ "$_fs_n" = "${2##*:}" ] || return 1
     # dev 分量钉住走 D 字段（件所在 fs 的 st_dev，0x 十六进制转十进制
-    # 后与 stat %d 同单位）——不靠名。D 缺席退化 ino 单分量，残窗同登记。
+    # 后与 stat %d 同单位）——不靠名。D 缺席时名可 stat 由 dev:ino 全量
+    # 补钉 dev；名亦不可 stat→拒（无 ino 单分量放行）。
     _fs_d=$(printf '%s\n' "$_fs_l" | sed -n 's/^D//p')
     case $_fs_d in
         0x*) _fs_d=${_fs_d#0x}
