@@ -24,7 +24,7 @@ internal sealed class ArchiveBundleBackend(
         ArchiveValidation.Settings(settings, context.Configuration);
         var packageName = ArchiveIdentity.PackageName(context.Configuration, settings);
         var version = settings.Version ?? context.Configuration.Version;
-        var stem = ArchiveIdentity.ArchiveStem(settings, packageName, version, context.Item);
+        var stem = ArchiveIdentity.ArchiveStem(settings, packageName, version, context.Item.Target);
         var entries = ArchiveTree.UnderStem(ArchiveTree.Build(
             context.Configuration, context.Item, settings, context.WorkDirectory, context.Logger),
             stem, context.Item.InputDirectory).ToList();

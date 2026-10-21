@@ -107,6 +107,21 @@ public sealed class TarWriterTests
     }
 
     [Fact]
+    public void Write_LongSymlinkTarget_EmitsPaxLinkpath()
+    {
+        // ustar linkname 只有 100B——超长目标改走 pax linkpath，ustar 字段写截断值
+        var target = "../" + new string('t', 120) + "/run";
+        var bytes = Write(new TarEntry
+        {
+            Name = "usr/bin/app", Kind = TarEntryKind.Symlink, Mode = 0x1ED,
+            LinkTarget = target
+        });
+        Assert.Equal((byte)'x', bytes[156]);   // pax 扩展头先行
+        var paxBody = Encoding.UTF8.GetString(bytes, 512, 512);
+        Assert.Contains("linkpath=" + target, paxBody);
+    }
+
+    [Fact]
     public void Write_LongName_SplitsIntoPrefix()
     {
         var longName = "a/" + new string('b', 120) + "/" + new string('c', 50);

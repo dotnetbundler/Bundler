@@ -20,7 +20,7 @@ OS 枚举（`TargetOperatingSystem`）只有 `Windows`/`MacOS`/`Linux` 三个值
 | 规范词 | 别名 | deb | rpm | apk | win | mac | appimage |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `x86_64` | `amd64`、`x64` | `amd64` | `x86_64` | `x86_64` | `x64` | `x86_64` | `x86_64` |
-| `i686` | `i386`、`x86`、`386` | `i386` | `i686` | `x86` | `x86` | — | `i686` |
+| `i686` | `i386`、`x86`、`386` | `i386` | `i686` | `x86` | `x86` | — | — |
 | `aarch64` | `arm64` | `arm64` | `aarch64` | `aarch64` | `arm64` | `arm64` | `aarch64` |
 | `universal` | — | — | — | — | — | `universal` | — |
 | `armv7hf` | `armhf`、`armv7` | `armhf` | `armv7hl` | `armv7` | — | — | — |
@@ -76,10 +76,11 @@ OS 枚举（`TargetOperatingSystem`）只有 `Windows`/`MacOS`/`Linux` 三个值
 
 - 依据：Apple 生态 `uname -m`/`lipo -archs` 输出 `x86_64|arm64`；universal2 双切片为 Apple 官方分发形态。
 
-### appimage（Linux，3 架构词 + musl 变体）
+### appimage（Linux，2 架构词 + musl 变体）
 
-`myapp-1.0.0-x86_64.AppImage`、`myapp-1.0.0-i686.AppImage`、`myapp-1.0.0-aarch64.AppImage`；
+`myapp-1.0.0-x86_64.AppImage`、`myapp-1.0.0-aarch64.AppImage`；
 musl：`myapp-1.0.0-x86_64-musl.AppImage`。
+i686 不产词——无随包 runtime，后端与矩阵同拒绝（`docs/design/formats/linux-appimage.md`）。
 
 - 依据：AppImageSpec `Name-$VERSION-$ARCH.AppImage`（$ARCH 取 `uname -m`，且规范要求名中不含 "linux" 平台段——双变体区分 libc 才挂 `-musl`）。
 

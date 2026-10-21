@@ -66,7 +66,18 @@ internal static class TarWriter
         foreach (var entry in entries)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (entry.PaxRecords is { Count: > 0 } paxRecords)
+            var paxRecords = entry.PaxRecords;
+            if (entry.Kind == TarEntryKind.Symlink &&
+                Encoding.UTF8.GetByteCount(entry.LinkTarget) > 100 &&
+                paxRecords?.Any(record => record.Key == "linkpath") != true)
+            {
+                // ustar linkname 只有 100B 且无 prefix 分身——超长链接目标走
+                // pax linkpath 扩展头（读者以 pax 为准），ustar 字段写截断值兜底。
+                paxRecords = (paxRecords ?? [])
+                    .Concat([new KeyValuePair<string, string>("linkpath", entry.LinkTarget)])
+                    .ToList();
+            }
+            if (paxRecords is { Count: > 0 })
             {
                 WriteEntry(output, header, zeroBlock, copyBuffer, PaxEntry(entry.Name, paxRecords), cancellationToken);
             }
@@ -131,7 +142,9 @@ internal static class TarWriter
             };
             if (entry.Kind == TarEntryKind.Symlink)
             {
-                WriteString(header, 157, 100, entry.LinkTarget);
+                // 超长目标已由 pax linkpath 承载；ustar 字段写截断前缀
+                // （不识 pax 的读者拿到的值不可用——与 GNU tar 同款兜底）。
+                WriteString(header, 157, 100, TruncateUtf8(entry.LinkTarget, 100));
             }
             WriteString(header, 257, 6, "ustar");
             header[263] = (byte)'0';
@@ -234,6 +247,34 @@ internal static class TarWriter
             }
         }
         throw new ArgumentException($"Tar entry path exceeds the ustar limit: '{name}'.");
+    }
+
+    // 按 UTF-8 字符边界截到 maxBytes 内，不切断多字节序列（netstandard2.0 无
+    // System.Text.Rune——手工按代理对计宽）。
+    private static string TruncateUtf8(string value, int maxBytes)
+    {
+        if (Encoding.UTF8.GetByteCount(value) <= maxBytes)
+        {
+            return value;
+        }
+        var budget = maxBytes;
+        var count = 0;
+        while (count < value.Length)
+        {
+            var paired = char.IsHighSurrogate(value[count]) &&
+                count + 1 < value.Length && char.IsLowSurrogate(value[count + 1]);
+            var byteCount = paired ? 4
+                : value[count] < 0x80 ? 1
+                : value[count] < 0x800 ? 2
+                : 3;
+            if (byteCount > budget)
+            {
+                break;
+            }
+            budget -= byteCount;
+            count += paired ? 2 : 1;
+        }
+        return value.Substring(0, count);
     }
 
     private static void WriteString(byte[] buffer, int offset, int width, string value)

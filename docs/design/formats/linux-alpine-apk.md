@@ -12,7 +12,7 @@
   架构映射以 `ArtifactNaming.ArchToken` 为单一来源，九词表见 `docs/design/targets.md`（`x86_64`/`x86`/`aarch64`/`armv7`/`armel`/`riscv64`/`loongarch64`/`ppc64le`/`s390x`），`BundlerAlpineApkArchitecture` 可覆盖（须 apk 架构名）；
   真实装跑证据仍限 x86_64/aarch64（见 §3）。
 - 数据段布局：`/usr/lib/<pkgname>/` 载荷 + `/usr/bin/<binname>` 符号链接（`BundlerAlpineApkBinLink` 改名/关闭）；`BundlerAlpineApkFile` 任意绝对路径映射。Alpine 官方包用 `/usr/` 非 `/opt/`。
-- 链接契约与 deb/rpm/AppImage 统一（`PayloadSource`/`PayloadPathBook`）：输入树内符号链接保留为链接条目（目标重写为相对链接目录的形式），外指/悬空链接打包前拒绝，目录链接不穿透递归。
+- 链接契约与 deb/rpm/AppImage 统一（`PayloadSource`/`PayloadPathBook`）：输入树内符号链接保留为链接条目（目标重写为相对链接目录的形式），外指/悬空链接打包前拒绝，目录链接不穿透递归；链接目标另须在包内可达——`includeDirectories=false` 的资源腿指向空目录等"主机存活、包内悬空"情形同口径拒绝。
 
 ## 2. 语义契约
 

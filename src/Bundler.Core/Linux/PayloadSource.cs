@@ -29,13 +29,19 @@ internal sealed record PayloadSourceItem(
 /// tree are preserved as symlink entries (the target is re-emitted relative to
 /// the link's directory so the package stays relocatable); links pointing
 /// outside, unreadable links, and dangling links reject — a package cannot
-/// silently inherit host content or embed dead references.
+/// silently inherit host content or embed dead references. On top of host-side
+/// resolution, <see cref="ValidateLinkCoverage"/> also rejects links whose target
+/// would not materialize inside the package itself (e.g. an empty directory when
+/// <c>includeDirectories</c> is off, or a skipped non-regular file).
 /// </summary>
 internal static class PayloadSource
 {
     private const int DirMode = 493;   // 0755
     private const int FileMode = 420;  // 0644
     private const int LinkMode = 511;  // 0777 — symlink entries carry the conventional mode
+    // 与 FileTree.CopyTree 调用方一致的深度封顶：链接不递归（链成叶），但病态
+    // 深目录树仍会把递归栈顶爆——按同口径 64 层拒绝。
+    private const int MaxTreeDepth = 64;
 
     /// <summary>Input tree: ordered directory items first, then ordered file/link items.</summary>
     internal static IEnumerable<PayloadSourceItem> CollectInput(
@@ -52,6 +58,8 @@ internal static class PayloadSource
             relative => string.Equals(relative, mainExecutable, StringComparison.Ordinal)
                 ? DirMode : FileMode,
             directories, leaves, logger);
+        ValidateLinkCoverage(directories.Concat(leaves).ToList(),
+            leaves.Where(item => item.Kind == PayloadSourceKind.Symlink).ToList());
         foreach (var item in directories.OrderBy(item => item.ArchivePath, StringComparer.Ordinal))
         {
             yield return item;
@@ -73,6 +81,10 @@ internal static class PayloadSource
         IBundleLogger logger,
         bool includeDirectories = false)
     {
+        // 覆盖核查跨资源联合——链接目标目录可能被另一资源的内容填满（如链接
+        // 指向 plugins/ 而插件经独立资源装入），逐资源核查会误拒。
+        var allItems = new List<PayloadSourceItem>();
+        var links = new List<PayloadSourceItem>();
         foreach (var resource in resources)
         {
             var target = resource.Destination.Replace('\\', '/').Trim('/');
@@ -99,6 +111,9 @@ internal static class PayloadSource
                     ? directories.OrderBy(item => item.ArchivePath, StringComparer.Ordinal)
                         .Concat(leaves.OrderBy(item => item.ArchivePath, StringComparer.Ordinal))
                     : leaves.OrderBy(item => item.ArchivePath, StringComparer.Ordinal);
+                allItems.AddRange(directories);
+                allItems.AddRange(leaves);
+                links.AddRange(leaves.Where(item => item.Kind == PayloadSourceKind.Symlink));
                 foreach (var item in ordered)
                 {
                     yield return item;
@@ -111,8 +126,10 @@ internal static class PayloadSource
                     logger.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {source}");
                     continue;
                 }
-                yield return new PayloadSourceItem(
+                var item = new PayloadSourceItem(
                     PayloadSourceKind.File, installRoot + "/" + target, source, FileMode);
+                allItems.Add(item);
+                yield return item;
             }
             else
             {
@@ -120,6 +137,7 @@ internal static class PayloadSource
                     $"The resource source does not exist: {source}", source);
             }
         }
+        ValidateLinkCoverage(allItems, links);
     }
 
     /// <summary>
@@ -137,8 +155,14 @@ internal static class PayloadSource
         Func<string, int> modeFor,
         List<PayloadSourceItem> directories,
         List<PayloadSourceItem> leaves,
-        IBundleLogger logger)
+        IBundleLogger logger,
+        int depth = 0)
     {
+        if (depth > MaxTreeDepth)
+        {
+            throw new InvalidDataException(
+                $"The payload tree exceeds the depth limit of {MaxTreeDepth}: {hostDirectory}");
+        }
         foreach (var name in Directory.GetFileSystemEntries(hostDirectory)
                      .Select(Path.GetFileName)
                      .OrderBy(entry => entry, StringComparer.Ordinal))
@@ -186,7 +210,7 @@ internal static class PayloadSource
                         PayloadSourceKind.Directory, archivePath, null, DirMode));
                 }
                 WalkTree(treeRoot, entry, archivePath, includeDirectories,
-                    modeFor, directories, leaves, logger);
+                    modeFor, directories, leaves, logger, depth + 1);
                 continue;
             }
             if (!UnixFileTypes.IsRegularFile(entry))
@@ -271,6 +295,83 @@ internal static class PayloadSource
         }
         return string.Join("/",
             Enumerable.Repeat("..", from.Length - common).Concat(to.Skip(common)));
+    }
+
+    /// <summary>
+    /// 包内覆盖核查：链接目标（归一到归档路径）必须等于某个出件条目、或落在
+    /// 某个出件条目的祖先目录链上——出件的文件/链接解包时隐式物化全部祖先
+    /// 目录。includeDirectories=false 下空目录不出件、被跳过的非常规件（fifo
+    /// 等）也不出件，指向它们的链接主机侧虽存活、包内照样悬空——按悬空同口径
+    /// 拒绝，不产静默死引用。
+    /// </summary>
+    private static void ValidateLinkCoverage(
+        IReadOnlyList<PayloadSourceItem> emittedItems,
+        IReadOnlyList<PayloadSourceItem> links)
+    {
+        if (links.Count == 0)
+        {
+            return;
+        }
+        var emitted = emittedItems
+            .Select(item => item.ArchivePath)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToList();
+        foreach (var link in links)
+        {
+            var resolved = ResolveArchiveTarget(link.ArchivePath, link.LinkTarget!);
+            // emitted 按 Ordinal 有序——首个 >= resolved 的项即唯一候选：等于
+            // resolved（目标是出件文件/目录/链接）或以 resolved+"/" 为前缀
+            // （目标作为该出件项的祖先目录被隐式物化）。
+            var index = emitted.BinarySearch(resolved, StringComparer.Ordinal);
+            if (index < 0)
+            {
+                index = ~index;
+            }
+            var covered = index < emitted.Count &&
+                (string.Equals(emitted[index], resolved, StringComparison.Ordinal) ||
+                 emitted[index].StartsWith(resolved + "/", StringComparison.Ordinal));
+            if (!covered)
+            {
+                throw new ArgumentException(
+                    $"The payload link '{link.SourcePath}' resolves to '{link.LinkTarget}' " +
+                    "which produces no packaged entry — the link would dangle inside " +
+                    "the package (empty directory targets are not emitted; point the " +
+                    "link at packaged content).");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Composes the emitted relative link target onto the link's archive parent
+    /// directory and normalizes POSIX '.'/'..' segments; the result must stay
+    /// inside the payload (host-side resolution already guarantees it).
+    /// </summary>
+    private static string ResolveArchiveTarget(string linkArchivePath, string relativeTarget)
+    {
+        var slash = linkArchivePath.LastIndexOf('/');
+        var parent = slash < 0 ? "" : linkArchivePath.Substring(0, slash);
+        var segments = new List<string>();
+        foreach (var segment in (parent + "/" + relativeTarget).Split('/'))
+        {
+            if (segment.Length == 0 || segment == ".")
+            {
+                continue;
+            }
+            if (segment == "..")
+            {
+                if (segments.Count == 0)
+                {
+                    throw new ArgumentException(
+                        $"The payload link '{linkArchivePath}' resolves outside the payload.");
+                }
+                segments.RemoveAt(segments.Count - 1);
+                continue;
+            }
+            segments.Add(segment);
+        }
+        // 归档路径绝对形（installRoot 以 '/' 起头）——归一化吃掉空段后补回根，
+        // 与出件条目的 ArchivePath 保持同形才能比对。
+        return "/" + string.Join("/", segments);
     }
 
     private static bool IsLink(string path)

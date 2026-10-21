@@ -9,7 +9,8 @@
 - **纯托管写入器，零原生工具**（延续 `.deb` 同策略）：`.rpm` = lead（96B）+ 签名 header + 主 header + cpio(newc) 载荷，由 `Bundler.Rpm` 用 C# 直写——任意宿主可产、无 GPL 义务、确定可复现；正确性由 `rpm -qip`/`-K`/`-i`、`rpmlint` 与自写 `RpmPackageReader` 双向互证背书。
 - 安装面为 dnf/yum/zypper 系发行版；SUSE 专属宏与 `pattern`/`product` 等扩展不做，按通用 RPM 4 规范产出。
 - 载荷布局与 deb 同构：`usr/lib/<package-name>/` + `usr/bin/<command>` 相对符号链接；`BundlerRpmInstallRoot`/`BundlerRpmBinLink` 覆盖。差异：rpm 要求**每个目录显式登记为包条目**（dir mode 0755）——按规范直写，不用上游的空文件 hack。
-- 链接契约与 deb/apk/AppImage 统一（`PayloadSource`/`PayloadPathBook`）：输入树内符号链接保留为链接条目（`FILELINKTOS` 记目标、摘要按目标文本、cpio 无载荷体），外指/悬空链接打包前拒绝，目录链接不穿透递归。
+- 链接契约与 deb/apk/AppImage 统一（`PayloadSource`/`PayloadPathBook`）：输入树内符号链接保留为链接条目（`FILELINKTOS` 记目标、摘要按目标文本、cpio 无载荷体），外指/悬空链接打包前拒绝，目录链接不穿透递归；链接目标另须在包内可达——`includeDirectories=false` 的资源腿指向空目录等"主机存活、包内悬空"情形同口径拒绝。
+- 尺寸上限：单文件 ≤2GiB（cpio newc 与 `FILESIZES` 均 int32，超限显式拒绝）；安装总尺寸超出 int32 时主头 `SIZE` 自动换 RPM 4.15+ `LONGSIZE`（tag 5009），签名头 `RPMSIGTAG_LONGSIZE` 同款——消费端需 rpm ≥4.15 读取。
 - 依赖透传：`Requires`/`Provides`/`Conflicts`/`Obsoletes`/`Recommends`/`Suggests`（`name [op evr]` 解析 `< <= = >= >`，拒 `!=`）；`AutoReqProv` 显式置 0；`rpmlib(...)` 自依赖按实际特性登记。
 - 压缩恒 gzip 无旋钮（netstandard2.0 无托管编码器）；`PAYLOADCOMPRESSOR`/`PAYLOADFLAGS` 如实填写。
 - 确定性：`BUILDTIME`/`FILEMTIMES` 固定 1980-01-01 UTC + 条目排序，同输入字节级一致。

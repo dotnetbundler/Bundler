@@ -55,6 +55,51 @@ public sealed class ArchiveTests : TempBase
         }
     }
 
+    // version 参与默认 stem 组成（settings.Version ?? bundle.Version）——含 '/'、
+    // '..' 的版本必须与显式 ArchiveName 同缝，在 validate 期就拒而非 Build 才炸。
+    [Fact]
+    public void RejectsUnsafeVersionInDefaultStem()
+    {
+        var input = CreateInputDirectory();
+        try
+        {
+            var configuration = Configuration(input, "", formats: [PackageFormat.Zip]);
+            foreach (var bad in new[] { "1.0/../escape", "v/2", "1 .0" })
+            {
+                var badVersion = new BundleConfiguration
+                {
+                    ProductName = configuration.ProductName,
+                    Identifier = configuration.Identifier,
+                    Version = bad,
+                    Publisher = configuration.Publisher,
+                    OutputDirectory = configuration.OutputDirectory,
+                    Targets = configuration.Targets
+                };
+                Assert.Throws<ArgumentException>(() => new ArchiveBundler().Validate(badVersion));
+            }
+            // settings.Version 覆盖同名入 stem——坏值同拒
+            Assert.Throws<ArgumentException>(() =>
+                new ArchiveBundler(new ArchiveBundleConfiguration { Version = "1/2" })
+                    .Validate(configuration));
+            // 显式 ArchiveName 安全时脏 version 不参与命名——不误伤
+            var sameBadVersion = new BundleConfiguration
+            {
+                ProductName = configuration.ProductName,
+                Identifier = configuration.Identifier,
+                Version = "v/2",
+                Publisher = configuration.Publisher,
+                OutputDirectory = configuration.OutputDirectory,
+                Targets = configuration.Targets
+            };
+            new ArchiveBundler(new ArchiveBundleConfiguration { ArchiveName = "fixed-name" })
+                .Validate(sameBadVersion);
+        }
+        finally
+        {
+            Cleanup(input);
+        }
+    }
+
     [Fact]
     public async Task WritesZip()
     {

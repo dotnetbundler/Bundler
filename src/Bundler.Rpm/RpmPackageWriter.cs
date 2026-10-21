@@ -276,6 +276,16 @@ internal static class RpmPackageWriter
         return entries;
     }
 
+    /// <summary>
+    /// RPMTAG_SIZE（记全部已装文件总字节）：单件 &gt;2GiB 已在 AddFile 拒，但件数
+    /// 一多总和照样越 int32——超出时换 RPM 4.15+ 的 LONGSIZE 变体（签名头
+    /// RPMSIGTAG_SIZE/LONGSIZE 同款取舍），不再 checked 溢出炸异常。
+    /// </summary>
+    internal static RpmHeaderWriter.Entry SizeEntry(long installedSize) =>
+        installedSize <= int.MaxValue
+            ? RpmHeaderWriter.Int32s(1009, (int)installedSize)             // SIZE
+            : RpmHeaderWriter.Int64s(5009, installedSize);                 // LONGSIZE
+
     private static List<RpmHeaderWriter.Entry> MainHeaderEntries(
         BundleConfiguration bundle,
         BundlePlanItem item,
@@ -351,7 +361,6 @@ internal static class RpmPackageWriter
             RpmHeaderWriter.Strings(1005, [DescriptionOf(bundle)], type: 9), // DESCRIPTION i18n
             RpmHeaderWriter.Int32s(1006, (int)BuildTime),                  // BUILDTIME
             RpmHeaderWriter.Str(1007, "bundler-build"),                    // BUILDHOST
-            RpmHeaderWriter.Int32s(1009, checked((int)installedSize)),     // SIZE
             RpmHeaderWriter.Str(1011, vendor),                             // VENDOR
             RpmHeaderWriter.Str(1014, settings.License ?? "Unspecified"),  // LICENSE
             RpmHeaderWriter.Str(1021, "linux"),                            // OS
@@ -385,6 +394,7 @@ internal static class RpmPackageWriter
             RpmHeaderWriter.Int32s(5011, 8),                               // FILEDIGESTALGO = sha256
             RpmHeaderWriter.Str(5062, "utf-8"),                            // ENCODING
         };
+        entries.Add(SizeEntry(installedSize));
         var group = settings.Group ?? "Unspecified";
         if (group.Length > 0)
         {
@@ -593,7 +603,9 @@ internal static class RpmPackageWriter
                 ArchivePath = path,
                 Mode = 0xA000 | 511 /* 0120777 */,
                 LinkTarget = linkTarget,
-                Size = linkTarget.Length
+                // cpio 体按 UTF-8 字节写（FileBytes 同源）、FILEDIGESTS 也哈希
+                // UTF-8 字节——字符数在非 ASCII 目标下与两者同时错位。
+                Size = Encoding.UTF8.GetByteCount(linkTarget)
             });
         }
 
