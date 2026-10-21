@@ -828,9 +828,9 @@ internal static class PkgApplyPlan
         {
             if (!Directory.Exists(dir))
             {
-                // O_DIRECTORY 让 open 对普通件父路径也失败——与真缺席分流
-                // 保准确报文（两级同为 LogUnavailable 良性降级，sh `[ -d ]`
-                // 同口径）。
+                // 父路径存在但 open 失败且非目录（非常规节点/悬空链接等）——
+                // 与真缺席分流保准确报文（两级同为 LogUnavailable 良性降级，
+                // sh `[ -d ]` 同口径）。
                 throw new LogUnavailableException(
                     File.Exists(dir)
                         ? $"--log '{path}' parent path is not a directory."
@@ -1360,12 +1360,13 @@ internal sealed class ExecSpec
 //（arm 紧凑表/generic 表之分消失在 PAL 内部）。
 internal static class NativeMethods
 {
-    // PAL OpenFlags（pal_io.h 定值，与 POSIX 数值无关的固定中间值）：
-    // RDONLY=0x0000 WRONLY=0x0001 CLOEXEC=0x0010 CREAT=0x0020 EXCL=0x0040
-    // TRUNC=0x0080 SYNC=0x0100 NOFOLLOW=0x0200 NONBLOCK_READ=0x0400
-    // NONBLOCK_WRITE=0x0800 DIRECTORY=0x1000（PAL 枚举末位——
-    // O_RDONLY 目录开件由原生 O_DIRECTORY 在内核侧拒非目录节点，
-    // 开后 fstat 的 S_ISDIR 仍作双保险复核）。
+    // PAL OpenFlags（pal_io.h 定值，与 POSIX 数值无关的固定中间值）。
+    // 可用集以出货运行时 ConvertOpenFlags 掩码为准——v10 pal_io.c 只放行
+    // ACCESS_MODE_MASK(0x000F)|CLOEXEC(0x0010)|CREAT(0x0020)|EXCL(0x0040)|
+    // TRUNC(0x0080)|SYNC(0x0100)|NOFOLLOW(0x0200)；NONBLOCK_*(0x0400/0x0800)
+    // 与 DIRECTORY(0x1000) 是 main 分支后加的枚举，出货版传未知位按 EINVAL
+    // 拒（CI 实证：0x1000 使目录 open 全败）。目录判据由开后 fstat 的
+    // S_ISDIR 闭环，不靠 open 旗标。
     // PAL 旗标集不导 O_NONBLOCK——fifo 阻塞窗由 OpenWithDeadline 的
     // 5s 线程内 open 收口（sh `timeout 5 cat` 同口径）。
     internal const int EnvOpenFlags = 0x0010 | 0x0200;
@@ -1375,7 +1376,7 @@ internal static class NativeMethods
     // dev:ino 比对，窗在 open 一刻归零（本侧 CREAT|NOFOLLOW 对链接已拒，
     // 残余窗为同主普通件抢建、内容无害等价，故不加 EXCL 保既有件路径）。
     internal const int LogCreateFlags = LogOpenFlags | 0x0020;
-    internal const int DirOpenFlags = 0x0010 | 0x0200 | 0x1000;
+    internal const int DirOpenFlags = 0x0010 | 0x0200;
     // 包路径刻意跟随符号链接（sh -f/cp 同口径登记 N10）：包件是调用方
     // 受托输入不越信任边界，只须 fstat 钉住 S_IFREG 防 fifo/设备换件窗。
     internal const int PkgOpenFlags = 0x0010;
@@ -1386,6 +1387,9 @@ internal static class NativeMethods
     private const int RegularFile = 0x8000; // PAL_S_IFREG
 
     // pal_io.h FileStatus 的同形镜像——PAL 归一化布局，Mode@4/Uid@8 定死。
+    // 尾字段 HardLinkCount 是 main 分支后加项：v10 出货结构止于 UserFlags
+    //（本字段恒读 0），托管缓冲按新头满尺寸预留——未来 runtime 写 120B
+    // 时窄缓冲即被踩尾，方向只能大不能小。
     [StructLayout(LayoutKind.Sequential)]
     internal struct FileStatus
     {
@@ -1506,8 +1510,8 @@ internal static class NativeMethods
         (status.Mode & TypeMask) == 0x4000; // S_IFDIR
 
     // --log 件缺席时父目录的"调用者可写"判据：必须是目录（普通件 o+wx
-    // 也会命中下判——DirOpenFlags 的 O_DIRECTORY 在 open 已拒非目录，
-    // 此处的 S_ISDIR 是 PAL 旗标失落时的双保险闭环）；
+    // 也会命中下判——出货 PAL 无可用 O_DIRECTORY 旗标，目录判据在此
+    // 由 S_ISDIR 闭环）；
     // 属主==调用 uid 直接放行（调用者自己的目录），否则认 others 写+
     // 执行位（/tmp sticky 类公共可写区，sticky 位不归 mode 低 12 位管
     // 不到——o+wx 两位置位才放行）。

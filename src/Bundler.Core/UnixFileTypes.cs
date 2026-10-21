@@ -34,6 +34,8 @@ internal static class UnixFileTypes
     private static extern uint SysGetEUid();
 
     // pal_io.h FileStatus 的同形镜像（前 4 槽为本判据所需，余者占位对齐）。
+    // 尾字段 HardLinkCount 是 main 分支后加项：v10 出货结构止于 UserFlags
+    //（恒读 0），托管缓冲按新头满尺寸预留防未来 runtime 写满踩尾。
     [StructLayout(LayoutKind.Sequential)]
     private struct FileStatus
     {
