@@ -61,15 +61,19 @@ public sealed class PayloadSourceTests : TempBase
             PayloadSource.CollectResources(
                 [new BundleResourceConfiguration { Source = "x", Destination = "/" }],
                 "/opt/app", NullBundleLogger.Instance).ToList());
-        // '.'/空段与 '..' 同口径——字面段会跟链接覆盖核查的归一化口径失配
-        Assert.Throws<ArgumentException>(() =>
-            PayloadSource.CollectResources(
-                [new BundleResourceConfiguration { Source = "x", Destination = "a/./b" }],
-                "/opt/app", NullBundleLogger.Instance).ToList());
-        Assert.Throws<ArgumentException>(() =>
-            PayloadSource.CollectResources(
-                [new BundleResourceConfiguration { Source = "x", Destination = "a//b" }],
-                "/opt/app", NullBundleLogger.Instance).ToList());
+    }
+
+    [Fact]
+    public void CollectResources_DotAndEmptySegments_Normalized()
+    {
+        // '.'/空段折叠进归档路径——与 ResolveArchiveTarget 归一化同口径，
+        // 字面段不再混入出件名（覆盖核查/碰撞判定口径对齐）。
+        var source = TempPath($"res-{Guid.NewGuid():N}.txt");
+        File.WriteAllText(source, "r");
+        var items = PayloadSource.CollectResources(
+            [new BundleResourceConfiguration { Source = source, Destination = "a/./b//doc.txt" }],
+            "/opt/app", NullBundleLogger.Instance).ToArray();
+        Assert.Equal("/opt/app/a/b/doc.txt", items[0].ArchivePath);
     }
 
     [Fact]

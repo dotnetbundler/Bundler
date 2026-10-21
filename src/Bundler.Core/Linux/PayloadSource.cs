@@ -87,15 +87,19 @@ internal static class PayloadSource
         var links = new List<PayloadSourceItem>();
         foreach (var resource in resources)
         {
-            var target = resource.Destination.Replace('\\', '/').Trim('/');
-            // 空段（a//b）与 '.' 段同拒——出件归档路径带字面 /./ 会与
-            // ResolveArchiveTarget 的归一化口径失配，让覆盖核查误拒合法链接。
-            if (target.Length == 0 ||
-                target.Split('/').Any(segment => segment.Length == 0 || segment is "." or ".."))
+            // '.'/空段折叠归一化（与 ResolveArchiveTarget 同口径——字面段进归档
+            // 路径会让覆盖核查口径失配）；'..' 逃逸意图与裸根（""、"/"）拒绝不变。
+            // "." 归一到空 = 载荷根合并（既有契约，碰撞由出件面判拒）。
+            var rawTarget = resource.Destination.Replace('\\', '/');
+            var segments = rawTarget.Split('/');
+            if (rawTarget.Trim('/').Length == 0 || segments.Any(segment => segment == ".."))
             {
                 throw new ArgumentException(
                     $"The resource target must be a clean path inside the payload: '{resource.Destination}'.");
             }
+            var target = string.Join("/",
+                segments.Where(segment => segment.Length > 0 && segment != "."));
+            var archiveBase = target.Length > 0 ? installRoot + "/" + target : installRoot;
             var source = Path.GetFullPath(resource.Source);
             if (IsLink(source))
             {
@@ -108,7 +112,7 @@ internal static class PayloadSource
             {
                 var directories = new List<PayloadSourceItem>();
                 var leaves = new List<PayloadSourceItem>();
-                WalkTree(source, source, installRoot + "/" + target, includeDirectories,
+                WalkTree(source, source, archiveBase, includeDirectories,
                     _ => FileMode, directories, leaves, logger);
                 var ordered = includeDirectories
                     ? directories.OrderBy(item => item.ArchivePath, StringComparer.Ordinal)
@@ -130,7 +134,7 @@ internal static class PayloadSource
                     continue;
                 }
                 var item = new PayloadSourceItem(
-                    PayloadSourceKind.File, installRoot + "/" + target, source, FileMode);
+                    PayloadSourceKind.File, archiveBase, source, FileMode);
                 allItems.Add(item);
                 yield return item;
             }
