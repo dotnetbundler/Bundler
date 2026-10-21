@@ -649,6 +649,10 @@ public static class UpdaterBootstrapParityTests
                 Assert.Fail("updater bootstrapper did not exit within 60s");
             }
             Task.WaitAll(stdout, stderr);
+            if (!string.IsNullOrEmpty(stderr.Result))
+            {
+                Console.Error.Write(stderr.Result);
+            }
             Assert.Equal(0, process.ExitCode);
                 AssertTree(expected, install);
         }

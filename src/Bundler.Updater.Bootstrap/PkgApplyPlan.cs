@@ -828,8 +828,13 @@ internal static class PkgApplyPlan
         {
             if (!Directory.Exists(dir))
             {
+                // O_DIRECTORY 让 open 对普通件父路径也失败——与真缺席分流
+                // 保准确报文（两级同为 LogUnavailable 良性降级，sh `[ -d ]`
+                // 同口径）。
                 throw new LogUnavailableException(
-                    $"--log '{path}' parent directory does not exist.");
+                    File.Exists(dir)
+                        ? $"--log '{path}' parent path is not a directory."
+                        : $"--log '{path}' parent directory does not exist.");
             }
             throw new UsageException(
                 $"--log '{path}' parent directory is not accessible.");
@@ -1501,7 +1506,8 @@ internal static class NativeMethods
         (status.Mode & TypeMask) == 0x4000; // S_IFDIR
 
     // --log 件缺席时父目录的"调用者可写"判据：必须是目录（普通件 o+wx
-    // 也会命中下判——PAL 无 O_DIRECTORY 位，目录判据在此处闭环）；
+    // 也会命中下判——DirOpenFlags 的 O_DIRECTORY 在 open 已拒非目录，
+    // 此处的 S_ISDIR 是 PAL 旗标失落时的双保险闭环）；
     // 属主==调用 uid 直接放行（调用者自己的目录），否则认 others 写+
     // 执行位（/tmp sticky 类公共可写区，sticky 位不归 mode 低 12 位管
     // 不到——o+wx 两位置位才放行）。

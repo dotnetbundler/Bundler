@@ -54,6 +54,7 @@ internal static class UnixFileTypes
         internal long RDev;
         internal long Ino;
         internal uint UserFlags;
+        internal uint HardLinkCount;
     }
 
     /// <summary>
