@@ -82,7 +82,7 @@ internal static class Dotnet
     // 刻意失败的负例调用勿走此口：继续用 Run 单发，避免确定性失败陪跑重试。
     // BUNDLER_RESTORE_TRACE 置位时逐 attempt 落事件（BEGIN/SPAWN/EXIT/TIMEOUT/RETRY）：
     // "Determining projects" 后零输出卡到超时的取证面——只记 pid/attempt/rc/elapsed/
-    // 已有 what 标签，不落 argv/环境/输出（防秘密入档）。
+    // what/timeout/next-attempt 元数据，不落 argv/环境/输出（防秘密入档）。
     public static ProcessRunner.Result RestoreWithRetry(IEnumerable<string> args, string what,
         ProcessRunner.Options? options = null, int maxAttempts = 6,
         TimeSpan? attemptTimeout = null, TimeSpan? idleTimeout = null)
