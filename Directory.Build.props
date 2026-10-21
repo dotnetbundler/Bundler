@@ -10,8 +10,9 @@
     <!-- NuGet Audit（SDK10 默认 mode=all）每次 restore 向每个 HTTP 源拉漏洞
          数据——包全在本地缓存也照发，是共享 runner 断供窗口内的固定挂死点
          （CI 实证，见 tests/Shared/Tooling/Dotnet.cs 头注）。知情取舍：本仓
-         是打包工具非部署应用，产品依赖的 NU190x 审计告警面一并关闭（告警
-         本来就只产生 warning，不构成安全门禁）。仓库外复制的 fixture 工程
+         是打包工具非部署应用，产品依赖的 NU190x 审计告警面一并关闭——
+         TWAE 下这类公告级告警会升 error，本就不应构成打包工具的构建门禁，
+         关掉正是所要语义而非损失。仓库外复制的 fixture 工程
          够不到本 props，由 RestoreWithRetry 另行 -p 注入。 -->
     <NuGetAudit>false</NuGetAudit>
     <ContinuousIntegrationBuild Condition="'$(ContinuousIntegrationBuild)' == '' and '$(CI)' == 'true'">true</ContinuousIntegrationBuild>
