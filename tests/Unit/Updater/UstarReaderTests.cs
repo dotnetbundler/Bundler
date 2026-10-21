@@ -154,6 +154,7 @@ public sealed class UstarReaderTests : TempBase
             ("PaxHeader.x", 'x', PaxRecord("linkpath", "../../escape"), ""),
             ("LongName", 'L', Encoding.UTF8.GetBytes("app/link\0"), ""),
             ("app/link", '2', [], "benign.txt"));
+        Assert.True(UstarReader.ContainsEscapingLink(tar, root));
     }
 
     [Fact]
@@ -167,6 +168,33 @@ public sealed class UstarReaderTests : TempBase
             ("PaxHeader.x1", 'x', PaxRecord("linkpath", "../../escape"), ""),
             ("PaxHeader.x2", 'x', PaxRecord("linkpath", "benign.txt"), ""),
             ("app/link", '2', [], "ignored.txt"));
+        Assert.False(UstarReader.ContainsEscapingLink(tar, root));
+    }
+
+    [Fact]
+    public void ContainsEscapingLink_GlobalPaxLinkpath_True()
+    {
+        // 'g' 全局 pax 头携逃逸 linkpath：落在所有后续条目的默认层——
+        // 消费端 bsdtar 会按它物化，预扫必须同判。
+        var root = Path.Combine(Root, "global");
+        Directory.CreateDirectory(root);
+        using var tar = RawTar(
+            ("PaxGlobal", 'g', PaxRecord("linkpath", "../../escape"), ""),
+            ("app/link", '2', [], "benign.txt"));
+        Assert.True(UstarReader.ContainsEscapingLink(tar, root));
+    }
+
+    [Fact]
+    public void ContainsEscapingLink_GnuLongLinkName_True()
+    {
+        // 'K' GNU 长链名：数据块即下一条目的链接目标——逃逸目标藏在长名里
+        // 而 ustar 字段放良性值，预扫仍须按真值判。
+        var root = Path.Combine(Root, "gnulong");
+        Directory.CreateDirectory(root);
+        using var tar = RawTar(
+            ("LongLink", 'K', Encoding.UTF8.GetBytes("../../../../etc/shadow\0"), ""),
+            ("app/link", '2', [], "benign.txt"));
+        Assert.True(UstarReader.ContainsEscapingLink(tar, root));
     }
 
     [Fact]

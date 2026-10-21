@@ -756,7 +756,8 @@ internal static class NativeSpawnUnix
 
     // F_DUPFD_CLOEXEC：复刻到 ≥min 槽位并原子带 CLOEXEC（dup+fcntl 两步形有
     // 并发 spawn 继承未收口 fd 的微窗）。平台常数：Linux glibc/musl=1030，
-    // macOS libSystem=67。
+    // macOS libSystem=67；宿主矩阵仅 Linux/macOS——若扩 BSD 系须按平台增补
+    //（FreeBSD=17）。
     private static readonly int s_fdDupfdCloexec = s_darwin ? 67 : 1030;
 
     // 管端落在其 dup2 目标槽本身时搬离——见 SpawnCore 调用点注释。

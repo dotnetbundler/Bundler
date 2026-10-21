@@ -346,15 +346,17 @@ _pa_sweep_stages() {
     command -v find >/dev/null 2>&1 || return 0
     command -v rm >/dev/null 2>&1 || return 0
     command -v mv >/dev/null 2>&1 || return 0
+    command -v rmdir >/dev/null 2>&1 || return 0
     for _d in "${TMPDIR:-/tmp}"/bundler-pkg.[!.]* "${TMPDIR:-/tmp}"/bundler-pkg-*; do
-        # 名目本身是链接：只摘链不跟（[ -d ] 跟链会为真，先显式排掉）。
-        if [ -L "$_d" ]; then rm -f "$_d" 2>/dev/null; continue; fi
         [ -d "$_d" ] || continue
         [ -n "$(find "$_d" -prune -mmin +1440 -print 2>/dev/null)" ] || continue
         # 钉名：先 mv 私有名——判龄到删件窗内名目被换链的风险归零；
         # .sweep.$$ 后缀仍在 bundler-pkg* glob 面内，弃收件下轮重扫不丢。
         _held="${_d}.sweep.$$"
         mv "$_d" "$_held" 2>/dev/null || continue
+        # mv 钉住的是条目本体：名目本来就是链接（或竞态被换链）时 mv 移的是
+        # 链非目标——held 是链则只摘链（龄门对链取的是目标 mtime，与 AOT
+        # SweepOne 的 LinkTarget 复核同语义）。
         if [ -L "$_held" ]; then rm -f "$_held" 2>/dev/null; continue; fi
         # 契约暂存目只装平铺常规件——逐条只删条目本体：链接 rm -f 只摘链
         # 不跟目标；真目录（含 FUSE/bind 挂载点）出现即整体弃收。root 侧
