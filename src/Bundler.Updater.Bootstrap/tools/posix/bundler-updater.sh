@@ -166,8 +166,13 @@ _pa_log_open() {
     # 分支只验父目录，open 会跟随链接以提权身份建出目标件。
     if [ -e "$LOG_FILE" ] || [ -h "$LOG_FILE" ]; then
         [ -f "$LOG_FILE" ] && [ ! -h "$LOG_FILE" ] || return 1
-        _lo=$(stat -c %u "$LOG_FILE" 2>/dev/null || stat -f %u "$LOG_FILE" 2>/dev/null || true)
-        [ -n "$_lo" ] && [ "$_lo" = "$_lu" ] || return 1
+        # 调用者即 root（_lu=0）：DAC 覆盖本就全域可写——容器/守护语境
+        # 挂宿主属主件也能真写，刚性属主比对会误拒（musl 冒烟实证）；
+        # pkexec 腿 _lu 是真实桌面用户，严格度不变。
+        if [ "$_lu" != "0" ]; then
+            _lo=$(stat -c %u "$LOG_FILE" 2>/dev/null || stat -f %u "$LOG_FILE" 2>/dev/null || true)
+            [ -n "$_lo" ] && [ "$_lo" = "$_lu" ] || return 1
+        fi
         # check→open 换件窗收口：记下 dev:ino，fd 复核比对同件——窗内
         # 把路径换成指向 root 件的链接会 mismatch 被拒（SEC 回归）。
         _li=$(stat -c '%d:%i' "$LOG_FILE" 2>/dev/null || stat -f '%d:%i' "$LOG_FILE" 2>/dev/null || true)
@@ -201,11 +206,14 @@ _pa_log_open() {
         # LogUnavailable/UsageException 两级同口径）。
         [ -d "$_ld" ] || return 2
         [ -h "$_ld" ] && return 1
-        _lo=$(stat -c %u "$_ld" 2>/dev/null || stat -f %u "$_ld" 2>/dev/null || true)
-        _lp=$(stat -c %a "$_ld" 2>/dev/null || stat -f %Lp "$_ld" 2>/dev/null || true)
-        if [ -z "$_lo" ] || [ "$_lo" != "$_lu" ]; then
-            # 公共可写区（/tmp sticky 类）：others 写+执行两位置位才放行
-            case "$_lp" in *[37]) : ;; *) return 1 ;; esac
+        # 调用者即 root：属主/o+wx 复核直通（DAC 覆盖——同上）。
+        if [ "$_lu" != "0" ]; then
+            _lo=$(stat -c %u "$_ld" 2>/dev/null || stat -f %u "$_ld" 2>/dev/null || true)
+            _lp=$(stat -c %a "$_ld" 2>/dev/null || stat -f %Lp "$_ld" 2>/dev/null || true)
+            if [ -z "$_lo" ] || [ "$_lo" != "$_lu" ]; then
+                # 公共可写区（/tmp sticky 类）：others 写+执行两位置位才放行
+                case "$_lp" in *[37]) : ;; *) return 1 ;; esac
+            fi
         fi
         # O_EXCL 原子建件：noclobber 让 > 对已存在路径（含符号链接——
         # O_CREAT|O_EXCL 不跟随，dangling 同拒）失败，check→open 换件

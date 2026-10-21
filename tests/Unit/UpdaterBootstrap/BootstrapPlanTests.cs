@@ -819,6 +819,27 @@ public sealed class BootstrapPlanTests : TempBase
     }
 
     [Fact]
+    public void DirWritableByCaller_RootCaller_ForeignOwnedDirPasses()
+    {
+        // musl 冒烟实证形态：容器内 euid=0、挂载宿主属主目录（uid≠0,0755）
+        // ——root 有 DAC 覆盖本就全域可写，刚性属主/o+wx 比对会误拒。
+        var foreign = new NativeMethods.FileStatus
+        {
+            Mode = 0x4000 | 0x1ED,   // S_IFDIR | 0755
+            Uid = 1001,
+        };
+        Assert.True(NativeMethods.DirWritableByCaller(foreign, 0L));
+        Assert.True(NativeMethods.CallerIsRoot(0L));
+        Assert.False(NativeMethods.CallerIsRoot(1000L));
+        Assert.False(NativeMethods.DirWritableByCaller(foreign, 1000L));
+        foreign.Mode = 0x4000 | 0x1F7;  // 0777：o+wx 公共区——非属主仍放行
+        Assert.True(NativeMethods.DirWritableByCaller(foreign, 1000L));
+        var notDir = foreign;
+        notDir.Mode = 0x8000 | 0x1F7;   // S_IFREG 冒充目录一律拒
+        Assert.False(NativeMethods.DirWritableByCaller(notDir, 0L));
+    }
+
+    [Fact]
     public void PkgApply_Deb_AptGetPreferred_DpkgFallback()
     {
         var pkg = WritePkg();

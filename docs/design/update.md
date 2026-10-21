@@ -118,7 +118,7 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   sh `_pa_fd_same` 在 Linux `/dev/fd`/`/proc/self/fd` 直 stat 先行，macOS devfs 对自属 fd stat 常 EBADF（CI 实证）→退 lsof 兜底——`i` 字段钉 fd 真实 vnode inode 必选、`D` 字段（hex）钉 fs dev、vnode 名 stat 补强全量 dev:ino 与属主复核（`u` 是进程 uid 非件属主不采用；名缺/转义时件身已 dev:ino 钉死、属主残窗如实登记放行）；
   lsof PATH 缺席重扫 `/usr/sbin` 等知名绝对位，证据缺/不一致一律拒（fail closed）；
   AOT 侧 fstat 直开 fd 恒达、无 devfs 面，`O_NOFOLLOW`+fstat 复核同口径。
-- `--log` 是"调用者可写"复核路径：件在=普通件+非链接+属主==调用 uid；件不在=父目录属主匹配或 o+wx 公共可写区（父目录为链接硬拒）+原子建件收口换件窗（sh 侧 noclobber/`O_EXCL`，AOT 侧 `CREAT`+开后 fstat 属主复核——两路同归"抢建窗内出现的件过不了属主闸"）；行内 `\r\n` 折空格防调用方串拆行伪造日志记录；失败两级口径——良性不可写（父目录不存在等）双侧 WARN 降级续行不写件，安全违规（异主件/链接/父目录不可写/fd 复核不符）pkg_apply 双侧 rc3 硬拒；apply 侧 sh 懒开一律 WARN 降级、AOT 归 `UsageException` rc2——"不写未验件"安全面一致、退出码口径差如实登记。
+- `--log` 是"调用者可写"复核路径：件在=普通件+非链接+属主==调用 uid；件不在=父目录属主匹配或 o+wx 公共可写区（父目录为链接硬拒）+原子建件收口换件窗（sh 侧 noclobber/`O_EXCL`，AOT 侧 `CREAT`+开后 fstat 属主复核——两路同归"抢建窗内出现的件过不了属主闸"）；调用 uid 即 root 时属主/可写复核直通——DAC 覆盖下本就全域可写，euid=0 容器挂宿主属主目录形态实证刚性比对误拒（pkexec 腿调用 uid 是真实桌面用户严格度不变）；行内 `\r\n` 折空格防调用方串拆行伪造日志记录；失败两级口径——良性不可写（父目录不存在等）双侧 WARN 降级续行不写件，安全违规（异主件/链接/父目录不可写/fd 复核不符）pkg_apply 双侧 rc3 硬拒；apply 侧 sh 懒开一律 WARN 降级、AOT 归 `UsageException` rc2——"不写未验件"安全面一致、退出码口径差如实登记。
 - 引导件 musl 静态件注入 `/usr/lib/<pkg>/`（与 zip/app 注入同构）。
   nsis/msi"不注入引导件"先例不适用此处——installer-replay 族的执行体仍是引导件编排安装命令。
   动词协议签名：`bundler-updater pkg-apply --pkg <本地包> --format <deb|rpm|apk> --app <重启目标> [--sha256 <hex>] [--env-file <会话env件>] [--rollback] [--log <件>]`。

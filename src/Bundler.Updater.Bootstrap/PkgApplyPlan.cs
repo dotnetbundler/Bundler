@@ -859,9 +859,14 @@ internal static class PkgApplyPlan
         if (fd != NativeMethods.InvalidFd)
         {
             // 既有件：fstat 已开描述符——校验对象是 open 钉住的同一 inode。
+            // 调用者即 root（CallerIsRoot）时属主复核直通——DAC 覆盖本就
+            // 全域可写，容器/守护语境（euid=0 挂宿主属主目录）刚性属主
+            // 比对只会误拒（musl 冒烟实证）；pkexec 腿 callerUid 是真实
+            // 桌面用户，严格度不变。
             if (NativeMethods.TryFStat(fd, out var status) &&
                 NativeMethods.IsRegularMode(status) &&
-                NativeMethods.OwnerMatches(status, callerUid))
+                (NativeMethods.CallerIsRoot(callerUid) ||
+                 NativeMethods.OwnerMatches(status, callerUid)))
             {
                 var existing = new FileStream(
                     new Microsoft.Win32.SafeHandles.SafeFileHandle(fd, ownsHandle: true),
@@ -1582,7 +1587,7 @@ internal static class NativeMethods
         {
             return false;
         }
-        if (OwnerMatches(status, callerUid))
+        if (CallerIsRoot(callerUid) || OwnerMatches(status, callerUid))
         {
             return true;
         }
@@ -1590,26 +1595,29 @@ internal static class NativeMethods
         return (status.Mode & otherWriteExec) == otherWriteExec;
     }
 
-    // st_uid 复核：期望 uid=已解析调用 uid，缺席按本进程 euid——
-    // geteuid 拿不到（不该发生）按校验失败拒。
-    internal static bool OwnerMatches(FileStatus status, long? callerUid)
+    // 有效调用 uid：显式解析值（PKEXEC_UID/SUDO_UID）优先，缺席按本进程
+    // euid；geteuid 拿不到按 -1——校验侧一律拒（fail closed）。
+    internal static long EffectiveCallerUid(long? callerUid)
     {
-        long expected;
         if (callerUid is { } uid)
         {
-            expected = uid;
+            return uid;
         }
-        else
+        try
         {
-            try
-            {
-                expected = SysGetEUid();
-            }
-            catch (Exception)
-            {
-                return false;
-            }
+            return SysGetEUid();
         }
-        return status.Uid == expected;
+        catch (Exception)
+        {
+            return -1;
+        }
     }
+
+    // 调用者即 root：euid==0 语境（pkexec/sudo 缺席=直跑，或显式传 0）——
+    // DAC 覆盖下目录/文件本就全域可写，属主/o+wx 刚性复核只会误拒。
+    internal static bool CallerIsRoot(long? callerUid) => EffectiveCallerUid(callerUid) == 0;
+
+    // st_uid 复核：期望 uid=有效调用 uid（显式值或 euid）。
+    internal static bool OwnerMatches(FileStatus status, long? callerUid)
+        => status.Uid == EffectiveCallerUid(callerUid);
 }
