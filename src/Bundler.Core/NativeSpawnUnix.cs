@@ -250,6 +250,15 @@ internal static class NativeSpawnUnix
                 throw PipeFailure();
             }
 
+            // 子件端落进 0/1/2 自家目标槽（父件 std 描述符关闭语境）时必须搬高：
+            // 本槽位会跳过 dup2 动作，fd 带着 CLOEXEC 进 exec 即被收——子件标准管
+            // 无声死（0 空 stdin、1/2 数据丢入虚空）。dup2(fd,fd) 清 CLOEXEC 是
+            // POSIX 后期扩展语义，三家 libc 面不齐——F_DUPFD_CLOEXEC 原子复刻到
+            // ≥3 是唯一语义确定的等价形，之后照旧走 dup2+close 动作对。
+            RelocateStdSlotFd(stdinPipe, 0, 0);
+            RelocateStdSlotFd(stdoutPipe, 1, 1);
+            RelocateStdSlotFd(stderrPipe, 1, 2);
+
             var spawn = SpawnOnWorkerThread(exeBytes, cwdBytes, argv, envp,
                 stdinPipe[0], stdoutPipe[1], stderrPipe[1],
                 stdinPipe[1], stdoutPipe[0], stderrPipe[0]);
@@ -321,6 +330,13 @@ internal static class NativeSpawnUnix
             // 孤件清扫按 /proc/self/task/<tid>/children 精确圈定（fork 源线程即
             // 是 posix_spawn 内部 clone 的发起者）。macOS 无 /proc——按弃件处理。
             result.WorkerTid = LinuxSelfTid();
+            // opaque 缓冲尺寸锚定（三家 libc 实测 sizeof 上界 + 冗余）：
+            //   file_actions —— glibc 80B / musl ~100B / libSystem 不透明指针
+            //     小结构，256B ≥ 2.5× 余量；
+            //   attr —— glibc ~348B（内嵌双 sigset_t+sched_param+pad）为三家
+            //     最大，512B 余量 ~47%；
+            //   sigset —— glibc/musl 128B，Darwin sigset_t 仅 4B，128B 全覆盖。
+            // 分配后 FillZero：init 只按本机 struct 填有效区，余量区恒零不漂。
             var actions = Marshal.AllocHGlobal(256);
             var attr = Marshal.AllocHGlobal(512);
             var sigEmpty = Marshal.AllocHGlobal(128);
@@ -737,6 +753,28 @@ internal static class NativeSpawnUnix
         fcntl(fds[0], F_SETFD, FD_CLOEXEC) == 0 && fcntl(fds[1], F_SETFD, FD_CLOEXEC) == 0;
 
     private static Win32Exception PipeFailure() => new(Marshal.GetLastWin32Error(), "pipe/fcntl failed.");
+
+    // F_DUPFD_CLOEXEC：复刻到 ≥min 槽位并原子带 CLOEXEC（dup+fcntl 两步形有
+    // 并发 spawn 继承未收口 fd 的微窗）。平台常数：Linux glibc/musl=1030，
+    // macOS libSystem=67。
+    private static readonly int s_fdDupfdCloexec = s_darwin ? 67 : 1030;
+
+    // 管端落在其 dup2 目标槽本身时搬离——见 SpawnCore 调用点注释。
+    private static void RelocateStdSlotFd(int[] fds, int index, int target)
+    {
+        var fd = fds[index];
+        if (fd != target)
+        {
+            return;
+        }
+        var moved = fcntl(fd, s_fdDupfdCloexec, 3);
+        if (moved < 0)
+        {
+            throw PipeFailure();
+        }
+        fds[index] = moved;
+        _ = close(target); // 原件已复刻——槽位 CLOEXEC 管端父件侧即关，不遗入子件。
+    }
 
     // 槽位关闭一并置 -1：两关之间 fd 号可被并发 open 复用——关后不置 -1，
     // 后续 CloseAll 会把同一个号当"自己的 fd"再关一次，误杀无关描述符。

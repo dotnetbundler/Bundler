@@ -345,10 +345,28 @@ _pa_timed() {
 _pa_sweep_stages() {
     command -v find >/dev/null 2>&1 || return 0
     command -v rm >/dev/null 2>&1 || return 0
+    command -v mv >/dev/null 2>&1 || return 0
     for _d in "${TMPDIR:-/tmp}"/bundler-pkg.[!.]* "${TMPDIR:-/tmp}"/bundler-pkg-*; do
+        # 名目本身是链接：只摘链不跟（[ -d ] 跟链会为真，先显式排掉）。
+        if [ -L "$_d" ]; then rm -f "$_d" 2>/dev/null; continue; fi
         [ -d "$_d" ] || continue
-        [ -n "$(find "$_d" -prune -mmin +1440 -print 2>/dev/null)" ] && \
-            rm -rf "$_d" 2>/dev/null || true
+        [ -n "$(find "$_d" -prune -mmin +1440 -print 2>/dev/null)" ] || continue
+        # 钉名：先 mv 私有名——判龄到删件窗内名目被换链的风险归零；
+        # .sweep.$$ 后缀仍在 bundler-pkg* glob 面内，弃收件下轮重扫不丢。
+        _held="${_d}.sweep.$$"
+        mv "$_d" "$_held" 2>/dev/null || continue
+        if [ -L "$_held" ]; then rm -f "$_held" 2>/dev/null; continue; fi
+        # 契约暂存目只装平铺常规件——逐条只删条目本体：链接 rm -f 只摘链
+        # 不跟目标；真目录（含 FUSE/bind 挂载点）出现即整体弃收。root 侧
+        # /tmp 跨用户共享，rm -rf 跨界扫挂载树即"root 任意删除"原语，
+        # 发现目录即弃收是不跨界语义（AOT SweepOne 同口径）。
+        _flat=1
+        for _e in "$_held"/* "$_held"/.[!.]* "$_held"/..?*; do
+            [ -e "$_e" ] || [ -L "$_e" ] || continue
+            if [ -d "$_e" ] && [ ! -L "$_e" ]; then _flat=; break; fi
+            rm -f "$_e" 2>/dev/null
+        done
+        [ -n "$_flat" ] && rmdir "$_held" 2>/dev/null || true
     done
 }
 

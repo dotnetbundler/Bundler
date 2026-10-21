@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using DotNet.Bundler.Updater.Bootstrap;
 using Xunit;
 
@@ -264,6 +265,41 @@ public sealed class ToolProcessTests
             Thread.Sleep(50);
         }
         Assert.False(ProcessAlive(pid));
+    }
+
+    [DllImport("libc")] private static extern int close(int fd);
+    [DllImport("libc", SetLastError = true)]
+    private static extern int open(byte[] path, int flags);
+
+    [Fact]
+    public void Spawn_ChildEndOnStdSlot_PipeStillWorks()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "fd 槽位碰撞面 POSIX-only");
+        // 关本进程 fd0：其后 pipe() 的读端必占 0 号槽——该槽正是子件 stdin 的
+        // dup2 目标，占自家槽位时 fd 带 CLOEXEC 进 exec 即被收（子件标准管
+        // 无声死）。修复后 F_DUPFD_CLOEXEC 搬高→dup2 正常，cat 回声可断言。
+        _ = close(0);
+        try
+        {
+            var info = new ToolProcessStartInfo
+            {
+                FileName = "/bin/cat",
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+            };
+            using var process = ToolProcess.Start(info);
+            Assert.NotNull(process);
+            process.StandardInput.Write("stdslot-ping\n");
+            process.StandardInput.Close();
+            var output = process.StandardOutput.ReadToEnd();
+            Assert.True(process.WaitForExit(10_000));
+            Assert.Contains("stdslot-ping", output);
+        }
+        finally
+        {
+            // fd0 不留空给其余测试面——/dev/null 回填，槽位恢复"已占无害"态。
+            _ = open(System.Text.Encoding.ASCII.GetBytes("/dev/null\0"), 0);
+        }
     }
 
     private static bool ProcessAlive(int pid)

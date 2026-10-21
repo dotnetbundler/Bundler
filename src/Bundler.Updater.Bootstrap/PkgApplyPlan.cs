@@ -192,8 +192,11 @@ internal static class PkgApplyPlan
                 File.SetUnixFileMode(dir,
                     UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                // 0700 是跨用户同名的隐私闸——chmod 失败不该哑掉：装包本身仍可
+                // 安全进行（副本内容与权限无关），但留痕让"私有性失效"可诊断。
+                log($"bundler-updater: warning: could not restrict staging dir permissions: {exception.Message}");
             }
         }
         var staged = Path.Combine(dir, Path.GetFileName(pkg));
@@ -295,16 +298,19 @@ internal static class PkgApplyPlan
     // /tmp 跨进程共享，只动 bundler-pkg-* 本契约名。
     private static void SweepStaleStageDirs()
     {
-        var cutoff = DateTime.UtcNow.AddHours(-24);
-        string tempRoot;
         try
         {
-            tempRoot = Path.GetTempPath();
+            SweepStaleStageDirs(Path.GetTempPath());
         }
         catch (Exception)
         {
-            return;
         }
+    }
+
+    // tempRoot 参数化是测试缝——生产侧恒 Path.GetTempPath()。
+    internal static void SweepStaleStageDirs(string tempRoot)
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-24);
         string[] dirs;
         try
         {
@@ -326,14 +332,68 @@ internal static class PkgApplyPlan
         {
             try
             {
-                if (Directory.GetLastWriteTimeUtc(dir) < cutoff)
+                if (Directory.GetLastWriteTimeUtc(dir) >= cutoff)
                 {
-                    Directory.Delete(dir, recursive: true);
+                    continue;
                 }
+                SweepOne(dir);
             }
             catch (Exception)
             {
             }
+        }
+    }
+
+    // 单目清扫：契约暂存目只装平铺常规件——先 mv 到私有名钉住路径（判龄到
+    // 删件窗内名目被换链的风险归零），再只删条目本体：链接只摘链不跟目标，
+    // 真目录/挂载点出现即整体弃收。root 侧 /tmp 是跨用户共享面——契约名目下
+    // 被塞 FUSE/bind 挂载时递归删会跨界扫挂载树，"发现即弃收"是不跨界语义。
+    private static void SweepOne(string dir)
+    {
+        var held = dir + ".sweep-" + Environment.ProcessId;
+        Directory.Move(dir, held);
+        try
+        {
+            // mv 后复核名目身份——held 若还是链接（判龄后名目被换链、mv 移的
+            // 是链非目标）只摘链即收工，绝不对链接路径枚举删件。
+            if (new DirectoryInfo(held).LinkTarget is not null)
+            {
+                Directory.Delete(held);
+                return;
+            }
+            var flat = true;
+            foreach (var entry in Directory.EnumerateFileSystemEntries(held))
+            {
+                var attr = File.GetAttributes(entry);
+                if ((attr & FileAttributes.ReparsePoint) != 0 ||
+                    (attr & FileAttributes.Directory) == 0)
+                {
+                    // 常规件/特殊件 rm 等价 unlink；Windows 目录链接走
+                    // Directory.Delete 非递归只摘点——两侧都不跨条目边界。
+                    if ((attr & FileAttributes.Directory) != 0)
+                    {
+                        Directory.Delete(entry);
+                    }
+                    else
+                    {
+                        File.Delete(entry);
+                    }
+                }
+                else
+                {
+                    flat = false;
+                    break;
+                }
+            }
+            if (flat)
+            {
+                // 非递归 rmdir——循环后仍剩件（枚举竞态新落件）即失败弃收，
+                // 下次扫到原契约名后缀仍在 glob 面内，重试语义不丢。
+                Directory.Delete(held);
+            }
+        }
+        catch (Exception)
+        {
         }
     }
 

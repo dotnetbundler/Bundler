@@ -83,7 +83,8 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   成功才 `command printf` 管道喂 `sudo -S`；密码不进 argv/环境变量/磁盘/日志。
   问密码腿有图形会话门槛：`DISPLAY`/`WAYLAND_DISPLAY` 全缺席（headless）时
   zenity/kdialog 必败直接跳过，直落裸 `sudo`（tty 密码提示/NOPASSWD 场景存活）。
-  `Apply`/`Rollback` 返回已拉起 `Process` 供观察退出码——已启动不表示安装成功；
+  `Apply`/`Rollback` 返回已拉起 `ToolProcess` 供观察退出码——已启动不表示安装成功
+  （`Process`→`ToolProcess` 是本轮重构的 API 破坏性变更，alpha 期接受）；
   `applied` 标记/留存件是"最近交付工件"面（诊断与回滚用），非零 rc 不还原。
 - 实现落点（B3 `SyspkgReplay`）：客户端身份 `alpineapk` 在动词面映射 `--format apk`。
   会话 env 件写 `<staging>/pkg-<guid>/session.env`（0600，含 CR/LF 的值跳过，零有效对或写败退为不带 `--env-file`）。
@@ -125,6 +126,10 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
   拷贝本身有界：AOT 经 PAL `O_NOFOLLOW`+5s 时限开件、fstat 复核普通件并按其尺寸封顶读；sh 侧 `timeout -k 10 60 cp` 包裹——判存到 open 的类型替换窗（fifo 挂死/设备件读不尽）双侧同形收口；
   `--sha256`（严格 64 位十六进制，畸形归用法错 rc3）对暂存副本逐位复核，不匹配/无哈希工具一律 rc4 拒绝，不降级装原件（AOT 摘要走内置纯托管 `BundledSha256`——musl 静态件无 OpenSSL 宿主面可依赖；sh 侧经 `sha256sum`→`shasum`→`openssl dgst` 工具链退化序）；
   暂存根随进程全出口回收（finally/EXIT trap），SIGKILL 残件由下一轮 `bundler-pkg-*`>24h 同名清扫兜底（find 缺席的宿主不扫，归 OS tmp 清理器）。
+  清扫是不跨界原语：先 mv 到 `.sweep-<pid>` 私有名钉住路径（名目换链窗归零），
+  只平删顶层条目（链接摘链不跟），内见真目录/挂载点即整体弃收——
+  root 侧 /tmp 跨用户共享，递归删遇 FUSE/bind 挂载即成任意删除原语，
+  双侧（AOT `SweepOne`/sh `_pa_sweep_stages`）同口径。
 - 每级安装命令先 `command -v` 预检再调用；安装腿有界——`ToolProcess` 有界 spawn+等待、超时 SIGKILL 整进程树（Unix 子件 setpgid 自立组）返 124（.NET 无 TERM/组信号面，孙进程必死优先于善后窗；进程面不走裸 `Process` API——macOS 实证过 spawn/reap 全局锁死锁把已退子进程留成僵尸、spawn 面堵死）、sh 侧 `timeout -k 30` 先 TERM 后 KILL 包裹同码——超时界与"无遗留 pm"双侧一致，善后窗宽严属已知实现差；
   默认 30min，`BUNDLER_UPDATER_PKG_TIMEOUT` **正数**秒双侧同名覆盖（`0`/非数字同归默认——GNU `timeout 0` 的无界义不外露）；
   apt-get 另带 `-o DPkg::Lock::Timeout=120` 把 dpkg 锁等待钉在包管理器自身界内。

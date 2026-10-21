@@ -30,6 +30,30 @@ internal static class UstarReader
             var mode = (int)ReadOctal(header, 100, 8);
             var type = (char)header[156];
             var prefix = ReadString(header, 345, 155);
+
+            // 伪条目只累积不复位——POSIX/bsdtar 口径是挂起覆盖值（pax path/
+            // linkpath、GNU 续名）跨伪头合并到下一个真实条目，同键后写胜；
+            // 伪条目处复位会让 x(linkpath)→L→'2' 构造档的覆盖值丢在半空。
+            switch (type)
+            {
+                case 'x': // pax：数据块是 "len key=value\n" 记录流，取 path=/linkpath=
+                {
+                    var (path, linkPath) = ReadPaxOverrides(stream, size);
+                    if (path is not null)
+                    {
+                        paxPath = path;
+                    }
+                    if (linkPath is not null)
+                    {
+                        paxLinkPath = linkPath;
+                    }
+                    continue;
+                }
+                case 'L': // GNU 续名：数据块即文件名
+                    longName = ReadDataString(stream, size);
+                    continue;
+            }
+
             var fullName = paxPath ?? longName ??
                 (prefix.Length > 0 ? prefix + "/" + name : name);
             var linkTargetOverride = paxLinkPath;
@@ -39,12 +63,6 @@ internal static class UstarReader
 
             switch (type)
             {
-                case 'x': // pax：数据块是 "len key=value\n" 记录流，取 path=/linkpath=
-                    (paxPath, paxLinkPath) = ReadPaxOverrides(stream, size);
-                    break;
-                case 'L': // GNU 续名：数据块即文件名
-                    longName = ReadDataString(stream, size);
-                    break;
                 case '2': // 符号链接：mode 0755，pax linkpath 优先于 ustar 截断字段
                 {
                     var target = linkTargetOverride ?? ReadString(header, 157, 100);
@@ -305,20 +323,39 @@ internal static class UstarReader
             var size = ReadOctal(header, 124, 12);
             var type = (char)header[156];
             var prefix = ReadString(header, 345, 155);
+
+            // 与 Extract 同口径：伪条目累积覆盖值，真实条目消费时复位——
+            // 预扫必须按消费端（bsdtar/managed）的合并语义判定，x→L→'2' 或
+            // 连续 x 构造档的逃逸 linkpath 不能被伪头次序骗丢。
+            switch (type)
+            {
+                case 'x':
+                {
+                    var (path, linkPath) = ReadPaxOverrides(stream, size);
+                    if (path is not null)
+                    {
+                        paxPath = path;
+                    }
+                    if (linkPath is not null)
+                    {
+                        paxLinkPath = linkPath;
+                    }
+                    continue;
+                }
+                case 'L':
+                    longName = ReadDataString(stream, size);
+                    continue;
+            }
+
             var fullName = paxPath ?? longName ??
                 (prefix.Length > 0 ? prefix + "/" + name : name);
             var linkTargetOverride = paxLinkPath;
             paxPath = null;
             paxLinkPath = null;
             longName = null;
+
             switch (type)
             {
-                case 'x':
-                    (paxPath, paxLinkPath) = ReadPaxOverrides(stream, size);
-                    break;
-                case 'L':
-                    longName = ReadDataString(stream, size);
-                    break;
                 case '2':
                 {
                     // 与 Extract 同取值源——pax linkpath 存在时 ustar 字段是截断值，

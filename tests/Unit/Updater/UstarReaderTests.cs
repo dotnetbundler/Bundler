@@ -104,6 +104,71 @@ public sealed class UstarReaderTests : TempBase
         Assert.True(UstarReader.ContainsEscapingLink(tar, root));
     }
 
+    // 构造档手写最小 tar 面——TarWriter 不产 'L' 与连续 'x' 序列，
+    // 预扫语义差例必须绕开写侧契约直铺原始块（len 字段自适应位数）。
+    private static byte[] PaxRecord(string key, string value)
+    {
+        var kv = $"{key}={value}";
+        var len = kv.Length + 3; // "<d> <kv>\n" 初探
+        while (Encoding.ASCII.GetBytes($"{len} {kv}\n").Length != len)
+        {
+            len++;
+        }
+        return Encoding.ASCII.GetBytes($"{len} {kv}\n");
+    }
+
+    private static MemoryStream RawTar(params (string Name, char Type, byte[] Data, string LinkName)[] entries)
+    {
+        var stream = new MemoryStream();
+        foreach (var (name, type, data, linkName) in entries)
+        {
+            var header = new byte[512];
+            var nameBytes = Encoding.UTF8.GetBytes(name);
+            Array.Copy(nameBytes, header, Math.Min(nameBytes.Length, 100));
+            if (linkName is { Length: > 0 } ln)
+            {
+                var linkBytes = Encoding.UTF8.GetBytes(ln);
+                Array.Copy(linkBytes, 0, header, 157, Math.Min(linkBytes.Length, 100));
+            }
+            var sizeBytes = Encoding.ASCII.GetBytes(Convert.ToString(data.Length, 8).PadLeft(11, '0') + '\0');
+            Array.Copy(sizeBytes, 0, header, 124, Math.Min(sizeBytes.Length, 12));
+            header[156] = (byte)type;
+            Array.Copy(Encoding.ASCII.GetBytes("ustar\0"), 0, header, 257, 6);
+            stream.Write(header, 0, 512);
+            stream.Write(data, 0, data.Length);
+            stream.Write(new byte[(512 - data.Length % 512) % 512]);
+        }
+        stream.Write(new byte[1024]);
+        stream.Position = 0;
+        return stream;
+    }
+
+    [Fact]
+    public void ContainsEscapingLink_PaxThenLongNameThenLink_PaxLinkpathStillJudged()
+    {
+        // x(linkpath=逃逸) → L(GNU 续名) → '2'：伪条目穿插不得丢挂起覆盖值——
+        // bsdtar 累积合并语义下该序列的链接按 pax linkpath 物化，预扫必须同判。
+        var root = Path.Combine(Root, "pseudo");
+        Directory.CreateDirectory(root);
+        using var tar = RawTar(
+            ("PaxHeader.x", 'x', PaxRecord("linkpath", "../../escape"), ""),
+            ("LongName", 'L', Encoding.UTF8.GetBytes("app/link\0"), ""),
+            ("app/link", '2', [], "benign.txt"));
+    }
+
+    [Fact]
+    public void ContainsEscapingLink_LaterPaxSameKey_LastWins()
+    {
+        // 连续 'x' 同键后写胜（bsdtar 合并口径）：后写良性值覆盖前写逃逸值，
+        // 预扫与消费端同判 false——比消费端更严或更宽都是口径差。
+        var root = Path.Combine(Root, "merge");
+        Directory.CreateDirectory(root);
+        using var tar = RawTar(
+            ("PaxHeader.x1", 'x', PaxRecord("linkpath", "../../escape"), ""),
+            ("PaxHeader.x2", 'x', PaxRecord("linkpath", "benign.txt"), ""),
+            ("app/link", '2', [], "ignored.txt"));
+    }
+
     [Fact]
     public void Extract_SymlinkLongTarget_PaxLinkpath_Restored()
     {
