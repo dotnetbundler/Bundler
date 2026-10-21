@@ -84,7 +84,12 @@ internal static class NativeSpawnUnix
     private const int ECHILD = 10;
     private const int WNOHANG = 1;
     // POSIX_SPAWN_SETPGROUP|SETSIGDEF|SETSIGMASK——glibc/musl/libSystem 低位同值。
-    private const short SpawnFlags = 0x02 | 0x04 | 0x08;
+    // Darwin 追加 Apple 扩展 POSIX_SPAWN_CLOEXEC_DEFAULT(0x4000)：子件 exec 前
+    // 关闭一切非 file-actions 建立的 fd——F_SETFD 在 ARM64 变参 ABI 下 arg 递
+    // 不到致 FD_CLOEXEC 随机失位的残余窗由此兜底收口；glibc/musl 无该旗标
+    //（未知旗标位会 EINVAL）不加。
+    private static readonly short SpawnFlags =
+        (short)((s_darwin ? 0x4000 : 0) | 0x02 | 0x04 | 0x08);
 
     /// <summary>spawn 出的 Unix 子件句柄面：pid + 排水 fd + 退出账本。</summary>
     internal sealed class SpawnedChild
@@ -776,9 +781,23 @@ internal static class NativeSpawnUnix
             return;
         }
         var slot = 3;
-        while (fcntl(slot, F_GETFD, 0) >= 0)
+        for (;;)
         {
-            slot++;
+            if (fcntl(slot, F_GETFD, 0) >= 0)
+            {
+                slot++;
+                continue;
+            }
+            var err = Marshal.GetLastWin32Error();
+            if (err == 9 /* EBADF */)
+            {
+                break; // 空槽
+            }
+            if (err != 4 /* EINTR */)
+            {
+                throw PipeFailure();
+            }
+            // EINTR 重试同槽位——信号打断不代表槽位占用。
         }
         if (dup2(fd, slot) < 0)
         {

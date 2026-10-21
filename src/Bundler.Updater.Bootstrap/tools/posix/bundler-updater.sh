@@ -361,7 +361,9 @@ _pa_sweep_stages() {
     command -v mv >/dev/null 2>&1 || return 0
     command -v rmdir >/dev/null 2>&1 || return 0
     for _d in "${TMPDIR:-/tmp}"/bundler-pkg.[!.]* "${TMPDIR:-/tmp}"/bundler-pkg-*; do
-        [ -d "$_d" ] || continue
+        # 真目录或任意链接名目都进扫（链→文件/悬空链同为残件名目，龄门按
+        # 链自身 lstat mtime 判——与 AOT 枚举口径对齐）；裸常规件跳过。
+        [ -d "$_d" ] || [ -L "$_d" ] || continue
         [ -n "$(find "$_d" -prune -mmin +1440 -print 2>/dev/null)" ] || continue
         # 钉名：先 mv 私有名——判龄到删件窗内名目被换链的风险归零；
         # .sweep.$$ 后缀仍在 bundler-pkg* glob 面内，弃收件下轮重扫不丢。
@@ -379,13 +381,13 @@ _pa_sweep_stages() {
             mv "$_held/${_d##*/}" "$_d" 2>/dev/null || true
             continue
         fi
-        # -n 静默不搬（held 撞文件/链名目）时 _held 不在或非目录——_d 原位
-        # 保留，下轮换名重扫。
-        [ -d "$_held" ] || [ -L "$_held" ] || continue
+        # 名目真腾空才进清扫——_d 还在 = -n 静默未搬（held 撞文件/链名目，
+        # held 是外来名目绝不能动），下轮换名重扫。
+        { [ -e "$_d" ] || [ -L "$_d" ]; } && continue
         # mv 钉住的是条目本体：名目本来就是链接（或竞态被换链）时 mv 移的是
-        # 链非目标——held 是链则只摘链（龄门口径两侧不同：sh find -P lstat
-        # 取链自身 mtime，AOT GetLastWriteTimeUtc 跟链取目标 mtime——陈旧链
-        # +新目标时 sh 摘而 AOT 留；摘除动作本身两路都只摘链不触目标）。
+        # 链非目标——held 是链则只摘链（龄门两侧同取链自身 mtime：sh find
+        # -P lstat、AOT GetLastWriteTimeUtc 对链同为 lstat 口径；新链+旧
+        # 目标两侧同留不收，摘除动作也只摘链不触目标）。
         if [ -L "$_held" ]; then rm -f "$_held" 2>/dev/null; continue; fi
         # 契约暂存目只装平铺常规件——逐条只删条目本体：链接 rm -f 只摘链
         # 不跟目标；真目录（含 FUSE/bind 挂载点）出现即整体弃收。root 侧
