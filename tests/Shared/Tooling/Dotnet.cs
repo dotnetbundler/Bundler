@@ -71,8 +71,11 @@ internal static class Dotnet
     //      存在的网络触点，测试语境零价值；
     //   2) IdleTimeout 看门狗：沉默即杀换枪（挂死签名是
     //      "Determining projects to restore..." 后零输出僵住），
-    //      同预算内换枪次数翻倍；慢但有进展的 restore 反而拿满
-    //      attemptTimeout 不被误杀——看门狗与墙钟分工见 ProcessRunner.IdleTimeout；
+    //      同预算内换枪次数翻倍。注意它判的是沉默不是进展——慢速
+    //      大下载/源重试出现 >阈值 零输出窗口同样被换枪且重试不续传，
+    //      "慢但活着的连接"可能比纯墙钟更早被判死：按幂等重来是有界
+    //      可回退的取舍（沉默即挂死签名，活跃下载进程极少全程安静
+    //      >75s），阈值勿再调低——看门狗与墙钟分工见 ProcessRunner.IdleTimeout；
     //   3) 有界重试：restore 幂等，超时/非零退出换新进程。
     // 本方法接管 options.Timeout/IdleTimeout——调用方传的这两项不生效
     // （attemptTimeout/idleTimeout 可显式覆盖）。
