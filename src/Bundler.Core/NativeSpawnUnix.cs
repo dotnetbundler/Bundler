@@ -495,9 +495,11 @@ internal static class NativeSpawnUnix
         // 无 --log 的 updater 腿 stderr 被收、写日志即死于非受控异常。
         // 钉闸 = 槽无 dup2 动作（childEnd<0 或恰在目标槽）且非重定向管端
         // 源槽：源槽被既有 addclose 收掉，补钉 dup2(n,n) 会撞 close→dup2
-        // EBADF；父件端管端占槽的形 pin→close 净关（父端本不该进子件），
-        // child-end 恰在目标槽的形（当前被 RelocateStdSlotFd 排除）由钉名
-        // 兜住。父件该槽本闭时 StdFdOpen 判闭跳过。dup() 探测非变参跨 ABI。
+        // EBADF；父件端管端占槽的形 pin→close 净关（父端本不该进子件）。
+        // child-end 恰在目标槽的形实质防线是 RelocateStdSlotFd（pipe 端恒
+        // 带 CLOEXEC，dup2(n,n) 挡得住 CLOEXEC_DEFAULT 清扫却清不掉
+        // CLOEXEC 位、execve 照收——钉名只兜非 CLOEXEC fd 的误收面）。
+        // 父件该槽本闭时 StdFdOpen 判闭跳过。dup() 探测非变参跨 ABI。
         if (s_darwin)
         {
             bool RedirectSource(int n) =>
