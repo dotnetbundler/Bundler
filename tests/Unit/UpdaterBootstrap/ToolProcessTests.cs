@@ -272,6 +272,22 @@ public sealed class ToolProcessTests
     private static extern int open(byte[] path, int flags);
 
     [Fact]
+    public void Spawn_NoRedirect_StdSlotsSurvive()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "stdio 钉名面 POSIX-only");
+        // darwin CLOEXEC_DEFAULT 会把一切未被 file_actions 触及的 fd 关尽——
+        // 未重定向的标准流须显式钉名，否则子件 stdout/stderr 全闭、写日志即
+        // 非受控死（macos-26 verify 腿实证 updater rc=134）。sh 双写断言
+        // rc==0 区分"钉名保住"与"静默被收"两种行为。
+        var info = new ToolProcessStartInfo { FileName = "/bin/sh" };
+        info.Arguments.AddRange(new[] { "-c", "echo a >&1 && echo b >&2" });
+        using var process = ToolProcess.Start(info);
+        Assert.NotNull(process);
+        Assert.True(process.WaitForExit(10_000));
+        Assert.Equal(0, process.ExitCode);
+    }
+
+    [Fact]
     public void Spawn_ChildEndOnStdSlot_PipeStillWorks()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "fd 槽位碰撞面 POSIX-only");

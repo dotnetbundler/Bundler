@@ -492,16 +492,23 @@ internal static class NativeSpawnUnix
         // Darwin CLOEXEC_DEFAULT 兜底把一切未被 file_actions 触及的 fd 关尽——
         // 未重定向的标准流必须显式 adddup2(n,n) 钉名才得保留（dup2(n,n) 语义
         // no-op，仅作"该槽已接管"登记），否则子件静默失去 stdio：CI 实证
-        // 无 --log 的 updater 腿 stderr 被收、写日志即死于非受控异常。父件
-        // 该槽本闭时跳过（adddup2 钉闭槽会让整个 spawn EBADF）；开闭判定
-        // 用 dup() 探测——非变参、跨 ABI 确定。
+        // 无 --log 的 updater 腿 stderr 被收、写日志即死于非受控异常。
+        // 钉闸 = 槽无 dup2 动作（childEnd<0 或恰在目标槽）且非重定向管端
+        // 源槽：源槽被既有 addclose 收掉，补钉 dup2(n,n) 会撞 close→dup2
+        // EBADF；父件端管端占槽的形 pin→close 净关（父端本不该进子件），
+        // child-end 恰在目标槽的形（当前被 RelocateStdSlotFd 排除）由钉名
+        // 兜住。父件该槽本闭时 StdFdOpen 判闭跳过。dup() 探测非变参跨 ABI。
         if (s_darwin)
         {
-            if (stdinR < 0 && StdFdOpen(0) &&
+            bool RedirectSource(int n) =>
+                n == stdinR && stdinR != 0 ||
+                n == stdoutW && stdoutW != 1 ||
+                n == stderrW && stderrW != 2;
+            if ((stdinR < 0 || stdinR == 0) && !RedirectSource(0) && StdFdOpen(0) &&
                 (rc = posix_spawn_file_actions_adddup2(actions, 0, 0)) != 0) { return rc; }
-            if (stdoutW < 0 && StdFdOpen(1) &&
+            if ((stdoutW < 0 || stdoutW == 1) && !RedirectSource(1) && StdFdOpen(1) &&
                 (rc = posix_spawn_file_actions_adddup2(actions, 1, 1)) != 0) { return rc; }
-            if (stderrW < 0 && StdFdOpen(2) &&
+            if ((stderrW < 0 || stderrW == 2) && !RedirectSource(2) && StdFdOpen(2) &&
                 (rc = posix_spawn_file_actions_adddup2(actions, 2, 2)) != 0) { return rc; }
         }
         // 父件端 addclose：fd 值落在 0-2 且该槽恰是前序 dup2 目标时跳过——
@@ -827,13 +834,21 @@ internal static class NativeSpawnUnix
     // 不到且 CI 实证返回值不可信。
     private static bool StdFdOpen(int fd)
     {
-        var probe = dup(fd);
-        if (probe < 0)
+        for (;;)
         {
-            return false;
+            var probe = dup(fd);
+            if (probe >= 0)
+            {
+                _ = close(probe);
+                return true;
+            }
+            // EINTR 重试；EBADF 判闭；EMFILE 等其余失败按闭槽降级——
+            // 探测本身不可用时不阻断 spawn（登记残余）。
+            if (Marshal.GetLastWin32Error() != 4 /* EINTR */)
+            {
+                return false;
+            }
         }
-        _ = close(probe);
-        return true;
     }
 
     // 槽位关闭一并置 -1：两关之间 fd 号可被并发 open 复用——关后不置 -1，
