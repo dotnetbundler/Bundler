@@ -76,12 +76,12 @@ public sealed class ToolingDiagnosticsIntegrationTests : TempBase
         var result = Dotnet.RestoreWithRetry(["restore", project, "--configfile", cfg], "fake-restore", options);
         Assert.Equal(0, result.ExitCode);
         var lines = File.ReadAllLines(trace);
-        Assert.Contains(lines, l => l.Contains("BEGIN") && l.Contains("attempt=1/4"));
+        Assert.Contains(lines, l => l.Contains("BEGIN") && l.Contains("attempt=1/6"));
         Assert.Contains(lines, l => l.Contains("SPAWN") && l.Contains("attempt=1"));
         Assert.Contains(lines,
             l => l.Contains("EXIT") && !l.Contains("rc=0") && l.Contains("attempt=1"));
         Assert.Contains(lines, l => l.Contains("RETRY") && l.Contains("next-attempt=2"));
-        Assert.Contains(lines, l => l.Contains("BEGIN") && l.Contains("attempt=2/4"));
+        Assert.Contains(lines, l => l.Contains("BEGIN") && l.Contains("attempt=2/6"));
         Assert.Contains(lines, l => l.Contains("EXIT rc=0") && l.Contains("attempt=2"));
     }
 
@@ -102,6 +102,32 @@ public sealed class ToolingDiagnosticsIntegrationTests : TempBase
         var lines = File.ReadAllLines(trace);
         Assert.Contains(lines, l => l.Contains("TIMEOUT") && l.Contains("attempt=1"));
         Assert.Contains(lines, l => l.Contains("RETRY") && l.Contains("next-attempt=2"));
+        Assert.Contains(lines, l => l.Contains("EXIT rc=0") && l.Contains("attempt=2"));
+    }
+
+    [Fact]
+    public void RestoreWithRetry_IdleWatchdogKillsSilentHangEarly()
+    {
+        // block1 fake 在 attempt=1 跑静默 sleep 30s——零输出挂死签名。
+        // idleTimeout=5s 应远早于 attemptTimeout=60s 墙钟就杀进程换枪；
+        // 全程耗时 << 60s 即证明是空闲判死而非陪跑满墙钟。
+        var (project, log, state, cfg) = SetupFakeProject();
+        var trace = TempPath("restore-trace-idle.log");
+        using var traceEnv = new EnvVar("BUNDLER_RESTORE_TRACE");
+        traceEnv.Set(trace);
+        var options = new ProcessRunner.Options
+        {
+            Environment = FakeEnv(log, state, "block1"),
+        };
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var result = Dotnet.RestoreWithRetry(["restore", project, "--configfile", cfg], "fake-restore",
+            options, attemptTimeout: TimeSpan.FromSeconds(60), idleTimeout: TimeSpan.FromSeconds(5));
+        sw.Stop();
+        Assert.Equal(0, result.ExitCode);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(45),
+            $"idle-kill 应在 5s 级触发，实际全程 {sw.Elapsed}——疑似陪跑到 60s 墙钟");
+        var lines = File.ReadAllLines(trace);
+        Assert.Contains(lines, l => l.Contains("TIMEOUT") && l.Contains("attempt=1"));
         Assert.Contains(lines, l => l.Contains("EXIT rc=0") && l.Contains("attempt=2"));
     }
 
