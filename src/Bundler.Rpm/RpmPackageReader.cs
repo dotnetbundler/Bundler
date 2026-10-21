@@ -14,6 +14,7 @@ internal sealed class RpmPackageReader
         public Dictionary<int, object> Tags { get; } = [];
         public int Tag(int tag) => Tags.TryGetValue(tag, out var v) && v is int[] i && i.Length > 0 ? i[0] : 0;
         public int[] Ints(int tag) => Tags.TryGetValue(tag, out var v) && v is int[] i ? i : [];
+        public long[] Longs(int tag) => Tags.TryGetValue(tag, out var v) && v is long[] l ? l : [];
         public string Text(int tag) => Tags.TryGetValue(tag, out var v) && v is string[] s && s.Length > 0 ? s[0] : "";
         public string[] Strings(int tag) => Tags.TryGetValue(tag, out var v) && v is string[] s ? s : [];
     }

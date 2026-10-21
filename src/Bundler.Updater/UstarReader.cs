@@ -3,16 +3,18 @@ using System.Text;
 namespace DotNet.Bundler.Updater;
 
 /// <summary>
-/// 最小 POSIX ustar 提取器：只读本仓 TarWriter 的产面（prefix 长名、pax `path=`、
-/// GNU 'L' 续名防兼容），普通文件/目录/符号链接三型，块到块流式，零依赖。
+/// 最小 POSIX ustar 提取器：只读本仓 TarWriter 的产面（prefix 长名、pax `path=`/
+/// `linkpath=`、GNU 'L' 续名防兼容），普通文件/目录/符号链接三型，块到块流式，
+/// 零依赖。linkpath 与 path 同列消费——超长链接目标由 pax 承载而非 ustar 截断值。
 /// </summary>
 internal static class UstarReader
 {
     internal static void Extract(Stream stream, string destinationRoot, Action<string>? log = null)
     {
         var header = new byte[512];
-        var longName = (string?)null;   // GNU 'L' 续名
-        var paxPath = (string?)null;    // pax path= 覆盖
+        var longName = (string?)null;    // GNU 'L' 续名
+        var paxPath = (string?)null;     // pax path= 覆盖
+        var paxLinkPath = (string?)null; // pax linkpath= 覆盖（>100B 链接目标）
         while (true)
         {
             if (!ReadBlock(stream, header))
@@ -30,20 +32,22 @@ internal static class UstarReader
             var prefix = ReadString(header, 345, 155);
             var fullName = paxPath ?? longName ??
                 (prefix.Length > 0 ? prefix + "/" + name : name);
+            var linkTargetOverride = paxLinkPath;
             paxPath = null;
+            paxLinkPath = null;
             longName = null;
 
             switch (type)
             {
-                case 'x': // pax：数据块是 "len key=value\n" 记录流，只取 path=
-                    paxPath = ReadPaxPath(stream, size);
+                case 'x': // pax：数据块是 "len key=value\n" 记录流，取 path=/linkpath=
+                    (paxPath, paxLinkPath) = ReadPaxOverrides(stream, size);
                     break;
                 case 'L': // GNU 续名：数据块即文件名
                     longName = ReadDataString(stream, size);
                     break;
-                case '2': // 符号链接：mode 0755，linkname@100..200
+                case '2': // 符号链接：mode 0755，pax linkpath 优先于 ustar 截断字段
                 {
-                    var target = ReadString(header, 157, 100);
+                    var target = linkTargetOverride ?? ReadString(header, 157, 100);
                     SkipData(stream, size);
                     var linkPath = SafePath(destinationRoot, fullName);
                     Directory.CreateDirectory(Path.GetDirectoryName(linkPath)!);
@@ -152,7 +156,10 @@ internal static class UstarReader
         }
     }
 
-    private static string? ReadPaxPath(Stream stream, long size)
+    // "len key=value\n" 记录流——len 计的是字节数，多字节名按字符切会越界。
+    // 只取本仓产面用到的两个键：path= 覆盖名、linkpath= 覆盖链接目标；
+    // 纯元数据记录返回 (null,null)，调用侧 ?? 回落 ustar 字段。
+    private static (string? Path, string? LinkPath) ReadPaxOverrides(Stream stream, long size)
     {
         var data = new byte[size];
         var read = 0;
@@ -163,16 +170,20 @@ internal static class UstarReader
             read += n;
         }
         SkipPadding(stream, size);
-        // "len key=value\n" 记录流——len 计的是字节数，多字节名按字符切会越界。
-        // 无 path= 的纯元数据记录返回 null，调用侧的 ?? 回落到 ustar 名段。
+        string? path = null;
+        string? linkPath = null;
         foreach (var record in ParsePaxRecords(data))
         {
             if (record.StartsWith("path=", StringComparison.Ordinal))
             {
-                return record.Substring(5);
+                path = record.Substring(5);
+            }
+            else if (record.StartsWith("linkpath=", StringComparison.Ordinal))
+            {
+                linkPath = record.Substring(9);
             }
         }
-        return null;
+        return (path, linkPath);
     }
 
     private static IEnumerable<string> ParsePaxRecords(byte[] data)
@@ -282,6 +293,7 @@ internal static class UstarReader
     {
         var header = new byte[512];
         string? paxPath = null;
+        string? paxLinkPath = null;
         string? longName = null;
         while (ReadBlock(stream, header))
         {
@@ -295,19 +307,23 @@ internal static class UstarReader
             var prefix = ReadString(header, 345, 155);
             var fullName = paxPath ?? longName ??
                 (prefix.Length > 0 ? prefix + "/" + name : name);
+            var linkTargetOverride = paxLinkPath;
             paxPath = null;
+            paxLinkPath = null;
             longName = null;
             switch (type)
             {
                 case 'x':
-                    paxPath = ReadPaxPath(stream, size);
+                    (paxPath, paxLinkPath) = ReadPaxOverrides(stream, size);
                     break;
                 case 'L':
                     longName = ReadDataString(stream, size);
                     break;
                 case '2':
                 {
-                    var target = ReadString(header, 157, 100);
+                    // 与 Extract 同取值源——pax linkpath 存在时 ustar 字段是截断值，
+                    // 不看 linkpath 会让逃逸目标混过预扫、由 bsdtar 按真值物化。
+                    var target = linkTargetOverride ?? ReadString(header, 157, 100);
                     SkipData(stream, size);
                     if (LinkEscapesRoot(target, Path.Combine(destinationRoot, fullName),
                             destinationRoot))

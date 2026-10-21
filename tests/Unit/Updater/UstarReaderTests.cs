@@ -12,10 +12,13 @@ public sealed class UstarReaderTests : TempBase
 {
 
 
-    private static MemoryStream TarOf(params TarEntry[] entries)
+    private static MemoryStream TarOf(params TarEntry[] entries) => TarOf(false, entries);
+
+    private static MemoryStream TarOf(bool permitPaxLinkpath, params TarEntry[] entries)
     {
         var stream = new MemoryStream();
-        TarWriter.Write(stream, entries);
+        TarWriter.Write(stream, entries, omitEndOfArchive: false,
+            permitPaxLinkpath: permitPaxLinkpath, TestContext.Current.CancellationToken);
         stream.Position = 0;
         return stream;
     }
@@ -82,6 +85,39 @@ public sealed class UstarReaderTests : TempBase
         using var tar = TarOf(
             new TarEntry { Name = "app/link", Kind = TarEntryKind.Symlink, LinkTarget = "../../../../etc/passwd" });
         Assert.True(UstarReader.ContainsEscapingLink(tar, root));
+    }
+
+    [Fact]
+    public void ContainsEscapingLink_PaxLinkpathEscape_True()
+    {
+        // 构造档：ustar linkname 放良性值、pax linkpath 藏逃逸目标——预扫必须
+        // 按消费端（bsdtar/managed）实际取用的 linkpath 判定，不能被表面值骗过。
+        var root = Path.Combine(Root, "pax-unsafe");
+        Directory.CreateDirectory(root);
+        using var tar = TarOf(
+            new TarEntry
+            {
+                Name = "app/link", Kind = TarEntryKind.Symlink,
+                LinkTarget = "safe.txt",
+                PaxRecords = [new KeyValuePair<string, string>("linkpath", "../../../../etc/shadow")]
+            });
+        Assert.True(UstarReader.ContainsEscapingLink(tar, root));
+    }
+
+    [Fact]
+    public void Extract_SymlinkLongTarget_PaxLinkpath_Restored()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "符号链接创建在 Windows 需特权");
+        var destination = Path.Combine(Root, "pax-long");
+        // >100B 的界内相对目标：写侧开闸走 pax linkpath，读侧须还原文本原值
+        var target = "../deep/" + new string('d', 110) + "/x.so";
+        using var tar = TarOf(permitPaxLinkpath: true,
+            new TarEntry { Name = "app/links/ln", Kind = TarEntryKind.Symlink, LinkTarget = target });
+
+        UstarReader.Extract(tar, destination);
+
+        var link = Path.Combine(destination, "app", "links", "ln");
+        Assert.Equal(target, new FileInfo(link).LinkTarget);
     }
 
     [Fact]
