@@ -1,6 +1,6 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-19
+> 最后更新：2026-10-21
 > 当前工作基线：`main@576e6f7`（含 PR #142 `744cfb6` Core+Abstractions 收口 squash 合入与 PR #143 CI 诊断增强合入）；
 > 此前 `main@c319b8c` 含 #133/#134 诊断瘦身回净、#135 dmg 断言收窄、#136 dmg 挂载后失败注入腿、#137 文档对账、#138 签名文档修正；
 > `110a2fe` 基线全矩阵 verify `39133258129` 已 completed/success 全绿；
@@ -17,7 +17,9 @@
 > 图形提权入口链等剩余边界仍挂 `docs/project/special-acceptance.md`。
 > 当前包版本：`0.1.0-alpha.109`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
 > 当前阶段：**全功能面体检收口进行中**——七域并行审查（Bugs/Security/Flags/Notes 四级全清零）产出约 95 项 findings，按用户授权分 6 个连贯 PR 处置：PR-1 Core+Abstractions 已合入（#142，4 轮 Local Review 清零）、PR-2 入口层收口完成（#144 待统一合并，2 轮 Local Review 清零）、PR-3 Linux 后端收口完成（#145 待统一合并，5 轮 Local Review 清零）、PR-4 Windows 后端收口完成（#146 待统一合并，6 轮 Local Review 清零）、PR-5 macOS 后端收口完成（#147 待统一合并，2 轮 Local Review 清零）、PR-6 UPDATE 收口完成（#148 待统一合并，Local Review 36 轮清零，引导件冻件三冻 `39341833602`@`0beb70a` 已入 `e05f1a7`）——**verify 终头 `b19bb2a` 六连全绿**（`39427930544`/`39436250095`/`39445950711`/`39454768280`/`39463149836`/`39470228672`；后两次各有单 job 基建取消经 rerun-failed 原位翻绿，测试腿首跑全绿零失败，windows-arm 腿逐次实证 0 restore 超时、fixture restore 全 up-to-date）；**公开 API 破改登记**：`Bundler.Updater` 包面 `UpdateClient.Apply`/`Rollback` 返回类型由 `System.Diagnostics.Process` 换 `ToolProcess`（快开发期授权口径——不背旧版兼容债）；
-> **收口轮当前事实**（分支 `rework/closure`，基于 #148 头 `8d0e9e9`，本机 Release 单测 1598 全绿）：按用户"再完整看一遍"指令做第二轮七域全功能复审——产出 6 Bug+3 Sec+~40 Flag+~60 Note findings 全量处置：BUG 面含 `NativeSpawnUnix` fd 号复用误杀、`ToolProcess` reaper 持锁饿死、WiX `-fips` 指纹漏哈希、样例 `$(Target)` 未定义属性、CliConfig 非标量 rc 漂移、FIFO 源 open 挂死、`DirOpenFlags` 无 PAL 映射位、sh `PA_UID` set -u 未绑定；SEC 面含 `--log` 任意追加+换行注入（双侧钉 fd+属主复核+`\r\n` 折空格+良性/违规两级口径）、sh env-file validate→cat TOCTOU（fd 钉住复核）、dangling symlink 跟写（`-h` 判存在）、pkg-apply 删件原语收敛（`_PA_ENV_OK` 旗标闸）；FLAG/NOTE 面含 CLI/MSBuild 编排管线双实现收编 `BundleOrchestrator`（Core 单源）、`TryDeleteFile`/`kebab-sanitize`/`WindowsFileNames` 重复实现下沉 Core、tar/cpio/rpm/apk/deb 写出器流式化+CancellationToken、WiX 产品字段码页可编码、macOS 公证⇒HardenedRuntime 前置闸（可桩 HostCheck）、`--reference-dir` 单输入拒绝、CLI 默认输出对齐 `artifacts/`、props/targets 机械对表断言、consume-linux rpm/apk 镜像回落、临时载荷件迁 `.bundler-work`；新 PR 与 verify 终头 5 连绿待办
+> **收口轮当前事实**（分支 `rework/closure`，基于 #148 头 `8d0e9e9`，本机 Release 单测 1598 全绿）：按用户"再完整看一遍"指令做第二轮七域全功能复审——产出 6 Bug+3 Sec+~40 Flag+~60 Note findings 全量处置：BUG 面含 `NativeSpawnUnix` fd 号复用误杀、`ToolProcess` reaper 持锁饿死、WiX `-fips` 指纹漏哈希、样例 `$(Target)` 未定义属性、CliConfig 非标量 rc 漂移、FIFO 源 open 挂死、`DirOpenFlags` 无 PAL 映射位、sh `PA_UID` set -u 未绑定；SEC 面含 `--log` 任意追加+换行注入（双侧钉 fd+属主复核+`\r\n` 折空格+良性/违规两级口径）、sh env-file validate→cat TOCTOU（fd 钉住复核）、dangling symlink 跟写（`-h` 判存在）、pkg-apply 删件原语收敛（`_PA_ENV_OK` 旗标闸）；FLAG/NOTE 面含 CLI/MSBuild 编排管线双实现收编 `BundleOrchestrator`（Core 单源）、`TryDeleteFile`/`kebab-sanitize`/`WindowsFileNames` 重复实现下沉 Core、tar/cpio/rpm/apk/deb 写出器流式化+CancellationToken、WiX 产品字段码页可编码、macOS 公证⇒HardenedRuntime 前置闸（可桩 HostCheck）、`--reference-dir` 单输入拒绝、CLI 默认输出对齐 `artifacts/`、props/targets 机械对表断言、consume-linux rpm/apk 镜像回落、临时载荷件迁 `.bundler-work`。
+> **收口轮终态**（分支 `rework/closure`，PR #149，head `9e2d93e`）：Local Review 22 轮清零；期间修复 macOS devfs fd 校验（`/dev/fd` 直 stat 不可达→`_pa_fd_same` lsof 兜底，`i` 钉 vnode inode+`D` 钉 fs dev+vnode 名 stat 复核，AOT fstat 恒达无此面）与 syspkg-verify harness `/ev` o+wx 权限+复跑 *.log 清场；NuGet restore 挂死三层加固——`-p:NuGetAudit=false` 统一注入（缓存命中逼近零公网）、`ProcessRunner.IdleTimeout` 75s 零输出换枪+3min 墙钟、6 次有界重试、test.yml 测试腿 90min 上限；
+> **verify 终头 5 连全绿**：`39565410058`@`1eac304` + `39572146142`/`39579059968`/`39586065941`/`39593462010`@`9e2d93e`（各 47/47 jobs success）；其间 `39552269251`@`1eac304` 撞 ~1.5h runner 出口劣化窗口（20/31 次 restore 180s 零输出僵死、windows-arm 腿 118min 判败）断链重启计数——定性 runner 基建 flake 非代码回归，三层加固即由该单取证而来；文档对账随头（update.md fd 钉住/--log 两级口径、testing.md 还原加固+restore-progress.log 登记）
 > PR-5 macOS 当前事实：签名横切收敛为 `Bundler.MacApp/MacSigningSupport`（凭据解析/临时钥匙串/codesign·pkgbuild·productsign 参数/公证提交-等待-订钉单源）；临时钥匙串改 `codesign --keychain` 直给、不再变异用户搜索列表；`productsign` 补 `--timestamp`、pkg 公证 `--wait` 对齐 1h 超时；DMG detach 统一为 graceful→`-force` 递进+`hdiutil info` 复核单序列（成败两路共用）；`resize -limits` 字段序双序自校正；pkg `Destination` 撞名簿+`.app` 注入拒绝；`.rtfd` 移出声明；`xattr -crs` 提到 macOS 无条件段；Apple ID 口令进 argv 的运行期警告+文档推荐 keychain-profile/API key
 > PR-6 UPDATE 当前事实：argv 拼写收敛单源 `Core/Update/UpdateArgv.cs`（三工程同源链接）；feed 取信=`.sig` 先验后解析+`artifact.file` 单段词法收口+`.part` Range 核对+全异常归 `UpdateException`（取消穿透）；`pkg-apply` 增 `--sha256`——root 侧把包暂存进私有 `bundler-pkg.*` 目录并对暂存副本复核哈希（留存包验签→root 执行 TOCTOU 收口），安装腿有界（默认 30min、`BUNDLER_UPDATER_PKG_TIMEOUT` 覆盖、apt-get `DPkg::Lock::Timeout=120`）；`BUNDLER_UPDATER_CMD_*` 覆盖须过存在+普通文件+执行位复核；`ProcessAlive`/`MacAppGate` fail-closed（签名态判不出一律拒）；AOT/POSIX parity 与 syspkg-verify 全链路已接线 `--sha256`
 > 全部 11 个格式、CLI 与 UPDATE 均已冻结（冻结指功能面不扩展，质量收口仍在进行）；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词，契约与全产物名目录见 `docs/design/targets.md`
@@ -88,7 +90,9 @@ src/ 各工程共享元数据统一在 `src/Directory.Build.props`（链式导�
 
 ## 3. 最近验证
 
-当前基线：`main@744cfb6`（`0.1.0-alpha.106`，PR #142 Core+Abstractions 收口 squash 合入）。
+收口轮（PR #149，`rework/closure`，head `9e2d93e`）本机验证（Windows x64，.NET SDK 10.0.302）：Release build rc 0（0 警告 0 错误）；本机单测 1598 全绿；`ToolingDiagnosticsIntegrationTests` 6/6（`--filter-class "*ToolingDiagnosticsIntegrationTests*"`，含 75s 空闲看门狗与六 attempt retry 语义腿）；verify 终头五连全绿与 CI 实证见文首终态条。
+
+历史基线：`main@744cfb6`（`0.1.0-alpha.106`，PR #142 Core+Abstractions 收口 squash 合入）。
 PR-1（Core+Abstractions 收口）本机验证（Windows x64，.NET SDK 10.0.302）：Release build rc 0（0 警告 0 错误）；Unit 全量 1434 总/0 失败/37 跳过；Api 全量 84 总/0 失败/14 跳过；Integration `ToolRunnerIntegrationTests` 3/3。
 PR-1 已落改动面：`ToolRunner.RunSync` 成功腿有界排空（对齐 TryRunAsync，消最后一条无界等待）；`UpdatePayloadStaging` 改走 `FileTree.CopyTree`+自复制防护+保留名（`bundler-update.json`/引导件）撞名显式拒绝；
 `UpdateBootstrapper` 注入改 `InjectOrThrow` 直抛、target 词显式校验、提取根属主/0700/24h 清扫（含 squatting 降级根）；`UpdateKeyMaterial` P-256 坐标+在场私钥 d 校验、POSIX 0600；`.desktop` 全落文值 CR/LF 净化；
@@ -177,12 +181,9 @@ Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline`
 5. **PR-5 macOS**：`MacSigningSupport` 共享化（凭据/keychain/参数生成单源）、codesign `--keychain` 替代搜索列表变异、productsign `--timestamp`、detach 统一、撞名簿、`.rtfd` 移除声明、`resize -limits` 字段序（macOS 实机复核登记）。
 6. **PR-6 UPDATE**：feed fetch/`TryRead`/argv `JoinArgv`/feed File 词法/pkg-apply 有界/ProcessAlive+MacAppGate fail-closed、**retained 包 root 侧重验签**（动 `Bundler.Updater.Bootstrap` 源码→必须 dispatch `produce-bootstrap` 重冻 8 件入库评审 + `syspkg-verify` 复验）。
 
-收口后 dispatch 一次 verify 全矩阵（`39142103135` 已作废，覆盖 alpha.106+ 的 CI 证据）。
+收口轮（第二轮七域复审）已并入 PR #149（`rework/closure`，head `9e2d93e`）：Local Review 22 轮清零、verify 终头 5 连全绿（见文首终态条）。
 其余既有剩余工作：
 
-- **CI 连续失败根治**：verify `39142103135`@`0c18cf9`（MSI Package restore 超时后取消/重跑判败）与 `39177022111`@`a137268`（NSIS rc=0xC000013A、UbuntuARM 失联）根因未证实、旧失败未重现；
-  PR #143（`diagnostics/ci-failures-20261019`，验证实现基线 `a95468d`）四条定向/复验 run 均过、本轮未复现旧故障；已停止额外盲跑，旧三类故障保留未决；
-  该 PR 已合入 `576e6f7`；四条取证基线为 alpha.105，不覆盖 PR #142/alpha.106；完整 verify 仍无全矩阵绿证；
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
 - UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 全链已实现：发射（`pkg` 身份字段、`CoveredFormats` 扩收、三后端旁车+引导件注入）、`pkg-apply` 动词 AOT/POSIX 双实现同协议、客户端 replay 编排（`SyspkgReplay`：预检三件套/留存/三级提权退化链/回滚重放）、debian/fedora/alpine 容器验收腿（经 `workflow_call` 收编 verify 发布门 `syspkg` job）——契约见 `docs/design/update.md` §2，图形提权真实桌面观感等剩余边界登记 `docs/project/special-acceptance.md`；
 - 发布链资产实际推送（NuGet/Release 为另一步，仍需用户明确许可）；
