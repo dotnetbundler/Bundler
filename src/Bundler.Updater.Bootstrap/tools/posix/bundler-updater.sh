@@ -57,8 +57,9 @@ log() {
 # 属主落允许 uid 集。/dev/fd|/proc/self/fd 直 stat 先行（Linux 恒达）；
 # devfs 宿主（macOS 对自属 fd 的 /dev/fd/N stat 常 EBADF——CI 实证）
 # 报节点自身 dev:ino 或直接失败的两种形态都不符→退 lsof 读内核
-# vnode：REG/VREG 类型+inode 等值即同件（跨卷同 ino 不同件需跨卷
-# 硬链——POSIX 不容）。lsof 缺席/取不到→拒（fail closed 同口径）。
+# vnode：REG/VREG 类型+inode 等值钉身（fd 真实 vnode），名可 stat 时
+# 叠加 dev:ino 全量钉 dev——inode 是 fs 局部量，跨 fs 同 ino 属天然
+# 巧合，单 ino 比对残窗见内层登记。lsof 缺席/取不到→拒（fail closed）。
 # $1=fd 号；$2=check 时记录的 dev:ino；$3=允许 uid 列表（空格分隔，
 # 空=不复核属主——属主复核抓 chown 竞态，inode 等值不挡属主变更）。
 _pa_fd_same() {
