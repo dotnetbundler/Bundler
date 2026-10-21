@@ -66,7 +66,7 @@ _pa_fd_same() {
     [ -e "$_fs_p" ] || _fs_p=/proc/self/fd/$1
     _fs_i=$(stat -Lc '%d:%i' "$_fs_p" 2>/dev/null || stat -Lf '%d:%i' "$_fs_p" 2>/dev/null || true)
     if [ -n "$_fs_i" ] && [ "$_fs_i" = "$2" ] && [ -f "$_fs_p" ]; then
-        [ -z "$3" ] && return 0
+        [ -z "${3:-}" ] && return 0
         _fs_o=$(stat -Lc %u "$_fs_p" 2>/dev/null || stat -Lf %u "$_fs_p" 2>/dev/null || true)
         for _fs_w in $3; do
             [ "$_fs_o" = "$_fs_w" ] && return 0
@@ -77,15 +77,25 @@ _pa_fd_same() {
     # -n 免 DNS 反查：提权语境无解析器会让 vnode 名解析阻塞 lsof 本身。
     _fs_l=$(lsof -n -a -p "$$" -d "$1" -F tiun 2>/dev/null)
     _fs_t=$(printf '%s\n' "$_fs_l" | sed -n 's/^t//p')
-    _fs_n=$(printf '%s\n' "$_fs_l" | sed -n 's/^i//p')
-    { [ "$_fs_t" = REG ] || [ "$_fs_t" = VREG ]; } && \
+    { [ "$_fs_t" = REG ] || [ "$_fs_t" = VREG ]; } || return 1
+    # dev:ino 全量比对走 vnode 名再 stat（与 check 侧同单位）；lsof 对
+    # 控制字符名转义/已删件无名时退 inode 单分量——残余窗登记：跨 fs
+    # 同 ino 巧合换件的理论缝（仍卡属主集，且攻击者无法自选 ino）。
+    _fs_nm=$(printf '%s\n' "$_fs_l" | sed -n 's/^n//p')
+    _fs_i=""
+    [ -n "$_fs_nm" ] && \
+        _fs_i=$(stat -c '%d:%i' "$_fs_nm" 2>/dev/null || stat -f '%d:%i' "$_fs_nm" 2>/dev/null || true)
+    if [ -n "$_fs_i" ]; then
+        [ "$_fs_i" = "$2" ] || return 1
+    else
+        _fs_n=$(printf '%s\n' "$_fs_l" | sed -n 's/^i//p')
         [ -n "$_fs_n" ] && [ "$_fs_n" = "${2##*:}" ] || return 1
-    [ -z "$3" ] && return 0
+    fi
+    [ -z "${3:-}" ] && return 0
     _fs_u=$(printf '%s\n' "$_fs_l" | sed -n 's/^u//p')
     case $_fs_u in ''|*[!0-9]*)
         # lsof u 字段给不出数字 uid 时按 vnode 名补 stat——名缺失
         #（已删件）即拒：属主拿不到=fail closed。
-        _fs_nm=$(printf '%s\n' "$_fs_l" | sed -n 's/^n//p')
         [ -n "$_fs_nm" ] && \
             _fs_u=$(stat -c %u "$_fs_nm" 2>/dev/null || stat -f %u "$_fs_nm" 2>/dev/null || true)
         ;;

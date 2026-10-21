@@ -64,11 +64,13 @@ public static class UpdaterBootstrapParityTests
         // stdout/stderr 异步消费：任一管道写满未消费会把子进程卡在写端。
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
+        // WaitAll 带时限兜底——Kill 不杀进程树，孙进程继承管道会让
+        // ReadToEndAsync 无 EOF 悬挂（超时 kill 腿恰是最需要现场的形态）。
         if (!process.WaitForExit(60_000))
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
-            Task.WaitAll(stdout, stderr);
-            if (!string.IsNullOrEmpty(stderr.Result))
+            Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(5));
+            if (stderr.IsCompleted && !string.IsNullOrEmpty(stderr.Result))
             {
                 Console.Error.Write(stderr.Result);
             }
@@ -651,8 +653,8 @@ public static class UpdaterBootstrapParityTests
             if (!process.WaitForExit(60_000))
             {
                 try { process.Kill(); } catch (InvalidOperationException) { }
-                Task.WaitAll(stdout, stderr);
-                if (!string.IsNullOrEmpty(stderr.Result))
+                Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(5));
+                if (stderr.IsCompleted && !string.IsNullOrEmpty(stderr.Result))
                 {
                     Console.Error.Write(stderr.Result);
                 }
@@ -1571,8 +1573,8 @@ public static class UpdaterBootstrapParityTests
         if (!process.WaitForExit(60_000))
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
-            Task.WaitAll(stdout, stderr);
-            if (!string.IsNullOrEmpty(stderr.Result))
+            Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(5));
+            if (stderr.IsCompleted && !string.IsNullOrEmpty(stderr.Result))
             {
                 Console.Error.Write(stderr.Result);
             }
