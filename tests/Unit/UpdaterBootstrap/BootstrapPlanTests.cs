@@ -801,8 +801,31 @@ public sealed class BootstrapPlanTests : TempBase
     public void PkgApply_Sweep_SymlinkDir_LinkOnlyRemoved()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "目录链接创建在 Windows 需特权");
-        // 契约名目是链接：mv 钉名后复核 LinkTarget——只摘链不跟目标删件。
+        // 契约名目是链接：mv 钉名后复核链本体——只摘链不跟目标删件。
+        // 龄门对链取链自身 mtime（lstat 口径，sh find -P 同款），新建链恒新
+        // ——注入未来截点让本条确定性走"陈旧"分支。
         var tempRoot = Path.Combine(Root, "sweep-link");
+        var victim = Path.Combine(tempRoot, "victim-dir");
+        Directory.CreateDirectory(victim);
+        var keep = Path.Combine(victim, "keep.txt");
+        File.WriteAllText(keep, "k");
+        var link = Path.Combine(tempRoot, "bundler-pkg.link");
+        Directory.CreateSymbolicLink(link, victim);
+
+        PkgApplyPlan.SweepStaleStageDirs(tempRoot, DateTime.UtcNow.AddHours(1));
+
+        Assert.False(Path.Exists(link));
+        Assert.True(File.Exists(keep));
+        Assert.True(Directory.Exists(victim));
+    }
+
+    [Fact]
+    public void PkgApply_Sweep_FreshLink_StaleTarget_LinkSurvives()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "目录链接创建在 Windows 需特权");
+        // 龄门按链自身 mtime（lstat）：链新目标旧→链不收——链接名目永不
+        // 被跟到目标上删件是安全契约，本断言反向钉住"不跟"语义。
+        var tempRoot = Path.Combine(Root, "sweep-freshlink");
         var victim = Path.Combine(tempRoot, "victim-dir");
         Directory.CreateDirectory(victim);
         var keep = Path.Combine(victim, "keep.txt");
@@ -813,7 +836,7 @@ public sealed class BootstrapPlanTests : TempBase
 
         PkgApplyPlan.SweepStaleStageDirs(tempRoot);
 
-        Assert.False(Path.Exists(link));
+        Assert.True(Path.Exists(link));
         Assert.True(File.Exists(keep));
         Assert.True(Directory.Exists(victim));
     }

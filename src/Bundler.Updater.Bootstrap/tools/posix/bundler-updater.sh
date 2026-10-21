@@ -372,6 +372,16 @@ _pa_sweep_stages() {
         _held="${_d}.sweep.$$"
         [ -e "$_held" ] || [ -L "$_held" ] && continue
         mv -n "$_d" "$_held" 2>/dev/null || continue
+        # mv -n 只在 dest/basename 撞件时不搬——held 撞"目录/链→目录"形态仍
+        # 会把 _d 嵌套进去（GNU/BSD/busybox 同模型，第 38 轮实证）。嵌套检
+        # 测：held 名下出现 _d 本名即搬回原名，held 撞名目留待下轮再扫。
+        if [ -e "$_held/${_d##*/}" ] || [ -L "$_held/${_d##*/}" ]; then
+            mv "$_held/${_d##*/}" "$_d" 2>/dev/null || true
+            continue
+        fi
+        # -n 静默不搬（held 撞文件/链名目）时 _held 不在或非目录——_d 原位
+        # 保留，下轮换名重扫。
+        [ -d "$_held" ] || [ -L "$_held" ] || continue
         # mv 钉住的是条目本体：名目本来就是链接（或竞态被换链）时 mv 移的是
         # 链非目标——held 是链则只摘链（龄门口径两侧不同：sh find -P lstat
         # 取链自身 mtime，AOT GetLastWriteTimeUtc 跟链取目标 mtime——陈旧链

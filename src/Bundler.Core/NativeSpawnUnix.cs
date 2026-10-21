@@ -41,6 +41,7 @@ internal static class NativeSpawnUnix
     [DllImport(LibC, SetLastError = true)] private static extern int pipe([Out] int[] fds);
     [DllImport(LibC, SetLastError = true)] private static extern int fcntl(int fd, int cmd, int arg);
     [DllImport(LibC, SetLastError = true)] private static extern int close(int fd);
+    [DllImport(LibC, SetLastError = true)] private static extern int dup2(int oldFd, int newFd);
     [DllImport(LibC, SetLastError = true)] private static extern int access(byte[] path, int mode);
     [DllImport(LibC, SetLastError = true)] private static extern int kill(int pid, int sig);
     [DllImport(LibC, SetLastError = true)] private static extern int waitpid(int pid, out int status, int options);
@@ -250,14 +251,15 @@ internal static class NativeSpawnUnix
                 throw PipeFailure();
             }
 
-            // 子件端落进 0/1/2 自家目标槽（父件 std 描述符关闭语境）时必须搬高：
-            // 本槽位会跳过 dup2 动作，fd 带着 CLOEXEC 进 exec 即被收——子件标准管
-            // 无声死（0 空 stdin、1/2 数据丢入虚空）。dup2(fd,fd) 清 CLOEXEC 是
-            // POSIX 后期扩展语义，三家 libc 面不齐——F_DUPFD_CLOEXEC 原子复刻到
-            // ≥3 是唯一语义确定的等价形，之后照旧走 dup2+close 动作对。
-            RelocateStdSlotFd(stdinPipe, 0, 0);
-            RelocateStdSlotFd(stdoutPipe, 1, 1);
-            RelocateStdSlotFd(stderrPipe, 1, 2);
+            // 子件端落进 0/1/2 标准槽带（父件 std 描述符关闭语境）必须整体
+            // 搬离：占自家目标槽会跳过 dup2 动作→fd 带 CLOEXEC 进 exec 即被
+            // 收；占别家目标槽会被前序 dup2 覆写——两者都是子件标准管无声死
+            //（0 空 stdin、1/2 数据丢入虚空）。dup2(fd,fd) 清 CLOEXEC 与
+            // F_DUPFD_CLOEXEC 都有跨 libc/ABI 的语义或调用面缺口——
+            // F_GETFD 探测+dup2 搬走是跨三家 libc 与 ARM64 变参 ABI 的确定形。
+            RelocateStdSlotFd(stdinPipe, 0);
+            RelocateStdSlotFd(stdoutPipe, 1);
+            RelocateStdSlotFd(stderrPipe, 1);
 
             var spawn = SpawnOnWorkerThread(exeBytes, cwdBytes, argv, envp,
                 stdinPipe[0], stdoutPipe[1], stderrPipe[1],
@@ -754,27 +756,36 @@ internal static class NativeSpawnUnix
 
     private static Win32Exception PipeFailure() => new(Marshal.GetLastWin32Error(), "pipe/fcntl failed.");
 
-    // F_DUPFD_CLOEXEC：复刻到 ≥min 槽位并原子带 CLOEXEC（dup+fcntl 两步形有
-    // 并发 spawn 继承未收口 fd 的微窗）。平台常数：Linux glibc/musl=1030，
-    // macOS libSystem=67；宿主矩阵仅 Linux/macOS——若扩 BSD 系须按平台增补
-    //（FreeBSD=17）。
-    private static readonly int s_fdDupfdCloexec = s_darwin ? 67 : 1030;
+    // F_GETFD：内核忽略第三参——Apple ARM64 变参 ABI（变参走栈、P/Invoke
+    // 按定参放寄存器）下 arg 递不到也无害，探测空槽跨 ABI 语义确定；
+    // F_DUPFD_CLOEXEC 同位场景 arg 是必须参数会吃到垃圾（CI 实证 EINVAL），
+    // 不可用。F_GETFD=1 全平台同值。
+    private const int F_GETFD = 1;
 
-    // 管端落在其 dup2 目标槽本身时搬离——见 SpawnCore 调用点注释。
-    private static void RelocateStdSlotFd(int[] fds, int index, int target)
+    // 子件端管端落进 0/1/2 标准槽带（父件 std 描述符被关语境）时整体搬离：
+    // 占自家 dup2 目标槽会跳过 dup2 动作→fd 带 CLOEXEC 进 exec 即被收；占
+    // 别家目标槽会被前序 dup2 提前覆写——两者都是子件标准管无声死。dup2
+    // 固定两参跨 ABI 语义确定；搬出后 fd 不带 CLOEXEC——并发 spawn 微窗可
+    // 继承（同 pipe()→SetCloexec 既有残余窗，addclose 终归零）；探测→dup2
+    // 之间他线程抢开同号会被覆写（µs 级窗，登记为已知残余）。
+    private static void RelocateStdSlotFd(int[] fds, int index)
     {
         var fd = fds[index];
-        if (fd != target)
+        if (fd < 0 || fd > 2)
         {
             return;
         }
-        var moved = fcntl(fd, s_fdDupfdCloexec, 3);
-        if (moved < 0)
+        var slot = 3;
+        while (fcntl(slot, F_GETFD, 0) >= 0)
+        {
+            slot++;
+        }
+        if (dup2(fd, slot) < 0)
         {
             throw PipeFailure();
         }
-        fds[index] = moved;
-        _ = close(target); // 原件已复刻——槽位 CLOEXEC 管端父件侧即关，不遗入子件。
+        fds[index] = slot;
+        _ = close(fd);
     }
 
     // 槽位关闭一并置 -1：两关之间 fd 号可被并发 open 复用——关后不置 -1，

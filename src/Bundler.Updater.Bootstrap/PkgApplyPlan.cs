@@ -300,7 +300,7 @@ internal static class PkgApplyPlan
     {
         try
         {
-            SweepStaleStageDirs(Path.GetTempPath());
+            SweepStaleStageDirs(Path.GetTempPath(), DateTime.UtcNow.AddHours(-24));
         }
         catch (Exception)
         {
@@ -308,20 +308,33 @@ internal static class PkgApplyPlan
     }
 
     // tempRoot 参数化是测试缝——生产侧恒 Path.GetTempPath()。
-    internal static void SweepStaleStageDirs(string tempRoot)
+    internal static void SweepStaleStageDirs(string tempRoot) =>
+        SweepStaleStageDirs(tempRoot, DateTime.UtcNow.AddHours(-24));
+
+    // cutoff 注入是测试缝——链接名目按自身 mtime（lstat 口径）判龄，注入
+    // 未来截点让新建件也计陈旧，清扫路径确定性可达。
+    internal static void SweepStaleStageDirs(string tempRoot, DateTime cutoff)
     {
-        var cutoff = DateTime.UtcNow.AddHours(-24);
         string[] dirs;
         try
         {
             // sh 腿建 bundler-pkg.XXXX（mktemp -d）、AOT 建 bundler-pkg-<guid>——
-            // 两种本契约名都收（跨实现残件互不漏）。
-            dirs = Directory.GetDirectories(tempRoot, "bundler-pkg*")
+            // 两种本契约名都收（跨实现残件互不漏）。枚举走全量 fs 条目：契约
+            // 名目下冒出来的链接（指向谁家的目录都算）同样按条目自身龄收——
+            // GetLastWriteTimeUtc 对链接取链自身 mtime（lstat 口径，不跟目标）。
+            dirs = Directory.GetFileSystemEntries(tempRoot, "bundler-pkg*")
                 .Where(d =>
                 {
                     var name = Path.GetFileName(d);
-                    return name.StartsWith("bundler-pkg-", StringComparison.Ordinal) ||
-                           name.StartsWith("bundler-pkg.", StringComparison.Ordinal);
+                    if (!name.StartsWith("bundler-pkg-", StringComparison.Ordinal) &&
+                        !name.StartsWith("bundler-pkg.", StringComparison.Ordinal))
+                    {
+                        return false;
+                    }
+                    var attr = File.GetAttributes(d);
+                    // 真目录或任意链接名目才进扫（链→文件/悬空链同为残件名目）；
+                    // 裸常规件不符契约，跳过。
+                    return (attr & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0;
                 }).ToArray();
         }
         catch (Exception)
@@ -351,14 +364,25 @@ internal static class PkgApplyPlan
     private static void SweepOne(string dir)
     {
         var held = dir + ".sweep-" + Environment.ProcessId;
-        Directory.Move(dir, held);
+        // 链接名目也进扫：File.Move(rename) 搬链本体不跟目标；真目录走
+        // Directory.Move。名目 held 撞已存在件时 Move 抛异常→上层 catch 跳
+        // 过，_d 原位留待下轮。
+        if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0)
+        {
+            File.Move(dir, held);
+        }
+        else
+        {
+            Directory.Move(dir, held);
+        }
         try
         {
             // mv 后复核名目身份——held 若还是链接（判龄后名目被换链、mv 移的
-            // 是链非目标）只摘链即收工，绝不对链接路径枚举删件。
-            if (new DirectoryInfo(held).LinkTarget is not null)
+            // 是链非目标）只摘链即收工，绝不对链接路径枚举删件。File.Delete
+            // 对链接（含链→目录）走 unlink 摘链节点，不触目标。
+            if ((File.GetAttributes(held) & FileAttributes.ReparsePoint) != 0)
             {
-                Directory.Delete(held);
+                File.Delete(held);
                 return;
             }
             var flat = true;
