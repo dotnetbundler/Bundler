@@ -44,5 +44,7 @@
   <ItemGroup>
     <!-- 任意绝对路径映射演示：/etc/hello-alpine-apk-app/defaults.conf。 -->
     <BundlerAlpineApkFile Include="$(HelloBundlerAppAssets)apk/defaults.conf" Destination="/etc/hello-alpine-apk-app/defaults.conf" />
+    <!-- 任意 .PKGINFO 键值追加：ItemSpec 为键、Value 元数据为值（如 install_if 条件安装）。 -->
+    <BundlerAlpineApkExtraPkgInfo Include="$(HelloBundlerApkExtraPkgInfoKey)" Value="$(HelloBundlerApkExtraPkgInfoValue)" Condition="'$(HelloBundlerApkExtraPkgInfoKey)' != ''" />
   </ItemGroup>
 </Project>
