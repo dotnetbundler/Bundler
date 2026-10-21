@@ -489,6 +489,21 @@ internal static class NativeSpawnUnix
             if ((rc = posix_spawn_file_actions_adddup2(actions, stderrW, 2)) != 0) { return rc; }
             if ((rc = posix_spawn_file_actions_addclose(actions, stderrW)) != 0) { return rc; }
         }
+        // Darwin CLOEXEC_DEFAULT 兜底把一切未被 file_actions 触及的 fd 关尽——
+        // 未重定向的标准流必须显式 adddup2(n,n) 钉名才得保留（dup2(n,n) 语义
+        // no-op，仅作"该槽已接管"登记），否则子件静默失去 stdio：CI 实证
+        // 无 --log 的 updater 腿 stderr 被收、写日志即死于非受控异常。父件
+        // 该槽本闭时跳过（adddup2 钉闭槽会让整个 spawn EBADF）；开闭判定
+        // 用 dup() 探测——非变参、跨 ABI 确定。
+        if (s_darwin)
+        {
+            if (stdinR < 0 && StdFdOpen(0) &&
+                (rc = posix_spawn_file_actions_adddup2(actions, 0, 0)) != 0) { return rc; }
+            if (stdoutW < 0 && StdFdOpen(1) &&
+                (rc = posix_spawn_file_actions_adddup2(actions, 1, 1)) != 0) { return rc; }
+            if (stderrW < 0 && StdFdOpen(2) &&
+                (rc = posix_spawn_file_actions_adddup2(actions, 2, 2)) != 0) { return rc; }
+        }
         // 父件端 addclose：fd 值落在 0-2 且该槽恰是前序 dup2 目标时跳过——
         // 父件 std 全关场景管道端可占入 0/1/2，此时该数字指向刚装上的排水口
         //（dup2 已把原槽位覆写——无父件端可关），误关即断该标准管。
@@ -805,6 +820,20 @@ internal static class NativeSpawnUnix
         }
         fds[index] = moved;
         _ = close(fd);
+    }
+
+    // 标准槽开闭探测：dup(fd) 对闭槽 EBADF、对开槽返复刻（非变参，跨 ABI
+    // 确定）——替代 fcntl(F_GETFD)：后者在 Apple ARM64 变参 ABI 下 arg 递
+    // 不到且 CI 实证返回值不可信。
+    private static bool StdFdOpen(int fd)
+    {
+        var probe = dup(fd);
+        if (probe < 0)
+        {
+            return false;
+        }
+        _ = close(probe);
+        return true;
     }
 
     // 槽位关闭一并置 -1：两关之间 fd 号可被并发 open 复用——关后不置 -1，
