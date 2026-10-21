@@ -364,25 +364,35 @@ internal static class PkgApplyPlan
     private static void SweepOne(string dir)
     {
         var held = dir + ".sweep-" + Environment.ProcessId;
-        // 链接名目也进扫：File.Move(rename) 搬链本体不跟目标；真目录走
-        // Directory.Move。名目 held 撞已存在件时 Move 抛异常→上层 catch 跳
-        // 过，_d 原位留待下轮。
-        if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0)
+        // 链接名目也进扫：rename 搬链本体不跟目标。按条目 attr 分派——
+        // File.Move 见 Directory 位（含链→目录）即拒，故链→目/真目同走
+        // Directory.Move，链→文件/悬空链走 File.Move。
+        var srcAttr = File.GetAttributes(dir);
+        if ((srcAttr & FileAttributes.Directory) != 0)
         {
-            File.Move(dir, held);
+            Directory.Move(dir, held);
         }
         else
         {
-            Directory.Move(dir, held);
+            File.Move(dir, held);
         }
         try
         {
             // mv 后复核名目身份——held 若还是链接（判龄后名目被换链、mv 移的
-            // 是链非目标）只摘链即收工，绝不对链接路径枚举删件。File.Delete
-            // 对链接（含链→目录）走 unlink 摘链节点，不触目标。
-            if ((File.GetAttributes(held) & FileAttributes.ReparsePoint) != 0)
+            // 是链非目标）只摘链即收工，绝不对链接路径枚举删件。链→目录走
+            // Directory.Delete（unlink 摘链节点），其余链接 File.Delete——
+            // 两路都只摘链不触目标。
+            var heldAttr = File.GetAttributes(held);
+            if ((heldAttr & FileAttributes.ReparsePoint) != 0)
             {
-                File.Delete(held);
+                if ((heldAttr & FileAttributes.Directory) != 0)
+                {
+                    Directory.Delete(held);
+                }
+                else
+                {
+                    File.Delete(held);
+                }
                 return;
             }
             var flat = true;

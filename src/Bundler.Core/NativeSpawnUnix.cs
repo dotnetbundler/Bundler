@@ -41,7 +41,7 @@ internal static class NativeSpawnUnix
     [DllImport(LibC, SetLastError = true)] private static extern int pipe([Out] int[] fds);
     [DllImport(LibC, SetLastError = true)] private static extern int fcntl(int fd, int cmd, int arg);
     [DllImport(LibC, SetLastError = true)] private static extern int close(int fd);
-    [DllImport(LibC, SetLastError = true)] private static extern int dup2(int oldFd, int newFd);
+    [DllImport(LibC, SetLastError = true)] private static extern int dup(int fd);
     [DllImport(LibC, SetLastError = true)] private static extern int access(byte[] path, int mode);
     [DllImport(LibC, SetLastError = true)] private static extern int kill(int pid, int sig);
     [DllImport(LibC, SetLastError = true)] private static extern int waitpid(int pid, out int status, int options);
@@ -761,18 +761,16 @@ internal static class NativeSpawnUnix
 
     private static Win32Exception PipeFailure() => new(Marshal.GetLastWin32Error(), "pipe/fcntl failed.");
 
-    // F_GETFD：内核忽略第三参——Apple ARM64 变参 ABI（变参走栈、P/Invoke
-    // 按定参放寄存器）下 arg 递不到也无害，探测空槽跨 ABI 语义确定；
-    // F_DUPFD_CLOEXEC 同位场景 arg 是必须参数会吃到垃圾（CI 实证 EINVAL），
-    // 不可用。F_GETFD=1 全平台同值。
-    private const int F_GETFD = 1;
-
     // 子件端管端落进 0/1/2 标准槽带（父件 std 描述符被关语境）时整体搬离：
     // 占自家 dup2 目标槽会跳过 dup2 动作→fd 带 CLOEXEC 进 exec 即被收；占
-    // 别家目标槽会被前序 dup2 提前覆写——两者都是子件标准管无声死。dup2
-    // 固定两参跨 ABI 语义确定；搬出后 fd 不带 CLOEXEC——并发 spawn 微窗可
-    // 继承（同 pipe()→SetCloexec 既有残余窗，addclose 终归零）；探测→dup2
-    // 之间他线程抢开同号会被覆写（µs 级窗，登记为已知残余）。
+    // 别家目标槽会被前序 dup2 提前覆写——两者都是子件标准管无声死。
+    // 搬离用 dup() 链占槽——dup 恒返最低空槽、非变参：带内空槽逐个占住
+    //（带内一共 3 位、fd 本体已占 1，至多 2 次中转）直到拿到 ≥3 复刻；
+    // 空槽探测/dup2 目标选择全程不需要 fcntl 带参调用（F_DUPFD_CLOEXEC 与
+    // F_GETFD 探测在 Apple ARM64 变参 ABI 下 arg 递不到——CI 实证；dup2
+    // 预取槽位的探测→占用微窗也一并消失）。带内副本即关；搬出后的 fd
+    // 不带 CLOEXEC——并发 spawn 微窗可继承（pipe()→SetCloexec 同款既有
+    // 残余口径，子件端 addclose 动作终归零）。
     private static void RelocateStdSlotFd(int[] fds, int index)
     {
         var fd = fds[index];
@@ -780,30 +778,32 @@ internal static class NativeSpawnUnix
         {
             return;
         }
-        var slot = 3;
-        for (;;)
+        var held0 = -1;
+        var held1 = -1;
+        var moved = dup(fd);
+        if (moved >= 0 && moved <= 2)
         {
-            if (fcntl(slot, F_GETFD, 0) >= 0)
-            {
-                slot++;
-                continue;
-            }
-            var err = Marshal.GetLastWin32Error();
-            if (err == 9 /* EBADF */)
-            {
-                break; // 空槽
-            }
-            if (err != 4 /* EINTR */)
-            {
-                throw PipeFailure();
-            }
-            // EINTR 重试同槽位——信号打断不代表槽位占用。
+            held0 = moved;
+            moved = dup(fd);
         }
-        if (dup2(fd, slot) < 0)
+        if (moved >= 0 && moved <= 2)
+        {
+            held1 = moved;
+            moved = dup(fd);
+        }
+        if (held0 >= 0)
+        {
+            _ = close(held0);
+        }
+        if (held1 >= 0)
+        {
+            _ = close(held1);
+        }
+        if (moved < 0)
         {
             throw PipeFailure();
         }
-        fds[index] = slot;
+        fds[index] = moved;
         _ = close(fd);
     }
 

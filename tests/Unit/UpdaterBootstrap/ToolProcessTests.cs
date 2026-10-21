@@ -277,7 +277,7 @@ public sealed class ToolProcessTests
         Assert.SkipWhen(OperatingSystem.IsWindows(), "fd 槽位碰撞面 POSIX-only");
         // 关本进程 fd0：其后 pipe() 的读端必占 0 号槽——该槽正是子件 stdin 的
         // dup2 目标，占自家槽位时 fd 带 CLOEXEC 进 exec 即被收（子件标准管
-        // 无声死）。修复后 F_GETFD 探测空槽+dup2 搬高→dup2 正常，cat 回声可断言。
+        // 无声死）。修复后 dup() 链占槽搬到 ≥3→dup2 正常，cat 回声可断言。
         _ = close(0);
         try
         {
