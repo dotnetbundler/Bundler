@@ -30,7 +30,9 @@ CONSOLE="$EV/console.log"
 FAILS=""
 
 mkdir -p "$EV" "$W" "$REC" || exit 2
-chmod 0777 "$REC" 2>/dev/null || true
+# --log 父目录复核要求 caller 可写：相位以 SUDO_UID=tester 声明调用 uid，
+# /ev 默认 root 属主 755 → caller 不可写 → rc3——与 REC 同给 o+wx。
+chmod 0777 "$REC" "$EV" 2>/dev/null || true
 : >"$RESULTS"; : >"$CONSOLE"
 
 note() { echo "$*" | tee -a "$RESULTS"; }
