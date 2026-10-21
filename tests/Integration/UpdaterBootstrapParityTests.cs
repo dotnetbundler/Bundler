@@ -70,7 +70,7 @@ public static class UpdaterBootstrapParityTests
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
             Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(5));
-            if (stderr.IsCompleted && !string.IsNullOrEmpty(stderr.Result))
+            if (stderr.IsCompletedSuccessfully && !string.IsNullOrEmpty(stderr.Result))
             {
                 Console.Error.Write(stderr.Result);
             }
@@ -654,7 +654,7 @@ public static class UpdaterBootstrapParityTests
             {
                 try { process.Kill(); } catch (InvalidOperationException) { }
                 Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(5));
-                if (stderr.IsCompleted && !string.IsNullOrEmpty(stderr.Result))
+                if (stderr.IsCompletedSuccessfully && !string.IsNullOrEmpty(stderr.Result))
                 {
                     Console.Error.Write(stderr.Result);
                 }
@@ -1574,7 +1574,7 @@ public static class UpdaterBootstrapParityTests
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
             Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(5));
-            if (stderr.IsCompleted && !string.IsNullOrEmpty(stderr.Result))
+            if (stderr.IsCompletedSuccessfully && !string.IsNullOrEmpty(stderr.Result))
             {
                 Console.Error.Write(stderr.Result);
             }

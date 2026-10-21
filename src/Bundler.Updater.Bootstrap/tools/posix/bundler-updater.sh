@@ -78,18 +78,19 @@ _pa_fd_same() {
     _fs_l=$(lsof -n -a -p "$$" -d "$1" -F tiun 2>/dev/null)
     _fs_t=$(printf '%s\n' "$_fs_l" | sed -n 's/^t//p')
     { [ "$_fs_t" = REG ] || [ "$_fs_t" = VREG ]; } || return 1
-    # dev:ino 全量比对走 vnode 名再 stat（与 check 侧同单位）；lsof 对
-    # 控制字符名转义/已删件无名时退 inode 单分量——残余窗登记：跨 fs
-    # 同 ino 巧合换件的理论缝（仍卡属主集，且攻击者无法自选 ino）。
+    # fd vnode inode 比对为 mandatory——name-stat 只补 dev 分量，不能替代
+    # fd 钉身（exec 开完到 lsof 之间名被换回的话，stat(name) 会指回旧件）。
+    _fs_n=$(printf '%s\n' "$_fs_l" | sed -n 's/^i//p')
+    [ -n "$_fs_n" ] && [ "$_fs_n" = "${2##*:}" ] || return 1
+    # 名可 stat 时叠加 dev:ino 全量比对钉住 dev；lsof 对控制字符名转义/
+    # 已删件无名时只钉 ino——残余窗登记：跨 fs 同 ino 巧合换件的理论缝
+    #（仍卡属主集，且攻击者无法自选 ino）。
     _fs_nm=$(printf '%s\n' "$_fs_l" | sed -n 's/^n//p')
     _fs_i=""
     [ -n "$_fs_nm" ] && \
         _fs_i=$(stat -c '%d:%i' "$_fs_nm" 2>/dev/null || stat -f '%d:%i' "$_fs_nm" 2>/dev/null || true)
     if [ -n "$_fs_i" ]; then
         [ "$_fs_i" = "$2" ] || return 1
-    else
-        _fs_n=$(printf '%s\n' "$_fs_l" | sed -n 's/^i//p')
-        [ -n "$_fs_n" ] && [ "$_fs_n" = "${2##*:}" ] || return 1
     fi
     [ -z "${3:-}" ] && return 0
     _fs_u=$(printf '%s\n' "$_fs_l" | sed -n 's/^u//p')
