@@ -133,6 +133,14 @@ internal static class PayloadSource
                     logger.Log(BundleLogLevel.Warning, $"Skipping non-regular file: {source}");
                     continue;
                 }
+                // 文件源 "." 归一到空会把文件落到 installRoot 自身——目录位
+                // 被文件占用产畸形包，显式拒绝（目录源 "." 合并语义不受影响）。
+                if (target.Length == 0)
+                {
+                    throw new ArgumentException(
+                        $"The resource target for file source '{resource.Source}' must name " +
+                        $"a path inside the payload, not the install root itself: '{resource.Destination}'.");
+                }
                 var item = new PayloadSourceItem(
                     PayloadSourceKind.File, archiveBase, source, FileMode);
                 allItems.Add(item);
@@ -320,7 +328,7 @@ internal static class PayloadSource
             return;
         }
         var emitted = emittedItems
-            .Select(item => item.ArchivePath)
+            .Select(item => CanonicalArchivePath(item.ArchivePath))
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToList();
         foreach (var link in links)
@@ -380,10 +388,17 @@ internal static class PayloadSource
             }
             segments.Add(segment);
         }
-        // 归档路径绝对形（installRoot 以 '/' 起头）——归一化吃掉空段后补回根，
-        // 与出件条目的 ArchivePath 保持同形才能比对。
-        return "/" + string.Join("/", segments);
+        // 规范相对形（无前导 '/'）——installRoot 形态随后端不同（rpm 绝对、
+        // deb/apk/AppImage 相对），比对两侧统一走 CanonicalArchivePath。
+        return string.Join("/", segments);
     }
+
+    // 归档路径归一：去前导 '/'、折叠空/'.' 段——后端 installRoot 形态不同
+    //（deb/apk/AppImage 相对、rpm 绝对），覆盖核查与比对统一在规范相对形
+    // 上进行，否则绝对/相对失配会让 Ordinal 二分永不命中。
+    private static string CanonicalArchivePath(string path) =>
+        string.Join("/", path.Replace('\\', '/').Split('/')
+            .Where(segment => segment.Length > 0 && segment != "."));
 
     private static bool IsLink(string path)
     {

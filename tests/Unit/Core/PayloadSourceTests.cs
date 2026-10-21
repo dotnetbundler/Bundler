@@ -334,6 +334,60 @@ public sealed class PayloadSourceTests : TempBase
     }
 
     [Fact]
+    public void CollectResources_Link_RelativeInstallRoot_NotFalselyRejected()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows 宿主上目录链接统一拒绝");
+        var root = Temp("bundler-res-rel");
+        Directory.CreateDirectory(Path.Combine(root.FullName, "libs"));
+        File.WriteAllText(Path.Combine(root.FullName, "libs", "real.so"), "lib");
+        var link = Path.Combine(root.FullName, "link");
+        if (!TryCreateLink(link, "libs", directory: true))
+        {
+            Assert.Skip("The host cannot create directory links; link leg unverifiable.");
+        }
+
+        // deb/apk/AppImage 形 installRoot 无前导 '/'——覆盖核查两侧须在
+        // 规范相对形上比对，否则 resolved 绝对形对 emitted 相对形永不命中
+        // 恒误拒（Local Review 回归）。
+        var items = PayloadSource.CollectResources(
+            [new BundleResourceConfiguration { Source = root.FullName, Destination = "res" }],
+            "usr/lib/pkg", NullBundleLogger.Instance).ToArray();
+
+        Assert.Contains(items, i => i.ArchivePath == "usr/lib/pkg/res/link");
+        Assert.Contains(items, i => i.ArchivePath == "usr/lib/pkg/res/libs/real.so");
+    }
+
+    [Fact]
+    public void CollectResources_DestinationDot_MergesIntoInstallRoot()
+    {
+        var root = Temp("bundler-res-dot");
+        File.WriteAllText(Path.Combine(root.FullName, "a.txt"), "a");
+
+        // "." 归一到空 = 载荷根合并（既有契约）——installRoot 下直接落件。
+        var items = PayloadSource.CollectResources(
+            [new BundleResourceConfiguration { Source = root.FullName, Destination = "." }],
+            "/opt/app", NullBundleLogger.Instance).ToArray();
+
+        Assert.Contains(items, i => i.ArchivePath == "/opt/app/a.txt");
+        Assert.DoesNotContain(items, i => i.ArchivePath.Contains("/./"));
+    }
+
+    [Fact]
+    public void CollectResources_DestinationDot_FileSource_Rejected()
+    {
+        var file = TempPath("bundler-res-dot-file.txt");
+        File.WriteAllText(file, "x");
+
+        // 文件源 "." 归一到空会落到 installRoot 自身路径——显式拒绝。
+        var ex = Assert.Throws<ArgumentException>(() =>
+            PayloadSource.CollectResources(
+                [new BundleResourceConfiguration { Source = file, Destination = "." }],
+                "/opt/app", NullBundleLogger.Instance).ToArray());
+        Assert.Contains("install root", ex.Message);
+    }
+
+    [Fact]
     public void CollectResources_LinkDirMaskedBySiblingName_Allowed()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(),

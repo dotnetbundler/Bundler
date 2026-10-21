@@ -229,7 +229,12 @@ _pa_log_open() {
     fi
     # 三重复核（普通件+dev:ino 同件+属主落调用 uid 或本进程 euid）收进
     # _pa_fd_same——devfs 宿主的 fd 复核由该函数内 lsof 兜底。
-    if ! _pa_fd_same 9 "$_li" "$_lu $(id -u 2>/dev/null)"; then
+    # 调用者即 root：属主白名单放空（_pa_fd_same 空白名单=只验 dev:ino
+    # 件身）——与 AOT CallerIsRoot 直通同口径，异主既有/抢建件在 root
+    # 语境下不再被白名单死闸误拒。
+    _fu=""
+    [ "$_lu" != "0" ] && _fu="$_lu $(id -u 2>/dev/null)"
+    if ! _pa_fd_same 9 "$_li" "$_fu"; then
         exec 9>&-
         return 1
     fi
@@ -360,11 +365,15 @@ _pa_sweep_stages() {
         [ -n "$(find "$_d" -prune -mmin +1440 -print 2>/dev/null)" ] || continue
         # 钉名：先 mv 私有名——判龄到删件窗内名目被换链的风险归零；
         # .sweep.$$ 后缀仍在 bundler-pkg* glob 面内，弃收件下轮重扫不丢。
+        # held 名目撞已有目（跨进程 PID 复用残留）时 mv 会把 _d 嵌套进去
+        # 产永久弃收件——在场即跳过，留待下轮换名再扫。
         _held="${_d}.sweep.$$"
+        [ -e "$_held" ] || [ -L "$_held" ] && continue
         mv "$_d" "$_held" 2>/dev/null || continue
         # mv 钉住的是条目本体：名目本来就是链接（或竞态被换链）时 mv 移的是
-        # 链非目标——held 是链则只摘链（龄门对链取的是目标 mtime，与 AOT
-        # SweepOne 的 LinkTarget 复核同语义）。
+        # 链非目标——held 是链则只摘链（龄门对链取链自身 mtime——find 默认
+        # -P 走 lstat；AOT SweepOne 取目标 mtime，两侧口径不同但结局一致：
+        # 链只被摘除不触目标）。
         if [ -L "$_held" ]; then rm -f "$_held" 2>/dev/null; continue; fi
         # 契约暂存目只装平铺常规件——逐条只删条目本体：链接 rm -f 只摘链
         # 不跟目标；真目录（含 FUSE/bind 挂载点）出现即整体弃收。root 侧
