@@ -126,36 +126,25 @@ public sealed class WindowsExternalCommandSignerTests
             WindowsExternalCommandSigner.Expand("%10", Request, "p"));
     }
 
+    // Windows argv 引号在 Core ToolProcess.QuoteWin——恒加引（CommandLineToArgvW
+    // 剥壳后 argv 等价），语义单源统一，不再是签名器私件。
     [Fact]
-    public void Quote_NoSpecialChars_PassThrough()
+    public void QuoteWin_NoSpecialChars_Wrapped()
     {
-        Assert.Equal("abc.exe", WindowsExternalCommandSigner.Quote("abc.exe"));
+        Assert.Equal("\"abc.exe\"", DotNet.Bundler.Core.ToolProcess.QuoteWin("abc.exe"));
     }
 
     [Fact]
-    public void Quote_Spaces_Wrapped()
+    public void QuoteWin_InnerQuote_Escaped()
     {
-        Assert.Equal("\"a b\"", WindowsExternalCommandSigner.Quote("a b"));
+        Assert.Equal("\"a\\\"b\"", DotNet.Bundler.Core.ToolProcess.QuoteWin("a\"b"));
     }
 
     [Fact]
-    public void Quote_InnerQuote_Escaped()
-    {
-        Assert.Equal("\"a\\\"b\"", WindowsExternalCommandSigner.Quote("a\"b"));
-    }
-
-    [Fact]
-    public void Quote_NoWhitespace_PassThrough()
-    {
-        // 无空格/引号不包引号——尾部反斜杠原样
-        Assert.Equal("dir\\", WindowsExternalCommandSigner.Quote("dir\\"));
-    }
-
-    [Fact]
-    public void Quote_SpacedPathTrailingSlash_SlashesDoubled()
+    public void QuoteWin_SpacedPathTrailingSlash_SlashesDoubled()
     {
         // argv 解析规则：包引号时收尾反斜杠须翻倍防吞引号
-        Assert.Equal("\"dir \\\\\"", WindowsExternalCommandSigner.Quote("dir \\"));
+        Assert.Equal("\"dir \\\\\"", DotNet.Bundler.Core.ToolProcess.QuoteWin("dir \\"));
     }
 
     [Fact]

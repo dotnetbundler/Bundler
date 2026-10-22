@@ -778,11 +778,11 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.Equal("dpkg -s myapp", lines[0]);
         Assert.StartsWith(
             $"pkexec {install}/bundler-updater pkg-apply --pkg {retained} " +
-            $"--format deb --app {Path.GetFullPath(app)} --env-file {staging}/pkg-",
+            $"--sha256 {Sha256Hex(artifact)} --format deb --app {Path.GetFullPath(app)} --env-file {staging}/pkg-",
             lines[1]);
         Assert.EndsWith("/session.env", lines[1]);
         Assert.StartsWith(
-            $"updater pkg-apply --pkg {retained} --format deb --app {Path.GetFullPath(app)} --env-file ",
+            $"updater pkg-apply --pkg {retained} --sha256 {Sha256Hex(artifact)} --format deb --app {Path.GetFullPath(app)} --env-file ",
             lines[2]);
         // env 件内容随 rec 回收：HOME 随行 + 显式注入的会话键。
         // 垫片的 env{...} 倾倒段是独立 >> 追加——拉起即退语义下行数门槛不保证
@@ -855,7 +855,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         // sudo 垫片记的是它自己看到的 argv：-S -p '' -- 前缀 + verb argv 逐字。
         Assert.Contains(
             $"sudo -S -p  -- {install}/bundler-updater pkg-apply --pkg {retained} " +
-            $"--format deb --app {Path.GetFullPath(app)}", text);
+            $"--sha256 {Sha256Hex(artifact)} --format deb --app {Path.GetFullPath(app)}", text);
         Assert.Contains($"updater pkg-apply --pkg {retained}", text);
     }
 
@@ -905,7 +905,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         var retained = Path.Combine(retention, "myapp_2.0-1_amd64.deb");
         Assert.Contains(
             $"sudo -- {install}/bundler-updater pkg-apply --pkg {retained} " +
-            $"--format deb --app {Path.GetFullPath(app)}", text);
+            $"--sha256 {Sha256Hex(artifact)} --format deb --app {Path.GetFullPath(app)}", text);
         Assert.Contains($"updater pkg-apply --pkg {retained}", text);
     }
 
@@ -1019,11 +1019,11 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         Assert.Equal("rpm -q myapp", lines[0]);
         Assert.StartsWith(
             $"pkexec {install}/bundler-updater pkg-apply --pkg {retained} " +
-            $"--format rpm --app {Path.GetFullPath(app)} --env-file {staging}/pkg-",
+            $"--sha256 {Sha256Hex(artifact)} --format rpm --app {Path.GetFullPath(app)} --env-file {staging}/pkg-",
             lines[1]);
         Assert.EndsWith("/session.env", lines[1]);
         Assert.StartsWith(
-            $"updater pkg-apply --pkg {retained} --format rpm --app {Path.GetFullPath(app)} --env-file ",
+            $"updater pkg-apply --pkg {retained} --sha256 {Sha256Hex(artifact)} --format rpm --app {Path.GetFullPath(app)} --env-file ",
             lines[2]);
         // env 件内容随 rec 回收：垫片 env{...} 倾倒段独立 >> 追加——
         // 与 deb 腿同口径对 "env-mode" 尾行做内容轮询再断言。
@@ -1168,7 +1168,7 @@ public sealed class UpdateClientChainTests : IClassFixture<UpdateClientChainFixt
         // --rollback 之间，故按行断言首/尾而不钉中间段。
         Assert.StartsWith(
             $"pkexec {install}/bundler-updater pkg-apply --pkg {oldPkg} " +
-            $"--format deb --app {Path.GetFullPath(app)}", lines[1]);
+            $"--sha256 {Sha256Hex(oldPkg)} --format deb --app {Path.GetFullPath(app)}", lines[1]);
         Assert.EndsWith("--rollback", lines[1]);
         Assert.StartsWith($"updater pkg-apply --pkg {oldPkg}", lines[2]);
         Assert.EndsWith("--rollback", lines[2]);

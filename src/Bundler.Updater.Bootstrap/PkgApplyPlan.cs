@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using DotNet.Bundler.Updater.Protocol;
 
 namespace DotNet.Bundler.Updater.Bootstrap;
 
@@ -91,6 +92,9 @@ internal static class PkgApplyPlan
         // sh 侧 awk 缺席走 PA_UID_FAIL→拒重启（rc6）的分流在 AOT 天然无对应物。
         var uid = ParseUid(GetEnv("PKEXEC_UID")) ?? ParseUid(GetEnv("SUDO_UID"));
         var passwd = uid is { } id ? LookupPasswd(id) : null;
+        // SIGKILL 留下的上轮暂存目兜底清扫（finally/EXIT trap 管不到强杀路径）。
+        SweepStaleStageDirs();
+        var staged = "";
         try
         {
             // --env-file 校验+读定在装包前（sh _pa_env_validate 同位，rc3 拒绝
@@ -100,8 +104,13 @@ internal static class PkgApplyPlan
             // 挂死 root 进程、symlink 可把 root 私有件内容灌进降权 app 的 env
             //（用户经 /proc/<app>/environ 读回）。
             var envLines = ReadEnvFile(options.EnvFile, uid);
+            // root 侧核验+暂存（客户端验签→root 读件 TOCTOU 收口）：包先复制进
+            // root 私有临时目录，--sha256 给了就对暂存副本复核——客户端验签算出的
+            // 哈希与 root 实际要装的字节逐位绑定，验后替换窗归零；装期间原路径被
+            // 改写也影响不了本轮回放（装的是快照非引用）。
+            staged = StagePackage(pkg, options.PackageSha256, log);
             var attempted = false;
-            foreach (var step in InstallChain(options, pkg))
+            foreach (var step in InstallChain(options, staged))
             {
                 var tool = ResolveCommand(step.Tool);
                 if (tool is null)
@@ -134,11 +143,180 @@ internal static class PkgApplyPlan
         }
         finally
         {
+            // 暂存副本随进程回收——成功/失败/拒绝路径全清（sh _pa_stage_cleanup 同义）。
+            if (staged.Length > 0)
+            {
+                CleanupStage(Path.GetDirectoryName(staged)!);
+            }
             // --env-file 是客户端 <staging>/pkg-<guid>/session.env 一次性输入——
             // 消费完（或装失败确定不消费）即删件与 pkg-* 暂存目录；客户端拉起即退
             // 后删不了，残件兜底在客户端拉起腿退出删余（Exited 钩/速退内联）与 24h staging 清扫。
             CleanupEnvFile(options.EnvFile);
         }
+    }
+
+    // 暂存到 root 私有目录 + --sha256 复核（sh pkg_apply 暂存段同义）：
+    // 返回暂存副本路径（其父目录即待清暂存根）。核验失败/复制失败抛异常归 rc4——
+    // 字节不符是篡改/腐坏信号，确定性拒绝不降级装原件。
+    private static string StagePackage(string pkg, string? expectedHex, Action<string> log)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "bundler-pkg-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        if (!OperatingSystem.IsWindows())
+        {
+            try
+            {
+                File.SetUnixFileMode(dir,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+            catch (Exception)
+            {
+            }
+        }
+        var staged = Path.Combine(dir, Path.GetFileName(pkg));
+        try
+        {
+            CopyPackage(pkg, staged);
+            if (expectedHex is { Length: > 0 })
+            {
+                var actual = Sha256Hex(staged);
+                if (!string.Equals(actual, expectedHex, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new UpdateRejectedException(
+                        $"package sha256 mismatch — expected {expectedHex}, staged copy hashed {actual}.");
+                }
+                log($"bundler-updater: package sha256 verified ({actual.Substring(0, 12)}…)");
+            }
+            return staged;
+        }
+        catch
+        {
+            CleanupStage(dir);
+            throw;
+        }
+    }
+
+    private static void CleanupStage(string dir)
+    {
+        try
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    // 判存→open 的类型替换窗收口（与 --env-file 同一威胁形）：包件是用户可写
+    // 路径，-f 判存后 open 前被换成 fifo/设备会让 root 进程挂死 open 或无限量
+    // 读设备件。POSIX 走 OpenWithDeadline 有界开件（fifo 阻塞 5s 收口）+ fstat
+    // 钉住 inode 复核 S_IFREG + 按 fstat 尺寸封顶拷贝——并发 append 流不进本
+    // 轮副本（内容篡改另由 --sha256 闸收）。Windows 无同形 fifo 换件面，File.Copy。
+    // 残余：NFS/FUSE 挂起读属内核 D-state，两侧（本循环/sh `timeout cp`）都杀
+    // 不动——与用户态可控窗不同级，登记为宿主层边界。
+    private static void CopyPackage(string source, string staged)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            File.Copy(source, staged);
+            return;
+        }
+        var fd = NativeMethods.OpenWithDeadline(source);
+        if (fd == NativeMethods.InvalidFd)
+        {
+            throw new UpdateRejectedException(
+                $"package '{source}' could not be opened for staging.");
+        }
+        try
+        {
+            if (!NativeMethods.TryFStat(fd, out var status) ||
+                !NativeMethods.IsRegularMode(status))
+            {
+                throw new UpdateRejectedException(
+                    $"package '{source}' is not a regular file — refusing to stage.");
+            }
+            // 句柄先行包、归属即移交——FileStream ctor 抛时只剩 SafeFileHandle
+            // 终结器收口，finally 不再二次 Close 同一 fd 号（号复用窗口免疫）。
+            var handle = new Microsoft.Win32.SafeHandles.SafeFileHandle(fd, ownsHandle: true);
+            fd = NativeMethods.InvalidFd;
+            using var input = new FileStream(handle, FileAccess.Read);
+            using var output = new FileStream(
+                staged, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            // 按 fstat 尺寸封顶：读满即停（提前 EOF→sha256 闸收；追加内容不进来）。
+            var remaining = status.Size;
+            var buffer = new byte[81920];
+            while (remaining > 0)
+            {
+                var read = input.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                if (read == 0)
+                {
+                    break;
+                }
+                output.Write(buffer, 0, read);
+                remaining -= read;
+            }
+        }
+        finally
+        {
+            if (fd != NativeMethods.InvalidFd)
+            {
+                NativeMethods.Close(fd);
+            }
+        }
+    }
+
+    // SIGKILL 残件兜底：EXIT/finally 清不到被强杀的进程——按名+龄清扫本轮
+    // 之前的暂存目（默认 24h，客户端 SweepStaleStaging 同龄口径）。root 侧
+    // /tmp 跨进程共享，只动 bundler-pkg-* 本契约名。
+    private static void SweepStaleStageDirs()
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-24);
+        string tempRoot;
+        try
+        {
+            tempRoot = Path.GetTempPath();
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        string[] dirs;
+        try
+        {
+            // sh 腿建 bundler-pkg.XXXX（mktemp -d）、AOT 建 bundler-pkg-<guid>——
+            // 两种本契约名都收（跨实现残件互不漏）。
+            dirs = Directory.GetDirectories(tempRoot, "bundler-pkg*")
+                .Where(d =>
+                {
+                    var name = Path.GetFileName(d);
+                    return name.StartsWith("bundler-pkg-", StringComparison.Ordinal) ||
+                           name.StartsWith("bundler-pkg.", StringComparison.Ordinal);
+                }).ToArray();
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        foreach (var dir in dirs)
+        {
+            try
+            {
+                if (Directory.GetLastWriteTimeUtc(dir) < cutoff)
+                {
+                    Directory.Delete(dir, recursive: true);
+                }
+            }
+            catch (Exception)
+            {
+            }
+        }
+    }
+
+    // musl 静态 AOT 无 OpenSSL——摘要走纯托管 BundledSha256（sh 侧 _pa_sha256 工具链同义）。
+    private static string Sha256Hex(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return BundledSha256.Hex(stream);
     }
 
     // --env-file 清理：删件恒做（尽力）；父目录仅本编排契约的 pkg-* 暂存名才删
@@ -188,7 +366,10 @@ internal static class PkgApplyPlan
                 yield return new InstallStep("apt-get",
                     ["install", "-y",
                      "-o", "Dpkg::Options::=--force-confdef",
-                     "-o", "Dpkg::Options::=--force-confold", pkg],
+                     "-o", "Dpkg::Options::=--force-confold",
+                     // dpkg 锁等待有界：别家包管理操作持锁时 apt-get 内部轮转
+                     // 等待是有界的，不叠加本层 Exec 超时才败（sh 侧同款 -o 行）。
+                     "-o", "DPkg::Lock::Timeout=120", pkg],
                     debEnv);
                 yield return new InstallStep("dpkg",
                     ["-i", "--force-confdef", "--force-confold", pkg],
@@ -349,7 +530,7 @@ internal static class PkgApplyPlan
         return false;
     }
 
-    // WorkingDirectory 由 Process.Start 同步设定——工作目录缺席/不可进在
+    // WorkingDirectory 由 ToolProcess 同步设定——工作目录缺席/不可进在
     // spawn 点即抛→false→降下一级，与 sh 侧 spawn 前显式 (cd "$_d") 同步
     // 探测同价（sh 是后台子壳 cd 失败被 & 吞需预检，AOT 天然同步拒）。
     private static bool TrySpawn(string nohup, string[] argv, string workingDir, Action<string> log)
@@ -379,8 +560,7 @@ internal static class PkgApplyPlan
         return command.Append(' ').Append(ShQuote(app)).ToString();
     }
 
-    private static string ShQuote(string value) =>
-        "'" + value.Replace("'", "'\\''") + "'";
+    private static string ShQuote(string value) => UpdateArgv.ShQuote(value);
 
     // 会话 env 回灌：env 件行集逐行收 KEY=value（键必须 [A-Za-z_][A-Za-z0-9_]*，
     // 坏行静默跳过——与 sh 支路同款过滤）；件缺省按最小集 HOME+DISPLAY 处理并记
@@ -621,7 +801,7 @@ internal static class PkgApplyPlan
     // env 不在本解析面：spawn argv 里的内层 `env K=V` 由 nohup 子进程经
     // execvp 按自己的 PATH 解析，从不经本函数——sh 侧原 env) 死支路已删（A4），
     // AOT 本就无对应 case，此处仅登记对齐事实。
-    private static string? ResolveCommand(string name)
+    internal static string? ResolveCommand(string name)
     {
         var overridePath = GetEnv("BUNDLER_UPDATER_CMD_" + CommandEnvName(name));
         if (!string.IsNullOrEmpty(overridePath) && IsExecutableFile(overridePath))
@@ -685,7 +865,8 @@ internal static class PkgApplyPlan
                     return candidate;
                 }
             }
-            else if (File.Exists(candidate) && HasExecuteBit(candidate))
+            else if (File.Exists(candidate) && IsRegularFile(candidate) &&
+                     HasExecuteBit(candidate))
             {
                 return candidate;
             }
@@ -723,8 +904,35 @@ internal static class PkgApplyPlan
         }
         try
         {
-            using var process = Process.Start(BuildStartInfo(spec))!;
-            process.WaitForExit();
+            using var process = ToolProcess.Start(BuildStartInfo(spec))
+                ?? throw new InvalidOperationException($"spawn timed out: {spec.FileName}");
+            // 安装腿有界：pm 挂死（dpkg 锁竞态外的死锁/前端自身卡死）会把特权
+            // 进程拖成永驻——默认 30min，BUNDLER_UPDATER_PKG_TIMEOUT 秒数覆盖
+            //（sh 侧 timeout 包裹同名同缝）；超时杀进程返 124（timeout(1) 同码，
+            // 对调用方是可分类的"安装腿超时"）。
+            if (!process.WaitForExit(ExecTimeoutMilliseconds()))
+            {
+                try
+                {
+                    // 整树杀：apt-get/dnf 的 dpkg/rpm 孙进程不能成孤儿继续持锁——
+                    // 双侧超时后都无遗留 pm。善后口径刻意不同：sh `timeout -k 30`
+                    // 给组发 TERM+30s 善后窗再 KILL；本面直 SIGKILL 进程组
+                    //（子件 setpgid 自立）是唯一能同时满足"有界 + 孙进程必死"
+                    // 的形态，善后窗差异登记为已知实现差。
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (Exception)
+                {
+                }
+                try
+                {
+                    process.WaitForExit(30_000);
+                }
+                catch (Exception)
+                {
+                }
+                return 124;
+            }
             return process.ExitCode;
         }
         catch (Exception)
@@ -734,10 +942,19 @@ internal static class PkgApplyPlan
         }
     }
 
+    private static int ExecTimeoutMilliseconds()
+    {
+        var raw = GetEnv("BUNDLER_UPDATER_PKG_TIMEOUT");
+        return raw is { Length: > 0 } && int.TryParse(raw, out var seconds) && seconds > 0
+            ? (int)Math.Min((long)seconds * 1000, int.MaxValue)
+            : 30 * 60 * 1000;
+    }
+
     // 预检用同步执行：stdin 立即钉死（防降权器读调用方终端/管道），
     // out/err 后台抽干到 Null——用法文本、PAM/auth 噪声不透调用方面。
-    // 不设超时：预检 argv 恒为"工具+最小参数+sh -c :"零交互形（stdin 已钉 EOF
-    // 无读面、命令即刻返回），挂死无现实入口；超时+强制终结路径的复杂度不抵收益。
+    // 预检 argv 恒为"工具+最小参数+sh -c :"零交互形（stdin 已钉 EOF 无读面、命令
+    // 即刻返回），工具自身挂死无现实入口——但进程面仍要有界：轮询 5min
+    //（远超预检真实耗时），spawn 本身同走 ~1min 级界。
     private static int ExecSilent(ExecSpec spec)
     {
         if (ExecProbe is { } probe)
@@ -750,11 +967,17 @@ internal static class PkgApplyPlan
             startInfo.RedirectStandardInput = true;
             startInfo.RedirectStandardOutput = true;
             startInfo.RedirectStandardError = true;
-            using var process = Process.Start(startInfo)!;
+            using var process = ToolProcess.Start(startInfo)
+                ?? throw new InvalidOperationException($"spawn timed out: {spec.FileName}");
             process.StandardInput.Dispose();
             _ = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
             _ = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
-            process.WaitForExit();
+            if (!process.WaitForExit(5 * 60_000))
+            {
+                try { process.Kill(entireProcessTree: true); } catch (Exception) { }
+                process.WaitForExit(10_000);
+                return 127;
+            }
             return process.ExitCode;
         }
         catch (Exception)
@@ -771,8 +994,7 @@ internal static class PkgApplyPlan
         }
         try
         {
-            StartDetached(spec);
-            return true;
+            return StartDetached(spec);
         }
         catch (Exception)
         {
@@ -786,7 +1008,10 @@ internal static class PkgApplyPlan
     // POSIX 经 /bin/sh `exec "$@"` 包裹把三向钉到 /dev/null——argv 逐参透传
     // 不经 shell 重解析；Windows 兜底腿无 shell 钉法，改接管道：stdin 立即关
     // =对端 EOF，out/err 后台抽干到 Null——子进程不再持有调用方句柄。
-    private static void StartDetached(ExecSpec spec)
+    // spawn 超时按 false 上报走退化下一腿——迟到子件可能随后真落地、与退化腿
+    // 构成双重拉起的竞态角是刻意接受项：锁死面下次腿 spawn 同样会在界内失败，
+    // 失败可观测优先于静默报成（Spawn 报 true 会吞掉整个降级链且无留痕）。
+    private static bool StartDetached(ExecSpec spec)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -794,11 +1019,17 @@ internal static class PkgApplyPlan
             startInfo.RedirectStandardInput = true;
             startInfo.RedirectStandardOutput = true;
             startInfo.RedirectStandardError = true;
-            var process = Process.Start(startInfo)!;
+            var process = ToolProcess.Start(startInfo);
+            if (process is null)
+            {
+                return false;
+            }
             process.StandardInput.Dispose();
             _ = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
             _ = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
-            return;
+            // 分离腿刻意不 Dispose：子件还要跑——Unix 自有 spawn 的后台 reap
+            // 线程会在其退出时收尸（Dispose 才关排水管，此刻后台抽干还在用）。
+            return true;
         }
         var wrapped = new ExecSpec
         {
@@ -811,19 +1042,13 @@ internal static class PkgApplyPlan
             WorkingDirectory = spec.WorkingDirectory,
             Environment = spec.Environment,
         };
-        Process.Start(BuildStartInfo(wrapped));
+        return ToolProcess.Start(BuildStartInfo(wrapped)) is not null;
     }
 
-    private static ProcessStartInfo BuildStartInfo(ExecSpec spec)
+    private static ToolProcessStartInfo BuildStartInfo(ExecSpec spec)
     {
-        var startInfo = new ProcessStartInfo(spec.FileName)
-        {
-            UseShellExecute = false,
-        };
-        foreach (var argument in spec.Arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
+        var startInfo = new ToolProcessStartInfo { FileName = spec.FileName };
+        startInfo.Arguments.AddRange(spec.Arguments);
         if (spec.WorkingDirectory is { } workingDirectory)
         {
             startInfo.WorkingDirectory = workingDirectory;
@@ -872,12 +1097,17 @@ internal static class PkgApplyPlan
             switch (name)
             {
                 case "--pkg": options.PackagePath = value; break;
+                case "--sha256": options.PackageSha256 = value; break;
                 case "--format": options.Format = value; break;
                 case "--app": options.AppPath = value; break;
                 case "--env-file": options.EnvFile = value; break;
                 case "--log": options.LogFile = value; break;
                 default: throw new UsageException($"unknown option '{name}'.");
             }
+        }
+        if (options.PackageSha256 is { Length: > 0 } sha && !IsSha256Hex(sha))
+        {
+            throw new UsageException("--sha256 must be exactly 64 hexadecimal characters.");
         }
         if (options.PackagePath.Length == 0)
         {
@@ -898,13 +1128,31 @@ internal static class PkgApplyPlan
     {
         writer.WriteLine("Usage:");
         writer.WriteLine("  bundler-updater pkg-apply --pkg <file> --format <deb|rpm|apk> --app <path>");
-        writer.WriteLine("      [--env-file <file>] [--rollback] [--log <file>]");
+        writer.WriteLine("      [--sha256 <hex>] [--env-file <file>] [--rollback] [--log <file>]");
+    }
+
+    // --sha256 词法校验：64 位十六进制——非该形状按用法错拒（sh 侧同判 rc3）。
+    private static bool IsSha256Hex(string value)
+    {
+        if (value.Length != 64)
+        {
+            return false;
+        }
+        foreach (var c in value)
+        {
+            if (!(c is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F'))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 }
 
 internal sealed class PkgApplyOptions
 {
     public string PackagePath = "";
+    public string PackageSha256 = "";
     public string Format = "";
     public string AppPath = "";
     public string? EnvFile;

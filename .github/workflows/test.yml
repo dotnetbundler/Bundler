@@ -150,6 +150,11 @@ jobs:
       BUNDLER_INTEGRATION_ALLOW_LOCAL_INSTALL: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"
+      # 签名包证书吊销检查（CRL/OCSP）走 HTTP/80 且仅 Windows 做——受限出口下
+      # 可达性抖动能把 restore 卡数十分钟（NuGet/Home#11548/#13659 同款实证，
+      # 本仓 windows-arm 腿两次 4×3min 重试全超时即此面）；CI 取 offline 口径
+      # 是文档记名的受限环境解法，与测试语义无关。
+      NUGET_CERT_REVOCATION_MODE: "offline"
       # 外部工具 spawn 落盘->诊断工件：挂死现场=文件里最后一条在途 spawn。
       BUNDLER_TOOL_TRACE: ${{ github.workspace }}/artifacts/ci/bundler-tool-trace.log
       # restore 逐 attempt 事件（BEGIN/SPAWN/EXIT/TIMEOUT/RETRY）落盘->诊断工件：

@@ -1,8 +1,10 @@
 using System.Runtime.InteropServices;
 
-// 引导件同源链接编译（Bundler.Updater.Bootstrap 引本文件并定义 BUNDLER_UPDATER_LINK）——
+// 引导件/客户端同源链接编译（Bundler.Updater.Bootstrap 与 Bundler.Updater 均引本文件）——
 // 命名空间随宿主切换，与 Update/* 协议件双栖先例同规。
-#if BUNDLER_UPDATER_LINK
+#if BUNDLER_UPDATER_CLIENT
+namespace DotNet.Bundler.Updater;
+#elif BUNDLER_UPDATER_LINK
 namespace DotNet.Bundler.Updater.Bootstrap;
 #else
 namespace DotNet.Bundler.Core;
@@ -27,6 +29,9 @@ internal static class UnixFileTypes
     // struct stat 的架构偏移表、__xstat/stat$INODE64 退化面整体不需要。
     [DllImport("libSystem.Native", EntryPoint = "SystemNative_Stat", SetLastError = true, CharSet = CharSet.Ansi)]
     private static extern int SysStat(string path, out FileStatus output);
+
+    [DllImport("libSystem.Native", EntryPoint = "SystemNative_GetEUid")]
+    private static extern uint SysGetEUid();
 
     // pal_io.h FileStatus 的同形镜像（前 4 槽为本判据所需，余者占位对齐）。
     [StructLayout(LayoutKind.Sequential)]
@@ -126,6 +131,29 @@ internal static class UnixFileTypes
                 return false;
             }
             uid = status.Uid;
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 本进程 euid（geteuid(2)）——用户名缺席的宿主上区分共享 /tmp 槽位的
+    /// 兜底身份。仅 POSIX 宿主可得；取不到按"无法判定"返 false。
+    /// </summary>
+    internal static bool TryGetEUid(out uint uid)
+    {
+        uid = 0;
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) &&
+            !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return false;
+        }
+        try
+        {
+            uid = SysGetEUid();
             return true;
         }
         catch (Exception)

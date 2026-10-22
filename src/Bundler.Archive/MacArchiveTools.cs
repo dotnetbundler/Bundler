@@ -41,12 +41,10 @@ internal static class MacArchiveTools
         {
             Materialize(entries, stagingRoot);
             var ok = format == PackageFormat.Zip
-                ? Run("/usr/bin/ditto", "-c -k --sequesterRsrc " +
-                    ShellQuote(stagingRoot) + " " + ShellQuote(partPath),
-                    ScaledTimeoutMs(entries)) == 0
-                : Run("/usr/bin/tar", "-czf " + ShellQuote(partPath) + " -C " +
-                    ShellQuote(stagingRoot) + " " + ShellQuote(TopStem(entries)),
-                    ScaledTimeoutMs(entries)) == 0;
+                ? Run(ScaledTimeoutMs(entries), "/usr/bin/ditto",
+                    "-c", "-k", "--sequesterRsrc", stagingRoot, partPath) == 0
+                : Run(ScaledTimeoutMs(entries), "/usr/bin/tar",
+                    "-czf", partPath, "-C", stagingRoot, TopStem(entries)) == 0;
             if (!ok)
             {
                 logger.Log(BundleLogLevel.Warning,
@@ -94,9 +92,8 @@ internal static class MacArchiveTools
         var partPath = outputPath + ".bundler-part";
         try
         {
-            var ok = Run("/usr/bin/ditto", "-c -k --sequesterRsrc --keepParent " +
-                ShellQuote(appDirectory) + " " + ShellQuote(partPath),
-                ScaledTimeoutMs(appDirectory)) == 0;
+            var ok = Run(ScaledTimeoutMs(appDirectory), "/usr/bin/ditto",
+                "-c", "-k", "--sequesterRsrc", "--keepParent", appDirectory, partPath) == 0;
             if (ok)
             {
                 File.Move(partPath, outputPath);
@@ -133,8 +130,8 @@ internal static class MacArchiveTools
                     break;
                 case TarEntryKind.Symlink:
                     Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                    Require(Run("/bin/ln", "-sfn " + ShellQuote(entry.LinkTarget) +
-                        " " + ShellQuote(destination)),
+                    Require(Run(60_000, "/bin/ln",
+                            "-sfn", entry.LinkTarget!, destination),
                         $"ln -sfn '{entry.LinkTarget}' '{destination}'");
                     CopySourceXattrs(entry, destination);
                     break;
@@ -147,12 +144,12 @@ internal static class MacArchiveTools
                     else
                     {
                         // cp -p 在 macOS 上随模式一并复制扩展属性与资源叉。
-                        Require(Run("/bin/cp", "-p " + ShellQuote(entry.SourcePath!) +
-                            " " + ShellQuote(destination)),
+                        Require(Run(60_000, "/bin/cp",
+                                "-p", entry.SourcePath!, destination),
                             $"cp -p '{entry.SourcePath}' '{destination}'");
                     }
-                    Require(Run("/bin/chmod", Convert.ToString(entry.Mode, 8) +
-                        " " + ShellQuote(destination)),
+                    Require(Run(60_000, "/bin/chmod",
+                            Convert.ToString(entry.Mode, 8), destination),
                         $"chmod {Convert.ToString(entry.Mode, 8)} '{destination}'");
                     break;
             }
@@ -178,11 +175,6 @@ internal static class MacArchiveTools
 
     private static string TopStem(IReadOnlyList<ArchiveTree.Entry> entries) =>
         entries[0].ArchivePath.Split('/')[0];
-
-    // 参数整词加引并转义（netstandard2.0 无 ArgumentList）：引号、空格、前导 '-'
-    // 在 .NET Unix 参数解析下均按字面传给工具，不产生参数解析副作用。
-    private static string ShellQuote(string value) =>
-        "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
     // 成品命令超时随载荷规模伸缩：固定 60s 会误杀 GB 级载荷（误杀→回退→丢 xattr）。
     // 按 25 MB/s 保守吞吐给 2 倍冗余，下限 60s；取不到长度按 0 计退回下限。
@@ -224,10 +216,11 @@ internal static class MacArchiveTools
     }
 
     // 超时即杀——不许半成品工具与回退写出器并发改同一目标。
-    private static int Run(string file, string arguments, int timeoutMilliseconds = 60_000)
+    private static int Run(int timeoutMilliseconds, string file, params string[] arguments)
     {
-        using var process = Process.Start(
-            new ProcessStartInfo(file, arguments) { UseShellExecute = false });
+        var startInfo = new ToolProcessStartInfo { FileName = file };
+        startInfo.Arguments.AddRange(arguments);
+        using var process = ToolProcess.Start(startInfo);
         if (process is null)
         {
             return -1;

@@ -1,6 +1,7 @@
 // 子进程运行辅助：集成腿统一经这里 spawn 外部工具/安装器/dotnet，
 // 捕获 stdout/stderr/退出码，失败时把输出带进断言消息。
-using System.Diagnostics;
+// 进程面统一挂 ToolProcess——Unix 经 libc posix_spawn 不碰运行时 spawn/reap
+// 全局锁（macOS CI 实证死锁面）；Windows 包装 Process 同语义。
 using System.Text;
 
 internal static class ProcessRunner
@@ -51,109 +52,100 @@ internal static class ProcessRunner
         string? argumentLine, Options? options)
     {
         options ??= new Options();
-        var startInfo = new ProcessStartInfo
+        var startInfo = new DotNet.Bundler.Core.ToolProcessStartInfo
         {
             FileName = filePath,
+            ArgumentLine = argumentLine,
             WorkingDirectory = options.WorkingDirectory ?? Environment.CurrentDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             RedirectStandardInput = true,
-            UseShellExecute = false,
         };
-        if (argumentLine is not null)
+        if (argumentLine is null && arguments is not null)
         {
-            startInfo.Arguments = argumentLine;
-        }
-        else if (arguments is not null)
-        {
-            foreach (var argument in arguments)
-            {
-                startInfo.ArgumentList.Add(argument);
-            }
+            startInfo.Arguments.AddRange(arguments);
         }
         if (options.Environment is { } env)
         {
             foreach (var pair in env)
             {
-                if (pair.Value is null)
-                {
-                    startInfo.Environment.Remove(pair.Key);
-                }
-                else
-                {
-                    startInfo.Environment[pair.Key] = pair.Value;
-                }
+                startInfo.Environment[pair.Key] = pair.Value;
             }
         }
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
-        using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-        process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdout.AppendLine(e.Data); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
-        process.Start();
-        try { options.ProcessStarted?.Invoke(process.Id); }
-        catch { /* 诊断回调故障不得改变被测进程流程 */ }
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        if (options.StandardInput is not null)
+        var process = DotNet.Bundler.Core.ToolProcess.Start(startInfo)
+            ?? throw new TimeoutException(
+                $"Process spawn did not complete within {DotNet.Bundler.Core.NativeSpawnUnix.SpawnTimeoutMilliseconds}ms: " +
+                $"{filePath} {argumentLine ?? string.Join(' ', arguments ?? [])}");
+        using (process)
         {
-            process.StandardInput.Write(options.StandardInput);
+            try { options.ProcessStarted?.Invoke(process.Id); }
+            catch { /* 诊断回调故障不得改变被测进程流程 */ }
+            // 行级异步排空：孙代持管写端时 EOF 永不至——排水任务收尾走下方限窗，
+            // 等不到按丢弃尾量处理（与原 BeginOutputReadLine+Cancel* 同价）。
+            var outTask = Task.Run(async () =>
+            {
+                string? line;
+                while ((line = await process.StandardOutput.ReadLineAsync().ConfigureAwait(false)) is not null)
+                {
+                    stdout.AppendLine(line);
+                }
+            });
+            var errTask = Task.Run(async () =>
+            {
+                string? line;
+                while ((line = await process.StandardError.ReadLineAsync().ConfigureAwait(false)) is not null)
+                {
+                    stderr.AppendLine(line);
+                }
+            });
+            if (options.StandardInput is not null)
+            {
+                process.StandardInput.Write(options.StandardInput);
+            }
+            process.StandardInput.Close();
+            if (!process.WaitForExit((int)options.Timeout.TotalMilliseconds))
+            {
+                TryKillTree(process);
+                throw new TimeoutException(
+                    $"Process timed out after {options.Timeout}: {filePath} {argumentLine ?? string.Join(' ', arguments ?? [])}\n" +
+                    $"stdout so far:\n{stdout}\nstderr so far:\n{stderr}");
+            }
+            // EOF 排水限窗：孙代继承管道写端时退出不等于 EOF——10s 内读不完的
+            // 丢尾量收尾（读任务被钉在管道上不可取消，弃任务不阻塞断言面）。
+            if (!Task.WaitAll([outTask, errTask], TimeSpan.FromSeconds(10)))
+            {
+                try { process.StandardOutput.Dispose(); } catch { /* 关管逼读退出 */ }
+                try { process.StandardError.Dispose(); } catch { }
+            }
+            return new Result(process.ExitCode, stdout.ToString(), stderr.ToString());
         }
-        process.StandardInput.Close();
-        if (!process.WaitForExit((int)options.Timeout.TotalMilliseconds))
-        {
-            TryKillTree(process);
-            throw new TimeoutException(
-                $"Process timed out after {options.Timeout}: {filePath} {argumentLine ?? string.Join(' ', arguments ?? [])}\n" +
-                $"stdout so far:\n{stdout}\nstderr so far:\n{stderr}");
-        }
-        // 无参 WaitForExit 会等异步读取遇到管道 EOF；孙进程（VBCSCompiler 等构建守护）
-        // 继承重定向管道写端且不退出时永不 EOF——musl 上实测挂满 10m 超时。
-        // 给 EOF 一个限时窗，过期取消异步读收尾（仅丢弃该管道缓冲尾量）。
-        var eofWait = Task.Run(() => process.WaitForExit());
-        if (!eofWait.Wait(TimeSpan.FromSeconds(10)))
-        {
-            try { process.CancelOutputRead(); } catch { /* 读已结束 */ }
-            try { process.CancelErrorRead(); } catch { /* 读已结束 */ }
-            process.WaitForExit();
-        }
-        return new Result(process.ExitCode, stdout.ToString(), stderr.ToString());
     }
 
     // 启动后不等待：供 "进程仍在运行 / 杀进程树模拟崩溃" 等腿使用。
-    public static Process StartDetached(string filePath, string argumentLine = "",
+    public static DotNet.Bundler.Core.ToolProcess StartDetached(string filePath, string argumentLine = "",
         string? workingDirectory = null, Dictionary<string, string?>? environment = null)
     {
-        var startInfo = new ProcessStartInfo
+        var startInfo = new DotNet.Bundler.Core.ToolProcessStartInfo
         {
             FileName = filePath,
-            Arguments = argumentLine,
+            ArgumentLine = argumentLine,
             WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory,
-            UseShellExecute = false,
-            // 控制台子进程须带自己的控制台：与测试宿主共享控制台时，针对子进程的 console-ctrl
-            // 关闭事件（如 Restart Manager RmShutdown）会广播进宿主并中止测试会话。
-            CreateNoWindow = true,
         };
         if (environment is { } env)
         {
-            // 与 Run 同一契约：value 为 null 表示从继承环境里移除该变量。
             foreach (var pair in env)
             {
-                if (pair.Value is null)
-                {
-                    startInfo.Environment.Remove(pair.Key);
-                }
-                else
-                {
-                    startInfo.Environment[pair.Key] = pair.Value;
-                }
+                startInfo.Environment[pair.Key] = pair.Value;
             }
         }
-        return Process.Start(startInfo)
+        // 分离 spawn：句柄只作观察/扑杀用，reaper 线程兜底收尸——不 Dispose 也无僵尸。
+        return DotNet.Bundler.Core.ToolProcess.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start {filePath} {argumentLine}");
     }
 
-    public static void TryKillTree(Process process)
+    public static void TryKillTree(DotNet.Bundler.Core.ToolProcess process)
     {
         try
         {

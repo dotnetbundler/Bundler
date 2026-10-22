@@ -6,18 +6,19 @@
 > `110a2fe` 基线全矩阵 verify `39133258129` 已 completed/success 全绿；
 > 联合 verify run `39142103135`（head=`0c18cf9`）未全绿：WindowsARM MSI Package 腿 attempt1 两测试 `dotnet restore` 3min 超时后 job 被取消、attempt2 restore 超时判败，其余已运行的 tests 矩阵腿通过、下游未执行——根因未证实；
 > verify run `39177022111`（head=`a137268`）Windows2025 x64 NSIS 重安装腿安装器 rc=0xC000013A、UbuntuARM runner 失联无工件——根因未证实；
-> `diagnostics/ci-failures-20261019` 分支只做定向复现入口与安全诊断插桩（不改产品语义、不放宽断言、非产品修复），已提交为 PR #143（验证实现基线 `a95468d`，待合并——用户已明确授权合并，Local Review 第 1 轮 clean）；当前阶段为取证/诊断就绪、本轮复验通过、根因未确认；
+> `diagnostics/ci-failures-20261019` 分支只做定向复现入口与安全诊断插桩（不改产品语义、不放宽断言、非产品修复），已提交并合入 main 为 PR #143（验证实现基线 `a95468d`，`576e6f7`，Local Review 第 1 轮 clean）；当前阶段为取证/诊断就绪、本轮复验通过、根因未确认；
 > 基于 `a95468d`（alpha.105）的四条定向/复验 CI 均 completed/success（Windows2025 `NsisIntegrationTests` 类 28/28、WindowsARM `MsiPackageContractTests` 10/10、UbuntuARM Integration 全类完成、Windows2025 suite=all 原调度四层 0 失败）——本轮未重现旧故障，不能证明根因已修；该基线不覆盖主线 PR #142/alpha.106 新代码；
-> 已停止额外盲跑，旧三类故障（MSI restore 超时/NSIS 0xC000013A/UbuntuARM 失联）保留未决；完整 verify 仍无全矩阵绿证。
+> 旧三类故障归属已明：MSI restore 超时根因已证实并根治——Windows 独有签名包 CRL/OCSP 吊销检查走 HTTP/80、windows-arm runner 出口不可达即挂（NuGet/Home#11548/#13659 同款签名），逐测试独立 `RestorePackagesPath` 把暴露面放大 ~20 倍；处置=`NUGET_CERT_REVOCATION_MODE=offline`（test.yml legs env+verify.yml 顶层 env，workflow_call 不穿透两处各放）+MSI 类还原缓存收敛类级 `_f.Cache`（`InitializePackagesOnly` 同补，空源必败测试保留独立）——`5bc2df1`/`b19bb2a`，修复后 windows-arm 腿四次全绿且 restore 全 up-to-date 零超时；NSIS 0xC000013A/UbuntuARM 失联归 runner 基建瞬断（未复现、无产品面证据）。
 > UPDATE 系统包扩展 B0–B5 全链完成并入 `main`（PR #107 设计、#108 发射+`pkg` 身份、#109 引导件 `pkg-apply` 双实现、#106/#110 macOS quarantine 能力探测、#111 客户端 `SyspkgReplay`、#112 syspkg-verify 三容器验收+DropProbe 修复、#113/#115 冻件重冻、#114 收尾：syspkg-verify 经 `workflow_call` 收编 verify 发布门、usage 文档、`pkg` 字段 v1 兼容断言）。
 > 测试确定性修复 #116（奇偶腿宿主 `DEBIAN_FRONTEND` env 泄漏+uidedge rec 竞态）与 #117（NSIS 卸载分离删除断言改 WaitFor）已并入。
 > 发布门实证：verify 于 `9d51ba3` 基线**三连全绿**（run `39062962978`、`39066991823`、`39070871573`——六宿主测试矩阵 + syspkg 三容器腿 + produce/consume/manual/universal 全链）。
-> 引导件冻件口径：现嵌 8 件为 produce-bootstrap run `39030858362`@`e0174dc` 产出（PR #129 入库，含 #128 PAL 化——env 件校验与 `UnixFileTypes` 改走 `libSystem.Native`、gate 竞态修复），SHA-256 与字节数留账于该 squash 正文。
-> 外部工具挂死加固：PR #130 给 `ToolRunner`/`ToolCache` 全链有界等待+spawn 追踪（`BUNDLER_TOOL_TIMEOUT_SECONDS`/`BUNDLER_TOOL_TRACE`），挂死收敛为带现场的有界失败；macOS 偶发 `hdiutil` 簿记滞后断言面由 PR #131 改有界轮询；PR #132 加 CI 进程快照采样（随后过滤瘦身至测试/工具面白名单）——加固后 intel 腿 suite=all 八连压测零复现，OS 层凶手未捕获。
+> 引导件冻件口径：现嵌 8 件为 produce-bootstrap run `39341833602`@`0beb70a` 产出——Unix spawn 面 `NativeSpawnUnix`（libc posix_spawn）+ musl static-pie `DirectPInvoke` 直绑 + `WorkingDirectory=""` PATH 基准修复 + `EnvironmentIsComplete` 完整环境块全链在冻件内（产线 alpine 容器冒烟与本机直跑 apply 双实证）；SHA-256 账留 PR #148 处置记录评论。
+> 外部工具挂死加固：PR #130 给 `ToolRunner`/`ToolCache` 全链有界等待+spawn 追踪（`BUNDLER_TOOL_TIMEOUT_SECONDS`/`BUNDLER_TOOL_TRACE`），挂死收敛为带现场的有界失败；macOS 偶发 `hdiutil` 簿记滞后断言面由 PR #131 改有界轮询；PR #132 加 CI 进程快照采样（随后过滤瘦身至测试/工具面白名单）——加固后 intel 腿 suite=all 八连压测零复现，OS 层凶手未捕获；verify `39225055542`@`09d6a01` macos-intel 腿复现真挂死——取证（`ci-logs-macos-26-intel`）实证：`hdiutil`/`makensis` 已退而成 Z 态僵尸 ~3h 未被 reap、宿主 S 态 0%、另有一 100% CPU 同 argv `dotnet` 子件（fork 后未 exec 的空转件，340KB RSS）——对照 dotnet/runtime 源码钉死机制为 **`Process.Start` 内部 Unix spawn/reap 全局互斥死锁**：`ForkAndExecProcess` 持 `s_processStartLock` 读锁同步等 fork 子件回报 exec，子件卡死则读锁不释放→SIGCHLD reaper（`CheckChildren`）排写锁饿死→僵尸不 reap、新 spawn 排在写者后全线阻塞（dotnet/runtime #135294/PR #135323 同族，修进 .NET 12、10.x 无修复）；根治决案=**弃 Unix `System.Diagnostics.Process`**：`Bundler.Core/NativeSpawnUnix` 走 **libc `posix_spawn`**（dup2/addchdir 经 file_actions 全原生执行、SETPGROUP 自立组→kill(-pid) 树杀、spawn 调用放专线程 ~1min 级有界弃件（60s 主界+落账留口/扑孤收尾）+Linux `/proc/self/task/<tid>/children` 精确扑孤——fork 子件跑托管 IL 的仓内 shim 路线经 WSL 实证否决：子件继承半死运行时态 SIGSEGV，shim 必须全原生）；上层统一 `ToolProcess`/`ToolProcessStartInfo`（Unix→NativeSpawnUnix、Windows 包装 Process——CreateProcess 无该失效类）、src 全部 spawn/等待点与测试侧 `TestProc`/`ProcessRunner` 收编同构件、`ProcessWait`/`TestProcessExit` 退役删除；残余如实登记：posix_spawn 内部仍 fork+shim，最深层机况下单次调用可堵——无共享锁不传染，60s 弃件后进程存活，比"有界失败但锁死面仍在"严格进一阶。
 > 图形提权入口链等剩余边界仍挂 `docs/project/special-acceptance.md`。
-> 当前包版本：`0.1.0-alpha.108`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
-> 当前阶段：**全功能面体检收口进行中**——七域并行审查（Bugs/Security/Flags/Notes 四级全清零）产出约 95 项 findings，按用户授权分 6 个连贯 PR 处置：PR-1 Core+Abstractions 已合入（#142，4 轮 Local Review 清零）、PR-2 入口层收口完成（#144 待统一合并，2 轮 Local Review 清零）、PR-3 Linux 后端收口完成（#145 待统一合并，5 轮 Local Review 清零）、PR-4 Windows 后端收口完成（#146 待统一合并，6 轮 Local Review 清零）、PR-5 macOS 后端收口完成（#147 待统一合并，2 轮 Local Review 清零）、PR-6 UPDATE 收口完成（#148 待统一合并，9 轮 Local Review 清零，引导件冻件全 8 件重冻入库）——剩全矩阵 verify 统一 dispatch；
+> 当前包版本：`0.1.0-alpha.109`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前阶段：**全功能面体检收口进行中**——七域并行审查（Bugs/Security/Flags/Notes 四级全清零）产出约 95 项 findings，按用户授权分 6 个连贯 PR 处置：PR-1 Core+Abstractions 已合入（#142，4 轮 Local Review 清零）、PR-2 入口层收口完成（#144 待统一合并，2 轮 Local Review 清零）、PR-3 Linux 后端收口完成（#145 待统一合并，5 轮 Local Review 清零）、PR-4 Windows 后端收口完成（#146 待统一合并，6 轮 Local Review 清零）、PR-5 macOS 后端收口完成（#147 待统一合并，2 轮 Local Review 清零）、PR-6 UPDATE 收口完成（#148 待统一合并，Local Review 36 轮清零，引导件冻件三冻 `39341833602`@`0beb70a` 已入 `e05f1a7`）——**verify 终头 `b19bb2a` 六连全绿**（`39427930544`/`39436250095`/`39445950711`/`39454768280`/`39463149836`/`39470228672`；后两次各有单 job 基建取消经 rerun-failed 原位翻绿，测试腿首跑全绿零失败，windows-arm 腿逐次实证 0 restore 超时、fixture restore 全 up-to-date）；**公开 API 破改登记**：`Bundler.Updater` 包面 `UpdateClient.Apply`/`Rollback` 返回类型由 `System.Diagnostics.Process` 换 `ToolProcess`（快开发期授权口径——不背旧版兼容债）；
 > PR-5 macOS 当前事实：签名横切收敛为 `Bundler.MacApp/MacSigningSupport`（凭据解析/临时钥匙串/codesign·pkgbuild·productsign 参数/公证提交-等待-订钉单源）；临时钥匙串改 `codesign --keychain` 直给、不再变异用户搜索列表；`productsign` 补 `--timestamp`、pkg 公证 `--wait` 对齐 1h 超时；DMG detach 统一为 graceful→`-force` 递进+`hdiutil info` 复核单序列（成败两路共用）；`resize -limits` 字段序双序自校正；pkg `Destination` 撞名簿+`.app` 注入拒绝；`.rtfd` 移出声明；`xattr -crs` 提到 macOS 无条件段；Apple ID 口令进 argv 的运行期警告+文档推荐 keychain-profile/API key
+> PR-6 UPDATE 当前事实：argv 拼写收敛单源 `Core/Update/UpdateArgv.cs`（三工程同源链接）；feed 取信=`.sig` 先验后解析+`artifact.file` 单段词法收口+`.part` Range 核对+全异常归 `UpdateException`（取消穿透）；`pkg-apply` 增 `--sha256`——root 侧把包暂存进私有 `bundler-pkg.*` 目录并对暂存副本复核哈希（留存包验签→root 执行 TOCTOU 收口），安装腿有界（默认 30min、`BUNDLER_UPDATER_PKG_TIMEOUT` 覆盖、apt-get `DPkg::Lock::Timeout=120`）；`BUNDLER_UPDATER_CMD_*` 覆盖须过存在+普通文件+执行位复核；`ProcessAlive`/`MacAppGate` fail-closed（签名态判不出一律拒）；AOT/POSIX parity 与 syspkg-verify 全链路已接线 `--sha256`
 > 全部 11 个格式、CLI 与 UPDATE 均已冻结（冻结指功能面不扩展，质量收口仍在进行）；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词，契约与全产物名目录见 `docs/design/targets.md`
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/design/formats/` 单文档只留设计决策、语义契约与能力状态
 >
@@ -97,7 +98,7 @@ Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline`
 此前非文档变更包括 PR #139/#140 squash 合入：`a3ea637`/#139 UPDATE 提权停链修复（已启动提权腿即终局、取消/拒绝/鉴权失败一律停不重放、问密码取消 126 不触 sudo）；
 `09c9646`/#140 DMG 挂载可观测增强（`hdiutil attach` 成功后落挂载事实 Information 日志（挂载点+镜像路径），attach 失败不落）。
 两 PR 合并前均过本地评审（Local Review clean）；
-合并后 CI 连续失败取证就绪（PR #143 待合并）、根因未证实（见下条），不声称已过全矩阵。
+合并后 CI 连续失败取证就绪（PR #143 已合入 `576e6f7`）、根因未证实（见下条），不声称已过全矩阵。
 全量重构、测试重写、收口修复与 UPDATE 系统包扩展链（PR #82–#136）均已合入 `main`；逐轮验证过程与 run 记录以 git 提交和 PR 留痕为准，本文不留分轮过程，仅保留当前事实与仍有意义的结论。
 
 - **verify 发布门**：`9d51ba3` 基线三连全绿（`39062962978`/`39066991823`/`39070871573`——六宿主测试矩阵 + syspkg 三容器 + produce/consume/manual/universal 全链）；
@@ -106,7 +107,7 @@ Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline`
   `110a2fe` 基线（#137 文档对账）全矩阵 verify `39133258129` 已 completed/success 全绿（六宿主 tests、produce/consume、manual/auto、universal、syspkg 三容器全 success）——该绿只覆盖 `110a2fe` 基线；`39142103135`/`39177022111` 均未全绿，当前无全矩阵绿证。
 - **macOS intel 挂死面**：两轮三测试锁步挂死定性 runner 实例级间歇失响应，OS 层凶手未捕获；我方"全链无超时兜底"放大器已修——#130 有界等待/杀树/有界排空/spawn 追踪（`BUNDLER_TOOL_TIMEOUT_SECONDS`/`BUNDLER_TOOL_TRACE`）+ `ToolCache` 锁上限，#132–#134 进程快照采样瘦身至白名单并经 `ci-logs-*` 工件 `always()` 上传（不进 job 日志）；suite=all 八连压测 + api 十连 + verify 多轮累计零复现，插桩留作复发取证面。
 - **dmg 失败清理断言面**：`hdiutil detach` 簿记滞后一次性断言误报由 #131 改 60s 有界轮询；`diskimages-helper` 邻座残影污染全局断言由 #135 收窄至失败域（retest `39124695555` macos 双腿绿）；#136 补挂载后失败真实注入腿（`BundlerMacDmgBackgroundFile` 缺件→attach 后 `ApplyBrandingAsync` 抛→catch 强制 detach）。
-- **引导件冻件口径**：现嵌 8 件为 produce-bootstrap run `39030858362`@`e0174dc` 产出（PR #129 入库），SHA-256 与字节数留账于该 squash 正文；musl 静态单件经 alpine SDK 容器产、双宿主通吃（`docs/design/update.md`）。
+- **引导件冻件口径**：现嵌 8 件为 produce-bootstrap run `39341833602`@`0beb70a` 产出——`NativeSpawnUnix`（libc posix_spawn）+ musl `DirectPInvoke` 直绑 + `WorkingDirectory=""` PATH 基准修复 + `EnvironmentIsComplete` 完整环境块全链在冻件内（alpine 容器冒烟+本机 apply 双实证），SHA-256 账留 PR #148 处置记录评论；musl 静态单件经 alpine SDK 容器产、双宿主通吃（`docs/design/update.md`）。
 - 本机 Windows x64 Release 基准（Windows 10.0.26200 win-x64，.NET SDK 10.0.302 / MSBuild 18.6.11，`main@110a2fe` 接管时实测）：`dotnet build Bundler.slnx -c Release --no-restore` rc 0（0 警告 0 错误）；
   `dotnet test tests/Unit/Bundler.UnitTests.csproj -c Release --no-build --no-restore` rc 0（总 1409 / 通过 1372 / 跳过 37 / 失败 0）；
   `dotnet test tests/Api/Bundler.ApiTests.csproj -c Release --no-build --no-restore` rc 0（总 84 / 通过 70 / 跳过 14 / 失败 0）；
@@ -127,7 +128,7 @@ Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline`
   verify `39142103135`@`0c18cf9` WindowsARM MSI Package 腿——attempt1 `FeatureSetScopePathAndCustomDirectory`/`PublicSampleMsiTableContract` 在 `dotnet restore` 3min 超时后 job 被取消；attempt2 `PerLanguageMsisInstallCoexistAndUninstallIndependently` 同样 restore 超时判败（该 attempt 为 Package 18 总 1 失败）；其余已运行的 tests 矩阵腿通过，下游 produce/consume/syspkg/manual 未执行；
   verify `39177022111`@`a137268` Windows2025 x64 `NsisIntegrationTests.ReinstallClosesOwnedProcessOnly` 安装器 rc=`-1073741510`=0xC000013A（退出码特征，原因待判）；UbuntuARM runner 失联、job logs 404 无工件；
   最新 WindowsARM 与 macOS 双腿均成功；
-  `diagnostics/ci-failures-20261019` 分支只加定向复现入口（`test_class` 精确过滤）与安全诊断插桩（`BUNDLER_RESTORE_TRACE`/`BUNDLER_NSIS_DIAGNOSTICS`/快照资源字段），不放宽断言、不改产品语义，已提交 PR #143（验证实现基线 `a95468d`，未合并，Local Review 第 1 轮 clean）。
+  `diagnostics/ci-failures-20261019` 分支只加定向复现入口（`test_class` 精确过滤）与安全诊断插桩（`BUNDLER_RESTORE_TRACE`/`BUNDLER_NSIS_DIAGNOSTICS`/快照资源字段），不放宽断言、不改产品语义，已提交并合入 PR #143（验证实现基线 `a95468d`，`576e6f7`，Local Review 第 1 轮 clean）。
 - **PR #143 定向 CI 取证**（验证实现基线 `a95468d`，工件与原始日志留 `bundler-ci-failures-65e61f0a8a4744318d37534977a69b40`）：
   run `39183902219` Windows2025 `NsisIntegrationTests` 类 28/28 completed/success（含 `ReinstallClosesOwnedProcessOnly`；art `12157855300`：`nsis-shutdown.log` 记 owned 退出 0xC000013A、installer rc0、external 存活——本轮行为符合预期，旧 installer 中断原因未证实）；
   run `39183904434` WindowsARM `MsiPackageContractTests` 10/10 completed/success（art `12157349776`：`restore-progress.log` 20 BEGIN/20 SPAWN/20 EXIT 全 rc0、均 attempt1、无 TIMEOUT/RETRY）；
@@ -180,7 +181,7 @@ Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline`
 
 - **CI 连续失败根治**：verify `39142103135`@`0c18cf9`（MSI Package restore 超时后取消/重跑判败）与 `39177022111`@`a137268`（NSIS rc=0xC000013A、UbuntuARM 失联）根因未证实、旧失败未重现；
   PR #143（`diagnostics/ci-failures-20261019`，验证实现基线 `a95468d`）四条定向/复验 run 均过、本轮未复现旧故障；已停止额外盲跑，旧三类故障保留未决；
-  该 PR 待合并（用户已明确授权合并）；四条取证基线为 alpha.105，不覆盖 PR #142/alpha.106；完整 verify 仍无全矩阵绿证；
+  该 PR 已合入 `576e6f7`；四条取证基线为 alpha.105，不覆盖 PR #142/alpha.106；完整 verify 仍无全矩阵绿证；
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`，见 §5）；
 - UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 全链已实现：发射（`pkg` 身份字段、`CoveredFormats` 扩收、三后端旁车+引导件注入）、`pkg-apply` 动词 AOT/POSIX 双实现同协议、客户端 replay 编排（`SyspkgReplay`：预检三件套/留存/三级提权退化链/回滚重放）、debian/fedora/alpine 容器验收腿（经 `workflow_call` 收编 verify 发布门 `syspkg` job）——契约见 `docs/design/update.md` §2，图形提权真实桌面观感等剩余边界登记 `docs/project/special-acceptance.md`；
 - 发布链资产实际推送（NuGet/Release 为另一步，仍需用户明确许可）；

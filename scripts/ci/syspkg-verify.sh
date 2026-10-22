@@ -81,7 +81,10 @@ want_rec() { # $1 phase-id $2 rec-file $3 expect-substr（形如 uid=1000）$4 d
 # mkdir——前六件协议解析用，id/mkdir 喂探针）。
 # stat 属协议工具：_pa_env_validate 的 st_uid 复核走 stat -c %u（缺 stat=
 # 无法复核→拒，shim 腿曾被空值拒成 rc3）；timeout 喂读侧 timeout 5 cat 上限。
-BASETOOLS="env nohup dirname awk ls sed tr id mkdir cat stat timeout"
+# cp/mktemp/rm/rmdir/sha256sum 属新暂存+核验面：包先 cp 进 bundler-pkg.* 私有
+# 暂存目再过 --sha256 复核（root 侧验签替代窗收口），缺 cp/sha256sum 会按
+# 暂存/核验失败 rc4；rm/rmdir 喂 env 件一次性清理与暂存根回收。
+BASETOOLS="env nohup dirname awk ls sed tr id mkdir cat stat timeout cp mktemp rm rmdir sha256sum find"
 # dpkg 在 PATH 内自查运行依赖（缺一个整体报 "expected programs not found" 退 2）：
 # sh/rm/tar/diff + dpkg-deb/dpkg-split/ldconfig/start-stop-daemon（实跑见
 # "unable to execute split package reassembly (dpkg-split)"）——shim 给 dpkg 必须一并给。
@@ -275,13 +278,16 @@ leg_deb() {
     snap base-v1
     want_line deb-env "$STAMPS" "postinst" "postinst scriptlet 已跑（账本外证据）"
 
-    # D1：AOT + SUDO_UID → apt-get 腿 + 默认 PATH 降权链（setpriv 优先）+ env 回灌
+    # D1：AOT + SUDO_UID → apt-get 腿 + 默认 PATH 降权链（setpriv 优先）+ env 回灌。
+    # --sha256 走全参——root 侧对暂存副本复核后装（留存包 TOCTOU 收口的生产路径）。
     mk_env "$W/env.d1" "$REC/d1.txt" d1-aot "$T_UID"
+    _d1_sha=$(sha256sum "$W/v2.deb"); _d1_sha=${_d1_sha%% *}
     rc_of env SUDO_UID="$T_UID" SUDO_GID="$T_GID" "$AOT" pkg-apply \
-        --pkg "$W/v2.deb" --format deb --app "$APP" \
+        --pkg "$W/v2.deb" --format deb --app "$APP" --sha256 "$_d1_sha" \
         --env-file "$W/env.d1" --log "$EV/d1-aot.log"
     expect_rc D1 0 $?
     expect_ver D1 2.0 "apt-get 腿真装 v2"
+    want_line D1 "$EV/d1-aot.log" "package sha256 verified" "root 侧暂存复核已走"
     want_line D1 "$EV/d1-aot.log" "via apt-get" "apt-get 腿被选用"
     want_rec D1 "$REC/d1.txt" "uid=$T_UID" "降权重启探针 uid=tester（setpriv 腿）"
     want_rec D1 "$REC/d1.txt" "MYVAR=d1-aot" "env 件回灌到达 --app"
@@ -316,14 +322,18 @@ leg_deb() {
         info "D3 降级由 apt-get 直装完成"
     fi
 
-    # D4：sh 支路 + 无 apt-get shim（退化 dpkg -i）+ su 降权腿（shim 不给 setpriv/sudo/runuser）
+    # D4：sh 支路 + 无 apt-get shim（退化 dpkg -i）+ su 降权腿（shim 不给 setpriv/sudo/runuser）。
+    # --sha256 走全参——sh 侧暂存+复核经 mktemp/cp/sha256sum（已入 BASETOOLS）。
     makeshim "$W/shim-su" $BASETOOLS $DPKGTOOLS su
     mk_env "$W/env.d4" "$REC/d4.txt" d4-sh "$T_UID"
+    _d4_sha=$(sha256sum "$W/v2.deb"); _d4_sha=${_d4_sha%% *}
     rc_of env PATH="$W/shim-su" SUDO_UID="$T_UID" SUDO_GID="$T_GID" \
         /bin/sh "$SHIMPL" pkg-apply --pkg "$W/v2.deb" --format deb --app "$APP" \
+        --sha256 "$_d4_sha" \
         --env-file "$W/env.d4" --log "$EV/d4-sh.log"
     expect_rc D4 0 $?
     expect_ver D4 2.0 "sh 支路 dpkg 退化腿真装"
+    want_line D4 "$EV/d4-sh.log" "package sha256 verified" "sh 侧暂存复核已走"
     want_line D4 "$EV/d4-sh.log" "apt-get not found — skipping" "缺 apt 退化证据"
     want_line D4 "$EV/d4-sh.log" "via dpkg" "dpkg -i 腿被选用"
     want_rec D4 "$REC/d4.txt" "uid=$T_UID" "su 降权腿重启探针 uid=tester"
@@ -398,13 +408,16 @@ leg_rpm() {
     snap base-v1
     want_line rpm-env "$STAMPS" "post:" "%post scriptlet 已跑"
 
-    # R1：AOT + PKEXEC_UID（pkexec 语境 env 名分支）→ dnf 腿 + 降权 + env 回灌
+    # R1：AOT + PKEXEC_UID（pkexec 语境 env 名分支）→ dnf 腿 + 降权 + env 回灌。
+    # --sha256 走全参（同 D1 口径——root 侧暂存复核）。
     mk_env "$W/env.r1" "$REC/r1.txt" r1-aot "$T_UID"
+    _r1_sha=$(sha256sum "$W/v2.rpm"); _r1_sha=${_r1_sha%% *}
     rc_of env PKEXEC_UID="$T_UID" "$AOT" pkg-apply \
-        --pkg "$W/v2.rpm" --format rpm --app "$APP" \
+        --pkg "$W/v2.rpm" --format rpm --app "$APP" --sha256 "$_r1_sha" \
         --env-file "$W/env.r1" --log "$EV/r1-aot.log"
     expect_rc R1 0 $?
     expect_ver R1 2.0-1 "dnf install ./x.rpm 腿真装 v2"
+    want_line R1 "$EV/r1-aot.log" "package sha256 verified" "root 侧暂存复核已走"
     want_line R1 "$EV/r1-aot.log" "via dnf" "dnf 腿被选用"
     want_rec R1 "$REC/r1.txt" "uid=$T_UID" "PKEXEC_UID 取回降权 uid=tester"
     want_rec R1 "$REC/r1.txt" "MYVAR=r1-aot" "env 回灌到达 --app"
@@ -458,14 +471,18 @@ leg_rpm() {
     want_line R3B "$EV/r3b-aot.log" "zypper not found" "zypper 缺席退化证据"
     want_line R3B "$EV/r3b-aot.log" "via rpm" "rpm -U 退化腿选用"
 
-    # R4：sh 支路 + runuser 降权腿（shim 给 rpm+runuser，不给 dnf/zypper/setpriv/sudo/su）
+    # R4：sh 支路 + runuser 降权腿（shim 给 rpm+runuser，不给 dnf/zypper/setpriv/sudo/su）。
+    # --sha256 走全参（同 D4 口径）。
     makeshim "$W/shim-runuser" $BASETOOLS rpm runuser
     mk_env "$W/env.r4" "$REC/r4.txt" r4-sh "$T_UID"
+    _r4_sha=$(sha256sum "$W/v2.rpm"); _r4_sha=${_r4_sha%% *}
     rc_of env PATH="$W/shim-runuser" SUDO_UID="$T_UID" SUDO_GID="$T_GID" \
         /bin/sh "$SHIMPL" pkg-apply --pkg "$W/v2.rpm" --format rpm --app "$APP" \
+        --sha256 "$_r4_sha" \
         --env-file "$W/env.r4" --log "$EV/r4-sh.log"
     expect_rc R4 0 $?
     expect_ver R4 2.0-1 "sh 支路 rpm -U 退化腿真装"
+    want_line R4 "$EV/r4-sh.log" "package sha256 verified" "sh 侧暂存复核已走"
     want_line R4 "$EV/r4-sh.log" "dnf not found — skipping" "缺 dnf 退化证据"
     want_line R4 "$EV/r4-sh.log" "via rpm" "rpm -U 腿被选用"
     want_rec R4 "$REC/r4.txt" "uid=$T_UID" "runuser 降权腿重启探针 uid=tester"
@@ -548,13 +565,16 @@ leg_apk() {
     snap base-v1
     want_line apk-env "$STAMPS" "post-install" ".post-install scriptlet 已跑"
 
-    # K1a：AOT unsigned v1→v2 + SUDO_UID 降权——keys 空目录 → apk add --allow-untrusted
+    # K1a：AOT unsigned v1→v2 + SUDO_UID 降权——keys 空目录 → apk add --allow-untrusted。
+    # --sha256 走全参（同 D1 口径）。
     mk_env "$W/env.k1" "$REC/k1.txt" k1-aot "$T_UID"
+    _k1_sha=$(sha256sum "$W/v2u.apk"); _k1_sha=${_k1_sha%% *}
     rc_of env SUDO_UID="$T_UID" SUDO_GID="$T_GID" "$AOT" pkg-apply \
-        --pkg "$W/v2u.apk" --format apk --app "$APP" \
+        --pkg "$W/v2u.apk" --format apk --app "$APP" --sha256 "$_k1_sha" \
         --env-file "$W/env.k1" --log "$EV/k1a-aot.log"
     expect_rc K1A 0 $?
     expect_ver K1A 2.0.0-r0 "unsigned 包经 --allow-untrusted 腿真装"
+    want_line K1A "$EV/k1a-aot.log" "package sha256 verified" "root 侧暂存复核已走"
     want_rec K1A "$REC/k1.txt" "uid=$T_UID" "降权重启探针 uid=tester"
     want_rec K1A "$REC/k1.txt" "MYVAR=k1-aot" "env 回灌到达 --app"
     info "K1A keys 空目录 → --allow-untrusted 证据=装成（无该旗标本件必被 apk 拒）"
@@ -617,11 +637,13 @@ leg_apk() {
         && pass "K3-pre 前提 v1 基线直装" || fail "K3-pre" "v1 基线装失败"
     expect_ver K3-pre 1.0.0-r0 "前提账本=v1"
     mk_env "$W/env.k3" "$REC/k3.txt" k3-sh "$T_UID"
+    _k3_sha=$(sha256sum "$W/v2s.apk"); _k3_sha=${_k3_sha%% *}
     rc_of env SUDO_UID="$T_UID" SUDO_GID="$T_GID" /bin/sh "$SHIMPL" pkg-apply \
-        --pkg "$W/v2s.apk" --format apk --app "$APP" \
+        --pkg "$W/v2s.apk" --format apk --app "$APP" --sha256 "$_k3_sha" \
         --env-file "$W/env.k3" --log "$EV/k3-sh.log"
     expect_rc K3 0 $?
     expect_ver K3 2.0.0-r0 "sh 支路签名包经裸 apk add 真装（公钥验签过）"
+    want_line K3 "$EV/k3-sh.log" "package sha256 verified" "sh 侧暂存复核已走"
     want_rec K3 "$REC/k3.txt" "uid=$T_UID" "busybox su/setpriv 降权腿 uid=tester"
     want_rec K3 "$REC/k3.txt" "MYVAR=k3-sh" "sh 支路 env 回灌到达 --app"
 

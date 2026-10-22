@@ -59,7 +59,8 @@ public static class UpdaterBootstrapParityTests
         {
             startInfo.ArgumentList.Add(arg);
         }
-        using var process = Process.Start(startInfo)!;
+        using var process = TestProc.Start(startInfo)
+            ?? throw new InvalidOperationException("spawn timed out");
         // stdout/stderr 异步消费：任一管道写满未消费会把子进程卡在写端。
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
@@ -632,7 +633,8 @@ public static class UpdaterBootstrapParityTests
             startInfo.ArgumentList.Add(install);
             startInfo.ArgumentList.Add("--payload");
             startInfo.ArgumentList.Add(payload);
-            using var process = Process.Start(startInfo)!;
+            using var process = TestProc.Start(startInfo)
+            ?? throw new InvalidOperationException("spawn timed out");
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
             if (!process.WaitForExit(60_000))
@@ -1063,7 +1065,8 @@ public static class UpdaterBootstrapParityTests
         {
             startInfo.ArgumentList.Add(arg);
         }
-        using var process = Process.Start(startInfo)!;
+        using var process = TestProc.Start(startInfo)
+            ?? throw new InvalidOperationException("spawn timed out");
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit(60_000))
@@ -1124,7 +1127,8 @@ public static class UpdaterBootstrapParityTests
             {
                 sleeperStart.ArgumentList.Add("30");
             }
-            using var sleeper = Process.Start(sleeperStart)!;
+            using var sleeper = TestProc.Start(sleeperStart)
+                ?? throw new InvalidOperationException("sleeper spawn timed out");
             try
             {
                 foreach (var impl in Impls)
@@ -1361,11 +1365,17 @@ public static class UpdaterBootstrapParityTests
     // "缺席"语义不依赖宿主是否恰好装着 apt/dnf（Debian 系宿主也照样判 rc5）。
     // rm/rmdir 属 --env-file 用完即删（件 + pkg-* 暂存目录）的协议内工具；
     // stat/id/cat/timeout 属 --env-file 三重校验+限时预读的协议内工具
-    //（timeout 缺席时 sh 退裸 cat，属可选——PkgRealTool 找不到就不种）。
+    //（timeout 缺席时 sh 退裸 cat，属可选——PkgRealTool 找不到就不种）；
+    // mktemp/cp/mkdir 属包暂存（root 私有快照），sha256sum/shasum/openssl
+    // 属 --sha256 复核的退化链（全缺席时 sh 支路按"无法核验"拒——同样属
+    // 协议内行为差异，须按宿主可用性对断言而非照单全收）；find 属
+    // bundler-pkg.* 残件清扫（缺席即跳过——协议允许）。
     static void SeedShim(string shim)
     {
         foreach (var tool in new[] { "env", "dirname", "awk", "ls", "sed", "nohup", "tr", "rm", "rmdir",
-                                   "stat", "id", "cat", "timeout" })
+                                   "stat", "id", "cat", "timeout", "find",
+                                   "mktemp", "cp", "mkdir",
+                                   "sha256sum", "shasum", "openssl" })
         {
             var real = PkgRealTool(tool);
             if (real != tool && !File.Exists(Path.Combine(shim, tool)))
@@ -1379,13 +1389,13 @@ public static class UpdaterBootstrapParityTests
     // 本进程 euid——uid env 与 env 件同场的奇偶腿用真实 euid 当"调用者"。
     static string CurrentUserUid()
     {
-        using var id = Process.Start(new ProcessStartInfo(PkgRealTool("id"), "-u")
+        using var id = TestProc.Start(new ProcessStartInfo(PkgRealTool("id"), "-u")
         {
             UseShellExecute = false,
             RedirectStandardOutput = true,
-        })!;
+        }) ?? throw new InvalidOperationException("id spawn timed out");
         var uid = id.StandardOutput.ReadToEnd().Trim();
-        id.WaitForExit();
+        id.WaitForExit(60_000);
         return uid;
     }
 
@@ -1401,8 +1411,10 @@ public static class UpdaterBootstrapParityTests
     }
 
     // 包管理器 stub：记录 <名> <argv>|DF=<DEBIAN_FRONTEND> 一行后按 rc 退出。
-    static string PmStub(string bin, string name, int rc, string rec) =>
-        WritePkgStub(Path.Combine(bin, name),
+    // fileName 与记录名解耦：逐例独立 stub 路径防"重写进行中被旧分离树 exec
+    // 读到半截脚本"竞态，记录名保持工具本名不漂移断言面。
+    static string PmStub(string bin, string name, int rc, string rec, string? fileName = null) =>
+        WritePkgStub(Path.Combine(bin, fileName ?? name),
             "#!/bin/sh\n" +
             "{ printf '%s' '" + name + "'; for a do printf ' %s' \"$a\"; done;" +
             " printf '|DF=%s\\n' \"${DEBIAN_FRONTEND:-}\"; } >> '" + rec + "'\n" +
@@ -1411,8 +1423,8 @@ public static class UpdaterBootstrapParityTests
     // 降权工具 stub：记录 <名> <argv> 一行后链式执行内层——
     // setpriv/sudo/runuser 腿在 argv 里找 `env` 标记并 exec 其后内容，
     // su 腿找 `-c` 并交给 /bin/sh——端到端验证 env 回灌真的到达 --app。
-    static string DropStub(string bin, string name, string rec) =>
-        WritePkgStub(Path.Combine(bin, name),
+    static string DropStub(string bin, string name, string rec, string? fileName = null) =>
+        WritePkgStub(Path.Combine(bin, fileName ?? name),
             "#!/bin/sh\n" +
             "{ printf '%s' '" + name + "'; for a do printf ' %s' \"$a\"; done; printf '\\n'; } >> '" + rec + "'\n" +
             "while [ $# -gt 0 ]; do\n" +
@@ -1435,14 +1447,50 @@ public static class UpdaterBootstrapParityTests
     {
         for (var i = 0; i < 100; i++)
         {
-            var lines = File.Exists(rec) ? File.ReadAllLines(rec) : [];
+            var lines = CompleteLines(rec);
             if (lines.Length >= minLines)
             {
                 return lines;
             }
             Thread.Sleep(100);
         }
-        return File.Exists(rec) ? File.ReadAllLines(rec) : [];
+        return CompleteLines(rec);
+    }
+
+    // 只数换行终止的完整行：AppStub 的 app| 记录行由两次 printf/write 组成，
+    // File.ReadAllLines 会把尚无换行尾的半截段计作一行——慢宿主（qemu arm64 腿
+    // 实证一次，两次 write 间被调度拉开）读到 `app|pwd=<dir>` 裸半截会让
+    // DISPLAY/MYVAR 段断言假败。
+    static string[] CompleteLines(string rec)
+    {
+        if (!File.Exists(rec))
+        {
+            return [];
+        }
+        var text = File.ReadAllText(rec);
+        var end = text.LastIndexOf('\n');
+        if (end < 0)
+        {
+            return [];
+        }
+        var lines = text[..(end + 1)].Split('\n');
+        return lines[..^1];
+    }
+
+    // pm 记录行形态：" <名> <固定argv…> <暂存包>|DF=<DEBIAN_FRONTEND>"。
+    // 包经 root 私有暂存副本喂给 pm（AOT bundler-pkg-*，sh bundler-pkg.*）——
+    // 断言固定前缀 + 暂存目录名 + 原包基名尾，不逐字比路径。
+    static void AssertPmLine(string line, string argsPrefix, string pkg, string debianFrontend)
+    {
+        var suffix = "|DF=" + debianFrontend;
+        Assert.EndsWith(suffix, line);
+        var argv = line[..^suffix.Length];
+        Assert.StartsWith(argsPrefix + " ", argv);
+        var staged = argv[(argsPrefix.Length + 1)..];
+        Assert.EndsWith("/" + Path.GetFileName(pkg), staged);
+        var stageDir = Path.GetFileName(Path.GetDirectoryName(staged)!);
+        Assert.NotNull(stageDir);
+        Assert.StartsWith("bundler-pkg", stageDir);
     }
 
     static int InvokePkg(Impl impl, IReadOnlyDictionary<string, string> env,
@@ -1496,7 +1544,8 @@ public static class UpdaterBootstrapParityTests
         {
             startInfo.Environment[pair.Key] = pair.Value;
         }
-        using var process = Process.Start(startInfo)!;
+        using var process = TestProc.Start(startInfo)
+            ?? throw new InvalidOperationException("spawn timed out");
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit(60_000))
@@ -1546,13 +1595,64 @@ public static class UpdaterBootstrapParityTests
 
                 Assert.Equal(0, rc);
                 var lines = WaitRecord(rec, 3);
-                Assert.Equal(
-                    $"apt-get install -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold {pkg}|DF=noninteractive",
-                    lines[0]);
-                Assert.Equal(
-                    $"dpkg -i --force-confdef --force-confold {pkg}|DF=noninteractive",
-                    lines[1]);
+                AssertPmLine(lines[0],
+                    "apt-get install -y -o Dpkg::Options::=--force-confdef " +
+                    "-o Dpkg::Options::=--force-confold -o DPkg::Lock::Timeout=120",
+                    pkg, "noninteractive");
+                AssertPmLine(lines[1],
+                    "dpkg -i --force-confdef --force-confold", pkg, "noninteractive");
                 Assert.StartsWith("app|pwd=" + dir, lines[2]);
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void PkgApply_Sha256_VerifiedOnStagedCopy_Parity()
+    {
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "sha-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
+                var app = AppStub(dir, rec);
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", PmStub(bin, "dpkg", 0, rec)));
+
+                // 双侧各自算包字节 sha256——--sha256 复核在暂存副本上做（sh 侧
+                // 依赖 sha256sum/shasum/openssl 退化链，宿主全无才 rc4，CI
+                // POSIX 宿主恒有 sha256sum）。
+                var sha = Convert.ToHexString(
+                    System.Security.Cryptography.SHA256.HashData(
+                        File.ReadAllBytes(pkg))).ToLowerInvariant();
+                Assert.Equal(0, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--sha256", sha));
+                var lines = WaitRecord(rec, 2);
+                AssertPmLine(lines[0], "dpkg -i --force-confdef --force-confold",
+                    pkg, "noninteractive");
+                Assert.StartsWith("app|pwd=", lines[1]);
+
+                // 不匹配 → 确定性 rc4，pm 零调用（记录件不再增长）。
+                File.Delete(rec);
+                var wrong = new string('0', 64);
+                Assert.Equal(4, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--sha256", wrong));
+                Thread.Sleep(200);
+                Assert.False(File.Exists(rec));
+
+                // 畸形（非 64 hex）→ 用法错 rc3。
+                Assert.Equal(3, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--sha256", "deadbeef"));
             }
         }
         finally { Cleanup(root); }
@@ -1620,8 +1720,8 @@ public static class UpdaterBootstrapParityTests
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "rpm", "--app", app));
                 var lines = WaitRecord(rec, 3);
-                Assert.Equal($"zypper install -y {pkg}|DF=", lines[0]);
-                Assert.Equal($"rpm -U {pkg}|DF=", lines[1]);
+                AssertPmLine(lines[0], "zypper install -y", pkg, "");
+                AssertPmLine(lines[1], "rpm -U", pkg, "");
                 Assert.StartsWith("app|pwd=", lines[2]);
 
                 // --rollback 子形态：rpm 末位换 --oldpackage。
@@ -1629,7 +1729,7 @@ public static class UpdaterBootstrapParityTests
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "rpm", "--app", app, "--rollback"));
                 lines = WaitRecord(rec, 3);
-                Assert.Equal($"rpm -U --oldpackage {pkg}|DF=", lines[1]);
+                AssertPmLine(lines[1], "rpm -U --oldpackage", pkg, "");
             }
         }
         finally { Cleanup(root); }
@@ -1659,14 +1759,14 @@ public static class UpdaterBootstrapParityTests
                 // keys 目录空 → --allow-untrusted。
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "apk", "--app", app));
-                Assert.Equal($"apk add --allow-untrusted {pkg}|DF=", WaitRecord(rec, 2)[0]);
+                AssertPmLine(WaitRecord(rec, 2)[0], "apk add --allow-untrusted", pkg, "");
 
                 // 预置公钥在场 → 不加旗标。
                 File.Delete(rec);
                 File.WriteAllText(Path.Combine(keysDir, "bundler-abc123.rsa.pub"), "pub");
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "apk", "--app", app));
-                Assert.Equal($"apk add {pkg}|DF=", WaitRecord(rec, 2)[0]);
+                AssertPmLine(WaitRecord(rec, 2)[0], "apk add", pkg, "");
             }
         }
         finally { Cleanup(root); }
@@ -1994,10 +2094,11 @@ public static class UpdaterBootstrapParityTests
                 // fifo 特殊件（exec 位也授上——隔离"非普通文件"判拒本身）：
                 // sh -f 判拒、AOT IsRegularFile 判拒；File.Exists 只排目录的旧口径会收。
                 var fifo = Path.Combine(dir, "fifo");
-                using (var mkfifo = Process.Start(new ProcessStartInfo("mkfifo", fifo)
-                       { UseShellExecute = false })!)
+                using (var mkfifo = TestProc.Start(new ProcessStartInfo("mkfifo", fifo)
+                       { UseShellExecute = false })
+                       ?? throw new InvalidOperationException("mkfifo spawn timed out"))
                 {
-                    mkfifo.WaitForExit();
+                    mkfifo.WaitForExit(60_000);
                     Assert.Equal(0, mkfifo.ExitCode);
                 }
                 if (!OperatingSystem.IsWindows())
@@ -2168,23 +2269,26 @@ public static class UpdaterBootstrapParityTests
                 var seq = 0;
                 var rec = "";
                 var app = "";
+                // CMD_* 覆盖由 FreshCase 逐例指向新 stub 路径，初值不预置死路径。
+                var env = PkgEnv(
+                    ("PKEXEC_UID", "99999999999999999999"),
+                    ("SUDO_UID", "4242"),
+                    ("SUDO_GID", "4343"),
+                    ("BUNDLER_UPDATER_PASSWD_FILE", emptyPasswd));
                 void FreshCase()
                 {
                     var n = ++seq;
                     rec = Path.Combine(dir, "rec-" + n + ".txt");
                     app = AppStub(dir, rec, "app-under-test-" + n);
-                    PmStub(bin, "dpkg", 0, rec);
-                    DropStub(bin, "setpriv", rec);
+                    // stub 路径也须逐例换：上例分离树里尚未 exec 的降权器会去读
+                    // stub 文件——原地重写会让它读到半截脚本，半截 printf 记出
+                    // 裸 "setpriv" 行挤进新 rec（CI ubuntu 实证一次）。
+                    // CMD_* 覆盖缝指向新路径（env 覆盖优先于 command -v，双腿同口径）。
+                    env["BUNDLER_UPDATER_CMD_DPKG"] = PmStub(bin, "dpkg", 0, rec, "dpkg-" + n);
+                    env["BUNDLER_UPDATER_CMD_SETPRIV"] = DropStub(bin, "setpriv", rec, "setpriv-" + n);
                 }
 
                 // PKEXEC_UID 超 int64 → 值缺席落 SUDO_UID 兜底。
-                var env = PkgEnv(
-                    ("BUNDLER_UPDATER_CMD_DPKG", Path.Combine(bin, "dpkg")),
-                    ("BUNDLER_UPDATER_CMD_SETPRIV", Path.Combine(bin, "setpriv")),
-                    ("PKEXEC_UID", "99999999999999999999"),
-                    ("SUDO_UID", "4242"),
-                    ("SUDO_GID", "4343"),
-                    ("BUNDLER_UPDATER_PASSWD_FILE", emptyPasswd));
                 FreshCase();
                 Assert.Equal(0, InvokePkg(impl, env, shim,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app));
@@ -2430,7 +2534,7 @@ public static class UpdaterBootstrapParityTests
                     name => name == "dpkg" ? dpkgInShim : null,
                     "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app));
                 var lines = WaitRecord(rec, 2);
-                Assert.Equal($"dpkg -i --force-confdef --force-confold {pkg}|DF=noninteractive", lines[0]);
+                AssertPmLine(lines[0], "dpkg -i --force-confdef --force-confold", pkg, "noninteractive");
                 Assert.StartsWith("app|pwd=" + dir, lines[1]);
             }
         }

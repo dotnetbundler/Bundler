@@ -13,6 +13,18 @@ internal sealed class UpdateDownloader
 {
     private static readonly HttpClient SharedHttp = new();
 
+    // 体读停滞上界（ms）：feed/产物 HTTP 读共用；env 覆盖是测试缝，生产恒 120s。
+    internal static int BodyStallMilliseconds
+    {
+        get
+        {
+            var raw = Environment.GetEnvironmentVariable("BUNDLER_UPDATER_BODY_STALL");
+            return raw is { Length: > 0 } && int.TryParse(raw, out var ms) && ms > 0
+                ? ms
+                : 120_000;
+        }
+    }
+
     /// <summary>
     /// 拉取并验签清单：`<feedUrl>.sig` 与清单同源，用安装身份公钥验过才解析——
     /// 清单本身不可信：签名只绑产物字节，不验清单则换源可把旧签名件标成新版本降级安装。
@@ -21,11 +33,32 @@ internal sealed class UpdateDownloader
     internal async Task<UpdateFeed> FetchFeedAsync(
         string feedUrl, string publicPointBase64, CancellationToken cancellationToken)
     {
-        var bytes = await GetBytesAsync(feedUrl, cancellationToken);
+        // feed 本体与签名腿同一例外面：调用方契约"协议/校验/拒绝全部确定性抛
+        // UpdateException"——裸 HttpRequestException/IOException 会把只捕
+        // UpdateException 的调用方打穿。用户取消（ct 已请求）不算协议拒绝，原样
+        // 穿透；HttpClient.Timeout 产生的 OCE 不带用户取消标记——超时归
+        // UpdateException，不被误分类成"用户取消"静默漏出。
+        byte[] bytes;
+        try
+        {
+            bytes = await GetBytesAsync(feedUrl, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not UpdateException)
+        {
+            throw new UpdateException($"update feed '{feedUrl}' is unreachable.", exception);
+        }
         byte[] signature;
         try
         {
             signature = await GetBytesAsync(SignatureUrl(feedUrl), cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception exception) when (exception is not UpdateException)
         {
@@ -51,9 +84,10 @@ internal sealed class UpdateDownloader
                 $"update feed '{feedUrl}' failed signature verification — refused.");
         }
         using var stream = new MemoryStream(bytes);
+        UpdateFeed feed;
         try
         {
-            return UpdateJson.ReadFeed(stream)
+            feed = UpdateJson.ReadFeed(stream)
                 ?? throw new UpdateException($"update feed '{feedUrl}' is not a valid manifest.");
         }
         catch (Exception exception) when (exception is not UpdateException)
@@ -63,6 +97,33 @@ internal sealed class UpdateDownloader
             throw new UpdateException(
                 $"update feed '{feedUrl}' is not a valid manifest.", exception);
         }
+        // 畸形清单归一化先行：netstandard DCS 不跑字段初始化器——缺省键与显式
+        // null 都产 null 字段（net10 STJ 侧显式 null 同样 null），消费面
+        //（SelectArtifact 遍历/artifact.Url/Sha256.Length）裸 NRE 会打穿
+        //"协议/校验/拒绝全归 UpdateException"的调用方契约。
+        feed.Artifacts ??= new List<UpdateFeedArtifact>();
+        // artifact.file 经 Path.Combine 拼本地下载名——词法必须是单段文件名：
+        // 分隔符/../等会让签名清单把下载件写到下载目录之外（签名只保真不保意图，
+        // 词法收口在客户端侧做）。url/sha256 同列必携——null/空在下游消费点
+        //（ResolveArtifactLocation/Sha256.Length）同样以 NRE 形态漏出。
+        foreach (var artifact in feed.Artifacts)
+        {
+            if (artifact is null || artifact.Url is not { Length: > 0 } ||
+                artifact.Sha256 is not { Length: > 0 })
+            {
+                throw new UpdateException(
+                    $"update feed '{feedUrl}' carries an artifact missing url/sha256.");
+            }
+            var file = artifact.File;
+            if (file is not { Length: > 0 } || file is "." or ".." ||
+                file.IndexOf('/') >= 0 || file.IndexOf('\\') >= 0)
+            {
+                throw new UpdateException(
+                    $"update feed '{feedUrl}' carries artifact file '{file}' — " +
+                    "not a plain single-segment file name.");
+            }
+        }
+        return feed;
     }
 
     /// <summary>
@@ -112,48 +173,62 @@ internal sealed class UpdateDownloader
     /// <summary>
     /// 下载/复制产物到 destinationPath 并验 sha256（声明了才验——清单缺哈希视为协议错误）。
     /// http(s) 支持 .part 续传；本地件直接复制。哈希不符即删档抛错，绝不放行。
+    /// 抓取/IO/HTTP 异常全归 UpdateException（与 feed 腿同契约——裸
+    /// HttpRequestException/IOException 会把只捕 UpdateException 的调用方打穿）；
+    /// 用户取消（ct 已请求）原样穿透。
     /// </summary>
     internal async Task DownloadAsync(
         string location, UpdateFeedArtifact artifact, string destinationPath,
         Action<string>? log, CancellationToken cancellationToken)
     {
-        if (IsHttp(location))
+        try
         {
-            await DownloadHttpAsync(location, destinationPath, log, cancellationToken);
-        }
-        else
-        {
-            var source = location.StartsWith("file://", StringComparison.Ordinal)
-                ? new Uri(location).LocalPath
-                : location;
-            log?.Invoke($"update: copy '{source}' → '{destinationPath}'");
-            File.Copy(source, destinationPath, overwrite: true);
-        }
+            if (IsHttp(location))
+            {
+                await DownloadHttpAsync(location, destinationPath, log, cancellationToken);
+            }
+            else
+            {
+                var source = location.StartsWith("file://", StringComparison.Ordinal)
+                    ? new Uri(location).LocalPath
+                    : location;
+                log?.Invoke($"update: copy '{source}' → '{destinationPath}'");
+                File.Copy(source, destinationPath, overwrite: true);
+            }
 
-        // 校验失败连同 `.part` 一并清——陈旧残件留存会让下轮按同偏移续传，
-        // 服务端仍回 206 就再拼出同样的坏文件，永久循环。
-        var partPath = destinationPath + ".part";
-        if (artifact.Size > 0 && new FileInfo(destinationPath).Length != artifact.Size)
-        {
-            File.Delete(destinationPath);
-            TryDelete(partPath);
-            throw new UpdateException(
-                $"downloaded artifact size mismatch: expected {artifact.Size} bytes.");
+            // 校验失败连同 `.part` 一并清——陈旧残件留存会让下轮按同偏移续传，
+            // 服务端仍回 206 就再拼出同样的坏文件，永久循环。
+            var partPath = destinationPath + ".part";
+            if (artifact.Size > 0 && new FileInfo(destinationPath).Length != artifact.Size)
+            {
+                File.Delete(destinationPath);
+                TryDelete(partPath);
+                throw new UpdateException(
+                    $"downloaded artifact size mismatch: expected {artifact.Size} bytes.");
+            }
+            if (artifact.Sha256.Length == 0)
+            {
+                File.Delete(destinationPath);
+                TryDelete(partPath);
+                throw new UpdateException("manifest artifact carries no sha256 — refusing unverifiable payload.");
+            }
+            var actual = Sha256Hex(destinationPath);
+            if (!string.Equals(actual, artifact.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                File.Delete(destinationPath);
+                TryDelete(partPath);
+                throw new UpdateException("downloaded artifact sha256 mismatch — payload refused.");
+            }
+            log?.Invoke($"update: sha256 verified ({actual.Substring(0, 12)}…)");
         }
-        if (artifact.Sha256.Length == 0)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            File.Delete(destinationPath);
-            TryDelete(partPath);
-            throw new UpdateException("manifest artifact carries no sha256 — refusing unverifiable payload.");
+            throw;
         }
-        var actual = Sha256Hex(destinationPath);
-        if (!string.Equals(actual, artifact.Sha256, StringComparison.OrdinalIgnoreCase))
+        catch (Exception exception) when (exception is not UpdateException)
         {
-            File.Delete(destinationPath);
-            TryDelete(partPath);
-            throw new UpdateException("downloaded artifact sha256 mismatch — payload refused.");
+            throw new UpdateException($"download '{location}' failed.", exception);
         }
-        log?.Invoke($"update: sha256 verified ({actual.Substring(0, 12)}…)");
     }
 
     /// <summary>
@@ -298,12 +373,14 @@ internal sealed class UpdateDownloader
             TryDelete(destinationPath + ".part");
             return true;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
         catch (Exception exception) when (exception is not UpdateException)
         {
+            // 非用户取消的 OCE（HttpClient.Timeout/非 ct 触发的取消）同归差分
+            // 回落——超时态误当用户取消穿透会把调用方推向静默 catch(OCE)。
             log?.Invoke($"update: delta failed ({exception.Message}) — full download");
             TryDelete(destinationPath);
             return false;
@@ -349,15 +426,37 @@ internal sealed class UpdateDownloader
         await CopyExactlyAsync(input, output, length, cancellationToken);
     }
 
+    // 体读有界读的共享腿：每块独立给停滞上界（CancelAfter 每趟重置）——
+    // 挂起的响应体/Range 段不能拖死下载；用户取消（外层 ct）原样穿透，
+    // 停滞超时归 UpdateException。差分腿与全量腿共用同一停滞语义。
+    private static async Task<int> ReadBoundedAsync(
+        Stream input, byte[] buffer, int count, CancellationTokenSource stall,
+        CancellationToken cancellationToken, string what)
+    {
+        stall.CancelAfter(BodyStallMilliseconds);
+        try
+        {
+            return await input.ReadAsync(buffer, 0, count, stall.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new UpdateException(
+                $"{what} stalled — no bytes within {BodyStallMilliseconds / 1000}s.");
+        }
+    }
+
     private static async Task CopyExactlyAsync(
         Stream input, Stream output, long length, CancellationToken cancellationToken)
     {
         var buffer = new byte[81920];
         var remaining = length;
+        // Range/差分源读同样挂停滞界——HTTP 206 腿挂起与全量腿同险。
+        using var stall = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         while (remaining > 0)
         {
-            var read = await input.ReadAsync(
-                buffer, 0, (int)Math.Min(buffer.Length, remaining), cancellationToken);
+            var read = await ReadBoundedAsync(
+                input, buffer, (int)Math.Min(buffer.Length, remaining), stall,
+                cancellationToken, "delta source/range read");
             if (read == 0)
             {
                 throw new UpdateException("delta source/range read ended early.");
@@ -387,6 +486,22 @@ internal sealed class UpdateDownloader
 
     // `.part` 续传：服务端给了 Accept-Ranges 就接着写；否则整档重下。
     private async Task DownloadHttpAsync(
+        string url, string destinationPath, Action<string>? log, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await DownloadHttpCoreAsync(url, destinationPath, log, cancellationToken);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // HttpClient.Timeout 的 OCE 不带用户取消标记——发送侧超时是协议
+            // 事实不是用户取消，误穿透会被调用方 catch(OCE) 静默当取消。
+            throw new UpdateException(
+                $"download '{url}' timed out — server did not respond in time.");
+        }
+    }
+
+    private async Task DownloadHttpCoreAsync(
         string url, string destinationPath, Action<string>? log, CancellationToken cancellationToken)
     {
         var partPath = destinationPath + ".part";
@@ -424,10 +539,24 @@ internal sealed class UpdateDownloader
             response.EnsureSuccessStatusCode();
 
             var mode = offset > 0 ? FileMode.Append : FileMode.Create;
+            using (var input = await response.Content.ReadAsStreamAsync())
             using (var output = new FileStream(partPath, mode, FileAccess.Write, FileShare.None))
             {
-                await (await response.Content.ReadAsStreamAsync())
-                    .CopyToAsync(output, 81920, cancellationToken);
+                // 逐块停滞界：ResponseHeadersRead 下流读不受发送侧超时保护——
+                // 慢速/挂起连接会把下载拖死；每块独立给停滞上界。
+                using var stall = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                var buffer = new byte[81920];
+                while (true)
+                {
+                    var read = await ReadBoundedAsync(
+                        input, buffer, buffer.Length, stall, cancellationToken,
+                        $"download '{url}'");
+                    if (read == 0)
+                    {
+                        break;
+                    }
+                    await output.WriteAsync(buffer, 0, read, cancellationToken);
+                }
             }
             // 目标已存在（同一更新重下/复用下载目录）也要能落——netstandard2.0 无 Move 覆写重载。
             if (File.Exists(destinationPath))
@@ -455,7 +584,24 @@ internal sealed class UpdateDownloader
             using var response = await SharedHttp.GetAsync(
                 location, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsByteArrayAsync();
+            // 体读停滞界：ReadAsByteArrayAsync 不吃外层 ct——挂起的响应体会拖死取件。
+            var content = response.Content.ReadAsByteArrayAsync();
+            // 计时器挂独立 cts——分胜负即刻取消，不留 ≤120s 挂钟残件。
+            using var timer = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            if (await Task.WhenAny(content, Task.Delay(BodyStallMilliseconds, timer.Token))
+                    != content)
+            {
+                // 弃置腿观异常防 unobserved 上报；计时器已赢/随本次取消回收。
+                _ = content.ContinueWith(
+                    t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                timer.Cancel();
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new UpdateException(
+                    $"fetch of '{location}' stalled — body not complete within " +
+                    $"{BodyStallMilliseconds / 1000}s.");
+            }
+            timer.Cancel();
+            return await content;
         }
         var path = location.StartsWith("file://", StringComparison.Ordinal)
             ? new Uri(location).LocalPath

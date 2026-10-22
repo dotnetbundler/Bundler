@@ -735,15 +735,17 @@ public sealed class CliTests : TempBase
             var (code, _, err) = Run("bundle", "--input-dir", input, "--output-dir", output);
             Assert.Equal(0, code); // err 上下文由后续 Contains 断言给出
             Assert.Contains($"target={LinuxHostTarget}", err);
-            Assert.Contains("formats=deb,zip", err);
+            // 缺省集契约（BundleDefaults.DefaultFormatsForTarget）：glibc linux→单件 deb，
+            // " (default for" 尾锚把 "deb,zip" 之类的多件集挡在断言外。
+            Assert.Contains("formats=deb (default for", err);
             Assert.Contains("productName=coolapp", err);
             Assert.Contains("identifier=dev.bundler.coolapp", err);
             Assert.Contains("version=0.1.0", err);
             Assert.Contains("mainExecutable=coolapp", err);
             Assert.True(Directory.EnumerateFiles(output, "*.deb").Any(),
                 "expected a .deb in output: " + string.Join(",", Directory.EnumerateFiles(output)));
-            Assert.True(Directory.EnumerateFiles(output, "*.zip").Any(),
-                "expected a .zip in output: " + string.Join(",", Directory.EnumerateFiles(output)));
+            Assert.False(Directory.EnumerateFiles(output, "*.zip").Any(),
+                "linux 缺省集只产 deb——出现 zip 说明缺省集回退到了多件形态");
         }
         finally
         {

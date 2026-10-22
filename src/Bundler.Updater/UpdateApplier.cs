@@ -16,7 +16,7 @@ namespace DotNet.Bundler.Updater;
 /// </summary>
 internal sealed class UpdateApplier
 {
-    internal static Process Apply(
+    internal static ToolProcess Apply(
         UpdateInstallIdentity identity, UpdateFeedArtifact artifact, string artifactPath,
         string installDirectory, ApplyOptions options, Action<string>? log)
     {
@@ -27,11 +27,17 @@ internal sealed class UpdateApplier
         {
             case "nsis":
                 return StartReplay(artifactPath,
-                    options.SilentInstaller ? "/UPDATE /S" : "/UPDATE", log);
+                    options.SilentInstaller
+                        ? UpdateArgv.Join(new[] { "/UPDATE", "/S" })
+                        : "/UPDATE", log);
             case "msi":
                 return StartReplay(
                     ResolveMsiexec(),
-                    "/i \"" + artifactPath + "\" " + (options.SilentInstaller ? "/qn" : "/passive"),
+                    UpdateArgv.Join(new[]
+                    {
+                        "/i", artifactPath,
+                        options.SilentInstaller ? "/qn" : "/passive",
+                    }),
                     log);
             case "zip":
             case "app": // .app 以 zip 件分发：解出内层 .app 目录走同一换包通道
@@ -80,7 +86,7 @@ internal sealed class UpdateApplier
     /// <summary>回滚钩子：引导程序 `--rollback` 模式——备份复制回安装目录且不二次备份。
     /// 备份位置与换包时的保留决策一致：开启保留指数据区目录，未开启指兄弟位瞬备（多半已删→拒绝）。
     /// deb/rpm/alpineapk 身份改走 SyspkgReplay：同提权链重放留存旧包并带 --rollback。</summary>
-    internal static Process Rollback(
+    internal static ToolProcess Rollback(
         UpdateInstallIdentity identity,
         string installDirectory, ApplyOptions options, Action<string>? log)
     {
@@ -94,7 +100,7 @@ internal sealed class UpdateApplier
     }
 
     // 引导程序 = 换包执行体；从安装目录/包内取件复制到临时目录执行，防自锁。
-    private static Process RunBootstrapper(
+    private static ToolProcess RunBootstrapper(
         string? payloadDirectory, string installDirectory,
         ApplyOptions options, Action<string>? log, bool rollback = false,
         string? backupDirectory = null)
@@ -103,19 +109,58 @@ internal sealed class UpdateApplier
         var runDir = Path.Combine(
             options.StagingRoot, "bootstrap-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(runDir);
-        var arguments =
-            "apply --install-dir \"" + installDirectory + "\"" +
-            (payloadDirectory is { Length: > 0 } payload ? " --payload \"" + payload + "\"" : "") +
-            (rollback ? " --rollback" : "") +
-            (backupDirectory is { Length: > 0 } bd ? " --backup-dir \"" + bd + "\"" : "") +
-            (!rollback && options.KeepRollbackBackup
-                ? " --retain-backup-to \"" + ResolveRetentionDirectory(installDirectory, options) + "\"" : "") +
-            (options.WaitPid is { } pid ? " --wait-pid " + pid : "") +
-            // --app 必须在客户端 cwd 绝对化——引导件以临时目录为工作目录，相对路径会静默解析失败。
-            (options.AppPath is { Length: > 0 } app ? " --app \"" + Path.GetFullPath(app) + "\"" : "") +
-            (options.KeepPayload ? " --keep-payload" : "") +
-            // --log 同理按客户端 cwd 绝对化——相对路径会落进引导件临时目录随清理丢失。
-            (options.LogFile is { Length: > 0 } lf ? " --log \"" + Path.GetFullPath(lf) + "\"" : "");
+        // argv 经 UpdateArgv.Join 逐元转义——路径含 "/串尾 \ 在裸拼接下会撕裂
+        // 参数边界（最坏情形把 --install-dir/--backup-dir 解析到别的目录）。
+        var argv = new List<string> { "apply", "--install-dir", installDirectory };
+        if (payloadDirectory is { Length: > 0 } payload)
+        {
+            argv.Add("--payload");
+            argv.Add(payload);
+        }
+        if (rollback)
+        {
+            argv.Add("--rollback");
+        }
+        if (backupDirectory is { Length: > 0 } bd)
+        {
+            argv.Add("--backup-dir");
+            argv.Add(bd);
+        }
+        if (!rollback && options.KeepRollbackBackup)
+        {
+            argv.Add("--retain-backup-to");
+            argv.Add(ResolveRetentionDirectory(installDirectory, options));
+        }
+        if (options.WaitPid is { } pid)
+        {
+            argv.Add("--wait-pid");
+            argv.Add(pid.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        else
+        {
+            // 换包不等宿主进程退出=安装目录正被运行中应用占用——文件替换/目录
+            // 搬移会竞态撕裂（应用中途读到半新半旧件）。API 面不强填当前 pid
+            //（调用方可能是管理器进程而非应用本体），但无 wait 目标必须可观测。
+            log?.Invoke(
+                "update: WARN no --wait-pid — swap may race a running instance");
+        }
+        // --app 必须在客户端 cwd 绝对化——引导件以临时目录为工作目录，相对路径会静默解析失败。
+        if (options.AppPath is { Length: > 0 } app)
+        {
+            argv.Add("--app");
+            argv.Add(Path.GetFullPath(app));
+        }
+        if (options.KeepPayload)
+        {
+            argv.Add("--keep-payload");
+        }
+        // --log 同理按客户端 cwd 绝对化——相对路径会落进引导件临时目录随清理丢失。
+        if (options.LogFile is { Length: > 0 } lf)
+        {
+            argv.Add("--log");
+            argv.Add(Path.GetFullPath(lf));
+        }
+        var arguments = UpdateArgv.Join(argv);
 
         if (ResolveBootstrapper(options.BootstrapperPath, installDirectory) is { } binary)
         {
@@ -123,14 +168,25 @@ internal sealed class UpdateApplier
             File.Copy(binary, staged, overwrite: true);
             MakeExecutable(staged);
             log?.Invoke($"update: bootstrapper '{staged}' {arguments}");
-            return Start(staged, arguments, runDir, shellExecute: false);
+            return Start(staged, argv, runDir);
         }
         if (ResolveBootstrapperScript(options.BootstrapperPath, installDirectory) is { } script)
         {
             var staged = Path.Combine(runDir, "bundler-updater.sh");
             File.Copy(script, staged, overwrite: true);
             log?.Invoke($"update: bootstrapper(script) '{staged}' {arguments}");
-            return Start("/bin/sh", "\"" + staged + "\" " + arguments, runDir, shellExecute: false);
+            var scriptArgv = new List<string> { staged };
+            scriptArgv.AddRange(argv);
+            return Start("/bin/sh", scriptArgv, runDir);
+        }
+        if (File.Exists(installDirectory))
+        {
+            // 文件级安装（AppImage）装位里塞不进注入件——自动解析注定失败，
+            // 与"目录装位未带 update 件"分两路报错，免得调用方查错方向。
+            throw new UpdateException(
+                $"no bootstrapper for file-level install '{installDirectory}' — " +
+                "pass ApplyOptions.BootstrapperPath explicitly or ship bundler-updater " +
+                "next to the image.");
         }
         throw new UpdateException(
             "no bootstrapper found (bundler-updater[.exe]/bundler-updater.sh) — " +
@@ -217,6 +273,42 @@ internal sealed class UpdateApplier
             return staging;
         }
         throw new UpdateException($"archive '{sourcePath}' produced no payload content.");
+    }
+
+    // 暂存根默认路径：POSIX %TEMP%=/tmp 跨用户共享——按用户名分槽。
+    // 分槽名必须单射（非允许字符一律 _xNNNN 编码，含 '_' 自身——"a b"/"a_b"
+    // 这类洗净同形不并槽）；用户名缺席（最小容器无 passwd 条目）回退
+    // euid 数字槽——仍保 per-user 语义不回落共享名。
+    // UpdateClientOptions.DownloadDirectory 同根复用（同一暂存域）。
+    internal static string DefaultStagingRoot()
+    {
+        var user = SanitizePathSegment(Environment.UserName);
+        if (user.Length == 0 && UnixFileTypes.TryGetEUid(out var uid))
+        {
+            // '_u' 前缀保证与任何真实用户名编码结果不并槽（'_' 恒被编码）。
+            user = "_u" + uid;
+        }
+        var name = user.Length > 0 ? "bundler-update-" + user : "bundler-update";
+        return Path.Combine(Path.GetTempPath(), name);
+    }
+
+    // internal：单射性有单测断言（"a b"/"a_b"/"a_x0020b" 三名不并槽）。
+    internal static string SanitizePathSegment(string value)
+    {
+        var builder = new System.Text.StringBuilder(value.Length);
+        foreach (var c in value)
+        {
+            if (char.IsLetterOrDigit(c) || c is '.' or '-')
+            {
+                builder.Append(c);
+            }
+            else
+            {
+                // 单射编码：'_' 也在编码面内——字面 "_x0020" 与转义结果不并槽。
+                builder.Append("_x").Append(((int)c).ToString("x4"));
+            }
+        }
+        return builder.ToString();
     }
 
     private static string PrepareStaging(ApplyOptions options)
@@ -362,22 +454,33 @@ internal sealed class UpdateApplier
         path.StartsWith(prefix, comparison) &&
         (path.Length == prefix.Length || path[prefix.Length] is '/' or '\\');
 
-    private static Process StartReplay(string file, string arguments, Action<string>? log)
+    private static ToolProcess StartReplay(string file, string arguments, Action<string>? log)
     {
         log?.Invoke($"update: replay '{file}' {arguments}");
-        return Start(file, arguments, Path.GetDirectoryName(file) ?? ".", shellExecute: true);
+        // ShellExecute 腿（Windows 安装器重放）——参数以 lpParameters 整串传递。
+        var startInfo = new ToolProcessStartInfo
+        {
+            FileName = file,
+            ArgumentLine = arguments,
+            UseShellExecute = true,
+            WorkingDirectory = Path.GetDirectoryName(file) ?? ".",
+        };
+        return ToolProcess.Start(startInfo)
+            ?? throw new UpdateException($"failed to start '{file}'.");
     }
 
-    private static Process Start(string file, string arguments, string workingDirectory,
-        bool shellExecute)
+    // 结构化 spawn 腿（POSIX bootstrapper/重启）——argv 列表不经 shell 转义层。
+    private static ToolProcess Start(string file, IReadOnlyList<string> arguments,
+        string workingDirectory)
     {
-        var startInfo = new ProcessStartInfo(file, arguments)
+        var startInfo = new ToolProcessStartInfo
         {
-            UseShellExecute = shellExecute,
+            FileName = file,
             WorkingDirectory = workingDirectory,
-            CreateNoWindow = !shellExecute,
         };
-        return Process.Start(startInfo)
+        startInfo.Arguments.AddRange(arguments);
+        // 分离 spawn（bootstrap/重启腿）——拉起即退语义，句柄只供留痕/观察用。
+        return ToolProcess.Start(startInfo)
             ?? throw new UpdateException($"failed to start '{file}'.");
     }
 
@@ -389,9 +492,13 @@ internal sealed class UpdateApplier
         }
         try
         {
-            using var process = Process.Start(new ProcessStartInfo("/bin/chmod", "+x \"" + path + "\"")
-            { UseShellExecute = false });
-            process?.WaitForExit(10_000);
+            var chmodInfo = new ToolProcessStartInfo { FileName = "/bin/chmod" };
+            chmodInfo.Arguments.AddRange(new[] { "+x", path });
+            using var process = ToolProcess.Start(chmodInfo);
+            if (process is not null)
+            {
+                process.WaitForExit(10_000);
+            }
         }
         catch (Exception)
         {
@@ -402,7 +509,9 @@ internal sealed class UpdateApplier
 /// <summary>应用参数：等谁退出、重启哪个、引导件/暂存/日志覆盖点。</summary>
 public sealed class ApplyOptions
 {
-    /// <summary>引导程序的等待对象——通常是发起更新的当前进程。</summary>
+    /// <summary>引导程序的等待对象——通常是发起更新的当前进程（Environment.ProcessId）。
+    /// 不填时换包不等任何进程退出：只在你确定安装目录此刻无运行中实例时才可省略，
+    /// 客户端会打 WARN 可观测。</summary>
     public int? WaitPid { get; init; }
     /// <summary>换包完成后重启的应用路径（.app 目录件在 mac 走 open）。</summary>
     public string? AppPath { get; init; }
@@ -419,9 +528,10 @@ public sealed class ApplyOptions
     public string? RollbackBackupDirectory { get; init; }
     /// <summary>引导件显式路径——默认探测安装目录内注入件。</summary>
     public string? BootstrapperPath { get; init; }
-    /// <summary>暂存根——默认系统临时目录下的 bundler-update。</summary>
-    public string StagingRoot { get; init; } =
-        Path.Combine(Path.GetTempPath(), "bundler-update");
+    /// <summary>暂存根——默认系统临时目录下的 per-user `bundler-update[-&lt;user&gt;]`：
+    /// POSIX 的 /tmp 跨用户共享，先建者的 0700/0755 权限会卡死后到用户的暂存目录，
+    /// 目录名按用户名分槽规避（Windows TEMP 本已 per-user，同口径零成本）。</summary>
+    public string StagingRoot { get; init; } = UpdateApplier.DefaultStagingRoot();
     /// <summary>引导程序日志文件。</summary>
     public string? LogFile { get; init; }
 }

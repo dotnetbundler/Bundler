@@ -627,6 +627,27 @@ public sealed class BootstrapPlanTests : TempBase
         return path;
     }
 
+    // 包管理器 argv 尾段=root 私有暂存副本（bundler-pkg-*/<包基名>），不是
+    // 调用方原件——暂存快照经 --sha256 复核后才过 pm，装期间原件被改写也
+    // 影响不了本轮回放。
+    private static void AssertStagedPkgArg(string arg, string originalPkg)
+    {
+        Assert.Equal(Path.GetFileName(originalPkg), Path.GetFileName(arg));
+        Assert.StartsWith("bundler-pkg-",
+            Path.GetFileName(Path.GetDirectoryName(arg)!));
+    }
+
+    private static string PkgSha256(string path)
+    {
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var builder = new System.Text.StringBuilder(64);
+        foreach (var b in sha.ComputeHash(File.ReadAllBytes(path)))
+        {
+            builder.Append(b.ToString("x2"));
+        }
+        return builder.ToString();
+    }
+
     private string WriteApp()
     {
         var path = TempPath("app");
@@ -672,6 +693,69 @@ public sealed class BootstrapPlanTests : TempBase
             ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app, "--bogus", "x"]));
         Assert.Equal(3, PkgApplyPlan.Run(
             ["pkg-apply", "--pkg", TempPath("missing.deb"), "--format", "deb", "--app", app]));
+
+        // --sha256 词法：非 64 位十六进制归用法错（rc3）——空/短/非 hex 全拒。
+        Assert.Equal(3, PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--sha256", "deadbeef"]));
+        Assert.Equal(3, PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--sha256", new string('g', 64)]));
+    }
+
+    [Fact]
+    public void PkgApply_Sha256_VerifiedOnStagedCopy()
+    {
+        // --sha256 复核落在暂存副本上（root 侧读件——客户端验签→root 装的
+        // TOCTOU 窗收口）：匹配才进前端链；不匹配确定性 rc4 且 pm 零调用，
+        // 原件内容与暂存核验逐位绑定。
+        var pkg = WritePkg();
+        var app = WriteApp();
+        SetupPkgProbes(commands: new Dictionary<string, string>
+        {
+            ["dpkg"] = "/stub/dpkg",
+            ["nohup"] = "/stub/nohup",
+        });
+
+        Assert.Equal(0, PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--sha256", PkgSha256(pkg)]));
+        Assert.Single(_pkgExecs);
+
+        _pkgExecs.Clear();
+        _pkgSpawns.Clear();
+        var wrong = new string('0', 64);
+        Assert.Equal(4, PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--sha256", wrong]));
+        Assert.Empty(_pkgExecs);
+        Assert.Empty(_pkgSpawns);
+    }
+
+    [Fact]
+    public void PkgApply_StageCleanup_OnAllExits()
+    {
+        // 暂存根在成功/失败/拒绝每条出口回收——bundler-pkg-* 不滞留 TEMP。
+        var pkg = WritePkg();
+        var app = WriteApp();
+        SetupPkgProbes(commands: new Dictionary<string, string>
+        {
+            ["dpkg"] = "/stub/dpkg",
+            ["nohup"] = "/stub/nohup",
+        });
+        var tempRoot = Path.GetTempPath();
+        var before = Directory.GetDirectories(tempRoot, "bundler-pkg-*");
+
+        Assert.Equal(0, PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app]));
+        // sha256 拒绝腿同样清场。
+        Assert.Equal(4, PkgApplyPlan.Run(
+            ["pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+             "--sha256", new string('0', 64)]));
+
+        var strays = Directory.GetDirectories(tempRoot, "bundler-pkg-*")
+            .Where(d => !before.Contains(d)).ToArray();
+        Assert.Empty(strays);
     }
 
     [Fact]
@@ -698,8 +782,10 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Equal(
             ["install", "-y",
              "-o", "Dpkg::Options::=--force-confdef",
-             "-o", "Dpkg::Options::=--force-confold", pkg],
-            exec.Args);
+             "-o", "Dpkg::Options::=--force-confold",
+             "-o", "DPkg::Lock::Timeout=120"],
+            exec.Args[..^1]);
+        AssertStagedPkgArg(exec.Args[^1], pkg);
         Assert.Equal("noninteractive", exec.Env?["DEBIAN_FRONTEND"]);
 
         // apt-get 失败 → dpkg 退化（同级 env/force 旗标，argv 换 dpkg -i 形）。
@@ -713,7 +799,8 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Equal(2, _pkgExecs.Count);
         Assert.Equal("/stub/apt-get", _pkgExecs[0].File);
         Assert.Equal("/stub/dpkg", _pkgExecs[1].File);
-        Assert.Equal(["-i", "--force-confdef", "--force-confold", pkg], _pkgExecs[1].Args);
+        Assert.Equal(["-i", "--force-confdef", "--force-confold"], _pkgExecs[1].Args[..^1]);
+        AssertStagedPkgArg(_pkgExecs[1].Args[^1], pkg);
         Assert.Equal("noninteractive", _pkgExecs[1].Env?["DEBIAN_FRONTEND"]);
     }
 
@@ -764,9 +851,11 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Equal(0, rc);
         Assert.Equal(2, _pkgExecs.Count);
         Assert.Equal("/stub/zypper", _pkgExecs[0].File);
-        Assert.Equal(["install", "-y", pkg], _pkgExecs[0].Args);
+        Assert.Equal(["install", "-y"], _pkgExecs[0].Args[..^1]);
+        AssertStagedPkgArg(_pkgExecs[0].Args[^1], pkg);
         Assert.Equal("/stub/rpm", _pkgExecs[1].File);
-        Assert.Equal(["-U", pkg], _pkgExecs[1].Args);
+        Assert.Equal(["-U"], _pkgExecs[1].Args[..^1]);
+        AssertStagedPkgArg(_pkgExecs[1].Args[^1], pkg);
 
         // --rollback 子形态：zypper 仍先跑（不感知 rollback），rpm 链末位换 --oldpackage。
         _pkgExecs.Clear();
@@ -778,7 +867,8 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Equal(0, rc);
         Assert.Equal(2, _pkgExecs.Count);
         Assert.Equal("/stub/rpm", _pkgExecs[1].File);
-        Assert.Equal(["-U", "--oldpackage", pkg], _pkgExecs[1].Args);
+        Assert.Equal(["-U", "--oldpackage"], _pkgExecs[1].Args[..^1]);
+        AssertStagedPkgArg(_pkgExecs[1].Args[^1], pkg);
     }
 
     [Fact]
@@ -797,7 +887,8 @@ public sealed class BootstrapPlanTests : TempBase
             ["pkg-apply", "--pkg", pkg, "--format", "rpm", "--app", app]));
         var exec = Assert.Single(_pkgExecs);
         Assert.Equal("/stub/dnf", exec.File);
-        Assert.Equal(["install", "-y", pkg], exec.Args);
+        Assert.Equal(["install", "-y"], exec.Args[..^1]);
+        AssertStagedPkgArg(exec.Args[^1], pkg);
     }
 
     [Fact]
@@ -821,14 +912,18 @@ public sealed class BootstrapPlanTests : TempBase
             commands: commands);
         Assert.Equal(0, PkgApplyPlan.Run(
             ["pkg-apply", "--pkg", pkg, "--format", "apk", "--app", app]));
-        Assert.Equal(["add", "--allow-untrusted", pkg], Assert.Single(_pkgExecs).Args);
+        var addExec = Assert.Single(_pkgExecs);
+        Assert.Equal(["add", "--allow-untrusted"], addExec.Args[..^1]);
+        AssertStagedPkgArg(addExec.Args[^1], pkg);
 
         File.WriteAllText(Path.Combine(keysDir, "bundler-abc123.rsa.pub"), "pub");
         _pkgExecs.Clear();
         _pkgSpawns.Clear();
         Assert.Equal(0, PkgApplyPlan.Run(
             ["pkg-apply", "--pkg", pkg, "--format", "apk", "--app", app]));
-        Assert.Equal(["add", pkg], Assert.Single(_pkgExecs).Args);
+        addExec = Assert.Single(_pkgExecs);
+        Assert.Equal(["add"], addExec.Args[..^1]);
+        AssertStagedPkgArg(addExec.Args[^1], pkg);
 
         // keys 目录缺席 → --allow-untrusted。
         _pkgExecs.Clear();
@@ -841,7 +936,9 @@ public sealed class BootstrapPlanTests : TempBase
             commands: commands);
         Assert.Equal(0, PkgApplyPlan.Run(
             ["pkg-apply", "--pkg", pkg, "--format", "apk", "--app", app]));
-        Assert.Equal(["add", "--allow-untrusted", pkg], Assert.Single(_pkgExecs).Args);
+        addExec = Assert.Single(_pkgExecs);
+        Assert.Equal(["add", "--allow-untrusted"], addExec.Args[..^1]);
+        AssertStagedPkgArg(addExec.Args[^1], pkg);
     }
 
     [Fact]

@@ -45,7 +45,7 @@ internal static class ToolRunner
     // 挂死插桩：BUNDLER_TOOL_TRACE 指向文件时，每次真实 spawn 追加一行（打开即写即关，
     // 进程被硬杀也不丢已落行）——CI 侧落盘经 ci-logs-* 工件上传，挂死现场=最后一条在途 spawn。
     // argv 过密旗标遮罩：security -p / notarytool --password 等凭证位不落明文（秘密不入可回显日志）。
-    private static void TraceSpawn(Process process, Request request)
+    private static void TraceSpawn(ToolProcess process, Request request)
     {
         var path = Environment.GetEnvironmentVariable("BUNDLER_TOOL_TRACE");
         if (string.IsNullOrEmpty(path))
@@ -109,17 +109,13 @@ internal static class ToolRunner
     private static int WaitMilliseconds(TimeSpan timeout) =>
         (int)Math.Max(1, Math.Min(timeout.TotalMilliseconds, int.MaxValue - 1));
 
-    // netstandard2.0 无 Kill(true)：新目标杀整棵树，旧面只杀直系子——
+    // ToolProcess.Kill 默认即树杀（Unix=killpg 覆盖孙代，Windows 新框架杀树/旧框架直系）；
     // 孙代持管道时由有界排空收尾兜底，不无限等 ReadToEnd。
-    private static void KillProcessTree(Process process)
+    private static void KillProcessTree(ToolProcess process)
     {
         try
         {
-#if NET10_0_OR_GREATER
-            process.Kill(entireProcessTree: true);
-#else
             process.Kill();
-#endif
         }
         catch
         {
@@ -179,33 +175,35 @@ internal static class ToolRunner
             return await handler(request, cancellationToken).ConfigureAwait(false);
         }
 
-        var startInfo = new ProcessStartInfo
+        var startInfo = new ToolProcessStartInfo
         {
             FileName = executable,
-            Arguments = string.Join(" ", request.Arguments.Select(QuoteArgument)),
             WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            CreateNoWindow = true
         };
+        // argv 直传列表——Unix 自有 spawn 吃原生 argv 不经引号串（quoting 只属 Windows 面）。
+        startInfo.Arguments.AddRange(request.Arguments);
         if (environment is not null)
         {
             foreach (var pair in environment)
             {
-                startInfo.EnvironmentVariables[pair.Key] = pair.Value;
+                startInfo.Environment[pair.Key] = pair.Value;
             }
         }
 
-        using var process = new Process { StartInfo = startInfo };
+        // spawn 有界：exec 失败抛（catch→null 同位"未能产出子进程"），60s 无回报返回 null。
+        ToolProcess? maybeProcess;
         try
         {
-            if (!process.Start())
-            {
-                return null;
-            }
+            maybeProcess = ToolProcess.Start(startInfo);
         }
         catch (Exception)
+        {
+            return null;
+        }
+        using var process = maybeProcess;
+        if (process is null)
         {
             return null;
         }
@@ -218,6 +216,7 @@ internal static class ToolRunner
             try { if (!process.HasExited) KillProcessTree(process); } catch { }
         }))
         {
+            // Unix 自有 spawn：退出观察=waitpid 轮询直查内核，不依赖运行时事件链。
             if (!process.WaitForExit(WaitMilliseconds(bound)))
             {
                 KillProcessTree(process);
@@ -247,26 +246,24 @@ internal static class ToolRunner
         IReadOnlyList<string> arguments,
         IReadOnlyDictionary<string, string>? environment = null)
     {
-        var startInfo = new ProcessStartInfo
+        var startInfo = new ToolProcessStartInfo
         {
             FileName = executable,
-            Arguments = string.Join(" ", arguments.Select(QuoteArgument)),
-            UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            CreateNoWindow = true
         };
+        startInfo.Arguments.AddRange(arguments);
         if (environment is not null)
         {
             foreach (var pair in environment)
             {
-                startInfo.EnvironmentVariables[pair.Key] = pair.Value;
+                startInfo.Environment[pair.Key] = pair.Value;
             }
         }
 
-        using var process = Process.Start(startInfo)
+        using var process = ToolProcess.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start '{executable}'.");
-        TraceSpawn(process, new Request(executable, arguments, startInfo.WorkingDirectory, environment));
+        TraceSpawn(process, new Request(executable, arguments, startInfo.WorkingDirectory ?? "", environment));
         // 两路都异步排空（同步顺序读在管道缓冲满时会死锁）；等待再有界——子进程挂死不再是无底洞。
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();

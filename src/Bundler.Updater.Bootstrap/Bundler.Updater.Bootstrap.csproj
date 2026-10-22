@@ -17,8 +17,16 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Bundler.UnitTests" />
     <InternalsVisibleTo Include="Bundler.IntegrationTests" />
-    <!-- 普通文件判定件与打包侧同源链接编译——单源事实（stat S_IFREG），零程序集蔓延。 -->
+    <!-- 普通文件判定件与 argv 拼写件与打包侧/客户端同源链接编译——单源事实，零程序集蔓延。 -->
     <Compile Include="..\Bundler.Core\UnixFileTypes.cs" />
+    <Compile Include="..\Bundler.Core\Update\UpdateArgv.cs" />
+    <Compile Include="..\Bundler.Core\ToolProcess.cs" />
+    <Compile Include="..\Bundler.Core\NativeSpawnUnix.cs" />
   </ItemGroup>
+
+  <!-- musl 静态 -static-pie 件无 .dynsym，裸 DllImport("libc") 运行时不可解析
+       （syspkg 冻件腿 rc3 实证）——libc 直绑清单与 Bundler.Updater 包随包
+       透传面同源（单一事实在该 targets，勿在本文件再抄一份）。 -->
+  <Import Project="..\Bundler.Updater\buildTransitive\DotNet.Bundler.Updater.targets" />
 
 </Project>

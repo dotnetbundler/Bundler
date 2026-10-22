@@ -230,19 +230,19 @@ public sealed class AppImageApiTests : TempBase
     static void Run(string tool, string? gnupgHome, string[] arguments,
         string? stdoutTo = null)
     {
-        var info = new System.Diagnostics.ProcessStartInfo(tool)
+        var info = new DotNet.Bundler.Core.ToolProcessStartInfo
         {
+            FileName = tool,
             RedirectStandardError = true,
             RedirectStandardOutput = true,
-            UseShellExecute = false
         };
-        info.Arguments = string.Join(" ",
-            arguments.Select(a => "\"" + a.Replace("\"", "\\\"") + "\""));
+        info.Arguments.AddRange(arguments);
         if (gnupgHome is not null)
         {
-            info.EnvironmentVariables["GNUPGHOME"] = gnupgHome;
+            info.Environment["GNUPGHOME"] = gnupgHome;
         }
-        using var process = System.Diagnostics.Process.Start(info)!;
+        using var process = DotNet.Bundler.Core.ToolProcess.Start(info)
+            ?? throw new InvalidOperationException(tool + " spawn did not complete in 60s");
         var stdOut = process.StandardOutput.ReadToEndAsync();
         var stdErr = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit(120_000))

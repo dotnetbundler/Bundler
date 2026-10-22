@@ -170,6 +170,82 @@ public sealed class UpdateClientTests : TempBase
             client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task CheckForUpdateAsync_UnreachableFeed_UpdateException()
+    {
+        // 抓取失败（文件缺席/IO/HTTP 错）统一包 UpdateException——客户端契约
+        // "协议/校验/拒绝全确定性"，裸 IOException/HttpRequestException 不漏出。
+        var key = CoreUpdate.UpdateKeyMaterial.Generate();
+        var client = Client(TempPath("no-such-feed-dir"), key, currentVersion: "1.0.0");
+
+        await Assert.ThrowsAsync<UpdateException>(() =>
+            client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CheckForUpdateAsync_MultiSegmentArtifactFile_Rejected()
+    {
+        // artifact.file 只做本地下载文件名——多段词法（分隔符/../绝对路径）
+        // 会把下载件写到下载目录之外；签名保真不保意图，词法收口在客户端。
+        var artifact = Artifact("win-x64", "nsis", "app-2.0.0.exe");
+        artifact.File = "../escape.exe";
+        var (feedDir, key) = MakeFeed("2.0.0", [artifact]);
+        var client = Client(feedDir, key, currentVersion: "1.0.0");
+
+        await Assert.ThrowsAsync<UpdateException>(() =>
+            client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CheckForUpdateAsync_BackslashArtifactFile_Rejected()
+    {
+        // 反斜杠多段/跨分隔符词法同拒——Windows 写件面会被 \\ 解进目录结构。
+        var artifact = Artifact("win-x64", "nsis", "app-2.0.0.exe");
+        artifact.File = "..\\evil.exe";
+        var (feedDir, key) = MakeFeed("2.0.0", [artifact]);
+        var client = Client(feedDir, key, currentVersion: "1.0.0");
+
+        await Assert.ThrowsAsync<UpdateException>(() =>
+            client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CheckForUpdateAsync_NullArtifactFile_Rejected()
+    {
+        // 畸形清单的显式 null（"file":null）与非法词法同归 UpdateException——
+        // 裸 NRE 会打穿"协议/校验/拒绝全确定性 UpdateException"调用方契约。
+        var (feedDir, key) = MakeFeed("2.0.0",
+            [Artifact("win-x64", "nsis", "app-2.0.0.exe")]);
+        // JSON 字节手术产真 null——WriteFeed(WhenWritingNull) 会省略键而非写 null。
+        MutateFeedJson(feedDir, key, json =>
+        {
+            var mutated = json.Replace("\"file\":\"app-2.0.0.exe\"", "\"file\":null");
+            Assert.NotEqual(json, mutated);
+            return mutated;
+        });
+        var client = Client(feedDir, key, currentVersion: "1.0.0");
+
+        await Assert.ThrowsAsync<UpdateException>(() =>
+            client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CheckForUpdateAsync_NullArtifacts_TreatedAsEmpty()
+    {
+        // "artifacts":null 与空清单同义——无匹配 artifact 即无更新（null 不
+        // 崩进 NRE）。畸形仍是签名清单内的形状问题，客户端按空集确定性处理。
+        var (feedDir, key) = MakeFeed("2.0.0", []);
+        MutateFeedJson(feedDir, key, json =>
+        {
+            var mutated = json.Replace("\"artifacts\":[]", "\"artifacts\":null");
+            Assert.NotEqual(json, mutated);
+            return mutated;
+        });
+        var client = Client(feedDir, key, currentVersion: "1.0.0");
+
+        Assert.Null(await client.CheckForUpdateAsync(TestContext.Current.CancellationToken));
+    }
+
     // ---- 下载/验签/应用闸 ----
 
     [Fact]
@@ -233,6 +309,26 @@ public sealed class UpdateClientTests : TempBase
 
         Assert.Throws<UpdateException>(() =>
             client.Apply(info!, Path.Combine(Root, "never-verified.bin")));
+    }
+
+    [Theory]
+    [InlineData("a b", "a_b")]      // 空格与下划线不得并槽
+    [InlineData("a b", "a_x0020b")] // 字面 _xNNNN 与转义结果不得并槽
+    [InlineData("alice", "alice-")] // 尾连字符合法直过但形状不同
+    public void SanitizePathSegment_Injective(string left, string right)
+    {
+        // /tmp 跨用户共享的分槽名：非允许字符一律 _xNNNN 编码（含 '_' 自身），
+        // 不同用户名恒产不同段名——并槽会让先建者的目录权限卡死后到用户。
+        Assert.NotEqual(
+            UpdateApplier.SanitizePathSegment(left),
+            UpdateApplier.SanitizePathSegment(right));
+    }
+
+    [Fact]
+    public void SanitizePathSegment_SafeCharsPassThrough()
+    {
+        Assert.Equal("alice.d-9", UpdateApplier.SanitizePathSegment("alice.d-9"));
+        Assert.Equal("a_x005fb", UpdateApplier.SanitizePathSegment("a_b"));
     }
 
     // ---- 装置 ----
@@ -309,6 +405,17 @@ public sealed class UpdateClientTests : TempBase
         // 签名地址约定：<feed>.sig
         File.WriteAllBytes(feedPath + ".sig", EcdsaSigner.Sign(feedBytes, key));
         return (feedDir, key);
+    }
+
+    /// <summary>对清单 JSON 做字节手术并重签——产"畸形但签名有效"的清单
+    ///（WhenWritingNull 序列化写不出显式 null，须绕过模型层直接改字节）。</summary>
+    private void MutateFeedJson(
+        string feedDir, CoreUpdate.UpdateKeyMaterial key, Func<string, string> mutate)
+    {
+        var feedPath = Path.Combine(feedDir, "bundler-update-feed.json");
+        var feedBytes = Encoding.UTF8.GetBytes(mutate(File.ReadAllText(feedPath)));
+        File.WriteAllBytes(feedPath, feedBytes);
+        File.WriteAllBytes(feedPath + ".sig", EcdsaSigner.Sign(feedBytes, key));
     }
 }
 

@@ -125,6 +125,15 @@ public sealed class PackageContentContractTests
     }
 
     [Fact]
+    public void UpdaterPackageShipsMuslDirectPInvokeTransitive()
+    {
+        // musl static-pie 消费方的 libc 直绑清单——缺席则自更新 spawn 面在
+        // Alpine 静态发布里运行期全崩（.dynsym 不可解析 DllImport("libc")）。
+        var entries = Entries("DotNet.Bundler.Updater");
+        Assert.Contains("buildTransitive/DotNet.Bundler.Updater.targets", entries);
+    }
+
+    [Fact]
     public void WixPackageCarriesThirdPartyProvenance()
     {
         var entries = Entries("DotNet.Bundler.Wix");

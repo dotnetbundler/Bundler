@@ -276,10 +276,10 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
         Assert.True(ApkTools.HasNonzeroTail(member0),
             "The signature tar must not end with zero blocks.");
         var names = ApkTools.TarListNames(member0).StdOut.Trim();
-        Assert.Equal(".SIGN.RSA.bundler-test.rsa.rsa.pub", names);
+        Assert.Equal(".SIGN.RSA.bundler-test.rsa.pub", names);
 
         var sigBin = Path.Combine(dest, "sig.bin");
-        ApkTools.TarMemberBytesToFile(member0, ".SIGN.RSA.bundler-test.rsa.rsa.pub", sigBin);
+        ApkTools.TarMemberBytesToFile(member0, ".SIGN.RSA.bundler-test.rsa.pub", sigBin);
         var verify = ProcessRunner.Run("openssl",
             ["dgst", "-sha1", "-verify", _f.PublicKey, "-signature", sigBin,
              Path.Combine(dest, "member1.gz")]);
@@ -401,7 +401,7 @@ public sealed class AlpineApkIntegrationTests : IClassFixture<AlpineApkFixture>
         var result = DockerRunner.RunScript("alpine:latest",
             """
             set -e
-            cp /tmp/key.rsa.pub /etc/apk/keys/bundler-test.rsa.rsa.pub
+            cp /tmp/key.rsa.pub /etc/apk/keys/bundler-test.rsa.pub
             apk add /tmp/signed.apk >/dev/null
             bundler-apk-fixture smoke | grep -q "BundlerAlpineApkIntegrationFixture:smoke"
             apk del bundler-apk-fixture >/dev/null

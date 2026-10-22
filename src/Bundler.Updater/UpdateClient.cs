@@ -199,7 +199,7 @@ public sealed class UpdateClient
     /// 返回已派生的进程——调用方应立即退出让 wait-pid 生效（file-swap）、
     /// 让提权引导件接管（pkg-replay）或让安装器接管（installer-replay）。
     /// </summary>
-    public Process Apply(UpdateInfo info, string artifactPath, ApplyOptions? options = null)
+    public ToolProcess Apply(UpdateInfo info, string artifactPath, ApplyOptions? options = null)
     {
         // 未验签产物永不进入应用面——Verify 是唯一置位入口。
         if (!string.Equals(Path.GetFullPath(artifactPath), _verifiedArtifact,
@@ -226,7 +226,7 @@ public sealed class UpdateClient
 
     /// <summary>回滚钩子：换包留下的备份倒回安装目录（默认不保留回滚点——ApplyOptions.KeepRollbackBackup 开启后才有可回滚目标）。
     /// deb/rpm/alpineapk 身份按系统包 replay：重放 retention 留存的旧包，无留存件确定性拒绝。</summary>
-    public Process Rollback(ApplyOptions? options = null) =>
+    public ToolProcess Rollback(ApplyOptions? options = null) =>
         UpdateApplier.Rollback(_identity, _installDirectory, options ?? new ApplyOptions(), _options.Log);
 
     /// <summary>一步到位：查→下→验→启。无更新返回 false。</summary>
@@ -328,8 +328,10 @@ public sealed class UpdateClientOptions
     /// <summary>链路事件行输出（进度/决议/拒绝原因）。</summary>
     public Action<string>? Log { get; init; }
     /// <summary><see cref="UpdateClient.UpdateAsync"/> 一步法的下载落点目录。</summary>
+    /// <summary>下载暂存目录——与 ApplyOptions.StagingRoot 同一 per-user 根
+    ///（POSIX /tmp 跨用户共享，先建者权限会卡死后到用户——按用户名分槽）。</summary>
     public string DownloadDirectory { get; init; } =
-        Path.Combine(Path.GetTempPath(), "bundler-update", "downloads");
+        Path.Combine(UpdateApplier.DefaultStagingRoot(), "downloads");
     /// <summary>block-map 差分开关（默认开；清单无块表或本地无缓存时自动全量）。</summary>
     public bool EnableDelta { get; init; } = true;
 }

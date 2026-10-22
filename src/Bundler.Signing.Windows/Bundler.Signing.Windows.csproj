@@ -5,9 +5,14 @@
     <PackageId>DotNet.Bundler.Signing.Windows</PackageId>
     <Description>Reusable Windows Authenticode signing API for DotNet.Bundler and other .NET tools.</Description>
     <PackageTags>dotnet;authenticode;signing;windows;installer</PackageTags>
+    <DefineConstants>$(DefineConstants);BUNDLER_SIGNING_LINK</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Bundler.Abstractions\Bundler.Abstractions.csproj" />
+    <!-- 外部签名命令可在 Unix 宿主跑（osslsigncode 类）——进程面与全产品
+         同构件（Unix 自有 fork/exec），源码链接保持独立包不带 Core 依赖 -->
+    <Compile Include="..\Bundler.Core\ToolProcess.cs" />
+    <Compile Include="..\Bundler.Core\NativeSpawnUnix.cs" />
     <InternalsVisibleTo Include="Bundler.UnitTests" />
   </ItemGroup>
 </Project>

@@ -457,6 +457,12 @@ internal static class BootstrapPlan
         }
     }
 
+    // 判活对齐 sh pid_alive 的 fail-closed 语义：进程不存在（ArgumentException）
+    // 才算死；其余一切异常（无权限查看异属主进程=EPERM 对偶面、竞态取码失败）
+    // 按"判定不可得=存活"处理——宁等 --lock-timeout/--wait-timeout 超时，
+    // 也不把活着的持锁者误判死偷锁、不把活着的宿主当已退出跳等换包。
+    // sh 侧 kill -0 EPERM 后复核 /proc/<pid> 存在性，本侧无同样复核件——
+    // GetProcessById 全异常一律按活保守收口。
     private static bool ProcessAlive(int pid)
     {
         try
@@ -464,9 +470,13 @@ internal static class BootstrapPlan
             using var process = Process.GetProcessById(pid);
             return !process.HasExited;
         }
+        catch (ArgumentException)
+        {
+            return false; // 进程不存在=已退出
+        }
         catch (Exception)
         {
-            return false;
+            return true; // 判定不可得=按活——两误判方向都退化超时而非误操作
         }
     }
 
@@ -920,17 +930,9 @@ internal static class BootstrapPlan
         var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
         while (DateTime.UtcNow < deadline)
         {
-            try
+            if (!ProcessAlive(pid))
             {
-                using var process = Process.GetProcessById(pid);
-                if (process.HasExited)
-                {
-                    return;
-                }
-            }
-            catch (ArgumentException)
-            {
-                return; // 进程不存在即视为已退出
+                return;
             }
             Thread.Sleep(200);
         }
@@ -942,16 +944,17 @@ internal static class BootstrapPlan
     {
         log($"bundler-updater: restart '{appPath}'");
         // 分离子进程：引导程序退出后新进程继续存活；macOS .app 目录件交给 open 走 LaunchServices。
-        ProcessStartInfo startInfo;
+        ToolProcessStartInfo startInfo;
         if (OperatingSystem.IsWindows())
         {
-            startInfo = new ProcessStartInfo(appPath)
-            { UseShellExecute = true, WorkingDirectory = workingDirectory };
+            startInfo = new ToolProcessStartInfo
+            { FileName = appPath, UseShellExecute = true, WorkingDirectory = workingDirectory };
         }
         else if (OperatingSystem.IsMacOS() && MacAppGate.LooksLikeAppBundle(appPath))
         {
-            startInfo = new ProcessStartInfo("/usr/bin/open", ["-n", appPath])
-            { UseShellExecute = false, WorkingDirectory = workingDirectory };
+            startInfo = new ToolProcessStartInfo
+            { FileName = "/usr/bin/open", WorkingDirectory = workingDirectory };
+            startInfo.Arguments.AddRange(new[] { "-n", appPath });
         }
         else
         {
@@ -960,15 +963,31 @@ internal static class BootstrapPlan
             // /bin/sh exec 钉到 /dev/null（sh 版 `</dev/null >/dev/null 2>&1`
             // 同价）：分离进程继承调用方管道写端会让调用方 ReadToEnd 永等 EOF。
             // "$@" 逐参透传不经 shell 重解析——argv 拼写原样到达 nohup。
-            startInfo = new ProcessStartInfo("/bin/sh",
-                ["-c", "exec \"$@\" </dev/null >/dev/null 2>&1",
-                 "bundler-updater-spawn", "nohup", appPath])
-            { UseShellExecute = false, WorkingDirectory = workingDirectory };
+            // nohup 走与 pkg-apply 链同一 ResolveCommand——BUNDLER_UPDATER_CMD_NOHUP
+            // 覆盖缝双侧同名同源；缺席 WARN 跳过重启（不拦已提交的换包）。
+            var nohup = PkgApplyPlan.ResolveCommand("nohup");
+            if (nohup is null)
+            {
+                log("bundler-updater: WARN nohup not found — cannot detach restart");
+                return;
+            }
+            startInfo = new ToolProcessStartInfo
+            { FileName = "/bin/sh", WorkingDirectory = workingDirectory };
+            startInfo.Arguments.AddRange(new[]
+            {
+                "-c", "exec \"$@\" </dev/null >/dev/null 2>&1",
+                "bundler-updater-spawn", nohup, appPath
+            });
         }
         // 重启失败不致命：换包/回滚已完成，重启只是便利步骤——与 POSIX `|| true` 对齐为 WARN。
         try
         {
-            Process.Start(startInfo);
+            // 分离重启腿：返回的句柄即弃（拉起即退语义），reaper 线程兜底收尸。
+            // spawn 超时只意味"60s 内无 exec 回报"——已按失败留痕对齐 || true 口径。
+            if (ToolProcess.Start(startInfo) is null)
+            {
+                log("bundler-updater: WARN restart spawn timed out");
+            }
         }
         catch (Exception exception)
         {
@@ -1229,23 +1248,58 @@ internal static class BootstrapPlan
             try
             {
                 Directory.CreateDirectory(destination);
-                ProcessStartInfo startInfo = OperatingSystem.IsMacOS()
-                    ? new ProcessStartInfo("/usr/bin/ditto", [source, destination])
-                    : new ProcessStartInfo("cp", ["-a", source + "/.", destination + "/"]);
-                startInfo.RedirectStandardError = true;
-                using var process = Process.Start(startInfo);
-                // 必须先排空 stderr——cp/ditto 大量报错写满管道会反压阻塞子进程，
-                // WaitForExit 将永久卡死。ReadToEnd 排水直到子进程退出再取码。
-                var stderr = process!.StandardError.ReadToEnd();
-                process.WaitForExit();
-                if (process.ExitCode == 0)
+                var startInfo = new ToolProcessStartInfo
                 {
-                    return;
+                    FileName = OperatingSystem.IsMacOS() ? "/usr/bin/ditto" : "cp",
+                    RedirectStandardError = true,
+                };
+                if (OperatingSystem.IsMacOS())
+                {
+                    startInfo.Arguments.AddRange(new[] { source, destination });
                 }
-                DeleteNodeIfPresent(destination);
-                var detail = stderr.Trim();
-                if (detail.Length > 240) { detail = "…" + detail[^240..]; }
-                log($"bundler-updater: WARN host copy failed (exit {process.ExitCode}){(detail.Length > 0 ? $" — {detail}" : "")} — falling back to managed copy");
+                else
+                {
+                    startInfo.Arguments.AddRange(new[] { "-a", source + "/.", destination + "/" });
+                }
+                using var process = ToolProcess.Start(startInfo);
+                if (process is null)
+                {
+                    DeleteNodeIfPresent(destination);
+                    log("bundler-updater: WARN host copy spawn timed out — falling back to managed copy");
+                }
+                else
+                {
+                    // stderr 后台抽干+退出同盖一个 60s 界：同步 ReadToEnd 先排空再等会让
+                    // "活进程挂死"（cp/ditto 在 FIFO/设备件上 open 阻塞，stderr 永不 EOF）
+                    // 在界外无限挂住——与 sh 侧 timeout -k 10 60 cp 包裹的是同一威胁面。
+                    var stderrTask = process.StandardError.ReadToEndAsync();
+                    var wedged = !process.WaitForExit(60_000);
+                    if (wedged)
+                    {
+                        try { process.Kill(); } catch (Exception) { }
+                        process.WaitForExit(10_000);
+                    }
+                    // EOF 排空也给限窗：孙代继承管道写端时退出不等于 EOF（孙进程必死但
+                    // 其持管期间 ReadToEndAsync 不返）——5s 内读不到按无细节处理。
+                    var stderr = "";
+                    try { if (stderrTask.Wait(5_000)) stderr = stderrTask.Result; } catch (Exception) { }
+                    if (wedged)
+                    {
+                        DeleteNodeIfPresent(destination);
+                        log("bundler-updater: WARN host copy timed out — falling back to managed copy");
+                    }
+                    else if (process.ExitCode == 0)
+                    {
+                        return;
+                    }
+                    else
+                    {
+                        DeleteNodeIfPresent(destination);
+                        var detail = stderr.Trim();
+                        if (detail.Length > 240) { detail = "…" + detail[^240..]; }
+                        log($"bundler-updater: WARN host copy failed (exit {process.ExitCode}){(detail.Length > 0 ? $" — {detail}" : "")} — falling back to managed copy");
+                    }
+                }
             }
             catch (Exception exception)
             {

@@ -141,12 +141,14 @@ public sealed class UpdaterClientTests : TempBase
                 new Protocol.UpdateFeedArtifact
                 {
                     Target = "windows-x86_64", Format = "zip",
-                    Url = "other.zip", Sha256 = "0", Size = 1, Signature = "AA=="
+                    Url = "other.zip", File = "other.zip",
+                    Sha256 = "0", Size = 1, Signature = "AA=="
                 },
                 new Protocol.UpdateFeedArtifact
                 {
                     Target = "linux-x86_64", Format = "zip",
-                    Url = "app-2.0.0-linux-x86_64.zip", Sha256 = "0", Size = 1, Signature = "AA=="
+                    Url = "app-2.0.0-linux-x86_64.zip", File = "app-2.0.0-linux-x86_64.zip",
+                    Sha256 = "0", Size = 1, Signature = "AA=="
                 });
 
             var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
@@ -164,7 +166,7 @@ public sealed class UpdaterClientTests : TempBase
                 new Protocol.UpdateFeedArtifact
                 {
                     Target = "windows-x86_64", Format = "msi",
-                    Url = "x.msi", Sha256 = "0", Size = 1, Signature = "AA=="
+                    Url = "x.msi", File = "x.msi", Sha256 = "0", Size = 1, Signature = "AA=="
                 });
             var client2 = UpdateClient.FromInstallDirectory(install, "1.0.0");
             Assert.Null(await client2.CheckForUpdateAsync(TestContext.Current.CancellationToken));
@@ -300,6 +302,38 @@ public sealed class UpdaterClientTests : TempBase
             var path = await client.DownloadAsync(info, Path.Combine(directory, "dl"), TestContext.Current.CancellationToken);
             Assert.True(File.ReadAllBytes(path).SequenceEqual(File.ReadAllBytes(v2)));
             client.Verify(info, path);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Client_DownloadAsync_MissingLocalArtifact_WrappedAsUpdateException()
+    {
+        // 归一壳断言：本地腿 File.Copy 的 FileNotFoundException 与 http 腿
+        // HttpRequestException 同归 UpdateException——"抓取/IO/HTTP 全归
+        // UpdateException"契约的可区分断言（旧实现会漏裸 FileNotFoundException）。
+        // 消息含件名的断言是刻意的：类型归一之外还要钉住"失败的是哪个件"——
+        // 归一消息把 location 全路径带出来，不丢诊断面。
+        var directory = CreateTempDirectory();
+        try
+        {
+            var install = InstallWithSidecar(directory, out var material, out var feedDir);
+            WriteFeed(feedDir, "stable", "2.0.0", material, new Protocol.UpdateFeedArtifact
+            {
+                Target = "linux-x86_64", Format = "zip",
+                Url = "missing-2.0.0.zip", File = "missing-2.0.0.zip",
+                Sha256 = "0", Size = 1, Signature = "AA==",
+            });
+            var client = UpdateClient.FromInstallDirectory(install, "1.0.0");
+            var info = (await client.CheckForUpdateAsync(TestContext.Current.CancellationToken))!;
+
+            var exception = await Assert.ThrowsAsync<UpdateException>(() =>
+                client.DownloadAsync(info, Path.Combine(directory, "dl"),
+                    TestContext.Current.CancellationToken));
+            Assert.Contains("missing-2.0.0.zip", exception.Message);
         }
         finally
         {

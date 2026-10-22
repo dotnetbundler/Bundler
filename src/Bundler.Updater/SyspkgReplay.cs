@@ -45,9 +45,9 @@ internal static class SyspkgReplay
     /// <summary>
     /// 提权腿拉起缝：置非 null 即不真 spawn——由测试决定返回什么（任意退出码的
     /// 进程道具/抛异常），断言"spawn 抛异常才退化下一腿、已启动腿不重放"语义；
-    /// 生产为 null 走 Process.Start。
+    /// 生产为 null 走 ToolProcess.Start（Unix 经 libc posix_spawn——不碰运行时 spawn/reap 全局锁）。
     /// </summary>
-    internal static Func<ProcessStartInfo, Process?>? SpawnProbe;
+    internal static Func<ToolProcessStartInfo, ToolProcess?>? SpawnProbe;
 
     // 会话 env 件的固定键集——在场才写行，不在场跳过（§2.2 "等在"口径）。
     private static readonly string[] SessionEnvKeys =
@@ -62,7 +62,7 @@ internal static class SyspkgReplay
 
     private const string AskpassPrompt = "Authentication required to install the update";
 
-    // 拉起观察窗只用于退出码留痕与会话 env 删余，不是退化判据——Process.Start
+    // 拉起观察窗只用于退出码留痕与会话 env 删余，不是退化判据——spawn
     // 一旦返回有效句柄，该腿即终局：窗内任意 rc（含 pkexec 126 取消、127 鉴权
     // 失败、pkg-apply 3/4/5/6）都按"已拉起"交还句柄由调用方观察退出码，绝不
     // 补拉下一级（授权取消/拒绝/未知鉴权失败一律停，已执行安装器不重放）。
@@ -81,7 +81,7 @@ internal static class SyspkgReplay
     /// 留存副本再验签 → 提权退化链拉起安装位 bundler-updater。
     /// 返回的是提权器进程句柄（拉起即退语义）。signature = 清单上行 base64 签名。
     /// </summary>
-    internal static Process Apply(
+    internal static ToolProcess Apply(
         UpdateInstallIdentity identity, string artifactPath, string signature,
         string installDirectory, ApplyOptions options, Action<string>? log)
         => StartLaunch(
@@ -91,7 +91,7 @@ internal static class SyspkgReplay
     /// rollback 编排：同路径同提权链重放留存旧包并带 --rollback——
     /// 无留存件确定性拒绝，不做空转 replay。
     /// </summary>
-    internal static Process Rollback(
+    internal static ToolProcess Rollback(
         UpdateInstallIdentity identity,
         string installDirectory, ApplyOptions options, Action<string>? log)
         => StartLaunch(PlanRollback(identity, installDirectory, options, log), log);
@@ -125,22 +125,36 @@ internal static class SyspkgReplay
         try
         {
             retained = TryRetainPackage(artifactPath, retentionDir, signature, log);
+            string? pkgSha256;
             if (retained is not null)
             {
                 // B2 留存副本再验签：retention 目录与原件同为用户可写——验签对原路径做、
                 // 装的是留存副本，验→拷→root 读之间存在同用户替换窗。直喂提权
                 // pkg-apply 的件必须先自身过签：验不过即篡改/腐坏信号，确定性拒绝
                 // 不绕道降级（留存失败的原始路径降级属 B-N3 登记的另一条口径）。
-                if (!VerifyRetainedPackage(retained, identity.PublicKey))
+                // 验签同趟带出 sha256 交 --sha256——root 进程对暂存副本复核同值，
+                // 客户端验签与 root 安装间的验后替换窗随字节绑定归零。
+                if (!VerifyRetainedPackage(retained, identity.PublicKey, out pkgSha256, log))
                 {
                     throw new UpdateException(
                         $"retained package '{retained}' failed signature re-verification — refused.");
                 }
                 pkgArg = retained;
             }
+            else
+            {
+                // 原件降级腿同趟验签+哈希：清单签名本在手上，VerifyFile out 参
+                // 单次读取一并出指纹——验签→root 读取之间的同用户替换窗与留存腿
+                // 同口径归零（只哈希不验会把"签名仍有效"的断言留在规划时点）。
+                if (!VerifyOriginalPackage(pkgArg, signature, identity.PublicKey, out pkgSha256, log))
+                {
+                    throw new UpdateException(
+                        $"package '{pkgArg}' failed signature re-verification — refused.");
+                }
+            }
             envFile = TryWriteSessionEnvFile(options, out envDir, log);
             var verbArgv = BuildVerbArgv(
-                updaterArgv, pkgArg, format, app, envFile, rollback: false, LogFilePath(options));
+                updaterArgv, pkgArg, pkgSha256, format, app, envFile, rollback: false, LogFilePath(options));
             log?.Invoke($"update: pkg-apply '{pkgArg}' via {legs[0].Description}");
             var launch = BuildLaunch(legs[0], verbArgv, envFile, envDir);
             launch.Fallbacks = legs.Skip(1)
@@ -176,7 +190,8 @@ internal static class SyspkgReplay
         UpdateApplier.SweepStaleStaging(options.StagingRoot);
         PrecheckLedgerAndManagers(format, pkg);
         var retentionDir = ResolveRetentionDirectory(installDirectory, options);
-        var selected = PickRollbackPackage(retentionDir, identity.PublicKey, log, out var appliedBefore)
+        var selected = PickRollbackPackage(
+                retentionDir, identity.PublicKey, log, out var appliedBefore, out var pkgSha256)
             ?? throw new UpdateException(
                 $"no retained package to roll back '{pkg}' — " +
                 "rollback replays a package retained by a previous update through this client.");
@@ -189,7 +204,7 @@ internal static class SyspkgReplay
         {
             envFile = TryWriteSessionEnvFile(options, out envDir, log);
             var verbArgv = BuildVerbArgv(
-                updaterArgv, selected, format, app, envFile, rollback: true, LogFilePath(options));
+                updaterArgv, selected, pkgSha256, format, app, envFile, rollback: true, LogFilePath(options));
             TryWriteAppliedMarker(retentionDir, Path.GetFileName(selected), log);
             log?.Invoke($"update: pkg-apply rollback '{selected}' via {legs[0].Description}");
             var launch = BuildLaunch(legs[0], verbArgv, envFile, envDir);
@@ -337,7 +352,7 @@ internal static class SyspkgReplay
 
     // 探测退化链：pkexec → zenity/kdialog 问密码 + sudo -S → 裸 sudo——
     // 这里只做可用性探测排出有序腿表；首选腿 spawn 抛（探测后工具被删/执行位
-    // 丢失，Process.Start 未起成）时 StartLaunch 沿表退化下一腿——已 spawn 成
+    // 丢失，spawn 未起成）时 StartLaunch 沿表退化下一腿——已 spawn 成
     // 功的腿无论退出码都不再换腿，不起二次重试循环。
     // 问密码管线腿硬需要图形会话通道——DISPLAY/WAYLAND_DISPLAY 全缺席（headless）
     // 时 zenity/kdialog 必败，探测期直接不进表（tty 密码提示/NOPASSWD 场景靠裸 sudo）。
@@ -378,15 +393,17 @@ internal static class SyspkgReplay
     }
 
     // verb argv 按 §2.3 协议签名逐字：
-    //   bundler-updater pkg-apply --pkg <本地包> --format <deb|rpm|apk> --app <重启目标>
-    //       [--env-file <会话env件>] [--rollback] [--log <件>]
+    //   bundler-updater pkg-apply --pkg <本地包> --sha256 <哈希> --format <deb|rpm|apk>
+    //       --app <重启目标> [--env-file <会话env件>] [--rollback] [--log <件>]
     // updaterArgv 已含引导件直跑或 "/bin/sh <script>" 前缀。
+    // --sha256 是 root 侧对暂存副本复核的字节指纹：客户端验签（留存副本）或
+    // 直读哈希（原件降级路径）算出的值，把"客户端验的字节"钉到"root 装的字节"上。
     // C-N6 消歧：verb --pkg 传本地包文件路径（留存副本优先），与身份字段
     // pkg（包管理器登记名）同名异义——一个指件、一个指名，分层语义。
-    // B-N10：argv 全程结构化传递（数组进 JoinArgv 引用、管线腿走 ShJoin 单引号），
+    // B-N10：argv 全程结构化传递（spawn/Exec 走 Arguments 列表，管线腿走 ShJoin 单引号），
     // 提权腿无 shell 注入面；--pkg/--app 均取自规划内路径不接受外部拼词。
     private static string[] BuildVerbArgv(
-        string[] updaterArgv, string pkgPath, string format, string app,
+        string[] updaterArgv, string pkgPath, string? pkgSha256, string format, string app,
         string? envFile, bool rollback, string? logFile)
     {
         var argv = new List<string>();
@@ -394,6 +411,11 @@ internal static class SyspkgReplay
         argv.Add("pkg-apply");
         argv.Add("--pkg");
         argv.Add(pkgPath);
+        if (pkgSha256 is { Length: > 0 })
+        {
+            argv.Add("--sha256");
+            argv.Add(pkgSha256);
+        }
         argv.Add("--format");
         argv.Add(format);
         argv.Add("--app");
@@ -542,25 +564,89 @@ internal static class SyspkgReplay
     // B2 留存件完整性再核：retention 目录与原件同为用户可写——直喂提权
     // pkg-apply 的候选必须 <name> 配 <name>.sig 成对且对身份公钥验过；
     // 签名缺失/畸形/验不过一律按不可信处理（调用方决定跳选还是拒绝）。
-    // 残余边界：验签在规划时、读取在使用时，同用户对留存件的验后替换窗仍在——
-    // 彻底封闭须引导件侧持公钥重验（root 进程信任面）；当前登记为已知边界。
-    private static bool VerifyRetainedPackage(string packagePath, string? publicKey)
+    // 验签同趟带出内容 sha256（VerifyFile out 参单次读取一并算）——哈希经
+    // --sha256 交到 root 进程对暂存副本复核，"客户端验的字节"与"root 装的
+    // 字节"逐位绑定，验签→root 读取之间的同用户替换窗归零（§2.3 协议）。
+    private static bool VerifyRetainedPackage(
+        string packagePath, string? publicKey, out string? sha256Hex, Action<string>? log)
     {
+        sha256Hex = null;
         try
         {
             var signaturePath = packagePath + ".sig";
             if (publicKey is not { Length: > 0 } || !File.Exists(signaturePath))
             {
+                log?.Invoke(
+                    $"update: retained package '{packagePath}' rejected — " +
+                    "missing identity key or .sig sidecar");
                 return false;
             }
-            return UpdateSignatureVerifier.VerifyFile(
-                packagePath, File.ReadAllBytes(signaturePath),
-                UpdateKeyMaterial.FromPublicPoint(publicKey));
+            if (!UpdateSignatureVerifier.VerifyFile(
+                    packagePath, File.ReadAllBytes(signaturePath),
+                    UpdateKeyMaterial.FromPublicPoint(publicKey), out var hash))
+            {
+                log?.Invoke(
+                    $"update: retained package '{packagePath}' rejected — " +
+                    "signature does not verify");
+                return false;
+            }
+            sha256Hex = Sha256ToHex(hash);
+            return true;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            // 失败原因入日志：权限错/IO 错与伪造签不可分辨会把排障推向猜——
+            // 拒绝结论不变，但拒绝理由必须是可观测的一等事实。
+            log?.Invoke(
+                $"update: retained package '{packagePath}' rejected — {exception.Message}");
             return false;
         }
+    }
+
+    // 原件降级腿的同趟验签+哈希：signature 是清单上行的 base64 签名（留存 .sig
+    // 同源），VerifyFile out 参单次读取验签出指纹——验签→暂存→root 读取链上
+    // 任一替换都同时推翻验签断言与哈希钉值。
+    private static bool VerifyOriginalPackage(
+        string packagePath, string signatureBase64, string? publicKey,
+        out string? sha256Hex, Action<string>? log)
+    {
+        sha256Hex = null;
+        try
+        {
+            if (publicKey is not { Length: > 0 })
+            {
+                log?.Invoke(
+                    $"update: package '{packagePath}' rejected — no identity key");
+                return false;
+            }
+            if (!UpdateSignatureVerifier.VerifyFile(
+                    packagePath, Convert.FromBase64String(signatureBase64),
+                    UpdateKeyMaterial.FromPublicPoint(publicKey), out var hash))
+            {
+                log?.Invoke(
+                    $"update: package '{packagePath}' rejected — " +
+                    "signature does not verify");
+                return false;
+            }
+            sha256Hex = Sha256ToHex(hash);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            log?.Invoke(
+                $"update: package '{packagePath}' rejected — {exception.Message}");
+            return false;
+        }
+    }
+
+    internal static string Sha256ToHex(byte[] hash)
+    {
+        var builder = new StringBuilder(64);
+        foreach (var b in hash)
+        {
+            builder.Append(b.ToString("x2"));
+        }
+        return builder.ToString();
     }
 
     // 删留存对（apply 侧失败还原用）：pkg 连同 .sig 一并删，不留孤儿签名件
@@ -638,9 +724,11 @@ internal static class SyspkgReplay
     //（候选硬门槛是 .sig 成对 + 身份公钥过签，与标记无关）。
     // B2 起无 .sig 的旧留档不再作候选（本仓冻结前无历史包袱，确定性收口）。
     private static string? PickRollbackPackage(
-        string retentionDir, string? publicKey, Action<string>? log, out string? appliedName)
+        string retentionDir, string? publicKey, Action<string>? log,
+        out string? appliedName, out string? sha256Hex)
     {
         appliedName = ReadAppliedMarker(retentionDir);
+        sha256Hex = null;
         try
         {
             if (!Directory.Exists(retentionDir))
@@ -648,6 +736,7 @@ internal static class SyspkgReplay
                 return null;
             }
             string? best = null;
+            string? bestHash = null;
             var bestStamp = DateTime.MinValue;
             foreach (var file in Directory.EnumerateFiles(retentionDir))
             {
@@ -658,7 +747,7 @@ internal static class SyspkgReplay
                 {
                     continue;
                 }
-                if (!VerifyRetainedPackage(file, publicKey))
+                if (!VerifyRetainedPackage(file, publicKey, out var fileHash, log))
                 {
                     log?.Invoke(
                         $"update: skipping retained package '{name}' — " +
@@ -671,9 +760,11 @@ internal static class SyspkgReplay
                      string.CompareOrdinal(name, Path.GetFileName(best)) > 0))
                 {
                     best = file;
+                    bestHash = fileHash;
                     bestStamp = stamp;
                 }
             }
+            sha256Hex = bestHash;
             return best;
         }
         catch (Exception)
@@ -806,7 +897,7 @@ internal static class SyspkgReplay
     //（拉起即退语义下 rc 主要靠 --log 件；活到读码的调用方也得分类口径）。
     // 存活腿挂 Exited 钩（ThreadPool 异步触发；本进程先退则钩不触发）；
     // 观察窗内已退出（任意 rc）的已终结进程不保证派发 Exited——两件直接内联做。
-    private static Process StartLaunch(SyspkgLaunch launch, Action<string>? log)
+    private static ToolProcess StartLaunch(SyspkgLaunch launch, Action<string>? log)
     {
         var legs = new List<SyspkgLaunch> { launch };
         legs.AddRange(launch.Fallbacks);
@@ -814,19 +905,18 @@ internal static class SyspkgReplay
         var notes = new List<string>();
         foreach (var leg in legs)
         {
-            Process? process;
+            ToolProcess? process;
             try
             {
-                var startInfo = new ProcessStartInfo(leg.FileName)
+                var startInfo = new ToolProcessStartInfo
                 {
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
+                    FileName = leg.FileName,
                     // 继承 stdio：裸 sudo 的 tty 密码提示与 pkexec/zenity 的 GUI 通道都靠它。
-                    Arguments = JoinArgv(leg.Arguments),
                 };
+                startInfo.Arguments.AddRange(leg.Arguments);
                 process = SpawnProbe is { } spawn
                     ? spawn(startInfo)
-                    : Process.Start(startInfo)
+                    : ToolProcess.Start(startInfo)
                         ?? throw new UpdateException($"failed to start '{leg.FileName}'.");
                 if (process is null)
                 {
@@ -868,11 +958,9 @@ internal static class SyspkgReplay
                 OnLegExited();
                 return process;
             }
-            // WaitForExit/EnableRaisingEvents 在 spawn try-catch 之外：此处抛异常会
-            // 越过退化与函数尾还原——生产 Process.Start 产物上实际不可达，仅
-            // SpawnProbe 测试缝误用可触发（登记边界，不为此加 try 扰动主链）。
+            // Exited 订阅在 spawn try-catch 之外：此处抛异常会越过退化与函数尾
+            // 还原——登记边界，不为此加 try 扰动主链。
             process.Exited += (_, _) => OnLegExited();
-            process.EnableRaisingEvents = true;
             return process;
         }
         CleanupEnvFile(launch.EnvFile, launch.EnvFileDirectory);
@@ -920,14 +1008,15 @@ internal static class SyspkgReplay
         }
         try
         {
-            var startInfo = new ProcessStartInfo(file, JoinArgv(args))
+            var startInfo = new ToolProcessStartInfo
             {
-                UseShellExecute = false,
-                CreateNoWindow = true,
+                FileName = file,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
-            using var process = Process.Start(startInfo)!;
+            startInfo.Arguments.AddRange(args);
+            using var process = ToolProcess.Start(startInfo)
+                ?? throw new InvalidOperationException($"spawn timed out: {file}");
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
             if (!process.WaitForExit(60_000))
@@ -956,12 +1045,16 @@ internal static class SyspkgReplay
 
     // command -v 解析序：BUNDLER_UPDATER_CMD_<TOOL> env 覆盖 → CommandProbe 权威 → PATH 实查。
     // 与引导件 PkgApplyPlan.ResolveCommand 同名同源，供垫片测试同口径供给。
+    // 覆盖值按引导件同款口径复核（-f -x：存在+普通文件+执行位）——客户端侧无提权
+    // 跨越，但流浪 env 不能让三件套/提权链探测对调用方会话造假：一个指向不存在
+    // 路径的 BUNDLER_UPDATER_CMD_DPKG 会让"账本归属预检"静默走样成"装不了"的
+    // 错误方向，双侧同判才保持单一语义。
     private static string? ResolveCommand(string name)
     {
         var overridePath = GetEnv("BUNDLER_UPDATER_CMD_" + CommandEnvName(name));
-        if (!string.IsNullOrEmpty(overridePath))
+        if (overridePath is { Length: > 0 } path && IsExecutableFile(path))
         {
-            return overridePath;
+            return path;
         }
         if (CommandProbe is { } probe)
         {
@@ -969,6 +1062,12 @@ internal static class SyspkgReplay
         }
         return FindOnPath(name);
     }
+
+    // 覆盖路径执行性判据（PkgApplyPlan.IsExecutableFile 同口径）：存在+普通文件
+    //（fifo/目录不算数），POSIX 另要任一执行位；Windows 无执行位面按普通文件即足。
+    private static bool IsExecutableFile(string path) =>
+        File.Exists(path) && UnixFileTypes.IsRegularFile(path) &&
+        (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || HasExecutePermission(path));
 
     private static string CommandEnvName(string name)
     {
@@ -995,6 +1094,12 @@ internal static class SyspkgReplay
         foreach (var dir in pathEnv.Split(
                      new[] { Path.PathSeparator }, StringSplitOptions.RemoveEmptyEntries))
         {
+            // 相对段会解析到 cwd 下同名件——与引导件 FindOnPath/sh command -v
+            // 要求绝对路径命中同口径：PATH 相对段一律跳过，不收 cwd 命运。
+            if (!Path.IsPathRooted(dir))
+            {
+                continue;
+            }
             var candidate = Path.Combine(dir, name);
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
@@ -1015,7 +1120,8 @@ internal static class SyspkgReplay
                     return candidate;
                 }
             }
-            else if (File.Exists(candidate) && HasExecutePermission(candidate))
+            else if (File.Exists(candidate) && UnixFileTypes.IsRegularFile(candidate) &&
+                     HasExecutePermission(candidate))
             {
                 return candidate;
             }
@@ -1063,52 +1169,7 @@ internal static class SyspkgReplay
         }
     }
 
-    // ProcessStartInfo.Arguments 是整条字符串（netstandard2.0 无 ArgumentList）——
-    // 逐元双引号包裹空格连接；内嵌 " 与紧邻引号/串尾的 \ 按 CommandLineToArgvW
-    // 规则转义（.NET 的 POSIX Arguments→argv 解析同规则）——不转义时路径里的
-    // " 或尾 \ 会撕裂参数边界，直进真 spawn/Exec 两条真实执行路径。
-    internal static string JoinArgv(IEnumerable<string> argv)
-    {
-        var builder = new StringBuilder();
-        foreach (var arg in argv)
-        {
-            if (builder.Length > 0)
-            {
-                builder.Append(' ');
-            }
-            AppendQuoted(builder, arg);
-        }
-        return builder.ToString();
-    }
-
-    // 引号规则：引号区内 " → 前导 \ 翻倍后再附 \"；串尾连续 \（紧邻收尾引号）
-    // 翻倍防吞引号；其余 \ 原样。
-    private static void AppendQuoted(StringBuilder builder, string arg)
-    {
-        builder.Append('"');
-        var backslashes = 0;
-        foreach (var c in arg)
-        {
-            if (c == '\\')
-            {
-                backslashes++;
-                continue;
-            }
-            if (c == '"')
-            {
-                builder.Append('\\', backslashes * 2 + 1).Append('"');
-            }
-            else
-            {
-                builder.Append('\\', backslashes).Append(c);
-            }
-            backslashes = 0;
-        }
-        builder.Append('\\', backslashes * 2).Append('"');
-    }
-
-    // POSIX 单引号引用（' 折为 '\''）——与引导件 PkgApplyPlan.ShQuote 同算法。
-    private static string ShQuote(string value) => "'" + value.Replace("'", "'\\''") + "'";
-
-    private static string ShJoin(IEnumerable<string> argv) => string.Join(" ", argv.Select(ShQuote));
+    // POSIX shell 管线腿（su -c/问密码）的逐 token 单引号引用——
+    // 结构化 argv 不经 shell 的腿（spawn/Exec）走 Arguments 列表不拼串。
+    private static string ShJoin(IEnumerable<string> argv) => UpdateArgv.ShJoin(argv);
 }

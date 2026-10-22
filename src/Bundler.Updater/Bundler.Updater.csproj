@@ -7,7 +7,7 @@
     <RootNamespace>DotNet.Bundler.Updater</RootNamespace>
     <PackageId>DotNet.Bundler.Updater</PackageId>
     <LangVersion>latest</LangVersion>
-    <DefineConstants>$(DefineConstants);BUNDLER_UPDATER_LINK</DefineConstants>
+    <DefineConstants>$(DefineConstants);BUNDLER_UPDATER_LINK;BUNDLER_UPDATER_CLIENT</DefineConstants>
     <Nullable>enable</Nullable>
     <Description>Application-side self-update client for DotNet.Bundler packages: feed check, verified download, signature gate and staged apply.</Description>
   </PropertyGroup>
@@ -22,6 +22,12 @@
     <Compile Include="..\Bundler.Core\Update\UpdateSignatureVerifier.cs" />
     <Compile Include="..\Bundler.Core\Update\UpdateJson.cs" />
     <Compile Include="..\Bundler.Core\Update\UpdateBlockMapModel.cs" />
+    <Compile Include="..\Bundler.Core\Update\UpdateArgv.cs" />
+    <Compile Include="..\Bundler.Core\UnixFileTypes.cs" />
+    <Compile Include="..\Bundler.Core\ToolProcess.cs" />
+    <Compile Include="..\Bundler.Core\NativeSpawnUnix.cs" />
+    <!-- musl 静态发布消费方的 libc 直绑清单一并随包透传（文件内注释为单一事实）。 -->
+    <None Include="buildTransitive\DotNet.Bundler.Updater.targets" Pack="true" PackagePath="buildTransitive/" />
   </ItemGroup>
 
 </Project>

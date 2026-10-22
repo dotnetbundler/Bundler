@@ -4,7 +4,6 @@
 // 只有 spawn 抛异常（Process.Start 未起成）才退化下一腿。
 // 道具统一有限时（即时退或 ~3s 延迟退），只清本轮登记进程，不起多余子代。
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using DotNet.Bundler.Updater;
@@ -13,7 +12,7 @@ using Protocol = DotNet.Bundler.Updater.Protocol;
 public sealed class SyspkgReplayLaunchIntegrationTests : TempBase
 {
     private readonly ConcurrentQueue<string> _log = new();
-    private readonly List<Process> _props = [];
+    private readonly List<ToolProcess> _props = [];
 
     public override void Dispose()
     {
@@ -112,7 +111,7 @@ public sealed class SyspkgReplayLaunchIntegrationTests : TempBase
     };
 
     // 即时退道具：spawn 后在观察窗内以给定码退出。
-    private Process ExitProp(int rc) => SpawnProp(
+    private ToolProcess ExitProp(int rc) => SpawnProp(
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? ("cmd.exe", $"/c exit {rc}")
             : ("/bin/sh", $"-c \"exit {rc}\""));
@@ -121,7 +120,7 @@ public sealed class SyspkgReplayLaunchIntegrationTests : TempBase
     // 释放 gate，确定性覆盖"窗外退出"路径，不依赖固定 sleep 与观察窗的差值。
     // Windows 用 inbox powershell 轮询（timeout/choice 在重定向 stdin 下即刻
     // 退出，ping 会拉多余子代——都不作道具）；POSIX 用 sh 循环 sleep。
-    private Process GatedExitProp(int rc, string gate)
+    private ToolProcess GatedExitProp(int rc, string gate)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
@@ -136,13 +135,13 @@ public sealed class SyspkgReplayLaunchIntegrationTests : TempBase
         return SpawnProp(("/bin/sh", "-c \"" + sh + "\""));
     }
 
-    private Process SpawnProp((string File, string Args) prop)
+    private ToolProcess SpawnProp((string File, string Args) prop)
     {
-        var process = Process.Start(new ProcessStartInfo(prop.File, prop.Args)
+        var process = ToolProcess.Start(new ToolProcessStartInfo
         {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        })!;
+            FileName = prop.File,
+            ArgumentLine = prop.Args,
+        }) ?? throw new InvalidOperationException($"spawn timed out: {prop.File}");
         _props.Add(process);
         return process;
     }
@@ -185,7 +184,7 @@ public sealed class SyspkgReplayLaunchIntegrationTests : TempBase
         SetupProbes(
             env: new Dictionary<string, string> { ["HOME"] = "/home/u" },
             commands: TwoLegCommands);
-        var spawned = new List<ProcessStartInfo>();
+        var spawned = new List<ToolProcessStartInfo>();
         SyspkgReplay.SpawnProbe = startInfo =>
         {
             spawned.Add(startInfo);
@@ -223,7 +222,7 @@ public sealed class SyspkgReplayLaunchIntegrationTests : TempBase
             env: new Dictionary<string, string> { ["HOME"] = "/home/u" },
             commands: TwoLegCommands);
         var gate = TempPath($"leg-gate-{rc}.release");
-        var spawned = new List<ProcessStartInfo>();
+        var spawned = new List<ToolProcessStartInfo>();
         SyspkgReplay.SpawnProbe = startInfo =>
         {
             spawned.Add(startInfo);
@@ -257,7 +256,7 @@ public sealed class SyspkgReplayLaunchIntegrationTests : TempBase
         SetupProbes(
             env: new Dictionary<string, string> { ["HOME"] = "/home/u" },
             commands: TwoLegCommands);
-        var spawned = new List<ProcessStartInfo>();
+        var spawned = new List<ToolProcessStartInfo>();
         SyspkgReplay.SpawnProbe = startInfo =>
         {
             spawned.Add(startInfo);
@@ -274,7 +273,7 @@ public sealed class SyspkgReplayLaunchIntegrationTests : TempBase
         Assert.Equal(2, spawned.Count);
         Assert.Equal("/stub/pkexec", spawned[0].FileName);
         Assert.Equal("/stub/sudo", spawned[1].FileName);
-        Assert.StartsWith("\"--\"", spawned[1].Arguments);   // 裸 sudo 腿 "--" 前缀保留
+        Assert.Equal("--", spawned[1].Arguments[0]);   // 裸 sudo 腿 "--" 前缀保留
         Assert.True(process.WaitForExit(30_000));
         Assert.Equal(0, process.ExitCode);
         AssertSessionEnvGone("第二腿交付后 env 件删余必须已执行");
