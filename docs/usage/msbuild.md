@@ -144,6 +144,8 @@ target 语法、架构词与产物命名契约见 [`../design/targets.md`](../de
 | `@(BundlerWindowsSigningFile)` | 输入目录内需追签的 DLL/sidecar 相对路径 |
 | `@(BundlerWindowsSigningCommandArgument)` | 外部命令独立参数；至少一项含 `{path}`/`%1`，另支持 `{artifactKind}`/`{target}`/`{productName}` 占位符；秘密经环境变量传入 |
 
+所有秘密旋钮（PFX 密码、`…SigningKeyPassphrase`、`…CertificatePassword`、`…ApplePassword`）一律走 `*EnvironmentVariable` 间址：属性值是环境变量**名**，任务运行时取值——口令不进项目文件、命令行与二进制日志；变量未设置属配置错误。
+
 ```xml
 <PropertyGroup>
   <BundlerWindowsSigningPfxFile>$(SigningCertificatePath)</BundlerWindowsSigningPfxFile>
@@ -165,6 +167,7 @@ target 语法、架构词与产物命名契约见 [`../design/targets.md`](../de
 | `BundlerUpdateFeedUrl` | 无 | 清单发布位置（http(s)/`file://`/UNC；制品按清单同目录解析） |
 | `BundlerUpdateChannel` | `latest` | 通道名，进清单文件名 `bundler-update-feed.<channel>.json` |
 | `BundlerUpdateSigningKeyFile` | 无 | ec-p256 JWK 私钥文件（签名强制；`bundler update-keygen` 生成；私钥不入库） |
+| `BundlerUpdateBootstrapperDirectory` | 无 | 引导件工具目录（`<target>/` 与 `posix/` 结构）；空时按程序集旁 conventions 解析 |
 | `BundlerUpdatePublicKey` | 无 | base64 验签公钥，烙进载荷 `bundler-update.json` |
 | `BundlerUpdateNotes` | 无 | 版本说明写入清单 `notes` |
 

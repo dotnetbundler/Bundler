@@ -9,6 +9,6 @@
 
   <ItemGroup>
     <!-- 任意归档相对路径映射演示：docs/readme.txt。 -->
-    <BundlerArchiveFile Include="$(HelloBundlerAppAssets)archive\readme.txt" Destination="docs/readme.txt" />
+    <BundlerArchiveFile Include="$(HelloBundlerAppAssets)archive/readme.txt" Destination="docs/readme.txt" />
   </ItemGroup>
 </Project>

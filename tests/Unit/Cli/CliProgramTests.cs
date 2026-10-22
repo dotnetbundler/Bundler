@@ -171,4 +171,45 @@ public sealed class CliProgramTests : TempBase
         Assert.Contains("\"deb\"", stdout);
         Assert.Contains("\"zip\"", stdout);
     }
+
+    [Fact]
+    public void SingleFormatConfiguration_FiltersTargetsToDeclaringFormats()
+    {
+        // 混合 targets：windows 载荷只声明 nsis、linux 载荷只声明 deb——
+        // 单格式 fanout 不能把另一个平台的 target 推进当前后端。
+        var config = new DotNet.Bundler.BundleConfiguration
+        {
+            ProductName = "X",
+            Identifier = "com.x",
+            Version = "1.0",
+            OutputDirectory = "out",
+            Targets =
+            [
+                new DotNet.Bundler.BundleTargetConfiguration
+                {
+                    Target = "windows-x86_64",
+                    InputDirectory = "winin",
+                    MainExecutable = "app.exe",
+                    Formats = [DotNet.Bundler.PackageFormat.Nsis]
+                },
+                new DotNet.Bundler.BundleTargetConfiguration
+                {
+                    Target = "linux-x86_64",
+                    InputDirectory = "linin",
+                    MainExecutable = "app",
+                    Formats = [DotNet.Bundler.PackageFormat.Deb]
+                }
+            ]
+        };
+
+        var deb = CliProgram.SingleFormatConfiguration(config, DotNet.Bundler.PackageFormat.Deb);
+        var debTarget = Assert.Single(deb.Targets);
+        Assert.Equal("linux-x86_64", debTarget.Target);
+        Assert.Equal([DotNet.Bundler.PackageFormat.Deb], debTarget.Formats);
+
+        var nsis = CliProgram.SingleFormatConfiguration(config, DotNet.Bundler.PackageFormat.Nsis);
+        var nsisTarget = Assert.Single(nsis.Targets);
+        Assert.Equal("windows-x86_64", nsisTarget.Target);
+        Assert.Equal([DotNet.Bundler.PackageFormat.Nsis], nsisTarget.Formats);
+    }
 }

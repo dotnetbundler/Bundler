@@ -94,16 +94,14 @@ internal static class CliConfig
             {
                 throw new CliUsageException($"Configuration file not found: {fullPath}");
             }
-            document = JsonNode.Parse(File.ReadAllText(fullPath), documentOptions: DocumentOptions) as JsonObject
-                ?? throw new CliUsageException($"Configuration file '{fullPath}' must be a JSON object.");
+            document = ParseDocument(File.ReadAllText(fullPath), fullPath);
             baseDirectory = Path.GetDirectoryName(fullPath)!;
         }
         else if (!parsed.NoConfig && File.Exists(DiscoveryFileName))
         {
             // cwd 里的 bundler.json 自动生效——显式 --config 覆盖、--no-config 关闭。
             var fullPath = Path.GetFullPath(DiscoveryFileName);
-            document = JsonNode.Parse(File.ReadAllText(fullPath), documentOptions: DocumentOptions) as JsonObject
-                ?? throw new CliUsageException($"Configuration file '{fullPath}' must be a JSON object.");
+            document = ParseDocument(File.ReadAllText(fullPath), fullPath);
             baseDirectory = Path.GetDirectoryName(fullPath)!;
             inferred.Add($"using configuration file '{fullPath}' (pass --no-config to ignore)");
         }
@@ -130,10 +128,101 @@ internal static class CliConfig
         ApplyCliOverrides(document, parsed);
         ResolveRelativePaths(document, baseDirectory);
         EnforceSchema(document);
+        ResolveSecretEnvVars(document);
         return Materialize(document, parsed, baseDirectory, inferred);
     }
 
     internal const string DiscoveryFileName = "bundler.json";
+
+    // 配置文件的 JSON 语法错误是用户输入错误——归 rc=2（CliUsageException），
+    // 与 schema/旋钮错误同一出口，不放 JsonException 裸奔成 rc=1。
+    private static JsonObject ParseDocument(string json, string fullPath)
+    {
+        try
+        {
+            return JsonNode.Parse(json, documentOptions: DocumentOptions) as JsonObject
+                ?? throw new CliUsageException(
+                    $"Configuration file '{fullPath}' must be a JSON object.");
+        }
+        catch (JsonException e)
+        {
+            throw new CliUsageException(
+                $"Configuration file '{fullPath}' is not valid JSON: {e.Message}");
+        }
+    }
+
+    // <secret>EnvironmentVariable 间址展开：把 env 名取出的值写进真值字段、
+    // 摘除间址键。两处都写了视为歧义——不允许文件明文与 env 名同时声明。
+    private static void ResolveSecretEnvVars(JsonObject document)
+    {
+        foreach (var (section, type) in SectionTypes)
+        {
+            if (document[section] is JsonObject child)
+            {
+                Resolve(child, type, section);
+            }
+        }
+
+        void Resolve(JsonObject node, Type type, string path)
+        {
+            if (BundlerJsonContext.Default.GetTypeInfo(type) is not
+                { Kind: JsonTypeInfoKind.Object } info)
+            {
+                return;
+            }
+            var byName = info.Properties.ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
+            foreach (var key in node.Select(pair => pair.Key).ToArray())
+            {
+                if (key.EndsWith(EnvKeySuffix, StringComparison.Ordinal) &&
+                    byName.TryGetValue(key[..^EnvKeySuffix.Length], out var secret) &&
+                    secret.PropertyType == typeof(string) && IsSecretName(secret.Name))
+                {
+                    var envName = node[key] is JsonValue envNode &&
+                        envNode.TryGetValue<string>(out var named) ? named : null;
+                    if (string.IsNullOrWhiteSpace(envName))
+                    {
+                        throw new CliUsageException(
+                            $"'{path}.{key}' must name an environment variable.");
+                    }
+                    var value = Environment.GetEnvironmentVariable(envName);
+                    if (value is null)
+                    {
+                        throw new CliUsageException(
+                            $"Environment variable '{envName}' referenced by " +
+                            $"'{path}.{key}' is not set.");
+                    }
+                    if (node[secret.Name] is not null)
+                    {
+                        throw new CliUsageException(
+                            $"'{path}' sets both '{secret.Name}' and '{key}'; keep only one.");
+                    }
+                    node[secret.Name] = value;
+                    node.Remove(key);
+                    continue;
+                }
+                if (!byName.TryGetValue(key, out var property) ||
+                    NestedValueType(property.PropertyType) is not { } nested)
+                {
+                    continue;
+                }
+                switch (node[key])
+                {
+                    case JsonObject obj:
+                        Resolve(obj, nested, path + "." + key);
+                        break;
+                    case JsonArray list:
+                        for (var i = 0; i < list.Count; i++)
+                        {
+                            if (list[i] is JsonObject element)
+                            {
+                                Resolve(element, nested, $"{path}.{key}[{i}]");
+                            }
+                        }
+                        break;
+                }
+            }
+        }
+    }
 
     // Schema is fixed: unknown keys (typos) are rejected rather than ignored.
     private static readonly HashSet<string> TopLevelFields = new(StringComparer.Ordinal)
@@ -222,7 +311,7 @@ internal static class CliConfig
                 {
                     knobs.Add(name);
                 }
-                if (NestedConfigType(propertyType) is { } nested &&
+                if (NestedValueType(propertyType) is { } nested &&
                     BundlerJsonContext.Default.GetTypeInfo(nested) is { Kind: JsonTypeInfoKind.Object } nestedInfo)
                 {
                     Collect(nestedInfo, knobs, seen);
@@ -235,33 +324,33 @@ internal static class CliConfig
             (name.EndsWith("Files", StringComparison.OrdinalIgnoreCase) ||
              name.EndsWith("Directories", StringComparison.OrdinalIgnoreCase)) &&
             (type == typeof(string) || IsStringCollection(type) || IsStringDictionary(type));
+    }
 
-        // IsAssignableFrom 走运行时类型句柄不依赖接口元数据——AOT 下安全；
-        // GetInterfaces() 会触发 IL2070 裁剪告警故不可用。
-        static bool IsStringCollection(Type type) =>
-            type != typeof(string) && typeof(IEnumerable<string>).IsAssignableFrom(type);
+    // IsAssignableFrom 走运行时类型句柄不依赖接口元数据——AOT 下安全；
+    // GetInterfaces() 会触发 IL2070 裁剪告警故不可用。
+    private static bool IsStringCollection(Type type) =>
+        type != typeof(string) && typeof(IEnumerable<string>).IsAssignableFrom(type);
 
-        static bool IsStringDictionary(Type type) =>
-            typeof(IDictionary<string, string>).IsAssignableFrom(type) ||
-            typeof(IReadOnlyDictionary<string, string>).IsAssignableFrom(type);
+    private static bool IsStringDictionary(Type type) =>
+        typeof(IDictionary<string, string>).IsAssignableFrom(type) ||
+        typeof(IReadOnlyDictionary<string, string>).IsAssignableFrom(type);
 
-        // 递归目标：嵌套配置对象的类型，或集合的元素类型。字符串/字符串集合/
-        // 字典自身不进递归。
-        static Type? NestedConfigType(Type type)
+    // 递归目标：嵌套配置对象的类型，或集合的元素类型。字符串/字符串集合/
+    // 字典自身不进递归。
+    private static Type? NestedValueType(Type type)
+    {
+        if (type == typeof(string) || IsStringCollection(type) || IsStringDictionary(type))
         {
-            if (type == typeof(string) || IsStringCollection(type) || IsStringDictionary(type))
-            {
-                return null;
-            }
-            if (type.IsArray)
-            {
-                return type.GetElementType();
-            }
-            var args = type.GetGenericArguments();
-            return args.Length == 1 && typeof(System.Collections.IEnumerable).IsAssignableFrom(type)
-                ? args[0]
-                : type;
+            return null;
         }
+        if (type.IsArray)
+        {
+            return type.GetElementType();
+        }
+        var args = type.GetGenericArguments();
+        return args.Length == 1 && typeof(System.Collections.IEnumerable).IsAssignableFrom(type)
+            ? args[0]
+            : type;
     }
 
     private static void EnforceSchema(JsonObject document)
@@ -291,6 +380,12 @@ internal static class CliConfig
                 "; format sections: " + string.Join(", ", SectionTypes.Keys.Order()) + ".");
         }
 
+        // 形状校验先于逐键校验：targets/分节写错形状（字符串/数字）时静默忽略
+        // 比报错更糟——声明了却没生效。
+        if (document["targets"] is not null and not JsonArray)
+        {
+            throw new CliUsageException("'targets' must be an array of objects.");
+        }
         if (document["targets"] is JsonArray targets)
         {
             for (var i = 0; i < targets.Count; i++)
@@ -320,9 +415,16 @@ internal static class CliConfig
 
         foreach (var (section, type) in SectionTypes)
         {
-            if (document[section] is JsonObject child)
+            switch (document[section])
             {
-                ValidateKeys(child, type, section);
+                case null:
+                    continue;
+                case JsonObject child:
+                    ValidateKeys(child, type, section);
+                    break;
+                default:
+                    throw new CliUsageException(
+                        $"The '{section}' format section must be a JSON object.");
             }
         }
 
@@ -342,6 +444,12 @@ internal static class CliConfig
                 // 大小写变体会被后续大小写敏感取值静默丢弃：门禁直接点破正确写法。
                 if (!knownExact.Contains(key))
                 {
+                    if (IsSecretEnvKey(key, byName))
+                    {
+                        // <secret>EnvironmentVariable 间址——值在物化前由
+                        // ResolveSecretEnvVars 展开成真值字段。
+                        continue;
+                    }
                     var canonical = knownExact.FirstOrDefault(k =>
                         string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
                     if (canonical is not null)
@@ -375,25 +483,23 @@ internal static class CliConfig
             }
         }
 
-        // 下钻目标：对象属性类型或集合元素类型；字符串字典与标量不下钻。
-        static Type? NestedValueType(Type type)
-        {
-            if (type == typeof(string) ||
-                typeof(IDictionary<string, string>).IsAssignableFrom(type) ||
-                typeof(IReadOnlyDictionary<string, string>).IsAssignableFrom(type))
-            {
-                return null;
-            }
-            if (type.IsArray)
-            {
-                return type.GetElementType();
-            }
-            var args = type.GetGenericArguments();
-            return args.Length == 1 && typeof(System.Collections.IEnumerable).IsAssignableFrom(type)
-                ? args[0]
-                : type;
-        }
     }
+
+    private const string EnvKeySuffix = "EnvironmentVariable";
+
+    // 秘密字段（*Password/*Passphrase）的 env 间址键：<name>EnvironmentVariable。
+    // JSON 里放明文口令是把秘密写进磁盘文件——env 间址是推荐形态（MSBuild 侧
+    // 秘密旋钮只收 env 名，与 WindowsSigningPfxPasswordEnvironmentVariable 先例一致）。
+    private static bool IsSecretEnvKey(string key, IReadOnlyDictionary<string, JsonPropertyInfo> byName) =>
+        key.EndsWith(EnvKeySuffix, StringComparison.Ordinal) &&
+        byName.TryGetValue(key[..^EnvKeySuffix.Length], out var property) &&
+        property.PropertyType == typeof(string) &&
+        IsSecretName(property.Name);
+
+    // JSON 元数据名可能是全小写（passphrase）——按不敏感后缀判秘密字段。
+    private static bool IsSecretName(string name) =>
+        name.EndsWith("password", StringComparison.OrdinalIgnoreCase) ||
+        name.EndsWith("passphrase", StringComparison.OrdinalIgnoreCase);
 
     // CLI value options (except --config) override the document's shared fields;
     // --<fmt>.<knob>=<value> merges into that format's section.
@@ -426,7 +532,7 @@ internal static class CliConfig
                 // 分号列表只对集合型旋钮生效——标量路径含 ';' 是合法单值（review BUG）。
                 var sectionValue = IsPathKnob(section, knobName)
                     ? ParsePathValue(value, IsCollectionProperty(SectionTypes[section], knobName))
-                    : ParseValue(value);
+                    : CoerceValue(SectionTypes[section], knobName, value);
                 child[knobName] = AsCollectionElement(
                     IsPathKnob(section, knobName) ? ResolveOverridePaths(sectionValue) : sectionValue,
                     SectionTypes[section], knobName);
@@ -436,11 +542,87 @@ internal static class CliConfig
             var fieldName = FieldName(name);
             var overrideValue = SharedPathFields.Contains(fieldName)
                 ? ParsePathValue(value, IsCollectionProperty(typeof(BundleConfiguration), fieldName))
-                : ParseValue(value);
+                : CoerceValue(typeof(BundleConfiguration), fieldName, value);
             document[fieldName] = AsCollectionElement(
                 SharedPathFields.Contains(fieldName) ? ResolveOverridePaths(overrideValue) : overrideValue,
                 typeof(BundleConfiguration), fieldName);
         }
+    }
+
+    // CLI 覆盖值按目标属性类型强转：字符串旋钮原样落字面值（"00123"/"true"/
+    // "a,b" 是合法字符串——不过 ParseValue 的标量强转与逗号劈分）；数值/布尔
+    // 仅当属性真是该类型时收；集合旋钮按元素类型逐项强转；未知键回落
+    // ParseValue（schema 校验随后拒绝）。
+    private static JsonNode? CoerceValue(Type owner, string propertyName, string value)
+    {
+        var property = BundlerJsonContext.Default.GetTypeInfo(owner)?.Properties
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.Name, propertyName, StringComparison.Ordinal));
+        var propertyType = property?.PropertyType;
+        var scalar = propertyType is null
+            ? null
+            : Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+        if (scalar == typeof(string) || scalar?.IsEnum == true)
+        {
+            return JsonValue.Create(value);
+        }
+        if (propertyType is not null && IsJsonCollection(propertyType))
+        {
+            var elementType = propertyType.IsArray
+                ? propertyType.GetElementType()
+                : propertyType.GetGenericArguments() is [var arg] ? arg : null;
+            if (value.StartsWith('['))
+            {
+                try
+                {
+                    return JsonNode.Parse(value);
+                }
+                catch (JsonException)
+                {
+                    // fall through: treat as a plain comma list
+                }
+            }
+            // 非标量元素（如 files[] 对象）CoerceScalar 返 null——落字面值让反序列化
+            // 给干净的 JsonException（归 rc=2），不是 [null] 进下游 NRE。
+            return new JsonArray(value.Split(',', StringSplitOptions.TrimEntries)
+                .Select(entry => (JsonNode?)CoerceScalar(elementType, entry)
+                    ?? JsonValue.Create(entry)).ToArray());
+        }
+        return CoerceScalar(scalar, value) ?? ParseValue(value);
+    }
+
+    private static JsonNode? CoerceScalar(Type? type, string value)
+    {
+        var scalar = type is null ? null : Nullable.GetUnderlyingType(type) ?? type;
+        if (scalar is null)
+        {
+            return null;
+        }
+        if (scalar == typeof(string) || scalar.IsEnum)
+        {
+            return JsonValue.Create(value);
+        }
+        if (scalar == typeof(bool))
+        {
+            // 非 true/false 字面值不猜——落成字符串让反序列化给明确错误。
+            return value is "true" or "false"
+                ? JsonValue.Create(value == "true")
+                : JsonValue.Create(value);
+        }
+        if (scalar == typeof(int) || scalar == typeof(long) || scalar == typeof(short) ||
+            scalar == typeof(byte) || scalar == typeof(uint) || scalar == typeof(ulong))
+        {
+            return long.TryParse(value, out var number)
+                ? JsonValue.Create(number)
+                : JsonValue.Create(value);
+        }
+        if (scalar == typeof(double) || scalar == typeof(float) || scalar == typeof(decimal))
+        {
+            return double.TryParse(value, out var number)
+                ? JsonValue.Create(number)
+                : JsonValue.Create(value);
+        }
+        return null;
     }
 
     // 逗号在 ParseValue 里是列表分隔符——路径类覆盖值先按 JSON 形状解析，
@@ -722,14 +904,15 @@ internal static class CliConfig
                 // 其余目标按宿主推导，不误标。
                 node["target"] = parsed.InputDirectories.Count >= 2 && ReferenceEquals(node, target)
                     ? "macos-universal"
-                    : HostTarget();
+                    : BundleDefaults.HostTarget();
                 inferred.Add(parsed.InputDirectories.Count >= 2 && ReferenceEquals(node, target)
                     ? $"target={node["target"]} (universal merge)"
                     : $"target={node["target"]} (host default)");
             }
             if (node["formats"] is null && infer)
             {
-                var chosen = FormatsForTarget(TargetText(node, parsed));
+                var chosen = BundleDefaults.DefaultFormatsForTarget(TargetText(node, parsed))
+                    .Select(FormatName).ToArray();
                 node["formats"] = new JsonArray(
                     chosen.Select(f => (JsonNode?)JsonValue.Create(f)).ToArray());
                 inferred.Add($"formats={string.Join(",", chosen)} (default for {TargetText(node, parsed)})");
@@ -760,13 +943,14 @@ internal static class CliConfig
         {
             // 纯数字三段式：Apple 元数据只收 [0-9.]+（AppleVersionPattern），
             // 带 -dev 后缀会在 dmg/app/pkg 腿构建期炸——推断值必须处处可产。
-            document["version"] = "0.1.0";
-            inferred.Add("version=0.1.0 (placeholder; pass --package-version for release)");
+            document["version"] = BundleDefaults.PlaceholderVersion;
+            inferred.Add($"version={BundleDefaults.PlaceholderVersion} (placeholder; pass --package-version for release)");
         }
         if (document["identifier"] is null && infer)
         {
             var product = document["productName"]?.GetValue<string>() ?? "app";
-            document["identifier"] = "dev.bundler." + NormalizeIdentifierSegment(product);
+            document["identifier"] = BundleDefaults.IdentifierPrefix +
+                BundleDefaults.NormalizeIdentifierSegment(product);
             inferred.Add($"identifier={document["identifier"]} (synthesized; pass --identifier for release)");
         }
 
@@ -788,12 +972,21 @@ internal static class CliConfig
 
         // 共享字段与 Core 的加载管线同一来源：反序列化模型 + 共用
         // BundleConfigurationPaths.Resolve，新增共享字段只改模型一侧。
-        var bundle = BundleConfigurationPaths.Resolve(
-            DeserializeWithDefaults(
-                document,
-                TypeInfoFor<BundleConfiguration>(),
-                new BundleConfiguration { OutputDirectory = "bundler-out" }),
-            baseDirectory);
+        // 值形状错误（string 塞进 int 字段等）是配置错误——JsonException 归 rc=2。
+        BundleConfiguration bundle;
+        try
+        {
+            bundle = BundleConfigurationPaths.Resolve(
+                DeserializeWithDefaults(
+                    document,
+                    TypeInfoFor<BundleConfiguration>(),
+                    new BundleConfiguration { OutputDirectory = "bundler-out" }),
+                baseDirectory);
+        }
+        catch (JsonException e)
+        {
+            throw new CliUsageException($"Invalid value in configuration: {e.Message}");
+        }
 
         return new CliResolvedConfiguration
         {
@@ -821,43 +1014,11 @@ internal static class CliConfig
     private static string TargetText(JsonObject target, CliArguments parsed) =>
         Text(target, "target")
         ?? (parsed.Options.TryGetValue("target", out var optionTarget) ? optionTarget : null)
-        ?? HostTarget();
-
-    // 推断链后段：目标缺省=宿主映射；格式缺省=目标 OS 推荐集。
-    private static string HostTarget()
-    {
-        var arch = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture switch
-        {
-            System.Runtime.InteropServices.Architecture.X64 => "x86_64",
-            System.Runtime.InteropServices.Architecture.Arm64 => "aarch64",
-            System.Runtime.InteropServices.Architecture.X86 => "i686",
-            System.Runtime.InteropServices.Architecture.Arm => "armv7hf",
-            _ => "x86_64"
-        };
-        if (OperatingSystem.IsWindows())
-        {
-            return "windows-" + arch;
-        }
-        if (OperatingSystem.IsMacOS())
-        {
-            return "macos-" + arch;
-        }
-        return "linux-" + arch;
-    }
-
-    private static string[] FormatsForTarget(string targetText) =>
-        BundleTarget.TryParse(targetText, out var target) && target is not null
-            ? target.OperatingSystem switch
-            {
-                TargetOperatingSystem.Windows => ["nsis"],
-                TargetOperatingSystem.MacOS => ["dmg"],
-                TargetOperatingSystem.Linux => target.IsMusl ? ["alpineapk"] : ["deb", "zip"],
-                _ => ["zip"]
-            }
-            : ["zip"];
+        ?? BundleDefaults.HostTarget();
 
     // mainExecutable 缺省推导：输入目录顶层唯一可执行文件时取用；多个候选不猜，
-    // 记进 notes 提示显式传参。windows 目标按 .exe 判，其余按 POSIX 执行位判。
+    // 记进 notes 提示显式传参。windows 目标按 .exe 判，其余按 POSIX 执行位判——
+    // 候选扫描在 Core 的 BundleDefaults.ExecutableCandidates（双入口同一来源）。
     private static void InferMainExecutable(
         JsonObject target, string baseDirectory, List<string> inferred)
     {
@@ -878,19 +1039,15 @@ internal static class CliConfig
         // 调用点在同一迭代中已先填 target——这里读 node 拿到的总是有效值。
         var forWindows = BundleTarget.TryParse(Text(target, "target"), out var t) &&
             t?.OperatingSystem == TargetOperatingSystem.Windows;
-        var candidates = Directory.EnumerateFiles(fullDir)
-            .Select(path => new { Name = Path.GetFileName(path), Path = path })
-            .Where(entry => IsExecutableCandidate(entry.Path, entry.Name!, forWindows))
-            .Select(entry => entry.Name!)
-            .ToArray();
-        if (candidates.Length == 1)
+        var candidates = BundleDefaults.ExecutableCandidates(fullDir, forWindows);
+        if (candidates.Count == 1)
         {
             target["mainExecutable"] = candidates[0];
             inferred.Add($"mainExecutable={candidates[0]} (only executable in input directory)");
         }
-        else if (candidates.Length > 1)
+        else if (candidates.Count > 1)
         {
-            inferred.Add($"mainExecutable not inferred: {candidates.Length} executables " +
+            inferred.Add($"mainExecutable not inferred: {candidates.Count} executables " +
                 $"({string.Join(", ", candidates)}) — pass --main-executable");
         }
         else
@@ -900,54 +1057,6 @@ internal static class CliConfig
             inferred.Add("mainExecutable not inferred: no executable candidates in " +
                 "input directory — defaulting to <productName>[.exe]");
         }
-    }
-
-    private static bool IsExecutableCandidate(string path, string name, bool forWindows)
-    {
-        if (forWindows)
-        {
-            return name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
-        }
-        if (OperatingSystem.IsWindows())
-        {
-            // POSIX 执行位在 Windows 宿主无从判——不猜，回落 productName 惯例。
-            return false;
-        }
-        try
-        {
-            return (File.GetUnixFileMode(path) & (UnixFileMode.UserExecute |
-                UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0;
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
-
-    private static string NormalizeIdentifierSegment(string name)
-    {
-        var builder = new System.Text.StringBuilder(name.Length);
-        var lastDash = true; // 首字符不允许 '-'——当作前导连续态跳过
-        foreach (var ch in name.ToLowerInvariant())
-        {
-            var valid = ch is >= 'a' and <= 'z' || ch is >= '0' and <= '9';
-            if (valid)
-            {
-                builder.Append(ch);
-                lastDash = false;
-            }
-            else if (!lastDash)
-            {
-                builder.Append('-');
-                lastDash = true;
-            }
-        }
-        var segment = builder.ToString().TrimEnd('-');
-        return segment.Length == 0 ? "app" : segment;
     }
 
     private static string? Text(JsonObject node, string field) =>
@@ -1073,10 +1182,22 @@ internal static class CliConfig
         return [];
     }
 
-    private static T? Section<T>(JsonObject document, string name) where T : class, new() =>
-        document[name] is JsonObject child
-            ? DeserializeWithDefaults(child, TypeInfoFor<T>(), new T())
-            : null;
+    private static T? Section<T>(JsonObject document, string name) where T : class, new()
+    {
+        if (document[name] is not JsonObject child)
+        {
+            return null;
+        }
+        try
+        {
+            return DeserializeWithDefaults(child, TypeInfoFor<T>(), new T());
+        }
+        catch (JsonException e)
+        {
+            throw new CliUsageException(
+                $"Invalid value in the '{name}' format section: {e.Message}");
+        }
+    }
 
     private static string FormatName(PackageFormat format) => format switch
     {

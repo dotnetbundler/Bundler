@@ -16,7 +16,7 @@
     <AssemblyName>HelloBundlerApp</AssemblyName>
     <SelfContained>true</SelfContained>
     <Version>1.0.0</Version>
-    <HelloBundlerAppAssets>$(MSBuildThisFileDirectory)Assets\</HelloBundlerAppAssets>
+    <HelloBundlerAppAssets>$(MSBuildThisFileDirectory)Assets/</HelloBundlerAppAssets>
 
     <BundlerEnabled>true</BundlerEnabled>
     <!-- 默认产物集：按目标 OS 族定可用格式，再按宿主裁剪需本机工具链的格式
@@ -56,7 +56,7 @@
     <BundlerCopyright>Copyright © DotNet.Bundler contributors</BundlerCopyright>
     <!-- 许可文件是全局旋钮：独立 .app 后端无许可载荷契约会硬拒——formats 集含独立 app 时自动缺席，
          其余后端（nsis/msi/dmg/pkg/deb/rpm/appimage/zip/targz/apk）照常携带。 -->
-    <BundlerLicenseFile Condition="!$([System.String]::Copy(';$(BundlerFormats);').Contains(';app;'))">$(HelloBundlerAppAssets)common\LICENSE.txt</BundlerLicenseFile>
+    <BundlerLicenseFile Condition="!$([System.String]::Copy(';$(BundlerFormats);').Contains(';app;'))">$(HelloBundlerAppAssets)common/LICENSE.txt</BundlerLicenseFile>
     <BundlerVersion Condition="'$(HelloBundlerVersion)' != ''">$(HelloBundlerVersion)</BundlerVersion>
     <BundlerOutputPath Condition="'$(HelloBundlerOutputPath)' != ''">$(HelloBundlerOutputPath)</BundlerOutputPath>
     <!-- 主可执行文件名与 macOS universal 合并（macos-x86_64;macos-aarch64 双 RID 输入合并为单 .app 载荷）。 -->
@@ -73,37 +73,37 @@
     <BundlerWindowsSigningCommand Condition="'$(HelloBundlerSigningCommand)' != ''">$(HelloBundlerSigningCommand)</BundlerWindowsSigningCommand>
   </PropertyGroup>
 
-  <Import Project="formats\Nsis.props" />
-  <Import Project="formats\Msi.props" />
-  <Import Project="formats\MacApp.props" />
-  <Import Project="formats\MacDmg.props" />
-  <Import Project="formats\MacPkg.props" />
-  <Import Project="formats\Deb.props" />
-  <Import Project="formats\Rpm.props" />
-  <Import Project="formats\AppImage.props" />
-  <Import Project="formats\Archive.props" />
-  <Import Project="formats\AlpineApk.props" />
-  <Import Project="formats\Update.props" />
+  <Import Project="formats/Nsis.props" />
+  <Import Project="formats/Msi.props" />
+  <Import Project="formats/MacApp.props" />
+  <Import Project="formats/MacDmg.props" />
+  <Import Project="formats/MacPkg.props" />
+  <Import Project="formats/Deb.props" />
+  <Import Project="formats/Rpm.props" />
+  <Import Project="formats/AppImage.props" />
+  <Import Project="formats/Archive.props" />
+  <Import Project="formats/AlpineApk.props" />
+  <Import Project="formats/Update.props" />
 
   <ItemGroup>
     <!-- 公共载荷项：图标按 RID 条件化——linux 后端只接受 PNG（hicolor），
          windows 用 .ico；mac 图标见 formats/MacApp.props（png/car/icon 三模式）。 -->
-    <BundlerIcon Include="$(HelloBundlerAppAssets)msi\app.ico"
+    <BundlerIcon Include="$(HelloBundlerAppAssets)msi/app.ico"
         Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('windows-'))" />
-    <BundlerIcon Include="$(HelloBundlerAppAssets)deb\icon48.png"
+    <BundlerIcon Include="$(HelloBundlerAppAssets)deb/icon48.png"
         Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('linux-'))" />
-    <BundlerIcon Include="$(HelloBundlerAppAssets)deb\icon@2x.png"
+    <BundlerIcon Include="$(HelloBundlerAppAssets)deb/icon@2x.png"
         Condition="$([System.String]::Copy('$(_HelloBundlerTargetLower)').StartsWith('linux-'))" />
     <!-- 资源项演示：每个格式原始样品的资源原样保留，随载荷进入安装根。 -->
-    <BundlerResource Include="$(HelloBundlerAppAssets)common\readme.txt" Destination="docs/readme.txt" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\demo-resource.txt" Destination="演示资源\说明.txt"
+    <BundlerResource Include="$(HelloBundlerAppAssets)common/readme.txt" Destination="docs/readme.txt" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)nsis/demo-resource.txt" Destination="演示资源/说明.txt"
         Condition="!$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\demo.hello" Destination="demo.hello" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)nsis\运行深链接.cmd" Destination="运行深链接.cmd"
+    <BundlerResource Include="$(HelloBundlerAppAssets)nsis/demo.hello" Destination="demo.hello" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)nsis/运行深链接.cmd" Destination="运行深链接.cmd"
         Condition="!$([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;'))" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)msi\demo-resource.txt" Destination="DemoResources\Readme.txt" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)msi\demo.hellomsi" Destination="demo.hellomsi" />
-    <BundlerResource Include="$(HelloBundlerAppAssets)msi\open-link.cmd" Destination="open-link.cmd" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)msi/demo-resource.txt" Destination="DemoResources/Readme.txt" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)msi/demo.hellomsi" Destination="demo.hellomsi" />
+    <BundlerResource Include="$(HelloBundlerAppAssets)msi/open-link.cmd" Destination="open-link.cmd" />
     <!-- 文件关联与 URL 协议：全部样品原型扩展一次集齐（windows 注册表 /
          freedesktop MimeType / macOS CFBundleDocumentTypes+URL schemes 各自落位）。 -->
     <BundlerFileAssociation Include="hello" Name="Hello Bundler App 文档"

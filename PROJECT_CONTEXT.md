@@ -1,7 +1,8 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-10-19
-> 当前工作基线：`main@744cfb6`（最新实现基线——#142 Core+Abstractions 收口 squash 合入，含 #139 UPDATE 提权停链修复与 #140 DMG 挂载可观测增强祖先链）；
+> 当前工作基线：`main@576e6f7`（含 PR #142 `744cfb6` Core+Abstractions 收口 squash 合入与 PR #143 CI 诊断增强合入）；
+> 此前 `main@c319b8c` 含 #133/#134 诊断瘦身回净、#135 dmg 断言收窄、#136 dmg 挂载后失败注入腿、#137 文档对账、#138 签名文档修正；
 > `110a2fe` 基线全矩阵 verify `39133258129` 已 completed/success 全绿；
 > 联合 verify run `39142103135`（head=`0c18cf9`）未全绿：WindowsARM MSI Package 腿 attempt1 两测试 `dotnet restore` 3min 超时后 job 被取消、attempt2 restore 超时判败，其余已运行的 tests 矩阵腿通过、下游未执行——根因未证实；
 > verify run `39177022111`（head=`a137268`）Windows2025 x64 NSIS 重安装腿安装器 rc=0xC000013A、UbuntuARM runner 失联无工件——根因未证实；
@@ -14,8 +15,8 @@
 > 引导件冻件口径：现嵌 8 件为 produce-bootstrap run `39030858362`@`e0174dc` 产出（PR #129 入库，含 #128 PAL 化——env 件校验与 `UnixFileTypes` 改走 `libSystem.Native`、gate 竞态修复），SHA-256 与字节数留账于该 squash 正文。
 > 外部工具挂死加固：PR #130 给 `ToolRunner`/`ToolCache` 全链有界等待+spawn 追踪（`BUNDLER_TOOL_TIMEOUT_SECONDS`/`BUNDLER_TOOL_TRACE`），挂死收敛为带现场的有界失败；macOS 偶发 `hdiutil` 簿记滞后断言面由 PR #131 改有界轮询；PR #132 加 CI 进程快照采样（随后过滤瘦身至测试/工具面白名单）——加固后 intel 腿 suite=all 八连压测零复现，OS 层凶手未捕获。
 > 图形提权入口链等剩余边界仍挂 `docs/project/special-acceptance.md`。
-> 当前包版本：`0.1.0-alpha.106`（根 `Directory.Build.props` 的 `BundlerPackageVersion`，已随 PR #142 合入 `main@744cfb6`）
-> 当前阶段：**全功能面体检收口进行中**——七域并行审查（Bugs/Security/Flags/Notes 四级全清零）产出约 95 项 findings，按用户授权分 6 个连贯 PR 处置：PR-1 Core+Abstractions（已随 PR #142 合入 `main@744cfb6`）、PR-2 入口层、PR-3 Linux、PR-4 Windows、PR-5 macOS、PR-6 UPDATE（含 produce-bootstrap 重冻）；
+> 当前包版本：`0.1.0-alpha.107`（根 `Directory.Build.props` 的 `BundlerPackageVersion`，本分支 `rework/entry-layer` 上）
+> 当前阶段：**全功能面体检收口进行中**——七域并行审查（Bugs/Security/Flags/Notes 四级全清零）产出约 95 项 findings，按用户授权分 6 个连贯 PR 处置：PR-1 Core+Abstractions 已合入（#142，4 轮 Local Review 清零）、**PR-2 入口层收口完成（#144 待统一合并，2 轮 Local Review 清零）**、PR-3 Linux、PR-4 Windows、PR-5 macOS、PR-6 UPDATE（含 produce-bootstrap 重冻）；
 > 全部 11 个格式、CLI 与 UPDATE 均已冻结（冻结指功能面不扩展，质量收口仍在进行）；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词，契约与全产物名目录见 `docs/design/targets.md`
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/design/formats/` 单文档只留设计决策、语义契约与能力状态
 >

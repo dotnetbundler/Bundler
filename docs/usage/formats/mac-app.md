@@ -68,7 +68,7 @@ MSBuild 前缀 `BundlerMacApp*`；`bundler.json` 分节 `app.*`；API `MacAppBun
 | MSBuild | 键/成员 | 说明 |
 | --- | --- | --- |
 | `BundlerMacAppSignIdentity` | `signing.identity` | `-`=ad-hoc / 证书 CN；空即不签。与临时证书互斥 |
-| `BundlerMacAppTemporaryCertificateFile`/`…Password` | `signing.temporaryCertificateFile`/`…Password` | p12 导入临时钥匙串（密码属秘密勿入库） |
+| `BundlerMacAppTemporaryCertificateFile`/`…PasswordEnvironmentVariable` | `signing.temporaryCertificateFile`/`…Password` | p12 导入临时钥匙串；MSBuild 侧只收**存密码的环境变量名**（口令不进项目文件/日志） |
 | `BundlerMacAppHardenedRuntime` | `signing.hardenedRuntime` | 每个可执行签名加 `--options runtime`（公证必需） |
 | `BundlerMacAppEntitlementsFile` | `signing.entitlementsFile` | entitlements plist |
 | `BundlerMacAppNotarize` | `signing.notarize` | ditto→`notarytool`→`stapler` 公证管线 |
@@ -76,9 +76,10 @@ MSBuild 前缀 `BundlerMacApp*`；`bundler.json` 分节 `app.*`；API `MacAppBun
 | `BundlerMacAppSkipStapling` | `signing.skipStapling` | 跳过 stapler |
 | `BundlerMacAppNotaryProfile` | `signing.keychainProfile` | 凭证模式一：keychain profile 名 |
 | `BundlerMacAppNotaryApiKeyFile`/`…KeyId`/`…KeyIssuer` | `signing.apiKeyFile`/`apiKeyId`/`apiKeyIssuer` | 凭证模式二：App Store Connect API key 三元组 |
-| `BundlerMacAppAppleId`/`…ApplePassword`/`…AppleTeamId` | `signing.appleId`/`applePassword`/`appleTeamId` | 凭证模式三：Apple ID 三元组 |
+| `BundlerMacAppAppleId`/`…ApplePasswordEnvironmentVariable`/`…AppleTeamId` | `signing.appleId`/`applePassword`/`appleTeamId` | 凭证模式三：Apple ID 三元组（口令经 env 间址） |
 
 凭证按**字段**逐一 `配置 ?? 环境变量` 合并（顺序 `APPLE_PROFILE` → `APPLE_API_KEY_PATH`+`APPLE_API_KEY`+`APPLE_API_ISSUER` → `APPLE_ID`+`APPLE_PASSWORD`+`APPLE_TEAM_ID`，配置与 env 可拼成完整组）；某组只凑出一部分属配置错误直接抛异常。
+秘密通道：MSBuild 的 `*Password`/`…Passphrase` 旋钮只收**环境变量名**（`…EnvironmentVariable` 后缀，任务运行时取值）；bundler.json 的 `*Password`/`…Passphrase` 字段可写 `<名>EnvironmentVariable` 间址键代替明文；直接公共 API 的 `…Password`/`Passphrase` 配置字段保持原样由调用方自行注入。
 **注意**：独立 `.app` 后端按契约硬拒 `BundlerLicenseFile`（许可载荷归 dmg/pkg）；`formats` 含独立 `app` 时不要配置许可文件。
 
 ## 4. 产物与边界

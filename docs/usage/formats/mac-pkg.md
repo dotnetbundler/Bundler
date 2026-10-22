@@ -55,9 +55,9 @@ MSBuild 前缀 `BundlerMacPkg*`；`bundler.json` 分节 `pkg.*`；API `MacPkgBun
 | MSBuild | `pkg.signing.*` / API | 说明 |
 | --- | --- | --- |
 | `BundlerMacPkgSignIdentity` | `identity` | `pkgbuild --sign`/`productsign --sign` 证书 CN |
-| `BundlerMacPkgTemporaryCertificateFile`/`…Password` | `temporaryCertificateFile`/`…Password` | p12 临时钥匙串（与 identity 互斥；密码属秘密） |
+| `BundlerMacPkgTemporaryCertificateFile`/`…PasswordEnvironmentVariable` | `temporaryCertificateFile`/`…Password` | p12 临时钥匙串（与 identity 互斥）；MSBuild 侧只收**存密码的环境变量名** |
 | `BundlerMacPkgNotarize` | `notarize` | `.pkg` 直接过 `notarytool`+`stapler` |
-| `BundlerMacPkgNotaryWait`/`…SkipStapling`/`…NotaryProfile`/`…AppleId`/`…ApplePassword`/`…AppleTeamId`/`…NotaryApiKeyFile`/`…KeyId`/`…KeyIssuer` | `notaryWait`/`skipStapling`/`keychainProfile`/`appleId`/`applePassword`/`appleTeamId`/`apiKeyFile`/`apiKeyId`/`apiKeyIssuer` | 同 `.app` 公证组（凭证与环境变量回退顺序见 [`mac-app.md` §3.5](mac-app.md)） |
+| `BundlerMacPkgNotaryWait`/`…SkipStapling`/`…NotaryProfile`/`…AppleId`/`…ApplePasswordEnvironmentVariable`/`…AppleTeamId`/`…NotaryApiKeyFile`/`…KeyId`/`…KeyIssuer` | `notaryWait`/`skipStapling`/`keychainProfile`/`appleId`/`applePassword`/`appleTeamId`/`apiKeyFile`/`apiKeyId`/`apiKeyIssuer` | 同 `.app` 公证组（凭证与环境变量回退顺序与秘密间址规则见 [`mac-app.md` §3.5](mac-app.md)） |
 
 ## 4. 场景
 

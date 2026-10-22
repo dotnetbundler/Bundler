@@ -15,16 +15,16 @@
     <BundlerAppImageDesktopFile Condition="'$(HelloBundlerAppImageDesktopFile)' != ''">$(HelloBundlerAppImageDesktopFile)</BundlerAppImageDesktopFile>
     <BundlerAppImageCategories>Utility;Development</BundlerAppImageCategories>
     <BundlerAppImageCategories Condition="'$(HelloBundlerAppImageCategories)' != ''">$(HelloBundlerAppImageCategories)</BundlerAppImageCategories>
-    <BundlerAppImageMetainfoFile>$(HelloBundlerAppAssets)appimage\app.metainfo.xml</BundlerAppImageMetainfoFile>
+    <BundlerAppImageMetainfoFile>$(HelloBundlerAppAssets)appimage/app.metainfo.xml</BundlerAppImageMetainfoFile>
     <BundlerAppImageMetainfoFile Condition="'$(HelloBundlerAppImageMetainfoFile)' != ''">$(HelloBundlerAppImageMetainfoFile)</BundlerAppImageMetainfoFile>
     <!-- GPG 签名：供私钥文件才签，走内嵌 appimagetool（隔离 GNUPGHOME + 口令注入）。 -->
     <BundlerAppImageSigningKeyFile Condition="'$(HelloBundlerAppImageSigningKeyFile)' != ''">$(HelloBundlerAppImageSigningKeyFile)</BundlerAppImageSigningKeyFile>
-    <BundlerAppImageSigningKeyPassphrase Condition="'$(HelloBundlerAppImageSigningKeyPassphrase)' != ''">$(HelloBundlerAppImageSigningKeyPassphrase)</BundlerAppImageSigningKeyPassphrase>
+    <BundlerAppImageSigningKeyPassphraseEnvironmentVariable Condition="'$(HelloBundlerAppImageSigningKeyPassphraseEnvironmentVariable)' != ''">$(HelloBundlerAppImageSigningKeyPassphraseEnvironmentVariable)</BundlerAppImageSigningKeyPassphraseEnvironmentVariable>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- 任意 AppDir 相对路径映射演示：opt/hello-bundler-app/defaults.conf。 -->
     <BundlerAppImageFile Condition="'$(HelloBundlerAppImageFiles)' == '1'"
-        Include="$(HelloBundlerAppAssets)appimage\defaults.conf" Destination="opt/hello-bundler-app/defaults.conf" />
+        Include="$(HelloBundlerAppAssets)appimage/defaults.conf" Destination="opt/hello-bundler-app/defaults.conf" />
   </ItemGroup>
 </Project>

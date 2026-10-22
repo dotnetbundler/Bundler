@@ -3,8 +3,8 @@
   <PropertyGroup>
     <HelloBundlerMsiInstallScope Condition="'$(HelloBundlerMsiInstallScope)' == ''">currentUser</HelloBundlerMsiInstallScope>
     <HelloBundlerMsiLanguage Condition="'$(HelloBundlerMsiLanguage)' == ''">en-US</HelloBundlerMsiLanguage>
-    <HelloBundlerMsiBannerBitmap Condition="'$(HelloBundlerMsiBannerBitmap)' == ''">$(HelloBundlerAppAssets)msi\banner.bmp</HelloBundlerMsiBannerBitmap>
-    <HelloBundlerMsiDialogBitmap Condition="'$(HelloBundlerMsiDialogBitmap)' == ''">$(HelloBundlerAppAssets)msi\dialog.bmp</HelloBundlerMsiDialogBitmap>
+    <HelloBundlerMsiBannerBitmap Condition="'$(HelloBundlerMsiBannerBitmap)' == ''">$(HelloBundlerAppAssets)msi/banner.bmp</HelloBundlerMsiBannerBitmap>
+    <HelloBundlerMsiDialogBitmap Condition="'$(HelloBundlerMsiDialogBitmap)' == ''">$(HelloBundlerAppAssets)msi/dialog.bmp</HelloBundlerMsiDialogBitmap>
     <HelloBundlerMsiInstallDirectorySelection Condition="'$(HelloBundlerMsiInstallDirectorySelection)' == ''">true</HelloBundlerMsiInstallDirectorySelection>
     <HelloBundlerMsiAddToPath Condition="'$(HelloBundlerMsiAddToPath)' == ''">true</HelloBundlerMsiAddToPath>
     <HelloBundlerMsiUninstallShortcut Condition="'$(HelloBundlerMsiUninstallShortcut)' == ''">true</HelloBundlerMsiUninstallShortcut>
@@ -40,11 +40,11 @@
     <!-- MSI 交互许可界面只收 RTF——formats 集含 msi 时全局许可改为 RTF（nsis/dmg/pkg 同样接受 RTF，
          其余后端只是载荷携带不受扩展名影响）。 -->
     <BundlerLicenseFile Condition="'$(HelloBundlerMsiLicenseFile)' != ''">$(HelloBundlerMsiLicenseFile)</BundlerLicenseFile>
-    <BundlerLicenseFile Condition="'$(HelloBundlerMsiLicenseFile)' == '' and $([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;')) and !$([System.String]::Copy(';$(BundlerFormats);').Contains(';app;'))">$(HelloBundlerAppAssets)msi\license.rtf</BundlerLicenseFile>
+    <BundlerLicenseFile Condition="'$(HelloBundlerMsiLicenseFile)' == '' and $([System.String]::Copy(';$(BundlerFormats);').Contains(';msi;')) and !$([System.String]::Copy(';$(BundlerFormats);').Contains(';app;'))">$(HelloBundlerAppAssets)msi/license.rtf</BundlerLicenseFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <BundlerWixLanguageFile Include="$(HelloBundlerAppAssets)msi\locale-zh-cn.wxl" Language="zh-CN"
+    <BundlerWixLanguageFile Include="$(HelloBundlerAppAssets)msi/locale-zh-cn.wxl" Language="zh-CN"
         Condition="$(HelloBundlerMsiLanguages.Contains('zh-CN')) or $(HelloBundlerMsiLanguage.Contains('zh-CN'))" />
     <!-- 专家扩展项演示（默认空不生效；传 -p:HelloBundlerMsiExpert*=... 注入）。 -->
     <BundlerWixExtensionFragment Include="$(HelloBundlerMsiExtensionFragment)"

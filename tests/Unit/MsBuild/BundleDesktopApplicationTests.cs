@@ -148,14 +148,65 @@ public sealed class BundleDesktopApplicationTests
         task.RpmPackageName = "pkg";
         task.RpmLicense = "MIT";
         task.RpmSigningKeyFile = "key.pem";
-        task.RpmSigningKeyPassphrase = "pw";
+        task.RpmSigningKeyPassphraseEnvironmentVariable = "_UT_RPM_SIGNING_PASS";
+        Environment.SetEnvironmentVariable("_UT_RPM_SIGNING_PASS", "pw");
+        try
+        {
+            var rpm = Assert.IsType<DotNet.Bundler.Rpm.RpmBundleConfiguration>(
+                task.BuildFormatConfiguration(PackageFormat.Rpm));
+            Assert.Equal("pkg", rpm.PackageName);
+            Assert.Equal("MIT", rpm.License);
+            Assert.Equal(Path.GetFullPath("key.pem"), rpm.Signing.KeyFile);
+            Assert.Equal("pw", rpm.Signing.Passphrase);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("_UT_RPM_SIGNING_PASS", null);
+        }
+    }
 
-        var rpm = Assert.IsType<DotNet.Bundler.Rpm.RpmBundleConfiguration>(
-            task.BuildFormatConfiguration(PackageFormat.Rpm));
-        Assert.Equal("pkg", rpm.PackageName);
-        Assert.Equal("MIT", rpm.License);
-        Assert.Equal(Path.GetFullPath("key.pem"), rpm.Signing.KeyFile);
-        Assert.Equal("pw", rpm.Signing.Passphrase);
+    [Fact]
+    public void BuildFormatConfiguration_SecretEnvMissing_Throws()
+    {
+        var task = Task();
+        task.RpmSigningKeyPassphraseEnvironmentVariable = "_UT_RPM_SIGNING_ABSENT";
+        Environment.SetEnvironmentVariable("_UT_RPM_SIGNING_ABSENT", null);
+        Assert.Throws<InvalidOperationException>(
+            () => task.BuildFormatConfiguration(PackageFormat.Rpm));
+    }
+
+    [Fact]
+    public void BuildBundleConfiguration_RelativePaths_ResolveAgainstProjectDirectory()
+    {
+        var project = Path.Combine(Path.GetTempPath(), "bundler-projdir-" + Guid.NewGuid().ToString("N"));
+        var task = Task();
+        task.ProjectDirectory = project;
+        task.LicenseFile = "lic.txt";
+        var bundle = task.BuildBundleConfiguration([PackageFormat.Deb]);
+        Assert.Equal(Path.GetFullPath(Path.Combine(project, "lic.txt")), bundle.LicenseFile);
+        Assert.Equal(Path.GetFullPath(Path.Combine(project, "in")), bundle.Targets[0].InputDirectory);
+    }
+
+    [Fact]
+    public void BuildBundleConfiguration_Update_BootstrapperDirectoryMapped()
+    {
+        var task = Task();
+        task.UpdateEnabled = true;
+        task.UpdateBootstrapperDirectory = "tools/updater";
+        var update = task.BuildBundleConfiguration([PackageFormat.Deb]).Update;
+        Assert.Equal(Path.GetFullPath("tools/updater"), update!.BootstrapperDirectory);
+    }
+
+    [Fact]
+    public void BuildFormatConfiguration_AlpineApk_ExtraPkgInfoMapped()
+    {
+        var task = Task();
+        var item = new TaskItem("install_if");
+        item.SetMetadata("Value", "busybox");
+        task.AlpineApkExtraPkgInfo = [item];
+        var apk = Assert.IsType<DotNet.Bundler.AlpineApk.AlpineApkBundleConfiguration>(
+            task.BuildFormatConfiguration(PackageFormat.AlpineApk));
+        Assert.Equal("busybox", apk.ExtraPkgInfo!["install_if"]);
     }
 
     [Fact]

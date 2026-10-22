@@ -33,7 +33,7 @@
     <BundlerAlpineApkPreUpgradeFile Condition="'$(BundlerTestAlpineApkPreUpgradeScript)' != ''">$(BundlerTestAlpineApkPreUpgradeScript)</BundlerAlpineApkPreUpgradeFile>
     <BundlerAlpineApkPostUpgradeFile Condition="'$(BundlerTestAlpineApkPostUpgradeScript)' != ''">$(BundlerTestAlpineApkPostUpgradeScript)</BundlerAlpineApkPostUpgradeFile>
     <BundlerAlpineApkSigningKeyFile Condition="'$(BundlerTestAlpineApkSigningKeyFile)' != ''">$(BundlerTestAlpineApkSigningKeyFile)</BundlerAlpineApkSigningKeyFile>
-    <BundlerAlpineApkSigningKeyPassphrase Condition="'$(BundlerTestAlpineApkSigningKeyPassphrase)' != ''">$(BundlerTestAlpineApkSigningKeyPassphrase)</BundlerAlpineApkSigningKeyPassphrase>
+    <BundlerAlpineApkSigningKeyPassphraseEnvironmentVariable Condition="'$(BundlerTestAlpineApkSigningKeyPassphrase)' != ''">BundlerTestAlpineApkSigningKeyPassphrase</BundlerAlpineApkSigningKeyPassphraseEnvironmentVariable>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Bundler.ProjectReference.targets', '$(MSBuildThisFileDirectory)'))" />
   <ItemGroup>
