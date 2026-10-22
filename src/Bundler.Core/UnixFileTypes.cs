@@ -81,6 +81,32 @@ internal static class UnixFileTypes
     }
 
     /// <summary>
+    /// stat 后检查任一执行位（user/group/other）。非 POSIX 宿主无法判定按 true 放行；
+    /// stat 失败按"无法判定=不信任"返回 false——供 macOS pkgbuild 脚本位预检这类
+    /// 宿主已保证 POSIX 的失败导向调用方如实拒绝。
+    /// </summary>
+    internal static bool HasAnyExecuteBit(string path)
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) &&
+            !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return true;
+        }
+        try
+        {
+            if (SysStat(path, out var status) != 0)
+            {
+                return false;
+            }
+            return (status.Mode & 0x49) != 0; // S_IXUSR|S_IXGRP|S_IXOTH
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// stat 后返回 <paramref name="path"/> 的属主 uid（symlink 跟随到目标）。
     /// 与 <see cref="IsRegularFile"/> 的 fail-open 相反——属主判据用于
     /// "共享目录是否可信"的安全判定，stat 不可得按"无法判定=不信任"返回 false。

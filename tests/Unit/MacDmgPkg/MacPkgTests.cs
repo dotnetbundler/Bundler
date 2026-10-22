@@ -550,6 +550,120 @@ public sealed class MacPkgTests : TempBase
         }
     }
 
+    // B4: payload.Destination 注入暂存 .app 内部会污染已签 bundle——前缀一律拒绝。
+    [Fact]
+    public async Task RejectsPayloadDestinationInsideStagedApp()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var extra = Path.Combine(input, "evil.txt");
+        File.WriteAllText(extra, "x");
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (request, _) =>
+        {
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            var inside = await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Files =
+                    [
+                        new MacPkgFileEntry
+                        {
+                            Source = extra,
+                            Destination = "ExampleApp.app/Contents/Resources/evil.txt"
+                        }
+                    ]
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+            Assert.Contains(".app bundle", inside.Message);
+
+            var exact = await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Files =
+                    [
+                        new MacPkgFileEntry { Source = extra, Destination = "ExampleApp.app" }
+                    ]
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+            Assert.Contains(".app bundle", exact.Message);
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    // B4: 两条 payload 认领同一目的地（含祖先/后代重叠）必须显式拒绝而不是静默覆盖。
+    [Fact]
+    public async Task RejectsCollidingPayloadDestinations()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var extraDir = Path.Combine(input, "extra");
+        Directory.CreateDirectory(extraDir);
+        File.WriteAllText(Path.Combine(extraDir, "x.txt"), "x");
+        var file = Path.Combine(input, "dup.txt");
+        File.WriteAllText(file, "x");
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (request, _) =>
+        {
+            var pkgPath = request.Arguments[request.Arguments.Count - 1];
+            Directory.CreateDirectory(Path.GetDirectoryName(pkgPath)!);
+            File.WriteAllText(pkgPath, "pkg");
+            return Task.FromResult(new ToolRunner.Result(0, "", ""));
+        };
+        try
+        {
+            // 同目的地两次认领
+            await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Files =
+                    [
+                        new MacPkgFileEntry { Source = file, Destination = "dup.txt" },
+                        new MacPkgFileEntry { Source = file, Destination = "dup.txt" },
+                    ]
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+            // 目录祖先 vs 后代文件
+            await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Files =
+                    [
+                        new MacPkgFileEntry { Source = extraDir, Destination = "support" },
+                        new MacPkgFileEntry { Source = file, Destination = "support/dup.txt" },
+                    ]
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+            // 反向：后代先认领，祖先后到同样拒绝
+            await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    Files =
+                    [
+                        new MacPkgFileEntry { Source = file, Destination = "support/dup.txt" },
+                        new MacPkgFileEntry { Source = extraDir, Destination = "support" },
+                    ]
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
     // R2: CopyTree 遇目录符号链接环显式报错，不再递归失控。
     [Fact]
     public void CopyTreeRejectsSymlinkLoop()
@@ -916,7 +1030,16 @@ public sealed class MacPkgTests : TempBase
         var output = Temp("DotNet.Bundler.Tests").FullName;
         var scripts = Path.Combine(input, "scripts");
         Directory.CreateDirectory(scripts);
-        File.WriteAllText(Path.Combine(scripts, "postinstall"), "#!/bin/sh\nexit 0\n");
+        var postinstall = Path.Combine(scripts, "postinstall");
+        File.WriteAllText(postinstall, "#!/bin/sh\nexit 0\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            // pkgbuild 要执行位——生产路径预检会拒 0644 件，夹具按真实形态 chmod +x。
+            File.SetUnixFileMode(postinstall,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
         var requests = new List<ToolRunner.Request>();
         var previousHost = MacPkgBundleBackend.HostCheck;
         var previous = ToolRunner.Handler;
@@ -941,6 +1064,83 @@ public sealed class MacPkgTests : TempBase
             var index = args.IndexOf("--scripts");
             Assert.True(index > 0 && args[index + 1] == Path.GetFullPath(scripts),
                 $"--scripts must forward the configured directory, got: {string.Join(' ', args)}");
+            var filterIndex = args.IndexOf("--filter");
+            Assert.True(filterIndex > 0 && args[filterIndex + 1] == "\\.DS_Store$",
+                $"pkgbuild must always carry --filter '\\.DS_Store$', got: {string.Join(' ', args)}");
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    // 脚本位预检：缺 #! shebang 的 preinstall/postinstall 在 pkgbuild 前显式拒绝。
+    [Fact]
+    public async Task RejectsScriptWithoutShebang()
+    {
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var scripts = Path.Combine(input, "scripts");
+        Directory.CreateDirectory(scripts);
+        var postinstall = Path.Combine(scripts, "postinstall");
+        File.WriteAllText(postinstall, "echo no-shebang\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(postinstall, UnixFileMode.UserRead | UnixFileMode.UserWrite |
+                UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+        }
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (_, _) => Task.FromResult(new ToolRunner.Result(0, "", ""));
+        try
+        {
+            var error = await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    ScriptsDirectory = scripts
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+            Assert.Contains("shebang", error.Message);
+        }
+        finally
+        {
+            ToolRunner.Handler = previous;
+            MacPkgBundleBackend.HostCheck = previousHost;
+            Cleanup(input, output);
+        }
+    }
+
+    // 执行位支路只在 POSIX 宿主可验——Windows 上 HasAnyExecuteBit fail-open。
+    [Fact]
+    public async Task RejectsScriptWithoutExecuteBit()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "exec-bit leg only exists on POSIX hosts");
+        var input = CreateInputDirectory();
+        var output = Temp("DotNet.Bundler.Tests").FullName;
+        var scripts = Path.Combine(input, "scripts");
+        Directory.CreateDirectory(scripts);
+        var postinstall = Path.Combine(scripts, "postinstall");
+        File.WriteAllText(postinstall, "#!/bin/sh\nexit 0\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(postinstall,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite |
+                UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+        }
+        var previousHost = MacPkgBundleBackend.HostCheck;
+        var previous = ToolRunner.Handler;
+        MacPkgBundleBackend.HostCheck = () => true;
+        ToolRunner.Handler = (_, _) => Task.FromResult(new ToolRunner.Result(0, "", ""));
+        try
+        {
+            var error = await Assert.ThrowsAsync<ArgumentException>(
+                () => new MacPkgBundler(new MacPkgBundleConfiguration
+                {
+                    ScriptsDirectory = scripts
+                }).BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken));
+            Assert.Contains("not executable", error.Message);
         }
         finally
         {

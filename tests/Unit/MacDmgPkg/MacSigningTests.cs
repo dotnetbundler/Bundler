@@ -103,9 +103,10 @@ public sealed class MacSigningTests : TempBase
     [Fact]
     public void Credentials_KeychainProfile_Wins()
     {
-        var args = MacAppSigning.ResolveCredentials(
+        var (args, passwordOnArgv) = MacSigningSupport.ResolveCredentials(
             new MacAppSigningConfiguration { KeychainProfile = "ci-profile" });
         Assert.Equal(["--keychain-profile", "ci-profile"], args);
+        Assert.False(passwordOnArgv);
     }
 
     [Fact]
@@ -113,28 +114,31 @@ public sealed class MacSigningTests : TempBase
     {
         var key = Path.Combine(Root, "key.p8");
         File.WriteAllText(key, "k");
-        var args = MacAppSigning.ResolveCredentials(
+        var (args, passwordOnArgv) = MacSigningSupport.ResolveCredentials(
             new MacAppSigningConfiguration
             {
                 ApiKeyFile = key, ApiKeyId = "KEYID1234", ApiKeyIssuer = "iss",
             });
         Assert.Equal(["--key", key, "--key-id", "KEYID1234", "--issuer", "iss"], args);
+        Assert.False(passwordOnArgv);
 
-        Assert.Throws<ArgumentException>(() => MacAppSigning.ResolveCredentials(
+        Assert.Throws<ArgumentException>(() => MacSigningSupport.ResolveCredentials(
             new MacAppSigningConfiguration { ApiKeyFile = key })); // 缺 id/issuer
     }
 
     [Fact]
     public void Credentials_AppleId_NeedsAllThree()
     {
-        var args = MacAppSigning.ResolveCredentials(
+        // Apple-ID 凭据把 app-specific 口令放上 notarytool argv——PasswordOnArgv 标出该面。
+        var (args, passwordOnArgv) = MacSigningSupport.ResolveCredentials(
             new MacAppSigningConfiguration
             {
                 AppleId = "a@b.c", ApplePassword = "app-pw", AppleTeamId = "TEAM",
             });
         Assert.Equal(["--apple-id", "a@b.c", "--password", "app-pw", "--team-id", "TEAM"], args);
+        Assert.True(passwordOnArgv);
 
-        Assert.Throws<ArgumentException>(() => MacAppSigning.ResolveCredentials(
+        Assert.Throws<ArgumentException>(() => MacSigningSupport.ResolveCredentials(
             new MacAppSigningConfiguration { AppleId = "a@b.c" }));
     }
 
@@ -144,7 +148,7 @@ public sealed class MacSigningTests : TempBase
     public void CodesignArguments_AdHoc_NoTimestamp()
     {
         var args = MacAppSigning.CodesignArguments(
-            "-", new MacAppSigningConfiguration(), entitlements: false, "/tmp/x.app");
+            "-", new MacAppSigningConfiguration(), keychain: null, entitlements: false, "/tmp/x.app");
         Assert.Contains("--sign", args);
         Assert.Contains("--timestamp=none", args); // ad-hoc 无时间戳服务
         Assert.Equal("/tmp/x.app", args[^1]);
@@ -159,12 +163,27 @@ public sealed class MacSigningTests : TempBase
             "Dev ID", new MacAppSigningConfiguration
             {
                 HardenedRuntime = true, EntitlementsFile = ent,
-            }, entitlements: true, "/tmp/x.app");
+            }, keychain: null, entitlements: true, "/tmp/x.app");
         Assert.Contains("--options", args);
         Assert.Contains("runtime", args);
         Assert.Contains("--entitlements", args);
         Assert.Contains("--timestamp", args);
     }
+
+    [Fact]
+    public void CodesignArguments_Keychain_PassedExplicitly()
+    {
+        // 临时 keychain 走 --keychain 形参直给，不再变异用户搜索列表。
+        var args = MacSigningSupport.CodesignArguments(
+            "Dev ID", hardenedRuntime: false, entitlementsFile: null,
+            applyEntitlements: false,
+            new MacSigningSupport.TemporaryKeychain("/tmp/k.keychain-db", "Dev ID"),
+            "/tmp/x.app");
+        var keychainIndex = args.ToList().IndexOf("--keychain");
+        Assert.True(keychainIndex > 0, "--keychain must be present when a temporary keychain is used.");
+        Assert.Equal("/tmp/k.keychain-db", args[keychainIndex + 1]);
+    }
+
 
     // ---- NotarySubmissionId ----
 
@@ -174,7 +193,7 @@ public sealed class MacSigningTests : TempBase
     [InlineData("not json", null)]
     public void NotarySubmission_ParsesId(string json, string? expected)
     {
-        Assert.Equal(expected, MacAppSigning.NotarySubmissionId(json));
+        Assert.Equal(expected, MacSigningSupport.NotarySubmissionId(json));
     }
 
     // ---- MacPkgSigning.Validate ----
@@ -203,8 +222,23 @@ public sealed class MacSigningTests : TempBase
     [Fact]
     public void PkgSigning_PkgbuildArgs()
     {
-        var args = MacPkgSigning.PkgbuildSignArguments("Dev ID Installer", null);
+        var args = MacSigningSupport.PkgbuildSignArguments("Dev ID Installer", null);
         Assert.Equal(["--sign", "Dev ID Installer", "--timestamp"], args);
+    }
+
+    [Fact]
+    public void PkgSigning_ProductsignArgs_CarryTimestamp()
+    {
+        // productsign 与 pkgbuild 同样需要时间戳签名（此前漏配 —— 无时间戳的
+        // productsign 件在证书吊销/过期后立即失去 Gatekeeper 信任）。
+        var args = MacSigningSupport.ProductsignArguments("Dev ID Installer", null);
+        Assert.Equal(["--sign", "Dev ID Installer", "--timestamp"], args);
+        var withKeychain = MacSigningSupport.ProductsignArguments(
+            "Dev ID Installer",
+            new MacSigningSupport.TemporaryKeychain("/tmp/k.keychain-db", "Dev ID Installer"));
+        Assert.Equal(
+            ["--sign", "Dev ID Installer", "--keychain", "/tmp/k.keychain-db", "--timestamp"],
+            withKeychain);
     }
 
     // ---- MacPkgBundleBackend.ValidateConfiguration ----

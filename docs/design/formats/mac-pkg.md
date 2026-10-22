@@ -8,7 +8,7 @@
 - `.pkg` 已冻结（基线 `0.1.0-alpha.47`），此后变更走变更控制（改行 + 新测试 + 文档同步）。
 - C# 原生编排 `pkgbuild`/`productbuild`/`productsign`/`xar`/`pkgutil`/`installer`（全系统自带，零再分发成本）。
 - 包结构策略：默认纯组件包（`pkgbuild` 直出）；配置分发特性（欢迎/许可/结语页、标题、域名选择）时自动升级为 `productbuild`+`distribution.xml` 分发包；调用方看到同一个 `.pkg` 输出路径。
-- 载荷默认取 `.app` 中间产物（`Pkg` 自动补 `App`），也支持任意文件树映射（`BundlerMacPkgFile` 项的 `Destination` 落到 install-location 相对路径）；安装位置默认 `/Applications`，可配 `--install-location`（相对路径拒绝）。
+- 载荷默认取 `.app` 中间产物（`Pkg` 自动补 `App`），也支持任意文件树映射（`BundlerMacPkgFile` 项的 `Destination` 落到 install-location 相对路径）；Destination 必须解析到包根之内、不得注入暂存 `.app` 内部、且与同/祖先/后代认领冲突显式拒绝（撞名簿按 APFS 缺省大小写不敏感判定）；安装位置默认 `/Applications`，可配 `--install-location`（相对路径拒绝）；`pkgbuild` 恒带 `--filter '\.DS_Store$'` 防 Finder 簿记件入包，`preinstall`/`postinstall` 脚本缺 `#!` 头或执行位时构建前置拒绝。
 - identifier/version 默认取 `BundlerIdentifier`/`BundlerVersion`（单一 `.app` 载荷可源自其 `CFBundleIdentifier`/`CFBundleShortVersionString`）；`BundlerMacPkgPackageName`/`BundlerMacPkgVersion` 可覆盖。
 - 定位：`.pkg` 是 macOS 唯一原生受管安装格式，角色对应 Windows 侧 MSI；`.app`/`.dmg` 对应免安装/拖拽分发面。
 
@@ -33,7 +33,7 @@
 
 - 组件包/分发包全链（`expand-full`/`xar` 结构断言）；welcome/license/conclusion 页（`.txt`/`.html`/`.rtf`，license 复用公共 `LicenseFile`）；分发标题。
 - `system`/`current-user-home` 双域；per-user 域非管理员真实安装 + 收据断言；system 域 sudo `installer` 真装/卸载已由集成腿实证。
-- Developer ID Installer 签名：组件包 `pkgbuild --sign --timestamp`、分发包 `productsign --sign`；`"-"` ad-hoc **明确拒绝**（`.pkg` 无 ad-hoc 等价物）；临时钥匙串导入/销毁复用 `MacAppSigning`；无效身份真实失败已验。
+- Developer ID Installer 签名：组件包 `pkgbuild --sign --timestamp`、分发包 `productsign --sign --timestamp`（两条签名链都带 Apple 时间戳）；`"-"` ad-hoc **明确拒绝**（`.pkg` 无 ad-hoc 等价物）；临时钥匙串导入/销毁与凭证解析复用 `Bundler.MacApp` 的 `MacSigningSupport`；无效身份真实失败已验。
 - `.pkg` 公证接线（`notarytool submit` 直收 `.pkg` + `stapler`；默认关；凭证三模式与 `APPLE_*` 回退同 `.app`）——**installer 包是 Gatekeeper 实际验签对象**（与 `.dmg` 结论相反）。
 - `ScriptsDirectory` 专家旋钮（默认关）：`pkgbuild --scripts` 原样收目录，`postinstall` 在 per-user 真装中执行已验。
 - 覆盖升级实测（收据版本更新）；`macos-x86_64` 产物结构与 CI 运行态实测；universal 通用目标可产。

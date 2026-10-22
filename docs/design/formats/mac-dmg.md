@@ -7,7 +7,7 @@
 
 - `.dmg` 格式已冻结（基线 `0.1.0-alpha.45`），仅缺陷修复附回归测试。
 - C# 原生编排 `hdiutil`/`osascript`/`SetFile`/`sips`，不内嵌 create-dmg 类第三方 fork（参数全可控，与宿主检测策略一致）。
-- DMG 本体可 `codesign`：自有 `Signing` 配置（identity 字符串 / `-` ad-hoc / 临时钥匙串证书，互斥），临时钥匙串实现复用 `MacAppSigning`；
+- DMG 本体可 `codesign`：自有 `Signing` 配置（identity 字符串 / `-` ad-hoc / 临时钥匙串证书，互斥），临时钥匙串与参数构造复用 `Bundler.MacApp` 的 `MacSigningSupport`（`codesign --keychain` 直给，不碰用户搜索列表）；
   `Identity="-"` 产 ad-hoc 签名并随即 `codesign --verify` 验签，完全未配置签名才跳过；
   **DMG 本体不做公证**——Gatekeeper 核验内部 `.app` 的 stapled 票据。
 - EULA：`LicenseFile`（txt/rtf）经 `hdiutil udifrez` 注入 SLA 资源，挂载时弹同意面板。

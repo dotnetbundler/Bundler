@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using DotNet.Bundler;
 using DotNet.Bundler.Core;
 
@@ -9,6 +8,7 @@ namespace DotNet.Bundler.MacApp;
 /// codesign (inside-out) + explicit notarization for the produced .app.
 /// Everything is opt-in: an empty <see cref="MacAppSigningConfiguration"/> leaves the bundle
 /// unsigned. Signing requires a macOS host; notarization requires a real identity (not "-").
+/// Credential/keychain/tool-argument machinery is shared via <see cref="MacSigningSupport"/>.
 /// </summary>
 internal static class MacAppSigning
 {
@@ -27,39 +27,19 @@ internal static class MacAppSigning
     internal static void Validate(MacAppSigningConfiguration signing)
     {
         var signingRequested = Configured(signing);
-        if (signing.Identity is not null && !string.IsNullOrEmpty(signing.TemporaryCertificateFile))
-        {
-            throw new ArgumentException(
-                "SignIdentity and TemporaryCertificateFile are mutually exclusive.");
-        }
-        if (signing.Identity is { Length: 0 })
-        {
-            throw new ArgumentException("SignIdentity cannot be empty (use \"-\" for ad-hoc).");
-        }
-        if (signing.TemporaryCertificateFile is { Length: > 0 } certificatePath &&
-            !File.Exists(Path.GetFullPath(certificatePath)))
-        {
-            throw new FileNotFoundException("TemporaryCertificateFile does not exist.", certificatePath);
-        }
+        MacSigningSupport.ValidateIdentityAndCertificate(
+            signing.Identity, signing.TemporaryCertificateFile, allowAdHoc: true, ".app");
         if (signing.EntitlementsFile is { Length: > 0 } entitlements &&
             !File.Exists(Path.GetFullPath(entitlements)))
         {
             throw new FileNotFoundException("EntitlementsFile does not exist.", entitlements);
         }
-        if (signing.Notarize)
-        {
-            var adHoc = signing.Identity == "-";
-            if (!signingRequested || adHoc)
-            {
-                throw new ArgumentException(
-                    "Notarization requires a real signing identity; ad-hoc signatures cannot be notarized.");
-            }
-            ResolveCredentials(signing); // throws when no credential combination is complete
-        }
-        else if (signing.SkipStapling || !signing.NotaryWait)
-        {
-            throw new ArgumentException("SkipStapling/NotaryWait require Notarize to be enabled.");
-        }
+        MacSigningSupport.ValidateNotarizationKnobs(
+            signing.Notarize, signingRequested, adHocIdentity: signing.Identity == "-",
+            signing.KeychainProfile, signing.ApiKeyFile, signing.ApiKeyId, signing.ApiKeyIssuer,
+            signing.AppleId, signing.ApplePassword, signing.AppleTeamId,
+            signing.SkipStapling, signing.NotaryWait,
+            "Notarization requires a real signing identity; ad-hoc signatures cannot be notarized.");
         if (signingRequested && !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             throw new PlatformNotSupportedException(".app signing requires a macOS host (codesign).");
@@ -71,33 +51,32 @@ internal static class MacAppSigning
         BundleBuildContext context, string appPath, string mainExecutable,
         MacAppSigningConfiguration signing, CancellationToken cancellationToken)
     {
+        // Provenance/quarantine xattrs are stripped unconditionally (signing or not): payload
+        // trees copied from the network or other machines carry com.apple.quarantine and
+        // FinderInfo attrs that would otherwise ride into the bundle and fail Gatekeeper
+        // checks or codesign's detritus audit on the user's machine.
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            await ToolRunner.RunAsync(
+                "xattr", ["-crs", appPath], context.WorkDirectory, cancellationToken);
+        }
         if (!Configured(signing))
         {
             return;
         }
         var logger = context.Logger;
-        TemporaryKeychain? keychain = null;
+        MacSigningSupport.TemporaryKeychain? keychain = null;
         string identity;
         try
         {
-            if (signing.TemporaryCertificateFile is { Length: > 0 } certificatePath)
-            {
-                keychain = await TemporaryKeychain.CreateAsync(
-                    context.WorkDirectory, Path.GetFullPath(certificatePath),
-                    signing.TemporaryCertificatePassword ?? "", logger, cancellationToken);
-                identity = keychain.Identity;
-            }
-            else
-            {
-                identity = signing.Identity!;
-            }
+            (identity, keychain) = await MacSigningSupport.ResolveIdentityAsync(
+                context.WorkDirectory, logger, signing.Identity, signing.TemporaryCertificateFile,
+                signing.TemporaryCertificatePassword, cancellationToken);
 
             logger.Log(BundleLogLevel.Information,
                 identity == "-"
                     ? "Signing the .app ad-hoc (codesign -s -)."
                     : $"Signing the .app with identity '{identity}'.");
-            await ToolRunner.RunAsync(
-                "xattr", ["-crs", appPath], context.WorkDirectory, cancellationToken);
 
             var contentsDirectory = Path.Combine(appPath, "Contents");
             var mainExecutablePath = Path.Combine(contentsDirectory, "MacOS", mainExecutable);
@@ -122,19 +101,19 @@ internal static class MacAppSigning
             foreach (var file in nestedFiles)
             {
                 await ToolRunner.RunAsync("codesign",
-                    CodesignArguments(identity, signing, entitlements: false, file),
+                    CodesignArguments(identity, signing, keychain, entitlements: false, file),
                     context.WorkDirectory, cancellationToken);
             }
             foreach (var nested in nestedBundles)
             {
                 await SignNestedBundleAsync(
-                    context, signing, identity, nested, cancellationToken);
+                    context, signing, identity, keychain, nested, cancellationToken);
             }
             await ToolRunner.RunAsync("codesign",
-                CodesignArguments(identity, signing, entitlements: true, mainExecutablePath),
+                CodesignArguments(identity, signing, keychain, entitlements: true, mainExecutablePath),
                 context.WorkDirectory, cancellationToken);
             await ToolRunner.RunAsync("codesign",
-                CodesignArguments(identity, signing, entitlements: true, appPath),
+                CodesignArguments(identity, signing, keychain, entitlements: true, appPath),
                 context.WorkDirectory, cancellationToken);
 
             await ToolRunner.RunAsync("codesign",
@@ -167,14 +146,21 @@ internal static class MacAppSigning
 
         if (signing.Notarize)
         {
-            await NotarizeAsync(context, appPath, signing, cancellationToken);
+            await NotarizeAppAsync(context, appPath, signing, cancellationToken);
         }
     }
+
+    /// <summary>codesign argument list; separated for test assertion.</summary>
+    internal static IReadOnlyList<string> CodesignArguments(
+        string identity, MacAppSigningConfiguration signing,
+        MacSigningSupport.TemporaryKeychain? keychain, bool entitlements, string target) =>
+        MacSigningSupport.CodesignArguments(
+            identity, signing.HardenedRuntime, signing.EntitlementsFile, entitlements, keychain, target);
 
     /// <summary>嵌套 bundle（.app/.framework/…）的 inside-out 递归签名：内部散文件→更深的嵌套→bundle 根。</summary>
     private static async Task SignNestedBundleAsync(
         BundleBuildContext context, MacAppSigningConfiguration signing, string identity,
-        string bundlePath, CancellationToken cancellationToken)
+        MacSigningSupport.TemporaryKeychain? keychain, string bundlePath, CancellationToken cancellationToken)
     {
         // .app 的载荷在 Contents/ 下；.framework 无 Contents，载荷在
         // Versions/Current 下（符号链接，枚举时自然穿透）；扁平嵌套包退回包根。
@@ -200,17 +186,17 @@ internal static class MacAppSigning
             foreach (var file in loose)
             {
                 await ToolRunner.RunAsync("codesign",
-                    CodesignArguments(identity, signing, entitlements: false, file),
+                    CodesignArguments(identity, signing, keychain, entitlements: false, file),
                     context.WorkDirectory, cancellationToken);
             }
             foreach (var nested in deeper)
             {
-                await SignNestedBundleAsync(context, signing, identity, nested, cancellationToken);
+                await SignNestedBundleAsync(context, signing, identity, keychain, nested, cancellationToken);
             }
         }
         // bundle 根签名封住其主可执行与资源——不叠 entitlements（属主 app 的旋钮）。
         await ToolRunner.RunAsync("codesign",
-            CodesignArguments(identity, signing, entitlements: false, bundlePath),
+            CodesignArguments(identity, signing, keychain, entitlements: false, bundlePath),
             context.WorkDirectory, cancellationToken);
     }
 
@@ -238,89 +224,11 @@ internal static class MacAppSigning
         return bundles;
     }
 
-    /// <summary>codesign argument list; separated for test assertion.</summary>
-    internal static IReadOnlyList<string> CodesignArguments(
-        string identity, MacAppSigningConfiguration signing, bool entitlements, string target)
-    {
-        var arguments = new List<string> { "--force", "--sign", identity };
-        if (signing.HardenedRuntime)
-        {
-            arguments.Add("--options");
-            arguments.Add("runtime");
-        }
-        if (entitlements && signing.EntitlementsFile is { Length: > 0 })
-        {
-            arguments.Add("--entitlements");
-            arguments.Add(Path.GetFullPath(signing.EntitlementsFile));
-        }
-        arguments.Add(identity == "-" ? "--timestamp=none" : "--timestamp");
-        arguments.Add(target);
-        return arguments;
-    }
-
-    /// <summary>
-    /// Resolves notary credentials: explicit config first, then APPLE_* env vars
-    /// (the names other bundlers use). Returns the credential argument set or throws.
-    /// </summary>
-    internal static IReadOnlyList<string> ResolveCredentials(MacAppSigningConfiguration signing) =>
-        ResolveCredentials(
-            signing.KeychainProfile, signing.ApiKeyFile, signing.ApiKeyId, signing.ApiKeyIssuer,
-            signing.AppleId, signing.ApplePassword, signing.AppleTeamId);
-
-    /// <summary>Field-level overload shared with the .pkg backend's signing configuration.</summary>
-    internal static IReadOnlyList<string> ResolveCredentials(
-        string? keychainProfile, string? apiKeyFile, string? apiKeyId, string? apiIssuer,
-        string? appleId, string? applePassword, string? appleTeamId)
-    {
-        var profile = keychainProfile ?? Env("APPLE_PROFILE");
-        if (profile is { Length: > 0 })
-        {
-            return ["--keychain-profile", profile];
-        }
-        var keyPath = apiKeyFile ?? Env("APPLE_API_KEY_PATH");
-        var keyId = apiKeyId ?? Env("APPLE_API_KEY");
-        var issuer = apiIssuer ?? Env("APPLE_API_ISSUER");
-        if (keyPath is { Length: > 0 } || keyId is { Length: > 0 } || issuer is { Length: > 0 })
-        {
-            if (keyPath is not { Length: > 0 } || keyId is not { Length: > 0 } ||
-                issuer is not { Length: > 0 })
-            {
-                throw new ArgumentException(
-                    "Notarization API-key credentials need all of ApiKeyFile/ApiKeyId/ApiKeyIssuer " +
-                    "(or APPLE_API_KEY_PATH/APPLE_API_KEY/APPLE_API_ISSUER).");
-            }
-            return ["--key", keyPath, "--key-id", keyId, "--issuer", issuer];
-        }
-        var id = appleId ?? Env("APPLE_ID");
-        var password = applePassword ?? Env("APPLE_PASSWORD");
-        var team = appleTeamId ?? Env("APPLE_TEAM_ID");
-        if (id is { Length: > 0 } || password is { Length: > 0 } || team is { Length: > 0 })
-        {
-            if (id is not { Length: > 0 } || password is not { Length: > 0 } ||
-                team is not { Length: > 0 })
-            {
-                throw new ArgumentException(
-                    "Notarization Apple-ID credentials need all of AppleId/ApplePassword/AppleTeamId " +
-                    "(or APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID).");
-            }
-            return ["--apple-id", id, "--password", password, "--team-id", team];
-        }
-        throw new ArgumentException(
-            "Notarization is enabled but no credentials were provided: set a keychain profile " +
-            "(Signing.KeychainProfile/APPLE_PROFILE), an API key (ApiKeyFile/ApiKeyId/ApiKeyIssuer " +
-            "or APPLE_API_KEY_PATH/APPLE_API_KEY/APPLE_API_ISSUER), or Apple ID credentials " +
-            "(AppleId/ApplePassword/AppleTeamId or APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID).");
-    }
-
-    private static string? Env(string name) =>
-        Environment.GetEnvironmentVariable(name) is { Length: > 0 } value ? value : null;
-
-    /// <summary>ditto → notarytool submit → stapler. The zip is always cleaned up.</summary>
-    private static async Task NotarizeAsync(
+    /// <summary>ditto → shared notary submit/staple. The zip is always cleaned up.</summary>
+    private static async Task NotarizeAppAsync(
         BundleBuildContext context, string appPath, MacAppSigningConfiguration signing,
         CancellationToken cancellationToken)
     {
-        var credentials = ResolveCredentials(signing);
         var zipPath = Path.Combine(
             context.WorkDirectory, Path.GetFileName(appPath) + ".notarize.zip");
         try
@@ -329,47 +237,12 @@ internal static class MacAppSigning
             await ToolRunner.RunAsync(
                 "ditto", ["-c", "-k", "--keepParent", appPath, zipPath],
                 context.WorkDirectory, cancellationToken);
-            var submitArguments = new List<string> { "notarytool", "submit", zipPath };
-            submitArguments.AddRange(credentials);
-            submitArguments.Add("--output-format");
-            submitArguments.Add("json");
-            if (signing.NotaryWait)
-            {
-                submitArguments.Add("--wait");
-            }
-            context.Logger.Log(BundleLogLevel.Information,
-                signing.NotaryWait
-                    ? "Submitting to notarytool and waiting for the verdict."
-                    : "Submitting to notarytool without waiting (stapling is skipped).");
-            var result = await ToolRunner.TryRunAsync(
-                "xcrun", submitArguments, context.WorkDirectory, cancellationToken,
-                timeout: TimeSpan.FromHours(1))
-                ?? throw new InvalidOperationException(
-                    "xcrun/notarytool is unavailable; notarization requires Xcode 13+ (host macOS 11.3+).");
-            if (result.ExitCode != 0)
-            {
-                throw new InvalidOperationException(
-                    $"notarytool submission failed.{Environment.NewLine}" +
-                    $"{result.StandardOutput}{result.StandardError}".TrimEnd());
-            }
-            var submissionId = NotarySubmissionId(result.StandardOutput);
-            if (submissionId is not null)
-            {
-                context.Logger.Log(BundleLogLevel.Information, $"notarytool submission id: {submissionId}");
-            }
-            if (!signing.NotaryWait || signing.SkipStapling)
-            {
-                if (signing.SkipStapling && signing.NotaryWait)
-                {
-                    context.Logger.Log(BundleLogLevel.Information,
-                        "SkipStapling: the ticket is accepted; stapling skipped per configuration.");
-                }
-                return;
-            }
-            await ToolRunner.RunAsync(
-                "xcrun", ["stapler", "staple", appPath],
-                context.WorkDirectory, cancellationToken);
-            context.Logger.Log(BundleLogLevel.Information, "stapler attached the notarization ticket.");
+            await MacSigningSupport.NotarizeAsync(
+                context, zipPath, stapleTarget: appPath,
+                signing.NotaryWait, signing.SkipStapling, signing.KeychainProfile,
+                signing.ApiKeyFile, signing.ApiKeyId, signing.ApiKeyIssuer,
+                signing.AppleId, signing.ApplePassword, signing.AppleTeamId,
+                cancellationToken);
         }
         finally
         {
@@ -377,264 +250,6 @@ internal static class MacAppSigning
             {
                 File.Delete(zipPath);
             }
-        }
-    }
-
-    /// <summary>Pull the submission id from notarytool's JSON output; null when absent.</summary>
-    internal static string? NotarySubmissionId(string json)
-    {
-        var match = Regex.Match(json, "\"id\"\\s*:\\s*\"(?<id>[0-9A-Fa-f-]{8,})\"");
-        return match.Success ? match.Groups["id"].Value : null;
-    }
-
-    /// <summary>
-    /// Throwaway keychain holding an imported signing certificate for the duration of one build.
-    /// The keychain is prepended to the user search list so codesign resolves the identity, then
-    /// the search list is restored and the keychain deleted on dispose.
-    /// Shared with the .dmg backend, which signs the image with the same certificate story.
-    /// </summary>
-    internal sealed class TemporaryKeychain
-    {
-        private TemporaryKeychain(string path, string password, string identity,
-            IReadOnlyList<string> previousKeychains)
-        {
-            Path = path;
-            Password = password;
-            Identity = identity;
-            PreviousKeychains = previousKeychains;
-        }
-
-        /// <summary>Keychain file path; exposed so sibling backends can pass --keychain.</summary>
-        internal string Path { get; }
-        private string Password { get; }
-        internal string Identity { get; }
-        private IReadOnlyList<string> PreviousKeychains { get; }
-
-        internal static async Task<TemporaryKeychain> CreateAsync(
-            string workDirectory, string certificatePath, string certificatePassword,
-            IBundleLogger logger, CancellationToken cancellationToken)
-        {
-            var path = System.IO.Path.Combine(
-                workDirectory, $"bundler-sign-{Guid.NewGuid():N}.keychain-db");
-            var password = BitConverter.ToString(Guid.NewGuid().ToByteArray()).Replace("-", "");
-
-            var keychain = new TemporaryKeychain(path, password, "", []);
-            try
-            {
-                keychain = await CreateCoreAsync(path, password, certificatePath,
-                    certificatePassword, workDirectory, logger, cancellationToken);
-                return keychain;
-            }
-            catch
-            {
-                await keychain.DisposeAsync(workDirectory, cancellationToken);
-                throw;
-            }
-        }
-
-        private static async Task<TemporaryKeychain> CreateCoreAsync(
-            string path, string password, string certificatePath, string certificatePassword,
-            string workDirectory, IBundleLogger logger, CancellationToken cancellationToken)
-        {
-            var existing = await ListUserKeychains(workDirectory, cancellationToken);
-            var keychain = new TemporaryKeychain(path, password, "", existing);
-            try
-            {
-            await ToolRunner.RunAsync(
-                "security", ["create-keychain", "-p", password, path],
-                workDirectory, cancellationToken);
-            var searchList = new List<string> { "list-keychains", "-d", "user", "-s", path };
-            searchList.AddRange(existing);
-            await ToolRunner.RunAsync(
-                "security", searchList, workDirectory, cancellationToken);
-            await ToolRunner.RunAsync(
-                "security", ["unlock-keychain", "-p", password, path],
-                workDirectory, cancellationToken);
-            // p12 口令不进 argv：先经 openssl 转成无口令 PEM 再导入。
-            var imported = false;
-            ToolRunner.Result? unwrapped = null;
-            var pemPath = System.IO.Path.Combine(
-                workDirectory, $"bundler-cert-{Guid.NewGuid():N}.pem");
-            var certPemPath = System.IO.Path.Combine(
-                workDirectory, $"bundler-leaf-{Guid.NewGuid():N}.pem");
-            var keyPemPath = System.IO.Path.Combine(
-                workDirectory, $"bundler-key-{Guid.NewGuid():N}.pem");
-            var passwordFile = System.IO.Path.Combine(
-                workDirectory, $"bundler-cert-{Guid.NewGuid():N}.pass");
-            try
-            {
-                // 口令文件与解包 PEM 含明文材料：以 0600 创建杜绝宽松 umask 下
-                // 他用户读取；openssl -out 截断既有文件时保留其权限位。
-                await CreateSecretFileAsync(pemPath, null, workDirectory, cancellationToken);
-                await CreateSecretFileAsync(certPemPath, null, workDirectory, cancellationToken);
-                await CreateSecretFileAsync(keyPemPath, null, workDirectory, cancellationToken);
-                await CreateSecretFileAsync(passwordFile, certificatePassword,
-                    workDirectory, cancellationToken);
-                unwrapped = await ToolRunner.TryRunAsync(
-                    "openssl",
-                    ["pkcs12", "-in", certificatePath, "-nodes",
-                     "-passin", "file:" + passwordFile, "-out", pemPath],
-                    workDirectory, cancellationToken);
-                if (unwrapped is { ExitCode: 0 } && File.Exists(pemPath))
-                {
-                    await ToolRunner.RunAsync(
-                        "security", ["import", pemPath, "-k", path, "-T", "/usr/bin/codesign"],
-                        workDirectory, cancellationToken);
-                    // security import 对 key+cert 同件 PEM 在部分宿主只进部分条目
-                    //（macos-26 CI 实证 rc=0 但 find-identity 0 valid identities）——
-                    // 社区自签 codesign 配方即 cert/key 分件导入；再分件补一遍，
-                    // 已存在的条目重复导入按无害略过（TryRun 不判 dup 报错），
-                    // 身份是否成立由下方 find-identity 读回裁定。
-                    var leafOut = await ToolRunner.TryRunAsync(
-                        "openssl",
-                        ["pkcs12", "-in", certificatePath, "-clcerts", "-nokeys",
-                         "-passin", "file:" + passwordFile, "-out", certPemPath],
-                        workDirectory, cancellationToken);
-                    var keyOut = await ToolRunner.TryRunAsync(
-                        "openssl",
-                        ["pkcs12", "-in", certificatePath, "-nocerts", "-nodes",
-                         "-passin", "file:" + passwordFile, "-out", keyPemPath],
-                        workDirectory, cancellationToken);
-                    if (leafOut is { ExitCode: 0 } && File.Exists(certPemPath))
-                    {
-                        _ = await ToolRunner.TryRunAsync(
-                            "security", ["import", certPemPath, "-k", path,
-                                "-T", "/usr/bin/codesign"],
-                            workDirectory, cancellationToken);
-                    }
-                    if (keyOut is { ExitCode: 0 } && File.Exists(keyPemPath))
-                    {
-                        _ = await ToolRunner.TryRunAsync(
-                            "security", ["import", keyPemPath, "-k", path,
-                                "-T", "/usr/bin/codesign"],
-                            workDirectory, cancellationToken);
-                    }
-                    imported = true;
-                }
-            }
-            finally
-            {
-                // 中间产物含明文私钥与口令文件，立即清除。
-                foreach (var secret in new[] { pemPath, certPemPath, keyPemPath, passwordFile })
-                {
-                    if (File.Exists(secret))
-                    {
-                        File.Delete(secret);
-                    }
-                }
-            }
-            if (!imported)
-            {
-                // 不退回 `security import -P`：口令进 argv 可被本机任意进程读取，
-                // 与仓规"秘密不入普通命令行"冲突——解包失败如实报错。
-                throw new InvalidOperationException(
-                    $"openssl could not convert '{certificatePath}' to PEM for keychain import: " +
-                    (unwrapped is null ? "openssl is unavailable" :
-                        unwrapped.StandardError.Trim() is { Length: > 0 } error ? error :
-                        $"exit code {unwrapped.ExitCode}") +
-                    "; the certificate password must not appear in process arguments.");
-            }
-            await ToolRunner.RunAsync(
-                "security", ["set-key-partition-list", "-S", "apple-tool:,apple:,codesign:",
-                    "-s", "-k", password, path],
-                workDirectory, cancellationToken);
-            var (identity, probe) = await FindIdentityAsync(
-                path, workDirectory, cancellationToken);
-            if (identity is null)
-            {
-                throw new InvalidOperationException(
-                    $"No signing identity was found in {certificatePath} after importing it " +
-                    $"into the temporary keychain.{probe}");
-            }
-            logger.Log(BundleLogLevel.Information,
-                $"Imported the signing certificate into a temporary keychain (identity '{identity}').");
-            return new TemporaryKeychain(path, password, identity, existing);
-            }
-            catch
-            {
-                // 中途失败也要还原用户钥匙串搜索列表（list-keychains -s 已改过）。
-                await keychain.DisposeAsync(workDirectory, cancellationToken);
-                throw;
-            }
-        }
-
-        // 含明文秘密的临时文件一律 0600 落盘——宽松 umask 下默认可被本机他用户读取。
-        // netstandard2.0 无 UnixCreateMode：先建空文件再 chmod——0600 生效前文件为空，
-        // 无秘密窗口；openssl -out 截断既有文件时保留其权限位。
-        private static async Task CreateSecretFileAsync(
-            string filePath, string? contents, string workDirectory, CancellationToken cancellationToken)
-        {
-            using (new FileStream(filePath, FileMode.CreateNew, FileAccess.Write)) { }
-            await ToolRunner.RunAsync(
-                "chmod", ["600", filePath], workDirectory, cancellationToken);
-            if (contents is not null)
-            {
-                File.WriteAllText(filePath, contents);
-            }
-        }
-
-        internal async Task DisposeAsync(string workDirectory, CancellationToken cancellationToken)
-        {
-            // 清理不可取消：取消时杀子进程会留下半还原的钥匙串搜索列表/残留 keychain 文件。
-            if (PreviousKeychains.Count > 0)
-            {
-                var restore = new List<string> { "list-keychains", "-d", "user", "-s" };
-                restore.AddRange(PreviousKeychains);
-                await ToolRunner.TryRunAsync("security", restore, workDirectory, CancellationToken.None);
-            }
-            await ToolRunner.TryRunAsync(
-                "security", ["delete-keychain", Path], workDirectory, CancellationToken.None);
-            if (File.Exists(Path))
-            {
-                File.Delete(Path);
-            }
-        }
-
-        private static async Task<IReadOnlyList<string>> ListUserKeychains(
-            string workDirectory, CancellationToken cancellationToken)
-        {
-            var result = await ToolRunner.TryRunAsync(
-                "security", ["list-keychains", "-d", "user"], workDirectory, cancellationToken);
-            if (result is not { ExitCode: 0 })
-            {
-                return [];
-            }
-            return result.StandardOutput
-                .Split('\n')
-                .Select(line => line.Trim().Trim('"'))
-                .Where(line => line.Length > 0)
-                .Where(line => line.EndsWith(".keychain-db", StringComparison.Ordinal) ||
-                               line.EndsWith(".keychain", StringComparison.Ordinal))
-                .ToArray();
-        }
-
-        // 返回（身份名, 探测现场）：未命中时第二路无策略全列帮助区分
-        // "条目根本没导进 keychain"（0 identities）与"有身份但 codesigning
-        // 策略面不认可"（有 identities、0 valid）——现场随异常进 Skip 理由。
-        private static async Task<(string? Identity, string Probe)> FindIdentityAsync(
-            string keychainPath, string workDirectory, CancellationToken cancellationToken)
-        {
-            var result = await ToolRunner.TryRunAsync("security",
-                ["find-identity", "-v", "-p", "codesigning", keychainPath],
-                workDirectory, cancellationToken);
-            var probe = " find-identity(-v -p codesigning): " + (result is null
-                ? "<security unavailable>"
-                : $"rc={result.ExitCode} [{(result.StandardOutput + result.StandardError).Trim()}]");
-            if (result is { ExitCode: 0 })
-            {
-                var match = Regex.Match(result.StandardOutput,
-                    "\\)\\s+[0-9A-Fa-f]{40}\\s+\"(?<name>[^\"]+)\"");
-                if (match.Success)
-                {
-                    return (match.Groups["name"].Value, probe);
-                }
-            }
-            var all = await ToolRunner.TryRunAsync("security",
-                ["find-identity", keychainPath], workDirectory, cancellationToken);
-            probe += "; find-identity(no policy): " + (all is null
-                ? "<security unavailable>"
-                : $"rc={all.ExitCode} [{(all.StandardOutput + all.StandardError).Trim()}]");
-            return (null, probe);
         }
     }
 }

@@ -146,11 +146,8 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
         // 已签 → 已签但异队：跨签名者换包即通道劫持，必须拒。
         Assert.SkipUnless(TestPlatform.IsMacOS, "codesign/xattr 门禁只在 macOS 宿主存在。");
         var directory = Ws.Combine("cross-team");
-        // 双 keychain 处置序承重：每个 TemporaryKeychain 在创建时快照当时的
-        // list-keychains 搜索列表，Dispose 用它还原——逆序（LIFO）拆才把列表
-        // 逐层还原到各创建时刻；using 声明天然逆序 Dispose，别改成统一清理。
-        // 进程被强杀则搜索列表与 keychain 件残留（无析构方）——属可接受面，
-        // 测试宿主重启/手工 security list-keychains -s 还原即可。
+        // 临时 keychain 不碰用户搜索列表：codesign 经 --keychain 直给身份，
+        // Dispose 只删 keychain 件——销毁序不再承重，using 逆序仅作惯例。
         using var alpha = RequireIdentity(
             Path.Combine(directory, "signing-a"), "BundlerGateAlpha", "GATEAAAAAA");
         using var beta = RequireIdentity(
@@ -265,7 +262,7 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
     }
 
     // 临时 keychain 自签证书链：openssl 造 codeSigning EKU 自签件 → TemporaryKeychain 导入
-    // （生产同款"用完还原搜索列表+删 keychain"清理语义）→ 签探针件实证 TeamIdentifier。
+    // （生产同款"--keychain 直给 + 用完删件"语义，不触碰用户搜索列表）→ 签探针件实证 TeamIdentifier。
     // 任一步不成立返回 null（reason 出参带现场），不抛出——调用方决定 Skip。
     private static SigningIdentity? TryCreateIdentity(
         string workDir, string commonName, string ou, out string reason)
@@ -325,12 +322,12 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
             return null;
         }
 
-        MacAppSigning.TemporaryKeychain keychain;
+        MacSigningSupport.TemporaryKeychain keychain;
         try
         {
             // 同一个固定假口令：TemporaryKeychain 内部把它落 0600 口令文件再以
             // openssl -passin file: 解包导入，全程不进 argv。
-            keychain = MacAppSigning.TemporaryKeychain.CreateAsync(
+            keychain = MacSigningSupport.TemporaryKeychain.CreateAsync(
                 workDir, p12Path, P12Password, NullBundleLogger.Instance, CancellationToken.None)
                 .GetAwaiter().GetResult();
         }
@@ -385,8 +382,8 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
         return identity;
     }
 
-    // 一个可用签名身份：临时 keychain 句柄 + 证书 CN + 实证 TeamID；Dispose 还原搜索列表并删件。
-    private sealed class SigningIdentity(MacAppSigning.TemporaryKeychain keychain, string workDir)
+    // 一个可用签名身份：临时 keychain 句柄 + 证书 CN + 实证 TeamID；Dispose 删件即可（不涉搜索列表）。
+    private sealed class SigningIdentity(MacSigningSupport.TemporaryKeychain keychain, string workDir)
         : IDisposable
     {
         internal string Name => keychain.Identity;
