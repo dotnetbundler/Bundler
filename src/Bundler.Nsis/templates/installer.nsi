@@ -442,7 +442,7 @@ Function un.onInit
     !insertmacro MULTIUSER_UNINIT
   !endif
   !insertmacro SetInstallContext
-  DotNetBundlerNsis::GetUninstallTransactionState "$UninstallTransactionDirectory" "$INSTDIR"
+  DotNetBundlerNsis::GetUninstallTransactionState "$UninstallTransactionDirectory" "$INSTDIR" "$TransactionRegistryRoot" "$TransactionRegistryView" "${UNINSTALL_KEY}"
   Pop $UninstallTransactionState
   ${If} $UninstallTransactionState < 0
     StrCpy $ExitCode ${EXIT_FAILURE}
@@ -459,6 +459,20 @@ Function un.onInit
     ${EndIf}
     StrCpy $DeleteAppData $0
     StrCpy $TransactionActive 1
+  ${EndIf}
+  ; 归属校验（仅全新卸载）：卸载器被复制到陌生目录运行时 $INSTDIR 指向任意树——
+  ; 归属标记件存在或注册 InstallRoot 兜底比对通过才继续，否则中止。
+  ; journal 层是权威层：Begin 与恢复续跑（state != 0，经 GetState 注册绑定）
+  ; 都要求安装目录与注册 InstallRoot 一致，伪造 journal 无法重定向删除目标。
+  ${If} $UninstallTransactionState == 0
+    IfFileExists "$INSTDIR\${INSTALL_MARKER}" uninstall_directory_owned
+    DotNetBundlerNsis::CheckUninstallDirectoryOwnership "$INSTDIR" "$TransactionRegistryRoot" "$TransactionRegistryView" "${UNINSTALL_KEY}"
+    Pop $0
+    IntCmp $0 0 uninstall_directory_owned
+      StrCpy $ExitCode ${EXIT_FAILURE}
+      SetErrorLevel $ExitCode
+      Abort
+    uninstall_directory_owned:
   ${EndIf}
 FunctionEnd
 

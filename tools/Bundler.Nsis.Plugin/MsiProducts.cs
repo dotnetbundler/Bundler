@@ -145,12 +145,16 @@ internal static class MsiProducts
                     if (entryName is null || entryPublisher is null || uninstallString is null ||
                         !entryName.Equals(displayName, StringComparison.OrdinalIgnoreCase) ||
                         !entryPublisher.Equals(publisher, StringComparison.OrdinalIgnoreCase) ||
-                        uninstallString.IndexOf("msiexec", StringComparison.OrdinalIgnoreCase) < 0)
+                        uninstallString.IndexOf("msiexec", StringComparison.OrdinalIgnoreCase) < 0 ||
+                        QueryDword(sub, "WindowsInstaller") != 1)
                     {
                         continue;
                     }
 
-                    if (ExtractProductCode(uninstallString) is { } code)
+                    // 注册卸载项可被任意安装器书写；再以 Windows Installer 自身的
+                    // ProductName/Publisher 复核——伪造 DisplayName 的外来条目在此出局。
+                    if (ExtractProductCode(uninstallString) is { } code &&
+                        MsiMetadataMatches(code, displayName, publisher))
                     {
                         yield return code;
                     }
@@ -174,6 +178,28 @@ internal static class MsiProducts
         return open >= 0 && close > open
             ? NormalizeCode(uninstallString.Substring(open, close - open + 1))
             : null;
+    }
+
+    // 手写/伪造的卸载项可以冒名 DisplayName+Publisher；已安装 MSI 的元数据由
+    // Windows Installer 权威回答，两项都相等才视作旧 MSI。
+    private static bool MsiMetadataMatches(string productCode, string displayName, string publisher)
+    {
+        var productName = GetProductInfo(productCode, "InstalledProductName") ??
+                          GetProductInfo(productCode, "ProductName");
+        var productPublisher = GetProductInfo(productCode, "Publisher");
+        return productName is not null &&
+               productName.Equals(displayName, StringComparison.OrdinalIgnoreCase) &&
+               productPublisher is not null &&
+               productPublisher.Equals(publisher, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static uint QueryDword(IntPtr key, string valueName)
+    {
+        uint type = 0;
+        uint value = 0;
+        uint length = sizeof(uint);
+        return RegQueryValueEx(key, valueName, IntPtr.Zero, ref type,
+                   ref value, ref length) == ErrorSuccess && type == 4 ? value : 0;
     }
 
     private static string? QueryString(IntPtr key, string valueName)
@@ -206,6 +232,11 @@ internal static class MsiProducts
     private static extern uint RegQueryValueEx(
         IntPtr hKey, string valueName, IntPtr reserved, ref uint type,
         byte[]? data, ref uint dataLength);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, EntryPoint = "RegQueryValueExW")]
+    private static extern uint RegQueryValueEx(
+        IntPtr hKey, string valueName, IntPtr reserved, ref uint type,
+        ref uint data, ref uint dataLength);
 
     [DllImport("advapi32.dll")]
     private static extern uint RegCloseKey(IntPtr hKey);

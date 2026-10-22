@@ -24,5 +24,5 @@ LangString InvalidRestartMode ${LANG_ARABIC} "الخيار /R صالح فقط م
 LangString ArgumentsRequireRestart ${LANG_ARABIC} "الخيار /ARGS صالح فقط مع /R."
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_ARABIC} "رفض التثبيت الآلي مجلدًا غير فارغ لا ينتمي إلى ${PRODUCT_NAME}."
 LangString ApplicationLaunchFailed ${LANG_ARABIC} "نجح التثبيت، لكن تعذر تشغيل ${PRODUCT_NAME}."
-LangString RecoveryManifestMismatch ${LANG_ARABIC} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
-LangString RecoveryManifestMismatchDetail ${LANG_ARABIC} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatch ${LANG_ARABIC} "تم إنشاء التثبيت المتوقف ببيان استرداد مختلف. شغّل المثبّت الأصلي مع /S /RECOVERONLY ونفس دليل /D= ثم أعد المحاولة."
+LangString RecoveryManifestMismatchDetail ${LANG_ARABIC} "لا يمكن لهذا المثبّت استرداد التثبيت المتوقف لأن تكوينه يختلف. شغّل المثبّت الأصلي مع /S /RECOVERONLY ونفس دليل /D= ثم أعد المحاولة."

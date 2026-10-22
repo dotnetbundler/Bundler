@@ -59,6 +59,20 @@ internal static class RestartManager
 
         try
         {
+            // MSDN 约定序：先 RmGetList 落定当前占用者集合，再 RmShutdown——
+            // 直接 Shutdown 依赖未文档化的隐式枚举；显式 GetList 让行为确定。
+            uint needed = 0;
+            uint count = 0;
+            var rebootReasons = 0u;
+            result = RmGetList(session, out needed, ref count, IntPtr.Zero, ref rebootReasons);
+            if (result != ErrorSuccess && result != ErrorMoreData)
+            {
+                return result;
+            }
+            if (needed == 0)
+            {
+                return ErrorSuccess;
+            }
             // 保持现有安装器的强制关闭语义，但只关闭实际占用目标文件的进程。
             return RmShutdown(session, ForceShutdown, IntPtr.Zero);
         }

@@ -748,6 +748,32 @@ public sealed class NsisIntegrationTests(NsisFixture fixture) : IClassFixture<Ns
         finally { Cleanup(); }
     }
 
+    // 归属校验：复制到陌生目录的 Uninstall.exe 不得对该目录递归删除——
+    // un.onInit 的标记/注册 InstallRoot 门与 Begin 的注册绑定双保险。
+    [Fact]
+    [Trait("Requires", "localinstall")]
+    public void CopiedUninstallerRejectsForeignDirectory()
+    {
+        _f.Ensure();
+        RequireConsent();
+        var foreign = _f.Ws.Combine("foreign-target");
+        Directory.CreateDirectory(foreign);
+        File.WriteAllText(Path.Combine(foreign, "keep.txt"), "keep");
+        try
+        {
+            RunOk(Installer("bundle"), $"/S /D={InstallDir}");
+            var copy = _f.Ws.Combine($"foreign-uninstaller-{Guid.NewGuid():N}.exe");
+            File.Copy(Uninstaller, copy);
+            var result = Run(copy, $"/S /DELETEAPPDATA _?={foreign}");
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.True(File.Exists(Path.Combine(foreign, "keep.txt")),
+                "Copied uninstaller deleted files in a foreign directory.");
+            Assert.True(Directory.Exists(InstallDir) && File.Exists(Exe),
+                "Foreign-directory rejection must not touch the real install.");
+        }
+        finally { Cleanup(); }
+    }
+
     // post-uninstall 中断：taskkill 杀掉整个卸载进程树，下次安装幂等完成旧卸载。
     [Fact]
     [Trait("Requires", "localinstall")]

@@ -24,5 +24,5 @@ LangString InvalidRestartMode ${LANG_KOREAN} "/R은 /S, /P 또는 /UPDATE와 함
 LangString ArgumentsRequireRestart ${LANG_KOREAN} "/ARGS는 /R과 함께 사용할 때만 유효합니다."
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_KOREAN} "자동 설치가 ${PRODUCT_NAME} 소유가 아닌 비어 있지 않은 폴더를 거부했습니다."
 LangString ApplicationLaunchFailed ${LANG_KOREAN} "설치는 완료되었지만 ${PRODUCT_NAME}을(를) 시작하지 못했습니다."
-LangString RecoveryManifestMismatch ${LANG_KOREAN} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
-LangString RecoveryManifestMismatchDetail ${LANG_KOREAN} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatch ${LANG_KOREAN} "중단된 설치는 다른 복구 매니페스트로 생성되었습니다. /S /RECOVERONLY와 동일한 /D= 디렉터리로 원래 설치 프로그램을 실행한 다음 다시 시도하세요."
+LangString RecoveryManifestMismatchDetail ${LANG_KOREAN} "이 설치 프로그램은 구성이 다르기 때문에 중단된 설치를 복구할 수 없습니다. /S /RECOVERONLY와 동일한 /D= 디렉터리로 원래 설치 프로그램을 실행한 다음 다시 시도하세요."

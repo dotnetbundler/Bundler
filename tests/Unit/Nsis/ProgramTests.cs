@@ -165,7 +165,7 @@ public sealed class ProgramTests : TempBase
                 repositoryRoot,
                 "third_party", "nsis", "plugins", "x86-unicode", "DotNetBundlerNsis.dll");
             Assert.True(File.Exists(pluginPath), "The bundled NSIS plug-in is missing.");
-            Assert.Equal("F0F5B0E81317B8600CE4D5B2BEAC3A08A51DD808FD7596FE5190F3B861455D54",
+            Assert.Equal("115BFC316970AF7C0436688EFB378D9FCDE816661FB6AEA7BD54E0768BD09A11",
                 Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath))));
 
             var toolset = await NsisToolResolver.ResolveAsync(archive, cache, TestContext.Current.CancellationToken);
@@ -802,6 +802,9 @@ public sealed class ProgramTests : TempBase
                template.Contains("MarkUninstallTransactionFinalizing", StringComparison.Ordinal) &&
                template.Contains("CommitUninstallTransaction", StringComparison.Ordinal),
             "The uninstaller should journal, resume, finalize, and commit forward deletion.");
+        Assert.True(template.Contains("uninstall_directory_owned", StringComparison.Ordinal) &&
+               template.Contains("IfFileExists \"$INSTDIR\\${INSTALL_MARKER}\"", StringComparison.Ordinal),
+            "un.onInit should refuse a foreign $INSTDIR before any deletion (copied-uninstaller guard).");
         Assert.True(template.Contains("UninstPage custom un.AppDataOptionsPage", StringComparison.Ordinal) &&
                template.Contains("$LOCALAPPDATA\\${PRODUCT_ID}", StringComparison.Ordinal),
             "The uninstaller should offer optional application-data deletion.");

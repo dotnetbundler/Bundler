@@ -68,10 +68,13 @@ public sealed class WindowsAuthenticodeSigner : IBundleSigner
                 throw new FileNotFoundException("The signing PFX file was not found.", path);
             }
 
+            // EphemeralKeySet：私钥只在内存存在——DefaultKeySet 会把 PFX 私钥
+            // 持久化进用户密钥存储区，秘密材料不该因签名而落在磁盘上。
+            // netstandard2.0 引用面缺该具名常量，用数值 32（运行时全支持）。
             return new X509Certificate2(
                 File.ReadAllBytes(path),
                 options.PfxPassword,
-                X509KeyStorageFlags.DefaultKeySet);
+                (X509KeyStorageFlags)32);
         }
 
         var requested = NormalizeThumbprint(options.CertificateThumbprint!);

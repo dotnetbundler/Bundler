@@ -72,6 +72,14 @@ internal static class UninstallTransaction
             }
 
             var install = ValidateInstallDirectory(installDirectory, transaction);
+            // 归属绑定：$INSTDIR 必须与注册项 InstallRoot（回退 InstallLocation）一致——
+            // 否则被复制到任意目录的 Uninstall.exe 可以借卸载事务对目标树递归删除。
+            var registered = ReadRegisteredInstallRoot(rootName, viewBits, uninstallSubKey);
+            if (!install.Equals(registered, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    "The install directory does not match the registered install root.");
+            }
             var uninstaller = Path.GetFullPath(uninstallerPath);
             var expectedUninstaller = Path.Combine(install, "Uninstall.exe");
             if (!uninstaller.Equals(expectedUninstaller, StringComparison.OrdinalIgnoreCase) || !File.Exists(uninstaller))
@@ -118,7 +126,38 @@ internal static class UninstallTransaction
         }
     }
 
-    internal static int GetState(string transactionDirectory, string expectedInstallDirectory)
+    // 归属兜底：标记件缺失时由插件按注册 InstallRoot（回退 InstallLocation）判定
+    // 候选 $INSTDIR 归属——与 Begin 同一套 GetFullPath+OrdinalIgnoreCase 规范化比较。
+    internal static int CheckDirectoryOwnership(
+        string installDirectory,
+        string rootName,
+        int viewBits,
+        string uninstallSubKey)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(installDirectory))
+            {
+                return 1;
+            }
+            var candidate = Path.GetFullPath(installDirectory.Trim())
+                .TrimEnd(Path.DirectorySeparatorChar);
+            RejectExistingReparsePoints(candidate);
+            var registered = ReadRegisteredInstallRoot(rootName, viewBits, uninstallSubKey);
+            return candidate.Equals(registered, StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+        }
+        catch (Exception exception)
+        {
+            return exception.HResult;
+        }
+    }
+
+    internal static int GetState(
+        string transactionDirectory,
+        string expectedInstallDirectory,
+        string rootName,
+        int viewBits,
+        string uninstallSubKey)
     {
         try
         {
@@ -131,7 +170,13 @@ internal static class UninstallTransaction
                 return 0;
             }
 
-            ValidateActiveTransaction(transaction, expectedInstallDirectory, allowMissingExpectedPathWhenFinalizing: true);
+            ValidateActiveTransaction(
+                transaction,
+                expectedInstallDirectory,
+                allowMissingExpectedPathWhenFinalizing: true,
+                rootName,
+                viewBits,
+                uninstallSubKey);
             return File.Exists(Path.Combine(transaction, FinalizingFileName)) ? 2 : 1;
         }
         catch (Exception exception)
@@ -211,7 +256,10 @@ internal static class UninstallTransaction
             var install = ValidateActiveTransaction(
                 transaction,
                 expectedInstallDirectory,
-                allowMissingExpectedPathWhenFinalizing: true);
+                allowMissingExpectedPathWhenFinalizing: true,
+                rootName,
+                viewBits,
+                uninstallSubKey);
             if (File.Exists(Path.Combine(transaction, FinalizingFileName)))
             {
                 // 持久状态已删除完毕；注册表锚点可能已移除，不再执行 journal 中的 EXE。
@@ -257,7 +305,7 @@ internal static class UninstallTransaction
         }
     }
 
-    private static string ReadRegisteredRecoveryHash(string rootName, int viewBits, string uninstallSubKey)
+    private static RegistryKey OpenUninstallKey(string rootName, int viewBits, string uninstallSubKey)
     {
         var hive = rootName switch
         {
@@ -271,9 +319,20 @@ internal static class UninstallTransaction
             64 => RegistryView.Registry64,
             _ => throw new InvalidDataException("The uninstall recovery registry view is invalid.")
         };
-        using var root = RegistryKey.OpenBaseKey(hive, view);
-        using var key = root.OpenSubKey(uninstallSubKey, writable: false);
-        var hash = key?.GetValue(RecoveryHashValueName) as string;
+        var root = RegistryKey.OpenBaseKey(hive, view);
+        var key = root.OpenSubKey(uninstallSubKey, writable: false);
+        root.Dispose();
+        if (key is null)
+        {
+            throw new InvalidDataException("The registered uninstall key is missing.");
+        }
+        return key;
+    }
+
+    private static string ReadRegisteredRecoveryHash(string rootName, int viewBits, string uninstallSubKey)
+    {
+        using var key = OpenUninstallKey(rootName, viewBits, uninstallSubKey);
+        var hash = key.GetValue(RecoveryHashValueName) as string;
         if (hash is null || hash.Length != 64 || hash.Any(character => !Uri.IsHexDigit(character)))
         {
             throw new InvalidDataException("The registered uninstall recovery hash is missing or invalid.");
@@ -281,10 +340,25 @@ internal static class UninstallTransaction
         return hash;
     }
 
+    private static string ReadRegisteredInstallRoot(string rootName, int viewBits, string uninstallSubKey)
+    {
+        using var key = OpenUninstallKey(rootName, viewBits, uninstallSubKey);
+        var registered = (key.GetValue("InstallRoot") as string) ??
+                         (key.GetValue("InstallLocation") as string);
+        if (string.IsNullOrWhiteSpace(registered))
+        {
+            throw new InvalidDataException("The registered install root is missing.");
+        }
+        return Path.GetFullPath(registered).TrimEnd(Path.DirectorySeparatorChar);
+    }
+
     private static string ValidateActiveTransaction(
         string transaction,
         string expectedInstallDirectory,
-        bool allowMissingExpectedPathWhenFinalizing)
+        bool allowMissingExpectedPathWhenFinalizing,
+        string rootName,
+        int viewBits,
+        string uninstallSubKey)
     {
         var prepared = ValidatePreparedTransaction(transaction);
         if (!File.Exists(Path.Combine(prepared, ActiveFileName)))
@@ -293,9 +367,10 @@ internal static class UninstallTransaction
         }
 
         var install = ValidateInstallDirectory(File.ReadAllText(Path.Combine(prepared, StateFileName)), prepared);
+        var finalizing = File.Exists(Path.Combine(prepared, FinalizingFileName));
         if (string.IsNullOrWhiteSpace(expectedInstallDirectory))
         {
-            if (!allowMissingExpectedPathWhenFinalizing || !File.Exists(Path.Combine(prepared, FinalizingFileName)))
+            if (!allowMissingExpectedPathWhenFinalizing || !finalizing)
             {
                 throw new InvalidDataException("The installed product location is unavailable for uninstall recovery.");
             }
@@ -306,6 +381,19 @@ internal static class UninstallTransaction
             if (!install.Equals(expected, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidDataException("The uninstall transaction does not match the registered install directory.");
+            }
+        }
+
+        // 归属绑定：仍在删除窗口内的 journal 其安装目录必须与注册 InstallRoot 一致，
+        // 否则复制/伪造的 journal 可以借恢复腿把删除目标重定向到任意目录。
+        // finalizing 后注册锚点可能已移除，且持久状态删除已完成，不再要求绑定。
+        if (!finalizing)
+        {
+            var registered = ReadRegisteredInstallRoot(rootName, viewBits, uninstallSubKey);
+            if (!install.Equals(registered, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    "The uninstall transaction install directory does not match the registered install root.");
             }
         }
         return install;

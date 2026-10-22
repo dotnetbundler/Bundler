@@ -24,5 +24,5 @@ LangString InvalidRestartMode ${LANG_RUSSIAN} "/R допустим только 
 LangString ArgumentsRequireRestart ${LANG_RUSSIAN} "/ARGS допустим только вместе с /R."
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_RUSSIAN} "Автоматическая установка отклонила непустую папку, не принадлежащую ${PRODUCT_NAME}."
 LangString ApplicationLaunchFailed ${LANG_RUSSIAN} "Установка завершена, но запустить ${PRODUCT_NAME} не удалось."
-LangString RecoveryManifestMismatch ${LANG_RUSSIAN} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
-LangString RecoveryManifestMismatchDetail ${LANG_RUSSIAN} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatch ${LANG_RUSSIAN} "Прерванная установка была создана с другим манифестом восстановления. Запустите исходный установщик с параметрами /S /RECOVERONLY и тем же каталогом /D=, затем повторите попытку."
+LangString RecoveryManifestMismatchDetail ${LANG_RUSSIAN} "Этот установщик не может восстановить прерванную установку, так как его конфигурация отличается. Запустите исходный установщик с параметрами /S /RECOVERONLY и тем же каталогом /D=, затем повторите попытку."

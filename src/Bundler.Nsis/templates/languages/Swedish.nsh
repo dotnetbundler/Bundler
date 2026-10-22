@@ -24,5 +24,5 @@ LangString InvalidRestartMode ${LANG_SWEDISH} "/R är endast giltigt tillsammans
 LangString ArgumentsRequireRestart ${LANG_SWEDISH} "/ARGS är endast giltigt tillsammans med /R."
 LangString AutomatedNonEmptyDirectoryBlocked ${LANG_SWEDISH} "Den automatiska installationen nekade en mapp som inte är tom och inte tillhör ${PRODUCT_NAME}."
 LangString ApplicationLaunchFailed ${LANG_SWEDISH} "Installationen lyckades, men ${PRODUCT_NAME} kunde inte startas."
-LangString RecoveryManifestMismatch ${LANG_SWEDISH} "The interrupted installation was created with a different recovery manifest. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
-LangString RecoveryManifestMismatchDetail ${LANG_SWEDISH} "The interrupted installation cannot be recovered by this installer because its configuration differs. Run the original installer with /S /RECOVERONLY and the same /D= directory, then retry."
+LangString RecoveryManifestMismatch ${LANG_SWEDISH} "Den avbrutna installationen skapades med ett annat återställningsmanifest. Kör det ursprungliga installationsprogrammet med /S /RECOVERONLY och samma /D=-katalog och försök sedan igen."
+LangString RecoveryManifestMismatchDetail ${LANG_SWEDISH} "Det här installationsprogrammet kan inte återställa den avbrutna installationen eftersom konfigurationen skiljer sig åt. Kör det ursprungliga installationsprogrammet med /S /RECOVERONLY och samma /D=-katalog och försök sedan igen."

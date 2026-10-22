@@ -150,8 +150,21 @@ public static class PluginActions
         UninstallTransaction.Activate(transactionDirectory);
 
     [NsisAction]
-    public static int GetUninstallTransactionState(string transactionDirectory, string expectedInstallDirectory) =>
-        UninstallTransaction.GetState(transactionDirectory, expectedInstallDirectory);
+    public static int CheckUninstallDirectoryOwnership(
+        string installDirectory,
+        string root,
+        int viewBits,
+        string uninstallSubKey) =>
+        UninstallTransaction.CheckDirectoryOwnership(installDirectory, root, viewBits, uninstallSubKey);
+
+    [NsisAction]
+    public static int GetUninstallTransactionState(
+        string transactionDirectory,
+        string expectedInstallDirectory,
+        string root,
+        int viewBits,
+        string uninstallSubKey) =>
+        UninstallTransaction.GetState(transactionDirectory, expectedInstallDirectory, root, viewBits, uninstallSubKey);
 
     [NsisAction]
     public static int GetUninstallTransactionDeleteAppData(string transactionDirectory) =>
